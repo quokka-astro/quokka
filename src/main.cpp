@@ -16,9 +16,15 @@
 // internal headers
 #include "athena_arrays.hpp"
 
+/// Entry function for test runner. To be written.
+///
+/// \param[in] argc Number of command-line arguments.
+/// \param[in] argv Command-line arguments (separated by spaces).
+///
+/// \return Error code.
+///
 int main(int argc, char *argv[])
 {
-	/// Placeholder function. To be written.
 	std::cout << "Hello, world!"
 		  << "\n";
 	return 0;
