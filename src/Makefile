@@ -34,6 +34,9 @@ driver: main.cpp
 clang-tidy: $(ANALYZE_FILES)
 	clang-tidy -checks='*,-fuchsia-*' $^ --
 
+cpplint: $(ANALYZE_FILES)
+	cpplint $^
+
 cppcheck: $(ANALYZE_FILES)
 	$(STATIC_ANALYZER) $(STATIC_ANALYZER_FLAGS) $^
 
