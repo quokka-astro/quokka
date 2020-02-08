@@ -14,7 +14,7 @@ STATIC_ANALYZER = cppcheck
 STATIC_ANALYZER_FLAGS = --enable=all --std=c++17 --suppress=missingIncludeSystem
 
 
-default: format clang-tidy driver
+default: format clang-tidy driver.exe
 
 
 ## code formatting
@@ -25,7 +25,7 @@ format: $(SRC_FILES)
 
 ## compiling
 
-driver: main.cpp
+driver.exe: main.cpp
 	$(CXX) $(CXXFLAGS) $^ -o driver.exe
 
 
