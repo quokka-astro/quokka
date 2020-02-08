@@ -1,4 +1,9 @@
+# Documentation build directory
 _build/
+
+# Emacs history files
+*~
+
 # Prerequisites
 *.d
 
