@@ -24,9 +24,21 @@
 ///
 /// \return Error code.
 ///
-int main(int argc, char *argv[])
+auto main(int argc, char *argv[]) -> int
 {
 	std::cout << "Hello, world!"
 		  << "\n";
+
+	const int nx = 32;
+	AthenaArray<double> density;
+	density.NewAthenaArray(nx);
+
+	std::cout << "density = ";
+
+	for (int i = 0; i < nx; ++i) {
+		std::cout << density(i) << " ";
+	}
+	std::cout << "\n";
+
 	return 0;
 }

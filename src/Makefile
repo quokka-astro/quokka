@@ -2,16 +2,42 @@
 
 CPP_FILES=$(wildcard *.cpp)
 HPP_FILES=$(wildcard *.hpp)
+SRC_FILES:=$(CPP_FILES) $(HPP_FILES)
 
-CXX = g++
-CXXFLAGS = -g -O0
+# exclude athena_arrays.hpp from static analysis
+ANALYZE_FILES:=$(filter-out athena_arrays.hpp, $(SRC_FILES))
+
+CXX ?= g++
+CXXFLAGS ?= -g -O0
+
+STATIC_ANALYZER = cppcheck
+STATIC_ANALYZER_FLAGS = --enable=all --std=c++17 --suppress=missingIncludeSystem
 
 
-default:
+default: format clang-tidy driver
 
-format: $(CPP_FILES) $(HPP_FILES)
+
+## code formatting
+
+format: $(SRC_FILES)
 	clang-format -i $^
+
+
+## compiling
 
 driver: main.cpp
 	$(CXX) $(CXXFLAGS) $^ -o driver.exe
+
+
+## static analysis / code linting
+
+clang-tidy: $(ANALYZE_FILES)
+	clang-tidy -checks='*,-fuchsia-*' $^ --
+
+cppcheck: $(ANALYZE_FILES)
+	$(STATIC_ANALYZER) $(STATIC_ANALYZER_FLAGS) $^
+
+flawfinder: $(ANALYZE_FILES)
+	flawfinder $^
+
 
