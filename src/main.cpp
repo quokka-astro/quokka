@@ -12,6 +12,7 @@
 
 // c++ headers
 #include <cstring>
+#include <iostream>
 
 // internal headers
 #include "athena_arrays.hpp"
