@@ -1,4 +1,6 @@
 # Documentation build directory
+docs/api/
+docs/doxyoutput/
 _build/
 
 # Emacs history files
