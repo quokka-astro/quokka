@@ -6,6 +6,6 @@ HPP_FILES=$(wildcard *.hpp)
 default:
 
 format: $(CPP_FILES) $(HPP_FILES)
-	clang-format -i $<
+	clang-format -i $^
 
 
