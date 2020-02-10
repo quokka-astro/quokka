@@ -1,2 +1,2 @@
 # TwoMomentRad
-Moment method for radiation transport written in C++
+Moment method for radiation transport for patch-based AMR, written in C++
