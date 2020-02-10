@@ -18,8 +18,8 @@
 // internal headers
 #include "athena_arrays.hpp"
 
-/// Class for a hyperbolic system of conservation laws
-///
+/// Class for a hyperbolic system of conservation laws (Cannot be instantiated,
+/// must be subclassed.)
 class HyperbolicSystem
 {
       public:
