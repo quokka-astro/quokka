@@ -6,6 +6,7 @@ SRC_FILES:=$(CPP_FILES) $(HPP_FILES)
 
 # exclude athena_arrays.hpp from static analysis
 ANALYZE_FILES:=$(filter-out athena_arrays.hpp, $(SRC_FILES))
+#ANALYZE_FILES:=$(CPP_FILES)
 
 CXX ?= g++
 CXXFLAGS ?= -g -O0
@@ -25,14 +26,14 @@ format: $(SRC_FILES)
 
 ## compiling
 
-driver.exe: main.cpp
+driver.exe: $(CPP_FILES)
 	$(CXX) $(CXXFLAGS) $^ -o driver.exe
 
 
 ## static analysis / code linting
 
 clang-tidy: $(ANALYZE_FILES)
-	clang-tidy -checks='*,-fuchsia-*' $^ --
+	clang-tidy -checks='*,-fuchsia-*,-misc-non-private-member-variables-in-classes,-cppcoreguidelines-non-private-member-variables-in-classes' $^ --
 
 cpplint: $(ANALYZE_FILES)
 	cpplint $^

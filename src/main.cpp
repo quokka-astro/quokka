@@ -16,6 +16,7 @@
 
 // internal headers
 #include "athena_arrays.hpp"
+#include "linear_advection.hpp"
 
 /// Entry function for test runner. To be written.
 ///
@@ -26,18 +27,18 @@
 ///
 auto main(int argc, char *argv[]) -> int
 {
-	std::cout << "Hello, world!"
-		  << "\n";
-
 	const int nx = 32;
-	AthenaArray<double> density;
-	density.NewAthenaArray(nx);
+	LinearAdvectionSystem advection_system(nx);
+
+	const int k = 10;
+	advection_system.density(k) = 1.0;
 
 	std::cout << "density = ";
 
 	for (int i = 0; i < nx; ++i) {
-		std::cout << density(i) << " ";
+		std::cout << advection_system.density(i) << " ";
 	}
+
 	std::cout << "\n";
 
 	return 0;
