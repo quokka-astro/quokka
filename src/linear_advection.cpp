@@ -11,7 +11,6 @@
 
 LinearAdvectionSystem::LinearAdvectionSystem(const int nx)
 {
-
 	this->density.NewAthenaArray(nx);
 }
 
