@@ -18,6 +18,9 @@
 #include "athena_arrays.hpp"
 #include "linear_advection.hpp"
 
+// function definitions
+void write_density(LinearAdvectionSystem &advection_system);
+
 /// Entry function for test runner. To be written.
 ///
 /// \param[in] argc Number of command-line arguments.
@@ -28,18 +31,37 @@
 auto main(int argc, char *argv[]) -> int
 {
 	const int nx = 32;
-	LinearAdvectionSystem advection_system(nx);
+	const double advection_velocity = 1.0;
+	const double Lx = 1.0;
 
-	const int k = 10;
-	advection_system.density(k) = 1.0;
+	LinearAdvectionSystem advection_system(nx, advection_velocity, Lx);
 
+	for (int i = advection_system.NumGhostZones();
+	     i < nx + advection_system.NumGhostZones(); ++i) {
+		auto value =
+		    static_cast<double>(i - advection_system.NumGhostZones());
+		advection_system.density(i) = value;
+	}
+
+	write_density(advection_system);
+
+	advection_system.AdvanceTimestep();
+
+	write_density(advection_system);
+
+	return 0;
+}
+
+void write_density(LinearAdvectionSystem &advection_system)
+{
 	std::cout << "density = ";
 
-	for (int i = 0; i < nx; ++i) {
+	auto nx = advection_system.Nx();
+	auto nghost = advection_system.NumGhostZones();
+
+	for (int i = 0; i < nx + 2 * nghost; ++i) {
 		std::cout << advection_system.density(i) << " ";
 	}
 
 	std::cout << "\n";
-
-	return 0;
 }

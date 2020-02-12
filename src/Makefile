@@ -21,7 +21,7 @@ default: format clang-tidy driver.exe
 ## code formatting
 
 format: $(SRC_FILES)
-	clang-format -i $^
+	clang-format-9 -i $^
 
 
 ## compiling
@@ -33,7 +33,7 @@ driver.exe: $(CPP_FILES)
 ## static analysis / code linting
 
 clang-tidy: $(ANALYZE_FILES)
-	clang-tidy -checks='*,-fuchsia-*,-misc-non-private-member-variables-in-classes,-cppcoreguidelines-non-private-member-variables-in-classes' $^ --
+	clang-tidy -checks='*,-fuchsia-*,-misc-non-private-member-variables-in-classes,-cppcoreguidelines-non-private-member-variables-in-classes,-google-runtime-references' $^ --
 
 cpplint: $(ANALYZE_FILES)
 	cpplint $^
