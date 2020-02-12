@@ -27,8 +27,8 @@ class LinearAdvectionSystem : public HyperbolicSystem
 	explicit LinearAdvectionSystem(int nx, double vx, double Lx);
 	void AddSourceTerms(AthenaArray<double> *source_terms) override;
 	void AdvanceTimestep() override;
-	int NumGhostZones();
-	int Nx();
+	auto NumGhostZones() -> int;
+	auto Nx() -> int;
 	void FillGhostZones() override;
 
       protected:
