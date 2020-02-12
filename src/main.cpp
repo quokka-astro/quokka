@@ -45,9 +45,12 @@ auto main(int argc, char *argv[]) -> int
 
 	write_density(advection_system);
 
-	advection_system.AdvanceTimestep();
+	const int max_timesteps = 10;
 
-	write_density(advection_system);
+	for (int j = 0; j < max_timesteps; ++j) {
+		advection_system.AdvanceTimestep();
+		write_density(advection_system);
+	}
 
 	return 0;
 }
