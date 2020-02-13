@@ -35,12 +35,14 @@ auto main(int argc, char *argv[]) -> int
 	const int nx = 32;
 	const double advection_velocity = 1.0;
 	const double Lx = 1.0;
+	const double CFL_number = 1.0;
 
 	const double atol = 1e-14; //< absolute tolerance for mass conservation
 
 	// Problem initialization
 
 	LinearAdvectionSystem advection_system(nx, advection_velocity, Lx);
+	advection_system.SetCFLNumber(CFL_number);
 
 	for (int i = advection_system.NumGhostZones();
 	     i < nx + advection_system.NumGhostZones(); ++i) {

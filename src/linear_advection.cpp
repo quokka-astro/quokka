@@ -42,6 +42,12 @@ auto LinearAdvectionSystem::Nx() -> int { return this->nx; }
 
 auto LinearAdvectionSystem::NumGhostZones() -> int { return this->nghost; }
 
+void LinearAdvectionSystem::SetCFLNumber(double CFL_number)
+{
+	assert((CFL_number > 0.0) && (CFL_number <= 1.0)); // NOLINT
+	this->CFL_number = CFL_number;
+}
+
 void LinearAdvectionSystem::FillGhostZones()
 {
 	// In general, this step will require MPI communication, and interaction

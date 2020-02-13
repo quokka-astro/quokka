@@ -29,7 +29,7 @@ class LinearAdvectionSystem : public HyperbolicSystem
 	void AddSourceTerms(AthenaArray<double> &source_terms) override;
 	void
 	AdvanceTimestep() override; //< Computes timestep and advances system
-	void FillGhostZones() override;
+	void SetCFLNumber(double CFL_number);
 
 	auto NumGhostZones() -> int;
 	auto Nx() -> int;
@@ -41,11 +41,8 @@ class LinearAdvectionSystem : public HyperbolicSystem
 	AthenaArray<double> density_flux;
 
 	double advection_vx;
-	double Lx;
-	double dx;
-	int nx;
-	int nghost = 2;
 
+	void FillGhostZones() override;
 	void ConservedToPrimitive() override;
 	void ComputeTimestep() override;
 	void ReconstructStates() override;

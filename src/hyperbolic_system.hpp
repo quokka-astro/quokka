@@ -34,8 +34,11 @@ class HyperbolicSystem
 
       protected:
 	double CFL_number = 1.0;
-	int nvars = 0;
 	double dt = 0;
+	double Lx;
+	double dx;
+	int nx;
+	int nghost = 2;
 
 	HyperbolicSystem() = default;
 
