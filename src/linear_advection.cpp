@@ -25,7 +25,8 @@ LinearAdvectionSystem::LinearAdvectionSystem(const int nx, const double vx,
 	this->density.NewAthenaArray(nx + 2 * (this->nghost));
 	this->density_xleft.NewAthenaArray(nx + 2 * (this->nghost));
 	this->density_xright.NewAthenaArray(nx + 2 * (this->nghost));
-	this->density_flux.NewAthenaArray(nx + 2 * (this->nghost));
+	this->density_flux_fromleft.NewAthenaArray(nx + 2 * (this->nghost));
+	this->density_flux_fromright.NewAthenaArray(nx + 2 * (this->nghost));
 }
 
 void LinearAdvectionSystem::AdvanceTimestep()
@@ -95,16 +96,18 @@ void LinearAdvectionSystem::ComputeFluxes()
 
 		// upwind direction for cell i is cell (i+1)
 		for (int i = nghost; i < nx + nghost; ++i) {
-			this->density_flux(i) =
-			    this->density_xright(i) * this->advection_vx;
+			this->density_flux_fromright(i) =
+			    this->density_xright(i) *
+			    std::abs(this->advection_vx);
 		}
 
 	} else {
 
 		// upwind direction for cell i is cell (i-1)
 		for (int i = nghost; i < nx + nghost; ++i) {
-			this->density_flux(i) =
-			    this->density_xleft(i) * this->advection_vx;
+			this->density_flux_fromleft(i) =
+			    this->density_xleft(i) *
+			    std::abs(this->advection_vx);
 		}
 	}
 }
@@ -112,8 +115,25 @@ void LinearAdvectionSystem::ComputeFluxes()
 void LinearAdvectionSystem::AddFluxes()
 {
 	for (int i = nghost; i < nx + nghost; ++i) {
-		this->density(i) += (this->dt) * this->density_flux(i);
+		this->density(i) +=
+		    (this->dt) * this->density_flux_fromright(i);
+		this->density(i) += (this->dt) * this->density_flux_fromleft(i);
+		this->density(i + 1) -=
+		    (this->dt) * this->density_flux_fromright(i);
+		this->density(i - 1) -=
+		    (this->dt) * this->density_flux_fromleft(i);
 	}
+}
+
+auto LinearAdvectionSystem::ComputeMass() -> double
+{
+	double mass = 0.0;
+
+	for (int i = nghost; i < nx + nghost; ++i) {
+		mass += this->density(i) * this->dx;
+	}
+
+	return mass;
 }
 
 void LinearAdvectionSystem::AddSourceTerms(AthenaArray<double> &source_terms) {}
