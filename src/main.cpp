@@ -36,6 +36,8 @@ auto main(int argc, char *argv[]) -> int
 	const double advection_velocity = 1.0;
 	const double Lx = 1.0;
 
+	const double atol = 1e-14; //< absolute tolerance for mass conservation
+
 	// Problem initialization
 
 	LinearAdvectionSystem advection_system(nx, advection_velocity, Lx);
@@ -47,11 +49,16 @@ auto main(int argc, char *argv[]) -> int
 		advection_system.density(i) = value;
 	}
 
+	std::cout << "Initial conditions:"
+		  << "\n";
 	write_density(advection_system);
+	std::cout << "\n";
+
+	const auto initial_mass = advection_system.ComputeMass();
 
 	// Main time loop
 
-	const int max_timesteps = 10;
+	const int max_timesteps = 32;
 
 	for (int j = 0; j < max_timesteps; ++j) {
 		std::cout << "Timestep " << j << "\n";
@@ -59,11 +66,19 @@ auto main(int argc, char *argv[]) -> int
 		advection_system.AdvanceTimestep();
 		write_density(advection_system);
 
-		std::cout << "Total mass = " << advection_system.ComputeMass()
-			  << "\n\n";
+		const auto current_mass = advection_system.ComputeMass();
+		std::cout << "Total mass = " << current_mass << "\n";
+		const auto mass_nonconservation =
+		    std::abs(current_mass - initial_mass);
+		std::cout << "Mass nonconservation = " << mass_nonconservation
+			  << "\n";
+		assert(mass_nonconservation < atol); // NOLINT
+
+		std::cout << "\n";
 	}
 
 	// Cleanup and exit
+	std::cout << "Finished." << std::endl;
 
 	return 0;
 }
