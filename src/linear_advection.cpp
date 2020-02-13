@@ -25,8 +25,7 @@ LinearAdvectionSystem::LinearAdvectionSystem(const int nx, const double vx,
 	this->density.NewAthenaArray(nx + 2 * (this->nghost));
 	this->density_xleft.NewAthenaArray(nx + 2 * (this->nghost));
 	this->density_xright.NewAthenaArray(nx + 2 * (this->nghost));
-	this->density_flux_fromleft.NewAthenaArray(nx + 2 * (this->nghost));
-	this->density_flux_fromright.NewAthenaArray(nx + 2 * (this->nghost));
+	this->density_flux.NewAthenaArray(nx + 2 * (this->nghost));
 }
 
 void LinearAdvectionSystem::AdvanceTimestep()
@@ -48,7 +47,7 @@ void LinearAdvectionSystem::FillGhostZones()
 	// In general, this step will require MPI communication, and interaction
 	// with the main AMR code.
 
-	// FIXME: assume periodic boundary conditions
+	// FIXME: currently we assume periodic boundary conditions.
 
 	// x1 right side boundary
 	for (int i = nghost + nx; i < nghost + nx + nghost; ++i) {
@@ -72,56 +71,37 @@ void LinearAdvectionSystem::ReconstructStates()
 {
 	// Use upwind (donor-cell) reconstruction
 
-	if (this->advection_vx < 0.0) {
-		// upwind direction for cell i is cell (i+1)
+	for (int i = nghost; i < nx + nghost; i++) {
 
-		for (int i = nghost; i < nx + nghost; i++) {
-			this->density_xleft(i) = 0.0;
+		if (this->advection_vx < 0.0) { // upwind switch
+
+			// upwind direction for cell i is cell (i+1)
+			this->density_xleft(i) = this->density(i);
 			this->density_xright(i) = this->density(i + 1);
-		}
 
-	} else {
-		// upwind direction for cell i is cell (i-1)
-
-		for (int i = nghost; i < nx + nghost; ++i) {
+		} else {
+			// upwind direction for cell i is cell (i-1)
 			this->density_xleft(i) = this->density(i - 1);
-			this->density_xright(i) = 0.0;
+			this->density_xright(i) = this->density(i);
 		}
 	}
 }
 
 void LinearAdvectionSystem::ComputeFluxes()
 {
-	if (this->advection_vx < 0.0) {
 
-		// upwind direction for cell i is cell (i+1)
-		for (int i = nghost; i < nx + nghost; ++i) {
-			this->density_flux_fromright(i) =
-			    this->density_xright(i) *
-			    std::abs(this->advection_vx);
-		}
+	for (int i = nghost; i < nx + nghost; ++i) {
 
-	} else {
-
-		// upwind direction for cell i is cell (i-1)
-		for (int i = nghost; i < nx + nghost; ++i) {
-			this->density_flux_fromleft(i) =
-			    this->density_xleft(i) *
-			    std::abs(this->advection_vx);
-		}
+		this->density_flux(i) =
+		    -1.0 * this->advection_vx *
+		    (this->density_xright(i) - this->density_xleft(i)) / dx;
 	}
 }
 
 void LinearAdvectionSystem::AddFluxes()
 {
 	for (int i = nghost; i < nx + nghost; ++i) {
-		this->density(i) +=
-		    (this->dt) * this->density_flux_fromright(i);
-		this->density(i) += (this->dt) * this->density_flux_fromleft(i);
-		this->density(i + 1) -=
-		    (this->dt) * this->density_flux_fromright(i);
-		this->density(i - 1) -=
-		    (this->dt) * this->density_flux_fromleft(i);
+		this->density(i) += (this->dt) * this->density_flux(i);
 	}
 }
 

@@ -38,8 +38,7 @@ class LinearAdvectionSystem : public HyperbolicSystem
       protected:
 	AthenaArray<double> density_xleft;
 	AthenaArray<double> density_xright;
-	AthenaArray<double> density_flux_fromleft;
-	AthenaArray<double> density_flux_fromright;
+	AthenaArray<double> density_flux;
 
 	double advection_vx;
 	double Lx;
