@@ -9,7 +9,7 @@ ANALYZE_FILES:=$(filter-out athena_arrays.hpp, $(SRC_FILES))
 #ANALYZE_FILES:=$(CPP_FILES)
 
 CXX ?= g++
-CXXFLAGS ?= -g -O0
+CXXFLAGS ?= -g -O0 --std=c++17
 
 STATIC_ANALYZER = cppcheck
 STATIC_ANALYZER_FLAGS = --enable=all --std=c++17 --suppress=missingIncludeSystem
@@ -33,7 +33,7 @@ driver.exe: $(CPP_FILES)
 ## static analysis / code linting
 
 clang-tidy: $(ANALYZE_FILES)
-	clang-tidy -checks='*,-fuchsia-*,-misc-non-private-member-variables-in-classes,-cppcoreguidelines-non-private-member-variables-in-classes,-google-runtime-references' $^ --
+	clang-tidy -checks='*,-fuchsia-*,-misc-non-private-member-variables-in-classes,-cppcoreguidelines-non-private-member-variables-in-classes,-google-runtime-references' $^ -- | sed 's/\x1b\[[0-9;]*m//g'
 
 cpplint: $(ANALYZE_FILES)
 	cpplint $^
