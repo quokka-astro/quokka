@@ -41,7 +41,8 @@ cpplint: $(ANALYZE_FILES)
 cppcheck: $(ANALYZE_FILES)
 	$(STATIC_ANALYZER) $(STATIC_ANALYZER_FLAGS) $^
 
-flawfinder: $(ANALYZE_FILES)
-	flawfinder $^
+clang-analyzer: $(ANALYZE_FILES)
+	scan-build -v make driver.exe
+
 
 

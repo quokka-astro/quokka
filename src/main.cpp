@@ -51,9 +51,17 @@ auto main(int argc, char *argv[]) -> int
 
 	// Main time loop
 
-	advection_system.AdvanceTimestep();
+	const int max_timesteps = 10;
 
-	write_density(advection_system);
+	for (int j = 0; j < max_timesteps; ++j) {
+		std::cout << "Timestep " << j << "\n";
+
+		advection_system.AdvanceTimestep();
+		write_density(advection_system);
+
+		std::cout << "Total mass = " << advection_system.ComputeMass()
+			  << "\n\n";
+	}
 
 	// Cleanup and exit
 

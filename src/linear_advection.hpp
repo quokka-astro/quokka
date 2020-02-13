@@ -11,6 +11,7 @@
 
 // c++ headers
 #include <cassert>
+#include <cmath>
 
 // internal headers
 #include "athena_arrays.hpp"
@@ -30,13 +31,15 @@ class LinearAdvectionSystem : public HyperbolicSystem
 	AdvanceTimestep() override; //< Computes timestep and advances system
 	void FillGhostZones() override;
 
-	int NumGhostZones();
-	int Nx();
+	auto NumGhostZones() -> int;
+	auto Nx() -> int;
+	auto ComputeMass() -> double;
 
       protected:
 	AthenaArray<double> density_xleft;
 	AthenaArray<double> density_xright;
-	AthenaArray<double> density_flux;
+	AthenaArray<double> density_flux_fromleft;
+	AthenaArray<double> density_flux_fromright;
 
 	double advection_vx;
 	double Lx;
