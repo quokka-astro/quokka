@@ -30,12 +30,12 @@ class HyperbolicSystem
 	///
 	/// \param[in] source_terms A 4-dimensional array of (nvars, nx, ny, nz)
 	///
-	virtual void AddSourceTerms(AthenaArray<double> *source_terms) = 0;
+	virtual void AddSourceTerms(AthenaArray<double> &source_terms) = 0;
 
       protected:
 	double CFL_number = 1.0;
 	int nvars = 0;
-	double timestep = 0;
+	double dt = 0;
 
 	HyperbolicSystem() = default;
 

@@ -30,9 +30,13 @@ void write_density(LinearAdvectionSystem &advection_system);
 ///
 auto main(int argc, char *argv[]) -> int
 {
+	// Problem parameters
+
 	const int nx = 32;
 	const double advection_velocity = 1.0;
 	const double Lx = 1.0;
+
+	// Problem initialization
 
 	LinearAdvectionSystem advection_system(nx, advection_velocity, Lx);
 
@@ -45,9 +49,13 @@ auto main(int argc, char *argv[]) -> int
 
 	write_density(advection_system);
 
+	// Main time loop
+
 	advection_system.AdvanceTimestep();
 
 	write_density(advection_system);
+
+	// Cleanup and exit
 
 	return 0;
 }

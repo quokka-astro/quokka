@@ -23,8 +23,9 @@ LinearAdvectionSystem::LinearAdvectionSystem(const int nx, const double vx,
 	this->dt = 0.;
 
 	this->density.NewAthenaArray(nx + 2 * (this->nghost));
-	this->interface_density.NewAthenaArray(nx + 2 * (this->nghost));
-	this->flux_density.NewAthenaArray(nx + 2 * (this->nghost));
+	this->density_xleft.NewAthenaArray(nx + 2 * (this->nghost));
+	this->density_xright.NewAthenaArray(nx + 2 * (this->nghost));
+	this->density_flux.NewAthenaArray(nx + 2 * (this->nghost));
 }
 
 void LinearAdvectionSystem::AdvanceTimestep()
@@ -43,6 +44,9 @@ auto LinearAdvectionSystem::NumGhostZones() -> int { return this->nghost; }
 
 void LinearAdvectionSystem::FillGhostZones()
 {
+	// In general, this step will require MPI communication, and interaction
+	// with the main AMR code.
+
 	// FIXME: assume periodic boundary conditions
 
 	// x1 right side boundary
@@ -71,31 +75,45 @@ void LinearAdvectionSystem::ReconstructStates()
 		// upwind direction for cell i is cell (i+1)
 
 		for (int i = nghost; i < nx + nghost; i++) {
-			this->interface_density(i) = this->density(i + 1);
+			this->density_xleft(i) = 0.0;
+			this->density_xright(i) = this->density(i + 1);
 		}
 
 	} else {
 		// upwind direction for cell i is cell (i-1)
 
 		for (int i = nghost; i < nx + nghost; ++i) {
-			this->interface_density(i) = this->density(i - 1);
+			this->density_xleft(i) = this->density(i - 1);
+			this->density_xright(i) = 0.0;
 		}
 	}
 }
 
 void LinearAdvectionSystem::ComputeFluxes()
 {
-	for (int i = nghost; i < nx + nghost; ++i) {
-		this->flux_density(i) =
-		    this->interface_density(i) * this->advection_vx;
+	if (this->advection_vx < 0.0) {
+
+		// upwind direction for cell i is cell (i+1)
+		for (int i = nghost; i < nx + nghost; ++i) {
+			this->density_flux(i) =
+			    this->density_xright(i) * this->advection_vx;
+		}
+
+	} else {
+
+		// upwind direction for cell i is cell (i-1)
+		for (int i = nghost; i < nx + nghost; ++i) {
+			this->density_flux(i) =
+			    this->density_xleft(i) * this->advection_vx;
+		}
 	}
 }
 
 void LinearAdvectionSystem::AddFluxes()
 {
 	for (int i = nghost; i < nx + nghost; ++i) {
-		this->density(i) += (this->dt) * this->flux_density(i);
+		this->density(i) += (this->dt) * this->density_flux(i);
 	}
 }
 
-void LinearAdvectionSystem::AddSourceTerms(AthenaArray<double> *source_terms) {}
+void LinearAdvectionSystem::AddSourceTerms(AthenaArray<double> &source_terms) {}

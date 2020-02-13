@@ -23,23 +23,24 @@ class LinearAdvectionSystem : public HyperbolicSystem
       public:
 	AthenaArray<double> density;
 
-	/// Computes timestep and advances system
 	explicit LinearAdvectionSystem(int nx, double vx, double Lx);
-	void AddSourceTerms(AthenaArray<double> *source_terms) override;
-	void AdvanceTimestep() override;
-	int NumGhostZones();
-	int Nx();
+
+	void AddSourceTerms(AthenaArray<double> &source_terms) override;
+	void
+	AdvanceTimestep() override; //< Computes timestep and advances system
 	void FillGhostZones() override;
 
+	int NumGhostZones();
+	int Nx();
+
       protected:
-	AthenaArray<double> interface_density;
-	AthenaArray<double> flux_density;
+	AthenaArray<double> density_xleft;
+	AthenaArray<double> density_xright;
+	AthenaArray<double> density_flux;
 
 	double advection_vx;
 	double Lx;
 	double dx;
-	double dt;
-	double CFL_number = 1.0;
 	int nx;
 	int nghost = 2;
 
