@@ -1,0 +1,3 @@
+[submodule "src/NamedType"]
+	path = src/NamedType
+	url = https://github.com/joboccara/NamedType.git

@@ -15,6 +15,8 @@
 
 // c++ headers
 
+// library headers
+
 // internal headers
 #include "athena_arrays.hpp"
 
@@ -40,8 +42,9 @@ class HyperbolicSystem
 	int nx_;
 	int nghost_ = 2;
 
-	HyperbolicSystem(int nx, double Lx)
-	    : nx_(nx), Lx_(Lx), dx_(Lx / static_cast<double>(nx))
+	HyperbolicSystem(int nx, double Lx, double CFL)
+	    : nx_(nx), Lx_(Lx), dx_(Lx / static_cast<double>(nx)),
+	      CFL_number_(CFL)
 	{
 	}
 

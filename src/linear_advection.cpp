@@ -9,16 +9,24 @@
 
 #include "linear_advection.hpp"
 
-LinearAdvectionSystem::LinearAdvectionSystem(const int nx, const double vx,
-					     const double Lx)
-    : HyperbolicSystem{nx, Lx}, advection_vx_(vx)
-{
-	assert(advection_vx_ != 0.0); // NOLINT
-	assert(Lx_ > 0.0);	      // NOLINT
-	assert(nx_ > 2);	      // NOLINT
-	assert(nghost_ > 1);	      // NOLINT
+// We must *define* static member variables here, outside of the class
+// *declaration*, even though the definitions are trivial.
+const LinearAdvectionSystem::Nx::argument LinearAdvectionSystem::nx;
+const LinearAdvectionSystem::Lx::argument LinearAdvectionSystem::lx;
+const LinearAdvectionSystem::Vx::argument LinearAdvectionSystem::vx;
+const LinearAdvectionSystem::CFLType::argument LinearAdvectionSystem::CFL;
 
-	const int dim1 = nx + 2 * nghost_;
+LinearAdvectionSystem::LinearAdvectionSystem(Nx const &nx, Lx const &lx,
+					     Vx const &vx, CFLType const &CFL)
+    : HyperbolicSystem{nx.get(), lx.get(), CFL.get()}, advection_vx_(vx.get())
+{
+	assert(advection_vx_ != 0.0);			     // NOLINT
+	assert(Lx_ > 0.0);				     // NOLINT
+	assert(nx_ > 2);				     // NOLINT
+	assert(nghost_ > 1);				     // NOLINT
+	assert((CFL_number_ > 0.0) && (CFL_number_ <= 1.0)); // NOLINT
+
+	const int dim1 = nx_ + 2 * nghost_;
 
 	density_.NewAthenaArray(dim1);
 	density_xleft_.NewAthenaArray(dim1);
@@ -36,7 +44,7 @@ void LinearAdvectionSystem::AdvanceTimestep()
 	//	AddSourceTerms();
 }
 
-auto LinearAdvectionSystem::Nx() -> int { return nx_; }
+auto LinearAdvectionSystem::GetNx() -> int { return nx_; }
 
 auto LinearAdvectionSystem::NumGhostZones() -> int { return nghost_; }
 

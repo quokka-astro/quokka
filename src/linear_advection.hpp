@@ -13,6 +13,9 @@
 #include <cassert>
 #include <cmath>
 
+// library headers
+#include "NamedType/named_type.hpp" // provides fluent::NamedType
+
 // internal headers
 #include "athena_arrays.hpp"
 #include "hyperbolic_system.hpp"
@@ -24,14 +27,25 @@ class LinearAdvectionSystem : public HyperbolicSystem
       public:
 	AthenaArray<double> density_;
 
-	LinearAdvectionSystem(int nx, double vx, double Lx);
+	using Nx = fluent::NamedType<int, struct NxParameter>;
+	using Lx = fluent::NamedType<double, struct LxParameter>;
+	using CFLType = fluent::NamedType<double, struct CFLParameter>;
+	using Vx = fluent::NamedType<double, struct VxParameter>;
+
+	static const Nx::argument nx;
+	static const Lx::argument lx;
+	static const CFLType::argument CFL;
+	static const Vx::argument vx;
+
+	LinearAdvectionSystem(Nx const &nx, Lx const &lx, Vx const &vx,
+			      CFLType const &CFL);
 
 	void AddSourceTerms(AthenaArray<double> &source_terms) override;
 	void AdvanceTimestep() override; //< Advances system by one timestep
 	void SetCFLNumber(double CFL_number);
 
 	auto NumGhostZones() -> int;
-	auto Nx() -> int;
+	auto GetNx() -> int;
 	auto ComputeMass() -> double;
 
       protected:

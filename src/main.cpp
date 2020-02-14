@@ -33,16 +33,23 @@ auto main(int argc, char *argv[]) -> int
 	// Problem parameters
 
 	const int nx = 32;
-	const double advection_velocity = 1.0;
 	const double Lx = 1.0;
+	const double advection_velocity = 1.0;
 	const double CFL_number = 1.0;
 
 	const double atol = 1e-14; //< absolute tolerance for mass conservation
 
 	// Problem initialization
+	// (We use named types in order to guarantee that we don't screw up the
+	// order of the arguments to the constructor. Also it makes C++ look
+	// like beautiful Python. With optimizations enabled, there is no
+	// performance penalty whatsoever. See
+	// https://github.com/joboccara/NamedType)
 
-	LinearAdvectionSystem advection_system(nx, advection_velocity, Lx);
-	advection_system.SetCFLNumber(CFL_number);
+	LinearAdvectionSystem advection_system(
+	    LinearAdvectionSystem::nx = nx, LinearAdvectionSystem::lx = Lx,
+	    LinearAdvectionSystem::vx = advection_velocity,
+	    LinearAdvectionSystem::CFL = CFL_number);
 
 	auto nghost = advection_system.NumGhostZones();
 
@@ -88,7 +95,7 @@ void write_density(LinearAdvectionSystem &advection_system)
 {
 	std::cout << "density = ";
 
-	auto nx = advection_system.Nx();
+	auto nx = advection_system.GetNx();
 	auto nghost = advection_system.NumGhostZones();
 
 	for (int i = 0; i < nx + 2 * nghost; ++i) {
