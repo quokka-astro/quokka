@@ -5,7 +5,7 @@
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file hyperbolic_system.cpp
+/// \file hyperbolic_system.hpp
 /// \brief Defines classes and functions for use with hyperbolic systems of
 /// conservation laws.
 ///
@@ -14,6 +14,7 @@
 ///
 
 // c++ headers
+#include <cmath>
 
 // library headers
 
@@ -33,6 +34,8 @@ class HyperbolicSystem
 	/// \param[in] source_terms A 4-dimensional array of (nvars, nx, ny, nz)
 	///
 	virtual void AddSourceTerms(AthenaArray<double> &source_terms) = 0;
+
+	static auto minmod(double a, double b) -> double;
 
       protected:
 	double CFL_number_ = 1.0;

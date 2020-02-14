@@ -31,6 +31,7 @@ LinearAdvectionSystem::LinearAdvectionSystem(Nx const &nx, Lx const &lx,
 	density_.NewAthenaArray(dim1);
 	density_xleft_.NewAthenaArray(dim1);
 	density_xright_.NewAthenaArray(dim1);
+	density_xinterface_.NewAthenaArray(dim1);
 	density_flux_.NewAthenaArray(dim1);
 }
 
@@ -39,6 +40,7 @@ void LinearAdvectionSystem::AdvanceTimestep()
 	FillGhostZones();
 	ComputeTimestep();
 	ReconstructStates();
+	DoRiemannSolve();
 	ComputeFluxes();
 	AddFluxes();
 	//	AddSourceTerms();
@@ -81,37 +83,83 @@ void LinearAdvectionSystem::ComputeTimestep()
 
 void LinearAdvectionSystem::ReconstructStates()
 {
-	// Use upwind (donor-cell) reconstruction
+	// By convention, the interfaces are defined on the left edge of each
+	// zone, i.e. xleft_(i) is the "left"-side of the interface at
+	// the left edge of zone i, and xright_(i) is the "right"-side of the
+	// interface at the *left* edge of zone i.
 
-	for (int i = nghost_; i < nx_ + nghost_; i++) {
+	// Indexing note: There are (nx + 1) interfaces for nx zones.
+
+	for (int i = nghost_; i < (nx_ + 1) + nghost_; i++) {
+
+		// Use piecewise-constant reconstruction
+		// (This converges at first order in spatial resolution.)
+
+		// density_xleft_(i) = density_(i - 1);
+		// density_xright_(i) = density_(i);
+
+		// Use piecewise-linear reconstruction
+		// (This converges at second order in spatial resolution.)
+
+		const auto lslope =
+		    HyperbolicSystem::minmod(density_(i) - density_(i - 1),
+					     density_(i - 1) - density_(i - 2));
+
+		const auto rslope =
+		    HyperbolicSystem::minmod(density_(i + 1) - density_(i),
+					     density_(i) - density_(i - 1));
+
+		density_xleft_(i) = density_(i - 1) + 0.25 * lslope;
+		density_xright_(i) = density_(i) + 0.25 * rslope;
+	}
+}
+
+void LinearAdvectionSystem::DoRiemannSolve()
+{
+	// By convention, the interfaces are defined on the left edge of each
+	// zone, i.e. xinterface_(i) is the solution to the Riemann problem at
+	// the left edge of zone i.
+
+	// Indexing note: There are (nx + 1) interfaces for nx zones.
+
+	for (int i = nghost_; i < (nx_ + 1) + nghost_; i++) {
+
+		// For advection, simply choose upwind side of the interface.
 
 		if (advection_vx_ < 0.0) { // upwind switch
-
-			// upwind direction for cell i is cell (i+1)
-			density_xleft_(i) = density_(i);
-			density_xright_(i) = density_(i + 1);
+			// upwind direction is the right-side of the interface
+			density_xinterface_(i) = density_xright_(i);
 
 		} else {
-			// upwind direction for cell i is cell (i-1)
-			density_xleft_(i) = density_(i - 1);
-			density_xright_(i) = density_(i);
+			// upwind direction is the left-side of the interface
+			density_xinterface_(i) = density_xleft_(i);
 		}
 	}
 }
 
 void LinearAdvectionSystem::ComputeFluxes()
 {
-	for (int i = nghost_; i < nx_ + nghost_; ++i) {
-		density_flux_(i) = -1.0 * advection_vx_ *
-				   (density_xright_(i) - density_xleft_(i)) /
-				   dx_;
+	// By convention, the fluxes are defined on the left edge of each zone,
+	// i.e. flux_(i) is the flux *into* zone i through the left-side
+	// interface.
+
+	// Indexing note: There are (nx + 1) interfaces for nx zones.
+
+	for (int i = nghost_; i < (nx_ + 1) + nghost_; i++) {
+		density_flux_(i) = advection_vx_ * density_xinterface_(i);
 	}
 }
 
 void LinearAdvectionSystem::AddFluxes()
 {
+	// By convention, the fluxes are defined on the left edge of each zone,
+	// i.e. flux_(i) is the flux *into* zone i through the interface on the
+	// left of zone i, and -1.0*flux(i+1) is the flux *into* zone i through
+	// the interface on the right of zone i.
+
 	for (int i = nghost_; i < nx_ + nghost_; ++i) {
-		density_(i) += dt_ * density_flux_(i);
+		density_(i) += -1.0 * (dt_ / dx_) *
+			       (density_flux_(i + 1) - density_flux_(i));
 	}
 }
 

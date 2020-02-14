@@ -51,6 +51,7 @@ class LinearAdvectionSystem : public HyperbolicSystem
       protected:
 	AthenaArray<double> density_xleft_;
 	AthenaArray<double> density_xright_;
+	AthenaArray<double> density_xinterface_;
 	AthenaArray<double> density_flux_;
 
 	double advection_vx_;
@@ -60,6 +61,7 @@ class LinearAdvectionSystem : public HyperbolicSystem
 	void ComputeTimestep() override;
 	void ReconstructStates() override;
 	void ComputeFluxes() override;
+	void DoRiemannSolve();
 	void AddFluxes() override;
 };
 
