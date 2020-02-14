@@ -39,7 +39,7 @@ void LinearAdvectionSystem::AdvanceTimestep()
 {
 	FillGhostZones();
 	ComputeTimestep();
-	ReconstructStates(HyperbolicSystem::minmod);
+	ReconstructStatesPLM(HyperbolicSystem::minmod);
 	DoRiemannSolve();
 	ComputeFluxes();
 	AddFluxes();
@@ -81,7 +81,7 @@ void LinearAdvectionSystem::ComputeTimestep()
 	dt_ = CFL_number_ * (dx_ / advection_vx_);
 }
 
-template <typename F> void LinearAdvectionSystem::ReconstructStates(F &&limiter)
+void LinearAdvectionSystem::ReconstructStatesConstant()
 {
 	// By convention, the interfaces are defined on the left edge of each
 	// zone, i.e. xleft_(i) is the "left"-side of the interface at
@@ -95,8 +95,22 @@ template <typename F> void LinearAdvectionSystem::ReconstructStates(F &&limiter)
 		// Use piecewise-constant reconstruction
 		// (This converges at first order in spatial resolution.)
 
-		// density_xleft_(i) = density_(i - 1);
-		// density_xright_(i) = density_(i);
+		density_xleft_(i) = density_(i - 1);
+		density_xright_(i) = density_(i);
+	}
+}
+
+template <typename F>
+void LinearAdvectionSystem::ReconstructStatesPLM(F &&limiter)
+{
+	// By convention, the interfaces are defined on the left edge of each
+	// zone, i.e. xleft_(i) is the "left"-side of the interface at
+	// the left edge of zone i, and xright_(i) is the "right"-side of the
+	// interface at the *left* edge of zone i.
+
+	// Indexing note: There are (nx + 1) interfaces for nx zones.
+
+	for (int i = nghost_; i < (nx_ + 1) + nghost_; i++) {
 
 		// Use piecewise-linear reconstruction
 		// (This converges at second order in spatial resolution.)
@@ -107,8 +121,8 @@ template <typename F> void LinearAdvectionSystem::ReconstructStates(F &&limiter)
 		const auto rslope = limiter(density_(i + 1) - density_(i),
 					    density_(i) - density_(i - 1));
 
-		density_xleft_(i) = density_(i - 1) + 0.25 * lslope;
-		density_xright_(i) = density_(i) + 0.25 * rslope;
+		density_xleft_(i) = density_(i - 1) + 0.25 * lslope; // NOLINT
+		density_xright_(i) = density_(i) + 0.25 * rslope;    // NOLINT
 	}
 }
 

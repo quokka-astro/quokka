@@ -22,7 +22,10 @@
 #include "athena_arrays.hpp"
 
 /// Provide type-safe global sign ('sgn') function.
-template <typename T> int sgn(T val) { return (T(0) < val) - (val < T(0)); }
+template <typename T> auto sgn(T val) -> int
+{
+	return (T(0) < val) - (val < T(0));
+}
 
 /// Class for a hyperbolic system of conservation laws (Cannot be instantiated,
 /// must be subclassed.)
