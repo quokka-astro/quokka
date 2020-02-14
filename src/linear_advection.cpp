@@ -39,7 +39,7 @@ void LinearAdvectionSystem::AdvanceTimestep()
 {
 	FillGhostZones();
 	ComputeTimestep();
-	ReconstructStates();
+	ReconstructStates(HyperbolicSystem::minmod);
 	DoRiemannSolve();
 	ComputeFluxes();
 	AddFluxes();
@@ -81,7 +81,7 @@ void LinearAdvectionSystem::ComputeTimestep()
 	dt_ = CFL_number_ * (dx_ / advection_vx_);
 }
 
-void LinearAdvectionSystem::ReconstructStates()
+template <typename F> void LinearAdvectionSystem::ReconstructStates(F &&limiter)
 {
 	// By convention, the interfaces are defined on the left edge of each
 	// zone, i.e. xleft_(i) is the "left"-side of the interface at
@@ -101,13 +101,11 @@ void LinearAdvectionSystem::ReconstructStates()
 		// Use piecewise-linear reconstruction
 		// (This converges at second order in spatial resolution.)
 
-		const auto lslope =
-		    HyperbolicSystem::minmod(density_(i) - density_(i - 1),
-					     density_(i - 1) - density_(i - 2));
+		const auto lslope = limiter(density_(i) - density_(i - 1),
+					    density_(i - 1) - density_(i - 2));
 
-		const auto rslope =
-		    HyperbolicSystem::minmod(density_(i + 1) - density_(i),
-					     density_(i) - density_(i - 1));
+		const auto rslope = limiter(density_(i + 1) - density_(i),
+					    density_(i) - density_(i - 1));
 
 		density_xleft_(i) = density_(i - 1) + 0.25 * lslope;
 		density_xright_(i) = density_(i) + 0.25 * rslope;

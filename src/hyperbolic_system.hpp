@@ -35,7 +35,8 @@ class HyperbolicSystem
 	///
 	virtual void AddSourceTerms(AthenaArray<double> &source_terms) = 0;
 
-	static auto minmod(double a, double b) -> double;
+	__attribute__((always_inline)) static auto minmod(double a, double b)
+	    -> double;
 
       protected:
 	double CFL_number_ = 1.0;
@@ -54,7 +55,6 @@ class HyperbolicSystem
 	virtual void FillGhostZones() = 0;
 	virtual void ConservedToPrimitive() = 0;
 	virtual void ComputeTimestep() = 0;
-	virtual void ReconstructStates() = 0;
 	virtual void ComputeFluxes() = 0;
 	virtual void AddFluxes() = 0;
 };
