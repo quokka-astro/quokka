@@ -44,11 +44,11 @@ auto main(int argc, char *argv[]) -> int
 	LinearAdvectionSystem advection_system(nx, advection_velocity, Lx);
 	advection_system.SetCFLNumber(CFL_number);
 
-	for (int i = advection_system.NumGhostZones();
-	     i < nx + advection_system.NumGhostZones(); ++i) {
-		auto value =
-		    static_cast<double>(i - advection_system.NumGhostZones());
-		advection_system.density(i) = value;
+	auto nghost = advection_system.NumGhostZones();
+
+	for (int i = nghost; i < nx + nghost; ++i) {
+		auto value = static_cast<double>(i - nghost);
+		advection_system.density_(i) = value;
 	}
 
 	std::cout << "Initial conditions:"
@@ -70,11 +70,10 @@ auto main(int argc, char *argv[]) -> int
 
 		const auto current_mass = advection_system.ComputeMass();
 		std::cout << "Total mass = " << current_mass << "\n";
-		const auto mass_nonconservation =
-		    std::abs(current_mass - initial_mass);
-		std::cout << "Mass nonconservation = " << mass_nonconservation
-			  << "\n";
-		assert(mass_nonconservation < atol); // NOLINT
+
+		const auto mass_deficit = std::abs(current_mass - initial_mass);
+		std::cout << "Mass nonconservation = " << mass_deficit << "\n";
+		assert(mass_deficit < atol); // NOLINT
 
 		std::cout << "\n";
 	}
@@ -93,7 +92,7 @@ void write_density(LinearAdvectionSystem &advection_system)
 	auto nghost = advection_system.NumGhostZones();
 
 	for (int i = 0; i < nx + 2 * nghost; ++i) {
-		std::cout << advection_system.density(i) << " ";
+		std::cout << advection_system.density_(i) << " ";
 	}
 
 	std::cout << "\n";

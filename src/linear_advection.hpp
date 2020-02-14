@@ -22,13 +22,12 @@
 class LinearAdvectionSystem : public HyperbolicSystem
 {
       public:
-	AthenaArray<double> density;
+	AthenaArray<double> density_;
 
-	explicit LinearAdvectionSystem(int nx, double vx, double Lx);
+	LinearAdvectionSystem(int nx, double vx, double Lx);
 
 	void AddSourceTerms(AthenaArray<double> &source_terms) override;
-	void
-	AdvanceTimestep() override; //< Computes timestep and advances system
+	void AdvanceTimestep() override; //< Advances system by one timestep
 	void SetCFLNumber(double CFL_number);
 
 	auto NumGhostZones() -> int;
@@ -36,11 +35,11 @@ class LinearAdvectionSystem : public HyperbolicSystem
 	auto ComputeMass() -> double;
 
       protected:
-	AthenaArray<double> density_xleft;
-	AthenaArray<double> density_xright;
-	AthenaArray<double> density_flux;
+	AthenaArray<double> density_xleft_;
+	AthenaArray<double> density_xright_;
+	AthenaArray<double> density_flux_;
 
-	double advection_vx;
+	double advection_vx_;
 
 	void FillGhostZones() override;
 	void ConservedToPrimitive() override;

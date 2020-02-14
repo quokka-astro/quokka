@@ -33,14 +33,17 @@ class HyperbolicSystem
 	virtual void AddSourceTerms(AthenaArray<double> &source_terms) = 0;
 
       protected:
-	double CFL_number = 1.0;
-	double dt = 0;
-	double Lx;
-	double dx;
-	int nx;
-	int nghost = 2;
+	double CFL_number_ = 1.0;
+	double dt_ = 0;
+	double Lx_;
+	double dx_;
+	int nx_;
+	int nghost_ = 2;
 
-	HyperbolicSystem() = default;
+	HyperbolicSystem(int nx, double Lx)
+	    : nx_(nx), Lx_(Lx), dx_(Lx / static_cast<double>(nx))
+	{
+	}
 
 	virtual void FillGhostZones() = 0;
 	virtual void ConservedToPrimitive() = 0;

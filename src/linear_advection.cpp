@@ -11,21 +11,19 @@
 
 LinearAdvectionSystem::LinearAdvectionSystem(const int nx, const double vx,
 					     const double Lx)
+    : HyperbolicSystem{nx, Lx}, advection_vx_(vx)
 {
-	assert(vx != 0.0); // NOLINT
-	assert(Lx > 0.0);  // NOLINT
-	assert(nx > 2);	   // NOLINT
+	assert(advection_vx_ != 0.0); // NOLINT
+	assert(Lx_ > 0.0);	      // NOLINT
+	assert(nx_ > 2);	      // NOLINT
+	assert(nghost_ > 1);	      // NOLINT
 
-	this->nx = nx;
-	this->advection_vx = vx;
-	this->Lx = Lx;
-	this->dx = Lx / (static_cast<double>(nx));
-	this->dt = 0.;
+	const int dim1 = nx + 2 * nghost_;
 
-	this->density.NewAthenaArray(nx + 2 * (this->nghost));
-	this->density_xleft.NewAthenaArray(nx + 2 * (this->nghost));
-	this->density_xright.NewAthenaArray(nx + 2 * (this->nghost));
-	this->density_flux.NewAthenaArray(nx + 2 * (this->nghost));
+	density_.NewAthenaArray(dim1);
+	density_xleft_.NewAthenaArray(dim1);
+	density_xright_.NewAthenaArray(dim1);
+	density_flux_.NewAthenaArray(dim1);
 }
 
 void LinearAdvectionSystem::AdvanceTimestep()
@@ -38,14 +36,14 @@ void LinearAdvectionSystem::AdvanceTimestep()
 	//	AddSourceTerms();
 }
 
-auto LinearAdvectionSystem::Nx() -> int { return this->nx; }
+auto LinearAdvectionSystem::Nx() -> int { return nx_; }
 
-auto LinearAdvectionSystem::NumGhostZones() -> int { return this->nghost; }
+auto LinearAdvectionSystem::NumGhostZones() -> int { return nghost_; }
 
 void LinearAdvectionSystem::SetCFLNumber(double CFL_number)
 {
 	assert((CFL_number > 0.0) && (CFL_number <= 1.0)); // NOLINT
-	this->CFL_number = CFL_number;
+	CFL_number_ = CFL_number;
 }
 
 void LinearAdvectionSystem::FillGhostZones()
@@ -56,13 +54,13 @@ void LinearAdvectionSystem::FillGhostZones()
 	// FIXME: currently we assume periodic boundary conditions.
 
 	// x1 right side boundary
-	for (int i = nghost + nx; i < nghost + nx + nghost; ++i) {
-		this->density(i) = this->density(i - nx);
+	for (int i = nghost_ + nx_; i < nghost_ + nx_ + nghost_; ++i) {
+		density_(i) = density_(i - nx_);
 	}
 
 	// x1 left side boundary
-	for (int i = 0; i < nghost; ++i) {
-		this->density(i) = this->density(i + nx);
+	for (int i = 0; i < nghost_; ++i) {
+		density_(i) = density_(i + nx_);
 	}
 }
 
@@ -70,44 +68,42 @@ void LinearAdvectionSystem::ConservedToPrimitive() {}
 
 void LinearAdvectionSystem::ComputeTimestep()
 {
-	this->dt = (this->CFL_number) * (this->dx) / (this->advection_vx);
+	dt_ = CFL_number_ * (dx_ / advection_vx_);
 }
 
 void LinearAdvectionSystem::ReconstructStates()
 {
 	// Use upwind (donor-cell) reconstruction
 
-	for (int i = nghost; i < nx + nghost; i++) {
+	for (int i = nghost_; i < nx_ + nghost_; i++) {
 
-		if (this->advection_vx < 0.0) { // upwind switch
+		if (advection_vx_ < 0.0) { // upwind switch
 
 			// upwind direction for cell i is cell (i+1)
-			this->density_xleft(i) = this->density(i);
-			this->density_xright(i) = this->density(i + 1);
+			density_xleft_(i) = density_(i);
+			density_xright_(i) = density_(i + 1);
 
 		} else {
 			// upwind direction for cell i is cell (i-1)
-			this->density_xleft(i) = this->density(i - 1);
-			this->density_xright(i) = this->density(i);
+			density_xleft_(i) = density_(i - 1);
+			density_xright_(i) = density_(i);
 		}
 	}
 }
 
 void LinearAdvectionSystem::ComputeFluxes()
 {
-
-	for (int i = nghost; i < nx + nghost; ++i) {
-
-		this->density_flux(i) =
-		    -1.0 * this->advection_vx *
-		    (this->density_xright(i) - this->density_xleft(i)) / dx;
+	for (int i = nghost_; i < nx_ + nghost_; ++i) {
+		density_flux_(i) = -1.0 * advection_vx_ *
+				   (density_xright_(i) - density_xleft_(i)) /
+				   dx_;
 	}
 }
 
 void LinearAdvectionSystem::AddFluxes()
 {
-	for (int i = nghost; i < nx + nghost; ++i) {
-		this->density(i) += (this->dt) * this->density_flux(i);
+	for (int i = nghost_; i < nx_ + nghost_; ++i) {
+		density_(i) += dt_ * density_flux_(i);
 	}
 }
 
@@ -115,8 +111,8 @@ auto LinearAdvectionSystem::ComputeMass() -> double
 {
 	double mass = 0.0;
 
-	for (int i = nghost; i < nx + nghost; ++i) {
-		mass += this->density(i) * this->dx;
+	for (int i = nghost_; i < nx_ + nghost_; ++i) {
+		mass += density_(i) * dx_;
 	}
 
 	return mass;
