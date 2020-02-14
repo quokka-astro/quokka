@@ -21,6 +21,9 @@
 // internal headers
 #include "athena_arrays.hpp"
 
+/// Provide type-safe global sign ('sgn') function.
+template <typename T> int sgn(T val) { return (T(0) < val) - (val < T(0)); }
+
 /// Class for a hyperbolic system of conservation laws (Cannot be instantiated,
 /// must be subclassed.)
 class HyperbolicSystem
@@ -35,8 +38,23 @@ class HyperbolicSystem
 	///
 	virtual void AddSourceTerms(AthenaArray<double> &source_terms) = 0;
 
-	__attribute__((always_inline)) static auto minmod(double a, double b)
-	    -> double;
+	__attribute__((always_inline)) inline static auto minmod(double a,
+								 double b)
+	    -> double
+	{
+		auto result = 0.0;
+
+		if ((sgn(a) == sgn(b)) && (a != b) && (a != 0.0) &&
+		    (b != 0.0)) {
+			if (std::abs(a) < std::abs(b)) {
+				result = a;
+			} else {
+				result = b;
+			}
+		}
+
+		return result;
+	}
 
       protected:
 	double CFL_number_ = 1.0;
