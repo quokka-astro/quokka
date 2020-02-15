@@ -61,6 +61,7 @@ class LinearAdvectionSystem : public HyperbolicSystem
 	void ComputeTimestep() override;
 	void ReconstructStatesConstant();
 	template <typename F> void ReconstructStatesPLM(F &&limiter);
+	void ReconstructStatesPPM();
 	void ComputeFluxes() override;
 	void DoRiemannSolve();
 	void AddFluxes() override;

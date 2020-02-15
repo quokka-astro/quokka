@@ -126,6 +126,23 @@ void LinearAdvectionSystem::ReconstructStatesPLM(F &&limiter)
 	}
 }
 
+void LinearAdvectionSystem::ReconstructStatesPPM()
+{
+	// By convention, the interfaces are defined on the left edge of each
+	// zone, i.e. xleft_(i) is the "left"-side of the interface at
+	// the left edge of zone i, and xright_(i) is the "right"-side of the
+	// interface at the *left* edge of zone i.
+
+	// Indexing note: There are (nx + 1) interfaces for nx zones.
+
+	for (int i = nghost_; i < (nx_ + 1) + nghost_; i++) {
+		// TODO(ben): implement PPM reconstruction following Collela &
+		// Woodward (1984)
+	}
+}
+
+// TODO(ben): combine this function with LinearAdvectionSystem::ComputeFluxes()
+//
 void LinearAdvectionSystem::DoRiemannSolve()
 {
 	// By convention, the interfaces are defined on the left edge of each
