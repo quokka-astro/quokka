@@ -28,7 +28,7 @@ void write_density(LinearAdvectionSystem &advection_system);
 ///
 /// \return Error code.
 ///
-auto main(int argc, char *argv[]) -> int
+auto main() -> int
 {
 	// Problem parameters
 
@@ -47,11 +47,11 @@ auto main(int argc, char *argv[]) -> int
 	// https://github.com/joboccara/NamedType)
 
 	LinearAdvectionSystem advection_system(
-	    LinearAdvectionSystem::nx = nx, LinearAdvectionSystem::lx = Lx,
-	    LinearAdvectionSystem::vx = advection_velocity,
+	    LinearAdvectionSystem::Nx = nx, LinearAdvectionSystem::Lx = Lx,
+	    LinearAdvectionSystem::Vx = advection_velocity,
 	    LinearAdvectionSystem::CFL = CFL_number);
 
-	auto nghost = advection_system.NumGhostZones();
+	auto nghost = advection_system.nghost();
 
 	for (int i = nghost; i < nx + nghost; ++i) {
 		auto value = static_cast<double>(i - nghost);
@@ -95,8 +95,8 @@ void write_density(LinearAdvectionSystem &advection_system)
 {
 	std::cout << "density = ";
 
-	auto nx = advection_system.GetNx();
-	auto nghost = advection_system.NumGhostZones();
+	auto nx = advection_system.nx();
+	auto nghost = advection_system.nghost();
 
 	for (int i = 0; i < nx + 2 * nghost; ++i) {
 		std::cout << advection_system.density_(i) << " ";

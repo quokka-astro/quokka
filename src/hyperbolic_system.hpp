@@ -60,16 +60,16 @@ class HyperbolicSystem
 	}
 
       protected:
-	double CFL_number_ = 1.0;
+	double cflNumber_ = 1.0;
 	double dt_ = 0;
-	double Lx_;
+	double lx_;
 	double dx_;
 	int nx_;
 	int nghost_ = 2;
 
-	HyperbolicSystem(int nx, double Lx, double CFL)
-	    : nx_(nx), Lx_(Lx), dx_(Lx / static_cast<double>(nx)),
-	      CFL_number_(CFL)
+	HyperbolicSystem(int nx, double lx, double cflNumber)
+	    : nx_(nx), lx_(lx), dx_(lx / static_cast<double>(nx)),
+	      cflNumber_(cflNumber)
 	{
 	}
 

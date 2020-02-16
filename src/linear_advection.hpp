@@ -27,34 +27,40 @@ class LinearAdvectionSystem : public HyperbolicSystem
       public:
 	AthenaArray<double> density_;
 
-	using Nx = fluent::NamedType<int, struct NxParameter>;
-	using Lx = fluent::NamedType<double, struct LxParameter>;
+	using NxType = fluent::NamedType<int, struct NxParameter>;
+	using LxType = fluent::NamedType<double, struct LxParameter>;
 	using CFLType = fluent::NamedType<double, struct CFLParameter>;
-	using Vx = fluent::NamedType<double, struct VxParameter>;
+	using VxType = fluent::NamedType<double, struct VxParameter>;
 
-	static const Nx::argument nx;
-	static const Lx::argument lx;
+	static const NxType::argument Nx;
+	static const LxType::argument Lx;
 	static const CFLType::argument CFL;
-	static const Vx::argument vx;
+	static const VxType::argument Vx;
 
-	LinearAdvectionSystem(Nx const &nx, Lx const &lx, Vx const &vx,
-			      CFLType const &CFL);
+	LinearAdvectionSystem(NxType const &nx, LxType const &lx,
+			      VxType const &vx, CFLType const &CFL);
 
 	void AddSourceTerms(AthenaArray<double> &source_terms) override;
 	void AdvanceTimestep() override; //< Advances system by one timestep
-	void SetCFLNumber(double CFL_number);
 
-	auto NumGhostZones() -> int;
-	auto GetNx() -> int;
+	// setter functions:
+
+	void set_cflNumber(double cflNumber);
+
+	// accessor functions:
+
+	auto nghost() -> int;
+	auto nx() -> int;
+
 	auto ComputeMass() -> double;
 
       protected:
-	AthenaArray<double> density_xleft_;
-	AthenaArray<double> density_xright_;
-	AthenaArray<double> density_xinterface_;
-	AthenaArray<double> density_flux_;
+	AthenaArray<double> densityXLeft_;
+	AthenaArray<double> densityXRight_;
+	AthenaArray<double> densityXInterface_;
+	AthenaArray<double> densityXFlux_;
 
-	double advection_vx_;
+	double advectionVx_;
 
 	void FillGhostZones() override;
 	void ConservedToPrimitive() override;

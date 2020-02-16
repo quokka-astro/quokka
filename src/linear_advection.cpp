@@ -11,28 +11,30 @@
 
 // We must *define* static member variables here, outside of the class
 // *declaration*, even though the definitions are trivial.
-const LinearAdvectionSystem::Nx::argument LinearAdvectionSystem::nx;
-const LinearAdvectionSystem::Lx::argument LinearAdvectionSystem::lx;
-const LinearAdvectionSystem::Vx::argument LinearAdvectionSystem::vx;
+const LinearAdvectionSystem::NxType::argument LinearAdvectionSystem::Nx;
+const LinearAdvectionSystem::LxType::argument LinearAdvectionSystem::Lx;
+const LinearAdvectionSystem::VxType::argument LinearAdvectionSystem::Vx;
 const LinearAdvectionSystem::CFLType::argument LinearAdvectionSystem::CFL;
 
-LinearAdvectionSystem::LinearAdvectionSystem(Nx const &nx, Lx const &lx,
-					     Vx const &vx, CFLType const &CFL)
-    : HyperbolicSystem{nx.get(), lx.get(), CFL.get()}, advection_vx_(vx.get())
+LinearAdvectionSystem::LinearAdvectionSystem(NxType const &nx, LxType const &lx,
+					     VxType const &vx,
+					     CFLType const &cflNumber)
+    : HyperbolicSystem{nx.get(), lx.get(), cflNumber.get()},
+      advectionVx_(vx.get())
 {
-	assert(advection_vx_ != 0.0);			     // NOLINT
-	assert(Lx_ > 0.0);				     // NOLINT
-	assert(nx_ > 2);				     // NOLINT
-	assert(nghost_ > 1);				     // NOLINT
-	assert((CFL_number_ > 0.0) && (CFL_number_ <= 1.0)); // NOLINT
+	assert(advectionVx_ != 0.0);			   // NOLINT
+	assert(lx_ > 0.0);				   // NOLINT
+	assert(nx_ > 2);				   // NOLINT
+	assert(nghost_ > 1);				   // NOLINT
+	assert((cflNumber_ > 0.0) && (cflNumber_ <= 1.0)); // NOLINT
 
 	const int dim1 = nx_ + 2 * nghost_;
 
 	density_.NewAthenaArray(dim1);
-	density_xleft_.NewAthenaArray(dim1);
-	density_xright_.NewAthenaArray(dim1);
-	density_xinterface_.NewAthenaArray(dim1);
-	density_flux_.NewAthenaArray(dim1);
+	densityXLeft_.NewAthenaArray(dim1);
+	densityXRight_.NewAthenaArray(dim1);
+	densityXInterface_.NewAthenaArray(dim1);
+	densityXFlux_.NewAthenaArray(dim1);
 }
 
 void LinearAdvectionSystem::AdvanceTimestep()
@@ -46,14 +48,14 @@ void LinearAdvectionSystem::AdvanceTimestep()
 	//	AddSourceTerms();
 }
 
-auto LinearAdvectionSystem::GetNx() -> int { return nx_; }
+auto LinearAdvectionSystem::nx() -> int { return nx_; }
 
-auto LinearAdvectionSystem::NumGhostZones() -> int { return nghost_; }
+auto LinearAdvectionSystem::nghost() -> int { return nghost_; }
 
-void LinearAdvectionSystem::SetCFLNumber(double CFL_number)
+void LinearAdvectionSystem::set_cflNumber(double cflNumber)
 {
-	assert((CFL_number > 0.0) && (CFL_number <= 1.0)); // NOLINT
-	CFL_number_ = CFL_number;
+	assert((cflNumber > 0.0) && (cflNumber <= 1.0)); // NOLINT
+	cflNumber_ = cflNumber;
 }
 
 void LinearAdvectionSystem::FillGhostZones()
@@ -78,7 +80,7 @@ void LinearAdvectionSystem::ConservedToPrimitive() {}
 
 void LinearAdvectionSystem::ComputeTimestep()
 {
-	dt_ = CFL_number_ * (dx_ / advection_vx_);
+	dt_ = cflNumber_ * (dx_ / advectionVx_);
 }
 
 void LinearAdvectionSystem::ReconstructStatesConstant()
@@ -90,13 +92,13 @@ void LinearAdvectionSystem::ReconstructStatesConstant()
 
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
 
-	for (int i = nghost_; i < (nx_ + 1) + nghost_; i++) {
+	for (int i = nghost_; i < (nx_ + 1) + nghost_; ++i) {
 
 		// Use piecewise-constant reconstruction
 		// (This converges at first order in spatial resolution.)
 
-		density_xleft_(i) = density_(i - 1);
-		density_xright_(i) = density_(i);
+		densityXLeft_(i) = density_(i - 1);
+		densityXRight_(i) = density_(i);
 	}
 }
 
@@ -110,7 +112,7 @@ void LinearAdvectionSystem::ReconstructStatesPLM(F &&limiter)
 
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
 
-	for (int i = nghost_; i < (nx_ + 1) + nghost_; i++) {
+	for (int i = nghost_; i < (nx_ + 1) + nghost_; ++i) {
 
 		// Use piecewise-linear reconstruction
 		// (This converges at second order in spatial resolution.)
@@ -121,8 +123,8 @@ void LinearAdvectionSystem::ReconstructStatesPLM(F &&limiter)
 		const auto rslope = limiter(density_(i + 1) - density_(i),
 					    density_(i) - density_(i - 1));
 
-		density_xleft_(i) = density_(i - 1) + 0.25 * lslope; // NOLINT
-		density_xright_(i) = density_(i) + 0.25 * rslope;    // NOLINT
+		densityXLeft_(i) = density_(i - 1) + 0.25 * lslope; // NOLINT
+		densityXRight_(i) = density_(i) + 0.25 * rslope;    // NOLINT
 	}
 }
 
@@ -135,7 +137,7 @@ void LinearAdvectionSystem::ReconstructStatesPPM()
 
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
 
-	for (int i = nghost_; i < (nx_ + 1) + nghost_; i++) {
+	for (int i = nghost_; i < (nx_ + 1) + nghost_; ++i) {
 		// TODO(ben): implement PPM reconstruction following Collela &
 		// Woodward (1984)
 	}
@@ -151,17 +153,17 @@ void LinearAdvectionSystem::DoRiemannSolve()
 
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
 
-	for (int i = nghost_; i < (nx_ + 1) + nghost_; i++) {
+	for (int i = nghost_; i < (nx_ + 1) + nghost_; ++i) {
 
 		// For advection, simply choose upwind side of the interface.
 
-		if (advection_vx_ < 0.0) { // upwind switch
+		if (advectionVx_ < 0.0) { // upwind switch
 			// upwind direction is the right-side of the interface
-			density_xinterface_(i) = density_xright_(i);
+			densityXInterface_(i) = densityXRight_(i);
 
 		} else {
 			// upwind direction is the left-side of the interface
-			density_xinterface_(i) = density_xleft_(i);
+			densityXInterface_(i) = densityXLeft_(i);
 		}
 	}
 }
@@ -174,8 +176,8 @@ void LinearAdvectionSystem::ComputeFluxes()
 
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
 
-	for (int i = nghost_; i < (nx_ + 1) + nghost_; i++) {
-		density_flux_(i) = advection_vx_ * density_xinterface_(i);
+	for (int i = nghost_; i < (nx_ + 1) + nghost_; ++i) {
+		densityXFlux_(i) = advectionVx_ * densityXInterface_(i);
 	}
 }
 
@@ -188,7 +190,7 @@ void LinearAdvectionSystem::AddFluxes()
 
 	for (int i = nghost_; i < nx_ + nghost_; ++i) {
 		density_(i) += -1.0 * (dt_ / dx_) *
-			       (density_flux_(i + 1) - density_flux_(i));
+			       (densityXFlux_(i + 1) - densityXFlux_(i));
 	}
 }
 
