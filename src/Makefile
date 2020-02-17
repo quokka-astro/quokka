@@ -33,7 +33,7 @@ driver.exe: $(CPP_FILES)
 ## static analysis / code linting
 
 clang-tidy: $(ANALYZE_FILES)
-	clang-tidy -checks='*,-fuchsia-*,-misc-non-private-member-variables-in-classes,-cppcoreguidelines-non-private-member-variables-in-classes,-google-runtime-references' $^ -- | sed 's/\x1b\[[0-9;]*m//g'
+	clang-tidy -extra-arg=-std=c++17 -checks='*,-fuchsia-*,-misc-non-private-member-variables-in-classes,-cppcoreguidelines-non-private-member-variables-in-classes,-google-runtime-references' $^ -- | sed 's/\x1b\[[0-9;]*m//g'
 
 cpplint: $(ANALYZE_FILES)
 	cpplint $^
