@@ -38,7 +38,7 @@ class LinearAdvectionSystem : public HyperbolicSystem
 	static const VxType::argument Vx;
 
 	LinearAdvectionSystem(NxType const &nx, LxType const &lx,
-			      VxType const &vx, CFLType const &CFL);
+			      VxType const &vx, CFLType const &cflNumber);
 
 	void AddSourceTerms(AthenaArray<double> &source_terms) override;
 	void AdvanceTimestep() override; //< Advances system by one timestep

@@ -41,7 +41,8 @@ void LinearAdvectionSystem::AdvanceTimestep()
 {
 	FillGhostZones();
 	ComputeTimestep();
-	ReconstructStatesPLM(HyperbolicSystem::minmod);
+	//	ReconstructStatesPLM(HyperbolicSystem::minmod);
+	ReconstructStatesPPM();
 	DoRiemannSolve();
 	ComputeFluxes();
 	AddFluxes();
@@ -141,8 +142,90 @@ void LinearAdvectionSystem::ReconstructStatesPPM()
 		// TODO(ben): implement PPM reconstruction following Collela &
 		// Woodward (1984)
 
+		// To convert indices from PPM paper to indices as used in this
+		// code:
+		//	interface(j + 1/2) -> interface(i + 1).
+		// 	interface(j - 1/2) -> interface(i).
+		//  zone (j + 1) -> density(i).
+		//  zone (j)	 -> density(i - 1).
+		//  zone (j - 1) -> density(i - 2).
 
+		// We use Eq. (1.6) specialized to the case of equally-spaced
+		// zones:
+		// a_{j+1/2} = a_j + (1/2)(a_{j+1} - a_j) + (1/6)(\delta a_j -
+		// \delta a_{j+1}) ,
+		//
+		// where \delta a_j is the average slope in the j-th zone:
+		// \delta a_j = (1/2) [ (a_{j+1} - a_j) + (a_j - a_{j-1}) ] .
+		//
+		// In practice, \delta a_j must be slope-limited according to:
+		// \delta_m a_j = min( |\delta a_j|, 2|a_{j+1} - a_j|, 2|a_j -
+		// a_{j-1}| ) \times sgn(\delta a_j)
+		//			if (a_{j+1} - a_j)(a_j - a_{j-1}) > 0,
+		//			or 0 otherwise.
+
+		auto limslope = [](double a_m2, double a_m1, double a_i) {
+			const auto da = 0.5 * (a_i - a_m2);
+			const auto rslope = 2.0 * std::abs(a_i - a_m1);
+			const auto lslope = 2.0 * std::abs(a_m1 - a_m2);
+
+			const auto slope =
+			    std::min({std::abs(da), rslope, lslope}) * sgn(da);
+
+			if ((a_i - a_m1) * (a_m1 - a_m2) > 0.0) {
+				return slope;
+			} else {
+				return 0.0;
+			}
+		};
+
+		const double da_i =
+		    limslope(density_(i - 1), density_(i), density_(i + 1));
+		const double da_iminus1 =
+		    limslope(density_(i - 2), density_(i - 1), density_(i));
+
+		const double a_jhalf = density_(i - 1) +
+				       0.5 * (density_(i) - density_(i - 1)) -
+				       (1.0 / 6.0) * (da_i - da_iminus1);
+
+		// a_R,(i-1) in PPM paper
+		densityXLeft_(i) = a_jhalf;
+
+		// a_L,i in PPM paper
+		densityXRight_(i) = a_jhalf;
 	}
+
+#if 0
+	for (int i = nghost_; i < nx_ + nghost_; ++i) {
+		// Monotonicity correction, using Eq. (1.10):
+
+		const double a_L = densityXRight_(i);	 // a_L,i in PPM paper
+		const double a_R = densityXLeft_(i + 1); // a_R,i in PPM paper
+		const double a = density_(i); // zone average (a_i in PPM paper)
+
+		double new_a_L = a_L;
+		double new_a_R = a_R;
+
+		if (((a_R - a) * (a - a_L)) <= 0.0) {
+
+			new_a_L = a;
+			new_a_R = a;
+
+		} else if (((a_R - a_L) * (a - 0.5 * (a_L + a_R))) >
+			   ((a_R - a_L) * (a_R - a_L) / 6.0)) {
+
+			new_a_L = (3.0 * a) - (2.0 * a_R);
+
+		} else if (((a_R - a_L) * (a_R - a_L) / (-6.0)) >
+			   ((a_R - a_L) * (a - 0.5 * (a_R + a_L)))) {
+
+			new_a_R = (3.0 * a) - (2.0 * a_L);
+		}
+
+		densityXRight_(i) = new_a_L;
+		densityXLeft_(i + 1) = new_a_R;
+	}
+#endif
 }
 
 // TODO(ben): combine this function with LinearAdvectionSystem::ComputeFluxes()

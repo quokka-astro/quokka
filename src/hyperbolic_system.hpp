@@ -65,7 +65,7 @@ class HyperbolicSystem
 	double lx_;
 	double dx_;
 	int nx_;
-	int nghost_ = 2;
+	int nghost_ = 3;
 
 	HyperbolicSystem(int nx, double lx, double cflNumber)
 	    : nx_(nx), lx_(lx), dx_(lx / static_cast<double>(nx)),
