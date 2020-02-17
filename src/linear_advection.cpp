@@ -138,9 +138,8 @@ void LinearAdvectionSystem::ReconstructStatesPPM()
 
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
 
-	for (int i = nghost_; i < (nx_ + 1) + nghost_; ++i) {
-		// TODO(ben): implement PPM reconstruction following Collela &
-		// Woodward (1984)
+	for (int i = nghost_ - 1; i < (nx_ + 2) + nghost_; ++i) {
+		// PPM reconstruction following Collela & Woodward (1984)
 
 		// To convert indices from PPM paper to indices as used in this
 		// code:
@@ -169,14 +168,13 @@ void LinearAdvectionSystem::ReconstructStatesPPM()
 			const auto rslope = 2.0 * std::abs(a_i - a_m1);
 			const auto lslope = 2.0 * std::abs(a_m1 - a_m2);
 
-			const auto slope =
+			auto slope =
 			    std::min({std::abs(da), rslope, lslope}) * sgn(da);
 
-			if ((a_i - a_m1) * (a_m1 - a_m2) > 0.0) {
-				return slope;
-			} else {
-				return 0.0;
+			if ((a_i - a_m1) * (a_m1 - a_m2) <= 0.0) {
+				slope = 0.0;
 			}
+			return slope;
 		};
 
 		const double da_i =
@@ -195,8 +193,9 @@ void LinearAdvectionSystem::ReconstructStatesPPM()
 		densityXRight_(i) = a_jhalf;
 	}
 
-#if 0
-	for (int i = nghost_; i < nx_ + nghost_; ++i) {
+	// TODO(ben): Add discontinuity detection here, using Eq. (1.14).
+
+	for (int i = nghost_ - 1; i < (nx_ + 1) + nghost_; ++i) {
 		// Monotonicity correction, using Eq. (1.10):
 
 		const double a_L = densityXRight_(i);	 // a_L,i in PPM paper
@@ -206,26 +205,30 @@ void LinearAdvectionSystem::ReconstructStatesPPM()
 		double new_a_L = a_L;
 		double new_a_R = a_R;
 
+		const double comparison1 =
+		    (a_R - a_L) * (a - 0.5 * (a_L + a_R));
+		const double comparison2 = std::pow((a_R - a_L), 2) / 6.0;
+
 		if (((a_R - a) * (a - a_L)) <= 0.0) {
 
+			// a_i is a local extremum
 			new_a_L = a;
 			new_a_R = a;
 
-		} else if (((a_R - a_L) * (a - 0.5 * (a_L + a_R))) >
-			   ((a_R - a_L) * (a_R - a_L) / 6.0)) {
+		} else if (comparison1 > comparison2) {
 
+			// parabola overshoots near a_L
 			new_a_L = (3.0 * a) - (2.0 * a_R);
 
-		} else if (((a_R - a_L) * (a_R - a_L) / (-6.0)) >
-			   ((a_R - a_L) * (a - 0.5 * (a_R + a_L)))) {
+		} else if (-comparison2 > comparison1) {
 
+			// parabola overshoots near a_R
 			new_a_R = (3.0 * a) - (2.0 * a_L);
 		}
 
 		densityXRight_(i) = new_a_L;
 		densityXLeft_(i + 1) = new_a_R;
 	}
-#endif
 }
 
 // TODO(ben): combine this function with LinearAdvectionSystem::ComputeFluxes()

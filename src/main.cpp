@@ -35,9 +35,9 @@ auto main() -> int
 	const int nx = 32;
 	const double Lx = 1.0;
 	const double advection_velocity = 1.0;
-	const double CFL_number = 1.0;
+	const double CFL_number = 0.8;
 
-	const double atol = 1e-10; //< absolute tolerance for mass conservation
+	const double atol = 1e-13; //< absolute tolerance for mass conservation
 
 	// Problem initialization
 	// (We use named types in order to guarantee that we don't screw up the
@@ -55,11 +55,11 @@ auto main() -> int
 
 	for (int i = nghost; i < nx + nghost; ++i) {
 		auto value = static_cast<double>(i - nghost);
-		advection_system.density_(i) = value;
+		// advection_system.density_(i) = value;
 
-		// advection_system.density_(i) =
-		//   1.0 +
-		//   std::sin(M_PI * (value + 0.5) / static_cast<double>(nx));
+		advection_system.density_(i) =
+		    1.0 +
+		    std::sin(M_PI * (value + 0.5) / static_cast<double>(nx));
 	}
 
 	std::cout << "Initial conditions:"
