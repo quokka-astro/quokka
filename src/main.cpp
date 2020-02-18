@@ -35,7 +35,8 @@ auto main() -> int
 	const int nx = 32;
 	const double Lx = 1.0;
 	const double advection_velocity = 1.0;
-	const double CFL_number = 0.8;
+	const double CFL_number = 0.5;
+	const double max_time = 1.0;
 
 	const double atol = 1e-13; //< absolute tolerance for mass conservation
 
@@ -55,10 +56,10 @@ auto main() -> int
 
 	for (int i = nghost; i < nx + nghost; ++i) {
 		auto value = static_cast<double>(i - nghost);
+
 		// advection_system.density_(i) = value;
 
 		advection_system.density_(i) =
-		    1.0 +
 		    std::sin(M_PI * (value + 0.5) / static_cast<double>(nx));
 	}
 
@@ -71,10 +72,15 @@ auto main() -> int
 
 	// Main time loop
 
-	const int max_timesteps = 2;
+	const int max_timesteps = 1000;
 
 	for (int j = 0; j < max_timesteps; ++j) {
-		std::cout << "Timestep " << j << "\n";
+		if (advection_system.time() >= max_time) {
+			break;
+		}
+
+		std::cout << "Timestep " << j
+			  << "; t = " << advection_system.time() << "\n";
 
 		advection_system.AdvanceTimestep();
 		write_density(advection_system);

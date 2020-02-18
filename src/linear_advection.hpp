@@ -51,6 +51,7 @@ class LinearAdvectionSystem : public HyperbolicSystem
 
 	auto nghost() -> int;
 	auto nx() -> int;
+	auto time() -> double;
 
 	auto ComputeMass() -> double;
 

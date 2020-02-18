@@ -47,7 +47,12 @@ void LinearAdvectionSystem::AdvanceTimestep()
 	ComputeFluxes();
 	AddFluxes();
 	//	AddSourceTerms();
+
+	// Adjust our clock
+	time_ += dt_;
 }
+
+auto LinearAdvectionSystem::time() -> double { return time_; }
 
 auto LinearAdvectionSystem::nx() -> int { return nx_; }
 
@@ -139,7 +144,9 @@ void LinearAdvectionSystem::ReconstructStatesPPM()
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
 
 	for (int i = nghost_ - 1; i < (nx_ + 2) + nghost_; ++i) {
-		// PPM reconstruction following Collela & Woodward (1984)
+		// PPM reconstruction following Colella & Woodward (1984), with
+		// some modifications following Mignone (2014), as implemented
+		// in Athena++.
 
 		// To convert indices from PPM paper to indices as used in this
 		// code:
@@ -151,40 +158,27 @@ void LinearAdvectionSystem::ReconstructStatesPPM()
 
 		// We use Eq. (1.6) specialized to the case of equally-spaced
 		// zones:
-		// a_{j+1/2} = a_j + (1/2)(a_{j+1} - a_j) + (1/6)(\delta a_j -
-		// \delta a_{j+1}) ,
+		// a_{j+1/2} = a_j + (1/2)(a_{j+1} - a_j) +
+		// 			(1/6)(\delta a_j - \delta a_{j+1}) ,
 		//
 		// where \delta a_j is the average slope in the j-th zone:
 		// \delta a_j = (1/2) [ (a_{j+1} - a_j) + (a_j - a_{j-1}) ] .
-		//
-		// In practice, \delta a_j must be slope-limited according to:
-		// \delta_m a_j = min( |\delta a_j|, 2|a_{j+1} - a_j|, 2|a_j -
-		// a_{j-1}| ) \times sgn(\delta a_j)
-		//			if (a_{j+1} - a_j)(a_j - a_{j-1}) > 0,
-		//			or 0 otherwise.
 
-		auto limslope = [](double a_m2, double a_m1, double a_i) {
-			const auto da = 0.5 * (a_i - a_m2);
-			const auto rslope = 2.0 * std::abs(a_i - a_m1);
-			const auto lslope = 2.0 * std::abs(a_m1 - a_m2);
+		// Estimate the interface a_{i - 1/2}.
+		// (Equivalent to step 1 in Athena++ (ppm_simple.cpp).)
 
-			auto slope =
-			    std::min({std::abs(da), rslope, lslope}) * sgn(da);
+		const double da_i = 0.5 * (density_(i + 1) - density_(i - 1));
+		const double da_iminus1 = 0.5 * (density_(i) - density_(i - 2));
 
-			if ((a_i - a_m1) * (a_m1 - a_m2) <= 0.0) {
-				slope = 0.0;
-			}
-			return slope;
-		};
+		double a_jhalf = 0.5 * (density_(i) + density_(i - 1)) -
+				 (1.0 / 6.0) * (da_i - da_iminus1);
 
-		const double da_i =
-		    limslope(density_(i - 1), density_(i), density_(i + 1));
-		const double da_iminus1 =
-		    limslope(density_(i - 2), density_(i - 1), density_(i));
-
-		const double a_jhalf = density_(i - 1) +
-				       0.5 * (density_(i) - density_(i - 1)) -
-				       (1.0 / 6.0) * (da_i - da_iminus1);
+		// Constrain interface value to lie between adjacent
+		// cell-averaged values (equivalent to step 2b in Athena++).
+		a_jhalf =
+		    std::min(a_jhalf, std::max(density_(i), density_(i - 1)));
+		a_jhalf =
+		    std::max(a_jhalf, std::min(density_(i), density_(i - 1)));
 
 		// a_R,(i-1) in PPM paper
 		densityXLeft_(i) = a_jhalf;
@@ -193,41 +187,46 @@ void LinearAdvectionSystem::ReconstructStatesPPM()
 		densityXRight_(i) = a_jhalf;
 	}
 
-	// TODO(ben): Add discontinuity detection here, using Eq. (1.14).
-
 	for (int i = nghost_ - 1; i < (nx_ + 1) + nghost_; ++i) {
-		// Monotonicity correction, using Eq. (1.10):
 
-		const double a_L = densityXRight_(i);	 // a_L,i in PPM paper
-		const double a_R = densityXLeft_(i + 1); // a_R,i in PPM paper
+		const double a_minus = densityXRight_(i); // a_L,i in PPM paper
+		const double a_plus =
+		    densityXLeft_(i + 1);     // a_R,i in PPM paper
 		const double a = density_(i); // zone average (a_i in PPM paper)
 
-		double new_a_L = a_L;
-		double new_a_R = a_R;
+		double new_a_minus = a_minus;
+		double new_a_plus = a_plus;
 
-		const double comparison1 =
-		    (a_R - a_L) * (a - 0.5 * (a_L + a_R));
-		const double comparison2 = std::pow((a_R - a_L), 2) / 6.0;
+		const double dqf_minus = (a - a_minus);
+		const double dqf_plus = (a_plus - a);
 
-		if (((a_R - a) * (a - a_L)) <= 0.0) {
+		// Monotonicity correction, using Eq. (1.10) in PPM paper.
+		// Equivalent to step 4b in Athena++ (ppm_simple.cpp).
 
-			// a_i is a local extremum
-			new_a_L = a;
-			new_a_R = a;
+		const double qa = dqf_plus * dqf_minus; // interface extrema
+		const double qb =
+		    (density_(i + 1) - density_(i)) *
+		    (density_(i) - density_(i - 1)); // cell-avg extrema
 
-		} else if (comparison1 > comparison2) {
+		if ((qa <= 0.0) || (qb <= 0.0)) { // local extremum
+			new_a_minus = a;
+			new_a_plus = a;
 
-			// parabola overshoots near a_L
-			new_a_L = (3.0 * a) - (2.0 * a_R);
+		} else { // no local extrema
 
-		} else if (-comparison2 > comparison1) {
+			// parabola overshoots near a_plus -> reset a_minus
+			if (std::abs(dqf_minus) >= 2.0 * std::abs(dqf_plus)) {
+				new_a_minus = (3.0 * a) - (2.0 * a_plus);
+			}
 
-			// parabola overshoots near a_R
-			new_a_R = (3.0 * a) - (2.0 * a_L);
+			// parabola overshoots near a_minus -> reset a_plus
+			if (std::abs(dqf_plus) >= 2.0 * std::abs(dqf_minus)) {
+				new_a_plus = (3.0 * a) - (2.0 * a_minus);
+			}
 		}
 
-		densityXRight_(i) = new_a_L;
-		densityXLeft_(i + 1) = new_a_R;
+		densityXRight_(i) = new_a_minus;
+		densityXLeft_(i + 1) = new_a_plus;
 	}
 }
 
@@ -256,6 +255,7 @@ void LinearAdvectionSystem::DoRiemannSolve()
 	}
 }
 
+// TODO(ben): Add flux limiter for positivity preservation.
 void LinearAdvectionSystem::ComputeFluxes()
 {
 	// By convention, the fluxes are defined on the left edge of each zone,

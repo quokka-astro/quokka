@@ -62,6 +62,7 @@ class HyperbolicSystem
       protected:
 	double cflNumber_ = 1.0;
 	double dt_ = 0;
+	double time_ = 0.;
 	double lx_;
 	double dx_;
 	int nx_;
