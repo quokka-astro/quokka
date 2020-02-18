@@ -166,6 +166,7 @@ void LinearAdvectionSystem::ReconstructStatesPPM()
 
 		// Estimate the interface a_{i - 1/2}.
 		// (Equivalent to step 1 in Athena++ (ppm_simple.cpp).)
+		// TODO(ben): simplify this using Eq. (1.9) from PPM paper.
 
 		const double da_i = 0.5 * (density_(i + 1) - density_(i - 1));
 		const double da_iminus1 = 0.5 * (density_(i) - density_(i - 2));
