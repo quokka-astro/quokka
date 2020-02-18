@@ -28,25 +28,31 @@ LinearAdvectionSystem::LinearAdvectionSystem(NxType const &nx, LxType const &lx,
 	assert(nghost_ > 1);				   // NOLINT
 	assert((cflNumber_ > 0.0) && (cflNumber_ <= 1.0)); // NOLINT
 
-	const int dim1 = nx_ + 2 * nghost_;
-
-	density_.NewAthenaArray(dim1);
-	densityXLeft_.NewAthenaArray(dim1);
-	densityXRight_.NewAthenaArray(dim1);
-	densityXInterface_.NewAthenaArray(dim1);
-	densityXFlux_.NewAthenaArray(dim1);
+	density_.NewAthenaArray(dim1_);
+	densityPrediction_.NewAthenaArray(dim1_);
+	densityXLeft_.NewAthenaArray(dim1_);
+	densityXRight_.NewAthenaArray(dim1_);
+	densityXFlux_.NewAthenaArray(dim1_);
 }
 
 void LinearAdvectionSystem::AdvanceTimestep()
 {
 	FillGhostZones();
 	ComputeTimestep();
-	//	ReconstructStatesPLM(HyperbolicSystem::minmod);
-	ReconstructStatesPPM();
-	DoRiemannSolve();
+
+	// Predictor step
+	ReconstructStatesConstant();
+	ComputeFluxes();
+	PredictHalfStep();
+
+	densityXLeft_.ZeroClear();
+	densityXRight_.ZeroClear();
+	densityXFlux_.ZeroClear();
+
+	// Corrector step
+	ReconstructStatesPPM(densityPrediction_);
 	ComputeFluxes();
 	AddFluxes();
-	//	AddSourceTerms();
 
 	// Adjust our clock
 	time_ += dt_;
@@ -134,7 +140,7 @@ void LinearAdvectionSystem::ReconstructStatesPLM(F &&limiter)
 	}
 }
 
-void LinearAdvectionSystem::ReconstructStatesPPM()
+void LinearAdvectionSystem::ReconstructStatesPPM(AthenaArray<double> &q)
 {
 	// By convention, the interfaces are defined on the left edge of each
 	// zone, i.e. xleft_(i) is the "left"-side of the interface at
@@ -168,20 +174,19 @@ void LinearAdvectionSystem::ReconstructStatesPPM()
 		// (Equivalent to step 1 in Athena++ (ppm_simple.cpp).)
 		// TODO(ben): simplify this using Eq. (1.9) from PPM paper.
 
-		const double da_i = 0.5 * (density_(i + 1) - density_(i - 1));
-		const double da_iminus1 = 0.5 * (density_(i) - density_(i - 2));
+		const double da_i = 0.5 * (q(i + 1) - q(i - 1));
+		const double da_iminus1 = 0.5 * (q(i) - q(i - 2));
 
 		// const double da_i = 0.;
 		// const double da_iminus1 = 0.;
 
 		// TODO(ben): carefully check signs here. (checked!)
-		const double a_jhalf = 0.5 * (density_(i) + density_(i - 1)) +
-				       (1.0 / 6.0) * (da_iminus1 - da_i);
+		const double a_jhalf =
+		    0.5 * (q(i) + q(i - 1)) + (1.0 / 6.0) * (da_iminus1 - da_i);
 
 		// Constrain interface value to lie between adjacent
 		// cell-averaged values (equivalent to step 2b in Athena++).
-		std::pair<double, double> bounds =
-		    std::minmax(density_(i), density_(i - 1));
+		std::pair<double, double> bounds = std::minmax(q(i), q(i - 1));
 		const double interface =
 		    std::clamp(a_jhalf, bounds.first, bounds.second);
 
@@ -196,8 +201,8 @@ void LinearAdvectionSystem::ReconstructStatesPPM()
 
 		const double a_minus = densityXRight_(i); // a_L,i in PPM paper
 		const double a_plus =
-		    densityXLeft_(i + 1);     // a_R,i in PPM paper
-		const double a = density_(i); // zone average (a_i in PPM paper)
+		    densityXLeft_(i + 1); // a_R,i in PPM paper
+		const double a = q(i);	  // zone average (a_i in PPM paper)
 
 		double new_a_minus = a_minus;
 		double new_a_plus = a_plus;
@@ -210,8 +215,8 @@ void LinearAdvectionSystem::ReconstructStatesPPM()
 
 		const double qa = dq_plus * dq_minus; // interface extrema
 		// const double qb =
-		//    (density_(i + 1) - density_(i)) *
-		//    (density_(i) - density_(i - 1)); // cell-avg extrema
+		//    (q(i + 1) - q(i)) *
+		//    (q(i) - q(i - 1)); // cell-avg extrema
 
 		if ((qa <= 0.0)) { // local extremum
 			new_a_minus = a;
@@ -235,9 +240,8 @@ void LinearAdvectionSystem::ReconstructStatesPPM()
 	}
 }
 
-// TODO(ben): combine this function with LinearAdvectionSystem::ComputeFluxes()
-//
-void LinearAdvectionSystem::DoRiemannSolve()
+// TODO(ben): add flux limiter for positivity preservation.
+void LinearAdvectionSystem::ComputeFluxes()
 {
 	// By convention, the interfaces are defined on the left edge of each
 	// zone, i.e. xinterface_(i) is the solution to the Riemann problem at
@@ -251,26 +255,28 @@ void LinearAdvectionSystem::DoRiemannSolve()
 
 		if (advectionVx_ < 0.0) { // upwind switch
 			// upwind direction is the right-side of the interface
-			densityXInterface_(i) = densityXRight_(i);
+			densityXFlux_(i) = advectionVx_ * densityXRight_(i);
 
 		} else {
 			// upwind direction is the left-side of the interface
-			densityXInterface_(i) = densityXLeft_(i);
+			densityXFlux_(i) = advectionVx_ * densityXLeft_(i);
 		}
 	}
 }
 
-// TODO(ben): Add flux limiter for positivity preservation.
-void LinearAdvectionSystem::ComputeFluxes()
+void LinearAdvectionSystem::PredictHalfStep()
 {
 	// By convention, the fluxes are defined on the left edge of each zone,
-	// i.e. flux_(i) is the flux *into* zone i through the left-side
-	// interface.
+	// i.e. flux_(i) is the flux *into* zone i through the interface on the
+	// left of zone i, and -1.0*flux(i+1) is the flux *into* zone i through
+	// the interface on the right of zone i.
 
-	// Indexing note: There are (nx + 1) interfaces for nx zones.
+	// FIXME: Prediction is needed over a wider stencil than main solve!
 
-	for (int i = nghost_; i < (nx_ + 1) + nghost_; ++i) {
-		densityXFlux_(i) = advectionVx_ * densityXInterface_(i);
+	for (int i = nghost_ - 2; i < (nx_ + 2) + nghost_; ++i) {
+		densityPrediction_(i) =
+		    density_(i) - (0.5 * dt_ / dx_) *
+				      (densityXFlux_(i + 1) - densityXFlux_(i));
 	}
 }
 
