@@ -170,21 +170,25 @@ void LinearAdvectionSystem::ReconstructStatesPPM()
 		const double da_i = 0.5 * (density_(i + 1) - density_(i - 1));
 		const double da_iminus1 = 0.5 * (density_(i) - density_(i - 2));
 
-		double a_jhalf = 0.5 * (density_(i) + density_(i - 1)) -
-				 (1.0 / 6.0) * (da_i - da_iminus1);
+		// const double da_i = 0.;
+		// const double da_iminus1 = 0.;
+
+		// TODO(ben): carefully check signs here. (checked!)
+		const double a_jhalf = 0.5 * (density_(i) + density_(i - 1)) +
+				       (1.0 / 6.0) * (da_iminus1 - da_i);
 
 		// Constrain interface value to lie between adjacent
 		// cell-averaged values (equivalent to step 2b in Athena++).
-		a_jhalf =
-		    std::min(a_jhalf, std::max(density_(i), density_(i - 1)));
-		a_jhalf =
-		    std::max(a_jhalf, std::min(density_(i), density_(i - 1)));
+		std::pair<double, double> bounds =
+		    std::minmax(density_(i), density_(i - 1));
+		const double interface =
+		    std::clamp(a_jhalf, bounds.first, bounds.second);
 
 		// a_R,(i-1) in PPM paper
-		densityXLeft_(i) = a_jhalf;
+		densityXLeft_(i) = interface;
 
 		// a_L,i in PPM paper
-		densityXRight_(i) = a_jhalf;
+		densityXRight_(i) = interface;
 	}
 
 	for (int i = nghost_ - 1; i < (nx_ + 1) + nghost_; ++i) {
@@ -197,31 +201,31 @@ void LinearAdvectionSystem::ReconstructStatesPPM()
 		double new_a_minus = a_minus;
 		double new_a_plus = a_plus;
 
-		const double dqf_minus = (a - a_minus);
-		const double dqf_plus = (a_plus - a);
+		const double dq_minus = (a - a_minus);
+		const double dq_plus = (a_plus - a);
 
 		// Monotonicity correction, using Eq. (1.10) in PPM paper.
 		// Equivalent to step 4b in Athena++ (ppm_simple.cpp).
 
-		const double qa = dqf_plus * dqf_minus; // interface extrema
-		const double qb =
-		    (density_(i + 1) - density_(i)) *
-		    (density_(i) - density_(i - 1)); // cell-avg extrema
+		const double qa = dq_plus * dq_minus; // interface extrema
+		// const double qb =
+		//    (density_(i + 1) - density_(i)) *
+		//    (density_(i) - density_(i - 1)); // cell-avg extrema
 
-		if ((qa <= 0.0) || (qb <= 0.0)) { // local extremum
+		if ((qa <= 0.0)) { // local extremum
 			new_a_minus = a;
 			new_a_plus = a;
 
 		} else { // no local extrema
 
 			// parabola overshoots near a_plus -> reset a_minus
-			if (std::abs(dqf_minus) >= 2.0 * std::abs(dqf_plus)) {
-				new_a_minus = (3.0 * a) - (2.0 * a_plus);
+			if (std::abs(dq_minus) >= 2.0 * std::abs(dq_plus)) {
+				new_a_minus = a - 2.0 * dq_plus;
 			}
 
 			// parabola overshoots near a_minus -> reset a_plus
-			if (std::abs(dqf_plus) >= 2.0 * std::abs(dqf_minus)) {
-				new_a_plus = (3.0 * a) - (2.0 * a_minus);
+			if (std::abs(dq_plus) >= 2.0 * std::abs(dq_minus)) {
+				new_a_plus = a + 2.0 * dq_minus;
 			}
 		}
 
