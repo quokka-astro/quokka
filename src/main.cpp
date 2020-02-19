@@ -35,14 +35,14 @@ auto main() -> int
 {
 	// Problem parameters
 
-	const int nx = 64;
+	const int nx = 32;
 	const double Lx = 1.0;
 	const double advection_velocity = 1.0;
-	const double CFL_number = 0.5;
+	const double CFL_number = 0.8;
 	const double max_time = 1.0;
-	const int max_timesteps = 800;
+	const int max_timesteps = 1000;
 
-	const double atol = 1e-13; //< absolute tolerance for mass conservation
+	const double atol = 1e-10; //< absolute tolerance for mass conservation
 
 	// Problem initialization
 	// (We use named types in order to guarantee that we don't screw up the

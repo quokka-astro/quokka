@@ -162,25 +162,23 @@ void LinearAdvectionSystem::ReconstructStatesPPM(AthenaArray<double> &q,
 		// some modifications following Mignone (2014), as implemented
 		// in Athena++.
 
-		// We use C&W Eq. (1.6) specialized to the case of
-		// equally-spaced zones: a_{j+1/2} = a_j + (1/2)(a_{j+1} - a_j)
-		// + (1/6)(\delta a_j - \delta a_{j+1}) ,
-		//
-		// where \delta a_j is the average slope in the j-th zone:
-		// \delta a_j = (1/2) [ (a_{j+1} - a_j) + (a_j - a_{j-1}) ] .
-
 		// (1.) Estimate the interface a_{i - 1/2}.
 		//      Equivalent to step 1 in Athena++ [ppm_simple.cpp].
 
-		// TODO(ben): simplify this using Eq. (1.9) from PPM paper.
-		const double da_i = 0.5 * (q(i + 1) - q(i - 1));
-		const double da_iminus1 = 0.5 * (q(i) - q(i - 2));
-		const double a_jhalf =
-		    0.5 * (q(i) + q(i - 1)) + (1.0 / 6.0) * (da_iminus1 - da_i);
+		// C&W Eq. (1.9) [parabola midpoint for the case of
+		// equally-spaced zones]: a_{j+1/2} = (7/12)(a_j + a_{j+1}) -
+		// (1/12)(a_{j+2} + a_{j-1}). Terms are grouped to preserve
+		// exact symmetry in floating-point arithmetic, following
+		// Athena++.
+
+		const double coef_1 = (7. / 12.);
+		const double coef_2 = (-1. / 12.);
+		const double a_jhalf = (coef_1 * q(i) + coef_2 * q(i + 1)) +
+				       (coef_1 * q(i - 1) + coef_2 * q(i - 2));
 
 		// (2.) Constrain interface value to lie between adjacent
 		//      cell-averaged values (equivalent to step 2b in
-		//      Athena++).
+		//      Athena++ [ppm_simple.cpp]).
 
 		std::pair<double, double> bounds = std::minmax(q(i), q(i - 1));
 		const double interface =
