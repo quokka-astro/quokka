@@ -58,6 +58,8 @@ void LinearAdvectionSystem::AdvanceTimestep()
 	// Corrector step
 	ReconstructStatesPPM(densityPrediction_, (-1) + nghost_,
 			     (nx_ + 1) + nghost_);
+	// TODO(ben): Add shock flattening following C&W
+	// FlattenShocks();
 	ComputeFluxes(nghost_, nx_ + nghost_);
 	AddFluxes();
 
