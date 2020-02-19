@@ -35,12 +35,12 @@ auto main() -> int
 {
 	// Problem parameters
 
-	const int nx = 16;
+	const int nx = 64;
 	const double Lx = 1.0;
 	const double advection_velocity = 1.0;
-	const double CFL_number = 0.4;
+	const double CFL_number = 0.5;
 	const double max_time = 1.0;
-	const int max_timesteps = 100;
+	const int max_timesteps = 800;
 
 	const double atol = 1e-13; //< absolute tolerance for mass conservation
 
@@ -87,10 +87,11 @@ auto main() -> int
 			break;
 		}
 
+		advection_system.AdvanceTimestep();
+
 		std::cout << "Timestep " << j
 			  << "; t = " << advection_system.time() << "\n";
 
-		advection_system.AdvanceTimestep();
 		write_density(advection_system);
 
 		const auto current_mass = advection_system.ComputeMass();
@@ -108,8 +109,8 @@ auto main() -> int
 		d_final.at(i) = advection_system.density_(i + nghost);
 	}
 
-	matplotlibcpp::plot(x, d_initial);
-	matplotlibcpp::plot(x, d_final);
+	matplotlibcpp::plot(x, d_initial, ".--");
+	matplotlibcpp::plot(x, d_final, ".-");
 	matplotlibcpp::save(std::string("./advection.png"));
 
 	// Cleanup and exit

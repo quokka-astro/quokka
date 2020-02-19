@@ -64,13 +64,16 @@ class LinearAdvectionSystem : public HyperbolicSystem
 	double advectionVx_;
 
 	void FillGhostZones() override;
-	void ConservedToPrimitive() override;
 	void ComputeTimestep() override;
-	void ReconstructStatesConstant();
+	void ConservedToPrimitive() override;
+
+	void ReconstructStatesConstant(int lo, int hi);
+	void ComputeFluxes(int lo, int hi) override;
+	void PredictHalfStep(int lo, int hi);
+
 	template <typename F> void ReconstructStatesPLM(F &&limiter);
-	void ReconstructStatesPPM(AthenaArray<double> &q);
-	void ComputeFluxes() override;
-	void PredictHalfStep();
+	void ReconstructStatesPPM(AthenaArray<double> &q, int lo, int hi);
+
 	void AddFluxes() override;
 };
 

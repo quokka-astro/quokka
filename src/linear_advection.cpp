@@ -37,21 +37,27 @@ LinearAdvectionSystem::LinearAdvectionSystem(NxType const &nx, LxType const &lx,
 
 void LinearAdvectionSystem::AdvanceTimestep()
 {
+	// Initialize data
 	FillGhostZones();
 	ComputeTimestep();
 
 	// Predictor step
-	ReconstructStatesConstant();
-	ComputeFluxes();
-	PredictHalfStep();
+	const int hlo = (-3) + nghost_;
+	const int hhi = (nx_ + 3) + nghost_;
 
+	ReconstructStatesConstant(hlo, hhi);
+	ComputeFluxes(hlo, hhi);
+	PredictHalfStep(hlo, hhi);
+
+	// Clear temporary arrays
 	densityXLeft_.ZeroClear();
 	densityXRight_.ZeroClear();
 	densityXFlux_.ZeroClear();
 
 	// Corrector step
-	ReconstructStatesPPM(densityPrediction_);
-	ComputeFluxes();
+	ReconstructStatesPPM(densityPrediction_, (-1) + nghost_,
+			     (nx_ + 1) + nghost_);
+	ComputeFluxes(nghost_, nx_ + nghost_);
 	AddFluxes();
 
 	// Adjust our clock
@@ -95,7 +101,8 @@ void LinearAdvectionSystem::ComputeTimestep()
 	dt_ = cflNumber_ * (dx_ / advectionVx_);
 }
 
-void LinearAdvectionSystem::ReconstructStatesConstant()
+void LinearAdvectionSystem::ReconstructStatesConstant(const int lo,
+						      const int hi)
 {
 	// By convention, the interfaces are defined on the left edge of each
 	// zone, i.e. xleft_(i) is the "left"-side of the interface at
@@ -104,7 +111,7 @@ void LinearAdvectionSystem::ReconstructStatesConstant()
 
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
 
-	for (int i = nghost_; i < (nx_ + 1) + nghost_; ++i) {
+	for (int i = lo; i < (hi + 1); ++i) {
 
 		// Use piecewise-constant reconstruction
 		// (This converges at first order in spatial resolution.)
@@ -140,7 +147,8 @@ void LinearAdvectionSystem::ReconstructStatesPLM(F &&limiter)
 	}
 }
 
-void LinearAdvectionSystem::ReconstructStatesPPM(AthenaArray<double> &q)
+void LinearAdvectionSystem::ReconstructStatesPPM(AthenaArray<double> &q,
+						 const int lo, const int hi)
 {
 	// By convention, the interfaces are defined on the left edge of each
 	// zone, i.e. xleft_(i) is the "left"-side of the interface at
@@ -149,74 +157,58 @@ void LinearAdvectionSystem::ReconstructStatesPPM(AthenaArray<double> &q)
 
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
 
-	for (int i = nghost_ - 1; i < (nx_ + 2) + nghost_; ++i) {
+	for (int i = lo; i < (hi + 1); ++i) {
 		// PPM reconstruction following Colella & Woodward (1984), with
 		// some modifications following Mignone (2014), as implemented
 		// in Athena++.
 
-		// To convert indices from PPM paper to indices as used in this
-		// code:
-		//	interface(j + 1/2) -> interface(i + 1).
-		// 	interface(j - 1/2) -> interface(i).
-		//  zone (j + 1) -> density(i).
-		//  zone (j)	 -> density(i - 1).
-		//  zone (j - 1) -> density(i - 2).
-
-		// We use Eq. (1.6) specialized to the case of equally-spaced
-		// zones:
-		// a_{j+1/2} = a_j + (1/2)(a_{j+1} - a_j) +
-		// 			(1/6)(\delta a_j - \delta a_{j+1}) ,
+		// We use C&W Eq. (1.6) specialized to the case of
+		// equally-spaced zones: a_{j+1/2} = a_j + (1/2)(a_{j+1} - a_j)
+		// + (1/6)(\delta a_j - \delta a_{j+1}) ,
 		//
 		// where \delta a_j is the average slope in the j-th zone:
 		// \delta a_j = (1/2) [ (a_{j+1} - a_j) + (a_j - a_{j-1}) ] .
 
-		// Estimate the interface a_{i - 1/2}.
-		// (Equivalent to step 1 in Athena++ (ppm_simple.cpp).)
-		// TODO(ben): simplify this using Eq. (1.9) from PPM paper.
+		// (1.) Estimate the interface a_{i - 1/2}.
+		//      Equivalent to step 1 in Athena++ [ppm_simple.cpp].
 
+		// TODO(ben): simplify this using Eq. (1.9) from PPM paper.
 		const double da_i = 0.5 * (q(i + 1) - q(i - 1));
 		const double da_iminus1 = 0.5 * (q(i) - q(i - 2));
-
-		// const double da_i = 0.;
-		// const double da_iminus1 = 0.;
-
-		// TODO(ben): carefully check signs here. (checked!)
 		const double a_jhalf =
 		    0.5 * (q(i) + q(i - 1)) + (1.0 / 6.0) * (da_iminus1 - da_i);
 
-		// Constrain interface value to lie between adjacent
-		// cell-averaged values (equivalent to step 2b in Athena++).
+		// (2.) Constrain interface value to lie between adjacent
+		//      cell-averaged values (equivalent to step 2b in
+		//      Athena++).
+
 		std::pair<double, double> bounds = std::minmax(q(i), q(i - 1));
 		const double interface =
 		    std::clamp(a_jhalf, bounds.first, bounds.second);
 
-		// a_R,(i-1) in PPM paper
+		// a_R,(i-1) in C&W
 		densityXLeft_(i) = interface;
 
-		// a_L,i in PPM paper
+		// a_L,i in C&W
 		densityXRight_(i) = interface;
 	}
 
-	for (int i = nghost_ - 1; i < (nx_ + 1) + nghost_; ++i) {
+	for (int i = lo; i < hi; ++i) {
 
-		const double a_minus = densityXRight_(i); // a_L,i in PPM paper
-		const double a_plus =
-		    densityXLeft_(i + 1); // a_R,i in PPM paper
-		const double a = q(i);	  // zone average (a_i in PPM paper)
-
-		double new_a_minus = a_minus;
-		double new_a_plus = a_plus;
+		const double a_minus = densityXRight_(i);   // a_L,i in C&W
+		const double a_plus = densityXLeft_(i + 1); // a_R,i in C&W
+		const double a = q(i);			    // a_i in C&W
 
 		const double dq_minus = (a - a_minus);
 		const double dq_plus = (a_plus - a);
 
-		// Monotonicity correction, using Eq. (1.10) in PPM paper.
-		// Equivalent to step 4b in Athena++ (ppm_simple.cpp).
+		double new_a_minus = a_minus;
+		double new_a_plus = a_plus;
+
+		// (3.) Monotonicity correction, using Eq. (1.10) in PPM paper.
+		//      Equivalent to step 4b in Athena++ [ppm_simple.cpp].
 
 		const double qa = dq_plus * dq_minus; // interface extrema
-		// const double qb =
-		//    (q(i + 1) - q(i)) *
-		//    (q(i) - q(i - 1)); // cell-avg extrema
 
 		if ((qa <= 0.0)) { // local extremum
 			new_a_minus = a;
@@ -241,7 +233,7 @@ void LinearAdvectionSystem::ReconstructStatesPPM(AthenaArray<double> &q)
 }
 
 // TODO(ben): add flux limiter for positivity preservation.
-void LinearAdvectionSystem::ComputeFluxes()
+void LinearAdvectionSystem::ComputeFluxes(const int lo, const int hi)
 {
 	// By convention, the interfaces are defined on the left edge of each
 	// zone, i.e. xinterface_(i) is the solution to the Riemann problem at
@@ -249,7 +241,7 @@ void LinearAdvectionSystem::ComputeFluxes()
 
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
 
-	for (int i = nghost_; i < (nx_ + 1) + nghost_; ++i) {
+	for (int i = lo; i < (hi + 1); ++i) {
 
 		// For advection, simply choose upwind side of the interface.
 
@@ -264,16 +256,14 @@ void LinearAdvectionSystem::ComputeFluxes()
 	}
 }
 
-void LinearAdvectionSystem::PredictHalfStep()
+void LinearAdvectionSystem::PredictHalfStep(const int lo, const int hi)
 {
 	// By convention, the fluxes are defined on the left edge of each zone,
 	// i.e. flux_(i) is the flux *into* zone i through the interface on the
 	// left of zone i, and -1.0*flux(i+1) is the flux *into* zone i through
 	// the interface on the right of zone i.
 
-	// FIXME: Prediction is needed over a wider stencil than main solve!
-
-	for (int i = nghost_ - 2; i < (nx_ + 2) + nghost_; ++i) {
+	for (int i = lo; i < hi; ++i) {
 		densityPrediction_(i) =
 		    density_(i) - (0.5 * dt_ / dx_) *
 				      (densityXFlux_(i + 1) - densityXFlux_(i));
