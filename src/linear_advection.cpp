@@ -46,6 +46,7 @@ void LinearAdvectionSystem::AdvanceTimestep()
 	const int hhi = (nx_ + 3) + nghost_;
 
 	ReconstructStatesConstant(hlo, hhi);
+	// ReconstructStatesPLM(HyperbolicSystem::minmod, hlo, hhi);
 	ComputeFluxes(hlo, hhi);
 	PredictHalfStep(hlo, hhi);
 
@@ -122,7 +123,8 @@ void LinearAdvectionSystem::ReconstructStatesConstant(const int lo,
 }
 
 template <typename F>
-void LinearAdvectionSystem::ReconstructStatesPLM(F &&limiter)
+void LinearAdvectionSystem::ReconstructStatesPLM(F &&limiter, const int lo,
+						 const int hi)
 {
 	// By convention, the interfaces are defined on the left edge of each
 	// zone, i.e. xleft_(i) is the "left"-side of the interface at
@@ -131,7 +133,7 @@ void LinearAdvectionSystem::ReconstructStatesPLM(F &&limiter)
 
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
 
-	for (int i = nghost_; i < (nx_ + 1) + nghost_; ++i) {
+	for (int i = lo; i < (hi + 1); ++i) {
 
 		// Use piecewise-linear reconstruction
 		// (This converges at second order in spatial resolution.)

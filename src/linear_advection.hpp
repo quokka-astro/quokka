@@ -71,7 +71,8 @@ class LinearAdvectionSystem : public HyperbolicSystem
 	void ComputeFluxes(int lo, int hi) override;
 	void PredictHalfStep(int lo, int hi);
 
-	template <typename F> void ReconstructStatesPLM(F &&limiter);
+	template <typename F>
+	void ReconstructStatesPLM(F &&limiter, int lo, int hi);
 	void ReconstructStatesPPM(AthenaArray<double> &q, int lo, int hi);
 
 	void AddFluxes() override;

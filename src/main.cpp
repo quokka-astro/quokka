@@ -35,10 +35,10 @@ auto main() -> int
 {
 	// Problem parameters
 
-	const int nx = 32;
+	const int nx = 64;
 	const double Lx = 1.0;
 	const double advection_velocity = 1.0;
-	const double CFL_number = 0.8;
+	const double CFL_number = 0.4;
 	const double max_time = 1.0;
 	const int max_timesteps = 1000;
 
@@ -109,7 +109,7 @@ auto main() -> int
 		d_final.at(i) = advection_system.density_(i + nghost);
 	}
 
-	matplotlibcpp::plot(x, d_initial, ".--");
+	matplotlibcpp::plot(x, d_initial, "--");
 	matplotlibcpp::plot(x, d_final, ".-");
 	matplotlibcpp::save(std::string("./advection.png"));
 

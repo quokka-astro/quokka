@@ -59,6 +59,21 @@ class HyperbolicSystem
 		return result;
 	}
 
+	__attribute__((always_inline)) inline static auto MC(double a, double b)
+	    -> double
+	{
+		auto result = 0.0;
+		const auto dcen = 0.5 * (a + b);
+
+		if (a * b > 0.0) {
+			result = std::min({std::abs(dcen), 2.0 * std::abs(a),
+					   2.0 * std::abs(b)}) *
+				 sgn(dcen);
+		}
+
+		return result;
+	}
+
       protected:
 	double cflNumber_ = 1.0;
 	double dt_ = 0;
