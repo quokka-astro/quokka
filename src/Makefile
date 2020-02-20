@@ -9,8 +9,8 @@ ANALYZE_FILES:=$(filter-out athena_arrays.hpp, $(SRC_FILES))
 #ANALYZE_FILES:=$(CPP_FILES)
 
 CXX ?= g++
-CXXFLAGS ?= -g -O0 --std=c++17 -I/usr/include/python2.7
-CXXLIBS ?= -lpython2.7
+CXXFLAGS ?= -g -O0 --std=c++17 -I/usr/include/python3.6
+CXXLIBS ?= -lpython3.6m
 
 STATIC_ANALYZER = cppcheck
 STATIC_ANALYZER_FLAGS = --enable=all --std=c++17 --suppress=missingIncludeSystem
