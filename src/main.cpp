@@ -38,7 +38,7 @@ auto main() -> int
 	const int nx = 64;
 	const double Lx = 1.0;
 	const double advection_velocity = 1.0;
-	const double CFL_number = 0.4;
+	const double CFL_number = 0.3;
 	const double max_time = 1.0;
 	const int max_timesteps = 1000;
 

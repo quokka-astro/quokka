@@ -42,13 +42,13 @@ void LinearAdvectionSystem::AdvanceTimestep()
 	ComputeTimestep();
 
 	// Predictor step
-	const int hlo = (-3) + nghost_;
-	const int hhi = (nx_ + 3) + nghost_;
+	const auto p_range =
+	    std::make_pair((-3) + nghost_, (nx_ + 3) + nghost_);
 
-	ReconstructStatesConstant(hlo, hhi);
-	// ReconstructStatesPLM(HyperbolicSystem::minmod, hlo, hhi);
-	ComputeFluxes(hlo, hhi);
-	PredictHalfStep(hlo, hhi);
+	ReconstructStatesConstant(p_range);
+	// ReconstructStatesPLM(HyperbolicSystem::minmod, p_range);
+	ComputeFluxes(p_range);
+	PredictHalfStep(p_range);
 
 	// Clear temporary arrays
 	densityXLeft_.ZeroClear();
@@ -56,11 +56,12 @@ void LinearAdvectionSystem::AdvanceTimestep()
 	densityXFlux_.ZeroClear();
 
 	// Corrector step
-	ReconstructStatesPPM(densityPrediction_, (-1) + nghost_,
-			     (nx_ + 1) + nghost_);
-	// TODO(ben): Add shock flattening following C&W
-	// FlattenShocks();
-	ComputeFluxes(nghost_, nx_ + nghost_);
+	const auto ppm_range = std::make_pair(-1 + nghost_, nx_ + 1 + nghost_);
+	const auto cell_range = std::make_pair(nghost_, nx_ + nghost_);
+
+	ReconstructStatesPPM(densityPrediction_, ppm_range);
+	// FlattenShocks(densityPrediction_, ppm_range);
+	ComputeFluxes(cell_range);
 	AddFluxes();
 
 	// Adjust our clock
@@ -104,8 +105,8 @@ void LinearAdvectionSystem::ComputeTimestep()
 	dt_ = cflNumber_ * (dx_ / advectionVx_);
 }
 
-void LinearAdvectionSystem::ReconstructStatesConstant(const int lo,
-						      const int hi)
+void LinearAdvectionSystem::ReconstructStatesConstant(
+    const std::pair<int, int> range)
 {
 	// By convention, the interfaces are defined on the left edge of each
 	// zone, i.e. xleft_(i) is the "left"-side of the interface at
@@ -114,7 +115,7 @@ void LinearAdvectionSystem::ReconstructStatesConstant(const int lo,
 
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
 
-	for (int i = lo; i < (hi + 1); ++i) {
+	for (int i = range.first; i < (range.second + 1); ++i) {
 
 		// Use piecewise-constant reconstruction
 		// (This converges at first order in spatial resolution.)
@@ -125,8 +126,8 @@ void LinearAdvectionSystem::ReconstructStatesConstant(const int lo,
 }
 
 template <typename F>
-void LinearAdvectionSystem::ReconstructStatesPLM(F &&limiter, const int lo,
-						 const int hi)
+void LinearAdvectionSystem::ReconstructStatesPLM(
+    F &&limiter, const std::pair<int, int> range)
 {
 	// By convention, the interfaces are defined on the left edge of each
 	// zone, i.e. xleft_(i) is the "left"-side of the interface at
@@ -135,7 +136,7 @@ void LinearAdvectionSystem::ReconstructStatesPLM(F &&limiter, const int lo,
 
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
 
-	for (int i = lo; i < (hi + 1); ++i) {
+	for (int i = range.first; i < (range.second + 1); ++i) {
 
 		// Use piecewise-linear reconstruction
 		// (This converges at second order in spatial resolution.)
@@ -151,8 +152,8 @@ void LinearAdvectionSystem::ReconstructStatesPLM(F &&limiter, const int lo,
 	}
 }
 
-void LinearAdvectionSystem::ReconstructStatesPPM(AthenaArray<double> &q,
-						 const int lo, const int hi)
+void LinearAdvectionSystem::ReconstructStatesPPM(
+    AthenaArray<double> &q, const std::pair<int, int> range)
 {
 	// By convention, the interfaces are defined on the left edge of each
 	// zone, i.e. xleft_(i) is the "left"-side of the interface at
@@ -161,7 +162,7 @@ void LinearAdvectionSystem::ReconstructStatesPPM(AthenaArray<double> &q,
 
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
 
-	for (int i = lo; i < (hi + 1); ++i) {
+	for (int i = range.first; i < (range.second + 1); ++i) {
 		// PPM reconstruction following Colella & Woodward (1984), with
 		// some modifications following Mignone (2014), as implemented
 		// in Athena++.
@@ -195,7 +196,7 @@ void LinearAdvectionSystem::ReconstructStatesPPM(AthenaArray<double> &q,
 		densityXRight_(i) = interface;
 	}
 
-	for (int i = lo; i < hi; ++i) {
+	for (int i = range.first; i < range.second; ++i) {
 
 		const double a_minus = densityXRight_(i);   // a_L,i in C&W
 		const double a_plus = densityXLeft_(i + 1); // a_R,i in C&W
@@ -234,8 +235,52 @@ void LinearAdvectionSystem::ReconstructStatesPPM(AthenaArray<double> &q,
 	}
 }
 
+void LinearAdvectionSystem::FlattenShocks(AthenaArray<double> &q,
+					  const std::pair<int, int> range)
+{
+	for (int i = range.first; i < range.second; ++i) {
+
+		const double a_minus = densityXRight_(i);   // a_L,i in C&W
+		const double a_plus = densityXLeft_(i + 1); // a_R,i in C&W
+		const double a = q(i);			    // a_i in C&W
+
+		auto flatten_f = [q](int j) {
+			const double a1 = 0.75;
+			const double a2 = 10.;
+			const double eps = 0.33;
+			double f = 0.;
+
+			const double shock_ratio =
+			    (q(j + 1) - q(j - 1)) / (q(j + 2) - q(j - 2));
+			const double qa = (q(j + 1) - q(j - 1)) /
+					  std::min(q(j + 1), q(j - 1));
+			if ((qa > eps) && ((q(j - 1) - q(j + 1)) > 0.)) {
+				f = 1.0 - std::max(0., (shock_ratio - a1) * a2);
+			}
+
+			return f;
+		};
+
+		const double f_i = flatten_f(i);
+		double f_s;
+		if (q(i + 1) - q(i - 1) < 0.) {
+			f_s = flatten_f(i + 1);
+		} else {
+			f_s = flatten_f(i - 1);
+		}
+
+		const double f = std::max(f_i, f_s);
+
+		const double new_a_minus = a * f + a_minus * (1.0 - f);
+		const double new_a_plus = a * f + a_plus * (1.0 - f);
+
+		densityXRight_(i) = new_a_minus;
+		densityXLeft_(i + 1) = new_a_plus;
+	}
+}
+
 // TODO(ben): add flux limiter for positivity preservation.
-void LinearAdvectionSystem::ComputeFluxes(const int lo, const int hi)
+void LinearAdvectionSystem::ComputeFluxes(const std::pair<int, int> range)
 {
 	// By convention, the interfaces are defined on the left edge of each
 	// zone, i.e. xinterface_(i) is the solution to the Riemann problem at
@@ -243,7 +288,7 @@ void LinearAdvectionSystem::ComputeFluxes(const int lo, const int hi)
 
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
 
-	for (int i = lo; i < (hi + 1); ++i) {
+	for (int i = range.first; i < (range.second + 1); ++i) {
 
 		// For advection, simply choose upwind side of the interface.
 
@@ -258,14 +303,14 @@ void LinearAdvectionSystem::ComputeFluxes(const int lo, const int hi)
 	}
 }
 
-void LinearAdvectionSystem::PredictHalfStep(const int lo, const int hi)
+void LinearAdvectionSystem::PredictHalfStep(const std::pair<int, int> range)
 {
 	// By convention, the fluxes are defined on the left edge of each zone,
 	// i.e. flux_(i) is the flux *into* zone i through the interface on the
 	// left of zone i, and -1.0*flux(i+1) is the flux *into* zone i through
 	// the interface on the right of zone i.
 
-	for (int i = lo; i < hi; ++i) {
+	for (int i = range.first; i < range.second; ++i) {
 		densityPrediction_(i) =
 		    density_(i) - (0.5 * dt_ / dx_) *
 				      (densityXFlux_(i + 1) - densityXFlux_(i));

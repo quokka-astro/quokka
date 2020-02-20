@@ -67,13 +67,15 @@ class LinearAdvectionSystem : public HyperbolicSystem
 	void ComputeTimestep() override;
 	void ConservedToPrimitive() override;
 
-	void ReconstructStatesConstant(int lo, int hi);
-	void ComputeFluxes(int lo, int hi) override;
-	void PredictHalfStep(int lo, int hi);
+	void ReconstructStatesConstant(std::pair<int, int> range);
+	void ComputeFluxes(std::pair<int, int> range) override;
+	void PredictHalfStep(std::pair<int, int> range);
 
 	template <typename F>
-	void ReconstructStatesPLM(F &&limiter, int lo, int hi);
-	void ReconstructStatesPPM(AthenaArray<double> &q, int lo, int hi);
+	void ReconstructStatesPLM(F &&limiter, std::pair<int, int> range);
+	void ReconstructStatesPPM(AthenaArray<double> &q,
+				  std::pair<int, int> range);
+	void FlattenShocks(AthenaArray<double> &q, std::pair<int, int> range);
 
 	void AddFluxes() override;
 };

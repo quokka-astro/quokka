@@ -94,7 +94,7 @@ class HyperbolicSystem
 	virtual void FillGhostZones() = 0;
 	virtual void ConservedToPrimitive() = 0;
 	virtual void ComputeTimestep() = 0;
-	virtual void ComputeFluxes(int lo, int hi) = 0;
+	virtual void ComputeFluxes(std::pair<int, int> range) = 0;
 	virtual void AddFluxes() = 0;
 };
 
