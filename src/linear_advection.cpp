@@ -238,6 +238,9 @@ void LinearAdvectionSystem::ReconstructStatesPPM(
 void LinearAdvectionSystem::FlattenShocks(AthenaArray<double> &q,
 					  const std::pair<int, int> range)
 {
+	// N.B.: shock flattening doesn't appear to really do much. Perhaps a
+	// bug?
+
 	for (int i = range.first; i < range.second; ++i) {
 
 		const double a_minus = densityXRight_(i);   // a_L,i in C&W
