@@ -1,12 +1,12 @@
-#ifndef LINEAR_ADVECTION_HPP_ // NOLINT
-#define LINEAR_ADVECTION_HPP_
+#ifndef HYDRO_SYSTEM_HPP_ // NOLINT
+#define HYDRO_SYSTEM_HPP_
 //==============================================================================
 // TwoMomentRad - a radiation transport library for patch-based AMR codes
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file linear_advection.hpp
-/// \brief Defines a class for solving a scalar linear advection equation.
+/// \file hydro_system.hpp
+/// \brief Defines a class for solving the (1d) Euler equations.
 ///
 
 // c++ headers
@@ -22,7 +22,7 @@
 
 /// Class for a linear, scalar advection equation
 ///
-class LinearAdvectionSystem : public HyperbolicSystem
+class HydroSystem : public HyperbolicSystem
 {
       public:
 	AthenaArray<double> density_;
@@ -30,18 +30,26 @@ class LinearAdvectionSystem : public HyperbolicSystem
 	using NxType = fluent::NamedType<int, struct NxParameter>;
 	using LxType = fluent::NamedType<double, struct LxParameter>;
 	using CFLType = fluent::NamedType<double, struct CFLParameter>;
-	using VxType = fluent::NamedType<double, struct VxParameter>;
 
 	static const NxType::argument Nx;
 	static const LxType::argument Lx;
 	static const CFLType::argument CFL;
-	static const VxType::argument Vx;
 
-	LinearAdvectionSystem(NxType const &nx, LxType const &lx,
-			      VxType const &vx, CFLType const &cflNumber);
+	HydroSystem(NxType const &nx, LxType const &lx,
+		    CFLType const &cflNumber);
 
 	void AddSourceTerms(AthenaArray<double> &source_terms) override;
 	void AdvanceTimestep() override; //< Advances system by one timestep
+
+	// setter functions:
+
+	void set_cflNumber(double cflNumber);
+
+	// accessor functions:
+
+	auto nghost() -> int;
+	auto nx() -> int;
+	auto time() -> double;
 
 	auto ComputeMass() -> double;
 
@@ -50,8 +58,6 @@ class LinearAdvectionSystem : public HyperbolicSystem
 	AthenaArray<double> densityXRight_;
 	AthenaArray<double> densityXFlux_;
 	AthenaArray<double> densityPrediction_;
-
-	double advectionVx_;
 
 	void FillGhostZones() override;
 	void ComputeTimestep() override;
@@ -70,4 +76,4 @@ class LinearAdvectionSystem : public HyperbolicSystem
 	void AddFluxes() override;
 };
 
-#endif // LINEAR_ADVECTION_HPP_
+#endif // HYDRO_SYSTEM_HPP_

@@ -3,26 +3,22 @@
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file linear_advection.cpp
-/// \brief Implements methods for solving a scalar linear advection equation.
+/// \file hydro_system.cpp
+/// \brief Implements methods for solving the (1d) Euler equations.
 ///
 
-#include "linear_advection.hpp"
+#include "hydro_system.hpp"
 
 // We must *define* static member variables here, outside of the class
 // *declaration*, even though the definitions are trivial.
-const LinearAdvectionSystem::NxType::argument LinearAdvectionSystem::Nx;
-const LinearAdvectionSystem::LxType::argument LinearAdvectionSystem::Lx;
-const LinearAdvectionSystem::VxType::argument LinearAdvectionSystem::Vx;
-const LinearAdvectionSystem::CFLType::argument LinearAdvectionSystem::CFL;
+const HydroSystem::NxType::argument HydroSystem::Nx;
+const HydroSystem::LxType::argument HydroSystem::Lx;
+const HydroSystem::CFLType::argument HydroSystem::CFL;
 
-LinearAdvectionSystem::LinearAdvectionSystem(NxType const &nx, LxType const &lx,
-					     VxType const &vx,
-					     CFLType const &cflNumber)
-    : HyperbolicSystem{nx.get(), lx.get(), cflNumber.get()},
-      advectionVx_(vx.get())
+HydroSystem::HydroSystem(NxType const &nx, LxType const &lx,
+			 CFLType const &cflNumber)
+    : HyperbolicSystem{nx.get(), lx.get(), cflNumber.get()}
 {
-	assert(advectionVx_ != 0.0);			   // NOLINT
 	assert(lx_ > 0.0);				   // NOLINT
 	assert(nx_ > 2);				   // NOLINT
 	assert(nghost_ > 1);				   // NOLINT
@@ -35,7 +31,7 @@ LinearAdvectionSystem::LinearAdvectionSystem(NxType const &nx, LxType const &lx,
 	densityXFlux_.NewAthenaArray(dim1_);
 }
 
-void LinearAdvectionSystem::AdvanceTimestep()
+void HydroSystem::AdvanceTimestep()
 {
 	// Initialize data
 	FillGhostZones();
@@ -68,7 +64,7 @@ void LinearAdvectionSystem::AdvanceTimestep()
 	time_ += dt_;
 }
 
-void LinearAdvectionSystem::FillGhostZones()
+void HydroSystem::FillGhostZones()
 {
 	// In general, this step will require MPI communication, and interaction
 	// with the main AMR code.
@@ -86,15 +82,14 @@ void LinearAdvectionSystem::FillGhostZones()
 	}
 }
 
-void LinearAdvectionSystem::ConservedToPrimitive() {}
+void HydroSystem::ConservedToPrimitive() {}
 
-void LinearAdvectionSystem::ComputeTimestep()
+void HydroSystem::ComputeTimestep()
 {
-	dt_ = cflNumber_ * (dx_ / advectionVx_);
+	//	dt_ = cflNumber_ * (dx_ / advectionVx_);
 }
 
-void LinearAdvectionSystem::ReconstructStatesConstant(
-    const std::pair<int, int> range)
+void HydroSystem::ReconstructStatesConstant(const std::pair<int, int> range)
 {
 	// By convention, the interfaces are defined on the left edge of each
 	// zone, i.e. xleft_(i) is the "left"-side of the interface at
@@ -114,8 +109,8 @@ void LinearAdvectionSystem::ReconstructStatesConstant(
 }
 
 template <typename F>
-void LinearAdvectionSystem::ReconstructStatesPLM(
-    F &&limiter, const std::pair<int, int> range)
+void HydroSystem::ReconstructStatesPLM(F &&limiter,
+				       const std::pair<int, int> range)
 {
 	// By convention, the interfaces are defined on the left edge of each
 	// zone, i.e. xleft_(i) is the "left"-side of the interface at
@@ -140,8 +135,8 @@ void LinearAdvectionSystem::ReconstructStatesPLM(
 	}
 }
 
-void LinearAdvectionSystem::ReconstructStatesPPM(
-    AthenaArray<double> &q, const std::pair<int, int> range)
+void HydroSystem::ReconstructStatesPPM(AthenaArray<double> &q,
+				       const std::pair<int, int> range)
 {
 	// By convention, the interfaces are defined on the left edge of each
 	// zone, i.e. xleft_(i) is the "left"-side of the interface at
@@ -223,8 +218,8 @@ void LinearAdvectionSystem::ReconstructStatesPPM(
 	}
 }
 
-void LinearAdvectionSystem::FlattenShocks(AthenaArray<double> &q,
-					  const std::pair<int, int> range)
+void HydroSystem::FlattenShocks(AthenaArray<double> &q,
+				const std::pair<int, int> range)
 {
 	// N.B.: shock flattening doesn't appear to really do much. Perhaps a
 	// bug?
@@ -271,7 +266,7 @@ void LinearAdvectionSystem::FlattenShocks(AthenaArray<double> &q,
 }
 
 // TODO(ben): add flux limiter for positivity preservation.
-void LinearAdvectionSystem::ComputeFluxes(const std::pair<int, int> range)
+void HydroSystem::ComputeFluxes(const std::pair<int, int> range)
 {
 	// By convention, the interfaces are defined on the left edge of each
 	// zone, i.e. xinterface_(i) is the solution to the Riemann problem at
@@ -280,21 +275,11 @@ void LinearAdvectionSystem::ComputeFluxes(const std::pair<int, int> range)
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
 
 	for (int i = range.first; i < (range.second + 1); ++i) {
-
-		// For advection, simply choose upwind side of the interface.
-
-		if (advectionVx_ < 0.0) { // upwind switch
-			// upwind direction is the right-side of the interface
-			densityXFlux_(i) = advectionVx_ * densityXRight_(i);
-
-		} else {
-			// upwind direction is the left-side of the interface
-			densityXFlux_(i) = advectionVx_ * densityXLeft_(i);
-		}
+		// TODO(ben): write Riemann solver.
 	}
 }
 
-void LinearAdvectionSystem::PredictHalfStep(const std::pair<int, int> range)
+void HydroSystem::PredictHalfStep(const std::pair<int, int> range)
 {
 	// By convention, the fluxes are defined on the left edge of each zone,
 	// i.e. flux_(i) is the flux *into* zone i through the interface on the
@@ -308,7 +293,7 @@ void LinearAdvectionSystem::PredictHalfStep(const std::pair<int, int> range)
 	}
 }
 
-void LinearAdvectionSystem::AddFluxes()
+void HydroSystem::AddFluxes()
 {
 	// By convention, the fluxes are defined on the left edge of each zone,
 	// i.e. flux_(i) is the flux *into* zone i through the interface on the
@@ -321,7 +306,7 @@ void LinearAdvectionSystem::AddFluxes()
 	}
 }
 
-auto LinearAdvectionSystem::ComputeMass() -> double
+auto HydroSystem::ComputeMass() -> double
 {
 	double mass = 0.0;
 
@@ -332,4 +317,4 @@ auto LinearAdvectionSystem::ComputeMass() -> double
 	return mass;
 }
 
-void LinearAdvectionSystem::AddSourceTerms(AthenaArray<double> &source_terms) {}
+void HydroSystem::AddSourceTerms(AthenaArray<double> &source_terms) {}

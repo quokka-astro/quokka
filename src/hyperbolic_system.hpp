@@ -14,6 +14,7 @@
 ///
 
 // c++ headers
+#include <cassert>
 #include <cmath>
 
 // library headers
@@ -41,6 +42,18 @@ class HyperbolicSystem
 	///
 	virtual void AddSourceTerms(AthenaArray<double> &source_terms) = 0;
 
+	// setter functions:
+
+	void set_cflNumber(double cflNumber);
+
+	// accessor functions:
+
+	auto nghost() -> int;
+	auto nx() -> int;
+	auto time() -> double;
+
+	// inline functions:
+
 	__attribute__((always_inline)) inline static auto minmod(double a,
 								 double b)
 	    -> double
@@ -59,21 +72,6 @@ class HyperbolicSystem
 		return result;
 	}
 
-	__attribute__((always_inline)) inline static auto MC(double a, double b)
-	    -> double
-	{
-		auto result = 0.0;
-		const auto dcen = 0.5 * (a + b);
-
-		if (a * b > 0.0) {
-			result = std::min({std::abs(dcen), 2.0 * std::abs(a),
-					   2.0 * std::abs(b)}) *
-				 sgn(dcen);
-		}
-
-		return result;
-	}
-
       protected:
 	double cflNumber_ = 1.0;
 	double dt_ = 0;
@@ -82,7 +80,7 @@ class HyperbolicSystem
 	double dx_;
 	int nx_;
 	int dim1_;
-	const int nghost_ = 4;
+	const int nghost_ = 4; // 4 ghost cells required for PPM
 
 	HyperbolicSystem(int nx, double lx, double cflNumber)
 	    : nx_(nx), lx_(lx), dx_(lx / static_cast<double>(nx)),
