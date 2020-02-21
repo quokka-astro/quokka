@@ -20,11 +20,6 @@ HydroSystem::HydroSystem(NxType const &nx, LxType const &lx,
 			 CFLType const &cflNumber, NvarsType const &nvars)
     : HyperbolicSystem{nx.get(), lx.get(), cflNumber.get(), nvars.get()}
 {
-	assert(lx_ > 0.0);				   // NOLINT
-	assert(nx_ > 2);				   // NOLINT
-	assert(nghost_ > 1);				   // NOLINT
-	assert((cflNumber_ > 0.0) && (cflNumber_ <= 1.0)); // NOLINT
-
 	enum varIndex {
 		density_index = 0,
 		x1Momentum_index = 1,
