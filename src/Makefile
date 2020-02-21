@@ -45,7 +45,7 @@ driver.exe: $(OBJ_FILES) $(KOKKOS_LINK_DEPENDS)
 
 ## static analysis / code linting
 
-clang-tidy: $(ANALYZE_FILES)
+tidy: $(ANALYZE_FILES)
 	clang-tidy -checks='*,-fuchsia-*,-misc-non-private-member-variables-in-classes,-cppcoreguidelines-non-private-member-variables-in-classes,-google-runtime-references' $^ -- $(KOKKOS_CPPFLAGS) $(KOKKOS_CXXFLAGS) $(CXXFLAGS) | sed 's/\x1b\[[0-9;]*m//g'
 
 cpplint: $(ANALYZE_FILES)
@@ -54,7 +54,7 @@ cpplint: $(ANALYZE_FILES)
 cppcheck: $(ANALYZE_FILES)
 	$(STATIC_ANALYZER) $(STATIC_ANALYZER_FLAGS) $^
 
-clang-analyze: $(ANALYZE_FILES)
+analyze: $(ANALYZE_FILES)
 	scan-build -v make driver.exe
 
 

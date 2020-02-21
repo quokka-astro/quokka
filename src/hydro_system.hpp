@@ -25,23 +25,20 @@
 class HydroSystem : public HyperbolicSystem
 {
       public:
-	AthenaArray<double> density_;
-	AthenaArray<double> x1Momentum_;
-	AthenaArray<double> energy_;
-
 	using NxType = fluent::NamedType<int, struct NxParameter>;
 	using LxType = fluent::NamedType<double, struct LxParameter>;
 	using CFLType = fluent::NamedType<double, struct CFLParameter>;
+	using NvarsType = fluent::NamedType<int, struct NvarsParameter>;
 
 	static const NxType::argument Nx;
 	static const LxType::argument Lx;
 	static const CFLType::argument CFL;
+	static const NvarsType::argument Nvars;
 
 	HydroSystem(NxType const &nx, LxType const &lx,
-		    CFLType const &cflNumber);
+		    CFLType const &cflNumber, NvarsType const &nvars);
 
 	void AddSourceTerms(AthenaArray<double> &source_terms) override;
-	void AdvanceTimestep() override; //< Advances system by one timestep
 
 	// setter functions:
 
@@ -56,36 +53,15 @@ class HydroSystem : public HyperbolicSystem
 	auto ComputeMass() -> double;
 
       protected:
-	AthenaArray<double> densityXLeft_;
-	AthenaArray<double> densityXRight_;
-	AthenaArray<double> densityXFlux_;
-	AthenaArray<double> densityPrediction_;
+	AthenaArray<double> density_;
+	AthenaArray<double> x1Momentum_;
+	AthenaArray<double> energy_;
 
-	AthenaArray<double> x1MomentumXLeft_;
-	AthenaArray<double> x1MomentumXRight_;
-	AthenaArray<double> x1MomentumXFlux_;
-	AthenaArray<double> x1MomentumPrediction_;
-
-	AthenaArray<double> energyXLeft_;
-	AthenaArray<double> energyXRight_;
-	AthenaArray<double> energyXFlux_;
-	AthenaArray<double> energyPrediction_;
-
-	void FillGhostZones() override;
-	void ComputeTimestep() override;
-	void ConservedToPrimitive() override;
-
-	void ReconstructStatesConstant(std::pair<int, int> range);
+	void ConservedToPrimitive(AthenaArray<double> &cons) override;
 	void ComputeFluxes(std::pair<int, int> range) override;
-	void PredictHalfStep(std::pair<int, int> range);
+	void ComputeTimestep() override;
 
-	template <typename F>
-	void ReconstructStatesPLM(F &&limiter, std::pair<int, int> range);
-	void ReconstructStatesPPM(AthenaArray<double> &q,
-				  std::pair<int, int> range);
 	void FlattenShocks(AthenaArray<double> &q, std::pair<int, int> range);
-
-	void AddFluxes() override;
 };
 
 #endif // HYDRO_SYSTEM_HPP_

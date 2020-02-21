@@ -34,7 +34,7 @@ class HyperbolicSystem
 {
       public:
 	/// Computes timestep and advances system
-	virtual void AdvanceTimestep() = 0;
+	void AdvanceTimestep();
 
 	/// Add source terms to the conserved variables.
 	///
@@ -48,6 +48,7 @@ class HyperbolicSystem
 
 	// accessor functions:
 
+	auto nvars() -> int;
 	auto nghost() -> int;
 	auto nx() -> int;
 	auto time() -> double;
@@ -73,6 +74,13 @@ class HyperbolicSystem
 	}
 
       protected:
+	AthenaArray<double> consVar_;
+	AthenaArray<double> primVar_;
+	AthenaArray<double> consVarPredictStep_;
+	AthenaArray<double> x1LeftState_;
+	AthenaArray<double> x1RightState_;
+	AthenaArray<double> x1Flux_;
+
 	double cflNumber_ = 1.0;
 	double dt_ = 0;
 	double time_ = 0.;
@@ -80,20 +88,40 @@ class HyperbolicSystem
 	double dx_;
 	int nx_;
 	int dim1_;
+	int nvars_;
 	const int nghost_ = 4; // 4 ghost cells required for PPM
 
-	HyperbolicSystem(int nx, double lx, double cflNumber)
+	HyperbolicSystem(int nx, double lx, double cflNumber, int nvars)
 	    : nx_(nx), lx_(lx), dx_(lx / static_cast<double>(nx)),
-	      cflNumber_(cflNumber)
+	      cflNumber_(cflNumber), nvars_(nvars)
 	{
+		assert(lx_ > 0.0);				   // NOLINT
+		assert(nx_ > 2);				   // NOLINT
+		assert(nghost_ > 1);				   // NOLINT
+		assert((cflNumber_ > 0.0) && (cflNumber_ <= 1.0)); // NOLINT
+
 		dim1_ = nx_ + 2 * nghost_;
+
+		consVar_.NewAthenaArray(nvars_, dim1_);
+		primVar_.NewAthenaArray(nvars_, dim1_);
+		consVarPredictStep_.NewAthenaArray(nvars_, dim1_);
+		x1LeftState_.NewAthenaArray(nvars_, dim1_);
+		x1RightState_.NewAthenaArray(nvars_, dim1_);
+		x1Flux_.NewAthenaArray(nvars_, dim1_);
 	}
 
-	virtual void FillGhostZones() = 0;
-	virtual void ConservedToPrimitive() = 0;
+	void FillGhostZones();
+	void AddFluxes();
+	void ReconstructStatesConstant(std::pair<int, int> range);
+	template <typename F>
+	void ReconstructStatesPLM(F &&limiter, std::pair<int, int> range);
+	void ReconstructStatesPPM(AthenaArray<double> &q,
+				  std::pair<int, int> range);
+	void PredictHalfStep(std::pair<int, int> range);
+
+	virtual void ConservedToPrimitive(AthenaArray<double> &cons) = 0;
 	virtual void ComputeTimestep() = 0;
 	virtual void ComputeFluxes(std::pair<int, int> range) = 0;
-	virtual void AddFluxes() = 0;
 };
 
 #endif // HYPERBOLIC_SYSTEM_HPP_

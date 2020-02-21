@@ -14,226 +14,60 @@
 const HydroSystem::NxType::argument HydroSystem::Nx;
 const HydroSystem::LxType::argument HydroSystem::Lx;
 const HydroSystem::CFLType::argument HydroSystem::CFL;
+const HydroSystem::NvarsType::argument HydroSystem::Nvars;
 
 HydroSystem::HydroSystem(NxType const &nx, LxType const &lx,
-			 CFLType const &cflNumber)
-    : HyperbolicSystem{nx.get(), lx.get(), cflNumber.get()}
+			 CFLType const &cflNumber, NvarsType const &nvars)
+    : HyperbolicSystem{nx.get(), lx.get(), cflNumber.get(), nvars.get()}
 {
 	assert(lx_ > 0.0);				   // NOLINT
 	assert(nx_ > 2);				   // NOLINT
 	assert(nghost_ > 1);				   // NOLINT
 	assert((cflNumber_ > 0.0) && (cflNumber_ <= 1.0)); // NOLINT
 
-	density_.NewAthenaArray(dim1_);
-	densityPrediction_.NewAthenaArray(dim1_);
-	densityXLeft_.NewAthenaArray(dim1_);
-	densityXRight_.NewAthenaArray(dim1_);
-	densityXFlux_.NewAthenaArray(dim1_);
-
-	x1Momentum_.NewAthenaArray(dim1_);
-	x1MomentumPrediction_.NewAthenaArray(dim1_);
-	x1MomentumXLeft_.NewAthenaArray(dim1_);
-	x1MomentumXRight_.NewAthenaArray(dim1_);
-	x1MomentumXFlux_.NewAthenaArray(dim1_);
-
-	energy_.NewAthenaArray(dim1_);
-	energyPrediction_.NewAthenaArray(dim1_);
-	energyXLeft_.NewAthenaArray(dim1_);
-	energyXRight_.NewAthenaArray(dim1_);
-	energyXFlux_.NewAthenaArray(dim1_);
+	enum varIndex {
+		density_index = 0,
+		x1Momentum_index = 1,
+		energy_index = 2
+	};
+	density_.InitWithShallowSlice(consVar_, 2, density_index, 0);
+	x1Momentum_.InitWithShallowSlice(consVar_, 2, x1Momentum_index, 0);
+	energy_.InitWithShallowSlice(consVar_, 2, energy_index, 0);
 }
 
-void HydroSystem::AdvanceTimestep()
+auto HydroSystem::ComputeMass() -> double
 {
-	// Initialize data
-	FillGhostZones();
-	ComputeTimestep();
+	double mass = 0.0;
 
-	// Predictor step
-	const auto p_range =
-	    std::make_pair((-3) + nghost_, (nx_ + 3) + nghost_);
-
-	ReconstructStatesConstant(p_range);
-	ComputeFluxes(p_range);
-	PredictHalfStep(p_range);
-
-	// Clear temporary arrays
-	densityXLeft_.ZeroClear();
-	densityXRight_.ZeroClear();
-	densityXFlux_.ZeroClear();
-	x1MomentumXLeft_.ZeroClear();
-	x1MomentumXRight_.ZeroClear();
-	x1MomentumXFlux_.ZeroClear();
-	energyXLeft_.ZeroClear();
-	energyXRight_.ZeroClear();
-	energyXFlux_.ZeroClear();
-
-	// Corrector step
-	const auto ppm_range = std::make_pair(-1 + nghost_, nx_ + 1 + nghost_);
-	const auto cell_range = std::make_pair(nghost_, nx_ + nghost_);
-
-	ReconstructStatesPPM(densityPrediction_, ppm_range);
-	ComputeFluxes(cell_range);
-	AddFluxes();
-
-	// Adjust our clock
-	time_ += dt_;
-}
-
-void HydroSystem::FillGhostZones()
-{
-	// In general, this step will require MPI communication, and interaction
-	// with the main AMR code.
-
-	// FIXME: currently we assume periodic boundary conditions.
-
-	// x1 right side boundary
-	for (int i = nghost_ + nx_; i < nghost_ + nx_ + nghost_; ++i) {
-		density_(i) = density_(i - nx_);
+	for (int i = nghost_; i < nx_ + nghost_; ++i) {
+		mass += density_(i) * dx_;
 	}
 
-	// x1 left side boundary
-	for (int i = 0; i < nghost_; ++i) {
-		density_(i) = density_(i + nx_);
-	}
+	return mass;
 }
 
-void HydroSystem::ConservedToPrimitive() {}
+void HydroSystem::ConservedToPrimitive(AthenaArray<double> &cons) {}
 
 void HydroSystem::ComputeTimestep()
 {
 	//	dt_ = cflNumber_ * (dx_ / advectionVx_);
 }
 
-void HydroSystem::ReconstructStatesConstant(const std::pair<int, int> range)
+// TODO(ben): add flux limiter for positivity preservation.
+void HydroSystem::ComputeFluxes(const std::pair<int, int> range)
 {
 	// By convention, the interfaces are defined on the left edge of each
-	// zone, i.e. xleft_(i) is the "left"-side of the interface at
-	// the left edge of zone i, and xright_(i) is the "right"-side of the
-	// interface at the *left* edge of zone i.
+	// zone, i.e. xinterface_(i) is the solution to the Riemann problem at
+	// the left edge of zone i.
 
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
 
 	for (int i = range.first; i < (range.second + 1); ++i) {
-
-		// Use piecewise-constant reconstruction
-		// (This converges at first order in spatial resolution.)
-
-		densityXLeft_(i) = density_(i - 1);
-		densityXRight_(i) = density_(i);
+		// TODO(ben): write Riemann solver.
 	}
 }
 
-template <typename F>
-void HydroSystem::ReconstructStatesPLM(F &&limiter,
-				       const std::pair<int, int> range)
-{
-	// By convention, the interfaces are defined on the left edge of each
-	// zone, i.e. xleft_(i) is the "left"-side of the interface at
-	// the left edge of zone i, and xright_(i) is the "right"-side of the
-	// interface at the *left* edge of zone i.
-
-	// Indexing note: There are (nx + 1) interfaces for nx zones.
-
-	for (int i = range.first; i < (range.second + 1); ++i) {
-
-		// Use piecewise-linear reconstruction
-		// (This converges at second order in spatial resolution.)
-
-		const auto lslope = limiter(density_(i) - density_(i - 1),
-					    density_(i - 1) - density_(i - 2));
-
-		const auto rslope = limiter(density_(i + 1) - density_(i),
-					    density_(i) - density_(i - 1));
-
-		densityXLeft_(i) = density_(i - 1) + 0.25 * lslope; // NOLINT
-		densityXRight_(i) = density_(i) + 0.25 * rslope;    // NOLINT
-	}
-}
-
-void HydroSystem::ReconstructStatesPPM(AthenaArray<double> &q,
-				       const std::pair<int, int> range)
-{
-	// By convention, the interfaces are defined on the left edge of each
-	// zone, i.e. xleft_(i) is the "left"-side of the interface at
-	// the left edge of zone i, and xright_(i) is the "right"-side of the
-	// interface at the *left* edge of zone i.
-
-	// Indexing note: There are (nx + 1) interfaces for nx zones.
-
-	for (int i = range.first; i < (range.second + 1); ++i) {
-		// PPM reconstruction following Colella & Woodward (1984), with
-		// some modifications following Mignone (2014), as implemented
-		// in Athena++.
-
-		// (1.) Estimate the interface a_{i - 1/2}.
-		//      Equivalent to step 1 in Athena++ [ppm_simple.cpp].
-
-		// C&W Eq. (1.9) [parabola midpoint for the case of
-		// equally-spaced zones]: a_{j+1/2} = (7/12)(a_j + a_{j+1}) -
-		// (1/12)(a_{j+2} + a_{j-1}). Terms are grouped to preserve
-		// exact symmetry in floating-point arithmetic, following
-		// Athena++.
-
-		const double coef_1 = (7. / 12.);
-		const double coef_2 = (-1. / 12.);
-		const double a_jhalf = (coef_1 * q(i) + coef_2 * q(i + 1)) +
-				       (coef_1 * q(i - 1) + coef_2 * q(i - 2));
-
-		// (2.) Constrain interface value to lie between adjacent
-		//      cell-averaged values (equivalent to step 2b in
-		//      Athena++ [ppm_simple.cpp]).
-
-		std::pair<double, double> bounds = std::minmax(q(i), q(i - 1));
-		const double interface =
-		    std::clamp(a_jhalf, bounds.first, bounds.second);
-
-		// a_R,(i-1) in C&W
-		densityXLeft_(i) = interface;
-
-		// a_L,i in C&W
-		densityXRight_(i) = interface;
-	}
-
-	for (int i = range.first; i < range.second; ++i) {
-
-		const double a_minus = densityXRight_(i);   // a_L,i in C&W
-		const double a_plus = densityXLeft_(i + 1); // a_R,i in C&W
-		const double a = q(i);			    // a_i in C&W
-
-		const double dq_minus = (a - a_minus);
-		const double dq_plus = (a_plus - a);
-
-		double new_a_minus = a_minus;
-		double new_a_plus = a_plus;
-
-		// (3.) Monotonicity correction, using Eq. (1.10) in PPM paper.
-		//      Equivalent to step 4b in Athena++ [ppm_simple.cpp].
-
-		const double qa = dq_plus * dq_minus; // interface extrema
-
-		if ((qa <= 0.0)) { // local extremum
-			new_a_minus = a;
-			new_a_plus = a;
-
-		} else { // no local extrema
-
-			// parabola overshoots near a_plus -> reset a_minus
-			if (std::abs(dq_minus) >= 2.0 * std::abs(dq_plus)) {
-				new_a_minus = a - 2.0 * dq_plus;
-			}
-
-			// parabola overshoots near a_minus -> reset a_plus
-			if (std::abs(dq_plus) >= 2.0 * std::abs(dq_minus)) {
-				new_a_plus = a + 2.0 * dq_minus;
-			}
-		}
-
-		densityXRight_(i) = new_a_minus;
-		densityXLeft_(i + 1) = new_a_plus;
-	}
-}
-
+#if 0
 void HydroSystem::FlattenShocks(AthenaArray<double> &q,
 				const std::pair<int, int> range)
 {
@@ -280,57 +114,6 @@ void HydroSystem::FlattenShocks(AthenaArray<double> &q,
 		densityXLeft_(i + 1) = new_a_plus;
 	}
 }
-
-// TODO(ben): add flux limiter for positivity preservation.
-void HydroSystem::ComputeFluxes(const std::pair<int, int> range)
-{
-	// By convention, the interfaces are defined on the left edge of each
-	// zone, i.e. xinterface_(i) is the solution to the Riemann problem at
-	// the left edge of zone i.
-
-	// Indexing note: There are (nx + 1) interfaces for nx zones.
-
-	for (int i = range.first; i < (range.second + 1); ++i) {
-		// TODO(ben): write Riemann solver.
-	}
-}
-
-void HydroSystem::PredictHalfStep(const std::pair<int, int> range)
-{
-	// By convention, the fluxes are defined on the left edge of each zone,
-	// i.e. flux_(i) is the flux *into* zone i through the interface on the
-	// left of zone i, and -1.0*flux(i+1) is the flux *into* zone i through
-	// the interface on the right of zone i.
-
-	for (int i = range.first; i < range.second; ++i) {
-		densityPrediction_(i) =
-		    density_(i) - (0.5 * dt_ / dx_) *
-				      (densityXFlux_(i + 1) - densityXFlux_(i));
-	}
-}
-
-void HydroSystem::AddFluxes()
-{
-	// By convention, the fluxes are defined on the left edge of each zone,
-	// i.e. flux_(i) is the flux *into* zone i through the interface on the
-	// left of zone i, and -1.0*flux(i+1) is the flux *into* zone i through
-	// the interface on the right of zone i.
-
-	for (int i = nghost_; i < nx_ + nghost_; ++i) {
-		density_(i) += -1.0 * (dt_ / dx_) *
-			       (densityXFlux_(i + 1) - densityXFlux_(i));
-	}
-}
-
-auto HydroSystem::ComputeMass() -> double
-{
-	double mass = 0.0;
-
-	for (int i = nghost_; i < nx_ + nghost_; ++i) {
-		mass += density_(i) * dx_;
-	}
-
-	return mass;
-}
+#endif
 
 void HydroSystem::AddSourceTerms(AthenaArray<double> &source_terms) {}

@@ -25,49 +25,37 @@
 class LinearAdvectionSystem : public HyperbolicSystem
 {
       public:
-	AthenaArray<double> density_;
-
 	using NxType = fluent::NamedType<int, struct NxParameter>;
 	using LxType = fluent::NamedType<double, struct LxParameter>;
 	using CFLType = fluent::NamedType<double, struct CFLParameter>;
 	using VxType = fluent::NamedType<double, struct VxParameter>;
+	using NvarsType = fluent::NamedType<int, struct NvarsParameter>;
 
 	static const NxType::argument Nx;
 	static const LxType::argument Lx;
 	static const CFLType::argument CFL;
 	static const VxType::argument Vx;
+	static const NvarsType::argument Nvars;
 
 	LinearAdvectionSystem(NxType const &nx, LxType const &lx,
-			      VxType const &vx, CFLType const &cflNumber);
+			      VxType const &vx, CFLType const &cflNumber,
+			      NvarsType const &nvars);
 
 	void AddSourceTerms(AthenaArray<double> &source_terms) override;
-	void AdvanceTimestep() override; //< Advances system by one timestep
-
 	auto ComputeMass() -> double;
 
-      protected:
-	AthenaArray<double> densityXLeft_;
-	AthenaArray<double> densityXRight_;
-	AthenaArray<double> densityXFlux_;
-	AthenaArray<double> densityPrediction_;
+	// accessor functions
 
+	auto density(int i) -> double; // returns rvalue
+	double &set_density(int i);    // returns lvalue
+
+      protected:
+	AthenaArray<double> density_; // shallow copy of consVars_(i,:)
 	double advectionVx_;
 
-	void FillGhostZones() override;
+	void ConservedToPrimitive(AthenaArray<double> &cons) override;
 	void ComputeTimestep() override;
-	void ConservedToPrimitive() override;
-
-	void ReconstructStatesConstant(std::pair<int, int> range);
 	void ComputeFluxes(std::pair<int, int> range) override;
-	void PredictHalfStep(std::pair<int, int> range);
-
-	template <typename F>
-	void ReconstructStatesPLM(F &&limiter, std::pair<int, int> range);
-	void ReconstructStatesPPM(AthenaArray<double> &q,
-				  std::pair<int, int> range);
-	void FlattenShocks(AthenaArray<double> &q, std::pair<int, int> range);
-
-	void AddFluxes() override;
 };
 
 #endif // LINEAR_ADVECTION_HPP_

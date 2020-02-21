@@ -48,6 +48,7 @@ auto main() -> int
 		const double CFL_number = 0.3;
 		const double max_time = 1.0;
 		const int max_timesteps = 1000;
+		const int nvars = 1; // only density
 
 		const double atol =
 		    1e-10; //< absolute tolerance for mass conservation
@@ -63,7 +64,8 @@ auto main() -> int
 		    LinearAdvectionSystem::Nx = nx,
 		    LinearAdvectionSystem::Lx = Lx,
 		    LinearAdvectionSystem::Vx = advection_velocity,
-		    LinearAdvectionSystem::CFL = CFL_number);
+		    LinearAdvectionSystem::CFL = CFL_number,
+		    LinearAdvectionSystem::Nvars = nvars);
 
 		auto nghost = advection_system.nghost();
 
@@ -71,9 +73,9 @@ auto main() -> int
 
 			auto value =
 			    static_cast<double>((i - nghost + nx / 2) % nx);
-			advection_system.density_(i) = value;
+			advection_system.set_density(i) = value;
 
-			// advection_system.density_(i) =
+			// advection_system.set_density(i) =
 			//    std::sin(M_PI * (value + 0.5) /
 			//    static_cast<double>(nx));
 		}
@@ -81,7 +83,7 @@ auto main() -> int
 		std::vector<double> x(nx), d_initial(nx), d_final(nx);
 		for (int i = 0; i < nx; ++i) {
 			x.at(i) = static_cast<double>(i);
-			d_initial.at(i) = advection_system.density_(i + nghost);
+			d_initial.at(i) = advection_system.density(i + nghost);
 		}
 
 		std::cout << "Initial conditions:"
@@ -121,7 +123,7 @@ auto main() -> int
 
 		// Plot results
 		for (int i = 0; i < nx; ++i) {
-			d_final.at(i) = advection_system.density_(i + nghost);
+			d_final.at(i) = advection_system.density(i + nghost);
 		}
 
 		matplotlibcpp::plot(x, d_initial, "--");
@@ -145,7 +147,7 @@ void write_density(LinearAdvectionSystem &advection_system)
 	auto nghost = advection_system.nghost();
 
 	for (int i = 0; i < nx + 2 * nghost; ++i) {
-		std::cout << advection_system.density_(i) << " ";
+		std::cout << advection_system.density(i) << " ";
 	}
 
 	std::cout << "\n";
