@@ -46,8 +46,8 @@ class LinearAdvectionSystem : public HyperbolicSystem
 
 	// accessor functions
 
-	auto density(int i) -> double; // returns rvalue
-	double &set_density(int i);    // returns lvalue
+	auto density(int i) -> double;	     // returns rvalue
+	auto set_density(int i) -> double &; // returns lvalue
 
       protected:
 	AthenaArray<double> density_; // shallow copy of consVars_(i,:)

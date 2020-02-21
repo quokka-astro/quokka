@@ -36,7 +36,10 @@ auto LinearAdvectionSystem::density(const int i) -> double
 	return density_(i);
 }
 
-double &LinearAdvectionSystem::set_density(const int i) { return density_(i); }
+auto LinearAdvectionSystem::set_density(const int i) -> double &
+{
+	return density_(i);
+}
 
 auto LinearAdvectionSystem::ComputeMass() -> double
 {

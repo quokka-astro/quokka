@@ -80,7 +80,9 @@ auto main() -> int
 			//    static_cast<double>(nx));
 		}
 
-		std::vector<double> x(nx), d_initial(nx), d_final(nx);
+		std::vector<double> x(nx);
+		std::vector<double> d_initial(nx);
+		std::vector<double> d_final(nx);
 		for (int i = 0; i < nx; ++i) {
 			x.at(i) = static_cast<double>(i);
 			d_initial.at(i) = advection_system.density(i + nghost);
