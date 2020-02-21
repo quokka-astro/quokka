@@ -3,6 +3,10 @@ docs/api/
 docs/doxyoutput/
 _build/
 
+# Kokkos build files
+KokkosCore_config.h
+KokkosCore_config.tmp
+
 # Emacs history files
 *~
 
