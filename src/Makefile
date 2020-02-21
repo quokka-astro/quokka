@@ -1,20 +1,26 @@
 ## Makefile for TwoMomentRad library
 
+KOKKOS_PATH = ./kokkos
+KOKKOS_DEVICES = OpenMP
+
 CPP_FILES=$(wildcard *.cpp)
 HPP_FILES=$(wildcard *.hpp)
 SRC_FILES:=$(CPP_FILES) $(HPP_FILES)
-
-# exclude athena_arrays.hpp from static analysis
 ANALYZE_FILES:=$(filter-out athena_arrays.hpp, $(SRC_FILES))
-#ANALYZE_FILES:=$(CPP_FILES)
-
-CXX ?= g++
-CXXFLAGS ?= -g -O0 --std=c++17 -I/usr/include/python3.6
-CXXLIBS ?= -lpython3.6m
+OBJ_FILES:=$(CPP_FILES:.cpp=.o)
 
 STATIC_ANALYZER = cppcheck
 STATIC_ANALYZER_FLAGS = --enable=all --std=c++17 --suppress=missingIncludeSystem
 
+CXX ?= g++
+CXXFLAGS ?= -g -O0 --std=c++17 -I/usr/include/python3.6
+
+LINK = $(CXX)
+LINKFLAGS = 
+LIB = -lpython3.6m
+
+
+include $(KOKKOS_PATH)/Makefile.kokkos
 
 default: format clang-tidy driver.exe
 
@@ -27,8 +33,11 @@ format: $(SRC_FILES)
 
 ## compiling
 
-driver.exe: $(CPP_FILES)
-	$(CXX) $(CXXFLAGS) $^ $(CXXLIBS) -o driver.exe
+%.o: %.cpp $(KOKKOS_CPP_DEPENDS)
+	$(CXX) $(KOKKOS_CPPFLAGS) $(KOKKOS_CXXFLAGS) $(CXXFLAGS) $(EXTRA_INC) -c $<
+
+driver.exe: $(OBJ_FILES) $(KOKKOS_LINK_DEPENDS)
+	$(LINK) $(KOKKOS_LDFLAGS) $(LINKFLAGS) $(OBJ_FILES) $(KOKKOS_LIBS) $(LIB) -o driver.exe
 
 
 ## static analysis / code linting

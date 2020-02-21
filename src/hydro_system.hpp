@@ -26,6 +26,8 @@ class HydroSystem : public HyperbolicSystem
 {
       public:
 	AthenaArray<double> density_;
+	AthenaArray<double> x1Momentum_;
+	AthenaArray<double> energy_;
 
 	using NxType = fluent::NamedType<int, struct NxParameter>;
 	using LxType = fluent::NamedType<double, struct LxParameter>;
@@ -58,6 +60,16 @@ class HydroSystem : public HyperbolicSystem
 	AthenaArray<double> densityXRight_;
 	AthenaArray<double> densityXFlux_;
 	AthenaArray<double> densityPrediction_;
+
+	AthenaArray<double> x1MomentumXLeft_;
+	AthenaArray<double> x1MomentumXRight_;
+	AthenaArray<double> x1MomentumXFlux_;
+	AthenaArray<double> x1MomentumPrediction_;
+
+	AthenaArray<double> energyXLeft_;
+	AthenaArray<double> energyXRight_;
+	AthenaArray<double> energyXFlux_;
+	AthenaArray<double> energyPrediction_;
 
 	void FillGhostZones() override;
 	void ComputeTimestep() override;

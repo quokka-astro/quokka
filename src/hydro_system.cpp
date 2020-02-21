@@ -29,6 +29,18 @@ HydroSystem::HydroSystem(NxType const &nx, LxType const &lx,
 	densityXLeft_.NewAthenaArray(dim1_);
 	densityXRight_.NewAthenaArray(dim1_);
 	densityXFlux_.NewAthenaArray(dim1_);
+
+	x1Momentum_.NewAthenaArray(dim1_);
+	x1MomentumPrediction_.NewAthenaArray(dim1_);
+	x1MomentumXLeft_.NewAthenaArray(dim1_);
+	x1MomentumXRight_.NewAthenaArray(dim1_);
+	x1MomentumXFlux_.NewAthenaArray(dim1_);
+
+	energy_.NewAthenaArray(dim1_);
+	energyPrediction_.NewAthenaArray(dim1_);
+	energyXLeft_.NewAthenaArray(dim1_);
+	energyXRight_.NewAthenaArray(dim1_);
+	energyXFlux_.NewAthenaArray(dim1_);
 }
 
 void HydroSystem::AdvanceTimestep()
@@ -42,7 +54,6 @@ void HydroSystem::AdvanceTimestep()
 	    std::make_pair((-3) + nghost_, (nx_ + 3) + nghost_);
 
 	ReconstructStatesConstant(p_range);
-	// ReconstructStatesPLM(HyperbolicSystem::minmod, p_range);
 	ComputeFluxes(p_range);
 	PredictHalfStep(p_range);
 
@@ -50,13 +61,18 @@ void HydroSystem::AdvanceTimestep()
 	densityXLeft_.ZeroClear();
 	densityXRight_.ZeroClear();
 	densityXFlux_.ZeroClear();
+	x1MomentumXLeft_.ZeroClear();
+	x1MomentumXRight_.ZeroClear();
+	x1MomentumXFlux_.ZeroClear();
+	energyXLeft_.ZeroClear();
+	energyXRight_.ZeroClear();
+	energyXFlux_.ZeroClear();
 
 	// Corrector step
 	const auto ppm_range = std::make_pair(-1 + nghost_, nx_ + 1 + nghost_);
 	const auto cell_range = std::make_pair(nghost_, nx_ + nghost_);
 
 	ReconstructStatesPPM(densityPrediction_, ppm_range);
-	// FlattenShocks(densityPrediction_, ppm_range);
 	ComputeFluxes(cell_range);
 	AddFluxes();
 

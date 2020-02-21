@@ -33,88 +33,106 @@ void write_density(LinearAdvectionSystem &advection_system);
 ///
 auto main() -> int
 {
-	// Problem parameters
+	// Initialization
 
-	const int nx = 64;
-	const double Lx = 1.0;
-	const double advection_velocity = 1.0;
-	const double CFL_number = 0.3;
-	const double max_time = 1.0;
-	const int max_timesteps = 1000;
+	Kokkos::initialize();
 
-	const double atol = 1e-10; //< absolute tolerance for mass conservation
+	{ // objects cannot be created/destroyed in same scope as
+	  // Kokkos::initialize or Kokkos::finalize
 
-	// Problem initialization
-	// (We use named types in order to guarantee that we don't screw up the
-	// order of the arguments to the constructor. Also it makes C++ look
-	// like beautiful Python. With optimizations enabled, there is no
-	// performance penalty whatsoever. See
-	// https://github.com/joboccara/NamedType)
+		// Problem parameters
 
-	LinearAdvectionSystem advection_system(
-	    LinearAdvectionSystem::Nx = nx, LinearAdvectionSystem::Lx = Lx,
-	    LinearAdvectionSystem::Vx = advection_velocity,
-	    LinearAdvectionSystem::CFL = CFL_number);
+		const int nx = 64;
+		const double Lx = 1.0;
+		const double advection_velocity = 1.0;
+		const double CFL_number = 0.3;
+		const double max_time = 1.0;
+		const int max_timesteps = 1000;
 
-	auto nghost = advection_system.nghost();
+		const double atol =
+		    1e-10; //< absolute tolerance for mass conservation
 
-	for (int i = nghost; i < nx + nghost; ++i) {
+		// Problem initialization
+		// (We use named types in order to guarantee that we don't screw
+		// up the order of the arguments to the constructor. Also it
+		// makes C++ look like beautiful Python. With optimizations
+		// enabled, there is no performance penalty whatsoever. See
+		// https://github.com/joboccara/NamedType)
 
-		auto value = static_cast<double>((i - nghost + nx / 2) % nx);
-		advection_system.density_(i) = value;
+		LinearAdvectionSystem advection_system(
+		    LinearAdvectionSystem::Nx = nx,
+		    LinearAdvectionSystem::Lx = Lx,
+		    LinearAdvectionSystem::Vx = advection_velocity,
+		    LinearAdvectionSystem::CFL = CFL_number);
 
-		// advection_system.density_(i) =
-		//    std::sin(M_PI * (value + 0.5) / static_cast<double>(nx));
-	}
+		auto nghost = advection_system.nghost();
 
-	std::vector<double> x(nx), d_initial(nx), d_final(nx);
-	for (int i = 0; i < nx; ++i) {
-		x.at(i) = static_cast<double>(i);
-		d_initial.at(i) = advection_system.density_(i + nghost);
-	}
+		for (int i = nghost; i < nx + nghost; ++i) {
 
-	std::cout << "Initial conditions:"
-		  << "\n";
-	write_density(advection_system);
-	std::cout << "\n";
+			auto value =
+			    static_cast<double>((i - nghost + nx / 2) % nx);
+			advection_system.density_(i) = value;
 
-	const auto initial_mass = advection_system.ComputeMass();
-
-	// Main time loop
-
-	for (int j = 0; j < max_timesteps; ++j) {
-		if (advection_system.time() >= max_time) {
-			break;
+			// advection_system.density_(i) =
+			//    std::sin(M_PI * (value + 0.5) /
+			//    static_cast<double>(nx));
 		}
 
-		advection_system.AdvanceTimestep();
+		std::vector<double> x(nx), d_initial(nx), d_final(nx);
+		for (int i = 0; i < nx; ++i) {
+			x.at(i) = static_cast<double>(i);
+			d_initial.at(i) = advection_system.density_(i + nghost);
+		}
 
-		std::cout << "Timestep " << j
-			  << "; t = " << advection_system.time() << "\n";
-
+		std::cout << "Initial conditions:"
+			  << "\n";
 		write_density(advection_system);
-
-		const auto current_mass = advection_system.ComputeMass();
-		std::cout << "Total mass = " << current_mass << "\n";
-
-		const auto mass_deficit = std::abs(current_mass - initial_mass);
-		std::cout << "Mass nonconservation = " << mass_deficit << "\n";
-		assert(mass_deficit < atol); // NOLINT
-
 		std::cout << "\n";
-	}
 
-	// Plot results
-	for (int i = 0; i < nx; ++i) {
-		d_final.at(i) = advection_system.density_(i + nghost);
-	}
+		const auto initial_mass = advection_system.ComputeMass();
 
-	matplotlibcpp::plot(x, d_initial, "--");
-	matplotlibcpp::plot(x, d_final, ".-");
-	matplotlibcpp::save(std::string("./advection.png"));
+		// Main time loop
 
-	// Cleanup and exit
-	std::cout << "Finished." << std::endl;
+		for (int j = 0; j < max_timesteps; ++j) {
+			if (advection_system.time() >= max_time) {
+				break;
+			}
+
+			advection_system.AdvanceTimestep();
+
+			std::cout << "Timestep " << j
+				  << "; t = " << advection_system.time()
+				  << "\n";
+
+			write_density(advection_system);
+
+			const auto current_mass =
+			    advection_system.ComputeMass();
+			std::cout << "Total mass = " << current_mass << "\n";
+
+			const auto mass_deficit =
+			    std::abs(current_mass - initial_mass);
+			std::cout << "Mass nonconservation = " << mass_deficit
+				  << "\n";
+			assert(mass_deficit < atol); // NOLINT
+
+			std::cout << "\n";
+		}
+
+		// Plot results
+		for (int i = 0; i < nx; ++i) {
+			d_final.at(i) = advection_system.density_(i + nghost);
+		}
+
+		matplotlibcpp::plot(x, d_initial, "--");
+		matplotlibcpp::plot(x, d_final, ".-");
+		matplotlibcpp::save(std::string("./advection.png"));
+
+		// Cleanup and exit
+		std::cout << "Finished." << std::endl;
+
+	} // destructors must be called before Kokkos::finalize()
+	Kokkos::finalize();
 
 	return 0;
 }
