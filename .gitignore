@@ -1,3 +1,9 @@
+# Acme output files
++Errors
+
+# image files
+*.png
+
 # Documentation build directory
 docs/api/
 docs/doxyoutput/

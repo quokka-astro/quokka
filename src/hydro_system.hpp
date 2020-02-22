@@ -12,6 +12,7 @@
 // c++ headers
 #include <cassert>
 #include <cmath>
+#include <valarray>
 
 // library headers
 #include "NamedType/named_type.hpp" // provides fluent::NamedType
@@ -25,6 +26,18 @@
 class HydroSystem : public HyperbolicSystem
 {
       public:
+	enum consVarIndex {
+		density_index = 0,
+		x1Momentum_index = 1,
+		energy_index = 2
+	};
+
+	enum primVarIndex {
+		primDensity_index = 0,
+		x1Velocity_index = 1,
+		pressure_index = 2
+	};
+
 	using NxType = fluent::NamedType<int, struct NxParameter>;
 	using LxType = fluent::NamedType<double, struct LxParameter>;
 	using CFLType = fluent::NamedType<double, struct CFLParameter>;
@@ -43,12 +56,15 @@ class HydroSystem : public HyperbolicSystem
 	// setter functions:
 
 	void set_cflNumber(double cflNumber);
+	auto set_density(int i) -> double &;
+	auto set_x1Momentum(int i) -> double &;
+	auto set_energy(int i) -> double &;
 
 	// accessor functions:
 
-	auto nghost() -> int;
-	auto nx() -> int;
-	auto time() -> double;
+	auto density(int i) -> double;
+	auto x1Momentum(int i) -> double;
+	auto energy(int i) -> double;
 
 	auto ComputeMass() -> double;
 
@@ -56,6 +72,12 @@ class HydroSystem : public HyperbolicSystem
 	AthenaArray<double> density_;
 	AthenaArray<double> x1Momentum_;
 	AthenaArray<double> energy_;
+
+	AthenaArray<double> primDensity_;
+	AthenaArray<double> x1Velocity_;
+	AthenaArray<double> pressure_;
+
+	const double gamma_ = (5. / 3.);
 
 	void ConservedToPrimitive(AthenaArray<double> &cons) override;
 	void ComputeFluxes(std::pair<int, int> range) override;

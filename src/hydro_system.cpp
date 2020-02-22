@@ -20,15 +20,29 @@ HydroSystem::HydroSystem(NxType const &nx, LxType const &lx,
 			 CFLType const &cflNumber, NvarsType const &nvars)
     : HyperbolicSystem{nx.get(), lx.get(), cflNumber.get(), nvars.get()}
 {
-	enum varIndex {
-		density_index = 0,
-		x1Momentum_index = 1,
-		energy_index = 2
-	};
 	density_.InitWithShallowSlice(consVar_, 2, density_index, 0);
 	x1Momentum_.InitWithShallowSlice(consVar_, 2, x1Momentum_index, 0);
 	energy_.InitWithShallowSlice(consVar_, 2, energy_index, 0);
+
+	primDensity_.InitWithShallowSlice(primVar_, 2, primDensity_index, 0);
+	x1Velocity_.InitWithShallowSlice(primVar_, 2, x1Velocity_index, 0);
+	pressure_.InitWithShallowSlice(primVar_, 2, pressure_index, 0);
 }
+
+auto HydroSystem::density(const int i) -> double { return density_(i); }
+
+auto HydroSystem::set_density(const int i) -> double & { return density_(i); }
+
+auto HydroSystem::x1Momentum(const int i) -> double { return x1Momentum_(i); }
+
+auto HydroSystem::set_x1Momentum(const int i) -> double &
+{
+	return x1Momentum_(i);
+}
+
+auto HydroSystem::energy(const int i) -> double { return energy_(i); }
+
+auto HydroSystem::set_energy(const int i) -> double & { return energy_(i); }
 
 auto HydroSystem::ComputeMass() -> double
 {
@@ -41,11 +55,42 @@ auto HydroSystem::ComputeMass() -> double
 	return mass;
 }
 
-void HydroSystem::ConservedToPrimitive(AthenaArray<double> &cons) {}
+void HydroSystem::ConservedToPrimitive(AthenaArray<double> &cons)
+{
+	for (int i = 0; i < dim1_; ++i) {
+		const auto rho = cons(density_index, i);
+		const auto px = cons(x1Momentum_index, i);
+		const auto e =
+		    cons(energy_index, i); // *total* gas energy density
+
+		const auto vx = px / rho;
+		const auto kinetic_energy = 0.5 * rho * std::pow(vx, 2);
+		const auto thermal_energy = e - kinetic_energy;
+		const auto P = thermal_energy * (gamma_ - 1.0);
+
+		primDensity_(i) = rho;
+		x1Velocity_(i) = vx;
+		pressure_(i) = P;
+	}
+}
 
 void HydroSystem::ComputeTimestep()
 {
-	//	dt_ = cflNumber_ * (dx_ / advectionVx_);
+	double dt = std::numeric_limits<double>::max();
+
+	for (int i = 0; i < dim1_; ++i) {
+		const double rho = primDensity_(i);
+		const double vx = x1Velocity_(i);
+		const double P = pressure_(i);
+		const double cs = std::sqrt(gamma_ * P / rho);
+
+		const double signal_max =
+		    std::max(std::abs(vx - cs), std::abs(vx + cs));
+		const double thisDt = cflNumber_ * (dx_ / signal_max);
+		dt = std::min(dt, thisDt);
+	}
+
+	dt_ = dt;
 }
 
 // TODO(ben): add flux limiter for positivity preservation.
@@ -58,7 +103,71 @@ void HydroSystem::ComputeFluxes(const std::pair<int, int> range)
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
 
 	for (int i = range.first; i < (range.second + 1); ++i) {
-		// TODO(ben): write Riemann solver.
+		// HLL solver following Balsara (2017)
+
+		// gather variables
+		const double rho_L = x1LeftState_(primDensity_index, i);
+		const double rho_R = x1RightState_(primDensity_index, i);
+
+		const double vx_L = x1LeftState_(x1Velocity_index, i);
+		const double vx_R = x1RightState_(x1Velocity_index, i);
+
+		const double P_L = x1LeftState_(pressure_index, i);
+		const double P_R = x1RightState_(pressure_index, i);
+
+		const double ke_L = 0.5 * rho_L * (vx_L * vx_L);
+		const double ke_R = 0.5 * rho_R * (vx_R * vx_R);
+
+		const double e_L = P_L / (gamma_ - 1.0) + ke_L;
+		const double e_R = P_L / (gamma_ - 1.0) + ke_R;
+
+		const double cs_L = std::sqrt(gamma_ * P_L / rho_L);
+		const double cs_R = std::sqrt(gamma_ * P_R / rho_R);
+
+		// compute wave speeds
+		const double s_L = vx_L - cs_L;
+		const double s_R = vx_R + cs_R;
+
+		const double vx_avg =
+		    (std::sqrt(rho_L) * vx_L + std::sqrt(rho_R) * vx_L) /
+		    (std::sqrt(rho_L) + std::sqrt(rho_R)); // Roe-average vx
+		const double cs_avg =
+		    (std::sqrt(rho_L) * cs_L + std::sqrt(rho_R) * cs_R) /
+		    (std::sqrt(rho_L) + std::sqrt(rho_R)); // Roe-average cs
+
+		const double s_Lavg =
+		    (vx_avg + cs_avg); // Roe-average vx - Roe-average cs
+		const double s_Ravg =
+		    (vx_avg - cs_avg); // Roe-average vx + Roe-average cs
+
+		const double eps = 1e-20;
+		const double S_L = std::min(std::min(s_L, s_Lavg), -eps);
+		const double S_R = std::max(std::max(s_R, s_Ravg), eps);
+
+		// compute fluxes
+		const std::valarray<double> F_L = {rho_L * vx_L,
+						   rho_L * (vx_L * vx_L) + P_L,
+						   (e_L + P_L) * vx_L};
+		const std::valarray<double> F_R = {rho_R * vx_R,
+						   rho_R * (vx_R * vx_R) + P_R,
+						   (e_R + P_R) * vx_R};
+
+		const std::valarray<double> U_L = {
+		    rho_L, rho_L * vx_L,
+		    P_L / (gamma_ - 1.0) + 0.5 * rho_L * (vx_L * vx_L)};
+		const std::valarray<double> U_R = {
+		    rho_R, rho_R * vx_R,
+		    P_R / (gamma_ - 1.0) + 0.5 * rho_R * (vx_R * vx_R)};
+
+		// due to comparison with 'eps' (see above), we only need to
+		// compute F*
+		const std::valarray<double> F_star =
+		    (S_R / (S_R - S_L)) * F_L - (S_L / (S_R - S_L)) * F_R +
+		    (S_R * S_L / (S_R - S_L)) * (U_R - U_L);
+
+		x1Flux_(density_index, i) = F_star[0];
+		x1Flux_(x1Momentum_index, i) = F_star[1];
+		x1Flux_(energy_index, i) = F_star[2];
 	}
 }
 
