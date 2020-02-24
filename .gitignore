@@ -1,3 +1,7 @@
+*.mp4
+
+.DS_Store
+
 # Acme output files
 +Errors
 
