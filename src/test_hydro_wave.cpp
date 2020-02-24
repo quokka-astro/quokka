@@ -19,7 +19,7 @@ void testproblem_hydro_wave()
 	const double max_time = 10.0;
 	const int max_timesteps = 5000;
 	const double gamma = 1.001; // ratio of specific heats
-	const double amp = 0.00001;  // wave amplitude
+	const double amp = 0.00001; // wave amplitude
 
 	const double rtol = 1e-6; //< absolute tolerance for conserved vars
 

@@ -57,7 +57,6 @@ void HyperbolicSystem::FillGhostZones(AthenaArray<double> &cons)
 			cons(n, i) = cons(n, nghost_ + 0);
 		}
 	}
-
 }
 
 void HyperbolicSystem::ReconstructStatesConstant(
