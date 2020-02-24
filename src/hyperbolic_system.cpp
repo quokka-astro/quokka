@@ -23,7 +23,7 @@ void HyperbolicSystem::set_cflNumber(double cflNumber)
 	cflNumber_ = cflNumber;
 }
 
-void HyperbolicSystem::FillGhostZones()
+void HyperbolicSystem::FillGhostZones(AthenaArray<double> &cons)
 {
 	// In general, this step will require MPI communication, and interaction
 	// with the main AMR code.
@@ -32,14 +32,14 @@ void HyperbolicSystem::FillGhostZones()
 	// x1 right side boundary
 	for (int n = 0; n < nvars_; ++n) {
 		for (int i = nghost_ + nx_; i < nghost_ + nx_ + nghost_; ++i) {
-			consVar_(n, i) = consVar_(n, i - nx_);
+			cons(n, i) = cons(n, i - nx_);
 		}
 	}
 
 	// x1 left side boundary
 	for (int n = 0; n < nvars_; ++n) {
 		for (int i = 0; i < nghost_; ++i) {
-			consVar_(n, i) = consVar_(n, i + nx_);
+			cons(n, i) = cons(n, i + nx_);
 		}
 	}
 #endif
@@ -47,14 +47,14 @@ void HyperbolicSystem::FillGhostZones()
 	// x1 right side boundary
 	for (int n = 0; n < nvars_; ++n) {
 		for (int i = nghost_ + nx_; i < nghost_ + nx_ + nghost_; ++i) {
-			consVar_(n, i) = consVar_(n, nghost_ + nx_ - 1);
+			cons(n, i) = cons(n, nghost_ + nx_ - 1);
 		}
 	}
 
 	// x1 left side boundary
 	for (int n = 0; n < nvars_; ++n) {
 		for (int i = 0; i < nghost_; ++i) {
-			consVar_(n, i) = consVar_(n, nghost_ + 0);
+			cons(n, i) = cons(n, nghost_ + 0);
 		}
 	}
 }
@@ -207,6 +207,9 @@ void HyperbolicSystem::ReconstructStatesPPM(AthenaArray<double> &q,
 				new_a_minus = a - 0.5 * dq0;
 				new_a_plus = a + 0.5 * dq0;
 
+				// new_a_minus = a;
+				// new_a_plus = a;
+
 			} else { // no local extrema
 
 				// parabola overshoots near
@@ -230,7 +233,7 @@ void HyperbolicSystem::ReconstructStatesPPM(AthenaArray<double> &q,
 	}
 }
 
-void HyperbolicSystem::PredictHalfStep(const std::pair<int, int> range)
+void HyperbolicSystem::PredictStep(const std::pair<int, int> range)
 {
 	// By convention, the fluxes are defined on the left edge of each zone,
 	// i.e. flux_(i) is the flux *into* zone i through the interface on the
@@ -241,8 +244,7 @@ void HyperbolicSystem::PredictHalfStep(const std::pair<int, int> range)
 		for (int i = range.first; i < range.second; ++i) {
 			consVarPredictStep_(n, i) =
 			    consVar_(n, i) -
-			    (0.5 * dt_ / dx_) *
-				(x1Flux_(n, i + 1) - x1Flux_(n, i));
+			    (dt_ / dx_) * (x1Flux_(n, i + 1) - x1Flux_(n, i));
 		}
 	}
 }
@@ -256,27 +258,34 @@ void HyperbolicSystem::AddFluxes()
 
 	for (int n = 0; n < nvars_; ++n) {
 		for (int i = nghost_; i < nx_ + nghost_; ++i) {
-			consVar_(n, i) += -1.0 * (dt_ / dx_) *
-					  (x1Flux_(n, i + 1) - x1Flux_(n, i));
+			const double U_0 = consVar_(n, i);
+			const double U_1 = consVarPredictStep_(n, i);
+			const double FU_1 = -1.0 * (dt_ / dx_) *
+					    (x1Flux_(n, i + 1) - x1Flux_(n, i));
+
+			// RK-SSP2 integrator
+			consVar_(n, i) = 0.5 * U_0 + 0.5 * U_1 + 0.5 * FU_1;
 		}
 	}
 }
 
 void HyperbolicSystem::AdvanceTimestep()
 {
+	const auto ppm_range = std::make_pair(-1 + nghost_, nx_ + 1 + nghost_);
+	const auto cell_range = std::make_pair(nghost_, nx_ + nghost_);
+	const auto predict_range =
+	    std::make_pair((-3) + nghost_, (nx_ + 3) + nghost_);
+
 	// Initialize data
-	FillGhostZones();
+	FillGhostZones(consVar_);
 	ConservedToPrimitive(consVar_, std::make_pair(0, dim1_));
 	ComputeTimestep();
 
 	// Predictor step
-	const auto p_range =
-	    std::make_pair((-3) + nghost_, (nx_ + 3) + nghost_);
-
-	ReconstructStatesConstant(p_range);
-	ComputeFluxes(p_range);
-	PredictHalfStep(p_range);
-	ConservedToPrimitive(consVarPredictStep_, p_range);
+	// ReconstructStatesConstant(p_range);
+	ReconstructStatesPPM(primVar_, ppm_range);
+	ComputeFluxes(cell_range);
+	PredictStep(cell_range);
 
 	// Clear temporary arrays
 	x1LeftState_.ZeroClear();
@@ -284,12 +293,9 @@ void HyperbolicSystem::AdvanceTimestep()
 	x1Flux_.ZeroClear();
 
 	// Corrector step
-	const auto ppm_range = std::make_pair(-1 + nghost_, nx_ + 1 + nghost_);
-	const auto cell_range = std::make_pair(nghost_, nx_ + nghost_);
-
-	// ReconstructStatesPPM(primVar_, ppm_range);
-	ReconstructStatesPLM(MC, ppm_range);
-
+	FillGhostZones(consVarPredictStep_);
+	ConservedToPrimitive(consVarPredictStep_, std::make_pair(0, dim1_));
+	ReconstructStatesPPM(primVar_, ppm_range);
 	ComputeFluxes(cell_range);
 	AddFluxes();
 

@@ -73,7 +73,7 @@ class HyperbolicSystem
 				std::min(2.0 * std::abs(a), 2.0 * std::abs(b)));
 	}
 
-	void FillGhostZones();
+	void FillGhostZones(AthenaArray<double> &cons);
 	virtual void ConservedToPrimitive(AthenaArray<double> &cons,
 					  std::pair<int, int> range) = 0;
 
@@ -119,7 +119,7 @@ class HyperbolicSystem
 	void ReconstructStatesPLM(F &&limiter, std::pair<int, int> range);
 	void ReconstructStatesPPM(AthenaArray<double> &q,
 				  std::pair<int, int> range);
-	void PredictHalfStep(std::pair<int, int> range);
+	void PredictStep(std::pair<int, int> range);
 
 	virtual void ComputeTimestep() = 0;
 	virtual void ComputeFluxes(std::pair<int, int> range) = 0;

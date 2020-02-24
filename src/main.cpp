@@ -159,14 +159,14 @@ void testproblem_hydro()
 {
 	// Problem parameters
 
-	const int nx = 64;
+	const int nx = 500;
 	const double Lx = 5.0;
-	const double CFL_number = 0.1;
+	const double CFL_number = 0.4;
 	const double max_time = 0.4;
 	const int max_timesteps = 5000;
 	const double gamma = 1.4; // ratio of specific heats
 
-	const double rtol = 1e-10; //< absolute tolerance for conserved vars
+	const double rtol = 1e-6; //< absolute tolerance for conserved vars
 
 	// Problem initialization
 
@@ -209,7 +209,6 @@ void testproblem_hydro()
 	std::vector<double> v_initial(nx + 2 * nghost);
 	std::vector<double> P_initial(nx + 2 * nghost);
 
-	hydro_system.FillGhostZones();
 	hydro_system.ConservedToPrimitive(hydro_system.consVar_,
 					  std::make_pair(nghost, nx + nghost));
 
@@ -275,6 +274,8 @@ void testproblem_hydro()
 		matplotlibcpp::plot(xs, P, P_args);
 
 		matplotlibcpp::legend();
+		matplotlibcpp::title(
+		    fmt::format("t = {:.4f}", hydro_system.time()));
 		matplotlibcpp::save(fmt::format("./hydro_{:0>4d}.png", j));
 
 		assert((mass_deficit / initial_mass) < rtol); // NOLINT
