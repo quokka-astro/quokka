@@ -105,6 +105,7 @@ void testproblem_advection()
 	std::vector<double> x(nx);
 	std::vector<double> d_initial(nx);
 	std::vector<double> d_final(nx);
+
 	for (int i = 0; i < nx; ++i) {
 		x.at(i) = static_cast<double>(i);
 		d_initial.at(i) = advection_system.density(i + nghost);
@@ -158,41 +159,69 @@ void testproblem_hydro()
 {
 	// Problem parameters
 
-	const int nx = 32;
-	const double Lx = 1.0;
-	const double CFL_number = 0.3;
-	const double max_time = 10.0;
+	const int nx = 64;
+	const double Lx = 5.0;
+	const double CFL_number = 0.1;
+	const double max_time = 0.4;
 	const int max_timesteps = 5000;
-	const int nvars = 3; // density, x-momentum, energy
+	const double gamma = 1.4; // ratio of specific heats
 
-	const double atol = 1e-10; //< absolute tolerance for conserved vars
+	const double rtol = 1e-10; //< absolute tolerance for conserved vars
 
 	// Problem initialization
 
 	HydroSystem hydro_system(HydroSystem::Nx = nx, HydroSystem::Lx = Lx,
 				 HydroSystem::CFL = CFL_number,
-				 HydroSystem::Nvars = nvars);
+				 HydroSystem::Gamma = gamma);
 
 	auto nghost = hydro_system.nghost();
 
-	const double amp = 0.01;
 	for (int i = nghost; i < nx + nghost; ++i) {
 		const auto idx_value = static_cast<double>(i - nghost);
 		const double x =
 		    Lx * ((idx_value + 0.5) / static_cast<double>(nx));
 
-		hydro_system.set_density(i) = 1.0;
-		hydro_system.set_x1Momentum(i) =
-		    hydro_system.density(i) * amp * std::cos(2.0 * M_PI * x);
-		hydro_system.set_energy(i) = 1.0;
+		const double vx = 0.0;
+		double rho;
+		double P;
+
+		if (x < 2.0) {
+			rho = 10.0;
+			P = 100.0;
+		} else {
+			rho = 1.0;
+			P = 1.0;
+		}
+
+		// const double amp = 0.01;
+		// const double rho = 1.0;
+		// const double vx = amp * std::cos(2.0 * M_PI * x);
+		// const double P = 1.0;
+
+		hydro_system.set_density(i) = rho;
+		hydro_system.set_x1Momentum(i) = rho * vx;
+		hydro_system.set_energy(i) =
+		    P / (gamma - 1.0) + 0.5 * rho * std::pow(vx, 2);
 	}
 
-	std::vector<double> x(nx);
-	std::vector<double> d_initial(nx);
-	std::vector<double> d_final(nx);
+	std::vector<double> xs(nx);
+	std::vector<double> d_initial(nx + 2 * nghost);
+	std::vector<double> v_initial(nx + 2 * nghost);
+	std::vector<double> P_initial(nx + 2 * nghost);
+
+	hydro_system.FillGhostZones();
+	hydro_system.ConservedToPrimitive(hydro_system.consVar_,
+					  std::make_pair(nghost, nx + nghost));
+
 	for (int i = 0; i < nx; ++i) {
-		x.at(i) = static_cast<double>(i);
-		d_initial.at(i) = hydro_system.density(i + nghost);
+		const double x = Lx * ((i + 0.5) / static_cast<double>(nx));
+		xs.at(i) = x;
+	}
+
+	for (int i = 0; i < nx + 2 * nghost; ++i) {
+		d_initial.at(i) = hydro_system.density(i);
+		v_initial.at(i) = hydro_system.x1Velocity(i);
+		P_initial.at(i) = hydro_system.pressure(i);
 	}
 
 	const auto initial_mass = hydro_system.ComputeMass();
@@ -210,24 +239,45 @@ void testproblem_hydro()
 			  << "\n";
 
 		const auto current_mass = hydro_system.ComputeMass();
-		std::cout << "Total mass = " << current_mass << "\n";
-
 		const auto mass_deficit = std::abs(current_mass - initial_mass);
+
+		std::cout << "Total mass = " << current_mass << "\n";
 		std::cout << "Mass nonconservation = " << mass_deficit << "\n";
-
-		assert(mass_deficit < atol); // NOLINT
-
 		std::cout << "\n";
 
 		// Plot results every X timesteps
+		std::vector<double> d(nx);
+		std::vector<double> vx(nx);
+		std::vector<double> P(nx);
+
+		hydro_system.ConservedToPrimitive(
+		    hydro_system.consVar_, std::make_pair(nghost, nghost + nx));
+
 		for (int i = 0; i < nx; ++i) {
-			d_final.at(i) = hydro_system.density(i + nghost);
+			d.at(i) = hydro_system.primDensity(i + nghost);
+			vx.at(i) = hydro_system.x1Velocity(i + nghost);
+			P.at(i) = hydro_system.pressure(i + nghost);
 		}
+
 		matplotlibcpp::clf();
-		matplotlibcpp::ylim(1.0 - amp, 1.0 + amp);
-		matplotlibcpp::plot(x, d_final, ".-");
-		// matplotlibcpp::plot(x, P_final, "--");
+		matplotlibcpp::ylim(0.0, 11.0);
+
+		std::map<std::string, std::string> d_args;
+		d_args["label"] = "density";
+		matplotlibcpp::plot(xs, d, d_args);
+
+		std::map<std::string, std::string> vx_args;
+		vx_args["label"] = "velocity";
+		matplotlibcpp::plot(xs, vx, vx_args);
+
+		std::map<std::string, std::string> P_args;
+		P_args["label"] = "pressure";
+		matplotlibcpp::plot(xs, P, P_args);
+
+		matplotlibcpp::legend();
 		matplotlibcpp::save(fmt::format("./hydro_{:0>4d}.png", j));
+
+		assert((mass_deficit / initial_mass) < rtol); // NOLINT
 	}
 
 	// Cleanup and exit

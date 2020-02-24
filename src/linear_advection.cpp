@@ -57,9 +57,10 @@ void LinearAdvectionSystem::ComputeTimestep()
 	dt_ = cflNumber_ * (dx_ / advectionVx_);
 }
 
-void LinearAdvectionSystem::ConservedToPrimitive(AthenaArray<double> &cons)
+void LinearAdvectionSystem::ConservedToPrimitive(
+    AthenaArray<double> &cons, const std::pair<int, int> range)
 {
-	for (int n = 0; n < nvars_; ++n) {
+	for (int n = range.first; n < range.second; ++n) {
 		for (int i = 0; i < dim1_; ++i) {
 			primVar_(n, i) = cons(n, i);
 		}

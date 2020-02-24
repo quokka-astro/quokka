@@ -13,11 +13,11 @@ STATIC_ANALYZER = cppcheck
 STATIC_ANALYZER_FLAGS = --enable=all --suppress=missingIncludeSystem --std=c++17
 
 CXX ?= clang++
-CXXFLAGS ?= -g -O0 --std=c++17 -I/usr/include/python3.7m -DFMT_HEADER_ONLY
+CXXFLAGS ?= -g -O0 --std=c++17 -I/usr/include/python3.6 -DFMT_HEADER_ONLY
 
 LINK = $(CXX)
 LINKFLAGS = 
-LIB = -lpython3.7m
+LIB = -lpython3.6m
 
 
 default: driver.exe
@@ -25,7 +25,7 @@ default: driver.exe
 
 ## Kokkos static library (built in-tree)
 
-KOKKOS_CXX_STANDARD=c++2a
+KOKKOS_CXX_STANDARD=c++17
 include $(KOKKOS_PATH)/Makefile.kokkos
 
 

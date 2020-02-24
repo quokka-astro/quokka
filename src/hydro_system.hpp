@@ -16,6 +16,7 @@
 
 // library headers
 #include "NamedType/named_type.hpp" // provides fluent::NamedType
+#include "fmt/include/fmt/format.h"
 
 // internal headers
 #include "athena_arrays.hpp"
@@ -41,17 +42,19 @@ class HydroSystem : public HyperbolicSystem
 	using NxType = fluent::NamedType<int, struct NxParameter>;
 	using LxType = fluent::NamedType<double, struct LxParameter>;
 	using CFLType = fluent::NamedType<double, struct CFLParameter>;
-	using NvarsType = fluent::NamedType<int, struct NvarsParameter>;
+	using GammaType = fluent::NamedType<double, struct GammaParameter>;
 
 	static const NxType::argument Nx;
 	static const LxType::argument Lx;
 	static const CFLType::argument CFL;
-	static const NvarsType::argument Nvars;
+	static const GammaType::argument Gamma;
 
 	HydroSystem(NxType const &nx, LxType const &lx,
-		    CFLType const &cflNumber, NvarsType const &nvars);
+		    CFLType const &cflNumber, GammaType const &gamma);
 
 	void AddSourceTerms(AthenaArray<double> &source_terms) override;
+	void ConservedToPrimitive(AthenaArray<double> &cons,
+				  std::pair<int, int> range) override;
 
 	// setter functions:
 
@@ -66,6 +69,10 @@ class HydroSystem : public HyperbolicSystem
 	auto x1Momentum(int i) -> double;
 	auto energy(int i) -> double;
 
+	auto primDensity(int i) -> double;
+	auto x1Velocity(int i) -> double;
+	auto pressure(int i) -> double;
+
 	auto ComputeMass() -> double;
 
       protected:
@@ -77,9 +84,8 @@ class HydroSystem : public HyperbolicSystem
 	AthenaArray<double> x1Velocity_;
 	AthenaArray<double> pressure_;
 
-	const double gamma_ = (5. / 3.);
+	double gamma_;
 
-	void ConservedToPrimitive(AthenaArray<double> &cons) override;
 	void ComputeFluxes(std::pair<int, int> range) override;
 	void ComputeTimestep() override;
 

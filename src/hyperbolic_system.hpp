@@ -33,6 +33,8 @@ template <typename T> auto sgn(T val) -> int
 class HyperbolicSystem
 {
       public:
+	AthenaArray<double> consVar_;
+
 	/// Computes timestep and advances system
 	void AdvanceTimestep();
 
@@ -59,22 +61,23 @@ class HyperbolicSystem
 								 double b)
 	    -> double
 	{
-		auto result = 0.0;
-
-		if ((sgn(a) == sgn(b)) && (a != b) && (a != 0.0) &&
-		    (b != 0.0)) {
-			if (std::abs(a) < std::abs(b)) {
-				result = a;
-			} else {
-				result = b;
-			}
-		}
-
-		return result;
+		return 0.5 * (sgn(a) + sgn(b)) *
+		       std::min(std::abs(a), std::abs(b));
 	}
 
+	__attribute__((always_inline)) inline static auto MC(double a, double b)
+	    -> double
+	{
+		return 0.5 * (sgn(a) + sgn(b)) *
+		       std::min(0.5 * std::abs(a + b),
+				std::min(2.0 * std::abs(a), 2.0 * std::abs(b)));
+	}
+
+	void FillGhostZones();
+	virtual void ConservedToPrimitive(AthenaArray<double> &cons,
+					  std::pair<int, int> range) = 0;
+
       protected:
-	AthenaArray<double> consVar_;
 	AthenaArray<double> primVar_;
 	AthenaArray<double> consVarPredictStep_;
 	AthenaArray<double> x1LeftState_;
@@ -110,7 +113,6 @@ class HyperbolicSystem
 		x1Flux_.NewAthenaArray(nvars_, dim1_);
 	}
 
-	void FillGhostZones();
 	void AddFluxes();
 	void ReconstructStatesConstant(std::pair<int, int> range);
 	template <typename F>
@@ -119,7 +121,6 @@ class HyperbolicSystem
 				  std::pair<int, int> range);
 	void PredictHalfStep(std::pair<int, int> range);
 
-	virtual void ConservedToPrimitive(AthenaArray<double> &cons) = 0;
 	virtual void ComputeTimestep() = 0;
 	virtual void ComputeFluxes(std::pair<int, int> range) = 0;
 };

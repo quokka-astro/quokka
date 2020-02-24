@@ -28,8 +28,7 @@ void HyperbolicSystem::FillGhostZones()
 	// In general, this step will require MPI communication, and interaction
 	// with the main AMR code.
 
-	// FIXME: currently we assume periodic boundary conditions.
-
+#if 0
 	// x1 right side boundary
 	for (int n = 0; n < nvars_; ++n) {
 		for (int i = nghost_ + nx_; i < nghost_ + nx_ + nghost_; ++i) {
@@ -41,6 +40,21 @@ void HyperbolicSystem::FillGhostZones()
 	for (int n = 0; n < nvars_; ++n) {
 		for (int i = 0; i < nghost_; ++i) {
 			consVar_(n, i) = consVar_(n, i + nx_);
+		}
+	}
+#endif
+
+	// x1 right side boundary
+	for (int n = 0; n < nvars_; ++n) {
+		for (int i = nghost_ + nx_; i < nghost_ + nx_ + nghost_; ++i) {
+			consVar_(n, i) = consVar_(n, nghost_ + nx_ - 1);
+		}
+	}
+
+	// x1 left side boundary
+	for (int n = 0; n < nvars_; ++n) {
+		for (int i = 0; i < nghost_; ++i) {
+			consVar_(n, i) = consVar_(n, nghost_ + 0);
 		}
 	}
 }
@@ -71,10 +85,10 @@ template <typename F>
 void HyperbolicSystem::ReconstructStatesPLM(F &&limiter,
 					    const std::pair<int, int> range)
 {
-	// By convention, the interfaces are defined on the left edge of
-	// each zone, i.e. xleft_(i) is the "left"-side of the interface
-	// at the left edge of zone i, and xright_(i) is the
-	// "right"-side of the interface at the *left* edge of zone i.
+	// By convention, the interfaces are defined on the left edge of each
+	// zone, i.e. xleft_(i) is the "left"-side of the interface at
+	// the left edge of zone i, and xright_(i) is the "right"-side of the
+	// interface at the *left* edge of zone i.
 
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
 
@@ -95,8 +109,8 @@ void HyperbolicSystem::ReconstructStatesPLM(F &&limiter,
 
 			x1LeftState_(n, i) =
 			    primVar_(n, i - 1) + 0.25 * lslope; // NOLINT
-			x1LeftState_(n, i) =
-			    primVar_(n, i) + 0.25 * rslope; // NOLINT
+			x1RightState_(n, i) =
+			    primVar_(n, i) - 0.25 * rslope; // NOLINT
 		}
 	}
 }
@@ -104,51 +118,56 @@ void HyperbolicSystem::ReconstructStatesPLM(F &&limiter,
 void HyperbolicSystem::ReconstructStatesPPM(AthenaArray<double> &q,
 					    const std::pair<int, int> range)
 {
-	// By convention, the interfaces are defined on the left
-	// edge of each zone, i.e. xleft_(i) is the "left"-side
-	// of the interface at the left edge of zone i, and
-	// xright_(i) is the "right"-side of the interface at
-	// the *left* edge of zone i.
+	// By convention, the interfaces are defined on the left edge of each
+	// zone, i.e. xleft_(i) is the "left"-side of the interface at the left
+	// edge of zone i, and xright_(i) is the "right"-side of the interface
+	// at the *left* edge of zone i.
 
-	// Indexing note: There are (nx + 1) interfaces for nx
-	// zones.
+	// Indexing note: There are (nx + 1) interfaces for nx zones.
 
 	for (int n = 0; n < nvars_; ++n) {
 		for (int i = range.first; i < (range.second + 1); ++i) {
-			// PPM reconstruction following Colella
-			// & Woodward (1984), with some
-			// modifications following Mignone
+			// PPM reconstruction following Colella & Woodward
+			// (1984), with some modifications following Mignone
 			// (2014), as implemented in Athena++.
 
-			// (1.) Estimate the interface a_{i -
-			// 1/2}.
+			// (1.) Estimate the interface a_{i - 1/2}.
 			//      Equivalent to step 1 in Athena++
 			//      [ppm_simple.cpp].
 
-			// C&W Eq. (1.9) [parabola midpoint for
-			// the case of equally-spaced zones]:
-			// a_{j+1/2} = (7/12)(a_j + a_{j+1}) -
-			// (1/12)(a_{j+2} + a_{j-1}). Terms are
-			// grouped to preserve exact symmetry in
-			// floating-point arithmetic, following
-			// Athena++.
+			// C&W Eq. (1.9) [parabola midpoint for the case of
+			// equally-spaced zones]: a_{j+1/2} = (7/12)(a_j +
+			// a_{j+1}) - (1/12)(a_{j+2} + a_{j-1}). Terms are
+			// grouped to preserve exact symmetry in floating-point
+			// arithmetic, following Athena++.
 
-			const double coef_1 = (7. / 12.);
-			const double coef_2 = (-1. / 12.);
-			const double a_jhalf =
-			    (coef_1 * q(n, i) + coef_2 * q(n, i + 1)) +
-			    (coef_1 * q(n, i - 1) + coef_2 * q(n, i - 2));
+			// const double coef_1 = (7. / 12.);
+			// const double coef_2 = (-1. / 12.);
+			// const double a_jhalf =
+			//    (coef_1 * q(n, i) + coef_2 * q(n, i + 1)) +
+			//    (coef_1 * q(n, i - 1) + coef_2 * q(n, i - 2));
 
-			// (2.) Constrain interface value to lie
-			// between adjacent
-			//      cell-averaged values (equivalent
-			//      to step 2b in Athena++
-			//      [ppm_simple.cpp]).
+			// Compute limited slopes
+			const double dq0 =
+			    MC(q(n, i + 1) - q(n, i), q(n, i) - q(n, i - 1));
 
-			std::pair<double, double> bounds =
-			    std::minmax(q(n, i), q(n, i - 1));
-			const double interface =
-			    std::clamp(a_jhalf, bounds.first, bounds.second);
+			const double dq1 = MC(q(n, i) - q(n, i - 1),
+					      q(n, i - 1) - q(n, i - 2));
+
+			// Compute interface (i - 1/2)
+			const double interface = q(n, i - 1) +
+						 0.5 * (q(n, i) - q(n, i - 1)) -
+						 (1. / 6.) * (dq0 - dq1);
+
+			// (2.) Constrain interface value to lie between
+			// adjacent cell-averaged values (equivalent to
+			// step 2b in Athena++ [ppm_simple.cpp]).
+
+			// std::pair<double, double> bounds =
+			//    std::minmax(q(n, i), q(n, i - 1));
+			// const double interface =
+			//    std::clamp(a_jhalf, bounds.first,
+			//    bounds.second);
 
 			// a_R,(i-1) in C&W
 			x1LeftState_(n, i) = interface;
@@ -173,17 +192,20 @@ void HyperbolicSystem::ReconstructStatesPPM(AthenaArray<double> &q,
 			double new_a_minus = a_minus;
 			double new_a_plus = a_plus;
 
-			// (3.) Monotonicity correction, using
-			// Eq. (1.10) in PPM paper.
-			//      Equivalent to step 4b in
-			//      Athena++ [ppm_simple.cpp].
+			// (3.) Monotonicity correction, using Eq. (1.10) in PPM
+			// paper. Equivalent to step 4b in Athena++
+			// [ppm_simple.cpp].
 
 			const double qa =
 			    dq_plus * dq_minus; // interface extrema
 
 			if ((qa <= 0.0)) { // local extremum
-				new_a_minus = a;
-				new_a_plus = a;
+
+				const double dq0 = MC(q(n, i + 1) - q(n, i),
+						      q(n, i) - q(n, i - 1));
+
+				new_a_minus = a - 0.5 * dq0;
+				new_a_plus = a + 0.5 * dq0;
 
 			} else { // no local extrema
 
@@ -210,12 +232,10 @@ void HyperbolicSystem::ReconstructStatesPPM(AthenaArray<double> &q,
 
 void HyperbolicSystem::PredictHalfStep(const std::pair<int, int> range)
 {
-	// By convention, the fluxes are defined on the
-	// left edge of each zone, i.e. flux_(i) is the
-	// flux *into* zone i through the interface on
-	// the left of zone i, and -1.0*flux(i+1) is the
-	// flux *into* zone i through the interface on
-	// the right of zone i.
+	// By convention, the fluxes are defined on the left edge of each zone,
+	// i.e. flux_(i) is the flux *into* zone i through the interface on the
+	// left of zone i, and -1.0*flux(i+1) is the flux *into* zone i through
+	// the interface on the right of zone i.
 
 	for (int n = 0; n < nvars_; ++n) {
 		for (int i = range.first; i < range.second; ++i) {
@@ -229,12 +249,10 @@ void HyperbolicSystem::PredictHalfStep(const std::pair<int, int> range)
 
 void HyperbolicSystem::AddFluxes()
 {
-	// By convention, the fluxes are defined on the
-	// left edge of each zone, i.e. flux_(i) is the
-	// flux *into* zone i through the interface on
-	// the left of zone i, and -1.0*flux(i+1) is the
-	// flux *into* zone i through the interface on
-	// the right of zone i.
+	// By convention, the fluxes are defined on the left edge of each zone,
+	// i.e. flux_(i) is the flux *into* zone i through the interface on the
+	// left of zone i, and -1.0*flux(i+1) is the flux *into* zone i through
+	// the interface on the right of zone i.
 
 	for (int n = 0; n < nvars_; ++n) {
 		for (int i = nghost_; i < nx_ + nghost_; ++i) {
@@ -248,7 +266,7 @@ void HyperbolicSystem::AdvanceTimestep()
 {
 	// Initialize data
 	FillGhostZones();
-	ConservedToPrimitive(consVar_);
+	ConservedToPrimitive(consVar_, std::make_pair(0, dim1_));
 	ComputeTimestep();
 
 	// Predictor step
@@ -258,7 +276,7 @@ void HyperbolicSystem::AdvanceTimestep()
 	ReconstructStatesConstant(p_range);
 	ComputeFluxes(p_range);
 	PredictHalfStep(p_range);
-	ConservedToPrimitive(consVarPredictStep_);
+	ConservedToPrimitive(consVarPredictStep_, p_range);
 
 	// Clear temporary arrays
 	x1LeftState_.ZeroClear();
@@ -269,7 +287,9 @@ void HyperbolicSystem::AdvanceTimestep()
 	const auto ppm_range = std::make_pair(-1 + nghost_, nx_ + 1 + nghost_);
 	const auto cell_range = std::make_pair(nghost_, nx_ + nghost_);
 
-	ReconstructStatesPPM(primVar_, ppm_range);
+	// ReconstructStatesPPM(primVar_, ppm_range);
+	ReconstructStatesPLM(MC, ppm_range);
+
 	ComputeFluxes(cell_range);
 	AddFluxes();
 

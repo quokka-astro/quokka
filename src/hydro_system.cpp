@@ -14,12 +14,15 @@
 const HydroSystem::NxType::argument HydroSystem::Nx;
 const HydroSystem::LxType::argument HydroSystem::Lx;
 const HydroSystem::CFLType::argument HydroSystem::CFL;
-const HydroSystem::NvarsType::argument HydroSystem::Nvars;
+const HydroSystem::GammaType::argument HydroSystem::Gamma;
 
 HydroSystem::HydroSystem(NxType const &nx, LxType const &lx,
-			 CFLType const &cflNumber, NvarsType const &nvars)
-    : HyperbolicSystem{nx.get(), lx.get(), cflNumber.get(), nvars.get()}
+			 CFLType const &cflNumber, GammaType const &gamma)
+    : HyperbolicSystem{nx.get(), lx.get(), cflNumber.get(), 3},
+      gamma_(gamma.get())
 {
+	assert((gamma_ > 1.0)); // NOLINT
+
 	density_.InitWithShallowSlice(consVar_, 2, density_index, 0);
 	x1Momentum_.InitWithShallowSlice(consVar_, 2, x1Momentum_index, 0);
 	energy_.InitWithShallowSlice(consVar_, 2, energy_index, 0);
@@ -44,6 +47,12 @@ auto HydroSystem::energy(const int i) -> double { return energy_(i); }
 
 auto HydroSystem::set_energy(const int i) -> double & { return energy_(i); }
 
+auto HydroSystem::primDensity(const int i) -> double { return primDensity_(i); }
+
+auto HydroSystem::x1Velocity(const int i) -> double { return x1Velocity_(i); }
+
+auto HydroSystem::pressure(const int i) -> double { return pressure_(i); }
+
 auto HydroSystem::ComputeMass() -> double
 {
 	double mass = 0.0;
@@ -55,9 +64,10 @@ auto HydroSystem::ComputeMass() -> double
 	return mass;
 }
 
-void HydroSystem::ConservedToPrimitive(AthenaArray<double> &cons)
+void HydroSystem::ConservedToPrimitive(AthenaArray<double> &cons,
+				       const std::pair<int, int> range)
 {
-	for (int i = 0; i < dim1_; ++i) {
+	for (int i = range.first; i < range.second; ++i) {
 		const auto rho = cons(density_index, i);
 		const auto px = cons(x1Momentum_index, i);
 		const auto e =
@@ -66,7 +76,11 @@ void HydroSystem::ConservedToPrimitive(AthenaArray<double> &cons)
 		const auto vx = px / rho;
 		const auto kinetic_energy = 0.5 * rho * std::pow(vx, 2);
 		const auto thermal_energy = e - kinetic_energy;
+
 		const auto P = thermal_energy * (gamma_ - 1.0);
+
+		assert(rho > 0.);
+		assert(P > 0.);
 
 		primDensity_(i) = rho;
 		x1Velocity_(i) = vx;
@@ -83,6 +97,7 @@ void HydroSystem::ComputeTimestep()
 		const double vx = x1Velocity_(i);
 		const double P = pressure_(i);
 		const double cs = std::sqrt(gamma_ * P / rho);
+		assert(cs > 0.);
 
 		const double signal_max =
 		    std::max(std::abs(vx - cs), std::abs(vx + cs));
@@ -124,6 +139,9 @@ void HydroSystem::ComputeFluxes(const std::pair<int, int> range)
 		const double cs_L = std::sqrt(gamma_ * P_L / rho_L);
 		const double cs_R = std::sqrt(gamma_ * P_R / rho_R);
 
+		assert(cs_L > 0.0);
+		assert(cs_R > 0.0);
+
 		// compute wave speeds
 		const double s_L = vx_L - cs_L;
 		const double s_R = vx_R + cs_R;
@@ -140,9 +158,8 @@ void HydroSystem::ComputeFluxes(const std::pair<int, int> range)
 		const double s_Ravg =
 		    (vx_avg - cs_avg); // Roe-average vx + Roe-average cs
 
-		const double eps = 1e-20;
-		const double S_L = std::min(std::min(s_L, s_Lavg), -eps);
-		const double S_R = std::max(std::max(s_R, s_Ravg), eps);
+		const double S_L = std::min(s_L, s_Lavg);
+		const double S_R = std::max(s_R, s_Ravg);
 
 		// compute fluxes
 		const std::valarray<double> F_L = {rho_L * vx_L,
@@ -159,15 +176,28 @@ void HydroSystem::ComputeFluxes(const std::pair<int, int> range)
 		    rho_R, rho_R * vx_R,
 		    P_R / (gamma_ - 1.0) + 0.5 * rho_R * (vx_R * vx_R)};
 
-		// due to comparison with 'eps' (see above), we only need to
-		// compute F*
 		const std::valarray<double> F_star =
 		    (S_R / (S_R - S_L)) * F_L - (S_L / (S_R - S_L)) * F_R +
 		    (S_R * S_L / (S_R - S_L)) * (U_R - U_L);
 
-		x1Flux_(density_index, i) = F_star[0];
-		x1Flux_(x1Momentum_index, i) = F_star[1];
-		x1Flux_(energy_index, i) = F_star[2];
+		std::valarray<double> F(3);
+
+		// open the Riemann fan
+		if (S_L > 0.0) {
+			F = F_L;
+		} else if (S_R < 0.0) {
+			F = F_R;
+		} else { // S_L <= 0.0 <= S_R
+			F = F_star;
+		}
+
+		assert(!std::isnan(F[0]));
+		assert(!std::isnan(F[1]));
+		assert(!std::isnan(F[2]));
+
+		x1Flux_(density_index, i) = F[0];
+		x1Flux_(x1Momentum_index, i) = F[1];
+		x1Flux_(energy_index, i) = F[2];
 	}
 }
 

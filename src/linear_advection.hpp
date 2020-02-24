@@ -53,7 +53,8 @@ class LinearAdvectionSystem : public HyperbolicSystem
 	AthenaArray<double> density_; // shallow copy of consVars_(i,:)
 	double advectionVx_;
 
-	void ConservedToPrimitive(AthenaArray<double> &cons) override;
+	void ConservedToPrimitive(AthenaArray<double> &cons,
+				  std::pair<int, int> range) override;
 	void ComputeTimestep() override;
 	void ComputeFluxes(std::pair<int, int> range) override;
 };
