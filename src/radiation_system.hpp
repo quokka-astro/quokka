@@ -32,8 +32,8 @@ class RadSystem : public HyperbolicSystem
 		x1RadFlux_index = 1,
 	};
 
-	const double c_light = 1.0;   // use c=1 units
-	const double c_hat = c_light; // for now
+	const double c_light_ = 1.0;   // use c=1 units
+	const double c_hat_ = c_light_; // for now
 
 	using NxType = fluent::NamedType<int, struct NxParameter>;
 	using LxType = fluent::NamedType<double, struct LxParameter>;

@@ -58,7 +58,7 @@ void RadSystem::ComputeTimestep()
 	double dt = std::numeric_limits<double>::max();
 
 	for (int i = 0; i < dim1_; ++i) {
-		const double signal_max = c_hat;
+		const double signal_max = c_hat_;
 		const double thisDt = cflNumber_ * (dx_ / signal_max);
 		dt = std::min(dt, thisDt);
 	}
@@ -86,12 +86,13 @@ void RadSystem::ComputeFluxes(const std::pair<int, int> range)
 		const double Fx_L = x1LeftState_(x1RadFlux_index, i);
 		const double Fx_R = x1RightState_(x1RadFlux_index, i);
 
-		// compute "reduced flux" == ||F|| / (c * erad)
+		// Compute "reduced flux" f == ||F|| / (c * erad)
+		// NOTE: It must always be the case that 0 <= f <= 1!
 
 		const double Fnorm_L = std::abs(Fx_L);
 		const double Fnorm_R = std::abs(Fx_R);
-		const double f_L = Fnorm_L / (c_light * erad_L);
-		const double f_R = Fnorm_R / (c_light * erad_R);
+		const double f_L = Fnorm_L / (c_light_ * erad_L);
+		const double f_R = Fnorm_R / (c_light_ * erad_R);
 
 		// compute radiation pressure tensors
 
@@ -114,18 +115,18 @@ void RadSystem::ComputeFluxes(const std::pair<int, int> range)
 		const double f_facL = std::sqrt(4.0 - 3.0 * (f_L * f_L));
 		const double f_facR = std::sqrt(4.0 - 3.0 * (f_R * f_R));
 
-		const double u_L = c_hat * (mu_L * f_L) / f_facL;
-		const double u_R = c_hat * (mu_R * f_R) / f_facR;
+		const double u_L = c_hat_ * (mu_L * f_L) / f_facL;
+		const double u_R = c_hat_ * (mu_R * f_R) / f_facR;
 
 		const double a_L =
-		    c_hat *
+		    c_hat_ *
 		    std::sqrt((2. / 3.) * ((f_facL * f_facL) - f_facL) +
 			      2.0 * (mu_L * mu_L) *
 				  (2.0 - (f_L * f_L) - f_facL)) /
 		    f_facL;
 
 		const double a_R =
-		    c_hat *
+		    c_hat_ *
 		    std::sqrt((2. / 3.) * ((f_facR * f_facR) - f_facR) +
 			      2.0 * (mu_R * mu_R) *
 				  (2.0 - (f_R * f_R) - f_facR)) /
@@ -138,11 +139,11 @@ void RadSystem::ComputeFluxes(const std::pair<int, int> range)
 
 		// compute fluxes
 
-		const std::valarray<double> F_L = {(c_hat / c_light) * Fx_L,
-						   c_hat * c_light * Prad_L};
+		const std::valarray<double> F_L = {(c_hat_ / c_light_) * Fx_L,
+						   c_hat_ * c_light_ * Prad_L};
 
-		const std::valarray<double> F_R = {(c_hat / c_light) * Fx_R,
-						   c_hat * c_light * Prad_R};
+		const std::valarray<double> F_R = {(c_hat_ / c_light_) * Fx_R,
+						   c_hat_ * c_light_ * Prad_R};
 
 		const std::valarray<double> U_L = {erad_L, Fx_L};
 		const std::valarray<double> U_R = {erad_R, Fx_R};
