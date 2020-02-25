@@ -15,7 +15,7 @@ void testproblem_hydro_shocktube()
 
 	const int nx = 500;
 	const double Lx = 5.0;
-	const double CFL_number = 0.8;
+	const double CFL_number = 0.4;
 	const double max_time = 0.4;
 	const int max_timesteps = 5000;
 	const double gamma = 1.4; // ratio of specific heats

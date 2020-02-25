@@ -161,10 +161,30 @@ void HydroSystem::ComputeFluxes(const std::pair<int, int> range)
 		const double cs_roe =
 		    std::sqrt((gamma_ - 1.) * (H_roe - 0.5 * vroe_sq));
 
+		// compute PVRS states (Toro 10.5.2)
+
+		const double rho_bar = 0.5 * (rho_L + rho_R);
+		const double cs_bar = 0.5 * (cs_L + cs_R);
+		const double P_PVRS =
+		    0.5 * (P_L + P_R) + 0.5 * (vx_L - vx_R) * rho_bar * cs_bar;
+		const double P_star = std::max(P_PVRS, 0.0);
+
+		const double q_L =
+		    (P_star <= P_L)
+			? 1.0
+			: std::sqrt(1.0 + ((gamma_ + 1.0) / (2.0 * gamma_)) *
+					      ((P_star / P_L) - 1.0));
+
+		const double q_R =
+		    (P_star <= P_R)
+			? 1.0
+			: std::sqrt(1.0 + ((gamma_ + 1.0) / (2.0 * gamma_)) *
+					      ((P_star / P_R) - 1.0));
+
 		// compute wave speeds
 
-		const double s_L = vx_L - cs_L;
-		const double s_R = vx_R + cs_R;
+		const double s_L = vx_L - cs_L * q_L;
+		const double s_R = vx_R + cs_R * q_R;
 
 		const double s_Lroe =
 		    (vx_roe - cs_roe); // Roe-average vx - Roe-average cs
@@ -207,6 +227,16 @@ void HydroSystem::ComputeFluxes(const std::pair<int, int> range)
 		} else { // S_L <= 0.0 <= S_R
 			F = F_star;
 		}
+
+		// add artificial viscosity following C&W Eq. (4.2), (4.5)
+
+		const double avisc_coef = 0.1;
+		const double div_v = (vx_R - vx_L); // modify for 3d!!!
+
+		// activate artificial viscosity only in converging flows, e.g.
+		// shocks
+		const double avisc = avisc_coef * std::max(-div_v, 0.0);
+		F = F + avisc * (U_L - U_R);
 
 		// check states are valid
 
