@@ -47,11 +47,6 @@ void testproblem_hydro_shocktube()
 			P = 1.0;
 		}
 
-		// const double amp = 0.01;
-		// const double rho = 1.0;
-		// const double vx = amp * std::cos(2.0 * M_PI * x);
-		// const double P = 1.0;
-
 		hydro_system.set_density(i) = rho;
 		hydro_system.set_x1Momentum(i) = rho * vx;
 		hydro_system.set_energy(i) =

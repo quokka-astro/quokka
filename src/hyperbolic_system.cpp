@@ -273,8 +273,6 @@ void HyperbolicSystem::AdvanceTimestep()
 {
 	const auto ppm_range = std::make_pair(-1 + nghost_, nx_ + 1 + nghost_);
 	const auto cell_range = std::make_pair(nghost_, nx_ + nghost_);
-	const auto predict_range =
-	    std::make_pair((-3) + nghost_, (nx_ + 3) + nghost_);
 
 	// Initialize data
 	FillGhostZones(consVar_);
@@ -282,7 +280,6 @@ void HyperbolicSystem::AdvanceTimestep()
 	ComputeTimestep();
 
 	// Predictor step
-	// ReconstructStatesConstant(p_range);
 	ReconstructStatesPPM(primVar_, ppm_range);
 	ComputeFluxes(cell_range);
 	PredictStep(cell_range);

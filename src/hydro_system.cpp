@@ -70,17 +70,17 @@ void HydroSystem::ConservedToPrimitive(AthenaArray<double> &cons,
 	for (int i = range.first; i < range.second; ++i) {
 		const auto rho = cons(density_index, i);
 		const auto px = cons(x1Momentum_index, i);
-		const auto e =
-		    cons(energy_index, i); // *total* gas energy density
+		const auto E =
+		    cons(energy_index, i); // *total* gas energy per unit volume
 
 		const auto vx = px / rho;
 		const auto kinetic_energy = 0.5 * rho * std::pow(vx, 2);
-		const auto thermal_energy = e - kinetic_energy;
+		const auto thermal_energy = E - kinetic_energy;
 
 		const auto P = thermal_energy * (gamma_ - 1.0);
 
-		assert(rho > 0.);
-		assert(P > 0.);
+		assert(rho > 0.); // NOLINT
+		assert(P > 0.);	  // NOLINT
 
 		primDensity_(i) = rho;
 		x1Velocity_(i) = vx;
@@ -97,7 +97,7 @@ void HydroSystem::ComputeTimestep()
 		const double vx = x1Velocity_(i);
 		const double P = pressure_(i);
 		const double cs = std::sqrt(gamma_ * P / rho);
-		assert(cs > 0.);
+		assert(cs > 0.); // NOLINT
 
 		const double signal_max =
 		    std::max(std::abs(vx - cs), std::abs(vx + cs));
@@ -118,9 +118,10 @@ void HydroSystem::ComputeFluxes(const std::pair<int, int> range)
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
 
 	for (int i = range.first; i < (range.second + 1); ++i) {
-		// HLL solver following Balsara (2017)
+		// HLL solver following Toro (1998) and Balsara (2017).
 
-		// gather variables
+		// gather left- and right- state variables
+
 		const double rho_L = x1LeftState_(primDensity_index, i);
 		const double rho_R = x1RightState_(primDensity_index, i);
 
@@ -133,45 +134,60 @@ void HydroSystem::ComputeFluxes(const std::pair<int, int> range)
 		const double ke_L = 0.5 * rho_L * (vx_L * vx_L);
 		const double ke_R = 0.5 * rho_R * (vx_R * vx_R);
 
-		const double e_L = P_L / (gamma_ - 1.0) + ke_L;
-		const double e_R = P_L / (gamma_ - 1.0) + ke_R;
+		const double E_L = P_L / (gamma_ - 1.0) + ke_L;
+		const double E_R = P_L / (gamma_ - 1.0) + ke_R;
+
+		const double H_L = (E_L + P_L) / rho_L; // enthalpy
+		const double H_R = (E_R + P_R) / rho_R;
 
 		const double cs_L = std::sqrt(gamma_ * P_L / rho_L);
 		const double cs_R = std::sqrt(gamma_ * P_R / rho_R);
 
-		assert(cs_L > 0.0);
-		assert(cs_R > 0.0);
+		assert(cs_L > 0.0); // NOLINT
+		assert(cs_R > 0.0); // NOLINT
+
+		// compute Roe averages
+
+		const double vx_roe =
+		    (std::sqrt(rho_L) * vx_L + std::sqrt(rho_R) * vx_L) /
+		    (std::sqrt(rho_L) + std::sqrt(rho_R)); // Roe-average vx
+
+		const double vroe_sq = vx_roe * vx_roe; // modify for 3d!!!
+
+		const double H_roe =
+		    (std::sqrt(rho_L) * H_L + std::sqrt(rho_R) * H_R) /
+		    (std::sqrt(rho_L) + std::sqrt(rho_R)); // Roe-average H
+
+		const double cs_roe =
+		    std::sqrt((gamma_ - 1.) * (H_roe - 0.5 * vroe_sq));
 
 		// compute wave speeds
+
 		const double s_L = vx_L - cs_L;
 		const double s_R = vx_R + cs_R;
 
-		const double vx_avg =
-		    (std::sqrt(rho_L) * vx_L + std::sqrt(rho_R) * vx_L) /
-		    (std::sqrt(rho_L) + std::sqrt(rho_R)); // Roe-average vx
-		const double cs_avg =
-		    (std::sqrt(rho_L) * cs_L + std::sqrt(rho_R) * cs_R) /
-		    (std::sqrt(rho_L) + std::sqrt(rho_R)); // Roe-average cs
+		const double s_Lroe =
+		    (vx_roe - cs_roe); // Roe-average vx - Roe-average cs
+		const double s_Rroe =
+		    (vx_roe + cs_roe); // Roe-average vx + Roe-average cs
 
-		const double s_Lavg =
-		    (vx_avg + cs_avg); // Roe-average vx - Roe-average cs
-		const double s_Ravg =
-		    (vx_avg - cs_avg); // Roe-average vx + Roe-average cs
-
-		const double S_L = std::min(s_L, s_Lavg);
-		const double S_R = std::max(s_R, s_Ravg);
+		const double S_L = std::min(s_L, s_Lroe);
+		const double S_R = std::max(s_R, s_Rroe);
 
 		// compute fluxes
+
 		const std::valarray<double> F_L = {rho_L * vx_L,
 						   rho_L * (vx_L * vx_L) + P_L,
-						   (e_L + P_L) * vx_L};
+						   (E_L + P_L) * vx_L};
+
 		const std::valarray<double> F_R = {rho_R * vx_R,
 						   rho_R * (vx_R * vx_R) + P_R,
-						   (e_R + P_R) * vx_R};
+						   (E_R + P_R) * vx_R};
 
 		const std::valarray<double> U_L = {
 		    rho_L, rho_L * vx_L,
 		    P_L / (gamma_ - 1.0) + 0.5 * rho_L * (vx_L * vx_L)};
+
 		const std::valarray<double> U_R = {
 		    rho_R, rho_R * vx_R,
 		    P_R / (gamma_ - 1.0) + 0.5 * rho_R * (vx_R * vx_R)};
@@ -183,6 +199,7 @@ void HydroSystem::ComputeFluxes(const std::pair<int, int> range)
 		std::valarray<double> F(3);
 
 		// open the Riemann fan
+
 		if (S_L > 0.0) {
 			F = F_L;
 		} else if (S_R < 0.0) {
@@ -191,9 +208,11 @@ void HydroSystem::ComputeFluxes(const std::pair<int, int> range)
 			F = F_star;
 		}
 
-		assert(!std::isnan(F[0]));
-		assert(!std::isnan(F[1]));
-		assert(!std::isnan(F[2]));
+		// check states are valid
+
+		assert(!std::isnan(F[0])); // NOLINT
+		assert(!std::isnan(F[1])); // NOLINT
+		assert(!std::isnan(F[2])); // NOLINT
 
 		x1Flux_(density_index, i) = F[0];
 		x1Flux_(x1Momentum_index, i) = F[1];
