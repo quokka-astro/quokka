@@ -67,6 +67,7 @@ void RadSystem::ComputeTimestep()
 }
 
 // TODO(ben): add flux limiter for positivity preservation.
+//
 void RadSystem::ComputeFluxes(const std::pair<int, int> range)
 {
 	// By convention, the interfaces are defined on the left edge of each
@@ -76,6 +77,7 @@ void RadSystem::ComputeFluxes(const std::pair<int, int> range)
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
 
 	for (int i = range.first; i < (range.second + 1); ++i) {
+
 		// HLL solver following Toro (1998) and Balsara (2017).
 		// Radiation eigenvalues from Skinner & Ostriker (2013).
 
@@ -93,15 +95,19 @@ void RadSystem::ComputeFluxes(const std::pair<int, int> range)
 		const double Fnorm_R = std::abs(Fx_R);
 		const double f_L = Fnorm_L / (c_light_ * erad_L);
 		const double f_R = Fnorm_R / (c_light_ * erad_R);
+		assert(f_L <= 1.0); // NOLINT
+		assert(f_R <= 1.0); // NOLINT
 
 		// compute radiation pressure tensors
 
 		const double chi_L = ();
 		const double chi_R = ();
 
+		// diagonal elements (identical in M1)
 		const double Tdiag_L = ();
 		const double Tdiag_R = ();
 
+		// elements in the direction of the rad. flux (identical in M1)
 		const double Tnn_L = ();
 		const double Tnn_R = ();
 
