@@ -91,35 +91,43 @@ void RadSystem::ComputeFluxes(const std::pair<int, int> range)
 		// Compute "reduced flux" f == ||F|| / (c * erad)
 		// NOTE: It must always be the case that 0 <= f <= 1!
 
-		const double Fnorm_L = std::abs(Fx_L);
-		const double Fnorm_R = std::abs(Fx_R);
+		const double Fnorm_L = std::sqrt(Fx_L * Fx_L); // modify in 3d!
+		const double Fnorm_R = std::sqrt(Fx_R * Fx_R);
 		const double f_L = Fnorm_L / (c_light_ * erad_L);
 		const double f_R = Fnorm_R / (c_light_ * erad_R);
 		assert(f_L <= 1.0); // NOLINT
 		assert(f_R <= 1.0); // NOLINT
-
-		// compute radiation pressure tensors
-
-		const double chi_L = ();
-		const double chi_R = ();
-
-		// diagonal elements (identical in M1)
-		const double Tdiag_L = ();
-		const double Tdiag_R = ();
-
-		// elements in the direction of the rad. flux (identical in M1)
-		const double Tnn_L = ();
-		const double Tnn_R = ();
 
 		// angle between interface and radiation flux
 
 		const double mu_L = Fx_L / f_L;
 		const double mu_R = Fx_R / f_R;
 
-		// compute min/max eigenvalues (following S&O, Eq. 41a)
+		// compute radiation pressure tensors
 
 		const double f_facL = std::sqrt(4.0 - 3.0 * (f_L * f_L));
 		const double f_facR = std::sqrt(4.0 - 3.0 * (f_R * f_R));
+
+		// compute Eddington factors
+		const double chi_L =
+		    (3.0 + 4.0 * (f_L * f_L)) / (5.0 + 2.0 * f_facL);
+		const double chi_R =
+		    (3.0 + 4.0 * (f_R * f_R)) / (5.0 + 2.0 * f_facR);
+
+		// diagonal term of Eddington tensor
+		const double Tdiag_L = (1.0 - chi_L) / 2.0;
+		const double Tdiag_R = (1.0 - chi_R) / 2.0;
+
+		// anisotropic term of Eddington tensor (in the direction of the
+		// rad. flux)
+		const double Txx_L = (3.0 * chi_L - 1.0) / 2.0 * (mu_L * mu_L);
+		const double Txx_R = (3.0 * chi_R - 1.0) / 2.0 * (mu_R * mu_R);
+
+		// compute the elements of the total radiation pressure tensor
+		const double Pxx_L = (Tdiag_L + Txx_L) * erad_L;
+		const double Pxx_R = (Tdiag_R + Txx_R) * erad_R;
+
+		// compute min/max eigenvalues (following S&O, Eq. 41a)
 
 		const double u_L = c_hat_ * (mu_L * f_L) / f_facL;
 		const double u_R = c_hat_ * (mu_R * f_R) / f_facR;
@@ -146,10 +154,10 @@ void RadSystem::ComputeFluxes(const std::pair<int, int> range)
 		// compute fluxes
 
 		const std::valarray<double> F_L = {(c_hat_ / c_light_) * Fx_L,
-						   c_hat_ * c_light_ * Prad_L};
+						   c_hat_ * c_light_ * Pxx_L};
 
 		const std::valarray<double> F_R = {(c_hat_ / c_light_) * Fx_R,
-						   c_hat_ * c_light_ * Prad_R};
+						   c_hat_ * c_light_ * Pxx_R};
 
 		const std::valarray<double> U_L = {erad_L, Fx_L};
 		const std::valarray<double> U_R = {erad_R, Fx_R};
