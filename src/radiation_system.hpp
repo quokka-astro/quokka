@@ -48,6 +48,7 @@ class RadSystem : public HyperbolicSystem
 
 	void ConservedToPrimitive(AthenaArray<double> &cons,
 				  std::pair<int, int> range) override;
+	void AddSourceTerms(std::pair<int, int> range);
 
 	// setter functions:
 
@@ -75,7 +76,6 @@ class RadSystem : public HyperbolicSystem
 
 	void ComputeFluxes(std::pair<int, int> range) override;
 	void ComputeTimestep() override;
-	void AddSourceTerms(std::pair<int, int> range);
 
 	auto ComputeOpacity(double rho, double Temp) -> double;
 	auto ComputeOpacityTempDerivative(double rho, double Temp) -> double;
