@@ -21,6 +21,9 @@ RadSystem::RadSystem(NxType const &nx, LxType const &lx,
 {
 	radEnergy_.InitWithShallowSlice(consVar_, 2, radEnergy_index, 0);
 	x1RadFlux_.InitWithShallowSlice(consVar_, 2, x1RadFlux_index, 0);
+
+	gasEnergy_.NewAthenaArray(nx.get() + 2.0 * nghost_);
+	staticGasDensity_.NewAthenaArray(nx.get() + 2.0 * nghost_);
 }
 
 auto RadSystem::c_light() -> double { return c_light_; }
@@ -33,12 +36,37 @@ auto RadSystem::x1RadFlux(const int i) -> double { return x1RadFlux_(i); }
 
 auto RadSystem::set_x1RadFlux(const int i) -> double & { return x1RadFlux_(i); }
 
+auto RadSystem::gasEnergy(const int i) -> double { return gasEnergy_(i); }
+
+auto RadSystem::set_gasEnergy(const int i) -> double & { return gasEnergy_(i); }
+
+auto RadSystem::staticGasDensity(const int i) -> double
+{
+	return staticGasDensity_(i);
+}
+
+auto RadSystem::set_staticGasDensity(const int i) -> double &
+{
+	return staticGasDensity_(i);
+}
+
 auto RadSystem::ComputeRadEnergy() -> double
 {
 	double energy = 0.0;
 
 	for (int i = nghost_; i < nx_ + nghost_; ++i) {
 		energy += radEnergy_(i) * dx_;
+	}
+
+	return energy;
+}
+
+auto RadSystem::ComputeGasEnergy() -> double
+{
+	double energy = 0.0;
+
+	for (int i = nghost_; i < nx_ + nghost_; ++i) {
+		energy += gasEnergy_(i) * dx_;
 	}
 
 	return energy;
@@ -91,8 +119,8 @@ void RadSystem::ComputeFluxes(const std::pair<int, int> range)
 		const double erad_R = x1RightState_(radEnergy_index, i);
 		const double Fx_L = x1LeftState_(x1RadFlux_index, i);
 		const double Fx_R = x1RightState_(x1RadFlux_index, i);
-		assert(erad_L > 0.0);
-		assert(erad_R > 0.0);
+		assert(erad_L > 0.0); // NOLINT
+		assert(erad_R > 0.0); // NOLINT
 
 		// Compute "reduced flux" f == ||F|| / (c * erad)
 		// NOTE: It must always be the case that 0 <= f <= 1!
@@ -103,15 +131,24 @@ void RadSystem::ComputeFluxes(const std::pair<int, int> range)
 		const double Fnorm_R = std::sqrt(Fx_R * Fx_R);
 		double f_L = Fnorm_L / (c_light_ * erad_L);
 		double f_R = Fnorm_R / (c_light_ * erad_R);
-		assert(std::fabs(f_L - 1.0) <= eps); // NOLINT
-		assert(std::fabs(f_R - 1.0) <= eps); // NOLINT
+		assert(f_L <= 1.0 + eps); // NOLINT
+		assert(f_R <= 1.0 + eps); // NOLINT
 		f_L = std::min(f_L, 1.0);
 		f_R = std::min(f_R, 1.0);
 
 		// angle between interface and radiation flux
 
-		const double nx_L = Fx_L / Fnorm_L;
-		const double nx_R = Fx_R / Fnorm_R;
+		double nx_L = Fx_L / Fnorm_L;
+		double nx_R = Fx_R / Fnorm_R;
+
+		if (Fnorm_L == 0.0) { // direction is undefined, so just drop
+				      // direction-dependent terms
+			nx_L = 0.0;
+		}
+		if (Fnorm_R == 0.0) { // direction is undefined, so just drop
+				      // direction-dependent terms
+			nx_R = 0.0;
+		}
 
 		const double mu_L = (nx_L); // modify in 3d!
 		const double mu_R = (nx_R);
@@ -201,4 +238,102 @@ void RadSystem::ComputeFluxes(const std::pair<int, int> range)
 	}
 }
 
-void RadSystem::AddSourceTerms(AthenaArray<double> &source_terms) {}
+auto RadSystem::ComputeOpacity(const double rho, const double Temp) -> double
+{
+	// TODO(ben): interpolate from a table
+	return 1.0;
+}
+
+auto RadSystem::ComputeOpacityTempDerivative(const double rho,
+					     const double Temp) -> double
+{
+	// TODO(ben): interpolate from a table
+	return 0.0;
+}
+
+void RadSystem::AddSourceTerms(std::pair<int, int> range)
+{
+	// Lorentz transform the radiation variables into the comoving frame
+	// TransformIntoComovingFrame(fluid_velocity);
+
+	// Add source terms
+
+	// 1. Compute gas energy and radiation energy update following Howell &
+	// Greenough [Journal of Computational Physics 184 (2003) 53–78].
+
+	for (int i = range.first; i < range.second; ++i) {
+		const double dt = dt_;
+		const double c = c_light_;
+		const double a_rad = radiation_constant_;
+
+		// load fluid properties
+		// const double mu = mean_molecular_mass_cgs_;
+		// const double gamma = gamma_;
+		// const double k_B = boltzmann_constant_cgs_;
+		// const double c_v = k_B / (mu * (gamma - 1.0));
+		const double c_v = 1.0; // TODO(ben): change this.
+		const double rho = staticGasDensity_(i);
+		const double Egas0 = gasEnergy_(i);
+
+		// load radiation energy
+		const double Erad0 = radEnergy_(i);
+
+		// BEGIN NEWTON-RAPHSON LOOP
+		double Egas_guess = Egas0;
+		double Erad_guess = Erad0;
+		const double resid_tol = 1e-10;
+		const int maxIter = 100;
+
+		for (int n = 0; n < maxIter; ++n) {
+			// compute material temperature, opacity
+			const double T_gas = Egas_guess / c_v;
+			const double kappa = ComputeOpacity(rho, T_gas);
+			const double B =
+			    c * a_rad * std::pow(T_gas, 4) / (4.0 * M_PI);
+
+			// compute derivatives
+			const double dB_dT = (4.0 * B) / T_gas;
+			const double dkappa_dT =
+			    ComputeOpacityTempDerivative(rho, T_gas);
+
+			// compute residuals
+			const double rhs = dt * kappa * (B - c * Erad_guess);
+			const double F_G = (Egas_guess - Egas0) + rhs;
+			const double F_R = (Erad_guess - Erad0) - rhs;
+
+			// check if converged
+			if ((std::fabs(F_G) < resid_tol) &&
+			    (std::fabs(F_R) < resid_tol)) {
+				break;
+			}
+
+			// compute Jacobian elements
+			const double drhs_dT =
+			    dt / (rho * c_v) *
+			    (kappa * dB_dT + (B - c * Erad_guess) * dkappa_dT);
+			const double dFG_dEgas = 1.0 - drhs_dT;
+			const double dFG_dErad = -(dt * kappa * c);
+			const double dFR_dEgas = -drhs_dT;
+			const double dFR_dErad = 1.0 + (dt * kappa * c);
+
+			// Update variables
+			const double eta = -dFR_dEgas / dFG_dEgas;
+			const double deltaErad =
+			    -(F_R + eta * F_G) / (dFR_dErad + eta * dFG_dErad);
+			const double deltaEgas =
+			    -(F_G + dFG_dErad * deltaErad) / dFG_dEgas;
+
+			Egas_guess += deltaEgas;
+			Erad_guess += deltaErad;
+		} // END NEWTON-RAPHSON LOOP
+
+		// store new radiation energy
+		radEnergy_(i) = Erad_guess;
+		gasEnergy_(i) = Egas_guess;
+
+		// 2. Compute radiation flux update
+
+		// Lorentz transform back to 'laboratory' frame
+		// TransformIntoComovingFrame(-fluid_velocity);
+	}
+}
