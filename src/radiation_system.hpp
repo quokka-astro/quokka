@@ -59,6 +59,7 @@ class RadSystem : public HyperbolicSystem
 	auto radEnergy(int i) -> double;
 	auto x1RadFlux(int i) -> double;
 	auto ComputeRadEnergy() -> double;
+	auto c_light() -> double;
 
       protected:
 	AthenaArray<double> radEnergy_;
@@ -66,6 +67,8 @@ class RadSystem : public HyperbolicSystem
 
 	void ComputeFluxes(std::pair<int, int> range) override;
 	void ComputeTimestep() override;
+
+	void AddSourceTerms(AthenaArray<double> &source_terms) override;
 };
 
 #endif // RADIATION_SYSTEM_HPP_

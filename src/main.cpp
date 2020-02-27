@@ -18,6 +18,7 @@
 #include "test_advection.hpp"
 #include "test_hydro_shocktube.hpp"
 #include "test_hydro_wave.hpp"
+#include "test_radiation_streaming.hpp"
 
 /// Entry function for test runner. To be written.
 ///
@@ -36,8 +37,9 @@ auto main() -> int
 	  // scope here to do that automatically
 
 		// testproblem_advection();
-		testproblem_hydro_shocktube();
+		// testproblem_hydro_shocktube();
 		// testproblem_hydro_wave();
+		testproblem_radiation_streaming();
 
 	} // destructors must be called before Kokkos::finalize()
 	Kokkos::finalize();

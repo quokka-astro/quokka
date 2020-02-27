@@ -23,6 +23,8 @@ RadSystem::RadSystem(NxType const &nx, LxType const &lx,
 	x1RadFlux_.InitWithShallowSlice(consVar_, 2, x1RadFlux_index, 0);
 }
 
+auto RadSystem::c_light() -> double { return c_light_; }
+
 auto RadSystem::radEnergy(const int i) -> double { return radEnergy_(i); }
 
 auto RadSystem::set_radEnergy(const int i) -> double & { return radEnergy_(i); }
@@ -81,27 +83,38 @@ void RadSystem::ComputeFluxes(const std::pair<int, int> range)
 		// HLL solver following Toro (1998) and Balsara (2017).
 		// Radiation eigenvalues from Skinner & Ostriker (2013).
 
+		const double eps = 1e-10;
+
 		// gather left- and right- state variables
 
 		const double erad_L = x1LeftState_(radEnergy_index, i);
 		const double erad_R = x1RightState_(radEnergy_index, i);
 		const double Fx_L = x1LeftState_(x1RadFlux_index, i);
 		const double Fx_R = x1RightState_(x1RadFlux_index, i);
+		assert(erad_L > 0.0);
+		assert(erad_R > 0.0);
 
 		// Compute "reduced flux" f == ||F|| / (c * erad)
 		// NOTE: It must always be the case that 0 <= f <= 1!
+		// This means that the radiation energy density *cannot* be
+		// zero!
 
 		const double Fnorm_L = std::sqrt(Fx_L * Fx_L); // modify in 3d!
 		const double Fnorm_R = std::sqrt(Fx_R * Fx_R);
-		const double f_L = Fnorm_L / (c_light_ * erad_L);
-		const double f_R = Fnorm_R / (c_light_ * erad_R);
-		assert(f_L <= 1.0); // NOLINT
-		assert(f_R <= 1.0); // NOLINT
+		double f_L = Fnorm_L / (c_light_ * erad_L);
+		double f_R = Fnorm_R / (c_light_ * erad_R);
+		assert(std::fabs(f_L - 1.0) <= eps); // NOLINT
+		assert(std::fabs(f_R - 1.0) <= eps); // NOLINT
+		f_L = std::min(f_L, 1.0);
+		f_R = std::min(f_R, 1.0);
 
 		// angle between interface and radiation flux
 
-		const double mu_L = Fx_L / f_L;
-		const double mu_R = Fx_R / f_R;
+		const double nx_L = Fx_L / Fnorm_L;
+		const double nx_R = Fx_R / Fnorm_R;
+
+		const double mu_L = (nx_L); // modify in 3d!
+		const double mu_R = (nx_R);
 
 		// compute radiation pressure tensors
 
@@ -120,8 +133,8 @@ void RadSystem::ComputeFluxes(const std::pair<int, int> range)
 
 		// anisotropic term of Eddington tensor (in the direction of the
 		// rad. flux)
-		const double Txx_L = (3.0 * chi_L - 1.0) / 2.0 * (mu_L * mu_L);
-		const double Txx_R = (3.0 * chi_R - 1.0) / 2.0 * (mu_R * mu_R);
+		const double Txx_L = (3.0 * chi_L - 1.0) / 2.0 * (nx_L * nx_L);
+		const double Txx_R = (3.0 * chi_R - 1.0) / 2.0 * (nx_R * nx_R);
 
 		// compute the elements of the total radiation pressure tensor
 		const double Pxx_L = (Tdiag_L + Txx_L) * erad_L;
@@ -148,8 +161,8 @@ void RadSystem::ComputeFluxes(const std::pair<int, int> range)
 
 		// compute min/max wave speeds (following Toro, Eq. 10.48)
 
-		const double S_L = std::min((u_L - a_L), (u_R - a_R));
-		const double S_R = std::max((u_R + a_R), (u_L + a_L));
+		const double S_L = u_L - a_L;
+		const double S_R = u_R + a_R;
 
 		// compute fluxes
 
@@ -187,3 +200,5 @@ void RadSystem::ComputeFluxes(const std::pair<int, int> range)
 		x1Flux_(x1RadFlux_index, i) = F[1];
 	}
 }
+
+void RadSystem::AddSourceTerms(AthenaArray<double> &source_terms) {}
