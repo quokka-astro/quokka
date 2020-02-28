@@ -64,6 +64,8 @@ struct _interpreter {
     PyObject *s_python_function_subplot;
     PyObject *s_python_function_subplot2grid;
     PyObject *s_python_function_legend;
+    PyObject *s_python_function_xscale;
+    PyObject *s_python_function_yscale;
     PyObject *s_python_function_xlim;
     PyObject *s_python_function_ion;
     PyObject *s_python_function_ginput;
@@ -194,6 +196,8 @@ private:
         s_python_function_subplot = safe_import(pymod, "subplot");
         s_python_function_subplot2grid = safe_import(pymod, "subplot2grid");
         s_python_function_legend = safe_import(pymod, "legend");
+		s_python_function_xscale = safe_import(pymod, "xscale");
+		s_python_function_yscale = safe_import(pymod, "yscale");
         s_python_function_ylim = safe_import(pymod, "ylim");
         s_python_function_title = safe_import(pymod, "title");
         s_python_function_axis = safe_import(pymod, "axis");
@@ -1207,6 +1211,44 @@ inline void legend()
     PyObject* res = PyObject_CallObject(detail::_interpreter::get().s_python_function_legend, detail::_interpreter::get().s_python_empty_tuple);
     if(!res) throw std::runtime_error("Call to legend() failed.");
 
+    Py_DECREF(res);
+}
+
+inline void xscale(const std::string &str, const std::map<std::string, std::string> &keywords = {})
+{
+    PyObject* pystr = PyString_FromString(str.c_str());
+    PyObject* args = PyTuple_New(1);
+    PyTuple_SetItem(args, 0, pystr);
+
+    PyObject* kwargs = PyDict_New();
+    for (auto it = keywords.begin(); it != keywords.end(); ++it) {
+        PyDict_SetItemString(kwargs, it->first.c_str(), PyUnicode_FromString(it->second.c_str()));
+    }
+
+    PyObject* res = PyObject_Call(detail::_interpreter::get().s_python_function_xscale, args, kwargs);
+    if(!res) throw std::runtime_error("Call to xscale() failed.");
+
+    Py_DECREF(args);
+    Py_DECREF(kwargs);
+    Py_DECREF(res);
+}
+
+inline void yscale(const std::string &str, const std::map<std::string, std::string> &keywords = {})
+{
+    PyObject* pystr = PyString_FromString(str.c_str());
+    PyObject* args = PyTuple_New(1);
+    PyTuple_SetItem(args, 0, pystr);
+
+    PyObject* kwargs = PyDict_New();
+    for (auto it = keywords.begin(); it != keywords.end(); ++it) {
+        PyDict_SetItemString(kwargs, it->first.c_str(), PyUnicode_FromString(it->second.c_str()));
+    }
+
+    PyObject* res = PyObject_Call(detail::_interpreter::get().s_python_function_yscale, args, kwargs);
+    if(!res) throw std::runtime_error("Call to yscale() failed.");
+
+    Py_DECREF(args);
+    Py_DECREF(kwargs);
     Py_DECREF(res);
 }
 
