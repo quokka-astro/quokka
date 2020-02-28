@@ -87,7 +87,7 @@ class HydroSystem : public HyperbolicSystem
 	double gamma_;
 
 	void ComputeFluxes(std::pair<int, int> range) override;
-	void ComputeTimestep() override;
+	void ComputeTimestep(double dt_max) override;
 
 	void FlattenShocks(AthenaArray<double> &q, std::pair<int, int> range);
 };

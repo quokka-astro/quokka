@@ -88,9 +88,9 @@ void HydroSystem::ConservedToPrimitive(AthenaArray<double> &cons,
 	}
 }
 
-void HydroSystem::ComputeTimestep()
+void HydroSystem::ComputeTimestep(const double dt_max)
 {
-	double dt = std::numeric_limits<double>::max();
+	double dt = dt_max;
 
 	for (int i = 0; i < dim1_; ++i) {
 		const double rho = primDensity_(i);

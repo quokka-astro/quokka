@@ -269,7 +269,17 @@ void HyperbolicSystem::AddFluxes()
 	}
 }
 
+void HyperbolicSystem::ComputeTimestep()
+{
+	ComputeTimestep(std::numeric_limits<double>::max());
+}
+
 void HyperbolicSystem::AdvanceTimestep()
+{
+	AdvanceTimestep(std::numeric_limits<double>::max());
+}
+
+void HyperbolicSystem::AdvanceTimestep(const double dt_max)
 {
 	const auto ppm_range = std::make_pair(-1 + nghost_, nx_ + 1 + nghost_);
 	const auto cell_range = std::make_pair(nghost_, nx_ + nghost_);
@@ -277,7 +287,7 @@ void HyperbolicSystem::AdvanceTimestep()
 	// Initialize data
 	FillGhostZones(consVar_);
 	ConservedToPrimitive(consVar_, std::make_pair(0, dim1_));
-	ComputeTimestep();
+	ComputeTimestep(dt_max);
 
 	// Predictor step
 	ReconstructStatesPPM(primVar_, ppm_range);

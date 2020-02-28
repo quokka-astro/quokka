@@ -52,9 +52,9 @@ auto LinearAdvectionSystem::ComputeMass() -> double
 	return mass;
 }
 
-void LinearAdvectionSystem::ComputeTimestep()
+void LinearAdvectionSystem::ComputeTimestep(const double dt_max)
 {
-	dt_ = cflNumber_ * (dx_ / advectionVx_);
+	dt_ = std::min(cflNumber_ * (dx_ / advectionVx_), dt_max);
 }
 
 void LinearAdvectionSystem::ConservedToPrimitive(

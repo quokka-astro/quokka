@@ -37,6 +37,7 @@ class HyperbolicSystem
 
 	/// Computes timestep and advances system
 	void AdvanceTimestep();
+	void AdvanceTimestep(double dt_max);
 
 	// setter functions:
 
@@ -114,8 +115,9 @@ class HyperbolicSystem
 	void ReconstructStatesPPM(AthenaArray<double> &q,
 				  std::pair<int, int> range);
 	void PredictStep(std::pair<int, int> range);
+	void ComputeTimestep();
 
-	virtual void ComputeTimestep() = 0;
+	virtual void ComputeTimestep(const double dt_max) = 0;
 	virtual void ComputeFluxes(std::pair<int, int> range) = 0;
 };
 

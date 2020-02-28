@@ -55,7 +55,7 @@ class LinearAdvectionSystem : public HyperbolicSystem
 
 	void ConservedToPrimitive(AthenaArray<double> &cons,
 				  std::pair<int, int> range) override;
-	void ComputeTimestep() override;
+	void ComputeTimestep(double dt_max) override;
 	void ComputeFluxes(std::pair<int, int> range) override;
 };
 
