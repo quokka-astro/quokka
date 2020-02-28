@@ -33,9 +33,13 @@ class RadSystem : public HyperbolicSystem
 		x1RadFlux_index = 1,
 	};
 
-	const double c_light_ = 1.0;		// use c=1 units
-	const double c_hat_ = c_light_;		// for now
-	const double radiation_constant_ = 1.0; // use a_rad = 1 units
+	const double c_light_ = 2.99792458e10; // cgs
+	const double c_hat_ = c_light_;	       // for now
+
+	const double radiation_constant_ = 7.5646e-15;		       // cgs
+	const double mean_molecular_mass_cgs_ = (0.5) * 1.6726231e-24; // cgs
+	const double boltzmann_constant_cgs_ = 1.380658e-16;	       // cgs
+	const double gamma_ = (5. / 3.);
 
 	using NxType = fluent::NamedType<int, struct NxParameter>;
 	using LxType = fluent::NamedType<double, struct LxParameter>;
@@ -50,6 +54,8 @@ class RadSystem : public HyperbolicSystem
 	void ConservedToPrimitive(AthenaArray<double> &cons,
 				  std::pair<int, int> range) override;
 	void AddSourceTerms(std::pair<int, int> range);
+	auto ComputeOpacity(double rho, double Temp) -> double;
+	auto ComputeOpacityTempDerivative(double rho, double Temp) -> double;
 
 	// setter functions:
 
@@ -68,6 +74,7 @@ class RadSystem : public HyperbolicSystem
 	auto ComputeRadEnergy() -> double;
 	auto ComputeGasEnergy() -> double;
 	auto c_light() -> double;
+	auto radiation_constant() -> double;
 
       protected:
 	AthenaArray<double> radEnergy_;
@@ -76,10 +83,7 @@ class RadSystem : public HyperbolicSystem
 	AthenaArray<double> staticGasDensity_;
 
 	void ComputeFluxes(std::pair<int, int> range) override;
-	void ComputeTimestep() override;
-
-	auto ComputeOpacity(double rho, double Temp) -> double;
-	auto ComputeOpacityTempDerivative(double rho, double Temp) -> double;
+	void ComputeTimestep(double dt_max) override;
 };
 
 #endif // RADIATION_SYSTEM_HPP_
