@@ -51,6 +51,7 @@ void testproblem_radiation_matter_coupling()
 		}
 
 		rad_system.AdvanceTimestep();
+		rad_system.AddSourceTerms(std::make_pair(nghost, nghost + nx));
 
 		std::cout << "Timestep " << j << "; t = " << rad_system.time()
 			  << "\n";

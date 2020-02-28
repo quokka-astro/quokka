@@ -279,17 +279,33 @@ void RadSystem::AddSourceTerms(std::pair<int, int> range)
 		const double Erad0 = radEnergy_(i);
 
 		// BEGIN NEWTON-RAPHSON LOOP
+		double F_G;
+		double F_R;
+		double rhs;
+		double T_gas;
+		double kappa;
+		double B;
+		double dB_dT;
+		double dkappa_dT;
+		double drhs_dT;
+		double dFG_dEgas;
+		double dFG_dErad;
+		double dFR_dEgas;
+		double dFR_dErad;
+		double eta;
+		double deltaErad;
+		double deltaEgas;
+
 		double Egas_guess = Egas0;
 		double Erad_guess = Erad0;
 		const double resid_tol = 1e-10;
-		const int maxIter = 100;
+		const int maxIter = 20;
 
 		for (int n = 0; n < maxIter; ++n) {
 			// compute material temperature, opacity
-			const double T_gas = Egas_guess / c_v;
-			const double kappa = ComputeOpacity(rho, T_gas);
-			const double B =
-			    c * a_rad * std::pow(T_gas, 4) / (4.0 * M_PI);
+			T_gas = Egas_guess / (rho * c_v);
+			kappa = ComputeOpacity(rho, T_gas);
+			B = c * a_rad * std::pow(T_gas, 4) / (4.0 * M_PI);
 
 			// compute derivatives
 			const double dB_dT = (4.0 * B) / T_gas;
@@ -297,36 +313,41 @@ void RadSystem::AddSourceTerms(std::pair<int, int> range)
 			    ComputeOpacityTempDerivative(rho, T_gas);
 
 			// compute residuals
-			const double rhs = dt * kappa * (B - c * Erad_guess);
-			const double F_G = (Egas_guess - Egas0) + rhs;
-			const double F_R = (Erad_guess - Erad0) - rhs;
+			rhs = dt * kappa * (B - c * Erad_guess);
+			F_G = (Egas_guess - Egas0) + rhs;
+			F_R = (Erad_guess - Erad0) - rhs;
 
 			// check if converged
 			if ((std::fabs(F_G) < resid_tol) &&
 			    (std::fabs(F_R) < resid_tol)) {
-			    std::cout << "converged after " << n << "iterations.\n";
+				std::cout << "converged after " << n
+					  << "iterations.\n";
 				break;
 			}
 
 			// compute Jacobian elements
-			const double drhs_dT =
+			drhs_dT =
 			    dt / (rho * c_v) *
 			    (kappa * dB_dT + (B - c * Erad_guess) * dkappa_dT);
-			const double dFG_dEgas = 1.0 - drhs_dT;
-			const double dFG_dErad = -(dt * kappa * c);
-			const double dFR_dEgas = -drhs_dT;
-			const double dFR_dErad = 1.0 + (dt * kappa * c);
+
+			dFG_dEgas = 1.0 - drhs_dT;
+			dFG_dErad = -(dt * kappa * c);
+			dFR_dEgas = -drhs_dT;
+			dFR_dErad = 1.0 + (dt * kappa * c);
 
 			// Update variables
-			const double eta = -dFR_dEgas / dFG_dEgas;
-			const double deltaErad =
+			eta = -dFR_dEgas / dFG_dEgas;
+			// eta = (eta > 0.0) ? eta : 0.0;
+			deltaErad =
 			    -(F_R + eta * F_G) / (dFR_dErad + eta * dFG_dErad);
-			const double deltaEgas =
-			    -(F_G + dFG_dErad * deltaErad) / dFG_dEgas;
+			deltaEgas = -(F_G + dFG_dErad * deltaErad) / dFG_dEgas;
 
 			Egas_guess += deltaEgas;
 			Erad_guess += deltaErad;
 		} // END NEWTON-RAPHSON LOOP
+
+		assert((std::fabs(F_G) < resid_tol) &&
+		       (std::fabs(F_R) < resid_tol)); // NOLINT
 
 		// store new radiation energy
 		radEnergy_(i) = Erad_guess;

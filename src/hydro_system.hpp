@@ -1,18 +1,17 @@
-#ifndef RADIATION_SYSTEM_HPP_ // NOLINT
-#define RADIATION_SYSTEM_HPP_
+#ifndef HYDRO_SYSTEM_HPP_ // NOLINT
+#define HYDRO_SYSTEM_HPP_
 //==============================================================================
 // TwoMomentRad - a radiation transport library for patch-based AMR codes
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file radiation_system.hpp
-/// \brief Defines a class for solving the (1d) radiation moment equations.
+/// \file hydro_system.hpp
+/// \brief Defines a class for solving the (1d) Euler equations.
 ///
 
 // c++ headers
 #include <cassert>
 #include <cmath>
-#include <iostream>
 #include <valarray>
 
 // library headers
@@ -25,61 +24,72 @@
 
 /// Class for a linear, scalar advection equation
 ///
-class RadSystem : public HyperbolicSystem
+class HydroSystem : public HyperbolicSystem
 {
       public:
 	enum consVarIndex {
-		radEnergy_index = 0,
-		x1RadFlux_index = 1,
+		density_index = 0,
+		x1Momentum_index = 1,
+		energy_index = 2
 	};
 
-	const double c_light_ = 1.0;		// use c=1 units
-	const double c_hat_ = c_light_;		// for now
-	const double radiation_constant_ = 1.0; // use a_rad = 1 units
+	enum primVarIndex {
+		primDensity_index = 0,
+		x1Velocity_index = 1,
+		pressure_index = 2
+	};
 
 	using NxType = fluent::NamedType<int, struct NxParameter>;
 	using LxType = fluent::NamedType<double, struct LxParameter>;
 	using CFLType = fluent::NamedType<double, struct CFLParameter>;
+	using GammaType = fluent::NamedType<double, struct GammaParameter>;
 
 	static const NxType::argument Nx;
 	static const LxType::argument Lx;
 	static const CFLType::argument CFL;
+	static const GammaType::argument Gamma;
 
-	RadSystem(NxType const &nx, LxType const &lx, CFLType const &cflNumber);
+	HydroSystem(NxType const &nx, LxType const &lx,
+		    CFLType const &cflNumber, GammaType const &gamma);
 
+	void AddSourceTerms(AthenaArray<double> &source_terms);
 	void ConservedToPrimitive(AthenaArray<double> &cons,
 				  std::pair<int, int> range) override;
-	void AddSourceTerms(std::pair<int, int> range);
 
 	// setter functions:
 
 	void set_cflNumber(double cflNumber);
-	auto set_radEnergy(int i) -> double &;
-	auto set_x1RadFlux(int i) -> double &;
-	auto set_gasEnergy(int i) -> double &;
-	auto set_staticGasDensity(int i) -> double &;
+	auto set_density(int i) -> double &;
+	auto set_x1Momentum(int i) -> double &;
+	auto set_energy(int i) -> double &;
 
 	// accessor functions:
 
-	auto radEnergy(int i) -> double;
-	auto x1RadFlux(int i) -> double;
-	auto gasEnergy(int i) -> double;
-	auto staticGasDensity(int i) -> double;
-	auto ComputeRadEnergy() -> double;
-	auto ComputeGasEnergy() -> double;
-	auto c_light() -> double;
+	auto density(int i) -> double;
+	auto x1Momentum(int i) -> double;
+	auto energy(int i) -> double;
+
+	auto primDensity(int i) -> double;
+	auto x1Velocity(int i) -> double;
+	auto pressure(int i) -> double;
+
+	auto ComputeMass() -> double;
 
       protected:
-	AthenaArray<double> radEnergy_;
-	AthenaArray<double> x1RadFlux_;
-	AthenaArray<double> gasEnergy_;
-	AthenaArray<double> staticGasDensity_;
+	AthenaArray<double> density_;
+	AthenaArray<double> x1Momentum_;
+	AthenaArray<double> energy_;
+
+	AthenaArray<double> primDensity_;
+	AthenaArray<double> x1Velocity_;
+	AthenaArray<double> pressure_;
+
+	double gamma_;
 
 	void ComputeFluxes(std::pair<int, int> range) override;
 	void ComputeTimestep() override;
 
-	auto ComputeOpacity(double rho, double Temp) -> double;
-	auto ComputeOpacityTempDerivative(double rho, double Temp) -> double;
+	void FlattenShocks(AthenaArray<double> &q, std::pair<int, int> range);
 };
 
-#endif // RADIATION_SYSTEM_HPP_
+#endif // HYDRO_SYSTEM_HPP_
