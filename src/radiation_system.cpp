@@ -304,6 +304,7 @@ void RadSystem::AddSourceTerms(std::pair<int, int> range)
 			// check if converged
 			if ((std::fabs(F_G) < resid_tol) &&
 			    (std::fabs(F_R) < resid_tol)) {
+			    std::cout << "converged after " << n << "iterations.\n";
 				break;
 			}
 

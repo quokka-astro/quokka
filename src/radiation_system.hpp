@@ -13,6 +13,7 @@
 #include <cassert>
 #include <cmath>
 #include <valarray>
+#include <iostream>
 
 // library headers
 #include "NamedType/named_type.hpp" // provides fluent::NamedType
