@@ -17,7 +17,7 @@ void testproblem_radiation_matter_coupling()
 	const double Lx = 1.0;
 	const double CFL_number = 0.4;
 	const double constant_dt = 1.0e-11; // s
-	const double max_time = 1.0e-6;	    // s
+	const double max_time = 1.0e-7;	    // s
 	const int max_timesteps = 2e5;
 
 	// Problem initialization
@@ -104,6 +104,34 @@ void testproblem_radiation_matter_coupling()
 		Egas_v.push_back(rad_system.gasEnergy(0 + nghost));
 	}
 
+	// Solve for asymptotically-exact solution (Gonzalez et al. 2007)
+	const int nmax = 1e4;
+	std::vector<double> t_exact(nmax);
+	std::vector<double> Tgas_exact(nmax);
+	for (int n = 0; n < nmax; ++n) {
+		const double T_r = initial_Trad;
+		const double T0 = initial_Tgas;
+		const double T_gas =
+		    (static_cast<double>(n + 1) / static_cast<double>(nmax)) *
+			(T_r - T0) +
+		    T0;
+
+		const double term1 =
+		    std::atan(T0 / T_r) - std::atan(T_gas / T_r);
+		const double term2 = -std::log(T_r - T0) + std::log(T_r + T0) +
+				     std::log(T_r - T_gas) -
+				     std::log(T_r + T_gas);
+
+		const double norm_fac =
+		    (-kappa * rad_system.c_light_ *
+		     rad_system.radiation_constant() / c_v) *
+		    std::pow(T_r, 3);
+
+		const double time_t = (0.5 * term1 + 0.25 * term2) / norm_fac;
+		t_exact.at(n) = (time_t);
+		Tgas_exact.at(n) = (T_gas);
+	}
+
 	matplotlibcpp::clf();
 	matplotlibcpp::yscale("log");
 	matplotlibcpp::xscale("log");
@@ -118,23 +146,18 @@ void testproblem_radiation_matter_coupling()
 	Tgas_args["label"] = "gas temperature";
 	matplotlibcpp::plot(t, Tgas, Tgas_args);
 
-	// matplotlibcpp::xscale("log");
+	std::map<std::string, std::string> exactsol_args;
+	exactsol_args["label"] = "exact solution assuming Trad = const.";
+	exactsol_args["linestyle"] = "--";
+	exactsol_args["color"] = "black";
+	matplotlibcpp::plot(t_exact, Tgas_exact, exactsol_args);
+
 	matplotlibcpp::legend();
-	matplotlibcpp::title(fmt::format("t = {:.4g}", rad_system.time()));
+	matplotlibcpp::xlabel("time t (s)");
+	matplotlibcpp::ylabel("temperature T (K)");
+	matplotlibcpp::title(fmt::format("dt = {:.4g}\nt = {:.4g}", constant_dt,
+					 rad_system.time()));
 	matplotlibcpp::save(fmt::format("./radcoupling.png"));
-
-	matplotlibcpp::clf();
-	matplotlibcpp::yscale("log");
-	matplotlibcpp::xscale("log");
-	matplotlibcpp::ylim(0.1 * Egas_v.front(), 10.0 * Egas_v.back());
-
-	std::map<std::string, std::string> egas_args;
-	egas_args["label"] = "gas energy density";
-	matplotlibcpp::plot(t, Egas_v, egas_args);
-
-	matplotlibcpp::legend();
-	matplotlibcpp::title(fmt::format("t = {:.4g}", rad_system.time()));
-	matplotlibcpp::save(fmt::format("./radcoupling_Egas.png"));
 
 	// Cleanup and exit
 	std::cout << "Finished." << std::endl;

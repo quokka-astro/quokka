@@ -292,7 +292,7 @@ void RadSystem::AddSourceTerms(std::pair<int, int> range)
 		double fourPiB;
 		double dB_dTgas;
 		double dkappa_dTgas;
-		double drhs_dTgas;
+		double drhs_dEgas;
 		double dFG_dEgas;
 		double dFG_dErad;
 		double dFR_dEgas;
@@ -332,14 +332,14 @@ void RadSystem::AddSourceTerms(std::pair<int, int> range)
 			}
 
 			// compute Jacobian elements
-			drhs_dTgas =
-			    (dt / (rho * c_v)) *
-			    ((rho * kappa) * dB_dTgas +
-			     (fourPiB - c * Erad_guess) * rho * dkappa_dTgas);
+			drhs_dEgas =
+			    (dt / c_v) *
+			    (kappa * dB_dTgas +
+			     dkappa_dTgas * (fourPiB - c * Erad_guess));
 
-			dFG_dEgas = 1.0 + drhs_dTgas;
+			dFG_dEgas = 1.0 + drhs_dEgas;
 			dFG_dErad = dt * (-(rho * kappa) * c);
-			dFR_dEgas = -drhs_dTgas;
+			dFR_dEgas = -drhs_dEgas;
 			dFR_dErad = 1.0 + dt * ((rho * kappa) * c);
 
 			// Update variables
