@@ -157,7 +157,7 @@ void testproblem_radiation_matter_coupling()
 	matplotlibcpp::ylabel("temperature T (K)");
 	matplotlibcpp::title(fmt::format("dt = {:.4g}\nt = {:.4g}", constant_dt,
 					 rad_system.time()));
-	matplotlibcpp::save(fmt::format("./radcoupling.png"));
+	matplotlibcpp::save(fmt::format("./radcoupling.pdf"));
 
 	// Cleanup and exit
 	std::cout << "Finished." << std::endl;

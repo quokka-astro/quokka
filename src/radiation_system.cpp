@@ -324,8 +324,10 @@ void RadSystem::AddSourceTerms(std::pair<int, int> range)
 			F_R = (Erad_guess - Erad0) - rhs;
 
 			// check if converged
-			if ((std::fabs(F_G / Egas0) < resid_tol) &&
-			    (std::fabs(F_R / Erad0) < resid_tol)) {
+			if ((std::fabs(std::max(F_G / Egas0, F_G / Etot0)) <
+			     resid_tol) &&
+			    (std::fabs(std::max(F_R / Erad0, F_R / Etot0)) <
+			     resid_tol)) {
 				std::cout << "converged after " << n
 					  << " iterations.\n";
 				break;

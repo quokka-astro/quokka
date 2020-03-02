@@ -117,7 +117,7 @@ class HyperbolicSystem
 	void PredictStep(std::pair<int, int> range);
 	void ComputeTimestep();
 
-	virtual void ComputeTimestep(const double dt_max) = 0;
+	virtual void ComputeTimestep(double dt_max) = 0;
 	virtual void ComputeFluxes(std::pair<int, int> range) = 0;
 };
 
