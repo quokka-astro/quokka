@@ -68,7 +68,7 @@ class HyperbolicSystem
 				std::min(2.0 * std::abs(a), 2.0 * std::abs(b)));
 	}
 
-	void FillGhostZones(AthenaArray<double> &cons);
+	virtual void FillGhostZones(AthenaArray<double> &cons);
 	virtual void ConservedToPrimitive(AthenaArray<double> &cons,
 					  std::pair<int, int> range) = 0;
 

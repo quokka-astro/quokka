@@ -18,6 +18,7 @@
 #include "test_advection.hpp"
 #include "test_hydro_shocktube.hpp"
 #include "test_hydro_wave.hpp"
+#include "test_radiation_marshak.hpp"
 #include "test_radiation_matter_coupling.hpp"
 #include "test_radiation_streaming.hpp"
 
@@ -41,7 +42,8 @@ auto main() -> int
 		// testproblem_hydro_shocktube();
 		// testproblem_hydro_wave();
 		// testproblem_radiation_streaming();
-		testproblem_radiation_matter_coupling();
+		// testproblem_radiation_matter_coupling();
+		testproblem_radiation_marshak();
 
 	} // destructors must be called before Kokkos::finalize()
 	Kokkos::finalize();

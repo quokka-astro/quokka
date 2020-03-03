@@ -41,6 +41,8 @@ class RadSystem : public HyperbolicSystem
 	const double boltzmann_constant_cgs_ = 1.380658e-16;	       // cgs
 	const double gamma_ = (5. / 3.);
 
+	const double Trad_floor_ = 1.0e-5; // K
+
 	using NxType = fluent::NamedType<int, struct NxParameter>;
 	using LxType = fluent::NamedType<double, struct LxParameter>;
 	using CFLType = fluent::NamedType<double, struct CFLParameter>;
@@ -51,6 +53,7 @@ class RadSystem : public HyperbolicSystem
 
 	RadSystem(NxType const &nx, LxType const &lx, CFLType const &cflNumber);
 
+	void FillGhostZones(AthenaArray<double> &cons) override;
 	void ConservedToPrimitive(AthenaArray<double> &cons,
 				  std::pair<int, int> range) override;
 	void AddSourceTerms(std::pair<int, int> range);
@@ -64,6 +67,7 @@ class RadSystem : public HyperbolicSystem
 	auto set_x1RadFlux(int i) -> double &;
 	auto set_gasEnergy(int i) -> double &;
 	auto set_staticGasDensity(int i) -> double &;
+	auto set_radEnergySource(int i) -> double &;
 
 	// accessor functions:
 
@@ -81,6 +85,7 @@ class RadSystem : public HyperbolicSystem
 	AthenaArray<double> x1RadFlux_;
 	AthenaArray<double> gasEnergy_;
 	AthenaArray<double> staticGasDensity_;
+	AthenaArray<double> radEnergySource_;
 
 	void ComputeFluxes(std::pair<int, int> range) override;
 	void ComputeTimestep(double dt_max) override;

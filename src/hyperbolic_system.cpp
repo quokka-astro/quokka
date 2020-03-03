@@ -28,6 +28,7 @@ void HyperbolicSystem::FillGhostZones(AthenaArray<double> &cons)
 	// In general, this step will require MPI communication, and interaction
 	// with the main AMR code.
 
+	// periodic boundary conditions
 #if 0
 	// x1 right side boundary
 	for (int n = 0; n < nvars_; ++n) {
@@ -44,6 +45,7 @@ void HyperbolicSystem::FillGhostZones(AthenaArray<double> &cons)
 	}
 #endif
 
+	// extrapolate boundary conditions
 	// x1 right side boundary
 	for (int n = 0; n < nvars_; ++n) {
 		for (int i = nghost_ + nx_; i < nghost_ + nx_ + nghost_; ++i) {
@@ -290,7 +292,8 @@ void HyperbolicSystem::AdvanceTimestep(const double dt_max)
 	ComputeTimestep(dt_max);
 
 	// Predictor step
-	ReconstructStatesPPM(primVar_, ppm_range);
+	ReconstructStatesConstant(ppm_range);
+	//	ReconstructStatesPPM(primVar_, ppm_range);
 	ComputeFluxes(cell_range);
 	PredictStep(cell_range);
 
@@ -302,7 +305,8 @@ void HyperbolicSystem::AdvanceTimestep(const double dt_max)
 	// Corrector step
 	FillGhostZones(consVarPredictStep_);
 	ConservedToPrimitive(consVarPredictStep_, std::make_pair(0, dim1_));
-	ReconstructStatesPPM(primVar_, ppm_range);
+	ReconstructStatesConstant(ppm_range);
+	//	ReconstructStatesPPM(primVar_, ppm_range);
 	ComputeFluxes(cell_range);
 	AddFluxes();
 

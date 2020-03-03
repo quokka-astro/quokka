@@ -24,6 +24,7 @@ RadSystem::RadSystem(NxType const &nx, LxType const &lx,
 
 	gasEnergy_.NewAthenaArray(nx.get() + 2.0 * nghost_);
 	staticGasDensity_.NewAthenaArray(nx.get() + 2.0 * nghost_);
+	radEnergySource_.NewAthenaArray(nx.get() + 2.0 * nghost_);
 }
 
 auto RadSystem::c_light() -> double { return c_light_; }
@@ -52,6 +53,11 @@ auto RadSystem::set_staticGasDensity(const int i) -> double &
 	return staticGasDensity_(i);
 }
 
+auto RadSystem::set_radEnergySource(const int i) -> double &
+{
+	return radEnergySource_(i);
+}
+
 auto RadSystem::ComputeRadEnergy() -> double
 {
 	double energy = 0.0;
@@ -72,6 +78,34 @@ auto RadSystem::ComputeGasEnergy() -> double
 	}
 
 	return energy;
+}
+
+void RadSystem::FillGhostZones(AthenaArray<double> &cons)
+{
+	// In general, this step will require MPI communication, and interaction
+	// with the main AMR code.
+
+	// Su & Olson (1997)* boundary conditions
+	// [Reflecting boundary on left, constant on right.]
+	// [*Subtle differences* from Marshak boundary condition!]
+
+	// x1 left side boundary (reflecting)
+	for (int i = 0; i < nghost_; ++i) {
+		cons(radEnergy_index, i) =
+		    cons(radEnergy_index, nghost_ + (nghost_ - i));
+		cons(x1RadFlux_index, i) =
+		    -cons(x1RadFlux_index, nghost_ + (nghost_ - i));
+	}
+
+	// x1 right side boundary (constant temperature, extrapolate flux)
+	for (int i = nghost_ + nx_; i < nghost_ + nx_ + nghost_; ++i) {
+		const double Erad_floor =
+		    radiation_constant_ * std::pow(Trad_floor_, 4);
+		cons(radEnergy_index, i) = Erad_floor;
+		cons(x1RadFlux_index, i) =
+		    std::min(c_light_ * Erad_floor,
+			     cons(x1RadFlux_index, nghost_ + nx_ - 1));
+	}
 }
 
 void RadSystem::ConservedToPrimitive(AthenaArray<double> &cons,
@@ -114,7 +148,7 @@ void RadSystem::ComputeFluxes(const std::pair<int, int> range)
 		// HLL solver following Toro (1998) and Balsara (2017).
 		// Radiation eigenvalues from Skinner & Ostriker (2013).
 
-		const double eps = 1e-10;
+		const double eps = 1e-2;
 
 		// gather left- and right- state variables
 
@@ -185,19 +219,13 @@ void RadSystem::ComputeFluxes(const std::pair<int, int> range)
 		const double u_L = c_hat_ * (mu_L * f_L) / f_facL;
 		const double u_R = c_hat_ * (mu_R * f_R) / f_facR;
 
-		const double a_L =
-		    c_hat_ *
-		    std::sqrt((2. / 3.) * ((f_facL * f_facL) - f_facL) +
-			      2.0 * (mu_L * mu_L) *
-				  (2.0 - (f_L * f_L) - f_facL)) /
-		    f_facL;
+		double a_L = (2. / 3.) * ((f_facL * f_facL) - f_facL) +
+			     2.0 * (mu_L * mu_L) * (2.0 - (f_L * f_L) - f_facL);
+		a_L = (a_L < 0.0) ? 0.0 : c_hat_ * std::sqrt(a_L) / f_facL;
 
-		const double a_R =
-		    c_hat_ *
-		    std::sqrt((2. / 3.) * ((f_facR * f_facR) - f_facR) +
-			      2.0 * (mu_R * mu_R) *
-				  (2.0 - (f_R * f_R) - f_facR)) /
-		    f_facR;
+		double a_R = (2. / 3.) * ((f_facR * f_facR) - f_facR) +
+			     2.0 * (mu_R * mu_R) * (2.0 - (f_R * f_R) - f_facR);
+		a_R = (a_R < 0.0) ? 0.0 : c_hat_ * std::sqrt(a_R) / f_facR;
 
 		// compute min/max wave speeds (following Toro, Eq. 10.48)
 
@@ -244,7 +272,8 @@ void RadSystem::ComputeFluxes(const std::pair<int, int> range)
 auto RadSystem::ComputeOpacity(const double rho, const double Temp) -> double
 {
 	// TODO(ben): interpolate from a table
-	return 0.4; // cm^2 g^-1 (Thomson opacity)
+	// return 0.4; // cm^2 g^-1 (Thomson opacity)
+	return 1.0;
 }
 
 auto RadSystem::ComputeOpacityTempDerivative(const double rho,
@@ -274,7 +303,12 @@ void RadSystem::AddSourceTerms(std::pair<int, int> range)
 		const double mu = mean_molecular_mass_cgs_;
 		const double gamma = gamma_;
 		const double k_B = boltzmann_constant_cgs_;
-		const double c_v = k_B / (mu * (gamma - 1.0));
+		double c_v;
+		// const double c_v = k_B / (mu * (gamma - 1.0));
+
+		const double eps_SuOlson =
+		    1.0; // Su & Olsen (1997) test problem ONLY
+		const double alpha_SuOlson = 4.0 * a_rad / eps_SuOlson;
 
 		const double rho = staticGasDensity_(i);
 		const double Egas0 = gasEnergy_(i);
@@ -289,6 +323,7 @@ void RadSystem::AddSourceTerms(std::pair<int, int> range)
 		double rhs;
 		double T_gas;
 		double kappa;
+		double S;
 		double fourPiB;
 		double dB_dTgas;
 		double dkappa_dTgas;
@@ -303,13 +338,18 @@ void RadSystem::AddSourceTerms(std::pair<int, int> range)
 
 		double Egas_guess = Egas0;
 		double Erad_guess = Erad0;
-		const double resid_tol = 1e-10;
+		const double resid_tol = 1e-6;
 		const int maxIter = 200;
+		int n;
+		for (n = 1; n <= maxIter; ++n) {
 
-		for (int n = 1; n <= maxIter; ++n) {
+			// compute material temperature
+			T_gas = std::pow(Egas_guess / (rho * alpha_SuOlson),
+					 (1. / 4.));
+			c_v = alpha_SuOlson * std::pow(T_gas, 3);
+			// T_gas = Egas_guess / (rho * c_v);
 
-			// compute material temperature, opacity
-			T_gas = Egas_guess / (rho * c_v);
+			// compute opacity, emissivity
 			kappa = ComputeOpacity(rho, T_gas);
 			fourPiB = c * a_rad * std::pow(T_gas, 4);
 
@@ -318,18 +358,20 @@ void RadSystem::AddSourceTerms(std::pair<int, int> range)
 			const double dkappa_dTgas =
 			    ComputeOpacityTempDerivative(rho, T_gas);
 
+			// constant radiation energy source term
+			// (does not modify gas energy directly!)
+			// (does not modify Jacobian!)
+			S = dt * (rho * kappa) * c * radEnergySource_(i);
+
 			// compute residuals
 			rhs = dt * (rho * kappa) * (fourPiB - c * Erad_guess);
 			F_G = (Egas_guess - Egas0) + rhs;
-			F_R = (Erad_guess - Erad0) - rhs;
+			// F_R = (Erad_guess - Erad0) - rhs;
+			F_R = (Erad_guess - Erad0) - (rhs + S);
 
 			// check if converged
-			if ((std::fabs(std::max(F_G / Egas0, F_G / Etot0)) <
-			     resid_tol) &&
-			    (std::fabs(std::max(F_R / Erad0, F_R / Etot0)) <
-			     resid_tol)) {
-				std::cout << "converged after " << n
-					  << " iterations.\n";
+			if ((std::abs(F_G / Etot0) < resid_tol) &&
+			    (std::abs(F_R / Etot0) < resid_tol)) {
 				break;
 			}
 
@@ -357,8 +399,8 @@ void RadSystem::AddSourceTerms(std::pair<int, int> range)
 
 		} // END NEWTON-RAPHSON LOOP
 
-		assert((std::fabs(F_G / Egas0) < resid_tol) && // NOLINT
-		       (std::fabs(F_R / Erad0) < resid_tol));  // NOLINT
+		assert((std::abs(F_G / Etot0) < resid_tol) && // NOLINT
+		       (std::abs(F_R / Etot0) < resid_tol));  // NOLINT
 
 		// store new radiation energy
 		radEnergy_(i) = Erad_guess;
@@ -366,7 +408,10 @@ void RadSystem::AddSourceTerms(std::pair<int, int> range)
 
 		// 2. Compute radiation flux update
 
-		// TODO(ben): write this.
+		const double F_rad = x1RadFlux_(i);
+		const double new_F_rad =
+		    (1. / (1.0 + (rho * kappa) * c * dt)) * F_rad;
+		x1RadFlux_(i) = new_F_rad;
 
 		// Lorentz transform back to 'laboratory' frame
 		// TransformIntoComovingFrame(-fluid_velocity);
