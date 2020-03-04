@@ -33,6 +33,11 @@ class RadSystem : public HyperbolicSystem
 		x1RadFlux_index = 1,
 	};
 
+	enum primVarIndex {
+		primRadEnergy_index = 0,
+		x1ReducedFlux_index = 1,
+	};
+
 	const double c_light_ = 2.99792458e10; // cgs
 	const double c_hat_ = c_light_;	       // for now
 

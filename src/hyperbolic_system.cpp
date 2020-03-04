@@ -292,8 +292,7 @@ void HyperbolicSystem::AdvanceTimestep(const double dt_max)
 	ComputeTimestep(dt_max);
 
 	// Predictor step
-	ReconstructStatesConstant(ppm_range);
-	//	ReconstructStatesPPM(primVar_, ppm_range);
+	ReconstructStatesPPM(primVar_, ppm_range);
 	ComputeFluxes(cell_range);
 	PredictStep(cell_range);
 
@@ -305,8 +304,7 @@ void HyperbolicSystem::AdvanceTimestep(const double dt_max)
 	// Corrector step
 	FillGhostZones(consVarPredictStep_);
 	ConservedToPrimitive(consVarPredictStep_, std::make_pair(0, dim1_));
-	ReconstructStatesConstant(ppm_range);
-	//	ReconstructStatesPPM(primVar_, ppm_range);
+	ReconstructStatesPPM(primVar_, ppm_range);
 	ComputeFluxes(cell_range);
 	AddFluxes();
 

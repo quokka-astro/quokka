@@ -111,11 +111,16 @@ void RadSystem::FillGhostZones(AthenaArray<double> &cons)
 void RadSystem::ConservedToPrimitive(AthenaArray<double> &cons,
 				     const std::pair<int, int> range)
 {
-	// have to copy to primitive array (even though it's identical)
-	for (int n = 0; n < nvars_; ++n) {
-		for (int i = range.first; i < range.second; ++i) {
-			primVar_(n, i) = cons(n, i);
-		}
+	// keep radiation energy density as-is
+	// convert (Fx,Fy,Fz) into reduced flux components (fx,fy,fx):
+	//   F_x -> F_x / (c*E_r)
+
+	for (int i = range.first; i < range.second; ++i) {
+		const auto E_r = cons(radEnergy_index, i);
+		const auto Fx = cons(x1RadFlux_index, i);
+		const auto reducedFluxX1 = Fx / (c_light_ * E_r);
+		primVar_(primRadEnergy_index, i) = E_r;
+		primVar_(x1ReducedFlux_index, i) = reducedFluxX1;
 	}
 }
 
@@ -148,47 +153,41 @@ void RadSystem::ComputeFluxes(const std::pair<int, int> range)
 		// HLL solver following Toro (1998) and Balsara (2017).
 		// Radiation eigenvalues from Skinner & Ostriker (2013).
 
-		const double eps = 1e-2;
-
 		// gather left- and right- state variables
 
-		const double erad_L = x1LeftState_(radEnergy_index, i);
-		const double erad_R = x1RightState_(radEnergy_index, i);
-		const double Fx_L = x1LeftState_(x1RadFlux_index, i);
-		const double Fx_R = x1RightState_(x1RadFlux_index, i);
+		const double erad_L = x1LeftState_(primRadEnergy_index, i);
+		const double erad_R = x1RightState_(primRadEnergy_index, i);
+		const double fx_L = x1LeftState_(x1ReducedFlux_index, i);
+		const double fx_R = x1RightState_(x1ReducedFlux_index, i);
+
+		// compute scalar reduced flux f
+
+		const double f_L = std::sqrt(fx_L * fx_L); // modify in 3d!
+		const double f_R = std::sqrt(fx_R * fx_R);
+
+		// check that states are physically-admissible
+		// NOTE: It must always be the case that 0 <= f <= 1!
+		// 		 This implies that erad != zero!
+
 		assert(erad_L > 0.0); // NOLINT
 		assert(erad_R > 0.0); // NOLINT
+		assert(f_L <= 1.0);   // NOLINT
+		assert(f_R <= 1.0);   // NOLINT
 
-		// Compute "reduced flux" f == ||F|| / (c * erad)
-		// NOTE: It must always be the case that 0 <= f <= 1!
-		// This means that the radiation energy density *cannot* be
-		// zero!
+		// angle between interface and radiation flux \hat{n}
+		// If direction is undefined, just drop direction-dependent
+		// terms.
 
-		const double Fnorm_L = std::sqrt(Fx_L * Fx_L); // modify in 3d!
-		const double Fnorm_R = std::sqrt(Fx_R * Fx_R);
-		double f_L = Fnorm_L / (c_light_ * erad_L);
-		double f_R = Fnorm_R / (c_light_ * erad_R);
-		assert(f_L <= 1.0 + eps); // NOLINT
-		assert(f_R <= 1.0 + eps); // NOLINT
-		f_L = std::min(f_L, 1.0);
-		f_R = std::min(f_R, 1.0);
-
-		// angle between interface and radiation flux
-
-		double nx_L = Fx_L / Fnorm_L;
-		double nx_R = Fx_R / Fnorm_R;
-
-		if (Fnorm_L == 0.0) { // direction is undefined, so just drop
-				      // direction-dependent terms
-			nx_L = 0.0;
-		}
-		if (Fnorm_R == 0.0) { // direction is undefined, so just drop
-				      // direction-dependent terms
-			nx_R = 0.0;
-		}
+		const double nx_L = (f_L > 0.0) ? (fx_L / f_L) : 0.0;
+		const double nx_R = (f_R > 0.0) ? (fx_R / f_R) : 0.0;
 
 		const double mu_L = (nx_L); // modify in 3d!
 		const double mu_R = (nx_R);
+
+		// Compute "un-reduced" Fx, ||F||
+
+		const double Fx_L = fx_L * (c_light_ * erad_L);
+		const double Fx_R = fx_R * (c_light_ * erad_R);
 
 		// compute radiation pressure tensors
 
@@ -221,13 +220,17 @@ void RadSystem::ComputeFluxes(const std::pair<int, int> range)
 
 		double a_L = (2. / 3.) * ((f_facL * f_facL) - f_facL) +
 			     2.0 * (mu_L * mu_L) * (2.0 - (f_L * f_L) - f_facL);
-		a_L = (a_L < 0.0) ? 0.0 : c_hat_ * std::sqrt(a_L) / f_facL;
 
 		double a_R = (2. / 3.) * ((f_facR * f_facR) - f_facR) +
 			     2.0 * (mu_R * mu_R) * (2.0 - (f_R * f_R) - f_facR);
+
+		// fix numerical rounding error that may cause imaginary speeds
+		// TODO(ben): rewrite wavespeeds in numerically stable form.
+
+		a_L = (a_L < 0.0) ? 0.0 : c_hat_ * std::sqrt(a_L) / f_facL;
 		a_R = (a_R < 0.0) ? 0.0 : c_hat_ * std::sqrt(a_R) / f_facR;
 
-		// compute min/max wave speeds (following Toro, Eq. 10.48)
+		// compute min/max wave speeds
 
 		const double S_L = u_L - a_L;
 		const double S_R = u_R + a_R;
@@ -299,15 +302,12 @@ void RadSystem::AddSourceTerms(std::pair<int, int> range)
 		const double a_rad = radiation_constant_;
 
 		// load fluid properties
-
-		const double mu = mean_molecular_mass_cgs_;
-		const double gamma = gamma_;
-		const double k_B = boltzmann_constant_cgs_;
 		double c_v;
-		// const double c_v = k_B / (mu * (gamma - 1.0));
+		// const double c_v = boltzmann_constant_cgs_ /
+		// (mean_molecular_mass_cgs_ * (gamma_ - 1.0));
 
 		const double eps_SuOlson =
-		    1.0; // Su & Olsen (1997) test problem ONLY
+		    1.0; // Su & Olson (1997) test problem
 		const double alpha_SuOlson = 4.0 * a_rad / eps_SuOlson;
 
 		const double rho = staticGasDensity_(i);
@@ -366,7 +366,6 @@ void RadSystem::AddSourceTerms(std::pair<int, int> range)
 			// compute residuals
 			rhs = dt * (rho * kappa) * (fourPiB - c * Erad_guess);
 			F_G = (Egas_guess - Egas0) + rhs;
-			// F_R = (Erad_guess - Erad0) - rhs;
 			F_R = (Erad_guess - Erad0) - (rhs + S);
 
 			// check if converged

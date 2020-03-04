@@ -11,7 +11,7 @@
 
 void testproblem_radiation_marshak()
 {
-	// TODO(ben): For this problem, need to do reconstruction in the reduced
+	// For this problem, you must do reconstruction in the reduced
 	// flux, *not* the flux. Otherwise, F exceeds cE at sharp temperature
 	// gradients.
 
@@ -21,10 +21,16 @@ void testproblem_radiation_marshak()
 	const double Lx = 30.0; // cm
 	const double CFL_number = 0.4;
 	const double constant_dt = 1.0e-12; // s
-	const double max_time = 5.0e-10;    // s
+	const double max_time = 1.0e-9;	    // s
 	const int max_timesteps = 1000;
 
-	const double kelvin_to_eV = 8.617385e-5;
+	const double rho = 1.0;		      // g cm^-3
+	const double initial_Tgas = 10.;      // K
+	const double initial_Trad = 10.;      // K
+	const double T_hohlraum = 3.481334e6; // K [= 300 eV]
+	const double eps_SuOlson = 1.0;	      // Su & Olson (1997) test problem
+	const double x0 = 5.0;		      // cm
+	const double max_time_source_on = 1e-9; // s
 
 	// Problem initialization
 
@@ -32,16 +38,10 @@ void testproblem_radiation_marshak()
 			     RadSystem::CFL = CFL_number);
 
 	auto nghost = rad_system.nghost();
-	const auto a_rad = rad_system.radiation_constant();
 
-	const double rho = 1.0;		      // g cm^-3
-	const double initial_Tgas = 10.;      // K
-	const double initial_Trad = 10.;      // K
-	const double T_hohlraum = 3.481334e6; // K [= 300 eV]
-	const double eps_SuOlson = 1.0; // Su & Olsen (1996) test problem ONLY
+	const auto a_rad = rad_system.radiation_constant();
+	const double kelvin_to_eV = 8.617385e-5;
 	const double alpha_SuOlson = 4.0 * a_rad / eps_SuOlson;
-	const double x0 = 5.0;			 // cm
-	const double max_time_source_on = 5e-10; // s
 
 	const auto initial_Egas =
 	    rho * alpha_SuOlson * std::pow(initial_Tgas, 4);
@@ -137,8 +137,8 @@ void testproblem_radiation_marshak()
 	matplotlibcpp::legend();
 	matplotlibcpp::xlabel("length x (cm)");
 	matplotlibcpp::ylabel("temperature (eV)");
-	matplotlibcpp::title(fmt::format("dt = {:.4g}\nt = {:.4g}", constant_dt,
-					 rad_system.time()));
+	matplotlibcpp::title(
+	    fmt::format("time t = {:.4g}", constant_dt, rad_system.time()));
 	matplotlibcpp::save(fmt::format("./marshak_wave.pdf"));
 
 	// Cleanup and exit
