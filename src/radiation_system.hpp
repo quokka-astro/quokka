@@ -46,7 +46,7 @@ class RadSystem : public HyperbolicSystem
 	const double boltzmann_constant_cgs_ = 1.380658e-16;	       // cgs
 	const double gamma_ = (5. / 3.);
 
-	const double Trad_floor_ = 1.0e-5; // K
+	double Erad_floor_ = 0.0;
 
 	using NxType = fluent::NamedType<int, struct NxParameter>;
 	using LxType = fluent::NamedType<double, struct LxParameter>;
@@ -68,6 +68,7 @@ class RadSystem : public HyperbolicSystem
 	// setter functions:
 
 	void set_cflNumber(double cflNumber);
+	void set_lx(double lx);
 	auto set_radEnergy(int i) -> double &;
 	auto set_x1RadFlux(int i) -> double &;
 	auto set_gasEnergy(int i) -> double &;

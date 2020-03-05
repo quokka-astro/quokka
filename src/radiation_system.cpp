@@ -31,6 +31,12 @@ auto RadSystem::c_light() -> double { return c_light_; }
 
 auto RadSystem::radiation_constant() -> double { return radiation_constant_; }
 
+void RadSystem::set_lx(const double lx)
+{
+	assert(lx > 0.0);
+	lx_ = lx;
+}
+
 auto RadSystem::radEnergy(const int i) -> double { return radEnergy_(i); }
 
 auto RadSystem::set_radEnergy(const int i) -> double & { return radEnergy_(i); }
@@ -99,12 +105,8 @@ void RadSystem::FillGhostZones(AthenaArray<double> &cons)
 
 	// x1 right side boundary (constant temperature, extrapolate flux)
 	for (int i = nghost_ + nx_; i < nghost_ + nx_ + nghost_; ++i) {
-		const double Erad_floor =
-		    radiation_constant_ * std::pow(Trad_floor_, 4);
-		cons(radEnergy_index, i) = Erad_floor;
-		cons(x1RadFlux_index, i) =
-		    std::min(c_light_ * Erad_floor,
-			     cons(x1RadFlux_index, nghost_ + nx_ - 1));
+		cons(radEnergy_index, i) = Erad_floor_;
+		cons(x1RadFlux_index, i) = 0.0;
 	}
 }
 
@@ -119,6 +121,7 @@ void RadSystem::ConservedToPrimitive(AthenaArray<double> &cons,
 		const auto E_r = cons(radEnergy_index, i);
 		const auto Fx = cons(x1RadFlux_index, i);
 		const auto reducedFluxX1 = Fx / (c_light_ * E_r);
+		// assert(std::abs(reducedFluxX1) <= 1.0); // NOLINT
 		primVar_(primRadEnergy_index, i) = E_r;
 		primVar_(x1ReducedFlux_index, i) = reducedFluxX1;
 	}
@@ -157,13 +160,15 @@ void RadSystem::ComputeFluxes(const std::pair<int, int> range)
 
 		const double erad_L = x1LeftState_(primRadEnergy_index, i);
 		const double erad_R = x1RightState_(primRadEnergy_index, i);
-		const double fx_L = x1LeftState_(x1ReducedFlux_index, i);
-		const double fx_R = x1RightState_(x1ReducedFlux_index, i);
+		const double fx_L =
+		    std::clamp(x1LeftState_(x1ReducedFlux_index, i), 0.0, 1.0);
+		const double fx_R =
+		    std::clamp(x1RightState_(x1ReducedFlux_index, i), 0.0, 1.0);
 
 		// compute scalar reduced flux f
-
-		const double f_L = std::sqrt(fx_L * fx_L); // modify in 3d!
-		const double f_R = std::sqrt(fx_R * fx_R);
+		// modify in 3d!
+		const double f_L = std::min(std::sqrt(fx_L * fx_L), 1.0);
+		const double f_R = std::min(std::sqrt(fx_R * fx_R), 1.0);
 
 		// check that states are physically-admissible
 		// NOTE: It must always be the case that 0 <= f <= 1!
@@ -224,16 +229,12 @@ void RadSystem::ComputeFluxes(const std::pair<int, int> range)
 		double a_R = (2. / 3.) * ((f_facR * f_facR) - f_facR) +
 			     2.0 * (mu_R * mu_R) * (2.0 - (f_R * f_R) - f_facR);
 
-		// fix numerical rounding error that may cause imaginary speeds
-		// TODO(ben): rewrite wavespeeds in numerically stable form.
-
-		a_L = (a_L < 0.0) ? 0.0 : c_hat_ * std::sqrt(a_L) / f_facL;
-		a_R = (a_R < 0.0) ? 0.0 : c_hat_ * std::sqrt(a_R) / f_facR;
-
 		// compute min/max wave speeds
 
 		const double S_L = u_L - a_L;
 		const double S_R = u_R + a_R;
+		// assert(std::abs(S_L) <= c_hat_); // NOLINT
+		// assert(std::abs(S_R) <= c_hat_); // NOLINT
 
 		// compute fluxes
 
@@ -306,8 +307,8 @@ void RadSystem::AddSourceTerms(std::pair<int, int> range)
 		// const double c_v = boltzmann_constant_cgs_ /
 		// (mean_molecular_mass_cgs_ * (gamma_ - 1.0));
 
-		const double eps_SuOlson =
-		    1.0; // Su & Olson (1997) test problem
+		// Su & Olson (1997) test problem
+		const double eps_SuOlson = 1.0;
 		const double alpha_SuOlson = 4.0 * a_rad / eps_SuOlson;
 
 		const double rho = staticGasDensity_(i);
@@ -338,7 +339,7 @@ void RadSystem::AddSourceTerms(std::pair<int, int> range)
 
 		double Egas_guess = Egas0;
 		double Erad_guess = Erad0;
-		const double resid_tol = 1e-6;
+		const double resid_tol = 1e-10;
 		const int maxIter = 200;
 		int n;
 		for (n = 1; n <= maxIter; ++n) {
@@ -361,7 +362,7 @@ void RadSystem::AddSourceTerms(std::pair<int, int> range)
 			// constant radiation energy source term
 			// (does not modify gas energy directly!)
 			// (does not modify Jacobian!)
-			S = dt * (rho * kappa) * c * radEnergySource_(i);
+			S = dt * (c * radEnergySource_(i));
 
 			// compute residuals
 			rhs = dt * (rho * kappa) * (fourPiB - c * Erad_guess);

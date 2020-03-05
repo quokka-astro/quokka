@@ -17,35 +17,50 @@ void testproblem_radiation_marshak()
 
 	// Problem parameters
 
-	const int nx = 300;
-	const double Lx = 30.0; // cm
-	const double CFL_number = 0.4;
-	const double constant_dt = 1.0e-12; // s
-	const double max_time = 1.0e-9;	    // s
-	const int max_timesteps = 1000;
+	const int nx = 3000;
+	const double CFL_number = 0.1;
+	const int max_timesteps = 1e4;
+	const double max_dtau = 0.01; // dimensionless time
+	const double max_tau = 0.01;  // dimensionless time
+	const double Lz = 30.0;	      // dimensionless length
 
-	const double rho = 1.0;		      // g cm^-3
-	const double initial_Tgas = 10.;      // K
-	const double initial_Trad = 10.;      // K
+	// Su & Olson (1997) parameters
+	const double eps_SuOlson = 1.0;
+	const double z0 = 0.5;	  // dimensionless length scale
+	const double tau0 = 10.0; // dimensionless time scale
+
+	const double rho = 1.0; // g cm^-3 (matter density)
+	const double kappa = 1.0;
 	const double T_hohlraum = 3.481334e6; // K [= 300 eV]
-	const double eps_SuOlson = 1.0;	      // Su & Olson (1997) test problem
-	const double x0 = 5.0;		      // cm
-	const double max_time_source_on = 1e-9; // s
 
 	// Problem initialization
 
-	RadSystem rad_system(RadSystem::Nx = nx, RadSystem::Lx = Lx,
+	RadSystem rad_system(RadSystem::Nx = nx, RadSystem::Lx = 1.0,
 			     RadSystem::CFL = CFL_number);
 
 	auto nghost = rad_system.nghost();
 
-	const auto a_rad = rad_system.radiation_constant();
+	const double a_rad = rad_system.radiation_constant();
+	const double c = rad_system.c_light();
 	const double kelvin_to_eV = 8.617385e-5;
-	const double alpha_SuOlson = 4.0 * a_rad / eps_SuOlson;
 
+	const double chi = rho * kappa; // cm^-1 (total matter opacity)
+	const double x0 = z0 / chi;	// cm
+	const double Lx = Lz / chi;	// cm
+	const double t0 = tau0 / (eps_SuOlson * c * chi);	   // s
+	const double max_time = max_tau / (eps_SuOlson * c * chi); // s
+	const double max_dt = max_dtau / (eps_SuOlson * c * chi);  // s
+
+	rad_system.set_lx(Lx);
+
+	const double alpha_SuOlson = 4.0 * a_rad / eps_SuOlson;
+	const double Q = 1.0 / (2.0 * z0); // do NOT change this
+	const double S = Q * (a_rad * std::pow(T_hohlraum, 4)); // erg cm^{-3}
 	const auto initial_Egas =
-	    rho * alpha_SuOlson * std::pow(initial_Tgas, 4);
-	const auto initial_Erad = a_rad * std::pow(initial_Trad, 4);
+	    1e-10 * (rho * alpha_SuOlson) * std::pow(T_hohlraum, 4);
+	const auto initial_Erad = 1e-10 * (a_rad * std::pow(T_hohlraum, 4));
+
+	rad_system.Erad_floor_ = initial_Erad;
 
 	for (int i = nghost; i < nx + nghost; ++i) {
 		const auto idx_value = static_cast<double>(i - nghost);
@@ -57,23 +72,13 @@ void testproblem_radiation_marshak()
 		rad_system.set_gasEnergy(i) = initial_Egas;
 		rad_system.set_staticGasDensity(i) = rho;
 		if (x < x0) {
-			rad_system.set_radEnergySource(i) =
-			    a_rad * std::pow(T_hohlraum, 4);
+			rad_system.set_radEnergySource(i) = S;
 		}
 	}
 
 	const auto Erad0 = rad_system.ComputeRadEnergy();
 	const auto Egas0 = rad_system.ComputeGasEnergy();
 	const auto Etot0 = Erad0 + Egas0;
-
-	const auto kappa = rad_system.ComputeOpacity(rho, initial_Tgas);
-	const auto heating_time =
-	    initial_Egas / (rho * kappa * rad_system.c_light_ *
-			    (a_rad * std::pow(initial_Tgas, 4) - initial_Erad));
-
-	std::cout << "Initial radiation temperature = " << initial_Trad << "\n";
-	std::cout << "Initial gas temperature = " << initial_Tgas << "\n";
-	std::cout << "Heating time = " << heating_time << "\n";
 
 	// Main time loop
 
@@ -82,13 +87,13 @@ void testproblem_radiation_marshak()
 			break;
 		}
 
-		if (rad_system.time() >= max_time_source_on) {
+		if (rad_system.time() >= t0) {
 			for (int i = nghost; i < nx + nghost; ++i) {
 				rad_system.set_radEnergySource(i) = 0.0;
 			}
 		}
 
-		rad_system.AdvanceTimestep(constant_dt);
+		rad_system.AdvanceTimestep(max_dt);
 		rad_system.AddSourceTerms(std::make_pair(nghost, nghost + nx));
 
 		std::cout << "Timestep " << j << "; t = " << rad_system.time()
@@ -109,22 +114,26 @@ void testproblem_radiation_marshak()
 	std::vector<double> xs(nx);
 	std::vector<double> Trad(nx);
 	std::vector<double> Tgas(nx);
+	std::vector<double> Erad(nx);
+	std::vector<double> Egas(nx);
 
 	for (int i = 0; i < nx; ++i) {
 		const double x = Lx * ((i + 0.5) / static_cast<double>(nx));
 		xs.at(i) = x;
 
-		Trad.at(i) =
-		    kelvin_to_eV *
-		    std::pow(rad_system.radEnergy(i + nghost) / a_rad, 1. / 4.);
+		const auto Erad_t = rad_system.radEnergy(i + nghost);
+		Erad.at(i) = Erad_t / (a_rad * std::pow(T_hohlraum, 4));
+		Trad.at(i) = kelvin_to_eV * std::pow(Erad_t / a_rad, 1. / 4.);
 
-		const double this_Egas = rad_system.gasEnergy(i + nghost);
+		const auto Egas_t = rad_system.gasEnergy(i + nghost);
+		Egas.at(i) = Egas_t / (a_rad * std::pow(T_hohlraum, 4));
 		Tgas.at(i) =
 		    kelvin_to_eV *
-		    std::pow(this_Egas / (rho * alpha_SuOlson), (1. / 4.));
+		    std::pow(Egas_t / (rho * alpha_SuOlson), (1. / 4.));
 	}
 
 	matplotlibcpp::clf();
+	matplotlibcpp::xlim(0.2, 8.0); // cm
 
 	std::map<std::string, std::string> Trad_args;
 	Trad_args["label"] = "radiation temperature";
@@ -137,9 +146,30 @@ void testproblem_radiation_marshak()
 	matplotlibcpp::legend();
 	matplotlibcpp::xlabel("length x (cm)");
 	matplotlibcpp::ylabel("temperature (eV)");
-	matplotlibcpp::title(
-	    fmt::format("time t = {:.4g}", constant_dt, rad_system.time()));
-	matplotlibcpp::save(fmt::format("./marshak_wave.pdf"));
+	matplotlibcpp::title(fmt::format("time t = {:.4g}", rad_system.time()));
+	matplotlibcpp::save("./marshak_wave_temperature.pdf");
+
+	matplotlibcpp::clf();
+	matplotlibcpp::xlim(0.2, 8.0); // cm
+
+	std::map<std::string, std::string> Erad_args;
+	Erad_args["label"] = "radiation energy density";
+	matplotlibcpp::plot(xs, Erad, Erad_args);
+
+	std::map<std::string, std::string> Egas_args;
+	Egas_args["label"] = "gas energy density";
+	matplotlibcpp::plot(xs, Egas, Egas_args);
+
+	matplotlibcpp::legend();
+	matplotlibcpp::xlabel("length x (cm)");
+	matplotlibcpp::ylabel("energy density");
+	matplotlibcpp::title(fmt::format(
+	    "time tau = {:.4g}", rad_system.time() * (eps_SuOlson * c * chi)));
+	matplotlibcpp::save("./marshak_wave.pdf");
+
+	matplotlibcpp::xscale("log");
+	matplotlibcpp::yscale("log");
+	matplotlibcpp::save("./marshak_wave_loglog.pdf");
 
 	// Cleanup and exit
 	std::cout << "Finished." << std::endl;
