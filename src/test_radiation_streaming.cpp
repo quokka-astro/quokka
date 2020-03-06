@@ -56,7 +56,7 @@ void testproblem_radiation_streaming()
 			break;
 		}
 
-		rad_system.AdvanceTimestep();
+		rad_system.AdvanceTimestep(max_time);
 
 		std::cout << "Timestep " << j << "; t = " << rad_system.time()
 			  << "\n";

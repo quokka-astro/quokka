@@ -38,6 +38,8 @@ class HyperbolicSystem
 	/// Computes timestep and advances system
 	void AdvanceTimestep();
 	void AdvanceTimestep(double dt_max);
+	void AdvanceTimestepRK2(double dt_max);
+	void AdvanceTimestepSDC(double dt_max);
 
 	// setter functions:
 
@@ -71,10 +73,13 @@ class HyperbolicSystem
 	virtual void FillGhostZones(AthenaArray<double> &cons);
 	virtual void ConservedToPrimitive(AthenaArray<double> &cons,
 					  std::pair<int, int> range) = 0;
+	virtual void AddSourceTerms(AthenaArray<double> &U,
+				    std::pair<int, int> range) = 0;
 
       protected:
 	AthenaArray<double> primVar_;
 	AthenaArray<double> consVarPredictStep_;
+	AthenaArray<double> consVarPredictStepPrev_;
 	AthenaArray<double> x1LeftState_;
 	AthenaArray<double> x1RightState_;
 	AthenaArray<double> x1Flux_;
@@ -103,17 +108,25 @@ class HyperbolicSystem
 		consVar_.NewAthenaArray(nvars_, dim1_);
 		primVar_.NewAthenaArray(nvars_, dim1_);
 		consVarPredictStep_.NewAthenaArray(nvars_, dim1_);
+		consVarPredictStepPrev_.NewAthenaArray(nvars_, dim1_);
 		x1LeftState_.NewAthenaArray(nvars_, dim1_);
 		x1RightState_.NewAthenaArray(nvars_, dim1_);
 		x1Flux_.NewAthenaArray(nvars_, dim1_);
 	}
 
-	void AddFluxes();
-	void ReconstructStatesConstant(std::pair<int, int> range);
+	void AddFluxesRK2(AthenaArray<double> &U0, AthenaArray<double> &U1,
+			  AthenaArray<double> &U2);
+	virtual void AddFluxesSDC(AthenaArray<double> &U_new,
+				  AthenaArray<double> &U_0) = 0;
+
+	void ReconstructStatesConstant(AthenaArray<double> &q,
+				       std::pair<int, int> range);
 	template <typename F>
-	void ReconstructStatesPLM(F &&limiter, std::pair<int, int> range);
+	void ReconstructStatesPLM(AthenaArray<double> &q,
+				  std::pair<int, int> range, F &&limiter);
 	void ReconstructStatesPPM(AthenaArray<double> &q,
 				  std::pair<int, int> range);
+
 	void PredictStep(std::pair<int, int> range);
 	void ComputeTimestep();
 

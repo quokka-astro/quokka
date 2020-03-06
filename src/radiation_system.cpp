@@ -17,13 +17,15 @@ const RadSystem::CFLType::argument RadSystem::CFL;
 
 RadSystem::RadSystem(NxType const &nx, LxType const &lx,
 		     CFLType const &cflNumber)
-    : HyperbolicSystem{nx.get(), lx.get(), cflNumber.get(), 2}
+    : HyperbolicSystem{nx.get(), lx.get(), cflNumber.get(), 4}
 {
 	radEnergy_.InitWithShallowSlice(consVar_, 2, radEnergy_index, 0);
 	x1RadFlux_.InitWithShallowSlice(consVar_, 2, x1RadFlux_index, 0);
 
-	gasEnergy_.NewAthenaArray(nx.get() + 2.0 * nghost_);
-	staticGasDensity_.NewAthenaArray(nx.get() + 2.0 * nghost_);
+	gasEnergy_.InitWithShallowSlice(consVar_, 2, gasEnergy_index, 0);
+	staticGasDensity_.InitWithShallowSlice(consVar_, 2, gasDensity_index,
+					       0);
+
 	radEnergySource_.NewAthenaArray(nx.get() + 2.0 * nghost_);
 }
 
@@ -33,7 +35,7 @@ auto RadSystem::radiation_constant() -> double { return radiation_constant_; }
 
 void RadSystem::set_lx(const double lx)
 {
-	assert(lx > 0.0);
+	assert(lx > 0.0); // NOLINT
 	lx_ = lx;
 }
 
@@ -122,6 +124,7 @@ void RadSystem::ConservedToPrimitive(AthenaArray<double> &cons,
 		const auto Fx = cons(x1RadFlux_index, i);
 		const auto reducedFluxX1 = Fx / (c_light_ * E_r);
 		// assert(std::abs(reducedFluxX1) <= 1.0); // NOLINT
+
 		primVar_(primRadEnergy_index, i) = E_r;
 		primVar_(x1ReducedFlux_index, i) = reducedFluxX1;
 	}
@@ -160,19 +163,23 @@ void RadSystem::ComputeFluxes(const std::pair<int, int> range)
 
 		const double erad_L = x1LeftState_(primRadEnergy_index, i);
 		const double erad_R = x1RightState_(primRadEnergy_index, i);
+
+		// perform flux limiting to prevent causality violation
+		// (this may indicate smaller dt is needed in the presence of
+		//  stiff source terms. or it may indicate a bug somewhere.)
 		const double fx_L =
 		    std::clamp(x1LeftState_(x1ReducedFlux_index, i), 0.0, 1.0);
 		const double fx_R =
 		    std::clamp(x1RightState_(x1ReducedFlux_index, i), 0.0, 1.0);
 
 		// compute scalar reduced flux f
-		// modify in 3d!
+		// [modify in 3d!]
 		const double f_L = std::min(std::sqrt(fx_L * fx_L), 1.0);
 		const double f_R = std::min(std::sqrt(fx_R * fx_R), 1.0);
 
 		// check that states are physically-admissible
-		// NOTE: It must always be the case that 0 <= f <= 1!
-		// 		 This implies that erad != zero!
+		// (NOTE: It must always be the case that 0 <= f <= 1!
+		// 	      This implies that erad != zero!)
 
 		assert(erad_L > 0.0); // NOLINT
 		assert(erad_R > 0.0); // NOLINT
@@ -287,7 +294,8 @@ auto RadSystem::ComputeOpacityTempDerivative(const double rho,
 	return 0.0;
 }
 
-void RadSystem::AddSourceTerms(std::pair<int, int> range)
+void RadSystem::AddSourceTerms(AthenaArray<double> &cons,
+			       std::pair<int, int> range)
 {
 	// Lorentz transform the radiation variables into the comoving frame
 	// TransformIntoComovingFrame(fluid_velocity);
@@ -311,11 +319,15 @@ void RadSystem::AddSourceTerms(std::pair<int, int> range)
 		const double eps_SuOlson = 1.0;
 		const double alpha_SuOlson = 4.0 * a_rad / eps_SuOlson;
 
-		const double rho = staticGasDensity_(i);
-		const double Egas0 = gasEnergy_(i);
+		const double rho = cons(gasDensity_index, i);
+		const double Egas0 = cons(gasEnergy_index, i);
 
 		// load radiation energy
-		const double Erad0 = radEnergy_(i);
+		const double Erad0 = cons(radEnergy_index, i);
+
+		assert(Egas0 > 0.0); // NOLINT
+		assert(Erad0 > 0.0); // NOLINT
+
 		const double Etot0 = Egas0 + Erad0;
 
 		// BEGIN NEWTON-RAPHSON LOOP
@@ -339,6 +351,7 @@ void RadSystem::AddSourceTerms(std::pair<int, int> range)
 
 		double Egas_guess = Egas0;
 		double Erad_guess = Erad0;
+		const double T_floor = 1e-10;
 		const double resid_tol = 1e-10;
 		const int maxIter = 200;
 		int n;
@@ -347,6 +360,8 @@ void RadSystem::AddSourceTerms(std::pair<int, int> range)
 			// compute material temperature
 			T_gas = std::pow(Egas_guess / (rho * alpha_SuOlson),
 					 (1. / 4.));
+			T_gas = (T_gas >= T_floor) ? T_gas : T_floor;
+
 			c_v = alpha_SuOlson * std::pow(T_gas, 3);
 			// T_gas = Egas_guess / (rho * c_v);
 
@@ -399,21 +414,72 @@ void RadSystem::AddSourceTerms(std::pair<int, int> range)
 
 		} // END NEWTON-RAPHSON LOOP
 
-		assert((std::abs(F_G / Etot0) < resid_tol) && // NOLINT
-		       (std::abs(F_R / Etot0) < resid_tol));  // NOLINT
+		assert(std::abs(F_G / Etot0) < resid_tol); // NOLINT
+		assert(std::abs(F_R / Etot0) < resid_tol); // NOLINT
+
+		assert(Erad_guess > 0.0); // NOLINT
+		assert(Egas_guess > 0.0); // NOLINT
 
 		// store new radiation energy
-		radEnergy_(i) = Erad_guess;
-		gasEnergy_(i) = Egas_guess;
+		cons(radEnergy_index, i) = Erad_guess;
+		cons(gasEnergy_index, i) = Egas_guess;
 
 		// 2. Compute radiation flux update
 
-		const double F_rad = x1RadFlux_(i);
+		const double F_rad = cons(x1RadFlux_index, i);
 		const double new_F_rad =
 		    (1. / (1.0 + (rho * kappa) * c * dt)) * F_rad;
-		x1RadFlux_(i) = new_F_rad;
+
+		cons(x1RadFlux_index, i) = new_F_rad;
 
 		// Lorentz transform back to 'laboratory' frame
 		// TransformIntoComovingFrame(-fluid_velocity);
+	}
+}
+
+void RadSystem::AddFluxesSDC(AthenaArray<double> &U_new,
+			     AthenaArray<double> &U_0)
+{
+	// By convention, the fluxes are defined on the left edge of each zone,
+	// i.e. flux_(i) is the flux *into* zone i through the interface on the
+	// left of zone i, and -1.0*flux(i+1) is the flux *into* zone i through
+	// the interface on the right of zone i.
+
+	// Perform flux limiting on intercell fluxes
+	// (This may be necessary within SDC correction iteration loop.)
+	for (int i = nghost_; i < nx_ + nghost_; ++i) {
+		const double Fp = x1Flux_(radEnergy_index, i + 1);
+		const double Fm = x1Flux_(radEnergy_index, i);
+
+		const double FU = -1.0 * (dt_ / dx_) * (Fp - Fm);
+		const double U0 = U_0(radEnergy_index, i);
+
+		double f_lim = 1.0;
+		double wp = 1.0;
+		double wm = 1.0;
+
+		if ((U0 + FU) <
+		    Erad_floor_) { // prevent negative energy density
+			f_lim = -((U0 - Erad_floor_) / FU);
+			wp = std::max(Fp, 0.0);
+			wm = std::max(-Fm, 0.0);
+			wp *= (1.0 / (wp + wm));
+			wm *= (1.0 / (wp + wm));
+		}
+
+		for (int n = 0; n < nvars_; ++n) {
+			x1Flux_(n, i + 1) *= f_lim * wp;
+			x1Flux_(n, i) *= f_lim * wm;
+		}
+	}
+
+	// Do normal forward Euler step
+	for (int n = 0; n < nvars_; ++n) {
+		for (int i = nghost_; i < nx_ + nghost_; ++i) {
+			const double Fp = x1Flux_(n, i + 1);
+			const double Fm = x1Flux_(n, i);
+			const double FU = -1.0 * (dt_ / dx_) * (Fp - Fm);
+			U_new(n, i) = U_0(n, i) + FU;
+		}
 	}
 }

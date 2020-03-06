@@ -17,9 +17,10 @@ void testproblem_radiation_marshak()
 
 	// Problem parameters
 
+	const int max_timesteps = 64;
+	const double CFL_number = 0.4;
 	const int nx = 3000;
-	const double CFL_number = 0.1;
-	const int max_timesteps = 1e4;
+
 	const double max_dtau = 0.01; // dimensionless time
 	const double max_tau = 0.01;  // dimensionless time
 	const double Lz = 30.0;	      // dimensionless length
@@ -93,8 +94,7 @@ void testproblem_radiation_marshak()
 			}
 		}
 
-		rad_system.AdvanceTimestep(max_dt);
-		rad_system.AddSourceTerms(std::make_pair(nghost, nghost + nx));
+		rad_system.AdvanceTimestepSDC(max_dt);
 
 		std::cout << "Timestep " << j << "; t = " << rad_system.time()
 			  << "\n";

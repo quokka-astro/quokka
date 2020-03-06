@@ -31,6 +31,8 @@ class RadSystem : public HyperbolicSystem
 	enum consVarIndex {
 		radEnergy_index = 0,
 		x1RadFlux_index = 1,
+		gasEnergy_index = 2,
+		gasDensity_index = 3,
 	};
 
 	enum primVarIndex {
@@ -61,7 +63,9 @@ class RadSystem : public HyperbolicSystem
 	void FillGhostZones(AthenaArray<double> &cons) override;
 	void ConservedToPrimitive(AthenaArray<double> &cons,
 				  std::pair<int, int> range) override;
-	void AddSourceTerms(std::pair<int, int> range);
+	void AddSourceTerms(AthenaArray<double> &cons,
+			    std::pair<int, int> range) override;
+
 	auto ComputeOpacity(double rho, double Temp) -> double;
 	auto ComputeOpacityTempDerivative(double rho, double Temp) -> double;
 
@@ -93,6 +97,10 @@ class RadSystem : public HyperbolicSystem
 	AthenaArray<double> staticGasDensity_;
 	AthenaArray<double> radEnergySource_;
 
+	// virtual function overrides
+
+	void AddFluxesSDC(AthenaArray<double> &U_new,
+			  AthenaArray<double> &U_0) override;
 	void ComputeFluxes(std::pair<int, int> range) override;
 	void ComputeTimestep(double dt_max) override;
 };
