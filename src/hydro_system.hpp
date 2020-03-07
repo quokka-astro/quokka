@@ -52,7 +52,7 @@ class HydroSystem : public HyperbolicSystem
 	HydroSystem(NxType const &nx, LxType const &lx,
 		    CFLType const &cflNumber, GammaType const &gamma);
 
-	void AddSourceTerms(AthenaArray<double> &source_terms);
+	void AddSourceTerms(AthenaArray<double> &U, std::pair<int,int> range) override;
 	void ConservedToPrimitive(AthenaArray<double> &cons,
 				  std::pair<int, int> range) override;
 
@@ -88,6 +88,7 @@ class HydroSystem : public HyperbolicSystem
 
 	void ComputeFluxes(std::pair<int, int> range) override;
 	void ComputeTimestep(double dt_max) override;
+	void AddFluxesSDC(AthenaArray<double> &U_new, AthenaArray<double> &U0) override;
 
 	void FlattenShocks(AthenaArray<double> &q, std::pair<int, int> range);
 };

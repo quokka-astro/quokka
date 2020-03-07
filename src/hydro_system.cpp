@@ -299,4 +299,12 @@ void HydroSystem::FlattenShocks(AthenaArray<double> &q,
 }
 #endif
 
-void HydroSystem::AddSourceTerms(AthenaArray<double> &source_terms) {}
+void HydroSystem::AddSourceTerms(AthenaArray<double> &U, std::pair<int,int> range)
+{
+	// TODO(ben): to be implemented
+}
+
+void HydroSystem::AddFluxesSDC(AthenaArray<double> &U_new, AthenaArray<double> &U0)
+{
+	// TODO(ben): to be implemented
+}
