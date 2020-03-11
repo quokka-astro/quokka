@@ -112,6 +112,34 @@ void RadSystem::FillGhostZones(AthenaArray<double> &cons)
 	}
 }
 
+bool RadSystem::CheckStatesValid(AthenaArray<double> &cons,
+				 const std::pair<int, int> range)
+{
+	bool all_valid = true;
+
+	for (int i = range.first; i < range.second; ++i) {
+		const auto E_r = cons(radEnergy_index, i);
+		const auto Fx = cons(x1RadFlux_index, i);
+		const auto reducedFluxX1 = Fx / (c_light_ * E_r);
+
+		if (E_r < 0.0) {
+			std::cout << "ERROR: Positivity failure at i = " << i
+				  << " with energy density = " << E_r
+				  << std::endl;
+			all_valid = false;
+		}
+
+		if (std::abs(reducedFluxX1) > 1.0) {
+			std::cout << "ERROR: Flux limiting failure at i = " << i
+				  << " with reduced flux = " << reducedFluxX1
+				  << std::endl;
+			all_valid = false;
+		}
+	}
+
+	return all_valid;
+}
+
 void RadSystem::ConservedToPrimitive(AthenaArray<double> &cons,
 				     const std::pair<int, int> range)
 {
@@ -123,7 +151,10 @@ void RadSystem::ConservedToPrimitive(AthenaArray<double> &cons,
 		const auto E_r = cons(radEnergy_index, i);
 		const auto Fx = cons(x1RadFlux_index, i);
 		const auto reducedFluxX1 = Fx / (c_light_ * E_r);
-		// assert(std::abs(reducedFluxX1) <= 1.0); // NOLINT
+
+		// check admissibility of states
+		assert(E_r > 0.0);			// NOLINT
+		assert(std::abs(reducedFluxX1) <= 1.0); // NOLINT
 
 		primVar_(primRadEnergy_index, i) = E_r;
 		primVar_(x1ReducedFlux_index, i) = reducedFluxX1;
@@ -164,18 +195,13 @@ void RadSystem::ComputeFluxes(const std::pair<int, int> range)
 		const double erad_L = x1LeftState_(primRadEnergy_index, i);
 		const double erad_R = x1RightState_(primRadEnergy_index, i);
 
-		// perform flux limiting to prevent causality violation
-		// (this may indicate smaller dt is needed in the presence of
-		//  stiff source terms. or it may indicate a bug somewhere.)
-		const double fx_L =
-		    std::clamp(x1LeftState_(x1ReducedFlux_index, i), 0.0, 1.0);
-		const double fx_R =
-		    std::clamp(x1RightState_(x1ReducedFlux_index, i), 0.0, 1.0);
+		const double fx_L = x1LeftState_(x1ReducedFlux_index, i);
+		const double fx_R = x1RightState_(x1ReducedFlux_index, i);
 
 		// compute scalar reduced flux f
 		// [modify in 3d!]
-		const double f_L = std::min(std::sqrt(fx_L * fx_L), 1.0);
-		const double f_R = std::min(std::sqrt(fx_R * fx_R), 1.0);
+		const double f_L = std::sqrt(fx_L * fx_L);
+		const double f_R = std::sqrt(fx_R * fx_R);
 
 		// check that states are physically-admissible
 		// (NOTE: It must always be the case that 0 <= f <= 1!
@@ -192,9 +218,6 @@ void RadSystem::ComputeFluxes(const std::pair<int, int> range)
 
 		const double nx_L = (f_L > 0.0) ? (fx_L / f_L) : 0.0;
 		const double nx_R = (f_R > 0.0) ? (fx_R / f_R) : 0.0;
-
-		const double mu_L = (nx_L); // modify in 3d!
-		const double mu_R = (nx_R);
 
 		// Compute "un-reduced" Fx, ||F||
 
@@ -225,23 +248,44 @@ void RadSystem::ComputeFluxes(const std::pair<int, int> range)
 		const double Pxx_L = (Tdiag_L + Txx_L) * erad_L;
 		const double Pxx_R = (Tdiag_R + Txx_R) * erad_R;
 
+#if 0
 		// compute min/max eigenvalues (following S&O, Eq. 41a)
 
-		const double u_L = c_hat_ * (mu_L * f_L) / f_facL;
-		const double u_R = c_hat_ * (mu_R * f_R) / f_facR;
+		const double mu_L = (nx_L); // modify in 3d!
+		const double mu_R = (nx_R);
 
-		double a_L = (2. / 3.) * ((f_facL * f_facL) - f_facL) +
-			     2.0 * (mu_L * mu_L) * (2.0 - (f_L * f_L) - f_facL);
+		const double u_L = (c_hat_ / f_facL) * (mu_L * f_L);
+		const double u_R = (c_hat_ / f_facR) * (mu_R * f_R);
 
-		double a_R = (2. / 3.) * ((f_facR * f_facR) - f_facR) +
-			     2.0 * (mu_R * mu_R) * (2.0 - (f_R * f_R) - f_facR);
+		double a_L =
+		    (c_hat_ / f_facL) *
+		    std::sqrt((2. / 3.) * ((f_facL * f_facL) - f_facL) +
+			      2.0 * (mu_L * mu_L) *
+				  (2.0 - (f_L * f_L) - f_facL));
 
-		// compute min/max wave speeds
+		double a_R =
+		    (c_hat_ / f_facL) *
+		    std::sqrt((2. / 3.) * ((f_facR * f_facR) - f_facR) +
+			      2.0 * (mu_R * mu_R) *
+				  (2.0 - (f_R * f_R) - f_facR));
 
 		const double S_L = u_L - a_L;
 		const double S_R = u_R + a_R;
-		// assert(std::abs(S_L) <= c_hat_); // NOLINT
-		// assert(std::abs(S_R) <= c_hat_); // NOLINT
+#endif
+
+		// compute min/max wave speeds
+
+		// frozen Eddington tensor approximation, following Balsara
+		// (1999) [JQSRT Vol. 61, No. 5, pp. 617–627, 1999], Eq. 46.
+
+		const double S_L = -c_hat_ * std::sqrt(Tdiag_L + Txx_L);
+		const double S_R = c_hat_ * std::sqrt(Tdiag_R + Txx_R);
+
+		assert(std::abs(S_L) <= c_hat_); // NOLINT
+		assert(std::abs(S_R) <= c_hat_); // NOLINT
+
+		const double S_Lc = -c_hat_;
+		const double S_Rc = c_hat_;
 
 		// compute fluxes
 
@@ -258,7 +302,13 @@ void RadSystem::ComputeFluxes(const std::pair<int, int> range)
 		    (S_R / (S_R - S_L)) * F_L - (S_L / (S_R - S_L)) * F_R +
 		    (S_R * S_L / (S_R - S_L)) * (U_R - U_L);
 
+		const std::valarray<double> F_star_diffusive =
+		    (S_Rc / (S_Rc - S_Lc)) * F_L -
+		    (S_Lc / (S_Rc - S_Lc)) * F_R +
+		    (S_Rc * S_Lc / (S_Rc - S_Lc)) * (U_R - U_L);
+
 		std::valarray<double> F(2);
+		std::valarray<double> F_diffusive(2);
 
 		// open the Riemann fan
 
@@ -271,12 +321,27 @@ void RadSystem::ComputeFluxes(const std::pair<int, int> range)
 		}
 
 		// check states are valid
-
 		assert(!std::isnan(F[0])); // NOLINT
 		assert(!std::isnan(F[1])); // NOLINT
 
+		if (S_Lc > 0.0) { // this should never happen
+			F_diffusive = F_L;
+		} else if (S_Rc < 0.0) { // this should never happen
+			F_diffusive = F_R;
+		} else { // S_Lc <= 0.0 <= S_Rc // should always be the case
+			F_diffusive = F_star_diffusive;
+		}
+
+		assert(!std::isnan(F_diffusive[0])); // NOLINT
+		assert(!std::isnan(F_diffusive[1])); // NOLINT
+
+		// these are computed with the linearized wavespeeds
 		x1Flux_(radEnergy_index, i) = F[0];
 		x1Flux_(x1RadFlux_index, i) = F[1];
+
+		// these are computed assuming S_L = -c_hat; S_R = +c_hat
+		x1FluxDiffusive_(radEnergy_index, i) = F_diffusive[0];
+		x1FluxDiffusive_(x1RadFlux_index, i) = F_diffusive[1];
 	}
 }
 
@@ -437,13 +502,129 @@ void RadSystem::AddSourceTerms(AthenaArray<double> &cons,
 	}
 }
 
-void RadSystem::AddFluxesSDC(AthenaArray<double> &U_new,
-			     AthenaArray<double> &U_0)
+void RadSystem::PredictStep(const std::pair<int, int> range)
 {
 	// By convention, the fluxes are defined on the left edge of each zone,
 	// i.e. flux_(i) is the flux *into* zone i through the interface on the
 	// left of zone i, and -1.0*flux(i+1) is the flux *into* zone i through
 	// the interface on the right of zone i.
+
+	for (int i = range.first; i < range.second; ++i) {
+		// construct new state: radiation energy density
+		const double E_0 = consVar_(radEnergy_index, i);
+		const double FE_1 = -1.0 * (dt_ / dx_) *
+				    (x1Flux_(radEnergy_index, i + 1) -
+				     x1Flux_(radEnergy_index, i));
+		const double E_new = E_0 + FE_1;
+
+		// construct new state: X1 radiation flux
+		const double x1F_0 = consVar_(x1RadFlux_index, i);
+		const double Fx1F_1 = -1.0 * (dt_ / dx_) *
+				      (x1Flux_(x1RadFlux_index, i + 1) -
+				       x1Flux_(x1RadFlux_index, i));
+		const double x1F_new = x1F_0 + Fx1F_1;
+
+		// check validity, fallback to diffusive flux if
+		// necessary
+		const double x1ReducedFlux_new = x1F_new / (c_light_ * E_new);
+
+		if (std::abs(x1ReducedFlux_new) < 1.0) {
+			consVarPredictStep_(radEnergy_index, i) = E_new;
+			consVarPredictStep_(x1RadFlux_index, i) = x1F_new;
+
+		} else {
+			std::cout
+			    << "WARNING: [stage 1] flux limited at i = " << i
+			    << " with reduced flux = " << x1ReducedFlux_new
+			    << std::endl;
+
+			const double FE_1d =
+			    -1.0 * (dt_ / dx_) *
+			    (x1FluxDiffusive_(radEnergy_index, i + 1) -
+			     x1FluxDiffusive_(radEnergy_index, i));
+			const double E_newd = E_0 + FE_1d;
+
+			const double Fx1F_1d =
+			    -1.0 * (dt_ / dx_) *
+			    (x1FluxDiffusive_(x1RadFlux_index, i + 1) -
+			     x1FluxDiffusive_(x1RadFlux_index, i));
+			const double x1F_newd = x1F_0 + Fx1F_1d;
+
+			consVarPredictStep_(radEnergy_index, i) = E_newd;
+			consVarPredictStep_(x1RadFlux_index, i) = x1F_newd;
+		}
+	}
+}
+
+void RadSystem::AddFluxesRK2(AthenaArray<double> &U0, AthenaArray<double> &U1)
+{
+	// By convention, the fluxes are defined on the left edge of
+	// each zone, i.e. flux_(i) is the flux *into* zone i through
+	// the interface on the left of zone i, and -1.0*flux(i+1) is
+	// the flux *into* zone i through the interface on the right of
+	// zone i.
+
+	for (int i = nghost_; i < nx_ + nghost_; ++i) {
+		// RK-SSP2 integrator
+
+		// construct new state: radiation energy density
+		const double E_0 = U0(radEnergy_index, i);
+		const double E_1 = U1(radEnergy_index, i);
+		const double FE_1 = -1.0 * (dt_ / dx_) *
+				    (x1Flux_(radEnergy_index, i + 1) -
+				     x1Flux_(radEnergy_index, i));
+		const double E_new = 0.5 * E_0 + 0.5 * E_1 + 0.5 * FE_1;
+
+		// construct new state: X1 radiation flux
+		const double x1F_0 = U0(x1RadFlux_index, i);
+		const double x1F_1 = U1(x1RadFlux_index, i);
+		const double Fx1F_1 = -1.0 * (dt_ / dx_) *
+				      (x1Flux_(x1RadFlux_index, i + 1) -
+				       x1Flux_(x1RadFlux_index, i));
+		const double x1F_new = 0.5 * x1F_0 + 0.5 * x1F_1 + 0.5 * Fx1F_1;
+
+		// check validity, fallback to diffusive flux if
+		// necessary
+		const double x1ReducedFlux_new = x1F_new / (c_light_ * E_new);
+
+		if (std::abs(x1ReducedFlux_new) < 1.0) {
+			U0(radEnergy_index, i) = E_new;
+			U0(x1RadFlux_index, i) = x1F_new;
+
+		} else {
+			std::cout
+			    << "WARNING: [stage 2] flux limited at i = " << i
+			    << " with reduced flux = " << x1ReducedFlux_new
+			    << std::endl;
+
+			const double FE_1d =
+			    -1.0 * (dt_ / dx_) *
+			    (x1FluxDiffusive_(radEnergy_index, i + 1) -
+			     x1FluxDiffusive_(radEnergy_index, i));
+			const double E_newd =
+			    0.5 * E_0 + 0.5 * E_1 + 0.5 * FE_1d;
+
+			const double Fx1F_1d =
+			    -1.0 * (dt_ / dx_) *
+			    (x1FluxDiffusive_(x1RadFlux_index, i + 1) -
+			     x1FluxDiffusive_(x1RadFlux_index, i));
+			const double x1F_newd =
+			    0.5 * x1F_0 + 0.5 * x1F_1 + 0.5 * Fx1F_1d;
+
+			U0(radEnergy_index, i) = E_newd;
+			U0(x1RadFlux_index, i) = x1F_newd;
+		}
+	}
+}
+
+void RadSystem::AddFluxesSDC(AthenaArray<double> &U_new,
+			     AthenaArray<double> &U_0)
+{
+	// By convention, the fluxes are defined on the left edge of
+	// each zone, i.e. flux_(i) is the flux *into* zone i through
+	// the interface on the left of zone i, and -1.0*flux(i+1) is
+	// the flux *into* zone i through the interface on the right of
+	// zone i.
 
 	// Perform flux limiting on intercell fluxes
 	// (This may be necessary within SDC correction iteration loop.)
@@ -451,25 +632,30 @@ void RadSystem::AddFluxesSDC(AthenaArray<double> &U_new,
 		const double Fp = x1Flux_(radEnergy_index, i + 1);
 		const double Fm = x1Flux_(radEnergy_index, i);
 
-		const double FU = -1.0 * (dt_ / dx_) * (Fp - Fm);
-		const double U0 = U_0(radEnergy_index, i);
+		const double dE = -1.0 * (dt_ / dx_) * (Fp - Fm);
+		const double E0 = U_0(radEnergy_index, i);
 
-		double f_lim = 1.0;
-		double wp = 1.0;
-		double wm = 1.0;
+		// prevent negative energy density
+		const double R = (-1.0 * dE) / (E0 - Erad_floor_);
+		// const double lambda_R =
+		//    std::pow(1.0 + (R * R * R * R), -1.0 / 4.0);
+		const double lambda_R = 1.0 / R;
 
-		if ((U0 + FU) <
-		    Erad_floor_) { // prevent negative energy density
-			f_lim = -((U0 - Erad_floor_) / FU);
-			wp = std::max(Fp, 0.0);
-			wm = std::max(-Fm, 0.0);
-			wp *= (1.0 / (wp + wm));
-			wm *= (1.0 / (wp + wm));
-		}
+		if (R > 0.0) {
+			const double wp = (-Fp < 0.0) ? lambda_R : 1.0;
+			const double wm = (Fm < 0.0) ? lambda_R : 1.0;
 
-		for (int n = 0; n < nvars_; ++n) {
-			x1Flux_(n, i + 1) *= f_lim * wp;
-			x1Flux_(n, i) *= f_lim * wm;
+			const double new_dE =
+			    -1.0 * (dt_ / dx_) * (wp * Fp - wm * Fm);
+
+			const double eps = 1e-10;
+			assert((1.0 - ((E0 + new_dE) / Erad_floor_)) <
+			       eps); // NOLINT
+
+			for (int n = 0; n < nvars_; ++n) {
+				x1Flux_(n, i + 1) *= wp;
+				x1Flux_(n, i) *= wm;
+			}
 		}
 	}
 

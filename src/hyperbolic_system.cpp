@@ -11,6 +11,8 @@
 
 auto HyperbolicSystem::time() -> double { return time_; }
 
+auto HyperbolicSystem::dt() -> double { return dt_; }
+
 auto HyperbolicSystem::nx() -> int { return nx_; }
 
 auto HyperbolicSystem::nghost() -> int { return nghost_; }
@@ -255,8 +257,7 @@ void HyperbolicSystem::PredictStep(const std::pair<int, int> range)
 }
 
 void HyperbolicSystem::AddFluxesRK2(AthenaArray<double> &U0,
-				    AthenaArray<double> &U1,
-				    AthenaArray<double> &U2)
+				    AthenaArray<double> &U1)
 {
 	// By convention, the fluxes are defined on the left edge of each zone,
 	// i.e. flux_(i) is the flux *into* zone i through the interface on the
@@ -265,13 +266,14 @@ void HyperbolicSystem::AddFluxesRK2(AthenaArray<double> &U0,
 
 	for (int n = 0; n < nvars_; ++n) {
 		for (int i = nghost_; i < nx_ + nghost_; ++i) {
+			// RK-SSP2 integrator
 			const double U_0 = U0(n, i);
 			const double U_1 = U1(n, i);
 			const double FU_1 = -1.0 * (dt_ / dx_) *
 					    (x1Flux_(n, i + 1) - x1Flux_(n, i));
 
-			// RK-SSP2 integrator
-			U2(n, i) = 0.5 * U_0 + 0.5 * U_1 + 0.5 * FU_1;
+			// save results in U0
+			U0(n, i) = 0.5 * U_0 + 0.5 * U_1 + 0.5 * FU_1;
 		}
 	}
 }
@@ -292,6 +294,12 @@ void HyperbolicSystem::AdvanceTimestep(const double dt_max)
 	AdvanceTimestepRK2(dt_max);
 }
 
+bool HyperbolicSystem::CheckStatesValid(AthenaArray<double> &cons,
+					const std::pair<int, int> range)
+{
+	return true;
+}
+
 void HyperbolicSystem::AdvanceTimestepRK2(const double dt_max)
 {
 	const auto ppm_range = std::make_pair(-1 + nghost_, nx_ + 1 + nghost_);
@@ -300,30 +308,45 @@ void HyperbolicSystem::AdvanceTimestepRK2(const double dt_max)
 	// Initialize data
 	FillGhostZones(consVar_);
 	ConservedToPrimitive(consVar_, std::make_pair(0, dim1_));
-	ComputeTimestep(dt_max);
+	ComputeTimestep(std::min(dt_max, dtExpandFactor_ * dtPrev_));
 
 	// Predictor step t_{n+1}
+	FillGhostZones(consVar_);
+	ConservedToPrimitive(consVar_, std::make_pair(0, dim1_));
 	ReconstructStatesPPM(primVar_, ppm_range);
 	ComputeFluxes(cell_range);
 	PredictStep(cell_range);
 
-	// Clear temporary arrays
-	x1LeftState_.ZeroClear();
-	x1RightState_.ZeroClear();
-	x1Flux_.ZeroClear();
+	if (!CheckStatesValid(consVarPredictStep_, cell_range)) {
+		std::cout << "[stage 1] This should not happen!\n";
+		assert(false);
+	}
 
 	// Corrector step
 	FillGhostZones(consVarPredictStep_);
 	ConservedToPrimitive(consVarPredictStep_, std::make_pair(0, dim1_));
 	ReconstructStatesPPM(primVar_, ppm_range);
 	ComputeFluxes(cell_range);
-	AddFluxesRK2(consVar_, consVarPredictStep_, consVar_);
+	AddFluxesRK2(consVar_, consVarPredictStep_);
+
+	if (!CheckStatesValid(consVarPredictStep_, cell_range)) {
+		std::cout << "[stage 2] This should not happen!\n";
+		assert(false);
+	}
 
 	// Add source terms via operator splitting
 	AddSourceTerms(consVar_, cell_range);
 
+#if 0
+	if (CheckStatesValid(consVar_, cell_range)) {
+		std::cout << "[source terms] This should not happen!\n";
+		assert(false);
+	}
+#endif
+
 	// Adjust our clock
 	time_ += dt_;
+	dtPrev_ = dt_;
 }
 
 void HyperbolicSystem::AdvanceTimestepSDC(const double dt_max)
@@ -351,7 +374,7 @@ void HyperbolicSystem::AdvanceTimestepSDC(const double dt_max)
 		// reduce initial timestep dt0 by a factor of 2^{s}
 		dt_ = (s > 0) ? (dt0 * std::pow(s, -2.0)) : dt0;
 		assert(dt_ > 0.0);
-		assert(dt_ < dt_max);
+		assert(dt_ <= dt_max);
 
 		/// 1. Compute initial guess for state at time t_{n+1}, save in
 		/// consVarPredictStep_
@@ -361,11 +384,21 @@ void HyperbolicSystem::AdvanceTimestepSDC(const double dt_max)
 		x1RightState_.ZeroClear();
 		x1Flux_.ZeroClear();
 
+		// 1ab. Copy consVar_ -> consVarPredictStep_
+		for (int n = 0; n < nvars_; ++n) {
+			for (int i = 0; i < dim1_; ++i) {
+				consVarPredictStep_(n, i) = consVar_(n, i);
+			}
+		}
+
 		// 1a. Compute state \tilde{U}(t_{n+1})
-		ConservedToPrimitive(consVar_, std::make_pair(0, dim1_));
+		FillGhostZones(consVarPredictStep_);
+		ConservedToPrimitive(consVarPredictStep_,
+				     std::make_pair(0, dim1_));
 		ReconstructStatesConstant(primVar_, ppm_range);
 		ComputeFluxes(cell_range);
-		PredictStep(cell_range); // saved to consVarPredictStep_
+		AddFluxesSDC(consVarPredictStep_, consVar_);
+		// PredictStep(cell_range); // saved to consVarPredictStep_
 
 		// 1ab. Copy consVarPredictStep_ -> consVarPredictStepPrev_
 		for (int n = 0; n < nvars_; ++n) {
@@ -386,13 +419,14 @@ void HyperbolicSystem::AdvanceTimestepSDC(const double dt_max)
 			for (int i = cell_range.first; i < cell_range.second;
 			     ++i) {
 				L2norm_initial +=
+				    dx_ *
 				    std::pow(consVarPredictStep_(n, i) -
 						 consVarPredictStepPrev_(n, i),
 					     2);
 			}
 		}
 
-		const int maxIter = 100;
+		const int maxIter = 200;
 		for (m = 1; m < maxIter; ++m) {
 
 			// 2b. Clear temporary arrays
@@ -418,6 +452,7 @@ void HyperbolicSystem::AdvanceTimestepSDC(const double dt_max)
 			ReconstructStatesConstant(primVar_, ppm_range);
 			ComputeFluxes(cell_range);
 			AddFluxesSDC(consVarPredictStep_, consVar_);
+
 			AddSourceTerms(consVarPredictStep_, cell_range);
 
 			// 2e. Compute L2-norm difference from previous solution
@@ -426,10 +461,13 @@ void HyperbolicSystem::AdvanceTimestepSDC(const double dt_max)
 			for (int n = 0; n < nvars_; ++n) {
 				for (int i = cell_range.first;
 				     i < cell_range.second; ++i) {
-					L2norm_resid += std::pow(
-					    consVarPredictStep_(n, i) -
-						consVarPredictStepPrev_(n, i),
-					    2);
+					L2norm_resid +=
+					    dx_ *
+					    std::pow(
+						consVarPredictStep_(n, i) -
+						    consVarPredictStepPrev_(n,
+									    i),
+						2);
 				}
 			}
 
@@ -456,7 +494,9 @@ void HyperbolicSystem::AdvanceTimestepSDC(const double dt_max)
 	if (std::abs(L2norm_resid_prev - L2norm_resid) < resid_hang_atol) {
 		std::cout << "Solver *still* hung after reducing timestep by "
 			     "factor of "
-			  << std::pow(2, s) << "x. Continuing anyway...\n";
+			  << std::pow(2, s) << "x.\n";
+		// assert(std::abs(L2norm_resid_prev - L2norm_resid) >=
+		// resid_hang_atol);
 	} else {
 		assert((L2norm_resid / L2norm_initial) < resid_rtol); // NOLINT
 		std::cout << "Converged in " << m << " SDC iterations."

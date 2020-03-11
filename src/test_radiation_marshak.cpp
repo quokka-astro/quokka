@@ -17,13 +17,14 @@ void testproblem_radiation_marshak()
 
 	// Problem parameters
 
-	const int max_timesteps = 64;
-	const double CFL_number = 0.4;
-	const int nx = 3000;
+	const int max_timesteps = 10001;
+	const double CFL_number = 0.1;
+	const int nx = 1200;
 
-	const double max_dtau = 0.01; // dimensionless time
-	const double max_tau = 0.01;  // dimensionless time
-	const double Lz = 30.0;	      // dimensionless length
+	const double max_dtau = 1e-3;	  // dimensionless time
+	const double initial_dtau = 1e-7; // dimensionless time
+	const double max_tau = 0.1;	  // dimensionless time
+	const double Lz = 10.0;		  // dimensionless length
 
 	// Su & Olson (1997) parameters
 	const double eps_SuOlson = 1.0;
@@ -48,9 +49,10 @@ void testproblem_radiation_marshak()
 	const double chi = rho * kappa; // cm^-1 (total matter opacity)
 	const double x0 = z0 / chi;	// cm
 	const double Lx = Lz / chi;	// cm
-	const double t0 = tau0 / (eps_SuOlson * c * chi);	   // s
-	const double max_time = max_tau / (eps_SuOlson * c * chi); // s
-	const double max_dt = max_dtau / (eps_SuOlson * c * chi);  // s
+	const double t0 = tau0 / (eps_SuOlson * c * chi);		  // s
+	const double max_time = max_tau / (eps_SuOlson * c * chi);	  // s
+	const double max_dt = max_dtau / (eps_SuOlson * c * chi);	  // s
+	const double initial_dt = initial_dtau / (eps_SuOlson * c * chi); // s
 
 	rad_system.set_lx(Lx);
 
@@ -94,10 +96,12 @@ void testproblem_radiation_marshak()
 			}
 		}
 
-		rad_system.AdvanceTimestepSDC(max_dt);
+		const double this_dtMax = ((j == 0) ? initial_dt : max_dt);
+		rad_system.AdvanceTimestepRK2(this_dtMax);
+		// rad_system.AdvanceTimestepSDC(this_dtMax);
 
 		std::cout << "Timestep " << j << "; t = " << rad_system.time()
-			  << "\n";
+			  << "; dt = " << rad_system.dt() << "\n";
 
 		const auto Erad = rad_system.ComputeRadEnergy();
 		const auto Egas = rad_system.ComputeGasEnergy();
@@ -162,13 +166,14 @@ void testproblem_radiation_marshak()
 
 	matplotlibcpp::legend();
 	matplotlibcpp::xlabel("length x (cm)");
-	matplotlibcpp::ylabel("energy density");
+	matplotlibcpp::ylabel("energy density (dimensionless)");
 	matplotlibcpp::title(fmt::format(
-	    "time tau = {:.4g}", rad_system.time() * (eps_SuOlson * c * chi)));
+	    "time ct = {:.4g}", rad_system.time() * (eps_SuOlson * c * chi)));
 	matplotlibcpp::save("./marshak_wave.pdf");
 
 	matplotlibcpp::xscale("log");
 	matplotlibcpp::yscale("log");
+	matplotlibcpp::ylim(1e-3, 3.0);
 	matplotlibcpp::save("./marshak_wave_loglog.pdf");
 
 	// Cleanup and exit

@@ -51,6 +51,7 @@ class HyperbolicSystem
 	auto nghost() -> int;
 	auto nx() -> int;
 	auto time() -> double;
+	auto dt() -> double;
 
 	// inline functions:
 
@@ -75,6 +76,8 @@ class HyperbolicSystem
 					  std::pair<int, int> range) = 0;
 	virtual void AddSourceTerms(AthenaArray<double> &U,
 				    std::pair<int, int> range) = 0;
+	virtual bool CheckStatesValid(AthenaArray<double> &cons,
+				      const std::pair<int, int> range);
 
       protected:
 	AthenaArray<double> primVar_;
@@ -83,9 +86,12 @@ class HyperbolicSystem
 	AthenaArray<double> x1LeftState_;
 	AthenaArray<double> x1RightState_;
 	AthenaArray<double> x1Flux_;
+	AthenaArray<double> x1FluxDiffusive_;
 
 	double cflNumber_ = 1.0;
 	double dt_ = 0;
+	const double dtExpandFactor_ = 1.2;
+	double dtPrev_ = std::numeric_limits<double>::max();
 	double time_ = 0.;
 	double lx_;
 	double dx_;
@@ -112,10 +118,11 @@ class HyperbolicSystem
 		x1LeftState_.NewAthenaArray(nvars_, dim1_);
 		x1RightState_.NewAthenaArray(nvars_, dim1_);
 		x1Flux_.NewAthenaArray(nvars_, dim1_);
+		x1FluxDiffusive_.NewAthenaArray(nvars_, dim1_);
 	}
 
-	void AddFluxesRK2(AthenaArray<double> &U0, AthenaArray<double> &U1,
-			  AthenaArray<double> &U2);
+	virtual void AddFluxesRK2(AthenaArray<double> &U0,
+				  AthenaArray<double> &U1);
 	virtual void AddFluxesSDC(AthenaArray<double> &U_new,
 				  AthenaArray<double> &U_0) = 0;
 
@@ -127,7 +134,7 @@ class HyperbolicSystem
 	void ReconstructStatesPPM(AthenaArray<double> &q,
 				  std::pair<int, int> range);
 
-	void PredictStep(std::pair<int, int> range);
+	virtual void PredictStep(std::pair<int, int> range);
 	void ComputeTimestep();
 
 	virtual void ComputeTimestep(double dt_max) = 0;

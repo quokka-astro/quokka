@@ -41,7 +41,8 @@ class LinearAdvectionSystem : public HyperbolicSystem
 			      VxType const &vx, CFLType const &cflNumber,
 			      NvarsType const &nvars);
 
-	void AddSourceTerms(AthenaArray<double> &U, std::pair<int,int> range) override;
+	void AddSourceTerms(AthenaArray<double> &U,
+			    std::pair<int, int> range) override;
 	auto ComputeMass() -> double;
 
 	// accessor functions
@@ -57,7 +58,8 @@ class LinearAdvectionSystem : public HyperbolicSystem
 				  std::pair<int, int> range) override;
 	void ComputeTimestep(double dt_max) override;
 	void ComputeFluxes(std::pair<int, int> range) override;
-	void AddFluxesSDC(AthenaArray<double> &U_new, AthenaArray<double> &U0) override;
+	void AddFluxesSDC(AthenaArray<double> &U_new,
+			  AthenaArray<double> &U0) override;
 };
 
 #endif // LINEAR_ADVECTION_HPP_

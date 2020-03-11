@@ -65,6 +65,8 @@ class RadSystem : public HyperbolicSystem
 				  std::pair<int, int> range) override;
 	void AddSourceTerms(AthenaArray<double> &cons,
 			    std::pair<int, int> range) override;
+	bool CheckStatesValid(AthenaArray<double> &cons,
+			      std::pair<int, int> range) override;
 
 	auto ComputeOpacity(double rho, double Temp) -> double;
 	auto ComputeOpacityTempDerivative(double rho, double Temp) -> double;
@@ -99,8 +101,11 @@ class RadSystem : public HyperbolicSystem
 
 	// virtual function overrides
 
+	void PredictStep(const std::pair<int, int> range) override;
 	void AddFluxesSDC(AthenaArray<double> &U_new,
 			  AthenaArray<double> &U_0) override;
+	void AddFluxesRK2(AthenaArray<double> &U0,
+			  AthenaArray<double> &U1) override;
 	void ComputeFluxes(std::pair<int, int> range) override;
 	void ComputeTimestep(double dt_max) override;
 };

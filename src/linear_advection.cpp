@@ -102,13 +102,14 @@ void LinearAdvectionSystem::ComputeFluxes(const std::pair<int, int> range)
 	}
 }
 
-void LinearAdvectionSystem::AddSourceTerms(AthenaArray<double> &U, std::pair<int,int> range)
+void LinearAdvectionSystem::AddSourceTerms(AthenaArray<double> &U,
+					   std::pair<int, int> range)
 {
 	// TODO(ben): to be implemented
 }
 
 void LinearAdvectionSystem::AddFluxesSDC(AthenaArray<double> &U_new,
-			     AthenaArray<double> &U_0)
+					 AthenaArray<double> &U_0)
 {
 	// TODO(ben): to be implemented
 }
