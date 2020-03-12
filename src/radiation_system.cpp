@@ -31,12 +31,24 @@ RadSystem::RadSystem(NxType const &nx, LxType const &lx,
 
 auto RadSystem::c_light() -> double { return c_light_; }
 
+void RadSystem::set_c_light(double c_light)
+{
+	c_light_ = c_light;
+	c_hat_ = c_light;
+}
+
 auto RadSystem::radiation_constant() -> double { return radiation_constant_; }
+
+void RadSystem::set_radiation_constant(double arad)
+{
+	radiation_constant_ = arad;
+}
 
 void RadSystem::set_lx(const double lx)
 {
 	assert(lx > 0.0); // NOLINT
 	lx_ = lx;
+	dx_ = lx / static_cast<double>(nx_);
 }
 
 auto RadSystem::radEnergy(const int i) -> double { return radEnergy_(i); }
@@ -166,11 +178,15 @@ void RadSystem::ComputeTimestep(const double dt_max)
 	// double dt = std::numeric_limits<double>::max();
 	double dt = dt_max;
 
+	// std::cout << "dt_max = " << dt_max << "\n";
+
 	for (int i = 0; i < dim1_; ++i) {
 		const double signal_max = c_hat_;
 		const double thisDt = cflNumber_ * (dx_ / signal_max);
 		dt = std::min(dt, thisDt);
 	}
+
+	// std::cout << "Timestep determined to be: " << dt << "\n";
 
 	dt_ = dt;
 }
@@ -250,7 +266,6 @@ void RadSystem::ComputeFluxes(const std::pair<int, int> range)
 
 #if 0
 		// compute min/max eigenvalues (following S&O, Eq. 41a)
-
 		const double mu_L = (nx_L); // modify in 3d!
 		const double mu_R = (nx_R);
 
@@ -273,8 +288,6 @@ void RadSystem::ComputeFluxes(const std::pair<int, int> range)
 		const double S_R = u_R + a_R;
 #endif
 
-		// compute min/max wave speeds
-
 		// frozen Eddington tensor approximation, following Balsara
 		// (1999) [JQSRT Vol. 61, No. 5, pp. 617–627, 1999], Eq. 46.
 
@@ -283,9 +296,6 @@ void RadSystem::ComputeFluxes(const std::pair<int, int> range)
 
 		assert(std::abs(S_L) <= c_hat_); // NOLINT
 		assert(std::abs(S_R) <= c_hat_); // NOLINT
-
-		const double S_Lc = -c_hat_;
-		const double S_Rc = c_hat_;
 
 		// compute fluxes
 
@@ -302,46 +312,19 @@ void RadSystem::ComputeFluxes(const std::pair<int, int> range)
 		    (S_R / (S_R - S_L)) * F_L - (S_L / (S_R - S_L)) * F_R +
 		    (S_R * S_L / (S_R - S_L)) * (U_R - U_L);
 
-		const std::valarray<double> F_star_diffusive =
-		    (S_Rc / (S_Rc - S_Lc)) * F_L -
-		    (S_Lc / (S_Rc - S_Lc)) * F_R +
-		    (S_Rc * S_Lc / (S_Rc - S_Lc)) * (U_R - U_L);
-
 		std::valarray<double> F(2);
-		std::valarray<double> F_diffusive(2);
 
-		// open the Riemann fan
-
-		if (S_L > 0.0) {
-			F = F_L;
-		} else if (S_R < 0.0) {
-			F = F_R;
-		} else { // S_L <= 0.0 <= S_R
-			F = F_star;
-		}
+		// in the frozen Eddington tensor approximation, we are always
+		// in the star region, so F = F_star
+		F = F_star;
 
 		// check states are valid
 		assert(!std::isnan(F[0])); // NOLINT
 		assert(!std::isnan(F[1])); // NOLINT
 
-		if (S_Lc > 0.0) { // this should never happen
-			F_diffusive = F_L;
-		} else if (S_Rc < 0.0) { // this should never happen
-			F_diffusive = F_R;
-		} else { // S_Lc <= 0.0 <= S_Rc // should always be the case
-			F_diffusive = F_star_diffusive;
-		}
-
-		assert(!std::isnan(F_diffusive[0])); // NOLINT
-		assert(!std::isnan(F_diffusive[1])); // NOLINT
-
 		// these are computed with the linearized wavespeeds
 		x1Flux_(radEnergy_index, i) = F[0];
 		x1Flux_(x1RadFlux_index, i) = F[1];
-
-		// these are computed assuming S_L = -c_hat; S_R = +c_hat
-		x1FluxDiffusive_(radEnergy_index, i) = F_diffusive[0];
-		x1FluxDiffusive_(x1RadFlux_index, i) = F_diffusive[1];
 	}
 }
 
@@ -376,7 +359,6 @@ void RadSystem::AddSourceTerms(AthenaArray<double> &cons,
 		const double a_rad = radiation_constant_;
 
 		// load fluid properties
-		double c_v;
 		// const double c_v = boltzmann_constant_cgs_ /
 		// (mean_molecular_mass_cgs_ * (gamma_ - 1.0));
 
@@ -386,6 +368,9 @@ void RadSystem::AddSourceTerms(AthenaArray<double> &cons,
 
 		const double rho = cons(gasDensity_index, i);
 		const double Egas0 = cons(gasEnergy_index, i);
+		const double c_v =
+		    alpha_SuOlson *
+		    std::pow(Egas0 / (rho * alpha_SuOlson), 3. / 4.);
 
 		// load radiation energy
 		const double Erad0 = cons(radEnergy_index, i);
@@ -401,7 +386,6 @@ void RadSystem::AddSourceTerms(AthenaArray<double> &cons,
 		double rhs;
 		double T_gas;
 		double kappa;
-		double S;
 		double fourPiB;
 		double dB_dTgas;
 		double dkappa_dTgas;
@@ -410,6 +394,7 @@ void RadSystem::AddSourceTerms(AthenaArray<double> &cons,
 		double dFG_dErad;
 		double dFR_dEgas;
 		double dFR_dErad;
+		double Src;
 		double eta;
 		double deltaErad;
 		double deltaEgas;
@@ -423,31 +408,24 @@ void RadSystem::AddSourceTerms(AthenaArray<double> &cons,
 		for (n = 1; n <= maxIter; ++n) {
 
 			// compute material temperature
-			T_gas = std::pow(Egas_guess / (rho * alpha_SuOlson),
-					 (1. / 4.));
-			T_gas = (T_gas >= T_floor) ? T_gas : T_floor;
-
-			c_v = alpha_SuOlson * std::pow(T_gas, 3);
-			// T_gas = Egas_guess / (rho * c_v);
+			T_gas = Egas_guess / (rho * c_v);
 
 			// compute opacity, emissivity
 			kappa = ComputeOpacity(rho, T_gas);
 			fourPiB = c * a_rad * std::pow(T_gas, 4);
+
+			// constant radiation energy source term
+			Src = dt * (c * radEnergySource_(i));
 
 			// compute derivatives w/r/t T_gas
 			const double dB_dTgas = (4.0 * fourPiB) / T_gas;
 			const double dkappa_dTgas =
 			    ComputeOpacityTempDerivative(rho, T_gas);
 
-			// constant radiation energy source term
-			// (does not modify gas energy directly!)
-			// (does not modify Jacobian!)
-			S = dt * (c * radEnergySource_(i));
-
 			// compute residuals
 			rhs = dt * (rho * kappa) * (fourPiB - c * Erad_guess);
 			F_G = (Egas_guess - Egas0) + rhs;
-			F_R = (Erad_guess - Erad0) - (rhs + S);
+			F_R = (Erad_guess - Erad0) - (rhs + Src);
 
 			// check if converged
 			if ((std::abs(F_G / Etot0) < resid_tol) &&

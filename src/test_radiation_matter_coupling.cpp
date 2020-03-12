@@ -32,8 +32,8 @@ void testproblem_radiation_matter_coupling()
 	const double rho = 1.0e-7;  // g cm^-3
 
 	const double c_v =
-	    rad_system.boltzmann_constant_cgs_ /
-	    (rad_system.mean_molecular_mass_cgs_ * (rad_system.gamma_ - 1.0));
+	    rad_system.boltzmann_constant_ /
+	    (rad_system.mean_molecular_mass_ * (rad_system.gamma_ - 1.0));
 
 	std::cout << "Volumetric heat capacity c_v = " << rho * c_v << "\n";
 

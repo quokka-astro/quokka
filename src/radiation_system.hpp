@@ -40,12 +40,12 @@ class RadSystem : public HyperbolicSystem
 		x1ReducedFlux_index = 1,
 	};
 
-	const double c_light_ = 2.99792458e10; // cgs
-	const double c_hat_ = c_light_;	       // for now
+	double c_light_ = 2.99792458e10;	 // cgs
+	double c_hat_ = c_light_;		 // for now
+	double radiation_constant_ = 7.5646e-15; // cgs
 
-	const double radiation_constant_ = 7.5646e-15;		       // cgs
-	const double mean_molecular_mass_cgs_ = (0.5) * 1.6726231e-24; // cgs
-	const double boltzmann_constant_cgs_ = 1.380658e-16;	       // cgs
+	const double mean_molecular_mass_ = (0.5) * 1.6726231e-24; // cgs
+	const double boltzmann_constant_ = 1.380658e-16;	   // cgs
 	const double gamma_ = (5. / 3.);
 
 	double Erad_floor_ = 0.0;
@@ -80,6 +80,8 @@ class RadSystem : public HyperbolicSystem
 	auto set_gasEnergy(int i) -> double &;
 	auto set_staticGasDensity(int i) -> double &;
 	auto set_radEnergySource(int i) -> double &;
+	void set_c_light(double c_light);
+	void set_radiation_constant(double arad);
 
 	// accessor functions:
 
