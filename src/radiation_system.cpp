@@ -242,14 +242,27 @@ void RadSystem::ComputeFluxes(const std::pair<int, int> range)
 
 		// compute radiation pressure tensors
 
+#if 0
+		// compute Levermore (1984) closure [Eq. 25]
 		const double f_facL = std::sqrt(4.0 - 3.0 * (f_L * f_L));
 		const double f_facR = std::sqrt(4.0 - 3.0 * (f_R * f_R));
 
-		// compute Eddington factors
 		const double chi_L =
 		    (3.0 + 4.0 * (f_L * f_L)) / (5.0 + 2.0 * f_facL);
 		const double chi_R =
 		    (3.0 + 4.0 * (f_R * f_R)) / (5.0 + 2.0 * f_facR);
+#endif
+
+		// compute Minerbo (1978) closure [piecewise approximation]
+		// (For unknown reasons, this closure tends to work better
+		// than the Levermore/Lorentz closure.)
+		const double chi_L =
+		    (f_L < 1. / 3.) ? (1. / 3.) : (0.5 - f_L + 1.5 * f_L * f_L);
+		const double chi_R =
+		    (f_R < 1. / 3.) ? (1. / 3.) : (0.5 - f_R + 1.5 * f_R * f_R);
+
+		assert((chi_L >= 1. / 3.) && (chi_L <= 1.0)); // NOLINT
+		assert((chi_R >= 1. / 3.) && (chi_R <= 1.0)); // NOLINT
 
 		// diagonal term of Eddington tensor
 		const double Tdiag_L = (1.0 - chi_L) / 2.0;
@@ -263,30 +276,6 @@ void RadSystem::ComputeFluxes(const std::pair<int, int> range)
 		// compute the elements of the total radiation pressure tensor
 		const double Pxx_L = (Tdiag_L + Txx_L) * erad_L;
 		const double Pxx_R = (Tdiag_R + Txx_R) * erad_R;
-
-#if 0
-		// compute min/max eigenvalues (following S&O, Eq. 41a)
-		const double mu_L = (nx_L); // modify in 3d!
-		const double mu_R = (nx_R);
-
-		const double u_L = (c_hat_ / f_facL) * (mu_L * f_L);
-		const double u_R = (c_hat_ / f_facR) * (mu_R * f_R);
-
-		double a_L =
-		    (c_hat_ / f_facL) *
-		    std::sqrt((2. / 3.) * ((f_facL * f_facL) - f_facL) +
-			      2.0 * (mu_L * mu_L) *
-				  (2.0 - (f_L * f_L) - f_facL));
-
-		double a_R =
-		    (c_hat_ / f_facL) *
-		    std::sqrt((2. / 3.) * ((f_facR * f_facR) - f_facR) +
-			      2.0 * (mu_R * mu_R) *
-				  (2.0 - (f_R * f_R) - f_facR));
-
-		const double S_L = u_L - a_L;
-		const double S_R = u_R + a_R;
-#endif
 
 		// frozen Eddington tensor approximation, following Balsara
 		// (1999) [JQSRT Vol. 61, No. 5, pp. 617–627, 1999], Eq. 46.
