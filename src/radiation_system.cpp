@@ -112,9 +112,9 @@ void RadSystem::FillGhostZones(AthenaArray<double> &cons)
 	// x1 left side boundary (reflecting)
 	for (int i = 0; i < nghost_; ++i) {
 		cons(radEnergy_index, i) =
-		    cons(radEnergy_index, nghost_ + (nghost_ - i));
+		    cons(radEnergy_index, nghost_ + (nghost_ - i - 1));
 		cons(x1RadFlux_index, i) =
-		    -cons(x1RadFlux_index, nghost_ + (nghost_ - i));
+		    -1.0 * cons(x1RadFlux_index, nghost_ + (nghost_ - i - 1));
 	}
 
 	// x1 right side boundary (constant temperature, extrapolate flux)
@@ -191,8 +191,6 @@ void RadSystem::ComputeTimestep(const double dt_max)
 	dt_ = dt;
 }
 
-// TODO(ben): add flux limiter for positivity preservation.
-//
 void RadSystem::ComputeFluxes(const std::pair<int, int> range)
 {
 	// By convention, the interfaces are defined on the left edge of each
@@ -311,10 +309,14 @@ void RadSystem::ComputeFluxes(const std::pair<int, int> range)
 		assert(!std::isnan(F[0])); // NOLINT
 		assert(!std::isnan(F[1])); // NOLINT
 
-		// these are computed with the linearized wavespeeds
 		x1Flux_(radEnergy_index, i) = F[0];
 		x1Flux_(x1RadFlux_index, i) = F[1];
 	}
+
+	std::cout << "Erad left boundary flux = "
+		  << x1Flux_(radEnergy_index, nghost_) << "\n";
+	std::cout << "Frad left boundary flux = "
+		  << x1Flux_(x1RadFlux_index, nghost_) << "\n";
 }
 
 auto RadSystem::ComputeOpacity(const double rho, const double Temp) -> double
@@ -357,9 +359,9 @@ void RadSystem::AddSourceTerms(AthenaArray<double> &cons,
 
 		const double rho = cons(gasDensity_index, i);
 		const double Egas0 = cons(gasEnergy_index, i);
-		const double c_v =
-		    alpha_SuOlson *
-		    std::pow(Egas0 / (rho * alpha_SuOlson), 3. / 4.);
+		// const double c_v =
+		//    alpha_SuOlson *
+		//    std::pow(Egas0 / (rho * alpha_SuOlson), 3. / 4.);
 
 		// load radiation energy
 		const double Erad0 = cons(radEnergy_index, i);
@@ -395,6 +397,13 @@ void RadSystem::AddSourceTerms(AthenaArray<double> &cons,
 		const int maxIter = 200;
 		int n;
 		for (n = 1; n <= maxIter; ++n) {
+
+			// compute specific heat capacity (ONLY for SuOlson
+			// test)
+			const double c_v =
+			    alpha_SuOlson *
+			    std::pow(Egas_guess / (rho * alpha_SuOlson),
+				     3. / 4.);
 
 			// compute material temperature
 			T_gas = Egas_guess / (rho * c_v);

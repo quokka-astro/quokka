@@ -17,14 +17,15 @@ void testproblem_radiation_marshak()
 
 	// Problem parameters
 
-	const int max_timesteps = 3000;
+	const int max_timesteps = 12000;
 	const double CFL_number = 0.4;
 	const int nx = 1200;
 
 	const double initial_dtau = 1e-6; // dimensionless time
 	const double max_dtau = 1e-3;	  // dimensionless time
-	const double max_tau = 0.1;	  // dimensionless time
-	const double Lz = 30.0;		  // dimensionless length
+	// const double max_tau = 3.16228;	  // dimensionless time
+	const double max_tau = 10.0; // dimensionless time
+	const double Lz = 30.0;	     // dimensionless length
 
 	// Su & Olson (1997) parameters
 	const double eps_SuOlson = 1.0;
@@ -158,23 +159,38 @@ void testproblem_radiation_marshak()
 		    std::pow(Egas_t / (rho * alpha_SuOlson), (1. / 4.));
 	}
 
-	std::vector<double> xs_exact = {0.01, 0.1,     0.17783, 0.31623,
-					0.45, 0.5,     0.56234, 0.75,
-					1.0,  1.33352, 1.77828, 3.16228};
+	std::vector<double> xs_exact = {
+	    0.01, 0.1, 0.17783, 0.31623, 0.45,	  0.5,	  0.56234,
+	    0.75, 1.0, 1.33352, 1.77828, 3.16228, 5.62341};
 
 	std::vector<double> Erad_diffusion_exact_0p1 = {
-	    0.09403, 0.09326, 0.09128, 0.08230, 0.06086, 0.04766,
-	    0.03171, 0.00755, 0.00064, 0.,	0.,	 0.};
+	    0.09403, 0.09326, 0.09128, 0.08230, 0.06086, 0.04766, 0.03171,
+	    0.00755, 0.00064, 0.,      0.,	0.,	 0.};
 	std::vector<double> Erad_transport_exact_0p1 = {
-	    0.09531, 0.09531, 0.09532, 0.09529, 0.08823, 0.04765,
-	    0.00375, 0.,      0.,      0.,	0.,	 0.};
+	    0.09531, 0.09531, 0.09532, 0.09529, 0.08823, 0.04765, 0.00375,
+	    0.,	     0.,      0.,      0.,	0.,	 0.};
 
 	std::vector<double> Erad_diffusion_exact_1p0 = {
-	    0.50359, 0.49716, 0.48302, 0.43743, 0.36656, 0.33271,
-	    0.29029, 0.18879, 0.10150, 0.04060, 0.01011, 0.00003};
+	    0.50359, 0.49716, 0.48302, 0.43743, 0.36656, 0.33271, 0.29029,
+	    0.18879, 0.10150, 0.04060, 0.01011, 0.00003, 0.};
 	std::vector<double> Erad_transport_exact_1p0 = {
-	    0.64308, 0.63585, 0.61958, 0.56187, 0.44711, 0.35801,
-	    0.25374, 0.11430, 0.03648, 0.00291, 0.,	 0.};
+	    0.64308, 0.63585, 0.61958, 0.56187, 0.44711, 0.35801, 0.25374,
+	    0.11430, 0.03648, 0.00291, 0.,	0.,	 0.};
+
+	std::vector<double> Erad_diffusion_exact_3p1 = {
+	    0.95968, 0.95049, 0.93036, 0.86638, 0.76956, 0.72433,
+	    0.66672, 0.51507, 0.35810, 0.21309, 0.10047, 0.00634};
+	std::vector<double> Erad_transport_exact_3p1 = {
+	    1.20052, 1.18869, 1.16190, 1.07175, 0.90951, 0.79902,
+	    0.66678, 0.44675, 0.27540, 0.14531, 0.05968, 0.00123};
+
+	std::vector<double> Erad_diffusion_exact_10p0 = {
+	    1.86585, 1.85424, 1.82889, 1.74866, 1.62824, 1.57237, 1.50024,
+	    1.29758, 1.06011, 0.79696, 0.52980, 0.12187, 0.00445};
+
+	std::vector<double> Erad_transport_exact_10p0 = {
+	    2.23575, 2.21944, 2.18344, 2.06448, 1.86072, 1.73178, 1.57496,
+	    1.27398, 0.98782, 0.70822, 0.45016, 0.09673, 0.00375};
 
 	matplotlibcpp::clf();
 	matplotlibcpp::xlim(0.2, 8.0); // cm
@@ -206,14 +222,16 @@ void testproblem_radiation_marshak()
 	diffusion_args["color"] = "gray";
 	diffusion_args["linestyle"] = "dashed";
 	diffusion_args["marker"] = ".";
-	matplotlibcpp::plot(xs_exact, Erad_diffusion_exact_0p1, diffusion_args);
+	matplotlibcpp::plot(xs_exact, Erad_diffusion_exact_10p0,
+			    diffusion_args);
 
 	std::map<std::string, std::string> transport_args;
 	transport_args["label"] = "transport solution (exact)";
 	transport_args["color"] = "red";
 	transport_args["linestyle"] = "dashed";
 	transport_args["marker"] = "*";
-	matplotlibcpp::plot(xs_exact, Erad_transport_exact_0p1, transport_args);
+	matplotlibcpp::plot(xs_exact, Erad_transport_exact_10p0,
+			    transport_args);
 
 	matplotlibcpp::legend();
 	matplotlibcpp::xlabel("length x (cm)");
