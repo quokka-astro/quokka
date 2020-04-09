@@ -18,7 +18,8 @@
 #include "linear_advection.hpp"
 
 // function definitions
-void write_density(LinearAdvectionSystem &advection_system);
+template <typename array_t>
+void write_density(LinearAdvectionSystem<array_t> &advection_system);
 void testproblem_advection();
 
 #endif // TEST_ADVECTION_HPP_

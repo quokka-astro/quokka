@@ -22,8 +22,8 @@ void testproblem_radiation_matter_coupling()
 
 	// Problem initialization
 
-	RadSystem rad_system(RadSystem::Nx = nx, RadSystem::Lx = Lx,
-			     RadSystem::CFL = CFL_number);
+	RadSystem<AthenaArray<double>> rad_system(
+	    {.nx = nx, .lx = Lx, .cflNumber = CFL_number});
 
 	auto nghost = rad_system.nghost();
 
@@ -56,7 +56,8 @@ void testproblem_radiation_matter_coupling()
 	const auto initial_Trad =
 	    std::pow(Erad / rad_system.radiation_constant(), 1. / 4.);
 	const auto initial_Tgas = Egas / (rho * c_v);
-	const auto kappa = rad_system.ComputeOpacity(rho, initial_Tgas);
+	const auto kappa =
+	    RadSystem<AthenaArray<double>>::ComputeOpacity(rho, initial_Tgas);
 	const auto heating_time =
 	    Egas /
 	    (rho * kappa * rad_system.c_light_ *

@@ -15,7 +15,6 @@
 #include <valarray>
 
 // library headers
-#include "NamedType/named_type.hpp" // provides fluent::NamedType
 #include "fmt/include/fmt/format.h"
 
 // internal headers
@@ -24,9 +23,29 @@
 
 /// Class for a linear, scalar advection equation
 ///
-class HydroSystem : public HyperbolicSystem
+template <typename array_t> class HydroSystem : public HyperbolicSystem<array_t>
 {
+	// See
+	// [https://isocpp.org/wiki/faq/templates#nondependent-name-lookup-members]
+	using HyperbolicSystem<array_t>::lx_;
+	using HyperbolicSystem<array_t>::nx_;
+	using HyperbolicSystem<array_t>::dx_;
+	using HyperbolicSystem<array_t>::dt_;
+	using HyperbolicSystem<array_t>::cflNumber_;
+	using HyperbolicSystem<array_t>::dim1_;
+	using HyperbolicSystem<array_t>::nghost_;
+	using HyperbolicSystem<array_t>::nvars_;
+
+	using HyperbolicSystem<array_t>::x1LeftState_;
+	using HyperbolicSystem<array_t>::x1RightState_;
+	using HyperbolicSystem<array_t>::x1Flux_;
+	using HyperbolicSystem<array_t>::x1FluxDiffusive_;
+	using HyperbolicSystem<array_t>::primVar_;
+	using HyperbolicSystem<array_t>::consVarPredictStep_;
+
       public:
+	using HyperbolicSystem<array_t>::consVar_;
+
 	enum consVarIndex {
 		density_index = 0,
 		x1Momentum_index = 1,
@@ -39,22 +58,17 @@ class HydroSystem : public HyperbolicSystem
 		pressure_index = 2
 	};
 
-	using NxType = fluent::NamedType<int, struct NxParameter>;
-	using LxType = fluent::NamedType<double, struct LxParameter>;
-	using CFLType = fluent::NamedType<double, struct CFLParameter>;
-	using GammaType = fluent::NamedType<double, struct GammaParameter>;
+	struct HydroSystemArgs {
+		int nx;
+		double lx;
+		double cflNumber;
+		double gamma;
+	};
 
-	static const NxType::argument Nx;
-	static const LxType::argument Lx;
-	static const CFLType::argument CFL;
-	static const GammaType::argument Gamma;
+	explicit HydroSystem(HydroSystemArgs args);
 
-	HydroSystem(NxType const &nx, LxType const &lx,
-		    CFLType const &cflNumber, GammaType const &gamma);
-
-	void AddSourceTerms(AthenaArray<double> &U,
-			    std::pair<int, int> range) override;
-	void ConservedToPrimitive(AthenaArray<double> &cons,
+	void AddSourceTerms(array_t &U, std::pair<int, int> range) override;
+	void ConservedToPrimitive(array_t &cons,
 				  std::pair<int, int> range) override;
 
 	// setter functions:
@@ -77,22 +91,287 @@ class HydroSystem : public HyperbolicSystem
 	auto ComputeMass() -> double;
 
       protected:
-	AthenaArray<double> density_;
-	AthenaArray<double> x1Momentum_;
-	AthenaArray<double> energy_;
+	array_t density_;
+	array_t x1Momentum_;
+	array_t energy_;
 
-	AthenaArray<double> primDensity_;
-	AthenaArray<double> x1Velocity_;
-	AthenaArray<double> pressure_;
+	array_t primDensity_;
+	array_t x1Velocity_;
+	array_t pressure_;
 
 	double gamma_;
 
 	void ComputeFluxes(std::pair<int, int> range) override;
 	void ComputeTimestep(double dt_max) override;
-	void AddFluxesSDC(AthenaArray<double> &U_new,
-			  AthenaArray<double> &U0) override;
+	void AddFluxesSDC(array_t &U_new, array_t &U0) override;
 
-	void FlattenShocks(AthenaArray<double> &q, std::pair<int, int> range);
+	void FlattenShocks(array_t &q, std::pair<int, int> range);
 };
+
+template <typename array_t>
+auto HydroSystem<array_t>::density(const int i) -> double
+{
+	return density_(i);
+}
+
+template <typename array_t>
+auto HydroSystem<array_t>::set_density(const int i) -> double &
+{
+	return density_(i);
+}
+
+template <typename array_t>
+auto HydroSystem<array_t>::x1Momentum(const int i) -> double
+{
+	return x1Momentum_(i);
+}
+
+template <typename array_t>
+auto HydroSystem<array_t>::set_x1Momentum(const int i) -> double &
+{
+	return x1Momentum_(i);
+}
+
+template <typename array_t>
+auto HydroSystem<array_t>::energy(const int i) -> double
+{
+	return energy_(i);
+}
+
+template <typename array_t>
+auto HydroSystem<array_t>::set_energy(const int i) -> double &
+{
+	return energy_(i);
+}
+
+template <typename array_t>
+auto HydroSystem<array_t>::primDensity(const int i) -> double
+{
+	return primDensity_(i);
+}
+
+template <typename array_t>
+auto HydroSystem<array_t>::x1Velocity(const int i) -> double
+{
+	return x1Velocity_(i);
+}
+
+template <typename array_t>
+auto HydroSystem<array_t>::pressure(const int i) -> double
+{
+	return pressure_(i);
+}
+
+template <typename array_t> auto HydroSystem<array_t>::ComputeMass() -> double
+{
+	double mass = 0.0;
+
+	for (int i = nghost_; i < nx_ + nghost_; ++i) {
+		mass += density_(i) * dx_;
+	}
+
+	return mass;
+}
+
+template <typename array_t>
+void HydroSystem<array_t>::ConservedToPrimitive(array_t &cons,
+						const std::pair<int, int> range)
+{
+	for (int i = range.first; i < range.second; ++i) {
+		const auto rho = cons(density_index, i);
+		const auto px = cons(x1Momentum_index, i);
+		const auto E =
+		    cons(energy_index, i); // *total* gas energy per unit volume
+
+		const auto vx = px / rho;
+		const auto kinetic_energy = 0.5 * rho * std::pow(vx, 2);
+		const auto thermal_energy = E - kinetic_energy;
+
+		const auto P = thermal_energy * (gamma_ - 1.0);
+
+		assert(rho > 0.); // NOLINT
+		assert(P > 0.);	  // NOLINT
+
+		primDensity_(i) = rho;
+		x1Velocity_(i) = vx;
+		pressure_(i) = P;
+	}
+}
+
+template <typename array_t>
+void HydroSystem<array_t>::ComputeTimestep(const double dt_max)
+{
+	double dt = dt_max;
+
+	for (int i = 0; i < dim1_; ++i) {
+		const double rho = primDensity_(i);
+		const double vx = x1Velocity_(i);
+		const double P = pressure_(i);
+		const double cs = std::sqrt(gamma_ * P / rho);
+		assert(cs > 0.); // NOLINT
+
+		const double signal_max =
+		    std::max(std::abs(vx - cs), std::abs(vx + cs));
+		const double thisDt = cflNumber_ * (dx_ / signal_max);
+		dt = std::min(dt, thisDt);
+	}
+
+	dt_ = dt;
+}
+
+// TODO(ben): add flux limiter for positivity preservation.
+template <typename array_t>
+void HydroSystem<array_t>::ComputeFluxes(const std::pair<int, int> range)
+{
+	// By convention, the interfaces are defined on the left edge of each
+	// zone, i.e. xinterface_(i) is the solution to the Riemann problem at
+	// the left edge of zone i.
+
+	// Indexing note: There are (nx + 1) interfaces for nx zones.
+
+	for (int i = range.first; i < (range.second + 1); ++i) {
+		// HLL solver following Toro (1998) and Balsara (2017).
+
+		// gather left- and right- state variables
+
+		const double rho_L = x1LeftState_(primDensity_index, i);
+		const double rho_R = x1RightState_(primDensity_index, i);
+
+		const double vx_L = x1LeftState_(x1Velocity_index, i);
+		const double vx_R = x1RightState_(x1Velocity_index, i);
+
+		const double P_L = x1LeftState_(pressure_index, i);
+		const double P_R = x1RightState_(pressure_index, i);
+
+		const double ke_L = 0.5 * rho_L * (vx_L * vx_L);
+		const double ke_R = 0.5 * rho_R * (vx_R * vx_R);
+
+		const double E_L = P_L / (gamma_ - 1.0) + ke_L;
+		const double E_R = P_L / (gamma_ - 1.0) + ke_R;
+
+		const double H_L = (E_L + P_L) / rho_L; // enthalpy
+		const double H_R = (E_R + P_R) / rho_R;
+
+		const double cs_L = std::sqrt(gamma_ * P_L / rho_L);
+		const double cs_R = std::sqrt(gamma_ * P_R / rho_R);
+
+		assert(cs_L > 0.0); // NOLINT
+		assert(cs_R > 0.0); // NOLINT
+
+		// compute Roe averages
+
+		const double vx_roe =
+		    (std::sqrt(rho_L) * vx_L + std::sqrt(rho_R) * vx_L) /
+		    (std::sqrt(rho_L) + std::sqrt(rho_R)); // Roe-average vx
+
+		const double vroe_sq = vx_roe * vx_roe; // modify for 3d!!!
+
+		const double H_roe =
+		    (std::sqrt(rho_L) * H_L + std::sqrt(rho_R) * H_R) /
+		    (std::sqrt(rho_L) + std::sqrt(rho_R)); // Roe-average H
+
+		const double cs_roe =
+		    std::sqrt((gamma_ - 1.) * (H_roe - 0.5 * vroe_sq));
+
+		// compute PVRS states (Toro 10.5.2)
+
+		const double rho_bar = 0.5 * (rho_L + rho_R);
+		const double cs_bar = 0.5 * (cs_L + cs_R);
+		const double P_PVRS =
+		    0.5 * (P_L + P_R) + 0.5 * (vx_L - vx_R) * rho_bar * cs_bar;
+		const double P_star = std::max(P_PVRS, 0.0);
+
+		const double q_L =
+		    (P_star <= P_L)
+			? 1.0
+			: std::sqrt(1.0 + ((gamma_ + 1.0) / (2.0 * gamma_)) *
+					      ((P_star / P_L) - 1.0));
+
+		const double q_R =
+		    (P_star <= P_R)
+			? 1.0
+			: std::sqrt(1.0 + ((gamma_ + 1.0) / (2.0 * gamma_)) *
+					      ((P_star / P_R) - 1.0));
+
+		// compute wave speeds
+
+		const double s_L = vx_L - cs_L * q_L;
+		const double s_R = vx_R + cs_R * q_R;
+
+		const double s_Lroe =
+		    (vx_roe - cs_roe); // Roe-average vx - Roe-average cs
+		const double s_Rroe =
+		    (vx_roe + cs_roe); // Roe-average vx + Roe-average cs
+
+		const double S_L = std::min(s_L, s_Lroe);
+		const double S_R = std::max(s_R, s_Rroe);
+
+		// compute fluxes
+
+		const std::valarray<double> F_L = {rho_L * vx_L,
+						   rho_L * (vx_L * vx_L) + P_L,
+						   (E_L + P_L) * vx_L};
+
+		const std::valarray<double> F_R = {rho_R * vx_R,
+						   rho_R * (vx_R * vx_R) + P_R,
+						   (E_R + P_R) * vx_R};
+
+		const std::valarray<double> U_L = {
+		    rho_L, rho_L * vx_L,
+		    P_L / (gamma_ - 1.0) + 0.5 * rho_L * (vx_L * vx_L)};
+
+		const std::valarray<double> U_R = {
+		    rho_R, rho_R * vx_R,
+		    P_R / (gamma_ - 1.0) + 0.5 * rho_R * (vx_R * vx_R)};
+
+		const std::valarray<double> F_star =
+		    (S_R / (S_R - S_L)) * F_L - (S_L / (S_R - S_L)) * F_R +
+		    (S_R * S_L / (S_R - S_L)) * (U_R - U_L);
+
+		std::valarray<double> F(3);
+
+		// open the Riemann fan
+
+		if (S_L > 0.0) {
+			F = F_L;
+		} else if (S_R < 0.0) {
+			F = F_R;
+		} else { // S_L <= 0.0 <= S_R
+			F = F_star;
+		}
+
+		// add artificial viscosity following C&W Eq. (4.2), (4.5)
+
+		const double avisc_coef = 0.1;
+		const double div_v = (vx_R - vx_L); // modify for 3d!!!
+
+		// activate artificial viscosity only in converging flows, e.g.
+		// shocks
+		const double avisc = avisc_coef * std::max(-div_v, 0.0);
+		F = F + avisc * (U_L - U_R);
+
+		// check states are valid
+
+		assert(!std::isnan(F[0])); // NOLINT
+		assert(!std::isnan(F[1])); // NOLINT
+		assert(!std::isnan(F[2])); // NOLINT
+
+		x1Flux_(density_index, i) = F[0];
+		x1Flux_(x1Momentum_index, i) = F[1];
+		x1Flux_(energy_index, i) = F[2];
+	}
+}
+
+template <typename array_t>
+void HydroSystem<array_t>::AddSourceTerms(array_t &U, std::pair<int, int> range)
+{
+	// TODO(ben): to be implemented
+}
+
+template <typename array_t>
+void HydroSystem<array_t>::AddFluxesSDC(array_t &U_new, array_t &U0)
+{
+	// TODO(ben): to be implemented
+}
 
 #endif // HYDRO_SYSTEM_HPP_

@@ -9,7 +9,8 @@
 
 #include "test_advection.hpp"
 
-void write_density(LinearAdvectionSystem &advection_system)
+template <typename array_t>
+void write_density(LinearAdvectionSystem<array_t> &advection_system)
 {
 	std::cout << "density = ";
 
@@ -39,11 +40,12 @@ void testproblem_advection()
 
 	// Problem initialization
 
-	LinearAdvectionSystem advection_system(
-	    LinearAdvectionSystem::Nx = nx, LinearAdvectionSystem::Lx = Lx,
-	    LinearAdvectionSystem::Vx = advection_velocity,
-	    LinearAdvectionSystem::CFL = CFL_number,
-	    LinearAdvectionSystem::Nvars = nvars);
+	LinearAdvectionSystem<AthenaArray<double>> advection_system(
+	    {.nx = nx,
+	     .lx = Lx,
+	     .vx = advection_velocity,
+	     .cflNumber = CFL_number,
+	     .nvars = nvars});
 
 	auto nghost = advection_system.nghost();
 

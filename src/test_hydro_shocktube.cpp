@@ -24,9 +24,8 @@ void testproblem_hydro_shocktube()
 
 	// Problem initialization
 
-	HydroSystem hydro_system(HydroSystem::Nx = nx, HydroSystem::Lx = Lx,
-				 HydroSystem::CFL = CFL_number,
-				 HydroSystem::Gamma = gamma);
+	HydroSystem<AthenaArray<double>> hydro_system(
+	    {.nx = nx, .lx = Lx, .cflNumber = CFL_number, .gamma = gamma});
 
 	auto nghost = hydro_system.nghost();
 
@@ -36,8 +35,8 @@ void testproblem_hydro_shocktube()
 		    Lx * ((idx_value + 0.5) / static_cast<double>(nx));
 
 		const double vx = 0.0;
-		double rho;
-		double P;
+		double rho = NAN;
+		double P = NAN;
 
 		if (x < 2.0) {
 			rho = 10.0;

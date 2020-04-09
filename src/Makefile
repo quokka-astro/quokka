@@ -47,7 +47,7 @@ driver.exe: $(OBJ_FILES) $(KOKKOS_LINK_DEPENDS)
 ## static analysis / code linting
 
 tidy: $(ANALYZE_FILES)
-	clang-tidy -checks='*,-fuchsia-*,-misc-non-private-member-variables-in-classes,-cppcoreguidelines-non-private-member-variables-in-classes,-google-runtime-references' $^ -- $(KOKKOS_CPPFLAGS) $(KOKKOS_CXXFLAGS) $(CXXFLAGS) | sed 's/\x1b\[[0-9;]*m//g'
+	@clang-tidy -checks='*,-fuchsia-*,-misc-non-private-member-variables-in-classes,-cppcoreguidelines-non-private-member-variables-in-classes,-google-runtime-references,-readability-magic-numbers,-cppcoreguidelines-avoid-magic-numbers' $^ -- $(KOKKOS_CPPFLAGS) $(KOKKOS_CXXFLAGS) $(CXXFLAGS) | sed 's/\x1b\[[0-9;]*m//g'
 
 cpplint: $(ANALYZE_FILES)
 	cpplint $^

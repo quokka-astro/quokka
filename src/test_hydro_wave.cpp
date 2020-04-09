@@ -25,9 +25,8 @@ void testproblem_hydro_wave()
 
 	// Problem initialization
 
-	HydroSystem hydro_system(HydroSystem::Nx = nx, HydroSystem::Lx = Lx,
-				 HydroSystem::CFL = CFL_number,
-				 HydroSystem::Gamma = gamma);
+	HydroSystem<AthenaArray<double>> hydro_system(
+	    {.nx = nx, .lx = Lx, .cflNumber = CFL_number, .gamma = gamma});
 
 	auto nghost = hydro_system.nghost();
 

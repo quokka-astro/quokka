@@ -21,8 +21,8 @@ void testproblem_radiation_streaming()
 
 	// Problem initialization
 
-	RadSystem rad_system(RadSystem::Nx = nx, RadSystem::Lx = Lx,
-			     RadSystem::CFL = CFL_number);
+	RadSystem<AthenaArray<double>> rad_system(
+	    {.nx = nx, .lx = Lx, .cflNumber = CFL_number});
 
 	auto nghost = rad_system.nghost();
 

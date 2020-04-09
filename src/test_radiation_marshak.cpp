@@ -40,8 +40,8 @@ void testproblem_radiation_marshak()
 
 	// Problem initialization
 
-	RadSystem rad_system(RadSystem::Nx = nx, RadSystem::Lx = 1.0,
-			     RadSystem::CFL = CFL_number);
+	RadSystem<AthenaArray<double>> rad_system(
+	    {.nx = nx, .lx = Lz, .cflNumber = CFL_number});
 
 	rad_system.set_radiation_constant(1.0);
 	rad_system.set_c_light(1.0);
@@ -94,7 +94,7 @@ void testproblem_radiation_marshak()
 			vol_frac = 1.0;
 		} else if ((xl < x0) && (xr > x0)) {
 			const double vol_frac = (x0 - xl) / (xr - xl);
-			assert(vol_frac > 0.0);
+			assert(vol_frac > 0.0); // NOLINT
 		}
 
 		rad_system.set_radEnergySource(i) = S * vol_frac;
@@ -177,6 +177,10 @@ void testproblem_radiation_marshak()
 	    0.64308, 0.63585, 0.61958, 0.56187, 0.44711, 0.35801, 0.25374,
 	    0.11430, 0.03648, 0.00291, 0.,	0.,	 0.};
 
+	std::vector<double> Egas_transport_exact_1p0 = {
+	    0.27126, 0.26839, 0.26261, 0.23978, 0.18826, 0.14187, 0.08838,
+	    0.03014, 0.00625, 0.00017, 0.,	0.,	 0.};
+
 	std::vector<double> Erad_diffusion_exact_3p1 = {
 	    0.95968, 0.95049, 0.93036, 0.86638, 0.76956, 0.72433,
 	    0.66672, 0.51507, 0.35810, 0.21309, 0.10047, 0.00634};
@@ -187,10 +191,37 @@ void testproblem_radiation_marshak()
 	std::vector<double> Erad_diffusion_exact_10p0 = {
 	    1.86585, 1.85424, 1.82889, 1.74866, 1.62824, 1.57237, 1.50024,
 	    1.29758, 1.06011, 0.79696, 0.52980, 0.12187, 0.00445};
-
 	std::vector<double> Erad_transport_exact_10p0 = {
 	    2.23575, 2.21944, 2.18344, 2.06448, 1.86072, 1.73178, 1.57496,
 	    1.27398, 0.98782, 0.70822, 0.45016, 0.09673, 0.00375};
+
+	std::vector<double> Egas_transport_exact_10p0 = {
+	    2.11186, 2.09585, 2.06052, 1.94365, 1.74291, 1.61536, 1.46027,
+	    1.16591, 0.88992, 0.62521, 0.38688, 0.07642, 0.00253};
+
+	std::vector<double> Trad_exact_10(Erad_transport_exact_10p0);
+	std::vector<double> Trad_exact_1(Erad_transport_exact_1p0);
+
+	std::vector<double> Tgas_exact_10(Egas_transport_exact_10p0);
+	std::vector<double> Tgas_exact_1(Egas_transport_exact_10p0);
+
+	for (int i = 0; i < xs_exact.size(); ++i) {
+		Trad_exact_10.at(i) =
+		    kelvin_to_eV * T_hohlraum_scaled *
+		    std::pow(Erad_transport_exact_10p0.at(i) / a_rad, 1. / 4.);
+		Trad_exact_1.at(i) =
+		    kelvin_to_eV * T_hohlraum_scaled *
+		    std::pow(Erad_transport_exact_1p0.at(i) / a_rad, 1. / 4.);
+
+		Tgas_exact_10.at(i) = kelvin_to_eV * T_hohlraum_scaled *
+				      std::pow(Egas_transport_exact_10p0.at(i) /
+						   (rho * alpha_SuOlson),
+					       (1. / 4.));
+		Tgas_exact_1.at(i) = kelvin_to_eV * T_hohlraum_scaled *
+				     std::pow(Egas_transport_exact_1p0.at(i) /
+						  (rho * alpha_SuOlson),
+					      (1. / 4.));
+	}
 
 	matplotlibcpp::clf();
 	matplotlibcpp::xlim(0.2, 8.0); // cm
@@ -198,6 +229,26 @@ void testproblem_radiation_marshak()
 	std::map<std::string, std::string> Trad_args;
 	Trad_args["label"] = "radiation temperature";
 	matplotlibcpp::plot(xs, Trad, Trad_args);
+
+	std::map<std::string, std::string> Trad_exact10_args;
+	Trad_exact10_args["label"] = "radiation temperature (t=10)";
+	Trad_exact10_args["marker"] = "+";
+	matplotlibcpp::plot(xs_exact, Trad_exact_10, Trad_exact10_args);
+
+	std::map<std::string, std::string> Tgas_exact10_args;
+	Tgas_exact10_args["label"] = "gas temperature (t=10)";
+	Tgas_exact10_args["marker"] = "+";
+	matplotlibcpp::plot(xs_exact, Tgas_exact_10, Tgas_exact10_args);
+
+	// std::map<std::string, std::string> Trad_exact1_args;
+	// Trad_exact1_args["label"] = "radiation temperature (t=1)";
+	// Trad_exact1_args["marker"] = ".";
+	// matplotlibcpp::plot(xs_exact, Trad_exact_1, Trad_exact1_args);
+
+	// std::map<std::string, std::string> Tgas_exact1_args;
+	// Tgas_exact1_args["label"] = "gas temperature (t=1)";
+	// Tgas_exact1_args["marker"] = ".";
+	// matplotlibcpp::plot(xs_exact, Tgas_exact_1, Tgas_exact1_args);
 
 	std::map<std::string, std::string> Tgas_args;
 	Tgas_args["label"] = "gas temperature";
@@ -207,13 +258,18 @@ void testproblem_radiation_marshak()
 	matplotlibcpp::xlabel("length x (cm)");
 	matplotlibcpp::ylabel("temperature (eV)");
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", rad_system.time()));
-	matplotlibcpp::xlim(0.0, 3.0); // cm
+	// matplotlibcpp::xlim(0.0, 3.0); // cm
+	matplotlibcpp::xlim(1e-1, 10.); // cm
+	matplotlibcpp::ylim(10., 1e3);	// eV
+	matplotlibcpp::xscale("log");
+	matplotlibcpp::yscale("log");
 	matplotlibcpp::save("./marshak_wave_temperature.pdf");
 
 	matplotlibcpp::clf();
 
 	std::map<std::string, std::string> Erad_args;
 	Erad_args["label"] = "Numerical solution (Minerbo closure)";
+	// Erad_args["label"] = "Numerical solution (Levermore closure)";
 	Erad_args["color"] = "black";
 	matplotlibcpp::plot(xs, Erad, Erad_args);
 
