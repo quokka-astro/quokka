@@ -255,11 +255,23 @@ void RadSystem<array_t>::FillGhostZones(array_t &cons)
 		    -1.0 * cons(x1RadFlux_index, nghost_ + (nghost_ - i - 1));
 	}
 
+	// x1 right side boundary (reflecting)
+	for (int i = nghost_ + nx_; i < nghost_ + nx_ + nghost_; ++i) {
+		cons(radEnergy_index, i) =
+			cons(radEnergy_index, (nghost_ + nx_) - (i - nx_ - nghost_ + 1));
+		cons(x1RadFlux_index, i) = 
+			-1.0 * cons(x1RadFlux_index,
+						(nghost_ + nx_) - (i - nx_ - nghost_ + 1));
+	}
+
+#if 0
 	// x1 right side boundary (constant temperature, extrapolate flux)
 	for (int i = nghost_ + nx_; i < nghost_ + nx_ + nghost_; ++i) {
 		cons(radEnergy_index, i) = Erad_floor_;
 		cons(x1RadFlux_index, i) = 0.0;
 	}
+#endif
+
 }
 
 template <typename array_t>
@@ -493,8 +505,8 @@ void RadSystem<array_t>::AddSourceTerms(array_t &cons,
 		const double a_rad = radiation_constant_;
 
 		// load fluid properties
-		// const double c_v = boltzmann_constant_cgs_ /
-		// (mean_molecular_mass_cgs_ * (gamma_ - 1.0));
+		const double c_v = boltzmann_constant_ /
+			(mean_molecular_mass_ * (gamma_ - 1.0));
 
 		// Su & Olson (1997) test problem
 		const double eps_SuOlson = 1.0;
@@ -539,10 +551,10 @@ void RadSystem<array_t>::AddSourceTerms(array_t &cons,
 		for (n = 0; n < maxIter; ++n) {
 
 			// compute material temperature
-			// T_gas = Egas_guess / (rho * c_v);
+			T_gas = Egas_guess / (rho * c_v);
 
-			T_gas = std::pow(Egas_guess / (rho * alpha_SuOlson),
-					 1. / 4.);
+			//T_gas = std::pow(Egas_guess / (rho * alpha_SuOlson),
+			//		 1. / 4.);
 
 			// compute opacity, emissivity
 			kappa = ComputeOpacity(rho, T_gas);
@@ -568,12 +580,12 @@ void RadSystem<array_t>::AddSourceTerms(array_t &cons,
 			}
 
 			// compute Jacobian elements
-			// drhs_dEgas =
-			//    (dt / c_v) *
-			//    (kappa * dB_dTgas +
-			//     dkappa_dTgas * (fourPiB - c * Erad_guess));
+			drhs_dEgas =
+			    (dt / c_v) *
+			    (kappa * dB_dTgas +
+			    dkappa_dTgas * (fourPiB - c * Erad_guess));
 
-			drhs_dEgas = dt * (kappa * c * a_rad / alpha_SuOlson);
+			//drhs_dEgas = dt * (kappa * c * a_rad / alpha_SuOlson);
 
 			dFG_dEgas = 1.0 + drhs_dEgas;
 			dFG_dErad = dt * (-(rho * kappa) * c);
