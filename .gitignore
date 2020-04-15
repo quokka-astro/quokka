@@ -1,5 +1,7 @@
-*.mp4
+build/
 
+*.mp4
+*.pdf
 .DS_Store
 
 # Acme output files
