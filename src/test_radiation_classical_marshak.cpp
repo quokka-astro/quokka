@@ -123,11 +123,6 @@ void testproblem_radiation_classical_marshak()
 	rad_system.Erad_floor_ = initial_Erad;
 
 	for (int i = nghost; i < nx + nghost; ++i) {
-		const auto idx_value = static_cast<double>(i - nghost);
-		const double xl = Lx * ((idx_value) / static_cast<double>(nx));
-		const double xr =
-		    Lx * ((idx_value + 1.0) / static_cast<double>(nx));
-
 		rad_system.set_radEnergy(i) = initial_Erad;
 		rad_system.set_x1RadFlux(i) = 0.0;
 		rad_system.set_gasEnergy(i) = initial_Egas;

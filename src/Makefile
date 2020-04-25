@@ -1,6 +1,6 @@
 ## Makefile for TwoMomentRad library
 
-KOKKOS_PATH = ./kokkos
+KOKKOS_PATH = ../extern/kokkos
 KOKKOS_DEVICES = OpenMP
 
 CPP_FILES=$(wildcard *.cpp)
@@ -56,7 +56,7 @@ cppcheck: $(ANALYZE_FILES)
 	$(STATIC_ANALYZER) $(STATIC_ANALYZER_FLAGS) $^
 
 analyze: $(ANALYZE_FILES)
-	scan-build -v make driver.exe
+	scan-build-10 -v make driver.exe
 
 
 

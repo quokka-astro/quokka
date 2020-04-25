@@ -35,10 +35,10 @@ void testproblem_radiation_matter_coupling()
 	const int nx = 4;
 	const double Lx = 1.0;
 	const double CFL_number = 0.4;
-	//const double constant_dt = 1.0e-11; // s
-	//const double max_time = 1.0e-7;	    // s
+	// const double constant_dt = 1.0e-11; // s
+	// const double max_time = 1.0e-7;	    // s
 	const double constant_dt = 1.0e-9; // s
-	const double max_time = 1.0e-4;	    // s
+	const double max_time = 1.0e-4;	   // s
 
 	const int max_timesteps = 1e7;
 
@@ -143,10 +143,10 @@ void testproblem_radiation_matter_coupling()
 	std::vector<double> Tgas_exact(nmax);
 
 	for (int n = 0; n < nmax; ++n) {
+#if 0
 		const double T_r = initial_Trad;
 		const double T0 = initial_Tgas;
 
-#if 0
 		const double T_gas =
 		    (static_cast<double>(n + 1) / static_cast<double>(nmax)) *
 			(T_r - T0) +
@@ -172,7 +172,11 @@ void testproblem_radiation_matter_coupling()
 		const double E0 = (Erad + Egas) / (arad + alpha_SuOlson / 4.0);
 		const double T0_4 = std::pow(initial_Tgas, 4);
 
-		const double T4 = (T0_4 - E0) * std::exp(-(4./alpha_SuOlson)*(arad + alpha_SuOlson / 4.0)*kappa*rho*c*time_t) + E0;
+		const double T4 =
+		    (T0_4 - E0) * std::exp(-(4. / alpha_SuOlson) *
+					   (arad + alpha_SuOlson / 4.0) *
+					   kappa * rho * c * time_t) +
+		    E0;
 
 		const double T_gas = std::pow(T4, 1. / 4.);
 
@@ -212,7 +216,8 @@ void testproblem_radiation_matter_coupling()
 	std::vector<double> frac_err(t.size());
 	for (int i = 0; i < t.size(); ++i) {
 		frac_err.at(i) = Tgas_exact.at(i) / Tgas.at(i) - 1.0;
-		//std::cout << Tgas.at(i) << "\t" << Tgas_exact.at(i) << std::endl;
+		// std::cout << Tgas.at(i) << "\t" << Tgas_exact.at(i) <<
+		// std::endl;
 	}
 	matplotlibcpp::plot(t, frac_err);
 	matplotlibcpp::xlabel("time t (s)");
