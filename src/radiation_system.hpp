@@ -257,11 +257,11 @@ void RadSystem<array_t>::FillGhostZones(array_t &cons)
 
 	// x1 right side boundary (reflecting)
 	for (int i = nghost_ + nx_; i < nghost_ + nx_ + nghost_; ++i) {
-		cons(radEnergy_index, i) =
-			cons(radEnergy_index, (nghost_ + nx_) - (i - nx_ - nghost_ + 1));
-		cons(x1RadFlux_index, i) = 
-			-1.0 * cons(x1RadFlux_index,
-						(nghost_ + nx_) - (i - nx_ - nghost_ + 1));
+		cons(radEnergy_index, i) = cons(
+		    radEnergy_index, (nghost_ + nx_) - (i - nx_ - nghost_ + 1));
+		cons(x1RadFlux_index, i) =
+		    -1.0 * cons(x1RadFlux_index,
+				(nghost_ + nx_) - (i - nx_ - nghost_ + 1));
 	}
 
 #if 0
@@ -271,7 +271,6 @@ void RadSystem<array_t>::FillGhostZones(array_t &cons)
 		cons(x1RadFlux_index, i) = 0.0;
 	}
 #endif
-
 }
 
 template <typename array_t>
@@ -395,7 +394,6 @@ void RadSystem<array_t>::ComputeFluxes(const std::pair<int, int> range)
 
 		// compute radiation pressure tensors
 
-#if 0
 		// compute Levermore (1984) closure [Eq. 25]
 		const double f_facL = std::sqrt(4.0 - 3.0 * (f_L * f_L));
 		const double f_facR = std::sqrt(4.0 - 3.0 * (f_R * f_R));
@@ -404,8 +402,8 @@ void RadSystem<array_t>::ComputeFluxes(const std::pair<int, int> range)
 		    (3.0 + 4.0 * (f_L * f_L)) / (5.0 + 2.0 * f_facL);
 		const double chi_R =
 		    (3.0 + 4.0 * (f_R * f_R)) / (5.0 + 2.0 * f_facR);
-#endif
 
+#if 0
 		// compute Minerbo (1978) closure [piecewise approximation]
 		// (For unknown reasons, this closure tends to work better
 		// than the Levermore/Lorentz closure.)
@@ -413,6 +411,7 @@ void RadSystem<array_t>::ComputeFluxes(const std::pair<int, int> range)
 		    (f_L < 1. / 3.) ? (1. / 3.) : (0.5 - f_L + 1.5 * f_L * f_L);
 		const double chi_R =
 		    (f_R < 1. / 3.) ? (1. / 3.) : (0.5 - f_R + 1.5 * f_R * f_R);
+#endif
 
 		assert((chi_L >= 1. / 3.) && (chi_L <= 1.0)); // NOLINT
 		assert((chi_R >= 1. / 3.) && (chi_R <= 1.0)); // NOLINT
@@ -505,8 +504,8 @@ void RadSystem<array_t>::AddSourceTerms(array_t &cons,
 		const double a_rad = radiation_constant_;
 
 		// load fluid properties
-		const double c_v = boltzmann_constant_ /
-			(mean_molecular_mass_ * (gamma_ - 1.0));
+		// const double c_v = boltzmann_constant_ /
+		//	(mean_molecular_mass_ * (gamma_ - 1.0));
 
 		// Su & Olson (1997) test problem
 		const double eps_SuOlson = 1.0;
@@ -551,10 +550,10 @@ void RadSystem<array_t>::AddSourceTerms(array_t &cons,
 		for (n = 0; n < maxIter; ++n) {
 
 			// compute material temperature
-			T_gas = Egas_guess / (rho * c_v);
+			// T_gas = Egas_guess / (rho * c_v);
 
-			//T_gas = std::pow(Egas_guess / (rho * alpha_SuOlson),
-			//		 1. / 4.);
+			T_gas =
+			    std::pow(4.0 * Egas_guess / alpha_SuOlson, 1. / 4.);
 
 			// compute opacity, emissivity
 			kappa = ComputeOpacity(rho, T_gas);
@@ -580,12 +579,13 @@ void RadSystem<array_t>::AddSourceTerms(array_t &cons,
 			}
 
 			// compute Jacobian elements
-			drhs_dEgas =
-			    (dt / c_v) *
-			    (kappa * dB_dTgas +
-			    dkappa_dTgas * (fourPiB - c * Erad_guess));
+			// drhs_dEgas =
+			//    (dt / c_v) *
+			//    (kappa * dB_dTgas +
+			//    dkappa_dTgas * (fourPiB - c * Erad_guess));
 
-			//drhs_dEgas = dt * (kappa * c * a_rad / alpha_SuOlson);
+			drhs_dEgas = dt * (rho * kappa * c * a_rad) *
+				     (4.0 / alpha_SuOlson);
 
 			dFG_dEgas = 1.0 + drhs_dEgas;
 			dFG_dErad = dt * (-(rho * kappa) * c);

@@ -32,7 +32,7 @@ include $(KOKKOS_PATH)/Makefile.kokkos
 ## code formatting
 
 format: $(SRC_FILES)
-	clang-format-9 -i $^
+	clang-format-10 -i $^
 
 
 ## compiling

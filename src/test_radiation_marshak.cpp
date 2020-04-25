@@ -9,6 +9,25 @@
 
 #include "test_radiation_marshak.hpp"
 
+auto main() -> int
+{
+	// Initialization
+
+	Kokkos::initialize();
+
+	int result = 0;
+
+	{ // objects must be destroyed before Kokkos::finalize, so enter new
+	  // scope here to do that automatically
+
+		testproblem_radiation_marshak();
+
+	} // destructors must be called before Kokkos::finalize()
+	Kokkos::finalize();
+
+	return result;
+}
+
 void testproblem_radiation_marshak()
 {
 	// For this problem, you must do reconstruction in the reduced
@@ -19,10 +38,10 @@ void testproblem_radiation_marshak()
 
 	const int max_timesteps = 12000;
 	const double CFL_number = 0.4;
-	const int nx = 1200;
+	const int nx = 1500;
 
-	const double initial_dtau = 1e-6; // dimensionless time
-	const double max_dtau = 1e-3;	  // dimensionless time
+	const double initial_dtau = 1e-9; // dimensionless time
+	const double max_dtau = 1e-2;	  // dimensionless time
 	// const double max_tau = 3.16228;	  // dimensionless time
 	const double max_tau = 10.0; // dimensionless time
 	const double Lz = 30.0;	     // dimensionless length
@@ -35,8 +54,8 @@ void testproblem_radiation_marshak()
 
 	const double rho = 1.0; // g cm^-3 (matter density)
 	const double kappa = 1.0;
-	const double T_hohlraum_scaled = 3.481334e6; // K [= 300 eV]
-	const double T_hohlraum = 1.0;		     // dimensionless
+	const double T_hohlraum = 1.0; // dimensionless
+	// const double T_hohlraum_scaled = 3.481334e6; // K [= 300 eV]
 
 	// Problem initialization
 
@@ -54,7 +73,7 @@ void testproblem_radiation_marshak()
 	std::cout << "radiation constant (code units) = " << a_rad << "\n";
 	std::cout << "c_light (code units) = " << c << "\n";
 
-	const double kelvin_to_eV = 8.617385e-5;
+	// const double kelvin_to_eV = 8.617385e-5;
 
 	const double chi = rho * kappa; // cm^-1 (total matter opacity)
 	const double x0 = z0 / chi;	// cm
@@ -71,10 +90,19 @@ void testproblem_radiation_marshak()
 	rad_system.set_lx(Lx);
 
 	const double alpha_SuOlson = 4.0 * a_rad / eps_SuOlson;
-	const double S = Q * (a_rad * std::pow(T_hohlraum, 4)); // erg cm^{-3}
-	const auto initial_Egas =
-	    1e-10 * (rho * alpha_SuOlson) * std::pow(T_hohlraum, 4);
+
+	auto ComputeTgasFromEgas = [=](const double Eint) {
+		return std::pow(4.0 * Eint / alpha_SuOlson, 1. / 4.);
+	};
+
+	auto ComputeEgasFromTgas = [=](const double Tgas) {
+		return (alpha_SuOlson / 4.0) * std::pow(Tgas, 4);
+	};
+
+	const auto initial_Egas = 1e-10 * ComputeEgasFromTgas(T_hohlraum);
 	const auto initial_Erad = 1e-10 * (a_rad * std::pow(T_hohlraum, 4));
+
+	const double S = Q * (a_rad * std::pow(T_hohlraum, 4)); // erg cm^{-3}
 
 	rad_system.Erad_floor_ = initial_Erad;
 
@@ -107,7 +135,26 @@ void testproblem_radiation_marshak()
 	// Main time loop
 
 	for (int j = 0; j < max_timesteps; ++j) {
+
 		if (rad_system.time() >= max_time) {
+			std::cout << "Timestep " << j
+				  << "; t = " << rad_system.time()
+				  << "; dt = " << rad_system.dt() << "\n";
+
+			const auto Erad = rad_system.ComputeRadEnergy();
+			const auto Egas = rad_system.ComputeGasEnergy();
+			const auto Etot = Erad + Egas;
+			const auto Ediff = std::fabs(Etot - Etot0);
+			const auto Eadded = x0 * rad_system.time() * (c * S);
+
+			std::cout << "radiation energy = " << Erad << "\n";
+			std::cout << "gas energy = " << Egas << "\n";
+			std::cout << "Total energy = " << Etot << "\n";
+			std::cout << "(Energy nonconservation = " << Ediff
+				  << ")\n";
+			std::cout << "Injected energy = " << Eadded << "\n";
+			std::cout << "\n";
+
 			break;
 		}
 
@@ -119,22 +166,6 @@ void testproblem_radiation_marshak()
 
 		const double this_dtMax = ((j == 0) ? initial_dt : max_dt);
 		rad_system.AdvanceTimestepRK2(this_dtMax);
-
-		std::cout << "Timestep " << j << "; t = " << rad_system.time()
-			  << "; dt = " << rad_system.dt() << "\n";
-
-		const auto Erad = rad_system.ComputeRadEnergy();
-		const auto Egas = rad_system.ComputeGasEnergy();
-		const auto Etot = Erad + Egas;
-		const auto Ediff = std::fabs(Etot - Etot0);
-		const auto Eadded = x0 * rad_system.time() * (c * S);
-
-		std::cout << "radiation energy = " << Erad << "\n";
-		std::cout << "gas energy = " << Egas << "\n";
-		std::cout << "Total energy = " << Etot << "\n";
-		std::cout << "(Energy nonconservation = " << Ediff << ")\n";
-		std::cout << "Injected energy = " << Eadded << "\n";
-		std::cout << "\n";
 	}
 
 	std::vector<double> xs(nx);
@@ -148,15 +179,12 @@ void testproblem_radiation_marshak()
 		xs.at(i) = x;
 
 		const auto Erad_t = rad_system.radEnergy(i + nghost);
-		Erad.at(i) = Erad_t / (a_rad * std::pow(T_hohlraum, 4));
-		Trad.at(i) = kelvin_to_eV * T_hohlraum_scaled *
-			     std::pow(Erad_t / a_rad, 1. / 4.);
+		Erad.at(i) = Erad_t;
+		Trad.at(i) = std::pow(Erad_t / a_rad, 1. / 4.);
 
 		const auto Egas_t = rad_system.gasEnergy(i + nghost);
-		Egas.at(i) = Egas_t / (a_rad * std::pow(T_hohlraum, 4));
-		Tgas.at(i) =
-		    kelvin_to_eV * T_hohlraum_scaled *
-		    std::pow(Egas_t / (rho * alpha_SuOlson), (1. / 4.));
+		Egas.at(i) = Egas_t;
+		Tgas.at(i) = ComputeTgasFromEgas(Egas_t);
 	}
 
 	std::vector<double> xs_exact = {
@@ -207,20 +235,14 @@ void testproblem_radiation_marshak()
 
 	for (int i = 0; i < xs_exact.size(); ++i) {
 		Trad_exact_10.at(i) =
-		    kelvin_to_eV * T_hohlraum_scaled *
 		    std::pow(Erad_transport_exact_10p0.at(i) / a_rad, 1. / 4.);
 		Trad_exact_1.at(i) =
-		    kelvin_to_eV * T_hohlraum_scaled *
 		    std::pow(Erad_transport_exact_1p0.at(i) / a_rad, 1. / 4.);
 
-		Tgas_exact_10.at(i) = kelvin_to_eV * T_hohlraum_scaled *
-				      std::pow(Egas_transport_exact_10p0.at(i) /
-						   (rho * alpha_SuOlson),
-					       (1. / 4.));
-		Tgas_exact_1.at(i) = kelvin_to_eV * T_hohlraum_scaled *
-				     std::pow(Egas_transport_exact_1p0.at(i) /
-						  (rho * alpha_SuOlson),
-					      (1. / 4.));
+		Tgas_exact_10.at(i) =
+		    ComputeTgasFromEgas(Egas_transport_exact_10p0.at(i));
+		Tgas_exact_1.at(i) =
+		    ComputeTgasFromEgas(Egas_transport_exact_1p0.at(i));
 	}
 
 	matplotlibcpp::clf();
@@ -231,45 +253,50 @@ void testproblem_radiation_marshak()
 	matplotlibcpp::plot(xs, Trad, Trad_args);
 
 	std::map<std::string, std::string> Trad_exact10_args;
-	Trad_exact10_args["label"] = "radiation temperature (t=10)";
-	Trad_exact10_args["marker"] = "+";
+	Trad_exact10_args["label"] = "radiation temperature (exact)";
+	Trad_exact10_args["marker"] = ".";
+	Trad_exact10_args["linestyle"] = "none";
+	Trad_exact10_args["color"] = "black";
 	matplotlibcpp::plot(xs_exact, Trad_exact_10, Trad_exact10_args);
 
-	std::map<std::string, std::string> Tgas_exact10_args;
-	Tgas_exact10_args["label"] = "gas temperature (t=10)";
-	Tgas_exact10_args["marker"] = "+";
-	matplotlibcpp::plot(xs_exact, Tgas_exact_10, Tgas_exact10_args);
-
-	// std::map<std::string, std::string> Trad_exact1_args;
-	// Trad_exact1_args["label"] = "radiation temperature (t=1)";
-	// Trad_exact1_args["marker"] = ".";
+	std::map<std::string, std::string> Trad_exact1_args;
+	Trad_exact1_args["label"] = "radiation temperature (exact)";
+	Trad_exact1_args["marker"] = ".";
+	Trad_exact1_args["linestyle"] = "none";
+	Trad_exact1_args["color"] = "black";
 	// matplotlibcpp::plot(xs_exact, Trad_exact_1, Trad_exact1_args);
-
-	// std::map<std::string, std::string> Tgas_exact1_args;
-	// Tgas_exact1_args["label"] = "gas temperature (t=1)";
-	// Tgas_exact1_args["marker"] = ".";
-	// matplotlibcpp::plot(xs_exact, Tgas_exact_1, Tgas_exact1_args);
 
 	std::map<std::string, std::string> Tgas_args;
 	Tgas_args["label"] = "gas temperature";
 	matplotlibcpp::plot(xs, Tgas, Tgas_args);
 
+	std::map<std::string, std::string> Tgas_exact10_args;
+	Tgas_exact10_args["label"] = "gas temperature (exact)";
+	Tgas_exact10_args["marker"] = "*";
+	Tgas_exact10_args["linestyle"] = "none";
+	Tgas_exact10_args["color"] = "black";
+	matplotlibcpp::plot(xs_exact, Tgas_exact_10, Tgas_exact10_args);
+
+	std::map<std::string, std::string> Tgas_exact1_args;
+	Tgas_exact1_args["label"] = "gas temperature (exact)";
+	Tgas_exact1_args["marker"] = "*";
+	Tgas_exact1_args["linestyle"] = "none";
+	Tgas_exact1_args["color"] = "black";
+	// matplotlibcpp::plot(xs_exact, Tgas_exact_1, Tgas_exact1_args);
+
 	matplotlibcpp::legend();
-	matplotlibcpp::xlabel("length x (cm)");
-	matplotlibcpp::ylabel("temperature (eV)");
+	matplotlibcpp::xlabel("length x (dimensionless)");
+	matplotlibcpp::ylabel("temperature (dimensionless)");
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", rad_system.time()));
-	// matplotlibcpp::xlim(0.0, 3.0); // cm
-	matplotlibcpp::xlim(1e-1, 10.); // cm
-	matplotlibcpp::ylim(10., 1e3);	// eV
+	matplotlibcpp::xlim(0.1, 30.0); // cm
+	// matplotlibcpp::ylim(0.0, 1.3);	// dimensionless
 	matplotlibcpp::xscale("log");
-	matplotlibcpp::yscale("log");
 	matplotlibcpp::save("./marshak_wave_temperature.pdf");
 
 	matplotlibcpp::clf();
 
 	std::map<std::string, std::string> Erad_args;
-	Erad_args["label"] = "Numerical solution (Minerbo closure)";
-	// Erad_args["label"] = "Numerical solution (Levermore closure)";
+	Erad_args["label"] = "Numerical solution";
 	Erad_args["color"] = "black";
 	matplotlibcpp::plot(xs, Erad, Erad_args);
 
@@ -284,18 +311,18 @@ void testproblem_radiation_marshak()
 	std::map<std::string, std::string> transport_args;
 	transport_args["label"] = "transport solution (exact)";
 	transport_args["color"] = "red";
-	transport_args["linestyle"] = "dashed";
+	transport_args["linestyle"] = "none";
 	transport_args["marker"] = "*";
 	matplotlibcpp::plot(xs_exact, Erad_transport_exact_10p0,
 			    transport_args);
 
 	matplotlibcpp::legend();
-	matplotlibcpp::xlabel("length x (cm)");
+	matplotlibcpp::xlabel("length x (dimensionless)");
 	matplotlibcpp::ylabel("radiation energy density (dimensionless)");
 	matplotlibcpp::title(fmt::format(
 	    "time ct = {:.4g}", rad_system.time() * (eps_SuOlson * c * chi)));
-	matplotlibcpp::ylim(0.0, 2.3);
 	matplotlibcpp::xlim(0.0, 3.0); // cm
+	//	matplotlibcpp::ylim(0.0, 2.3);
 	matplotlibcpp::save("./marshak_wave.pdf");
 
 	matplotlibcpp::xscale("log");
