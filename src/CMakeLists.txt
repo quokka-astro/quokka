@@ -1,4 +1,4 @@
-add_subdirectory(${TwoMomentRad_SOURCE_DIR}/src/kokkos ${TwoMomentRad_BINARY_DIR}/kokkos)
+add_subdirectory(${TwoMomentRad_SOURCE_DIR}/extern/kokkos ${TwoMomentRad_BINARY_DIR}/kokkos)
 find_package(PythonLibs REQUIRED)
 
 add_executable(test_radiation_matter_coupling radiation_system.cpp hyperbolic_system.cpp test_radiation_matter_coupling.cpp)
