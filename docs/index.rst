@@ -6,16 +6,19 @@
 Welcome to TwoMomentRad's documentation!
 ========================================
 
+This is a library for computing radiation hydrodynamics for patch-based AMR codes.
+
 .. toctree::
    :maxdepth: 2
-   :caption: Contents:
 
    about
-   api/library_root
-
-
+   installation
+   
+   
 Indices and tables
 ==================
 
 * :ref:`genindex`
 * :ref:`search`
+
+
