@@ -10,7 +10,7 @@
 ///
 
 // external headers
-#include "fmt/include/fmt/format.h"
+#include <fmt/format.h>
 #include "matplotlibcpp.h"
 
 // internal headers

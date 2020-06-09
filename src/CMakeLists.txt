@@ -1,32 +1,37 @@
 add_subdirectory(${TwoMomentRad_SOURCE_DIR}/extern/kokkos ${TwoMomentRad_BINARY_DIR}/kokkos)
+add_subdirectory(${TwoMomentRad_SOURCE_DIR}/extern/fmt ${TwoMomentRad_BINARY_DIR}/fmt)
+
 find_package(PythonLibs REQUIRED)
 
 add_executable(test_radiation_matter_coupling radiation_system.cpp hyperbolic_system.cpp test_radiation_matter_coupling.cpp)
 
-add_definitions(-DFMT_HEADER_ONLY)
 include_directories(${PYTHON_INCLUDE_DIRS})
 include_directories(${Kokkos_INCLUDE_DIRS_RET})
+include_directories(${fmt_INCLUDE_DIRS_RET})
 
 add_executable(test_radiation_marshak radiation_system.cpp hyperbolic_system.cpp test_radiation_marshak.cpp)
 
-add_definitions(-DFMT_HEADER_ONLY)
 include_directories(${PYTHON_INCLUDE_DIRS})
 include_directories(${Kokkos_INCLUDE_DIRS_RET})
+include_directories(${fmt_INCLUDE_DIRS_RET})
 
 add_executable(test_radiation_classical_marshak radiation_system.cpp hyperbolic_system.cpp test_radiation_classical_marshak.cpp)
 
-add_definitions(-DFMT_HEADER_ONLY)
 include_directories(${PYTHON_INCLUDE_DIRS})
 include_directories(${Kokkos_INCLUDE_DIRS_RET})
+include_directories(${fmt_INCLUDE_DIRS_RET})
 
 target_link_libraries(test_radiation_matter_coupling ${PYTHON_LIBRARY})
 target_link_libraries(test_radiation_matter_coupling kokkos)
+target_link_libraries(test_radiation_matter_coupling fmt::fmt)
 
 target_link_libraries(test_radiation_marshak ${PYTHON_LIBRARY})
 target_link_libraries(test_radiation_marshak kokkos)
+target_link_libraries(test_radiation_marshak fmt::fmt)
 
 target_link_libraries(test_radiation_classical_marshak ${PYTHON_LIBRARY})
 target_link_libraries(test_radiation_classical_marshak kokkos)
+target_link_libraries(test_radiation_classical_marshak fmt::fmt)
 
 include(CTest)
 add_test(NAME MatterEnergyExchange COMMAND test_radiation_matter_coupling)
