@@ -17,7 +17,11 @@
 #include "athena_arrays.hpp"
 #include "radiation_system.hpp"
 
+extern "C" {
+	#include "interpolate.h"
+}
+
 // function definitions
-void testproblem_radiation_matter_coupling();
+auto testproblem_radiation_matter_coupling() -> int;
 
 #endif // TEST_RADIATION_MATTER_COUPLING_HPP_

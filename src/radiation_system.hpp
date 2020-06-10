@@ -24,27 +24,27 @@
 
 /// Class for a linear, scalar advection equation
 ///
-template <typename array_t> class RadSystem : public HyperbolicSystem<array_t>
+template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_t>
 {
 	// See
 	// https://stackoverflow.com/questions/4010281/accessing-protected-members-of-superclass-in-c-with-templates
 	// for why this is necessary.
-	using HyperbolicSystem<array_t>::lx_;
-	using HyperbolicSystem<array_t>::nx_;
-	using HyperbolicSystem<array_t>::dx_;
-	using HyperbolicSystem<array_t>::dt_;
-	using HyperbolicSystem<array_t>::cflNumber_;
-	using HyperbolicSystem<array_t>::dim1_;
-	using HyperbolicSystem<array_t>::nghost_;
-	using HyperbolicSystem<array_t>::nvars_;
+	using HyperbolicSystem<problem_t>::lx_;
+	using HyperbolicSystem<problem_t>::nx_;
+	using HyperbolicSystem<problem_t>::dx_;
+	using HyperbolicSystem<problem_t>::dt_;
+	using HyperbolicSystem<problem_t>::cflNumber_;
+	using HyperbolicSystem<problem_t>::dim1_;
+	using HyperbolicSystem<problem_t>::nghost_;
+	using HyperbolicSystem<problem_t>::nvars_;
 
-	using HyperbolicSystem<array_t>::x1LeftState_;
-	using HyperbolicSystem<array_t>::x1RightState_;
-	using HyperbolicSystem<array_t>::x1Flux_;
-	using HyperbolicSystem<array_t>::x1FluxDiffusive_;
-	using HyperbolicSystem<array_t>::primVar_;
-	using HyperbolicSystem<array_t>::consVar_;
-	using HyperbolicSystem<array_t>::consVarPredictStep_;
+	using HyperbolicSystem<problem_t>::x1LeftState_;
+	using HyperbolicSystem<problem_t>::x1RightState_;
+	using HyperbolicSystem<problem_t>::x1Flux_;
+	using HyperbolicSystem<problem_t>::x1FluxDiffusive_;
+	using HyperbolicSystem<problem_t>::primVar_;
+	using HyperbolicSystem<problem_t>::consVar_;
+	using HyperbolicSystem<problem_t>::consVarPredictStep_;
 
       public:
 	enum consVarIndex {
@@ -129,92 +129,106 @@ template <typename array_t> class RadSystem : public HyperbolicSystem<array_t>
 	void ComputeTimestep(double dt_max) override;
 };
 
-template <typename array_t> auto RadSystem<array_t>::c_light() const -> double
+template <typename problem_t>
+RadSystem<problem_t>::RadSystem(RadSystemArgs args)
+    : HyperbolicSystem<problem_t>{args.nx, args.lx, args.cflNumber, 4}
+{
+	radEnergy_.InitWithShallowSlice(consVar_, 2, radEnergy_index, 0);
+	x1RadFlux_.InitWithShallowSlice(consVar_, 2, x1RadFlux_index, 0);
+
+	gasEnergy_.InitWithShallowSlice(consVar_, 2, gasEnergy_index, 0);
+	staticGasDensity_.InitWithShallowSlice(consVar_, 2, gasDensity_index,
+					       0);
+
+	radEnergySource_.NewAthenaArray(args.nx + 2 * nghost_);
+}
+
+template <typename problem_t> auto RadSystem<problem_t>::c_light() const -> double
 {
 	return c_light_;
 }
 
-template <typename array_t> void RadSystem<array_t>::set_c_light(double c_light)
+template <typename problem_t> void RadSystem<problem_t>::set_c_light(double c_light)
 {
 	c_light_ = c_light;
 	c_hat_ = c_light;
 }
 
-template <typename array_t>
-auto RadSystem<array_t>::radiation_constant() const -> double
+template <typename problem_t>
+auto RadSystem<problem_t>::radiation_constant() const -> double
 {
 	return radiation_constant_;
 }
 
-template <typename array_t>
-void RadSystem<array_t>::set_radiation_constant(double arad)
+template <typename problem_t>
+void RadSystem<problem_t>::set_radiation_constant(double arad)
 {
 	radiation_constant_ = arad;
 }
 
-template <typename array_t> void RadSystem<array_t>::set_lx(const double lx)
+template <typename problem_t> void RadSystem<problem_t>::set_lx(const double lx)
 {
 	assert(lx > 0.0); // NOLINT
 	lx_ = lx;
 	dx_ = lx / static_cast<double>(nx_);
 }
 
-template <typename array_t>
-auto RadSystem<array_t>::radEnergy(const int i) const -> double
+template <typename problem_t>
+auto RadSystem<problem_t>::radEnergy(const int i) const -> double
 {
 	return radEnergy_(i);
 }
 
-template <typename array_t>
-auto RadSystem<array_t>::set_radEnergy(const int i) -> double &
+template <typename problem_t>
+auto RadSystem<problem_t>::set_radEnergy(const int i) -> double &
 {
 	return radEnergy_(i);
 }
 
-template <typename array_t>
-auto RadSystem<array_t>::x1RadFlux(const int i) const -> double
+template <typename problem_t>
+auto RadSystem<problem_t>::x1RadFlux(const int i) const -> double
 {
 	return x1RadFlux_(i);
 }
 
-template <typename array_t>
-auto RadSystem<array_t>::set_x1RadFlux(const int i) -> double &
+template <typename problem_t>
+auto RadSystem<problem_t>::set_x1RadFlux(const int i) -> double &
 {
 	return x1RadFlux_(i);
 }
 
-template <typename array_t>
-auto RadSystem<array_t>::gasEnergy(const int i) const -> double
+template <typename problem_t>
+auto RadSystem<problem_t>::gasEnergy(const int i) const -> double
 {
 	return gasEnergy_(i);
 }
 
-template <typename array_t>
-auto RadSystem<array_t>::set_gasEnergy(const int i) -> double &
+template <typename problem_t>
+auto RadSystem<problem_t>::set_gasEnergy(const int i) -> double &
 {
 	return gasEnergy_(i);
 }
 
-template <typename array_t>
-auto RadSystem<array_t>::staticGasDensity(const int i) const -> double
+template <typename problem_t>
+auto RadSystem<problem_t>::staticGasDensity(const int i) const -> double
 {
 	return staticGasDensity_(i);
 }
 
-template <typename array_t>
-auto RadSystem<array_t>::set_staticGasDensity(const int i) -> double &
+template <typename problem_t>
+auto RadSystem<problem_t>::set_staticGasDensity(const int i) -> double &
 {
 	return staticGasDensity_(i);
 }
 
-template <typename array_t>
-auto RadSystem<array_t>::set_radEnergySource(const int i) -> double &
+template <typename problem_t>
+auto RadSystem<problem_t>::set_radEnergySource(const int i) -> double &
 {
 	return radEnergySource_(i);
 }
 
-template <typename array_t>
-auto RadSystem<array_t>::ComputeRadEnergy() const -> double
+template <typename problem_t>
+auto RadSystem<problem_t>::ComputeRadEnergy() const -> double
 {
 	double energy = 0.0;
 
@@ -225,8 +239,8 @@ auto RadSystem<array_t>::ComputeRadEnergy() const -> double
 	return energy;
 }
 
-template <typename array_t>
-auto RadSystem<array_t>::ComputeGasEnergy() const -> double
+template <typename problem_t>
+auto RadSystem<problem_t>::ComputeGasEnergy() const -> double
 {
 	double energy = 0.0;
 
@@ -237,8 +251,9 @@ auto RadSystem<array_t>::ComputeGasEnergy() const -> double
 	return energy;
 }
 
-template <typename array_t>
-void RadSystem<array_t>::FillGhostZones(array_t &cons)
+
+template <typename problem_t>
+void RadSystem<problem_t>::FillGhostZones(array_t &cons)
 {
 	// In general, this step will require MPI communication, and interaction
 	// with the main AMR code.
@@ -273,8 +288,9 @@ void RadSystem<array_t>::FillGhostZones(array_t &cons)
 #endif
 }
 
-template <typename array_t>
-auto RadSystem<array_t>::CheckStatesValid(array_t &cons,
+
+template <typename problem_t>
+auto RadSystem<problem_t>::CheckStatesValid(array_t &cons,
 					  const std::pair<int, int> range) const
     -> bool
 {
@@ -303,8 +319,8 @@ auto RadSystem<array_t>::CheckStatesValid(array_t &cons,
 	return all_valid;
 }
 
-template <typename array_t>
-void RadSystem<array_t>::ConservedToPrimitive(array_t &cons,
+template <typename problem_t>
+void RadSystem<problem_t>::ConservedToPrimitive(array_t &cons,
 					      const std::pair<int, int> range)
 {
 	// keep radiation energy density as-is
@@ -325,8 +341,8 @@ void RadSystem<array_t>::ConservedToPrimitive(array_t &cons,
 	}
 }
 
-template <typename array_t>
-void RadSystem<array_t>::ComputeTimestep(const double dt_max)
+template <typename problem_t>
+void RadSystem<problem_t>::ComputeTimestep(const double dt_max)
 {
 	// double dt = std::numeric_limits<double>::max();
 	double dt = dt_max;
@@ -344,8 +360,8 @@ void RadSystem<array_t>::ComputeTimestep(const double dt_max)
 	dt_ = dt;
 }
 
-template <typename array_t>
-void RadSystem<array_t>::ComputeFluxes(const std::pair<int, int> range)
+template <typename problem_t>
+void RadSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 {
 	// By convention, the interfaces are defined on the left edge of each
 	// zone, i.e. xinterface_(i) is the solution to the Riemann problem at
@@ -406,7 +422,7 @@ void RadSystem<array_t>::ComputeFluxes(const std::pair<int, int> range)
 #if 0
 		// compute Minerbo (1978) closure [piecewise approximation]
 		// (For unknown reasons, this closure tends to work better
-		// than the Levermore/Lorentz closure.)
+		// than the Levermore/Lorentz closure on the Su & Olson 1997 test.)
 		const double chi_L =
 		    (f_L < 1. / 3.) ? (1. / 3.) : (0.5 - f_L + 1.5 * f_L * f_L);
 		const double chi_R =
@@ -468,8 +484,8 @@ void RadSystem<array_t>::ComputeFluxes(const std::pair<int, int> range)
 	}
 }
 
-template <typename array_t>
-auto RadSystem<array_t>::ComputeOpacity(const double rho, const double Temp)
+template <typename problem_t>
+auto RadSystem<problem_t>::ComputeOpacity(const double rho, const double Temp)
     -> double
 {
 	// TODO(ben): interpolate from a table
@@ -477,8 +493,8 @@ auto RadSystem<array_t>::ComputeOpacity(const double rho, const double Temp)
 	return 1.0;
 }
 
-template <typename array_t>
-auto RadSystem<array_t>::ComputeOpacityTempDerivative(const double rho,
+template <typename problem_t>
+auto RadSystem<problem_t>::ComputeOpacityTempDerivative(const double rho,
 						      const double Temp)
     -> double
 {
@@ -486,8 +502,8 @@ auto RadSystem<array_t>::ComputeOpacityTempDerivative(const double rho,
 	return 0.0;
 }
 
-template <typename array_t>
-void RadSystem<array_t>::AddSourceTerms(array_t &cons,
+template <typename problem_t>
+void RadSystem<problem_t>::AddSourceTerms(array_t &cons,
 					std::pair<int, int> range)
 {
 	// Lorentz transform the radiation variables into the comoving frame
@@ -628,8 +644,8 @@ void RadSystem<array_t>::AddSourceTerms(array_t &cons,
 	}
 }
 
-template <typename array_t>
-void RadSystem<array_t>::PredictStep(const std::pair<int, int> range)
+template <typename problem_t>
+void RadSystem<problem_t>::PredictStep(const std::pair<int, int> range)
 {
 	// By convention, the fluxes are defined on the left edge of each zone,
 	// i.e. flux_(i) is the flux *into* zone i through the interface on the
@@ -683,8 +699,8 @@ void RadSystem<array_t>::PredictStep(const std::pair<int, int> range)
 	}
 }
 
-template <typename array_t>
-void RadSystem<array_t>::AddFluxesRK2(array_t &U0, array_t &U1)
+template <typename problem_t>
+void RadSystem<problem_t>::AddFluxesRK2(array_t &U0, array_t &U1)
 {
 	// By convention, the fluxes are defined on the left edge of
 	// each zone, i.e. flux_(i) is the flux *into* zone i through
@@ -745,8 +761,8 @@ void RadSystem<array_t>::AddFluxesRK2(array_t &U0, array_t &U1)
 	}
 }
 
-template <typename array_t>
-void RadSystem<array_t>::AddFluxesSDC(array_t &U_new, array_t &U_0)
+template <typename problem_t>
+void RadSystem<problem_t>::AddFluxesSDC(array_t &U_new, array_t &U_0)
 {
 	// By convention, the fluxes are defined on the left edge of
 	// each zone, i.e. flux_(i) is the flux *into* zone i through

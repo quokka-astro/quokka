@@ -10,6 +10,7 @@
 ///
 
 // external headers
+#include <cmath>
 #include <fmt/format.h>
 #include "matplotlibcpp.h"
 
@@ -17,7 +18,11 @@
 #include "athena_arrays.hpp"
 #include "radiation_system.hpp"
 
+extern "C" {
+	#include "interpolate.h"
+}
+
 // function definitions
-void testproblem_radiation_marshak();
+auto testproblem_radiation_marshak() -> int;
 
 #endif // TEST_RADIATION_MARSHAK_HPP_

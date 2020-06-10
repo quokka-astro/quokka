@@ -20,7 +20,7 @@ auto main() -> int
 	{ // objects must be destroyed before Kokkos::finalize, so enter new
 	  // scope here to do that automatically
 
-		testproblem_radiation_matter_coupling();
+		result = testproblem_radiation_matter_coupling();
 
 	} // destructors must be called before Kokkos::finalize()
 	Kokkos::finalize();
@@ -28,23 +28,26 @@ auto main() -> int
 	return result;
 }
 
-void testproblem_radiation_matter_coupling()
+struct CouplingProblem {}; // dummy type to allow compile-type polymorphism via template specialization
+
+auto testproblem_radiation_matter_coupling() -> int
 {
 	// Problem parameters
 
 	const int nx = 4;
-	const double Lx = 1.0;
-	const double CFL_number = 0.4;
+	const double Lx = 1e5;
+	const double CFL_number = 1.0;
 	// const double constant_dt = 1.0e-11; // s
 	// const double max_time = 1.0e-7;	    // s
-	const double constant_dt = 1.0e-9; // s
+
+	const double constant_dt = 1.0e-8; // s
 	const double max_time = 1.0e-4;	   // s
 
-	const int max_timesteps = 1e7;
+	const int max_timesteps = 1e6;
 
 	// Problem initialization
 
-	RadSystem<AthenaArray<double>> rad_system(
+	RadSystem<CouplingProblem> rad_system(
 	    {.nx = nx, .lx = Lx, .cflNumber = CFL_number});
 
 	auto nghost = rad_system.nghost();
@@ -97,7 +100,7 @@ void testproblem_radiation_matter_coupling()
 	const auto initial_Trad =
 	    std::pow(Erad / rad_system.radiation_constant(), 1. / 4.);
 	const auto kappa =
-	    RadSystem<AthenaArray<double>>::ComputeOpacity(rho, initial_Tgas);
+	    RadSystem<CouplingProblem>::ComputeOpacity(rho, initial_Tgas);
 
 	std::cout << "Initial radiation temperature = " << initial_Trad << "\n";
 	std::cout << "Initial gas temperature = " << initial_Tgas << "\n";
@@ -184,6 +187,22 @@ void testproblem_radiation_matter_coupling()
 		Tgas_exact.at(n) = (T_gas);
 	}
 
+	// interpolate exact solution onto output timesteps
+	std::vector<double> Tgas_exact_interp(t.size());
+	interpolate_arrays(t.data(), Tgas_exact_interp.data(), t.size(),
+					   t_exact.data(), Tgas_exact.data(), t_exact.size());
+
+	// compute L2 error norm
+	double err_norm = 0.;
+	double sol_norm = 0.;
+	for(int i = 0; i < t.size(); ++i) {
+		err_norm += std::pow(Tgas[i] - Tgas_exact_interp[i], 2);
+		sol_norm += std::pow(Tgas_exact_interp[i], 2);
+	}
+	const double rel_error = err_norm/sol_norm;
+	const double error_tol = 1e-10;
+	std::cout << "relative L2 error norm = " << rel_error << std::endl;
+
 	matplotlibcpp::clf();
 	matplotlibcpp::yscale("log");
 	matplotlibcpp::xscale("log");
@@ -202,7 +221,7 @@ void testproblem_radiation_matter_coupling()
 	exactsol_args["label"] = "gas temperature (exact)";
 	exactsol_args["linestyle"] = "--";
 	exactsol_args["color"] = "black";
-	matplotlibcpp::plot(t_exact, Tgas_exact, exactsol_args);
+	matplotlibcpp::plot(t, Tgas_exact_interp, exactsol_args);
 
 	matplotlibcpp::legend();
 	matplotlibcpp::xlabel("time t (s)");
@@ -215,9 +234,7 @@ void testproblem_radiation_matter_coupling()
 
 	std::vector<double> frac_err(t.size());
 	for (int i = 0; i < t.size(); ++i) {
-		frac_err.at(i) = Tgas_exact.at(i) / Tgas.at(i) - 1.0;
-		// std::cout << Tgas.at(i) << "\t" << Tgas_exact.at(i) <<
-		// std::endl;
+		frac_err.at(i) = Tgas_exact_interp.at(i) / Tgas.at(i) - 1.0;
 	}
 	matplotlibcpp::plot(t, frac_err);
 	matplotlibcpp::xlabel("time t (s)");
@@ -226,105 +243,12 @@ void testproblem_radiation_matter_coupling()
 
 	// Cleanup and exit
 	std::cout << "Finished." << std::endl;
+
+	int status = 0;
+	if (rel_error > error_tol) {
+		status = 1;
+	}
+	return status;
 }
 
-#define LIKELY_IN_CACHE_SIZE 8
 
-/** @brief find index of a sorted array such that arr[i] <= key < arr[i + 1].
- *
- * If an starting index guess is in-range, the array values around this
- * index are first checked.  This allows for repeated calls for well-ordered
- * keys (a very common case) to use the previous index as a very good guess.
- *
- * If the guess value is not useful, bisection of the array is used to
- * find the index.  If there is no such index, the return values are:
- *     key < arr[0] -- -1
- *     key == arr[len - 1] -- len - 1
- *     key > arr[len - 1] -- len
- * The array is assumed contiguous and sorted in ascending order.
- *
- * @param key key value.
- * @param arr contiguous sorted array to be searched.
- * @param len length of the array.
- * @param guess initial guess of index
- * @return index
- */
-static int64_t binary_search_with_guess(const double key, const double *arr,
-					int64_t len, int64_t guess)
-{
-	int64_t imin = 0;
-	int64_t imax = len;
-
-	/* Handle keys outside of the arr range first */
-	if (key > arr[len - 1]) {
-		return len;
-	} else if (key < arr[0]) {
-		return -1;
-	}
-
-	/*
-	 * If len <= 4 use linear search.
-	 * From above we know key >= arr[0] when we start.
-	 */
-	if (len <= 4) {
-		int64_t i;
-
-		for (i = 1; i < len && key >= arr[i]; ++i)
-			;
-		return i - 1;
-	}
-
-	if (guess > len - 3) {
-		guess = len - 3;
-	}
-	if (guess < 1) {
-		guess = 1;
-	}
-
-	/* check most likely values: guess - 1, guess, guess + 1 */
-	if (key < arr[guess]) {
-		if (key < arr[guess - 1]) {
-			imax = guess - 1;
-			/* last attempt to restrict search to items in cache */
-			if (guess > LIKELY_IN_CACHE_SIZE &&
-			    key >= arr[guess - LIKELY_IN_CACHE_SIZE]) {
-				imin = guess - LIKELY_IN_CACHE_SIZE;
-			}
-		} else {
-			/* key >= arr[guess - 1] */
-			return guess - 1;
-		}
-	} else {
-		/* key >= arr[guess] */
-		if (key < arr[guess + 1]) {
-			return guess;
-		} else {
-			/* key >= arr[guess + 1] */
-			if (key < arr[guess + 2]) {
-				return guess + 1;
-			} else {
-				/* key >= arr[guess + 2] */
-				imin = guess + 2;
-				/* last attempt to restrict search to items in
-				 * cache */
-				if (guess < len - LIKELY_IN_CACHE_SIZE - 1 &&
-				    key < arr[guess + LIKELY_IN_CACHE_SIZE]) {
-					imax = guess + LIKELY_IN_CACHE_SIZE;
-				}
-			}
-		}
-	}
-
-	/* finally, find index by bisection */
-	while (imin < imax) {
-		const npy_intp imid = imin + ((imax - imin) >> 1);
-		if (key >= arr[imid]) {
-			imin = imid + 1;
-		} else {
-			imax = imid;
-		}
-	}
-	return imin - 1;
-}
-
-#undef LIKELY_IN_CACHE_SIZE

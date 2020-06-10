@@ -3,19 +3,19 @@ add_subdirectory(${TwoMomentRad_SOURCE_DIR}/extern/fmt ${TwoMomentRad_BINARY_DIR
 
 find_package(PythonLibs REQUIRED)
 
-add_executable(test_radiation_matter_coupling radiation_system.cpp hyperbolic_system.cpp test_radiation_matter_coupling.cpp)
+add_executable(test_radiation_matter_coupling radiation_system.cpp hyperbolic_system.cpp test_radiation_matter_coupling.cpp interpolate.c)
 
 include_directories(${PYTHON_INCLUDE_DIRS})
 include_directories(${Kokkos_INCLUDE_DIRS_RET})
 include_directories(${fmt_INCLUDE_DIRS_RET})
 
-add_executable(test_radiation_marshak radiation_system.cpp hyperbolic_system.cpp test_radiation_marshak.cpp)
+add_executable(test_radiation_marshak radiation_system.cpp hyperbolic_system.cpp test_radiation_marshak.cpp interpolate.c)
 
 include_directories(${PYTHON_INCLUDE_DIRS})
 include_directories(${Kokkos_INCLUDE_DIRS_RET})
 include_directories(${fmt_INCLUDE_DIRS_RET})
 
-add_executable(test_radiation_classical_marshak radiation_system.cpp hyperbolic_system.cpp test_radiation_classical_marshak.cpp)
+add_executable(test_radiation_classical_marshak radiation_system.cpp hyperbolic_system.cpp test_radiation_classical_marshak.cpp interpolate.c)
 
 include_directories(${PYTHON_INCLUDE_DIRS})
 include_directories(${Kokkos_INCLUDE_DIRS_RET})

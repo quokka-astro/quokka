@@ -20,7 +20,7 @@ auto main() -> int
 	{ // objects must be destroyed before Kokkos::finalize, so enter new
 	  // scope here to do that automatically
 
-		testproblem_radiation_marshak();
+		result = testproblem_radiation_marshak();
 
 	} // destructors must be called before Kokkos::finalize()
 	Kokkos::finalize();
@@ -28,7 +28,9 @@ auto main() -> int
 	return result;
 }
 
-void testproblem_radiation_marshak()
+struct MarshakProblem {}; // dummy type to allow compile-type polymorphism via template specialization
+
+auto testproblem_radiation_marshak() -> int
 {
 	// For this problem, you must do reconstruction in the reduced
 	// flux, *not* the flux. Otherwise, F exceeds cE at sharp temperature
@@ -59,7 +61,7 @@ void testproblem_radiation_marshak()
 
 	// Problem initialization
 
-	RadSystem<AthenaArray<double>> rad_system(
+	RadSystem<MarshakProblem> rad_system(
 	    {.nx = nx, .lx = Lz, .cflNumber = CFL_number});
 
 	rad_system.set_radiation_constant(1.0);
@@ -245,6 +247,27 @@ void testproblem_radiation_marshak()
 		    ComputeTgasFromEgas(Egas_transport_exact_1p0.at(i));
 	}
 
+	// interpolate numerical solution onto exact solution tabulated points
+
+	std::vector<double> Tgas_numerical_interp(xs_exact.size());
+	interpolate_arrays(xs_exact.data(), Tgas_numerical_interp.data(), xs_exact.size(),
+						xs.data(), Tgas.data(), xs.size());
+
+	// compute L2 error norm
+
+	double err_norm = 0.;
+	double sol_norm = 0.;
+	for(int i=0; i < xs_exact.size(); ++i) {
+		err_norm += std::pow( Tgas_numerical_interp[i] - Tgas_exact_10[i], 2 );
+		sol_norm += std::pow( Tgas_exact_10[i], 2 );
+	}
+	const double rel_error = err_norm / sol_norm;
+	const double error_tol = 1e-3;
+	std::cout << "Relative L2 error norm = " << rel_error << std::endl;
+
+
+	// Plot solution
+
 	matplotlibcpp::clf();
 	matplotlibcpp::xlim(0.2, 8.0); // cm
 
@@ -264,7 +287,7 @@ void testproblem_radiation_marshak()
 	Trad_exact1_args["marker"] = ".";
 	Trad_exact1_args["linestyle"] = "none";
 	Trad_exact1_args["color"] = "black";
-	// matplotlibcpp::plot(xs_exact, Trad_exact_1, Trad_exact1_args);
+	//matplotlibcpp::plot(xs_exact, Trad_exact_1, Trad_exact1_args);
 
 	std::map<std::string, std::string> Tgas_args;
 	Tgas_args["label"] = "gas temperature";
@@ -282,7 +305,7 @@ void testproblem_radiation_marshak()
 	Tgas_exact1_args["marker"] = "*";
 	Tgas_exact1_args["linestyle"] = "none";
 	Tgas_exact1_args["color"] = "black";
-	// matplotlibcpp::plot(xs_exact, Tgas_exact_1, Tgas_exact1_args);
+	//matplotlibcpp::plot(xs_exact, Tgas_exact_1, Tgas_exact1_args);
 
 	matplotlibcpp::legend();
 	matplotlibcpp::xlabel("length x (dimensionless)");
@@ -333,4 +356,10 @@ void testproblem_radiation_marshak()
 
 	// Cleanup and exit
 	std::cout << "Finished." << std::endl;
+
+	int status = 0;
+	if (rel_error > error_tol) {
+		status = 1;
+	} 
+	return status;
 }

@@ -20,7 +20,7 @@ auto main() -> int
 	{ // objects must be destroyed before Kokkos::finalize, so enter new
 	  // scope here to do that automatically
 
-		testproblem_radiation_classical_marshak();
+		result = testproblem_radiation_classical_marshak();
 
 	} // destructors must be called before Kokkos::finalize()
 	Kokkos::finalize();
@@ -28,8 +28,10 @@ auto main() -> int
 	return result;
 }
 
+struct SuOlsonProblem {}; // dummy type to allow compile-type polymorphism via template specialization
+
 template <>
-void RadSystem<AthenaArray<double>>::FillGhostZones(AthenaArray<double> &cons)
+void RadSystem<SuOlsonProblem>::FillGhostZones(array_t &cons)
 {
 	// Su & Olson (1996) boundary conditions
 	const double T_H = 1.0; // Hohlraum temperature
@@ -52,7 +54,7 @@ void RadSystem<AthenaArray<double>>::FillGhostZones(AthenaArray<double> &cons)
 	}
 }
 
-void testproblem_radiation_classical_marshak()
+auto testproblem_radiation_classical_marshak() -> int
 {
 	// For this problem, you must do reconstruction in the reduced
 	// flux, *not* the flux. Otherwise, F exceeds cE at sharp temperature
@@ -79,7 +81,7 @@ void testproblem_radiation_classical_marshak()
 
 	// Problem initialization
 
-	RadSystem<AthenaArray<double>> rad_system(
+	RadSystem<SuOlsonProblem> rad_system(
 	    {.nx = nx, .lx = Lz, .cflNumber = CFL_number});
 
 	rad_system.set_radiation_constant(1.0);
@@ -183,6 +185,52 @@ void testproblem_radiation_classical_marshak()
 		Tgas.at(i) = ComputeTgasFromEgas(Egas_t);
 	}
 
+	// read in exact solution
+
+	std::vector<double> xs_exact;
+	std::vector<double> Trad_exact;
+	std::vector<double> Tmat_exact;
+
+	std::string filename = "../../extern/SuOlson/100pt_tau10p0.dat";
+	std::ifstream fstream(filename, std::ios::in);
+	assert( fstream.is_open() );
+
+	std::string header;
+	std::getline(fstream, header);
+
+	for(std::string line; std::getline(fstream, line); ) {
+		std::istringstream iss(line);
+		std::vector<double> values;
+
+		for (double value; iss >> value; ) {
+			values.push_back(value);
+		}
+		auto x_val = std::sqrt(3.0)*values.at(1);
+		auto Trad_val = values.at(4);
+		auto Tmat_val = values.at(5);
+
+		xs_exact.push_back(x_val);
+		Trad_exact.push_back(Trad_val);
+		Tmat_exact.push_back(Tmat_val);
+	}
+
+	// compute error norm
+
+	std::vector<double> Trad_interp(xs_exact.size());
+	interpolate_arrays(xs_exact.data(), Trad_interp.data(), xs_exact.size(),
+						xs.data(), Trad.data(), xs.size());
+
+	double err_norm = 0.;
+	double sol_norm = 0.;
+	for(int i = 0; i < xs_exact.size(); ++i) {
+		err_norm += std::pow( Trad_interp[i] - Trad_exact[i], 2 );
+		sol_norm += std::pow( Trad_exact[i], 2 );
+	}
+
+	const double error_tol = 0.003;
+	const double rel_error = err_norm / sol_norm;
+	std::cout << "Relative L2 error norm = " << rel_error << std::endl;
+
 	// plot results
 
 	// temperature
@@ -234,4 +282,10 @@ void testproblem_radiation_classical_marshak()
 
 	// Cleanup and exit
 	std::cout << "Finished." << std::endl;
+
+	int status = 0;
+	if ((rel_error > error_tol) || std::isnan(rel_error)) {
+		status = 1;
+	}
+	return status;
 }

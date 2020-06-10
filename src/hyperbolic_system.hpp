@@ -28,9 +28,12 @@ template <typename T> auto sgn(T val) -> int
 	return (T(0) < val) - (val < T(0));
 }
 
+typedef AthenaArray<double> array_t;
+
+
 /// Class for a hyperbolic system of conservation laws (Cannot be instantiated,
 /// must be subclassed.)
-template <typename array_t> class HyperbolicSystem
+template <typename problem_t> class HyperbolicSystem
 {
       public:
 	array_t consVar_;
@@ -138,48 +141,48 @@ template <typename array_t> class HyperbolicSystem
 	virtual void ComputeFluxes(std::pair<int, int> range) = 0;
 };
 
-template <typename array_t>
-auto HyperbolicSystem<array_t>::time() const -> double
+template <typename problem_t>
+auto HyperbolicSystem<problem_t>::time() const -> double
 {
 	return time_;
 }
 
-template <typename array_t> auto HyperbolicSystem<array_t>::dt() const -> double
+template <typename problem_t> auto HyperbolicSystem<problem_t>::dt() const -> double
 {
 	return dt_;
 }
 
-template <typename array_t> auto HyperbolicSystem<array_t>::nx() const -> int
+template <typename problem_t> auto HyperbolicSystem<problem_t>::nx() const -> int
 {
 	return nx_;
 }
 
-template <typename array_t>
-auto HyperbolicSystem<array_t>::nghost() const -> int
+template <typename problem_t>
+auto HyperbolicSystem<problem_t>::nghost() const -> int
 {
 	return nghost_;
 }
 
-template <typename array_t> auto HyperbolicSystem<array_t>::nvars() const -> int
+template <typename problem_t> auto HyperbolicSystem<problem_t>::nvars() const -> int
 {
 	return nvars_;
 }
 
-template <typename array_t>
-void HyperbolicSystem<array_t>::set_cflNumber(double cflNumber)
+template <typename problem_t>
+void HyperbolicSystem<problem_t>::set_cflNumber(double cflNumber)
 {
 	assert((cflNumber > 0.0) && (cflNumber <= 1.0)); // NOLINT
 	cflNumber_ = cflNumber;
 }
 
-template <typename array_t>
-void HyperbolicSystem<array_t>::AddSourceTerms(array_t &U,
+template <typename problem_t>
+void HyperbolicSystem<problem_t>::AddSourceTerms(array_t &U,
 					       std::pair<int, int> range)
 {
 }
 
-template <typename array_t>
-void HyperbolicSystem<array_t>::FillGhostZones(array_t &cons)
+template <typename problem_t>
+void HyperbolicSystem<problem_t>::FillGhostZones(array_t &cons)
 {
 	// In general, this step will require MPI communication, and interaction
 	// with the main AMR code.
@@ -217,8 +220,8 @@ void HyperbolicSystem<array_t>::FillGhostZones(array_t &cons)
 	}
 }
 
-template <typename array_t>
-void HyperbolicSystem<array_t>::ReconstructStatesConstant(
+template <typename problem_t>
+void HyperbolicSystem<problem_t>::ReconstructStatesConstant(
     array_t &q, const std::pair<int, int> range)
 {
 	// By convention, the interfaces are defined on the left edge of each
@@ -240,9 +243,9 @@ void HyperbolicSystem<array_t>::ReconstructStatesConstant(
 	}
 }
 
-template <typename array_t>
+template <typename problem_t>
 template <typename F>
-void HyperbolicSystem<array_t>::ReconstructStatesPLM(
+void HyperbolicSystem<problem_t>::ReconstructStatesPLM(
     array_t &q, const std::pair<int, int> range, F &&limiter)
 {
 	// By convention, the interfaces are defined on the left edge of each
@@ -272,8 +275,8 @@ void HyperbolicSystem<array_t>::ReconstructStatesPLM(
 	}
 }
 
-template <typename array_t>
-void HyperbolicSystem<array_t>::ReconstructStatesPPM(
+template <typename problem_t>
+void HyperbolicSystem<problem_t>::ReconstructStatesPPM(
     array_t &q, const std::pair<int, int> range)
 {
 	// By convention, the interfaces are defined on the left edge of each
@@ -391,8 +394,8 @@ void HyperbolicSystem<array_t>::ReconstructStatesPPM(
 	}
 }
 
-template <typename array_t>
-void HyperbolicSystem<array_t>::PredictStep(const std::pair<int, int> range)
+template <typename problem_t>
+void HyperbolicSystem<problem_t>::PredictStep(const std::pair<int, int> range)
 {
 	// By convention, the fluxes are defined on the left edge of each zone,
 	// i.e. flux_(i) is the flux *into* zone i through the interface on the
@@ -408,8 +411,8 @@ void HyperbolicSystem<array_t>::PredictStep(const std::pair<int, int> range)
 	}
 }
 
-template <typename array_t>
-void HyperbolicSystem<array_t>::AddFluxesRK2(array_t &U0, array_t &U1)
+template <typename problem_t>
+void HyperbolicSystem<problem_t>::AddFluxesRK2(array_t &U0, array_t &U1)
 {
 	// By convention, the fluxes are defined on the left edge of each zone,
 	// i.e. flux_(i) is the flux *into* zone i through the interface on the
@@ -430,32 +433,32 @@ void HyperbolicSystem<array_t>::AddFluxesRK2(array_t &U0, array_t &U1)
 	}
 }
 
-template <typename array_t> void HyperbolicSystem<array_t>::ComputeTimestep()
+template <typename problem_t> void HyperbolicSystem<problem_t>::ComputeTimestep()
 {
 	ComputeTimestep(std::numeric_limits<double>::max());
 }
 
-template <typename array_t> void HyperbolicSystem<array_t>::AdvanceTimestep()
+template <typename problem_t> void HyperbolicSystem<problem_t>::AdvanceTimestep()
 {
 	AdvanceTimestep(std::numeric_limits<double>::max());
 }
 
-template <typename array_t>
-void HyperbolicSystem<array_t>::AdvanceTimestep(const double dt_max)
+template <typename problem_t>
+void HyperbolicSystem<problem_t>::AdvanceTimestep(const double dt_max)
 {
 	// use RK2 by default
 	AdvanceTimestepRK2(dt_max);
 }
 
-template <typename array_t>
-auto HyperbolicSystem<array_t>::CheckStatesValid(
+template <typename problem_t>
+auto HyperbolicSystem<problem_t>::CheckStatesValid(
     array_t &cons, const std::pair<int, int> range) const -> bool
 {
 	return true;
 }
 
-template <typename array_t>
-void HyperbolicSystem<array_t>::AdvanceTimestepRK2(const double dt_max)
+template <typename problem_t>
+void HyperbolicSystem<problem_t>::AdvanceTimestepRK2(const double dt_max)
 {
 	const auto ppm_range = std::make_pair(-1 + nghost_, nx_ + 1 + nghost_);
 	const auto cell_range = std::make_pair(nghost_, nx_ + nghost_);
@@ -504,8 +507,8 @@ void HyperbolicSystem<array_t>::AdvanceTimestepRK2(const double dt_max)
 	dtPrev_ = dt_;
 }
 
-template <typename array_t>
-void HyperbolicSystem<array_t>::AdvanceTimestepSDC(const double dt_max)
+template <typename problem_t>
+void HyperbolicSystem<problem_t>::AdvanceTimestepSDC(const double dt_max)
 {
 	const auto ppm_range = std::make_pair(-1 + nghost_, nx_ + 1 + nghost_);
 	const auto cell_range = std::make_pair(nghost_, nx_ + nghost_);
