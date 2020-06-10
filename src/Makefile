@@ -1,7 +1,9 @@
 ## Makefile for TwoMomentRad library
 
 KOKKOS_PATH = ../extern/kokkos
-KOKKOS_DEVICES = OpenMP
+KOKKOS_DEVICES = serial
+
+FMT_PATH = ../extern/fmt/include
 
 CPP_FILES=$(wildcard *.cpp)
 HPP_FILES=$(wildcard *.hpp)
@@ -13,7 +15,7 @@ STATIC_ANALYZER = cppcheck
 STATIC_ANALYZER_FLAGS = --enable=all --suppress=missingIncludeSystem --std=c++17
 
 CXX ?= clang++
-CXXFLAGS ?= -g -O0 --std=c++17 -I/usr/include/python3.6 -DFMT_HEADER_ONLY
+CXXFLAGS ?= -g -O0 --std=c++17 -I/usr/include/python3.6 -DFMT_HEADER_ONLY -I$(FMT_PATH)
 
 LINK = $(CXX)
 LINKFLAGS = 
