@@ -10,7 +10,7 @@ c..declare
       integer          i,nstep,iargc
       double precision time,zpos,trad_bc_ev,opac,alpha,
      1                 erad,trad,trad_ev,tmat,tmat_ev,
-     2                 zlo,zhi,zstep,value
+     2                 zlo,zhi,zstep,value,uans,vans,tau
 
 
 c..some physics
@@ -27,10 +27,11 @@ c..popular formats
 
 
 c..input parameters
-      trad_bc_ev = 1.0d3
+      trad_bc_ev = 1.0d0
       opac       = 1.0d0
       alpha      = 4.0d0*asol
-      time       = 1.0d-9
+      tau        = 1.0d0
+      time       = tau * alpha / (4.0d0*asol*clight*opac)
 
 
 c..number of grid points, spatial domain, spatial step size
@@ -41,10 +42,10 @@ c..number of grid points, spatial domain, spatial step size
 
 
 c..output file
-      outfile = '100pt_1em10.dat'
+      outfile = '100pt_tau1p0.dat'
       open(unit=2,file=outfile,status='unknown')
-      write(2,02) nstep,time
-      write(2,01) 'i','x','trad','tev'
+c.....write(2,02) nstep,tau
+      write(2,01) 'i','x','U','V','Trad/T_H','Tmat/T_H'
 
 
 c..use the mid-cell points to match various eularian hydrocodes
@@ -52,10 +53,10 @@ c..use the mid-cell points to match various eularian hydrocodes
        zpos = zlo + 0.5d0*zstep + float(i-1)*zstep
 
        call so_wave(time,zpos,trad_bc_ev,opac,alpha,
-     1              erad,trad,trad_ev,tmat,tmat_ev)
+     1              erad,trad,trad_ev,tmat,tmat_ev,uans,vans)
 
-       write(6,40) i,zpos,trad_ev,tmat_ev
-       write(2,40) i,zpos,trad_ev,tmat_ev
+       write(6,40) i,zpos,uans,vans,trad_ev,tmat_ev
+       write(2,40) i,zpos,uans,vans,trad_ev,tmat_ev
  40    format(1x,i4,1p8e14.6)
 
       enddo
@@ -70,7 +71,7 @@ c..close up stop
 
 
       subroutine so_wave(time,zpos,trad_bc_ev,opac,alpha,
-     1                   erad,trad,trad_ev,tmat,tmat_ev)
+     1                   erad,trad,trad_ev,tmat,tmat_ev,uans,vans)
       implicit none
       save
 
@@ -93,12 +94,12 @@ c..trad_ev    = temperature of material field electron volts
 
 c..declare the input
       double precision time,zpos,trad_bc_ev,opac,alpha,
-     1                 erad,trad,trad_ev,tmat,tmat_ev
+     1                 erad,trad,trad_ev,tmat,tmat_ev,uans,vans
 
 
 c..local variables
       double precision trad_bc,ener_in,xpos,epsilon,tau,ialpha,
-     1                 uans,vans,usolution,vsolution
+     1                 usolution,vsolution
 
 
 c..some physics
