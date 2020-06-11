@@ -24,7 +24,8 @@
 
 /// Class for a linear, scalar advection equation
 ///
-template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_t>
+template <typename problem_t>
+class RadSystem : public HyperbolicSystem<problem_t>
 {
 	// See
 	// https://stackoverflow.com/questions/4010281/accessing-protected-members-of-superclass-in-c-with-templates
@@ -86,9 +87,12 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	// static functions
 
-	static auto ComputeOpacity(double rho, double Temp) -> double;
-	static auto ComputeOpacityTempDerivative(double rho, double Temp)
+	static auto ComputeOpacity(double rho, double Tgas) -> double;
+	static auto ComputeOpacityTempDerivative(double rho, double Tgas)
 	    -> double;
+	static auto ComputeTgasFromEgas(double Egas) -> double;
+	static auto ComputeEgasFromTgas(double Tgas) -> double;
+	auto ComputeEgasTempDerivative(double rho, double Tgas) -> double;
 
 	// setter functions:
 
@@ -143,12 +147,14 @@ RadSystem<problem_t>::RadSystem(RadSystemArgs args)
 	radEnergySource_.NewAthenaArray(args.nx + 2 * nghost_);
 }
 
-template <typename problem_t> auto RadSystem<problem_t>::c_light() const -> double
+template <typename problem_t>
+auto RadSystem<problem_t>::c_light() const -> double
 {
 	return c_light_;
 }
 
-template <typename problem_t> void RadSystem<problem_t>::set_c_light(double c_light)
+template <typename problem_t>
+void RadSystem<problem_t>::set_c_light(double c_light)
 {
 	c_light_ = c_light;
 	c_hat_ = c_light;
@@ -251,7 +257,6 @@ auto RadSystem<problem_t>::ComputeGasEnergy() const -> double
 	return energy;
 }
 
-
 template <typename problem_t>
 void RadSystem<problem_t>::FillGhostZones(array_t &cons)
 {
@@ -288,11 +293,9 @@ void RadSystem<problem_t>::FillGhostZones(array_t &cons)
 #endif
 }
 
-
 template <typename problem_t>
-auto RadSystem<problem_t>::CheckStatesValid(array_t &cons,
-					  const std::pair<int, int> range) const
-    -> bool
+auto RadSystem<problem_t>::CheckStatesValid(
+    array_t &cons, const std::pair<int, int> range) const -> bool
 {
 	bool all_valid = true;
 
@@ -321,7 +324,7 @@ auto RadSystem<problem_t>::CheckStatesValid(array_t &cons,
 
 template <typename problem_t>
 void RadSystem<problem_t>::ConservedToPrimitive(array_t &cons,
-					      const std::pair<int, int> range)
+						const std::pair<int, int> range)
 {
 	// keep radiation energy density as-is
 	// convert (Fx,Fy,Fz) into reduced flux components (fx,fy,fx):
@@ -485,7 +488,7 @@ void RadSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 }
 
 template <typename problem_t>
-auto RadSystem<problem_t>::ComputeOpacity(const double rho, const double Temp)
+auto RadSystem<problem_t>::ComputeOpacity(const double rho, const double Tgas)
     -> double
 {
 	// TODO(ben): interpolate from a table
@@ -495,7 +498,7 @@ auto RadSystem<problem_t>::ComputeOpacity(const double rho, const double Temp)
 
 template <typename problem_t>
 auto RadSystem<problem_t>::ComputeOpacityTempDerivative(const double rho,
-						      const double Temp)
+							const double Tgas)
     -> double
 {
 	// TODO(ben): interpolate from a table
@@ -503,8 +506,18 @@ auto RadSystem<problem_t>::ComputeOpacityTempDerivative(const double rho,
 }
 
 template <typename problem_t>
+auto RadSystem<problem_t>::ComputeEgasTempDerivative(const double rho,
+						     const double Tgas)
+    -> double
+{
+	const double c_v =
+	    boltzmann_constant_ / (mean_molecular_mass_ * (gamma_ - 1.0));
+	return (rho * c_v);
+}
+
+template <typename problem_t>
 void RadSystem<problem_t>::AddSourceTerms(array_t &cons,
-					std::pair<int, int> range)
+					  std::pair<int, int> range)
 {
 	// Lorentz transform the radiation variables into the comoving frame
 	// TransformIntoComovingFrame(fluid_velocity);
@@ -520,13 +533,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &cons,
 		const double a_rad = radiation_constant_;
 
 		// load fluid properties
-		// const double c_v = boltzmann_constant_ /
-		//	(mean_molecular_mass_ * (gamma_ - 1.0));
-
-		// Su & Olson (1997) test problem
-		const double eps_SuOlson = 1.0;
-		const double alpha_SuOlson = 4.0 * a_rad / eps_SuOlson;
-
 		const double rho = cons(gasDensity_index, i);
 		const double Egas0 = cons(gasEnergy_index, i);
 
@@ -566,13 +572,12 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &cons,
 		for (n = 0; n < maxIter; ++n) {
 
 			// compute material temperature
-			// T_gas = Egas_guess / (rho * c_v);
-
-			T_gas =
-			    std::pow(4.0 * Egas_guess / alpha_SuOlson, 1. / 4.);
+			T_gas = RadSystem<problem_t>::ComputeTgasFromEgas(
+			    Egas_guess);
 
 			// compute opacity, emissivity
-			kappa = ComputeOpacity(rho, T_gas);
+			kappa =
+			    RadSystem<problem_t>::ComputeOpacity(rho, T_gas);
 			fourPiB = c * a_rad * std::pow(T_gas, 4);
 
 			// constant radiation energy source term
@@ -581,7 +586,8 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &cons,
 			// compute derivatives w/r/t T_gas
 			const double dB_dTgas = (4.0 * fourPiB) / T_gas;
 			const double dkappa_dTgas =
-			    ComputeOpacityTempDerivative(rho, T_gas);
+			    RadSystem<problem_t>::ComputeOpacityTempDerivative(
+				rho, T_gas);
 
 			// compute residuals
 			rhs = dt * (rho * kappa) * (fourPiB - c * Erad_guess);
@@ -595,13 +601,13 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &cons,
 			}
 
 			// compute Jacobian elements
-			// drhs_dEgas =
-			//    (dt / c_v) *
-			//    (kappa * dB_dTgas +
-			//    dkappa_dTgas * (fourPiB - c * Erad_guess));
+			const double c_v =
+			    ComputeEgasTempDerivative(rho, T_gas);
 
-			drhs_dEgas = dt * (rho * kappa * c * a_rad) *
-				     (4.0 / alpha_SuOlson);
+			drhs_dEgas =
+			    (rho * dt / c_v) *
+			    (kappa * dB_dTgas +
+			     dkappa_dTgas * (fourPiB - c * Erad_guess));
 
 			dFG_dEgas = 1.0 + drhs_dEgas;
 			dFG_dErad = dt * (-(rho * kappa) * c);

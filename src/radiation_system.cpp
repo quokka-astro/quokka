@@ -8,5 +8,3 @@
 ///
 
 #include "radiation_system.hpp"
-
-

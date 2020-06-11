@@ -10,8 +10,8 @@
 ///
 
 // external headers
-#include <fmt/format.h>
 #include "matplotlibcpp.h"
+#include <fmt/format.h>
 
 // internal headers
 #include "athena_arrays.hpp"

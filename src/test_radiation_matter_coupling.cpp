@@ -28,7 +28,43 @@ auto main() -> int
 	return result;
 }
 
-struct CouplingProblem {}; // dummy type to allow compile-type polymorphism via template specialization
+struct CouplingProblem {
+}; // dummy type to allow compile-type polymorphism via template specialization
+
+// Su & Olson (1997) test problem
+const double eps_SuOlson = 1.0;
+const double a_rad = 7.5646e-15; // cgs
+const double alpha_SuOlson = 4.0 * a_rad / eps_SuOlson;
+
+template <>
+auto RadSystem<CouplingProblem>::ComputeTgasFromEgas(const double Egas)
+    -> double
+{
+	return std::pow(4.0 * Egas / alpha_SuOlson, 1. / 4.);
+}
+
+template <>
+auto RadSystem<CouplingProblem>::ComputeEgasFromTgas(const double Tgas)
+    -> double
+{
+	return (alpha_SuOlson / 4.0) * std::pow(Tgas, 4);
+}
+
+template <>
+auto RadSystem<CouplingProblem>::ComputeEgasTempDerivative(const double rho,
+							   const double Tgas)
+    -> double
+{
+	// This is also known as the heat capacity, i.e.
+	// 		\del E_g / \del T = \rho c_v,
+	// for normal materials.
+
+	// However, for this problem, this must be of the form \alpha T^3
+	// in order to obtain an exact solution to the problem.
+	// The input parameter is the *temperature*, not Egas itself.
+
+	return alpha_SuOlson * std::pow(Tgas, 3);
+}
 
 auto testproblem_radiation_matter_coupling() -> int
 {
@@ -39,38 +75,40 @@ auto testproblem_radiation_matter_coupling() -> int
 	const double CFL_number = 1.0;
 	// const double constant_dt = 1.0e-11; // s
 	// const double max_time = 1.0e-7;	    // s
-
 	const double constant_dt = 1.0e-8; // s
 	const double max_time = 1.0e-4;	   // s
-
 	const int max_timesteps = 1e6;
+
+	const double Erad = 1.0e12; // erg cm^-3
+	const double Egas = 1.0e2;  // erg cm^-3
+	const double rho = 1.0e-7;  // g cm^-3
+	const double initial_Tgas =
+	    RadSystem<CouplingProblem>::ComputeTgasFromEgas(Egas);
+	const auto initial_Trad = std::pow(Erad / a_rad, 1. / 4.);
+	const auto kappa =
+	    RadSystem<CouplingProblem>::ComputeOpacity(rho, initial_Tgas);
 
 	// Problem initialization
 
 	RadSystem<CouplingProblem> rad_system(
 	    {.nx = nx, .lx = Lx, .cflNumber = CFL_number});
 
+	rad_system.set_radiation_constant(a_rad);
 	auto nghost = rad_system.nghost();
 
-	const double Erad = 1.0e12; // erg cm^-3
-	const double Egas = 1.0e2;  // erg cm^-3
-	const double rho = 1.0e-7;  // g cm^-3
+	for (int i = nghost; i < nx + nghost; ++i) {
+		rad_system.set_radEnergy(i) = Erad;
+		rad_system.set_x1RadFlux(i) = 0.0;
+		rad_system.set_gasEnergy(i) = Egas;
+		rad_system.set_staticGasDensity(i) = rho;
+	}
 
-	// Su & Olson (1997) test problem
-	const double eps_SuOlson = 1.0;
-	const double a_rad = rad_system.radiation_constant_;
-	const double alpha_SuOlson = 4.0 * a_rad / eps_SuOlson;
+	const auto initial_Erad = rad_system.ComputeRadEnergy();
+	const auto initial_Egas = rad_system.ComputeGasEnergy();
+	const auto initial_Etot = initial_Erad + initial_Egas;
 
-	auto ComputeTgasFromEgas = [=](const double Eint) {
-		return std::pow(4.0 * Eint / alpha_SuOlson, 1. / 4.);
-	};
-
-	auto ComputeEgasFromTgas = [=](const double Tgas) {
-		return (alpha_SuOlson / 4.0) * std::pow(Tgas, 4);
-	};
-
-	const double initial_Tgas = ComputeTgasFromEgas(Egas);
-	std::cout << "Initial Tgas = " << initial_Tgas << "\n";
+	std::cout << "Initial radiation temperature = " << initial_Trad << "\n";
+	std::cout << "Initial gas temperature = " << initial_Tgas << "\n";
 
 #if 0
 	const double c_v =
@@ -81,31 +119,12 @@ auto testproblem_radiation_matter_coupling() -> int
 	std::cout << "Volumetric heat capacity c_v = " << rho * c_v << "\n";
 #endif
 
-	for (int i = nghost; i < nx + nghost; ++i) {
-		rad_system.set_radEnergy(i) = Erad;
-		rad_system.set_x1RadFlux(i) = 0.0;
-		rad_system.set_gasEnergy(i) = Egas;
-		rad_system.set_staticGasDensity(i) = rho;
-	}
+	// Main time loop
 
 	std::vector<double> t;
 	std::vector<double> Trad;
 	std::vector<double> Tgas;
 	std::vector<double> Egas_v;
-
-	const auto initial_Erad = rad_system.ComputeRadEnergy();
-	const auto initial_Egas = rad_system.ComputeGasEnergy();
-	const auto initial_Etot = initial_Erad + initial_Egas;
-
-	const auto initial_Trad =
-	    std::pow(Erad / rad_system.radiation_constant(), 1. / 4.);
-	const auto kappa =
-	    RadSystem<CouplingProblem>::ComputeOpacity(rho, initial_Tgas);
-
-	std::cout << "Initial radiation temperature = " << initial_Trad << "\n";
-	std::cout << "Initial gas temperature = " << initial_Tgas << "\n";
-
-	// Main time loop
 
 	for (int j = 0; j < max_timesteps; ++j) {
 
@@ -136,7 +155,8 @@ auto testproblem_radiation_matter_coupling() -> int
 					1. / 4.));
 
 		auto Egas_i = rad_system.gasEnergy(0 + nghost);
-		Tgas.push_back(ComputeTgasFromEgas(Egas_i));
+		Tgas.push_back(
+		    RadSystem<CouplingProblem>::ComputeTgasFromEgas(Egas_i));
 		Egas_v.push_back(rad_system.gasEnergy(0 + nghost));
 	}
 
@@ -190,16 +210,16 @@ auto testproblem_radiation_matter_coupling() -> int
 	// interpolate exact solution onto output timesteps
 	std::vector<double> Tgas_exact_interp(t.size());
 	interpolate_arrays(t.data(), Tgas_exact_interp.data(), t.size(),
-					   t_exact.data(), Tgas_exact.data(), t_exact.size());
+			   t_exact.data(), Tgas_exact.data(), t_exact.size());
 
 	// compute L2 error norm
 	double err_norm = 0.;
 	double sol_norm = 0.;
-	for(int i = 0; i < t.size(); ++i) {
+	for (int i = 0; i < t.size(); ++i) {
 		err_norm += std::pow(Tgas[i] - Tgas_exact_interp[i], 2);
 		sol_norm += std::pow(Tgas_exact_interp[i], 2);
 	}
-	const double rel_error = err_norm/sol_norm;
+	const double rel_error = err_norm / sol_norm;
 	const double error_tol = 1e-10;
 	std::cout << "relative L2 error norm = " << rel_error << std::endl;
 
@@ -250,5 +270,3 @@ auto testproblem_radiation_matter_coupling() -> int
 	}
 	return status;
 }
-
-

@@ -30,7 +30,6 @@ template <typename T> auto sgn(T val) -> int
 
 typedef AthenaArray<double> array_t;
 
-
 /// Class for a hyperbolic system of conservation laws (Cannot be instantiated,
 /// must be subclassed.)
 template <typename problem_t> class HyperbolicSystem
@@ -147,12 +146,14 @@ auto HyperbolicSystem<problem_t>::time() const -> double
 	return time_;
 }
 
-template <typename problem_t> auto HyperbolicSystem<problem_t>::dt() const -> double
+template <typename problem_t>
+auto HyperbolicSystem<problem_t>::dt() const -> double
 {
 	return dt_;
 }
 
-template <typename problem_t> auto HyperbolicSystem<problem_t>::nx() const -> int
+template <typename problem_t>
+auto HyperbolicSystem<problem_t>::nx() const -> int
 {
 	return nx_;
 }
@@ -163,7 +164,8 @@ auto HyperbolicSystem<problem_t>::nghost() const -> int
 	return nghost_;
 }
 
-template <typename problem_t> auto HyperbolicSystem<problem_t>::nvars() const -> int
+template <typename problem_t>
+auto HyperbolicSystem<problem_t>::nvars() const -> int
 {
 	return nvars_;
 }
@@ -177,7 +179,7 @@ void HyperbolicSystem<problem_t>::set_cflNumber(double cflNumber)
 
 template <typename problem_t>
 void HyperbolicSystem<problem_t>::AddSourceTerms(array_t &U,
-					       std::pair<int, int> range)
+						 std::pair<int, int> range)
 {
 }
 
@@ -433,12 +435,14 @@ void HyperbolicSystem<problem_t>::AddFluxesRK2(array_t &U0, array_t &U1)
 	}
 }
 
-template <typename problem_t> void HyperbolicSystem<problem_t>::ComputeTimestep()
+template <typename problem_t>
+void HyperbolicSystem<problem_t>::ComputeTimestep()
 {
 	ComputeTimestep(std::numeric_limits<double>::max());
 }
 
-template <typename problem_t> void HyperbolicSystem<problem_t>::AdvanceTimestep()
+template <typename problem_t>
+void HyperbolicSystem<problem_t>::AdvanceTimestep()
 {
 	AdvanceTimestep(std::numeric_limits<double>::max());
 }

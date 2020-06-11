@@ -28,13 +28,24 @@ auto main() -> int
 	return result;
 }
 
-struct SuOlsonProblem {}; // dummy type to allow compile-type polymorphism via template specialization
+struct SuOlsonProblem {
+}; // dummy type to allow compile-type polymorphism via template specialization
 
-template <>
-void RadSystem<SuOlsonProblem>::FillGhostZones(array_t &cons)
+// Su & Olson (1997) parameters
+const double eps_SuOlson = 1.0;
+const double kappa = 1.0;
+const double rho = 1.0;	       // g cm^-3 (matter density)
+const double T_hohlraum = 1.0; // dimensionless
+// const double T_hohlraum_scaled = 3.481334e6; // K [= 300 eV]
+// const double kelvin_to_eV = 8.617385e-5;
+const double a_rad = 1.0;
+const double c = 1.0;
+const double alpha_SuOlson = 4.0 * a_rad / eps_SuOlson;
+
+template <> void RadSystem<SuOlsonProblem>::FillGhostZones(array_t &cons)
 {
 	// Su & Olson (1996) boundary conditions
-	const double T_H = 1.0; // Hohlraum temperature
+	const double T_H = T_hohlraum;
 	const double E_inc = radiation_constant_ * std::pow(T_H, 4);
 	const double F_inc = c_light_ * E_inc / 4.0;
 
@@ -52,6 +63,42 @@ void RadSystem<SuOlsonProblem>::FillGhostZones(array_t &cons)
 		    -1.0 * cons(x1RadFlux_index,
 				(nghost_ + nx_) - (i - nx_ - nghost_ + 1));
 	}
+}
+
+template <>
+auto RadSystem<SuOlsonProblem>::ComputeOpacity(const double rho,
+					       const double Tgas) -> double
+{
+	return kappa;
+}
+
+template <>
+auto RadSystem<SuOlsonProblem>::ComputeTgasFromEgas(const double Egas) -> double
+{
+	return std::pow(4.0 * Egas / alpha_SuOlson, 1. / 4.);
+}
+
+template <>
+auto RadSystem<SuOlsonProblem>::ComputeEgasFromTgas(const double Tgas) -> double
+{
+	return (alpha_SuOlson / 4.0) * std::pow(Tgas, 4);
+}
+
+template <>
+auto RadSystem<SuOlsonProblem>::ComputeEgasTempDerivative(const double rho,
+							  const double Tgas)
+    -> double
+{
+	// This is also known as the heat capacity, i.e.
+	// 		\del E_g / \del T = \rho c_v,
+	// for normal materials.
+
+	// However, for this problem, this must be of the form \alpha T^3
+	// in order to obtain an exact solution to the problem.
+	// The input parameters are the density and *temperature*, not Egas
+	// itself.
+
+	return alpha_SuOlson * std::pow(Tgas, 3);
 }
 
 auto testproblem_radiation_classical_marshak() -> int
@@ -72,58 +119,26 @@ auto testproblem_radiation_classical_marshak() -> int
 	const double Lz = 100.0;	  // dimensionless length
 
 	// Su & Olson (1997) parameters
-	const double eps_SuOlson = 1.0;
-
-	const double rho = 1.0; // g cm^-3 (matter density)
-	const double kappa = 1.0;
-	const double T_hohlraum = 1.0; // dimensionless
-	// const double T_hohlraum_scaled = 3.481334e6; // K [= 300 eV]
+	const double chi = rho * kappa; // cm^-1 (total matter opacity)
+	const double Lx = Lz / chi;	// cm
+	const double max_time = max_tau / (eps_SuOlson * c * chi);	  // s
+	const double max_dt = max_dtau / (eps_SuOlson * c * chi);	  // s
+	const double initial_dt = initial_dtau / (eps_SuOlson * c * chi); // s
+	const auto initial_Egas =
+	    1e-10 * RadSystem<SuOlsonProblem>::ComputeEgasFromTgas(T_hohlraum);
+	const auto initial_Erad = 1e-10 * (a_rad * std::pow(T_hohlraum, 4));
 
 	// Problem initialization
 
 	RadSystem<SuOlsonProblem> rad_system(
 	    {.nx = nx, .lx = Lz, .cflNumber = CFL_number});
 
-	rad_system.set_radiation_constant(1.0);
-	rad_system.set_c_light(1.0);
-
-	auto nghost = rad_system.nghost();
-
-	const double a_rad = rad_system.radiation_constant();
-	const double c = rad_system.c_light();
-
-	std::cout << "radiation constant (code units) = " << a_rad << "\n";
-	std::cout << "c_light (code units) = " << c << "\n";
-
-	// const double kelvin_to_eV = 8.617385e-5;
-
-	const double chi = rho * kappa; // cm^-1 (total matter opacity)
-	const double Lx = Lz / chi;	// cm
-	const double max_time = max_tau / (eps_SuOlson * c * chi);	  // s
-	const double max_dt = max_dtau / (eps_SuOlson * c * chi);	  // s
-	const double initial_dt = initial_dtau / (eps_SuOlson * c * chi); // s
-
-	std::cout << "Lx = " << Lx << "\n";
-	std::cout << "initial_dt = " << initial_dt << "\n";
-	std::cout << "max_dt = " << max_dt << "\n";
-
+	rad_system.set_radiation_constant(a_rad);
+	rad_system.set_c_light(c);
 	rad_system.set_lx(Lx);
-
-	const double alpha_SuOlson = 4.0 * a_rad / eps_SuOlson;
-
-	auto ComputeTgasFromEgas = [=](const double Eint) {
-		return std::pow(4.0 * Eint / alpha_SuOlson, 1. / 4.);
-	};
-
-	auto ComputeEgasFromTgas = [=](const double Tgas) {
-		return (alpha_SuOlson / 4.0) * std::pow(Tgas, 4);
-	};
-
-	const auto initial_Egas = 1e-10 * ComputeEgasFromTgas(T_hohlraum);
-	const auto initial_Erad = 1e-10 * (a_rad * std::pow(T_hohlraum, 4));
-
 	rad_system.Erad_floor_ = initial_Erad;
 
+	auto nghost = rad_system.nghost();
 	for (int i = nghost; i < nx + nghost; ++i) {
 		rad_system.set_radEnergy(i) = initial_Erad;
 		rad_system.set_x1RadFlux(i) = 0.0;
@@ -135,6 +150,12 @@ auto testproblem_radiation_classical_marshak() -> int
 	const auto Erad0 = rad_system.ComputeRadEnergy();
 	const auto Egas0 = rad_system.ComputeGasEnergy();
 	const auto Etot0 = Erad0 + Egas0;
+
+	std::cout << "radiation constant (code units) = " << a_rad << "\n";
+	std::cout << "c_light (code units) = " << c << "\n";
+	std::cout << "Lx = " << Lx << "\n";
+	std::cout << "initial_dt = " << initial_dt << "\n";
+	std::cout << "max_dt = " << max_dt << "\n";
 
 	// Main time loop
 
@@ -182,7 +203,8 @@ auto testproblem_radiation_classical_marshak() -> int
 		const auto Egas_t =
 		    rad_system.gasEnergy(i + nghost) / std::sqrt(3.);
 		Egas.at(i) = Egas_t;
-		Tgas.at(i) = ComputeTgasFromEgas(Egas_t);
+		Tgas.at(i) =
+		    RadSystem<SuOlsonProblem>::ComputeTgasFromEgas(Egas_t);
 	}
 
 	// read in exact solution
@@ -193,19 +215,19 @@ auto testproblem_radiation_classical_marshak() -> int
 
 	std::string filename = "../../extern/SuOlson/100pt_tau10p0.dat";
 	std::ifstream fstream(filename, std::ios::in);
-	assert( fstream.is_open() );
+	assert(fstream.is_open());
 
 	std::string header;
 	std::getline(fstream, header);
 
-	for(std::string line; std::getline(fstream, line); ) {
+	for (std::string line; std::getline(fstream, line);) {
 		std::istringstream iss(line);
 		std::vector<double> values;
 
-		for (double value; iss >> value; ) {
+		for (double value; iss >> value;) {
 			values.push_back(value);
 		}
-		auto x_val = std::sqrt(3.0)*values.at(1);
+		auto x_val = std::sqrt(3.0) * values.at(1);
 		auto Trad_val = values.at(4);
 		auto Tmat_val = values.at(5);
 
@@ -218,13 +240,13 @@ auto testproblem_radiation_classical_marshak() -> int
 
 	std::vector<double> Trad_interp(xs_exact.size());
 	interpolate_arrays(xs_exact.data(), Trad_interp.data(), xs_exact.size(),
-						xs.data(), Trad.data(), xs.size());
+			   xs.data(), Trad.data(), xs.size());
 
 	double err_norm = 0.;
 	double sol_norm = 0.;
-	for(int i = 0; i < xs_exact.size(); ++i) {
-		err_norm += std::pow( Trad_interp[i] - Trad_exact[i], 2 );
-		sol_norm += std::pow( Trad_exact[i], 2 );
+	for (int i = 0; i < xs_exact.size(); ++i) {
+		err_norm += std::pow(Trad_interp[i] - Trad_exact[i], 2);
+		sol_norm += std::pow(Trad_exact[i], 2);
 	}
 
 	const double error_tol = 0.003;

@@ -10,15 +10,15 @@
 ///
 
 // external headers
-#include <fmt/format.h>
 #include "matplotlibcpp.h"
+#include <fmt/format.h>
 
 // internal headers
 #include "athena_arrays.hpp"
 #include "radiation_system.hpp"
 
 extern "C" {
-	#include "interpolate.h"
+#include "interpolate.h"
 }
 
 // function definitions
