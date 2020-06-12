@@ -37,14 +37,16 @@ const double a_rad = 7.5646e-15; // cgs
 const double alpha_SuOlson = 4.0 * a_rad / eps_SuOlson;
 
 template <>
-auto RadSystem<CouplingProblem>::ComputeTgasFromEgas(const double Egas)
+auto RadSystem<CouplingProblem>::ComputeTgasFromEgas(const double rho,
+						     const double Egas)
     -> double
 {
 	return std::pow(4.0 * Egas / alpha_SuOlson, 1. / 4.);
 }
 
 template <>
-auto RadSystem<CouplingProblem>::ComputeEgasFromTgas(const double Tgas)
+auto RadSystem<CouplingProblem>::ComputeEgasFromTgas(const double rho,
+						     const double Tgas)
     -> double
 {
 	return (alpha_SuOlson / 4.0) * std::pow(Tgas, 4);
@@ -82,11 +84,7 @@ auto testproblem_radiation_matter_coupling() -> int
 	const double Erad = 1.0e12; // erg cm^-3
 	const double Egas = 1.0e2;  // erg cm^-3
 	const double rho = 1.0e-7;  // g cm^-3
-	const double initial_Tgas =
-	    RadSystem<CouplingProblem>::ComputeTgasFromEgas(Egas);
 	const auto initial_Trad = std::pow(Erad / a_rad, 1. / 4.);
-	const auto kappa =
-	    RadSystem<CouplingProblem>::ComputeOpacity(rho, initial_Tgas);
 
 	// Problem initialization
 
@@ -94,8 +92,11 @@ auto testproblem_radiation_matter_coupling() -> int
 	    {.nx = nx, .lx = Lx, .cflNumber = CFL_number});
 
 	rad_system.set_radiation_constant(a_rad);
-	auto nghost = rad_system.nghost();
+	const double initial_Tgas = rad_system.ComputeTgasFromEgas(rho, Egas);
+	const auto kappa =
+	    RadSystem<CouplingProblem>::ComputeOpacity(rho, initial_Tgas);
 
+	auto nghost = rad_system.nghost();
 	for (int i = nghost; i < nx + nghost; ++i) {
 		rad_system.set_radEnergy(i) = Erad;
 		rad_system.set_x1RadFlux(i) = 0.0;
@@ -155,8 +156,7 @@ auto testproblem_radiation_matter_coupling() -> int
 					1. / 4.));
 
 		auto Egas_i = rad_system.gasEnergy(0 + nghost);
-		Tgas.push_back(
-		    RadSystem<CouplingProblem>::ComputeTgasFromEgas(Egas_i));
+		Tgas.push_back(rad_system.ComputeTgasFromEgas(rho, Egas_i));
 		Egas_v.push_back(rad_system.gasEnergy(0 + nghost));
 	}
 

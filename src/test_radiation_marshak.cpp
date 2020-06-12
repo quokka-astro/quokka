@@ -43,13 +43,15 @@ const double c = 1.0;
 const double alpha_SuOlson = 4.0 * a_rad / eps_SuOlson;
 
 template <>
-auto RadSystem<MarshakProblem>::ComputeTgasFromEgas(const double Egas) -> double
+auto RadSystem<MarshakProblem>::ComputeTgasFromEgas(const double rho,
+						    const double Egas) -> double
 {
 	return std::pow(4.0 * Egas / alpha_SuOlson, 1. / 4.);
 }
 
 template <>
-auto RadSystem<MarshakProblem>::ComputeEgasFromTgas(const double Tgas) -> double
+auto RadSystem<MarshakProblem>::ComputeEgasFromTgas(const double rho,
+						    const double Tgas) -> double
 {
 	return (alpha_SuOlson / 4.0) * std::pow(Tgas, 4);
 }
@@ -125,7 +127,7 @@ auto testproblem_radiation_marshak() -> int
 	rad_system.set_lx(Lx);
 
 	const auto initial_Egas =
-	    1e-10 * RadSystem<MarshakProblem>::ComputeEgasFromTgas(T_hohlraum);
+	    1e-10 * rad_system.ComputeEgasFromTgas(rho, T_hohlraum);
 	const auto initial_Erad = 1e-10 * (a_rad * std::pow(T_hohlraum, 4));
 
 	const double S = Q * (a_rad * std::pow(T_hohlraum, 4)); // erg cm^{-3}
@@ -210,8 +212,7 @@ auto testproblem_radiation_marshak() -> int
 
 		const auto Egas_t = rad_system.gasEnergy(i + nghost);
 		Egas.at(i) = Egas_t;
-		Tgas.at(i) =
-		    RadSystem<MarshakProblem>::ComputeTgasFromEgas(Egas_t);
+		Tgas.at(i) = rad_system.ComputeTgasFromEgas(rho, Egas_t);
 	}
 
 	std::vector<double> xs_exact = {
@@ -266,12 +267,10 @@ auto testproblem_radiation_marshak() -> int
 		Trad_exact_1.at(i) =
 		    std::pow(Erad_transport_exact_1p0.at(i) / a_rad, 1. / 4.);
 
-		Tgas_exact_10.at(i) =
-		    RadSystem<MarshakProblem>::ComputeTgasFromEgas(
-			Egas_transport_exact_10p0.at(i));
-		Tgas_exact_1.at(i) =
-		    RadSystem<MarshakProblem>::ComputeTgasFromEgas(
-			Egas_transport_exact_1p0.at(i));
+		Tgas_exact_10.at(i) = rad_system.ComputeTgasFromEgas(
+		    rho, Egas_transport_exact_10p0.at(i));
+		Tgas_exact_1.at(i) = rad_system.ComputeTgasFromEgas(
+		    rho, Egas_transport_exact_1p0.at(i));
 	}
 
 	// interpolate numerical solution onto exact solution tabulated points

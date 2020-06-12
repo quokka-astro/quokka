@@ -44,10 +44,11 @@ class RadSystem : public HyperbolicSystem<problem_t>
 	using HyperbolicSystem<problem_t>::x1Flux_;
 	using HyperbolicSystem<problem_t>::x1FluxDiffusive_;
 	using HyperbolicSystem<problem_t>::primVar_;
-	using HyperbolicSystem<problem_t>::consVar_;
 	using HyperbolicSystem<problem_t>::consVarPredictStep_;
 
       public:
+	using HyperbolicSystem<problem_t>::consVar_;
+
 	enum consVarIndex {
 		radEnergy_index = 0,
 		x1RadFlux_index = 1,
@@ -65,9 +66,12 @@ class RadSystem : public HyperbolicSystem<problem_t>
 	double c_hat_ = c_light_;		 // for now
 	double radiation_constant_ = 7.5646e-15; // cgs
 
-	const double mean_molecular_mass_ = (0.5) * 1.6726231e-24; // cgs
-	const double boltzmann_constant_ = 1.380658e-16;	   // cgs
-	const double gamma_ = (5. / 3.);
+	const double mean_molecular_mass_cgs_ = (0.5) * 1.6726231e-24; // cgs
+	const double boltzmann_constant_cgs_ = 1.380658e-16;	       // cgs
+
+	double mean_molecular_mass_ = (0.5) * mean_molecular_mass_cgs_;
+	double boltzmann_constant_ = boltzmann_constant_cgs_;
+	double gamma_ = (5. / 3.);
 
 	double Erad_floor_ = 0.0;
 
@@ -85,14 +89,16 @@ class RadSystem : public HyperbolicSystem<problem_t>
 	void AddSourceTerms(array_t &cons, std::pair<int, int> range) override;
 	auto CheckStatesValid(array_t &cons, std::pair<int, int> range) const
 	    -> bool override;
+	auto ComputeTimestep(double dt_max) -> double override;
+	void AdvanceTimestep(double dt_max) override;
 
 	// static functions
 
 	static auto ComputeOpacity(double rho, double Tgas) -> double;
 	static auto ComputeOpacityTempDerivative(double rho, double Tgas)
 	    -> double;
-	static auto ComputeTgasFromEgas(double Egas) -> double;
-	static auto ComputeEgasFromTgas(double Tgas) -> double;
+	auto ComputeTgasFromEgas(double rho, double Egas) -> double;
+	auto ComputeEgasFromTgas(double rho, double Tgas) -> double;
 	auto ComputeEgasTempDerivative(double rho, double Tgas) -> double;
 
 	// setter functions:
@@ -133,7 +139,6 @@ class RadSystem : public HyperbolicSystem<problem_t>
 	void PredictStep(std::pair<int, int> range) override;
 	void AddFluxesRK2(array_t &U0, array_t &U1) override;
 	void ComputeFluxes(std::pair<int, int> range) override;
-	void ComputeTimestep(double dt_max) override;
 };
 
 template <typename problem_t>
@@ -146,7 +151,8 @@ RadSystem<problem_t>::RadSystem(RadSystemArgs args)
 	gasEnergy_.InitWithShallowSlice(consVar_, 2, gasEnergy_index, 0);
 	staticGasDensity_.InitWithShallowSlice(consVar_, 2, gasDensity_index,
 					       0);
-	x1GasMomentum_.InitWithShallowSlice(consVar_, 2, x1GasMomentum_index, 0);
+	x1GasMomentum_.InitWithShallowSlice(consVar_, 2, x1GasMomentum_index,
+					    0);
 
 	radEnergySource_.NewAthenaArray(args.nx + 2 * nghost_);
 }
@@ -361,7 +367,7 @@ void RadSystem<problem_t>::ConservedToPrimitive(array_t &cons,
 }
 
 template <typename problem_t>
-void RadSystem<problem_t>::ComputeTimestep(const double dt_max)
+auto RadSystem<problem_t>::ComputeTimestep(const double dt_max) -> double
 {
 	// double dt = std::numeric_limits<double>::max();
 	double dt = dt_max;
@@ -377,6 +383,13 @@ void RadSystem<problem_t>::ComputeTimestep(const double dt_max)
 	// std::cout << "Timestep determined to be: " << dt << "\n";
 
 	dt_ = dt;
+	return dt;
+}
+
+template <typename problem_t>
+void RadSystem<problem_t>::AdvanceTimestep(double dt_max)
+{
+	HyperbolicSystem<problem_t>::AdvanceTimestep(dt_max);
 }
 
 template <typename problem_t>
@@ -522,6 +535,24 @@ auto RadSystem<problem_t>::ComputeOpacityTempDerivative(const double rho,
 }
 
 template <typename problem_t>
+auto RadSystem<problem_t>::ComputeTgasFromEgas(const double rho,
+					       const double Egas) -> double
+{
+	const double c_v =
+	    boltzmann_constant_ / (mean_molecular_mass_ * (gamma_ - 1.0));
+	return (Egas / (rho * c_v));
+}
+
+template <typename problem_t>
+auto RadSystem<problem_t>::ComputeEgasFromTgas(const double rho,
+					       const double Tgas) -> double
+{
+	const double c_v =
+	    boltzmann_constant_ / (mean_molecular_mass_ * (gamma_ - 1.0));
+	return (rho * c_v * Tgas);
+}
+
+template <typename problem_t>
 auto RadSystem<problem_t>::ComputeEgasTempDerivative(const double rho,
 						     const double Tgas)
     -> double
@@ -589,7 +620,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &cons,
 
 			// compute material temperature
 			T_gas = RadSystem<problem_t>::ComputeTgasFromEgas(
-			    Egas_guess);
+			    rho, Egas_guess);
 
 			// compute opacity, emissivity
 			kappa =
@@ -662,10 +693,11 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &cons,
 		cons(x1RadFlux_index, i) = new_Frad_x;
 
 		// 3. Compute conservative gas momentum update
-		//	[N.B. should this step happen after the Lorentz transform?]
+		//	[N.B. should this step happen after the Lorentz
+		//transform?]
 
 		const double dF_x = new_Frad_x - Frad_x;
-		const double dx1Momentum = -dF_x / (c*c);
+		const double dx1Momentum = -dF_x / (c * c);
 
 		cons(x1GasMomentum_index, i) += dx1Momentum;
 

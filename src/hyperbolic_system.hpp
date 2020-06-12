@@ -39,9 +39,8 @@ template <typename problem_t> class HyperbolicSystem
 
 	/// Computes timestep and advances system
 	void AdvanceTimestep();
-	void AdvanceTimestep(double dt_max);
+	virtual void AdvanceTimestep(double dt_max);
 	void AdvanceTimestepRK2(double dt_max);
-	void AdvanceTimestepSDC(double dt_max);
 
 	// setter functions:
 
@@ -52,6 +51,7 @@ template <typename problem_t> class HyperbolicSystem
 	[[nodiscard]] auto nvars() const -> int;
 	[[nodiscard]] auto nghost() const -> int;
 	[[nodiscard]] auto nx() const -> int;
+	[[nodiscard]] auto dim1() const -> int;
 	[[nodiscard]] auto time() const -> double;
 	[[nodiscard]] auto dt() const -> double;
 
@@ -133,9 +133,9 @@ template <typename problem_t> class HyperbolicSystem
 				  F &&limiter);
 
 	virtual void PredictStep(std::pair<int, int> range);
-	void ComputeTimestep();
+	auto ComputeTimestep() -> double;
 
-	virtual void ComputeTimestep(double dt_max) = 0;
+	virtual auto ComputeTimestep(double dt_max) -> double = 0;
 	virtual void ComputeFluxes(std::pair<int, int> range) = 0;
 };
 
@@ -155,6 +155,12 @@ template <typename problem_t>
 auto HyperbolicSystem<problem_t>::nx() const -> int
 {
 	return nx_;
+}
+
+template <typename problem_t>
+auto HyperbolicSystem<problem_t>::dim1() const -> int
+{
+	return dim1_;
 }
 
 template <typename problem_t>
@@ -435,9 +441,9 @@ void HyperbolicSystem<problem_t>::AddFluxesRK2(array_t &U0, array_t &U1)
 }
 
 template <typename problem_t>
-void HyperbolicSystem<problem_t>::ComputeTimestep()
+auto HyperbolicSystem<problem_t>::ComputeTimestep() -> double
 {
-	ComputeTimestep(std::numeric_limits<double>::max());
+	return ComputeTimestep(std::numeric_limits<double>::max());
 }
 
 template <typename problem_t>

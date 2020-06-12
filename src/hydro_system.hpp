@@ -23,28 +23,29 @@
 
 /// Class for a linear, scalar advection equation
 ///
-template <typename array_t> class HydroSystem : public HyperbolicSystem<array_t>
+template <typename problem_t>
+class HydroSystem : public HyperbolicSystem<problem_t>
 {
 	// See
 	// [https://isocpp.org/wiki/faq/templates#nondependent-name-lookup-members]
-	using HyperbolicSystem<array_t>::lx_;
-	using HyperbolicSystem<array_t>::nx_;
-	using HyperbolicSystem<array_t>::dx_;
-	using HyperbolicSystem<array_t>::dt_;
-	using HyperbolicSystem<array_t>::cflNumber_;
-	using HyperbolicSystem<array_t>::dim1_;
-	using HyperbolicSystem<array_t>::nghost_;
-	using HyperbolicSystem<array_t>::nvars_;
+	using HyperbolicSystem<problem_t>::lx_;
+	using HyperbolicSystem<problem_t>::nx_;
+	using HyperbolicSystem<problem_t>::dx_;
+	using HyperbolicSystem<problem_t>::dt_;
+	using HyperbolicSystem<problem_t>::cflNumber_;
+	using HyperbolicSystem<problem_t>::dim1_;
+	using HyperbolicSystem<problem_t>::nghost_;
+	using HyperbolicSystem<problem_t>::nvars_;
 
-	using HyperbolicSystem<array_t>::x1LeftState_;
-	using HyperbolicSystem<array_t>::x1RightState_;
-	using HyperbolicSystem<array_t>::x1Flux_;
-	using HyperbolicSystem<array_t>::x1FluxDiffusive_;
-	using HyperbolicSystem<array_t>::primVar_;
-	using HyperbolicSystem<array_t>::consVarPredictStep_;
+	using HyperbolicSystem<problem_t>::x1LeftState_;
+	using HyperbolicSystem<problem_t>::x1RightState_;
+	using HyperbolicSystem<problem_t>::x1Flux_;
+	using HyperbolicSystem<problem_t>::x1FluxDiffusive_;
+	using HyperbolicSystem<problem_t>::primVar_;
+	using HyperbolicSystem<problem_t>::consVarPredictStep_;
 
       public:
-	using HyperbolicSystem<array_t>::consVar_;
+	using HyperbolicSystem<problem_t>::consVar_;
 
 	enum consVarIndex {
 		density_index = 0,
@@ -70,6 +71,8 @@ template <typename array_t> class HydroSystem : public HyperbolicSystem<array_t>
 	void AddSourceTerms(array_t &U, std::pair<int, int> range) override;
 	void ConservedToPrimitive(array_t &cons,
 				  std::pair<int, int> range) override;
+	auto ComputeTimestep(double dt_max) -> double override;
+	void AdvanceTimestep(double dt_max) override;
 
 	// setter functions:
 
@@ -89,6 +92,7 @@ template <typename array_t> class HydroSystem : public HyperbolicSystem<array_t>
 	auto pressure(int i) -> double;
 
 	auto ComputeMass() -> double;
+	auto ComputeEnergy() -> double;
 
       protected:
 	array_t density_;
@@ -102,67 +106,80 @@ template <typename array_t> class HydroSystem : public HyperbolicSystem<array_t>
 	double gamma_;
 
 	void ComputeFluxes(std::pair<int, int> range) override;
-	void ComputeTimestep(double dt_max) override;
-	void AddFluxesSDC(array_t &U_new, array_t &U0) override;
-
-	void FlattenShocks(array_t &q, std::pair<int, int> range);
 };
 
-template <typename array_t>
-auto HydroSystem<array_t>::density(const int i) -> double
+template <typename problem_t>
+HydroSystem<problem_t>::HydroSystem(HydroSystemArgs args)
+    : gamma_(args.gamma), HyperbolicSystem<problem_t>{args.nx, args.lx,
+						      args.cflNumber, 3}
+{
+	assert((gamma_ > 1.0)); // NOLINT
+
+	density_.InitWithShallowSlice(consVar_, 2, density_index, 0);
+	x1Momentum_.InitWithShallowSlice(consVar_, 2, x1Momentum_index, 0);
+	energy_.InitWithShallowSlice(consVar_, 2, energy_index, 0);
+
+	primDensity_.InitWithShallowSlice(primVar_, 2, primDensity_index, 0);
+	x1Velocity_.InitWithShallowSlice(primVar_, 2, x1Velocity_index, 0);
+	pressure_.InitWithShallowSlice(primVar_, 2, pressure_index, 0);
+}
+
+template <typename problem_t>
+auto HydroSystem<problem_t>::density(const int i) -> double
 {
 	return density_(i);
 }
 
-template <typename array_t>
-auto HydroSystem<array_t>::set_density(const int i) -> double &
+template <typename problem_t>
+auto HydroSystem<problem_t>::set_density(const int i) -> double &
 {
 	return density_(i);
 }
 
-template <typename array_t>
-auto HydroSystem<array_t>::x1Momentum(const int i) -> double
+template <typename problem_t>
+auto HydroSystem<problem_t>::x1Momentum(const int i) -> double
 {
 	return x1Momentum_(i);
 }
 
-template <typename array_t>
-auto HydroSystem<array_t>::set_x1Momentum(const int i) -> double &
+template <typename problem_t>
+auto HydroSystem<problem_t>::set_x1Momentum(const int i) -> double &
 {
 	return x1Momentum_(i);
 }
 
-template <typename array_t>
-auto HydroSystem<array_t>::energy(const int i) -> double
+template <typename problem_t>
+auto HydroSystem<problem_t>::energy(const int i) -> double
 {
 	return energy_(i);
 }
 
-template <typename array_t>
-auto HydroSystem<array_t>::set_energy(const int i) -> double &
+template <typename problem_t>
+auto HydroSystem<problem_t>::set_energy(const int i) -> double &
 {
 	return energy_(i);
 }
 
-template <typename array_t>
-auto HydroSystem<array_t>::primDensity(const int i) -> double
+template <typename problem_t>
+auto HydroSystem<problem_t>::primDensity(const int i) -> double
 {
 	return primDensity_(i);
 }
 
-template <typename array_t>
-auto HydroSystem<array_t>::x1Velocity(const int i) -> double
+template <typename problem_t>
+auto HydroSystem<problem_t>::x1Velocity(const int i) -> double
 {
 	return x1Velocity_(i);
 }
 
-template <typename array_t>
-auto HydroSystem<array_t>::pressure(const int i) -> double
+template <typename problem_t>
+auto HydroSystem<problem_t>::pressure(const int i) -> double
 {
 	return pressure_(i);
 }
 
-template <typename array_t> auto HydroSystem<array_t>::ComputeMass() -> double
+template <typename problem_t>
+auto HydroSystem<problem_t>::ComputeMass() -> double
 {
 	double mass = 0.0;
 
@@ -173,9 +190,21 @@ template <typename array_t> auto HydroSystem<array_t>::ComputeMass() -> double
 	return mass;
 }
 
-template <typename array_t>
-void HydroSystem<array_t>::ConservedToPrimitive(array_t &cons,
-						const std::pair<int, int> range)
+template <typename problem_t>
+auto HydroSystem<problem_t>::ComputeEnergy() -> double
+{
+	double energy = 0.0;
+
+	for (int i = nghost_; i < nx_ + nghost_; ++i) {
+		energy += energy_(i) * dx_;
+	}
+
+	return energy;
+}
+
+template <typename problem_t>
+void HydroSystem<problem_t>::ConservedToPrimitive(
+    array_t &cons, const std::pair<int, int> range)
 {
 	for (int i = range.first; i < range.second; ++i) {
 		const auto rho = cons(density_index, i);
@@ -198,8 +227,8 @@ void HydroSystem<array_t>::ConservedToPrimitive(array_t &cons,
 	}
 }
 
-template <typename array_t>
-void HydroSystem<array_t>::ComputeTimestep(const double dt_max)
+template <typename problem_t>
+auto HydroSystem<problem_t>::ComputeTimestep(const double dt_max) -> double
 {
 	double dt = dt_max;
 
@@ -217,11 +246,18 @@ void HydroSystem<array_t>::ComputeTimestep(const double dt_max)
 	}
 
 	dt_ = dt;
+	return dt;
+}
+
+template <typename problem_t>
+void HydroSystem<problem_t>::AdvanceTimestep(double dt_max)
+{
+	HyperbolicSystem<problem_t>::AdvanceTimestep(dt_max);
 }
 
 // TODO(ben): add flux limiter for positivity preservation.
-template <typename array_t>
-void HydroSystem<array_t>::ComputeFluxes(const std::pair<int, int> range)
+template <typename problem_t>
+void HydroSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 {
 	// By convention, the interfaces are defined on the left edge of each
 	// zone, i.e. xinterface_(i) is the solution to the Riemann problem at
@@ -362,14 +398,9 @@ void HydroSystem<array_t>::ComputeFluxes(const std::pair<int, int> range)
 	}
 }
 
-template <typename array_t>
-void HydroSystem<array_t>::AddSourceTerms(array_t &U, std::pair<int, int> range)
-{
-	// TODO(ben): to be implemented
-}
-
-template <typename array_t>
-void HydroSystem<array_t>::AddFluxesSDC(array_t &U_new, array_t &U0)
+template <typename problem_t>
+void HydroSystem<problem_t>::AddSourceTerms(array_t &U,
+					    std::pair<int, int> range)
 {
 	// TODO(ben): to be implemented
 }

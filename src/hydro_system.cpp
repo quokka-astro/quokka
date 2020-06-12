@@ -8,18 +8,3 @@
 ///
 
 #include "hydro_system.hpp"
-
-template <>
-HydroSystem<AthenaArray<double>>::HydroSystem(HydroSystemArgs args)
-    : HyperbolicSystem{args.nx, args.lx, args.cflNumber, 3}, gamma_(args.gamma)
-{
-	assert((gamma_ > 1.0)); // NOLINT
-
-	density_.InitWithShallowSlice(consVar_, 2, density_index, 0);
-	x1Momentum_.InitWithShallowSlice(consVar_, 2, x1Momentum_index, 0);
-	energy_.InitWithShallowSlice(consVar_, 2, energy_index, 0);
-
-	primDensity_.InitWithShallowSlice(primVar_, 2, primDensity_index, 0);
-	x1Velocity_.InitWithShallowSlice(primVar_, 2, x1Velocity_index, 0);
-	pressure_.InitWithShallowSlice(primVar_, 2, pressure_index, 0);
-}

@@ -3,11 +3,11 @@
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file test_radiation_marshak.cpp
-/// \brief Defines a test problem for radiation in the diffusion regime.
+/// \file test_radhydro_shock.cpp
+/// \brief Defines a test problem for a radiative shock.
 ///
 
-#include "test_radiation_classical_marshak.hpp"
+#include "test_radhydro_shock.hpp"
 
 auto main() -> int
 {
@@ -20,7 +20,7 @@ auto main() -> int
 	{ // objects must be destroyed before Kokkos::finalize, so enter new
 	  // scope here to do that automatically
 
-		result = testproblem_radiation_classical_marshak();
+		result = testproblem_radhydro_shock();
 
 	} // destructors must be called before Kokkos::finalize()
 	Kokkos::finalize();
@@ -28,131 +28,129 @@ auto main() -> int
 	return result;
 }
 
-struct SuOlsonProblem {
+struct ShockProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-// Su & Olson (1997) parameters
-const double eps_SuOlson = 1.0;
-const double kappa = 1.0;
-const double rho = 1.0;	       // g cm^-3 (matter density)
-const double T_hohlraum = 1.0; // dimensionless
-// const double T_hohlraum_scaled = 3.481334e6; // K [= 300 eV]
-// const double kelvin_to_eV = 8.617385e-5;
 const double a_rad = 1.0;
 const double c = 1.0;
-const double alpha_SuOlson = 4.0 * a_rad / eps_SuOlson;
 
-template <> void RadSystem<SuOlsonProblem>::FillGhostZones(array_t &cons)
+template <> void RadSystem<ShockProblem>::AdvanceTimestep(const double dt)
 {
-	// Su & Olson (1996) boundary conditions
-	const double T_H = T_hohlraum;
-	const double E_inc = radiation_constant_ * std::pow(T_H, 4);
-	const double F_inc = c_light_ * E_inc / 4.0;
+	const auto ppm_range = std::make_pair(-1 + nghost_, nx_ + 1 + nghost_);
+	const auto cell_range = std::make_pair(nghost_, nx_ + nghost_);
 
-	// x1 left side boundary (Marshak)
-	for (int i = 0; i < nghost_; ++i) {
-		cons(radEnergy_index, i) = E_inc;
-		cons(x1RadFlux_index, i) = F_inc;
+	dt_ = dt;
+
+	FillGhostZones(consVar_);
+	ConservedToPrimitive(consVar_, std::make_pair(0, dim1_));
+	ReconstructStatesPPM(primVar_, ppm_range);
+	ComputeFluxes(cell_range);
+	PredictStep(cell_range);
+
+	if (!CheckStatesValid(consVarPredictStep_, cell_range)) {
+		std::cout
+		    << "[rad step] Invalid states. This should not happen!\n";
+		assert(false); // NOLINT
 	}
 
-	// x1 right side boundary (reflecting)
-	for (int i = nghost_ + nx_; i < nghost_ + nx_ + nghost_; ++i) {
-		cons(radEnergy_index, i) = cons(
-		    radEnergy_index, (nghost_ + nx_) - (i - nx_ - nghost_ + 1));
-		cons(x1RadFlux_index, i) =
-		    -1.0 * cons(x1RadFlux_index,
-				(nghost_ + nx_) - (i - nx_ - nghost_ + 1));
+	for (int i = cell_range.first; i < cell_range.second; ++i) {
+		consVar_(radEnergy_index, i) =
+		    consVarPredictStep_(radEnergy_index, i);
+		consVar_(x1RadFlux_index, i) =
+		    consVarPredictStep_(x1RadFlux_index, i);
+		// do *not* copy hydro variables!
 	}
+
+	// Add source terms via operator splitting
+	AddSourceTerms(consVar_, cell_range);
+
+	// new state is now in consVar_
+
+	// Adjust our clock
+	time_ += dt_;
+	dtPrev_ = dt_;
 }
 
-template <>
-auto RadSystem<SuOlsonProblem>::ComputeOpacity(const double rho,
-					       const double Tgas) -> double
+template <> void HydroSystem<ShockProblem>::AdvanceTimestep(const double dt)
 {
-	return kappa;
+	const auto ppm_range = std::make_pair(-1 + nghost_, nx_ + 1 + nghost_);
+	const auto cell_range = std::make_pair(nghost_, nx_ + nghost_);
+
+	dt_ = dt;
+
+	FillGhostZones(consVar_);
+	ConservedToPrimitive(consVar_, std::make_pair(0, dim1_));
+	ReconstructStatesPPM(primVar_, ppm_range);
+	ComputeFluxes(cell_range);
+	PredictStep(cell_range);
+
+	if (!CheckStatesValid(consVarPredictStep_, cell_range)) {
+		std::cout
+		    << "[hydro step] Invalid states. This should not happen!\n";
+		assert(false); // NOLINT
+	}
+
+	// new state is now in consVarPredictStep_
+
+	for (int n = 0; n < nvars_; ++n) {
+		for (int i = cell_range.first; i < cell_range.second; ++i) {
+			consVar_(n, i) = consVarPredictStep_(n, i);
+		}
+	}
+
+	// Adjust our clock
+	time_ += dt_;
+	dtPrev_ = dt_;
 }
 
-template <>
-auto RadSystem<SuOlsonProblem>::ComputeTgasFromEgas(const double rho,
-						    const double Egas) -> double
+auto testproblem_radhydro_shock() -> int
 {
-	return std::pow(4.0 * Egas / alpha_SuOlson, 1. / 4.);
-}
-
-template <>
-auto RadSystem<SuOlsonProblem>::ComputeEgasFromTgas(const double rho,
-						    const double Tgas) -> double
-{
-	return (alpha_SuOlson / 4.0) * std::pow(Tgas, 4);
-}
-
-template <>
-auto RadSystem<SuOlsonProblem>::ComputeEgasTempDerivative(const double rho,
-							  const double Tgas)
-    -> double
-{
-	// This is also known as the heat capacity, i.e.
-	// 		\del E_g / \del T = \rho c_v,
-	// for normal materials.
-
-	// However, for this problem, this must be of the form \alpha T^3
-	// in order to obtain an exact solution to the problem.
-	// The input parameters are the density and *temperature*, not Egas
-	// itself.
-
-	return alpha_SuOlson * std::pow(Tgas, 3);
-}
-
-auto testproblem_radiation_classical_marshak() -> int
-{
-	// For this problem, you must do reconstruction in the reduced
-	// flux, *not* the flux. Otherwise, F exceeds cE at sharp temperature
-	// gradients.
-
 	// Problem parameters
 
-	const int max_timesteps = 2e5;
+	const int max_timesteps = 1e5;
 	const double CFL_number = 0.4;
-	const int nx = 1500;
+	const int nx = 100;
 
-	const double initial_dtau = 1e-9; // dimensionless time
-	const double max_dtau = 1e-2;	  // dimensionless time
-	const double max_tau = 10.0;	  // dimensionless time
-	const double Lz = 100.0;	  // dimensionless length
-
-	// Su & Olson (1997) parameters
-	const double chi = rho * kappa; // cm^-1 (total matter opacity)
-	const double Lx = Lz / chi;	// cm
-	const double max_time = max_tau / (eps_SuOlson * c * chi);	  // s
-	const double max_dt = max_dtau / (eps_SuOlson * c * chi);	  // s
-	const double initial_dt = initial_dtau / (eps_SuOlson * c * chi); // s
+	const double initial_dt = 1e-3; // dimensionless time
+	const double max_dt = 1e-2;	// dimensionless time
+	const double max_time = 10.0;	// dimensionless time
+	const double Lx = 100.0;	// dimensionless length
+	const double rho = 1.0;
+	const double gamma = (5. / 3.);
+	const double initial_Trad = 1.0;
+	const double initial_Tgas = 0.1;
 
 	// Problem initialization
 
-	RadSystem<SuOlsonProblem> rad_system(
-	    {.nx = nx, .lx = Lz, .cflNumber = CFL_number});
+	RadSystem<ShockProblem> rad_system(
+	    {.nx = nx, .lx = Lx, .cflNumber = CFL_number});
 
 	rad_system.set_radiation_constant(a_rad);
 	rad_system.set_c_light(c);
-	rad_system.set_lx(Lx);
+	rad_system.mean_molecular_mass_ = 1.;
+	rad_system.boltzmann_constant_ = 1.;
+	rad_system.gamma_ = gamma;
 
-	const auto initial_Egas =
-	    1e-10 * rad_system.ComputeEgasFromTgas(rho, T_hohlraum);
-	const auto initial_Erad = 1e-10 * (a_rad * std::pow(T_hohlraum, 4));
-	rad_system.Erad_floor_ = initial_Erad;
+	const double initial_Erad = a_rad * std::pow(initial_Trad, 4);
+	const double initial_Egas =
+	    rad_system.ComputeEgasFromTgas(rho, initial_Tgas);
+
+	HydroSystem<ShockProblem> hydro_system(
+	    {.nx = nx, .lx = Lx, .cflNumber = CFL_number, .gamma = gamma});
 
 	auto nghost = rad_system.nghost();
 	for (int i = nghost; i < nx + nghost; ++i) {
 		rad_system.set_radEnergy(i) = initial_Erad;
 		rad_system.set_x1RadFlux(i) = 0.0;
-		rad_system.set_gasEnergy(i) = initial_Egas;
-		rad_system.set_staticGasDensity(i) = rho;
-		rad_system.set_x1GasMomentum(i) = 0.0;
 		rad_system.set_radEnergySource(i) = 0.0;
+
+		hydro_system.set_energy(i) = initial_Egas;
+		hydro_system.set_density(i) = rho;
+		hydro_system.set_x1Momentum(i) = 0.0;
 	}
 
 	const auto Erad0 = rad_system.ComputeRadEnergy();
-	const auto Egas0 = rad_system.ComputeGasEnergy();
+	const auto Egas0 = hydro_system.ComputeEnergy();
 	const auto Etot0 = Erad0 + Egas0;
 
 	std::cout << "radiation constant (code units) = " << a_rad << "\n";
@@ -171,7 +169,7 @@ auto testproblem_radiation_classical_marshak() -> int
 				  << "; dt = " << rad_system.dt() << "\n";
 
 			const auto Erad = rad_system.ComputeRadEnergy();
-			const auto Egas = rad_system.ComputeGasEnergy();
+			const auto Egas = hydro_system.ComputeEnergy();
 			const auto Etot = Erad + Egas;
 			const auto Ediff = std::fabs(Etot - Etot0);
 
@@ -186,7 +184,42 @@ auto testproblem_radiation_classical_marshak() -> int
 		}
 
 		const double this_dtMax = ((j == 0) ? initial_dt : max_dt);
-		rad_system.AdvanceTimestepRK2(this_dtMax);
+
+		// Fill ghost zones
+		const auto all_cells = std::make_pair(0, hydro_system.dim1());
+		hydro_system.FillGhostZones(hydro_system.consVar_);
+		hydro_system.ConservedToPrimitive(hydro_system.consVar_,
+						  all_cells);
+
+		rad_system.FillGhostZones(rad_system.consVar_);
+		rad_system.ConservedToPrimitive(rad_system.consVar_, all_cells);
+
+		// Compute global timestep
+		const double this_dt =
+		    std::min(hydro_system.ComputeTimestep(this_dtMax),
+			     rad_system.ComputeTimestep(this_dtMax));
+
+		// Advance hydro subsystem
+		hydro_system.AdvanceTimestep(this_dt);
+
+		// Copy hydro vars into rad_system
+		for (int i = nghost; i < (nx + nghost); ++i) {
+			rad_system.set_staticGasDensity(i) =
+			    hydro_system.density(i);
+			rad_system.set_x1GasMomentum(i) =
+			    hydro_system.x1Momentum(i);
+			rad_system.set_gasEnergy(i) = hydro_system.energy(i);
+		}
+
+		// Advance radiation subsystem
+		rad_system.AdvanceTimestep(this_dt);
+
+		// Copy updated hydro vars back into hydro_system
+		for (int i = nghost; i < (nx + nghost); ++i) {
+			hydro_system.set_x1Momentum(i) =
+			    rad_system.x1GasMomentum(i);
+			hydro_system.set_energy(i) = rad_system.gasEnergy(i);
+		}
 	}
 
 	std::vector<double> xs(nx);
@@ -196,32 +229,36 @@ auto testproblem_radiation_classical_marshak() -> int
 	std::vector<double> Egas(nx);
 	std::vector<double> x1GasMomentum(nx);
 	std::vector<double> x1RadFlux(nx);
+	std::vector<double> gasDensity(nx);
 
 	for (int i = 0; i < nx; ++i) {
 		const double x = Lx * ((i + 0.5) / static_cast<double>(nx));
-		xs.at(i) = std::sqrt(3.0) * x;
+		xs.at(i) = x;
 
-		const auto Erad_t =
-		    rad_system.radEnergy(i + nghost) / std::sqrt(3.);
+		const auto Erad_t = rad_system.radEnergy(i + nghost);
 		Erad.at(i) = Erad_t;
 		Trad.at(i) = std::pow(Erad_t / a_rad, 1. / 4.);
 
-		const auto Egas_t =
-		    rad_system.gasEnergy(i + nghost) / std::sqrt(3.);
+		const auto rho = rad_system.staticGasDensity(i + nghost);
+		const auto Egas_t = rad_system.gasEnergy(i + nghost);
+
 		Egas.at(i) = Egas_t;
 		Tgas.at(i) = rad_system.ComputeTgasFromEgas(rho, Egas_t);
 
 		x1GasMomentum.at(i) = rad_system.x1GasMomentum(i + nghost);
 		x1RadFlux.at(i) = rad_system.x1RadFlux(i + nghost);
+
+		gasDensity.at(i) = hydro_system.density(i + nghost);
 	}
 
+#if 0
 	// read in exact solution
 
 	std::vector<double> xs_exact;
 	std::vector<double> Trad_exact;
 	std::vector<double> Tmat_exact;
 
-	std::string filename = "../../extern/SuOlson/100pt_tau10p0.dat";
+	std::string filename = "../../extern/radshock/analytic.dat";
 	std::ifstream fstream(filename, std::ios::in);
 	assert(fstream.is_open());
 
@@ -235,7 +272,7 @@ auto testproblem_radiation_classical_marshak() -> int
 		for (double value; iss >> value;) {
 			values.push_back(value);
 		}
-		auto x_val = std::sqrt(3.0) * values.at(1);
+		auto x_val = values.at(1);
 		auto Trad_val = values.at(4);
 		auto Tmat_val = values.at(5);
 
@@ -260,6 +297,7 @@ auto testproblem_radiation_classical_marshak() -> int
 	const double error_tol = 0.003;
 	const double rel_error = err_norm / sol_norm;
 	std::cout << "Relative L2 error norm = " << rel_error << std::endl;
+#endif
 
 	// plot results
 
@@ -270,7 +308,7 @@ auto testproblem_radiation_classical_marshak() -> int
 
 	std::map<std::string, std::string> Trad_exact_args;
 	Trad_exact_args["label"] = "radiation temperature (exact)";
-	matplotlibcpp::plot(xs_exact, Trad_exact, Trad_exact_args);
+	// matplotlibcpp::plot(xs_exact, Trad_exact, Trad_exact_args);
 
 	std::map<std::string, std::string> Tgas_args;
 	Tgas_args["label"] = "gas temperature";
@@ -278,16 +316,15 @@ auto testproblem_radiation_classical_marshak() -> int
 
 	std::map<std::string, std::string> Tgas_exact_args;
 	Tgas_exact_args["label"] = "gas temperature (exact)";
-	matplotlibcpp::plot(xs_exact, Tmat_exact, Tgas_exact_args);
+	// matplotlibcpp::plot(xs_exact, Tmat_exact, Tgas_exact_args);
 
 	matplotlibcpp::xlabel("length x (dimensionless)");
 	matplotlibcpp::ylabel("temperature (dimensionless)");
-	matplotlibcpp::xlim(0.4, 100.); // dimensionless
+	matplotlibcpp::xlim(0.0, 100.); // dimensionless
 	matplotlibcpp::ylim(0.0, 1.0);	// dimensionless
-	matplotlibcpp::xscale("log");
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", rad_system.time()));
-	matplotlibcpp::save("./classical_marshak_wave_temperature.pdf");
+	matplotlibcpp::save("./radshock_temperature.pdf");
 
 	// momentum
 	std::map<std::string, std::string> gasmom_args, radmom_args;
@@ -299,17 +336,29 @@ auto testproblem_radiation_classical_marshak() -> int
 	matplotlibcpp::plot(xs, x1RadFlux, radmom_args);
 	matplotlibcpp::xlabel("length x (dimensionless)");
 	matplotlibcpp::ylabel("momentum density (dimensionless)");
-	matplotlibcpp::xlim(0.4, 100.); // dimensionless
+	matplotlibcpp::xlim(0.0, 100.); // dimensionless
 	matplotlibcpp::ylim(0.0, 3.0);	// dimensionless
-	matplotlibcpp::xscale("log");
 	matplotlibcpp::legend();
-	matplotlibcpp::save("./classical_marshak_wave_momentum.pdf");
+	matplotlibcpp::save("./radshock_momentum.pdf");
+
+	// gas density
+	std::map<std::string, std::string> gasdens_args;
+	gasdens_args["label"] = "gas density";
+
+	matplotlibcpp::clf();
+	matplotlibcpp::plot(xs, gasDensity, gasdens_args);
+	matplotlibcpp::xlabel("length x (dimensionless)");
+	matplotlibcpp::ylabel("mass density (dimensionless)");
+	matplotlibcpp::xlim(0.0, 100.); // dimensionless
+	matplotlibcpp::ylim(0.0, 3.0);	// dimensionless
+	matplotlibcpp::legend();
+	matplotlibcpp::save("./radshock_gasdensity.pdf");
 
 	// energy density
 	matplotlibcpp::clf();
 
 	std::map<std::string, std::string> Erad_args;
-	Erad_args["label"] = "Numerical solution";
+	Erad_args["label"] = "radiation energy density";
 	Erad_args["color"] = "black";
 	matplotlibcpp::plot(xs, Erad, Erad_args);
 
@@ -320,26 +369,28 @@ auto testproblem_radiation_classical_marshak() -> int
 
 	matplotlibcpp::xlabel("length x (dimensionless)");
 	matplotlibcpp::ylabel("radiation energy density (dimensionless)");
-	matplotlibcpp::xlim(0.4, 100.0); // cm
+	matplotlibcpp::xlim(0.0, 100.0); // cm
 	matplotlibcpp::ylim(0.0, 1.0);
-	matplotlibcpp::xscale("log");
 	matplotlibcpp::legend();
-	matplotlibcpp::title(fmt::format(
-	    "time ct = {:.4g}", rad_system.time() * (eps_SuOlson * c * chi)));
-	matplotlibcpp::save("./classical_marshak_wave.pdf");
+	matplotlibcpp::title(
+	    fmt::format("time ct = {:.4g}", rad_system.time()));
+	matplotlibcpp::save("./radshock_energy.pdf");
 
-	matplotlibcpp::xscale("log");
 	matplotlibcpp::yscale("log");
-	matplotlibcpp::xlim(0.4, 100.0); // cm
-	matplotlibcpp::ylim(1e-8, 1.3);
-	matplotlibcpp::save("./classical_marshak_wave_loglog.pdf");
+	matplotlibcpp::xlim(0.0, 100.0); // cm
+	matplotlibcpp::ylim(1e-5, 1.3);
+	matplotlibcpp::save("./radshock_energy_loglog.pdf");
 
 	// Cleanup and exit
 	std::cout << "Finished." << std::endl;
 
 	int status = 0;
+
+#if 0
 	if ((rel_error > error_tol) || std::isnan(rel_error)) {
 		status = 1;
 	}
+#endif
+
 	return status;
 }

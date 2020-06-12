@@ -21,6 +21,12 @@ include_directories(${PYTHON_INCLUDE_DIRS})
 include_directories(${Kokkos_INCLUDE_DIRS_RET})
 include_directories(${fmt_INCLUDE_DIRS_RET})
 
+add_executable(test_radhydro_shock radiation_system.cpp hydro_system.cpp hyperbolic_system.cpp test_radhydro_shock.cpp interpolate.c)
+
+include_directories(${PYTHON_INCLUDE_DIRS})
+include_directories(${Kokkos_INCLUDE_DIRS_RET})
+include_directories(${fmt_INCLUDE_DIRS_RET})
+
 target_link_libraries(test_radiation_matter_coupling ${PYTHON_LIBRARY})
 target_link_libraries(test_radiation_matter_coupling kokkos)
 target_link_libraries(test_radiation_matter_coupling fmt::fmt)
@@ -33,7 +39,12 @@ target_link_libraries(test_radiation_classical_marshak ${PYTHON_LIBRARY})
 target_link_libraries(test_radiation_classical_marshak kokkos)
 target_link_libraries(test_radiation_classical_marshak fmt::fmt)
 
+target_link_libraries(test_radhydro_shock ${PYTHON_LIBRARY})
+target_link_libraries(test_radhydro_shock kokkos)
+target_link_libraries(test_radhydro_shock fmt::fmt)
+
 include(CTest)
 add_test(NAME MatterEnergyExchange COMMAND test_radiation_matter_coupling)
 add_test(NAME MarshakWave COMMAND test_radiation_marshak)
 add_test(NAME ClassicalMarshakWave COMMAND test_radiation_classical_marshak)
+add_test(NAME RadhydroShock COMMAND test_radhydro_shock)
