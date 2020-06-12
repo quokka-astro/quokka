@@ -131,7 +131,6 @@ class RadSystem : public HyperbolicSystem<problem_t>
 	// virtual function overrides
 
 	void PredictStep(std::pair<int, int> range) override;
-	void AddFluxesSDC(array_t &U_new, array_t &U_0) override;
 	void AddFluxesRK2(array_t &U0, array_t &U1) override;
 	void ComputeFluxes(std::pair<int, int> range) override;
 	void ComputeTimestep(double dt_max) override;
@@ -788,59 +787,6 @@ void RadSystem<problem_t>::AddFluxesRK2(array_t &U0, array_t &U1)
 
 			U0(radEnergy_index, i) = E_newd;
 			U0(x1RadFlux_index, i) = x1F_newd;
-		}
-	}
-}
-
-template <typename problem_t>
-void RadSystem<problem_t>::AddFluxesSDC(array_t &U_new, array_t &U_0)
-{
-	// By convention, the fluxes are defined on the left edge of
-	// each zone, i.e. flux_(i) is the flux *into* zone i through
-	// the interface on the left of zone i, and -1.0*flux(i+1) is
-	// the flux *into* zone i through the interface on the right of
-	// zone i.
-
-	// Perform flux limiting on intercell fluxes
-	// (This may be necessary within SDC correction iteration loop.)
-	for (int i = nghost_; i < nx_ + nghost_; ++i) {
-		const double Fp = x1Flux_(radEnergy_index, i + 1);
-		const double Fm = x1Flux_(radEnergy_index, i);
-
-		const double dE = -1.0 * (dt_ / dx_) * (Fp - Fm);
-		const double E0 = U_0(radEnergy_index, i);
-
-		// prevent negative energy density
-		const double R = (-1.0 * dE) / (E0 - Erad_floor_);
-		// const double lambda_R =
-		//    std::pow(1.0 + (R * R * R * R), -1.0 / 4.0);
-		const double lambda_R = 1.0 / R;
-
-		if (R > 0.0) {
-			const double wp = (-Fp < 0.0) ? lambda_R : 1.0;
-			const double wm = (Fm < 0.0) ? lambda_R : 1.0;
-
-			const double new_dE =
-			    -1.0 * (dt_ / dx_) * (wp * Fp - wm * Fm);
-
-			const double eps = 1e-10;
-			assert((1.0 - ((E0 + new_dE) / Erad_floor_)) <
-			       eps); // NOLINT
-
-			for (int n = 0; n < nvars_; ++n) {
-				x1Flux_(n, i + 1) *= wp;
-				x1Flux_(n, i) *= wm;
-			}
-		}
-	}
-
-	// Do normal forward Euler step
-	for (int n = 0; n < nvars_; ++n) {
-		for (int i = nghost_; i < nx_ + nghost_; ++i) {
-			const double Fp = x1Flux_(n, i + 1);
-			const double Fm = x1Flux_(n, i);
-			const double FU = -1.0 * (dt_ / dx_) * (Fp - Fm);
-			U_new(n, i) = U_0(n, i) + FU;
 		}
 	}
 }
