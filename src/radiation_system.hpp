@@ -53,6 +53,7 @@ class RadSystem : public HyperbolicSystem<problem_t>
 		x1RadFlux_index = 1,
 		gasEnergy_index = 2,
 		gasDensity_index = 3,
+		x1GasMomentum_index = 4,
 	};
 
 	enum primVarIndex {
@@ -102,6 +103,7 @@ class RadSystem : public HyperbolicSystem<problem_t>
 	auto set_x1RadFlux(int i) -> double &;
 	auto set_gasEnergy(int i) -> double &;
 	auto set_staticGasDensity(int i) -> double &;
+	auto set_x1GasMomentum(int i) -> double &;
 	auto set_radEnergySource(int i) -> double &;
 	void set_c_light(double c_light);
 	void set_radiation_constant(double arad);
@@ -112,6 +114,7 @@ class RadSystem : public HyperbolicSystem<problem_t>
 	[[nodiscard]] auto x1RadFlux(int i) const -> double;
 	[[nodiscard]] auto gasEnergy(int i) const -> double;
 	[[nodiscard]] auto staticGasDensity(int i) const -> double;
+	[[nodiscard]] auto x1GasMomentum(int i) const -> double;
 	[[nodiscard]] auto ComputeRadEnergy() const -> double;
 	[[nodiscard]] auto ComputeGasEnergy() const -> double;
 	[[nodiscard]] auto c_light() const -> double;
@@ -122,6 +125,7 @@ class RadSystem : public HyperbolicSystem<problem_t>
 	array_t x1RadFlux_;
 	array_t gasEnergy_;
 	array_t staticGasDensity_;
+	array_t x1GasMomentum_;
 	array_t radEnergySource_;
 
 	// virtual function overrides
@@ -135,7 +139,7 @@ class RadSystem : public HyperbolicSystem<problem_t>
 
 template <typename problem_t>
 RadSystem<problem_t>::RadSystem(RadSystemArgs args)
-    : HyperbolicSystem<problem_t>{args.nx, args.lx, args.cflNumber, 4}
+    : HyperbolicSystem<problem_t>{args.nx, args.lx, args.cflNumber, 5}
 {
 	radEnergy_.InitWithShallowSlice(consVar_, 2, radEnergy_index, 0);
 	x1RadFlux_.InitWithShallowSlice(consVar_, 2, x1RadFlux_index, 0);
@@ -143,6 +147,7 @@ RadSystem<problem_t>::RadSystem(RadSystemArgs args)
 	gasEnergy_.InitWithShallowSlice(consVar_, 2, gasEnergy_index, 0);
 	staticGasDensity_.InitWithShallowSlice(consVar_, 2, gasDensity_index,
 					       0);
+	x1GasMomentum_.InitWithShallowSlice(consVar_, 2, x1GasMomentum_index, 0);
 
 	radEnergySource_.NewAthenaArray(args.nx + 2 * nghost_);
 }
@@ -225,6 +230,18 @@ template <typename problem_t>
 auto RadSystem<problem_t>::set_staticGasDensity(const int i) -> double &
 {
 	return staticGasDensity_(i);
+}
+
+template <typename problem_t>
+auto RadSystem<problem_t>::x1GasMomentum(const int i) const -> double
+{
+	return x1GasMomentum_(i);
+}
+
+template <typename problem_t>
+auto RadSystem<problem_t>::set_x1GasMomentum(const int i) -> double &
+{
+	return x1GasMomentum_(i);
 }
 
 template <typename problem_t>
@@ -639,11 +656,19 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &cons,
 
 		// 2. Compute radiation flux update
 
-		const double F_rad = cons(x1RadFlux_index, i);
-		const double new_F_rad =
-		    (1. / (1.0 + (rho * kappa) * c * dt)) * F_rad;
+		const double Frad_x = cons(x1RadFlux_index, i);
+		const double new_Frad_x =
+		    (1. / (1.0 + (rho * kappa) * c * dt)) * Frad_x;
 
-		cons(x1RadFlux_index, i) = new_F_rad;
+		cons(x1RadFlux_index, i) = new_Frad_x;
+
+		// 3. Compute conservative gas momentum update
+		//	[N.B. should this step happen after the Lorentz transform?]
+
+		const double dF_x = new_Frad_x - Frad_x;
+		const double dx1Momentum = -dF_x / (c*c);
+
+		cons(x1GasMomentum_index, i) += dx1Momentum;
 
 		// Lorentz transform back to 'laboratory' frame
 		// TransformIntoComovingFrame(-fluid_velocity);

@@ -144,6 +144,7 @@ auto testproblem_radiation_classical_marshak() -> int
 		rad_system.set_x1RadFlux(i) = 0.0;
 		rad_system.set_gasEnergy(i) = initial_Egas;
 		rad_system.set_staticGasDensity(i) = rho;
+		rad_system.set_x1GasMomentum(i) = 0.0;
 		rad_system.set_radEnergySource(i) = 0.0;
 	}
 
@@ -190,6 +191,8 @@ auto testproblem_radiation_classical_marshak() -> int
 	std::vector<double> Tgas(nx);
 	std::vector<double> Erad(nx);
 	std::vector<double> Egas(nx);
+	std::vector<double> x1GasMomentum(nx);
+	std::vector<double> x1RadFlux(nx);
 
 	for (int i = 0; i < nx; ++i) {
 		const double x = Lx * ((i + 0.5) / static_cast<double>(nx));
@@ -205,6 +208,9 @@ auto testproblem_radiation_classical_marshak() -> int
 		Egas.at(i) = Egas_t;
 		Tgas.at(i) =
 		    RadSystem<SuOlsonProblem>::ComputeTgasFromEgas(Egas_t);
+
+		x1GasMomentum.at(i) = rad_system.x1GasMomentum(i + nghost);
+		x1RadFlux.at(i) = rad_system.x1RadFlux(i + nghost);
 	}
 
 	// read in exact solution
@@ -260,9 +266,17 @@ auto testproblem_radiation_classical_marshak() -> int
 	Trad_args["label"] = "radiation temperature";
 	matplotlibcpp::plot(xs, Trad, Trad_args);
 
+	std::map<std::string, std::string> Trad_exact_args;
+	Trad_exact_args["label"] = "radiation temperature (exact)";
+	matplotlibcpp::plot(xs_exact, Trad_exact, Trad_exact_args);
+
 	std::map<std::string, std::string> Tgas_args;
 	Tgas_args["label"] = "gas temperature";
 	matplotlibcpp::plot(xs, Tgas, Tgas_args);
+
+	std::map<std::string, std::string> Tgas_exact_args;
+	Tgas_exact_args["label"] = "gas temperature (exact)";
+	matplotlibcpp::plot(xs_exact, Tmat_exact, Tgas_exact_args);
 
 	matplotlibcpp::xlabel("length x (dimensionless)");
 	matplotlibcpp::ylabel("temperature (dimensionless)");
@@ -272,6 +286,23 @@ auto testproblem_radiation_classical_marshak() -> int
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", rad_system.time()));
 	matplotlibcpp::save("./classical_marshak_wave_temperature.pdf");
+
+	// momentum
+	std::map<std::string, std::string> gasmom_args, radmom_args;
+	gasmom_args["label"] = "gas momentum density";
+	radmom_args["label"] = "radiation momentum density";
+
+	matplotlibcpp::clf();
+	matplotlibcpp::plot(xs, x1GasMomentum, gasmom_args);
+	matplotlibcpp::plot(xs, x1RadFlux, radmom_args);
+	matplotlibcpp::xlabel("length x (dimensionless)");
+	matplotlibcpp::ylabel("momentum density (dimensionless)");
+	matplotlibcpp::xlim(0.4, 100.); // dimensionless
+	matplotlibcpp::ylim(0.0, 3.0);	// dimensionless
+	matplotlibcpp::xscale("log");
+	matplotlibcpp::legend();
+	matplotlibcpp::save("./classical_marshak_wave_momentum.pdf");
+
 
 	// energy density
 	matplotlibcpp::clf();
