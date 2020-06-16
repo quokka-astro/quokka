@@ -18,6 +18,6 @@
 #include "hydro_system.hpp"
 
 // function definitions
-void testproblem_hydro_wave();
+int testproblem_hydro_wave();
 
 #endif // TEST_HYDRO_WAVE_HPP_

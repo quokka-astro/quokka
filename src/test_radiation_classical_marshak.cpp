@@ -201,13 +201,16 @@ auto testproblem_radiation_classical_marshak() -> int
 		const double x = Lx * ((i + 0.5) / static_cast<double>(nx));
 		xs.at(i) = std::sqrt(3.0) * x;
 
-		const auto Erad_t =
-		    rad_system.radEnergy(i + nghost) / std::sqrt(3.);
+		const auto Erad_t = rad_system.radEnergy(i + nghost) / std::sqrt(3.);
 		Erad.at(i) = Erad_t;
 		Trad.at(i) = std::pow(Erad_t / a_rad, 1. / 4.);
 
-		const auto Egas_t =
-		    rad_system.gasEnergy(i + nghost) / std::sqrt(3.);
+		const auto Etot_t = rad_system.gasEnergy(i + nghost);
+		const auto rho = rad_system.staticGasDensity(i + nghost);
+		const auto x1GasMom = rad_system.x1GasMomentum(i + nghost);
+		const auto Ekin = (x1GasMom*x1GasMom) / (2.0*rho);
+
+		const auto Egas_t = (Etot_t - Ekin) / std::sqrt(3.);
 		Egas.at(i) = Egas_t;
 		Tgas.at(i) = rad_system.ComputeTgasFromEgas(rho, Egas_t);
 

@@ -73,6 +73,8 @@ class HydroSystem : public HyperbolicSystem<problem_t>
 				  std::pair<int, int> range) override;
 	auto ComputeTimestep(double dt_max) -> double override;
 	void AdvanceTimestep(double dt_max) override;
+	void FillGhostZones(array_t &cons) override;
+
 
 	// setter functions:
 
@@ -247,6 +249,12 @@ auto HydroSystem<problem_t>::ComputeTimestep(const double dt_max) -> double
 
 	dt_ = dt;
 	return dt;
+}
+
+template <typename problem_t>
+void HydroSystem<problem_t>::FillGhostZones(array_t &cons)
+{
+	HyperbolicSystem<problem_t>::FillGhostZones(cons);
 }
 
 template <typename problem_t>

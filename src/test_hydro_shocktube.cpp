@@ -9,14 +9,37 @@
 
 #include "test_hydro_shocktube.hpp"
 
-void testproblem_hydro_shocktube()
+struct ShocktubeProblem {};
+
+auto main() -> int
+{
+	// Initialization
+
+	Kokkos::initialize();
+
+	int result = 0;
+
+	{ // objects must be destroyed before Kokkos::finalize, so enter new
+	  // scope here to do that automatically
+
+		result = testproblem_hydro_shocktube();
+
+	} // destructors must be called before Kokkos::finalize()
+	Kokkos::finalize();
+
+	return result;
+}
+
+int testproblem_hydro_shocktube()
 {
 	// Problem parameters
 
-	const int nx = 500;
+	const int nx = 1000;
 	const double Lx = 5.0;
 	const double CFL_number = 0.4;
 	const double max_time = 0.4;
+	const double max_dt = 1e-3;
+	const double initial_dt = 1e-6;
 	const int max_timesteps = 5000;
 	const double gamma = 1.4; // ratio of specific heats
 
@@ -24,7 +47,7 @@ void testproblem_hydro_shocktube()
 
 	// Problem initialization
 
-	HydroSystem<AthenaArray<double>> hydro_system(
+	HydroSystem<ShocktubeProblem> hydro_system(
 	    {.nx = nx, .lx = Lx, .cflNumber = CFL_number, .gamma = gamma});
 
 	auto nghost = hydro_system.nghost();
@@ -80,55 +103,115 @@ void testproblem_hydro_shocktube()
 			break;
 		}
 
-		hydro_system.AdvanceTimestep();
+		const double this_dtMax = ((j == 0) ? initial_dt : max_dt);
+		hydro_system.AdvanceTimestepRK2(this_dtMax);
 
-		std::cout << "Timestep " << j << "; t = " << hydro_system.time()
-			  << "\n";
-
+#if 0
 		const auto current_mass = hydro_system.ComputeMass();
 		const auto mass_deficit = std::abs(current_mass - initial_mass);
 
+		std::cout << "Timestep " << j << "; t = " << hydro_system.time()
+			  << "\n";
 		std::cout << "Total mass = " << current_mass << "\n";
 		std::cout << "Mass nonconservation = " << mass_deficit << "\n";
 		std::cout << "\n";
+#endif
 
-		// Plot results every X timesteps
-		std::vector<double> d(nx);
-		std::vector<double> vx(nx);
-		std::vector<double> P(nx);
-
-		hydro_system.ConservedToPrimitive(
-		    hydro_system.consVar_, std::make_pair(nghost, nghost + nx));
-
-		for (int i = 0; i < nx; ++i) {
-			d.at(i) = hydro_system.primDensity(i + nghost);
-			vx.at(i) = hydro_system.x1Velocity(i + nghost);
-			P.at(i) = hydro_system.pressure(i + nghost);
-		}
-
-		matplotlibcpp::clf();
-		matplotlibcpp::ylim(0.0, 11.0);
-
-		std::map<std::string, std::string> d_args;
-		d_args["label"] = "density";
-		matplotlibcpp::plot(xs, d, d_args);
-
-		std::map<std::string, std::string> vx_args;
-		vx_args["label"] = "velocity";
-		matplotlibcpp::plot(xs, vx, vx_args);
-
-		std::map<std::string, std::string> P_args;
-		P_args["label"] = "pressure";
-		matplotlibcpp::plot(xs, P, P_args);
-
-		matplotlibcpp::legend();
-		matplotlibcpp::title(
-		    fmt::format("t = {:.4f}", hydro_system.time()));
-		matplotlibcpp::save(fmt::format("./hydro_{:0>4d}.png", j));
-
-		assert((mass_deficit / initial_mass) < rtol); // NOLINT
 	}
+
+// read in exact solution
+
+	std::vector<double> xs_exact;
+	std::vector<double> density_exact;
+	std::vector<double> pressure_exact;
+	std::vector<double> velocity_exact;
+
+	std::string filename = "../../extern/ppm1d/output";
+	std::ifstream fstream(filename, std::ios::in);
+	assert(fstream.is_open());
+
+	std::string header, blank_line;
+	std::getline(fstream, header);
+	std::getline(fstream, blank_line);
+
+	for (std::string line; std::getline(fstream, line);) {
+		std::istringstream iss(line);
+		std::vector<double> values;
+
+		for (double value; iss >> value;) {
+			values.push_back(value);
+		}
+		auto x = values.at(1);
+		auto density = values.at(2);
+		auto pressure = values.at(3);
+		auto velocity = values.at(4);
+
+		xs_exact.push_back(x);
+		density_exact.push_back(density);
+		pressure_exact.push_back(pressure);
+		velocity_exact.push_back(velocity);
+	}
+
+	std::vector<double> d(nx);
+	std::vector<double> vx(nx);
+	std::vector<double> P(nx);
+
+	hydro_system.ConservedToPrimitive(hydro_system.consVar_,
+					  std::make_pair(nghost, nghost + nx));
+
+	for (int i = 0; i < nx; ++i) {
+		d.at(i) = hydro_system.primDensity(i + nghost);
+		vx.at(i) = hydro_system.x1Velocity(i + nghost);
+		P.at(i) = hydro_system.pressure(i + nghost) / 10;
+	}
+
+	// compute error norm
+
+	std::vector<double> density_exact_interp(xs.size());
+	interpolate_arrays(xs.data(), density_exact_interp.data(), xs.size(),
+			   		   xs_exact.data(), density_exact.data(), xs_exact.size());
+
+
+	double err_norm = 0.;
+	double sol_norm = 0.;
+	for (int i = 0; i < xs_exact.size(); ++i) {
+		err_norm += std::pow(d[i] - density_exact_interp[i], 2);
+		sol_norm += std::pow(density_exact_interp[i], 2);
+	}
+
+	const double error_tol = 2.0e-6;
+	const double rel_error = err_norm / sol_norm;
+	std::cout << "Relative L2 error norm = " << rel_error << std::endl;
+
+	// Compute test success condition
+	int status = 0;
+	if(rel_error > error_tol) {
+		status = 1;
+	}
+
+	// Plot results
+	matplotlibcpp::clf();
+	//matplotlibcpp::ylim(0.0, 11.0);
+
+	std::map<std::string, std::string> d_args, dexact_args;
+	d_args["label"] = "density";
+	dexact_args["label"] = "density (exact solution)";
+	matplotlibcpp::plot(xs, d, d_args);
+	matplotlibcpp::plot(xs, density_exact_interp, dexact_args);
+
+	std::map<std::string, std::string> vx_args;
+	vx_args["label"] = "velocity";
+	matplotlibcpp::plot(xs, vx, vx_args);
+
+	std::map<std::string, std::string> P_args;
+	P_args["label"] = "pressure / 10";
+	matplotlibcpp::plot(xs, P, P_args);
+
+	matplotlibcpp::legend();
+	matplotlibcpp::title(fmt::format("t = {:.4f}", hydro_system.time()));
+	matplotlibcpp::save(fmt::format("./hydro_{:.4f}.png", hydro_system.time()));
 
 	// Cleanup and exit
 	std::cout << "Finished." << std::endl;
+	return status;
 }

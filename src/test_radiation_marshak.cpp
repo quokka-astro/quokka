@@ -207,10 +207,16 @@ auto testproblem_radiation_marshak() -> int
 		xs.at(i) = x;
 
 		const auto Erad_t = rad_system.radEnergy(i + nghost);
+
 		Erad.at(i) = Erad_t;
 		Trad.at(i) = std::pow(Erad_t / a_rad, 1. / 4.);
 
-		const auto Egas_t = rad_system.gasEnergy(i + nghost);
+		const auto Etot_t = rad_system.gasEnergy(i + nghost);
+		const auto rho = rad_system.staticGasDensity(i + nghost);
+		const auto x1GasMom = rad_system.x1GasMomentum(i + nghost);
+		const auto Ekin = (x1GasMom*x1GasMom) / (2.0*rho);
+		const auto Egas_t = Etot_t - Ekin;
+
 		Egas.at(i) = Egas_t;
 		Tgas.at(i) = rad_system.ComputeTgasFromEgas(rho, Egas_t);
 	}

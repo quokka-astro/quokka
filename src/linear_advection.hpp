@@ -21,27 +21,29 @@
 
 /// Class for a linear, scalar advection equation
 ///
-template <typename array_t>
-class LinearAdvectionSystem : public HyperbolicSystem<array_t>
+template <typename problem_t>
+class LinearAdvectionSystem : public HyperbolicSystem<problem_t>
 {
-	using HyperbolicSystem<array_t>::lx_;
-	using HyperbolicSystem<array_t>::nx_;
-	using HyperbolicSystem<array_t>::dx_;
-	using HyperbolicSystem<array_t>::dt_;
-	using HyperbolicSystem<array_t>::cflNumber_;
-	using HyperbolicSystem<array_t>::dim1_;
-	using HyperbolicSystem<array_t>::nghost_;
-	using HyperbolicSystem<array_t>::nvars_;
+	using HyperbolicSystem<problem_t>::lx_;
+	using HyperbolicSystem<problem_t>::nx_;
+	using HyperbolicSystem<problem_t>::dx_;
+	using HyperbolicSystem<problem_t>::dt_;
+	using HyperbolicSystem<problem_t>::cflNumber_;
+	using HyperbolicSystem<problem_t>::dim1_;
+	using HyperbolicSystem<problem_t>::nghost_;
+	using HyperbolicSystem<problem_t>::nvars_;
 
-	using HyperbolicSystem<array_t>::x1LeftState_;
-	using HyperbolicSystem<array_t>::x1RightState_;
-	using HyperbolicSystem<array_t>::x1Flux_;
-	using HyperbolicSystem<array_t>::x1FluxDiffusive_;
-	using HyperbolicSystem<array_t>::primVar_;
-	using HyperbolicSystem<array_t>::consVar_;
-	using HyperbolicSystem<array_t>::consVarPredictStep_;
+	using HyperbolicSystem<problem_t>::x1LeftState_;
+	using HyperbolicSystem<problem_t>::x1RightState_;
+	using HyperbolicSystem<problem_t>::x1Flux_;
+	using HyperbolicSystem<problem_t>::x1FluxDiffusive_;
+	using HyperbolicSystem<problem_t>::primVar_;
+	using HyperbolicSystem<problem_t>::consVar_;
+	using HyperbolicSystem<problem_t>::consVarPredictStep_;
 
       public:
+  	enum varIndex { density_index = 0 };
+
 	struct LinearAdvectionArgs {
 		int nx;
 		double lx;
@@ -54,6 +56,7 @@ class LinearAdvectionSystem : public HyperbolicSystem<array_t>
 
 	void AddSourceTerms(array_t &U, std::pair<int, int> range) override;
 	auto ComputeMass() -> double;
+	void FillGhostZones(array_t &cons) override;
 
 	// accessor functions
 
@@ -66,25 +69,34 @@ class LinearAdvectionSystem : public HyperbolicSystem<array_t>
 
 	void ConservedToPrimitive(array_t &cons,
 				  std::pair<int, int> range) override;
-	void ComputeTimestep(double dt_max) override;
+	auto ComputeTimestep(double dt_max) -> double override;
 	void ComputeFluxes(std::pair<int, int> range) override;
-	void AddFluxesSDC(array_t &U_new, array_t &U0) override;
 };
 
-template <typename array_t>
-auto LinearAdvectionSystem<array_t>::density(const int i) -> double
+template <typename problem_t>
+LinearAdvectionSystem<problem_t>::LinearAdvectionSystem(const LinearAdvectionArgs args)
+    : advectionVx_(args.vx),
+	HyperbolicSystem<problem_t>{args.nx, args.lx, args.cflNumber, args.nvars}
+{
+	assert(advectionVx_ != 0.0); // NOLINT
+
+	density_.InitWithShallowSlice(consVar_, 2, density_index, 0);
+}
+
+template <typename problem_t>
+auto LinearAdvectionSystem<problem_t>::density(const int i) -> double
 {
 	return density_(i);
 }
 
-template <typename array_t>
-auto LinearAdvectionSystem<array_t>::set_density(const int i) -> double &
+template <typename problem_t>
+auto LinearAdvectionSystem<problem_t>::set_density(const int i) -> double &
 {
 	return density_(i);
 }
 
-template <typename array_t>
-auto LinearAdvectionSystem<array_t>::ComputeMass() -> double
+template <typename problem_t>
+auto LinearAdvectionSystem<problem_t>::ComputeMass() -> double
 {
 	double mass = 0.0;
 
@@ -95,26 +107,47 @@ auto LinearAdvectionSystem<array_t>::ComputeMass() -> double
 	return mass;
 }
 
-template <typename array_t>
-void LinearAdvectionSystem<array_t>::ComputeTimestep(const double dt_max)
+template <typename problem_t>
+auto LinearAdvectionSystem<problem_t>::ComputeTimestep(const double dt_max) -> double
 {
 	dt_ = std::min(cflNumber_ * (dx_ / advectionVx_), dt_max);
+	return dt_;
 }
 
-template <typename array_t>
-void LinearAdvectionSystem<array_t>::ConservedToPrimitive(
+template <typename problem_t>
+void LinearAdvectionSystem<problem_t>::FillGhostZones(array_t &cons)
+{
+	// periodic boundary conditions
+	
+	// x1 right side boundary
+	for (int n = 0; n < nvars_; ++n) {
+		for (int i = nghost_ + nx_; i < nghost_ + nx_ + nghost_; ++i) {
+			cons(n, i) = cons(n, i - nx_);
+		}
+	}
+
+	// x1 left side boundary
+	for (int n = 0; n < nvars_; ++n) {
+		for (int i = 0; i < nghost_; ++i) {
+			cons(n, i) = cons(n, i + nx_);
+		}
+	}
+}
+
+template <typename problem_t>
+void LinearAdvectionSystem<problem_t>::ConservedToPrimitive(
     array_t &cons, const std::pair<int, int> range)
 {
-	for (int n = range.first; n < range.second; ++n) {
-		for (int i = 0; i < dim1_; ++i) {
+	for (int n = 0; n < nvars_; ++n) {
+		for (int i = range.first; i < range.second; ++i) {
 			primVar_(n, i) = cons(n, i);
 		}
 	}
 }
 
 // TODO(ben): add flux limiter for positivity preservation.
-template <typename array_t>
-void LinearAdvectionSystem<array_t>::ComputeFluxes(
+template <typename problem_t>
+void LinearAdvectionSystem<problem_t>::ComputeFluxes(
     const std::pair<int, int> range)
 {
 	// By convention, the interfaces are defined on
@@ -149,15 +182,9 @@ void LinearAdvectionSystem<array_t>::ComputeFluxes(
 	}
 }
 
-template <typename array_t>
-void LinearAdvectionSystem<array_t>::AddSourceTerms(array_t &U,
+template <typename problem_t>
+void LinearAdvectionSystem<problem_t>::AddSourceTerms(array_t &U,
 						    std::pair<int, int> range)
-{
-	// TODO(ben): to be implemented
-}
-
-template <typename array_t>
-void LinearAdvectionSystem<array_t>::AddFluxesSDC(array_t &U_new, array_t &U0)
 {
 	// TODO(ben): to be implemented
 }

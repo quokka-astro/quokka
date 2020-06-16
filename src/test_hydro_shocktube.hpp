@@ -12,12 +12,16 @@
 // external headers
 #include "matplotlibcpp.h"
 #include <fmt/format.h>
+#include <fstream>
 
 // internal headers
 #include "athena_arrays.hpp"
 #include "hydro_system.hpp"
+extern "C" {
+    #include "interpolate.h"
+}
 
 // function definitions
-void testproblem_hydro_shocktube();
+int testproblem_hydro_shocktube();
 
 #endif // TEST_HYDRO_SHOCKTUBE_HPP_

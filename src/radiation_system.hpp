@@ -581,7 +581,12 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &cons,
 
 		// load fluid properties
 		const double rho = cons(gasDensity_index, i);
-		const double Egas0 = cons(gasEnergy_index, i);
+		const double Egastot0 = cons(gasEnergy_index, i);
+		const double x1GasMom0 = cons(x1GasMomentum_index, i);
+		const double vx0 = x1GasMom0 / rho;
+		const double vsq0 = vx0*vx0;			// N.B. modify for 3d
+		const double Ekin0 = 0.5*rho*vsq0;
+		const double Egas0 = Egastot0 - Ekin0;
 
 		// load radiation energy
 		const double Erad0 = cons(radEnergy_index, i);
@@ -682,7 +687,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &cons,
 
 		// store new radiation energy
 		cons(radEnergy_index, i) = Erad_guess;
-		cons(gasEnergy_index, i) = Egas_guess;
+		cons(gasEnergy_index, i) = Egas_guess + Ekin0;
 
 		// 2. Compute radiation flux update
 
@@ -694,12 +699,18 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &cons,
 
 		// 3. Compute conservative gas momentum update
 		//	[N.B. should this step happen after the Lorentz
-		//transform?]
+		//			transform?]
 
 		const double dF_x = new_Frad_x - Frad_x;
 		const double dx1Momentum = -dF_x / (c * c);
 
 		cons(x1GasMomentum_index, i) += dx1Momentum;
+
+		// 4. Update kinetic energy of gas
+		// [ something buggy here ]
+
+		const double dEkin = (vx0 * dx1Momentum);	// modify in 3d
+		cons(gasEnergy_index, i) += dEkin;
 
 		// Lorentz transform back to 'laboratory' frame
 		// TransformIntoComovingFrame(-fluid_velocity);

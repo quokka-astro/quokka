@@ -31,8 +31,60 @@ auto main() -> int
 struct ShockProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-const double a_rad = 1.0;
-const double c = 1.0;
+const double a_rad = 1.0e-4;	// equal to P_0 in dimensionless units
+const double sigma_a = 1.0e6;	// absorption cross section
+const double c = 3.0 * (sigma_a / a_rad); // dimensionless speed of light
+const double gamma_gas = (5./3.);
+const double c_s0 = 1.0; // adiabatic sound speed
+const double mu = gamma_gas; // mean molecular weight (required s.t. c_s0 == 1)
+const double k_B = 1.0; // dimensionless Boltzmann constant
+const double c_v = k_B / (mu * (gamma_gas - 1.0));	// specific heat
+
+const double Mach0 = 3.0;
+const double T0 = 1.0;
+const double rho0 = 1.0;
+const double v0 = 0.;	// transform v -> v - v0
+
+const double T1 = 3.6666666666666656;
+const double rho1 = 3.00343914708257;
+const double v1 = (Mach0 * (rho0 / rho1)) - Mach0;	// v -> v - v0
+
+const double Erad0 = a_rad * std::pow(T0, 4);
+const double Egas0 = rho0 * c_v * T0;
+const double Erad1 = a_rad * std::pow(T1, 4);
+const double Egas1 = rho1 * c_v * T1;
+
+template <> void RadSystem<ShockProblem>::FillGhostZones(array_t &cons)
+{
+	// x1 left side boundary (shock)
+	for (int i = 0; i < nghost_; ++i) {
+		cons(radEnergy_index, i) = Erad0;
+		cons(x1RadFlux_index, i) = 0.;
+	}
+
+	// x1 right side boundary (shock)
+	for (int i = nghost_ + nx_; i < nghost_ + nx_ + nghost_; ++i) {
+		cons(radEnergy_index, i) = Erad1;
+		cons(x1RadFlux_index, i) = 0.;
+	}
+}
+
+template <> void HydroSystem<ShockProblem>::FillGhostZones(array_t &cons)
+{
+	// x1 left side boundary (shock)
+	for (int i = 0; i < nghost_; ++i) {
+		cons(density_index, i) = rho0;
+		cons(x1Momentum_index, i) = rho0*v0;
+		cons(energy_index, i) = Egas0 + 0.5*rho0*(v0*v0);
+	}
+
+	// x1 right side boundary (shock)
+	for (int i = nghost_ + nx_; i < nghost_ + nx_ + nghost_; ++i) {
+		cons(density_index, i) = rho1;
+		cons(x1Momentum_index, i) = rho1*v1;
+		cons(energy_index, i) = Egas1 + 0.5*rho1*(v1*v1);
+	}
+}
 
 template <> void RadSystem<ShockProblem>::AdvanceTimestep(const double dt)
 {
@@ -107,18 +159,18 @@ auto testproblem_radhydro_shock() -> int
 {
 	// Problem parameters
 
-	const int max_timesteps = 1e5;
-	const double CFL_number = 0.4;
-	const int nx = 100;
+	const int max_timesteps = 1e6;
+	const double CFL_number = 0.1;
+	const int nx = 500;
+	const double Lx = 15.0;	// dimensionless length
 
-	const double initial_dt = 1e-3; // dimensionless time
-	const double max_dt = 1e-2;	// dimensionless time
-	const double max_time = 10.0;	// dimensionless time
-	const double Lx = 100.0;	// dimensionless length
-	const double rho = 1.0;
-	const double gamma = (5. / 3.);
-	const double initial_Trad = 1.0;
-	const double initial_Tgas = 0.1;
+	const double initial_dtau = 1e-2;	// dimensionless time
+	const double max_dtau = 1.0;		// dimensionless time
+	const double max_tau = 1000.0;		// dimensionless time
+
+	const double max_time = max_tau / c;
+	const double max_dt = max_dtau / c;
+	const double initial_dt = initial_dtau / c;
 
 	// Problem initialization
 
@@ -127,26 +179,35 @@ auto testproblem_radhydro_shock() -> int
 
 	rad_system.set_radiation_constant(a_rad);
 	rad_system.set_c_light(c);
-	rad_system.mean_molecular_mass_ = 1.;
-	rad_system.boltzmann_constant_ = 1.;
-	rad_system.gamma_ = gamma;
-
-	const double initial_Erad = a_rad * std::pow(initial_Trad, 4);
-	const double initial_Egas =
-	    rad_system.ComputeEgasFromTgas(rho, initial_Tgas);
+	rad_system.mean_molecular_mass_ = mu;
+	rad_system.boltzmann_constant_ = k_B;
+	rad_system.gamma_ = gamma_gas;
 
 	HydroSystem<ShockProblem> hydro_system(
-	    {.nx = nx, .lx = Lx, .cflNumber = CFL_number, .gamma = gamma});
+	    {.nx = nx, .lx = Lx, .cflNumber = CFL_number, .gamma = gamma_gas});
 
 	auto nghost = rad_system.nghost();
 	for (int i = nghost; i < nx + nghost; ++i) {
-		rad_system.set_radEnergy(i) = initial_Erad;
-		rad_system.set_x1RadFlux(i) = 0.0;
+		const double x = Lx * ((i + 0.5) / static_cast<double>(nx));
+
 		rad_system.set_radEnergySource(i) = 0.0;
 
-		hydro_system.set_energy(i) = initial_Egas;
-		hydro_system.set_density(i) = rho;
-		hydro_system.set_x1Momentum(i) = 0.0;
+		if (x < (2./3.)*Lx) {
+			rad_system.set_radEnergy(i) = Erad0;
+			rad_system.set_x1RadFlux(i) = 0.0;
+
+			hydro_system.set_energy(i) = Egas0 + 0.5*rho0*(v0*v0);
+			hydro_system.set_density(i) = rho0;
+			hydro_system.set_x1Momentum(i) = rho0*v0;
+		} else {
+			rad_system.set_radEnergy(i) = Erad1;
+			rad_system.set_x1RadFlux(i) = 0.0;
+
+			hydro_system.set_energy(i) = Egas1 + 0.5*rho1*(v1*v1);
+			hydro_system.set_density(i) = rho1;
+			hydro_system.set_x1Momentum(i) = rho1*v1;
+		
+		}
 	}
 
 	const auto Erad0 = rad_system.ComputeRadEnergy();
@@ -230,25 +291,30 @@ auto testproblem_radhydro_shock() -> int
 	std::vector<double> x1GasMomentum(nx);
 	std::vector<double> x1RadFlux(nx);
 	std::vector<double> gasDensity(nx);
+	std::vector<double> gasVelocity(nx);
 
 	for (int i = 0; i < nx; ++i) {
 		const double x = Lx * ((i + 0.5) / static_cast<double>(nx));
 		xs.at(i) = x;
 
 		const auto Erad_t = rad_system.radEnergy(i + nghost);
-		Erad.at(i) = Erad_t;
+		Erad.at(i) = Erad_t / a_rad;	// scale by P_0
 		Trad.at(i) = std::pow(Erad_t / a_rad, 1. / 4.);
 
+		const auto Etot_t = rad_system.gasEnergy(i + nghost);
 		const auto rho = rad_system.staticGasDensity(i + nghost);
-		const auto Egas_t = rad_system.gasEnergy(i + nghost);
+		const auto x1GasMom = rad_system.x1GasMomentum(i + nghost);
+		const auto Ekin = (x1GasMom*x1GasMom) / (2.0*rho);
+		const auto Egas_t = Etot_t - Ekin;
 
 		Egas.at(i) = Egas_t;
 		Tgas.at(i) = rad_system.ComputeTgasFromEgas(rho, Egas_t);
 
-		x1GasMomentum.at(i) = rad_system.x1GasMomentum(i + nghost);
+		x1GasMomentum.at(i) = x1GasMom;
 		x1RadFlux.at(i) = rad_system.x1RadFlux(i + nghost);
 
-		gasDensity.at(i) = hydro_system.density(i + nghost);
+		gasDensity.at(i) = rho;
+		gasVelocity.at(i) = x1GasMom / rho;
 	}
 
 #if 0
@@ -320,10 +386,8 @@ auto testproblem_radhydro_shock() -> int
 
 	matplotlibcpp::xlabel("length x (dimensionless)");
 	matplotlibcpp::ylabel("temperature (dimensionless)");
-	matplotlibcpp::xlim(0.0, 100.); // dimensionless
-	matplotlibcpp::ylim(0.0, 1.0);	// dimensionless
 	matplotlibcpp::legend();
-	matplotlibcpp::title(fmt::format("time t = {:.4g}", rad_system.time()));
+	matplotlibcpp::title(fmt::format("time ct = {:.4g}", rad_system.time()*c));
 	matplotlibcpp::save("./radshock_temperature.pdf");
 
 	// momentum
@@ -336,21 +400,22 @@ auto testproblem_radhydro_shock() -> int
 	matplotlibcpp::plot(xs, x1RadFlux, radmom_args);
 	matplotlibcpp::xlabel("length x (dimensionless)");
 	matplotlibcpp::ylabel("momentum density (dimensionless)");
-	matplotlibcpp::xlim(0.0, 100.); // dimensionless
-	matplotlibcpp::ylim(0.0, 3.0);	// dimensionless
 	matplotlibcpp::legend();
 	matplotlibcpp::save("./radshock_momentum.pdf");
 
 	// gas density
-	std::map<std::string, std::string> gasdens_args;
+	std::map<std::string, std::string> gasdens_args, gasvx_args;
 	gasdens_args["label"] = "gas density";
+	gasdens_args["color"] = "black";
+	gasvx_args["label"] = "gas velocity";
+	gasvx_args["color"] = "blue";
+	gasvx_args["linestyle"] = "dashed";
 
 	matplotlibcpp::clf();
 	matplotlibcpp::plot(xs, gasDensity, gasdens_args);
+	//matplotlibcpp::plot(xs, gasVelocity, gasvx_args);
 	matplotlibcpp::xlabel("length x (dimensionless)");
 	matplotlibcpp::ylabel("mass density (dimensionless)");
-	matplotlibcpp::xlim(0.0, 100.); // dimensionless
-	matplotlibcpp::ylim(0.0, 3.0);	// dimensionless
 	matplotlibcpp::legend();
 	matplotlibcpp::save("./radshock_gasdensity.pdf");
 
@@ -369,17 +434,10 @@ auto testproblem_radhydro_shock() -> int
 
 	matplotlibcpp::xlabel("length x (dimensionless)");
 	matplotlibcpp::ylabel("radiation energy density (dimensionless)");
-	matplotlibcpp::xlim(0.0, 100.0); // cm
-	matplotlibcpp::ylim(0.0, 1.0);
 	matplotlibcpp::legend();
 	matplotlibcpp::title(
-	    fmt::format("time ct = {:.4g}", rad_system.time()));
+	    fmt::format("time ct = {:.4g}", rad_system.time()*c));
 	matplotlibcpp::save("./radshock_energy.pdf");
-
-	matplotlibcpp::yscale("log");
-	matplotlibcpp::xlim(0.0, 100.0); // cm
-	matplotlibcpp::ylim(1e-5, 1.3);
-	matplotlibcpp::save("./radshock_energy_loglog.pdf");
 
 	// Cleanup and exit
 	std::cout << "Finished." << std::endl;
