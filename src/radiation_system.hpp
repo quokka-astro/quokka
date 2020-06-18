@@ -91,6 +91,7 @@ class RadSystem : public HyperbolicSystem<problem_t>
 	    -> bool override;
 	auto ComputeTimestep(double dt_max) -> double override;
 	void AdvanceTimestep(double dt_max) override;
+	auto ComputeEddingtonFactor(double f) -> double;
 
 	// static functions
 
@@ -393,6 +394,24 @@ void RadSystem<problem_t>::AdvanceTimestep(double dt_max)
 }
 
 template <typename problem_t>
+auto RadSystem<problem_t>::ComputeEddingtonFactor(double f) -> double
+{
+	// f is the reduced flux == |F|/cE.
+	// compute Levermore (1984) closure [Eq. 25]
+	const double f_fac = std::sqrt(4.0 - 3.0 * (f * f));
+	const double chi = (3.0 + 4.0 * (f*f)) / (5.0 + 2.0 * f);
+
+#if 0
+	// compute Minerbo (1978) closure [piecewise approximation]
+	// (For unknown reasons, this closure tends to work better
+	// than the Levermore/Lorentz closure on the Su & Olson 1997 test.)
+	const double chi = (f < 1. / 3.) ? (1. / 3.) : (0.5 - f + 1.5 * f*f);
+#endif
+
+	return chi;
+}
+
+template <typename problem_t>
 void RadSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 {
 	// By convention, the interfaces are defined on the left edge of each
@@ -441,25 +460,8 @@ void RadSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 		const double Fx_R = fx_R * (c_light_ * erad_R);
 
 		// compute radiation pressure tensors
-
-		// compute Levermore (1984) closure [Eq. 25]
-		const double f_facL = std::sqrt(4.0 - 3.0 * (f_L * f_L));
-		const double f_facR = std::sqrt(4.0 - 3.0 * (f_R * f_R));
-
-		const double chi_L =
-		    (3.0 + 4.0 * (f_L * f_L)) / (5.0 + 2.0 * f_facL);
-		const double chi_R =
-		    (3.0 + 4.0 * (f_R * f_R)) / (5.0 + 2.0 * f_facR);
-
-#if 0
-		// compute Minerbo (1978) closure [piecewise approximation]
-		// (For unknown reasons, this closure tends to work better
-		// than the Levermore/Lorentz closure on the Su & Olson 1997 test.)
-		const double chi_L =
-		    (f_L < 1. / 3.) ? (1. / 3.) : (0.5 - f_L + 1.5 * f_L * f_L);
-		const double chi_R =
-		    (f_R < 1. / 3.) ? (1. / 3.) : (0.5 - f_R + 1.5 * f_R * f_R);
-#endif
+		const double chi_L = ComputeEddingtonFactor(f_L);
+		const double chi_R = ComputeEddingtonFactor(f_R);
 
 		assert((chi_L >= 1. / 3.) && (chi_L <= 1.0)); // NOLINT
 		assert((chi_R >= 1. / 3.) && (chi_R <= 1.0)); // NOLINT
