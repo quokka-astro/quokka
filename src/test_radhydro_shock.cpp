@@ -183,12 +183,12 @@ auto testproblem_radhydro_shock() -> int
 
 	const int max_timesteps = 2e6;
 	const double CFL_number = 0.4;
-	const int nx = 128;
+	const int nx = 512;
 	const double Lx = 15.0 * (c/sigma_a);	// length
 
 	const double initial_dtau = 1.0;	// dimensionless time
 	const double max_dtau = 1.0;		// dimensionless time
-	const double max_tau = 10.0 * (Lx/c_s0);		// dimensionless time
+	const double max_tau = 1.0 * (Lx/c_s0);		// dimensionless time
 
 	const double max_time = max_tau / c_s0;
 	const double max_dt = max_dtau / c_s0;
@@ -433,7 +433,7 @@ auto testproblem_radhydro_shock() -> int
 
 	matplotlibcpp::clf();
 	matplotlibcpp::plot(xs, gasDensity, gasdens_args);
-	//matplotlibcpp::plot(xs, gasVelocity, gasvx_args);
+	matplotlibcpp::plot(xs, gasVelocity, gasvx_args);
 	matplotlibcpp::xlabel("length x (dimensionless)");
 	matplotlibcpp::ylabel("mass density (dimensionless)");
 	matplotlibcpp::legend();
