@@ -138,7 +138,7 @@ int testproblem_advection()
 	matplotlibcpp::plot(x, d_initial, d_initial_args);
 	matplotlibcpp::plot(x, d_final, d_final_args);
 	matplotlibcpp::legend();
-	matplotlibcpp::save(std::string("./advection.png"));
+	matplotlibcpp::save(std::string("./advection.pdf"));
 
 	// Cleanup and exit
 	std::cout << "Finished." << std::endl;

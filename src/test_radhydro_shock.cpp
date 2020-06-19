@@ -44,11 +44,11 @@ const double c_v = k_B / (mu * (gamma_gas - 1.0));	// specific heat
 
 const double T0 = 1.0;
 const double rho0 = 1.0;
-const double v0 = Mach0;	// transform v -> v - v0	// is there a bug??
+const double v0 = Mach0;
 
 const double T1 = 3.6666666666666656;
 const double rho1 = 3.00343914708257;
-const double v1 = (Mach0 * (rho0 / rho1));	// v -> v - v0
+const double v1 = (Mach0 * (rho0 / rho1));
 
 const double Erad0 = a_rad * std::pow(T0, 4);
 const double Egas0 = rho0 * c_v * T0;
@@ -275,7 +275,7 @@ auto testproblem_radhydro_shock() -> int
 			rad_system.set_x1GasMomentum(i) = hydro_system.x1Momentum(i);
 			rad_system.set_gasEnergy(i) = hydro_system.energy(i);
 		}
-//#if 0
+
 		// Advance radiation subsystem
 		rad_system.AdvanceTimestepRK2(this_dt);
 
@@ -284,7 +284,7 @@ auto testproblem_radhydro_shock() -> int
 			hydro_system.set_x1Momentum(i) = rad_system.x1GasMomentum(i);
 			hydro_system.set_energy(i) = rad_system.gasEnergy(i);
 		}
-//#endif
+
 	}
 
 	std::cout << "Timestep " << j << "; t = " << hydro_system.time()

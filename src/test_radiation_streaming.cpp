@@ -86,7 +86,7 @@ void testproblem_radiation_streaming()
 		matplotlibcpp::legend();
 		matplotlibcpp::title(
 		    fmt::format("t = {:.4f}", rad_system.time()));
-		matplotlibcpp::save(fmt::format("./rad_{:0>4d}.png", j));
+		matplotlibcpp::save(fmt::format("./rad_{:0>4d}.pdf", j));
 	}
 
 	// Cleanup and exit

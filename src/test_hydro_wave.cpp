@@ -193,7 +193,7 @@ int testproblem_hydro_wave()
 	matplotlibcpp::plot(xs, d_exact, dexact_args);
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("t = {:.4f}", t));
-	matplotlibcpp::save(fmt::format("./density_{:.4f}.png", t));
+	matplotlibcpp::save(fmt::format("./density_{:.4f}.pdf", t));
 
 	std::map<std::string, std::string> P_args, Pinit_args, Pexact_args;
 	P_args["label"] = "pressure";
@@ -206,7 +206,7 @@ int testproblem_hydro_wave()
 	matplotlibcpp::plot(xs, P_exact, Pexact_args);
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("t = {:.4f}", t));
-	matplotlibcpp::save(fmt::format("./pressure_{:.4f}.png", t));
+	matplotlibcpp::save(fmt::format("./pressure_{:.4f}.pdf", t));
 
 	std::map<std::string, std::string> v_args, vinit_args, vexact_args;
 	v_args["label"] = "velocity";
@@ -219,7 +219,7 @@ int testproblem_hydro_wave()
 	matplotlibcpp::plot(xs, v_exact, vexact_args);
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("t = {:.4f}", t));
-	matplotlibcpp::save(fmt::format("./velocity_{:.4f}.png", t));
+	matplotlibcpp::save(fmt::format("./velocity_{:.4f}.pdf", t));
 
 
 	assert((mass_deficit / initial_mass) < rtol); // NOLINT

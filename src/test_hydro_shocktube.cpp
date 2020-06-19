@@ -209,7 +209,7 @@ int testproblem_hydro_shocktube()
 
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("t = {:.4f}", hydro_system.time()));
-	matplotlibcpp::save(fmt::format("./hydro_{:.4f}.png", hydro_system.time()));
+	matplotlibcpp::save(fmt::format("./hydro_{:.4f}.pdf", hydro_system.time()));
 
 	// Cleanup and exit
 	std::cout << "Finished." << std::endl;
