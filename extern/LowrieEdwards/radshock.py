@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy.optimize
 import scipy.interpolate
-from scikits.odes import ode
+from scikits.odes import ode  # use CVODE
 from math import sqrt
 
 def shock_jump(gamma, P0, M0):
@@ -116,11 +116,8 @@ kappa = kappa_diffusivity
 #kappa = 1.0
 
 ## compute solution
-# eps is slightly problem dependent -- if too small (for high Mach numbers), may cause CVODE errors:
-#   [CVODE ERROR]  CVode
-#     At t = 4.99999, mxstep steps taken before reaching tout.
 eps = 1e-5
-assert(eps <= 1e-3) # but don't make it larger than 1e-3, otherwise solutions are quite wrong
+assert(eps <= 1e-3) # never make it larger than 1e-3, otherwise solutions are quite wrong
 epsA = eps
 epsB = -eps
 Trad_epsA = Trad0 + epsA
