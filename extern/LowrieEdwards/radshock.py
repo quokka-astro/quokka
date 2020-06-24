@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.optimize
+import scipy.interpolate
 from scikits.odes import ode
 from math import sqrt
 import pdb
@@ -143,7 +144,7 @@ print(f"Traddot_epsA = {Traddot_epsA}")
 print(f"Traddot_epsB = {Traddot_epsB}")
 
 y0_A = np.array([-epsA/Traddot_epsA, T_epsA])  # initial conditions
-y0_B = np.array([epsB/Traddot_epsB, T_epsB])
+y0_B = np.array([ epsB/Traddot_epsB, T_epsB])
 
 eps_ASP = 1e-5  # avoid the Adiabatic Sonic Point (only for *continuous* solutions w/out hydro shock)
 x0_A = v_epsA / sqrt(T_epsA)
@@ -181,20 +182,68 @@ Trad_B = Trad_fun(rho_B, T_B, gamma=gamma, P0=P0, M0=M0)
 ## connect solutions
 ## -> solve 2d root-finding problem:
 ##      f(\Delta x_A, \Delta x_B) = 0, where
-##      f(...) = | j_p - j_s |^2 + (Trad_p - Trad_s)^2
+##      f(...) = | j_p(x=0) - j_s(x=0) |^2 + [Trad_p(x=0) - Trad_s(x=0)]^2
 ##      j_p = ( (\rho v)_p, (\rho v^2 + P)_p, [v(\rho E + P)]_p )
 ##      j_s = ( (\rho v)_s, (\rho v^2 + P)_s, [v(\rho E + P)]_s )
 
+interp = lambda x,y: scipy.interpolate.interp1d(x,y,kind='linear',fill_value='extrapolate')
 
-plt.plot(x_A, rho_A, color='blue', label='density')
-plt.plot(x_A, T_A, color='orange', label='gas temperature')
-plt.plot(x_A, Trad_A, color='green', label='radiation temperature')
-plt.plot(x_A, vel_A, color='red', label='velocity')
+rho_Afun = interp(x_A, rho_A)
+vel_Afun = interp(x_A, vel_A)
+T_Afun   = interp(x_A, T_A)
+Trad_Afun= interp(x_A, Trad_A)
 
-plt.plot(x_B, rho_B, '--', color='blue')
-plt.plot(x_B, T_B, '--', color='orange')
-plt.plot(x_B, Trad_B, '--', color='green')
-plt.plot(x_B, vel_B, '--', color='red')
+rho_Bfun = interp(x_B, rho_B)
+vel_Bfun = interp(x_B, vel_B)
+T_Bfun   = interp(x_B, T_B)
+Trad_Bfun= interp(x_B, Trad_B)
+
+def objective(dx):
+    """compute the figure of merit f, defined above."""
+    x0 = 0.
+    x_A = x0 - dx[0]
+    x_B = x0 - dx[1]
+
+    rhoA = rho_Afun(x_A)
+    velA = vel_Afun(x_A)
+    TmatA = T_Afun(x_A)
+    TradA = Trad_Afun(x_A)
+    P_a = rhoA*TmatA / gamma
+    E_a = TmatA / (gamma*(gamma-1)) + 0.5*(velA**2)
+
+    rhoB = rho_Bfun(x_B)
+    velB = vel_Bfun(x_B)
+    TmatB = T_Bfun(x_B)
+    TradB = Trad_Bfun(x_B)
+    P_b = rhoA*TmatA / gamma
+    E_b = TmatB / (gamma*(gamma-1)) + 0.5*(velB**2)
+
+    j_p = np.array([rhoA*velA, rhoA*velA**2 + P_a, velA*(rhoA*E_a + P_a)])
+    j_s = np.array([rhoB*velB, rhoB*velB**2 + P_b, velB*(rhoB*E_b + P_b)])
+
+    norm = np.sum((j_p - j_s)**2) + (TradA - TradB)**2
+    return norm
+
+dx_guess = np.array([epsA/Traddot_epsA, -epsB/Traddot_epsB])
+sol = scipy.optimize.minimize(objective, dx_guess, method='powell', tol=1e-10)
+dx_A, dx_B = sol.x
+print(f"dx_A = {dx_A}")
+print(f"dx_B = {dx_B}")
+print(f"objective = {sol.fun} after {sol.nit} iterations.")
+x_A += dx_A
+x_B += dx_B
+A_mask = (x_A <= 0.)
+B_mask = (x_B >= 0.)
+
+plt.plot(x_A[A_mask], rho_A[A_mask], color='blue', label='density')
+plt.plot(x_A[A_mask], T_A[A_mask], color='orange', label='gas temperature')
+plt.plot(x_A[A_mask], Trad_A[A_mask], color='green', label='radiation temperature')
+plt.plot(x_A[A_mask], vel_A[A_mask], color='red', label='velocity')
+
+plt.plot(x_B[B_mask], rho_B[B_mask], '--', color='blue')
+plt.plot(x_B[B_mask], T_B[B_mask], '--', color='orange')
+plt.plot(x_B[B_mask], Trad_B[B_mask], '--', color='green')
+plt.plot(x_B[B_mask], vel_B[B_mask], '--', color='red')
 
 plt.legend(loc='best')
 plt.tight_layout()
