@@ -4,7 +4,6 @@ import scipy.optimize
 import scipy.interpolate
 from scikits.odes import ode
 from math import sqrt
-import pdb
 
 def shock_jump(gamma, P0, M0):
     """Compute shock jump conditions for a radiative shock
@@ -59,9 +58,6 @@ def shock(M, y, dy_dM, gamma=np.NaN, M0=np.NaN, P0=np.NaN, kappa=np.NaN):
     dy_dM[0] = dx_dM
     dy_dM[1] = dT_dM
 
-    #pdb.set_trace()
-
-
 def dT_dTrad(rho, T, Trad, gamma, M0, P0, sign=-1.0, sign2=1.0):
     C_p = 1.0/(gamma - 1.0)
     v = M0 / rho
@@ -95,7 +91,7 @@ def dT_dTrad(rho, T, Trad, gamma, M0, P0, sign=-1.0, sign2=1.0):
 ## compute asymptotic states
 gamma = 5./3.
 P0 = 1.0e-4
-M0 = 30.0
+M0 = 3.0
 
 T0 = 1.0
 Trad0 = T0
@@ -112,12 +108,15 @@ print(f"post-shock radiation-to-gas pressure ratio = {P1}")
 
 ## define absorption coefficients, diffusivity
 sigma_a = 1e6           # absorption coefficient
-c = 100.0 * (M0 + 1.0)  # dimensionless speed of light
-#kappa = sigma_a / c     # diffusivity
-kappa = 1
+cs0 = 1.0
+c = 100.0 * (M0 + cs0)  # dimensionless speed of light
+kappa_opacity = sigma_a / c
+kappa_diffusivity = c / (3.0*kappa_opacity*cs0)
+kappa = kappa_diffusivity
+#kappa = 1.0
 
 ## compute solution
-# eps is slightly problem dependent -- if too small (for high Mach numbers), will cause CVODE errors:
+# eps is slightly problem dependent -- if too small (for high Mach numbers), may cause CVODE errors:
 #   [CVODE ERROR]  CVode
 #     At t = 4.99999, mxstep steps taken before reaching tout.
 eps = 1e-5
@@ -126,8 +125,8 @@ epsA = eps
 epsB = -eps
 Trad_epsA = Trad0 + epsA
 Trad_epsB = Trad1 + epsB
-sign_A = -1.0
-sign_B = 1.0    # problem dependent!!
+sign_A = -1.0   # sign_A is always -1
+sign_B = 1.0    # sign_B is Mach number-dependent! (Negative iff there exists an ISP.)
 T_epsA = T0 + epsA * dT_dTrad(rho0, T0, Trad0, gamma, M0, P0, sign=sign_A)
 T_epsB = T1 - epsB * dT_dTrad(rho1, T1, Trad1, gamma, M0, P0, sign=sign_B)
 
@@ -148,24 +147,21 @@ Traddot_epsB = dTrad_dx_fun(rho_epsB, T_epsB, Trad_epsB, gamma=gamma, M0=M0, P0=
 print(f"Traddot_epsA = {Traddot_epsA}")
 print(f"Traddot_epsB = {Traddot_epsB}")
 
-y0_A = np.array([-epsA/Traddot_epsA, T_epsA])  # initial conditions
-y0_B = np.array([ epsB/Traddot_epsB, T_epsB])
-
+y0_A = np.array([0., T_epsA])  # initial conditions
+y0_B = np.array([0., T_epsB])
 x0_A = v_epsA / sqrt(T_epsA)
 x0_B = v_epsB / sqrt(T_epsB)
-
-# avoid the Adiabatic Sonic Point (only needed for *continuous* solutions w/out hydro shock)
-#eps_ASP = 1.0e-5
-eps_ASP = 0.
-x1_A = 1 + eps_ASP
-x1_B = 1 - eps_ASP
+# avoid the Adiabatic Sonic Point (although CVODE seems to perform just fine integrating to M=1)
+# Lowrie & Edwards (2008) state that the embedded hydro shock (if it exists) must be coincident with the ASP
+x1_A = 1.0
+x1_B = 1.0
 
 print(f"Left-side initial conditions = ({x0_A}, {y0_A})")
 print(f"Right-side initial conditions = ({x0_B}, {y0_B})")
 
 ## integrate ODE
-xsol_A = np.linspace(x0_A, x1_A, 1024, endpoint=True)
-xsol_B = np.linspace(x0_B, x1_B, 1024, endpoint=True)
+xsol_A = np.linspace(x0_A, x1_A, 512, endpoint=True)
+xsol_B = np.linspace(x0_B, x1_B, 512, endpoint=True)
 fun = lambda x,y,ydot: shock(x,y,ydot, gamma=gamma, P0=P0, M0=M0, kappa=kappa)
 
 options = {'max_steps': 50000, 'rtol': 1e-8, 'atol': 1e-12}
@@ -221,29 +217,40 @@ def objective(dx):
     TmatA = T_Afun(xA)
     TradA = Trad_Afun(xA)
     P_a = rhoA*TmatA / gamma
+    Pstar_a = P_a + (1./3.)*P0*TradA**4
     E_a = TmatA / (gamma*(gamma-1)) + 0.5*(velA**2)
+    Estar_a = E_a + P0*TradA**4 / rhoA
 
     rhoB = rho_Bfun(xB)
     velB = vel_Bfun(xB)
     TmatB = T_Bfun(xB)
     TradB = Trad_Bfun(xB)
     P_b = rhoA*TmatA / gamma
+    Pstar_b = P_b + (1./3.)*P0*TradB**4
     E_b = TmatB / (gamma*(gamma-1)) + 0.5*(velB**2)
+    Estar_b = E_b + P0*TradB**4 / rhoB
 
-    j_p = np.array([rhoA*velA, rhoA*velA**2 + P_a, velA*(rhoA*E_a + P_a)])
-    j_s = np.array([rhoB*velB, rhoB*velB**2 + P_b, velB*(rhoB*E_b + P_b)])
+    #j_p = np.array([rhoA*velA, rhoA*velA**2 + Pstar_a, velA*(rhoA*Estar_a + Pstar_a)])
+    #j_s = np.array([rhoB*velB, rhoB*velB**2 + Pstar_b, velB*(rhoB*Estar_b + Pstar_b)])
+    #j_p = np.array([rhoA*velA, rhoA*velA**2 + P_a, velA*(rhoA*E_a + Pstar_a)])
+    #j_s = np.array([rhoB*velB, rhoB*velB**2 + P_b, velB*(rhoB*E_b + Pstar_b)])
 
     #norm = np.sum((j_p - j_s)**2) + (TradA - TradB)**2     # bad
-    norm = (rhoA*velA - rhoB*velB)**2 + (TradA - TradB)**2 + 0.1*dx[0]**2  # good
+    norm = (rhoA*velA - rhoB*velB)**2 + (TradA - TradB)**2  # good
     return norm
 
-dx_guess = np.array([-np.max(x_A), -np.min(x_B)])
+dx_guess = np.array([-0.5*np.max(x_A), -0.5*np.min(x_B)])
+bounds_dxA = (-np.max(x_A), 0.)
+bounds_dxB = (0., -np.min(x_B))
 print(f"dx_guess = {dx_guess}")
+print(f"bounds dx_A = {bounds_dxA}")
+print(f"bounds dx_B = {bounds_dxB}")
 
-sol = scipy.optimize.minimize(objective, dx_guess, method='powell', tol=1e-10)
-dx_A, dx_B = sol.x
+jump_tol = 1e-5
+sol = scipy.optimize.minimize(objective, dx_guess, method='L-BFGS-B', bounds=[bounds_dxA, bounds_dxB], tol=jump_tol)
 print(f"objective = {sol.fun} after {sol.nit} iterations.")
-#dx_A, dx_B = dx_guess
+assert(sol.fun <= jump_tol)
+dx_A, dx_B = sol.x
 print(f"dx_A = {dx_A}")
 print(f"dx_B = {dx_B}")
 
@@ -264,18 +271,25 @@ plt.plot(x_B[B_mask], T_B[B_mask], color='black')
 plt.plot(x_B[B_mask], Trad_B[B_mask], '-.', color='black')
 #plt.plot(x_B[B_mask], vel_B[B_mask], color='red')
 
+extend_B = 0.05
+plt.plot([x_B[B_mask][0], x_B[B_mask][0] + extend_B], np.ones(2)*rho_B[B_mask][0], color='blue')
+plt.plot([x_B[B_mask][0], x_B[B_mask][0] + extend_B], np.ones(2)*T_B[B_mask][0], color='black')
+
 plot_jump = True
 if plot_jump:
+    size = 20.0
     # plot temperature shock jump
-    plt.scatter(x_A[A_mask][-1], T_A[A_mask][-1], color='black')
-    plt.scatter(x_B[B_mask][-1], T_B[B_mask][-1], color='black')
+    plt.scatter(x_A[A_mask][-1], T_A[A_mask][-1], color='black', s=size)
+    plt.scatter(x_B[B_mask][-1], T_B[B_mask][-1], color='black', s=size)
+    plt.plot([x_A[A_mask][-1], x_B[B_mask][-1]], [T_A[A_mask][-1], T_B[B_mask][-1]], color='black')
 
     # plot density shock jump
-    plt.scatter(x_A[A_mask][-1], rho_A[A_mask][-1], color='black')
-    plt.scatter(x_B[B_mask][-1], rho_B[B_mask][-1], color='black')
+    plt.scatter(x_A[A_mask][-1], rho_A[A_mask][-1], color='blue', s=size)
+    plt.scatter(x_B[B_mask][-1], rho_B[B_mask][-1], color='blue', s=size)
+    plt.plot([x_A[A_mask][-1], x_B[B_mask][-1]], [rho_A[A_mask][-1], rho_B[B_mask][-1]], color='blue')
 
 # plot discarded (unphysical) regions of solutions
-plot_discarded = True
+plot_discarded = False
 if plot_discarded:
     plt.plot(x_A[~A_mask], rho_A[~A_mask], '--', color='blue', alpha=0.5)
     plt.plot(x_A[~A_mask], T_A[~A_mask], '--', color='black',  alpha=0.5)
@@ -288,7 +302,7 @@ if plot_discarded:
     #plt.plot(x_B[~B_mask], vel_B[~B_mask], '--', color='red', alpha=0.5)
 
 plt.legend(loc='best')
-plt.title(f"M0 = {M0}, P0 = {P0}, kappa = {kappa}, sigma_a = {sigma_a:.1e}")
+plt.title(f"M0 = {M0}, P0 = {P0}, kappa = {kappa:.3f}, sigma_a = {sigma_a:.1e}")
 
 # Mach 1.05 plot
 #plt.xlim(-0.015, 0.015)
@@ -310,13 +324,29 @@ plt.title(f"M0 = {M0}, P0 = {P0}, kappa = {kappa}, sigma_a = {sigma_a:.1e}")
 #plt.xlim(-0.01, 0.005)
 #plt.ylim(1, 4.5)
 
-# Mach 5 plot
+# Mach 5 plot [temperature spike is incorrectly absent]
 #plt.xlim(-0.04, 0.01)
 #plt.ylim(1, 11)
 
 # Mach 27 plot
-plt.xlim(-0.25, 0.05)
-plt.ylim(1., 70.)
+#plt.xlim(-0.25, 0.05)
+#plt.ylim(1., 70.)
 
-plt.tight_layout()
+# Mach 30 plot
+#plt.xlim(-0.25, 0.05)
+#plt.ylim(1., 70.)
+
+# Mach 50 plot
+#plt.xlim(-0.25, 0.05)
+#plt.ylim(1., 90.)
+
+# Mach 2, P0 = 0.1      # CVODE currently breaks on this one!
+#plt.xlim(1e5, 3e5)
+#plt.ylim(1.25, 2.5)
+
+# Mach 3 plot, reduced dimensionless speed of light
+plt.xlim(-0.004, 0.002)
+plt.ylim(1, 4.5)
+
+#plt.tight_layout()
 plt.savefig('ode_solution.pdf')
