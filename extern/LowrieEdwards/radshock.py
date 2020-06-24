@@ -239,28 +239,39 @@ A_mask = (x_A <= 0.)
 B_mask = (x_B >= 0.)
 
 plt.plot(x_A[A_mask], rho_A[A_mask], color='blue', label='density')
-plt.plot(x_A[A_mask], T_A[A_mask], color='orange', label='gas temperature')
-plt.plot(x_A[A_mask], Trad_A[A_mask], color='green', label='radiation temperature')
-plt.plot(x_A[A_mask], vel_A[A_mask], color='red', label='velocity')
+plt.plot(x_A[A_mask], T_A[A_mask], color='black', label='gas temperature')
+plt.plot(x_A[A_mask], Trad_A[A_mask], '-.', color='black', label='radiation temperature')
+#plt.plot(x_A[A_mask], vel_A[A_mask], color='red', label='velocity')
 
 plt.plot(x_B[B_mask], rho_B[B_mask], color='blue')
-plt.plot(x_B[B_mask], T_B[B_mask], color='orange')
-plt.plot(x_B[B_mask], Trad_B[B_mask], color='green')
-plt.plot(x_B[B_mask], vel_B[B_mask], color='red')
+plt.plot(x_B[B_mask], T_B[B_mask], color='black')
+plt.plot(x_B[B_mask], Trad_B[B_mask], '-.', color='black')
+#plt.plot(x_B[B_mask], vel_B[B_mask], color='red')
+
+# plot temperature shock jump
+plt.scatter(x_A[A_mask][-1], T_A[A_mask][-1], color='black')
+plt.scatter(x_B[B_mask][-1], T_B[B_mask][-1], color='black')
+
+# plot density shock jump
+plt.scatter(x_A[A_mask][-1], rho_A[A_mask][-1], color='black')
+plt.scatter(x_B[B_mask][-1], rho_B[B_mask][-1], color='black')
 
 # plot discarded (unphysical) regions of solutions
 plot_discarded = False
 if plot_discarded:
     plt.plot(x_A[~A_mask], rho_A[~A_mask], '--', color='blue', alpha=0.5)
-    plt.plot(x_A[~A_mask], T_A[~A_mask], '--', color='orange',  alpha=0.5)
-    plt.plot(x_A[~A_mask], Trad_A[~A_mask], '--', color='green', alpha=0.5)
-    plt.plot(x_A[~A_mask], vel_A[~A_mask], '--', color='red', alpha=0.5)
+    plt.plot(x_A[~A_mask], T_A[~A_mask], '--', color='black',  alpha=0.5)
+    plt.plot(x_A[~A_mask], Trad_A[~A_mask], '--', color='black', alpha=0.5)
+    #plt.plot(x_A[~A_mask], vel_A[~A_mask], '--', color='red', alpha=0.5)
 
     plt.plot(x_B[~B_mask], rho_B[~B_mask], '--', color='blue',  alpha=0.5)
-    plt.plot(x_B[~B_mask], T_B[~B_mask], '--', color='orange', alpha=0.5)
-    plt.plot(x_B[~B_mask], Trad_B[~B_mask], '--', color='green', alpha=0.5)
-    plt.plot(x_B[~B_mask], vel_B[~B_mask], '--', color='red', alpha=0.5)
+    plt.plot(x_B[~B_mask], T_B[~B_mask], '--', color='black', alpha=0.5)
+    plt.plot(x_B[~B_mask], Trad_B[~B_mask], '--', color='black', alpha=0.5)
+    #plt.plot(x_B[~B_mask], vel_B[~B_mask], '--', color='red', alpha=0.5)
 
 plt.legend(loc='best')
+plt.title(f"M0 = {M0}, P0 = {P0}, kappa = {kappa}, sigma_a = {sigma_a:.1e}")
+plt.xlim(-0.01, 0.005)
+plt.ylim(1.0, 4.5)
 plt.tight_layout()
 plt.savefig('ode_solution.pdf')
