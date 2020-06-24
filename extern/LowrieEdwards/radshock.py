@@ -117,7 +117,7 @@ c = 100.0 * (M0 + 1.0)  # dimensionless speed of light
 kappa = 1
 
 ## compute solution
-eps = 1e-5
+eps = 1e-3
 epsA = eps
 epsB = -eps
 Trad_epsA = Trad0 + epsA
@@ -146,10 +146,11 @@ print(f"Traddot_epsB = {Traddot_epsB}")
 y0_A = np.array([-epsA/Traddot_epsA, T_epsA])  # initial conditions
 y0_B = np.array([ epsB/Traddot_epsB, T_epsB])
 
-eps_ASP = 1e-5  # avoid the Adiabatic Sonic Point (only for *continuous* solutions w/out hydro shock)
 x0_A = v_epsA / sqrt(T_epsA)
-x1_A = 1 + eps_ASP
 x0_B = v_epsB / sqrt(T_epsB)
+
+eps_ASP = 0.  # avoid the Adiabatic Sonic Point (only needed for *continuous* solutions w/out hydro shock)
+x1_A = 1 + eps_ASP
 x1_B = 1 - eps_ASP
 
 print(f"Left-side initial conditions = ({x0_A}, {y0_A})")
@@ -221,10 +222,12 @@ def objective(dx):
     j_p = np.array([rhoA*velA, rhoA*velA**2 + P_a, velA*(rhoA*E_a + P_a)])
     j_s = np.array([rhoB*velB, rhoB*velB**2 + P_b, velB*(rhoB*E_b + P_b)])
 
-    norm = np.sum((j_p - j_s)**2) + (TradA - TradB)**2
+    #norm = np.sum((j_p - j_s)**2) + (TradA - TradB)**2     # bad
+    norm = (rhoA*velA - rhoB*velB)**2 + (TradA - TradB)**2  # good
     return norm
 
-dx_guess = np.array([epsA/Traddot_epsA, -epsB/Traddot_epsB])
+dx_guess = np.array([-np.max(x_A), -np.min(x_B)])
+print(f"dx_guess = {dx_guess}")
 sol = scipy.optimize.minimize(objective, dx_guess, method='powell', tol=1e-10)
 dx_A, dx_B = sol.x
 print(f"dx_A = {dx_A}")
@@ -240,10 +243,23 @@ plt.plot(x_A[A_mask], T_A[A_mask], color='orange', label='gas temperature')
 plt.plot(x_A[A_mask], Trad_A[A_mask], color='green', label='radiation temperature')
 plt.plot(x_A[A_mask], vel_A[A_mask], color='red', label='velocity')
 
-plt.plot(x_B[B_mask], rho_B[B_mask], '--', color='blue')
-plt.plot(x_B[B_mask], T_B[B_mask], '--', color='orange')
-plt.plot(x_B[B_mask], Trad_B[B_mask], '--', color='green')
-plt.plot(x_B[B_mask], vel_B[B_mask], '--', color='red')
+plt.plot(x_B[B_mask], rho_B[B_mask], color='blue')
+plt.plot(x_B[B_mask], T_B[B_mask], color='orange')
+plt.plot(x_B[B_mask], Trad_B[B_mask], color='green')
+plt.plot(x_B[B_mask], vel_B[B_mask], color='red')
+
+# plot discarded (unphysical) regions of solutions
+plot_discarded = False
+if plot_discarded:
+    plt.plot(x_A[~A_mask], rho_A[~A_mask], '--', color='blue', alpha=0.5)
+    plt.plot(x_A[~A_mask], T_A[~A_mask], '--', color='orange',  alpha=0.5)
+    plt.plot(x_A[~A_mask], Trad_A[~A_mask], '--', color='green', alpha=0.5)
+    plt.plot(x_A[~A_mask], vel_A[~A_mask], '--', color='red', alpha=0.5)
+
+    plt.plot(x_B[~B_mask], rho_B[~B_mask], '--', color='blue',  alpha=0.5)
+    plt.plot(x_B[~B_mask], T_B[~B_mask], '--', color='orange', alpha=0.5)
+    plt.plot(x_B[~B_mask], Trad_B[~B_mask], '--', color='green', alpha=0.5)
+    plt.plot(x_B[~B_mask], vel_B[~B_mask], '--', color='red', alpha=0.5)
 
 plt.legend(loc='best')
 plt.tight_layout()
