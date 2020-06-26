@@ -258,6 +258,15 @@ print(f"x_B ranges from [{np.min(x_B)}, {np.max(x_B)}] = {np.max(x_B) - np.min(x
 A_mask = (x_A <= 0.)
 B_mask = (x_B >= 0.)
 
+## output to file
+x = np.concatenate((x_A[A_mask], x_B[B_mask][::-1]))
+rho = np.concatenate((rho_A[A_mask], rho_B[B_mask][::-1]))
+vel = np.concatenate((vel_A[A_mask], vel_B[B_mask][::-1]))
+Tmat = np.concatenate((T_A[A_mask], T_B[B_mask][::-1]))
+Trad = np.concatenate((Trad_A[A_mask], Trad_B[B_mask][::-1]))
+x += 0.004
+np.savetxt("./shock.txt", np.c_[x, rho, vel, Tmat, Trad], header="x rho vel Tmat Trad")
+
 plt.plot(x_A[A_mask], rho_A[A_mask], color='blue', label='density')
 plt.plot(x_A[A_mask], T_A[A_mask], color='black', label='gas temperature')
 plt.plot(x_A[A_mask], Trad_A[A_mask], '-.', color='black', label='radiation temperature')
@@ -321,7 +330,7 @@ plt.title(f"M0 = {M0}, P0 = {P0}, kappa = {kappa:.3f}, sigma_a = {sigma_a:.1e}")
 #plt.xlim(-0.01, 0.005)
 #plt.ylim(1, 4.5)
 
-# Mach 5 plot [temperature spike is incorrectly absent]
+# Mach 5 plot   [temperature spike is incorrectly absent]
 #plt.xlim(-0.04, 0.01)
 #plt.ylim(1, 11)
 
@@ -337,7 +346,7 @@ plt.title(f"M0 = {M0}, P0 = {P0}, kappa = {kappa:.3f}, sigma_a = {sigma_a:.1e}")
 #plt.xlim(-0.25, 0.05)
 #plt.ylim(1., 90.)
 
-# Mach 2, P0 = 0.1      # CVODE currently breaks on this one!
+# Mach 2, P0 = 0.1  [CVODE currently breaks on this one!]
 #plt.xlim(1e5, 3e5)
 #plt.ylim(1.25, 2.5)
 
