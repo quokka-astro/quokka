@@ -37,6 +37,15 @@ def dTrad_dx_fun(rho, T, Trad, gamma=np.NaN, M0=np.NaN, P0=np.NaN, kappa=np.NaN)
             P0*(Trad**4 - rho) ) / (24*P0*kappa*Trad**3)
     return d_dx
 
+def dErad_dx_fun(rho, T, Trad, gamma=np.NaN, M0=np.NaN, P0=np.NaN, kappa=np.NaN):
+    """d(Erad)/dx = d(arad*Trad**4)/dx = arad * d(Trad**4)/d(Trad) * d(Trad)/dx
+                  = 4 * arad * Trad**3 * d(Trad)/dx ,
+       Frad = d/dx (kappa * dErad/dx)."""
+
+    prefactor = 4.0*Trad**3
+    dTrad_dx = dTrad_dx_fun(rho,T,Trad,gamma=gamma,M0=M0,P0=P0,kappa=kappa)
+    return prefactor*dTrad_dx
+
 def Trad_fun(rho, T, gamma=np.NaN, M0=np.NaN, P0=np.NaN):
     Km = 3*(gamma*M0**2 + 1) + gamma*P0
     return ( (Km - 3*gamma*(M0**2 / rho) - 3*T*rho) / (gamma*P0) )**(1./4.)
@@ -109,11 +118,15 @@ print(f"post-shock radiation-to-gas pressure ratio = {P1}")
 ## define absorption coefficients, diffusivity
 sigma_a = 1e6           # absorption coefficient
 cs0 = 1.0
-c = 100.0 * (M0 + cs0)  # dimensionless speed of light
-kappa_opacity = sigma_a / c
+c = sqrt(3.0*sigma_a) * cs0 # dimensionless speed of light
+#c = 100.0 * (M0 + cs0)
+L = 15.0 * (1.0 / sigma_a) * (c/cs0)
+kappa_opacity = sigma_a * (cs0 / c)
 kappa_diffusivity = c / (3.0*kappa_opacity*cs0)
 kappa = kappa_diffusivity
 #kappa = 1.0
+print(f"dimensionless speed of light = {c}")
+print(f"gradient length L = {L}")
 
 ## compute solution
 eps = 1e-5
@@ -227,16 +240,14 @@ def objective(dx):
     E_b = TmatB / (gamma*(gamma-1)) + 0.5*(velB**2)
     Estar_b = E_b + P0*TradB**4 / rhoB
 
-    #j_p = np.array([rhoA*velA, rhoA*velA**2 + Pstar_a, velA*(rhoA*Estar_a + Pstar_a)])
-    #j_s = np.array([rhoB*velB, rhoB*velB**2 + Pstar_b, velB*(rhoB*Estar_b + Pstar_b)])
-    #j_p = np.array([rhoA*velA, rhoA*velA**2 + P_a, velA*(rhoA*E_a + Pstar_a)])
-    #j_s = np.array([rhoB*velB, rhoB*velB**2 + P_b, velB*(rhoB*E_b + Pstar_b)])
+    j_p = np.array([rhoA*velA, rhoA*velA**2 + Pstar_a, velA*(rhoA*Estar_a + Pstar_a)])
+    j_s = np.array([rhoB*velB, rhoB*velB**2 + Pstar_b, velB*(rhoB*Estar_b + Pstar_b)])
 
-    #norm = np.sum((j_p - j_s)**2) + (TradA - TradB)**2     # bad
+    #norm = np.sum((j_p - j_s)**2) + (TradA - TradB)**2       # bad
     norm = (rhoA*velA - rhoB*velB)**2 + (TradA - TradB)**2  # good
     return norm
 
-dx_guess = np.array([-0.5*np.max(x_A), -0.5*np.min(x_B)])
+dx_guess = np.array([-0.9*np.max(x_A), -0.9*np.min(x_B)])
 bounds_dxA = (-np.max(x_A), 0.)
 bounds_dxB = (0., -np.min(x_B))
 print(f"dx_guess = {dx_guess}")
@@ -246,7 +257,7 @@ print(f"bounds dx_B = {bounds_dxB}")
 jump_tol = 1e-5
 sol = scipy.optimize.minimize(objective, dx_guess, method='L-BFGS-B', bounds=[bounds_dxA, bounds_dxB], tol=jump_tol)
 print(f"objective = {sol.fun} after {sol.nit} iterations.")
-assert(sol.fun <= jump_tol)
+#assert(sol.fun <= jump_tol)
 dx_A, dx_B = sol.x
 print(f"dx_A = {dx_A}")
 print(f"dx_B = {dx_B}")
@@ -264,7 +275,14 @@ rho = np.concatenate((rho_A[A_mask], rho_B[B_mask][::-1]))
 vel = np.concatenate((vel_A[A_mask], vel_B[B_mask][::-1]))
 Tmat = np.concatenate((T_A[A_mask], T_B[B_mask][::-1]))
 Trad = np.concatenate((Trad_A[A_mask], Trad_B[B_mask][::-1]))
-x += 0.004
+
+Erad = Trad**4
+Frad = -kappa*dErad_dx_fun(rho, Tmat, Trad, gamma=gamma, M0=M0, P0=P0, kappa=kappa)
+Frad += (4./3.)*vel*Erad
+reduced_Frad = ( Frad / Erad ) * (1.0 / c)
+print(f"reduced flux min/max = {np.min(reduced_Frad)} {np.max(reduced_Frad)}")
+
+x += (2./3.)*L
 np.savetxt("./shock.txt", np.c_[x, rho, vel, Tmat, Trad], header="x rho vel Tmat Trad")
 
 plt.plot(x_A[A_mask], rho_A[A_mask], color='blue', label='density')
@@ -351,8 +369,23 @@ plt.title(f"M0 = {M0}, P0 = {P0}, kappa = {kappa:.3f}, sigma_a = {sigma_a:.1e}")
 #plt.ylim(1.25, 2.5)
 
 # Mach 3 plot, reduced dimensionless speed of light
-plt.xlim(-0.004, 0.002)
+plt.xlim((-2./3.)*L, (1./3.)*L)
 plt.ylim(1, 4.5)
 
 #plt.tight_layout()
 plt.savefig('ode_solution.pdf')
+
+plt.clf()
+plt.xlim(0., L)
+plt.ylim(0., 1.1)
+plt.ylabel('reduced flux')
+plt.plot(x, np.abs(reduced_Frad), '.-', color='green', label='radiation flux')
+plt.plot([0., L], [1., 1.], '--', color='black')
+plt.savefig('reduced_flux.pdf')
+
+plt.clf()
+plt.ylabel('radiation flux')
+plt.plot(x, Frad/c, '.-', color='green', label='radiation flux')
+#plt.plot(x, Erad, '.-', color='black', label='radiation energy density')
+plt.legend(loc='best')
+plt.savefig('flux.pdf')

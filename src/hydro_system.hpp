@@ -382,7 +382,7 @@ void HydroSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 		}
 
 		// add artificial viscosity following C&W Eq. (4.2), (4.5)
-		const double avisc_coef = 1.0;
+		const double avisc_coef = 0.1;
 		const double div_v = (vx_R - vx_L); // modify for 3d!!!
 
 		// activate artificial viscosity only in converging flows, e.g.

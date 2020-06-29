@@ -35,7 +35,7 @@ const double a_rad = 1.0e-4;	// equal to P_0 in dimensionless units
 const double sigma_a = 1.0e6;	// absorption cross section
 const double c_s0 = 1.0; // adiabatic sound speed
 const double Mach0 = 3.0;
-const double c = 100.0 * (Mach0 + c_s0); // dimensionless speed of light
+const double c = sqrt(3.0*sigma_a) * c_s0; // dimensionless speed of light
 const double kappa = sigma_a * (c_s0 / c);	// specific opacity
 const double gamma_gas = (5./3.);
 const double mu = gamma_gas; // mean molecular weight (required s.t. c_s0 == 1)
@@ -46,8 +46,8 @@ const double T0 = 1.0;
 const double rho0 = 1.0;
 const double v0 = Mach0;
 
-const double T1 = 3.6666666666666656;
-const double rho1 = 3.00343914708257;
+const double T1 = 3.661912665809719;
+const double rho1 = 3.0021676971081166;
 const double v1 = (Mach0 * (rho0 / rho1));
 
 const double Erad0 = a_rad * std::pow(T0, 4);
@@ -181,14 +181,15 @@ auto testproblem_radhydro_shock() -> int
 {
 	// Problem parameters
 
-	const int max_timesteps = 2e6;
+	const int max_timesteps = 2e7;
 	const double CFL_number = 0.4;
-	const int nx = 512;
+//	const int nx = 512;
+	const int nx = 256;
 	const double Lx = 15.0 * (c/sigma_a);	// length
 
 	const double initial_dtau = 1.0;	// dimensionless time
 	const double max_dtau = 1.0;		// dimensionless time
-	const double max_tau = 1.0 * (Lx/c_s0);		// dimensionless time
+	const double max_tau = 6.0 * (Lx/c_s0);		// dimensionless time
 
 	const double max_time = max_tau / c_s0;
 	const double max_dt = max_dtau / c_s0;
@@ -337,72 +338,91 @@ auto testproblem_radhydro_shock() -> int
 		gasVelocity.at(i) = x1GasMom / rho;
 	}
 
-#if 0
 	// read in exact solution
 
 	std::vector<double> xs_exact;
 	std::vector<double> Trad_exact;
 	std::vector<double> Tmat_exact;
 
-	std::string filename = "../../extern/radshock/analytic.dat";
+	std::string filename = "../../extern/LowrieEdwards/shock.txt";
 	std::ifstream fstream(filename, std::ios::in);
-	assert(fstream.is_open());
-
-	std::string header;
-	std::getline(fstream, header);
-
-	for (std::string line; std::getline(fstream, line);) {
-		std::istringstream iss(line);
-		std::vector<double> values;
-
-		for (double value; iss >> value;) {
-			values.push_back(value);
-		}
-		auto x_val = values.at(1);
-		auto Trad_val = values.at(4);
-		auto Tmat_val = values.at(5);
-
-		xs_exact.push_back(x_val);
-		Trad_exact.push_back(Trad_val);
-		Tmat_exact.push_back(Tmat_val);
-	}
-
-	// compute error norm
-
-	std::vector<double> Trad_interp(xs_exact.size());
-	interpolate_arrays(xs_exact.data(), Trad_interp.data(), xs_exact.size(),
-			   xs.data(), Trad.data(), xs.size());
-
-	double err_norm = 0.;
-	double sol_norm = 0.;
-	for (int i = 0; i < xs_exact.size(); ++i) {
-		err_norm += std::pow(Trad_interp[i] - Trad_exact[i], 2);
-		sol_norm += std::pow(Trad_exact[i], 2);
-	}
 
 	const double error_tol = 0.003;
-	const double rel_error = err_norm / sol_norm;
-	std::cout << "Relative L2 error norm = " << rel_error << std::endl;
-#endif
+	double rel_error = NAN;
+	if(fstream.is_open()) {
+
+		std::string header;
+		std::getline(fstream, header);
+
+		for (std::string line; std::getline(fstream, line);) {
+			std::istringstream iss(line);
+			std::vector<double> values;
+
+			for (double value; iss >> value;) {
+				values.push_back(value);
+			}
+			auto x_val = values.at(0);
+			auto Tmat_val = values.at(3);
+			auto Trad_val = values.at(4);
+
+			if ((x_val > 0.0) && (x_val < Lx)) {
+				xs_exact.push_back(x_val);
+				Tmat_exact.push_back(Tmat_val);
+				Trad_exact.push_back(Trad_val);
+			}
+			//std::cout << "solution " << x_val << "\t" << Tmat_val << "\t" << Trad_val << std::endl;
+		}
+
+		// compute error norm
+
+		std::vector<double> Trad_interp(xs_exact.size());
+		std::cout << "xs min/max = " << xs[0] << ", " << xs[xs.size()-1] << std::endl;
+		std::cout << "xs_exact min/max = " << xs_exact[0] << ", " << xs_exact[xs_exact.size()-1] << std::endl;
+
+		interpolate_arrays(xs_exact.data(), Trad_interp.data(), xs_exact.size(),
+			   xs.data(), Trad.data(), xs.size());
+
+		double err_norm = 0.;
+		double sol_norm = 0.;
+		for (int i = 0; i < xs_exact.size(); ++i) {
+			err_norm += std::pow(Trad_interp[i] - Trad_exact[i], 2);
+			sol_norm += std::pow(Trad_exact[i], 2);
+		}
+
+		rel_error = err_norm / sol_norm;
+		std::cout << "Error norm = " << err_norm << std::endl;
+		std::cout << "Solution norm = " << sol_norm << std::endl;
+		std::cout << "Relative L2 error norm = " << rel_error << std::endl;
+	}
 
 	// plot results
 
 	// temperature
 	std::map<std::string, std::string> Trad_args;
 	Trad_args["label"] = "radiation temperature";
+	Trad_args["color"] = "black";
 	matplotlibcpp::plot(xs, Trad, Trad_args);
 
-	std::map<std::string, std::string> Trad_exact_args;
-	Trad_exact_args["label"] = "radiation temperature (exact)";
-	// matplotlibcpp::plot(xs_exact, Trad_exact, Trad_exact_args);
+	if(fstream.is_open()) {
+		std::map<std::string, std::string> Trad_exact_args;
+		Trad_exact_args["label"] = "radiation temperature (exact)";
+		Trad_exact_args["color"] = "black";
+		Trad_exact_args["linestyle"] = "dashed";
+		matplotlibcpp::plot(xs_exact, Trad_exact, Trad_exact_args);
+	}
 
 	std::map<std::string, std::string> Tgas_args;
 	Tgas_args["label"] = "gas temperature";
+	Tgas_args["color"] = "red";
 	matplotlibcpp::plot(xs, Tgas, Tgas_args);
 
-	std::map<std::string, std::string> Tgas_exact_args;
-	Tgas_exact_args["label"] = "gas temperature (exact)";
-	// matplotlibcpp::plot(xs_exact, Tmat_exact, Tgas_exact_args);
+	if(fstream.is_open()) {
+		std::map<std::string, std::string> Tgas_exact_args;
+		Tgas_exact_args["label"] = "gas temperature (exact)";
+		Tgas_exact_args["color"] = "red";
+		Tgas_exact_args["linestyle"] = "dashed";
+		matplotlibcpp::plot(xs_exact, Tmat_exact, Tgas_exact_args);
+	}
 
 	matplotlibcpp::xlabel("length x (dimensionless)");
 	matplotlibcpp::ylabel("temperature (dimensionless)");
@@ -463,12 +483,9 @@ auto testproblem_radhydro_shock() -> int
 	std::cout << "Finished." << std::endl;
 
 	int status = 0;
-
-#if 0
 	if ((rel_error > error_tol) || std::isnan(rel_error)) {
 		status = 1;
 	}
-#endif
 
 	return status;
 }
