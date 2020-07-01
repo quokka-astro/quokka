@@ -120,7 +120,7 @@ sigma_a = 1e6           # absorption coefficient
 cs0 = 1.0
 c = sqrt(3.0*sigma_a) * cs0 # dimensionless speed of light
 #c = 100.0 * (M0 + cs0)
-L = 15.0 * (1.0 / sigma_a) * (c/cs0)
+L = 10.0 * (1.0 / sigma_a) * (c/cs0)
 kappa_opacity = sigma_a * (cs0 / c)
 kappa_diffusivity = c / (3.0*kappa_opacity*cs0)
 kappa = kappa_diffusivity
@@ -129,7 +129,7 @@ print(f"dimensionless speed of light = {c}")
 print(f"gradient length L = {L}")
 
 ## compute solution
-eps = 1e-5
+eps = 1e-6
 assert(eps <= 1e-3) # never make it larger than 1e-3, otherwise solutions are quite wrong
 epsA = eps
 epsB = -eps
@@ -163,15 +163,16 @@ x0_A = v_epsA / sqrt(T_epsA)
 x0_B = v_epsB / sqrt(T_epsB)
 # avoid the Adiabatic Sonic Point (although CVODE seems to perform just fine integrating to M=1)
 # Lowrie & Edwards (2008) state that the embedded hydro shock (if it exists) must be coincident with the ASP
-x1_A = 1.0
-x1_B = 1.0
+eps_ASP = 0.0
+x1_A = 1.0 + eps_ASP
+x1_B = 1.0 - eps_ASP
 
 print(f"Left-side initial conditions = ({x0_A}, {y0_A})")
 print(f"Right-side initial conditions = ({x0_B}, {y0_B})")
 
 ## integrate ODE
-xsol_A = np.linspace(x0_A, x1_A, 512, endpoint=True)
-xsol_B = np.linspace(x0_B, x1_B, 512, endpoint=True)
+xsol_A = np.linspace(x0_A, x1_A, 1024, endpoint=True)
+xsol_B = np.linspace(x0_B, x1_B, 1024, endpoint=True)
 fun = lambda x,y,ydot: shock(x,y,ydot, gamma=gamma, P0=P0, M0=M0, kappa=kappa)
 
 options = {'max_steps': 50000, 'rtol': 1e-8, 'atol': 1e-12}
@@ -207,11 +208,13 @@ print(f"Mach_B ranges from [{np.min(M_B)}, {np.max(M_B)}] = {np.max(M_B) - np.mi
 interp = lambda x,y: scipy.interpolate.interp1d(x,y,kind='cubic',fill_value='extrapolate')
 
 rho_Afun = interp(x_A, rho_A)
+M_Afun   = interp(x_A, M_A)
 vel_Afun = interp(x_A, vel_A)
 T_Afun   = interp(x_A, T_A)
 Trad_Afun= interp(x_A, Trad_A)
 
 rho_Bfun = interp(x_B, rho_B)
+M_Bfun   = interp(x_B, M_B)
 vel_Bfun = interp(x_B, vel_B)
 T_Bfun   = interp(x_B, T_B)
 Trad_Bfun= interp(x_B, Trad_B)
@@ -223,41 +226,56 @@ def objective(dx):
     xB = x0 - dx[1]
 
     rhoA = rho_Afun(xA)
+    MachA = M_Afun(xA)
     velA = vel_Afun(xA)
     TmatA = T_Afun(xA)
     TradA = Trad_Afun(xA)
-    P_a = rhoA*TmatA / gamma
-    Pstar_a = P_a + (1./3.)*P0*TradA**4
-    E_a = TmatA / (gamma*(gamma-1)) + 0.5*(velA**2)
-    Estar_a = E_a + P0*TradA**4 / rhoA
+
+    # drop factors of P0
+    Prad_a = (1./3.)*TradA**4
+    Frad_a = -kappa*dErad_dx_fun(rhoA, TmatA, TradA, gamma=gamma, M0=M0, P0=P0, kappa=kappa)
+    Frad_a += (4./3.)*(velA/c)*TradA**4
+
+    # compute state function of hydro variables
+    S_a = MachA**2 * ( (gamma-1) * MachA**2 + 2 ) / ( gamma * MachA**2 + 1 )**2
 
     rhoB = rho_Bfun(xB)
+    MachB = M_Bfun(xB)
     velB = vel_Bfun(xB)
     TmatB = T_Bfun(xB)
     TradB = Trad_Bfun(xB)
-    P_b = rhoA*TmatA / gamma
-    Pstar_b = P_b + (1./3.)*P0*TradB**4
-    E_b = TmatB / (gamma*(gamma-1)) + 0.5*(velB**2)
-    Estar_b = E_b + P0*TradB**4 / rhoB
 
-    j_p = np.array([rhoA*velA, rhoA*velA**2 + Pstar_a, velA*(rhoA*Estar_a + Pstar_a)])
-    j_s = np.array([rhoB*velB, rhoB*velB**2 + Pstar_b, velB*(rhoB*Estar_b + Pstar_b)])
+    Prad_b = (1./3.)*TradB**4
+    Frad_b = -kappa*dErad_dx_fun(rhoB, TmatB, TradB, gamma=gamma, M0=M0, P0=P0, kappa=kappa)
+    Frad_b += (4./3.)*(velB/c)*TradB**4
 
-    #norm = np.sum((j_p - j_s)**2) + (TradA - TradB)**2       # bad
-    norm = (rhoA*velA - rhoB*velB)**2 + (TradA - TradB)**2  # good
-    return norm
+    S_b = MachB**2 * ( (gamma-1) * MachB**2 + 2 ) / ( gamma * MachB**2 + 1 )**2
 
-dx_guess = np.array([-0.9*np.max(x_A), -0.9*np.min(x_B)])
+    j_p = np.array([Frad_a, Prad_a, S_a])
+    j_s = np.array([Frad_b, Prad_b, S_b])
+
+    #my_norm = lambda v: np.sum( np.abs(v) )
+    my_norm = lambda v: np.sum( v**2 )
+    rel_norm = my_norm(j_p - j_s) / my_norm(j_s)    # good
+    #norm = (rhoA*velA - rhoB*velB)**2 + (TradA - TradB)**2  # bad!
+    return rel_norm
+
 bounds_dxA = (-np.max(x_A), 0.)
 bounds_dxB = (0., -np.min(x_B))
-print(f"dx_guess = {dx_guess}")
 print(f"bounds dx_A = {bounds_dxA}")
 print(f"bounds dx_B = {bounds_dxB}")
 
+# global optimization
+res = scipy.optimize.shgo(objective, bounds=[bounds_dxA, bounds_dxB], n=300, iters=10)
+dx_guess = res.x
+print(f"global minimum = {dx_guess} with value = {res.fun}")
+
 jump_tol = 1e-5
-sol = scipy.optimize.minimize(objective, dx_guess, method='L-BFGS-B', bounds=[bounds_dxA, bounds_dxB], tol=jump_tol)
+my_method = 'L-BFGS-B'
+sol = scipy.optimize.minimize(objective, dx_guess, method=my_method,
+                                bounds=[bounds_dxA, bounds_dxB], tol=jump_tol)
 print(f"objective = {sol.fun} after {sol.nit} iterations.")
-#assert(sol.fun <= jump_tol)
+assert(sol.fun <= jump_tol)
 dx_A, dx_B = sol.x
 print(f"dx_A = {dx_A}")
 print(f"dx_B = {dx_B}")
@@ -278,12 +296,12 @@ Trad = np.concatenate((Trad_A[A_mask], Trad_B[B_mask][::-1]))
 
 Erad = Trad**4
 Frad = -kappa*dErad_dx_fun(rho, Tmat, Trad, gamma=gamma, M0=M0, P0=P0, kappa=kappa)
-Frad += (4./3.)*vel*Erad
+Frad += (4./3.)*(vel/c)*Erad
 reduced_Frad = ( Frad / Erad ) * (1.0 / c)
 print(f"reduced flux min/max = {np.min(reduced_Frad)} {np.max(reduced_Frad)}")
 
 x += (2./3.)*L
-np.savetxt("./shock.txt", np.c_[x, rho, vel, Tmat, Trad], header="x rho vel Tmat Trad")
+np.savetxt("./shock.txt", np.c_[x, rho, vel, Tmat, Trad, Frad/c], header="x rho vel Tmat Trad Frad/c")
 
 plt.plot(x_A[A_mask], rho_A[A_mask], color='blue', label='density')
 plt.plot(x_A[A_mask], T_A[A_mask], color='black', label='gas temperature')
@@ -294,6 +312,14 @@ plt.plot(x_B[B_mask], rho_B[B_mask], color='blue')
 plt.plot(x_B[B_mask], T_B[B_mask], color='black')
 plt.plot(x_B[B_mask], Trad_B[B_mask], '-.', color='black')
 #plt.plot(x_B[B_mask], vel_B[B_mask], color='red')
+
+import pandas as pd
+fornax = pd.read_csv("./Trad_fig30.csv")
+fornax['x'] *= 1.0e-2
+plt.plot(fornax['x'], fornax['Trad'], '.', color='red', label='Fornax Trad')
+fornax = pd.read_csv("./Tmat_fig30.csv")
+fornax['x'] *= 1.0e-2
+plt.plot(fornax['x'], fornax['Tmat'], '.', color='blue', label='Fornax Tmat')
 
 extend_B = 0.05
 plt.plot([x_B[B_mask][0], x_B[B_mask][0] + extend_B], np.ones(2)*rho_B[B_mask][0], color='blue')

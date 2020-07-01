@@ -36,6 +36,7 @@ const double sigma_a = 1.0e6;	// absorption cross section
 const double c_s0 = 1.0; // adiabatic sound speed
 const double Mach0 = 3.0;
 const double c = sqrt(3.0*sigma_a) * c_s0; // dimensionless speed of light
+//const double c = 100.0 * (Mach0 + c_s0);
 const double kappa = sigma_a * (c_s0 / c);	// specific opacity
 const double gamma_gas = (5./3.);
 const double mu = gamma_gas; // mean molecular weight (required s.t. c_s0 == 1)
@@ -62,11 +63,13 @@ auto RadSystem<ShockProblem>::ComputeOpacity(const double rho, const double Tgas
 	return kappa;
 }
 
+//#if 0
 template <>
 auto RadSystem<ShockProblem>::ComputeEddingtonFactor(double f) -> double
 {
 	return (1./3.);	// Eddington approximation
 }
+//#endif
 
 template <> void RadSystem<ShockProblem>::FillGhostZones(array_t &cons)
 {
@@ -108,88 +111,35 @@ template <> void HydroSystem<ShockProblem>::FillGhostZones(array_t &cons)
 	}
 }
 
-template <> void RadSystem<ShockProblem>::AdvanceTimestep(const double dt)
+template <> void RadSystem<ShockProblem>::AdvanceTimestep(const double hydro_dt)
 {
-	const auto ppm_range = std::make_pair(-1 + nghost_, nx_ + 1 + nghost_);
-	const auto cell_range = std::make_pair(nghost_, nx_ + nghost_);
-
-	dt_ = dt;
-
-	FillGhostZones(consVar_);
-	ConservedToPrimitive(consVar_, std::make_pair(0, dim1_));
-	ReconstructStatesPPM(primVar_, ppm_range);
-	ComputeFluxes(cell_range);
-	PredictStep(cell_range);
-
-	if (!CheckStatesValid(consVarPredictStep_, cell_range)) {
-		std::cout
-		    << "[rad step] Invalid states. This should not happen!\n";
-		assert(false); // NOLINT
+	// Subcycle to reach hydro_dt exactly in M substeps.
+	auto advance_to_time = time_ + hydro_dt;
+	int Nsubsteps = 0;
+	while (time_ < advance_to_time) {
+		auto dt_remaining = (advance_to_time - time_);
+		auto dt_max = std::min(dtExpandFactor_ * dtPrev_, dt_remaining);
+		auto dt_substep = ComputeTimestep(std::min(hydro_dt, dt_max));
+		AdvanceTimestepRK2(dt_substep);
+		++Nsubsteps;
 	}
-
-	for (int i = cell_range.first; i < cell_range.second; ++i) {
-		consVar_(radEnergy_index, i) =
-		    consVarPredictStep_(radEnergy_index, i);
-		consVar_(x1RadFlux_index, i) =
-		    consVarPredictStep_(x1RadFlux_index, i);
-		// do *not* copy hydro variables!
-	}
-
-	// Add source terms via operator splitting
-	AddSourceTerms(consVar_, cell_range);
-
-	// new state is now in consVar_
-
-	// Adjust our clock
-	time_ += dt_;
-	dtPrev_ = dt_;
-}
-
-template <> void HydroSystem<ShockProblem>::AdvanceTimestep(const double dt)
-{
-	const auto ppm_range = std::make_pair(-1 + nghost_, nx_ + 1 + nghost_);
-	const auto cell_range = std::make_pair(nghost_, nx_ + nghost_);
-
-	dt_ = dt;
-
-	FillGhostZones(consVar_);
-	ConservedToPrimitive(consVar_, std::make_pair(0, dim1_));
-	ReconstructStatesPPM(primVar_, ppm_range);
-	ComputeFluxes(cell_range);
-	PredictStep(cell_range);
-
-	if (!CheckStatesValid(consVarPredictStep_, cell_range)) {
-		std::cout
-		    << "[hydro step] Invalid states. This should not happen!\n";
-		assert(false); // NOLINT
-	}
-
-	// new state is now in consVarPredictStep_
-
-	for (int n = 0; n < nvars_; ++n) {
-		for (int i = cell_range.first; i < cell_range.second; ++i) {
-			consVar_(n, i) = consVarPredictStep_(n, i);
-		}
-	}
-
-	// Adjust our clock
-	time_ += dt_;
-	dtPrev_ = dt_;
+	std::cout << "Advanced radiation subsystem with " << Nsubsteps << " substeps.\n";
+	assert(time_ == advance_to_time); // NOLINT
 }
 
 auto testproblem_radhydro_shock() -> int
 {
 	// Problem parameters
 
-	const int max_timesteps = 2e7;
+	const int max_timesteps = 2e4;
 	const double CFL_number = 0.4;
 //	const int nx = 512;
 	const int nx = 256;
-	const double Lx = 15.0 * (c/sigma_a);	// length
+	const double Lx = 10.0 * (c/sigma_a);	// length
 
 	const double initial_dtau = 1.0;	// dimensionless time
 	const double max_dtau = 1.0;		// dimensionless time
-	const double max_tau = 6.0 * (Lx/c_s0);		// dimensionless time
+	const double max_tau = 1.0 * (Lx/c_s0);		// dimensionless time
 
 	const double max_time = max_tau / c_s0;
 	const double max_dt = max_dtau / c_s0;
@@ -261,11 +211,10 @@ auto testproblem_radhydro_shock() -> int
 		rad_system.FillGhostZones(rad_system.consVar_);
 		rad_system.ConservedToPrimitive(rad_system.consVar_, all_cells);
 
-		// Compute global timestep
-		const double this_dt =
-		    std::min(hydro_system.ComputeTimestep(this_dtMax),
-			     rad_system.ComputeTimestep(this_dtMax));
-		//std::cout << "t = " << hydro_system.time() << "\tdt = " << this_dt << std::endl;
+		// Compute hydro timestep
+		const double this_dt = hydro_system.ComputeTimestep(this_dtMax);
+		std::cout << "[timestep " << j << "] ";
+		std::cout << "t = " << hydro_system.time() << "\tdt = " << this_dt << std::endl;
 
 		// Advance hydro subsystem
 		hydro_system.AdvanceTimestepRK2(this_dt);
@@ -277,8 +226,8 @@ auto testproblem_radhydro_shock() -> int
 			rad_system.set_gasEnergy(i) = hydro_system.energy(i);
 		}
 
-		// Advance radiation subsystem
-		rad_system.AdvanceTimestepRK2(this_dt);
+		// Advance radiation subsystem, subcycling if necessary
+		rad_system.AdvanceTimestep(this_dt);
 
 		// Copy updated hydro vars back into hydro_system
 		for (int i = nghost; i < (nx + nghost); ++i) {
@@ -286,6 +235,7 @@ auto testproblem_radhydro_shock() -> int
 			hydro_system.set_energy(i) = rad_system.gasEnergy(i);
 		}
 
+		std::cout << std::endl;
 	}
 
 	std::cout << "Timestep " << j << "; t = " << hydro_system.time()
@@ -308,6 +258,7 @@ auto testproblem_radhydro_shock() -> int
 	std::vector<double> Trad(nx);
 	std::vector<double> Tgas(nx);
 	std::vector<double> Erad(nx);
+	std::vector<double> Frad_over_c(nx);
 	std::vector<double> Egas(nx);
 	std::vector<double> x1GasMomentum(nx);
 	std::vector<double> x1RadFlux(nx);
@@ -323,6 +274,7 @@ auto testproblem_radhydro_shock() -> int
 		Trad.at(i) = std::pow(Erad_t / a_rad, 1. / 4.);
 
 		const auto Etot_t = rad_system.gasEnergy(i + nghost);
+		const auto Frad = rad_system.x1RadFlux(i + nghost);
 		const auto rho = rad_system.staticGasDensity(i + nghost);
 		const auto x1GasMom = rad_system.x1GasMomentum(i + nghost);
 		const auto Ekin = (x1GasMom*x1GasMom) / (2.0*rho);
@@ -332,7 +284,8 @@ auto testproblem_radhydro_shock() -> int
 		Tgas.at(i) = rad_system.ComputeTgasFromEgas(rho, Egas_t);
 
 		x1GasMomentum.at(i) = x1GasMom;
-		x1RadFlux.at(i) = rad_system.x1RadFlux(i + nghost);
+		x1RadFlux.at(i) = Frad;
+		Frad_over_c.at(i) = Frad;
 
 		gasDensity.at(i) = rho;
 		gasVelocity.at(i) = x1GasMom / rho;
@@ -343,6 +296,7 @@ auto testproblem_radhydro_shock() -> int
 	std::vector<double> xs_exact;
 	std::vector<double> Trad_exact;
 	std::vector<double> Tmat_exact;
+	std::vector<double> Frad_over_c_exact;
 
 	std::string filename = "../../extern/LowrieEdwards/shock.txt";
 	std::ifstream fstream(filename, std::ios::in);
@@ -364,11 +318,13 @@ auto testproblem_radhydro_shock() -> int
 			auto x_val = values.at(0);
 			auto Tmat_val = values.at(3);
 			auto Trad_val = values.at(4);
+			auto Frad_over_c_val = values.at(5);
 
 			if ((x_val > 0.0) && (x_val < Lx)) {
 				xs_exact.push_back(x_val);
 				Tmat_exact.push_back(Tmat_val);
 				Trad_exact.push_back(Trad_val);
+				Frad_over_c_exact.push_back(Frad_over_c_val);
 			}
 			//std::cout << "solution " << x_val << "\t" << Tmat_val << "\t" << Trad_val << std::endl;
 		}
@@ -385,40 +341,40 @@ auto testproblem_radhydro_shock() -> int
 		double err_norm = 0.;
 		double sol_norm = 0.;
 		for (int i = 0; i < xs_exact.size(); ++i) {
-			err_norm += std::pow(Trad_interp[i] - Trad_exact[i], 2);
-			sol_norm += std::pow(Trad_exact[i], 2);
+			err_norm += std::abs(Trad_interp[i] - Trad_exact[i]);
+			sol_norm += std::abs(Trad_exact[i]);
 		}
 
 		rel_error = err_norm / sol_norm;
 		std::cout << "Error norm = " << err_norm << std::endl;
 		std::cout << "Solution norm = " << sol_norm << std::endl;
-		std::cout << "Relative L2 error norm = " << rel_error << std::endl;
+		std::cout << "Relative L1 error norm = " << rel_error << std::endl;
 	}
 
 	// plot results
 
 	// temperature
 	std::map<std::string, std::string> Trad_args;
-	Trad_args["label"] = "radiation temperature";
+	Trad_args["label"] = "Trad";
 	Trad_args["color"] = "black";
 	matplotlibcpp::plot(xs, Trad, Trad_args);
 
 	if(fstream.is_open()) {
 		std::map<std::string, std::string> Trad_exact_args;
-		Trad_exact_args["label"] = "radiation temperature (exact)";
+		Trad_exact_args["label"] = "Trad (diffusion ODE)";
 		Trad_exact_args["color"] = "black";
 		Trad_exact_args["linestyle"] = "dashed";
 		matplotlibcpp::plot(xs_exact, Trad_exact, Trad_exact_args);
 	}
 
 	std::map<std::string, std::string> Tgas_args;
-	Tgas_args["label"] = "gas temperature";
+	Tgas_args["label"] = "Tmat";
 	Tgas_args["color"] = "red";
 	matplotlibcpp::plot(xs, Tgas, Tgas_args);
 
 	if(fstream.is_open()) {
 		std::map<std::string, std::string> Tgas_exact_args;
-		Tgas_exact_args["label"] = "gas temperature (exact)";
+		Tgas_exact_args["label"] = "Tmat (diffusion ODE)";
 		Tgas_exact_args["color"] = "red";
 		Tgas_exact_args["linestyle"] = "dashed";
 		matplotlibcpp::plot(xs_exact, Tmat_exact, Tgas_exact_args);
@@ -430,18 +386,22 @@ auto testproblem_radhydro_shock() -> int
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", hydro_system.time()));
 	matplotlibcpp::save("./radshock_temperature.pdf");
 
-	// momentum
-	std::map<std::string, std::string> gasmom_args, radmom_args;
-	gasmom_args["label"] = "gas momentum density";
-	radmom_args["label"] = "radiation momentum density";
+	// radiation flux
+	std::map<std::string, std::string> gasmom_args, radmom_args, Frad_exact_args;
+	//gasmom_args["label"] = "gas momentum density";
+	radmom_args["label"] = "Frad";
+	Frad_exact_args["label"] = "Frad (diffusion ODE)";
 
 	matplotlibcpp::clf();
-	matplotlibcpp::plot(xs, x1GasMomentum, gasmom_args);
-	matplotlibcpp::plot(xs, x1RadFlux, radmom_args);
+	//matplotlibcpp::plot(xs, x1GasMomentum, gasmom_args);
+	matplotlibcpp::plot(xs, Frad_over_c, radmom_args);
+	if(fstream.is_open()) {
+		matplotlibcpp::plot(xs_exact, Frad_over_c_exact, Frad_exact_args);
+	}
 	matplotlibcpp::xlabel("length x (dimensionless)");
-	matplotlibcpp::ylabel("momentum density (dimensionless)");
+	matplotlibcpp::ylabel("radiation flux (dimensionless)");
 	matplotlibcpp::legend();
-	matplotlibcpp::save("./radshock_momentum.pdf");
+	matplotlibcpp::save("./radshock_flux.pdf");
 
 	// gas density
 	std::map<std::string, std::string> gasdens_args, gasvx_args;

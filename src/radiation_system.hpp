@@ -399,7 +399,7 @@ auto RadSystem<problem_t>::ComputeEddingtonFactor(double f) -> double
 	// f is the reduced flux == |F|/cE.
 	// compute Levermore (1984) closure [Eq. 25]
 	const double f_fac = std::sqrt(4.0 - 3.0 * (f * f));
-	const double chi = (3.0 + 4.0 * (f*f)) / (5.0 + 2.0 * f);
+	const double chi = (3.0 + 4.0 * (f*f)) / (5.0 + 2.0 * f_fac);
 
 #if 0
 	// compute Minerbo (1978) closure [piecewise approximation]
@@ -460,8 +460,8 @@ void RadSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 		const double Fx_R = fx_R * (c_light_ * erad_R);
 
 		// compute radiation pressure tensors
-		const double chi_L = ComputeEddingtonFactor(f_L);
-		const double chi_R = ComputeEddingtonFactor(f_R);
+		const double chi_L = RadSystem<problem_t>::ComputeEddingtonFactor(f_L);
+		const double chi_R = RadSystem<problem_t>::ComputeEddingtonFactor(f_R);
 
 		assert((chi_L >= 1. / 3.) && (chi_L <= 1.0)); // NOLINT
 		assert((chi_R >= 1. / 3.) && (chi_R <= 1.0)); // NOLINT
@@ -656,7 +656,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &cons,
 
 			// compute Jacobian elements
 			const double c_v =
-			    ComputeEgasTempDerivative(rho, T_gas);
+			    RadSystem<problem_t>::ComputeEgasTempDerivative(rho, T_gas);
 
 			drhs_dEgas =
 			    (rho * dt / c_v) *

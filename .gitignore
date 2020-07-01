@@ -1,5 +1,6 @@
 .vscode/
 build/
+__pycache__
 
 *.mp4
 *.pdf

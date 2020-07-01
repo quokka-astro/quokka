@@ -467,7 +467,7 @@ auto HyperbolicSystem<problem_t>::CheckStatesValid(
 }
 
 template <typename problem_t>
-void HyperbolicSystem<problem_t>::AdvanceTimestepRK2(const double dt_max)
+void HyperbolicSystem<problem_t>::AdvanceTimestepRK2(const double dt)
 {
 	const auto ppm_range = std::make_pair(-1 + nghost_, nx_ + 1 + nghost_);
 	const auto cell_range = std::make_pair(nghost_, nx_ + nghost_);
@@ -475,7 +475,8 @@ void HyperbolicSystem<problem_t>::AdvanceTimestepRK2(const double dt_max)
 	// Initialize data
 	FillGhostZones(consVar_);
 	ConservedToPrimitive(consVar_, std::make_pair(0, dim1_));
-	ComputeTimestep(std::min(dt_max, dtExpandFactor_ * dtPrev_));
+	//ComputeTimestep(std::min(dt_max, dtExpandFactor_ * dtPrev_));
+	dt_ = dt;
 
 	// Predictor step t_{n+1}
 	FillGhostZones(consVar_);
