@@ -117,8 +117,12 @@ print(f"post-shock radiation-to-gas pressure ratio = {P1}")
 
 ## define absorption coefficients, diffusivity
 sigma_a = 1e6           # absorption coefficient
-cs0 = 1.0
-c = sqrt(3.0*sigma_a) * cs0 # dimensionless speed of light
+#cs0 = 1.0
+#c = sqrt(3.0*sigma_a) * cs0 # dimensionless speed of light
+c = 1.0
+cs0 = 1.0/sqrt(3.0*sigma_a)
+# when setting c=1 and cs0 appropriately, Frad is normalized wrong by several orders of magnitude...
+
 #c = 100.0 * (M0 + cs0)
 L = 10.0 * (1.0 / sigma_a) * (c/cs0)
 kappa_opacity = sigma_a * (cs0 / c)
@@ -303,12 +307,12 @@ print(f"reduced flux min/max = {np.min(reduced_Frad)} {np.max(reduced_Frad)}")
 x += (2./3.)*L
 np.savetxt("./shock.txt", np.c_[x, rho, vel, Tmat, Trad, Frad/c], header="x rho vel Tmat Trad Frad/c")
 
-plt.plot(x_A[A_mask], rho_A[A_mask], color='blue', label='density')
+#plt.plot(x_A[A_mask], rho_A[A_mask], color='blue', label='density')
 plt.plot(x_A[A_mask], T_A[A_mask], color='black', label='gas temperature')
 plt.plot(x_A[A_mask], Trad_A[A_mask], '-.', color='black', label='radiation temperature')
 #plt.plot(x_A[A_mask], vel_A[A_mask], color='red', label='velocity')
 
-plt.plot(x_B[B_mask], rho_B[B_mask], color='blue')
+#plt.plot(x_B[B_mask], rho_B[B_mask], color='blue')
 plt.plot(x_B[B_mask], T_B[B_mask], color='black')
 plt.plot(x_B[B_mask], Trad_B[B_mask], '-.', color='black')
 #plt.plot(x_B[B_mask], vel_B[B_mask], color='red')
@@ -322,7 +326,7 @@ fornax['x'] *= 1.0e-2
 plt.plot(fornax['x'], fornax['Tmat'], '.', color='blue', label='Fornax Tmat')
 
 extend_B = 0.05
-plt.plot([x_B[B_mask][0], x_B[B_mask][0] + extend_B], np.ones(2)*rho_B[B_mask][0], color='blue')
+#plt.plot([x_B[B_mask][0], x_B[B_mask][0] + extend_B], np.ones(2)*rho_B[B_mask][0], color='blue')
 plt.plot([x_B[B_mask][0], x_B[B_mask][0] + extend_B], np.ones(2)*T_B[B_mask][0], color='black')
 
 plot_jump = True
@@ -334,19 +338,19 @@ if plot_jump:
     plt.plot([x_A[A_mask][-1], x_B[B_mask][-1]], [T_A[A_mask][-1], T_B[B_mask][-1]], color='black')
 
     # plot density shock jump
-    plt.scatter(x_A[A_mask][-1], rho_A[A_mask][-1], color='blue', s=size)
-    plt.scatter(x_B[B_mask][-1], rho_B[B_mask][-1], color='blue', s=size)
-    plt.plot([x_A[A_mask][-1], x_B[B_mask][-1]], [rho_A[A_mask][-1], rho_B[B_mask][-1]], color='blue')
+    #plt.scatter(x_A[A_mask][-1], rho_A[A_mask][-1], color='blue', s=size)
+    #plt.scatter(x_B[B_mask][-1], rho_B[B_mask][-1], color='blue', s=size)
+    #plt.plot([x_A[A_mask][-1], x_B[B_mask][-1]], [rho_A[A_mask][-1], rho_B[B_mask][-1]], color='blue')
 
 # plot discarded (unphysical) regions of solutions
 plot_discarded = False
 if plot_discarded:
-    plt.plot(x_A[~A_mask], rho_A[~A_mask], '--', color='blue', alpha=0.5)
+    #plt.plot(x_A[~A_mask], rho_A[~A_mask], '--', color='blue', alpha=0.5)
     plt.plot(x_A[~A_mask], T_A[~A_mask], '--', color='black',  alpha=0.5)
     plt.plot(x_A[~A_mask], Trad_A[~A_mask], '--', color='black', alpha=0.5)
     #plt.plot(x_A[~A_mask], vel_A[~A_mask], '--', color='red', alpha=0.5)
 
-    plt.plot(x_B[~B_mask], rho_B[~B_mask], '--', color='blue',  alpha=0.5)
+    #plt.plot(x_B[~B_mask], rho_B[~B_mask], '--', color='blue',  alpha=0.5)
     plt.plot(x_B[~B_mask], T_B[~B_mask], '--', color='black', alpha=0.5)
     plt.plot(x_B[~B_mask], Trad_B[~B_mask], '--', color='black', alpha=0.5)
     #plt.plot(x_B[~B_mask], vel_B[~B_mask], '--', color='red', alpha=0.5)

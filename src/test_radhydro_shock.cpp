@@ -33,23 +33,29 @@ struct ShockProblem {
 
 const double a_rad = 1.0e-4;	// equal to P_0 in dimensionless units
 const double sigma_a = 1.0e6;	// absorption cross section
-const double c_s0 = 1.0; // adiabatic sound speed
 const double Mach0 = 3.0;
+
+const double c_s0 = 1.0; // adiabatic sound speed
 const double c = sqrt(3.0*sigma_a) * c_s0; // dimensionless speed of light
-//const double c = 100.0 * (Mach0 + c_s0);
+//const double c = 1.0;
+//const double c_s0 = 1.0 / sqrt(3.0*sigma_a);
+
+//const double c = 100.0 * (Mach0 + c_s0); // old parameter value
+
 const double kappa = sigma_a * (c_s0 / c);	// specific opacity
 const double gamma_gas = (5./3.);
 const double mu = gamma_gas; // mean molecular weight (required s.t. c_s0 == 1)
-const double k_B = 1.0; // dimensionless Boltzmann constant
+//const double k_B = 1.0; // dimensionless Boltzmann constant
+const double k_B = std::pow(c_s0, 2);	// required to make temperature and sound speed consistent
 const double c_v = k_B / (mu * (gamma_gas - 1.0));	// specific heat
 
 const double T0 = 1.0;
 const double rho0 = 1.0;
-const double v0 = Mach0;
+const double v0 = (Mach0 * c_s0);
 
 const double T1 = 3.661912665809719;
 const double rho1 = 3.0021676971081166;
-const double v1 = (Mach0 * (rho0 / rho1));
+const double v1 = (Mach0 * c_s0) * (rho0 / rho1);
 
 const double Erad0 = a_rad * std::pow(T0, 4);
 const double Egas0 = rho0 * c_v * T0;
@@ -123,7 +129,7 @@ template <> void RadSystem<ShockProblem>::AdvanceTimestep(const double hydro_dt)
 		AdvanceTimestepRK2(dt_substep);
 		++Nsubsteps;
 	}
-	std::cout << "Advanced radiation subsystem with " << Nsubsteps << " substeps.\n";
+	std::cout << "\tAdvanced radiation subsystem with " << Nsubsteps << " substeps.\n";
 	assert(time_ == advance_to_time); // NOLINT
 }
 
@@ -133,12 +139,13 @@ auto testproblem_radhydro_shock() -> int
 
 	const int max_timesteps = 2e4;
 	const double CFL_number = 0.4;
-//	const int nx = 512;
-	const int nx = 256;
-	const double Lx = 10.0 * (c/sigma_a);	// length
+	const int nx = 512;
+//	const int nx = 256;
+	const double Lx = 10.0 * (c/c_s0) / sigma_a;	// length
+//	const double Lx = 100.0 * (c/c_s0) / sigma_a;	// length
 
-	const double initial_dtau = 1.0;	// dimensionless time
-	const double max_dtau = 1.0;		// dimensionless time
+	const double initial_dtau = 1.0e-9;	// dimensionless time
+	const double max_dtau = 1.0e-3;		// dimensionless time
 	const double max_tau = 1.0 * (Lx/c_s0);		// dimensionless time
 
 	const double max_time = max_tau / c_s0;
@@ -195,6 +202,8 @@ auto testproblem_radhydro_shock() -> int
 
 	// Main time loop
 	int j;
+	double dt_prev = std::numeric_limits<double>::max();
+	const double dt_expand_factor = 1.1;
 	for (j = 0; j < max_timesteps; ++j) {
 		if (hydro_system.time() >= max_time) {
 			break;
@@ -212,7 +221,9 @@ auto testproblem_radhydro_shock() -> int
 		rad_system.ConservedToPrimitive(rad_system.consVar_, all_cells);
 
 		// Compute hydro timestep
-		const double this_dt = hydro_system.ComputeTimestep(this_dtMax);
+		const double computed_dt = hydro_system.ComputeTimestep(this_dtMax);
+		const double this_dt = std::min(computed_dt, dt_expand_factor*dt_prev);
+
 		std::cout << "[timestep " << j << "] ";
 		std::cout << "t = " << hydro_system.time() << "\tdt = " << this_dt << std::endl;
 
@@ -234,6 +245,9 @@ auto testproblem_radhydro_shock() -> int
 			hydro_system.set_x1Momentum(i) = rad_system.x1GasMomentum(i);
 			hydro_system.set_energy(i) = rad_system.gasEnergy(i);
 		}
+
+		// Update previous timestep
+		dt_prev = this_dt;
 
 		std::cout << std::endl;
 	}
@@ -288,7 +302,7 @@ auto testproblem_radhydro_shock() -> int
 		Frad_over_c.at(i) = Frad;
 
 		gasDensity.at(i) = rho;
-		gasVelocity.at(i) = x1GasMom / rho;
+		gasVelocity.at(i) = (x1GasMom / rho) / c_s0;
 	}
 
 	// read in exact solution

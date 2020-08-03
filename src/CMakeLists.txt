@@ -45,6 +45,12 @@ include_directories(${PYTHON_INCLUDE_DIRS})
 include_directories(${Kokkos_INCLUDE_DIRS_RET})
 include_directories(${fmt_INCLUDE_DIRS_RET})
 
+add_executable(test_radiation_pulse hyperbolic_system.cpp radiation_system.cpp test_radiation_pulse.cpp interpolate.c)
+
+include_directories(${PYTHON_INCLUDE_DIRS})
+include_directories(${Kokkos_INCLUDE_DIRS_RET})
+include_directories(${fmt_INCLUDE_DIRS_RET})
+
 target_link_libraries(test_radiation_matter_coupling ${PYTHON_LIBRARY})
 target_link_libraries(test_radiation_matter_coupling kokkos)
 target_link_libraries(test_radiation_matter_coupling fmt::fmt)
@@ -73,6 +79,9 @@ target_link_libraries(test_hydro_wave ${PYTHON_LIBRARY})
 target_link_libraries(test_hydro_wave kokkos)
 target_link_libraries(test_hydro_wave fmt::fmt)
 
+target_link_libraries(test_radiation_pulse ${PYTHON_LIBRARY})
+target_link_libraries(test_radiation_pulse kokkos)
+target_link_libraries(test_radiation_pulse fmt::fmt)
 
 include(CTest)
 add_test(NAME MatterEnergyExchange COMMAND test_radiation_matter_coupling)
@@ -82,3 +91,4 @@ add_test(NAME RadhydroShock COMMAND test_radhydro_shock)
 add_test(NAME HydroShocktube COMMAND test_hydro_shocktube)
 add_test(NAME ScalarAdvection COMMAND test_advection)
 add_test(NAME HydroWave COMMAND test_hydro_wave)
+add_test(NAME RadiationPulse COMMAND test_radiation_pulse)
