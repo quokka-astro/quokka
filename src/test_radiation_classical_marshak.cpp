@@ -47,12 +47,16 @@ template <> void RadSystem<SuOlsonProblem>::FillGhostZones(array_t &cons)
 	// Su & Olson (1996) boundary conditions
 	const double T_H = T_hohlraum;
 	const double E_inc = radiation_constant_ * std::pow(T_H, 4);
-	const double F_inc = c_light_ * E_inc / 4.0;
+	//const double F_inc = c_light_ * E_inc / 4.0;
+
+	const double E_0 = cons(radEnergy_index, nghost_);
+	const double F_0 = cons(x1RadFlux_index, nghost_);
+	const double F_bdry = (c_light_ / 2.0)*(E_inc - E_0) - F_0;
 
 	// x1 left side boundary (Marshak)
 	for (int i = 0; i < nghost_; ++i) {
 		cons(radEnergy_index, i) = E_inc;
-		cons(x1RadFlux_index, i) = F_inc;
+		cons(x1RadFlux_index, i) = F_bdry;
 	}
 
 	// x1 right side boundary (reflecting)
@@ -201,7 +205,7 @@ auto testproblem_radiation_classical_marshak() -> int
 		const double x = Lx * ((i + 0.5) / static_cast<double>(nx));
 		xs.at(i) = std::sqrt(3.0) * x;
 
-		const auto Erad_t = rad_system.radEnergy(i + nghost) / std::sqrt(3.);
+		const auto Erad_t = rad_system.radEnergy(i + nghost);
 		Erad.at(i) = Erad_t;
 		Trad.at(i) = std::pow(Erad_t / a_rad, 1. / 4.);
 
@@ -210,7 +214,7 @@ auto testproblem_radiation_classical_marshak() -> int
 		const auto x1GasMom = rad_system.x1GasMomentum(i + nghost);
 		const auto Ekin = (x1GasMom*x1GasMom) / (2.0*rho);
 
-		const auto Egas_t = (Etot_t - Ekin) / std::sqrt(3.);
+		const auto Egas_t = (Etot_t - Ekin);
 		Egas.at(i) = Egas_t;
 		Tgas.at(i) = rad_system.ComputeTgasFromEgas(rho, Egas_t);
 
@@ -256,13 +260,13 @@ auto testproblem_radiation_classical_marshak() -> int
 	double err_norm = 0.;
 	double sol_norm = 0.;
 	for (int i = 0; i < xs_exact.size(); ++i) {
-		err_norm += std::pow(Trad_interp[i] - Trad_exact[i], 2);
-		sol_norm += std::pow(Trad_exact[i], 2);
+		err_norm += std::abs(Trad_interp[i] - Trad_exact[i]);
+		sol_norm += std::abs(Trad_exact[i]);
 	}
 
 	const double error_tol = 0.003;
 	const double rel_error = err_norm / sol_norm;
-	std::cout << "Relative L2 error norm = " << rel_error << std::endl;
+	std::cout << "Relative L1 error norm = " << rel_error << std::endl;
 
 	// plot results
 
