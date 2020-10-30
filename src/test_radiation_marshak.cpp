@@ -291,12 +291,14 @@ auto testproblem_radiation_marshak() -> int
 	double sol_norm = 0.;
 	for (int i = 0; i < xs_exact.size(); ++i) {
 		err_norm +=
-		    std::pow(Tgas_numerical_interp[i] - Tgas_exact_10[i], 2);
-		sol_norm += std::pow(Tgas_exact_10[i], 2);
+		    std::abs(Tgas_numerical_interp[i] - Tgas_exact_10[i]);
+		sol_norm += std::abs(Tgas_exact_10[i]);
 	}
 	const double rel_error = err_norm / sol_norm;
-	const double error_tol = 1e-3;
-	std::cout << "Relative L2 error norm = " << rel_error << std::endl;
+	const double error_tol =
+	    0.03; // this will not agree to better than this, due to not being
+		  // able to capture fEdd < 1/3 behavior
+	std::cout << "Relative L1 error norm = " << rel_error << std::endl;
 
 	// Plot solution
 

@@ -216,12 +216,12 @@ auto testproblem_radiation_matter_coupling() -> int
 	double err_norm = 0.;
 	double sol_norm = 0.;
 	for (int i = 0; i < t.size(); ++i) {
-		err_norm += std::pow(Tgas[i] - Tgas_exact_interp[i], 2);
-		sol_norm += std::pow(Tgas_exact_interp[i], 2);
+		err_norm += std::abs(Tgas[i] - Tgas_exact_interp[i]);
+		sol_norm += std::abs(Tgas_exact_interp[i]);
 	}
 	const double rel_error = err_norm / sol_norm;
-	const double error_tol = 1e-10;
-	std::cout << "relative L2 error norm = " << rel_error << std::endl;
+	const double error_tol = 1e-5;
+	std::cout << "relative L1 error norm = " << rel_error << std::endl;
 
 	matplotlibcpp::clf();
 	matplotlibcpp::yscale("log");
