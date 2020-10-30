@@ -47,11 +47,18 @@ template <> void RadSystem<SuOlsonProblem>::FillGhostZones(array_t &cons)
 	// Su & Olson (1996) boundary conditions
 	const double T_H = T_hohlraum;
 	const double E_inc = radiation_constant_ * std::pow(T_H, 4);
-	//const double F_inc = c_light_ * E_inc / 4.0;
+	const double c = c_light_;
+	//const double F_inc = c * E_inc / 4.0;
 
 	const double E_0 = cons(radEnergy_index, nghost_);
+	const double E_1 = cons(radEnergy_index, nghost_ + 1);
 	const double F_0 = cons(x1RadFlux_index, nghost_);
-	const double F_bdry = (c_light_ / 2.0)*(E_inc - E_0) - F_0;
+	const double F_1 = cons(x1RadFlux_index, nghost_ + 1);
+
+	// use PPM stencil at interface to solve for F_rad in the ghost zones
+	const double F_bdry = 0.5 * c * E_inc -
+			      (7. / 12.) * (c * E_0 + 2.0 * F_0) +
+			      (1. / 12.) * (c * E_1 + 2.0 * F_1);
 
 	// x1 left side boundary (Marshak)
 	for (int i = 0; i < nghost_; ++i) {
@@ -59,12 +66,12 @@ template <> void RadSystem<SuOlsonProblem>::FillGhostZones(array_t &cons)
 		cons(x1RadFlux_index, i) = F_bdry;
 	}
 
-	// x1 right side boundary (reflecting)
+	// x1 right side boundary (outflow)
 	for (int i = nghost_ + nx_; i < nghost_ + nx_ + nghost_; ++i) {
 		cons(radEnergy_index, i) = cons(
 		    radEnergy_index, (nghost_ + nx_) - (i - nx_ - nghost_ + 1));
 		cons(x1RadFlux_index, i) =
-		    -1.0 * cons(x1RadFlux_index,
+		    cons(x1RadFlux_index,
 				(nghost_ + nx_) - (i - nx_ - nghost_ + 1));
 	}
 }
@@ -125,12 +132,12 @@ auto testproblem_radiation_classical_marshak() -> int
 
 	const int max_timesteps = 2e5;
 	const double CFL_number = 0.4;
-	const int nx = 1500;
+	const int nx = 400;
 
 	const double initial_dtau = 1e-9; // dimensionless time
-	const double max_dtau = 1e-2;	  // dimensionless time
+	const double max_dtau = 1e-3;	  // dimensionless time
 	const double max_tau = 10.0;	  // dimensionless time
-	const double Lz = 100.0;	  // dimensionless length
+	const double Lz = 20.0;	  // dimensionless length
 
 	// Su & Olson (1997) parameters
 	const double chi = rho * kappa; // cm^-1 (total matter opacity)
@@ -267,18 +274,23 @@ auto testproblem_radiation_classical_marshak() -> int
 
 	double err_norm = 0.;
 	double sol_norm = 0.;
+	const double t = rad_system.time();
+	const double xmax = c * t;
+	std::cout << "diffusion length = " << xmax << std::endl;
 	for (int i = 0; i < xs_exact.size(); ++i) {
-		err_norm += std::abs(Trad_interp[i] - Trad_exact[i]);
-		sol_norm += std::abs(Trad_exact[i]);
+		if (xs_exact[i] < xmax) {
+			err_norm += std::abs(Trad_interp[i] - Trad_exact[i]);
+			sol_norm += std::abs(Trad_exact[i]);
+		}
 	}
 
-	const double error_tol = 0.003;
+	const double error_tol = 0.015; // 1.5 per cent
 	const double rel_error = err_norm / sol_norm;
 	std::cout << "Relative L1 error norm = " << rel_error << std::endl;
 
 	// plot results
 
-	// temperature
+	// radiation temperature
 	std::map<std::string, std::string> Trad_args;
 	Trad_args["label"] = "radiation temperature";
 	matplotlibcpp::plot(xs, Trad, Trad_args);
@@ -286,6 +298,18 @@ auto testproblem_radiation_classical_marshak() -> int
 	std::map<std::string, std::string> Trad_exact_args;
 	Trad_exact_args["label"] = "radiation temperature (exact)";
 	matplotlibcpp::plot(xs_exact, Trad_exact, Trad_exact_args);
+
+	matplotlibcpp::xlabel("length x (dimensionless)");
+	matplotlibcpp::ylabel("temperature (dimensionless)");
+	matplotlibcpp::xlim(0.4, 100.); // dimensionless
+	matplotlibcpp::ylim(0.0, 1.0);	// dimensionless
+	matplotlibcpp::xscale("log");
+	matplotlibcpp::legend();
+	matplotlibcpp::title(fmt::format("time t = {:.4g}", rad_system.time()));
+	matplotlibcpp::save("./classical_marshak_wave_temperature.pdf");
+
+	// material temperature
+	matplotlibcpp::clf();
 
 	std::map<std::string, std::string> Tgas_args;
 	Tgas_args["label"] = "gas temperature";
@@ -302,52 +326,7 @@ auto testproblem_radiation_classical_marshak() -> int
 	matplotlibcpp::xscale("log");
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", rad_system.time()));
-	matplotlibcpp::save("./classical_marshak_wave_temperature.pdf");
-
-	// momentum
-	std::map<std::string, std::string> gasmom_args, radmom_args;
-	gasmom_args["label"] = "gas momentum density";
-	radmom_args["label"] = "radiation momentum density";
-
-	matplotlibcpp::clf();
-	matplotlibcpp::plot(xs, x1GasMomentum, gasmom_args);
-	matplotlibcpp::plot(xs, x1RadFlux, radmom_args);
-	matplotlibcpp::xlabel("length x (dimensionless)");
-	matplotlibcpp::ylabel("momentum density (dimensionless)");
-	matplotlibcpp::xlim(0.4, 100.); // dimensionless
-	matplotlibcpp::ylim(0.0, 3.0);	// dimensionless
-	matplotlibcpp::xscale("log");
-	matplotlibcpp::legend();
-	matplotlibcpp::save("./classical_marshak_wave_momentum.pdf");
-
-	// energy density
-	matplotlibcpp::clf();
-
-	std::map<std::string, std::string> Erad_args;
-	Erad_args["label"] = "Numerical solution";
-	Erad_args["color"] = "black";
-	matplotlibcpp::plot(xs, Erad, Erad_args);
-
-	std::map<std::string, std::string> Egas_args;
-	Egas_args["label"] = "gas energy density";
-	Egas_args["color"] = "red";
-	matplotlibcpp::plot(xs, Egas, Egas_args);
-
-	matplotlibcpp::xlabel("length x (dimensionless)");
-	matplotlibcpp::ylabel("radiation energy density (dimensionless)");
-	matplotlibcpp::xlim(0.4, 100.0); // cm
-	matplotlibcpp::ylim(0.0, 1.0);
-	matplotlibcpp::xscale("log");
-	matplotlibcpp::legend();
-	matplotlibcpp::title(fmt::format(
-	    "time ct = {:.4g}", rad_system.time() * (eps_SuOlson * c * chi)));
-	matplotlibcpp::save("./classical_marshak_wave.pdf");
-
-	matplotlibcpp::xscale("log");
-	matplotlibcpp::yscale("log");
-	matplotlibcpp::xlim(0.4, 100.0); // cm
-	matplotlibcpp::ylim(1e-8, 1.3);
-	matplotlibcpp::save("./classical_marshak_wave_loglog.pdf");
+	matplotlibcpp::save("./classical_marshak_wave_gastemperature.pdf");
 
 	// Cleanup and exit
 	std::cout << "Finished." << std::endl;
