@@ -78,7 +78,8 @@ template <typename problem_t> class HyperbolicSystem
 					  std::pair<int, int> range) = 0;
 	virtual void AddSourceTerms(array_t &U, std::pair<int, int> range) = 0;
 	virtual auto CheckStatesValid(array_t &cons,
-				      std::pair<int, int> range) const -> bool;
+				      std::pair<int, int> range) -> bool;
+	virtual void FlattenShocks(array_t &q, std::pair<int, int> range);
 
       protected:
 	array_t primVar_;
@@ -185,6 +186,11 @@ void HyperbolicSystem<problem_t>::set_cflNumber(double cflNumber)
 template <typename problem_t>
 void HyperbolicSystem<problem_t>::AddSourceTerms(array_t &U,
 						 std::pair<int, int> range)
+{
+}
+
+template <typename problem_t>
+void HyperbolicSystem<problem_t>::FlattenShocks(array_t &q, std::pair<int, int> range)
 {
 }
 
@@ -315,33 +321,51 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(
 			//    (coef_1 * q(n, i) + coef_2 * q(n, i + 1)) +
 			//    (coef_1 * q(n, i - 1) + coef_2 * q(n, i - 2));
 
-			// Compute limited slopes
+			// Compute limited slopes as in C&W original method
 			const double dq0 =
 			    MC(q(n, i + 1) - q(n, i), q(n, i) - q(n, i - 1));
 
-			const double dq1 = MC(q(n, i) - q(n, i - 1),
-					      q(n, i - 1) - q(n, i - 2));
+			const double dq1 =
+				MC(q(n, i) - q(n, i - 1), q(n, i - 1) - q(n, i - 2));
 
 			// Compute interface (i - 1/2)
 			const double interface = q(n, i - 1) +
 						 0.5 * (q(n, i) - q(n, i - 1)) -
 						 (1. / 6.) * (dq0 - dq1);
 
-			// (2.) Constrain interface value to lie between
-			// adjacent cell-averaged values (equivalent to
-			// step 2b in Athena++ [ppm_simple.cpp]).
-
-			// std::pair<double, double> bounds =
-			//    std::minmax(q(n, i), q(n, i - 1));
-			// const double interface =
-			//    std::clamp(a_jhalf, bounds.first,
-			//    bounds.second);
-
 			// a_R,(i-1) in C&W
 			x1LeftState_(n, i) = interface;
 
 			// a_L,i in C&W
 			x1RightState_(n, i) = interface;
+		}
+	}
+
+	for (int n = 0; n < nvars_; ++n) {
+		for (int i = range.first; i < range.second; ++i) {
+			// (2.) Constrain interface value to lie between
+			// adjacent cell-averaged values (equivalent to
+			// step 2b in Athena++ [ppm_simple.cpp]).
+			// [See Eq. B8 of Mignone+ 2005]
+
+			// compute bounds from surrounding cells
+			const std::pair<double, double> bounds = 
+				std::minmax({q(n, i - 1), q(n, i), q(n, i+1)}); // modify in 3d !!
+
+			// get interfaces
+			const double a_minus = x1RightState_(n, i);
+			const double a_plus = x1LeftState_(n, i+1);
+
+			// left side of zone i
+			const double new_a_minus =
+			    std::clamp(a_minus, bounds.first, bounds.second);
+
+			// right side of zone i
+			const double new_a_plus =
+				std::clamp(a_plus, bounds.first, bounds.second);
+
+			x1RightState_(n, i) = new_a_minus;
+			x1LeftState_(n, i+1) = new_a_plus;
 		}
 	}
 
@@ -372,11 +396,14 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(
 				const double dq0 = MC(q(n, i + 1) - q(n, i),
 						      q(n, i) - q(n, i - 1));
 
+				// use linear reconstruction, following Balsara (2017).
+				//     [Living Rev Comput Astrophys (2017) 3:2]
 				new_a_minus = a - 0.5 * dq0;
 				new_a_plus = a + 0.5 * dq0;
 
-				// new_a_minus = a;
-				// new_a_plus = a;
+				// original C&W method for this case
+				//new_a_minus = a;
+				//new_a_plus = a;
 
 			} else { // no local extrema
 
@@ -399,6 +426,13 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(
 			x1LeftState_(n, i + 1) = new_a_plus;
 		}
 	}
+
+	// Important final step: ensure that velocity does not exceed c
+	// in any cell where v^2 > c, reconstruct using first-order method for all velocity components
+	// (must be done by user)
+
+	// Apply shock flattening
+	FlattenShocks(q, range);
 }
 
 template <typename problem_t>
@@ -461,7 +495,7 @@ void HyperbolicSystem<problem_t>::AdvanceTimestep(const double dt_max)
 
 template <typename problem_t>
 auto HyperbolicSystem<problem_t>::CheckStatesValid(
-    array_t &cons, const std::pair<int, int> range) const -> bool
+    array_t &cons, const std::pair<int, int> range) -> bool
 {
 	return true;
 }
@@ -486,8 +520,8 @@ void HyperbolicSystem<problem_t>::AdvanceTimestepRK2(const double dt)
 	PredictStep(cell_range);
 
 	if (!CheckStatesValid(consVarPredictStep_, cell_range)) {
-		std::cout << "[stage 1] This should not happen!\n";
-		assert(false); // NOLINT
+		// need to implement first-order flux correction here
+		assert(false);
 	}
 
 	// Corrector step

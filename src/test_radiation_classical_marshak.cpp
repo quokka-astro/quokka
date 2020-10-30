@@ -69,6 +69,14 @@ template <> void RadSystem<SuOlsonProblem>::FillGhostZones(array_t &cons)
 	}
 }
 
+#if 0
+template <>
+auto RadSystem<SuOlsonProblem>::ComputeEddingtonFactor(double f) -> double
+{
+	return (1./3.);
+}
+#endif
+
 template <>
 auto RadSystem<SuOlsonProblem>::ComputeOpacity(const double rho,
 					       const double Tgas) -> double

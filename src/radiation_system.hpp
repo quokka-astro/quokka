@@ -87,7 +87,7 @@ class RadSystem : public HyperbolicSystem<problem_t>
 	void ConservedToPrimitive(array_t &cons,
 				  std::pair<int, int> range) override;
 	void AddSourceTerms(array_t &cons, std::pair<int, int> range) override;
-	auto CheckStatesValid(array_t &cons, std::pair<int, int> range) const
+	auto CheckStatesValid(array_t &cons, std::pair<int, int> range)
 	    -> bool override;
 	auto ComputeTimestep(double dt_max) -> double override;
 	void AdvanceTimestep(double dt_max) override;
@@ -318,7 +318,7 @@ void RadSystem<problem_t>::FillGhostZones(array_t &cons)
 
 template <typename problem_t>
 auto RadSystem<problem_t>::CheckStatesValid(
-    array_t &cons, const std::pair<int, int> range) const -> bool
+    array_t &cons, const std::pair<int, int> range) -> bool
 {
 	bool all_valid = true;
 
@@ -398,6 +398,7 @@ auto RadSystem<problem_t>::ComputeEddingtonFactor(double f) -> double
 {
 	// f is the reduced flux == |F|/cE.
 	// compute Levermore (1984) closure [Eq. 25]
+	// the is the M1 closure that is derived from Lorentz invariance
 	const double f_fac = std::sqrt(4.0 - 3.0 * (f * f));
 	const double chi = (3.0 + 4.0 * (f*f)) / (5.0 + 2.0 * f_fac);
 

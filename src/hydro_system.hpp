@@ -74,7 +74,8 @@ class HydroSystem : public HyperbolicSystem<problem_t>
 	auto ComputeTimestep(double dt_max) -> double override;
 	void AdvanceTimestep(double dt_max) override;
 	void FillGhostZones(array_t &cons) override;
-
+	void FlattenShocks(array_t &q, const std::pair<int,int> range) override;
+	auto CheckStatesValid(array_t &cons, const std::pair<int, int> range) -> bool override;
 
 	// setter functions:
 
@@ -105,9 +106,14 @@ class HydroSystem : public HyperbolicSystem<problem_t>
 	array_t x1Velocity_;
 	array_t pressure_;
 
+	// PPM shock flattening coefficients
+	array_t x1Chi_;
+	array_t problemCell_;
+
 	double gamma_;
 
 	void ComputeFluxes(std::pair<int, int> range) override;
+	void ComputeFlatteningCoefficientX1(std::pair<int, int> range);
 };
 
 template <typename problem_t>
@@ -124,6 +130,9 @@ HydroSystem<problem_t>::HydroSystem(HydroSystemArgs args)
 	primDensity_.InitWithShallowSlice(primVar_, 2, primDensity_index, 0);
 	x1Velocity_.InitWithShallowSlice(primVar_, 2, x1Velocity_index, 0);
 	pressure_.InitWithShallowSlice(primVar_, 2, pressure_index, 0);
+
+	x1Chi_.NewAthenaArray(args.nx + 2*nghost_);
+	problemCell_.NewAthenaArray(args.nx + 2*nghost_);
 }
 
 template <typename problem_t>
@@ -227,6 +236,8 @@ void HydroSystem<problem_t>::ConservedToPrimitive(
 		x1Velocity_(i) = vx;
 		pressure_(i) = P;
 	}
+
+	ComputeFlatteningCoefficientX1(range);
 }
 
 template <typename problem_t>
@@ -249,6 +260,108 @@ auto HydroSystem<problem_t>::ComputeTimestep(const double dt_max) -> double
 
 	dt_ = dt;
 	return dt;
+}
+
+template <typename problem_t>
+auto HydroSystem<problem_t>::CheckStatesValid(
+    array_t &cons, const std::pair<int, int> range) -> bool
+{
+	bool areValid = true;
+	for (int i = range.first; i < range.second; ++i) {
+		const auto rho = cons(density_index, i);
+		const auto px = cons(x1Momentum_index, i);
+		const auto E =
+		    cons(energy_index, i); // *total* gas energy per unit volume
+
+		const auto vx = px / rho;
+		const auto kinetic_energy = 0.5 * rho * std::pow(vx, 2);
+		const auto thermal_energy = E - kinetic_energy;
+
+		const auto P = thermal_energy * (gamma_ - 1.0);
+
+		if (rho <= 0.) {
+			problemCell_(i) = 1.0;
+			std::cout << "Bad cell i = " << i << " (negative density = " << rho << ")." << std::endl;
+			areValid = false;
+		}
+		if( P <= 0.) {
+			problemCell_(i) = 1.0;
+			std::cout << "Bad cell i = " << i << " (negative pressure = " << P << ")." << std::endl;
+			areValid = false;
+		}
+	}
+	return areValid;
+}
+
+template <typename problem_t>
+void HydroSystem<problem_t>::ComputeFlatteningCoefficientX1(const std::pair<int,int> range)
+{
+	// compute the PPM shock flattening coefficient following
+	//   Appendix B1 of Mignone+ 2005 [this description has typos].
+	// Method originally from Miller & Colella,
+	//   Journal of Computational Physics 183, 26–82 (2002) [no typos].
+
+	constexpr double beta_max = 0.85;
+	constexpr double beta_min = 0.75;
+	constexpr double Zmax = 0.75;
+	constexpr double Zmin = 0.25;
+
+	for (int i = range.first; i < range.second; ++i) {
+		// beta is a measure of shock resolution (Eq. 74 of Miller & Colella 2002)
+		const double beta =
+		    std::abs(pressure_(i + 1) - pressure_(i - 1)) /
+		    std::abs(pressure_(i + 2) - pressure_(i - 2));
+
+		// Eq. 75 of Miller & Colella 2002
+		const double chi_min =
+		    std::max(0., std::min(1., (beta_max - beta) /
+						  (beta_max - beta_min)));
+
+		// Z is a measure of shock strength (Eq. 76 of Miller & Colella 2002)
+		const double K_S = gamma_ * pressure_(i); // equal to \rho c_s^2
+		const double Z =
+		    std::abs(pressure_(i + 1) - pressure_(i - 1)) / K_S;
+
+		// check for converging flow (Eq. 77)
+		double chi = 1.0;
+		if (x1Velocity_(i + 1) < x1Velocity_(i - 1)) {
+			chi = std::max(
+			    chi_min, std::min(1., (Zmax - Z) / (Zmax - Zmin)));
+		}
+
+		x1Chi_(i) = chi;
+	}
+}
+
+template <typename problem_t>
+void HydroSystem<problem_t>::FlattenShocks(array_t &q, const std::pair<int,int> range)
+{
+	for (int n = 0; n < nvars_; ++n) {
+		for (int i = range.first; i < range.second; ++i) {
+			// Apply shock flattening
+
+			// compute coefficient as the minimum from all surrounding cells
+			//  (Eq. 78 of Miller & Colella 2002)
+			double chi = 
+				std::min({x1Chi_(i - 1), x1Chi_(i), x1Chi_(i+1)}); // modify in 3d !!
+
+			// get interfaces
+			const double a_minus = x1RightState_(n, i);
+			const double a_plus = x1LeftState_(n, i+1);
+			const double a_mean = q(n, i);
+
+			// left side of zone i (Eq. 70a)
+			const double new_a_minus =
+			    chi * a_minus + (1. - chi) * a_mean;
+
+			// right side of zone i (Eq. 70b)
+			const double new_a_plus =
+			    chi * a_plus + (1. - chi) * a_mean;
+
+			x1RightState_(n, i) = new_a_minus;
+			x1LeftState_(n, i+1) = new_a_plus;
+		}
+	}
 }
 
 template <typename problem_t>
@@ -339,6 +452,9 @@ void HydroSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 		const double s_L = vx_L - q_L*cs_L;
 		const double s_R = vx_R + q_R*cs_R;
 
+		//const double s_L = vx_L - cs_L;
+		//const double s_R = vx_R + cs_R;
+
 		const double s_Lroe = (vx_roe - cs_roe); // Davis, Einfeldt wave speeds
 		const double s_Rroe = (vx_roe + cs_roe);
 
@@ -382,8 +498,8 @@ void HydroSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 		}
 
 		// add artificial viscosity following C&W Eq. (4.2), (4.5)
+		const double avisc_coef = 0.;
 		//const double avisc_coef = 0.1;
-		const double avisc_coef = 1.0;
 		const double div_v = (vx_R - vx_L); // modify for 3d!!!
 
 		// activate artificial viscosity only in converging flows, e.g.
