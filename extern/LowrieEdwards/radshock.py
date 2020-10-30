@@ -304,7 +304,7 @@ Frad += (4./3.)*(vel/c)*Erad
 reduced_Frad = ( Frad / Erad ) * (1.0 / c)
 print(f"reduced flux min/max = {np.min(reduced_Frad)} {np.max(reduced_Frad)}")
 
-x += (2./3.)*L
+x += 0.85*L
 np.savetxt("./shock.txt", np.c_[x, rho, vel, Tmat, Trad, Frad/c], header="x rho vel Tmat Trad Frad/c")
 
 #plt.plot(x_A[A_mask], rho_A[A_mask], color='blue', label='density')

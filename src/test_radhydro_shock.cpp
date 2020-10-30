@@ -40,8 +40,6 @@ const double c = sqrt(3.0*sigma_a) * c_s0; // dimensionless speed of light
 //const double c = 1.0;
 //const double c_s0 = 1.0 / sqrt(3.0*sigma_a);
 
-//const double c = 100.0 * (Mach0 + c_s0); // old parameter value
-
 const double kappa = sigma_a * (c_s0 / c);	// specific opacity
 const double gamma_gas = (5./3.);
 const double mu = gamma_gas; // mean molecular weight (required s.t. c_s0 == 1)
@@ -139,7 +137,7 @@ auto testproblem_radhydro_shock() -> int
 
 	const int max_timesteps = 2e4;
 	const double CFL_number = 0.8;
-	const int nx = 512;
+	const int nx = 512; // minimum resolution given in Skinner et al.
 	const double Lx = 10.0 * (c/c_s0) / sigma_a;	// length
 
 	const double initial_dtau = 1.0e-3;	// dimensionless time
@@ -170,7 +168,7 @@ auto testproblem_radhydro_shock() -> int
 
 		rad_system.set_radEnergySource(i) = 0.0;
 
-		if (x < ((2./3.)*Lx)) {
+		if (x < (0.85*Lx)) {
 			rad_system.set_radEnergy(i) = Erad0;
 			rad_system.set_x1RadFlux(i) = 0.0;
 
