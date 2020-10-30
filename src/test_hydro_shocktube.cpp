@@ -36,9 +36,9 @@ int testproblem_hydro_shocktube()
 
 	const int nx = 1000;
 	const double Lx = 5.0;
-	const double CFL_number = 0.4;
+	const double CFL_number = 0.1;
 	const double max_time = 0.4;
-	const double max_dt = 1e-3;
+	const double max_dt = 1e-4;
 	const double initial_dt = 1e-6;
 	const int max_timesteps = 5000;
 	const double gamma = 1.4; // ratio of specific heats
@@ -174,14 +174,16 @@ int testproblem_hydro_shocktube()
 
 	double err_norm = 0.;
 	double sol_norm = 0.;
-	for (int i = 0; i < xs_exact.size(); ++i) {
-		err_norm += std::pow(d[i] - density_exact_interp[i], 2);
-		sol_norm += std::pow(density_exact_interp[i], 2);
+	for (int i = 0; i < xs.size(); ++i) {
+		err_norm += std::abs(d[i] - density_exact_interp[i]);
+		sol_norm += std::abs(density_exact_interp[i]);
 	}
 
-	const double error_tol = 2.0e-6;
+	const double error_tol = 0.002;
 	const double rel_error = err_norm / sol_norm;
-	std::cout << "Relative L2 error norm = " << rel_error << std::endl;
+	std::cout << "err_norm = " << err_norm << std::endl;
+	std::cout << "sol_norm = " << sol_norm << std::endl;
+	std::cout << "Relative L1 error norm = " << rel_error << std::endl;
 
 	// Compute test success condition
 	int status = 0;
