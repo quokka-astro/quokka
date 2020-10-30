@@ -138,13 +138,11 @@ auto testproblem_radhydro_shock() -> int
 	// Problem parameters
 
 	const int max_timesteps = 2e4;
-	const double CFL_number = 0.4;
+	const double CFL_number = 0.8;
 	const int nx = 512;
-//	const int nx = 256;
 	const double Lx = 10.0 * (c/c_s0) / sigma_a;	// length
-//	const double Lx = 100.0 * (c/c_s0) / sigma_a;	// length
 
-	const double initial_dtau = 1.0e-9;	// dimensionless time
+	const double initial_dtau = 1.0e-3;	// dimensionless time
 	const double max_dtau = 1.0e-3;		// dimensionless time
 	const double max_tau = 1.0 * (Lx/c_s0);		// dimensionless time
 
@@ -198,7 +196,8 @@ auto testproblem_radhydro_shock() -> int
 	std::cout << "c_light (code units) = " << c << "\n";
 	std::cout << "Lx = " << Lx << "\n";
 	std::cout << "initial_dt = " << initial_dt << "\n";
-	std::cout << "max_dt = " << max_dt << "\n\n";
+	std::cout << "max_dt = " << max_dt << "\n";
+	std::cout << "max_time = " << max_time << "\n\n";
 
 	// Main time loop
 	int j;
