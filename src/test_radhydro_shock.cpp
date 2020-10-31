@@ -37,14 +37,11 @@ const double Mach0 = 3.0;
 
 const double c_s0 = 1.0; // adiabatic sound speed
 const double c = sqrt(3.0*sigma_a) * c_s0; // dimensionless speed of light
-//const double c = 1.0;
-//const double c_s0 = 1.0 / sqrt(3.0*sigma_a);
+const double k_B = std::pow(c_s0, 2);	// required to make temperature and sound speed consistent
 
-const double kappa = sigma_a * (c_s0 / c);	// specific opacity
+const double kappa = sigma_a * (c_s0 / c);	// opacity [cm^-1]
 const double gamma_gas = (5./3.);
 const double mu = gamma_gas; // mean molecular weight (required s.t. c_s0 == 1)
-//const double k_B = 1.0; // dimensionless Boltzmann constant
-const double k_B = std::pow(c_s0, 2);	// required to make temperature and sound speed consistent
 const double c_v = k_B / (mu * (gamma_gas - 1.0));	// specific heat
 
 const double T0 = 1.0;
@@ -64,7 +61,7 @@ template <>
 auto RadSystem<ShockProblem>::ComputeOpacity(const double rho, const double Tgas)
     -> double
 {
-	return kappa;
+	return (kappa / rho);
 }
 
 //#if 0
@@ -138,11 +135,11 @@ auto testproblem_radhydro_shock() -> int
 	const int max_timesteps = 2e4;
 	const double CFL_number = 0.8;
 	const int nx = 512; // minimum resolution given in Skinner et al.
-	const double Lx = 10.0 * (c/c_s0) / sigma_a;	// length
+	const double Lx = 9.112876254180604 * (c/c_s0) / sigma_a;	// length
 
-	const double initial_dtau = 1.0e-3;	// dimensionless time
-	const double max_dtau = 1.0e-3;		// dimensionless time
-	const double max_tau = 1.0 * (Lx/c_s0);		// dimensionless time
+	const double initial_dtau = 1.0e-3;		// initial timestep [dimensionless]
+	const double max_dtau = 1.0e-3;			// maximum timestep [dimensionless]
+	const double max_tau = 3.0 * (Lx/v0);	// 3 shock crossing times [dimensionless]
 
 	const double max_time = max_tau / c_s0;
 	const double max_dt = max_dtau / c_s0;
@@ -168,7 +165,8 @@ auto testproblem_radhydro_shock() -> int
 
 		rad_system.set_radEnergySource(i) = 0.0;
 
-		if (x < (0.85*Lx)) {
+		constexpr double shock_position = 0.0132 / 0.01575;
+		if (x < (shock_position * Lx)) {
 			rad_system.set_radEnergy(i) = Erad0;
 			rad_system.set_x1RadFlux(i) = 0.0;
 
@@ -312,7 +310,7 @@ auto testproblem_radhydro_shock() -> int
 	std::string filename = "../../extern/LowrieEdwards/shock.txt";
 	std::ifstream fstream(filename, std::ios::in);
 
-	const double error_tol = 0.003;
+	const double error_tol = 0.005;
 	double rel_error = NAN;
 	if(fstream.is_open()) {
 
@@ -337,7 +335,6 @@ auto testproblem_radhydro_shock() -> int
 				Trad_exact.push_back(Trad_val);
 				Frad_over_c_exact.push_back(Frad_over_c_val);
 			}
-			//std::cout << "solution " << x_val << "\t" << Tmat_val << "\t" << Trad_val << std::endl;
 		}
 
 		// compute error norm
@@ -397,23 +394,6 @@ auto testproblem_radhydro_shock() -> int
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", hydro_system.time()));
 	matplotlibcpp::save("./radshock_temperature.pdf");
 
-	// radiation flux
-	std::map<std::string, std::string> gasmom_args, radmom_args, Frad_exact_args;
-	//gasmom_args["label"] = "gas momentum density";
-	radmom_args["label"] = "Frad";
-	Frad_exact_args["label"] = "Frad (diffusion ODE)";
-
-	matplotlibcpp::clf();
-	//matplotlibcpp::plot(xs, x1GasMomentum, gasmom_args);
-	matplotlibcpp::plot(xs, Frad_over_c, radmom_args);
-	if(fstream.is_open()) {
-		matplotlibcpp::plot(xs_exact, Frad_over_c_exact, Frad_exact_args);
-	}
-	matplotlibcpp::xlabel("length x (dimensionless)");
-	matplotlibcpp::ylabel("radiation flux (dimensionless)");
-	matplotlibcpp::legend();
-	matplotlibcpp::save("./radshock_flux.pdf");
-
 	// gas density
 	std::map<std::string, std::string> gasdens_args, gasvx_args;
 	gasdens_args["label"] = "gas density";
@@ -429,26 +409,6 @@ auto testproblem_radhydro_shock() -> int
 	matplotlibcpp::ylabel("mass density (dimensionless)");
 	matplotlibcpp::legend();
 	matplotlibcpp::save("./radshock_gasdensity.pdf");
-
-	// energy density
-	matplotlibcpp::clf();
-
-	std::map<std::string, std::string> Erad_args;
-	Erad_args["label"] = "radiation energy density";
-	Erad_args["color"] = "black";
-	matplotlibcpp::plot(xs, Erad, Erad_args);
-
-	std::map<std::string, std::string> Egas_args;
-	Egas_args["label"] = "gas energy density";
-	Egas_args["color"] = "red";
-	matplotlibcpp::plot(xs, Egas, Egas_args);
-
-	matplotlibcpp::xlabel("length x (dimensionless)");
-	matplotlibcpp::ylabel("radiation energy density (dimensionless)");
-	matplotlibcpp::legend();
-	matplotlibcpp::title(
-	    fmt::format("time t = {:.4g}", hydro_system.time()));
-	matplotlibcpp::save("./radshock_energy.pdf");
 
 	// Cleanup and exit
 	std::cout << "Finished." << std::endl;

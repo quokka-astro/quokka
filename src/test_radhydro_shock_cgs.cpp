@@ -144,7 +144,6 @@ auto testproblem_radhydro_shock() -> int
 
 	const double initial_dtau = 1.0e-3;	  // dimensionless time
 	const double max_dtau = 1.0e-3;		  // dimensionless time
-	const double max_tau = 1.0 * (Lx / c_s0); // dimensionless time
 
 	const double initial_dt = initial_dtau / c_s0;
 	const double max_dt = max_dtau / c_s0;
@@ -315,7 +314,7 @@ auto testproblem_radhydro_shock() -> int
 	std::string filename = "../../extern/LowrieEdwards/shock.txt";
 	std::ifstream fstream(filename, std::ios::in);
 
-	const double error_tol = 0.003;
+	const double error_tol = 0.005;
 	double rel_error = NAN;
 	if(fstream.is_open()) {
 
@@ -340,7 +339,6 @@ auto testproblem_radhydro_shock() -> int
 				Trad_exact.push_back(Trad_val);
 				Frad_over_c_exact.push_back(Frad_over_c_val);
 			}
-			//std::cout << "solution " << x_val << "\t" << Tmat_val << "\t" << Trad_val << std::endl;
 		}
 
 		// compute error norm
@@ -398,26 +396,7 @@ auto testproblem_radhydro_shock() -> int
 	matplotlibcpp::ylabel("temperature (dimensionless)");
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", hydro_system.time()));
-	matplotlibcpp::save("./radshock_temperature.pdf");
-
-#if 0
-	// radiation flux
-	std::map<std::string, std::string> gasmom_args, radmom_args, Frad_exact_args;
-	//gasmom_args["label"] = "gas momentum density";
-	radmom_args["label"] = "Frad";
-	Frad_exact_args["label"] = "Frad (diffusion ODE)";
-
-	matplotlibcpp::clf();
-	//matplotlibcpp::plot(xs, x1GasMomentum, gasmom_args);
-	matplotlibcpp::plot(xs, Frad_over_c, radmom_args);
-	if(fstream.is_open()) {
-		matplotlibcpp::plot(xs_exact, Frad_over_c_exact, Frad_exact_args);
-	}
-	matplotlibcpp::xlabel("length x (dimensionless)");
-	matplotlibcpp::ylabel("radiation flux (dimensionless)");
-	matplotlibcpp::legend();
-	matplotlibcpp::save("./radshock_flux.pdf");
-#endif
+	matplotlibcpp::save("./radshock_cgs_temperature.pdf");
 
 	// gas density
 	std::map<std::string, std::string> gasdens_args, gasvx_args;
@@ -433,29 +412,7 @@ auto testproblem_radhydro_shock() -> int
 	matplotlibcpp::xlabel("length x (cm)");
 	matplotlibcpp::ylabel("mass density (g/cc)");
 	matplotlibcpp::legend();
-	matplotlibcpp::save("./radshock_gasdensity.pdf");
-
-#if 0
-	// energy density
-	matplotlibcpp::clf();
-
-	std::map<std::string, std::string> Erad_args;
-	Erad_args["label"] = "radiation energy density";
-	Erad_args["color"] = "black";
-	matplotlibcpp::plot(xs, Erad, Erad_args);
-
-	std::map<std::string, std::string> Egas_args;
-	Egas_args["label"] = "gas energy density";
-	Egas_args["color"] = "red";
-	matplotlibcpp::plot(xs, Egas, Egas_args);
-
-	matplotlibcpp::xlabel("length x (dimensionless)");
-	matplotlibcpp::ylabel("radiation energy density (dimensionless)");
-	matplotlibcpp::legend();
-	matplotlibcpp::title(
-	    fmt::format("time t = {:.4g}", hydro_system.time()));
-	matplotlibcpp::save("./radshock_energy.pdf");
-#endif
+	matplotlibcpp::save("./radshock_cgs_gasdensity.pdf");
 
 	// Cleanup and exit
 	std::cout << "Finished." << std::endl;

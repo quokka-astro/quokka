@@ -11,8 +11,8 @@
 
 // external headers
 #include "matplotlibcpp.h"
+#include <cmath>
 #include <fmt/format.h>
-#include <fstream>
 
 // internal headers
 #include "athena_arrays.hpp"
@@ -23,6 +23,6 @@ extern "C" {
 }
 
 // function definitions
-auto testproblem_radiation_classical_marshak() -> int;
+auto testproblem_radiation_marshak() -> int;
 
 #endif // TEST_RADIATION_MARSHAK_HPP_
