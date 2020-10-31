@@ -31,6 +31,9 @@ auto main() -> int
 struct ShockProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
+// parameters taken from Section 9.5 of Skinner et al. (2019)
+// [The Astrophysical Journal Supplement Series, 241:7 (27pp), 2019 March]
+
 constexpr double a_rad = 7.5646e-15; // erg cm^-3 K^-4
 constexpr double c = 2.99792458e10;	 // cm s^-1
 constexpr double k_B = 1.380658e-16; // erg K^-1
