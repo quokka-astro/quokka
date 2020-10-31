@@ -124,7 +124,7 @@ cs0 = 1.0/sqrt(3.0*sigma_a)
 # when setting c=1 and cs0 appropriately, Frad is normalized wrong by several orders of magnitude...
 
 #c = 100.0 * (M0 + cs0)
-L = 10.0 * (1.0 / sigma_a) * (c/cs0)
+L = 9.112876254180604 * (1.0 / sigma_a) * (c/cs0)
 kappa_opacity = sigma_a * (cs0 / c)
 kappa_diffusivity = c / (3.0*kappa_opacity*cs0)
 kappa = kappa_diffusivity
@@ -304,7 +304,10 @@ Frad += (4./3.)*(vel/c)*Erad
 reduced_Frad = ( Frad / Erad ) * (1.0 / c)
 print(f"reduced flux min/max = {np.min(reduced_Frad)} {np.max(reduced_Frad)}")
 
-x += 0.85*L
+pos_offset = (0.0132 / 0.01575)*L
+x += pos_offset
+x_A += pos_offset
+x_B += pos_offset
 np.savetxt("./shock.txt", np.c_[x, rho, vel, Tmat, Trad, Frad/c], header="x rho vel Tmat Trad Frad/c")
 
 #plt.plot(x_A[A_mask], rho_A[A_mask], color='blue', label='density')
@@ -320,14 +323,16 @@ plt.plot(x_B[B_mask], Trad_B[B_mask], '-.', color='black')
 import pandas as pd
 fornax = pd.read_csv("./Trad_fig30.csv")
 fornax['x'] *= 1.0e-2
+fornax['x'] += pos_offset
 plt.plot(fornax['x'], fornax['Trad'], '.', color='red', label='Fornax Trad')
 fornax = pd.read_csv("./Tmat_fig30.csv")
 fornax['x'] *= 1.0e-2
+fornax['x'] += pos_offset
 plt.plot(fornax['x'], fornax['Tmat'], '.', color='blue', label='Fornax Tmat')
 
-extend_B = 0.05
-#plt.plot([x_B[B_mask][0], x_B[B_mask][0] + extend_B], np.ones(2)*rho_B[B_mask][0], color='blue')
-plt.plot([x_B[B_mask][0], x_B[B_mask][0] + extend_B], np.ones(2)*T_B[B_mask][0], color='black')
+#extend_B = 0.05
+##plt.plot([x_B[B_mask][0], x_B[B_mask][0] + extend_B], np.ones(2)*rho_B[B_mask][0], color='blue')
+#plt.plot([x_B[B_mask][0], x_B[B_mask][0] + extend_B], np.ones(2)*T_B[B_mask][0], color='black')
 
 plot_jump = True
 if plot_jump:
@@ -399,7 +404,7 @@ plt.title(f"M0 = {M0}, P0 = {P0}, kappa = {kappa:.3f}, sigma_a = {sigma_a:.1e}")
 #plt.ylim(1.25, 2.5)
 
 # Mach 3 plot, reduced dimensionless speed of light
-plt.xlim((-2./3.)*L, (1./3.)*L)
+plt.xlim(0., L)
 plt.ylim(1, 4.5)
 
 #plt.tight_layout()

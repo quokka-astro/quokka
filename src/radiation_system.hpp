@@ -510,6 +510,8 @@ void RadSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 		// in the star region, so F = F_star
 		F = F_star;
 
+		// do NOT add artificial viscosity here!!
+
 		// check states are valid
 		assert(!std::isnan(F[0])); // NOLINT
 		assert(!std::isnan(F[1])); // NOLINT

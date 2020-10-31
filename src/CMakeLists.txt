@@ -21,7 +21,19 @@ include_directories(${PYTHON_INCLUDE_DIRS})
 include_directories(${Kokkos_INCLUDE_DIRS_RET})
 include_directories(${fmt_INCLUDE_DIRS_RET})
 
+add_executable(test_radiation_marshak_cgs radiation_system.cpp hyperbolic_system.cpp test_radiation_marshak_cgs.cpp interpolate.c)
+
+include_directories(${PYTHON_INCLUDE_DIRS})
+include_directories(${Kokkos_INCLUDE_DIRS_RET})
+include_directories(${fmt_INCLUDE_DIRS_RET})
+
 add_executable(test_radhydro_shock radiation_system.cpp hydro_system.cpp hyperbolic_system.cpp test_radhydro_shock.cpp interpolate.c)
+
+include_directories(${PYTHON_INCLUDE_DIRS})
+include_directories(${Kokkos_INCLUDE_DIRS_RET})
+include_directories(${fmt_INCLUDE_DIRS_RET})
+
+add_executable(test_radhydro_shock_cgs radiation_system.cpp hydro_system.cpp hyperbolic_system.cpp test_radhydro_shock_cgs.cpp interpolate.c)
 
 include_directories(${PYTHON_INCLUDE_DIRS})
 include_directories(${Kokkos_INCLUDE_DIRS_RET})
@@ -63,9 +75,17 @@ target_link_libraries(test_radiation_classical_marshak ${PYTHON_LIBRARY})
 target_link_libraries(test_radiation_classical_marshak kokkos)
 target_link_libraries(test_radiation_classical_marshak fmt::fmt)
 
+target_link_libraries(test_radiation_marshak_cgs ${PYTHON_LIBRARY})
+target_link_libraries(test_radiation_marshak_cgs kokkos)
+target_link_libraries(test_radiation_marshak_cgs fmt::fmt)
+
 target_link_libraries(test_radhydro_shock ${PYTHON_LIBRARY})
 target_link_libraries(test_radhydro_shock kokkos)
 target_link_libraries(test_radhydro_shock fmt::fmt)
+
+target_link_libraries(test_radhydro_shock_cgs ${PYTHON_LIBRARY})
+target_link_libraries(test_radhydro_shock_cgs kokkos)
+target_link_libraries(test_radhydro_shock_cgs fmt::fmt)
 
 target_link_libraries(test_hydro_shocktube ${PYTHON_LIBRARY})
 target_link_libraries(test_hydro_shocktube kokkos)
