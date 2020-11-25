@@ -310,7 +310,7 @@ auto testproblem_radhydro_shock() -> int
 	std::string filename = "../../extern/LowrieEdwards/shock.txt";
 	std::ifstream fstream(filename, std::ios::in);
 
-	const double error_tol = 0.005;
+	const double error_tol = 0.015;
 	double rel_error = NAN;
 	if(fstream.is_open()) {
 

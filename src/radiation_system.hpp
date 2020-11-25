@@ -712,7 +712,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &cons,
 		cons(x1GasMomentum_index, i) += dx1Momentum;
 
 		// 4. Update kinetic energy of gas
-		// [ something buggy here ]
 
 		const double dEkin = (vx0 * dx1Momentum);	// modify in 3d
 		cons(gasEnergy_index, i) += dEkin;
