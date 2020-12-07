@@ -1,5 +1,5 @@
-#ifndef TEST_RADIATION_MARSHAK_HPP_ // NOLINT
-#define TEST_RADIATION_MARSHAK_HPP_
+#ifndef TEST_RADIATION_MARSHAK_CGS_HPP_ // NOLINT
+#define TEST_RADIATION_MARSHAK_CGS_HPP_
 //==============================================================================
 // TwoMomentRad - a radiation transport library for patch-based AMR codes
 // Copyright 2020 Benjamin Wibking.
@@ -25,4 +25,4 @@ extern "C" {
 // function definitions
 auto testproblem_radiation_marshak_cgs() -> int;
 
-#endif // TEST_RADIATION_MARSHAK_HPP_
+#endif // TEST_RADIATION_MARSHAK_CGS_HPP_
