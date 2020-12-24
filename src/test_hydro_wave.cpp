@@ -51,6 +51,9 @@ void HyperbolicSystem<WaveProblem>::FillGhostZones(array_t &cons)
 
 int testproblem_hydro_wave()
 {
+	// Based on the ATHENA test page:
+	// https://www.astro.princeton.edu/~jstone/Athena/tests/linear-waves/linear-waves.html
+
 	// Problem parameters
 
 	const int nx = 256;
