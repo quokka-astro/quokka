@@ -13,4 +13,4 @@ include(CTest)
 
 find_program(CLANG_TIDY_EXE
   NAMES "clang-tidy")
-set(CMAKE_CXX_CLANG_TIDY "${CLANG_TIDY_EXE};-checks='*,-fuchsia-*,-misc-non-private-member-variables-in-classes,-cppcoreguidelines-non-private-member-variables-in-classes,-google-runtime-references,-readability-magic-numbers,-cppcoreguidelines-avoid-magic-numbers")
+set(CMAKE_CXX_CLANG_TIDY "${CLANG_TIDY_EXE} -checks='*,-fuchsia-*,-misc-non-private-member-variables-in-classes,-cppcoreguidelines-non-private-member-variables-in-classes,-google-runtime-references,-readability-magic-numbers,-cppcoreguidelines-avoid-magic-numbers")

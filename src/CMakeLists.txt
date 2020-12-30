@@ -3,105 +3,43 @@ add_subdirectory(${TwoMomentRad_SOURCE_DIR}/extern/fmt ${TwoMomentRad_BINARY_DIR
 
 find_package(PythonLibs REQUIRED)
 
+include_directories(${PYTHON_INCLUDE_DIRS})
+include_directories(${Kokkos_INCLUDE_DIRS_RET})
+include_directories(${fmt_INCLUDE_DIRS_RET})
+
+link_libraries(${PYTHON_LIBRARY})
+link_libraries(kokkos)
+link_libraries(fmt::fmt)
+
+function(add_clang_static_analysis target)
+    get_target_property(SRCs ${target} SOURCES)
+    add_library(${target}_analyze OBJECT ${SRCs})
+    target_include_directories(${target}_analyze PRIVATE ${PYTHON_INCLUDE_DIRS})
+    target_include_directories(${target}_analyze PRIVATE ${Kokkos_INCLUDE_DIRS_RET} ${fmt_INCLUDE_DIRS_RET})
+    target_compile_options(${target}_analyze BEFORE PRIVATE "--analyze")
+endfunction()
+
 add_executable(test_radiation_matter_coupling radiation_system.cpp hyperbolic_system.cpp test_radiation_matter_coupling.cpp interpolate.c)
-
-include_directories(${PYTHON_INCLUDE_DIRS})
-include_directories(${Kokkos_INCLUDE_DIRS_RET})
-include_directories(${fmt_INCLUDE_DIRS_RET})
-
 add_executable(test_radiation_SuOlson radiation_system.cpp hyperbolic_system.cpp test_radiation_SuOlson.cpp interpolate.c)
-
-include_directories(${PYTHON_INCLUDE_DIRS})
-include_directories(${Kokkos_INCLUDE_DIRS_RET})
-include_directories(${fmt_INCLUDE_DIRS_RET})
-
 add_executable(test_radiation_marshak radiation_system.cpp hyperbolic_system.cpp test_radiation_marshak.cpp interpolate.c)
-
-include_directories(${PYTHON_INCLUDE_DIRS})
-include_directories(${Kokkos_INCLUDE_DIRS_RET})
-include_directories(${fmt_INCLUDE_DIRS_RET})
-
 add_executable(test_radiation_marshak_cgs radiation_system.cpp hyperbolic_system.cpp test_radiation_marshak_cgs.cpp interpolate.c)
-
-include_directories(${PYTHON_INCLUDE_DIRS})
-include_directories(${Kokkos_INCLUDE_DIRS_RET})
-include_directories(${fmt_INCLUDE_DIRS_RET})
-
 add_executable(test_radhydro_shock radiation_system.cpp hydro_system.cpp hyperbolic_system.cpp test_radhydro_shock.cpp interpolate.c)
-
-include_directories(${PYTHON_INCLUDE_DIRS})
-include_directories(${Kokkos_INCLUDE_DIRS_RET})
-include_directories(${fmt_INCLUDE_DIRS_RET})
-
 add_executable(test_radhydro_shock_cgs radiation_system.cpp hydro_system.cpp hyperbolic_system.cpp test_radhydro_shock_cgs.cpp interpolate.c)
-
-include_directories(${PYTHON_INCLUDE_DIRS})
-include_directories(${Kokkos_INCLUDE_DIRS_RET})
-include_directories(${fmt_INCLUDE_DIRS_RET})
-
 add_executable(test_hydro_shocktube hydro_system.cpp hyperbolic_system.cpp test_hydro_shocktube.cpp interpolate.c)
-
-include_directories(${PYTHON_INCLUDE_DIRS})
-include_directories(${Kokkos_INCLUDE_DIRS_RET})
-include_directories(${fmt_INCLUDE_DIRS_RET})
-
 add_executable(test_advection linear_advection.cpp hyperbolic_system.cpp test_advection.cpp interpolate.c)
-
-include_directories(${PYTHON_INCLUDE_DIRS})
-include_directories(${Kokkos_INCLUDE_DIRS_RET})
-include_directories(${fmt_INCLUDE_DIRS_RET})
-
 add_executable(test_hydro_wave hydro_system.cpp hyperbolic_system.cpp test_hydro_wave.cpp)
-
-include_directories(${PYTHON_INCLUDE_DIRS})
-include_directories(${Kokkos_INCLUDE_DIRS_RET})
-include_directories(${fmt_INCLUDE_DIRS_RET})
-
 add_executable(test_radiation_pulse hyperbolic_system.cpp radiation_system.cpp test_radiation_pulse.cpp interpolate.c)
 
-include_directories(${PYTHON_INCLUDE_DIRS})
-include_directories(${Kokkos_INCLUDE_DIRS_RET})
-include_directories(${fmt_INCLUDE_DIRS_RET})
-
-target_link_libraries(test_radiation_matter_coupling ${PYTHON_LIBRARY})
-target_link_libraries(test_radiation_matter_coupling kokkos)
-target_link_libraries(test_radiation_matter_coupling fmt::fmt)
-
-target_link_libraries(test_radiation_SuOlson ${PYTHON_LIBRARY})
-target_link_libraries(test_radiation_SuOlson kokkos)
-target_link_libraries(test_radiation_SuOlson fmt::fmt)
-
-target_link_libraries(test_radiation_marshak ${PYTHON_LIBRARY})
-target_link_libraries(test_radiation_marshak kokkos)
-target_link_libraries(test_radiation_marshak fmt::fmt)
-
-target_link_libraries(test_radiation_marshak_cgs ${PYTHON_LIBRARY})
-target_link_libraries(test_radiation_marshak_cgs kokkos)
-target_link_libraries(test_radiation_marshak_cgs fmt::fmt)
-
-target_link_libraries(test_radhydro_shock ${PYTHON_LIBRARY})
-target_link_libraries(test_radhydro_shock kokkos)
-target_link_libraries(test_radhydro_shock fmt::fmt)
-
-target_link_libraries(test_radhydro_shock_cgs ${PYTHON_LIBRARY})
-target_link_libraries(test_radhydro_shock_cgs kokkos)
-target_link_libraries(test_radhydro_shock_cgs fmt::fmt)
-
-target_link_libraries(test_hydro_shocktube ${PYTHON_LIBRARY})
-target_link_libraries(test_hydro_shocktube kokkos)
-target_link_libraries(test_hydro_shocktube fmt::fmt)
-
-target_link_libraries(test_advection ${PYTHON_LIBRARY})
-target_link_libraries(test_advection kokkos)
-target_link_libraries(test_advection fmt::fmt)
-
-target_link_libraries(test_hydro_wave ${PYTHON_LIBRARY})
-target_link_libraries(test_hydro_wave kokkos)
-target_link_libraries(test_hydro_wave fmt::fmt)
-
-target_link_libraries(test_radiation_pulse ${PYTHON_LIBRARY})
-target_link_libraries(test_radiation_pulse kokkos)
-target_link_libraries(test_radiation_pulse fmt::fmt)
+add_clang_static_analysis(test_radiation_matter_coupling)
+add_clang_static_analysis(test_radiation_SuOlson)
+add_clang_static_analysis(test_radiation_marshak)
+add_clang_static_analysis(test_radiation_marshak_cgs)
+add_clang_static_analysis(test_radhydro_shock)
+add_clang_static_analysis(test_radhydro_shock_cgs)
+add_clang_static_analysis(test_hydro_shocktube)
+add_clang_static_analysis(test_advection)
+add_clang_static_analysis(test_hydro_wave)
+add_clang_static_analysis(test_radiation_pulse)
 
 include(CTest)
 add_test(NAME MatterEnergyExchange COMMAND test_radiation_matter_coupling)
