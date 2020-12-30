@@ -1,0 +1,8 @@
+.. Bibliography
+
+Bibliography
+============
+
+.. bibliography::
+   :cited:
+   

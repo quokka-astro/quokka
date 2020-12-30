@@ -13,6 +13,8 @@ This is a library for computing radiation hydrodynamics for patch-based AMR code
 
    about
    installation
+   equations
+   bibliography
    
    
 Indices and tables
