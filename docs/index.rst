@@ -6,7 +6,10 @@
 Welcome to TwoMomentRad's documentation!
 ========================================
 
-This is a library for computing radiation hydrodynamics for patch-based AMR codes.
+TwoMomentRad is a high-resolution shock capturing AMR radiation hydrodynamics code using the AMReX
+library :cite:`AMReX_JOSS` to provide patch-based adaptive mesh functionality.
+We take advantage of the C++ loop abstractions in AMReX in order to
+run with high performance on either CPUs, NVIDIA GPUs, or AMD GPUs.
 
 .. toctree::
    :maxdepth: 2

@@ -36,6 +36,7 @@ master_doc = 'index'
 extensions = [ "breathe", "sphinxcontrib.bibtex" ]
 
 bibtex_bibfiles = ["references.bib"]
+#bibtex_default_style = "plain"
 
 breathe_projects = {
     "TwoMomentRad": "./doxyoutput/xml"
