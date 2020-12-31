@@ -4,3 +4,6 @@
 [submodule "src/fmt"]
 	path = extern/fmt
 	url = https://github.com/fmtlib/fmt.git
+[submodule "extern/amrex"]
+	path = extern/amrex
+	url = git@github.com:AMReX-Codes/amrex.git
