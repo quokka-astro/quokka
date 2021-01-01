@@ -315,12 +315,14 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(
 			// grouped to preserve exact symmetry in floating-point
 			// arithmetic, following Athena++.
 
-			// const double coef_1 = (7. / 12.);
-			// const double coef_2 = (-1. / 12.);
-			// const double a_jhalf =
-			//    (coef_1 * q(n, i) + coef_2 * q(n, i + 1)) +
-			//    (coef_1 * q(n, i - 1) + coef_2 * q(n, i - 2));
-
+			const double coef_1 = (7. / 12.);
+			const double coef_2 = (-1. / 12.);
+			const double interface =
+				(coef_1 * q(n, i) + coef_2 * q(n, i + 1)) +
+				(coef_1 * q(n, i - 1) + coef_2 * q(n, i - 2));
+#if 0
+			// something is wrong here, this causes weird oscillations in Shu-Osher problem
+			// -- do not use in production! --
 			// Compute limited slopes as in C&W original method
 			const double dq0 =
 			    MC(q(n, i + 1) - q(n, i), q(n, i) - q(n, i - 1));
@@ -332,7 +334,7 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(
 			const double interface = q(n, i - 1) +
 						 0.5 * (q(n, i) - q(n, i - 1)) -
 						 (1. / 6.) * (dq0 - dq1);
-
+#endif
 			// a_R,(i-1) in C&W
 			x1LeftState_(n, i) = interface;
 
@@ -388,11 +390,13 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(
 			// paper. Equivalent to step 4b in Athena++
 			// [ppm_simple.cpp].
 
-			const double qa =
-			    dq_plus * dq_minus; // interface extrema
+			const double qa = dq_plus * dq_minus; // interface extrema
 
 			if ((qa <= 0.0)) { // local extremum
-
+#if 0
+				// causes subtle, but very weird, oscillations
+				// in the Shu-Osher test problem.
+				// (not recommended)
 				const double dq0 = MC(q(n, i + 1) - q(n, i),
 						      q(n, i) - q(n, i - 1));
 
@@ -400,10 +404,10 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(
 				//     [Living Rev Comput Astrophys (2017) 3:2]
 				new_a_minus = a - 0.5 * dq0;
 				new_a_plus = a + 0.5 * dq0;
-
+#endif
 				// original C&W method for this case
-				//new_a_minus = a;
-				//new_a_plus = a;
+				new_a_minus = a;
+				new_a_plus = a;
 
 			} else { // no local extrema
 
@@ -420,6 +424,7 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(
 				    2.0 * std::abs(dq_minus)) {
 					new_a_plus = a + 2.0 * dq_minus;
 				}
+
 			}
 
 			x1RightState_(n, i) = new_a_minus;
