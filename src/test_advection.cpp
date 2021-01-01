@@ -45,7 +45,7 @@ void write_density(LinearAdvectionSystem<problem_t> &advection_system)
 	std::cout << "\n";
 }
 
-int testproblem_advection()
+auto testproblem_advection() -> int
 {
 	// Problem parameters
 
@@ -86,10 +86,10 @@ int testproblem_advection()
 		d_initial.at(i) = advection_system.density(i + nghost);
 	}
 
-	const auto initial_mass = advection_system.ComputeMass();
+	//const auto initial_mass = advection_system.ComputeMass();
 
 	// Main time loop
-	int j;
+	int j = 0;
 	for (j = 0; j < max_timesteps; ++j) {
 		if (advection_system.time() >= max_time) {
 			break;
@@ -100,9 +100,9 @@ int testproblem_advection()
 	std::cout << "timestep " << j << "; t = " << advection_system.time() << "\n";
 	//write_density(advection_system);
 
-	const auto current_mass = advection_system.ComputeMass();
+	//const auto current_mass = advection_system.ComputeMass();
 	//std::cout << "Total mass = " << current_mass << "\n";
-	const auto mass_deficit = std::abs(current_mass - initial_mass);
+	//const auto mass_deficit = std::abs(current_mass - initial_mass);
 	//std::cout << "Mass nonconservation = " << mass_deficit << "\n";
 	//assert(mass_deficit < atol); // NOLINT
 
@@ -130,7 +130,8 @@ int testproblem_advection()
 	}
 
 	// Plot results
-	std::map<std::string, std::string> d_initial_args, d_final_args;
+	std::map<std::string, std::string> d_initial_args;
+	std::map<std::string, std::string> d_final_args;
 	d_initial_args["label"] = "density (initial)";
 	d_final_args["label"] = "density (final)";
 

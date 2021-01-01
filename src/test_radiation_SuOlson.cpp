@@ -137,8 +137,7 @@ auto testproblem_radiation_marshak() -> int
 	for (int i = nghost; i < nx + nghost; ++i) {
 		const auto idx_value = static_cast<double>(i - nghost);
 		const double xl = Lx * ((idx_value) / static_cast<double>(nx));
-		const double xr =
-		    Lx * ((idx_value + 1.0) / static_cast<double>(nx));
+		const double xr = Lx * ((idx_value + 1.0) / static_cast<double>(nx));
 
 		rad_system.set_radEnergy(i) = initial_Erad;
 		rad_system.set_x1RadFlux(i) = 0.0;
@@ -149,7 +148,7 @@ auto testproblem_radiation_marshak() -> int
 		if ((xl < x0) && (xr <= x0)) {
 			vol_frac = 1.0;
 		} else if ((xl < x0) && (xr > x0)) {
-			const double vol_frac = (x0 - xl) / (xr - xl);
+			vol_frac = (x0 - xl) / (xr - xl);
 			assert(vol_frac > 0.0); // NOLINT
 		}
 

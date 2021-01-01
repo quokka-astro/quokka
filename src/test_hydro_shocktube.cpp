@@ -30,7 +30,7 @@ auto main() -> int
 	return result;
 }
 
-int testproblem_hydro_shocktube()
+auto testproblem_hydro_shocktube() -> int
 {
 	// Problem parameters
 
@@ -94,7 +94,7 @@ int testproblem_hydro_shocktube()
 		P_initial.at(i) = hydro_system.pressure(i);
 	}
 
-	const auto initial_mass = hydro_system.ComputeMass();
+	//const auto initial_mass = hydro_system.ComputeMass();
 
 	// Main time loop
 
@@ -128,9 +128,10 @@ int testproblem_hydro_shocktube()
 
 	std::string filename = "../../extern/ppm1d/output";
 	std::ifstream fstream(filename, std::ios::in);
-	assert(fstream.is_open());
+	assert(fstream.is_open()); // NOLINT
 
-	std::string header, blank_line;
+	std::string header;
+	std::string blank_line;
 	std::getline(fstream, header);
 	std::getline(fstream, blank_line);
 
@@ -195,7 +196,9 @@ int testproblem_hydro_shocktube()
 	matplotlibcpp::clf();
 	//matplotlibcpp::ylim(0.0, 11.0);
 
-	std::map<std::string, std::string> d_args, dexact_args;
+	using mpl_arg = std::map<std::string, std::string>;
+	mpl_arg d_args;
+	mpl_arg dexact_args;
 	d_args["label"] = "density";
 	dexact_args["label"] = "density (exact solution)";
 	matplotlibcpp::plot(xs, d, d_args);

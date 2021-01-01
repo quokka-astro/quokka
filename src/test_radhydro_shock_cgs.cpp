@@ -98,8 +98,6 @@ template <> void HydroSystem<ShockProblem>::FillGhostZones(array_t &cons)
 {
 	// x1 left side boundary (shock)
 	const double xmom_L = cons(x1Momentum_index, nghost_);
-	const double dens_L = cons(density_index, nghost_);
-	const double vx_L = xmom_L / dens_L;
 
 	for (int i = 0; i < nghost_; ++i) {
 		cons(density_index, i) = rho0;
@@ -109,8 +107,6 @@ template <> void HydroSystem<ShockProblem>::FillGhostZones(array_t &cons)
 
 	// x1 right side boundary (shock)
 	const double xmom_R = cons(x1Momentum_index, nghost_ + nx_ - 1);
-	const double dens_R = cons(density_index, nghost_ + nx_ - 1);
-	const double vx_R = xmom_R / dens_R;
 
 	for (int i = nghost_ + nx_; i < nghost_ + nx_ + nghost_; ++i) {
 		cons(density_index, i) = rho1;
