@@ -17,6 +17,7 @@ run with high performance on either CPUs, NVIDIA GPUs, or AMD GPUs.
    about
    installation
    equations
+   tests/radshock
    bibliography
    
    
