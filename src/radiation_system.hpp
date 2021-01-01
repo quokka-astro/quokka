@@ -582,6 +582,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &cons,
 	for (int i = range.first; i < range.second; ++i) {
 		const double dt = dt_;
 		const double c = c_light_;
+		const double chat = c_hat_;
 		const double a_rad = radiation_constant_;
 
 		// load fluid properties
@@ -599,7 +600,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &cons,
 		assert(Egas0 > 0.0); // NOLINT
 		assert(Erad0 > 0.0); // NOLINT
 
-		const double Etot0 = Egas0 + Erad0;
+		const double Etot0 = Egas0 + (c / chat)*Erad0;
 
 		// BEGIN NEWTON-RAPHSON LOOP
 		double F_G = NAN;
@@ -635,10 +636,10 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &cons,
 			// compute opacity, emissivity
 			kappa =
 			    RadSystem<problem_t>::ComputeOpacity(rho, T_gas);
-			fourPiB = c * a_rad * std::pow(T_gas, 4);
+			fourPiB = chat * a_rad * std::pow(T_gas, 4);
 
 			// constant radiation energy source term
-			Src = dt * (c * radEnergySource_(i));
+			Src = dt * (chat * radEnergySource_(i));
 
 			// compute derivatives w/r/t T_gas
 			const double dB_dTgas = (4.0 * fourPiB) / T_gas;
@@ -647,8 +648,8 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &cons,
 				rho, T_gas);
 
 			// compute residuals
-			rhs = dt * (rho * kappa) * (fourPiB - c * Erad_guess);
-			F_G = (Egas_guess - Egas0) + rhs;
+			rhs = dt * (rho * kappa) * (fourPiB - chat * Erad_guess);
+			F_G = (Egas_guess - Egas0) + ((c / chat) * rhs);
 			F_R = (Erad_guess - Erad0) - (rhs + Src);
 
 			// check if converged
@@ -664,12 +665,12 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &cons,
 			drhs_dEgas =
 			    (rho * dt / c_v) *
 			    (kappa * dB_dTgas +
-			     dkappa_dTgas * (fourPiB - c * Erad_guess));
+			     dkappa_dTgas * (fourPiB - chat * Erad_guess));
 
-			dFG_dEgas = 1.0 + drhs_dEgas;
+			dFG_dEgas = 1.0 + (c / chat)*drhs_dEgas;
 			dFG_dErad = dt * (-(rho * kappa) * c);
 			dFR_dEgas = -drhs_dEgas;
-			dFR_dErad = 1.0 + dt * ((rho * kappa) * c);
+			dFR_dErad = 1.0 + dt * ((rho * kappa) * chat);
 
 			// Update variables
 			eta = -dFR_dEgas / dFG_dEgas;
@@ -698,7 +699,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &cons,
 
 		const double Frad_x = cons(x1RadFlux_index, i);
 		const double new_Frad_x =
-		    (1. / (1.0 + (rho * kappa) * c * dt)) * Frad_x;
+		    (1. / (1.0 + (rho * kappa) * chat * dt)) * Frad_x;
 
 		cons(x1RadFlux_index, i) = new_Frad_x;
 
@@ -707,7 +708,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &cons,
 		//			transform?]
 
 		const double dF_x = new_Frad_x - Frad_x;
-		const double dx1Momentum = -dF_x / (c * c);
+		const double dx1Momentum = -dF_x / (c * chat);
 
 		cons(x1GasMomentum_index, i) += dx1Momentum;
 

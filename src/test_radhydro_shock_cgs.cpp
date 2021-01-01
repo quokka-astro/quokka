@@ -57,6 +57,8 @@ constexpr double T1 = 7.98e6; // K
 constexpr double rho1 = 17.1; // g cm^-3
 constexpr double v1 = 1.73e7; // cm s^-1
 
+constexpr double chat = 10.0*(v0 + c_s0); // reduced speed of light
+
 const double Erad0 = a_rad * std::pow(T0, 4); // erg cm^-3
 constexpr double Egas0 = rho0 * c_v * T0; // erg cm^-3
 const double Erad1 = a_rad * std::pow(T1, 4); // erg cm^-3
@@ -129,7 +131,7 @@ template <> void RadSystem<ShockProblem>::AdvanceTimestep(const double hydro_dt)
 		AdvanceTimestepRK2(dt_substep);
 		++Nsubsteps;
 	}
-	std::cout << "\tAdvanced radiation subsystem with " << Nsubsteps << " substeps.\n";
+	//std::cout << "\tAdvanced radiation subsystem with " << Nsubsteps << " substeps.\n";
 	assert(time_ == advance_to_time); // NOLINT
 }
 
@@ -138,8 +140,8 @@ auto testproblem_radhydro_shock() -> int
 	// Problem parameters
 
 	const int max_timesteps = 2e4;
-	const double CFL_number = 0.8;
-	const int nx = 512;	   // minimum resolution given in Skinner et al.
+	const double CFL_number = 0.2;
+	const int nx = 256;
 	const double Lx = 0.01575; // cm
 
 	const double initial_dtau = 1.0e-3;	  // dimensionless time
@@ -155,7 +157,9 @@ auto testproblem_radhydro_shock() -> int
 	    {.nx = nx, .lx = Lx, .cflNumber = CFL_number});
 
 	rad_system.set_radiation_constant(a_rad);
-	rad_system.set_c_light(c);
+	//rad_system.set_c_light(c);
+	rad_system.c_light_ = c;
+	rad_system.c_hat_ = chat;
 	rad_system.mean_molecular_mass_ = mu;
 	rad_system.boltzmann_constant_ = k_B;
 	rad_system.gamma_ = gamma_gas;
@@ -190,7 +194,7 @@ auto testproblem_radhydro_shock() -> int
 
 	const auto Erad0 = rad_system.ComputeRadEnergy();
 	const auto Egas0 = hydro_system.ComputeEnergy();
-	const auto Etot0 = Erad0 + Egas0;
+	const auto Etot0 = (c/chat)*Erad0 + Egas0;
 
 	std::cout << "radiation constant (code units) = " << a_rad << "\n";
 	std::cout << "c_light (code units) = " << c << "\n";
@@ -223,8 +227,8 @@ auto testproblem_radhydro_shock() -> int
 		const double computed_dt = hydro_system.ComputeTimestep(this_dtMax);
 		const double this_dt = std::min(computed_dt, dt_expand_factor*dt_prev);
 
-		std::cout << "[timestep " << j << "] ";
-		std::cout << "t = " << hydro_system.time() << "\tdt = " << this_dt << std::endl;
+		//std::cout << "[timestep " << j << "] ";
+		//std::cout << "t = " << hydro_system.time() << "\tdt = " << this_dt << std::endl;
 
 		// Advance hydro subsystem
 		hydro_system.AdvanceTimestepRK2(this_dt);
@@ -248,7 +252,7 @@ auto testproblem_radhydro_shock() -> int
 		// Update previous timestep
 		dt_prev = this_dt;
 
-		std::cout << std::endl;
+		//std::cout << std::endl;
 	}
 
 	std::cout << "Timestep " << j << "; t = " << hydro_system.time()
@@ -256,7 +260,7 @@ auto testproblem_radhydro_shock() -> int
 
 	const auto total_Erad = rad_system.ComputeRadEnergy();
 	const auto total_Egas = hydro_system.ComputeEnergy();
-	const auto total_E = total_Erad + total_Egas;
+	const auto total_E = (c/chat)*total_Erad + total_Egas;
 	const auto Ediff = std::fabs(total_E - Etot0);
 
 	std::cout << "radiation energy = " << total_Erad << "\n";
