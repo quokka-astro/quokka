@@ -60,6 +60,5 @@ the Lorentz-factor local closure of :cite:`Levermore_1984` to compute
 the variable Eddington tensor.
 
 The source terms corresponding to matter-radiation energy exchange are solved implicitly with the method of :cite:`Howell_2003` following
-the hyperbolic subsystem update. The gas momentum update is likewise computed implicitly (and applied symmetrically to the 
-radiation momentum) in order to maintain the correct behavior
-in the asymptotic diffusion limit :cite:`Skinner_2019`.
+the hyperbolic subsystem update. The matter-radiation momentum update is likewise computed implicitly 
+in order to maintain the correct behavior in the asymptotic diffusion limit :cite:`Skinner_2019`.
