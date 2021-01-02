@@ -38,8 +38,7 @@ auto testproblem_hydro_shocktube() -> int
 	const double Lx = 10.0;
 	const double CFL_number = 0.2;
 	const double max_time = 1.8;
-	const double fixed_dt = 2e-4;
-	//const double initial_dt = 1e-5;
+	const double fixed_dt = 1e-4;
 	const int max_timesteps = 20000;
 	const double gamma = 1.4; // ratio of specific heats
 
@@ -112,7 +111,6 @@ auto testproblem_hydro_shocktube() -> int
 	std::vector<double> d(nx);
 	std::vector<double> vx(nx);
 	std::vector<double> P(nx);
-	std::vector<double> e(nx);
 
 	hydro_system.ConservedToPrimitive(hydro_system.consVar_,
 					  std::make_pair(nghost, nghost + nx));
@@ -121,7 +119,6 @@ auto testproblem_hydro_shocktube() -> int
 		d.at(i) = hydro_system.primDensity(i + nghost);
 		vx.at(i) = hydro_system.x1Velocity(i + nghost);
 		P.at(i) = hydro_system.pressure(i + nghost);
-		e.at(i) = P.at(i) / ((gamma - 1.0)*d.at(i));
 	}
 
 #if 0
@@ -129,14 +126,14 @@ auto testproblem_hydro_shocktube() -> int
 	std::vector<double> density_exact;
 	std::vector<double> pressure_exact;
 	std::vector<double> velocity_exact;
-	std::vector<double> eint_exact;
 
-	std::string filename = "../../extern/ppm1d/leblanc.dat";
+	std::string filename = "../../extern/ppm1d/results";
 	std::ifstream fstream(filename, std::ios::in);
 	assert(fstream.is_open());
 
 	std::string header, blank_line;
 	std::getline(fstream, header);
+	std::getline(fstream, blank_line);
 	std::getline(fstream, blank_line);
 
 	for (std::string line; std::getline(fstream, line);) {
@@ -151,15 +148,13 @@ auto testproblem_hydro_shocktube() -> int
 		}
 		auto x = values.at(1);
 		auto density = values.at(2);
-		auto pressure = values.at(3);
-		auto velocity = values.at(4);
-		auto eint = pressure / ( (gamma - 1.0) * density );
+		auto velocity = values.at(3);
+		auto pressure = values.at(4);
 
 		xs_exact.push_back(x);
 		density_exact.push_back(density);
 		pressure_exact.push_back(pressure);
 		velocity_exact.push_back(velocity);
-		eint_exact.push_back(eint);
 	}
 
 	// compute error norm
@@ -167,10 +162,6 @@ auto testproblem_hydro_shocktube() -> int
 	std::vector<double> density_exact_interp(xs.size());
 	interpolate_arrays(xs.data(), density_exact_interp.data(), xs.size(),
 			   		   xs_exact.data(), density_exact.data(), xs_exact.size());
-
-	std::vector<double> eint_exact_interp(xs.size());
-	interpolate_arrays(xs.data(), eint_exact_interp.data(), xs.size(),
-			   		   xs_exact.data(), eint_exact.data(), xs_exact.size());
 
 	double err_norm = 0.;
 	double sol_norm = 0.;
@@ -190,10 +181,9 @@ auto testproblem_hydro_shocktube() -> int
 		status = 1;
 	}
 #endif
-
 	// Plot results
 	matplotlibcpp::clf();
-	matplotlibcpp::ylim(0.0, 5.0);
+	//matplotlibcpp::ylim(0.0, 5.0);
 
 	std::map<std::string, std::string> d_args, dexact_args;
 	d_args["label"] = "density";
