@@ -50,7 +50,7 @@ Solution
 --------
 Since the solution is given assuming radiation diffusion, we set the Eddington factor (as used in the Riemann solver for the radiation moment equations) to a constant value of :math:`1/3` everywhere.
 
-We use the RK2 integrator with a CFL number of 0.2 and a mesh of 256 equal-size zones. After 3 shock crossing times, we obtain a solution for the radiation temperature and matter temperature that agrees to better than 0.5% (in relative L1 norm) with the steady-state ODE solution to the radiation hydrodynamics equations:
+We use the RK2 integrator with a CFL number of 0.2 and a mesh of 256 equally-spaced zones. After 3 shock crossing times, we obtain a solution for the radiation temperature and matter temperature that agrees to better than 0.5% (in relative L1 norm) with the steady-state ODE solution to the radiation hydrodynamics equations:
 
 
 .. figure:: radshock_cgs_temperature.png
