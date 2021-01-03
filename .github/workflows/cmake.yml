@@ -1,6 +1,7 @@
 name: CMake
 
 on: [push]
+runs-on: self-hosted
 
 env:
   # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
