@@ -311,7 +311,7 @@ auto testproblem_radhydro_shock() -> int
 	std::vector<double> Tmat_exact;
 	std::vector<double> Frad_over_c_exact;
 
-	std::string filename = "../../extern/LowrieEdwards/shock.txt";
+	std::string filename = "../extern/LowrieEdwards/shock.txt";
 	std::ifstream fstream(filename, std::ios::in);
 
 	const double error_tol = 0.005;

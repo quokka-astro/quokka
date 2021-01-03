@@ -243,7 +243,7 @@ auto testproblem_radiation_classical_marshak() -> int
 	std::vector<double> Trad_exact;
 	std::vector<double> Tmat_exact;
 
-	std::string filename = "../../extern/SuOlson/100pt_tau10p0.dat";
+	std::string filename = "../extern/SuOlson/100pt_tau10p0.dat";
 	std::ifstream fstream(filename, std::ios::in);
 	assert(fstream.is_open());
 

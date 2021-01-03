@@ -126,7 +126,7 @@ auto testproblem_hydro_shocktube() -> int
 	std::vector<double> pressure_exact;
 	std::vector<double> velocity_exact;
 
-	std::string filename = "../../extern/ppm1d/output";
+	std::string filename = "../extern/ppm1d/output";
 	std::ifstream fstream(filename, std::ios::in);
 	assert(fstream.is_open()); // NOLINT
 
