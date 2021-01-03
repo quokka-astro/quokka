@@ -55,6 +55,7 @@ jobs:
       run: ctest --verbose -C $BUILD_TYPE
       
     - name: Upload test output
+      if: always()
       uses: actions/upload-artifact@v2
       with:
         name: test-results
