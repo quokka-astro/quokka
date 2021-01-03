@@ -44,6 +44,9 @@ jobs:
       # Execute the build.  You can specify a specific target with "--target <NAME>"
       run: cmake --build . --config $BUILD_TYPE
 
+    - name: Create test output directory
+      run: cmake -E make_directory $GITHUB_WORKSPACE/tests
+
     - name: Test
       working-directory: ${{runner.workspace}}/build
       shell: bash
