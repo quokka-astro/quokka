@@ -12,7 +12,8 @@ jobs:
     # well on Windows or Mac.  You can convert this to a matrix build if you need
     # cross-platform coverage.
     # See: https://docs.github.com/en/free-pro-team@latest/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
-    runs-on: ubuntu-20.04
+    #runs-on: ubuntu-20.04
+    runs-on: self-hosted
 
     steps:
     - uses: actions/checkout@v2
@@ -24,8 +25,8 @@ jobs:
       # We'll use this as our working directory for all subsequent commands
       run: cmake -E make_directory ${{runner.workspace}}/build
 
-    - name: Install Python headers
-      run: sudo apt-get install python3-dev python3-numpy python3-matplotlib
+    #- name: Install Python headers
+    #  run: sudo apt-get install python3-dev python3-numpy python3-matplotlib
 
     - name: Configure CMake
       # Use a bash shell so we can use the same syntax for environment variable
