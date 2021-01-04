@@ -483,8 +483,14 @@ void RadSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 		// frozen Eddington tensor approximation, following Balsara
 		// (1999) [JQSRT Vol. 61, No. 5, pp. 617–627, 1999], Eq. 46.
 
-		const double S_L = -c_hat_ * std::sqrt(Tdiag_L + Txx_L);
-		const double S_R = c_hat_ * std::sqrt(Tdiag_R + Txx_R);
+		const double s_L = -c_hat_ * std::sqrt(Tdiag_L + Txx_L);
+		const double s_R = c_hat_ * std::sqrt(Tdiag_R + Txx_R);
+
+		const double S_L = std::min({-c_hat_ * f_L, -c_hat_ * (f_L - chi_L) / (1.0 - f_L),
+					     -c_hat_ * (f_L + chi_L) / (1.0 + f_L), s_L});
+
+		const double S_R = std::max({c_hat_ * f_R, c_hat_ * (f_R - chi_R) / (1.0 - f_R),
+					     c_hat_ * (f_R + chi_R) / (1.0 + f_R), s_R});
 
 		assert(std::abs(S_L) <= c_hat_); // NOLINT
 		assert(std::abs(S_R) <= c_hat_); // NOLINT
@@ -500,9 +506,11 @@ void RadSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 		const std::valarray<double> U_L = {erad_L, Fx_L};
 		const std::valarray<double> U_R = {erad_R, Fx_R};
 
+		const double epsilon = 1.0; // std::min(1.0, 1.0/tau_cell);
+
 		const std::valarray<double> F_star =
 		    (S_R / (S_R - S_L)) * F_L - (S_L / (S_R - S_L)) * F_R +
-		    (S_R * S_L / (S_R - S_L)) * (U_R - U_L);
+		    epsilon * (S_R * S_L / (S_R - S_L)) * (U_R - U_L);
 
 		std::valarray<double> F(2);
 

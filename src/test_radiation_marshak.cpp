@@ -132,7 +132,7 @@ auto testproblem_radiation_classical_marshak() -> int
 
 	const int max_timesteps = 2e5;
 	const double CFL_number = 0.4;
-	const int nx = 400;
+	const int nx = 80;
 
 	const double initial_dtau = 1e-9; // dimensionless time
 	const double max_dtau = 1e-3;	  // dimensionless time
@@ -268,19 +268,19 @@ auto testproblem_radiation_classical_marshak() -> int
 
 	// compute error norm
 
-	std::vector<double> Trad_interp(xs_exact.size());
-	interpolate_arrays(xs_exact.data(), Trad_interp.data(), xs_exact.size(),
-			   xs.data(), Trad.data(), xs.size());
+	std::vector<double> Trad_exact_interp(xs.size());
+	interpolate_arrays(xs.data(), Trad_exact_interp.data(), xs.size(),
+			   xs_exact.data(), Trad_exact.data(), xs_exact.size());
 
 	double err_norm = 0.;
 	double sol_norm = 0.;
 	const double t = rad_system.time();
 	const double xmax = c * t;
 	std::cout << "diffusion length = " << xmax << std::endl;
-	for (int i = 0; i < xs_exact.size(); ++i) {
-		if (xs_exact[i] < xmax) {
-			err_norm += std::abs(Trad_interp[i] - Trad_exact[i]);
-			sol_norm += std::abs(Trad_exact[i]);
+	for (int i = 0; i < xs.size(); ++i) {
+		if (xs[i] < xmax) {
+			err_norm += std::abs(Trad[i] - Trad_exact_interp[i]);
+			sol_norm += std::abs(Trad_exact_interp[i]);
 		}
 	}
 
