@@ -49,28 +49,30 @@ void HyperbolicSystem<WaveProblem>::FillGhostZones(array_t &cons)
 	}
 }
 
-int testproblem_hydro_wave()
+auto testproblem_hydro_wave() -> int
 {
 	// Based on the ATHENA test page:
 	// https://www.astro.princeton.edu/~jstone/Athena/tests/linear-waves/linear-waves.html
 
 	// Problem parameters
 
-	const int nx = 256;
-	const double Lx = 5.0;
-	const double CFL_number = 0.4;
-	const double max_time = 0.1;
-	const double max_dt = 1e-2;
-	const int max_timesteps = 5000;
+	const int nx = 100;
+	const double Lx = 1.0;
+	const double CFL_number = 0.8;
+	const double max_time = 1.0;
+	const double max_dt = 1e-3;
+	const int max_timesteps = 1e3;
 
 	const double gamma = 5./3.; // ratio of specific heats
 	const double rho0 = 1.0;	// background density
-	const double c_s0 = 1.0;	// background sound speed
-	const double P0 = rho0 * std::pow(c_s0, 2) / gamma; // background pressure
-	const double v0 = 0.0;		// background velocity
-	const double amp = 1.0e-6;	// perturbation amplitude
+	const double P0 = 1.0 / gamma; // background pressure
+	const double v0 = 0.;		// background velocity
+	const double A = 1.0e-6;	// perturbation amplitude
 
-	const double rtol = 1e-6; //< absolute tolerance for conserved vars
+	const std::valarray<double> R = {1.0, -1.0, 1.5}; // right eigenvector of sound wave
+	const std::valarray<double> U_0 = {rho0, rho0*v0, P0/(gamma - 1.0) + 0.5*rho0*std::pow(v0, 2)};
+
+	const double rtol = 1e-10; //< absolute tolerance for conserved vars
 
 	// Problem initialization
 
@@ -81,15 +83,17 @@ int testproblem_hydro_wave()
 
 	for (int i = nghost; i < nx + nghost; ++i) {
 		const auto idx_value = static_cast<double>(i - nghost);
-		const double x =
-		    Lx * ((idx_value + 0.5) / static_cast<double>(nx));
+		//const double x = Lx * ((idx_value + 0.5) / static_cast<double>(nx));
+		const double x_L = Lx * ((idx_value) / static_cast<double>(nx));
+		const double x_R = Lx * ((idx_value + 1) / static_cast<double>(nx));
+		const double dx = x_R - x_L;
 
-		const double vx = v0 + amp * std::cos(2.0 * M_PI * x);
+		//const std::valarray<double> dU = A * R * std::sin(2.0 * M_PI * x);
+		const std::valarray<double> dU = (A*R/(2.0*M_PI*dx))*(std::cos(2.0*M_PI*x_L) - std::cos(2.0*M_PI*x_R));
 
-		hydro_system.set_density(i) = rho0;
-		hydro_system.set_x1Momentum(i) = rho0 * vx;
-		hydro_system.set_energy(i) =
-		    P0 / (gamma - 1.0) + 0.5 * rho0 * std::pow(vx, 2);
+		hydro_system.set_density(i) 	= U_0[0] + dU[0];
+		hydro_system.set_x1Momentum(i) 	= U_0[1] + dU[1];
+		hydro_system.set_energy(i) 		= U_0[2] + dU[2];
 	}
 
 	std::vector<double> xs(nx);
@@ -103,9 +107,9 @@ int testproblem_hydro_wave()
 	for (int i = 0; i < nx; ++i) {
 		const double x = Lx * ((i + 0.5) / static_cast<double>(nx));
 		xs.at(i) = x;
-		d_initial.at(i) = (hydro_system.density(i+nghost) - rho0) / amp;
-		v_initial.at(i) = (hydro_system.x1Velocity(i+nghost) - v0) / amp;
-		P_initial.at(i) = (hydro_system.pressure(i+nghost) - P0) / amp;
+		d_initial.at(i) = (hydro_system.density(i+nghost) - rho0) / A;
+		v_initial.at(i) = (hydro_system.x1Velocity(i+nghost) - v0) / A;
+		P_initial.at(i) = (hydro_system.pressure(i+nghost) - P0) / A;
 	}
 
 	const auto initial_mass = hydro_system.ComputeMass();
@@ -137,63 +141,47 @@ int testproblem_hydro_wave()
 					  std::make_pair(nghost, nghost + nx));
 
 	for (int i = 0; i < nx; ++i) {
-		d.at(i) = (hydro_system.primDensity(i + nghost) - rho0) / amp;
-		v.at(i) = (hydro_system.x1Velocity(i + nghost) - v0) / amp;
-		P.at(i) = (hydro_system.pressure(i + nghost) - P0) / amp;
+		d.at(i) = (hydro_system.primDensity(i + nghost) - rho0) / A;
+		v.at(i) = (hydro_system.x1Velocity(i + nghost) - v0) / A;
+		P.at(i) = (hydro_system.pressure(i + nghost) - P0) / A;
 	}
-
-	// compute error norm
-	std::vector<double> d_exact(nx);
-	std::vector<double> v_exact(nx);
-	std::vector<double> P_exact(nx);
 
 	const double t = hydro_system.time();
-	const double phi_d = -M_PI/2.0;
-	const double phi_v = 0.;
-	const double phi_P = -M_PI/2.0;
 
+	double rhoerr_norm = 0.;
 	for(int i = 0; i < nx; ++i) {
-		const double x = xs[i];
-		// there are *two* waves in the initial conditions!
-		const double amp_d = (0.5*(gamma - 1.)/gamma);
-		const double amp_P = (0.5*(gamma - 1.));
-
-		// wrong amplitude
-		v_exact[i] = (1./std::sqrt(2.))*std::cos(2.0*M_PI*(x + c_s0*t) + phi_v) +
-						(1./std::sqrt(2.))*std::cos(2.0*M_PI*(x - c_s0*t) + phi_v);
-
-		d_exact[i] = (1./std::sqrt(2.))*std::cos(2.0*M_PI*(x + c_s0*t) + phi_d) +
-						(1./std::sqrt(2.))*std::cos(2.0*M_PI*(x + c_s0*t) + phi_d); // wrong?
-						
-		P_exact[i] = std::cos(2.0*M_PI*(x + c_s0*t) + phi_P); // wrong?
-	}
-
-	double err_norm = 0.;
-	double sol_norm = 0.;
-	for(int i = 0; i < nx; ++i) {
-		err_norm += std::pow(P[i] - P_exact[i], 2);
-		sol_norm += std::pow(P_exact[i], 2);
+		rhoerr_norm += std::abs(d[i] - d_initial[i]) / nx;
 	}
 	
-	const double err_tol = 1e-5;
-	const double rel_err = err_norm / sol_norm;
+	double vxerr_norm = 0.;
+	for(int i = 0; i < nx; ++i) {
+		vxerr_norm += std::abs(v[i] - v_initial[i]) / nx;
+	}
+
+	double Perr_norm = 0.;
+	for(int i = 0; i < nx; ++i) {
+		Perr_norm += std::abs(P[i] - P_initial[i]) / nx;
+	}
+
+	const double err_norm = std::sqrt(std::pow(rhoerr_norm, 2) +
+									  std::pow(vxerr_norm,  2) +
+									  std::pow(Perr_norm,   2) );
+
+	const double err_tol = 0.003;
 	int status = 0;
-	if (rel_err > err_tol) {
+	if (err_norm > err_tol) {
 		status = 1;
 	}
-	std::cout << "Relative error norm = " << rel_err << std::endl;
+	std::cout << "L1 error norm = " << err_norm << std::endl;
 
 	// plot result
 	std::map<std::string, std::string> d_args, dinit_args, dexact_args;
 	d_args["label"] = "density";
 	dinit_args["label"] = "density (initial)";
-	dexact_args["label"] = "density (exact)";
 
 	matplotlibcpp::clf();
 	matplotlibcpp::plot(xs, d, d_args);
 	matplotlibcpp::plot(xs, d_initial, dinit_args);
-	//matplotlibcpp::plot(xs, v);
-	matplotlibcpp::plot(xs, d_exact, dexact_args);
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("t = {:.4f}", t));
 	matplotlibcpp::save(fmt::format("./density_{:.4f}.pdf", t));
@@ -201,12 +189,10 @@ int testproblem_hydro_wave()
 	std::map<std::string, std::string> P_args, Pinit_args, Pexact_args;
 	P_args["label"] = "pressure";
 	Pinit_args["label"] = "pressure (initial)";
-	Pexact_args["label"] = "pressure (exact)";
 
 	matplotlibcpp::clf();
 	matplotlibcpp::plot(xs, P, P_args);
 	matplotlibcpp::plot(xs, P_initial, Pinit_args);
-	matplotlibcpp::plot(xs, P_exact, Pexact_args);
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("t = {:.4f}", t));
 	matplotlibcpp::save(fmt::format("./pressure_{:.4f}.pdf", t));
@@ -214,12 +200,10 @@ int testproblem_hydro_wave()
 	std::map<std::string, std::string> v_args, vinit_args, vexact_args;
 	v_args["label"] = "velocity";
 	vinit_args["label"] = "velocity (initial)";
-	vexact_args["label"] = "velocity (exact)";
 
 	matplotlibcpp::clf();
 	matplotlibcpp::plot(xs, v, v_args);
 	matplotlibcpp::plot(xs, v_initial, vinit_args);
-	matplotlibcpp::plot(xs, v_exact, vexact_args);
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("t = {:.4f}", t));
 	matplotlibcpp::save(fmt::format("./velocity_{:.4f}.pdf", t));
