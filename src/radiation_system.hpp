@@ -322,6 +322,12 @@ auto RadSystem<problem_t>::CheckStatesValid(
 {
 	bool all_valid = true;
 
+	// enforce energy density floor
+	for (int i = range.first; i < range.second; ++i) {
+		const auto E_r = cons(radEnergy_index, i);
+		cons(radEnergy_index, i) = std::max(E_r, Erad_floor_);
+	}
+
 	for (int i = range.first; i < range.second; ++i) {
 		const auto E_r = cons(radEnergy_index, i);
 		const auto Fx = cons(x1RadFlux_index, i);
