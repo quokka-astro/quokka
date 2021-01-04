@@ -19,6 +19,7 @@ run with high performance on either CPUs, NVIDIA GPUs, or AMD GPUs.
    equations
    tests/radshock
    tests/shu_osher
+   tests/sms
    bibliography
    
    

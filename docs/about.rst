@@ -33,7 +33,7 @@ Hydrodynamics
 ~~~~~~~~~~~~~
 The hydrodynamics solver is an unsplit Godunov method, using the
 piecewise parabolic method :cite:`CW84` for reconstruction
-in the primitive variables, the HLLE and HLLC Riemann solvers
+in the primitive variables, the HLLC Riemann solver
 :cite:`Toro2013` for flux computations, and a method-of-lines formulation for the time integration.
 
 We use the method of :cite:`Mignone2005` to reduce the order of

@@ -393,10 +393,11 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(
 			const double qa = dq_plus * dq_minus; // interface extrema
 
 			if ((qa <= 0.0)) { // local extremum
-#if 0
-				// causes subtle, but very weird, oscillations
+
+				// Causes subtle, but very weird, oscillations
 				// in the Shu-Osher test problem.
-				// (not recommended)
+				// However, it is necessary to get a reasonable solution
+				// for the sawtooth advection problem.
 				const double dq0 = MC(q(n, i + 1) - q(n, i),
 						      q(n, i) - q(n, i - 1));
 
@@ -404,10 +405,10 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(
 				//     [Living Rev Comput Astrophys (2017) 3:2]
 				new_a_minus = a - 0.5 * dq0;
 				new_a_plus = a + 0.5 * dq0;
-#endif
+
 				// original C&W method for this case
-				new_a_minus = a;
-				new_a_plus = a;
+				//new_a_minus = a;
+				//new_a_plus = a;
 
 			} else { // no local extrema
 

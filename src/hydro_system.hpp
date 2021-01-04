@@ -415,19 +415,6 @@ void HydroSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 		assert(cs_L > 0.0); // NOLINT
 		assert(cs_R > 0.0); // NOLINT
 
-		// compute Roe averages
-		const double roe_norm = (std::sqrt(rho_L) + std::sqrt(rho_R));
-
-		const double vx_roe =
-		    (std::sqrt(rho_L) * vx_L + std::sqrt(rho_R) * vx_R) / roe_norm; // Roe-average vx
-
-		const double vroe_sq = vx_roe * vx_roe; // modify for 3d!!!
-
-		const double H_roe =
-		    (std::sqrt(rho_L) * H_L + std::sqrt(rho_R) * H_R) / roe_norm; // Roe-average H
-
-		const double cs_roe = std::sqrt((gamma_ - 1.0)*(H_roe - 0.5*vroe_sq));
-
 		// compute PVRS states (Toro 10.5.2)
 
 		const double rho_bar = 0.5 * (rho_L + rho_R);
@@ -448,18 +435,37 @@ void HydroSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 					      ((P_star / P_R) - 1.0) );
 
 		// compute wave speeds
-		
-		const double s_L = vx_L - q_L*cs_L;
-		const double s_R = vx_R + q_R*cs_R;
 
-		//const double s_L = vx_L - cs_L;
-		//const double s_R = vx_R + cs_R;
+		const double S_L = vx_L - q_L * cs_L;
+		const double S_R = vx_R + q_R * cs_R;
+		const double S_star =
+		    ((P_R - P_L) + (rho_L * vx_L * (S_L - vx_L) - rho_R * vx_R * (S_R - vx_R))) /
+		    (rho_L * (S_L - vx_L) - rho_R * (S_R - vx_R));
+
+		const double P_LR =
+			0.5*(P_L + P_R + rho_L*(S_L-vx_L)*(S_star-vx_L) + rho_R*(S_R-vx_R)*(S_star-vx_R));
+
+#if 0
+		// compute Roe averages
+		
+		const double roe_norm = (std::sqrt(rho_L) + std::sqrt(rho_R));
+
+		const double vx_roe =
+		    (std::sqrt(rho_L) * vx_L + std::sqrt(rho_R) * vx_R) / roe_norm; // Roe-average vx
+
+		const double vroe_sq = vx_roe * vx_roe; // modify for 3d!!!
+
+		const double H_roe =
+		    (std::sqrt(rho_L) * H_L + std::sqrt(rho_R) * H_R) / roe_norm; // Roe-average H
+
+		const double cs_roe = std::sqrt((gamma_ - 1.0)*(H_roe - 0.5*vroe_sq));
 
 		const double s_Lroe = (vx_roe - cs_roe); // Davis, Einfeldt wave speeds
 		const double s_Rroe = (vx_roe + cs_roe);
 
 		const double S_L = std::min(s_L, s_Lroe);
 		const double S_R = std::max(s_R, s_Rroe);
+#endif
 
 		assert( S_L <= S_R );
 
@@ -481,14 +487,23 @@ void HydroSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 		    rho_R, rho_R * vx_R,
 		    P_R / (gamma_ - 1.0) + 0.5 * rho_R * (vx_R * vx_R)};
 
+		const std::valarray<double> D_star = {0., 1., S_star};
+
+		const std::valarray<double> F_starL =
+			( S_star*(S_L*U_L - F_L) + S_L*P_LR*D_star ) / (S_L - S_star);
+
+		const std::valarray<double> F_starR =
+			( S_star*(S_R*U_R - F_R) + S_R*P_LR*D_star ) / (S_R - S_star);
+
+		// open the Riemann fan
+		std::valarray<double> F(3);
+
+#if 0
 		const std::valarray<double> F_star =
 		    (S_R / (S_R - S_L)) * F_L - (S_L / (S_R - S_L)) * F_R +
 		    (S_R * S_L / (S_R - S_L)) * (U_R - U_L);
 
-		std::valarray<double> F(3);
-
-		// open the Riemann fan
-
+		// HLL flux
 		if (S_L > 0.0) {
 			F = F_L;
 		} else if (S_R < 0.0) {
@@ -496,7 +511,20 @@ void HydroSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 		} else { // S_L <= 0.0 <= S_R
 			F = F_star;
 		}
+#endif
 
+		// HLLC flux
+		if (S_L > 0.0) {
+			F = F_L;
+		} else if ((S_star > 0.0) && (S_L <= 0.0)) {
+			F = F_starL;
+		} else if ((S_star <= 0.0) && (S_R >= 0.0)) {
+			F = F_starR;
+		} else { // S_R < 0.0
+			F = F_R;
+		}
+
+#if 0
 		// add artificial viscosity following C&W Eq. (4.2), (4.5)
 		const double avisc_coef = 0.1;
 		const double div_v = (vx_R - vx_L); // modify for 3d!!!
@@ -505,6 +533,7 @@ void HydroSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 		// shocks
 		const double avisc = avisc_coef * std::max(-div_v, 0.0);
 		F = F + avisc * (U_L - U_R);
+#endif
 
 		// check states are valid
 		assert(!std::isnan(F[0])); // NOLINT
