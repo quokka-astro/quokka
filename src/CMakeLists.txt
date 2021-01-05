@@ -1,5 +1,5 @@
-add_subdirectory(${TwoMomentRad_SOURCE_DIR}/extern/kokkos ${TwoMomentRad_BINARY_DIR}/kokkos)
-add_subdirectory(${TwoMomentRad_SOURCE_DIR}/extern/fmt ${TwoMomentRad_BINARY_DIR}/fmt)
+add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/kokkos ${QuokkaCode_BINARY_DIR}/kokkos)
+add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/fmt ${QuokkaCode_BINARY_DIR}/fmt)
 
 find_package(PythonLibs REQUIRED)
 
