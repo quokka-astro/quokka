@@ -55,7 +55,7 @@ The hyperbolic radiation subsystem is solved using an unsplit Godunov method, us
 
 We reconstruct the energy density and the `reduced flux` :math:`f = F/cE`, in order to maintain the flux-limiting condition :math:`F \le cE` in discontinuous and near-discontinuous radiation flows.
 
-We find that the use of PPM is sufficient to ensure the correct behavior of the advection terms in the asymptotic diffusion limit, without either needing to modify the Riemann solver or resorting to discontinuous Galerkin methods :cite:`Lowrie_2001`. We use
+To ensure the correct behavior of the advection terms in the asymptotic diffusion limit :cite:`Lowrie_2001`, we modify the Riemann solver according to :cite:`Skinner_2019`. We use
 the Lorentz-factor local closure of :cite:`Levermore_1984` to compute 
 the variable Eddington tensor.
 
