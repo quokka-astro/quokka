@@ -240,6 +240,7 @@ auto testproblem_radiation_pulse() -> int
 	const double rel_error = err_norm / sol_norm;
 	std::cout << "Relative L1 error norm = " << rel_error << std::endl;
 
+#if 0
 	// plot energy density
 	std::map<std::string, std::string> Erad_args, Erad_exact_args, Erad_initial_args;
 	Erad_args["label"] = "Numerical solution";
@@ -263,6 +264,7 @@ auto testproblem_radiation_pulse() -> int
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("time ct = {:.4g}", initial_time + rad_system.time() * c));
 	matplotlibcpp::save("./radiation_pulse.pdf");
+#endif
 
 	// plot temperature
 	matplotlibcpp::clf();
