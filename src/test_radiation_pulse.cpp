@@ -34,8 +34,8 @@ struct PulseProblem {
 const double kappa0 = 1.0e3;   // cm^-1 (opacity)
 const double rho = 1.0;	       // g cm^-3 (matter density)
 const double a_rad = 4.0e-10;  // radiation constant == 4sigma_SB/c (dimensionless)
-const double c = 1.0e10;	   // speed of light (dimensionless)
-const double chat = 1.0e4;
+const double c = 1.0e8;	   // speed of light (dimensionless)
+const double chat = 1.0e3;
 const double Erad_floor = a_rad * std::pow(1.0e-5, 4);
 
 const double Lx = 1.0;	  // dimensionless length
@@ -59,7 +59,6 @@ template <> void RadSystem<PulseProblem>::FillGhostZones(array_t &cons)
 
 	// x1 left side boundary
 	for (int i = 0; i < nghost_; ++i) {
-		const double x = lx_ * ((i + 0.5) / static_cast<double>(nx_));
 		const double Erad = Erad_floor_;
 		const double Frad = 0.;
 		
@@ -69,7 +68,6 @@ template <> void RadSystem<PulseProblem>::FillGhostZones(array_t &cons)
 
 	// x1 right side boundary
 	for (int i = nghost_ + nx_; i < nghost_ + nx_ + nghost_; ++i) {
-		const double x = lx_ * ((i + 0.5) / static_cast<double>(nx_));
 		const double Erad = Erad_floor_;
 		const double Frad = 0.;
 		
@@ -83,6 +81,18 @@ auto RadSystem<PulseProblem>::ComputeOpacity(const double rho,
 					       const double Tgas) -> double
 {
 	return (kappa0 / rho) * std::max(std::pow(Tgas, 3), 1.0);
+}
+
+template <>
+auto RadSystem<PulseProblem>::ComputeOpacityTempDerivative(const double rho,
+							const double Tgas)
+    -> double
+{
+	if (Tgas > 1.0) {
+		return (kappa0 / rho) * 3.0 * std::pow(Tgas, 2);
+	} else {
+		return 0.0;
+	}
 }
 
 auto testproblem_radiation_pulse() -> int
@@ -103,11 +113,11 @@ auto testproblem_radiation_pulse() -> int
 	// Problem parameters
 
 	const int max_timesteps = 1e6;
-	const double CFL_number = 0.8;
-	const int nx = 500;
+	const double CFL_number = 0.1;
+	const int nx = 1000;
 
 	const double max_dt = 1e-3;	  	// dimensionless time
-	const double max_time = 1.0e-3;	// dimensionless time
+	const double max_time = 1.0e-2;	// dimensionless time
 
 	// Problem initialization
 
