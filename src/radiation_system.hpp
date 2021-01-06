@@ -92,6 +92,7 @@ class RadSystem : public HyperbolicSystem<problem_t>
 	auto ComputeTimestep(double dt_max) -> double override;
 	void AdvanceTimestep(double dt_max) override;
 	auto ComputeEddingtonFactor(double f) -> double;
+	void FlattenShocks(array_t &q, const std::pair<int,int> range) override;
 
 	// static functions
 
@@ -101,6 +102,9 @@ class RadSystem : public HyperbolicSystem<problem_t>
 	auto ComputeTgasFromEgas(double rho, double Egas) -> double;
 	auto ComputeEgasFromTgas(double rho, double Tgas) -> double;
 	auto ComputeEgasTempDerivative(double rho, double Tgas) -> double;
+	auto ComputeEintFromEgas(const double density, const double X1GasMom,
+					       const double X2GasMom, const double X3GasMom,
+					       const double Etot) -> double;
 
 	// setter functions:
 
@@ -134,12 +138,17 @@ class RadSystem : public HyperbolicSystem<problem_t>
 	array_t staticGasDensity_;
 	array_t x1GasMomentum_;
 	array_t radEnergySource_;
+	
+	// PPM shock flattening coefficients
+	array_t x1Chi_;
+	array_t problemCell_;
 
 	// virtual function overrides
 
 	void PredictStep(std::pair<int, int> range) override;
 	void AddFluxesRK2(array_t &U0, array_t &U1) override;
 	void ComputeFluxes(std::pair<int, int> range) override;
+	void ComputeFlatteningCoefficientX1(std::pair<int, int> range);
 };
 
 template <typename problem_t>
@@ -156,6 +165,9 @@ RadSystem<problem_t>::RadSystem(RadSystemArgs args)
 					    0);
 
 	radEnergySource_.NewAthenaArray(args.nx + 2 * nghost_);
+
+	x1Chi_.NewAthenaArray(args.nx + 2*nghost_);
+	problemCell_.NewAthenaArray(args.nx + 2*nghost_);
 }
 
 template <typename problem_t>
@@ -352,6 +364,77 @@ auto RadSystem<problem_t>::CheckStatesValid(
 }
 
 template <typename problem_t>
+void RadSystem<problem_t>::ComputeFlatteningCoefficientX1(const std::pair<int,int> range)
+{
+	// compute the PPM shock flattening coefficient following
+	//   Appendix B1 of Mignone+ 2005 [this description has typos].
+	// Method originally from Miller & Colella,
+	//   Journal of Computational Physics 183, 26–82 (2002) [no typos].
+
+	constexpr double beta_max = 0.85;
+	constexpr double beta_min = 0.75;
+	constexpr double Zmax = 0.75;
+	constexpr double Zmin = 0.25;
+
+	for (int i = range.first; i < range.second; ++i) {
+		// beta is a measure of shock resolution (Eq. 74 of Miller & Colella 2002)
+		const double beta =
+		    std::abs(radEnergy_(i + 1) - radEnergy_(i - 1)) /
+		    std::abs(radEnergy_(i + 2) - radEnergy_(i - 2));
+
+		// Eq. 75 of Miller & Colella 2002
+		const double chi_min =
+		    std::max(0., std::min(1., (beta_max - beta) /
+						  (beta_max - beta_min)));
+
+		// Z is a measure of shock strength (Eq. 76 of Miller & Colella 2002)
+		const double K_S = (4./3.) * radEnergy_(i); // equal to \rho c_s^2
+		const double Z =
+		    std::abs(radEnergy_(i + 1) - radEnergy_(i - 1)) / K_S;
+
+		// check for converging flow (Eq. 77)
+		double chi = 1.0;
+		if (x1RadFlux_(i + 1) < x1RadFlux_(i - 1)) {
+			chi = std::max(
+			    chi_min, std::min(1., (Zmax - Z) / (Zmax - Zmin)));
+		}
+
+		x1Chi_(i) = chi;
+	}
+}
+
+template <typename problem_t>
+void RadSystem<problem_t>::FlattenShocks(array_t &q, const std::pair<int,int> range)
+{
+	for (int n = 0; n < nvars_; ++n) {
+		for (int i = range.first; i < range.second; ++i) {
+			// Apply shock flattening
+
+			// compute coefficient as the minimum from all surrounding cells
+			//  (Eq. 78 of Miller & Colella 2002)
+			double chi = 
+				std::min({x1Chi_(i - 1), x1Chi_(i), x1Chi_(i+1)}); // modify in 3d !!
+
+			// get interfaces
+			const double a_minus = x1RightState_(n, i);
+			const double a_plus = x1LeftState_(n, i+1);
+			const double a_mean = q(n, i);
+
+			// left side of zone i (Eq. 70a)
+			const double new_a_minus =
+			    chi * a_minus + (1. - chi) * a_mean;
+
+			// right side of zone i (Eq. 70b)
+			const double new_a_plus =
+			    chi * a_plus + (1. - chi) * a_mean;
+
+			x1RightState_(n, i) = new_a_minus;
+			x1LeftState_(n, i+1) = new_a_plus;
+		}
+	}
+}
+
+template <typename problem_t>
 void RadSystem<problem_t>::ConservedToPrimitive(array_t &cons,
 						const std::pair<int, int> range)
 {
@@ -440,6 +523,33 @@ void RadSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 		const double fx_L = x1LeftState_(x1ReducedFlux_index, i);
 		const double fx_R = x1RightState_(x1ReducedFlux_index, i);
 
+		// compute interface-averaged cell optical depth
+
+		// [By convention, the interfaces are defined on the left edge of each
+		// zone, i.e. xleft_(i) is the "left"-side of the interface at
+		// the left edge of zone i, and xright_(i) is the "right"-side of the
+		// interface at the *left* edge of zone i.]
+
+		const double rho_L = staticGasDensity_(i - 1); // piecewise-constant reconstruction
+		const double rho_R = staticGasDensity_(i);
+
+		const double x1GasMom_L = x1GasMomentum_(i - 1);
+		const double x1GasMom_R = x1GasMomentum_(i);
+
+		const double Egas_L = gasEnergy_(i - 1);
+		const double Egas_R = gasEnergy_(i);
+
+		const double Eint_L = RadSystem<problem_t>::ComputeEintFromEgas(rho_L, x1GasMom_L, 0., 0., Egas_L);
+		const double Eint_R = RadSystem<problem_t>::ComputeEintFromEgas(rho_R, x1GasMom_R, 0., 0., Egas_R);
+
+		const double Tgas_L = RadSystem<problem_t>::ComputeTgasFromEgas(rho_L, Eint_L);
+		const double Tgas_R = RadSystem<problem_t>::ComputeTgasFromEgas(rho_R, Eint_R);
+
+		const double tau_L = dx_ * rho_L * RadSystem<problem_t>::ComputeOpacity(rho_L, Tgas_L);
+		const double tau_R = dx_ * rho_R * RadSystem<problem_t>::ComputeOpacity(rho_R, Tgas_R);
+
+		const double tau_cell = 0.5*(tau_L + tau_R);
+
 		// compute scalar reduced flux f
 		// [modify in 3d!]
 		const double f_L = std::sqrt(fx_L * fx_L);
@@ -512,7 +622,7 @@ void RadSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 		const std::valarray<double> U_L = {erad_L, Fx_L};
 		const std::valarray<double> U_R = {erad_R, Fx_R};
 
-		const double epsilon = 1.0; // std::min(1.0, 1.0/tau_cell);
+		const std::valarray<double> epsilon = {std::min(1.0, 1.0/tau_cell), 1.0};
 
 		const std::valarray<double> F_star =
 		    (S_R / (S_R - S_L)) * F_L - (S_L / (S_R - S_L)) * F_R +
@@ -579,6 +689,17 @@ auto RadSystem<problem_t>::ComputeEgasTempDerivative(const double rho,
 	const double c_v =
 	    boltzmann_constant_ / (mean_molecular_mass_ * (gamma_ - 1.0));
 	return (rho * c_v);
+}
+
+template <typename problem_t>
+auto RadSystem<problem_t>::ComputeEintFromEgas(const double density, const double X1GasMom,
+					       const double X2GasMom, const double X3GasMom,
+					       const double Etot) -> double
+{
+	const double p_sq = X1GasMom * X1GasMom + X2GasMom * X2GasMom + X3GasMom * X3GasMom;
+	const double Ekin = p_sq / (2.0 * density);
+	const double Eint = Etot - Ekin;
+	return Eint;
 }
 
 template <typename problem_t>

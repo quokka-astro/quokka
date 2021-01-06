@@ -18,6 +18,7 @@
 #include "radiation_system.hpp"
 
 // function definitions
-void testproblem_radiation_streaming();
+auto main() -> int;
+auto testproblem_radiation_streaming() -> int;
 
 #endif // TEST_RADIATION_STREAMING_HPP_
