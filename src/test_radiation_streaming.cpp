@@ -33,6 +33,7 @@ struct StreamingProblem {
 
 const double erad_floor = 1.0e-5;
 const double c = 1.0; // speed of light
+const double chat = 0.2; // reduced speed of light
 
 template <> void RadSystem<StreamingProblem>::FillGhostZones(array_t &cons)
 {
@@ -63,7 +64,7 @@ auto testproblem_radiation_streaming() -> int
 	const double Lx = 1.0;
 	const double CFL_number = 0.8;
 	const double dt_max = 1e-2;
-	const double tmax = 0.5;
+	const double tmax = 1.0;
 	const int max_timesteps = 5000;
 
 	// Problem initialization
@@ -71,8 +72,8 @@ auto testproblem_radiation_streaming() -> int
 	RadSystem<StreamingProblem> rad_system(
 	    {.nx = nx, .lx = Lx, .cflNumber = CFL_number});
 
-	rad_system.set_c_light(c);
-	rad_system.set_radiation_constant(1.0);
+	rad_system.c_light_ = c;
+	rad_system.c_hat_ = chat;
 	rad_system.Erad_floor_ = erad_floor;
 
 	auto nghost = rad_system.nghost();
@@ -93,7 +94,7 @@ auto testproblem_radiation_streaming() -> int
 	for (int i = 0; i < nx; ++i) {
 		const double x = Lx * ((i + 0.5) / static_cast<double>(nx));
 		xs.at(i) = x;
-		erad_exact.at(i) = (x <= c*tmax) ? 1.0 : 0.0; 
+		erad_exact.at(i) = (x <= chat*tmax) ? 1.0 : 0.0; 
 	}
 
 	const auto initial_erad = rad_system.ComputeRadEnergy();
@@ -136,7 +137,7 @@ auto testproblem_radiation_streaming() -> int
 	}
 
 	const double rel_err_norm = err_norm / sol_norm;
-	const double rel_err_tol = 0.04;
+	const double rel_err_tol = 0.06;
 	int status = NAN;
 	if( rel_err_norm < rel_err_tol ) {
 		status = 0;
