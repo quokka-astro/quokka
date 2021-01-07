@@ -81,7 +81,7 @@ auto testproblem_radiation_matter_coupling() -> int
 	// const double constant_dt = 1.0e-11; // s
 	// const double max_time = 1.0e-7;	    // s
 	const double constant_dt = 1.0e-8; // s
-	const double max_time = 1.0e-4;	   // s
+	const double max_time = 1.0e-2;	   // s
 	const int max_timesteps = 1e6;
 
 	const double Erad = 1.0e12; // erg cm^-3
@@ -167,12 +167,15 @@ auto testproblem_radiation_matter_coupling() -> int
 	}
 
 	// Solve for asymptotically-exact solution (Gonzalez et al. 2007)
+	// 	[original source for this test: Turner & Stone (2001)]
 	const int nmax = t.size();
-	std::vector<double> t_exact(nmax);
+	//std::vector<double> t_exact(nmax);
+	std::vector<double> Tgas_rsla_exact(nmax);
 	std::vector<double> Tgas_exact(nmax);
 
 	for (int n = 0; n < nmax; ++n) {
 #if 0
+		// Solution to Turner and Stone (2001) problem
 		const double T_r = initial_Trad;
 		const double T0 = initial_Tgas;
 
@@ -196,34 +199,39 @@ auto testproblem_radiation_matter_coupling() -> int
 #endif
 
 		const double time_t = t.at(n);
-		const double arad = rad_system.radiation_constant();
-		const double c = rad_system.c_light_;
-		const double E0 = (Erad + Egas) / (arad + alpha_SuOlson / 4.0);
 		const double T0_4 = std::pow(initial_Tgas, 4);
 
-		const double T4 =
-		    (T0_4 - E0) * std::exp(-(4. / alpha_SuOlson) *
-					   (arad + alpha_SuOlson / 4.0) *
-					   kappa * rho * c * time_t) +
-		    E0;
+		const double E0_rsla = ((c/c_hat)*Erad + Egas) / (a_rad + (c_hat/c) * alpha_SuOlson / 4.0);
+		const double E0		 = (Erad + Egas) / (a_rad + alpha_SuOlson / 4.0);
 
+		const double T4_rsla =
+		    (T0_4 - (c_hat/c)*E0_rsla) * std::exp( -(4. / alpha_SuOlson) *
+					   (a_rad + (c_hat/c) * alpha_SuOlson / 4.0) *
+					   kappa * rho * c * time_t ) + (c_hat/c)*E0_rsla;
+
+		const double T4 =
+		    (T0_4 - E0) * std::exp( -(4. / alpha_SuOlson) *
+					   (a_rad + alpha_SuOlson / 4.0) *
+					   kappa * rho * c * time_t ) + E0;
+
+		const double T_gas_rsla = std::pow(T4_rsla, 1. / 4.);
 		const double T_gas = std::pow(T4, 1. / 4.);
 
-		t_exact.at(n) = (time_t);
-		Tgas_exact.at(n) = (T_gas);
+		Tgas_rsla_exact.at(n) = T_gas_rsla;
+		Tgas_exact.at(n) = T_gas;
 	}
 
 	// interpolate exact solution onto output timesteps
-	std::vector<double> Tgas_exact_interp(t.size());
-	interpolate_arrays(t.data(), Tgas_exact_interp.data(), t.size(),
-			   t_exact.data(), Tgas_exact.data(), t_exact.size());
+	//std::vector<double> Tgas_exact_interp(t.size());
+	//interpolate_arrays(t.data(), Tgas_exact_interp.data(), t.size(),
+	//		   t_exact.data(), Tgas_exact.data(), t_exact.size());
 
 	// compute L1 error norm
 	double err_norm = 0.;
 	double sol_norm = 0.;
 	for (int i = 0; i < t.size(); ++i) {
-		err_norm += std::abs(Tgas[i] - Tgas_exact_interp[i]);
-		sol_norm += std::abs(Tgas_exact_interp[i]);
+		err_norm += std::abs(Tgas[i] - Tgas_rsla_exact[i]);
+		sol_norm += std::abs(Tgas_rsla_exact[i]);
 	}
 	const double rel_error = err_norm / sol_norm;
 	const double error_tol = 1e-5;
@@ -236,18 +244,24 @@ auto testproblem_radiation_matter_coupling() -> int
 			    10.0 * std::max(Trad.back(), Tgas.back()));
 
 	std::map<std::string, std::string> Trad_args;
-	Trad_args["label"] = "radiation temperature";
+	Trad_args["label"] = "radiation temperature (numerical, RSLA)";
 	matplotlibcpp::plot(t, Trad, Trad_args);
 
 	std::map<std::string, std::string> Tgas_args;
-	Tgas_args["label"] = "gas temperature";
+	Tgas_args["label"] = "gas temperature (numerical, RSLA)";
 	matplotlibcpp::plot(t, Tgas, Tgas_args);
+
+	std::map<std::string, std::string> exactsolrsla_args;
+	exactsolrsla_args["label"] = "gas temperature (exact, RSLA)";
+	exactsolrsla_args["linestyle"] = "--";
+	exactsolrsla_args["color"] = "black";
+	matplotlibcpp::plot(t, Tgas_rsla_exact, exactsolrsla_args);
 
 	std::map<std::string, std::string> exactsol_args;
 	exactsol_args["label"] = "gas temperature (exact)";
-	exactsol_args["linestyle"] = "--";
+	exactsol_args["linestyle"] = ":";
 	exactsol_args["color"] = "black";
-	matplotlibcpp::plot(t, Tgas_exact_interp, exactsol_args);
+	matplotlibcpp::plot(t, Tgas_exact, exactsol_args);
 
 	matplotlibcpp::legend();
 	matplotlibcpp::xlabel("time t (s)");
@@ -260,7 +274,7 @@ auto testproblem_radiation_matter_coupling() -> int
 
 	std::vector<double> frac_err(t.size());
 	for (int i = 0; i < t.size(); ++i) {
-		frac_err.at(i) = Tgas_exact_interp.at(i) / Tgas.at(i) - 1.0;
+		frac_err.at(i) = Tgas_rsla_exact.at(i) / Tgas.at(i) - 1.0;
 	}
 	matplotlibcpp::plot(t, frac_err);
 	matplotlibcpp::xlabel("time t (s)");

@@ -20,6 +20,7 @@ run with high performance on either CPUs, NVIDIA GPUs, or AMD GPUs.
    tests/radshock
    tests/shu_osher
    tests/sms
+   tests/energy_exchange
    bibliography
    
    

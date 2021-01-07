@@ -1,7 +1,7 @@
 .. Slow-moving shock test
 
 Slow-moving shock test
-====================
+=======================
 
 This test problem demonstrates the extent to which post-shock oscillations
 are controlled in slowly-moving shocks. This effect can be exhibited in all
@@ -9,7 +9,8 @@ Godunov codes, even with first-order methods, for sufficiently slow-moving
 shocks across the computational grid :cite:`Jin_1996`.
 
 The shock flattening method of :cite:`CW84` (implemented in our code in modified form) reduces the oscillations, but does not completely
-suppress them.
+suppress them. Adding artificial viscosity according to the method of :cite:`CW84`,
+even to the level of smoothing the contact discontinuity by 5-10 cells, does `not` cure the problem.
 
 Parameters
 ----------

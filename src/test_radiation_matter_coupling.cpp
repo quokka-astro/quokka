@@ -78,7 +78,7 @@ auto testproblem_radiation_matter_coupling() -> int
 	// const double constant_dt = 1.0e-11; // s
 	// const double max_time = 1.0e-7;	    // s
 	const double constant_dt = 1.0e-8; // s
-	const double max_time = 1.0e-4;	   // s
+	const double max_time = 1.0e-2;	   // s
 	const int max_timesteps = 1e6;
 
 	const double Erad = 1.0e12; // erg cm^-3
@@ -230,11 +230,11 @@ auto testproblem_radiation_matter_coupling() -> int
 			    10.0 * std::max(Trad.back(), Tgas.back()));
 
 	std::map<std::string, std::string> Trad_args;
-	Trad_args["label"] = "radiation temperature";
+	Trad_args["label"] = "radiation temperature (numerical)";
 	matplotlibcpp::plot(t, Trad, Trad_args);
 
 	std::map<std::string, std::string> Tgas_args;
-	Tgas_args["label"] = "gas temperature";
+	Tgas_args["label"] = "gas temperature (numerical)";
 	matplotlibcpp::plot(t, Tgas, Tgas_args);
 
 	std::map<std::string, std::string> exactsol_args;
