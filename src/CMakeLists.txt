@@ -66,5 +66,5 @@ add_test(NAME HydroSlowMovingShock COMMAND test_hydro_sms WORKING_DIRECTORY ${CM
 add_test(NAME HydroVacuum COMMAND test_hydro_vacuum WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 add_test(NAME HydroWave COMMAND test_hydro_wave WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 add_test(NAME RadiationStreaming COMMAND test_radiation_streaming WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+add_test(NAME RadiationPulse COMMAND test_radiation_pulse WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 #add_test(NAME ShuOsher COMMAND test_hydro_shuosher)
-#add_test(NAME RadiationPulse COMMAND test_radiation_pulse)

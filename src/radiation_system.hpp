@@ -92,7 +92,7 @@ class RadSystem : public HyperbolicSystem<problem_t>
 	auto ComputeTimestep(double dt_max) -> double override;
 	void AdvanceTimestep(double dt_max) override;
 	auto ComputeEddingtonFactor(double f) -> double;
-	void FlattenShocks(array_t &q, const std::pair<int,int> range) override;
+	//void FlattenShocks(array_t &q, const std::pair<int,int> range) override;
 
 	// static functions
 
@@ -105,6 +105,7 @@ class RadSystem : public HyperbolicSystem<problem_t>
 	auto ComputeEintFromEgas(const double density, const double X1GasMom,
 					       const double X2GasMom, const double X3GasMom,
 					       const double Etot) -> double;
+	void ComputeCellOpticalDepth(int i);
 
 	// setter functions:
 
@@ -148,7 +149,7 @@ class RadSystem : public HyperbolicSystem<problem_t>
 	void PredictStep(std::pair<int, int> range) override;
 	void AddFluxesRK2(array_t &U0, array_t &U1) override;
 	void ComputeFluxes(std::pair<int, int> range) override;
-	void ComputeFlatteningCoefficientX1(std::pair<int, int> range);
+	//void ComputeFlatteningCoefficientX1(std::pair<int, int> range);
 };
 
 template <typename problem_t>
@@ -363,6 +364,10 @@ auto RadSystem<problem_t>::CheckStatesValid(
 	return all_valid;
 }
 
+#if 0
+// this makes the radiation solution worse in almost all cases,
+// though it does reduce oscillations in some problems (at the expense
+// of making other parts of the solution worse/too diffusive)
 template <typename problem_t>
 void RadSystem<problem_t>::ComputeFlatteningCoefficientX1(const std::pair<int,int> range)
 {
@@ -433,6 +438,7 @@ void RadSystem<problem_t>::FlattenShocks(array_t &q, const std::pair<int,int> ra
 		}
 	}
 }
+#endif
 
 template <typename problem_t>
 void RadSystem<problem_t>::ConservedToPrimitive(array_t &cons,
@@ -502,6 +508,39 @@ auto RadSystem<problem_t>::ComputeEddingtonFactor(double f) -> double
 }
 
 template <typename problem_t>
+void RadSystem<problem_t>::ComputeCellOpticalDepth(int i)
+{
+	// compute interface-averaged cell optical depth
+
+	// [By convention, the interfaces are defined on the left edge of each
+	// zone, i.e. xleft_(i) is the "left"-side of the interface at
+	// the left edge of zone i, and xright_(i) is the "right"-side of the
+	// interface at the *left* edge of zone i.]
+
+	const double rho_L = staticGasDensity_(i - 1); // piecewise-constant reconstruction
+	const double rho_R = staticGasDensity_(i);
+
+	const double x1GasMom_L = x1GasMomentum_(i - 1);
+	const double x1GasMom_R = x1GasMomentum_(i);
+
+	const double Egas_L = gasEnergy_(i - 1);
+	const double Egas_R = gasEnergy_(i);
+
+	const double Eint_L =
+	    RadSystem<problem_t>::ComputeEintFromEgas(rho_L, x1GasMom_L, 0., 0., Egas_L);
+	const double Eint_R =
+	    RadSystem<problem_t>::ComputeEintFromEgas(rho_R, x1GasMom_R, 0., 0., Egas_R);
+
+	const double Tgas_L = RadSystem<problem_t>::ComputeTgasFromEgas(rho_L, Eint_L);
+	const double Tgas_R = RadSystem<problem_t>::ComputeTgasFromEgas(rho_R, Eint_R);
+
+	const double tau_L = dx_ * rho_L * RadSystem<problem_t>::ComputeOpacity(rho_L, Tgas_L);
+	const double tau_R = dx_ * rho_R * RadSystem<problem_t>::ComputeOpacity(rho_R, Tgas_R);
+
+	const double tau_cell = 0.5 * (tau_L + tau_R);
+}
+
+template <typename problem_t>
 void RadSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 {
 	// By convention, the interfaces are defined on the left edge of each
@@ -522,33 +561,6 @@ void RadSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 
 		const double fx_L = x1LeftState_(x1ReducedFlux_index, i);
 		const double fx_R = x1RightState_(x1ReducedFlux_index, i);
-
-		// compute interface-averaged cell optical depth
-
-		// [By convention, the interfaces are defined on the left edge of each
-		// zone, i.e. xleft_(i) is the "left"-side of the interface at
-		// the left edge of zone i, and xright_(i) is the "right"-side of the
-		// interface at the *left* edge of zone i.]
-
-		const double rho_L = staticGasDensity_(i - 1); // piecewise-constant reconstruction
-		const double rho_R = staticGasDensity_(i);
-
-		const double x1GasMom_L = x1GasMomentum_(i - 1);
-		const double x1GasMom_R = x1GasMomentum_(i);
-
-		const double Egas_L = gasEnergy_(i - 1);
-		const double Egas_R = gasEnergy_(i);
-
-		const double Eint_L = RadSystem<problem_t>::ComputeEintFromEgas(rho_L, x1GasMom_L, 0., 0., Egas_L);
-		const double Eint_R = RadSystem<problem_t>::ComputeEintFromEgas(rho_R, x1GasMom_R, 0., 0., Egas_R);
-
-		const double Tgas_L = RadSystem<problem_t>::ComputeTgasFromEgas(rho_L, Eint_L);
-		const double Tgas_R = RadSystem<problem_t>::ComputeTgasFromEgas(rho_R, Eint_R);
-
-		const double tau_L = dx_ * rho_L * RadSystem<problem_t>::ComputeOpacity(rho_L, Tgas_L);
-		const double tau_R = dx_ * rho_R * RadSystem<problem_t>::ComputeOpacity(rho_R, Tgas_R);
-
-		const double tau_cell = 0.5*(tau_L + tau_R);
 
 		// compute scalar reduced flux f
 		// [modify in 3d!]
@@ -622,7 +634,9 @@ void RadSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 		const std::valarray<double> U_L = {erad_L, Fx_L};
 		const std::valarray<double> U_R = {erad_R, Fx_R};
 
-		const std::valarray<double> epsilon = {std::min(1.0, 1.0/tau_cell), 1.0};
+		// const double tau_cell = ComputeCellOpticalDepth(i);
+		// const std::valarray<double> epsilon = {std::min(1.0, 1.0/tau_cell), 1.0};
+		const std::valarray<double> epsilon = {1.0, 1.0};
 
 		const std::valarray<double> F_star =
 		    (S_R / (S_R - S_L)) * F_L - (S_L / (S_R - S_L)) * F_R +
@@ -642,6 +656,12 @@ void RadSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 
 		x1Flux_(radEnergy_index, i) = F[0];
 		x1Flux_(x1RadFlux_index, i) = F[1];
+
+		// Lax-Friedrichs flux, in case of positivity errors
+		std::valarray<double> LLF = 0.5*(F_L + F_R) - 0.5*(dx_/dt_)*(U_R - U_L);
+
+		x1FluxDiffusive_(radEnergy_index, i) = LLF[0];
+		x1FluxDiffusive_(x1RadFlux_index, i) = LLF[1];
 	}
 }
 
@@ -889,10 +909,10 @@ void RadSystem<problem_t>::PredictStep(const std::pair<int, int> range)
 			consVarPredictStep_(x1RadFlux_index, i) = x1F_new;
 
 		} else {
-			std::cout
-			    << "WARNING: [stage 1] flux limited at i = " << i
-			    << " with reduced flux = " << x1ReducedFlux_new
-			    << std::endl;
+			//std::cout
+			//    << "WARNING: [stage 1] flux limited at i = " << i
+			//    << " with reduced flux = " << x1ReducedFlux_new
+			//    << std::endl;
 
 			const double FE_1d =
 			    -1.0 * (dt_ / dx_) *
@@ -949,10 +969,10 @@ void RadSystem<problem_t>::AddFluxesRK2(array_t &U0, array_t &U1)
 			U0(x1RadFlux_index, i) = x1F_new;
 
 		} else {
-			std::cout
-			    << "WARNING: [stage 2] flux limited at i = " << i
-			    << " with reduced flux = " << x1ReducedFlux_new
-			    << std::endl;
+			//std::cout
+			//    << "WARNING: [stage 2] flux limited at i = " << i
+			//    << " with reduced flux = " << x1ReducedFlux_new
+			//    << std::endl;
 
 			const double FE_1d =
 			    -1.0 * (dt_ / dx_) *

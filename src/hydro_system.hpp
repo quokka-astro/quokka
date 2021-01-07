@@ -336,10 +336,12 @@ void HydroSystem<problem_t>::ComputeFlatteningCoefficientX1(const std::pair<int,
 template <typename problem_t>
 void HydroSystem<problem_t>::FlattenShocks(array_t &q, const std::pair<int,int> range)
 {
+	// Apply shock flattening based on Miller & Colella (2002)
+	// [This is necessary to get a reasonable solution to the slow-moving
+	// shock problem, and reduces post-shock oscillations in other cases.]
+
 	for (int n = 0; n < nvars_; ++n) {
 		for (int i = range.first; i < range.second; ++i) {
-			// Apply shock flattening
-
 			// compute coefficient as the minimum from all surrounding cells
 			//  (Eq. 78 of Miller & Colella 2002)
 			double chi = 

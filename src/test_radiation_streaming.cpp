@@ -137,7 +137,7 @@ auto testproblem_radiation_streaming() -> int
 	}
 
 	const double rel_err_norm = err_norm / sol_norm;
-	const double rel_err_tol = 0.06;
+	const double rel_err_tol = 0.03;
 	int status = NAN;
 	if( rel_err_norm < rel_err_tol ) {
 		status = 0;

@@ -31,11 +31,12 @@ auto main() -> int
 struct PulseProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-const double kappa0 = 1.0e3;   // cm^-1 (opacity)
+const double kappa0 = 1.0e5;   // cm^-1 (opacity at temperature T0)
+const double T0 = 1.0;		   // K (temperature)
 const double rho = 1.0;	       // g cm^-3 (matter density)
 const double a_rad = 4.0e-10;  // radiation constant == 4sigma_SB/c (dimensionless)
 const double c = 1.0e8;	   // speed of light (dimensionless)
-const double chat = 1.0e3;
+const double chat = 1.0e7;
 const double Erad_floor = a_rad * std::pow(1.0e-5, 4);
 
 const double Lx = 1.0;	  // dimensionless length
@@ -47,7 +48,7 @@ auto compute_exact_Trad(const double x, const double t) -> double
 	// compute exact solution for Gaussian radiation pulse
 	// 		assuming diffusion approximation
 	const double sigma = 0.025;
-	const double D = 4.0 * c * a_rad / (3.0 * kappa0);
+	const double D = 4.0 * c * a_rad * std::pow(T0, 3) / (3.0 * kappa0);
 	const double width_sq = (sigma*sigma + D*t);
 	const double normfac = 1.0 / (2.0 * std::sqrt( M_PI * width_sq ));
 	return 0.5 * normfac * std::exp( -(x*x) / (4.0*width_sq) );
@@ -80,7 +81,7 @@ template <>
 auto RadSystem<PulseProblem>::ComputeOpacity(const double rho,
 					       const double Tgas) -> double
 {
-	return (kappa0 / rho) * std::max(std::pow(Tgas, 3), 1.0);
+	return (kappa0 / rho) * std::max( std::pow(Tgas/T0, 3), 1.0 );
 }
 
 template <>
@@ -89,9 +90,9 @@ auto RadSystem<PulseProblem>::ComputeOpacityTempDerivative(const double rho,
     -> double
 {
 	if (Tgas > 1.0) {
-		return (kappa0 / rho) * 3.0 * std::pow(Tgas, 2);
+		return (kappa0 / rho) * (3.0/T0) * std::pow(Tgas/T0, 2);
 	} else {
-		return 0.0;
+		return 0.;
 	}
 }
 
@@ -105,19 +106,22 @@ auto testproblem_radiation_pulse() -> int
 	// This makes this problem a stringent test of the asymptotic-
 	// preserving property of the computational method, since the
 	// optical depth per cell at the peak of the temperature profile is
-	// ~10^2 or greater.
+	// of order 10^5.
 
-	// Due to the long diffusion time (compared to Lx/c), the reduced 
-	// speed of light approximation must be used.
+	// This problem cannot be run for a meaningful amount of time
+	// compared to the diffusion time. (RSLA only makes the diffusion time
+	// longer by a factor of c/c_hat and therefore does not help.)
+	// However, this problem does test whether matter and radiation equilibrate
+	// (as they should) and that numerical diffusion is not excessive.
 
 	// Problem parameters
 
-	const int max_timesteps = 1e6;
-	const double CFL_number = 0.1;
-	const int nx = 1000;
+	const int max_timesteps = 3e5;
+	const double CFL_number = 0.8;
+	const int nx = 128;
 
 	const double max_dt = 1e-3;	  	// dimensionless time
-	const double max_time = 1.0e-2;	// dimensionless time
+	const double max_time = 1.0e-4;	// dimensionless time
 
 	// Problem initialization
 
@@ -246,51 +250,26 @@ auto testproblem_radiation_pulse() -> int
 		sol_norm += std::abs(Trad_exact[i]);
 	}
 
-	const double error_tol = 0.001;
+	const double error_tol = 0.005;
 	const double rel_error = err_norm / sol_norm;
 	std::cout << "Relative L1 error norm = " << rel_error << std::endl;
-
-#if 0
-	// plot energy density
-	std::map<std::string, std::string> Erad_args, Erad_exact_args, Erad_initial_args;
-	Erad_args["label"] = "Numerical solution";
-	Erad_args["color"] = "red";
-	Erad_args["linestyle"] = ":";
-	
-	Erad_exact_args["label"] = "Exact solution";
-	Erad_exact_args["linestyle"] = "-.";
-	Erad_exact_args["color"] = "blue";
-
-	Erad_initial_args["label"] = "initial condition";
-	Erad_initial_args["color"] = "black";
-	Erad_initial_args["linestyle"] = ":";
-
-	matplotlibcpp::plot(xs, Erad_initial, Erad_initial_args);
-	matplotlibcpp::plot(xs, Erad, Erad_args);
-	matplotlibcpp::plot(xs_exact, Erad_exact, Erad_exact_args);
-
-	matplotlibcpp::xlabel("length x (dimensionless)");
-	matplotlibcpp::ylabel("radiation energy density (dimensionless)");
-	matplotlibcpp::legend();
-	matplotlibcpp::title(fmt::format("time ct = {:.4g}", initial_time + rad_system.time() * c));
-	matplotlibcpp::save("./radiation_pulse.pdf");
-#endif
 
 	// plot temperature
 	matplotlibcpp::clf();
 
-	std::map<std::string, std::string> Trad_args, Tgas_args, Trad_exact_args, Tinit_args;
+	std::map<std::string, std::string> Trad_args, Tgas_args, Tinit_args;
 	Trad_args["label"] = "radiation temperature";
 	Trad_args["linestyle"] = "-.";
 	Tgas_args["label"] = "gas temperature";
 	Tgas_args["linestyle"] = "--";
-	Trad_exact_args["label"] = "radiation temperature (exact)";
-	Trad_exact_args["linestyle"] = ":";
 	Tinit_args["label"] = "initial temperature";
+	Tinit_args["color"] = "grey";
+	//Trad_exact_args["label"] = "radiation temperature (exact)";
+	//Trad_exact_args["linestyle"] = ":";
 	matplotlibcpp::plot(xs, T_initial, Tinit_args);
 	matplotlibcpp::plot(xs, Trad, Trad_args);
 	matplotlibcpp::plot(xs, Tgas, Tgas_args);
-	matplotlibcpp::plot(xs, Trad_exact, Trad_exact_args);
+	//matplotlibcpp::plot(xs, Trad_exact, Trad_exact_args);
 
 	matplotlibcpp::xlabel("length x (dimensionless)");
 	matplotlibcpp::ylabel("temperature (dimensionless)");
