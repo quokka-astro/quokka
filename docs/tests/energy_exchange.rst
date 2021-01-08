@@ -18,10 +18,20 @@ The initial energy densities are:
 ..
 
 We assume a specific heat :math:`c_v = \alpha T^3` which enables an analytic solution.
-We adopt a reduced speed of light (as used in :cite:`Skinner_2019`) with :math:`\hat c = 0.1 c`.
+We adopt a reduced speed of light with :math:`\hat c = 0.1 c`.
 
 Solution
 --------
+
+The exact time-dependent solution for the matter temperature :math:`T` is:
+
+.. math::
+    E_0 = E_{\text{gas}} + \frac{c}{\hat c} E_{\text{rad}} \\
+    \tilde E_0 = \frac{E_0}{a_r + \frac{\hat c}{c} \frac{\alpha}{4}} \\
+    T^4 = \left( T_{0}^4 - \frac{\hat c}{c} \tilde E_0 \right) \, \exp \left[ -\frac{4}{\alpha} \left( a_r + \frac{\hat c}{c} \frac{\alpha}{4} \right) \kappa \rho c t \right] \, + \, \frac{\hat c}{c} \tilde E_0 \, .
+..
+
+We show the numerical results below:
 
 .. figure:: radcoupling_rsla.png
     :alt: A figure showing the radiation temperature and material temperature as a function of time.
