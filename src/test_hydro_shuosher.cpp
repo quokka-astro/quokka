@@ -121,19 +121,17 @@ auto testproblem_hydro_shocktube() -> int
 		P.at(i) = hydro_system.pressure(i + nghost);
 	}
 
-#if 0
 	std::vector<double> xs_exact;
 	std::vector<double> density_exact;
 	std::vector<double> pressure_exact;
 	std::vector<double> velocity_exact;
 
-	std::string filename = "../../extern/ppm1d/results";
+	std::string filename = "../extern/ShuOsher_athena_3c_hllc_vl.txt";
 	std::ifstream fstream(filename, std::ios::in);
 	assert(fstream.is_open());
 
 	std::string header, blank_line;
 	std::getline(fstream, header);
-	std::getline(fstream, blank_line);
 	std::getline(fstream, blank_line);
 
 	for (std::string line; std::getline(fstream, line);) {
@@ -148,8 +146,8 @@ auto testproblem_hydro_shocktube() -> int
 		}
 		auto x = values.at(1);
 		auto density = values.at(2);
-		auto velocity = values.at(3);
-		auto pressure = values.at(4);
+		auto pressure = values.at(3);
+		auto velocity = values.at(4);
 
 		xs_exact.push_back(x);
 		density_exact.push_back(density);
@@ -170,7 +168,7 @@ auto testproblem_hydro_shocktube() -> int
 		sol_norm += std::abs(density_exact_interp[i]);
 	}
 
-	const double error_tol = 0.002;
+	const double error_tol = 0.02;
 	const double rel_error = err_norm / sol_norm;
 	std::cout << "err_norm = " << err_norm << std::endl;
 	std::cout << "sol_norm = " << sol_norm << std::endl;
@@ -180,20 +178,25 @@ auto testproblem_hydro_shocktube() -> int
 	if(rel_error > error_tol) {
 		status = 1;
 	}
-#endif
+
 	// Plot results
 	matplotlibcpp::clf();
 	//matplotlibcpp::ylim(0.0, 5.0);
 
-	std::map<std::string, std::string> d_args, dexact_args;
+	std::unordered_map<std::string, std::string> d_args;
+	std::map<std::string, std::string> dexact_args;
 	d_args["label"] = "density";
-	dexact_args["label"] = "density (exact solution)";
-	matplotlibcpp::plot(xs, d, d_args);
-	//matplotlibcpp::plot(xs, density_exact_interp, dexact_args);
+	d_args["marker"] = "x";
+	d_args["color"] = "black";
+	dexact_args["label"] = "density (reference solution)";
+	dexact_args["color"] = "gray";
+
+	matplotlibcpp::scatter(xs, d, 5.0, d_args);
+	matplotlibcpp::plot(xs, density_exact_interp, dexact_args);
 
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("t = {:.4f}", hydro_system.time()));
-	matplotlibcpp::save(fmt::format("./hydro_shuosher_{:.4f}.pdf", hydro_system.time()));
+	matplotlibcpp::save(fmt::format("./hydro_shuosher.pdf", hydro_system.time()));
 
 	// Cleanup and exit
 	std::cout << "Finished." << std::endl;

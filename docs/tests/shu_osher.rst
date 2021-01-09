@@ -9,7 +9,7 @@ ENO-RF-3 scheme shown in Figure 14b of :cite:`Shu_1989`.
 
 Parameters
 ----------
-The left- and right-side initial conditions are:
+The left- (:math:`x < 1.0`) and right-side (:math:`x \ge 1.0`) initial conditions are:
 
 .. math::
     \rho_0 = 3.857143 \\
@@ -26,11 +26,15 @@ Solution
 --------
 
 We use the RK2 integrator with a fixed timestep of :math:`10^{-4}`
-and a mesh of 400 equally-spaced zones. There are some subtle stair-step artifacts
+and a mesh of 400 equally-spaced zones, evolving until time :math:`t=1.8`. There are some subtle stair-step artifacts
 similar to those seen in the sawtooth linear advection test, but these converge away
-as the spatial resolution is increased. These can be eliminated by
-projecting the primitive variables into characteristic waves and reconstructing
+as the spatial resolution is increased.
+
+These artefacts can be eliminated by
+projecting into characteristic waves and reconstructing
 the interface states in the characteristic variables, as done in §4 of :cite:`Shu_1989`.
+The reference solution is computed using Athena++ with PPM reconstruction in the characteristic
+variables on a grid of 1600 zones.
 
 .. figure:: hydro_shuosher.png
     :alt: A figure showing the numerical solution to the Shu-Osher test.
