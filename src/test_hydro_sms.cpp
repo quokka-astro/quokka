@@ -152,15 +152,11 @@ auto testproblem_hydro_shocktube() -> int
 
 	// compute error norm
 
-	std::vector<double> density_exact_interp(xs.size());
-	interpolate_arrays(xs.data(), density_exact_interp.data(), xs.size(),
-			   		   xs_exact.data(), density_exact.data(), xs_exact.size());
-
 	double err_norm = 0.;
 	double sol_norm = 0.;
 	for (int i = 0; i < xs.size(); ++i) {
-		err_norm += std::abs(d[i] - density_exact_interp[i]);
-		sol_norm += std::abs(density_exact_interp[i]);
+		err_norm += std::abs(d[i] - density_exact[i]);
+		sol_norm += std::abs(density_exact[i]);
 	}
 
 	const double error_tol = 0.01;
@@ -182,7 +178,7 @@ auto testproblem_hydro_shocktube() -> int
 	d_args["label"] = "density";
 	dexact_args["label"] = "density (exact solution)";
 	matplotlibcpp::plot(xs, d, d_args);
-	matplotlibcpp::plot(xs, density_exact_interp, dexact_args);
+	matplotlibcpp::plot(xs, density_exact, dexact_args);
 
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("t = {:.4f}", hydro_system.time()));
