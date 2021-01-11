@@ -12,11 +12,13 @@ link_libraries(kokkos)
 link_libraries(fmt::fmt)
 
 function(add_clang_static_analysis target)
-    get_target_property(SRCs ${target} SOURCES)
-    add_library(${target}_analyze OBJECT ${SRCs})
-    target_include_directories(${target}_analyze PRIVATE ${PYTHON_INCLUDE_DIRS})
-    target_include_directories(${target}_analyze PRIVATE ${Kokkos_INCLUDE_DIRS_RET} ${fmt_INCLUDE_DIRS_RET})
-    target_compile_options(${target}_analyze BEFORE PRIVATE "--analyze")
+    if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        get_target_property(SRCs ${target} SOURCES)
+        add_library(${target}_analyze OBJECT ${SRCs})
+        target_include_directories(${target}_analyze PRIVATE ${PYTHON_INCLUDE_DIRS})
+        target_include_directories(${target}_analyze PRIVATE ${Kokkos_INCLUDE_DIRS_RET} ${fmt_INCLUDE_DIRS_RET})
+        target_compile_options(${target}_analyze BEFORE PRIVATE "--analyze")
+    endif()
 endfunction()
 
 add_executable(test_radiation_matter_coupling radiation_system.cpp hyperbolic_system.cpp test_radiation_matter_coupling.cpp interpolate.c)
@@ -78,7 +80,7 @@ include(CodeCoverage)
 append_coverage_compiler_flags()
 setup_target_for_coverage_gcovr_html(
         NAME coverage                 
-        EXECUTABLE ctest -j ${n_cores} # Executable in PROJECT_BINARY_DIR
+        EXECUTABLE ctest -j ${n_cores}
         DEPENDENCIES
             test_radiation_matter_coupling
             test_radiation_matter_coupling_rsla
