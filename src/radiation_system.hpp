@@ -66,10 +66,10 @@ class RadSystem : public HyperbolicSystem<problem_t>
 	double c_hat_ = c_light_;		 // for now
 	double radiation_constant_ = 7.5646e-15; // cgs
 
-	const double mean_molecular_mass_cgs_ = (0.5) * 1.6726231e-24; // cgs
+	const double mean_molecular_mass_cgs_ = 1.6726231e-24; // cgs
 	const double boltzmann_constant_cgs_ = 1.380658e-16;	       // cgs
 
-	double mean_molecular_mass_ = (0.5) * mean_molecular_mass_cgs_;
+	double mean_molecular_mass_ = mean_molecular_mass_cgs_;
 	double boltzmann_constant_ = boltzmann_constant_cgs_;
 	double gamma_ = (5. / 3.);
 
@@ -105,7 +105,7 @@ class RadSystem : public HyperbolicSystem<problem_t>
 	auto ComputeEintFromEgas(const double density, const double X1GasMom,
 					       const double X2GasMom, const double X3GasMom,
 					       const double Etot) -> double;
-	void ComputeCellOpticalDepth(int i);
+	auto ComputeCellOpticalDepth(int i) -> double;
 
 	// setter functions:
 
@@ -508,7 +508,7 @@ auto RadSystem<problem_t>::ComputeEddingtonFactor(double f) -> double
 }
 
 template <typename problem_t>
-void RadSystem<problem_t>::ComputeCellOpticalDepth(int i)
+auto RadSystem<problem_t>::ComputeCellOpticalDepth(int i) -> double
 {
 	// compute interface-averaged cell optical depth
 
@@ -537,7 +537,7 @@ void RadSystem<problem_t>::ComputeCellOpticalDepth(int i)
 	const double tau_L = dx_ * rho_L * RadSystem<problem_t>::ComputeOpacity(rho_L, Tgas_L);
 	const double tau_R = dx_ * rho_R * RadSystem<problem_t>::ComputeOpacity(rho_R, Tgas_R);
 
-	const double tau_cell = 0.5 * (tau_L + tau_R);
+	return 0.5 * (tau_L + tau_R);
 }
 
 template <typename problem_t>
@@ -634,8 +634,8 @@ void RadSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 		const std::valarray<double> U_L = {erad_L, Fx_L};
 		const std::valarray<double> U_R = {erad_R, Fx_R};
 
-		// const double tau_cell = ComputeCellOpticalDepth(i);
-		// const std::valarray<double> epsilon = {std::min(1.0, 1.0/tau_cell), 1.0};
+		const double tau_cell = ComputeCellOpticalDepth(i);
+		//const std::valarray<double> epsilon = {std::min(1.0, 1.0/tau_cell), 1.0};
 		const std::valarray<double> epsilon = {1.0, 1.0};
 
 		const std::valarray<double> F_star =
@@ -909,10 +909,10 @@ void RadSystem<problem_t>::PredictStep(const std::pair<int, int> range)
 			consVarPredictStep_(x1RadFlux_index, i) = x1F_new;
 
 		} else {
-			//std::cout
-			//    << "WARNING: [stage 1] flux limited at i = " << i
-			//    << " with reduced flux = " << x1ReducedFlux_new
-			//    << std::endl;
+			std::cout
+			    << "WARNING: [stage 1] flux limited at i = " << i
+			    << " with reduced flux = " << x1ReducedFlux_new
+			    << std::endl;
 
 			const double FE_1d =
 			    -1.0 * (dt_ / dx_) *
@@ -969,10 +969,10 @@ void RadSystem<problem_t>::AddFluxesRK2(array_t &U0, array_t &U1)
 			U0(x1RadFlux_index, i) = x1F_new;
 
 		} else {
-			//std::cout
-			//    << "WARNING: [stage 2] flux limited at i = " << i
-			//    << " with reduced flux = " << x1ReducedFlux_new
-			//    << std::endl;
+			std::cout
+			    << "WARNING: [stage 2] flux limited at i = " << i
+			    << " with reduced flux = " << x1ReducedFlux_new
+			    << std::endl;
 
 			const double FE_1d =
 			    -1.0 * (dt_ / dx_) *
