@@ -26,7 +26,7 @@ jobs:
       run: cmake -E make_directory ${{runner.workspace}}/build
 
     - name: Install dependencies
-      run: sudo apt-get update && sudo apt-get install python3-dev python3-numpy python3-matplotlib gcovr
+      run: sudo apt-get update && sudo apt-get install python3-dev python3-numpy python3-matplotlib gcovr libopenmpi-dev
 
     - name: Configure CMake
       # Use a bash shell so we can use the same syntax for environment variable
