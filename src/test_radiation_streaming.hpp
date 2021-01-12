@@ -14,11 +14,11 @@
 #include <fmt/format.h>
 
 // internal headers
-#include "athena_arrays.hpp"
+
 #include "radiation_system.hpp"
 
 // function definitions
-auto main() -> int;
+auto main(int argc, char** argv) -> int;
 auto testproblem_radiation_streaming() -> int;
 
 #endif // TEST_RADIATION_STREAMING_HPP_

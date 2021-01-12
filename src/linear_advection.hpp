@@ -16,7 +16,6 @@
 // library headers
 
 // internal headers
-#include "athena_arrays.hpp"
 #include "hyperbolic_system.hpp"
 
 /// Class for a linear, scalar advection equation
@@ -80,7 +79,7 @@ LinearAdvectionSystem<problem_t>::LinearAdvectionSystem(const LinearAdvectionArg
 {
 	assert(advectionVx_ != 0.0); // NOLINT
 
-	density_.InitWithShallowSlice(consVar_, 2, density_index, 0);
+	density_ = consVar_.SliceArray(density_index);
 }
 
 template <typename problem_t>

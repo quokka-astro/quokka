@@ -14,7 +14,6 @@
 #include <fmt/format.h>
 
 // internal headers
-#include "athena_arrays.hpp"
 #include "hydro_system.hpp"
 
 // function definitions

@@ -10,6 +10,10 @@ set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
 include(CTest)
 
+set(AMReX_SPACEDIM 1)
+set(AMReX_MPI OFF)
+set(AMReX_LINEAR_SOLVERS OFF)
+
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/src ${QuokkaCode_BINARY_DIR}/src)
 
 find_program(CLANG_TIDY_EXE NAMES "clang-tidy")

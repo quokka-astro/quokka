@@ -29,11 +29,11 @@
 ///
 /// \return Error code.
 ///
-auto main() -> int
+auto main(int argc, char** argv) -> int
 {
 	// Initialization
 
-	Kokkos::initialize();
+	amrex::Initialize(argc, argv);
 
 	{ // objects must be destroyed before Kokkos::finalize, so enter new
 	  // scope here to do that automatically
@@ -45,8 +45,8 @@ auto main() -> int
 		testproblem_radiation_matter_coupling();
 		// testproblem_radiation_marshak();
 
-	} // destructors must be called before Kokkos::finalize()
-	Kokkos::finalize();
+	} // destructors must be called before amrex::Finalize()
+	amrex::Finalize();
 
 	return 0;
 }

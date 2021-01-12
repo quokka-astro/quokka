@@ -9,11 +9,11 @@
 
 #include "test_hydro_wave.hpp"
 
-auto main() -> int
+auto main(int argc, char** argv) -> int
 {
 	// Initialization
 
-	Kokkos::initialize();
+	amrex::Initialize(argc, argv);
 
 	int result = 0;
 
@@ -22,8 +22,8 @@ auto main() -> int
 
 		result = testproblem_hydro_wave();
 
-	} // destructors must be called before Kokkos::finalize()
-	Kokkos::finalize();
+	} // destructors must be called before amrex::Finalize()
+	amrex::Finalize();
 
 	return result;
 }

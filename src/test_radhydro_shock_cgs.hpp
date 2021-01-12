@@ -15,7 +15,7 @@
 #include <fstream>
 
 // internal headers
-#include "athena_arrays.hpp"
+
 #include "hydro_system.hpp"
 #include "radiation_system.hpp"
 

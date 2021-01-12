@@ -15,7 +15,7 @@
 #include <fmt/format.h>
 
 // internal headers
-#include "athena_arrays.hpp"
+
 #include "radiation_system.hpp"
 
 extern "C" {

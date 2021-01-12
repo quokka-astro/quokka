@@ -9,12 +9,12 @@
 
 #include "test_radhydro_shock.hpp"
 
-auto main() -> int
+auto main(int argc, char** argv) -> int
 {
 	// Initialization
 
-	Kokkos::initialize();
-
+	amrex::Initialize(argc, argv);
+	
 	int result = 0;
 
 	{ // objects must be destroyed before Kokkos::finalize, so enter new
@@ -22,8 +22,8 @@ auto main() -> int
 
 		result = testproblem_radhydro_shock();
 
-	} // destructors must be called before Kokkos::finalize()
-	Kokkos::finalize();
+	} // destructors must be called before amrex::Finalize()
+	amrex::Finalize();
 
 	return result;
 }

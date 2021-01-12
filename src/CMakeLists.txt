@@ -1,17 +1,14 @@
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/amrex ${QuokkaCode_BINARY_DIR}/amrex)
-add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/kokkos ${QuokkaCode_BINARY_DIR}/kokkos)
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/fmt ${QuokkaCode_BINARY_DIR}/fmt)
 
 find_package(PythonLibs REQUIRED)
 
 include_directories(${PYTHON_INCLUDE_DIRS})
 include_directories(${amrex_INCLUDE_DIRS_RET})
-include_directories(${Kokkos_INCLUDE_DIRS_RET})
 include_directories(${fmt_INCLUDE_DIRS_RET})
 
 link_libraries(${PYTHON_LIBRARY})
 link_libraries(AMReX::amrex)
-link_libraries(kokkos)
 link_libraries(fmt::fmt)
 
 function(add_clang_static_analysis target)

@@ -11,12 +11,12 @@
 
 struct ShocktubeProblem {};
 
-auto main() -> int
+auto main(int argc, char** argv) -> int
 {
 	// Initialization
 
-	Kokkos::initialize();
-
+	amrex::Initialize(argc, argv);
+	
 	int result = 0;
 
 	{ // objects must be destroyed before Kokkos::finalize, so enter new
@@ -24,8 +24,8 @@ auto main() -> int
 
 		result = testproblem_hydro_shocktube();
 
-	} // destructors must be called before Kokkos::finalize()
-	Kokkos::finalize();
+	} // destructors must be called before amrex::Finalize()
+	amrex::Finalize();
 
 	return result;
 }

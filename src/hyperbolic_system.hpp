@@ -18,9 +18,11 @@
 #include <cmath>
 
 // library headers
+#include "AMReX_Array4.H"
+#include "AMReX_FArrayBox.H"
 
 // internal headers
-#include "athena_arrays.hpp"
+
 
 /// Provide type-safe global sign ('sgn') function.
 template <typename T> auto sgn(T val) -> int
@@ -28,7 +30,57 @@ template <typename T> auto sgn(T val) -> int
 	return (T(0) < val) - (val < T(0));
 }
 
-typedef AthenaArray<double> array_t;
+struct array_t
+{
+	amrex::Array4<double> arr_;
+	int ncomp_accessor_;
+
+	array_t() : arr_(), ncomp_accessor_(0)
+	{
+		// default constructor
+	}
+
+	array_t(amrex::Array4<double> arr) : arr_(arr), ncomp_accessor_(0)
+	{
+		// initialize arr_ to arr
+	}
+
+	array_t(amrex::Array4<double> arr, int ncomp) : arr_(arr), ncomp_accessor_(ncomp)
+	{
+
+	}
+
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE 
+	double& operator()(int n, int i) noexcept
+	{
+		int j = 0;
+		int k = 0;
+		return arr_(i, j, k, n);
+	}
+
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE 
+	double operator()(int n, int i) const noexcept
+	{
+		int j = 0;
+		int k = 0;
+		return arr_(i, j, k, n);
+	}
+
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE 
+	double& operator()(int i) noexcept
+	{
+		return arr_(i, 0, 0, ncomp_accessor_);
+	}
+
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE 
+	double operator()(int i) const noexcept
+	{
+		return arr_(i, 0, 0, ncomp_accessor_);
+	}
+
+	void AllocateArray(int ncomp, int dim1, int dim2 = 1, int dim3 = 1);
+	auto SliceArray(int ncomp) -> array_t;
+};
 
 /// Class for a hyperbolic system of conservation laws (Cannot be instantiated,
 /// must be subclassed.)
@@ -113,15 +165,15 @@ template <typename problem_t> class HyperbolicSystem
 
 		dim1_ = nx_ + 2 * nghost_;
 
-		consVar_.NewAthenaArray(nvars_, dim1_);
-		primVar_.NewAthenaArray(nvars_, dim1_);
-		consVarPredictStep_.NewAthenaArray(nvars_, dim1_);
-		consVarPredictStepPrev_.NewAthenaArray(nvars_, dim1_);
+		consVar_.AllocateArray(nvars_, dim1_);
+		primVar_.AllocateArray(nvars_, dim1_);
+		consVarPredictStep_.AllocateArray(nvars_, dim1_);
+		consVarPredictStepPrev_.AllocateArray(nvars_, dim1_);
 
-		x1LeftState_.NewAthenaArray(nvars_, dim1_);
-		x1RightState_.NewAthenaArray(nvars_, dim1_);
-		x1Flux_.NewAthenaArray(nvars_, dim1_);
-		x1FluxDiffusive_.NewAthenaArray(nvars_, dim1_);
+		x1LeftState_.AllocateArray(nvars_, dim1_);
+		x1RightState_.AllocateArray(nvars_, dim1_);
+		x1Flux_.AllocateArray(nvars_, dim1_);
+		x1FluxDiffusive_.AllocateArray(nvars_, dim1_);
 	}
 
 	virtual void AddFluxesRK2(array_t &U0, array_t &U1);

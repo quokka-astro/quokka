@@ -19,7 +19,6 @@
 #include <fmt/format.h>
 
 // internal headers
-#include "athena_arrays.hpp"
 #include "hyperbolic_system.hpp"
 
 /// Class for a linear, scalar advection equation
@@ -156,19 +155,17 @@ template <typename problem_t>
 RadSystem<problem_t>::RadSystem(RadSystemArgs args)
     : HyperbolicSystem<problem_t>{args.nx, args.lx, args.cflNumber, 5}
 {
-	radEnergy_.InitWithShallowSlice(consVar_, 2, radEnergy_index, 0);
-	x1RadFlux_.InitWithShallowSlice(consVar_, 2, x1RadFlux_index, 0);
+	radEnergy_ = consVar_.SliceArray(radEnergy_index);
+	x1RadFlux_ = consVar_.SliceArray(x1RadFlux_index);
 
-	gasEnergy_.InitWithShallowSlice(consVar_, 2, gasEnergy_index, 0);
-	staticGasDensity_.InitWithShallowSlice(consVar_, 2, gasDensity_index,
-					       0);
-	x1GasMomentum_.InitWithShallowSlice(consVar_, 2, x1GasMomentum_index,
-					    0);
+	gasEnergy_ = consVar_.SliceArray(gasEnergy_index);
+	staticGasDensity_ = consVar_.SliceArray(gasDensity_index);
+	x1GasMomentum_ = consVar_.SliceArray(x1GasMomentum_index);
 
-	radEnergySource_.NewAthenaArray(args.nx + 2 * nghost_);
+	radEnergySource_.AllocateArray(1, args.nx + 2 * nghost_);
 
-	x1Chi_.NewAthenaArray(args.nx + 2*nghost_);
-	problemCell_.NewAthenaArray(args.nx + 2*nghost_);
+	x1Chi_.AllocateArray(1, args.nx + 2*nghost_);
+	problemCell_.AllocateArray(1, args.nx + 2*nghost_);
 }
 
 template <typename problem_t>

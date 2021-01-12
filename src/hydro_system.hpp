@@ -18,7 +18,6 @@
 #include <fmt/format.h>
 
 // internal headers
-#include "athena_arrays.hpp"
 #include "hyperbolic_system.hpp"
 
 /// Class for a linear, scalar advection equation
@@ -123,16 +122,16 @@ HydroSystem<problem_t>::HydroSystem(HydroSystemArgs args)
 {
 	assert((gamma_ > 1.0)); // NOLINT
 
-	density_.InitWithShallowSlice(consVar_, 2, density_index, 0);
-	x1Momentum_.InitWithShallowSlice(consVar_, 2, x1Momentum_index, 0);
-	energy_.InitWithShallowSlice(consVar_, 2, energy_index, 0);
+	density_ = consVar_.SliceArray(density_index);
+	x1Momentum_ = consVar_.SliceArray(x1Momentum_index);
+	energy_ = consVar_.SliceArray(energy_index);
 
-	primDensity_.InitWithShallowSlice(primVar_, 2, primDensity_index, 0);
-	x1Velocity_.InitWithShallowSlice(primVar_, 2, x1Velocity_index, 0);
-	pressure_.InitWithShallowSlice(primVar_, 2, pressure_index, 0);
+	primDensity_ = consVar_.SliceArray(primDensity_index);
+	x1Velocity_ = consVar_.SliceArray(x1Velocity_index);
+	pressure_ = consVar_.SliceArray(pressure_index);
 
-	x1Chi_.NewAthenaArray(args.nx + 2*nghost_);
-	problemCell_.NewAthenaArray(args.nx + 2*nghost_);
+	x1Chi_.AllocateArray(1, args.nx + 2*nghost_);
+	problemCell_.AllocateArray(1, args.nx + 2*nghost_);
 }
 
 template <typename problem_t>
@@ -237,7 +236,7 @@ void HydroSystem<problem_t>::ConservedToPrimitive(
 		pressure_(i) = P;
 	}
 
-	ComputeFlatteningCoefficientX1(range);
+	ComputeFlatteningCoefficientX1(std::make_pair(-2 + nghost_, nghost_ + nx_ + 2));
 }
 
 template <typename problem_t>
