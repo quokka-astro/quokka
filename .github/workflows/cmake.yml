@@ -30,10 +30,10 @@ jobs:
       run: sudo apt-get update && sudo apt-get install python3-dev python3-numpy python3-matplotlib gcovr libopenmpi-dev
 
     - name: Install Sonarscan CLI
-      run: curl https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-4.5.0.2216-linux.zip > sonar-scanner.zip
-      run: unzip sonar-scanner.zip
-      run: curl https://sonarcloud.io/static/cpp/build-wrapper-linux-x86.zip > build-wrapper.zip
-      run: unzip build-wrapper.zip
+      run: ( curl https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-4.5.0.2216-linux.zip > sonar-scanner.zip ) && unzip sonar-scanner.zip
+      
+    - name: Install Sonarscan Build Wrapper
+      run: ( curl https://sonarcloud.io/static/cpp/build-wrapper-linux-x86.zip > build-wrapper.zip ) && unzip build-wrapper.zip
 
     - name: Configure CMake
       # Use a bash shell so we can use the same syntax for environment variable
