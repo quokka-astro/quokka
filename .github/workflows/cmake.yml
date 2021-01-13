@@ -70,7 +70,7 @@ jobs:
 
     - name: Run gcov
       working-directory: ${{runner.workspace}}/build
-      run: gcovr -r $GITHUB_WORKSPACE --gcov-executable="llvm-cov-10 gcov" --exclude=".*/extern/.*" --exclude=".*/test_.*\.cpp" --sonarqube coverage.xml
+      run: gcovr -r $GITHUB_WORKSPACE --gcov-executable="llvm-cov-10 gcov" --exclude=".*/extern/.*" --sonarqube coverage.xml
 
     - name: SonarCloud Scan
       working-directory: ${{github.workspace}}
