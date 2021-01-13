@@ -56,7 +56,7 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-      run: ${{runner.workspace}}/sonar-scanner-cli-4.5.0.2216-linux/bin/sonar-scanner -Dsonar.cfamily.build-wrapper-output=${{runner.workspace}}/build/bw-output
+      run: ${{runner.workspace}}/sonar-scanner-4.5.0.2216-linux/bin/sonar-scanner -Dsonar.cfamily.build-wrapper-output=${{runner.workspace}}/build/bw-output
 
     - name: Create test output directory
       run: cmake -E make_directory $GITHUB_WORKSPACE/tests

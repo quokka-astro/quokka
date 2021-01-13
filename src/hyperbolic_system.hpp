@@ -30,9 +30,11 @@ template <typename T> auto sgn(T val) -> int
 	return (T(0) < val) - (val < T(0));
 }
 
+using amrex::Real;
+
 struct array_t
 {
-	amrex::Array4<double> arr_;
+	amrex::Array4<Real> arr_;
 	int ncomp_accessor_;
 
 	array_t() : arr_(), ncomp_accessor_(0)
@@ -40,12 +42,12 @@ struct array_t
 		// default constructor
 	}
 
-	array_t(amrex::Array4<double> arr) : arr_(arr), ncomp_accessor_(0)
+	array_t(amrex::Array4<Real> arr) : arr_(arr), ncomp_accessor_(0)
 	{
 		// initialize arr_ to arr
 	}
 
-	array_t(amrex::Array4<double> arr, int ncomp) : arr_(arr), ncomp_accessor_(ncomp)
+	array_t(amrex::Array4<Real> arr, int ncomp) : arr_(arr), ncomp_accessor_(ncomp)
 	{
 
 	}
