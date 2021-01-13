@@ -355,6 +355,7 @@ auto RadSystem<problem_t>::CheckStatesValid(
 				  << " with reduced flux = " << reducedFluxX1
 				  << std::endl;
 			all_valid = false;
+			// TODO(ben): implement first-order flux correction
 		}
 	}
 

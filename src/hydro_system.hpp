@@ -126,9 +126,9 @@ HydroSystem<problem_t>::HydroSystem(HydroSystemArgs args)
 	x1Momentum_ = consVar_.SliceArray(x1Momentum_index);
 	energy_ = consVar_.SliceArray(energy_index);
 
-	primDensity_ = consVar_.SliceArray(primDensity_index);
-	x1Velocity_ = consVar_.SliceArray(x1Velocity_index);
-	pressure_ = consVar_.SliceArray(pressure_index);
+	primDensity_ = primVar_.SliceArray(primDensity_index);
+	x1Velocity_ = primVar_.SliceArray(x1Velocity_index);
+	pressure_ = primVar_.SliceArray(pressure_index);
 
 	x1Chi_.AllocateArray(1, args.nx + 2*nghost_);
 	problemCell_.AllocateArray(1, args.nx + 2*nghost_);
