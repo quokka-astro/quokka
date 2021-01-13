@@ -139,7 +139,10 @@ elseif(NOT CMAKE_COMPILER_IS_GNUCXX)
     endif()
 endif()
 
-set(COVERAGE_COMPILER_FLAGS "-fprofile-instr-generate -fcoverage-mapping"
+#set(COVERAGE_COMPILER_FLAGS "-fprofile-instr-generate -fcoverage-mapping"
+#    CACHE INTERNAL "")
+
+set(COVERAGE_COMPILER_FLAGS "--coverage" # this flag must be used for Clang
     CACHE INTERNAL "")
 
 set(CMAKE_Fortran_FLAGS_COVERAGE
@@ -169,9 +172,9 @@ mark_as_advanced(
     CMAKE_EXE_LINKER_FLAGS_COVERAGE
     CMAKE_SHARED_LINKER_FLAGS_COVERAGE )
 
-#if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
-#    message(WARNING "Code coverage results with an optimised (non-Debug) build may be misleading")
-#endif() # NOT CMAKE_BUILD_TYPE STREQUAL "Debug"
+if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+    message(WARNING "Code coverage results with an optimised (non-Debug) build may be misleading")
+endif() # NOT CMAKE_BUILD_TYPE STREQUAL "Debug"
 
 #if(CMAKE_C_COMPILER_ID STREQUAL "GNU" OR CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
 #    link_libraries(gcov)
@@ -327,10 +330,11 @@ function(setup_target_for_coverage_gcovr_html)
 endfunction() # setup_target_for_coverage_gcovr_html
 
 function(append_coverage_compiler_flags)
-    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${COVERAGE_COMPILER_FLAGS}" PARENT_SCOPE)
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COVERAGE_COMPILER_FLAGS}" PARENT_SCOPE)
-        set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} ${COVERAGE_COMPILER_FLAGS}" PARENT_SCOPE)
-        message(STATUS "Appending code coverage compiler flags: ${COVERAGE_COMPILER_FLAGS}")
-    endif()
+    #if(CMAKE_BUILD_TYPE STREQUAL "Debug") # only add --coverage flag if in debug mode
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${COVERAGE_COMPILER_FLAGS}" PARENT_SCOPE)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COVERAGE_COMPILER_FLAGS}" PARENT_SCOPE)
+    set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} ${COVERAGE_COMPILER_FLAGS}" PARENT_SCOPE)
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${COVERAGE_COMPILER_FLAGS}" PARENT_SCOPE)
+    message(STATUS "Appending code coverage compiler flags: ${COVERAGE_COMPILER_FLAGS}")
+    #endif()
 endfunction() # append_coverage_compiler_flags

@@ -51,13 +51,6 @@ jobs:
       # Execute the build.  You can specify a specific target with "--target <NAME>"
       run: ${{runner.workspace}}/build-wrapper-linux-x86/build-wrapper-linux-x86-64 --out-dir bw-output cmake --build . --config $BUILD_TYPE
 
-    - name: SonarCloud Scan
-      working-directory: ${{github.workspace}}
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
-        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-      run: ${{runner.workspace}}/sonar-scanner-4.5.0.2216-linux/bin/sonar-scanner -Dsonar.cfamily.build-wrapper-output=${{runner.workspace}}/build/bw-output
-
     - name: Create test output directory
       run: cmake -E make_directory $GITHUB_WORKSPACE/tests
 
@@ -67,10 +60,21 @@ jobs:
       # Execute tests defined by the CMake configuration.  
       # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
       run: ctest --verbose -C $BUILD_TYPE
-      
+
     - name: Upload test output
       if: always()
       uses: actions/upload-artifact@v2
       with:
         name: test-results
         path: ${{github.workspace}}/tests
+
+    - name: Run gcov
+      working-directory: ${{runner.workspace}}/build
+      run: gcovr -r $GITHUB_WORKSPACE/src --gcov-executable="llvm-cov-11 gcov" --sonarqube coverage.xml .
+
+    - name: SonarCloud Scan
+      working-directory: ${{github.workspace}}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      run: ${{runner.workspace}}/sonar-scanner-4.5.0.2216-linux/bin/sonar-scanner -Dsonar.cfamily.build-wrapper-output=${{runner.workspace}}/build/bw-output -Dsonar.coverageReportPaths=${{runner.workspace}}/build/coverage.xml
