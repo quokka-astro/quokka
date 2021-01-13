@@ -113,14 +113,14 @@ auto testproblem_radiation_streaming() -> int
 		dtPrev = this_dt;
 	}
 
-	std::cout << "Timestep " << j << "; t = " << rad_system.time() << "\n";
+	amrex::Print() << "Timestep " << j << "; t = " << rad_system.time() << "\n";
 
 	const auto current_erad = rad_system.ComputeRadEnergy();
 	const auto erad_deficit = std::abs(current_erad - initial_erad);
 
-	std::cout << "Total energy = " << current_erad << "\n";
-	std::cout << "Energy nonconservation = " << erad_deficit << "\n";
-	std::cout << "\n";
+	amrex::Print() << "Total energy = " << current_erad << "\n";
+	amrex::Print() << "Energy nonconservation = " << erad_deficit << "\n";
+	amrex::Print() << "\n";
 
 	// compute error norm
 	std::vector<double> erad(nx);
@@ -145,7 +145,7 @@ auto testproblem_radiation_streaming() -> int
 		status = 1;
 	}
 
-	std::cout << "Relative L1 norm = " << rel_err_norm << std::endl;
+	amrex::Print() << "Relative L1 norm = " << rel_err_norm << std::endl;
 
 	// Plot results every X timesteps
 
@@ -165,6 +165,6 @@ auto testproblem_radiation_streaming() -> int
 	matplotlibcpp::save("./radiation_streaming.pdf");
 
 	// Cleanup and exit
-	std::cout << "Finished." << std::endl;
+	amrex::Print() << "Finished." << std::endl;
 	return status;
 }

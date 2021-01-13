@@ -110,11 +110,11 @@ auto testproblem_hydro_shocktube() -> int
 		const auto current_mass = hydro_system.ComputeMass();
 		const auto mass_deficit = std::abs(current_mass - initial_mass);
 
-		std::cout << "Timestep " << j << "; t = " << hydro_system.time()
+		amrex::Print() << "Timestep " << j << "; t = " << hydro_system.time()
 			  << "\n";
-		std::cout << "Total mass = " << current_mass << "\n";
-		std::cout << "Mass nonconservation = " << mass_deficit << "\n";
-		std::cout << "\n";
+		amrex::Print() << "Total mass = " << current_mass << "\n";
+		amrex::Print() << "Mass nonconservation = " << mass_deficit << "\n";
+		amrex::Print() << "\n";
 #endif
 
 	}
@@ -182,9 +182,9 @@ auto testproblem_hydro_shocktube() -> int
 
 	const double error_tol = 0.002;
 	const double rel_error = err_norm / sol_norm;
-	std::cout << "err_norm = " << err_norm << std::endl;
-	std::cout << "sol_norm = " << sol_norm << std::endl;
-	std::cout << "Relative L1 error norm = " << rel_error << std::endl;
+	amrex::Print() << "err_norm = " << err_norm << std::endl;
+	amrex::Print() << "sol_norm = " << sol_norm << std::endl;
+	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
 
 	// Compute test success condition
 	int status = 0;
@@ -217,6 +217,6 @@ auto testproblem_hydro_shocktube() -> int
 	matplotlibcpp::save(fmt::format("./hydro_{:.4f}.pdf", hydro_system.time()));
 
 	// Cleanup and exit
-	std::cout << "Finished." << std::endl;
+	amrex::Print() << "Finished." << std::endl;
 	return status;
 }

@@ -123,14 +123,14 @@ auto testproblem_hydro_wave() -> int
 		hydro_system.AdvanceTimestep(max_dt);
 	}
 
-	std::cout << "t = " << hydro_system.time() << "\n";
+	amrex::Print() << "t = " << hydro_system.time() << "\n";
 
 	const auto current_mass = hydro_system.ComputeMass();
 	const auto mass_deficit = std::abs(current_mass - initial_mass);
 
-	std::cout << "Total mass = " << current_mass << "\n";
-	std::cout << "Mass nonconservation = " << mass_deficit << "\n";
-	std::cout << "\n";
+	amrex::Print() << "Total mass = " << current_mass << "\n";
+	amrex::Print() << "Mass nonconservation = " << mass_deficit << "\n";
+	amrex::Print() << "\n";
 
 	// Plot results every X timesteps
 	std::vector<double> d(nx);
@@ -172,7 +172,7 @@ auto testproblem_hydro_wave() -> int
 	if (err_norm > err_tol) {
 		status = 1;
 	}
-	std::cout << "L1 error norm = " << err_norm << std::endl;
+	amrex::Print() << "L1 error norm = " << err_norm << std::endl;
 
 	// plot result
 	std::map<std::string, std::string> d_args, dinit_args, dexact_args;
@@ -212,6 +212,6 @@ auto testproblem_hydro_wave() -> int
 	assert((mass_deficit / initial_mass) < rtol); // NOLINT
 
 	// Cleanup and exit
-	std::cout << "Finished." << std::endl;
+	amrex::Print() << "Finished." << std::endl;
 	return status;
 }

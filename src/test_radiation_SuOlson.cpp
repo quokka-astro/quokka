@@ -118,11 +118,11 @@ auto testproblem_radiation_marshak() -> int
 	const double max_dt = max_dtau / (eps_SuOlson * c * chi);	  // s
 	const double initial_dt = initial_dtau / (eps_SuOlson * c * chi); // s
 
-	std::cout << "radiation constant (code units) = " << a_rad << "\n";
-	std::cout << "c_light (code units) = " << c << "\n";
-	std::cout << "Lx = " << Lx << "\n";
-	std::cout << "initial_dt = " << initial_dt << "\n";
-	std::cout << "max_dt = " << max_dt << "\n";
+	amrex::Print() << "radiation constant (code units) = " << a_rad << "\n";
+	amrex::Print() << "c_light (code units) = " << c << "\n";
+	amrex::Print() << "Lx = " << Lx << "\n";
+	amrex::Print() << "initial_dt = " << initial_dt << "\n";
+	amrex::Print() << "max_dt = " << max_dt << "\n";
 
 	rad_system.set_lx(Lx);
 
@@ -164,7 +164,7 @@ auto testproblem_radiation_marshak() -> int
 	for (int j = 0; j < max_timesteps; ++j) {
 
 		if (rad_system.time() >= max_time) {
-			std::cout << "Timestep " << j
+			amrex::Print() << "Timestep " << j
 				  << "; t = " << rad_system.time()
 				  << "; dt = " << rad_system.dt() << "\n";
 
@@ -174,13 +174,13 @@ auto testproblem_radiation_marshak() -> int
 			const auto Ediff = std::fabs(Etot - Etot0);
 			const auto Eadded = x0 * rad_system.time() * (c * S);
 
-			std::cout << "radiation energy = " << Erad << "\n";
-			std::cout << "gas energy = " << Egas << "\n";
-			std::cout << "Total energy = " << Etot << "\n";
-			std::cout << "(Energy nonconservation = " << Ediff
+			amrex::Print() << "radiation energy = " << Erad << "\n";
+			amrex::Print() << "gas energy = " << Egas << "\n";
+			amrex::Print() << "Total energy = " << Etot << "\n";
+			amrex::Print() << "(Energy nonconservation = " << Ediff
 				  << ")\n";
-			std::cout << "Injected energy = " << Eadded << "\n";
-			std::cout << "\n";
+			amrex::Print() << "Injected energy = " << Eadded << "\n";
+			amrex::Print() << "\n";
 
 			break;
 		}
@@ -297,7 +297,7 @@ auto testproblem_radiation_marshak() -> int
 	const double error_tol =
 	    0.03; // this will not agree to better than this, due to not being
 		  // able to capture fEdd < 1/3 behavior
-	std::cout << "Relative L1 error norm = " << rel_error << std::endl;
+	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
 
 	// Plot solution
 
@@ -388,7 +388,7 @@ auto testproblem_radiation_marshak() -> int
 	matplotlibcpp::save("./SuOlsonTest_loglog.pdf");
 
 	// Cleanup and exit
-	std::cout << "Finished." << std::endl;
+	amrex::Print() << "Finished." << std::endl;
 
 	int status = 0;
 	if (rel_error > error_tol) {

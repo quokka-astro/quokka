@@ -98,7 +98,7 @@ auto testproblem_hydro_shocktube() -> int
 
 	for (int j = 0; j < max_timesteps; ++j) {
 		if (hydro_system.time() >= max_time) {
-			std::cout << "Stopping at t=" << hydro_system.time() << std::endl;
+			amrex::Print() << "Stopping at t=" << hydro_system.time() << std::endl;
 			break;
 		}
 
@@ -180,9 +180,9 @@ auto testproblem_hydro_shocktube() -> int
 
 	const double error_tol = 0.002;
 	const double rel_error = err_norm / sol_norm;
-	std::cout << "err_norm = " << err_norm << std::endl;
-	std::cout << "sol_norm = " << sol_norm << std::endl;
-	std::cout << "Relative L1 error norm = " << rel_error << std::endl;
+	amrex::Print() << "err_norm = " << err_norm << std::endl;
+	amrex::Print() << "sol_norm = " << sol_norm << std::endl;
+	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
 
 	// Compute test success condition
 	if(rel_error > error_tol) {
@@ -226,6 +226,6 @@ auto testproblem_hydro_shocktube() -> int
 
 
 	// Cleanup and exit
-	std::cout << "Finished." << std::endl;
+	amrex::Print() << "Finished." << std::endl;
 	return status;
 }

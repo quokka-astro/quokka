@@ -165,13 +165,13 @@ auto testproblem_radiation_pulse() -> int
 	const auto Egas0 = rad_system.ComputeGasEnergy();
 	const auto Etot0 = Erad0 + Egas0;
 
-	std::cout << "radiation constant (code units) = " << a_rad << "\n";
-	std::cout << "c_light (code units) = " << c << "\n";
-	std::cout << "Lx = " << Lx << "\n";
-	std::cout << "max_dt = " << max_dt << "\n";
-	std::cout << "initial time = " << initial_time << std::endl;
-	std::cout << "initial gas energy = " << Egas0 << std::endl;
-	std::cout << "initial radiation energy = " << Erad0 << "\n" << std::endl;
+	amrex::Print() << "radiation constant (code units) = " << a_rad << "\n";
+	amrex::Print() << "c_light (code units) = " << c << "\n";
+	amrex::Print() << "Lx = " << Lx << "\n";
+	amrex::Print() << "max_dt = " << max_dt << "\n";
+	amrex::Print() << "initial time = " << initial_time << std::endl;
+	amrex::Print() << "initial gas energy = " << Egas0 << std::endl;
+	amrex::Print() << "initial radiation energy = " << Erad0 << "\n" << std::endl;
 
 	// Main time loop
 	int j;
@@ -190,7 +190,7 @@ auto testproblem_radiation_pulse() -> int
 		dt_prev = this_dt;
 	}
 
-	std::cout << "Timestep " << j << "; t = " << rad_system.time()
+	amrex::Print() << "Timestep " << j << "; t = " << rad_system.time()
 		  << "; dt = " << rad_system.dt() << "\n";
 
 	const auto Erad_tot = rad_system.ComputeRadEnergy();
@@ -198,11 +198,11 @@ auto testproblem_radiation_pulse() -> int
 	const auto Etot = Erad_tot + Egas_tot;
 	const auto Ediff = std::fabs(Etot - Etot0);
 
-	std::cout << "radiation energy = " << Erad_tot << "\n";
-	std::cout << "gas energy = " << Egas_tot << "\n";
-	std::cout << "Total energy = " << Etot << "\n";
-	std::cout << "(Energy nonconservation = " << Ediff << ")\n";
-	std::cout << "\n";
+	amrex::Print() << "radiation energy = " << Erad_tot << "\n";
+	amrex::Print() << "gas energy = " << Egas_tot << "\n";
+	amrex::Print() << "Total energy = " << Etot << "\n";
+	amrex::Print() << "(Energy nonconservation = " << Ediff << ")\n";
+	amrex::Print() << "\n";
 
 
 	// read out results
@@ -252,7 +252,7 @@ auto testproblem_radiation_pulse() -> int
 
 	const double error_tol = 0.005;
 	const double rel_error = err_norm / sol_norm;
-	std::cout << "Relative L1 error norm = " << rel_error << std::endl;
+	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
 
 	// plot temperature
 	matplotlibcpp::clf();
@@ -278,7 +278,7 @@ auto testproblem_radiation_pulse() -> int
 	matplotlibcpp::save("./radiation_pulse_temperature.pdf");
 
 	// Cleanup and exit
-	std::cout << "Finished." << std::endl;
+	amrex::Print() << "Finished." << std::endl;
 
 	int status = 0;
 

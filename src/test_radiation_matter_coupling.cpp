@@ -108,8 +108,8 @@ auto testproblem_radiation_matter_coupling() -> int
 	const auto initial_Egas = rad_system.ComputeGasEnergy();
 	const auto initial_Etot = initial_Erad + initial_Egas;
 
-	std::cout << "Initial radiation temperature = " << initial_Trad << "\n";
-	std::cout << "Initial gas temperature = " << initial_Tgas << "\n";
+	amrex::Print() << "Initial radiation temperature = " << initial_Trad << "\n";
+	amrex::Print() << "Initial gas temperature = " << initial_Tgas << "\n";
 
 #if 0
 	const double c_v =
@@ -117,7 +117,7 @@ auto testproblem_radiation_matter_coupling() -> int
 	    (rad_system.mean_molecular_mass_ * (rad_system.gamma_ - 1.0));
 	const auto initial_Tgas = Egas / (rho * c_v);
 
-	std::cout << "Volumetric heat capacity c_v = " << rho * c_v << "\n";
+	amrex::Print() << "Volumetric heat capacity c_v = " << rho * c_v << "\n";
 #endif
 
 	// Main time loop
@@ -135,15 +135,15 @@ auto testproblem_radiation_matter_coupling() -> int
 		const auto Ediff = std::fabs(current_Etot - initial_Etot);
 
 		if (rad_system.time() >= max_time) {
-			std::cout << "Timestep " << j
+			amrex::Print() << "Timestep " << j
 				  << "; t = " << rad_system.time() << "\n";
-			std::cout << "radiation energy = " << current_Erad
+			amrex::Print() << "radiation energy = " << current_Erad
 				  << "\n";
-			std::cout << "gas energy = " << current_Egas << "\n";
-			std::cout << "Total energy = " << current_Etot << "\n";
-			std::cout << "(Energy nonconservation = " << Ediff
+			amrex::Print() << "gas energy = " << current_Egas << "\n";
+			amrex::Print() << "Total energy = " << current_Etot << "\n";
+			amrex::Print() << "(Energy nonconservation = " << Ediff
 				  << ")\n";
-			std::cout << "\n";
+			amrex::Print() << "\n";
 
 			break;
 		}
@@ -221,7 +221,7 @@ auto testproblem_radiation_matter_coupling() -> int
 	}
 	const double rel_error = err_norm / sol_norm;
 	const double error_tol = 1e-5;
-	std::cout << "relative L1 error norm = " << rel_error << std::endl;
+	amrex::Print() << "relative L1 error norm = " << rel_error << std::endl;
 
 	matplotlibcpp::clf();
 	matplotlibcpp::yscale("log");
@@ -262,7 +262,7 @@ auto testproblem_radiation_matter_coupling() -> int
 	matplotlibcpp::save(fmt::format("./radcoupling_fractional_error.pdf"));
 
 	// Cleanup and exit
-	std::cout << "Finished." << std::endl;
+	amrex::Print() << "Finished." << std::endl;
 
 	int status = 0;
 	if (rel_error > error_tol) {

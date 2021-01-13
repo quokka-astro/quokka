@@ -127,7 +127,7 @@ template <> void RadSystem<ShockProblem>::AdvanceTimestep(const double hydro_dt)
 		AdvanceTimestepRK2(dt_substep);
 		++Nsubsteps;
 	}
-	//std::cout << "\tAdvanced radiation subsystem with " << Nsubsteps << " substeps.\n";
+	//amrex::Print() << "\tAdvanced radiation subsystem with " << Nsubsteps << " substeps.\n";
 	assert(time_ == advance_to_time); // NOLINT
 }
 
@@ -192,12 +192,12 @@ auto testproblem_radhydro_shock() -> int
 	const auto Egas0 = hydro_system.ComputeEnergy();
 	const auto Etot0 = (c/chat)*Erad0 + Egas0;
 
-	std::cout << "radiation constant (code units) = " << a_rad << "\n";
-	std::cout << "c_light (code units) = " << c << "\n";
-	std::cout << "Lx = " << Lx << "\n";
-	std::cout << "initial_dt = " << initial_dt << "\n";
-	std::cout << "max_dt = " << max_dt << "\n";
-	std::cout << "max_time = " << max_time << "\n\n";
+	amrex::Print() << "radiation constant (code units) = " << a_rad << "\n";
+	amrex::Print() << "c_light (code units) = " << c << "\n";
+	amrex::Print() << "Lx = " << Lx << "\n";
+	amrex::Print() << "initial_dt = " << initial_dt << "\n";
+	amrex::Print() << "max_dt = " << max_dt << "\n";
+	amrex::Print() << "max_time = " << max_time << "\n\n";
 
 	// Main time loop
 	int j;
@@ -223,8 +223,8 @@ auto testproblem_radhydro_shock() -> int
 		const double computed_dt = hydro_system.ComputeTimestep(this_dtMax);
 		const double this_dt = std::min(computed_dt, dt_expand_factor*dt_prev);
 
-		//std::cout << "[timestep " << j << "] ";
-		//std::cout << "t = " << hydro_system.time() << "\tdt = " << this_dt << std::endl;
+		//amrex::Print() << "[timestep " << j << "] ";
+		//amrex::Print() << "t = " << hydro_system.time() << "\tdt = " << this_dt << std::endl;
 
 		// Advance hydro subsystem
 		hydro_system.AdvanceTimestepRK2(this_dt);
@@ -248,10 +248,10 @@ auto testproblem_radhydro_shock() -> int
 		// Update previous timestep
 		dt_prev = this_dt;
 
-		//std::cout << std::endl;
+		//amrex::Print() << std::endl;
 	}
 
-	std::cout << "Timestep " << j << "; t = " << hydro_system.time()
+	amrex::Print() << "Timestep " << j << "; t = " << hydro_system.time()
 		  << "; dt = " << hydro_system.dt() << "\n";
 
 	const auto total_Erad = rad_system.ComputeRadEnergy();
@@ -259,11 +259,11 @@ auto testproblem_radhydro_shock() -> int
 	const auto total_E = (c/chat)*total_Erad + total_Egas;
 	const auto Ediff = std::fabs(total_E - Etot0);
 
-	std::cout << "radiation energy = " << total_Erad << "\n";
-	std::cout << "gas energy = " << total_Egas << "\n";
-	std::cout << "Total energy = " << total_E << "\n";
-	std::cout << "(Energy nonconservation = " << Ediff << ")\n";
-	std::cout << "\n";
+	amrex::Print() << "radiation energy = " << total_Erad << "\n";
+	amrex::Print() << "gas energy = " << total_Egas << "\n";
+	amrex::Print() << "Total energy = " << total_E << "\n";
+	amrex::Print() << "(Energy nonconservation = " << Ediff << ")\n";
+	amrex::Print() << "\n";
 
 	// read output variables
 
@@ -344,8 +344,8 @@ auto testproblem_radhydro_shock() -> int
 		// compute error norm
 
 		std::vector<double> Trad_interp(xs_exact.size());
-		std::cout << "xs min/max = " << xs[0] << ", " << xs[xs.size()-1] << std::endl;
-		std::cout << "xs_exact min/max = " << xs_exact[0] << ", " << xs_exact[xs_exact.size()-1] << std::endl;
+		amrex::Print() << "xs min/max = " << xs[0] << ", " << xs[xs.size()-1] << std::endl;
+		amrex::Print() << "xs_exact min/max = " << xs_exact[0] << ", " << xs_exact[xs_exact.size()-1] << std::endl;
 
 		interpolate_arrays(xs_exact.data(), Trad_interp.data(), xs_exact.size(),
 			   xs.data(), Trad.data(), xs.size());
@@ -358,9 +358,9 @@ auto testproblem_radhydro_shock() -> int
 		}
 
 		rel_error = err_norm / sol_norm;
-		std::cout << "Error norm = " << err_norm << std::endl;
-		std::cout << "Solution norm = " << sol_norm << std::endl;
-		std::cout << "Relative L1 error norm = " << rel_error << std::endl;
+		amrex::Print() << "Error norm = " << err_norm << std::endl;
+		amrex::Print() << "Solution norm = " << sol_norm << std::endl;
+		amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
 	}
 
 	// plot results
@@ -415,7 +415,7 @@ auto testproblem_radhydro_shock() -> int
 	matplotlibcpp::save("./radshock_cgs_gasdensity.pdf");
 
 	// Cleanup and exit
-	std::cout << "Finished." << std::endl;
+	amrex::Print() << "Finished." << std::endl;
 
 	int status = 0;
 	if ((rel_error > error_tol) || std::isnan(rel_error)) {

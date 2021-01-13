@@ -104,7 +104,7 @@ auto testproblem_hydro_shocktube() -> int
 		hydro_system.AdvanceTimestepRK2(fixed_dt);
 	}
 
-	std::cout << "Stopping at timestep " << j << " t=" << hydro_system.time() << std::endl;
+	amrex::Print() << "Stopping at timestep " << j << " t=" << hydro_system.time() << std::endl;
 
 // read in exact solution
 	int status = 0;
@@ -166,9 +166,9 @@ auto testproblem_hydro_shocktube() -> int
 	// [See Section 10.7 and Figure 10.20 of Toro (1998).]
 	const double error_tol = 0.0; // this is not a typo
 	const double rel_error = err_norm / sol_norm;
-	std::cout << "err_norm = " << err_norm << std::endl;
-	std::cout << "sol_norm = " << sol_norm << std::endl;
-	std::cout << "Relative L1 error norm = " << rel_error << std::endl;
+	amrex::Print() << "err_norm = " << err_norm << std::endl;
+	amrex::Print() << "sol_norm = " << sol_norm << std::endl;
+	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
 
 	// Compute test success condition
 	if(rel_error > error_tol) {
@@ -192,6 +192,6 @@ auto testproblem_hydro_shocktube() -> int
 	matplotlibcpp::save(fmt::format("./hydro_contact.pdf", hydro_system.time()));
 
 	// Cleanup and exit
-	std::cout << "Finished." << std::endl;
+	amrex::Print() << "Finished." << std::endl;
 	return status;
 }

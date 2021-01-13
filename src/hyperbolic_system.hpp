@@ -592,7 +592,7 @@ void HyperbolicSystem<problem_t>::AdvanceTimestepRK2(const double dt)
 	AddFluxesRK2(consVar_, consVarPredictStep_);
 
 	if (!CheckStatesValid(consVarPredictStep_, cell_range)) {
-		std::cout << "[stage 2] This should not happen!\n";
+		amrex::Print() << "[stage 2] This should not happen!\n";
 		assert(false); // NOLINT
 	}
 
@@ -601,7 +601,7 @@ void HyperbolicSystem<problem_t>::AdvanceTimestepRK2(const double dt)
 
 #if 0
 	if (CheckStatesValid(consVar_, cell_range)) {
-		std::cout << "[source terms] This should not happen!\n";
+		amrex::Print() << "[source terms] This should not happen!\n";
 		assert(false);
 	}
 #endif

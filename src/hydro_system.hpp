@@ -280,12 +280,12 @@ auto HydroSystem<problem_t>::CheckStatesValid(
 
 		if (rho <= 0.) {
 			problemCell_(i) = 1.0;
-			std::cout << "Bad cell i = " << i << " (negative density = " << rho << ")." << std::endl;
+			amrex::Print() << "Bad cell i = " << i << " (negative density = " << rho << ")." << std::endl;
 			areValid = false;
 		}
 		if( P <= 0.) {
 			problemCell_(i) = 1.0;
-			std::cout << "Bad cell i = " << i << " (negative pressure = " << P << ")." << std::endl;
+			amrex::Print() << "Bad cell i = " << i << " (negative pressure = " << P << ")." << std::endl;
 			areValid = false;
 		}
 	}

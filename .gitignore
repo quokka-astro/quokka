@@ -1,7 +1,10 @@
 .vscode/
 build/
+tests/
 .clangd
 __pycache__
+*.code-workspace
+*.sarif
 
 *.mp4
 *.pdf

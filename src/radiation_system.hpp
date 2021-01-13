@@ -344,14 +344,14 @@ auto RadSystem<problem_t>::CheckStatesValid(
 		const auto reducedFluxX1 = Fx / (c_light_ * E_r);
 
 		if (E_r < 0.0) {
-			std::cout << "ERROR: Positivity failure at i = " << i
+			amrex::Print() << "ERROR: Positivity failure at i = " << i
 				  << " with energy density = " << E_r
 				  << std::endl;
 			all_valid = false;
 		}
 
 		if (std::abs(reducedFluxX1) > 1.0) {
-			std::cout << "ERROR: Flux limiting failure at i = " << i
+			amrex::Print() << "ERROR: Flux limiting failure at i = " << i
 				  << " with reduced flux = " << reducedFluxX1
 				  << std::endl;
 			all_valid = false;
@@ -466,7 +466,7 @@ auto RadSystem<problem_t>::ComputeTimestep(const double dt_max) -> double
 	// double dt = std::numeric_limits<double>::max();
 	double dt = dt_max;
 
-	// std::cout << "dt_max = " << dt_max << "\n";
+	// amrex::Print() << "dt_max = " << dt_max << "\n";
 
 	for (int i = 0; i < dim1_; ++i) {
 		const double signal_max = c_hat_;
@@ -474,7 +474,7 @@ auto RadSystem<problem_t>::ComputeTimestep(const double dt_max) -> double
 		dt = std::min(dt, thisDt);
 	}
 
-	// std::cout << "Timestep determined to be: " << dt << "\n";
+	// amrex::Print() << "Timestep determined to be: " << dt << "\n";
 
 	dt_ = dt;
 	return dt;
@@ -907,7 +907,7 @@ void RadSystem<problem_t>::PredictStep(const std::pair<int, int> range)
 			consVarPredictStep_(x1RadFlux_index, i) = x1F_new;
 
 		} else {
-			std::cout
+			amrex::Print()
 			    << "WARNING: [stage 1] flux limited at i = " << i
 			    << " with reduced flux = " << x1ReducedFlux_new
 			    << std::endl;
@@ -967,7 +967,7 @@ void RadSystem<problem_t>::AddFluxesRK2(array_t &U0, array_t &U1)
 			U0(x1RadFlux_index, i) = x1F_new;
 
 		} else {
-			std::cout
+			amrex::Print()
 			    << "WARNING: [stage 2] flux limited at i = " << i
 			    << " with reduced flux = " << x1ReducedFlux_new
 			    << std::endl;

@@ -33,16 +33,16 @@ struct SawtoothProblem {};
 template <typename problem_t>
 void write_density(LinearAdvectionSystem<problem_t> &advection_system)
 {
-	std::cout << "density = ";
+	amrex::Print() << "density = ";
 
 	auto nx = advection_system.nx();
 	auto nghost = advection_system.nghost();
 
 	for (int i = 0; i < nx + 2 * nghost; ++i) {
-		std::cout << advection_system.density(i) << " ";
+		amrex::Print() << advection_system.density(i) << " ";
 	}
 
-	std::cout << "\n";
+	amrex::Print() << "\n";
 }
 
 auto testproblem_advection() -> int
@@ -103,7 +103,7 @@ auto testproblem_advection() -> int
 		advection_system.AdvanceTimestepRK2(max_dt);
 	}
 
-	std::cout << "timestep " << j << "; t = " << advection_system.time() << "\n";
+	amrex::Print() << "timestep " << j << "; t = " << advection_system.time() << "\n";
 
 
 	// Compute error norm
@@ -119,9 +119,9 @@ auto testproblem_advection() -> int
 	}
 	
 	const double rel_error = err_norm / sol_norm;
-	//std::cout << "Absolute error norm = " << err_norm << std::endl;
-	//std::cout << "Reference solution norm = " << sol_norm << std::endl;
-	std::cout << "Relative L1 error norm = " << rel_error << std::endl;
+	//amrex::Print() << "Absolute error norm = " << err_norm << std::endl;
+	//amrex::Print() << "Reference solution norm = " << sol_norm << std::endl;
+	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
 
 	const double err_tol = 0.015;
 	int status = 0;
@@ -142,7 +142,7 @@ auto testproblem_advection() -> int
 	matplotlibcpp::save(std::string("./advection_semiellipse.pdf"));
 
 	// Cleanup and exit
-	std::cout << "Finished." << std::endl;
+	amrex::Print() << "Finished." << std::endl;
 
 	return status;
 }

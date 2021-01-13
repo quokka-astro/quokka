@@ -174,18 +174,18 @@ auto testproblem_radiation_classical_marshak() -> int
 	const auto Egas0 = rad_system.ComputeGasEnergy();
 	const auto Etot0 = Erad0 + Egas0;
 
-	std::cout << "radiation constant (code units) = " << a_rad << "\n";
-	std::cout << "c_light (code units) = " << c << "\n";
-	std::cout << "Lx = " << Lx << "\n";
-	std::cout << "initial_dt = " << initial_dt << "\n";
-	std::cout << "max_dt = " << max_dt << "\n";
+	amrex::Print() << "radiation constant (code units) = " << a_rad << "\n";
+	amrex::Print() << "c_light (code units) = " << c << "\n";
+	amrex::Print() << "Lx = " << Lx << "\n";
+	amrex::Print() << "initial_dt = " << initial_dt << "\n";
+	amrex::Print() << "max_dt = " << max_dt << "\n";
 
 	// Main time loop
 
 	for (int j = 0; j < max_timesteps; ++j) {
 
 		if (rad_system.time() >= max_time) {
-			std::cout << "Timestep " << j
+			amrex::Print() << "Timestep " << j
 				  << "; t = " << rad_system.time()
 				  << "; dt = " << rad_system.dt() << "\n";
 
@@ -194,12 +194,12 @@ auto testproblem_radiation_classical_marshak() -> int
 			const auto Etot = Erad + Egas;
 			const auto Ediff = std::fabs(Etot - Etot0);
 
-			std::cout << "radiation energy = " << Erad << "\n";
-			std::cout << "gas energy = " << Egas << "\n";
-			std::cout << "Total energy = " << Etot << "\n";
-			std::cout << "(Energy nonconservation = " << Ediff
+			amrex::Print() << "radiation energy = " << Erad << "\n";
+			amrex::Print() << "gas energy = " << Egas << "\n";
+			amrex::Print() << "Total energy = " << Etot << "\n";
+			amrex::Print() << "(Energy nonconservation = " << Ediff
 				  << ")\n";
-			std::cout << "\n";
+			amrex::Print() << "\n";
 
 			break;
 		}
@@ -276,7 +276,7 @@ auto testproblem_radiation_classical_marshak() -> int
 	double sol_norm = 0.;
 	const double t = rad_system.time();
 	const double xmax = c * t;
-	std::cout << "diffusion length = " << xmax << std::endl;
+	amrex::Print() << "diffusion length = " << xmax << std::endl;
 	for (int i = 0; i < xs.size(); ++i) {
 		if (xs[i] < xmax) {
 			err_norm += std::abs(Trad[i] - Trad_exact_interp[i]);
@@ -286,7 +286,7 @@ auto testproblem_radiation_classical_marshak() -> int
 
 	const double error_tol = 0.015; // 1.5 per cent
 	const double rel_error = err_norm / sol_norm;
-	std::cout << "Relative L1 error norm = " << rel_error << std::endl;
+	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
 
 	// plot results
 
@@ -329,7 +329,7 @@ auto testproblem_radiation_classical_marshak() -> int
 	matplotlibcpp::save("./marshak_wave_gastemperature.pdf");
 
 	// Cleanup and exit
-	std::cout << "Finished." << std::endl;
+	amrex::Print() << "Finished." << std::endl;
 
 	int status = 0;
 	if ((rel_error > error_tol) || std::isnan(rel_error)) {
