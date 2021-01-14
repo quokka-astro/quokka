@@ -111,7 +111,9 @@ enum indexOrderList {
 	X3 = 2
 };
 
-using array_t = templatedArray<X1>;	// default order is (X1, X2, X3) indexing
+using array_t = templatedArray<X1>;	// default order is (X1, X2, X3) for index operator()
+// using array_t_X2 = templatedArray<X2>;   // order is (X2, X3, X1)
+// using array_t_X3 = templatedArray<X3>;   // order is (X3, X1, X2)
 
 /// Class for a hyperbolic system of conservation laws (Cannot be instantiated,
 /// must be subclassed.)
