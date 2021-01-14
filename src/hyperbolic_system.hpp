@@ -32,22 +32,24 @@ template <typename T> auto sgn(T val) -> int
 
 using amrex::Real;
 
-struct array_t
+template <int T>
+struct templatedArray
 {
 	amrex::Array4<Real> arr_;
-	int ncomp_accessor_;
+	int ncomp_accessor_ = 0;
+	constexpr static int index_order = T;
 
-	array_t() : arr_(), ncomp_accessor_(0)
+	templatedArray() : arr_()
 	{
 		// default constructor
 	}
 
-	array_t(amrex::Array4<Real> arr) : arr_(arr), ncomp_accessor_(0)
+	templatedArray(amrex::Array4<Real> arr) : arr_(arr)
 	{
 		// initialize arr_ to arr
 	}
 
-	array_t(amrex::Array4<Real> arr, int ncomp) : arr_(arr), ncomp_accessor_(ncomp)
+	templatedArray(amrex::Array4<Real> arr, int ncomp) : arr_(arr), ncomp_accessor_(ncomp)
 	{
 
 	}
@@ -81,8 +83,35 @@ struct array_t
 	}
 
 	void AllocateArray(int ncomp, int dim1, int dim2 = 1, int dim3 = 1);
-	auto SliceArray(int ncomp) -> array_t;
+	auto SliceArray(int ncomp) -> templatedArray;
 };
+
+// Convenience function to allocate stand-alone amrex::Array4 objects
+template <int T>
+void templatedArray<T>::AllocateArray(int ncomp, int dim1, int dim2, int dim3)
+{
+	auto size = dim1 * dim2 * dim3 * ncomp;
+	auto p = new double[size];
+	amrex::Dim3 lower = {0, 0, 0};
+	amrex::Dim3 upper = {dim1, dim2, dim3};
+	arr_ = amrex::Array4<double>(p, lower, upper, ncomp);
+}
+
+// Return a shallow slice corresponding to an individual component.
+// [Array4 objects can be accessed with arr(i,j,k) if there is only one component]
+template <int T>
+auto templatedArray<T>::SliceArray(int ncomp) -> templatedArray<T>
+{
+	return templatedArray<T>(arr_, ncomp);
+}
+
+enum indexOrderList {
+	X1 = 0,
+	X2 = 1,
+	X3 = 2
+};
+
+using array_t = templatedArray<X1>;	// default order is (X1, X2, X3) indexing
 
 /// Class for a hyperbolic system of conservation laws (Cannot be instantiated,
 /// must be subclassed.)
