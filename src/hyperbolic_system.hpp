@@ -618,25 +618,21 @@ void HyperbolicSystem<problem_t>::AdvanceTimestepRK2(const double dt)
 	ComputeFluxes(cell_range);
 	PredictStep(cell_range);
 
-	if (!CheckStatesValid(consVarPredictStep_, cell_range)) {
-		// need to implement first-order flux correction here
-		amrex::Print() << "[stage 1] This should not happen!\n";
-		assert(false);
-	}
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+	    CheckStatesValid(consVarPredictStep_, cell_range),
+	    "[stage 1] Non-realizable states produced. This should not happen!");
 
 	// Stage 2 of RK2-SSP
 	FillGhostZones(consVarPredictStep_);
 	ConservedToPrimitive(consVarPredictStep_, std::make_pair(0, dim1_));
 	ReconstructStatesPPM(primVar_, ppm_range);
-	//ReconstructStatesPLM(primVar_, ppm_range);
+	// ReconstructStatesPLM(primVar_, ppm_range);
 	ComputeFluxes(cell_range);
 	AddFluxesRK2(consVar_, consVarPredictStep_);
 
-	if (!CheckStatesValid(consVarPredictStep_, cell_range)) {
-		// need to implement first-order flux correction here
-		amrex::Print() << "[stage 2] This should not happen!\n";
-		assert(false); // NOLINT
-	}
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+		CheckStatesValid(consVar_, cell_range),
+	    "[stage 2] Non-realizable states produced. This should not happen!");
 
 	// Add source terms via operator splitting
 	AddSourceTerms(consVar_, cell_range);
@@ -676,20 +672,16 @@ void HyperbolicSystem<problem_t>::AdvanceTimestepSDC2(const double dt)
 		ComputeFluxes(cell_range);
 		PredictStep(cell_range);
 
-		if (!CheckStatesValid(consVarPredictStep_, cell_range)) {
-			// need to implement first-order flux correction here
-			amrex::Print() << "[step 1a] This should not happen!\n";
-			assert(false);
-		}
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+	   		CheckStatesValid(consVarPredictStep_, cell_range),
+	    	"[step 1a] Non-realizable states produced. This should not happen!");
 
 		// Step 1b: Add source terms via operator splitting
 		AddSourceTerms(consVarPredictStep_, cell_range);
 
-		if (!CheckStatesValid(consVarPredictStep_, cell_range)) {
-			// need to implement first-order flux correction here
-			amrex::Print() << "[step 1b] This should not happen!\n";
-			assert(false);
-		}
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+	   		CheckStatesValid(consVarPredictStep_, cell_range),
+	    	"[step 1b] Non-realizable states produced. This should not happen!");
 	}
 
 	// Adjust our clock
