@@ -126,6 +126,7 @@ template <typename problem_t> class HyperbolicSystem
 	void AdvanceTimestep();
 	virtual void AdvanceTimestep(double dt_max);
 	void AdvanceTimestepRK2(double dt_max);
+	void AdvanceTimestepSDC2(const double dt);
 
 	// setter functions:
 
@@ -141,14 +142,6 @@ template <typename problem_t> class HyperbolicSystem
 	[[nodiscard]] auto dt() const -> double;
 
 	// inline functions:
-
-	__attribute__((always_inline)) inline static auto minmod(double a,
-								 double b)
-	    -> double
-	{
-		return 0.5 * (sgn(a) + sgn(b)) *
-		       std::min(std::abs(a), std::abs(b));
-	}
 
 	__attribute__((always_inline)) inline static auto MC(double a, double b)
 	    -> double
@@ -170,10 +163,16 @@ template <typename problem_t> class HyperbolicSystem
 	array_t primVar_;
 	array_t consVarPredictStep_;
 	array_t consVarPredictStepPrev_;
+
 	array_t x1LeftState_;
 	array_t x1RightState_;
 	array_t x1Flux_;
 	array_t x1FluxDiffusive_;
+
+	//array_t x2LeftState_;
+	//array_t x2RightState_;
+	//array_t x2Flux_;
+	//array_t x2FluxDiffusive_;
 
 	double cflNumber_ = 1.0;
 	double dt_ = 0;
@@ -212,11 +211,8 @@ template <typename problem_t> class HyperbolicSystem
 	virtual void AddFluxesRK2(array_t &U0, array_t &U1);
 
 	void ReconstructStatesConstant(array_t &q, std::pair<int, int> range);
+	void ReconstructStatesPLM(array_t &q, std::pair<int, int> range);
 	void ReconstructStatesPPM(array_t &q, std::pair<int, int> range);
-
-	template <typename F>
-	void ReconstructStatesPLM(array_t &q, std::pair<int, int> range,
-				  F &&limiter);
 
 	virtual void PredictStep(std::pair<int, int> range);
 	auto ComputeTimestep() -> double;
@@ -342,10 +338,15 @@ void HyperbolicSystem<problem_t>::ReconstructStatesConstant(
 }
 
 template <typename problem_t>
-template <typename F>
-void HyperbolicSystem<problem_t>::ReconstructStatesPLM(
-    array_t &q, const std::pair<int, int> range, F &&limiter)
+void HyperbolicSystem<problem_t>::ReconstructStatesPLM(array_t &q, const std::pair<int, int> range)
 {
+	// Unlike PPM, PLM with the MC limiter is TVD.
+	// (There are no spurious oscillations, *except* in the slow-moving shock problem,
+	// which can produce unphysical oscillations even when using upwind Godunov fluxes.)
+	// However, most tests fail when using PLM reconstruction because
+	// the accuracy tolerances are very strict, and the L1 error is significantly
+	// worse compared to PPM for a given number of mesh elements.
+
 	// By convention, the interfaces are defined on the left edge of each
 	// zone, i.e. xleft_(i) is the "left"-side of the interface at
 	// the left edge of zone i, and xright_(i) is the "right"-side of the
@@ -360,17 +361,20 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPLM(
 			// (This converges at second order in spatial
 			// resolution.)
 
-			const auto lslope = limiter(q(n, i) - q(n, i - 1),
-						    q(n, i - 1) - q(n, i - 2));
+			const auto lslope = MC(q(n, i) - q(n, i - 1), q(n, i - 1) - q(n, i - 2));
+			const auto rslope = MC(q(n, i + 1) - q(n, i), q(n, i) - q(n, i - 1));
 
-			const auto rslope = limiter(q(n, i + 1) - q(n, i),
-						    q(n, i) - q(n, i - 1));
-
-			x1LeftState_(n, i) =
-			    q(n, i - 1) + 0.25 * lslope;	       // NOLINT
-			x1RightState_(n, i) = q(n, i) - 0.25 * rslope; // NOLINT
+			x1LeftState_(n, i) = q(n, i - 1) + 0.25 * lslope; // NOLINT
+			x1RightState_(n, i) = q(n, i) - 0.25 * rslope;	  // NOLINT
 		}
 	}
+
+	// Important final step: ensure that velocity does not exceed c
+	// in any cell where v^2 > c, reconstruct using first-order method for all velocity components
+	// (must be done by user)
+
+	// Apply shock flattening
+	FlattenShocks(q, range);
 }
 
 template <typename problem_t>
@@ -597,32 +601,39 @@ void HyperbolicSystem<problem_t>::AdvanceTimestepRK2(const double dt)
 	const auto ppm_range = std::make_pair(-1 + nghost_, nx_ + 1 + nghost_);
 	const auto cell_range = std::make_pair(nghost_, nx_ + nghost_);
 
+	// Allocate temporary arrays for intermediate stages
+	// ...
+
 	// Initialize data
 	FillGhostZones(consVar_);
 	ConservedToPrimitive(consVar_, std::make_pair(0, dim1_));
 	//ComputeTimestep(std::min(dt_max, dtExpandFactor_ * dtPrev_));
 	dt_ = dt;
 
-	// Predictor step t_{n+1}
+	// Stage 1 of RK2-SSP
 	FillGhostZones(consVar_);
 	ConservedToPrimitive(consVar_, std::make_pair(0, dim1_));
 	ReconstructStatesPPM(primVar_, ppm_range);
+	//ReconstructStatesPLM(primVar_, ppm_range);
 	ComputeFluxes(cell_range);
 	PredictStep(cell_range);
 
 	if (!CheckStatesValid(consVarPredictStep_, cell_range)) {
 		// need to implement first-order flux correction here
+		amrex::Print() << "[stage 1] This should not happen!\n";
 		assert(false);
 	}
 
-	// Corrector step
+	// Stage 2 of RK2-SSP
 	FillGhostZones(consVarPredictStep_);
 	ConservedToPrimitive(consVarPredictStep_, std::make_pair(0, dim1_));
 	ReconstructStatesPPM(primVar_, ppm_range);
+	//ReconstructStatesPLM(primVar_, ppm_range);
 	ComputeFluxes(cell_range);
 	AddFluxesRK2(consVar_, consVarPredictStep_);
 
 	if (!CheckStatesValid(consVarPredictStep_, cell_range)) {
+		// need to implement first-order flux correction here
 		amrex::Print() << "[stage 2] This should not happen!\n";
 		assert(false); // NOLINT
 	}
@@ -630,12 +641,56 @@ void HyperbolicSystem<problem_t>::AdvanceTimestepRK2(const double dt)
 	// Add source terms via operator splitting
 	AddSourceTerms(consVar_, cell_range);
 
-#if 0
-	if (CheckStatesValid(consVar_, cell_range)) {
-		amrex::Print() << "[source terms] This should not happen!\n";
-		assert(false);
+	// Adjust our clock
+	time_ += dt_;
+	dtPrev_ = dt_;
+}
+
+
+template <typename problem_t>
+void HyperbolicSystem<problem_t>::AdvanceTimestepSDC2(const double dt)
+{
+	// Use a second-order SDC method to advance the radiation subsystem,
+	// continuing iterations until the nonlinear residual is below a given tolerance.
+
+	const auto ppm_range = std::make_pair(-1 + nghost_, nx_ + 1 + nghost_);
+	const auto cell_range = std::make_pair(nghost_, nx_ + nghost_);
+
+	// begin SDC loop
+	int maxIterationCount = 50; // if it takes more than this, abort and crash
+	int j = 0;
+	for (j = 0; j < maxIterationCount; ++j) {
+		// Check for convergence
+		// ...
+
+		// Initialize data
+		FillGhostZones(consVar_);
+		ConservedToPrimitive(consVar_, std::make_pair(0, dim1_));
+		dt_ = dt;
+
+		// Step 1a: Advance transport operator
+		FillGhostZones(consVar_);
+		ConservedToPrimitive(consVar_, std::make_pair(0, dim1_));
+		ReconstructStatesPLM(primVar_,
+				     ppm_range); // PPM *cannot* be used with 2nd-order SDC
+		ComputeFluxes(cell_range);
+		PredictStep(cell_range);
+
+		if (!CheckStatesValid(consVarPredictStep_, cell_range)) {
+			// need to implement first-order flux correction here
+			amrex::Print() << "[step 1a] This should not happen!\n";
+			assert(false);
+		}
+
+		// Step 1b: Add source terms via operator splitting
+		AddSourceTerms(consVarPredictStep_, cell_range);
+
+		if (!CheckStatesValid(consVarPredictStep_, cell_range)) {
+			// need to implement first-order flux correction here
+			amrex::Print() << "[step 1b] This should not happen!\n";
+			assert(false);
+		}
 	}
-#endif
 
 	// Adjust our clock
 	time_ += dt_;
