@@ -6,8 +6,8 @@ using namespace amrex;
 
 void advance (MultiFab& phi_old,
               MultiFab& phi_new,
-	      Array<MultiFab, AMREX_SPACEDIM>& flux,
-	      Real dt,
+	          Array<MultiFab, AMREX_SPACEDIM>& flux,
+	          Real dt,
               Geometry const& geom)
 {
 
@@ -25,62 +25,53 @@ void advance (MultiFab& phi_old,
 
     // This example supports both 2D and 3D.  Otherwise,
     // we would not need to use AMREX_D_TERM.
+    AMREX_D_TERM(const Real dxinv = geom.InvCellSize(0);,
+                 const Real dyinv = geom.InvCellSize(1);,
+                 const Real dzinv = geom.InvCellSize(2););
 
     // Compute fluxes one grid at a time
-    for (MFIter mfi(phi_old); mfi.isValid(); ++mfi) {
-	    auto const &phi = phi_old.const_array(mfi);
+    for ( MFIter mfi(phi_old); mfi.isValid(); ++mfi )
+    {
+        const Box& xbx = mfi.nodaltilebox(0);
+        const Box& ybx = mfi.nodaltilebox(1);
+        auto const& fluxx = flux[0].array(mfi);
+        auto const& fluxy = flux[1].array(mfi);
+#if (AMREX_SPACEDIM > 2)
+        const Box& zbx = mfi.nodaltilebox(2);
+        auto const& fluxz = flux[2].array(mfi);
+#endif
+        auto const& phi = phi_old.const_array(mfi);
 
-	    const Box &xbx = mfi.nodaltilebox(0);
-	    auto const &fluxx = flux[0].array(mfi);
-        const Real dxinv = geom.InvCellSize(0);
+        amrex::ParallelFor(xbx,
+        [=] AMREX_GPU_DEVICE (int i, int j, int k)
+        {
+            compute_flux<X1>(i,j,k,fluxx,phi,dxinv);
+        });
 
-	    amrex::ParallelFor(xbx, [=] AMREX_GPU_DEVICE(LOOP_ORDER_X1(int i, int j, int k)) {
-		    compute_flux<X1>(i, j, k, fluxx, phi, dxinv);
-	    });
+        amrex::ParallelFor(ybx,
+        [=] AMREX_GPU_DEVICE (int i, int j, int k)
+        {
+            compute_flux<X2>(i,j,k,fluxy,phi,dyinv);
+        });
 
-	    if constexpr (amrex::SpaceDim > 1) {
-            const Box &ybx = mfi.nodaltilebox(1);
-		    auto const &fluxy = flux[1].array(mfi);
-            const Real dyinv = geom.InvCellSize(1);
-
-		    amrex::ParallelFor(ybx, [=] AMREX_GPU_DEVICE(LOOP_ORDER_X2(int i, int j, int k)) {
-			    compute_flux<X2>(i, j, k, fluxy, phi, dyinv);
-		    });
-	    }
-
-	    if constexpr (amrex::SpaceDim > 2) {
-            const Box &zbx = mfi.nodaltilebox(2);
-		    auto const &fluxz = flux[2].array(mfi);
-            const Real dzinv = geom.InvCellSize(2);
-
-		    amrex::ParallelFor(zbx, [=] AMREX_GPU_DEVICE(LOOP_ORDER_X3(int i, int j, int k)) {
-			    compute_flux<X3>(i, j, k, fluxz, phi, dzinv);
-		    });
-	    }
+#if (AMREX_SPACEDIM > 2)
+        amrex::ParallelFor(zbx,
+        [=] AMREX_GPU_DEVICE (int i, int j, int k)
+        {
+            compute_flux<X3>(i,j,k,fluxz,phi,dzinv);
+        });
+#endif
     }
 
     // Advance the solution one grid at a time
     for ( MFIter mfi(phi_old); mfi.isValid(); ++mfi )
     {
-        std::vector<amrex::Array4<amrex::Real const>> fluxes(amrex::SpaceDim);
-        std::vector<amrex::Real> dinv(amrex::SpaceDim);
-
         const Box& vbx = mfi.validbox();
         auto const& fluxx = flux[0].const_array(mfi);
-        fluxes[0] = fluxx;
-        dinv[0] = geom.InvCellSize(0);
-
-	    if constexpr (amrex::SpaceDim > 1) {
-            auto const& fluxy = flux[1].const_array(mfi);
-            fluxes[1] = fluxy;
-            dinv[1] = geom.InvCellSize(1);
-        }
-	    if constexpr (amrex::SpaceDim > 2) {
-            auto const& fluxz = flux[2].const_array(mfi);
-            fluxes[2] = fluxz;
-            dinv[2] = geom.InvCellSize(2);
-        }
-
+        auto const& fluxy = flux[1].const_array(mfi);
+#if (AMREX_SPACEDIM > 2)
+        auto const& fluxz = flux[2].const_array(mfi);
+#endif
         auto const& phiOld = phi_old.const_array(mfi);
         auto const& phiNew = phi_new.array(mfi);
 
@@ -88,9 +79,9 @@ void advance (MultiFab& phi_old,
         [=] AMREX_GPU_DEVICE (int i, int j, int k)
         {
             update_phi(i,j,k,phiOld,phiNew,
-                       fluxes,
+                       AMREX_D_DECL(fluxx,fluxy,fluxz),
                        dt,
-                       dinv);
+                       AMREX_D_DECL(dxinv,dyinv,dzinv));
         });
     }
 }

@@ -1,10 +1,27 @@
 // These macros are defined such that, e.g., Array4View<X2>::operator(LOOP_ORDER_X2(i,j,k)) == arr_(i,j,k).
 // Therefore, they do NOT have the same index ordering as that inside the corresponding Array4View<>::operator()!
-#define LOOP_ORDER_X1(i,j,k) i,j,k
-#define LOOP_ORDER_X2(i,j,k) j,k,i
-#define LOOP_ORDER_X3(i,j,k) k,i,j
+//#define REORDER_X1(i,j,k) i,j,k
+//#define REORDER_X2(i,j,k) j,k,i
+//#define REORDER_X3(i,j,k) k,i,j
 
 enum array4ViewIndexOrderList { X1 = 0, X2 = 1, X3 = 2 };
+
+template <int N> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto reorderMultiIndex(int, int, int);
+
+template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto reorderMultiIndex<X1>(int i, int j, int k)
+{
+	return std::make_tuple(i,j,k);
+}
+
+template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto reorderMultiIndex<X2>(int i, int j, int k)
+{
+	return std::make_tuple(j,k,i);
+}
+
+template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto reorderMultiIndex<X3>(int i, int j, int k)
+{
+	return std::make_tuple(k,i,j);
+}
 
 template <class T, int N, class Enable = void> struct Array4View {
 	amrex::Array4<T> arr_;
