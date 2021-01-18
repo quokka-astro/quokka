@@ -101,7 +101,7 @@ auto testproblem_radiation_streaming() -> int
 
 	// Main time loop
 	double dtPrev = NAN;
-	int j = NAN;
+	int j;
 	for (j = 0; j < max_timesteps; ++j) {
 		if (rad_system.time() >= tmax) {
 			break;
@@ -138,11 +138,9 @@ auto testproblem_radiation_streaming() -> int
 
 	const double rel_err_norm = err_norm / sol_norm;
 	const double rel_err_tol = 0.03;
-	int status = NAN;
+	int status = 1;
 	if( rel_err_norm < rel_err_tol ) {
 		status = 0;
-	} else {
-		status = 1;
 	}
 
 	amrex::Print() << "Relative L1 norm = " << rel_err_norm << std::endl;
