@@ -39,6 +39,7 @@ add_executable(test_advection_se linear_advection.cpp hyperbolic_system.cpp test
 add_executable(test_hydro_wave hydro_system.cpp hyperbolic_system.cpp test_hydro_wave.cpp)
 add_executable(test_radiation_pulse hyperbolic_system.cpp radiation_system.cpp test_radiation_pulse.cpp)
 add_executable(test_radiation_streaming hyperbolic_system.cpp radiation_system.cpp test_radiation_streaming.cpp)
+add_executable(test_amrex_2d test_amrex_2d.cpp diffusion.cpp)
 
 add_clang_static_analysis(test_radiation_matter_coupling)
 add_clang_static_analysis(test_radiation_SuOlson)
