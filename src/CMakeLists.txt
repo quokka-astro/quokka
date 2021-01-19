@@ -77,25 +77,25 @@ add_test(NAME RadiationStreaming COMMAND test_radiation_streaming WORKING_DIRECT
 add_test(NAME RadiationPulse COMMAND test_radiation_pulse WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 add_test(NAME ShuOsher COMMAND test_hydro_shuosher WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 
-include(CodeCoverage)
-append_coverage_compiler_flags()
-setup_target_for_coverage_gcovr_html(
-        NAME coverage                 
-        EXECUTABLE ctest -j ${n_cores}
-        DEPENDENCIES
-            test_radiation_matter_coupling
-            test_radiation_matter_coupling_rsla
-            test_radiation_SuOlson
-            test_radiation_marshak
-            test_radiation_marshak_cgs
-            test_radiation_streaming
-            test_radiation_pulse
-            test_advection
-            test_advection_se
-            test_hydro_shocktube
-            test_hydro_leblanc
-            test_hydro_sms
-            test_hydro_contact
-            test_hydro_vacuum
-            test_hydro_wave
-            test_hydro_shuosher)
+# include(CodeCoverage)
+# append_coverage_compiler_flags()
+# setup_target_for_coverage_gcovr_html(
+#         NAME coverage                 
+#         EXECUTABLE ctest -j ${n_cores}
+#         DEPENDENCIES
+#             test_radiation_matter_coupling
+#             test_radiation_matter_coupling_rsla
+#             test_radiation_SuOlson
+#             test_radiation_marshak
+#             test_radiation_marshak_cgs
+#             test_radiation_streaming
+#             test_radiation_pulse
+#             test_advection
+#             test_advection_se
+#             test_hydro_shocktube
+#             test_hydro_leblanc
+#             test_hydro_sms
+#             test_hydro_contact
+#             test_hydro_vacuum
+#             test_hydro_wave
+#             test_hydro_shuosher)

@@ -343,6 +343,9 @@ auto RadSystem<problem_t>::CheckStatesValid(
 		const auto Fx = cons(x1RadFlux_index, i);
 		const auto reducedFluxX1 = Fx / (c_light_ * E_r);
 
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!std::isnan(E_r), "Energy density is NAN!");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!std::isnan(Fx), "Flux is NAN!");
+
 		if (E_r < 0.0) {
 			amrex::Print() << "ERROR: Positivity failure at i = " << i
 				  << " with energy density = " << E_r
@@ -352,7 +355,7 @@ auto RadSystem<problem_t>::CheckStatesValid(
 
 		if (std::abs(reducedFluxX1) > 1.0) {
 			amrex::Print() << "ERROR: Flux limiting failure at i = " << i
-				  << " with reduced flux = " << reducedFluxX1
+				  << " with reduced flux = " << reducedFluxX1 << " and E_r = " << E_r
 				  << std::endl;
 			all_valid = false;
 			// TODO(ben): implement first-order flux correction
@@ -361,82 +364,6 @@ auto RadSystem<problem_t>::CheckStatesValid(
 
 	return all_valid;
 }
-
-#if 0
-// this makes the radiation solution worse in almost all cases,
-// though it does reduce oscillations in some problems (at the expense
-// of making other parts of the solution worse/too diffusive)
-template <typename problem_t>
-void RadSystem<problem_t>::ComputeFlatteningCoefficientX1(const std::pair<int,int> range)
-{
-	// compute the PPM shock flattening coefficient following
-	//   Appendix B1 of Mignone+ 2005 [this description has typos].
-	// Method originally from Miller & Colella,
-	//   Journal of Computational Physics 183, 26–82 (2002) [no typos].
-
-	constexpr double beta_max = 0.85;
-	constexpr double beta_min = 0.75;
-	constexpr double Zmax = 0.75;
-	constexpr double Zmin = 0.25;
-
-	for (int i = range.first; i < range.second; ++i) {
-		// beta is a measure of shock resolution (Eq. 74 of Miller & Colella 2002)
-		const double beta =
-		    std::abs(radEnergy_(i + 1) - radEnergy_(i - 1)) /
-		    std::abs(radEnergy_(i + 2) - radEnergy_(i - 2));
-
-		// Eq. 75 of Miller & Colella 2002
-		const double chi_min =
-		    std::max(0., std::min(1., (beta_max - beta) /
-						  (beta_max - beta_min)));
-
-		// Z is a measure of shock strength (Eq. 76 of Miller & Colella 2002)
-		const double K_S = (4./3.) * radEnergy_(i); // equal to \rho c_s^2
-		const double Z =
-		    std::abs(radEnergy_(i + 1) - radEnergy_(i - 1)) / K_S;
-
-		// check for converging flow (Eq. 77)
-		double chi = 1.0;
-		if (x1RadFlux_(i + 1) < x1RadFlux_(i - 1)) {
-			chi = std::max(
-			    chi_min, std::min(1., (Zmax - Z) / (Zmax - Zmin)));
-		}
-
-		x1Chi_(i) = chi;
-	}
-}
-
-template <typename problem_t>
-void RadSystem<problem_t>::FlattenShocks(array_t &q, const std::pair<int,int> range)
-{
-	for (int n = 0; n < nvars_; ++n) {
-		for (int i = range.first; i < range.second; ++i) {
-			// Apply shock flattening
-
-			// compute coefficient as the minimum from all surrounding cells
-			//  (Eq. 78 of Miller & Colella 2002)
-			double chi = 
-				std::min({x1Chi_(i - 1), x1Chi_(i), x1Chi_(i+1)}); // modify in 3d !!
-
-			// get interfaces
-			const double a_minus = x1RightState_(n, i);
-			const double a_plus = x1LeftState_(n, i+1);
-			const double a_mean = q(n, i);
-
-			// left side of zone i (Eq. 70a)
-			const double new_a_minus =
-			    chi * a_minus + (1. - chi) * a_mean;
-
-			// right side of zone i (Eq. 70b)
-			const double new_a_plus =
-			    chi * a_plus + (1. - chi) * a_mean;
-
-			x1RightState_(n, i) = new_a_minus;
-			x1LeftState_(n, i+1) = new_a_plus;
-		}
-	}
-}
-#endif
 
 template <typename problem_t>
 void RadSystem<problem_t>::ConservedToPrimitive(array_t &cons,
@@ -633,8 +560,8 @@ void RadSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 		const std::valarray<double> U_R = {erad_R, Fx_R};
 
 		const double tau_cell = ComputeCellOpticalDepth(i);
-		//const std::valarray<double> epsilon = {std::min(1.0, 1.0/tau_cell), 1.0};
-		const std::valarray<double> epsilon = {1.0, 1.0};
+		const std::valarray<double> epsilon = {std::min(1.0, 1.0/tau_cell), 1.0};
+		//const std::valarray<double> epsilon = {1.0, 1.0};
 
 		const std::valarray<double> F_star =
 		    (S_R / (S_R - S_L)) * F_L - (S_L / (S_R - S_L)) * F_R +
@@ -907,10 +834,10 @@ void RadSystem<problem_t>::PredictStep(const std::pair<int, int> range)
 			consVarPredictStep_(x1RadFlux_index, i) = x1F_new;
 
 		} else {
-			amrex::Print()
-			    << "WARNING: [stage 1] flux limited at i = " << i
-			    << " with reduced flux = " << x1ReducedFlux_new
-			    << std::endl;
+			//amrex::Print()
+			//    << "WARNING: [stage 1] flux limited at i = " << i
+			//    << " with reduced flux = " << x1ReducedFlux_new
+			//    << std::endl;
 
 			const double FE_1d =
 			    -1.0 * (dt_ / dx_) *

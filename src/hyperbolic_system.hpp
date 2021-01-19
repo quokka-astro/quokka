@@ -143,12 +143,21 @@ template <typename problem_t> class HyperbolicSystem
 
 	// inline functions:
 
-	__attribute__((always_inline)) inline static auto MC(double a, double b)
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto MC(double a, double b)
 	    -> double
 	{
 		return 0.5 * (sgn(a) + sgn(b)) *
 		       std::min(0.5 * std::abs(a + b),
 				std::min(2.0 * std::abs(a), 2.0 * std::abs(b)));
+	}
+
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto Koren(double a, double b)
+	    -> double
+	{	
+		// CAUTION: this limiter is asymmetric (i.e. lim(a,b) != 1/lim(b,a)!)
+		// More accurate in L1 norm than MC, but weird asymmetries in solutions.
+		// Not recommended.
+		return 4.0 * std::max(0., std::min(a, std::min((1./6.)*b + (1./3.)*a, b)));
 	}
 
 	virtual void FillGhostZones(array_t &cons);
@@ -216,6 +225,8 @@ template <typename problem_t> class HyperbolicSystem
 
 	virtual void PredictStep(std::pair<int, int> range);
 	auto ComputeTimestep() -> double;
+	void CopyVars(array_t &src, array_t& dest, const std::pair<int, int> range);
+	auto ComputeResidual(array_t &cur, array_t& prev, const std::pair<int, int> range) -> double;
 
 	virtual auto ComputeTimestep(double dt_max) -> double = 0;
 	virtual void ComputeFluxes(std::pair<int, int> range) = 0;
@@ -596,6 +607,31 @@ auto HyperbolicSystem<problem_t>::CheckStatesValid(
 }
 
 template <typename problem_t>
+void HyperbolicSystem<problem_t>::CopyVars(array_t &src, array_t& dest, const std::pair<int, int> range)
+{
+	for (int n = 0; n < nvars_; ++n) {
+		for (int i = range.first; i < range.second; ++i) {
+			dest(n, i) = src(n, i);
+		}
+	}
+}
+
+template <typename problem_t>
+auto HyperbolicSystem<problem_t>::ComputeResidual(array_t &cur, array_t& prev, const std::pair<int, int> range) -> double
+{
+	double norm = 0.;
+	for (int n = 0; n < nvars_; ++n) {
+		double comp = 0.;
+		for (int i = range.first; i < range.second; ++i) {
+			comp += std::abs(cur(n, i) - prev(n, i));
+		}
+		comp *= 1.0/(range.second - range.first);
+		norm += comp*comp;
+	}
+	return std::sqrt(norm);
+}
+
+template <typename problem_t>
 void HyperbolicSystem<problem_t>::AdvanceTimestepRK2(const double dt)
 {
 	const auto ppm_range = std::make_pair(-1 + nghost_, nx_ + 1 + nghost_);
@@ -626,7 +662,7 @@ void HyperbolicSystem<problem_t>::AdvanceTimestepRK2(const double dt)
 	FillGhostZones(consVarPredictStep_);
 	ConservedToPrimitive(consVarPredictStep_, std::make_pair(0, dim1_));
 	ReconstructStatesPPM(primVar_, ppm_range);
-	// ReconstructStatesPLM(primVar_, ppm_range);
+	//ReconstructStatesPLM(primVar_, ppm_range);
 	ComputeFluxes(cell_range);
 	AddFluxesRK2(consVar_, consVarPredictStep_);
 
@@ -652,29 +688,25 @@ void HyperbolicSystem<problem_t>::AdvanceTimestepSDC2(const double dt)
 	const auto ppm_range = std::make_pair(-1 + nghost_, nx_ + 1 + nghost_);
 	const auto cell_range = std::make_pair(nghost_, nx_ + nghost_);
 
-	// begin SDC loop
-	int maxIterationCount = 50; // if it takes more than this, abort and crash
-	int j = 0;
-	for (j = 0; j < maxIterationCount; ++j) {
-		// Check for convergence
-		// ...
+	// Initialize data
+	dt_ = dt;
+	CopyVars(consVar_, consVarPredictStep_, cell_range); // consVarPredictStep_ may not be initialized by the user
+	CopyVars(consVar_, consVarPredictStepPrev_, cell_range);
 
-		// Initialize data
-		FillGhostZones(consVar_);
-		ConservedToPrimitive(consVar_, std::make_pair(0, dim1_));
-		dt_ = dt;
+	// begin SDC loop
+	const double atol = 1.0e-10; // absolute tolerance for L1 residual
+	const int maxIterationCount = 200;
+	double res = NAN;
+	int j = 0;
+	for (; j < maxIterationCount; ++j) {
+		// Step 0: Fill ghost zones and convert to primitive variables
+		FillGhostZones(consVarPredictStepPrev_);
+		ConservedToPrimitive(consVarPredictStepPrev_, std::make_pair(0, dim1_));
 
 		// Step 1a: Advance transport operator
-		FillGhostZones(consVar_);
-		ConservedToPrimitive(consVar_, std::make_pair(0, dim1_));
-		ReconstructStatesPLM(primVar_,
-				     ppm_range); // PPM *cannot* be used with 2nd-order SDC
+		ReconstructStatesPLM(primVar_, ppm_range); // PPM *cannot* be used with 2nd-order SDC
 		ComputeFluxes(cell_range);
-		PredictStep(cell_range);
-
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-	   		CheckStatesValid(consVarPredictStep_, cell_range),
-	    	"[step 1a] Non-realizable states produced. This should not happen!");
+		PredictStep(cell_range); // update consVarPredictStep_
 
 		// Step 1b: Add source terms via operator splitting
 		AddSourceTerms(consVarPredictStep_, cell_range);
@@ -682,7 +714,23 @@ void HyperbolicSystem<problem_t>::AdvanceTimestepSDC2(const double dt)
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 	   		CheckStatesValid(consVarPredictStep_, cell_range),
 	    	"[step 1b] Non-realizable states produced. This should not happen!");
+
+		// Step 2: Check for convergence
+		res = ComputeResidual(consVarPredictStep_, consVarPredictStepPrev_, cell_range);
+		amrex::Print() << "residual = " << res << "\n";
+		if (res < atol) {
+			break;
+		}
+
+		// Save current iteration
+		CopyVars(consVarPredictStep_, consVarPredictStepPrev_, cell_range); // copy current iteration
 	}
+
+	//AMREX_ALWAYS_ASSERT_WITH_MESSAGE(res < atol, "SDC2 iteration exceeded maximum iteration count, but did not converge.");
+	amrex::Print() << "SDC2 iteration converged with residual " << res << " after " << j+1 << " iterations.\n";
+
+	// If converged, copy final solution to consVar_
+	CopyVars(consVarPredictStep_, consVar_, cell_range);
 
 	// Adjust our clock
 	time_ += dt_;

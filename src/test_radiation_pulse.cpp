@@ -37,7 +37,7 @@ const double rho = 1.0;	       // g cm^-3 (matter density)
 const double a_rad = 4.0e-10;  // radiation constant == 4sigma_SB/c (dimensionless)
 const double c = 1.0e8;	   // speed of light (dimensionless)
 const double chat = 1.0e7;
-const double Erad_floor = a_rad * std::pow(1.0e-5, 4);
+const double Erad_floor = a_rad * std::pow(1.0e-2, 4);
 
 const double Lx = 1.0;	  // dimensionless length
 const double x0 = Lx / 2.0;
@@ -108,15 +108,9 @@ auto testproblem_radiation_pulse() -> int
 	// optical depth per cell at the peak of the temperature profile is
 	// of order 10^5.
 
-	// This problem cannot be run for a meaningful amount of time
-	// compared to the diffusion time. (RSLA only makes the diffusion time
-	// longer by a factor of c/c_hat and therefore does not help.)
-	// However, this problem does test whether matter and radiation equilibrate
-	// (as they should) and that numerical diffusion is not excessive.
-
 	// Problem parameters
 
-	const int max_timesteps = 3e5;
+	const int max_timesteps = 10;
 	const double CFL_number = 0.8;
 	const int nx = 128;
 
@@ -186,7 +180,7 @@ auto testproblem_radiation_pulse() -> int
 		const double computed_dt = rad_system.ComputeTimestep(max_dt);
 		const double this_dt = std::min(computed_dt, dt_expand_fac*dt_prev);
 
-		rad_system.AdvanceTimestepRK2(this_dt);
+		rad_system.AdvanceTimestepSDC2(this_dt);
 		dt_prev = this_dt;
 	}
 
@@ -250,7 +244,7 @@ auto testproblem_radiation_pulse() -> int
 		sol_norm += std::abs(Trad_exact[i]);
 	}
 
-	const double error_tol = 0.005;
+	const double error_tol = 0.02;
 	const double rel_error = err_norm / sol_norm;
 	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
 
