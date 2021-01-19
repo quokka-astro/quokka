@@ -56,8 +56,6 @@ auto compute_exact_Trad(const double x, const double t) -> double
 
 template <> void RadSystem<PulseProblem>::FillGhostZones(array_t &cons)
 {
-	double t = time_ + initial_time;
-
 	// x1 left side boundary
 	for (int i = 0; i < nghost_; ++i) {
 		const double Erad = Erad_floor_;
@@ -91,9 +89,8 @@ auto RadSystem<PulseProblem>::ComputeOpacityTempDerivative(const double rho,
 {
 	if (Tgas > 1.0) {
 		return (kappa0 / rho) * (3.0/T0) * std::pow(Tgas/T0, 2);
-	} else {
-		return 0.;
 	}
+	return 0.;
 }
 
 auto testproblem_radiation_pulse() -> int
@@ -168,9 +165,9 @@ auto testproblem_radiation_pulse() -> int
 	amrex::Print() << "initial radiation energy = " << Erad0 << "\n" << std::endl;
 
 	// Main time loop
-	int j;
 	double dt_prev = NAN;
-	for (j = 0; j < max_timesteps; ++j) {
+	int j = 0;
+	for (; j < max_timesteps; ++j) {
 		if (rad_system.time() >= max_time) {
 			break;
 		}
@@ -251,7 +248,9 @@ auto testproblem_radiation_pulse() -> int
 	// plot temperature
 	matplotlibcpp::clf();
 
-	std::map<std::string, std::string> Trad_args, Tgas_args, Tinit_args;
+	std::map<std::string, std::string> Trad_args;
+	std::map<std::string, std::string> Tgas_args;
+	std::map<std::string, std::string> Tinit_args;
 	Trad_args["label"] = "radiation temperature";
 	Trad_args["linestyle"] = "-.";
 	Tgas_args["label"] = "gas temperature";

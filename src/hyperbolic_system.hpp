@@ -23,61 +23,43 @@
 
 // internal headers
 
-
 /// Provide type-safe global sign ('sgn') function.
-template <typename T> auto sgn(T val) -> int
-{
-	return (T(0) < val) - (val < T(0));
-}
+template <typename T> auto sgn(T val) -> int { return (T(0) < val) - (val < T(0)); }
 
 using amrex::Real;
 
-template <int T>
-struct templatedArray
-{
+template <int T> struct templatedArray {
 	amrex::Array4<Real> arr_;
 	int ncomp_accessor_ = 0;
 	constexpr static int index_order = T;
 
-	templatedArray() : arr_()
-	{
-		// default constructor
-	}
+	templatedArray() : arr_() {}
 
-	templatedArray(amrex::Array4<Real> arr) : arr_(arr)
-	{
-		// initialize arr_ to arr
-	}
+	explicit templatedArray(amrex::Array4<Real> arr) : arr_(arr) {}
 
-	templatedArray(amrex::Array4<Real> arr, int ncomp) : arr_(arr), ncomp_accessor_(ncomp)
-	{
+	templatedArray(amrex::Array4<Real> arr, int ncomp) : arr_(arr), ncomp_accessor_(ncomp) {}
 
-	}
-
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE 
-	double& operator()(int n, int i) noexcept
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(int n, int i) noexcept -> double &
 	{
 		int j = 0;
 		int k = 0;
 		return arr_(i, j, k, n);
 	}
 
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE 
-	double operator()(int n, int i) const noexcept
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(int n, int i) const noexcept
+	    -> double
 	{
 		int j = 0;
 		int k = 0;
 		return arr_(i, j, k, n);
 	}
 
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE 
-	double& operator()(int i) noexcept
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(int i) noexcept -> double &
 	{
 		return arr_(i, 0, 0, ncomp_accessor_);
 	}
 
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE 
-	double operator()(int i) const noexcept
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(int i) const noexcept -> double
 	{
 		return arr_(i, 0, 0, ncomp_accessor_);
 	}
@@ -87,11 +69,10 @@ struct templatedArray
 };
 
 // Convenience function to allocate stand-alone amrex::Array4 objects
-template <int T>
-void templatedArray<T>::AllocateArray(int ncomp, int dim1, int dim2, int dim3)
+template <int T> void templatedArray<T>::AllocateArray(int ncomp, int dim1, int dim2, int dim3)
 {
 	auto size = dim1 * dim2 * dim3 * ncomp;
-	auto p = new double[size];
+	auto *p = new double[size];
 	amrex::Dim3 lower = {0, 0, 0};
 	amrex::Dim3 upper = {dim1, dim2, dim3};
 	arr_ = amrex::Array4<double>(p, lower, upper, ncomp);
@@ -99,19 +80,14 @@ void templatedArray<T>::AllocateArray(int ncomp, int dim1, int dim2, int dim3)
 
 // Return a shallow slice corresponding to an individual component.
 // [Array4 objects can be accessed with arr(i,j,k) if there is only one component]
-template <int T>
-auto templatedArray<T>::SliceArray(int ncomp) -> templatedArray<T>
+template <int T> auto templatedArray<T>::SliceArray(int ncomp) -> templatedArray<T>
 {
 	return templatedArray<T>(arr_, ncomp);
 }
 
-enum indexOrderList {
-	X1 = 0,
-	X2 = 1,
-	X3 = 2
-};
+enum indexOrderList { X1 = 0, X2 = 1, X3 = 2 };
 
-using array_t = templatedArray<X1>;	// default order is (X1, X2, X3) for index operator()
+using array_t = templatedArray<X1>; // default order is (X1, X2, X3) for index operator()
 // using array_t_X2 = templatedArray<X2>;   // order is (X2, X3, X1)
 // using array_t_X3 = templatedArray<X3>;   // order is (X3, X1, X2)
 
@@ -126,7 +102,7 @@ template <typename problem_t> class HyperbolicSystem
 	void AdvanceTimestep();
 	virtual void AdvanceTimestep(double dt_max);
 	void AdvanceTimestepRK2(double dt_max);
-	void AdvanceTimestepSDC2(const double dt);
+	void AdvanceTimestepSDC2(double dt);
 
 	// setter functions:
 
@@ -143,29 +119,25 @@ template <typename problem_t> class HyperbolicSystem
 
 	// inline functions:
 
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto MC(double a, double b)
-	    -> double
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto MC(double a, double b) -> double
 	{
 		return 0.5 * (sgn(a) + sgn(b)) *
 		       std::min(0.5 * std::abs(a + b),
 				std::min(2.0 * std::abs(a), 2.0 * std::abs(b)));
 	}
 
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto Koren(double a, double b)
-	    -> double
-	{	
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto Koren(double a, double b) -> double
+	{
 		// CAUTION: this limiter is asymmetric (i.e. lim(a,b) != 1/lim(b,a)!)
 		// More accurate in L1 norm than MC, but weird asymmetries in solutions.
 		// Not recommended.
-		return 4.0 * std::max(0., std::min(a, std::min((1./6.)*b + (1./3.)*a, b)));
+		return 4.0 * std::max(0., std::min(a, std::min((1. / 6.) * b + (1. / 3.) * a, b)));
 	}
 
 	virtual void FillGhostZones(array_t &cons);
-	virtual void ConservedToPrimitive(array_t &cons,
-					  std::pair<int, int> range) = 0;
+	virtual void ConservedToPrimitive(array_t &cons, std::pair<int, int> range) = 0;
 	virtual void AddSourceTerms(array_t &U, std::pair<int, int> range) = 0;
-	virtual auto CheckStatesValid(array_t &cons,
-				      std::pair<int, int> range) -> bool;
+	virtual auto CheckStatesValid(array_t &cons, std::pair<int, int> range) -> bool;
 	virtual void FlattenShocks(array_t &q, std::pair<int, int> range);
 
       protected:
@@ -178,10 +150,10 @@ template <typename problem_t> class HyperbolicSystem
 	array_t x1Flux_;
 	array_t x1FluxDiffusive_;
 
-	//array_t x2LeftState_;
-	//array_t x2RightState_;
-	//array_t x2Flux_;
-	//array_t x2FluxDiffusive_;
+	// array_t x2LeftState_;
+	// array_t x2RightState_;
+	// array_t x2Flux_;
+	// array_t x2FluxDiffusive_;
 
 	double cflNumber_ = 1.0;
 	double dt_ = 0;
@@ -196,8 +168,8 @@ template <typename problem_t> class HyperbolicSystem
 	const int nghost_ = 4; // 4 ghost cells required for PPM
 
 	HyperbolicSystem(int nx, double lx, double cflNumber, int nvars)
-	    : nx_(nx), lx_(lx), dx_(lx / static_cast<double>(nx)),
-	      cflNumber_(cflNumber), nvars_(nvars)
+	    : nx_(nx), lx_(lx), dx_(lx / static_cast<double>(nx)), cflNumber_(cflNumber),
+	      nvars_(nvars)
 	{
 		assert(lx_ > 0.0);				   // NOLINT
 		assert(nx_ > 2);				   // NOLINT
@@ -225,59 +197,45 @@ template <typename problem_t> class HyperbolicSystem
 
 	virtual void PredictStep(std::pair<int, int> range);
 	auto ComputeTimestep() -> double;
-	void CopyVars(array_t &src, array_t& dest, const std::pair<int, int> range);
-	auto ComputeResidual(array_t &cur, array_t& prev, const std::pair<int, int> range) -> double;
+	void CopyVars(array_t &src, array_t &dest, std::pair<int, int> range);
+	auto ComputeResidual(array_t &cur, array_t &prev, std::pair<int, int> range) -> double;
 
 	virtual auto ComputeTimestep(double dt_max) -> double = 0;
 	virtual void ComputeFluxes(std::pair<int, int> range) = 0;
 };
 
-template <typename problem_t>
-auto HyperbolicSystem<problem_t>::time() const -> double
+template <typename problem_t> auto HyperbolicSystem<problem_t>::time() const -> double
 {
 	return time_;
 }
 
-template <typename problem_t>
-auto HyperbolicSystem<problem_t>::dt() const -> double
-{
-	return dt_;
-}
+template <typename problem_t> auto HyperbolicSystem<problem_t>::dt() const -> double { return dt_; }
 
-template <typename problem_t>
-auto HyperbolicSystem<problem_t>::nx() const -> int
-{
-	return nx_;
-}
+template <typename problem_t> auto HyperbolicSystem<problem_t>::nx() const -> int { return nx_; }
 
-template <typename problem_t>
-auto HyperbolicSystem<problem_t>::dim1() const -> int
+template <typename problem_t> auto HyperbolicSystem<problem_t>::dim1() const -> int
 {
 	return dim1_;
 }
 
-template <typename problem_t>
-auto HyperbolicSystem<problem_t>::nghost() const -> int
+template <typename problem_t> auto HyperbolicSystem<problem_t>::nghost() const -> int
 {
 	return nghost_;
 }
 
-template <typename problem_t>
-auto HyperbolicSystem<problem_t>::nvars() const -> int
+template <typename problem_t> auto HyperbolicSystem<problem_t>::nvars() const -> int
 {
 	return nvars_;
 }
 
-template <typename problem_t>
-void HyperbolicSystem<problem_t>::set_cflNumber(double cflNumber)
+template <typename problem_t> void HyperbolicSystem<problem_t>::set_cflNumber(double cflNumber)
 {
 	assert((cflNumber > 0.0) && (cflNumber <= 1.0)); // NOLINT
 	cflNumber_ = cflNumber;
 }
 
 template <typename problem_t>
-void HyperbolicSystem<problem_t>::AddSourceTerms(array_t &U,
-						 std::pair<int, int> range)
+void HyperbolicSystem<problem_t>::AddSourceTerms(array_t &U, std::pair<int, int> range)
 {
 }
 
@@ -286,8 +244,7 @@ void HyperbolicSystem<problem_t>::FlattenShocks(array_t &q, std::pair<int, int> 
 {
 }
 
-template <typename problem_t>
-void HyperbolicSystem<problem_t>::FillGhostZones(array_t &cons)
+template <typename problem_t> void HyperbolicSystem<problem_t>::FillGhostZones(array_t &cons)
 {
 	// In general, this step will require MPI communication, and interaction
 	// with the main AMR code.
@@ -326,8 +283,8 @@ void HyperbolicSystem<problem_t>::FillGhostZones(array_t &cons)
 }
 
 template <typename problem_t>
-void HyperbolicSystem<problem_t>::ReconstructStatesConstant(
-    array_t &q, const std::pair<int, int> range)
+void HyperbolicSystem<problem_t>::ReconstructStatesConstant(array_t &q,
+							    const std::pair<int, int> range)
 {
 	// By convention, the interfaces are defined on the left edge of each
 	// zone, i.e. xleft_(i) is the "left"-side of the interface at
@@ -381,16 +338,15 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPLM(array_t &q, const std::pa
 	}
 
 	// Important final step: ensure that velocity does not exceed c
-	// in any cell where v^2 > c, reconstruct using first-order method for all velocity components
-	// (must be done by user)
+	// in any cell where v^2 > c, reconstruct using first-order method for all velocity
+	// components (must be done by user)
 
 	// Apply shock flattening
 	FlattenShocks(q, range);
 }
 
 template <typename problem_t>
-void HyperbolicSystem<problem_t>::ReconstructStatesPPM(
-    array_t &q, const std::pair<int, int> range)
+void HyperbolicSystem<problem_t>::ReconstructStatesPPM(array_t &q, const std::pair<int, int> range)
 {
 	// By convention, the interfaces are defined on the left edge of each
 	// zone, i.e. xleft_(i) is the "left"-side of the interface at the left
@@ -417,24 +373,9 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(
 
 			const double coef_1 = (7. / 12.);
 			const double coef_2 = (-1. / 12.);
-			const double interface =
-				(coef_1 * q(n, i) + coef_2 * q(n, i + 1)) +
-				(coef_1 * q(n, i - 1) + coef_2 * q(n, i - 2));
-#if 0
-			// something is wrong here, this causes weird oscillations in Shu-Osher problem
-			// -- do not use in production! --
-			// Compute limited slopes as in C&W original method
-			const double dq0 =
-			    MC(q(n, i + 1) - q(n, i), q(n, i) - q(n, i - 1));
+			const double interface = (coef_1 * q(n, i) + coef_2 * q(n, i + 1)) +
+						 (coef_1 * q(n, i - 1) + coef_2 * q(n, i - 2));
 
-			const double dq1 =
-				MC(q(n, i) - q(n, i - 1), q(n, i - 1) - q(n, i - 2));
-
-			// Compute interface (i - 1/2)
-			const double interface = q(n, i - 1) +
-						 0.5 * (q(n, i) - q(n, i - 1)) -
-						 (1. / 6.) * (dq0 - dq1);
-#endif
 			// a_R,(i-1) in C&W
 			x1LeftState_(n, i) = interface;
 
@@ -451,34 +392,30 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(
 			// [See Eq. B8 of Mignone+ 2005]
 
 			// compute bounds from surrounding cells
-			const std::pair<double, double> bounds = 
-				std::minmax({q(n, i - 1), q(n, i), q(n, i+1)}); // modify in 3d !!
+			const std::pair<double, double> bounds =
+			    std::minmax({q(n, i - 1), q(n, i), q(n, i + 1)}); // modify in 3d !!
 
 			// get interfaces
 			const double a_minus = x1RightState_(n, i);
-			const double a_plus = x1LeftState_(n, i+1);
+			const double a_plus = x1LeftState_(n, i + 1);
 
 			// left side of zone i
-			const double new_a_minus =
-			    std::clamp(a_minus, bounds.first, bounds.second);
+			const double new_a_minus = std::clamp(a_minus, bounds.first, bounds.second);
 
 			// right side of zone i
-			const double new_a_plus =
-				std::clamp(a_plus, bounds.first, bounds.second);
+			const double new_a_plus = std::clamp(a_plus, bounds.first, bounds.second);
 
 			x1RightState_(n, i) = new_a_minus;
-			x1LeftState_(n, i+1) = new_a_plus;
+			x1LeftState_(n, i + 1) = new_a_plus;
 		}
 	}
 
 	for (int n = 0; n < nvars_; ++n) {
 		for (int i = range.first; i < range.second; ++i) {
 
-			const double a_minus =
-			    x1RightState_(n, i); // a_L,i in C&W
-			const double a_plus =
-			    x1LeftState_(n, i + 1); // a_R,i in C&W
-			const double a = q(n, i);   // a_i in C&W
+			const double a_minus = x1RightState_(n, i);   // a_L,i in C&W
+			const double a_plus = x1LeftState_(n, i + 1); // a_R,i in C&W
+			const double a = q(n, i);		      // a_i in C&W
 
 			const double dq_minus = (a - a_minus);
 			const double dq_plus = (a_plus - a);
@@ -498,8 +435,7 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(
 				// in the Shu-Osher test problem.
 				// However, it is necessary to get a reasonable solution
 				// for the sawtooth advection problem.
-				const double dq0 = MC(q(n, i + 1) - q(n, i),
-						      q(n, i) - q(n, i - 1));
+				const double dq0 = MC(q(n, i + 1) - q(n, i), q(n, i) - q(n, i - 1));
 
 				// use linear reconstruction, following Balsara (2017).
 				//     [Living Rev Comput Astrophys (2017) 3:2]
@@ -507,25 +443,22 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(
 				new_a_plus = a + 0.5 * dq0;
 
 				// original C&W method for this case
-				//new_a_minus = a;
-				//new_a_plus = a;
+				// new_a_minus = a;
+				// new_a_plus = a;
 
 			} else { // no local extrema
 
 				// parabola overshoots near
 				// a_plus -> reset a_minus
-				if (std::abs(dq_minus) >=
-				    2.0 * std::abs(dq_plus)) {
+				if (std::abs(dq_minus) >= 2.0 * std::abs(dq_plus)) {
 					new_a_minus = a - 2.0 * dq_plus;
 				}
 
 				// parabola overshoots near
 				// a_minus -> reset a_plus
-				if (std::abs(dq_plus) >=
-				    2.0 * std::abs(dq_minus)) {
+				if (std::abs(dq_plus) >= 2.0 * std::abs(dq_minus)) {
 					new_a_plus = a + 2.0 * dq_minus;
 				}
-
 			}
 
 			x1RightState_(n, i) = new_a_minus;
@@ -534,8 +467,8 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(
 	}
 
 	// Important final step: ensure that velocity does not exceed c
-	// in any cell where v^2 > c, reconstruct using first-order method for all velocity components
-	// (must be done by user)
+	// in any cell where v^2 > c, reconstruct using first-order method for all velocity
+	// components (must be done by user)
 
 	// Apply shock flattening
 	FlattenShocks(q, range);
@@ -552,8 +485,7 @@ void HyperbolicSystem<problem_t>::PredictStep(const std::pair<int, int> range)
 	for (int n = 0; n < nvars_; ++n) {
 		for (int i = range.first; i < range.second; ++i) {
 			consVarPredictStep_(n, i) =
-			    consVar_(n, i) -
-			    (dt_ / dx_) * (x1Flux_(n, i + 1) - x1Flux_(n, i));
+			    consVar_(n, i) - (dt_ / dx_) * (x1Flux_(n, i + 1) - x1Flux_(n, i));
 		}
 	}
 }
@@ -571,8 +503,8 @@ void HyperbolicSystem<problem_t>::AddFluxesRK2(array_t &U0, array_t &U1)
 			// RK-SSP2 integrator
 			const double U_0 = U0(n, i);
 			const double U_1 = U1(n, i);
-			const double FU_1 = -1.0 * (dt_ / dx_) *
-					    (x1Flux_(n, i + 1) - x1Flux_(n, i));
+			const double FU_1 =
+			    -1.0 * (dt_ / dx_) * (x1Flux_(n, i + 1) - x1Flux_(n, i));
 
 			// save results in U0
 			U0(n, i) = 0.5 * U_0 + 0.5 * U_1 + 0.5 * FU_1;
@@ -580,34 +512,32 @@ void HyperbolicSystem<problem_t>::AddFluxesRK2(array_t &U0, array_t &U1)
 	}
 }
 
-template <typename problem_t>
-auto HyperbolicSystem<problem_t>::ComputeTimestep() -> double
+template <typename problem_t> auto HyperbolicSystem<problem_t>::ComputeTimestep() -> double
 {
 	return ComputeTimestep(std::numeric_limits<double>::max());
 }
 
-template <typename problem_t>
-void HyperbolicSystem<problem_t>::AdvanceTimestep()
+template <typename problem_t> void HyperbolicSystem<problem_t>::AdvanceTimestep()
 {
 	AdvanceTimestep(std::numeric_limits<double>::max());
 }
 
-template <typename problem_t>
-void HyperbolicSystem<problem_t>::AdvanceTimestep(const double dt_max)
+template <typename problem_t> void HyperbolicSystem<problem_t>::AdvanceTimestep(const double dt_max)
 {
 	// use RK2 by default
 	AdvanceTimestepRK2(dt_max);
 }
 
 template <typename problem_t>
-auto HyperbolicSystem<problem_t>::CheckStatesValid(
-    array_t &cons, const std::pair<int, int> range) -> bool
+auto HyperbolicSystem<problem_t>::CheckStatesValid(array_t & /*cons*/,
+						   const std::pair<int, int> /*range*/) -> bool
 {
 	return true;
 }
 
 template <typename problem_t>
-void HyperbolicSystem<problem_t>::CopyVars(array_t &src, array_t& dest, const std::pair<int, int> range)
+void HyperbolicSystem<problem_t>::CopyVars(array_t &src, array_t &dest,
+					   const std::pair<int, int> range)
 {
 	for (int n = 0; n < nvars_; ++n) {
 		for (int i = range.first; i < range.second; ++i) {
@@ -617,7 +547,8 @@ void HyperbolicSystem<problem_t>::CopyVars(array_t &src, array_t& dest, const st
 }
 
 template <typename problem_t>
-auto HyperbolicSystem<problem_t>::ComputeResidual(array_t &cur, array_t& prev, const std::pair<int, int> range) -> double
+auto HyperbolicSystem<problem_t>::ComputeResidual(array_t &cur, array_t &prev,
+						  const std::pair<int, int> range) -> double
 {
 	double norm = 0.;
 	for (int n = 0; n < nvars_; ++n) {
@@ -625,14 +556,13 @@ auto HyperbolicSystem<problem_t>::ComputeResidual(array_t &cur, array_t& prev, c
 		for (int i = range.first; i < range.second; ++i) {
 			comp += std::abs(cur(n, i) - prev(n, i));
 		}
-		comp *= 1.0/(range.second - range.first);
-		norm += comp*comp;
+		comp *= 1.0 / (range.second - range.first);
+		norm += comp * comp;
 	}
 	return std::sqrt(norm);
 }
 
-template <typename problem_t>
-void HyperbolicSystem<problem_t>::AdvanceTimestepRK2(const double dt)
+template <typename problem_t> void HyperbolicSystem<problem_t>::AdvanceTimestepRK2(const double dt)
 {
 	const auto ppm_range = std::make_pair(-1 + nghost_, nx_ + 1 + nghost_);
 	const auto cell_range = std::make_pair(nghost_, nx_ + nghost_);
@@ -643,14 +573,14 @@ void HyperbolicSystem<problem_t>::AdvanceTimestepRK2(const double dt)
 	// Initialize data
 	FillGhostZones(consVar_);
 	ConservedToPrimitive(consVar_, std::make_pair(0, dim1_));
-	//ComputeTimestep(std::min(dt_max, dtExpandFactor_ * dtPrev_));
+	// ComputeTimestep(std::min(dt_max, dtExpandFactor_ * dtPrev_));
 	dt_ = dt;
 
 	// Stage 1 of RK2-SSP
 	FillGhostZones(consVar_);
 	ConservedToPrimitive(consVar_, std::make_pair(0, dim1_));
 	ReconstructStatesPPM(primVar_, ppm_range);
-	//ReconstructStatesPLM(primVar_, ppm_range);
+	// ReconstructStatesPLM(primVar_, ppm_range);
 	ComputeFluxes(cell_range);
 	PredictStep(cell_range);
 
@@ -662,12 +592,12 @@ void HyperbolicSystem<problem_t>::AdvanceTimestepRK2(const double dt)
 	FillGhostZones(consVarPredictStep_);
 	ConservedToPrimitive(consVarPredictStep_, std::make_pair(0, dim1_));
 	ReconstructStatesPPM(primVar_, ppm_range);
-	//ReconstructStatesPLM(primVar_, ppm_range);
+	// ReconstructStatesPLM(primVar_, ppm_range);
 	ComputeFluxes(cell_range);
 	AddFluxesRK2(consVar_, consVarPredictStep_);
 
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-		CheckStatesValid(consVar_, cell_range),
+	    CheckStatesValid(consVar_, cell_range),
 	    "[stage 2] Non-realizable states produced. This should not happen!");
 
 	// Add source terms via operator splitting
@@ -678,9 +608,7 @@ void HyperbolicSystem<problem_t>::AdvanceTimestepRK2(const double dt)
 	dtPrev_ = dt_;
 }
 
-
-template <typename problem_t>
-void HyperbolicSystem<problem_t>::AdvanceTimestepSDC2(const double dt)
+template <typename problem_t> void HyperbolicSystem<problem_t>::AdvanceTimestepSDC2(const double dt)
 {
 	// Use a second-order SDC method to advance the radiation subsystem,
 	// continuing iterations until the nonlinear residual is below a given tolerance.
@@ -690,7 +618,8 @@ void HyperbolicSystem<problem_t>::AdvanceTimestepSDC2(const double dt)
 
 	// Initialize data
 	dt_ = dt;
-	CopyVars(consVar_, consVarPredictStep_, cell_range); // consVarPredictStep_ may not be initialized by the user
+	CopyVars(consVar_, consVarPredictStep_,
+		 cell_range); // consVarPredictStep_ may not be initialized by the user
 	CopyVars(consVar_, consVarPredictStepPrev_, cell_range);
 
 	// begin SDC loop
@@ -704,7 +633,8 @@ void HyperbolicSystem<problem_t>::AdvanceTimestepSDC2(const double dt)
 		ConservedToPrimitive(consVarPredictStepPrev_, std::make_pair(0, dim1_));
 
 		// Step 1a: Advance transport operator
-		ReconstructStatesPLM(primVar_, ppm_range); // PPM *cannot* be used with 2nd-order SDC
+		ReconstructStatesPLM(primVar_,
+				     ppm_range); // PPM *cannot* be used with 2nd-order SDC
 		ComputeFluxes(cell_range);
 		PredictStep(cell_range); // update consVarPredictStep_
 
@@ -712,8 +642,8 @@ void HyperbolicSystem<problem_t>::AdvanceTimestepSDC2(const double dt)
 		AddSourceTerms(consVarPredictStep_, cell_range);
 
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-	   		CheckStatesValid(consVarPredictStep_, cell_range),
-	    	"[step 1b] Non-realizable states produced. This should not happen!");
+		    CheckStatesValid(consVarPredictStep_, cell_range),
+		    "[step 1b] Non-realizable states produced. This should not happen!");
 
 		// Step 2: Check for convergence
 		res = ComputeResidual(consVarPredictStep_, consVarPredictStepPrev_, cell_range);
@@ -723,11 +653,14 @@ void HyperbolicSystem<problem_t>::AdvanceTimestepSDC2(const double dt)
 		}
 
 		// Save current iteration
-		CopyVars(consVarPredictStep_, consVarPredictStepPrev_, cell_range); // copy current iteration
+		CopyVars(consVarPredictStep_, consVarPredictStepPrev_,
+			 cell_range); // copy current iteration
 	}
 
-	//AMREX_ALWAYS_ASSERT_WITH_MESSAGE(res < atol, "SDC2 iteration exceeded maximum iteration count, but did not converge.");
-	amrex::Print() << "SDC2 iteration converged with residual " << res << " after " << j+1 << " iterations.\n";
+	// AMREX_ALWAYS_ASSERT_WITH_MESSAGE(res < atol, "SDC2 iteration exceeded maximum iteration
+	// count, but did not converge.");
+	amrex::Print() << "SDC2 iteration converged with residual " << res << " after " << j + 1
+		       << " iterations.\n";
 
 	// If converged, copy final solution to consVar_
 	CopyVars(consVarPredictStep_, consVar_, cell_range);

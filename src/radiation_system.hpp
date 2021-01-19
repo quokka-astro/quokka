@@ -101,9 +101,9 @@ class RadSystem : public HyperbolicSystem<problem_t>
 	auto ComputeTgasFromEgas(double rho, double Egas) -> double;
 	auto ComputeEgasFromTgas(double rho, double Tgas) -> double;
 	auto ComputeEgasTempDerivative(double rho, double Tgas) -> double;
-	auto ComputeEintFromEgas(const double density, const double X1GasMom,
-					       const double X2GasMom, const double X3GasMom,
-					       const double Etot) -> double;
+	auto ComputeEintFromEgas(double density, double X1GasMom,
+					       double X2GasMom, double X3GasMom,
+					       double Etot) -> double;
 	auto ComputeCellOpticalDepth(int i) -> double;
 
 	// setter functions:
@@ -591,20 +591,17 @@ void RadSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 }
 
 template <typename problem_t>
-auto RadSystem<problem_t>::ComputeOpacity(const double rho, const double Tgas)
+auto RadSystem<problem_t>::ComputeOpacity(const double /*rho*/, const double /*Tgas*/)
     -> double
 {
-	// TODO(ben): interpolate from a table
-	// return 0.4; // cm^2 g^-1 (Thomson opacity)
 	return 1.0;
 }
 
 template <typename problem_t>
-auto RadSystem<problem_t>::ComputeOpacityTempDerivative(const double rho,
-							const double Tgas)
+auto RadSystem<problem_t>::ComputeOpacityTempDerivative(const double /*rho*/,
+							const double /*Tgas*/)
     -> double
 {
-	// TODO(ben): interpolate from a table
 	return 0.0;
 }
 
@@ -628,7 +625,7 @@ auto RadSystem<problem_t>::ComputeEgasFromTgas(const double rho,
 
 template <typename problem_t>
 auto RadSystem<problem_t>::ComputeEgasTempDerivative(const double rho,
-						     const double Tgas)
+						     const double /*Tgas*/)
     -> double
 {
 	const double c_v =
