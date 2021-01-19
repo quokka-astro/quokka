@@ -97,29 +97,25 @@ auto testproblem_hydro_shocktube() -> int
 	//const auto initial_mass = hydro_system.ComputeMass();
 
 	// Main time loop
-
-	for (int j = 0; j < max_timesteps; ++j) {
+    amrex::Real start_time = amrex::ParallelDescriptor::second();
+	int j = 0;
+	for (; j < max_timesteps; ++j) {
 		if (hydro_system.time() >= max_time) {
 			break;
 		}
 
 		const double this_dtMax = ((j == 0) ? initial_dt : max_dt);
 		hydro_system.AdvanceTimestepRK2(this_dtMax);
-
-#if 0
-		const auto current_mass = hydro_system.ComputeMass();
-		const auto mass_deficit = std::abs(current_mass - initial_mass);
-
-		amrex::Print() << "Timestep " << j << "; t = " << hydro_system.time()
-			  << "\n";
-		amrex::Print() << "Total mass = " << current_mass << "\n";
-		amrex::Print() << "Mass nonconservation = " << mass_deficit << "\n";
-		amrex::Print() << "\n";
-#endif
-
 	}
 
-// read in exact solution
+	// Compute performance figure-of-merit (microseconds/zone-cycle)
+	amrex::Real stop_time = amrex::ParallelDescriptor::second();
+	amrex::Real run_time = stop_time - start_time;
+	amrex::Real zone_cycles_per_second = (j*nx)/run_time;
+	amrex::Print() << "Zone-cycles/second = " << std::setprecision(5) << zone_cycles_per_second;
+	amrex::Print() << " (" << std::setprecision(5) << (1.0e6/zone_cycles_per_second) << " µs/zone-cycle)\n";
+
+	// read in exact solution
 
 	std::vector<double> xs_exact;
 	std::vector<double> density_exact;
