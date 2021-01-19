@@ -115,19 +115,26 @@ auto testproblem_hydro_wave() -> int
 	const auto initial_mass = hydro_system.ComputeMass();
 
 	// Main time loop
+    amrex::Real start_time = amrex::ParallelDescriptor::second();
 
-	for (int j = 0; j < max_timesteps; ++j) {
+	int j = 0;
+	for (; j < max_timesteps; ++j) {
 		if (hydro_system.time() >= max_time) {
 			break;
 		}
 		hydro_system.AdvanceTimestep(max_dt);
 	}
 
-	amrex::Print() << "t = " << hydro_system.time() << "\n";
+	// Compute performance figure-of-merit (microseconds/zone-cycle)
+	amrex::Real stop_time = amrex::ParallelDescriptor::second();
+	amrex::Real run_time = stop_time - start_time;
+	amrex::Real zone_cycles_per_second = (j*nx)/run_time;
+	amrex::Print() << "Zone-cycles/second = " << std::setprecision(5) << zone_cycles_per_second;
+	amrex::Print() << " (" << std::setprecision(5) << (1.0e6/zone_cycles_per_second) << " µs/zone-cycle)\n";
 
 	const auto current_mass = hydro_system.ComputeMass();
 	const auto mass_deficit = std::abs(current_mass - initial_mass);
-
+	amrex::Print() << "t = " << hydro_system.time() << "\n";
 	amrex::Print() << "Total mass = " << current_mass << "\n";
 	amrex::Print() << "Mass nonconservation = " << mass_deficit << "\n";
 	amrex::Print() << "\n";
