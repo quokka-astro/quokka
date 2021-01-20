@@ -886,10 +886,10 @@ void RadSystem<problem_t>::PredictStep(const std::pair<int, int> range)
 			consVarPredictStep_(x1RadFlux_index, i) = x1F_new;
 
 		} else {
-			//amrex::Print()
-			//    << "WARNING: [stage 1] flux limited at i = " << i
-			//    << " with reduced flux = " << x1ReducedFlux_new
-			//    << std::endl;
+			// amrex::Print()
+			//     << "WARNING: [stage 1] flux limited at i = " << i
+			//     << " with reduced flux = " << x1ReducedFlux_new
+			//     << std::endl;
 
 			const double FE_1d =
 			    -1.0 * (dt_ / dx_) *
@@ -946,10 +946,10 @@ void RadSystem<problem_t>::AddFluxesRK2(array_t &U0, array_t &U1)
 			U0(x1RadFlux_index, i) = x1F_new;
 
 		} else {
-			amrex::Print()
-			    << "WARNING: [stage 2] flux limited at i = " << i
-			    << " with reduced flux = " << x1ReducedFlux_new
-			    << std::endl;
+			// amrex::Print()
+			//     << "WARNING: [stage 2] flux limited at i = " << i
+			//     << " with reduced flux = " << x1ReducedFlux_new
+			//     << std::endl;
 
 			const double FE_1d =
 			    -1.0 * (dt_ / dx_) *
