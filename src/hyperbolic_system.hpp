@@ -582,6 +582,7 @@ template <typename problem_t> void HyperbolicSystem<problem_t>::AdvanceTimestepR
 	ConservedToPrimitive(consVar_, std::make_pair(0, dim1_));
 	ReconstructStatesPPM(primVar_, ppm_range);
 	ComputeFluxes(cell_range);
+	ComputeFirstOrderFluxes(cell_range);
 	PredictStep(cell_range);
 
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
@@ -593,6 +594,7 @@ template <typename problem_t> void HyperbolicSystem<problem_t>::AdvanceTimestepR
 	ConservedToPrimitive(consVarPredictStep_, std::make_pair(0, dim1_));
 	ReconstructStatesPPM(primVar_, ppm_range);
 	ComputeFluxes(cell_range);
+	ComputeFirstOrderFluxes(cell_range);
 	AddFluxesRK2(consVar_, consVarPredictStep_);
 
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
@@ -635,6 +637,7 @@ template <typename problem_t> void HyperbolicSystem<problem_t>::AdvanceTimestepS
 		ReconstructStatesPLM(primVar_,
 				     ppm_range); // PPM *cannot* be used with 2nd-order SDC
 		ComputeFluxes(cell_range);
+		ComputeFirstOrderFluxes(cell_range);
 		PredictStep(cell_range); // update consVarPredictStep_
 
 		// Step 1b: Add source terms via operator splitting
