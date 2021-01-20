@@ -70,6 +70,7 @@ class LinearAdvectionSystem : public HyperbolicSystem<problem_t>
 				  std::pair<int, int> range) override;
 	auto ComputeTimestep(double dt_max) -> double override;
 	void ComputeFluxes(std::pair<int, int> range) override;
+	void ComputeFirstOrderFluxes(std::pair<int, int> range) override;
 };
 
 template <typename problem_t>
@@ -144,7 +145,12 @@ void LinearAdvectionSystem<problem_t>::ConservedToPrimitive(
 	}
 }
 
-// TODO(ben): add flux limiter for positivity preservation.
+template <typename problem_t>
+void LinearAdvectionSystem<problem_t>::ComputeFirstOrderFluxes(std::pair<int, int> range)
+{
+	// TODO(ben): implement
+}
+
 template <typename problem_t>
 void LinearAdvectionSystem<problem_t>::ComputeFluxes(
     const std::pair<int, int> range)

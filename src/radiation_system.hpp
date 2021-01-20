@@ -148,7 +148,7 @@ class RadSystem : public HyperbolicSystem<problem_t>
 	void PredictStep(std::pair<int, int> range) override;
 	void AddFluxesRK2(array_t &U0, array_t &U1) override;
 	void ComputeFluxes(std::pair<int, int> range) override;
-	//void ComputeFlatteningCoefficientX1(std::pair<int, int> range);
+	void ComputeFirstOrderFluxes(std::pair<int, int> range) override;
 };
 
 template <typename problem_t>
@@ -466,6 +466,75 @@ auto RadSystem<problem_t>::ComputeCellOpticalDepth(int i) -> double
 }
 
 template <typename problem_t>
+void RadSystem<problem_t>::ComputeFirstOrderFluxes(std::pair<int, int> range)
+{
+	// By convention, the interfaces are defined on the left edge of each
+	// zone, i.e. x1Flux_(i) is the solution to the Riemann problem at
+	// the left edge of zone i.
+
+	// compute Lax-Friedrichs fluxes for use in flux-limiting to ensure realizable states
+
+	for (int i = range.first; i < (range.second + 1); ++i) {
+		// gather L/R states
+		const double erad_L = consVar_(radEnergy_index, i-1);
+		const double erad_R = consVar_(radEnergy_index, i);
+
+		const double Fx_L = consVar_(x1RadFlux_index, i-1);
+		const double Fx_R = consVar_(x1RadFlux_index, i);
+
+		// compute primitive variables
+		const double fx_L = Fx_L / (c_light_*erad_L);
+		const double fx_R = Fx_R / (c_light_*erad_R);
+
+		// compute scalar reduced flux f
+		// [modify in 3d!]
+		const double f_L = std::sqrt(fx_L * fx_L);
+		const double f_R = std::sqrt(fx_R * fx_R);
+
+		const double nx_L = (f_L > 0.0) ? (fx_L / f_L) : 0.0;
+		const double nx_R = (f_R > 0.0) ? (fx_R / f_R) : 0.0;
+
+		// compute radiation pressure tensors
+		const double chi_L = RadSystem<problem_t>::ComputeEddingtonFactor(f_L);
+		const double chi_R = RadSystem<problem_t>::ComputeEddingtonFactor(f_R);
+
+		// diagonal term of Eddington tensor
+		const double Tdiag_L = (1.0 - chi_L) / 2.0;
+		const double Tdiag_R = (1.0 - chi_R) / 2.0;
+
+		// anisotropic term of Eddington tensor (in the direction of the
+		// rad. flux)
+		const double Txx_L = (3.0 * chi_L - 1.0) / 2.0 * (nx_L * nx_L);
+		const double Txx_R = (3.0 * chi_R - 1.0) / 2.0 * (nx_R * nx_R);
+
+		// compute the elements of the total radiation pressure tensor
+		const double Pxx_L = (Tdiag_L + Txx_L) * erad_L;
+		const double Pxx_R = (Tdiag_R + Txx_R) * erad_R;
+
+		// compute signal speed
+		const double S_L = -c_hat_ * std::sqrt(Tdiag_L + Txx_L);
+		const double S_R =  c_hat_ * std::sqrt(Tdiag_R + Txx_R);
+
+		const double sstar = std::max(std::abs(S_L), std::abs(S_R));
+
+		// compute (using local signal speed) Lax-Friedrichs flux
+		const std::valarray<double> F_L = {(c_hat_ / c_light_) * Fx_L,
+						   c_hat_ * c_light_ * Pxx_L};
+
+		const std::valarray<double> F_R = {(c_hat_ / c_light_) * Fx_R,
+						   c_hat_ * c_light_ * Pxx_R};
+
+		const std::valarray<double> U_L = {erad_L, Fx_L};
+		const std::valarray<double> U_R = {erad_R, Fx_R};
+
+		const std::valarray<double> LLF = 0.5 * (F_L + F_R - sstar*(U_R - U_L));
+
+		x1FluxDiffusive_(radEnergy_index, i) = LLF[0];
+		x1FluxDiffusive_(x1RadFlux_index, i) = LLF[1];
+	}
+}
+
+template <typename problem_t>
 void RadSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 {
 	// By convention, the interfaces are defined on the left edge of each
@@ -536,14 +605,8 @@ void RadSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 		// frozen Eddington tensor approximation, following Balsara
 		// (1999) [JQSRT Vol. 61, No. 5, pp. 617–627, 1999], Eq. 46.
 
-		const double s_L = -c_hat_ * std::sqrt(Tdiag_L + Txx_L);
-		const double s_R = c_hat_ * std::sqrt(Tdiag_R + Txx_R);
-
-		const double S_L = std::min({-c_hat_ * f_L, -c_hat_ * (f_L - chi_L) / (1.0 - f_L),
-					     -c_hat_ * (f_L + chi_L) / (1.0 + f_L), s_L});
-
-		const double S_R = std::max({c_hat_ * f_R, c_hat_ * (f_R - chi_R) / (1.0 - f_R),
-					     c_hat_ * (f_R + chi_R) / (1.0 + f_R), s_R});
+		const double S_L = -c_hat_ * std::sqrt(Tdiag_L + Txx_L);
+		const double S_R =  c_hat_ * std::sqrt(Tdiag_R + Txx_R);
 
 		assert(std::abs(S_L) <= c_hat_); // NOLINT
 		assert(std::abs(S_R) <= c_hat_); // NOLINT
@@ -573,20 +636,12 @@ void RadSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 		// in the star region, so F = F_star
 		F = F_star;
 
-		// do NOT add artificial viscosity here!!
-
 		// check states are valid
 		assert(!std::isnan(F[0])); // NOLINT
 		assert(!std::isnan(F[1])); // NOLINT
 
 		x1Flux_(radEnergy_index, i) = F[0];
 		x1Flux_(x1RadFlux_index, i) = F[1];
-
-		// Lax-Friedrichs flux, in case of positivity errors
-		std::valarray<double> LLF = 0.5*(F_L + F_R) - 0.5*(dx_/dt_)*(U_R - U_L);
-
-		x1FluxDiffusive_(radEnergy_index, i) = LLF[0];
-		x1FluxDiffusive_(x1RadFlux_index, i) = LLF[1];
 	}
 }
 

@@ -67,12 +67,12 @@ class HydroSystem : public HyperbolicSystem<problem_t>
 
 	explicit HydroSystem(HydroSystemArgs args);
 
-	void AddSourceTerms(array_t &U, std::pair<int, int> range) override;
 	void ConservedToPrimitive(array_t &cons,
 				  std::pair<int, int> range) override;
 	auto ComputeTimestep(double dt_max) -> double override;
 	void AdvanceTimestep(double dt_max) override;
 	void FillGhostZones(array_t &cons) override;
+	void ComputeFlatteningCoefficients(std::pair<int, int> range) override;
 	void FlattenShocks(array_t &q, const std::pair<int,int> range) override;
 	auto CheckStatesValid(array_t &cons, const std::pair<int, int> range) -> bool override;
 
@@ -112,7 +112,7 @@ class HydroSystem : public HyperbolicSystem<problem_t>
 	double gamma_;
 
 	void ComputeFluxes(std::pair<int, int> range) override;
-	void ComputeFlatteningCoefficientX1(std::pair<int, int> range);
+	void ComputeFirstOrderFluxes(std::pair<int, int> range) override;
 };
 
 template <typename problem_t>
@@ -235,8 +235,6 @@ void HydroSystem<problem_t>::ConservedToPrimitive(
 		x1Velocity_(i) = vx;
 		pressure_(i) = P;
 	}
-
-	ComputeFlatteningCoefficientX1(std::make_pair(-2 + nghost_, nghost_ + nx_ + 2));
 }
 
 template <typename problem_t>
@@ -293,7 +291,7 @@ auto HydroSystem<problem_t>::CheckStatesValid(
 }
 
 template <typename problem_t>
-void HydroSystem<problem_t>::ComputeFlatteningCoefficientX1(const std::pair<int,int> range)
+void HydroSystem<problem_t>::ComputeFlatteningCoefficients(const std::pair<int,int> range)
 {
 	// compute the PPM shock flattening coefficient following
 	//   Appendix B1 of Mignone+ 2005 [this description has typos].
@@ -377,7 +375,61 @@ void HydroSystem<problem_t>::AdvanceTimestep(double dt_max)
 	HyperbolicSystem<problem_t>::AdvanceTimestep(dt_max);
 }
 
-// TODO(ben): add flux limiter for positivity preservation.
+template <typename problem_t>
+void HydroSystem<problem_t>::ComputeFirstOrderFluxes(std::pair<int, int> range)
+{
+	// By convention, the interfaces are defined on the left edge of each
+	// zone, i.e. x1Flux_(i) is the solution to the Riemann problem at
+	// the left edge of zone i.
+
+	// compute Lax-Friedrichs fluxes for use in flux-limiting to ensure realizable states
+
+	for (int i = range.first; i < (range.second + 1); ++i) {
+		// gather L/R states
+		const double rho_L = consVar_(density_index, i-1);
+		const double rho_R = consVar_(density_index, i);
+
+		const double mom_L = consVar_(x1Momentum_index, i-1);
+		const double mom_R = consVar_(x1Momentum_index, i);
+
+		const double E_L = consVar_(energy_index, i-1);
+		const double E_R = consVar_(energy_index, i);
+
+		// compute primitive variables
+		const double vx_L = mom_L / rho_L;
+		const double vx_R = mom_R / rho_R;
+
+		const double ke_L = 0.5 * rho_L * (vx_L * vx_L);
+		const double ke_R = 0.5 * rho_R * (vx_R * vx_R);
+
+		const double P_L = (E_L - ke_L) * (gamma_ - 1.0);
+		const double P_R = (E_R - ke_R) * (gamma_ - 1.0);
+
+		const double cs_L = std::sqrt(gamma_ * P_L / rho_L);
+		const double cs_R = std::sqrt(gamma_ * P_R / rho_R);
+
+		const double s_L = std::abs(vx_L) + cs_L;
+		const double s_R = std::abs(vx_R) + cs_R;
+		const double sstar = std::max(s_L, s_R);
+
+		// compute (using local signal speed) Lax-Friedrichs flux
+		const std::valarray<double> F_L = {rho_L * vx_L, rho_L * (vx_L * vx_L) + P_L,
+						   (E_L + P_L) * vx_L};
+
+		const std::valarray<double> F_R = {rho_R * vx_R, rho_R * (vx_R * vx_R) + P_R,
+						   (E_R + P_R) * vx_R};
+
+		const std::valarray<double> U_L = {rho_L, mom_L, E_L};
+		const std::valarray<double> U_R = {rho_R, mom_R, E_R};
+
+		const std::valarray<double> LLF = 0.5 * (F_L + F_R - sstar*(U_R - U_L));
+
+		x1FluxDiffusive_(density_index, i) = LLF[0];
+		x1FluxDiffusive_(x1Momentum_index, i) = LLF[1];
+		x1FluxDiffusive_(energy_index, i) = LLF[2];
+	}
+}
+
 template <typename problem_t>
 void HydroSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 {
@@ -446,28 +498,6 @@ void HydroSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 		const double P_LR =
 			0.5*(P_L + P_R + rho_L*(S_L-vx_L)*(S_star-vx_L) + rho_R*(S_R-vx_R)*(S_star-vx_R));
 
-#if 0
-		// compute Roe averages
-		
-		const double roe_norm = (std::sqrt(rho_L) + std::sqrt(rho_R));
-
-		const double vx_roe =
-		    (std::sqrt(rho_L) * vx_L + std::sqrt(rho_R) * vx_R) / roe_norm; // Roe-average vx
-
-		const double vroe_sq = vx_roe * vx_roe; // modify for 3d!!!
-
-		const double H_roe =
-		    (std::sqrt(rho_L) * H_L + std::sqrt(rho_R) * H_R) / roe_norm; // Roe-average H
-
-		const double cs_roe = std::sqrt((gamma_ - 1.0)*(H_roe - 0.5*vroe_sq));
-
-		const double s_Lroe = (vx_roe - cs_roe); // Davis, Einfeldt wave speeds
-		const double s_Rroe = (vx_roe + cs_roe);
-
-		const double S_L = std::min(s_L, s_Lroe);
-		const double S_R = std::max(s_R, s_Rroe);
-#endif
-
 		assert( S_L <= S_R );
 
 		// compute fluxes
@@ -499,21 +529,6 @@ void HydroSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 		// open the Riemann fan
 		std::valarray<double> F(3);
 
-#if 0
-		const std::valarray<double> F_star =
-		    (S_R / (S_R - S_L)) * F_L - (S_L / (S_R - S_L)) * F_R +
-		    (S_R * S_L / (S_R - S_L)) * (U_R - U_L);
-
-		// HLL flux
-		if (S_L > 0.0) {
-			F = F_L;
-		} else if (S_R < 0.0) {
-			F = F_R;
-		} else { // S_L <= 0.0 <= S_R
-			F = F_star;
-		}
-#endif
-
 		// HLLC flux
 		if (S_L > 0.0) {
 			F = F_L;
@@ -525,17 +540,6 @@ void HydroSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 			F = F_R;
 		}
 
-#if 0
-		// add artificial viscosity following C&W Eq. (4.2), (4.5)
-		const double avisc_coef = 0.1;
-		const double div_v = (vx_R - vx_L); // modify for 3d!!!
-
-		// activate artificial viscosity only in converging flows, e.g.
-		// shocks
-		const double avisc = avisc_coef * std::max(-div_v, 0.0);
-		F = F + avisc * (U_L - U_R);
-#endif
-
 		// check states are valid
 		assert(!std::isnan(F[0])); // NOLINT
 		assert(!std::isnan(F[1])); // NOLINT
@@ -545,13 +549,6 @@ void HydroSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 		x1Flux_(x1Momentum_index, i) = F[1];
 		x1Flux_(energy_index, i) = F[2];
 	}
-}
-
-template <typename problem_t>
-void HydroSystem<problem_t>::AddSourceTerms(array_t &U,
-					    std::pair<int, int> range)
-{
-	// TODO(ben): to be implemented
 }
 
 #endif // HYDRO_SYSTEM_HPP_

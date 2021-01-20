@@ -136,8 +136,9 @@ template <typename problem_t> class HyperbolicSystem
 
 	virtual void FillGhostZones(array_t &cons);
 	virtual void ConservedToPrimitive(array_t &cons, std::pair<int, int> range) = 0;
-	virtual void AddSourceTerms(array_t &U, std::pair<int, int> range) = 0;
+	virtual void AddSourceTerms(array_t &U, std::pair<int, int> range);
 	virtual auto CheckStatesValid(array_t &cons, std::pair<int, int> range) -> bool;
+	virtual void ComputeFlatteningCoefficients(std::pair<int, int> range);
 	virtual void FlattenShocks(array_t &q, std::pair<int, int> range);
 
       protected:
@@ -202,6 +203,7 @@ template <typename problem_t> class HyperbolicSystem
 
 	virtual auto ComputeTimestep(double dt_max) -> double = 0;
 	virtual void ComputeFluxes(std::pair<int, int> range) = 0;
+	virtual void ComputeFirstOrderFluxes(std::pair<int, int> range) = 0;
 };
 
 template <typename problem_t> auto HyperbolicSystem<problem_t>::time() const -> double
@@ -236,6 +238,11 @@ template <typename problem_t> void HyperbolicSystem<problem_t>::set_cflNumber(do
 
 template <typename problem_t>
 void HyperbolicSystem<problem_t>::AddSourceTerms(array_t &U, std::pair<int, int> range)
+{
+}
+
+template <typename problem_t>
+void HyperbolicSystem<problem_t>::ComputeFlatteningCoefficients(std::pair<int, int> range)
 {
 }
 
@@ -340,6 +347,7 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPLM(array_t &q, const std::pa
 	// Important final step: ensure that velocity does not exceed c
 	// in any cell where v^2 > c, reconstruct using first-order method for all velocity
 	// components (must be done by user)
+	ComputeFlatteningCoefficients(std::make_pair(-2 + nghost_, nghost_ + nx_ + 2));
 
 	// Apply shock flattening
 	FlattenShocks(q, range);
@@ -357,19 +365,16 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(array_t &q, const std::pa
 
 	for (int n = 0; n < nvars_; ++n) {
 		for (int i = range.first; i < (range.second + 1); ++i) {
-			// PPM reconstruction following Colella & Woodward
-			// (1984), with some modifications following Mignone
-			// (2014), as implemented in Athena++.
+			// PPM reconstruction following Colella & Woodward (1984), with some
+			// modifications following Mignone (2014), as implemented in Athena++.
 
-			// (1.) Estimate the interface a_{i - 1/2}.
-			//      Equivalent to step 1 in Athena++
-			//      [ppm_simple.cpp].
+			// (1.) Estimate the interface a_{i - 1/2}. Equivalent to step 1 in Athena++
+			// [ppm_simple.cpp].
 
-			// C&W Eq. (1.9) [parabola midpoint for the case of
-			// equally-spaced zones]: a_{j+1/2} = (7/12)(a_j +
-			// a_{j+1}) - (1/12)(a_{j+2} + a_{j-1}). Terms are
-			// grouped to preserve exact symmetry in floating-point
-			// arithmetic, following Athena++.
+			// C&W Eq. (1.9) [parabola midpoint for the case of equally-spaced zones]:
+			// a_{j+1/2} = (7/12)(a_j + a_{j+1}) - (1/12)(a_{j+2} + a_{j-1}). Terms are
+			// grouped to preserve exact symmetry in floating-pointn arithmetic,
+			// following Athena++.
 
 			const double coef_1 = (7. / 12.);
 			const double coef_2 = (-1. / 12.);
@@ -386,10 +391,9 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(array_t &q, const std::pa
 
 	for (int n = 0; n < nvars_; ++n) {
 		for (int i = range.first; i < range.second; ++i) {
-			// (2.) Constrain interface value to lie between
-			// adjacent cell-averaged values (equivalent to
-			// step 2b in Athena++ [ppm_simple.cpp]).
-			// [See Eq. B8 of Mignone+ 2005]
+			// (2.) Constrain interface value to lie between adjacent cell-averaged
+			// values (equivalent to step 2b in Athena++ [ppm_simple.cpp]). [See Eq. B8
+			// of Mignone+ 2005]
 
 			// compute bounds from surrounding cells
 			const std::pair<double, double> bounds =
@@ -415,7 +419,7 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(array_t &q, const std::pa
 
 			const double a_minus = x1RightState_(n, i);   // a_L,i in C&W
 			const double a_plus = x1LeftState_(n, i + 1); // a_R,i in C&W
-			const double a = q(n, i);		      // a_i in C&W
+			const double a = q(n, i);		      		  // a_i in C&W
 
 			const double dq_minus = (a - a_minus);
 			const double dq_plus = (a_plus - a);
@@ -423,22 +427,20 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(array_t &q, const std::pa
 			double new_a_minus = a_minus;
 			double new_a_plus = a_plus;
 
-			// (3.) Monotonicity correction, using Eq. (1.10) in PPM
-			// paper. Equivalent to step 4b in Athena++
-			// [ppm_simple.cpp].
+			// (3.) Monotonicity correction, using Eq. (1.10) in PPM paper. Equivalent
+			// to step 4b in Athena++ [ppm_simple.cpp].
 
 			const double qa = dq_plus * dq_minus; // interface extrema
 
 			if ((qa <= 0.0)) { // local extremum
 
-				// Causes subtle, but very weird, oscillations
-				// in the Shu-Osher test problem.
-				// However, it is necessary to get a reasonable solution
+				// Causes subtle, but very weird, oscillations in the Shu-Osher test
+				// problem. However, it is necessary to get a reasonable solution
 				// for the sawtooth advection problem.
 				const double dq0 = MC(q(n, i + 1) - q(n, i), q(n, i) - q(n, i - 1));
 
-				// use linear reconstruction, following Balsara (2017).
-				//     [Living Rev Comput Astrophys (2017) 3:2]
+				// use linear reconstruction, following Balsara (2017) [Living Rev
+				// Comput Astrophys (2017) 3:2]
 				new_a_minus = a - 0.5 * dq0;
 				new_a_plus = a + 0.5 * dq0;
 
@@ -448,14 +450,12 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(array_t &q, const std::pa
 
 			} else { // no local extrema
 
-				// parabola overshoots near
-				// a_plus -> reset a_minus
+				// parabola overshoots near a_plus -> reset a_minus
 				if (std::abs(dq_minus) >= 2.0 * std::abs(dq_plus)) {
 					new_a_minus = a - 2.0 * dq_plus;
 				}
 
-				// parabola overshoots near
-				// a_minus -> reset a_plus
+				// parabola overshoots near a_minus -> reset a_plus
 				if (std::abs(dq_plus) >= 2.0 * std::abs(dq_minus)) {
 					new_a_plus = a + 2.0 * dq_minus;
 				}
@@ -469,6 +469,7 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(array_t &q, const std::pa
 	// Important final step: ensure that velocity does not exceed c
 	// in any cell where v^2 > c, reconstruct using first-order method for all velocity
 	// components (must be done by user)
+	ComputeFlatteningCoefficients(std::make_pair(-2 + nghost_, nghost_ + nx_ + 2));
 
 	// Apply shock flattening
 	FlattenShocks(q, range);
@@ -580,7 +581,6 @@ template <typename problem_t> void HyperbolicSystem<problem_t>::AdvanceTimestepR
 	FillGhostZones(consVar_);
 	ConservedToPrimitive(consVar_, std::make_pair(0, dim1_));
 	ReconstructStatesPPM(primVar_, ppm_range);
-	// ReconstructStatesPLM(primVar_, ppm_range);
 	ComputeFluxes(cell_range);
 	PredictStep(cell_range);
 
@@ -592,7 +592,6 @@ template <typename problem_t> void HyperbolicSystem<problem_t>::AdvanceTimestepR
 	FillGhostZones(consVarPredictStep_);
 	ConservedToPrimitive(consVarPredictStep_, std::make_pair(0, dim1_));
 	ReconstructStatesPPM(primVar_, ppm_range);
-	// ReconstructStatesPLM(primVar_, ppm_range);
 	ComputeFluxes(cell_range);
 	AddFluxesRK2(consVar_, consVarPredictStep_);
 
