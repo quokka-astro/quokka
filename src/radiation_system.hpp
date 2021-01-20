@@ -877,11 +877,10 @@ void RadSystem<problem_t>::PredictStep(const std::pair<int, int> range)
 				       x1Flux_(x1RadFlux_index, i));
 		const double x1F_new = x1F_0 + Fx1F_1;
 
-		// check validity, fallback to diffusive flux if
-		// necessary
+		// check validity, fallback to diffusive flux if necessary
 		const double x1ReducedFlux_new = x1F_new / (c_light_ * E_new);
 
-		if (std::abs(x1ReducedFlux_new) < 1.0) {
+		if (std::abs(x1ReducedFlux_new) <= 1.0) {
 			consVarPredictStep_(radEnergy_index, i) = E_new;
 			consVarPredictStep_(x1RadFlux_index, i) = x1F_new;
 
@@ -937,11 +936,10 @@ void RadSystem<problem_t>::AddFluxesRK2(array_t &U0, array_t &U1)
 				       x1Flux_(x1RadFlux_index, i));
 		const double x1F_new = 0.5 * x1F_0 + 0.5 * x1F_1 + 0.5 * Fx1F_1;
 
-		// check validity, fallback to diffusive flux if
-		// necessary
+		// check validity, fallback to diffusive flux if necessary
 		const double x1ReducedFlux_new = x1F_new / (c_light_ * E_new);
 
-		if (std::abs(x1ReducedFlux_new) < 1.0) {
+		if (std::abs(x1ReducedFlux_new) <= 1.0) {
 			U0(radEnergy_index, i) = E_new;
 			U0(x1RadFlux_index, i) = x1F_new;
 
