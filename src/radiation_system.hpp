@@ -866,40 +866,32 @@ void RadSystem<problem_t>::PredictStep(const std::pair<int, int> range)
 		// construct new state: radiation energy density
 		const double E_0 = consVar_(radEnergy_index, i);
 		const double FE_1 = -1.0 * (dt_ / dx_) *
-				    (x1Flux_(radEnergy_index, i + 1) -
-				     x1Flux_(radEnergy_index, i));
+				    (x1Flux_(radEnergy_index, i + 1) - x1Flux_(radEnergy_index, i));
 		const double E_new = E_0 + FE_1;
 
 		// construct new state: X1 radiation flux
 		const double x1F_0 = consVar_(x1RadFlux_index, i);
-		const double Fx1F_1 = -1.0 * (dt_ / dx_) *
-				      (x1Flux_(x1RadFlux_index, i + 1) -
-				       x1Flux_(x1RadFlux_index, i));
+		const double Fx1F_1 =
+		    -1.0 * (dt_ / dx_) *
+		    (x1Flux_(x1RadFlux_index, i + 1) - x1Flux_(x1RadFlux_index, i));
 		const double x1F_new = x1F_0 + Fx1F_1;
 
 		// check validity, fallback to diffusive flux if necessary
-		const double x1ReducedFlux_new = x1F_new / (c_light_ * E_new);
 
-		if (std::abs(x1ReducedFlux_new) <= 1.0) {
+		if (double x1ReducedFlux_new = x1F_new / (c_light_ * E_new);
+		    std::abs(x1ReducedFlux_new) <= 1.0) {
 			consVarPredictStep_(radEnergy_index, i) = E_new;
 			consVarPredictStep_(x1RadFlux_index, i) = x1F_new;
 
 		} else {
-			// amrex::Print()
-			//     << "WARNING: [stage 1] flux limited at i = " << i
-			//     << " with reduced flux = " << x1ReducedFlux_new
-			//     << std::endl;
-
-			const double FE_1d =
-			    -1.0 * (dt_ / dx_) *
-			    (x1FluxDiffusive_(radEnergy_index, i + 1) -
-			     x1FluxDiffusive_(radEnergy_index, i));
+			const double FE_1d = -1.0 * (dt_ / dx_) *
+					     (x1FluxDiffusive_(radEnergy_index, i + 1) -
+					      x1FluxDiffusive_(radEnergy_index, i));
 			const double E_newd = E_0 + FE_1d;
 
-			const double Fx1F_1d =
-			    -1.0 * (dt_ / dx_) *
-			    (x1FluxDiffusive_(x1RadFlux_index, i + 1) -
-			     x1FluxDiffusive_(x1RadFlux_index, i));
+			const double Fx1F_1d = -1.0 * (dt_ / dx_) *
+					       (x1FluxDiffusive_(x1RadFlux_index, i + 1) -
+						x1FluxDiffusive_(x1RadFlux_index, i));
 			const double x1F_newd = x1F_0 + Fx1F_1d;
 
 			consVarPredictStep_(radEnergy_index, i) = E_newd;
@@ -908,8 +900,7 @@ void RadSystem<problem_t>::PredictStep(const std::pair<int, int> range)
 	}
 }
 
-template <typename problem_t>
-void RadSystem<problem_t>::AddFluxesRK2(array_t &U0, array_t &U1)
+template <typename problem_t> void RadSystem<problem_t>::AddFluxesRK2(array_t &U0, array_t &U1)
 {
 	// By convention, the fluxes are defined on the left edge of
 	// each zone, i.e. flux_(i) is the flux *into* zone i through
@@ -924,44 +915,34 @@ void RadSystem<problem_t>::AddFluxesRK2(array_t &U0, array_t &U1)
 		const double E_0 = U0(radEnergy_index, i);
 		const double E_1 = U1(radEnergy_index, i);
 		const double FE_1 = -1.0 * (dt_ / dx_) *
-				    (x1Flux_(radEnergy_index, i + 1) -
-				     x1Flux_(radEnergy_index, i));
+				    (x1Flux_(radEnergy_index, i + 1) - x1Flux_(radEnergy_index, i));
 		const double E_new = 0.5 * E_0 + 0.5 * E_1 + 0.5 * FE_1;
 
 		// construct new state: X1 radiation flux
 		const double x1F_0 = U0(x1RadFlux_index, i);
 		const double x1F_1 = U1(x1RadFlux_index, i);
-		const double Fx1F_1 = -1.0 * (dt_ / dx_) *
-				      (x1Flux_(x1RadFlux_index, i + 1) -
-				       x1Flux_(x1RadFlux_index, i));
+		const double Fx1F_1 =
+		    -1.0 * (dt_ / dx_) *
+		    (x1Flux_(x1RadFlux_index, i + 1) - x1Flux_(x1RadFlux_index, i));
 		const double x1F_new = 0.5 * x1F_0 + 0.5 * x1F_1 + 0.5 * Fx1F_1;
 
 		// check validity, fallback to diffusive flux if necessary
-		const double x1ReducedFlux_new = x1F_new / (c_light_ * E_new);
 
-		if (std::abs(x1ReducedFlux_new) <= 1.0) {
+		if (double x1ReducedFlux_new = x1F_new / (c_light_ * E_new);
+		    std::abs(x1ReducedFlux_new) <= 1.0) {
 			U0(radEnergy_index, i) = E_new;
 			U0(x1RadFlux_index, i) = x1F_new;
 
 		} else {
-			// amrex::Print()
-			//     << "WARNING: [stage 2] flux limited at i = " << i
-			//     << " with reduced flux = " << x1ReducedFlux_new
-			//     << std::endl;
+			const double FE_1d = -1.0 * (dt_ / dx_) *
+					     (x1FluxDiffusive_(radEnergy_index, i + 1) -
+					      x1FluxDiffusive_(radEnergy_index, i));
+			const double E_newd = 0.5 * E_0 + 0.5 * E_1 + 0.5 * FE_1d;
 
-			const double FE_1d =
-			    -1.0 * (dt_ / dx_) *
-			    (x1FluxDiffusive_(radEnergy_index, i + 1) -
-			     x1FluxDiffusive_(radEnergy_index, i));
-			const double E_newd =
-			    0.5 * E_0 + 0.5 * E_1 + 0.5 * FE_1d;
-
-			const double Fx1F_1d =
-			    -1.0 * (dt_ / dx_) *
-			    (x1FluxDiffusive_(x1RadFlux_index, i + 1) -
-			     x1FluxDiffusive_(x1RadFlux_index, i));
-			const double x1F_newd =
-			    0.5 * x1F_0 + 0.5 * x1F_1 + 0.5 * Fx1F_1d;
+			const double Fx1F_1d = -1.0 * (dt_ / dx_) *
+					       (x1FluxDiffusive_(x1RadFlux_index, i + 1) -
+						x1FluxDiffusive_(x1RadFlux_index, i));
+			const double x1F_newd = 0.5 * x1F_0 + 0.5 * x1F_1 + 0.5 * Fx1F_1d;
 
 			U0(radEnergy_index, i) = E_newd;
 			U0(x1RadFlux_index, i) = x1F_newd;

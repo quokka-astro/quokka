@@ -5,7 +5,7 @@
 #include "ArrayView.hpp"
 
 
-template <int DIR> AMREX_GPU_DEVICE AMREX_FORCE_INLINE
+template <FluxDir DIR> AMREX_GPU_DEVICE AMREX_FORCE_INLINE
 void compute_flux(int i_in, int j_in, int k_in,
                   amrex::Array4<amrex::Real> const &fluxx_in,
 	              amrex::Array4<amrex::Real const> const &phi_in,
@@ -27,7 +27,7 @@ void init_phi (int i, int j, int k,
                amrex::GpuArray<amrex::Real,AMREX_SPACEDIM> const& dx,
                amrex::GpuArray<amrex::Real,AMREX_SPACEDIM> const& prob_lo)
 {
-    using amrex::Real;;
+    using amrex::Real;
 
     Real x = prob_lo[0] + (i+Real(0.5)) * dx[0];
     Real y = prob_lo[1] + (j+Real(0.5)) * dx[1];

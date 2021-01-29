@@ -34,7 +34,7 @@ add_executable(test_hydro_shuosher hydro_system.cpp hyperbolic_system.cpp test_h
 add_executable(test_hydro_sms hydro_system.cpp hyperbolic_system.cpp test_hydro_sms.cpp)
 add_executable(test_hydro_contact hydro_system.cpp hyperbolic_system.cpp test_hydro_contact.cpp)
 add_executable(test_hydro_vacuum hydro_system.cpp hyperbolic_system.cpp test_hydro_vacuum.cpp interpolate.c)
-add_executable(test_advection linear_advection.cpp hyperbolic_system.cpp test_advection.cpp)
+add_executable(test_advection linear_advection.cpp hyperbolic_system.cpp simulation.cpp test_advection.cpp)
 add_executable(test_advection_se linear_advection.cpp hyperbolic_system.cpp test_advection_semiellipse.cpp)
 add_executable(test_hydro_wave hydro_system.cpp hyperbolic_system.cpp test_hydro_wave.cpp)
 add_executable(test_radiation_pulse hyperbolic_system.cpp radiation_system.cpp test_radiation_pulse.cpp)

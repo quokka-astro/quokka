@@ -26,7 +26,7 @@
 /// Provide type-safe global sign ('sgn') function.
 template <typename T> auto sgn(T val) -> int { return (T(0) < val) - (val < T(0)); }
 
-using amrex::Real;
+using Real = amrex::Real;
 
 template <int T> struct templatedArray {
 	amrex::Array4<Real> arr_;
@@ -119,14 +119,14 @@ template <typename problem_t> class HyperbolicSystem
 
 	// inline functions:
 
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto MC(double a, double b) -> double
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto MC(double a, double b) -> double
 	{
 		return 0.5 * (sgn(a) + sgn(b)) *
 		       std::min(0.5 * std::abs(a + b),
 				std::min(2.0 * std::abs(a), 2.0 * std::abs(b)));
 	}
 
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto Koren(double a, double b) -> double
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto Koren(double a, double b) -> double
 	{
 		// CAUTION: this limiter is asymmetric (i.e. lim(a,b) != 1/lim(b,a)!)
 		// More accurate in L1 norm than MC, but weird asymmetries in solutions.
@@ -169,7 +169,7 @@ template <typename problem_t> class HyperbolicSystem
 	const int nghost_ = 4; // 4 ghost cells required for PPM
 
 	HyperbolicSystem(int nx, double lx, double cflNumber, int nvars)
-	    : nx_(nx), lx_(lx), dx_(lx / static_cast<double>(nx)), cflNumber_(cflNumber),
+	    : cflNumber_(cflNumber), lx_(lx), dx_(lx / static_cast<double>(nx)), nx_(nx),
 	      nvars_(nvars)
 	{
 		assert(lx_ > 0.0);				   // NOLINT
@@ -199,7 +199,7 @@ template <typename problem_t> class HyperbolicSystem
 	virtual void PredictStep(std::pair<int, int> range);
 	auto ComputeTimestep() -> double;
 	void CopyVars(array_t &src, array_t &dest, std::pair<int, int> range);
-	auto ComputeResidual(array_t &cur, array_t &prev, std::pair<int, int> range) -> double;
+	auto ComputeResidual(array_t &cur, array_t &prev, std::pair<int, int> range) const -> double;
 
 	virtual auto ComputeTimestep(double dt_max) -> double = 0;
 	virtual void ComputeFluxes(std::pair<int, int> range) = 0;
@@ -239,16 +239,19 @@ template <typename problem_t> void HyperbolicSystem<problem_t>::set_cflNumber(do
 template <typename problem_t>
 void HyperbolicSystem<problem_t>::AddSourceTerms(array_t &U, std::pair<int, int> range)
 {
+	// intentionally zero source terms by default
 }
 
 template <typename problem_t>
 void HyperbolicSystem<problem_t>::ComputeFlatteningCoefficients(std::pair<int, int> range)
 {
+	// intentionally no flattening by default
 }
 
 template <typename problem_t>
 void HyperbolicSystem<problem_t>::FlattenShocks(array_t &q, std::pair<int, int> range)
 {
+	// intentionally no flattening by default
 }
 
 template <typename problem_t> void HyperbolicSystem<problem_t>::FillGhostZones(array_t &cons)
@@ -549,7 +552,7 @@ void HyperbolicSystem<problem_t>::CopyVars(array_t &src, array_t &dest,
 
 template <typename problem_t>
 auto HyperbolicSystem<problem_t>::ComputeResidual(array_t &cur, array_t &prev,
-						  const std::pair<int, int> range) -> double
+						  const std::pair<int, int> range) const -> double
 {
 	double norm = 0.;
 	for (int n = 0; n < nvars_; ++n) {

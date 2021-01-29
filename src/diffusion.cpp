@@ -45,20 +45,20 @@ void advance (MultiFab& phi_old,
         amrex::ParallelFor(xbx,
         [=] AMREX_GPU_DEVICE (int i, int j, int k)
         {
-            compute_flux<X1>(i,j,k,fluxx,phi,dxinv);
+            compute_flux<FluxDir::X1>(i,j,k,fluxx,phi,dxinv);
         });
 
         amrex::ParallelFor(ybx,
         [=] AMREX_GPU_DEVICE (int i, int j, int k)
         {
-            compute_flux<X2>(i,j,k,fluxy,phi,dyinv);
+            compute_flux<FluxDir::X2>(i,j,k,fluxy,phi,dyinv);
         });
 
 #if (AMREX_SPACEDIM > 2)
         amrex::ParallelFor(zbx,
         [=] AMREX_GPU_DEVICE (int i, int j, int k)
         {
-            compute_flux<X3>(i,j,k,fluxz,phi,dzinv);
+            compute_flux<FluxDir::X3>(i,j,k,fluxz,phi,dzinv);
         });
 #endif
     }

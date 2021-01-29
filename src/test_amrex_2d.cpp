@@ -24,7 +24,10 @@ void main_main ()
     Real strt_time = ParallelDescriptor::second();
 
     // AMREX_SPACEDIM: number of dimensions
-    int n_cell, max_grid_size, nsteps, plot_int;
+    int n_cell;
+    int max_grid_size;
+    int nsteps;
+    int plot_int;
 
     // inputs parameters
     {
