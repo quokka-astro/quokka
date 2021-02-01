@@ -11,6 +11,7 @@
 
 // c++ headers
 #include "AMReX_DistributionMapping.H"
+#include "hyperbolic_system.hpp"
 #include <cassert>
 #include <cmath>
 
@@ -25,70 +26,127 @@
 
 // internal headers
 
+using Real = amrex::Real;
+
 // Simulation class should be initialized only once per program (i.e., is a singleton)
+template <typename problem_t>
 class SingleLevelSimulation
 {
       public:
-	int n_cell{128};
-	int max_grid_size{32};
-	int nsteps{10};
+	int n_cell_{128};
+	int max_grid_size_{32};
+	int maxTimesteps_{static_cast<int>(1e4)};
 
-	amrex::BoxArray simBoxArray;
-	amrex::Geometry simGeometry;
-	amrex::IntVect dom_lo{AMREX_D_DECL(0, 0, 0)};
-	amrex::IntVect dom_hi{AMREX_D_DECL(n_cell - 1, n_cell - 1, n_cell - 1)};
-	amrex::Box domain{dom_lo, dom_hi};
+	amrex::BoxArray simBoxArray_;
+	amrex::Geometry simGeometry_;
+	amrex::IntVect domain_lo_{AMREX_D_DECL(0, 0, 0)};
+	amrex::IntVect domain_hi_{AMREX_D_DECL(n_cell_ - 1, n_cell_ - 1, n_cell_ - 1)};
+	amrex::Box domain_{domain_lo_, domain_hi_};
 
 	// This defines the physical box, [-1,1] in each direction.
-	amrex::RealBox real_box{
+	amrex::RealBox real_box_{
 	    {AMREX_D_DECL(-amrex::Real(1.0), -amrex::Real(1.0), -amrex::Real(1.0))},
 	    {AMREX_D_DECL(amrex::Real(1.0), amrex::Real(1.0), amrex::Real(1.0))}};
 
 	// periodic in all directions
-	amrex::Array<int, AMREX_SPACEDIM> is_periodic{AMREX_D_DECL(1, 1, 1)};
+	amrex::Array<int, AMREX_SPACEDIM> is_periodic_{AMREX_D_DECL(1, 1, 1)};
 
-	// How Boxes are distributed among MPI processes
-	amrex::DistributionMapping simDistributionMapping;
+	// How boxes are distributed among MPI processes
+	amrex::DistributionMapping simDistributionMapping_;
 
-	// we allocate two phi multifabs; one will store the old state, the other the new.
-	amrex::MultiFab phi_old;
-	amrex::MultiFab phi_new;
+	// we allocate two multifabs; one will store the old state, the other the new.
+	amrex::MultiFab state_old_;
+	amrex::MultiFab state_new_;
 
 	// Nghost = number of ghost cells for each array
-	int Nghost = 1;
+	int nghost_ = 1;
 	// Ncomp = number of components for each array
-	int Ncomp = 1;
+	int ncomp_ = 1;
     // dx = cell size
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx{};
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_{};
+
+	amrex::Real dt_ = NAN;
+	amrex::Real tNow_ = NAN;
+	amrex::Real stopTime_ = NAN;
 
 	SingleLevelSimulation()
 	{
-		// ParmParse is way of reading inputs from the inputs file
-		amrex::ParmParse pp;
+		readParameters();
 
-		// We need to get n_cell from the inputs file - this is the number of cells on each
-		// side of a square (or cubic) domain.
-		pp.get("n_cell", n_cell);
-
-		// The domain is broken into boxes of size max_grid_size
-		pp.get("max_grid_size", max_grid_size);
-
-		// Default nsteps to 10, allow us to set it to something else in the inputs file
-		pp.query("nsteps", nsteps);
-
-		// Initialize the boxarray "ba" from the single box "bx"
-		simBoxArray.define(domain);
-		// Break up boxarray "ba" into chunks no larger than "max_grid_size" along a
-		// direction
-		simBoxArray.maxSize(max_grid_size);
+		simBoxArray_.define(domain_);
+		simBoxArray_.maxSize(max_grid_size_);
 
 		// This defines a Geometry object
-		simGeometry.define(domain, real_box, amrex::CoordSys::cartesian, is_periodic);
-		dx = simGeometry.CellSizeArray();
+		simGeometry_.define(domain_, real_box_, amrex::CoordSys::cartesian, is_periodic_);
+		dx_ = simGeometry_.CellSizeArray();
 
 		// initial DistributionMapping with boxarray
-		simDistributionMapping = amrex::DistributionMapping(simBoxArray);
+		simDistributionMapping_ = amrex::DistributionMapping(simBoxArray_);
 	}
+
+	void readParameters();
+	void evolve();
+	void computeTimestep();
+	virtual auto computeTimestepLocal() -> amrex::Real = 0;
+	virtual void setInitialConditions() = 0;
+	virtual void advanceSingleTimestep() = 0;
 };
+
+template <typename problem_t>
+void SingleLevelSimulation<problem_t>::readParameters()
+{
+	// ParmParse is way of reading inputs from the inputs file
+	amrex::ParmParse pp;
+
+	// We need to get n_cell from the inputs file - this is the number of cells on each
+	// side of a square (or cubic) domain.
+	pp.get("n_cell", n_cell_);
+
+	// The domain is broken into boxes of size max_grid_size
+	pp.get("max_grid_size", max_grid_size_);
+
+	// Default nsteps to 10, allow us to set it to something else in the inputs file
+	pp.query("max_timesteps", maxTimesteps_);
+}
+
+template <typename problem_t>
+void SingleLevelSimulation<problem_t>::computeTimestep()
+{
+    Real dt_tmp = computeTimestepLocal();
+    amrex::ParallelDescriptor::ReduceRealMin(dt_tmp);
+
+    constexpr Real change_max = 1.1;
+    Real dt_0 = dt_tmp;
+
+    dt_tmp = std::min(dt_tmp, change_max*dt_);
+    dt_0 = std::min(dt_0, dt_tmp);
+
+    // Limit dt to avoid overshooting stop_time
+    const Real eps = 1.e-3*dt_0;
+
+    if (tNow_ + dt_0 > stopTime_ - eps) {
+        dt_0 = stopTime_ - tNow_;
+    }
+
+    dt_ = dt_0;
+}
+
+template <typename problem_t>
+void SingleLevelSimulation<problem_t>::evolve()
+{
+    // Main time loop
+	int j = 0;
+	for (; j < maxTimesteps_; ++j) {
+		if (tNow_ >= stopTime_) {
+			break;
+		}
+
+        computeTimestep();
+		advanceSingleTimestep();
+
+		// print timestep information on I/O processor
+        amrex::Print() << "Cycle " << j << "; t = " << tNow_ << "; dt = " << dt_ << "\n";
+	}
+}
 
 #endif // SIMULATION_HPP_
