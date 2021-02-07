@@ -26,6 +26,7 @@ add_executable(test_radiation_matter_coupling_rsla radiation_system.cpp hyperbol
 add_executable(test_radiation_SuOlson radiation_system.cpp hyperbolic_system.cpp test_radiation_SuOlson.cpp interpolate.c)
 add_executable(test_radiation_marshak radiation_system.cpp hyperbolic_system.cpp test_radiation_marshak.cpp interpolate.c)
 add_executable(test_radiation_marshak_cgs radiation_system.cpp hyperbolic_system.cpp test_radiation_marshak_cgs.cpp interpolate.c)
+add_executable(test_radiation_marshak_asymptotic radiation_system.cpp hyperbolic_system.cpp test_radiation_marshak_asymptotic.cpp interpolate.c)
 add_executable(test_radhydro_shock radiation_system.cpp hydro_system.cpp hyperbolic_system.cpp test_radhydro_shock.cpp interpolate.c)
 add_executable(test_radhydro_shock_cgs radiation_system.cpp hydro_system.cpp hyperbolic_system.cpp test_radhydro_shock_cgs.cpp interpolate.c)
 add_executable(test_hydro_shocktube hydro_system.cpp hyperbolic_system.cpp test_hydro_shocktube.cpp interpolate.c)

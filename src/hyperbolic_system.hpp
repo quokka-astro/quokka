@@ -652,7 +652,7 @@ template <typename problem_t> void HyperbolicSystem<problem_t>::AdvanceTimestepS
 
 		// Step 2: Check for convergence
 		res = ComputeResidual(consVarPredictStep_, consVarPredictStepPrev_, cell_range);
-		amrex::Print() << "residual = " << res << "\n";
+		//amrex::Print() << "residual = " << res << "\n";
 		if (res < atol) {
 			break;
 		}
