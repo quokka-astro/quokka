@@ -358,7 +358,7 @@ void RadSystem<problem_t>::ConservedToPrimitive(array_t &cons, const std::pair<i
 
 		// check admissibility of states
 		assert(E_r > 0.0);			// NOLINT
-		assert(std::abs(reducedFluxX1) <= 1.0); // NOLINT
+		//assert(std::abs(reducedFluxX1) <= 1.0); // NOLINT
 
 		primVar_(primRadEnergy_index, i) = E_r;
 		primVar_(x1ReducedFlux_index, i) = reducedFluxX1;
@@ -543,8 +543,8 @@ void RadSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 
 		assert(erad_L > 0.0); // NOLINT
 		assert(erad_R > 0.0); // NOLINT
-		assert(f_L <= 1.0);   // NOLINT
-		assert(f_R <= 1.0);   // NOLINT
+		//assert(f_L <= 1.0);   // NOLINT
+		//assert(f_R <= 1.0);   // NOLINT
 
 		// angle between interface and radiation flux \hat{n}
 		// If direction is undefined, just drop direction-dependent

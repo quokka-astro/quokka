@@ -9,7 +9,7 @@
 
 #include "test_radiation_marshak_asymptotic.hpp"
 
-auto main(int argc, char** argv) -> int
+auto main(int argc, char **argv) -> int
 {
 	// Initialization
 	amrex::Initialize(argc, argv);
@@ -30,12 +30,12 @@ auto main(int argc, char** argv) -> int
 struct SuOlsonProblemCgs {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-constexpr double kappa = 300.0;	  // cm^-1 (opacity)
-constexpr double rho = 2.0879373766122384;		  // g cm^-3 (matter density)
+constexpr double kappa = 300.0;		      // cm^-1 (opacity)
+constexpr double rho = 2.0879373766122384;    // g cm^-3 (matter density)
 constexpr double T_hohlraum = 1.1604448449e7; // K (1 keV)
 // const double kelvin_to_eV = 8.617385e-5;
 constexpr double a_rad = 7.5646e-15; // erg cm^-3 K^-4
-constexpr double c = 2.99792458e10;	 // cm s^-1
+constexpr double c = 2.99792458e10;  // cm s^-1
 
 template <> void RadSystem<SuOlsonProblemCgs>::FillGhostZones(array_t &cons)
 {
@@ -43,7 +43,7 @@ template <> void RadSystem<SuOlsonProblemCgs>::FillGhostZones(array_t &cons)
 	const double T_H = T_hohlraum;
 	const double E_inc = radiation_constant_ * std::pow(T_H, 4);
 	const double c = c_light_;
-	//const double F_inc = c * E_inc / 4.0;
+	// const double F_inc = c * E_inc / 4.0;
 
 	const double E_0 = cons(radEnergy_index, nghost_);
 	const double E_1 = cons(radEnergy_index, nghost_ + 1);
@@ -51,15 +51,14 @@ template <> void RadSystem<SuOlsonProblemCgs>::FillGhostZones(array_t &cons)
 	const double F_1 = cons(x1RadFlux_index, nghost_ + 1);
 
 	// use PPM stencil at interface to solve for F_rad in the ghost zones
-	const double F_bdry_PPM = 0.5 * c * E_inc -
-			      (7. / 12.) * (c * E_0 + 2.0 * F_0) +
-			      (1. / 12.) * (c * E_1 + 2.0 * F_1);
+	const double F_bdry_PPM = 0.5 * c * E_inc - (7. / 12.) * (c * E_0 + 2.0 * F_0) +
+				  (1. / 12.) * (c * E_1 + 2.0 * F_1);
 
-	//const double F_bdry_upwind = c*E_inc / 4.0;
+	// const double F_bdry_upwind = c*E_inc / 4.0;
 
 	const double F_bdry = F_bdry_PPM;
 
-	assert(std::abs(F_bdry / (c*E_inc)) < 1.0);
+	assert(std::abs(F_bdry / (c * E_inc)) < 1.0);
 
 	// x1 left side boundary (Marshak)
 	for (int i = 0; i < nghost_; ++i) {
@@ -69,20 +68,26 @@ template <> void RadSystem<SuOlsonProblemCgs>::FillGhostZones(array_t &cons)
 
 	// x1 right side boundary (outflow)
 	for (int i = nghost_ + nx_; i < nghost_ + nx_ + nghost_; ++i) {
-		cons(radEnergy_index, i) = cons(
-		    radEnergy_index, (nghost_ + nx_) - (i - nx_ - nghost_ + 1));
+		cons(radEnergy_index, i) =
+		    cons(radEnergy_index, (nghost_ + nx_) - (i - nx_ - nghost_ + 1));
 		cons(x1RadFlux_index, i) =
-		    cons(x1RadFlux_index,
-				(nghost_ + nx_) - (i - nx_ - nghost_ + 1));
+		    cons(x1RadFlux_index, (nghost_ + nx_) - (i - nx_ - nghost_ + 1));
 	}
 }
 
 template <>
-auto RadSystem<SuOlsonProblemCgs>::ComputeOpacity(const double rho,
-					       const double Tgas) -> double
+auto RadSystem<SuOlsonProblemCgs>::ComputeOpacity(const double rho, const double Tgas) -> double
 {
-	auto sigma = kappa * std::pow(Tgas/T_hohlraum, -3); // cm^-1
-	return (sigma / rho); // cm^2 g^-1
+	auto sigma = kappa * std::pow(Tgas / T_hohlraum, -3); // cm^-1
+	return (sigma / rho);				      // cm^2 g^-1
+}
+
+template <>
+auto RadSystem<SuOlsonProblemCgs>::ComputeOpacityTempDerivative(const double rho, const double Tgas)
+    -> double
+{
+	auto sigma_dT = (-3.0 * kappa / Tgas) * std::pow(Tgas / T_hohlraum, -3); // cm^-1
+	return (sigma_dT / rho);
 }
 
 auto testproblem_radiation_marshak_cgs() -> int
@@ -95,34 +100,36 @@ auto testproblem_radiation_marshak_cgs() -> int
 	// [SDC (or a similar method) is required for a correct solution!]
 
 	// For discussion of the asymptotic preserving property,
-	// R.G. McClarren, R.B. Lowrie / Journal of Computational Physics 227 (2008) 9711–9726.
+	// R.G. McClarren, R.B. Lowrie, Journal of Computational Physics 227 (2008) 9711–9726.
+	// R.G. McClarren, T.M. Evans, R.B. Lowrie, J.D. Densmore, Semi-implicit time integration
+	//   for PN thermal radiative transfer, Journal of Computational Physics 227 (2008) 7561-7586.
 
 	// Problem parameters
 
 	const int max_timesteps = 3e5;
 	const double CFL_number = 0.9;
-	const int nx = 18; // [matches resolution of McClarren & Lowrie (2008)]
+	const int nx = 36; // [18 == matches resolution of McClarren & Lowrie (2008)]
 
 	const double initial_dt = 1.0e-15; // s
 	const double max_dt = 5.0e-12;	   // s
 	const double max_time = 50.0e-9;   // s
-	const double Lx = 0.66;			   // cm
+	const double Lx = 0.66;		   // cm
 
-	const double dx = Lx / nx;	// cm
+	const double dx = Lx / nx;	    // cm
 	const double tau_cell = kappa * dx; // dimensionless optical depth
 
 	// Problem initialization
 
-	RadSystem<SuOlsonProblemCgs> rad_system(
-	    {.nx = nx, .lx = Lx, .cflNumber = CFL_number});
+	RadSystem<SuOlsonProblemCgs> rad_system({.nx = nx, .lx = Lx, .cflNumber = CFL_number});
 
 	rad_system.set_radiation_constant(a_rad);
 	rad_system.set_c_light(c);
 	rad_system.set_lx(Lx);
 
-	const double c_v = (rad_system.boltzmann_constant_ / rad_system.mean_molecular_mass_) / (rad_system.gamma_ - 1.);
+	const double c_v = (rad_system.boltzmann_constant_ / rad_system.mean_molecular_mass_) /
+			   (rad_system.gamma_ - 1.);
 
-	const double T_initial = 1.0e-9*T_hohlraum; // K
+	const double T_initial = 1.0e-9 * T_hohlraum; // K
 	const double initial_Egas = rad_system.ComputeEgasFromTgas(rho, T_initial);
 	const double initial_Erad = a_rad * std::pow(T_initial, 4);
 	const double T_floor = T_initial;
@@ -146,7 +153,7 @@ auto testproblem_radiation_marshak_cgs() -> int
 	std::cout << "c_light (code units) = " << c << "\n";
 	std::cout << "Lx = " << Lx << "\n";
 	std::cout << "tau_cell = " << tau_cell << "\n";
-	std::cout << "rho * c_v = " << rho*c_v << "\n";
+	std::cout << "rho * c_v = " << rho * c_v << "\n";
 	std::cout << "initial_dt = " << initial_dt << "\n";
 	std::cout << "max_dt = " << max_dt << "\n";
 	std::cout << "max_time = " << max_time << std::endl;
@@ -164,7 +171,7 @@ auto testproblem_radiation_marshak_cgs() -> int
 		// Compute timestep
 		const double dt_expand_fac = 1.2;
 		const double computed_dt = rad_system.ComputeTimestep(this_dtMax);
-		const double this_dt = std::min(computed_dt, dt_expand_fac*dt_prev);
+		const double this_dt = std::min(computed_dt, dt_expand_fac * dt_prev);
 
 		amrex::Print() << "cycle " << j << " t = " << rad_system.time();
 		amrex::Print() << " dt = " << this_dt << "\n";
@@ -207,7 +214,7 @@ auto testproblem_radiation_marshak_cgs() -> int
 		const double Etot_t = rad_system.gasEnergy(i + nghost);
 		const double rho = rad_system.staticGasDensity(i + nghost);
 		const double x1GasMom = rad_system.x1GasMomentum(i + nghost);
-		const double Ekin = (x1GasMom*x1GasMom) / (2.0*rho);
+		const double Ekin = (x1GasMom * x1GasMom) / (2.0 * rho);
 
 		const double Egas_t = (Etot_t - Ekin);
 		Egas.at(i) = Egas_t;
@@ -228,7 +235,7 @@ auto testproblem_radiation_marshak_cgs() -> int
 	std::map<std::string, std::string> Trad_exact_args;
 	Trad_exact_args["label"] = "radiation temperature (exact)";
 
-	matplotlibcpp::ylim(0.0, 1.0); // keV
+	matplotlibcpp::ylim(0.0, 1.0);	// keV
 	matplotlibcpp::xlim(0.0, 0.55); // cm
 	matplotlibcpp::xlabel("length x (cm)");
 	matplotlibcpp::ylabel("temperature (keV)");
@@ -247,7 +254,7 @@ auto testproblem_radiation_marshak_cgs() -> int
 	std::map<std::string, std::string> Tgas_exact_args;
 	Tgas_exact_args["label"] = "gas temperature (exact)";
 
-	matplotlibcpp::ylim(0.0, 1.0); // keV
+	matplotlibcpp::ylim(0.0, 1.0);	// keV
 	matplotlibcpp::xlim(0.0, 0.55); // cm
 	matplotlibcpp::xlabel("length x (cm)");
 	matplotlibcpp::ylabel("temperature (keV)");
