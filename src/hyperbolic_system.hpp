@@ -136,7 +136,7 @@ template <typename problem_t> class HyperbolicSystem
 
 	virtual void FillGhostZones(array_t &cons);
 	virtual void ConservedToPrimitive(array_t &cons, std::pair<int, int> range) = 0;
-	virtual void AddSourceTerms(array_t &U, std::pair<int, int> range);
+	virtual void AddSourceTerms(array_t &U_prev, array_t &U_new, std::pair<int, int> range);
 	virtual auto CheckStatesValid(array_t &cons, std::pair<int, int> range) -> bool;
 	virtual void ComputeFlatteningCoefficients(std::pair<int, int> range);
 	virtual void FlattenShocks(array_t &q, std::pair<int, int> range);
@@ -145,6 +145,8 @@ template <typename problem_t> class HyperbolicSystem
 	array_t primVar_;
 	array_t consVarPredictStep_;
 	array_t consVarPredictStepPrev_;
+
+	array_t advectionFluxes_;
 
 	array_t x1LeftState_;
 	array_t x1RightState_;
@@ -184,6 +186,7 @@ template <typename problem_t> class HyperbolicSystem
 		consVarPredictStep_.AllocateArray(nvars_, dim1_);
 		consVarPredictStepPrev_.AllocateArray(nvars_, dim1_);
 
+		advectionFluxes_.AllocateArray(nvars_, dim1_);
 		x1LeftState_.AllocateArray(nvars_, dim1_);
 		x1RightState_.AllocateArray(nvars_, dim1_);
 		x1Flux_.AllocateArray(nvars_, dim1_);
@@ -191,6 +194,7 @@ template <typename problem_t> class HyperbolicSystem
 	}
 
 	virtual void AddFluxesRK2(array_t &U0, array_t &U1);
+	void SaveFluxes(std::pair<int, int> range);
 
 	void ReconstructStatesConstant(array_t &q, std::pair<int, int> range);
 	void ReconstructStatesPLM(array_t &q, std::pair<int, int> range);
@@ -237,7 +241,7 @@ template <typename problem_t> void HyperbolicSystem<problem_t>::set_cflNumber(do
 }
 
 template <typename problem_t>
-void HyperbolicSystem<problem_t>::AddSourceTerms(array_t &U, std::pair<int, int> range)
+void HyperbolicSystem<problem_t>::AddSourceTerms(array_t &U_prev, array_t &U_new, std::pair<int, int> range)
 {
 	// intentionally zero source terms by default
 }
@@ -323,7 +327,7 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPLM(array_t &q, const std::pa
 	// which can produce unphysical oscillations even when using upwind Godunov fluxes.)
 	// However, most tests fail when using PLM reconstruction because
 	// the accuracy tolerances are very strict, and the L1 error is significantly
-	// worse compared to PPM for a given number of mesh elements.
+	// worse compared to PPM for a fixed number of mesh elements.
 
 	// By convention, the interfaces are defined on the left edge of each
 	// zone, i.e. xleft_(i) is the "left"-side of the interface at
@@ -336,8 +340,7 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPLM(array_t &q, const std::pa
 		for (int i = range.first; i < (range.second + 1); ++i) {
 
 			// Use piecewise-linear reconstruction
-			// (This converges at second order in spatial
-			// resolution.)
+			// (This converges at second order in spatial resolution.)
 
 			const auto lslope = MC(q(n, i) - q(n, i - 1), q(n, i - 1) - q(n, i - 2));
 			const auto rslope = MC(q(n, i + 1) - q(n, i), q(n, i) - q(n, i - 1));
@@ -479,6 +482,21 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(array_t &q, const std::pa
 }
 
 template <typename problem_t>
+void HyperbolicSystem<problem_t>::SaveFluxes(const std::pair<int, int> range)
+{
+	// By convention, the fluxes are defined on the left edge of each zone,
+	// i.e. flux_(i) is the flux *into* zone i through the interface on the
+	// left of zone i, and -1.0*flux(i+1) is the flux *into* zone i through
+	// the interface on the right of zone i.
+
+	for (int n = 0; n < nvars_; ++n) {
+		for (int i = range.first; i < range.second; ++i) {
+			advectionFluxes_(n, i) = (-1.0 / dx_) * (x1Flux_(n, i + 1) - x1Flux_(n, i));
+		}
+	}
+}
+
+template <typename problem_t>
 void HyperbolicSystem<problem_t>::PredictStep(const std::pair<int, int> range)
 {
 	// By convention, the fluxes are defined on the left edge of each zone,
@@ -605,7 +623,7 @@ template <typename problem_t> void HyperbolicSystem<problem_t>::AdvanceTimestepR
 	    "[stage 2] Non-realizable states produced. This should not happen!");
 
 	// Add source terms via operator splitting
-	AddSourceTerms(consVar_, cell_range);
+	AddSourceTerms(consVar_, consVar_, cell_range);
 
 	// Adjust our clock
 	time_ += dt_;
@@ -622,45 +640,48 @@ template <typename problem_t> void HyperbolicSystem<problem_t>::AdvanceTimestepS
 
 	// Initialize data
 	dt_ = dt;
-	CopyVars(consVar_, consVarPredictStep_,
-		 cell_range); // consVarPredictStep_ may not be initialized by the user
+	// ensure that consVarPredictStep_ is initialized
+	CopyVars(consVar_, consVarPredictStep_, cell_range); 
 	CopyVars(consVar_, consVarPredictStepPrev_, cell_range);
 
 	// begin SDC loop
 	const double atol = 1.0e-10; // absolute tolerance for L1 residual
-	const int maxIterationCount = 200;
+	const int maxIterationCount = 40;
 	double res = NAN;
 	int j = 0;
 	for (; j < maxIterationCount; ++j) {
+
 		// Step 0: Fill ghost zones and convert to primitive variables
 		FillGhostZones(consVarPredictStepPrev_);
 		ConservedToPrimitive(consVarPredictStepPrev_, std::make_pair(0, dim1_));
 
 		// Step 1a: Advance transport operator
-		ReconstructStatesPLM(primVar_,
-				     ppm_range); // PPM *cannot* be used with 2nd-order SDC
+		// [CAUTION: PPM *cannot* be used with 2nd-order SDC]
+		ReconstructStatesPLM(primVar_, ppm_range); 
 		ComputeFluxes(cell_range);
 		ComputeFirstOrderFluxes(cell_range);
-		PredictStep(cell_range); // update consVarPredictStep_
+		SaveFluxes(cell_range); // update advectionFlux_
 
-		// Step 1b: Add source terms via operator splitting
-		AddSourceTerms(consVarPredictStep_, cell_range);
+		// Step 1b: Add source terms via pseudo-non-time-splitting
+		// [Pu Sun, A Pseudo-Non-Time-Splitting Method in Air Quality Modeling, Journal of
+		// Computational Physics, Volume 127, Issue 1, 1996]
+		AddSourceTerms(consVar_, consVarPredictStep_, cell_range);
 
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-		    CheckStatesValid(consVarPredictStep_, cell_range),
-		    "[step 1b] Non-realizable states produced. This should not happen!");
-
-		// Step 2: Check for convergence
+		// Step 2: Check for convergence from previous iteration
 		res = ComputeResidual(consVarPredictStep_, consVarPredictStepPrev_, cell_range);
-		//amrex::Print() << "residual = " << res << "\n";
+		//amrex::Print() << "\tresidual = " << res << "\n";
+
 		if (res < atol) {
 			break;
 		}
 
-		// Save current iteration
-		CopyVars(consVarPredictStep_, consVarPredictStepPrev_,
-			 cell_range); // copy current iteration
+		// Step 3: Save current iteration
+		CopyVars(consVarPredictStep_, consVarPredictStepPrev_, cell_range);
 	}
+
+	//AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+	//    CheckStatesValid(consVarPredictStep_, cell_range),
+	//    "[step 1b] Non-realizable states produced. This should not happen!");
 
 	// AMREX_ALWAYS_ASSERT_WITH_MESSAGE(res < atol, "SDC2 iteration exceeded maximum iteration
 	// count, but did not converge.");

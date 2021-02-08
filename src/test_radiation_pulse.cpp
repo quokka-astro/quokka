@@ -107,7 +107,7 @@ auto testproblem_radiation_pulse() -> int
 
 	// Problem parameters
 
-	const int max_timesteps = 10;
+	const int max_timesteps = 100;
 	const double CFL_number = 0.8;
 	const int nx = 128;
 

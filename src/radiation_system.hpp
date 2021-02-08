@@ -23,8 +23,7 @@
 
 /// Class for a linear, scalar advection equation
 ///
-template <typename problem_t>
-class RadSystem : public HyperbolicSystem<problem_t>
+template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_t>
 {
 	// See
 	// https://stackoverflow.com/questions/4010281/accessing-protected-members-of-superclass-in-c-with-templates
@@ -38,6 +37,7 @@ class RadSystem : public HyperbolicSystem<problem_t>
 	using HyperbolicSystem<problem_t>::nghost_;
 	using HyperbolicSystem<problem_t>::nvars_;
 
+	using HyperbolicSystem<problem_t>::advectionFluxes_;
 	using HyperbolicSystem<problem_t>::x1LeftState_;
 	using HyperbolicSystem<problem_t>::x1RightState_;
 	using HyperbolicSystem<problem_t>::x1Flux_;
@@ -66,7 +66,7 @@ class RadSystem : public HyperbolicSystem<problem_t>
 	double radiation_constant_ = 7.5646e-15; // cgs
 
 	const double mean_molecular_mass_cgs_ = 1.6726231e-24; // cgs
-	const double boltzmann_constant_cgs_ = 1.380658e-16;	       // cgs
+	const double boltzmann_constant_cgs_ = 1.380658e-16;   // cgs
 
 	double mean_molecular_mass_ = mean_molecular_mass_cgs_;
 	double boltzmann_constant_ = boltzmann_constant_cgs_;
@@ -83,27 +83,25 @@ class RadSystem : public HyperbolicSystem<problem_t>
 	explicit RadSystem(RadSystemArgs args);
 
 	void FillGhostZones(array_t &cons) override;
-	void ConservedToPrimitive(array_t &cons,
-				  std::pair<int, int> range) override;
-	void AddSourceTerms(array_t &cons, std::pair<int, int> range) override;
-	auto CheckStatesValid(array_t &cons, std::pair<int, int> range)
-	    -> bool override;
+	void ConservedToPrimitive(array_t &cons, std::pair<int, int> range) override;
+	void AddSourceTerms(array_t &consPrev, array_t &consNew, std::pair<int, int> range) override;
+	auto CheckStatesValid(array_t &cons, std::pair<int, int> range) -> bool override;
 	auto ComputeTimestep(double dt_max) -> double override;
 	void AdvanceTimestep(double dt_max) override;
 	auto ComputeEddingtonFactor(double f) -> double;
-	//void FlattenShocks(array_t &q, const std::pair<int,int> range) override;
+	// void FlattenShocks(array_t &q, const std::pair<int,int> range) override;
 
 	// static functions
 
 	static auto ComputeOpacity(double rho, double Tgas) -> double;
-	static auto ComputeOpacityTempDerivative(double rho, double Tgas)
-	    -> double;
+	static auto ComputeOpacityTempDerivative(double rho, double Tgas) -> double;
 	auto ComputeTgasFromEgas(double rho, double Egas) -> double;
 	auto ComputeEgasFromTgas(double rho, double Tgas) -> double;
 	auto ComputeEgasTempDerivative(double rho, double Tgas) -> double;
-	auto ComputeEintFromEgas(double density, double X1GasMom,
-					       double X2GasMom, double X3GasMom,
-					       double Etot) -> double;
+	auto ComputeEintFromEgas(double density, double X1GasMom, double X2GasMom, double X3GasMom,
+				 double Etot) -> double;
+	auto ComputeEgasFromEint(double density, double X1GasMom, double X2GasMom, double X3GasMom,
+				 double Eint) -> double;
 	auto ComputeCellOpticalDepth(int i) -> double;
 
 	// setter functions:
@@ -138,7 +136,7 @@ class RadSystem : public HyperbolicSystem<problem_t>
 	array_t staticGasDensity_;
 	array_t x1GasMomentum_;
 	array_t radEnergySource_;
-	
+
 	// PPM shock flattening coefficients
 	array_t x1Chi_;
 	array_t problemCell_;
@@ -164,31 +162,27 @@ RadSystem<problem_t>::RadSystem(RadSystemArgs args)
 
 	radEnergySource_.AllocateArray(1, args.nx + 2 * nghost_);
 
-	x1Chi_.AllocateArray(1, args.nx + 2*nghost_);
-	problemCell_.AllocateArray(1, args.nx + 2*nghost_);
+	x1Chi_.AllocateArray(1, args.nx + 2 * nghost_);
+	problemCell_.AllocateArray(1, args.nx + 2 * nghost_);
 }
 
-template <typename problem_t>
-auto RadSystem<problem_t>::c_light() const -> double
+template <typename problem_t> auto RadSystem<problem_t>::c_light() const -> double
 {
 	return c_light_;
 }
 
-template <typename problem_t>
-void RadSystem<problem_t>::set_c_light(double c_light)
+template <typename problem_t> void RadSystem<problem_t>::set_c_light(double c_light)
 {
 	c_light_ = c_light;
 	c_hat_ = c_light;
 }
 
-template <typename problem_t>
-auto RadSystem<problem_t>::radiation_constant() const -> double
+template <typename problem_t> auto RadSystem<problem_t>::radiation_constant() const -> double
 {
 	return radiation_constant_;
 }
 
-template <typename problem_t>
-void RadSystem<problem_t>::set_radiation_constant(double arad)
+template <typename problem_t> void RadSystem<problem_t>::set_radiation_constant(double arad)
 {
 	radiation_constant_ = arad;
 }
@@ -200,38 +194,32 @@ template <typename problem_t> void RadSystem<problem_t>::set_lx(const double lx)
 	dx_ = lx / static_cast<double>(nx_);
 }
 
-template <typename problem_t>
-auto RadSystem<problem_t>::radEnergy(const int i) const -> double
+template <typename problem_t> auto RadSystem<problem_t>::radEnergy(const int i) const -> double
 {
 	return radEnergy_(i);
 }
 
-template <typename problem_t>
-auto RadSystem<problem_t>::set_radEnergy(const int i) -> double &
+template <typename problem_t> auto RadSystem<problem_t>::set_radEnergy(const int i) -> double &
 {
 	return radEnergy_(i);
 }
 
-template <typename problem_t>
-auto RadSystem<problem_t>::x1RadFlux(const int i) const -> double
+template <typename problem_t> auto RadSystem<problem_t>::x1RadFlux(const int i) const -> double
 {
 	return x1RadFlux_(i);
 }
 
-template <typename problem_t>
-auto RadSystem<problem_t>::set_x1RadFlux(const int i) -> double &
+template <typename problem_t> auto RadSystem<problem_t>::set_x1RadFlux(const int i) -> double &
 {
 	return x1RadFlux_(i);
 }
 
-template <typename problem_t>
-auto RadSystem<problem_t>::gasEnergy(const int i) const -> double
+template <typename problem_t> auto RadSystem<problem_t>::gasEnergy(const int i) const -> double
 {
 	return gasEnergy_(i);
 }
 
-template <typename problem_t>
-auto RadSystem<problem_t>::set_gasEnergy(const int i) -> double &
+template <typename problem_t> auto RadSystem<problem_t>::set_gasEnergy(const int i) -> double &
 {
 	return gasEnergy_(i);
 }
@@ -248,14 +236,12 @@ auto RadSystem<problem_t>::set_staticGasDensity(const int i) -> double &
 	return staticGasDensity_(i);
 }
 
-template <typename problem_t>
-auto RadSystem<problem_t>::x1GasMomentum(const int i) const -> double
+template <typename problem_t> auto RadSystem<problem_t>::x1GasMomentum(const int i) const -> double
 {
 	return x1GasMomentum_(i);
 }
 
-template <typename problem_t>
-auto RadSystem<problem_t>::set_x1GasMomentum(const int i) -> double &
+template <typename problem_t> auto RadSystem<problem_t>::set_x1GasMomentum(const int i) -> double &
 {
 	return x1GasMomentum_(i);
 }
@@ -266,8 +252,7 @@ auto RadSystem<problem_t>::set_radEnergySource(const int i) -> double &
 	return radEnergySource_(i);
 }
 
-template <typename problem_t>
-auto RadSystem<problem_t>::ComputeRadEnergy() const -> double
+template <typename problem_t> auto RadSystem<problem_t>::ComputeRadEnergy() const -> double
 {
 	double energy = 0.0;
 
@@ -278,8 +263,7 @@ auto RadSystem<problem_t>::ComputeRadEnergy() const -> double
 	return energy;
 }
 
-template <typename problem_t>
-auto RadSystem<problem_t>::ComputeGasEnergy() const -> double
+template <typename problem_t> auto RadSystem<problem_t>::ComputeGasEnergy() const -> double
 {
 	double energy = 0.0;
 
@@ -290,8 +274,7 @@ auto RadSystem<problem_t>::ComputeGasEnergy() const -> double
 	return energy;
 }
 
-template <typename problem_t>
-void RadSystem<problem_t>::FillGhostZones(array_t &cons)
+template <typename problem_t> void RadSystem<problem_t>::FillGhostZones(array_t &cons)
 {
 	// In general, this step will require MPI communication, and interaction
 	// with the main AMR code.
@@ -302,19 +285,17 @@ void RadSystem<problem_t>::FillGhostZones(array_t &cons)
 
 	// x1 left side boundary (reflecting)
 	for (int i = 0; i < nghost_; ++i) {
-		cons(radEnergy_index, i) =
-		    cons(radEnergy_index, nghost_ + (nghost_ - i - 1));
+		cons(radEnergy_index, i) = cons(radEnergy_index, nghost_ + (nghost_ - i - 1));
 		cons(x1RadFlux_index, i) =
 		    -1.0 * cons(x1RadFlux_index, nghost_ + (nghost_ - i - 1));
 	}
 
 	// x1 right side boundary (reflecting)
 	for (int i = nghost_ + nx_; i < nghost_ + nx_ + nghost_; ++i) {
-		cons(radEnergy_index, i) = cons(
-		    radEnergy_index, (nghost_ + nx_) - (i - nx_ - nghost_ + 1));
+		cons(radEnergy_index, i) =
+		    cons(radEnergy_index, (nghost_ + nx_) - (i - nx_ - nghost_ + 1));
 		cons(x1RadFlux_index, i) =
-		    -1.0 * cons(x1RadFlux_index,
-				(nghost_ + nx_) - (i - nx_ - nghost_ + 1));
+		    -1.0 * cons(x1RadFlux_index, (nghost_ + nx_) - (i - nx_ - nghost_ + 1));
 	}
 
 #if 0
@@ -327,8 +308,7 @@ void RadSystem<problem_t>::FillGhostZones(array_t &cons)
 }
 
 template <typename problem_t>
-auto RadSystem<problem_t>::CheckStatesValid(
-    array_t &cons, const std::pair<int, int> range) -> bool
+auto RadSystem<problem_t>::CheckStatesValid(array_t &cons, const std::pair<int, int> range) -> bool
 {
 	bool all_valid = true;
 
@@ -348,15 +328,14 @@ auto RadSystem<problem_t>::CheckStatesValid(
 
 		if (E_r < 0.0) {
 			amrex::Print() << "ERROR: Positivity failure at i = " << i
-				  << " with energy density = " << E_r
-				  << std::endl;
+				       << " with energy density = " << E_r << std::endl;
 			all_valid = false;
 		}
 
 		if (std::abs(reducedFluxX1) > 1.0) {
 			amrex::Print() << "ERROR: Flux limiting failure at i = " << i
-				  << " with reduced flux = " << reducedFluxX1 << " and E_r = " << E_r
-				  << std::endl;
+				       << " with reduced flux = " << reducedFluxX1
+				       << " and E_r = " << E_r << std::endl;
 			all_valid = false;
 			// TODO(ben): implement first-order flux correction
 		}
@@ -366,8 +345,7 @@ auto RadSystem<problem_t>::CheckStatesValid(
 }
 
 template <typename problem_t>
-void RadSystem<problem_t>::ConservedToPrimitive(array_t &cons,
-						const std::pair<int, int> range)
+void RadSystem<problem_t>::ConservedToPrimitive(array_t &cons, const std::pair<int, int> range)
 {
 	// keep radiation energy density as-is
 	// convert (Fx,Fy,Fz) into reduced flux components (fx,fy,fx):
@@ -407,20 +385,19 @@ auto RadSystem<problem_t>::ComputeTimestep(const double dt_max) -> double
 	return dt;
 }
 
-template <typename problem_t>
-void RadSystem<problem_t>::AdvanceTimestep(double dt_max)
+template <typename problem_t> void RadSystem<problem_t>::AdvanceTimestep(double dt_max)
 {
 	HyperbolicSystem<problem_t>::AdvanceTimestep(dt_max);
 }
 
-template <typename problem_t>
-auto RadSystem<problem_t>::ComputeEddingtonFactor(double f) -> double
+template <typename problem_t> auto RadSystem<problem_t>::ComputeEddingtonFactor(double f_in) -> double
 {
 	// f is the reduced flux == |F|/cE.
 	// compute Levermore (1984) closure [Eq. 25]
 	// the is the M1 closure that is derived from Lorentz invariance
+	const double f = std::clamp(f_in, 0., 1.); // restrict f to be within [0, 1]
 	const double f_fac = std::sqrt(4.0 - 3.0 * (f * f));
-	const double chi = (3.0 + 4.0 * (f*f)) / (5.0 + 2.0 * f_fac);
+	const double chi = (3.0 + 4.0 * (f * f)) / (5.0 + 2.0 * f_fac);
 
 #if 0
 	// compute Minerbo (1978) closure [piecewise approximation]
@@ -432,8 +409,7 @@ auto RadSystem<problem_t>::ComputeEddingtonFactor(double f) -> double
 	return chi;
 }
 
-template <typename problem_t>
-auto RadSystem<problem_t>::ComputeCellOpticalDepth(int i) -> double
+template <typename problem_t> auto RadSystem<problem_t>::ComputeCellOpticalDepth(int i) -> double
 {
 	// compute interface-averaged cell optical depth
 
@@ -476,15 +452,15 @@ void RadSystem<problem_t>::ComputeFirstOrderFluxes(std::pair<int, int> range)
 
 	for (int i = range.first; i < (range.second + 1); ++i) {
 		// gather L/R states
-		const double erad_L = consVar_(radEnergy_index, i-1);
+		const double erad_L = consVar_(radEnergy_index, i - 1);
 		const double erad_R = consVar_(radEnergy_index, i);
 
-		const double Fx_L = consVar_(x1RadFlux_index, i-1);
+		const double Fx_L = consVar_(x1RadFlux_index, i - 1);
 		const double Fx_R = consVar_(x1RadFlux_index, i);
 
 		// compute primitive variables
-		const double fx_L = Fx_L / (c_light_*erad_L);
-		const double fx_R = Fx_R / (c_light_*erad_R);
+		const double fx_L = Fx_L / (c_light_ * erad_L);
+		const double fx_R = Fx_R / (c_light_ * erad_R);
 
 		// compute scalar reduced flux f
 		// [modify in 3d!]
@@ -513,7 +489,7 @@ void RadSystem<problem_t>::ComputeFirstOrderFluxes(std::pair<int, int> range)
 
 		// compute signal speed
 		const double S_L = -c_hat_ * std::sqrt(Tdiag_L + Txx_L);
-		const double S_R =  c_hat_ * std::sqrt(Tdiag_R + Txx_R);
+		const double S_R = c_hat_ * std::sqrt(Tdiag_R + Txx_R);
 
 		const double sstar = std::max(std::abs(S_L), std::abs(S_R));
 
@@ -527,7 +503,7 @@ void RadSystem<problem_t>::ComputeFirstOrderFluxes(std::pair<int, int> range)
 		const std::valarray<double> U_L = {erad_L, Fx_L};
 		const std::valarray<double> U_R = {erad_R, Fx_R};
 
-		const std::valarray<double> LLF = 0.5 * (F_L + F_R - sstar*(U_R - U_L));
+		const std::valarray<double> LLF = 0.5 * (F_L + F_R - sstar * (U_R - U_L));
 
 		x1FluxDiffusive_(radEnergy_index, i) = LLF[0];
 		x1FluxDiffusive_(x1RadFlux_index, i) = LLF[1];
@@ -606,7 +582,7 @@ void RadSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 		// (1999) [JQSRT Vol. 61, No. 5, pp. 617–627, 1999], Eq. 46.
 
 		const double S_L = -c_hat_ * std::sqrt(Tdiag_L + Txx_L);
-		const double S_R =  c_hat_ * std::sqrt(Tdiag_R + Txx_R);
+		const double S_R = c_hat_ * std::sqrt(Tdiag_R + Txx_R);
 
 		assert(std::abs(S_L) <= c_hat_); // NOLINT
 		assert(std::abs(S_R) <= c_hat_); // NOLINT
@@ -623,8 +599,8 @@ void RadSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 		const std::valarray<double> U_R = {erad_R, Fx_R};
 
 		const double tau_cell = ComputeCellOpticalDepth(i);
-		const std::valarray<double> epsilon = {std::min(1.0, 1.0/tau_cell), 1.0};
-		//const std::valarray<double> epsilon = {1.0, 1.0};
+		const std::valarray<double> epsilon = {std::min(1.0, 1.0 / tau_cell), 1.0};
+		// const std::valarray<double> epsilon = {1.0, 1.0};
 
 		const std::valarray<double> F_star =
 		    (S_R / (S_R - S_L)) * F_L - (S_L / (S_R - S_L)) * F_R +
@@ -646,45 +622,37 @@ void RadSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 }
 
 template <typename problem_t>
-auto RadSystem<problem_t>::ComputeOpacity(const double /*rho*/, const double /*Tgas*/)
-    -> double
+auto RadSystem<problem_t>::ComputeOpacity(const double /*rho*/, const double /*Tgas*/) -> double
 {
 	return 1.0;
 }
 
 template <typename problem_t>
-auto RadSystem<problem_t>::ComputeOpacityTempDerivative(const double /*rho*/,
-							const double /*Tgas*/)
+auto RadSystem<problem_t>::ComputeOpacityTempDerivative(const double /*rho*/, const double /*Tgas*/)
     -> double
 {
 	return 0.0;
 }
 
 template <typename problem_t>
-auto RadSystem<problem_t>::ComputeTgasFromEgas(const double rho,
-					       const double Egas) -> double
+auto RadSystem<problem_t>::ComputeTgasFromEgas(const double rho, const double Egas) -> double
 {
-	const double c_v =
-	    boltzmann_constant_ / (mean_molecular_mass_ * (gamma_ - 1.0));
+	const double c_v = boltzmann_constant_ / (mean_molecular_mass_ * (gamma_ - 1.0));
 	return (Egas / (rho * c_v));
 }
 
 template <typename problem_t>
-auto RadSystem<problem_t>::ComputeEgasFromTgas(const double rho,
-					       const double Tgas) -> double
+auto RadSystem<problem_t>::ComputeEgasFromTgas(const double rho, const double Tgas) -> double
 {
-	const double c_v =
-	    boltzmann_constant_ / (mean_molecular_mass_ * (gamma_ - 1.0));
+	const double c_v = boltzmann_constant_ / (mean_molecular_mass_ * (gamma_ - 1.0));
 	return (rho * c_v * Tgas);
 }
 
 template <typename problem_t>
-auto RadSystem<problem_t>::ComputeEgasTempDerivative(const double rho,
-						     const double /*Tgas*/)
+auto RadSystem<problem_t>::ComputeEgasTempDerivative(const double rho, const double /*Tgas*/)
     -> double
 {
-	const double c_v =
-	    boltzmann_constant_ / (mean_molecular_mass_ * (gamma_ - 1.0));
+	const double c_v = boltzmann_constant_ / (mean_molecular_mass_ * (gamma_ - 1.0));
 	return (rho * c_v);
 }
 
@@ -700,8 +668,18 @@ auto RadSystem<problem_t>::ComputeEintFromEgas(const double density, const doubl
 }
 
 template <typename problem_t>
-void RadSystem<problem_t>::AddSourceTerms(array_t &cons,
-					  std::pair<int, int> range)
+auto RadSystem<problem_t>::ComputeEgasFromEint(const double density, const double X1GasMom,
+					       const double X2GasMom, const double X3GasMom,
+					       const double Eint) -> double
+{
+	const double p_sq = X1GasMom * X1GasMom + X2GasMom * X2GasMom + X3GasMom * X3GasMom;
+	const double Ekin = p_sq / (2.0 * density);
+	const double Etot = Eint + Ekin;
+	return Etot;
+}
+
+template <typename problem_t>
+void RadSystem<problem_t>::AddSourceTerms(array_t &consPrev, array_t &consNew, std::pair<int, int> range)
 {
 	// Lorentz transform the radiation variables into the comoving frame
 	// TransformIntoComovingFrame(fluid_velocity);
@@ -718,21 +696,20 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &cons,
 		const double a_rad = radiation_constant_;
 
 		// load fluid properties
-		const double rho = cons(gasDensity_index, i);
-		const double Egastot0 = cons(gasEnergy_index, i);
-		const double x1GasMom0 = cons(x1GasMomentum_index, i);
-		const double vx0 = x1GasMom0 / rho;
-		const double vsq0 = vx0*vx0;			// N.B. modify for 3d
-		const double Ekin0 = 0.5*rho*vsq0;
-		const double Egas0 = Egastot0 - Ekin0;
+		const double rho = consPrev(gasDensity_index, i);
+		const double Egastot0 = consPrev(gasEnergy_index, i);
+		const double x1GasMom0 = consPrev(x1GasMomentum_index, i);
+		const double vx0 = x1GasMom0 / rho; // needed to update kinetic energy
+		const double Egas0 =
+		    ComputeEintFromEgas(rho, x1GasMom0, 0, 0, Egastot0); // modify in 3d
 
 		// load radiation energy
-		const double Erad0 = cons(radEnergy_index, i);
+		const double Erad0 = consPrev(radEnergy_index, i);
 
 		assert(Egas0 > 0.0); // NOLINT
 		assert(Erad0 > 0.0); // NOLINT
 
-		const double Etot0 = Egas0 + (c / chat)*Erad0;
+		const double Etot0 = Egas0 + (c / chat) * Erad0;
 
 		// BEGIN NEWTON-RAPHSON LOOP
 		double F_G = NAN;
@@ -762,22 +739,20 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &cons,
 		for (n = 0; n < maxIter; ++n) {
 
 			// compute material temperature
-			T_gas = RadSystem<problem_t>::ComputeTgasFromEgas(
-			    rho, Egas_guess);
+			T_gas = RadSystem<problem_t>::ComputeTgasFromEgas(rho, Egas_guess);
 
 			// compute opacity, emissivity
-			kappa =
-			    RadSystem<problem_t>::ComputeOpacity(rho, T_gas);
+			kappa = RadSystem<problem_t>::ComputeOpacity(rho, T_gas);
 			fourPiB = chat * a_rad * std::pow(T_gas, 4);
 
 			// constant radiation energy source term
-			Src = dt * (chat * radEnergySource_(i));
+			// plus advection source term (for well-balanced/SDC integrators)
+			Src = dt * ( (chat * radEnergySource_(i)) + advectionFluxes_(radEnergy_index, i) );
 
 			// compute derivatives w/r/t T_gas
 			const double dB_dTgas = (4.0 * fourPiB) / T_gas;
 			const double dkappa_dTgas =
-			    RadSystem<problem_t>::ComputeOpacityTempDerivative(
-				rho, T_gas);
+			    RadSystem<problem_t>::ComputeOpacityTempDerivative(rho, T_gas);
 
 			// compute residuals
 			rhs = dt * (rho * kappa) * (fourPiB - chat * Erad_guess);
@@ -796,10 +771,9 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &cons,
 
 			drhs_dEgas =
 			    (rho * dt / c_v) *
-			    (kappa * dB_dTgas +
-			     dkappa_dTgas * (fourPiB - chat * Erad_guess));
+			    (kappa * dB_dTgas + dkappa_dTgas * (fourPiB - chat * Erad_guess));
 
-			dFG_dEgas = 1.0 + (c / chat)*drhs_dEgas;
+			dFG_dEgas = 1.0 + (c / chat) * drhs_dEgas;
 			dFG_dErad = dt * (-(rho * kappa) * c);
 			dFR_dEgas = -drhs_dEgas;
 			dFR_dErad = 1.0 + dt * ((rho * kappa) * chat);
@@ -808,8 +782,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &cons,
 			eta = -dFR_dEgas / dFG_dEgas;
 			// eta = (eta > 0.0) ? eta : 0.0;
 
-			deltaErad =
-			    -(F_R + eta * F_G) / (dFR_dErad + eta * dFG_dErad);
+			deltaErad = -(F_R + eta * F_G) / (dFR_dErad + eta * dFG_dErad);
 			deltaEgas = -(F_G + dFG_dErad * deltaErad) / dFG_dEgas;
 
 			Egas_guess += deltaEgas;
@@ -823,31 +796,31 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &cons,
 		assert(Erad_guess > 0.0); // NOLINT
 		assert(Egas_guess > 0.0); // NOLINT
 
-		// store new radiation energy
-		cons(radEnergy_index, i) = Erad_guess;
-		cons(gasEnergy_index, i) = Egas_guess + Ekin0;
+		// store new radiation energy, gas energy
+		consNew(radEnergy_index, i) = Erad_guess;
+		consNew(gasEnergy_index, i) =
+		    ComputeEgasFromEint(rho, x1GasMom0, 0, 0, Egas_guess); // modify in 3d
 
 		// 2. Compute radiation flux update
 
-		const double Frad_x = cons(x1RadFlux_index, i);
-		const double new_Frad_x =
-		    (1. / (1.0 + (rho * kappa) * chat * dt)) * Frad_x;
+		const double Frad_x_t0 = consPrev(x1RadFlux_index, i);
+		const double Frad_x_t1 = (Frad_x_t0 + (dt * advectionFluxes_(x1RadFlux_index, i))) /
+					 (1.0 + (rho * kappa) * chat * dt);
 
-		cons(x1RadFlux_index, i) = new_Frad_x;
+		consNew(x1RadFlux_index, i) = Frad_x_t1;
 
 		// 3. Compute conservative gas momentum update
-		//	[N.B. should this step happen after the Lorentz
-		//			transform?]
+		//	[N.B. should this step happen after the Lorentz	transform?]
 
-		const double dF_x = new_Frad_x - Frad_x;
+		const double dF_x = Frad_x_t1 - Frad_x_t0;
 		const double dx1Momentum = -dF_x / (c * chat);
 
-		cons(x1GasMomentum_index, i) += dx1Momentum;
+		consNew(x1GasMomentum_index, i) += dx1Momentum;
 
 		// 4. Update kinetic energy of gas
 
-		const double dEkin = (vx0 * dx1Momentum);	// modify in 3d
-		cons(gasEnergy_index, i) += dEkin;
+		const double dEkin = (vx0 * dx1Momentum); // modify in 3d
+		consNew(gasEnergy_index, i) += dEkin;
 
 		// Lorentz transform back to 'laboratory' frame
 		// TransformIntoComovingFrame(-fluid_velocity);

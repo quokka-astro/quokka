@@ -50,9 +50,6 @@ template <> void RadSystem<SuOlsonProblemCgs>::FillGhostZones(array_t &cons)
 	const double F_0 = cons(x1RadFlux_index, nghost_);
 	const double F_1 = cons(x1RadFlux_index, nghost_ + 1);
 
-	//std::cout << "E_0 = " << E_0 << std::endl;
-	//std::cout << "E_1 = " << E_1 << std::endl;
-
 	// use PPM stencil at interface to solve for F_rad in the ghost zones
 	const double F_bdry_PPM = 0.5 * c * E_inc -
 			      (7. / 12.) * (c * E_0 + 2.0 * F_0) +
@@ -63,7 +60,6 @@ template <> void RadSystem<SuOlsonProblemCgs>::FillGhostZones(array_t &cons)
 	const double F_bdry = F_bdry_PPM;
 
 	assert(std::abs(F_bdry / (c*E_inc)) < 1.0);
-	//assert(F_bdry > 0.);
 
 	// x1 left side boundary (Marshak)
 	for (int i = 0; i < nghost_; ++i) {
@@ -101,21 +97,16 @@ auto testproblem_radiation_marshak_cgs() -> int
 	// For discussion of the asymptotic preserving property,
 	// R.G. McClarren, R.B. Lowrie / Journal of Computational Physics 227 (2008) 9711–9726.
 
-	// This test may avoid the problem exposed in the matter-radiation equilibrium
-	// test (wrong equilibrium temperature), since the total energy is determined
-	// by the boundary conditions, not the integral of the sum of the Egas and
-	// Erad (internal) source terms.
-
 	// Problem parameters
 
-	const int max_timesteps = 1e2;
-	const double CFL_number = 0.3;
-	const int nx = 32;
+	const int max_timesteps = 3e5;
+	const double CFL_number = 0.9;
+	const int nx = 18; // [matches resolution of McClarren & Lowrie (2008)]
 
-	const double initial_dt = 1.0e-18; // s
-	const double max_dt = 1.0e-12;	  // s
-	const double max_time = 1.0e-9; // s
-	const double Lx = 1.0;	// cm
+	const double initial_dt = 1.0e-15; // s
+	const double max_dt = 5.0e-12;	   // s
+	const double max_time = 50.0e-9;   // s
+	const double Lx = 0.66;			   // cm
 
 	const double dx = Lx / nx;	// cm
 	const double tau_cell = kappa * dx; // dimensionless optical depth
@@ -231,12 +222,14 @@ auto testproblem_radiation_marshak_cgs() -> int
 	// radiation temperature
 	std::map<std::string, std::string> Trad_args;
 	Trad_args["label"] = "radiation temperature";
+	Trad_args["marker"] = ".";
 	matplotlibcpp::plot(xs, Trad, Trad_args);
 
 	std::map<std::string, std::string> Trad_exact_args;
 	Trad_exact_args["label"] = "radiation temperature (exact)";
-	//matplotlibcpp::plot(xs_exact, Trad_exact, Trad_exact_args);
 
+	matplotlibcpp::ylim(0.0, 1.0); // keV
+	matplotlibcpp::xlim(0.0, 0.55); // cm
 	matplotlibcpp::xlabel("length x (cm)");
 	matplotlibcpp::ylabel("temperature (keV)");
 	matplotlibcpp::legend();
@@ -248,12 +241,14 @@ auto testproblem_radiation_marshak_cgs() -> int
 
 	std::map<std::string, std::string> Tgas_args;
 	Tgas_args["label"] = "gas temperature";
+	Tgas_args["marker"] = ".";
 	matplotlibcpp::plot(xs, Tgas, Tgas_args);
 
 	std::map<std::string, std::string> Tgas_exact_args;
 	Tgas_exact_args["label"] = "gas temperature (exact)";
-	//matplotlibcpp::plot(xs_exact, Tmat_exact, Tgas_exact_args);
 
+	matplotlibcpp::ylim(0.0, 1.0); // keV
+	matplotlibcpp::xlim(0.0, 0.55); // cm
 	matplotlibcpp::xlabel("length x (cm)");
 	matplotlibcpp::ylabel("temperature (keV)");
 	matplotlibcpp::legend();
@@ -264,10 +259,5 @@ auto testproblem_radiation_marshak_cgs() -> int
 	std::cout << "Finished." << std::endl;
 
 	int status = 0;
-#if 0
-	if ((rel_error > error_tol) || std::isnan(rel_error)) {
-		status = 1;
-	}
-#endif
 	return status;
 }
