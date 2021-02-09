@@ -84,7 +84,10 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	void FillGhostZones(array_t &cons) override;
 	void ConservedToPrimitive(array_t &cons, std::pair<int, int> range) override;
-	void AddSourceTerms(array_t &consPrev, array_t &consNew, std::pair<int, int> range) override;
+	void AddSourceTerms(array_t &consPrev, array_t &consNew,
+			    std::pair<int, int> range) override;
+	void ComputeSourceTermsExplicit(array_t &consPrev, array_t &src,
+					std::pair<int, int> range) override;
 	auto CheckStatesValid(array_t &cons, std::pair<int, int> range) -> bool override;
 	auto ComputeTimestep(double dt_max) -> double override;
 	void AdvanceTimestep(double dt_max) override;
@@ -357,8 +360,8 @@ void RadSystem<problem_t>::ConservedToPrimitive(array_t &cons, const std::pair<i
 		const auto reducedFluxX1 = Fx / (c_light_ * E_r);
 
 		// check admissibility of states
-		assert(E_r > 0.0);			// NOLINT
-		//assert(std::abs(reducedFluxX1) <= 1.0); // NOLINT
+		assert(E_r > 0.0); // NOLINT
+		// assert(std::abs(reducedFluxX1) <= 1.0); // NOLINT
 
 		primVar_(primRadEnergy_index, i) = E_r;
 		primVar_(x1ReducedFlux_index, i) = reducedFluxX1;
@@ -390,7 +393,8 @@ template <typename problem_t> void RadSystem<problem_t>::AdvanceTimestep(double 
 	HyperbolicSystem<problem_t>::AdvanceTimestep(dt_max);
 }
 
-template <typename problem_t> auto RadSystem<problem_t>::ComputeEddingtonFactor(double f_in) -> double
+template <typename problem_t>
+auto RadSystem<problem_t>::ComputeEddingtonFactor(double f_in) -> double
 {
 	// f is the reduced flux == |F|/cE.
 	// compute Levermore (1984) closure [Eq. 25]
@@ -543,8 +547,8 @@ void RadSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 
 		assert(erad_L > 0.0); // NOLINT
 		assert(erad_R > 0.0); // NOLINT
-		//assert(f_L <= 1.0);   // NOLINT
-		//assert(f_R <= 1.0);   // NOLINT
+		// assert(f_L <= 1.0);   // NOLINT
+		// assert(f_R <= 1.0);   // NOLINT
 
 		// angle between interface and radiation flux \hat{n}
 		// If direction is undefined, just drop direction-dependent
@@ -679,7 +683,43 @@ auto RadSystem<problem_t>::ComputeEgasFromEint(const double density, const doubl
 }
 
 template <typename problem_t>
-void RadSystem<problem_t>::AddSourceTerms(array_t &consPrev, array_t &consNew, std::pair<int, int> range)
+void RadSystem<problem_t>::ComputeSourceTermsExplicit(array_t &consPrev, array_t &src,
+						      std::pair<int, int> range)
+{
+	const double dt = dt_;
+	const double chat = c_hat_;
+	const double a_rad = radiation_constant_;
+
+	for (int i = range.first; i < range.second; ++i) {
+		// load gas energy
+		const auto rho = consPrev(gasDensity_index, i);
+		const auto Egastot0 = consPrev(gasEnergy_index, i);
+		const auto x1GasMom0 = consPrev(x1GasMomentum_index, i);
+		const auto Egas0 =
+		    ComputeEintFromEgas(rho, x1GasMom0, 0, 0, Egastot0); // modify in 3d
+
+		// load radiation energy, momentum
+		const auto Erad0 = consPrev(radEnergy_index, i);
+		const auto Frad0_x = consPrev(x1RadFlux_index, i);
+		// compute material temperature
+		const auto T_gas = RadSystem<problem_t>::ComputeTgasFromEgas(rho, Egas0);
+		// compute opacity, emissivity
+		const auto kappa = RadSystem<problem_t>::ComputeOpacity(rho, T_gas);
+		const auto fourPiB = chat * a_rad * std::pow(T_gas, 4);
+		// constant radiation energy source term
+		const auto Src = dt * (chat * radEnergySource_(i));
+		// compute reaction term
+		const auto rhs = dt * (rho * kappa) * (fourPiB - chat * Erad0);
+		const auto Fx_rhs = -dt * chat * (rho * kappa) * Frad0_x;
+
+		src(radEnergy_index, i) = rhs;
+		src(x1RadFlux_index, i) = Fx_rhs;
+	}
+}
+
+template <typename problem_t>
+void RadSystem<problem_t>::AddSourceTerms(array_t &consPrev, array_t &consNew,
+					  std::pair<int, int> range)
 {
 	// Lorentz transform the radiation variables into the comoving frame
 	// TransformIntoComovingFrame(fluid_velocity);
@@ -747,7 +787,8 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consPrev, array_t &consNew, s
 
 			// constant radiation energy source term
 			// plus advection source term (for well-balanced/SDC integrators)
-			Src = dt * ( (chat * radEnergySource_(i)) + advectionFluxes_(radEnergy_index, i) );
+			Src = dt *
+			      ((chat * radEnergySource_(i)) + advectionFluxes_(radEnergy_index, i));
 
 			// compute derivatives w/r/t T_gas
 			const double dB_dTgas = (4.0 * fourPiB) / T_gas;

@@ -119,14 +119,16 @@ template <typename problem_t> class HyperbolicSystem
 
 	// inline functions:
 
-	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto MC(double a, double b) -> double
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto MC(double a, double b)
+	    -> double
 	{
 		return 0.5 * (sgn(a) + sgn(b)) *
 		       std::min(0.5 * std::abs(a + b),
 				std::min(2.0 * std::abs(a), 2.0 * std::abs(b)));
 	}
 
-	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto Koren(double a, double b) -> double
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto Koren(double a, double b)
+	    -> double
 	{
 		// CAUTION: this limiter is asymmetric (i.e. lim(a,b) != 1/lim(b,a)!)
 		// More accurate in L1 norm than MC, but weird asymmetries in solutions.
@@ -137,6 +139,8 @@ template <typename problem_t> class HyperbolicSystem
 	virtual void FillGhostZones(array_t &cons);
 	virtual void ConservedToPrimitive(array_t &cons, std::pair<int, int> range) = 0;
 	virtual void AddSourceTerms(array_t &U_prev, array_t &U_new, std::pair<int, int> range);
+	virtual void ComputeSourceTermsExplicit(array_t &U_prev, array_t &src,
+						std::pair<int, int> range);
 	virtual auto CheckStatesValid(array_t &cons, std::pair<int, int> range) -> bool;
 	virtual void ComputeFlatteningCoefficients(std::pair<int, int> range);
 	virtual void FlattenShocks(array_t &q, std::pair<int, int> range);
@@ -147,6 +151,9 @@ template <typename problem_t> class HyperbolicSystem
 	array_t consVarPredictStepPrev_;
 
 	array_t advectionFluxes_;
+	array_t advectionFluxesU0_;
+	array_t reactionTerms_;
+	array_t reactionTermsU0_;
 
 	array_t x1LeftState_;
 	array_t x1RightState_;
@@ -187,6 +194,9 @@ template <typename problem_t> class HyperbolicSystem
 		consVarPredictStepPrev_.AllocateArray(nvars_, dim1_);
 
 		advectionFluxes_.AllocateArray(nvars_, dim1_);
+		reactionTerms_.AllocateArray(nvars_, dim1_);
+		advectionFluxesU0_.AllocateArray(nvars_, dim1_);
+		reactionTermsU0_.AllocateArray(nvars_, dim1_);
 		x1LeftState_.AllocateArray(nvars_, dim1_);
 		x1RightState_.AllocateArray(nvars_, dim1_);
 		x1Flux_.AllocateArray(nvars_, dim1_);
@@ -203,7 +213,9 @@ template <typename problem_t> class HyperbolicSystem
 	virtual void PredictStep(std::pair<int, int> range);
 	auto ComputeTimestep() -> double;
 	void CopyVars(array_t &src, array_t &dest, std::pair<int, int> range);
-	auto ComputeResidual(array_t &cur, array_t &prev, std::pair<int, int> range) const -> double;
+	auto ComputeResidual(array_t &cur, array_t &prev, std::pair<int, int> range) const
+	    -> double;
+	auto ComputeNorm(array_t &arr, std::pair<int, int> range) const -> double;
 
 	virtual auto ComputeTimestep(double dt_max) -> double = 0;
 	virtual void ComputeFluxes(std::pair<int, int> range) = 0;
@@ -241,7 +253,15 @@ template <typename problem_t> void HyperbolicSystem<problem_t>::set_cflNumber(do
 }
 
 template <typename problem_t>
-void HyperbolicSystem<problem_t>::AddSourceTerms(array_t &U_prev, array_t &U_new, std::pair<int, int> range)
+void HyperbolicSystem<problem_t>::AddSourceTerms(array_t &U_prev, array_t &U_new,
+						 std::pair<int, int> range)
+{
+	// intentionally zero source terms by default
+}
+
+template <typename problem_t>
+void HyperbolicSystem<problem_t>::ComputeSourceTermsExplicit(array_t &U_prev, array_t &src,
+							     std::pair<int, int> range)
 {
 	// intentionally zero source terms by default
 }
@@ -425,7 +445,7 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(array_t &q, const std::pa
 
 			const double a_minus = x1RightState_(n, i);   // a_L,i in C&W
 			const double a_plus = x1LeftState_(n, i + 1); // a_R,i in C&W
-			const double a = q(n, i);		      		  // a_i in C&W
+			const double a = q(n, i);		      // a_i in C&W
 
 			const double dq_minus = (a - a_minus);
 			const double dq_plus = (a_plus - a);
@@ -584,6 +604,22 @@ auto HyperbolicSystem<problem_t>::ComputeResidual(array_t &cur, array_t &prev,
 	return std::sqrt(norm);
 }
 
+template <typename problem_t>
+auto HyperbolicSystem<problem_t>::ComputeNorm(array_t &arr, const std::pair<int, int> range) const
+    -> double
+{
+	double norm = 0.;
+	for (int n = 0; n < nvars_; ++n) {
+		double comp = 0.;
+		for (int i = range.first; i < range.second; ++i) {
+			comp += std::abs(arr(n, i));
+		}
+		comp *= 1.0 / (range.second - range.first);
+		norm += comp * comp;
+	}
+	return std::sqrt(norm);
+}
+
 template <typename problem_t> void HyperbolicSystem<problem_t>::AdvanceTimestepRK2(const double dt)
 {
 	const auto ppm_range = std::make_pair(-1 + nghost_, nx_ + 1 + nghost_);
@@ -641,37 +677,60 @@ template <typename problem_t> void HyperbolicSystem<problem_t>::AdvanceTimestepS
 	// Initialize data
 	dt_ = dt;
 	// ensure that consVarPredictStep_ is initialized
-	CopyVars(consVar_, consVarPredictStep_, cell_range); 
+	CopyVars(consVar_, consVarPredictStep_, cell_range);
 	CopyVars(consVar_, consVarPredictStepPrev_, cell_range);
 
 	// begin SDC loop
-	const double atol = 1.0e-10; // absolute tolerance for L1 residual
-	const int maxIterationCount = 40;
+	const double rtol = 1.0e-10; // relative tolerance for L1 residual
+	const double normPrev = ComputeNorm(consVar_, cell_range);
+	const int maxIterationCount = 50;
 	double res = NAN;
 	int j = 0;
 	for (; j < maxIterationCount; ++j) {
 
 		// Step 0: Fill ghost zones and convert to primitive variables
-		FillGhostZones(consVarPredictStepPrev_);
+		FillGhostZones(consVarPredictStepPrev_); // consVarPredictStepPrev_ == U^{t+1,k}
 		ConservedToPrimitive(consVarPredictStepPrev_, std::make_pair(0, dim1_));
 
-		// Step 1a: Advance transport operator
-		// [CAUTION: PPM *cannot* be used with 2nd-order SDC]
-		ReconstructStatesPLM(primVar_, ppm_range); 
+		// Step 1a: Compute transport terms using state U^{t+1,k}
+		ReconstructStatesPLM(primVar_, ppm_range); // PPM is unstable for SDC2!
 		ComputeFluxes(cell_range);
 		ComputeFirstOrderFluxes(cell_range);
-		SaveFluxes(cell_range); // update advectionFlux_
 
-		// Step 1b: Add source terms via pseudo-non-time-splitting
-		// [Pu Sun, A Pseudo-Non-Time-Splitting Method in Air Quality Modeling, Journal of
-		// Computational Physics, Volume 127, Issue 1, 1996]
+		// update advectionFluxes_ <- F(U^{t+1, k})
+		SaveFluxes(cell_range);
+		// update reactionTerms_ <- S(U^{t+1, k})
+		ComputeSourceTermsExplicit(consVarPredictStepPrev_, reactionTerms_, cell_range);
+
+		if (j == 0) {
+			// these terms correspond to the previous timestep
+			CopyVars(advectionFluxes_, advectionFluxesU0_, cell_range);
+			CopyVars(reactionTerms_, reactionTermsU0_, cell_range);
+		}
+
+		// Add SDC source terms to advectionFluxes_ following Zingale et al., ApJ 886:105
+		//  (2019).
+		for (int n = 0; n < nvars_; ++n) {
+			for (int i = cell_range.first; i < cell_range.second; ++i) {
+				// advectionFluxes_ == F(U^{t+1,k})
+				// advectionFluxesU0_ == F(U^{t})
+				// reactionTerms_ == S(U^{t+1,k})
+				// reactionTermsU0_ == S(U^{t})
+				advectionFluxes_(n, i) =
+				    0.5 * (advectionFluxesU0_(n, i) + advectionFluxes_(n, i) +
+					   reactionTermsU0_(n, i) + reactionTerms_(n, i)) -
+				    reactionTerms_(n, i);
+			}
+		}
+
+		// Step 1b: Compute reaction terms with advectionFluxes_ as a source term.
 		AddSourceTerms(consVar_, consVarPredictStep_, cell_range);
 
-		// Step 2: Check for convergence from previous iteration
-		res = ComputeResidual(consVarPredictStep_, consVarPredictStepPrev_, cell_range);
-		//amrex::Print() << "\tresidual = " << res << "\n";
+		// Step 2: Check for convergence of |U^{t+1, k+1} - U^{t+1, k}|
+		res = ComputeResidual(consVarPredictStep_, consVarPredictStepPrev_, cell_range) /
+		      normPrev;
 
-		if (res < atol) {
+		if (res <= rtol) {
 			break;
 		}
 
@@ -679,14 +738,14 @@ template <typename problem_t> void HyperbolicSystem<problem_t>::AdvanceTimestepS
 		CopyVars(consVarPredictStep_, consVarPredictStepPrev_, cell_range);
 	}
 
-	//AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+	// AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 	//    CheckStatesValid(consVarPredictStep_, cell_range),
 	//    "[step 1b] Non-realizable states produced. This should not happen!");
 
-	// AMREX_ALWAYS_ASSERT_WITH_MESSAGE(res < atol, "SDC2 iteration exceeded maximum iteration
-	// count, but did not converge.");
-	amrex::Print() << "SDC2 iteration converged with residual " << res << " after " << j + 1
+	amrex::Print() << "\tSDC2 iteration converged with residual " << res << " after " << j + 1
 		       << " iterations.\n";
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+	    res <= rtol, "SDC2 iteration exceeded maximum iteration count, but did not converge.");
 
 	// If converged, copy final solution to consVar_
 	CopyVars(consVarPredictStep_, consVar_, cell_range);

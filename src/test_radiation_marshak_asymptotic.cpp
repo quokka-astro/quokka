@@ -39,6 +39,10 @@ constexpr double c = 2.99792458e10;  // cm s^-1
 
 template <> void RadSystem<SuOlsonProblemCgs>::FillGhostZones(array_t &cons)
 {
+	// This boundary condition is only first-order accurate!
+	// (Not quite good enough for simulating an optically-thick Marshak wave;
+	//  the temperature becomes T_H in the first zone, rather than just at the face.)
+
 	// Su & Olson (1996) boundary conditions
 	const double T_H = T_hohlraum;
 	const double E_inc = radiation_constant_ * std::pow(T_H, 4);
@@ -51,12 +55,12 @@ template <> void RadSystem<SuOlsonProblemCgs>::FillGhostZones(array_t &cons)
 	const double F_1 = cons(x1RadFlux_index, nghost_ + 1);
 
 	// use PPM stencil at interface to solve for F_rad in the ghost zones
-	const double F_bdry_PPM = 0.5 * c * E_inc - (7. / 12.) * (c * E_0 + 2.0 * F_0) +
-				  (1. / 12.) * (c * E_1 + 2.0 * F_1);
+	//const double F_bdry_PPM = 0.5 * c * E_inc - (7. / 12.) * (c * E_0 + 2.0 * F_0) +
+	//			  (1. / 12.) * (c * E_1 + 2.0 * F_1);
 
-	// const double F_bdry_upwind = c*E_inc / 4.0;
+	const double F_bdry_PLM = 0.5 * c * E_inc - 0.5 * (c * E_0 + 2.0 * F_0);
 
-	const double F_bdry = F_bdry_PPM;
+	const double F_bdry = F_bdry_PLM;
 
 	assert(std::abs(F_bdry / (c * E_inc)) < 1.0);
 
@@ -99,20 +103,23 @@ auto testproblem_radiation_marshak_cgs() -> int
 	// error that is arbitrarily large in the asymptotic limit!
 	// [SDC (or a similar method) is required for a correct solution!]
 
-	// For discussion of the asymptotic preserving property,
-	// R.G. McClarren, R.B. Lowrie, Journal of Computational Physics 227 (2008) 9711–9726.
+	// For discussion of the asymptotic preserving property:
+	// R.G. McClarren, R.B. Lowrie, The effects of slope limiting on asymptotic-preserving
+	//   numerical methods for hyperbolic conservation laws, Journal of Computational Physics 227
+	//   (2008) 9711–9726.
 	// R.G. McClarren, T.M. Evans, R.B. Lowrie, J.D. Densmore, Semi-implicit time integration
-	//   for PN thermal radiative transfer, Journal of Computational Physics 227 (2008) 7561-7586.
+	//   for PN thermal radiative transfer, Journal of Computational Physics 227 (2008)
+	//   7561-7586.
 
 	// Problem parameters
 
-	const int max_timesteps = 3e5;
+	const int max_timesteps = 2e5;
 	const double CFL_number = 0.9;
-	const int nx = 36; // [18 == matches resolution of McClarren & Lowrie (2008)]
+	const int nx = 20; // [18 == matches resolution of McClarren & Lowrie (2008)]
 
-	const double initial_dt = 1.0e-15; // s
+	const double initial_dt = 5.0e-12; // s
 	const double max_dt = 5.0e-12;	   // s
-	const double max_time = 50.0e-9;   // s
+	const double max_time = 10.0e-9;   // s
 	const double Lx = 0.66;		   // cm
 
 	const double dx = Lx / nx;	    // cm
