@@ -64,6 +64,7 @@ add_test(NAME MatterEnergyExchangeRSLA COMMAND test_radiation_matter_coupling_rs
 add_test(NAME SuOlsonTest COMMAND test_radiation_SuOlson WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 add_test(NAME MarshakWave COMMAND test_radiation_marshak WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 add_test(NAME MarshakWaveCGS COMMAND test_radiation_marshak_cgs WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+add_test(NAME MarshakWaveAsymptoticDiffusion COMMAND test_radiation_marshak_asymptotic WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 add_test(NAME RadhydroShock COMMAND test_radhydro_shock WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 add_test(NAME RadhydroShockCGS COMMAND test_radhydro_shock_cgs WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 add_test(NAME HydroShocktube COMMAND test_hydro_shocktube WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)

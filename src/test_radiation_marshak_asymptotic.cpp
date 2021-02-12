@@ -123,9 +123,9 @@ auto testproblem_radiation_marshak_cgs() -> int
 
 	// Problem parameters
 
-	const int max_timesteps = 3e5;
+	const int max_timesteps = 1e5;
 	const double CFL_number = 0.9;
-	const int nx = 100; // [18 == matches resolution of McClarren & Lowrie (2008)]
+	const int nx = 60; // [18 == matches resolution of McClarren & Lowrie (2008)]
 
 	const double initial_dt = 5.0e-12; // s
 	const double max_dt = 5.0e-12;	   // s
@@ -269,8 +269,26 @@ auto testproblem_radiation_marshak_cgs() -> int
 
 		xs_exact.push_back(x_val);
 		Tmat_exact.push_back(Tmat_val);
-		//amrex::Print() << x_val << " " << Tmat_val << "\n";
 	}
+
+	// compute error norm
+
+	// interpolate numerical solution onto exact tabulated solution
+	std::vector<double> Tmat_interp(xs_exact.size());
+	interpolate_arrays(xs_exact.data(), Tmat_interp.data(), xs_exact.size(),
+			   xs.data(), Tgas.data(), xs.size());
+
+	double err_norm = 0.;
+	double sol_norm = 0.;
+	const double t = rad_system.time();
+	for (int i = 0; i < xs_exact.size(); ++i) {
+		err_norm += std::abs(Tmat_interp[i] - Tmat_exact[i]);
+		sol_norm += std::abs(Tmat_exact[i]);
+	}
+
+	const double error_tol = 0.05; // 5 per cent
+	const double rel_error = err_norm / sol_norm;
+	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
 
 	// plot results
 
@@ -298,5 +316,8 @@ auto testproblem_radiation_marshak_cgs() -> int
 	std::cout << "Finished." << std::endl;
 
 	int status = 0;
+	if ((rel_error > error_tol) || std::isnan(rel_error)) {
+		status = 1;
+	}
 	return status;
 }
