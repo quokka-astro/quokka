@@ -94,28 +94,38 @@ auto RadSystem<SuOlsonProblemCgs>::ComputeOpacityTempDerivative(const double rho
 	return (sigma_dT / rho);
 }
 
+template <>
+auto RadSystem<SuOlsonProblemCgs>::ComputeEddingtonFactor(double f) -> double
+{
+	return (1./3.);	// Eddington approximation
+}
+
 auto testproblem_radiation_marshak_cgs() -> int
 {
 	// This problem tests whether the numerical scheme is asymptotic preserving.
 	// This requires both a spatial discretization *and* a temporal discretization
-	// that have the asymptotic-preserving property.
-	// Operator splitting the transport and source terms can give a splitting
-	// error that is arbitrarily large in the asymptotic limit!
-	// [SDC (or a similar method) is required for a correct solution!]
+	// that have the asymptotic-preserving property. Operator splitting the transport and source
+	// terms can give a splitting error that is arbitrarily large in the asymptotic limit! [SDC
+	// (or a semi-implicit predictor-corrector method) is REQUIRED for a correct solution.]
 
-	// For discussion of the asymptotic preserving property:
-	// R.G. McClarren, R.B. Lowrie, The effects of slope limiting on asymptotic-preserving
-	//   numerical methods for hyperbolic conservation laws, Journal of Computational Physics 227
-	//   (2008) 9711–9726.
-	// R.G. McClarren, T.M. Evans, R.B. Lowrie, J.D. Densmore, Semi-implicit time integration
-	//   for PN thermal radiative transfer, Journal of Computational Physics 227 (2008)
-	//   7561-7586.
+	// For discussion of the asymptotic-preserving property:
+	// 1. R.G. McClarren, R.B. Lowrie, The effects of slope limiting on asymptotic-preserving
+	//     numerical methods for hyperbolic conservation laws, Journal of Computational Physics 227
+	//     (2008) 9711–9726.
+	// 2. R.G. McClarren, T.M. Evans, R.B. Lowrie, J.D. Densmore, Semi-implicit time integration
+	//     for PN thermal radiative transfer, Journal of Computational Physics 227 (2008)
+	//     7561-7586.
+
+	// Note: PLM (w/ asymptotic correction in Riemann solver) does a good job, but not quite as
+	// good as linear DG on this problem. There are some 'stair-stepping' artifacts that appear
+	// with PLM at low resolution that don't appear when using DG.
+	// -- Hopefully, this will be solved with a larger stencil (e.g. PPM).
 
 	// Problem parameters
 
-	const int max_timesteps = 2e5;
+	const int max_timesteps = 3e5;
 	const double CFL_number = 0.9;
-	const int nx = 20; // [18 == matches resolution of McClarren & Lowrie (2008)]
+	const int nx = 100; // [18 == matches resolution of McClarren & Lowrie (2008)]
 
 	const double initial_dt = 5.0e-12; // s
 	const double max_dt = 5.0e-12;	   // s
@@ -141,6 +151,10 @@ auto testproblem_radiation_marshak_cgs() -> int
 	const double initial_Erad = a_rad * std::pow(T_initial, 4);
 	const double T_floor = T_initial;
 	rad_system.Erad_floor_ = a_rad * std::pow(T_floor, 4);
+
+	// enforce Marshak boundary condition in Riemann solver
+	rad_system.T_marshak_left_ = T_hohlraum;
+	rad_system.do_marshak_left_boundary_ = true;
 
 	auto nghost = rad_system.nghost();
 	for (int i = nghost; i < nx + nghost; ++i) {
@@ -231,35 +245,46 @@ auto testproblem_radiation_marshak_cgs() -> int
 		x1RadFlux.at(i) = rad_system.x1RadFlux(i + nghost);
 	}
 
+	// read in exact solution
+
+	std::vector<double> xs_exact;
+	std::vector<double> Tmat_exact;
+
+	std::string filename = "../extern/marshak_similarity.csv";
+	std::ifstream fstream(filename, std::ios::in);
+	assert(fstream.is_open());
+
+	std::string header;
+	std::getline(fstream, header);
+
+	for (std::string line; std::getline(fstream, line);) {
+		std::istringstream iss(line);
+		std::vector<double> values;
+
+		for (double value; iss >> value;) {
+			values.push_back(value);
+		}
+		auto x_val = values.at(0);
+		auto Tmat_val = values.at(1);
+
+		xs_exact.push_back(x_val);
+		Tmat_exact.push_back(Tmat_val);
+		//amrex::Print() << x_val << " " << Tmat_val << "\n";
+	}
+
 	// plot results
-
-	// radiation temperature
-	std::map<std::string, std::string> Trad_args;
-	Trad_args["label"] = "radiation temperature";
-	Trad_args["marker"] = ".";
-	matplotlibcpp::plot(xs, Trad, Trad_args);
-
-	std::map<std::string, std::string> Trad_exact_args;
-	Trad_exact_args["label"] = "radiation temperature (exact)";
-
-	matplotlibcpp::ylim(0.0, 1.0);	// keV
-	matplotlibcpp::xlim(0.0, 0.55); // cm
-	matplotlibcpp::xlabel("length x (cm)");
-	matplotlibcpp::ylabel("temperature (keV)");
-	matplotlibcpp::legend();
-	matplotlibcpp::title(fmt::format("time t = {:.4g}", rad_system.time()));
-	matplotlibcpp::save("./marshak_wave_asymptotic_temperature.pdf");
 
 	// material temperature
 	matplotlibcpp::clf();
 
 	std::map<std::string, std::string> Tgas_args;
+	std::map<std::string, std::string> Tgas_exact_args;
 	Tgas_args["label"] = "gas temperature";
 	Tgas_args["marker"] = ".";
-	matplotlibcpp::plot(xs, Tgas, Tgas_args);
-
-	std::map<std::string, std::string> Tgas_exact_args;
 	Tgas_exact_args["label"] = "gas temperature (exact)";
+	Tgas_exact_args["marker"] = "x";
+	matplotlibcpp::plot(xs, Tgas, Tgas_args);
+	matplotlibcpp::plot(xs_exact, Tmat_exact, Tgas_exact_args);
 
 	matplotlibcpp::ylim(0.0, 1.0);	// keV
 	matplotlibcpp::xlim(0.0, 0.55); // cm

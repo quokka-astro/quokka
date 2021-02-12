@@ -74,6 +74,9 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	double Erad_floor_ = 0.0;
 
+	bool do_marshak_left_boundary_ = false;
+	double T_marshak_left_ = 0.0;
+
 	struct RadSystemArgs {
 		int nx;
 		double lx;
@@ -442,7 +445,8 @@ template <typename problem_t> auto RadSystem<problem_t>::ComputeCellOpticalDepth
 	const double tau_L = dx_ * rho_L * RadSystem<problem_t>::ComputeOpacity(rho_L, Tgas_L);
 	const double tau_R = dx_ * rho_R * RadSystem<problem_t>::ComputeOpacity(rho_R, Tgas_R);
 
-	return 0.5 * (tau_L + tau_R);
+//	return (2.0 * tau_L * tau_R) / (tau_L + tau_R); // harmonic mean (bad)
+	return 0.5*(tau_L + tau_R); // arithmetic mean (good)
 }
 
 template <typename problem_t>
@@ -530,7 +534,7 @@ void RadSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 
 		// gather left- and right- state variables
 
-		const double erad_L = x1LeftState_(primRadEnergy_index, i);
+		double erad_L = x1LeftState_(primRadEnergy_index, i);
 		const double erad_R = x1RightState_(primRadEnergy_index, i);
 
 		const double fx_L = x1LeftState_(x1ReducedFlux_index, i);
@@ -559,8 +563,15 @@ void RadSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 
 		// Compute "un-reduced" Fx, ||F||
 
-		const double Fx_L = fx_L * (c_light_ * erad_L);
+		double Fx_L = fx_L * (c_light_ * erad_L);
 		const double Fx_R = fx_R * (c_light_ * erad_R);
+
+		// enforce Marshak boundary condition in Riemann solver
+		if((i == nghost_) && do_marshak_left_boundary_) {
+			const double E_inc = radiation_constant_ * std::pow(T_marshak_left_, 4);
+			erad_L = E_inc;
+			Fx_L = 0.5 * c_light_ * E_inc - 0.5 * (c_light_ * erad_R + 2.0 * Fx_R);
+		}
 
 		// compute radiation pressure tensors
 		const double chi_L = RadSystem<problem_t>::ComputeEddingtonFactor(f_L);
@@ -582,11 +593,21 @@ void RadSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 		const double Pxx_L = (Tdiag_L + Txx_L) * erad_L;
 		const double Pxx_R = (Tdiag_R + Txx_R) * erad_R;
 
+		// asymptotic-preserving correction -- necessary for (at least) PLM
+		const double tau_cell = ComputeCellOpticalDepth(i);
+		//const std::valarray<double> epsilon = {1.0, 1.0}; // no correction
+		//const std::valarray<double> epsilon = {std::min(1.0, 1.0 / tau_cell), 1.0}; // Skinner et al. [does not actually work]
+		const std::valarray<double> epsilon = {std::min(1.0, 1.0 / (tau_cell*tau_cell)), 1.0};
+
+		// inspired by https://arxiv.org/pdf/2102.02212.pdf
+		// ensures that signal speed -> c \sqrt{f_xx} / tau_cell in the diffusion limit
+		const auto S_corr = std::min(1.0, 1.0 / tau_cell);
+
 		// frozen Eddington tensor approximation, following Balsara
 		// (1999) [JQSRT Vol. 61, No. 5, pp. 617–627, 1999], Eq. 46.
 
-		const double S_L = -c_hat_ * std::sqrt(Tdiag_L + Txx_L);
-		const double S_R = c_hat_ * std::sqrt(Tdiag_R + Txx_R);
+		const double S_L = -c_hat_ * S_corr * std::sqrt(Tdiag_L + Txx_L);
+		const double S_R = c_hat_ * S_corr * std::sqrt(Tdiag_R + Txx_R);
 
 		assert(std::abs(S_L) <= c_hat_); // NOLINT
 		assert(std::abs(S_R) <= c_hat_); // NOLINT
@@ -601,10 +622,6 @@ void RadSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 
 		const std::valarray<double> U_L = {erad_L, Fx_L};
 		const std::valarray<double> U_R = {erad_R, Fx_R};
-
-		const double tau_cell = ComputeCellOpticalDepth(i);
-		const std::valarray<double> epsilon = {std::min(1.0, 1.0 / tau_cell), 1.0};
-		// const std::valarray<double> epsilon = {1.0, 1.0};
 
 		const std::valarray<double> F_star =
 		    (S_R / (S_R - S_L)) * F_L - (S_L / (S_R - S_L)) * F_R +
