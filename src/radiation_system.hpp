@@ -445,8 +445,8 @@ template <typename problem_t> auto RadSystem<problem_t>::ComputeCellOpticalDepth
 	const double tau_L = dx_ * rho_L * RadSystem<problem_t>::ComputeOpacity(rho_L, Tgas_L);
 	const double tau_R = dx_ * rho_R * RadSystem<problem_t>::ComputeOpacity(rho_R, Tgas_R);
 
-//	return (2.0 * tau_L * tau_R) / (tau_L + tau_R); // harmonic mean (bad)
-	return 0.5*(tau_L + tau_R); // arithmetic mean (good)
+	return (2.0 * tau_L * tau_R) / (tau_L + tau_R); // harmonic mean
+//	return 0.5*(tau_L + tau_R); // arithmetic mean
 }
 
 template <typename problem_t>
