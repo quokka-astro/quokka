@@ -117,7 +117,7 @@ template <typename problem_t> class HyperbolicSystem
 	[[nodiscard]] auto time() const -> double;
 	[[nodiscard]] auto dt() const -> double;
 
-	// inline functions:
+	// static member functions
 
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto MC(double a, double b)
 	    -> double
@@ -135,6 +135,20 @@ template <typename problem_t> class HyperbolicSystem
 		// Not recommended.
 		return 4.0 * std::max(0., std::min(a, std::min((1. / 6.) * b + (1. / 3.) * a, b)));
 	}
+
+	static void ReconstructStatesConstant(array_t &q, array_t &leftState, array_t &rightState,
+					      std::pair<int, int> range, int nvars);
+	static void ReconstructStatesPLM(array_t &q, array_t &leftState, array_t &rightState,
+					      std::pair<int, int> range, int nvars);
+	static void ReconstructStatesPPM(array_t &q, array_t &leftState, array_t &rightState,
+					      std::pair<int, int> range, int nvars);
+
+	static auto ComputeTimestep() -> double;
+	static void CopyVars(array_t &src, array_t &dest, std::pair<int, int> range, int nvars);
+	static auto ComputeResidual(array_t &cur, array_t &prev, std::pair<int, int> range, int nvars) -> double;
+	static auto ComputeNorm(array_t &arr, std::pair<int, int> range, int nvars) -> double;
+
+	// non-static member functions
 
 	virtual void FillGhostZones(array_t &cons);
 	virtual void ConservedToPrimitive(array_t &cons, std::pair<int, int> range) = 0;
@@ -159,11 +173,6 @@ template <typename problem_t> class HyperbolicSystem
 	array_t x1RightState_;
 	array_t x1Flux_;
 	array_t x1FluxDiffusive_;
-
-	// array_t x2LeftState_;
-	// array_t x2RightState_;
-	// array_t x2Flux_;
-	// array_t x2FluxDiffusive_;
 
 	double cflNumber_ = 1.0;
 	double dt_ = 0;
@@ -206,17 +215,7 @@ template <typename problem_t> class HyperbolicSystem
 	virtual void AddFluxesRK2(array_t &U0, array_t &U1);
 	void SaveFluxes(std::pair<int, int> range);
 
-	void ReconstructStatesConstant(array_t &q, std::pair<int, int> range);
-	void ReconstructStatesPLM(array_t &q, std::pair<int, int> range);
-	void ReconstructStatesPPM(array_t &q, std::pair<int, int> range);
-
 	virtual void PredictStep(std::pair<int, int> range);
-	auto ComputeTimestep() -> double;
-	void CopyVars(array_t &src, array_t &dest, std::pair<int, int> range);
-	auto ComputeResidual(array_t &cur, array_t &prev, std::pair<int, int> range) const
-	    -> double;
-	auto ComputeNorm(array_t &arr, std::pair<int, int> range) const -> double;
-
 	virtual auto ComputeTimestep(double dt_max) -> double = 0;
 	virtual void ComputeFluxes(std::pair<int, int> range) = 0;
 	virtual void ComputeFirstOrderFluxes(std::pair<int, int> range) = 0;
@@ -318,7 +317,9 @@ template <typename problem_t> void HyperbolicSystem<problem_t>::FillGhostZones(a
 
 template <typename problem_t>
 void HyperbolicSystem<problem_t>::ReconstructStatesConstant(array_t &q,
-							    const std::pair<int, int> range)
+								array_t &leftState, array_t &rightState,
+							    const std::pair<int, int> range,
+								const int nvars)
 {
 	// By convention, the interfaces are defined on the left edge of each
 	// zone, i.e. xleft_(i) is the "left"-side of the interface at
@@ -326,21 +327,24 @@ void HyperbolicSystem<problem_t>::ReconstructStatesConstant(array_t &q,
 	// interface at the *left* edge of zone i.
 
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
-	for (int n = 0; n < nvars_; ++n) {
+	for (int n = 0; n < nvars; ++n) {
 		for (int i = range.first; i < (range.second + 1); ++i) {
 
 			// Use piecewise-constant reconstruction
 			// (This converges at first order in spatial
 			// resolution.)
 
-			x1LeftState_(n, i) = q(n, i - 1);
-			x1RightState_(n, i) = q(n, i);
+			leftState(n, i) = q(n, i - 1);
+			rightState(n, i) = q(n, i);
 		}
 	}
 }
 
 template <typename problem_t>
-void HyperbolicSystem<problem_t>::ReconstructStatesPLM(array_t &q, const std::pair<int, int> range)
+void HyperbolicSystem<problem_t>::ReconstructStatesPLM(array_t &q,
+								array_t &leftState, array_t &rightState,
+							    const std::pair<int, int> range,
+								const int nvars)
 {
 	// Unlike PPM, PLM with the MC limiter is TVD.
 	// (There are no spurious oscillations, *except* in the slow-moving shock problem,
@@ -356,7 +360,7 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPLM(array_t &q, const std::pa
 
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
 
-	for (int n = 0; n < nvars_; ++n) {
+	for (int n = 0; n < nvars; ++n) {
 		for (int i = range.first; i < (range.second + 1); ++i) {
 
 			// Use piecewise-linear reconstruction
@@ -365,22 +369,25 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPLM(array_t &q, const std::pa
 			const auto lslope = MC(q(n, i) - q(n, i - 1), q(n, i - 1) - q(n, i - 2));
 			const auto rslope = MC(q(n, i + 1) - q(n, i), q(n, i) - q(n, i - 1));
 
-			x1LeftState_(n, i) = q(n, i - 1) + 0.25 * lslope; // NOLINT
-			x1RightState_(n, i) = q(n, i) - 0.25 * rslope;	  // NOLINT
+			leftState(n, i) = q(n, i - 1) + 0.25 * lslope; // NOLINT
+			rightState(n, i) = q(n, i) - 0.25 * rslope;	  // NOLINT
 		}
 	}
 
 	// Important final step: ensure that velocity does not exceed c
 	// in any cell where v^2 > c, reconstruct using first-order method for all velocity
 	// components (must be done by user)
-	ComputeFlatteningCoefficients(std::make_pair(-2 + nghost_, nghost_ + nx_ + 2));
+	//ComputeFlatteningCoefficients(std::make_pair(-2 + nghost_, nghost_ + nx_ + 2));
 
 	// Apply shock flattening
-	FlattenShocks(q, range);
+	//FlattenShocks(q, range);
 }
 
 template <typename problem_t>
-void HyperbolicSystem<problem_t>::ReconstructStatesPPM(array_t &q, const std::pair<int, int> range)
+void HyperbolicSystem<problem_t>::ReconstructStatesPPM(array_t &q,
+								array_t &leftState, array_t &rightState,
+							    const std::pair<int, int> range,
+								const int nvars)
 {
 	// By convention, the interfaces are defined on the left edge of each
 	// zone, i.e. xleft_(i) is the "left"-side of the interface at the left
@@ -389,7 +396,7 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(array_t &q, const std::pa
 
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
 
-	for (int n = 0; n < nvars_; ++n) {
+	for (int n = 0; n < nvars; ++n) {
 		for (int i = range.first; i < (range.second + 1); ++i) {
 			// PPM reconstruction following Colella & Woodward (1984), with some
 			// modifications following Mignone (2014), as implemented in Athena++.
@@ -408,14 +415,14 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(array_t &q, const std::pa
 						 (coef_1 * q(n, i - 1) + coef_2 * q(n, i - 2));
 
 			// a_R,(i-1) in C&W
-			x1LeftState_(n, i) = interface;
+			leftState(n, i) = interface;
 
 			// a_L,i in C&W
-			x1RightState_(n, i) = interface;
+			rightState(n, i) = interface;
 		}
 	}
 
-	for (int n = 0; n < nvars_; ++n) {
+	for (int n = 0; n < nvars; ++n) {
 		for (int i = range.first; i < range.second; ++i) {
 			// (2.) Constrain interface value to lie between adjacent cell-averaged
 			// values (equivalent to step 2b in Athena++ [ppm_simple.cpp]). [See Eq. B8
@@ -426,8 +433,8 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(array_t &q, const std::pa
 			    std::minmax({q(n, i - 1), q(n, i), q(n, i + 1)}); // modify in 3d !!
 
 			// get interfaces
-			const double a_minus = x1RightState_(n, i);
-			const double a_plus = x1LeftState_(n, i + 1);
+			const double a_minus = rightState(n, i);
+			const double a_plus = leftState(n, i + 1);
 
 			// left side of zone i
 			const double new_a_minus = std::clamp(a_minus, bounds.first, bounds.second);
@@ -435,16 +442,16 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(array_t &q, const std::pa
 			// right side of zone i
 			const double new_a_plus = std::clamp(a_plus, bounds.first, bounds.second);
 
-			x1RightState_(n, i) = new_a_minus;
-			x1LeftState_(n, i + 1) = new_a_plus;
+			rightState(n, i) = new_a_minus;
+			leftState(n, i + 1) = new_a_plus;
 		}
 	}
 
-	for (int n = 0; n < nvars_; ++n) {
+	for (int n = 0; n < nvars; ++n) {
 		for (int i = range.first; i < range.second; ++i) {
 
-			const double a_minus = x1RightState_(n, i);   // a_L,i in C&W
-			const double a_plus = x1LeftState_(n, i + 1); // a_R,i in C&W
+			const double a_minus = rightState(n, i);   // a_L,i in C&W
+			const double a_plus = leftState(n, i + 1); // a_R,i in C&W
 			const double a = q(n, i);		      // a_i in C&W
 
 			const double dq_minus = (a - a_minus);
@@ -487,18 +494,18 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(array_t &q, const std::pa
 				}
 			}
 
-			x1RightState_(n, i) = new_a_minus;
-			x1LeftState_(n, i + 1) = new_a_plus;
+			rightState(n, i) = new_a_minus;
+			leftState(n, i + 1) = new_a_plus;
 		}
 	}
 
 	// Important final step: ensure that velocity does not exceed c
 	// in any cell where v^2 > c, reconstruct using first-order method for all velocity
 	// components (must be done by user)
-	ComputeFlatteningCoefficients(std::make_pair(-2 + nghost_, nghost_ + nx_ + 2));
+	//ComputeFlatteningCoefficients(std::make_pair(-2 + nghost_, nghost_ + nx_ + 2));
 
 	// Apply shock flattening
-	FlattenShocks(q, range);
+	//FlattenShocks(q, range);
 }
 
 template <typename problem_t>
@@ -579,9 +586,10 @@ auto HyperbolicSystem<problem_t>::CheckStatesValid(array_t & /*cons*/,
 
 template <typename problem_t>
 void HyperbolicSystem<problem_t>::CopyVars(array_t &src, array_t &dest,
-					   const std::pair<int, int> range)
+					   const std::pair<int, int> range,
+					   const int nvars)
 {
-	for (int n = 0; n < nvars_; ++n) {
+	for (int n = 0; n < nvars; ++n) {
 		for (int i = range.first; i < range.second; ++i) {
 			dest(n, i) = src(n, i);
 		}
@@ -590,10 +598,11 @@ void HyperbolicSystem<problem_t>::CopyVars(array_t &src, array_t &dest,
 
 template <typename problem_t>
 auto HyperbolicSystem<problem_t>::ComputeResidual(array_t &cur, array_t &prev,
-						  const std::pair<int, int> range) const -> double
+						  const std::pair<int, int> range,
+						  const int nvars) -> double
 {
 	double norm = 0.;
-	for (int n = 0; n < nvars_; ++n) {
+	for (int n = 0; n < nvars; ++n) {
 		double comp = 0.;
 		for (int i = range.first; i < range.second; ++i) {
 			comp += std::abs(cur(n, i) - prev(n, i));
@@ -605,11 +614,12 @@ auto HyperbolicSystem<problem_t>::ComputeResidual(array_t &cur, array_t &prev,
 }
 
 template <typename problem_t>
-auto HyperbolicSystem<problem_t>::ComputeNorm(array_t &arr, const std::pair<int, int> range) const
+auto HyperbolicSystem<problem_t>::ComputeNorm(array_t &arr, const std::pair<int, int> range,
+							const int nvars)
     -> double
 {
 	double norm = 0.;
-	for (int n = 0; n < nvars_; ++n) {
+	for (int n = 0; n < nvars; ++n) {
 		double comp = 0.;
 		for (int i = range.first; i < range.second; ++i) {
 			comp += std::abs(arr(n, i));
@@ -637,7 +647,11 @@ template <typename problem_t> void HyperbolicSystem<problem_t>::AdvanceTimestepR
 	// Stage 1 of RK2-SSP
 	FillGhostZones(consVar_);
 	ConservedToPrimitive(consVar_, std::make_pair(0, dim1_));
-	ReconstructStatesPPM(primVar_, ppm_range);
+
+	ReconstructStatesPPM(primVar_, x1LeftState_, x1RightState_, ppm_range, nvars_);
+	ComputeFlatteningCoefficients(std::make_pair(-2 + nghost_, nghost_ + nx_ + 2));
+	FlattenShocks(primVar_, ppm_range);
+
 	ComputeFluxes(cell_range);
 	ComputeFirstOrderFluxes(cell_range);
 	PredictStep(cell_range);
@@ -649,7 +663,11 @@ template <typename problem_t> void HyperbolicSystem<problem_t>::AdvanceTimestepR
 	// Stage 2 of RK2-SSP
 	FillGhostZones(consVarPredictStep_);
 	ConservedToPrimitive(consVarPredictStep_, std::make_pair(0, dim1_));
-	ReconstructStatesPPM(primVar_, ppm_range);
+
+	ReconstructStatesPPM(primVar_, x1LeftState_, x1RightState_, ppm_range, nvars_);
+	ComputeFlatteningCoefficients(std::make_pair(-2 + nghost_, nghost_ + nx_ + 2));
+	FlattenShocks(primVar_, ppm_range);
+
 	ComputeFluxes(cell_range);
 	ComputeFirstOrderFluxes(cell_range);
 	AddFluxesRK2(consVar_, consVarPredictStep_);
@@ -677,12 +695,12 @@ template <typename problem_t> void HyperbolicSystem<problem_t>::AdvanceTimestepS
 	// Initialize data
 	dt_ = dt;
 	// ensure that consVarPredictStep_ is initialized
-	CopyVars(consVar_, consVarPredictStep_, cell_range);
-	CopyVars(consVar_, consVarPredictStepPrev_, cell_range);
+	CopyVars(consVar_, consVarPredictStep_, cell_range, nvars_);
+	CopyVars(consVar_, consVarPredictStepPrev_, cell_range, nvars_);
 
 	// begin SDC loop
 	const double rtol = 1.0e-10; // relative tolerance for L1 residual
-	const double normPrev = ComputeNorm(consVar_, cell_range);
+	const double normPrev = ComputeNorm(consVar_, cell_range, nvars_);
 	const int maxIterationCount = 50;
 	double res = NAN;
 	int j = 0;
@@ -693,7 +711,7 @@ template <typename problem_t> void HyperbolicSystem<problem_t>::AdvanceTimestepS
 		ConservedToPrimitive(consVarPredictStepPrev_, std::make_pair(0, dim1_));
 
 		// Step 1a: Compute transport terms using state U^{t+1,k}
-		ReconstructStatesPLM(primVar_, ppm_range); // PPM is unstable for SDC2!
+		ReconstructStatesPLM(primVar_, x1LeftState_, x1RightState_, ppm_range, nvars_); // PPM is unstable for SDC2!
 		ComputeFluxes(cell_range);
 		ComputeFirstOrderFluxes(cell_range);
 
@@ -704,8 +722,8 @@ template <typename problem_t> void HyperbolicSystem<problem_t>::AdvanceTimestepS
 
 		if (j == 0) {
 			// these terms correspond to the previous timestep
-			CopyVars(advectionFluxes_, advectionFluxesU0_, cell_range);
-			CopyVars(reactionTerms_, reactionTermsU0_, cell_range);
+			CopyVars(advectionFluxes_, advectionFluxesU0_, cell_range, nvars_);
+			CopyVars(reactionTerms_, reactionTermsU0_, cell_range, nvars_);
 		}
 
 		// Add SDC source terms to advectionFluxes_ following Zingale et al., ApJ 886:105
@@ -727,7 +745,7 @@ template <typename problem_t> void HyperbolicSystem<problem_t>::AdvanceTimestepS
 		AddSourceTerms(consVar_, consVarPredictStep_, cell_range);
 
 		// Step 2: Check for convergence of |U^{t+1, k+1} - U^{t+1, k}|
-		res = ComputeResidual(consVarPredictStep_, consVarPredictStepPrev_, cell_range) /
+		res = ComputeResidual(consVarPredictStep_, consVarPredictStepPrev_, cell_range, nvars_) /
 		      normPrev;
 
 		if (res <= rtol) {
@@ -735,7 +753,7 @@ template <typename problem_t> void HyperbolicSystem<problem_t>::AdvanceTimestepS
 		}
 
 		// Step 3: Save current iteration
-		CopyVars(consVarPredictStep_, consVarPredictStepPrev_, cell_range);
+		CopyVars(consVarPredictStep_, consVarPredictStepPrev_, cell_range, nvars_);
 	}
 
 	// AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
@@ -748,7 +766,7 @@ template <typename problem_t> void HyperbolicSystem<problem_t>::AdvanceTimestepS
 	    res <= rtol, "SDC2 iteration exceeded maximum iteration count, but did not converge.");
 
 	// If converged, copy final solution to consVar_
-	CopyVars(consVarPredictStep_, consVar_, cell_range);
+	CopyVars(consVarPredictStep_, consVar_, cell_range, nvars_);
 
 	// Adjust our clock
 	time_ += dt_;

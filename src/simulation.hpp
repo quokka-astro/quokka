@@ -68,6 +68,7 @@ class SingleLevelSimulation
 	amrex::Real dt_ = NAN;
 	amrex::Real tNow_ = NAN;
 	amrex::Real stopTime_ = NAN;
+	amrex::Real cflNumber_ = 1.0;
 
 	SingleLevelSimulation()
 	{
@@ -107,6 +108,9 @@ void SingleLevelSimulation<problem_t>::readParameters()
 
 	// Default nsteps to 10, allow us to set it to something else in the inputs file
 	pp.query("max_timesteps", maxTimesteps_);
+
+	// Default CFL number == 1.0, set to whatever is in the file
+	pp.query("cfl", cflNumber_);
 }
 
 template <typename problem_t>
