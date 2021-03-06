@@ -103,9 +103,9 @@ template <typename problem_t> class HyperbolicSystem
 	array_t consVar_;
 
 	/// Computes timestep and advances system
-	void AdvanceTimestep();
-	virtual void AdvanceTimestep(double dt_max);
-	void AdvanceTimestepSDC2(double dt);
+	//void AdvanceTimestep();
+	//virtual void AdvanceTimestep(double dt_max);
+	//void AdvanceTimestepSDC2(double dt);
 
 	// setter functions:
 
@@ -150,12 +150,12 @@ template <typename problem_t> class HyperbolicSystem
 	static auto ComputeResidual(array_t &cur, array_t &prev, std::pair<int, int> range, int nvars) -> double;
 	static auto ComputeNorm(array_t &arr, std::pair<int, int> range, int nvars) -> double;
 
-	static void AdvanceTimestepRK2(const double dt, array_t &consVar, std::pair<int,int> cell_range, const int nvars);
+	//static void AdvanceTimestepRK2(const double dt, array_t &consVar, std::pair<int,int> cell_range, const int nvars);
 
 	// non-static member functions
 
 	virtual void FillGhostZones(array_t &cons);
-	virtual void ConservedToPrimitive(array_t &cons, std::pair<int, int> range) = 0;
+	//virtual void ConservedToPrimitive(array_t &cons, std::pair<int, int> range) = 0;
 	virtual void AddSourceTerms(array_t &U_prev, array_t &U_new, std::pair<int, int> range);
 	virtual void ComputeSourceTermsExplicit(array_t &U_prev, array_t &src,
 						std::pair<int, int> range);
@@ -618,6 +618,7 @@ auto HyperbolicSystem<problem_t>::ComputeNorm(array_t &arr, const std::pair<int,
 	return std::sqrt(norm);
 }
 
+#if 0
 template <typename problem_t> void HyperbolicSystem<problem_t>::AdvanceTimestepRK2(const double dt,
 	array_t &consVar, std::pair<int,int> cell_range, const int nvars)
 {
@@ -673,7 +674,9 @@ template <typename problem_t> void HyperbolicSystem<problem_t>::AdvanceTimestepR
 	// Add source terms via operator splitting
 	AddSourceTerms(consVar, consVar, cell_range);
 }
+#endif
 
+#if 0
 template <typename problem_t> void HyperbolicSystem<problem_t>::AdvanceTimestepSDC2(const double dt)
 {
 	// Use a second-order SDC method to advance the radiation subsystem,
@@ -762,5 +765,6 @@ template <typename problem_t> void HyperbolicSystem<problem_t>::AdvanceTimestepS
 	time_ += dt_;
 	dtPrev_ = dt_;
 }
+#endif
 
 #endif // HYPERBOLIC_SYSTEM_HPP_
