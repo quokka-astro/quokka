@@ -27,20 +27,20 @@ template <typename problem_t> class LinearAdvectionSystem : public HyperbolicSys
 
 	// static member functions
 
-	static void ConservedToPrimitive(array_t &cons, array_t &primVar, std::pair<int, int> range,
+	static void ConservedToPrimitive(arrayconst_t &cons, array_t &primVar, std::pair<int, int> range,
 					 int nvars);
 	static auto ComputeTimestep(double dt_max, double cflNumber, double dx, double advectionVx)
 	    -> double;
-	static void ComputeFluxes(array_t &x1Flux, array_t &x1LeftState, array_t &x1RightState,
+	static void ComputeFluxes(array_t &x1Flux, arrayconst_t &x1LeftState, arrayconst_t &x1RightState,
 				  double advectionVx, std::pair<int, int> range, int nvars);
-	static auto ComputeMass(array_t &density, double dx,
+	static auto ComputeMass(arrayconst_t &density, double dx,
 						   std::pair<int, int> range) -> double;
 	static void FillGhostZones(array_t &cons, int nx, int nghost,
 						      int nvars);
 };
 
 template <typename problem_t>
-auto LinearAdvectionSystem<problem_t>::ComputeMass(array_t &density, const double dx,
+auto LinearAdvectionSystem<problem_t>::ComputeMass(arrayconst_t &density, const double dx,
 						   std::pair<int, int> range) -> double
 {
 	const int j = 1;
@@ -89,7 +89,7 @@ void LinearAdvectionSystem<problem_t>::FillGhostZones(array_t &cons, const int n
 }
 
 template <typename problem_t>
-void LinearAdvectionSystem<problem_t>::ConservedToPrimitive(array_t &cons,
+void LinearAdvectionSystem<problem_t>::ConservedToPrimitive(arrayconst_t &cons,
 								array_t &primVar,
 							    const std::pair<int, int> range,
 								const int nvars)
@@ -106,7 +106,7 @@ void LinearAdvectionSystem<problem_t>::ConservedToPrimitive(array_t &cons,
 
 template <typename problem_t>
 void LinearAdvectionSystem<problem_t>::ComputeFluxes(array_t &x1Flux, 
-							 array_t &x1LeftState, array_t &x1RightState,
+							 arrayconst_t &x1LeftState, arrayconst_t &x1RightState,
 							 const double advectionVx,
 						     const std::pair<int, int> range,
 						     const int nvars)

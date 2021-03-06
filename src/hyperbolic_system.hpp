@@ -26,7 +26,8 @@
 /// Provide type-safe global sign ('sgn') function.
 template <typename T> auto sgn(T val) -> int { return (T(0) < val) - (val < T(0)); }
 
-using array_t = amrex::Array4<amrex::Real>;
+using array_t = amrex::Array4<amrex::Real> const;
+using arrayconst_t = amrex::Array4<const amrex::Real> const;
 
 /// Class for a hyperbolic system of conservation laws (Cannot be instantiated,
 /// must be subclassed.)
@@ -61,23 +62,23 @@ template <typename problem_t> class HyperbolicSystem
 				std::min(2.0 * std::abs(a), 2.0 * std::abs(b)));
 	}
 
-	static void ReconstructStatesConstant(array_t &q, array_t &leftState, array_t &rightState,
+	static void ReconstructStatesConstant(arrayconst_t &q, array_t &leftState, array_t &rightState,
 					      std::pair<int, int> range, int nvars);
-	static void ReconstructStatesPLM(array_t &q, array_t &leftState, array_t &rightState,
+	static void ReconstructStatesPLM(arrayconst_t &q, array_t &leftState, array_t &rightState,
 					 std::pair<int, int> range, int nvars);
-	static void ReconstructStatesPPM(array_t &q, array_t &leftState, array_t &rightState,
+	static void ReconstructStatesPPM(arrayconst_t &q, array_t &leftState, array_t &rightState,
 					 std::pair<int, int> range, int nvars);
 
-	static void CopyVars(array_t &src, array_t &dest, std::pair<int, int> range, int nvars);
-	static auto ComputeResidual(array_t &cur, array_t &prev, std::pair<int, int> range,
+	static void CopyVars(arrayconst_t &src, array_t &dest, std::pair<int, int> range, int nvars);
+	static auto ComputeResidual(arrayconst_t &cur, arrayconst_t &prev, std::pair<int, int> range,
 				    int nvars) -> double;
-	static auto ComputeNorm(array_t &arr, std::pair<int, int> range, int nvars) -> double;
+	static auto ComputeNorm(arrayconst_t &arr, std::pair<int, int> range, int nvars) -> double;
 
-	static void AddFluxesRK2(array_t &U_new, array_t &U0, array_t &U1, array_t &x1Flux,
+	static void AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayconst_t &U1, arrayconst_t &x1Flux,
 				 double dt, double dx, std::pair<int, int> range, int nvars);
-	static void PredictStep(array_t &consVarOld, array_t &consVarNew, array_t &x1Flux,
+	static void PredictStep(arrayconst_t &consVarOld, array_t &consVarNew, arrayconst_t &x1Flux,
 				double dt, double dx, std::pair<int, int> range, int nvars);
-	static void SaveFluxes(array_t &advectionFluxes, array_t &x1Flux, double dx, std::pair<int, int> range, int nvars);
+	static void SaveFluxes(array_t &advectionFluxes, arrayconst_t &x1Flux, double dx, std::pair<int, int> range, int nvars);
 
 	// static void AdvanceTimestepRK2(const double dt, array_t &consVar, std::pair<int,int>
 	// cell_range, const int nvars);
@@ -88,7 +89,7 @@ template <typename problem_t> class HyperbolicSystem
 	virtual void AddSourceTerms(array_t &U_prev, array_t &U_new, std::pair<int, int> range);
 	virtual void ComputeSourceTermsExplicit(array_t &U_prev, array_t &src,
 						std::pair<int, int> range);
-	virtual auto CheckStatesValid(array_t &cons, std::pair<int, int> range) -> bool;
+	virtual auto CheckStatesValid(arrayconst_t &cons, std::pair<int, int> range) -> bool;
 	virtual void ComputeFlatteningCoefficients(std::pair<int, int> range);
 	virtual void FlattenShocks(array_t &q, std::pair<int, int> range);
 
@@ -221,7 +222,7 @@ template <typename problem_t> void HyperbolicSystem<problem_t>::FillGhostZones(a
 }
 
 template <typename problem_t>
-void HyperbolicSystem<problem_t>::ReconstructStatesConstant(array_t &q, array_t &leftState,
+void HyperbolicSystem<problem_t>::ReconstructStatesConstant(arrayconst_t &q, array_t &leftState,
 							    array_t &rightState,
 							    const std::pair<int, int> range,
 							    const int nvars)
@@ -249,7 +250,7 @@ void HyperbolicSystem<problem_t>::ReconstructStatesConstant(array_t &q, array_t 
 }
 
 template <typename problem_t>
-void HyperbolicSystem<problem_t>::ReconstructStatesPLM(array_t &q, array_t &leftState,
+void HyperbolicSystem<problem_t>::ReconstructStatesPLM(arrayconst_t &q, array_t &leftState,
 						       array_t &rightState,
 						       const std::pair<int, int> range,
 						       const int nvars)
@@ -294,7 +295,7 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPLM(array_t &q, array_t &left
 }
 
 template <typename problem_t>
-void HyperbolicSystem<problem_t>::ReconstructStatesPPM(array_t &q, array_t &leftState,
+void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q, array_t &leftState,
 						       array_t &rightState,
 						       const std::pair<int, int> range,
 						       const int nvars)
@@ -421,7 +422,7 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(array_t &q, array_t &left
 }
 
 template <typename problem_t>
-void HyperbolicSystem<problem_t>::SaveFluxes(array_t &advectionFluxes, array_t &x1Flux, const double dx, const std::pair<int, int> range, const int nvars)
+void HyperbolicSystem<problem_t>::SaveFluxes(array_t &advectionFluxes, arrayconst_t &x1Flux, const double dx, const std::pair<int, int> range, const int nvars)
 {
 	// By convention, the fluxes are defined on the left edge of each zone,
 	// i.e. flux_(i) is the flux *into* zone i through the interface on the
@@ -438,8 +439,8 @@ void HyperbolicSystem<problem_t>::SaveFluxes(array_t &advectionFluxes, array_t &
 }
 
 template <typename problem_t>
-void HyperbolicSystem<problem_t>::PredictStep(array_t &consVarOld, array_t &consVarNew,
-					      array_t &x1Flux, const double dt, const double dx,
+void HyperbolicSystem<problem_t>::PredictStep(arrayconst_t &consVarOld, array_t &consVarNew,
+					      arrayconst_t &x1Flux, const double dt, const double dx,
 					      const std::pair<int, int> range, const int nvars)
 {
 	// By convention, the fluxes are defined on the left edge of each zone,
@@ -458,8 +459,8 @@ void HyperbolicSystem<problem_t>::PredictStep(array_t &consVarOld, array_t &cons
 }
 
 template <typename problem_t>
-void HyperbolicSystem<problem_t>::AddFluxesRK2(array_t &U_new, array_t &U0, array_t &U1,
-					       array_t &x1Flux, const double dt, const double dx,
+void HyperbolicSystem<problem_t>::AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayconst_t &U1,
+					       arrayconst_t &x1Flux, const double dt, const double dx,
 					       const std::pair<int, int> range, const int nvars)
 {
 	// By convention, the fluxes are defined on the left edge of each zone,
@@ -483,14 +484,14 @@ void HyperbolicSystem<problem_t>::AddFluxesRK2(array_t &U_new, array_t &U0, arra
 }
 
 template <typename problem_t>
-auto HyperbolicSystem<problem_t>::CheckStatesValid(array_t & /*cons*/,
+auto HyperbolicSystem<problem_t>::CheckStatesValid(arrayconst_t & /*cons*/,
 						   const std::pair<int, int> /*range*/) -> bool
 {
 	return true;
 }
 
 template <typename problem_t>
-void HyperbolicSystem<problem_t>::CopyVars(array_t &src, array_t &dest,
+void HyperbolicSystem<problem_t>::CopyVars(arrayconst_t &src, array_t &dest,
 					   const std::pair<int, int> range, const int nvars)
 {
 	const int j = 1;
@@ -504,7 +505,7 @@ void HyperbolicSystem<problem_t>::CopyVars(array_t &src, array_t &dest,
 }
 
 template <typename problem_t>
-auto HyperbolicSystem<problem_t>::ComputeResidual(array_t &cur, array_t &prev,
+auto HyperbolicSystem<problem_t>::ComputeResidual(arrayconst_t &cur, arrayconst_t &prev,
 						  const std::pair<int, int> range, const int nvars)
     -> double
 {
@@ -524,7 +525,7 @@ auto HyperbolicSystem<problem_t>::ComputeResidual(array_t &cur, array_t &prev,
 }
 
 template <typename problem_t>
-auto HyperbolicSystem<problem_t>::ComputeNorm(array_t &arr, const std::pair<int, int> range,
+auto HyperbolicSystem<problem_t>::ComputeNorm(arrayconst_t &arr, const std::pair<int, int> range,
 					      const int nvars) -> double
 {
 	const int j = 1;

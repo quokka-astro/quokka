@@ -55,6 +55,7 @@ class SingleLevelSimulation
 	amrex::DistributionMapping simDistributionMapping_;
 
 	// we allocate two multifabs; one will store the old state, the other the new.
+	// TODO(ben): these need to be initialized!!
 	amrex::MultiFab state_old_;
 	amrex::MultiFab state_new_;
 

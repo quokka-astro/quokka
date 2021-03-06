@@ -36,10 +36,10 @@ template <typename problem_t> class AdvectionSimulation : public SingleLevelSimu
 	auto computeTimestepLocal() -> amrex::Real override;
 	void setInitialConditions() override;
 	void advanceSingleTimestep() override;
-	void stageOneRK2SSP(amrex::Array4<amrex::Real> const &consVarOld,
+	void stageOneRK2SSP(amrex::Array4<const amrex::Real> const &consVarOld,
 			    amrex::Array4<amrex::Real> const &consVarNew,
 			    const amrex::Box &indexRange, int nvars);
-	void stageTwoRK2SSP(amrex::Array4<amrex::Real> const &consVar,
+	void stageTwoRK2SSP(amrex::Array4<const amrex::Real> const &consVar,
 			    amrex::Array4<amrex::Real> const &consVarNew,
 			    const amrex::Box &indexRange, int nvars);
 
@@ -86,7 +86,7 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::advanceSingle
 	// advance all grids on local processor (Stage 1 of integrator)
 	for (amrex::MFIter iter(state_new_); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox(); // 'validbox' == exclude ghost zones
-		auto const &stateOld = state_old_.array(iter);
+		auto const &stateOld = state_old_.const_array(iter);
 		auto const &stateNew = state_new_.array(iter);
 		stageOneRK2SSP(stateOld, stateNew, indexRange,
 			       ncomp_); // result saved in state_new_
@@ -98,7 +98,7 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::advanceSingle
 	// advance all grids on local processor (Stage 2 of integrator)
 	for (amrex::MFIter iter(state_new_); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox(); // 'validbox' == exclude ghost zones
-		auto const &stateOld = state_old_.array(iter);
+		auto const &stateOld = state_old_.const_array(iter);
 		auto const &stateNew = state_new_.array(iter);
 		stageTwoRK2SSP(stateOld, stateNew, indexRange,
 			       ncomp_); // result saved in state_new_
@@ -106,9 +106,9 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::advanceSingle
 }
 
 template <typename problem_t>
-void AdvectionSimulation<problem_t>::stageOneRK2SSP(amrex::Array4<amrex::Real> const &consVarOld,
-						    amrex::Array4<amrex::Real> const &consVarNew,
-						    const amrex::Box &indexRange, const int nvars)
+void AdvectionSimulation<problem_t>::stageOneRK2SSP(
+    amrex::Array4<const amrex::Real> const &consVarOld,
+    amrex::Array4<amrex::Real> const &consVarNew, const amrex::Box &indexRange, const int nvars)
 {
 	// convert indexRange to cell_range (std::pair<int,int> along x-direction)
 	const auto lowerIndex = indexRange.smallEnd();
@@ -135,14 +135,14 @@ void AdvectionSimulation<problem_t>::stageOneRK2SSP(amrex::Array4<amrex::Real> c
 								cell_range, nvars);
 
 		LinearAdvectionSystem<problem_t>::PredictStep(
-		    consVarOld, consVarNew, x1Flux.array(), dt_, dx_, cell_range, nvars);
+		    consVarOld, consVarNew, x1Flux.array(), dt_, dx_[0], cell_range, nvars);
 	}
 }
 
 template <typename problem_t>
-void AdvectionSimulation<problem_t>::stageTwoRK2SSP(amrex::Array4<amrex::Real> const &consVarOld,
-						    amrex::Array4<amrex::Real> const &consVarNew,
-						    const amrex::Box &indexRange, const int nvars)
+void AdvectionSimulation<problem_t>::stageTwoRK2SSP(
+    amrex::Array4<const amrex::Real> const &consVarOld,
+    amrex::Array4<amrex::Real> const &consVarNew, const amrex::Box &indexRange, const int nvars)
 {
 	// convert indexRange to cell_range (std::pair<int,int> along x-direction)
 	const auto lowerIndex = indexRange.smallEnd();
@@ -167,8 +167,8 @@ void AdvectionSimulation<problem_t>::stageTwoRK2SSP(amrex::Array4<amrex::Real> c
 								cell_range, nvars);
 
 		LinearAdvectionSystem<problem_t>::AddFluxesRK2(consVarNew, consVarOld, consVarNew,
-							       x1Flux.array(), dt_, dx_, cell_range,
-							       nvars);
+							       x1Flux.array(), dt_, dx_[0],
+							       cell_range, nvars);
 	}
 }
 
