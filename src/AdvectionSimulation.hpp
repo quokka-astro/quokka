@@ -34,8 +34,12 @@ template <typename problem_t> class AdvectionSimulation : public SingleLevelSimu
 	auto computeTimestepLocal() -> amrex::Real override;
 	void setInitialConditions() override;
 	void advanceSingleTimestep() override;
-	void stageOneRK2SSP(double dt, array_t &consVar, const amrex::Box &indexRange, int nvars);
-	void stageTwoRK2SSP(double dt, array_t &consVar, const amrex::Box &indexRange, int nvars);
+	void stageOneRK2SSP(amrex::Array4<amrex::Real> const &consVarOld,
+			    amrex::Array4<amrex::Real> const &consVarNew,
+			    const amrex::Box &indexRange, int nvars);
+	void stageTwoRK2SSP(amrex::Array4<amrex::Real> const &consVar,
+			    amrex::Array4<amrex::Real> const &consVarNew,
+			    const amrex::Box &indexRange, int nvars);
 
       protected:
 	const double advectionVx_ = 1.0;
@@ -70,29 +74,36 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::setInitialCon
 
 template <typename problem_t> void AdvectionSimulation<problem_t>::advanceSingleTimestep()
 {
+    // We use the RK2-SSP method here. It needs two registers: one to store the old timestep,
+    // and another to store the intermediate stage (which is reused for the final stage).
+
 	// update ghost zones
 	// TODO(ben): implement
 
 	// advance all grids on local processor (Stage 1 of integrator)
 	for (amrex::MFIter iter(state_new_); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox(); // 'validbox' == exclude ghost zones
-		amrex::Array4<amrex::Real> const &stateNew = state_new_.array(iter);
-		stageOneRK2SSP(dt_, stateNew, indexRange, ncomp_);
+		auto const &stateOld = state_old_.array(iter);
+		auto const &stateNew = state_new_.array(iter);
+		stageOneRK2SSP(stateOld, stateNew, indexRange, ncomp_); // result saved in state_new_
 	}
 
-	// update ghost zones (again)
+	// update ghost zones
 	// TODO(ben): implement
 
 	// advance all grids on local processor (Stage 2 of integrator)
 	for (amrex::MFIter iter(state_new_); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox(); // 'validbox' == exclude ghost zones
-		amrex::Array4<amrex::Real> const &stateNew = state_new_.array(iter);
-		stageTwoRK2SSP(dt_, stateNew, indexRange, ncomp_);
+		auto const &stateOld = state_old_.array(iter);
+		auto const &stateNew = state_new_.array(iter);
+		stageTwoRK2SSP(stateOld, stateNew, indexRange, ncomp_); // result saved in state_new_
 	}
 }
 
 template <typename problem_t>
-void AdvectionSimulation<problem_t>::stageOneRK2SSP(const double dt, array_t &consVar,
+void AdvectionSimulation<problem_t>::stageOneRK2SSP(
+						    amrex::Array4<amrex::Real> const &consVarOld,
+						    amrex::Array4<amrex::Real> const &consVarNew,
 						    const amrex::Box &indexRange, const int nvars)
 {
 	// convert indexRange to cell_range (std::pair<int,int> along x-direction)
@@ -103,31 +114,34 @@ void AdvectionSimulation<problem_t>::stageOneRK2SSP(const double dt, array_t &co
 	const auto ppm_range = std::make_pair(-1 + cell_range.first, 1 + cell_range.second);
 
 	// Allocate temporary arrays
-	const auto [dim1, dim2, dim3] = amrex::length(consVar.arr_);
+	const auto [dim1, dim2, dim3] = amrex::length(consVarOld);
 	array_t primVar(nvars, dim1);
 	array_t x1LeftState(nvars, dim1);
 	array_t x1RightState(nvars, dim1);
-	array_t x1Fluxes(nvars, dim1);
-	array_t consVarPredictStep(nvars, dim1);
+	array_t x1Flux(nvars, dim1);
+	// array_t consVarPredictStep(nvars, dim1);
 
 	// Stage 1 of RK2-SSP
 	{
 		// FillGhostZones(consVar);
-		LinearAdvectionSystem<problem_t>::ConservedToPrimitive(consVar,
-								       std::make_pair(0, dim1));
+		LinearAdvectionSystem<problem_t>::ConservedToPrimitive(consVarOld, primVar,
+								       ppm_range,
+								       nvars); // save to primVar
 		LinearAdvectionSystem<problem_t>::ReconstructStatesPPM(
-		    primVar, x1LeftState, x1RightState, ppm_range, nvars);
-		LinearAdvectionSystem<problem_t>::ComputeFluxes(cell_range);
-		LinearAdvectionSystem<problem_t>::PredictStep(cell_range);
-	}
+		    primVar, x1LeftState, x1RightState, ppm_range,
+		    nvars); // save to x1Left/RightState
+		LinearAdvectionSystem<problem_t>::ComputeFluxes(x1Flux, x1LeftState, x1RightState,
+								advectionVx_, cell_range, nvars);
 
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-	    LinearAdvectionSystem<problem_t>::CheckStatesValid(consVarPredictStep, cell_range),
-	    "[stage 1] Non-realizable states produced. This should not happen!");
+		LinearAdvectionSystem<problem_t>::PredictStep(consVarOld, consVarNew, x1Flux, dt_,
+							      dx_, cell_range, nvars);
+	}
 }
 
 template <typename problem_t>
-void AdvectionSimulation<problem_t>::stageTwoRK2SSP(const double dt, array_t &consVar,
+void AdvectionSimulation<problem_t>::stageTwoRK2SSP(
+						    amrex::Array4<amrex::Real> const &consVarOld,
+						    amrex::Array4<amrex::Real> const &consVarNew,
 						    const amrex::Box &indexRange, const int nvars)
 {
 	// convert indexRange to cell_range (std::pair<int,int> along x-direction)
@@ -138,27 +152,26 @@ void AdvectionSimulation<problem_t>::stageTwoRK2SSP(const double dt, array_t &co
 	const auto ppm_range = std::make_pair(-1 + cell_range.first, 1 + cell_range.second);
 
 	// Allocate temporary arrays
-	const auto [dim1, dim2, dim3] = amrex::length(consVar.arr_);
+	const auto [dim1, dim2, dim3] = amrex::length(consVarOld);
 	array_t primVar(nvars, dim1);
 	array_t x1LeftState(nvars, dim1);
 	array_t x1RightState(nvars, dim1);
-	array_t x1Fluxes(nvars, dim1);
-	array_t consVarPredictStep(nvars, dim1);
+	array_t x1Flux(nvars, dim1);
+	// array_t consVarPredictStep(nvars, dim1);
 
 	// Stage 2 of RK2-SSP
 	{
-		// FillGhostZones(consVarPredictStep);
-		LinearAdvectionSystem<problem_t>::ConservedToPrimitive(consVarPredictStep,
-								       std::make_pair(0, dim1));
+		// FillGhostZones(consVarNew);
+		LinearAdvectionSystem<problem_t>::ConservedToPrimitive(consVarNew, primVar,
+								       ppm_range, nvars);
 		LinearAdvectionSystem<problem_t>::ReconstructStatesPPM(
 		    primVar, x1LeftState, x1RightState, ppm_range, nvars);
-		LinearAdvectionSystem<problem_t>::ComputeFluxes(cell_range);
-		LinearAdvectionSystem<problem_t>::AddFluxesRK2(consVar, consVarPredictStep);
-	}
+		LinearAdvectionSystem<problem_t>::ComputeFluxes(x1Flux, x1LeftState, x1RightState,
+								advectionVx_, cell_range, nvars);
 
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-	    LinearAdvectionSystem<problem_t>::CheckStatesValid(consVar, cell_range),
-	    "[stage 2] Non-realizable states produced. This should not happen!");
+		LinearAdvectionSystem<problem_t>::AddFluxesRK2(consVarNew, consVarOld, consVarNew,
+							       x1Flux, dt_, dx_, cell_range, nvars);
+	}
 }
 
 #endif // ADVECTION_SIMULATION_HPP_
