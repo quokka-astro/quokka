@@ -26,83 +26,13 @@
 /// Provide type-safe global sign ('sgn') function.
 template <typename T> auto sgn(T val) -> int { return (T(0) < val) - (val < T(0)); }
 
-using Real = amrex::Real;
-
-template <int T> struct templatedArray {
-	amrex::Array4<Real> arr_;
-	int ncomp_accessor_ = 0;
-	constexpr static int index_order = T;
-
-	templatedArray() : arr_() {}
-
-	explicit templatedArray(amrex::Array4<Real> arr) : arr_(arr) {}
-
-	templatedArray(amrex::Array4<Real> arr, int ncomp) : arr_(arr), ncomp_accessor_(ncomp) {}
-
-	templatedArray(int ncomp, int dim1, int dim2 = 1, int dim3 = 1)
-	{
-		AllocateArray(ncomp, dim1, dim2, dim3);
-	}
-
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(int n, int i) noexcept -> double &
-	{
-		int j = 0;
-		int k = 0;
-		return arr_(i, j, k, n);
-	}
-
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(int n, int i) const noexcept
-	    -> double
-	{
-		int j = 0;
-		int k = 0;
-		return arr_(i, j, k, n);
-	}
-
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(int i) noexcept -> double &
-	{
-		return arr_(i, 0, 0, ncomp_accessor_);
-	}
-
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(int i) const noexcept -> double
-	{
-		return arr_(i, 0, 0, ncomp_accessor_);
-	}
-
-	void AllocateArray(int ncomp, int dim1, int dim2 = 1, int dim3 = 1);
-	auto SliceArray(int ncomp) -> templatedArray;
-};
-
-// Convenience function to allocate stand-alone amrex::Array4 objects
-template <int T> void templatedArray<T>::AllocateArray(int ncomp, int dim1, int dim2, int dim3)
-{
-	auto size = dim1 * dim2 * dim3 * ncomp;
-	auto *p = new double[size];
-	amrex::Dim3 lower = {0, 0, 0};
-	amrex::Dim3 upper = {dim1, dim2, dim3};
-	arr_ = amrex::Array4<double>(p, lower, upper, ncomp);
-}
-
-// Return a shallow slice corresponding to an individual component.
-// [Array4 objects can be accessed with arr(i,j,k) if there is only one component]
-template <int T> auto templatedArray<T>::SliceArray(int ncomp) -> templatedArray<T>
-{
-	return templatedArray<T>(arr_, ncomp);
-}
-
-enum indexOrderList { X1 = 0, X2 = 1, X3 = 2 };
-
-using array_t = templatedArray<X1>; // default order is (X1, X2, X3) for index operator()
-// using array_t_X2 = templatedArray<X2>;   // order is (X2, X3, X1)
-// using array_t_X3 = templatedArray<X3>;   // order is (X3, X1, X2)
+using array_t = amrex::Array4<amrex::Real>;
 
 /// Class for a hyperbolic system of conservation laws (Cannot be instantiated,
 /// must be subclassed.)
 template <typename problem_t> class HyperbolicSystem
 {
       public:
-	array_t consVar_;
-
 	/// Computes timestep and advances system
 	// void AdvanceTimestep();
 	// virtual void AdvanceTimestep(double dt_max);
@@ -131,15 +61,6 @@ template <typename problem_t> class HyperbolicSystem
 				std::min(2.0 * std::abs(a), 2.0 * std::abs(b)));
 	}
 
-	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto Koren(double a, double b)
-	    -> double
-	{
-		// CAUTION: this limiter is asymmetric (i.e. lim(a,b) != 1/lim(b,a)!)
-		// More accurate in L1 norm than MC, but weird asymmetries in solutions.
-		// Not recommended.
-		return 4.0 * std::max(0., std::min(a, std::min((1. / 6.) * b + (1. / 3.) * a, b)));
-	}
-
 	static void ReconstructStatesConstant(array_t &q, array_t &leftState, array_t &rightState,
 					      std::pair<int, int> range, int nvars);
 	static void ReconstructStatesPLM(array_t &q, array_t &leftState, array_t &rightState,
@@ -156,13 +77,14 @@ template <typename problem_t> class HyperbolicSystem
 				 double dt, double dx, std::pair<int, int> range, int nvars);
 	static void PredictStep(array_t &consVarOld, array_t &consVarNew, array_t &x1Flux,
 				double dt, double dx, std::pair<int, int> range, int nvars);
+	static void SaveFluxes(array_t &advectionFluxes, array_t &x1Flux, double dx, std::pair<int, int> range, int nvars);
+
 	// static void AdvanceTimestepRK2(const double dt, array_t &consVar, std::pair<int,int>
 	// cell_range, const int nvars);
 
 	// non-static member functions
 
 	virtual void FillGhostZones(array_t &cons);
-	// virtual void ConservedToPrimitive(array_t &cons, std::pair<int, int> range) = 0;
 	virtual void AddSourceTerms(array_t &U_prev, array_t &U_new, std::pair<int, int> range);
 	virtual void ComputeSourceTermsExplicit(array_t &U_prev, array_t &src,
 						std::pair<int, int> range);
@@ -171,19 +93,6 @@ template <typename problem_t> class HyperbolicSystem
 	virtual void FlattenShocks(array_t &q, std::pair<int, int> range);
 
       protected:
-	array_t primVar_;
-	array_t consVarPredictStep_;
-	array_t consVarPredictStepPrev_;
-
-	array_t advectionFluxes_;
-	array_t advectionFluxesU0_;
-	array_t reactionTerms_;
-	array_t reactionTermsU0_;
-
-	array_t x1LeftState_;
-	array_t x1RightState_;
-	array_t x1Flux_;
-	array_t x1FluxDiffusive_;
 
 	double cflNumber_ = 1.0;
 	double dt_ = 0;
@@ -207,23 +116,7 @@ template <typename problem_t> class HyperbolicSystem
 		assert((cflNumber_ > 0.0) && (cflNumber_ <= 1.0)); // NOLINT
 
 		dim1_ = nx_ + 2 * nghost_;
-
-		consVar_.AllocateArray(nvars_, dim1_);
-		primVar_.AllocateArray(nvars_, dim1_);
-		consVarPredictStep_.AllocateArray(nvars_, dim1_);
-		consVarPredictStepPrev_.AllocateArray(nvars_, dim1_);
-
-		advectionFluxes_.AllocateArray(nvars_, dim1_);
-		reactionTerms_.AllocateArray(nvars_, dim1_);
-		advectionFluxesU0_.AllocateArray(nvars_, dim1_);
-		reactionTermsU0_.AllocateArray(nvars_, dim1_);
-		x1LeftState_.AllocateArray(nvars_, dim1_);
-		x1RightState_.AllocateArray(nvars_, dim1_);
-		x1Flux_.AllocateArray(nvars_, dim1_);
-		x1FluxDiffusive_.AllocateArray(nvars_, dim1_);
 	}
-
-	void SaveFluxes(std::pair<int, int> range);
 
 	// virtual auto ComputeTimestep(double dt_max) -> double = 0;
 	// virtual void ComputeFluxes(std::pair<int, int> range) = 0;
@@ -296,30 +189,33 @@ template <typename problem_t> void HyperbolicSystem<problem_t>::FillGhostZones(a
 	// x1 right side boundary
 	for (int n = 0; n < nvars_; ++n) {
 		for (int i = nghost_ + nx_; i < nghost_ + nx_ + nghost_; ++i) {
-			cons(n, i) = cons(n, i - nx_);
+			cons(i, j, k, n) = cons(n, i - nx_);
 		}
 	}
 
 	// x1 left side boundary
 	for (int n = 0; n < nvars_; ++n) {
 		for (int i = 0; i < nghost_; ++i) {
-			cons(n, i) = cons(n, i + nx_);
+			cons(i, j, k, n) = cons(n, i + nx_);
 		}
 	}
 #endif
+
+	const int j = 1;
+	const int k = 1;
 
 	// extrapolate boundary conditions
 	// x1 right side boundary
 	for (int n = 0; n < nvars_; ++n) {
 		for (int i = nghost_ + nx_; i < nghost_ + nx_ + nghost_; ++i) {
-			cons(n, i) = cons(n, nghost_ + nx_ - 1);
+			cons(i, j, k, n) = cons(nghost_ + nx_ - 1, j, k, n);
 		}
 	}
 
 	// x1 left side boundary
 	for (int n = 0; n < nvars_; ++n) {
 		for (int i = 0; i < nghost_; ++i) {
-			cons(n, i) = cons(n, nghost_ + 0);
+			cons(i, j, k, n) = cons(nghost_ + 0, j, k, n);
 		}
 	}
 }
@@ -335,6 +231,9 @@ void HyperbolicSystem<problem_t>::ReconstructStatesConstant(array_t &q, array_t 
 	// the left edge of zone i, and xright_(i) is the "right"-side of the
 	// interface at the *left* edge of zone i.
 
+	const int j = 1;
+	const int k = 1;
+
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
 	for (int n = 0; n < nvars; ++n) {
 		for (int i = range.first; i < (range.second + 1); ++i) {
@@ -343,8 +242,8 @@ void HyperbolicSystem<problem_t>::ReconstructStatesConstant(array_t &q, array_t 
 			// (This converges at first order in spatial
 			// resolution.)
 
-			leftState(n, i) = q(n, i - 1);
-			rightState(n, i) = q(n, i);
+			leftState(i, j, k, n) = q(i - 1, j, k, n);
+			rightState(i, j, k, n) = q(i, j, k, n);
 		}
 	}
 }
@@ -368,6 +267,8 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPLM(array_t &q, array_t &left
 	// interface at the *left* edge of zone i.
 
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
+	const int j = 1;
+	const int k = 1;
 
 	for (int n = 0; n < nvars; ++n) {
 		for (int i = range.first; i < (range.second + 1); ++i) {
@@ -375,11 +276,11 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPLM(array_t &q, array_t &left
 			// Use piecewise-linear reconstruction
 			// (This converges at second order in spatial resolution.)
 
-			const auto lslope = MC(q(n, i) - q(n, i - 1), q(n, i - 1) - q(n, i - 2));
-			const auto rslope = MC(q(n, i + 1) - q(n, i), q(n, i) - q(n, i - 1));
+			const auto lslope = MC(q(i, j, k, n) - q(i - 1, j, k, n), q(i - 1, j, k, n) - q(i - 2, j, k, n));
+			const auto rslope = MC(q(i + 1, j, k, n) - q(i, j, k, n), q(i, j, k, n) - q(i - 1, j, k, n));
 
-			leftState(n, i) = q(n, i - 1) + 0.25 * lslope; // NOLINT
-			rightState(n, i) = q(n, i) - 0.25 * rslope;    // NOLINT
+			leftState(i, j, k, n) = q(i - 1, j, k, n) + 0.25 * lslope; // NOLINT
+			rightState(i, j, k, n) = q(i, j, k, n) - 0.25 * rslope;    // NOLINT
 		}
 	}
 
@@ -404,6 +305,8 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(array_t &q, array_t &left
 	// at the *left* edge of zone i.
 
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
+	const int j = 1;
+	const int k = 1;
 
 	for (int n = 0; n < nvars; ++n) {
 		for (int i = range.first; i < (range.second + 1); ++i) {
@@ -420,14 +323,14 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(array_t &q, array_t &left
 
 			const double coef_1 = (7. / 12.);
 			const double coef_2 = (-1. / 12.);
-			const double interface = (coef_1 * q(n, i) + coef_2 * q(n, i + 1)) +
-						 (coef_1 * q(n, i - 1) + coef_2 * q(n, i - 2));
+			const double interface = (coef_1 * q(i, j, k, n) + coef_2 * q(i + 1, j, k, n)) +
+						 (coef_1 * q(i - 1, j, k, n) + coef_2 * q(i - 2, j, k, n));
 
 			// a_R,(i-1) in C&W
-			leftState(n, i) = interface;
+			leftState(i, j, k, n) = interface;
 
 			// a_L,i in C&W
-			rightState(n, i) = interface;
+			rightState(i, j, k, n) = interface;
 		}
 	}
 
@@ -439,11 +342,11 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(array_t &q, array_t &left
 
 			// compute bounds from surrounding cells
 			const std::pair<double, double> bounds =
-			    std::minmax({q(n, i - 1), q(n, i), q(n, i + 1)}); // modify in 3d !!
+			    std::minmax({q(i - 1, j, k, n), q(i, j, k, n), q(i + 1, j, k, n)}); // modify in 3d !!
 
 			// get interfaces
-			const double a_minus = rightState(n, i);
-			const double a_plus = leftState(n, i + 1);
+			const double a_minus = rightState(i, j, k, n);
+			const double a_plus = leftState(i + 1, j, k, n);
 
 			// left side of zone i
 			const double new_a_minus = std::clamp(a_minus, bounds.first, bounds.second);
@@ -451,17 +354,17 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(array_t &q, array_t &left
 			// right side of zone i
 			const double new_a_plus = std::clamp(a_plus, bounds.first, bounds.second);
 
-			rightState(n, i) = new_a_minus;
-			leftState(n, i + 1) = new_a_plus;
+			rightState(i, j, k, n) = new_a_minus;
+			leftState(i + 1, j, k, n) = new_a_plus;
 		}
 	}
 
 	for (int n = 0; n < nvars; ++n) {
 		for (int i = range.first; i < range.second; ++i) {
 
-			const double a_minus = rightState(n, i);   // a_L,i in C&W
-			const double a_plus = leftState(n, i + 1); // a_R,i in C&W
-			const double a = q(n, i);		   // a_i in C&W
+			const double a_minus = rightState(i, j, k, n);   // a_L,i in C&W
+			const double a_plus = leftState(i + 1, j, k, n); // a_R,i in C&W
+			const double a = q(i, j, k, n);		   // a_i in C&W
 
 			const double dq_minus = (a - a_minus);
 			const double dq_plus = (a_plus - a);
@@ -479,7 +382,7 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(array_t &q, array_t &left
 				// Causes subtle, but very weird, oscillations in the Shu-Osher test
 				// problem. However, it is necessary to get a reasonable solution
 				// for the sawtooth advection problem.
-				const double dq0 = MC(q(n, i + 1) - q(n, i), q(n, i) - q(n, i - 1));
+				const double dq0 = MC(q(i + 1, j, k, n) - q(i, j, k, n), q(i, j, k, n) - q(i - 1, j, k, n));
 
 				// use linear reconstruction, following Balsara (2017) [Living Rev
 				// Comput Astrophys (2017) 3:2]
@@ -503,8 +406,8 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(array_t &q, array_t &left
 				}
 			}
 
-			rightState(n, i) = new_a_minus;
-			leftState(n, i + 1) = new_a_plus;
+			rightState(i, j, k, n) = new_a_minus;
+			leftState(i + 1, j, k, n) = new_a_plus;
 		}
 	}
 
@@ -518,16 +421,18 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(array_t &q, array_t &left
 }
 
 template <typename problem_t>
-void HyperbolicSystem<problem_t>::SaveFluxes(const std::pair<int, int> range)
+void HyperbolicSystem<problem_t>::SaveFluxes(array_t &advectionFluxes, array_t &x1Flux, const double dx, const std::pair<int, int> range, const int nvars)
 {
 	// By convention, the fluxes are defined on the left edge of each zone,
 	// i.e. flux_(i) is the flux *into* zone i through the interface on the
 	// left of zone i, and -1.0*flux(i+1) is the flux *into* zone i through
 	// the interface on the right of zone i.
+	const int j = 1;
+	const int k = 1;
 
-	for (int n = 0; n < nvars_; ++n) {
+	for (int n = 0; n < nvars; ++n) {
 		for (int i = range.first; i < range.second; ++i) {
-			advectionFluxes_(n, i) = (-1.0 / dx_) * (x1Flux_(n, i + 1) - x1Flux_(n, i));
+			advectionFluxes(i, j, k, n) = (-1.0 / dx) * (x1Flux(i + 1, j, k, n) - x1Flux(i, j, k, n));
 		}
 	}
 }
@@ -541,11 +446,13 @@ void HyperbolicSystem<problem_t>::PredictStep(array_t &consVarOld, array_t &cons
 	// i.e. flux_(i) is the flux *into* zone i through the interface on the
 	// left of zone i, and -1.0*flux(i+1) is the flux *into* zone i through
 	// the interface on the right of zone i.
+	const int j = 1;
+	const int k = 1;
 
 	for (int n = 0; n < nvars; ++n) {
 		for (int i = range.first; i < range.second; ++i) {
-			consVarNew(n, i) =
-			    consVarOld(n, i) - (dt / dx) * (x1Flux(n, i + 1) - x1Flux(n, i));
+			consVarNew(i, j, k, n) =
+			    consVarOld(i, j, k, n) - (dt / dx) * (x1Flux(i + 1, j, k, n) - x1Flux(i, j, k, n));
 		}
 	}
 }
@@ -559,16 +466,18 @@ void HyperbolicSystem<problem_t>::AddFluxesRK2(array_t &U_new, array_t &U0, arra
 	// i.e. flux_(i) is the flux *into* zone i through the interface on the
 	// left of zone i, and -1.0*flux(i+1) is the flux *into* zone i through
 	// the interface on the right of zone i.
+	const int j = 1;
+	const int k = 1;
 
 	for (int n = 0; n < nvars; ++n) {
 		for (int i = range.first; i < range.second; ++i) {
 			// RK-SSP2 integrator
-			const double U_0 = U0(n, i);
-			const double U_1 = U1(n, i);
-			const double FU_1 = -1.0 * (dt / dx) * (x1Flux(n, i + 1) - x1Flux(n, i));
+			const double U_0 = U0(i, j, k, n);
+			const double U_1 = U1(i, j, k, n);
+			const double FU_1 = -1.0 * (dt / dx) * (x1Flux(i + 1, j, k, n) - x1Flux(i, j, k, n));
 
 			// save results in U_new
-			U_new(n, i) = 0.5 * U_0 + 0.5 * U_1 + 0.5 * FU_1;
+			U_new(i, j, k, n) = 0.5 * U_0 + 0.5 * U_1 + 0.5 * FU_1;
 		}
 	}
 }
@@ -584,9 +493,12 @@ template <typename problem_t>
 void HyperbolicSystem<problem_t>::CopyVars(array_t &src, array_t &dest,
 					   const std::pair<int, int> range, const int nvars)
 {
+	const int j = 1;
+	const int k = 1;
+
 	for (int n = 0; n < nvars; ++n) {
 		for (int i = range.first; i < range.second; ++i) {
-			dest(n, i) = src(n, i);
+			dest(i, j, k, n) = src(i, j, k, n);
 		}
 	}
 }
@@ -596,11 +508,14 @@ auto HyperbolicSystem<problem_t>::ComputeResidual(array_t &cur, array_t &prev,
 						  const std::pair<int, int> range, const int nvars)
     -> double
 {
+	const int j = 1;
+	const int k = 1;
+
 	double norm = 0.;
 	for (int n = 0; n < nvars; ++n) {
 		double comp = 0.;
 		for (int i = range.first; i < range.second; ++i) {
-			comp += std::abs(cur(n, i) - prev(n, i));
+			comp += std::abs(cur(i, j, k, n) - prev(i, j, k, n));
 		}
 		comp *= 1.0 / (range.second - range.first);
 		norm += comp * comp;
@@ -612,11 +527,14 @@ template <typename problem_t>
 auto HyperbolicSystem<problem_t>::ComputeNorm(array_t &arr, const std::pair<int, int> range,
 					      const int nvars) -> double
 {
+	const int j = 1;
+	const int k = 1;
+
 	double norm = 0.;
 	for (int n = 0; n < nvars; ++n) {
 		double comp = 0.;
 		for (int i = range.first; i < range.second; ++i) {
-			comp += std::abs(arr(n, i));
+			comp += std::abs(arr(i, j, k, n));
 		}
 		comp *= 1.0 / (range.second - range.first);
 		norm += comp * comp;
@@ -733,10 +651,10 @@ template <typename problem_t> void HyperbolicSystem<problem_t>::AdvanceTimestepS
 				// advectionFluxesU0_ == F(U^{t})
 				// reactionTerms_ == S(U^{t+1,k})
 				// reactionTermsU0_ == S(U^{t})
-				advectionFluxes_(n, i) =
-				    0.5 * (advectionFluxesU0_(n, i) + advectionFluxes_(n, i) +
-					   reactionTermsU0_(n, i) + reactionTerms_(n, i)) -
-				    reactionTerms_(n, i);
+				advectionFluxes_(i, j, k, n) =
+				    0.5 * (advectionFluxesU0_(i, j, k, n) + advectionFluxes_(i, j, k, n) +
+					   reactionTermsU0_(i, j, k, n) + reactionTerms_(i, j, k, n)) -
+				    reactionTerms_(i, j, k, n);
 			}
 		}
 

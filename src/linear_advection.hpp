@@ -25,17 +25,6 @@ template <typename problem_t> class LinearAdvectionSystem : public HyperbolicSys
       public:
 	enum varIndex { density_index = 0 };
 
-	// struct LinearAdvectionArgs {
-	// 	int nx;
-	// 	double lx;
-	// 	double vx;
-	// 	double cflNumber;
-	// 	int nvars;
-	// };
-
-	//explicit LinearAdvectionSystem(LinearAdvectionArgs args);
-	//void AddSourceTerms(array_t &U_prev, array_t &U_new, std::pair<int, int> range) override;
-
 	// static member functions
 
 	static void ConservedToPrimitive(array_t &cons, array_t &primVar, std::pair<int, int> range,
@@ -48,25 +37,19 @@ template <typename problem_t> class LinearAdvectionSystem : public HyperbolicSys
 						   std::pair<int, int> range) -> double;
 	static void FillGhostZones(array_t &cons, int nx, int nghost,
 						      int nvars);
-
-	// accessor functions
-
-	//auto density(int i) -> double;	     // returns rvalue
-	//auto set_density(int i) -> double &; // returns lvalue
-
-      protected:
-	//array_t density_; // shallow copy of consVars_(i,:)
-	//double advectionVx_;
 };
 
 template <typename problem_t>
 auto LinearAdvectionSystem<problem_t>::ComputeMass(array_t &density, const double dx,
 						   std::pair<int, int> range) -> double
 {
+	const int j = 1;
+	const int k = 1;
+
 	double mass = 0.0;
 
 	for (int i = range.first; i < range.second; ++i) {
-		mass += density(i) * dx;
+		mass += density(i, j, k) * dx;
 	}
 
 	return mass;
@@ -86,19 +69,21 @@ template <typename problem_t>
 void LinearAdvectionSystem<problem_t>::FillGhostZones(array_t &cons, const int nx, const int nghost,
 						      const int nvars)
 {
+	const int j = 1;
+	const int k = 1;
 	// periodic boundary conditions
 
 	// x1 right side boundary
 	for (int n = 0; n < nvars; ++n) {
 		for (int i = nghost + nx; i < nghost + nx + nghost; ++i) {
-			cons(n, i) = cons(n, i - nx);
+			cons(i, j, k, n) = cons(i - nx, j, k, n);
 		}
 	}
 
 	// x1 left side boundary
 	for (int n = 0; n < nvars; ++n) {
 		for (int i = 0; i < nghost; ++i) {
-			cons(n, i) = cons(n, i + nx);
+			cons(i, j, k, n) = cons(i + nx, j, k, n);
 		}
 	}
 }
@@ -109,9 +94,12 @@ void LinearAdvectionSystem<problem_t>::ConservedToPrimitive(array_t &cons,
 							    const std::pair<int, int> range,
 								const int nvars)
 {
+	const int j = 1;
+	const int k = 1;
+
 	for (int n = 0; n < nvars; ++n) {
 		for (int i = range.first; i < range.second; ++i) {
-			primVar(n, i) = cons(n, i);
+			primVar(i, j, k, n) = cons(i, j, k, n);
 		}
 	}
 }
@@ -127,7 +115,9 @@ void LinearAdvectionSystem<problem_t>::ComputeFluxes(array_t &x1Flux,
 	// xinterface_(i) is the solution to the Riemann problem at the left edge of zone i.
 
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
-
+	const int j = 1;
+	const int k = 1;
+	
 	for (int n = 0; n < nvars; ++n) {
 		for (int i = range.first; i < (range.second + 1); ++i) {
 
@@ -135,11 +125,11 @@ void LinearAdvectionSystem<problem_t>::ComputeFluxes(array_t &x1Flux,
 
 			if (advectionVx < 0.0) { // upwind switch
 				// upwind direction is the right-side of the interface
-				x1Flux(n, i) = advectionVx * x1RightState(n, i);
+				x1Flux(i, j, k, n) = advectionVx * x1RightState(i, j, k, n);
 
 			} else {
 				// upwind direction is the left-side of the interface
-				x1Flux(n, i) = advectionVx * x1LeftState(n, i);
+				x1Flux(i, j, k, n) = advectionVx * x1LeftState(i, j, k, n);
 			}
 		}
 	}
