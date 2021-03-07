@@ -111,10 +111,10 @@ void AdvectionSimulation<problem_t>::stageOneRK2SSP(
     amrex::Array4<amrex::Real> const &consVarNew, const amrex::Box &indexRange, const int nvars)
 {
 	// convert indexRange to cell_range (std::pair<int,int> along x-direction)
-	const auto lowerIndex = indexRange.smallEnd();
-	const auto upperIndex = indexRange.bigEnd();
-	const auto cell_range = std::make_pair(lowerIndex[0], upperIndex[0]);
-	const auto ppm_range = std::make_pair(-1 + cell_range.first, 1 + cell_range.second);
+	//const auto lowerIndex = indexRange.smallEnd();
+	//const auto upperIndex = indexRange.bigEnd();
+	//const auto cell_range = std::make_pair(lowerIndex[0], upperIndex[0]);
+	//const auto ppm_range = std::make_pair(-1 + cell_range.first, 1 + cell_range.second);
 
 	// Allocate temporary arrays
 	amrex::FArrayBox primVar(indexRange, nvars);
@@ -125,17 +125,17 @@ void AdvectionSimulation<problem_t>::stageOneRK2SSP(
 	// Stage 1 of RK2-SSP
 	{
 		LinearAdvectionSystem<problem_t>::ConservedToPrimitive(consVarOld, primVar.array(),
-								       ppm_range,
+								       indexRange,
 								       nvars); // save to primVar
 		LinearAdvectionSystem<problem_t>::ReconstructStatesPPM(
-		    primVar.array(), x1LeftState.array(), x1RightState.array(), ppm_range,
+		    primVar.array(), x1LeftState.array(), x1RightState.array(), indexRange,
 		    nvars); // save to x1Left/RightState
 		LinearAdvectionSystem<problem_t>::ComputeFluxes(x1Flux.array(), x1LeftState.array(),
 								x1RightState.array(), advectionVx_,
-								cell_range, nvars);
+								indexRange, nvars);
 
 		LinearAdvectionSystem<problem_t>::PredictStep(
-		    consVarOld, consVarNew, x1Flux.array(), dt_, dx_[0], cell_range, nvars);
+		    consVarOld, consVarNew, x1Flux.array(), dt_, dx_[0], indexRange, nvars);
 	}
 }
 
@@ -145,10 +145,10 @@ void AdvectionSimulation<problem_t>::stageTwoRK2SSP(
     amrex::Array4<amrex::Real> const &consVarNew, const amrex::Box &indexRange, const int nvars)
 {
 	// convert indexRange to cell_range (std::pair<int,int> along x-direction)
-	const auto lowerIndex = indexRange.smallEnd();
-	const auto upperIndex = indexRange.bigEnd();
-	const auto cell_range = std::make_pair(lowerIndex[0], upperIndex[0]);
-	const auto ppm_range = std::make_pair(-1 + cell_range.first, 1 + cell_range.second);
+	//const auto lowerIndex = indexRange.smallEnd();
+	//const auto upperIndex = indexRange.bigEnd();
+	//const auto cell_range = std::make_pair(lowerIndex[0], upperIndex[0]);
+	//const auto ppm_range = std::make_pair(-1 + cell_range.first, 1 + cell_range.second);
 
 	// Allocate temporary arrays
 	amrex::FArrayBox primVar(indexRange, nvars);
@@ -159,16 +159,16 @@ void AdvectionSimulation<problem_t>::stageTwoRK2SSP(
 	// Stage 2 of RK2-SSP
 	{
 		LinearAdvectionSystem<problem_t>::ConservedToPrimitive(consVarNew, primVar.array(),
-								       ppm_range, nvars);
+								       indexRange, nvars);
 		LinearAdvectionSystem<problem_t>::ReconstructStatesPPM(
-		    primVar.array(), x1LeftState.array(), x1RightState.array(), ppm_range, nvars);
+		    primVar.array(), x1LeftState.array(), x1RightState.array(), indexRange, nvars);
 		LinearAdvectionSystem<problem_t>::ComputeFluxes(x1Flux.array(), x1LeftState.array(),
 								x1RightState.array(), advectionVx_,
-								cell_range, nvars);
+								indexRange, nvars);
 
 		LinearAdvectionSystem<problem_t>::AddFluxesRK2(consVarNew, consVarOld, consVarNew,
 							       x1Flux.array(), dt_, dx_[0],
-							       cell_range, nvars);
+							       indexRange, nvars);
 	}
 }
 

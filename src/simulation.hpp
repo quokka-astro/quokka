@@ -33,19 +33,21 @@ template <typename problem_t>
 class SingleLevelSimulation
 {
       public:
-	int n_cell_{128};
+	int nx_{128};
+	int ny_{1};
+	int nz_{1};
 	int max_grid_size_{32};
-	int maxTimesteps_{static_cast<int>(1e4)};
+	int maxTimesteps_{1000};
 
 	amrex::BoxArray simBoxArray_;
 	amrex::Geometry simGeometry_;
 	amrex::IntVect domain_lo_{AMREX_D_DECL(0, 0, 0)};
-	amrex::IntVect domain_hi_{AMREX_D_DECL(n_cell_ - 1, n_cell_ - 1, n_cell_ - 1)};
+	amrex::IntVect domain_hi_{AMREX_D_DECL(nx_ - 1, ny_ - 1, nz_ - 1)};
 	amrex::Box domain_{domain_lo_, domain_hi_};
 
 	// This defines the physical box, [-1,1] in each direction.
 	amrex::RealBox real_box_{
-	    {AMREX_D_DECL(-amrex::Real(1.0), -amrex::Real(1.0), -amrex::Real(1.0))},
+	    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.0), amrex::Real(0.0))},
 	    {AMREX_D_DECL(amrex::Real(1.0), amrex::Real(1.0), amrex::Real(1.0))}};
 
 	// periodic in all directions
@@ -55,25 +57,24 @@ class SingleLevelSimulation
 	amrex::DistributionMapping simDistributionMapping_;
 
 	// we allocate two multifabs; one will store the old state, the other the new.
-	// TODO(ben): these need to be initialized!!
 	amrex::MultiFab state_old_;
 	amrex::MultiFab state_new_;
 
 	// Nghost = number of ghost cells for each array
-	int nghost_ = 1;
+	int nghost_ = 4;
 	// Ncomp = number of components for each array
 	int ncomp_ = 1;
     // dx = cell size
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_{};
 
 	amrex::Real dt_ = NAN;
-	amrex::Real tNow_ = NAN;
+	amrex::Real tNow_ = 0.0;
 	amrex::Real stopTime_ = NAN;
-	amrex::Real cflNumber_ = 1.0;
+	amrex::Real cflNumber_ = 0.8; // default
 
 	SingleLevelSimulation()
 	{
-		readParameters();
+		//readParameters();
 
 		simBoxArray_.define(domain_);
 		simBoxArray_.maxSize(max_grid_size_);
@@ -84,6 +85,10 @@ class SingleLevelSimulation
 
 		// initial DistributionMapping with boxarray
 		simDistributionMapping_ = amrex::DistributionMapping(simBoxArray_);
+
+		// initialize MultiFabs
+		state_old_ = amrex::MultiFab(simBoxArray_, simDistributionMapping_, ncomp_, nghost_);
+		state_new_ = amrex::MultiFab(simBoxArray_, simDistributionMapping_, ncomp_, nghost_);
 	}
 
 	void readParameters();
@@ -100,9 +105,10 @@ void SingleLevelSimulation<problem_t>::readParameters()
 	// ParmParse is way of reading inputs from the inputs file
 	amrex::ParmParse pp;
 
-	// We need to get n_cell from the inputs file - this is the number of cells on each
-	// side of a square (or cubic) domain.
-	pp.get("n_cell", n_cell_);
+	// We need to get Nx, Ny, Nz (grid dimensions)
+	pp.get("nx", nx_);
+	pp.get("ny", ny_);
+	pp.get("nz", nz_);
 
 	// The domain is broken into boxes of size max_grid_size
 	pp.get("max_grid_size", max_grid_size_);
@@ -146,8 +152,11 @@ void SingleLevelSimulation<problem_t>::evolve()
 			break;
 		}
 
+        amrex::MultiFab::Copy(state_old_, state_new_, 0, 0, ncomp_, nghost_);
+
         computeTimestep();
 		advanceSingleTimestep();
+		tNow_ += dt_;
 
 		// print timestep information on I/O processor
         amrex::Print() << "Cycle " << j << "; t = " << tNow_ << "; dt = " << dt_ << "\n";

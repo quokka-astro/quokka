@@ -34,14 +34,20 @@ struct SawtoothProblem {};
 template <>
 void AdvectionSimulation<SawtoothProblem>::setInitialConditions()
 {
-	for (int i = nghost_; i < n_cell_ + nghost_; ++i) {
+	for (amrex::MFIter iter(state_old_); iter.isValid(); ++iter) {
+		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
+		auto const &state = state_old_.array(iter);
 
-		auto x = (0.5 + static_cast<double>(i - nghost_)) / n_cell_;
-		double dens = 0.0;
-		if (std::abs(x - 0.2) <= 0.15) {
-			dens = std::sqrt( 1.0 - std::pow((x-0.2)/0.15, 2) );
-		}
-		//advectionSystem_.set_density(i) = dens;
+        amrex::ParallelFor(indexRange,
+        [=] AMREX_GPU_DEVICE (int i, int j, int k)
+        {
+			auto x = (0.5 + static_cast<double>(i)) / nx_;
+			double dens = 0.0;
+			if (std::abs(x - 0.2) <= 0.15) {
+				dens = std::sqrt( 1.0 - std::pow((x-0.2)/0.15, 2) );
+			}
+			state(i, j, k, 0) = dens;
+		});
 	}
 }
 
