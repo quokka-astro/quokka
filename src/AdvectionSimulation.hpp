@@ -9,6 +9,7 @@
 /// \brief Implements classes and functions to organise the overall setup,
 /// timestepping, solving, and I/O of a simulation for linear advection.
 
+#include "AMReX_Arena.H"
 #include "AMReX_Array4.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_Box.H"
@@ -136,11 +137,11 @@ void AdvectionSimulation<problem_t>::stageOneRK2SSP(
 	    //amrex::surroundingNodes(reconstructRange, 0); // 0 == x1 direction
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, 0);
 
-	// Allocate temporary arrays
-	amrex::FArrayBox primVar(ghostRange, nvars);	   // cell-centered
-	amrex::FArrayBox x1LeftState(x1ReconstructRange, nvars);  // node-centered in x
-	amrex::FArrayBox x1RightState(x1ReconstructRange, nvars); // node-centered in x
-	amrex::FArrayBox x1Flux(x1FluxRange, nvars);	   // node-centered in x
+	// Allocate temporary arrays using CUDA stream async allocator (or equivalent)
+	amrex::FArrayBox primVar(ghostRange, nvars, amrex::The_Async_Arena());	   // cell-centered
+	amrex::FArrayBox x1LeftState(x1ReconstructRange, nvars, amrex::The_Async_Arena());
+	amrex::FArrayBox x1RightState(x1ReconstructRange, nvars, amrex::The_Async_Arena());
+	amrex::FArrayBox x1Flux(x1FluxRange, nvars, amrex::The_Async_Arena());	   // node-centered in x
 
 	// Stage 1 of RK2-SSP
 	{
@@ -181,11 +182,11 @@ void AdvectionSimulation<problem_t>::stageTwoRK2SSP(
 	    //amrex::surroundingNodes(reconstructRange, 0); // 0 == x1 direction
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, 0);
 
-	// Allocate temporary arrays
-	amrex::FArrayBox primVar(ghostRange, nvars);	   // cell-centered
-	amrex::FArrayBox x1LeftState(x1ReconstructRange, nvars);  // node-centered in x
-	amrex::FArrayBox x1RightState(x1ReconstructRange, nvars); // node-centered in x
-	amrex::FArrayBox x1Flux(x1FluxRange, nvars);	   // node-centered in x
+	// Allocate temporary arrays using CUDA stream async allocator (or equivalent)
+	amrex::FArrayBox primVar(ghostRange, nvars, amrex::The_Async_Arena());	   // cell-centered
+	amrex::FArrayBox x1LeftState(x1ReconstructRange, nvars, amrex::The_Async_Arena());
+	amrex::FArrayBox x1RightState(x1ReconstructRange, nvars, amrex::The_Async_Arena());
+	amrex::FArrayBox x1Flux(x1FluxRange, nvars, amrex::The_Async_Arena());	   // node-centered in x
 
 	// Stage 2 of RK2-SSP
 	{
