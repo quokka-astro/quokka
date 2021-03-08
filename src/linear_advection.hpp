@@ -17,6 +17,7 @@
 // library headers
 
 // internal headers
+#include "AMReX_BLassert.H"
 #include "AMReX_FArrayBox.H"
 #include "AMReX_FabArrayUtility.H"
 #include "hyperbolic_system.hpp"
@@ -95,6 +96,7 @@ void LinearAdvectionSystem<problem_t>::ConservedToPrimitive(arrayconst_t &cons,
     [=] AMREX_GPU_DEVICE (int i, int j, int k)
     {
 		for (int n = 0; n < nvars; ++n) {
+			//AMREX_ASSERT(!std::isnan(cons(i,j,k,n)));
 			primVar(i, j, k, n) = cons(i, j, k, n);
 		}
 	});

@@ -54,7 +54,7 @@ template <> void AdvectionSimulation<SawtoothProblem>::setInitialConditions()
 {
 	for (amrex::MFIter iter(state_old_); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
-		auto const &state = state_old_.array(iter);
+		auto const &state = state_new_.array(iter);
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 			auto x = (0.5 + static_cast<double>(i)) / nx_;
@@ -65,6 +65,9 @@ template <> void AdvectionSimulation<SawtoothProblem>::setInitialConditions()
 			state(i, j, k, 0) = dens;
 		});
 	}
+
+	// set flag
+	areInitialConditionsDefined_ = true;
 }
 
 void ComputeExactSolution(amrex::Array4<amrex::Real> const &exact_arr, amrex::Box const &indexRange,
@@ -101,6 +104,9 @@ auto testproblem_advection() -> int
 
 	// Problem initialization
 	AdvectionSimulation<SawtoothProblem> sim;
+
+	// set initial conditions
+	sim.setInitialConditions();
 
 	// run simulation
 	sim.evolve();

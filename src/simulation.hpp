@@ -10,6 +10,7 @@
 /// timestepping, solving, and I/O of a simulation.
 
 // c++ headers
+#include "AMReX_BLassert.H"
 #include "AMReX_DistributionMapping.H"
 #include "AMReX_INT.H"
 #include "AMReX_VisMF.H"
@@ -31,8 +32,7 @@
 using Real = amrex::Real;
 
 // Simulation class should be initialized only once per program (i.e., is a singleton)
-template <typename problem_t>
-class SingleLevelSimulation
+template <typename problem_t> class SingleLevelSimulation
 {
       public:
 	int nx_{128};
@@ -66,18 +66,19 @@ class SingleLevelSimulation
 	int nghost_ = 4;
 	// Ncomp = number of components for each array
 	int ncomp_ = 1;
-    // dx = cell size
+	// dx = cell size
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_{};
 
 	amrex::Real dt_ = NAN;
 	amrex::Real tNow_ = 0.0;
-	amrex::Real stopTime_ = NAN;
-	amrex::Real cflNumber_ = 0.8; // default
+	amrex::Real stopTime_ = 1.0; // default
+	amrex::Real cflNumber_ = 0.3; // default
 	amrex::Long cycleCount_ = 0;
+	bool areInitialConditionsDefined_ = false;
 
 	SingleLevelSimulation()
 	{
-		//readParameters();
+		// readParameters();
 
 		simBoxArray_.define(domain_);
 		simBoxArray_.maxSize(max_grid_size_);
@@ -90,8 +91,10 @@ class SingleLevelSimulation
 		simDistributionMapping_ = amrex::DistributionMapping(simBoxArray_);
 
 		// initialize MultiFabs
-		state_old_ = amrex::MultiFab(simBoxArray_, simDistributionMapping_, ncomp_, nghost_);
-		state_new_ = amrex::MultiFab(simBoxArray_, simDistributionMapping_, ncomp_, nghost_);
+		state_old_ =
+		    amrex::MultiFab(simBoxArray_, simDistributionMapping_, ncomp_, nghost_);
+		state_new_ =
+		    amrex::MultiFab(simBoxArray_, simDistributionMapping_, ncomp_, nghost_);
 	}
 
 	void readParameters();
@@ -102,8 +105,7 @@ class SingleLevelSimulation
 	virtual void advanceSingleTimestep() = 0;
 };
 
-template <typename problem_t>
-void SingleLevelSimulation<problem_t>::readParameters()
+template <typename problem_t> void SingleLevelSimulation<problem_t>::readParameters()
 {
 	// ParmParse is way of reading inputs from the inputs file
 	amrex::ParmParse pp;
@@ -123,47 +125,52 @@ void SingleLevelSimulation<problem_t>::readParameters()
 	pp.query("cfl", cflNumber_);
 }
 
-template <typename problem_t>
-void SingleLevelSimulation<problem_t>::computeTimestep()
+template <typename problem_t> void SingleLevelSimulation<problem_t>::computeTimestep()
 {
-    Real dt_tmp = computeTimestepLocal();
-    amrex::ParallelDescriptor::ReduceRealMin(dt_tmp);
+	Real dt_tmp = computeTimestepLocal();
+	amrex::ParallelDescriptor::ReduceRealMin(dt_tmp);
 
-    constexpr Real change_max = 1.1;
-    Real dt_0 = dt_tmp;
+	constexpr Real change_max = 1.1;
+	Real dt_0 = dt_tmp;
 
-    dt_tmp = std::min(dt_tmp, change_max*dt_);
-    dt_0 = std::min(dt_0, dt_tmp);
+	dt_tmp = std::min(dt_tmp, change_max * dt_);
+	dt_0 = std::min(dt_0, dt_tmp);
 
-    // Limit dt to avoid overshooting stop_time
-    const Real eps = 1.e-3*dt_0;
+	// Limit dt to avoid overshooting stop_time
+	const Real eps = 1.e-3 * dt_0;
 
-    if (tNow_ + dt_0 > stopTime_ - eps) {
-        dt_0 = stopTime_ - tNow_;
-    }
+	if (tNow_ + dt_0 > stopTime_ - eps) {
+		dt_0 = stopTime_ - tNow_;
+	}
 
-    dt_ = dt_0;
+	dt_ = dt_0;
 }
 
-template <typename problem_t>
-void SingleLevelSimulation<problem_t>::evolve()
+template <typename problem_t> void SingleLevelSimulation<problem_t>::evolve()
 {
-    // Main time loop
+	// Main time loop
+	AMREX_ASSERT(areInitialConditionsDefined_);
+
 	int j = 0;
 	for (; j < maxTimesteps_; ++j) {
 		if (tNow_ >= stopTime_) {
 			break;
 		}
 
-        amrex::MultiFab::Copy(state_old_, state_new_, 0, 0, ncomp_, nghost_);
+		amrex::MultiFab::Copy(state_old_, state_new_, 0, 0, ncomp_, 0);
 
-        computeTimestep();
+		computeTimestep();
 		advanceSingleTimestep();
 		tNow_ += dt_;
 		++cycleCount_;
 
+		// output plotfile
+		const std::string &pltfile = amrex::Concatenate("plt", cycleCount_, 4);
+		amrex::WriteSingleLevelPlotfile(pltfile, state_new_, {"density"}, simGeometry_,
+						tNow_, cycleCount_);
+
 		// print timestep information on I/O processor
-        amrex::Print() << "Cycle " << j << "; t = " << tNow_ << "; dt = " << dt_ << "\n";
+		amrex::Print() << "Cycle " << j << "; t = " << tNow_ << "; dt = " << dt_ << "\n";
 	}
 }
 

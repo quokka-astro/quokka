@@ -15,11 +15,22 @@
 #include "AMReX_FArrayBox.H"
 #include "AMReX_IntVect.H"
 #include "AMReX_REAL.H"
+#include "AMReX_Utility.H"
+#include "fmt/core.h"
 #include "linear_advection.hpp"
 #include "simulation.hpp"
 #include <climits>
 #include <limits>
+#include <string>
 #include <utility>
+
+inline void CheckNaN(amrex::FArrayBox const &arr, amrex::Box const &indexRange, const int ncomp)
+{
+	if (amrex::IntVect where; arr.contains_nan(indexRange, 0, ncomp, where)) {
+		amrex::Abort(fmt::format("NAN found in array at index {}, {}, {}", where.dim3().x,
+					 where.dim3().y, where.dim3().z));
+	}
+}
 
 // Simulation class should be initialized only once per program (i.e., is a singleton)
 template <typename problem_t> class AdvectionSimulation : public SingleLevelSimulation<problem_t>
@@ -36,6 +47,7 @@ template <typename problem_t> class AdvectionSimulation : public SingleLevelSimu
 	using SingleLevelSimulation<problem_t>::nghost_;
 	using SingleLevelSimulation<problem_t>::tNow_;
 	using SingleLevelSimulation<problem_t>::cycleCount_;
+	using SingleLevelSimulation<problem_t>::areInitialConditionsDefined_;
 
 	explicit AdvectionSimulation() = default;
 
@@ -88,32 +100,29 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::advanceSingle
 
 	// update ghost zones [old timestep]
 	state_old_.FillBoundary(simGeometry_.periodicity());
+	AMREX_ASSERT(!state_old_.contains_nan(0, ncomp_));
 
 	// advance all grids on local processor (Stage 1 of integrator)
 	for (amrex::MFIter iter(state_new_); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox(); // 'validbox' == exclude ghost zones
 		auto const &stateOld = state_old_.const_array(iter);
 		auto const &stateNew = state_new_.array(iter);
-		stageOneRK2SSP(stateOld, stateNew, indexRange,
-			       ncomp_); // result saved in state_new_
+		stageOneRK2SSP(stateOld, stateNew, indexRange, ncomp_);
+		// CheckNaN(state_new_, indexRange, ncomp_);
 	}
-
-	const std::string& pltfile = amrex::Concatenate("plt", cycleCount_, 5);
-    amrex::WriteSingleLevelPlotfile(pltfile, state_new_, {"density"}, simGeometry_, tNow_, cycleCount_);
-	AMREX_ASSERT(!state_new_.contains_nan());
 
 	// update ghost zones [intermediate stage stored in state_new_]
 	state_new_.FillBoundary(simGeometry_.periodicity());
+	AMREX_ASSERT(!state_new_.contains_nan(0, ncomp_));
 
 	// advance all grids on local processor (Stage 2 of integrator)
 	for (amrex::MFIter iter(state_new_); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox(); // 'validbox' == exclude ghost zones
 		auto const &stateOld = state_old_.const_array(iter);
 		auto const &stateNew = state_new_.array(iter);
-		stageTwoRK2SSP(stateOld, stateNew, indexRange,
-			       ncomp_); // result saved in state_new_
+		stageTwoRK2SSP(stateOld, stateNew, indexRange, ncomp_);
+		// CheckNaN(state_new_, indexRange, ncomp_);
 	}
-	AMREX_ASSERT(!state_new_.contains_nan());
 }
 
 template <typename problem_t>
@@ -121,26 +130,41 @@ void AdvectionSimulation<problem_t>::stageOneRK2SSP(
     amrex::Array4<const amrex::Real> const &consVarOld,
     amrex::Array4<amrex::Real> const &consVarNew, const amrex::Box &indexRange, const int nvars)
 {
-	// extend box to include ghost zones (PPM requires at least 2 ghost zones)
+	// extend box to include ghost zones
 	amrex::Box const &ghostRange = amrex::grow(indexRange, nghost_);
-	amrex::Box const &ppmRange = amrex::grow(indexRange, 1);
+	amrex::Box const &reconstructRange =
+	    amrex::grow(indexRange, 1); // a one-zone layer around the cells must be reconstructed
+	amrex::Box const &x1ReconstructRange = ghostRange;
+	    //amrex::surroundingNodes(reconstructRange, 0); // 0 == x1 direction
+	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, 0);
 
 	// Allocate temporary arrays
-	amrex::FArrayBox primVar(ghostRange, nvars);
-	amrex::FArrayBox x1LeftState(ghostRange, nvars);
-	amrex::FArrayBox x1RightState(ghostRange, nvars);
-	amrex::FArrayBox x1Flux(ghostRange, nvars);
+	amrex::FArrayBox primVar(ghostRange, nvars);	   // cell-centered
+	amrex::FArrayBox x1LeftState(x1ReconstructRange, nvars);  // node-centered in x
+	amrex::FArrayBox x1RightState(x1ReconstructRange, nvars); // node-centered in x
+	amrex::FArrayBox x1Flux(x1FluxRange, nvars);	   // node-centered in x
 
 	// Stage 1 of RK2-SSP
 	{
+		// cell-centered kernel
 		LinearAdvectionSystem<problem_t>::ConservedToPrimitive(consVarOld, primVar.array(),
 								       ghostRange, nvars);
-		LinearAdvectionSystem<problem_t>::ReconstructStatesPPM(
-		    primVar.array(), x1LeftState.array(), x1RightState.array(), ppmRange, nvars);
+		CheckNaN(primVar, ghostRange, ncomp_);
 
+		// ???-centered kernel
+		LinearAdvectionSystem<problem_t>::ReconstructStatesPPM(
+		    primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange,
+		    nvars);
+		CheckNaN(x1LeftState, reconstructRange, ncomp_);
+		CheckNaN(x1RightState, reconstructRange, ncomp_);
+
+		// interface-centered kernel
 		LinearAdvectionSystem<problem_t>::ComputeFluxes(x1Flux.array(), x1LeftState.array(),
 								x1RightState.array(), advectionVx_,
-								indexRange, nvars);
+								x1FluxRange, nvars);
+		CheckNaN(x1Flux, x1FluxRange, ncomp_);
+
+		// cell-centered kernel
 		LinearAdvectionSystem<problem_t>::PredictStep(
 		    consVarOld, consVarNew, x1Flux.array(), dt_, dx_[0], indexRange, nvars);
 	}
@@ -151,26 +175,41 @@ void AdvectionSimulation<problem_t>::stageTwoRK2SSP(
     amrex::Array4<const amrex::Real> const &consVarOld,
     amrex::Array4<amrex::Real> const &consVarNew, const amrex::Box &indexRange, const int nvars)
 {
-	// extend box to include ghost zones (PPM requires at least 2 ghost zones)
+	// extend box to include ghost zones
 	amrex::Box const &ghostRange = amrex::grow(indexRange, nghost_);
-	amrex::Box const &ppmRange = amrex::grow(indexRange, 1);
+	amrex::Box const &reconstructRange =
+	    amrex::grow(indexRange, 1); // a one-zone layer around the cells must be reconstructed
+	amrex::Box const &x1ReconstructRange = ghostRange;
+	    //amrex::surroundingNodes(reconstructRange, 0); // 0 == x1 direction
+	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, 0);
 
 	// Allocate temporary arrays
-	amrex::FArrayBox primVar(ghostRange, nvars);
-	amrex::FArrayBox x1LeftState(ghostRange, nvars);
-	amrex::FArrayBox x1RightState(ghostRange, nvars);
-	amrex::FArrayBox x1Flux(ghostRange, nvars);
+	amrex::FArrayBox primVar(ghostRange, nvars);	   // cell-centered
+	amrex::FArrayBox x1LeftState(x1ReconstructRange, nvars);  // node-centered in x
+	amrex::FArrayBox x1RightState(x1ReconstructRange, nvars); // node-centered in x
+	amrex::FArrayBox x1Flux(x1FluxRange, nvars);	   // node-centered in x
 
 	// Stage 2 of RK2-SSP
 	{
+		// cell-centered kernel
 		LinearAdvectionSystem<problem_t>::ConservedToPrimitive(consVarNew, primVar.array(),
 								       ghostRange, nvars);
-		LinearAdvectionSystem<problem_t>::ReconstructStatesPPM(
-		    primVar.array(), x1LeftState.array(), x1RightState.array(), ppmRange, nvars);
+		CheckNaN(primVar, ghostRange, ncomp_);
 
+		// ???-centered kernel
+		LinearAdvectionSystem<problem_t>::ReconstructStatesPPM(
+		    primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange,
+		    nvars);
+		CheckNaN(x1LeftState, reconstructRange, ncomp_);
+		CheckNaN(x1RightState, reconstructRange, ncomp_);
+
+		// interface-centered kernel
 		LinearAdvectionSystem<problem_t>::ComputeFluxes(x1Flux.array(), x1LeftState.array(),
 								x1RightState.array(), advectionVx_,
-								indexRange, nvars);
+								x1FluxRange, nvars);
+		CheckNaN(x1Flux, x1FluxRange, ncomp_);
+
+		// cell-centered kernel
 		LinearAdvectionSystem<problem_t>::AddFluxesRK2(consVarNew, consVarOld, consVarNew,
 							       x1Flux.array(), dt_, dx_[0],
 							       indexRange, nvars);
