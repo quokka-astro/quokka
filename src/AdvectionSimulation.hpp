@@ -101,7 +101,6 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::advanceSingle
 	const std::string& pltfile = amrex::Concatenate("plt", cycleCount_, 5);
     amrex::WriteSingleLevelPlotfile(pltfile, state_new_, {"density"}, simGeometry_, tNow_, cycleCount_);
 	AMREX_ASSERT(!state_new_.contains_nan());
-	//amrex::VisMF::Write(state_new_, "state_new_.amrex");
 
 	// update ghost zones [intermediate stage stored in state_new_]
 	state_new_.FillBoundary(simGeometry_.periodicity());
