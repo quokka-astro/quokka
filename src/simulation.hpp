@@ -165,9 +165,9 @@ template <typename problem_t> void SingleLevelSimulation<problem_t>::evolve()
 		++cycleCount_;
 
 		// output plotfile
-		const std::string &pltfile = amrex::Concatenate("plt", cycleCount_, 4);
-		amrex::WriteSingleLevelPlotfile(pltfile, state_new_, {"density"}, simGeometry_,
-						tNow_, cycleCount_);
+		//const std::string &pltfile = amrex::Concatenate("plt", cycleCount_, 4);
+		//amrex::WriteSingleLevelPlotfile(pltfile, state_new_, {"density"}, simGeometry_,
+		//				tNow_, cycleCount_);
 
 		// print timestep information on I/O processor
 		amrex::Print() << "Cycle " << j << "; t = " << tNow_ << "; dt = " << dt_ << "\n";

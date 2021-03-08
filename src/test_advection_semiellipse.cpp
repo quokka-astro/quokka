@@ -18,9 +18,8 @@
 auto main(int argc, char **argv) -> int
 {
 	// Initialization
-	// amrex::Initialize(argc, argv);
-
-	// copied from Exa-wind:
+	// (copied from ExaWind)
+	
 	amrex::Initialize(argc, argv, true, MPI_COMM_WORLD, []() {
 		amrex::ParmParse pp("amrex");
 		// Set the defaults so that we throw an exception instead of attempting
@@ -71,7 +70,7 @@ template <> void AdvectionSimulation<SawtoothProblem>::setInitialConditions()
 }
 
 void ComputeExactSolution(amrex::Array4<amrex::Real> const &exact_arr, amrex::Box const &indexRange,
-			  const double nx)
+			  const int nx)
 {
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		auto x = (0.5 + static_cast<double>(i)) / nx;
@@ -129,8 +128,8 @@ auto testproblem_advection() -> int
 	const auto err_norm = state_exact.norm1(this_comp);
 	const double rel_error = err_norm / sol_norm;
 
-	amrex::Print() << "L1 solution norm = " << sol_norm << std::endl;
-	amrex::Print() << "L1 error norm = " << err_norm << std::endl;
+	//amrex::Print() << "L1 solution norm = " << sol_norm << std::endl;
+	//amrex::Print() << "L1 error norm = " << err_norm << std::endl;
 	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
 
 	const double err_tol = 0.015;
