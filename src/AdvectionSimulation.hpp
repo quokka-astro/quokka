@@ -10,17 +10,21 @@
 /// timestepping, solving, and I/O of a simulation for linear advection.
 
 #include "AMReX_Array4.H"
+#include "AMReX_BLassert.H"
+#include "AMReX_Box.H"
 #include "AMReX_FArrayBox.H"
 #include "AMReX_IntVect.H"
 #include "AMReX_REAL.H"
 #include "linear_advection.hpp"
 #include "simulation.hpp"
+#include <climits>
 #include <limits>
 #include <utility>
 
 // Simulation class should be initialized only once per program (i.e., is a singleton)
 template <typename problem_t> class AdvectionSimulation : public SingleLevelSimulation<problem_t>
 {
+      public:
 	using SingleLevelSimulation<problem_t>::simGeometry_;
 	using SingleLevelSimulation<problem_t>::state_old_;
 	using SingleLevelSimulation<problem_t>::state_new_;
@@ -29,8 +33,10 @@ template <typename problem_t> class AdvectionSimulation : public SingleLevelSimu
 	using SingleLevelSimulation<problem_t>::dx_;
 	using SingleLevelSimulation<problem_t>::dt_;
 	using SingleLevelSimulation<problem_t>::ncomp_;
+	using SingleLevelSimulation<problem_t>::nghost_;
+	using SingleLevelSimulation<problem_t>::tNow_;
+	using SingleLevelSimulation<problem_t>::cycleCount_;
 
-      public:
 	explicit AdvectionSimulation() = default;
 
 	auto computeTimestepLocal() -> amrex::Real override;
@@ -92,7 +98,12 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::advanceSingle
 			       ncomp_); // result saved in state_new_
 	}
 
-	// update ghost zones [intermediate stage]
+	const std::string& pltfile = amrex::Concatenate("plt", cycleCount_, 5);
+    amrex::WriteSingleLevelPlotfile(pltfile, state_new_, {"density"}, simGeometry_, tNow_, cycleCount_);
+	AMREX_ASSERT(!state_new_.contains_nan());
+	//amrex::VisMF::Write(state_new_, "state_new_.amrex");
+
+	// update ghost zones [intermediate stage stored in state_new_]
 	state_new_.FillBoundary(simGeometry_.periodicity());
 
 	// advance all grids on local processor (Stage 2 of integrator)
@@ -103,6 +114,7 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::advanceSingle
 		stageTwoRK2SSP(stateOld, stateNew, indexRange,
 			       ncomp_); // result saved in state_new_
 	}
+	AMREX_ASSERT(!state_new_.contains_nan());
 }
 
 template <typename problem_t>
@@ -110,30 +122,26 @@ void AdvectionSimulation<problem_t>::stageOneRK2SSP(
     amrex::Array4<const amrex::Real> const &consVarOld,
     amrex::Array4<amrex::Real> const &consVarNew, const amrex::Box &indexRange, const int nvars)
 {
-	// convert indexRange to cell_range (std::pair<int,int> along x-direction)
-	//const auto lowerIndex = indexRange.smallEnd();
-	//const auto upperIndex = indexRange.bigEnd();
-	//const auto cell_range = std::make_pair(lowerIndex[0], upperIndex[0]);
-	//const auto ppm_range = std::make_pair(-1 + cell_range.first, 1 + cell_range.second);
+	// extend box to include ghost zones (PPM requires at least 2 ghost zones)
+	amrex::Box const &ghostRange = amrex::grow(indexRange, nghost_);
+	amrex::Box const &ppmRange = amrex::grow(indexRange, 1);
 
 	// Allocate temporary arrays
-	amrex::FArrayBox primVar(indexRange, nvars);
-	amrex::FArrayBox x1LeftState(indexRange, nvars);
-	amrex::FArrayBox x1RightState(indexRange, nvars);
-	amrex::FArrayBox x1Flux(indexRange, nvars);
+	amrex::FArrayBox primVar(ghostRange, nvars);
+	amrex::FArrayBox x1LeftState(ghostRange, nvars);
+	amrex::FArrayBox x1RightState(ghostRange, nvars);
+	amrex::FArrayBox x1Flux(ghostRange, nvars);
 
 	// Stage 1 of RK2-SSP
 	{
 		LinearAdvectionSystem<problem_t>::ConservedToPrimitive(consVarOld, primVar.array(),
-								       indexRange,
-								       nvars); // save to primVar
+								       ghostRange, nvars);
 		LinearAdvectionSystem<problem_t>::ReconstructStatesPPM(
-		    primVar.array(), x1LeftState.array(), x1RightState.array(), indexRange,
-		    nvars); // save to x1Left/RightState
+		    primVar.array(), x1LeftState.array(), x1RightState.array(), ppmRange, nvars);
+
 		LinearAdvectionSystem<problem_t>::ComputeFluxes(x1Flux.array(), x1LeftState.array(),
 								x1RightState.array(), advectionVx_,
 								indexRange, nvars);
-
 		LinearAdvectionSystem<problem_t>::PredictStep(
 		    consVarOld, consVarNew, x1Flux.array(), dt_, dx_[0], indexRange, nvars);
 	}
@@ -144,28 +152,26 @@ void AdvectionSimulation<problem_t>::stageTwoRK2SSP(
     amrex::Array4<const amrex::Real> const &consVarOld,
     amrex::Array4<amrex::Real> const &consVarNew, const amrex::Box &indexRange, const int nvars)
 {
-	// convert indexRange to cell_range (std::pair<int,int> along x-direction)
-	//const auto lowerIndex = indexRange.smallEnd();
-	//const auto upperIndex = indexRange.bigEnd();
-	//const auto cell_range = std::make_pair(lowerIndex[0], upperIndex[0]);
-	//const auto ppm_range = std::make_pair(-1 + cell_range.first, 1 + cell_range.second);
+	// extend box to include ghost zones (PPM requires at least 2 ghost zones)
+	amrex::Box const &ghostRange = amrex::grow(indexRange, nghost_);
+	amrex::Box const &ppmRange = amrex::grow(indexRange, 1);
 
 	// Allocate temporary arrays
-	amrex::FArrayBox primVar(indexRange, nvars);
-	amrex::FArrayBox x1LeftState(indexRange, nvars);
-	amrex::FArrayBox x1RightState(indexRange, nvars);
-	amrex::FArrayBox x1Flux(indexRange, nvars);
+	amrex::FArrayBox primVar(ghostRange, nvars);
+	amrex::FArrayBox x1LeftState(ghostRange, nvars);
+	amrex::FArrayBox x1RightState(ghostRange, nvars);
+	amrex::FArrayBox x1Flux(ghostRange, nvars);
 
 	// Stage 2 of RK2-SSP
 	{
 		LinearAdvectionSystem<problem_t>::ConservedToPrimitive(consVarNew, primVar.array(),
-								       indexRange, nvars);
+								       ghostRange, nvars);
 		LinearAdvectionSystem<problem_t>::ReconstructStatesPPM(
-		    primVar.array(), x1LeftState.array(), x1RightState.array(), indexRange, nvars);
+		    primVar.array(), x1LeftState.array(), x1RightState.array(), ppmRange, nvars);
+
 		LinearAdvectionSystem<problem_t>::ComputeFluxes(x1Flux.array(), x1LeftState.array(),
 								x1RightState.array(), advectionVx_,
 								indexRange, nvars);
-
 		LinearAdvectionSystem<problem_t>::AddFluxesRK2(consVarNew, consVarOld, consVarNew,
 							       x1Flux.array(), dt_, dx_[0],
 							       indexRange, nvars);

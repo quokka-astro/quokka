@@ -11,6 +11,8 @@
 
 // c++ headers
 #include "AMReX_DistributionMapping.H"
+#include "AMReX_INT.H"
+#include "AMReX_VisMF.H"
 #include "hyperbolic_system.hpp"
 #include <cassert>
 #include <cmath>
@@ -71,6 +73,7 @@ class SingleLevelSimulation
 	amrex::Real tNow_ = 0.0;
 	amrex::Real stopTime_ = NAN;
 	amrex::Real cflNumber_ = 0.8; // default
+	amrex::Long cycleCount_ = 0;
 
 	SingleLevelSimulation()
 	{
@@ -157,6 +160,7 @@ void SingleLevelSimulation<problem_t>::evolve()
         computeTimestep();
 		advanceSingleTimestep();
 		tNow_ += dt_;
+		++cycleCount_;
 
 		// print timestep information on I/O processor
         amrex::Print() << "Cycle " << j << "; t = " << tNow_ << "; dt = " << dt_ << "\n";

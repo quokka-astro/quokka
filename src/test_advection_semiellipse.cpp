@@ -8,17 +8,35 @@
 ///
 
 #include "test_advection_semiellipse.hpp"
+#include "AMReX_Box.H"
+#include "AMReX_FArrayBox.H"
+#include "AdvectionSimulation.hpp"
+#include "hyperbolic_system.hpp"
+#include "linear_advection.hpp"
 #include <vector>
 
-auto main(int argc, char** argv) -> int
+auto main(int argc, char **argv) -> int
 {
 	// Initialization
+	// amrex::Initialize(argc, argv);
 
-	amrex::Initialize(argc, argv);
+	// copied from Exa-wind:
+	amrex::Initialize(argc, argv, true, MPI_COMM_WORLD, []() {
+		amrex::ParmParse pp("amrex");
+		// Set the defaults so that we throw an exception instead of attempting
+		// to generate backtrace files. However, if the user has explicitly set
+		// these options in their input files respect those settings.
+		if (!pp.contains("throw_exception")) {
+			pp.add("throw_exception", 1);
+		}
+		if (!pp.contains("signal_handling")) {
+			pp.add("signal_handling", 0);
+		}
+	});
 
 	int result = 0;
 
-	{ // objects must be destroyed before Kokkos::finalize, so enter new
+	{ // objects must be destroyed before amrex::finalize, so enter new
 	  // scope here to do that automatically
 
 		result = testproblem_advection();
@@ -29,31 +47,42 @@ auto main(int argc, char** argv) -> int
 	return result;
 }
 
-struct SawtoothProblem {};
+struct SawtoothProblem {
+};
 
-template <>
-void AdvectionSimulation<SawtoothProblem>::setInitialConditions()
+template <> void AdvectionSimulation<SawtoothProblem>::setInitialConditions()
 {
 	for (amrex::MFIter iter(state_old_); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
 		auto const &state = state_old_.array(iter);
 
-        amrex::ParallelFor(indexRange,
-        [=] AMREX_GPU_DEVICE (int i, int j, int k)
-        {
+		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 			auto x = (0.5 + static_cast<double>(i)) / nx_;
 			double dens = 0.0;
 			if (std::abs(x - 0.2) <= 0.15) {
-				dens = std::sqrt( 1.0 - std::pow((x-0.2)/0.15, 2) );
+				dens = std::sqrt(1.0 - std::pow((x - 0.2) / 0.15, 2));
 			}
 			state(i, j, k, 0) = dens;
 		});
 	}
 }
 
+void ComputeExactSolution(amrex::Array4<amrex::Real> const &exact_arr, amrex::Box const &indexRange,
+			  const double nx)
+{
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		auto x = (0.5 + static_cast<double>(i)) / nx;
+		double dens = 0.0;
+		if (std::abs(x - 0.2) <= 0.15) {
+			dens = std::sqrt(1.0 - std::pow((x - 0.2) / 0.15, 2));
+		}
+		exact_arr(i, j, k, 0) = dens;
+	});
+}
+
 auto testproblem_advection() -> int
 {
-	// Based on 
+	// Based on
 	// https://www.mathematik.uni-dortmund.de/~kuzmin/fcttvd.pdf
 	// Section 6.2: Convection of a semi-ellipse
 
@@ -76,63 +105,32 @@ auto testproblem_advection() -> int
 	// run simulation
 	sim.evolve();
 
-	// compute exact solution
-	std::vector<double> x_arr(nx);
-	std::vector<double> d_initial(nx);
-	std::vector<double> d_final(nx);
+	// Compute reference solution
+	amrex::MultiFab state_exact(sim.simBoxArray_, sim.simDistributionMapping_, sim.ncomp_,
+				    sim.nghost_);
 
-	for (int i = 0; i < nx; ++i) {
-		auto x = (0.5 + static_cast<double>(i)) / nx;
-		double dens = 0.0;
-		if (std::abs(x - 0.2) <= 0.15) {
-			dens = std::sqrt( 1.0 - std::pow((x-0.2)/0.15, 2) );
-		}
-		x_arr.at(i)		= x;
-		d_initial.at(i) = dens;
+	for (amrex::MFIter iter(sim.state_new_); iter.isValid(); ++iter) {
+		const amrex::Box &indexRange = iter.validbox();
+		auto const &stateExact = state_exact.array(iter);
+		auto const &stateNew = sim.state_new_.const_array(iter);
+		ComputeExactSolution(stateExact, indexRange, sim.nx_);
 	}
 
-#if 0
 	// Compute error norm
-	for (int i = 0; i < nx; ++i) {
-		d_final.at(i) = advection_system.density(i + nghost);
-	}
-	
-	double err_norm = 0.;
-	double sol_norm = 0.;
-	for (int i=0; i < nx; ++i) {
-		err_norm += std::abs(d_final[i] - d_initial[i]);
-		sol_norm += std::abs(d_initial[i]);
-	}
-	
+	const int this_comp = 0;
+	const auto sol_norm = state_exact.norm1(this_comp);
+	amrex::MultiFab::Saxpy(state_exact, -1., sim.state_new_, this_comp, this_comp, sim.ncomp_, sim.nghost_);
+	const auto err_norm = state_exact.norm1(this_comp);
 	const double rel_error = err_norm / sol_norm;
-	//amrex::Print() << "Absolute error norm = " << err_norm << std::endl;
-	//amrex::Print() << "Reference solution norm = " << sol_norm << std::endl;
+
+	amrex::Print() << "L1 solution norm = " << sol_norm << std::endl;
+	amrex::Print() << "L1 error norm = " << err_norm << std::endl;
 	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
-#endif
 
 	const double err_tol = 0.015;
 	int status = 0;
-
-#if 0
 	if (rel_error > err_tol) {
 		status = 1;
 	}
-#endif
-
-	// Plot results
-	std::map<std::string, std::string> d_initial_args;
-	std::map<std::string, std::string> d_final_args;
-	d_initial_args["label"] = "density (initial)";
-	d_final_args["label"] = "density (final)";
-
-	matplotlibcpp::clf();
-	matplotlibcpp::plot(x_arr, d_initial, d_initial_args);
-	matplotlibcpp::plot(x_arr, d_final, d_final_args);
-	matplotlibcpp::legend();
-	matplotlibcpp::save(std::string("./advection_semiellipse.pdf"));
-
-	// Cleanup and exit
-	amrex::Print() << "Finished." << std::endl;
-
 	return status;
 }
