@@ -108,7 +108,6 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::advanceSingle
 		auto const &stateOld = state_old_.const_array(iter);
 		auto const &stateNew = state_new_.array(iter);
 		stageOneRK2SSP(stateOld, stateNew, indexRange, ncomp_);
-		// CheckNaN(state_new_, indexRange, ncomp_);
 	}
 
 	// update ghost zones [intermediate stage stored in state_new_]
@@ -121,7 +120,6 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::advanceSingle
 		auto const &stateOld = state_old_.const_array(iter);
 		auto const &stateNew = state_new_.array(iter);
 		stageTwoRK2SSP(stateOld, stateNew, indexRange, ncomp_);
-		// CheckNaN(state_new_, indexRange, ncomp_);
 	}
 }
 

@@ -35,11 +35,11 @@ using Real = amrex::Real;
 template <typename problem_t> class SingleLevelSimulation
 {
       public:
-	int nx_{128};
+	int nx_{400};
 	int ny_{1};
 	int nz_{1};
 	int max_grid_size_{32};
-	int maxTimesteps_{1000};
+	int maxTimesteps_{4000};
 
 	amrex::BoxArray simBoxArray_;
 	amrex::Geometry simGeometry_;
