@@ -26,10 +26,19 @@
 #include <AMReX_PlotFileUtil.H>
 #include <AMReX_Print.H>
 #include <AMReX_Utility.H>
+#include "fmt/core.h"
 
 // internal headers
 
 using Real = amrex::Real;
+
+inline void CheckNaN(amrex::FArrayBox const &arr, amrex::Box const &indexRange, const int ncomp)
+{
+	if (amrex::IntVect where; arr.contains_nan(indexRange, 0, ncomp, where)) {
+		amrex::Abort(fmt::format("NAN found in array at index {}, {}, {}", where.dim3().x,
+					 where.dim3().y, where.dim3().z));
+	}
+}
 
 // Simulation class should be initialized only once per program (i.e., is a singleton)
 template <typename problem_t> class SingleLevelSimulation
