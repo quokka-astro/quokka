@@ -26,6 +26,7 @@
 #include <AMReX_PlotFileUtil.H>
 #include <AMReX_Print.H>
 #include <AMReX_Utility.H>
+#include <limits>
 #include "fmt/core.h"
 
 // internal headers
@@ -48,7 +49,7 @@ template <typename problem_t> class SingleLevelSimulation
 	int ny_{1};
 	int nz_{1};
 	int max_grid_size_{32};
-	int maxTimesteps_{4000};
+	int maxTimesteps_{10000};
 
 	amrex::BoxArray simBoxArray_;
 	amrex::Geometry simGeometry_;
@@ -79,6 +80,7 @@ template <typename problem_t> class SingleLevelSimulation
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_{};
 
 	amrex::Real dt_ = NAN;
+	amrex::Real maxDt_ = std::numeric_limits<double>::max(); // default (no limit)
 	amrex::Real tNow_ = 0.0;
 	amrex::Real stopTime_ = 1.0; // default
 	amrex::Real cflNumber_ = 0.3; // default
@@ -144,6 +146,7 @@ template <typename problem_t> void SingleLevelSimulation<problem_t>::computeTime
 
 	dt_tmp = std::min(dt_tmp, change_max * dt_);
 	dt_0 = std::min(dt_0, dt_tmp);
+	dt_0 = std::min(dt_0, maxDt_); // limit to maxDt_
 
 	// Limit dt to avoid overshooting stop_time
 	const Real eps = 1.e-3 * dt_0;

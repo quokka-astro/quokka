@@ -12,6 +12,7 @@
 #include "AMReX_DistributionMapping.H"
 #include "AMReX_FArrayBox.H"
 #include "AMReX_MultiFab.H"
+#include "AMReX_ParallelDescriptor.H"
 #include "AdvectionSimulation.hpp"
 
 auto main(int argc, char **argv) -> int
@@ -89,6 +90,7 @@ auto testproblem_advection() -> int
 
 	// Problem initialization
 	AdvectionSimulation<SawtoothProblem> sim;
+	sim.maxDt_ = max_dt;
 
 	// set initial conditions
 	sim.setInitialConditions();
@@ -135,27 +137,29 @@ auto testproblem_advection() -> int
 	auto const &state_final_array = state_final.array(0);
 	auto const &state_exact_array = state_exact_local.array(0);
 
-	std::vector<double> d_final(sim.nx_);
-	std::vector<double> d_initial(sim.nx_);
-	std::vector<double> x(sim.nx_);
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		std::vector<double> d_final(sim.nx_);
+		std::vector<double> d_initial(sim.nx_);
+		std::vector<double> x(sim.nx_);
 
-	for (int i = 0; i < sim.nx_; ++i) {
-		x.at(i) = (static_cast<double>(i) + 0.5) / sim.nx_;
-		d_final.at(i) = state_final_array(i, 0, 0);
-		d_initial.at(i) = state_exact_array(i, 0, 0);
+		for (int i = 0; i < sim.nx_; ++i) {
+			x.at(i) = (static_cast<double>(i) + 0.5) / sim.nx_;
+			d_final.at(i) = state_final_array(i, 0, 0);
+			d_initial.at(i) = state_exact_array(i, 0, 0);
+		}
+
+		// Plot results
+		std::map<std::string, std::string> d_initial_args;
+		std::map<std::string, std::string> d_final_args;
+		d_initial_args["label"] = "density (initial)";
+		d_final_args["label"] = "density (final)";
+
+		matplotlibcpp::clf();
+		matplotlibcpp::plot(x, d_initial, d_initial_args);
+		matplotlibcpp::plot(x, d_final, d_final_args);
+		matplotlibcpp::legend();
+		matplotlibcpp::save(std::string("./advection.pdf"));
 	}
-
-	// Plot results
-	std::map<std::string, std::string> d_initial_args;
-	std::map<std::string, std::string> d_final_args;
-	d_initial_args["label"] = "density (initial)";
-	d_final_args["label"] = "density (final)";
-
-	matplotlibcpp::clf();
-	matplotlibcpp::plot(x, d_initial, d_initial_args);
-	matplotlibcpp::plot(x, d_final, d_final_args);
-	matplotlibcpp::legend();
-	matplotlibcpp::save(std::string("./advection.pdf"));
 
 	return status;
 }
