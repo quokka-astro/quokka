@@ -46,10 +46,10 @@ auto main(int argc, char **argv) -> int
 	return result;
 }
 
-struct SawtoothProblem {
+struct SemiellipseProblem {
 };
 
-template <> void AdvectionSimulation<SawtoothProblem>::setInitialConditions()
+template <> void AdvectionSimulation<SemiellipseProblem>::setInitialConditions()
 {
 	for (amrex::MFIter iter(state_old_); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
@@ -89,7 +89,6 @@ auto testproblem_advection() -> int
 	// Section 6.2: Convection of a semi-ellipse
 
 	// Problem parameters
-
 	const int nx = 400;
 	const double Lx = 1.0;
 	const double advection_velocity = 1.0;
@@ -99,10 +98,8 @@ auto testproblem_advection() -> int
 	const int max_timesteps = 1e4;
 	const int nvars = 1; // only density
 
-	const double atol = 1e-10; //< absolute tolerance for mass conservation
-
 	// Problem initialization
-	AdvectionSimulation<SawtoothProblem> sim;
+	AdvectionSimulation<SemiellipseProblem> sim;
 
 	// set initial conditions
 	sim.setInitialConditions();
@@ -127,9 +124,6 @@ auto testproblem_advection() -> int
 	amrex::MultiFab::Saxpy(state_exact, -1., sim.state_new_, this_comp, this_comp, sim.ncomp_, sim.nghost_);
 	const auto err_norm = state_exact.norm1(this_comp);
 	const double rel_error = err_norm / sol_norm;
-
-	//amrex::Print() << "L1 solution norm = " << sol_norm << std::endl;
-	//amrex::Print() << "L1 error norm = " << err_norm << std::endl;
 	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
 
 	const double err_tol = 0.015;

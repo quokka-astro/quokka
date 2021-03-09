@@ -72,7 +72,7 @@ template <typename problem_t> class SingleLevelSimulation
 	amrex::MultiFab state_new_;
 
 	// Nghost = number of ghost cells for each array
-	int nghost_ = 3;
+	int nghost_ = 3; // PPM needs nghost >= 3
 	// Ncomp = number of components for each array
 	int ncomp_ = 1;
 	// dx = cell size

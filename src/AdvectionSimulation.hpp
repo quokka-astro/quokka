@@ -145,8 +145,8 @@ void AdvectionSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Rea
 	LinearAdvectionSystem<problem_t>::ReconstructStatesPPM(
 	    primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange,
 	    x1ReconstructRange, nvars);
-	CheckNaN(x1LeftState, reconstructRange, ncomp_);
-	CheckNaN(x1RightState, reconstructRange, ncomp_);
+	CheckNaN(x1LeftState, x1ReconstructRange, ncomp_);
+	CheckNaN(x1RightState, x1ReconstructRange, ncomp_);
 
 	// interface-centered kernel
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, 0);

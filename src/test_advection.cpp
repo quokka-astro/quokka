@@ -8,13 +8,17 @@
 ///
 
 #include "test_advection.hpp"
+#include "AMReX_BoxArray.H"
+#include "AMReX_DistributionMapping.H"
+#include "AMReX_FArrayBox.H"
+#include "AMReX_MultiFab.H"
 #include "AdvectionSimulation.hpp"
 
 auto main(int argc, char **argv) -> int
 {
 	// Initialization
 	// (copied from ExaWind)
-	
+
 	amrex::Initialize(argc, argv, true, MPI_COMM_WORLD, []() {
 		amrex::ParmParse pp("amrex");
 		// Set the defaults so that we throw an exception instead of attempting
@@ -74,7 +78,6 @@ void ComputeExactSolution(amrex::Array4<amrex::Real> const &exact_arr, amrex::Bo
 auto testproblem_advection() -> int
 {
 	// Problem parameters
-
 	const int nx = 400;
 	const double Lx = 1.0;
 	const double advection_velocity = 1.0;
@@ -83,8 +86,6 @@ auto testproblem_advection() -> int
 	const double max_dt = 1e-4;
 	const int max_timesteps = 1e4;
 	const int nvars = 1; // only density
-
-	const double atol = 1e-10; //< absolute tolerance for mass conservation
 
 	// Problem initialization
 	AdvectionSimulation<SawtoothProblem> sim;
@@ -109,13 +110,13 @@ auto testproblem_advection() -> int
 	// Compute error norm
 	const int this_comp = 0;
 	const auto sol_norm = state_exact.norm1(this_comp);
-	amrex::MultiFab::Saxpy(state_exact, -1., sim.state_new_, this_comp, this_comp, sim.ncomp_,
+	amrex::MultiFab residual(sim.simBoxArray_, sim.simDistributionMapping_, sim.ncomp_,
+				 sim.nghost_);
+	amrex::MultiFab::Copy(residual, state_exact, 0, 0, sim.ncomp_, sim.nghost_);
+	amrex::MultiFab::Saxpy(residual, -1., sim.state_new_, this_comp, this_comp, sim.ncomp_,
 			       sim.nghost_);
-	const auto err_norm = state_exact.norm1(this_comp);
+	const auto err_norm = residual.norm1(this_comp);
 	const double rel_error = err_norm / sol_norm;
-
-	//amrex::Print() << "L1 solution norm = " << sol_norm << std::endl;
-	//amrex::Print() << "L1 error norm = " << err_norm << std::endl;
 	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
 
 	const double err_tol = 0.015;
@@ -124,7 +125,26 @@ auto testproblem_advection() -> int
 		status = 1;
 	}
 
-#if 0
+	// copy all FABs to a local FAB across the entire domain
+	amrex::BoxArray localBoxes(sim.domain_);
+	amrex::DistributionMapping localDistribution(localBoxes, 1);
+	amrex::MultiFab state_final(localBoxes, localDistribution, sim.ncomp_, 0);
+	amrex::MultiFab state_exact_local(localBoxes, localDistribution, sim.ncomp_, 0);
+	state_final.ParallelCopy(sim.state_new_);
+	state_exact_local.ParallelCopy(state_exact);
+	auto const &state_final_array = state_final.array(0);
+	auto const &state_exact_array = state_exact_local.array(0);
+
+	std::vector<double> d_final(sim.nx_);
+	std::vector<double> d_initial(sim.nx_);
+	std::vector<double> x(sim.nx_);
+
+	for (int i = 0; i < sim.nx_; ++i) {
+		x.at(i) = (static_cast<double>(i) + 0.5) / sim.nx_;
+		d_final.at(i) = state_final_array(i, 0, 0);
+		d_initial.at(i) = state_exact_array(i, 0, 0);
+	}
+
 	// Plot results
 	std::map<std::string, std::string> d_initial_args;
 	std::map<std::string, std::string> d_final_args;
@@ -136,7 +156,6 @@ auto testproblem_advection() -> int
 	matplotlibcpp::plot(x, d_final, d_final_args);
 	matplotlibcpp::legend();
 	matplotlibcpp::save(std::string("./advection.pdf"));
-#endif
 
 	return status;
 }
