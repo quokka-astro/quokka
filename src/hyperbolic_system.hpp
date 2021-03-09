@@ -39,24 +39,6 @@ using arrayconst_t = amrex::Array4<const amrex::Real> const;
 template <typename problem_t> class HyperbolicSystem
 {
       public:
-	/// Computes timestep and advances system
-	// void AdvanceTimestep();
-	// virtual void AdvanceTimestep(double dt_max);
-	// void AdvanceTimestepSDC2(double dt);
-
-	// setter functions:
-
-	void set_cflNumber(double cflNumber);
-
-	// accessor functions:
-
-	[[nodiscard]] auto nvars() const -> int;
-	[[nodiscard]] auto nghost() const -> int;
-	[[nodiscard]] auto nx() const -> int;
-	[[nodiscard]] auto dim1() const -> int;
-	[[nodiscard]] auto time() const -> double;
-	[[nodiscard]] auto dt() const -> double;
-
 	// static member functions
 
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto MC(double a, double b)
@@ -73,96 +55,30 @@ template <typename problem_t> class HyperbolicSystem
 	static void ReconstructStatesPLM(arrayconst_t &q, array_t &leftState, array_t &rightState,
 					 amrex::Box const &indexRange, int nvars);
 	static void ReconstructStatesPPM(arrayconst_t &q, array_t &leftState, array_t &rightState,
-					 amrex::Box const &indexRange, int nvars);
-
-	static void CopyVars(arrayconst_t &src, array_t &dest, amrex::Box const &indexRange,
-			     int nvars);
-	static auto ComputeResidual(amrex::FArrayBox const &cur, amrex::FArrayBox const &prev,
-				    amrex::Box const &indexRange, int nvars) -> double;
-	static auto ComputeNorm(amrex::FArrayBox const &arr, amrex::Box const &indexRange, int nvars)
-	    -> double;
+					 amrex::Box const &cellRange,
+					 amrex::Box const &interfaceRange, int nvars);
 
 	static void AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayconst_t &U1,
 				 arrayconst_t &x1Flux, double dt, double dx,
 				 amrex::Box const &indexRange, int nvars);
 	static void PredictStep(arrayconst_t &consVarOld, array_t &consVarNew, arrayconst_t &x1Flux,
 				double dt, double dx, amrex::Box const &indexRange, int nvars);
+
 	static void SaveFluxes(array_t &advectionFluxes, arrayconst_t &x1Flux, double dx,
 			       amrex::Box const &indexRange, int nvars);
 
-	// static void AdvanceTimestepRK2(const double dt, array_t &consVar, std::pair<int,int>
-	// cell_range, const int nvars);
-
 	// non-static member functions
 
-	virtual void FillGhostZones(array_t &cons);
-	virtual void AddSourceTerms(array_t &U_prev, array_t &U_new, std::pair<int, int> range);
-	virtual void ComputeSourceTermsExplicit(array_t &U_prev, array_t &src,
-						std::pair<int, int> range);
-	virtual auto CheckStatesValid(arrayconst_t &cons, std::pair<int, int> range) -> bool;
-	virtual void ComputeFlatteningCoefficients(std::pair<int, int> range);
-	virtual void FlattenShocks(array_t &q, std::pair<int, int> range);
-
-      protected:
-	double cflNumber_ = 1.0;
-	double dt_ = 0;
-	const double dtExpandFactor_ = 1.2;
-	double dtPrev_ = std::numeric_limits<double>::max();
-	double time_ = 0.;
-	double lx_;
-	double dx_;
-	int nx_;
-	int dim1_;
-	int nvars_;
-	const int nghost_ = 4; // 4 ghost cells required for PPM
-
-	HyperbolicSystem(int nx, double lx, double cflNumber, int nvars)
-	    : cflNumber_(cflNumber), lx_(lx), dx_(lx / static_cast<double>(nx)), nx_(nx),
-	      nvars_(nvars)
-	{
-		assert(lx_ > 0.0);				   // NOLINT
-		assert(nx_ > 2);				   // NOLINT
-		assert(nghost_ > 1);				   // NOLINT
-		assert((cflNumber_ > 0.0) && (cflNumber_ <= 1.0)); // NOLINT
-
-		dim1_ = nx_ + 2 * nghost_;
-	}
-
-	// virtual auto ComputeTimestep(double dt_max) -> double = 0;
-	// virtual void ComputeFluxes(std::pair<int, int> range) = 0;
-	// virtual void ComputeFirstOrderFluxes(std::pair<int, int> range) = 0;
+	// virtual void FillGhostZones(array_t &cons);
+	// virtual void AddSourceTerms(array_t &U_prev, array_t &U_new, std::pair<int, int> range);
+	// virtual void ComputeSourceTermsExplicit(array_t &U_prev, array_t &src,
+	// 					std::pair<int, int> range);
+	// virtual auto CheckStatesValid(arrayconst_t &cons, std::pair<int, int> range) -> bool;
+	// virtual void ComputeFlatteningCoefficients(std::pair<int, int> range);
+	// virtual void FlattenShocks(array_t &q, std::pair<int, int> range);
 };
 
-template <typename problem_t> auto HyperbolicSystem<problem_t>::time() const -> double
-{
-	return time_;
-}
-
-template <typename problem_t> auto HyperbolicSystem<problem_t>::dt() const -> double { return dt_; }
-
-template <typename problem_t> auto HyperbolicSystem<problem_t>::nx() const -> int { return nx_; }
-
-template <typename problem_t> auto HyperbolicSystem<problem_t>::dim1() const -> int
-{
-	return dim1_;
-}
-
-template <typename problem_t> auto HyperbolicSystem<problem_t>::nghost() const -> int
-{
-	return nghost_;
-}
-
-template <typename problem_t> auto HyperbolicSystem<problem_t>::nvars() const -> int
-{
-	return nvars_;
-}
-
-template <typename problem_t> void HyperbolicSystem<problem_t>::set_cflNumber(double cflNumber)
-{
-	assert((cflNumber > 0.0) && (cflNumber <= 1.0)); // NOLINT
-	cflNumber_ = cflNumber;
-}
-
+#if 0
 template <typename problem_t>
 void HyperbolicSystem<problem_t>::AddSourceTerms(array_t &U_prev, array_t &U_new,
 						 std::pair<int, int> range)
@@ -188,47 +104,7 @@ void HyperbolicSystem<problem_t>::FlattenShocks(array_t &q, std::pair<int, int> 
 {
 	// intentionally no flattening by default
 }
-
-template <typename problem_t> void HyperbolicSystem<problem_t>::FillGhostZones(array_t &cons)
-{
-	// In general, this step will require MPI communication, and interaction
-	// with the main AMR code.
-
-	// periodic boundary conditions
-#if 0
-	// x1 right side boundary
-	for (int n = 0; n < nvars_; ++n) {
-		for (int i = nghost_ + nx_; i < nghost_ + nx_ + nghost_; ++i) {
-			cons(i, j, k, n) = cons(n, i - nx_);
-		}
-	}
-
-	// x1 left side boundary
-	for (int n = 0; n < nvars_; ++n) {
-		for (int i = 0; i < nghost_; ++i) {
-			cons(i, j, k, n) = cons(n, i + nx_);
-		}
-	}
 #endif
-
-	const int j = 1;
-	const int k = 1;
-
-	// extrapolate boundary conditions
-	// x1 right side boundary
-	for (int n = 0; n < nvars_; ++n) {
-		for (int i = nghost_ + nx_; i < nghost_ + nx_ + nghost_; ++i) {
-			cons(i, j, k, n) = cons(nghost_ + nx_ - 1, j, k, n);
-		}
-	}
-
-	// x1 left side boundary
-	for (int n = 0; n < nvars_; ++n) {
-		for (int i = 0; i < nghost_; ++i) {
-			cons(i, j, k, n) = cons(nghost_ + 0, j, k, n);
-		}
-	}
-}
 
 template <typename problem_t>
 void HyperbolicSystem<problem_t>::ReconstructStatesConstant(arrayconst_t &q, array_t &leftState,
@@ -242,15 +118,13 @@ void HyperbolicSystem<problem_t>::ReconstructStatesConstant(arrayconst_t &q, arr
 	// interface at the *left* edge of zone i.
 
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		for (int n = 0; n < nvars; ++n) {
-			// Use piecewise-constant reconstruction
-			// (This converges at first order in spatial
-			// resolution.)
+	amrex::ParallelFor(indexRange, nvars, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
+		// Use piecewise-constant reconstruction
+		// (This converges at first order in spatial
+		// resolution.)
 
-			leftState(i, j, k, n) = q(i - 1, j, k, n);
-			rightState(i, j, k, n) = q(i, j, k, n);
-		}
+		leftState(i, j, k, n) = q(i - 1, j, k, n);
+		rightState(i, j, k, n) = q(i, j, k, n);
 	});
 }
 
@@ -274,20 +148,17 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPLM(arrayconst_t &q, array_t 
 
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
 
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		for (int n = 0; n < nvars; ++n) {
+	amrex::ParallelFor(indexRange, nvars, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
+		// Use piecewise-linear reconstruction
+		// (This converges at second order in spatial resolution.)
 
-			// Use piecewise-linear reconstruction
-			// (This converges at second order in spatial resolution.)
+		const auto lslope =
+		    MC(q(i, j, k, n) - q(i - 1, j, k, n), q(i - 1, j, k, n) - q(i - 2, j, k, n));
+		const auto rslope =
+		    MC(q(i + 1, j, k, n) - q(i, j, k, n), q(i, j, k, n) - q(i - 1, j, k, n));
 
-			const auto lslope = MC(q(i, j, k, n) - q(i - 1, j, k, n),
-					       q(i - 1, j, k, n) - q(i - 2, j, k, n));
-			const auto rslope = MC(q(i + 1, j, k, n) - q(i, j, k, n),
-					       q(i, j, k, n) - q(i - 1, j, k, n));
-
-			leftState(i, j, k, n) = q(i - 1, j, k, n) + 0.25 * lslope; // NOLINT
-			rightState(i, j, k, n) = q(i, j, k, n) - 0.25 * rslope;	   // NOLINT
-		}
+		leftState(i, j, k, n) = q(i - 1, j, k, n) + 0.25 * lslope; // NOLINT
+		rightState(i, j, k, n) = q(i, j, k, n) - 0.25 * rslope;	   // NOLINT
 	});
 
 	// Important final step: ensure that velocity does not exceed c
@@ -302,7 +173,8 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPLM(arrayconst_t &q, array_t 
 template <typename problem_t>
 void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q, array_t &leftState,
 						       array_t &rightState,
-						       amrex::Box const &indexRange,
+						       amrex::Box const &cellRange,
+						       amrex::Box const &interfaceRange,
 						       const int nvars)
 {
 	// By convention, the interfaces are defined on the left edge of each
@@ -312,110 +184,104 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q, array_t 
 
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
 
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		for (int n = 0; n < nvars; ++n) {
-			// PPM reconstruction following Colella & Woodward (1984), with some
-			// modifications following Mignone (2014), as implemented in Athena++.
+	// interface-centered kernel
+	amrex::ParallelFor(interfaceRange, nvars, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
+		// PPM reconstruction following Colella & Woodward (1984), with some
+		// modifications following Mignone (2014), as implemented in Athena++.
 
-			// (1.) Estimate the interface a_{i - 1/2}. Equivalent to step 1 in Athena++
-			// [ppm_simple.cpp].
+		// (1.) Estimate the interface a_{i - 1/2}. Equivalent to step 1 in Athena++
+		// [ppm_simple.cpp].
 
-			// C&W Eq. (1.9) [parabola midpoint for the case of equally-spaced zones]:
-			// a_{j+1/2} = (7/12)(a_j + a_{j+1}) - (1/12)(a_{j+2} + a_{j-1}). Terms are
-			// grouped to preserve exact symmetry in floating-point arithmetic,
-			// following Athena++.
+		// C&W Eq. (1.9) [parabola midpoint for the case of equally-spaced zones]:
+		// a_{j+1/2} = (7/12)(a_j + a_{j+1}) - (1/12)(a_{j+2} + a_{j-1}). Terms are
+		// grouped to preserve exact symmetry in floating-point arithmetic,
+		// following Athena++.
 
-			const double coef_1 = (7. / 12.);
-			const double coef_2 = (-1. / 12.);
-			const double interface =
-			    (coef_1 * q(i, j, k, n) + coef_2 * q(i + 1, j, k, n)) +
-			    (coef_1 * q(i - 1, j, k, n) + coef_2 * q(i - 2, j, k, n));
+		const double coef_1 = (7. / 12.);
+		const double coef_2 = (-1. / 12.);
+		const double interface = (coef_1 * q(i, j, k, n) + coef_2 * q(i + 1, j, k, n)) +
+					 (coef_1 * q(i - 1, j, k, n) + coef_2 * q(i - 2, j, k, n));
 
-			// a_R,(i-1) in C&W
-			leftState(i, j, k, n) = interface;
+		// a_R,(i-1) in C&W
+		leftState(i, j, k, n) = interface;
 
-			// a_L,i in C&W
-			rightState(i, j, k, n) = interface;
-		}
+		// a_L,i in C&W
+		rightState(i, j, k, n) = interface;
 	});
 
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		for (int n = 0; n < nvars; ++n) {
-			// (2.) Constrain interface value to lie between adjacent cell-averaged
-			// values (equivalent to step 2b in Athena++ [ppm_simple.cpp]). [See Eq. B8
-			// of Mignone+ 2005]
+	// cell-centered kernel
+	amrex::ParallelFor(cellRange, nvars, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
+		// (2.) Constrain interface value to lie between adjacent cell-averaged
+		// values (equivalent to step 2b in Athena++ [ppm_simple.cpp]). [See Eq. B8
+		// of Mignone+ 2005]
 
-			// compute bounds from surrounding cells
-			const std::pair<double, double> bounds =
-			    std::minmax({q(i - 1, j, k, n), q(i, j, k, n),
-					 q(i + 1, j, k, n)}); // modify in 3d !!
+		// compute bounds from surrounding cells
+		const std::pair<double, double> bounds = std::minmax(
+		    {q(i - 1, j, k, n), q(i, j, k, n), q(i + 1, j, k, n)}); // modify in 3d !!
 
-			// get interfaces
-			const double a_minus = rightState(i, j, k, n);
-			const double a_plus = leftState(i + 1, j, k, n);
+		// get interfaces
+		const double a_minus = rightState(i, j, k, n);
+		const double a_plus = leftState(i + 1, j, k, n);
 
-			// left side of zone i
-			const double new_a_minus = std::clamp(a_minus, bounds.first, bounds.second);
+		// left side of zone i
+		const double new_a_minus = std::clamp(a_minus, bounds.first, bounds.second);
 
-			// right side of zone i
-			const double new_a_plus = std::clamp(a_plus, bounds.first, bounds.second);
+		// right side of zone i
+		const double new_a_plus = std::clamp(a_plus, bounds.first, bounds.second);
 
-			rightState(i, j, k, n) = new_a_minus;
-			leftState(i + 1, j, k, n) = new_a_plus;
-		}
+		rightState(i, j, k, n) = new_a_minus;
+		leftState(i + 1, j, k, n) = new_a_plus;
 	});
 
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		for (int n = 0; n < nvars; ++n) {
+	// cell-centered kernel
+	amrex::ParallelFor(cellRange, nvars, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
+		const double a_minus = rightState(i, j, k, n);	 // a_L,i in C&W
+		const double a_plus = leftState(i + 1, j, k, n); // a_R,i in C&W
+		const double a = q(i, j, k, n);			 // a_i in C&W
 
-			const double a_minus = rightState(i, j, k, n);	 // a_L,i in C&W
-			const double a_plus = leftState(i + 1, j, k, n); // a_R,i in C&W
-			const double a = q(i, j, k, n);			 // a_i in C&W
+		const double dq_minus = (a - a_minus);
+		const double dq_plus = (a_plus - a);
 
-			const double dq_minus = (a - a_minus);
-			const double dq_plus = (a_plus - a);
+		double new_a_minus = a_minus;
+		double new_a_plus = a_plus;
 
-			double new_a_minus = a_minus;
-			double new_a_plus = a_plus;
+		// (3.) Monotonicity correction, using Eq. (1.10) in PPM paper. Equivalent
+		// to step 4b in Athena++ [ppm_simple.cpp].
 
-			// (3.) Monotonicity correction, using Eq. (1.10) in PPM paper. Equivalent
-			// to step 4b in Athena++ [ppm_simple.cpp].
+		const double qa = dq_plus * dq_minus; // interface extrema
 
-			const double qa = dq_plus * dq_minus; // interface extrema
+		if ((qa <= 0.0)) { // local extremum
 
-			if ((qa <= 0.0)) { // local extremum
+			// Causes subtle, but very weird, oscillations in the Shu-Osher test
+			// problem. However, it is necessary to get a reasonable solution
+			// for the sawtooth advection problem.
+			const double dq0 = MC(q(i + 1, j, k, n) - q(i, j, k, n),
+					      q(i, j, k, n) - q(i - 1, j, k, n));
 
-				// Causes subtle, but very weird, oscillations in the Shu-Osher test
-				// problem. However, it is necessary to get a reasonable solution
-				// for the sawtooth advection problem.
-				const double dq0 = MC(q(i + 1, j, k, n) - q(i, j, k, n),
-						      q(i, j, k, n) - q(i - 1, j, k, n));
+			// use linear reconstruction, following Balsara (2017) [Living Rev
+			// Comput Astrophys (2017) 3:2]
+			new_a_minus = a - 0.5 * dq0;
+			new_a_plus = a + 0.5 * dq0;
 
-				// use linear reconstruction, following Balsara (2017) [Living Rev
-				// Comput Astrophys (2017) 3:2]
-				new_a_minus = a - 0.5 * dq0;
-				new_a_plus = a + 0.5 * dq0;
+			// original C&W method for this case
+			// new_a_minus = a;
+			// new_a_plus = a;
 
-				// original C&W method for this case
-				// new_a_minus = a;
-				// new_a_plus = a;
+		} else { // no local extrema
 
-			} else { // no local extrema
-
-				// parabola overshoots near a_plus -> reset a_minus
-				if (std::abs(dq_minus) >= 2.0 * std::abs(dq_plus)) {
-					new_a_minus = a - 2.0 * dq_plus;
-				}
-
-				// parabola overshoots near a_minus -> reset a_plus
-				if (std::abs(dq_plus) >= 2.0 * std::abs(dq_minus)) {
-					new_a_plus = a + 2.0 * dq_minus;
-				}
+			// parabola overshoots near a_plus -> reset a_minus
+			if (std::abs(dq_minus) >= 2.0 * std::abs(dq_plus)) {
+				new_a_minus = a - 2.0 * dq_plus;
 			}
 
-			rightState(i, j, k, n) = new_a_minus;
-			leftState(i + 1, j, k, n) = new_a_plus;
+			// parabola overshoots near a_minus -> reset a_plus
+			if (std::abs(dq_plus) >= 2.0 * std::abs(dq_minus)) {
+				new_a_plus = a + 2.0 * dq_minus;
+			}
 		}
+
+		rightState(i, j, k, n) = new_a_minus;
+		leftState(i + 1, j, k, n) = new_a_plus;
 	});
 
 	// Important final step: ensure that velocity does not exceed c
@@ -437,11 +303,9 @@ void HyperbolicSystem<problem_t>::SaveFluxes(array_t &advectionFluxes, arraycons
 	// left of zone i, and -1.0*flux(i+1) is the flux *into* zone i through
 	// the interface on the right of zone i.
 
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		for (int n = 0; n < nvars; ++n) {
-			advectionFluxes(i, j, k, n) =
-			    (-1.0 / dx) * (x1Flux(i + 1, j, k, n) - x1Flux(i, j, k, n));
-		}
+	amrex::ParallelFor(indexRange, nvars, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
+		advectionFluxes(i, j, k, n) =
+		    (-1.0 / dx) * (x1Flux(i + 1, j, k, n) - x1Flux(i, j, k, n));
 	});
 }
 
@@ -456,12 +320,9 @@ void HyperbolicSystem<problem_t>::PredictStep(arrayconst_t &consVarOld, array_t 
 	// left of zone i, and -1.0*flux(i+1) is the flux *into* zone i through
 	// the interface on the right of zone i.
 
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		for (int n = 0; n < nvars; ++n) {
-			consVarNew(i, j, k, n) =
-			    consVarOld(i, j, k, n) -
-			    (dt / dx) * (x1Flux(i + 1, j, k, n) - x1Flux(i, j, k, n));
-		}
+	amrex::ParallelFor(indexRange, nvars, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
+		consVarNew(i, j, k, n) = consVarOld(i, j, k, n) -
+					 (dt / dx) * (x1Flux(i + 1, j, k, n) - x1Flux(i, j, k, n));
 	});
 }
 
@@ -476,73 +337,16 @@ void HyperbolicSystem<problem_t>::AddFluxesRK2(array_t &U_new, arrayconst_t &U0,
 	// left of zone i, and -1.0*flux(i+1) is the flux *into* zone i through
 	// the interface on the right of zone i.
 
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		for (int n = 0; n < nvars; ++n) {
-			// RK-SSP2 integrator
-			const double U_0 = U0(i, j, k, n);
-			const double U_1 = U1(i, j, k, n);
-			const double FU_1 =
-			    -1.0 * (dt / dx) * (x1Flux(i + 1, j, k, n) - x1Flux(i, j, k, n));
+	amrex::ParallelFor(indexRange, nvars, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
+		// RK-SSP2 integrator
+		const double U_0 = U0(i, j, k, n);
+		const double U_1 = U1(i, j, k, n);
+		const double FU_1 =
+		    -1.0 * (dt / dx) * (x1Flux(i + 1, j, k, n) - x1Flux(i, j, k, n));
 
-			// save results in U_new
-			U_new(i, j, k, n) = 0.5 * U_0 + 0.5 * U_1 + 0.5 * FU_1;
-		}
+		// save results in U_new
+		U_new(i, j, k, n) = 0.5 * U_0 + 0.5 * U_1 + 0.5 * FU_1;
 	});
-}
-
-template <typename problem_t>
-auto HyperbolicSystem<problem_t>::CheckStatesValid(arrayconst_t & /*cons*/,
-						   const std::pair<int, int> /*range*/) -> bool
-{
-	return true;
-}
-
-template <typename problem_t>
-void HyperbolicSystem<problem_t>::CopyVars(arrayconst_t &src, array_t &dest,
-					   amrex::Box const &indexRange, const int nvars)
-{
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		for (int n = 0; n < nvars; ++n) {
-			dest(i, j, k, n) = src(i, j, k, n);
-		}
-	});
-}
-
-template <typename problem_t>
-auto HyperbolicSystem<problem_t>::ComputeResidual(amrex::FArrayBox const &cur, amrex::FArrayBox const &prev,
-						  amrex::Box const &indexRange, const int nvars)
-    -> double
-{
-	amrex::FArrayBox diff(indexRange, nvars);
-	diff.setVal(0.);
-	diff.saxpy(1., cur);
-	diff.saxpy(-1., prev);
-	diff.abs();
-
-	amrex::Real norm = 0.;
-	amrex::Dim3 size = indexRange.size().dim3();
-	for (int n = 0; n < nvars; ++n) {
-		const amrex::Real comp = diff.sum(indexRange, n) / (size.x*size.y*size.z);
-		norm += (comp * comp);
-	}
-	return std::sqrt(norm);
-}
-
-template <typename problem_t>
-auto HyperbolicSystem<problem_t>::ComputeNorm(amrex::FArrayBox const &arr, amrex::Box const &indexRange,
-					      const int nvars) -> double
-{
-	amrex::Real norm = 0.;
-	amrex::FArrayBox norm_arr(indexRange, nvars);
-	norm_arr.copy(arr);
-	norm_arr.abs();
-
-	amrex::Dim3 size = indexRange.size().dim3();
-	for (int n = 0; n < nvars; ++n) {
-		const amrex::Real comp = norm_arr.sum(indexRange, n) / (size.x*size.y*size.z);
-		norm += (comp * comp);
-	}
-	return std::sqrt(norm);
 }
 
 #if 0

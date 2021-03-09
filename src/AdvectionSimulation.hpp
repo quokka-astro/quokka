@@ -61,9 +61,10 @@ template <typename problem_t> class AdvectionSimulation : public SingleLevelSimu
 	void stageTwoRK2SSP(amrex::Array4<const amrex::Real> const &consVar,
 			    amrex::Array4<amrex::Real> const &consVarNew,
 			    const amrex::Box &indexRange, int nvars);
+	void fluxFunction(amrex::Array4<const amrex::Real> const &consState,
+			  amrex::FArrayBox &x1Flux, const amrex::Box &indexRange, int nvars);
 
-      protected:
-	const double advectionVx_ = 1.0;
+	    protected : const double advectionVx_ = 1.0;
 };
 
 template <typename problem_t>
@@ -125,48 +126,56 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::advanceSingle
 }
 
 template <typename problem_t>
+void AdvectionSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real> const &consState,
+						  amrex::FArrayBox &x1Flux,
+						  const amrex::Box &indexRange, const int nvars)
+{
+	// extend box to include ghost zones
+	amrex::Box const &ghostRange = amrex::grow(indexRange, nghost_);
+	// N.B.: A one-zone layer around the cells must be fully reconstructed in order for PPM to
+	// work.
+	amrex::Box const &reconstructRange = amrex::grow(indexRange, 1);
+	// [0 == x1 direction]
+	amrex::Box const &x1ReconstructRange = amrex::surroundingNodes(reconstructRange, 0);
+
+	// Allocate temporary arrays using CUDA stream async allocator (or equivalent)
+	amrex::FArrayBox primVar(ghostRange, nvars, amrex::The_Async_Arena()); // cell-centered
+	amrex::FArrayBox x1LeftState(x1ReconstructRange, nvars, amrex::The_Async_Arena());
+	amrex::FArrayBox x1RightState(x1ReconstructRange, nvars, amrex::The_Async_Arena());
+
+	// cell-centered kernel
+	LinearAdvectionSystem<problem_t>::ConservedToPrimitive(consState, primVar.array(),
+							       ghostRange, nvars);
+	CheckNaN(primVar, ghostRange, ncomp_);
+
+	// mixed interface/cell-centered kernel
+	LinearAdvectionSystem<problem_t>::ReconstructStatesPPM(
+	    primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange,
+	    x1ReconstructRange, nvars);
+	CheckNaN(x1LeftState, reconstructRange, ncomp_);
+	CheckNaN(x1RightState, reconstructRange, ncomp_);
+
+	// interface-centered kernel
+	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, 0);
+	LinearAdvectionSystem<problem_t>::ComputeFluxes(x1Flux.array(), x1LeftState.array(),
+							x1RightState.array(), advectionVx_,
+							x1FluxRange, nvars);
+	CheckNaN(x1Flux, x1FluxRange, ncomp_);
+}
+
+template <typename problem_t>
 void AdvectionSimulation<problem_t>::stageOneRK2SSP(
     amrex::Array4<const amrex::Real> const &consVarOld,
     amrex::Array4<amrex::Real> const &consVarNew, const amrex::Box &indexRange, const int nvars)
 {
-	// extend box to include ghost zones
-	amrex::Box const &ghostRange = amrex::grow(indexRange, nghost_);
-	amrex::Box const &reconstructRange =
-	    amrex::grow(indexRange, 1); // a one-zone layer around the cells must be reconstructed
-	amrex::Box const &x1ReconstructRange = ghostRange;
-	    //amrex::surroundingNodes(reconstructRange, 0); // 0 == x1 direction
-	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, 0);
-
 	// Allocate temporary arrays using CUDA stream async allocator (or equivalent)
-	amrex::FArrayBox primVar(ghostRange, nvars, amrex::The_Async_Arena());	   // cell-centered
-	amrex::FArrayBox x1LeftState(x1ReconstructRange, nvars, amrex::The_Async_Arena());
-	amrex::FArrayBox x1RightState(x1ReconstructRange, nvars, amrex::The_Async_Arena());
-	amrex::FArrayBox x1Flux(x1FluxRange, nvars, amrex::The_Async_Arena());	   // node-centered in x
+	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, 0);
+	amrex::FArrayBox x1Flux(x1FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in x
 
 	// Stage 1 of RK2-SSP
-	{
-		// cell-centered kernel
-		LinearAdvectionSystem<problem_t>::ConservedToPrimitive(consVarOld, primVar.array(),
-								       ghostRange, nvars);
-		CheckNaN(primVar, ghostRange, ncomp_);
-
-		// ???-centered kernel
-		LinearAdvectionSystem<problem_t>::ReconstructStatesPPM(
-		    primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange,
-		    nvars);
-		CheckNaN(x1LeftState, reconstructRange, ncomp_);
-		CheckNaN(x1RightState, reconstructRange, ncomp_);
-
-		// interface-centered kernel
-		LinearAdvectionSystem<problem_t>::ComputeFluxes(x1Flux.array(), x1LeftState.array(),
-								x1RightState.array(), advectionVx_,
-								x1FluxRange, nvars);
-		CheckNaN(x1Flux, x1FluxRange, ncomp_);
-
-		// cell-centered kernel
-		LinearAdvectionSystem<problem_t>::PredictStep(
-		    consVarOld, consVarNew, x1Flux.array(), dt_, dx_[0], indexRange, nvars);
-	}
+	fluxFunction(consVarOld, x1Flux, indexRange, nvars);
+	LinearAdvectionSystem<problem_t>::PredictStep(consVarOld, consVarNew, x1Flux.array(), dt_,
+						      dx_[0], indexRange, nvars);
 }
 
 template <typename problem_t>
@@ -174,45 +183,14 @@ void AdvectionSimulation<problem_t>::stageTwoRK2SSP(
     amrex::Array4<const amrex::Real> const &consVarOld,
     amrex::Array4<amrex::Real> const &consVarNew, const amrex::Box &indexRange, const int nvars)
 {
-	// extend box to include ghost zones
-	amrex::Box const &ghostRange = amrex::grow(indexRange, nghost_);
-	amrex::Box const &reconstructRange =
-	    amrex::grow(indexRange, 1); // a one-zone layer around the cells must be reconstructed
-	amrex::Box const &x1ReconstructRange = ghostRange;
-	    //amrex::surroundingNodes(reconstructRange, 0); // 0 == x1 direction
-	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, 0);
-
 	// Allocate temporary arrays using CUDA stream async allocator (or equivalent)
-	amrex::FArrayBox primVar(ghostRange, nvars, amrex::The_Async_Arena());	   // cell-centered
-	amrex::FArrayBox x1LeftState(x1ReconstructRange, nvars, amrex::The_Async_Arena());
-	amrex::FArrayBox x1RightState(x1ReconstructRange, nvars, amrex::The_Async_Arena());
-	amrex::FArrayBox x1Flux(x1FluxRange, nvars, amrex::The_Async_Arena());	   // node-centered in x
+	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, 0);
+	amrex::FArrayBox x1Flux(x1FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in x
 
 	// Stage 2 of RK2-SSP
-	{
-		// cell-centered kernel
-		LinearAdvectionSystem<problem_t>::ConservedToPrimitive(consVarNew, primVar.array(),
-								       ghostRange, nvars);
-		CheckNaN(primVar, ghostRange, ncomp_);
-
-		// ???-centered kernel
-		LinearAdvectionSystem<problem_t>::ReconstructStatesPPM(
-		    primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange,
-		    nvars);
-		CheckNaN(x1LeftState, reconstructRange, ncomp_);
-		CheckNaN(x1RightState, reconstructRange, ncomp_);
-
-		// interface-centered kernel
-		LinearAdvectionSystem<problem_t>::ComputeFluxes(x1Flux.array(), x1LeftState.array(),
-								x1RightState.array(), advectionVx_,
-								x1FluxRange, nvars);
-		CheckNaN(x1Flux, x1FluxRange, ncomp_);
-
-		// cell-centered kernel
-		LinearAdvectionSystem<problem_t>::AddFluxesRK2(consVarNew, consVarOld, consVarNew,
-							       x1Flux.array(), dt_, dx_[0],
-							       indexRange, nvars);
-	}
+	fluxFunction(consVarNew, x1Flux, indexRange, nvars);
+	LinearAdvectionSystem<problem_t>::AddFluxesRK2(
+	    consVarNew, consVarOld, consVarNew, x1Flux.array(), dt_, dx_[0], indexRange, nvars);
 }
 
 #endif // ADVECTION_SIMULATION_HPP_

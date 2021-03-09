@@ -63,7 +63,7 @@ template <typename problem_t> class SingleLevelSimulation
 	amrex::MultiFab state_new_;
 
 	// Nghost = number of ghost cells for each array
-	int nghost_ = 4;
+	int nghost_ = 3;
 	// Ncomp = number of components for each array
 	int ncomp_ = 1;
 	// dx = cell size
@@ -150,6 +150,7 @@ template <typename problem_t> void SingleLevelSimulation<problem_t>::evolve()
 {
 	// Main time loop
 	AMREX_ASSERT(areInitialConditionsDefined_);
+    amrex::Real start_time = amrex::ParallelDescriptor::second();
 
 	int j = 0;
 	for (; j < maxTimesteps_; ++j) {
@@ -172,6 +173,14 @@ template <typename problem_t> void SingleLevelSimulation<problem_t>::evolve()
 		// print timestep information on I/O processor
 		amrex::Print() << "Cycle " << j << "; t = " << tNow_ << "; dt = " << dt_ << "\n";
 	}
+
+	// compute performance metric (microseconds/zone-update)
+    amrex::Real elapsed_sec = amrex::ParallelDescriptor::second() - start_time;
+    const int IOProc = amrex::ParallelDescriptor::IOProcessorNumber();
+    amrex::ParallelDescriptor::ReduceRealMax(elapsed_sec, IOProc);
+	const double zone_cycles = cycleCount_ * (nx_ * ny_ * nz_);
+	const double microseconds_per_update = 1.0e6 * elapsed_sec / zone_cycles;
+	amrex::Print() << "Performance figure-of-merit: " << microseconds_per_update << " μs/zone-update\n";
 }
 
 #endif // SIMULATION_HPP_
