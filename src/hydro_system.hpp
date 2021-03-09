@@ -6,12 +6,13 @@
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 /// \file hydro_system.hpp
-/// \brief Defines a class for solving the (1d) Euler equations.
+/// \brief Defines a class for solving the Euler equations.
 ///
 
 // c++ headers
 #include <cassert>
 #include <cmath>
+#include <limits>
 #include <valarray>
 
 // library headers
@@ -20,255 +21,95 @@
 // internal headers
 #include "hyperbolic_system.hpp"
 
-/// Class for a linear, scalar advection equation
+/// Class for the Euler equations of inviscid hydrodynamics
 ///
-template <typename problem_t>
-class HydroSystem : public HyperbolicSystem<problem_t>
+template <typename problem_t> class HydroSystem : public HyperbolicSystem<problem_t>
 {
-	// See
-	// [https://isocpp.org/wiki/faq/templates#nondependent-name-lookup-members]
-	using HyperbolicSystem<problem_t>::lx_;
-	using HyperbolicSystem<problem_t>::nx_;
-	using HyperbolicSystem<problem_t>::dx_;
-	using HyperbolicSystem<problem_t>::dt_;
-	using HyperbolicSystem<problem_t>::cflNumber_;
-	using HyperbolicSystem<problem_t>::dim1_;
-	using HyperbolicSystem<problem_t>::nghost_;
-	using HyperbolicSystem<problem_t>::nvars_;
-
-	using HyperbolicSystem<problem_t>::x1LeftState_;
-	using HyperbolicSystem<problem_t>::x1RightState_;
-	using HyperbolicSystem<problem_t>::x1Flux_;
-	using HyperbolicSystem<problem_t>::x1FluxDiffusive_;
-	using HyperbolicSystem<problem_t>::primVar_;
-	using HyperbolicSystem<problem_t>::consVarPredictStep_;
-
       public:
-	using HyperbolicSystem<problem_t>::consVar_;
+	enum consVarIndex { density_index = 0, x1Momentum_index = 1, energy_index = 2 };
+	enum primVarIndex { primDensity_index = 0, x1Velocity_index = 1, pressure_index = 2 };
 
-	enum consVarIndex {
-		density_index = 0,
-		x1Momentum_index = 1,
-		energy_index = 2
-	};
+	static void ConservedToPrimitive(arrayconst_t &cons, array_t &primVar,
+					 amrex::Box const &indexRange);
 
-	enum primVarIndex {
-		primDensity_index = 0,
-		x1Velocity_index = 1,
-		pressure_index = 2
-	};
+	// requires GPU reductions
+	static auto ComputeTimestep(arrayconst_t &cons, double dx, amrex::Box const &indexRange)
+	    -> double;
+	// static auto CheckStatesValid(array_t &cons, const std::pair<int, int> range) -> bool;
 
-	struct HydroSystemArgs {
-		int nx;
-		double lx;
-		double cflNumber;
-		double gamma;
-	};
+	static void ComputeFluxes(arrayconst_t &x1LeftState, arrayconst_t &x1RightState,
+				  array_t &x1Flux, amrex::Box const &indexRange);
+	static void ComputeFirstOrderFluxes(arrayconst_t &consVar, array_t &x1FluxDiffusive,
+					    amrex::Box const &indexRange);
+	static void ComputeFlatteningCoefficients(arrayconst_t &primVar, array_t &x1Chi,
+						  amrex::Box const &indexRange);
+	static void FlattenShocks(arrayconst_t &q, arrayconst_t &x1Chi, array_t &x1LeftState,
+				  array_t &x1RightState, amrex::Box const &indexRange, int nvars);
 
-	explicit HydroSystem(HydroSystemArgs args);
-
-	void ConservedToPrimitive(array_t &cons,
-				  std::pair<int, int> range) override;
-	auto ComputeTimestep(double dt_max) -> double override;
-	void AdvanceTimestep(double dt_max) override;
-	void FillGhostZones(array_t &cons) override;
-	void ComputeFlatteningCoefficients(std::pair<int, int> range) override;
-	void FlattenShocks(array_t &q, const std::pair<int,int> range) override;
-	auto CheckStatesValid(array_t &cons, const std::pair<int, int> range) -> bool override;
-
-	// setter functions:
-
-	void set_cflNumber(double cflNumber);
-	auto set_density(int i) -> double &;
-	auto set_x1Momentum(int i) -> double &;
-	auto set_energy(int i) -> double &;
-
-	// accessor functions:
-
-	auto density(int i) -> double;
-	auto x1Momentum(int i) -> double;
-	auto energy(int i) -> double;
-
-	auto primDensity(int i) -> double;
-	auto x1Velocity(int i) -> double;
-	auto pressure(int i) -> double;
-
-	auto ComputeMass() -> double;
-	auto ComputeEnergy() -> double;
-
-      protected:
-	array_t density_;
-	array_t x1Momentum_;
-	array_t energy_;
-
-	array_t primDensity_;
-	array_t x1Velocity_;
-	array_t pressure_;
-
-	// PPM shock flattening coefficients
-	array_t x1Chi_;
-	array_t problemCell_;
-
-	double gamma_;
-
-	void ComputeFluxes(std::pair<int, int> range) override;
-	void ComputeFirstOrderFluxes(std::pair<int, int> range) override;
+	static double gamma_;
 };
 
 template <typename problem_t>
-HydroSystem<problem_t>::HydroSystem(HydroSystemArgs args)
-    : gamma_(args.gamma), HyperbolicSystem<problem_t>{args.nx, args.lx,
-						      args.cflNumber, 3}
+void HydroSystem<problem_t>::ConservedToPrimitive(arrayconst_t &cons, array_t &primVar,
+						  amrex::Box const &indexRange)
 {
-	assert((gamma_ > 1.0)); // NOLINT
-
-	density_ = consVar_.SliceArray(density_index);
-	x1Momentum_ = consVar_.SliceArray(x1Momentum_index);
-	energy_ = consVar_.SliceArray(energy_index);
-
-	primDensity_ = primVar_.SliceArray(primDensity_index);
-	x1Velocity_ = primVar_.SliceArray(x1Velocity_index);
-	pressure_ = primVar_.SliceArray(pressure_index);
-
-	x1Chi_.AllocateArray(1, args.nx + 2*nghost_);
-	problemCell_.AllocateArray(1, args.nx + 2*nghost_);
-}
-
-template <typename problem_t>
-auto HydroSystem<problem_t>::density(const int i) -> double
-{
-	return density_(i);
-}
-
-template <typename problem_t>
-auto HydroSystem<problem_t>::set_density(const int i) -> double &
-{
-	return density_(i);
-}
-
-template <typename problem_t>
-auto HydroSystem<problem_t>::x1Momentum(const int i) -> double
-{
-	return x1Momentum_(i);
-}
-
-template <typename problem_t>
-auto HydroSystem<problem_t>::set_x1Momentum(const int i) -> double &
-{
-	return x1Momentum_(i);
-}
-
-template <typename problem_t>
-auto HydroSystem<problem_t>::energy(const int i) -> double
-{
-	return energy_(i);
-}
-
-template <typename problem_t>
-auto HydroSystem<problem_t>::set_energy(const int i) -> double &
-{
-	return energy_(i);
-}
-
-template <typename problem_t>
-auto HydroSystem<problem_t>::primDensity(const int i) -> double
-{
-	return primDensity_(i);
-}
-
-template <typename problem_t>
-auto HydroSystem<problem_t>::x1Velocity(const int i) -> double
-{
-	return x1Velocity_(i);
-}
-
-template <typename problem_t>
-auto HydroSystem<problem_t>::pressure(const int i) -> double
-{
-	return pressure_(i);
-}
-
-template <typename problem_t>
-auto HydroSystem<problem_t>::ComputeMass() -> double
-{
-	double mass = 0.0;
-
-	for (int i = nghost_; i < nx_ + nghost_; ++i) {
-		mass += density_(i) * dx_;
-	}
-
-	return mass;
-}
-
-template <typename problem_t>
-auto HydroSystem<problem_t>::ComputeEnergy() -> double
-{
-	double energy = 0.0;
-
-	for (int i = nghost_; i < nx_ + nghost_; ++i) {
-		energy += energy_(i) * dx_;
-	}
-
-	return energy;
-}
-
-template <typename problem_t>
-void HydroSystem<problem_t>::ConservedToPrimitive(
-    array_t &cons, const std::pair<int, int> range)
-{
-	for (int i = range.first; i < range.second; ++i) {
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const auto rho = cons(density_index, i);
 		const auto px = cons(x1Momentum_index, i);
-		const auto E =
-		    cons(energy_index, i); // *total* gas energy per unit volume
+		const auto E = cons(energy_index, i); // *total* gas energy per unit volume
+
+		const auto vx = px / rho;
+		const auto kinetic_energy = 0.5 * rho * std::pow(vx, 2);
+		const auto thermal_energy = E - kinetic_energy;
+
+		const auto P = thermal_energy * (HydroSystem<problem_t>::gamma_ - 1.0);
+
+		assert(rho > 0.); // NOLINT
+		assert(P > 0.);	  // NOLINT
+
+		primVar(i, j, k, primDensity_index) = rho;
+		primVar(i, j, k, x1Velocity_index) = vx;
+		primVar(i, j, k, pressure_index) = P;
+	});
+}
+
+template <typename problem_t>
+auto HydroSystem<problem_t>::ComputeTimestep(arrayconst_t &cons, const double dx,
+					     amrex::Box const &indexRange) -> double
+{
+	double dt = std::numeric_limits<double>::max();
+
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		const auto rho = cons(i, j, k, density_index);
+		const auto px = cons(i, j, k, x1Momentum_index);
+		const auto E = cons(i, j, k, energy_index); // *total* gas energy per unit volume
 
 		const auto vx = px / rho;
 		const auto kinetic_energy = 0.5 * rho * std::pow(vx, 2);
 		const auto thermal_energy = E - kinetic_energy;
 
 		const auto P = thermal_energy * (gamma_ - 1.0);
-
-		assert(rho > 0.); // NOLINT
-		assert(P > 0.);	  // NOLINT
-
-		primDensity_(i) = rho;
-		x1Velocity_(i) = vx;
-		pressure_(i) = P;
-	}
-}
-
-template <typename problem_t>
-auto HydroSystem<problem_t>::ComputeTimestep(const double dt_max) -> double
-{
-	double dt = dt_max;
-
-	for (int i = 0; i < dim1_; ++i) {
-		const double rho = primDensity_(i);
-		const double vx = x1Velocity_(i);
-		const double P = pressure_(i);
-		const double cs = std::sqrt(gamma_ * P / rho);
+		const double cs = std::sqrt(HydroSystem<problem_t>::gamma_ * P / rho);
 		assert(cs > 0.); // NOLINT
 
-		const double signal_max =
-		    std::max(std::abs(vx - cs), std::abs(vx + cs));
-		const double thisDt = cflNumber_ * (dx_ / signal_max);
+		const double signal_max = std::max(std::abs(vx - cs), std::abs(vx + cs));
+		const double thisDt = (dx / signal_max);
 		dt = std::min(dt, thisDt);
-	}
+	});
 
-	dt_ = dt;
 	return dt;
 }
 
+#if 0
 template <typename problem_t>
-auto HydroSystem<problem_t>::CheckStatesValid(
-    array_t &cons, const std::pair<int, int> range) -> bool
+auto HydroSystem<problem_t>::CheckStatesValid(arrayconst_t &cons, amrex::Box const &indexRange)
+    -> bool
 {
 	bool areValid = true;
-	for (int i = range.first; i < range.second; ++i) {
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const auto rho = cons(density_index, i);
 		const auto px = cons(x1Momentum_index, i);
-		const auto E =
-		    cons(energy_index, i); // *total* gas energy per unit volume
+		const auto E = cons(energy_index, i); // *total* gas energy per unit volume
 
 		const auto vx = px / rho;
 		const auto kinetic_energy = 0.5 * rho * std::pow(vx, 2);
@@ -277,21 +118,23 @@ auto HydroSystem<problem_t>::CheckStatesValid(
 		const auto P = thermal_energy * (gamma_ - 1.0);
 
 		if (rho <= 0.) {
-			problemCell_(i) = 1.0;
-			amrex::Print() << "Bad cell i = " << i << " (negative density = " << rho << ")." << std::endl;
+			amrex::Print() << "Bad cell i = " << i << " (negative density = " << rho
+				       << ")." << std::endl;
 			areValid = false;
 		}
-		if( P <= 0.) {
-			problemCell_(i) = 1.0;
-			amrex::Print() << "Bad cell i = " << i << " (negative pressure = " << P << ")." << std::endl;
+		if (P <= 0.) {
+			amrex::Print() << "Bad cell i = " << i << " (negative pressure = " << P
+				       << ")." << std::endl;
 			areValid = false;
 		}
-	}
+	});
 	return areValid;
 }
+#endif
 
 template <typename problem_t>
-void HydroSystem<problem_t>::ComputeFlatteningCoefficients(const std::pair<int,int> range)
+void HydroSystem<problem_t>::ComputeFlatteningCoefficients(arrayconst_t &primVar, array_t &x1Chi,
+							   amrex::Box const &indexRange)
 {
 	// compute the PPM shock flattening coefficient following
 	//   Appendix B1 of Mignone+ 2005 [this description has typos].
@@ -303,80 +146,69 @@ void HydroSystem<problem_t>::ComputeFlatteningCoefficients(const std::pair<int,i
 	constexpr double Zmax = 0.75;
 	constexpr double Zmin = 0.25;
 
-	for (int i = range.first; i < range.second; ++i) {
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		// beta is a measure of shock resolution (Eq. 74 of Miller & Colella 2002)
-		const double beta =
-		    std::abs(pressure_(i + 1) - pressure_(i - 1)) /
-		    std::abs(pressure_(i + 2) - pressure_(i - 2));
+		const double beta = std::abs(primVar(i + 1, j, k, pressure_index) -
+					     primVar(i - 1, j, k, pressure_index)) /
+				    std::abs(primVar(i + 2, j, k, pressure_index) -
+					     primVar(i - 2, j, k, pressure_index));
 
 		// Eq. 75 of Miller & Colella 2002
 		const double chi_min =
-		    std::max(0., std::min(1., (beta_max - beta) /
-						  (beta_max - beta_min)));
+		    std::max(0., std::min(1., (beta_max - beta) / (beta_max - beta_min)));
 
 		// Z is a measure of shock strength (Eq. 76 of Miller & Colella 2002)
-		const double K_S = gamma_ * pressure_(i); // equal to \rho c_s^2
-		const double Z =
-		    std::abs(pressure_(i + 1) - pressure_(i - 1)) / K_S;
+		const double K_S = gamma_ * primVar(i, j, k, pressure_index); // equal to \rho c_s^2
+		const double Z = std::abs(primVar(i + 1, j, k, pressure_index) -
+					  primVar(i - 1, j, k, pressure_index)) /
+				 K_S;
 
 		// check for converging flow (Eq. 77)
 		double chi = 1.0;
-		if (x1Velocity_(i + 1) < x1Velocity_(i - 1)) {
-			chi = std::max(
-			    chi_min, std::min(1., (Zmax - Z) / (Zmax - Zmin)));
+		if (primVar(i + 1, j, k, x1Velocity_index) <
+		    primVar(i - 1, j, k, x1Velocity_index)) {
+			chi = std::max(chi_min, std::min(1., (Zmax - Z) / (Zmax - Zmin)));
 		}
 
-		x1Chi_(i) = chi;
-	}
+		x1Chi(i, j, k) = chi;
+	});
 }
 
 template <typename problem_t>
-void HydroSystem<problem_t>::FlattenShocks(array_t &q, const std::pair<int,int> range)
+void HydroSystem<problem_t>::FlattenShocks(arrayconst_t &q, arrayconst_t &x1Chi,
+					   array_t &x1LeftState, array_t &x1RightState,
+					   amrex::Box const &indexRange, const int nvars)
 {
 	// Apply shock flattening based on Miller & Colella (2002)
 	// [This is necessary to get a reasonable solution to the slow-moving
 	// shock problem, and reduces post-shock oscillations in other cases.]
 
-	for (int n = 0; n < nvars_; ++n) {
-		for (int i = range.first; i < range.second; ++i) {
-			// compute coefficient as the minimum from all surrounding cells
-			//  (Eq. 78 of Miller & Colella 2002)
-			double chi = 
-				std::min({x1Chi_(i - 1), x1Chi_(i), x1Chi_(i+1)}); // modify in 3d !!
+	amrex::ParallelFor(indexRange, nvars, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
+		// compute coefficient as the minimum from all surrounding cells
+		//  (Eq. 78 of Miller & Colella 2002)
+		double chi = std::min(
+		    {x1Chi(i - 1, j, k), x1Chi(i, j, k), x1Chi(i + 1, j, k)}); // modify in 3d !!
 
-			// get interfaces
-			const double a_minus = x1RightState_(n, i);
-			const double a_plus = x1LeftState_(n, i+1);
-			const double a_mean = q(n, i);
+		// get interfaces
+		const double a_minus = x1RightState(i, j, k, n);
+		const double a_plus = x1LeftState(i + 1, j, k, n);
+		const double a_mean = q(i, j, k, n);
 
-			// left side of zone i (Eq. 70a)
-			const double new_a_minus =
-			    chi * a_minus + (1. - chi) * a_mean;
+		// left side of zone i (Eq. 70a)
+		const double new_a_minus = chi * a_minus + (1. - chi) * a_mean;
 
-			// right side of zone i (Eq. 70b)
-			const double new_a_plus =
-			    chi * a_plus + (1. - chi) * a_mean;
+		// right side of zone i (Eq. 70b)
+		const double new_a_plus = chi * a_plus + (1. - chi) * a_mean;
 
-			x1RightState_(n, i) = new_a_minus;
-			x1LeftState_(n, i+1) = new_a_plus;
-		}
-	}
+		x1RightState(i, j, k, n) = new_a_minus;
+		x1LeftState(i + 1, j, k, n) = new_a_plus;
+	});
 }
 
 template <typename problem_t>
-void HydroSystem<problem_t>::FillGhostZones(array_t &cons)
-{
-	HyperbolicSystem<problem_t>::FillGhostZones(cons);
-}
-
-template <typename problem_t>
-void HydroSystem<problem_t>::AdvanceTimestep(double dt_max)
-{
-	HyperbolicSystem<problem_t>::AdvanceTimestep(dt_max);
-}
-
-template <typename problem_t>
-void HydroSystem<problem_t>::ComputeFirstOrderFluxes(std::pair<int, int> range)
+void HydroSystem<problem_t>::ComputeFirstOrderFluxes(arrayconst_t &consVar,
+						     array_t &x1FluxDiffusive,
+						     amrex::Box const &indexRange)
 {
 	// By convention, the interfaces are defined on the left edge of each
 	// zone, i.e. x1Flux_(i) is the solution to the Riemann problem at
@@ -384,16 +216,16 @@ void HydroSystem<problem_t>::ComputeFirstOrderFluxes(std::pair<int, int> range)
 
 	// compute Lax-Friedrichs fluxes for use in flux-limiting to ensure realizable states
 
-	for (int i = range.first; i < (range.second + 1); ++i) {
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		// gather L/R states
-		const double rho_L = consVar_(density_index, i-1);
-		const double rho_R = consVar_(density_index, i);
+		const double rho_L = consVar(i - 1, j, k, density_index);
+		const double rho_R = consVar(i, j, k, density_index);
 
-		const double mom_L = consVar_(x1Momentum_index, i-1);
-		const double mom_R = consVar_(x1Momentum_index, i);
+		const double mom_L = consVar(i - 1, j, k, x1Momentum_index);
+		const double mom_R = consVar(i, j, k, x1Momentum_index);
 
-		const double E_L = consVar_(energy_index, i-1);
-		const double E_R = consVar_(energy_index, i);
+		const double E_L = consVar(i - 1, j, k, energy_index);
+		const double E_R = consVar(i, j, k, energy_index);
 
 		// compute primitive variables
 		const double vx_L = mom_L / rho_L;
@@ -422,16 +254,17 @@ void HydroSystem<problem_t>::ComputeFirstOrderFluxes(std::pair<int, int> range)
 		const std::valarray<double> U_L = {rho_L, mom_L, E_L};
 		const std::valarray<double> U_R = {rho_R, mom_R, E_R};
 
-		const std::valarray<double> LLF = 0.5 * (F_L + F_R - sstar*(U_R - U_L));
+		const std::valarray<double> LLF = 0.5 * (F_L + F_R - sstar * (U_R - U_L));
 
-		x1FluxDiffusive_(density_index, i) = LLF[0];
-		x1FluxDiffusive_(x1Momentum_index, i) = LLF[1];
-		x1FluxDiffusive_(energy_index, i) = LLF[2];
-	}
+		x1FluxDiffusive(i, j, k, density_index) = LLF[0];
+		x1FluxDiffusive(i, j, k, x1Momentum_index) = LLF[1];
+		x1FluxDiffusive(i, j, k, energy_index) = LLF[2];
+	});
 }
 
 template <typename problem_t>
-void HydroSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
+void HydroSystem<problem_t>::ComputeFluxes(arrayconst_t &x1LeftState, arrayconst_t &x1RightState,
+					   array_t &x1Flux, amrex::Box const &indexRange)
 {
 	// By convention, the interfaces are defined on the left edge of each
 	// zone, i.e. xinterface_(i) is the solution to the Riemann problem at
@@ -439,19 +272,19 @@ void HydroSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
 
-	for (int i = range.first; i < (range.second + 1); ++i) {
-		// HLL solver following Toro (1998) and Balsara (2017).
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		// HLLC solver following Toro (1998) and Balsara (2017).
 
 		// gather left- and right- state variables
 
-		const double rho_L = x1LeftState_(primDensity_index, i);
-		const double rho_R = x1RightState_(primDensity_index, i);
+		const double rho_L = x1LeftState(i, j, k, primDensity_index);
+		const double rho_R = x1RightState(i, j, k, primDensity_index);
 
-		const double vx_L = x1LeftState_(x1Velocity_index, i);
-		const double vx_R = x1RightState_(x1Velocity_index, i);
+		const double vx_L = x1LeftState(i, j, k, x1Velocity_index);
+		const double vx_R = x1RightState(i, j, k, x1Velocity_index);
 
-		const double P_L = x1LeftState_(pressure_index, i);
-		const double P_R = x1RightState_(pressure_index, i);
+		const double P_L = x1LeftState(i, j, k, pressure_index);
+		const double P_R = x1RightState(i, j, k, pressure_index);
 
 		const double ke_L = 0.5 * rho_L * (vx_L * vx_L);
 		const double ke_R = 0.5 * rho_R * (vx_R * vx_R);
@@ -475,17 +308,15 @@ void HydroSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 		const double P_PVRS = 0.5 * (P_L + P_R) - 0.5 * (vx_R - vx_L) * (rho_bar * cs_bar);
 		const double P_star = std::max(P_PVRS, 0.0);
 
-		const double q_L =
-		    (P_star <= P_L)
-			? 1.0
-			: std::sqrt( 1.0 + ((gamma_ + 1.0) / (2.0 * gamma_)) *
-					      ((P_star / P_L) - 1.0) );
+		const double q_L = (P_star <= P_L)
+				       ? 1.0
+				       : std::sqrt(1.0 + ((gamma_ + 1.0) / (2.0 * gamma_)) *
+							     ((P_star / P_L) - 1.0));
 
-		const double q_R =
-		    (P_star <= P_R)
-			? 1.0
-			: std::sqrt( 1.0 + ((gamma_ + 1.0) / (2.0 * gamma_)) *
-					      ((P_star / P_R) - 1.0) );
+		const double q_R = (P_star <= P_R)
+				       ? 1.0
+				       : std::sqrt(1.0 + ((gamma_ + 1.0) / (2.0 * gamma_)) *
+							     ((P_star / P_R) - 1.0));
 
 		// compute wave speeds
 
@@ -495,36 +326,32 @@ void HydroSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 		    ((P_R - P_L) + (rho_L * vx_L * (S_L - vx_L) - rho_R * vx_R * (S_R - vx_R))) /
 		    (rho_L * (S_L - vx_L) - rho_R * (S_R - vx_R));
 
-		const double P_LR =
-			0.5*(P_L + P_R + rho_L*(S_L-vx_L)*(S_star-vx_L) + rho_R*(S_R-vx_R)*(S_star-vx_R));
+		const double P_LR = 0.5 * (P_L + P_R + rho_L * (S_L - vx_L) * (S_star - vx_L) +
+					   rho_R * (S_R - vx_R) * (S_star - vx_R));
 
-		assert( S_L <= S_R );
+		assert(S_L <= S_R);
 
 		// compute fluxes
 
-		const std::valarray<double> F_L = {rho_L * vx_L,
-						   rho_L * (vx_L * vx_L) + P_L,
+		const std::valarray<double> F_L = {rho_L * vx_L, rho_L * (vx_L * vx_L) + P_L,
 						   (E_L + P_L) * vx_L};
 
-		const std::valarray<double> F_R = {rho_R * vx_R,
-						   rho_R * (vx_R * vx_R) + P_R,
+		const std::valarray<double> F_R = {rho_R * vx_R, rho_R * (vx_R * vx_R) + P_R,
 						   (E_R + P_R) * vx_R};
 
 		const std::valarray<double> U_L = {
-		    rho_L, rho_L * vx_L,
-		    P_L / (gamma_ - 1.0) + 0.5 * rho_L * (vx_L * vx_L)};
+		    rho_L, rho_L * vx_L, P_L / (gamma_ - 1.0) + 0.5 * rho_L * (vx_L * vx_L)};
 
 		const std::valarray<double> U_R = {
-		    rho_R, rho_R * vx_R,
-		    P_R / (gamma_ - 1.0) + 0.5 * rho_R * (vx_R * vx_R)};
+		    rho_R, rho_R * vx_R, P_R / (gamma_ - 1.0) + 0.5 * rho_R * (vx_R * vx_R)};
 
 		const std::valarray<double> D_star = {0., 1., S_star};
 
 		const std::valarray<double> F_starL =
-			( S_star*(S_L*U_L - F_L) + S_L*P_LR*D_star ) / (S_L - S_star);
+		    (S_star * (S_L * U_L - F_L) + S_L * P_LR * D_star) / (S_L - S_star);
 
 		const std::valarray<double> F_starR =
-			( S_star*(S_R*U_R - F_R) + S_R*P_LR*D_star ) / (S_R - S_star);
+		    (S_star * (S_R * U_R - F_R) + S_R * P_LR * D_star) / (S_R - S_star);
 
 		// open the Riemann fan
 		std::valarray<double> F(3);
@@ -545,10 +372,10 @@ void HydroSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
 		assert(!std::isnan(F[1])); // NOLINT
 		assert(!std::isnan(F[2])); // NOLINT
 
-		x1Flux_(density_index, i) = F[0];
-		x1Flux_(x1Momentum_index, i) = F[1];
-		x1Flux_(energy_index, i) = F[2];
-	}
+		x1Flux(i, j, k, density_index) = F[0];
+		x1Flux(i, j, k, x1Momentum_index) = F[1];
+		x1Flux(i, j, k, energy_index) = F[2];
+	});
 }
 
 #endif // HYDRO_SYSTEM_HPP_
