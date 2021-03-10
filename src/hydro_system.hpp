@@ -32,9 +32,9 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	static void ConservedToPrimitive(arrayconst_t &cons, array_t &primVar,
 					 amrex::Box const &indexRange);
 
+	static void ComputeMaxSignalSpeed(arrayconst_t &cons, array_t &maxSignal,
+					  amrex::Box const &indexRange);
 	// requires GPU reductions
-	static auto ComputeTimestep(arrayconst_t &cons, double dx, amrex::Box const &indexRange)
-	    -> double;
 	// static auto CheckStatesValid(array_t &cons, const std::pair<int, int> range) -> bool;
 
 	static void ComputeFluxes(arrayconst_t &x1LeftState, arrayconst_t &x1RightState,
@@ -74,11 +74,9 @@ void HydroSystem<problem_t>::ConservedToPrimitive(arrayconst_t &cons, array_t &p
 }
 
 template <typename problem_t>
-auto HydroSystem<problem_t>::ComputeTimestep(arrayconst_t &cons, const double dx,
-					     amrex::Box const &indexRange) -> double
+void HydroSystem<problem_t>::ComputeMaxSignalSpeed(arrayconst_t &cons, array_t &maxSignal,
+						   amrex::Box const &indexRange)
 {
-	double dt = std::numeric_limits<double>::max();
-
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const auto rho = cons(i, j, k, density_index);
 		const auto px = cons(i, j, k, x1Momentum_index);
@@ -93,11 +91,8 @@ auto HydroSystem<problem_t>::ComputeTimestep(arrayconst_t &cons, const double dx
 		assert(cs > 0.); // NOLINT
 
 		const double signal_max = std::max(std::abs(vx - cs), std::abs(vx + cs));
-		const double thisDt = (dx / signal_max);
-		dt = std::min(dt, thisDt);
+		maxSignal(i, j, k) = signal_max;
 	});
-
-	return dt;
 }
 
 #if 0

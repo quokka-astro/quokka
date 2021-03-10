@@ -19,6 +19,7 @@
 #include <cmath>
 
 // library headers
+#include "fmt/core.h"
 #include <AMReX_Geometry.H>
 #include <AMReX_Gpu.H>
 #include <AMReX_MultiFab.H>
@@ -27,7 +28,6 @@
 #include <AMReX_Print.H>
 #include <AMReX_Utility.H>
 #include <limits>
-#include "fmt/core.h"
 
 // internal headers
 
@@ -71,6 +71,7 @@ template <typename problem_t> class SingleLevelSimulation
 	// we allocate two multifabs; one will store the old state, the other the new.
 	amrex::MultiFab state_old_;
 	amrex::MultiFab state_new_;
+	amrex::MultiFab max_signal_speed_; // needed to compute CFL timestep
 
 	// Nghost = number of ghost cells for each array
 	int nghost_ = 3; // PPM needs nghost >= 3
@@ -82,7 +83,7 @@ template <typename problem_t> class SingleLevelSimulation
 	amrex::Real dt_ = NAN;
 	amrex::Real maxDt_ = std::numeric_limits<double>::max(); // default (no limit)
 	amrex::Real tNow_ = 0.0;
-	amrex::Real stopTime_ = 1.0; // default
+	amrex::Real stopTime_ = 1.0;  // default
 	amrex::Real cflNumber_ = 0.3; // default
 	amrex::Long cycleCount_ = 0;
 	bool areInitialConditionsDefined_ = false;
@@ -106,12 +107,15 @@ template <typename problem_t> class SingleLevelSimulation
 		    amrex::MultiFab(simBoxArray_, simDistributionMapping_, ncomp_, nghost_);
 		state_new_ =
 		    amrex::MultiFab(simBoxArray_, simDistributionMapping_, ncomp_, nghost_);
+		max_signal_speed_ =
+		    amrex::MultiFab(simBoxArray_, simDistributionMapping_, ncomp_, nghost_);
 	}
 
 	void readParameters();
 	void evolve();
 	void computeTimestep();
-	virtual auto computeTimestepLocal() -> amrex::Real = 0;
+	// virtual auto computeTimestepLocal() -> amrex::Real = 0;
+	virtual void computeMaxSignalLocal() = 0;
 	virtual void setInitialConditions() = 0;
 	virtual void advanceSingleTimestep() = 0;
 };
@@ -138,18 +142,19 @@ template <typename problem_t> void SingleLevelSimulation<problem_t>::readParamet
 
 template <typename problem_t> void SingleLevelSimulation<problem_t>::computeTimestep()
 {
-	Real dt_tmp = computeTimestepLocal();
-	amrex::ParallelDescriptor::ReduceRealMin(dt_tmp);
+	computeMaxSignalLocal();
+	amrex::Real domain_signal_max = max_signal_speed_.norminf();
+	amrex::Real dt_tmp = cflNumber_ * (dx_[0] / domain_signal_max);
 
-	constexpr Real change_max = 1.1;
-	Real dt_0 = dt_tmp;
+	constexpr amrex::Real change_max = 1.1;
+	amrex::Real dt_0 = dt_tmp;
 
 	dt_tmp = std::min(dt_tmp, change_max * dt_);
 	dt_0 = std::min(dt_0, dt_tmp);
 	dt_0 = std::min(dt_0, maxDt_); // limit to maxDt_
 
 	// Limit dt to avoid overshooting stop_time
-	const Real eps = 1.e-3 * dt_0;
+	const amrex::Real eps = 1.e-3 * dt_0;
 
 	if (tNow_ + dt_0 > stopTime_ - eps) {
 		dt_0 = stopTime_ - tNow_;
@@ -162,10 +167,9 @@ template <typename problem_t> void SingleLevelSimulation<problem_t>::evolve()
 {
 	// Main time loop
 	AMREX_ASSERT(areInitialConditionsDefined_);
-    amrex::Real start_time = amrex::ParallelDescriptor::second();
+	amrex::Real start_time = amrex::ParallelDescriptor::second();
 
-	int j = 0;
-	for (; j < maxTimesteps_; ++j) {
+	for (int j = 0; j < maxTimesteps_; ++j) {
 		if (tNow_ >= stopTime_) {
 			break;
 		}
@@ -178,8 +182,8 @@ template <typename problem_t> void SingleLevelSimulation<problem_t>::evolve()
 		++cycleCount_;
 
 		// output plotfile
-		//const std::string &pltfile = amrex::Concatenate("plt", cycleCount_, 4);
-		//amrex::WriteSingleLevelPlotfile(pltfile, state_new_, {"density"}, simGeometry_,
+		// const std::string &pltfile = amrex::Concatenate("plt", cycleCount_, 4);
+		// amrex::WriteSingleLevelPlotfile(pltfile, state_new_, {"density"}, simGeometry_,
 		//				tNow_, cycleCount_);
 
 		// print timestep information on I/O processor
@@ -187,12 +191,14 @@ template <typename problem_t> void SingleLevelSimulation<problem_t>::evolve()
 	}
 
 	// compute performance metric (microseconds/zone-update)
-    amrex::Real elapsed_sec = amrex::ParallelDescriptor::second() - start_time;
-    const int IOProc = amrex::ParallelDescriptor::IOProcessorNumber();
-    amrex::ParallelDescriptor::ReduceRealMax(elapsed_sec, IOProc);
+	amrex::Real elapsed_sec = amrex::ParallelDescriptor::second() - start_time;
+	const int IOProc = amrex::ParallelDescriptor::IOProcessorNumber();
+	amrex::ParallelDescriptor::ReduceRealMax(elapsed_sec, IOProc);
+
 	const double zone_cycles = cycleCount_ * (nx_ * ny_ * nz_);
 	const double microseconds_per_update = 1.0e6 * elapsed_sec / zone_cycles;
-	amrex::Print() << "Performance figure-of-merit: " << microseconds_per_update << " μs/zone-update\n";
+	amrex::Print() << "Performance figure-of-merit: " << microseconds_per_update
+		       << " μs/zone-update\n";
 }
 
 #endif // SIMULATION_HPP_

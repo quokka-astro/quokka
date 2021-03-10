@@ -33,8 +33,8 @@ template <typename problem_t> class LinearAdvectionSystem : public HyperbolicSys
 
 	static void ConservedToPrimitive(arrayconst_t &cons, array_t &primVar,
 					 amrex::Box const &indexRange, int nvars);
-	static auto ComputeTimestep(double dt_max, double cflNumber, double dx, double advectionVx)
-	    -> double;
+	static void ComputeMaxSignalSpeed(arrayconst_t &cons, array_t &maxSignal,
+					  double advectionVx, amrex::Box const &indexRange);
 	static void ComputeFluxes(array_t &x1Flux, arrayconst_t &x1LeftState,
 				  arrayconst_t &x1RightState, double advectionVx,
 				  amrex::Box const &indexRange, int nvars);
@@ -53,12 +53,14 @@ auto LinearAdvectionSystem<problem_t>::ComputeMass(amrex::FArrayBox const &densi
 }
 
 template <typename problem_t>
-auto LinearAdvectionSystem<problem_t>::ComputeTimestep(const double dt_max, const double cflNumber,
-						       const double dx, const double advectionVx)
-    -> double
+void LinearAdvectionSystem<problem_t>::ComputeMaxSignalSpeed(arrayconst_t & /*cons*/, array_t &maxSignal,
+							     const double advectionVx,
+							     amrex::Box const &indexRange)
 {
-	auto dt = std::min(cflNumber * (dx / advectionVx), dt_max);
-	return dt;
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		const double signal_max = std::abs(advectionVx);
+		maxSignal(i, j, k) = signal_max;
+	});
 }
 
 template <typename problem_t>

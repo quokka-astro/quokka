@@ -32,6 +32,7 @@ template <typename problem_t> class HydroSimulation : public SingleLevelSimulati
 	using SingleLevelSimulation<problem_t>::simGeometry_;
 	using SingleLevelSimulation<problem_t>::state_old_;
 	using SingleLevelSimulation<problem_t>::state_new_;
+	using SingleLevelSimulation<problem_t>::max_signal_speed_;
 
 	using SingleLevelSimulation<problem_t>::cflNumber_;
 	using SingleLevelSimulation<problem_t>::dx_;
@@ -44,7 +45,7 @@ template <typename problem_t> class HydroSimulation : public SingleLevelSimulati
 
 	explicit HydroSimulation() = default;
 
-	auto computeTimestepLocal() -> amrex::Real override;
+	void computeMaxSignalLocal() override;
 	void setInitialConditions() override;
 	void advanceSingleTimestep() override;
 	void stageOneRK2SSP(amrex::Array4<const amrex::Real> const &consVarOld,
@@ -57,24 +58,15 @@ template <typename problem_t> class HydroSimulation : public SingleLevelSimulati
 			  amrex::FArrayBox &x1Flux, const amrex::Box &indexRange, int nvars);
 };
 
-template <typename problem_t> auto HydroSimulation<problem_t>::computeTimestepLocal() -> amrex::Real
+template <typename problem_t> void HydroSimulation<problem_t>::computeMaxSignalLocal()
 {
 	// loop over local grids, compute CFL timestep
-
-	AMREX_D_TERM(const Real dxinv = simGeometry_.InvCellSize(0);
-		     , const Real dyinv = simGeometry_.InvCellSize(1);
-		     , const Real dzinv = simGeometry_.InvCellSize(2););
-
-	const auto dt_max = std::numeric_limits<double>::max();
-	amrex::Real dt = 0.0;
-
 	for (amrex::MFIter iter(state_new_); iter.isValid(); ++iter) {
-		auto thisDt =
-		    HydroSystem<problem_t>::ComputeTimestep(dt_max, cflNumber_, 1.0 / dxinv);
-		dt = std::max(dt, thisDt);
+		const amrex::Box &indexRange = iter.validbox();
+		auto const &stateOld = state_old_.const_array(iter);
+		auto const &maxSignal = max_signal_speed_.array(iter);
+		HydroSystem<problem_t>::ComputeMaxSignalSpeed(stateOld, maxSignal, indexRange);
 	}
-
-	return dt;
 }
 
 template <typename problem_t> void HydroSimulation<problem_t>::setInitialConditions()
