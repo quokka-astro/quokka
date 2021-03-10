@@ -8,21 +8,35 @@
 ///
 
 #include "test_hydro_contact.hpp"
+#include "AMReX_ParmParse.H"
+#include "HydroSimulation.hpp"
 
 struct ShocktubeProblem {};
 
-auto main(int argc, char** argv) -> int
+auto main(int argc, char **argv) -> int
 {
 	// Initialization
+	// (copied from ExaWind)
 
-	amrex::Initialize(argc, argv);
+	amrex::Initialize(argc, argv, true, MPI_COMM_WORLD, []() {
+		amrex::ParmParse pp("amrex");
+		// Set the defaults so that we throw an exception instead of attempting
+		// to generate backtrace files. However, if the user has explicitly set
+		// these options in their input files respect those settings.
+		if (!pp.contains("throw_exception")) {
+			pp.add("throw_exception", 1);
+		}
+		if (!pp.contains("signal_handling")) {
+			pp.add("signal_handling", 0);
+		}
+	});
 
 	int result = 0;
 
-	{ // objects must be destroyed before Kokkos::finalize, so enter new
+	{ // objects must be destroyed before amrex::finalize, so enter new
 	  // scope here to do that automatically
 
-		result = testproblem_hydro_shocktube();
+		result = testproblem_hydro_contact();
 
 	} // destructors must be called before amrex::Finalize()
 	amrex::Finalize();
@@ -30,7 +44,36 @@ auto main(int argc, char** argv) -> int
 	return result;
 }
 
-auto testproblem_hydro_shocktube() -> int
+struct ContactProblem {};
+
+template <> void HydroSimulation<ContactProblem>::setInitialConditions()
+{
+	for (amrex::MFIter iter(state_old_); iter.isValid(); ++iter) {
+		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
+		auto const &state = state_new_.array(iter);
+
+		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+			auto x = (0.5 + static_cast<double>(i)) / nx_;
+			auto value = static_cast<double>((i + nx_ / 2) % nx_) / nx_;
+			state(i, j, k, 0) = value;
+		});
+	}
+
+	// set flag
+	areInitialConditionsDefined_ = true;
+}
+
+void ComputeExactSolution(amrex::Array4<amrex::Real> const &exact_arr, amrex::Box const &indexRange,
+			  const int nx)
+{
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		auto x = (0.5 + static_cast<double>(i)) / nx;
+		auto value = static_cast<double>((i + nx / 2) % nx) / nx;
+		exact_arr(i, j, k, 0) = value;
+	});
+}
+
+auto testproblem_hydro_contact() -> int
 {
 	// Problem parameters
 
@@ -46,11 +89,8 @@ auto testproblem_hydro_shocktube() -> int
 	const double rtol = 1e-6; //< absolute tolerance for conserved vars
 
 	// Problem initialization
+	
 
-	HydroSystem<ShocktubeProblem> hydro_system(
-	    {.nx = nx, .lx = Lx, .cflNumber = CFL_number, .gamma = gamma});
-
-	auto nghost = hydro_system.nghost();
 
 	for (int i = nghost; i < nx + nghost; ++i) {
 		const auto idx_value = static_cast<double>(i - nghost);
@@ -94,19 +134,9 @@ auto testproblem_hydro_shocktube() -> int
 		P_initial.at(i) = hydro_system.pressure(i);
 	}
 
-	// Main time loop
-	int j = NAN;
-	for (j = 0; j < max_timesteps; ++j) {
-		if (hydro_system.time() >= max_time) {
-			break;
-		}
+	// evolve
 
-		hydro_system.AdvanceTimestepRK2(fixed_dt);
-	}
-
-	amrex::Print() << "Stopping at timestep " << j << " t=" << hydro_system.time() << std::endl;
-
-// read in exact solution
+	// read in exact solution
 	int status = 0;
 
 	std::vector<double> d(nx);

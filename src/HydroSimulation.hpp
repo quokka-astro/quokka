@@ -9,12 +9,14 @@
 /// \brief Implements classes and functions to organise the overall setup,
 /// timestepping, solving, and I/O of a simulation for hydrodynamics.
 
+#include "AMReX_Algorithm.H"
 #include "AMReX_Arena.H"
 #include "AMReX_Array4.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_Box.H"
 #include "AMReX_FArrayBox.H"
 #include "AMReX_IntVect.H"
+#include "AMReX_MultiFab.H"
 #include "AMReX_REAL.H"
 #include "AMReX_Utility.H"
 #include "fmt/core.h"

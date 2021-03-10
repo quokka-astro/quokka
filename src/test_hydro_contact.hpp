@@ -22,6 +22,6 @@ extern "C" {
 }
 
 // function definitions
-auto testproblem_hydro_shocktube() -> int;
+auto testproblem_hydro_contact() -> int;
 
 #endif // TEST_HYDRO_LEBLANC_HPP_

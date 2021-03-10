@@ -8,6 +8,7 @@
 ///
 
 #include "test_advection.hpp"
+#include "AMReX_Algorithm.H"
 #include "AMReX_BoxArray.H"
 #include "AMReX_DistributionMapping.H"
 #include "AMReX_FArrayBox.H"
