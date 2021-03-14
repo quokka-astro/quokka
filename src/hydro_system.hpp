@@ -30,29 +30,34 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	enum consVarIndex { density_index = 0, x1Momentum_index = 1, energy_index = 2 };
 	enum primVarIndex { primDensity_index = 0, x1Velocity_index = 1, pressure_index = 2 };
 
-	static void ConservedToPrimitive(amrex::Array4<const amrex::Real> const &cons, array_t &primVar,
-					 amrex::Box const &indexRange);
+	static void ConservedToPrimitive(amrex::Array4<const amrex::Real> const &cons,
+					 array_t &primVar, amrex::Box const &indexRange);
 
-	static void ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real> const &cons, array_t &maxSignal,
-					  amrex::Box const &indexRange);
+	static void ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real> const &cons,
+					  array_t &maxSignal, amrex::Box const &indexRange);
 	// requires GPU reductions
 	// static auto CheckStatesValid(array_t &cons, const std::pair<int, int> range) -> bool;
 
-	static void ComputeFluxes(amrex::Array4<const amrex::Real> const &x1LeftState, amrex::Array4<const amrex::Real> const &x1RightState,
-				  array_t &x1Flux, amrex::Box const &indexRange);
-	static void ComputeFirstOrderFluxes(amrex::Array4<const amrex::Real> const &consVar, array_t &x1FluxDiffusive,
-					    amrex::Box const &indexRange);
-	static void ComputeFlatteningCoefficients(amrex::Array4<const amrex::Real> const &primVar, array_t &x1Chi,
-						  amrex::Box const &indexRange);
-	static void FlattenShocks(amrex::Array4<const amrex::Real> const &q, amrex::Array4<const amrex::Real> const &x1Chi, array_t &x1LeftState,
-				  array_t &x1RightState, amrex::Box const &indexRange, int nvars);
+	static void ComputeFluxes(array_t &x1Flux,
+					   amrex::Array4<const amrex::Real> const &x1LeftState,
+					   amrex::Array4<const amrex::Real> const &x1RightState,
+					   amrex::Box const &indexRange);
+	static void ComputeFirstOrderFluxes(amrex::Array4<const amrex::Real> const &consVar,
+					    array_t &x1FluxDiffusive, amrex::Box const &indexRange);
+	
+	static void ComputeFlatteningCoefficients(amrex::Array4<const amrex::Real> const &primVar,
+						  array_t &x1Chi, amrex::Box const &indexRange);
+	static void FlattenShocks(amrex::Array4<const amrex::Real> const &q,
+				  amrex::Array4<const amrex::Real> const &x1Chi,
+				  array_t &x1LeftState, array_t &x1RightState,
+				  amrex::Box const &indexRange, int nvars);
 
 	static double gamma_;
 };
 
 template <typename problem_t>
-void HydroSystem<problem_t>::ConservedToPrimitive(amrex::Array4<const amrex::Real> const &cons, array_t &primVar,
-						  amrex::Box const &indexRange)
+void HydroSystem<problem_t>::ConservedToPrimitive(amrex::Array4<const amrex::Real> const &cons,
+						  array_t &primVar, amrex::Box const &indexRange)
 {
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const auto rho = cons(i, j, k, density_index);
@@ -79,8 +84,8 @@ void HydroSystem<problem_t>::ConservedToPrimitive(amrex::Array4<const amrex::Rea
 }
 
 template <typename problem_t>
-void HydroSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real> const &cons, array_t &maxSignal,
-						   amrex::Box const &indexRange)
+void HydroSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real> const &cons,
+						   array_t &maxSignal, amrex::Box const &indexRange)
 {
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const auto rho = cons(i, j, k, density_index);
@@ -133,8 +138,8 @@ auto HydroSystem<problem_t>::CheckStatesValid(amrex::Array4<const amrex::Real> c
 #endif
 
 template <typename problem_t>
-void HydroSystem<problem_t>::ComputeFlatteningCoefficients(amrex::Array4<const amrex::Real> const &primVar, array_t &x1Chi,
-							   amrex::Box const &indexRange)
+void HydroSystem<problem_t>::ComputeFlatteningCoefficients(
+    amrex::Array4<const amrex::Real> const &primVar, array_t &x1Chi, amrex::Box const &indexRange)
 {
 	// compute the PPM shock flattening coefficient following
 	//   Appendix B1 of Mignone+ 2005 [this description has typos].
@@ -176,7 +181,8 @@ void HydroSystem<problem_t>::ComputeFlatteningCoefficients(amrex::Array4<const a
 }
 
 template <typename problem_t>
-void HydroSystem<problem_t>::FlattenShocks(amrex::Array4<const amrex::Real> const &q, amrex::Array4<const amrex::Real> const &x1Chi,
+void HydroSystem<problem_t>::FlattenShocks(amrex::Array4<const amrex::Real> const &q,
+					   amrex::Array4<const amrex::Real> const &x1Chi,
 					   array_t &x1LeftState, array_t &x1RightState,
 					   amrex::Box const &indexRange, const int nvars)
 {
@@ -208,9 +214,9 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::Array4<const amrex::Real> cons
 }
 
 template <typename problem_t>
-void HydroSystem<problem_t>::ComputeFirstOrderFluxes(amrex::Array4<const amrex::Real> const &consVar,
-						     array_t &x1FluxDiffusive,
-						     amrex::Box const &indexRange)
+void HydroSystem<problem_t>::ComputeFirstOrderFluxes(
+    amrex::Array4<const amrex::Real> const &consVar, array_t &x1FluxDiffusive,
+    amrex::Box const &indexRange)
 {
 	// By convention, the interfaces are defined on the left edge of each
 	// zone, i.e. x1Flux_(i) is the solution to the Riemann problem at
@@ -265,8 +271,10 @@ void HydroSystem<problem_t>::ComputeFirstOrderFluxes(amrex::Array4<const amrex::
 }
 
 template <typename problem_t>
-void HydroSystem<problem_t>::ComputeFluxes(amrex::Array4<const amrex::Real> const &x1LeftState, amrex::Array4<const amrex::Real> const &x1RightState,
-					   array_t &x1Flux, amrex::Box const &indexRange)
+void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux,
+					   amrex::Array4<const amrex::Real> const &x1LeftState,
+					   amrex::Array4<const amrex::Real> const &x1RightState,
+					   amrex::Box const &indexRange)
 {
 	// By convention, the interfaces are defined on the left edge of each
 	// zone, i.e. xinterface_(i) is the solution to the Riemann problem at
@@ -278,10 +286,6 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::Array4<const amrex::Real> cons
 		// HLLC solver following Toro (1998) and Balsara (2017).
 
 		// gather left- and right- state variables
-		amrex::Print() << "x1LeftState(0,0,0) = " << x1LeftState(0,0,0) << "\n";
-		amrex::Print() << "x1LeftState(1,0,0) = " << x1LeftState(1,0,0) << "\n";
-		amrex::Print() << "x1RightState(0,0,0) = " << x1RightState(0,0,0) << "\n";
-		amrex::Print() << "x1RightState(1,0,0) = " << x1RightState(1,0,0) << "\n";
 
 		const double rho_L = x1LeftState(i, j, k, primDensity_index);
 		const double rho_R = x1RightState(i, j, k, primDensity_index);
@@ -298,8 +302,8 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::Array4<const amrex::Real> cons
 		const double E_L = P_L / (gamma_ - 1.0) + ke_L;
 		const double E_R = P_R / (gamma_ - 1.0) + ke_R;
 
-		//const double H_L = (E_L + P_L) / rho_L; // enthalpy
-		//const double H_R = (E_R + P_R) / rho_R;
+		// const double H_L = (E_L + P_L) / rho_L; // enthalpy
+		// const double H_R = (E_R + P_R) / rho_R;
 
 		const double cs_L = std::sqrt(gamma_ * P_L / rho_L);
 		const double cs_R = std::sqrt(gamma_ * P_R / rho_R);
