@@ -151,7 +151,6 @@ auto testproblem_hydro_contact() -> int
 	for (amrex::MFIter iter(sim.state_new_); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &stateExact = state_exact.array(iter);
-		//auto const &stateNew = sim.state_new_.const_array(iter);
 		ComputeExactSolution(stateExact, indexRange, sim.nx_);
 	}
 
@@ -189,9 +188,9 @@ auto testproblem_hydro_contact() -> int
 	// Plot results
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		std::vector<double> x(sim.nx_);
-		std::vector<double> d(sim.nx_);
-		std::vector<double> vx(sim.nx_);
-		std::vector<double> P(sim.nx_);
+		std::vector<double> d_final(sim.nx_);
+		std::vector<double> vx_final(sim.nx_);
+		std::vector<double> P_final(sim.nx_);
 		std::vector<double> density_exact(sim.nx_);
 		std::vector<double> pressure_exact(sim.nx_);
 		std::vector<double> velocity_exact(sim.nx_);
@@ -199,14 +198,33 @@ auto testproblem_hydro_contact() -> int
 		for (int i = 0; i < nx; ++i) {
 			const auto idx_value = static_cast<double>(i);
 			const auto this_x = Lx * ((idx_value + 0.5) / static_cast<double>(nx));
-			const auto rho = 0.;
-			const auto vx = 0.;
-			const auto P = 0.;
+
+			const auto rho = state_exact_array(i, 0, 0, HydroSystem<ContactProblem>::density_index);
+			const auto xmom = state_exact_array(i, 0, 0, HydroSystem<ContactProblem>::x1Momentum_index);
+			const auto E = state_exact_array(i, 0, 0, HydroSystem<ContactProblem>::energy_index);
+
+			const auto vx = xmom/rho;
+			const auto Eint = E - 0.5*rho*(vx*vx);
+			const auto P = (HydroSystem<ContactProblem>::gamma_ - 1.) * Eint;
 
 			x.push_back(this_x);
 			density_exact.push_back(rho);
 			pressure_exact.push_back(P);
 			velocity_exact.push_back(vx);
+		}
+
+		for (int i = 0; i < nx; ++i) {
+			const auto rho = state_final_array(i, 0, 0, HydroSystem<ContactProblem>::density_index);
+			const auto xmom = state_final_array(i, 0, 0, HydroSystem<ContactProblem>::x1Momentum_index);
+			const auto E = state_final_array(i, 0, 0, HydroSystem<ContactProblem>::energy_index);
+
+			const auto vx = xmom/rho;
+			const auto Eint = E - 0.5*rho*(vx*vx);
+			const auto P = (HydroSystem<ContactProblem>::gamma_ - 1.) * Eint;
+
+			d_final.push_back(rho);
+			vx_final.push_back(vx);
+			P_final.push_back(P);	
 		}
 
 		std::unordered_map<std::string, std::string> d_args;
@@ -215,7 +233,7 @@ auto testproblem_hydro_contact() -> int
 		d_args["color"] = "black";
 		dexact_args["label"] = "density (exact solution)";
 
-		matplotlibcpp::scatter(x, d, 10.0, d_args);
+		matplotlibcpp::scatter(x, d_final, 10.0, d_args);
 		matplotlibcpp::plot(x, density_exact, dexact_args);
 
 		matplotlibcpp::legend();
