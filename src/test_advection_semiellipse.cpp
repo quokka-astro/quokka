@@ -10,6 +10,7 @@
 #include "test_advection_semiellipse.hpp"
 #include "AMReX_Box.H"
 #include "AMReX_FArrayBox.H"
+#include "AMReX_ParmParse.H"
 #include "AdvectionSimulation.hpp"
 #include "hyperbolic_system.hpp"
 #include "linear_advection.hpp"
