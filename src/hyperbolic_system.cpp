@@ -9,3 +9,5 @@
 
 #include "hyperbolic_system.hpp"
 
+template struct amrex::Array4<double>;
+template struct amrex::Array4<const double>;

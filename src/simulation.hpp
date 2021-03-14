@@ -74,9 +74,9 @@ template <typename problem_t> class SingleLevelSimulation
 	amrex::MultiFab max_signal_speed_; // needed to compute CFL timestep
 
 	// Nghost = number of ghost cells for each array
-	int nghost_ = 3; // PPM needs nghost >= 3
+	int nghost_ = 4; // PPM needs nghost >= 3, PPM+flattening needs nghost >= 4
 	// Ncomp = number of components for each array
-	int ncomp_ = 1;
+	int ncomp_ = 3;
 	// dx = cell size
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_{};
 

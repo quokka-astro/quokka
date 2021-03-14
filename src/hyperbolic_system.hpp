@@ -66,45 +66,7 @@ template <typename problem_t> class HyperbolicSystem
 
 	static void SaveFluxes(array_t &advectionFluxes, arrayconst_t &x1Flux, double dx,
 			       amrex::Box const &indexRange, int nvars);
-
-	// non-static member functions
-
-	// virtual void FillGhostZones(array_t &cons);
-	// virtual void AddSourceTerms(array_t &U_prev, array_t &U_new, std::pair<int, int> range);
-	// virtual void ComputeSourceTermsExplicit(array_t &U_prev, array_t &src,
-	// 					std::pair<int, int> range);
-	// virtual auto CheckStatesValid(arrayconst_t &cons, std::pair<int, int> range) -> bool;
-	// virtual void ComputeFlatteningCoefficients(std::pair<int, int> range);
-	// virtual void FlattenShocks(array_t &q, std::pair<int, int> range);
 };
-
-#if 0
-template <typename problem_t>
-void HyperbolicSystem<problem_t>::AddSourceTerms(array_t &U_prev, array_t &U_new,
-						 std::pair<int, int> range)
-{
-	// intentionally zero source terms by default
-}
-
-template <typename problem_t>
-void HyperbolicSystem<problem_t>::ComputeSourceTermsExplicit(array_t &U_prev, array_t &src,
-							     std::pair<int, int> range)
-{
-	// intentionally zero source terms by default
-}
-
-template <typename problem_t>
-void HyperbolicSystem<problem_t>::ComputeFlatteningCoefficients(std::pair<int, int> range)
-{
-	// intentionally no flattening by default
-}
-
-template <typename problem_t>
-void HyperbolicSystem<problem_t>::FlattenShocks(array_t &q, std::pair<int, int> range)
-{
-	// intentionally no flattening by default
-}
-#endif
 
 template <typename problem_t>
 void HyperbolicSystem<problem_t>::ReconstructStatesConstant(arrayconst_t &q, array_t &leftState,

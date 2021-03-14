@@ -8,6 +8,7 @@
 ///
 
 #include "test_hydro_contact.hpp"
+#include "AMReX_BLassert.H"
 #include "AMReX_ParmParse.H"
 #include "HydroSimulation.hpp"
 #include "hydro_system.hpp"
@@ -48,7 +49,7 @@ auto main(int argc, char **argv) -> int
 struct ContactProblem {
 };
 
-template<> double HydroSystem<ContactProblem>::gamma_ = 1.4;
+template <> double HydroSystem<ContactProblem>::gamma_ = 1.4;
 constexpr double v_contact = 0.0; // contact wave velocity
 
 template <> void HydroSimulation<ContactProblem>::setInitialConditions()
@@ -58,7 +59,31 @@ template <> void HydroSimulation<ContactProblem>::setInitialConditions()
 		auto const &state = state_new_.array(iter);
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-			// TBD
+			const auto idx_value = static_cast<double>(i);
+			const double x = ((idx_value + 0.5) / static_cast<double>(nx_));
+
+			double v = NAN;
+			double rho = NAN;
+			double P = NAN;
+
+			if (x < 0.5) {
+				rho = 1.4;
+				v = v_contact;
+				P = 1.0;
+			} else {
+				rho = 1.0;
+				v = v_contact;
+				P = 1.0;
+			}
+			AMREX_ASSERT(!std::isnan(v));
+			AMREX_ASSERT(!std::isnan(rho));
+			AMREX_ASSERT(!std::isnan(P));
+
+			const auto gamma = HydroSystem<ContactProblem>::gamma_;
+			state(i, j, k, HydroSystem<ContactProblem>::density_index) = rho;
+			state(i, j, k, HydroSystem<ContactProblem>::x1Momentum_index) = rho * v;
+			state(i, j, k, HydroSystem<ContactProblem>::energy_index) =
+			    P / (gamma - 1.) + 0.5 * rho * (v * v);
 		});
 	}
 
@@ -101,11 +126,11 @@ auto testproblem_hydro_contact() -> int
 
 	const int nx = 100;
 	const double Lx = 1.0;
-	//const double CFL_number = 0.8;
-	//const double max_time = 2.0;
+	// const double CFL_number = 0.8;
+	// const double max_time = 2.0;
 	const double fixed_dt = 1e-3;
-	//const int max_timesteps = 2000;
-	//const double gamma = 1.4; // ratio of specific heats
+	// const int max_timesteps = 2000;
+	// const double gamma = 1.4; // ratio of specific heats
 
 	// Problem initialization
 	HydroSimulation<ContactProblem> sim;
@@ -126,7 +151,7 @@ auto testproblem_hydro_contact() -> int
 	for (amrex::MFIter iter(sim.state_new_); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &stateExact = state_exact.array(iter);
-		auto const &stateNew = sim.state_new_.const_array(iter);
+		//auto const &stateNew = sim.state_new_.const_array(iter);
 		ComputeExactSolution(stateExact, indexRange, sim.nx_);
 	}
 

@@ -17,6 +17,7 @@
 #include "AMReX_FArrayBox.H"
 #include "AMReX_IntVect.H"
 #include "AMReX_MultiFab.H"
+#include "AMReX_MultiFabUtil.H"
 #include "AMReX_REAL.H"
 #include "AMReX_Utility.H"
 #include "fmt/core.h"
@@ -116,6 +117,7 @@ void HydroSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real> c
 	// N.B.: A one-zone layer around the cells must be fully reconstructed in order for PPM to
 	// work.
 	amrex::Box const &reconstructRange = amrex::grow(indexRange, 1);
+	amrex::Box const &flatteningRange = amrex::grow(indexRange, 2); // +1 greater than ppmRange
 	// [0 == x1 direction]
 	amrex::Box const &x1ReconstructRange = amrex::surroundingNodes(reconstructRange, 0);
 
@@ -126,25 +128,37 @@ void HydroSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real> c
 	amrex::FArrayBox x1RightState(x1ReconstructRange, nvars, amrex::The_Async_Arena());
 
 	// cell-centered kernel
-	HydroSystem<problem_t>::ConservedToPrimitive(consState, primVar.array(), ghostRange, nvars);
-	CheckNaN(primVar, ghostRange, ncomp_);
+	HydroSystem<problem_t>::ConservedToPrimitive(consState, primVar.array(), ghostRange);
+	CheckNaN(primVar, ghostRange, nvars);
 
 	// mixed interface/cell-centered kernel
 	HydroSystem<problem_t>::ReconstructStatesPPM(primVar.array(), x1LeftState.array(),
 						     x1RightState.array(), reconstructRange,
 						     x1ReconstructRange, nvars);
+	CheckNaN(x1LeftState, x1ReconstructRange, nvars);
+	CheckNaN(x1RightState, x1ReconstructRange, nvars);
+
+	// cell-centered kernel
 	HydroSystem<problem_t>::ComputeFlatteningCoefficients(primVar.array(), x1Flat.array(),
-							      reconstructRange);
+							      flatteningRange);
+	CheckNaN(x1LeftState, x1ReconstructRange, nvars);
+	CheckNaN(x1RightState, x1ReconstructRange, nvars);
+
+	// cell-centered kernel
 	HydroSystem<problem_t>::FlattenShocks(primVar.array(), x1Flat.array(), x1LeftState.array(),
 					      x1RightState.array(), reconstructRange, nvars);
-	CheckNaN(x1LeftState, x1ReconstructRange, ncomp_);
-	CheckNaN(x1RightState, x1ReconstructRange, ncomp_);
+	amrex::Print() << "x1LeftState(0,0,0) = " << x1LeftState.array()(0, 0, 0) << "\n";
+	amrex::Print() << "x1LeftState(1,0,0) = " << x1LeftState.array()(1, 0, 0) << "\n";
+	amrex::Print() << "x1RightState(0,0,0) = " << x1RightState.array()(0, 0, 0) << "\n";
+	amrex::Print() << "x1RightState(1,0,0) = " << x1RightState.array()(1, 0, 0) << "\n\n";
+	CheckNaN(x1LeftState, x1ReconstructRange, nvars);
+	CheckNaN(x1RightState, x1ReconstructRange, nvars);
 
 	// interface-centered kernel
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, 0);
 	HydroSystem<problem_t>::ComputeFluxes(x1Flux.array(), x1LeftState.array(),
-					      x1RightState.array(), x1FluxRange, nvars);
-	CheckNaN(x1Flux, x1FluxRange, ncomp_);
+					      x1RightState.array(), x1FluxRange);
+	CheckNaN(x1Flux, x1FluxRange, nvars);
 }
 
 template <typename problem_t>

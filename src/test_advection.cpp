@@ -56,10 +56,9 @@ template <> void AdvectionSimulation<SawtoothProblem>::setInitialConditions()
 		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
 		auto const &state = state_new_.array(iter);
 
-		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-			auto x = (0.5 + static_cast<double>(i)) / nx_;
+		amrex::ParallelFor(indexRange, ncomp_, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
 			auto value = static_cast<double>((i + nx_ / 2) % nx_) / nx_;
-			state(i, j, k, 0) = value;
+			state(i, j, k, n) = value;
 		});
 	}
 
@@ -68,12 +67,11 @@ template <> void AdvectionSimulation<SawtoothProblem>::setInitialConditions()
 }
 
 void ComputeExactSolution(amrex::Array4<amrex::Real> const &exact_arr, amrex::Box const &indexRange,
-			  const int nx)
+			const int nvars, const int nx)
 {
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		auto x = (0.5 + static_cast<double>(i)) / nx;
+	amrex::ParallelFor(indexRange, nvars, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
 		auto value = static_cast<double>((i + nx / 2) % nx) / nx;
-		exact_arr(i, j, k, 0) = value;
+		exact_arr(i, j, k, n) = value;
 	});
 }
 
@@ -106,25 +104,27 @@ auto testproblem_advection() -> int
 	for (amrex::MFIter iter(sim.state_new_); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &stateExact = state_exact.array(iter);
-		auto const &stateNew = sim.state_new_.const_array(iter);
-		ComputeExactSolution(stateExact, indexRange, sim.nx_);
+		ComputeExactSolution(stateExact, indexRange, sim.ncomp_, sim.nx_);
 	}
 
 	// Compute error norm
-	const int this_comp = 0;
-	const auto sol_norm = state_exact.norm1(this_comp);
 	amrex::MultiFab residual(sim.simBoxArray_, sim.simDistributionMapping_, sim.ncomp_,
 				 sim.nghost_);
 	amrex::MultiFab::Copy(residual, state_exact, 0, 0, sim.ncomp_, sim.nghost_);
-	amrex::MultiFab::Saxpy(residual, -1., sim.state_new_, this_comp, this_comp, sim.ncomp_,
-			       sim.nghost_);
-	const auto err_norm = residual.norm1(this_comp);
-	const double rel_error = err_norm / sol_norm;
-	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
+	amrex::MultiFab::Saxpy(residual, -1., sim.state_new_, 0, 0, sim.ncomp_, sim.nghost_);
+	
+	double min_rel_error = std::numeric_limits<double>::max();
+	for(int comp = 0; comp < sim.ncomp_; ++comp) {
+		const auto sol_norm = state_exact.norm1(comp);
+		const auto err_norm = residual.norm1(comp);
+		const double rel_error = err_norm / sol_norm;
+		min_rel_error = std::min(min_rel_error, rel_error);
+		amrex::Print() << "Relative L1 error norm (comp " << comp << ") = " << rel_error << "\n";
+	}
 
 	const double err_tol = 0.015;
 	int status = 0;
-	if (rel_error > err_tol) {
+	if (min_rel_error > err_tol) {
 		status = 1;
 	}
 
@@ -138,6 +138,7 @@ auto testproblem_advection() -> int
 	auto const &state_final_array = state_final.array(0);
 	auto const &state_exact_array = state_exact_local.array(0);
 
+	// plot solution
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		std::vector<double> d_final(sim.nx_);
 		std::vector<double> d_initial(sim.nx_);
@@ -155,7 +156,6 @@ auto testproblem_advection() -> int
 		d_initial_args["label"] = "density (initial)";
 		d_final_args["label"] = "density (final)";
 
-		matplotlibcpp::clf();
 		matplotlibcpp::plot(x, d_initial, d_initial_args);
 		matplotlibcpp::plot(x, d_final, d_final_args);
 		matplotlibcpp::legend();
