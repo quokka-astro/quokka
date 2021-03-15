@@ -45,7 +45,7 @@ inline void CheckNaN(amrex::FArrayBox const &arr, amrex::Box const &indexRange, 
 template <typename problem_t> class SingleLevelSimulation
 {
       public:
-	int nx_{400};
+	int nx_{100};
 	int ny_{1};
 	int nz_{1};
 	int max_grid_size_{32};

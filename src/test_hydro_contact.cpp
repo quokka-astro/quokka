@@ -59,8 +59,7 @@ template <> void HydroSimulation<ContactProblem>::setInitialConditions()
 		auto const &state = state_new_.array(iter);
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-			const auto idx_value = static_cast<double>(i);
-			const double x = ((idx_value + 0.5) / static_cast<double>(nx_));
+			const double x = (0.5 + static_cast<double>(i)) / nx_; // something is wrong here!!
 
 			double v = NAN;
 			double rho = NAN;
@@ -95,8 +94,7 @@ void ComputeExactSolution(amrex::Array4<amrex::Real> const &exact_arr, amrex::Bo
 			  const int nx)
 {
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		const auto idx_value = static_cast<double>(i);
-		const double x = ((idx_value + 0.5) / static_cast<double>(nx));
+		const double x = (0.5 + static_cast<double>(i)) / nx;
 
 		double v = NAN;
 		double rho = NAN;
