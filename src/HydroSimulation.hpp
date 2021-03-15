@@ -153,7 +153,7 @@ void HydroSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real> c
 	// interface-centered kernel
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, 0);
 	HydroSystem<problem_t>::ComputeFluxes(x1Flux.array(), x1LeftState.array(),
-					      x1RightState.array(), x1FluxRange);
+					      x1RightState.array(), x1FluxRange); // watch out for argument order!!
 	CheckNaN(x1Flux, x1FluxRange, nvars);
 }
 
