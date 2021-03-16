@@ -139,16 +139,16 @@ void HydroSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real> c
 	CheckNaN(x1RightState, x1ReconstructRange, nvars);
 
 	// cell-centered kernel
-	//HydroSystem<problem_t>::ComputeFlatteningCoefficients(primVar.array(), x1Flat.array(),
-	//						      flatteningRange);
-	//CheckNaN(x1LeftState, x1ReconstructRange, nvars);
-	//CheckNaN(x1RightState, x1ReconstructRange, nvars);
+	HydroSystem<problem_t>::ComputeFlatteningCoefficients(primVar.array(), x1Flat.array(),
+							      flatteningRange);
+	CheckNaN(x1LeftState, x1ReconstructRange, nvars);
+	CheckNaN(x1RightState, x1ReconstructRange, nvars);
 
 	// cell-centered kernel
-	//HydroSystem<problem_t>::FlattenShocks(primVar.array(), x1Flat.array(), x1LeftState.array(),
-	//				      x1RightState.array(), reconstructRange, nvars);
-	//CheckNaN(x1LeftState, x1ReconstructRange, nvars);
-	//CheckNaN(x1RightState, x1ReconstructRange, nvars);
+	HydroSystem<problem_t>::FlattenShocks(primVar.array(), x1Flat.array(), x1LeftState.array(),
+					      x1RightState.array(), reconstructRange, nvars);
+	CheckNaN(x1LeftState, x1ReconstructRange, nvars);
+	CheckNaN(x1RightState, x1ReconstructRange, nvars);
 
 	// interface-centered kernel
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, 0);
