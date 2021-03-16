@@ -54,12 +54,15 @@ constexpr double v_contact = 0.0; // contact wave velocity
 
 template <> void HydroSimulation<ContactProblem>::setInitialConditions()
 {
+	amrex::GpuArray<Real, AMREX_SPACEDIM> dx = simGeometry_.CellSizeArray();
+    amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo = simGeometry_.ProbLoArray();
+
 	for (amrex::MFIter iter(state_old_); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
 		auto const &state = state_new_.array(iter);
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-			const double x = (0.5 + static_cast<double>(i)) / nx_; // something is wrong here!!
+    		amrex::Real const x = prob_lo[0] + (i+Real(0.5)) * dx[0];
 
 			double v = NAN;
 			double rho = NAN;
@@ -91,10 +94,10 @@ template <> void HydroSimulation<ContactProblem>::setInitialConditions()
 }
 
 void ComputeExactSolution(amrex::Array4<amrex::Real> const &exact_arr, amrex::Box const &indexRange,
-			  const int nx)
+			amrex::GpuArray<Real, AMREX_SPACEDIM> dx, amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo)
 {
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		const double x = (0.5 + static_cast<double>(i)) / nx;
+    	amrex::Real const x = prob_lo[0] + (i+Real(0.5)) * dx[0];
 
 		double v = NAN;
 		double rho = NAN;
@@ -122,11 +125,11 @@ auto testproblem_hydro_contact() -> int
 {
 	// Problem parameters
 
-	const int nx = 100;
-	const double Lx = 1.0;
+	//const int nx = 100;
+	//const double Lx = 1.0;
 	// const double CFL_number = 0.8;
 	// const double max_time = 2.0;
-	const double fixed_dt = 1e-3;
+	//const double fixed_dt = 1e-3;
 	// const int max_timesteps = 2000;
 	// const double gamma = 1.4; // ratio of specific heats
 
@@ -145,11 +148,13 @@ auto testproblem_hydro_contact() -> int
 	// Compute reference solution
 	amrex::MultiFab state_exact(sim.simBoxArray_, sim.simDistributionMapping_, sim.ncomp_,
 				    sim.nghost_);
+	amrex::GpuArray<Real, AMREX_SPACEDIM> dx = sim.simGeometry_.CellSizeArray();
+    amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo = sim.simGeometry_.ProbLoArray();
 
 	for (amrex::MFIter iter(sim.state_new_); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &stateExact = state_exact.array(iter);
-		ComputeExactSolution(stateExact, indexRange, sim.nx_);
+		ComputeExactSolution(stateExact, indexRange, dx, prob_lo);
 	}
 
 	// Compute error norm
@@ -193,9 +198,8 @@ auto testproblem_hydro_contact() -> int
 		std::vector<double> pressure_exact(sim.nx_);
 		std::vector<double> velocity_exact(sim.nx_);
 
-		for (int i = 0; i < nx; ++i) {
-			const auto idx_value = static_cast<double>(i);
-			const auto this_x = Lx * ((idx_value + 0.5) / static_cast<double>(nx));
+		for (int i = 0; i < sim.nx_; ++i) {
+    		amrex::Real const this_x = prob_lo[0] + (i+Real(0.5)) * dx[0];
 
 			const auto rho = state_exact_array(i, 0, 0, HydroSystem<ContactProblem>::density_index);
 			const auto xmom = state_exact_array(i, 0, 0, HydroSystem<ContactProblem>::x1Momentum_index);
@@ -211,7 +215,7 @@ auto testproblem_hydro_contact() -> int
 			velocity_exact.push_back(vx);
 		}
 
-		for (int i = 0; i < nx; ++i) {
+		for (int i = 0; i < sim.nx_; ++i) {
 			const auto rho = state_final_array(i, 0, 0, HydroSystem<ContactProblem>::density_index);
 			const auto xmom = state_final_array(i, 0, 0, HydroSystem<ContactProblem>::x1Momentum_index);
 			const auto E = state_final_array(i, 0, 0, HydroSystem<ContactProblem>::energy_index);
