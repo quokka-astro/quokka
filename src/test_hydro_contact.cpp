@@ -13,8 +13,6 @@
 #include "HydroSimulation.hpp"
 #include "hydro_system.hpp"
 
-struct ShocktubeProblem {
-};
 
 auto main(int argc, char **argv) -> int
 {
@@ -124,14 +122,7 @@ void ComputeExactSolution(amrex::Array4<amrex::Real> const &exact_arr, amrex::Bo
 auto testproblem_hydro_contact() -> int
 {
 	// Problem parameters
-
 	//const int nx = 100;
-	//const double Lx = 1.0;
-	// const double CFL_number = 0.8;
-	// const double max_time = 2.0;
-	//const double fixed_dt = 1e-3;
-	// const int max_timesteps = 2000;
-	// const double gamma = 1.4; // ratio of specific heats
 
 	// Problem initialization
 	HydroSimulation<ContactProblem> sim;
