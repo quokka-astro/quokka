@@ -276,7 +276,6 @@ def objective(dx):
     j_p = np.array([Frad_a, Prad_a, S_a])
     j_s = np.array([Frad_b, Prad_b, S_b])
 
-    #my_norm = lambda v: np.sum( np.abs(v) )
     my_norm = lambda v: np.sum( v**2 )
     rel_norm = my_norm(j_p - j_s) / my_norm(j_s)    # good
     #norm = (rhoA*velA - rhoB*velB)**2 + (TradA - TradB)**2  # bad!
