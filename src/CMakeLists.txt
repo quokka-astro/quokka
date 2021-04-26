@@ -1,3 +1,4 @@
+#include(AMReX_SetupCUDA)
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/amrex ${QuokkaCode_BINARY_DIR}/amrex)
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/fmt ${QuokkaCode_BINARY_DIR}/fmt)
 
@@ -41,6 +42,10 @@ add_executable(test_advection_se linear_advection.cpp hyperbolic_system.cpp test
 # add_executable(test_radiation_pulse hyperbolic_system.cpp radiation_system.cpp test_radiation_pulse.cpp)
 # add_executable(test_radiation_streaming hyperbolic_system.cpp radiation_system.cpp test_radiation_streaming.cpp)
 #add_executable(test_amrex_2d test_amrex_2d.cpp diffusion.cpp)
+
+setup_target_for_cuda_compilation(test_hydro_contact)
+setup_target_for_cuda_compilation(test_advection)
+setup_target_for_cuda_compilation(test_advection_se)
 
 # add_clang_static_analysis(test_radiation_matter_coupling)
 # add_clang_static_analysis(test_radiation_SuOlson)
