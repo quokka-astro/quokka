@@ -8,15 +8,18 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
-#set(CMAKE_CUDA_COMPILER "/usr/local/cuda/bin/nvcc")
-#set(AMReX_GPU_BACKEND CUDA)
-enable_language(CUDA)
+set(CMAKE_CUDA_COMPILER "/usr/local/cuda/bin/nvcc")
 
 include(CTest)
 
 set(AMReX_SPACEDIM 1 CACHE STRING "" FORCE)
 set(AMReX_MPI OFF CACHE BOOL "" FORCE)
 set(AMReX_LINEAR_SOLVERS OFF CACHE BOOL "" FORCE)
+set(AMReX_GPU_BACKEND CUDA)
+enable_language(CUDA)
+
+add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/amrex ${QuokkaCode_BINARY_DIR}/amrex)
+add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/fmt ${QuokkaCode_BINARY_DIR}/fmt)
 
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/src ${QuokkaCode_BINARY_DIR}/src)
 
