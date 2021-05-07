@@ -38,19 +38,8 @@ template <typename problem_t> class LinearAdvectionSystem : public HyperbolicSys
 	static void ComputeFluxes(array_t &x1Flux, arrayconst_t &x1LeftState,
 				  arrayconst_t &x1RightState, double advectionVx,
 				  amrex::Box const &indexRange, int nvars);
-	static auto ComputeMass(amrex::FArrayBox const &density, double dx,
-				amrex::Box const &indexRange) -> double;
 };
 
-template <typename problem_t>
-auto LinearAdvectionSystem<problem_t>::ComputeMass(amrex::FArrayBox const &density, const double dx,
-						   amrex::Box const &indexRange) -> double
-{
-	amrex::FArrayBox mass(indexRange, 1);
-	mass.saxpy(dx, density);
-	const amrex::Real mass_sum = mass.sum(0); // sum component 0
-	return mass_sum;
-}
 
 template <typename problem_t>
 void LinearAdvectionSystem<problem_t>::ComputeMaxSignalSpeed(arrayconst_t & /*cons*/, array_t &maxSignal,
