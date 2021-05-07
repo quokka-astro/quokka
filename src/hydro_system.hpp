@@ -52,7 +52,7 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 				  array_t &x1LeftState, array_t &x1RightState,
 				  amrex::Box const &indexRange, int nvars);
 
-	static double gamma_;
+	static constexpr double gamma_ = 5./3.;
 };
 
 template <typename problem_t>

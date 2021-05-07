@@ -14,7 +14,6 @@
 #include "AMReX_DistributionMapping.H"
 #include "AMReX_INT.H"
 #include "AMReX_VisMF.H"
-#include "hyperbolic_system.hpp"
 #include <cassert>
 #include <cmath>
 
@@ -33,7 +32,7 @@
 
 using Real = amrex::Real;
 
-inline void CheckNaN(amrex::FArrayBox const &arr, amrex::Box const &indexRange, const int ncomp)
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void CheckNaN(amrex::FArrayBox const &arr, amrex::Box const &indexRange, const int ncomp)
 {
 #ifndef NDEBUG
 	if (amrex::IntVect where; arr.contains_nan(indexRange, 0, ncomp, where)) {
@@ -41,6 +40,10 @@ inline void CheckNaN(amrex::FArrayBox const &arr, amrex::Box const &indexRange, 
 					 where.dim3().y, where.dim3().z));
 	}
 #endif
+}
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE double clamp(double v, double lo, double hi) {
+    return (v < lo) ? lo : (hi < v) ? hi : v;
 }
 
 // Simulation class should be initialized only once per program (i.e., is a singleton)

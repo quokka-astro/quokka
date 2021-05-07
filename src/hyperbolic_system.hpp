@@ -27,9 +27,10 @@
 #include "AMReX_MultiFab.H"
 
 // internal headers
+#include "simulation.hpp"
 
 /// Provide type-safe global sign ('sgn') function.
-template <typename T> auto sgn(T val) -> int { return (T(0) < val) - (val < T(0)); }
+template <typename T> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto sgn(T val) -> int { return (T(0) < val) - (val < T(0)); }
 
 using array_t = amrex::Array4<amrex::Real> const;
 using arrayconst_t = amrex::Array4<const amrex::Real> const;
@@ -186,10 +187,10 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q, array_t 
 		const double a_plus = leftState(i + 1, j, k, n);
 
 		// left side of zone i
-		const double new_a_minus = std::clamp(a_minus, bounds.first, bounds.second);
+		const double new_a_minus = clamp(a_minus, bounds.first, bounds.second);
 
 		// right side of zone i
-		const double new_a_plus = std::clamp(a_plus, bounds.first, bounds.second);
+		const double new_a_plus = clamp(a_plus, bounds.first, bounds.second);
 
 		rightState(i, j, k, n) = new_a_minus;
 		leftState(i + 1, j, k, n) = new_a_plus;

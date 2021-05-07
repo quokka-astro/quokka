@@ -402,7 +402,7 @@ auto RadSystem<problem_t>::ComputeEddingtonFactor(double f_in) -> double
 	// f is the reduced flux == |F|/cE.
 	// compute Levermore (1984) closure [Eq. 25]
 	// the is the M1 closure that is derived from Lorentz invariance
-	const double f = std::clamp(f_in, 0., 1.); // restrict f to be within [0, 1]
+	const double f = quokka::clamp(f_in, 0., 1.); // restrict f to be within [0, 1]
 	const double f_fac = std::sqrt(4.0 - 3.0 * (f * f));
 	const double chi = (3.0 + 4.0 * (f * f)) / (5.0 + 2.0 * f_fac);
 
