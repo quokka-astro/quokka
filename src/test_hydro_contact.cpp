@@ -47,7 +47,11 @@ auto main(int argc, char **argv) -> int
 struct ContactProblem {
 };
 
-template <> constexpr double HydroSystem<ContactProblem>::gamma_ = 1.4;
+template <>
+struct EOS_Traits<ContactProblem>
+{
+	static constexpr double gamma = 1.4;
+};
 constexpr double v_contact = 0.0; // contact wave velocity
 
 template <> void HydroSimulation<ContactProblem>::setInitialConditions()

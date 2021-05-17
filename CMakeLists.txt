@@ -9,7 +9,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake ${PROJECT_SOURCE_DIR}/extern/amrex/Tools/CMake)
 set(CMAKE_CUDA_COMPILER "/usr/local/cuda/bin/nvcc")
-
+#set(CMAKE_CUDA_ARCHITECTURES 70)
 include(CTest)
 
 set(AMReX_SPACEDIM 1 CACHE STRING "" FORCE)
@@ -21,7 +21,6 @@ include(AMReX_SetupCUDA)
 
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/amrex ${QuokkaCode_BINARY_DIR}/amrex)
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/fmt ${QuokkaCode_BINARY_DIR}/fmt)
-
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/src ${QuokkaCode_BINARY_DIR}/src)
 
 find_program(CLANG_TIDY_EXE NAMES "clang-tidy")

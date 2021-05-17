@@ -21,10 +21,19 @@
 // internal headers
 #include "AMReX_BLassert.H"
 #include "hyperbolic_system.hpp"
+#include "valarray.hpp"
+
+// this struct is specialized by the user application code
+//
+template <typename problem_t> struct EOS_Traits
+{
+	static constexpr double gamma = 5. / 3.; // default value
+};
 
 /// Class for the Euler equations of inviscid hydrodynamics
 ///
-template <typename problem_t> class HydroSystem : public HyperbolicSystem<problem_t>
+template <typename problem_t>
+class HydroSystem : public HyperbolicSystem<problem_t>
 {
       public:
 	enum consVarIndex { density_index = 0, x1Momentum_index = 1, energy_index = 2 };
@@ -39,12 +48,12 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	// static auto CheckStatesValid(array_t &cons, const std::pair<int, int> range) -> bool;
 
 	static void ComputeFluxes(array_t &x1Flux,
-					   amrex::Array4<const amrex::Real> const &x1LeftState,
-					   amrex::Array4<const amrex::Real> const &x1RightState,
-					   amrex::Box const &indexRange);
+				  amrex::Array4<const amrex::Real> const &x1LeftState,
+				  amrex::Array4<const amrex::Real> const &x1RightState,
+				  amrex::Box const &indexRange);
 	static void ComputeFirstOrderFluxes(amrex::Array4<const amrex::Real> const &consVar,
 					    array_t &x1FluxDiffusive, amrex::Box const &indexRange);
-	
+
 	static void ComputeFlatteningCoefficients(amrex::Array4<const amrex::Real> const &primVar,
 						  array_t &x1Chi, amrex::Box const &indexRange);
 	static void FlattenShocks(amrex::Array4<const amrex::Real> const &q,
@@ -52,7 +61,9 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 				  array_t &x1LeftState, array_t &x1RightState,
 				  amrex::Box const &indexRange, int nvars);
 
-	static constexpr double gamma_ = 5./3.;
+	static constexpr double gamma_ = EOS_Traits<problem_t>::gamma;
+	// static constexpr double gamma_; // C++ standard does not allow constexpr to be
+	// uninitialized, even in a templated class!
 };
 
 template <typename problem_t>
@@ -253,16 +264,18 @@ void HydroSystem<problem_t>::ComputeFirstOrderFluxes(
 		const double sstar = std::max(s_L, s_R);
 
 		// compute (using local signal speed) Lax-Friedrichs flux
-		const std::valarray<double> F_L = {rho_L * vx_L, rho_L * (vx_L * vx_L) + P_L,
+		constexpr int dim = 3;
+		
+		const quokka::valarray<double, dim> F_L = {rho_L * vx_L, rho_L * (vx_L * vx_L) + P_L,
 						   (E_L + P_L) * vx_L};
 
-		const std::valarray<double> F_R = {rho_R * vx_R, rho_R * (vx_R * vx_R) + P_R,
+		const quokka::valarray<double, dim> F_R = {rho_R * vx_R, rho_R * (vx_R * vx_R) + P_R,
 						   (E_R + P_R) * vx_R};
 
-		const std::valarray<double> U_L = {rho_L, mom_L, E_L};
-		const std::valarray<double> U_R = {rho_R, mom_R, E_R};
+		const quokka::valarray<double, dim> U_L = {rho_L, mom_L, E_L};
+		const quokka::valarray<double, dim> U_R = {rho_R, mom_R, E_R};
 
-		const std::valarray<double> LLF = 0.5 * (F_L + F_R - sstar * (U_R - U_L));
+		const quokka::valarray<double, dim> LLF = 0.5 * (F_L + F_R - sstar * (U_R - U_L));
 
 		x1FluxDiffusive(i, j, k, density_index) = LLF[0];
 		x1FluxDiffusive(i, j, k, x1Momentum_index) = LLF[1];
@@ -342,29 +355,29 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux,
 		assert(S_L <= S_R);
 
 		// compute fluxes
-
-		const std::valarray<double> F_L = {rho_L * vx_L, rho_L * (vx_L * vx_L) + P_L,
+		constexpr int fluxdim = 3;
+		const quokka::valarray<double, fluxdim> F_L = {rho_L * vx_L, rho_L * (vx_L * vx_L) + P_L,
 						   (E_L + P_L) * vx_L};
 
-		const std::valarray<double> F_R = {rho_R * vx_R, rho_R * (vx_R * vx_R) + P_R,
+		const quokka::valarray<double, fluxdim> F_R = {rho_R * vx_R, rho_R * (vx_R * vx_R) + P_R,
 						   (E_R + P_R) * vx_R};
 
-		const std::valarray<double> U_L = {
+		const quokka::valarray<double, fluxdim> U_L = {
 		    rho_L, rho_L * vx_L, P_L / (gamma_ - 1.0) + 0.5 * rho_L * (vx_L * vx_L)};
 
-		const std::valarray<double> U_R = {
+		const quokka::valarray<double, fluxdim> U_R = {
 		    rho_R, rho_R * vx_R, P_R / (gamma_ - 1.0) + 0.5 * rho_R * (vx_R * vx_R)};
 
-		const std::valarray<double> D_star = {0., 1., S_star};
+		const quokka::valarray<double, fluxdim> D_star = {0., 1., S_star};
 
-		const std::valarray<double> F_starL =
+		const quokka::valarray<double, fluxdim> F_starL =
 		    (S_star * (S_L * U_L - F_L) + S_L * P_LR * D_star) / (S_L - S_star);
 
-		const std::valarray<double> F_starR =
+		const quokka::valarray<double, fluxdim> F_starR =
 		    (S_star * (S_R * U_R - F_R) + S_R * P_LR * D_star) / (S_R - S_star);
 
 		// open the Riemann fan
-		std::valarray<double> F(3);
+		quokka::valarray<double, fluxdim> F;
 
 		// HLLC flux
 		if (S_L > 0.0) {
