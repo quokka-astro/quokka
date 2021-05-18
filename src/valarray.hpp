@@ -10,7 +10,7 @@
 /// (This is necessary because std::valarray is not defined in CUDA C++!)
 
 // library headers
-#include <AMReX_Gpu.H>
+#include <AMReX_GpuQualifiers.H>
 
 namespace quokka
 {
@@ -21,10 +21,12 @@ template <typename T, int d> class valarray
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE valarray(std::initializer_list<T> list)
 	{
 		assert(list.size() == d);
-        T const *input = std::data(list);
-        for(size_t i = 0; i < list.size(); ++i) {
-            values[i] = input[i];
-        }
+		T const *input =
+		    std::data(list); // requires nvcc to be in C++17 mode! (if it fails, the
+				     // compiler flags are wrong, probably due to a CMake issue.)
+		for (size_t i = 0; i < list.size(); ++i) {
+			values[i] = input[i];
+		}
 	}
 
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE T &operator[](size_t i) { return values[i]; }
@@ -40,7 +42,7 @@ template <typename T, int d> class valarray
 
 template <typename T, int d>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE quokka::valarray<T, d>
-operator+(quokka::valarray<T,d> const &a, quokka::valarray<T,d> const &b)
+operator+(quokka::valarray<T, d> const &a, quokka::valarray<T, d> const &b)
 {
 	quokka::valarray<T, d> sum;
 	for (size_t i = 0; i < a.size(); ++i) {
@@ -50,8 +52,8 @@ operator+(quokka::valarray<T,d> const &a, quokka::valarray<T,d> const &b)
 }
 
 template <typename T, int d>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE quokka::valarray<T,d> operator-(quokka::valarray<T,d> const &a,
-								       quokka::valarray<T,d> const &b)
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE quokka::valarray<T, d>
+operator-(quokka::valarray<T, d> const &a, quokka::valarray<T, d> const &b)
 {
 	quokka::valarray<T, d> diff;
 	for (size_t i = 0; i < a.size(); ++i) {
@@ -61,8 +63,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE quokka::valarray<T,d> operator-(quokka:
 }
 
 template <typename T, int d>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE quokka::valarray<T,d> operator*(quokka::valarray<T,d> const &a,
-								       quokka::valarray<T,d> const &b)
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE quokka::valarray<T, d>
+operator*(quokka::valarray<T, d> const &a, quokka::valarray<T, d> const &b)
 {
 	quokka::valarray<T, d> prod;
 	for (size_t i = 0; i < a.size(); ++i) {
@@ -72,8 +74,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE quokka::valarray<T,d> operator*(quokka:
 }
 
 template <typename T, int d>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE quokka::valarray<T,d> operator*(T const &scalar,
-								       quokka::valarray<T,d> const &v)
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE quokka::valarray<T, d>
+operator*(T const &scalar, quokka::valarray<T, d> const &v)
 {
 	quokka::valarray<T, d> scalarprod;
 	for (size_t i = 0; i < v.size(); ++i) {
@@ -83,8 +85,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE quokka::valarray<T,d> operator*(T const
 }
 
 template <typename T, int d>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE quokka::valarray<T,d> operator/(quokka::valarray<T,d> const &v,
-								       T const &scalar)
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE quokka::valarray<T, d>
+operator/(quokka::valarray<T, d> const &v, T const &scalar)
 {
 	quokka::valarray<T, d> scalardiv;
 	for (size_t i = 0; i < v.size(); ++i) {
