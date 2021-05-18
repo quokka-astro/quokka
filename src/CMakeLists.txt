@@ -39,9 +39,11 @@ add_executable(test_advection_se linear_advection.cpp hyperbolic_system.cpp test
 # add_executable(test_radiation_streaming hyperbolic_system.cpp radiation_system.cpp test_radiation_streaming.cpp)
 #add_executable(test_amrex_2d test_amrex_2d.cpp diffusion.cpp)
 
-#setup_target_for_cuda_compilation(test_hydro_contact)
-#setup_target_for_cuda_compilation(test_advection)
-#setup_target_for_cuda_compilation(test_advection_se)
+if(AMReX_GPU_BACKEND MATCHES "CUDA")
+    setup_target_for_cuda_compilation(test_hydro_contact)
+    setup_target_for_cuda_compilation(test_advection)
+    setup_target_for_cuda_compilation(test_advection_se)
+endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 
 # add_clang_static_analysis(test_radiation_matter_coupling)
 # add_clang_static_analysis(test_radiation_SuOlson)
