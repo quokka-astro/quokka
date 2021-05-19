@@ -1,0 +1,29 @@
+
+(base) ➜  src git:(kernels-refactor) ./test_advection ../../default.in
+Initializing CUDA...
+CUDA initialized with 1 GPU
+AMReX (21.05-40-g79f79aae9f5c) initialized
+terminate called after throwing an instance of 'std::runtime_error'
+  what():  CUDA error 719 in file ../extern/amrex/Src/Base/AMReX_GpuDevice.cpp line 619: unspecified launch failure
+[1]    567 abort      ./test_advection ../../default.in
+(base) ➜  src git:(kernels-refactor) ./test_advection ../../default.in
+Initializing CUDA...
+CUDA initialized with 1 GPU
+AMReX (21.05-40-g79f79aae9f5c) initialized
+terminate called after throwing an instance of 'std::runtime_error'
+  what():  CUDA error 700 in file ../extern/amrex/Src/Base/AMReX_GpuDevice.cpp line 619: an illegal memory access was encountered
+[1]    595 abort      ./test_advection ../../default.in
+(base) ➜  src git:(kernels-refactor) ./test_advection ../../default.in
+Initializing CUDA...
+CUDA initialized with 1 GPU
+AMReX (21.05-40-g79f79aae9f5c) initialized
+terminate called after throwing an instance of 'std::runtime_error'
+  what():  CUDA error 700 in file ../extern/amrex/Src/Base/AMReX_GpuDevice.cpp line 619: an illegal memory access was encountered
+[1]    612 abort      ./test_advection ../../default.in
+(base) ➜  src git:(kernels-refactor) ./test_advection ../../default.in
+Initializing CUDA...
+CUDA initialized with 1 GPU
+AMReX (21.05-40-g79f79aae9f5c) initialized
+terminate called after throwing an instance of 'std::runtime_error'
+  what():  CUDA error 700 in file ../extern/amrex/Src/Base/AMReX_GpuDevice.cpp line 619: an illegal memory access was encountered
+[1]    629 abort      ./test_advection ../../default.in
