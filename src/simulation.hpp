@@ -52,7 +52,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE double clamp(double v, double lo, doubl
 template <typename problem_t> class SingleLevelSimulation
 {
       public:
-	int nx_{400};
+	int nx_{400}; // FIXME(ben): pass to GPU lambda function or copy class to GPU (!)
 	int ny_{1};
 	int nz_{1};
 	int max_grid_size_{32};

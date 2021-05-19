@@ -55,9 +55,10 @@ template <> void AdvectionSimulation<SawtoothProblem>::setInitialConditions()
 	for (amrex::MFIter iter(state_old_); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
 		auto const &state = state_new_.array(iter);
+		auto const nx = nx_; // class members are not automatically transferred to device!
 
 		amrex::ParallelFor(indexRange, ncomp_, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
-			auto value = static_cast<double>((i + nx_ / 2) % nx_) / nx_;
+			auto value = static_cast<double>((i + nx / 2) % nx) / nx;
 			state(i, j, k, n) = value;
 		});
 	}

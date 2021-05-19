@@ -56,9 +56,10 @@ template <> void AdvectionSimulation<SemiellipseProblem>::setInitialConditions()
 	for (amrex::MFIter iter(state_old_); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
 		auto const &state = state_new_.array(iter);
+		auto const nx = nx_;
 
 		amrex::ParallelFor(indexRange, ncomp_, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
-			auto x = (0.5 + static_cast<double>(i)) / nx_;
+			auto x = (0.5 + static_cast<double>(i)) / nx;
 			double dens = 0.0;
 			if (std::abs(x - 0.2) <= 0.15) {
 				dens = std::sqrt(1.0 - std::pow((x - 0.2) / 0.15, 2));
