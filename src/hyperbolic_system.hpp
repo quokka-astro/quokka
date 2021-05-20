@@ -274,14 +274,16 @@ void HyperbolicSystem<problem_t>::SaveFluxes(array_t &advectionFluxes, arraycons
 
 template <typename problem_t>
 void HyperbolicSystem<problem_t>::PredictStep(arrayconst_t &consVarOld, array_t &consVarNew,
-					      arrayconst_t &x1Flux, const double dt,
-					      const double dx, amrex::Box const &indexRange,
+					      arrayconst_t &x1Flux, const double dt_in,
+					      const double dx_in, amrex::Box const &indexRange,
 					      const int nvars)
 {
 	// By convention, the fluxes are defined on the left edge of each zone,
 	// i.e. flux_(i) is the flux *into* zone i through the interface on the
 	// left of zone i, and -1.0*flux(i+1) is the flux *into* zone i through
 	// the interface on the right of zone i.
+	const auto dt = dt_in;
+	const auto dx = dx_in;
 
 	amrex::ParallelFor(indexRange, nvars, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
 		consVarNew(i, j, k, n) = consVarOld(i, j, k, n) -
@@ -291,14 +293,16 @@ void HyperbolicSystem<problem_t>::PredictStep(arrayconst_t &consVarOld, array_t 
 
 template <typename problem_t>
 void HyperbolicSystem<problem_t>::AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayconst_t &U1,
-					       arrayconst_t &x1Flux, const double dt,
-					       const double dx, amrex::Box const &indexRange,
+					       arrayconst_t &x1Flux, const double dt_in,
+					       const double dx_in, amrex::Box const &indexRange,
 					       const int nvars)
 {
 	// By convention, the fluxes are defined on the left edge of each zone,
 	// i.e. flux_(i) is the flux *into* zone i through the interface on the
 	// left of zone i, and -1.0*flux(i+1) is the flux *into* zone i through
 	// the interface on the right of zone i.
+	const auto dt = dt_in;
+	const auto dx = dx_in;
 
 	amrex::ParallelFor(indexRange, nvars, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
 		// RK-SSP2 integrator

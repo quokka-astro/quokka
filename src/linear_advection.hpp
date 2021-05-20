@@ -40,14 +40,15 @@ template <typename problem_t> class LinearAdvectionSystem : public HyperbolicSys
 				  amrex::Box const &indexRange, int nvars);
 };
 
-
 template <typename problem_t>
-void LinearAdvectionSystem<problem_t>::ComputeMaxSignalSpeed(arrayconst_t & /*cons*/, array_t &maxSignal,
-							     const double advectionVx,
-							     amrex::Box const &indexRange)
+void LinearAdvectionSystem<problem_t>::ComputeMaxSignalSpeed(
+    amrex::Array4<amrex::Real const> const & /*cons*/, amrex::Array4<amrex::Real> const &maxSignal,
+    const double advectionVx, amrex::Box const &indexRange)
 {
+	const auto vx = advectionVx;
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		const double signal_max = std::abs(advectionVx);
+		const double signal_max = fabs(vx);
+		// const double signal_max = advectionVx; // fails with 'invalid device function'
 		maxSignal(i, j, k) = signal_max;
 	});
 }
@@ -72,16 +73,17 @@ void LinearAdvectionSystem<problem_t>::ComputeFluxes(array_t &x1Flux, arrayconst
 	// xinterface_(i) is the solution to the Riemann problem at the left edge of zone i.
 
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
+	const auto vx = advectionVx;
 
 	amrex::ParallelFor(indexRange, nvars, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
 		// For advection, simply choose upwind side of the interface.
-		if (advectionVx < 0.0) { // upwind switch
+		if (vx < 0.0) { // upwind switch
 			// upwind direction is the right-side of the interface
-			x1Flux(i, j, k, n) = advectionVx * x1RightState(i, j, k, n);
+			x1Flux(i, j, k, n) = vx * x1RightState(i, j, k, n);
 
 		} else {
 			// upwind direction is the left-side of the interface
-			x1Flux(i, j, k, n) = advectionVx * x1LeftState(i, j, k, n);
+			x1Flux(i, j, k, n) = vx * x1LeftState(i, j, k, n);
 		}
 	});
 }
