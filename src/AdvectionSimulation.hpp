@@ -17,14 +17,11 @@
 #include "AMReX_IntVect.H"
 #include "AMReX_REAL.H"
 #include "AMReX_Utility.H"
+
 #include "ArrayView.hpp"
 #include "fmt/core.h"
 #include "linear_advection.hpp"
 #include "simulation.hpp"
-#include <climits>
-#include <limits>
-#include <string>
-#include <utility>
 
 // Simulation class should be initialized only once per program (i.e., is a singleton)
 template <typename problem_t> class AdvectionSimulation : public SingleLevelSimulation<problem_t>
@@ -167,7 +164,12 @@ void AdvectionSimulation<problem_t>::stageOneRK2SSP(
 #endif // AMREX_SPACEDIM >= 2
 
 	// Stage 1 of RK2-SSP
-	auto fluxArrays = {x1Flux.array(), x2Flux.array()};
+#if (AMREX_SPACEDIM == 1)
+	amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrays = {x1Flux.const_array()};
+#elif (AMREX_SPACEDIM == 2)
+	amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrays = {x1Flux.const_array(), x2Flux.const_array()};
+#endif
+
 	LinearAdvectionSystem<problem_t>::PredictStep(consVarOld, consVarNew, fluxArrays, dt_, dx_,
 						      indexRange, nvars);
 }
@@ -181,10 +183,25 @@ void AdvectionSimulation<problem_t>::stageTwoRK2SSP(
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, 0);
 	amrex::FArrayBox x1Flux(x1FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in x
 
-	// Stage 2 of RK2-SSP
+#if (AMREX_SPACEDIM >= 2) // for 2D problems
+	amrex::Box const &x2FluxRange = amrex::surroundingNodes(indexRange, 0);
+	amrex::FArrayBox x2Flux(x2FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in y
+#endif // AMREX_SPACEDIM >= 2
+
 	fluxFunction(consVarNew, x1Flux, indexRange, nvars);
+#if (AMREX_SPACEDIM >= 2) // for 2D problems
+	fluxFunction(consVarNew, x2Flux, indexRange, nvars);
+#endif // AMREX_SPACEDIM >= 2
+
+#if (AMREX_SPACEDIM == 1)
+	amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrays = {x1Flux.const_array()};
+#elif (AMREX_SPACEDIM == 2)
+	amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrays = {x1Flux.const_array(), x2Flux.const_array()};
+#endif
+
+	// Stage 2 of RK2-SSP
 	LinearAdvectionSystem<problem_t>::AddFluxesRK2(
-	    consVarNew, consVarOld, consVarNew, x1Flux.array(), dt_, dx_[0], indexRange, nvars);
+	    consVarNew, consVarOld, consVarNew, fluxArrays, dt_, dx_, indexRange, nvars);
 }
 
 #endif // ADVECTION_SIMULATION_HPP_

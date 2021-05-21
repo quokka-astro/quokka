@@ -34,14 +34,7 @@ using Real = amrex::Real;
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void CheckNaN(amrex::FArrayBox const &arr, amrex::Box const &indexRange, const int ncomp)
 {
-#if 0 // need to rewrite for GPU
-#ifndef NDEBUG
-	if (amrex::IntVect where; arr.contains_nan(indexRange, 0, ncomp, where)) {
-		amrex::Abort(fmt::format("NAN found in array at index {}, {}, {}", where.dim3().x,
-					 where.dim3().y, where.dim3().z));
-	}
-#endif
-#endif
+	// need to rewrite for GPU
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE double clamp(double v, double lo, double hi) {

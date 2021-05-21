@@ -168,7 +168,7 @@ void HydroSimulation<problem_t>::stageOneRK2SSP(amrex::Array4<const amrex::Real>
 
 	// Stage 1 of RK2-SSP
 	fluxFunction(consVarOld, x1Flux, indexRange, nvars);
-	HydroSystem<problem_t>::PredictStep(consVarOld, consVarNew, x1Flux.array(), dt_, dx_[0],
+	HydroSystem<problem_t>::PredictStep(consVarOld, consVarNew, {x1Flux.array()}, dt_, dx_,
 					    indexRange, nvars);
 }
 
@@ -183,8 +183,8 @@ void HydroSimulation<problem_t>::stageTwoRK2SSP(amrex::Array4<const amrex::Real>
 
 	// Stage 2 of RK2-SSP
 	fluxFunction(consVarNew, x1Flux, indexRange, nvars);
-	HydroSystem<problem_t>::AddFluxesRK2(consVarNew, consVarOld, consVarNew, x1Flux.array(),
-					     dt_, dx_[0], indexRange, nvars);
+	HydroSystem<problem_t>::AddFluxesRK2(consVarNew, consVarOld, consVarNew, {x1Flux.array()},
+					     dt_, dx_, indexRange, nvars);
 }
 
 #endif // HYDRO_SIMULATION_HPP_
