@@ -46,7 +46,7 @@ template <typename problem_t> class SingleLevelSimulation
 {
       public:
 	int nx_{400};
-	int ny_{4};
+	int ny_{32};
 	int nz_{1};
 	int max_grid_size_{32};
 	int maxTimesteps_{10000};
