@@ -20,6 +20,8 @@
 
 // internal headers
 #include "AMReX_BLassert.H"
+#include "AMReX_REAL.H"
+#include "ArrayView.hpp"
 #include "hyperbolic_system.hpp"
 #include "valarray.hpp"
 
@@ -155,8 +157,11 @@ auto HydroSystem<problem_t>::CheckStatesValid(amrex::Array4<const amrex::Real> c
 template <typename problem_t>
 template <FluxDir DIR>
 void HydroSystem<problem_t>::ComputeFlatteningCoefficients(
-    amrex::Array4<const amrex::Real> const &primVar, array_t &x1Chi, amrex::Box const &indexRange)
+    amrex::Array4<const amrex::Real> const &primVar_in, array_t &x1Chi_in, amrex::Box const &indexRange)
 {
+	quokka::Array4View<const amrex::Real, DIR> primVar(primVar_in);
+	quokka::Array4View<amrex::Real, DIR> x1Chi(x1Chi_in);
+
 	// compute the PPM shock flattening coefficient following
 	//   Appendix B1 of Mignone+ 2005 [this description has typos].
 	// Method originally from Miller & Colella,
@@ -168,7 +173,9 @@ void HydroSystem<problem_t>::ComputeFlatteningCoefficients(
 	constexpr double Zmin = 0.25;
 
 	// cell-centered kernel
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in) {
+		auto [i,j,k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
+
 		// beta is a measure of shock resolution (Eq. 74 of Miller & Colella 2002)
 		const double beta = std::abs(primVar(i + 1, j, k, pressure_index) -
 					     primVar(i - 1, j, k, pressure_index)) /
@@ -198,17 +205,24 @@ void HydroSystem<problem_t>::ComputeFlatteningCoefficients(
 
 template <typename problem_t>
 template <FluxDir DIR>
-void HydroSystem<problem_t>::FlattenShocks(amrex::Array4<const amrex::Real> const &q,
-					   amrex::Array4<const amrex::Real> const &x1Chi,
-					   array_t &x1LeftState, array_t &x1RightState,
+void HydroSystem<problem_t>::FlattenShocks(amrex::Array4<const amrex::Real> const &q_in,
+					   amrex::Array4<const amrex::Real> const &x1Chi_in,
+					   array_t &x1LeftState_in, array_t &x1RightState_in,
 					   amrex::Box const &indexRange, const int nvars)
 {
+	quokka::Array4View<const amrex::Real, DIR> q(q_in);
+	quokka::Array4View<const amrex::Real, DIR> x1Chi(x1Chi_in);
+	quokka::Array4View<amrex::Real, DIR> x1LeftState(x1LeftState_in);
+	quokka::Array4View<amrex::Real, DIR> x1RightState(x1RightState_in);
+
 	// Apply shock flattening based on Miller & Colella (2002)
 	// [This is necessary to get a reasonable solution to the slow-moving
 	// shock problem, and reduces post-shock oscillations in other cases.]
 
 	// cell-centered kernel
-	amrex::ParallelFor(indexRange, nvars, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
+	amrex::ParallelFor(indexRange, nvars, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) {
+		auto [i,j,k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
+
 		// compute coefficient as the minimum from all surrounding cells
 		//  (Eq. 78 of Miller & Colella 2002)
 		double chi = std::min(
@@ -233,16 +247,21 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::Array4<const amrex::Real> cons
 template <typename problem_t>
 template <FluxDir DIR>
 void HydroSystem<problem_t>::ComputeFirstOrderFluxes(
-    amrex::Array4<const amrex::Real> const &consVar, array_t &x1FluxDiffusive,
+    amrex::Array4<const amrex::Real> const &consVar_in, array_t &x1FluxDiffusive_in,
     amrex::Box const &indexRange)
 {
+	quokka::Array4View<const amrex::Real, DIR> consVar(consVar_in);
+	quokka::Array4View<amrex::Real, DIR> x1FluxDiffusive(x1FluxDiffusive_in);
+
 	// By convention, the interfaces are defined on the left edge of each
 	// zone, i.e. x1Flux_(i) is the solution to the Riemann problem at
 	// the left edge of zone i.
 
 	// compute Lax-Friedrichs fluxes for use in flux-limiting to ensure realizable states
 
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in) {
+		auto [i,j,k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
+
 		// gather L/R states
 		const double rho_L = consVar(i - 1, j, k, density_index);
 		const double rho_R = consVar(i, j, k, density_index);
@@ -292,18 +311,24 @@ void HydroSystem<problem_t>::ComputeFirstOrderFluxes(
 
 template <typename problem_t>
 template <FluxDir DIR>
-void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux,
-					   amrex::Array4<const amrex::Real> const &x1LeftState,
-					   amrex::Array4<const amrex::Real> const &x1RightState,
+void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
+					   amrex::Array4<const amrex::Real> const &x1LeftState_in,
+					   amrex::Array4<const amrex::Real> const &x1RightState_in,
 					   amrex::Box const &indexRange)
 {
+	quokka::Array4View<const amrex::Real, DIR> x1LeftState(x1LeftState_in);
+	quokka::Array4View<const amrex::Real, DIR> x1RightState(x1RightState_in);
+	quokka::Array4View<amrex::Real, DIR> x1Flux(x1Flux_in);
+
 	// By convention, the interfaces are defined on the left edge of each
 	// zone, i.e. xinterface_(i) is the solution to the Riemann problem at
 	// the left edge of zone i.
 
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
 
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in) {
+		auto [i,j,k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
+		
 		// HLLC solver following Toro (1998) and Balsara (2017).
 
 		// gather left- and right- state variables

@@ -9,7 +9,7 @@
 /// \brief A container for an array of Reals with template magic to permute indices
 
 // library headers
-#include <AMReX_GpuQualifiers.H>
+#include <AMReX_Utility.H>
 
 // These functions are defined such that, e.g., Array4View<X2>::operator(LOOP_ORDER_X2(i,j,k)) ==
 // arr_(i,j,k). Therefore, they do NOT have the same index ordering as that inside the corresponding
@@ -46,7 +46,7 @@ template <class T, FluxDir N, class Enable = void> struct Array4View {
 	explicit Array4View(amrex::Array4<T> arr) : arr_(arr) {}
 };
 
-// X1
+// X1-flux
 
 // if T is non-const
 template <class T> struct Array4View<T, FluxDir::X1, std::enable_if_t<!std::is_const_v<T>>> {
@@ -55,19 +55,17 @@ template <class T> struct Array4View<T, FluxDir::X1, std::enable_if_t<!std::is_c
 
 	explicit Array4View(amrex::Array4<T> arr) : arr_(arr) {}
 
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE double &operator()(int i, int j, int k,
-								    int n) const noexcept
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(int i, int j, int k,
+								 int n) const noexcept -> T &
 	{
 		return arr_(i, j, k, n);
 	}
 
-#if 0
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE double operator()(int i, int j, int k,
-								   int n) const noexcept
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(int i, int j, int k) const noexcept
+	    -> T &
 	{
-		return arr_(i, j, k, n);
+		return arr_(i, j, k);
 	}
-#endif
 };
 
 // if T is const
@@ -77,10 +75,16 @@ template <class T> struct Array4View<T, FluxDir::X1, std::enable_if_t<std::is_co
 
 	explicit Array4View(amrex::Array4<T> arr) : arr_(arr) {}
 
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE double operator()(int i, int j, int k,
-								   int n) const noexcept
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(int i, int j, int k,
+								 int n) const noexcept -> T
 	{
 		return arr_(i, j, k, n);
+	}
+
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(int i, int j, int k) const noexcept
+	    -> T
+	{
+		return arr_(i, j, k);
 	}
 };
 
@@ -93,19 +97,17 @@ template <class T> struct Array4View<T, FluxDir::X2, std::enable_if_t<!std::is_c
 
 	explicit Array4View(amrex::Array4<T> arr) : arr_(arr) {}
 
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE double &operator()(int i, int j, int k,
-								    int n) const noexcept
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(int i, int j, int k,
+								 int n) const noexcept -> T &
 	{
 		return arr_(k, i, j, n);
 	}
 
-#if 0
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE double operator()(int i, int j, int k,
-								   int n) const noexcept
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(int i, int j, int k) const noexcept
+	    -> T &
 	{
-		return arr_(k, i, j, n);
+		return arr_(k, i, j);
 	}
-#endif
 };
 
 // if T is const
@@ -115,10 +117,16 @@ template <class T> struct Array4View<T, FluxDir::X2, std::enable_if_t<std::is_co
 
 	explicit Array4View(amrex::Array4<T> arr) : arr_(arr) {}
 
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE double operator()(int i, int j, int k,
-								   int n) const noexcept
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(int i, int j, int k,
+								 int n) const noexcept -> T
 	{
 		return arr_(k, i, j, n);
+	}
+
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(int i, int j, int k) const noexcept
+	    -> T
+	{
+		return arr_(k, i, j);
 	}
 };
 
@@ -131,19 +139,17 @@ template <class T> struct Array4View<T, FluxDir::X3, std::enable_if_t<!std::is_c
 
 	explicit Array4View(amrex::Array4<T> arr) : arr_(arr) {}
 
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE double &operator()(int i, int j, int k,
-								    int n) const noexcept
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(int i, int j, int k,
+								 int n) const noexcept -> T &
 	{
 		return arr_(j, k, i, n);
 	}
 
-#if 0
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE double operator()(int i, int j, int k,
-								   int n) const noexcept
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(int i, int j, int k) const noexcept
+	    -> T &
 	{
-		return arr_(j, k, i, n);
+		return arr_(j, k, i);
 	}
-#endif
 };
 
 // if T is const
@@ -153,10 +159,16 @@ template <class T> struct Array4View<T, FluxDir::X3, std::enable_if_t<std::is_co
 
 	explicit Array4View(amrex::Array4<T> arr) : arr_(arr) {}
 
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE double operator()(int i, int j, int k,
-								   int n) const noexcept
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(int i, int j, int k,
+								 int n) const noexcept -> T
 	{
 		return arr_(j, k, i, n);
+	}
+
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(int i, int j, int k) const noexcept
+	    -> T
+	{
+		return arr_(j, k, i);
 	}
 };
 } // namespace quokka
