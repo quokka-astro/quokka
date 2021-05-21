@@ -52,11 +52,14 @@ template <typename problem_t> class AdvectionSimulation : public SingleLevelSimu
 	void stageTwoRK2SSP(amrex::Array4<const amrex::Real> const &consVar,
 			    amrex::Array4<amrex::Real> const &consVarNew,
 			    const amrex::Box &indexRange, int nvars);
+
+	template <FluxDir DIR>
 	void fluxFunction(amrex::Array4<const amrex::Real> const &consState,
 			  amrex::FArrayBox &x1Flux, const amrex::Box &indexRange, int nvars);
 
       protected:
 	const double advectionVx_ = 1.0;
+	const double advectionVy_ = 0.0;
 };
 
 template <typename problem_t> void AdvectionSimulation<problem_t>::computeMaxSignalLocal()
@@ -107,17 +110,29 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::advanceSingle
 }
 
 template <typename problem_t>
+template <FluxDir DIR>
 void AdvectionSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real> const &consState,
 						  amrex::FArrayBox &x1Flux,
 						  const amrex::Box &indexRange, const int nvars)
 {
+	amrex::Real advectionVel = NAN;
+	int dim = 0;
+	if constexpr (DIR == FluxDir::X1) {
+		advectionVel = advectionVx_;
+		// [0 == x1 direction]
+		dim = 0;
+	} else if constexpr (DIR == FluxDir::X2) {
+		advectionVel = advectionVy_;
+		// [1 == x2 direction]
+		dim = 1;
+	}
+
 	// extend box to include ghost zones
 	amrex::Box const &ghostRange = amrex::grow(indexRange, nghost_);
 	// N.B.: A one-zone layer around the cells must be fully reconstructed in order for PPM to
 	// work.
 	amrex::Box const &reconstructRange = amrex::grow(indexRange, 1);
-	// [0 == x1 direction]
-	amrex::Box const &x1ReconstructRange = amrex::surroundingNodes(reconstructRange, 0);
+	amrex::Box const &x1ReconstructRange = amrex::surroundingNodes(reconstructRange, dim);
 
 	// Allocate temporary arrays using CUDA stream async allocator (or equivalent)
 	amrex::FArrayBox primVar(ghostRange, nvars, amrex::The_Async_Arena()); // cell-centered
@@ -130,16 +145,17 @@ void AdvectionSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Rea
 	CheckNaN(primVar, ghostRange, ncomp_);
 
 	// mixed interface/cell-centered kernel
-	LinearAdvectionSystem<problem_t>::template ReconstructStatesPPM<FluxDir::X1>(
+	LinearAdvectionSystem<problem_t>::template ReconstructStatesPPM<DIR>(
 	    primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange,
 	    x1ReconstructRange, nvars);
 	CheckNaN(x1LeftState, x1ReconstructRange, ncomp_);
 	CheckNaN(x1RightState, x1ReconstructRange, ncomp_);
 
 	// interface-centered kernel
-	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, 0);
-	LinearAdvectionSystem<problem_t>::template ComputeFluxes<FluxDir::X1>(
-	    x1Flux.array(), x1LeftState.array(), x1RightState.array(), advectionVx_, x1FluxRange,
+	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, dim);
+
+	LinearAdvectionSystem<problem_t>::template ComputeFluxes<DIR>(
+	    x1Flux.array(), x1LeftState.array(), x1RightState.array(), advectionVel, x1FluxRange,
 	    nvars);
 	CheckNaN(x1Flux, x1FluxRange, ncomp_);
 }
@@ -154,20 +170,21 @@ void AdvectionSimulation<problem_t>::stageOneRK2SSP(
 	amrex::FArrayBox x1Flux(x1FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in x
 
 #if (AMREX_SPACEDIM >= 2) // for 2D problems
-	amrex::Box const &x2FluxRange = amrex::surroundingNodes(indexRange, 0);
+	amrex::Box const &x2FluxRange = amrex::surroundingNodes(indexRange, 1);
 	amrex::FArrayBox x2Flux(x2FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in y
 #endif // AMREX_SPACEDIM >= 2
 
-	fluxFunction(consVarOld, x1Flux, indexRange, nvars);
+	fluxFunction<FluxDir::X1>(consVarOld, x1Flux, indexRange, nvars);
 #if (AMREX_SPACEDIM >= 2) // for 2D problems
-	fluxFunction(consVarOld, x2Flux, indexRange, nvars);
+	fluxFunction<FluxDir::X2>(consVarOld, x2Flux, indexRange, nvars);
 #endif // AMREX_SPACEDIM >= 2
 
 	// Stage 1 of RK2-SSP
 #if (AMREX_SPACEDIM == 1)
 	amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrays = {x1Flux.const_array()};
 #elif (AMREX_SPACEDIM == 2)
-	amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrays = {x1Flux.const_array(), x2Flux.const_array()};
+	amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrays = {x1Flux.const_array(),
+								    x2Flux.const_array()};
 #endif
 
 	LinearAdvectionSystem<problem_t>::PredictStep(consVarOld, consVarNew, fluxArrays, dt_, dx_,
@@ -184,24 +201,25 @@ void AdvectionSimulation<problem_t>::stageTwoRK2SSP(
 	amrex::FArrayBox x1Flux(x1FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in x
 
 #if (AMREX_SPACEDIM >= 2) // for 2D problems
-	amrex::Box const &x2FluxRange = amrex::surroundingNodes(indexRange, 0);
+	amrex::Box const &x2FluxRange = amrex::surroundingNodes(indexRange, 1);
 	amrex::FArrayBox x2Flux(x2FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in y
 #endif // AMREX_SPACEDIM >= 2
 
-	fluxFunction(consVarNew, x1Flux, indexRange, nvars);
+	fluxFunction<FluxDir::X1>(consVarNew, x1Flux, indexRange, nvars);
 #if (AMREX_SPACEDIM >= 2) // for 2D problems
-	fluxFunction(consVarNew, x2Flux, indexRange, nvars);
+	fluxFunction<FluxDir::X2>(consVarNew, x2Flux, indexRange, nvars);
 #endif // AMREX_SPACEDIM >= 2
 
 #if (AMREX_SPACEDIM == 1)
 	amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrays = {x1Flux.const_array()};
 #elif (AMREX_SPACEDIM == 2)
-	amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrays = {x1Flux.const_array(), x2Flux.const_array()};
+	amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrays = {x1Flux.const_array(),
+								    x2Flux.const_array()};
 #endif
 
 	// Stage 2 of RK2-SSP
-	LinearAdvectionSystem<problem_t>::AddFluxesRK2(
-	    consVarNew, consVarOld, consVarNew, fluxArrays, dt_, dx_, indexRange, nvars);
+	LinearAdvectionSystem<problem_t>::AddFluxesRK2(consVarNew, consVarOld, consVarNew,
+						       fluxArrays, dt_, dx_, indexRange, nvars);
 }
 
 #endif // ADVECTION_SIMULATION_HPP_

@@ -350,7 +350,7 @@ void HyperbolicSystem<problem_t>::PredictStep(
 				       (dt / dx) * (x1Flux(i + 1, j, k, n) - x1Flux(i, j, k, n));
 #if (AMREX_SPACEDIM >= 2)
 				   consVarNew(i, j, k, n) -=
-					   (dt / dy) * (x2Flux(i + 1, j, k, n) - x2Flux(i, j, k, n));
+					   (dt / dy) * (x2Flux(i, j + 1, k, n) - x2Flux(i, j, k, n));
 #endif
 			   });
 }
@@ -384,7 +384,7 @@ void HyperbolicSystem<problem_t>::AddFluxesRK2(
 			-1.0 * (dt / dx) * (x1Flux(i + 1, j, k, n) - x1Flux(i, j, k, n));
 #if (AMREX_SPACEDIM >= 2)
 			const double FyU_1 =
-			-1.0 * (dt / dy) * (x2Flux(i + 1, j, k, n) - x2Flux(i, j, k, n));	
+			-1.0 * (dt / dy) * (x2Flux(i, j + 1, k, n) - x2Flux(i, j, k, n));	
 #endif
 
 		    // save results in U_new
