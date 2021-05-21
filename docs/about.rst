@@ -37,7 +37,7 @@ in the primitive variables, the HLLC Riemann solver
 :cite:`Toro2013` for flux computations, and a method-of-lines formulation for the time integration.
 
 We use the method of :cite:`Mignone2005` to reduce the order of
-integration in zones where shocks are detected in order to suppress
+reconstruction in zones where shocks are detected in order to suppress
 spurious oscillations in strong shocks. We also apply a small amount
 of artificial viscosity in shocks following the original prescription
 of :cite:`CW84`.
