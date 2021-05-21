@@ -57,6 +57,8 @@ template <typename problem_t> class HydroSimulation : public SingleLevelSimulati
 	void stageTwoRK2SSP(amrex::Array4<const amrex::Real> const &consVar,
 			    amrex::Array4<amrex::Real> const &consVarNew,
 			    const amrex::Box &indexRange, int nvars);
+
+	template <FluxDir DIR>
 	void fluxFunction(amrex::Array4<const amrex::Real> const &consState,
 			  amrex::FArrayBox &x1Flux, const amrex::Box &indexRange, int nvars);
 };
@@ -108,18 +110,25 @@ template <typename problem_t> void HydroSimulation<problem_t>::advanceSingleTime
 }
 
 template <typename problem_t>
+template <FluxDir DIR>
 void HydroSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real> const &consState,
 					      amrex::FArrayBox &x1Flux,
 					      const amrex::Box &indexRange, const int nvars)
 {
+	int dir = 0;
+	if constexpr (DIR == FluxDir::X1) {
+		dir = 0;
+	} else if constexpr (DIR == FluxDir::X2) {
+		dir = 1;
+	}
+
 	// extend box to include ghost zones
 	amrex::Box const &ghostRange = amrex::grow(indexRange, nghost_);
 	// N.B.: A one-zone layer around the cells must be fully reconstructed in order for PPM to
 	// work.
 	amrex::Box const &reconstructRange = amrex::grow(indexRange, 1);
 	amrex::Box const &flatteningRange = amrex::grow(indexRange, 2); // +1 greater than ppmRange
-	// [0 == x1 direction]
-	amrex::Box const &x1ReconstructRange = amrex::surroundingNodes(reconstructRange, 0);
+	amrex::Box const &x1ReconstructRange = amrex::surroundingNodes(reconstructRange, dir);
 
 	// Allocate temporary arrays using CUDA stream async allocator (or equivalent)
 	amrex::FArrayBox primVar(ghostRange, nvars, amrex::The_Async_Arena()); // cell-centered
@@ -132,28 +141,29 @@ void HydroSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real> c
 	CheckNaN(primVar, ghostRange, nvars);
 
 	// mixed interface/cell-centered kernel
-	HydroSystem<problem_t>::template ReconstructStatesPPM<FluxDir::X1>(primVar.array(), x1LeftState.array(),
-						     x1RightState.array(), reconstructRange,
-						     x1ReconstructRange, nvars);
+	HydroSystem<problem_t>::template ReconstructStatesPPM<DIR>(
+	    primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange,
+	    x1ReconstructRange, nvars);
 	CheckNaN(x1LeftState, x1ReconstructRange, nvars);
 	CheckNaN(x1RightState, x1ReconstructRange, nvars);
 
 	// cell-centered kernel
-	HydroSystem<problem_t>::ComputeFlatteningCoefficients(primVar.array(), x1Flat.array(),
+	HydroSystem<problem_t>::template ComputeFlatteningCoefficients<DIR>(primVar.array(), x1Flat.array(),
 							      flatteningRange);
 	CheckNaN(x1LeftState, x1ReconstructRange, nvars);
 	CheckNaN(x1RightState, x1ReconstructRange, nvars);
 
 	// cell-centered kernel
-	HydroSystem<problem_t>::FlattenShocks(primVar.array(), x1Flat.array(), x1LeftState.array(),
+	HydroSystem<problem_t>::template FlattenShocks<DIR>(primVar.array(), x1Flat.array(), x1LeftState.array(),
 					      x1RightState.array(), reconstructRange, nvars);
 	CheckNaN(x1LeftState, x1ReconstructRange, nvars);
 	CheckNaN(x1RightState, x1ReconstructRange, nvars);
 
 	// interface-centered kernel
-	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, 0);
-	HydroSystem<problem_t>::ComputeFluxes(x1Flux.array(), x1LeftState.array(),
-					      x1RightState.array(), x1FluxRange); // watch out for argument order!!
+	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, dir);
+	HydroSystem<problem_t>::template ComputeFluxes<DIR>(x1Flux.array(), x1LeftState.array(),
+						   x1RightState.array(),
+						   x1FluxRange); // watch out for argument order!!
 	CheckNaN(x1Flux, x1FluxRange, nvars);
 }
 
@@ -166,9 +176,26 @@ void HydroSimulation<problem_t>::stageOneRK2SSP(amrex::Array4<const amrex::Real>
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, 0);
 	amrex::FArrayBox x1Flux(x1FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in x
 
+#if (AMREX_SPACEDIM >= 2) // for 2D problems
+	amrex::Box const &x2FluxRange = amrex::surroundingNodes(indexRange, 1);
+	amrex::FArrayBox x2Flux(x2FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in y
+#endif // AMREX_SPACEDIM >= 2
+
+	fluxFunction<FluxDir::X1>(consVarOld, x1Flux, indexRange, nvars);
+#if (AMREX_SPACEDIM >= 2) // for 2D problems
+	fluxFunction<FluxDir::X2>(consVarOld, x2Flux, indexRange, nvars);
+#endif // AMREX_SPACEDIM >= 2
+
 	// Stage 1 of RK2-SSP
-	fluxFunction(consVarOld, x1Flux, indexRange, nvars);
-	HydroSystem<problem_t>::PredictStep(consVarOld, consVarNew, {x1Flux.array()}, dt_, dx_,
+#if (AMREX_SPACEDIM == 1)
+	amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrays = {x1Flux.const_array()};
+#elif (AMREX_SPACEDIM == 2)
+	amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrays = {x1Flux.const_array(),
+								    x2Flux.const_array()};
+#endif
+
+	// Stage 1 of RK2-SSP
+	HydroSystem<problem_t>::PredictStep(consVarOld, consVarNew, fluxArrays, dt_, dx_,
 					    indexRange, nvars);
 }
 
@@ -181,10 +208,26 @@ void HydroSimulation<problem_t>::stageTwoRK2SSP(amrex::Array4<const amrex::Real>
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, 0);
 	amrex::FArrayBox x1Flux(x1FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in x
 
+#if (AMREX_SPACEDIM >= 2) // for 2D problems
+	amrex::Box const &x2FluxRange = amrex::surroundingNodes(indexRange, 1);
+	amrex::FArrayBox x2Flux(x2FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in y
+#endif // AMREX_SPACEDIM >= 2
+
+	fluxFunction<FluxDir::X1>(consVarNew, x1Flux, indexRange, nvars);
+#if (AMREX_SPACEDIM >= 2) // for 2D problems
+	fluxFunction<FluxDir::X2>(consVarNew, x2Flux, indexRange, nvars);
+#endif // AMREX_SPACEDIM >= 2
+
+#if (AMREX_SPACEDIM == 1)
+	amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrays = {x1Flux.const_array()};
+#elif (AMREX_SPACEDIM == 2)
+	amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrays = {x1Flux.const_array(),
+								    x2Flux.const_array()};
+#endif
+
 	// Stage 2 of RK2-SSP
-	fluxFunction(consVarNew, x1Flux, indexRange, nvars);
-	HydroSystem<problem_t>::AddFluxesRK2(consVarNew, consVarOld, consVarNew, {x1Flux.array()},
-					     dt_, dx_, indexRange, nvars);
+	HydroSystem<problem_t>::AddFluxesRK2(consVarNew, consVarOld, consVarNew, fluxArrays, dt_,
+					     dx_, indexRange, nvars);
 }
 
 #endif // HYDRO_SIMULATION_HPP_

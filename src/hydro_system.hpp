@@ -25,15 +25,13 @@
 
 // this struct is specialized by the user application code
 //
-template <typename problem_t> struct EOS_Traits
-{
+template <typename problem_t> struct EOS_Traits {
 	static constexpr double gamma = 5. / 3.; // default value
 };
 
 /// Class for the Euler equations of inviscid hydrodynamics
 ///
-template <typename problem_t>
-class HydroSystem : public HyperbolicSystem<problem_t>
+template <typename problem_t> class HydroSystem : public HyperbolicSystem<problem_t>
 {
       public:
 	enum consVarIndex { density_index = 0, x1Momentum_index = 1, energy_index = 2 };
@@ -47,15 +45,21 @@ class HydroSystem : public HyperbolicSystem<problem_t>
 	// requires GPU reductions
 	// static auto CheckStatesValid(array_t &cons, const std::pair<int, int> range) -> bool;
 
+	template <FluxDir DIR>
 	static void ComputeFluxes(array_t &x1Flux,
 				  amrex::Array4<const amrex::Real> const &x1LeftState,
 				  amrex::Array4<const amrex::Real> const &x1RightState,
 				  amrex::Box const &indexRange);
+
+	template <FluxDir DIR>
 	static void ComputeFirstOrderFluxes(amrex::Array4<const amrex::Real> const &consVar,
 					    array_t &x1FluxDiffusive, amrex::Box const &indexRange);
 
+	template <FluxDir DIR>
 	static void ComputeFlatteningCoefficients(amrex::Array4<const amrex::Real> const &primVar,
 						  array_t &x1Chi, amrex::Box const &indexRange);
+
+	template <FluxDir DIR>
 	static void FlattenShocks(amrex::Array4<const amrex::Real> const &q,
 				  amrex::Array4<const amrex::Real> const &x1Chi,
 				  array_t &x1LeftState, array_t &x1RightState,
@@ -149,6 +153,7 @@ auto HydroSystem<problem_t>::CheckStatesValid(amrex::Array4<const amrex::Real> c
 #endif
 
 template <typename problem_t>
+template <FluxDir DIR>
 void HydroSystem<problem_t>::ComputeFlatteningCoefficients(
     amrex::Array4<const amrex::Real> const &primVar, array_t &x1Chi, amrex::Box const &indexRange)
 {
@@ -192,6 +197,7 @@ void HydroSystem<problem_t>::ComputeFlatteningCoefficients(
 }
 
 template <typename problem_t>
+template <FluxDir DIR>
 void HydroSystem<problem_t>::FlattenShocks(amrex::Array4<const amrex::Real> const &q,
 					   amrex::Array4<const amrex::Real> const &x1Chi,
 					   array_t &x1LeftState, array_t &x1RightState,
@@ -225,6 +231,7 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::Array4<const amrex::Real> cons
 }
 
 template <typename problem_t>
+template <FluxDir DIR>
 void HydroSystem<problem_t>::ComputeFirstOrderFluxes(
     amrex::Array4<const amrex::Real> const &consVar, array_t &x1FluxDiffusive,
     amrex::Box const &indexRange)
@@ -265,12 +272,12 @@ void HydroSystem<problem_t>::ComputeFirstOrderFluxes(
 
 		// compute (using local signal speed) Lax-Friedrichs flux
 		constexpr int dim = 3;
-		
-		const quokka::valarray<double, dim> F_L = {rho_L * vx_L, rho_L * (vx_L * vx_L) + P_L,
-						   (E_L + P_L) * vx_L};
 
-		const quokka::valarray<double, dim> F_R = {rho_R * vx_R, rho_R * (vx_R * vx_R) + P_R,
-						   (E_R + P_R) * vx_R};
+		const quokka::valarray<double, dim> F_L = {
+		    rho_L * vx_L, rho_L * (vx_L * vx_L) + P_L, (E_L + P_L) * vx_L};
+
+		const quokka::valarray<double, dim> F_R = {
+		    rho_R * vx_R, rho_R * (vx_R * vx_R) + P_R, (E_R + P_R) * vx_R};
 
 		const quokka::valarray<double, dim> U_L = {rho_L, mom_L, E_L};
 		const quokka::valarray<double, dim> U_R = {rho_R, mom_R, E_R};
@@ -284,6 +291,7 @@ void HydroSystem<problem_t>::ComputeFirstOrderFluxes(
 }
 
 template <typename problem_t>
+template <FluxDir DIR>
 void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux,
 					   amrex::Array4<const amrex::Real> const &x1LeftState,
 					   amrex::Array4<const amrex::Real> const &x1RightState,
@@ -356,11 +364,11 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux,
 
 		// compute fluxes
 		constexpr int fluxdim = 3;
-		const quokka::valarray<double, fluxdim> F_L = {rho_L * vx_L, rho_L * (vx_L * vx_L) + P_L,
-						   (E_L + P_L) * vx_L};
+		const quokka::valarray<double, fluxdim> F_L = {
+		    rho_L * vx_L, rho_L * (vx_L * vx_L) + P_L, (E_L + P_L) * vx_L};
 
-		const quokka::valarray<double, fluxdim> F_R = {rho_R * vx_R, rho_R * (vx_R * vx_R) + P_R,
-						   (E_R + P_R) * vx_R};
+		const quokka::valarray<double, fluxdim> F_R = {
+		    rho_R * vx_R, rho_R * (vx_R * vx_R) + P_R, (E_R + P_R) * vx_R};
 
 		const quokka::valarray<double, fluxdim> U_L = {
 		    rho_L, rho_L * vx_L, P_L / (gamma_ - 1.0) + 0.5 * rho_L * (vx_L * vx_L)};
