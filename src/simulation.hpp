@@ -108,7 +108,7 @@ template <typename problem_t> class SingleLevelSimulation
 		state_new_ =
 		    amrex::MultiFab(simBoxArray_, simDistributionMapping_, ncomp_, nghost_);
 		max_signal_speed_ =
-		    amrex::MultiFab(simBoxArray_, simDistributionMapping_, ncomp_, nghost_);
+		    amrex::MultiFab(simBoxArray_, simDistributionMapping_, 1, nghost_);
 	}
 
 	void readParameters();
