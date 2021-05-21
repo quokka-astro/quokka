@@ -156,10 +156,20 @@ void AdvectionSimulation<problem_t>::stageOneRK2SSP(
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, 0);
 	amrex::FArrayBox x1Flux(x1FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in x
 
-	// Stage 1 of RK2-SSP
+#if (AMREX_SPACEDIM >= 2) // for 2D problems
+	amrex::Box const &x2FluxRange = amrex::surroundingNodes(indexRange, 0);
+	amrex::FArrayBox x2Flux(x2FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in y
+#endif // AMREX_SPACEDIM >= 2
+
 	fluxFunction(consVarOld, x1Flux, indexRange, nvars);
-	LinearAdvectionSystem<problem_t>::PredictStep(consVarOld, consVarNew, x1Flux.array(), dt_,
-						      dx_[0], indexRange, nvars);
+#if (AMREX_SPACEDIM >= 2) // for 2D problems
+	fluxFunction(consVarOld, x2Flux, indexRange, nvars);
+#endif // AMREX_SPACEDIM >= 2
+
+	// Stage 1 of RK2-SSP
+	auto fluxArrays = {x1Flux.array(), x2Flux.array()};
+	LinearAdvectionSystem<problem_t>::PredictStep(consVarOld, consVarNew, fluxArrays, dt_, dx_,
+						      indexRange, nvars);
 }
 
 template <typename problem_t>
