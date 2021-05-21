@@ -35,6 +35,7 @@ template <typename problem_t> class LinearAdvectionSystem : public HyperbolicSys
 					 amrex::Box const &indexRange, int nvars);
 	static void ComputeMaxSignalSpeed(arrayconst_t &cons, array_t &maxSignal,
 					  double advectionVx, amrex::Box const &indexRange);
+	template <FluxDir DIR>
 	static void ComputeFluxes(array_t &x1Flux, arrayconst_t &x1LeftState,
 				  arrayconst_t &x1RightState, double advectionVx,
 				  amrex::Box const &indexRange, int nvars);
@@ -64,28 +65,39 @@ void LinearAdvectionSystem<problem_t>::ConservedToPrimitive(arrayconst_t &cons, 
 }
 
 template <typename problem_t>
-void LinearAdvectionSystem<problem_t>::ComputeFluxes(array_t &x1Flux, arrayconst_t &x1LeftState,
-						     arrayconst_t &x1RightState,
+template <FluxDir DIR>
+void LinearAdvectionSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
+						     arrayconst_t &x1LeftState_in,
+						     arrayconst_t &x1RightState_in,
 						     const double advectionVx,
 						     amrex::Box const &indexRange, const int nvars)
 {
+	// construct ArrayViews for permuted indices
+	quokka::Array4View<amrex::Real const, DIR> x1LeftState(x1LeftState_in);
+	quokka::Array4View<amrex::Real const, DIR> x1RightState(x1RightState_in);
+	quokka::Array4View<amrex::Real, DIR> x1Flux(x1Flux_in);
+
+	const auto vx = advectionVx; // avoid CUDA invalid device function error
+	
 	// By convention, the interfaces are defined on the left edge of each zone, i.e.
 	// xinterface_(i) is the solution to the Riemann problem at the left edge of zone i.
+	// [Indexing note: There are (nx + 1) interfaces for nx zones.]
 
-	// Indexing note: There are (nx + 1) interfaces for nx zones.
-	const auto vx = advectionVx;
+	amrex::ParallelFor(indexRange, nvars,
+			   [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
+				   // permute array indices according to dir
+				   auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
 
-	amrex::ParallelFor(indexRange, nvars, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
-		// For advection, simply choose upwind side of the interface.
-		if (vx < 0.0) { // upwind switch
-			// upwind direction is the right-side of the interface
-			x1Flux(i, j, k, n) = vx * x1RightState(i, j, k, n);
+				   // For advection, simply choose upwind side of the interface.
+				   if (vx < 0.0) { // upwind switch
+					   // upwind direction is the right-side of the interface
+					   x1Flux(i, j, k, n) = vx * x1RightState(i, j, k, n);
 
-		} else {
-			// upwind direction is the left-side of the interface
-			x1Flux(i, j, k, n) = vx * x1LeftState(i, j, k, n);
-		}
-	});
+				   } else {
+					   // upwind direction is the left-side of the interface
+					   x1Flux(i, j, k, n) = vx * x1LeftState(i, j, k, n);
+				   }
+			   });
 }
 
 #endif // LINEAR_ADVECTION_HPP_

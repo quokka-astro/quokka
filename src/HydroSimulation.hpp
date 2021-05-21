@@ -132,7 +132,7 @@ void HydroSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real> c
 	CheckNaN(primVar, ghostRange, nvars);
 
 	// mixed interface/cell-centered kernel
-	HydroSystem<problem_t>::ReconstructStatesPPM(primVar.array(), x1LeftState.array(),
+	HydroSystem<problem_t>::template ReconstructStatesPPM<FluxDir::X1>(primVar.array(), x1LeftState.array(),
 						     x1RightState.array(), reconstructRange,
 						     x1ReconstructRange, nvars);
 	CheckNaN(x1LeftState, x1ReconstructRange, nvars);

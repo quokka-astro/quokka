@@ -17,6 +17,7 @@
 #include "AMReX_IntVect.H"
 #include "AMReX_REAL.H"
 #include "AMReX_Utility.H"
+#include "ArrayView.hpp"
 #include "fmt/core.h"
 #include "linear_advection.hpp"
 #include "simulation.hpp"
@@ -24,7 +25,6 @@
 #include <limits>
 #include <string>
 #include <utility>
-
 
 // Simulation class should be initialized only once per program (i.e., is a singleton)
 template <typename problem_t> class AdvectionSimulation : public SingleLevelSimulation<problem_t>
@@ -58,7 +58,8 @@ template <typename problem_t> class AdvectionSimulation : public SingleLevelSimu
 	void fluxFunction(amrex::Array4<const amrex::Real> const &consState,
 			  amrex::FArrayBox &x1Flux, const amrex::Box &indexRange, int nvars);
 
-	    protected : const double advectionVx_ = 1.0;
+      protected:
+	const double advectionVx_ = 1.0;
 };
 
 template <typename problem_t> void AdvectionSimulation<problem_t>::computeMaxSignalLocal()
@@ -68,7 +69,8 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::computeMaxSig
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &stateOld = state_old_.const_array(iter);
 		auto const &maxSignal = max_signal_speed_.array(iter);
-		LinearAdvectionSystem<problem_t>::ComputeMaxSignalSpeed(stateOld, maxSignal, advectionVx_, indexRange);
+		LinearAdvectionSystem<problem_t>::ComputeMaxSignalSpeed(stateOld, maxSignal,
+									advectionVx_, indexRange);
 	}
 }
 
@@ -131,7 +133,7 @@ void AdvectionSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Rea
 	CheckNaN(primVar, ghostRange, ncomp_);
 
 	// mixed interface/cell-centered kernel
-	LinearAdvectionSystem<problem_t>::ReconstructStatesPPM(
+	LinearAdvectionSystem<problem_t>::template ReconstructStatesPPM<FluxDir::X1>(
 	    primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange,
 	    x1ReconstructRange, nvars);
 	CheckNaN(x1LeftState, x1ReconstructRange, ncomp_);
@@ -139,9 +141,9 @@ void AdvectionSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Rea
 
 	// interface-centered kernel
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, 0);
-	LinearAdvectionSystem<problem_t>::ComputeFluxes(x1Flux.array(), x1LeftState.array(),
-							x1RightState.array(), advectionVx_,
-							x1FluxRange, nvars);
+	LinearAdvectionSystem<problem_t>::template ComputeFluxes<FluxDir::X1>(
+	    x1Flux.array(), x1LeftState.array(), x1RightState.array(), advectionVx_, x1FluxRange,
+	    nvars);
 	CheckNaN(x1Flux, x1FluxRange, ncomp_);
 }
 
