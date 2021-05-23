@@ -105,8 +105,8 @@ void HydroSystem<problem_t>::ConservedToPrimitive(amrex::Array4<const amrex::Rea
 
 		const auto P = thermal_energy * (HydroSystem<problem_t>::gamma_ - 1.0);
 
-		assert(rho > 0.); // NOLINT
-		assert(P > 0.);	  // NOLINT
+		AMREX_ASSERT(rho > 0.); // NOLINT
+		AMREX_ASSERT(P > 0.);	// NOLINT
 
 		primVar(i, j, k, primDensity_index) = rho;
 		primVar(i, j, k, x1Velocity_index) = vx;
@@ -142,7 +142,7 @@ void HydroSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Re
 		const auto P = thermal_energy * (HydroSystem<problem_t>::gamma_ - 1.0);
 
 		const double cs = std::sqrt(HydroSystem<problem_t>::gamma_ * P / rho);
-		assert(cs > 0.); // NOLINT
+		AMREX_ASSERT(cs > 0.); // NOLINT
 
 		const double vel_mag = std::sqrt(vx * vx + vy * vy + vz * vz);
 		const double signal_max = vel_mag + cs;
@@ -256,7 +256,8 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::Array4<const amrex::Real> cons
 		    // compute coefficient as the minimum from all surrounding cells
 		    //  (Eq. 78 of Miller & Colella 2002)
 		    double chi = std::min({
-			    x1Chi_in(i_in - 1, j_in, k_in), x1Chi_in(i_in, j_in, k_in), x1Chi_in(i_in + 1, j_in, k_in),
+			    x1Chi_in(i_in - 1, j_in, k_in), x1Chi_in(i_in, j_in, k_in),
+				x1Chi_in(i_in + 1, j_in, k_in),
 #if (AMREX_SPACEDIM >= 2)
 				x1Chi_in(i_in, j_in - 1, k_in), x1Chi_in(i_in, j_in + 1, k_in),
 #endif
@@ -394,8 +395,8 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 		const double cs_L = std::sqrt(gamma_ * P_L / rho_L);
 		const double cs_R = std::sqrt(gamma_ * P_R / rho_R);
 
-		assert(cs_L > 0.0); // NOLINT
-		assert(cs_R > 0.0); // NOLINT
+		AMREX_ASSERT(cs_L > 0.0); // NOLINT
+		AMREX_ASSERT(cs_R > 0.0); // NOLINT
 
 		// assign normal component of velocity according to DIR
 
@@ -441,7 +442,7 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 		const double P_LR = 0.5 * (P_L + P_R + rho_L * (S_L - u_L) * (S_star - u_L) +
 					   rho_R * (S_R - u_R) * (S_star - u_R));
 
-		assert(S_L <= S_R);
+		AMREX_ASSERT(S_L <= S_R);
 
 		// compute fluxes
 		constexpr int fluxdim = 5;
@@ -505,11 +506,11 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 		}
 
 		// check states are valid
-		assert(!std::isnan(F[0])); // NOLINT
-		assert(!std::isnan(F[1])); // NOLINT
-		assert(!std::isnan(F[2])); // NOLINT
-		assert(!std::isnan(F[3])); // NOLINT
-		assert(!std::isnan(F[4])); // NOLINT
+		AMREX_ASSERT(!std::isnan(F[0])); // NOLINT
+		AMREX_ASSERT(!std::isnan(F[1])); // NOLINT
+		AMREX_ASSERT(!std::isnan(F[2])); // NOLINT
+		AMREX_ASSERT(!std::isnan(F[3])); // NOLINT
+		AMREX_ASSERT(!std::isnan(F[4])); // NOLINT
 
 		x1Flux(i, j, k, density_index) = F[0];
 		x1Flux(i, j, k, x1Momentum_index) = F[1];
