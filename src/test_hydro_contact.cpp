@@ -66,28 +66,30 @@ template <> void HydroSimulation<ContactProblem>::setInitialConditions()
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
     		amrex::Real const x = prob_lo[0] + (i+Real(0.5)) * dx[0];
 
-			double v = NAN;
+			double vx = NAN;
 			double rho = NAN;
 			double P = NAN;
 
 			if (x < 0.5) {
 				rho = 1.4;
-				v = v_contact;
+				vx = v_contact;
 				P = 1.0;
 			} else {
 				rho = 1.0;
-				v = v_contact;
+				vx = v_contact;
 				P = 1.0;
 			}
-			AMREX_ASSERT(!std::isnan(v));
+			AMREX_ASSERT(!std::isnan(vx));
 			AMREX_ASSERT(!std::isnan(rho));
 			AMREX_ASSERT(!std::isnan(P));
 
 			const auto gamma = HydroSystem<ContactProblem>::gamma_;
 			state(i, j, k, HydroSystem<ContactProblem>::density_index) = rho;
-			state(i, j, k, HydroSystem<ContactProblem>::x1Momentum_index) = rho * v;
+			state(i, j, k, HydroSystem<ContactProblem>::x1Momentum_index) = rho * vx;
+			state(i, j, k, HydroSystem<ContactProblem>::x2Momentum_index) = 0.;
+			state(i, j, k, HydroSystem<ContactProblem>::x3Momentum_index) = 0.;
 			state(i, j, k, HydroSystem<ContactProblem>::energy_index) =
-			    P / (gamma - 1.) + 0.5 * rho * (v * v);
+			    P / (gamma - 1.) + 0.5 * rho * (vx * vx);
 		});
 	}
 
@@ -101,25 +103,27 @@ void ComputeExactSolution(amrex::Array4<amrex::Real> const &exact_arr, amrex::Bo
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
     	amrex::Real const x = prob_lo[0] + (i+Real(0.5)) * dx[0];
 
-		double v = NAN;
+		double vx = NAN;
 		double rho = NAN;
 		double P = NAN;
 
 		if (x < 0.5) {
 			rho = 1.4;
-			v = v_contact;
+			vx = v_contact;
 			P = 1.0;
 		} else {
 			rho = 1.0;
-			v = v_contact;
+			vx = v_contact;
 			P = 1.0;
 		}
 
 		const auto gamma = HydroSystem<ContactProblem>::gamma_;
 		exact_arr(i, j, k, HydroSystem<ContactProblem>::density_index) = rho;
-		exact_arr(i, j, k, HydroSystem<ContactProblem>::x1Momentum_index) = rho * v;
+		exact_arr(i, j, k, HydroSystem<ContactProblem>::x1Momentum_index) = rho * vx;
+		exact_arr(i, j, k, HydroSystem<ContactProblem>::x2Momentum_index) = 0.;
+		exact_arr(i, j, k, HydroSystem<ContactProblem>::x3Momentum_index) = 0.;
 		exact_arr(i, j, k, HydroSystem<ContactProblem>::energy_index) =
-		    P / (gamma - 1.) + 0.5 * rho * (v * v);
+		    P / (gamma - 1.) + 0.5 * rho * (vx * vx);
 	});
 }
 

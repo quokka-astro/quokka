@@ -20,7 +20,7 @@ template <typename T, int d> class valarray
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE valarray() {}
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE valarray(std::initializer_list<T> list)
 	{
-		assert(list.size() == d);
+		AMREX_ASSERT(list.size() == d);
 		T const *input =
 		    std::data(list); // requires nvcc to be in C++17 mode! (if it fails, the
 				     // compiler flags are wrong, probably due to a CMake issue.)

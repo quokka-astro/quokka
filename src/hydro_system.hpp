@@ -10,10 +10,6 @@
 ///
 
 // c++ headers
-#include <cassert>
-#include <cmath>
-#include <limits>
-#include <valarray>
 
 // library headers
 #include <fmt/format.h>
@@ -36,8 +32,20 @@ template <typename problem_t> struct EOS_Traits {
 template <typename problem_t> class HydroSystem : public HyperbolicSystem<problem_t>
 {
       public:
-	enum consVarIndex { density_index = 0, x1Momentum_index = 1, energy_index = 2 };
-	enum primVarIndex { primDensity_index = 0, x1Velocity_index = 1, pressure_index = 2 };
+	enum consVarIndex {
+		density_index = 0,
+		x1Momentum_index = 1,
+		x2Momentum_index = 2,
+		x3Momentum_index = 3,
+		energy_index = 4
+	};
+	enum primVarIndex {
+		primDensity_index = 0,
+		x1Velocity_index = 1,
+		x2Velocity_index = 2,
+		x3Velocity_index = 3,
+		pressure_index = 4
+	};
 
 	static void ConservedToPrimitive(amrex::Array4<const amrex::Real> const &cons,
 					 array_t &primVar, amrex::Box const &indexRange);
@@ -79,14 +87,20 @@ void HydroSystem<problem_t>::ConservedToPrimitive(amrex::Array4<const amrex::Rea
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const auto rho = cons(i, j, k, density_index);
 		const auto px = cons(i, j, k, x1Momentum_index);
+		const auto py = cons(i, j, k, x2Momentum_index);
+		const auto pz = cons(i, j, k, x3Momentum_index);
 		const auto E = cons(i, j, k, energy_index); // *total* gas energy per unit volume
 
 		AMREX_ASSERT(!std::isnan(rho));
 		AMREX_ASSERT(!std::isnan(px));
+		AMREX_ASSERT(!std::isnan(py));
+		AMREX_ASSERT(!std::isnan(pz));
 		AMREX_ASSERT(!std::isnan(E));
 
 		const auto vx = px / rho;
-		const auto kinetic_energy = 0.5 * rho * std::pow(vx, 2);
+		const auto vy = py / rho;
+		const auto vz = pz / rho;
+		const auto kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
 		const auto thermal_energy = E - kinetic_energy;
 
 		const auto P = thermal_energy * (HydroSystem<problem_t>::gamma_ - 1.0);
@@ -96,6 +110,8 @@ void HydroSystem<problem_t>::ConservedToPrimitive(amrex::Array4<const amrex::Rea
 
 		primVar(i, j, k, primDensity_index) = rho;
 		primVar(i, j, k, x1Velocity_index) = vx;
+		primVar(i, j, k, x2Velocity_index) = vy;
+		primVar(i, j, k, x3Velocity_index) = vz;
 		primVar(i, j, k, pressure_index) = P;
 	});
 }
@@ -107,17 +123,29 @@ void HydroSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Re
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const auto rho = cons(i, j, k, density_index);
 		const auto px = cons(i, j, k, x1Momentum_index);
+		const auto py = cons(i, j, k, x2Momentum_index);
+		const auto pz = cons(i, j, k, x3Momentum_index);
 		const auto E = cons(i, j, k, energy_index); // *total* gas energy per unit volume
 
+		AMREX_ASSERT(!std::isnan(rho));
+		AMREX_ASSERT(!std::isnan(px));
+		AMREX_ASSERT(!std::isnan(py));
+		AMREX_ASSERT(!std::isnan(pz));
+		AMREX_ASSERT(!std::isnan(E));
+
 		const auto vx = px / rho;
-		const auto kinetic_energy = 0.5 * rho * std::pow(vx, 2);
+		const auto vy = py / rho;
+		const auto vz = pz / rho;
+		const auto kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
 		const auto thermal_energy = E - kinetic_energy;
 
-		const auto P = thermal_energy * (gamma_ - 1.0);
+		const auto P = thermal_energy * (HydroSystem<problem_t>::gamma_ - 1.0);
+
 		const double cs = std::sqrt(HydroSystem<problem_t>::gamma_ * P / rho);
 		assert(cs > 0.); // NOLINT
 
-		const double signal_max = std::max(std::abs(vx - cs), std::abs(vx + cs));
+		const double vel_mag = std::sqrt(vx * vx + vy * vy + vz * vz);
+		const double signal_max = vel_mag + cs;
 		maxSignal(i, j, k) = signal_max;
 	});
 }
@@ -157,7 +185,8 @@ auto HydroSystem<problem_t>::CheckStatesValid(amrex::Array4<const amrex::Real> c
 template <typename problem_t>
 template <FluxDir DIR>
 void HydroSystem<problem_t>::ComputeFlatteningCoefficients(
-    amrex::Array4<const amrex::Real> const &primVar_in, array_t &x1Chi_in, amrex::Box const &indexRange)
+    amrex::Array4<const amrex::Real> const &primVar_in, array_t &x1Chi_in,
+    amrex::Box const &indexRange)
 {
 	quokka::Array4View<const amrex::Real, DIR> primVar(primVar_in);
 	quokka::Array4View<amrex::Real, DIR> x1Chi(x1Chi_in);
@@ -174,7 +203,7 @@ void HydroSystem<problem_t>::ComputeFlatteningCoefficients(
 
 	// cell-centered kernel
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in) {
-		auto [i,j,k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
+		auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
 
 		// beta is a measure of shock resolution (Eq. 74 of Miller & Colella 2002)
 		const double beta = std::abs(primVar(i + 1, j, k, pressure_index) -
@@ -220,28 +249,36 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::Array4<const amrex::Real> cons
 	// shock problem, and reduces post-shock oscillations in other cases.]
 
 	// cell-centered kernel
-	amrex::ParallelFor(indexRange, nvars, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) {
-		auto [i,j,k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
+	amrex::ParallelFor(
+	    indexRange, nvars, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) {
+		    auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
 
-		// compute coefficient as the minimum from all surrounding cells
-		//  (Eq. 78 of Miller & Colella 2002)
-		double chi = std::min(
-		    {x1Chi(i - 1, j, k), x1Chi(i, j, k), x1Chi(i + 1, j, k)}); // modify in 3d !!
+		    // compute coefficient as the minimum from all surrounding cells
+		    //  (Eq. 78 of Miller & Colella 2002)
+		    double chi = std::min({
+			    x1Chi_in(i_in - 1, j_in, k_in), x1Chi_in(i_in, j_in, k_in), x1Chi_in(i_in + 1, j_in, k_in),
+#if (AMREX_SPACEDIM >= 2)
+				x1Chi_in(i_in, j_in - 1, k_in), x1Chi_in(i_in, j_in + 1, k_in),
+#endif
+#if (AMREX_SPACEDIM == 3)
+				x1Chi_in(i_in, j_in, k_in - 1), x1Chi_in(i_in, j_in, k_in + 1),
+#endif
+		    });
 
-		// get interfaces
-		const double a_minus = x1RightState(i, j, k, n);
-		const double a_plus = x1LeftState(i + 1, j, k, n);
-		const double a_mean = q(i, j, k, n);
+		    // get interfaces
+		    const double a_minus = x1RightState(i, j, k, n);
+		    const double a_plus = x1LeftState(i + 1, j, k, n);
+		    const double a_mean = q(i, j, k, n);
 
-		// left side of zone i (Eq. 70a)
-		const double new_a_minus = chi * a_minus + (1. - chi) * a_mean;
+		    // left side of zone i (Eq. 70a)
+		    const double new_a_minus = chi * a_minus + (1. - chi) * a_mean;
 
-		// right side of zone i (Eq. 70b)
-		const double new_a_plus = chi * a_plus + (1. - chi) * a_mean;
+		    // right side of zone i (Eq. 70b)
+		    const double new_a_plus = chi * a_plus + (1. - chi) * a_mean;
 
-		x1RightState(i, j, k, n) = new_a_minus;
-		x1LeftState(i + 1, j, k, n) = new_a_plus;
-	});
+		    x1RightState(i, j, k, n) = new_a_minus;
+		    x1LeftState(i + 1, j, k, n) = new_a_plus;
+	    });
 }
 
 template <typename problem_t>
@@ -260,21 +297,21 @@ void HydroSystem<problem_t>::ComputeFirstOrderFluxes(
 	// compute Lax-Friedrichs fluxes for use in flux-limiting to ensure realizable states
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in) {
-		auto [i,j,k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
+		auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
 
 		// gather L/R states
 		const double rho_L = consVar(i - 1, j, k, density_index);
 		const double rho_R = consVar(i, j, k, density_index);
 
-		const double mom_L = consVar(i - 1, j, k, x1Momentum_index);
-		const double mom_R = consVar(i, j, k, x1Momentum_index);
+		const double xmom_L = consVar(i - 1, j, k, x1Momentum_index);
+		const double xmom_R = consVar(i, j, k, x1Momentum_index);
 
 		const double E_L = consVar(i - 1, j, k, energy_index);
 		const double E_R = consVar(i, j, k, energy_index);
 
 		// compute primitive variables
-		const double vx_L = mom_L / rho_L;
-		const double vx_R = mom_R / rho_R;
+		const double vx_L = xmom_L / rho_L;
+		const double vx_R = xmom_R / rho_R;
 
 		const double ke_L = 0.5 * rho_L * (vx_L * vx_L);
 		const double ke_R = 0.5 * rho_R * (vx_R * vx_R);
@@ -298,8 +335,8 @@ void HydroSystem<problem_t>::ComputeFirstOrderFluxes(
 		const quokka::valarray<double, dim> F_R = {
 		    rho_R * vx_R, rho_R * (vx_R * vx_R) + P_R, (E_R + P_R) * vx_R};
 
-		const quokka::valarray<double, dim> U_L = {rho_L, mom_L, E_L};
-		const quokka::valarray<double, dim> U_R = {rho_R, mom_R, E_R};
+		const quokka::valarray<double, dim> U_L = {rho_L, xmom_L, E_L};
+		const quokka::valarray<double, dim> U_R = {rho_R, xmom_R, E_R};
 
 		const quokka::valarray<double, dim> LLF = 0.5 * (F_L + F_R - sstar * (U_R - U_L));
 
@@ -327,8 +364,8 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in) {
-		auto [i,j,k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
-		
+		auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
+
 		// HLLC solver following Toro (1998) and Balsara (2017).
 
 		// gather left- and right- state variables
@@ -339,17 +376,20 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 		const double vx_L = x1LeftState(i, j, k, x1Velocity_index);
 		const double vx_R = x1RightState(i, j, k, x1Velocity_index);
 
+		const double vy_L = x1LeftState(i, j, k, x2Velocity_index);
+		const double vy_R = x1RightState(i, j, k, x2Velocity_index);
+
+		const double vz_L = x1LeftState(i, j, k, x3Velocity_index);
+		const double vz_R = x1RightState(i, j, k, x3Velocity_index);
+
 		const double P_L = x1LeftState(i, j, k, pressure_index);
 		const double P_R = x1RightState(i, j, k, pressure_index);
 
-		const double ke_L = 0.5 * rho_L * (vx_L * vx_L);
-		const double ke_R = 0.5 * rho_R * (vx_R * vx_R);
+		const double ke_L = 0.5 * rho_L * (vx_L * vx_L + vy_L * vy_L + vz_L * vz_L);
+		const double ke_R = 0.5 * rho_R * (vx_R * vx_R + vy_R * vy_R + vz_R * vz_R);
 
 		const double E_L = P_L / (gamma_ - 1.0) + ke_L;
 		const double E_R = P_R / (gamma_ - 1.0) + ke_R;
-
-		// const double H_L = (E_L + P_L) / rho_L; // enthalpy
-		// const double H_R = (E_R + P_R) / rho_R;
 
 		const double cs_L = std::sqrt(gamma_ * P_L / rho_L);
 		const double cs_R = std::sqrt(gamma_ * P_R / rho_R);
@@ -357,11 +397,27 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 		assert(cs_L > 0.0); // NOLINT
 		assert(cs_R > 0.0); // NOLINT
 
+		// assign normal component of velocity according to DIR
+
+		double u_L = NAN;
+		double u_R = NAN;
+
+		if constexpr (DIR == FluxDir::X1) {
+			u_L = vx_L;
+			u_R = vx_R;
+		} else if constexpr (DIR == FluxDir::X2) {
+			u_L = vy_L;
+			u_R = vy_R;
+		} else if constexpr (DIR == FluxDir::X3) {
+			u_L = vz_L;
+			u_R = vz_R;
+		}
+
 		// compute PVRS states (Toro 10.5.2)
 
 		const double rho_bar = 0.5 * (rho_L + rho_R);
 		const double cs_bar = 0.5 * (cs_L + cs_R);
-		const double P_PVRS = 0.5 * (P_L + P_R) - 0.5 * (vx_R - vx_L) * (rho_bar * cs_bar);
+		const double P_PVRS = 0.5 * (P_L + P_R) - 0.5 * (u_R - u_L) * (rho_bar * cs_bar);
 		const double P_star = std::max(P_PVRS, 0.0);
 
 		const double q_L = (P_star <= P_L)
@@ -376,32 +432,57 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 
 		// compute wave speeds
 
-		const double S_L = vx_L - q_L * cs_L;
-		const double S_R = vx_R + q_R * cs_R;
+		const double S_L = u_L - q_L * cs_L;
+		const double S_R = u_R + q_R * cs_R;
 		const double S_star =
-		    ((P_R - P_L) + (rho_L * vx_L * (S_L - vx_L) - rho_R * vx_R * (S_R - vx_R))) /
-		    (rho_L * (S_L - vx_L) - rho_R * (S_R - vx_R));
+		    ((P_R - P_L) + (rho_L * u_L * (S_L - u_L) - rho_R * u_R * (S_R - u_R))) /
+		    (rho_L * (S_L - u_L) - rho_R * (S_R - u_R));
 
-		const double P_LR = 0.5 * (P_L + P_R + rho_L * (S_L - vx_L) * (S_star - vx_L) +
-					   rho_R * (S_R - vx_R) * (S_star - vx_R));
+		const double P_LR = 0.5 * (P_L + P_R + rho_L * (S_L - u_L) * (S_star - u_L) +
+					   rho_R * (S_R - u_R) * (S_star - u_R));
 
 		assert(S_L <= S_R);
 
 		// compute fluxes
-		constexpr int fluxdim = 3;
-		const quokka::valarray<double, fluxdim> F_L = {
-		    rho_L * vx_L, rho_L * (vx_L * vx_L) + P_L, (E_L + P_L) * vx_L};
+		constexpr int fluxdim = 5;
 
-		const quokka::valarray<double, fluxdim> F_R = {
-		    rho_R * vx_R, rho_R * (vx_R * vx_R) + P_R, (E_R + P_R) * vx_R};
+		quokka::valarray<double, fluxdim> D_L;
+		quokka::valarray<double, fluxdim> D_R;
+		quokka::valarray<double, fluxdim> D_star;
 
-		const quokka::valarray<double, fluxdim> U_L = {
-		    rho_L, rho_L * vx_L, P_L / (gamma_ - 1.0) + 0.5 * rho_L * (vx_L * vx_L)};
+		if constexpr (DIR == FluxDir::X1) {
+			D_L = {0., 1., 0., 0., u_L};
+			D_R = {0., 1., 0., 0., u_R};
+			D_star = {0., 1., 0., 0., S_star};
+		} else if constexpr (DIR == FluxDir::X2) {
+			D_L = {0., 0., 1., 0., u_L};
+			D_R = {0., 0., 1., 0., u_R};
+			D_star = {0., 0., 1., 0., S_star};
+		} else if constexpr (DIR == FluxDir::X3) {
+			D_L = {0., 0., 0., 1., u_L};
+			D_R = {0., 0., 0., 1., u_R};
+			D_star = {0., 0., 0., 1., S_star};
+		}
 
-		const quokka::valarray<double, fluxdim> U_R = {
-		    rho_R, rho_R * vx_R, P_R / (gamma_ - 1.0) + 0.5 * rho_R * (vx_R * vx_R)};
+		const quokka::valarray<double, fluxdim> U_L = {rho_L, rho_L * vx_L, rho_L * vy_L,
+							       rho_L * vz_L, E_L};
 
-		const quokka::valarray<double, fluxdim> D_star = {0., 1., S_star};
+		const quokka::valarray<double, fluxdim> U_R = {rho_R, rho_R * vx_R, rho_R * vy_R,
+							       rho_R * vz_R, E_R};
+
+#if 0
+		// x-dir
+		const quokka::valarray<double, fluxdim> Fx_L = {
+		    rho_L * vx_L, rho_L * (vx_L * vx_L) + P_L, rho_L * (vx_L * vy_L),
+		    rho_L * (vx_L * vz_L), (E_L + P_L) * vx_L};
+
+		const quokka::valarray<double, fluxdim> Fx_R = {
+		    rho_R * vx_R, rho_R * (vx_R * vx_R) + P_R, rho_R * (vx_R * vy_R),
+		    rho_R * (vx_R * vz_R), (E_R + P_R) * vx_R};
+#endif
+
+		quokka::valarray<double, fluxdim> F_L = u_L * U_L + P_L * D_L;
+		quokka::valarray<double, fluxdim> F_R = u_R * U_R + P_R * D_R;
 
 		const quokka::valarray<double, fluxdim> F_starL =
 		    (S_star * (S_L * U_L - F_L) + S_L * P_LR * D_star) / (S_L - S_star);
@@ -427,10 +508,14 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 		assert(!std::isnan(F[0])); // NOLINT
 		assert(!std::isnan(F[1])); // NOLINT
 		assert(!std::isnan(F[2])); // NOLINT
+		assert(!std::isnan(F[3])); // NOLINT
+		assert(!std::isnan(F[4])); // NOLINT
 
 		x1Flux(i, j, k, density_index) = F[0];
 		x1Flux(i, j, k, x1Momentum_index) = F[1];
-		x1Flux(i, j, k, energy_index) = F[2];
+		x1Flux(i, j, k, x2Momentum_index) = F[2];
+		x1Flux(i, j, k, x3Momentum_index) = F[3];
+		x1Flux(i, j, k, energy_index) = F[4];
 	});
 }
 

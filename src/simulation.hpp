@@ -76,7 +76,7 @@ template <typename problem_t> class SingleLevelSimulation
 	// Nghost = number of ghost cells for each array
 	int nghost_ = 4; // PPM needs nghost >= 3, PPM+flattening needs nghost >= 4
 	// Ncomp = number of components for each array
-	int ncomp_ = 3;
+	int ncomp_ = 5; // for 3d Euler equations
 	// dx = cell size
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_{};
 
