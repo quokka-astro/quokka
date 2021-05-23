@@ -282,6 +282,7 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::Array4<const amrex::Real> cons
 	    });
 }
 
+// TODO(ben): modify for 3D!
 template <typename problem_t>
 template <FluxDir DIR>
 void HydroSystem<problem_t>::ComputeFirstOrderFluxes(
