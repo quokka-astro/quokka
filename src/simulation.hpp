@@ -13,6 +13,7 @@
 #include "AMReX_BLassert.H"
 #include "AMReX_DistributionMapping.H"
 #include "AMReX_INT.H"
+#include "AMReX_ParallelDescriptor.H"
 #include "AMReX_VisMF.H"
 #include <cassert>
 #include <cmath>
@@ -47,8 +48,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE double clamp(double v, double lo, doubl
 template <typename problem_t> class SingleLevelSimulation
 {
       public:
-	int nx_{400};
-	int ny_{40};
+	int nx_{512};
+	int ny_{512};
 	int nz_{1};
 	int max_grid_size_{32};
 	int maxTimesteps_{10000};
@@ -62,7 +63,7 @@ template <typename problem_t> class SingleLevelSimulation
 	// This defines the physical box, [-1,1] in each direction.
 	amrex::RealBox real_box_{
 	    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.0), amrex::Real(0.0))},
-	    {AMREX_D_DECL(amrex::Real(1.0), amrex::Real(0.1), amrex::Real(1.0))}};
+	    {AMREX_D_DECL(amrex::Real(1.0), amrex::Real(1.0), amrex::Real(1.0))}};
 
 	// periodic in all directions
 	amrex::Array<int, AMREX_SPACEDIM> is_periodic_{AMREX_D_DECL(1, 1, 1)};
@@ -79,6 +80,9 @@ template <typename problem_t> class SingleLevelSimulation
 	int nghost_ = 4; // PPM needs nghost >= 3, PPM+flattening needs nghost >= 4
 	// Ncomp = number of components for each array
 	int ncomp_ = 5; // for 3d Euler equations
+
+	int plotfileInterval_ = 100; // write plotfile every 10 cycles
+	bool outputAtInterval_ = false;
 
 	// dx = cell size
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_{};
@@ -184,13 +188,20 @@ template <typename problem_t> void SingleLevelSimulation<problem_t>::evolve()
 		tNow_ += dt_;
 		++cycleCount_;
 
-		// output plotfile
-		// const std::string &pltfile = amrex::Concatenate("plt", cycleCount_, 4);
-		// amrex::WriteSingleLevelPlotfile(pltfile, state_new_, {"density"}, simGeometry_,
-		//				tNow_, cycleCount_);
+		if (outputAtInterval_ && ((cycleCount_ % plotfileInterval_) == 0)) {
+			// output plotfile
+			const std::string &pltfile = amrex::Concatenate("plt", cycleCount_, 5);
+			amrex::WriteSingleLevelPlotfile(
+			    pltfile, state_new_,
+			    {"density", "x-momentum", "y-momentum", "z-momentum", "energy"},
+			    simGeometry_, tNow_, cycleCount_);
+		}
 
 		// print timestep information on I/O processor
-		amrex::Print() << "Cycle " << j << "; t = " << tNow_ << "; dt = " << dt_ << "\n";
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			amrex::Print()
+			    << "Cycle " << j << "; t = " << tNow_ << "; dt = " << dt_ << "\n";
+		}
 	}
 
 	// compute performance metric (microseconds/zone-update)
@@ -198,13 +209,15 @@ template <typename problem_t> void SingleLevelSimulation<problem_t>::evolve()
 	const int IOProc = amrex::ParallelDescriptor::IOProcessorNumber();
 	amrex::ParallelDescriptor::ReduceRealMax(elapsed_sec, IOProc);
 
-	const double zone_cycles = cycleCount_ * (nx_ * ny_ * nz_);
-	const double microseconds_per_update = 1.0e6 * elapsed_sec / zone_cycles;
-	amrex::Print() << "Performance figure-of-merit: " << microseconds_per_update
-		       << " μs/zone-update\n";
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		const double zone_cycles = cycleCount_ * (nx_ * ny_ * nz_);
+		const double microseconds_per_update = 1.0e6 * elapsed_sec / zone_cycles;
+		amrex::Print() << "Performance figure-of-merit: " << microseconds_per_update
+			       << " μs/zone-update\n";
+	}
 
 	// output plotfile
-	const std::string &pltfile = amrex::Concatenate("plt", cycleCount_, 4);
+	const std::string &pltfile = amrex::Concatenate("plt", cycleCount_, 5);
 	amrex::WriteSingleLevelPlotfile(
 	    pltfile, state_new_, {"density", "x-momentum", "y-momentum", "z-momentum", "energy"},
 	    simGeometry_, tNow_, cycleCount_);
