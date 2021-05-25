@@ -15,8 +15,6 @@
 #include "AMReX_INT.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_VisMF.H"
-#include <cassert>
-#include <cmath>
 
 // library headers
 #include "fmt/core.h"
@@ -27,22 +25,15 @@
 #include <AMReX_PlotFileUtil.H>
 #include <AMReX_Print.H>
 #include <AMReX_Utility.H>
-#include <limits>
 
 // internal headers
 
 using Real = amrex::Real;
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void
-CheckNaN(amrex::FArrayBox const &arr, amrex::Box const &indexRange, const int ncomp)
-{
-	// need to rewrite for GPU
-}
+CheckNaN(amrex::FArrayBox const &arr, amrex::Box const &indexRange, int ncomp);
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE double clamp(double v, double lo, double hi)
-{
-	return (v < lo) ? lo : (hi < v) ? hi : v;
-}
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto clamp(double v, double lo, double hi) -> double;
 
 // Simulation class should be initialized only once per program (i.e., is a singleton)
 template <typename problem_t> class SingleLevelSimulation
@@ -51,7 +42,7 @@ template <typename problem_t> class SingleLevelSimulation
 	int nx_{512};
 	int ny_{512};
 	int nz_{1};
-	int max_grid_size_{32};
+	int max_grid_size_{64};
 	int maxTimesteps_{10000};
 
 	amrex::BoxArray simBoxArray_;
