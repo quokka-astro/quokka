@@ -93,7 +93,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 					 amrex::Array4<const amrex::Real> const &x1LeftState,
 					 amrex::Array4<const amrex::Real> const &x1RightState,
 					 amrex::Box const &indexRange, arrayconst_t &consVar,
-					 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx)
+					 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx);
 
 	static void ComputeFirstOrderFluxes(amrex::Array4<const amrex::Real> const &consVar,
 						   array_t &x1FluxDiffusive,
@@ -149,7 +149,7 @@ void RadSystem<problem_t>::ConservedToPrimitive(amrex::Array4<const amrex::Real>
 }
 
 template <typename problem_t>
-void RadSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real> const &cons,
+void RadSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real> const & /*cons*/,
 						 array_t &maxSignal, amrex::Box const &indexRange)
 {
 	// cell-centered kernel

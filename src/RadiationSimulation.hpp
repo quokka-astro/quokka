@@ -17,18 +17,19 @@
 #include "AMReX_Algorithm.H"
 #include "AMReX_Arena.H"
 #include "AMReX_Array4.H"
+#include "AMReX_BCRec.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_Box.H"
 #include "AMReX_FArrayBox.H"
 #include "AMReX_IntVect.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_MultiFabUtil.H"
+#include "AMReX_PhysBCFunct.H"
 #include "AMReX_REAL.H"
 #include "AMReX_Utility.H"
 
 #include "radiation_system.hpp"
 #include "simulation.hpp"
-
 
 // Simulation class should be initialized only once per program (i.e., is a singleton)
 template <typename problem_t> class RadiationSimulation : public SingleLevelSimulation<problem_t>
@@ -47,6 +48,7 @@ template <typename problem_t> class RadiationSimulation : public SingleLevelSimu
 	using SingleLevelSimulation<problem_t>::tNow_;
 	using SingleLevelSimulation<problem_t>::cycleCount_;
 	using SingleLevelSimulation<problem_t>::areInitialConditionsDefined_;
+	using SingleLevelSimulation<problem_t>::boundaryConditions_;
 
 	// member functions
 
@@ -61,6 +63,13 @@ template <typename problem_t> class RadiationSimulation : public SingleLevelSimu
 	void stageTwoRK2SSP(amrex::Array4<const amrex::Real> const &consVar,
 			    amrex::Array4<amrex::Real> const &consVarNew,
 			    const amrex::Box &indexRange, int nvars);
+
+	void fillBoundaryConditions(amrex::MultiFab &state);
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+	setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<Real> const &dest,
+				    int dcomp, int numcomp, amrex::GeometryData const &geom,
+				    Real time, const amrex::BCRec *bcr, int bcomp,
+				    int orig_comp) const;
 
 	template <FluxDir DIR>
 	void fluxFunction(amrex::Array4<const amrex::Real> const &consState,
@@ -83,13 +92,51 @@ template <typename problem_t> void RadiationSimulation<problem_t>::setInitialCon
 	// do nothing -- user should implement using problem-specific template specialization
 }
 
+template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+RadiationSimulation<problem_t>::setCustomBoundaryConditions(
+    const amrex::IntVect &iv, amrex::Array4<Real> const &dest, const int dcomp, const int numcomp,
+    amrex::GeometryData const &geom, const Real time, const amrex::BCRec *bcr, const int bcomp,
+    const int orig_comp) const
+{
+	// user should implement if needed using template specialization
+	// (This is only called when amrex::BCType::ext_dir is set for a given boundary.)
+
+	// set boundary condition for cell 'iv'
+}
+
+template <typename problem_t> struct setBoundaryFunctor {
+	AMREX_GPU_DEVICE void operator()(const amrex::IntVect &iv, amrex::Array4<Real> const &dest,
+					 const int dcomp, const int numcomp,
+					 amrex::GeometryData const &geom, const Real time,
+					 const amrex::BCRec *bcr, const int bcomp,
+					 const int orig_comp)
+	{
+		RadiationSimulation<problem_t>::setCustomBoundaryConditions(
+		    iv, dest, dcomp, numcomp, geom, time, bcr, bcomp, orig_comp);
+	}
+};
+
+template <typename problem_t>
+void RadiationSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &state)
+{
+	state.FillBoundary(simGeometry_.periodicity());
+	if (!simGeometry_.isAllPeriodic()) {
+		auto boundaryFunctor(setBoundaryFunctor<problem_t>)
+		    ->amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>;
+		amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>>
+		    physicalBoundaryFunctor(simGeometry_, boundaryConditions_, boundaryFunctor);
+		physicalBoundaryFunctor(state, 0, ncomp_, nghost_, tNow_, 0);
+	}
+}
+
 template <typename problem_t> void RadiationSimulation<problem_t>::advanceSingleTimestep()
 {
 	// We use the RK2-SSP method here. It needs two registers: one to store the old timestep,
 	// and another to store the intermediate stage (which is reused for the final stage).
 
 	// update ghost zones [old timestep]
-	state_old_.FillBoundary(simGeometry_.periodicity());
+	fillBoundaryConditions(state_old_);
 	AMREX_ASSERT(!state_old_.contains_nan(0, ncomp_));
 
 	// advance all grids on local processor (Stage 1 of integrator)
@@ -101,7 +148,7 @@ template <typename problem_t> void RadiationSimulation<problem_t>::advanceSingle
 	}
 
 	// update ghost zones [intermediate stage stored in state_new_]
-	state_new_.FillBoundary(simGeometry_.periodicity());
+	fillBoundaryConditions(state_new_);
 	AMREX_ASSERT(!state_new_.contains_nan(0, ncomp_));
 
 	// advance all grids on local processor (Stage 2 of integrator)
@@ -116,8 +163,8 @@ template <typename problem_t> void RadiationSimulation<problem_t>::advanceSingle
 template <typename problem_t>
 template <FluxDir DIR>
 void RadiationSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real> const &consState,
-					      amrex::FArrayBox &x1Flux,
-					      const amrex::Box &indexRange, const int nvars)
+						  amrex::FArrayBox &x1Flux,
+						  const amrex::Box &indexRange, const int nvars)
 {
 	int dir = 0;
 	if constexpr (DIR == FluxDir::X1) {
@@ -153,16 +200,16 @@ void RadiationSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Rea
 
 	// interface-centered kernel
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, dir);
-	RadSystem<problem_t>::template ComputeFluxes<DIR>(x1Flux.array(), x1LeftState.array(),
-						   x1RightState.array(),
-						   x1FluxRange); // watch out for argument order!!
+	RadSystem<problem_t>::template ComputeFluxes<DIR>(
+	    x1Flux.array(), x1LeftState.array(), x1RightState.array(),
+	    x1FluxRange); // watch out for argument order!!
 	CheckNaN(x1Flux, x1FluxRange, nvars);
 }
 
 template <typename problem_t>
-void RadiationSimulation<problem_t>::stageOneRK2SSP(amrex::Array4<const amrex::Real> const &consVarOld,
-						amrex::Array4<amrex::Real> const &consVarNew,
-						const amrex::Box &indexRange, const int nvars)
+void RadiationSimulation<problem_t>::stageOneRK2SSP(
+    amrex::Array4<const amrex::Real> const &consVarOld,
+    amrex::Array4<amrex::Real> const &consVarNew, const amrex::Box &indexRange, const int nvars)
 {
 	// Allocate temporary arrays using CUDA stream async allocator (or equivalent)
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, 0);
@@ -187,14 +234,14 @@ void RadiationSimulation<problem_t>::stageOneRK2SSP(amrex::Array4<const amrex::R
 #endif
 
 	// Stage 1 of RK2-SSP
-	RadSystem<problem_t>::PredictStep(consVarOld, consVarNew, fluxArrays, dt_, dx_,
-					    indexRange, nvars);
+	RadSystem<problem_t>::PredictStep(consVarOld, consVarNew, fluxArrays, dt_, dx_, indexRange,
+					  nvars);
 }
 
 template <typename problem_t>
-void RadiationSimulation<problem_t>::stageTwoRK2SSP(amrex::Array4<const amrex::Real> const &consVarOld,
-						amrex::Array4<amrex::Real> const &consVarNew,
-						const amrex::Box &indexRange, const int nvars)
+void RadiationSimulation<problem_t>::stageTwoRK2SSP(
+    amrex::Array4<const amrex::Real> const &consVarOld,
+    amrex::Array4<amrex::Real> const &consVarNew, const amrex::Box &indexRange, const int nvars)
 {
 	// Allocate temporary arrays using CUDA stream async allocator (or equivalent)
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, 0);
@@ -218,8 +265,8 @@ void RadiationSimulation<problem_t>::stageTwoRK2SSP(amrex::Array4<const amrex::R
 #endif
 
 	// Stage 2 of RK2-SSP
-	RadSystem<problem_t>::AddFluxesRK2(consVarNew, consVarOld, consVarNew, fluxArrays, dt_,
-					     dx_, indexRange, nvars);
+	RadSystem<problem_t>::AddFluxesRK2(consVarNew, consVarOld, consVarNew, fluxArrays, dt_, dx_,
+					   indexRange, nvars);
 }
 
 #endif // RADIATION_SIMULATION_HPP_

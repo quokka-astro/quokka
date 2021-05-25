@@ -10,13 +10,14 @@
 /// timestepping, solving, and I/O of a simulation.
 
 // c++ headers
+
+// library headers
+#include "AMReX_BCRec.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_DistributionMapping.H"
 #include "AMReX_INT.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_VisMF.H"
-
-// library headers
 #include "fmt/core.h"
 #include <AMReX_Geometry.H>
 #include <AMReX_Gpu.H>
@@ -45,10 +46,10 @@ CheckNaN(amrex::FArrayBox const &arr, amrex::Box const &indexRange, const int nc
 template <typename problem_t> class SingleLevelSimulation
 {
       public:
-	int nx_{512};
-	int ny_{512};
+	int nx_{400};
+	int ny_{40};
 	int nz_{1};
-	int max_grid_size_{64};
+	int max_grid_size_{32};
 	int maxTimesteps_{10000};
 
 	amrex::BoxArray simBoxArray_;
@@ -60,10 +61,13 @@ template <typename problem_t> class SingleLevelSimulation
 	// This defines the physical box, [-1,1] in each direction.
 	amrex::RealBox real_box_{
 	    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.0), amrex::Real(0.0))},
-	    {AMREX_D_DECL(amrex::Real(1.0), amrex::Real(1.0), amrex::Real(1.0))}};
+	    {AMREX_D_DECL(amrex::Real(1.0), amrex::Real(0.1), amrex::Real(1.0))}};
 
 	// periodic in all directions
 	amrex::Array<int, AMREX_SPACEDIM> is_periodic_{AMREX_D_DECL(1, 1, 1)};
+
+	// boundary conditions object
+	amrex::Vector<amrex::BCRec> boundaryConditions_;
 
 	// How boxes are distributed among MPI processes
 	amrex::DistributionMapping simDistributionMapping_;
@@ -102,6 +106,7 @@ template <typename problem_t> class SingleLevelSimulation
 		// This defines a Geometry object
 		simGeometry_.define(domain_, real_box_, amrex::CoordSys::cartesian, is_periodic_);
 		dx_ = simGeometry_.CellSizeArray();
+		boundaryConditions_ = amrex::Vector<amrex::BCRec>(ncomp_);
 
 		// initial DistributionMapping with boxarray
 		simDistributionMapping_ = amrex::DistributionMapping(simBoxArray_);
