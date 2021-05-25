@@ -30,10 +30,16 @@
 
 using Real = amrex::Real;
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void
-CheckNaN(amrex::FArrayBox const &arr, amrex::Box const &indexRange, int ncomp);
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto clamp(double v, double lo, double hi) -> double
+{
+	return (v < lo) ? lo : (hi < v) ? hi : v;
+}
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto clamp(double v, double lo, double hi) -> double;
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void
+CheckNaN(amrex::FArrayBox const &arr, amrex::Box const &indexRange, const int ncomp)
+{
+	// need to rewrite for GPU
+}
 
 // Simulation class should be initialized only once per program (i.e., is a singleton)
 template <typename problem_t> class SingleLevelSimulation
