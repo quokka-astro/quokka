@@ -114,8 +114,9 @@ auto testproblem_hydro_blast() -> int
 	HydroSimulation<BlastProblem> sim;
 	sim.stopTime_ = 1.5;
 	sim.cflNumber_ = 0.4;
-	sim.maxTimesteps_ = 5000;
-	sim.outputAtInterval_ = false;
+	sim.maxTimesteps_ = 20000;
+	sim.plotfileInterval_ = 25;
+	sim.outputAtInterval_ = true;
 
 	// initialize
 	sim.setInitialConditions();
