@@ -8,6 +8,7 @@
 ///
 
 #include "test_hydro2d_blast.hpp"
+#include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_Config.H"
 #include "AMReX_ParallelDescriptor.H"
@@ -115,11 +116,33 @@ auto testproblem_hydro_blast() -> int
 	    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.0), amrex::Real(0.0))},
 	    {AMREX_D_DECL(amrex::Real(1.0), amrex::Real(1.5), amrex::Real(1.0))}};
 
+	auto isNormalComp = [=] (int n, int dim) {
+		if ((n == HydroSystem<BlastProblem>::x1Momentum_index) && (dim == 0)) {
+			return true;
+		}
+		if ((n == HydroSystem<BlastProblem>::x2Momentum_index) && (dim == 1)) {
+			return true;
+		}
+		if ((n == HydroSystem<BlastProblem>::x3Momentum_index) && (dim == 2)) {
+			return true;
+		}
+		return false;
+	};
+
 	amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
 	for (int n = 0; n < nvars; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			boundaryConditions[n].setLo(i, amrex::BCType::int_dir); // periodic
-			boundaryConditions[n].setHi(i, amrex::BCType::int_dir); // periodic
+#if 0
+			boundaryConditions[n].setLo(i, amrex::BCType::foextrap);
+			boundaryConditions[n].setHi(i, amrex::BCType::foextrap);	
+#endif
+			if(isNormalComp(n, i)) {
+				boundaryConditions[n].setLo(i, amrex::BCType::reflect_odd);
+				boundaryConditions[n].setHi(i, amrex::BCType::reflect_odd);
+			} else {
+				boundaryConditions[n].setLo(i, amrex::BCType::reflect_even);
+				boundaryConditions[n].setHi(i, amrex::BCType::reflect_even);				
+			}
 		}
 	}
 
