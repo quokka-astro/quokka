@@ -13,12 +13,13 @@
 
 // library headers
 #include "AMReX_BCRec.H"
+#include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
+#include "AMReX_Config.H"
 #include "AMReX_DistributionMapping.H"
 #include "AMReX_INT.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_VisMF.H"
-#include "fmt/core.h"
 #include <AMReX_Geometry.H>
 #include <AMReX_Gpu.H>
 #include <AMReX_MultiFab.H>
@@ -54,7 +55,7 @@ template <typename problem_t> class SingleLevelSimulation
 
 	amrex::BoxArray simBoxArray_;
 	amrex::Geometry simGeometry_;
-	amrex::IntVect domain_lo_{AMREX_D_DECL(0, 0, 0)};
+	amrex::IntVect const domain_lo_{AMREX_D_DECL(0, 0, 0)};
 	amrex::IntVect domain_hi_{AMREX_D_DECL(nx_ - 1, ny_ - 1, nz_ - 1)};
 	amrex::Box domain_{domain_lo_, domain_hi_};
 
@@ -82,7 +83,7 @@ template <typename problem_t> class SingleLevelSimulation
 	// Ncomp = number of components for each array
 	int ncomp_ = 5; // for 3d Euler equations
 
-	int plotfileInterval_ = 100; // write plotfile every 10 cycles
+	int plotfileInterval_ = 100; // write plotfile every 100 cycles
 	bool outputAtInterval_ = false;
 
 	// dx = cell size
@@ -96,17 +97,37 @@ template <typename problem_t> class SingleLevelSimulation
 	amrex::Long cycleCount_ = 0;
 	bool areInitialConditionsDefined_ = false;
 
-	SingleLevelSimulation()
+	SingleLevelSimulation(amrex::IntVect &gridDims, amrex::RealBox &boxSize,
+			      amrex::Vector<amrex::BCRec> &boundaryConditions)
 	{
 		// readParameters();
 
+		// set grid dimension variables
+		domain_hi_ = {AMREX_D_DECL(gridDims[0] - 1, gridDims[1] - 1, gridDims[2] - 1)};
+		domain_ = {domain_lo_, domain_hi_};
 		simBoxArray_.define(domain_);
 		simBoxArray_.maxSize(max_grid_size_);
 
 		// This defines a Geometry object
+		real_box_ = boxSize;
+		boundaryConditions_ = boundaryConditions;
+		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+			bool is_periodic_this_dim = true;
+			// check whether each component has periodic boundary conditions
+			for (int n = 0; n < ncomp_; ++n) {
+				is_periodic_this_dim =
+				    (is_periodic_this_dim &&
+				     (boundaryConditions_[n].lo(i) == amrex::BCType::int_dir) &&
+				     (boundaryConditions_[n].hi(i) == amrex::BCType::int_dir));
+			}
+			is_periodic_[i] = static_cast<int>(is_periodic_this_dim);
+		}
+		amrex::Print() << "periodicity: " << is_periodic_ << "\n";
+
 		simGeometry_.define(domain_, real_box_, amrex::CoordSys::cartesian, is_periodic_);
 		dx_ = simGeometry_.CellSizeArray();
-		boundaryConditions_ = amrex::Vector<amrex::BCRec>(ncomp_);
+
+		amrex::Print() << "isAllPeriodic() = " << simGeometry_.isAllPeriodic() << "\n";
 
 		// initial DistributionMapping with boxarray
 		simDistributionMapping_ = amrex::DistributionMapping(simBoxArray_);

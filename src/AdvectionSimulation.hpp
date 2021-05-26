@@ -41,7 +41,11 @@ template <typename problem_t> class AdvectionSimulation : public SingleLevelSimu
 	using SingleLevelSimulation<problem_t>::cycleCount_;
 	using SingleLevelSimulation<problem_t>::areInitialConditionsDefined_;
 
-	explicit AdvectionSimulation() = default;
+	AdvectionSimulation(amrex::IntVect &gridDims, amrex::RealBox &boxSize,
+			    amrex::Vector<amrex::BCRec> &boundaryConditions)
+	    : SingleLevelSimulation<problem_t>(gridDims, boxSize, boundaryConditions)
+	{
+	}
 
 	void computeMaxSignalLocal() override;
 	void setInitialConditions() override;

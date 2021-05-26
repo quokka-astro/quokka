@@ -9,7 +9,9 @@
 
 #include "test_advection.hpp"
 #include "AMReX_Algorithm.H"
+#include "AMReX_BC_TYPES.H"
 #include "AMReX_BoxArray.H"
+#include "AMReX_Config.H"
 #include "AMReX_DistributionMapping.H"
 #include "AMReX_FArrayBox.H"
 #include "AMReX_MultiFab.H"
@@ -57,10 +59,11 @@ template <> void AdvectionSimulation<SawtoothProblem>::setInitialConditions()
 		auto const &state = state_new_.array(iter);
 		auto const nx = nx_; // class members are not automatically transferred to device!
 
-		amrex::ParallelFor(indexRange, ncomp_, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
-			auto value = static_cast<double>((i + nx / 2) % nx) / nx;
-			state(i, j, k, n) = value;
-		});
+		amrex::ParallelFor(indexRange, ncomp_,
+				   [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
+					   auto value = static_cast<double>((i + nx / 2) % nx) / nx;
+					   state(i, j, k, n) = value;
+				   });
 	}
 
 	// set flag
@@ -68,7 +71,7 @@ template <> void AdvectionSimulation<SawtoothProblem>::setInitialConditions()
 }
 
 void ComputeExactSolution(amrex::Array4<amrex::Real> const &exact_arr, amrex::Box const &indexRange,
-			const int nvars, const int nx)
+			  const int nvars, const int nx)
 {
 	amrex::ParallelFor(indexRange, nvars, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
 		auto value = static_cast<double>((i + nx / 2) % nx) / nx;
@@ -79,17 +82,30 @@ void ComputeExactSolution(amrex::Array4<amrex::Real> const &exact_arr, amrex::Bo
 auto testproblem_advection() -> int
 {
 	// Problem parameters
-	//const int nx = 400;
-	//const double Lx = 1.0;
-	//const double advection_velocity = 1.0;
-	//const double CFL_number = 0.3;
-	//const double max_time = 1.0;
+	const int nx = 400;
+	const double Lx = 1.0;
+	// const double advection_velocity = 1.0;
+	// const double CFL_number = 0.3;
+	// const double max_time = 1.0;
 	const double max_dt = 1e-4;
-	//const int max_timesteps = 1e4;
-	//const int nvars = 1; // only density
+	// const int max_timesteps = 1e4;
+	const int nvars = 5; // only density
+
+	amrex::IntVect gridDims{AMREX_D_DECL(nx, 4, 4)};
+	amrex::RealBox boxSize{
+	    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.0), amrex::Real(0.0))},
+	    {AMREX_D_DECL(amrex::Real(Lx), amrex::Real(1.0), amrex::Real(1.0))}};
+
+	amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
+	for (int n = 0; n < nvars; ++n) {
+		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+			boundaryConditions[n].setLo(i, amrex::BCType::int_dir); // periodic
+			boundaryConditions[n].setHi(i, amrex::BCType::int_dir);
+		}
+	}
 
 	// Problem initialization
-	AdvectionSimulation<SawtoothProblem> sim;
+	AdvectionSimulation<SawtoothProblem> sim(gridDims, boxSize, boundaryConditions);
 	sim.maxDt_ = max_dt;
 
 	// set initial conditions
@@ -113,14 +129,15 @@ auto testproblem_advection() -> int
 				 sim.nghost_);
 	amrex::MultiFab::Copy(residual, state_exact, 0, 0, sim.ncomp_, sim.nghost_);
 	amrex::MultiFab::Saxpy(residual, -1., sim.state_new_, 0, 0, sim.ncomp_, sim.nghost_);
-	
+
 	double min_rel_error = std::numeric_limits<double>::max();
-	for(int comp = 0; comp < sim.ncomp_; ++comp) {
+	for (int comp = 0; comp < sim.ncomp_; ++comp) {
 		const auto sol_norm = state_exact.norm1(comp);
 		const auto err_norm = residual.norm1(comp);
 		const double rel_error = err_norm / sol_norm;
 		min_rel_error = std::min(min_rel_error, rel_error);
-		amrex::Print() << "Relative L1 error norm (comp " << comp << ") = " << rel_error << "\n";
+		amrex::Print() << "Relative L1 error norm (comp " << comp << ") = " << rel_error
+			       << "\n";
 	}
 
 	const double err_tol = 0.015;

@@ -92,17 +92,30 @@ auto testproblem_advection() -> int
 	// Section 6.2: Convection of a semi-ellipse
 
 	// Problem parameters
-	//const int nx = 400;
-	//const double Lx = 1.0;
+	const int nx = 400;
+	const double Lx = 1.0;
 	//const double advection_velocity = 1.0;
 	//const double CFL_number = 0.3;
 	//const double max_time = 1.0;
 	const double max_dt = 1e-4;
 	//const int max_timesteps = 1e4;
-	//const int nvars = 1; // only density
+	const int nvars = 5; // only density
+
+	amrex::IntVect gridDims{AMREX_D_DECL(nx, 4, 4)};
+	amrex::RealBox boxSize{
+	    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.0), amrex::Real(0.0))},
+	    {AMREX_D_DECL(amrex::Real(Lx), amrex::Real(1.0), amrex::Real(1.0))}};
+
+	amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
+	for (int n = 0; n < nvars; ++n) {
+		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+			boundaryConditions[n].setLo(i, amrex::BCType::int_dir); // periodic
+			boundaryConditions[n].setHi(i, amrex::BCType::int_dir);
+		}
+	}
 
 	// Problem initialization
-	AdvectionSimulation<SemiellipseProblem> sim;
+	AdvectionSimulation<SemiellipseProblem> sim(gridDims, boxSize, boundaryConditions);
 	sim.maxDt_ = max_dt;
 
 	// set initial conditions

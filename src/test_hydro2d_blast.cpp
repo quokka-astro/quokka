@@ -108,10 +108,23 @@ template <> void HydroSimulation<BlastProblem>::setInitialConditions()
 auto testproblem_hydro_blast() -> int
 {
 	// Problem parameters
-	// const int nx = 100;
+	const int nvars = 5; // Euler equations
+	
+	amrex::IntVect gridDims{AMREX_D_DECL(400, 600, 4)};
+	amrex::RealBox boxSize{
+	    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.0), amrex::Real(0.0))},
+	    {AMREX_D_DECL(amrex::Real(1.0), amrex::Real(1.5), amrex::Real(1.0))}};
+
+	amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
+	for (int n = 0; n < nvars; ++n) {
+		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+			boundaryConditions[n].setLo(i, amrex::BCType::int_dir); // periodic
+		}
+	}
 
 	// Problem initialization
-	HydroSimulation<BlastProblem> sim;
+	HydroSimulation<BlastProblem> sim(gridDims, boxSize, boundaryConditions);
+
 	sim.stopTime_ = 1.5;
 	sim.cflNumber_ = 0.4;
 	sim.maxTimesteps_ = 20000;

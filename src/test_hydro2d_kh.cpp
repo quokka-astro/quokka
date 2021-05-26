@@ -60,7 +60,6 @@ template <> void HydroSimulation<KelvinHelmholzProblem>::setInitialConditions()
 	amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo = simGeometry_.ProbLoArray();
 	amrex::GpuArray<Real, AMREX_SPACEDIM> prob_hi = simGeometry_.ProbHiArray();
 
-	amrex::Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
 	amrex::Real const y0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
 	amrex::Real const amp = 0.01;
 
@@ -119,10 +118,23 @@ template <> void HydroSimulation<KelvinHelmholzProblem>::setInitialConditions()
 auto testproblem_hydro_kelvinhelmholz() -> int
 {
 	// Problem parameters
-	// const int nx = 100;
+	const int nvars = 5; // Euler equations
+	
+	amrex::IntVect gridDims{AMREX_D_DECL(512, 512, 4)};
+	amrex::RealBox boxSize{
+	    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.0), amrex::Real(0.0))},
+	    {AMREX_D_DECL(amrex::Real(1.0), amrex::Real(1.0), amrex::Real(1.0))}};
+
+	amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
+	for (int n = 0; n < nvars; ++n) {
+		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+			boundaryConditions[n].setLo(i, amrex::BCType::int_dir); // periodic
+		}
+	}
 
 	// Problem initialization
-	HydroSimulation<KelvinHelmholzProblem> sim;
+	HydroSimulation<KelvinHelmholzProblem> sim(gridDims, boxSize, boundaryConditions);
+
 	sim.stopTime_ = 5.0;
 	sim.cflNumber_ = 0.4;
 	sim.maxTimesteps_ = 20000;

@@ -130,10 +130,26 @@ void ComputeExactSolution(amrex::Array4<amrex::Real> const &exact_arr, amrex::Bo
 auto testproblem_hydro_contact() -> int
 {
 	// Problem parameters
-	//const int nx = 100;
+	const int nx = 100;
+	const double Lx = 1.0;
+	const int nvars = 5; // Euler equations
+
+	amrex::IntVect gridDims{AMREX_D_DECL(nx, 4, 4)};
+	amrex::RealBox boxSize{
+	    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.0), amrex::Real(0.0))},
+	    {AMREX_D_DECL(amrex::Real(Lx), amrex::Real(1.0), amrex::Real(1.0))}};
+
+	amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
+	for (int n = 0; n < nvars; ++n) {
+		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+			boundaryConditions[n].setLo(i, amrex::BCType::int_dir); // periodic
+			boundaryConditions[n].setHi(i, amrex::BCType::int_dir);
+		}
+	}
 
 	// Problem initialization
-	HydroSimulation<ContactProblem> sim;
+	HydroSimulation<ContactProblem> sim(gridDims, boxSize, boundaryConditions);
+
 	sim.stopTime_ = 2.0;
 	sim.cflNumber_ = 0.8;
 	sim.maxTimesteps_ = 2000;

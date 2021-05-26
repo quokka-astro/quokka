@@ -46,8 +46,12 @@ template <typename problem_t> class HydroSimulation : public SingleLevelSimulati
 	using SingleLevelSimulation<problem_t>::cycleCount_;
 	using SingleLevelSimulation<problem_t>::areInitialConditionsDefined_;
 
-	explicit HydroSimulation() = default;
-
+	HydroSimulation(amrex::IntVect &gridDims, amrex::RealBox &boxSize,
+			    amrex::Vector<amrex::BCRec> &boundaryConditions)
+	    : SingleLevelSimulation<problem_t>(gridDims, boxSize, boundaryConditions)
+	{
+	}
+	
 	void computeMaxSignalLocal() override;
 	void setInitialConditions() override;
 	void advanceSingleTimestep() override;
