@@ -7,7 +7,7 @@
 /// \brief Defines a test problem for a shock tube.
 ///
 
-#include "test_hydro2d_blast.hpp"
+#include "test_hydro2d_rm.hpp"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_Config.H"
@@ -39,7 +39,7 @@ auto main(int argc, char **argv) -> int
 	{ // objects must be destroyed before amrex::finalize, so enter new
 	  // scope here to do that automatically
 
-		result = testproblem_hydro_blast();
+		result = testproblem_hydro_rm();
 
 	} // destructors must be called before amrex::Finalize()
 	amrex::Finalize();
@@ -47,14 +47,14 @@ auto main(int argc, char **argv) -> int
 	return result;
 }
 
-struct BlastProblem {
+struct RichtmeyerMeshkovProblem {
 };
 
-template <> struct EOS_Traits<BlastProblem> {
-	static constexpr double gamma = 5. / 3.;
+template <> struct EOS_Traits<RichtmeyerMeshkovProblem> {
+	static constexpr double gamma = 1.4;
 };
 
-template <> void HydroSimulation<BlastProblem>::setInitialConditions()
+template <> void HydroSimulation<RichtmeyerMeshkovProblem>::setInitialConditions()
 {
 	amrex::GpuArray<Real, AMREX_SPACEDIM> dx = simGeometry_.CellSizeArray();
 	amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo = simGeometry_.ProbLoArray();
@@ -70,18 +70,19 @@ template <> void HydroSimulation<BlastProblem>::setInitialConditions()
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 			amrex::Real const x = prob_lo[0] + (i + Real(0.5)) * dx[0];
 			amrex::Real const y = prob_lo[1] + (j + Real(0.5)) * dx[1];
-			amrex::Real const R = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2));
 
 			double vx = 0.;
 			double vy = 0.;
 			double vz = 0.;
-			double rho = 1.0;
+			double rho = NAN;
 			double P = NAN;
 
-			if (R < 0.1) { // inside circle
-				P = 10.;
+			if ((x+y) > 0.15) {
+				P = 1.0;
+				rho = 1.0;
 			} else {
-				P = 0.1;
+				P = 0.14;
+				rho = 0.125;
 			}
 
 			AMREX_ASSERT(!std::isnan(vx));
@@ -91,13 +92,13 @@ template <> void HydroSimulation<BlastProblem>::setInitialConditions()
 			AMREX_ASSERT(!std::isnan(P));
 
 			const auto v_sq = vx * vx + vy * vy + vz * vz;
-			const auto gamma = HydroSystem<BlastProblem>::gamma_;
+			const auto gamma = HydroSystem<RichtmeyerMeshkovProblem>::gamma_;
 
-			state(i, j, k, HydroSystem<BlastProblem>::density_index) = rho;
-			state(i, j, k, HydroSystem<BlastProblem>::x1Momentum_index) = rho * vx;
-			state(i, j, k, HydroSystem<BlastProblem>::x2Momentum_index) = rho * vy;
-			state(i, j, k, HydroSystem<BlastProblem>::x3Momentum_index) = rho * vz;
-			state(i, j, k, HydroSystem<BlastProblem>::energy_index) =
+			state(i, j, k, HydroSystem<RichtmeyerMeshkovProblem>::density_index) = rho;
+			state(i, j, k, HydroSystem<RichtmeyerMeshkovProblem>::x1Momentum_index) = rho * vx;
+			state(i, j, k, HydroSystem<RichtmeyerMeshkovProblem>::x2Momentum_index) = rho * vy;
+			state(i, j, k, HydroSystem<RichtmeyerMeshkovProblem>::x3Momentum_index) = rho * vz;
+			state(i, j, k, HydroSystem<RichtmeyerMeshkovProblem>::energy_index) =
 			    P / (gamma - 1.) + 0.5 * rho * v_sq;
 		});
 	}
@@ -106,24 +107,24 @@ template <> void HydroSimulation<BlastProblem>::setInitialConditions()
 	areInitialConditionsDefined_ = true;
 }
 
-auto testproblem_hydro_blast() -> int
+auto testproblem_hydro_rm() -> int
 {
 	// Problem parameters
 	const int nvars = 5; // Euler equations
 	
-	amrex::IntVect gridDims{AMREX_D_DECL(400, 600, 4)};
+	amrex::IntVect gridDims{AMREX_D_DECL(400, 400, 4)};
 	amrex::RealBox boxSize{
 	    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.0), amrex::Real(0.0))},
-	    {AMREX_D_DECL(amrex::Real(1.0), amrex::Real(1.5), amrex::Real(1.0))}};
+	    {AMREX_D_DECL(amrex::Real(0.3), amrex::Real(0.3), amrex::Real(1.0))}};
 
 	auto isNormalComp = [=] (int n, int dim) {
-		if ((n == HydroSystem<BlastProblem>::x1Momentum_index) && (dim == 0)) {
+		if ((n == HydroSystem<RichtmeyerMeshkovProblem>::x1Momentum_index) && (dim == 0)) {
 			return true;
 		}
-		if ((n == HydroSystem<BlastProblem>::x2Momentum_index) && (dim == 1)) {
+		if ((n == HydroSystem<RichtmeyerMeshkovProblem>::x2Momentum_index) && (dim == 1)) {
 			return true;
 		}
-		if ((n == HydroSystem<BlastProblem>::x3Momentum_index) && (dim == 2)) {
+		if ((n == HydroSystem<RichtmeyerMeshkovProblem>::x3Momentum_index) && (dim == 2)) {
 			return true;
 		}
 		return false;
@@ -143,9 +144,9 @@ auto testproblem_hydro_blast() -> int
 	}
 
 	// Problem initialization
-	HydroSimulation<BlastProblem> sim(gridDims, boxSize, boundaryConditions);
+	HydroSimulation<RichtmeyerMeshkovProblem> sim(gridDims, boxSize, boundaryConditions);
 
-	sim.stopTime_ = 1.5;
+	sim.stopTime_ = 2.5;
 	sim.cflNumber_ = 0.4;
 	sim.maxTimesteps_ = 20000;
 	sim.plotfileInterval_ = 25;
