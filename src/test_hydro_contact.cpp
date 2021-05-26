@@ -205,15 +205,15 @@ auto testproblem_hydro_contact() -> int
 
 	// Plot results
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-		std::vector<double> x(sim.nx_);
-		std::vector<double> d_final(sim.nx_);
-		std::vector<double> vx_final(sim.nx_);
-		std::vector<double> P_final(sim.nx_);
-		std::vector<double> density_exact(sim.nx_);
-		std::vector<double> pressure_exact(sim.nx_);
-		std::vector<double> velocity_exact(sim.nx_);
+		std::vector<double> x(nx);
+		std::vector<double> d_final(nx);
+		std::vector<double> vx_final(nx);
+		std::vector<double> P_final(nx);
+		std::vector<double> density_exact(nx);
+		std::vector<double> pressure_exact(nx);
+		std::vector<double> velocity_exact(nx);
 
-		for (int i = 0; i < sim.nx_; ++i) {
+		for (int i = 0; i < nx; ++i) {
     		amrex::Real const this_x = prob_lo[0] + (i+Real(0.5)) * dx[0];
 
 			const auto rho = state_exact_array(i, 0, 0, HydroSystem<ContactProblem>::density_index);
@@ -230,7 +230,7 @@ auto testproblem_hydro_contact() -> int
 			velocity_exact.push_back(vx);
 		}
 
-		for (int i = 0; i < sim.nx_; ++i) {
+		for (int i = 0; i < nx; ++i) {
 			const auto rho = state_final_array(i, 0, 0, HydroSystem<ContactProblem>::density_index);
 			const auto xmom = state_final_array(i, 0, 0, HydroSystem<ContactProblem>::x1Momentum_index);
 			const auto E = state_final_array(i, 0, 0, HydroSystem<ContactProblem>::energy_index);

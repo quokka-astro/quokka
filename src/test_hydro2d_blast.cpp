@@ -119,6 +119,7 @@ auto testproblem_hydro_blast() -> int
 	for (int n = 0; n < nvars; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
 			boundaryConditions[n].setLo(i, amrex::BCType::int_dir); // periodic
+			boundaryConditions[n].setHi(i, amrex::BCType::int_dir); // periodic
 		}
 	}
 
