@@ -68,27 +68,27 @@ template <> struct RadSystem_Traits<SuOlsonProblemCgs> {
 };
 
 template <>
-auto RadSystem<SuOlsonProblemCgs>::ComputeOpacity(const double rho, const double Tgas) -> double
+auto RadSystem<SuOlsonProblemCgs>::ComputeOpacity(const double  /*rho*/, const double  /*Tgas*/) -> double
 {
 	return kappa;
 }
 
 template <>
-auto RadSystem<SuOlsonProblemCgs>::ComputeTgasFromEgas(const double rho, const double Egas)
+auto RadSystem<SuOlsonProblemCgs>::ComputeTgasFromEgas(const double  /*rho*/, const double Egas)
     -> double
 {
 	return std::pow(4.0 * Egas / alpha_SuOlson, 1. / 4.);
 }
 
 template <>
-auto RadSystem<SuOlsonProblemCgs>::ComputeEgasFromTgas(const double rho, const double Tgas)
+auto RadSystem<SuOlsonProblemCgs>::ComputeEgasFromTgas(const double  /*rho*/, const double Tgas)
     -> double
 {
 	return (alpha_SuOlson / 4.0) * std::pow(Tgas, 4);
 }
 
 template <>
-auto RadSystem<SuOlsonProblemCgs>::ComputeEgasTempDerivative(const double rho, const double Tgas)
+auto RadSystem<SuOlsonProblemCgs>::ComputeEgasTempDerivative(const double  /*rho*/, const double Tgas)
     -> double
 {
 	// This is also known as the heat capacity, i.e.
@@ -106,9 +106,9 @@ auto RadSystem<SuOlsonProblemCgs>::ComputeEgasTempDerivative(const double rho, c
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 RadiationSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(
-    const amrex::IntVect &iv, amrex::Array4<Real> const &consVar, int dcomp, int numcomp,
-    amrex::GeometryData const &geom, const Real time, const amrex::BCRec *bcr, int bcomp,
-    int orig_comp)
+    const amrex::IntVect &iv, amrex::Array4<Real> const &consVar, int  /*dcomp*/, int  /*numcomp*/,
+    amrex::GeometryData const & /*geom*/, const Real  /*time*/, const amrex::BCRec *bcr, int  /*bcomp*/,
+    int  /*orig_comp*/)
 {
 	if(!(bcr->lo(0) == amrex::BCType::ext_dir)) {
 		return;
@@ -181,9 +181,6 @@ RadiationSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(
 
 template <> void RadiationSimulation<SuOlsonProblemCgs>::setInitialConditions()
 {
-	amrex::GpuArray<Real, AMREX_SPACEDIM> dx = simGeometry_.CellSizeArray();
-	amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo = simGeometry_.ProbLoArray();
-
 	for (amrex::MFIter iter(state_old_); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
 		auto const &state = state_new_.array(iter);
@@ -236,8 +233,8 @@ auto testproblem_radiation_marshak_cgs() -> int
 
 	amrex::IntVect gridDims{AMREX_D_DECL(nx, 4, 4)};
 	amrex::RealBox boxSize{
-	    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.0), amrex::Real(0.0))},
-	    {AMREX_D_DECL(amrex::Real(Lx), amrex::Real(Lx * 0.01), amrex::Real(1.0))}};
+	    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.0), amrex::Real(0.0))}, // NOLINT
+	    {AMREX_D_DECL(amrex::Real(Lx), amrex::Real(Lx * 0.01), amrex::Real(1.0))}}; // NOLINT
 
 	constexpr int nvars = 9;
 	amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
