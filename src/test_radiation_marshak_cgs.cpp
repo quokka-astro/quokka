@@ -110,7 +110,7 @@ RadiationSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(
     int orig_comp)
 {
 	// This should only be called when amrex::BCType::ext_dir is set for a given boundary!
-	//if (bcr->lo(0) != amrex::BCType::ext_dir) {
+	// if (bcr->lo(0) != amrex::BCType::ext_dir) {
 	//	return;
 	//}
 
@@ -123,9 +123,7 @@ RadiationSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(
 	auto [i, j, k] = iv.toArray();
 #endif
 
-	if (i >= 0) {
-		return;
-	}
+	//amrex::Print() << "(" << i << ", " << j << ", " << k << ")\n";
 
 	// Marshak boundary condition
 	const double T_H = T_hohlraum;
@@ -148,12 +146,22 @@ RadiationSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(
 
 	AMREX_ASSERT(std::abs(F_bdry / (c * E_inc)) < 1.0);
 
-	// x1 left side boundary (Marshak)
-	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::radEnergy_index) = E_inc;
-	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x1RadFlux_index) = F_bdry;
-	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x2RadFlux_index) = 0.;
-	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x3RadFlux_index) = 0.;
-
+	if (i < 0) {
+		// x1 left side boundary (Marshak)
+		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::radEnergy_index) = E_inc;
+		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x1RadFlux_index) = F_bdry;
+		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x2RadFlux_index) = 0.;
+		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x3RadFlux_index) = 0.;
+	} else {
+		const double T_initial = 1.0e4; // K
+		const double Egas =
+		    RadSystem<SuOlsonProblemCgs>::ComputeEgasFromTgas(rho, T_initial);
+		const double Erad = a_rad * std::pow(T_initial, 4);
+		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::radEnergy_index) = Erad;
+		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x1RadFlux_index) = 0;
+		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x2RadFlux_index) = 0;
+		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x3RadFlux_index) = 0;
+	}
 	const double T_initial = 1.0e4; // K
 	const double Egas = RadSystem<SuOlsonProblemCgs>::ComputeEgasFromTgas(rho, T_initial);
 	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::gasEnergy_index) = Egas;
@@ -203,7 +211,7 @@ auto testproblem_radiation_marshak_cgs() -> int
 
 	// Problem parameters
 
-	const int max_timesteps = 20000;
+	const int max_timesteps = 10000;
 	const double CFL_number = 0.4;
 	const int nx = 400;
 	// const double initial_dtau = 1e-9; // dimensionless time
@@ -219,8 +227,9 @@ auto testproblem_radiation_marshak_cgs() -> int
 	// const double initial_dt = initial_dtau / (eps_SuOlson * c * chi); // s
 
 	amrex::IntVect gridDims{AMREX_D_DECL(nx, 4, 4)};
-	amrex::RealBox boxSize{{AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.0), amrex::Real(0.0))},
-			       {AMREX_D_DECL(amrex::Real(Lx), amrex::Real(1.0), amrex::Real(1.0))}};
+	amrex::RealBox boxSize{
+	    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.0), amrex::Real(0.0))},
+	    {AMREX_D_DECL(amrex::Real(Lx), amrex::Real(Lx*0.01), amrex::Real(1.0))}};
 
 	constexpr int nvars = 9;
 	amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
@@ -230,7 +239,7 @@ auto testproblem_radiation_marshak_cgs() -> int
 			boundaryConditions[n].setHi(i, amrex::BCType::int_dir);
 		}
 		boundaryConditions[n].setLo(0, amrex::BCType::ext_dir);	 // custom (Marshak) x1
-		boundaryConditions[n].setHi(0, amrex::BCType::foextrap); // extrapolate x1
+		boundaryConditions[n].setHi(0, amrex::BCType::ext_dir); // extrapolate x1
 	}
 
 	// Problem initialization
