@@ -21,7 +21,10 @@ template <typename T, int d> class valarray
 {
       public:
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE valarray() = default;
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE valarray(std::initializer_list<T> list)
+
+	// we *want* implicit construction from initializer lists for valarrays,
+	// (although not cppcore-compliant)
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE valarray(std::initializer_list<T> list) // NOLINT
 	{
 		AMREX_ASSERT(list.size() == d);
 		T const *input =
