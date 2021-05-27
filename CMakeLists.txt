@@ -1,4 +1,3 @@
-#cmake_minimum_required(VERSION 3.20)
 cmake_minimum_required(VERSION 3.16)
 project(QuokkaCode VERSION 1.0
   DESCRIPTION "Radiation hydrodynamics with structured AMR"
@@ -14,11 +13,9 @@ include(CTest)
 set(AMReX_SPACEDIM 1 CACHE STRING "" FORCE)
 set(AMReX_MPI ON CACHE BOOL "" FORCE)
 set(AMReX_LINEAR_SOLVERS OFF CACHE BOOL "" FORCE)
-
 #set(AMReX_GPU_BACKEND CUDA) # set this on CMake command line
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
-  #set(CMAKE_CUDA_COMPILER "/usr/local/cuda/bin/nvcc") # should be in PATH
   enable_language(CUDA)
   # Include the AMReX-provided CUDA setup module -- OBSOLETE with CMake >= 3.20
   if(CMAKE_VERSION VERSION_LESS 3.20)
