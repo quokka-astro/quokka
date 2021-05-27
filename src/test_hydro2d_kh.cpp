@@ -68,7 +68,7 @@ template <> void HydroSimulation<KelvinHelmholzProblem>::setInitialConditions()
 		auto const &state = state_new_.array(iter);
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-			amrex::Real const x = prob_lo[0] + (i + Real(0.5)) * dx[0];
+			//amrex::Real const x = prob_lo[0] + (i + Real(0.5)) * dx[0];
 			amrex::Real const y = prob_lo[1] + (j + Real(0.5)) * dx[1];
 
 			amrex::Real const rand_x = amrex::Random() - 0.5; // drawn from [0.0, 1.0)

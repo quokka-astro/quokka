@@ -60,9 +60,6 @@ template <> void HydroSimulation<RichtmeyerMeshkovProblem>::setInitialConditions
 	amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo = simGeometry_.ProbLoArray();
 	amrex::GpuArray<Real, AMREX_SPACEDIM> prob_hi = simGeometry_.ProbHiArray();
 
-	amrex::Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
-	amrex::Real const y0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
-
 	for (amrex::MFIter iter(state_old_); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
 		auto const &state = state_new_.array(iter);

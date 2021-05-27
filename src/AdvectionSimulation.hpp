@@ -42,8 +42,8 @@ template <typename problem_t> class AdvectionSimulation : public SingleLevelSimu
 	using SingleLevelSimulation<problem_t>::areInitialConditionsDefined_;
 
 	AdvectionSimulation(amrex::IntVect &gridDims, amrex::RealBox &boxSize,
-			    amrex::Vector<amrex::BCRec> &boundaryConditions)
-	    : SingleLevelSimulation<problem_t>(gridDims, boxSize, boundaryConditions)
+			    amrex::Vector<amrex::BCRec> &boundaryConditions, const int ncomp = 1)
+	    : SingleLevelSimulation<problem_t>(gridDims, boxSize, boundaryConditions, ncomp)
 	{
 	}
 

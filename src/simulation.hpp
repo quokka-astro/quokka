@@ -41,6 +41,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void
 CheckNaN(amrex::FArrayBox const &arr, amrex::Box const &indexRange, const int ncomp)
 {
 	// need to rewrite for GPU
+	AMREX_ASSERT(!arr.contains_nan(indexRange, 0, ncomp));
 }
 
 // Simulation class should be initialized only once per program (i.e., is a singleton)
@@ -51,7 +52,7 @@ template <typename problem_t> class SingleLevelSimulation
 	int ny_{40};
 	int nz_{1};
 	int max_grid_size_{32};
-	int maxTimesteps_{10000};
+	int maxTimesteps_;
 
 	amrex::BoxArray simBoxArray_;
 	amrex::Geometry simGeometry_;
@@ -81,7 +82,9 @@ template <typename problem_t> class SingleLevelSimulation
 	// Nghost = number of ghost cells for each array
 	int nghost_ = 4; // PPM needs nghost >= 3, PPM+flattening needs nghost >= 4
 	// Ncomp = number of components for each array
-	int ncomp_ = 5; // for 3d Euler equations
+	int ncomp_ = NAN; // == 5 for 3d Euler equations
+	int ncompPrimitive_ = NAN; // for radiation, fewer primitive variables than conserved variables
+	amrex::Vector<std::string> componentNames_;
 
 	int plotfileInterval_ = 100; // write plotfile every 100 cycles
 	bool outputAtInterval_ = false;
@@ -98,8 +101,21 @@ template <typename problem_t> class SingleLevelSimulation
 	bool areInitialConditionsDefined_ = false;
 
 	SingleLevelSimulation(amrex::IntVect &gridDims, amrex::RealBox &boxSize,
-			      amrex::Vector<amrex::BCRec> &boundaryConditions)
+			      amrex::Vector<amrex::BCRec> &boundaryConditions, const int ncomp)
+	    : ncomp_(ncomp), ncompPrimitive_(ncomp)
 	{
+		initialize(gridDims, boxSize, boundaryConditions);
+	}
+
+	SingleLevelSimulation(amrex::IntVect &gridDims, amrex::RealBox &boxSize,
+			      amrex::Vector<amrex::BCRec> &boundaryConditions, const int ncomp, const int ncompPrimitive)
+	    : ncomp_(ncomp), ncompPrimitive_(ncompPrimitive)
+	{
+		initialize(gridDims, boxSize, boundaryConditions);
+	}
+	
+	void initialize(amrex::IntVect &gridDims, amrex::RealBox &boxSize,
+			      amrex::Vector<amrex::BCRec> &boundaryConditions) {
 		// readParameters();
 
 		// set grid dimension variables
@@ -214,10 +230,8 @@ template <typename problem_t> void SingleLevelSimulation<problem_t>::evolve()
 		if (outputAtInterval_ && ((cycleCount_ % plotfileInterval_) == 0)) {
 			// output plotfile
 			const std::string &pltfile = amrex::Concatenate("plt", cycleCount_, 5);
-			amrex::WriteSingleLevelPlotfile(
-			    pltfile, state_new_,
-			    {"density", "x-momentum", "y-momentum", "z-momentum", "energy"},
-			    simGeometry_, tNow_, cycleCount_);
+			amrex::WriteSingleLevelPlotfile(pltfile, state_new_, componentNames_,
+							simGeometry_, tNow_, cycleCount_);
 		}
 
 		// print timestep information on I/O processor
@@ -241,9 +255,8 @@ template <typename problem_t> void SingleLevelSimulation<problem_t>::evolve()
 
 	// output plotfile
 	const std::string &pltfile = amrex::Concatenate("plt", cycleCount_, 5);
-	amrex::WriteSingleLevelPlotfile(
-	    pltfile, state_new_, {"density", "x-momentum", "y-momentum", "z-momentum", "energy"},
-	    simGeometry_, tNow_, cycleCount_);
+	amrex::WriteSingleLevelPlotfile(pltfile, state_new_, componentNames_, simGeometry_, tNow_,
+					cycleCount_);
 }
 
 #endif // SIMULATION_HPP_

@@ -49,8 +49,8 @@ template <typename problem_t> class HydroSimulation : public SingleLevelSimulati
 	using SingleLevelSimulation<problem_t>::boundaryConditions_;
 
 	HydroSimulation(amrex::IntVect &gridDims, amrex::RealBox &boxSize,
-			amrex::Vector<amrex::BCRec> &boundaryConditions)
-	    : SingleLevelSimulation<problem_t>(gridDims, boxSize, boundaryConditions)
+			amrex::Vector<amrex::BCRec> &boundaryConditions, const int ncomp = 5)
+	    : SingleLevelSimulation<problem_t>(gridDims, boxSize, boundaryConditions, ncomp)
 	{
 	}
 

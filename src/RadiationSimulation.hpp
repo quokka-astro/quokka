@@ -44,6 +44,7 @@ template <typename problem_t> class RadiationSimulation : public SingleLevelSimu
 	using SingleLevelSimulation<problem_t>::dx_;
 	using SingleLevelSimulation<problem_t>::dt_;
 	using SingleLevelSimulation<problem_t>::ncomp_;
+	using SingleLevelSimulation<problem_t>::ncompPrimitive_;
 	using SingleLevelSimulation<problem_t>::nghost_;
 	using SingleLevelSimulation<problem_t>::tNow_;
 	using SingleLevelSimulation<problem_t>::cycleCount_;
@@ -52,7 +53,14 @@ template <typename problem_t> class RadiationSimulation : public SingleLevelSimu
 
 	// member functions
 
-	explicit RadiationSimulation() = default;
+	RadiationSimulation(amrex::IntVect &gridDims, amrex::RealBox &boxSize,
+			    amrex::Vector<amrex::BCRec> &boundaryConditions,
+			    const int ncomp = RadSystem<problem_t>::consVarEnumEnd,
+			    const int ncompPrim = RadSystem<problem_t>::primVarEnumEnd)
+	    : SingleLevelSimulation<problem_t>(gridDims, boxSize, boundaryConditions, ncomp,
+					       ncompPrim)
+	{
+	}
 
 	void computeMaxSignalLocal() override;
 	void setInitialConditions() override;
@@ -63,17 +71,32 @@ template <typename problem_t> class RadiationSimulation : public SingleLevelSimu
 	void stageTwoRK2SSP(amrex::Array4<const amrex::Real> const &consVar,
 			    amrex::Array4<amrex::Real> const &consVarNew,
 			    const amrex::Box &indexRange, int nvars);
+	void operatorSplitSourceTerms(amrex::Array4<const amrex::Real> const &consVarOld,
+				      amrex::Array4<amrex::Real> const &consVarNew,
+				      const amrex::Box &indexRange, const int nvars);
 
 	void fillBoundaryConditions(amrex::MultiFab &state);
-	AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void
 	setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<Real> const &dest,
 				    int dcomp, int numcomp, amrex::GeometryData const &geom,
-				    Real time, const amrex::BCRec *bcr, int bcomp,
-				    int orig_comp) const;
+				    Real time, const amrex::BCRec *bcr, int bcomp, int orig_comp);
 
 	template <FluxDir DIR>
 	void fluxFunction(amrex::Array4<const amrex::Real> const &consState,
 			  amrex::FArrayBox &x1Flux, const amrex::Box &indexRange, int nvars);
+};
+
+template <typename problem_t> struct setBoundaryFunctor {
+	AMREX_GPU_DEVICE void operator()(const amrex::IntVect &iv, amrex::Array4<Real> const &dest,
+					 const int &dcomp, const int &numcomp,
+					 amrex::GeometryData const &geom, const Real &time,
+					 const amrex::BCRec *bcr, int bcomp,
+					 const int &orig_comp) const
+	{
+		RadiationSimulation<problem_t>::setCustomBoundaryConditions(
+		    iv, dest, dcomp, numcomp, geom, time, bcr, bcomp, orig_comp);
+	}
 };
 
 template <typename problem_t> void RadiationSimulation<problem_t>::computeMaxSignalLocal()
@@ -95,9 +118,9 @@ template <typename problem_t> void RadiationSimulation<problem_t>::setInitialCon
 template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 RadiationSimulation<problem_t>::setCustomBoundaryConditions(
-    const amrex::IntVect &iv, amrex::Array4<Real> const &dest, const int dcomp, const int numcomp,
-    amrex::GeometryData const &geom, const Real time, const amrex::BCRec *bcr, const int bcomp,
-    const int orig_comp) const
+    const amrex::IntVect &iv, amrex::Array4<Real> const &dest, int dcomp, int numcomp,
+    amrex::GeometryData const &geom, const Real time, const amrex::BCRec *bcr, int bcomp,
+    int orig_comp)
 {
 	// user should implement if needed using template specialization
 	// (This is only called when amrex::BCType::ext_dir is set for a given boundary.)
@@ -105,28 +128,19 @@ RadiationSimulation<problem_t>::setCustomBoundaryConditions(
 	// set boundary condition for cell 'iv'
 }
 
-template <typename problem_t> struct setBoundaryFunctor {
-	AMREX_GPU_DEVICE void operator()(const amrex::IntVect &iv, amrex::Array4<Real> const &dest,
-					 const int dcomp, const int numcomp,
-					 amrex::GeometryData const &geom, const Real time,
-					 const amrex::BCRec *bcr, const int bcomp,
-					 const int orig_comp)
-	{
-		RadiationSimulation<problem_t>::setCustomBoundaryConditions(
-		    iv, dest, dcomp, numcomp, geom, time, bcr, bcomp, orig_comp);
-	}
-};
-
 template <typename problem_t>
 void RadiationSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &state)
 {
 	state.FillBoundary(simGeometry_.periodicity());
 	if (!simGeometry_.isAllPeriodic()) {
-		auto boundaryFunctor(setBoundaryFunctor<problem_t>)
-		    ->amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>;
+		AMREX_ALWAYS_ASSERT(state.ixType().cellCentered());
+
+		amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>> boundaryFunctor(
+		    setBoundaryFunctor<problem_t>{});
 		amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>>
 		    physicalBoundaryFunctor(simGeometry_, boundaryConditions_, boundaryFunctor);
-		physicalBoundaryFunctor(state, 0, ncomp_, nghost_, tNow_, 0);
+
+		physicalBoundaryFunctor(state, 0, state.nComp(), state.nGrowVect(), tNow_, 0);
 	}
 }
 
@@ -144,7 +158,7 @@ template <typename problem_t> void RadiationSimulation<problem_t>::advanceSingle
 		const amrex::Box &indexRange = iter.validbox(); // 'validbox' == exclude ghost zones
 		auto const &stateOld = state_old_.const_array(iter);
 		auto const &stateNew = state_new_.array(iter);
-		stageOneRK2SSP(stateOld, stateNew, indexRange, ncomp_);
+		stageOneRK2SSP(stateOld, stateNew, indexRange, ncompPrimitive_);
 	}
 
 	// update ghost zones [intermediate stage stored in state_new_]
@@ -156,8 +170,31 @@ template <typename problem_t> void RadiationSimulation<problem_t>::advanceSingle
 		const amrex::Box &indexRange = iter.validbox(); // 'validbox' == exclude ghost zones
 		auto const &stateOld = state_old_.const_array(iter);
 		auto const &stateNew = state_new_.array(iter);
-		stageTwoRK2SSP(stateOld, stateNew, indexRange, ncomp_);
+		stageTwoRK2SSP(stateOld, stateNew, indexRange, ncompPrimitive_);
 	}
+
+	// source terms
+	for (amrex::MFIter iter(state_new_); iter.isValid(); ++iter) {
+		const amrex::Box &indexRange = iter.validbox(); // 'validbox' == exclude ghost zones
+		auto const &stateOld = state_old_.const_array(iter);
+		auto const &stateNew = state_new_.array(iter);
+		operatorSplitSourceTerms(stateOld, stateNew, indexRange, ncomp_);
+	}
+}
+
+template <typename problem_t>
+void RadiationSimulation<problem_t>::operatorSplitSourceTerms(
+    amrex::Array4<const amrex::Real> const &consVarOld,
+    amrex::Array4<amrex::Real> const &consVarNew, const amrex::Box &indexRange, const int nvars)
+{
+	amrex::FArrayBox radEnergySource(indexRange, 1, amrex::The_Async_Arena()); // cell-centered
+	amrex::FArrayBox advectionFluxes(indexRange, 1, amrex::The_Async_Arena()); // cell-centered
+	radEnergySource.setVal(0.);
+	advectionFluxes.setVal(0.);
+
+	// cell-centered source terms
+	RadSystem<problem_t>::AddSourceTerms(consVarOld, consVarNew, radEnergySource.const_array(),
+					     advectionFluxes.const_array(), indexRange, dt_);
 }
 
 template <typename problem_t>
@@ -178,32 +215,32 @@ void RadiationSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Rea
 	// N.B.: A one-zone layer around the cells must be fully reconstructed in order for PPM to
 	// work.
 	amrex::Box const &reconstructRange = amrex::grow(indexRange, 1);
-	amrex::Box const &flatteningRange = amrex::grow(indexRange, 2); // +1 greater than ppmRange
 	amrex::Box const &x1ReconstructRange = amrex::surroundingNodes(reconstructRange, dir);
 
 	// Allocate temporary arrays using CUDA stream async allocator (or equivalent)
-	amrex::FArrayBox primVar(ghostRange, nvars, amrex::The_Async_Arena()); // cell-centered
-	amrex::FArrayBox x1Flat(ghostRange, nvars, amrex::The_Async_Arena());
-	amrex::FArrayBox x1LeftState(x1ReconstructRange, nvars, amrex::The_Async_Arena());
-	amrex::FArrayBox x1RightState(x1ReconstructRange, nvars, amrex::The_Async_Arena());
+	amrex::FArrayBox primVar(ghostRange, ncompPrimitive_,
+				 amrex::The_Async_Arena()); // cell-centered
+	amrex::FArrayBox x1LeftState(x1ReconstructRange, ncompPrimitive_, amrex::The_Async_Arena());
+	amrex::FArrayBox x1RightState(x1ReconstructRange, ncompPrimitive_,
+				      amrex::The_Async_Arena());
 
 	// cell-centered kernel
 	RadSystem<problem_t>::ConservedToPrimitive(consState, primVar.array(), ghostRange);
-	CheckNaN(primVar, ghostRange, nvars);
+	CheckNaN(primVar, ghostRange, ncompPrimitive_);
 
 	// mixed interface/cell-centered kernel
 	RadSystem<problem_t>::template ReconstructStatesPPM<DIR>(
 	    primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange,
-	    x1ReconstructRange, nvars);
-	CheckNaN(x1LeftState, x1ReconstructRange, nvars);
-	CheckNaN(x1RightState, x1ReconstructRange, nvars);
+	    x1ReconstructRange, ncompPrimitive_);
+	CheckNaN(x1LeftState, x1ReconstructRange, ncompPrimitive_);
+	CheckNaN(x1RightState, x1ReconstructRange, ncompPrimitive_);
 
 	// interface-centered kernel
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, dir);
 	RadSystem<problem_t>::template ComputeFluxes<DIR>(
-	    x1Flux.array(), x1LeftState.array(), x1RightState.array(),
-	    x1FluxRange); // watch out for argument order!!
-	CheckNaN(x1Flux, x1FluxRange, nvars);
+	    x1Flux.array(), x1LeftState.array(), x1RightState.array(), x1FluxRange, consState,
+	    dx_); // watch out for argument order!!
+	CheckNaN(x1Flux, x1FluxRange, ncompPrimitive_);
 }
 
 template <typename problem_t>

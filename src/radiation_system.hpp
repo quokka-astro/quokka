@@ -15,6 +15,7 @@
 // library headers
 
 // internal headers
+#include "ArrayView.hpp"
 #include "hyperbolic_system.hpp"
 #include "simulation.hpp"
 #include "valarray.hpp"
@@ -55,14 +56,16 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 		gasDensity_index = 5,
 		x1GasMomentum_index = 6,
 		x2GasMomentum_index = 7,
-		x3GasMomentum_index = 8
+		x3GasMomentum_index = 8,
+		consVarEnumEnd = 9
 	};
 
 	enum primVarIndex {
 		primRadEnergy_index = 0,
 		x1ReducedFlux_index = 1,
 		x2ReducedFlux_index = 2,
-		x3ReducedFlux_index = 3
+		x3ReducedFlux_index = 3,
+		primVarEnumEnd = 4
 	};
 
 	// C++ standard does not allow constexpr to be uninitialized, even in a templated class!
@@ -89,19 +92,20 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static void ConservedToPrimitive(amrex::Array4<const amrex::Real> const &cons,
 					 array_t &primVar, amrex::Box const &indexRange);
 
+	template <FluxDir DIR>
 	static void ComputeFluxes(array_t &x1Flux,
-					 amrex::Array4<const amrex::Real> const &x1LeftState,
-					 amrex::Array4<const amrex::Real> const &x1RightState,
-					 amrex::Box const &indexRange, arrayconst_t &consVar,
-					 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx);
+				  amrex::Array4<const amrex::Real> const &x1LeftState,
+				  amrex::Array4<const amrex::Real> const &x1RightState,
+				  amrex::Box const &indexRange, arrayconst_t &consVar,
+				  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx);
 
-	static void ComputeFirstOrderFluxes(amrex::Array4<const amrex::Real> const &consVar,
-						   array_t &x1FluxDiffusive,
-						   amrex::Box const &indexRange);
+	// static void ComputeFirstOrderFluxes(amrex::Array4<const amrex::Real> const &consVar,
+	//					   array_t &x1FluxDiffusive,
+	//					   amrex::Box const &indexRange);
 
 	static void AddSourceTerms(arrayconst_t &consPrev, array_t &consNew,
-				   arrayconst_t &radEnergySource, amrex::Box const &indexRange,
-				   amrex::Real dt);
+				   arrayconst_t &radEnergySource, arrayconst_t &advectionFluxes,
+				   amrex::Box const &indexRange, amrex::Real dt);
 	static void ComputeSourceTermsExplicit(arrayconst_t &consPrev,
 					       arrayconst_t &radEnergySource, array_t &src,
 					       amrex::Box const &indexRange, amrex::Real dt);
@@ -137,7 +141,11 @@ void RadSystem<problem_t>::ConservedToPrimitive(amrex::Array4<const amrex::Real>
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const auto E_r = cons(i, j, k, radEnergy_index);
 		const auto Fx = cons(i, j, k, x1RadFlux_index);
+		const auto Fy = cons(i, j, k, x2RadFlux_index);
+		const auto Fz = cons(i, j, k, x3RadFlux_index);
 		const auto reducedFluxX1 = Fx / (c_light_ * E_r);
+		const auto reducedFluxX2 = Fy / (c_light_ * E_r);
+		const auto reducedFluxX3 = Fz / (c_light_ * E_r);
 
 		// check admissibility of states
 		AMREX_ASSERT(E_r > 0.0); // NOLINT
@@ -145,6 +153,8 @@ void RadSystem<problem_t>::ConservedToPrimitive(amrex::Array4<const amrex::Real>
 
 		primVar(i, j, k, primRadEnergy_index) = E_r;
 		primVar(i, j, k, x1ReducedFlux_index) = reducedFluxX1;
+		primVar(i, j, k, x2ReducedFlux_index) = reducedFluxX2;
+		primVar(i, j, k, x3ReducedFlux_index) = reducedFluxX3;
 	});
 }
 
@@ -192,14 +202,14 @@ auto RadSystem<problem_t>::ComputeCellOpticalDepth(arrayconst_t &consVar,
 	// interface at the *left* edge of zone i.]
 
 	const double rho_L =
-	    consVar(gasDensity_index, i - 1, j, k); // piecewise-constant reconstruction
-	const double rho_R = consVar(gasDensity_index, i, j, k);
+	    consVar(i - 1, j, k, gasDensity_index); // piecewise-constant reconstruction
+	const double rho_R = consVar(i, j, k, gasDensity_index);
 
-	const double x1GasMom_L = consVar(x1GasMomentum_index, i - 1, j, k);
-	const double x1GasMom_R = consVar(x1GasMomentum_index, i, j, k);
+	const double x1GasMom_L = consVar(i - 1, j, k, x1GasMomentum_index);
+	const double x1GasMom_R = consVar(i, j, k, x1GasMomentum_index);
 
-	const double Egas_L = consVar(gasEnergy_index, i - 1, j, k);
-	const double Egas_R = consVar(gasEnergy_index, i, j, k);
+	const double Egas_L = consVar(i - 1, j, k, gasEnergy_index);
+	const double Egas_R = consVar(i, j, k, gasEnergy_index);
 
 	const double Eint_L = RadSystem<problem_t>::ComputeEintFromEgas(rho_L, x1GasMom_L, 0., 0.,
 									Egas_L); // modify in 3d
@@ -218,6 +228,7 @@ auto RadSystem<problem_t>::ComputeCellOpticalDepth(arrayconst_t &consVar,
 	//	return 0.5*(tau_L + tau_R); // arithmetic mean
 }
 
+#if 0
 template <typename problem_t>
 void RadSystem<problem_t>::ComputeFirstOrderFluxes(amrex::Array4<const amrex::Real> const &consVar,
 						   array_t &x1FluxDiffusive,
@@ -292,8 +303,10 @@ void RadSystem<problem_t>::ComputeFirstOrderFluxes(amrex::Array4<const amrex::Re
 		x1FluxDiffusive(x1RadFlux_index, i) = LLF[1];
 	});
 }
+#endif
 
 template <typename problem_t>
+template <FluxDir DIR>
 void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux,
 					 amrex::Array4<const amrex::Real> const &x1LeftState,
 					 amrex::Array4<const amrex::Real> const &x1RightState,
@@ -410,6 +423,8 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux,
 
 		x1Flux(i, j, k, radEnergy_index) = F[0];
 		x1Flux(i, j, k, x1RadFlux_index) = F[1];
+		x1Flux(i, j, k, x2RadFlux_index) = 0.;
+		x1Flux(i, j, k, x3RadFlux_index) = 0.;
 	});
 }
 
@@ -471,44 +486,9 @@ auto RadSystem<problem_t>::ComputeEgasFromEint(const double density, const doubl
 }
 
 template <typename problem_t>
-void RadSystem<problem_t>::ComputeSourceTermsExplicit(arrayconst_t &consPrev,
-						      arrayconst_t &radEnergySource, array_t &src,
-						      amrex::Box const &indexRange, amrex::Real dt)
-{
-	const double chat = c_hat_;
-	const double a_rad = radiation_constant_;
-
-	// cell-centered kernel
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		// load gas energy
-		const auto rho = consPrev(i, j, k, gasDensity_index);
-		const auto Egastot0 = consPrev(i, j, k, gasEnergy_index);
-		const auto x1GasMom0 = consPrev(i, j, k, x1GasMomentum_index);
-		const auto Egas0 =
-		    ComputeEintFromEgas(rho, x1GasMom0, 0, 0, Egastot0); // modify in 3d
-
-		// load radiation energy, momentum
-		const auto Erad0 = consPrev(i, j, k, radEnergy_index);
-		const auto Frad0_x = consPrev(i, j, k, x1RadFlux_index);
-		// compute material temperature
-		const auto T_gas = RadSystem<problem_t>::ComputeTgasFromEgas(rho, Egas0);
-		// compute opacity, emissivity
-		const auto kappa = RadSystem<problem_t>::ComputeOpacity(rho, T_gas);
-		const auto fourPiB = chat * a_rad * std::pow(T_gas, 4);
-		// constant radiation energy source term
-		const auto Src = dt * (chat * radEnergySource(i, j, k));
-		// compute reaction term
-		const auto rhs = dt * (rho * kappa) * (fourPiB - chat * Erad0);
-		const auto Fx_rhs = -dt * chat * (rho * kappa) * Frad0_x;
-
-		src(radEnergy_index, i) = rhs;
-		src(x1RadFlux_index, i) = Fx_rhs;
-	});
-}
-
-template <typename problem_t>
 void RadSystem<problem_t>::AddSourceTerms(arrayconst_t &consPrev, array_t &consNew,
 					  arrayconst_t &radEnergySource,
+					  arrayconst_t &advectionFluxes,
 					  amrex::Box const &indexRange, amrex::Real dt)
 {
 	// Lorentz transform the radiation variables into the comoving frame
@@ -534,7 +514,7 @@ void RadSystem<problem_t>::AddSourceTerms(arrayconst_t &consPrev, array_t &consN
 		    ComputeEintFromEgas(rho, x1GasMom0, 0, 0, Egastot0); // modify in 3d
 
 		// load radiation energy
-		const double Erad0 = consPrev(radEnergy_index, i);
+		const double Erad0 = consPrev(i, j, k, radEnergy_index);
 
 		AMREX_ASSERT(Egas0 > 0.0); // NOLINT
 		AMREX_ASSERT(Erad0 > 0.0); // NOLINT
@@ -548,8 +528,8 @@ void RadSystem<problem_t>::AddSourceTerms(arrayconst_t &consPrev, array_t &consN
 		double T_gas = NAN;
 		double kappa = NAN;
 		double fourPiB = NAN;
-		double dB_dTgas = NAN;
-		double dkappa_dTgas = NAN;
+		// double dB_dTgas = NAN;
+		// double dkappa_dTgas = NAN;
 		double drhs_dEgas = NAN;
 		double dFG_dEgas = NAN;
 		double dFG_dErad = NAN;
@@ -562,7 +542,7 @@ void RadSystem<problem_t>::AddSourceTerms(arrayconst_t &consPrev, array_t &consN
 
 		double Egas_guess = Egas0;
 		double Erad_guess = Erad0;
-		const double T_floor = 1e-10;
+		// const double T_floor = 1e-10;
 		const double resid_tol = 1e-10;
 		const int maxIter = 200;
 		int n = 0;
@@ -577,8 +557,7 @@ void RadSystem<problem_t>::AddSourceTerms(arrayconst_t &consPrev, array_t &consN
 
 			// constant radiation energy source term
 			// plus advection source term (for well-balanced/SDC integrators)
-			Src = dt * ((chat * radEnergySource(i, j, k)) +
-				    advectionFluxes_(i, j, k, radEnergy_index));
+			Src = dt * ((chat * radEnergySource(i, j, k)) + advectionFluxes(i, j, k));
 
 			// compute derivatives w/r/t T_gas
 			const double dB_dTgas = (4.0 * fourPiB) / T_gas;
@@ -636,7 +615,7 @@ void RadSystem<problem_t>::AddSourceTerms(arrayconst_t &consPrev, array_t &consN
 
 		const double Frad_x_t0 = consPrev(i, j, k, x1RadFlux_index);
 		const double Frad_x_t1 =
-		    (Frad_x_t0 + (dt * advectionFluxes_(i, j, k, x1RadFlux_index))) /
+		    (Frad_x_t0 + (dt * advectionFluxes(i, j, k))) /
 		    (1.0 + (rho * kappa) * chat * dt);
 
 		consNew(i, j, k, x1RadFlux_index) = Frad_x_t1;
@@ -656,6 +635,42 @@ void RadSystem<problem_t>::AddSourceTerms(arrayconst_t &consPrev, array_t &consN
 
 		// Lorentz transform back to 'laboratory' frame
 		// TransformIntoComovingFrame(-fluid_velocity);
+	});
+}
+
+template <typename problem_t>
+void RadSystem<problem_t>::ComputeSourceTermsExplicit(arrayconst_t &consPrev,
+						      arrayconst_t &radEnergySource, array_t &src,
+						      amrex::Box const &indexRange, amrex::Real dt)
+{
+	const double chat = c_hat_;
+	const double a_rad = radiation_constant_;
+
+	// cell-centered kernel
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		// load gas energy
+		const auto rho = consPrev(i, j, k, gasDensity_index);
+		const auto Egastot0 = consPrev(i, j, k, gasEnergy_index);
+		const auto x1GasMom0 = consPrev(i, j, k, x1GasMomentum_index);
+		const auto Egas0 =
+		    ComputeEintFromEgas(rho, x1GasMom0, 0, 0, Egastot0); // modify in 3d
+
+		// load radiation energy, momentum
+		const auto Erad0 = consPrev(i, j, k, radEnergy_index);
+		const auto Frad0_x = consPrev(i, j, k, x1RadFlux_index);
+		// compute material temperature
+		const auto T_gas = RadSystem<problem_t>::ComputeTgasFromEgas(rho, Egas0);
+		// compute opacity, emissivity
+		const auto kappa = RadSystem<problem_t>::ComputeOpacity(rho, T_gas);
+		const auto fourPiB = chat * a_rad * std::pow(T_gas, 4);
+		// constant radiation energy source term
+		const auto Src = dt * (chat * radEnergySource(i, j, k));
+		// compute reaction term
+		const auto rhs = dt * (rho * kappa) * (fourPiB - chat * Erad0);
+		const auto Fx_rhs = -dt * chat * (rho * kappa) * Frad0_x;
+
+		src(radEnergy_index, i) = rhs;
+		src(x1RadFlux_index, i) = Fx_rhs;
 	});
 }
 
