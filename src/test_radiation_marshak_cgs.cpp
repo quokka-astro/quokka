@@ -10,6 +10,7 @@
 #include "test_radiation_marshak_cgs.hpp"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_Config.H"
+#include "AMReX_IntVect.H"
 #include <mpi.h>
 
 auto main(int argc, char **argv) -> int
@@ -109,12 +110,16 @@ RadiationSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(
     amrex::GeometryData const &geom, const Real time, const amrex::BCRec *bcr, int bcomp,
     int orig_comp)
 {
-	// This should only be called when amrex::BCType::ext_dir is set for a given boundary!
-	// if (bcr->lo(0) != amrex::BCType::ext_dir) {
-	//	return;
-	//}
+	if(!(bcr->lo(0) == amrex::BCType::ext_dir)) {
+		return;
+	}
 
 	// set boundary condition for cell 'iv'
+#if (AMREX_SPACEDIM == 1)
+	auto i = iv.toArray()[0];
+	int j = 0;
+	int k = 0;
+#endif
 #if (AMREX_SPACEDIM == 2)
 	auto [i, j] = iv.toArray();
 	int k = 0;
@@ -125,45 +130,48 @@ RadiationSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(
 
 	//amrex::Print() << "(" << i << ", " << j << ", " << k << ")\n";
 
-	// Marshak boundary condition
-	const double T_H = T_hohlraum;
-	const double E_inc = radiation_constant_cgs_ * std::pow(T_H, 4);
-	const double c = c_light_cgs_;
-	// const double F_inc = c * E_inc / 4.0;
-
-	const double E_0 = consVar(0, j, k, RadSystem<SuOlsonProblemCgs>::radEnergy_index);
-	const double F_0 = consVar(0, j, k, RadSystem<SuOlsonProblemCgs>::x1RadFlux_index);
-
-	// const double E_1 = consVar(1, j, k, RadSystem<SuOlsonProblemCgs>::radEnergy_index);
-	// const double F_1 = consVar(1, j, k, RadSystem<SuOlsonProblemCgs>::x1RadFlux_index);
-
-	// use PPM stencil at interface to solve for F_rad in the ghost zones
-	// const double F_bdry = 0.5 * c * E_inc - (7. / 12.) * (c * E_0 + 2.0 * F_0) +
-	//		      (1. / 12.) * (c * E_1 + 2.0 * F_1);
-
-	// use value at interface to solve for F_rad in the ghost zones
-	const double F_bdry = 0.5 * c * E_inc - 0.5 * (c * E_0 + 2.0 * F_0);
-
-	AMREX_ASSERT(std::abs(F_bdry / (c * E_inc)) < 1.0);
+	const double T_gas = 1.0e4; // K
 
 	if (i < 0) {
+		// Marshak boundary condition
+		const double T_H = T_hohlraum;
+		const double E_inc = radiation_constant_cgs_ * std::pow(T_H, 4);
+		const double c = c_light_cgs_;
+		// const double F_inc = c * E_inc / 4.0;
+
+		const double E_0 = consVar(0, j, k, RadSystem<SuOlsonProblemCgs>::radEnergy_index);
+		const double F_0 = consVar(0, j, k, RadSystem<SuOlsonProblemCgs>::x1RadFlux_index);
+
+		// const double E_1 = consVar(1, j, k,
+		// RadSystem<SuOlsonProblemCgs>::radEnergy_index); const double F_1 = consVar(1, j,
+		// k, RadSystem<SuOlsonProblemCgs>::x1RadFlux_index);
+
+		// use PPM stencil at interface to solve for F_rad in the ghost zones
+		// const double F_bdry = 0.5 * c * E_inc - (7. / 12.) * (c * E_0 + 2.0 * F_0) +
+		//		      (1. / 12.) * (c * E_1 + 2.0 * F_1);
+
+		// use value at interface to solve for F_rad in the ghost zones
+		const double F_bdry = 0.5 * c * E_inc - 0.5 * (c * E_0 + 2.0 * F_0);
+
+		AMREX_ASSERT(std::abs(F_bdry / (c * E_inc)) < 1.0);
+
 		// x1 left side boundary (Marshak)
 		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::radEnergy_index) = E_inc;
 		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x1RadFlux_index) = F_bdry;
 		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x2RadFlux_index) = 0.;
 		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x3RadFlux_index) = 0.;
 	} else {
-		const double T_initial = 1.0e4; // K
-		const double Egas =
-		    RadSystem<SuOlsonProblemCgs>::ComputeEgasFromTgas(rho, T_initial);
-		const double Erad = a_rad * std::pow(T_initial, 4);
+		// right-side boundary -- constant
+		const double Erad = a_rad * std::pow(T_gas, 4);
+
 		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::radEnergy_index) = Erad;
 		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x1RadFlux_index) = 0;
 		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x2RadFlux_index) = 0;
 		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x3RadFlux_index) = 0;
 	}
-	const double T_initial = 1.0e4; // K
-	const double Egas = RadSystem<SuOlsonProblemCgs>::ComputeEgasFromTgas(rho, T_initial);
+
+	// gas boundary conditions are the same on both sides (not used)
+	const double Egas = RadSystem<SuOlsonProblemCgs>::ComputeEgasFromTgas(rho, T_gas);
 	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::gasEnergy_index) = Egas;
 	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::gasDensity_index) = rho;
 	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x1GasMomentum_index) = 0.;
@@ -211,7 +219,7 @@ auto testproblem_radiation_marshak_cgs() -> int
 
 	// Problem parameters
 
-	const int max_timesteps = 10000;
+	const int max_timesteps = 1000;
 	const double CFL_number = 0.4;
 	const int nx = 400;
 	// const double initial_dtau = 1e-9; // dimensionless time
@@ -229,17 +237,17 @@ auto testproblem_radiation_marshak_cgs() -> int
 	amrex::IntVect gridDims{AMREX_D_DECL(nx, 4, 4)};
 	amrex::RealBox boxSize{
 	    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.0), amrex::Real(0.0))},
-	    {AMREX_D_DECL(amrex::Real(Lx), amrex::Real(Lx*0.01), amrex::Real(1.0))}};
+	    {AMREX_D_DECL(amrex::Real(Lx), amrex::Real(Lx * 0.01), amrex::Real(1.0))}};
 
 	constexpr int nvars = 9;
 	amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
 	for (int n = 0; n < nvars; ++n) {
-		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
-			boundaryConditions[n].setLo(i, amrex::BCType::int_dir); // periodic
-			boundaryConditions[n].setHi(i, amrex::BCType::int_dir);
-		}
-		boundaryConditions[n].setLo(0, amrex::BCType::ext_dir);	 // custom (Marshak) x1
-		boundaryConditions[n].setHi(0, amrex::BCType::ext_dir); // extrapolate x1
+		//for (int i = 1; i < AMREX_SPACEDIM; ++i) {
+		//	boundaryConditions[n].setLo(i, amrex::BCType::int_dir); // periodic
+		//	boundaryConditions[n].setHi(i, amrex::BCType::int_dir);
+		//}
+		boundaryConditions[n].setLo(0, amrex::BCType::ext_dir); // custom (Marshak) x1
+		boundaryConditions[n].setHi(0, amrex::BCType::foextrap); // extrapolate x1
 	}
 
 	// Problem initialization
@@ -249,9 +257,6 @@ auto testproblem_radiation_marshak_cgs() -> int
 	sim.maxTimesteps_ = max_timesteps;
 	sim.outputAtInterval_ = true;
 	sim.plotfileInterval_ = 100; // for debugging
-	sim.componentNames_ = {"radEnergy",	"x-RadFlux",	 "y-RadFlux",
-			       "z-RadFlux",	"gasEnergy",	 "gasDensity",
-			       "x-GasMomentum", "y-GasMomentum", "z-GasMomentum"};
 
 	// initialize
 	sim.setInitialConditions();
@@ -362,7 +367,6 @@ auto testproblem_radiation_marshak_cgs() -> int
 	matplotlibcpp::xlim(0.4 / chi, 100. / chi); // cm
 	matplotlibcpp::ylim(T_initial, T_hohlraum); // K
 	matplotlibcpp::xscale("log");
-	// matplotlibcpp::yscale("log");
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", rad_system.time()));
 	matplotlibcpp::save("./marshak_wave_cgs_temperature.pdf");
@@ -383,7 +387,6 @@ auto testproblem_radiation_marshak_cgs() -> int
 	matplotlibcpp::xlim(0.4 / chi, 100. / chi); // cm
 	matplotlibcpp::ylim(T_initial, T_hohlraum); // K
 	matplotlibcpp::xscale("log");
-	// matplotlibcpp::yscale("log");
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", rad_system.time()));
 	matplotlibcpp::save("./marshak_wave_cgs_gastemperature.pdf");

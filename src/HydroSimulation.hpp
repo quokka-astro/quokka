@@ -47,11 +47,13 @@ template <typename problem_t> class HydroSimulation : public SingleLevelSimulati
 	using SingleLevelSimulation<problem_t>::cycleCount_;
 	using SingleLevelSimulation<problem_t>::areInitialConditionsDefined_;
 	using SingleLevelSimulation<problem_t>::boundaryConditions_;
+	using SingleLevelSimulation<problem_t>::componentNames_;
 
 	HydroSimulation(amrex::IntVect &gridDims, amrex::RealBox &boxSize,
 			amrex::Vector<amrex::BCRec> &boundaryConditions, const int ncomp = 5)
 	    : SingleLevelSimulation<problem_t>(gridDims, boxSize, boundaryConditions, ncomp)
 	{
+		componentNames_ = {"density", "x-momentum", "y-momentum", "z-momentum", "energy"};
 	}
 
 	void computeMaxSignalLocal() override;

@@ -18,6 +18,7 @@
 #include "AMReX_Config.H"
 #include "AMReX_DistributionMapping.H"
 #include "AMReX_INT.H"
+#include "AMReX_IntVect.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_VisMF.H"
 #include <AMReX_Geometry.H>
@@ -48,22 +49,20 @@ CheckNaN(amrex::FArrayBox const &arr, amrex::Box const &indexRange, const int nc
 template <typename problem_t> class SingleLevelSimulation
 {
       public:
-	int nx_{400};
-	int ny_{40};
+	int nx_{1};
+	int ny_{1};
 	int nz_{1};
 	int max_grid_size_{32};
-	int maxTimesteps_;
+	int maxTimesteps_{10000};
 
 	amrex::BoxArray simBoxArray_;
 	amrex::Geometry simGeometry_;
 	amrex::IntVect const domain_lo_{AMREX_D_DECL(0, 0, 0)};
-	amrex::IntVect domain_hi_{AMREX_D_DECL(nx_ - 1, ny_ - 1, nz_ - 1)};
-	amrex::Box domain_{domain_lo_, domain_hi_};
+	amrex::IntVect domain_hi_;
+	amrex::Box domain_;
 
 	// This defines the physical box, [-1,1] in each direction.
-	amrex::RealBox real_box_{
-	    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.0), amrex::Real(0.0))},
-	    {AMREX_D_DECL(amrex::Real(1.0), amrex::Real(0.1), amrex::Real(1.0))}};
+	amrex::RealBox real_box_;
 
 	// periodic in all directions
 	amrex::Array<int, AMREX_SPACEDIM> is_periodic_{AMREX_D_DECL(1, 1, 1)};
@@ -83,7 +82,8 @@ template <typename problem_t> class SingleLevelSimulation
 	int nghost_ = 4; // PPM needs nghost >= 3, PPM+flattening needs nghost >= 4
 	// Ncomp = number of components for each array
 	int ncomp_ = NAN; // == 5 for 3d Euler equations
-	int ncompPrimitive_ = NAN; // for radiation, fewer primitive variables than conserved variables
+	int ncompPrimitive_ =
+	    NAN; // for radiation, fewer primitive variables than conserved variables
 	amrex::Vector<std::string> componentNames_;
 
 	int plotfileInterval_ = 100; // write plotfile every 100 cycles
@@ -108,18 +108,28 @@ template <typename problem_t> class SingleLevelSimulation
 	}
 
 	SingleLevelSimulation(amrex::IntVect &gridDims, amrex::RealBox &boxSize,
-			      amrex::Vector<amrex::BCRec> &boundaryConditions, const int ncomp, const int ncompPrimitive)
+			      amrex::Vector<amrex::BCRec> &boundaryConditions, const int ncomp,
+			      const int ncompPrimitive)
 	    : ncomp_(ncomp), ncompPrimitive_(ncompPrimitive)
 	{
 		initialize(gridDims, boxSize, boundaryConditions);
 	}
-	
+
 	void initialize(amrex::IntVect &gridDims, amrex::RealBox &boxSize,
-			      amrex::Vector<amrex::BCRec> &boundaryConditions) {
+			amrex::Vector<amrex::BCRec> &boundaryConditions)
+	{
 		// readParameters();
 
 		// set grid dimension variables
-		domain_hi_ = {AMREX_D_DECL(gridDims[0] - 1, gridDims[1] - 1, gridDims[2] - 1)};
+		nx_ = gridDims[0];
+#if (AMREX_SPACEDIM >= 2)
+		ny_ = gridDims[1];
+#endif
+#if (AMREX_SPACEDIM == 3)
+		nz_ = gridDims[2];
+#endif
+		domain_hi_ = amrex::IntVect(
+		    {AMREX_D_DECL(gridDims[0] - 1, gridDims[1] - 1, gridDims[2] - 1)});
 		domain_ = {domain_lo_, domain_hi_};
 		simBoxArray_.define(domain_);
 		simBoxArray_.maxSize(max_grid_size_);

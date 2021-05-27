@@ -50,6 +50,7 @@ template <typename problem_t> class RadiationSimulation : public SingleLevelSimu
 	using SingleLevelSimulation<problem_t>::cycleCount_;
 	using SingleLevelSimulation<problem_t>::areInitialConditionsDefined_;
 	using SingleLevelSimulation<problem_t>::boundaryConditions_;
+	using SingleLevelSimulation<problem_t>::componentNames_;
 
 	// member functions
 
@@ -60,6 +61,9 @@ template <typename problem_t> class RadiationSimulation : public SingleLevelSimu
 	    : SingleLevelSimulation<problem_t>(gridDims, boxSize, boundaryConditions, ncomp,
 					       ncompPrim)
 	{
+		componentNames_ = {"radEnergy",	    "x-RadFlux",     "y-RadFlux",
+				   "z-RadFlux",	    "gasEnergy",     "gasDensity",
+				   "x-GasMomentum", "y-GasMomentum", "z-GasMomentum"};
 	}
 
 	void computeMaxSignalLocal() override;
