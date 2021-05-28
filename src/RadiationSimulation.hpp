@@ -81,8 +81,7 @@ template <typename problem_t> class RadiationSimulation : public SingleLevelSimu
 	void stageTwoRK2SSP(amrex::Array4<const amrex::Real> const &consVar,
 			    amrex::Array4<amrex::Real> const &consVarNew,
 			    const amrex::Box &indexRange, int nvars);
-	void operatorSplitSourceTerms(amrex::Array4<const amrex::Real> const &consVarOld,
-				      amrex::Array4<amrex::Real> const &consVarNew,
+	void operatorSplitSourceTerms(amrex::Array4<amrex::Real> const &stateNew,
 				      const amrex::Box &indexRange, const int nvars);
 
 	void fillBoundaryConditions(amrex::MultiFab &state);
@@ -191,16 +190,14 @@ template <typename problem_t> void RadiationSimulation<problem_t>::advanceSingle
 	// source terms
 	for (amrex::MFIter iter(state_new_); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox(); // 'validbox' == exclude ghost zones
-		auto const &stateOld = state_old_.const_array(iter);
 		auto const &stateNew = state_new_.array(iter);
-		operatorSplitSourceTerms(stateOld, stateNew, indexRange, ncomp_);
+		operatorSplitSourceTerms(stateNew, indexRange, ncomp_);
 	}
 }
 
 template <typename problem_t>
 void RadiationSimulation<problem_t>::operatorSplitSourceTerms(
-    amrex::Array4<const amrex::Real> const &consVarOld,
-    amrex::Array4<amrex::Real> const &consVarNew, const amrex::Box &indexRange, const int nvars)
+    amrex::Array4<amrex::Real> const &stateNew, const amrex::Box &indexRange, const int nvars)
 {
 	amrex::FArrayBox radEnergySource(indexRange, 1, amrex::The_Async_Arena()); // cell-centered
 	amrex::FArrayBox advectionFluxes(indexRange, 1, amrex::The_Async_Arena()); // cell-centered
@@ -211,7 +208,7 @@ void RadiationSimulation<problem_t>::operatorSplitSourceTerms(
 	RadSystem<problem_t>::SetRadEnergySource(radEnergySource.array(), indexRange, dx_, tNow_);
 
 	// cell-centered source terms
-	RadSystem<problem_t>::AddSourceTerms(consVarOld, consVarNew, radEnergySource.const_array(),
+	RadSystem<problem_t>::AddSourceTerms(stateNew, radEnergySource.const_array(),
 					     advectionFluxes.const_array(), indexRange, dt_);
 }
 

@@ -109,9 +109,9 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 				       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
 				       amrex::Real time);
 
-	static void AddSourceTerms(arrayconst_t &consPrev, array_t &consNew,
-				   arrayconst_t &radEnergySource, arrayconst_t &advectionFluxes,
-				   amrex::Box const &indexRange, amrex::Real dt);
+	static void AddSourceTerms(array_t &consVar, arrayconst_t &radEnergySource,
+					  arrayconst_t &advectionFluxes,
+					  amrex::Box const &indexRange, amrex::Real dt);
 	static void ComputeSourceTermsExplicit(arrayconst_t &consPrev,
 					       arrayconst_t &radEnergySource, array_t &src,
 					       amrex::Box const &indexRange, amrex::Real dt);
@@ -136,7 +136,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 };
 
 template <typename problem_t>
-void RadSystem<problem_t>::SetRadEnergySource(array_t &radEnergySource, amrex::Box const &indexRange,
+void RadSystem<problem_t>::SetRadEnergySource(array_t &radEnergySource,
+					      amrex::Box const &indexRange,
 					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
 					      amrex::Real time)
 {
@@ -500,11 +501,13 @@ auto RadSystem<problem_t>::ComputeEgasFromEint(const double density, const doubl
 }
 
 template <typename problem_t>
-void RadSystem<problem_t>::AddSourceTerms(arrayconst_t &consPrev, array_t &consNew,
-					  arrayconst_t &radEnergySource,
+void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEnergySource,
 					  arrayconst_t &advectionFluxes,
 					  amrex::Box const &indexRange, amrex::Real dt)
 {
+	arrayconst_t &consPrev = consVar; // make read-only
+	array_t &consNew = consVar;
+
 	// Lorentz transform the radiation variables into the comoving frame
 	// TransformIntoComovingFrame(fluid_velocity);
 

@@ -35,17 +35,14 @@ auto main(int argc, char** argv) -> int
 
 	amrex::Initialize(argc, argv);
 
-	{ // objects must be destroyed before Kokkos::finalize, so enter new
-	  // scope here to do that automatically
-
+	{
 		// testproblem_advection();
 		// testproblem_hydro_shocktube();
 		// testproblem_hydro_wave();
 		// testproblem_radiation_streaming();
 		testproblem_radiation_matter_coupling();
 		// testproblem_radiation_marshak();
-
-	} // destructors must be called before amrex::Finalize()
+	}
 	amrex::Finalize();
 
 	return 0;

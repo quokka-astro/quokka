@@ -65,7 +65,7 @@ template <typename problem_t> class SingleLevelSimulation
 	amrex::RealBox real_box_;
 
 	// periodic in all directions
-	amrex::Array<int, AMREX_SPACEDIM> is_periodic_{AMREX_D_DECL(1, 1, 1)};
+	amrex::Array<int, AMREX_SPACEDIM> is_periodic_{};
 
 	// boundary conditions object
 	amrex::Vector<amrex::BCRec> boundaryConditions_;
@@ -141,8 +141,8 @@ template <typename problem_t> class SingleLevelSimulation
 			bool is_periodic_this_dim = true;
 			// check whether each component has periodic boundary conditions
 			for (int n = 0; n < ncomp_; ++n) {
-				if (!(boundaryConditions_[n].lo(i) == amrex::BCType::int_dir) &&
-				    (boundaryConditions_[n].hi(i) == amrex::BCType::int_dir)) {
+				if (!((boundaryConditions[n].lo(i) == amrex::BCType::int_dir) &&
+				      (boundaryConditions[n].hi(i) == amrex::BCType::int_dir))) {
 					is_periodic_this_dim = false;
 				}
 			}
