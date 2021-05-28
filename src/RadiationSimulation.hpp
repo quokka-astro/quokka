@@ -52,6 +52,10 @@ template <typename problem_t> class RadiationSimulation : public SingleLevelSimu
 	using SingleLevelSimulation<problem_t>::boundaryConditions_;
 	using SingleLevelSimulation<problem_t>::componentNames_;
 
+	std::vector<double> t_vec_;
+	std::vector<double> Trad_vec_;
+	std::vector<double> Tgas_vec_;
+
 	// member functions
 
 	RadiationSimulation(amrex::IntVect &gridDims, amrex::RealBox &boxSize,
@@ -69,6 +73,8 @@ template <typename problem_t> class RadiationSimulation : public SingleLevelSimu
 	void computeMaxSignalLocal() override;
 	void setInitialConditions() override;
 	void advanceSingleTimestep() override;
+	void computeAfterTimestep() override;
+
 	void stageOneRK2SSP(amrex::Array4<const amrex::Real> const &consVarOld,
 			    amrex::Array4<amrex::Real> const &consVarNew,
 			    const amrex::Box &indexRange, int nvars);
@@ -117,6 +123,11 @@ template <typename problem_t> void RadiationSimulation<problem_t>::computeMaxSig
 template <typename problem_t> void RadiationSimulation<problem_t>::setInitialConditions()
 {
 	// do nothing -- user should implement using problem-specific template specialization
+}
+
+template <typename problem_t> void RadiationSimulation<problem_t>::computeAfterTimestep()
+{
+	// do nothing -- user should implement if desired
 }
 
 template <typename problem_t>
@@ -195,6 +206,9 @@ void RadiationSimulation<problem_t>::operatorSplitSourceTerms(
 	amrex::FArrayBox advectionFluxes(indexRange, 1, amrex::The_Async_Arena()); // cell-centered
 	radEnergySource.setVal(0.);
 	advectionFluxes.setVal(0.);
+
+	// cell-centered radiation energy source (used only in test problems)
+	RadSystem<problem_t>::SetRadEnergySource(radEnergySource.array(), indexRange, dx_, tNow_);
 
 	// cell-centered source terms
 	RadSystem<problem_t>::AddSourceTerms(consVarOld, consVarNew, radEnergySource.const_array(),

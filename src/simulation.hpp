@@ -141,10 +141,10 @@ template <typename problem_t> class SingleLevelSimulation
 			bool is_periodic_this_dim = true;
 			// check whether each component has periodic boundary conditions
 			for (int n = 0; n < ncomp_; ++n) {
-				is_periodic_this_dim =
-				    (is_periodic_this_dim &&
-				     (boundaryConditions_[n].lo(i) == amrex::BCType::int_dir) &&
-				     (boundaryConditions_[n].hi(i) == amrex::BCType::int_dir));
+				if (!(boundaryConditions_[n].lo(i) == amrex::BCType::int_dir) &&
+				    (boundaryConditions_[n].hi(i) == amrex::BCType::int_dir)) {
+					is_periodic_this_dim = false;
+				}
 			}
 			is_periodic_[i] = static_cast<int>(is_periodic_this_dim);
 		}
@@ -174,6 +174,7 @@ template <typename problem_t> class SingleLevelSimulation
 	virtual void computeMaxSignalLocal() = 0;
 	virtual void setInitialConditions() = 0;
 	virtual void advanceSingleTimestep() = 0;
+	virtual void computeAfterTimestep() = 0;
 };
 
 template <typename problem_t> void SingleLevelSimulation<problem_t>::readParameters()
@@ -236,6 +237,8 @@ template <typename problem_t> void SingleLevelSimulation<problem_t>::evolve()
 		advanceSingleTimestep();
 		tNow_ += dt_;
 		++cycleCount_;
+
+		computeAfterTimestep(); // for inline analysis
 
 		if (outputAtInterval_ && ((cycleCount_ % plotfileInterval_) == 0)) {
 			// output plotfile

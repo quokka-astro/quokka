@@ -65,7 +65,7 @@ template <> struct RadSystem_Traits<SuOlsonProblemCgs> {
 	static constexpr double boltzmann_constant = boltzmann_constant_cgs_;
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double Erad_floor = 0.;
-	static constexpr bool do_marshak_left_boundary = true;
+	static constexpr bool do_marshak_left_boundary = false;
 	static constexpr double T_marshak_left = T_hohlraum;
 };
 
@@ -216,7 +216,7 @@ auto testproblem_radiation_marshak_cgs() -> int
 
 	// Problem parameters
 
-	const int max_timesteps = 1;
+	const int max_timesteps = 1000;
 	const double CFL_number = 0.4;
 	const int nx = 400;
 	// const double initial_dtau = 1e-9; // dimensionless time

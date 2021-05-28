@@ -15,6 +15,8 @@
 // library headers
 
 // internal headers
+#include "AMReX_Array.H"
+#include "AMReX_REAL.H"
 #include "ArrayView.hpp"
 #include "hyperbolic_system.hpp"
 #include "simulation.hpp"
@@ -103,6 +105,10 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	//					   array_t &x1FluxDiffusive,
 	//					   amrex::Box const &indexRange);
 
+	static void SetRadEnergySource(array_t &radEnergy, amrex::Box const &indexRange,
+				       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
+				       amrex::Real time);
+
 	static void AddSourceTerms(arrayconst_t &consPrev, array_t &consNew,
 				   arrayconst_t &radEnergySource, arrayconst_t &advectionFluxes,
 				   amrex::Box const &indexRange, amrex::Real dt);
@@ -128,6 +134,14 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	// requires GPU reductions
 	// auto CheckStatesValid(array_t &cons, std::pair<int, int> range) -> bool;
 };
+
+template <typename problem_t>
+void RadSystem<problem_t>::SetRadEnergySource(array_t &radEnergySource, amrex::Box const &indexRange,
+					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
+					      amrex::Real time)
+{
+	// do nothing -- user implemented
+}
 
 template <typename problem_t>
 void RadSystem<problem_t>::ConservedToPrimitive(amrex::Array4<const amrex::Real> const &cons,
@@ -614,9 +628,8 @@ void RadSystem<problem_t>::AddSourceTerms(arrayconst_t &consPrev, array_t &consN
 		// 2. Compute radiation flux update
 
 		const double Frad_x_t0 = consPrev(i, j, k, x1RadFlux_index);
-		const double Frad_x_t1 =
-		    (Frad_x_t0 + (dt * advectionFluxes(i, j, k))) /
-		    (1.0 + (rho * kappa) * chat * dt);
+		const double Frad_x_t1 = (Frad_x_t0 + (dt * advectionFluxes(i, j, k))) /
+					 (1.0 + (rho * kappa) * chat * dt);
 
 		consNew(i, j, k, x1RadFlux_index) = Frad_x_t1;
 

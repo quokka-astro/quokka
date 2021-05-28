@@ -52,6 +52,8 @@ template <typename problem_t> class AdvectionSimulation : public SingleLevelSimu
 	void computeMaxSignalLocal() override;
 	void setInitialConditions() override;
 	void advanceSingleTimestep() override;
+	void computeAfterTimestep() override;
+
 	void stageOneRK2SSP(amrex::Array4<const amrex::Real> const &consVarOld,
 			    amrex::Array4<amrex::Real> const &consVarNew,
 			    const amrex::Box &indexRange, int nvars);
@@ -81,6 +83,11 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::computeMaxSig
 }
 
 template <typename problem_t> void AdvectionSimulation<problem_t>::setInitialConditions()
+{
+	// do nothing -- user should implement using problem-specific template specialization
+}
+
+template <typename problem_t> void AdvectionSimulation<problem_t>::computeAfterTimestep()
 {
 	// do nothing -- user should implement using problem-specific template specialization
 }
