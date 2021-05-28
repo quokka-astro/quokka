@@ -131,7 +131,7 @@ RadiationSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(
 	auto [i, j, k] = iv.toArray();
 #endif
 
-	amrex::Print() << "(" << i << ", " << j << ", " << k << ")\n";
+	//	amrex::Print() << "(" << i << ", " << j << ", " << k << ")\n";
 
 	if (i < 0) {
 		// Marshak boundary condition
@@ -373,7 +373,7 @@ auto testproblem_radiation_marshak_cgs() -> int
 		matplotlibcpp::xlim(0.4 / chi, 100. / chi);	  // cm
 		matplotlibcpp::ylim(0.1 * T_initial, T_hohlraum); // K
 		matplotlibcpp::xscale("log");
-		matplotlibcpp::yscale("log");
+		//matplotlibcpp::yscale("log");
 		matplotlibcpp::legend();
 		matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNow_));
 		matplotlibcpp::save("./marshak_wave_cgs_temperature.pdf");
@@ -394,7 +394,7 @@ auto testproblem_radiation_marshak_cgs() -> int
 		matplotlibcpp::xlim(0.4 / chi, 100. / chi);	  // cm
 		matplotlibcpp::ylim(0.1 * T_initial, T_hohlraum); // K
 		matplotlibcpp::xscale("log");
-		matplotlibcpp::yscale("log");
+		//matplotlibcpp::yscale("log");
 		matplotlibcpp::legend();
 		matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNow_));
 		matplotlibcpp::save("./marshak_wave_cgs_gastemperature.pdf");

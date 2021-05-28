@@ -145,7 +145,7 @@ auto testproblem_radiation_matter_coupling() -> int
 
 	const int nx = 4;
 	const double Lx = 1e5; // cm
-	const double CFL_number = 0.1; // 1.0;
+	const double CFL_number = 1.0;
 	const double max_time = 1.0e-2; // s
 	const int max_timesteps = 1e6;
 	// const double constant_dt = 1.0e-8; // s
@@ -159,9 +159,9 @@ auto testproblem_radiation_matter_coupling() -> int
 	constexpr int nvars = 9;
 	amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
 	for (int n = 0; n < nvars; ++n) {
-		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
-			boundaryConditions[n].setLo(i, amrex::BCType::int_dir); // periodic
-			boundaryConditions[n].setHi(i, amrex::BCType::int_dir);
+		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+			boundaryConditions[n].setLo(i, amrex::BCType::foextrap); // extrapolate
+			boundaryConditions[n].setHi(i, amrex::BCType::foextrap);
 		}
 	}
 
@@ -221,7 +221,7 @@ auto testproblem_radiation_matter_coupling() -> int
 			sol_norm += std::abs(Tgas_exact_interp[i]);
 		}
 		const double rel_error = err_norm / sol_norm;
-		const double error_tol = 1e-5;
+		const double error_tol = 2e-5;
 		amrex::Print() << "relative L1 error norm = " << rel_error << std::endl;
 		if (rel_error > error_tol) {
 			status = 1;
