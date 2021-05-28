@@ -128,8 +128,13 @@ template <typename problem_t> class SingleLevelSimulation
 #if (AMREX_SPACEDIM == 3)
 		nz_ = gridDims[2];
 #endif
+
+#if (AMREX_SPACEDIM == 1)
 		domain_hi_ = amrex::IntVect(
 		    {AMREX_D_DECL(gridDims[0] - 1, gridDims[1] - 1, gridDims[2] - 1)});
+#else
+		domain_hi_ = {AMREX_D_DECL(gridDims[0] - 1, gridDims[1] - 1, gridDims[2] - 1)};
+#endif
 		domain_ = {domain_lo_, domain_hi_};
 		simBoxArray_.define(domain_);
 		simBoxArray_.maxSize(max_grid_size_);

@@ -239,12 +239,12 @@ auto testproblem_radiation_marshak_cgs() -> int
 	constexpr int nvars = 9;
 	amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
 	for (int n = 0; n < nvars; ++n) {
-		// for (int i = 1; i < AMREX_SPACEDIM; ++i) {
-		//	boundaryConditions[n].setLo(i, amrex::BCType::int_dir); // periodic
-		//	boundaryConditions[n].setHi(i, amrex::BCType::int_dir);
-		//}
-		boundaryConditions[n].setLo(0, amrex::BCType::ext_dir);	 // custom (Marshak) x1
-		boundaryConditions[n].setHi(0, amrex::BCType::ext_dir); // extrapolate x1
+		boundaryConditions[n].setLo(0, amrex::BCType::ext_dir);	// custom (Marshak) x1
+		boundaryConditions[n].setHi(0, amrex::BCType::foextrap); // extrapolate x1
+		for (int i = 1; i < AMREX_SPACEDIM; ++i) { // x2- and x3- directions
+			boundaryConditions[n].setLo(i, amrex::BCType::int_dir); // periodic
+			boundaryConditions[n].setHi(i, amrex::BCType::int_dir);
+		}
 	}
 
 	// Problem initialization
