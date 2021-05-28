@@ -164,7 +164,6 @@ void RadSystem<problem_t>::ConservedToPrimitive(amrex::Array4<const amrex::Real>
 
 		// check admissibility of states
 		AMREX_ASSERT(E_r > 0.0); // NOLINT
-		// AMREX_ASSERT(std::abs(reducedFluxX1) <= 1.0); // NOLINT
 
 		primVar(i, j, k, primRadEnergy_index) = E_r;
 		primVar(i, j, k, x1ReducedFlux_index) = reducedFluxX1;
@@ -204,6 +203,7 @@ auto RadSystem<problem_t>::ComputeEddingtonFactor(double f_in) -> double
 	return chi;
 }
 
+// TODO(ben): direction dependent!!!
 template <typename problem_t>
 auto RadSystem<problem_t>::ComputeCellOpticalDepth(arrayconst_t &consVar,
 						   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
@@ -243,83 +243,7 @@ auto RadSystem<problem_t>::ComputeCellOpticalDepth(arrayconst_t &consVar,
 	//	return 0.5*(tau_L + tau_R); // arithmetic mean
 }
 
-#if 0
-template <typename problem_t>
-void RadSystem<problem_t>::ComputeFirstOrderFluxes(amrex::Array4<const amrex::Real> const &consVar,
-						   array_t &x1FluxDiffusive,
-						   amrex::Box const &indexRange)
-{
-	// By convention, the interfaces are defined on the left edge of each
-	// zone, i.e. x1Flux_(i) is the solution to the Riemann problem at
-	// the left edge of zone i.
-
-	// compute Lax-Friedrichs fluxes for use in flux-limiting to ensure realizable states
-
-	// interface-centered kernel
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		// gather L/R states
-		const double erad_L = consVar(i - 1, j, k, radEnergy_index);
-		const double erad_R = consVar(i, j, k, radEnergy_index);
-
-		const double Fx_L = consVar(i - 1, j, k, x1RadFlux_index);
-		const double Fx_R = consVar(i, j, k, x1RadFlux_index);
-
-		// compute primitive variables
-		const double fx_L = Fx_L / (c_light_ * erad_L);
-		const double fx_R = Fx_R / (c_light_ * erad_R);
-
-		// compute scalar reduced flux f
-		// [modify in 3d!]
-		const double f_L = std::sqrt(fx_L * fx_L);
-		const double f_R = std::sqrt(fx_R * fx_R);
-
-		const double nx_L = (f_L > 0.0) ? (fx_L / f_L) : 0.0;
-		const double nx_R = (f_R > 0.0) ? (fx_R / f_R) : 0.0;
-
-		// compute radiation pressure tensors
-		const double chi_L = RadSystem<problem_t>::ComputeEddingtonFactor(f_L);
-		const double chi_R = RadSystem<problem_t>::ComputeEddingtonFactor(f_R);
-
-		// diagonal term of Eddington tensor
-		const double Tdiag_L = (1.0 - chi_L) / 2.0;
-		const double Tdiag_R = (1.0 - chi_R) / 2.0;
-
-		// anisotropic term of Eddington tensor (in the direction of the
-		// rad. flux)
-		const double Txx_L = (3.0 * chi_L - 1.0) / 2.0 * (nx_L * nx_L);
-		const double Txx_R = (3.0 * chi_R - 1.0) / 2.0 * (nx_R * nx_R);
-
-		// compute the elements of the total radiation pressure tensor
-		const double Pxx_L = (Tdiag_L + Txx_L) * erad_L;
-		const double Pxx_R = (Tdiag_R + Txx_R) * erad_R;
-
-		// compute signal speed
-		const double S_L = -c_hat_ * std::sqrt(Tdiag_L + Txx_L);
-		const double S_R = c_hat_ * std::sqrt(Tdiag_R + Txx_R);
-
-		const double sstar = std::max(std::abs(S_L), std::abs(S_R));
-
-		// compute (using local signal speed) Lax-Friedrichs flux
-		constexpr int fluxdim = 2;
-
-		const quokka::valarray<double, fluxdim> F_L = {(c_hat_ / c_light_) * Fx_L,
-							       c_hat_ * c_light_ * Pxx_L};
-
-		const quokka::valarray<double, fluxdim> F_R = {(c_hat_ / c_light_) * Fx_R,
-							       c_hat_ * c_light_ * Pxx_R};
-
-		const quokka::valarray<double, fluxdim> U_L = {erad_L, Fx_L};
-		const quokka::valarray<double, fluxdim> U_R = {erad_R, Fx_R};
-
-		const quokka::valarray<double, fluxdim> LLF =
-		    0.5 * (F_L + F_R - sstar * (U_R - U_L));
-
-		x1FluxDiffusive(radEnergy_index, i) = LLF[0];
-		x1FluxDiffusive(x1RadFlux_index, i) = LLF[1];
-	});
-}
-#endif
-
+// TODO(ben): make direction dependent!!
 template <typename problem_t>
 template <FluxDir DIR>
 void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux,
@@ -392,10 +316,8 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux,
 		const double Pxx_L = (Tdiag_L + Txx_L) * erad_L;
 		const double Pxx_R = (Tdiag_R + Txx_R) * erad_R;
 
-		// asymptotic-preserving correction
+		// asymptotic-preserving correction (new in this code)
 		const double tau_cell = ComputeCellOpticalDepth(consVar, dx, i, j, k);
-		// const std::valarray<double> epsilon = {std::min(1.0, 1.0 / tau_cell), 1.0}; //
-		// Skinner et al. [does not actually work]
 		constexpr int fluxdim = 2;
 		const quokka::valarray<double, fluxdim> epsilon = {
 		    std::min(1.0, 1.0 / (tau_cell * tau_cell)), 1.0};
