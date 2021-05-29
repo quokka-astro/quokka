@@ -8,6 +8,7 @@
 ///
 
 #include "AMReX_BC_TYPES.H"
+#include "AMReX_BLassert.H"
 #include "AMReX_Config.H"
 #include "AMReX_IntVect.H"
 #include "radiation_system.hpp"
@@ -190,6 +191,45 @@ template <> void RadiationSimulation<TophatProblem>::setInitialConditions()
 
 	// set flag
 	areInitialConditionsDefined_ = true;
+}
+
+template <> void RadiationSimulation<TophatProblem>::computeAfterTimestep()
+{
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		// copy all FABs to a local FAB across the entire domain
+		amrex::BoxArray localBoxes(domain_);
+		amrex::DistributionMapping localDistribution(localBoxes, 1);
+		amrex::MultiFab state_mf(localBoxes, localDistribution, ncomp_, 0);
+		state_mf.ParallelCopy(state_new_);
+		auto const &state = state_mf.array(0);
+
+		amrex::Long asymmetry = 0;
+
+		int j0 = ny_/2;
+		for (int i = 0; i < nx_; ++i) {
+			for (int j = 0; j < ny_; ++j) {
+				for (int k = 0; k < nz_; ++k) {
+					for (int n = 0; n < ncomp_; ++n) {
+						const amrex::Real comp_upper = state(i, j, k, n);
+						int j_reflect = j0 - (j - j0 + 1);
+						amrex::Real comp_lower = state(i, j_reflect, k, n);
+
+						if(n == RadSystem<TophatProblem>::x2RadFlux_index) {
+							comp_lower *= -1.0;
+						}
+						if(comp_upper != comp_lower) {
+							amrex::Print() << i << "," << j << "," << k << "," << n << "\n";
+							asymmetry++;
+						}
+						//AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+						//    comp_upper == comp_lower,
+						//    "y-midplane symmetry check failed!");
+					}
+				}
+			}
+		}
+		AMREX_ASSERT_WITH_MESSAGE(asymmetry == 0, "y-midplane symmetry check failed!");
+	}
 }
 
 auto testproblem_radiation_marshak_cgs() -> int

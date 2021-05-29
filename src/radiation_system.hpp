@@ -128,9 +128,10 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 					double X3GasMom, double Eint) -> double;
 
 	template <FluxDir DIR>
-	static auto ComputeCellOpticalDepth(const quokka::Array4View<const amrex::Real, DIR> &consVar,
-					    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, int i,
-					    int j, int k) -> double;
+	static auto
+	ComputeCellOpticalDepth(const quokka::Array4View<const amrex::Real, DIR> &consVar,
+				amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, int i, int j,
+				int k) -> double;
 
 	// requires GPU reductions
 	// auto CheckStatesValid(array_t &cons, std::pair<int, int> range) -> bool;
@@ -372,10 +373,12 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 		constexpr int fluxdim = 4;
 		const quokka::valarray<double, fluxdim> epsilon = {
 		    std::min(1.0, 1.0 / (tau_cell * tau_cell)), 1.0, 1.0, 1.0};
+		// const quokka::valarray<double, fluxdim> epsilon = {1.0, 1.0, 1.0, 1.0};
 
 		// inspired by https://arxiv.org/pdf/2102.02212.pdf
 		// ensures that signal speed -> c \sqrt{f_xx} / tau_cell in the diffusion limit
 		const auto S_corr = std::min(1.0, 1.0 / tau_cell);
+		// const auto S_corr = 1.0;
 
 		// frozen Eddington tensor approximation, following Balsara
 		// (1999) [JQSRT Vol. 61, No. 5, pp. 617–627, 1999], Eq. 46.
