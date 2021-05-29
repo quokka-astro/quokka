@@ -92,7 +92,7 @@ auto RadSystem<TophatProblem>::ComputeEgasFromTgas(const double rho, const doubl
 }
 
 template <>
-auto RadSystem<TophatProblem>::ComputeEgasTempDerivative(const double rho, const double  /*Tgas*/)
+auto RadSystem<TophatProblem>::ComputeEgasTempDerivative(const double rho, const double /*Tgas*/)
     -> double
 {
 	// This is also known as the heat capacity, i.e.
@@ -131,32 +131,30 @@ RadiationSimulation<TophatProblem>::setCustomBoundaryConditions(
 
 	if (i < 0) {
 		// Marshak boundary condition
-		double E_inc = Erad_initial;
-		double F_bdry = 0.;
+		double E_inc = a_rad * std::pow(T_hohlraum, 4);
+		double Fx_bdry = 0.;
+		const double E_0 = consVar(0, j, k, RadSystem<TophatProblem>::radEnergy_index);
+		const double Fx_0 = consVar(0, j, k, RadSystem<TophatProblem>::x1RadFlux_index);
+		const double Fy_0 = consVar(0, j, k, RadSystem<TophatProblem>::x2RadFlux_index);
+		const double Fz_0 = consVar(0, j, k, RadSystem<TophatProblem>::x3RadFlux_index);
 
 		if (std::abs(y - y0) < 0.5) {
-			const double E_inc = a_rad * std::pow(T_hohlraum, 4);
-			const double E_0 = consVar(0, j, k, RadSystem<TophatProblem>::radEnergy_index);
-			const double F_0 = consVar(0, j, k, RadSystem<TophatProblem>::x1RadFlux_index);
-
-			// const double E_1 = consVar(1, j, k, RadSystem<TophatProblem>::radEnergy_index);
-			// const double F_1 = consVar(1, j, k, RadSystem<TophatProblem>::x1RadFlux_index);
-
-			// use PPM stencil at interface to solve for F_rad in the ghost zones
-			// const double F_bdry = 0.5 * c * E_inc - (7. / 12.) * (c * E_0 + 2.0 *
-			// F_0) + (1. / 12.) * (c * E_1 + 2.0 * F_1);
-
-			// use value at interface to solve for F_rad in the ghost zones
-			const double F_bdry = 0.5 * c * E_inc - 0.5 * (c * E_0 + 2.0 * F_0);
-
-			AMREX_ASSERT(std::abs(F_bdry / (c * E_inc)) < 1.0);
+			// solve for F_bdry where F_inc = c * E_inc / 4 (Marshak boundary)
+			Fx_bdry = 0.5 * c * E_inc - 0.5 * (c * E_0 + 2.0 * Fx_0);
+		} else {
+			// reflecting boundary
+			E_inc = E_0;
+			Fx_bdry = -Fx_0;
 		}
+
+		AMREX_ASSERT(std::abs(Fx_bdry / (c * E_inc)) < 1.0); // flux-limiting condition
 
 		// x1 left side boundary (Marshak)
 		consVar(i, j, k, RadSystem<TophatProblem>::radEnergy_index) = E_inc;
-		consVar(i, j, k, RadSystem<TophatProblem>::x1RadFlux_index) = F_bdry;
-		consVar(i, j, k, RadSystem<TophatProblem>::x2RadFlux_index) = 0.;
-		consVar(i, j, k, RadSystem<TophatProblem>::x3RadFlux_index) = 0.;
+		consVar(i, j, k, RadSystem<TophatProblem>::x1RadFlux_index) = Fx_bdry;
+		consVar(i, j, k, RadSystem<TophatProblem>::x2RadFlux_index) = Fy_0;
+		consVar(i, j, k, RadSystem<TophatProblem>::x3RadFlux_index) = Fz_0;
+
 	} else {
 		// right-side boundary -- constant
 		consVar(i, j, k, RadSystem<TophatProblem>::radEnergy_index) = Erad_initial;
@@ -197,8 +195,8 @@ template <> void RadiationSimulation<TophatProblem>::setInitialConditions()
 auto testproblem_radiation_marshak_cgs() -> int
 {
 	// Problem parameters
-	const int max_timesteps = 10000;
-	const double CFL_number = 0.4;
+	const int max_timesteps = 1000;
+	const double CFL_number = 0.1;
 	const int nx = 140;
 	const int ny = 80;
 
@@ -229,7 +227,7 @@ auto testproblem_radiation_marshak_cgs() -> int
 	sim.cflNumber_ = CFL_number;
 	sim.maxTimesteps_ = max_timesteps;
 	sim.outputAtInterval_ = true;
-	sim.plotfileInterval_ = 100; // for debugging
+	sim.plotfileInterval_ = 10; // for debugging
 
 	// initialize
 	sim.setInitialConditions();
