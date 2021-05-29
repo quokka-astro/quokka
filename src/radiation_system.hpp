@@ -127,7 +127,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static auto ComputeEgasFromEint(double density, double X1GasMom, double X2GasMom,
 					double X3GasMom, double Eint) -> double;
 
-	static auto ComputeCellOpticalDepth(arrayconst_t &consVar,
+	template <FluxDir DIR>
+	static auto ComputeCellOpticalDepth(const quokka::Array4View<const amrex::Real, DIR> &consVar,
 					    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, int i,
 					    int j, int k) -> double;
 
@@ -206,7 +207,7 @@ auto RadSystem<problem_t>::ComputeEddingtonFactor(double f_in) -> double
 template <typename problem_t>
 template <FluxDir DIR>
 auto RadSystem<problem_t>::ComputeCellOpticalDepth(
-    quokka::Array4View<const amrex::real, DIR> &consVar,
+    const quokka::Array4View<const amrex::Real, DIR> &consVar,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, int i, int j, int k) -> double
 {
 	// compute interface-averaged cell optical depth
@@ -240,19 +241,17 @@ auto RadSystem<problem_t>::ComputeCellOpticalDepth(
 	const double Egas_L = consVar(i - 1, j, k, gasEnergy_index);
 	const double Egas_R = consVar(i, j, k, gasEnergy_index);
 
-	const double Eint_L = RadSystem<problem_t>::ComputeEintFromEgas(rho_L, x1GasMom_L, x2GasMom_L, x3GasMom_R,
-									Egas_L);
-	const double Eint_R = RadSystem<problem_t>::ComputeEintFromEgas(rho_R, x1GasMom_R, x2GasMom_R, x3GasMom_R,
-									Egas_R);
+	const double Eint_L = RadSystem<problem_t>::ComputeEintFromEgas(
+	    rho_L, x1GasMom_L, x2GasMom_L, x3GasMom_L, Egas_L);
+	const double Eint_R = RadSystem<problem_t>::ComputeEintFromEgas(
+	    rho_R, x1GasMom_R, x2GasMom_R, x3GasMom_R, Egas_R);
 
 	const double Tgas_L = RadSystem<problem_t>::ComputeTgasFromEgas(rho_L, Eint_L);
 	const double Tgas_R = RadSystem<problem_t>::ComputeTgasFromEgas(rho_R, Eint_R);
 
 	const double dl = dx[0]; // modify in 3d
-	const double tau_L =
-	    dl * rho_L * RadSystem<problem_t>::ComputeOpacity(rho_L, Tgas_L);
-	const double tau_R =
-	    dl * rho_R * RadSystem<problem_t>::ComputeOpacity(rho_R, Tgas_R);
+	const double tau_L = dl * rho_L * RadSystem<problem_t>::ComputeOpacity(rho_L, Tgas_L);
+	const double tau_R = dl * rho_R * RadSystem<problem_t>::ComputeOpacity(rho_R, Tgas_R);
 
 	return (2.0 * tau_L * tau_R) / (tau_L + tau_R); // harmonic mean
 	//	return 0.5*(tau_L + tau_R); // arithmetic mean
@@ -269,7 +268,7 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 	quokka::Array4View<const amrex::Real, DIR> x1LeftState(x1LeftState_in);
 	quokka::Array4View<const amrex::Real, DIR> x1RightState(x1RightState_in);
 	quokka::Array4View<amrex::Real, DIR> x1Flux(x1Flux_in);
-	quokka::Array4View<const amrex::real, DIR> consVar(consVar_in);
+	quokka::Array4View<const amrex::Real, DIR> consVar(consVar_in);
 
 	// By convention, the interfaces are defined on the left edge of each
 	// zone, i.e. xinterface_(i) is the solution to the Riemann problem at
@@ -369,10 +368,10 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 		}
 
 		// asymptotic-preserving correction (new in this code) -- direction-dependent!
-		const double tau_cell = ComputeCellOpticalDepth(consVar, dx, i, j, k);
+		const double tau_cell = ComputeCellOpticalDepth<DIR>(consVar, dx, i, j, k);
 		constexpr int fluxdim = 4;
 		const quokka::valarray<double, fluxdim> epsilon = {
-		    std::min(1.0, 1.0 / (tau_cell * tau_cell)), 1.0};
+		    std::min(1.0, 1.0 / (tau_cell * tau_cell)), 1.0, 1.0, 1.0};
 
 		// inspired by https://arxiv.org/pdf/2102.02212.pdf
 		// ensures that signal speed -> c \sqrt{f_xx} / tau_cell in the diffusion limit
@@ -380,6 +379,8 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 
 		// frozen Eddington tensor approximation, following Balsara
 		// (1999) [JQSRT Vol. 61, No. 5, pp. 617–627, 1999], Eq. 46.
+		double Tnormal_L = NAN;
+		double Tnormal_R = NAN;
 		if constexpr (DIR == FluxDir::X1) {
 			Tnormal_L = T_L[0][0];
 			Tnormal_R = T_R[0][0];
