@@ -227,7 +227,7 @@ auto testproblem_radiation_marshak_cgs() -> int
 	sim.cflNumber_ = CFL_number;
 	sim.maxTimesteps_ = max_timesteps;
 	sim.outputAtInterval_ = true;
-	sim.plotfileInterval_ = 10; // for debugging
+	sim.plotfileInterval_ = 1; // for debugging
 
 	// initialize
 	sim.setInitialConditions();
