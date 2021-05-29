@@ -52,7 +52,7 @@ template <typename problem_t> class SingleLevelSimulation
 	int nx_{1};
 	int ny_{1};
 	int nz_{1};
-	int max_grid_size_{32};
+	int max_grid_size_{128};
 	int maxTimesteps_{10000};
 
 	amrex::BoxArray simBoxArray_;
