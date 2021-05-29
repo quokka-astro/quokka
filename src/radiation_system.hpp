@@ -110,8 +110,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 				       amrex::Real time);
 
 	static void AddSourceTerms(array_t &consVar, arrayconst_t &radEnergySource,
-					  arrayconst_t &advectionFluxes,
-					  amrex::Box const &indexRange, amrex::Real dt);
+				   arrayconst_t &advectionFluxes, amrex::Box const &indexRange,
+				   amrex::Real dt);
 	static void ComputeSourceTermsExplicit(arrayconst_t &consPrev,
 					       arrayconst_t &radEnergySource, array_t &src,
 					       amrex::Box const &indexRange, amrex::Real dt);
@@ -243,7 +243,6 @@ auto RadSystem<problem_t>::ComputeCellOpticalDepth(arrayconst_t &consVar,
 	//	return 0.5*(tau_L + tau_R); // arithmetic mean
 }
 
-// TODO(ben): make direction dependent!!
 template <typename problem_t>
 template <FluxDir DIR>
 void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux,
@@ -252,6 +251,10 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux,
 					 amrex::Box const &indexRange, arrayconst_t &consVar,
 					 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx)
 {
+	quokka::Array4View<const amrex::Real, DIR> x1LeftState(x1LeftState_in);
+	quokka::Array4View<const amrex::Real, DIR> x1RightState(x1RightState_in);
+	quokka::Array4View<amrex::Real, DIR> x1Flux(x1Flux_in);
+
 	// By convention, the interfaces are defined on the left edge of each
 	// zone, i.e. xinterface_(i) is the solution to the Riemann problem at
 	// the left edge of zone i.
@@ -259,21 +262,31 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux,
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
 
 	// interface-centered kernel
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in) {
+		auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
+
 		// HLL solver following Toro (1998) and Balsara (2017).
 		// Radiation eigenvalues from Skinner & Ostriker (2013).
 
 		// gather left- and right- state variables
-		double erad_L = x1LeftState(i, j, k, primRadEnergy_index);
+		const double erad_L = x1LeftState(i, j, k, primRadEnergy_index);
 		const double erad_R = x1RightState(i, j, k, primRadEnergy_index);
 
 		const double fx_L = x1LeftState(i, j, k, x1ReducedFlux_index);
 		const double fx_R = x1RightState(i, j, k, x1ReducedFlux_index);
 
+		const double fy_L = x1LeftState(i, j, k, x2ReducedFlux_index);
+		const double fy_R = x1LeftState(i, j, k, x2ReducedFlux_index);
+
+		const double fz_L = x1LeftState(i, j, k, x3ReducedFlux_index);
+		const double fz_R = x1LeftState(i, j, k, x3ReducedFlux_index);
+
+		const double fvec_L[3] = {fx_L, fy_L, fz_L};
+		const double fvec_R[3] = {fx_R, fy_R, fz_R};
+
 		// compute scalar reduced flux f
-		// [modify in 3d!]
-		const double f_L = std::sqrt(fx_L * fx_L);
-		const double f_R = std::sqrt(fx_R * fx_R);
+		const double f_L = std::sqrt(fx_L * fx_L + fy_L * fy_L + fz_L * fz_L);
+		const double f_R = std::sqrt(fx_R * fx_R + fy_R * fy_R + fz_R * fz_R);
 
 		// check that states are physically admissible
 		AMREX_ASSERT(erad_L > 0.0); // NOLINT
@@ -282,19 +295,23 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux,
 		// angle between interface and radiation flux \hat{n}
 		// If direction is undefined, just drop direction-dependent
 		// terms.
-		const double nx_L = (f_L > 0.0) ? (fx_L / f_L) : 0.0;
-		const double nx_R = (f_R > 0.0) ? (fx_R / f_R) : 0.0;
+		double n_L[3];
+		double n_R[3];
 
-		// Compute "un-reduced" Fx, ||F||
-		double Fx_L = fx_L * (c_light_ * erad_L);
+		for (int i = 0; i < 3; ++i) {
+			n_L[i] = (f_L > 0.) ? (fvec_L[i] / f_L) : 0.;
+			n_R[i] = (f_R > 0.) ? (fvec_R[i] / f_R) : 0.;
+		}
+
+		// Compute "un-reduced" Fx, Fy, Fz
+		const double Fx_L = fx_L * (c_light_ * erad_L);
 		const double Fx_R = fx_R * (c_light_ * erad_R);
 
-		// enforce Marshak boundary condition in Riemann solver
-		if ((i == 0) && do_marshak_left_boundary_) {
-			const double E_inc = radiation_constant_ * std::pow(T_marshak_left_, 4);
-			erad_L = E_inc;
-			Fx_L = 0.5 * c_light_ * E_inc - 0.5 * (c_light_ * erad_R + 2.0 * Fx_R);
-		}
+		const double Fy_L = fy_L * (c_light_ * erad_L);
+		const double Fy_R = fy_R * (c_light_ * erad_R);
+
+		const double Fz_L = fz_L * (c_light_ * erad_L);
+		const double Fz_R = fz_R * (c_light_ * erad_R);
 
 		// compute radiation pressure tensors
 		const double chi_L = RadSystem<problem_t>::ComputeEddingtonFactor(f_L);
@@ -309,16 +326,35 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux,
 
 		// anisotropic term of Eddington tensor (in the direction of the
 		// rad. flux)
-		const double Txx_L = (3.0 * chi_L - 1.0) / 2.0 * (nx_L * nx_L);
-		const double Txx_R = (3.0 * chi_R - 1.0) / 2.0 * (nx_R * nx_R);
+		const double Tf_L = (3.0 * chi_L - 1.0) / 2.0;
+		const double Tf_R = (3.0 * chi_R - 1.0) / 2.0;
+
+		// assemble Eddington tensor
+		double T_L[3][3];
+		double T_R[3][3];
+
+		for (int i = 0; i < 3; ++i) {
+			for (int j = 0; j < 3; ++j) {
+				const double delta_ij = (i == j) ? 1 : 0;
+				T_L[i][j] = Tdiag_L * delta_ij + Tf_L * (n_L[i] * n_L[j]);
+				T_R[i][j] = Tdiag_R * delta_ij + Tf_R * (n_R[i] * n_R[j]);
+			}
+		}
 
 		// compute the elements of the total radiation pressure tensor
-		const double Pxx_L = (Tdiag_L + Txx_L) * erad_L;
-		const double Pxx_R = (Tdiag_R + Txx_R) * erad_R;
+		double P_L[3][3];
+		double P_R[3][3];
 
-		// asymptotic-preserving correction (new in this code)
+		for (int i = 0; i < 3; ++i) {
+			for (int j = 0; j < 3; ++j) {
+				P_L[i][j] = T_L[i][j] * erad_L;
+				P_R[i][j] = T_R[i][j] * erad_R;
+			}
+		}
+
+		// asymptotic-preserving correction (new in this code) -- direction-dependent!
 		const double tau_cell = ComputeCellOpticalDepth(consVar, dx, i, j, k);
-		constexpr int fluxdim = 2;
+		constexpr int fluxdim = 4;
 		const quokka::valarray<double, fluxdim> epsilon = {
 		    std::min(1.0, 1.0 / (tau_cell * tau_cell)), 1.0};
 
@@ -328,21 +364,80 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux,
 
 		// frozen Eddington tensor approximation, following Balsara
 		// (1999) [JQSRT Vol. 61, No. 5, pp. 617–627, 1999], Eq. 46.
-		const double S_L = -c_hat_ * S_corr * std::sqrt(Tdiag_L + Txx_L);
-		const double S_R = c_hat_ * S_corr * std::sqrt(Tdiag_R + Txx_R);
+		if constexpr (DIR == FluxDir::X1) {
+			Tnormal_L = T_L[0][0];
+			Tnormal_R = T_R[0][0];
+		} else if constexpr (DIR == FluxDir::X2) {
+			Tnormal_L = T_L[1][1];
+			Tnormal_R = T_R[1][1];
+		} else if constexpr (DIR == FluxDir::X3) {
+			Tnormal_L = T_L[2][2];
+			Tnormal_R = T_R[2][2];
+		}
+		const double S_L = -c_hat_ * S_corr * std::sqrt(Tnormal_L);
+		const double S_R = c_hat_ * S_corr * std::sqrt(Tnormal_R);
 
 		AMREX_ASSERT(std::abs(S_L) <= c_hat_); // NOLINT
 		AMREX_ASSERT(std::abs(S_R) <= c_hat_); // NOLINT
 
-		// compute fluxes
-		const quokka::valarray<double, fluxdim> F_L = {(c_hat_ / c_light_) * Fx_L,
-							       c_hat_ * c_light_ * Pxx_L};
+		// compute fluxes F_L, F_R
+		// P_nx, P_ny, P_nz indicate components where 'n' is the direction of the face
+		// normal
+		// F_n is the radiation flux component in the direction of the face normal
+		double Fn_L = NAN;
+		double Fn_R = NAN;
+		double Pnx_L = NAN;
+		double Pnx_R = NAN;
+		double Pny_L = NAN;
+		double Pny_R = NAN;
+		double Pnz_L = NAN;
+		double Pnz_R = NAN;
 
-		const quokka::valarray<double, fluxdim> F_R = {(c_hat_ / c_light_) * Fx_R,
-							       c_hat_ * c_light_ * Pxx_R};
+		if constexpr (DIR == FluxDir::X1) {
+			Fn_L = Fx_L;
+			Fn_R = Fx_R;
 
-		const quokka::valarray<double, fluxdim> U_L = {erad_L, Fx_L};
-		const quokka::valarray<double, fluxdim> U_R = {erad_R, Fx_R};
+			Pnx_L = P_L[0][0];
+			Pny_L = P_L[0][1];
+			Pnz_L = P_L[0][2];
+
+			Pnx_R = P_R[0][0];
+			Pny_R = P_R[0][1];
+			Pnz_R = P_R[0][2];
+		} else if constexpr (DIR == FluxDir::X2) {
+			Fn_L = Fy_L;
+			Fn_R = Fy_R;
+
+			Pnx_L = P_L[1][0];
+			Pny_L = P_L[1][1];
+			Pnz_L = P_L[1][2];
+
+			Pnx_R = P_R[1][0];
+			Pny_R = P_R[1][1];
+			Pnz_R = P_R[1][2];
+		} else if constexpr (DIR == FluxDir::X3) {
+			Fn_L = Fz_L;
+			Fn_L = Fz_R;
+
+			Pnx_L = P_L[2][0];
+			Pny_L = P_L[2][1];
+			Pnz_L = P_L[2][2];
+
+			Pnx_R = P_R[2][0];
+			Pny_R = P_R[2][1];
+			Pnz_R = P_R[2][2];
+		}
+
+		const quokka::valarray<double, fluxdim> F_L = {
+		    (c_hat_ / c_light_) * Fn_L, (c_hat_ * c_light_) * Pnx_L,
+		    (c_hat_ * c_light_) * Pny_L, (c_hat_ * c_light_) * Pnz_L};
+
+		const quokka::valarray<double, fluxdim> F_R = {
+		    (c_hat_ / c_light_) * Fn_R, (c_hat_ * c_light_) * Pnx_R,
+		    (c_hat_ * c_light_) * Pny_R, (c_hat_ * c_light_) * Pnz_R};
+
+		const quokka::valarray<double, fluxdim> U_L = {erad_L, Fx_L, Fy_L, Fz_L};
+		const quokka::valarray<double, fluxdim> U_R = {erad_R, Fx_R, Fy_R, Fz_R};
 
 		const quokka::valarray<double, fluxdim> F_star =
 		    (S_R / (S_R - S_L)) * F_L - (S_L / (S_R - S_L)) * F_R +
@@ -357,11 +452,13 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux,
 		// check states are valid
 		AMREX_ASSERT(!std::isnan(F[0])); // NOLINT
 		AMREX_ASSERT(!std::isnan(F[1])); // NOLINT
+		AMREX_ASSERT(!std::isnan(F[2])); // NOLINT
+		AMREX_ASSERT(!std::isnan(F[3])); // NOLINT
 
 		x1Flux(i, j, k, radEnergy_index) = F[0];
 		x1Flux(i, j, k, x1RadFlux_index) = F[1];
-		x1Flux(i, j, k, x2RadFlux_index) = 0.;
-		x1Flux(i, j, k, x3RadFlux_index) = 0.;
+		x1Flux(i, j, k, x2RadFlux_index) = F[2];
+		x1Flux(i, j, k, x3RadFlux_index) = F[3];
 	});
 }
 
