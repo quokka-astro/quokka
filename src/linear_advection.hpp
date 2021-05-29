@@ -77,8 +77,7 @@ void LinearAdvectionSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 	quokka::Array4View<amrex::Real const, DIR> x1RightState(x1RightState_in);
 	quokka::Array4View<amrex::Real, DIR> x1Flux(x1Flux_in);
 
-	const auto vx = advectionVx; // avoid CUDA invalid device function error
-	
+	const auto vx = advectionVx; // avoid CUDA invalid device function error (tracked as NVIDIA bug #3318015)
 	// By convention, the interfaces are defined on the left edge of each zone, i.e.
 	// xinterface_(i) is the solution to the Riemann problem at the left edge of zone i.
 	// [Indexing note: There are (nx + 1) interfaces for nx zones.]
