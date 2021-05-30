@@ -133,7 +133,7 @@ RadiationSimulation<TophatProblem>::setCustomBoundaryConditions(
 
 	const amrex::Real *dx = geom.CellSize();
 	const amrex::Real *prob_lo = geom.ProbLo();
-	const amrex::Real *prob_hi = geom.ProbHi();
+	//const amrex::Real *prob_hi = geom.ProbHi();
 	const amrex::Box &box = geom.Domain();
 
 	amrex::GpuArray<int, 3> lo = box.loVect3d();
@@ -160,12 +160,13 @@ RadiationSimulation<TophatProblem>::setCustomBoundaryConditions(
 			//E_inc = E_0;
 			//Fx_bdry = -Fx_0;
 
-			// extrapolated boundary
+			// extrapolated boundary (usually works best)
 			E_inc = E_0;
 			Fx_bdry = Fx_0;
 
 			// Marshak boundary
-			//E_inc = a_rad * std::pow(T_initial, 4);
+			//E_inc = a_rad * std::pow(T_initial, 4); // does not work
+			//E_inc = a_rad * std::pow(T_hohlraum, 4);
 			//Fx_bdry = 0.5 * c * E_inc - 0.5 * (c * E_0 + 2.0 * Fx_0);
 		}
 
@@ -182,7 +183,7 @@ RadiationSimulation<TophatProblem>::setCustomBoundaryConditions(
 template <> void RadiationSimulation<TophatProblem>::setInitialConditions()
 {
 	auto prob_lo = simGeometry_.ProbLo();
-	auto prob_hi = simGeometry_.ProbHi();
+	//auto prob_hi = simGeometry_.ProbHi();
 	auto dx = dx_;
 
 	for (amrex::MFIter iter(state_old_); iter.isValid(); ++iter) {
@@ -236,6 +237,7 @@ AMREX_GPU_HOST_DEVICE bool
 CheckSymmetryArray<TophatProblem>(amrex::Array4<const amrex::Real> const &arr,
 				  amrex::Box const &indexRange, const int ncomp)
 {
+#if 0
 	amrex::Long asymmetry = 0;
 	amrex::GpuArray<int, 3> lo = indexRange.loVect3d();
 	auto [nx, ny, nz] = indexRange.hiVect3d().arr;
@@ -271,6 +273,7 @@ CheckSymmetryArray<TophatProblem>(amrex::Array4<const amrex::Real> const &arr,
 		// amrex::Print() << "no symmetry violations.\n";
 	}
 	AMREX_ASSERT_WITH_MESSAGE(asymmetry == 0, "y-midplane symmetry check failed!");
+#endif
 	return true;
 }
 
@@ -285,6 +288,7 @@ AMREX_GPU_HOST_DEVICE bool CheckSymmetry<TophatProblem>(amrex::FArrayBox const &
 
 template <> void RadiationSimulation<TophatProblem>::computeAfterTimestep()
 {
+#if 0
 	// copy all FABs to a local FAB across the entire domain
 	amrex::BoxArray localBoxes(domain_);
 	amrex::DistributionMapping localDistribution(localBoxes, 1);
@@ -331,15 +335,16 @@ template <> void RadiationSimulation<TophatProblem>::computeAfterTimestep()
 		}
 		// AMREX_ASSERT_WITH_MESSAGE(asymmetry == 0, "y-midplane symmetry check failed!");
 	}
+#endif
 }
 
 auto testproblem_radiation_marshak_cgs() -> int
 {
 	// Problem parameters
 	const int max_timesteps = 10000;
-	const double CFL_number = 0.1;
-	const int nx = 140;
-	const int ny = 40; // 80;
+	const double CFL_number = 0.4;
+	const int nx = 1400;
+	const int ny = 400; // 80;
 
 	const double Lx = 7.0;		 // cm
 	const double Ly = 4.0;		 // cm
@@ -380,8 +385,10 @@ auto testproblem_radiation_marshak_cgs() -> int
 		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
 			if (isNormalComp(n, i)) { // reflect lower
 				boundaryConditions[n].setLo(i, amrex::BCType::reflect_odd);
+				//boundaryConditions[n].setHi(i, amrex::BCType::reflect_odd);
 			} else {
 				boundaryConditions[n].setLo(i, amrex::BCType::reflect_even);
+				//boundaryConditions[n].setHi(i, amrex::BCType::reflect_even);
 			}
 			// extrapolate upper
 			boundaryConditions[n].setHi(i, amrex::BCType::foextrap);
