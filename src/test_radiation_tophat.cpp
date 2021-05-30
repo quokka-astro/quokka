@@ -180,8 +180,9 @@ template <> void RadiationSimulation<TophatProblem>::setInitialConditions()
 			const double Egas =
 			    RadSystem<TophatProblem>::ComputeEgasFromTgas(rho_pipe, T_initial);
 			const double Erad = a_rad * std::pow(T_initial, 4);
+
 			double rho = rho_pipe;
-			// change rho -> rho_wall in some regions
+			// TODO(ben): change rho -> rho_wall in some regions
 			
 			state(i, j, k, RadSystem<TophatProblem>::radEnergy_index) = Erad;
 			state(i, j, k, RadSystem<TophatProblem>::x1RadFlux_index) = 0;
