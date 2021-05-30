@@ -45,11 +45,17 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto clamp(double v, double lo, double 
 namespace quokka
 {
 template <typename T>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE bool
+AMREX_GPU_HOST_DEVICE bool
+CheckSymmetryArray(amrex::Array4<const amrex::Real> const &arr, amrex::Box const &indexRange, const int ncomp)
+{
+	return true;
+}
+
+template <typename T>
+AMREX_GPU_HOST_DEVICE bool
 CheckSymmetry(amrex::FArrayBox const &arr, amrex::Box const &indexRange, const int ncomp)
 {
-	// implement per-problem
-	return true;
+	return CheckSymmetryArray<T>(arr.const_array(), indexRange, ncomp);
 }
 
 template <typename T>

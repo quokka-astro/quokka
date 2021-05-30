@@ -7,6 +7,7 @@
 /// \brief Defines a test problem for radiation in the diffusion regime.
 ///
 
+#include "AMReX_Array.H"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_Config.H"
@@ -126,27 +127,37 @@ RadiationSimulation<TophatProblem>::setCustomBoundaryConditions(
 	const amrex::Real *dx = geom.CellSize();
 	const amrex::Real *prob_lo = geom.ProbLo();
 	const amrex::Real *prob_hi = geom.ProbHi();
-	amrex::Real const y0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
+	const amrex::Box &box = geom.Domain();
+
+	amrex::GpuArray<int, 3> lo = box.loVect3d();
+	amrex::GpuArray<int, 3> hi = box.hiVect3d();
+
+	amrex::Real const y0 = 0.;
 	amrex::Real const y = prob_lo[1] + (j + Real(0.5)) * dx[1];
 
-	const double Erad_initial = a_rad * std::pow(T_initial, 4);
-
-	if (i < 0) {
+	if (i < lo[0]) {
 		// Marshak boundary condition
-		double E_inc = a_rad * std::pow(T_hohlraum, 4);
-		double Fx_bdry = 0.;
-		const double E_0 = consVar(0, j, k, RadSystem<TophatProblem>::radEnergy_index);
-		const double Fx_0 = consVar(0, j, k, RadSystem<TophatProblem>::x1RadFlux_index);
-		const double Fy_0 = consVar(0, j, k, RadSystem<TophatProblem>::x2RadFlux_index);
-		const double Fz_0 = consVar(0, j, k, RadSystem<TophatProblem>::x3RadFlux_index);
+		double E_inc = NAN;
+		const double E_0 = consVar(lo[0], j, k, RadSystem<TophatProblem>::radEnergy_index);
+		const double Fx_0 = consVar(lo[0], j, k, RadSystem<TophatProblem>::x1RadFlux_index);
+		const double Fy_0 = consVar(lo[0], j, k, RadSystem<TophatProblem>::x2RadFlux_index);
+		const double Fz_0 = consVar(lo[0], j, k, RadSystem<TophatProblem>::x3RadFlux_index);
 
+		double Fx_bdry = NAN;
 		if (std::abs(y - y0) < 0.5) {
-			// solve for F_bdry where F_inc = c * E_inc / 4 (Marshak boundary)
+			E_inc = a_rad * std::pow(T_hohlraum, 4);
 			Fx_bdry = 0.5 * c * E_inc - 0.5 * (c * E_0 + 2.0 * Fx_0);
 		} else {
 			// reflecting boundary
+			//E_inc = E_0;
+			//Fx_bdry = -Fx_0;
+			
+			// extrap boundary
 			E_inc = E_0;
-			Fx_bdry = -Fx_0;
+			Fx_bdry = Fx_0;
+
+			//E_inc = a_rad * std::pow(T_initial, 4);
+			//Fx_bdry = 0.5 * c * E_inc - 0.5 * (c * E_0 + 2.0 * Fx_0);
 		}
 
 		AMREX_ASSERT(std::abs(Fx_bdry / (c * E_inc)) < 1.0); // flux-limiting condition
@@ -156,14 +167,15 @@ RadiationSimulation<TophatProblem>::setCustomBoundaryConditions(
 		consVar(i, j, k, RadSystem<TophatProblem>::x1RadFlux_index) = Fx_bdry;
 		consVar(i, j, k, RadSystem<TophatProblem>::x2RadFlux_index) = Fy_0;
 		consVar(i, j, k, RadSystem<TophatProblem>::x3RadFlux_index) = Fz_0;
-
-	} else {
+	}
+	/* else if(i > hi[0]) {
 		// right-side boundary -- constant
+		const double Erad_initial = a_rad * std::pow(T_initial, 4);
 		consVar(i, j, k, RadSystem<TophatProblem>::radEnergy_index) = Erad_initial;
 		consVar(i, j, k, RadSystem<TophatProblem>::x1RadFlux_index) = 0;
 		consVar(i, j, k, RadSystem<TophatProblem>::x2RadFlux_index) = 0;
 		consVar(i, j, k, RadSystem<TophatProblem>::x3RadFlux_index) = 0;
-	}
+	} */
 }
 
 template <> void RadiationSimulation<TophatProblem>::setInitialConditions()
@@ -197,12 +209,11 @@ template <> void RadiationSimulation<TophatProblem>::setInitialConditions()
 namespace quokka
 {
 template <>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE bool
-CheckSymmetry<TophatProblem>(amrex::FArrayBox const &arr, amrex::Box const &indexRange,
-			     const int ncomp)
+AMREX_GPU_HOST_DEVICE bool
+CheckSymmetryArray<TophatProblem>(amrex::Array4<const amrex::Real> const &arr,
+				  amrex::Box const &indexRange, const int ncomp)
 {
 	amrex::Long asymmetry = 0;
-	amrex::Array4<const amrex::Real> state = arr.const_array();
 	amrex::GpuArray<int, 3> lo = indexRange.loVect3d();
 	auto [nx, ny, nz] = indexRange.hiVect3d().arr;
 	AMREX_ASSERT(lo[0] == 0);
@@ -214,9 +225,9 @@ CheckSymmetry<TophatProblem>(amrex::FArrayBox const &arr, amrex::Box const &inde
 		for (int j = 0; j < ny; ++j) {
 			for (int k = 0; k < nz; ++k) {
 				for (int n = 0; n < ncomp; ++n) {
-					const amrex::Real comp_upper = state(i, j, k, n);
+					const amrex::Real comp_upper = arr(i, j, k, n);
 					int j_reflect = j0 - (j - j0 + 1);
-					amrex::Real comp_lower = state(i, j_reflect, k, n);
+					amrex::Real comp_lower = arr(i, j_reflect, k, n);
 
 					if ((n == RadSystem<TophatProblem>::x2RadFlux_index) ||
 					    (n == RadSystem<TophatProblem>::x2GasMomentum_index)) {
@@ -224,29 +235,40 @@ CheckSymmetry<TophatProblem>(amrex::FArrayBox const &arr, amrex::Box const &inde
 					}
 
 					if (comp_upper != comp_lower) {
-						//amrex::Print()
-						//    << i << "," << j << "," << k << "," << n
-						//    << comp_upper << comp_lower << "\n";
+						amrex::Print()
+						    << i << "," << j << "," << k << "," << n
+						    << comp_upper << comp_lower << "\n";
 						asymmetry++;
-						AMREX_ASSERT(false);
 					}
 				}
 			}
 		}
 	}
+	if (asymmetry == 0) {
+		// amrex::Print() << "no symmetry violations.\n";
+	}
 	AMREX_ASSERT_WITH_MESSAGE(asymmetry == 0, "y-midplane symmetry check failed!");
 	return true;
+}
+
+template <>
+AMREX_GPU_HOST_DEVICE bool CheckSymmetry<TophatProblem>(amrex::FArrayBox const &arr,
+							amrex::Box const &indexRange,
+							const int ncomp)
+{
+	return CheckSymmetryArray<TophatProblem>(arr.const_array(), indexRange, ncomp);
 }
 } // namespace quokka
 
 template <> void RadiationSimulation<TophatProblem>::computeAfterTimestep()
 {
+	// copy all FABs to a local FAB across the entire domain
+	amrex::BoxArray localBoxes(domain_);
+	amrex::DistributionMapping localDistribution(localBoxes, 1);
+	amrex::MultiFab state_mf(localBoxes, localDistribution, ncomp_, 0);
+	state_mf.ParallelCopy(state_new_);
+
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-		// copy all FABs to a local FAB across the entire domain
-		amrex::BoxArray localBoxes(domain_);
-		amrex::DistributionMapping localDistribution(localBoxes, 1);
-		amrex::MultiFab state_mf(localBoxes, localDistribution, ncomp_, 0);
-		state_mf.ParallelCopy(state_new_);
 		auto const &state = state_mf.array(0);
 
 		amrex::Long asymmetry = 0;
@@ -272,17 +294,19 @@ template <> void RadiationSimulation<TophatProblem>::computeAfterTimestep()
 						}
 
 						if (comp_upper != comp_lower) {
-							//amrex::Print()
-							//    << i << ", " << j << ", " << k << ", " << n << ", "
-							//    << comp_upper << ", " << comp_lower << "\n";
+							// amrex::Print()
+							//    << i << ", " << j << ", " << k << ", "
+							//    << n << ", "
+							//    << comp_upper << ", " << comp_lower <<
+							//    "\n";
 							asymmetry++;
-							AMREX_ASSERT(false);
+							// AMREX_ASSERT(false);
 						}
 					}
 				}
 			}
 		}
-		AMREX_ASSERT_WITH_MESSAGE(asymmetry == 0, "y-midplane symmetry check failed!");
+		//AMREX_ASSERT_WITH_MESSAGE(asymmetry == 0, "y-midplane symmetry check failed!");
 	}
 }
 
@@ -292,7 +316,7 @@ auto testproblem_radiation_marshak_cgs() -> int
 	const int max_timesteps = 1000;
 	const double CFL_number = 0.1;
 	const int nx = 140;
-	const int ny = 80;
+	const int ny = 40; //80;
 
 	const double Lx = 7.0;		 // cm
 	const double Ly = 4.0;		 // cm
@@ -300,8 +324,30 @@ auto testproblem_radiation_marshak_cgs() -> int
 
 	amrex::IntVect gridDims{AMREX_D_DECL(nx, ny, 4)};
 	amrex::RealBox boxSize{
-	    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.0), amrex::Real(0.0))}, // NOLINT
-	    {AMREX_D_DECL(amrex::Real(Lx), amrex::Real(Ly), amrex::Real(1.0))}};  // NOLINT
+	    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.), amrex::Real(0.0))}, // NOLINT
+	    {AMREX_D_DECL(amrex::Real(Lx), amrex::Real(Ly/2.0), amrex::Real(1.0))}};  // NOLINT
+
+	auto isNormalComp = [=] (int n, int dim) {
+		if ((n == RadSystem<TophatProblem>::x1RadFlux_index) && (dim == 0)) {
+			return true;
+		}
+		if ((n == RadSystem<TophatProblem>::x2RadFlux_index) && (dim == 1)) {
+			return true;
+		}
+		if ((n == RadSystem<TophatProblem>::x3RadFlux_index) && (dim == 2)) {
+			return true;
+		}
+		if ((n == RadSystem<TophatProblem>::x1GasMomentum_index) && (dim == 0)) {
+			return true;
+		}
+		if ((n == RadSystem<TophatProblem>::x2GasMomentum_index) && (dim == 1)) {
+			return true;
+		}
+		if ((n == RadSystem<TophatProblem>::x3GasMomentum_index) && (dim == 2)) {
+			return true;
+		}
+		return false;
+	};
 
 	constexpr int nvars = 9;
 	amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
@@ -309,8 +355,12 @@ auto testproblem_radiation_marshak_cgs() -> int
 		boundaryConditions[n].setLo(0, amrex::BCType::ext_dir);	 // left x1 -- Marshak
 		boundaryConditions[n].setHi(0, amrex::BCType::foextrap); // right x1 -- extrapolate
 		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
-			boundaryConditions[n].setLo(
-			    i, amrex::BCType::foextrap); // extrapolate all others
+			if(isNormalComp(n, i)) { // reflect lower
+				boundaryConditions[n].setLo(i, amrex::BCType::reflect_odd);
+			} else {
+				boundaryConditions[n].setLo(i, amrex::BCType::reflect_even);
+			}
+			// extrapolate upper
 			boundaryConditions[n].setHi(i, amrex::BCType::foextrap);
 		}
 	}

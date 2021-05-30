@@ -173,6 +173,7 @@ template <typename problem_t> void RadiationSimulation<problem_t>::advanceSingle
 		auto const &stateOld = state_old_.const_array(iter);
 		auto const &stateNew = state_new_.array(iter);
 		stageOneRK2SSP(stateOld, stateNew, indexRange, ncompPrimitive_);
+		quokka::CheckSymmetryArray<problem_t>(stateNew, indexRange, ncomp_);
 	}
 
 	// update ghost zones [intermediate stage stored in state_new_]
@@ -185,13 +186,19 @@ template <typename problem_t> void RadiationSimulation<problem_t>::advanceSingle
 		auto const &stateOld = state_old_.const_array(iter);
 		auto const &stateNew = state_new_.array(iter);
 		stageTwoRK2SSP(stateOld, stateNew, indexRange, ncompPrimitive_);
+		quokka::CheckSymmetryArray<problem_t>(stateNew, indexRange, ncomp_);
 	}
 
+	// update ghost zones [intermediate stage stored in state_new_]
+	fillBoundaryConditions(state_new_);
+	AMREX_ASSERT(!state_new_.contains_nan(0, ncomp_));
+	
 	// source terms
 	for (amrex::MFIter iter(state_new_); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox(); // 'validbox' == exclude ghost zones
 		auto const &stateNew = state_new_.array(iter);
 		operatorSplitSourceTerms(stateNew, indexRange, ncomp_);
+		quokka::CheckSymmetryArray<problem_t>(stateNew, indexRange, ncomp_);
 	}
 }
 
