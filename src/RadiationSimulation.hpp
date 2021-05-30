@@ -192,7 +192,7 @@ template <typename problem_t> void RadiationSimulation<problem_t>::advanceSingle
 	// update ghost zones [intermediate stage stored in state_new_]
 	fillBoundaryConditions(state_new_);
 	AMREX_ASSERT(!state_new_.contains_nan(0, ncomp_));
-	
+
 	// source terms
 	for (amrex::MFIter iter(state_new_); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox(); // 'validbox' == exclude ghost zones
@@ -206,8 +206,10 @@ template <typename problem_t>
 void RadiationSimulation<problem_t>::operatorSplitSourceTerms(
     amrex::Array4<amrex::Real> const &stateNew, const amrex::Box &indexRange, const int nvars)
 {
-	amrex::FArrayBox radEnergySource(indexRange, 1, amrex::The_Async_Arena()); // cell-centered scalar
-	amrex::FArrayBox advectionFluxes(indexRange, 3, amrex::The_Async_Arena()); // cell-centered vector
+	amrex::FArrayBox radEnergySource(indexRange, 1,
+					 amrex::The_Async_Arena()); // cell-centered scalar
+	amrex::FArrayBox advectionFluxes(indexRange, 3,
+					 amrex::The_Async_Arena()); // cell-centered vector
 	radEnergySource.setVal(0.);
 	advectionFluxes.setVal(0.);
 
@@ -251,9 +253,13 @@ void RadiationSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Rea
 	quokka::CheckNaN<problem_t>(primVar, indexRange, ghostRange, ncompPrimitive_);
 
 	// mixed interface/cell-centered kernel
-	RadSystem<problem_t>::template ReconstructStatesPPM<DIR>(
-	    primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange,
-	    x1ReconstructRange, ncompPrimitive_);
+	// RadSystem<problem_t>::template ReconstructStatesPPM<DIR>(
+	//   primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange,
+	//    x1ReconstructRange, ncompPrimitive_);
+	// PLM and donor cell are interface-centered kernels
+	RadSystem<problem_t>::template ReconstructStatesPLM<DIR>(
+	    primVar.array(), x1LeftState.array(), x1RightState.array(), x1ReconstructRange,
+	    ncompPrimitive_);
 	quokka::CheckNaN<problem_t>(x1LeftState, indexRange, x1ReconstructRange, ncompPrimitive_);
 	quokka::CheckNaN<problem_t>(x1RightState, indexRange, x1ReconstructRange, ncompPrimitive_);
 

@@ -352,7 +352,7 @@ auto testproblem_radiation_marshak_cgs() -> int
 {
 	// Problem parameters
 	const int max_timesteps = 10000;
-	const double CFL_number = 0.05;
+	const double CFL_number = 0.1;
 	const int nx = 140;
 	const int ny = 40; // 80;
 

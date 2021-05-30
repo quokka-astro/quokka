@@ -219,26 +219,18 @@ auto RadSystem<problem_t>::ComputeCellOpticalDepth(
 	// the left edge of zone i, and xright_(i) is the "right"-side of the
 	// interface at the *left* edge of zone i.]
 
-	const double rho_L =
-	    consVar(i - 1, j, k, gasDensity_index); // piecewise-constant reconstruction
+	// piecewise-constant reconstruction
+	const double rho_L = consVar(i - 1, j, k, gasDensity_index); 
 	const double rho_R = consVar(i, j, k, gasDensity_index);
 
 	const double x1GasMom_L = consVar(i - 1, j, k, x1GasMomentum_index);
 	const double x1GasMom_R = consVar(i, j, k, x1GasMomentum_index);
 
-	const double x2GasMom_R = consVar(i, j, k, x2GasMomentum_index);
-#if (AMREX_SPACEDIM >= 2)
 	const double x2GasMom_L = consVar(i - 1, j, k, x2GasMomentum_index);
-#else
-	const double x2GasMom_L = x2GasMom_R;
-#endif
+	const double x2GasMom_R = consVar(i, j, k, x2GasMomentum_index);
 
-	const double x3GasMom_R = consVar(i, j, k, x3GasMomentum_index);
-#if (AMREX_SPACEDIM == 3)
 	const double x3GasMom_L = consVar(i - 1, j, k, x3GasMomentum_index);
-#else
-	const double x3GasMom_L = x3GasMom_R;
-#endif
+	const double x3GasMom_R = consVar(i, j, k, x3GasMomentum_index);
 
 	const double Egas_L = consVar(i - 1, j, k, gasEnergy_index);
 	const double Egas_R = consVar(i, j, k, gasEnergy_index);
@@ -477,21 +469,15 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 		// assemble Eddington tensor
 		double T_L[3][3];
 		double T_R[3][3];
+		double P_L[3][3];
+		double P_R[3][3];
 
 		for (int i = 0; i < 3; ++i) {
 			for (int j = 0; j < 3; ++j) {
 				const double delta_ij = (i == j) ? 1 : 0;
 				T_L[i][j] = Tdiag_L * delta_ij + Tf_L * (n_L[i] * n_L[j]);
 				T_R[i][j] = Tdiag_R * delta_ij + Tf_R * (n_R[i] * n_R[j]);
-			}
-		}
-
-		// compute the elements of the total radiation pressure tensor
-		double P_L[3][3];
-		double P_R[3][3];
-
-		for (int i = 0; i < 3; ++i) {
-			for (int j = 0; j < 3; ++j) {
+				// compute the elements of the total radiation pressure tensor
 				P_L[i][j] = T_L[i][j] * erad_L;
 				P_R[i][j] = T_R[i][j] * erad_R;
 			}
