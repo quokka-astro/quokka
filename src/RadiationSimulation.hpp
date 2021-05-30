@@ -199,8 +199,8 @@ template <typename problem_t>
 void RadiationSimulation<problem_t>::operatorSplitSourceTerms(
     amrex::Array4<amrex::Real> const &stateNew, const amrex::Box &indexRange, const int nvars)
 {
-	amrex::FArrayBox radEnergySource(indexRange, 1, amrex::The_Async_Arena()); // cell-centered
-	amrex::FArrayBox advectionFluxes(indexRange, 1, amrex::The_Async_Arena()); // cell-centered
+	amrex::FArrayBox radEnergySource(indexRange, 1, amrex::The_Async_Arena()); // cell-centered scalar
+	amrex::FArrayBox advectionFluxes(indexRange, 3, amrex::The_Async_Arena()); // cell-centered vector
 	radEnergySource.setVal(0.);
 	advectionFluxes.setVal(0.);
 
@@ -241,21 +241,21 @@ void RadiationSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Rea
 
 	// cell-centered kernel
 	RadSystem<problem_t>::ConservedToPrimitive(consState, primVar.array(), ghostRange);
-	CheckNaN(primVar, ghostRange, ncompPrimitive_);
+	quokka::CheckNaN<problem_t>(primVar, indexRange, ghostRange, ncompPrimitive_);
 
 	// mixed interface/cell-centered kernel
 	RadSystem<problem_t>::template ReconstructStatesPPM<DIR>(
 	    primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange,
 	    x1ReconstructRange, ncompPrimitive_);
-	CheckNaN(x1LeftState, x1ReconstructRange, ncompPrimitive_);
-	CheckNaN(x1RightState, x1ReconstructRange, ncompPrimitive_);
+	quokka::CheckNaN<problem_t>(x1LeftState, indexRange, x1ReconstructRange, ncompPrimitive_);
+	quokka::CheckNaN<problem_t>(x1RightState, indexRange, x1ReconstructRange, ncompPrimitive_);
 
 	// interface-centered kernel
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, dir);
 	RadSystem<problem_t>::template ComputeFluxes<DIR>(
 	    x1Flux.array(), x1LeftState.array(), x1RightState.array(), x1FluxRange, consState,
 	    dx_); // watch out for argument order!!
-	CheckNaN(x1Flux, x1FluxRange, ncompPrimitive_);
+	quokka::CheckNaN<problem_t>(x1Flux, indexRange, x1FluxRange, ncompPrimitive_);
 }
 
 template <typename problem_t>

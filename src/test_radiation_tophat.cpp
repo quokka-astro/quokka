@@ -13,6 +13,7 @@
 #include "AMReX_IntVect.H"
 #include "radiation_system.hpp"
 #include "test_radiation_marshak_cgs.hpp"
+#include <tuple>
 
 auto main(int argc, char **argv) -> int
 {
@@ -193,6 +194,51 @@ template <> void RadiationSimulation<TophatProblem>::setInitialConditions()
 	areInitialConditionsDefined_ = true;
 }
 
+namespace quokka
+{
+template <>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE bool
+CheckSymmetry<TophatProblem>(amrex::FArrayBox const &arr, amrex::Box const &indexRange,
+			     const int ncomp)
+{
+	amrex::Long asymmetry = 0;
+	amrex::Array4<const amrex::Real> state = arr.const_array();
+	amrex::GpuArray<int, 3> lo = indexRange.loVect3d();
+	auto [nx, ny, nz] = indexRange.hiVect3d().arr;
+	AMREX_ASSERT(lo[0] == 0);
+	AMREX_ASSERT(lo[1] == 0);
+	AMREX_ASSERT(lo[2] == 0);
+
+	int j0 = ny / 2;
+	for (int i = 0; i < nx; ++i) {
+		for (int j = 0; j < ny; ++j) {
+			for (int k = 0; k < nz; ++k) {
+				for (int n = 0; n < ncomp; ++n) {
+					const amrex::Real comp_upper = state(i, j, k, n);
+					int j_reflect = j0 - (j - j0 + 1);
+					amrex::Real comp_lower = state(i, j_reflect, k, n);
+
+					if ((n == RadSystem<TophatProblem>::x2RadFlux_index) ||
+					    (n == RadSystem<TophatProblem>::x2GasMomentum_index)) {
+						comp_lower *= -1.0;
+					}
+
+					if (comp_upper != comp_lower) {
+						//amrex::Print()
+						//    << i << "," << j << "," << k << "," << n
+						//    << comp_upper << comp_lower << "\n";
+						asymmetry++;
+						AMREX_ASSERT(false);
+					}
+				}
+			}
+		}
+	}
+	AMREX_ASSERT_WITH_MESSAGE(asymmetry == 0, "y-midplane symmetry check failed!");
+	return true;
+}
+} // namespace quokka
+
 template <> void RadiationSimulation<TophatProblem>::computeAfterTimestep()
 {
 	if (amrex::ParallelDescriptor::IOProcessor()) {
@@ -204,26 +250,34 @@ template <> void RadiationSimulation<TophatProblem>::computeAfterTimestep()
 		auto const &state = state_mf.array(0);
 
 		amrex::Long asymmetry = 0;
-
-		int j0 = ny_/2;
-		for (int i = 0; i < nx_; ++i) {
-			for (int j = 0; j < ny_; ++j) {
-				for (int k = 0; k < nz_; ++k) {
-					for (int n = 0; n < ncomp_; ++n) {
+		auto nx = nx_;
+		auto ny = ny_;
+		auto nz = nz_;
+		auto ncomp = ncomp_;
+		int j0 = ny / 2;
+		for (int i = 0; i < nx; ++i) {
+			for (int j = 0; j < ny; ++j) {
+				for (int k = 0; k < nz; ++k) {
+					for (int n = 0; n < ncomp; ++n) {
 						const amrex::Real comp_upper = state(i, j, k, n);
 						int j_reflect = j0 - (j - j0 + 1);
 						amrex::Real comp_lower = state(i, j_reflect, k, n);
 
-						if(n == RadSystem<TophatProblem>::x2RadFlux_index) {
+						if ((n ==
+						     RadSystem<TophatProblem>::x2RadFlux_index) ||
+						    (n ==
+						     RadSystem<
+							 TophatProblem>::x2GasMomentum_index)) {
 							comp_lower *= -1.0;
 						}
-						if(comp_upper != comp_lower) {
-							amrex::Print() << i << "," << j << "," << k << "," << n << "\n";
+
+						if (comp_upper != comp_lower) {
+							//amrex::Print()
+							//    << i << ", " << j << ", " << k << ", " << n << ", "
+							//    << comp_upper << ", " << comp_lower << "\n";
 							asymmetry++;
+							AMREX_ASSERT(false);
 						}
-						//AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-						//    comp_upper == comp_lower,
-						//    "y-midplane symmetry check failed!");
 					}
 				}
 			}

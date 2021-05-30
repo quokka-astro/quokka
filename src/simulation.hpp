@@ -12,11 +12,15 @@
 // c++ headers
 
 // library headers
+#include "AMReX_Array4.H"
 #include "AMReX_BCRec.H"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_Config.H"
 #include "AMReX_DistributionMapping.H"
+#include "AMReX_Extension.H"
+#include "AMReX_FArrayBox.H"
+#include "AMReX_GpuQualifiers.H"
 #include "AMReX_INT.H"
 #include "AMReX_IntVect.H"
 #include "AMReX_ParallelDescriptor.H"
@@ -38,12 +42,25 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto clamp(double v, double lo, double 
 	return (v < lo) ? lo : (hi < v) ? hi : v;
 }
 
+namespace quokka
+{
+template <typename T>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE bool
+CheckSymmetry(amrex::FArrayBox const &arr, amrex::Box const &indexRange, const int ncomp)
+{
+	// implement per-problem
+	return true;
+}
+
+template <typename T>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void
-CheckNaN(amrex::FArrayBox const &arr, amrex::Box const &indexRange, const int ncomp)
+CheckNaN(amrex::FArrayBox const &arr, amrex::Box const &symmetryRange, amrex::Box const &nanRange, const int ncomp)
 {
 	// need to rewrite for GPU
-	AMREX_ASSERT(!arr.contains_nan(indexRange, 0, ncomp));
+	AMREX_ASSERT(CheckSymmetry<T>(arr, symmetryRange, ncomp));
+	AMREX_ASSERT(!arr.contains_nan(nanRange, 0, ncomp));
 }
+} // namespace quokka
 
 // Simulation class should be initialized only once per program (i.e., is a singleton)
 template <typename problem_t> class SingleLevelSimulation
@@ -52,7 +69,7 @@ template <typename problem_t> class SingleLevelSimulation
 	int nx_{1};
 	int ny_{1};
 	int nz_{1};
-	int max_grid_size_{128};
+	int max_grid_size_{256}; // amrex default is 128 in 2D
 	int maxTimesteps_{10000};
 
 	amrex::BoxArray simBoxArray_;

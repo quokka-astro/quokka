@@ -140,7 +140,7 @@ auto testproblem_hydro_kelvinhelmholz() -> int
 	sim.cflNumber_ = 0.4;
 	sim.maxTimesteps_ = 20000;
 	sim.plotfileInterval_ = 25;
-	sim.outputAtInterval_ = true;
+	sim.outputAtInterval_ = false;
 
 	// initialize
 	sim.setInitialConditions();

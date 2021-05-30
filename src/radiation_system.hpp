@@ -250,7 +250,14 @@ auto RadSystem<problem_t>::ComputeCellOpticalDepth(
 	const double Tgas_L = RadSystem<problem_t>::ComputeTgasFromEgas(rho_L, Eint_L);
 	const double Tgas_R = RadSystem<problem_t>::ComputeTgasFromEgas(rho_R, Eint_R);
 
-	const double dl = dx[0]; // modify in 3d
+	double dl = NAN;
+	if constexpr (DIR == FluxDir::X1) {
+		dl = dx[0];
+	} else if constexpr (DIR == FluxDir::X2) {
+		dl = dx[1];
+	} else if constexpr (DIR == FluxDir::X3) {
+		dl = dx[2];
+	}
 	const double tau_L = dl * rho_L * RadSystem<problem_t>::ComputeOpacity(rho_L, Tgas_L);
 	const double tau_R = dl * rho_R * RadSystem<problem_t>::ComputeOpacity(rho_R, Tgas_R);
 
@@ -565,9 +572,14 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		const double rho = consPrev(i, j, k, gasDensity_index);
 		const double Egastot0 = consPrev(i, j, k, gasEnergy_index);
 		const double x1GasMom0 = consPrev(i, j, k, x1GasMomentum_index);
-		const double vx0 = x1GasMom0 / rho; // needed to update kinetic energy
+		const double x2GasMom0 = consPrev(i, j, k, x2GasMomentum_index);
+		const double x3GasMom0 = consPrev(i, j, k, x3GasMomentum_index);
+		amrex::GpuArray<const amrex::Real, 3> vel0 = {
+		    x1GasMom0 / rho,
+			x2GasMom0 / rho,
+		    x3GasMom0 / rho}; // needed to update kinetic energy
 		const double Egas0 =
-		    ComputeEintFromEgas(rho, x1GasMom0, 0, 0, Egastot0); // modify in 3d
+		    ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0);
 
 		// load radiation energy
 		const double Erad0 = consPrev(i, j, k, radEnergy_index);
@@ -584,8 +596,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		double T_gas = NAN;
 		double kappa = NAN;
 		double fourPiB = NAN;
-		// double dB_dTgas = NAN;
-		// double dkappa_dTgas = NAN;
 		double drhs_dEgas = NAN;
 		double dFG_dEgas = NAN;
 		double dFG_dErad = NAN;
@@ -665,27 +675,43 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		// store new radiation energy, gas energy
 		consNew(i, j, k, radEnergy_index) = Erad_guess;
 		consNew(i, j, k, gasEnergy_index) =
-		    ComputeEgasFromEint(rho, x1GasMom0, 0, 0, Egas_guess); // modify in 3d
+		    ComputeEgasFromEint(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egas_guess);
 
 		// 2. Compute radiation flux update
+		amrex::GpuArray<amrex::Real, 3> Frad_t0{};
+		amrex::GpuArray<amrex::Real, 3> Frad_t1{};
 
-		const double Frad_x_t0 = consPrev(i, j, k, x1RadFlux_index);
-		const double Frad_x_t1 = (Frad_x_t0 + (dt * advectionFluxes(i, j, k))) /
-					 (1.0 + (rho * kappa) * chat * dt);
+		Frad_t0[0] = consPrev(i, j, k, x1RadFlux_index);
+		Frad_t0[1] = consPrev(i, j, k, x2RadFlux_index);
+		Frad_t0[2] = consPrev(i, j, k, x3RadFlux_index);
 
-		consNew(i, j, k, x1RadFlux_index) = Frad_x_t1;
+		for (int n = 0; n < 3; ++n) {
+			Frad_t1[n] = (Frad_t0[n] + (dt * advectionFluxes(i, j, k, n))) /
+				     (1.0 + (rho * kappa) * chat * dt);
+		}
+		consNew(i, j, k, x1RadFlux_index) = Frad_t1[0];
+		consNew(i, j, k, x2RadFlux_index) = Frad_t1[1];
+		consNew(i, j, k, x3RadFlux_index) = Frad_t1[2];
 
-		// 3. Compute conservative gas momentum update
+		// 3. Compute conservative gas momentum update -- modify in 3d
 		//	[N.B. should this step happen after the Lorentz	transform?]
+		amrex::GpuArray<amrex::Real, 3> dF{};
+		amrex::GpuArray<amrex::Real, 3> dMomentum{};
 
-		const double dF_x = Frad_x_t1 - Frad_x_t0;
-		const double dx1Momentum = -dF_x / (c * chat);
+		for (int n = 0; n < 3; ++n) {
+			dF[n] = Frad_t1[n] - Frad_t0[n];
+			dMomentum[n] = -dF[n] / (c * chat);
+		}
 
-		consNew(i, j, k, x1GasMomentum_index) += dx1Momentum;
+		consNew(i, j, k, x1GasMomentum_index) += dMomentum[0];
+		consNew(i, j, k, x2GasMomentum_index) += dMomentum[1];
+		consNew(i, j, k, x3GasMomentum_index) += dMomentum[2];
 
 		// 4. Update kinetic energy of gas
-
-		const double dEkin = (vx0 * dx1Momentum); // modify in 3d
+		double dEkin = 0.;
+		for (int n = 0; n < 3; ++n) {
+			dEkin += (vel0[n] * dMomentum[n]);
+		}
 		consNew(i, j, k, gasEnergy_index) += dEkin;
 
 		// Lorentz transform back to 'laboratory' frame
@@ -707,8 +733,10 @@ void RadSystem<problem_t>::ComputeSourceTermsExplicit(arrayconst_t &consPrev,
 		const auto rho = consPrev(i, j, k, gasDensity_index);
 		const auto Egastot0 = consPrev(i, j, k, gasEnergy_index);
 		const auto x1GasMom0 = consPrev(i, j, k, x1GasMomentum_index);
+		const double x2GasMom0 = consPrev(i, j, k, x2GasMomentum_index);
+		const double x3GasMom0 = consPrev(i, j, k, x3GasMomentum_index);
 		const auto Egas0 =
-		    ComputeEintFromEgas(rho, x1GasMom0, 0, 0, Egastot0); // modify in 3d
+		    ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0);
 
 		// load radiation energy, momentum
 		const auto Erad0 = consPrev(i, j, k, radEnergy_index);
