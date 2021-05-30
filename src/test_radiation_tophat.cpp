@@ -152,31 +152,41 @@ RadiationSimulation<TophatProblem>::setCustomBoundaryConditions(
 		const double Fz_0 = consVar(lo[0], j, k, RadSystem<TophatProblem>::x3RadFlux_index);
 
 		double Fx_bdry = NAN;
+		double Fy_bdry = NAN;
+		double Fz_bdry = NAN;
+
 		if (std::abs(y - y0) < 0.5) {
 			E_inc = a_rad * std::pow(T_hohlraum, 4);
 			Fx_bdry = 0.5 * c * E_inc - 0.5 * (c * E_0 + 2.0 * Fx_0);
+			Fy_bdry = 0.;
+			Fz_bdry = 0.;
 		} else {
-			// reflecting boundary
-			//E_inc = E_0;
-			//Fx_bdry = -Fx_0;
-
-			// extrapolated boundary (usually works best)
+			// reflecting boundary (usually works best)
 			E_inc = E_0;
-			Fx_bdry = Fx_0;
+			Fx_bdry = -Fx_0;
+			Fy_bdry = 0.;
+			Fz_bdry = 0.;
 
-			// Marshak boundary
-			//E_inc = a_rad * std::pow(T_initial, 4); // does not work
-			//E_inc = a_rad * std::pow(T_hohlraum, 4);
+			// extrapolated boundary
+			//E_inc = E_0;
+			//Fx_bdry = Fx_0;
+			//Fy_bdry = 0.;
+			//Fz_bdry = 0.;
+
+			// Marshak boundary (does not work)
+			//E_inc = a_rad * std::pow(T_initial, 4);
 			//Fx_bdry = 0.5 * c * E_inc - 0.5 * (c * E_0 + 2.0 * Fx_0);
+			//Fy_bdry = 0.;
+			//Fz_bdry = 0.;
 		}
-
-		AMREX_ASSERT(std::abs(Fx_bdry / (c * E_inc)) < 1.0); // flux-limiting condition
+		const amrex::Real Fnorm = std::sqrt(Fx_bdry*Fx_bdry + Fy_bdry*Fy_bdry + Fz_bdry*Fz_bdry);
+		AMREX_ASSERT((Fnorm / (c * E_inc)) < 1.0); // flux-limiting condition
 
 		// x1 left side boundary (Marshak)
 		consVar(i, j, k, RadSystem<TophatProblem>::radEnergy_index) = E_inc;
 		consVar(i, j, k, RadSystem<TophatProblem>::x1RadFlux_index) = Fx_bdry;
-		consVar(i, j, k, RadSystem<TophatProblem>::x2RadFlux_index) = Fy_0;
-		consVar(i, j, k, RadSystem<TophatProblem>::x3RadFlux_index) = Fz_0;
+		consVar(i, j, k, RadSystem<TophatProblem>::x2RadFlux_index) = Fy_bdry;
+		consVar(i, j, k, RadSystem<TophatProblem>::x3RadFlux_index) = Fz_bdry;
 	}
 }
 
@@ -342,9 +352,9 @@ auto testproblem_radiation_marshak_cgs() -> int
 {
 	// Problem parameters
 	const int max_timesteps = 10000;
-	const double CFL_number = 0.4;
-	const int nx = 1400;
-	const int ny = 400; // 80;
+	const double CFL_number = 0.05;
+	const int nx = 140;
+	const int ny = 40; // 80;
 
 	const double Lx = 7.0;		 // cm
 	const double Ly = 4.0;		 // cm

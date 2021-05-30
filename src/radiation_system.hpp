@@ -101,9 +101,10 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 				  amrex::Box const &indexRange, arrayconst_t &consVar,
 				  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx);
 
-	// static void ComputeFirstOrderFluxes(amrex::Array4<const amrex::Real> const &consVar,
-	//					   array_t &x1FluxDiffusive,
-	//					   amrex::Box const &indexRange);
+	template <FluxDir DIR>
+	static void ComputeFirstOrderFluxes(amrex::Array4<const amrex::Real> const &consVar_in,
+					    array_t &x1FluxDiffusive_in,
+					    amrex::Box const &indexRange);
 
 	static void SetRadEnergySource(array_t &radEnergy, amrex::Box const &indexRange,
 				       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
@@ -267,6 +268,93 @@ auto RadSystem<problem_t>::ComputeCellOpticalDepth(
 
 template <typename problem_t>
 template <FluxDir DIR>
+void RadSystem<problem_t>::ComputeFirstOrderFluxes(
+    amrex::Array4<const amrex::Real> const &consVar_in, array_t &x1FluxDiffusive_in,
+    amrex::Box const &indexRange)
+{
+	quokka::Array4View<amrex::Real, DIR> x1FluxDiffusive(x1FluxDiffusive_in);
+	quokka::Array4View<const amrex::Real, DIR> consVar(consVar_in);
+
+	// By convention, the interfaces are defined on the left edge of each
+	// zone, i.e. x1Flux_(i) is the solution to the Riemann problem at
+	// the left edge of zone i.
+
+	// compute Lax-Friedrichs fluxes for use in flux-limiting to ensure realizable states
+
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in) {
+		auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
+
+		// gather L/R states
+		const double erad_L = consVar(i - 1, j, k, radEnergy_index);
+		const double erad_R = consVar(i, j, k, radEnergy_index);
+
+		const double Fx_L = consVar(i - 1, j, k, x1RadFlux_index);
+		const double Fx_R = consVar(i, j, k, x1RadFlux_index);
+
+		const double Fy_L = consVar(i - 1, j, k, x2RadFlux_index);
+		const double Fy_R = consVar(i, j, k, x2RadFlux_index);
+
+		const double Fz_L = consVar(i - 1, j, k, x3RadFlux_index);
+		const double Fz_R = consVar(i, j, k, x3RadFlux_index);
+
+		// compute primitive variables
+		const double fx_L = Fx_L / (c_light_ * erad_L);
+		const double fx_R = Fx_R / (c_light_ * erad_R);
+
+		// compute scalar reduced flux f
+		// [modify in 3d!]
+		const double f_L = std::sqrt(fx_L * fx_L);
+		const double f_R = std::sqrt(fx_R * fx_R);
+
+		const double nx_L = (f_L > 0.0) ? (fx_L / f_L) : 0.0;
+		const double nx_R = (f_R > 0.0) ? (fx_R / f_R) : 0.0;
+
+		// compute radiation pressure tensors
+		const double chi_L = RadSystem<problem_t>::ComputeEddingtonFactor(f_L);
+		const double chi_R = RadSystem<problem_t>::ComputeEddingtonFactor(f_R);
+
+		// diagonal term of Eddington tensor
+		const double Tdiag_L = (1.0 - chi_L) / 2.0;
+		const double Tdiag_R = (1.0 - chi_R) / 2.0;
+
+		// anisotropic term of Eddington tensor (in the direction of the
+		// rad. flux)
+		const double Txx_L = (3.0 * chi_L - 1.0) / 2.0 * (nx_L * nx_L);
+		const double Txx_R = (3.0 * chi_R - 1.0) / 2.0 * (nx_R * nx_R);
+
+		// compute the elements of the total radiation pressure tensor
+		const double Pxx_L = (Tdiag_L + Txx_L) * erad_L;
+		const double Pxx_R = (Tdiag_R + Txx_R) * erad_R;
+
+		// compute signal speed
+		const double S_L = -c_hat_ * std::sqrt(Tdiag_L + Txx_L);
+		const double S_R = c_hat_ * std::sqrt(Tdiag_R + Txx_R);
+
+		const double sstar = std::max(std::abs(S_L), std::abs(S_R));
+
+		// compute (using local signal speed) Lax-Friedrichs flux
+		constexpr int fluxdim = 4;
+		const quokka::valarray<double, fluxdim> F_L = {(c_hat_ / c_light_) * Fx_L,
+							       c_hat_ * c_light_ * Pxx_L};
+
+		const quokka::valarray<double, fluxdim> F_R = {(c_hat_ / c_light_) * Fx_R,
+							       c_hat_ * c_light_ * Pxx_R};
+
+		const quokka::valarray<double, fluxdim> U_L = {erad_L, Fx_L};
+		const quokka::valarray<double, fluxdim> U_R = {erad_R, Fx_R};
+
+		const quokka::valarray<double, fluxdim> LLF =
+		    0.5 * (F_L + F_R - sstar * (U_R - U_L));
+
+		x1FluxDiffusive(i, j, k, radEnergy_index) = LLF[0];
+		x1FluxDiffusive(i, j, k, x1RadFlux_index) = LLF[1];
+		x1FluxDiffusive(i, j, k, x2RadFlux_index) = LLF[2];
+		x1FluxDiffusive(i, j, k, x3RadFlux_index) = LLF[3];
+	});
+}
+
+template <typename problem_t>
+template <FluxDir DIR>
 void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 					 amrex::Array4<const amrex::Real> const &x1LeftState_in,
 					 amrex::Array4<const amrex::Real> const &x1RightState_in,
@@ -292,28 +380,72 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 		// Radiation eigenvalues from Skinner & Ostriker (2013).
 
 		// gather left- and right- state variables
-		const double erad_L = x1LeftState(i, j, k, primRadEnergy_index);
-		const double erad_R = x1RightState(i, j, k, primRadEnergy_index);
+		double erad_L = x1LeftState(i, j, k, primRadEnergy_index);
+		double erad_R = x1RightState(i, j, k, primRadEnergy_index);
 
-		const double fx_L = x1LeftState(i, j, k, x1ReducedFlux_index);
-		const double fx_R = x1RightState(i, j, k, x1ReducedFlux_index);
+		double fx_L = x1LeftState(i, j, k, x1ReducedFlux_index);
+		double fx_R = x1RightState(i, j, k, x1ReducedFlux_index);
 
-		const double fy_L = x1LeftState(i, j, k, x2ReducedFlux_index);
-		const double fy_R = x1LeftState(i, j, k, x2ReducedFlux_index);
+		double fy_L = x1LeftState(i, j, k, x2ReducedFlux_index);
+		double fy_R = x1LeftState(i, j, k, x2ReducedFlux_index);
 
-		const double fz_L = x1LeftState(i, j, k, x3ReducedFlux_index);
-		const double fz_R = x1LeftState(i, j, k, x3ReducedFlux_index);
-
-		const double fvec_L[3] = {fx_L, fy_L, fz_L};
-		const double fvec_R[3] = {fx_R, fy_R, fz_R};
+		double fz_L = x1LeftState(i, j, k, x3ReducedFlux_index);
+		double fz_R = x1LeftState(i, j, k, x3ReducedFlux_index);
 
 		// compute scalar reduced flux f
-		const double f_L = std::sqrt(fx_L * fx_L + fy_L * fy_L + fz_L * fz_L);
-		const double f_R = std::sqrt(fx_R * fx_R + fy_R * fy_R + fz_R * fz_R);
+		double f_L = std::sqrt(fx_L * fx_L + fy_L * fy_L + fz_L * fz_L);
+		double f_R = std::sqrt(fx_R * fx_R + fy_R * fy_R + fz_R * fz_R);
+
+		// Compute "un-reduced" Fx, Fy, Fz
+		double Fx_L = fx_L * (c_light_ * erad_L);
+		double Fx_R = fx_R * (c_light_ * erad_R);
+
+		double Fy_L = fy_L * (c_light_ * erad_L);
+		double Fy_R = fy_R * (c_light_ * erad_R);
+
+		double Fz_L = fz_L * (c_light_ * erad_L);
+		double Fz_R = fz_R * (c_light_ * erad_R);
+
+		// check that states are physically admissible; if not, use first-order
+		// reconstruction
+		if (!((erad_L > 0.) && (erad_R > 0.) && (f_L < 1.) && (f_R < 1.))) {
+			amrex::Print() << "fofc: f_L = " << f_L << " f_R = " << f_R << "\n";
+
+			erad_L = consVar(i - 1, j, k, radEnergy_index);
+			erad_R = consVar(i, j, k, radEnergy_index);
+
+			Fx_L = consVar(i - 1, j, k, x1RadFlux_index);
+			Fx_R = consVar(i, j, k, x1RadFlux_index);
+
+			Fy_L = consVar(i - 1, j, k, x2RadFlux_index);
+			Fy_R = consVar(i, j, k, x2RadFlux_index);
+
+			Fz_L = consVar(i - 1, j, k, x3RadFlux_index);
+			Fz_R = consVar(i, j, k, x3RadFlux_index);
+
+			// compute primitive variables
+			fx_L = Fx_L / (c_light_ * erad_L);
+			fx_R = Fx_R / (c_light_ * erad_R);
+
+			fy_L = Fy_L / (c_light_ * erad_L);
+			fy_R = Fy_R / (c_light_ * erad_R);
+
+			fz_L = Fz_L / (c_light_ * erad_L);
+			fz_R = Fz_R / (c_light_ * erad_R);
+
+			f_L = std::sqrt(fx_L * fx_L + fy_L * fy_L + fz_L * fz_L);
+			f_R = std::sqrt(fx_R * fx_R + fy_R * fy_R + fz_R * fz_R);
+			amrex::Print() << "fofc [corrected]: f_L = " << f_L << " f_R = " << f_R << "\n";
+		}
 
 		// check that states are physically admissible
-		AMREX_ASSERT(erad_L > 0.0); // NOLINT
-		AMREX_ASSERT(erad_R > 0.0); // NOLINT
+		AMREX_ASSERT(erad_L > 0.0);
+		AMREX_ASSERT(erad_R > 0.0);
+		AMREX_ASSERT(f_L < 1.0);
+		AMREX_ASSERT(f_R < 1.0);
+
+		double fvec_L[3] = {fx_L, fy_L, fz_L};
+		double fvec_R[3] = {fx_R, fy_R, fz_R};
 
 		// angle between interface and radiation flux \hat{n}
 		// If direction is undefined, just drop direction-dependent
@@ -325,16 +457,6 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 			n_L[i] = (f_L > 0.) ? (fvec_L[i] / f_L) : 0.;
 			n_R[i] = (f_R > 0.) ? (fvec_R[i] / f_R) : 0.;
 		}
-
-		// Compute "un-reduced" Fx, Fy, Fz
-		const double Fx_L = fx_L * (c_light_ * erad_L);
-		const double Fx_R = fx_R * (c_light_ * erad_R);
-
-		const double Fy_L = fy_L * (c_light_ * erad_L);
-		const double Fy_R = fy_R * (c_light_ * erad_R);
-
-		const double Fz_L = fz_L * (c_light_ * erad_L);
-		const double Fz_R = fz_R * (c_light_ * erad_R);
 
 		// compute radiation pressure tensors
 		const double chi_L = RadSystem<problem_t>::ComputeEddingtonFactor(f_L);
@@ -575,8 +697,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		const double x2GasMom0 = consPrev(i, j, k, x2GasMomentum_index);
 		const double x3GasMom0 = consPrev(i, j, k, x3GasMomentum_index);
 		amrex::GpuArray<const amrex::Real, 3> vel0 = {
-		    x1GasMom0 / rho,
-			x2GasMom0 / rho,
+		    x1GasMom0 / rho, x2GasMom0 / rho,
 		    x3GasMom0 / rho}; // needed to update kinetic energy
 		const double Egas0 =
 		    ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0);
