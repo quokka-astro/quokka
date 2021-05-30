@@ -168,14 +168,6 @@ RadiationSimulation<TophatProblem>::setCustomBoundaryConditions(
 		consVar(i, j, k, RadSystem<TophatProblem>::x2RadFlux_index) = Fy_0;
 		consVar(i, j, k, RadSystem<TophatProblem>::x3RadFlux_index) = Fz_0;
 	}
-	/* else if(i > hi[0]) {
-		// right-side boundary -- constant
-		const double Erad_initial = a_rad * std::pow(T_initial, 4);
-		consVar(i, j, k, RadSystem<TophatProblem>::radEnergy_index) = Erad_initial;
-		consVar(i, j, k, RadSystem<TophatProblem>::x1RadFlux_index) = 0;
-		consVar(i, j, k, RadSystem<TophatProblem>::x2RadFlux_index) = 0;
-		consVar(i, j, k, RadSystem<TophatProblem>::x3RadFlux_index) = 0;
-	} */
 }
 
 template <> void RadiationSimulation<TophatProblem>::setInitialConditions()
@@ -188,14 +180,16 @@ template <> void RadiationSimulation<TophatProblem>::setInitialConditions()
 			const double Egas =
 			    RadSystem<TophatProblem>::ComputeEgasFromTgas(rho_pipe, T_initial);
 			const double Erad = a_rad * std::pow(T_initial, 4);
-
+			double rho = rho_pipe;
+			// change rho -> rho_wall in some regions
+			
 			state(i, j, k, RadSystem<TophatProblem>::radEnergy_index) = Erad;
 			state(i, j, k, RadSystem<TophatProblem>::x1RadFlux_index) = 0;
 			state(i, j, k, RadSystem<TophatProblem>::x2RadFlux_index) = 0;
 			state(i, j, k, RadSystem<TophatProblem>::x3RadFlux_index) = 0;
 
 			state(i, j, k, RadSystem<TophatProblem>::gasEnergy_index) = Egas;
-			state(i, j, k, RadSystem<TophatProblem>::gasDensity_index) = rho_pipe;
+			state(i, j, k, RadSystem<TophatProblem>::gasDensity_index) = rho;
 			state(i, j, k, RadSystem<TophatProblem>::x1GasMomentum_index) = 0.;
 			state(i, j, k, RadSystem<TophatProblem>::x2GasMomentum_index) = 0.;
 			state(i, j, k, RadSystem<TophatProblem>::x3GasMomentum_index) = 0.;
@@ -313,10 +307,10 @@ template <> void RadiationSimulation<TophatProblem>::computeAfterTimestep()
 auto testproblem_radiation_marshak_cgs() -> int
 {
 	// Problem parameters
-	const int max_timesteps = 1000;
+	const int max_timesteps = 10000;
 	const double CFL_number = 0.1;
-	const int nx = 140;
-	const int ny = 40; //80;
+	const int nx = 1400;
+	const int ny = 400; //80;
 
 	const double Lx = 7.0;		 // cm
 	const double Ly = 4.0;		 // cm
@@ -371,7 +365,7 @@ auto testproblem_radiation_marshak_cgs() -> int
 	sim.cflNumber_ = CFL_number;
 	sim.maxTimesteps_ = max_timesteps;
 	sim.outputAtInterval_ = true;
-	sim.plotfileInterval_ = 1; // for debugging
+	sim.plotfileInterval_ = 10; // for debugging
 
 	// initialize
 	sim.setInitialConditions();
