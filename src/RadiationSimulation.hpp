@@ -175,7 +175,7 @@ template <typename problem_t> void RadiationSimulation<problem_t>::advanceSingle
 		stageOneRK2SSP(stateOld, stateNew, indexRange, ncompPrimitive_);
 		quokka::CheckSymmetryArray<problem_t>(stateNew, indexRange, ncomp_);
 	}
-
+#if 0
 	// update ghost zones [intermediate stage stored in state_new_]
 	fillBoundaryConditions(state_new_);
 	AMREX_ASSERT(!state_new_.contains_nan(0, ncomp_));
@@ -188,7 +188,7 @@ template <typename problem_t> void RadiationSimulation<problem_t>::advanceSingle
 		stageTwoRK2SSP(stateOld, stateNew, indexRange, ncompPrimitive_);
 		quokka::CheckSymmetryArray<problem_t>(stateNew, indexRange, ncomp_);
 	}
-
+#endif
 	// update ghost zones [intermediate stage stored in state_new_]
 	fillBoundaryConditions(state_new_);
 	AMREX_ASSERT(!state_new_.contains_nan(0, ncomp_));
@@ -257,7 +257,7 @@ void RadiationSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Rea
 	//   primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange,
 	//    x1ReconstructRange, ncompPrimitive_);
 	// PLM and donor cell are interface-centered kernels
-	RadSystem<problem_t>::template ReconstructStatesPLM<DIR>(
+	RadSystem<problem_t>::template ReconstructStatesConstant<DIR>(
 	    primVar.array(), x1LeftState.array(), x1RightState.array(), x1ReconstructRange,
 	    ncompPrimitive_);
 	quokka::CheckNaN<problem_t>(x1LeftState, indexRange, x1ReconstructRange, ncompPrimitive_);
