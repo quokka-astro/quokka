@@ -484,13 +484,14 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 		}
 
 		// asymptotic-preserving correction (new in this code) -- direction-dependent!
+		// [similar to Skinner et al. 2020, but tau *must* be squared. 1/tau does not work.]
 		const double tau_cell = ComputeCellOpticalDepth<DIR>(consVar, dx, i, j, k);
 		constexpr int fluxdim = 4;
 		const quokka::valarray<double, fluxdim> epsilon = {
 		    std::min(1.0, 1.0 / (tau_cell * tau_cell)), 1.0, 1.0, 1.0};
 		//const quokka::valarray<double, fluxdim> epsilon = {1.0, 1.0, 1.0, 1.0};
 
-		// inspired by https://arxiv.org/pdf/2102.02212.pdf
+		// inspired by Appendix of Jiang et al. ApJ 767:148 (2013)
 		// ensures that signal speed -> c \sqrt{f_xx} / tau_cell in the diffusion limit
 		const auto S_corr = std::min(1.0, 1.0 / tau_cell);
 		//const auto S_corr = 1.0;
