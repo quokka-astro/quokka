@@ -9,6 +9,7 @@ __pycache__
 *.mp4
 *.pdf
 .DS_Store
+.cache
 
 # Acme output files
 +Errors
