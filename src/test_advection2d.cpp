@@ -100,6 +100,19 @@ void ComputeExactSolution(amrex::Array4<amrex::Real> const &exact_arr, amrex::Bo
 	});
 }
 
+// based on:
+// https://en.cppreference.com/w/cpp/types/numeric_limits/epsilon
+template <class T>
+auto isEqualToMachinePrecision(T x, T y, int ulp = 1) ->
+    typename std::enable_if<!std::numeric_limits<T>::is_integer, bool>::type
+{
+	// the machine epsilon has to be scaled to the magnitude of the values used
+	// and multiplied by the desired precision in ULPs (units in the last place)
+	return std::fabs(x - y) <= std::numeric_limits<T>::epsilon() * std::fabs(x + y) * ulp
+	       // unless the result is subnormal
+	       || std::fabs(x - y) < std::numeric_limits<T>::min();
+}
+
 template <> void AdvectionSimulation<SquareProblem>::computeAfterTimestep()
 {
 	// copy all FABs to a local FAB across the entire domain
@@ -113,7 +126,6 @@ template <> void AdvectionSimulation<SquareProblem>::computeAfterTimestep()
 		auto prob_lo = simGeometry_.ProbLo();
 		auto dx = dx_;
 
-		const amrex::Real machine_eps = 1e-15;
 		amrex::Long asymmetry = 0;
 		auto nx = nx_;
 		auto ny = ny_;
@@ -122,27 +134,31 @@ template <> void AdvectionSimulation<SquareProblem>::computeAfterTimestep()
 		for (int i = 0; i < nx; ++i) {
 			for (int j = 0; j < ny; ++j) {
 				for (int k = 0; k < nz; ++k) {
-					amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
-					amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
+					amrex::Real const x =
+					    prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+					amrex::Real const y =
+					    prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
 					for (int n = 0; n < ncomp; ++n) {
 						const amrex::Real comp_upper = state(i, j, k, n);
 						// reflect across x/y diagonal
 						const amrex::Real comp_lower = state(j, i, k, n);
 						const amrex::Real average =
-						    0.5 * (comp_upper + comp_lower);
+						    std::fabs(comp_upper + comp_lower);
 						const amrex::Real residual =
 						    std::abs(comp_upper - comp_lower) / average;
-						if (residual > machine_eps) {
+						
+						if (!isEqualToMachinePrecision(comp_upper,
+									      comp_lower)) {
 							amrex::Print()
 							    << i << ", " << j << ", " << k << ", "
 							    << n << ", " << comp_upper << ", "
-							    << comp_lower << " " << residual << "\n";
+							    << comp_lower << " " << residual
+							    << "\n";
 							amrex::Print() << "x = " << x << "\n";
 							amrex::Print() << "y = " << y << "\n";
 							asymmetry++;
 							AMREX_ASSERT_WITH_MESSAGE(
-							    comp_upper == comp_lower,
-							    "x/y not symmetric!");
+							    false, "x/y not symmetric!");
 						}
 					}
 				}
