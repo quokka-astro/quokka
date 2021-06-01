@@ -65,9 +65,8 @@ template <typename problem_t> class AdvectionSimulation : public SingleLevelSimu
 	void fluxFunction(amrex::Array4<const amrex::Real> const &consState,
 			  amrex::FArrayBox &x1Flux, const amrex::Box &indexRange, int nvars);
 
-      protected:
-	const double advectionVx_ = 1.0;
-	const double advectionVy_ = 0.0;
+	double advectionVx_ = 1.0;
+	double advectionVy_ = 0.0;
 };
 
 template <typename problem_t> void AdvectionSimulation<problem_t>::computeMaxSignalLocal()

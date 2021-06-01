@@ -7,12 +7,15 @@
 /// \brief Defines a test problem for linear advection.
 ///
 
-#include "test_advection.hpp"
+#include "test_advection2d.hpp"
 #include "AMReX_Algorithm.H"
+#include "AMReX_Array.H"
 #include "AMReX_BC_TYPES.H"
+#include "AMReX_BLassert.H"
 #include "AMReX_BoxArray.H"
 #include "AMReX_Config.H"
 #include "AMReX_DistributionMapping.H"
+#include "AMReX_Extension.H"
 #include "AMReX_FArrayBox.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParallelDescriptor.H"
@@ -49,23 +52,39 @@ auto main(int argc, char **argv) -> int
 	return result;
 }
 
-struct SawtoothProblem {
+struct SquareProblem {
 };
 
-template <> void AdvectionSimulation<SawtoothProblem>::setInitialConditions()
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto
+exactSolutionAtIndex(int i, int j, amrex::Real const *prob_lo, amrex::Real const *prob_hi,
+		     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx) -> amrex::Real
 {
+	amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+	amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
+	amrex::Real const x0 = prob_lo[0] + amrex::Real(0.5) * (prob_hi[0] - prob_lo[0]);
+	amrex::Real const y0 = prob_lo[1] + amrex::Real(0.5) * (prob_hi[1] - prob_lo[1]);
+	amrex::Real rho = 0.;
+
+	if ((std::abs(x - x0) < 0.1) && (std::abs(y - y0) < 0.1)) {
+		rho = 1.;
+	}
+	return rho;
+}
+
+template <> void AdvectionSimulation<SquareProblem>::setInitialConditions()
+{
+	auto prob_lo = simGeometry_.ProbLo();
+	auto prob_hi = simGeometry_.ProbHi();
+	auto dx = dx_;
+
 	for (amrex::MFIter iter(state_old_); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
 		auto const &state = state_new_.array(iter);
-		//auto const nx = nx_; // class members are not automatically transferred to device!
-		auto const ny = ny_;
 
-		amrex::ParallelFor(indexRange, ncomp_,
-				   [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
-					   //auto value = static_cast<double>((i + nx / 2) % nx) / nx;
-					   auto value = static_cast<double>((j + ny / 2) % ny) / ny;
-					   state(i, j, k, n) = value;
-				   });
+		amrex::ParallelFor(
+		    indexRange, ncomp_, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
+			    state(i, j, k, n) = exactSolutionAtIndex(i, j, prob_lo, prob_hi, dx);
+		    });
 	}
 
 	// set flag
@@ -73,34 +92,82 @@ template <> void AdvectionSimulation<SawtoothProblem>::setInitialConditions()
 }
 
 void ComputeExactSolution(amrex::Array4<amrex::Real> const &exact_arr, amrex::Box const &indexRange,
-			  const int nvars, const int nx, const int ny)
+			  const int nvars, amrex::Real const *prob_lo, amrex::Real const *prob_hi,
+			  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx)
 {
 	amrex::ParallelFor(indexRange, nvars, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
-		//auto value = static_cast<double>((i + nx / 2) % nx) / nx;
-		auto value = static_cast<double>((j + ny / 2) % ny) / ny;
-		exact_arr(i, j, k, n) = value;
+		exact_arr(i, j, k, n) = exactSolutionAtIndex(i, j, prob_lo, prob_hi, dx);
 	});
+}
+
+template <> void AdvectionSimulation<SquareProblem>::computeAfterTimestep()
+{
+	// copy all FABs to a local FAB across the entire domain
+	amrex::BoxArray localBoxes(domain_);
+	amrex::DistributionMapping localDistribution(localBoxes, 1);
+	amrex::MultiFab state_mf(localBoxes, localDistribution, ncomp_, 0);
+	state_mf.ParallelCopy(state_new_);
+
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		auto const &state = state_mf.array(0);
+		auto prob_lo = simGeometry_.ProbLo();
+		auto dx = dx_;
+
+		const amrex::Real machine_eps = 1e-15;
+		amrex::Long asymmetry = 0;
+		auto nx = nx_;
+		auto ny = ny_;
+		auto nz = nz_;
+		auto ncomp = ncomp_;
+		for (int i = 0; i < nx; ++i) {
+			for (int j = 0; j < ny; ++j) {
+				for (int k = 0; k < nz; ++k) {
+					amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+					amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
+					for (int n = 0; n < ncomp; ++n) {
+						const amrex::Real comp_upper = state(i, j, k, n);
+						// reflect across x/y diagonal
+						const amrex::Real comp_lower = state(j, i, k, n);
+						const amrex::Real average =
+						    0.5 * (comp_upper + comp_lower);
+						const amrex::Real residual =
+						    std::abs(comp_upper - comp_lower) / average;
+						if (residual > machine_eps) {
+							amrex::Print()
+							    << i << ", " << j << ", " << k << ", "
+							    << n << ", " << comp_upper << ", "
+							    << comp_lower << " " << residual << "\n";
+							amrex::Print() << "x = " << x << "\n";
+							amrex::Print() << "y = " << y << "\n";
+							asymmetry++;
+							AMREX_ASSERT_WITH_MESSAGE(
+							    comp_upper == comp_lower,
+							    "x/y not symmetric!");
+						}
+					}
+				}
+			}
+		}
+		AMREX_ASSERT_WITH_MESSAGE(asymmetry == 0, "x/y not symmetric!");
+	}
 }
 
 auto testproblem_advection() -> int
 {
 	// Problem parameters
-	const int nx = 400;
+	const int nx = 100;
 	const double Lx = 1.0;
-	const double advection_velocity = 1.0;
+	const double advection_velocity = 1.0; // same for x- and y- directions
 	const double CFL_number = 0.4;
 	const double max_time = 1.0;
 	const double max_dt = 1.0e-3;
 	const int max_timesteps = 1e4;
 	const int nvars = 1; // only density
 
-	//amrex::IntVect gridDims{AMREX_D_DECL(nx, 4, 4)};
-	amrex::IntVect gridDims{AMREX_D_DECL(4, nx, 4)};
+	amrex::IntVect gridDims{AMREX_D_DECL(nx, nx, 4)};
 
-	amrex::RealBox boxSize{
-	    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.0), amrex::Real(0.0))},
-	    {AMREX_D_DECL(amrex::Real(1.0), amrex::Real(Lx), amrex::Real(1.0))}};
-//	    {AMREX_D_DECL(amrex::Real(Lx), amrex::Real(1.0), amrex::Real(1.0))}};
+	amrex::RealBox boxSize{{AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.0), amrex::Real(0.0))},
+			       {AMREX_D_DECL(amrex::Real(Lx), amrex::Real(Lx), amrex::Real(1.0))}};
 
 	amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
 	for (int n = 0; n < nvars; ++n) {
@@ -111,13 +178,13 @@ auto testproblem_advection() -> int
 	}
 
 	// Problem initialization
-	AdvectionSimulation<SawtoothProblem> sim(gridDims, boxSize, boundaryConditions);
+	AdvectionSimulation<SquareProblem> sim(gridDims, boxSize, boundaryConditions);
 	sim.maxDt_ = max_dt;
 	sim.stopTime_ = max_time;
 	sim.cflNumber_ = CFL_number;
 	sim.maxTimesteps_ = max_timesteps;
 
-	sim.advectionVx_ = 1.0;
+	sim.advectionVx_ = advection_velocity;
 	sim.advectionVy_ = advection_velocity;
 
 	// set initial conditions
@@ -126,14 +193,17 @@ auto testproblem_advection() -> int
 	// run simulation
 	sim.evolve();
 
-	// Compute reference solution
+	// Compute reference solution (at t=1 it is equal to the initial conditions)
 	amrex::MultiFab state_exact(sim.simBoxArray_, sim.simDistributionMapping_, sim.ncomp_,
 				    sim.nghost_);
 
 	for (amrex::MFIter iter(sim.state_new_); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &stateExact = state_exact.array(iter);
-		ComputeExactSolution(stateExact, indexRange, sim.ncomp_, sim.nx_, sim.ny_);
+		auto prob_lo = sim.simGeometry_.ProbLo();
+		auto prob_hi = sim.simGeometry_.ProbHi();
+		auto dx = sim.dx_;
+		ComputeExactSolution(stateExact, indexRange, sim.ncomp_, prob_lo, prob_hi, dx);
 	}
 
 	// Compute error norm
@@ -156,43 +226,6 @@ auto testproblem_advection() -> int
 	int status = 0;
 	if (min_rel_error > err_tol) {
 		status = 1;
-	}
-
-	// copy all FABs to a local FAB across the entire domain
-	amrex::BoxArray localBoxes(sim.domain_);
-	amrex::DistributionMapping localDistribution(localBoxes, 1);
-	amrex::MultiFab state_final(localBoxes, localDistribution, sim.ncomp_, 0);
-	amrex::MultiFab state_exact_local(localBoxes, localDistribution, sim.ncomp_, 0);
-	state_final.ParallelCopy(sim.state_new_);
-	state_exact_local.ParallelCopy(state_exact);
-	auto const &state_final_array = state_final.array(0);
-	auto const &state_exact_array = state_exact_local.array(0);
-
-	// plot solution
-	if (amrex::ParallelDescriptor::IOProcessor()) {
-		auto N = sim.ny_;
-		std::vector<double> d_final(N);
-		std::vector<double> d_initial(N);
-		std::vector<double> x(N);
-
-		for (int i = 0; i < N; ++i) {
-			x.at(i) = (static_cast<double>(i) + 0.5) / N;
-//			d_final.at(i) = state_final_array(i, 0, 0);
-//			d_initial.at(i) = state_exact_array(i, 0, 0);
-			d_final.at(i) = state_final_array(0, i, 0);
-			d_initial.at(i) = state_exact_array(0, i, 0);
-		}
-
-		// Plot results
-		std::map<std::string, std::string> d_initial_args;
-		std::map<std::string, std::string> d_final_args;
-		d_initial_args["label"] = "density (initial)";
-		d_final_args["label"] = "density (final)";
-
-		matplotlibcpp::plot(x, d_initial, d_initial_args);
-		matplotlibcpp::plot(x, d_final, d_final_args);
-		matplotlibcpp::legend();
-		matplotlibcpp::save(std::string("./advection.pdf"));
 	}
 
 	return status;
