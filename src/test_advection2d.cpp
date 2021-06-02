@@ -20,6 +20,7 @@
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "AdvectionSimulation.hpp"
+#include <limits>
 
 auto main(int argc, char **argv) -> int
 {
@@ -103,11 +104,12 @@ void ComputeExactSolution(amrex::Array4<amrex::Real> const &exact_arr, amrex::Bo
 // based on:
 // https://en.cppreference.com/w/cpp/types/numeric_limits/epsilon
 template <class T>
-auto isEqualToMachinePrecision(T x, T y, int ulp = 1) ->
+auto isEqualToMachinePrecision(T x, T y, int ulp = 7) ->
     typename std::enable_if<!std::numeric_limits<T>::is_integer, bool>::type
 {
 	// the machine epsilon has to be scaled to the magnitude of the values used
 	// and multiplied by the desired precision in ULPs (units in the last place)
+	// [Note: 7 ULP * epsilon() ~= 1.554e-15]
 	return std::fabs(x - y) <= std::numeric_limits<T>::epsilon() * std::fabs(x + y) * ulp
 	       // unless the result is subnormal
 	       || std::fabs(x - y) < std::numeric_limits<T>::min();

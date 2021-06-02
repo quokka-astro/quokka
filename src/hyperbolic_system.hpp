@@ -66,14 +66,17 @@ template <typename problem_t> class HyperbolicSystem
 					 amrex::Box const &interfaceRange, int nvars);
 
 	static void AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayconst_t &U1,
-				 amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray, double dt,
-				 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>,
+				 amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray,
+				 double dt_in,
+				 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,
 				 amrex::Box const &indexRange, int nvars);
 
 	static void PredictStep(arrayconst_t &consVarOld, array_t &consVarNew,
-				amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray, double dt,
-				amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>,
+				amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray,
+				double dt_in,
+				amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,
 				amrex::Box const &indexRange, int nvars);
+
 #if 0
 	static void SaveFluxes(array_t &advectionFluxes, arrayconst_t &x1Flux, double dx,
 			       amrex::Box const &indexRange, int nvars);
@@ -343,14 +346,17 @@ void HyperbolicSystem<problem_t>::PredictStep(
 	const auto x2Flux = fluxArray[1];
 #endif
 
+	AMREX_ASSERT(dx == dy);
+
 	amrex::ParallelFor(indexRange, nvars,
 			   [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
 				   consVarNew(i, j, k, n) =
-				       consVarOld(i, j, k, n) -
-				       (dt / dx) * (x1Flux(i + 1, j, k, n) - x1Flux(i, j, k, n));
+				       consVarOld(i, j, k, n) +
+				       (dt / dx) * (x1Flux(i, j, k, n) - x1Flux(i + 1, j, k, n))
 #if (AMREX_SPACEDIM >= 2)
-				   consVarNew(i, j, k, n) -=
-					   (dt / dy) * (x2Flux(i, j + 1, k, n) - x2Flux(i, j, k, n));
+				       + (dt / dy) * (x2Flux(i, j, k, n) - x2Flux(i, j + 1, k, n));
+#else
+						;
 #endif
 			   });
 }
@@ -366,7 +372,7 @@ void HyperbolicSystem<problem_t>::AddFluxesRK2(
 	// i.e. flux_(i) is the flux *into* zone i through the interface on the
 	// left of zone i, and -1.0*flux(i+1) is the flux *into* zone i through
 	// the interface on the right of zone i.
-	
+
 	const auto dt = dt_in;
 	const auto dx = dx_in[0];
 	auto x1Flux = fluxArray[0];
@@ -380,17 +386,18 @@ void HyperbolicSystem<problem_t>::AddFluxesRK2(
 		    // RK-SSP2 integrator
 		    const double U_0 = U0(i, j, k, n);
 		    const double U_1 = U1(i, j, k, n);
-		    const double FxU_1 =
-			-1.0 * (dt / dx) * (x1Flux(i + 1, j, k, n) - x1Flux(i, j, k, n));
+
+		    const double FxU_1 = (dt / dx) * (x1Flux(i, j, k, n) - x1Flux(i + 1, j, k, n));
 #if (AMREX_SPACEDIM >= 2)
-			const double FyU_1 =
-			-1.0 * (dt / dy) * (x2Flux(i, j + 1, k, n) - x2Flux(i, j, k, n));	
+		    const double FyU_1 = (dt / dy) * (x2Flux(i, j, k, n) - x2Flux(i, j + 1, k, n));
 #endif
 
 		    // save results in U_new
-		    U_new(i, j, k, n) = 0.5 * U_0 + 0.5 * U_1 + 0.5 * FxU_1;
+		    U_new(i, j, k, n) = 0.5 * U_0 + 0.5 * U_1 + 0.5 * FxU_1
 #if (AMREX_SPACEDIM >= 2)
-			U_new(i, j, k, n) += 0.5 * FyU_1;
+					+ 0.5 * FyU_1;
+#else
+				;
 #endif
 	    });
 }
