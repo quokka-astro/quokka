@@ -105,13 +105,9 @@ template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 RadiationSimulation<BoxProblem>::setCustomBoundaryConditions(
     const amrex::IntVect &iv, amrex::Array4<Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
-    amrex::GeometryData const &geom, const Real /*time*/, const amrex::BCRec *bcr, int /*bcomp*/,
-    int /*orig_comp*/)
+    amrex::GeometryData const &geom, const Real /*time*/, const amrex::BCRec * /*bcr*/,
+    int /*bcomp*/, int /*orig_comp*/)
 {
-	if (!((bcr->lo(0) == amrex::BCType::ext_dir) || (bcr->hi(0) == amrex::BCType::ext_dir))) {
-		return;
-	}
-
 #if (AMREX_SPACEDIM == 2)
 	auto [i, j] = iv.toArray();
 	int k = 0;
@@ -120,55 +116,59 @@ RadiationSimulation<BoxProblem>::setCustomBoundaryConditions(
 	auto [i, j, k] = iv.toArray();
 #endif
 
-	// const amrex::Real *dx = geom.CellSize();
-	// const amrex::Real *prob_lo = geom.ProbLo();
 	const amrex::Box &box = geom.Domain();
 	amrex::GpuArray<int, 3> lo = box.loVect3d();
 	amrex::GpuArray<int, 3> hi = box.hiVect3d();
 
-	double E_0 = NAN;
-	double Fx_0 = NAN;
-	double Fy_0 = NAN;
-	double Fz_0 = NAN;
-
-	if (i < lo[0]) {
-		E_0 = consVar(lo[0], j, k, RadSystem<BoxProblem>::radEnergy_index);
-		Fx_0 = consVar(lo[0], j, k, RadSystem<BoxProblem>::x1RadFlux_index);
-		Fy_0 = consVar(lo[0], j, k, RadSystem<BoxProblem>::x2RadFlux_index);
-		Fz_0 = consVar(lo[0], j, k, RadSystem<BoxProblem>::x3RadFlux_index);
-	} else if (j < lo[1]) {
-		E_0 = consVar(i, lo[1], k, RadSystem<BoxProblem>::radEnergy_index);
-		Fx_0 = consVar(i, lo[1], k, RadSystem<BoxProblem>::x1RadFlux_index);
-		Fy_0 = consVar(i, lo[1], k, RadSystem<BoxProblem>::x2RadFlux_index);
-		Fz_0 = consVar(i, lo[1], k, RadSystem<BoxProblem>::x3RadFlux_index);
-	} else if (i > hi[0]) {
-		E_0 = consVar(hi[0], j, k, RadSystem<BoxProblem>::radEnergy_index);
-		Fx_0 = consVar(hi[0], j, k, RadSystem<BoxProblem>::x1RadFlux_index);
-		Fy_0 = consVar(hi[0], j, k, RadSystem<BoxProblem>::x2RadFlux_index);
-		Fz_0 = consVar(hi[0], j, k, RadSystem<BoxProblem>::x3RadFlux_index);
-	} else if (j > hi[1]) {
-		E_0 = consVar(i, hi[1], k, RadSystem<BoxProblem>::radEnergy_index);
-		Fx_0 = consVar(i, hi[1], k, RadSystem<BoxProblem>::x1RadFlux_index);
-		Fy_0 = consVar(i, hi[1], k, RadSystem<BoxProblem>::x2RadFlux_index);
-		Fz_0 = consVar(i, hi[1], k, RadSystem<BoxProblem>::x3RadFlux_index);
-	} else {
+	bool left = (i < lo[0]);
+	bool right = (i > hi[0]);
+	bool lower = (j < lo[1]);
+	bool upper = (j > hi[1]);
+	
+	if (! (left || right || lower || upper)) {
 		return;
 	}
 
-	double E_inc = NAN;
-	double Fx_bdry = NAN;
-	double Fy_bdry = NAN;
-	double Fz_bdry = NAN;
+	const double E_inc = a_rad * std::pow(T_hohlraum, 4);
+	double E_bdry = NAN;
+	double Fx_bdry = 0.;
+	double Fy_bdry = 0.;
+	double Fz_bdry = 0.;
 
-	if ((i < lo[0]) || (j < lo[1])) {
-		// lower and left-side walls
-		E_inc = a_rad * std::pow(T_hohlraum, 4);
+	if (left) { // left boundary
+		const double E_0 = consVar(lo[0], j, k, RadSystem<BoxProblem>::radEnergy_index);
+		const double Fx_0 = consVar(lo[0], j, k, RadSystem<BoxProblem>::x1RadFlux_index);
+		//const double Fy_0 = consVar(lo[0], j, k, RadSystem<BoxProblem>::x2RadFlux_index);
+		// Marshak boundary -- left wall
+		E_bdry = E_inc;
 		Fx_bdry = 0.5 * c * E_inc - 0.5 * (c * E_0 + 2.0 * Fx_0);
-		Fy_bdry = 0.;
-		Fz_bdry = 0.;
-	} else { // upper and right-side walls
-		// extrapolated boundary
-		E_inc = E_0;
+	}
+	if (lower) { // lower boundary
+		const double E_0 = consVar(i, lo[1], k, RadSystem<BoxProblem>::radEnergy_index);
+		//const double Fx_0 = consVar(i, lo[1], k, RadSystem<BoxProblem>::x1RadFlux_index);
+		const double Fy_0 = consVar(i, lo[1], k, RadSystem<BoxProblem>::x2RadFlux_index);
+		// Marshak boundary -- lower wall
+		E_bdry = E_inc;
+		Fy_bdry = 0.5 * c * E_inc - 0.5 * (c * E_0 + 2.0 * Fy_0);
+	}
+	if (right) { // right boundary
+		const double E_0 = consVar(hi[0], j, k, RadSystem<BoxProblem>::radEnergy_index);
+		const double Fx_0 = consVar(hi[0], j, k, RadSystem<BoxProblem>::x1RadFlux_index);
+		const double Fy_0 = consVar(hi[0], j, k, RadSystem<BoxProblem>::x2RadFlux_index);
+		const double Fz_0 = consVar(hi[0], j, k, RadSystem<BoxProblem>::x3RadFlux_index);
+		// extrapolated boundary -- upper and right-side walls
+		E_bdry = E_0;
+		Fx_bdry = Fx_0;
+		Fy_bdry = Fy_0;
+		Fz_bdry = Fz_0;
+	}
+	if (upper) { // upper boundary
+		const double E_0 = consVar(i, hi[1], k, RadSystem<BoxProblem>::radEnergy_index);
+		const double Fx_0 = consVar(i, hi[1], k, RadSystem<BoxProblem>::x1RadFlux_index);
+		const double Fy_0 = consVar(i, hi[1], k, RadSystem<BoxProblem>::x2RadFlux_index);
+		const double Fz_0 = consVar(i, hi[1], k, RadSystem<BoxProblem>::x3RadFlux_index);
+		// extrapolated boundary -- upper and right-side walls
+		E_bdry = E_0;
 		Fx_bdry = Fx_0;
 		Fy_bdry = Fy_0;
 		Fz_bdry = Fz_0;
@@ -176,9 +176,9 @@ RadiationSimulation<BoxProblem>::setCustomBoundaryConditions(
 
 	const amrex::Real Fnorm =
 	    std::sqrt(Fx_bdry * Fx_bdry + Fy_bdry * Fy_bdry + Fz_bdry * Fz_bdry);
-	AMREX_ASSERT((Fnorm / (c * E_inc)) < 1.0); // flux-limiting condition
+	AMREX_ASSERT((Fnorm / (c * E_bdry)) < 1.0); // flux-limiting condition
 
-	consVar(i, j, k, RadSystem<BoxProblem>::radEnergy_index) = E_inc;
+	consVar(i, j, k, RadSystem<BoxProblem>::radEnergy_index) = E_bdry;
 	consVar(i, j, k, RadSystem<BoxProblem>::x1RadFlux_index) = Fx_bdry;
 	consVar(i, j, k, RadSystem<BoxProblem>::x2RadFlux_index) = Fy_bdry;
 	consVar(i, j, k, RadSystem<BoxProblem>::x3RadFlux_index) = Fz_bdry;
@@ -186,10 +186,6 @@ RadiationSimulation<BoxProblem>::setCustomBoundaryConditions(
 
 template <> void RadiationSimulation<BoxProblem>::setInitialConditions()
 {
-	// auto prob_lo = simGeometry_.ProbLo();
-	// auto prob_hi = simGeometry_.ProbHi();
-	// auto dx = dx_;
-
 	for (amrex::MFIter iter(state_old_); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
 		auto const &state = state_new_.array(iter);
@@ -264,9 +260,9 @@ template <> void RadiationSimulation<BoxProblem>::computeAfterTimestep()
 						    std::fabs(comp_upper + comp_lower);
 						const amrex::Real residual =
 						    std::abs(comp_upper - comp_lower) / average;
-						
+
 						if (!isEqualToMachinePrecision(comp_upper,
-									      comp_lower)) {
+									       comp_lower)) {
 							amrex::Print()
 							    << i << ", " << j << ", " << k << ", "
 							    << n << ", " << comp_upper << ", "
@@ -291,27 +287,27 @@ auto testproblem_radiation_marshak_cgs() -> int
 	// Problem parameters
 	const int max_timesteps = 10000;
 	const double CFL_number = 0.1;
-	const int nx = 140;
-	const int ny = 40; // 80;
+	const int nx = 100;
+	const int ny = 100;
 
-	const double Lx = 7.0;		 // cm
-	const double Ly = 4.0;		 // cm
+	const double Lx = 1.0;		 // cm
+	const double Ly = 1.0;		 // cm
 	const double max_time = 3.0e-10; // s
 
 	amrex::IntVect gridDims{AMREX_D_DECL(nx, ny, 4)};
 	amrex::RealBox boxSize{
-	    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.), amrex::Real(0.0))},       // NOLINT
-	    {AMREX_D_DECL(amrex::Real(Lx), amrex::Real(Ly / 2.0), amrex::Real(1.0))}}; // NOLINT
+	    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.), amrex::Real(0.0))},  // NOLINT
+	    {AMREX_D_DECL(amrex::Real(Lx),  amrex::Real(Ly), amrex::Real(1.0))}}; // NOLINT
 
 	constexpr int nvars = 9;
 	amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
 	for (int n = 0; n < nvars; ++n) {
 		// x
-		boundaryConditions[n].setLo(0, amrex::BCType::ext_dir);	 // left x1 -- Marshak
-		boundaryConditions[n].setHi(0, amrex::BCType::foextrap); // right x1 -- extrapolate
+		boundaryConditions[n].setLo(0, amrex::BCType::ext_dir); // left x1 -- Marshak
+		boundaryConditions[n].setHi(0, amrex::BCType::ext_dir); // right x1 -- extrapolate
 		// y
-		boundaryConditions[n].setLo(1, amrex::BCType::ext_dir);	 // left x2 -- Marshak
-		boundaryConditions[n].setHi(1, amrex::BCType::foextrap); // right x2 -- extrapolate
+		boundaryConditions[n].setLo(1, amrex::BCType::ext_dir); // left x2 -- Marshak
+		boundaryConditions[n].setHi(1, amrex::BCType::ext_dir); // right x2 -- extrapolate
 	}
 
 	// Problem initialization
