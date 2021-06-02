@@ -13,7 +13,7 @@
 #include "AMReX_Config.H"
 #include "AMReX_IntVect.H"
 #include "radiation_system.hpp"
-#include "test_radiation_marshak_cgs.hpp"
+#include "test_radiation_tophat.hpp"
 #include <tuple>
 
 auto main(int argc, char **argv) -> int
@@ -148,8 +148,8 @@ RadiationSimulation<TophatProblem>::setCustomBoundaryConditions(
 
 		const double E_0 = consVar(lo[0], j, k, RadSystem<TophatProblem>::radEnergy_index);
 		const double Fx_0 = consVar(lo[0], j, k, RadSystem<TophatProblem>::x1RadFlux_index);
-		const double Fy_0 = consVar(lo[0], j, k, RadSystem<TophatProblem>::x2RadFlux_index);
-		const double Fz_0 = consVar(lo[0], j, k, RadSystem<TophatProblem>::x3RadFlux_index);
+		//const double Fy_0 = consVar(lo[0], j, k, RadSystem<TophatProblem>::x2RadFlux_index);
+		//const double Fz_0 = consVar(lo[0], j, k, RadSystem<TophatProblem>::x3RadFlux_index);
 
 		double Fx_bdry = NAN;
 		double Fy_bdry = NAN;

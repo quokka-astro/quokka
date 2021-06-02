@@ -37,11 +37,7 @@ template <typename problem_t> struct RadSystem_Traits {
 	static constexpr double mean_molecular_mass = hydrogen_mass_cgs_;
 	static constexpr double boltzmann_constant = boltzmann_constant_cgs_;
 	static constexpr double gamma = 5. / 3.;
-
 	static constexpr double Erad_floor = 0.;
-
-	static constexpr bool do_marshak_left_boundary = false;
-	static constexpr double T_marshak_left = 0.;
 };
 
 /// Class for the radiation moment equations
@@ -83,10 +79,6 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	static constexpr double Erad_floor_ = RadSystem_Traits<problem_t>::Erad_floor;
 
-	static constexpr bool do_marshak_left_boundary_ =
-	    RadSystem_Traits<problem_t>::do_marshak_left_boundary;
-	static constexpr double T_marshak_left_ = RadSystem_Traits<problem_t>::T_marshak_left;
-
 	// static functions
 
 	static void ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real> const &cons,
@@ -101,10 +93,12 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 				  amrex::Box const &indexRange, arrayconst_t &consVar,
 				  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx);
 
+#if 0
 	template <FluxDir DIR>
 	static void ComputeFirstOrderFluxes(amrex::Array4<const amrex::Real> const &consVar_in,
 					    array_t &x1FluxDiffusive_in,
 					    amrex::Box const &indexRange);
+#endif
 
 	static void SetRadEnergySource(array_t &radEnergy, amrex::Box const &indexRange,
 				       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
@@ -258,6 +252,7 @@ auto RadSystem<problem_t>::ComputeCellOpticalDepth(
 	//	return 0.5*(tau_L + tau_R); // arithmetic mean
 }
 
+#if 0
 template <typename problem_t>
 template <FluxDir DIR>
 void RadSystem<problem_t>::ComputeFirstOrderFluxes(
@@ -344,6 +339,7 @@ void RadSystem<problem_t>::ComputeFirstOrderFluxes(
 		x1FluxDiffusive(i, j, k, x3RadFlux_index) = LLF[3];
 	});
 }
+#endif
 
 template <typename problem_t>
 template <FluxDir DIR>
@@ -849,13 +845,17 @@ void RadSystem<problem_t>::ComputeSourceTermsExplicit(arrayconst_t &consPrev,
 		// load radiation energy, momentum
 		const auto Erad0 = consPrev(i, j, k, radEnergy_index);
 		const auto Frad0_x = consPrev(i, j, k, x1RadFlux_index);
+
 		// compute material temperature
 		const auto T_gas = RadSystem<problem_t>::ComputeTgasFromEgas(rho, Egas0);
+
 		// compute opacity, emissivity
 		const auto kappa = RadSystem<problem_t>::ComputeOpacity(rho, T_gas);
 		const auto fourPiB = chat * a_rad * std::pow(T_gas, 4);
+
 		// constant radiation energy source term
 		const auto Src = dt * (chat * radEnergySource(i, j, k));
+		
 		// compute reaction term
 		const auto rhs = dt * (rho * kappa) * (fourPiB - chat * Erad0);
 		const auto Fx_rhs = -dt * chat * (rho * kappa) * Frad0_x;
