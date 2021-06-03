@@ -154,7 +154,7 @@ void AdvectionSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Rea
 	// cell-centered kernel
 	LinearAdvectionSystem<problem_t>::ConservedToPrimitive(consState, primVar.array(),
 							       ghostRange, nvars);
-	quokka::CheckNaN<problem_t>(primVar, indexRange, ghostRange, ncomp_);
+	quokka::CheckNaN<problem_t>(primVar, indexRange, ghostRange, ncomp_, dx_);
 
 	// mixed interface/cell-centered kernel
 	// LinearAdvectionSystem<problem_t>::template ReconstructStatesPPM<DIR>(
@@ -164,8 +164,8 @@ void AdvectionSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Rea
 	//    primVar.array(), x1LeftState.array(), x1RightState.array(), x1ReconstructRange, nvars);
 	LinearAdvectionSystem<problem_t>::template ReconstructStatesConstant<DIR>(
 	    primVar.array(), x1LeftState.array(), x1RightState.array(), x1ReconstructRange, nvars);
-	quokka::CheckNaN<problem_t>(x1LeftState, indexRange, x1ReconstructRange, ncomp_);
-	quokka::CheckNaN<problem_t>(x1RightState, indexRange, x1ReconstructRange, ncomp_);
+	quokka::CheckNaN<problem_t>(x1LeftState, indexRange, x1ReconstructRange, ncomp_, dx_);
+	quokka::CheckNaN<problem_t>(x1RightState, indexRange, x1ReconstructRange, ncomp_, dx_);
 
 	// interface-centered kernel
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, dim);
@@ -173,7 +173,7 @@ void AdvectionSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Rea
 	LinearAdvectionSystem<problem_t>::template ComputeFluxes<DIR>(
 	    x1Flux.array(), x1LeftState.array(), x1RightState.array(), advectionVel, x1FluxRange,
 	    nvars);
-	quokka::CheckNaN<problem_t>(x1Flux, indexRange, x1FluxRange, ncomp_);
+	quokka::CheckNaN<problem_t>(x1Flux, indexRange, x1FluxRange, ncomp_, dx_);
 }
 
 template <typename problem_t>

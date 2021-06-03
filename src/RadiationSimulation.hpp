@@ -82,7 +82,7 @@ template <typename problem_t> class RadiationSimulation : public SingleLevelSimu
 			    amrex::Array4<amrex::Real> const &consVarNew,
 			    const amrex::Box &indexRange, int nvars);
 	void operatorSplitSourceTerms(amrex::Array4<amrex::Real> const &stateNew,
-				      const amrex::Box &indexRange, const int nvars);
+				      const amrex::Box &indexRange, int nvars);
 
 	void fillBoundaryConditions(amrex::MultiFab &state);
 
@@ -173,7 +173,7 @@ template <typename problem_t> void RadiationSimulation<problem_t>::advanceSingle
 		auto const &stateOld = state_old_.const_array(iter);
 		auto const &stateNew = state_new_.array(iter);
 		stageOneRK2SSP(stateOld, stateNew, indexRange, ncompPrimitive_);
-		quokka::CheckSymmetryArray<problem_t>(stateNew, indexRange, ncomp_);
+		quokka::CheckSymmetryArray<problem_t>(stateNew, indexRange, ncomp_, dx_);
 	}
 #if 0
 	// update ghost zones [intermediate stage stored in state_new_]
@@ -186,7 +186,7 @@ template <typename problem_t> void RadiationSimulation<problem_t>::advanceSingle
 		auto const &stateOld = state_old_.const_array(iter);
 		auto const &stateNew = state_new_.array(iter);
 		stageTwoRK2SSP(stateOld, stateNew, indexRange, ncompPrimitive_);
-		quokka::CheckSymmetryArray<problem_t>(stateNew, indexRange, ncomp_);
+		quokka::CheckSymmetryArray<problem_t>(stateNew, indexRange, ncomp_, dx_);
 	}
 #endif
 	// update ghost zones [intermediate stage stored in state_new_]
@@ -198,13 +198,13 @@ template <typename problem_t> void RadiationSimulation<problem_t>::advanceSingle
 		const amrex::Box &indexRange = iter.validbox(); // 'validbox' == exclude ghost zones
 		auto const &stateNew = state_new_.array(iter);
 		operatorSplitSourceTerms(stateNew, indexRange, ncomp_);
-		quokka::CheckSymmetryArray<problem_t>(stateNew, indexRange, ncomp_);
+		quokka::CheckSymmetryArray<problem_t>(stateNew, indexRange, ncomp_, dx_);
 	}
 }
 
 template <typename problem_t>
 void RadiationSimulation<problem_t>::operatorSplitSourceTerms(
-    amrex::Array4<amrex::Real> const &stateNew, const amrex::Box &indexRange, const int nvars)
+    amrex::Array4<amrex::Real> const &stateNew, const amrex::Box &indexRange, const int  /*nvars*/)
 {
 	amrex::FArrayBox radEnergySource(indexRange, 1,
 					 amrex::The_Async_Arena()); // cell-centered scalar
@@ -225,7 +225,7 @@ template <typename problem_t>
 template <FluxDir DIR>
 void RadiationSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real> const &consState,
 						  amrex::FArrayBox &x1Flux,
-						  const amrex::Box &indexRange, const int nvars)
+						  const amrex::Box &indexRange, const int  /*nvars*/)
 {
 	int dir = 0;
 	if constexpr (DIR == FluxDir::X1) {
@@ -250,7 +250,7 @@ void RadiationSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Rea
 
 	// cell-centered kernel
 	RadSystem<problem_t>::ConservedToPrimitive(consState, primVar.array(), ghostRange);
-	quokka::CheckNaN<problem_t>(primVar, indexRange, ghostRange, ncompPrimitive_);
+	quokka::CheckNaN<problem_t>(primVar, indexRange, ghostRange, ncompPrimitive_, dx_);
 
 	// mixed interface/cell-centered kernel
 	// RadSystem<problem_t>::template ReconstructStatesPPM<DIR>(
@@ -260,15 +260,15 @@ void RadiationSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Rea
 	RadSystem<problem_t>::template ReconstructStatesConstant<DIR>(
 	    primVar.array(), x1LeftState.array(), x1RightState.array(), x1ReconstructRange,
 	    ncompPrimitive_);
-	quokka::CheckNaN<problem_t>(x1LeftState, indexRange, x1ReconstructRange, ncompPrimitive_);
-	quokka::CheckNaN<problem_t>(x1RightState, indexRange, x1ReconstructRange, ncompPrimitive_);
+	quokka::CheckNaN<problem_t>(x1LeftState, indexRange, x1ReconstructRange, ncompPrimitive_, dx_);
+	quokka::CheckNaN<problem_t>(x1RightState, indexRange, x1ReconstructRange, ncompPrimitive_, dx_);
 
 	// interface-centered kernel
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, dir);
 	RadSystem<problem_t>::template ComputeFluxes<DIR>(
 	    x1Flux.array(), x1LeftState.array(), x1RightState.array(), x1FluxRange, consState,
 	    dx_); // watch out for argument order!!
-	quokka::CheckNaN<problem_t>(x1Flux, indexRange, x1FluxRange, ncompPrimitive_);
+	quokka::CheckNaN<problem_t>(x1Flux, indexRange, x1FluxRange, ncompPrimitive_, dx_);
 }
 
 template <typename problem_t>

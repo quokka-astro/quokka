@@ -14,13 +14,14 @@
 #include "AMReX_Config.H"
 #include "AMReX_IntVect.H"
 #include "radiation_system.hpp"
+#include <limits>
 #include <tuple>
 
 auto main(int argc, char **argv) -> int
 {
 	// Initialization (copied from ExaWind)
 
-	amrex::Initialize(argc, argv, true, MPI_COMM_WORLD, []() {
+	amrex::Initialize(argc, argv, true, MPI_COMM_WORLD, []() { // NOLINT
 		amrex::ParmParse pp("amrex");
 		// Set the defaults so that we throw an exception instead of attempting
 		// to generate backtrace files. However, if the user has explicitly set
@@ -124,8 +125,8 @@ RadiationSimulation<BoxProblem>::setCustomBoundaryConditions(
 	bool right = (i > hi[0]);
 	bool lower = (j < lo[1]);
 	bool upper = (j > hi[1]);
-	
-	if (! (left || right || lower || upper)) {
+
+	if (!(left || right || lower || upper)) {
 		return;
 	}
 
@@ -138,14 +139,12 @@ RadiationSimulation<BoxProblem>::setCustomBoundaryConditions(
 	if (left) { // left boundary
 		const double E_0 = consVar(lo[0], j, k, RadSystem<BoxProblem>::radEnergy_index);
 		const double Fx_0 = consVar(lo[0], j, k, RadSystem<BoxProblem>::x1RadFlux_index);
-		//const double Fy_0 = consVar(lo[0], j, k, RadSystem<BoxProblem>::x2RadFlux_index);
 		// Marshak boundary -- left wall
 		E_bdry = E_inc;
 		Fx_bdry = 0.5 * c * E_inc - 0.5 * (c * E_0 + 2.0 * Fx_0);
 	}
 	if (lower) { // lower boundary
 		const double E_0 = consVar(i, lo[1], k, RadSystem<BoxProblem>::radEnergy_index);
-		//const double Fx_0 = consVar(i, lo[1], k, RadSystem<BoxProblem>::x1RadFlux_index);
 		const double Fy_0 = consVar(i, lo[1], k, RadSystem<BoxProblem>::x2RadFlux_index);
 		// Marshak boundary -- lower wall
 		E_bdry = E_inc;
@@ -216,88 +215,113 @@ template <> void RadiationSimulation<BoxProblem>::setInitialConditions()
 // based on:
 // https://en.cppreference.com/w/cpp/types/numeric_limits/epsilon
 template <class T>
-auto isEqualToMachinePrecision(T x, T y, int ulp = 7) ->
+auto isEqualToMachinePrecision(T x, T y, int ulp = 10) ->
     typename std::enable_if<!std::numeric_limits<T>::is_integer, bool>::type
 {
 	// the machine epsilon has to be scaled to the magnitude of the values used
 	// and multiplied by the desired precision in ULPs (units in the last place)
-	// [Note: 7 ULP * epsilon() ~= 1.554e-15]
-	return std::fabs(x - y) <= std::numeric_limits<T>::epsilon() * std::fabs(x + y) * ulp
-	       // unless the result is subnormal
-	       || std::fabs(x - y) < std::numeric_limits<T>::min();
+	// [Note: 10 ULP * epsilon() ~= 2.22e-15]
+	//return std::fabs(x - y) <= std::numeric_limits<T>::epsilon() * std::fabs(x + y) * ulp;
+	return std::fabs(x - y) <= (1.0e-8) * std::fabs(x + y);
 }
 
-template <> void RadiationSimulation<BoxProblem>::computeAfterTimestep()
+namespace quokka
 {
-	// copy all FABs to a local FAB across the entire domain
-	amrex::BoxArray localBoxes(domain_);
-	amrex::DistributionMapping localDistribution(localBoxes, 1);
-	amrex::MultiFab state_mf(localBoxes, localDistribution, ncomp_, 0);
-	state_mf.ParallelCopy(state_new_);
+#define DEBUG_SYMMETRY
 
-	if (amrex::ParallelDescriptor::IOProcessor()) {
-		auto const &state = state_mf.array(0);
-		auto prob_lo = simGeometry_.ProbLo();
-		auto dx = dx_;
+template <>
+AMREX_GPU_HOST_DEVICE auto
+CheckSymmetryArray<BoxProblem>(amrex::Array4<const amrex::Real> const &arr,
+			       amrex::Box const &indexRange, const int ncomp,
+			       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx) -> bool
+{
+#ifdef DEBUG_SYMMETRY
+	amrex::Long asymmetry = 0;
+	amrex::GpuArray<int, 3> prob_lo = indexRange.loVect3d();
+	auto nx = indexRange.hiVect3d()[0] + 1;
+	auto ny = indexRange.hiVect3d()[1] + 1;
+	auto nz = indexRange.hiVect3d()[2] + 1;
+	AMREX_ASSERT(prob_lo[0] == 0);
+	AMREX_ASSERT(prob_lo[1] == 0);
+	AMREX_ASSERT(prob_lo[2] == 0);
+	auto state = arr;
 
-		amrex::Long asymmetry = 0;
-		auto nx = nx_;
-		auto ny = ny_;
-		auto nz = nz_;
-		auto ncomp = ncomp_;
-		for (int i = 0; i < nx; ++i) {
-			for (int j = 0; j < ny; ++j) {
-				for (int k = 0; k < nz; ++k) {
-					amrex::Real const x =
-					    prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
-					amrex::Real const y =
-					    prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
-					for (int n = 0; n < ncomp; ++n) {
-						const amrex::Real comp_upper = state(i, j, k, n);
-						// reflect across x/y diagonal
-						const amrex::Real comp_lower = state(j, i, k, n);
-						const amrex::Real average =
-						    std::fabs(comp_upper + comp_lower);
-						const amrex::Real residual =
-						    std::abs(comp_upper - comp_lower) / average;
+	for (int i = 0; i < nx; ++i) {
+		for (int j = 0; j < ny; ++j) {
+			for (int k = 0; k < nz; ++k) {
+				amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+				amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
 
-						if (!isEqualToMachinePrecision(comp_upper,
-									       comp_lower)) {
-							amrex::Print()
-							    << i << ", " << j << ", " << k << ", "
-							    << n << ", " << comp_upper << ", "
-							    << comp_lower << " " << residual
-							    << "\n";
-							amrex::Print() << "x = " << x << "\n";
-							amrex::Print() << "y = " << y << "\n";
-							asymmetry++;
-							AMREX_ASSERT_WITH_MESSAGE(
-							    false, "x/y not symmetric!");
-						}
+				for (int n = 0; n < ncomp; ++n) {
+					const amrex::Real comp_upper = state(i, j, k, n);
+
+					// reflect across x/y diagonal
+					int n_lower = n;
+					if (n == RadSystem<BoxProblem>::x1RadFlux_index) {
+						n_lower = RadSystem<BoxProblem>::x2RadFlux_index;
+					} else if (n == RadSystem<BoxProblem>::x2RadFlux_index) {
+						n_lower = RadSystem<BoxProblem>::x1RadFlux_index;
+					} else if (n ==
+						   RadSystem<BoxProblem>::x1GasMomentum_index) {
+						n_lower =
+						    RadSystem<BoxProblem>::x2GasMomentum_index;
+					} else if (n ==
+						   RadSystem<BoxProblem>::x2GasMomentum_index) {
+						n_lower =
+						    RadSystem<BoxProblem>::x1GasMomentum_index;
+					}
+					amrex::Real comp_lower = state(j, i, k, n_lower);
+
+					const amrex::Real average =
+					    std::fabs(comp_upper + comp_lower);
+					const amrex::Real residual =
+					    std::abs(comp_upper - comp_lower) / average;
+
+					if (!isEqualToMachinePrecision(comp_upper, comp_lower)) {
+						amrex::Print()
+						    << i << ", " << j << ", " << k << ", " << n
+						    << ", " << comp_upper << ", " << comp_lower
+						    << " " << residual << "\n";
+						amrex::Print() << "x = " << x << "\n";
+						amrex::Print() << "y = " << y << "\n";
+						asymmetry++;
+						AMREX_ASSERT_WITH_MESSAGE(false,
+									  "x/y not symmetric!");
 					}
 				}
 			}
 		}
-		AMREX_ASSERT_WITH_MESSAGE(asymmetry == 0, "x/y not symmetric!");
 	}
+	AMREX_ASSERT_WITH_MESSAGE(asymmetry == 0, "x/y not symmetric!");
+#endif // DEBUG_SYMMETRY
+	return true;
 }
+
+template <>
+AMREX_GPU_HOST_DEVICE auto
+CheckSymmetry<BoxProblem>(amrex::FArrayBox const &arr, amrex::Box const &indexRange,
+			  const int ncomp, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx) -> bool
+{
+	return CheckSymmetryArray<BoxProblem>(arr.const_array(), indexRange, ncomp, dx);
+}
+} // namespace quokka
 
 auto testproblem_radiation_marshak_cgs() -> int
 {
 	// Problem parameters
-	const int max_timesteps = 10000;
-	const double CFL_number = 0.1;
+	const int max_timesteps = 1000;
+	const double CFL_number = 0.4;
 	const int nx = 100;
 	const int ny = 100;
 
 	const double Lx = 1.0;		 // cm
 	const double Ly = 1.0;		 // cm
-	const double max_time = 3.0e-10; // s
+	const double max_time = 1.0e-11; // s
 
 	amrex::IntVect gridDims{AMREX_D_DECL(nx, ny, 4)};
 	amrex::RealBox boxSize{
-	    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.), amrex::Real(0.0))},  // NOLINT
-	    {AMREX_D_DECL(amrex::Real(Lx),  amrex::Real(Ly), amrex::Real(1.0))}}; // NOLINT
+	    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.), amrex::Real(0.0))}, // NOLINT
+	    {AMREX_D_DECL(amrex::Real(Lx), amrex::Real(Ly), amrex::Real(1.0))}}; // NOLINT
 
 	constexpr int nvars = 9;
 	amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
@@ -316,7 +340,7 @@ auto testproblem_radiation_marshak_cgs() -> int
 	sim.cflNumber_ = CFL_number;
 	sim.maxTimesteps_ = max_timesteps;
 	sim.outputAtInterval_ = true;
-	sim.plotfileInterval_ = 10; // for debugging
+	sim.plotfileInterval_ = 1; // for debugging
 
 	// initialize
 	sim.setInitialConditions();

@@ -198,34 +198,34 @@ void HydroSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real> c
 
 	// cell-centered kernel
 	HydroSystem<problem_t>::ConservedToPrimitive(consState, primVar.array(), ghostRange);
-	quokka::CheckNaN<problem_t>(primVar, indexRange, ghostRange, nvars);
+	quokka::CheckNaN<problem_t>(primVar, indexRange, ghostRange, nvars, dx_);
 
 	// mixed interface/cell-centered kernel
 	HydroSystem<problem_t>::template ReconstructStatesPPM<DIR>(
 	    primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange,
 	    x1ReconstructRange, nvars);
-	quokka::CheckNaN<problem_t>(x1LeftState, indexRange, x1ReconstructRange, nvars);
-	quokka::CheckNaN<problem_t>(x1RightState, indexRange, x1ReconstructRange, nvars);
+	quokka::CheckNaN<problem_t>(x1LeftState, indexRange, x1ReconstructRange, nvars, dx_);
+	quokka::CheckNaN<problem_t>(x1RightState, indexRange, x1ReconstructRange, nvars, dx_);
 
 	// cell-centered kernel
 	HydroSystem<problem_t>::template ComputeFlatteningCoefficients<DIR>(
 	    primVar.array(), x1Flat.array(), flatteningRange);
-	quokka::CheckNaN<problem_t>(x1LeftState, indexRange, x1ReconstructRange, nvars);
-	quokka::CheckNaN<problem_t>(x1RightState, indexRange, x1ReconstructRange, nvars);
+	quokka::CheckNaN<problem_t>(x1LeftState, indexRange, x1ReconstructRange, nvars, dx_);
+	quokka::CheckNaN<problem_t>(x1RightState, indexRange, x1ReconstructRange, nvars, dx_);
 
 	// cell-centered kernel
 	HydroSystem<problem_t>::template FlattenShocks<DIR>(
 	    primVar.array(), x1Flat.array(), x1LeftState.array(), x1RightState.array(),
 	    reconstructRange, nvars);
-	quokka::CheckNaN<problem_t>(x1LeftState, indexRange, x1ReconstructRange, nvars);
-	quokka::CheckNaN<problem_t>(x1RightState, indexRange, x1ReconstructRange, nvars);
+	quokka::CheckNaN<problem_t>(x1LeftState, indexRange, x1ReconstructRange, nvars, dx_);
+	quokka::CheckNaN<problem_t>(x1RightState, indexRange, x1ReconstructRange, nvars, dx_);
 
 	// interface-centered kernel
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, dir);
 	HydroSystem<problem_t>::template ComputeFluxes<DIR>(
 	    x1Flux.array(), x1LeftState.array(), x1RightState.array(),
 	    x1FluxRange); // watch out for argument order!!
-	quokka::CheckNaN<problem_t>(x1Flux, indexRange, x1FluxRange, nvars);
+	quokka::CheckNaN<problem_t>(x1Flux, indexRange, x1FluxRange, nvars, dx_);
 }
 
 template <typename problem_t>

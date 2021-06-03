@@ -10,6 +10,7 @@
 ///
 
 // c++ headers
+#include <array>
 #include <cmath>
 
 // library headers
@@ -375,10 +376,10 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 		double fx_R = x1RightState(i, j, k, x1ReducedFlux_index);
 
 		double fy_L = x1LeftState(i, j, k, x2ReducedFlux_index);
-		double fy_R = x1LeftState(i, j, k, x2ReducedFlux_index);
+		double fy_R = x1RightState(i, j, k, x2ReducedFlux_index);
 
 		double fz_L = x1LeftState(i, j, k, x3ReducedFlux_index);
-		double fz_R = x1LeftState(i, j, k, x3ReducedFlux_index);
+		double fz_R = x1RightState(i, j, k, x3ReducedFlux_index);
 
 		// compute scalar reduced flux f
 		double f_L = std::sqrt(fx_L * fx_L + fy_L * fy_L + fz_L * fz_L);
@@ -432,14 +433,14 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 		AMREX_ASSERT(f_L < 1.0);
 		AMREX_ASSERT(f_R < 1.0);
 
-		double fvec_L[3] = {fx_L, fy_L, fz_L};
-		double fvec_R[3] = {fx_R, fy_R, fz_R};
+		std::array<amrex::Real, 3> fvec_L = {fx_L, fy_L, fz_L};
+		std::array<amrex::Real, 3> fvec_R = {fx_R, fy_R, fz_R};
 
 		// angle between interface and radiation flux \hat{n}
 		// If direction is undefined, just drop direction-dependent
 		// terms.
-		double n_L[3];
-		double n_R[3];
+		std::array<amrex::Real, 3> n_L{};
+		std::array<amrex::Real, 3> n_R{};
 
 		for (int i = 0; i < 3; ++i) {
 			n_L[i] = (f_L > 0.) ? (fvec_L[i] / f_L) : 0.;

@@ -7,13 +7,14 @@
 /// \brief Defines a test problem for radiation in the diffusion regime.
 ///
 
+#include "test_radiation_tophat.hpp"
 #include "AMReX_Array.H"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_Config.H"
 #include "AMReX_IntVect.H"
+#include "AMReX_REAL.H"
 #include "radiation_system.hpp"
-#include "test_radiation_tophat.hpp"
 #include <tuple>
 
 auto main(int argc, char **argv) -> int
@@ -133,7 +134,7 @@ RadiationSimulation<TophatProblem>::setCustomBoundaryConditions(
 
 	const amrex::Real *dx = geom.CellSize();
 	const amrex::Real *prob_lo = geom.ProbLo();
-	//const amrex::Real *prob_hi = geom.ProbHi();
+	// const amrex::Real *prob_hi = geom.ProbHi();
 	const amrex::Box &box = geom.Domain();
 
 	amrex::GpuArray<int, 3> lo = box.loVect3d();
@@ -148,8 +149,9 @@ RadiationSimulation<TophatProblem>::setCustomBoundaryConditions(
 
 		const double E_0 = consVar(lo[0], j, k, RadSystem<TophatProblem>::radEnergy_index);
 		const double Fx_0 = consVar(lo[0], j, k, RadSystem<TophatProblem>::x1RadFlux_index);
-		//const double Fy_0 = consVar(lo[0], j, k, RadSystem<TophatProblem>::x2RadFlux_index);
-		//const double Fz_0 = consVar(lo[0], j, k, RadSystem<TophatProblem>::x3RadFlux_index);
+		// const double Fy_0 = consVar(lo[0], j, k,
+		// RadSystem<TophatProblem>::x2RadFlux_index); const double Fz_0 = consVar(lo[0], j,
+		// k, RadSystem<TophatProblem>::x3RadFlux_index);
 
 		double Fx_bdry = NAN;
 		double Fy_bdry = NAN;
@@ -168,18 +170,19 @@ RadiationSimulation<TophatProblem>::setCustomBoundaryConditions(
 			Fz_bdry = 0.;
 
 			// extrapolated boundary
-			//E_inc = E_0;
-			//Fx_bdry = Fx_0;
-			//Fy_bdry = 0.;
-			//Fz_bdry = 0.;
+			// E_inc = E_0;
+			// Fx_bdry = Fx_0;
+			// Fy_bdry = 0.;
+			// Fz_bdry = 0.;
 
 			// Marshak boundary (does not work)
-			//E_inc = a_rad * std::pow(T_initial, 4);
-			//Fx_bdry = 0.5 * c * E_inc - 0.5 * (c * E_0 + 2.0 * Fx_0);
-			//Fy_bdry = 0.;
-			//Fz_bdry = 0.;
+			// E_inc = a_rad * std::pow(T_initial, 4);
+			// Fx_bdry = 0.5 * c * E_inc - 0.5 * (c * E_0 + 2.0 * Fx_0);
+			// Fy_bdry = 0.;
+			// Fz_bdry = 0.;
 		}
-		const amrex::Real Fnorm = std::sqrt(Fx_bdry*Fx_bdry + Fy_bdry*Fy_bdry + Fz_bdry*Fz_bdry);
+		const amrex::Real Fnorm =
+		    std::sqrt(Fx_bdry * Fx_bdry + Fy_bdry * Fy_bdry + Fz_bdry * Fz_bdry);
 		AMREX_ASSERT((Fnorm / (c * E_inc)) < 1.0); // flux-limiting condition
 
 		// x1 left side boundary (Marshak)
@@ -193,7 +196,7 @@ RadiationSimulation<TophatProblem>::setCustomBoundaryConditions(
 template <> void RadiationSimulation<TophatProblem>::setInitialConditions()
 {
 	auto prob_lo = simGeometry_.ProbLo();
-	//auto prob_hi = simGeometry_.ProbHi();
+	// auto prob_hi = simGeometry_.ProbHi();
 	auto dx = dx_;
 
 	for (amrex::MFIter iter(state_old_); iter.isValid(); ++iter) {
@@ -243,9 +246,10 @@ template <> void RadiationSimulation<TophatProblem>::setInitialConditions()
 namespace quokka
 {
 template <>
-AMREX_GPU_HOST_DEVICE bool
+AMREX_GPU_HOST_DEVICE auto
 CheckSymmetryArray<TophatProblem>(amrex::Array4<const amrex::Real> const &arr,
-				  amrex::Box const &indexRange, const int ncomp)
+				  amrex::Box const &indexRange, const int ncomp,
+				  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx) -> bool
 {
 #if 0
 	amrex::Long asymmetry = 0;
@@ -288,17 +292,17 @@ CheckSymmetryArray<TophatProblem>(amrex::Array4<const amrex::Real> const &arr,
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE bool CheckSymmetry<TophatProblem>(amrex::FArrayBox const &arr,
-							amrex::Box const &indexRange,
-							const int ncomp)
+AMREX_GPU_HOST_DEVICE auto
+CheckSymmetry<TophatProblem>(amrex::FArrayBox const &arr, amrex::Box const &indexRange,
+			     const int ncomp, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx)
+    -> bool
 {
-	return CheckSymmetryArray<TophatProblem>(arr.const_array(), indexRange, ncomp);
+	return CheckSymmetryArray<TophatProblem>(arr.const_array(), indexRange, ncomp, dx);
 }
 } // namespace quokka
 
 template <> void RadiationSimulation<TophatProblem>::computeAfterTimestep()
 {
-#if 0
 	// copy all FABs to a local FAB across the entire domain
 	amrex::BoxArray localBoxes(domain_);
 	amrex::DistributionMapping localDistribution(localBoxes, 1);
@@ -345,7 +349,6 @@ template <> void RadiationSimulation<TophatProblem>::computeAfterTimestep()
 		}
 		// AMREX_ASSERT_WITH_MESSAGE(asymmetry == 0, "y-midplane symmetry check failed!");
 	}
-#endif
 }
 
 auto testproblem_radiation_marshak_cgs() -> int
@@ -395,10 +398,10 @@ auto testproblem_radiation_marshak_cgs() -> int
 		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
 			if (isNormalComp(n, i)) { // reflect lower
 				boundaryConditions[n].setLo(i, amrex::BCType::reflect_odd);
-				//boundaryConditions[n].setHi(i, amrex::BCType::reflect_odd);
+				// boundaryConditions[n].setHi(i, amrex::BCType::reflect_odd);
 			} else {
 				boundaryConditions[n].setLo(i, amrex::BCType::reflect_even);
-				//boundaryConditions[n].setHi(i, amrex::BCType::reflect_even);
+				// boundaryConditions[n].setHi(i, amrex::BCType::reflect_even);
 			}
 			// extrapolate upper
 			boundaryConditions[n].setHi(i, amrex::BCType::foextrap);
