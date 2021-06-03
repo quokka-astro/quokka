@@ -113,6 +113,11 @@ auto RadSystem<TophatProblem>::ComputeEgasTempDerivative(const double rho, const
 	return rho * c_v;
 }
 
+template <> auto RadSystem<TophatProblem>::ComputeEddingtonFactor(double f) -> double
+{
+	return (1. / 3.); // Eddington approximation
+}
+
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 RadiationSimulation<TophatProblem>::setCustomBoundaryConditions(
@@ -120,10 +125,6 @@ RadiationSimulation<TophatProblem>::setCustomBoundaryConditions(
     amrex::GeometryData const &geom, const Real /*time*/, const amrex::BCRec *bcr, int /*bcomp*/,
     int /*orig_comp*/)
 {
-	if (!((bcr->lo(0) == amrex::BCType::ext_dir) || (bcr->hi(0) == amrex::BCType::ext_dir))) {
-		return;
-	}
-
 #if (AMREX_SPACEDIM == 2)
 	auto [i, j] = iv.toArray();
 	int k = 0;
@@ -149,9 +150,8 @@ RadiationSimulation<TophatProblem>::setCustomBoundaryConditions(
 
 		const double E_0 = consVar(lo[0], j, k, RadSystem<TophatProblem>::radEnergy_index);
 		const double Fx_0 = consVar(lo[0], j, k, RadSystem<TophatProblem>::x1RadFlux_index);
-		// const double Fy_0 = consVar(lo[0], j, k,
-		// RadSystem<TophatProblem>::x2RadFlux_index); const double Fz_0 = consVar(lo[0], j,
-		// k, RadSystem<TophatProblem>::x3RadFlux_index);
+		const double Fy_0 = consVar(lo[0], j, k, RadSystem<TophatProblem>::x2RadFlux_index);
+		const double Fz_0 = consVar(lo[0], j, k, RadSystem<TophatProblem>::x3RadFlux_index);
 
 		double Fx_bdry = NAN;
 		double Fy_bdry = NAN;
@@ -166,14 +166,14 @@ RadiationSimulation<TophatProblem>::setCustomBoundaryConditions(
 			// reflecting boundary (usually works best)
 			E_inc = E_0;
 			Fx_bdry = -Fx_0;
-			Fy_bdry = 0.;
-			Fz_bdry = 0.;
+			Fy_bdry = Fy_0;
+			Fz_bdry = Fz_0;
 
 			// extrapolated boundary
 			// E_inc = E_0;
 			// Fx_bdry = Fx_0;
-			// Fy_bdry = 0.;
-			// Fz_bdry = 0.;
+			// Fy_bdry = 0;
+			// Fz_bdry = 0;
 
 			// Marshak boundary (does not work)
 			// E_inc = a_rad * std::pow(T_initial, 4);
@@ -191,6 +191,9 @@ RadiationSimulation<TophatProblem>::setCustomBoundaryConditions(
 		consVar(i, j, k, RadSystem<TophatProblem>::x2RadFlux_index) = Fy_bdry;
 		consVar(i, j, k, RadSystem<TophatProblem>::x3RadFlux_index) = Fz_bdry;
 	}
+	// N.B.: Boundary conditions for gas *must* be set!! Otherwise the optical depth correction
+	// does not work! [runs stably, but not correctly (!) when the optical depth correction is
+	// disabled.]
 }
 
 template <> void RadiationSimulation<TophatProblem>::setInitialConditions()
@@ -355,9 +358,9 @@ auto testproblem_radiation_marshak_cgs() -> int
 {
 	// Problem parameters
 	const int max_timesteps = 10000;
-	const double CFL_number = 0.1;
-	const int nx = 140;
-	const int ny = 40; // 80;
+	const double CFL_number = 0.4;
+	const int nx = 700;
+	const int ny = 200; // 80;
 
 	const double Lx = 7.0;		 // cm
 	const double Ly = 4.0;		 // cm
