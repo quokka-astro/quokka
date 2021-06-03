@@ -21,7 +21,7 @@ auto main(int argc, char **argv) -> int
 {
 	// Initialization (copied from ExaWind)
 
-	amrex::Initialize(argc, argv, true, MPI_COMM_WORLD, []() {
+	amrex::Initialize(argc, argv, true, MPI_COMM_WORLD, []() { // NOLINT
 		amrex::ParmParse pp("amrex");
 		// Set the defaults so that we throw an exception instead of attempting
 		// to generate backtrace files. However, if the user has explicitly set
@@ -113,16 +113,18 @@ auto RadSystem<TophatProblem>::ComputeEgasTempDerivative(const double rho, const
 	return rho * c_v;
 }
 
+#if 0
 template <> auto RadSystem<TophatProblem>::ComputeEddingtonFactor(double f) -> double
 {
 	return (1. / 3.); // Eddington approximation
 }
+#endif
 
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 RadiationSimulation<TophatProblem>::setCustomBoundaryConditions(
     const amrex::IntVect &iv, amrex::Array4<Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
-    amrex::GeometryData const &geom, const Real /*time*/, const amrex::BCRec *bcr, int /*bcomp*/,
+    amrex::GeometryData const &geom, const Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
     int /*orig_comp*/)
 {
 #if (AMREX_SPACEDIM == 2)
@@ -139,7 +141,7 @@ RadiationSimulation<TophatProblem>::setCustomBoundaryConditions(
 	const amrex::Box &box = geom.Domain();
 
 	amrex::GpuArray<int, 3> lo = box.loVect3d();
-	amrex::GpuArray<int, 3> hi = box.hiVect3d();
+	//amrex::GpuArray<int, 3> hi = box.hiVect3d();
 
 	amrex::Real const y0 = 0.;
 	amrex::Real const y = prob_lo[1] + (j + Real(0.5)) * dx[1];
@@ -152,6 +154,15 @@ RadiationSimulation<TophatProblem>::setCustomBoundaryConditions(
 		const double Fx_0 = consVar(lo[0], j, k, RadSystem<TophatProblem>::x1RadFlux_index);
 		const double Fy_0 = consVar(lo[0], j, k, RadSystem<TophatProblem>::x2RadFlux_index);
 		const double Fz_0 = consVar(lo[0], j, k, RadSystem<TophatProblem>::x3RadFlux_index);
+
+		const double Egas = consVar(lo[0], j, k, RadSystem<TophatProblem>::gasEnergy_index);
+		const double rho = consVar(lo[0], j, k, RadSystem<TophatProblem>::gasDensity_index);
+		const double px =
+		    consVar(lo[0], j, k, RadSystem<TophatProblem>::x1GasMomentum_index);
+		const double py =
+		    consVar(lo[0], j, k, RadSystem<TophatProblem>::x2GasMomentum_index);
+		const double pz =
+		    consVar(lo[0], j, k, RadSystem<TophatProblem>::x3GasMomentum_index);
 
 		double Fx_bdry = NAN;
 		double Fy_bdry = NAN;
@@ -172,8 +183,8 @@ RadiationSimulation<TophatProblem>::setCustomBoundaryConditions(
 			// extrapolated boundary
 			// E_inc = E_0;
 			// Fx_bdry = Fx_0;
-			// Fy_bdry = 0;
-			// Fz_bdry = 0;
+			// Fy_bdry = Fy_0;
+			// Fz_bdry = Fz_0;
 
 			// Marshak boundary (does not work)
 			// E_inc = a_rad * std::pow(T_initial, 4);
@@ -190,15 +201,19 @@ RadiationSimulation<TophatProblem>::setCustomBoundaryConditions(
 		consVar(i, j, k, RadSystem<TophatProblem>::x1RadFlux_index) = Fx_bdry;
 		consVar(i, j, k, RadSystem<TophatProblem>::x2RadFlux_index) = Fy_bdry;
 		consVar(i, j, k, RadSystem<TophatProblem>::x3RadFlux_index) = Fz_bdry;
+
+		// reflecting boundary for gas variables
+		consVar(i, j, k, RadSystem<TophatProblem>::gasEnergy_index) = Egas;
+		consVar(i, j, k, RadSystem<TophatProblem>::gasDensity_index) = rho;
+		consVar(i, j, k, RadSystem<TophatProblem>::x1GasMomentum_index) = -px;
+		consVar(i, j, k, RadSystem<TophatProblem>::x2GasMomentum_index) = py;
+		consVar(i, j, k, RadSystem<TophatProblem>::x3GasMomentum_index) = pz;
 	}
-	// N.B.: Boundary conditions for gas *must* be set!! Otherwise the optical depth correction
-	// does not work! [runs stably, but not correctly (!) when the optical depth correction is
-	// disabled.]
 }
 
 template <> void RadiationSimulation<TophatProblem>::setInitialConditions()
 {
-	auto prob_lo = simGeometry_.ProbLo();
+	const auto *prob_lo = simGeometry_.ProbLo();
 	// auto prob_hi = simGeometry_.ProbHi();
 	auto dx = dx_;
 
@@ -246,116 +261,12 @@ template <> void RadiationSimulation<TophatProblem>::setInitialConditions()
 	areInitialConditionsDefined_ = true;
 }
 
-namespace quokka
-{
-template <>
-AMREX_GPU_HOST_DEVICE auto
-CheckSymmetryArray<TophatProblem>(amrex::Array4<const amrex::Real> const &arr,
-				  amrex::Box const &indexRange, const int ncomp,
-				  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx) -> bool
-{
-#if 0
-	amrex::Long asymmetry = 0;
-	amrex::GpuArray<int, 3> lo = indexRange.loVect3d();
-	auto [nx, ny, nz] = indexRange.hiVect3d().arr;
-	AMREX_ASSERT(lo[0] == 0);
-	AMREX_ASSERT(lo[1] == 0);
-	AMREX_ASSERT(lo[2] == 0);
-
-	int j0 = ny / 2;
-	for (int i = 0; i < nx; ++i) {
-		for (int j = 0; j < ny; ++j) {
-			for (int k = 0; k < nz; ++k) {
-				for (int n = 0; n < ncomp; ++n) {
-					const amrex::Real comp_upper = arr(i, j, k, n);
-					int j_reflect = j0 - (j - j0 + 1);
-					amrex::Real comp_lower = arr(i, j_reflect, k, n);
-
-					if ((n == RadSystem<TophatProblem>::x2RadFlux_index) ||
-					    (n == RadSystem<TophatProblem>::x2GasMomentum_index)) {
-						comp_lower *= -1.0;
-					}
-
-					if (comp_upper != comp_lower) {
-						amrex::Print()
-						    << i << "," << j << "," << k << "," << n
-						    << comp_upper << comp_lower << "\n";
-						asymmetry++;
-					}
-				}
-			}
-		}
-	}
-	if (asymmetry == 0) {
-		// amrex::Print() << "no symmetry violations.\n";
-	}
-	AMREX_ASSERT_WITH_MESSAGE(asymmetry == 0, "y-midplane symmetry check failed!");
-#endif
-	return true;
-}
-
-template <>
-AMREX_GPU_HOST_DEVICE auto
-CheckSymmetry<TophatProblem>(amrex::FArrayBox const &arr, amrex::Box const &indexRange,
-			     const int ncomp, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx)
-    -> bool
-{
-	return CheckSymmetryArray<TophatProblem>(arr.const_array(), indexRange, ncomp, dx);
-}
-} // namespace quokka
-
-template <> void RadiationSimulation<TophatProblem>::computeAfterTimestep()
-{
-	// copy all FABs to a local FAB across the entire domain
-	amrex::BoxArray localBoxes(domain_);
-	amrex::DistributionMapping localDistribution(localBoxes, 1);
-	amrex::MultiFab state_mf(localBoxes, localDistribution, ncomp_, 0);
-	state_mf.ParallelCopy(state_new_);
-
-	if (amrex::ParallelDescriptor::IOProcessor()) {
-		auto const &state = state_mf.array(0);
-
-		amrex::Long asymmetry = 0;
-		auto nx = nx_;
-		auto ny = ny_;
-		auto nz = nz_;
-		auto ncomp = ncomp_;
-		int j0 = ny / 2;
-		for (int i = 0; i < nx; ++i) {
-			for (int j = 0; j < ny; ++j) {
-				for (int k = 0; k < nz; ++k) {
-					for (int n = 0; n < ncomp; ++n) {
-						const amrex::Real comp_upper = state(i, j, k, n);
-						int j_reflect = j0 - (j - j0 + 1);
-						amrex::Real comp_lower = state(i, j_reflect, k, n);
-
-						if ((n ==
-						     RadSystem<TophatProblem>::x2RadFlux_index) ||
-						    (n ==
-						     RadSystem<
-							 TophatProblem>::x2GasMomentum_index)) {
-							comp_lower *= -1.0;
-						}
-
-						if (comp_upper != comp_lower) {
-							// amrex::Print()
-							//    << i << ", " << j << ", " << k << ", "
-							//    << n << ", "
-							//    << comp_upper << ", " << comp_lower <<
-							//    "\n";
-							asymmetry++;
-							// AMREX_ASSERT(false);
-						}
-					}
-				}
-			}
-		}
-		// AMREX_ASSERT_WITH_MESSAGE(asymmetry == 0, "y-midplane symmetry check failed!");
-	}
-}
-
 auto testproblem_radiation_marshak_cgs() -> int
 {
+	// N.B. The asymptotic correction in the HLL solver does not work at the discontinuity in
+	// the lower x1 boundary condition. To run stably, it must be disabled. However, this causes
+	// unphysical radiation leakage into the walls surrounding the pipe.
+
 	// Problem parameters
 	const int max_timesteps = 10000;
 	const double CFL_number = 0.4;
@@ -417,7 +328,7 @@ auto testproblem_radiation_marshak_cgs() -> int
 	sim.cflNumber_ = CFL_number;
 	sim.maxTimesteps_ = max_timesteps;
 	sim.outputAtInterval_ = true;
-	sim.plotfileInterval_ = 1; // for debugging
+	sim.plotfileInterval_ = 10; // for debugging
 
 	// initialize
 	sim.setInitialConditions();

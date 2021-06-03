@@ -90,7 +90,7 @@ auto testproblem_advection() -> int
 	const double advection_velocity = 1.0;
 	const double CFL_number = 0.4;
 	const double max_time = 1.0;
-	const double max_dt = 1.0e-3;
+	const double max_dt = 1.0e-4;
 	const int max_timesteps = 1e4;
 	const int nvars = 1; // only density
 

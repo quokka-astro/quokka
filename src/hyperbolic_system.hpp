@@ -346,8 +346,6 @@ void HyperbolicSystem<problem_t>::PredictStep(
 	const auto x2Flux = fluxArray[1];
 #endif
 
-	AMREX_ASSERT(dx == dy);
-
 	amrex::ParallelFor(indexRange, nvars,
 			   [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
 				   consVarNew(i, j, k, n) =

@@ -175,7 +175,7 @@ template <typename problem_t> void RadiationSimulation<problem_t>::advanceSingle
 		stageOneRK2SSP(stateOld, stateNew, indexRange, ncompPrimitive_);
 		quokka::CheckSymmetryArray<problem_t>(stateNew, indexRange, ncomp_, dx_);
 	}
-#if 0
+
 	// update ghost zones [intermediate stage stored in state_new_]
 	fillBoundaryConditions(state_new_);
 	AMREX_ASSERT(!state_new_.contains_nan(0, ncomp_));
@@ -188,7 +188,7 @@ template <typename problem_t> void RadiationSimulation<problem_t>::advanceSingle
 		stageTwoRK2SSP(stateOld, stateNew, indexRange, ncompPrimitive_);
 		quokka::CheckSymmetryArray<problem_t>(stateNew, indexRange, ncomp_, dx_);
 	}
-#endif
+
 	// update ghost zones [intermediate stage stored in state_new_]
 	fillBoundaryConditions(state_new_);
 	AMREX_ASSERT(!state_new_.contains_nan(0, ncomp_));
@@ -204,7 +204,7 @@ template <typename problem_t> void RadiationSimulation<problem_t>::advanceSingle
 
 template <typename problem_t>
 void RadiationSimulation<problem_t>::operatorSplitSourceTerms(
-    amrex::Array4<amrex::Real> const &stateNew, const amrex::Box &indexRange, const int  /*nvars*/)
+    amrex::Array4<amrex::Real> const &stateNew, const amrex::Box &indexRange, const int /*nvars*/)
 {
 	amrex::FArrayBox radEnergySource(indexRange, 1,
 					 amrex::The_Async_Arena()); // cell-centered scalar
@@ -225,7 +225,7 @@ template <typename problem_t>
 template <FluxDir DIR>
 void RadiationSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real> const &consState,
 						  amrex::FArrayBox &x1Flux,
-						  const amrex::Box &indexRange, const int  /*nvars*/)
+						  const amrex::Box &indexRange, const int /*nvars*/)
 {
 	int dir = 0;
 	if constexpr (DIR == FluxDir::X1) {
@@ -253,15 +253,17 @@ void RadiationSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Rea
 	quokka::CheckNaN<problem_t>(primVar, indexRange, ghostRange, ncompPrimitive_, dx_);
 
 	// mixed interface/cell-centered kernel
-	// RadSystem<problem_t>::template ReconstructStatesPPM<DIR>(
-	//   primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange,
-	//    x1ReconstructRange, ncompPrimitive_);
+	RadSystem<problem_t>::template ReconstructStatesPPM<DIR>(
+	    primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange,
+	    x1ReconstructRange, ncompPrimitive_);
 	// PLM and donor cell are interface-centered kernels
-	RadSystem<problem_t>::template ReconstructStatesConstant<DIR>(
-	    primVar.array(), x1LeftState.array(), x1RightState.array(), x1ReconstructRange,
-	    ncompPrimitive_);
-	quokka::CheckNaN<problem_t>(x1LeftState, indexRange, x1ReconstructRange, ncompPrimitive_, dx_);
-	quokka::CheckNaN<problem_t>(x1RightState, indexRange, x1ReconstructRange, ncompPrimitive_, dx_);
+	// RadSystem<problem_t>::template ReconstructStatesConstant<DIR>(
+	//    primVar.array(), x1LeftState.array(), x1RightState.array(), x1ReconstructRange,
+	//    ncompPrimitive_);
+	quokka::CheckNaN<problem_t>(x1LeftState, indexRange, x1ReconstructRange, ncompPrimitive_,
+				    dx_);
+	quokka::CheckNaN<problem_t>(x1RightState, indexRange, x1ReconstructRange, ncompPrimitive_,
+				    dx_);
 
 	// interface-centered kernel
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, dir);
