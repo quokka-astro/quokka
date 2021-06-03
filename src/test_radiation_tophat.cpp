@@ -113,12 +113,12 @@ auto RadSystem<TophatProblem>::ComputeEgasTempDerivative(const double rho, const
 	return rho * c_v;
 }
 
-#if 0
-template <> auto RadSystem<TophatProblem>::ComputeEddingtonFactor(double f) -> double
+//#if 0
+template <> auto RadSystem<TophatProblem>::ComputeEddingtonFactor(double  /*f*/) -> double
 {
 	return (1. / 3.); // Eddington approximation
 }
-#endif
+//#endif
 
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
@@ -174,17 +174,17 @@ RadiationSimulation<TophatProblem>::setCustomBoundaryConditions(
 			Fy_bdry = 0.;
 			Fz_bdry = 0.;
 		} else {
-			// reflecting boundary (usually works best)
-			E_inc = E_0;
-			Fx_bdry = -Fx_0;
-			Fy_bdry = Fy_0;
-			Fz_bdry = Fz_0;
+			// reflecting boundary
+			//E_inc = E_0;
+			//Fx_bdry = -Fx_0;
+			//Fy_bdry = Fy_0;
+			//Fz_bdry = Fz_0;
 
 			// extrapolated boundary
-			// E_inc = E_0;
-			// Fx_bdry = Fx_0;
-			// Fy_bdry = Fy_0;
-			// Fz_bdry = Fz_0;
+			E_inc = E_0;
+			Fx_bdry = Fx_0;
+			Fy_bdry = Fy_0;
+			Fz_bdry = Fz_0;
 
 			// Marshak boundary (does not work)
 			// E_inc = a_rad * std::pow(T_initial, 4);
@@ -202,10 +202,10 @@ RadiationSimulation<TophatProblem>::setCustomBoundaryConditions(
 		consVar(i, j, k, RadSystem<TophatProblem>::x2RadFlux_index) = Fy_bdry;
 		consVar(i, j, k, RadSystem<TophatProblem>::x3RadFlux_index) = Fz_bdry;
 
-		// reflecting boundary for gas variables
+		// extrapolated/outflow boundary for gas variables
 		consVar(i, j, k, RadSystem<TophatProblem>::gasEnergy_index) = Egas;
 		consVar(i, j, k, RadSystem<TophatProblem>::gasDensity_index) = rho;
-		consVar(i, j, k, RadSystem<TophatProblem>::x1GasMomentum_index) = -px;
+		consVar(i, j, k, RadSystem<TophatProblem>::x1GasMomentum_index) = px;
 		consVar(i, j, k, RadSystem<TophatProblem>::x2GasMomentum_index) = py;
 		consVar(i, j, k, RadSystem<TophatProblem>::x3GasMomentum_index) = pz;
 	}

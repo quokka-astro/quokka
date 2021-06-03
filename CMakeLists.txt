@@ -13,6 +13,7 @@ include(CTest)
 set(AMReX_SPACEDIM 2 CACHE STRING "" FORCE)
 set(AMReX_MPI ON CACHE BOOL "" FORCE)
 set(AMReX_LINEAR_SOLVERS OFF CACHE BOOL "" FORCE)
+set(AMReX_ASSERTIONS ON CACHE BOOL "" FORCE)
 #set(AMReX_GPU_BACKEND CUDA) # set this on CMake command line
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
@@ -26,6 +27,3 @@ endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/amrex ${QuokkaCode_BINARY_DIR}/amrex)
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/fmt ${QuokkaCode_BINARY_DIR}/fmt)
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/src ${QuokkaCode_BINARY_DIR}/src)
-
-find_program(CLANG_TIDY_EXE NAMES "clang-tidy")
-set(CMAKE_CXX_CLANG_TIDY "${CLANG_TIDY_EXE}")
