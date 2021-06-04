@@ -253,13 +253,13 @@ void RadiationSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Rea
 	quokka::CheckNaN<problem_t>(primVar, indexRange, ghostRange, ncompPrimitive_, dx_);
 
 	// mixed interface/cell-centered kernel
-	//RadSystem<problem_t>::template ReconstructStatesPPM<DIR>(
-	//    primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange,
-	//    x1ReconstructRange, ncompPrimitive_);
+	RadSystem<problem_t>::template ReconstructStatesPPM<DIR>(
+	    primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange,
+	    x1ReconstructRange, ncompPrimitive_);
 	// PLM and donor cell are interface-centered kernels
-	 RadSystem<problem_t>::template ReconstructStatesConstant<DIR>(
-	    primVar.array(), x1LeftState.array(), x1RightState.array(), x1ReconstructRange,
-	    ncompPrimitive_);
+	//RadSystem<problem_t>::template ReconstructStatesConstant<DIR>(
+	//    primVar.array(), x1LeftState.array(), x1RightState.array(), x1ReconstructRange,
+	//    ncompPrimitive_);
 	quokka::CheckNaN<problem_t>(x1LeftState, indexRange, x1ReconstructRange, ncompPrimitive_,
 				    dx_);
 	quokka::CheckNaN<problem_t>(x1RightState, indexRange, x1ReconstructRange, ncompPrimitive_,

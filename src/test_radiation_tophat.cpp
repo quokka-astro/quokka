@@ -113,12 +113,12 @@ auto RadSystem<TophatProblem>::ComputeEgasTempDerivative(const double rho, const
 	return rho * c_v;
 }
 
-//#if 0
+#if 0
 template <> auto RadSystem<TophatProblem>::ComputeEddingtonFactor(double  /*f*/) -> double
 {
 	return (1. / 3.); // Eddington approximation
 }
-//#endif
+#endif
 
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void

@@ -215,7 +215,7 @@ auto RadSystem<problem_t>::ComputeCellOpticalDepth(
 	// interface at the *left* edge of zone i.]
 
 	// piecewise-constant reconstruction
-	const double rho_L = consVar(i - 1, j, k, gasDensity_index); 
+	const double rho_L = consVar(i - 1, j, k, gasDensity_index);
 	const double rho_R = consVar(i, j, k, gasDensity_index);
 
 	const double x1GasMom_L = consVar(i - 1, j, k, x1GasMomentum_index);
@@ -424,14 +424,15 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 
 			f_L = std::sqrt(fx_L * fx_L + fy_L * fy_L + fz_L * fz_L);
 			f_R = std::sqrt(fx_R * fx_R + fy_R * fy_R + fz_R * fz_R);
-			amrex::Print() << "fofc [corrected]: f_L = " << f_L << " f_R = " << f_R << "\n";
+			amrex::Print()
+			    << "fofc [corrected]: f_L = " << f_L << " f_R = " << f_R << "\n";
 		}
 
 		// check that states are physically admissible
 		AMREX_ASSERT(erad_L > 0.0);
 		AMREX_ASSERT(erad_R > 0.0);
-		AMREX_ASSERT(f_L < 1.0);
-		AMREX_ASSERT(f_R < 1.0);
+		// AMREX_ASSERT(f_L < 1.0); // there is sometimes a small (<1%) flux limiting
+		// violation when using P1 AMREX_ASSERT(f_R < 1.0);
 
 		std::array<amrex::Real, 3> fvec_L = {fx_L, fy_L, fz_L};
 		std::array<amrex::Real, 3> fvec_R = {fx_R, fy_R, fz_R};
@@ -481,8 +482,10 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 		}
 
 		// asymptotic-preserving correction (new in this code) -- direction-dependent!
-		// [similar to Skinner et al. 2020, but tau *must* be squared. 1/tau does not work.]
-		//const double tau_cell = ComputeCellOpticalDepth<DIR>(consVar, dx, i, j, k);
+		// [Similar to Skinner et al. 2020, but tau^-2 instead of tau^-1, which is not
+		// actually asymptotic-preserving. Also-- this correction is not
+		// stable when used for the tophat problem.]
+		// const double tau_cell = ComputeCellOpticalDepth<DIR>(consVar, dx, i, j, k);
 		const double tau_cell = 0.;
 		constexpr int fluxdim = 4;
 		const quokka::valarray<double, fluxdim> epsilon = {
@@ -855,7 +858,7 @@ void RadSystem<problem_t>::ComputeSourceTermsExplicit(arrayconst_t &consPrev,
 
 		// constant radiation energy source term
 		const auto Src = dt * (chat * radEnergySource(i, j, k));
-		
+
 		// compute reaction term
 		const auto rhs = dt * (rho * kappa) * (fourPiB - chat * Erad0);
 		const auto Fx_rhs = -dt * chat * (rho * kappa) * Frad0_x;
