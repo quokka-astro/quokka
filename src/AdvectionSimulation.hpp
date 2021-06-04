@@ -157,13 +157,13 @@ void AdvectionSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Rea
 	quokka::CheckNaN<problem_t>(primVar, indexRange, ghostRange, ncomp_, dx_);
 
 	// mixed interface/cell-centered kernel
-	LinearAdvectionSystem<problem_t>::template ReconstructStatesPPM<DIR>(
-	    primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange,
-	    x1ReconstructRange, nvars);
+	//LinearAdvectionSystem<problem_t>::template ReconstructStatesPPM<DIR>(
+	//    primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange,
+	//    x1ReconstructRange, nvars);
 	//LinearAdvectionSystem<problem_t>::template ReconstructStatesPLM<DIR>(
 	//    primVar.array(), x1LeftState.array(), x1RightState.array(), x1ReconstructRange, nvars);
-	//LinearAdvectionSystem<problem_t>::template ReconstructStatesConstant<DIR>(
-	//    primVar.array(), x1LeftState.array(), x1RightState.array(), x1ReconstructRange, nvars);
+	LinearAdvectionSystem<problem_t>::template ReconstructStatesConstant<DIR>(
+	    primVar.array(), x1LeftState.array(), x1RightState.array(), x1ReconstructRange, nvars);
 	quokka::CheckNaN<problem_t>(x1LeftState, indexRange, x1ReconstructRange, ncomp_, dx_);
 	quokka::CheckNaN<problem_t>(x1RightState, indexRange, x1ReconstructRange, ncomp_, dx_);
 
@@ -202,6 +202,9 @@ void AdvectionSimulation<problem_t>::stageOneRK2SSP(
 	amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrays = {x1Flux.const_array(),
 								    x2Flux.const_array()};
 #endif
+
+	// if applicable, check that fluxes are symmetric (only for test problems with x/y symmetry)
+	//quokka::CheckSymmetryFluxes<problem_t>(x1Flux, x2Flux, indexRange, ncomp_, dx_);
 
 	LinearAdvectionSystem<problem_t>::PredictStep(consVarOld, consVarNew, fluxArrays, dt_, dx_,
 						      indexRange, nvars);

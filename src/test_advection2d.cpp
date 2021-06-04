@@ -74,8 +74,8 @@ exactSolutionAtIndex(int i, int j, amrex::Real const *prob_lo, amrex::Real const
 
 template <> void AdvectionSimulation<SquareProblem>::setInitialConditions()
 {
-	auto prob_lo = simGeometry_.ProbLo();
-	auto prob_hi = simGeometry_.ProbHi();
+	const auto *prob_lo = simGeometry_.ProbLo();
+	const auto *prob_hi = simGeometry_.ProbHi();
 	auto dx = dx_;
 
 	for (amrex::MFIter iter(state_old_); iter.isValid(); ++iter) {
@@ -104,7 +104,7 @@ void ComputeExactSolution(amrex::Array4<amrex::Real> const &exact_arr, amrex::Bo
 // based on:
 // https://en.cppreference.com/w/cpp/types/numeric_limits/epsilon
 template <class T>
-auto isEqualToMachinePrecision(T x, T y, int ulp = 7) ->
+auto isEqualToMachinePrecision(T x, T y, int ulp = 0) ->
     typename std::enable_if<!std::numeric_limits<T>::is_integer, bool>::type
 {
 	// the machine epsilon has to be scaled to the magnitude of the values used
@@ -125,7 +125,7 @@ template <> void AdvectionSimulation<SquareProblem>::computeAfterTimestep()
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		auto const &state = state_mf.array(0);
-		auto prob_lo = simGeometry_.ProbLo();
+		const auto *prob_lo = simGeometry_.ProbLo();
 		auto dx = dx_;
 
 		amrex::Long asymmetry = 0;
@@ -218,8 +218,8 @@ auto testproblem_advection() -> int
 	for (amrex::MFIter iter(sim.state_new_); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &stateExact = state_exact.array(iter);
-		auto prob_lo = sim.simGeometry_.ProbLo();
-		auto prob_hi = sim.simGeometry_.ProbHi();
+		const auto *prob_lo = sim.simGeometry_.ProbLo();
+		const auto *prob_hi = sim.simGeometry_.ProbHi();
 		auto dx = sim.dx_;
 		ComputeExactSolution(stateExact, indexRange, sim.ncomp_, prob_lo, prob_hi, dx);
 	}
