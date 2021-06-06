@@ -17,6 +17,7 @@
 
 // internal headers
 #include "AMReX_Array.H"
+#include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
 #include "ArrayView.hpp"
 #include "hyperbolic_system.hpp"
@@ -112,15 +113,15 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 					       arrayconst_t &radEnergySource, array_t &src,
 					       amrex::Box const &indexRange, amrex::Real dt);
 
-	static auto ComputeEddingtonFactor(double f) -> double;
-	static auto ComputeOpacity(double rho, double Tgas) -> double;
-	static auto ComputeOpacityTempDerivative(double rho, double Tgas) -> double;
-	static auto ComputeTgasFromEgas(double rho, double Egas) -> double;
-	static auto ComputeEgasFromTgas(double rho, double Tgas) -> double;
-	static auto ComputeEgasTempDerivative(double rho, double Tgas) -> double;
-	static auto ComputeEintFromEgas(double density, double X1GasMom, double X2GasMom,
+	AMREX_GPU_HOST_DEVICE static constexpr auto ComputeEddingtonFactor(double f) -> double;
+	AMREX_GPU_HOST_DEVICE static constexpr auto ComputeOpacity(double rho, double Tgas) -> double;
+	AMREX_GPU_HOST_DEVICE static constexpr auto ComputeOpacityTempDerivative(double rho, double Tgas) -> double;
+	AMREX_GPU_HOST_DEVICE static constexpr auto ComputeTgasFromEgas(double rho, double Egas) -> double;
+	AMREX_GPU_HOST_DEVICE static constexpr auto ComputeEgasFromTgas(double rho, double Tgas) -> double;
+	AMREX_GPU_HOST_DEVICE static constexpr auto ComputeEgasTempDerivative(double rho, double Tgas) -> double;
+	AMREX_GPU_HOST_DEVICE static constexpr auto ComputeEintFromEgas(double density, double X1GasMom, double X2GasMom,
 					double X3GasMom, double Etot) -> double;
-	static auto ComputeEgasFromEint(double density, double X1GasMom, double X2GasMom,
+	AMREX_GPU_HOST_DEVICE static constexpr auto ComputeEgasFromEint(double density, double X1GasMom, double X2GasMom,
 					double X3GasMom, double Eint) -> double;
 
 	template <FluxDir DIR>
@@ -182,7 +183,7 @@ void RadSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real
 }
 
 template <typename problem_t>
-auto RadSystem<problem_t>::ComputeEddingtonFactor(double f_in) -> double
+AMREX_GPU_DEVICE constexpr auto RadSystem<problem_t>::ComputeEddingtonFactor(double f_in) -> double
 {
 	// f is the reduced flux == |F|/cE.
 	// compute Levermore (1984) closure [Eq. 25]
@@ -398,8 +399,6 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 		// check that states are physically admissible; if not, use first-order
 		// reconstruction
 		if (!((erad_L > 0.) && (erad_R > 0.) && (f_L < 1.) && (f_R < 1.))) {
-			amrex::Print() << "fofc: f_L = " << f_L << " f_R = " << f_R << "\n";
-
 			erad_L = consVar(i - 1, j, k, radEnergy_index);
 			erad_R = consVar(i, j, k, radEnergy_index);
 
@@ -424,8 +423,6 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 
 			f_L = std::sqrt(fx_L * fx_L + fy_L * fy_L + fz_L * fz_L);
 			f_R = std::sqrt(fx_R * fx_R + fy_R * fy_R + fz_R * fz_R);
-			amrex::Print()
-			    << "fofc [corrected]: f_L = " << f_L << " f_R = " << f_R << "\n";
 		}
 
 		// check that states are physically admissible
@@ -598,34 +595,34 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 }
 
 template <typename problem_t>
-auto RadSystem<problem_t>::ComputeOpacity(const double /*rho*/, const double /*Tgas*/) -> double
+AMREX_GPU_HOST_DEVICE constexpr auto RadSystem<problem_t>::ComputeOpacity(const double /*rho*/, const double /*Tgas*/)  -> double
 {
 	return 1.0;
 }
 
 template <typename problem_t>
-auto RadSystem<problem_t>::ComputeOpacityTempDerivative(const double /*rho*/, const double /*Tgas*/)
+AMREX_GPU_HOST_DEVICE constexpr auto RadSystem<problem_t>::ComputeOpacityTempDerivative(const double /*rho*/, const double /*Tgas*/) 
     -> double
 {
 	return 0.0;
 }
 
 template <typename problem_t>
-auto RadSystem<problem_t>::ComputeTgasFromEgas(const double rho, const double Egas) -> double
+AMREX_GPU_HOST_DEVICE constexpr auto RadSystem<problem_t>::ComputeTgasFromEgas(const double rho, const double Egas) -> double
 {
 	const double c_v = boltzmann_constant_ / (mean_molecular_mass_ * (gamma_ - 1.0));
 	return (Egas / (rho * c_v));
 }
 
 template <typename problem_t>
-auto RadSystem<problem_t>::ComputeEgasFromTgas(const double rho, const double Tgas) -> double
+AMREX_GPU_HOST_DEVICE constexpr auto RadSystem<problem_t>::ComputeEgasFromTgas(const double rho, const double Tgas) -> double
 {
 	const double c_v = boltzmann_constant_ / (mean_molecular_mass_ * (gamma_ - 1.0));
 	return (rho * c_v * Tgas);
 }
 
 template <typename problem_t>
-auto RadSystem<problem_t>::ComputeEgasTempDerivative(const double rho, const double /*Tgas*/)
+AMREX_GPU_HOST_DEVICE constexpr auto RadSystem<problem_t>::ComputeEgasTempDerivative(const double rho, const double /*Tgas*/)
     -> double
 {
 	const double c_v = boltzmann_constant_ / (mean_molecular_mass_ * (gamma_ - 1.0));
@@ -633,9 +630,9 @@ auto RadSystem<problem_t>::ComputeEgasTempDerivative(const double rho, const dou
 }
 
 template <typename problem_t>
-auto RadSystem<problem_t>::ComputeEintFromEgas(const double density, const double X1GasMom,
+AMREX_GPU_HOST_DEVICE constexpr auto RadSystem<problem_t>::ComputeEintFromEgas(const double density, const double X1GasMom,
 					       const double X2GasMom, const double X3GasMom,
-					       const double Etot) -> double
+					       const double Etot)  -> double
 {
 	const double p_sq = X1GasMom * X1GasMom + X2GasMom * X2GasMom + X3GasMom * X3GasMom;
 	const double Ekin = p_sq / (2.0 * density);
@@ -644,7 +641,7 @@ auto RadSystem<problem_t>::ComputeEintFromEgas(const double density, const doubl
 }
 
 template <typename problem_t>
-auto RadSystem<problem_t>::ComputeEgasFromEint(const double density, const double X1GasMom,
+AMREX_GPU_HOST_DEVICE constexpr auto RadSystem<problem_t>::ComputeEgasFromEint(const double density, const double X1GasMom,
 					       const double X2GasMom, const double X3GasMom,
 					       const double Eint) -> double
 {

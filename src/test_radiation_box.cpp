@@ -73,26 +73,26 @@ template <> struct RadSystem_Traits<BoxProblem> {
 };
 
 template <>
-auto RadSystem<BoxProblem>::ComputeOpacity(const double /*rho*/, const double /*Tgas*/) -> double
+constexpr auto RadSystem<BoxProblem>::ComputeOpacity(const double /*rho*/, const double /*Tgas*/) -> double
 {
 	amrex::Real kappa = kappa_pipe;
 	return kappa;
 }
 
 template <>
-auto RadSystem<BoxProblem>::ComputeTgasFromEgas(const double rho, const double Egas) -> double
+constexpr auto RadSystem<BoxProblem>::ComputeTgasFromEgas(const double rho, const double Egas) -> double
 {
 	return Egas / (rho * c_v);
 }
 
 template <>
-auto RadSystem<BoxProblem>::ComputeEgasFromTgas(const double rho, const double Tgas) -> double
+constexpr auto RadSystem<BoxProblem>::ComputeEgasFromTgas(const double rho, const double Tgas) -> double
 {
 	return rho * c_v * Tgas;
 }
 
 template <>
-auto RadSystem<BoxProblem>::ComputeEgasTempDerivative(const double rho, const double /*Tgas*/)
+constexpr auto RadSystem<BoxProblem>::ComputeEgasTempDerivative(const double rho, const double /*Tgas*/)
     -> double
 {
 	// This is also known as the heat capacity, i.e.
@@ -215,13 +215,13 @@ template <> void RadiationSimulation<BoxProblem>::setInitialConditions()
 // based on:
 // https://en.cppreference.com/w/cpp/types/numeric_limits/epsilon
 template <class T>
-auto isEqualToMachinePrecision(T x, T y, int ulp = 10) ->
+AMREX_GPU_HOST_DEVICE constexpr auto isEqualToMachinePrecision(T x, T y, int ulp = 10) ->
     typename std::enable_if<!std::numeric_limits<T>::is_integer, bool>::type
 {
 	// the machine epsilon has to be scaled to the magnitude of the values used
 	// and multiplied by the desired precision in ULPs (units in the last place)
 	// [Note: 10 ULP * epsilon() ~= 2.22e-15]
-	//return std::fabs(x - y) <= std::numeric_limits<T>::epsilon() * std::fabs(x + y) * ulp;
+	// return std::fabs(x - y) <= std::numeric_limits<T>::epsilon() * std::fabs(x + y) * ulp;
 	return std::fabs(x - y) <= (1.0e-8) * std::fabs(x + y);
 }
 
@@ -278,12 +278,14 @@ CheckSymmetryArray<BoxProblem>(amrex::Array4<const amrex::Real> const &arr,
 					    std::abs(comp_upper - comp_lower) / average;
 
 					if (!isEqualToMachinePrecision(comp_upper, comp_lower)) {
+#ifndef AMREX_USE_GPU
 						amrex::Print()
 						    << i << ", " << j << ", " << k << ", " << n
 						    << ", " << comp_upper << ", " << comp_lower
 						    << " " << residual << "\n";
 						amrex::Print() << "x = " << x << "\n";
 						amrex::Print() << "y = " << y << "\n";
+#endif
 						asymmetry++;
 						AMREX_ASSERT_WITH_MESSAGE(false,
 									  "x/y not symmetric!");
@@ -292,17 +294,9 @@ CheckSymmetryArray<BoxProblem>(amrex::Array4<const amrex::Real> const &arr,
 			}
 		}
 	}
-	AMREX_ASSERT_WITH_MESSAGE(asymmetry == 0, "x/y not symmetric!");
+	// AMREX_ASSERT_WITH_MESSAGE(asymmetry == 0, "x/y not symmetric!");
 #endif // DEBUG_SYMMETRY
 	return true;
-}
-
-template <>
-AMREX_GPU_HOST_DEVICE auto
-CheckSymmetry<BoxProblem>(amrex::FArrayBox const &arr, amrex::Box const &indexRange,
-			  const int ncomp, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx) -> bool
-{
-	return CheckSymmetryArray<BoxProblem>(arr.const_array(), indexRange, ncomp, dx);
 }
 } // namespace quokka
 

@@ -71,6 +71,7 @@ template <> void HydroSimulation<KelvinHelmholzProblem>::setInitialConditions()
 			//amrex::Real const x = prob_lo[0] + (i + Real(0.5)) * dx[0];
 			amrex::Real const y = prob_lo[1] + (j + Real(0.5)) * dx[1];
 
+			// amrex::Random() no longer works on GPU!!
 			amrex::Real const rand_x = amrex::Random() - 0.5; // drawn from [0.0, 1.0)
 			amrex::Real const rand_y = amrex::Random() - 0.5;
 

@@ -210,8 +210,14 @@ void RadiationSimulation<problem_t>::operatorSplitSourceTerms(
 					 amrex::The_Async_Arena()); // cell-centered scalar
 	amrex::FArrayBox advectionFluxes(indexRange, 3,
 					 amrex::The_Async_Arena()); // cell-centered vector
-	radEnergySource.setVal(0.);
-	advectionFluxes.setVal(0.);
+	
+	// N.B.: only way to initialize FAB on GPU
+	radEnergySource.set_initval(0.);
+	radEnergySource.set_do_initval(true);
+	radEnergySource.initVal();
+	advectionFluxes.set_initval(0.);
+	advectionFluxes.set_do_initval(true);
+	advectionFluxes.initVal();
 
 	// cell-centered radiation energy source (used only in test problems)
 	RadSystem<problem_t>::SetRadEnergySource(radEnergySource.array(), indexRange, dx_, tNow_);
