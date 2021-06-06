@@ -77,7 +77,7 @@ template <> struct RadSystem_Traits<TophatProblem> {
 };
 
 template <>
-auto RadSystem<TophatProblem>::ComputeOpacity(const double rho, const double /*Tgas*/) -> double
+constexpr auto RadSystem<TophatProblem>::ComputeOpacity(const double rho, const double /*Tgas*/) -> double
 {
 	amrex::Real kappa = 0.;
 	if (rho == rho_pipe) {
@@ -91,19 +91,19 @@ auto RadSystem<TophatProblem>::ComputeOpacity(const double rho, const double /*T
 }
 
 template <>
-auto RadSystem<TophatProblem>::ComputeTgasFromEgas(const double rho, const double Egas) -> double
+constexpr auto RadSystem<TophatProblem>::ComputeTgasFromEgas(const double rho, const double Egas) -> double
 {
 	return Egas / (rho * c_v);
 }
 
 template <>
-auto RadSystem<TophatProblem>::ComputeEgasFromTgas(const double rho, const double Tgas) -> double
+constexpr auto RadSystem<TophatProblem>::ComputeEgasFromTgas(const double rho, const double Tgas) -> double
 {
 	return rho * c_v * Tgas;
 }
 
 template <>
-auto RadSystem<TophatProblem>::ComputeEgasTempDerivative(const double rho, const double /*Tgas*/)
+constexpr auto RadSystem<TophatProblem>::ComputeEgasTempDerivative(const double rho, const double /*Tgas*/)
     -> double
 {
 	// This is also known as the heat capacity, i.e.
@@ -114,7 +114,7 @@ auto RadSystem<TophatProblem>::ComputeEgasTempDerivative(const double rho, const
 }
 
 #if 0
-template <> auto RadSystem<TophatProblem>::ComputeEddingtonFactor(double  /*f*/) -> double
+template <> constexpr auto RadSystem<TophatProblem>::ComputeEddingtonFactor(double  /*f*/) -> double
 {
 	return (1. / 3.); // Eddington approximation
 }
@@ -312,10 +312,8 @@ auto testproblem_radiation_marshak_cgs() -> int
 		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
 			if (isNormalComp(n, i)) { // reflect lower
 				boundaryConditions[n].setLo(i, amrex::BCType::reflect_odd);
-				// boundaryConditions[n].setHi(i, amrex::BCType::reflect_odd);
 			} else {
 				boundaryConditions[n].setLo(i, amrex::BCType::reflect_even);
-				// boundaryConditions[n].setHi(i, amrex::BCType::reflect_even);
 			}
 			// extrapolate upper
 			boundaryConditions[n].setHi(i, amrex::BCType::foextrap);
