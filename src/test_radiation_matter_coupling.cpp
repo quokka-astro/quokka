@@ -47,9 +47,9 @@ struct CouplingProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
 // Su & Olson (1997) test problem
-const double eps_SuOlson = 1.0;
-const double a_rad = 7.5646e-15; // cgs
-const double alpha_SuOlson = 4.0 * a_rad / eps_SuOlson;
+constexpr double eps_SuOlson = 1.0;
+constexpr double a_rad = 7.5646e-15; // cgs
+constexpr double alpha_SuOlson = 4.0 * a_rad / eps_SuOlson;
 
 template <> struct RadSystem_Traits<CouplingProblem> {
 	static constexpr double c_light = c_light_cgs_;
@@ -64,19 +64,19 @@ template <> struct RadSystem_Traits<CouplingProblem> {
 };
 
 template <>
-auto RadSystem<CouplingProblem>::ComputeTgasFromEgas(const double rho, const double Egas) -> double
+constexpr auto RadSystem<CouplingProblem>::ComputeTgasFromEgas(const double rho, const double Egas) -> double
 {
 	return std::pow(4.0 * Egas / alpha_SuOlson, 1. / 4.);
 }
 
 template <>
-auto RadSystem<CouplingProblem>::ComputeEgasFromTgas(const double rho, const double Tgas) -> double
+constexpr auto RadSystem<CouplingProblem>::ComputeEgasFromTgas(const double rho, const double Tgas) -> double
 {
 	return (alpha_SuOlson / 4.0) * std::pow(Tgas, 4);
 }
 
 template <>
-auto RadSystem<CouplingProblem>::ComputeEgasTempDerivative(const double rho, const double Tgas)
+constexpr auto RadSystem<CouplingProblem>::ComputeEgasTempDerivative(const double rho, const double Tgas)
     -> double
 {
 	// This is also known as the heat capacity, i.e.
