@@ -10,10 +10,12 @@
 #include "test_hydro2d_kh.hpp"
 #include "AMReX_BLassert.H"
 #include "AMReX_Config.H"
+#include "AMReX_GpuLaunchFunctsC.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
 #include "AMReX_Random.H"
+#include "AMReX_RandomEngine.H"
 #include "HydroSimulation.hpp"
 #include "hydro_system.hpp"
 
@@ -67,49 +69,50 @@ template <> void HydroSimulation<KelvinHelmholzProblem>::setInitialConditions()
 		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
 		auto const &state = state_new_.array(iter);
 
-		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-			//amrex::Real const x = prob_lo[0] + (i + Real(0.5)) * dx[0];
-			amrex::Real const y = prob_lo[1] + (j + Real(0.5)) * dx[1];
+		amrex::ParallelForRNG(
+		    indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k,
+						     amrex::RandomEngine const &engine) noexcept {
+			    amrex::Real const y = prob_lo[1] + (j + Real(0.5)) * dx[1];
 
-			// amrex::Random() no longer works on GPU!!
-			amrex::Real const rand_x = amrex::Random() - 0.5; // drawn from [0.0, 1.0)
-			amrex::Real const rand_y = amrex::Random() - 0.5;
+			    // drawn from [0.0, 1.0)
+			    amrex::Real const rand_x = amrex::Random(engine) - 0.5;
+			    amrex::Real const rand_y = amrex::Random(engine) - 0.5;
 
-			double vx = 0.;
-			double vy = 0.;
-			double vz = 0.;
-			double rho = 1.0;
-			double P = 2.5;
+			    double vx = 0.;
+			    double vy = 0.;
+			    double vz = 0.;
+			    double rho = 1.0;
+			    double P = 2.5;
 
-			if (std::abs(y - y0) <= 0.25) {
-				rho = 2.0;
-				vx = 0.5 + amp * rand_x;
-				vy = amp * rand_y;
-			} else {
-				rho = 1.0;
-				vx = -0.5 + amp * rand_x;
-				vy = amp * rand_y;
-			}
+			    if (std::abs(y - y0) <= 0.25) {
+				    rho = 2.0;
+				    vx = 0.5 + amp * rand_x;
+				    vy = amp * rand_y;
+			    } else {
+				    rho = 1.0;
+				    vx = -0.5 + amp * rand_x;
+				    vy = amp * rand_y;
+			    }
 
-			AMREX_ASSERT(!std::isnan(vx));
-			AMREX_ASSERT(!std::isnan(vy));
-			AMREX_ASSERT(!std::isnan(vz));
-			AMREX_ASSERT(!std::isnan(rho));
-			AMREX_ASSERT(!std::isnan(P));
+			    AMREX_ASSERT(!std::isnan(vx));
+			    AMREX_ASSERT(!std::isnan(vy));
+			    AMREX_ASSERT(!std::isnan(vz));
+			    AMREX_ASSERT(!std::isnan(rho));
+			    AMREX_ASSERT(!std::isnan(P));
 
-			const auto v_sq = vx * vx + vy * vy + vz * vz;
-			const auto gamma = HydroSystem<KelvinHelmholzProblem>::gamma_;
+			    const auto v_sq = vx * vx + vy * vy + vz * vz;
+			    const auto gamma = HydroSystem<KelvinHelmholzProblem>::gamma_;
 
-			state(i, j, k, HydroSystem<KelvinHelmholzProblem>::density_index) = rho;
-			state(i, j, k, HydroSystem<KelvinHelmholzProblem>::x1Momentum_index) =
-			    rho * vx;
-			state(i, j, k, HydroSystem<KelvinHelmholzProblem>::x2Momentum_index) =
-			    rho * vy;
-			state(i, j, k, HydroSystem<KelvinHelmholzProblem>::x3Momentum_index) =
-			    rho * vz;
-			state(i, j, k, HydroSystem<KelvinHelmholzProblem>::energy_index) =
-			    P / (gamma - 1.) + 0.5 * rho * v_sq;
-		});
+			    state(i, j, k, HydroSystem<KelvinHelmholzProblem>::density_index) = rho;
+			    state(i, j, k, HydroSystem<KelvinHelmholzProblem>::x1Momentum_index) =
+				rho * vx;
+			    state(i, j, k, HydroSystem<KelvinHelmholzProblem>::x2Momentum_index) =
+				rho * vy;
+			    state(i, j, k, HydroSystem<KelvinHelmholzProblem>::x3Momentum_index) =
+				rho * vz;
+			    state(i, j, k, HydroSystem<KelvinHelmholzProblem>::energy_index) =
+				P / (gamma - 1.) + 0.5 * rho * v_sq;
+		    });
 	}
 
 	// set flag
@@ -120,7 +123,7 @@ auto testproblem_hydro_kelvinhelmholz() -> int
 {
 	// Problem parameters
 	const int nvars = 5; // Euler equations
-	
+
 	amrex::IntVect gridDims{AMREX_D_DECL(512, 512, 4)};
 	amrex::RealBox boxSize{
 	    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.0), amrex::Real(0.0))},
