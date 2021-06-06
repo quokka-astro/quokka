@@ -159,14 +159,14 @@ template <> void AdvectionSimulation<SquareProblem>::computeAfterTimestep()
 							amrex::Print() << "x = " << x << "\n";
 							amrex::Print() << "y = " << y << "\n";
 							asymmetry++;
-							AMREX_ASSERT_WITH_MESSAGE(
+							AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 							    false, "x/y not symmetric!");
 						}
 					}
 				}
 			}
 		}
-		AMREX_ASSERT_WITH_MESSAGE(asymmetry == 0, "x/y not symmetric!");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(asymmetry == 0, "x/y not symmetric!");
 	}
 }
 
