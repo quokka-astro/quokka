@@ -207,6 +207,7 @@ void HydroSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real> c
 	quokka::CheckNaN<problem_t>(x1LeftState, indexRange, x1ReconstructRange, nvars, dx_);
 	quokka::CheckNaN<problem_t>(x1RightState, indexRange, x1ReconstructRange, nvars, dx_);
 
+	// flattening causes x/y asymmetry!!!
 	// cell-centered kernel
 	HydroSystem<problem_t>::template ComputeFlatteningCoefficients<DIR>(
 	    primVar.array(), x1Flat.array(), flatteningRange);
@@ -255,6 +256,10 @@ void HydroSimulation<problem_t>::stageOneRK2SSP(amrex::Array4<const amrex::Real>
 								    x2Flux.const_array()};
 #endif
 
+	// if applicable, check that fluxes are symmetric (only for test problems with x/y symmetry)
+	quokka::CheckSymmetryFluxes<problem_t>(x1Flux.const_array(), x2Flux.const_array(),
+					       indexRange, ncomp_, dx_);
+
 	// Stage 1 of RK2-SSP
 	HydroSystem<problem_t>::PredictStep(consVarOld, consVarNew, fluxArrays, dt_, dx_,
 					    indexRange, nvars);
@@ -285,6 +290,10 @@ void HydroSimulation<problem_t>::stageTwoRK2SSP(amrex::Array4<const amrex::Real>
 	amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrays = {x1Flux.const_array(),
 								    x2Flux.const_array()};
 #endif
+
+	// if applicable, check that fluxes are symmetric (only for test problems with x/y symmetry)
+	quokka::CheckSymmetryFluxes<problem_t>(x1Flux.const_array(), x2Flux.const_array(),
+					       indexRange, ncomp_, dx_);
 
 	// Stage 2 of RK2-SSP
 	HydroSystem<problem_t>::AddFluxesRK2(consVarNew, consVarOld, consVarNew, fluxArrays, dt_,

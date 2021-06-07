@@ -54,6 +54,72 @@ template <> struct EOS_Traits<RichtmeyerMeshkovProblem> {
 	static constexpr double gamma = 1.4;
 };
 
+namespace quokka
+{
+template <>
+AMREX_GPU_HOST_DEVICE auto CheckSymmetryFluxes<RichtmeyerMeshkovProblem>(
+    amrex::Array4<const amrex::Real> const &arr1, amrex::Array4<const amrex::Real> const &arr2,
+    amrex::Box const &indexRange, const int ncomp, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx)
+    -> bool
+{
+	amrex::Long asymmetry = 0;
+	amrex::GpuArray<int, 3> prob_lo = indexRange.loVect3d();
+	auto nx = indexRange.hiVect3d()[0] + 1;
+	auto ny = indexRange.hiVect3d()[1] + 1;
+	auto nz = indexRange.hiVect3d()[2] + 1;
+	AMREX_ASSERT(prob_lo[0] == 0);
+	AMREX_ASSERT(prob_lo[1] == 0);
+	AMREX_ASSERT(prob_lo[2] == 0);
+
+	for (int i = 0; i < nx; ++i) {
+		for (int j = 0; j < ny; ++j) {
+			for (int k = 0; k < nz; ++k) {
+				amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+				amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
+
+				for (int n = 0; n < ncomp; ++n) {
+					const amrex::Real comp_upper = arr1(i, j, k, n);
+
+					// reflect across x/y diagonal
+					int n_lower = n;
+					if (n == HydroSystem<
+						     RichtmeyerMeshkovProblem>::x1Momentum_index) {
+						n_lower = HydroSystem<
+						    RichtmeyerMeshkovProblem>::x2Momentum_index;
+					} else if (n == HydroSystem<RichtmeyerMeshkovProblem>::
+							    x2Momentum_index) {
+						n_lower = HydroSystem<
+						    RichtmeyerMeshkovProblem>::x1Momentum_index;
+					}
+
+					amrex::Real comp_lower = arr2(j, i, k, n_lower);
+
+					const amrex::Real average =
+					    std::fabs(comp_upper + comp_lower);
+					const amrex::Real residual =
+					    std::abs(comp_upper - comp_lower) / average;
+
+					if (comp_upper != comp_lower) {
+#ifndef AMREX_USE_GPU
+						amrex::Print()
+						    << i << ", " << j << ", " << k << ", " << n
+						    << ", " << comp_upper << ", " << comp_lower
+						    << " " << residual << "\n";
+						amrex::Print() << "x = " << x << "\n";
+						amrex::Print() << "y = " << y << "\n";
+#endif
+						asymmetry++;
+						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+						    false,
+						    "[CheckSymmetryFluxes] x/y not symmetric!");
+					}
+				}
+			}
+		}
+	}
+	return true;
+}
+} // namespace quokka
 
 template <> void HydroSimulation<RichtmeyerMeshkovProblem>::computeAfterTimestep()
 {
@@ -82,8 +148,24 @@ template <> void HydroSimulation<RichtmeyerMeshkovProblem>::computeAfterTimestep
 					    prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
 					for (int n = 0; n < ncomp; ++n) {
 						const amrex::Real comp_upper = state(i, j, k, n);
+
 						// reflect across x/y diagonal
-						const amrex::Real comp_lower = state(j, i, k, n);
+						int n_lower = n;
+						if (n == HydroSystem<RichtmeyerMeshkovProblem>::
+							     x1Momentum_index) {
+							n_lower =
+							    HydroSystem<RichtmeyerMeshkovProblem>::
+								x2Momentum_index;
+						} else if (n ==
+							   HydroSystem<RichtmeyerMeshkovProblem>::
+							       x2Momentum_index) {
+							n_lower =
+							    HydroSystem<RichtmeyerMeshkovProblem>::
+								x1Momentum_index;
+						}
+
+						amrex::Real comp_lower = state(j, i, k, n_lower);
+
 						const amrex::Real average =
 						    std::fabs(comp_upper + comp_lower);
 						const amrex::Real residual =
@@ -109,7 +191,6 @@ template <> void HydroSimulation<RichtmeyerMeshkovProblem>::computeAfterTimestep
 	}
 }
 
-
 template <> void HydroSimulation<RichtmeyerMeshkovProblem>::setInitialConditions()
 {
 	amrex::GpuArray<Real, AMREX_SPACEDIM> dx = simGeometry_.CellSizeArray();
@@ -130,7 +211,7 @@ template <> void HydroSimulation<RichtmeyerMeshkovProblem>::setInitialConditions
 			double rho = NAN;
 			double P = NAN;
 
-			if ((x+y) > 0.15) {
+			if ((x + y) > 0.15) {
 				P = 1.0;
 				rho = 1.0;
 			} else {
@@ -148,9 +229,12 @@ template <> void HydroSimulation<RichtmeyerMeshkovProblem>::setInitialConditions
 			const auto gamma = HydroSystem<RichtmeyerMeshkovProblem>::gamma_;
 
 			state(i, j, k, HydroSystem<RichtmeyerMeshkovProblem>::density_index) = rho;
-			state(i, j, k, HydroSystem<RichtmeyerMeshkovProblem>::x1Momentum_index) = rho * vx;
-			state(i, j, k, HydroSystem<RichtmeyerMeshkovProblem>::x2Momentum_index) = rho * vy;
-			state(i, j, k, HydroSystem<RichtmeyerMeshkovProblem>::x3Momentum_index) = rho * vz;
+			state(i, j, k, HydroSystem<RichtmeyerMeshkovProblem>::x1Momentum_index) =
+			    rho * vx;
+			state(i, j, k, HydroSystem<RichtmeyerMeshkovProblem>::x2Momentum_index) =
+			    rho * vy;
+			state(i, j, k, HydroSystem<RichtmeyerMeshkovProblem>::x3Momentum_index) =
+			    rho * vz;
 			state(i, j, k, HydroSystem<RichtmeyerMeshkovProblem>::energy_index) =
 			    P / (gamma - 1.) + 0.5 * rho * v_sq;
 		});
@@ -164,13 +248,13 @@ auto testproblem_hydro_rm() -> int
 {
 	// Problem parameters
 	const int nvars = 5; // Euler equations
-	
-	amrex::IntVect gridDims{AMREX_D_DECL(400, 400, 4)};
+
+	amrex::IntVect gridDims{AMREX_D_DECL(128, 128, 4)};
 	amrex::RealBox boxSize{
 	    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.0), amrex::Real(0.0))},
 	    {AMREX_D_DECL(amrex::Real(0.3), amrex::Real(0.3), amrex::Real(1.0))}};
 
-	auto isNormalComp = [=] (int n, int dim) {
+	auto isNormalComp = [=](int n, int dim) {
 		if ((n == HydroSystem<RichtmeyerMeshkovProblem>::x1Momentum_index) && (dim == 0)) {
 			return true;
 		}
@@ -186,12 +270,12 @@ auto testproblem_hydro_rm() -> int
 	amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
 	for (int n = 0; n < nvars; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			if(isNormalComp(n, i)) {
+			if (isNormalComp(n, i)) {
 				boundaryConditions[n].setLo(i, amrex::BCType::reflect_odd);
 				boundaryConditions[n].setHi(i, amrex::BCType::reflect_odd);
 			} else {
 				boundaryConditions[n].setLo(i, amrex::BCType::reflect_even);
-				boundaryConditions[n].setHi(i, amrex::BCType::reflect_even);				
+				boundaryConditions[n].setHi(i, amrex::BCType::reflect_even);
 			}
 		}
 	}
@@ -207,6 +291,7 @@ auto testproblem_hydro_rm() -> int
 
 	// initialize
 	sim.setInitialConditions();
+	sim.computeAfterTimestep();
 
 	// evolve
 	sim.evolve();

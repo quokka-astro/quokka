@@ -221,10 +221,18 @@ void HydroSystem<problem_t>::ComputeFlatteningCoefficients(
 					  primVar(i - 1, j, k, pressure_index)) /
 				 K_S;
 
-		// check for converging flow (Eq. 77)
+		// check for converging flow along the normal direction DIR (Eq. 77)
+		int velocity_index = 0;
+		if constexpr(DIR == FluxDir::X1) {
+			velocity_index = x1Velocity_index;
+		} else if constexpr(DIR == FluxDir::X2) {
+			velocity_index = x2Velocity_index;
+		} else if constexpr(DIR == FluxDir::X3) {
+			velocity_index = x3Velocity_index;
+		}
 		double chi = 1.0;
-		if (primVar(i + 1, j, k, x1Velocity_index) <
-		    primVar(i - 1, j, k, x1Velocity_index)) {
+		if (primVar(i + 1, j, k, velocity_index) <
+		    primVar(i - 1, j, k, velocity_index)) {
 			chi = std::max(chi_min, std::min(1., (Zmax - Z) / (Zmax - Zmin)));
 		}
 
@@ -448,9 +456,9 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 		// compute fluxes
 		constexpr int fluxdim = 5;
 
-		quokka::valarray<double, fluxdim> D_L;
-		quokka::valarray<double, fluxdim> D_R;
-		quokka::valarray<double, fluxdim> D_star;
+		quokka::valarray<double, fluxdim> D_L{};
+		quokka::valarray<double, fluxdim> D_R{};
+		quokka::valarray<double, fluxdim> D_star{};
 
 		if constexpr (DIR == FluxDir::X1) {
 			D_L = {0., 1., 0., 0., u_L};
@@ -493,7 +501,7 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 		    (S_star * (S_R * U_R - F_R) + S_R * P_LR * D_star) / (S_R - S_star);
 
 		// open the Riemann fan
-		quokka::valarray<double, fluxdim> F;
+		quokka::valarray<double, fluxdim> F{};
 
 		// HLLC flux
 		if (S_L > 0.0) {
@@ -505,6 +513,10 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 		} else { // S_R < 0.0
 			F = F_R;
 		}
+
+		//if((i==0) && (j==0)) {
+		//	std::raise(SIGINT); //breakpoint
+		//}
 
 		// check states are valid
 		AMREX_ASSERT(!std::isnan(F[0])); // NOLINT
