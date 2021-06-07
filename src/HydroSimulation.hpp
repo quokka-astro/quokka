@@ -207,7 +207,6 @@ void HydroSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real> c
 	quokka::CheckNaN<problem_t>(x1LeftState, indexRange, x1ReconstructRange, nvars, dx_);
 	quokka::CheckNaN<problem_t>(x1RightState, indexRange, x1ReconstructRange, nvars, dx_);
 
-	// flattening causes x/y asymmetry!!!
 	// cell-centered kernel
 	HydroSystem<problem_t>::template ComputeFlatteningCoefficients<DIR>(
 	    primVar.array(), x1Flat.array(), flatteningRange);

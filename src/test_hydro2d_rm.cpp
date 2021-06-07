@@ -62,6 +62,7 @@ AMREX_GPU_HOST_DEVICE auto CheckSymmetryFluxes<RichtmeyerMeshkovProblem>(
     amrex::Box const &indexRange, const int ncomp, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx)
     -> bool
 {
+#ifdef DEBUG_SYMMETRY
 	amrex::Long asymmetry = 0;
 	amrex::GpuArray<int, 3> prob_lo = indexRange.loVect3d();
 	auto nx = indexRange.hiVect3d()[0] + 1;
@@ -117,12 +118,16 @@ AMREX_GPU_HOST_DEVICE auto CheckSymmetryFluxes<RichtmeyerMeshkovProblem>(
 			}
 		}
 	}
+#endif // DEBUG_SYMMETRY
 	return true;
 }
 } // namespace quokka
 
 template <> void HydroSimulation<RichtmeyerMeshkovProblem>::computeAfterTimestep()
 {
+#ifdef DEBUG_SYMMETRY
+	// this code does not actually work with Nranks > 1 ...
+
 	// copy all FABs to a local FAB across the entire domain
 	amrex::BoxArray localBoxes(domain_);
 	amrex::DistributionMapping localDistribution(localBoxes, 1);
@@ -189,6 +194,7 @@ template <> void HydroSimulation<RichtmeyerMeshkovProblem>::computeAfterTimestep
 		}
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(asymmetry == 0, "x/y not symmetric!");
 	}
+#endif
 }
 
 template <> void HydroSimulation<RichtmeyerMeshkovProblem>::setInitialConditions()
@@ -249,7 +255,7 @@ auto testproblem_hydro_rm() -> int
 	// Problem parameters
 	const int nvars = 5; // Euler equations
 
-	amrex::IntVect gridDims{AMREX_D_DECL(128, 128, 4)};
+	amrex::IntVect gridDims{AMREX_D_DECL(512, 512, 4)};
 	amrex::RealBox boxSize{
 	    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.0), amrex::Real(0.0))},
 	    {AMREX_D_DECL(amrex::Real(0.3), amrex::Real(0.3), amrex::Real(1.0))}};
@@ -291,7 +297,7 @@ auto testproblem_hydro_rm() -> int
 
 	// initialize
 	sim.setInitialConditions();
-	sim.computeAfterTimestep();
+	//sim.computeAfterTimestep();
 
 	// evolve
 	sim.evolve();

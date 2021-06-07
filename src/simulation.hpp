@@ -294,8 +294,9 @@ template <typename problem_t> void SingleLevelSimulation<problem_t>::evolve()
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		const double zone_cycles = cycleCount_ * (nx_ * ny_ * nz_);
 		const double microseconds_per_update = 1.0e6 * elapsed_sec / zone_cycles;
+		const double megaupdates_per_second = 1.0/microseconds_per_update;
 		amrex::Print() << "Performance figure-of-merit: " << microseconds_per_update
-			       << " μs/zone-update\n";
+			       << " μs/zone-update [" << megaupdates_per_second << " Mupdates/s]\n";
 	}
 
 	// output plotfile
