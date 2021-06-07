@@ -1,0 +1,4 @@
+[2D Implosion Test]
+1 GPU V100-32GB -- clang-12 + nvcc      Performance figure-of-merit: 0.02327984477 μs/zone-update [42.95561289 Mupdates/s]
+1 CPU CascadeLake-16core -- clang-12    Performance figure-of-merit: 0.2386213292 μs/zone-update [4.190740213 Mupdates/s]
+1 CPU CascadeLake-16core -- gcc 8.3.1   Performance figure-of-merit: 0.3944465444 μs/zone-update [2.53519777 Mupdates/s]
