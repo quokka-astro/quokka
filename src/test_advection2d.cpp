@@ -20,6 +20,7 @@
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "AdvectionSimulation.hpp"
+#include <csignal>
 #include <limits>
 
 auto main(int argc, char **argv) -> int
@@ -115,6 +116,64 @@ auto isEqualToMachinePrecision(T x, T y, int ulp = 0) ->
 	       || std::fabs(x - y) < std::numeric_limits<T>::min();
 }
 
+namespace quokka
+{
+template <>
+AMREX_GPU_HOST_DEVICE auto
+CheckSymmetryFluxes<SquareProblem>(amrex::Array4<const amrex::Real> const &arr1,
+				   amrex::Array4<const amrex::Real> const &arr2,
+				   amrex::Box const &indexRange, const int ncomp,
+				   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx) -> bool
+{
+	amrex::Long asymmetry = 0;
+	amrex::GpuArray<int, 3> prob_lo = indexRange.loVect3d();
+	auto nx = indexRange.hiVect3d()[0] + 1;
+	auto ny = indexRange.hiVect3d()[1] + 1;
+	auto nz = indexRange.hiVect3d()[2] + 1;
+	AMREX_ASSERT(prob_lo[0] == 0);
+	AMREX_ASSERT(prob_lo[1] == 0);
+	AMREX_ASSERT(prob_lo[2] == 0);
+
+	for (int i = 0; i < nx; ++i) {
+		for (int j = 0; j < ny; ++j) {
+			for (int k = 0; k < nz; ++k) {
+				amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+				amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
+
+				for (int n = 0; n < ncomp; ++n) {
+					const amrex::Real comp_upper = arr1(i, j, k, n);
+
+					// reflect across x/y diagonal
+					int n_lower = n;
+					amrex::Real comp_lower = arr2(j, i, k, n_lower);
+
+					const amrex::Real average =
+					    std::fabs(comp_upper + comp_lower);
+					const amrex::Real residual =
+					    std::abs(comp_upper - comp_lower) / average;
+
+					if (!isEqualToMachinePrecision(comp_upper, comp_lower)) {
+#ifndef AMREX_USE_GPU
+						amrex::Print()
+						    << i << ", " << j << ", " << k << ", " << n
+						    << ", " << comp_upper << ", " << comp_lower
+						    << " " << residual << "\n";
+						amrex::Print() << "x = " << x << "\n";
+						amrex::Print() << "y = " << y << "\n";
+#endif
+						asymmetry++;
+						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+						    false,
+						    "[CheckSymmetryFluxes] x/y not symmetric!");
+					}
+				}
+			}
+		}
+	}
+	return true;
+}
+} // namespace quokka
+
 template <> void AdvectionSimulation<SquareProblem>::computeAfterTimestep()
 {
 	// copy all FABs to a local FAB across the entire domain
@@ -148,9 +207,9 @@ template <> void AdvectionSimulation<SquareProblem>::computeAfterTimestep()
 						    std::fabs(comp_upper + comp_lower);
 						const amrex::Real residual =
 						    std::abs(comp_upper - comp_lower) / average;
-						
+
 						if (!isEqualToMachinePrecision(comp_upper,
-									      comp_lower)) {
+									       comp_lower)) {
 							amrex::Print()
 							    << i << ", " << j << ", " << k << ", "
 							    << n << ", " << comp_upper << ", "
@@ -172,6 +231,11 @@ template <> void AdvectionSimulation<SquareProblem>::computeAfterTimestep()
 
 auto testproblem_advection() -> int
 {
+	// check that we are in strict IEEE 754 mode
+	// (If we are, then the results should be symmetric [about the diagonal of the grid] not
+	// only to machine epsilon but to every last digit! Yes, this *is* possible [in 2D].)
+	AMREX_ALWAYS_ASSERT(std::numeric_limits<double>::is_iec559);
+
 	// Problem parameters
 	const int nx = 100;
 	const double Lx = 1.0;
@@ -240,7 +304,7 @@ auto testproblem_advection() -> int
 			       << "\n";
 	}
 
-	const double err_tol = 0.015;
+	const double err_tol = 0.25;
 	int status = 0;
 	if (min_rel_error > err_tol) {
 		status = 1;

@@ -349,13 +349,12 @@ void HyperbolicSystem<problem_t>::PredictStep(
 	amrex::ParallelFor(indexRange, nvars,
 			   [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
 				   consVarNew(i, j, k, n) =
-				       consVarOld(i, j, k, n) +
+				       consVarOld(i, j, k, n) + (
 				       (dt / dx) * (x1Flux(i, j, k, n) - x1Flux(i + 1, j, k, n))
 #if (AMREX_SPACEDIM >= 2)
-				       + (dt / dy) * (x2Flux(i, j, k, n) - x2Flux(i, j + 1, k, n));
-#else
-						;
+				       + (dt / dy) * (x2Flux(i, j, k, n) - x2Flux(i, j + 1, k, n))
 #endif
+					   );
 			   });
 }
 
@@ -391,12 +390,12 @@ void HyperbolicSystem<problem_t>::AddFluxesRK2(
 #endif
 
 		    // save results in U_new
-		    U_new(i, j, k, n) = 0.5 * U_0 + 0.5 * U_1 + 0.5 * FxU_1
+		    U_new(i, j, k, n) = (0.5 * U_0 + 0.5 * U_1) + (
+					0.5 * FxU_1
 #if (AMREX_SPACEDIM >= 2)
-					+ 0.5 * FyU_1;
-#else
-				;
+					+ 0.5 * FyU_1
 #endif
+					);
 	    });
 }
 

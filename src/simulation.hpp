@@ -47,17 +47,20 @@ namespace quokka
 template <typename T>
 AMREX_GPU_HOST_DEVICE auto CheckSymmetryArray(amrex::Array4<const amrex::Real> const &arr,
 					      amrex::Box const &indexRange, const int ncomp,
-					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx) -> bool
+					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx)
+    -> bool
 {
-	return true;
+	return true; // problem-specific implementation for test problems
 }
 
 template <typename T>
-AMREX_GPU_HOST_DEVICE auto CheckSymmetry(amrex::FArrayBox const &arr, amrex::Box const &indexRange,
-					 const int ncomp,
-					 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx) -> bool
+AMREX_GPU_HOST_DEVICE auto CheckSymmetryFluxes(amrex::Array4<const amrex::Real> const &arr1,
+					       amrex::Array4<const amrex::Real> const &arr2,
+					       amrex::Box const &indexRange, const int ncomp,
+					       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx)
+    -> bool
 {
-	return CheckSymmetryArray<T>(arr.const_array(), indexRange, ncomp, dx);
+	return true; // problem-specific implementation for test problems
 }
 
 template <typename T>
@@ -66,7 +69,6 @@ CheckNaN(amrex::FArrayBox const &arr, amrex::Box const &symmetryRange, amrex::Bo
 	 const int ncomp, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx)
 {
 	// need to rewrite for GPU
-	//AMREX_ASSERT(CheckSymmetry<T>(arr, symmetryRange, ncomp, dx));
 	AMREX_ASSERT(!arr.contains_nan(nanRange, 0, ncomp));
 }
 } // namespace quokka
