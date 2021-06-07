@@ -54,6 +54,62 @@ template <> struct EOS_Traits<RichtmeyerMeshkovProblem> {
 	static constexpr double gamma = 1.4;
 };
 
+
+template <> void HydroSimulation<RichtmeyerMeshkovProblem>::computeAfterTimestep()
+{
+	// copy all FABs to a local FAB across the entire domain
+	amrex::BoxArray localBoxes(domain_);
+	amrex::DistributionMapping localDistribution(localBoxes, 1);
+	amrex::MultiFab state_mf(localBoxes, localDistribution, ncomp_, 0);
+	state_mf.ParallelCopy(state_new_);
+
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		auto const &state = state_mf.array(0);
+		const auto *prob_lo = simGeometry_.ProbLo();
+		auto dx = dx_;
+
+		amrex::Long asymmetry = 0;
+		auto nx = nx_;
+		auto ny = ny_;
+		auto nz = nz_;
+		auto ncomp = ncomp_;
+		for (int i = 0; i < nx; ++i) {
+			for (int j = 0; j < ny; ++j) {
+				for (int k = 0; k < nz; ++k) {
+					amrex::Real const x =
+					    prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+					amrex::Real const y =
+					    prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
+					for (int n = 0; n < ncomp; ++n) {
+						const amrex::Real comp_upper = state(i, j, k, n);
+						// reflect across x/y diagonal
+						const amrex::Real comp_lower = state(j, i, k, n);
+						const amrex::Real average =
+						    std::fabs(comp_upper + comp_lower);
+						const amrex::Real residual =
+						    std::abs(comp_upper - comp_lower) / average;
+
+						if (comp_upper != comp_lower) {
+							amrex::Print()
+							    << i << ", " << j << ", " << k << ", "
+							    << n << ", " << comp_upper << ", "
+							    << comp_lower << " " << residual
+							    << "\n";
+							amrex::Print() << "x = " << x << "\n";
+							amrex::Print() << "y = " << y << "\n";
+							asymmetry++;
+							AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+							    false, "x/y not symmetric!");
+						}
+					}
+				}
+			}
+		}
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(asymmetry == 0, "x/y not symmetric!");
+	}
+}
+
+
 template <> void HydroSimulation<RichtmeyerMeshkovProblem>::setInitialConditions()
 {
 	amrex::GpuArray<Real, AMREX_SPACEDIM> dx = simGeometry_.CellSizeArray();
