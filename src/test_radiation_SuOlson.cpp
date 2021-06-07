@@ -68,19 +68,19 @@ template <> struct RadSystem_Traits<MarshakProblem> {
 };
 
 template <>
-constexpr auto RadSystem<MarshakProblem>::ComputeTgasFromEgas(const double rho, const double Egas) -> double
+AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputeTgasFromEgas(const double rho, const double Egas) -> double
 {
 	return std::pow(4.0 * Egas / alpha_SuOlson, 1. / 4.);
 }
 
 template <>
-constexpr auto RadSystem<MarshakProblem>::ComputeEgasFromTgas(const double rho, const double Tgas) -> double
+AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputeEgasFromTgas(const double rho, const double Tgas) -> double
 {
 	return (alpha_SuOlson / 4.0) * (Tgas*Tgas*Tgas*Tgas);
 }
 
 template <>
-constexpr auto RadSystem<MarshakProblem>::ComputeEgasTempDerivative(const double rho, const double Tgas)
+AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputeEgasTempDerivative(const double rho, const double Tgas)
     -> double
 {
 	// This is also known as the heat capacity, i.e.
@@ -94,8 +94,8 @@ constexpr auto RadSystem<MarshakProblem>::ComputeEgasTempDerivative(const double
 	return alpha_SuOlson * std::pow(Tgas, 3);
 }
 
-constexpr auto initial_Egas = 1e-10 * RadSystem<MarshakProblem>::ComputeEgasFromTgas(rho, T_hohlraum);
-constexpr auto initial_Erad = 1e-10 * (a_rad * (T_hohlraum*T_hohlraum*T_hohlraum*T_hohlraum));
+const auto initial_Egas = 1e-10 * RadSystem<MarshakProblem>::ComputeEgasFromTgas(rho, T_hohlraum);
+const auto initial_Erad = 1e-10 * (a_rad * (T_hohlraum*T_hohlraum*T_hohlraum*T_hohlraum));
 
 template <>
 void RadSystem<MarshakProblem>::SetRadEnergySource(array_t &radEnergySource,

@@ -73,26 +73,26 @@ template <> struct RadSystem_Traits<BoxProblem> {
 };
 
 template <>
-constexpr auto RadSystem<BoxProblem>::ComputeOpacity(const double /*rho*/, const double /*Tgas*/) -> double
+AMREX_GPU_HOST_DEVICE auto RadSystem<BoxProblem>::ComputeOpacity(const double /*rho*/, const double /*Tgas*/) -> double
 {
 	amrex::Real kappa = kappa_pipe;
 	return kappa;
 }
 
 template <>
-constexpr auto RadSystem<BoxProblem>::ComputeTgasFromEgas(const double rho, const double Egas) -> double
+AMREX_GPU_HOST_DEVICE auto RadSystem<BoxProblem>::ComputeTgasFromEgas(const double rho, const double Egas) -> double
 {
 	return Egas / (rho * c_v);
 }
 
 template <>
-constexpr auto RadSystem<BoxProblem>::ComputeEgasFromTgas(const double rho, const double Tgas) -> double
+AMREX_GPU_HOST_DEVICE auto RadSystem<BoxProblem>::ComputeEgasFromTgas(const double rho, const double Tgas) -> double
 {
 	return rho * c_v * Tgas;
 }
 
 template <>
-constexpr auto RadSystem<BoxProblem>::ComputeEgasTempDerivative(const double rho, const double /*Tgas*/)
+AMREX_GPU_HOST_DEVICE auto RadSystem<BoxProblem>::ComputeEgasTempDerivative(const double rho, const double /*Tgas*/)
     -> double
 {
 	// This is also known as the heat capacity, i.e.
@@ -215,7 +215,7 @@ template <> void RadiationSimulation<BoxProblem>::setInitialConditions()
 // based on:
 // https://en.cppreference.com/w/cpp/types/numeric_limits/epsilon
 template <class T>
-AMREX_GPU_HOST_DEVICE constexpr auto isEqualToMachinePrecision(T x, T y, int ulp = 10) ->
+AMREX_GPU_HOST_DEVICE auto isEqualToMachinePrecision(T x, T y, int ulp = 10) ->
     typename std::enable_if<!std::numeric_limits<T>::is_integer, bool>::type
 {
 	// the machine epsilon has to be scaled to the magnitude of the values used

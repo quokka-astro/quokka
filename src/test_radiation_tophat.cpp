@@ -77,7 +77,7 @@ template <> struct RadSystem_Traits<TophatProblem> {
 };
 
 template <>
-constexpr auto RadSystem<TophatProblem>::ComputeOpacity(const double rho, const double /*Tgas*/) -> double
+AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeOpacity(const double rho, const double /*Tgas*/) -> double
 {
 	amrex::Real kappa = 0.;
 	if (rho == rho_pipe) {
@@ -91,19 +91,19 @@ constexpr auto RadSystem<TophatProblem>::ComputeOpacity(const double rho, const 
 }
 
 template <>
-constexpr auto RadSystem<TophatProblem>::ComputeTgasFromEgas(const double rho, const double Egas) -> double
+AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeTgasFromEgas(const double rho, const double Egas) -> double
 {
 	return Egas / (rho * c_v);
 }
 
 template <>
-constexpr auto RadSystem<TophatProblem>::ComputeEgasFromTgas(const double rho, const double Tgas) -> double
+AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeEgasFromTgas(const double rho, const double Tgas) -> double
 {
 	return rho * c_v * Tgas;
 }
 
 template <>
-constexpr auto RadSystem<TophatProblem>::ComputeEgasTempDerivative(const double rho, const double /*Tgas*/)
+AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeEgasTempDerivative(const double rho, const double /*Tgas*/)
     -> double
 {
 	// This is also known as the heat capacity, i.e.
@@ -114,7 +114,7 @@ constexpr auto RadSystem<TophatProblem>::ComputeEgasTempDerivative(const double 
 }
 
 #if 0
-template <> constexpr auto RadSystem<TophatProblem>::ComputeEddingtonFactor(double  /*f*/) -> double
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeEddingtonFactor(double  /*f*/) -> double
 {
 	return (1. / 3.); // Eddington approximation
 }

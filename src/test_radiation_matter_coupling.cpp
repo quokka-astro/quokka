@@ -64,19 +64,19 @@ template <> struct RadSystem_Traits<CouplingProblem> {
 };
 
 template <>
-constexpr auto RadSystem<CouplingProblem>::ComputeTgasFromEgas(const double rho, const double Egas) -> double
+AMREX_GPU_HOST_DEVICE auto RadSystem<CouplingProblem>::ComputeTgasFromEgas(const double rho, const double Egas) -> double
 {
 	return std::pow(4.0 * Egas / alpha_SuOlson, 1. / 4.);
 }
 
 template <>
-constexpr auto RadSystem<CouplingProblem>::ComputeEgasFromTgas(const double rho, const double Tgas) -> double
+AMREX_GPU_HOST_DEVICE auto RadSystem<CouplingProblem>::ComputeEgasFromTgas(const double rho, const double Tgas) -> double
 {
 	return (alpha_SuOlson / 4.0) * std::pow(Tgas, 4);
 }
 
 template <>
-constexpr auto RadSystem<CouplingProblem>::ComputeEgasTempDerivative(const double rho, const double Tgas)
+AMREX_GPU_HOST_DEVICE auto RadSystem<CouplingProblem>::ComputeEgasTempDerivative(const double rho, const double Tgas)
     -> double
 {
 	// This is also known as the heat capacity, i.e.

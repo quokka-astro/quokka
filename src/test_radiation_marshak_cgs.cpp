@@ -70,28 +70,28 @@ template <> struct RadSystem_Traits<SuOlsonProblemCgs> {
 };
 
 template <>
-constexpr auto RadSystem<SuOlsonProblemCgs>::ComputeOpacity(const double /*rho*/, const double /*Tgas*/)
+AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblemCgs>::ComputeOpacity(const double /*rho*/, const double /*Tgas*/)
     -> double
 {
 	return kappa;
 }
 
 template <>
-constexpr auto RadSystem<SuOlsonProblemCgs>::ComputeTgasFromEgas(const double /*rho*/, const double Egas)
+AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblemCgs>::ComputeTgasFromEgas(const double /*rho*/, const double Egas)
     -> double
 {
 	return std::pow(4.0 * Egas / alpha_SuOlson, 1. / 4.);
 }
 
 template <>
-constexpr auto RadSystem<SuOlsonProblemCgs>::ComputeEgasFromTgas(const double /*rho*/, const double Tgas)
+AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblemCgs>::ComputeEgasFromTgas(const double /*rho*/, const double Tgas)
     -> double
 {
 	return (alpha_SuOlson / 4.0) * std::pow(Tgas, 4);
 }
 
 template <>
-constexpr auto RadSystem<SuOlsonProblemCgs>::ComputeEgasTempDerivative(const double /*rho*/,
+AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblemCgs>::ComputeEgasTempDerivative(const double /*rho*/,
 							     const double Tgas) -> double
 {
 	// This is also known as the heat capacity, i.e.
