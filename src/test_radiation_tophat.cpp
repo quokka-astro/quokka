@@ -77,7 +77,8 @@ template <> struct RadSystem_Traits<TophatProblem> {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeOpacity(const double rho, const double /*Tgas*/) -> double
+AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeOpacity(const double rho,
+								    const double /*Tgas*/) -> double
 {
 	amrex::Real kappa = 0.;
 	if (rho == rho_pipe) {
@@ -91,19 +92,24 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeOpacity(const double
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeTgasFromEgas(const double rho, const double Egas) -> double
+AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeTgasFromEgas(const double rho,
+									 const double Egas)
+    -> double
 {
 	return Egas / (rho * c_v);
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeEgasFromTgas(const double rho, const double Tgas) -> double
+AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeEgasFromTgas(const double rho,
+									 const double Tgas)
+    -> double
 {
 	return rho * c_v * Tgas;
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeEgasTempDerivative(const double rho, const double /*Tgas*/)
+AMREX_GPU_HOST_DEVICE auto
+RadSystem<TophatProblem>::ComputeEgasTempDerivative(const double rho, const double /*Tgas*/)
     -> double
 {
 	// This is also known as the heat capacity, i.e.
@@ -113,19 +119,23 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeEgasTempDerivative(c
 	return rho * c_v;
 }
 
-#if 0
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeEddingtonFactor(double  /*f*/) -> double
+template <>
+AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeEddingtonFactor(const double f)
+    -> double
 {
-	return (1. / 3.); // Eddington approximation
+	// compute Minerbo (1978) closure [piecewise approximation]
+	// (For unknown reasons, this closure tends to work better
+	// than the Levermore closure on the Su & Olson 1997 test.)
+	const double chi = (f < 1. / 3.) ? (1. / 3.) : (0.5 - f + 1.5 * f * f);
+	return chi;
 }
-#endif
 
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 RadiationSimulation<TophatProblem>::setCustomBoundaryConditions(
     const amrex::IntVect &iv, amrex::Array4<Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
-    amrex::GeometryData const &geom, const Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
-    int /*orig_comp*/)
+    amrex::GeometryData const &geom, const Real /*time*/, const amrex::BCRec * /*bcr*/,
+    int /*bcomp*/, int /*orig_comp*/)
 {
 #if (AMREX_SPACEDIM == 2)
 	auto [i, j] = iv.toArray();
@@ -141,7 +151,7 @@ RadiationSimulation<TophatProblem>::setCustomBoundaryConditions(
 	const amrex::Box &box = geom.Domain();
 
 	amrex::GpuArray<int, 3> lo = box.loVect3d();
-	//amrex::GpuArray<int, 3> hi = box.hiVect3d();
+	// amrex::GpuArray<int, 3> hi = box.hiVect3d();
 
 	amrex::Real const y0 = 0.;
 	amrex::Real const y = prob_lo[1] + (j + Real(0.5)) * dx[1];
@@ -175,10 +185,10 @@ RadiationSimulation<TophatProblem>::setCustomBoundaryConditions(
 			Fz_bdry = 0.;
 		} else {
 			// reflecting boundary
-			//E_inc = E_0;
-			//Fx_bdry = -Fx_0;
-			//Fy_bdry = Fy_0;
-			//Fz_bdry = Fz_0;
+			// E_inc = E_0;
+			// Fx_bdry = -Fx_0;
+			// Fy_bdry = Fy_0;
+			// Fz_bdry = Fz_0;
 
 			// extrapolated boundary
 			E_inc = E_0;
@@ -275,7 +285,7 @@ auto testproblem_radiation_marshak_cgs() -> int
 
 	const double Lx = 7.0;		 // cm
 	const double Ly = 4.0;		 // cm
-	const double max_time = 3.0e-10; // s
+	const double max_time = 5.0e-10; // s
 
 	amrex::IntVect gridDims{AMREX_D_DECL(nx, ny, 4)};
 	amrex::RealBox boxSize{
