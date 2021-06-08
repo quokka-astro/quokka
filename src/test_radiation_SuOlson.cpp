@@ -129,17 +129,20 @@ void RadSystem<MarshakProblem>::SetRadEnergySource(array_t &radEnergySource,
 
 template <> void RadiationSimulation<MarshakProblem>::setInitialConditions()
 {
+	const auto Erad0 = initial_Erad;
+	const auto Egas0 = initial_Egas;
+
 	for (amrex::MFIter iter(state_old_); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
 		auto const &state = state_new_.array(iter);
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-			state(i, j, k, RadSystem<MarshakProblem>::radEnergy_index) = initial_Erad;
+			state(i, j, k, RadSystem<MarshakProblem>::radEnergy_index) = Erad0;
 			state(i, j, k, RadSystem<MarshakProblem>::x1RadFlux_index) = 0;
 			state(i, j, k, RadSystem<MarshakProblem>::x2RadFlux_index) = 0;
 			state(i, j, k, RadSystem<MarshakProblem>::x3RadFlux_index) = 0;
 
-			state(i, j, k, RadSystem<MarshakProblem>::gasEnergy_index) = initial_Egas;
+			state(i, j, k, RadSystem<MarshakProblem>::gasEnergy_index) = Egas0;
 			state(i, j, k, RadSystem<MarshakProblem>::gasDensity_index) = rho;
 			state(i, j, k, RadSystem<MarshakProblem>::x1GasMomentum_index) = 0.;
 			state(i, j, k, RadSystem<MarshakProblem>::x2GasMomentum_index) = 0.;

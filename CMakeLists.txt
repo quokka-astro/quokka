@@ -18,6 +18,8 @@ set(AMReX_LINEAR_SOLVERS OFF CACHE BOOL "" FORCE)
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
   enable_language(CUDA)
+  set(AMReX_CUDA_FASTMATH OFF CACHE BOOL "" FORCE)
+  set(CMAKE_CUDA_FLAGS "--fmad=false" CACHE STRING "" FORCE) # fused MAD causes directional asymmetry
   # Include the AMReX-provided CUDA setup module -- OBSOLETE with CMake >= 3.20
   if(CMAKE_VERSION VERSION_LESS 3.20)
     include(AMReX_SetupCUDA)
