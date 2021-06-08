@@ -14,6 +14,7 @@
 #include "AMReX_Config.H"
 #include "AMReX_IntVect.H"
 #include "radiation_system.hpp"
+#include <csignal>
 #include <limits>
 #include <tuple>
 
@@ -73,26 +74,30 @@ template <> struct RadSystem_Traits<BoxProblem> {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<BoxProblem>::ComputeOpacity(const double /*rho*/, const double /*Tgas*/) -> double
+AMREX_GPU_HOST_DEVICE auto RadSystem<BoxProblem>::ComputeOpacity(const double /*rho*/,
+								 const double /*Tgas*/) -> double
 {
 	amrex::Real kappa = kappa_pipe;
 	return kappa;
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<BoxProblem>::ComputeTgasFromEgas(const double rho, const double Egas) -> double
+AMREX_GPU_HOST_DEVICE auto RadSystem<BoxProblem>::ComputeTgasFromEgas(const double rho,
+								      const double Egas) -> double
 {
 	return Egas / (rho * c_v);
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<BoxProblem>::ComputeEgasFromTgas(const double rho, const double Tgas) -> double
+AMREX_GPU_HOST_DEVICE auto RadSystem<BoxProblem>::ComputeEgasFromTgas(const double rho,
+								      const double Tgas) -> double
 {
 	return rho * c_v * Tgas;
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<BoxProblem>::ComputeEgasTempDerivative(const double rho, const double /*Tgas*/)
+AMREX_GPU_HOST_DEVICE auto RadSystem<BoxProblem>::ComputeEgasTempDerivative(const double rho,
+									    const double /*Tgas*/)
     -> double
 {
 	// This is also known as the heat capacity, i.e.
@@ -212,30 +217,14 @@ template <> void RadiationSimulation<BoxProblem>::setInitialConditions()
 	areInitialConditionsDefined_ = true;
 }
 
-// based on:
-// https://en.cppreference.com/w/cpp/types/numeric_limits/epsilon
-template <class T>
-AMREX_GPU_HOST_DEVICE auto isEqualToMachinePrecision(T x, T y, int ulp = 10) ->
-    typename std::enable_if<!std::numeric_limits<T>::is_integer, bool>::type
-{
-	// the machine epsilon has to be scaled to the magnitude of the values used
-	// and multiplied by the desired precision in ULPs (units in the last place)
-	// [Note: 10 ULP * epsilon() ~= 2.22e-15]
-	// return std::fabs(x - y) <= std::numeric_limits<T>::epsilon() * std::fabs(x + y) * ulp;
-	return std::fabs(x - y) <= (1.0e-8) * std::fabs(x + y);
-}
-
 namespace quokka
 {
-#define DEBUG_SYMMETRY
-
 template <>
 AMREX_GPU_HOST_DEVICE auto
 CheckSymmetryArray<BoxProblem>(amrex::Array4<const amrex::Real> const &arr,
 			       amrex::Box const &indexRange, const int ncomp,
 			       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx) -> bool
 {
-#ifdef DEBUG_SYMMETRY
 	amrex::Long asymmetry = 0;
 	amrex::GpuArray<int, 3> prob_lo = indexRange.loVect3d();
 	auto nx = indexRange.hiVect3d()[0] + 1;
@@ -245,6 +234,8 @@ CheckSymmetryArray<BoxProblem>(amrex::Array4<const amrex::Real> const &arr,
 	AMREX_ASSERT(prob_lo[1] == 0);
 	AMREX_ASSERT(prob_lo[2] == 0);
 	auto state = arr;
+
+	// std::raise(SIGINT); // break
 
 	for (int i = 0; i < nx; ++i) {
 		for (int j = 0; j < ny; ++j) {
@@ -277,7 +268,7 @@ CheckSymmetryArray<BoxProblem>(amrex::Array4<const amrex::Real> const &arr,
 					const amrex::Real residual =
 					    std::abs(comp_upper - comp_lower) / average;
 
-					if (!isEqualToMachinePrecision(comp_upper, comp_lower)) {
+					if (comp_upper != comp_lower) {
 #ifndef AMREX_USE_GPU
 						amrex::Print()
 						    << i << ", " << j << ", " << k << ", " << n
@@ -287,15 +278,13 @@ CheckSymmetryArray<BoxProblem>(amrex::Array4<const amrex::Real> const &arr,
 						amrex::Print() << "y = " << y << "\n";
 #endif
 						asymmetry++;
-						AMREX_ASSERT_WITH_MESSAGE(false,
-									  "x/y not symmetric!");
+						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+						    false, "x/y not symmetric!");
 					}
 				}
 			}
 		}
 	}
-	// AMREX_ASSERT_WITH_MESSAGE(asymmetry == 0, "x/y not symmetric!");
-#endif // DEBUG_SYMMETRY
 	return true;
 }
 } // namespace quokka

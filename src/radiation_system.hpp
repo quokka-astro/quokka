@@ -17,6 +17,7 @@
 
 // internal headers
 #include "AMReX_Array.H"
+#include "AMReX_BLassert.H"
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
 #include "ArrayView.hpp"
@@ -720,14 +721,17 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 
 			// compute material temperature
 			T_gas = RadSystem<problem_t>::ComputeTgasFromEgas(rho, Egas_guess);
+			AMREX_ASSERT(T_gas >= 0.);
 
 			// compute opacity, emissivity
 			kappa = RadSystem<problem_t>::ComputeOpacity(rho, T_gas);
+			AMREX_ASSERT(kappa >= 0.);
 			fourPiB = chat * a_rad * std::pow(T_gas, 4);
 
 			// constant radiation energy source term
 			// plus advection source term (for well-balanced/SDC integrators)
 			Src = dt * ((chat * radEnergySource(i, j, k)) + advectionFluxes(i, j, k));
+			AMREX_ASSERT(!std::isnan(Src));
 
 			// compute derivatives w/r/t T_gas
 			const double dB_dTgas = (4.0 * fourPiB) / T_gas;
@@ -764,6 +768,8 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 
 			deltaErad = -(F_R + eta * F_G) / (dFR_dErad + eta * dFG_dErad);
 			deltaEgas = -(F_G + dFG_dErad * deltaErad) / dFG_dEgas;
+			AMREX_ASSERT(!std::isnan(deltaErad));
+			AMREX_ASSERT(!std::isnan(deltaEgas));
 
 			Egas_guess += deltaEgas;
 			Erad_guess += deltaErad;

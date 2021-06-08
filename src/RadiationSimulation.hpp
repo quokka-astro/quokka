@@ -190,8 +190,8 @@ template <typename problem_t> void RadiationSimulation<problem_t>::advanceSingle
 	}
 
 	// update ghost zones [intermediate stage stored in state_new_]
-	fillBoundaryConditions(state_new_);
-	AMREX_ASSERT(!state_new_.contains_nan(0, ncomp_));
+	//fillBoundaryConditions(state_new_);
+	//AMREX_ASSERT(!state_new_.contains_nan(0, ncomp_));
 
 	// source terms
 	for (amrex::MFIter iter(state_new_); iter.isValid(); ++iter) {
@@ -211,13 +211,8 @@ void RadiationSimulation<problem_t>::operatorSplitSourceTerms(
 	amrex::FArrayBox advectionFluxes(indexRange, 3,
 					 amrex::The_Async_Arena()); // cell-centered vector
 	
-	// N.B.: only way to initialize FAB on GPU
-	radEnergySource.set_initval(0.);
-	radEnergySource.set_do_initval(true);
-	radEnergySource.initVal();
-	advectionFluxes.set_initval(0.);
-	advectionFluxes.set_do_initval(true);
-	advectionFluxes.initVal();
+	radEnergySource.setVal(0.); // does not compile when CUDA is enabled!
+	advectionFluxes.setVal(0.);
 
 	// cell-centered radiation energy source (used only in test problems)
 	RadSystem<problem_t>::SetRadEnergySource(radEnergySource.array(), indexRange, dx_, tNow_);

@@ -255,7 +255,7 @@ auto testproblem_hydro_rm() -> int
 	// Problem parameters
 	const int nvars = 5; // Euler equations
 
-	amrex::IntVect gridDims{AMREX_D_DECL(512, 512, 4)};
+	amrex::IntVect gridDims{AMREX_D_DECL(1024, 1024, 4)};
 	amrex::RealBox boxSize{
 	    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.0), amrex::Real(0.0))},
 	    {AMREX_D_DECL(amrex::Real(0.3), amrex::Real(0.3), amrex::Real(1.0))}};
@@ -291,8 +291,8 @@ auto testproblem_hydro_rm() -> int
 
 	sim.stopTime_ = 2.5;
 	sim.cflNumber_ = 0.4;
-	sim.maxTimesteps_ = 40000;
-	sim.plotfileInterval_ = 25;
+	sim.maxTimesteps_ = 50000;
+	sim.plotfileInterval_ = 100;
 	sim.outputAtInterval_ = false;
 
 	// initialize
