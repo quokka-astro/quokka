@@ -21,7 +21,6 @@
 #include "AMReX_PhysBCFunct.H"
 #include "AMReX_REAL.H"
 #include "AMReX_Utility.H"
-#include "fmt/core.h"
 #include "hydro_system.hpp"
 #include "simulation.hpp"
 #include <climits>

@@ -21,6 +21,7 @@
 #include "AMReX_BLassert.H"
 #include "AMReX_Box.H"
 #include "AMReX_FArrayBox.H"
+#include "AMReX_GpuControl.H"
 #include "AMReX_IntVect.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_MultiFabUtil.H"
@@ -211,8 +212,8 @@ void RadiationSimulation<problem_t>::operatorSplitSourceTerms(
 	amrex::FArrayBox advectionFluxes(indexRange, 3,
 					 amrex::The_Async_Arena()); // cell-centered vector
 	
-	radEnergySource.setVal(0.); // does not compile when CUDA is enabled!
-	advectionFluxes.setVal(0.);
+	radEnergySource.template setVal<amrex::RunOn::Device>(0.);
+	advectionFluxes.template setVal<amrex::RunOn::Device>(0.);
 
 	// cell-centered radiation energy source (used only in test problems)
 	RadSystem<problem_t>::SetRadEnergySource(radEnergySource.array(), indexRange, dx_, tNow_);

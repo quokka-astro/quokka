@@ -10,7 +10,6 @@
 #include "test_hydro2d_kh.hpp"
 #include "AMReX_BLassert.H"
 #include "AMReX_Config.H"
-#include "AMReX_GpuLaunchFunctsC.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
@@ -70,8 +69,9 @@ template <> void HydroSimulation<KelvinHelmholzProblem>::setInitialConditions()
 		auto const &state = state_new_.array(iter);
 
 		amrex::ParallelForRNG(
-		    indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k,
-						     amrex::RandomEngine const &engine) noexcept {
+		    indexRange, [=] AMREX_GPU_DEVICE (int i, int j, int k,
+						     amrex::RandomEngine const &engine) noexcept
+			{
 			    amrex::Real const y = prob_lo[1] + (j + Real(0.5)) * dx[1];
 
 			    // drawn from [0.0, 1.0)
@@ -124,7 +124,7 @@ auto testproblem_hydro_kelvinhelmholz() -> int
 	// Problem parameters
 	const int nvars = 5; // Euler equations
 
-	amrex::IntVect gridDims{AMREX_D_DECL(512, 512, 4)};
+	amrex::IntVect gridDims{AMREX_D_DECL(1024, 1024, 4)};
 	amrex::RealBox boxSize{
 	    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.0), amrex::Real(0.0))},
 	    {AMREX_D_DECL(amrex::Real(1.0), amrex::Real(1.0), amrex::Real(1.0))}};
@@ -142,9 +142,9 @@ auto testproblem_hydro_kelvinhelmholz() -> int
 
 	sim.stopTime_ = 5.0;
 	sim.cflNumber_ = 0.4;
-	sim.maxTimesteps_ = 20000;
-	sim.plotfileInterval_ = 25;
-	sim.outputAtInterval_ = false;
+	sim.maxTimesteps_ = 40000;
+	sim.plotfileInterval_ = 100;
+	sim.outputAtInterval_ = true;
 
 	// initialize
 	sim.setInitialConditions();

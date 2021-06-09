@@ -11,7 +11,6 @@
 
 // external headers
 #include "matplotlibcpp.h"
-#include <fmt/format.h>
 #include <fstream>
 
 // internal headers

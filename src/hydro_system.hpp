@@ -12,7 +12,6 @@
 // c++ headers
 
 // library headers
-#include <fmt/format.h>
 
 // internal headers
 #include "AMReX_BLassert.H"
