@@ -500,30 +500,6 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 			Tnormal_R = T_R[2][2];
 		}
 
-		// asymptotic-preserving correction
-		// [Similar to Skinner et al. 2020, but tau^-2 instead of tau^-1, which is not
-		// actually asymptotic-preserving with PLM+SDC2. This correction is not stable when
-		// used for the tophat problem.]
-		const double tau_cell = ComputeCellOpticalDepth<DIR>(consVar, dx, i, j, k);
-
-		// ensures that signal speed -> c \sqrt{f_xx} / tau_cell in the diffusion limit
-		// [see Appendix of Jiang et al. ApJ 767:148 (2013) for derivation]
-		const double Tnormal_avg =
-		    (2.0 * Tnormal_L * Tnormal_R) / (Tnormal_L + Tnormal_R); // harmonic mean
-		const double tau = tau_cell / std::sqrt(2.0 * Tnormal_avg);
-		const double S_corr = std::sqrt(1.0 - std::exp(-tau * tau)) / tau;
-		// const double S_corr = 1.;
-
-		// (this step is only done in Skinner et al. 2020, not in Jiang et al. 2013)
-		// const quokka::valarray<double, fluxdim> epsilon = {S_corr, 1.0, 1.0, 1.0};
-		const quokka::valarray<double, fluxdim> epsilon = {1.0, 1.0, 1.0, 1.0};
-
-		const double S_L = -c_hat_ * S_corr * std::sqrt(Tnormal_L);
-		const double S_R = c_hat_ * S_corr * std::sqrt(Tnormal_R);
-
-		AMREX_ASSERT(std::abs(S_L) <= c_hat_); // NOLINT
-		AMREX_ASSERT(std::abs(S_R) <= c_hat_); // NOLINT
-
 		// compute fluxes F_L, F_R
 		// P_nx, P_ny, P_nz indicate components where 'n' is the direction of the face
 		// normal
@@ -583,15 +559,35 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 		const quokka::valarray<double, fluxdim> U_L = {erad_L, Fx_L, Fy_L, Fz_L};
 		const quokka::valarray<double, fluxdim> U_R = {erad_R, Fx_R, Fy_R, Fz_R};
 
-		const quokka::valarray<double, fluxdim> F_star =
-		    (S_R / (S_R - S_L)) * F_L - (S_L / (S_R - S_L)) * F_R +
-		    epsilon * (S_R * S_L / (S_R - S_L)) * (U_R - U_L);
+		// asymptotic-preserving flux correction
+		// [Similar to Skinner et al. 2020, but tau^-2 instead of tau^-1, which is not
+		// actually asymptotic-preserving with PLM+SDC2. This correction causes
+		// flux-limiting violations when used for the tophat problem.]
+		const double tau_cell = ComputeCellOpticalDepth<DIR>(consVar, dx, i, j, k);
 
-		quokka::valarray<double, fluxdim> F{};
+		// ensures that signal speed -> c \sqrt{f_xx} / tau_cell in the diffusion limit
+		// [see Appendix of Jiang et al. ApJ 767:148 (2013) for derivation]
+		const double Tnormal_avg =
+		    (2.0 * Tnormal_L * Tnormal_R) / (Tnormal_L + Tnormal_R); // harmonic mean
+		const double tau = tau_cell / std::sqrt(2.0 * Tnormal_avg);
+		const double S_corr = std::sqrt(1.0 - std::exp(-tau * tau)) / tau;
+		// const double S_corr = 1.;
+
+		// (this step is only done in Skinner et al. 2020, not in Jiang et al. 2013)
+		// const quokka::valarray<double, fluxdim> epsilon = {S_corr, 1.0, 1.0, 1.0};
+		const quokka::valarray<double, fluxdim> epsilon = {1.0, 1.0, 1.0, 1.0};
+
+		const double S_L = -c_hat_ * S_corr * std::sqrt(Tnormal_L);
+		const double S_R = c_hat_ * S_corr * std::sqrt(Tnormal_R);
+
+		AMREX_ASSERT(std::abs(S_L) <= c_hat_); // NOLINT
+		AMREX_ASSERT(std::abs(S_R) <= c_hat_); // NOLINT
 
 		// in the frozen Eddington tensor approximation, we are always
 		// in the star region, so F = F_star
-		F = F_star;
+		const quokka::valarray<double, fluxdim> F =
+		    (S_R / (S_R - S_L)) * F_L - (S_L / (S_R - S_L)) * F_R +
+		    epsilon * (S_R * S_L / (S_R - S_L)) * (U_R - U_L);
 
 		// check states are valid
 		AMREX_ASSERT(!std::isnan(F[0])); // NOLINT
