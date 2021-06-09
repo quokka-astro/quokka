@@ -190,9 +190,7 @@ template <typename problem_t> void RadiationSimulation<problem_t>::advanceSingle
 		quokka::CheckSymmetryArray<problem_t>(stateNew, indexRange, ncomp_, dx_);
 	}
 
-	// update ghost zones [intermediate stage stored in state_new_]
-	//fillBoundaryConditions(state_new_);
-	//AMREX_ASSERT(!state_new_.contains_nan(0, ncomp_));
+	// no ghost zone update needed for source terms
 
 	// source terms
 	for (amrex::MFIter iter(state_new_); iter.isValid(); ++iter) {

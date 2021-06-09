@@ -560,25 +560,28 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 		const quokka::valarray<double, fluxdim> U_R = {erad_R, Fx_R, Fy_R, Fz_R};
 
 		// asymptotic-preserving flux correction
-		// [Similar to Skinner et al. 2020, but tau^-2 instead of tau^-1, which is not
+		// [Similar to Skinner et al. (2019), but tau^-2 instead of tau^-1, which is not
 		// actually asymptotic-preserving with PLM+SDC2. This correction causes
 		// flux-limiting violations when used for the tophat problem.]
 		const double tau_cell = ComputeCellOpticalDepth<DIR>(consVar, dx, i, j, k);
 
 		// ensures that signal speed -> c \sqrt{f_xx} / tau_cell in the diffusion limit
 		// [see Appendix of Jiang et al. ApJ 767:148 (2013) for derivation]
-		const double Tnormal_avg =
-		    (2.0 * Tnormal_L * Tnormal_R) / (Tnormal_L + Tnormal_R); // harmonic mean
-		const double tau = tau_cell / std::sqrt(2.0 * Tnormal_avg);
-		const double S_corr = std::sqrt(1.0 - std::exp(-tau * tau)) / tau;
-		// const double S_corr = 1.;
+		// const double Tnormal_avg = (2.0 * Tnormal_L * Tnormal_R) / (Tnormal_L +
+		// Tnormal_R); // harmonic mean
+		const double tau = tau_cell; // / std::sqrt(2.0 * Tnormal_avg);
+		const double S_corr =
+		    std::sqrt(1.0 - std::exp(-tau * tau)) / tau; // Jiang et al. (2013)
+		// const double S_corr = std::min(1.0, 1.0/tau_cell); // Skinner et al. (2019)
+		// const double S_corr = 1.; // no correction
 
-		// (this step is only done in Skinner et al. 2020, not in Jiang et al. 2013)
-		// const quokka::valarray<double, fluxdim> epsilon = {S_corr, 1.0, 1.0, 1.0};
-		const quokka::valarray<double, fluxdim> epsilon = {1.0, 1.0, 1.0, 1.0};
+		const quokka::valarray<double, fluxdim> epsilon = {S_corr, 1.0, 1.0,
+								   1.0}; // Skinner et al. (2019)
+		// const quokka::valarray<double, fluxdim> epsilon = {S_corr, S_corr, S_corr,
+		// S_corr}; // Jiang et al. (2013)
 
-		const double S_L = -c_hat_ * S_corr * std::sqrt(Tnormal_L);
-		const double S_R = c_hat_ * S_corr * std::sqrt(Tnormal_R);
+		const double S_L = -c_hat_ * std::sqrt(Tnormal_L);
+		const double S_R = c_hat_ * std::sqrt(Tnormal_R);
 
 		AMREX_ASSERT(std::abs(S_L) <= c_hat_); // NOLINT
 		AMREX_ASSERT(std::abs(S_R) <= c_hat_); // NOLINT
