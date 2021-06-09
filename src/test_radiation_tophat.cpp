@@ -120,12 +120,13 @@ RadSystem<TophatProblem>::ComputeEgasTempDerivative(const double rho, const doub
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeEddingtonFactor(const double f)
+AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeEddingtonFactor(const double f_in)
     -> double
 {
 	// compute Minerbo (1978) closure [piecewise approximation]
 	// (For unknown reasons, this closure tends to work better
 	// than the Levermore closure on the Su & Olson 1997 test.)
+	const double f = clamp(f_in, 0., 1.); // restrict f to be within [0, 1]
 	const double chi = (f < 1. / 3.) ? (1. / 3.) : (0.5 - f + 1.5 * f * f);
 	return chi;
 }
@@ -280,8 +281,8 @@ auto testproblem_radiation_marshak_cgs() -> int
 	// Problem parameters
 	const int max_timesteps = 10000;
 	const double CFL_number = 0.4;
-	const int nx = 700;
-	const int ny = 200; // 80;
+	const int nx = 140; //700;
+	const int ny = 40;	//200;
 
 	const double Lx = 7.0;		 // cm
 	const double Ly = 4.0;		 // cm

@@ -69,6 +69,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 		primVarEnumEnd = 4
 	};
 
+	static constexpr int fluxdim = 4;
+
 	// C++ standard does not allow constexpr to be uninitialized, even in a templated class!
 	static constexpr double c_light_ = RadSystem_Traits<problem_t>::c_light;
 	static constexpr double c_hat_ = RadSystem_Traits<problem_t>::c_hat;
@@ -116,14 +118,18 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	AMREX_GPU_HOST_DEVICE static auto ComputeEddingtonFactor(double f) -> double;
 	AMREX_GPU_HOST_DEVICE static auto ComputeOpacity(double rho, double Tgas) -> double;
-	AMREX_GPU_HOST_DEVICE static auto ComputeOpacityTempDerivative(double rho, double Tgas) -> double;
+	AMREX_GPU_HOST_DEVICE static auto ComputeOpacityTempDerivative(double rho, double Tgas)
+	    -> double;
 	AMREX_GPU_HOST_DEVICE static auto ComputeTgasFromEgas(double rho, double Egas) -> double;
 	AMREX_GPU_HOST_DEVICE static auto ComputeEgasFromTgas(double rho, double Tgas) -> double;
-	AMREX_GPU_HOST_DEVICE static auto ComputeEgasTempDerivative(double rho, double Tgas) -> double;
-	AMREX_GPU_HOST_DEVICE static auto ComputeEintFromEgas(double density, double X1GasMom, double X2GasMom,
-					double X3GasMom, double Etot) -> double;
-	AMREX_GPU_HOST_DEVICE static auto ComputeEgasFromEint(double density, double X1GasMom, double X2GasMom,
-					double X3GasMom, double Eint) -> double;
+	AMREX_GPU_HOST_DEVICE static auto ComputeEgasTempDerivative(double rho, double Tgas)
+	    -> double;
+	AMREX_GPU_HOST_DEVICE static auto ComputeEintFromEgas(double density, double X1GasMom,
+							      double X2GasMom, double X3GasMom,
+							      double Etot) -> double;
+	AMREX_GPU_HOST_DEVICE static auto ComputeEgasFromEint(double density, double X1GasMom,
+							      double X2GasMom, double X3GasMom,
+							      double Eint) -> double;
 
 	template <FluxDir DIR>
 	static auto
@@ -252,7 +258,7 @@ auto RadSystem<problem_t>::ComputeCellOpticalDepth(
 	const double tau_R = dl * rho_R * RadSystem<problem_t>::ComputeOpacity(rho_R, Tgas_R);
 
 	return (2.0 * tau_L * tau_R) / (tau_L + tau_R); // harmonic mean
-	//	return 0.5*(tau_L + tau_R); // arithmetic mean
+	// return 0.5*(tau_L + tau_R); // arithmetic mean
 }
 
 #if 0
@@ -479,20 +485,6 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 			}
 		}
 
-		// asymptotic-preserving correction (new in this code) -- direction-dependent!
-		// [Similar to Skinner et al. 2020, but tau^-2 instead of tau^-1, which is not
-		// actually asymptotic-preserving. Also-- this correction is not
-		// stable when used for the tophat problem.]
-		// const double tau_cell = ComputeCellOpticalDepth<DIR>(consVar, dx, i, j, k);
-		const double tau_cell = 0.;
-		constexpr int fluxdim = 4;
-		const quokka::valarray<double, fluxdim> epsilon = {
-		    std::min(1.0, 1.0 / (tau_cell * tau_cell)), 1.0, 1.0, 1.0};
-
-		// inspired by Appendix of Jiang et al. ApJ 767:148 (2013)
-		// ensures that signal speed -> c \sqrt{f_xx} / tau_cell in the diffusion limit
-		const auto S_corr = std::min(1.0, 1.0 / tau_cell);
-
 		// frozen Eddington tensor approximation, following Balsara
 		// (1999) [JQSRT Vol. 61, No. 5, pp. 617–627, 1999], Eq. 46.
 		double Tnormal_L = NAN;
@@ -507,6 +499,25 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 			Tnormal_L = T_L[2][2];
 			Tnormal_R = T_R[2][2];
 		}
+
+		// asymptotic-preserving correction
+		// [Similar to Skinner et al. 2020, but tau^-2 instead of tau^-1, which is not
+		// actually asymptotic-preserving with PLM+SDC2. This correction is not stable when
+		// used for the tophat problem.]
+		const double tau_cell = ComputeCellOpticalDepth<DIR>(consVar, dx, i, j, k);
+
+		// ensures that signal speed -> c \sqrt{f_xx} / tau_cell in the diffusion limit
+		// [see Appendix of Jiang et al. ApJ 767:148 (2013) for derivation]
+		const double Tnormal_avg =
+		    (2.0 * Tnormal_L * Tnormal_R) / (Tnormal_L + Tnormal_R); // harmonic mean
+		const double tau = tau_cell / std::sqrt(2.0 * Tnormal_avg);
+		const double S_corr = std::sqrt(1.0 - std::exp(-tau * tau)) / tau;
+		// const double S_corr = 1.;
+
+		// (this step is only done in Skinner et al. 2020, not in Jiang et al. 2013)
+		// const quokka::valarray<double, fluxdim> epsilon = {S_corr, 1.0, 1.0, 1.0};
+		const quokka::valarray<double, fluxdim> epsilon = {1.0, 1.0, 1.0, 1.0};
+
 		const double S_L = -c_hat_ * S_corr * std::sqrt(Tnormal_L);
 		const double S_R = c_hat_ * S_corr * std::sqrt(Tnormal_R);
 
@@ -596,34 +607,39 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 }
 
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeOpacity(const double /*rho*/, const double /*Tgas*/)  -> double
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeOpacity(const double /*rho*/,
+								const double /*Tgas*/) -> double
 {
 	return 1.0;
 }
 
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeOpacityTempDerivative(const double /*rho*/, const double /*Tgas*/) 
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeOpacityTempDerivative(const double /*rho*/,
+									      const double /*Tgas*/)
     -> double
 {
 	return 0.0;
 }
 
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeTgasFromEgas(const double rho, const double Egas) -> double
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeTgasFromEgas(const double rho,
+								     const double Egas) -> double
 {
 	const double c_v = boltzmann_constant_ / (mean_molecular_mass_ * (gamma_ - 1.0));
 	return (Egas / (rho * c_v));
 }
 
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeEgasFromTgas(const double rho, const double Tgas) -> double
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeEgasFromTgas(const double rho,
+								     const double Tgas) -> double
 {
 	const double c_v = boltzmann_constant_ / (mean_molecular_mass_ * (gamma_ - 1.0));
 	return (rho * c_v * Tgas);
 }
 
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeEgasTempDerivative(const double rho, const double /*Tgas*/)
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeEgasTempDerivative(const double rho,
+									   const double /*Tgas*/)
     -> double
 {
 	const double c_v = boltzmann_constant_ / (mean_molecular_mass_ * (gamma_ - 1.0));
@@ -631,9 +647,10 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeEgasTempDerivative(const
 }
 
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeEintFromEgas(const double density, const double X1GasMom,
-					       const double X2GasMom, const double X3GasMom,
-					       const double Etot)  -> double
+AMREX_GPU_HOST_DEVICE auto
+RadSystem<problem_t>::ComputeEintFromEgas(const double density, const double X1GasMom,
+					  const double X2GasMom, const double X3GasMom,
+					  const double Etot) -> double
 {
 	const double p_sq = X1GasMom * X1GasMom + X2GasMom * X2GasMom + X3GasMom * X3GasMom;
 	const double Ekin = p_sq / (2.0 * density);
@@ -642,9 +659,10 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeEintFromEgas(const doubl
 }
 
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeEgasFromEint(const double density, const double X1GasMom,
-					       const double X2GasMom, const double X3GasMom,
-					       const double Eint) -> double
+AMREX_GPU_HOST_DEVICE auto
+RadSystem<problem_t>::ComputeEgasFromEint(const double density, const double X1GasMom,
+					  const double X2GasMom, const double X3GasMom,
+					  const double Eint) -> double
 {
 	const double p_sq = X1GasMom * X1GasMom + X2GasMom * X2GasMom + X3GasMom * X3GasMom;
 	const double Ekin = p_sq / (2.0 * density);
