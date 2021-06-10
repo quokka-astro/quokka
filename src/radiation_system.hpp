@@ -12,6 +12,7 @@
 // c++ headers
 #include <array>
 #include <cmath>
+#include <vector>
 
 // library headers
 
@@ -149,6 +150,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 				amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, int i, int j,
 				int k) -> double;
 
+	static auto isStateValid(std::vector<amrex::Real> &cons) -> bool;
+
 	// requires GPU reductions
 	// auto CheckStatesValid(array_t &cons, std::pair<int, int> range) -> bool;
 };
@@ -202,6 +205,23 @@ void RadSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real
 }
 
 template <typename problem_t>
+auto RadSystem<problem_t>::isStateValid(std::vector<amrex::Real> &cons) -> bool
+{
+	// check if the state variable 'cons' is a valid state
+	const auto E_r = cons[radEnergy_index];
+	const auto Fx = cons[x1RadFlux_index];
+	const auto Fy = cons[x2RadFlux_index];
+	const auto Fz = cons[x3RadFlux_index];
+
+	const auto Fnorm = std::sqrt(Fx * Fx + Fy * Fy + Fz * Fz);
+	const auto f = Fnorm / (c_light_ * E_r);
+
+	bool isNonNegative = (E_r > 0.);
+	bool isFluxCausal = (f <= 1.);
+	return (isNonNegative && isFluxCausal);
+}
+
+template <typename problem_t>
 void RadSystem<problem_t>::PredictStep(
     arrayconst_t &consVarOld, array_t &consVarNew,
     amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray,
@@ -226,14 +246,33 @@ void RadSystem<problem_t>::PredictStep(
 #endif
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+		std::vector<amrex::Real> cons(nvars); // this will not work on GPU
+
 		for (int n = 0; n < nvars; ++n) {
-			consVarNew(i, j, k, n) =
-			    consVarOld(i, j, k, n) +
-			    ((dt / dx) * (x1Flux(i, j, k, n) - x1Flux(i + 1, j, k, n))
+			cons[n] = consVarOld(i, j, k, n) +
+				  ((dt / dx) * (x1Flux(i, j, k, n) - x1Flux(i + 1, j, k, n))
 #if (AMREX_SPACEDIM >= 2)
-			     + (dt / dy) * (x2Flux(i, j, k, n) - x2Flux(i, j + 1, k, n))
+				   + (dt / dy) * (x2Flux(i, j, k, n) - x2Flux(i, j + 1, k, n))
 #endif
-			    );
+				  );
+		}
+
+		if (!isStateValid(cons)) {
+			// use diffusive fluxes instead
+			for (int n = 0; n < nvars; ++n) {
+				cons[n] = consVarOld(i, j, k, n) +
+					  ((dt / dx) * (x1FluxDiffusive(i, j, k, n) -
+							x1FluxDiffusive(i + 1, j, k, n))
+#if (AMREX_SPACEDIM >= 2)
+					   + (dt / dy) * (x2FluxDiffusive(i, j, k, n) -
+							  x2FluxDiffusive(i, j + 1, k, n))
+#endif
+					  );
+			}
+		}
+
+		for (int n = 0; n < nvars; ++n) {
+			consVarNew(i, j, k, n) = cons[n];
 		}
 	});
 }
@@ -356,95 +395,6 @@ auto RadSystem<problem_t>::ComputeCellOpticalDepth(
 	return (2.0 * tau_L * tau_R) / (tau_L + tau_R); // harmonic mean
 	// return 0.5*(tau_L + tau_R); // arithmetic mean
 }
-
-#if 0
-template <typename problem_t>
-template <FluxDir DIR>
-void RadSystem<problem_t>::ComputeFirstOrderFluxes(
-    amrex::Array4<const amrex::Real> const &consVar_in, array_t &x1FluxDiffusive_in,
-    amrex::Box const &indexRange)
-{
-	quokka::Array4View<amrex::Real, DIR> x1FluxDiffusive(x1FluxDiffusive_in);
-	quokka::Array4View<const amrex::Real, DIR> consVar(consVar_in);
-
-	// By convention, the interfaces are defined on the left edge of each
-	// zone, i.e. x1Flux_(i) is the solution to the Riemann problem at
-	// the left edge of zone i.
-
-	// compute Lax-Friedrichs fluxes for use in flux-limiting to ensure realizable states
-
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in) {
-		auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
-
-		// gather L/R states
-		const double erad_L = consVar(i - 1, j, k, radEnergy_index);
-		const double erad_R = consVar(i, j, k, radEnergy_index);
-
-		const double Fx_L = consVar(i - 1, j, k, x1RadFlux_index);
-		const double Fx_R = consVar(i, j, k, x1RadFlux_index);
-
-		const double Fy_L = consVar(i - 1, j, k, x2RadFlux_index);
-		const double Fy_R = consVar(i, j, k, x2RadFlux_index);
-
-		const double Fz_L = consVar(i - 1, j, k, x3RadFlux_index);
-		const double Fz_R = consVar(i, j, k, x3RadFlux_index);
-
-		// compute primitive variables
-		const double fx_L = Fx_L / (c_light_ * erad_L);
-		const double fx_R = Fx_R / (c_light_ * erad_R);
-
-		// compute scalar reduced flux f
-		// [modify in 3d!]
-		const double f_L = std::sqrt(fx_L * fx_L);
-		const double f_R = std::sqrt(fx_R * fx_R);
-
-		const double nx_L = (f_L > 0.0) ? (fx_L / f_L) : 0.0;
-		const double nx_R = (f_R > 0.0) ? (fx_R / f_R) : 0.0;
-
-		// compute radiation pressure tensors
-		const double chi_L = RadSystem<problem_t>::ComputeEddingtonFactor(f_L);
-		const double chi_R = RadSystem<problem_t>::ComputeEddingtonFactor(f_R);
-
-		// diagonal term of Eddington tensor
-		const double Tdiag_L = (1.0 - chi_L) / 2.0;
-		const double Tdiag_R = (1.0 - chi_R) / 2.0;
-
-		// anisotropic term of Eddington tensor (in the direction of the
-		// rad. flux)
-		const double Txx_L = (3.0 * chi_L - 1.0) / 2.0 * (nx_L * nx_L);
-		const double Txx_R = (3.0 * chi_R - 1.0) / 2.0 * (nx_R * nx_R);
-
-		// compute the elements of the total radiation pressure tensor
-		const double Pxx_L = (Tdiag_L + Txx_L) * erad_L;
-		const double Pxx_R = (Tdiag_R + Txx_R) * erad_R;
-
-		// compute signal speed
-		const double S_L = -c_hat_ * std::sqrt(Tdiag_L + Txx_L);
-		const double S_R = c_hat_ * std::sqrt(Tdiag_R + Txx_R);
-
-		const double sstar = std::max(std::abs(S_L), std::abs(S_R));
-
-		// compute (using local signal speed) Lax-Friedrichs flux
-		constexpr int fluxdim = 4;
-		const quokka::valarray<double, fluxdim> F_L = {(c_hat_ / c_light_) * Fx_L,
-							       c_hat_ * c_light_ * Pxx_L};
-
-		const quokka::valarray<double, fluxdim> F_R = {(c_hat_ / c_light_) * Fx_R,
-							       c_hat_ * c_light_ * Pxx_R};
-
-		const quokka::valarray<double, fluxdim> U_L = {erad_L, Fx_L};
-		const quokka::valarray<double, fluxdim> U_R = {erad_R, Fx_R};
-
-		const quokka::valarray<double, fluxdim> LLF =
-		    0.5 * (F_L + F_R - sstar * (U_R - U_L));
-
-		x1FluxDiffusive(i, j, k, radEnergy_index) = LLF[0];
-		x1FluxDiffusive(i, j, k, x1RadFlux_index) = LLF[1];
-		x1FluxDiffusive(i, j, k, x2RadFlux_index) = LLF[2];
-		x1FluxDiffusive(i, j, k, x3RadFlux_index) = LLF[3];
-	});
-}
-#endif
 
 template <typename problem_t>
 template <FluxDir DIR>
@@ -664,19 +614,18 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 		const double tau_cell = ComputeCellOpticalDepth<DIR>(consVar, dx, i, j, k);
 
 		// ensures that signal speed -> c \sqrt{f_xx} / tau_cell in the diffusion
-		// limit [see Appendix of Jiang et al. ApJ 767:148 (2013) for derivation]
-		// const double Tnormal_avg = (2.0 * Tnormal_L * Tnormal_R) / (Tnormal_L +
-		// Tnormal_R); // harmonic mean
-		const double tau = tau_cell; // / std::sqrt(2.0 * Tnormal_avg);
-		const double S_corr =
-		    std::sqrt(1.0 - std::exp(-tau * tau)) / tau; // Jiang et al. (2013)
+		// limit [see Appendix of Jiang et al. ApJ 767:148 (2013)]
+		const double S_corr = std::sqrt(1.0 - std::exp(-tau_cell * tau_cell)) /
+				      tau_cell; // Jiang et al. (2013)
 		// const double S_corr = std::min(1.0, 1.0/tau_cell); // Skinner et al.
-		// (2019) const double S_corr = 1.; // no correction
 
-		const quokka::valarray<double, fluxdim> epsilon = {S_corr, 1.0, 1.0,
-								   1.0}; // Skinner et al. (2019)
-		// const quokka::valarray<double, fluxdim> epsilon = {S_corr, S_corr,
-		// S_corr, S_corr}; // Jiang et al. (2013)
+		// adjust the wavespeeds (cancels out except for the last term in the HLL flux)
+		// const quokka::valarray<double, fluxdim> epsilon = {S_corr, 1.0, 1.0,
+		//						   1.0}; // Skinner et al. (2019)
+		// const quokka::valarray<double, fluxdim> epsilon = {S_corr, S_corr, S_corr,
+		//						   S_corr}; // Jiang et al. (2013)
+		const quokka::valarray<double, fluxdim> epsilon = {S_corr * S_corr, S_corr, S_corr,
+								   S_corr}; // this code
 
 		const double S_L = -c_hat_ * std::sqrt(Tnormal_L);
 		const double S_R = c_hat_ * std::sqrt(Tnormal_R);
