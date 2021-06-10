@@ -91,11 +91,21 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static void ConservedToPrimitive(amrex::Array4<const amrex::Real> const &cons,
 					 array_t &primVar, amrex::Box const &indexRange);
 
+	static void PredictStep(arrayconst_t &consVarOld, array_t &consVarNew,
+				amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray,
+				double dt_in, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,
+				amrex::Box const &indexRange, int nvars);
+
+	static void AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayconst_t &U1,
+				 amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray,
+				 double dt_in, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,
+				 amrex::Box const &indexRange, int nvars);
+
 	template <FluxDir DIR>
-	static void ComputeFluxes(array_t &x1Flux,
-				  amrex::Array4<const amrex::Real> const &x1LeftState,
-				  amrex::Array4<const amrex::Real> const &x1RightState,
-				  amrex::Box const &indexRange, arrayconst_t &consVar,
+	static void ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiffusive_in,
+				  amrex::Array4<const amrex::Real> const &x1LeftState_in,
+				  amrex::Array4<const amrex::Real> const &x1RightState_in,
+				  amrex::Box const &indexRange, arrayconst_t &consVar_in,
 				  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx);
 
 #if 0
@@ -187,6 +197,78 @@ void RadSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real
 		const double signal_max = c_hat_;
 		maxSignal(i, j, k) = signal_max;
 	});
+}
+
+template <typename problem_t>
+void RadSystem<problem_t>::PredictStep(arrayconst_t &consVarOld, array_t &consVarNew,
+				       amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray,
+				       const double dt_in,
+				       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,
+				       amrex::Box const &indexRange, const int nvars)
+{
+	// By convention, the fluxes are defined on the left edge of each zone,
+	// i.e. flux_(i) is the flux *into* zone i through the interface on the
+	// left of zone i, and -1.0*flux(i+1) is the flux *into* zone i through
+	// the interface on the right of zone i.
+
+	const auto dt = dt_in;
+	const auto dx = dx_in[0];
+	const auto x1Flux = fluxArray[0];
+#if (AMREX_SPACEDIM >= 2)
+	const auto dy = dx_in[1];
+	const auto x2Flux = fluxArray[1];
+#endif
+
+	amrex::ParallelFor(indexRange, nvars,
+			   [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
+				   consVarNew(i, j, k, n) =
+				       consVarOld(i, j, k, n) +
+				       ((dt / dx) * (x1Flux(i, j, k, n) - x1Flux(i + 1, j, k, n))
+#if (AMREX_SPACEDIM >= 2)
+					+ (dt / dy) * (x2Flux(i, j, k, n) - x2Flux(i, j + 1, k, n))
+#endif
+				       );
+			   });
+}
+
+template <typename problem_t>
+void RadSystem<problem_t>::AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayconst_t &U1,
+					amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray,
+					const double dt_in,
+					amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,
+					amrex::Box const &indexRange, const int nvars)
+{
+	// By convention, the fluxes are defined on the left edge of each zone,
+	// i.e. flux_(i) is the flux *into* zone i through the interface on the
+	// left of zone i, and -1.0*flux(i+1) is the flux *into* zone i through
+	// the interface on the right of zone i.
+
+	const auto dt = dt_in;
+	const auto dx = dx_in[0];
+	auto x1Flux = fluxArray[0];
+#if (AMREX_SPACEDIM >= 2)
+	const auto dy = dx_in[1];
+	const auto x2Flux = fluxArray[1];
+#endif
+
+	amrex::ParallelFor(
+	    indexRange, nvars, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
+		    // RK-SSP2 integrator
+		    const double U_0 = U0(i, j, k, n);
+		    const double U_1 = U1(i, j, k, n);
+
+		    const double FxU_1 = (dt / dx) * (x1Flux(i, j, k, n) - x1Flux(i + 1, j, k, n));
+#if (AMREX_SPACEDIM >= 2)
+		    const double FyU_1 = (dt / dy) * (x2Flux(i, j, k, n) - x2Flux(i, j + 1, k, n));
+#endif
+
+		    // save results in U_new
+		    U_new(i, j, k, n) = (0.5 * U_0 + 0.5 * U_1) + (0.5 * FxU_1
+#if (AMREX_SPACEDIM >= 2)
+								   + 0.5 * FyU_1
+#endif
+								  );
+	    });
 }
 
 template <typename problem_t>
@@ -352,7 +434,7 @@ void RadSystem<problem_t>::ComputeFirstOrderFluxes(
 
 template <typename problem_t>
 template <FluxDir DIR>
-void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
+void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiffusive_in,
 					 amrex::Array4<const amrex::Real> const &x1LeftState_in,
 					 amrex::Array4<const amrex::Real> const &x1RightState_in,
 					 amrex::Box const &indexRange, arrayconst_t &consVar_in,
