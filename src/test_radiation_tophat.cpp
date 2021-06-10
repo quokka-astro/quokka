@@ -281,8 +281,8 @@ auto testproblem_radiation_marshak_cgs() -> int
 	// Problem parameters
 	const int max_timesteps = 10000;
 	const double CFL_number = 0.4;
-	const int nx = 140; //700;
-	const int ny = 40;	//200;
+	const int nx = 700; // 280;
+	const int ny = 200; // 80;
 
 	const double Lx = 7.0;		 // cm
 	const double Ly = 4.0;		 // cm
@@ -337,7 +337,7 @@ auto testproblem_radiation_marshak_cgs() -> int
 	sim.cflNumber_ = CFL_number;
 	sim.maxTimesteps_ = max_timesteps;
 	sim.outputAtInterval_ = true;
-	sim.plotfileInterval_ = 100; // for debugging
+	sim.plotfileInterval_ = 20; // for debugging
 
 	// initialize
 	sim.setInitialConditions();
