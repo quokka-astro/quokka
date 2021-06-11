@@ -274,10 +274,6 @@ template <> void RadiationSimulation<TophatProblem>::setInitialConditions()
 
 auto testproblem_radiation_marshak_cgs() -> int
 {
-	// N.B. The asymptotic correction in the HLL solver does not work at the discontinuity in
-	// the lower x1 boundary condition. To run stably, it must be disabled. However, this causes
-	// unphysical radiation leakage into the walls surrounding the pipe.
-
 	// Problem parameters
 	const int max_timesteps = 10000;
 	const double CFL_number = 0.4;

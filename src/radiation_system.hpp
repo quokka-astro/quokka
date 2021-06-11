@@ -111,13 +111,6 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 				  amrex::Box const &indexRange, arrayconst_t &consVar_in,
 				  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx);
 
-#if 0
-	template <FluxDir DIR>
-	static void ComputeFirstOrderFluxes(amrex::Array4<const amrex::Real> const &consVar_in,
-					    array_t &x1FluxDiffusive_in,
-					    amrex::Box const &indexRange);
-#endif
-
 	static void SetRadEnergySource(array_t &radEnergy, amrex::Box const &indexRange,
 				       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
 				       amrex::Real time);
@@ -608,9 +601,8 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 		const quokka::valarray<double, fluxdim> U_R = {erad_R, Fx_R, Fy_R, Fz_R};
 
 		// asymptotic-preserving flux correction
-		// [Similar to Skinner et al. (2019), but tau^-2 instead of tau^-1, which is
-		// not actually asymptotic-preserving with PLM+SDC2. This correction causes
-		// flux-limiting violations when used for the tophat problem.]
+		// [Similar to Skinner et al. (2019), but tau^-2 instead of tau^-1, which does not
+		// appear to be asymptotic-preserving with PLM+SDC2.]
 		const double tau_cell = ComputeCellOpticalDepth<DIR>(consVar, dx, i, j, k);
 
 		// ensures that signal speed -> c \sqrt{f_xx} / tau_cell in the diffusion
