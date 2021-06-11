@@ -84,7 +84,7 @@ template <typename problem_t> class RadiationSimulation : public SingleLevelSimu
 			    amrex::Array4<amrex::Real> const &consVarNew,
 			    const amrex::Box &indexRange, int nvars);
 	void operatorSplitSourceTerms(amrex::Array4<amrex::Real> const &stateNew,
-				      const amrex::Box &indexRange, int nvars);
+				      const amrex::Box &indexRange, int nvars, double dt);
 
 	void fillBoundaryConditions(amrex::MultiFab &state);
 
@@ -192,20 +192,19 @@ template <typename problem_t> void RadiationSimulation<problem_t>::advanceSingle
 		quokka::CheckSymmetryArray<problem_t>(stateNew, indexRange, ncomp_, dx_);
 	}
 
-	// no ghost zone update needed for source terms
-
 	// source terms
 	for (amrex::MFIter iter(state_new_); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox(); // 'validbox' == exclude ghost zones
 		auto const &stateNew = state_new_.array(iter);
-		operatorSplitSourceTerms(stateNew, indexRange, ncomp_);
+		operatorSplitSourceTerms(stateNew, indexRange, ncomp_, dt_);
 		quokka::CheckSymmetryArray<problem_t>(stateNew, indexRange, ncomp_, dx_);
 	}
 }
 
 template <typename problem_t>
 void RadiationSimulation<problem_t>::operatorSplitSourceTerms(
-    amrex::Array4<amrex::Real> const &stateNew, const amrex::Box &indexRange, const int /*nvars*/)
+    amrex::Array4<amrex::Real> const &stateNew, const amrex::Box &indexRange, const int /*nvars*/,
+    const double dt)
 {
 	amrex::FArrayBox radEnergySource(indexRange, 1,
 					 amrex::The_Async_Arena()); // cell-centered scalar
@@ -220,7 +219,7 @@ void RadiationSimulation<problem_t>::operatorSplitSourceTerms(
 
 	// cell-centered source terms
 	RadSystem<problem_t>::AddSourceTerms(stateNew, radEnergySource.const_array(),
-					     advectionFluxes.const_array(), indexRange, dt_);
+					     advectionFluxes.const_array(), indexRange, dt);
 }
 
 template <typename problem_t>
@@ -260,9 +259,12 @@ void RadiationSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Rea
 	    primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange,
 	    x1ReconstructRange, ncompPrimitive_);
 	// PLM and donor cell are interface-centered kernels
-	// RadSystem<problem_t>::template ReconstructStatesConstant<DIR>(
+	//RadSystem<problem_t>::template ReconstructStatesConstant<DIR>(
 	//    primVar.array(), x1LeftState.array(), x1RightState.array(), x1ReconstructRange,
 	//    ncompPrimitive_);
+	// RadSystem<problem_t>::template ReconstructStatesPLM<DIR>(
+	//		primVar.array(), x1LeftState.array(), x1RightState.array(),
+	// x1ReconstructRange, 		ncompPrimitive_);
 	quokka::CheckNaN<problem_t>(x1LeftState, indexRange, x1ReconstructRange, ncompPrimitive_,
 				    dx_);
 	quokka::CheckNaN<problem_t>(x1RightState, indexRange, x1ReconstructRange, ncompPrimitive_,
@@ -276,6 +278,57 @@ void RadiationSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Rea
 							  dx_); // watch out for argument order!!
 	quokka::CheckNaN<problem_t>(x1Flux, indexRange, x1FluxRange, ncompPrimitive_, dx_);
 }
+
+#if 0
+template <typename problem_t>
+void RadiationSimulation<problem_t>::AdvanceTimestepPredictorCorrector()
+{
+	// Use two iterations of a second-order SDC-like method to advance the radiation subsystem.
+	// [McClarren et al., Journal of Computational Physics 227 (2008) 7561–7586]
+
+	// ensure that consVarPredictStep_ is initialized
+	CopyVars(consVar_, consVarPredictStep_, cell_range);
+	CopyVars(consVar_, consVarPredictStepPrev_, cell_range);
+
+	/// Predictor step
+
+	// Step 0: Fill ghost zones and convert to primitive variables
+	FillGhostZones(consVarPredictStepPrev_); // consVarPredictStepPrev_ == U^{t+1,k}
+	ConservedToPrimitive(consVarPredictStepPrev_, std::make_pair(0, dim1_));
+
+	// Step 1a: Compute transport terms using state U^{t+1/2,k}
+	// [N.B. PPM is unstable for SDC2!]
+	ComputeFluxes(cell_range);
+	// update advectionFluxes_ <- F(U^{t+1, k})
+	SaveFluxes(cell_range);
+	// update reactionTerms_ <- S(U^{t+1, k})
+	ComputeSourceTermsExplicit(consVarPredictStepPrev_, reactionTerms_, cell_range);
+
+	// Add SDC source terms to advectionFluxes_
+	for (int n = 0; n < nvars_; ++n) {
+		for (int i = cell_range.first; i < cell_range.second; ++i) {
+			// advectionFluxes_ == F(U^{t+1,k})
+			// advectionFluxesU0_ == F(U^{t})
+			// reactionTerms_ == S(U^{t+1,k})
+			// reactionTermsU0_ == S(U^{t})
+			advectionFluxes_(n, i) =
+			    (advectionFluxes_(n, i) + reactionTerms_(n, i)) - reactionTerms_(n, i);
+		}
+	}
+
+	// Step 1b: Compute reaction terms with advectionFluxes_ as a source term.
+	AddSourceTerms(consVar_, consVarPredictStep_, cell_range);
+
+	// Step 1c: Save current iteration
+	CopyVars(consVarPredictStep_, consVarPredictStepPrev_, cell_range);
+
+	/// Corrector step
+
+
+	// Copy final solution to consVar_
+	CopyVars(consVarPredictStep_, consVar_, cell_range);
+}
+#endif
 
 template <typename problem_t>
 void RadiationSimulation<problem_t>::stageOneRK2SSP(

@@ -607,17 +607,13 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 
 		// ensures that signal speed -> c \sqrt{f_xx} / tau_cell in the diffusion
 		// limit [see Appendix of Jiang et al. ApJ 767:148 (2013)]
-		const double S_corr = std::sqrt(1.0 - std::exp(-tau_cell * tau_cell)) /
-				      tau_cell; // Jiang et al. (2013)
-		// const double S_corr = std::min(1.0, 1.0/tau_cell); // Skinner et al.
+		const double S_corr = std::sqrt(1.0 - std::exp(-tau_cell * tau_cell)) / tau_cell; // Jiang et al. (2013)
+		//const double S_corr = std::min(1.0, 1.0/tau_cell); // Skinner et al.
 
 		// adjust the wavespeeds (cancels out except for the last term in the HLL flux)
-		// const quokka::valarray<double, fluxdim> epsilon = {S_corr, 1.0, 1.0,
-		//						   1.0}; // Skinner et al. (2019)
-		// const quokka::valarray<double, fluxdim> epsilon = {S_corr, S_corr, S_corr,
-		//						   S_corr}; // Jiang et al. (2013)
-		const quokka::valarray<double, fluxdim> epsilon = {S_corr * S_corr, S_corr, S_corr,
-								   S_corr}; // this code
+		//const quokka::valarray<double, fluxdim> epsilon = {S_corr, 1.0, 1.0, 1.0}; // Skinner et al. (2019)
+		//const quokka::valarray<double, fluxdim> epsilon = {S_corr, S_corr, S_corr, S_corr}; // Jiang et al. (2013)
+		const quokka::valarray<double, fluxdim> epsilon = {S_corr * S_corr, S_corr, S_corr, S_corr}; // this code
 
 		const double S_L = -c_hat_ * std::sqrt(Tnormal_L);
 		const double S_R = c_hat_ * std::sqrt(Tnormal_R);
@@ -672,7 +668,7 @@ template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeTgasFromEgas(const double rho,
 								     const double Egas) -> double
 {
-	const double c_v = boltzmann_constant_ / (mean_molecular_mass_ * (gamma_ - 1.0));
+	constexpr double c_v = boltzmann_constant_ / (mean_molecular_mass_ * (gamma_ - 1.0));
 	return (Egas / (rho * c_v));
 }
 
@@ -680,7 +676,7 @@ template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeEgasFromTgas(const double rho,
 								     const double Tgas) -> double
 {
-	const double c_v = boltzmann_constant_ / (mean_molecular_mass_ * (gamma_ - 1.0));
+	constexpr double c_v = boltzmann_constant_ / (mean_molecular_mass_ * (gamma_ - 1.0));
 	return (rho * c_v * Tgas);
 }
 
@@ -689,7 +685,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeEgasTempDerivative(const
 									   const double /*Tgas*/)
     -> double
 {
-	const double c_v = boltzmann_constant_ / (mean_molecular_mass_ * (gamma_ - 1.0));
+	constexpr double c_v = boltzmann_constant_ / (mean_molecular_mass_ * (gamma_ - 1.0));
 	return (rho * c_v);
 }
 
