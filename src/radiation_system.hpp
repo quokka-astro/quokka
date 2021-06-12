@@ -615,8 +615,8 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 		//const quokka::valarray<double, fluxdim> epsilon = {S_corr, S_corr, S_corr, S_corr}; // Jiang et al. (2013)
 		const quokka::valarray<double, fluxdim> epsilon = {S_corr * S_corr, S_corr, S_corr, S_corr}; // this code
 
-		const double S_L = -c_hat_ * std::sqrt(Tnormal_L);
-		const double S_R = c_hat_ * std::sqrt(Tnormal_R);
+		const double S_L = std::min(-0.1*c_hat_, -c_hat_ * std::sqrt(Tnormal_L));
+		const double S_R = std::max( 0.1*c_hat_,  c_hat_ * std::sqrt(Tnormal_R));
 
 		AMREX_ASSERT(std::abs(S_L) <= c_hat_); // NOLINT
 		AMREX_ASSERT(std::abs(S_R) <= c_hat_); // NOLINT

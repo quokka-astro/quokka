@@ -52,7 +52,7 @@ struct ShadowProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
 constexpr double sigma0 = 0.1;	     // cm^-1 (opacity)
-constexpr double rho_bg = 1.0e-3;	 // g cm^-3 (matter density)
+constexpr double rho_bg = 1.0e-3;    // g cm^-3 (matter density)
 constexpr double rho_clump = 1.0;    // g cm^-3 (matter density)
 constexpr double T_hohlraum = 1740.; // K
 constexpr double T_initial = 290.;   // K
@@ -64,7 +64,7 @@ template <> struct RadSystem_Traits<ShadowProblem> {
 	static constexpr double c_light = c;
 	static constexpr double c_hat = c;
 	static constexpr double radiation_constant = a_rad;
-	static constexpr double mean_molecular_mass = hydrogen_mass_cgs_;
+	static constexpr double mean_molecular_mass = 1000. * hydrogen_mass_cgs_;
 	static constexpr double boltzmann_constant = boltzmann_constant_cgs_;
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double Erad_floor = 0.;
@@ -72,15 +72,16 @@ template <> struct RadSystem_Traits<ShadowProblem> {
 
 template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<ShadowProblem>::ComputeOpacity(const double rho,
-								    const double Tgas) -> double
+								    const double /*Tgas*/) -> double
 {
-	const amrex::Real sigma =
-	    sigma0 * std::pow(Tgas / T_initial, -3.5) * std::pow(rho / rho_bg, 2);
+	const amrex::Real sigma = sigma0 * std::pow(rho / rho_bg, 2);
+	//	    sigma0 * std::pow(Tgas / T_initial, -3.5) * std::pow(rho / rho_bg, 2);
 
 	const amrex::Real kappa = sigma / rho; // specific opacity [cm^2 g^-1]
 	return kappa;
 }
 
+#if 0
 template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<ShadowProblem>::ComputeOpacityTempDerivative(const double rho,
 										  const double Tgas)
@@ -92,14 +93,14 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<ShadowProblem>::ComputeOpacityTempDerivativ
 	const amrex::Real dkappa_dTgas = dsigma_dTgas / rho; // specific opacity [cm^2 g^-1]
 	return dkappa_dTgas;
 }
-
-#if 0
-template <>
-AMREX_GPU_DEVICE auto RadSystem<ShadowProblem>::ComputeEddingtonFactor(double  /*f_in*/) -> double
-{
-	return (1./3.); // Eddington approximation
-}
 #endif
+
+template <>
+AMREX_GPU_DEVICE auto RadSystem<ShadowProblem>::ComputeEddingtonFactor(double /*f_in*/) -> double
+{
+	return 1.0; // streaming
+		    // return (1./3.); // Eddington approximation
+}
 
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
@@ -116,8 +117,8 @@ RadiationSimulation<ShadowProblem>::setCustomBoundaryConditions(
 	auto [i, j, k] = iv.toArray();
 #endif
 
-	const amrex::Real *dx = geom.CellSize();
-	const amrex::Real *prob_lo = geom.ProbLo();
+	// const amrex::Real *dx = geom.CellSize();
+	// const amrex::Real *prob_lo = geom.ProbLo();
 	const amrex::Box &box = geom.Domain();
 	amrex::GpuArray<int, 3> lo = box.loVect3d();
 
@@ -141,7 +142,7 @@ RadiationSimulation<ShadowProblem>::setCustomBoundaryConditions(
 		    std::sqrt(Fx_bdry * Fx_bdry + Fy_bdry * Fy_bdry + Fz_bdry * Fz_bdry);
 		AMREX_ASSERT((Fnorm / (c * E_inc)) <= 1.0); // flux-limiting condition
 
-		// x1 left side boundary (Marshak)
+		// x1 left side boundary (streaming)
 		consVar(i, j, k, RadSystem<ShadowProblem>::radEnergy_index) = E_inc;
 		consVar(i, j, k, RadSystem<ShadowProblem>::x1RadFlux_index) = Fx_bdry;
 		consVar(i, j, k, RadSystem<ShadowProblem>::x2RadFlux_index) = Fy_bdry;
@@ -205,14 +206,14 @@ auto testproblem_radiation_shadow() -> int
 	// Probably we need to use a predictor-corrector method...
 
 	// Problem parameters
-	const int max_timesteps = 20000;
-	const double CFL_number = 0.4;
-	const int nx = 280;
-	const int ny = 80;
+	constexpr int max_timesteps = 20000;
+	constexpr double CFL_number = 0.4;
+	constexpr int nx = 560; // 280;
+	constexpr int ny = 160; // 80;
 
-	const double Lx = 1.0;		 // cm
-	const double Ly = 0.24;		 // cm
-	const double max_time = 1.0e-10; // s
+	constexpr double Lx = 1.0;		     // cm
+	constexpr double Ly = 0.24;		     // cm
+	constexpr double max_time = 10.0 * (Lx / c); // s
 
 	amrex::IntVect gridDims{AMREX_D_DECL(nx, ny, 4)};
 	amrex::RealBox boxSize{
@@ -257,7 +258,9 @@ auto testproblem_radiation_shadow() -> int
 		}
 	}
 
-	// print units
+	// print specific heat
+	// if c_v is too high, the problem becomes too stiff for the operator-split Newton solver
+	// and garbage results are produced
 	auto c_v = RadSystem_Traits<ShadowProblem>::boltzmann_constant /
 		   (RadSystem_Traits<ShadowProblem>::mean_molecular_mass *
 		    (RadSystem_Traits<ShadowProblem>::gamma - 1.0));
@@ -269,7 +272,7 @@ auto testproblem_radiation_shadow() -> int
 	sim.cflNumber_ = CFL_number;
 	sim.maxTimesteps_ = max_timesteps;
 	sim.outputAtInterval_ = true;
-	sim.plotfileInterval_ = 20; // for debugging
+	sim.plotfileInterval_ = 50; // for debugging
 
 	// initialize
 	sim.setInitialConditions();
