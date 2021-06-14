@@ -95,12 +95,14 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<ShadowProblem>::ComputeOpacityTempDerivativ
 }
 #endif
 
+#if 0
 template <>
 AMREX_GPU_DEVICE auto RadSystem<ShadowProblem>::ComputeEddingtonFactor(double /*f_in*/) -> double
 {
 	return 1.0; // streaming
-		    // return (1./3.); // Eddington approximation
+	// return (1./3.); // Eddington approximation
 }
+#endif
 
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
@@ -202,8 +204,8 @@ template <> void RadiationSimulation<ShadowProblem>::setInitialConditions()
 
 auto testproblem_radiation_shadow() -> int
 {
-	// N.B. The operator splitting error is very significant for this problem!
-	// Probably we need to use a predictor-corrector method...
+	// N.B. The matter-energy exchange can exceed numerical precision in IEEE double for this problem!
+	// Need to rewrite to handle cases where dt/c_v < epsilon
 
 	// Problem parameters
 	constexpr int max_timesteps = 20000;

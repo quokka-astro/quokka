@@ -833,10 +833,10 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			    (rho * dt / c_v) *
 			    (kappa * dB_dTgas + dkappa_dTgas * (fourPiB - chat * Erad_guess));
 
-			dFG_dEgas = 1.0 + (c / chat) * drhs_dEgas;
+			dFG_dEgas = 1.0 + (c / chat) * drhs_dEgas; // may underflow machine precision limits!
 			dFG_dErad = dt * (-(rho * kappa) * c);
 			dFR_dEgas = -drhs_dEgas;
-			dFR_dErad = 1.0 + dt * ((rho * kappa) * chat);
+			dFR_dErad = 1.0 + dt * ((rho * kappa) * chat); // may underflow machine precision limits!
 
 			// Update variables
 			eta = -dFR_dEgas / dFG_dEgas;
