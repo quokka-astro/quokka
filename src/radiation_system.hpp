@@ -578,7 +578,7 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 			Pnz_R = P_R[1][2];
 		} else if constexpr (DIR == FluxDir::X3) {
 			Fn_L = Fz_L;
-			Fn_L = Fz_R;
+			Fn_R = Fz_R;
 
 			Pnx_L = P_L[2][0];
 			Pny_L = P_L[2][1];
@@ -588,6 +588,15 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 			Pny_R = P_R[2][1];
 			Pnz_R = P_R[2][2];
 		}
+
+		AMREX_ASSERT(Fn_L != NAN);
+		AMREX_ASSERT(Fn_R != NAN);
+		AMREX_ASSERT(Pnx_L != NAN);
+		AMREX_ASSERT(Pnx_R != NAN);
+		AMREX_ASSERT(Pny_L != NAN);
+		AMREX_ASSERT(Pny_R != NAN);
+		AMREX_ASSERT(Pnz_L != NAN);
+		AMREX_ASSERT(Pnz_R != NAN);
 
 		const quokka::valarray<double, fluxdim> F_L = {
 		    (c_hat_ / c_light_) * Fn_L, (c_hat_ * c_light_) * Pnx_L,
@@ -607,14 +616,20 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 
 		// ensures that signal speed -> c \sqrt{f_xx} / tau_cell in the diffusion
 		// limit [see Appendix of Jiang et al. ApJ 767:148 (2013)]
-		const double S_corr = std::sqrt(1.0 - std::exp(-tau_cell * tau_cell)) / tau_cell; // Jiang et al. (2013)
-		//const double S_corr = std::min(1.0, 1.0/tau_cell); // Skinner et al.
+		const double S_corr = std::sqrt(1.0 - std::exp(-tau_cell * tau_cell)) /
+				      tau_cell; // Jiang et al. (2013)
+		// const double S_corr = std::min(1.0, 1.0/tau_cell); // Skinner et al.
 
 		// adjust the wavespeeds (cancels out except for the last term in the HLL flux)
-		//const quokka::valarray<double, fluxdim> epsilon = {S_corr, 1.0, 1.0, 1.0}; // Skinner et al. (2019)
-		//const quokka::valarray<double, fluxdim> epsilon = {S_corr, S_corr, S_corr, S_corr}; // Jiang et al. (2013)
-		const quokka::valarray<double, fluxdim> epsilon = {S_corr * S_corr, S_corr, S_corr, S_corr}; // this code
+		// const quokka::valarray<double, fluxdim> epsilon = {S_corr, 1.0, 1.0, 1.0}; //
+		// Skinner et al. (2019) const quokka::valarray<double, fluxdim> epsilon = {S_corr,
+		// S_corr, S_corr, S_corr}; // Jiang et al. (2013)
+		const quokka::valarray<double, fluxdim> epsilon = {S_corr * S_corr, S_corr, S_corr,
+								   S_corr}; // this code
 
+		// compute the norm of the wavespeed vector
+		//const double S_L = std::min(-0.1*c_hat_, -c_hat_ * std::sqrt(T_L[0][0] + T_L[1][1] + T_L[2][2]));
+		//const double S_R = std::max( 0.1*c_hat_,  c_hat_ * std::sqrt(T_R[0][0] + T_R[1][1] + T_R[2][2]));
 		const double S_L = std::min(-0.1*c_hat_, -c_hat_ * std::sqrt(Tnormal_L));
 		const double S_R = std::max( 0.1*c_hat_,  c_hat_ * std::sqrt(Tnormal_R));
 

@@ -213,7 +213,7 @@ auto testproblem_radiation_shadow() -> int
 
 	constexpr double Lx = 1.0;		     // cm
 	constexpr double Ly = 0.24;		     // cm
-	constexpr double max_time = 10.0 * (Lx / c); // s
+	constexpr double max_time = 1.0e-10; // 10.0 * (Lx / c); // s
 
 	amrex::IntVect gridDims{AMREX_D_DECL(nx, ny, 4)};
 	amrex::RealBox boxSize{
