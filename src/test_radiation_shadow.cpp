@@ -16,6 +16,7 @@
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
 #include "radiation_system.hpp"
+#include <limits>
 #include <tuple>
 
 auto main(int argc, char **argv) -> int
@@ -64,7 +65,7 @@ template <> struct RadSystem_Traits<ShadowProblem> {
 	static constexpr double c_light = c;
 	static constexpr double c_hat = c;
 	static constexpr double radiation_constant = a_rad;
-	static constexpr double mean_molecular_mass = 1000. * hydrogen_mass_cgs_;
+	static constexpr double mean_molecular_mass = 1.0e5 * hydrogen_mass_cgs_;
 	static constexpr double boltzmann_constant = boltzmann_constant_cgs_;
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double Erad_floor = 0.;
@@ -204,8 +205,8 @@ template <> void RadiationSimulation<ShadowProblem>::setInitialConditions()
 
 auto testproblem_radiation_shadow() -> int
 {
-	// N.B. The matter-energy exchange can exceed numerical precision in IEEE double for this problem!
-	// Need to rewrite to handle cases where dt/c_v < epsilon
+	// N.B. The matter-energy exchange can exceed numerical precision in IEEE double for this
+	// problem! Need to rewrite to handle cases where dt/c_v < epsilon
 
 	// Problem parameters
 	constexpr int max_timesteps = 20000;
@@ -213,8 +214,8 @@ auto testproblem_radiation_shadow() -> int
 	constexpr int nx = 560; // 280;
 	constexpr int ny = 160; // 80;
 
-	constexpr double Lx = 1.0;		     // cm
-	constexpr double Ly = 0.24;		     // cm
+	constexpr double Lx = 1.0;	     // cm
+	constexpr double Ly = 0.24;	     // cm
 	constexpr double max_time = 1.0e-10; // 10.0 * (Lx / c); // s
 
 	amrex::IntVect gridDims{AMREX_D_DECL(nx, ny, 4)};
@@ -260,13 +261,21 @@ auto testproblem_radiation_shadow() -> int
 		}
 	}
 
-	// print specific heat
-	// if c_v is too high, the problem becomes too stiff for the operator-split Newton solver
-	// and garbage results are produced
-	auto c_v = RadSystem_Traits<ShadowProblem>::boltzmann_constant /
-		   (RadSystem_Traits<ShadowProblem>::mean_molecular_mass *
-		    (RadSystem_Traits<ShadowProblem>::gamma - 1.0));
-	amrex::Print() << "c_v = " << c_v << "\n";
+	// print epsilon ("stiffness parameter" from Su & Olson)
+	// if epsilon is smaller than ~machine epsilon, the problem becomes too stiff for the
+	// Newton solver and garbage results are produced
+	const auto dt_CFL = CFL_number * std::min(Lx / nx, Ly / ny) / c;
+	const auto c_v = RadSystem_Traits<ShadowProblem>::boltzmann_constant /
+			 (RadSystem_Traits<ShadowProblem>::mean_molecular_mass *
+			  (RadSystem_Traits<ShadowProblem>::gamma - 1.0));
+	const auto epsilon =
+	    4.0 * a_rad * (T_initial * T_initial * T_initial) * sigma0 * (c * dt_CFL) / c_v;
+	const auto machine_epsilon = std::numeric_limits<amrex::Real>::epsilon();
+	amrex::Print() << "radiation epsilon (stiffness parameter) = " << epsilon << "\n"
+		       << "machine epsilon = " << machine_epsilon << "\n";
+
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(epsilon > machine_epsilon,
+					 "radiation epsilon is smaller than machine epsilon!");
 
 	// Problem initialization
 	RadiationSimulation<ShadowProblem> sim(gridDims, boxSize, boundaryConditions, nvars);
