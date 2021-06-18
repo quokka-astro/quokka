@@ -45,19 +45,19 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto clamp(double v, double lo, double 
 namespace quokka
 {
 template <typename T>
-AMREX_GPU_HOST_DEVICE auto CheckSymmetryArray(amrex::Array4<const amrex::Real> const &arr,
-					      amrex::Box const &indexRange, const int ncomp,
-					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx)
+AMREX_GPU_HOST_DEVICE auto CheckSymmetryArray(amrex::Array4<const amrex::Real> const & /*arr*/,
+					      amrex::Box const & /*indexRange*/, const int  /*ncomp*/,
+					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>  /*dx*/)
     -> bool
 {
 	return true; // problem-specific implementation for test problems
 }
 
 template <typename T>
-AMREX_GPU_HOST_DEVICE auto CheckSymmetryFluxes(amrex::Array4<const amrex::Real> const &arr1,
-					       amrex::Array4<const amrex::Real> const &arr2,
-					       amrex::Box const &indexRange, const int ncomp,
-					       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx)
+AMREX_GPU_HOST_DEVICE auto CheckSymmetryFluxes(amrex::Array4<const amrex::Real> const & /*arr1*/,
+					       amrex::Array4<const amrex::Real> const & /*arr2*/,
+					       amrex::Box const & /*indexRange*/, const int  /*ncomp*/,
+					       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>  /*dx*/)
     -> bool
 {
 	return true; // problem-specific implementation for test problems
@@ -65,8 +65,8 @@ AMREX_GPU_HOST_DEVICE auto CheckSymmetryFluxes(amrex::Array4<const amrex::Real> 
 
 template <typename T>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void
-CheckNaN(amrex::FArrayBox const &arr, amrex::Box const &symmetryRange, amrex::Box const &nanRange,
-	 const int ncomp, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx)
+CheckNaN(amrex::FArrayBox const & /*arr*/, amrex::Box const & /*symmetryRange*/, amrex::Box const & /*nanRange*/,
+	 const int  /*ncomp*/, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>  /*dx*/)
 {
 	// need to rewrite for GPU
 	AMREX_ASSERT(!arr.contains_nan(nanRange, 0, ncomp));
@@ -80,7 +80,7 @@ template <typename problem_t> class SingleLevelSimulation
 	int nx_{1};
 	int ny_{1};
 	int nz_{1};
-	int max_grid_size_{256}; // amrex default is 128 in 2D
+	int max_grid_size_{32}; // amrex default is 128 in 2D, 32 in 3D
 	int maxTimesteps_{10000};
 
 	amrex::BoxArray simBoxArray_;

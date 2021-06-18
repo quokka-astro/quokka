@@ -67,6 +67,7 @@ template <typename problem_t> class AdvectionSimulation : public SingleLevelSimu
 
 	double advectionVx_ = 1.0;
 	double advectionVy_ = 0.0;
+	double advectionVz_ = 0.0;
 };
 
 template <typename problem_t> void AdvectionSimulation<problem_t>::computeMaxSignalLocal()
@@ -137,6 +138,10 @@ void AdvectionSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Rea
 		advectionVel = advectionVy_;
 		// [1 == x2 direction]
 		dim = 1;
+	} else if constexpr (DIR == FluxDir::X3) {
+		advectionVel = advectionVz_;
+		// [2 == x3 direction]
+		dim = 2;
 	}
 
 	// extend box to include ghost zones
@@ -186,24 +191,22 @@ void AdvectionSimulation<problem_t>::stageOneRK2SSP(
 	// Allocate temporary arrays using CUDA stream async allocator (or equivalent)
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, 0);
 	amrex::FArrayBox x1Flux(x1FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in x
+	fluxFunction<FluxDir::X1>(consVarOld, x1Flux, indexRange, nvars);
 
-#if (AMREX_SPACEDIM >= 2) // for 2D problems
+#if (AMREX_SPACEDIM >= 2) // for 2D+3D problems
 	amrex::Box const &x2FluxRange = amrex::surroundingNodes(indexRange, 1);
 	amrex::FArrayBox x2Flux(x2FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in y
-#endif // AMREX_SPACEDIM >= 2
-
-	fluxFunction<FluxDir::X1>(consVarOld, x1Flux, indexRange, nvars);
-#if (AMREX_SPACEDIM >= 2) // for 2D problems
 	fluxFunction<FluxDir::X2>(consVarOld, x2Flux, indexRange, nvars);
 #endif // AMREX_SPACEDIM >= 2
 
-	// Stage 1 of RK2-SSP
-#if (AMREX_SPACEDIM == 1)
-	amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrays = {x1Flux.const_array()};
-#elif (AMREX_SPACEDIM == 2)
-	amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrays = {x1Flux.const_array(),
-								    x2Flux.const_array()};
-#endif
+#if (AMREX_SPACEDIM == 3) // for 3D problems
+	amrex::Box const &x3FluxRange = amrex::surroundingNodes(indexRange, 2);
+	amrex::FArrayBox x3Flux(x3FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in z
+	fluxFunction<FluxDir::X3>(consVarOld, x3Flux, indexRange, nvars);
+#endif	// AMREX_SPACEDIM == 3
+
+	amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrays = {
+	    AMREX_D_DECL(x1Flux.const_array(), x2Flux.const_array(), x3Flux.const_array())};
 
 	// if applicable, check that fluxes are symmetric (only for test problems with x/y symmetry)
 	quokka::CheckSymmetryFluxes<problem_t>(x1Flux.const_array(), x2Flux.const_array(),
@@ -221,23 +224,22 @@ void AdvectionSimulation<problem_t>::stageTwoRK2SSP(
 	// Allocate temporary arrays using CUDA stream async allocator (or equivalent)
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, 0);
 	amrex::FArrayBox x1Flux(x1FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in x
+	fluxFunction<FluxDir::X1>(consVarOld, x1Flux, indexRange, nvars);
 
-#if (AMREX_SPACEDIM >= 2) // for 2D problems
+#if (AMREX_SPACEDIM >= 2) // for 2D+3D problems
 	amrex::Box const &x2FluxRange = amrex::surroundingNodes(indexRange, 1);
 	amrex::FArrayBox x2Flux(x2FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in y
+	fluxFunction<FluxDir::X2>(consVarOld, x2Flux, indexRange, nvars);
 #endif // AMREX_SPACEDIM >= 2
 
-	fluxFunction<FluxDir::X1>(consVarNew, x1Flux, indexRange, nvars);
-#if (AMREX_SPACEDIM >= 2) // for 2D problems
-	fluxFunction<FluxDir::X2>(consVarNew, x2Flux, indexRange, nvars);
-#endif // AMREX_SPACEDIM >= 2
+#if (AMREX_SPACEDIM == 3) // for 3D problems
+	amrex::Box const &x3FluxRange = amrex::surroundingNodes(indexRange, 2);
+	amrex::FArrayBox x3Flux(x3FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in z
+	fluxFunction<FluxDir::X3>(consVarOld, x3Flux, indexRange, nvars);
+#endif	// AMREX_SPACEDIM == 3
 
-#if (AMREX_SPACEDIM == 1)
-	amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrays = {x1Flux.const_array()};
-#elif (AMREX_SPACEDIM == 2)
-	amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrays = {x1Flux.const_array(),
-								    x2Flux.const_array()};
-#endif
+	amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrays = {
+	    AMREX_D_DECL(x1Flux.const_array(), x2Flux.const_array(), x3Flux.const_array())};
 
 	// if applicable, check that fluxes are symmetric (only for test problems with x/y symmetry)
 	quokka::CheckSymmetryFluxes<problem_t>(x1Flux.const_array(), x2Flux.const_array(),

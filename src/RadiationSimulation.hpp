@@ -240,6 +240,8 @@ void RadiationSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Rea
 		dir = 0;
 	} else if constexpr (DIR == FluxDir::X2) {
 		dir = 1;
+	} else if constexpr (DIR == FluxDir::X3) {
+		dir = 2;
 	}
 
 	// extend box to include ghost zones
@@ -345,32 +347,27 @@ void RadiationSimulation<problem_t>::stageOneRK2SSP(
 	// Allocate temporary arrays using CUDA stream async allocator (or equivalent)
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, 0);
 	amrex::FArrayBox x1Flux(x1FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in x
-	amrex::FArrayBox x1FluxDiffusive(x1FluxRange, nvars,
-					 amrex::The_Async_Arena()); // node-centered in x
+	amrex::FArrayBox x1FluxDiffusive(x1FluxRange, nvars, amrex::The_Async_Arena());
+	fluxFunction<FluxDir::X1>(consVarOld, x1Flux, x1FluxDiffusive, indexRange, nvars);
 
-#if (AMREX_SPACEDIM >= 2) // for 2D problems
+#if (AMREX_SPACEDIM >= 2) // for 2D+3D problems
 	amrex::Box const &x2FluxRange = amrex::surroundingNodes(indexRange, 1);
 	amrex::FArrayBox x2Flux(x2FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in y
-	amrex::FArrayBox x2FluxDiffusive(x2FluxRange, nvars,
-					 amrex::The_Async_Arena()); // node-centered in y
-#endif								    // AMREX_SPACEDIM >= 2
-
-	fluxFunction<FluxDir::X1>(consVarOld, x1Flux, x1FluxDiffusive, indexRange, nvars);
-#if (AMREX_SPACEDIM >= 2) // for 2D problems
+	amrex::FArrayBox x2FluxDiffusive(x2FluxRange, nvars, amrex::The_Async_Arena());
 	fluxFunction<FluxDir::X2>(consVarOld, x2Flux, x2FluxDiffusive, indexRange, nvars);
 #endif // AMREX_SPACEDIM >= 2
 
-	// Stage 1 of RK2-SSP
-#if (AMREX_SPACEDIM == 1)
-	amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrays = {x1Flux.const_array()};
+#if (AMREX_SPACEDIM == 3) // for 3D problems
+	amrex::Box const &x3FluxRange = amrex::surroundingNodes(indexRange, 2);
+	amrex::FArrayBox x3Flux(x3FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in z
+	amrex::FArrayBox x3FluxDiffusive(x3FluxRange, nvars, amrex::The_Async_Arena());
+	fluxFunction<FluxDir::X3>(consVarOld, x3Flux, x3FluxDiffusive, indexRange, nvars);
+#endif	// AMREX_SPACEDIM == 3
+
+	amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrays = {
+	    AMREX_D_DECL(x1Flux.const_array(), x2Flux.const_array(), x3Flux.const_array())};
 	amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxDiffusiveArrays{
-	    x1FluxDiffusive.const_array()};
-#elif (AMREX_SPACEDIM == 2)
-	amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrays = {x1Flux.const_array(),
-								    x2Flux.const_array()};
-	amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxDiffusiveArrays{
-	    x1FluxDiffusive.const_array(), x2FluxDiffusive.const_array()};
-#endif
+	    AMREX_D_DECL(x1FluxDiffusive.const_array(), x2FluxDiffusive.const_array(), x3FluxDiffusive.const_array())};
 
 	// Stage 1 of RK2-SSP
 	RadSystem<problem_t>::template PredictStep<nvars>(
@@ -385,31 +382,27 @@ void RadiationSimulation<problem_t>::stageTwoRK2SSP(
 	// Allocate temporary arrays using CUDA stream async allocator (or equivalent)
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, 0);
 	amrex::FArrayBox x1Flux(x1FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in x
-	amrex::FArrayBox x1FluxDiffusive(x1FluxRange, nvars,
-					 amrex::The_Async_Arena()); // node-centered in x
+	amrex::FArrayBox x1FluxDiffusive(x1FluxRange, nvars, amrex::The_Async_Arena());
+	fluxFunction<FluxDir::X1>(consVarOld, x1Flux, x1FluxDiffusive, indexRange, nvars);
 
-#if (AMREX_SPACEDIM >= 2) // for 2D problems
+#if (AMREX_SPACEDIM >= 2) // for 2D+3D problems
 	amrex::Box const &x2FluxRange = amrex::surroundingNodes(indexRange, 1);
 	amrex::FArrayBox x2Flux(x2FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in y
-	amrex::FArrayBox x2FluxDiffusive(x2FluxRange, nvars,
-					 amrex::The_Async_Arena()); // node-centered in y
-#endif								    // AMREX_SPACEDIM >= 2
-
-	fluxFunction<FluxDir::X1>(consVarNew, x1Flux, x1FluxDiffusive, indexRange, nvars);
-#if (AMREX_SPACEDIM >= 2) // for 2D problems
-	fluxFunction<FluxDir::X2>(consVarNew, x2Flux, x2FluxDiffusive, indexRange, nvars);
+	amrex::FArrayBox x2FluxDiffusive(x2FluxRange, nvars, amrex::The_Async_Arena());
+	fluxFunction<FluxDir::X2>(consVarOld, x2Flux, x2FluxDiffusive, indexRange, nvars);
 #endif // AMREX_SPACEDIM >= 2
 
-#if (AMREX_SPACEDIM == 1)
-	amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrays = {x1Flux.const_array()};
-	amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxDiffusiveArrays = {
-	    x1FluxDiffusive.const_array()};
-#elif (AMREX_SPACEDIM == 2)
-	amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrays = {x1Flux.const_array(),
-								    x2Flux.const_array()};
+#if (AMREX_SPACEDIM == 3) // for 3D problems
+	amrex::Box const &x3FluxRange = amrex::surroundingNodes(indexRange, 2);
+	amrex::FArrayBox x3Flux(x3FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in z
+	amrex::FArrayBox x3FluxDiffusive(x3FluxRange, nvars, amrex::The_Async_Arena());
+	fluxFunction<FluxDir::X3>(consVarOld, x3Flux, x3FluxDiffusive, indexRange, nvars);
+#endif	// AMREX_SPACEDIM == 3
+
+	amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrays = {
+	    AMREX_D_DECL(x1Flux.const_array(), x2Flux.const_array(), x3Flux.const_array())};
 	amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxDiffusiveArrays{
-	    x1FluxDiffusive.const_array(), x2FluxDiffusive.const_array()};
-#endif
+	    AMREX_D_DECL(x1FluxDiffusive.const_array(), x2FluxDiffusive.const_array(), x3FluxDiffusive.const_array())};
 
 	// Stage 2 of RK2-SSP
 	RadSystem<problem_t>::AddFluxesRK2(consVarNew, consVarOld, consVarNew, fluxArrays,

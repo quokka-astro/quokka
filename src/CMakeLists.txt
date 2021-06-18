@@ -34,7 +34,9 @@ add_executable(test_advection_se linear_advection.cpp hyperbolic_system.cpp test
 # add_executable(test_hydro_wave hydro_system.cpp hyperbolic_system.cpp test_hydro_wave.cpp)
 # add_executable(test_radiation_pulse hyperbolic_system.cpp radiation_system.cpp test_radiation_pulse.cpp)
 # add_executable(test_radiation_streaming hyperbolic_system.cpp radiation_system.cpp test_radiation_streaming.cpp)
-#add_executable(test_amrex_2d test_amrex_2d.cpp diffusion.cpp)
+
+add_executable(test_hydro3d_blast hydro_system.cpp hyperbolic_system.cpp test_hydro3d_blast.cpp)
+
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
     setup_target_for_cuda_compilation(test_radiation_matter_coupling)
@@ -50,6 +52,7 @@ if(AMReX_GPU_BACKEND MATCHES "CUDA")
     setup_target_for_cuda_compilation(test_hydro2d_blast)
     setup_target_for_cuda_compilation(test_hydro2d_kh)
     setup_target_for_cuda_compilation(test_hydro2d_rm)
+    setup_target_for_cuda_compilation(test_hydro3d_blast)
 endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 
 include(CTest)
