@@ -123,6 +123,7 @@ AMREX_GPU_HOST_DEVICE auto CheckSymmetryFluxes<RichtmeyerMeshkovProblem>(
 }
 } // namespace quokka
 
+//#define DEBUG_SYMMETRY
 template <> void HydroSimulation<RichtmeyerMeshkovProblem>::computeAfterTimestep()
 {
 #ifdef DEBUG_SYMMETRY

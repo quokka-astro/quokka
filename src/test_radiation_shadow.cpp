@@ -264,6 +264,7 @@ auto testproblem_radiation_shadow() -> int
 	// print epsilon ("stiffness parameter" from Su & Olson)
 	// if epsilon is smaller than ~machine epsilon, the problem becomes too stiff for the
 	// Newton solver and garbage results are produced
+	
 	const auto dt_CFL = CFL_number * std::min(Lx / nx, Ly / ny) / c;
 	const auto c_v = RadSystem_Traits<ShadowProblem>::boltzmann_constant /
 			 (RadSystem_Traits<ShadowProblem>::mean_molecular_mass *

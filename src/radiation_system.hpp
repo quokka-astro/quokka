@@ -92,11 +92,12 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static void ConservedToPrimitive(amrex::Array4<const amrex::Real> const &cons,
 					 array_t &primVar, amrex::Box const &indexRange);
 
+	template <int nvars>
 	static void PredictStep(arrayconst_t &consVarOld, array_t &consVarNew,
 				amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray,
 				amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxDiffusiveArray,
 				double dt_in, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,
-				amrex::Box const &indexRange, int nvars);
+				amrex::Box const &indexRange);
 
 	static void AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayconst_t &U1,
 				 amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray,
@@ -138,12 +139,12 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 							      double Eint) -> double;
 
 	template <FluxDir DIR>
-	static auto
+	AMREX_GPU_DEVICE static auto
 	ComputeCellOpticalDepth(const quokka::Array4View<const amrex::Real, DIR> &consVar,
 				amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, int i, int j,
 				int k) -> double;
 
-	static auto isStateValid(std::vector<amrex::Real> &cons) -> bool;
+	AMREX_GPU_DEVICE static auto isStateValid(std::array<amrex::Real, fluxdim> &cons) -> bool;
 
 	// requires GPU reductions
 	// auto CheckStatesValid(array_t &cons, std::pair<int, int> range) -> bool;
@@ -198,7 +199,8 @@ void RadSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real
 }
 
 template <typename problem_t>
-auto RadSystem<problem_t>::isStateValid(std::vector<amrex::Real> &cons) -> bool
+AMREX_GPU_DEVICE auto RadSystem<problem_t>::isStateValid(std::array<amrex::Real, fluxdim> &cons)
+    -> bool
 {
 	// check if the state variable 'cons' is a valid state
 	const auto E_r = cons[radEnergy_index];
@@ -215,12 +217,12 @@ auto RadSystem<problem_t>::isStateValid(std::vector<amrex::Real> &cons) -> bool
 }
 
 template <typename problem_t>
+template <int nvars>
 void RadSystem<problem_t>::PredictStep(
     arrayconst_t &consVarOld, array_t &consVarNew,
     amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray,
     amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxDiffusiveArray, const double dt_in,
-    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange,
-    const int nvars)
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange)
 {
 	// By convention, the fluxes are defined on the left edge of each zone,
 	// i.e. flux_(i) is the flux *into* zone i through the interface on the
@@ -239,7 +241,7 @@ void RadSystem<problem_t>::PredictStep(
 #endif
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-		std::vector<amrex::Real> cons(nvars); // this will not work on GPU
+		std::array<amrex::Real, nvars> cons{}; // this *may* work on GPU
 
 		for (int n = 0; n < nvars; ++n) {
 			cons[n] = consVarOld(i, j, k, n) +
@@ -339,7 +341,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeEddingtonFactor(double f_in) 
 
 template <typename problem_t>
 template <FluxDir DIR>
-auto RadSystem<problem_t>::ComputeCellOpticalDepth(
+AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeCellOpticalDepth(
     const quokka::Array4View<const amrex::Real, DIR> &consVar,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, int i, int j, int k) -> double
 {
@@ -628,10 +630,8 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 								   S_corr}; // this code
 
 		// compute the norm of the wavespeed vector
-		//const double S_L = std::min(-0.1*c_hat_, -c_hat_ * std::sqrt(T_L[0][0] + T_L[1][1] + T_L[2][2]));
-		//const double S_R = std::max( 0.1*c_hat_,  c_hat_ * std::sqrt(T_R[0][0] + T_R[1][1] + T_R[2][2]));
-		const double S_L = std::min(-0.1*c_hat_, -c_hat_ * std::sqrt(Tnormal_L));
-		const double S_R = std::max( 0.1*c_hat_,  c_hat_ * std::sqrt(Tnormal_R));
+		const double S_L = std::min(-0.1 * c_hat_, -c_hat_ * std::sqrt(Tnormal_L));
+		const double S_R = std::max(0.1 * c_hat_, c_hat_ * std::sqrt(Tnormal_R));
 
 		AMREX_ASSERT(std::abs(S_L) <= c_hat_); // NOLINT
 		AMREX_ASSERT(std::abs(S_R) <= c_hat_); // NOLINT
@@ -833,17 +833,38 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			    (rho * dt / c_v) *
 			    (kappa * dB_dTgas + dkappa_dTgas * (fourPiB - chat * Erad_guess));
 
-			dFG_dEgas = 1.0 + (c / chat) * drhs_dEgas; // may underflow machine precision limits!
-			dFG_dErad = dt * (-(rho * kappa) * c);
-			dFR_dEgas = -drhs_dEgas;
-			dFR_dErad = 1.0 + dt * ((rho * kappa) * chat); // may underflow machine precision limits!
+			// N.B. When dFG_dEgas == 1.0 due to floating point rounding error, it
+			// causes deltaErad to have exactly the *opposite* sign that it should! This
+			// causes unphysical 'radiation bounce' in regions where it actually should
+			// be perfectly absorbing!
+			const double epsilon = 4.0 * a_rad * std::pow(T_gas, 3) * (rho * kappa) *
+					       (c * dt) / (c_v / rho);
+			constexpr double eps_min = 1.0e-10;
 
-			// Update variables
-			eta = -dFR_dEgas / dFG_dEgas;
-			// eta = (eta > 0.0) ? eta : 0.0;
+			if (epsilon > eps_min) {
+				// compute deltaErad, deltaEgas normally
+				dFG_dEgas = 1.0 + (c / chat) * drhs_dEgas;
+				dFG_dErad = dt * (-(rho * kappa) * c);
+				dFR_dEgas = -drhs_dEgas;
+				dFR_dErad = 1.0 + dt * ((rho * kappa) * chat);
 
-			deltaErad = -(F_R + eta * F_G) / (dFR_dErad + eta * dFG_dErad);
-			deltaEgas = -(F_G + dFG_dErad * deltaErad) / dFG_dEgas;
+				// Update variables
+				eta = -dFR_dEgas / dFG_dEgas;
+				// eta = (eta > 0.0) ? eta : 0.0;
+
+				deltaErad = -(F_R + eta * F_G) / (dFR_dErad + eta * dFG_dErad);
+				deltaEgas = -(F_G + dFG_dErad * deltaErad) / dFG_dEgas;
+			} else {
+#if 0
+				// compute deltaErad, deltaEgas via Taylor expansion
+				// (safe to ignore temperature dependence of opacity in this limit)
+				const auto alpha_eps = kappa * rho * chat * dt;
+				deltaErad = (1.0 - alpha_eps) * F_R +
+					    (F_G - (1.0 - alpha_eps) * (F_G + F_R)) * epsilon;
+				deltaEgas = ;
+#endif
+			}
+
 			AMREX_ASSERT(!std::isnan(deltaErad));
 			AMREX_ASSERT(!std::isnan(deltaEgas));
 
