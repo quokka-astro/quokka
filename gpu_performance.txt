@@ -5,3 +5,6 @@
 
 [2D Implosion Test 1024x1024]
 1 GPU V100-32GB (clang-12 + nvcc + noFMA)  Performance figure-of-merit: 0.009469129324 μs/zone-update [105.6063304 Mupdates/s]
+
+[3D Sedov Test 512x512x512]
+1 GPU V100-32GB (clang-12 + nvcc + noFMA)  Performance figure-of-merit: 0.01964144473 μs/zone-update [50.91275178 Mupdates/s]
