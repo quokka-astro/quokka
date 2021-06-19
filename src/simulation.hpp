@@ -46,8 +46,9 @@ namespace quokka
 {
 template <typename T>
 AMREX_GPU_HOST_DEVICE auto CheckSymmetryArray(amrex::Array4<const amrex::Real> const & /*arr*/,
-					      amrex::Box const & /*indexRange*/, const int  /*ncomp*/,
-					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>  /*dx*/)
+					      amrex::Box const & /*indexRange*/,
+					      const int /*ncomp*/,
+					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> /*dx*/)
     -> bool
 {
 	return true; // problem-specific implementation for test problems
@@ -56,8 +57,9 @@ AMREX_GPU_HOST_DEVICE auto CheckSymmetryArray(amrex::Array4<const amrex::Real> c
 template <typename T>
 AMREX_GPU_HOST_DEVICE auto CheckSymmetryFluxes(amrex::Array4<const amrex::Real> const & /*arr1*/,
 					       amrex::Array4<const amrex::Real> const & /*arr2*/,
-					       amrex::Box const & /*indexRange*/, const int  /*ncomp*/,
-					       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>  /*dx*/)
+					       amrex::Box const & /*indexRange*/,
+					       const int /*ncomp*/,
+					       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> /*dx*/)
     -> bool
 {
 	return true; // problem-specific implementation for test problems
@@ -65,10 +67,10 @@ AMREX_GPU_HOST_DEVICE auto CheckSymmetryFluxes(amrex::Array4<const amrex::Real> 
 
 template <typename T>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void
-CheckNaN(amrex::FArrayBox const & /*arr*/, amrex::Box const & /*symmetryRange*/, amrex::Box const & /*nanRange*/,
-	 const int  /*ncomp*/, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>  /*dx*/)
+CheckNaN(amrex::FArrayBox const &arr, amrex::Box const & /*symmetryRange*/,
+	 amrex::Box const &nanRange, const int ncomp,
+	 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> /*dx*/)
 {
-	// need to rewrite for GPU
 	AMREX_ASSERT(!arr.contains_nan(nanRange, 0, ncomp));
 }
 } // namespace quokka
@@ -259,6 +261,11 @@ template <typename problem_t> void SingleLevelSimulation<problem_t>::evolve()
 	AMREX_ASSERT(areInitialConditionsDefined_);
 	amrex::Real start_time = amrex::ParallelDescriptor::second();
 
+	// output initial conditions
+	const std::string &pltfile_init = amrex::Concatenate("plt", cycleCount_, 5);
+	amrex::WriteSingleLevelPlotfile(pltfile_init, state_new_, componentNames_, simGeometry_, tNow_,
+					cycleCount_);
+
 	for (int j = 0; j < maxTimesteps_; ++j) {
 		if (tNow_ >= stopTime_) {
 			break;
@@ -294,12 +301,12 @@ template <typename problem_t> void SingleLevelSimulation<problem_t>::evolve()
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		const double zone_cycles = cycleCount_ * (nx_ * ny_ * nz_);
 		const double microseconds_per_update = 1.0e6 * elapsed_sec / zone_cycles;
-		const double megaupdates_per_second = 1.0/microseconds_per_update;
+		const double megaupdates_per_second = 1.0 / microseconds_per_update;
 		amrex::Print() << "Performance figure-of-merit: " << microseconds_per_update
 			       << " μs/zone-update [" << megaupdates_per_second << " Mupdates/s]\n";
 	}
 
-	// output plotfile
+	// output final state
 	const std::string &pltfile = amrex::Concatenate("plt", cycleCount_, 5);
 	amrex::WriteSingleLevelPlotfile(pltfile, state_new_, componentNames_, simGeometry_, tNow_,
 					cycleCount_);

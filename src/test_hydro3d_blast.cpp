@@ -151,8 +151,8 @@ auto testproblem_hydro_sedov() -> int
 	sim.stopTime_ = 0.1;
 	sim.cflNumber_ = 0.3; // *must* be less than 1/3 in 3D!
 	sim.maxTimesteps_ = 5000;
-	sim.plotfileInterval_ = 25;
-	sim.outputAtInterval_ = false;
+	sim.plotfileInterval_ = 100;
+	sim.outputAtInterval_ = true;
 
 	// initialize
 	sim.setInitialConditions();
