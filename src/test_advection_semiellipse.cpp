@@ -94,12 +94,13 @@ auto testproblem_advection() -> int
 	// Problem parameters
 	const int nx = 400;
 	const double Lx = 1.0;
-	//const double advection_velocity = 1.0;
-	//const double CFL_number = 0.3;
-	//const double max_time = 1.0;
+	const double advection_velocity = 1.0;
+	const double CFL_number = 0.3;
+	const double max_time = 1.0;
 	const double max_dt = 1e-4;
-	//const int max_timesteps = 1e4;
-	const int nvars = 5; // only density
+	const int max_timesteps = 1e4;
+	
+	const int nvars = 1; // only density
 
 	amrex::IntVect gridDims{AMREX_D_DECL(nx, 4, 4)};
 	amrex::RealBox boxSize{
@@ -117,6 +118,11 @@ auto testproblem_advection() -> int
 	// Problem initialization
 	AdvectionSimulation<SemiellipseProblem> sim(gridDims, boxSize, boundaryConditions);
 	sim.maxDt_ = max_dt;
+	sim.advectionVx_ = advection_velocity;
+	sim.advectionVy_ = 0.;
+	sim.advectionVz_ = 0.;
+	sim.maxTimesteps_ = max_timesteps;
+	sim.stopTime_ = max_time;
 
 	// set initial conditions
 	sim.setInitialConditions();
