@@ -843,20 +843,32 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			double const R = c / chat;
 			double const Rinv = chat / c;
 			double const alpha = dt * ((kappa * rho) * chat);
-
-			// compute deltaErad, deltaEgas normally
-			dFG_dEgas = 1.0 + (c / chat) * drhs_dEgas;
-			dFG_dErad = dt * (-(rho * kappa) * c);
-			dFR_dEgas = -drhs_dEgas;
-			dFR_dErad = 1.0 + dt * ((rho * kappa) * chat);
+			double const alphaplus1_sq = (1.0 + alpha) * (1.0 + alpha);
 
 			// Update variables
-			eta = -dFR_dEgas / dFG_dEgas;
-			// eta = (eta > 0.0) ? eta : 0.0;
+			// dFG_dEgas = 1.0 + (c / chat) * drhs_dEgas;     // 1.0 + epsilon;
+			// dFG_dErad = dt * (-(rho * kappa) * c);	       // -R*alpha
+			// dFR_dEgas = -drhs_dEgas;		       // -Rinv * epsilon;
+			// dFR_dErad = 1.0 + dt * ((rho * kappa) * chat); // 1.0 + alpha;
+			// eta = -dFR_dEgas / dFG_dEgas;
+			//// eta = (eta > 0.0) ? eta : 0.0;
+			// deltaErad = -(F_R + eta * F_G) / (dFR_dErad + eta * dFG_dErad);
+			// deltaEgas = -(F_G + dFG_dErad * deltaErad) / dFG_dEgas;
 
-			deltaErad = -(F_R + eta * F_G) / (dFR_dErad + eta * dFG_dErad);
-			deltaEgas = -(F_G + dFG_dErad * deltaErad) / dFG_dEgas;
-
+			constexpr double epsilon_min = 1.0e-5;
+			if (epsilon > epsilon_min) {
+				deltaErad = -((1.0 + epsilon) * F_R + Rinv * F_G * epsilon) /
+					    (1.0 + epsilon + alpha);
+				deltaEgas = -((1.0 + alpha) * F_G + alpha * R * F_R) /
+					    (1.0 + epsilon + alpha);
+			} else {
+				deltaErad = -F_R / (1.0 + alpha) - (alpha * F_R / alphaplus1_sq +
+								    Rinv * F_G / (1.0 + alpha)) *
+								       epsilon;
+				deltaEgas = -(F_G + R * alpha * F_R / (1.0 + alpha)) +
+					    ((1.0 + alpha) * F_G + R * alpha * F_R) /
+						alphaplus1_sq * epsilon;
+			}
 			AMREX_ASSERT(!std::isnan(deltaErad));
 			AMREX_ASSERT(!std::isnan(deltaEgas));
 
@@ -865,11 +877,11 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 
 		} // END NEWTON-RAPHSON LOOP
 
-		AMREX_ASSERT(std::abs(F_G / Etot0) < resid_tol); // NOLINT
-		AMREX_ASSERT(std::abs(F_R / Etot0) < resid_tol); // NOLINT
+		AMREX_ALWAYS_ASSERT(std::abs(F_G / Etot0) < resid_tol);
+		AMREX_ALWAYS_ASSERT(std::abs(F_R / Etot0) < resid_tol);
 
-		AMREX_ASSERT(Erad_guess > 0.0); // NOLINT
-		AMREX_ASSERT(Egas_guess > 0.0); // NOLINT
+		AMREX_ALWAYS_ASSERT(Erad_guess > 0.0);
+		AMREX_ALWAYS_ASSERT(Egas_guess > 0.0);
 
 		// store new radiation energy, gas energy
 		consNew(i, j, k, radEnergy_index) = Erad_guess;
