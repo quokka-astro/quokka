@@ -268,11 +268,11 @@ void RadiationSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Rea
 	    x1ReconstructRange, ncompPrimitive_);
 	// PLM and donor cell are interface-centered kernels
 	// RadSystem<problem_t>::template ReconstructStatesConstant<DIR>(
-	//    primVar.array(), x1LeftState.array(), x1RightState.array(), x1ReconstructRange,
-	//    ncompPrimitive_);
+	//      primVar.array(), x1LeftState.array(), x1RightState.array(), x1ReconstructRange,
+	//      ncompPrimitive_);
 	// RadSystem<problem_t>::template ReconstructStatesPLM<DIR>(
 	//		primVar.array(), x1LeftState.array(), x1RightState.array(),
-	// x1ReconstructRange, 		ncompPrimitive_);
+	//      x1ReconstructRange, ncompPrimitive_);
 	quokka::CheckNaN<problem_t>(x1LeftState, indexRange, x1ReconstructRange, ncompPrimitive_,
 				    dx_);
 	quokka::CheckNaN<problem_t>(x1RightState, indexRange, x1ReconstructRange, ncompPrimitive_,
@@ -352,7 +352,8 @@ void RadiationSimulation<problem_t>::stageOneRK2SSP(
 	amrex::Box const &x2FluxRange = amrex::surroundingNodes(indexRange, 1);
 	amrex::FArrayBox x2Flux(x2FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in y
 	amrex::FArrayBox x2FluxDiffusive(x2FluxRange, nvars, amrex::The_Async_Arena());
-#elif (AMREX_SPACEDIM == 3)
+#endif
+#if (AMREX_SPACEDIM == 3)
 	amrex::Box const &x3FluxRange = amrex::surroundingNodes(indexRange, 2);
 	amrex::FArrayBox x3Flux(x3FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in z
 	amrex::FArrayBox x3FluxDiffusive(x3FluxRange, nvars, amrex::The_Async_Arena());
@@ -386,7 +387,8 @@ void RadiationSimulation<problem_t>::stageTwoRK2SSP(
 	amrex::Box const &x2FluxRange = amrex::surroundingNodes(indexRange, 1);
 	amrex::FArrayBox x2Flux(x2FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in y
 	amrex::FArrayBox x2FluxDiffusive(x2FluxRange, nvars, amrex::The_Async_Arena());
-#elif (AMREX_SPACEDIM == 3)
+#endif
+#if (AMREX_SPACEDIM == 3)
 	amrex::Box const &x3FluxRange = amrex::surroundingNodes(indexRange, 2);
 	amrex::FArrayBox x3Flux(x3FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in z
 	amrex::FArrayBox x3FluxDiffusive(x3FluxRange, nvars, amrex::The_Async_Arena());

@@ -195,7 +195,8 @@ void AdvectionSimulation<problem_t>::stageOneRK2SSP(
 #if (AMREX_SPACEDIM >= 2)
 	amrex::Box const &x2FluxRange = amrex::surroundingNodes(indexRange, 1);
 	amrex::FArrayBox x2Flux(x2FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in y
-#elif (AMREX_SPACEDIM == 3)
+#endif
+#if (AMREX_SPACEDIM == 3)
 	amrex::Box const &x3FluxRange = amrex::surroundingNodes(indexRange, 2);
 	amrex::FArrayBox x3Flux(x3FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in z
 #endif
@@ -226,7 +227,8 @@ void AdvectionSimulation<problem_t>::stageTwoRK2SSP(
 #if (AMREX_SPACEDIM >= 2)
 	amrex::Box const &x2FluxRange = amrex::surroundingNodes(indexRange, 1);
 	amrex::FArrayBox x2Flux(x2FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in y
-#elif (AMREX_SPACEDIM == 3)
+#endif
+#if (AMREX_SPACEDIM == 3)
 	amrex::Box const &x3FluxRange = amrex::surroundingNodes(indexRange, 2);
 	amrex::FArrayBox x3Flux(x3FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in z
 #endif
