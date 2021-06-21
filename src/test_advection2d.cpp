@@ -231,7 +231,7 @@ auto testproblem_advection() -> int
 			       << "\n";
 	}
 
-	const double err_tol = 0.2;
+	const double err_tol = 0.25;
 	int status = 0;
 	if (min_rel_error > err_tol) {
 		status = 1;

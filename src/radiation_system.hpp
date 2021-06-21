@@ -837,33 +837,25 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			// causes deltaErad to have exactly the *opposite* sign that it should! This
 			// causes unphysical 'radiation bounce' in regions where it actually should
 			// be perfectly absorbing!
-			const double epsilon = 4.0 * a_rad * std::pow(T_gas, 3) * (rho * kappa) *
-					       (c * dt) / (c_v / rho);
-			constexpr double eps_min = 1.0e-10;
+			const double epsilon = (c / chat) * drhs_dEgas;
+			// == 4.0 * a_rad * std::pow(T_gas, 3) * (rho * kappa) * (c * dt) /
+			//    (c_v / rho) [assuming dkappa_dTgas==0]
+			double const R = c / chat;
+			double const Rinv = chat / c;
+			double const alpha = dt * ((kappa * rho) * chat);
 
-			if (epsilon > eps_min) {
-				// compute deltaErad, deltaEgas normally
-				dFG_dEgas = 1.0 + (c / chat) * drhs_dEgas;
-				dFG_dErad = dt * (-(rho * kappa) * c);
-				dFR_dEgas = -drhs_dEgas;
-				dFR_dErad = 1.0 + dt * ((rho * kappa) * chat);
+			// compute deltaErad, deltaEgas normally
+			dFG_dEgas = 1.0 + (c / chat) * drhs_dEgas;
+			dFG_dErad = dt * (-(rho * kappa) * c);
+			dFR_dEgas = -drhs_dEgas;
+			dFR_dErad = 1.0 + dt * ((rho * kappa) * chat);
 
-				// Update variables
-				eta = -dFR_dEgas / dFG_dEgas;
-				// eta = (eta > 0.0) ? eta : 0.0;
+			// Update variables
+			eta = -dFR_dEgas / dFG_dEgas;
+			// eta = (eta > 0.0) ? eta : 0.0;
 
-				deltaErad = -(F_R + eta * F_G) / (dFR_dErad + eta * dFG_dErad);
-				deltaEgas = -(F_G + dFG_dErad * deltaErad) / dFG_dEgas;
-			} else {
-#if 0
-				// compute deltaErad, deltaEgas via Taylor expansion
-				// (safe to ignore temperature dependence of opacity in this limit)
-				const auto alpha_eps = kappa * rho * chat * dt;
-				deltaErad = (1.0 - alpha_eps) * F_R +
-					    (F_G - (1.0 - alpha_eps) * (F_G + F_R)) * epsilon;
-				deltaEgas = ;
-#endif
-			}
+			deltaErad = -(F_R + eta * F_G) / (dFR_dErad + eta * dFG_dErad);
+			deltaEgas = -(F_G + dFG_dErad * deltaErad) / dFG_dEgas;
 
 			AMREX_ASSERT(!std::isnan(deltaErad));
 			AMREX_ASSERT(!std::isnan(deltaEgas));

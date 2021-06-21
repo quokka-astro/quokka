@@ -262,9 +262,9 @@ template <typename problem_t> void SingleLevelSimulation<problem_t>::evolve()
 	amrex::Real start_time = amrex::ParallelDescriptor::second();
 
 	// output initial conditions
-	const std::string &pltfile_init = amrex::Concatenate("plt", cycleCount_, 5);
-	amrex::WriteSingleLevelPlotfile(pltfile_init, state_new_, componentNames_, simGeometry_, tNow_,
-					cycleCount_);
+	//const std::string &pltfile_init = amrex::Concatenate("plt", cycleCount_, 5);
+	//amrex::WriteSingleLevelPlotfile(pltfile_init, state_new_, componentNames_, simGeometry_, tNow_,
+	//				cycleCount_);
 
 	for (int j = 0; j < maxTimesteps_; ++j) {
 		if (tNow_ >= stopTime_) {

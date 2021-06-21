@@ -237,19 +237,17 @@ void HydroSimulation<problem_t>::stageOneRK2SSP(amrex::Array4<const amrex::Real>
 	// Allocate temporary arrays using CUDA stream async allocator (or equivalent)
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, 0);
 	amrex::FArrayBox x1Flux(x1FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in x
-	fluxFunction<FluxDir::X1>(consVarOld, x1Flux, indexRange, nvars);
-
-#if (AMREX_SPACEDIM >= 2) // for 2D+3D problems
+#if (AMREX_SPACEDIM >= 2)
 	amrex::Box const &x2FluxRange = amrex::surroundingNodes(indexRange, 1);
 	amrex::FArrayBox x2Flux(x2FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in y
-	fluxFunction<FluxDir::X2>(consVarOld, x2Flux, indexRange, nvars);
-#endif // AMREX_SPACEDIM >= 2
-
-#if (AMREX_SPACEDIM == 3) // for 3D problems
+#elif (AMREX_SPACEDIM == 3)
 	amrex::Box const &x3FluxRange = amrex::surroundingNodes(indexRange, 2);
 	amrex::FArrayBox x3Flux(x3FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in z
-	fluxFunction<FluxDir::X3>(consVarOld, x3Flux, indexRange, nvars);
-#endif	// AMREX_SPACEDIM == 3
+#endif
+
+	AMREX_D_TERM(fluxFunction<FluxDir::X1>(consVarOld, x1Flux, indexRange, nvars);
+		     , fluxFunction<FluxDir::X2>(consVarOld, x2Flux, indexRange, nvars);
+		     , fluxFunction<FluxDir::X3>(consVarOld, x3Flux, indexRange, nvars);)
 
 	amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrays = {
 	    AMREX_D_DECL(x1Flux.const_array(), x2Flux.const_array(), x3Flux.const_array())};
@@ -271,19 +269,17 @@ void HydroSimulation<problem_t>::stageTwoRK2SSP(amrex::Array4<const amrex::Real>
 	// Allocate temporary arrays using CUDA stream async allocator (or equivalent)
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, 0);
 	amrex::FArrayBox x1Flux(x1FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in x
-	fluxFunction<FluxDir::X1>(consVarOld, x1Flux, indexRange, nvars);
-
-#if (AMREX_SPACEDIM >= 2) // for 2D+3D problems
+#if (AMREX_SPACEDIM >= 2)
 	amrex::Box const &x2FluxRange = amrex::surroundingNodes(indexRange, 1);
 	amrex::FArrayBox x2Flux(x2FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in y
-	fluxFunction<FluxDir::X2>(consVarOld, x2Flux, indexRange, nvars);
-#endif // AMREX_SPACEDIM >= 2
-
-#if (AMREX_SPACEDIM == 3) // for 3D problems
+#elif (AMREX_SPACEDIM == 3)
 	amrex::Box const &x3FluxRange = amrex::surroundingNodes(indexRange, 2);
 	amrex::FArrayBox x3Flux(x3FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in z
-	fluxFunction<FluxDir::X3>(consVarOld, x3Flux, indexRange, nvars);
-#endif	// AMREX_SPACEDIM == 3
+#endif
+
+	AMREX_D_TERM(fluxFunction<FluxDir::X1>(consVarNew, x1Flux, indexRange, nvars);
+		     , fluxFunction<FluxDir::X2>(consVarNew, x2Flux, indexRange, nvars);
+		     , fluxFunction<FluxDir::X3>(consVarNew, x3Flux, indexRange, nvars);)
 
 	amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrays = {
 	    AMREX_D_DECL(x1Flux.const_array(), x2Flux.const_array(), x3Flux.const_array())};
