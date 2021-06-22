@@ -618,9 +618,9 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 
 		// ensures that signal speed -> c \sqrt{f_xx} / tau_cell in the diffusion
 		// limit [see Appendix of Jiang et al. ApJ 767:148 (2013)]
-		const double S_corr = std::sqrt(1.0 - std::exp(-tau_cell * tau_cell)) /
-				      tau_cell; // Jiang et al. (2013)
-		// const double S_corr = std::min(1.0, 1.0/tau_cell); // Skinner et al.
+		//const double S_corr = std::sqrt(1.0 - std::exp(-tau_cell * tau_cell)) /
+		//		      tau_cell; // Jiang et al. (2013)
+		const double S_corr = std::min(1.0, 1.0/tau_cell); // Skinner et al.
 
 		// adjust the wavespeeds (cancels out except for the last term in the HLL flux)
 		// const quokka::valarray<double, fluxdim> epsilon = {S_corr, 1.0, 1.0, 1.0}; //

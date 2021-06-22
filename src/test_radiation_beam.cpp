@@ -71,7 +71,7 @@ template <> struct RadSystem_Traits<BeamProblem> {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<BeamProblem>::ComputeOpacity(const double rho,
+AMREX_GPU_HOST_DEVICE auto RadSystem<BeamProblem>::ComputeOpacity(const double  /*rho*/,
 								  const double /*Tgas*/) -> double
 {
 	return kappa0;
@@ -122,10 +122,10 @@ RadiationSimulation<BeamProblem>::setCustomBoundaryConditions(
 	const amrex::Real *prob_lo = geom.ProbLo();
 	const amrex::Box &box = geom.Domain();
 	amrex::GpuArray<int, 3> lo = box.loVect3d();
-	amrex::Real const y0 = 0.;
+	amrex::Real const x = prob_lo[0] + (i + Real(0.5)) * dx[0];
 	amrex::Real const y = prob_lo[1] + (j + Real(0.5)) * dx[1];
 
-	if (i < lo[0]) {
+	if ((i < lo[0]) && !(j < lo[1])) {
 		// streaming boundary condition
 		double E_inc = NAN;
 
@@ -144,10 +144,11 @@ RadiationSimulation<BeamProblem>::setCustomBoundaryConditions(
 		double Fy_bdry = NAN;
 		double Fz_bdry = NAN;
 
-		const double y_min = 0.125;
-		const double y_max = 0.25;
+		//const double y_min = 0.125;
+		//const double y_max = 0.25;
+		const double y_max = 0.0625;
 
-		if ((y >= y_min) && (y <= y_max)) {
+		if (y <= y_max) {
 			E_inc = a_rad * std::pow(T_hohlraum, 4);
 			Fx_bdry = (1.0/std::sqrt(2.0)) * c * E_inc;
 			Fy_bdry = (1.0/std::sqrt(2.0)) * c * E_inc;
@@ -163,7 +164,91 @@ RadiationSimulation<BeamProblem>::setCustomBoundaryConditions(
 		    std::sqrt(Fx_bdry * Fx_bdry + Fy_bdry * Fy_bdry + Fz_bdry * Fz_bdry);
 		AMREX_ASSERT((Fnorm / (c * E_inc)) < 1.0); // flux-limiting condition
 
-		// x1 left side boundary
+		// x1, x2 left side boundary
+		consVar(i, j, k, RadSystem<BeamProblem>::radEnergy_index) = E_inc;
+		consVar(i, j, k, RadSystem<BeamProblem>::x1RadFlux_index) = Fx_bdry;
+		consVar(i, j, k, RadSystem<BeamProblem>::x2RadFlux_index) = Fy_bdry;
+		consVar(i, j, k, RadSystem<BeamProblem>::x3RadFlux_index) = Fz_bdry;
+
+		// extrapolated/outflow boundary for gas variables
+		consVar(i, j, k, RadSystem<BeamProblem>::gasEnergy_index) = Egas;
+		consVar(i, j, k, RadSystem<BeamProblem>::gasDensity_index) = rho;
+		consVar(i, j, k, RadSystem<BeamProblem>::x1GasMomentum_index) = px;
+		consVar(i, j, k, RadSystem<BeamProblem>::x2GasMomentum_index) = py;
+		consVar(i, j, k, RadSystem<BeamProblem>::x3GasMomentum_index) = pz;
+	} else if ((j < lo[1]) && !(i < lo[0])) {
+		// streaming boundary condition
+		double E_inc = NAN;
+
+		const double E_0 = consVar(i, lo[1], k, RadSystem<BeamProblem>::radEnergy_index);
+		const double Fx_0 = consVar(i, lo[1], k, RadSystem<BeamProblem>::x1RadFlux_index);
+		const double Fy_0 = consVar(i, lo[1], k, RadSystem<BeamProblem>::x2RadFlux_index);
+		const double Fz_0 = consVar(i, lo[1], k, RadSystem<BeamProblem>::x3RadFlux_index);
+
+		const double Egas = consVar(i, lo[1], k, RadSystem<BeamProblem>::gasEnergy_index);
+		const double rho = consVar(i, lo[1], k, RadSystem<BeamProblem>::gasDensity_index);
+		const double px = consVar(i, lo[1], k, RadSystem<BeamProblem>::x1GasMomentum_index);
+		const double py = consVar(i, lo[1], k, RadSystem<BeamProblem>::x2GasMomentum_index);
+		const double pz = consVar(i, lo[1], k, RadSystem<BeamProblem>::x3GasMomentum_index);
+
+		double Fx_bdry = NAN;
+		double Fy_bdry = NAN;
+		double Fz_bdry = NAN;
+
+		const double x_max = 0.0625;
+
+		if (x <= x_max) {
+			E_inc = a_rad * std::pow(T_hohlraum, 4);
+			Fx_bdry = (1.0/std::sqrt(2.0)) * c * E_inc;
+			Fy_bdry = (1.0/std::sqrt(2.0)) * c * E_inc;
+			Fz_bdry = 0.;
+		} else {
+			// reflecting/absorbing boundary
+			E_inc = E_0;
+			Fx_bdry = Fx_0;
+			Fy_bdry = -Fy_0;
+			Fz_bdry = Fz_0;
+		}
+		const amrex::Real Fnorm =
+		    std::sqrt(Fx_bdry * Fx_bdry + Fy_bdry * Fy_bdry + Fz_bdry * Fz_bdry);
+		AMREX_ASSERT((Fnorm / (c * E_inc)) < 1.0); // flux-limiting condition
+
+		// x1, x2 left side boundary
+		consVar(i, j, k, RadSystem<BeamProblem>::radEnergy_index) = E_inc;
+		consVar(i, j, k, RadSystem<BeamProblem>::x1RadFlux_index) = Fx_bdry;
+		consVar(i, j, k, RadSystem<BeamProblem>::x2RadFlux_index) = Fy_bdry;
+		consVar(i, j, k, RadSystem<BeamProblem>::x3RadFlux_index) = Fz_bdry;
+
+		// extrapolated/outflow boundary for gas variables
+		consVar(i, j, k, RadSystem<BeamProblem>::gasEnergy_index) = Egas;
+		consVar(i, j, k, RadSystem<BeamProblem>::gasDensity_index) = rho;
+		consVar(i, j, k, RadSystem<BeamProblem>::x1GasMomentum_index) = px;
+		consVar(i, j, k, RadSystem<BeamProblem>::x2GasMomentum_index) = py;
+		consVar(i, j, k, RadSystem<BeamProblem>::x3GasMomentum_index) = pz;
+	} else if ((i < lo[0]) && (j < lo[1])) {
+		// streaming boundary condition
+		double E_inc = NAN;
+
+		const double Egas = consVar(lo[0], lo[1], k, RadSystem<BeamProblem>::gasEnergy_index);
+		const double rho = consVar(lo[0], lo[1], k, RadSystem<BeamProblem>::gasDensity_index);
+		const double px = consVar(lo[0], lo[1], k, RadSystem<BeamProblem>::x1GasMomentum_index);
+		const double py = consVar(lo[0], lo[1], k, RadSystem<BeamProblem>::x2GasMomentum_index);
+		const double pz = consVar(lo[0], lo[1], k, RadSystem<BeamProblem>::x3GasMomentum_index);
+
+		double Fx_bdry = NAN;
+		double Fy_bdry = NAN;
+		double Fz_bdry = NAN;
+
+		E_inc = a_rad * std::pow(T_hohlraum, 4);
+		Fx_bdry = (1.0/std::sqrt(2.0)) * c * E_inc;
+		Fy_bdry = (1.0/std::sqrt(2.0)) * c * E_inc;
+		Fz_bdry = 0.;
+
+		const amrex::Real Fnorm =
+		    std::sqrt(Fx_bdry * Fx_bdry + Fy_bdry * Fy_bdry + Fz_bdry * Fz_bdry);
+		AMREX_ASSERT((Fnorm / (c * E_inc)) < 1.0); // flux-limiting condition
+
+		// x1, x2 left side boundary
 		consVar(i, j, k, RadSystem<BeamProblem>::radEnergy_index) = E_inc;
 		consVar(i, j, k, RadSystem<BeamProblem>::x1RadFlux_index) = Fx_bdry;
 		consVar(i, j, k, RadSystem<BeamProblem>::x2RadFlux_index) = Fy_bdry;
@@ -248,9 +333,11 @@ auto testproblem_radiation_beam() -> int
 	constexpr int nvars = 9;
 	amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
 	for (int n = 0; n < nvars; ++n) {
-		boundaryConditions[n].setLo(0, amrex::BCType::ext_dir);	 // left x1 -- Marshak
+		boundaryConditions[n].setLo(0, amrex::BCType::ext_dir);	 // left x1 -- inflow
 		boundaryConditions[n].setHi(0, amrex::BCType::foextrap); // right x1 -- extrapolate
-		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
+		boundaryConditions[n].setLo(1, amrex::BCType::ext_dir);	 // left x2 -- inflow
+		boundaryConditions[n].setHi(1, amrex::BCType::foextrap); // right x2 -- extrapolate
+		for (int i = 2; i < AMREX_SPACEDIM; ++i) {
 			if (isNormalComp(n, i)) { // reflect lower
 				boundaryConditions[n].setLo(i, amrex::BCType::reflect_odd);
 			} else {

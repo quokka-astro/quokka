@@ -268,11 +268,11 @@ void RadiationSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Rea
 	    x1ReconstructRange, ncompPrimitive_);
 	// PLM and donor cell are interface-centered kernels
 	// RadSystem<problem_t>::template ReconstructStatesConstant<DIR>(
-	//      primVar.array(), x1LeftState.array(), x1RightState.array(), x1ReconstructRange,
-	//      ncompPrimitive_);
+	//     primVar.array(), x1LeftState.array(), x1RightState.array(), x1ReconstructRange,
+	//     ncompPrimitive_);
 	// RadSystem<problem_t>::template ReconstructStatesPLM<DIR>(
-	//		primVar.array(), x1LeftState.array(), x1RightState.array(),
-	//      x1ReconstructRange, ncompPrimitive_);
+	//     primVar.array(), x1LeftState.array(), x1RightState.array(), x1ReconstructRange,
+	//     ncompPrimitive_);
 	quokka::CheckNaN<problem_t>(x1LeftState, indexRange, x1ReconstructRange, ncompPrimitive_,
 				    dx_);
 	quokka::CheckNaN<problem_t>(x1RightState, indexRange, x1ReconstructRange, ncompPrimitive_,
@@ -359,9 +359,10 @@ void RadiationSimulation<problem_t>::stageOneRK2SSP(
 	amrex::FArrayBox x3FluxDiffusive(x3FluxRange, nvars, amrex::The_Async_Arena());
 #endif
 
-	AMREX_D_TERM(fluxFunction<FluxDir::X1>(consVarOld, x1Flux, x1FluxDiffusive, indexRange, nvars);
-		     , fluxFunction<FluxDir::X2>(consVarOld, x2Flux, x2FluxDiffusive, indexRange, nvars);
-		     , fluxFunction<FluxDir::X3>(consVarOld, x3Flux, x3FluxDiffusive, indexRange, nvars);)
+	AMREX_D_TERM(
+	    fluxFunction<FluxDir::X1>(consVarOld, x1Flux, x1FluxDiffusive, indexRange, nvars);
+	    , fluxFunction<FluxDir::X2>(consVarOld, x2Flux, x2FluxDiffusive, indexRange, nvars);
+	    , fluxFunction<FluxDir::X3>(consVarOld, x3Flux, x3FluxDiffusive, indexRange, nvars);)
 
 	amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrays = {
 	    AMREX_D_DECL(x1Flux.const_array(), x2Flux.const_array(), x3Flux.const_array())};
@@ -394,9 +395,10 @@ void RadiationSimulation<problem_t>::stageTwoRK2SSP(
 	amrex::FArrayBox x3FluxDiffusive(x3FluxRange, nvars, amrex::The_Async_Arena());
 #endif
 
-	AMREX_D_TERM(fluxFunction<FluxDir::X1>(consVarNew, x1Flux, x1FluxDiffusive, indexRange, nvars);
-		     , fluxFunction<FluxDir::X2>(consVarNew, x2Flux, x2FluxDiffusive, indexRange, nvars);
-		     , fluxFunction<FluxDir::X3>(consVarNew, x3Flux, x3FluxDiffusive, indexRange, nvars);)
+	AMREX_D_TERM(
+	    fluxFunction<FluxDir::X1>(consVarNew, x1Flux, x1FluxDiffusive, indexRange, nvars);
+	    , fluxFunction<FluxDir::X2>(consVarNew, x2Flux, x2FluxDiffusive, indexRange, nvars);
+	    , fluxFunction<FluxDir::X3>(consVarNew, x3Flux, x3FluxDiffusive, indexRange, nvars);)
 
 	amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrays = {
 	    AMREX_D_DECL(x1Flux.const_array(), x2Flux.const_array(), x3Flux.const_array())};
