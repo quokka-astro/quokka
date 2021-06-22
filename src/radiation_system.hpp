@@ -50,27 +50,27 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 {
       public:
 	enum consVarIndex {
-		radEnergy_index = 0,
-		x1RadFlux_index = 1,
-		x2RadFlux_index = 2,
-		x3RadFlux_index = 3,
+		gasDensity_index = 0,
+		x1GasMomentum_index = 1,
+		x2GasMomentum_index = 2,
+		x3GasMomentum_index = 3,
 		gasEnergy_index = 4,
-		gasDensity_index = 5,
-		x1GasMomentum_index = 6,
-		x2GasMomentum_index = 7,
-		x3GasMomentum_index = 8,
-		consVarEnumEnd = 9
+		radEnergy_index = 5,
+		x1RadFlux_index = 6,
+		x2RadFlux_index = 7,
+		x3RadFlux_index = 8,
 	};
+
+	static constexpr int nvar_ = 9;
+	static constexpr int nvarHyperbolic_ = 4;
+	static constexpr int nstartHyperbolic_ = radEnergy_index;
 
 	enum primVarIndex {
 		primRadEnergy_index = 0,
 		x1ReducedFlux_index = 1,
 		x2ReducedFlux_index = 2,
 		x3ReducedFlux_index = 3,
-		primVarEnumEnd = 4
 	};
-
-	static constexpr int fluxdim = 4;
 
 	// C++ standard does not allow constexpr to be uninitialized, even in a templated class!
 	static constexpr double c_light_ = RadSystem_Traits<problem_t>::c_light;
@@ -97,13 +97,13 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 				amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray,
 				amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxDiffusiveArray,
 				double dt_in, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,
-				amrex::Box const &indexRange);
+				amrex::Box const &indexRange, int nstart);
 
 	static void AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayconst_t &U1,
 				 amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray,
 				 amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxDiffusiveArray,
 				 double dt_in, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,
-				 amrex::Box const &indexRange, int nvars);
+				 amrex::Box const &indexRange, int nvars, int nstart);
 
 	template <FluxDir DIR>
 	static void ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiffusive_in,
@@ -144,7 +144,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 				amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, int i, int j,
 				int k) -> double;
 
-	AMREX_GPU_DEVICE static auto isStateValid(std::array<amrex::Real, fluxdim> &cons) -> bool;
+	AMREX_GPU_DEVICE static auto isStateValid(std::array<amrex::Real, nvarHyperbolic_> &cons)
+	    -> bool;
 
 	// requires GPU reductions
 	// auto CheckStatesValid(array_t &cons, std::pair<int, int> range) -> bool;
@@ -199,8 +200,8 @@ void RadSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE auto RadSystem<problem_t>::isStateValid(std::array<amrex::Real, fluxdim> &cons)
-    -> bool
+AMREX_GPU_DEVICE auto
+RadSystem<problem_t>::isStateValid(std::array<amrex::Real, nvarHyperbolic_> &cons) -> bool
 {
 	// check if the state variable 'cons' is a valid state
 	const auto E_r = cons[radEnergy_index];
@@ -222,7 +223,8 @@ void RadSystem<problem_t>::PredictStep(
     arrayconst_t &consVarOld, array_t &consVarNew,
     amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray,
     amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxDiffusiveArray, const double dt_in,
-    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange)
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange,
+    const int nstart)
 {
 	// By convention, the fluxes are defined on the left edge of each zone,
 	// i.e. flux_(i) is the flux *into* zone i through the interface on the
@@ -244,30 +246,31 @@ void RadSystem<problem_t>::PredictStep(
 		std::array<amrex::Real, nvars> cons{}; // this *may* work on GPU
 
 		for (int n = 0; n < nvars; ++n) {
-			cons[n] = consVarOld(i, j, k, n) +
-				  ((dt / dx) * (x1Flux(i, j, k, n) - x1Flux(i + 1, j, k, n))
+			cons[n] =
+			    consVarOld(i, j, k, nstart+n) +
+			    ((dt / dx) * (x1Flux(i, j, k, n) - x1Flux(i + 1, j, k, n))
 #if (AMREX_SPACEDIM >= 2)
-				   + (dt / dy) * (x2Flux(i, j, k, n) - x2Flux(i, j + 1, k, n))
+			     + (dt / dy) * (x2Flux(i, j, k, n) - x2Flux(i, j + 1, k, n))
 #endif
-				  );
+			    );
 		}
 
 		if (!isStateValid(cons)) {
 			// use diffusive fluxes instead
 			for (int n = 0; n < nvars; ++n) {
-				cons[n] = consVarOld(i, j, k, n) +
-					  ((dt / dx) * (x1FluxDiffusive(i, j, k, n) -
-							x1FluxDiffusive(i + 1, j, k, n))
+				cons[n] = consVarOld(i, j, k, nstart+n) +
+						   ((dt / dx) * (x1FluxDiffusive(i, j, k, n) -
+								 x1FluxDiffusive(i + 1, j, k, n))
 #if (AMREX_SPACEDIM >= 2)
-					   + (dt / dy) * (x2FluxDiffusive(i, j, k, n) -
-							  x2FluxDiffusive(i, j + 1, k, n))
+						    + (dt / dy) * (x2FluxDiffusive(i, j, k, n) -
+								   x2FluxDiffusive(i, j + 1, k, n))
 #endif
-					  );
+						   );
 			}
 		}
 
 		for (int n = 0; n < nvars; ++n) {
-			consVarNew(i, j, k, n) = cons[n];
+			consVarNew(i, j, k, nstart+n) = cons[n];
 		}
 	});
 }
@@ -278,7 +281,7 @@ void RadSystem<problem_t>::AddFluxesRK2(
     amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray,
     amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxDiffusiveArray, const double dt_in,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange,
-    const int nvars)
+    const int nvars, const int nstart)
 {
 	// By convention, the fluxes are defined on the left edge of each zone,
 	// i.e. flux_(i) is the flux *into* zone i through the interface on the
@@ -299,8 +302,8 @@ void RadSystem<problem_t>::AddFluxesRK2(
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 		for (int n = 0; n < nvars; ++n) {
 			// RK-SSP2 integrator
-			const double U_0 = U0(i, j, k, n);
-			const double U_1 = U1(i, j, k, n);
+			const double U_0 = U0(i, j, k, nstart+n);
+			const double U_1 = U1(i, j, k, nstart+n);
 
 			const double FxU_1 =
 			    (dt / dx) * (x1Flux(i, j, k, n) - x1Flux(i + 1, j, k, n));
@@ -310,7 +313,7 @@ void RadSystem<problem_t>::AddFluxesRK2(
 #endif
 
 			// save results in U_new
-			U_new(i, j, k, n) = (0.5 * U_0 + 0.5 * U_1) + (0.5 * FxU_1
+			U_new(i, j, k, nstart+n) = (0.5 * U_0 + 0.5 * U_1) + (0.5 * FxU_1
 #if (AMREX_SPACEDIM >= 2)
 								       + 0.5 * FyU_1
 #endif
@@ -600,16 +603,16 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 		AMREX_ASSERT(Pnz_L != NAN);
 		AMREX_ASSERT(Pnz_R != NAN);
 
-		const quokka::valarray<double, fluxdim> F_L = {
+		const quokka::valarray<double, nvarHyperbolic_> F_L = {
 		    (c_hat_ / c_light_) * Fn_L, (c_hat_ * c_light_) * Pnx_L,
 		    (c_hat_ * c_light_) * Pny_L, (c_hat_ * c_light_) * Pnz_L};
 
-		const quokka::valarray<double, fluxdim> F_R = {
+		const quokka::valarray<double, nvarHyperbolic_> F_R = {
 		    (c_hat_ / c_light_) * Fn_R, (c_hat_ * c_light_) * Pnx_R,
 		    (c_hat_ * c_light_) * Pny_R, (c_hat_ * c_light_) * Pnz_R};
 
-		const quokka::valarray<double, fluxdim> U_L = {erad_L, Fx_L, Fy_L, Fz_L};
-		const quokka::valarray<double, fluxdim> U_R = {erad_R, Fx_R, Fy_R, Fz_R};
+		const quokka::valarray<double, nvarHyperbolic_> U_L = {erad_L, Fx_L, Fy_L, Fz_L};
+		const quokka::valarray<double, nvarHyperbolic_> U_R = {erad_R, Fx_R, Fy_R, Fz_R};
 
 		// asymptotic-preserving flux correction
 		// [Similar to Skinner et al. (2019), but tau^-2 instead of tau^-1, which does not
@@ -618,16 +621,17 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 
 		// ensures that signal speed -> c \sqrt{f_xx} / tau_cell in the diffusion
 		// limit [see Appendix of Jiang et al. ApJ 767:148 (2013)]
-		//const double S_corr = std::sqrt(1.0 - std::exp(-tau_cell * tau_cell)) /
+		// const double S_corr = std::sqrt(1.0 - std::exp(-tau_cell * tau_cell)) /
 		//		      tau_cell; // Jiang et al. (2013)
-		const double S_corr = std::min(1.0, 1.0/tau_cell); // Skinner et al.
+		const double S_corr = std::min(1.0, 1.0 / tau_cell); // Skinner et al.
 
 		// adjust the wavespeeds (cancels out except for the last term in the HLL flux)
-		// const quokka::valarray<double, fluxdim> epsilon = {S_corr, 1.0, 1.0, 1.0}; //
-		// Skinner et al. (2019) const quokka::valarray<double, fluxdim> epsilon = {S_corr,
-		// S_corr, S_corr, S_corr}; // Jiang et al. (2013)
-		const quokka::valarray<double, fluxdim> epsilon = {S_corr * S_corr, S_corr, S_corr,
-								   S_corr}; // this code
+		// const quokka::valarray<double, nvarHyperbolic_> epsilon =
+		// {S_corr, 1.0, 1.0, 1.0}; // Skinner et al. (2019) const quokka::valarray<double,
+		// nvarHyperbolic_> epsilon = {S_corr, S_corr, S_corr, S_corr}; // Jiang et al.
+		// (2013)
+		const quokka::valarray<double, nvarHyperbolic_> epsilon = {
+		    S_corr * S_corr, S_corr, S_corr, S_corr}; // this code
 
 		// compute the norm of the wavespeed vector
 		const double S_L = std::min(-0.1 * c_hat_, -c_hat_ * std::sqrt(Tnormal_L));
@@ -638,7 +642,7 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 
 		// in the frozen Eddington tensor approximation, we are always
 		// in the star region, so F = F_star
-		const quokka::valarray<double, fluxdim> F =
+		const quokka::valarray<double, nvarHyperbolic_> F =
 		    (S_R / (S_R - S_L)) * F_L - (S_L / (S_R - S_L)) * F_R +
 		    epsilon * (S_R * S_L / (S_R - S_L)) * (U_R - U_L);
 
@@ -648,19 +652,19 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 		AMREX_ASSERT(!std::isnan(F[2])); // NOLINT
 		AMREX_ASSERT(!std::isnan(F[3])); // NOLINT
 
-		x1Flux(i, j, k, radEnergy_index) = F[0];
-		x1Flux(i, j, k, x1RadFlux_index) = F[1];
-		x1Flux(i, j, k, x2RadFlux_index) = F[2];
-		x1Flux(i, j, k, x3RadFlux_index) = F[3];
+		x1Flux(i, j, k, radEnergy_index - nstartHyperbolic_) = F[0];
+		x1Flux(i, j, k, x1RadFlux_index - nstartHyperbolic_) = F[1];
+		x1Flux(i, j, k, x2RadFlux_index - nstartHyperbolic_) = F[2];
+		x1Flux(i, j, k, x3RadFlux_index - nstartHyperbolic_) = F[3];
 
-		const quokka::valarray<double, fluxdim> diffusiveF =
+		const quokka::valarray<double, nvarHyperbolic_> diffusiveF =
 		    (S_R / (S_R - S_L)) * F_L - (S_L / (S_R - S_L)) * F_R +
 		    (S_R * S_L / (S_R - S_L)) * (U_R - U_L);
 
-		x1FluxDiffusive(i, j, k, radEnergy_index) = diffusiveF[0];
-		x1FluxDiffusive(i, j, k, x1RadFlux_index) = diffusiveF[1];
-		x1FluxDiffusive(i, j, k, x2RadFlux_index) = diffusiveF[2];
-		x1FluxDiffusive(i, j, k, x3RadFlux_index) = diffusiveF[3];
+		x1FluxDiffusive(i, j, k, radEnergy_index - nstartHyperbolic_) = diffusiveF[0];
+		x1FluxDiffusive(i, j, k, x1RadFlux_index - nstartHyperbolic_) = diffusiveF[1];
+		x1FluxDiffusive(i, j, k, x2RadFlux_index - nstartHyperbolic_) = diffusiveF[2];
+		x1FluxDiffusive(i, j, k, x3RadFlux_index - nstartHyperbolic_) = diffusiveF[3];
 	});
 }
 

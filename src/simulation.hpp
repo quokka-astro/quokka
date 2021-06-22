@@ -91,7 +91,7 @@ template <typename problem_t> class SingleLevelSimulation
 	amrex::IntVect domain_hi_;
 	amrex::Box domain_;
 
-	// This defines the physical box, [-1,1] in each direction.
+	// This defines the physical box in each direction.
 	amrex::RealBox real_box_;
 
 	// periodic in all directions

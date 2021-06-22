@@ -58,14 +58,15 @@ template <typename problem_t> class RadiationSimulation : public SingleLevelSimu
 	std::vector<double> Trad_vec_;
 	std::vector<double> Tgas_vec_;
 
-	static constexpr int ncompHyperbolic_ = 4;
+	static constexpr int ncompHyperbolic_ = RadSystem<problem_t>::nvarHyperbolic_;
+	static constexpr int nstartHyperbolic_ = RadSystem<problem_t>::nstartHyperbolic_;
 
 	// member functions
 
 	RadiationSimulation(amrex::IntVect &gridDims, amrex::RealBox &boxSize,
 			    amrex::Vector<amrex::BCRec> &boundaryConditions,
-			    const int ncomp = RadSystem<problem_t>::consVarEnumEnd,
-			    const int ncompPrim = RadSystem<problem_t>::primVarEnumEnd)
+			    const int ncomp = RadSystem<problem_t>::nvar_,
+			    const int ncompPrim = ncompHyperbolic_)
 	    : SingleLevelSimulation<problem_t>(gridDims, boxSize, boundaryConditions, ncomp,
 					       ncompPrim)
 	{
@@ -82,11 +83,10 @@ template <typename problem_t> class RadiationSimulation : public SingleLevelSimu
 	template <int nvars>
 	void stageOneRK2SSP(amrex::Array4<const amrex::Real> const &consVarOld,
 			    amrex::Array4<amrex::Real> const &consVarNew,
-			    const amrex::Box &indexRange);
-
-	void stageTwoRK2SSP(amrex::Array4<const amrex::Real> const &consVar,
+			    const amrex::Box &indexRange, int ncompStart);
+	void stageTwoRK2SSP(amrex::Array4<const amrex::Real> const &consVarOld,
 			    amrex::Array4<amrex::Real> const &consVarNew,
-			    const amrex::Box &indexRange, int nvars);
+			    const amrex::Box &indexRange, const int nvars, int ncompStart);
 	void operatorSplitSourceTerms(amrex::Array4<amrex::Real> const &stateNew,
 				      const amrex::Box &indexRange, int nvars, double dt);
 
@@ -170,8 +170,6 @@ template <typename problem_t> void RadiationSimulation<problem_t>::advanceSingle
 	// We use the RK2-SSP method here. It needs two registers: one to store the old timestep,
 	// and another to store the intermediate stage (which is reused for the final stage).
 
-	AMREX_ASSERT(ncompHyperbolic_ == ncompPrimitive_);
-
 	// update ghost zones [old timestep]
 	fillBoundaryConditions(state_old_);
 	AMREX_ASSERT(!state_old_.contains_nan(0, ncomp_));
@@ -181,7 +179,7 @@ template <typename problem_t> void RadiationSimulation<problem_t>::advanceSingle
 		const amrex::Box &indexRange = iter.validbox(); // 'validbox' == exclude ghost zones
 		auto const &stateOld = state_old_.const_array(iter);
 		auto const &stateNew = state_new_.array(iter);
-		stageOneRK2SSP<ncompHyperbolic_>(stateOld, stateNew, indexRange);
+		stageOneRK2SSP<ncompHyperbolic_>(stateOld, stateNew, indexRange, nstartHyperbolic_);
 		quokka::CheckSymmetryArray<problem_t>(stateNew, indexRange, ncomp_, dx_);
 	}
 
@@ -194,7 +192,7 @@ template <typename problem_t> void RadiationSimulation<problem_t>::advanceSingle
 		const amrex::Box &indexRange = iter.validbox(); // 'validbox' == exclude ghost zones
 		auto const &stateOld = state_old_.const_array(iter);
 		auto const &stateNew = state_new_.array(iter);
-		stageTwoRK2SSP(stateOld, stateNew, indexRange, ncompPrimitive_);
+		stageTwoRK2SSP(stateOld, stateNew, indexRange, ncompHyperbolic_, nstartHyperbolic_);
 		quokka::CheckSymmetryArray<problem_t>(stateNew, indexRange, ncomp_, dx_);
 	}
 
@@ -342,7 +340,8 @@ template <typename problem_t>
 template <int nvars>
 void RadiationSimulation<problem_t>::stageOneRK2SSP(
     amrex::Array4<const amrex::Real> const &consVarOld,
-    amrex::Array4<amrex::Real> const &consVarNew, const amrex::Box &indexRange)
+    amrex::Array4<amrex::Real> const &consVarNew, const amrex::Box &indexRange,
+    const int ncompStart)
 {
 	// Allocate temporary arrays using CUDA stream async allocator (or equivalent)
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, 0);
@@ -371,14 +370,16 @@ void RadiationSimulation<problem_t>::stageOneRK2SSP(
 			 x3FluxDiffusive.const_array())};
 
 	// Stage 1 of RK2-SSP
-	RadSystem<problem_t>::template PredictStep<nvars>(
-	    consVarOld, consVarNew, fluxArrays, fluxDiffusiveArrays, dt_, dx_, indexRange);
+	RadSystem<problem_t>::template PredictStep<nvars>(consVarOld, consVarNew, fluxArrays,
+							  fluxDiffusiveArrays, dt_, dx_, indexRange,
+							  ncompStart);
 }
 
 template <typename problem_t>
 void RadiationSimulation<problem_t>::stageTwoRK2SSP(
     amrex::Array4<const amrex::Real> const &consVarOld,
-    amrex::Array4<amrex::Real> const &consVarNew, const amrex::Box &indexRange, const int nvars)
+    amrex::Array4<amrex::Real> const &consVarNew, const amrex::Box &indexRange, const int nvars,
+    const int ncompStart)
 {
 	// Allocate temporary arrays using CUDA stream async allocator (or equivalent)
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, 0);
@@ -408,7 +409,8 @@ void RadiationSimulation<problem_t>::stageTwoRK2SSP(
 
 	// Stage 2 of RK2-SSP
 	RadSystem<problem_t>::AddFluxesRK2(consVarNew, consVarOld, consVarNew, fluxArrays,
-					   fluxDiffusiveArrays, dt_, dx_, indexRange, nvars);
+					   fluxDiffusiveArrays, dt_, dx_, indexRange, nvars,
+					   ncompStart);
 }
 
 #endif // RADIATION_SIMULATION_HPP_
