@@ -65,7 +65,7 @@ template <> struct RadSystem_Traits<ShadowProblem> {
 	static constexpr double c_light = c;
 	static constexpr double c_hat = c;
 	static constexpr double radiation_constant = a_rad;
-	static constexpr double mean_molecular_mass = 10.0 * hydrogen_mass_cgs_;
+	static constexpr double mean_molecular_mass = 1.0e5 * hydrogen_mass_cgs_;
 	static constexpr double boltzmann_constant = boltzmann_constant_cgs_;
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double Erad_floor = 0.;
@@ -206,8 +206,7 @@ template <> void RadiationSimulation<ShadowProblem>::setInitialConditions()
 auto testproblem_radiation_shadow() -> int
 {
 	// N.B. The matter-energy exchange used to exceed numerical precision in IEEE double for
-	// this problem. The Newton solver has been rewritten to be numerically stable for this
-	// case.
+	// this problem.
 
 	// Problem parameters
 	constexpr int max_timesteps = 20000;
@@ -263,8 +262,7 @@ auto testproblem_radiation_shadow() -> int
 	}
 
 	// Print radiation epsilon ("stiffness parameter" from Su & Olson).
-	// (if epsilon is smaller than machine epsilon, the old Newton solver would produce garbage
-	// results. it is now numerically stable for arbitrarily small epsilon.)
+	// (if epsilon is smaller than machine epsilon, garbage results ensue.)
 
 	const auto dt_CFL = CFL_number * std::min(Lx / nx, Ly / ny) / c;
 	const auto c_v = RadSystem_Traits<ShadowProblem>::boltzmann_constant /
