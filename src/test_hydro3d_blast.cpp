@@ -114,7 +114,7 @@ auto testproblem_hydro_sedov() -> int
 	// Problem parameters
 	const int nvars = 5; // Euler equations
 
-	amrex::IntVect gridDims{AMREX_D_DECL(512, 512, 512)};
+	amrex::IntVect gridDims{AMREX_D_DECL(384, 384, 384)};
 	amrex::RealBox boxSize{
 	    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.0), amrex::Real(0.0))},
 	    {AMREX_D_DECL(amrex::Real(1.0), amrex::Real(1.0), amrex::Real(1.0))}};
@@ -148,7 +148,7 @@ auto testproblem_hydro_sedov() -> int
 	// Problem initialization
 	HydroSimulation<SedovProblem> sim(gridDims, boxSize, boundaryConditions);
 
-	sim.stopTime_ = 0.1;
+	sim.stopTime_ = 0.05;
 	sim.cflNumber_ = 0.3; // *must* be less than 1/3 in 3D!
 	sim.maxTimesteps_ = 5000;
 	sim.plotfileInterval_ = 100;
