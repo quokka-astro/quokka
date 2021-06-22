@@ -86,7 +86,7 @@ template <typename problem_t> class RadiationSimulation : public SingleLevelSimu
 			    const amrex::Box &indexRange, int ncompStart);
 	void stageTwoRK2SSP(amrex::Array4<const amrex::Real> const &consVarOld,
 			    amrex::Array4<amrex::Real> const &consVarNew,
-			    const amrex::Box &indexRange, const int nvars, int ncompStart);
+			    const amrex::Box &indexRange, int nvars, int ncompStart);
 	void operatorSplitSourceTerms(amrex::Array4<amrex::Real> const &stateNew,
 				      const amrex::Box &indexRange, int nvars, double dt);
 
