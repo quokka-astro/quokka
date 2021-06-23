@@ -837,42 +837,16 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			    (rho * dt / c_v) *
 			    (kappa * dB_dTgas + dkappa_dTgas * (fourPiB - chat * Erad_guess));
 
-			// N.B. When dFG_dEgas == 1.0 due to floating point rounding error, it
-			// causes deltaErad to have exactly the *opposite* sign that it should! This
-			// causes unphysical 'radiation bounce' in regions where it actually should
-			// be perfectly absorbing!
-			const double epsilon = (c / chat) * drhs_dEgas;
-			// == 4.0 * a_rad * std::pow(T_gas, 3) * (rho * kappa) * (c * dt) /
-			//    (c_v / rho) [assuming dkappa_dTgas==0]
-			double const R = c / chat;
-			double const Rinv = chat / c;
-			double const alpha = dt * ((kappa * rho) * chat);
-			double const alphaplus1_sq = (1.0 + alpha) * (1.0 + alpha);
-
 			// Update variables
-			// dFG_dEgas = 1.0 + (c / chat) * drhs_dEgas;     // 1.0 + epsilon;
-			// dFG_dErad = dt * (-(rho * kappa) * c);	       // -R*alpha
-			// dFR_dEgas = -drhs_dEgas;		       // -Rinv * epsilon;
-			// dFR_dErad = 1.0 + dt * ((rho * kappa) * chat); // 1.0 + alpha;
-			// eta = -dFR_dEgas / dFG_dEgas;
-			//// eta = (eta > 0.0) ? eta : 0.0;
-			// deltaErad = -(F_R + eta * F_G) / (dFR_dErad + eta * dFG_dErad);
-			// deltaEgas = -(F_G + dFG_dErad * deltaErad) / dFG_dEgas;
+			dFG_dEgas = 1.0 + (c / chat) * drhs_dEgas;     // 1.0 + epsilon;
+			dFG_dErad = dt * (-(rho * kappa) * c);	       // -R*alpha
+			dFR_dEgas = -drhs_dEgas;		       		   // -Rinv * epsilon;
+			dFR_dErad = 1.0 + dt * ((rho * kappa) * chat); // 1.0 + alpha;
+			eta = -dFR_dEgas / dFG_dEgas;
+			// eta = (eta > 0.0) ? eta : 0.0;
+			deltaErad = -(F_R + eta * F_G) / (dFR_dErad + eta * dFG_dErad);
+			deltaEgas = -(F_G + dFG_dErad * deltaErad) / dFG_dEgas;
 
-			constexpr double epsilon_min = 1.0e-5;
-			if (epsilon > epsilon_min) {
-				deltaErad = -((1.0 + epsilon) * F_R + Rinv * F_G * epsilon) /
-					    (1.0 + epsilon + alpha);
-				deltaEgas = -((1.0 + alpha) * F_G + alpha * R * F_R) /
-					    (1.0 + epsilon + alpha);
-			} else {
-				deltaErad = -F_R / (1.0 + alpha) - (alpha * F_R / alphaplus1_sq +
-								    Rinv * F_G / (1.0 + alpha)) *
-								       epsilon;
-				deltaEgas = -(F_G + R * alpha * F_R / (1.0 + alpha)) +
-					    ((1.0 + alpha) * F_G + R * alpha * F_R) /
-						alphaplus1_sq * epsilon;
-			}
 			AMREX_ASSERT(!std::isnan(deltaErad));
 			AMREX_ASSERT(!std::isnan(deltaEgas));
 

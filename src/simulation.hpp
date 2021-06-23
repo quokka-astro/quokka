@@ -20,6 +20,7 @@
 #include "AMReX_DistributionMapping.H"
 #include "AMReX_Extension.H"
 #include "AMReX_FArrayBox.H"
+#include "AMReX_GpuControl.H"
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_INT.H"
 #include "AMReX_IntVect.H"
@@ -71,7 +72,7 @@ CheckNaN(amrex::FArrayBox const &arr, amrex::Box const & /*symmetryRange*/,
 	 amrex::Box const &nanRange, const int ncomp,
 	 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> /*dx*/)
 {
-	AMREX_ASSERT(!arr.contains_nan(nanRange, 0, ncomp));
+	AMREX_ASSERT(!arr.template contains_nan<amrex::RunOn::Gpu>(nanRange, 0, ncomp));
 }
 } // namespace quokka
 

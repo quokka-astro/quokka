@@ -95,7 +95,6 @@ auto testproblem_advection() -> int
 	const int nx = 400;
 	const double Lx = 1.0;
 	const double advection_velocity = 1.0;
-	const double CFL_number = 0.3;
 	const double max_time = 1.0;
 	const double max_dt = 1e-4;
 	const int max_timesteps = 1e4;

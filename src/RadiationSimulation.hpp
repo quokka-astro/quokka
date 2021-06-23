@@ -285,57 +285,6 @@ void RadiationSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Rea
 	quokka::CheckNaN<problem_t>(x1Flux, indexRange, x1FluxRange, ncompPrimitive_, dx_);
 }
 
-#if 0
-template <typename problem_t>
-void RadiationSimulation<problem_t>::AdvanceTimestepPredictorCorrector()
-{
-	// Use two iterations of a second-order SDC-like method to advance the radiation subsystem.
-	// [McClarren et al., Journal of Computational Physics 227 (2008) 7561–7586]
-
-	// ensure that consVarPredictStep_ is initialized
-	CopyVars(consVar_, consVarPredictStep_, cell_range);
-	CopyVars(consVar_, consVarPredictStepPrev_, cell_range);
-
-	/// Predictor step
-
-	// Step 0: Fill ghost zones and convert to primitive variables
-	FillGhostZones(consVarPredictStepPrev_); // consVarPredictStepPrev_ == U^{t+1,k}
-	ConservedToPrimitive(consVarPredictStepPrev_, std::make_pair(0, dim1_));
-
-	// Step 1a: Compute transport terms using state U^{t+1/2,k}
-	// [N.B. PPM is unstable for SDC2!]
-	ComputeFluxes(cell_range);
-	// update advectionFluxes_ <- F(U^{t+1, k})
-	SaveFluxes(cell_range);
-	// update reactionTerms_ <- S(U^{t+1, k})
-	ComputeSourceTermsExplicit(consVarPredictStepPrev_, reactionTerms_, cell_range);
-
-	// Add SDC source terms to advectionFluxes_
-	for (int n = 0; n < nvars_; ++n) {
-		for (int i = cell_range.first; i < cell_range.second; ++i) {
-			// advectionFluxes_ == F(U^{t+1,k})
-			// advectionFluxesU0_ == F(U^{t})
-			// reactionTerms_ == S(U^{t+1,k})
-			// reactionTermsU0_ == S(U^{t})
-			advectionFluxes_(n, i) =
-			    (advectionFluxes_(n, i) + reactionTerms_(n, i)) - reactionTerms_(n, i);
-		}
-	}
-
-	// Step 1b: Compute reaction terms with advectionFluxes_ as a source term.
-	AddSourceTerms(consVar_, consVarPredictStep_, cell_range);
-
-	// Step 1c: Save current iteration
-	CopyVars(consVarPredictStep_, consVarPredictStepPrev_, cell_range);
-
-	/// Corrector step
-
-
-	// Copy final solution to consVar_
-	CopyVars(consVarPredictStep_, consVar_, cell_range);
-}
-#endif
-
 template <typename problem_t>
 template <int nvars>
 void RadiationSimulation<problem_t>::stageOneRK2SSP(
