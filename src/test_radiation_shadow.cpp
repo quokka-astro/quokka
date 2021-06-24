@@ -121,7 +121,7 @@ RadiationSimulation<ShadowProblem>::setCustomBoundaryConditions(
 #endif
 
 	// const amrex::Real *dx = geom.CellSize();
-	// const amrex::Real *prob_lo = geom.ProbLo();
+	// amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_lo = geom.ProbLoArray();
 	const amrex::Box &box = geom.Domain();
 	amrex::GpuArray<int, 3> lo = box.loVect3d();
 
@@ -162,7 +162,7 @@ RadiationSimulation<ShadowProblem>::setCustomBoundaryConditions(
 
 template <> void RadiationSimulation<ShadowProblem>::setInitialConditions()
 {
-	const auto *prob_lo = simGeometry_.ProbLo();
+	auto prob_lo = simGeometry_.ProbLoArray();
 	auto dx = dx_;
 
 	for (amrex::MFIter iter(state_old_); iter.isValid(); ++iter) {

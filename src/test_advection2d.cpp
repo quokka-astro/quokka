@@ -19,6 +19,7 @@
 #include "AMReX_FArrayBox.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParallelDescriptor.H"
+#include "AMReX_REAL.H"
 #include "AdvectionSimulation.hpp"
 #include <csignal>
 #include <limits>
@@ -58,7 +59,8 @@ struct SquareProblem {
 };
 
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto
-exactSolutionAtIndex(int i, int j, amrex::Real const *prob_lo, amrex::Real const *prob_hi,
+exactSolutionAtIndex(int i, int j, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo,
+		     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi,
 		     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx) -> amrex::Real
 {
 	amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
@@ -75,8 +77,8 @@ exactSolutionAtIndex(int i, int j, amrex::Real const *prob_lo, amrex::Real const
 
 template <> void AdvectionSimulation<SquareProblem>::setInitialConditions()
 {
-	const auto *prob_lo = simGeometry_.ProbLo();
-	const auto *prob_hi = simGeometry_.ProbHi();
+	auto prob_lo = simGeometry_.ProbLoArray();
+	auto prob_hi = simGeometry_.ProbHiArray();
 	auto dx = dx_;
 
 	for (amrex::MFIter iter(state_old_); iter.isValid(); ++iter) {
@@ -94,7 +96,9 @@ template <> void AdvectionSimulation<SquareProblem>::setInitialConditions()
 }
 
 void ComputeExactSolution(amrex::Array4<amrex::Real> const &exact_arr, amrex::Box const &indexRange,
-			  const int nvars, amrex::Real const *prob_lo, amrex::Real const *prob_hi,
+			  const int nvars,
+			  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_lo,
+			  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_hi,
 			  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx)
 {
 	amrex::ParallelFor(indexRange, nvars, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
@@ -112,7 +116,7 @@ template <> void AdvectionSimulation<SquareProblem>::computeAfterTimestep()
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		auto const &state = state_mf.array(0);
-		const auto *prob_lo = simGeometry_.ProbLo();
+		auto const prob_lo = simGeometry_.ProbLoArray();
 		auto dx = dx_;
 
 		amrex::Long asymmetry = 0;
@@ -209,8 +213,8 @@ auto testproblem_advection() -> int
 	for (amrex::MFIter iter(sim.state_new_); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &stateExact = state_exact.array(iter);
-		const auto *prob_lo = sim.simGeometry_.ProbLo();
-		const auto *prob_hi = sim.simGeometry_.ProbHi();
+		auto const prob_lo = sim.simGeometry_.ProbLoArray();
+		auto const prob_hi = sim.simGeometry_.ProbHiArray();
 		auto dx = sim.dx_;
 		ComputeExactSolution(stateExact, indexRange, sim.ncomp_, prob_lo, prob_hi, dx);
 	}

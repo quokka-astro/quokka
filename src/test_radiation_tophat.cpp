@@ -146,10 +146,10 @@ RadiationSimulation<TophatProblem>::setCustomBoundaryConditions(
 	auto [i, j, k] = iv.toArray();
 #endif
 
-	const amrex::Real *dx = geom.CellSize();
-	const amrex::Real *prob_lo = geom.ProbLo();
-	// const amrex::Real *prob_hi = geom.ProbHi();
-	const amrex::Box &box = geom.Domain();
+	amrex::Real const *dx = geom.CellSize();
+	auto const *prob_lo = geom.ProbLo();
+	// auto const *prob_hi = geom.ProbHi();
+	amrex::Box const &box = geom.Domain();
 
 	amrex::GpuArray<int, 3> lo = box.loVect3d();
 	// amrex::GpuArray<int, 3> hi = box.hiVect3d();
@@ -224,8 +224,8 @@ RadiationSimulation<TophatProblem>::setCustomBoundaryConditions(
 
 template <> void RadiationSimulation<TophatProblem>::setInitialConditions()
 {
-	const auto *prob_lo = simGeometry_.ProbLo();
-	// auto prob_hi = simGeometry_.ProbHi();
+	auto const prob_lo = simGeometry_.ProbLoArray();
+	// auto const prob_hi = simGeometry_.ProbHiArray();
 	auto dx = dx_;
 
 	for (amrex::MFIter iter(state_old_); iter.isValid(); ++iter) {

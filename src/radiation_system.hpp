@@ -244,7 +244,7 @@ void RadSystem<problem_t>::PredictStep(
 #endif
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-		std::array<amrex::Real, nvars> cons{}; // this *may* work on GPU
+		std::array<amrex::Real, nvars> cons{};
 
 		for (int n = 0; n < nvars; ++n) {
 			cons[n] =

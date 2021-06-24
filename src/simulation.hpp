@@ -206,6 +206,7 @@ template <typename problem_t> class SingleLevelSimulation
 	void readParameters();
 	void evolve();
 	void computeTimestep();
+	
 	// virtual auto computeTimestepLocal() -> amrex::Real = 0;
 	virtual void computeMaxSignalLocal() = 0;
 	virtual void setInitialConditions() = 0;

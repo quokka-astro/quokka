@@ -118,9 +118,9 @@ RadiationSimulation<BeamProblem>::setCustomBoundaryConditions(
 	auto [i, j, k] = iv.toArray();
 #endif
 
-	const amrex::Real *dx = geom.CellSize();
-	const amrex::Real *prob_lo = geom.ProbLo();
-	const amrex::Box &box = geom.Domain();
+	amrex::Real const *dx = geom.CellSize();
+	amrex::Real const *prob_lo = geom.ProbLo();
+	amrex::Box const &box = geom.Domain();
 	amrex::GpuArray<int, 3> lo = box.loVect3d();
 	amrex::Real const x = prob_lo[0] + (i + Real(0.5)) * dx[0];
 	amrex::Real const y = prob_lo[1] + (j + Real(0.5)) * dx[1];

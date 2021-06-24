@@ -137,7 +137,7 @@ template <> void HydroSimulation<RichtmeyerMeshkovProblem>::computeAfterTimestep
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		auto const &state = state_mf.array(0);
-		const auto *prob_lo = simGeometry_.ProbLo();
+		auto const prob_lo = simGeometry_.ProbLoArray();
 		auto dx = dx_;
 
 		amrex::Long asymmetry = 0;
