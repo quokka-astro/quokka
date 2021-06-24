@@ -224,14 +224,15 @@ void RadSystem<problem_t>::PredictStep(
     amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray,
     amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxDiffusiveArray, const double dt_in,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange,
-    const int nstart)
+    const int nstart_in)
 {
 	// By convention, the fluxes are defined on the left edge of each zone,
 	// i.e. flux_(i) is the flux *into* zone i through the interface on the
 	// left of zone i, and -1.0*flux(i+1) is the flux *into* zone i through
 	// the interface on the right of zone i.
 
-	const auto dt = dt_in;
+	auto const dt = dt_in; // workaround nvcc bug
+	auto const nstart = nstart_in; // workaround nvcc bug
 
 	const auto dx = dx_in[0];
 	const auto x1Flux = fluxArray[0];
@@ -281,14 +282,16 @@ void RadSystem<problem_t>::AddFluxesRK2(
     amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray,
     amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxDiffusiveArray, const double dt_in,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange,
-    const int nvars, const int nstart)
+    const int nvars_in, const int nstart_in)
 {
 	// By convention, the fluxes are defined on the left edge of each zone,
 	// i.e. flux_(i) is the flux *into* zone i through the interface on the
 	// left of zone i, and -1.0*flux(i+1) is the flux *into* zone i through
 	// the interface on the right of zone i.
 
-	const auto dt = dt_in;
+	auto const dt = dt_in;
+	auto const nvars = nvars_in;
+	auto const nstart = nstart_in;
 
 	const auto dx = dx_in[0];
 	const auto x1Flux = fluxArray[0];
