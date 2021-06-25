@@ -58,7 +58,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 		radEnergy_index = 5,
 		x1RadFlux_index = 6,
 		x2RadFlux_index = 7,
-		x3RadFlux_index = 8,
+		x3RadFlux_index = 8
 	};
 
 	static constexpr int nvar_ = 9;
@@ -92,18 +92,17 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static void ConservedToPrimitive(amrex::Array4<const amrex::Real> const &cons,
 					 array_t &primVar, amrex::Box const &indexRange);
 
-	template <int nvars>
 	static void PredictStep(arrayconst_t &consVarOld, array_t &consVarNew,
 				amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray,
 				amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxDiffusiveArray,
 				double dt_in, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,
-				amrex::Box const &indexRange, int nstart);
+				amrex::Box const &indexRange, int nvars);
 
 	static void AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayconst_t &U1,
 				 amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray,
 				 amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxDiffusiveArray,
 				 double dt_in, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,
-				 amrex::Box const &indexRange, int nvars, int nstart);
+				 amrex::Box const &indexRange, int nvars);
 
 	template <FluxDir DIR>
 	static void ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiffusive_in,
@@ -204,10 +203,10 @@ AMREX_GPU_DEVICE auto
 RadSystem<problem_t>::isStateValid(std::array<amrex::Real, nvarHyperbolic_> &cons) -> bool
 {
 	// check if the state variable 'cons' is a valid state
-	const auto E_r = cons[radEnergy_index];
-	const auto Fx = cons[x1RadFlux_index];
-	const auto Fy = cons[x2RadFlux_index];
-	const auto Fz = cons[x3RadFlux_index];
+	const auto E_r = cons.at(radEnergy_index - nstartHyperbolic_);
+	const auto Fx = cons.at(x1RadFlux_index - nstartHyperbolic_);
+	const auto Fy = cons.at(x2RadFlux_index - nstartHyperbolic_);
+	const auto Fz = cons.at(x3RadFlux_index - nstartHyperbolic_);
 
 	const auto Fnorm = std::sqrt(Fx * Fx + Fy * Fy + Fz * Fz);
 	const auto f = Fnorm / (c_light_ * E_r);
@@ -218,13 +217,12 @@ RadSystem<problem_t>::isStateValid(std::array<amrex::Real, nvarHyperbolic_> &con
 }
 
 template <typename problem_t>
-template <int nvars>
 void RadSystem<problem_t>::PredictStep(
     arrayconst_t &consVarOld, array_t &consVarNew,
     amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray,
     amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxDiffusiveArray, const double dt_in,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange,
-    const int nstart_in)
+    const int /*nvars*/)
 {
 	// By convention, the fluxes are defined on the left edge of each zone,
 	// i.e. flux_(i) is the flux *into* zone i through the interface on the
@@ -232,7 +230,6 @@ void RadSystem<problem_t>::PredictStep(
 	// the interface on the right of zone i.
 
 	auto const dt = dt_in; // workaround nvcc bug
-	auto const nstart = nstart_in; // workaround nvcc bug
 
 	const auto dx = dx_in[0];
 	const auto x1Flux = fluxArray[0];
@@ -244,34 +241,33 @@ void RadSystem<problem_t>::PredictStep(
 #endif
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-		std::array<amrex::Real, nvars> cons{};
+		std::array<amrex::Real, nvarHyperbolic_> cons{}; // this *may* work on GPU
 
-		for (int n = 0; n < nvars; ++n) {
-			cons[n] =
-			    consVarOld(i, j, k, nstart+n) +
-			    ((dt / dx) * (x1Flux(i, j, k, n) - x1Flux(i + 1, j, k, n))
+		for (int n = 0; n < nvarHyperbolic_; ++n) {
+			cons.at(n) = consVarOld(i, j, k, nstartHyperbolic_ + n) +
+				     ((dt / dx) * (x1Flux(i, j, k, n) - x1Flux(i + 1, j, k, n))
 #if (AMREX_SPACEDIM >= 2)
-			     + (dt / dy) * (x2Flux(i, j, k, n) - x2Flux(i, j + 1, k, n))
+				      + (dt / dy) * (x2Flux(i, j, k, n) - x2Flux(i, j + 1, k, n))
 #endif
-			    );
+				     );
 		}
 
 		if (!isStateValid(cons)) {
 			// use diffusive fluxes instead
-			for (int n = 0; n < nvars; ++n) {
-				cons[n] = consVarOld(i, j, k, nstart+n) +
-						   ((dt / dx) * (x1FluxDiffusive(i, j, k, n) -
-								 x1FluxDiffusive(i + 1, j, k, n))
+			for (int n = 0; n < nvarHyperbolic_; ++n) {
+				cons.at(n) = consVarOld(i, j, k, nstartHyperbolic_ + n) +
+					     ((dt / dx) * (x1FluxDiffusive(i, j, k, n) -
+							   x1FluxDiffusive(i + 1, j, k, n))
 #if (AMREX_SPACEDIM >= 2)
-						    + (dt / dy) * (x2FluxDiffusive(i, j, k, n) -
-								   x2FluxDiffusive(i, j + 1, k, n))
+					      + (dt / dy) * (x2FluxDiffusive(i, j, k, n) -
+							     x2FluxDiffusive(i, j + 1, k, n))
 #endif
-						   );
+					     );
 			}
 		}
 
-		for (int n = 0; n < nvars; ++n) {
-			consVarNew(i, j, k, nstart+n) = cons[n];
+		for (int n = 0; n < nvarHyperbolic_; ++n) {
+			consVarNew(i, j, k, nstartHyperbolic_ + n) = cons.at(n);
 		}
 	});
 }
@@ -282,7 +278,7 @@ void RadSystem<problem_t>::AddFluxesRK2(
     amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray,
     amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxDiffusiveArray, const double dt_in,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange,
-    const int nvars_in, const int nstart_in)
+    const int /*nvars*/)
 {
 	// By convention, the fluxes are defined on the left edge of each zone,
 	// i.e. flux_(i) is the flux *into* zone i through the interface on the
@@ -290,8 +286,6 @@ void RadSystem<problem_t>::AddFluxesRK2(
 	// the interface on the right of zone i.
 
 	auto const dt = dt_in;
-	auto const nvars = nvars_in;
-	auto const nstart = nstart_in;
 
 	const auto dx = dx_in[0];
 	const auto x1Flux = fluxArray[0];
@@ -303,10 +297,10 @@ void RadSystem<problem_t>::AddFluxesRK2(
 #endif
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-		for (int n = 0; n < nvars; ++n) {
+		for (int n = 0; n < nvarHyperbolic_; ++n) {
 			// RK-SSP2 integrator
-			const double U_0 = U0(i, j, k, nstart+n);
-			const double U_1 = U1(i, j, k, nstart+n);
+			const double U_0 = U0(i, j, k, nstartHyperbolic_ + n);
+			const double U_1 = U1(i, j, k, nstartHyperbolic_ + n);
 
 			const double FxU_1 =
 			    (dt / dx) * (x1Flux(i, j, k, n) - x1Flux(i + 1, j, k, n));
@@ -316,11 +310,12 @@ void RadSystem<problem_t>::AddFluxesRK2(
 #endif
 
 			// save results in U_new
-			U_new(i, j, k, nstart+n) = (0.5 * U_0 + 0.5 * U_1) + (0.5 * FxU_1
+			U_new(i, j, k, nstartHyperbolic_ + n) =
+			    (0.5 * U_0 + 0.5 * U_1) + (0.5 * FxU_1
 #if (AMREX_SPACEDIM >= 2)
-								       + 0.5 * FyU_1
+						       + 0.5 * FyU_1
 #endif
-								      );
+						      );
 		}
 	});
 }
