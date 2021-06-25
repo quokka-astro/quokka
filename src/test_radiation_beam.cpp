@@ -162,7 +162,7 @@ RadiationSimulation<BeamProblem>::setCustomBoundaryConditions(
 		}
 		const amrex::Real Fnorm =
 		    std::sqrt(Fx_bdry * Fx_bdry + Fy_bdry * Fy_bdry + Fz_bdry * Fz_bdry);
-		AMREX_ASSERT((Fnorm / (c * E_inc)) < 1.0); // flux-limiting condition
+		//AMREX_ASSERT((Fnorm / (c * E_inc)) < 1.0); // flux-limiting condition
 
 		// x1, x2 left side boundary
 		consVar(i, j, k, RadSystem<BeamProblem>::radEnergy_index) = E_inc;
@@ -211,7 +211,7 @@ RadiationSimulation<BeamProblem>::setCustomBoundaryConditions(
 		}
 		const amrex::Real Fnorm =
 		    std::sqrt(Fx_bdry * Fx_bdry + Fy_bdry * Fy_bdry + Fz_bdry * Fz_bdry);
-		AMREX_ASSERT((Fnorm / (c * E_inc)) < 1.0); // flux-limiting condition
+		//AMREX_ASSERT((Fnorm / (c * E_inc)) < 1.0); // flux-limiting condition
 
 		// x1, x2 left side boundary
 		consVar(i, j, k, RadSystem<BeamProblem>::radEnergy_index) = E_inc;
@@ -246,7 +246,7 @@ RadiationSimulation<BeamProblem>::setCustomBoundaryConditions(
 
 		const amrex::Real Fnorm =
 		    std::sqrt(Fx_bdry * Fx_bdry + Fy_bdry * Fy_bdry + Fz_bdry * Fz_bdry);
-		AMREX_ASSERT((Fnorm / (c * E_inc)) < 1.0); // flux-limiting condition
+		//AMREX_ASSERT((Fnorm / (c * E_inc)) < 1.0); // flux-limiting condition
 
 		// x1, x2 left side boundary
 		consVar(i, j, k, RadSystem<BeamProblem>::radEnergy_index) = E_inc;

@@ -46,7 +46,7 @@ template <typename problem_t> class RadiationSimulation : public SingleLevelSimu
 	using SingleLevelSimulation<problem_t>::dx_;
 	using SingleLevelSimulation<problem_t>::dt_;
 	using SingleLevelSimulation<problem_t>::ncomp_;
-	using SingleLevelSimulation<problem_t>::ncompPrimitive_;
+	// using SingleLevelSimulation<problem_t>::ncompPrimitive_;
 	using SingleLevelSimulation<problem_t>::nghost_;
 	using SingleLevelSimulation<problem_t>::tNow_;
 	using SingleLevelSimulation<problem_t>::cycleCount_;
@@ -70,9 +70,9 @@ template <typename problem_t> class RadiationSimulation : public SingleLevelSimu
 	    : SingleLevelSimulation<problem_t>(gridDims, boxSize, boundaryConditions, ncomp,
 					       ncompPrim)
 	{
-		componentNames_ = {"radEnergy",	    "x-RadFlux",     "y-RadFlux",
-				   "z-RadFlux",	    "gasEnergy",     "gasDensity",
-				   "x-GasMomentum", "y-GasMomentum", "z-GasMomentum"};
+		componentNames_ = {"gasDensity",    "x-GasMomentum", "y-GasMomentum",
+				   "z-GasMomentum", "gasEnergy",     "radEnergy",
+				   "x-RadFlux",	    "y-RadFlux",     "z-RadFlux"};
 	}
 
 	void computeMaxSignalLocal() override;
@@ -80,13 +80,12 @@ template <typename problem_t> class RadiationSimulation : public SingleLevelSimu
 	void advanceSingleTimestep() override;
 	void computeAfterTimestep() override;
 
-	template <int nvars>
 	void stageOneRK2SSP(amrex::Array4<const amrex::Real> const &consVarOld,
 			    amrex::Array4<amrex::Real> const &consVarNew,
-			    const amrex::Box &indexRange, int ncompStart);
+			    const amrex::Box &indexRange, int nvars);
 	void stageTwoRK2SSP(amrex::Array4<const amrex::Real> const &consVarOld,
 			    amrex::Array4<amrex::Real> const &consVarNew,
-			    const amrex::Box &indexRange, const int nvars, int ncompStart);
+			    const amrex::Box &indexRange, int nvars);
 	void operatorSplitSourceTerms(amrex::Array4<amrex::Real> const &stateNew,
 				      const amrex::Box &indexRange, int nvars, double dt);
 
@@ -179,8 +178,8 @@ template <typename problem_t> void RadiationSimulation<problem_t>::advanceSingle
 		const amrex::Box &indexRange = iter.validbox(); // 'validbox' == exclude ghost zones
 		auto const &stateOld = state_old_.const_array(iter);
 		auto const &stateNew = state_new_.array(iter);
-		stageOneRK2SSP<ncompHyperbolic_>(stateOld, stateNew, indexRange, nstartHyperbolic_);
-		quokka::CheckSymmetryArray<problem_t>(stateNew, indexRange, ncomp_, dx_);
+		stageOneRK2SSP(stateOld, stateNew, indexRange, ncompHyperbolic_);
+		quokka::CheckSymmetryArray<problem_t>(stateNew, indexRange, ncompHyperbolic_, dx_);
 	}
 
 	// update ghost zones [intermediate stage stored in state_new_]
@@ -192,8 +191,8 @@ template <typename problem_t> void RadiationSimulation<problem_t>::advanceSingle
 		const amrex::Box &indexRange = iter.validbox(); // 'validbox' == exclude ghost zones
 		auto const &stateOld = state_old_.const_array(iter);
 		auto const &stateNew = state_new_.array(iter);
-		stageTwoRK2SSP(stateOld, stateNew, indexRange, ncompHyperbolic_, nstartHyperbolic_);
-		quokka::CheckSymmetryArray<problem_t>(stateNew, indexRange, ncomp_, dx_);
+		stageTwoRK2SSP(stateOld, stateNew, indexRange, ncompHyperbolic_);
+		quokka::CheckSymmetryArray<problem_t>(stateNew, indexRange, ncompHyperbolic_, dx_);
 	}
 
 	// source terms
@@ -231,7 +230,7 @@ template <FluxDir DIR>
 void RadiationSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real> const &consState,
 						  amrex::FArrayBox &x1Flux,
 						  amrex::FArrayBox &x1FluxDiffusive,
-						  const amrex::Box &indexRange, const int /*nvars*/)
+						  const amrex::Box &indexRange, const int nvars)
 {
 	int dir = 0;
 	if constexpr (DIR == FluxDir::X1) {
@@ -250,31 +249,28 @@ void RadiationSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Rea
 	amrex::Box const &x1ReconstructRange = amrex::surroundingNodes(reconstructRange, dir);
 
 	// Allocate temporary arrays using CUDA stream async allocator (or equivalent)
-	amrex::FArrayBox primVar(ghostRange, ncompPrimitive_,
+	amrex::FArrayBox primVar(ghostRange, nvars,
 				 amrex::The_Async_Arena()); // cell-centered
-	amrex::FArrayBox x1LeftState(x1ReconstructRange, ncompPrimitive_, amrex::The_Async_Arena());
-	amrex::FArrayBox x1RightState(x1ReconstructRange, ncompPrimitive_,
-				      amrex::The_Async_Arena());
+	amrex::FArrayBox x1LeftState(x1ReconstructRange, nvars, amrex::The_Async_Arena());
+	amrex::FArrayBox x1RightState(x1ReconstructRange, nvars, amrex::The_Async_Arena());
 
 	// cell-centered kernel
 	RadSystem<problem_t>::ConservedToPrimitive(consState, primVar.array(), ghostRange);
-	quokka::CheckNaN<problem_t>(primVar, indexRange, ghostRange, ncompPrimitive_, dx_);
+	quokka::CheckNaN<problem_t>(primVar, indexRange, ghostRange, nvars, dx_);
 
 	// mixed interface/cell-centered kernel
 	RadSystem<problem_t>::template ReconstructStatesPPM<DIR>(
 	    primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange,
-	    x1ReconstructRange, ncompPrimitive_);
+	    x1ReconstructRange, nvars);
 	// PLM and donor cell are interface-centered kernels
 	// RadSystem<problem_t>::template ReconstructStatesConstant<DIR>(
 	//     primVar.array(), x1LeftState.array(), x1RightState.array(), x1ReconstructRange,
-	//     ncompPrimitive_);
+	//     nvars);
 	// RadSystem<problem_t>::template ReconstructStatesPLM<DIR>(
 	//     primVar.array(), x1LeftState.array(), x1RightState.array(), x1ReconstructRange,
-	//     ncompPrimitive_);
-	quokka::CheckNaN<problem_t>(x1LeftState, indexRange, x1ReconstructRange, ncompPrimitive_,
-				    dx_);
-	quokka::CheckNaN<problem_t>(x1RightState, indexRange, x1ReconstructRange, ncompPrimitive_,
-				    dx_);
+	//     nvars);
+	quokka::CheckNaN<problem_t>(x1LeftState, indexRange, x1ReconstructRange, nvars, dx_);
+	quokka::CheckNaN<problem_t>(x1RightState, indexRange, x1ReconstructRange, nvars, dx_);
 
 	// interface-centered kernel
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, dir);
@@ -282,7 +278,7 @@ void RadiationSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Rea
 							  x1LeftState.array(), x1RightState.array(),
 							  x1FluxRange, consState,
 							  dx_); // watch out for argument order!!
-	quokka::CheckNaN<problem_t>(x1Flux, indexRange, x1FluxRange, ncompPrimitive_, dx_);
+	quokka::CheckNaN<problem_t>(x1Flux, indexRange, x1FluxRange, nvars, dx_);
 }
 
 #if 0
@@ -337,11 +333,9 @@ void RadiationSimulation<problem_t>::AdvanceTimestepPredictorCorrector()
 #endif
 
 template <typename problem_t>
-template <int nvars>
 void RadiationSimulation<problem_t>::stageOneRK2SSP(
     amrex::Array4<const amrex::Real> const &consVarOld,
-    amrex::Array4<amrex::Real> const &consVarNew, const amrex::Box &indexRange,
-    const int ncompStart)
+    amrex::Array4<amrex::Real> const &consVarNew, const amrex::Box &indexRange, const int nvars)
 {
 	// Allocate temporary arrays using CUDA stream async allocator (or equivalent)
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, 0);
@@ -370,16 +364,14 @@ void RadiationSimulation<problem_t>::stageOneRK2SSP(
 			 x3FluxDiffusive.const_array())};
 
 	// Stage 1 of RK2-SSP
-	RadSystem<problem_t>::template PredictStep<nvars>(consVarOld, consVarNew, fluxArrays,
-							  fluxDiffusiveArrays, dt_, dx_, indexRange,
-							  ncompStart);
+	RadSystem<problem_t>::PredictStep(consVarOld, consVarNew, fluxArrays, fluxDiffusiveArrays,
+					  dt_, dx_, indexRange, nvars);
 }
 
 template <typename problem_t>
 void RadiationSimulation<problem_t>::stageTwoRK2SSP(
     amrex::Array4<const amrex::Real> const &consVarOld,
-    amrex::Array4<amrex::Real> const &consVarNew, const amrex::Box &indexRange, const int nvars,
-    const int ncompStart)
+    amrex::Array4<amrex::Real> const &consVarNew, const amrex::Box &indexRange, const int nvars)
 {
 	// Allocate temporary arrays using CUDA stream async allocator (or equivalent)
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, 0);
@@ -409,8 +401,7 @@ void RadiationSimulation<problem_t>::stageTwoRK2SSP(
 
 	// Stage 2 of RK2-SSP
 	RadSystem<problem_t>::AddFluxesRK2(consVarNew, consVarOld, consVarNew, fluxArrays,
-					   fluxDiffusiveArrays, dt_, dx_, indexRange, nvars,
-					   ncompStart);
+					   fluxDiffusiveArrays, dt_, dx_, indexRange, nvars);
 }
 
 #endif // RADIATION_SIMULATION_HPP_
