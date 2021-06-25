@@ -14,3 +14,5 @@
 
 [3D Sedov Test 384^3]
 1 GPU V100-32GB (clang-12 + nvcc + noFMA)  Performance figure-of-merit: 0.02198741689 μs/zone-update [45.48055849 Mupdates/s]
+
+[2D Beam Test 1024^2]

@@ -83,7 +83,7 @@ template <typename problem_t> class SingleLevelSimulation
 	int nx_{1};
 	int ny_{1};
 	int nz_{1};
-	int max_grid_size_{32}; // amrex default is 128 in 2D, 32 in 3D
+	//int max_grid_size_{32}; // amrex default is 128 in 2D, 32 in 3D
 	int maxTimesteps_{10000};
 
 	amrex::BoxArray simBoxArray_;
@@ -168,7 +168,7 @@ template <typename problem_t> class SingleLevelSimulation
 #endif
 		domain_ = {domain_lo_, domain_hi_};
 		simBoxArray_.define(domain_);
-		simBoxArray_.maxSize(max_grid_size_);
+		//simBoxArray_.maxSize(max_grid_size_);
 
 		// This defines a Geometry object
 		real_box_ = boxSize;
@@ -225,7 +225,7 @@ template <typename problem_t> void SingleLevelSimulation<problem_t>::readParamet
 	pp.get("nz", nz_);
 
 	// The domain is broken into boxes of size max_grid_size
-	pp.get("max_grid_size", max_grid_size_);
+	//pp.get("max_grid_size", max_grid_size_);
 
 	// Default nsteps to 10, allow us to set it to something else in the inputs file
 	pp.query("max_timesteps", maxTimesteps_);
