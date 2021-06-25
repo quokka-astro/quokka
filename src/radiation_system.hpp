@@ -229,8 +229,7 @@ void RadSystem<problem_t>::PredictStep(
 	// left of zone i, and -1.0*flux(i+1) is the flux *into* zone i through
 	// the interface on the right of zone i.
 
-	auto const dt = dt_in; // workaround nvcc bug
-
+	auto const dt = dt_in;
 	const auto dx = dx_in[0];
 	const auto x1Flux = fluxArray[0];
 	const auto x1FluxDiffusive = fluxDiffusiveArray[0];
@@ -239,30 +238,31 @@ void RadSystem<problem_t>::PredictStep(
 	const auto x2Flux = fluxArray[1];
 	const auto x2FluxDiffusive = fluxDiffusiveArray[1];
 #endif
+#if (AMREX_SPACEDIM == 3)
+	const auto dz = dx_in[2];
+	const auto x3Flux = fluxArray[2];
+	const auto x3FluxDiffusive = fluxDiffusiveArray[2];
+#endif
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-		std::array<amrex::Real, nvarHyperbolic_> cons{}; // this *may* work on GPU
+		std::array<amrex::Real, nvarHyperbolic_> cons{};
 
 		for (int n = 0; n < nvarHyperbolic_; ++n) {
 			cons.at(n) = consVarOld(i, j, k, nstartHyperbolic_ + n) +
-				     ((dt / dx) * (x1Flux(i, j, k, n) - x1Flux(i + 1, j, k, n))
-#if (AMREX_SPACEDIM >= 2)
-				      + (dt / dy) * (x2Flux(i, j, k, n) - x2Flux(i, j + 1, k, n))
-#endif
-				     );
+			(AMREX_D_TERM( (dt / dx) * (x1Flux(i, j, k, n) - x1Flux(i + 1, j, k, n)),
+				      	 + (dt / dy) * (x2Flux(i, j, k, n) - x2Flux(i, j + 1, k, n)),
+				      	 + (dt / dz) * (x3Flux(i, j, k, n) - x3Flux(i, j, k + 1, n))
+						   ));
 		}
 
 		if (!isStateValid(cons)) {
 			// use diffusive fluxes instead
 			for (int n = 0; n < nvarHyperbolic_; ++n) {
 				cons.at(n) = consVarOld(i, j, k, nstartHyperbolic_ + n) +
-					     ((dt / dx) * (x1FluxDiffusive(i, j, k, n) -
-							   x1FluxDiffusive(i + 1, j, k, n))
-#if (AMREX_SPACEDIM >= 2)
-					      + (dt / dy) * (x2FluxDiffusive(i, j, k, n) -
-							     x2FluxDiffusive(i, j + 1, k, n))
-#endif
-					     );
+				(AMREX_D_TERM( (dt / dx) * (x1FluxDiffusive(i, j, k, n) - x1FluxDiffusive(i + 1, j, k, n)),
+				      	 + (dt / dy) * (x2FluxDiffusive(i, j, k, n) - x2FluxDiffusive(i, j + 1, k, n)),
+				      	 + (dt / dz) * (x3FluxDiffusive(i, j, k, n) - x3FluxDiffusive(i, j, k + 1, n))
+						   ));
 			}
 		}
 
@@ -286,7 +286,6 @@ void RadSystem<problem_t>::AddFluxesRK2(
 	// the interface on the right of zone i.
 
 	auto const dt = dt_in;
-
 	const auto dx = dx_in[0];
 	const auto x1Flux = fluxArray[0];
 	const auto x1FluxDiffusive = fluxDiffusiveArray[0];
@@ -294,6 +293,11 @@ void RadSystem<problem_t>::AddFluxesRK2(
 	const auto dy = dx_in[1];
 	const auto x2Flux = fluxArray[1];
 	const auto x2FluxDiffusive = fluxDiffusiveArray[1];
+#endif
+#if (AMREX_SPACEDIM == 3)
+	const auto dz = dx_in[2];
+	const auto x3Flux = fluxArray[2];
+	const auto x3FluxDiffusive = fluxDiffusiveArray[2];
 #endif
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
@@ -308,14 +312,18 @@ void RadSystem<problem_t>::AddFluxesRK2(
 			const double FyU_1 =
 			    (dt / dy) * (x2Flux(i, j, k, n) - x2Flux(i, j + 1, k, n));
 #endif
+#if (AMREX_SPACEDIM == 3)
+			const double FzU_1 =
+				(dt / dz) * (x3Flux(i, j, k, n) - x3Flux(i, j, k + 1, n));
+#endif
 
 			// save results in U_new
 			U_new(i, j, k, nstartHyperbolic_ + n) =
-			    (0.5 * U_0 + 0.5 * U_1) + (0.5 * FxU_1
-#if (AMREX_SPACEDIM >= 2)
-						       + 0.5 * FyU_1
-#endif
-						      );
+			    (0.5 * U_0 + 0.5 * U_1) + 
+				(AMREX_D_TERM( 0.5 * FxU_1,
+				      	 	 + 0.5 * FyU_1,
+				      		 + 0.5 * FzU_1
+						   	 ));
 		}
 	});
 }
