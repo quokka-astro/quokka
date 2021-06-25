@@ -16,3 +16,12 @@
 1 GPU V100-32GB (clang-12 + nvcc + noFMA)  Performance figure-of-merit: 0.02198741689 μs/zone-update [45.48055849 Mupdates/s]
 
 [2D Beam Test 1024^2]
+1 GPU V100-32GB (gcc-8 + nvcc + noFMA)     Performance figure-of-merit: 0.01584891696 μs/zone-update [63.09579402 Mupdates/s]
+1 GPU V100-32GB (clang-12 + nvcc + noFMA)  Performance figure-of-merit: 0.007625529878 μs/zone-update [131.1384279 Mupdates/s]
+
+[3D Beam Test 256^3]
+1 GPU V100-32GB (clang-12 + nvcc + noFMA)  Performance figure-of-merit: 0.009227734151 μs/zone-update [108.3689651 Mupdates/s]
+                                           Performance figure-of-merit: 0.01140765783 μs/zone-update [87.66041329 Mupdates/s]
+                                           Performance figure-of-merit: 0.007972986967 μs/zone-update [125.4235087 Mupdates/s]
+                                           Performance figure-of-merit: 0.007896107919 μs/zone-update [126.6446723 Mupdates/s]
+                                           Performance figure-of-merit: 0.007844274211 μs/zone-update [127.48152 Mupdates/s]

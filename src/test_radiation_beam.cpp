@@ -297,16 +297,14 @@ auto testproblem_radiation_beam() -> int
 	// Problem parameters
 	const int max_timesteps = 10000;
 	const double CFL_number = 0.2;
-	const int nx = 128;
-	const int ny = 128;
+	const int nx = 256;
 	const double Lx = 2.0;		 // cm
-	const double Ly = 2.0;		 // cm
-	const double max_time = 3.0 * (Lx/c); // s
+	const double max_time = 0.3 * (Lx/c); // s
 
-	amrex::IntVect gridDims{AMREX_D_DECL(nx, ny, 4)};
+	amrex::IntVect gridDims{AMREX_D_DECL(nx, nx, nx)};
 	amrex::RealBox boxSize{
 	    {AMREX_D_DECL(amrex::Real(0.), amrex::Real(0.), amrex::Real(0.))},	 // NOLINT
-	    {AMREX_D_DECL(amrex::Real(Lx), amrex::Real(Ly), amrex::Real(1.0))}}; // NOLINT
+	    {AMREX_D_DECL(amrex::Real(Lx), amrex::Real(Lx), amrex::Real(Lx))}}; // NOLINT
 
 	auto isNormalComp = [=](int n, int dim) {
 		if ((n == RadSystem<BeamProblem>::x1RadFlux_index) && (dim == 0)) {
@@ -353,7 +351,7 @@ auto testproblem_radiation_beam() -> int
 	sim.stopTime_ = max_time;
 	sim.cflNumber_ = CFL_number;
 	sim.maxTimesteps_ = max_timesteps;
-	sim.outputAtInterval_ = true;
+	sim.outputAtInterval_ = false;
 	sim.plotfileInterval_ = 20; // for debugging
 
 	// initialize
