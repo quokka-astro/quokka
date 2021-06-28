@@ -52,9 +52,9 @@ constexpr double c = 2.99792458e10;	 // cm s^-1
 constexpr double k_B = 1.380658e-16; // erg K^-1
 constexpr double m_H = 1.6726231e-24; // mass of hydrogen atom [g]
 
-constexpr double P0 = 1.0e-4;	// equal to P_0 in dimensionless units
-constexpr double sigma_a = 1.0e6;	// absorption cross section
-constexpr double Mach0 = 3.0;
+//constexpr double P0 = 1.0e-4;	// equal to P_0 in dimensionless units
+//constexpr double sigma_a = 1.0e6;	// absorption cross section
+//constexpr double Mach0 = 3.0;
 constexpr double c_s0 = 1.73e7; // adiabatic sound speed [cm s^-1]
 
 constexpr double kappa = 577.0;	// "opacity" == rho*kappa [cm^-1] (!!)
@@ -72,9 +72,9 @@ constexpr double v1 = 1.73e7; // cm s^-1
 
 constexpr double chat = 10.0*(v0 + c_s0); // reduced speed of light
 
-const double Erad0 = a_rad * std::pow(T0, 4); // erg cm^-3
+constexpr double Erad0 = a_rad * (T0*T0*T0*T0); // erg cm^-3
 constexpr double Egas0 = rho0 * c_v * T0; // erg cm^-3
-const double Erad1 = a_rad * std::pow(T1, 4); // erg cm^-3
+constexpr double Erad1 = a_rad * (T1*T1*T1*T1); // erg cm^-3
 constexpr double Egas1 = rho1 * c_v * T1; // erg cm^-3
 
 constexpr double Lx = 0.01575; // cm
@@ -227,10 +227,10 @@ auto testproblem_radhydro_shock() -> int
 	const double CFL_number = 0.2;
 	const int nx = 256;
 
-	const double initial_dtau = 1.0e-3;	  // dimensionless time
-	const double max_dtau = 1.0e-3;		  // dimensionless time
-	const double initial_dt = initial_dtau / c_s0;
-	const double max_dt = max_dtau / c_s0;
+	//const double initial_dtau = 1.0e-3;	  // dimensionless time
+	//const double max_dtau = 1.0e-3;		  // dimensionless time
+	//const double initial_dt = initial_dtau / c_s0;
+	//const double max_dt = max_dtau / c_s0;
 	const double max_time = 9.08e-10; // s
 
 	amrex::IntVect gridDims{AMREX_D_DECL(nx, 4, 4)};
