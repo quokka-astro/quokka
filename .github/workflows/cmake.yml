@@ -27,7 +27,7 @@ jobs:
       run: cmake -E make_directory ${{runner.workspace}}/build
 
     - name: Install dependencies
-      run: sudo apt-get update && sudo apt-get install python3-dev python3-numpy python3-matplotlib gcovr libopenmpi-dev
+      run: sudo apt-get update && sudo apt-get install python3-dev python3-numpy python3-matplotlib gcovr libopenmpi-dev ccache
 
     - name: Install Sonarscan CLI
       run: ( curl https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-4.5.0.2216-linux.zip > sonar-scanner.zip ) && unzip sonar-scanner.zip -d ${{runner.workspace}}
