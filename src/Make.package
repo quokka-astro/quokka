@@ -1,0 +1,2 @@
+CEXE_sources += hydro_system.cpp hyperbolic_system.cpp test_hydro2d_kh.cpp
+CEXE_headers += hydro_system.hpp hyperbolic_system.hpp test_hydro2d_kh.hpp simulation.hpp valarray.hpp

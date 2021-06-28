@@ -1,3 +1,5 @@
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.optimize
@@ -156,6 +158,8 @@ print(f"rho_epsA = {rho_epsA}")
 print(f"rho_epsB = {rho_epsB}")
 v_epsA = M0 / rho_epsA
 v_epsB = M0 / rho_epsB
+print(f"v_epsA = {v_epsA}")
+print(f"v_epsB = {v_epsB}")
 Traddot_epsA = dTrad_dx_fun(rho_epsA, T_epsA, Trad_epsA, gamma=gamma, M0=M0, P0=P0, kappa=kappa)
 Traddot_epsB = dTrad_dx_fun(rho_epsB, T_epsB, Trad_epsB, gamma=gamma, M0=M0, P0=P0, kappa=kappa)
 print(f"Traddot_epsA = {Traddot_epsA}")
@@ -171,8 +175,8 @@ eps_ASP = 0.0
 x1_A = 1.0 + eps_ASP
 x1_B = 1.0 - eps_ASP
 
-print(f"Left-side initial conditions = ({x0_A}, {y0_A})")
-print(f"Right-side initial conditions = ({x0_B}, {y0_B})")
+print(f"Left-side initial conditions = (M_A = {x0_A}, (x_A, T_A) = {y0_A})")
+print(f"Right-side initial conditions = (M_B = {x0_B}, (x_B, T_B) = {y0_B})")
 
 ## integrate ODE
 xsol_A = np.linspace(x0_A, x1_A, 1024, endpoint=True)
@@ -192,6 +196,20 @@ x_A = solution_A.values.y[:,0]
 x_B = solution_B.values.y[:,0]
 T_A = solution_A.values.y[:, 1]
 T_B = solution_B.values.y[:, 1]
+
+## plot precursor
+fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2)
+ax1.plot(M_A, x_A, label='x')
+ax1.set_xlabel("Mach number")
+ax1.set_ylabel("x")
+ax2.plot(M_A, T_A, label='T')
+ax2.set_xlabel("Mach number")
+ax2.set_ylabel("T")
+plt.suptitle(f"M0 = {M0}, P0 = {P0}, kappa = {kappa:.3f}, sigma_a = {sigma_a:.1e}")
+plt.tight_layout()
+plt.savefig('precursor_solution.pdf')
+plt.clf()
+
 vel_A = M_A * np.sqrt(T_A)
 vel_B = M_B * np.sqrt(T_B)
 rho_A = M0 / vel_A
@@ -258,7 +276,6 @@ def objective(dx):
     j_p = np.array([Frad_a, Prad_a, S_a])
     j_s = np.array([Frad_b, Prad_b, S_b])
 
-    #my_norm = lambda v: np.sum( np.abs(v) )
     my_norm = lambda v: np.sum( v**2 )
     rel_norm = my_norm(j_p - j_s) / my_norm(j_s)    # good
     #norm = (rhoA*velA - rhoB*velB)**2 + (TradA - TradB)**2  # bad!

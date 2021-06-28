@@ -8,16 +8,37 @@
 ///
 
 #include "test_advection.hpp"
+#include "AMReX_Algorithm.H"
+#include "AMReX_BC_TYPES.H"
+#include "AMReX_BoxArray.H"
+#include "AMReX_Config.H"
+#include "AMReX_DistributionMapping.H"
+#include "AMReX_FArrayBox.H"
+#include "AMReX_MultiFab.H"
+#include "AMReX_ParallelDescriptor.H"
+#include "AdvectionSimulation.hpp"
 
-auto main(int argc, char** argv) -> int
+auto main(int argc, char **argv) -> int
 {
 	// Initialization
+	// (copied from ExaWind)
 
-	amrex::Initialize(argc, argv);
+	amrex::Initialize(argc, argv, true, MPI_COMM_WORLD, []() {
+		amrex::ParmParse pp("amrex");
+		// Set the defaults so that we throw an exception instead of attempting
+		// to generate backtrace files. However, if the user has explicitly set
+		// these options in their input files respect those settings.
+		if (!pp.contains("throw_exception")) {
+			pp.add("throw_exception", 1);
+		}
+		if (!pp.contains("signal_handling")) {
+			pp.add("signal_handling", 0);
+		}
+	});
 
 	int result = 0;
 
-	{ // objects must be destroyed before Kokkos::finalize, so enter new
+	{ // objects must be destroyed before amrex::finalize, so enter new
 	  // scope here to do that automatically
 
 		result = testproblem_advection();
@@ -28,121 +49,151 @@ auto main(int argc, char** argv) -> int
 	return result;
 }
 
-struct SawtoothProblem {};
+struct SawtoothProblem {
+};
 
-template <typename problem_t>
-void write_density(LinearAdvectionSystem<problem_t> &advection_system)
+template <> void AdvectionSimulation<SawtoothProblem>::setInitialConditions()
 {
-	amrex::Print() << "density = ";
+	for (amrex::MFIter iter(state_old_); iter.isValid(); ++iter) {
+		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
+		auto const &state = state_new_.array(iter);
+		//auto const nx = nx_; // class members are not automatically transferred to device!
+		auto const ny = ny_;
 
-	auto nx = advection_system.nx();
-	auto nghost = advection_system.nghost();
-
-	for (int i = 0; i < nx + 2 * nghost; ++i) {
-		amrex::Print() << advection_system.density(i) << " ";
+		amrex::ParallelFor(indexRange, ncomp_,
+				   [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
+					   //auto value = static_cast<double>((i + nx / 2) % nx) / nx;
+					   auto value = static_cast<double>((j + ny / 2) % ny) / ny;
+					   state(i, j, k, n) = value;
+				   });
 	}
 
-	amrex::Print() << "\n";
+	// set flag
+	areInitialConditionsDefined_ = true;
+}
+
+void ComputeExactSolution(amrex::Array4<amrex::Real> const &exact_arr, amrex::Box const &indexRange,
+			  const int nvars, const int nx, const int ny)
+{
+	amrex::ParallelFor(indexRange, nvars, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
+		//auto value = static_cast<double>((i + nx / 2) % nx) / nx;
+		auto value = static_cast<double>((j + ny / 2) % ny) / ny;
+		exact_arr(i, j, k, n) = value;
+	});
 }
 
 auto testproblem_advection() -> int
 {
 	// Problem parameters
-
 	const int nx = 400;
 	const double Lx = 1.0;
 	const double advection_velocity = 1.0;
-	const double CFL_number = 0.3;
+	const double CFL_number = 0.4;
 	const double max_time = 1.0;
-	const double max_dt = 1e-4;
+	const double max_dt = 1.0e-4;
 	const int max_timesteps = 1e4;
 	const int nvars = 1; // only density
 
-	const double atol = 1e-10; //< absolute tolerance for mass conservation
+	//amrex::IntVect gridDims{AMREX_D_DECL(nx, 4, 4)};
+	amrex::IntVect gridDims{AMREX_D_DECL(4, nx, 4)};
+
+	amrex::RealBox boxSize{
+	    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.0), amrex::Real(0.0))},
+	    {AMREX_D_DECL(amrex::Real(1.0), amrex::Real(Lx), amrex::Real(1.0))}};
+//	    {AMREX_D_DECL(amrex::Real(Lx), amrex::Real(1.0), amrex::Real(1.0))}};
+
+	amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
+	for (int n = 0; n < nvars; ++n) {
+		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+			boundaryConditions[n].setLo(i, amrex::BCType::int_dir); // periodic
+			boundaryConditions[n].setHi(i, amrex::BCType::int_dir);
+		}
+	}
 
 	// Problem initialization
+	AdvectionSimulation<SawtoothProblem> sim(gridDims, boxSize, boundaryConditions);
+	sim.maxDt_ = max_dt;
+	sim.stopTime_ = max_time;
+	sim.cflNumber_ = CFL_number;
+	sim.maxTimesteps_ = max_timesteps;
 
-	LinearAdvectionSystem<SawtoothProblem> advection_system(
-	    {.nx = nx,
-	     .lx = Lx,
-	     .vx = advection_velocity,
-	     .cflNumber = CFL_number,
-	     .nvars = nvars});
+	sim.advectionVx_ = 1.0;
+	sim.advectionVy_ = advection_velocity;
 
-	auto nghost = advection_system.nghost();
+	// set initial conditions
+	sim.setInitialConditions();
 
-	for (int i = nghost; i < nx + nghost; ++i) {
+	// run simulation
+	sim.evolve();
 
-		auto value = static_cast<double>((i - nghost + nx / 2) % nx) / nx;
-		advection_system.set_density(i) = value;
+	// Compute reference solution
+	amrex::MultiFab state_exact(sim.simBoxArray_, sim.simDistributionMapping_, sim.ncomp_,
+				    sim.nghost_);
+
+	for (amrex::MFIter iter(sim.state_new_); iter.isValid(); ++iter) {
+		const amrex::Box &indexRange = iter.validbox();
+		auto const &stateExact = state_exact.array(iter);
+		ComputeExactSolution(stateExact, indexRange, sim.ncomp_, sim.nx_, sim.ny_);
 	}
-
-	std::vector<double> x(nx);
-	std::vector<double> d_initial(nx);
-	std::vector<double> d_final(nx);
-
-	for (int i = 0; i < nx; ++i) {
-		x.at(i) = static_cast<double>(i);
-		d_initial.at(i) = advection_system.density(i + nghost);
-	}
-
-	//const auto initial_mass = advection_system.ComputeMass();
-
-	// Main time loop
-	int j = 0;
-	for (j = 0; j < max_timesteps; ++j) {
-		if (advection_system.time() >= max_time) {
-			break;
-		}
-		advection_system.AdvanceTimestepRK2(max_dt);
-	}
-
-	amrex::Print() << "timestep " << j << "; t = " << advection_system.time() << "\n";
-	//write_density(advection_system);
-
-	//const auto current_mass = advection_system.ComputeMass();
-	//amrex::Print() << "Total mass = " << current_mass << "\n";
-	//const auto mass_deficit = std::abs(current_mass - initial_mass);
-	//amrex::Print() << "Mass nonconservation = " << mass_deficit << "\n";
-	//assert(mass_deficit < atol); // NOLINT
 
 	// Compute error norm
-	for (int i = 0; i < nx; ++i) {
-		d_final.at(i) = advection_system.density(i + nghost);
-	}
-	
-	double err_norm = 0.;
-	double sol_norm = 0.;
-	for (int i=0; i < nx; ++i) {
-		err_norm += std::abs(d_final[i] - d_initial[i]);
-		sol_norm += std::abs(d_initial[i]);
-	}
-	
-	const double rel_error = err_norm / sol_norm;
-	//amrex::Print() << "Absolute error norm = " << err_norm << std::endl;
-	//amrex::Print() << "Reference solution norm = " << sol_norm << std::endl;
-	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
+	amrex::MultiFab residual(sim.simBoxArray_, sim.simDistributionMapping_, sim.ncomp_,
+				 sim.nghost_);
+	amrex::MultiFab::Copy(residual, state_exact, 0, 0, sim.ncomp_, sim.nghost_);
+	amrex::MultiFab::Saxpy(residual, -1., sim.state_new_, 0, 0, sim.ncomp_, sim.nghost_);
 
-	const double err_tol = 0.01;
+	double min_rel_error = std::numeric_limits<double>::max();
+	for (int comp = 0; comp < sim.ncomp_; ++comp) {
+		const auto sol_norm = state_exact.norm1(comp);
+		const auto err_norm = residual.norm1(comp);
+		const double rel_error = err_norm / sol_norm;
+		min_rel_error = std::min(min_rel_error, rel_error);
+		amrex::Print() << "Relative L1 error norm (comp " << comp << ") = " << rel_error
+			       << "\n";
+	}
+
+	const double err_tol = 0.015;
 	int status = 0;
-	if (rel_error > err_tol) {
+	if (min_rel_error > err_tol) {
 		status = 1;
 	}
 
-	// Plot results
-	std::map<std::string, std::string> d_initial_args;
-	std::map<std::string, std::string> d_final_args;
-	d_initial_args["label"] = "density (initial)";
-	d_final_args["label"] = "density (final)";
+	// copy all FABs to a local FAB across the entire domain
+	amrex::BoxArray localBoxes(sim.domain_);
+	amrex::DistributionMapping localDistribution(localBoxes, 1);
+	amrex::MultiFab state_final(localBoxes, localDistribution, sim.ncomp_, 0);
+	amrex::MultiFab state_exact_local(localBoxes, localDistribution, sim.ncomp_, 0);
+	state_final.ParallelCopy(sim.state_new_);
+	state_exact_local.ParallelCopy(state_exact);
+	auto const &state_final_array = state_final.array(0);
+	auto const &state_exact_array = state_exact_local.array(0);
 
-	matplotlibcpp::clf();
-	matplotlibcpp::plot(x, d_initial, d_initial_args);
-	matplotlibcpp::plot(x, d_final, d_final_args);
-	matplotlibcpp::legend();
-	matplotlibcpp::save(std::string("./advection.pdf"));
+	// plot solution
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		auto N = sim.ny_;
+		std::vector<double> d_final(N);
+		std::vector<double> d_initial(N);
+		std::vector<double> x(N);
 
-	// Cleanup and exit
-	amrex::Print() << "Finished." << std::endl;
+		for (int i = 0; i < N; ++i) {
+			x.at(i) = (static_cast<double>(i) + 0.5) / N;
+//			d_final.at(i) = state_final_array(i, 0, 0);
+//			d_initial.at(i) = state_exact_array(i, 0, 0);
+			d_final.at(i) = state_final_array(0, i, 0);
+			d_initial.at(i) = state_exact_array(0, i, 0);
+		}
+
+		// Plot results
+		std::map<std::string, std::string> d_initial_args;
+		std::map<std::string, std::string> d_final_args;
+		d_initial_args["label"] = "density (initial)";
+		d_final_args["label"] = "density (final)";
+
+		matplotlibcpp::plot(x, d_initial, d_initial_args);
+		matplotlibcpp::plot(x, d_final, d_final_args);
+		matplotlibcpp::legend();
+		matplotlibcpp::save(std::string("./advection.pdf"));
+	}
 
 	return status;
 }

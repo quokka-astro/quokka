@@ -8,16 +8,31 @@
 ///
 
 #include "test_radiation_matter_coupling.hpp"
+#include "AMReX_BC_TYPES.H"
+#include "RadhydroSimulation.hpp"
+#include "radiation_system.hpp"
+#include <vector>
 
-auto main(int argc, char** argv) -> int
+auto main(int argc, char **argv) -> int
 {
-	// Initialization
+	// Initialization (copied from ExaWind)
 
-	amrex::Initialize(argc, argv);
+	amrex::Initialize(argc, argv, true, MPI_COMM_WORLD, []() {
+		amrex::ParmParse pp("amrex");
+		// Set the defaults so that we throw an exception instead of attempting
+		// to generate backtrace files. However, if the user has explicitly set
+		// these options in their input files respect those settings.
+		if (!pp.contains("throw_exception")) {
+			pp.add("throw_exception", 1);
+		}
+		if (!pp.contains("signal_handling")) {
+			pp.add("signal_handling", 0);
+		}
+	});
 
 	int result = 0;
 
-	{ // objects must be destroyed before Kokkos::finalize, so enter new
+	{ // objects must be destroyed before amrex::finalize, so enter new
 	  // scope here to do that automatically
 
 		result = testproblem_radiation_matter_coupling();
@@ -32,29 +47,36 @@ struct CouplingProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
 // Su & Olson (1997) test problem
-const double eps_SuOlson = 1.0;
-const double a_rad = 7.5646e-15; // cgs
-const double alpha_SuOlson = 4.0 * a_rad / eps_SuOlson;
+constexpr double eps_SuOlson = 1.0;
+constexpr double a_rad = 7.5646e-15; // cgs
+constexpr double alpha_SuOlson = 4.0 * a_rad / eps_SuOlson;
+
+template <> struct RadSystem_Traits<CouplingProblem> {
+	static constexpr double c_light = c_light_cgs_;
+	static constexpr double c_hat = c_light_cgs_;
+	static constexpr double radiation_constant = radiation_constant_cgs_;
+	static constexpr double mean_molecular_mass = hydrogen_mass_cgs_;
+	static constexpr double boltzmann_constant = boltzmann_constant_cgs_;
+	static constexpr double gamma = 5. / 3.;
+	static constexpr double Erad_floor = 0.;
+	static constexpr bool do_marshak_left_boundary = false;
+	static constexpr double T_marshak_left = 0.;
+};
 
 template <>
-auto RadSystem<CouplingProblem>::ComputeTgasFromEgas(const double rho,
-						     const double Egas)
-    -> double
+AMREX_GPU_HOST_DEVICE auto RadSystem<CouplingProblem>::ComputeTgasFromEgas(const double rho, const double Egas) -> double
 {
 	return std::pow(4.0 * Egas / alpha_SuOlson, 1. / 4.);
 }
 
 template <>
-auto RadSystem<CouplingProblem>::ComputeEgasFromTgas(const double rho,
-						     const double Tgas)
-    -> double
+AMREX_GPU_HOST_DEVICE auto RadSystem<CouplingProblem>::ComputeEgasFromTgas(const double rho, const double Tgas) -> double
 {
 	return (alpha_SuOlson / 4.0) * std::pow(Tgas, 4);
 }
 
 template <>
-auto RadSystem<CouplingProblem>::ComputeEgasTempDerivative(const double rho,
-							   const double Tgas)
+AMREX_GPU_HOST_DEVICE auto RadSystem<CouplingProblem>::ComputeEgasTempDerivative(const double rho, const double Tgas)
     -> double
 {
 	// This is also known as the heat capacity, i.e.
@@ -68,205 +90,188 @@ auto RadSystem<CouplingProblem>::ComputeEgasTempDerivative(const double rho,
 	return alpha_SuOlson * std::pow(Tgas, 3);
 }
 
+constexpr double Erad = 1.0e12; // erg cm^-3
+constexpr double Egas = 1.0e2;	// erg cm^-3
+constexpr double rho = 1.0e-7;	// g cm^-3
+
+template <> void RadhydroSimulation<CouplingProblem>::setInitialConditions()
+{
+	for (amrex::MFIter iter(state_old_); iter.isValid(); ++iter) {
+		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
+		auto const &state = state_new_.array(iter);
+
+		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+			state(i, j, k, RadSystem<CouplingProblem>::radEnergy_index) = Erad;
+			state(i, j, k, RadSystem<CouplingProblem>::x1RadFlux_index) = 0;
+			state(i, j, k, RadSystem<CouplingProblem>::x2RadFlux_index) = 0;
+			state(i, j, k, RadSystem<CouplingProblem>::x3RadFlux_index) = 0;
+
+			state(i, j, k, RadSystem<CouplingProblem>::gasEnergy_index) = Egas;
+			state(i, j, k, RadSystem<CouplingProblem>::gasDensity_index) = rho;
+			state(i, j, k, RadSystem<CouplingProblem>::x1GasMomentum_index) = 0.;
+			state(i, j, k, RadSystem<CouplingProblem>::x2GasMomentum_index) = 0.;
+			state(i, j, k, RadSystem<CouplingProblem>::x3GasMomentum_index) = 0.;
+		});
+	}
+
+	// set flag
+	areInitialConditionsDefined_ = true;
+}
+
+template <> void RadhydroSimulation<CouplingProblem>::computeAfterTimestep()
+{
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		// copy all FABs to a local FAB across the entire domain
+		amrex::BoxArray localBoxes(domain_);
+		amrex::DistributionMapping localDistribution(localBoxes, 1);
+		amrex::MultiFab state_final(localBoxes, localDistribution, ncomp_, 0);
+		amrex::MultiFab state_exact_local(localBoxes, localDistribution, ncomp_, 0);
+		state_final.ParallelCopy(state_new_);
+		auto const &state_final_array = state_final.array(0);
+
+		t_vec_.push_back(tNow_);
+		const amrex::Real Erad_i =
+		    state_final_array(0, 0, 0, RadSystem<CouplingProblem>::radEnergy_index);
+		const amrex::Real Egas_i =
+		    state_final_array(0, 0, 0, RadSystem<CouplingProblem>::gasEnergy_index);
+		Trad_vec_.push_back(std::pow(Erad_i / a_rad, 1. / 4.));
+		Tgas_vec_.push_back(RadSystem<CouplingProblem>::ComputeTgasFromEgas(rho, Egas_i));
+	}
+}
+
 auto testproblem_radiation_matter_coupling() -> int
 {
 	// Problem parameters
 
 	const int nx = 4;
-	const double Lx = 1e5;
+	const double Lx = 1e5; // cm
 	const double CFL_number = 1.0;
-	// const double constant_dt = 1.0e-11; // s
-	// const double max_time = 1.0e-7;	    // s
-	const double constant_dt = 1.0e-8; // s
-	const double max_time = 1.0e-2;	   // s
+	const double max_time = 1.0e-2; // s
 	const int max_timesteps = 1e6;
-
-	const double Erad = 1.0e12; // erg cm^-3
-	const double Egas = 1.0e2;  // erg cm^-3
-	const double rho = 1.0e-7;  // g cm^-3
-	const auto initial_Trad = std::pow(Erad / a_rad, 1. / 4.);
+	// const double constant_dt = 1.0e-8; // s
 
 	// Problem initialization
+	amrex::IntVect gridDims{AMREX_D_DECL(nx, 4, 4)};
+	amrex::RealBox boxSize{
+	    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.0), amrex::Real(0.0))},	// NOLINT
+	    {AMREX_D_DECL(amrex::Real(Lx), amrex::Real(1.0), amrex::Real(1.0))}}; // NOLINT
 
-	RadSystem<CouplingProblem> rad_system(
-	    {.nx = nx, .lx = Lx, .cflNumber = CFL_number});
-
-	rad_system.set_radiation_constant(a_rad);
-	const double initial_Tgas = rad_system.ComputeTgasFromEgas(rho, Egas);
-	const auto kappa =
-	    RadSystem<CouplingProblem>::ComputeOpacity(rho, initial_Tgas);
-
-	auto nghost = rad_system.nghost();
-	for (int i = nghost; i < nx + nghost; ++i) {
-		rad_system.set_radEnergy(i) = Erad;
-		rad_system.set_x1RadFlux(i) = 0.0;
-		rad_system.set_gasEnergy(i) = Egas;
-		rad_system.set_staticGasDensity(i) = rho;
+	constexpr int nvars = 9;
+	amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
+	for (int n = 0; n < nvars; ++n) {
+		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+			boundaryConditions[n].setLo(i, amrex::BCType::foextrap); // extrapolate
+			boundaryConditions[n].setHi(i, amrex::BCType::foextrap);
+		}
 	}
 
-	const auto initial_Erad = rad_system.ComputeRadEnergy();
-	const auto initial_Egas = rad_system.ComputeGasEnergy();
-	const auto initial_Etot = initial_Erad + initial_Egas;
+	RadhydroSimulation<CouplingProblem> sim(gridDims, boxSize, boundaryConditions);
+	sim.stopTime_ = max_time;
+	sim.radiationCflNumber_ = CFL_number;
+	sim.maxTimesteps_ = max_timesteps;
+	sim.outputAtInterval_ = false;
+	sim.plotfileInterval_ = 100; // for debugging
 
-	amrex::Print() << "Initial radiation temperature = " << initial_Trad << "\n";
-	amrex::Print() << "Initial gas temperature = " << initial_Tgas << "\n";
+	// initialize
+	sim.setInitialConditions();
 
-#if 0
-	const double c_v =
-	    rad_system.boltzmann_constant_ /
-	    (rad_system.mean_molecular_mass_ * (rad_system.gamma_ - 1.0));
-	const auto initial_Tgas = Egas / (rho * c_v);
+	// evolve
+	sim.evolve();
 
-	amrex::Print() << "Volumetric heat capacity c_v = " << rho * c_v << "\n";
-#endif
+	// copy solution slice to vector
+	int status = 0;
 
-	// Main time loop
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		// Solve for asymptotically-exact solution (Gonzalez et al. 2007)
+		const int nmax = sim.t_vec_.size();
+		std::vector<double> t_exact(nmax);
+		std::vector<double> Tgas_exact(nmax);
+		const double initial_Tgas =
+		    RadSystem<CouplingProblem>::ComputeTgasFromEgas(rho, Egas);
+		const auto kappa = RadSystem<CouplingProblem>::ComputeOpacity(rho, initial_Tgas);
 
-	std::vector<double> t;
-	std::vector<double> Trad;
-	std::vector<double> Tgas;
-	std::vector<double> Egas_v;
+		for (int n = 0; n < nmax; ++n) {
+			const double time_t = sim.t_vec_.at(n);
+			const double arad = RadSystem<CouplingProblem>::radiation_constant_;
+			const double c = RadSystem<CouplingProblem>::c_light_;
+			const double E0 = (Erad + Egas) / (arad + alpha_SuOlson / 4.0);
+			const double T0_4 = std::pow(initial_Tgas, 4);
 
-	for (int j = 0; j < max_timesteps; ++j) {
+			const double T4 = (T0_4 - E0) * std::exp(-(4. / alpha_SuOlson) *
+								 (arad + alpha_SuOlson / 4.0) *
+								 kappa * rho * c * time_t) +
+					  E0;
 
-		const auto current_Erad = rad_system.ComputeRadEnergy();
-		const auto current_Egas = rad_system.ComputeGasEnergy();
-		const auto current_Etot = current_Erad + current_Egas;
-		const auto Ediff = std::fabs(current_Etot - initial_Etot);
+			const double T_gas = std::pow(T4, 1. / 4.);
 
-		if (rad_system.time() >= max_time) {
-			amrex::Print() << "Timestep " << j
-				  << "; t = " << rad_system.time() << "\n";
-			amrex::Print() << "radiation energy = " << current_Erad
-				  << "\n";
-			amrex::Print() << "gas energy = " << current_Egas << "\n";
-			amrex::Print() << "Total energy = " << current_Etot << "\n";
-			amrex::Print() << "(Energy nonconservation = " << Ediff
-				  << ")\n";
-			amrex::Print() << "\n";
-
-			break;
+			t_exact.at(n) = (time_t);
+			Tgas_exact.at(n) = (T_gas);
 		}
 
-		rad_system.AdvanceTimestep(constant_dt);
+		// interpolate exact solution onto output timesteps
+		std::vector<double> Tgas_exact_interp(sim.t_vec_.size());
+		interpolate_arrays(sim.t_vec_.data(), Tgas_exact_interp.data(), sim.t_vec_.size(),
+				   t_exact.data(), Tgas_exact.data(), t_exact.size());
 
-		t.push_back(rad_system.time());
-		Trad.push_back(std::pow(rad_system.radEnergy(0 + nghost) /
-					    rad_system.radiation_constant(),
-					1. / 4.));
+		// compute L2 error norm
+		double err_norm = 0.;
+		double sol_norm = 0.;
+		for (int i = 0; i < sim.t_vec_.size(); ++i) {
+			err_norm += std::abs(sim.Tgas_vec_[i] - Tgas_exact_interp[i]);
+			sol_norm += std::abs(Tgas_exact_interp[i]);
+		}
+		const double rel_error = err_norm / sol_norm;
+		const double error_tol = 2e-5;
+		amrex::Print() << "relative L1 error norm = " << rel_error << std::endl;
+		if (rel_error > error_tol) {
+			status = 1;
+		}
 
-		auto Egas_i = rad_system.gasEnergy(0 + nghost);
-		Tgas.push_back(rad_system.ComputeTgasFromEgas(rho, Egas_i));
-		Egas_v.push_back(rad_system.gasEnergy(0 + nghost));
+		// Plot results
+		std::vector<double> &Tgas = sim.Tgas_vec_;
+		std::vector<double> &Trad = sim.Trad_vec_;
+		std::vector<double> &t = sim.t_vec_;
+
+		matplotlibcpp::clf();
+		matplotlibcpp::yscale("log");
+		matplotlibcpp::xscale("log");
+		matplotlibcpp::ylim(0.1 * std::min(Tgas.front(), Trad.front()),
+				    10.0 * std::max(Trad.back(), Tgas.back()));
+
+		std::map<std::string, std::string> Trad_args;
+		Trad_args["label"] = "radiation temperature (numerical)";
+		matplotlibcpp::plot(t, Trad, Trad_args);
+
+		std::map<std::string, std::string> Tgas_args;
+		Tgas_args["label"] = "gas temperature (numerical)";
+		matplotlibcpp::plot(t, Tgas, Tgas_args);
+
+		std::map<std::string, std::string> exactsol_args;
+		exactsol_args["label"] = "gas temperature (exact)";
+		exactsol_args["linestyle"] = "--";
+		exactsol_args["color"] = "black";
+		matplotlibcpp::plot(t, Tgas_exact_interp, exactsol_args);
+
+		matplotlibcpp::legend();
+		matplotlibcpp::xlabel("time t (s)");
+		matplotlibcpp::ylabel("temperature T (K)");
+		// matplotlibcpp::title(
+		//    fmt::format("dt = {:.4g}\nt = {:.4g}", constant_dt, sim.tNow_));
+		matplotlibcpp::save(fmt::format("./radcoupling.pdf"));
+
+		matplotlibcpp::clf();
+
+		std::vector<double> frac_err(t.size());
+		for (int i = 0; i < t.size(); ++i) {
+			frac_err.at(i) = Tgas_exact_interp.at(i) / Tgas.at(i) - 1.0;
+		}
+		matplotlibcpp::plot(t, frac_err);
+		matplotlibcpp::xlabel("time t (s)");
+		matplotlibcpp::ylabel("fractional error in material temperature");
+		matplotlibcpp::save(fmt::format("./radcoupling_fractional_error.pdf"));
 	}
-
-	// Solve for asymptotically-exact solution (Gonzalez et al. 2007)
-	const int nmax = t.size();
-	std::vector<double> t_exact(nmax);
-	std::vector<double> Tgas_exact(nmax);
-
-	for (int n = 0; n < nmax; ++n) {
-#if 0
-		const double T_r = initial_Trad;
-		const double T0 = initial_Tgas;
-
-		const double T_gas =
-		    (static_cast<double>(n + 1) / static_cast<double>(nmax)) *
-			(T_r - T0) +
-		    T0;
-
-		const double term1 =
-		    std::atan(T0 / T_r) - std::atan(T_gas / T_r);
-		const double term2 = -std::log(T_r - T0) + std::log(T_r + T0) +
-				     std::log(T_r - T_gas) -
-				     std::log(T_r + T_gas);
-
-		const double norm_fac =
-		    (-kappa * rad_system.c_light_ *
-		     rad_system.radiation_constant() / c_v) *
-		    std::pow(T_r, 3);
-
-		const double time_t = (0.5 * term1 + 0.25 * term2) / norm_fac;
-#endif
-
-		const double time_t = t.at(n);
-		const double arad = rad_system.radiation_constant();
-		const double c = rad_system.c_light_;
-		const double E0 = (Erad + Egas) / (arad + alpha_SuOlson / 4.0);
-		const double T0_4 = std::pow(initial_Tgas, 4);
-
-		const double T4 =
-		    (T0_4 - E0) * std::exp(-(4. / alpha_SuOlson) *
-					   (arad + alpha_SuOlson / 4.0) *
-					   kappa * rho * c * time_t) +
-		    E0;
-
-		const double T_gas = std::pow(T4, 1. / 4.);
-
-		t_exact.at(n) = (time_t);
-		Tgas_exact.at(n) = (T_gas);
-	}
-
-	// interpolate exact solution onto output timesteps
-	std::vector<double> Tgas_exact_interp(t.size());
-	interpolate_arrays(t.data(), Tgas_exact_interp.data(), t.size(),
-			   t_exact.data(), Tgas_exact.data(), t_exact.size());
-
-	// compute L2 error norm
-	double err_norm = 0.;
-	double sol_norm = 0.;
-	for (int i = 0; i < t.size(); ++i) {
-		err_norm += std::abs(Tgas[i] - Tgas_exact_interp[i]);
-		sol_norm += std::abs(Tgas_exact_interp[i]);
-	}
-	const double rel_error = err_norm / sol_norm;
-	const double error_tol = 1e-5;
-	amrex::Print() << "relative L1 error norm = " << rel_error << std::endl;
-
-	matplotlibcpp::clf();
-	matplotlibcpp::yscale("log");
-	matplotlibcpp::xscale("log");
-	matplotlibcpp::ylim(0.1 * std::min(Tgas.front(), Trad.front()),
-			    10.0 * std::max(Trad.back(), Tgas.back()));
-
-	std::map<std::string, std::string> Trad_args;
-	Trad_args["label"] = "radiation temperature (numerical)";
-	matplotlibcpp::plot(t, Trad, Trad_args);
-
-	std::map<std::string, std::string> Tgas_args;
-	Tgas_args["label"] = "gas temperature (numerical)";
-	matplotlibcpp::plot(t, Tgas, Tgas_args);
-
-	std::map<std::string, std::string> exactsol_args;
-	exactsol_args["label"] = "gas temperature (exact)";
-	exactsol_args["linestyle"] = "--";
-	exactsol_args["color"] = "black";
-	matplotlibcpp::plot(t, Tgas_exact_interp, exactsol_args);
-
-	matplotlibcpp::legend();
-	matplotlibcpp::xlabel("time t (s)");
-	matplotlibcpp::ylabel("temperature T (K)");
-	matplotlibcpp::title(fmt::format("dt = {:.4g}\nt = {:.4g}", constant_dt,
-					 rad_system.time()));
-	matplotlibcpp::save(fmt::format("./radcoupling.pdf"));
-
-	matplotlibcpp::clf();
-
-	std::vector<double> frac_err(t.size());
-	for (int i = 0; i < t.size(); ++i) {
-		frac_err.at(i) = Tgas_exact_interp.at(i) / Tgas.at(i) - 1.0;
-	}
-	matplotlibcpp::plot(t, frac_err);
-	matplotlibcpp::xlabel("time t (s)");
-	matplotlibcpp::ylabel("fractional error in material temperature");
-	matplotlibcpp::save(fmt::format("./radcoupling_fractional_error.pdf"));
 
 	// Cleanup and exit
 	amrex::Print() << "Finished." << std::endl;
-
-	int status = 0;
-	if (rel_error > error_tol) {
-		status = 1;
-	}
 	return status;
 }

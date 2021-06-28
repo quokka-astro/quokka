@@ -8,16 +8,30 @@
 ///
 
 #include "test_hydro_wave.hpp"
+#include "AMReX_ParmParse.H"
+#include "HydroSimulation.hpp"
+#include "hydro_system.hpp"
 
-auto main(int argc, char** argv) -> int
+auto main(int argc, char **argv) -> int
 {
-	// Initialization
+	// Initialization (copied from ExaWind)
 
-	amrex::Initialize(argc, argv);
+	amrex::Initialize(argc, argv, true, MPI_COMM_WORLD, []() {
+		amrex::ParmParse pp("amrex");
+		// Set the defaults so that we throw an exception instead of attempting
+		// to generate backtrace files. However, if the user has explicitly set
+		// these options in their input files respect those settings.
+		if (!pp.contains("throw_exception")) {
+			pp.add("throw_exception", 1);
+		}
+		if (!pp.contains("signal_handling")) {
+			pp.add("signal_handling", 0);
+		}
+	});
 
 	int result = 0;
 
-	{ // objects must be destroyed before Kokkos::finalize, so enter new
+	{ // objects must be destroyed before amrex::finalize, so enter new
 	  // scope here to do that automatically
 
 		result = testproblem_hydro_wave();
@@ -28,25 +42,47 @@ auto main(int argc, char** argv) -> int
 	return result;
 }
 
-struct WaveProblem {};
+struct WaveProblem {
+};
 
-template <>
-void HyperbolicSystem<WaveProblem>::FillGhostZones(array_t &cons)
+template <> double HydroSystem<WaveProblem>::gamma_ = 5. / 3.;
+
+template <> void HydroSimulation<WaveProblem>::setInitialConditions()
 {
-	// periodic boundary conditions
-	// x1 right side boundary
-	for (int n = 0; n < nvars_; ++n) {
-		for (int i = nghost_ + nx_; i < nghost_ + nx_ + nghost_; ++i) {
-			cons(n, i) = cons(n, i - nx_);
-		}
+	amrex::GpuArray<Real, AMREX_SPACEDIM> dx = simGeometry_.CellSizeArray();
+	amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo = simGeometry_.ProbLoArray();
+
+	for (amrex::MFIter iter(state_old_); iter.isValid(); ++iter) {
+		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
+		auto const &state = state_new_.array(iter);
+
+		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+			const amrex::Real x_L = prob_lo[0] + (i + Real(0.0)) * dx[0];
+			const amrex::Real x_R = prob_lo[0] + (i + Real(1.0)) * dx[0];
+			const amrex::Real dx = x_R - x_L;
+
+			const double gamma = HydroSystem<WaveProblem>::gamma_;
+			const double rho0 = 1.0;       // background density
+			const double P0 = 1.0 / gamma; // background pressure
+			const double v0 = 0.;	       // background velocity
+			const double A = 1.0e-6;       // perturbation amplitude
+
+			const std::valarray<double> R = {1.0, -1.0,
+							 1.5}; // right eigenvector of sound wave
+			const std::valarray<double> U_0 = {
+			    rho0, rho0 * v0, P0 / (gamma - 1.0) + 0.5 * rho0 * std::pow(v0, 2)};
+			const std::valarray<double> dU =
+			    (A * R / (2.0 * M_PI * dx)) *
+			    (std::cos(2.0 * M_PI * x_L) - std::cos(2.0 * M_PI * x_R));
+
+			state(i, j, k, HydroSystem<WaveProblem>::density_index) = U_0[0] + dU[0];
+			state(i, j, k, HydroSystem<WaveProblem>::x1Momentum_index) = U_0[1] + dU[1];
+			state(i, j, k, HydroSystem<WaveProblem>::energy_index) = U_0[2] + dU[2];
+		});
 	}
 
-	// x1 left side boundary
-	for (int n = 0; n < nvars_; ++n) {
-		for (int i = 0; i < nghost_; ++i) {
-			cons(n, i) = cons(n, i + nx_);
-		}
-	}
+	// set flag
+	areInitialConditionsDefined_ = true;
 }
 
 auto testproblem_hydro_wave() -> int
@@ -63,89 +99,32 @@ auto testproblem_hydro_wave() -> int
 	const double max_dt = 1e-3;
 	const int max_timesteps = 1e3;
 
-	const double gamma = 5./3.; // ratio of specific heats
-	const double rho0 = 1.0;	// background density
-	const double P0 = 1.0 / gamma; // background pressure
-	const double v0 = 0.;		// background velocity
-	const double A = 1.0e-6;	// perturbation amplitude
-
-	const std::valarray<double> R = {1.0, -1.0, 1.5}; // right eigenvector of sound wave
-	const std::valarray<double> U_0 = {rho0, rho0*v0, P0/(gamma - 1.0) + 0.5*rho0*std::pow(v0, 2)};
-
-	const double rtol = 1e-10; //< absolute tolerance for conserved vars
-
 	// Problem initialization
 
-	HydroSystem<WaveProblem> hydro_system(
-	    {.nx = nx, .lx = Lx, .cflNumber = CFL_number, .gamma = gamma});
 
-	auto nghost = hydro_system.nghost();
 
-	for (int i = nghost; i < nx + nghost; ++i) {
-		const auto idx_value = static_cast<double>(i - nghost);
-		//const double x = Lx * ((idx_value + 0.5) / static_cast<double>(nx));
-		const double x_L = Lx * ((idx_value) / static_cast<double>(nx));
-		const double x_R = Lx * ((idx_value + 1) / static_cast<double>(nx));
-		const double dx = x_R - x_L;
+	// Main time loop
 
-		//const std::valarray<double> dU = A * R * std::sin(2.0 * M_PI * x);
-		const std::valarray<double> dU = (A*R/(2.0*M_PI*dx))*(std::cos(2.0*M_PI*x_L) - std::cos(2.0*M_PI*x_R));
 
-		hydro_system.set_density(i) 	= U_0[0] + dU[0];
-		hydro_system.set_x1Momentum(i) 	= U_0[1] + dU[1];
-		hydro_system.set_energy(i) 		= U_0[2] + dU[2];
-	}
+
+	// Plot results every X timesteps
 
 	std::vector<double> xs(nx);
 	std::vector<double> d_initial(nx);
 	std::vector<double> v_initial(nx);
 	std::vector<double> P_initial(nx);
 
-	hydro_system.ConservedToPrimitive(hydro_system.consVar_,
-					  std::make_pair(nghost, nx + nghost));
-
 	for (int i = 0; i < nx; ++i) {
 		const double x = Lx * ((i + 0.5) / static_cast<double>(nx));
 		xs.at(i) = x;
-		d_initial.at(i) = (hydro_system.density(i+nghost) - rho0) / A;
-		v_initial.at(i) = (hydro_system.x1Velocity(i+nghost) - v0) / A;
-		P_initial.at(i) = (hydro_system.pressure(i+nghost) - P0) / A;
+		d_initial.at(i) = (hydro_system.density(i + nghost) - rho0) / A;
+		v_initial.at(i) = (hydro_system.x1Velocity(i + nghost) - v0) / A;
+		P_initial.at(i) = (hydro_system.pressure(i + nghost) - P0) / A;
 	}
 
-	const auto initial_mass = hydro_system.ComputeMass();
-
-	// Main time loop
-    amrex::Real start_time = amrex::ParallelDescriptor::second();
-
-	int j = 0;
-	for (; j < max_timesteps; ++j) {
-		if (hydro_system.time() >= max_time) {
-			break;
-		}
-		hydro_system.AdvanceTimestep(max_dt);
-	}
-
-	// Compute performance figure-of-merit (microseconds/zone-cycle)
-	amrex::Real stop_time = amrex::ParallelDescriptor::second();
-	amrex::Real run_time = stop_time - start_time;
-	amrex::Real zone_cycles_per_second = (j*nx)/run_time;
-	amrex::Print() << "Zone-cycles/second = " << std::setprecision(5) << zone_cycles_per_second;
-	amrex::Print() << " (" << std::setprecision(5) << (1.0e6/zone_cycles_per_second) << " µs/zone-cycle)\n";
-
-	const auto current_mass = hydro_system.ComputeMass();
-	const auto mass_deficit = std::abs(current_mass - initial_mass);
-	amrex::Print() << "t = " << hydro_system.time() << "\n";
-	amrex::Print() << "Total mass = " << current_mass << "\n";
-	amrex::Print() << "Mass nonconservation = " << mass_deficit << "\n";
-	amrex::Print() << "\n";
-
-	// Plot results every X timesteps
 	std::vector<double> d(nx);
 	std::vector<double> v(nx);
 	std::vector<double> P(nx);
-
-	hydro_system.ConservedToPrimitive(hydro_system.consVar_,
-					  std::make_pair(nghost, nghost + nx));
 
 	for (int i = 0; i < nx; ++i) {
 		d.at(i) = (hydro_system.primDensity(i + nghost) - rho0) / A;
@@ -153,33 +132,29 @@ auto testproblem_hydro_wave() -> int
 		P.at(i) = (hydro_system.pressure(i + nghost) - P0) / A;
 	}
 
-	const double t = hydro_system.time();
-
 	double rhoerr_norm = 0.;
-	for(int i = 0; i < nx; ++i) {
+	for (int i = 0; i < nx; ++i) {
 		rhoerr_norm += std::abs(d[i] - d_initial[i]) / nx;
 	}
-	
+
 	double vxerr_norm = 0.;
-	for(int i = 0; i < nx; ++i) {
+	for (int i = 0; i < nx; ++i) {
 		vxerr_norm += std::abs(v[i] - v_initial[i]) / nx;
 	}
 
 	double Perr_norm = 0.;
-	for(int i = 0; i < nx; ++i) {
+	for (int i = 0; i < nx; ++i) {
 		Perr_norm += std::abs(P[i] - P_initial[i]) / nx;
 	}
 
-	const double err_norm = std::sqrt(std::pow(rhoerr_norm, 2) +
-									  std::pow(vxerr_norm,  2) +
-									  std::pow(Perr_norm,   2) );
+	const double err_norm =
+	    std::sqrt(std::pow(rhoerr_norm, 2) + std::pow(vxerr_norm, 2) + std::pow(Perr_norm, 2));
 
 	const double err_tol = 0.003;
 	int status = 0;
 	if (err_norm > err_tol) {
 		status = 1;
 	}
-	amrex::Print() << "L1 error norm = " << err_norm << std::endl;
 
 	// plot result
 	std::map<std::string, std::string> d_args, dinit_args, dexact_args;
@@ -214,7 +189,6 @@ auto testproblem_hydro_wave() -> int
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("t = {:.4f}", t));
 	matplotlibcpp::save(fmt::format("./velocity_{:.4f}.pdf", t));
-
 
 	assert((mass_deficit / initial_mass) < rtol); // NOLINT
 

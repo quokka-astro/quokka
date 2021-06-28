@@ -12,170 +12,91 @@
 // c++ headers
 #include <cassert>
 #include <cmath>
+#include <type_traits>
 
 // library headers
 
 // internal headers
+#include "AMReX_BLassert.H"
+#include "AMReX_FArrayBox.H"
+#include "AMReX_FabArrayUtility.H"
 #include "hyperbolic_system.hpp"
 
 /// Class for a linear, scalar advection equation
 ///
 template <typename problem_t> class LinearAdvectionSystem : public HyperbolicSystem<problem_t>
 {
-	using HyperbolicSystem<problem_t>::lx_;
-	using HyperbolicSystem<problem_t>::nx_;
-	using HyperbolicSystem<problem_t>::dx_;
-	using HyperbolicSystem<problem_t>::dt_;
-	using HyperbolicSystem<problem_t>::cflNumber_;
-	using HyperbolicSystem<problem_t>::dim1_;
-	using HyperbolicSystem<problem_t>::nghost_;
-	using HyperbolicSystem<problem_t>::nvars_;
-
-	using HyperbolicSystem<problem_t>::x1LeftState_;
-	using HyperbolicSystem<problem_t>::x1RightState_;
-	using HyperbolicSystem<problem_t>::x1Flux_;
-	using HyperbolicSystem<problem_t>::x1FluxDiffusive_;
-	using HyperbolicSystem<problem_t>::primVar_;
-	using HyperbolicSystem<problem_t>::consVar_;
-	using HyperbolicSystem<problem_t>::consVarPredictStep_;
-
       public:
 	enum varIndex { density_index = 0 };
 
-	struct LinearAdvectionArgs {
-		int nx;
-		double lx;
-		double vx;
-		double cflNumber;
-		int nvars;
-	};
+	// static member functions
 
-	explicit LinearAdvectionSystem(LinearAdvectionArgs args);
-
-	void AddSourceTerms(array_t &U_prev, array_t &U_new, std::pair<int, int> range) override;
-	auto ComputeMass() -> double;
-	void FillGhostZones(array_t &cons) override;
-
-	// accessor functions
-
-	auto density(int i) -> double;	     // returns rvalue
-	auto set_density(int i) -> double &; // returns lvalue
-
-      protected:
-	array_t density_; // shallow copy of consVars_(i,:)
-	double advectionVx_;
-
-	void ConservedToPrimitive(array_t &cons, std::pair<int, int> range) override;
-	auto ComputeTimestep(double dt_max) -> double override;
-	void ComputeFluxes(std::pair<int, int> range) override;
-	void ComputeFirstOrderFluxes(std::pair<int, int> range) override;
+	static void ConservedToPrimitive(arrayconst_t &cons, array_t &primVar,
+					 amrex::Box const &indexRange, int nvars);
+	static void ComputeMaxSignalSpeed(arrayconst_t &cons, array_t &maxSignal,
+					  double advectionVx, amrex::Box const &indexRange);
+	template <FluxDir DIR>
+	static void ComputeFluxes(array_t &x1Flux, arrayconst_t &x1LeftState,
+				  arrayconst_t &x1RightState, double advectionVx,
+				  amrex::Box const &indexRange, int nvars);
 };
 
 template <typename problem_t>
-LinearAdvectionSystem<problem_t>::LinearAdvectionSystem(const LinearAdvectionArgs args)
-    : advectionVx_(args.vx), HyperbolicSystem<problem_t>{args.nx, args.lx, args.cflNumber,
-							 args.nvars}
+void LinearAdvectionSystem<problem_t>::ComputeMaxSignalSpeed(
+    amrex::Array4<amrex::Real const> const & /*cons*/, amrex::Array4<amrex::Real> const &maxSignal,
+    const double advectionVx, amrex::Box const &indexRange)
 {
-	assert(advectionVx_ != 0.0); // NOLINT
-
-	density_ = consVar_.SliceArray(density_index);
-}
-
-template <typename problem_t> auto LinearAdvectionSystem<problem_t>::density(const int i) -> double
-{
-	return density_(i);
-}
-
-template <typename problem_t>
-auto LinearAdvectionSystem<problem_t>::set_density(const int i) -> double &
-{
-	return density_(i);
-}
-
-template <typename problem_t> auto LinearAdvectionSystem<problem_t>::ComputeMass() -> double
-{
-	double mass = 0.0;
-
-	for (int i = nghost_; i < nx_ + nghost_; ++i) {
-		mass += density_(i) * dx_;
-	}
-
-	return mass;
+	const auto vx = advectionVx;
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		const double signal_max = std::abs(vx);
+		// const double signal_max = advectionVx; // fails with 'invalid device function'
+		maxSignal(i, j, k) = signal_max;
+	});
 }
 
 template <typename problem_t>
-auto LinearAdvectionSystem<problem_t>::ComputeTimestep(const double dt_max) -> double
+void LinearAdvectionSystem<problem_t>::ConservedToPrimitive(arrayconst_t &cons, array_t &primVar,
+							    amrex::Box const &indexRange,
+							    const int nvars)
 {
-	dt_ = std::min(cflNumber_ * (dx_ / advectionVx_), dt_max);
-	return dt_;
-}
-
-template <typename problem_t> void LinearAdvectionSystem<problem_t>::FillGhostZones(array_t &cons)
-{
-	// periodic boundary conditions
-
-	// x1 right side boundary
-	for (int n = 0; n < nvars_; ++n) {
-		for (int i = nghost_ + nx_; i < nghost_ + nx_ + nghost_; ++i) {
-			cons(n, i) = cons(n, i - nx_);
-		}
-	}
-
-	// x1 left side boundary
-	for (int n = 0; n < nvars_; ++n) {
-		for (int i = 0; i < nghost_; ++i) {
-			cons(n, i) = cons(n, i + nx_);
-		}
-	}
+	amrex::ParallelFor(indexRange, nvars, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
+		primVar(i, j, k, n) = cons(i, j, k, n);
+	});
 }
 
 template <typename problem_t>
-void LinearAdvectionSystem<problem_t>::ConservedToPrimitive(array_t &cons,
-							    const std::pair<int, int> range)
+template <FluxDir DIR>
+void LinearAdvectionSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
+						     arrayconst_t &x1LeftState_in,
+						     arrayconst_t &x1RightState_in,
+						     const double advectionVx,
+						     amrex::Box const &indexRange, const int nvars)
 {
-	for (int n = 0; n < nvars_; ++n) {
-		for (int i = range.first; i < range.second; ++i) {
-			primVar_(n, i) = cons(n, i);
-		}
-	}
-}
+	// construct ArrayViews for permuted indices
+	quokka::Array4View<amrex::Real const, DIR> x1LeftState(x1LeftState_in);
+	quokka::Array4View<amrex::Real const, DIR> x1RightState(x1RightState_in);
+	quokka::Array4View<amrex::Real, DIR> x1Flux(x1Flux_in);
 
-template <typename problem_t>
-void LinearAdvectionSystem<problem_t>::ComputeFirstOrderFluxes(std::pair<int, int> range)
-{
-	// TODO(ben): implement
-}
-
-template <typename problem_t>
-void LinearAdvectionSystem<problem_t>::ComputeFluxes(const std::pair<int, int> range)
-{
+	const auto vx = advectionVx; // avoid CUDA invalid device function error (tracked as NVIDIA bug #3318015)
 	// By convention, the interfaces are defined on the left edge of each zone, i.e.
 	// xinterface_(i) is the solution to the Riemann problem at the left edge of zone i.
+	// [Indexing note: There are (nx + 1) interfaces for nx zones.]
 
-	// Indexing note: There are (nx + 1) interfaces for nx zones.
+	amrex::ParallelFor(indexRange, nvars,
+			   [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
+				   // permute array indices according to dir
+				   auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
 
-	for (int n = 0; n < nvars_; ++n) {
-		for (int i = range.first; i < (range.second + 1); ++i) {
+				   // For advection, simply choose upwind side of the interface.
+				   if (vx < 0.0) { // upwind switch
+					   // upwind direction is the right-side of the interface
+					   x1Flux(i, j, k, n) = vx * x1RightState(i, j, k, n);
 
-			// For advection, simply choose upwind side of the interface.
-
-			if (advectionVx_ < 0.0) { // upwind switch
-				// upwind direction is the right-side of the interface
-				x1Flux_(n, i) = advectionVx_ * x1RightState_(n, i);
-
-			} else {
-				// upwind direction is the left-side of the interface
-				x1Flux_(n, i) = advectionVx_ * x1LeftState_(n, i);
-			}
-		}
-	}
-}
-
-template <typename problem_t>
-void LinearAdvectionSystem<problem_t>::AddSourceTerms(array_t &U_prev, array_t &U_new,
-						      std::pair<int, int> range)
-{
-	// TODO(ben): to be implemented
+				   } else {
+					   // upwind direction is the left-side of the interface
+					   x1Flux(i, j, k, n) = vx * x1LeftState(i, j, k, n);
+				   }
+			   });
 }
 
 #endif // LINEAR_ADVECTION_HPP_

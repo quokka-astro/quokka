@@ -1,29 +1,23 @@
-#ifndef TEST_RADHYDRO_SHOCK_HPP_ // NOLINT
-#define TEST_RADHYDRO_SHOCK_HPP_
+#ifndef TEST_RADIATION_BEAM_HPP_ // NOLINT
+#define TEST_RADIATION_BEAM_HPP_
 //==============================================================================
 // TwoMomentRad - a radiation transport library for patch-based AMR codes
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file test_radhydro_shock.hpp
-/// \brief Defines a test problem for a radiative shock.
+/// \file test_radiation_marshak.hpp
+/// \brief Defines a test problem for radiation in the static diffusion regime.
 ///
 
 // external headers
-#include "matplotlibcpp.h"
 #include <fmt/format.h>
 #include <fstream>
 
 // internal headers
-#include "RadhydroSimulation.hpp"
-#include "hydro_system.hpp"
 #include "radiation_system.hpp"
-
-extern "C" {
-#include "interpolate.h"
-}
+#include "RadhydroSimulation.hpp"
 
 // function definitions
-auto testproblem_radhydro_shock() -> int;
+auto testproblem_radiation_beam() -> int;
 
-#endif // TEST_RADHYDRO_SHOCK_HPP_
+#endif // TEST_RADIATION_BEAM_HPP_

@@ -1,29 +1,24 @@
-#ifndef TEST_RADHYDRO_SHOCK_HPP_ // NOLINT
-#define TEST_RADHYDRO_SHOCK_HPP_
+#ifndef TEST_ADVECTION_HPP_ // NOLINT
+#define TEST_ADVECTION_HPP_
 //==============================================================================
 // TwoMomentRad - a radiation transport library for patch-based AMR codes
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file test_radhydro_shock.hpp
-/// \brief Defines a test problem for a radiative shock.
+/// \file test_advection.cpp
+/// \brief Defines a test problem for linear advection.
 ///
 
 // external headers
 #include "matplotlibcpp.h"
 #include <fmt/format.h>
-#include <fstream>
 
 // internal headers
-#include "RadhydroSimulation.hpp"
-#include "hydro_system.hpp"
-#include "radiation_system.hpp"
 
-extern "C" {
-#include "interpolate.h"
-}
+#include "linear_advection.hpp"
 
 // function definitions
-auto testproblem_radhydro_shock() -> int;
+template <typename problem_t> void write_density(LinearAdvectionSystem<problem_t> &advection_system);
+int testproblem_advection();
 
-#endif // TEST_RADHYDRO_SHOCK_HPP_
+#endif // TEST_ADVECTION_HPP_

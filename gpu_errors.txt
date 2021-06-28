@@ -1,0 +1,115 @@
+bwibking@avatargpue:~/TwoMomentRad/build> cmake -DAMReX_GPU_BACKEND=CUDA -DCMAKE_BUILD_TYPE=Debug -DAMReX_CUDA_SHOW_CODELINES=ON -DAMReX_CUDA_SHOW_LINENUMBERS=ON ..
+
+bwibking@avatargpue:~/TwoMomentRad/build> cuda-gdb src/test_advection
+NVIDIA (R) CUDA Debugger
+11.0 release
+Portions Copyright (C) 2007-2020 NVIDIA Corporation
+GNU gdb (GDB) 8.2
+Copyright (C) 2018 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
+Type "show copying" and "show warranty" for details.
+This GDB was configured as "x86_64-pc-linux-gnu".
+Type "show configuration" for configuration details.
+For bug reporting instructions, please see:
+<http://www.gnu.org/software/gdb/bugs/>.
+Find the GDB manual and other documentation resources online at:
+    <http://www.gnu.org/software/gdb/documentation/>.
+
+For help, type "help".
+Type "apropos word" to search for commands related to "word"...
+Reading symbols from src/test_advection...done.
+(cuda-gdb) r
+Starting program: /home/bwibking/TwoMomentRad/build/src/test_advection 
+warning: Cannot parse .gnu_debugdata section; LZMA support was disabled at compile time
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib64/libthread_db.so.1".
+Initializing CUDA...
+[Detaching after fork from child process 2519852]
+[New Thread 0x7fffeeb9c700 (LWP 2519865)]
+[New Thread 0x7fffee39b700 (LWP 2519866)]
+CUDA initialized with 1 GPU
+AMReX (21.05-40-g79f79aae9f5c) initialized
+warning: Cuda API error detected: cudaLaunchKernel returned (0x62)
+
+warning: Cuda API error detected: cudaGetLastError returned (0x62)
+
+terminate called after throwing an instance of 'std::runtime_error'
+  what():  GPU last error detected in file /home/bwibking/TwoMomentRad/extern/amrex/Src/Base/AMReX_GpuLaunchFunctsG.H line 966: invalid device function
+
+Thread 1 "test_advection" received signal SIGABRT, Aborted.
+0x00007ffff655770f in raise () from /lib64/libc.so.6
+
+
+bwibking@avatargpue:~/TwoMomentRad/build> compute-sanitizer src/test_advection========= COMPUTE-SANITIZER
+Initializing CUDA...
+CUDA initialized with 1 GPU
+AMReX (21.05-40-g79f79aae9f5c) initialized
+========= Program hit invalid device function (error 98) on CUDA API call to cudaLaunchKernel.
+=========     Saved host backtrace up to driver entry point at error
+=========     Host Frame: [0x7f1cd4694f63]
+=========                in /lib64/libcuda.so.1
+=========     Host Frame: [0x7644f1]
+=========                in /home/bwibking/TwoMomentRad/build/src/test_advection
+=========     Host Frame: [0x412c90]
+=========                in /home/bwibking/TwoMomentRad/build/src/test_advection
+=========     Host Frame: [0x434072]
+=========                in /home/bwibking/TwoMomentRad/build/src/test_advection
+=========     Host Frame: [0x430604]
+=========                in /home/bwibking/TwoMomentRad/build/src/test_advection
+=========     Host Frame: [0x42b3e6]
+=========                in /home/bwibking/TwoMomentRad/build/src/test_advection
+=========     Host Frame: [0x4216ca]
+=========                in /home/bwibking/TwoMomentRad/build/src/test_advection
+=========     Host Frame: [0x43c4de]
+=========                in /home/bwibking/TwoMomentRad/build/src/test_advection
+=========     Host Frame: [0x427a5d]
+=========                in /home/bwibking/TwoMomentRad/build/src/test_advection
+=========     Host Frame: [0x41b8d4]
+=========                in /home/bwibking/TwoMomentRad/build/src/test_advection
+=========     Host Frame: [0x40e163]
+=========                in /home/bwibking/TwoMomentRad/build/src/test_advection
+=========     Host Frame: [0x40df03]
+=========                in /home/bwibking/TwoMomentRad/build/src/test_advection
+=========     Host Frame:__libc_start_main [0x7f1cd5c4c6a3]
+=========                in /lib64/libc.so.6
+=========     Host Frame: [0x40b0ee]
+=========                in /home/bwibking/TwoMomentRad/build/src/test_advection
+========= 
+========= Program hit invalid device function (error 98) on CUDA API call to cudaGetLastError.
+=========     Saved host backtrace up to driver entry point at error
+=========     Host Frame: [0x7f1cd4694f63]
+=========                in /lib64/libcuda.so.1
+=========     Host Frame: [0x74c63f]
+=========                in /home/bwibking/TwoMomentRad/build/src/test_advection
+=========     Host Frame: [0x418ca7]
+=========                in /home/bwibking/TwoMomentRad/build/src/test_advection
+=========     Host Frame: [0x418cdd]
+=========                in /home/bwibking/TwoMomentRad/build/src/test_advection
+=========     Host Frame: [0x430617]
+=========                in /home/bwibking/TwoMomentRad/build/src/test_advection
+=========     Host Frame: [0x42b3e6]
+=========                in /home/bwibking/TwoMomentRad/build/src/test_advection
+=========     Host Frame: [0x4216ca]
+=========                in /home/bwibking/TwoMomentRad/build/src/test_advection
+=========     Host Frame: [0x43c4de]
+=========                in /home/bwibking/TwoMomentRad/build/src/test_advection
+=========     Host Frame: [0x427a5d]
+=========                in /home/bwibking/TwoMomentRad/build/src/test_advection
+=========     Host Frame: [0x41b8d4]
+=========                in /home/bwibking/TwoMomentRad/build/src/test_advection
+=========     Host Frame: [0x40e163]
+=========                in /home/bwibking/TwoMomentRad/build/src/test_advection
+=========     Host Frame: [0x40df03]
+=========                in /home/bwibking/TwoMomentRad/build/src/test_advection
+=========     Host Frame:__libc_start_main [0x7f1cd5c4c6a3]
+=========                in /lib64/libc.so.6
+=========     Host Frame: [0x40b0ee]
+=========                in /home/bwibking/TwoMomentRad/build/src/test_advection
+========= 
+terminate called after throwing an instance of 'std::runtime_error'
+  what():  GPU last error detected in file /home/bwibking/TwoMomentRad/extern/amrex/Src/Base/AMReX_GpuLaunchFunctsG.H line 966: invalid device function
+========= Error: process didn't terminate successfully
+========= Target application returned an error
+========= ERROR SUMMARY: 2 errors

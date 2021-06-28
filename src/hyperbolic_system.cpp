@@ -9,7 +9,5 @@
 
 #include "hyperbolic_system.hpp"
 
-// explicitly instantiate class templates here
-extern template struct templatedArray<X1>;
-extern template struct templatedArray<X2>;
-extern template struct templatedArray<X3>;
+template struct amrex::Array4<double>;
+template struct amrex::Array4<const double>;

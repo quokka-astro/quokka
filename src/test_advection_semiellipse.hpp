@@ -16,9 +16,9 @@
 // internal headers
 
 #include "linear_advection.hpp"
+#include "AdvectionSimulation.hpp"
 
 // function definitions
-template <typename problem_t> void write_density(LinearAdvectionSystem<problem_t> &advection_system);
-int testproblem_advection();
+auto testproblem_advection() -> int;
 
 #endif // TEST_ADVECTION_HPP_
