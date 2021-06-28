@@ -248,21 +248,25 @@ void RadSystem<problem_t>::PredictStep(
 		std::array<amrex::Real, nvarHyperbolic_> cons{};
 
 		for (int n = 0; n < nvarHyperbolic_; ++n) {
-			cons.at(n) = consVarOld(i, j, k, nstartHyperbolic_ + n) +
-			(AMREX_D_TERM( (dt / dx) * (x1Flux(i, j, k, n) - x1Flux(i + 1, j, k, n)),
-				      	 + (dt / dy) * (x2Flux(i, j, k, n) - x2Flux(i, j + 1, k, n)),
-				      	 + (dt / dz) * (x3Flux(i, j, k, n) - x3Flux(i, j, k + 1, n))
-						   ));
+			cons.at(n) =
+			    consVarOld(i, j, k, nstartHyperbolic_ + n) +
+			    (AMREX_D_TERM(
+				(dt / dx) * (x1Flux(i, j, k, n) - x1Flux(i + 1, j, k, n)),
+				+(dt / dy) * (x2Flux(i, j, k, n) - x2Flux(i, j + 1, k, n)),
+				+(dt / dz) * (x3Flux(i, j, k, n) - x3Flux(i, j, k + 1, n))));
 		}
 
 		if (!isStateValid(cons)) {
 			// use diffusive fluxes instead
 			for (int n = 0; n < nvarHyperbolic_; ++n) {
-				cons.at(n) = consVarOld(i, j, k, nstartHyperbolic_ + n) +
-				(AMREX_D_TERM( (dt / dx) * (x1FluxDiffusive(i, j, k, n) - x1FluxDiffusive(i + 1, j, k, n)),
-				      	 + (dt / dy) * (x2FluxDiffusive(i, j, k, n) - x2FluxDiffusive(i, j + 1, k, n)),
-				      	 + (dt / dz) * (x3FluxDiffusive(i, j, k, n) - x3FluxDiffusive(i, j, k + 1, n))
-						   ));
+				cons.at(n) =
+				    consVarOld(i, j, k, nstartHyperbolic_ + n) +
+				    (AMREX_D_TERM((dt / dx) * (x1FluxDiffusive(i, j, k, n) -
+							       x1FluxDiffusive(i + 1, j, k, n)),
+						  +(dt / dy) * (x2FluxDiffusive(i, j, k, n) -
+								x2FluxDiffusive(i, j + 1, k, n)),
+						  +(dt / dz) * (x3FluxDiffusive(i, j, k, n) -
+								x3FluxDiffusive(i, j, k + 1, n))));
 			}
 		}
 
@@ -301,11 +305,11 @@ void RadSystem<problem_t>::AddFluxesRK2(
 #endif
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+		std::array<amrex::Real, nvarHyperbolic_> cons_new{};
+
 		for (int n = 0; n < nvarHyperbolic_; ++n) {
-			// RK-SSP2 integrator
 			const double U_0 = U0(i, j, k, nstartHyperbolic_ + n);
 			const double U_1 = U1(i, j, k, nstartHyperbolic_ + n);
-
 			const double FxU_1 =
 			    (dt / dx) * (x1Flux(i, j, k, n) - x1Flux(i + 1, j, k, n));
 #if (AMREX_SPACEDIM >= 2)
@@ -314,16 +318,37 @@ void RadSystem<problem_t>::AddFluxesRK2(
 #endif
 #if (AMREX_SPACEDIM == 3)
 			const double FzU_1 =
-				(dt / dz) * (x3Flux(i, j, k, n) - x3Flux(i, j, k + 1, n));
+			    (dt / dz) * (x3Flux(i, j, k, n) - x3Flux(i, j, k + 1, n));
 #endif
+			// save results in cons_new
+			cons_new.at(n) = (0.5 * U_0 + 0.5 * U_1) +
+					 (AMREX_D_TERM(0.5 * FxU_1, +0.5 * FyU_1, +0.5 * FzU_1));
+		}
 
-			// save results in U_new
-			U_new(i, j, k, nstartHyperbolic_ + n) =
-			    (0.5 * U_0 + 0.5 * U_1) + 
-				(AMREX_D_TERM( 0.5 * FxU_1,
-				      	 	 + 0.5 * FyU_1,
-				      		 + 0.5 * FzU_1
-						   	 ));
+		if (!isStateValid(cons_new)) {
+			// use diffusive fluxes instead
+			for (int n = 0; n < nvarHyperbolic_; ++n) {
+				const double U_0 = U0(i, j, k, nstartHyperbolic_ + n);
+				const double U_1 = U1(i, j, k, nstartHyperbolic_ + n);
+				const double FxU_1 = (dt / dx) * (x1FluxDiffusive(i, j, k, n) -
+								  x1FluxDiffusive(i + 1, j, k, n));
+#if (AMREX_SPACEDIM >= 2)
+				const double FyU_1 = (dt / dy) * (x2FluxDiffusive(i, j, k, n) -
+								  x2FluxDiffusive(i, j + 1, k, n));
+#endif
+#if (AMREX_SPACEDIM == 3)
+				const double FzU_1 = (dt / dz) * (x3FluxDiffusive(i, j, k, n) -
+								  x3FluxDiffusive(i, j, k + 1, n));
+#endif
+				// save results in cons_new
+				cons_new.at(n) =
+				    (0.5 * U_0 + 0.5 * U_1) +
+				    (AMREX_D_TERM(0.5 * FxU_1, +0.5 * FyU_1, +0.5 * FzU_1));
+			}
+		}
+
+		for (int n = 0; n < nvarHyperbolic_; ++n) {
+			U_new(i, j, k, nstartHyperbolic_ + n) = cons_new.at(n);
 		}
 	});
 }
@@ -846,7 +871,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			// Update variables
 			dFG_dEgas = 1.0 + (c / chat) * drhs_dEgas;     // 1.0 + epsilon;
 			dFG_dErad = dt * (-(rho * kappa) * c);	       // -R*alpha
-			dFR_dEgas = -drhs_dEgas;		       		   // -Rinv * epsilon;
+			dFR_dEgas = -drhs_dEgas;		       // -Rinv * epsilon;
 			dFR_dErad = 1.0 + dt * ((rho * kappa) * chat); // 1.0 + alpha;
 			eta = -dFR_dEgas / dFG_dEgas;
 			// eta = (eta > 0.0) ? eta : 0.0;
