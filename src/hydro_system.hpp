@@ -46,6 +46,8 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 		pressure_index = 4
 	};
 
+	static constexpr int nvar_ = 5;
+
 	static void ConservedToPrimitive(amrex::Array4<const amrex::Real> const &cons,
 					 array_t &primVar, amrex::Box const &indexRange);
 

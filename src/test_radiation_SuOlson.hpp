@@ -17,7 +17,7 @@
 // internal headers
 
 #include "radiation_system.hpp"
-#include "RadiationSimulation.hpp"
+#include "RadhydroSimulation.hpp"
 
 extern "C" {
 #include "interpolate.h"

@@ -10,8 +10,9 @@
 #include "test_hydro_contact.hpp"
 #include "AMReX_BLassert.H"
 #include "AMReX_ParmParse.H"
-#include "HydroSimulation.hpp"
+#include "RadhydroSimulation.hpp"
 #include "hydro_system.hpp"
+#include "radiation_system.hpp"
 
 
 auto main(int argc, char **argv) -> int
@@ -54,7 +55,7 @@ struct EOS_Traits<ContactProblem>
 };
 constexpr double v_contact = 0.0; // contact wave velocity
 
-template <> void HydroSimulation<ContactProblem>::setInitialConditions()
+template <> void RadhydroSimulation<ContactProblem>::setInitialConditions()
 {
 	amrex::GpuArray<Real, AMREX_SPACEDIM> dx = simGeometry_.CellSizeArray();
     amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo = simGeometry_.ProbLoArray();
@@ -132,13 +133,13 @@ auto testproblem_hydro_contact() -> int
 	// Problem parameters
 	const int nx = 100;
 	const double Lx = 1.0;
-	const int nvars = 5; // Euler equations
 
 	amrex::IntVect gridDims{AMREX_D_DECL(nx, 4, 4)};
 	amrex::RealBox boxSize{
 	    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.0), amrex::Real(0.0))},
 	    {AMREX_D_DECL(amrex::Real(Lx), amrex::Real(1.0), amrex::Real(1.0))}};
-
+	
+	const int nvars = RadSystem<ContactProblem>::nvar_;
 	amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
 	for (int n = 0; n < nvars; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
@@ -148,8 +149,9 @@ auto testproblem_hydro_contact() -> int
 	}
 
 	// Problem initialization
-	HydroSimulation<ContactProblem> sim(gridDims, boxSize, boundaryConditions);
-
+	RadhydroSimulation<ContactProblem> sim(gridDims, boxSize, boundaryConditions);
+	sim.is_hydro_enabled_ = true;
+	sim.is_radiation_enabled_ = false;
 	sim.stopTime_ = 2.0;
 	sim.cflNumber_ = 0.8;
 	sim.maxTimesteps_ = 2000;

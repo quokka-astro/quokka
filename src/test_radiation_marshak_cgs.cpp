@@ -108,7 +108,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblemCgs>::ComputeEgasTempDerivati
 
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-RadiationSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(
+RadhydroSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(
     const amrex::IntVect &iv, amrex::Array4<Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
     amrex::GeometryData const & /*geom*/, const Real /*time*/, const amrex::BCRec *bcr,
     int /*bcomp*/, int /*orig_comp*/)
@@ -180,7 +180,7 @@ RadiationSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(
 	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x3GasMomentum_index) = 0.;
 }
 
-template <> void RadiationSimulation<SuOlsonProblemCgs>::setInitialConditions()
+template <> void RadhydroSimulation<SuOlsonProblemCgs>::setInitialConditions()
 {
 	for (amrex::MFIter iter(state_old_); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
@@ -248,9 +248,9 @@ auto testproblem_radiation_marshak_cgs() -> int
 	}
 
 	// Problem initialization
-	RadiationSimulation<SuOlsonProblemCgs> sim(gridDims, boxSize, boundaryConditions, nvars);
+	RadhydroSimulation<SuOlsonProblemCgs> sim(gridDims, boxSize, boundaryConditions);
 	sim.stopTime_ = max_time;
-	sim.cflNumber_ = CFL_number;
+	sim.radiationCflNumber_ = CFL_number;
 	sim.maxTimesteps_ = max_timesteps;
 	sim.outputAtInterval_ = true;
 	sim.plotfileInterval_ = 100; // for debugging

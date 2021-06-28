@@ -9,7 +9,7 @@
 
 #include "test_radiation_matter_coupling.hpp"
 #include "AMReX_BC_TYPES.H"
-#include "RadiationSimulation.hpp"
+#include "RadhydroSimulation.hpp"
 #include "radiation_system.hpp"
 #include <vector>
 
@@ -94,7 +94,7 @@ constexpr double Erad = 1.0e12; // erg cm^-3
 constexpr double Egas = 1.0e2;	// erg cm^-3
 constexpr double rho = 1.0e-7;	// g cm^-3
 
-template <> void RadiationSimulation<CouplingProblem>::setInitialConditions()
+template <> void RadhydroSimulation<CouplingProblem>::setInitialConditions()
 {
 	for (amrex::MFIter iter(state_old_); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
@@ -118,7 +118,7 @@ template <> void RadiationSimulation<CouplingProblem>::setInitialConditions()
 	areInitialConditionsDefined_ = true;
 }
 
-template <> void RadiationSimulation<CouplingProblem>::computeAfterTimestep()
+template <> void RadhydroSimulation<CouplingProblem>::computeAfterTimestep()
 {
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		// copy all FABs to a local FAB across the entire domain
@@ -165,9 +165,9 @@ auto testproblem_radiation_matter_coupling() -> int
 		}
 	}
 
-	RadiationSimulation<CouplingProblem> sim(gridDims, boxSize, boundaryConditions, nvars);
+	RadhydroSimulation<CouplingProblem> sim(gridDims, boxSize, boundaryConditions);
 	sim.stopTime_ = max_time;
-	sim.cflNumber_ = CFL_number;
+	sim.radiationCflNumber_ = CFL_number;
 	sim.maxTimesteps_ = max_timesteps;
 	sim.outputAtInterval_ = false;
 	sim.plotfileInterval_ = 100; // for debugging

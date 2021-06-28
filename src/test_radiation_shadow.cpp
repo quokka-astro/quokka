@@ -107,7 +107,7 @@ AMREX_GPU_DEVICE auto RadSystem<ShadowProblem>::ComputeEddingtonFactor(double /*
 
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-RadiationSimulation<ShadowProblem>::setCustomBoundaryConditions(
+RadhydroSimulation<ShadowProblem>::setCustomBoundaryConditions(
     const amrex::IntVect &iv, amrex::Array4<Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
     amrex::GeometryData const &geom, const Real /*time*/, const amrex::BCRec * /*bcr*/,
     int /*bcomp*/, int /*orig_comp*/)
@@ -160,7 +160,7 @@ RadiationSimulation<ShadowProblem>::setCustomBoundaryConditions(
 	}
 }
 
-template <> void RadiationSimulation<ShadowProblem>::setInitialConditions()
+template <> void RadhydroSimulation<ShadowProblem>::setInitialConditions()
 {
 	auto prob_lo = simGeometry_.ProbLoArray();
 	auto dx = dx_;
@@ -275,9 +275,9 @@ auto testproblem_radiation_shadow() -> int
 		       << "machine epsilon = " << machine_epsilon << "\n";
 
 	// Problem initialization
-	RadiationSimulation<ShadowProblem> sim(gridDims, boxSize, boundaryConditions, nvars);
+	RadhydroSimulation<ShadowProblem> sim(gridDims, boxSize, boundaryConditions);
 	sim.stopTime_ = max_time;
-	sim.cflNumber_ = CFL_number;
+	sim.radiationCflNumber_ = CFL_number;
 	sim.maxTimesteps_ = max_timesteps;
 	sim.outputAtInterval_ = true;
 	sim.plotfileInterval_ = 50; // for debugging

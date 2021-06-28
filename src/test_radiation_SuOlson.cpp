@@ -127,7 +127,7 @@ void RadSystem<MarshakProblem>::SetRadEnergySource(array_t &radEnergySource,
 	});
 }
 
-template <> void RadiationSimulation<MarshakProblem>::setInitialConditions()
+template <> void RadhydroSimulation<MarshakProblem>::setInitialConditions()
 {
 	const auto Erad0 = initial_Erad;
 	const auto Egas0 = initial_Egas;
@@ -205,9 +205,9 @@ auto testproblem_radiation_marshak() -> int
 		}
 	}
 
-	RadiationSimulation<MarshakProblem> sim(gridDims, boxSize, boundaryConditions, nvars);
+	RadhydroSimulation<MarshakProblem> sim(gridDims, boxSize, boundaryConditions);
 	sim.stopTime_ = max_time;
-	sim.cflNumber_ = CFL_number;
+	sim.radiationCflNumber_ = CFL_number;
 	sim.maxTimesteps_ = max_timesteps;
 	sim.outputAtInterval_ = false;
 	sim.plotfileInterval_ = 100; // for debugging

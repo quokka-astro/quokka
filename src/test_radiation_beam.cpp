@@ -105,7 +105,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<BeamProblem>::ComputeEgasTempDerivative(con
 
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-RadiationSimulation<BeamProblem>::setCustomBoundaryConditions(
+RadhydroSimulation<BeamProblem>::setCustomBoundaryConditions(
     const amrex::IntVect &iv, amrex::Array4<Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
     amrex::GeometryData const &geom, const Real /*time*/, const amrex::BCRec * /*bcr*/,
     int /*bcomp*/, int /*orig_comp*/)
@@ -263,7 +263,7 @@ RadiationSimulation<BeamProblem>::setCustomBoundaryConditions(
 	}
 }
 
-template <> void RadiationSimulation<BeamProblem>::setInitialConditions()
+template <> void RadhydroSimulation<BeamProblem>::setInitialConditions()
 {
 	for (amrex::MFIter iter(state_old_); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
@@ -297,11 +297,11 @@ auto testproblem_radiation_beam() -> int
 	// Problem parameters
 	const int max_timesteps = 10000;
 	const double CFL_number = 0.2;
-	const int nx = 256;
+	const int nx = 128;
 	const double Lx = 2.0;		 // cm
 	const double max_time = 0.3 * (Lx/c); // s
 
-	amrex::IntVect gridDims{AMREX_D_DECL(nx, nx, nx)};
+	amrex::IntVect gridDims{AMREX_D_DECL(nx, nx, 4)};
 	amrex::RealBox boxSize{
 	    {AMREX_D_DECL(amrex::Real(0.), amrex::Real(0.), amrex::Real(0.))},	 // NOLINT
 	    {AMREX_D_DECL(amrex::Real(Lx), amrex::Real(Lx), amrex::Real(Lx))}}; // NOLINT
@@ -347,9 +347,9 @@ auto testproblem_radiation_beam() -> int
 	}
 
 	// Problem initialization
-	RadiationSimulation<BeamProblem> sim(gridDims, boxSize, boundaryConditions, nvars);
+	RadhydroSimulation<BeamProblem> sim(gridDims, boxSize, boundaryConditions);
 	sim.stopTime_ = max_time;
-	sim.cflNumber_ = CFL_number;
+	sim.radiationCflNumber_ = CFL_number;
 	sim.maxTimesteps_ = max_timesteps;
 	sim.outputAtInterval_ = false;
 	sim.plotfileInterval_ = 20; // for debugging

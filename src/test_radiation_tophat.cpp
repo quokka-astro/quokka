@@ -133,7 +133,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeEddingtonFactor(cons
 
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-RadiationSimulation<TophatProblem>::setCustomBoundaryConditions(
+RadhydroSimulation<TophatProblem>::setCustomBoundaryConditions(
     const amrex::IntVect &iv, amrex::Array4<Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
     amrex::GeometryData const &geom, const Real /*time*/, const amrex::BCRec * /*bcr*/,
     int /*bcomp*/, int /*orig_comp*/)
@@ -222,7 +222,7 @@ RadiationSimulation<TophatProblem>::setCustomBoundaryConditions(
 	}
 }
 
-template <> void RadiationSimulation<TophatProblem>::setInitialConditions()
+template <> void RadhydroSimulation<TophatProblem>::setInitialConditions()
 {
 	auto const prob_lo = simGeometry_.ProbLoArray();
 	// auto const prob_hi = simGeometry_.ProbHiArray();
@@ -328,9 +328,9 @@ auto testproblem_radiation_marshak_cgs() -> int
 	}
 
 	// Problem initialization
-	RadiationSimulation<TophatProblem> sim(gridDims, boxSize, boundaryConditions, nvars);
+	RadhydroSimulation<TophatProblem> sim(gridDims, boxSize, boundaryConditions);
 	sim.stopTime_ = max_time;
-	sim.cflNumber_ = CFL_number;
+	sim.radiationCflNumber_ = CFL_number;
 	sim.maxTimesteps_ = max_timesteps;
 	sim.outputAtInterval_ = true;
 	sim.plotfileInterval_ = 20; // for debugging

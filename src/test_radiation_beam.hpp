@@ -15,7 +15,7 @@
 
 // internal headers
 #include "radiation_system.hpp"
-#include "RadiationSimulation.hpp"
+#include "RadhydroSimulation.hpp"
 
 // function definitions
 auto testproblem_radiation_beam() -> int;
