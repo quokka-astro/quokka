@@ -15,7 +15,7 @@
 #include <fstream>
 
 // internal headers
-
+#include "RadhydroSimulation.hpp"
 #include "hydro_system.hpp"
 #include "radiation_system.hpp"
 

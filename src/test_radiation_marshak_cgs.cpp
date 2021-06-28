@@ -65,8 +65,6 @@ template <> struct RadSystem_Traits<SuOlsonProblemCgs> {
 	static constexpr double boltzmann_constant = boltzmann_constant_cgs_;
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double Erad_floor = 0.;
-	static constexpr bool do_marshak_left_boundary = false;
-	static constexpr double T_marshak_left = T_hohlraum;
 };
 
 template <>
@@ -236,7 +234,7 @@ auto testproblem_radiation_marshak_cgs() -> int
 	    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.0), amrex::Real(0.0))},	// NOLINT
 	    {AMREX_D_DECL(amrex::Real(Lx), amrex::Real(Lx * 0.01), amrex::Real(1.0))}}; // NOLINT
 
-	constexpr int nvars = 9;
+	constexpr int nvars = RadSystem<SuOlsonProblemCgs>::nvar_;
 	amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
 	for (int n = 0; n < nvars; ++n) {
 		boundaryConditions[n].setLo(0, amrex::BCType::ext_dir);	// custom (Marshak) x1
