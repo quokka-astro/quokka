@@ -24,37 +24,6 @@
 #include <csignal>
 #include <limits>
 
-auto main(int argc, char **argv) -> int
-{
-	// Initialization
-	// (copied from ExaWind)
-
-	amrex::Initialize(argc, argv, true, MPI_COMM_WORLD, []() {
-		amrex::ParmParse pp("amrex");
-		// Set the defaults so that we throw an exception instead of attempting
-		// to generate backtrace files. However, if the user has explicitly set
-		// these options in their input files respect those settings.
-		if (!pp.contains("throw_exception")) {
-			pp.add("throw_exception", 1);
-		}
-		if (!pp.contains("signal_handling")) {
-			pp.add("signal_handling", 0);
-		}
-	});
-
-	int result = 0;
-
-	{ // objects must be destroyed before amrex::finalize, so enter new
-	  // scope here to do that automatically
-
-		result = testproblem_advection();
-
-	} // destructors must be called before amrex::Finalize()
-	amrex::Finalize();
-
-	return result;
-}
-
 struct SquareProblem {
 };
 
@@ -160,7 +129,7 @@ template <> void AdvectionSimulation<SquareProblem>::computeAfterTimestep()
 	}
 }
 
-auto testproblem_advection() -> int
+auto problem_main() -> int
 {
 	// check that we are in strict IEEE 754 mode
 	// (If we are, then the results should be symmetric [about the diagonal of the grid] not

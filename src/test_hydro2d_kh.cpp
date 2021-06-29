@@ -17,37 +17,8 @@
 #include "AMReX_RandomEngine.H"
 #include "RadhydroSimulation.hpp"
 #include "hydro_system.hpp"
+#include "test_radhydro_shock_cgs.hpp"
 #include <csignal>
-
-auto main(int argc, char **argv) -> int
-{
-	// Initialization (copied from ExaWind)
-
-	amrex::Initialize(argc, argv, true, MPI_COMM_WORLD, []() {
-		amrex::ParmParse pp("amrex");
-		// Set the defaults so that we throw an exception instead of attempting
-		// to generate backtrace files. However, if the user has explicitly set
-		// these options in their input files respect those settings.
-		if (!pp.contains("throw_exception")) {
-			pp.add("throw_exception", 1);
-		}
-		if (!pp.contains("signal_handling")) {
-			pp.add("signal_handling", 0);
-		}
-	});
-
-	int result = 0;
-
-	{ // objects must be destroyed before amrex::finalize, so enter new
-	  // scope here to do that automatically
-
-		result = testproblem_hydro_kelvinhelmholz();
-
-	} // destructors must be called before amrex::Finalize()
-	amrex::Finalize();
-
-	return result;
-}
 
 struct KelvinHelmholzProblem {
 };
@@ -120,7 +91,7 @@ template <> void RadhydroSimulation<KelvinHelmholzProblem>::setInitialConditions
 	areInitialConditionsDefined_ = true;
 }
 
-auto testproblem_hydro_kelvinhelmholz() -> int
+auto problem_main() -> int
 {
 	// Problem parameters
 	amrex::IntVect gridDims{AMREX_D_DECL(1024, 1024, 4)};

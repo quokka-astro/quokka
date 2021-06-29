@@ -12,37 +12,7 @@
 #include "AMReX_Config.H"
 #include "AMReX_IntVect.H"
 #include "radiation_system.hpp"
-#include <mpi.h>
-
-auto main(int argc, char **argv) -> int
-{
-	// Initialization (copied from ExaWind)
-
-	amrex::Initialize(argc, argv, true, MPI_COMM_WORLD, []() {
-		amrex::ParmParse pp("amrex");
-		// Set the defaults so that we throw an exception instead of attempting
-		// to generate backtrace files. However, if the user has explicitly set
-		// these options in their input files respect those settings.
-		if (!pp.contains("throw_exception")) {
-			pp.add("throw_exception", 1);
-		}
-		if (!pp.contains("signal_handling")) {
-			pp.add("signal_handling", 0);
-		}
-	});
-
-	int result = 0;
-
-	{ // objects must be destroyed before amrex::finalize, so enter new
-	  // scope here to do that automatically
-
-		result = testproblem_radiation_marshak_cgs();
-
-	} // destructors must be called before amrex::Finalize()
-	amrex::Finalize();
-
-	return result;
-}
+#include "test_radhydro_shock_cgs.hpp"
 
 struct SuOlsonProblemCgs {
 }; // dummy type to allow compile-type polymorphism via template specialization
@@ -206,7 +176,7 @@ template <> void RadhydroSimulation<SuOlsonProblemCgs>::setInitialConditions()
 	areInitialConditionsDefined_ = true;
 }
 
-auto testproblem_radiation_marshak_cgs() -> int
+auto problem_main() -> int
 {
 	// For this problem, you must do reconstruction in the reduced
 	// flux, *not* the flux. Otherwise, F exceeds cE at sharp temperature
