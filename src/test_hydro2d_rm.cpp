@@ -14,7 +14,7 @@
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
-#include "HydroSimulation.hpp"
+#include "RadhydroSimulation.hpp"
 #include "hydro_system.hpp"
 
 auto main(int argc, char **argv) -> int
@@ -124,7 +124,7 @@ AMREX_GPU_HOST_DEVICE auto CheckSymmetryFluxes<RichtmeyerMeshkovProblem>(
 } // namespace quokka
 
 //#define DEBUG_SYMMETRY
-template <> void HydroSimulation<RichtmeyerMeshkovProblem>::computeAfterTimestep()
+template <> void RadhydroSimulation<RichtmeyerMeshkovProblem>::computeAfterTimestep()
 {
 #ifdef DEBUG_SYMMETRY
 	// this code does not actually work with Nranks > 1 ...
@@ -198,7 +198,7 @@ template <> void HydroSimulation<RichtmeyerMeshkovProblem>::computeAfterTimestep
 #endif
 }
 
-template <> void HydroSimulation<RichtmeyerMeshkovProblem>::setInitialConditions()
+template <> void RadhydroSimulation<RichtmeyerMeshkovProblem>::setInitialConditions()
 {
 	amrex::GpuArray<Real, AMREX_SPACEDIM> dx = simGeometry_.CellSizeArray();
 	amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo = simGeometry_.ProbLoArray();
@@ -254,8 +254,6 @@ template <> void HydroSimulation<RichtmeyerMeshkovProblem>::setInitialConditions
 auto testproblem_hydro_rm() -> int
 {
 	// Problem parameters
-	const int nvars = 5; // Euler equations
-
 	amrex::IntVect gridDims{AMREX_D_DECL(1024, 1024, 4)};
 	amrex::RealBox boxSize{
 	    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.0), amrex::Real(0.0))},
@@ -274,6 +272,7 @@ auto testproblem_hydro_rm() -> int
 		return false;
 	};
 
+	const int nvars = RadhydroSimulation<RichtmeyerMeshkovProblem>::nvarTotal_;
 	amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
 	for (int n = 0; n < nvars; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
@@ -288,8 +287,9 @@ auto testproblem_hydro_rm() -> int
 	}
 
 	// Problem initialization
-	HydroSimulation<RichtmeyerMeshkovProblem> sim(gridDims, boxSize, boundaryConditions);
-
+	RadhydroSimulation<RichtmeyerMeshkovProblem> sim(gridDims, boxSize, boundaryConditions);
+	sim.is_hydro_enabled_ = true;
+	sim.is_radiation_enabled_ = false;
 	sim.stopTime_ = 2.5;
 	sim.cflNumber_ = 0.4;
 	sim.maxTimesteps_ = 50000;

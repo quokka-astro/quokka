@@ -15,8 +15,9 @@
 #include "AMReX_Print.H"
 #include "AMReX_Random.H"
 #include "AMReX_RandomEngine.H"
-#include "HydroSimulation.hpp"
+#include "RadhydroSimulation.hpp"
 #include "hydro_system.hpp"
+#include <csignal>
 
 auto main(int argc, char **argv) -> int
 {
@@ -55,7 +56,7 @@ template <> struct EOS_Traits<KelvinHelmholzProblem> {
 	static constexpr double gamma = 1.4;
 };
 
-template <> void HydroSimulation<KelvinHelmholzProblem>::setInitialConditions()
+template <> void RadhydroSimulation<KelvinHelmholzProblem>::setInitialConditions()
 {
 	amrex::GpuArray<Real, AMREX_SPACEDIM> dx = simGeometry_.CellSizeArray();
 	amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo = simGeometry_.ProbLoArray();
@@ -122,13 +123,12 @@ template <> void HydroSimulation<KelvinHelmholzProblem>::setInitialConditions()
 auto testproblem_hydro_kelvinhelmholz() -> int
 {
 	// Problem parameters
-	const int nvars = 5; // Euler equations
-
 	amrex::IntVect gridDims{AMREX_D_DECL(1024, 1024, 4)};
 	amrex::RealBox boxSize{
 	    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.0), amrex::Real(0.0))},
 	    {AMREX_D_DECL(amrex::Real(1.0), amrex::Real(1.0), amrex::Real(1.0))}};
 
+	const int nvars = RadhydroSimulation<KelvinHelmholzProblem>::nvarTotal_;
 	amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
 	for (int n = 0; n < nvars; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
@@ -138,8 +138,9 @@ auto testproblem_hydro_kelvinhelmholz() -> int
 	}
 
 	// Problem initialization
-	HydroSimulation<KelvinHelmholzProblem> sim(gridDims, boxSize, boundaryConditions);
-
+	RadhydroSimulation<KelvinHelmholzProblem> sim(gridDims, boxSize, boundaryConditions);
+	sim.is_hydro_enabled_ = true;
+	sim.is_radiation_enabled_ = false;
 	sim.stopTime_ = 5.0;
 	sim.cflNumber_ = 0.4;
 	sim.maxTimesteps_ = 40000;

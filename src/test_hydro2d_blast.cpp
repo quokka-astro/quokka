@@ -14,7 +14,7 @@
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
-#include "HydroSimulation.hpp"
+#include "RadhydroSimulation.hpp"
 #include "hydro_system.hpp"
 
 auto main(int argc, char **argv) -> int
@@ -54,7 +54,7 @@ template <> struct EOS_Traits<BlastProblem> {
 	static constexpr double gamma = 5. / 3.;
 };
 
-template <> void HydroSimulation<BlastProblem>::setInitialConditions()
+template <> void RadhydroSimulation<BlastProblem>::setInitialConditions()
 {
 	amrex::GpuArray<Real, AMREX_SPACEDIM> dx = simGeometry_.CellSizeArray();
 	amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo = simGeometry_.ProbLoArray();
@@ -108,9 +108,7 @@ template <> void HydroSimulation<BlastProblem>::setInitialConditions()
 
 auto testproblem_hydro_blast() -> int
 {
-	// Problem parameters
-	const int nvars = 5; // Euler equations
-	
+	// Problem parameters	
 	amrex::IntVect gridDims{AMREX_D_DECL(400, 600, 4)};
 	amrex::RealBox boxSize{
 	    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.0), amrex::Real(0.0))},
@@ -129,6 +127,7 @@ auto testproblem_hydro_blast() -> int
 		return false;
 	};
 
+	const int nvars = RadhydroSimulation<BlastProblem>::nvarTotal_;
 	amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
 	for (int n = 0; n < nvars; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
@@ -143,8 +142,9 @@ auto testproblem_hydro_blast() -> int
 	}
 
 	// Problem initialization
-	HydroSimulation<BlastProblem> sim(gridDims, boxSize, boundaryConditions);
-
+	RadhydroSimulation<BlastProblem> sim(gridDims, boxSize, boundaryConditions);
+	sim.is_hydro_enabled_ = true;
+	sim.is_radiation_enabled_ = false;
 	sim.stopTime_ = 1.5;
 	sim.cflNumber_ = 0.4;
 	sim.maxTimesteps_ = 20000;
