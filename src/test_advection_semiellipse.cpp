@@ -26,7 +26,7 @@ template <> void AdvectionSimulation<SemiellipseProblem>::setInitialConditions()
 	for (amrex::MFIter iter(state_old_); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
 		auto const &state = state_new_.array(iter);
-		auto const nx = nx_;
+		auto const nx = nx_[0];
 
 		amrex::ParallelFor(indexRange, ncomp_, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
 			auto x = (0.5 + static_cast<double>(i)) / nx;
@@ -106,7 +106,7 @@ auto problem_main() -> int
 	for (amrex::MFIter iter(sim.state_new_); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &stateExact = state_exact.array(iter);
-		ComputeExactSolution(stateExact, indexRange, sim.ncomp_, sim.nx_);
+		ComputeExactSolution(stateExact, indexRange, sim.ncomp_, sim.nx_[0]);
 	}
 
 	// Compute error norm
@@ -142,12 +142,12 @@ auto problem_main() -> int
 
 	// plot solution
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-		std::vector<double> d_final(sim.nx_);
-		std::vector<double> d_initial(sim.nx_);
-		std::vector<double> x(sim.nx_);
+		std::vector<double> d_final(sim.nx_[0]);
+		std::vector<double> d_initial(sim.nx_[0]);
+		std::vector<double> x(sim.nx_[0]);
 
-		for (int i = 0; i < sim.nx_; ++i) {
-			x.at(i) = (static_cast<double>(i) + 0.5) / sim.nx_;
+		for (int i = 0; i < sim.nx_[0]; ++i) {
+			x.at(i) = (static_cast<double>(i) + 0.5) / sim.nx_[0];
 			d_final.at(i) = state_final_array(i, 0, 0);
 			d_initial.at(i) = state_exact_array(i, 0, 0);
 		}

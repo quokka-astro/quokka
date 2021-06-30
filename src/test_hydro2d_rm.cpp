@@ -25,75 +25,6 @@ template <> struct EOS_Traits<RichtmeyerMeshkovProblem> {
 	static constexpr double gamma = 1.4;
 };
 
-namespace quokka
-{
-template <>
-AMREX_GPU_HOST_DEVICE auto CheckSymmetryFluxes<RichtmeyerMeshkovProblem>(
-    amrex::Array4<const amrex::Real> const &arr1, amrex::Array4<const amrex::Real> const &arr2,
-    amrex::Box const &indexRange, const int ncomp, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx)
-    -> bool
-{
-#ifdef DEBUG_SYMMETRY
-	amrex::Long asymmetry = 0;
-	amrex::GpuArray<int, 3> prob_lo = indexRange.loVect3d();
-	auto nx = indexRange.hiVect3d()[0] + 1;
-	auto ny = indexRange.hiVect3d()[1] + 1;
-	auto nz = indexRange.hiVect3d()[2] + 1;
-	AMREX_ASSERT(prob_lo[0] == 0);
-	AMREX_ASSERT(prob_lo[1] == 0);
-	AMREX_ASSERT(prob_lo[2] == 0);
-
-	for (int i = 0; i < nx; ++i) {
-		for (int j = 0; j < ny; ++j) {
-			for (int k = 0; k < nz; ++k) {
-				amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
-				amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
-
-				for (int n = 0; n < ncomp; ++n) {
-					const amrex::Real comp_upper = arr1(i, j, k, n);
-
-					// reflect across x/y diagonal
-					int n_lower = n;
-					if (n == HydroSystem<
-						     RichtmeyerMeshkovProblem>::x1Momentum_index) {
-						n_lower = HydroSystem<
-						    RichtmeyerMeshkovProblem>::x2Momentum_index;
-					} else if (n == HydroSystem<RichtmeyerMeshkovProblem>::
-							    x2Momentum_index) {
-						n_lower = HydroSystem<
-						    RichtmeyerMeshkovProblem>::x1Momentum_index;
-					}
-
-					amrex::Real comp_lower = arr2(j, i, k, n_lower);
-
-					const amrex::Real average =
-					    std::fabs(comp_upper + comp_lower);
-					const amrex::Real residual =
-					    std::abs(comp_upper - comp_lower) / average;
-
-					if (comp_upper != comp_lower) {
-#ifndef AMREX_USE_GPU
-						amrex::Print()
-						    << i << ", " << j << ", " << k << ", " << n
-						    << ", " << comp_upper << ", " << comp_lower
-						    << " " << residual << "\n";
-						amrex::Print() << "x = " << x << "\n";
-						amrex::Print() << "y = " << y << "\n";
-#endif
-						asymmetry++;
-						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-						    false,
-						    "[CheckSymmetryFluxes] x/y not symmetric!");
-					}
-				}
-			}
-		}
-	}
-#endif // DEBUG_SYMMETRY
-	return true;
-}
-} // namespace quokka
-
 //#define DEBUG_SYMMETRY
 template <> void RadhydroSimulation<RichtmeyerMeshkovProblem>::computeAfterTimestep()
 {
@@ -171,17 +102,17 @@ template <> void RadhydroSimulation<RichtmeyerMeshkovProblem>::computeAfterTimes
 
 template <> void RadhydroSimulation<RichtmeyerMeshkovProblem>::setInitialConditions()
 {
-	amrex::GpuArray<Real, AMREX_SPACEDIM> dx = simGeometry_.CellSizeArray();
-	amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo = simGeometry_.ProbLoArray();
-	amrex::GpuArray<Real, AMREX_SPACEDIM> prob_hi = simGeometry_.ProbHiArray();
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = simGeometry_.CellSizeArray();
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = simGeometry_.ProbLoArray();
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = simGeometry_.ProbHiArray();
 
 	for (amrex::MFIter iter(state_old_); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
 		auto const &state = state_new_.array(iter);
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-			amrex::Real const x = prob_lo[0] + (i + Real(0.5)) * dx[0];
-			amrex::Real const y = prob_lo[1] + (j + Real(0.5)) * dx[1];
+			amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+			amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
 
 			double vx = 0.;
 			double vy = 0.;
@@ -269,7 +200,6 @@ auto problem_main() -> int
 
 	// initialize
 	sim.setInitialConditions();
-	//sim.computeAfterTimestep();
 
 	// evolve
 	sim.evolve();

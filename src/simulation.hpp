@@ -12,6 +12,8 @@
 // c++ headers
 
 // library headers
+#include "AMReX_AmrCore.H"
+#include "AMReX_Array.H"
 #include "AMReX_Array4.H"
 #include "AMReX_BCRec.H"
 #include "AMReX_BC_TYPES.H"
@@ -25,6 +27,7 @@
 #include "AMReX_INT.H"
 #include "AMReX_IntVect.H"
 #include "AMReX_ParallelDescriptor.H"
+#include "AMReX_SPACE.H"
 #include "AMReX_VisMF.H"
 #include <AMReX_Geometry.H>
 #include <AMReX_Gpu.H>
@@ -35,112 +38,39 @@
 #include <AMReX_Utility.H>
 
 // internal headers
+#include "CheckNaN.hpp"
+#include "math_impl.hpp"
 
-using Real = amrex::Real;
-
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto clamp(double v, double lo, double hi) -> double
-{
-	return (v < lo) ? lo : (hi < v) ? hi : v;
-}
-
-namespace quokka
-{
-template <typename T>
-AMREX_GPU_HOST_DEVICE auto CheckSymmetryArray(amrex::Array4<const amrex::Real> const & /*arr*/,
-					      amrex::Box const & /*indexRange*/,
-					      const int /*ncomp*/,
-					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> /*dx*/)
-    -> bool
-{
-	return true; // problem-specific implementation for test problems
-}
-
-template <typename T>
-AMREX_GPU_HOST_DEVICE auto CheckSymmetryFluxes(amrex::Array4<const amrex::Real> const & /*arr1*/,
-					       amrex::Array4<const amrex::Real> const & /*arr2*/,
-					       amrex::Box const & /*indexRange*/,
-					       const int /*ncomp*/,
-					       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> /*dx*/)
-    -> bool
-{
-	return true; // problem-specific implementation for test problems
-}
-
-template <typename T>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void
-CheckNaN(amrex::FArrayBox const &arr, amrex::Box const & /*symmetryRange*/,
-	 amrex::Box const &nanRange, const int ncomp,
-	 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> /*dx*/)
-{
-	AMREX_ASSERT(!arr.template contains_nan<amrex::RunOn::Gpu>(nanRange, 0, ncomp));
-}
-} // namespace quokka
-
-// Simulation class should be initialized only once per program (i.e., is a singleton)
-template <typename problem_t> class SingleLevelSimulation
+// Main simulation class; solvers should inherit from this
+template <typename problem_t> class AMRSimulation //: public amrex::AmrCore
 {
       public:
-	int nx_{1};
-	int ny_{1};
-	int nz_{1};
-	//int max_grid_size_{32}; // amrex default is 128 in 2D, 32 in 3D
-	int maxTimesteps_{10000};
-
-	amrex::BoxArray simBoxArray_;
-	amrex::Geometry simGeometry_;
-	amrex::IntVect const domain_lo_{AMREX_D_DECL(0, 0, 0)};
-	amrex::IntVect domain_hi_;
-	amrex::Box domain_;
-
-	// This defines the physical box in each direction.
-	amrex::RealBox real_box_;
-
-	// periodic in all directions
-	amrex::Array<int, AMREX_SPACEDIM> is_periodic_{};
-
-	// boundary conditions object
-	amrex::Vector<amrex::BCRec> boundaryConditions_;
-
-	// How boxes are distributed among MPI processes
-	amrex::DistributionMapping simDistributionMapping_;
-
-	// we allocate two multifabs; one will store the old state, the other the new.
-	amrex::MultiFab state_old_;
-	amrex::MultiFab state_new_;
-	amrex::MultiFab max_signal_speed_; // needed to compute CFL timestep
-
-	// Nghost = number of ghost cells for each array
-	int nghost_ = 4; // PPM needs nghost >= 3, PPM+flattening needs nghost >= 4
-	// Ncomp = number of components for each array
-	int ncomp_ = NAN; // == 5 for 3d Euler equations
-	int ncompPrimitive_ =
-	    NAN; // for radiation, fewer primitive variables than conserved variables
-	amrex::Vector<std::string> componentNames_;
-
-	int plotfileInterval_ = 100; // write plotfile every 100 cycles
-	bool outputAtInterval_ = false;
-
-	// dx = cell size
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_{};
-
-	amrex::Real dt_ = NAN;
-	amrex::Real maxDt_ = std::numeric_limits<double>::max(); // default (no limit)
+	amrex::Real maxDt_ = std::numeric_limits<double>::max(); // no limit by default
 	amrex::Real tNow_ = 0.0;
 	amrex::Real stopTime_ = 1.0;  // default
 	amrex::Real cflNumber_ = 0.3; // default
 	amrex::Long cycleCount_ = 0;
-	bool areInitialConditionsDefined_ = false;
+	amrex::Long maxTimesteps_ = 1e4;     // default
+	amrex::Long plotfileInterval_ = 100; // write plotfile every 100 cycles
+	bool outputAtInterval_ = false;
 
-	SingleLevelSimulation(amrex::IntVect &gridDims, amrex::RealBox &boxSize,
-			      amrex::Vector<amrex::BCRec> &boundaryConditions, const int ncomp)
+	amrex::BoxArray simBoxArray_;
+	amrex::DistributionMapping simDistributionMapping_;
+	amrex::Box domain_;
+	amrex::GpuArray<int, AMREX_SPACEDIM> nx_{};	// number of cells
+
+	// constructors
+
+	AMRSimulation(amrex::IntVect &gridDims, amrex::RealBox &boxSize,
+		      amrex::Vector<amrex::BCRec> &boundaryConditions, const int ncomp)
 	    : ncomp_(ncomp), ncompPrimitive_(ncomp)
 	{
 		initialize(gridDims, boxSize, boundaryConditions);
 	}
 
-	SingleLevelSimulation(amrex::IntVect &gridDims, amrex::RealBox &boxSize,
-			      amrex::Vector<amrex::BCRec> &boundaryConditions, const int ncomp,
-			      const int ncompPrimitive)
+	AMRSimulation(amrex::IntVect &gridDims, amrex::RealBox &boxSize,
+		      amrex::Vector<amrex::BCRec> &boundaryConditions, const int ncomp,
+		      const int ncompPrimitive)
 	    : ncomp_(ncomp), ncompPrimitive_(ncompPrimitive)
 	{
 		initialize(gridDims, boxSize, boundaryConditions);
@@ -152,25 +82,13 @@ template <typename problem_t> class SingleLevelSimulation
 		// readParameters();
 
 		// set grid dimension variables
-		nx_ = gridDims[0];
-#if (AMREX_SPACEDIM >= 2)
-		ny_ = gridDims[1];
-#endif
-#if (AMREX_SPACEDIM == 3)
-		nz_ = gridDims[2];
-#endif
-
-#if (AMREX_SPACEDIM == 1)
-		domain_hi_ = amrex::IntVect(
-		    {AMREX_D_DECL(gridDims[0] - 1, gridDims[1] - 1, gridDims[2] - 1)});
-#else
+		nx_ = amrex::GpuArray<int, AMREX_SPACEDIM>(
+		    {AMREX_D_DECL(gridDims[0], gridDims[1], gridDims[2])});
 		domain_hi_ = {AMREX_D_DECL(gridDims[0] - 1, gridDims[1] - 1, gridDims[2] - 1)};
-#endif
 		domain_ = {domain_lo_, domain_hi_};
 		simBoxArray_.define(domain_);
-		//simBoxArray_.maxSize(max_grid_size_);
 
-		// This defines a Geometry object
+		// check periodicity of boundary conditions
 		real_box_ = boxSize;
 		boundaryConditions_ = boundaryConditions;
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
@@ -184,12 +102,9 @@ template <typename problem_t> class SingleLevelSimulation
 			}
 			is_periodic_[i] = static_cast<int>(is_periodic_this_dim);
 		}
-		amrex::Print() << "periodicity: " << is_periodic_ << "\n";
 
 		simGeometry_.define(domain_, real_box_, amrex::CoordSys::cartesian, is_periodic_);
 		dx_ = simGeometry_.CellSizeArray();
-
-		amrex::Print() << "isAllPeriodic() = " << simGeometry_.isAllPeriodic() << "\n";
 
 		// initial DistributionMapping with boxarray
 		simDistributionMapping_ = amrex::DistributionMapping(simBoxArray_);
@@ -206,35 +121,86 @@ template <typename problem_t> class SingleLevelSimulation
 	void readParameters();
 	void evolve();
 	void computeTimestep();
-	
+
 	// virtual auto computeTimestepLocal() -> amrex::Real = 0;
 	virtual void computeMaxSignalLocal() = 0;
 	virtual void setInitialConditions() = 0;
 	virtual void advanceSingleTimestep() = 0;
 	virtual void computeAfterTimestep() = 0;
+
+#if 0
+	// Make a new level using provided BoxArray and DistributionMapping and
+	// fill with interpolated coarse level data.
+	// overrides the pure virtual function in AmrCore
+	void MakeNewLevelFromCoarse(int lev, amrex::Real time, const amrex::BoxArray &ba,
+				    const amrex::DistributionMapping &dm) override;
+
+	// Remake an existing level using provided BoxArray and DistributionMapping and
+	// fill with existing fine and coarse data.
+	// overrides the pure virtual function in AmrCore
+	void RemakeLevel(int lev, amrex::Real time, const amrex::BoxArray &ba,
+			 const amrex::DistributionMapping &dm) override;
+
+	// Delete level data
+	// overrides the pure virtual function in AmrCore
+	void ClearLevel(int lev) override;
+
+	// Make a new level from scratch using provided BoxArray and DistributionMapping.
+	// Only used during initialization.
+	// overrides the pure virtual function in AmrCore
+	void MakeNewLevelFromScratch(int lev, amrex::Real time, const amrex::BoxArray &ba,
+				     const amrex::DistributionMapping &dm) override;
+
+	// tag all cells for refinement
+	// overrides the pure virtual function in AmrCore
+	void ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override;
+#endif
+
+      protected:
+	amrex::Geometry simGeometry_;
+	amrex::IntVect const domain_lo_{AMREX_D_DECL(0, 0, 0)};
+	amrex::IntVect domain_hi_;
+	amrex::RealBox real_box_;
+	amrex::Array<int, AMREX_SPACEDIM> is_periodic_{};
+	amrex::Vector<amrex::BCRec> boundaryConditions_;
+
+	// we allocate two multifabs; one will store the old state, the other the new.
+	amrex::MultiFab state_old_;
+	amrex::MultiFab state_new_;
+	amrex::MultiFab max_signal_speed_; // needed to compute CFL timestep
+
+	// Nghost = number of ghost cells for each array
+	int nghost_ = 4;  // PPM needs nghost >= 3, PPM+flattening needs nghost >= 4
+	int ncomp_ = NAN; // = number of components (conserved variables) for each array
+	int ncompPrimitive_ =
+	    NAN; // number of primitive variables (not necessarily the same as ncomp_)
+	amrex::Vector<std::string> componentNames_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_{}; // dx = cell size
+	amrex::Real dt_ = NAN;
+	bool areInitialConditionsDefined_ = false;
 };
 
-template <typename problem_t> void SingleLevelSimulation<problem_t>::readParameters()
+template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 {
-	// ParmParse is way of reading inputs from the inputs file
+	// ParmParse reads inputs from the *.inputs file
 	amrex::ParmParse pp;
 
 	// We need to get Nx, Ny, Nz (grid dimensions)
-	pp.get("nx", nx_);
-	pp.get("ny", ny_);
-	pp.get("nz", nz_);
+	pp.get("nx", nx_[0]);
+	pp.get("ny", nx_[1]);
+	pp.get("nz", nx_[2]);
 
 	// The domain is broken into boxes of size max_grid_size
-	//pp.get("max_grid_size", max_grid_size_);
+	// pp.get("max_grid_size", max_grid_size_);
 
-	// Default nsteps to 10, allow us to set it to something else in the inputs file
+	// Default nsteps = 1e4
 	pp.query("max_timesteps", maxTimesteps_);
 
-	// Default CFL number == 1.0, set to whatever is in the file
+	// Default CFL number == 0.3, set to whatever is in the file
 	pp.query("cfl", cflNumber_);
 }
 
-template <typename problem_t> void SingleLevelSimulation<problem_t>::computeTimestep()
+template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 {
 	computeMaxSignalLocal();
 	amrex::Real domain_signal_max = max_signal_speed_.norminf();
@@ -257,16 +223,16 @@ template <typename problem_t> void SingleLevelSimulation<problem_t>::computeTime
 	dt_ = dt_0;
 }
 
-template <typename problem_t> void SingleLevelSimulation<problem_t>::evolve()
+template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 {
 	// Main time loop
 	AMREX_ASSERT(areInitialConditionsDefined_);
 	amrex::Real start_time = amrex::ParallelDescriptor::second();
 
 	// output initial conditions
-	//const std::string &pltfile_init = amrex::Concatenate("plt", cycleCount_, 5);
-	//amrex::WriteSingleLevelPlotfile(pltfile_init, state_new_, componentNames_, simGeometry_, tNow_,
-	//				cycleCount_);
+	// const std::string &pltfile_init = amrex::Concatenate("plt", cycleCount_, 5);
+	// amrex::WriteSingleLevelPlotfile(pltfile_init, state_new_, componentNames_, simGeometry_,
+	// tNow_, 				cycleCount_);
 
 	for (int j = 0; j < maxTimesteps_; ++j) {
 		if (tNow_ >= stopTime_) {
@@ -301,7 +267,7 @@ template <typename problem_t> void SingleLevelSimulation<problem_t>::evolve()
 	amrex::ParallelDescriptor::ReduceRealMax(elapsed_sec, IOProc);
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-		const double zone_cycles = cycleCount_ * (nx_ * ny_ * nz_);
+		const double zone_cycles = cycleCount_ * (nx_[0] * nx_[1] * nx_[2]);
 		const double microseconds_per_update = 1.0e6 * elapsed_sec / zone_cycles;
 		const double megaupdates_per_second = 1.0 / microseconds_per_update;
 		amrex::Print() << "Performance figure-of-merit: " << microseconds_per_update

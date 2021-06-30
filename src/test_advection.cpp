@@ -26,8 +26,8 @@ template <> void AdvectionSimulation<SawtoothProblem>::setInitialConditions()
 	for (amrex::MFIter iter(state_old_); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
 		auto const &state = state_new_.array(iter);
-		//auto const nx = nx_; // class members are not automatically transferred to device!
-		auto const ny = ny_;
+		//auto const nx = nx_[0]; // class members are not automatically transferred to device!
+		auto const ny = nx_[1];
 
 		amrex::ParallelFor(indexRange, ncomp_,
 				   [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
@@ -42,7 +42,7 @@ template <> void AdvectionSimulation<SawtoothProblem>::setInitialConditions()
 }
 
 void ComputeExactSolution(amrex::Array4<amrex::Real> const &exact_arr, amrex::Box const &indexRange,
-			  const int nvars, const int nx, const int ny)
+			  const int nvars, const int /*nx*/, const int ny)
 {
 	amrex::ParallelFor(indexRange, nvars, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
 		//auto value = static_cast<double>((i + nx / 2) % nx) / nx;
@@ -102,7 +102,7 @@ auto problem_main() -> int
 	for (amrex::MFIter iter(sim.state_new_); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &stateExact = state_exact.array(iter);
-		ComputeExactSolution(stateExact, indexRange, sim.ncomp_, sim.nx_, sim.ny_);
+		ComputeExactSolution(stateExact, indexRange, sim.ncomp_, sim.nx_[0], sim.nx_[1]);
 	}
 
 	// Compute error norm
@@ -139,7 +139,7 @@ auto problem_main() -> int
 
 	// plot solution
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-		auto N = sim.ny_;
+		auto N = sim.nx_[1];
 		std::vector<double> d_final(N);
 		std::vector<double> d_initial(N);
 		std::vector<double> x(N);

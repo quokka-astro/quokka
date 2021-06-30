@@ -77,8 +77,8 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblemCgs>::ComputeEgasTempDerivati
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 RadhydroSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(
-    const amrex::IntVect &iv, amrex::Array4<Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
-    amrex::GeometryData const & /*geom*/, const Real /*time*/, const amrex::BCRec *bcr,
+    const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
+    amrex::GeometryData const & /*geom*/, const amrex::Real /*time*/, const amrex::BCRec *bcr,
     int /*bcomp*/, int /*orig_comp*/)
 {
 	if (!((bcr->lo(0) == amrex::BCType::ext_dir) || (bcr->hi(0) == amrex::BCType::ext_dir))) {

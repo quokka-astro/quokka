@@ -29,9 +29,9 @@ template <> struct EOS_Traits<KelvinHelmholzProblem> {
 
 template <> void RadhydroSimulation<KelvinHelmholzProblem>::setInitialConditions()
 {
-	amrex::GpuArray<Real, AMREX_SPACEDIM> dx = simGeometry_.CellSizeArray();
-	amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo = simGeometry_.ProbLoArray();
-	amrex::GpuArray<Real, AMREX_SPACEDIM> prob_hi = simGeometry_.ProbHiArray();
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = simGeometry_.CellSizeArray();
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = simGeometry_.ProbLoArray();
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = simGeometry_.ProbHiArray();
 
 	amrex::Real const y0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
 	amrex::Real const amp = 0.01;
@@ -44,7 +44,7 @@ template <> void RadhydroSimulation<KelvinHelmholzProblem>::setInitialConditions
 		    indexRange, [=] AMREX_GPU_DEVICE (int i, int j, int k,
 						     amrex::RandomEngine const &engine) noexcept
 			{
-			    amrex::Real const y = prob_lo[1] + (j + Real(0.5)) * dx[1];
+			    amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
 
 			    // drawn from [0.0, 1.0)
 			    amrex::Real const rand_x = amrex::Random(engine) - 0.5;

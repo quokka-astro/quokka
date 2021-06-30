@@ -35,25 +35,24 @@
 #include "simulation.hpp"
 
 // Simulation class should be initialized only once per program (i.e., is a singleton)
-template <typename problem_t> class RadhydroSimulation : public SingleLevelSimulation<problem_t>
+template <typename problem_t> class RadhydroSimulation : public AMRSimulation<problem_t>
 {
       public:
-	using SingleLevelSimulation<problem_t>::simGeometry_;
-	using SingleLevelSimulation<problem_t>::state_old_;
-	using SingleLevelSimulation<problem_t>::state_new_;
-	using SingleLevelSimulation<problem_t>::max_signal_speed_;
+	using AMRSimulation<problem_t>::simGeometry_;
+	using AMRSimulation<problem_t>::state_old_;
+	using AMRSimulation<problem_t>::state_new_;
+	using AMRSimulation<problem_t>::max_signal_speed_;
 
-	using SingleLevelSimulation<problem_t>::cflNumber_;
-	using SingleLevelSimulation<problem_t>::dx_;
-	using SingleLevelSimulation<problem_t>::dt_; // this is the *hydro* timestep
-	using SingleLevelSimulation<problem_t>::ncomp_;
-	// using SingleLevelSimulation<problem_t>::ncompPrimitive_;
-	using SingleLevelSimulation<problem_t>::nghost_;
-	using SingleLevelSimulation<problem_t>::tNow_;
-	using SingleLevelSimulation<problem_t>::cycleCount_;
-	using SingleLevelSimulation<problem_t>::areInitialConditionsDefined_;
-	using SingleLevelSimulation<problem_t>::boundaryConditions_;
-	using SingleLevelSimulation<problem_t>::componentNames_;
+	using AMRSimulation<problem_t>::cflNumber_;
+	using AMRSimulation<problem_t>::dx_;
+	using AMRSimulation<problem_t>::dt_; // this is the *hydro* timestep
+	using AMRSimulation<problem_t>::ncomp_;
+	using AMRSimulation<problem_t>::nghost_;
+	using AMRSimulation<problem_t>::tNow_;
+	using AMRSimulation<problem_t>::cycleCount_;
+	using AMRSimulation<problem_t>::areInitialConditionsDefined_;
+	using AMRSimulation<problem_t>::boundaryConditions_;
+	using AMRSimulation<problem_t>::componentNames_;
 
 	std::vector<double> t_vec_;
 	std::vector<double> Trad_vec_;
@@ -73,7 +72,7 @@ template <typename problem_t> class RadhydroSimulation : public SingleLevelSimul
 
 	RadhydroSimulation(amrex::IntVect &gridDims, amrex::RealBox &boxSize,
 			    amrex::Vector<amrex::BCRec> &boundaryConditions)
-	    : SingleLevelSimulation<problem_t>(gridDims, boxSize, boundaryConditions,
+	    : AMRSimulation<problem_t>(gridDims, boxSize, boundaryConditions,
 					       RadSystem<problem_t>::nvar_, ncompHyperbolic_)
 	{
 		componentNames_ = {"gasDensity",    "x-GasMomentum", "y-GasMomentum",
@@ -109,9 +108,9 @@ template <typename problem_t> class RadhydroSimulation : public SingleLevelSimul
 	void fillBoundaryConditions(amrex::MultiFab &state);
 
 	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void
-	setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<Real> const &dest,
+	setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest,
 				    int dcomp, int numcomp, amrex::GeometryData const &geom,
-				    Real time, const amrex::BCRec *bcr, int bcomp, int orig_comp);
+				    amrex::Real time, const amrex::BCRec *bcr, int bcomp, int orig_comp);
 
 	template <FluxDir DIR>
 	void fluxFunction(amrex::Array4<const amrex::Real> const &consState,
@@ -124,9 +123,9 @@ template <typename problem_t> class RadhydroSimulation : public SingleLevelSimul
 };
 
 template <typename problem_t> struct setBoundaryFunctor {
-	AMREX_GPU_DEVICE void operator()(const amrex::IntVect &iv, amrex::Array4<Real> const &dest,
+	AMREX_GPU_DEVICE void operator()(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest,
 					 const int &dcomp, const int &numcomp,
-					 amrex::GeometryData const &geom, const Real &time,
+					 amrex::GeometryData const &geom, const amrex::Real &time,
 					 const amrex::BCRec *bcr, int bcomp,
 					 const int &orig_comp) const
 	{
@@ -159,8 +158,8 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::computeAfterTi
 template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 RadhydroSimulation<problem_t>::setCustomBoundaryConditions(
-    const amrex::IntVect &iv, amrex::Array4<Real> const &dest, int dcomp, int numcomp,
-    amrex::GeometryData const &geom, const Real time, const amrex::BCRec *bcr, int bcomp,
+    const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, int dcomp, int numcomp,
+    amrex::GeometryData const &geom, const amrex::Real time, const amrex::BCRec *bcr, int bcomp,
     int orig_comp)
 {
 	// user should implement if needed using template specialization

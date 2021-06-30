@@ -79,8 +79,8 @@ AMREX_GPU_DEVICE auto RadSystem<ShadowProblem>::ComputeEddingtonFactor(double /*
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 RadhydroSimulation<ShadowProblem>::setCustomBoundaryConditions(
-    const amrex::IntVect &iv, amrex::Array4<Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
-    amrex::GeometryData const &geom, const Real /*time*/, const amrex::BCRec * /*bcr*/,
+    const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
+    amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/,
     int /*bcomp*/, int /*orig_comp*/)
 {
 #if (AMREX_SPACEDIM == 2)

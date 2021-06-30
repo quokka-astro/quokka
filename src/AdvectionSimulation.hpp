@@ -25,27 +25,27 @@
 #include "simulation.hpp"
 
 // Simulation class should be initialized only once per program (i.e., is a singleton)
-template <typename problem_t> class AdvectionSimulation : public SingleLevelSimulation<problem_t>
+template <typename problem_t> class AdvectionSimulation : public AMRSimulation<problem_t>
 {
       public:
-	using SingleLevelSimulation<problem_t>::simGeometry_;
-	using SingleLevelSimulation<problem_t>::state_old_;
-	using SingleLevelSimulation<problem_t>::state_new_;
-	using SingleLevelSimulation<problem_t>::max_signal_speed_;
+	using AMRSimulation<problem_t>::simGeometry_;
+	using AMRSimulation<problem_t>::state_old_;
+	using AMRSimulation<problem_t>::state_new_;
+	using AMRSimulation<problem_t>::max_signal_speed_;
 
-	using SingleLevelSimulation<problem_t>::cflNumber_;
-	using SingleLevelSimulation<problem_t>::dx_;
-	using SingleLevelSimulation<problem_t>::dt_;
-	using SingleLevelSimulation<problem_t>::ncomp_;
-	using SingleLevelSimulation<problem_t>::nghost_;
-	using SingleLevelSimulation<problem_t>::tNow_;
-	using SingleLevelSimulation<problem_t>::cycleCount_;
-	using SingleLevelSimulation<problem_t>::areInitialConditionsDefined_;
-	using SingleLevelSimulation<problem_t>::componentNames_;
+	using AMRSimulation<problem_t>::cflNumber_;
+	using AMRSimulation<problem_t>::dx_;
+	using AMRSimulation<problem_t>::dt_;
+	using AMRSimulation<problem_t>::ncomp_;
+	using AMRSimulation<problem_t>::nghost_;
+	using AMRSimulation<problem_t>::tNow_;
+	using AMRSimulation<problem_t>::cycleCount_;
+	using AMRSimulation<problem_t>::areInitialConditionsDefined_;
+	using AMRSimulation<problem_t>::componentNames_;
 
 	AdvectionSimulation(amrex::IntVect &gridDims, amrex::RealBox &boxSize,
 			    amrex::Vector<amrex::BCRec> &boundaryConditions, const int ncomp = 1)
-	    : SingleLevelSimulation<problem_t>(gridDims, boxSize, boundaryConditions, ncomp)
+	    : AMRSimulation<problem_t>(gridDims, boxSize, boundaryConditions, ncomp)
 	{
 		componentNames_ = {"density"};
 	}

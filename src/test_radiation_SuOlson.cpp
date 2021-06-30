@@ -39,19 +39,19 @@ template <> struct RadSystem_Traits<MarshakProblem> {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputeTgasFromEgas(const double rho, const double Egas) -> double
+AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputeTgasFromEgas(const double /*rho*/, const double Egas) -> double
 {
 	return std::pow(4.0 * Egas / alpha_SuOlson, 1. / 4.);
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputeEgasFromTgas(const double rho, const double Tgas) -> double
+AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputeEgasFromTgas(const double /*rho*/, const double Tgas) -> double
 {
 	return (alpha_SuOlson / 4.0) * (Tgas*Tgas*Tgas*Tgas);
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputeEgasTempDerivative(const double rho, const double Tgas)
+AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputeEgasTempDerivative(const double /*rho*/, const double Tgas)
     -> double
 {
 	// This is also known as the heat capacity, i.e.
@@ -79,8 +79,8 @@ void RadSystem<MarshakProblem>::SetRadEnergySource(array_t &radEnergySource,
 	const double S = Q * (a_rad * std::pow(T_hohlraum, 4)); // erg cm^{-3}
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		amrex::Real const xl = (i + Real(0.)) * dx[0];
-		amrex::Real const xr = (i + Real(1.)) * dx[0];
+		amrex::Real const xl = (i + amrex::Real(0.)) * dx[0];
+		amrex::Real const xr = (i + amrex::Real(1.)) * dx[0];
 
 		double vol_frac = 0.0;
 		if ((xl < x0) && (xr <= x0)) {

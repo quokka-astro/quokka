@@ -89,9 +89,9 @@ template <> void AdvectionSimulation<SquareProblem>::computeAfterTimestep()
 		auto dx = dx_;
 
 		amrex::Long asymmetry = 0;
-		auto nx = nx_;
-		auto ny = ny_;
-		auto nz = nz_;
+		auto nx = nx_[0];
+		auto ny = nx_[1];
+		auto nz = nx_[2];
 		auto ncomp = ncomp_;
 		for (int i = 0; i < nx; ++i) {
 			for (int j = 0; j < ny; ++j) {

@@ -82,8 +82,8 @@ template <> auto RadSystem<ShockProblem>::ComputeEddingtonFactor(double /*f*/) -
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 RadhydroSimulation<ShockProblem>::setCustomBoundaryConditions(
-    const amrex::IntVect &iv, amrex::Array4<Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
-    amrex::GeometryData const &geom, const Real /*time*/, const amrex::BCRec *bcr, int /*bcomp*/,
+    const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
+    amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec *bcr, int /*bcomp*/,
     int /*orig_comp*/)
 {
 	if (!((bcr->lo(0) == amrex::BCType::ext_dir) || (bcr->hi(0) == amrex::BCType::ext_dir))) {
@@ -108,8 +108,8 @@ RadhydroSimulation<ShockProblem>::setCustomBoundaryConditions(
 	amrex::Box const &box = geom.Domain();
 	amrex::GpuArray<int, 3> lo = box.loVect3d();
 	amrex::GpuArray<int, 3> hi = box.hiVect3d();
-	amrex::Real const x = prob_lo[0] + (i + Real(0.5)) * dx[0];
-	amrex::Real const y = prob_lo[1] + (j + Real(0.5)) * dx[1];
+	amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+	amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
 
 	if (i < 0) {
 		// x1 left side boundary -- constant
@@ -149,16 +149,16 @@ RadhydroSimulation<ShockProblem>::setCustomBoundaryConditions(
 
 template <> void RadhydroSimulation<ShockProblem>::setInitialConditions()
 {
-	amrex::GpuArray<Real, AMREX_SPACEDIM> dx = simGeometry_.CellSizeArray();
-	amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo = simGeometry_.ProbLoArray();
-	amrex::GpuArray<Real, AMREX_SPACEDIM> prob_hi = simGeometry_.ProbHiArray();
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = simGeometry_.CellSizeArray();
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = simGeometry_.ProbLoArray();
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = simGeometry_.ProbHiArray();
 
 	for (amrex::MFIter iter(state_old_); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
 		auto const &state = state_new_.array(iter);
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-			amrex::Real const x = prob_lo[0] + (i + Real(0.5)) * dx[0];
+			amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
 
 			amrex::Real radEnergy = NAN;
 			amrex::Real x1RadFlux = NAN;
