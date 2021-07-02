@@ -344,7 +344,7 @@ auto problem_main() -> int
 		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("length x (dimensionless)");
 		matplotlibcpp::ylabel("temperature (dimensionless)");
-		matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNow_));
+		matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_));
 		matplotlibcpp::xlim(0.1, 30.0); // cm
 		// matplotlibcpp::ylim(0.0, 1.3);	// dimensionless
 		matplotlibcpp::xscale("log");
@@ -375,7 +375,7 @@ auto problem_main() -> int
 		matplotlibcpp::xlabel("length x (dimensionless)");
 		matplotlibcpp::ylabel("radiation energy density (dimensionless)");
 		matplotlibcpp::title(
-		    fmt::format("time ct = {:.4g}", sim.tNow_ * (eps_SuOlson * c * rho * kappa)));
+		    fmt::format("time ct = {:.4g}", sim.tNew_ * (eps_SuOlson * c * rho * kappa)));
 		matplotlibcpp::xlim(0.0, 3.0); // cm
 		//	matplotlibcpp::ylim(0.0, 2.3);
 		matplotlibcpp::save("./SuOlsonTest.pdf");

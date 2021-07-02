@@ -8,7 +8,10 @@
 ///
 
 #include "AMReX.H"
+#include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
+#include "AMReX_Print.H"
+#include "AMReX_REAL.H"
 
 #include "main.hpp"
 
@@ -29,14 +32,30 @@ auto main(int argc, char **argv) -> int
 		}
 	});
 
-	int result = 0;
+	amrex::Real start_time = amrex::ParallelDescriptor::second();
 
+	int result = 0;
 	{ // objects must be destroyed before amrex::finalize, so enter new
 	  // scope here to do that automatically
 
 		result = problem_main();
 
 	} // destructors must be called before amrex::Finalize()
+
+	// compute elapsed time
+	amrex::Real elapsed_sec = amrex::ParallelDescriptor::second() - start_time;
+	const int IOProc = amrex::ParallelDescriptor::IOProcessorNumber();
+	amrex::ParallelDescriptor::ReduceRealMax(elapsed_sec, IOProc);
+
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		//const double zone_cycles = cycleCount_ * (nx_[0] * nx_[1] * nx_[2]);
+		//const double microseconds_per_update = 1.0e6 * elapsed_sec / zone_cycles;
+		//const double megaupdates_per_second = 1.0 / microseconds_per_update;
+		//amrex::Print() << "Performance figure-of-merit: " << microseconds_per_update
+		//	       << " μs/zone-update [" << megaupdates_per_second << " Mupdates/s]\n";
+		amrex::Print() << "elapsed time: " << elapsed_sec << " seconds.\n";
+	}
+
 	amrex::Finalize();
 
 	return result;

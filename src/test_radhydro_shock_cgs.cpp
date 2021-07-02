@@ -392,7 +392,7 @@ auto problem_main() -> int
 		matplotlibcpp::xlabel("length x (cm)");
 		matplotlibcpp::ylabel("temperature (dimensionless)");
 		matplotlibcpp::legend();
-		matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNow_));
+		matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_));
 		matplotlibcpp::save("./radshock_cgs_temperature.pdf");
 	}
 

@@ -308,7 +308,7 @@ auto problem_main() -> int
 
 		double err_norm = 0.;
 		double sol_norm = 0.;
-		const double t = sim.tNow_;
+		const double t = sim.tNew_;
 		const double xmax = c * t;
 		amrex::Print() << "diffusion length = " << xmax << std::endl;
 		for (int i = 0; i < xs_exact.size(); ++i) {
@@ -343,7 +343,7 @@ auto problem_main() -> int
 		matplotlibcpp::xscale("log");
 		//matplotlibcpp::yscale("log");
 		matplotlibcpp::legend();
-		matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNow_));
+		matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_));
 		matplotlibcpp::save("./marshak_wave_cgs_temperature.pdf");
 
 		// material temperature
@@ -364,7 +364,7 @@ auto problem_main() -> int
 		matplotlibcpp::xscale("log");
 		//matplotlibcpp::yscale("log");
 		matplotlibcpp::legend();
-		matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNow_));
+		matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_));
 		matplotlibcpp::save("./marshak_wave_cgs_gastemperature.pdf");
 	}
 

@@ -229,7 +229,7 @@ auto problem_main() -> int
 		matplotlibcpp::plot(x, density_exact, dexact_args);
 
 		matplotlibcpp::legend();
-		matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNow_));
+		matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_));
 		matplotlibcpp::save("./hydro_contact.pdf");
 	}
 

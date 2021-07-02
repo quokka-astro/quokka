@@ -13,6 +13,7 @@
 #include "AMReX_Array4.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_Box.H"
+#include "AMReX_DistributionMapping.H"
 #include "AMReX_FArrayBox.H"
 #include "AMReX_IntVect.H"
 #include "AMReX_REAL.H"
@@ -28,20 +29,22 @@
 template <typename problem_t> class AdvectionSimulation : public AMRSimulation<problem_t>
 {
       public:
-	using AMRSimulation<problem_t>::simGeometry_;
 	using AMRSimulation<problem_t>::state_old_;
 	using AMRSimulation<problem_t>::state_new_;
 	using AMRSimulation<problem_t>::max_signal_speed_;
 
 	using AMRSimulation<problem_t>::cflNumber_;
-	using AMRSimulation<problem_t>::dx_;
 	using AMRSimulation<problem_t>::dt_;
 	using AMRSimulation<problem_t>::ncomp_;
 	using AMRSimulation<problem_t>::nghost_;
-	using AMRSimulation<problem_t>::tNow_;
 	using AMRSimulation<problem_t>::cycleCount_;
 	using AMRSimulation<problem_t>::areInitialConditionsDefined_;
 	using AMRSimulation<problem_t>::componentNames_;
+
+	using AMRSimulation<problem_t>::fillBoundaryConditions;
+	using AMRSimulation<problem_t>::grids;
+	using AMRSimulation<problem_t>::dmap;
+	using AMRSimulation<problem_t>::geom;
 
 	AdvectionSimulation(amrex::IntVect &gridDims, amrex::RealBox &boxSize,
 			    amrex::Vector<amrex::BCRec> &boundaryConditions, const int ncomp = 1)
@@ -50,15 +53,21 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 		componentNames_ = {"density"};
 	}
 
-	void computeMaxSignalLocal() override;
-	void setInitialConditions() override;
-	void advanceSingleTimestep() override;
+	void computeMaxSignalLocal(int level) override;
+	void setInitialConditionsAtLevel(int level) override;
+	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev,
+					  int /*iteration*/, int /*ncycle*/) override;
 	void computeAfterTimestep() override;
+	// tag cells for refinement
+	void ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override;
 
-	void stageOneRK2SSP(amrex::Array4<const amrex::Real> const &consVarOld,
+	void stageOneRK2SSP(amrex::Real dt, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
+			    amrex::Array4<const amrex::Real> const &consVarOld,
 			    amrex::Array4<amrex::Real> const &consVarNew,
 			    const amrex::Box &indexRange, int nvars);
-	void stageTwoRK2SSP(amrex::Array4<const amrex::Real> const &consVar,
+	void stageTwoRK2SSP(amrex::Real dt, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
+			    amrex::Array4<const amrex::Real> const &consVarOld,
+			    amrex::Array4<const amrex::Real> const &consVarIntermediate,
 			    amrex::Array4<amrex::Real> const &consVarNew,
 			    const amrex::Box &indexRange, int nvars);
 
@@ -71,19 +80,20 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	double advectionVz_ = 0.0;
 };
 
-template <typename problem_t> void AdvectionSimulation<problem_t>::computeMaxSignalLocal()
+template <typename problem_t>
+void AdvectionSimulation<problem_t>::computeMaxSignalLocal(int const level)
 {
 	// loop over local grids, compute CFL timestep
-	for (amrex::MFIter iter(state_new_); iter.isValid(); ++iter) {
+	for (amrex::MFIter iter(state_new_[level]); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
-		auto const &stateOld = state_old_.const_array(iter);
-		auto const &maxSignal = max_signal_speed_.array(iter);
+		auto const &stateOld = state_old_[level].const_array(iter);
+		auto const &maxSignal = max_signal_speed_[level].array(iter);
 		LinearAdvectionSystem<problem_t>::ComputeMaxSignalSpeed(stateOld, maxSignal,
 									advectionVx_, indexRange);
 	}
 }
 
-template <typename problem_t> void AdvectionSimulation<problem_t>::setInitialConditions()
+template <typename problem_t> void AdvectionSimulation<problem_t>::setInitialConditionsAtLevel(int level)
 {
 	// do nothing -- user should implement using problem-specific template specialization
 }
@@ -93,33 +103,57 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::computeAfterT
 	// do nothing -- user should implement using problem-specific template specialization
 }
 
-template <typename problem_t> void AdvectionSimulation<problem_t>::advanceSingleTimestep()
+template <typename problem_t>
+void AdvectionSimulation<problem_t>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time,
+					      int ngrow)
 {
-	// We use the RK2-SSP method here. It needs two registers: one to store the old timestep,
-	// and another to store the intermediate stage (which is reused for the final stage).
+	// tag cells for refinement
+}
 
-	// update ghost zones [old timestep]
-	state_old_.FillBoundary(simGeometry_.periodicity());
-	AMREX_ASSERT(!state_old_.contains_nan(0, ncomp_));
+template <typename problem_t>
+void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex::Real time,
+								  amrex::Real dt_lev,
+								  int /*iteration*/, int /*ncycle*/)
+{
+	// since we are starting a new timestep, need to swap old and new states on this level
+	std::swap(state_old_[lev], state_new_[lev]);
+
+	// allocate new MultiFab to hold the boundary-filled state vector
+	amrex::MultiFab S_filled(grids[lev], dmap[lev], state_old_[lev].nComp(), nghost_);
+
+	// We use the RK2-SSP integrator in a method-of-lines framework. In the current code, it
+	// needs 3 registers: one to store the old timestep, and one to store the intermediate
+	// stage, and one to store the final stage. This can be reduced to two registers if the
+	// intermediate stage and final stage re-use the same register.
+
+	// update ghost zones [w/ old timestep]
+	fillBoundaryConditions(S_filled, state_old_[lev], lev, time);
+
+	// allocate new MultiFab for intermediate stage
+	amrex::MultiFab stageOneResult(grids[lev], dmap[lev], state_old_[lev].nComp(), nghost_);
+
+	// cell size
+	auto const &dx = geom[lev].CellSizeArray();
 
 	// advance all grids on local processor (Stage 1 of integrator)
-	for (amrex::MFIter iter(state_new_); iter.isValid(); ++iter) {
-		const amrex::Box &indexRange = iter.validbox(); // 'validbox' == exclude ghost zones
-		auto const &stateOld = state_old_.const_array(iter);
-		auto const &stateNew = state_new_.array(iter);
-		stageOneRK2SSP(stateOld, stateNew, indexRange, ncomp_);
+	for (amrex::MFIter iter(stageOneResult); iter.isValid(); ++iter) {
+		const amrex::Box &indexRange = iter.validbox();
+		auto const &stateOld = S_filled.const_array(iter);
+		auto const &stateNew = stageOneResult.array(iter);
+		stageOneRK2SSP(dt_lev, dx, stateOld, stateNew, indexRange, ncomp_);
 	}
 
-	// update ghost zones [intermediate stage stored in state_new_]
-	state_new_.FillBoundary(simGeometry_.periodicity());
-	AMREX_ASSERT(!state_new_.contains_nan(0, ncomp_));
+	// update ghost zones [w/ intermediate stage stored in stateOneResult]
+	fillBoundaryConditions(S_filled, stageOneResult, lev, time);
 
 	// advance all grids on local processor (Stage 2 of integrator)
-	for (amrex::MFIter iter(state_new_); iter.isValid(); ++iter) {
-		const amrex::Box &indexRange = iter.validbox(); // 'validbox' == exclude ghost zones
-		auto const &stateOld = state_old_.const_array(iter);
-		auto const &stateNew = state_new_.array(iter);
-		stageTwoRK2SSP(stateOld, stateNew, indexRange, ncomp_);
+	for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
+		const amrex::Box &indexRange = iter.validbox();
+		auto const &stateOld = state_old_[lev].const_array(iter);
+		auto const &stateIntermediate = S_filled.const_array(iter);
+		auto const &stateNew = state_new_[lev].array(iter);
+		stageTwoRK2SSP(dt_lev, dx, stateOld, stateIntermediate, stateNew, indexRange,
+			       ncomp_);
 	}
 }
 
@@ -147,8 +181,6 @@ void AdvectionSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Rea
 
 	// extend box to include ghost zones
 	amrex::Box const &ghostRange = amrex::grow(indexRange, nghost_);
-	// N.B.: A one-zone layer around the cells must be fully reconstructed in order for PPM to
-	// work.
 	amrex::Box const &reconstructRange = amrex::grow(indexRange, 1);
 	amrex::Box const &x1ReconstructRange = amrex::surroundingNodes(reconstructRange, dim);
 
@@ -160,20 +192,11 @@ void AdvectionSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Rea
 	// cell-centered kernel
 	LinearAdvectionSystem<problem_t>::ConservedToPrimitive(consState, primVar.array(),
 							       ghostRange, nvars);
-	quokka::CheckNaN<problem_t>(primVar, indexRange, ghostRange, ncomp_, dx_);
 
 	// mixed interface/cell-centered kernel
 	LinearAdvectionSystem<problem_t>::template ReconstructStatesPPM<DIR>(
 	    primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange,
 	    x1ReconstructRange, nvars);
-	// LinearAdvectionSystem<problem_t>::template ReconstructStatesPLM<DIR>(
-	//    primVar.array(), x1LeftState.array(), x1RightState.array(), x1ReconstructRange,
-	//    nvars);
-	// LinearAdvectionSystem<problem_t>::template ReconstructStatesConstant<DIR>(
-	//    primVar.array(), x1LeftState.array(), x1RightState.array(), x1ReconstructRange,
-	//    nvars);
-	quokka::CheckNaN<problem_t>(x1LeftState, indexRange, x1ReconstructRange, ncomp_, dx_);
-	quokka::CheckNaN<problem_t>(x1RightState, indexRange, x1ReconstructRange, ncomp_, dx_);
 
 	// interface-centered kernel
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, dim);
@@ -181,15 +204,14 @@ void AdvectionSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Rea
 	LinearAdvectionSystem<problem_t>::template ComputeFluxes<DIR>(
 	    x1Flux.array(), x1LeftState.array(), x1RightState.array(), advectionVel, x1FluxRange,
 	    nvars);
-	quokka::CheckNaN<problem_t>(x1Flux, indexRange, x1FluxRange, ncomp_, dx_);
 }
 
 template <typename problem_t>
 void AdvectionSimulation<problem_t>::stageOneRK2SSP(
+    amrex::Real dt, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
     amrex::Array4<const amrex::Real> const &consVarOld,
     amrex::Array4<amrex::Real> const &consVarNew, const amrex::Box &indexRange, const int nvars)
 {
-	// Allocate temporary arrays using CUDA stream async allocator (or equivalent)
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, 0);
 	amrex::FArrayBox x1Flux(x1FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in x
 #if (AMREX_SPACEDIM >= 2)
@@ -208,20 +230,17 @@ void AdvectionSimulation<problem_t>::stageOneRK2SSP(
 	amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrays = {
 	    AMREX_D_DECL(x1Flux.const_array(), x2Flux.const_array(), x3Flux.const_array())};
 
-	// if applicable, check that fluxes are symmetric (only for test problems with x/y symmetry)
-	quokka::CheckSymmetryFluxes<problem_t>(x1Flux.const_array(), x2Flux.const_array(),
-					       indexRange, ncomp_, dx_);
-
-	LinearAdvectionSystem<problem_t>::PredictStep(consVarOld, consVarNew, fluxArrays, dt_, dx_,
+	LinearAdvectionSystem<problem_t>::PredictStep(consVarOld, consVarNew, fluxArrays, dt, dx,
 						      indexRange, nvars);
 }
 
 template <typename problem_t>
 void AdvectionSimulation<problem_t>::stageTwoRK2SSP(
+    amrex::Real dt, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
     amrex::Array4<const amrex::Real> const &consVarOld,
+    amrex::Array4<const amrex::Real> const &consVarIntermediate,
     amrex::Array4<amrex::Real> const &consVarNew, const amrex::Box &indexRange, const int nvars)
 {
-	// Allocate temporary arrays using CUDA stream async allocator (or equivalent)
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, 0);
 	amrex::FArrayBox x1Flux(x1FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in x
 #if (AMREX_SPACEDIM >= 2)
@@ -240,13 +259,9 @@ void AdvectionSimulation<problem_t>::stageTwoRK2SSP(
 	amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrays = {
 	    AMREX_D_DECL(x1Flux.const_array(), x2Flux.const_array(), x3Flux.const_array())};
 
-	// if applicable, check that fluxes are symmetric (only for test problems with x/y symmetry)
-	quokka::CheckSymmetryFluxes<problem_t>(x1Flux.const_array(), x2Flux.const_array(),
-					       indexRange, ncomp_, dx_);
-
 	// Stage 2 of RK2-SSP
-	LinearAdvectionSystem<problem_t>::AddFluxesRK2(consVarNew, consVarOld, consVarNew,
-						       fluxArrays, dt_, dx_, indexRange, nvars);
+	LinearAdvectionSystem<problem_t>::AddFluxesRK2(consVarNew, consVarOld, consVarIntermediate,
+						       fluxArrays, dt, dx, indexRange, nvars);
 }
 
 #endif // ADVECTION_SIMULATION_HPP_

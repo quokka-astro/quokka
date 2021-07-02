@@ -38,7 +38,6 @@
 template <typename problem_t> class RadhydroSimulation : public AMRSimulation<problem_t>
 {
       public:
-	using AMRSimulation<problem_t>::simGeometry_;
 	using AMRSimulation<problem_t>::state_old_;
 	using AMRSimulation<problem_t>::state_new_;
 	using AMRSimulation<problem_t>::max_signal_speed_;
@@ -46,13 +45,17 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	using AMRSimulation<problem_t>::cflNumber_;
 	using AMRSimulation<problem_t>::dx_;
 	using AMRSimulation<problem_t>::dt_; // this is the *hydro* timestep
+	using AMRSimulation<problem_t>::tNew_;
 	using AMRSimulation<problem_t>::ncomp_;
 	using AMRSimulation<problem_t>::nghost_;
-	using AMRSimulation<problem_t>::tNow_;
 	using AMRSimulation<problem_t>::cycleCount_;
 	using AMRSimulation<problem_t>::areInitialConditionsDefined_;
 	using AMRSimulation<problem_t>::boundaryConditions_;
 	using AMRSimulation<problem_t>::componentNames_;
+
+	// from super-superclass
+	using AMRSimulation<problem_t>::dmap;
+	using AMRSimulation<problem_t>::grids;
 
 	std::vector<double> t_vec_;
 	std::vector<double> Trad_vec_;
@@ -71,18 +74,19 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	// member functions
 
 	RadhydroSimulation(amrex::IntVect &gridDims, amrex::RealBox &boxSize,
-			    amrex::Vector<amrex::BCRec> &boundaryConditions)
+			   amrex::Vector<amrex::BCRec> &boundaryConditions)
 	    : AMRSimulation<problem_t>(gridDims, boxSize, boundaryConditions,
-					       RadSystem<problem_t>::nvar_, ncompHyperbolic_)
+				       RadSystem<problem_t>::nvar_, ncompHyperbolic_)
 	{
 		componentNames_ = {"gasDensity",    "x-GasMomentum", "y-GasMomentum",
 				   "z-GasMomentum", "gasEnergy",     "radEnergy",
 				   "x-RadFlux",	    "y-RadFlux",     "z-RadFlux"};
 	}
 
-	void computeMaxSignalLocal() override;
+	void computeMaxSignalLocal(int level) override;
 	void setInitialConditions() override;
-	void advanceSingleTimestep() override;
+	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev,
+					  int iteration, int ncycle);
 	void computeAfterTimestep() override;
 
 	// radiation subcycle
@@ -107,11 +111,6 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 
 	void fillBoundaryConditions(amrex::MultiFab &state);
 
-	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void
-	setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest,
-				    int dcomp, int numcomp, amrex::GeometryData const &geom,
-				    amrex::Real time, const amrex::BCRec *bcr, int bcomp, int orig_comp);
-
 	template <FluxDir DIR>
 	void fluxFunction(amrex::Array4<const amrex::Real> const &consState,
 			  amrex::FArrayBox &x1Flux, amrex::FArrayBox &x1FluxDiffusive,
@@ -122,25 +121,14 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 			       amrex::FArrayBox &x1Flux, const amrex::Box &indexRange, int nvars);
 };
 
-template <typename problem_t> struct setBoundaryFunctor {
-	AMREX_GPU_DEVICE void operator()(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest,
-					 const int &dcomp, const int &numcomp,
-					 amrex::GeometryData const &geom, const amrex::Real &time,
-					 const amrex::BCRec *bcr, int bcomp,
-					 const int &orig_comp) const
-	{
-		RadhydroSimulation<problem_t>::setCustomBoundaryConditions(
-		    iv, dest, dcomp, numcomp, geom, time, bcr, bcomp, orig_comp);
-	}
-};
-
-template <typename problem_t> void RadhydroSimulation<problem_t>::computeMaxSignalLocal()
+template <typename problem_t>
+void RadhydroSimulation<problem_t>::computeMaxSignalLocal(int const level)
 {
 	// hydro: loop over local grids, compute hydro CFL timestep
-	for (amrex::MFIter iter(state_new_); iter.isValid(); ++iter) {
+	for (amrex::MFIter iter(state_new_[level]); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
-		auto const &stateOld = state_old_.const_array(iter);
-		auto const &maxSignal = max_signal_speed_.array(iter);
+		auto const &stateOld = state_old_[level].const_array(iter);
+		auto const &maxSignal = max_signal_speed_[level].array(iter);
 		HydroSystem<problem_t>::ComputeMaxSignalSpeed(stateOld, maxSignal, indexRange);
 	}
 }
@@ -156,36 +144,19 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::computeAfterTi
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-RadhydroSimulation<problem_t>::setCustomBoundaryConditions(
-    const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, int dcomp, int numcomp,
-    amrex::GeometryData const &geom, const amrex::Real time, const amrex::BCRec *bcr, int bcomp,
-    int orig_comp)
+void RadhydroSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &state)
 {
-	// user should implement if needed using template specialization
-	// (This is only called when amrex::BCType::ext_dir is set for a given boundary.)
-
-	// set boundary condition for cell 'iv'
+	// TODO(ben): should be implemented by base class!
 }
 
 template <typename problem_t>
-void RadhydroSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &state)
+void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex::Real time,
+								 amrex::Real dt_lev,
+								 int /*iteration*/, int /*ncycle*/)
 {
-	state.FillBoundary(simGeometry_.periodicity());
-	if (!simGeometry_.isAllPeriodic()) {
-		AMREX_ALWAYS_ASSERT(state.ixType().cellCentered());
+	// since we are starting a new timestep, need to swap old and new states
+	std::swap(state_old_[lev], state_new_[lev]);
 
-		amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>> boundaryFunctor(
-		    setBoundaryFunctor<problem_t>{});
-		amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>>
-		    physicalBoundaryFunctor(simGeometry_, boundaryConditions_, boundaryFunctor);
-
-		physicalBoundaryFunctor(state, 0, state.nComp(), state.nGrowVect(), tNow_, 0);
-	}
-}
-
-template <typename problem_t> void RadhydroSimulation<problem_t>::advanceSingleTimestep()
-{
 	/// advance hydro
 	if (is_hydro_enabled_) {
 		// update ghost zones [old timestep]
@@ -427,7 +398,7 @@ void RadhydroSimulation<problem_t>::operatorSplitSourceTerms(
 	advectionFluxes.template setVal<amrex::RunOn::Device>(0.);
 
 	// cell-centered radiation energy source (used only in test problems)
-	RadSystem<problem_t>::SetRadEnergySource(radEnergySource.array(), indexRange, dx_, tNow_);
+	RadSystem<problem_t>::SetRadEnergySource(radEnergySource.array(), indexRange, dx_, tNew_);
 
 	// cell-centered source terms
 	RadSystem<problem_t>::AddSourceTerms(stateNew, radEnergySource.const_array(),
@@ -437,9 +408,9 @@ void RadhydroSimulation<problem_t>::operatorSplitSourceTerms(
 template <typename problem_t>
 template <FluxDir DIR>
 void RadhydroSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real> const &consState,
-						  amrex::FArrayBox &x1Flux,
-						  amrex::FArrayBox &x1FluxDiffusive,
-						  const amrex::Box &indexRange, const int nvars)
+						 amrex::FArrayBox &x1Flux,
+						 amrex::FArrayBox &x1FluxDiffusive,
+						 const amrex::Box &indexRange, const int nvars)
 {
 	int dir = 0;
 	if constexpr (DIR == FluxDir::X1) {

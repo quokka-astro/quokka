@@ -100,7 +100,7 @@ template <> void RadhydroSimulation<CouplingProblem>::computeAfterTimestep()
 		state_final.ParallelCopy(state_new_);
 		auto const &state_final_array = state_final.array(0);
 
-		t_vec_.push_back(tNow_);
+		t_vec_.push_back(tNew_);
 		const amrex::Real Erad_i =
 		    state_final_array(0, 0, 0, RadSystem<CouplingProblem>::radEnergy_index);
 		const amrex::Real Egas_i =
@@ -227,7 +227,7 @@ auto problem_main() -> int
 		matplotlibcpp::xlabel("time t (s)");
 		matplotlibcpp::ylabel("temperature T (K)");
 		// matplotlibcpp::title(
-		//    fmt::format("dt = {:.4g}\nt = {:.4g}", constant_dt, sim.tNow_));
+		//    fmt::format("dt = {:.4g}\nt = {:.4g}", constant_dt, sim.tNew_));
 		matplotlibcpp::save(fmt::format("./radcoupling.pdf"));
 
 		matplotlibcpp::clf();
