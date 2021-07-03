@@ -68,13 +68,13 @@ template <typename problem_t> class HyperbolicSystem
 
 	__attribute__ ((__target__ ("no-fma")))
 	static void AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayconst_t &U1,
-				 amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray,
+				 std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray,
 				 double dt_in, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,
 				 amrex::Box const &indexRange, int nvars);
 
 	__attribute__ ((__target__ ("no-fma")))
 	static void PredictStep(arrayconst_t &consVarOld, array_t &consVarNew,
-				amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray,
+				std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray,
 				double dt_in, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,
 				amrex::Box const &indexRange, int nvars);
 
@@ -314,7 +314,7 @@ void HyperbolicSystem<problem_t>::SaveFluxes(array_t &advectionFluxes, arraycons
 template <typename problem_t>
 void HyperbolicSystem<problem_t>::PredictStep(
     arrayconst_t &consVarOld, array_t &consVarNew,
-    amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray, const double dt_in,
+    std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray, const double dt_in,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange,
     const int nvars)
 {
@@ -349,7 +349,7 @@ void HyperbolicSystem<problem_t>::PredictStep(
 template <typename problem_t>
 void HyperbolicSystem<problem_t>::AddFluxesRK2(
     array_t &U_new, arrayconst_t &U0, arrayconst_t &U1,
-    amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray, const double dt_in,
+    std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray, const double dt_in,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange,
     const int nvars)
 {

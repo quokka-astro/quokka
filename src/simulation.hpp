@@ -42,6 +42,7 @@
 #include <AMReX_Print.H>
 #include <AMReX_Utility.H>
 #include <csignal>
+#include <iomanip>
 
 // internal headers
 #include "CheckNaN.hpp"
@@ -61,19 +62,19 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real cflNumber_ = 0.3;				 // default
 	amrex::Long cycleCount_ = 0;
 	amrex::Long maxTimesteps_ = 1e4; // default
-	int plotfileInterval_ = 100;	 // -1 == no output
+	int plotfileInterval_ = 10;	 // -1 == no output
 	int checkpointInterval_ = -1;	 // -1 == no output
 
 	// constructors
 
-	AMRSimulation(amrex::IntVect &gridDims, amrex::RealBox &boxSize,
+	AMRSimulation(amrex::IntVect & /*gridDims*/, amrex::RealBox & /*boxSize*/,
 		      amrex::Vector<amrex::BCRec> &boundaryConditions, const int ncomp)
 	    : ncomp_(ncomp), ncompPrimitive_(ncomp)
 	{
 		initialize(boundaryConditions);
 	}
 
-	AMRSimulation(amrex::IntVect &gridDims, amrex::RealBox &boxSize,
+	AMRSimulation(amrex::IntVect & /*gridDims*/, amrex::RealBox & /*boxSize*/,
 		      amrex::Vector<amrex::BCRec> &boundaryConditions, const int ncomp,
 		      const int ncompPrimitive)
 	    : ncomp_(ncomp), ncompPrimitive_(ncompPrimitive)
@@ -112,9 +113,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 				     const amrex::DistributionMapping &dm) override;
 
 	// AMR utility functions
-	void fillBoundaryConditions(amrex::MultiFab &S_filled,
-							    amrex::MultiFab &state, int lev,
-							    amrex::Real time);
+	void fillBoundaryConditions(amrex::MultiFab &S_filled, amrex::MultiFab &state, int lev,
+				    amrex::Real time);
 	void FillPatchWithData(int lev, amrex::Real time, amrex::MultiFab &mf,
 			       amrex::Vector<amrex::MultiFab *> &coarseData,
 			       amrex::Vector<amrex::Real> &coarseTime,
@@ -168,25 +168,26 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	/// AMR-specific parameters
 	int regrid_int = 2; // regrid interval (number of sub-cycles)
+	int do_reflux = 0; // 1 == reflux, 0 == no reflux
 };
 
 template <typename problem_t>
 void AMRSimulation<problem_t>::initialize(amrex::Vector<amrex::BCRec> &boundaryConditions)
 {
-    int nlevs_max = max_level + 1;
-    istep.resize(nlevs_max, 0);
-    nsubsteps.resize(nlevs_max, 1);
-    for (int lev = 1; lev <= max_level; ++lev) {
-        nsubsteps[lev] = MaxRefRatio(lev-1);
-    }
+	int nlevs_max = max_level + 1;
+	istep.resize(nlevs_max, 0);
+	nsubsteps.resize(nlevs_max, 1);
+	for (int lev = 1; lev <= max_level; ++lev) {
+		nsubsteps[lev] = MaxRefRatio(lev - 1);
+	}
 
-    tNew_.resize(nlevs_max, 0.0);
-    tOld_.resize(nlevs_max, -1.e100);
-    dt_.resize(nlevs_max, 1.e100);
-    state_new_.resize(nlevs_max);
-    state_old_.resize(nlevs_max);
+	tNew_.resize(nlevs_max, 0.0);
+	tOld_.resize(nlevs_max, -1.e100);
+	dt_.resize(nlevs_max, 1.e100);
+	state_new_.resize(nlevs_max);
+	state_old_.resize(nlevs_max);
 	max_signal_speed_.resize(nlevs_max);
-    flux_reg_.resize(nlevs_max+1);
+	flux_reg_.resize(nlevs_max + 1);
 
 	boundaryConditions_ = boundaryConditions;
 }
@@ -205,18 +206,18 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 template <typename problem_t> void AMRSimulation<problem_t>::setInitialConditions()
 {
-    // start simulation from the beginning
-    const amrex::Real time = 0.0;
-    InitFromScratch(time);
-    AverageDown();
+	// start simulation from the beginning
+	const amrex::Real time = 0.0;
+	InitFromScratch(time);
+	AverageDown();
 
-    if (checkpointInterval_ > 0) {
-        WriteCheckpointFile();
-    }
+	if (checkpointInterval_ > 0) {
+		WriteCheckpointFile();
+	}
 
-    if (plotfileInterval_ > 0) {
-        WritePlotFile();
-    }
+	if (plotfileInterval_ > 0) {
+		WritePlotFile();
+	}
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
@@ -225,7 +226,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 	for (int level = 0; level <= finest_level; ++level) {
 		computeMaxSignalLocal(level);
 		amrex::Real domain_signal_max = max_signal_speed_[level].norminf();
-		amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx = geom[level].CellSizeArray();
+		amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx =
+		    geom[level].CellSizeArray();
 		amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
 		dt_tmp[level] = cflNumber_ * (dx_min / domain_signal_max);
 	}
@@ -372,7 +374,11 @@ void AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time,
 			timeStepWithSubcycling(lev + 1, time + (i - 1) * dt_[lev + 1], i);
 		}
 
-		// TODO(ben): increment flux registers, do reflux here
+		if (do_reflux != 0) {
+			// do AMR reflux on coarse level (this level)
+			amrex::MultiFab &S_coarse = state_new_[lev];
+			flux_reg_[lev + 1]->Reflux(S_coarse);
+		}
 
 		AverageDownTo(lev); // average lev+1 down to lev
 	}
@@ -494,8 +500,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setCustomBoun
 
 template <typename problem_t>
 void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
-							    amrex::MultiFab &state, int lev,
-							    amrex::Real time)
+						      amrex::MultiFab &state, int lev,
+						      amrex::Real time)
 {
 	amrex::Vector<amrex::MultiFab *> fineData{&state};
 	amrex::Vector<amrex::Real> fineTime{time};
@@ -537,7 +543,8 @@ void AMRSimulation<problem_t>::FillPatchWithData(int lev, amrex::Real time, amre
 					    geom[lev], finePhysicalBoundaryFunctor, 0);
 	} else {
 		amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>>
-	    	coarsePhysicalBoundaryFunctor(geom[lev - 1], boundaryConditions_, boundaryFunctor);
+		    coarsePhysicalBoundaryFunctor(geom[lev - 1], boundaryConditions_,
+						  boundaryFunctor);
 
 		// use CellConservativeLinear interpolation onto fine grid
 		amrex::Interpolater *mapper = &amrex::cell_cons_interp;
@@ -634,7 +641,7 @@ void AMRSimulation<problem_t>::GetData(int lev, amrex::Real time,
 // average down on all levels
 template <typename problem_t> void AMRSimulation<problem_t>::AverageDown()
 {
-	for(int lev = finest_level-1; lev >= 0; --lev) {
+	for (int lev = finest_level - 1; lev >= 0; --lev) {
 		AverageDownTo(lev);
 	}
 }
