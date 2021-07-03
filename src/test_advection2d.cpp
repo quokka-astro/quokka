@@ -136,7 +136,7 @@ auto problem_main() -> int
 	// check that we are in strict IEEE 754 mode
 	// (If we are, then the results should be symmetric [about the diagonal of the grid] not
 	// only to machine epsilon but to every last digit! Yes, this *is* possible [in 2D].)
-	AMREX_ALWAYS_ASSERT(std::numeric_limits<double>::is_iec559);
+	static_assert(std::numeric_limits<double>::is_iec559);
 
 	// Problem parameters
 	const int nx = 100;
