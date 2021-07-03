@@ -283,7 +283,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 				       << " TIME = " << cur_time << " DT = " << dt_[0] << std::endl;
 		}
 
-		// sync up time
+		// sync up time (to avoid roundoff error)
 		for (lev = 0; lev <= finest_level; ++lev) {
 			tNew_[lev] = cur_time;
 		}
