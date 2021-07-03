@@ -9,12 +9,14 @@
 /// \brief Implements classes and functions to organise the overall setup,
 /// timestepping, solving, and I/O of a simulation for linear advection.
 
+#include "AMReX.H"
 #include "AMReX_Arena.H"
 #include "AMReX_Array4.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_Box.H"
 #include "AMReX_DistributionMapping.H"
 #include "AMReX_FArrayBox.H"
+#include "AMReX_GpuUtility.H"
 #include "AMReX_IntVect.H"
 #include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
@@ -67,7 +69,7 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 			    const amrex::Box &indexRange, int nvars);
 	void stageTwoRK2SSP(amrex::Real dt, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
 			    amrex::Array4<const amrex::Real> const &consVarOld,
-			    amrex::Array4<const amrex::Real> const &consVarIntermediate,
+			    amrex::Array4<const amrex::Real> const &consVarStar,
 			    amrex::Array4<amrex::Real> const &consVarNew,
 			    const amrex::Box &indexRange, int nvars);
 
@@ -93,7 +95,8 @@ void AdvectionSimulation<problem_t>::computeMaxSignalLocal(int const level)
 	}
 }
 
-template <typename problem_t> void AdvectionSimulation<problem_t>::setInitialConditionsAtLevel(int level)
+template <typename problem_t>
+void AdvectionSimulation<problem_t>::setInitialConditionsAtLevel(int level)
 {
 	// do nothing -- user should implement using problem-specific template specialization
 }
@@ -115,45 +118,45 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 								  amrex::Real dt_lev,
 								  int /*iteration*/, int /*ncycle*/)
 {
+	// based on amrex/Tests/EB/CNS/Source/CNS_advance.cpp
+
 	// since we are starting a new timestep, need to swap old and new states on this level
 	std::swap(state_old_[lev], state_new_[lev]);
 
-	// allocate new MultiFab to hold the boundary-filled state vector
-	amrex::MultiFab S_filled(grids[lev], dmap[lev], state_old_[lev].nComp(), nghost_);
+	// check state validity
+	AMREX_ASSERT(!state_old_[lev].contains_nan(0, state_old_[lev].nComp()));
 
-	// We use the RK2-SSP integrator in a method-of-lines framework. In the current code, it
-	// needs 3 registers: one to store the old timestep, and one to store the intermediate
-	// stage, and one to store the final stage. This can be reduced to two registers if the
+	// allocate new MultiFab to hold the boundary-filled state vector
+	amrex::MultiFab Sborder(grids[lev], dmap[lev], state_old_[lev].nComp(), nghost_);
+
+	// We use the RK2-SSP integrator in a method-of-lines framework. It needs 2 registers: one
+	// to store the old timestep, and one to store the intermediate stage and final stage. The
 	// intermediate stage and final stage re-use the same register.
 
 	// update ghost zones [w/ old timestep]
-	fillBoundaryConditions(S_filled, state_old_[lev], lev, time);
-
-	// allocate new MultiFab for intermediate stage
-	amrex::MultiFab stageOneResult(grids[lev], dmap[lev], state_old_[lev].nComp(), nghost_);
+	fillBoundaryConditions(Sborder, state_old_[lev], lev, time);
 
 	// cell size
 	auto const &dx = geom[lev].CellSizeArray();
 
 	// advance all grids on local processor (Stage 1 of integrator)
-	for (amrex::MFIter iter(stageOneResult); iter.isValid(); ++iter) {
+	for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
-		auto const &stateOld = S_filled.const_array(iter);
-		auto const &stateNew = stageOneResult.array(iter);
+		auto const &stateOld = Sborder.const_array(iter);
+		auto const &stateNew = state_new_[lev].array(iter);
 		stageOneRK2SSP(dt_lev, dx, stateOld, stateNew, indexRange, ncomp_);
 	}
 
-	// update ghost zones [w/ intermediate stage stored in stateOneResult]
-	fillBoundaryConditions(S_filled, stageOneResult, lev, time);
+	// update ghost zones [w/ intermediate stage stored in state_new_]
+	fillBoundaryConditions(Sborder, state_new_[lev], lev, time+dt_lev);
 
 	// advance all grids on local processor (Stage 2 of integrator)
 	for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
-		auto const &stateOld = state_old_[lev].const_array(iter);
-		auto const &stateIntermediate = S_filled.const_array(iter);
-		auto const &stateNew = state_new_[lev].array(iter);
-		stageTwoRK2SSP(dt_lev, dx, stateOld, stateIntermediate, stateNew, indexRange,
-			       ncomp_);
+		auto const &stateInOld = state_old_[lev].const_array(iter);
+		auto const &stateInStar = Sborder.const_array(iter);
+		auto const &stateOut = state_new_[lev].array(iter);
+		stageTwoRK2SSP(dt_lev, dx, stateInOld, stateInStar, stateOut, indexRange, ncomp_);
 	}
 }
 
@@ -197,6 +200,8 @@ void AdvectionSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Rea
 	LinearAdvectionSystem<problem_t>::template ReconstructStatesPPM<DIR>(
 	    primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange,
 	    x1ReconstructRange, nvars);
+	//LinearAdvectionSystem<problem_t>::template ReconstructStatesConstant<DIR>(
+	//    primVar.array(), x1LeftState.array(), x1RightState.array(), x1ReconstructRange, nvars);
 
 	// interface-centered kernel
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, dim);
@@ -238,7 +243,7 @@ template <typename problem_t>
 void AdvectionSimulation<problem_t>::stageTwoRK2SSP(
     amrex::Real dt, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
     amrex::Array4<const amrex::Real> const &consVarOld,
-    amrex::Array4<const amrex::Real> const &consVarIntermediate,
+    amrex::Array4<const amrex::Real> const &consVarStar,
     amrex::Array4<amrex::Real> const &consVarNew, const amrex::Box &indexRange, const int nvars)
 {
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, 0);
@@ -252,15 +257,15 @@ void AdvectionSimulation<problem_t>::stageTwoRK2SSP(
 	amrex::FArrayBox x3Flux(x3FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in z
 #endif
 
-	AMREX_D_TERM(fluxFunction<FluxDir::X1>(consVarNew, x1Flux, indexRange, nvars);
-		     , fluxFunction<FluxDir::X2>(consVarNew, x2Flux, indexRange, nvars);
-		     , fluxFunction<FluxDir::X3>(consVarNew, x3Flux, indexRange, nvars);)
+	AMREX_D_TERM(fluxFunction<FluxDir::X1>(consVarStar, x1Flux, indexRange, nvars);
+		     , fluxFunction<FluxDir::X2>(consVarStar, x2Flux, indexRange, nvars);
+		     , fluxFunction<FluxDir::X3>(consVarStar, x3Flux, indexRange, nvars);)
 
 	amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrays = {
 	    AMREX_D_DECL(x1Flux.const_array(), x2Flux.const_array(), x3Flux.const_array())};
 
 	// Stage 2 of RK2-SSP
-	LinearAdvectionSystem<problem_t>::AddFluxesRK2(consVarNew, consVarOld, consVarIntermediate,
+	LinearAdvectionSystem<problem_t>::AddFluxesRK2(consVarNew, consVarOld, consVarStar,
 						       fluxArrays, dt, dx, indexRange, nvars);
 }
 

@@ -61,7 +61,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real cflNumber_ = 0.3;				 // default
 	amrex::Long cycleCount_ = 0;
 	amrex::Long maxTimesteps_ = 1e4; // default
-	int plotfileInterval_ = 1;	 // -1 == no output
+	int plotfileInterval_ = 100;	 // -1 == no output
 	int checkpointInterval_ = -1;	 // -1 == no output
 
 	// constructors
@@ -355,7 +355,7 @@ void AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time,
 	// Advance a single level for a single time step, and update flux registers
 
 	tOld_[lev] = tNew_[lev];
-	tNew_[lev] += dt_[lev];
+	tNew_[lev] += dt_[lev]; // critical that this is done *before* advanceAtLevel
 
 	advanceSingleTimestepAtLevel(lev, time, dt_[lev], iteration, nsubsteps[lev]);
 
