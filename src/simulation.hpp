@@ -131,7 +131,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void timeStepWithSubcycling(int lev, amrex::Real time, int iteration);
 
 	// boundary condition
-	static void
+	AMREX_GPU_DEVICE static void
 	setCustomBoundaryConditions(const amrex::IntVect &iv,
 				    amrex::Array4<amrex::Real> const &dest, int dcomp, int numcomp,
 				    amrex::GeometryData const &geom, amrex::Real time,

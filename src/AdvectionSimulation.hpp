@@ -18,9 +18,6 @@
 #include "AMReX_DistributionMapping.H"
 #include "AMReX_FArrayBox.H"
 #include "AMReX_FabArrayUtility.H"
-#include "AMReX_GpuControl.H"
-#include "AMReX_GpuLaunchFunctsC.H"
-#include "AMReX_GpuUtility.H"
 #include "AMReX_IntVect.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_REAL.H"
@@ -119,16 +116,17 @@ void AdvectionSimulation<problem_t>::ErrorEst(int lev, amrex::TagBoxArray &tags,
 {
 	// tag cells for refinement
 	const amrex::MultiFab &state = state_new_[lev];
-	const amrex::Vector<amrex::Real> dens_threshold = {0.01, 0.1, 0.2};
+	const int N = 3;
+	const amrex::GpuArray<amrex::Real, N> dens_threshold{0.01, 0.1, 0.2};
 
 	for (amrex::MFIter mfi(state); mfi.isValid(); ++mfi) {
 		const amrex::Box &box = mfi.tilebox();
-		const auto statearr = state.array(mfi);
+		const auto statearr = state.const_array(mfi);
 		const auto tagarray = tags.array(mfi);
 
 		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			amrex::Real threshold = NAN;
-			if (lev < dens_threshold.size()) {
+			if (lev < N) {
 				threshold = dens_threshold[lev];
 			}
 			if (statearr(i, j, k, 0) > threshold) {
@@ -190,12 +188,14 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 		if (lev < finest_level) {
 			fr_as_crse.CrseAdd(
 			    iter, {AMREX_D_DECL(&fluxArrays[0], &fluxArrays[1], &fluxArrays[2])},
-			    geomLevel.CellSize(), dt_lev, amrex::RunOn::Cpu);
+			    geomLevel.CellSize(), dt_lev,
+			    amrex::RunOn::Gpu); // results incorrect on GPU if set to RunOn::Cpu!
 		}
 		if (lev != 0) {
 			fr_as_fine.FineAdd(
 			    iter, {AMREX_D_DECL(&fluxArrays[0], &fluxArrays[1], &fluxArrays[2])},
-			    geomLevel.CellSize(), dt_lev, amrex::RunOn::Cpu);
+			    geomLevel.CellSize(), dt_lev,
+			    amrex::RunOn::Gpu); // results incorrect on GPU if set to RunOn::Cpu!
 		}
 	}
 
@@ -222,12 +222,14 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 		if (lev < finest_level) {
 			fr_as_crse.CrseAdd(
 			    iter, {AMREX_D_DECL(&fluxArrays[0], &fluxArrays[1], &fluxArrays[2])},
-			    geomLevel.CellSize(), dt_lev, amrex::RunOn::Cpu);
+			    geomLevel.CellSize(), dt_lev,
+			    amrex::RunOn::Gpu); // results incorrect on GPU if set to RunOn::Cpu!
 		}
 		if (lev != 0) {
 			fr_as_fine.FineAdd(
 			    iter, {AMREX_D_DECL(&fluxArrays[0], &fluxArrays[1], &fluxArrays[2])},
-			    geomLevel.CellSize(), dt_lev, amrex::RunOn::Cpu);
+			    geomLevel.CellSize(), dt_lev,
+			    amrex::RunOn::Gpu); // results incorrect on GPU if set to RunOn::Cpu!
 		}
 	}
 }
@@ -236,7 +238,11 @@ template <typename problem_t>
 void AdvectionSimulation<problem_t>::rescaleFluxArrays(
     std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxArray, amrex::Real const scalar)
 {
-	AMREX_D_TERM(fluxArray[0] *= scalar;, fluxArray[1] *= scalar;, fluxArray[2] *= scalar;)
+	// WARNING: appears to give incorrect results if set to amrex::RunOn::Cpu but CUDA is
+	// enabled!!
+	AMREX_D_TERM(fluxArray[0].mult<amrex::RunOn::Gpu>(scalar);
+		     , fluxArray[1].mult<amrex::RunOn::Gpu>(scalar);
+		     , fluxArray[2].mult<amrex::RunOn::Gpu>(scalar);)
 }
 
 template <typename problem_t>
@@ -300,8 +306,9 @@ void AdvectionSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Rea
 	LinearAdvectionSystem<problem_t>::template ReconstructStatesPPM<DIR>(
 	    primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange,
 	    x1ReconstructRange, nvars);
-	//LinearAdvectionSystem<problem_t>::template ReconstructStatesConstant<DIR>(
-	//    primVar.array(), x1LeftState.array(), x1RightState.array(), x1ReconstructRange, nvars);
+	// LinearAdvectionSystem<problem_t>::template ReconstructStatesConstant<DIR>(
+	//    primVar.array(), x1LeftState.array(), x1RightState.array(), x1ReconstructRange,
+	//    nvars);
 
 	// interface-centered kernel
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, dim);
