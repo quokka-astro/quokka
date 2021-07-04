@@ -10,6 +10,7 @@
 /// timestepping, solving, and I/O of a simulation.
 
 // c++ headers
+#include "AMReX_REAL.H"
 #include "memory"
 
 // library headers
@@ -43,6 +44,7 @@
 #include <AMReX_Utility.H>
 #include <csignal>
 #include <iomanip>
+#include <ostream>
 
 // internal headers
 #include "CheckNaN.hpp"
@@ -168,7 +170,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	/// AMR-specific parameters
 	int regrid_int = 2; // regrid interval (number of sub-cycles)
-	int do_reflux = 0; // 1 == reflux, 0 == no reflux
+	int do_reflux = 1;  // 1 == reflux, 0 == no reflux
 };
 
 template <typename problem_t>
@@ -263,6 +265,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 	amrex::Real cur_time = tNew_[0];
 	int last_plot_file_step = 0;
+	amrex::Real init_sum_rho = state_new_[0].sum();
 
 	// Main time loop
 	for (int step = istep[0]; step < maxTimesteps_ && cur_time < stopTime_; ++step) {
@@ -278,10 +281,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		++cycleCount_;
 		computeAfterTimestep();
 
-		if (amrex::ParallelDescriptor::IOProcessor()) {
-			amrex::Print() << "Coarse STEP " << step + 1 << " ends."
-				       << " TIME = " << cur_time << " DT = " << dt_[0] << std::endl;
-		}
+		// check conservation
+		amrex::Real sum_rho = state_new_[0].sum();
+
+		// amrex::Print() only happens on I/O processor
+		amrex::Print() << "Coarse STEP " << step + 1 << " ends."
+			       << " TIME = " << cur_time << " DT = " << dt_[0]
+			       << " Sum(rho) = " << sum_rho << std::endl;
 
 		// sync up time
 		for (lev = 0; lev <= finest_level; ++lev) {
@@ -310,6 +316,16 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		}
 	}
 
+	amrex::Real const final_sum_rho = state_new_[0].sum();
+	// should be very close to machine epsilon
+	amrex::Real const conservation_error = (final_sum_rho - init_sum_rho) / init_sum_rho;
+	amrex::Print() << "Initial rho = " << init_sum_rho << std::endl;
+	amrex::Print() << "Conservation: fractional error = " << conservation_error << std::endl;
+
+	amrex::Real const min_rho = state_new_[0].min(0);
+	amrex::Real const max_rho = state_new_[0].max(0);
+	amrex::Print() << "Min rho = " << min_rho << " max rho = " << max_rho << std::endl;
+
 	if (plotfileInterval_ > 0 && istep[0] > last_plot_file_step) {
 		WritePlotFile();
 	}
@@ -320,7 +336,6 @@ void AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time,
 {
 	if (regrid_int > 0) // We may need to regrid
 	{
-
 		// help keep track of whether a level was already regridded
 		// from a coarser level call to regrid
 		static amrex::Vector<int> last_regrid_step(max_level + 1, 0);
@@ -348,7 +363,7 @@ void AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time,
 		}
 	}
 
-	if (Verbose() && amrex::ParallelDescriptor::IOProcessor()) {
+	if (Verbose()) {
 		amrex::Print() << "[Level " << lev << " step " << istep[lev] + 1 << "] ";
 		amrex::Print() << "ADVANCE with time = " << tNew_[lev] << " dt = " << dt_[lev]
 			       << std::endl;
