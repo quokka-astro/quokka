@@ -25,6 +25,7 @@
 #include "AMReX_Box.H"
 #include "AMReX_Config.H"
 #include "AMReX_FArrayBox.H"
+#include "AMReX_FabFactory.H"
 #include "AMReX_GpuControl.H"
 #include "AMReX_IntVect.H"
 #include "AMReX_MultiFab.H"
@@ -91,6 +92,9 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	// tag cells for refinement
 	void ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override;
 
+	auto expandFluxArrays(std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxes, int nstartNew,
+			      int ncompNew) -> std::array<amrex::FArrayBox, AMREX_SPACEDIM>;
+
 	// radiation subcycle
 	void advanceSingleTimestepAtLevelRadiation(int lev, amrex::Real time,
 						   amrex::Real dt_radiation);
@@ -148,32 +152,7 @@ template <typename problem_t>
 void RadhydroSimulation<problem_t>::ErrorEst(int lev, amrex::TagBoxArray &tags,
 					     amrex::Real /*time*/, int /*ngrow*/)
 {
-	// tag cells for refinement
-
-	const amrex::Real epsilon_threshold = 0.01; // curvature refinement threshold
-
-	for (amrex::MFIter mfi(state_new_[lev]); mfi.isValid(); ++mfi) {
-		const amrex::Box &box = mfi.tilebox();
-		const auto state = state_new_[lev].const_array(mfi);
-		const auto tag = tags.array(mfi);
-
-		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			int const n = HydroSystem<problem_t>::density_index;
-			amrex::Real const delsq_x =
-			    (state(i + 1, j, k, n) - 2.0 * state(i, j, k, n) +
-			     state(i - 1, j, k, n));
-			amrex::Real const delsq_y =
-			    (state(i, j + 1, k, n) - 2.0 * state(i, j, k, n) +
-			     state(i, j - 1, k, n));
-
-			// estimate curvature from finite difference stencil
-			// [see Athena++ paper]
-			amrex::Real const epsilon = std::abs(delsq_x + delsq_y) / state(i, j, k, n);
-			if (epsilon > epsilon_threshold) {
-				tag(i, j, k) = amrex::TagBox::SET;
-			}
-		});
-	}
+	// tag cells for refinement -- user should implement
 }
 
 template <typename problem_t>
@@ -185,6 +164,9 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 
 	// since we are starting a new timestep, need to swap old and new states on this level
 	std::swap(state_old_[lev], state_new_[lev]);
+
+	// check state validity
+	AMREX_ASSERT(!state_old_[lev].contains_nan(0, state_old_[lev].nComp()));
 
 	// get geometry (used only for cell sizes)
 	auto const &geomLevel = geom[lev];
@@ -198,8 +180,6 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 
 	/// advance hydro
 	if (is_hydro_enabled_) {
-		// check state validity
-		AMREX_ASSERT(!state_old_[lev].contains_nan(0, ncompHydro_));
 
 		// update ghost zones [old timestep]
 		fillBoundaryConditions(state_old_[lev], state_old_[lev], lev, time);
@@ -222,9 +202,14 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 			// increment flux registers
 			// (N.B. flux arrays must have the same number of components as
 			// state_new_[lev]!)
-			incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, fluxArrays, 0.5, lev,
-					       dt_lev);
+			auto expandedFluxes =
+			    expandFluxArrays(fluxArrays, 0, state_new_[lev].nComp());
+			incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, expandedFluxes, 0.5,
+					       lev, dt_lev);
 		}
+
+		// check intermediate state validity
+		AMREX_ASSERT(!state_new_[lev].contains_nan(0, state_new_[lev].nComp()));
 
 		// update ghost zones [intermediate stage stored in state_new_]
 		fillBoundaryConditions(state_new_[lev], state_new_[lev], lev, time + dt_lev);
@@ -248,8 +233,10 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 			// increment flux registers
 			// (N.B. flux arrays must have the same number of components as
 			// state_new_[lev]!)
-			incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, fluxArrays, 0.5, lev,
-					       dt_lev);
+			auto expandedFluxes =
+			    expandFluxArrays(fluxArrays, 0, state_new_[lev].nComp());
+			incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, expandedFluxes, 0.5,
+					       lev, dt_lev);
 		}
 	}
 
@@ -257,6 +244,26 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 	if (is_radiation_enabled_) {
 		subcycleRadiationAtLevel(lev, time, dt_lev);
 	}
+
+	// check state validity
+	AMREX_ASSERT(!state_new_[lev].contains_nan(0, state_new_[lev].nComp()));
+}
+
+template <typename problem_t>
+auto RadhydroSimulation<problem_t>::expandFluxArrays(
+    std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxes, const int nstartNew, const int ncompNew)
+    -> std::array<amrex::FArrayBox, AMREX_SPACEDIM>
+{
+	auto copyFlux = [nstartNew, ncompNew](amrex::FArrayBox const &oldFlux) {
+		amrex::Box const &fluxRange = oldFlux.box();
+		amrex::FArrayBox newFlux(fluxRange, ncompNew, amrex::The_Async_Arena());
+		newFlux.setVal<amrex::RunOn::Device>(0.);
+		// copy oldFlux (starting at 0) to newFlux (starting at nstart)
+		AMREX_ASSERT(ncompNew > oldFlux.nComp());
+		newFlux.copy(oldFlux, 0, nstartNew, oldFlux.nComp());
+		return newFlux;
+	};
+	return {AMREX_D_DECL(copyFlux(fluxes[0]), copyFlux(fluxes[1]), copyFlux(fluxes[2]))};
 }
 
 template <typename problem_t>
@@ -408,6 +415,7 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevelRadiation(int le
 		    dt_radiation, dx, indexRange, ncompHyperbolic_);
 
 		// increment flux registers
+		// WARNING: as written, diffusive flux correction is not compatible with reflux!!
 		incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, fluxArrays, 0.5, lev,
 				       dt_radiation);
 	}
@@ -435,6 +443,7 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevelRadiation(int le
 		    dt_radiation, dx, indexRange, ncompHyperbolic_);
 
 		// increment flux registers
+		// WARNING: as written, diffusive flux correction is not compatible with reflux!!
 		incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, fluxArrays, 0.5, lev,
 				       dt_radiation);
 	}

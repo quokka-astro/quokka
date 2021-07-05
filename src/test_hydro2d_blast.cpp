@@ -70,12 +70,45 @@ template <> void RadhydroSimulation<BlastProblem>::setInitialConditionsAtLevel(i
 			state(i, j, k, HydroSystem<BlastProblem>::x3Momentum_index) = rho * vz;
 			state(i, j, k, HydroSystem<BlastProblem>::energy_index) =
 			    P / (gamma - 1.) + 0.5 * rho * v_sq;
+			
+			//#if 0
+			// initialize radiation variables just in case
+			state(i, j, k, RadSystem<BlastProblem>::radEnergy_index) = 0;
+			state(i, j, k, RadSystem<BlastProblem>::x1RadFlux_index) = 0;
+			state(i, j, k, RadSystem<BlastProblem>::x2RadFlux_index) = 0;
+			state(i, j, k, RadSystem<BlastProblem>::x3RadFlux_index) = 0;
+			//#endif
 		});
 	}
 
 	// set flag
 	areInitialConditionsDefined_ = true;
 }
+
+template <>
+void RadhydroSimulation<BlastProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags,
+					     amrex::Real /*time*/, int /*ngrow*/)
+{
+	// tag cells for refinement
+
+	//const amrex::Real epsilon_threshold = 0.1; // curvature refinement threshold
+	const amrex::Real rho_threshold = 1.3; // density refinement threshold
+	
+	for (amrex::MFIter mfi(state_new_[lev]); mfi.isValid(); ++mfi) {
+		const amrex::Box &box = mfi.validbox();
+		const auto state = state_new_[lev].const_array(mfi);
+		const auto tag = tags.array(mfi);
+
+		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			int const n = HydroSystem<BlastProblem>::density_index;
+			amrex::Real const rho = state(i,j,k,n);
+			if (rho > rho_threshold) {
+				tag(i, j, k) = amrex::TagBox::SET;
+			}
+		});
+	}
+}
+
 
 auto problem_main() -> int
 {
@@ -119,7 +152,7 @@ auto problem_main() -> int
 	sim.stopTime_ = 1.5;
 	sim.cflNumber_ = 0.4;
 	sim.maxTimesteps_ = 20000;
-	sim.plotfileInterval_ = 25;
+	sim.plotfileInterval_ = 1;
 
 	// initialize
 	sim.setInitialConditions();

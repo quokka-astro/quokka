@@ -44,6 +44,7 @@
 #include <AMReX_Utility.H>
 #include <csignal>
 #include <iomanip>
+#include <limits>
 #include <ostream>
 
 // internal headers
@@ -135,7 +136,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 				    amrex::YAFluxRegister &fr_as_fine,
 				    std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxArrays,
 				    amrex::Real rescaleFactor, int lev, amrex::Real dt_lev);
-					
+
 	// boundary condition
 	AMREX_GPU_DEVICE static void
 	setCustomBoundaryConditions(const amrex::IntVect &iv,
@@ -236,7 +237,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 		amrex::Real domain_signal_max = max_signal_speed_[level].norminf();
 		amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx =
 		    geom[level].CellSizeArray();
-		
+
 		amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
 		dt_tmp[level] = cflNumber_ * (dx_min / domain_signal_max);
 	}
@@ -282,6 +283,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 		int lev = 0;
 		int iteration = 1;
+
 		timeStepWithSubcycling(lev, cur_time, iteration);
 
 		cur_time += dt_[0];
@@ -295,6 +297,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		amrex::Print() << "Coarse STEP " << step + 1 << " ends."
 			       << " TIME = " << cur_time << " DT = " << dt_[0]
 			       << " Sum(rho) = " << sum_rho << std::endl;
+
+		if (std::abs(sum_rho - init_sum_rho) > std::numeric_limits<float>::epsilon()) {
+			std::raise(SIGINT); // breakpoint if we stop conserving density!
+		}
 
 		// sync up time (to avoid roundoff error)
 		for (lev = 0; lev <= finest_level; ++lev) {
@@ -464,6 +470,7 @@ void AMRSimulation<problem_t>::MakeNewLevelFromCoarse(int level, amrex::Real tim
 	}
 
 	FillCoarsePatch(level, time, state_new_[level], 0, ncomp);
+	FillCoarsePatch(level, time, state_old_[level], 0, ncomp); // also necessary
 }
 
 // Remake an existing level using provided BoxArray and DistributionMapping and fill with existing
@@ -480,6 +487,7 @@ void AMRSimulation<problem_t>::RemakeLevel(int level, amrex::Real time, const am
 	amrex::MultiFab max_signal_speed(ba, dm, 1, nghost);
 
 	FillPatch(level, time, new_state, 0, ncomp);
+	FillPatch(level, time, old_state, 0, ncomp); // also necessary
 
 	std::swap(new_state, state_new_[level]);
 	std::swap(old_state, state_old_[level]);
@@ -527,7 +535,11 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(int level, amrex::Real ti
 		    refRatio(level - 1), level, ncomp);
 	}
 
+	// set state_new_[lev] to desired initial condition
 	setInitialConditionsAtLevel(level);
+
+	// copy to state_old_
+	state_old_[level].ParallelCopy(state_new_[level]);
 }
 
 template <typename problem_t> struct setBoundaryFunctor {
@@ -556,11 +568,11 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setCustomBoun
 
 template <typename problem_t>
 void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
-						      amrex::MultiFab &state, int lev,
-						      amrex::Real time)
+						      amrex::MultiFab &state, int const lev,
+						      amrex::Real const time)
 {
 	amrex::Vector<amrex::MultiFab *> fineData{&state};
-	amrex::Vector<amrex::Real> fineTime{time};
+	amrex::Vector<amrex::Real> fineTime = {time};
 	amrex::Vector<amrex::MultiFab *> coarseData;
 	amrex::Vector<amrex::Real> coarseTime;
 
@@ -569,12 +581,17 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 		GetData(lev - 1, time, coarseData, coarseTime);
 	}
 
+	AMREX_ASSERT(!state.contains_nan(0, state.nComp()));
+	for (int i = 0; i < coarseData.size(); ++i) {
+		AMREX_ASSERT(!coarseData[i]->contains_nan(0, state.nComp()));
+	}
+
 	FillPatchWithData(lev, time, S_filled, coarseData, coarseTime, fineData, fineTime, 0,
 			  S_filled.nComp());
 
 	// ensure that there are no NaNs (can happen when domain boundary filling is unimplemented
 	// or malfunctioning)
-	//AMREX_ASSERT(!S_filled.contains_nan(0, S_filled.nComp()));
+	AMREX_ASSERT(!S_filled.contains_nan(0, S_filled.nComp()));
 }
 
 // Compute a new multifab 'mf' by copying in state from given data and filling ghost cells
