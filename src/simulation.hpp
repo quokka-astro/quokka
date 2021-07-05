@@ -236,6 +236,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 		amrex::Real domain_signal_max = max_signal_speed_[level].norminf();
 		amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx =
 		    geom[level].CellSizeArray();
+		
 		amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
 		dt_tmp[level] = cflNumber_ * (dx_min / domain_signal_max);
 	}
@@ -573,7 +574,7 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 
 	// ensure that there are no NaNs (can happen when domain boundary filling is unimplemented
 	// or malfunctioning)
-	AMREX_ASSERT(!S_filled.contains_nan(0, S_filled.nComp()));
+	//AMREX_ASSERT(!S_filled.contains_nan(0, S_filled.nComp()));
 }
 
 // Compute a new multifab 'mf' by copying in state from given data and filling ghost cells

@@ -25,18 +25,18 @@ template <> struct EOS_Traits<BlastProblem> {
 	static constexpr double gamma = 5. / 3.;
 };
 
-template <> void RadhydroSimulation<BlastProblem>::setInitialConditions()
+template <> void RadhydroSimulation<BlastProblem>::setInitialConditionsAtLevel(int lev)
 {
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = simGeometry_.CellSizeArray();
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = simGeometry_.ProbLoArray();
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = simGeometry_.ProbHiArray();
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = geom[lev].ProbHiArray();
 
 	amrex::Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
 	amrex::Real const y0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
 
-	for (amrex::MFIter iter(state_old_); iter.isValid(); ++iter) {
+	for (amrex::MFIter iter(state_old_[lev]); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
-		auto const &state = state_new_.array(iter);
+		auto const &state = state_new_[lev].array(iter);
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 			amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
@@ -120,7 +120,6 @@ auto problem_main() -> int
 	sim.cflNumber_ = 0.4;
 	sim.maxTimesteps_ = 20000;
 	sim.plotfileInterval_ = 25;
-	sim.outputAtInterval_ = true;
 
 	// initialize
 	sim.setInitialConditions();
