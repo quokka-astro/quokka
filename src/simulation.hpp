@@ -129,7 +129,13 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void AverageDown();
 	void AverageDownTo(int crse_lev);
 	void timeStepWithSubcycling(int lev, amrex::Real time, int iteration);
-
+	void rescaleFluxArrays(std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxArray,
+			       amrex::Real scalar);
+	void incrementFluxRegisters(amrex::MFIter &iter, amrex::YAFluxRegister &fr_as_crse,
+				    amrex::YAFluxRegister &fr_as_fine,
+				    std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxArrays,
+				    amrex::Real rescaleFactor, int lev, amrex::Real dt_lev);
+					
 	// boundary condition
 	AMREX_GPU_DEVICE static void
 	setCustomBoundaryConditions(const amrex::IntVect &iv,
@@ -397,6 +403,40 @@ void AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time,
 
 		AverageDownTo(lev); // average lev+1 down to lev
 	}
+}
+
+template <typename problem_t>
+void AMRSimulation<problem_t>::incrementFluxRegisters(
+    amrex::MFIter &iter, amrex::YAFluxRegister &fr_as_crse, amrex::YAFluxRegister &fr_as_fine,
+    std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxArrays, amrex::Real const rescaleFactor,
+    int const lev, amrex::Real const dt_lev)
+{
+	auto const &geomLevel = geom[lev];
+	rescaleFluxArrays(fluxArrays, rescaleFactor);
+
+	if (lev < finest_level) {
+		fr_as_crse.CrseAdd(
+		    iter, {AMREX_D_DECL(&fluxArrays[0], &fluxArrays[1], &fluxArrays[2])},
+		    geomLevel.CellSize(), dt_lev,
+		    amrex::RunOn::Gpu); // results incorrect on GPU if set to RunOn::Cpu!
+	}
+	if (lev != 0) {
+		fr_as_fine.FineAdd(
+		    iter, {AMREX_D_DECL(&fluxArrays[0], &fluxArrays[1], &fluxArrays[2])},
+		    geomLevel.CellSize(), dt_lev,
+		    amrex::RunOn::Gpu); // results incorrect on GPU if set to RunOn::Cpu!
+	}
+}
+
+template <typename problem_t>
+void AMRSimulation<problem_t>::rescaleFluxArrays(
+    std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxArray, amrex::Real const scalar)
+{
+	// WARNING: appears to give incorrect results if set to amrex::RunOn::Cpu but CUDA is
+	// enabled!!
+	AMREX_D_TERM(fluxArray[0].mult<amrex::RunOn::Gpu>(scalar);
+		     , fluxArray[1].mult<amrex::RunOn::Gpu>(scalar);
+		     , fluxArray[2].mult<amrex::RunOn::Gpu>(scalar);)
 }
 
 // Make a new level using provided BoxArray and DistributionMapping and fill with interpolated
