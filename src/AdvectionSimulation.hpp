@@ -149,9 +149,6 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 	// check state validity
 	AMREX_ASSERT(!state_old_[lev].contains_nan(0, state_old_[lev].nComp()));
 
-	// allocate new MultiFab to hold the boundary-filled state vector
-	amrex::MultiFab Sborder(grids[lev], dmap[lev], state_old_[lev].nComp(), nghost_);
-
 	// get geometry (used only for cell sizes)
 	auto const &geomLevel = geom[lev];
 
@@ -167,12 +164,13 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 	// intermediate stage and final stage re-use the same register.
 
 	// update ghost zones [w/ old timestep]
-	fillBoundaryConditions(Sborder, state_old_[lev], lev, time);
+	// (N.B. the input and output multifabs are allowed to be the same, as done here)
+	fillBoundaryConditions(state_old_[lev], state_old_[lev], lev, time);
 
 	// advance all grids on local processor (Stage 1 of integrator)
 	for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
-		auto const &stateOld = Sborder.const_array(iter);
+		auto const &stateOld = state_old_[lev].const_array(iter);
 		auto const &stateNew = state_new_[lev].array(iter);
 		auto fluxArrays = computeFluxes(stateOld, indexRange, ncomp_);
 
@@ -200,13 +198,13 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 	}
 
 	// update ghost zones [w/ intermediate stage stored in state_new_]
-	fillBoundaryConditions(Sborder, state_new_[lev], lev, time + dt_lev);
+	fillBoundaryConditions(state_new_[lev], state_new_[lev], lev, time + dt_lev);
 
 	// advance all grids on local processor (Stage 2 of integrator)
 	for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &stateInOld = state_old_[lev].const_array(iter);
-		auto const &stateInStar = Sborder.const_array(iter);
+		auto const &stateInStar = state_new_[lev].const_array(iter);
 		auto const &stateOut = state_new_[lev].array(iter);
 		auto fluxArrays = computeFluxes(stateInStar, indexRange, ncomp_);
 
