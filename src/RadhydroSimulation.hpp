@@ -149,19 +149,29 @@ void RadhydroSimulation<problem_t>::ErrorEst(int lev, amrex::TagBoxArray &tags,
 					     amrex::Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for refinement
-	const amrex::MultiFab &state = state_new_[lev];
-	for (amrex::MFIter mfi(state); mfi.isValid(); ++mfi) {
+
+	const amrex::Real epsilon_threshold = 0.01; // curvature refinement threshold
+
+	for (amrex::MFIter mfi(state_new_[lev]); mfi.isValid(); ++mfi) {
 		const amrex::Box &box = mfi.tilebox();
-		const auto statearr = state.const_array(mfi);
-		const auto tagarray = tags.array(mfi);
+		const auto state = state_new_[lev].const_array(mfi);
+		const auto tag = tags.array(mfi);
 
 		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-#if 0
-			amrex::Real rho_threshold = 1.0;
-			if (statearr(i, j, k, HydroSystem<problem_t>::density_index) > rho_threshold) {
-				tagarray(i, j, k) = amrex::TagBox::SET;
+			int const n = HydroSystem<problem_t>::density_index;
+			amrex::Real const delsq_x =
+			    (state(i + 1, j, k, n) - 2.0 * state(i, j, k, n) +
+			     state(i - 1, j, k, n));
+			amrex::Real const delsq_y =
+			    (state(i, j + 1, k, n) - 2.0 * state(i, j, k, n) +
+			     state(i, j - 1, k, n));
+
+			// estimate curvature from finite difference stencil
+			// [see Athena++ paper]
+			amrex::Real const epsilon = std::abs(delsq_x + delsq_y) / state(i, j, k, n);
+			if (epsilon > epsilon_threshold) {
+				tag(i, j, k) = amrex::TagBox::SET;
 			}
-#endif
 		});
 	}
 }
@@ -210,6 +220,8 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 			    dt_lev, geomLevel.CellSizeArray(), indexRange, ncompHydro_);
 
 			// increment flux registers
+			// (N.B. flux arrays must have the same number of components as
+			// state_new_[lev]!)
 			incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, fluxArrays, 0.5, lev,
 					       dt_lev);
 		}
@@ -234,6 +246,8 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 			    dt_lev, geomLevel.CellSizeArray(), indexRange, ncompHydro_);
 
 			// increment flux registers
+			// (N.B. flux arrays must have the same number of components as
+			// state_new_[lev]!)
 			incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, fluxArrays, 0.5, lev,
 					       dt_lev);
 		}
