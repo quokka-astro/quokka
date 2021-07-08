@@ -58,6 +58,8 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	using AMRSimulation<problem_t>::incrementFluxRegisters;
 	using AMRSimulation<problem_t>::finest_level;
 	using AMRSimulation<problem_t>::finestLevel;
+	using AMRSimulation<problem_t>::tOld_;
+	using AMRSimulation<problem_t>::tNew_;
 
 	AdvectionSimulation(amrex::IntVect &gridDims, amrex::RealBox &boxSize,
 			    amrex::Vector<amrex::BCRec> &boundaryConditions, const int ncomp = 1)
@@ -146,6 +148,8 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAllLevels(amrex::Real 
 		// since we are starting a new timestep, need to swap old and new states on this
 		// level
 		std::swap(state_old_[lev], state_new_[lev]);
+        tOld_[lev] = tNew_[lev]; // must be done in this function
+        tNew_[lev] += dt;
 
 		// check state validity
 		AMREX_ASSERT(!state_old_[lev].contains_nan(0, state_old_[lev].nComp()));

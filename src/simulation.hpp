@@ -329,14 +329,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		int lev = 0;
 		int iteration = 1;
 
-#if 0
+//#if 0
 		if (do_subcycle == 1) {
 			timeStepWithSubcycling(lev, cur_time, iteration);
 		} else {
 			timeStepNoSubcycling(cur_time, iteration);
 		}
-#endif
-		timeStepWithSubcycling(lev, cur_time, iteration);
+//#endif
+		//timeStepWithSubcycling(lev, cur_time, iteration);
 
 		cur_time += dt_[0];
 		++cycleCount_;
@@ -471,26 +471,6 @@ void AMRSimulation<problem_t>::incrementFluxRegisters(
 	AMREX_D_TERM(AMREX_ASSERT(!fluxArrays[0].contains_nan());
 		     , AMREX_ASSERT(!fluxArrays[1].contains_nan());
 		     , AMREX_ASSERT(!fluxArrays[2].contains_nan());)
-
-#if 0
-	if (lev == 0) { // debugging
-		auto const &fbox = fluxArrays[1].box();
-		auto const &farr = fluxArrays[1].const_array();
-		if (fbox.contains(amrex::IntVect{19, 20})) {
-			amrex::Real const fy_val = farr(19, 20, 0);
-			std::raise(SIGINT);
-		}
-	}
-	if (lev == 1) { // debugging
-		auto const &fbox = fluxArrays[1].box();
-		auto const &farr = fluxArrays[1].const_array();
-		if (fbox.contains(amrex::IntVect{39, 40})) {
-			amrex::Real const fy_val1 = farr(38, 40, 0);
-			amrex::Real const fy_val2 = farr(39, 40, 0);
-			std::raise(SIGINT);
-		}
-	}
-#endif
 
 	if (do_reflux) {
 		if (fr_as_crse) {
