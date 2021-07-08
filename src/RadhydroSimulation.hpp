@@ -57,6 +57,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	using AMRSimulation<problem_t>::flux_reg_;
 	using AMRSimulation<problem_t>::incrementFluxRegisters;
 	using AMRSimulation<problem_t>::finest_level;
+	using AMRSimulation<problem_t>::finestLevel;
 
 	std::vector<double> t_vec_;
 	std::vector<double> Trad_vec_;
@@ -88,6 +89,8 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	void setInitialConditionsAtLevel(int level) override;
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev,
 					  int iteration, int ncycle) override;
+	void advanceSingleTimestepAllLevels(amrex::Real time, amrex::Real dt,
+					    int /*iteration*/) override;
 	void computeAfterTimestep() override;
 	// tag cells for refinement
 	void ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override;
@@ -167,15 +170,22 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 
 	// check state validity
 	AMREX_ASSERT(!state_old_[lev].contains_nan(0, state_old_[lev].nComp()));
+	AMREX_ASSERT(!state_old_[lev].contains_nan()); // check ghost cells
 
 	// get geometry (used only for cell sizes)
 	auto const &geomLevel = geom[lev];
 
 	// get flux registers
-	amrex::YAFluxRegister &fr_as_crse = *flux_reg_[lev + 1];
-	amrex::YAFluxRegister &fr_as_fine = *flux_reg_[lev];
-	if (lev < finest_level) {
-		fr_as_crse.reset(); // set flux register to zero
+	amrex::YAFluxRegister *fr_as_crse = nullptr;
+	amrex::YAFluxRegister *fr_as_fine = nullptr;
+	{
+		if (lev < finestLevel()) {
+			fr_as_crse = flux_reg_[lev + 1].get();
+			fr_as_crse->reset();
+		}
+		if (lev > 0) {
+			fr_as_fine = flux_reg_[lev].get();
+		}
 	}
 
 	/// advance hydro
@@ -204,15 +214,17 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 			// state_new_[lev]!)
 			auto expandedFluxes =
 			    expandFluxArrays(fluxArrays, 0, state_new_[lev].nComp());
-			incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, expandedFluxes, 0.5,
-					       lev, dt_lev);
+			incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, expandedFluxes, lev,
+					       0.5 * dt_lev);
 		}
 
 		// check intermediate state validity
 		AMREX_ASSERT(!state_new_[lev].contains_nan(0, state_new_[lev].nComp()));
+		AMREX_ASSERT(!state_new_[lev].contains_nan()); // check ghost zones
 
 		// update ghost zones [intermediate stage stored in state_new_]
 		fillBoundaryConditions(state_new_[lev], state_new_[lev], lev, time + dt_lev);
+		// fillBoundaryConditions(state_new_[lev], state_new_[lev], lev, time);
 
 		// advance all grids on local processor (Stage 2 of integrator)
 		for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
@@ -235,8 +247,8 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 			// state_new_[lev]!)
 			auto expandedFluxes =
 			    expandFluxArrays(fluxArrays, 0, state_new_[lev].nComp());
-			incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, expandedFluxes, 0.5,
-					       lev, dt_lev);
+			incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, expandedFluxes, lev,
+					       0.5 * dt_lev);
 		}
 	}
 
@@ -247,6 +259,7 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 
 	// check state validity
 	AMREX_ASSERT(!state_new_[lev].contains_nan(0, state_new_[lev].nComp()));
+	AMREX_ASSERT(!state_new_[lev].contains_nan()); // check ghost zones
 }
 
 template <typename problem_t>
@@ -379,6 +392,12 @@ void RadhydroSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Rea
 }
 
 template <typename problem_t>
+void RadhydroSimulation<problem_t>::advanceSingleTimestepAllLevels(amrex::Real time, amrex::Real dt,
+								   int /*iteration*/)
+{
+}
+
+template <typename problem_t>
 void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevelRadiation(int lev, amrex::Real time,
 									  amrex::Real dt_radiation)
 {
@@ -387,8 +406,17 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevelRadiation(int le
 	auto const &dx = geomLevel.CellSizeArray();
 
 	// get flux registers
-	amrex::YAFluxRegister &fr_as_crse = *flux_reg_[lev + 1];
-	amrex::YAFluxRegister &fr_as_fine = *flux_reg_[lev];
+	amrex::YAFluxRegister *fr_as_crse = nullptr;
+	amrex::YAFluxRegister *fr_as_fine = nullptr;
+	{
+		if (lev < finestLevel()) {
+			fr_as_crse = flux_reg_[lev + 1].get();
+			//fr_as_crse->reset(); // only reset at beginning of hydro step
+		}
+		if (lev > 0) {
+			fr_as_fine = flux_reg_[lev].get();
+		}
+	}
 
 	// We use the RK2-SSP method here. It needs two registers: one to store the old timestep,
 	// and another to store the intermediate stage (which is reused for the final stage).
@@ -416,8 +444,8 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevelRadiation(int le
 
 		// increment flux registers
 		// WARNING: as written, diffusive flux correction is not compatible with reflux!!
-		incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, fluxArrays, 0.5, lev,
-				       dt_radiation);
+		incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, fluxArrays, lev,
+				       0.5 * dt_radiation);
 	}
 
 	// update ghost zones [intermediate stage stored in state_new_]
@@ -444,8 +472,8 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevelRadiation(int le
 
 		// increment flux registers
 		// WARNING: as written, diffusive flux correction is not compatible with reflux!!
-		incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, fluxArrays, 0.5, lev,
-				       dt_radiation);
+		incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, fluxArrays, lev,
+				       0.5 * dt_radiation);
 	}
 
 	// matter-radiation exchange source terms

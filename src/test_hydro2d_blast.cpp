@@ -8,12 +8,16 @@
 ///
 
 #include "test_hydro2d_blast.hpp"
+#include "AMReX_Array.H"
+#include "AMReX_BCRec.H"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_Config.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
+#include "AMReX_REAL.H"
+#include "AMReX_TagBox.H"
 #include "RadhydroSimulation.hpp"
 #include "hydro_system.hpp"
 #include "test_radhydro_shock_cgs.hpp"
@@ -36,6 +40,7 @@ template <> void RadhydroSimulation<BlastProblem>::setInitialConditionsAtLevel(i
 
 	for (amrex::MFIter iter(state_old_[lev]); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
+		// const amrex::Box &indexRange = iter.fabbox(); // INCLUDES ghost zones
 		auto const &state = state_new_[lev].array(iter);
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -70,7 +75,7 @@ template <> void RadhydroSimulation<BlastProblem>::setInitialConditionsAtLevel(i
 			state(i, j, k, HydroSystem<BlastProblem>::x3Momentum_index) = rho * vz;
 			state(i, j, k, HydroSystem<BlastProblem>::energy_index) =
 			    P / (gamma - 1.) + 0.5 * rho * v_sq;
-			
+
 			//#if 0
 			// initialize radiation variables just in case
 			state(i, j, k, RadSystem<BlastProblem>::radEnergy_index) = 0;
@@ -87,13 +92,12 @@ template <> void RadhydroSimulation<BlastProblem>::setInitialConditionsAtLevel(i
 
 template <>
 void RadhydroSimulation<BlastProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags,
-					     amrex::Real /*time*/, int /*ngrow*/)
+						amrex::Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for refinement
 
-	//const amrex::Real epsilon_threshold = 0.1; // curvature refinement threshold
-	const amrex::Real rho_threshold = 1.3; // density refinement threshold
-	
+	const amrex::Real eta_threshold = 0.2; // gradient refinement threshold
+
 	for (amrex::MFIter mfi(state_new_[lev]); mfi.isValid(); ++mfi) {
 		const amrex::Box &box = mfi.validbox();
 		const auto state = state_new_[lev].const_array(mfi);
@@ -101,24 +105,30 @@ void RadhydroSimulation<BlastProblem>::ErrorEst(int lev, amrex::TagBoxArray &tag
 
 		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			int const n = HydroSystem<BlastProblem>::density_index;
-			amrex::Real const rho = state(i,j,k,n);
-			if (rho > rho_threshold) {
+			amrex::Real const rho = state(i, j, k, n);
+
+			amrex::Real const del_x =
+			    std::abs(state(i + 1, j, k, n) - state(i - 1, j, k, n)) / 2.0;
+			amrex::Real const del_y =
+			    std::abs(state(i, j + 1, k, n) - state(i, j - 1, k, n)) / 2.0;
+			amrex::Real const gradient_indicator = std::max(del_x, del_y) / rho;
+
+			if (gradient_indicator > eta_threshold) {
 				tag(i, j, k) = amrex::TagBox::SET;
 			}
 		});
 	}
 }
 
-
 auto problem_main() -> int
 {
-	// Problem parameters	
+	// Problem parameters
 	amrex::IntVect gridDims{AMREX_D_DECL(400, 600, 4)};
 	amrex::RealBox boxSize{
 	    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.0), amrex::Real(0.0))},
 	    {AMREX_D_DECL(amrex::Real(1.0), amrex::Real(1.5), amrex::Real(1.0))}};
 
-	auto isNormalComp = [=] (int n, int dim) {
+	auto isNormalComp = [=](int n, int dim) {
 		if ((n == HydroSystem<BlastProblem>::x1Momentum_index) && (dim == 0)) {
 			return true;
 		}
@@ -131,16 +141,24 @@ auto problem_main() -> int
 		return false;
 	};
 
+	constexpr bool reflecting_boundary = false;
+
 	const int nvars = RadhydroSimulation<BlastProblem>::nvarTotal_;
 	amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
 	for (int n = 0; n < nvars; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			if(isNormalComp(n, i)) {
-				boundaryConditions[n].setLo(i, amrex::BCType::reflect_odd);
-				boundaryConditions[n].setHi(i, amrex::BCType::reflect_odd);
+			if (reflecting_boundary) {
+				if (isNormalComp(n, i)) {
+					boundaryConditions[n].setLo(i, amrex::BCType::reflect_odd);
+					boundaryConditions[n].setHi(i, amrex::BCType::reflect_odd);
+				} else {
+					boundaryConditions[n].setLo(i, amrex::BCType::reflect_even);
+					boundaryConditions[n].setHi(i, amrex::BCType::reflect_even);
+				}
 			} else {
-				boundaryConditions[n].setLo(i, amrex::BCType::reflect_even);
-				boundaryConditions[n].setHi(i, amrex::BCType::reflect_even);				
+				// periodic
+				boundaryConditions[n].setLo(i, amrex::BCType::int_dir);
+				boundaryConditions[n].setHi(i, amrex::BCType::int_dir);
 			}
 		}
 	}

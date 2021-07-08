@@ -75,6 +75,59 @@ void ComputeExactSolution(amrex::Array4<amrex::Real> const &exact_arr, amrex::Bo
 	});
 }
 
+template <>
+void AdvectionSimulation<SquareProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags,
+						  amrex::Real /*time*/, int /*ngrow*/)
+{
+	// tag cells for refinement
+#if 0
+	const amrex::MultiFab &state = state_new_[lev];
+	const int N = 3;
+	const amrex::GpuArray<amrex::Real, N> dens_threshold{0.01, 0.1, 0.2};
+
+	for (amrex::MFIter mfi(state); mfi.isValid(); ++mfi) {
+		const amrex::Box &box = mfi.tilebox();
+		const auto statearr = state.const_array(mfi);
+		const auto tagarray = tags.array(mfi);
+
+		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			amrex::Real threshold = NAN;
+			if (lev < N) {
+				threshold = dens_threshold[lev];
+			}
+			if (statearr(i, j, k, 0) > threshold) {
+				tagarray(i, j, k) = amrex::TagBox::SET;
+			}
+		});
+	}
+#endif
+
+	const amrex::Real eta_threshold = 0.5; // gradient refinement threshold
+	const amrex::Real rho_min = 0.1;    // minimum rho for refinement
+
+	for (amrex::MFIter mfi(state_new_[lev]); mfi.isValid(); ++mfi) {
+		const amrex::Box &box = mfi.validbox();
+		const auto state = state_new_[lev].const_array(mfi);
+		const auto tag = tags.array(mfi);
+
+		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			int const n = 0;
+			amrex::Real const rho = state(i, j, k, n);
+
+			amrex::Real const del_x = std::max(std::abs(state(i + 1, j, k, n) - rho),
+							   std::abs(rho - state(i - 1, j, k, n)));
+			amrex::Real const del_y = std::max(std::abs(state(i, j + 1, k, n) - rho),
+							   std::abs(rho - state(i, j - 1, k, n)));
+			amrex::Real const gradient_indicator =
+			    std::max(del_x, del_y) / std::max(rho, rho_min);
+
+			if (gradient_indicator > eta_threshold) {
+				tag(i, j, k) = amrex::TagBox::SET;
+			}
+		});
+	}
+}
+
 template <> void AdvectionSimulation<SquareProblem>::computeAfterTimestep()
 {
 #if 0
@@ -144,7 +197,7 @@ auto problem_main() -> int
 	const double advection_velocity = 1.0; // same for x- and y- directions
 	const double CFL_number = 0.4;
 	const double max_time = 1.0;
-	const double max_dt = 1.0e-3;
+	// const double max_dt = 1.0e-3;
 	const int max_timesteps = 1e4;
 	const int nvars = 1; // only density
 
@@ -163,10 +216,12 @@ auto problem_main() -> int
 
 	// Problem initialization
 	AdvectionSimulation<SquareProblem> sim(gridDims, boxSize, boundaryConditions);
-	sim.maxDt_ = max_dt;
+	// sim.maxDt_ = max_dt;
 	sim.stopTime_ = max_time;
 	sim.cflNumber_ = CFL_number;
 	sim.maxTimesteps_ = max_timesteps;
+	sim.plotfileInterval_ = 1;   // for debugging
+	sim.checkpointInterval_ = 1; // for debugging
 
 	sim.advectionVx_ = advection_velocity;
 	sim.advectionVy_ = advection_velocity;
