@@ -10,6 +10,7 @@
 /// timestepping, solving, and I/O of a simulation.
 
 // c++ headers
+#include "AMReX_FluxRegister.H"
 #include "AMReX_Interpolater.H"
 #include "AMReX_REAL.H"
 #include "memory"
@@ -51,6 +52,8 @@
 // internal headers
 #include "CheckNaN.hpp"
 #include "math_impl.hpp"
+
+//#define USE_YAFLUXREGISTER
 
 // Main simulation class; solvers should inherit from this
 template <typename problem_t> class AMRSimulation : public amrex::AmrCore
@@ -166,7 +169,11 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// NOTE: the flux register associated with flux_reg[lev] is associated with the lev/lev-1
 	// interface (and has grid spacing associated with lev-1) therefore flux_reg[0] and
 	// flux_reg[nlevs_max] are never actually used in the reflux operation
+#ifdef USE_YAFLUXREGISTER
 	amrex::Vector<std::unique_ptr<amrex::YAFluxRegister>> flux_reg_;
+#else
+	amrex::Vector<std::unique_ptr<amrex::FluxRegister>> flux_reg_;
+#endif // USE_YAFLUXREGISTER
 
 	// Nghost = number of ghost cells for each array
 	int nghost_ = 4;	   // PPM needs nghost >= 3, PPM+flattening needs nghost >= 4
@@ -329,14 +336,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		int lev = 0;
 		int iteration = 1;
 
-//#if 0
+		#if 0
 		if (do_subcycle == 1) {
 			timeStepWithSubcycling(lev, cur_time, iteration);
 		} else {
 			timeStepNoSubcycling(cur_time, iteration);
 		}
-//#endif
-		//timeStepWithSubcycling(lev, cur_time, iteration);
+		#endif
+		timeStepWithSubcycling(lev, cur_time, iteration);
 
 		cur_time += dt_[0];
 		++cycleCount_;
@@ -345,13 +352,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		// check conservation
 		amrex::Real const sum_rho = state_new_[0].sum();
 		amrex::Real const conservation_error = (sum_rho - init_sum_rho) / init_sum_rho;
-
-		// amrex::Print() only happens on I/O processor
 		amrex::Print() << "Coarse STEP " << step + 1 << " ends."
 			       << " TIME = " << cur_time << " DT = " << dt_[0]
 			       << " Sum(rho) = " << sum_rho
 			       << " conservation error = " << conservation_error << std::endl;
-
 		if (std::abs(conservation_error) > 1.0e-14) {
 			amrex::Print() << "stopping due to conservation error!" << std::endl;
 			break;
@@ -422,7 +426,11 @@ void AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time,
 
 		if (do_reflux) {
 			// update lev based on coarse-fine flux mismatch
+#ifdef USE_YAFLUXREGISTER
 			flux_reg_[lev + 1]->Reflux(state_new_[lev]);
+#else
+			flux_reg_[lev + 1]->Reflux(state_new_[lev], 1.0, 0, 0, ncomp_, geom[lev]);
+#endif // USE_YAFLUXREGISTER
 		}
 
 		AverageDownTo(lev); // average lev+1 down to lev
@@ -460,6 +468,7 @@ void AMRSimulation<problem_t>::timeStepNoSubcycling(amrex::Real time, int iterat
 	}
 }
 
+#ifdef USE_YAFLUXREGISTER
 template <typename problem_t>
 void AMRSimulation<problem_t>::incrementFluxRegisters(
     amrex::MFIter &mfi, amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine,
@@ -490,6 +499,7 @@ void AMRSimulation<problem_t>::incrementFluxRegisters(
 		}
 	}
 }
+#endif // USE_YAFLUXREGISTER
 
 // Make a new level using provided BoxArray and DistributionMapping and fill with interpolated
 // coarse level data. Overrides the pure virtual function in AmrCore
@@ -511,9 +521,14 @@ void AMRSimulation<problem_t>::MakeNewLevelFromCoarse(int level, amrex::Real tim
 	tOld_[level] = time - 1.e200;
 
 	if (level > 0 && do_reflux) {
+#ifdef USE_YAFLUXREGISTER
 		flux_reg_[level].reset(new amrex::YAFluxRegister(
 		    ba, boxArray(level - 1), dm, DistributionMap(level - 1), Geom(level),
 		    Geom(level - 1), refRatio(level - 1), level, ncomp));
+#else
+		flux_reg_[level].reset(
+		    new amrex::FluxRegister(ba, dm, refRatio(level - 1), level, ncomp_));
+#endif
 	}
 
 	FillCoarsePatch(level, time, state_new_[level], 0, ncomp);
@@ -546,9 +561,14 @@ void AMRSimulation<problem_t>::RemakeLevel(int level, amrex::Real time, const am
 	tOld_[level] = time - 1.e200;
 
 	if (level > 0 && do_reflux) {
+#ifdef USE_YAFLUXREGISTER
 		flux_reg_[level].reset(new amrex::YAFluxRegister(
 		    ba, boxArray(level - 1), dm, DistributionMap(level - 1), Geom(level),
 		    Geom(level - 1), refRatio(level - 1), level, ncomp));
+#else
+		flux_reg_[level].reset(
+		    new amrex::FluxRegister(ba, dm, refRatio(level - 1), level, ncomp_));
+#endif
 	}
 }
 
@@ -583,9 +603,14 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(int level, amrex::Real ti
 	tOld_[level] = time - 1.e200;
 
 	if (level > 0 && do_reflux) {
+#ifdef USE_YAFLUXREGISTER
 		flux_reg_[level].reset(new amrex::YAFluxRegister(
 		    ba, boxArray(level - 1), dm, DistributionMap(level - 1), Geom(level),
 		    Geom(level - 1), refRatio(level - 1), level, ncomp));
+#else
+		flux_reg_[level].reset(
+		    new amrex::FluxRegister(ba, dm, refRatio(level - 1), level, ncomp_));
+#endif
 	}
 
 	// set state_new_[lev] to desired initial condition
@@ -996,9 +1021,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 		max_signal_speed_[lev].define(ba, dm, 1, nghost);
 
 		if (lev > 0 && do_reflux) {
+#ifdef USE_YAFLUXREGISTER
 			flux_reg_[lev].reset(new amrex::YAFluxRegister(
 			    ba, boxArray(lev - 1), dm, DistributionMap(lev - 1), Geom(lev),
 			    Geom(lev - 1), refRatio(lev - 1), lev, ncomp));
+#else
+			flux_reg_[lev].reset(
+			    new amrex::FluxRegister(ba, dm, refRatio(lev - 1), lev, ncomp_));
+#endif
 		}
 	}
 

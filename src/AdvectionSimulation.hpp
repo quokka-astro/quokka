@@ -9,12 +9,15 @@
 /// \brief Implements classes and functions to organise the overall setup,
 /// timestepping, solving, and I/O of a simulation for linear advection.
 
+#include <array>
+
 #include "AMReX.H"
 #include "AMReX_Arena.H"
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_Box.H"
+#include "AMReX_Config.H"
 #include "AMReX_DistributionMapping.H"
 #include "AMReX_FArrayBox.H"
 #include "AMReX_FabArrayUtility.H"
@@ -24,13 +27,13 @@
 #include "AMReX_SPACE.H"
 #include "AMReX_TagBox.H"
 #include "AMReX_Utility.H"
-
 #include "AMReX_YAFluxRegister.H"
-#include "ArrayView.hpp"
 #include "fmt/core.h"
+#include <AMReX_FluxRegister.H>
+
+#include "ArrayView.hpp"
 #include "linear_advection.hpp"
 #include "simulation.hpp"
-#include <array>
 
 // Simulation class should be initialized only once per program (i.e., is a singleton)
 template <typename problem_t> class AdvectionSimulation : public AMRSimulation<problem_t>
@@ -92,8 +95,8 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	double advectionVz_ = 0.0; // default
 
 	static constexpr int reconstructOrder_ =
-	    3; // PPM = 3 ['third order'], piecewise constant == 1
-	static constexpr int integratorOrder_ = 2; // RK2-SSP = 2, forward Euler = 1
+	    1; // PPM = 3 ['third order'], piecewise constant == 1
+	static constexpr int integratorOrder_ = 1; // RK2-SSP = 2, forward Euler = 1
 };
 
 template <typename problem_t>
@@ -148,8 +151,8 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAllLevels(amrex::Real 
 		// since we are starting a new timestep, need to swap old and new states on this
 		// level
 		std::swap(state_old_[lev], state_new_[lev]);
-        tOld_[lev] = tNew_[lev]; // must be done in this function
-        tNew_[lev] += dt;
+		tOld_[lev] = tNew_[lev]; // must be done in this function
+		tNew_[lev] += dt;
 
 		// check state validity
 		AMREX_ASSERT(!state_old_[lev].contains_nan(0, state_old_[lev].nComp()));
@@ -274,9 +277,11 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 	// get geometry (used only for cell sizes)
 	auto const &geomLevel = geom[lev];
 
+#ifdef USE_YAFLUXREGISTER
 	// get flux registers
 	amrex::YAFluxRegister *fr_as_crse = nullptr;
 	amrex::YAFluxRegister *fr_as_fine = nullptr;
+
 	if (do_reflux) {
 		if (lev < finestLevel()) {
 			fr_as_crse = flux_reg_[lev + 1].get();
@@ -286,6 +291,29 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 			fr_as_fine = flux_reg_[lev].get();
 		}
 	}
+#else
+	amrex::FluxRegister *fine = nullptr;
+	amrex::FluxRegister *current = nullptr;
+
+	if (do_reflux && lev < finest_level) {
+		fine = flux_reg_[lev + 1].get();
+		fine->setVal(0.0);
+	}
+
+	if (do_reflux && lev > 0) {
+		current = flux_reg_[lev].get();
+	}
+
+	amrex::MultiFab fluxes[AMREX_SPACEDIM];
+
+	if (do_reflux) {
+		for (int j = 0; j < AMREX_SPACEDIM; j++) {
+			amrex::BoxArray ba = state_new_[lev].boxArray();
+			ba.surroundingNodes(j);
+			fluxes[j].define(ba, dmap[lev], ncomp_, 0);
+		}
+	}
+#endif // USE_YAFLUXREGISTER
 
 	// We use the RK2-SSP integrator in a method-of-lines framework. It needs 2
 	// registers: one to store the old timestep, and one to store the intermediate stage
@@ -316,9 +344,18 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 				  fluxArrays[2].const_array())},
 		    dt_lev, geomLevel.CellSizeArray(), indexRange, ncomp_);
 
-		// increment flux registers
-		incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, fluxArrays, lev,
-				       fluxScaleFactor * dt_lev);
+		if (do_reflux) {
+#ifdef USE_YAFLUXREGISTER
+			// increment flux registers
+			incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, fluxArrays, lev,
+					       fluxScaleFactor * dt_lev);
+#else
+			for (int i = 0; i < AMREX_SPACEDIM; i++) {
+				fluxes[i][iter].copy<amrex::RunOn::Gpu>(fluxArrays[i],
+									iter.nodaltilebox(i));
+			}
+#endif // USE_YAFLUXREGISTER
+		}
 	}
 
 	if constexpr (integratorOrder_ == 2) {
@@ -340,11 +377,45 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 					  fluxArrays[2].const_array())},
 			    dt_lev, geomLevel.CellSizeArray(), indexRange, ncomp_);
 
-			// increment flux registers
-			incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, fluxArrays, lev,
-					       fluxScaleFactor * dt_lev);
+			if (do_reflux) {
+#ifdef USE_YAFLUXREGISTER
+				// increment flux registers
+				incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, fluxArrays,
+						       lev, fluxScaleFactor * dt_lev);
+#else
+				for (int i = 0; i < AMREX_SPACEDIM; i++) {
+					fluxes[i][iter].copy<amrex::RunOn::Gpu>(
+					    fluxArrays[i], iter.nodaltilebox(i));
+				}
+#endif // USE_YAFLUXREGISTER
+			}
 		}
 	}
+
+#ifndef USE_YAFLUXREGISTER
+	if (do_reflux) {
+		// rescale by face area
+		auto dx = geomLevel.CellSizeArray();
+		amrex::Real const cell_vol = AMREX_D_TERM(dx[0], * dx[1], * dx[2]);
+
+		for (int i = 0; i < AMREX_SPACEDIM; i++) {
+			amrex::Real const face_area = cell_vol / dx[i];
+			fluxes[i].mult(fluxScaleFactor * dt_lev * face_area);
+		}
+
+		if (current != nullptr) {
+			for (int i = 0; i < AMREX_SPACEDIM; i++) {
+				current->FineAdd(fluxes[i], i, 0, 0, ncomp_, 1.);
+			}
+		}
+
+		if (fine != nullptr) {
+			for (int i = 0; i < AMREX_SPACEDIM; i++) {
+				fine->CrseInit(fluxes[i], i, 0, 0, ncomp_, -1.);
+			}
+		}
+	}
+#endif
 }
 
 template <typename problem_t>
