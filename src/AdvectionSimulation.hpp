@@ -72,8 +72,6 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 
 	void computeMaxSignalLocal(int level) override;
 	void setInitialConditionsAtLevel(int level) override;
-	void advanceSingleTimestepAllLevels(amrex::Real time, amrex::Real dt,
-					    int iteration) override;
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev,
 					  int /*iteration*/, int /*ncycle*/) override;
 	void computeAfterTimestep() override;
@@ -94,8 +92,8 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	double advectionVz_ = 0.0; // default
 
 	static constexpr int reconstructOrder_ =
-	    1; // PPM = 3 ['third order'], piecewise constant == 1
-	static constexpr int integratorOrder_ = 1; // RK2-SSP = 2, forward Euler = 1
+	    3; // PPM = 3 ['third order'], piecewise constant == 1
+	static constexpr int integratorOrder_ = 2; // RK2-SSP = 2, forward Euler = 1
 };
 
 template <typename problem_t>
@@ -127,135 +125,6 @@ void AdvectionSimulation<problem_t>::ErrorEst(int lev, amrex::TagBoxArray &tags,
 					      amrex::Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for refinement -- implement in problem generator
-}
-
-template <typename problem_t>
-void AdvectionSimulation<problem_t>::advanceSingleTimestepAllLevels(amrex::Real time,
-								    amrex::Real dt,
-								    int /*iteration*/)
-{
-	amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> fluxes(finest_level + 1);
-
-	// allocate global flux MultiFabs
-	for (int lev = 0; lev <= finest_level; lev++) {
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			amrex::BoxArray ba = grids[lev];
-			ba.surroundingNodes(idim);
-			fluxes[lev][idim] = amrex::MultiFab(ba, dmap[lev], 1, 0);
-		}
-	}
-
-	// compute fluxes on each level
-	for (int lev = 0; lev <= finest_level; lev++) {
-		// since we are starting a new timestep, need to swap old and new states on this
-		// level
-		std::swap(state_old_[lev], state_new_[lev]);
-		tOld_[lev] = tNew_[lev]; // must be done in this function
-		tNew_[lev] += dt;
-
-		// check state validity
-		AMREX_ASSERT(!state_old_[lev].contains_nan(0, state_old_[lev].nComp()));
-		AMREX_ASSERT(!state_old_[lev].contains_nan()); // check ghost cells
-
-		// update ghost zones [w/ old timestep]
-		fillBoundaryConditions(state_old_[lev], state_old_[lev], lev, time);
-
-		// advance all grids on local processor (Stage 1 of integrator)
-		for (amrex::MFIter iter(state_old_[lev]); iter.isValid(); ++iter) {
-			const amrex::Box &indexRange = iter.validbox();
-			auto const &stateOld = state_old_[lev].const_array(iter);
-
-			AMREX_D_TERM(
-			    amrex::Array4<amrex::Real> x1Flux = fluxes[lev][0].array(iter);
-			    , amrex::Array4<amrex::Real> x2Flux = fluxes[lev][1].array(iter);
-			    , amrex::Array4<amrex::Real> x3Flux = fluxes[lev][2].array(iter);)
-
-			AMREX_D_TERM(
-			    fluxFunction<FluxDir::X1>(stateOld, x1Flux, indexRange, ncomp_);
-			    , fluxFunction<FluxDir::X2>(stateOld, x2Flux, indexRange, ncomp_);
-			    , fluxFunction<FluxDir::X3>(stateOld, x3Flux, indexRange, ncomp_);)
-		}
-	}
-
-	// average down fluxes
-	for (int lev = finest_level; lev > 0; lev--) {
-		amrex::average_down_faces(amrex::GetArrOfConstPtrs(fluxes[lev]),
-					  amrex::GetArrOfPtrs(fluxes[lev - 1]), refRatio(lev - 1),
-					  geom[lev - 1]);
-	}
-
-	// compute conservative update [Stage 1]
-	for (int lev = 0; lev <= finest_level; lev++) {
-		for (amrex::MFIter iter(state_old_[lev]); iter.isValid(); ++iter) {
-			const amrex::Box &indexRange = iter.validbox();
-			auto const &stateOld = state_old_[lev].const_array(iter);
-			auto const &stateNew = state_new_[lev].array(iter);
-
-			AMREX_D_TERM(auto x1Flux = fluxes[lev][0].const_array(iter);
-				     , auto x2Flux = fluxes[lev][1].const_array(iter);
-				     , auto x3Flux = fluxes[lev][2].const_array(iter);)
-
-			// Stage 1 of RK2-SSP
-			LinearAdvectionSystem<problem_t>::PredictStep(
-			    stateOld, stateNew, {AMREX_D_DECL(x1Flux, x2Flux, x3Flux)}, dt,
-			    geom[lev].CellSizeArray(), indexRange, ncomp_);
-		}
-	}
-
-	if constexpr (integratorOrder_ == 2) {
-		// compute fluxes on each level [Stage 2]
-		for (int lev = 0; lev <= finest_level; lev++) {
-			// update ghost zones [w/ intermediate stage stored in state_new_]
-			fillBoundaryConditions(state_new_[lev], state_new_[lev], lev, time + dt);
-
-			// advance all grids on local processor (Stage 2 of integrator)
-			for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
-				const amrex::Box &indexRange = iter.validbox();
-				auto const &stateInStar = state_new_[lev].const_array(iter);
-
-				AMREX_D_TERM(amrex::Array4<amrex::Real> x1Flux =
-						 fluxes[lev][0].array(iter);
-					     , amrex::Array4<amrex::Real> x2Flux =
-						   fluxes[lev][1].array(iter);
-					     , amrex::Array4<amrex::Real> x3Flux =
-						   fluxes[lev][2].array(iter);)
-
-				AMREX_D_TERM(fluxFunction<FluxDir::X1>(stateInStar, x1Flux,
-								       indexRange, ncomp_);
-					     , fluxFunction<FluxDir::X2>(stateInStar, x2Flux,
-									 indexRange, ncomp_);
-					     , fluxFunction<FluxDir::X3>(stateInStar, x3Flux,
-									 indexRange, ncomp_);)
-			}
-		}
-
-		// average down fluxes
-		for (int lev = finest_level; lev > 0; lev--) {
-			amrex::average_down_faces(amrex::GetArrOfConstPtrs(fluxes[lev]),
-						  amrex::GetArrOfPtrs(fluxes[lev - 1]),
-						  refRatio(lev - 1), geom[lev - 1]);
-		}
-
-		// compute conservative update [Stage 2]
-		for (int lev = 0; lev <= finest_level; lev++) {
-			for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
-				const amrex::Box &indexRange = iter.validbox();
-				auto const &stateInOld = state_old_[lev].const_array(iter);
-				auto const &stateInStar = state_new_[lev].const_array(iter);
-				auto const &stateOut = state_new_[lev].array(iter);
-
-				AMREX_D_TERM(auto x1Flux = fluxes[lev][0].const_array(iter);
-					     , auto x2Flux = fluxes[lev][1].const_array(iter);
-					     , auto x3Flux = fluxes[lev][2].const_array(iter);)
-
-				// Stage 2 of RK2-SSP
-				LinearAdvectionSystem<problem_t>::AddFluxesRK2(
-				    stateOut, stateInOld, stateInStar,
-				    {AMREX_D_DECL(x1Flux, x2Flux, x3Flux)}, dt,
-				    geom[lev].CellSizeArray(), indexRange, ncomp_);
-			}
-		}
-	}
 }
 
 template <typename problem_t>
@@ -303,6 +172,7 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 		current = flux_reg_[lev].get();
 	}
 
+	// create temporary MultiFab to store the fluxes from each grid on this level
 	amrex::MultiFab fluxes[AMREX_SPACEDIM];
 
 	if (do_reflux) {
@@ -310,6 +180,7 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 			amrex::BoxArray ba = state_new_[lev].boxArray();
 			ba.surroundingNodes(j);
 			fluxes[j].define(ba, dmap[lev], ncomp_, 0);
+			fluxes[j].setVal(0.);
 		}
 	}
 #endif // USE_YAFLUXREGISTER
@@ -350,8 +221,7 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 					       fluxScaleFactor * dt_lev);
 #else
 			for (int i = 0; i < AMREX_SPACEDIM; i++) {
-				fluxes[i][iter].copy<amrex::RunOn::Gpu>(fluxArrays[i],
-									iter.nodaltilebox(i));
+				fluxes[i][iter].plus<amrex::RunOn::Gpu>(fluxArrays[i]);
 			}
 #endif // USE_YAFLUXREGISTER
 		}
@@ -383,8 +253,7 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 						       lev, fluxScaleFactor * dt_lev);
 #else
 				for (int i = 0; i < AMREX_SPACEDIM; i++) {
-					fluxes[i][iter].copy<amrex::RunOn::Gpu>(
-					    fluxArrays[i], iter.nodaltilebox(i));
+					fluxes[i][iter].plus<amrex::RunOn::Gpu>(fluxArrays[i]);
 				}
 #endif // USE_YAFLUXREGISTER
 			}
@@ -395,11 +264,12 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 	if (do_reflux) {
 		// rescale by face area
 		auto dx = geomLevel.CellSizeArray();
-		amrex::Real const cell_vol = AMREX_D_TERM(dx[0], * dx[1], * dx[2]);
+		amrex::Real const cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
 		for (int i = 0; i < AMREX_SPACEDIM; i++) {
 			amrex::Real const face_area = cell_vol / dx[i];
-			fluxes[i].mult(fluxScaleFactor * dt_lev * face_area);
+			amrex::Real const rescaleFactor = fluxScaleFactor * dt_lev * face_area;
+			fluxes[i].mult(rescaleFactor);
 		}
 
 		if (current != nullptr) {

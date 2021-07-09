@@ -10,10 +10,11 @@
 /// timestepping, solving, and I/O of a simulation.
 
 // c++ headers
-#include "AMReX_FluxRegister.H"
-#include "AMReX_Interpolater.H"
-#include "AMReX_REAL.H"
-#include "memory"
+#include <csignal>
+#include <iomanip>
+#include <limits>
+#include <memory>
+#include <ostream>
 
 // library headers
 #include "AMReX.H"
@@ -28,12 +29,15 @@
 #include "AMReX_Extension.H"
 #include "AMReX_FArrayBox.H"
 #include "AMReX_FillPatchUtil.H"
+#include "AMReX_FluxRegister.H"
 #include "AMReX_GpuControl.H"
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_INT.H"
 #include "AMReX_IntVect.H"
+#include "AMReX_Interpolater.H"
 #include "AMReX_MultiFabUtil.H"
 #include "AMReX_ParallelDescriptor.H"
+#include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
 #include "AMReX_VisMF.H"
 #include "AMReX_YAFluxRegister.H"
@@ -44,10 +48,6 @@
 #include <AMReX_PlotFileUtil.H>
 #include <AMReX_Print.H>
 #include <AMReX_Utility.H>
-#include <csignal>
-#include <iomanip>
-#include <limits>
-#include <ostream>
 
 // internal headers
 #include "CheckNaN.hpp"
@@ -99,8 +99,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	virtual void setInitialConditionsAtLevel(int level) = 0;
 	virtual void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev,
 						  int iteration, int ncycle) = 0;
-	virtual void advanceSingleTimestepAllLevels(amrex::Real time, amrex::Real dt,
-						    int /*iteration*/) = 0;
 	virtual void computeAfterTimestep() = 0;
 
 	// tag cells for refinement
@@ -136,7 +134,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void AverageDown();
 	void AverageDownTo(int crse_lev);
 	void timeStepWithSubcycling(int lev, amrex::Real time, int iteration);
-	void timeStepNoSubcycling(amrex::Real time, int iteration);
 
 	void incrementFluxRegisters(amrex::MFIter &mfi, amrex::YAFluxRegister *fr_as_crse,
 				    amrex::YAFluxRegister *fr_as_fine,
@@ -335,14 +332,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 		int lev = 0;
 		int iteration = 1;
-
-		#if 0
-		if (do_subcycle == 1) {
-			timeStepWithSubcycling(lev, cur_time, iteration);
-		} else {
-			timeStepNoSubcycling(cur_time, iteration);
-		}
-		#endif
 		timeStepWithSubcycling(lev, cur_time, iteration);
 
 		cur_time += dt_[0];
@@ -395,6 +384,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	}
 }
 
+// N.B.: This function actually works for subcycled or not subcycled, as long as
+// nsubsteps[lev] is set correctly.
 template <typename problem_t>
 void AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time, int iteration)
 {
@@ -434,37 +425,6 @@ void AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time,
 		}
 
 		AverageDownTo(lev); // average lev+1 down to lev
-	}
-}
-
-// Advance all the levels with the same dt
-template <typename problem_t>
-void AMRSimulation<problem_t>::timeStepNoSubcycling(amrex::Real time, int iteration)
-{
-	BL_PROFILE("AMRSimulation::timeStepNoSubcycling()");
-
-	if (Verbose()) {
-		for (int lev = 0; lev <= finest_level; lev++) {
-			amrex::Print() << "[Level " << lev << " step " << istep[lev] + 1 << "] ";
-			amrex::Print() << "ADVANCE with time = " << tNew_[lev] << " dt = " << dt_[0]
-				       << std::endl;
-		}
-	}
-
-	advanceSingleTimestepAllLevels(time, dt_[0], iteration);
-
-	// Make sure the coarser levels are consistent with the finer levels
-	AverageDown();
-
-	for (int lev = 0; lev <= finest_level; lev++) {
-		++istep[lev];
-	}
-
-	if (Verbose()) {
-		for (int lev = 0; lev <= finest_level; lev++) {
-			amrex::Print() << "[Level " << lev << " step " << istep[lev] << "] ";
-			amrex::Print() << "Advanced " << CountCells(lev) << " cells" << std::endl;
-		}
 	}
 }
 
