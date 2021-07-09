@@ -1,8 +1,8 @@
 #ifndef TEST_ADVECTION_HPP_ // NOLINT
 #define TEST_ADVECTION_HPP_
 //==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
+// AMRAdvection
+// Copyright 2021 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 /// \file test_advection.cpp
@@ -10,8 +10,6 @@
 ///
 
 // external headers
-#include "matplotlibcpp.h"
-#include <fmt/format.h>
 
 // internal headers
 
@@ -19,6 +17,6 @@
 
 // function definitions
 template <typename problem_t> void write_density(LinearAdvectionSystem<problem_t> &advection_system);
-int testproblem_advection();
+int problem_main();
 
 #endif // TEST_ADVECTION_HPP_

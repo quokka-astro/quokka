@@ -1,8 +1,8 @@
 #ifndef SIMULATION_HPP_ // NOLINT
 #define SIMULATION_HPP_
 //==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
+// AMRAdvection
+// Copyright 2021 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 /// \file simulation.cpp
@@ -53,7 +53,7 @@
 #include "CheckNaN.hpp"
 #include "math_impl.hpp"
 
-//#define USE_YAFLUXREGISTER
+#define USE_YAFLUXREGISTER
 
 // Main simulation class; solvers should inherit from this
 template <typename problem_t> class AMRSimulation : public amrex::AmrCore

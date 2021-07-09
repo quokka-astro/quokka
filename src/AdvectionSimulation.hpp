@@ -1,8 +1,8 @@
 #ifndef ADVECTION_SIMULATION_HPP_ // NOLINT
 #define ADVECTION_SIMULATION_HPP_
 //==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
+// AMRAdvection
+// Copyright 2021 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 /// \file AdvectionSimulation.hpp
@@ -28,7 +28,6 @@
 #include "AMReX_TagBox.H"
 #include "AMReX_Utility.H"
 #include "AMReX_YAFluxRegister.H"
-#include "fmt/core.h"
 #include <AMReX_FluxRegister.H>
 
 #include "ArrayView.hpp"

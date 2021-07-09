@@ -1,8 +1,8 @@
 #ifndef HYPERBOLIC_SYSTEM_HPP_ // NOLINT
 #define HYPERBOLIC_SYSTEM_HPP_
 //==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
+// AMRAdvection
+// Copyright 2021 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 /// \file hyperbolic_system.hpp
@@ -77,11 +77,6 @@ template <typename problem_t> class HyperbolicSystem
 				std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray,
 				double dt_in, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,
 				amrex::Box const &indexRange, int nvars);
-
-#if 0
-	static void SaveFluxes(array_t &advectionFluxes, arrayconst_t &x1Flux, double dx,
-			       amrex::Box const &indexRange, int nvars);
-#endif
 };
 
 template <typename problem_t>
