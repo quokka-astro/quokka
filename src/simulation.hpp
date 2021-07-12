@@ -10,9 +10,11 @@
 /// timestepping, solving, and I/O of a simulation.
 
 // c++ headers
-#include "AMReX_Interpolater.H"
-#include "AMReX_REAL.H"
-#include "memory"
+#include <csignal>
+#include <iomanip>
+#include <limits>
+#include <memory>
+#include <ostream>
 
 // library headers
 #include "AMReX.H"
@@ -27,12 +29,16 @@
 #include "AMReX_Extension.H"
 #include "AMReX_FArrayBox.H"
 #include "AMReX_FillPatchUtil.H"
+#include "AMReX_FluxRegister.H"
 #include "AMReX_GpuControl.H"
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_INT.H"
+#include "AMReX_IndexType.H"
 #include "AMReX_IntVect.H"
+#include "AMReX_Interpolater.H"
 #include "AMReX_MultiFabUtil.H"
 #include "AMReX_ParallelDescriptor.H"
+#include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
 #include "AMReX_VisMF.H"
 #include "AMReX_YAFluxRegister.H"
@@ -43,14 +49,13 @@
 #include <AMReX_PlotFileUtil.H>
 #include <AMReX_Print.H>
 #include <AMReX_Utility.H>
-#include <csignal>
-#include <iomanip>
-#include <limits>
-#include <ostream>
 
 // internal headers
 #include "CheckNaN.hpp"
 #include "math_impl.hpp"
+#include "memory"
+
+#define USE_YAFLUXREGISTER
 
 // Main simulation class; solvers should inherit from this
 template <typename problem_t> class AMRSimulation : public amrex::AmrCore
@@ -96,8 +101,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	virtual void setInitialConditionsAtLevel(int level) = 0;
 	virtual void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev,
 						  int iteration, int ncycle) = 0;
-	virtual void advanceSingleTimestepAllLevels(amrex::Real time, amrex::Real dt,
-						    int /*iteration*/) = 0;
 	virtual void computeAfterTimestep() = 0;
 
 	// tag cells for refinement
@@ -114,7 +117,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// Delete level data
 	void ClearLevel(int lev) override;
 
-	// Make a new level from scratch using provided BoxArray and DistributionMapping
+	// Make a new level from scratch using provided BoxArray and
+	// DistributionMapping
 	void MakeNewLevelFromScratch(int lev, amrex::Real time, const amrex::BoxArray &ba,
 				     const amrex::DistributionMapping &dm) override;
 
@@ -133,7 +137,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void AverageDown();
 	void AverageDownTo(int crse_lev);
 	void timeStepWithSubcycling(int lev, amrex::Real time, int iteration);
-	void timeStepNoSubcycling(amrex::Real time, int iteration);
 
 	void incrementFluxRegisters(amrex::MFIter &mfi, amrex::YAFluxRegister *fr_as_crse,
 				    amrex::YAFluxRegister *fr_as_fine,
@@ -163,10 +166,15 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	// flux registers: store fluxes at coarse-fine interface for synchronization
 	// this will be sized "nlevs_max+1"
-	// NOTE: the flux register associated with flux_reg[lev] is associated with the lev/lev-1
-	// interface (and has grid spacing associated with lev-1) therefore flux_reg[0] and
-	// flux_reg[nlevs_max] are never actually used in the reflux operation
+	// NOTE: the flux register associated with flux_reg[lev] is associated with
+	// the lev/lev-1 interface (and has grid spacing associated with lev-1)
+	// therefore flux_reg[0] and flux_reg[nlevs_max] are never actually used in
+	// the reflux operation
+#ifdef USE_YAFLUXREGISTER
 	amrex::Vector<std::unique_ptr<amrex::YAFluxRegister>> flux_reg_;
+#else
+	amrex::Vector<std::unique_ptr<amrex::FluxRegister>> flux_reg_;
+#endif // USE_YAFLUXREGISTER
 
 	// Nghost = number of ghost cells for each array
 	int nghost_ = 4;	   // PPM needs nghost >= 3, PPM+flattening needs nghost >= 4
@@ -212,6 +220,26 @@ void AMRSimulation<problem_t>::initialize(amrex::Vector<amrex::BCRec> &boundaryC
 	flux_reg_.resize(nlevs_max + 1);
 
 	boundaryConditions_ = boundaryConditions;
+
+	// check that grids will be properly nested on each level
+	// (this is necessary since FillPatch only fills from non-ghost cells on
+	// lev-1)
+	auto checkIsProperlyNested = [=](int const lev, amrex::IntVect const &blockingFactor) {
+		return amrex::ProperlyNested(refRatio(lev - 1), blockingFactor, nghost_,
+					     amrex::IndexType::TheCellType(),
+					     &amrex::cell_cons_interp);
+	};
+
+	for (int lev = 1; lev <= max_level; ++lev) {
+		if (!checkIsProperlyNested(lev, blocking_factor[lev])) {
+			// level lev is not properly nested
+			amrex::Print()
+			    << "Blocking factor is too small for proper grid nesting! "
+			       "Increase blocking factor to >= ceil(nghost,ref_ratio)*ref_ratio."
+			    << std::endl;
+			amrex::Abort("Grids not properly nested!");
+		}
+	}
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
@@ -233,7 +261,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Default do_subcycle = 1
 	pp.query("do_subcycle", do_subcycle);
 
-	// specify this on the commmand-line in order to restart from a checkpoint file
+	// specify this on the commmand-line in order to restart from a checkpoint
+	// file
 	pp.query("restartfile", restart_chkfile);
 }
 
@@ -328,15 +357,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 		int lev = 0;
 		int iteration = 1;
-
-//#if 0
-		if (do_subcycle == 1) {
-			timeStepWithSubcycling(lev, cur_time, iteration);
-		} else {
-			timeStepNoSubcycling(cur_time, iteration);
-		}
-//#endif
-		//timeStepWithSubcycling(lev, cur_time, iteration);
+		timeStepWithSubcycling(lev, cur_time, iteration);
 
 		cur_time += dt_[0];
 		++cycleCount_;
@@ -345,14 +366,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		// check conservation
 		amrex::Real const sum_rho = state_new_[0].sum();
 		amrex::Real const conservation_error = (sum_rho - init_sum_rho) / init_sum_rho;
-
-		// amrex::Print() only happens on I/O processor
 		amrex::Print() << "Coarse STEP " << step + 1 << " ends."
 			       << " TIME = " << cur_time << " DT = " << dt_[0]
 			       << " Sum(rho) = " << sum_rho
 			       << " conservation error = " << conservation_error << std::endl;
-
-		if (std::abs(conservation_error) > 1.0e-14) {
+		if (std::abs(conservation_error) > 1.0e-12) {
 			amrex::Print() << "stopping due to conservation error!" << std::endl;
 			break;
 		}
@@ -391,6 +409,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	}
 }
 
+// N.B.: This function actually works for subcycled or not subcycled, as long as
+// nsubsteps[lev] is set correctly.
 template <typename problem_t>
 void AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time, int iteration)
 {
@@ -420,46 +440,20 @@ void AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time,
 			timeStepWithSubcycling(lev + 1, time + (i - 1) * dt_[lev + 1], i);
 		}
 
-		if (do_reflux) {
+		if (do_reflux != 0) {
 			// update lev based on coarse-fine flux mismatch
+#ifdef USE_YAFLUXREGISTER
 			flux_reg_[lev + 1]->Reflux(state_new_[lev]);
+#else
+			flux_reg_[lev + 1]->Reflux(state_new_[lev], 1.0, 0, 0, ncomp_, geom[lev]);
+#endif // USE_YAFLUXREGISTER
 		}
 
 		AverageDownTo(lev); // average lev+1 down to lev
 	}
 }
 
-// Advance all the levels with the same dt
-template <typename problem_t>
-void AMRSimulation<problem_t>::timeStepNoSubcycling(amrex::Real time, int iteration)
-{
-	BL_PROFILE("AMRSimulation::timeStepNoSubcycling()");
-
-	if (Verbose()) {
-		for (int lev = 0; lev <= finest_level; lev++) {
-			amrex::Print() << "[Level " << lev << " step " << istep[lev] + 1 << "] ";
-			amrex::Print() << "ADVANCE with time = " << tNew_[lev] << " dt = " << dt_[0]
-				       << std::endl;
-		}
-	}
-
-	advanceSingleTimestepAllLevels(time, dt_[0], iteration);
-
-	// Make sure the coarser levels are consistent with the finer levels
-	AverageDown();
-
-	for (int lev = 0; lev <= finest_level; lev++) {
-		++istep[lev];
-	}
-
-	if (Verbose()) {
-		for (int lev = 0; lev <= finest_level; lev++) {
-			amrex::Print() << "[Level " << lev << " step " << istep[lev] << "] ";
-			amrex::Print() << "Advanced " << CountCells(lev) << " cells" << std::endl;
-		}
-	}
-}
-
+#ifdef USE_YAFLUXREGISTER
 template <typename problem_t>
 void AMRSimulation<problem_t>::incrementFluxRegisters(
     amrex::MFIter &mfi, amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine,
@@ -468,12 +462,8 @@ void AMRSimulation<problem_t>::incrementFluxRegisters(
 {
 	BL_PROFILE("AMRSimulation::incrementFluxRegisters()");
 
-	AMREX_D_TERM(AMREX_ASSERT(!fluxArrays[0].contains_nan());
-		     , AMREX_ASSERT(!fluxArrays[1].contains_nan());
-		     , AMREX_ASSERT(!fluxArrays[2].contains_nan());)
-
-	if (do_reflux) {
-		if (fr_as_crse) {
+	if (do_reflux != 0) {
+		if (fr_as_crse != nullptr) {
 			AMREX_ASSERT(lev < finestLevel());
 			AMREX_ASSERT(fr_as_crse == flux_reg_[lev + 1].get());
 			fr_as_crse->CrseAdd(
@@ -481,7 +471,7 @@ void AMRSimulation<problem_t>::incrementFluxRegisters(
 			    geom[lev].CellSize(), dt_lev, amrex::RunOn::Gpu);
 		}
 
-		if (fr_as_fine) {
+		if (fr_as_fine != nullptr) {
 			AMREX_ASSERT(lev > 0);
 			AMREX_ASSERT(fr_as_fine == flux_reg_[lev].get());
 			fr_as_fine->FineAdd(
@@ -490,9 +480,11 @@ void AMRSimulation<problem_t>::incrementFluxRegisters(
 		}
 	}
 }
+#endif // USE_YAFLUXREGISTER
 
-// Make a new level using provided BoxArray and DistributionMapping and fill with interpolated
-// coarse level data. Overrides the pure virtual function in AmrCore
+// Make a new level using provided BoxArray and DistributionMapping and fill
+// with interpolated coarse level data. Overrides the pure virtual function in
+// AmrCore
 template <typename problem_t>
 void AMRSimulation<problem_t>::MakeNewLevelFromCoarse(int level, amrex::Real time,
 						      const amrex::BoxArray &ba,
@@ -510,18 +502,24 @@ void AMRSimulation<problem_t>::MakeNewLevelFromCoarse(int level, amrex::Real tim
 	tNew_[level] = time;
 	tOld_[level] = time - 1.e200;
 
-	if (level > 0 && do_reflux) {
-		flux_reg_[level].reset(new amrex::YAFluxRegister(
+	if (level > 0 && (do_reflux != 0)) {
+#ifdef USE_YAFLUXREGISTER
+		flux_reg_[level] = std::make_unique<amrex::YAFluxRegister>(
 		    ba, boxArray(level - 1), dm, DistributionMap(level - 1), Geom(level),
-		    Geom(level - 1), refRatio(level - 1), level, ncomp));
+		    Geom(level - 1), refRatio(level - 1), level, ncomp);
+#else
+		flux_reg_[level] = std::make_unique<amrex::FluxRegister>(
+		    ba, dm, refRatio(level - 1), level, ncomp_);
+#endif
 	}
 
 	FillCoarsePatch(level, time, state_new_[level], 0, ncomp);
 	FillCoarsePatch(level, time, state_old_[level], 0, ncomp); // also necessary
 }
 
-// Remake an existing level using provided BoxArray and DistributionMapping and fill with existing
-// fine and coarse data. Overrides the pure virtual function in AmrCore
+// Remake an existing level using provided BoxArray and DistributionMapping and
+// fill with existing fine and coarse data. Overrides the pure virtual function
+// in AmrCore
 template <typename problem_t>
 void AMRSimulation<problem_t>::RemakeLevel(int level, amrex::Real time, const amrex::BoxArray &ba,
 					   const amrex::DistributionMapping &dm)
@@ -545,10 +543,15 @@ void AMRSimulation<problem_t>::RemakeLevel(int level, amrex::Real time, const am
 	tNew_[level] = time;
 	tOld_[level] = time - 1.e200;
 
-	if (level > 0 && do_reflux) {
-		flux_reg_[level].reset(new amrex::YAFluxRegister(
+	if (level > 0 && (do_reflux != 0)) {
+#ifdef USE_YAFLUXREGISTER
+		flux_reg_[level] = std::make_unique<amrex::YAFluxRegister>(
 		    ba, boxArray(level - 1), dm, DistributionMap(level - 1), Geom(level),
-		    Geom(level - 1), refRatio(level - 1), level, ncomp));
+		    Geom(level - 1), refRatio(level - 1), level, ncomp);
+#else
+		flux_reg_[level] = std::make_unique<amrex::FluxRegister>(
+		    ba, dm, refRatio(level - 1), level, ncomp_);
+#endif
 	}
 }
 
@@ -563,8 +566,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::ClearLevel(int leve
 	flux_reg_[level].reset(nullptr);
 }
 
-// Make a new level from scratch using provided BoxArray and DistributionMapping.
-// Only used during initialization. Overrides the pure virtual function in AmrCore
+// Make a new level from scratch using provided BoxArray and
+// DistributionMapping. Only used during initialization. Overrides the pure
+// virtual function in AmrCore
 template <typename problem_t>
 void AMRSimulation<problem_t>::MakeNewLevelFromScratch(int level, amrex::Real time,
 						       const amrex::BoxArray &ba,
@@ -582,10 +586,15 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(int level, amrex::Real ti
 	tNew_[level] = time;
 	tOld_[level] = time - 1.e200;
 
-	if (level > 0 && do_reflux) {
-		flux_reg_[level].reset(new amrex::YAFluxRegister(
+	if (level > 0 && (do_reflux != 0)) {
+#ifdef USE_YAFLUXREGISTER
+		flux_reg_[level] = std::make_unique<amrex::YAFluxRegister>(
 		    ba, boxArray(level - 1), dm, DistributionMap(level - 1), Geom(level),
-		    Geom(level - 1), refRatio(level - 1), level, ncomp));
+		    Geom(level - 1), refRatio(level - 1), level, ncomp);
+#else
+		flux_reg_[level] = std::make_unique<amrex::FluxRegister>(
+		    ba, dm, refRatio(level - 1), level, ncomp_);
+#endif
 	}
 
 	// set state_new_[lev] to desired initial condition
@@ -617,7 +626,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setCustomBoun
     int orig_comp)
 {
 	// user should implement if needed using template specialization
-	// (This is only called when amrex::BCType::ext_dir is set for a given boundary.)
+	// (This is only called when amrex::BCType::ext_dir is set for a given
+	// boundary.)
 
 	// set boundary condition for cell 'iv'
 }
@@ -635,7 +645,8 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 	amrex::Vector<amrex::Real> coarseTime;
 
 	if (lev > 0) {
-		// on coarse level, returns old state, new state, or both depending on 'time'
+		// on coarse level, returns old state, new state, or both depending on
+		// 'time'
 		GetData(lev - 1, time, coarseData, coarseTime);
 	}
 
@@ -650,13 +661,14 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 	FillPatchWithData(lev, time, S_filled, coarseData, coarseTime, fineData, fineTime, 0,
 			  S_filled.nComp());
 
-	// ensure that there are no NaNs (can happen when domain boundary filling is unimplemented
-	// or malfunctioning)
+	// ensure that there are no NaNs (can happen when domain boundary filling is
+	// unimplemented or malfunctioning)
 	AMREX_ASSERT(!S_filled.contains_nan(0, S_filled.nComp()));
-	AMREX_ASSERT(!S_filled.contains_nan()); // check ghost zones
+	//AMREX_ASSERT(!S_filled.contains_nan()); // check ghost zones
 }
 
-// Compute a new multifab 'mf' by copying in state from given data and filling ghost cells
+// Compute a new multifab 'mf' by copying in state from given data and filling
+// ghost cells
 template <typename problem_t>
 void AMRSimulation<problem_t>::FillPatchWithData(int lev, amrex::Real time, amrex::MultiFab &mf,
 						 amrex::Vector<amrex::MultiFab *> &coarseData,
@@ -687,7 +699,8 @@ void AMRSimulation<problem_t>::FillPatchWithData(int lev, amrex::Real time, amre
 		amrex::Interpolater *mapper = &amrex::cell_cons_interp;
 		// amrex::Interpolater *mapper = &amrex::pc_interp;
 
-		// copies interior zones, fills ghost zones with space-time interpolated data
+		// copies interior zones, fills ghost zones with space-time interpolated
+		// data
 		amrex::FillPatchTwoLevels(mf, time, coarseData, coarseTime, fineData, fineTime, 0,
 					  icomp, ncomp, geom[lev - 1], geom[lev],
 					  coarsePhysicalBoundaryFunctor, 0,
@@ -696,7 +709,8 @@ void AMRSimulation<problem_t>::FillPatchWithData(int lev, amrex::Real time, amre
 	}
 }
 
-// Compute a new multifab 'mf' by copying in state from valid region and filling ghost cells
+// Compute a new multifab 'mf' by copying in state from valid region and filling
+// ghost cells
 template <typename problem_t>
 void AMRSimulation<problem_t>::FillPatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp,
 					 int ncomp)
@@ -752,7 +766,8 @@ void AMRSimulation<problem_t>::FillCoarsePatch(int lev, amrex::Real time, amrex:
 				     0, refRatio(lev - 1), mapper, boundaryConditions_, 0);
 }
 
-// utility to copy in data from state_old_ and/or state_new_ into another multifab
+// utility to copy in data from state_old_ and/or state_new_ into another
+// multifab
 template <typename problem_t>
 void AMRSimulation<problem_t>::GetData(int lev, amrex::Real time,
 				       amrex::Vector<amrex::MultiFab *> &data,
@@ -836,13 +851,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile
 {
 
 	// chk00010            write a checkpoint file with this root directory
-	// chk00010/Header     this contains information you need to save (e.g., finest_level,
-	// t_new, etc.) and also
+	// chk00010/Header     this contains information you need to save (e.g.,
+	// finest_level, t_new, etc.) and also
 	//                     the BoxArrays at each level
 	// chk00010/Level_0/
 	// chk00010/Level_1/
-	// etc.                these subdirectories will hold the MultiFab data at each level of
-	// refinement
+	// etc.                these subdirectories will hold the MultiFab data at
+	// each level of refinement
 
 	// checkpoint file name, e.g., chk00010
 	const std::string &checkpointname = amrex::Concatenate(chk_file, istep[0]);
@@ -995,10 +1010,15 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 		state_new_[lev].define(grids[lev], dmap[lev], ncomp, nghost);
 		max_signal_speed_[lev].define(ba, dm, 1, nghost);
 
-		if (lev > 0 && do_reflux) {
-			flux_reg_[lev].reset(new amrex::YAFluxRegister(
+		if (lev > 0 && (do_reflux != 0)) {
+#ifdef USE_YAFLUXREGISTER
+			flux_reg_[lev] = std::make_unique<amrex::YAFluxRegister>(
 			    ba, boxArray(lev - 1), dm, DistributionMap(lev - 1), Geom(lev),
-			    Geom(lev - 1), refRatio(lev - 1), lev, ncomp));
+			    Geom(lev - 1), refRatio(lev - 1), lev, ncomp);
+#else
+			flux_reg_[lev] = std::make_unique<amrex::FluxRegister>(
+			    ba, dm, refRatio(lev - 1), lev, ncomp_);
+#endif
 		}
 	}
 
