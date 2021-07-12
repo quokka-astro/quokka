@@ -58,6 +58,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	using AMRSimulation<problem_t>::incrementFluxRegisters;
 	using AMRSimulation<problem_t>::finest_level;
 	using AMRSimulation<problem_t>::finestLevel;
+	using AMRSimulation<problem_t>::do_reflux;
 
 	std::vector<double> t_vec_;
 	std::vector<double> Trad_vec_;
@@ -89,8 +90,6 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	void setInitialConditionsAtLevel(int level) override;
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev,
 					  int iteration, int ncycle) override;
-	void advanceSingleTimestepAllLevels(amrex::Real time, amrex::Real dt,
-					    int /*iteration*/) override;
 	void computeAfterTimestep() override;
 	// tag cells for refinement
 	void ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override;
@@ -178,7 +177,7 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 	// get flux registers
 	amrex::YAFluxRegister *fr_as_crse = nullptr;
 	amrex::YAFluxRegister *fr_as_fine = nullptr;
-	{
+	if (do_reflux != 0) {
 		if (lev < finestLevel()) {
 			fr_as_crse = flux_reg_[lev + 1].get();
 			fr_as_crse->reset();
@@ -210,8 +209,6 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 			    dt_lev, geomLevel.CellSizeArray(), indexRange, ncompHydro_);
 
 			// increment flux registers
-			// (N.B. flux arrays must have the same number of components as
-			// state_new_[lev]!)
 			auto expandedFluxes =
 			    expandFluxArrays(fluxArrays, 0, state_new_[lev].nComp());
 			incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, expandedFluxes, lev,
@@ -224,7 +221,6 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 
 		// update ghost zones [intermediate stage stored in state_new_]
 		fillBoundaryConditions(state_new_[lev], state_new_[lev], lev, time + dt_lev);
-		// fillBoundaryConditions(state_new_[lev], state_new_[lev], lev, time);
 
 		// advance all grids on local processor (Stage 2 of integrator)
 		for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
@@ -243,8 +239,6 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 			    dt_lev, geomLevel.CellSizeArray(), indexRange, ncompHydro_);
 
 			// increment flux registers
-			// (N.B. flux arrays must have the same number of components as
-			// state_new_[lev]!)
 			auto expandedFluxes =
 			    expandFluxArrays(fluxArrays, 0, state_new_[lev].nComp());
 			incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, expandedFluxes, lev,
@@ -267,6 +261,7 @@ auto RadhydroSimulation<problem_t>::expandFluxArrays(
     std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxes, const int nstartNew, const int ncompNew)
     -> std::array<amrex::FArrayBox, AMREX_SPACEDIM>
 {
+	// (N.B. reflux arrays must have the same number of components as state_new_[lev]!)
 	auto copyFlux = [nstartNew, ncompNew](amrex::FArrayBox const &oldFlux) {
 		amrex::Box const &fluxRange = oldFlux.box();
 		amrex::FArrayBox newFlux(fluxRange, ncompNew, amrex::The_Async_Arena());
@@ -392,12 +387,6 @@ void RadhydroSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Rea
 }
 
 template <typename problem_t>
-void RadhydroSimulation<problem_t>::advanceSingleTimestepAllLevels(amrex::Real time, amrex::Real dt,
-								   int /*iteration*/)
-{
-}
-
-template <typename problem_t>
 void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevelRadiation(int lev, amrex::Real time,
 									  amrex::Real dt_radiation)
 {
@@ -411,7 +400,7 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevelRadiation(int le
 	{
 		if (lev < finestLevel()) {
 			fr_as_crse = flux_reg_[lev + 1].get();
-			//fr_as_crse->reset(); // only reset at beginning of hydro step
+			// fr_as_crse->reset(); // only reset at beginning of hydro step
 		}
 		if (lev > 0) {
 			fr_as_fine = flux_reg_[lev].get();

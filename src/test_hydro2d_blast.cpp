@@ -7,7 +7,6 @@
 /// \brief Defines a test problem for a shock tube.
 ///
 
-#include "test_hydro2d_blast.hpp"
 #include "AMReX_Array.H"
 #include "AMReX_BCRec.H"
 #include "AMReX_BC_TYPES.H"
@@ -18,9 +17,10 @@
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
 #include "AMReX_TagBox.H"
+
 #include "RadhydroSimulation.hpp"
 #include "hydro_system.hpp"
-#include "test_radhydro_shock_cgs.hpp"
+#include "test_hydro2d_blast.hpp"
 
 struct BlastProblem {
 };
@@ -40,7 +40,6 @@ template <> void RadhydroSimulation<BlastProblem>::setInitialConditionsAtLevel(i
 
 	for (amrex::MFIter iter(state_old_[lev]); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
-		// const amrex::Box &indexRange = iter.fabbox(); // INCLUDES ghost zones
 		auto const &state = state_new_[lev].array(iter);
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -76,13 +75,11 @@ template <> void RadhydroSimulation<BlastProblem>::setInitialConditionsAtLevel(i
 			state(i, j, k, HydroSystem<BlastProblem>::energy_index) =
 			    P / (gamma - 1.) + 0.5 * rho * v_sq;
 
-			//#if 0
-			// initialize radiation variables just in case
+			// initialize radiation variables to zero
 			state(i, j, k, RadSystem<BlastProblem>::radEnergy_index) = 0;
 			state(i, j, k, RadSystem<BlastProblem>::x1RadFlux_index) = 0;
 			state(i, j, k, RadSystem<BlastProblem>::x2RadFlux_index) = 0;
 			state(i, j, k, RadSystem<BlastProblem>::x3RadFlux_index) = 0;
-			//#endif
 		});
 	}
 
@@ -96,7 +93,8 @@ void RadhydroSimulation<BlastProblem>::ErrorEst(int lev, amrex::TagBoxArray &tag
 {
 	// tag cells for refinement
 
-	const amrex::Real eta_threshold = 0.2; // gradient refinement threshold
+	const amrex::Real eta_threshold = 0.1; // gradient refinement threshold
+	const amrex::Real P_min = 1.0e-3;      // minimum pressure for refinement
 
 	for (amrex::MFIter mfi(state_new_[lev]); mfi.isValid(); ++mfi) {
 		const amrex::Box &box = mfi.validbox();
@@ -104,14 +102,24 @@ void RadhydroSimulation<BlastProblem>::ErrorEst(int lev, amrex::TagBoxArray &tag
 		const auto tag = tags.array(mfi);
 
 		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			int const n = HydroSystem<BlastProblem>::density_index;
-			amrex::Real const rho = state(i, j, k, n);
+			amrex::Real const P =
+			    HydroSystem<BlastProblem>::ComputePressure(state, i, j, k);
+			amrex::Real const P_xplus =
+			    HydroSystem<BlastProblem>::ComputePressure(state, i + 1, j, k);
+			amrex::Real const P_xminus =
+			    HydroSystem<BlastProblem>::ComputePressure(state, i - 1, j, k);
+			amrex::Real const P_yplus =
+			    HydroSystem<BlastProblem>::ComputePressure(state, i, j + 1, k);
+			amrex::Real const P_yminus =
+			    HydroSystem<BlastProblem>::ComputePressure(state, i, j - 1, k);
 
 			amrex::Real const del_x =
-			    std::abs(state(i + 1, j, k, n) - state(i - 1, j, k, n)) / 2.0;
+			    std::max(std::abs(P_xplus - P), std::abs(P - P_xminus));
 			amrex::Real const del_y =
-			    std::abs(state(i, j + 1, k, n) - state(i, j - 1, k, n)) / 2.0;
-			amrex::Real const gradient_indicator = std::max(del_x, del_y) / rho;
+			    std::max(std::abs(P_yplus - P), std::abs(P - P_yminus));
+
+			amrex::Real const gradient_indicator =
+			    std::max(del_x, del_y) / std::max(P, P_min);
 
 			if (gradient_indicator > eta_threshold) {
 				tag(i, j, k) = amrex::TagBox::SET;
@@ -141,7 +149,7 @@ auto problem_main() -> int
 		return false;
 	};
 
-	constexpr bool reflecting_boundary = false;
+	constexpr bool reflecting_boundary = true;
 
 	const int nvars = RadhydroSimulation<BlastProblem>::nvarTotal_;
 	amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
@@ -168,9 +176,9 @@ auto problem_main() -> int
 	sim.is_hydro_enabled_ = true;
 	sim.is_radiation_enabled_ = false;
 	sim.stopTime_ = 1.5;
-	sim.cflNumber_ = 0.4;
+	sim.cflNumber_ = 0.3;
 	sim.maxTimesteps_ = 20000;
-	sim.plotfileInterval_ = 1;
+	sim.plotfileInterval_ = 10;
 
 	// initialize
 	sim.setInitialConditions();

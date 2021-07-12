@@ -651,7 +651,6 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 	}
 
 	AMREX_ASSERT(!state.contains_nan(0, state.nComp()));
-	// AMREX_ASSERT(!state.contains_nan()); // check ghost zones
 
 	for (int i = 0; i < coarseData.size(); ++i) {
 		AMREX_ASSERT(!coarseData[i]->contains_nan(0, state.nComp()));
@@ -664,7 +663,7 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 	// ensure that there are no NaNs (can happen when domain boundary filling is
 	// unimplemented or malfunctioning)
 	AMREX_ASSERT(!S_filled.contains_nan(0, S_filled.nComp()));
-	//AMREX_ASSERT(!S_filled.contains_nan()); // check ghost zones
+	AMREX_ASSERT(!S_filled.contains_nan()); // check ghost zones
 }
 
 // Compute a new multifab 'mf' by copying in state from given data and filling
@@ -697,7 +696,6 @@ void AMRSimulation<problem_t>::FillPatchWithData(int lev, amrex::Real time, amre
 
 		// use CellConservativeLinear interpolation onto fine grid
 		amrex::Interpolater *mapper = &amrex::cell_cons_interp;
-		// amrex::Interpolater *mapper = &amrex::pc_interp;
 
 		// copies interior zones, fills ghost zones with space-time interpolated
 		// data
