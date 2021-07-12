@@ -364,7 +364,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		computeAfterTimestep();
 
 		// check conservation
-		amrex::Real const sum_rho = state_new_[0].sum();
+		amrex::Real const sum_rho = state_new_[0].sum(0);
 		amrex::Real const conservation_error = (sum_rho - init_sum_rho) / init_sum_rho;
 		amrex::Print() << "Coarse STEP " << step + 1 << " ends."
 			       << " TIME = " << cur_time << " DT = " << dt_[0]

@@ -267,6 +267,11 @@ void RadSystem<problem_t>::PredictStep(
 								x2FluxDiffusive(i, j + 1, k, n)),
 						  +(dt / dz) * (x3FluxDiffusive(i, j, k, n) -
 								x3FluxDiffusive(i, j, k + 1, n))));
+				
+				//x1Flux(i, j, k, n) = x1FluxDiffusive(i, j, k, n);
+				//x1Flux(i + 1, j, k, n) = x1FluxDiffusive(i + 1, j, k, n);
+				//x1Flux(i, j + 1, k, n) = x1FluxDiffusive(i, j + 1, k, n);
+				//x1Flux(i, j, k + 1, n) = x1FluxDiffusive(i, j, k + 1, n);
 			}
 		}
 

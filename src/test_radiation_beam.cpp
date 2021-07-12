@@ -7,25 +7,27 @@
 /// \brief Defines a test problem for radiation in the diffusion regime.
 ///
 
+#include <csignal>
+#include <tuple>
+
 #include "AMReX_Array.H"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_Config.H"
 #include "AMReX_IntVect.H"
 #include "AMReX_REAL.H"
+
 #include "radiation_system.hpp"
-#include "test_radhydro_shock_cgs.hpp"
 #include "test_radiation_beam.hpp"
-#include <tuple>
 
 struct BeamProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
 constexpr double kelvin_to_eV = 8.617385e-5;
-constexpr double kappa0 = 0.01;		 // cm^2 g^-1 (specific opacity)
-constexpr double rho0 = 1.0;		 // g cm^-3 (matter density)
-constexpr double T_hohlraum = 1000.; // K
-constexpr double T_initial = 300.;	 // K
+constexpr double kappa0 = 0.01;				 // cm^2 g^-1 (specific opacity)
+constexpr double rho0 = 1.0;				 // g cm^-3 (matter density)
+constexpr double T_hohlraum = 1000.;			 // K
+constexpr double T_initial = 300.;			 // K
 constexpr double c_v = (1.0e15 * 1.0e-6 * kelvin_to_eV); // erg g^-1 K^-1
 
 constexpr double a_rad = 7.5646e-15; // erg cm^-3 K^-4
@@ -42,7 +44,7 @@ template <> struct RadSystem_Traits<BeamProblem> {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<BeamProblem>::ComputeOpacity(const double  /*rho*/,
+AMREX_GPU_HOST_DEVICE auto RadSystem<BeamProblem>::ComputeOpacity(const double /*rho*/,
 								  const double /*Tgas*/) -> double
 {
 	return kappa0;
@@ -75,11 +77,10 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<BeamProblem>::ComputeEgasTempDerivative(con
 }
 
 template <>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-RadhydroSimulation<BeamProblem>::setCustomBoundaryConditions(
-    const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
-    amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/,
-    int /*bcomp*/, int /*orig_comp*/)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<BeamProblem>::setCustomBoundaryConditions(
+    const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/,
+    int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
+    const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
 {
 #if (AMREX_SPACEDIM == 2)
 	auto [i, j] = iv.toArray();
@@ -93,12 +94,12 @@ RadhydroSimulation<BeamProblem>::setCustomBoundaryConditions(
 	amrex::Real const *prob_lo = geom.ProbLo();
 	amrex::Box const &box = geom.Domain();
 	amrex::GpuArray<int, 3> lo = box.loVect3d();
+
 	amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
 	amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
 
 	if ((i < lo[0]) && !(j < lo[1])) {
 		// streaming boundary condition
-		double E_inc = NAN;
 
 		const double E_0 = consVar(lo[0], j, k, RadSystem<BeamProblem>::radEnergy_index);
 		const double Fx_0 = consVar(lo[0], j, k, RadSystem<BeamProblem>::x1RadFlux_index);
@@ -111,18 +112,19 @@ RadhydroSimulation<BeamProblem>::setCustomBoundaryConditions(
 		const double py = consVar(lo[0], j, k, RadSystem<BeamProblem>::x2GasMomentum_index);
 		const double pz = consVar(lo[0], j, k, RadSystem<BeamProblem>::x3GasMomentum_index);
 
+		double E_inc = NAN;
 		double Fx_bdry = NAN;
 		double Fy_bdry = NAN;
 		double Fz_bdry = NAN;
 
-		//const double y_min = 0.125;
-		//const double y_max = 0.25;
+		// const double y_min = 0.125;
+		// const double y_max = 0.25;
 		const double y_max = 0.0625;
 
 		if (y <= y_max) {
 			E_inc = a_rad * std::pow(T_hohlraum, 4);
-			Fx_bdry = (1.0/std::sqrt(2.0)) * c * E_inc;
-			Fy_bdry = (1.0/std::sqrt(2.0)) * c * E_inc;
+			Fx_bdry = (1.0 / std::sqrt(2.0)) * c * E_inc;
+			Fy_bdry = (1.0 / std::sqrt(2.0)) * c * E_inc;
 			Fz_bdry = 0.;
 		} else {
 			// reflecting/absorbing boundary
@@ -131,9 +133,6 @@ RadhydroSimulation<BeamProblem>::setCustomBoundaryConditions(
 			Fy_bdry = Fy_0;
 			Fz_bdry = Fz_0;
 		}
-		const amrex::Real Fnorm =
-		    std::sqrt(Fx_bdry * Fx_bdry + Fy_bdry * Fy_bdry + Fz_bdry * Fz_bdry);
-		//AMREX_ASSERT((Fnorm / (c * E_inc)) < 1.0); // flux-limiting condition
 
 		// x1, x2 left side boundary
 		consVar(i, j, k, RadSystem<BeamProblem>::radEnergy_index) = E_inc;
@@ -170,8 +169,8 @@ RadhydroSimulation<BeamProblem>::setCustomBoundaryConditions(
 
 		if (x <= x_max) {
 			E_inc = a_rad * std::pow(T_hohlraum, 4);
-			Fx_bdry = (1.0/std::sqrt(2.0)) * c * E_inc;
-			Fy_bdry = (1.0/std::sqrt(2.0)) * c * E_inc;
+			Fx_bdry = (1.0 / std::sqrt(2.0)) * c * E_inc;
+			Fy_bdry = (1.0 / std::sqrt(2.0)) * c * E_inc;
 			Fz_bdry = 0.;
 		} else {
 			// reflecting/absorbing boundary
@@ -180,9 +179,6 @@ RadhydroSimulation<BeamProblem>::setCustomBoundaryConditions(
 			Fy_bdry = -Fy_0;
 			Fz_bdry = Fz_0;
 		}
-		const amrex::Real Fnorm =
-		    std::sqrt(Fx_bdry * Fx_bdry + Fy_bdry * Fy_bdry + Fz_bdry * Fz_bdry);
-		//AMREX_ASSERT((Fnorm / (c * E_inc)) < 1.0); // flux-limiting condition
 
 		// x1, x2 left side boundary
 		consVar(i, j, k, RadSystem<BeamProblem>::radEnergy_index) = E_inc;
@@ -197,27 +193,24 @@ RadhydroSimulation<BeamProblem>::setCustomBoundaryConditions(
 		consVar(i, j, k, RadSystem<BeamProblem>::x2GasMomentum_index) = py;
 		consVar(i, j, k, RadSystem<BeamProblem>::x3GasMomentum_index) = pz;
 	} else if ((i < lo[0]) && (j < lo[1])) {
+		// std::raise(SIGINT); // corner boundary breakpoint
 		// streaming boundary condition
-		double E_inc = NAN;
 
-		const double Egas = consVar(lo[0], lo[1], k, RadSystem<BeamProblem>::gasEnergy_index);
-		const double rho = consVar(lo[0], lo[1], k, RadSystem<BeamProblem>::gasDensity_index);
-		const double px = consVar(lo[0], lo[1], k, RadSystem<BeamProblem>::x1GasMomentum_index);
-		const double py = consVar(lo[0], lo[1], k, RadSystem<BeamProblem>::x2GasMomentum_index);
-		const double pz = consVar(lo[0], lo[1], k, RadSystem<BeamProblem>::x3GasMomentum_index);
+		const double Egas =
+		    consVar(lo[0], lo[1], k, RadSystem<BeamProblem>::gasEnergy_index);
+		const double rho =
+		    consVar(lo[0], lo[1], k, RadSystem<BeamProblem>::gasDensity_index);
+		const double px =
+		    consVar(lo[0], lo[1], k, RadSystem<BeamProblem>::x1GasMomentum_index);
+		const double py =
+		    consVar(lo[0], lo[1], k, RadSystem<BeamProblem>::x2GasMomentum_index);
+		const double pz =
+		    consVar(lo[0], lo[1], k, RadSystem<BeamProblem>::x3GasMomentum_index);
 
-		double Fx_bdry = NAN;
-		double Fy_bdry = NAN;
-		double Fz_bdry = NAN;
-
-		E_inc = a_rad * std::pow(T_hohlraum, 4);
-		Fx_bdry = (1.0/std::sqrt(2.0)) * c * E_inc;
-		Fy_bdry = (1.0/std::sqrt(2.0)) * c * E_inc;
-		Fz_bdry = 0.;
-
-		const amrex::Real Fnorm =
-		    std::sqrt(Fx_bdry * Fx_bdry + Fy_bdry * Fy_bdry + Fz_bdry * Fz_bdry);
-		//AMREX_ASSERT((Fnorm / (c * E_inc)) < 1.0); // flux-limiting condition
+		double E_inc = a_rad * std::pow(T_hohlraum, 4);
+		double Fx_bdry = (1.0 / std::sqrt(2.0)) * c * E_inc;
+		double Fy_bdry = (1.0 / std::sqrt(2.0)) * c * E_inc;
+		double Fz_bdry = 0.;
 
 		// x1, x2 left side boundary
 		consVar(i, j, k, RadSystem<BeamProblem>::radEnergy_index) = E_inc;
@@ -234,11 +227,11 @@ RadhydroSimulation<BeamProblem>::setCustomBoundaryConditions(
 	}
 }
 
-template <> void RadhydroSimulation<BeamProblem>::setInitialConditions()
+template <> void RadhydroSimulation<BeamProblem>::setInitialConditionsAtLevel(int lev)
 {
-	for (amrex::MFIter iter(state_old_); iter.isValid(); ++iter) {
+	for (amrex::MFIter iter(state_old_[lev]); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
-		auto const &state = state_new_.array(iter);
+		auto const &state = state_new_[lev].array(iter);
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 			const double Erad = a_rad * std::pow(T_initial, 4);
@@ -263,18 +256,59 @@ template <> void RadhydroSimulation<BeamProblem>::setInitialConditions()
 	areInitialConditionsDefined_ = true;
 }
 
+template <>
+void RadhydroSimulation<BeamProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags,
+					       amrex::Real /*time*/, int /*ngrow*/)
+{
+	// tag cells for refinement
+
+	const amrex::Real eta_threshold = 0.1; // gradient refinement threshold
+	const amrex::Real erad_min = 1.0e-3;   // minimum erad for refinement
+
+	for (amrex::MFIter mfi(state_new_[lev]); mfi.isValid(); ++mfi) {
+		const amrex::Box &box = mfi.validbox();
+		const auto state = state_new_[lev].const_array(mfi);
+		const auto tag = tags.array(mfi);
+
+		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			amrex::Real const P =
+			    state(i, j, k, RadSystem<BeamProblem>::radEnergy_index);
+			amrex::Real const P_xplus =
+			    state(i + 1, j, k, RadSystem<BeamProblem>::radEnergy_index);
+			amrex::Real const P_xminus =
+			    state(i - 1, j, k, RadSystem<BeamProblem>::radEnergy_index);
+			amrex::Real const P_yplus =
+			    state(i, j + 1, k, RadSystem<BeamProblem>::radEnergy_index);
+			amrex::Real const P_yminus =
+			    state(i, j - 1, k, RadSystem<BeamProblem>::radEnergy_index);
+
+			amrex::Real const del_x =
+			    std::max(std::abs(P_xplus - P), std::abs(P - P_xminus));
+			amrex::Real const del_y =
+			    std::max(std::abs(P_yplus - P), std::abs(P - P_yminus));
+
+			amrex::Real const gradient_indicator =
+			    std::max(del_x, del_y) / std::max(P, erad_min);
+
+			if (gradient_indicator > eta_threshold) {
+				tag(i, j, k) = amrex::TagBox::SET;
+			}
+		});
+	}
+}
+
 auto problem_main() -> int
 {
 	// Problem parameters
 	const int max_timesteps = 10000;
 	const double CFL_number = 0.2;
 	const int nx = 128;
-	const double Lx = 2.0;		 // cm
-	const double max_time = 0.3 * (Lx/c); // s
+	const double Lx = 2.0;			// cm
+	const double max_time = 2.0 * (Lx / c); // s
 
 	amrex::IntVect gridDims{AMREX_D_DECL(nx, nx, 4)};
 	amrex::RealBox boxSize{
-	    {AMREX_D_DECL(amrex::Real(0.), amrex::Real(0.), amrex::Real(0.))},	 // NOLINT
+	    {AMREX_D_DECL(amrex::Real(0.), amrex::Real(0.), amrex::Real(0.))},	// NOLINT
 	    {AMREX_D_DECL(amrex::Real(Lx), amrex::Real(Lx), amrex::Real(Lx))}}; // NOLINT
 
 	auto isNormalComp = [=](int n, int dim) {
@@ -322,8 +356,9 @@ auto problem_main() -> int
 	sim.stopTime_ = max_time;
 	sim.radiationCflNumber_ = CFL_number;
 	sim.maxTimesteps_ = max_timesteps;
-	sim.outputAtInterval_ = false;
 	sim.plotfileInterval_ = 20; // for debugging
+	sim.is_hydro_enabled_ = false;
+	sim.is_radiation_enabled_ = true;
 
 	// initialize
 	sim.setInitialConditions();
