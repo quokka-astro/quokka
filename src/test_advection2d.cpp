@@ -133,8 +133,8 @@ auto problem_main() -> int
 	sim.stopTime_ = max_time;
 	sim.cflNumber_ = CFL_number;
 	sim.maxTimesteps_ = max_timesteps;
-	sim.plotfileInterval_ = 1;   // for debugging
-	sim.checkpointInterval_ = 1; // for debugging
+	sim.plotfileInterval_ = 10;   // for debugging
+	sim.checkpointInterval_ = 10; // for debugging
 
 	sim.advectionVx_ = advection_velocity;
 	sim.advectionVy_ = advection_velocity;

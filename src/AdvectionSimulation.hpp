@@ -173,7 +173,7 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 	}
 
 	// create temporary MultiFab to store the fluxes from each grid on this level
-	amrex::MultiFab fluxes[AMREX_SPACEDIM];
+	std::array<amrex::MultiFab, AMREX_SPACEDIM> fluxes;
 
 	if (do_reflux) {
 		for (int j = 0; j < AMREX_SPACEDIM; j++) {
