@@ -55,8 +55,7 @@
 #include "math_impl.hpp"
 #include "memory"
 
-// this is set in CMakeLists.txt
-//#define USE_YAFLUXREGISTER
+#define USE_YAFLUXREGISTER
 
 // Main simulation class; solvers should inherit from this
 template <typename problem_t> class AMRSimulation : public amrex::AmrCore
