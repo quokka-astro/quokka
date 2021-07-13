@@ -23,3 +23,7 @@
 1 GPU V100-32GB (clang-12 + nvcc + noFMA)  Performance figure-of-merit: 0.01141679422 μs/zone-update [87.5902623 Mupdates/s]
                                            Performance figure-of-merit: 0.008336832294 μs/zone-update [119.9496361 Mupdates/s]
                                            Performance figure-of-merit: 0.008376713556 μs/zone-update [119.3785598 Mupdates/s]
+
+[2D AMR Sedov test 1024x1536]
+(GPU; blocking_factor=128; max_level=2) Performance figure-of-merit: 0.03123706585 μs/zone-update [32.01325006 Mupdates/s]
+(GPU; blocking_factor=128; max_level=0) Performance figure-of-merit: 0.02104795749 μs/zone-update [47.51054826 Mupdates/s]

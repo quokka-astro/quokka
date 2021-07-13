@@ -175,7 +175,7 @@ auto problem_main() -> int
 	RadhydroSimulation<BlastProblem> sim(gridDims, boxSize, boundaryConditions);
 	sim.is_hydro_enabled_ = true;
 	sim.is_radiation_enabled_ = false;
-	sim.stopTime_ = 1.5;
+	sim.stopTime_ = 0.1; //1.5;
 	sim.cflNumber_ = 0.3;
 	sim.maxTimesteps_ = 20000;
 	sim.plotfileInterval_ = 100;
