@@ -75,18 +75,15 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	int checkpointInterval_ = -1;	 // -1 == no output
 
 	// constructors
-
-	AMRSimulation(amrex::IntVect & /*gridDims*/, amrex::RealBox & /*boxSize*/,
-		      amrex::Vector<amrex::BCRec> &boundaryConditions, const int ncomp)
-	    : ncomp_(ncomp), ncompPrimitive_(ncomp)
+	
+	AMRSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions, const int ncomp, const int ncompPrim)
+	    : ncomp_(ncomp), ncompPrimitive_(ncompPrim)
 	{
 		initialize(boundaryConditions);
 	}
 
-	AMRSimulation(amrex::IntVect & /*gridDims*/, amrex::RealBox & /*boxSize*/,
-		      amrex::Vector<amrex::BCRec> &boundaryConditions, const int ncomp,
-		      const int ncompPrimitive)
-	    : ncomp_(ncomp), ncompPrimitive_(ncompPrimitive)
+	AMRSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions, const int ncomp)
+	    : ncomp_(ncomp), ncompPrimitive_(ncomp)
 	{
 		initialize(boundaryConditions);
 	}
@@ -337,7 +334,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 	amrex::Real cur_time = tNew_[0];
 	int last_plot_file_step = 0;
-	amrex::Real init_sum_rho = state_new_[0].sum();
+	amrex::Vector<amrex::Real> init_sum_cons(ncomp_);
+	for (int n = 0; n < ncomp_; ++n) {
+		const int lev = 0;
+		init_sum_cons[n] = state_new_[lev].sum(n);
+	}
 
 	// Main time loop
 	for (int step = istep[0]; step < maxTimesteps_ && cur_time < stopTime_; ++step) {
@@ -363,18 +364,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		++cycleCount_;
 		computeAfterTimestep();
 
-		// check conservation
-		amrex::Real const sum_rho = state_new_[0].sum(0);
-		amrex::Real const conservation_error = (sum_rho - init_sum_rho) / init_sum_rho;
-		amrex::Print() << "Coarse STEP " << step + 1 << " ends."
-			       << " TIME = " << cur_time << " DT = " << dt_[0]
-			       << " Sum(rho) = " << sum_rho
-			       << " conservation error = " << conservation_error << std::endl;
-		if (std::abs(conservation_error) > 1.0e-12) {
-			amrex::Print() << "stopping due to conservation error!" << std::endl;
-			break;
-		}
-
 		// sync up time (to avoid roundoff error)
 		for (lev = 0; lev <= finest_level; ++lev) {
 			tNew_[lev] = cur_time;
@@ -394,15 +383,16 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		}
 	}
 
-	amrex::Real const final_sum_rho = state_new_[0].sum();
-	// should be very close to machine epsilon
-	amrex::Real const conservation_error = (final_sum_rho - init_sum_rho) / init_sum_rho;
-	amrex::Print() << "Initial rho = " << init_sum_rho << std::endl;
-	amrex::Print() << "Conservation: fractional error = " << conservation_error << std::endl;
-
-	amrex::Real const min_rho = state_new_[0].min(0);
-	amrex::Real const max_rho = state_new_[0].max(0);
-	amrex::Print() << "Min rho = " << min_rho << " max rho = " << max_rho << std::endl;
+	for (int n = 0; n < ncomp_; ++n) {
+		amrex::Real const final_sum = state_new_[0].sum(n);
+		amrex::Real const abs_err = (final_sum - init_sum_cons[n]);
+		amrex::Real const rel_err = abs_err / init_sum_cons[n];
+		amrex::Print() << "Initial " << componentNames_[n] << " = " << init_sum_cons[n] << std::endl;
+		amrex::Print() << "\tabsolute conservation error = " << abs_err << std::endl;
+		if (init_sum_cons[n] != 0.0) {
+			amrex::Print() << "\trelative conservation error = " << rel_err << std::endl;
+		}
+	}
 
 	if (plotfileInterval_ > 0 && istep[0] > last_plot_file_step) {
 		WritePlotFile();

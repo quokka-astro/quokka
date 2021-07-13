@@ -63,9 +63,9 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	using AMRSimulation<problem_t>::tOld_;
 	using AMRSimulation<problem_t>::tNew_;
 
-	AdvectionSimulation(amrex::IntVect &gridDims, amrex::RealBox &boxSize,
+	AdvectionSimulation(amrex::IntVect & /*gridDims*/, amrex::RealBox & /*boxSize*/,
 			    amrex::Vector<amrex::BCRec> &boundaryConditions, const int ncomp = 1)
-	    : AMRSimulation<problem_t>(gridDims, boxSize, boundaryConditions, ncomp)
+	    : AMRSimulation<problem_t>(boundaryConditions, ncomp)
 	{
 		componentNames_ = {"density"};
 	}

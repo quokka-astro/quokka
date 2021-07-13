@@ -78,9 +78,18 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 
 	// member functions
 
-	RadhydroSimulation(amrex::IntVect &gridDims, amrex::RealBox &boxSize,
+	explicit RadhydroSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions)
+	    : AMRSimulation<problem_t>(boundaryConditions,
+				       RadSystem<problem_t>::nvar_, ncompHyperbolic_)
+	{
+		componentNames_ = {"gasDensity",    "x-GasMomentum", "y-GasMomentum",
+				   "z-GasMomentum", "gasEnergy",     "radEnergy",
+				   "x-RadFlux",	    "y-RadFlux",     "z-RadFlux"};
+	}
+
+	RadhydroSimulation(amrex::IntVect & /*gridDims*/, amrex::RealBox & /*boxSize*/,
 			   amrex::Vector<amrex::BCRec> &boundaryConditions)
-	    : AMRSimulation<problem_t>(gridDims, boxSize, boundaryConditions,
+	    : AMRSimulation<problem_t>(boundaryConditions,
 				       RadSystem<problem_t>::nvar_, ncompHyperbolic_)
 	{
 		componentNames_ = {"gasDensity",    "x-GasMomentum", "y-GasMomentum",
