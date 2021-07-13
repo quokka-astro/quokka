@@ -178,7 +178,7 @@ auto problem_main() -> int
 	sim.stopTime_ = 1.5;
 	sim.cflNumber_ = 0.3;
 	sim.maxTimesteps_ = 20000;
-	sim.plotfileInterval_ = 10;
+	sim.plotfileInterval_ = 100;
 
 	// initialize
 	sim.setInitialConditions();

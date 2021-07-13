@@ -302,7 +302,7 @@ auto RadhydroSimulation<problem_t>::expandFluxArrays(
 		newFlux.setVal<amrex::RunOn::Device>(0.);
 		// copy oldFlux (starting at 0) to newFlux (starting at nstart)
 		AMREX_ASSERT(ncompNew > oldFlux.nComp());
-		newFlux.copy(oldFlux, 0, nstartNew, oldFlux.nComp());
+		newFlux.copy<amrex::RunOn::Device>(oldFlux, 0, nstartNew, oldFlux.nComp());
 		return newFlux;
 	};
 	return {AMREX_D_DECL(copyFlux(fluxes[0]), copyFlux(fluxes[1]), copyFlux(fluxes[2]))};

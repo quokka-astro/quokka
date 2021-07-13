@@ -190,6 +190,9 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	int regrid_int = 2;  // regrid interval (number of coarse steps)
 	int do_reflux = 1;   // 1 == reflux, 0 == no reflux
 	int do_subcycle = 1; // 1 == subcycle, 0 == no subcyle
+
+	// performance metrics
+	amrex::Long cellUpdates_ = 0;
 };
 
 template <typename problem_t>
@@ -329,6 +332,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 {
 	BL_PROFILE("AMRSimulation::evolve()");
+	amrex::Real const start_time = amrex::ParallelDescriptor::second();
 
 	AMREX_ALWAYS_ASSERT(areInitialConditionsDefined_);
 
@@ -394,6 +398,17 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		}
 	}
 
+	// compute zone-cycles/sec
+	amrex::Real elapsed_sec = amrex::ParallelDescriptor::second() - start_time;
+	const int IOProc = amrex::ParallelDescriptor::IOProcessorNumber();
+	amrex::ParallelDescriptor::ReduceRealMax(elapsed_sec, IOProc);
+	amrex::ParallelDescriptor::ReduceLongSum(cellUpdates_);
+	const double microseconds_per_update = 1.0e6 * elapsed_sec / cellUpdates_;
+	const double megaupdates_per_second = 1.0 / microseconds_per_update;
+	amrex::Print() << "Performance figure-of-merit: " << microseconds_per_update
+		       << " μs/zone-update [" << megaupdates_per_second << " Mupdates/s]\n";
+	amrex::Print() << "elapsed time: " << elapsed_sec << " seconds.\n";
+
 	if (plotfileInterval_ > 0 && istep[0] > last_plot_file_step) {
 		WritePlotFile();
 	}
@@ -419,6 +434,7 @@ void AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time,
 	advanceSingleTimestepAtLevel(lev, time, dt_[lev], iteration, nsubsteps[lev]);
 	++istep[lev];
 
+	cellUpdates_ += CountCells(lev); // keep track of total number of cell updates
 	if (Verbose()) {
 		amrex::Print() << "[Level " << lev << " step " << istep[lev] << "] ";
 		amrex::Print() << "Advanced " << CountCells(lev) << " cells" << std::endl;
