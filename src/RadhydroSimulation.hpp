@@ -149,6 +149,8 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 template <typename problem_t>
 void RadhydroSimulation<problem_t>::computeMaxSignalLocal(int const level)
 {
+	BL_PROFILE("RadhydroSimulation::computeMaxSignalLocal()");
+
 	// hydro: loop over local grids, compute CFL timestep
 	for (amrex::MFIter iter(state_new_[level]); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
@@ -193,6 +195,7 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 								 amrex::Real dt_lev,
 								 int /*iteration*/, int /*ncycle*/)
 {
+	BL_PROFILE("RadhydroSimulation::advanceSingleTimestepAtLevel()");
 	// based on amrex/Tests/EB/CNS/Source/CNS_advance.cpp
 
 	// since we are starting a new timestep, need to swap old and new states on this level
@@ -236,6 +239,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 							amrex::YAFluxRegister *fr_as_crse,
 							amrex::YAFluxRegister *fr_as_fine)
 {
+	BL_PROFILE("RadhydroSimulation::advanceHydroAtLevel()");
 
 	// update ghost zones [old timestep]
 	fillBoundaryConditions(state_old_[lev], state_old_[lev], lev, time);
@@ -313,6 +317,8 @@ auto RadhydroSimulation<problem_t>::computeHydroFluxes(
     amrex::Array4<const amrex::Real> const &consVar, const amrex::Box &indexRange, const int nvars)
     -> std::array<amrex::FArrayBox, AMREX_SPACEDIM>
 {
+	BL_PROFILE("RadhydroSimulation::computeHydroFluxes()");
+
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, 0);
 	amrex::FArrayBox x1Flux(x1FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in x
 #if (AMREX_SPACEDIM >= 2)

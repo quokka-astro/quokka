@@ -134,6 +134,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void AverageDown();
 	void AverageDownTo(int crse_lev);
 	void timeStepWithSubcycling(int lev, amrex::Real time, int iteration);
+	void doRegridIfNeeded(int step, amrex::Real time);
 
 	void incrementFluxRegisters(amrex::MFIter &mfi, amrex::YAFluxRegister *fr_as_crse,
 				    amrex::YAFluxRegister *fr_as_fine,
@@ -348,16 +349,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	for (int step = istep[0]; step < maxTimesteps_ && cur_time < stopTime_; ++step) {
 		amrex::Print() << "\nCoarse STEP " << step + 1 << " at t = " << cur_time << " starts ..." << std::endl;
 
-		if (max_level > 0 && regrid_int > 0) // regridding is possible
-		{
-			if (step % regrid_int == 0) { // regrid on this coarse step
-				if (Verbose()) {
-					amrex::Print() << "regridding..." << std::endl;
-				}
-				regrid(0, cur_time);
-			}
-		}
-
+		doRegridIfNeeded(step, cur_time);
 		computeTimestep(); // very important to call this *after* regrid!
 
 		int lev = 0;
@@ -411,6 +403,22 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 	if (plotfileInterval_ > 0 && istep[0] > last_plot_file_step) {
 		WritePlotFile();
+	}
+}
+
+template <typename problem_t>
+void AMRSimulation<problem_t>::doRegridIfNeeded(int const step, amrex::Real const time)
+{
+	BL_PROFILE("AMRSimulation::doRegridIfNeeded()");
+
+	if (max_level > 0 && regrid_int > 0) // regridding is possible
+	{
+		if (step % regrid_int == 0) { // regrid on this coarse step
+			if (Verbose()) {
+				amrex::Print() << "regridding..." << std::endl;
+			}
+			regrid(0, time);
+		}
 	}
 }
 
@@ -645,26 +653,42 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 {
 	BL_PROFILE("AMRSimulation::fillBoundaryConditions()");
 
-	amrex::Vector<amrex::MultiFab *> fineData{&state};
-	amrex::Vector<amrex::Real> fineTime = {time};
-	amrex::Vector<amrex::MultiFab *> coarseData;
-	amrex::Vector<amrex::Real> coarseTime;
+	if (max_level > 0) { // AMR is enabled
+		amrex::Vector<amrex::MultiFab *> fineData{&state};
+		amrex::Vector<amrex::Real> fineTime = {time};
+		amrex::Vector<amrex::MultiFab *> coarseData;
+		amrex::Vector<amrex::Real> coarseTime;
 
-	if (lev > 0) {
-		// on coarse level, returns old state, new state, or both depending on
-		// 'time'
-		GetData(lev - 1, time, coarseData, coarseTime);
+		if (lev > 0) {
+			// on coarse level, returns old state, new state, or both depending on
+			// 'time'
+			GetData(lev - 1, time, coarseData, coarseTime);
+		}
+
+		AMREX_ASSERT(!state.contains_nan(0, state.nComp()));
+
+		for (int i = 0; i < coarseData.size(); ++i) {
+			AMREX_ASSERT(!coarseData[i]->contains_nan(0, state.nComp()));
+			AMREX_ASSERT(!coarseData[i]->contains_nan()); // check ghost zones
+		}
+
+		FillPatchWithData(lev, time, S_filled, coarseData, coarseTime, fineData, fineTime, 0,
+				S_filled.nComp());
+	} else { // AMR is disabled, only level 0 exists
+		AMREX_ASSERT(lev == 0);
+		AMREX_ASSERT(S_filled == state);
+		// fill internal and periodic boundaries
+		state.FillBoundary(geom[lev].periodicity());
+
+		if (!geom[lev].isAllPeriodic()) {
+			amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>> boundaryFunctor(
+				setBoundaryFunctor<problem_t>{});
+			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>>
+				physicalBoundaryFunctor(geom[lev], boundaryConditions_, boundaryFunctor);
+			// fill physical boundaries
+			physicalBoundaryFunctor(state, 0, state.nComp(), state.nGrowVect(), time, 0);
+		}
 	}
-
-	AMREX_ASSERT(!state.contains_nan(0, state.nComp()));
-
-	for (int i = 0; i < coarseData.size(); ++i) {
-		AMREX_ASSERT(!coarseData[i]->contains_nan(0, state.nComp()));
-		AMREX_ASSERT(!coarseData[i]->contains_nan()); // check ghost zones
-	}
-
-	FillPatchWithData(lev, time, S_filled, coarseData, coarseTime, fineData, fineTime, 0,
-			  S_filled.nComp());
 
 	// ensure that there are no NaNs (can happen when domain boundary filling is
 	// unimplemented or malfunctioning)

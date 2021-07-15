@@ -1,76 +1,143 @@
+[3D AMR Sedov Test 384^3]
+amr.n_cell          = 384 384 384
+amr.max_level       = 1     # number of levels = max_level + 1
+amr.blocking_factor = 32    # grid size must be divisible by this
+amr.n_error_buf     = 3     # minimum 3 cell buffer around tagged cells
+amr.grid_eff        = 0.7   # default
+do_reflux = 1
+do_subcycle = 1
 
-Performance figure-of-merit: 4.954141962 μs/zone-update
-Relative L1 error norm = 0
+Performance figure-of-merit: 0.06330512888 μs/zone-update [15.7965084 Mupdates/s]
+elapsed time: 1916.48047 seconds.
+Writing plotfile plt00325
 Finished.
-Total GPU global memory (MB): 32510
-Free  GPU global memory (MB): 31191
-[The         Arena] space allocated (MB): 24382
-[The         Arena] space used      (MB): 0
-[The  Device Arena] space allocated (MB): 8
-[The  Device Arena] space used      (MB): 0
-[The Managed Arena] space allocated (MB): 8
-[The Managed Arena] space used      (MB): 0
-[The  Pinned Arena] space allocated (MB): 8
-[The  Pinned Arena] space used      (MB): 0
-AMReX (21.05-40-g79f79aae9f5c) finalized
-==2679370== Profiling application: src/test_hydro_contact
-==2679370== Profiling result:
-            Type  Time(%)      Time     Calls       Avg       Min       Max  Name
- GPU activities:   64.49%  1.40542s         1  1.40542s  1.40542s  1.40542s  _ZN5amrex13launch_globalILi256EZNS_11ParallelForIiZN71_GLOBAL__N__47_tmpxft_0028db0a_00000000_7_AMReX_Random_cpp1_ii_2fbf9b8e16ResizeRandomSeedEvEUliE_vEENSt9enable_ifIXsr5amrex19MaybeDeviceRunnableIT0_vEE5valueEvE4typeERKNS_3Gpu10KernelInfoET_OS5_EUlvE_EEvS5_
-                    5.57%  121.41ms     30784  3.9430us  3.8390us  7.8080us  _ZN5amrex13launch_globalILi256EZNS_11ParallelForIZN11HydroSystemI14ContactProblemE13ComputeFluxesERKNS_6Array4IdEERKNS5_IKdEESC_RKNS_3BoxEEUliiiE_EENSt9enable_ifIXsr5amrex19MaybeDeviceRunnableIT_vEE5valueEvE4typeERKNS_3Gpu10KernelInfoESF_OSI_EUlvE_EEvT0_
-                    4.33%  94.272ms     30784  3.0620us  3.0070us  4.6400us  _ZN5amrex13launch_globalILi256EZNS_11ParallelForIiZN16HyperbolicSystemI14ContactProblemE20ReconstructStatesPPMERKNS_6Array4IKdEERKNS5_IdEESC_RKNS_3BoxESF_iEUliiiiE0_vEENSt9enable_ifIXsr5amrex19MaybeDeviceRunnableIT0_vEE5valueEvE4typeERKNS_3Gpu10KernelInfoESF_T_OSI_EUlvE_EEvSI_
-                    3.89%  84.800ms     30784  2.7540us  2.3990us  14.848us  _ZN5amrex13launch_globalILi256EZNS_11ParallelForIZN11HydroSystemI14ContactProblemE20ConservedToPrimitiveERKNS_6Array4IKdEERKNS5_IdEERKNS_3BoxEEUliiiE_EENSt9enable_ifIXsr5amrex19MaybeDeviceRunnableIT_vEE5valueEvE4typeERKNS_3Gpu10KernelInfoESF_OSI_EUlvE_EEvT0_
-                    3.86%  84.205ms     30784  2.7350us  2.6870us  13.600us  _ZN5amrex13launch_globalILi256EZNS_11ParallelForIZN11HydroSystemI14ContactProblemE29ComputeFlatteningCoefficientsERKNS_6Array4IKdEERKNS5_IdEERKNS_3BoxEEUliiiE_EENSt9enable_ifIXsr5amrex19MaybeDeviceRunnableIT_vEE5valueEvE4typeERKNS_3Gpu10KernelInfoESF_OSI_EUlvE_EEvT0_
-                    3.61%  78.701ms     30784  2.5560us  2.4950us  6.8480us  _ZN5amrex13launch_globalILi256EZNS_11ParallelForIiZN16HyperbolicSystemI14ContactProblemE20ReconstructStatesPPMERKNS_6Array4IKdEERKNS5_IdEESC_RKNS_3BoxESF_iEUliiiiE1_vEENSt9enable_ifIXsr5amrex19MaybeDeviceRunnableIT0_vEE5valueEvE4typeERKNS_3Gpu10KernelInfoESF_T_OSI_EUlvE_EEvSI_
-                    3.27%  71.337ms     30784  2.3170us  2.2080us  13.472us  _ZN5amrex13launch_globalILi256EZNS_11ParallelForIiZN11HydroSystemI14ContactProblemE13FlattenShocksERKNS_6Array4IKdEES9_RKNS5_IdEESC_RKNS_3BoxEiEUliiiiE_vEENSt9enable_ifIXsr5amrex19MaybeDeviceRunnableIT0_vEE5valueEvE4typeERKNS_3Gpu10KernelInfoESF_T_OSI_EUlvE_EEvSI_
-                    3.09%  67.306ms     30784  2.1860us  2.1430us  5.1200us  _ZN5amrex13launch_globalILi256EZNS_11ParallelForIiZN16HyperbolicSystemI14ContactProblemE20ReconstructStatesPPMERKNS_6Array4IKdEERKNS5_IdEESC_RKNS_3BoxESF_iEUliiiiE_vEENSt9enable_ifIXsr5amrex19MaybeDeviceRunnableIT0_vEE5valueEvE4typeERKNS_3Gpu10KernelInfoESF_T_OSI_EUlvE_EEvSI_
-                    1.82%  39.567ms     15392  2.5700us  2.4950us  13.632us  _ZN5amrex13launch_globalILi256EZNS_11ParallelForIZN11HydroSystemI14ContactProblemE21ComputeMaxSignalSpeedERKNS_6Array4IKdEERKNS5_IdEERKNS_3BoxEEUliiiE_EENSt9enable_ifIXsr5amrex19MaybeDeviceRunnableIT_vEE5valueEvE4typeERKNS_3Gpu10KernelInfoESF_OSI_EUlvE_EEvT0_
-                    1.76%  38.400ms     15392  2.4940us  2.2710us  14.207us  _ZN5amrex13launch_globalILi256EZNS_11ParallelForIiZN16HyperbolicSystemI14ContactProblemE12AddFluxesRK2ERKNS_6Array4IdEERKNS5_IKdEESC_SC_ddRKNS_3BoxEiEUliiiiE_vEENSt9enable_ifIXsr5amrex19MaybeDeviceRunnableIT0_vEE5valueEvE4typeERKNS_3Gpu10KernelInfoESF_T_OSI_EUlvE_EEvSI_
-                    1.68%  36.703ms     15392  2.3840us  2.1430us  14.848us  _ZN5amrex13launch_globalILi256EZNS_11ParallelForIiZN16HyperbolicSystemI14ContactProblemE11PredictStepERKNS_6Array4IKdEERKNS5_IdEES9_ddRKNS_3BoxEiEUliiiiE_vEENSt9enable_ifIXsr5amrex19MaybeDeviceRunnableIT0_vEE5valueEvE4typeERKNS_3Gpu10KernelInfoESF_T_OSI_EUlvE_EEvSI_
-                    1.32%  28.772ms     15392  1.8690us  1.7280us  3.1040us  _ZN5amrex13launch_globalILi256EZNS_6launchIZNS_9ReduceOpsIJNS_11ReduceOpMaxEEE4evalINS_10ReduceDataIJdEEEZNS_8fudetail16ReduceMax_deviceINS_9FArrayBoxEZNKS_8MultiFab5norm0EiibbEUlRKNS_3BoxERKNS_6Array4IKdEEE_vEENT_10value_typeERKNS_8FabArrayISL_EERKNS_7IntVectEOT0_EUlSE_E_EEvSE_RT_OT0_EUlvE_EEviimP11CUstream_stOSL_EUlvE_EEvSU_
-                    0.59%  12.853ms      3557  3.6130us  3.3920us  16.672us  [CUDA memcpy HtoD]
-                    0.31%  6.8451ms      2370  2.8880us  2.7520us  3.5200us  _ZN5amrex13launch_globalILi256EZNS_6launchIZNS_6detail16ParallelFor_doitINS_13Array4CopyTagIdEEZNS2_10fab_to_fabIdNS2_9CellStoreIdEEEEvRKNS_6VectorINS4_IT_EESaISB_EEEiiiOT0_EUliiiiiS5_E_EEvRKNS9_ISA_SaISA_EEESH_EUlvE_EEviimP11CUstream_stOSA_EUlvE_EEvSG_
-                    0.19%  4.1209ms      1186  3.4740us  3.4230us  5.5040us  _ZN5amrex13launch_globalILi256EZNS_6launchIZNS_3Gpu5Fuser6LaunchEvEUlvE_EEviimP11CUstream_stOT_EUlvE_EEvT0_
-                    0.19%  4.0597ms      1184  3.4280us  3.3600us  14.879us  _ZN5amrex13launch_globalILi256EZNS_6launchIZNS_9ReduceOpsIJNS_11ReduceOpMaxEEE5valueINS_10ReduceDataIJdEEEEENT_4TypeERS8_EUlvE_EEviimP11CUstream_stOT_EUlvE_EEvT0_
-                    0.02%  461.15us         1  461.15us  461.15us  461.15us  _ZN5amrex13launch_globalILi256EZNS_6launchIZNS_10BlockMutex11init_statesEPNS2_7state_tEiEUlvE_EEviimP11CUstream_stOT_EUlvE_EEvT0_
-                    0.00%  49.920us        26  1.9200us  1.7280us  2.3360us  _ZN5amrex13launch_globalILi256EZNS_6launchIZNS_9ReduceOpsIJNS_11ReduceOpSumEEE4evalINS_10ReduceDataIJdEEEZNS_8fudetail16ReduceSum_deviceINS_9FArrayBoxEZNKS_8MultiFab5norm1EiibEUlRKNS_3BoxERKNS_6Array4IKdEEE_vEENT_10value_typeERKNS_8FabArrayISL_EERKNS_7IntVectEOT0_EUlSE_E_EEvSE_RT_OT0_EUlvE_EEviimP11CUstream_stOSL_EUlvE_EEvSU_
-                    0.00%  19.040us        13  1.4640us  1.2480us  2.6880us  _ZN5amrex13launch_globalILi256EZNS_11ParallelForIZN15HydroSimulationI14ContactProblemE20setInitialConditionsEvEUliiiE_EENSt9enable_ifIXsr5amrex19MaybeDeviceRunnableIT_vEE5valueEvE4typeERKNS_3Gpu10KernelInfoERKNS_3BoxEOS7_EUlvE_EEvT0_
-                    0.00%  17.216us        13  1.3240us  1.2160us  2.2720us  _ZN5amrex13launch_globalILi256EZNS_11ParallelForIZ20ComputeExactSolutionRKNS_6Array4IdEERKNS_3BoxENS_8GpuArrayIdLm1EEESA_EUliiiE_EENSt9enable_ifIXsr5amrex19MaybeDeviceRunnableIT_vEE5valueEvE4typeERKNS_3Gpu10KernelInfoES8_OSD_EUlvE_EEvT0_
-                    0.00%  7.4880us         2  3.7440us  3.2960us  4.1920us  _ZN5amrex13launch_globalILi256EZNS_6launchIZNS_9ReduceOpsIJNS_11ReduceOpSumEEE5valueINS_10ReduceDataIJdEEEEENT_4TypeERS8_EUlvE_EEviimP11CUstream_stOT_EUlvE_EEvT0_
-                    0.00%  3.4240us         1  3.4240us  3.4240us  3.4240us  _ZN5amrex13launch_globalIZNS_3Gpu19PutLambda4DLauncherIZNS_4CopyINS_9FArrayBoxEvEEvRNS_8FabArrayIT_EERKS7_iiiRKNS_7IntVectEEUliiiiE_EEvPNS1_10FuseHelperERKS6_EUlvE_EEvS6_
-                    0.00%  2.5600us         1  2.5600us  2.5600us  2.5600us  _ZN5amrex13launch_globalIZNS_3Gpu19PutLambda4DLauncherIZNS_8MultiFab5SaxpyERS3_dRKS3_iiiRKNS_7IntVectEEUliiiiE_EEvPNS1_10FuseHelperERKT_EUlvE_EEvSD_
-                    0.00%  1.6960us         1  1.6960us  1.6960us  1.6960us  _ZN5amrex13launch_globalILi256EZNS_11single_taskIZN71_GLOBAL__N__47_tmpxft_0028db0a_00000000_7_AMReX_Random_cpp1_ii_2fbf9b8e16ResizeRandomSeedEvEUlvE_EEvP11CUstream_stOT_EUlvE_EEvT0_
-      API calls:   42.18%  1.51802s      9493  159.91us  1.0030us  1.40543s  cudaDeviceSynchronize
-                   40.60%  1.46093s    281855  5.1830us  4.1790us  2.5329ms  cudaLaunchKernel
-                    9.21%  331.32ms    153920  2.1520us     702ns  414.73us  cudaLaunchHostFunc
-                    4.99%  179.48ms         1  179.48ms  179.48ms  179.48ms  cudaDeviceSetSharedMemConfig
-                    1.28%  46.161ms    364817     126ns     105ns  405.85us  cudaGetLastError
-                    0.79%  28.384ms      3556  7.9810us  6.4670us  380.40us  cudaMemcpyAsync
-                    0.57%  20.626ms         2  10.313ms  26.487us  20.599ms  cudaMallocManaged
-                    0.21%  7.4981ms      1186  6.3220us  2.3370us  14.559us  cudaStreamSynchronize
-                    0.06%  2.1127ms         1  2.1127ms  2.1127ms  2.1127ms  cudaHostAlloc
-                    0.03%  1.1653ms         1  1.1653ms  1.1653ms  1.1653ms  cuDeviceTotalMem
-                    0.03%  1.0585ms         1  1.0585ms  1.0585ms  1.0585ms  cudaFreeHost
-                    0.02%  618.40us         3  206.13us  22.560us  482.34us  cudaFree
-                    0.01%  479.54us         1  479.54us  479.54us  479.54us  cudaMemcpy
-                    0.01%  310.43us         1  310.43us  310.43us  310.43us  cudaMalloc
-                    0.00%  174.29us         4  43.572us  12.623us  64.352us  cudaMemGetInfo
-                    0.00%  102.00us       101  1.0090us     127ns  39.992us  cuDeviceGetAttribute
-                    0.00%  92.947us         1  92.947us  92.947us  92.947us  cudaGetDeviceProperties
-                    0.00%  41.294us         1  41.294us  41.294us  41.294us  cudaMemAdvise
-                    0.00%  30.962us         4  7.7400us  1.5410us  25.015us  cudaStreamCreate
-                    0.00%  18.985us         1  18.985us  18.985us  18.985us  cuDeviceGetName
-                    0.00%  3.6980us         2  1.8490us     622ns  3.0760us  cudaProfilerStart
-                    0.00%  2.2130us         1  2.2130us  2.2130us  2.2130us  cudaSetDevice
-                    0.00%  2.1830us         1  2.1830us  2.1830us  2.1830us  cuDeviceGetPCIBusId
-                    0.00%  1.1170us         3     372ns     179ns     710ns  cuDeviceGetCount
-                    0.00%     753ns         2     376ns     124ns     629ns  cuDeviceGet
-                    0.00%     638ns         1     638ns     638ns     638ns  cudaGetDeviceCount
-                    0.00%     266ns         1     266ns     266ns     266ns  cuDeviceGetUuid
+elapsed time: 1920.985213 seconds.
 
-==2679370== Unified Memory profiling result:
-Device "Tesla V100-PCIE-32GB (0)"
-   Count  Avg Size  Min Size  Max Size  Total Size  Total Time  Name
-       6  21.333KB  4.0000KB  56.000KB  128.0000KB  18.52800us  Device To Host
-      18         -         -         -           -  2.608320ms  Gpu page fault groups
-Total CPU Page faults: 2
+
+TinyProfiler total time across processes [min...avg...max]: 1921 ... 1921 ... 1921
+
+----------------------------------------------------------------------------------------------------
+Name                                                 NCalls  Excl. Min  Excl. Avg  Excl. Max   Max %
+----------------------------------------------------------------------------------------------------
+RadhydroSimulation::computeHydroFluxes()            1847760      686.7      686.7      686.7  35.75%
+RadhydroSimulation::advanceHydroAtLevel()               975      478.6      478.6      478.6  24.92%
+FillPatchSingleLevel                                   3405      155.7      155.7      155.7   8.10%
+Fuser::Launch()                                       13536      131.7      131.7      131.7   6.86%
+FillBoundary_nowait()                                  1952      125.8      125.8      125.8   6.55%
+FabArray::ParallelCopy_nowait()                        3648      79.66      79.66      79.66   4.15%
+AmrMesh::MakeNewGrids()                                 165      79.29      79.29      79.29   4.13%
+FabArrayBase::CPC::define()                            2951         59         59         59   3.07%
+RadhydroSimulation::computeMaxSignalLocal()             650      57.38      57.38      57.38   2.99%
+FillPatchTwoLevels                                     1377      20.75      20.75      20.75   1.08%
+PhysBCFunct::()                                        3405      19.46      19.46      19.46   1.01%
+CellConservativeLinear::interp()                     191884      6.001      6.001      6.001   0.31%
+VisMF::AsyncWrite()                                      10      5.542      5.542      5.542   0.29%
+AMRSimulation::incrementFluxRegisters()             1847760      4.033      4.033      4.033   0.21%
+FabArrayBase::FB::FB()                                   40      2.474      2.474      2.474   0.13%
+AMRSimulation::computeTimestep()                        325      2.141      2.141      2.141   0.11%
+TagBoxArray::mapPRD                                     165      1.782      1.782      1.782   0.09%
+AMRSimulation::RemakeLevel()                             38      1.765      1.765      1.765   0.09%
+OwnerMask()                                             165      1.623      1.623      1.623   0.08%
+TagBoxArray::collate()                                  165     0.7072     0.7072     0.7072   0.04%
+amrex::average_down                                     326     0.2132     0.2132     0.2132   0.01%
+FabArray::setVal()                                     1019      0.157      0.157      0.157   0.01%
+AMRSimulation::MakeNewLevelFromScratch()                  2     0.1506     0.1506     0.1506   0.01%
+AMRSimulation::evolve()                                   1     0.1048     0.1048     0.1048   0.01%
+AMRSimulation::timeStepWithSubcycling()                 975     0.1045     0.1045     0.1045   0.01%
+WriteMultiLevelPlotfile()                                 5    0.03513    0.03513    0.03513   0.00%
+FPinfo::FPinfo()                                         77    0.01432    0.01432    0.01432   0.00%
+RadhydroSimulation::advanceSingleTimestepAtLevel()      975   0.007708   0.007708   0.007708   0.00%
+FabArrayBase::getCPC()                                 3726   0.006566   0.006566   0.006566   0.00%
+AmrMesh-cluster                                         165   0.005441   0.005441   0.005441   0.00%
+FabArray::ParallelCopy()                               3648   0.005033   0.005033   0.005033   0.00%
+AMRSimulation::fillBoundaryConditions()                1952   0.003297   0.003297   0.003297   0.00%
+FabArray::ParallelCopy_finish()                        3648     0.0032     0.0032     0.0032   0.00%
+ClusterList::chop()                                     165   0.002656   0.002656   0.002656   0.00%
+AMRSimulation::doRegridIfNeeded()                       325   0.002545   0.002545   0.002545   0.00%
+AMRSimulation::FillPatchWithData()                     2028   0.002442   0.002442   0.002442   0.00%
+FabArrayBase::TheFPinfo()                              1377   0.002379   0.002379   0.002379   0.00%
+FabArray::FillBoundary()                               1952   0.002272   0.002272   0.002272   0.00%
+FillBoundary_finish()                                  1952   0.002144   0.002144   0.002144   0.00%
+DistributionMapping::SFCProcessorMapDoIt()               40   0.001567   0.001567   0.001567   0.00%
+AMRSimulation::GetData()                               1453   0.001347   0.001347   0.001347   0.00%
+ClusterList::intersect()                                165   0.001283   0.001283   0.001283   0.00%
+FabArrayBase::getFB()                                  1952   0.001196   0.001196   0.001196   0.00%
+AMRSimulation::AverageDownTo()                          326  0.0005199  0.0005199  0.0005199   0.00%
+amrex::average_down_w_geom                              326  0.0003396  0.0003396  0.0003396   0.00%
+BoxList::complementIn                                   330  0.0001652  0.0001652  0.0001652   0.00%
+AMRSimulation::FillPatch()                               76  0.0001535  0.0001535  0.0001535   0.00%
+DistributionMapping::LeastUsedCPUs()                    117  0.0001452  0.0001452  0.0001452   0.00%
+BoxList::parallelComplementIn()                         330  0.0001338  0.0001338  0.0001338   0.00%
+DistributionMapping::Distribute()                        40  0.0001189  0.0001189  0.0001189   0.00%
+AMRSimulation::setInitialConditions()                     1  8.363e-05  8.363e-05  8.363e-05   0.00%
+AMRSimulation::initialize()                               1  7.201e-06  7.201e-06  7.201e-06   0.00%
+AMRSimulation::readParameters()                           1  2.087e-06  2.087e-06  2.087e-06   0.00%
+AMRSimulation::AverageDown()                              1   8.56e-07   8.56e-07   8.56e-07   0.00%
+----------------------------------------------------------------------------------------------------
+
+----------------------------------------------------------------------------------------------------
+Name                                                 NCalls  Incl. Min  Incl. Avg  Incl. Max   Max %
+----------------------------------------------------------------------------------------------------
+AMRSimulation::evolve()                                   1       1917       1917       1917  99.81%
+AMRSimulation::timeStepWithSubcycling()                 975       1720       1720       1720  89.51%
+RadhydroSimulation::advanceSingleTimestepAtLevel()      975       1606       1606       1606  83.63%
+RadhydroSimulation::advanceHydroAtLevel()               975       1580       1580       1580  82.23%
+RadhydroSimulation::computeHydroFluxes()            1847760      686.7      686.7      686.7  35.75%
+AMRSimulation::FillPatchWithData()                     2028      448.9      448.9      448.9  23.37%
+AMRSimulation::fillBoundaryConditions()                1952      410.6      410.6      410.6  21.37%
+FillPatchTwoLevels                                     1377      367.1      367.1      367.1  19.11%
+FillPatchSingleLevel                                   3405      326.4      326.4      326.4  16.99%
+AMRSimulation::doRegridIfNeeded()                       325      134.3      134.3      134.3   6.99%
+Fuser::Launch()                                       13536      131.7      131.7      131.7   6.86%
+FabArray::ParallelCopy()                               3648      130.8      130.8      130.8   6.81%
+FabArray::ParallelCopy_nowait()                        3648      130.8      130.8      130.8   6.81%
+FabArray::FillBoundary()                               1952      128.3      128.3      128.3   6.68%
+FillBoundary_nowait()                                  1952      128.3      128.3      128.3   6.68%
+AmrMesh::MakeNewGrids()                                 165      86.16      86.16      86.16   4.49%
+AMRSimulation::computeTimestep()                        325      59.52      59.52      59.52   3.10%
+FabArrayBase::getCPC()                                 3726      59.01      59.01      59.01   3.07%
+FabArrayBase::CPC::define()                            2951         59         59         59   3.07%
+RadhydroSimulation::computeMaxSignalLocal()             650      57.38      57.38      57.38   2.99%
+AMRSimulation::RemakeLevel()                             38      49.05      49.05      49.05   2.55%
+AMRSimulation::FillPatch()                               76      38.31      38.31      38.31   1.99%
+FabArray::setVal()                                     1019      30.05      30.05      30.05   1.56%
+PhysBCFunct::()                                        3405      19.46      19.46      19.46   1.01%
+AMRSimulation::AverageDownTo()                          326      9.969      9.969      9.969   0.52%
+amrex::average_down_w_geom                              326      9.968      9.968      9.968   0.52%
+amrex::average_down                                     326      9.968      9.968      9.968   0.52%
+CellConservativeLinear::interp()                     191884      6.001      6.001      6.001   0.31%
+WriteMultiLevelPlotfile()                                 5      5.578      5.578      5.578   0.29%
+VisMF::AsyncWrite()                                      10      5.542      5.542      5.542   0.29%
+TagBoxArray::mapPRD                                     165      4.274      4.274      4.274   0.22%
+AMRSimulation::incrementFluxRegisters()             1847760      4.033      4.033      4.033   0.21%
+AMRSimulation::setInitialConditions()                     1        3.6        3.6        3.6   0.19%
+FabArrayBase::getFB()                                  1952      2.475      2.475      2.475   0.13%
+FabArrayBase::FB::FB()                                   40      2.474      2.474      2.474   0.13%
+OwnerMask()                                             165      1.623      1.623      1.623   0.08%
+AMRSimulation::MakeNewLevelFromScratch()                  2      0.932      0.932      0.932   0.05%
+TagBoxArray::collate()                                  165     0.7074     0.7074     0.7074   0.04%
+AMRSimulation::AverageDown()                              1    0.07916    0.07916    0.07916   0.00%
+FabArrayBase::TheFPinfo()                              1377    0.01679    0.01679    0.01679   0.00%
+FPinfo::FPinfo()                                         77    0.01441    0.01441    0.01441   0.00%
+AmrMesh-cluster                                         165    0.00938    0.00938    0.00938   0.00%
+FabArray::ParallelCopy_finish()                        3648     0.0032     0.0032     0.0032   0.00%
+ClusterList::chop()                                     165   0.002656   0.002656   0.002656   0.00%
+FillBoundary_finish()                                  1952   0.002144   0.002144   0.002144   0.00%
+DistributionMapping::SFCProcessorMapDoIt()               40   0.001737   0.001737   0.001737   0.00%
+AMRSimulation::GetData()                               1453   0.001347   0.001347   0.001347   0.00%
+ClusterList::intersect()                                165   0.001283   0.001283   0.001283   0.00%
+BoxList::parallelComplementIn()                         330   0.000299   0.000299   0.000299   0.00%
+BoxList::complementIn                                   330  0.0001652  0.0001652  0.0001652   0.00%
+DistributionMapping::LeastUsedCPUs()                    117  0.0001452  0.0001452  0.0001452   0.00%
+DistributionMapping::Distribute()                        40  0.0001189  0.0001189  0.0001189   0.00%
+AMRSimulation::initialize()                               1  9.288e-06  9.288e-06  9.288e-06   0.00%
+AMRSimulation::readParameters()                           1  2.087e-06  2.087e-06  2.087e-06   0.00%
+----------------------------------------------------------------------------------------------------
+
+Total GPU global memory (MB) spread across MPI: [32510 ... 32510]
+Free  GPU global memory (MB) spread across MPI: [1 ... 1]
+[The         Arena] space (MB) allocated spread across MPI: [44776 ... 44776]
+[The         Arena] space (MB) used      spread across MPI: [0 ... 0]
+[The  Pinned Arena] space (MB) allocated spread across MPI: [7136 ... 7136]
+[The  Pinned Arena] space (MB) used      spread across MPI: [0 ... 0]
+AMReX (21.06-46-g8575439bdbc5) finalized

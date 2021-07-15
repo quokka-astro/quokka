@@ -7,16 +7,16 @@
 /// \brief Defines a test problem for a shock tube.
 ///
 
-#include "test_hydro2d_rm.hpp"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_Config.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
+
+#include "test_hydro2d_rm.hpp"
 #include "RadhydroSimulation.hpp"
 #include "hydro_system.hpp"
-#include "test_radhydro_shock_cgs.hpp"
 
 struct RichtmeyerMeshkovProblem {
 };
@@ -100,15 +100,15 @@ template <> void RadhydroSimulation<RichtmeyerMeshkovProblem>::computeAfterTimes
 #endif
 }
 
-template <> void RadhydroSimulation<RichtmeyerMeshkovProblem>::setInitialConditions()
+template <> void RadhydroSimulation<RichtmeyerMeshkovProblem>::setInitialConditionsAtLevel(int lev)
 {
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = simGeometry_.CellSizeArray();
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = simGeometry_.ProbLoArray();
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = simGeometry_.ProbHiArray();
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = geom[lev].ProbHiArray();
 
-	for (amrex::MFIter iter(state_old_); iter.isValid(); ++iter) {
+	for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
-		auto const &state = state_new_.array(iter);
+		auto const &state = state_new_[lev].array(iter);
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 			amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
@@ -156,10 +156,10 @@ template <> void RadhydroSimulation<RichtmeyerMeshkovProblem>::setInitialConditi
 auto problem_main() -> int
 {
 	// Problem parameters
-	amrex::IntVect gridDims{AMREX_D_DECL(1024, 1024, 4)};
-	amrex::RealBox boxSize{
-	    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.0), amrex::Real(0.0))},
-	    {AMREX_D_DECL(amrex::Real(0.3), amrex::Real(0.3), amrex::Real(1.0))}};
+	//amrex::IntVect gridDims{AMREX_D_DECL(1024, 1024, 4)};
+	//amrex::RealBox boxSize{
+	//    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.0), amrex::Real(0.0))},
+	//    {AMREX_D_DECL(amrex::Real(0.3), amrex::Real(0.3), amrex::Real(1.0))}};
 
 	auto isNormalComp = [=](int n, int dim) {
 		if ((n == HydroSystem<RichtmeyerMeshkovProblem>::x1Momentum_index) && (dim == 0)) {
@@ -189,14 +189,13 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	RadhydroSimulation<RichtmeyerMeshkovProblem> sim(gridDims, boxSize, boundaryConditions);
+	RadhydroSimulation<RichtmeyerMeshkovProblem> sim(boundaryConditions);
 	sim.is_hydro_enabled_ = true;
 	sim.is_radiation_enabled_ = false;
 	sim.stopTime_ = 2.5;
 	sim.cflNumber_ = 0.4;
 	sim.maxTimesteps_ = 50000;
 	sim.plotfileInterval_ = 100;
-	sim.outputAtInterval_ = false;
 
 	// initialize
 	sim.setInitialConditions();

@@ -14,6 +14,10 @@
 
 [3D Sedov Test 384^3]
 1 GPU V100-32GB (clang-12 + nvcc + noFMA)  Performance figure-of-merit: 0.02198741689 μs/zone-update [45.48055849 Mupdates/s]
+(AMR max_level=0) 1 GPU (clang12 + nvcc + noFMA) Performance figure-of-merit: 0.03532532634 μs/zone-update [28.30830182 Mupdates/s]
+(AMR max_level=0) 1 GPU (clang12 + nvcc + FMA) Performance figure-of-merit: 0.03466918772 μs/zone-update [28.84405623 Mupdates/s]
+(AMR max_level=1) 1 GPU (clang12 + nvcc + noFMA) Performance figure-of-merit: 0.06566813798 μs/zone-update [15.2280852 Mupdates/s]
+(AMR max_level=1) 1 GPU (gcc-8 + nvcc + noFMA) Performance figure-of-merit: 0.06562001939 μs/zone-update [15.23925182 Mupdates/s]
 
 [2D Beam Test 1024^2]
 1 GPU V100-32GB (gcc-8 + nvcc + noFMA)     Performance figure-of-merit: 0.01584891696 μs/zone-update [63.09579402 Mupdates/s]
@@ -26,4 +30,8 @@
 
 [2D AMR Sedov test 1024x1536]
 (GPU; blocking_factor=128; max_level=2) Performance figure-of-merit: 0.03123706585 μs/zone-update [32.01325006 Mupdates/s]
-(GPU; blocking_factor=128; max_level=0) Performance figure-of-merit: 0.02104795749 μs/zone-update [47.51054826 Mupdates/s]
+(GPU; blocking_factor=128; max_level=0) Performance figure-of-merit: 0.02076180176 μs/zone-update [48.16537657 Mupdates/s]
+
+[2D AMR Sedov test 1024x1024]
+(GPU; blocking_factor=128; max_level=0) Performance figure-of-merit: 0.01997319992 μs/zone-update [50.0670901 Mupdates/s]
+
