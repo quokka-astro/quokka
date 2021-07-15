@@ -44,14 +44,21 @@ template <> struct RadSystem_Traits<ShadowProblem> {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<ShadowProblem>::ComputeOpacity(const double rho,
+AMREX_GPU_HOST_DEVICE auto RadSystem<ShadowProblem>::ComputePlanckOpacity(const double rho,
 								    const double /*Tgas*/) -> double
 {
 	const amrex::Real sigma = sigma0 * std::pow(rho / rho_bg, 2);
-	//	    sigma0 * std::pow(Tgas / T_initial, -3.5) * std::pow(rho / rho_bg, 2);
+	// sigma0 * std::pow(Tgas / T_initial, -3.5) * std::pow(rho / rho_bg, 2);
 
 	const amrex::Real kappa = sigma / rho; // specific opacity [cm^2 g^-1]
 	return kappa;
+}
+
+template <>
+AMREX_GPU_HOST_DEVICE auto RadSystem<ShadowProblem>::ComputeRosselandOpacity(const double rho,
+								    const double Tgas) -> double
+{
+	return ComputePlanckOpacity(rho, Tgas);
 }
 
 template <>
@@ -197,15 +204,9 @@ auto problem_main() -> int
 	constexpr double CFL_number = 0.4;
 	constexpr int nx = 560; // 280;
 	constexpr int ny = 160; // 80;
-
 	constexpr double Lx = 1.0;	     // cm
-	constexpr double Ly = 0.24;	     // cm
+	constexpr double Ly = 0.12;	     // cm
 	constexpr double max_time = 5.0e-11; // 10.0 * (Lx / c); // s
-
-	amrex::IntVect gridDims{AMREX_D_DECL(nx, ny, 4)};
-	amrex::RealBox boxSize{
-	    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.), amrex::Real(0.0))},       // NOLINT
-	    {AMREX_D_DECL(amrex::Real(Lx), amrex::Real(Ly / 2.0), amrex::Real(1.0))}}; // NOLINT
 
 	auto isNormalComp = [=](int n, int dim) {
 		if ((n == RadSystem<ShadowProblem>::x1RadFlux_index) && (dim == 0)) {
@@ -259,7 +260,7 @@ auto problem_main() -> int
 		       << "machine epsilon = " << machine_epsilon << "\n";
 
 	// Problem initialization
-	RadhydroSimulation<ShadowProblem> sim(gridDims, boxSize, boundaryConditions);
+	RadhydroSimulation<ShadowProblem> sim(boundaryConditions);
 	sim.stopTime_ = max_time;
 	sim.radiationCflNumber_ = CFL_number;
 	sim.maxTimesteps_ = max_timesteps;

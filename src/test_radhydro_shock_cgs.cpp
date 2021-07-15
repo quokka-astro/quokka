@@ -71,7 +71,13 @@ template <> struct EOS_Traits<ShockProblem> {
 };
 
 template <>
-auto RadSystem<ShockProblem>::ComputeOpacity(const double rho, const double /*Tgas*/) -> double
+auto RadSystem<ShockProblem>::ComputePlanckOpacity(const double rho, const double /*Tgas*/) -> double
+{
+	return (kappa / rho);
+}
+
+template <>
+auto RadSystem<ShockProblem>::ComputeRosselandOpacity(const double rho, const double /*Tgas*/) -> double
 {
 	return (kappa / rho);
 }

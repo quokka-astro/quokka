@@ -44,7 +44,14 @@ template <> struct RadSystem_Traits<BeamProblem> {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<BeamProblem>::ComputeOpacity(const double /*rho*/,
+AMREX_GPU_HOST_DEVICE auto RadSystem<BeamProblem>::ComputePlanckOpacity(const double /*rho*/,
+								  const double /*Tgas*/) -> double
+{
+	return kappa0;
+}
+
+template <>
+AMREX_GPU_HOST_DEVICE auto RadSystem<BeamProblem>::ComputeRosselandOpacity(const double /*rho*/,
 								  const double /*Tgas*/) -> double
 {
 	return kappa0;
@@ -117,8 +124,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<BeamProblem>::setCustomBo
 		double Fy_bdry = NAN;
 		double Fz_bdry = NAN;
 
-		// const double y_min = 0.125;
-		// const double y_max = 0.25;
 		const double y_max = 0.0625;
 
 		if (y <= y_max) {
@@ -193,7 +198,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<BeamProblem>::setCustomBo
 		consVar(i, j, k, RadSystem<BeamProblem>::x2GasMomentum_index) = py;
 		consVar(i, j, k, RadSystem<BeamProblem>::x3GasMomentum_index) = pz;
 	} else if ((i < lo[0]) && (j < lo[1])) {
-		// std::raise(SIGINT); // corner boundary breakpoint
 		// streaming boundary condition
 
 		const double Egas =
@@ -306,11 +310,6 @@ auto problem_main() -> int
 	const double Lx = 2.0;			// cm
 	const double max_time = 2.0 * (Lx / c); // s
 
-	amrex::IntVect gridDims{AMREX_D_DECL(nx, nx, 4)};
-	amrex::RealBox boxSize{
-	    {AMREX_D_DECL(amrex::Real(0.), amrex::Real(0.), amrex::Real(0.))},	// NOLINT
-	    {AMREX_D_DECL(amrex::Real(Lx), amrex::Real(Lx), amrex::Real(Lx))}}; // NOLINT
-
 	auto isNormalComp = [=](int n, int dim) {
 		if ((n == RadSystem<BeamProblem>::x1RadFlux_index) && (dim == 0)) {
 			return true;
@@ -352,7 +351,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	RadhydroSimulation<BeamProblem> sim(gridDims, boxSize, boundaryConditions);
+	RadhydroSimulation<BeamProblem> sim(boundaryConditions);
 	sim.stopTime_ = max_time;
 	sim.radiationCflNumber_ = CFL_number;
 	sim.maxTimesteps_ = max_timesteps;
