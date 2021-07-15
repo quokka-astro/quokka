@@ -333,7 +333,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 {
 	BL_PROFILE("AMRSimulation::evolve()");
-	amrex::Real const start_time = amrex::ParallelDescriptor::second();
 
 	AMREX_ALWAYS_ASSERT(areInitialConditionsDefined_);
 
@@ -344,6 +343,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		const int lev = 0;
 		init_sum_cons[n] = state_new_[lev].sum(n);
 	}
+
+	amrex::Real const start_time = amrex::ParallelDescriptor::second();
 
 	// Main time loop
 	for (int step = istep[0]; step < maxTimesteps_ && cur_time < stopTime_; ++step) {
@@ -379,6 +380,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		}
 	}
 
+	// compute conservation error
 	for (int n = 0; n < ncomp_; ++n) {
 		amrex::Real const final_sum = state_new_[0].sum(n);
 		amrex::Real const abs_err = (final_sum - init_sum_cons[n]);
@@ -401,6 +403,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		       << " μs/zone-update [" << megaupdates_per_second << " Mupdates/s]\n";
 	amrex::Print() << "elapsed time: " << elapsed_sec << " seconds.\n";
 
+	// write final plotfile
 	if (plotfileInterval_ > 0 && istep[0] > last_plot_file_step) {
 		WritePlotFile();
 	}
@@ -441,8 +444,8 @@ void AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time,
 
 	advanceSingleTimestepAtLevel(lev, time, dt_[lev], iteration, nsubsteps[lev]);
 	++istep[lev];
-
 	cellUpdates_ += CountCells(lev); // keep track of total number of cell updates
+
 	if (Verbose()) {
 		amrex::Print() << "[Level " << lev << " step " << istep[lev] << "] ";
 		amrex::Print() << "Advanced " << CountCells(lev) << " cells" << std::endl;
@@ -865,6 +868,8 @@ auto AMRSimulation<problem_t>::PlotFileMF() const -> amrex::Vector<const amrex::
 // write plotfile to disk
 template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile() const
 {
+	BL_PROFILE("AMRSimulation::WritePlotFile()");
+
 	const std::string &plotfilename = PlotFileName(istep[0]);
 	const auto &mf = PlotFileMF();
 	const auto &varnames = componentNames_;
@@ -877,6 +882,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile() con
 
 template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile() const
 {
+	BL_PROFILE("AMRSimulation::WriteCheckpointFile()");
 
 	// chk00010            write a checkpoint file with this root directory
 	// chk00010/Header     this contains information you need to save (e.g.,
@@ -964,6 +970,7 @@ inline void GotoNextLine(std::istream &is)
 
 template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile()
 {
+	BL_PROFILE("AMRSimulation::ReadCheckpointFile()");
 
 	amrex::Print() << "Restart from checkpoint " << restart_chkfile << "\n";
 

@@ -165,6 +165,8 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array
 						       amrex::Box const &interfaceRange,
 						       const int nvars)
 {
+	BL_PROFILE("HyperbolicSystem::ReconstructStatesPPM()");
+
 	// construct ArrayViews for permuted indices
 	quokka::Array4View<amrex::Real const, DIR> q(q_in);
 	quokka::Array4View<amrex::Real, DIR> leftState(leftState_in);
@@ -318,6 +320,8 @@ void HyperbolicSystem<problem_t>::PredictStep(
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange,
     const int nvars)
 {
+	BL_PROFILE("HyperbolicSystem::PredictStep()");
+
 	// By convention, the fluxes are defined on the left edge of each zone,
 	// i.e. flux_(i) is the flux *into* zone i through the interface on the
 	// left of zone i, and -1.0*flux(i+1) is the flux *into* zone i through
@@ -353,6 +357,8 @@ void HyperbolicSystem<problem_t>::AddFluxesRK2(
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange,
     const int nvars)
 {
+	BL_PROFILE("HyperbolicSystem::AddFluxesRK2()");
+
 	// By convention, the fluxes are defined on the left edge of each zone,
 	// i.e. flux_(i) is the flux *into* zone i through the interface on the
 	// left of zone i, and -1.0*flux(i+1) is the flux *into* zone i through

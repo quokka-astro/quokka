@@ -196,7 +196,6 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 								 int /*iteration*/, int /*ncycle*/)
 {
 	BL_PROFILE("RadhydroSimulation::advanceSingleTimestepAtLevel()");
-	// based on amrex/Tests/EB/CNS/Source/CNS_advance.cpp
 
 	// since we are starting a new timestep, need to swap old and new states on this level
 	std::swap(state_old_[lev], state_new_[lev]);
@@ -298,6 +297,8 @@ auto RadhydroSimulation<problem_t>::expandFluxArrays(
     std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxes, const int nstartNew, const int ncompNew)
     -> std::array<amrex::FArrayBox, AMREX_SPACEDIM>
 {
+	BL_PROFILE("RadhydroSimulation::expandFluxArrays()");
+
 	// This is needed because reflux arrays must have the same number of components as
 	// state_new_[lev]
 	auto copyFlux = [nstartNew, ncompNew](amrex::FArrayBox const &oldFlux) {
