@@ -14,58 +14,25 @@
 #include "hydro_system.hpp"
 #include "radiation_system.hpp"
 
-
-auto main(int argc, char **argv) -> int
-{
-	// Initialization (copied from ExaWind)
-
-	amrex::Initialize(argc, argv, true, MPI_COMM_WORLD, []() {
-		amrex::ParmParse pp("amrex");
-		// Set the defaults so that we throw an exception instead of attempting
-		// to generate backtrace files. However, if the user has explicitly set
-		// these options in their input files respect those settings.
-		if (!pp.contains("throw_exception")) {
-			pp.add("throw_exception", 1);
-		}
-		if (!pp.contains("signal_handling")) {
-			pp.add("signal_handling", 0);
-		}
-	});
-
-	int result = 0;
-
-	{ // objects must be destroyed before amrex::finalize, so enter new
-	  // scope here to do that automatically
-
-		result = testproblem_hydro_contact();
-
-	} // destructors must be called before amrex::Finalize()
-	amrex::Finalize();
-
-	return result;
-}
-
 struct ContactProblem {
 };
 
-template <>
-struct EOS_Traits<ContactProblem>
-{
+template <> struct EOS_Traits<ContactProblem> {
 	static constexpr double gamma = 1.4;
 };
 constexpr double v_contact = 0.0; // contact wave velocity
 
 template <> void RadhydroSimulation<ContactProblem>::setInitialConditions()
 {
-	amrex::GpuArray<Real, AMREX_SPACEDIM> dx = simGeometry_.CellSizeArray();
-    amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo = simGeometry_.ProbLoArray();
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = simGeometry_.CellSizeArray();
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = simGeometry_.ProbLoArray();
 
 	for (amrex::MFIter iter(state_old_); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
 		auto const &state = state_new_.array(iter);
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-    		amrex::Real const x = prob_lo[0] + (i+Real(0.5)) * dx[0];
+			amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
 
 			double vx = NAN;
 			double rho = NAN;
@@ -99,10 +66,11 @@ template <> void RadhydroSimulation<ContactProblem>::setInitialConditions()
 }
 
 void ComputeExactSolution(amrex::Array4<amrex::Real> const &exact_arr, amrex::Box const &indexRange,
-			amrex::GpuArray<Real, AMREX_SPACEDIM> dx, amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo)
+			  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
+			  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo)
 {
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-    	amrex::Real const x = prob_lo[0] + (i+Real(0.5)) * dx[0];
+		amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
 
 		double vx = NAN;
 		double rho = NAN;
@@ -128,17 +96,16 @@ void ComputeExactSolution(amrex::Array4<amrex::Real> const &exact_arr, amrex::Bo
 	});
 }
 
-auto testproblem_hydro_contact() -> int
+auto problem_main() -> int
 {
 	// Problem parameters
 	const int nx = 100;
 	const double Lx = 1.0;
 
 	amrex::IntVect gridDims{AMREX_D_DECL(nx, 4, 4)};
-	amrex::RealBox boxSize{
-	    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.0), amrex::Real(0.0))},
-	    {AMREX_D_DECL(amrex::Real(Lx), amrex::Real(1.0), amrex::Real(1.0))}};
-	
+	amrex::RealBox boxSize{{AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.0), amrex::Real(0.0))},
+			       {AMREX_D_DECL(amrex::Real(Lx), amrex::Real(1.0), amrex::Real(1.0))}};
+
 	const int nvars = RadhydroSimulation<ContactProblem>::nvarTotal_;
 	amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
 	for (int n = 0; n < nvars; ++n) {
@@ -165,8 +132,8 @@ auto testproblem_hydro_contact() -> int
 	// Compute reference solution
 	amrex::MultiFab state_exact(sim.simBoxArray_, sim.simDistributionMapping_, sim.ncomp_,
 				    sim.nghost_);
-	amrex::GpuArray<Real, AMREX_SPACEDIM> dx = sim.simGeometry_.CellSizeArray();
-    amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo = sim.simGeometry_.ProbLoArray();
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = sim.simGeometry_.CellSizeArray();
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = sim.simGeometry_.ProbLoArray();
 
 	for (amrex::MFIter iter(sim.state_new_); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
@@ -216,14 +183,17 @@ auto testproblem_hydro_contact() -> int
 		std::vector<double> velocity_exact(nx);
 
 		for (int i = 0; i < nx; ++i) {
-    		amrex::Real const this_x = prob_lo[0] + (i+Real(0.5)) * dx[0];
+			amrex::Real const this_x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
 
-			const auto rho = state_exact_array(i, 0, 0, HydroSystem<ContactProblem>::density_index);
-			const auto xmom = state_exact_array(i, 0, 0, HydroSystem<ContactProblem>::x1Momentum_index);
-			const auto E = state_exact_array(i, 0, 0, HydroSystem<ContactProblem>::energy_index);
+			const auto rho =
+			    state_exact_array(i, 0, 0, HydroSystem<ContactProblem>::density_index);
+			const auto xmom = state_exact_array(
+			    i, 0, 0, HydroSystem<ContactProblem>::x1Momentum_index);
+			const auto E =
+			    state_exact_array(i, 0, 0, HydroSystem<ContactProblem>::energy_index);
 
-			const auto vx = xmom/rho;
-			const auto Eint = E - 0.5*rho*(vx*vx);
+			const auto vx = xmom / rho;
+			const auto Eint = E - 0.5 * rho * (vx * vx);
 			const auto P = (HydroSystem<ContactProblem>::gamma_ - 1.) * Eint;
 
 			x.push_back(this_x);
@@ -233,17 +203,20 @@ auto testproblem_hydro_contact() -> int
 		}
 
 		for (int i = 0; i < nx; ++i) {
-			const auto rho = state_final_array(i, 0, 0, HydroSystem<ContactProblem>::density_index);
-			const auto xmom = state_final_array(i, 0, 0, HydroSystem<ContactProblem>::x1Momentum_index);
-			const auto E = state_final_array(i, 0, 0, HydroSystem<ContactProblem>::energy_index);
+			const auto rho =
+			    state_final_array(i, 0, 0, HydroSystem<ContactProblem>::density_index);
+			const auto xmom = state_final_array(
+			    i, 0, 0, HydroSystem<ContactProblem>::x1Momentum_index);
+			const auto E =
+			    state_final_array(i, 0, 0, HydroSystem<ContactProblem>::energy_index);
 
-			const auto vx = xmom/rho;
-			const auto Eint = E - 0.5*rho*(vx*vx);
+			const auto vx = xmom / rho;
+			const auto Eint = E - 0.5 * rho * (vx * vx);
 			const auto P = (HydroSystem<ContactProblem>::gamma_ - 1.) * Eint;
 
 			d_final.push_back(rho);
 			vx_final.push_back(vx);
-			P_final.push_back(P);	
+			P_final.push_back(P);
 		}
 
 		std::unordered_map<std::string, std::string> d_args;
@@ -256,7 +229,7 @@ auto testproblem_hydro_contact() -> int
 		matplotlibcpp::plot(x, density_exact, dexact_args);
 
 		matplotlibcpp::legend();
-		matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNow_));
+		matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_));
 		matplotlibcpp::save("./hydro_contact.pdf");
 	}
 

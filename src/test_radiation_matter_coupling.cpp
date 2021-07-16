@@ -11,37 +11,8 @@
 #include "AMReX_BC_TYPES.H"
 #include "RadhydroSimulation.hpp"
 #include "radiation_system.hpp"
+#include "test_radhydro_shock_cgs.hpp"
 #include <vector>
-
-auto main(int argc, char **argv) -> int
-{
-	// Initialization (copied from ExaWind)
-
-	amrex::Initialize(argc, argv, true, MPI_COMM_WORLD, []() {
-		amrex::ParmParse pp("amrex");
-		// Set the defaults so that we throw an exception instead of attempting
-		// to generate backtrace files. However, if the user has explicitly set
-		// these options in their input files respect those settings.
-		if (!pp.contains("throw_exception")) {
-			pp.add("throw_exception", 1);
-		}
-		if (!pp.contains("signal_handling")) {
-			pp.add("signal_handling", 0);
-		}
-	});
-
-	int result = 0;
-
-	{ // objects must be destroyed before amrex::finalize, so enter new
-	  // scope here to do that automatically
-
-		result = testproblem_radiation_matter_coupling();
-
-	} // destructors must be called before amrex::Finalize()
-	amrex::Finalize();
-
-	return result;
-}
 
 struct CouplingProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
@@ -129,7 +100,7 @@ template <> void RadhydroSimulation<CouplingProblem>::computeAfterTimestep()
 		state_final.ParallelCopy(state_new_);
 		auto const &state_final_array = state_final.array(0);
 
-		t_vec_.push_back(tNow_);
+		t_vec_.push_back(tNew_);
 		const amrex::Real Erad_i =
 		    state_final_array(0, 0, 0, RadSystem<CouplingProblem>::radEnergy_index);
 		const amrex::Real Egas_i =
@@ -139,7 +110,7 @@ template <> void RadhydroSimulation<CouplingProblem>::computeAfterTimestep()
 	}
 }
 
-auto testproblem_radiation_matter_coupling() -> int
+auto problem_main() -> int
 {
 	// Problem parameters
 
@@ -256,7 +227,7 @@ auto testproblem_radiation_matter_coupling() -> int
 		matplotlibcpp::xlabel("time t (s)");
 		matplotlibcpp::ylabel("temperature T (K)");
 		// matplotlibcpp::title(
-		//    fmt::format("dt = {:.4g}\nt = {:.4g}", constant_dt, sim.tNow_));
+		//    fmt::format("dt = {:.4g}\nt = {:.4g}", constant_dt, sim.tNew_));
 		matplotlibcpp::save(fmt::format("./radcoupling.pdf"));
 
 		matplotlibcpp::clf();

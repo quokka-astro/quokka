@@ -33,8 +33,10 @@ template <typename problem_t> class LinearAdvectionSystem : public HyperbolicSys
 
 	static void ConservedToPrimitive(arrayconst_t &cons, array_t &primVar,
 					 amrex::Box const &indexRange, int nvars);
-	static void ComputeMaxSignalSpeed(arrayconst_t &cons, array_t &maxSignal,
-					  double advectionVx, amrex::Box const &indexRange);
+	static void ComputeMaxSignalSpeed(amrex::Array4<amrex::Real const> const & /*cons*/,
+					  amrex::Array4<amrex::Real> const &maxSignal,
+					  double advectionVx, double advectionVy,
+					  double advectionVz, amrex::Box const &indexRange);
 	template <FluxDir DIR>
 	static void ComputeFluxes(array_t &x1Flux, arrayconst_t &x1LeftState,
 				  arrayconst_t &x1RightState, double advectionVx,
@@ -44,12 +46,14 @@ template <typename problem_t> class LinearAdvectionSystem : public HyperbolicSys
 template <typename problem_t>
 void LinearAdvectionSystem<problem_t>::ComputeMaxSignalSpeed(
     amrex::Array4<amrex::Real const> const & /*cons*/, amrex::Array4<amrex::Real> const &maxSignal,
-    const double advectionVx, amrex::Box const &indexRange)
+    const double advectionVx, const double advectionVy, const double advectionVz,
+    amrex::Box const &indexRange)
 {
 	const auto vx = advectionVx;
+	const auto vy = advectionVy;
+	const auto vz = advectionVz;
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		const double signal_max = std::abs(vx);
-		// const double signal_max = advectionVx; // fails with 'invalid device function'
+		const double signal_max = std::sqrt(vx * vx + vy * vy + vz * vz);
 		maxSignal(i, j, k) = signal_max;
 	});
 }
@@ -77,26 +81,27 @@ void LinearAdvectionSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 	quokka::Array4View<amrex::Real const, DIR> x1RightState(x1RightState_in);
 	quokka::Array4View<amrex::Real, DIR> x1Flux(x1Flux_in);
 
-	const auto vx = advectionVx; // avoid CUDA invalid device function error (tracked as NVIDIA bug #3318015)
+	const auto vx = advectionVx; // avoid CUDA invalid device function error (tracked as NVIDIA
+				     // bug #3318015)
 	// By convention, the interfaces are defined on the left edge of each zone, i.e.
 	// xinterface_(i) is the solution to the Riemann problem at the left edge of zone i.
 	// [Indexing note: There are (nx + 1) interfaces for nx zones.]
 
-	amrex::ParallelFor(indexRange, nvars,
-			   [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
-				   // permute array indices according to dir
-				   auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
+	amrex::ParallelFor(
+	    indexRange, nvars, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
+		    // permute array indices according to dir
+		    auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
 
-				   // For advection, simply choose upwind side of the interface.
-				   if (vx < 0.0) { // upwind switch
-					   // upwind direction is the right-side of the interface
-					   x1Flux(i, j, k, n) = vx * x1RightState(i, j, k, n);
+		    // For advection, simply choose upwind side of the interface.
+		    if (vx < 0.0) { // upwind switch
+			    // upwind direction is the right-side of the interface
+			    x1Flux(i, j, k, n) = vx * x1RightState(i, j, k, n);
 
-				   } else {
-					   // upwind direction is the left-side of the interface
-					   x1Flux(i, j, k, n) = vx * x1LeftState(i, j, k, n);
-				   }
-			   });
+		    } else {
+			    // upwind direction is the left-side of the interface
+			    x1Flux(i, j, k, n) = vx * x1LeftState(i, j, k, n);
+		    }
+	    });
 }
 
 #endif // LINEAR_ADVECTION_HPP_

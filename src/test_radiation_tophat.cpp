@@ -15,37 +15,8 @@
 #include "AMReX_IntVect.H"
 #include "AMReX_REAL.H"
 #include "radiation_system.hpp"
+#include "test_radhydro_shock_cgs.hpp"
 #include <tuple>
-
-auto main(int argc, char **argv) -> int
-{
-	// Initialization (copied from ExaWind)
-
-	amrex::Initialize(argc, argv, true, MPI_COMM_WORLD, []() { // NOLINT
-		amrex::ParmParse pp("amrex");
-		// Set the defaults so that we throw an exception instead of attempting
-		// to generate backtrace files. However, if the user has explicitly set
-		// these options in their input files respect those settings.
-		if (!pp.contains("throw_exception")) {
-			pp.add("throw_exception", 1);
-		}
-		if (!pp.contains("signal_handling")) {
-			pp.add("signal_handling", 0);
-		}
-	});
-
-	int result = 0;
-
-	{ // objects must be destroyed before amrex::finalize, so enter new
-	  // scope here to do that automatically
-
-		result = testproblem_radiation_marshak_cgs();
-
-	} // destructors must be called before amrex::Finalize()
-	amrex::Finalize();
-
-	return result;
-}
 
 struct TophatProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
@@ -134,8 +105,8 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeEddingtonFactor(cons
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 RadhydroSimulation<TophatProblem>::setCustomBoundaryConditions(
-    const amrex::IntVect &iv, amrex::Array4<Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
-    amrex::GeometryData const &geom, const Real /*time*/, const amrex::BCRec * /*bcr*/,
+    const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
+    amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/,
     int /*bcomp*/, int /*orig_comp*/)
 {
 #if (AMREX_SPACEDIM == 2)
@@ -155,7 +126,7 @@ RadhydroSimulation<TophatProblem>::setCustomBoundaryConditions(
 	// amrex::GpuArray<int, 3> hi = box.hiVect3d();
 
 	amrex::Real const y0 = 0.;
-	amrex::Real const y = prob_lo[1] + (j + Real(0.5)) * dx[1];
+	amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
 
 	if (i < lo[0]) {
 		// Marshak boundary condition
@@ -272,7 +243,7 @@ template <> void RadhydroSimulation<TophatProblem>::setInitialConditions()
 	areInitialConditionsDefined_ = true;
 }
 
-auto testproblem_radiation_marshak_cgs() -> int
+auto problem_main() -> int
 {
 	// Problem parameters
 	const int max_timesteps = 10000;

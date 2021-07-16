@@ -24,6 +24,6 @@ extern "C" {
 }
 
 // function definitions
-auto testproblem_radhydro_shock() -> int;
+auto problem_main() -> int;
 
 #endif // TEST_RADHYDRO_SHOCK_HPP_

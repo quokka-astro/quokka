@@ -9,36 +9,7 @@
 
 #include "test_radiation_SuOlson.hpp"
 #include "AMReX_ParallelDescriptor.H"
-
-auto main(int argc, char **argv) -> int
-{
-	// Initialization (copied from ExaWind)
-
-	amrex::Initialize(argc, argv, true, MPI_COMM_WORLD, []() {
-		amrex::ParmParse pp("amrex");
-		// Set the defaults so that we throw an exception instead of attempting
-		// to generate backtrace files. However, if the user has explicitly set
-		// these options in their input files respect those settings.
-		if (!pp.contains("throw_exception")) {
-			pp.add("throw_exception", 1);
-		}
-		if (!pp.contains("signal_handling")) {
-			pp.add("signal_handling", 0);
-		}
-	});
-
-	int result = 0;
-
-	{ // objects must be destroyed before amrex::finalize, so enter new
-	  // scope here to do that automatically
-
-		result = testproblem_radiation_marshak();
-
-	} // destructors must be called before amrex::Finalize()
-	amrex::Finalize();
-
-	return result;
-}
+#include "test_radhydro_shock_cgs.hpp"
 
 struct MarshakProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
@@ -68,19 +39,19 @@ template <> struct RadSystem_Traits<MarshakProblem> {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputeTgasFromEgas(const double rho, const double Egas) -> double
+AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputeTgasFromEgas(const double /*rho*/, const double Egas) -> double
 {
 	return std::pow(4.0 * Egas / alpha_SuOlson, 1. / 4.);
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputeEgasFromTgas(const double rho, const double Tgas) -> double
+AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputeEgasFromTgas(const double /*rho*/, const double Tgas) -> double
 {
 	return (alpha_SuOlson / 4.0) * (Tgas*Tgas*Tgas*Tgas);
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputeEgasTempDerivative(const double rho, const double Tgas)
+AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputeEgasTempDerivative(const double /*rho*/, const double Tgas)
     -> double
 {
 	// This is also known as the heat capacity, i.e.
@@ -108,8 +79,8 @@ void RadSystem<MarshakProblem>::SetRadEnergySource(array_t &radEnergySource,
 	const double S = Q * (a_rad * std::pow(T_hohlraum, 4)); // erg cm^{-3}
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		amrex::Real const xl = (i + Real(0.)) * dx[0];
-		amrex::Real const xr = (i + Real(1.)) * dx[0];
+		amrex::Real const xl = (i + amrex::Real(0.)) * dx[0];
+		amrex::Real const xr = (i + amrex::Real(1.)) * dx[0];
 
 		double vol_frac = 0.0;
 		if ((xl < x0) && (xr <= x0)) {
@@ -154,7 +125,7 @@ template <> void RadhydroSimulation<MarshakProblem>::setInitialConditions()
 	areInitialConditionsDefined_ = true;
 }
 
-auto testproblem_radiation_marshak() -> int
+auto problem_main() -> int
 {
 	// For this problem, you must do reconstruction in the reduced
 	// flux, *not* the flux. Otherwise, F exceeds cE at sharp temperature
@@ -373,7 +344,7 @@ auto testproblem_radiation_marshak() -> int
 		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("length x (dimensionless)");
 		matplotlibcpp::ylabel("temperature (dimensionless)");
-		matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNow_));
+		matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_));
 		matplotlibcpp::xlim(0.1, 30.0); // cm
 		// matplotlibcpp::ylim(0.0, 1.3);	// dimensionless
 		matplotlibcpp::xscale("log");
@@ -404,7 +375,7 @@ auto testproblem_radiation_marshak() -> int
 		matplotlibcpp::xlabel("length x (dimensionless)");
 		matplotlibcpp::ylabel("radiation energy density (dimensionless)");
 		matplotlibcpp::title(
-		    fmt::format("time ct = {:.4g}", sim.tNow_ * (eps_SuOlson * c * rho * kappa)));
+		    fmt::format("time ct = {:.4g}", sim.tNew_ * (eps_SuOlson * c * rho * kappa)));
 		matplotlibcpp::xlim(0.0, 3.0); // cm
 		//	matplotlibcpp::ylim(0.0, 2.3);
 		matplotlibcpp::save("./SuOlsonTest.pdf");

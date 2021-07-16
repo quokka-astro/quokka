@@ -68,13 +68,13 @@ template <typename problem_t> class HyperbolicSystem
 
 	__attribute__ ((__target__ ("no-fma")))
 	static void AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayconst_t &U1,
-				 amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray,
+				 std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray,
 				 double dt_in, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,
 				 amrex::Box const &indexRange, int nvars);
 
 	__attribute__ ((__target__ ("no-fma")))
 	static void PredictStep(arrayconst_t &consVarOld, array_t &consVarNew,
-				amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray,
+				std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray,
 				double dt_in, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,
 				amrex::Box const &indexRange, int nvars);
 
@@ -165,6 +165,8 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array
 						       amrex::Box const &interfaceRange,
 						       const int nvars)
 {
+	//BL_PROFILE("HyperbolicSystem::ReconstructStatesPPM()");
+
 	// construct ArrayViews for permuted indices
 	quokka::Array4View<amrex::Real const, DIR> q(q_in);
 	quokka::Array4View<amrex::Real, DIR> leftState(leftState_in);
@@ -314,10 +316,12 @@ void HyperbolicSystem<problem_t>::SaveFluxes(array_t &advectionFluxes, arraycons
 template <typename problem_t>
 void HyperbolicSystem<problem_t>::PredictStep(
     arrayconst_t &consVarOld, array_t &consVarNew,
-    amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray, const double dt_in,
+    std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray, const double dt_in,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange,
     const int nvars)
 {
+	BL_PROFILE("HyperbolicSystem::PredictStep()");
+
 	// By convention, the fluxes are defined on the left edge of each zone,
 	// i.e. flux_(i) is the flux *into* zone i through the interface on the
 	// left of zone i, and -1.0*flux(i+1) is the flux *into* zone i through
@@ -349,10 +353,12 @@ void HyperbolicSystem<problem_t>::PredictStep(
 template <typename problem_t>
 void HyperbolicSystem<problem_t>::AddFluxesRK2(
     array_t &U_new, arrayconst_t &U0, arrayconst_t &U1,
-    amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray, const double dt_in,
+    std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray, const double dt_in,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange,
     const int nvars)
 {
+	BL_PROFILE("HyperbolicSystem::AddFluxesRK2()");
+
 	// By convention, the fluxes are defined on the left edge of each zone,
 	// i.e. flux_(i) is the flux *into* zone i through the interface on the
 	// left of zone i, and -1.0*flux(i+1) is the flux *into* zone i through

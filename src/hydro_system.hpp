@@ -56,6 +56,9 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	// requires GPU reductions
 	// static auto CheckStatesValid(array_t &cons, const std::pair<int, int> range) -> bool;
 
+	AMREX_GPU_DEVICE static auto ComputePressure(amrex::Array4<const amrex::Real> const &cons,
+						     int i, int j, int k) -> amrex::Real;
+
 	template <FluxDir DIR>
 	static void ComputeFluxes(array_t &x1Flux,
 				  amrex::Array4<const amrex::Real> const &x1LeftState,
@@ -184,6 +187,25 @@ auto HydroSystem<problem_t>::CheckStatesValid(amrex::Array4<const amrex::Real> c
 #endif
 
 template <typename problem_t>
+AMREX_GPU_DEVICE auto
+HydroSystem<problem_t>::ComputePressure(amrex::Array4<const amrex::Real> const &cons, int i, int j,
+					int k) -> amrex::Real
+{
+	const auto rho = cons(i, j, k, density_index);
+	const auto px = cons(i, j, k, x1Momentum_index);
+	const auto py = cons(i, j, k, x2Momentum_index);
+	const auto pz = cons(i, j, k, x3Momentum_index);
+	const auto E = cons(i, j, k, energy_index); // *total* gas energy per unit volume
+	const auto vx = px / rho;
+	const auto vy = py / rho;
+	const auto vz = pz / rho;
+	const auto kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
+	const auto thermal_energy = E - kinetic_energy;
+	const auto P = thermal_energy * (HydroSystem<problem_t>::gamma_ - 1.0);
+	return P;
+}
+
+template <typename problem_t>
 template <FluxDir DIR>
 void HydroSystem<problem_t>::ComputeFlatteningCoefficients(
     amrex::Array4<const amrex::Real> const &primVar_in, array_t &x1Chi_in,
@@ -224,16 +246,15 @@ void HydroSystem<problem_t>::ComputeFlatteningCoefficients(
 
 		// check for converging flow along the normal direction DIR (Eq. 77)
 		int velocity_index = 0;
-		if constexpr(DIR == FluxDir::X1) {
+		if constexpr (DIR == FluxDir::X1) {
 			velocity_index = x1Velocity_index;
-		} else if constexpr(DIR == FluxDir::X2) {
+		} else if constexpr (DIR == FluxDir::X2) {
 			velocity_index = x2Velocity_index;
-		} else if constexpr(DIR == FluxDir::X3) {
+		} else if constexpr (DIR == FluxDir::X3) {
 			velocity_index = x3Velocity_index;
 		}
 		double chi = 1.0;
-		if (primVar(i + 1, j, k, velocity_index) <
-		    primVar(i - 1, j, k, velocity_index)) {
+		if (primVar(i + 1, j, k, velocity_index) < primVar(i - 1, j, k, velocity_index)) {
 			chi = std::max(chi_min, std::min(1., (Zmax - Z) / (Zmax - Zmin)));
 		}
 
@@ -515,7 +536,7 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 			F = F_R;
 		}
 
-		//if((i==0) && (j==0)) {
+		// if((i==0) && (j==0)) {
 		//	std::raise(SIGINT); //breakpoint
 		//}
 

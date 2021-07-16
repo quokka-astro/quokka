@@ -12,59 +12,31 @@
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BoxArray.H"
 #include "AMReX_Config.H"
+#include "AMReX_CoordSys.H"
 #include "AMReX_DistributionMapping.H"
 #include "AMReX_FArrayBox.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "AdvectionSimulation.hpp"
 
-auto main(int argc, char **argv) -> int
-{
-	// Initialization
-	// (copied from ExaWind)
-
-	amrex::Initialize(argc, argv, true, MPI_COMM_WORLD, []() {
-		amrex::ParmParse pp("amrex");
-		// Set the defaults so that we throw an exception instead of attempting
-		// to generate backtrace files. However, if the user has explicitly set
-		// these options in their input files respect those settings.
-		if (!pp.contains("throw_exception")) {
-			pp.add("throw_exception", 1);
-		}
-		if (!pp.contains("signal_handling")) {
-			pp.add("signal_handling", 0);
-		}
-	});
-
-	int result = 0;
-
-	{ // objects must be destroyed before amrex::finalize, so enter new
-	  // scope here to do that automatically
-
-		result = testproblem_advection();
-
-	} // destructors must be called before amrex::Finalize()
-	amrex::Finalize();
-
-	return result;
-}
-
 struct SawtoothProblem {
 };
 
-template <> void AdvectionSimulation<SawtoothProblem>::setInitialConditions()
+template <> void AdvectionSimulation<SawtoothProblem>::setInitialConditionsAtLevel(int level)
 {
-	for (amrex::MFIter iter(state_old_); iter.isValid(); ++iter) {
+	auto const &prob_lo = geom[level].ProbLoArray();
+	auto const &dx = geom[level].CellSizeArray();
+	auto const y_length = geom[level].ProbLength(1); // y-axis
+
+	for (amrex::MFIter iter(state_old_[level]); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
-		auto const &state = state_new_.array(iter);
-		//auto const nx = nx_; // class members are not automatically transferred to device!
-		auto const ny = ny_;
+		auto const &state = state_new_[level].array(iter);
 
 		amrex::ParallelFor(indexRange, ncomp_,
 				   [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
-					   //auto value = static_cast<double>((i + nx / 2) % nx) / nx;
-					   auto value = static_cast<double>((j + ny / 2) % ny) / ny;
-					   state(i, j, k, n) = value;
+						amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
+						auto value = std::fmod(y + 0.5*y_length, y_length);
+						state(i, j, k, n) = value;
 				   });
 	}
 
@@ -73,7 +45,7 @@ template <> void AdvectionSimulation<SawtoothProblem>::setInitialConditions()
 }
 
 void ComputeExactSolution(amrex::Array4<amrex::Real> const &exact_arr, amrex::Box const &indexRange,
-			  const int nvars, const int nx, const int ny)
+			  const int nvars, const int /*nx*/, const int ny)
 {
 	amrex::ParallelFor(indexRange, nvars, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
 		//auto value = static_cast<double>((i + nx / 2) % nx) / nx;
@@ -82,7 +54,7 @@ void ComputeExactSolution(amrex::Array4<amrex::Real> const &exact_arr, amrex::Bo
 	});
 }
 
-auto testproblem_advection() -> int
+auto problem_main() -> int
 {
 	// Problem parameters
 	const int nx = 400;
@@ -126,6 +98,8 @@ auto testproblem_advection() -> int
 	// run simulation
 	sim.evolve();
 
+	int status = 0;
+#if 0
 	// Compute reference solution
 	amrex::MultiFab state_exact(sim.simBoxArray_, sim.simDistributionMapping_, sim.ncomp_,
 				    sim.nghost_);
@@ -133,7 +107,7 @@ auto testproblem_advection() -> int
 	for (amrex::MFIter iter(sim.state_new_); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &stateExact = state_exact.array(iter);
-		ComputeExactSolution(stateExact, indexRange, sim.ncomp_, sim.nx_, sim.ny_);
+		ComputeExactSolution(stateExact, indexRange, sim.ncomp_, sim.nx_[0], sim.nx_[1]);
 	}
 
 	// Compute error norm
@@ -153,7 +127,6 @@ auto testproblem_advection() -> int
 	}
 
 	const double err_tol = 0.015;
-	int status = 0;
 	if (min_rel_error > err_tol) {
 		status = 1;
 	}
@@ -170,7 +143,7 @@ auto testproblem_advection() -> int
 
 	// plot solution
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-		auto N = sim.ny_;
+		auto N = sim.nx_[1];
 		std::vector<double> d_final(N);
 		std::vector<double> d_initial(N);
 		std::vector<double> x(N);
@@ -194,6 +167,7 @@ auto testproblem_advection() -> int
 		matplotlibcpp::legend();
 		matplotlibcpp::save(std::string("./advection.pdf"));
 	}
+#endif
 
 	return status;
 }

@@ -7,7 +7,9 @@
 /// \brief Defines a 2D test problem for radiation in the transport regime.
 ///
 
-#include "test_radiation_shadow.hpp"
+#include <limits>
+#include <tuple>
+
 #include "AMReX_Array.H"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
@@ -15,39 +17,9 @@
 #include "AMReX_IntVect.H"
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
+
 #include "radiation_system.hpp"
-#include <limits>
-#include <tuple>
-
-auto main(int argc, char **argv) -> int
-{
-	// Initialization (copied from ExaWind)
-
-	amrex::Initialize(argc, argv, true, MPI_COMM_WORLD, []() { // NOLINT
-		amrex::ParmParse pp("amrex");
-		// Set the defaults so that we throw an exception instead of attempting
-		// to generate backtrace files. However, if the user has explicitly set
-		// these options in their input files respect those settings.
-		if (!pp.contains("throw_exception")) {
-			pp.add("throw_exception", 1);
-		}
-		if (!pp.contains("signal_handling")) {
-			pp.add("signal_handling", 0);
-		}
-	});
-
-	int result = 0;
-
-	{ // objects must be destroyed before amrex::finalize, so enter new
-	  // scope here to do that automatically
-
-		result = testproblem_radiation_shadow();
-
-	} // destructors must be called before amrex::Finalize()
-	amrex::Finalize();
-
-	return result;
-}
+#include "test_radiation_shadow.hpp"
 
 struct ShadowProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
@@ -72,45 +44,28 @@ template <> struct RadSystem_Traits<ShadowProblem> {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<ShadowProblem>::ComputeOpacity(const double rho,
+AMREX_GPU_HOST_DEVICE auto RadSystem<ShadowProblem>::ComputePlanckOpacity(const double rho,
 								    const double /*Tgas*/) -> double
 {
 	const amrex::Real sigma = sigma0 * std::pow(rho / rho_bg, 2);
-	//	    sigma0 * std::pow(Tgas / T_initial, -3.5) * std::pow(rho / rho_bg, 2);
+	// sigma0 * std::pow(Tgas / T_initial, -3.5) * std::pow(rho / rho_bg, 2);
 
 	const amrex::Real kappa = sigma / rho; // specific opacity [cm^2 g^-1]
 	return kappa;
 }
 
-#if 0
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<ShadowProblem>::ComputeOpacityTempDerivative(const double rho,
-										  const double Tgas)
-    -> double
+AMREX_GPU_HOST_DEVICE auto RadSystem<ShadowProblem>::ComputeRosselandOpacity(const double rho,
+								    const double Tgas) -> double
 {
-	const amrex::Real dsigma_dTgas = sigma0 * (-3.5) * std::pow(Tgas / T_initial, -4.5) *
-					 std::pow(rho / rho_bg, 2) / T_initial;
-
-	const amrex::Real dkappa_dTgas = dsigma_dTgas / rho; // specific opacity [cm^2 g^-1]
-	return dkappa_dTgas;
+	return ComputePlanckOpacity(rho, Tgas);
 }
-#endif
-
-#if 0
-template <>
-AMREX_GPU_DEVICE auto RadSystem<ShadowProblem>::ComputeEddingtonFactor(double /*f_in*/) -> double
-{
-	return 1.0; // streaming
-	// return (1./3.); // Eddington approximation
-}
-#endif
 
 template <>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-RadhydroSimulation<ShadowProblem>::setCustomBoundaryConditions(
-    const amrex::IntVect &iv, amrex::Array4<Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
-    amrex::GeometryData const &geom, const Real /*time*/, const amrex::BCRec * /*bcr*/,
-    int /*bcomp*/, int /*orig_comp*/)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<ShadowProblem>::setCustomBoundaryConditions(
+    const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/,
+    int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
+    const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
 {
 #if (AMREX_SPACEDIM == 2)
 	auto [i, j] = iv.toArray();
@@ -120,8 +75,6 @@ RadhydroSimulation<ShadowProblem>::setCustomBoundaryConditions(
 	auto [i, j, k] = iv.toArray();
 #endif
 
-	// const amrex::Real *dx = geom.CellSize();
-	// amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_lo = geom.ProbLoArray();
 	const amrex::Box &box = geom.Domain();
 	amrex::GpuArray<int, 3> lo = box.loVect3d();
 
@@ -160,14 +113,14 @@ RadhydroSimulation<ShadowProblem>::setCustomBoundaryConditions(
 	}
 }
 
-template <> void RadhydroSimulation<ShadowProblem>::setInitialConditions()
+template <> void RadhydroSimulation<ShadowProblem>::setInitialConditionsAtLevel(int lev)
 {
-	auto prob_lo = simGeometry_.ProbLoArray();
-	auto dx = dx_;
+	auto prob_lo = geom[lev].ProbLoArray();
+	auto dx = geom[lev].CellSizeArray();
 
-	for (amrex::MFIter iter(state_old_); iter.isValid(); ++iter) {
+	for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
-		auto const &state = state_new_.array(iter);
+		auto const &state = state_new_[lev].array(iter);
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 			amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
@@ -203,25 +156,57 @@ template <> void RadhydroSimulation<ShadowProblem>::setInitialConditions()
 	areInitialConditionsDefined_ = true;
 }
 
-auto testproblem_radiation_shadow() -> int
+template <>
+void RadhydroSimulation<ShadowProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags,
+						 amrex::Real /*time*/, int /*ngrow*/)
 {
-	// N.B. The matter-energy exchange used to exceed numerical precision in IEEE double for
-	// this problem.
+	// tag cells for refinement
 
+	const amrex::Real eta_threshold = 0.1; // gradient refinement threshold
+	const amrex::Real erad_min = 1.0e-3;   // minimum erad for refinement
+
+	for (amrex::MFIter mfi(state_new_[lev]); mfi.isValid(); ++mfi) {
+		const amrex::Box &box = mfi.validbox();
+		const auto state = state_new_[lev].const_array(mfi);
+		const auto tag = tags.array(mfi);
+
+		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			amrex::Real const P =
+			    state(i, j, k, RadSystem<ShadowProblem>::radEnergy_index);
+			amrex::Real const P_xplus =
+			    state(i + 1, j, k, RadSystem<ShadowProblem>::radEnergy_index);
+			amrex::Real const P_xminus =
+			    state(i - 1, j, k, RadSystem<ShadowProblem>::radEnergy_index);
+			amrex::Real const P_yplus =
+			    state(i, j + 1, k, RadSystem<ShadowProblem>::radEnergy_index);
+			amrex::Real const P_yminus =
+			    state(i, j - 1, k, RadSystem<ShadowProblem>::radEnergy_index);
+
+			amrex::Real const del_x =
+			    std::max(std::abs(P_xplus - P), std::abs(P - P_xminus));
+			amrex::Real const del_y =
+			    std::max(std::abs(P_yplus - P), std::abs(P - P_yminus));
+
+			amrex::Real const gradient_indicator =
+			    std::max(del_x, del_y) / std::max(P, erad_min);
+
+			if (gradient_indicator > eta_threshold) {
+				tag(i, j, k) = amrex::TagBox::SET;
+			}
+		});
+	}
+}
+
+auto problem_main() -> int
+{
 	// Problem parameters
 	constexpr int max_timesteps = 20000;
 	constexpr double CFL_number = 0.4;
 	constexpr int nx = 560; // 280;
 	constexpr int ny = 160; // 80;
-
 	constexpr double Lx = 1.0;	     // cm
-	constexpr double Ly = 0.24;	     // cm
-	constexpr double max_time = 1.0e-10; // 10.0 * (Lx / c); // s
-
-	amrex::IntVect gridDims{AMREX_D_DECL(nx, ny, 4)};
-	amrex::RealBox boxSize{
-	    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.), amrex::Real(0.0))},       // NOLINT
-	    {AMREX_D_DECL(amrex::Real(Lx), amrex::Real(Ly / 2.0), amrex::Real(1.0))}}; // NOLINT
+	constexpr double Ly = 0.12;	     // cm
+	constexpr double max_time = 5.0e-11; // 10.0 * (Lx / c); // s
 
 	auto isNormalComp = [=](int n, int dim) {
 		if ((n == RadSystem<ShadowProblem>::x1RadFlux_index) && (dim == 0)) {
@@ -262,7 +247,7 @@ auto testproblem_radiation_shadow() -> int
 	}
 
 	// Print radiation epsilon ("stiffness parameter" from Su & Olson).
-	// (if epsilon is smaller than machine epsilon, garbage results ensue.)
+	// (if epsilon is smaller than machine epsilon, there are unphysical radiation shocks.)
 
 	const auto dt_CFL = CFL_number * std::min(Lx / nx, Ly / ny) / c;
 	const auto c_v = RadSystem_Traits<ShadowProblem>::boltzmann_constant /
@@ -275,11 +260,10 @@ auto testproblem_radiation_shadow() -> int
 		       << "machine epsilon = " << machine_epsilon << "\n";
 
 	// Problem initialization
-	RadhydroSimulation<ShadowProblem> sim(gridDims, boxSize, boundaryConditions);
+	RadhydroSimulation<ShadowProblem> sim(boundaryConditions);
 	sim.stopTime_ = max_time;
 	sim.radiationCflNumber_ = CFL_number;
 	sim.maxTimesteps_ = max_timesteps;
-	sim.outputAtInterval_ = true;
 	sim.plotfileInterval_ = 50; // for debugging
 
 	// initialize
