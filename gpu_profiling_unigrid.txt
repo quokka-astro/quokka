@@ -1,0 +1,107 @@
+[3D Unigrid Sedov Test]
+geometry.prob_lo     =  0.0  0.0  0.0 
+geometry.prob_hi     =  1.0  1.0  1.0
+geometry.is_periodic =  0    0    0
+amr.v              = 0
+amr.n_cell          = 384 384 384
+amr.max_level       = 0 
+amr.blocking_factor = 32 
+amr.n_error_buf     = 3  
+amr.grid_eff        = 0.7
+do_reflux = 0
+do_subcycle = 0
+
+Performance figure-of-merit: 0.01598570885 μs/zone-update [62.55587472 Mupdates/s]
+elapsed time: 45.25802273 seconds.
+Writing plotfile plt00050
+Finished.
+elapsed time: 47.92062869 seconds.
+
+
+TinyProfiler total time across processes [min...avg...max]: 47.92 ... 47.92 ... 47.92
+
+---------------------------------------------------------------------------------------------------
+Name                                                NCalls  Excl. Min  Excl. Avg  Excl. Max   Max %
+---------------------------------------------------------------------------------------------------
+RadhydroSimulation::computeHydroFluxes()            172800      31.58      31.58      31.58  65.91%
+RadhydroSimulation::advanceHydroAtLevel()               50      4.346      4.346      4.346   9.07%
+PhysBCFunct::()                                        101      4.056      4.056      4.056   8.46%
+FillBoundary_nowait()                                  101       2.16       2.16       2.16   4.51%
+VisMF::AsyncWrite()                                      2      1.932      1.932      1.932   4.03%
+HyperbolicSystem::AddFluxesRK2()                     86400     0.9309     0.9309     0.9309   1.94%
+HyperbolicSystem::PredictStep()                      86400     0.9226     0.9226     0.9226   1.93%
+RadhydroSimulation::computeMaxSignalLocal()             50     0.6442     0.6442     0.6442   1.34%
+AMRSimulation::computeTimestep()                        50     0.5555     0.5555     0.5555   1.16%
+FabArray::ParallelCopy_nowait()                          1     0.2005     0.2005     0.2005   0.42%
+FabArrayBase::FB::FB()                                   1     0.1883     0.1883     0.1883   0.39%
+AMRSimulation::evolve()                                  1     0.1553     0.1553     0.1553   0.32%
+AMRSimulation::MakeNewLevelFromScratch()                 1     0.1428     0.1428     0.1428   0.30%
+FabArrayBase::CPC::define()                              1     0.0903     0.0903     0.0903   0.19%
+WriteMultiLevelPlotfile()                                2   0.009792   0.009792   0.009792   0.02%
+AMRSimulation::timeStepWithSubcycling()                 50  0.0003526  0.0003526  0.0003526   0.00%
+RadhydroSimulation::advanceSingleTimestepAtLevel()      50  0.0002506  0.0002506  0.0002506   0.00%
+Fuser::Launch()                                        324  0.0002496  0.0002496  0.0002496   0.00%
+AMRSimulation::fillBoundaryConditions()                101  0.0001491  0.0001491  0.0001491   0.00%
+FabArray::FillBoundary()                               101  0.0001433  0.0001433  0.0001433   0.00%
+DistributionMapping::SFCProcessorMapDoIt()               1  0.0001114  0.0001114  0.0001114   0.00%
+FillBoundary_finish()                                  101  9.475e-05  9.475e-05  9.475e-05   0.00%
+FabArrayBase::getFB()                                  101  8.058e-05  8.058e-05  8.058e-05   0.00%
+AMRSimulation::setInitialConditions()                    1  6.251e-05  6.251e-05  6.251e-05   0.00%
+AMRSimulation::doRegridIfNeeded()                       50  3.611e-05  3.611e-05  3.611e-05   0.00%
+AMRSimulation::WritePlotFile()                           2  2.988e-05  2.988e-05  2.988e-05   0.00%
+DistributionMapping::Distribute()                        1  8.017e-06  8.017e-06  8.017e-06   0.00%
+AMRSimulation::initialize()                              1  5.602e-06  5.602e-06  5.602e-06   0.00%
+AMRSimulation::readParameters()                          1  2.268e-06  2.268e-06  2.268e-06   0.00%
+FabArray::ParallelCopy()                                 1   2.19e-06   2.19e-06   2.19e-06   0.00%
+FabArray::ParallelCopy_finish()                          1  2.182e-06  2.182e-06  2.182e-06   0.00%
+FabArrayBase::getCPC()                                   1  1.812e-06  1.812e-06  1.812e-06   0.00%
+DistributionMapping::LeastUsedCPUs()                     1  1.139e-06  1.139e-06  1.139e-06   0.00%
+AMRSimulation::AverageDown()                             1    9.3e-07    9.3e-07    9.3e-07   0.00%
+---------------------------------------------------------------------------------------------------
+
+---------------------------------------------------------------------------------------------------
+Name                                                NCalls  Incl. Min  Incl. Avg  Incl. Max   Max %
+---------------------------------------------------------------------------------------------------
+AMRSimulation::evolve()                                  1      45.83      45.83      45.83  95.65%
+AMRSimulation::timeStepWithSubcycling()                 50      43.95      43.95      43.95  91.72%
+RadhydroSimulation::advanceSingleTimestepAtLevel()      50      43.95      43.95      43.95  91.72%
+RadhydroSimulation::advanceHydroAtLevel()               50      43.95      43.95      43.95  91.72%
+RadhydroSimulation::computeHydroFluxes()            172800      31.58      31.58      31.58  65.91%
+AMRSimulation::fillBoundaryConditions()                101      6.404      6.404      6.404  13.36%
+PhysBCFunct::()                                        101      4.056      4.056      4.056   8.46%
+FabArray::FillBoundary()                               101      2.348      2.348      2.348   4.90%
+FillBoundary_nowait()                                  101      2.348      2.348      2.348   4.90%
+AMRSimulation::setInitialConditions()                    1      2.085      2.085      2.085   4.35%
+AMRSimulation::WritePlotFile()                           2      1.942      1.942      1.942   4.05%
+WriteMultiLevelPlotfile()                                2      1.942      1.942      1.942   4.05%
+VisMF::AsyncWrite()                                      2      1.932      1.932      1.932   4.03%
+AMRSimulation::computeTimestep()                        50        1.2        1.2        1.2   2.50%
+HyperbolicSystem::AddFluxesRK2()                     86400     0.9309     0.9309     0.9309   1.94%
+HyperbolicSystem::PredictStep()                      86400     0.9226     0.9226     0.9226   1.93%
+AMRSimulation::MakeNewLevelFromScratch()                 1     0.6677     0.6677     0.6677   1.39%
+RadhydroSimulation::computeMaxSignalLocal()             50     0.6442     0.6442     0.6442   1.34%
+FabArray::ParallelCopy()                                 1     0.2908     0.2908     0.2908   0.61%
+FabArray::ParallelCopy_nowait()                          1     0.2908     0.2908     0.2908   0.61%
+FabArrayBase::getFB()                                  101     0.1884     0.1884     0.1884   0.39%
+FabArrayBase::FB::FB()                                   1     0.1883     0.1883     0.1883   0.39%
+FabArrayBase::getCPC()                                   1     0.0903     0.0903     0.0903   0.19%
+FabArrayBase::CPC::define()                              1     0.0903     0.0903     0.0903   0.19%
+Fuser::Launch()                                        324  0.0002496  0.0002496  0.0002496   0.00%
+DistributionMapping::SFCProcessorMapDoIt()               1  0.0001206  0.0001206  0.0001206   0.00%
+FillBoundary_finish()                                  101  9.475e-05  9.475e-05  9.475e-05   0.00%
+AMRSimulation::doRegridIfNeeded()                       50  3.611e-05  3.611e-05  3.611e-05   0.00%
+DistributionMapping::Distribute()                        1  8.017e-06  8.017e-06  8.017e-06   0.00%
+AMRSimulation::initialize()                              1   7.87e-06   7.87e-06   7.87e-06   0.00%
+AMRSimulation::readParameters()                          1  2.268e-06  2.268e-06  2.268e-06   0.00%
+FabArray::ParallelCopy_finish()                          1  2.182e-06  2.182e-06  2.182e-06   0.00%
+DistributionMapping::LeastUsedCPUs()                     1  1.139e-06  1.139e-06  1.139e-06   0.00%
+AMRSimulation::AverageDown()                             1    9.3e-07    9.3e-07    9.3e-07   0.00%
+---------------------------------------------------------------------------------------------------
+
+Total GPU global memory (MB) spread across MPI: [32510 ... 32510]
+Free  GPU global memory (MB) spread across MPI: [15997 ... 15997]
+[The         Arena] space (MB) allocated spread across MPI: [24382 ... 24382]
+[The         Arena] space (MB) used      spread across MPI: [0 ... 0]
+[The  Pinned Arena] space (MB) allocated spread across MPI: [4624 ... 4624]
+[The  Pinned Arena] space (MB) used      spread across MPI: [0 ... 0]
+AMReX (21.06-46-g8575439bdbc5) finalized

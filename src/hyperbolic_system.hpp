@@ -165,7 +165,7 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array
 						       amrex::Box const &interfaceRange,
 						       const int nvars)
 {
-	BL_PROFILE("HyperbolicSystem::ReconstructStatesPPM()");
+	//BL_PROFILE("HyperbolicSystem::ReconstructStatesPPM()");
 
 	// construct ArrayViews for permuted indices
 	quokka::Array4View<amrex::Real const, DIR> q(q_in);

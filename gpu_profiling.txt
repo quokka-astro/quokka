@@ -1,154 +1,155 @@
-[3D AMR Sedov Test 384^3]
+[3D AMR Sedov Test]
+geometry.prob_lo     =  0.0  0.0  0.0 
+geometry.prob_hi     =  1.0  1.0  1.0
+geometry.is_periodic =  0    0    0
+amr.v              = 0       
 amr.n_cell          = 384 384 384
-amr.max_level       = 1     # number of levels = max_level + 1
-amr.blocking_factor = 32    # grid size must be divisible by this
-amr.n_error_buf     = 3     # minimum 3 cell buffer around tagged cells
-amr.grid_eff        = 0.7   # default
+amr.max_level       = 1     
+amr.blocking_factor = 32   
+amr.n_error_buf     = 3    
+amr.grid_eff        = 0.7 
 do_reflux = 1
 do_subcycle = 1
 
-
-Performance figure-of-merit: 0.0423361255 μs/zone-update [23.62048931 Mupdates/s]
-elapsed time: 1281.671156 seconds.
-Writing plotfile plt00325
+Performance figure-of-merit: 0.03372307539 μs/zone-update [29.65328602 Mupdates/s]
+elapsed time: 120.8646073 seconds.
+Writing plotfile plt00050
 Finished.
-elapsed time: 1286.518474 seconds.
+elapsed time: 126.3756421 seconds.
 
 
-TinyProfiler total time across processes [min...avg...max]: 1287 ... 1287 ... 1287
+TinyProfiler total time across processes [min...avg...max]: 126.4 ... 126.4 ... 126.4
 
-----------------------------------------------------------------------------------------------------
-Name                                                 NCalls  Excl. Min  Excl. Avg  Excl. Max   Max %
-----------------------------------------------------------------------------------------------------
-RadhydroSimulation::computeHydroFluxes()            1847760      215.8      215.8      215.8  16.78%
-RadhydroSimulation::expandFluxArrays()              1847760      170.6      170.6      170.6  13.26%
-FillPatchSingleLevel                                   3405        143        143        143  11.11%
-HyperbolicSystem::ReconstructStatesPPM()            5543280      124.4      124.4      124.4   9.67%
-Fuser::Launch()                                       13524      107.3      107.3      107.3   8.34%
-FillBoundary_nowait()                                  1952      106.4      106.4      106.4   8.27%
-RadhydroSimulation::advanceHydroAtLevel()               975      93.65      93.65      93.65   7.28%
-AmrMesh::MakeNewGrids()                                 165      74.72      74.72      74.72   5.81%
-FabArray::ParallelCopy_nowait()                        3648      66.35      66.35      66.35   5.16%
-FabArrayBase::CPC::define()                            2951      57.65      57.65      57.65   4.48%
-RadhydroSimulation::computeMaxSignalLocal()             650      37.06      37.06      37.06   2.88%
-FillPatchTwoLevels                                     1377      21.29      21.29      21.29   1.65%
-PhysBCFunct::()                                        3405      15.46      15.46      15.46   1.20%
-HyperbolicSystem::PredictStep()                      923880      11.58      11.58      11.58   0.90%
-HyperbolicSystem::AddFluxesRK2()                     923880      10.52      10.52      10.52   0.82%
-AMRSimulation::incrementFluxRegisters()             1847760      9.934      9.934      9.934   0.77%
-CellConservativeLinear::interp()                     191884      4.916      4.916      4.916   0.38%
-AMRSimulation::computeTimestep()                        325      4.555      4.555      4.555   0.35%
-VisMF::AsyncWrite()                                       4      3.034      3.034      3.034   0.24%
-FabArrayBase::FB::FB()                                   40      2.424      2.424      2.424   0.19%
-TagBoxArray::mapPRD                                     165      1.553      1.553      1.553   0.12%
-OwnerMask()                                             165       1.47       1.47       1.47   0.11%
-AMRSimulation::RemakeLevel()                             38      1.408      1.408      1.408   0.11%
-TagBoxArray::collate()                                  165     0.5891     0.5891     0.5891   0.05%
-amrex::average_down                                     326     0.1832     0.1832     0.1832   0.01%
-AMRSimulation::MakeNewLevelFromScratch()                  2     0.1629     0.1629     0.1629   0.01%
-AMRSimulation::evolve()                                   1     0.1528     0.1528     0.1528   0.01%
-FabArray::setVal()                                     1019     0.1454     0.1454     0.1454   0.01%
-AMRSimulation::timeStepWithSubcycling()                 975    0.06395    0.06395    0.06395   0.00%
-WriteMultiLevelPlotfile()                                 2    0.01064    0.01064    0.01064   0.00%
-FPinfo::FPinfo()                                         77     0.0066     0.0066     0.0066   0.00%
-FabArrayBase::getCPC()                                 3726   0.005983   0.005983   0.005983   0.00%
-AmrMesh-cluster                                         165   0.004277   0.004277   0.004277   0.00%
-FabArray::ParallelCopy()                               3648   0.004209   0.004209   0.004209   0.00%
-RadhydroSimulation::advanceSingleTimestepAtLevel()      975   0.004122   0.004122   0.004122   0.00%
-ClusterList::chop()                                     165   0.002508   0.002508   0.002508   0.00%
-FabArray::ParallelCopy_finish()                        3648   0.002407   0.002407   0.002407   0.00%
-AMRSimulation::fillBoundaryConditions()                1952   0.002294   0.002294   0.002294   0.00%
-FabArray::FillBoundary()                               1952    0.00201    0.00201    0.00201   0.00%
-AMRSimulation::FillPatchWithData()                     2028   0.001934   0.001934   0.001934   0.00%
-AMRSimulation::doRegridIfNeeded()                       325   0.001923   0.001923   0.001923   0.00%
-FabArrayBase::TheFPinfo()                              1377    0.00178    0.00178    0.00178   0.00%
-FillBoundary_finish()                                  1952   0.001537   0.001537   0.001537   0.00%
-DistributionMapping::SFCProcessorMapDoIt()               40   0.001519   0.001519   0.001519   0.00%
-ClusterList::intersect()                                165   0.001195   0.001195   0.001195   0.00%
-AMRSimulation::GetData()                               1453   0.001111   0.001111   0.001111   0.00%
-FabArrayBase::getFB()                                  1952  0.0008679  0.0008679  0.0008679   0.00%
-AMRSimulation::AverageDownTo()                          326   0.000408   0.000408   0.000408   0.00%
-amrex::average_down_w_geom                              326  0.0002711  0.0002711  0.0002711   0.00%
-BoxList::complementIn                                   330  0.0001775  0.0001775  0.0001775   0.00%
-DistributionMapping::LeastUsedCPUs()                    117  0.0001293  0.0001293  0.0001293   0.00%
-AMRSimulation::FillPatch()                               76  0.0001253  0.0001253  0.0001253   0.00%
-DistributionMapping::Distribute()                        40  0.0001165  0.0001165  0.0001165   0.00%
-BoxList::parallelComplementIn()                         330  0.0001091  0.0001091  0.0001091   0.00%
-AMRSimulation::setInitialConditions()                     1  4.349e-05  4.349e-05  4.349e-05   0.00%
-AMRSimulation::WritePlotFile()                            2  2.968e-05  2.968e-05  2.968e-05   0.00%
-AMRSimulation::initialize()                               1  8.088e-06  8.088e-06  8.088e-06   0.00%
-AMRSimulation::readParameters()                           1   2.05e-06   2.05e-06   2.05e-06   0.00%
-AMRSimulation::AverageDown()                              1   8.61e-07   8.61e-07   8.61e-07   0.00%
-----------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------
+Name                                                NCalls  Excl. Min  Excl. Avg  Excl. Max   Max %
+---------------------------------------------------------------------------------------------------
+RadhydroSimulation::computeHydroFluxes()            218752      42.12      42.12      42.12  33.33%
+RadhydroSimulation::expandFluxArrays()              218752      21.77      21.77      21.77  17.22%
+RadhydroSimulation::advanceHydroAtLevel()              150      16.47      16.47      16.47  13.03%
+AmrMesh::MakeNewGrids()                                 27      14.57      14.57      14.57  11.53%
+FabArrayBase::CPC::define()                            436      5.745      5.745      5.745   4.55%
+Fuser::Launch()                                       2098      4.417      4.417      4.417   3.50%
+PhysBCFunct::()                                        515      3.991      3.991      3.991   3.16%
+FillPatchSingleLevel                                   515      3.602      3.602      3.602   2.85%
+FillBoundary_nowait()                                  302      3.085      3.085      3.085   2.44%
+VisMF::AsyncWrite()                                      4      2.303      2.303      2.303   1.82%
+FillPatchTwoLevels                                     207       1.53       1.53       1.53   1.21%
+HyperbolicSystem::AddFluxesRK2()                    109376      1.331      1.331      1.331   1.05%
+HyperbolicSystem::PredictStep()                     109376      1.283      1.283      1.283   1.02%
+RadhydroSimulation::computeMaxSignalLocal()            100     0.7476     0.7476     0.7476   0.59%
+FabArray::ParallelCopy_nowait()                        550     0.6106     0.6106     0.6106   0.48%
+AMRSimulation::incrementFluxRegisters()             218752     0.5889     0.5889     0.5889   0.47%
+AMRSimulation::computeTimestep()                        50     0.5651     0.5651     0.5651   0.45%
+FabArrayBase::FB::FB()                                   5     0.2986     0.2986     0.2986   0.24%
+CellConservativeLinear::interp()                     11234       0.29       0.29       0.29   0.23%
+TagBoxArray::mapPRD                                     27     0.2618     0.2618     0.2618   0.21%
+OwnerMask()                                             27     0.2472     0.2472     0.2472   0.20%
+AMRSimulation::MakeNewLevelFromScratch()                 2     0.1657     0.1657     0.1657   0.13%
+AMRSimulation::evolve()                                  1     0.1623     0.1623     0.1623   0.13%
+TagBoxArray::collate()                                  27     0.1073     0.1073     0.1073   0.08%
+AMRSimulation::RemakeLevel()                             3    0.05365    0.05365    0.05365   0.04%
+FabArray::setVal()                                     158    0.01928    0.01928    0.01928   0.02%
+WriteMultiLevelPlotfile()                                2    0.01007    0.01007    0.01007   0.01%
+AMRSimulation::timeStepWithSubcycling()                150   0.009276   0.009276   0.009276   0.01%
+amrex::average_down                                     51   0.009144   0.009144   0.009144   0.01%
+FabArrayBase::getCPC()                                 558  0.0008688  0.0008688  0.0008688   0.00%
+RadhydroSimulation::advanceSingleTimestepAtLevel()     150  0.0006297  0.0006297  0.0006297   0.00%
+FabArray::ParallelCopy()                               550  0.0005139  0.0005139  0.0005139   0.00%
+FPinfo::FPinfo()                                         7  0.0004618  0.0004618  0.0004618   0.00%
+AMRSimulation::fillBoundaryConditions()                302  0.0003752  0.0003752  0.0003752   0.00%
+FabArray::ParallelCopy_finish()                        550  0.0003399  0.0003399  0.0003399   0.00%
+AMRSimulation::FillPatchWithData()                     308   0.000287   0.000287   0.000287   0.00%
+FabArray::FillBoundary()                               302  0.0002856  0.0002856  0.0002856   0.00%
+FabArrayBase::TheFPinfo()                              207  0.0002453  0.0002453  0.0002453   0.00%
+FillBoundary_finish()                                  302  0.0001939  0.0001939  0.0001939   0.00%
+AMRSimulation::GetData()                               213  0.0001926  0.0001926  0.0001926   0.00%
+DistributionMapping::SFCProcessorMapDoIt()               5  0.0001923  0.0001923  0.0001923   0.00%
+ClusterList::intersect()                                27  0.0001744  0.0001744  0.0001744   0.00%
+AmrMesh-cluster                                         27  0.0001513  0.0001513  0.0001513   0.00%
+FabArrayBase::getFB()                                  302  0.0001417  0.0001417  0.0001417   0.00%
+ClusterList::chop()                                     27  0.0001314  0.0001314  0.0001314   0.00%
+AMRSimulation::doRegridIfNeeded()                       50  0.0001201  0.0001201  0.0001201   0.00%
+AMRSimulation::AverageDownTo()                          51  6.209e-05  6.209e-05  6.209e-05   0.00%
+AMRSimulation::setInitialConditions()                    1  4.216e-05  4.216e-05  4.216e-05   0.00%
+amrex::average_down_w_geom                              51  4.024e-05  4.024e-05  4.024e-05   0.00%
+AMRSimulation::WritePlotFile()                           2  2.794e-05  2.794e-05  2.794e-05   0.00%
+BoxList::complementIn                                   54  2.415e-05  2.415e-05  2.415e-05   0.00%
+BoxList::parallelComplementIn()                         54  1.928e-05  1.928e-05  1.928e-05   0.00%
+DistributionMapping::Distribute()                        5  1.556e-05  1.556e-05  1.556e-05   0.00%
+DistributionMapping::LeastUsedCPUs()                    12  1.479e-05  1.479e-05  1.479e-05   0.00%
+AMRSimulation::FillPatch()                               6  7.038e-06  7.038e-06  7.038e-06   0.00%
+AMRSimulation::initialize()                              1  6.804e-06  6.804e-06  6.804e-06   0.00%
+AMRSimulation::readParameters()                          1  2.009e-06  2.009e-06  2.009e-06   0.00%
+AMRSimulation::AverageDown()                             1   7.83e-07   7.83e-07   7.83e-07   0.00%
+---------------------------------------------------------------------------------------------------
 
-----------------------------------------------------------------------------------------------------
-Name                                                 NCalls  Incl. Min  Incl. Avg  Incl. Max   Max %
-----------------------------------------------------------------------------------------------------
-AMRSimulation::evolve()                                   1       1283       1283       1283  99.74%
-AMRSimulation::timeStepWithSubcycling()                 975       1115       1115       1115  86.69%
-RadhydroSimulation::advanceSingleTimestepAtLevel()      975       1027       1027       1027  79.86%
-RadhydroSimulation::advanceHydroAtLevel()               975       1001       1001       1001  77.83%
-AMRSimulation::FillPatchWithData()                     2028      399.6      399.6      399.6  31.06%
-AMRSimulation::fillBoundaryConditions()                1952        365        365        365  28.37%
-RadhydroSimulation::computeHydroFluxes()            1847760      340.3      340.3      340.3  26.45%
-FillPatchTwoLevels                                     1377      323.6      323.6      323.6  25.15%
-FillPatchSingleLevel                                   3405      290.9      290.9      290.9  22.61%
-RadhydroSimulation::expandFluxArrays()              1847760      170.6      170.6      170.6  13.26%
-AMRSimulation::doRegridIfNeeded()                       325      124.7      124.7      124.7   9.69%
-HyperbolicSystem::ReconstructStatesPPM()            5543280      124.4      124.4      124.4   9.67%
-FabArray::ParallelCopy()                               3648      116.5      116.5      116.5   9.05%
-FabArray::ParallelCopy_nowait()                        3648      116.5      116.5      116.5   9.05%
-FabArray::FillBoundary()                               1952      108.9      108.9      108.9   8.46%
-FillBoundary_nowait()                                  1952      108.9      108.9      108.9   8.46%
-Fuser::Launch()                                       13524      107.3      107.3      107.3   8.34%
-AmrMesh::MakeNewGrids()                                 165      80.85      80.85      80.85   6.28%
-FabArrayBase::getCPC()                                 3726      57.66      57.66      57.66   4.48%
-FabArrayBase::CPC::define()                            2951      57.65      57.65      57.65   4.48%
-AMRSimulation::RemakeLevel()                             38      44.51      44.51      44.51   3.46%
-AMRSimulation::computeTimestep()                        325      41.62      41.62      41.62   3.24%
-RadhydroSimulation::computeMaxSignalLocal()             650      37.07      37.07      37.07   2.88%
-AMRSimulation::FillPatch()                               76      34.61      34.61      34.61   2.69%
-FabArray::setVal()                                     1019      29.05      29.05      29.05   2.26%
-PhysBCFunct::()                                        3405      15.46      15.46      15.46   1.20%
-HyperbolicSystem::PredictStep()                      923880      11.58      11.58      11.58   0.90%
-HyperbolicSystem::AddFluxesRK2()                     923880      10.52      10.52      10.52   0.82%
-AMRSimulation::incrementFluxRegisters()             1847760      9.934      9.934      9.934   0.77%
-AMRSimulation::AverageDownTo()                          326      7.593      7.593      7.593   0.59%
-amrex::average_down_w_geom                              326      7.593      7.593      7.593   0.59%
-amrex::average_down                                     326      7.593      7.593      7.593   0.59%
-CellConservativeLinear::interp()                     191884      4.916      4.916      4.916   0.38%
-TagBoxArray::mapPRD                                     165      3.889      3.889      3.889   0.30%
-AMRSimulation::setInitialConditions()                     1       3.34       3.34       3.34   0.26%
-AMRSimulation::WritePlotFile()                            2      3.045      3.045      3.045   0.24%
-WriteMultiLevelPlotfile()                                 2      3.045      3.045      3.045   0.24%
-VisMF::AsyncWrite()                                       4      3.034      3.034      3.034   0.24%
-FabArrayBase::getFB()                                  1952      2.425      2.425      2.425   0.19%
-FabArrayBase::FB::FB()                                   40      2.424      2.424      2.424   0.19%
-OwnerMask()                                             165       1.47       1.47       1.47   0.11%
-AMRSimulation::MakeNewLevelFromScratch()                  2     0.9681     0.9681     0.9681   0.08%
-TagBoxArray::collate()                                  165     0.5893     0.5893     0.5893   0.05%
-AMRSimulation::AverageDown()                              1    0.07823    0.07823    0.07823   0.01%
-FabArrayBase::TheFPinfo()                              1377   0.008463   0.008463   0.008463   0.00%
-AmrMesh-cluster                                         165   0.007981   0.007981   0.007981   0.00%
-FPinfo::FPinfo()                                         77   0.006682   0.006682   0.006682   0.00%
-ClusterList::chop()                                     165   0.002508   0.002508   0.002508   0.00%
-FabArray::ParallelCopy_finish()                        3648   0.002407   0.002407   0.002407   0.00%
-DistributionMapping::SFCProcessorMapDoIt()               40   0.001682   0.001682   0.001682   0.00%
-FillBoundary_finish()                                  1952   0.001537   0.001537   0.001537   0.00%
-ClusterList::intersect()                                165   0.001195   0.001195   0.001195   0.00%
-AMRSimulation::GetData()                               1453   0.001111   0.001111   0.001111   0.00%
-BoxList::parallelComplementIn()                         330  0.0002866  0.0002866  0.0002866   0.00%
-BoxList::complementIn                                   330  0.0001775  0.0001775  0.0001775   0.00%
-DistributionMapping::LeastUsedCPUs()                    117  0.0001293  0.0001293  0.0001293   0.00%
-DistributionMapping::Distribute()                        40  0.0001165  0.0001165  0.0001165   0.00%
-AMRSimulation::initialize()                               1  1.014e-05  1.014e-05  1.014e-05   0.00%
-AMRSimulation::readParameters()                           1   2.05e-06   2.05e-06   2.05e-06   0.00%
-----------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------
+Name                                                NCalls  Incl. Min  Incl. Avg  Incl. Max   Max %
+---------------------------------------------------------------------------------------------------
+AMRSimulation::evolve()                                  1      121.5      121.5      121.5  96.18%
+AMRSimulation::timeStepWithSubcycling()                150      104.7      104.7      104.7  82.83%
+RadhydroSimulation::advanceSingleTimestepAtLevel()     150      101.3      101.3      101.3  80.17%
+RadhydroSimulation::advanceHydroAtLevel()              150      100.4      100.4      100.4  79.46%
+RadhydroSimulation::computeHydroFluxes()            218752      42.12      42.12      42.12  33.33%
+RadhydroSimulation::expandFluxArrays()              218752      21.77      21.77      21.77  17.22%
+AMRSimulation::FillPatchWithData()                     308      17.43      17.43      17.43  13.79%
+AMRSimulation::fillBoundaryConditions()                302      17.14      17.14      17.14  13.56%
+AmrMesh::MakeNewGrids()                                 27       15.8       15.8       15.8  12.50%
+AMRSimulation::doRegridIfNeeded()                       50      14.76      14.76      14.76  11.68%
+FillPatchSingleLevel                                   515      11.33      11.33      11.33   8.96%
+FillPatchTwoLevels                                     207      10.74      10.74      10.74   8.50%
+FabArrayBase::getCPC()                                 558      5.746      5.746      5.746   4.55%
+FabArrayBase::CPC::define()                            436      5.745      5.745      5.745   4.55%
+FabArray::ParallelCopy()                               550      5.515      5.515      5.515   4.36%
+FabArray::ParallelCopy_nowait()                        550      5.514      5.514      5.514   4.36%
+AMRSimulation::setInitialConditions()                    1      4.827      4.827      4.827   3.82%
+Fuser::Launch()                                       2098      4.417      4.417      4.417   3.50%
+PhysBCFunct::()                                        515      3.992      3.992      3.992   3.16%
+FabArray::FillBoundary()                               302      3.384      3.384      3.384   2.68%
+FillBoundary_nowait()                                  302      3.384      3.384      3.384   2.68%
+AMRSimulation::WritePlotFile()                           2      2.313      2.313      2.313   1.83%
+WriteMultiLevelPlotfile()                                2      2.313      2.313      2.313   1.83%
+VisMF::AsyncWrite()                                      4      2.303      2.303      2.303   1.82%
+FabArray::setVal()                                     158      1.438      1.438      1.438   1.14%
+HyperbolicSystem::AddFluxesRK2()                    109376      1.331      1.331      1.331   1.05%
+AMRSimulation::computeTimestep()                        50      1.313      1.313      1.313   1.04%
+HyperbolicSystem::PredictStep()                     109376      1.283      1.283      1.283   1.02%
+AMRSimulation::MakeNewLevelFromScratch()                 2      1.026      1.026      1.026   0.81%
+AMRSimulation::RemakeLevel()                             3      1.017      1.017      1.017   0.80%
+RadhydroSimulation::computeMaxSignalLocal()            100     0.7477     0.7477     0.7477   0.59%
+TagBoxArray::mapPRD                                     27     0.6624     0.6624     0.6624   0.52%
+AMRSimulation::incrementFluxRegisters()             218752     0.5889     0.5889     0.5889   0.47%
+AMRSimulation::AverageDownTo()                          51     0.3718     0.3718     0.3718   0.29%
+amrex::average_down_w_geom                              51     0.3718     0.3718     0.3718   0.29%
+amrex::average_down                                     51     0.3717     0.3717     0.3717   0.29%
+FabArrayBase::getFB()                                  302     0.2987     0.2987     0.2987   0.24%
+FabArrayBase::FB::FB()                                   5     0.2986     0.2986     0.2986   0.24%
+CellConservativeLinear::interp()                     11234       0.29       0.29       0.29   0.23%
+AMRSimulation::FillPatch()                               6     0.2837     0.2837     0.2837   0.22%
+OwnerMask()                                             27     0.2472     0.2472     0.2472   0.20%
+TagBoxArray::collate()                                  27     0.1073     0.1073     0.1073   0.08%
+AMRSimulation::AverageDown()                             1    0.05746    0.05746    0.05746   0.05%
+FabArrayBase::TheFPinfo()                              207  0.0007155  0.0007155  0.0007155   0.00%
+FPinfo::FPinfo()                                         7  0.0004702  0.0004702  0.0004702   0.00%
+AmrMesh-cluster                                         27  0.0004572  0.0004572  0.0004572   0.00%
+FabArray::ParallelCopy_finish()                        550  0.0003399  0.0003399  0.0003399   0.00%
+DistributionMapping::SFCProcessorMapDoIt()               5  0.0002143  0.0002143  0.0002143   0.00%
+FillBoundary_finish()                                  302  0.0001939  0.0001939  0.0001939   0.00%
+AMRSimulation::GetData()                               213  0.0001926  0.0001926  0.0001926   0.00%
+ClusterList::intersect()                                27  0.0001744  0.0001744  0.0001744   0.00%
+ClusterList::chop()                                     27  0.0001314  0.0001314  0.0001314   0.00%
+BoxList::parallelComplementIn()                         54  4.343e-05  4.343e-05  4.343e-05   0.00%
+BoxList::complementIn                                   54  2.415e-05  2.415e-05  2.415e-05   0.00%
+DistributionMapping::Distribute()                        5  1.556e-05  1.556e-05  1.556e-05   0.00%
+DistributionMapping::LeastUsedCPUs()                    12  1.479e-05  1.479e-05  1.479e-05   0.00%
+AMRSimulation::initialize()                              1  8.813e-06  8.813e-06  8.813e-06   0.00%
+AMRSimulation::readParameters()                          1  2.009e-06  2.009e-06  2.009e-06   0.00%
+---------------------------------------------------------------------------------------------------
 
 Total GPU global memory (MB) spread across MPI: [32510 ... 32510]
-Free  GPU global memory (MB) spread across MPI: [1 ... 1]
-[The         Arena] space (MB) allocated spread across MPI: [44770 ... 44770]
+Free  GPU global memory (MB) spread across MPI: [2427 ... 2427]
+[The         Arena] space (MB) allocated spread across MPI: [29606 ... 29606]
 [The         Arena] space (MB) used      spread across MPI: [0 ... 0]
-[The  Pinned Arena] space (MB) allocated spread across MPI: [7136 ... 7136]
+[The  Pinned Arena] space (MB) allocated spread across MPI: [5344 ... 5344]
 [The  Pinned Arena] space (MB) used      spread across MPI: [0 ... 0]
 AMReX (21.06-46-g8575439bdbc5) finalized

@@ -257,10 +257,12 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 				  fluxArrays[2].const_array())},
 		    dt_lev, geom[lev].CellSizeArray(), indexRange, ncompHydro_);
 
-		// increment flux registers
-		auto expandedFluxes = expandFluxArrays(fluxArrays, 0, state_new_[lev].nComp());
-		incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, expandedFluxes, lev,
-				       0.5 * dt_lev);
+		if (do_reflux) {
+			// increment flux registers
+			auto expandedFluxes = expandFluxArrays(fluxArrays, 0, state_new_[lev].nComp());
+			incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, expandedFluxes, lev,
+					       0.5 * dt_lev);
+		}
 	}
 
 	// check intermediate state validity
@@ -285,10 +287,12 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 				  fluxArrays[2].const_array())},
 		    dt_lev, geom[lev].CellSizeArray(), indexRange, ncompHydro_);
 
-		// increment flux registers
-		auto expandedFluxes = expandFluxArrays(fluxArrays, 0, state_new_[lev].nComp());
-		incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, expandedFluxes, lev,
-				       0.5 * dt_lev);
+		if (do_reflux) {
+			// increment flux registers
+			auto expandedFluxes = expandFluxArrays(fluxArrays, 0, state_new_[lev].nComp());
+			incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, expandedFluxes, lev,
+						0.5 * dt_lev);
+		}
 	}
 }
 
@@ -463,12 +467,14 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevelRadiation(
 				  fluxDiffusiveArrays[2].const_array())},
 		    dt_radiation, dx, indexRange, ncompHyperbolic_);
 
-		// increment flux registers
-		// WARNING: as written, diffusive flux correction is not compatible with reflux!!
-		auto expandedFluxes =
-		    expandFluxArrays(fluxArrays, nstartHyperbolic_, state_new_[lev].nComp());
-		incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, expandedFluxes, lev,
-				       0.5 * dt_radiation);
+		if (do_reflux) {
+			// increment flux registers
+			// WARNING: as written, diffusive flux correction is not compatible with reflux!!
+			auto expandedFluxes =
+				expandFluxArrays(fluxArrays, nstartHyperbolic_, state_new_[lev].nComp());
+			incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, expandedFluxes, lev,
+						0.5 * dt_radiation);
+		}
 	}
 
 	// update ghost zones [intermediate stage stored in state_new_]
@@ -493,12 +499,14 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevelRadiation(
 				  fluxDiffusiveArrays[2].const_array())},
 		    dt_radiation, dx, indexRange, ncompHyperbolic_);
 
-		// increment flux registers
-		// WARNING: as written, diffusive flux correction is not compatible with reflux!!
-		auto expandedFluxes =
-		    expandFluxArrays(fluxArrays, nstartHyperbolic_, state_new_[lev].nComp());
-		incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, expandedFluxes, lev,
-				       0.5 * dt_radiation);
+		if (do_reflux) {
+			// increment flux registers
+			// WARNING: as written, diffusive flux correction is not compatible with reflux!!
+			auto expandedFluxes =
+				expandFluxArrays(fluxArrays, nstartHyperbolic_, state_new_[lev].nComp());
+			incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, expandedFluxes, lev,
+						0.5 * dt_radiation);
+		}
 	}
 
 	// matter-radiation exchange source terms
