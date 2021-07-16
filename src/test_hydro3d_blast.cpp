@@ -31,9 +31,9 @@ template <> void RadhydroSimulation<SedovProblem>::setInitialConditionsAtLevel(i
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = geom[lev].ProbHiArray();
 
-	amrex::Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
-	amrex::Real const y0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
-	amrex::Real const z0 = prob_lo[2] + 0.5 * (prob_hi[2] - prob_lo[2]);
+	amrex::Real const x0 = 0.; //prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
+	amrex::Real const y0 = 0.; //prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
+	amrex::Real const z0 = 0.; //prob_lo[2] + 0.5 * (prob_hi[2] - prob_lo[2]);
 
 	for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
@@ -123,12 +123,6 @@ void RadhydroSimulation<SedovProblem>::ErrorEst(int lev, amrex::TagBoxArray &tag
 
 auto problem_main() -> int
 {
-	// Problem parameters
-	//amrex::IntVect gridDims{AMREX_D_DECL(384, 384, 384)};
-	//amrex::RealBox boxSize{
-	//    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.0), amrex::Real(0.0))},
-	//    {AMREX_D_DECL(amrex::Real(1.0), amrex::Real(1.0), amrex::Real(1.0))}};
-
 	auto isNormalComp = [=](int n, int dim) {
 		if ((n == HydroSystem<SedovProblem>::x1Momentum_index) && (dim == 0)) {
 			return true;
@@ -160,10 +154,10 @@ auto problem_main() -> int
 	RadhydroSimulation<SedovProblem> sim(boundaryConditions);
 	sim.is_hydro_enabled_ = true;
 	sim.is_radiation_enabled_ = false;
-	sim.stopTime_ = 0.05;
+	sim.stopTime_ = 0.5; //0.05;
 	sim.cflNumber_ = 0.3; // *must* be less than 1/3 in 3D!
-	sim.maxTimesteps_ = 50;
-	sim.plotfileInterval_ = 500;
+	sim.maxTimesteps_ = 500;
+	sim.plotfileInterval_ = 50;
 
 	// initialize
 	sim.setInitialConditions();
