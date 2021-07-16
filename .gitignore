@@ -1,6 +1,6 @@
 .vscode/
 build/
-tests/
+tests/plt*
 .clangd
 __pycache__
 *.code-workspace

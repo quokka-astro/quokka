@@ -233,7 +233,7 @@ auto problem_main() -> int
 	sim.radiationCflNumber_ = CFL_number;
 	sim.maxTimesteps_ = max_timesteps;
 	sim.stopTime_ = max_time;
-	sim.plotfileInterval_ = 100;
+	sim.plotfileInterval_ = -1;
 
 	// run
 	sim.setInitialConditions();
