@@ -306,7 +306,7 @@ auto problem_main() -> int
 	// Problem parameters
 	const int max_timesteps = 10000;
 	const double CFL_number = 0.2;
-	const int nx = 128;
+	//const int nx = 128;
 	const double Lx = 2.0;			// cm
 	const double max_time = 2.0 * (Lx / c); // s
 

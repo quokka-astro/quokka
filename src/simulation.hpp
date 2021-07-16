@@ -679,7 +679,7 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 				S_filled.nComp());
 	} else { // AMR is disabled, only level 0 exists
 		AMREX_ASSERT(lev == 0);
-		AMREX_ASSERT(S_filled == state);
+		//AMREX_ASSERT(S_filled == state);
 		// fill internal and periodic boundaries
 		state.FillBoundary(geom[lev].periodicity());
 
