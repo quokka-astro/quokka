@@ -176,8 +176,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	// Nghost = number of ghost cells for each array
 	int nghost_ = 4;	   // PPM needs nghost >= 3, PPM+flattening needs nghost >= 4
-	int ncomp_ = NAN;	   // = number of components (conserved variables) for each array
-	int ncompPrimitive_ = NAN; // number of primitive variables
+	int ncomp_ = 0;	   // = number of components (conserved variables) for each array
+	int ncompPrimitive_ = 0; // number of primitive variables
 	amrex::Vector<std::string> componentNames_;
 	bool areInitialConditionsDefined_ = false;
 
@@ -396,7 +396,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	amrex::Real elapsed_sec = amrex::ParallelDescriptor::second() - start_time;
 	const int IOProc = amrex::ParallelDescriptor::IOProcessorNumber();
 	amrex::ParallelDescriptor::ReduceRealMax(elapsed_sec, IOProc);
-	amrex::ParallelDescriptor::ReduceLongSum(cellUpdates_);
+
 	const double microseconds_per_update = 1.0e6 * elapsed_sec / cellUpdates_;
 	const double megaupdates_per_second = 1.0 / microseconds_per_update;
 	amrex::Print() << "Performance figure-of-merit: " << microseconds_per_update
