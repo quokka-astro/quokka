@@ -14,7 +14,7 @@ add_executable(test_radiation_matter_coupling main.cpp test_radiation_matter_cou
 #add_executable(test_radiation_box main.cpp test_radiation_box.cpp)
 add_executable(test_radiation_shadow main.cpp test_radiation_shadow.cpp)
 add_executable(test_radiation_beam main.cpp test_radiation_beam.cpp)
-add_executable(test_radiation_SuOlson main.cpp test_radiation_SuOlson.cpp fextract.cpp interpolate.c)
+#add_executable(test_radiation_SuOlson main.cpp test_radiation_SuOlson.cpp fextract.cpp interpolate.c)
 # add_executable(test_radiation_marshak main.cpp test_radiation_marshak.cpp interpolate.c)
 #add_executable(test_radiation_marshak_cgs main.cpp test_radiation_marshak_cgs.cpp interpolate.c)
 # add_executable(test_radiation_marshak_asymptotic main.cpp test_radiation_marshak_asymptotic.cpp interpolate.c)
