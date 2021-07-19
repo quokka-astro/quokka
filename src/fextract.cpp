@@ -78,15 +78,6 @@ auto fextract(MultiFab &mf, Geometry &geom, const int idir,
 
   if (idir < 0 || idir >= AMREX_SPACEDIM) {
     amrex::Abort("invalid direction!");
-  } else if (idir == 0) {
-    amrex::Print() << " slicing along x-direction at coarse grid (j,k)=("
-                   << jloc << "," << kloc << ")\n";
-  } else if (idir == 1) {
-    amrex::Print() << " slicing along y-direction at coarse grid (i,k)=("
-                   << iloc << "," << kloc << ")\n";
-  } else if (idir == 2) {
-    amrex::Print() << " slicing along z-direction at coarse grid (i,j)=("
-                   << iloc << "," << jloc << ")\n";
   }
 
   const IntVect ivloc{AMREX_D_DECL(iloc, jloc, kloc)};

@@ -62,6 +62,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 {
       public:
 	amrex::Real maxDt_ = std::numeric_limits<double>::max(); // no limit by default
+	amrex::Real initDt_ = std::numeric_limits<double>::max(); // no limit by default
+	amrex::Real constantDt_ = 0.0;
 	amrex::Vector<int> istep;				 // which step?
 	amrex::Vector<int> nsubsteps;				 // how many substeps on each level?
 	amrex::Vector<amrex::Real> tNew_;			 // for state_new_
@@ -99,6 +101,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	virtual void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev,
 						  int iteration, int ncycle) = 0;
 	virtual void computeAfterTimestep() = 0;
+	virtual void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) = 0;
 
 	// tag cells for refinement
 	void ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override = 0;
@@ -191,6 +194,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	int regrid_int = 2;  // regrid interval (number of coarse steps)
 	int do_reflux = 1;   // 1 == reflux, 0 == no reflux
 	int do_subcycle = 1; // 1 == subcycle, 0 == no subcyle
+	int suppress_output = 0; // 1 == show timestepping, 0 == do not output each timestep
+	int disable_radiation_transport_terms = 0; // 1 == disable hyperbolic radiation subsystem; 0 == default
 
 	// performance metrics
 	amrex::Long cellUpdates_ = 0;
@@ -262,6 +267,15 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Default do_subcycle = 1
 	pp.query("do_subcycle", do_subcycle);
 
+	// Default suppress_output = 0
+	pp.query("suppress_output", suppress_output);
+
+	// Default disable_radiation_transport_terms = 0
+	pp.query("disable_radiation_transport_terms", disable_radiation_transport_terms);
+	if (disable_radiation_transport_terms != 0) {
+		amrex::Print() << "Transport terms disabled!" << std::endl;
+	}
+
 	// specify this on the commmand-line in order to restart from a checkpoint
 	// file
 	pp.query("restartfile", restart_chkfile);
@@ -314,6 +328,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 		n_factor *= nsubsteps[level];
 		dt_0 = std::min(dt_0, n_factor * dt_tmp[level]);
 		dt_0 = std::min(dt_0, maxDt_); // limit to maxDt_
+		if (tNew_[level] == 0.0) { // first timestep
+			dt_0 = std::min(dt_0, initDt_);
+		}
+		if (constantDt_ > 0.0) { // use constant timestep if set
+			dt_0 = constantDt_;
+		}
 	}
 
 	// Limit dt to avoid overshooting stop_time
@@ -338,17 +358,23 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 	amrex::Real cur_time = tNew_[0];
 	int last_plot_file_step = 0;
+
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = geom[0].CellSizeArray();
+	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
 	amrex::Vector<amrex::Real> init_sum_cons(ncomp_);
 	for (int n = 0; n < ncomp_; ++n) {
 		const int lev = 0;
-		init_sum_cons[n] = state_new_[lev].sum(n);
+		init_sum_cons[n] = state_new_[lev].sum(n) * vol;
 	}
 
 	amrex::Real const start_time = amrex::ParallelDescriptor::second();
 
 	// Main time loop
 	for (int step = istep[0]; step < maxTimesteps_ && cur_time < stopTime_; ++step) {
-		amrex::Print() << "\nCoarse STEP " << step + 1 << " at t = " << cur_time << " starts ..." << std::endl;
+		if (suppress_output == 0) {
+			amrex::Print() << "\nCoarse STEP " << step + 1
+						   << " at t = " << cur_time << " starts ..." << std::endl;
+		}
 
 		doRegridIfNeeded(step, cur_time);
 		computeTimestep(); // very important to call this *after* regrid!
@@ -380,9 +406,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		}
 	}
 
+	computeAfterEvolve(init_sum_cons);
+
 	// compute conservation error
 	for (int n = 0; n < ncomp_; ++n) {
-		amrex::Real const final_sum = state_new_[0].sum(n);
+		amrex::Real const final_sum = state_new_[0].sum(n) * vol;
 		amrex::Real const abs_err = (final_sum - init_sum_cons[n]);
 		amrex::Real const rel_err = abs_err / init_sum_cons[n];
 		amrex::Print() << "Initial " << componentNames_[n] << " = " << init_sum_cons[n] << std::endl;
@@ -390,13 +418,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		if (init_sum_cons[n] != 0.0) {
 			amrex::Print() << "\trelative conservation error = " << rel_err << std::endl;
 		}
+		amrex::Print() << std::endl;
 	}
 
 	// compute zone-cycles/sec
 	amrex::Real elapsed_sec = amrex::ParallelDescriptor::second() - start_time;
 	const int IOProc = amrex::ParallelDescriptor::IOProcessorNumber();
 	amrex::ParallelDescriptor::ReduceRealMax(elapsed_sec, IOProc);
-
 	const double microseconds_per_update = 1.0e6 * elapsed_sec / cellUpdates_;
 	const double megaupdates_per_second = 1.0 / microseconds_per_update;
 	amrex::Print() << "Performance figure-of-merit: " << microseconds_per_update

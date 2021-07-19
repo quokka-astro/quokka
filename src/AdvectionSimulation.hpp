@@ -75,6 +75,8 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev,
 					  int /*iteration*/, int /*ncycle*/) override;
 	void computeAfterTimestep() override;
+	void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) override;
+
 	// tag cells for refinement
 	void ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override;
 
@@ -125,6 +127,12 @@ void AdvectionSimulation<problem_t>::ErrorEst(int lev, amrex::TagBoxArray &tags,
 					      amrex::Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for refinement -- implement in problem generator
+}
+
+template <typename problem_t>
+void AdvectionSimulation<problem_t>::computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons)
+{
+	// check conservation if desired, etc.
 }
 
 template <typename problem_t>

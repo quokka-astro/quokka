@@ -836,8 +836,8 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
     // load radiation energy
     const double Erad0 = consPrev(i, j, k, radEnergy_index);
 
-    AMREX_ASSERT(Egas0 > 0.0); // NOLINT
-    AMREX_ASSERT(Erad0 > 0.0); // NOLINT
+    AMREX_ASSERT(Egas0 > 0.0);
+    AMREX_ASSERT(Erad0 > 0.0);
 
     const double Etot0 = Egas0 + (c / chat) * Erad0;
 
@@ -928,6 +928,9 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
     AMREX_ALWAYS_ASSERT(Erad_guess > 0.0);
     AMREX_ALWAYS_ASSERT(Egas_guess > 0.0);
 
+    const double Etot1 = Egas_guess + (c / chat) * Erad_guess;
+    AMREX_ALWAYS_ASSERT(std::abs((Etot1 - Src) - Etot0) < resid_tol*Etot0);
+
     // store new radiation energy, gas energy
     consNew(i, j, k, radEnergy_index) = Erad_guess;
     consNew(i, j, k, gasEnergy_index) =
@@ -941,13 +944,13 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
     Frad_t0[1] = consPrev(i, j, k, x2RadFlux_index);
     Frad_t0[2] = consPrev(i, j, k, x3RadFlux_index);
 
-    amrex::Real const kappaRosseland = ComputeRosselandOpacity(rho, T_gas);
+    //amrex::Real const kappaRosseland = ComputeRosselandOpacity(rho, T_gas);
 
     for (int n = 0; n < 3; ++n) {
-      // this should use the flux mean; in the gray appoximation, we follow
+      // this should use the flux mean; in the gray approximation, we follow
       // Mihalas & Mihalas (1984) and use the Rosseland mean
       Frad_t1[n] = (Frad_t0[n] + (dt * advectionFluxes(i, j, k, n))) /
-                   (1.0 + (rho * kappaRosseland) * chat * dt);
+                   (1.0 + (rho * kappa) * chat * dt);
     }
     consNew(i, j, k, x1RadFlux_index) = Frad_t1[0];
     consNew(i, j, k, x2RadFlux_index) = Frad_t1[1];
