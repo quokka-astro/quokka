@@ -27,6 +27,7 @@
 #include "AMReX_Config.H"
 #include "AMReX_FArrayBox.H"
 #include "AMReX_FabFactory.H"
+#include "AMReX_Geometry.H"
 #include "AMReX_GpuControl.H"
 #include "AMReX_IntVect.H"
 #include "AMReX_MultiFab.H"
@@ -54,7 +55,6 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	using AMRSimulation<problem_t>::areInitialConditionsDefined_;
 	using AMRSimulation<problem_t>::boundaryConditions_;
 	using AMRSimulation<problem_t>::componentNames_;
-
 	using AMRSimulation<problem_t>::fillBoundaryConditions;
 	using AMRSimulation<problem_t>::geom;
 	using AMRSimulation<problem_t>::flux_reg_;
@@ -65,6 +65,8 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	using AMRSimulation<problem_t>::Verbose;
 	using AMRSimulation<problem_t>::disable_radiation_transport_terms;
 	using AMRSimulation<problem_t>::constantDt_;
+	using AMRSimulation<problem_t>::boxArray;
+	using AMRSimulation<problem_t>::DistributionMap;
 
 	std::vector<double> t_vec_;
 	std::vector<double> Trad_vec_;
@@ -75,10 +77,11 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	static constexpr int ncompHyperbolic_ = RadSystem<problem_t>::nvarHyperbolic_;
 	static constexpr int nstartHyperbolic_ = RadSystem<problem_t>::nstartHyperbolic_;
 
-	// amrex::Real dtRadiation_ = NAN; // this is radiation subcycle timestep
 	amrex::Real radiationCflNumber_ = 0.3;
 	bool is_hydro_enabled_ = false;
 	bool is_radiation_enabled_ = true;
+	bool computeReferenceSolution_ = false;
+	amrex::Real errorNorm_ = NAN;
 
 	// member functions
 
@@ -107,6 +110,9 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 					  int iteration, int ncycle) override;
 	void computeAfterTimestep() override;
 	void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) override;
+	void computeReferenceSolution(amrex::MultiFab &ref,
+		amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+    	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo);
 
 	// tag cells for refinement
 	void ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override;
@@ -197,10 +203,17 @@ void RadhydroSimulation<problem_t>::ErrorEst(int lev, amrex::TagBoxArray &tags,
 }
 
 template <typename problem_t>
+void RadhydroSimulation<problem_t>::computeReferenceSolution(amrex::MultiFab &ref,
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
+{
+	// user should implement
+}
+
+template <typename problem_t>
 void RadhydroSimulation<problem_t>::computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons)
 {
 	// check conservation of total energy
-
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = geom[0].CellSizeArray();
 	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
 
@@ -220,6 +233,29 @@ void RadhydroSimulation<problem_t>::computeAfterEvolve(amrex::Vector<amrex::Real
 	amrex::Print() << "\tabsolute conservation error = " << abs_err << std::endl;
 	amrex::Print() << "\trelative conservation error = " << rel_err << std::endl;
 	amrex::Print() << std::endl;
+
+	if (computeReferenceSolution_) {
+		// compute reference solution
+		const int ncomp = state_new_[0].nComp();
+		const int nghost = state_new_[0].nGrow();
+		amrex::MultiFab state_ref_level0(boxArray(0), DistributionMap(0), ncomp, nghost);
+		computeReferenceSolution(state_ref_level0, geom[0].CellSizeArray(), geom[0].ProbLoArray());
+
+		// compute error norm
+		amrex::MultiFab residual(boxArray(0), DistributionMap(0), ncomp, nghost);
+		amrex::MultiFab::Copy(residual, state_ref_level0, 0, 0, ncomp, nghost);
+		amrex::MultiFab::Saxpy(residual, -1., state_new_[0], 0, 0, ncomp, nghost);
+
+		amrex::Real sol_norm = 0.;
+		amrex::Real err_norm = 0.;
+		for (int n = 0; n < ncomp; ++n) {
+			sol_norm += state_ref_level0.norm1(n);
+			err_norm += residual.norm1(n);
+		}
+		const double rel_error = err_norm / sol_norm;
+		errorNorm_ = rel_error;
+		amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
+	}
 }
 
 template <typename problem_t>
