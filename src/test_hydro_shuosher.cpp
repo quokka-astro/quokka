@@ -7,198 +7,286 @@
 /// \brief Defines a test problem for a shock tube.
 ///
 
+#include <cmath>
+#include <vector>
+
+#include "AMReX_BC_TYPES.H"
+#include "RadhydroSimulation.hpp"
+#include "fextract.hpp"
 #include "test_hydro_shuosher.hpp"
 
 struct ShocktubeProblem {};
 
-auto main(int argc, char** argv) -> int
-{
-	// Initialization
+template <> struct EOS_Traits<ShocktubeProblem> {
+  static constexpr double gamma = 1.4;
+};
 
-	amrex::Initialize(argc, argv);
+template <>
+void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsAtLevel(
+    int lev) {
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo =
+      geom[lev].ProbLoArray();
 
-	int result = 0;
+  for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
+    const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
+    auto const &state = state_new_[lev].array(iter);
 
-	{ // objects must be destroyed before Kokkos::finalize, so enter new
-	  // scope here to do that automatically
+    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+      amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+      double vx = NAN;
+      double rho = NAN;
+      double P = NAN;
 
-		result = testproblem_hydro_shocktube();
+      if (x < 1.0) {
+        rho = 3.857143;
+        vx = 2.629369;
+        P = 10.33333;
+      } else {
+        rho = 1.0 + 0.2 * std::sin(5.0 * x);
+        vx = 0.0;
+        P = 1.0;
+      }
 
-	} // destructors must be called before amrex::Finalize()
-	amrex::Finalize();
+      AMREX_ASSERT(!std::isnan(vx));
+      AMREX_ASSERT(!std::isnan(rho));
+      AMREX_ASSERT(!std::isnan(P));
 
-	return result;
+      for (int n = 0; n < ncomp_; ++n) {
+        state(i, j, k, n) = 0.;
+      }
+
+      const auto gamma = HydroSystem<ShocktubeProblem>::gamma_;
+      state(i, j, k, HydroSystem<ShocktubeProblem>::density_index) = rho;
+      state(i, j, k, HydroSystem<ShocktubeProblem>::x1Momentum_index) =
+          rho * vx;
+      state(i, j, k, HydroSystem<ShocktubeProblem>::x2Momentum_index) = 0.;
+      state(i, j, k, HydroSystem<ShocktubeProblem>::x3Momentum_index) = 0.;
+      state(i, j, k, HydroSystem<ShocktubeProblem>::energy_index) =
+          P / (gamma - 1.) + 0.5 * rho * (vx * vx);
+    });
+  }
+
+  // set flag
+  areInitialConditionsDefined_ = true;
 }
 
-auto testproblem_hydro_shocktube() -> int
-{
-	// Problem parameters
+template <>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(
+    const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar,
+    int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
+    const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
+    int /*orig_comp*/) {
+#if (AMREX_SPACEDIM == 1)
+  auto i = iv.toArray()[0];
+  int j = 0;
+  int k = 0;
+#endif
+#if (AMREX_SPACEDIM == 2)
+  auto [i, j] = iv.toArray();
+  int k = 0;
+#endif
+#if (AMREX_SPACEDIM == 3)
+  auto [i, j, k] = iv.toArray();
+#endif
 
-	const int nx = 400;
-	const double Lx = 10.0;
-	const double CFL_number = 0.2;
-	const double max_time = 1.8;
-	const double fixed_dt = 1e-4;
-	const int max_timesteps = 20000;
-	const double gamma = 1.4; // ratio of specific heats
+  amrex::Box const &box = geom.Domain();
+  amrex::GpuArray<int, 3> lo = box.loVect3d();
+  amrex::GpuArray<int, 3> hi = box.hiVect3d();
+  const auto gamma = HydroSystem<ShocktubeProblem>::gamma_;
+  double rho = NAN;
+  double vx = NAN;
+  double P = NAN;
 
-	const double rtol = 1e-6; //< absolute tolerance for conserved vars
+if (i >= hi[0]) {
+    // x1 right-side boundary -- constant
+    rho = 1.0;
+    vx = 0.0;
+    P = 1.0;
+    consVar(i, j, k, RadSystem<ShocktubeProblem>::gasDensity_index) = rho;
+    consVar(i, j, k, RadSystem<ShocktubeProblem>::x1GasMomentum_index) = rho*vx;
+    consVar(i, j, k, RadSystem<ShocktubeProblem>::x2GasMomentum_index) = 0.;
+    consVar(i, j, k, RadSystem<ShocktubeProblem>::x3GasMomentum_index) = 0.;
+    consVar(i, j, k, RadSystem<ShocktubeProblem>::gasEnergy_index) =
+        P / (gamma - 1.);
+  }
+}
 
-	// Problem initialization
+template <>
+void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
+    amrex::MultiFab &ref,
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo) {
 
-	HydroSystem<ShocktubeProblem> hydro_system(
-	    {.nx = nx, .lx = Lx, .cflNumber = CFL_number, .gamma = gamma});
+  // read in exact solution
+  std::vector<double> xs_exact;
+  std::vector<double> density_exact;
+  std::vector<double> pressure_exact;
+  std::vector<double> velocity_exact;
 
-	auto nghost = hydro_system.nghost();
+  std::string filename = "../extern/ShuOsher_athena_3c_hllc_vl.txt";
+  std::ifstream fstream(filename, std::ios::in);
+  assert(fstream.is_open());
 
-	for (int i = nghost; i < nx + nghost; ++i) {
-		const auto idx_value = static_cast<double>(i - nghost);
-		const double x = Lx * ((idx_value + 0.5) / static_cast<double>(nx));
+  std::string header;
+  std::string blank_line;
+  std::getline(fstream, header);
+  std::getline(fstream, blank_line);
 
-		double vx = NAN;
-		double rho = NAN;
-		double P = NAN;
+  for (std::string line; std::getline(fstream, line);) {
+    std::istringstream iss(line);
+    std::vector<double> values;
 
-		if (x < 1.0) {
-			rho = 3.857143;
-			vx = 2.629369;
-			P = 10.33333;
-		} else {
-			rho = 1.0 + 0.2*std::sin(5.0*x);
-			vx = 0.0;
-			P = 1.0;
-		}
+    for (double value = NAN; iss >> value;) {
+      values.push_back(value);
+    }
+    auto x = values.at(1);
+    auto density = values.at(2);
+    auto pressure = values.at(3);
+    auto velocity = values.at(4);
 
-		hydro_system.set_density(i) = rho;
-		hydro_system.set_x1Momentum(i) = rho * vx;
-		hydro_system.set_energy(i) =
-		    P / (gamma - 1.0) + 0.5 * rho * std::pow(vx, 2);
-	}
+    xs_exact.push_back(x);
+    density_exact.push_back(density);
+    pressure_exact.push_back(pressure);
+    velocity_exact.push_back(velocity);
+  }
 
-	std::vector<double> xs(nx);
-	std::vector<double> d_initial(nx + 2 * nghost);
-	std::vector<double> v_initial(nx + 2 * nghost);
-	std::vector<double> P_initial(nx + 2 * nghost);
+  // interpolate exact solution onto coarse grid
+  auto const box = geom[0].Domain();
+  int nx = (box.hiVect3d()[0] - box.loVect3d()[0]) + 1;
+  std::vector<double> xs(nx);
+  for (int i = 0; i < nx; ++i) {
+    xs.at(i) = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+  }
 
-	hydro_system.ConservedToPrimitive(hydro_system.consVar_,
-					  std::make_pair(nghost, nx + nghost));
+  std::vector<double> density_exact_interp(xs.size());
+  std::vector<double> velocity_exact_interp(xs.size());
+  std::vector<double> pressure_exact_interp(xs.size());
 
-	for (int i = 0; i < nx; ++i) {
-		const double x = Lx * ((i + 0.5) / static_cast<double>(nx));
-		xs.at(i) = x;
-	}
+  interpolate_arrays(xs.data(), density_exact_interp.data(),
+                     static_cast<int>(xs.size()), xs_exact.data(),
+                     density_exact.data(), static_cast<int>(xs_exact.size()));
+  interpolate_arrays(xs.data(), velocity_exact_interp.data(),
+                     static_cast<int>(xs.size()), xs_exact.data(),
+                     velocity_exact.data(), static_cast<int>(xs_exact.size()));
+  interpolate_arrays(xs.data(), pressure_exact_interp.data(),
+                     static_cast<int>(xs.size()), xs_exact.data(),
+                     pressure_exact.data(), static_cast<int>(xs_exact.size()));
 
-	for (int i = 0; i < nx + 2 * nghost; ++i) {
-		d_initial.at(i) = hydro_system.density(i);
-		v_initial.at(i) = hydro_system.x1Velocity(i);
-		P_initial.at(i) = hydro_system.pressure(i);
-	}
+  // fill reference solution multifab
+  for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
+    const amrex::Box &indexRange = iter.validbox();
+    auto const &stateExact = ref.array(iter);
+    auto const ncomp = ref.nComp();
 
-	// Main time loop
+    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j,
+                                                        int k) noexcept {
+      for (int n = 0; n < ncomp; ++n) {
+        stateExact(i, j, k, n) = 0.;
+      }
+      amrex::Real rho = density_exact_interp.at(i);
+      amrex::Real vx = velocity_exact_interp.at(i);
+      amrex::Real P = pressure_exact_interp.at(i);
 
-	for (int j = 0; j < max_timesteps; ++j) {
-		if (hydro_system.time() >= max_time) {
-			amrex::Print() << "Stopping at t=" << hydro_system.time() << std::endl;
-			break;
-		}
+      const auto gamma = HydroSystem<ShocktubeProblem>::gamma_;
+      stateExact(i, j, k, HydroSystem<ShocktubeProblem>::density_index) = rho;
+      stateExact(i, j, k, HydroSystem<ShocktubeProblem>::x1Momentum_index) =
+          rho * vx;
+      stateExact(i, j, k, HydroSystem<ShocktubeProblem>::x2Momentum_index) = 0.;
+      stateExact(i, j, k, HydroSystem<ShocktubeProblem>::x3Momentum_index) = 0.;
+      stateExact(i, j, k, HydroSystem<ShocktubeProblem>::energy_index) =
+          P / (gamma - 1.) + 0.5 * rho * (vx * vx);
+    });
+  }
 
-		hydro_system.AdvanceTimestepRK2(fixed_dt);
-	}
+  // Plot results
+  auto [position, values] = fextract(state_new_[0], geom[0], 0, 0.5);
+  auto [pos_exact, val_exact] = fextract(ref, geom[0], 0, 0.5);
 
-// read in exact solution
-	int status = 0;
+  if (amrex::ParallelDescriptor::IOProcessor()) {
+    // extract values
+    std::vector<double> d(nx);
+    std::vector<double> vx(nx);
+    std::vector<double> P(nx);
 
-	std::vector<double> d(nx);
-	std::vector<double> vx(nx);
-	std::vector<double> P(nx);
+    for (int i = 0; i < nx; ++i) {
+      amrex::Real rho =
+          values.at(HydroSystem<ShocktubeProblem>::density_index).at(i);
+      amrex::Real xmom =
+          values.at(HydroSystem<ShocktubeProblem>::x1Momentum_index).at(i);
+      amrex::Real Egas =
+          values.at(HydroSystem<ShocktubeProblem>::energy_index).at(i);
 
-	hydro_system.ConservedToPrimitive(hydro_system.consVar_,
-					  std::make_pair(nghost, nghost + nx));
+      amrex::Real xvel = xmom / rho;
+      amrex::Real Eint = Egas - xmom * xmom / (2.0 * rho);
+      amrex::Real pressure =
+          (HydroSystem<ShocktubeProblem>::gamma_ - 1.) * Eint;
 
-	for (int i = 0; i < nx; ++i) {
-		d.at(i) = hydro_system.primDensity(i + nghost);
-		vx.at(i) = hydro_system.x1Velocity(i + nghost);
-		P.at(i) = hydro_system.pressure(i + nghost);
-	}
+      d.at(i) = rho;
+      vx.at(i) = xvel;
+      P.at(i) = pressure;
+    }
 
-	std::vector<double> xs_exact;
-	std::vector<double> density_exact;
-	std::vector<double> pressure_exact;
-	std::vector<double> velocity_exact;
+    matplotlibcpp::clf();
+    std::unordered_map<std::string, std::string> d_args;
+    std::map<std::string, std::string> dexact_args;
+    d_args["label"] = "density";
+    d_args["marker"] = "x";
+    d_args["color"] = "black";
+    dexact_args["label"] = "density (reference solution)";
+    dexact_args["color"] = "gray";
 
-	std::string filename = "../extern/ShuOsher_athena_3c_hllc_vl.txt";
-	std::ifstream fstream(filename, std::ios::in);
-	assert(fstream.is_open());
+    matplotlibcpp::scatter(xs, d, 5.0, d_args);
+    matplotlibcpp::plot(xs, density_exact_interp, dexact_args);
 
-	std::string header, blank_line;
-	std::getline(fstream, header);
-	std::getline(fstream, blank_line);
+    matplotlibcpp::legend();
+    matplotlibcpp::title(fmt::format("t = {:.4f}", tNew_[0]));
+    matplotlibcpp::save(fmt::format("./hydro_shuosher.pdf", tNew_[0]));
+  }
+}
 
-	for (std::string line; std::getline(fstream, line);) {
-		std::istringstream iss(line);
-		std::vector<double> values;
+auto problem_main() -> int {
+  // Problem parameters
+  // const int nx = 400;
+  // const double Lx = 10.0;
+  const double CFL_number = 0.2;
+  const double max_time = 1.8;
+  const double fixed_dt = 1e-4;
+  const int max_timesteps = 20000;
 
-		for (double value; iss >> value;) {
-			values.push_back(value);
-			//if(iss.peek() == ',') {
-			//	iss.ignore();
-			//}
-		}
-		auto x = values.at(1);
-		auto density = values.at(2);
-		auto pressure = values.at(3);
-		auto velocity = values.at(4);
+  // Problem initialization
+  const int nvars = RadhydroSimulation<ShocktubeProblem>::nvarTotal_;
+  amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
+  for (int n = 0; n < nvars; ++n) {
+    boundaryConditions[0].setLo(0, amrex::BCType::foextrap); // Dirichlet
+    boundaryConditions[0].setHi(0, amrex::BCType::ext_dir);
+    for (int i = 1; i < AMREX_SPACEDIM; ++i) {
+      boundaryConditions[n].setLo(i, amrex::BCType::int_dir); // periodic
+      boundaryConditions[n].setHi(i, amrex::BCType::int_dir);
+    }
+  }
 
-		xs_exact.push_back(x);
-		density_exact.push_back(density);
-		pressure_exact.push_back(pressure);
-		velocity_exact.push_back(velocity);
-	}
+  RadhydroSimulation<ShocktubeProblem> sim(boundaryConditions);
+  sim.is_hydro_enabled_ = true;
+  sim.is_radiation_enabled_ = false;
+  sim.cflNumber_ = CFL_number;
+  sim.constantDt_ = fixed_dt;
+  sim.stopTime_ = max_time;
+  sim.maxTimesteps_ = max_timesteps;
+  sim.computeReferenceSolution_ = true;
+  sim.plotfileInterval_ = -1;
 
-	// compute error norm
+  // Main time loop
+  sim.setInitialConditions();
+  sim.evolve();
 
-	std::vector<double> density_exact_interp(xs.size());
-	interpolate_arrays(xs.data(), density_exact_interp.data(), xs.size(),
-			   		   xs_exact.data(), density_exact.data(), xs_exact.size());
+  // Compute test success condition
+  int status = 0;
+  const double error_tol = 0.01;
+  if (sim.errorNorm_ > error_tol) {
+    status = 1;
+  }
 
-	double err_norm = 0.;
-	double sol_norm = 0.;
-	for (int i = 0; i < xs.size(); ++i) {
-		err_norm += std::abs(d[i] - density_exact_interp[i]);
-		sol_norm += std::abs(density_exact_interp[i]);
-	}
-
-	const double error_tol = 0.02;
-	const double rel_error = err_norm / sol_norm;
-	amrex::Print() << "err_norm = " << err_norm << std::endl;
-	amrex::Print() << "sol_norm = " << sol_norm << std::endl;
-	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
-
-	// Compute test success condition
-	if(rel_error > error_tol) {
-		status = 1;
-	}
-
-	// Plot results
-	matplotlibcpp::clf();
-	//matplotlibcpp::ylim(0.0, 5.0);
-
-	std::unordered_map<std::string, std::string> d_args;
-	std::map<std::string, std::string> dexact_args;
-	d_args["label"] = "density";
-	d_args["marker"] = "x";
-	d_args["color"] = "black";
-	dexact_args["label"] = "density (reference solution)";
-	dexact_args["color"] = "gray";
-
-	matplotlibcpp::scatter(xs, d, 5.0, d_args);
-	matplotlibcpp::plot(xs, density_exact_interp, dexact_args);
-
-	matplotlibcpp::legend();
-	matplotlibcpp::title(fmt::format("t = {:.4f}", hydro_system.time()));
-	matplotlibcpp::save(fmt::format("./hydro_shuosher.pdf", hydro_system.time()));
-
-	// Cleanup and exit
-	amrex::Print() << "Finished." << std::endl;
-	return status;
+  return status;
 }
