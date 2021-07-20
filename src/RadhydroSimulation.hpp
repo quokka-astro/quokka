@@ -228,7 +228,7 @@ void RadhydroSimulation<problem_t>::computeAfterEvolve(amrex::Vector<amrex::Real
 	amrex::Real const abs_err = (Etot - Etot0);
 	amrex::Real const rel_err = abs_err / Etot0;
 
-	amrex::Print() << "Initial gas+radiation energy = " << Etot0 << std::endl;
+	amrex::Print() << "\nInitial gas+radiation energy = " << Etot0 << std::endl;
 	amrex::Print() << "Final gas+radiation energy = " << Etot << std::endl;
 	amrex::Print() << "\tabsolute conservation error = " << abs_err << std::endl;
 	amrex::Print() << "\trelative conservation error = " << rel_err << std::endl;
@@ -256,6 +256,7 @@ void RadhydroSimulation<problem_t>::computeAfterEvolve(amrex::Vector<amrex::Real
 		errorNorm_ = rel_error;
 		amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
 	}
+	amrex::Print() << std::endl;
 }
 
 template <typename problem_t>
