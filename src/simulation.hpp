@@ -406,6 +406,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		}
 	}
 
+	// compute reference solution (if it's a test problem)
 	computeAfterEvolve(init_sum_cons);
 
 	// compute conservation error
@@ -429,7 +430,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	const double megaupdates_per_second = 1.0 / microseconds_per_update;
 	amrex::Print() << "Performance figure-of-merit: " << microseconds_per_update
 		       << " μs/zone-update [" << megaupdates_per_second << " Mupdates/s]\n";
-	amrex::Print() << "elapsed time: " << elapsed_sec << " seconds.\n";
 
 	// write final plotfile
 	if (plotfileInterval_ > 0 && istep[0] > last_plot_file_step) {

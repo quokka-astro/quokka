@@ -22,6 +22,12 @@ template <> struct EOS_Traits<ShocktubeProblem> {
   static constexpr double gamma = 1.4;
 };
 
+// left- and right- side shock states
+constexpr amrex::Real rho_L = 10.0;
+constexpr amrex::Real P_L = 100.0;
+constexpr amrex::Real rho_R = 1.0;
+constexpr amrex::Real P_R = 1.0;
+
 template <>
 void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsAtLevel(
     int lev) {
@@ -41,11 +47,11 @@ void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsAtLevel(
       double P = NAN;
 
       if (x < 2.0) {
-        rho = 10.0;
-        P = 100.0;
+        rho = rho_L;
+        P = P_L;
       } else {
-        rho = 1.0;
-        P = 1.0;
+        rho = rho_R;
+        P = P_R;
       }
 
       AMREX_ASSERT(!std::isnan(vx));
@@ -68,6 +74,55 @@ void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsAtLevel(
 
   // set flag
   areInitialConditionsDefined_ = true;
+}
+
+template <>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(
+    const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar,
+    int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
+    const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
+    int /*orig_comp*/)
+{
+#if (AMREX_SPACEDIM == 1)
+  auto i = iv.toArray()[0];
+  int j = 0;
+  int k = 0;
+#endif
+#if (AMREX_SPACEDIM == 2)
+  auto [i, j] = iv.toArray();
+  int k = 0;
+#endif
+#if (AMREX_SPACEDIM == 3)
+  auto [i, j, k] = iv.toArray();
+#endif
+
+  amrex::Box const &box = geom.Domain();
+  amrex::GpuArray<int, 3> lo = box.loVect3d();
+  amrex::GpuArray<int, 3> hi = box.hiVect3d();
+  const auto gamma = HydroSystem<ShocktubeProblem>::gamma_;
+
+  if (i < lo[0]) {
+    // x1 left side boundary -- constant
+    const double xmom_L =
+        consVar(lo[0], j, k, RadSystem<ShocktubeProblem>::x1GasMomentum_index);
+
+    consVar(i, j, k, RadSystem<ShocktubeProblem>::gasEnergy_index) = P_L / (gamma - 1.);
+    consVar(i, j, k, RadSystem<ShocktubeProblem>::gasDensity_index) = rho_L;
+    consVar(i, j, k, RadSystem<ShocktubeProblem>::x1GasMomentum_index) = 0.;
+    consVar(i, j, k, RadSystem<ShocktubeProblem>::x2GasMomentum_index) = 0.;
+    consVar(i, j, k, RadSystem<ShocktubeProblem>::x3GasMomentum_index) = 0.;
+  } else if (i >= hi[0]) {
+    // x1 right-side boundary -- constant
+    const double xmom_R =
+        consVar(hi[0], j, k, RadSystem<ShocktubeProblem>::x1GasMomentum_index);
+
+    consVar(i, j, k, RadSystem<ShocktubeProblem>::gasEnergy_index) = P_R / (gamma - 1.);
+    consVar(i, j, k, RadSystem<ShocktubeProblem>::gasDensity_index) = rho_R;
+    consVar(i, j, k, RadSystem<ShocktubeProblem>::x1GasMomentum_index) = 0.;
+    consVar(i, j, k, RadSystem<ShocktubeProblem>::x2GasMomentum_index) = 0.;
+    consVar(i, j, k, RadSystem<ShocktubeProblem>::x3GasMomentum_index) = 0.;
+  }
 }
 
 template <>
@@ -219,8 +274,8 @@ auto problem_main() -> int {
   const int nvars = RadhydroSimulation<ShocktubeProblem>::nvarTotal_;
   amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
   for (int n = 0; n < nvars; ++n) {
-    boundaryConditions[0].setLo(0, amrex::BCType::foextrap); // periodic
-    boundaryConditions[0].setHi(0, amrex::BCType::foextrap);
+    boundaryConditions[0].setLo(0, amrex::BCType::ext_dir); // Dirichlet
+    boundaryConditions[0].setHi(0, amrex::BCType::ext_dir);
     for (int i = 1; i < AMREX_SPACEDIM; ++i) {
       boundaryConditions[n].setLo(i, amrex::BCType::int_dir); // periodic
       boundaryConditions[n].setHi(i, amrex::BCType::int_dir);
