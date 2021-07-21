@@ -113,7 +113,7 @@ template <> void RadhydroSimulation<CouplingProblem>::computeAfterTimestep() {
 
     const amrex::Real Erad_i =
         values.at(RadSystem<CouplingProblem>::radEnergy_index).at(0);
-	
+
     Trad_vec_.push_back(std::pow(Erad_i / a_rad, 1. / 4.));
     Tgas_vec_.push_back(
         RadSystem<CouplingProblem>::ComputeTgasFromEgas(rho, Egas_i));
@@ -141,7 +141,8 @@ auto problem_main() -> int {
   }
 
   RadhydroSimulation<CouplingProblem> sim(boundaryConditions);
-  sim.is_hydro_enabled_ = true; // for unknown reasons, setting this to false gives incorrect results!
+  sim.is_hydro_enabled_ = true; // for unknown reasons, setting this to false
+                                // gives incorrect results!
   sim.is_radiation_enabled_ = true;
   sim.cflNumber_ = CFL_number;
   sim.radiationCflNumber_ = CFL_number;
