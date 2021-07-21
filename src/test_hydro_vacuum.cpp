@@ -11,10 +11,10 @@
 
 #include "AMReX_BLassert.H"
 
-#include "test_hydro_vacuum.hpp"
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
 #include "hydro_system.hpp"
+#include "test_hydro_vacuum.hpp"
 
 struct ShocktubeProblem {};
 
