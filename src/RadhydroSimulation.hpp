@@ -248,6 +248,7 @@ void RadhydroSimulation<problem_t>::computeAfterEvolve(amrex::Vector<amrex::Real
 
 		amrex::Real sol_norm = 0.;
 		amrex::Real err_norm = 0.;
+		// compute rms of each component
 		for (int n = 0; n < ncomp; ++n) {
 			sol_norm += std::pow(state_ref_level0.norm1(n), 2);
 			err_norm += std::pow(residual.norm1(n), 2);
@@ -257,7 +258,7 @@ void RadhydroSimulation<problem_t>::computeAfterEvolve(amrex::Vector<amrex::Real
 
 		const double rel_error = err_norm / sol_norm;
 		errorNorm_ = rel_error;
-		amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
+		amrex::Print() << "Relative rms L1 error norm = " << rel_error << std::endl;
 	}
 	amrex::Print() << std::endl;
 }
