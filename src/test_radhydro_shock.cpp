@@ -7,301 +7,276 @@
 /// \brief Defines a test problem for a radiative shock.
 ///
 
+#include <cmath>
+
 #include "test_radhydro_shock.hpp"
-
-auto main(int argc, char** argv) -> int
-{
-	// Initialization
-
-	amrex::Initialize(argc, argv);
-	
-	int result = 0;
-
-	{ // objects must be destroyed before Kokkos::finalize, so enter new
-	  // scope here to do that automatically
-
-		result = testproblem_radhydro_shock();
-
-	} // destructors must be called before amrex::Finalize()
-	amrex::Finalize();
-
-	return result;
-}
+#include "RadhydroSimulation.hpp"
+#include "fextract.hpp"
 
 struct ShockProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-const double a_rad = 1.0e-4;	// equal to P_0 in dimensionless units
-const double sigma_a = 1.0e6;	// absorption cross section
-const double Mach0 = 3.0;
+constexpr double a_rad = 1.0e-4;	// equal to P_0 in dimensionless units
+constexpr double sigma_a = 1.0e6;	// absorption cross section
+constexpr double Mach0 = 3.0;
 
-const double c_s0 = 1.0; // adiabatic sound speed
-const double c = sqrt(3.0*sigma_a) * c_s0; // dimensionless speed of light
-const double k_B = std::pow(c_s0, 2);	// required to make temperature and sound speed consistent
+constexpr double c_s0 = 1.0; // adiabatic sound speed
+constexpr double c = 1732.0508075688772; //std::sqrt(3.0*sigma_a) * c_s0; // dimensionless speed of light
+constexpr double k_B = (c_s0*c_s0);	// required to make temperature and sound speed consistent
 
 const double kappa = sigma_a * (c_s0 / c);	// opacity [cm^-1]
-const double gamma_gas = (5./3.);
-const double mu = gamma_gas; // mean molecular weight (required s.t. c_s0 == 1)
-const double c_v = k_B / (mu * (gamma_gas - 1.0));	// specific heat
+constexpr double gamma_gas = (5./3.);
+constexpr double mu = gamma_gas; // mean molecular weight (required s.t. c_s0 == 1)
+constexpr double c_v = k_B / (mu * (gamma_gas - 1.0));	// specific heat
 
-const double T0 = 1.0;
-const double rho0 = 1.0;
-const double v0 = (Mach0 * c_s0);
+constexpr double T0 = 1.0;
+constexpr double rho0 = 1.0;
+constexpr double v0 = (Mach0 * c_s0);
 
-const double T1 = 3.661912665809719;
-const double rho1 = 3.0021676971081166;
-const double v1 = (Mach0 * c_s0) * (rho0 / rho1);
+constexpr double T1 = 3.661912665809719;
+constexpr double rho1 = 3.0021676971081166;
+constexpr double v1 = (Mach0 * c_s0) * (rho0 / rho1);
 
-const double chat = 10.0*(v0 + c_s0); // reduced speed of light
+constexpr double chat = 10.0*(v0 + c_s0); // reduced speed of light
 
-const double Erad0 = a_rad * std::pow(T0, 4);
-const double Egas0 = rho0 * c_v * T0;
-const double Erad1 = a_rad * std::pow(T1, 4);
-const double Egas1 = rho1 * c_v * T1;
+constexpr double Erad0 = a_rad * (T0*T0*T0*T0);
+constexpr double Egas0 = rho0 * c_v * T0;
+constexpr double Erad1 = a_rad * (T1*T1*T1*T1);
+constexpr double Egas1 = rho1 * c_v * T1;
+
+constexpr double shock_position = 0.0128; // 0.0132; // cm
+		// (shock position drifts to the right slightly during the simulation, so
+	    // we initialize slightly to the left...)
+
+template <> struct RadSystem_Traits<ShockProblem> {
+	static constexpr double c_light = c;
+	static constexpr double c_hat = chat;
+	static constexpr double radiation_constant = a_rad;
+	static constexpr double mean_molecular_mass = mu;
+	static constexpr double boltzmann_constant = k_B;
+	static constexpr double gamma = gamma_gas;
+	static constexpr double Erad_floor = 0.;
+};
+
+template <> struct EOS_Traits<ShockProblem> {
+	static constexpr double gamma = gamma_gas;
+};
 
 template <>
-auto RadSystem<ShockProblem>::ComputeOpacity(const double rho, const double Tgas)
-    -> double
+auto RadSystem<ShockProblem>::ComputePlanckOpacity(const double rho, const double /*Tgas*/) -> double
 {
 	return (kappa / rho);
 }
 
-//#if 0
 template <>
-auto RadSystem<ShockProblem>::ComputeEddingtonFactor(double f) -> double
+auto RadSystem<ShockProblem>::ComputeRosselandOpacity(const double rho, const double /*Tgas*/) -> double
 {
-	return (1./3.);	// Eddington approximation
-}
-//#endif
-
-template <> void RadSystem<ShockProblem>::FillGhostZones(array_t &cons)
-{
-	// x1 left side boundary (shock)
-	for (int i = 0; i < nghost_; ++i) {
-		cons(radEnergy_index, i) = Erad0;
-		cons(x1RadFlux_index, i) = 0.;
-	}
-
-	// x1 right side boundary (shock)
-	for (int i = nghost_ + nx_; i < nghost_ + nx_ + nghost_; ++i) {
-		cons(radEnergy_index, i) = Erad1;
-		cons(x1RadFlux_index, i) = 0.;
-	}
+	return (kappa / rho);
 }
 
-template <> void HydroSystem<ShockProblem>::FillGhostZones(array_t &cons)
+template <> auto RadSystem<ShockProblem>::ComputeEddingtonFactor(double /*f*/) -> double
 {
-	// x1 left side boundary (shock)
-	const double xmom_L = cons(x1Momentum_index, nghost_);
+	return (1. / 3.); // Eddington approximation
+}
 
-	for (int i = 0; i < nghost_; ++i) {
-		cons(density_index, i) = rho0;
-		cons(x1Momentum_index, i) = (xmom_L < (rho0*v0)) ? xmom_L : (rho0*v0);
-		cons(energy_index, i) = Egas0 + 0.5*rho0*(v0*v0);
+
+template <>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+AMRSimulation<ShockProblem>::setCustomBoundaryConditions(
+    const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
+    amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec *bcr, int /*bcomp*/,
+    int /*orig_comp*/)
+{
+	if (!((bcr->lo(0) == amrex::BCType::ext_dir) || (bcr->hi(0) == amrex::BCType::ext_dir))) {
+		return;
 	}
 
-	// x1 right side boundary (shock)
-	const double xmom_R = cons(x1Momentum_index, nghost_ + nx_ - 1);
+#if (AMREX_SPACEDIM == 1)
+	auto i = iv.toArray()[0];
+	int j = 0;
+	int k = 0;
+#endif
+#if (AMREX_SPACEDIM == 2)
+	auto [i, j] = iv.toArray();
+	int k = 0;
+#endif
+#if (AMREX_SPACEDIM == 3)
+	auto [i, j, k] = iv.toArray();
+#endif
 
-	for (int i = nghost_ + nx_; i < nghost_ + nx_ + nghost_; ++i) {
-		cons(density_index, i) = rho1;
-		cons(x1Momentum_index, i) = (xmom_R > (rho1*v1)) ? xmom_R : (rho1*v1);
-		cons(energy_index, i) = Egas1 + 0.5*rho1*(v1*v1);
+	amrex::Box const &box = geom.Domain();
+	amrex::GpuArray<int, 3> lo = box.loVect3d();
+	amrex::GpuArray<int, 3> hi = box.hiVect3d();
+
+	if (i < lo[0]) {
+		// x1 left side boundary -- constant
+		consVar(i, j, k, RadSystem<ShockProblem>::radEnergy_index) = Erad0;
+		consVar(i, j, k, RadSystem<ShockProblem>::x1RadFlux_index) = 0;
+		consVar(i, j, k, RadSystem<ShockProblem>::x2RadFlux_index) = 0;
+		consVar(i, j, k, RadSystem<ShockProblem>::x3RadFlux_index) = 0;
+
+		const double xmom_L =
+		    consVar(lo[0], j, k, RadSystem<ShockProblem>::x1GasMomentum_index);
+
+		consVar(i, j, k, RadSystem<ShockProblem>::gasEnergy_index) =
+		    Egas0 + 0.5 * rho0 * (v0 * v0);
+		consVar(i, j, k, RadSystem<ShockProblem>::gasDensity_index) = rho0;
+		consVar(i, j, k, RadSystem<ShockProblem>::x1GasMomentum_index) =
+		    (xmom_L < (rho0 * v0)) ? xmom_L : (rho0 * v0); // xmom_L;
+
+		consVar(i, j, k, RadSystem<ShockProblem>::x2GasMomentum_index) = 0.;
+		consVar(i, j, k, RadSystem<ShockProblem>::x3GasMomentum_index) = 0.;
+	} else if (i >= hi[0]) {
+		// x1 right-side boundary -- constant
+		consVar(i, j, k, RadSystem<ShockProblem>::radEnergy_index) = Erad1;
+		consVar(i, j, k, RadSystem<ShockProblem>::x1RadFlux_index) = 0;
+		consVar(i, j, k, RadSystem<ShockProblem>::x2RadFlux_index) = 0;
+		consVar(i, j, k, RadSystem<ShockProblem>::x3RadFlux_index) = 0;
+
+		const double xmom_R =
+		    consVar(hi[0], j, k, RadSystem<ShockProblem>::x1GasMomentum_index);
+
+		consVar(i, j, k, RadSystem<ShockProblem>::gasEnergy_index) =
+		    Egas1 + 0.5 * rho1 * (v1 * v1);
+		consVar(i, j, k, RadSystem<ShockProblem>::gasDensity_index) = rho1;
+		consVar(i, j, k, RadSystem<ShockProblem>::x1GasMomentum_index) =
+		    (xmom_R > (rho1 * v1)) ? xmom_R : (rho1 * v1); // xmom_R;
+		consVar(i, j, k, RadSystem<ShockProblem>::x2GasMomentum_index) = 0.;
+		consVar(i, j, k, RadSystem<ShockProblem>::x3GasMomentum_index) = 0.;
 	}
 }
 
-template <> void RadSystem<ShockProblem>::AdvanceTimestep(const double hydro_dt)
+template <> void RadhydroSimulation<ShockProblem>::setInitialConditionsAtLevel(int lev)
 {
-	// Subcycle to reach hydro_dt exactly in M substeps.
-	auto advance_to_time = time_ + hydro_dt;
-	int Nsubsteps = 0;
-	while (time_ < advance_to_time) {
-		auto dt_remaining = (advance_to_time - time_);
-		auto dt_max = std::min(dtExpandFactor_ * dtPrev_, dt_remaining);
-		auto dt_substep = ComputeTimestep(std::min(hydro_dt, dt_max));
-		AdvanceTimestepRK2(dt_substep);
-		++Nsubsteps;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
+
+	for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
+		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
+		auto const &state = state_new_[lev].array(iter);
+
+		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+			amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+
+			amrex::Real radEnergy = NAN;
+			amrex::Real x1RadFlux = NAN;
+			amrex::Real energy = NAN;
+			amrex::Real density = NAN;
+			amrex::Real x1Momentum = NAN;
+
+			if (x < shock_position) {
+				radEnergy = Erad0;
+				x1RadFlux = 0.0;
+				energy = Egas0 + 0.5 * rho0 * (v0 * v0);
+				density = rho0;
+				x1Momentum = rho0 * v0;
+			} else {
+				radEnergy = Erad1;
+				x1RadFlux = 0.0;
+				energy = Egas1 + 0.5 * rho1 * (v1 * v1);
+				density = rho1;
+				x1Momentum = rho1 * v1;
+			}
+
+			state(i, j, k, RadSystem<ShockProblem>::radEnergy_index) = radEnergy;
+			state(i, j, k, RadSystem<ShockProblem>::x1RadFlux_index) = x1RadFlux;
+			state(i, j, k, RadSystem<ShockProblem>::x2RadFlux_index) = 0;
+			state(i, j, k, RadSystem<ShockProblem>::x3RadFlux_index) = 0;
+
+			state(i, j, k, RadSystem<ShockProblem>::gasEnergy_index) = energy;
+			state(i, j, k, RadSystem<ShockProblem>::gasDensity_index) = density;
+			state(i, j, k, RadSystem<ShockProblem>::x1GasMomentum_index) = x1Momentum;
+			state(i, j, k, RadSystem<ShockProblem>::x2GasMomentum_index) = 0;
+			state(i, j, k, RadSystem<ShockProblem>::x3GasMomentum_index) = 0;
+		});
 	}
-	//amrex::Print() << "\tAdvanced radiation subsystem with " << Nsubsteps << " substeps.\n";
-	assert(time_ == advance_to_time); // NOLINT
+
+	// set flag
+	areInitialConditionsDefined_ = true;
 }
 
-auto testproblem_radhydro_shock() -> int
+auto problem_main() -> int
 {
 	// Problem parameters
-
 	const int max_timesteps = 2e4;
-	const double CFL_number = 0.2;
-	const int nx = 256;
-	const double Lx = 9.112876254180604 * (c/c_s0) / sigma_a;	// length
+	const double CFL_number = 0.4;
+	const double Lx = 0.01578396467532876; // 9.112876254180604 * (c/c_s0) / sigma_a;
+	//const int nx = 512;
 
-	const double initial_dtau = 1.0e-3;		// initial timestep [dimensionless]
+	//const double initial_dtau = 1.0e-3;		// initial timestep [dimensionless]
 	const double max_dtau = 1.0e-3;			// maximum timestep [dimensionless]
 	const double max_tau = 3.0 * (Lx/v0);	// 3 shock crossing times [dimensionless]
 
-	const double max_time = max_tau / c_s0;
+	//const double initial_dt = initial_dtau / c_s0;
 	const double max_dt = max_dtau / c_s0;
-	const double initial_dt = initial_dtau / c_s0;
+	const double max_time = max_tau / c_s0;
+
+	constexpr int nvars = RadSystem<ShockProblem>::nvar_;
+	amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
+	for (int n = 0; n < nvars; ++n) {
+		boundaryConditions[n].setLo(0, amrex::BCType::ext_dir); // custom x1
+		boundaryConditions[n].setHi(0, amrex::BCType::ext_dir); // custom x1
+		for (int i = 1; i < AMREX_SPACEDIM; ++i) {		// x2- and x3- directions
+			boundaryConditions[n].setLo(i, amrex::BCType::int_dir); // periodic
+			boundaryConditions[n].setHi(i, amrex::BCType::int_dir);
+		}
+	}
 
 	// Problem initialization
+	RadhydroSimulation<ShockProblem> sim(boundaryConditions);
+	sim.is_hydro_enabled_ = true;
+	sim.is_radiation_enabled_ = true;
+	sim.cflNumber_ = CFL_number;
+	sim.radiationCflNumber_ = CFL_number;
+	sim.maxTimesteps_ = max_timesteps;
+	//sim.initDt_ = initial_dt;
+	sim.maxDt_ = max_dt;
+	sim.stopTime_ = max_time;
+	sim.plotfileInterval_ = -1;
 
-	RadSystem<ShockProblem> rad_system(
-	    {.nx = nx, .lx = Lx, .cflNumber = CFL_number});
+	// run
+	sim.setInitialConditions();
+	sim.evolve();
 
-	rad_system.set_radiation_constant(a_rad);
-	//rad_system.set_c_light(c);
-	rad_system.c_light_ = c;
-	rad_system.c_hat_ = chat;
-	rad_system.mean_molecular_mass_ = mu;
-	rad_system.boltzmann_constant_ = k_B;
-	rad_system.gamma_ = gamma_gas;
-
-	HydroSystem<ShockProblem> hydro_system(
-	    {.nx = nx, .lx = Lx, .cflNumber = CFL_number, .gamma = gamma_gas});
-
-	auto nghost = rad_system.nghost();
-	for (int i = nghost; i < nx + nghost; ++i) {
-		const double x = Lx * ((i + 0.5) / static_cast<double>(nx));
-
-		rad_system.set_radEnergySource(i) = 0.0;
-
-		constexpr double shock_position = 0.0132 / 0.01575;
-		if (x < (shock_position * Lx)) {
-			rad_system.set_radEnergy(i) = Erad0;
-			rad_system.set_x1RadFlux(i) = 0.0;
-
-			hydro_system.set_energy(i) = Egas0 + 0.5*rho0*(v0*v0);
-			hydro_system.set_density(i) = rho0;
-			hydro_system.set_x1Momentum(i) = rho0*v0;
-		} else {
-			rad_system.set_radEnergy(i) = Erad1;
-			rad_system.set_x1RadFlux(i) = 0.0;
-
-			hydro_system.set_energy(i) = Egas1 + 0.5*rho1*(v1*v1);
-			hydro_system.set_density(i) = rho1;
-			hydro_system.set_x1Momentum(i) = rho1*v1;
-		
-		}
-	}
-
-	const auto Erad0 = rad_system.ComputeRadEnergy();
-	const auto Egas0 = hydro_system.ComputeEnergy();
-	const auto Etot0 = Erad0 + Egas0;
-
-	amrex::Print() << "radiation constant (code units) = " << a_rad << "\n";
-	amrex::Print() << "c_light (code units) = " << c << "\n";
-	amrex::Print() << "Lx = " << Lx << "\n";
-	amrex::Print() << "initial_dt = " << initial_dt << "\n";
-	amrex::Print() << "max_dt = " << max_dt << "\n";
-	amrex::Print() << "max_time = " << max_time << "\n\n";
-
-	// Main time loop
-	int j;
-	double dt_prev = std::numeric_limits<double>::max();
-	const double dt_expand_factor = 1.1;
-	for (j = 0; j < max_timesteps; ++j) {
-		if (hydro_system.time() >= max_time) {
-			break;
-		}
-
-		const double this_dtMax = ((j == 0) ? initial_dt : max_dt);
-
-		// Fill ghost zones
-		const auto all_cells = std::make_pair(0, hydro_system.dim1());
-		hydro_system.FillGhostZones(hydro_system.consVar_);
-		hydro_system.ConservedToPrimitive(hydro_system.consVar_,
-						  all_cells);
-
-		rad_system.FillGhostZones(rad_system.consVar_);
-		rad_system.ConservedToPrimitive(rad_system.consVar_, all_cells);
-
-		// Compute hydro timestep
-		const double computed_dt = hydro_system.ComputeTimestep(this_dtMax);
-		const double this_dt = std::min(computed_dt, dt_expand_factor*dt_prev);
-
-		//amrex::Print() << "[timestep " << j << "] ";
-		//amrex::Print() << "t = " << hydro_system.time() << "\tdt = " << this_dt << std::endl;
-
-		// Advance hydro subsystem
-		hydro_system.AdvanceTimestepRK2(this_dt);
-
-		// Copy hydro vars into rad_system
-		for (int i = nghost; i < (nx + nghost); ++i) {
-			rad_system.set_staticGasDensity(i) = hydro_system.density(i);
-			rad_system.set_x1GasMomentum(i) = hydro_system.x1Momentum(i);
-			rad_system.set_gasEnergy(i) = hydro_system.energy(i);
-		}
-
-		// Advance radiation subsystem, subcycling if necessary
-		rad_system.AdvanceTimestep(this_dt);
-
-		// Copy updated hydro vars back into hydro_system
-		for (int i = nghost; i < (nx + nghost); ++i) {
-			hydro_system.set_x1Momentum(i) = rad_system.x1GasMomentum(i);
-			hydro_system.set_energy(i) = rad_system.gasEnergy(i);
-		}
-
-		// Update previous timestep
-		dt_prev = this_dt;
-
-		//amrex::Print() << std::endl;
-	}
-
-	amrex::Print() << "Timestep " << j << "; t = " << hydro_system.time()
-		  << "; dt = " << hydro_system.dt() << "\n";
-
-	const auto total_Erad = rad_system.ComputeRadEnergy();
-	const auto total_Egas = hydro_system.ComputeEnergy();
-	const auto total_E = total_Erad + total_Egas;
-	const auto Ediff = std::fabs(total_E - Etot0);
-
-	amrex::Print() << "radiation energy = " << total_Erad << "\n";
-	amrex::Print() << "gas energy = " << total_Egas << "\n";
-	amrex::Print() << "Total energy = " << total_E << "\n";
-	amrex::Print() << "(Energy nonconservation = " << Ediff << ")\n";
-	amrex::Print() << "\n";
 
 	// read output variables
+	auto [position, values] = fextract(sim.state_new_[0], sim.Geom(0), 0, 0.0);
+	int nx = static_cast<int>(position.size());	
 
 	std::vector<double> xs(nx);
 	std::vector<double> Trad(nx);
 	std::vector<double> Tgas(nx);
 	std::vector<double> Erad(nx);
-	std::vector<double> Frad_over_c(nx);
 	std::vector<double> Egas(nx);
-	std::vector<double> x1GasMomentum(nx);
-	std::vector<double> x1RadFlux(nx);
 	std::vector<double> gasDensity(nx);
 	std::vector<double> gasVelocity(nx);
 
 	for (int i = 0; i < nx; ++i) {
 		const double x = Lx * ((i + 0.5) / static_cast<double>(nx));
-		xs.at(i) = x;
+		xs.at(i) = x; // cm
 
-		const auto Erad_t = rad_system.radEnergy(i + nghost);
-		Erad.at(i) = Erad_t / a_rad;	// scale by P_0
-		Trad.at(i) = std::pow(Erad_t / a_rad, 1. / 4.);
+		const double Erad_t =
+		    values.at(RadSystem<ShockProblem>::radEnergy_index).at(i);
+		Erad.at(i) = Erad_t / a_rad;			     // scaled
+		Trad.at(i) = std::pow(Erad_t / a_rad, 1. / 4.) / T0; // dimensionless
 
-		const auto Etot_t = rad_system.gasEnergy(i + nghost);
-		const auto Frad = rad_system.x1RadFlux(i + nghost);
-		const auto rho = rad_system.staticGasDensity(i + nghost);
-		const auto x1GasMom = rad_system.x1GasMomentum(i + nghost);
-		const auto Ekin = (x1GasMom*x1GasMom) / (2.0*rho);
-		const auto Egas_t = Etot_t - Ekin;
+		const double Etot_t =
+		    values.at(RadSystem<ShockProblem>::gasEnergy_index).at(i);
+		const double rho =
+		    values.at(RadSystem<ShockProblem>::gasDensity_index).at(i);
+		const double x1GasMom = values.at(RadSystem<ShockProblem>::x1GasMomentum_index).at(i);
+		const double Ekin = (x1GasMom * x1GasMom) / (2.0 * rho);
 
+		const double Egas_t = (Etot_t - Ekin);
 		Egas.at(i) = Egas_t;
-		Tgas.at(i) = rad_system.ComputeTgasFromEgas(rho, Egas_t);
-
-		x1GasMomentum.at(i) = x1GasMom;
-		x1RadFlux.at(i) = Frad;
-		Frad_over_c.at(i) = Frad;
+		Tgas.at(i) = RadSystem<ShockProblem>::ComputeTgasFromEgas(rho, Egas_t) /
+			     T0; // dimensionless
 
 		gasDensity.at(i) = rho;
-		gasVelocity.at(i) = (x1GasMom / rho) / c_s0;
+		gasVelocity.at(i) = x1GasMom / rho;
 	}
 
 	// read in exact solution
-
 	std::vector<double> xs_exact;
 	std::vector<double> Trad_exact;
 	std::vector<double> Tmat_exact;
@@ -310,7 +285,7 @@ auto testproblem_radhydro_shock() -> int
 	std::string filename = "../extern/LowrieEdwards/shock.txt";
 	std::ifstream fstream(filename, std::ios::in);
 
-	const double error_tol = 0.015;
+	const double error_tol = 0.01;
 	double rel_error = NAN;
 	if(fstream.is_open()) {
 
@@ -321,7 +296,7 @@ auto testproblem_radhydro_shock() -> int
 			std::istringstream iss(line);
 			std::vector<double> values;
 
-			for (double value; iss >> value;) {
+			for (double value = NAN; iss >> value;) {
 				values.push_back(value);
 			}
 			auto x_val = values.at(0);
@@ -338,13 +313,12 @@ auto testproblem_radhydro_shock() -> int
 		}
 
 		// compute error norm
-
 		std::vector<double> Trad_interp(xs_exact.size());
 		amrex::Print() << "xs min/max = " << xs[0] << ", " << xs[xs.size()-1] << std::endl;
 		amrex::Print() << "xs_exact min/max = " << xs_exact[0] << ", " << xs_exact[xs_exact.size()-1] << std::endl;
 
-		interpolate_arrays(xs_exact.data(), Trad_interp.data(), xs_exact.size(),
-			   xs.data(), Trad.data(), xs.size());
+		interpolate_arrays(xs_exact.data(), Trad_interp.data(), static_cast<int>(xs_exact.size()),
+			   xs.data(), Trad.data(), static_cast<int>(xs.size()));
 
 		double err_norm = 0.;
 		double sol_norm = 0.;
@@ -391,11 +365,12 @@ auto testproblem_radhydro_shock() -> int
 	matplotlibcpp::xlabel("length x (dimensionless)");
 	matplotlibcpp::ylabel("temperature (dimensionless)");
 	matplotlibcpp::legend();
-	matplotlibcpp::title(fmt::format("time t = {:.4g}", hydro_system.time()));
+	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
 	matplotlibcpp::save("./radshock_temperature.pdf");
 
 	// gas density
-	std::map<std::string, std::string> gasdens_args, gasvx_args;
+	std::map<std::string, std::string> gasdens_args;
+	std::map<std::string, std::string> gasvx_args;
 	gasdens_args["label"] = "gas density";
 	gasdens_args["color"] = "black";
 	gasvx_args["label"] = "gas velocity";
@@ -411,8 +386,6 @@ auto testproblem_radhydro_shock() -> int
 	matplotlibcpp::save("./radshock_gasdensity.pdf");
 
 	// Cleanup and exit
-	amrex::Print() << "Finished." << std::endl;
-
 	int status = 0;
 	if ((rel_error > error_tol) || std::isnan(rel_error)) {
 		status = 1;
