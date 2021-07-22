@@ -62,9 +62,17 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	using AMRSimulation<problem_t>::finestLevel;
 	using AMRSimulation<problem_t>::tOld_;
 	using AMRSimulation<problem_t>::tNew_;
+	using AMRSimulation<problem_t>::boxArray;
+	using AMRSimulation<problem_t>::DistributionMap;
 
 	AdvectionSimulation(amrex::IntVect & /*gridDims*/, amrex::RealBox & /*boxSize*/,
 			    amrex::Vector<amrex::BCRec> &boundaryConditions, const int ncomp = 1)
+	    : AMRSimulation<problem_t>(boundaryConditions, ncomp)
+	{
+		componentNames_ = {"density"};
+	}
+
+	explicit AdvectionSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions, const int ncomp = 1)
 	    : AMRSimulation<problem_t>(boundaryConditions, ncomp)
 	{
 		componentNames_ = {"density"};
@@ -76,6 +84,10 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 					  int /*iteration*/, int /*ncycle*/) override;
 	void computeAfterTimestep() override;
 	void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) override;
+	void computeReferenceSolution(
+	    amrex::MultiFab &ref,
+    	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+    	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo);
 
 	// tag cells for refinement
 	void ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override;
@@ -92,6 +104,8 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	double advectionVx_ = 1.0; // default
 	double advectionVy_ = 0.0; // default
 	double advectionVz_ = 0.0; // default
+
+	amrex::Real errorNorm_ = NAN;
 
 	static constexpr int reconstructOrder_ =
 	    3; // PPM = 3 ['third order'], piecewise constant == 1
@@ -130,9 +144,41 @@ void AdvectionSimulation<problem_t>::ErrorEst(int lev, amrex::TagBoxArray &tags,
 }
 
 template <typename problem_t>
-void AdvectionSimulation<problem_t>::computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons)
+void AdvectionSimulation<problem_t>::computeReferenceSolution(
+    amrex::MultiFab &ref,
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
-	// check conservation if desired, etc.
+	// user implemented
+}
+
+template <typename problem_t>
+void AdvectionSimulation<problem_t>::computeAfterEvolve(amrex::Vector<amrex::Real> & /*initSumCons*/)
+{
+	// compute reference solution
+	const int ncomp = state_new_[0].nComp();
+	const int nghost = state_new_[0].nGrow();
+	amrex::MultiFab state_ref_level0(boxArray(0), DistributionMap(0), ncomp, nghost);
+	computeReferenceSolution(state_ref_level0, geom[0].CellSizeArray(), geom[0].ProbLoArray());
+
+	// compute error norm
+	amrex::MultiFab residual(boxArray(0), DistributionMap(0), ncomp, nghost);
+	amrex::MultiFab::Copy(residual, state_ref_level0, 0, 0, ncomp, nghost);
+	amrex::MultiFab::Saxpy(residual, -1., state_new_[0], 0, 0, ncomp, nghost);
+
+	amrex::Real sol_norm = 0.;
+	amrex::Real err_norm = 0.;
+	// compute rms of each component
+	for (int n = 0; n < ncomp; ++n) {
+		sol_norm += std::pow(state_ref_level0.norm1(n), 2);
+		err_norm += std::pow(residual.norm1(n), 2);
+	}
+	sol_norm = std::sqrt(sol_norm);
+	err_norm = std::sqrt(err_norm);
+	const double rel_error = err_norm / sol_norm;
+	errorNorm_ = rel_error;
+
+	amrex::Print() << "Relative rms L1 error norm = " << rel_error << "\n\n";
 }
 
 template <typename problem_t>
