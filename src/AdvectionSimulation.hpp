@@ -87,7 +87,8 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	void computeReferenceSolution(
 	    amrex::MultiFab &ref,
     	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-    	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo);
+    	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+		amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi);
 
 	// tag cells for refinement
 	void ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override;
@@ -147,7 +148,8 @@ template <typename problem_t>
 void AdvectionSimulation<problem_t>::computeReferenceSolution(
     amrex::MultiFab &ref,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi)
 {
 	// user implemented
 }
@@ -159,7 +161,8 @@ void AdvectionSimulation<problem_t>::computeAfterEvolve(amrex::Vector<amrex::Rea
 	const int ncomp = state_new_[0].nComp();
 	const int nghost = state_new_[0].nGrow();
 	amrex::MultiFab state_ref_level0(boxArray(0), DistributionMap(0), ncomp, nghost);
-	computeReferenceSolution(state_ref_level0, geom[0].CellSizeArray(), geom[0].ProbLoArray());
+	computeReferenceSolution(state_ref_level0, geom[0].CellSizeArray(),
+							 geom[0].ProbLoArray(), geom[0].ProbHiArray());
 
 	// compute error norm
 	amrex::MultiFab residual(boxArray(0), DistributionMap(0), ncomp, nghost);
