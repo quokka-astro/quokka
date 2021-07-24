@@ -239,9 +239,11 @@ auto problem_main() -> int
 	sim.is_hydro_enabled_ = true;
 	sim.is_radiation_enabled_ = true;
 	sim.stopTime_ = 0.076 * t0;
-	sim.cflNumber_ = 0.1;
+	sim.cflNumber_ = 0.3;
 	sim.maxTimesteps_ = 5000;
-	sim.plotfileInterval_ = 1;
+	sim.reconstructionOrder_ = 1; // donor cell
+	sim.integratorOrder_ = 1; // forward Euler
+	sim.plotfileInterval_ = 10;
 
 	// initialize
 	sim.setInitialConditions();
