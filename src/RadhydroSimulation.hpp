@@ -468,6 +468,8 @@ void RadhydroSimulation<problem_t>::hydroFluxFunction(
 		HydroSystem<problem_t>::template ReconstructStatesConstant<DIR>(
 			primVar.array(), x1LeftState.array(), x1RightState.array(),
 			x1ReconstructRange, nvars);
+	} else {
+		amrex::Abort("Invalid reconstruction order specified!");
 	}
 
 	// cell-centered kernel
