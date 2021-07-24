@@ -85,17 +85,25 @@ AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(
   amrex::GpuArray<int, 3> lo = box.loVect3d();
   amrex::GpuArray<int, 3> hi = box.hiVect3d();
 
-  if (i >= hi[0]) {
-    // x1 right-side boundary -- constant
-    double rho = 1.0;
-    double m = -3.44;
-    double E = 8.4168;
-    consVar(i, j, k, RadSystem<ShocktubeProblem>::gasDensity_index) = rho;
-    consVar(i, j, k, RadSystem<ShocktubeProblem>::x1GasMomentum_index) = m;
-    consVar(i, j, k, RadSystem<ShocktubeProblem>::x2GasMomentum_index) = 0.;
-    consVar(i, j, k, RadSystem<ShocktubeProblem>::x3GasMomentum_index) = 0.;
-    consVar(i, j, k, RadSystem<ShocktubeProblem>::gasEnergy_index) = E;
+  double rho = NAN;
+  double m = NAN;
+  double E = NAN;
+
+  if (i < lo[0]) {
+    rho = 3.86;
+    m = -3.1266;
+    E = 27.0913;
+  } else if (i >= hi[0]) {
+    rho = 1.0;
+    m = -3.44;
+    E = 8.4168;
   }
+
+  consVar(i, j, k, RadSystem<ShocktubeProblem>::gasDensity_index) = rho;
+  consVar(i, j, k, RadSystem<ShocktubeProblem>::x1GasMomentum_index) = m;
+  consVar(i, j, k, RadSystem<ShocktubeProblem>::x2GasMomentum_index) = 0.;
+  consVar(i, j, k, RadSystem<ShocktubeProblem>::x3GasMomentum_index) = 0.;
+  consVar(i, j, k, RadSystem<ShocktubeProblem>::gasEnergy_index) = E;
 }
 
 template <>
@@ -218,8 +226,8 @@ auto problem_main() -> int {
   const int nvars = RadhydroSimulation<ShocktubeProblem>::nvarTotal_;
   amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
   for (int n = 0; n < nvars; ++n) {
-    boundaryConditions[0].setLo(0, amrex::BCType::foextrap); // Dirichlet
-    boundaryConditions[0].setHi(0, amrex::BCType::foextrap);
+    boundaryConditions[0].setLo(0, amrex::BCType::ext_dir);
+    boundaryConditions[0].setHi(0, amrex::BCType::ext_dir);
     for (int i = 1; i < AMREX_SPACEDIM; ++i) {
       boundaryConditions[n].setLo(i, amrex::BCType::int_dir); // periodic
       boundaryConditions[n].setHi(i, amrex::BCType::int_dir);
@@ -233,6 +241,8 @@ auto problem_main() -> int {
   sim.constantDt_ = fixed_dt;
   sim.stopTime_ = max_time;
   sim.maxTimesteps_ = max_timesteps;
+  sim.integratorOrder_ = 2;     // use forward Euler
+  sim.reconstructionOrder_ = 3; // use donor cell
   sim.computeReferenceSolution_ = true;
   sim.plotfileInterval_ = -1;
 

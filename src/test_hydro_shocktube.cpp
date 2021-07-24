@@ -104,9 +104,6 @@ AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(
 
   if (i < lo[0]) {
     // x1 left side boundary -- constant
-    const double xmom_L =
-        consVar(lo[0], j, k, RadSystem<ShocktubeProblem>::x1GasMomentum_index);
-
     consVar(i, j, k, RadSystem<ShocktubeProblem>::gasEnergy_index) = P_L / (gamma - 1.);
     consVar(i, j, k, RadSystem<ShocktubeProblem>::gasDensity_index) = rho_L;
     consVar(i, j, k, RadSystem<ShocktubeProblem>::x1GasMomentum_index) = 0.;
@@ -114,9 +111,6 @@ AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(
     consVar(i, j, k, RadSystem<ShocktubeProblem>::x3GasMomentum_index) = 0.;
   } else if (i >= hi[0]) {
     // x1 right-side boundary -- constant
-    const double xmom_R =
-        consVar(hi[0], j, k, RadSystem<ShocktubeProblem>::x1GasMomentum_index);
-
     consVar(i, j, k, RadSystem<ShocktubeProblem>::gasEnergy_index) = P_R / (gamma - 1.);
     consVar(i, j, k, RadSystem<ShocktubeProblem>::gasDensity_index) = rho_R;
     consVar(i, j, k, RadSystem<ShocktubeProblem>::x1GasMomentum_index) = 0.;

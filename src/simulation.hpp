@@ -643,6 +643,9 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(int level, amrex::Real ti
 	// set state_new_[lev] to desired initial condition
 	setInitialConditionsAtLevel(level);
 
+	// check that state_new_[lev] is properly filled
+	AMREX_ALWAYS_ASSERT(!state_new_[level].contains_nan(0, ncomp));
+
 	// fill ghost zones
 	fillBoundaryConditions(state_new_[level], state_new_[level], level, time);
 

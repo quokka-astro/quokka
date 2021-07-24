@@ -9,6 +9,7 @@
 
 #include <cmath>
 
+#include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 
 #include "RadhydroSimulation.hpp"
@@ -66,6 +67,53 @@ void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsAtLevel(
 
   // set flag
   areInitialConditionsDefined_ = true;
+}
+
+template <>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(
+    const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar,
+    int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
+    const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
+    int /*orig_comp*/) {
+#if (AMREX_SPACEDIM == 1)
+  auto i = iv.toArray()[0];
+  int j = 0;
+  int k = 0;
+#endif
+#if (AMREX_SPACEDIM == 2)
+  auto [i, j] = iv.toArray();
+  int k = 0;
+#endif
+#if (AMREX_SPACEDIM == 3)
+  auto [i, j, k] = iv.toArray();
+#endif
+
+  amrex::Box const &box = geom.Domain();
+  amrex::GpuArray<int, 3> lo = box.loVect3d();
+  amrex::GpuArray<int, 3> hi = box.hiVect3d();
+
+  double vx = NAN;
+  double rho = NAN;
+  double P = NAN;
+
+  if (i < lo[0]) {
+    rho = 1.0;
+    vx = -2.0;
+    P = 0.4;
+  } else if (i >= hi[0]) {
+    rho = 1.0;
+    vx = 2.0;
+    P = 0.4;
+  }
+
+  double E = P / (HydroSystem<ShocktubeProblem>::gamma_ - 1.) + 0.5 * rho * (vx*vx);
+
+  consVar(i, j, k, RadSystem<ShocktubeProblem>::gasDensity_index) = rho;
+  consVar(i, j, k, RadSystem<ShocktubeProblem>::x1GasMomentum_index) = rho*vx;
+  consVar(i, j, k, RadSystem<ShocktubeProblem>::x2GasMomentum_index) = 0.;
+  consVar(i, j, k, RadSystem<ShocktubeProblem>::x3GasMomentum_index) = 0.;
+  consVar(i, j, k, RadSystem<ShocktubeProblem>::gasEnergy_index) = E;
 }
 
 template <>
@@ -222,8 +270,8 @@ auto problem_main() -> int {
   const int nvars = RadhydroSimulation<ShocktubeProblem>::nvarTotal_;
   amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
   for (int n = 0; n < nvars; ++n) {
-    boundaryConditions[0].setLo(0, amrex::BCType::foextrap); // extrapolate
-    boundaryConditions[0].setHi(0, amrex::BCType::foextrap);
+    boundaryConditions[0].setLo(0, amrex::BCType::ext_dir); // Dirichlet
+    boundaryConditions[0].setHi(0, amrex::BCType::ext_dir);
     for (int i = 1; i < AMREX_SPACEDIM; ++i) {
       boundaryConditions[n].setLo(i, amrex::BCType::int_dir); // periodic
       boundaryConditions[n].setHi(i, amrex::BCType::int_dir);

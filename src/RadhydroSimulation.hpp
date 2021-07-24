@@ -83,6 +83,9 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	bool computeReferenceSolution_ = false;
 	amrex::Real errorNorm_ = NAN;
 
+	int integratorOrder_ = 2; // 1 == forward Euler; 2 == RK2-SSP (default)
+	int reconstructionOrder_ = 3; // 1 == donor cell; 2 == PLM; 3 == PPM (default)
+
 	// member functions
 
 	explicit RadhydroSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions)
@@ -313,6 +316,13 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 {
 	BL_PROFILE("RadhydroSimulation::advanceHydroAtLevel()");
 
+	amrex::Real fluxScaleFactor = NAN;
+	if (integratorOrder_ == 2) {
+		fluxScaleFactor = 0.5;
+	} else if (integratorOrder_ == 1) {
+		fluxScaleFactor = 1.0;
+	}
+
 	// update ghost zones [old timestep]
 	fillBoundaryConditions(state_old_[lev], state_old_[lev], lev, time);
 
@@ -334,37 +344,39 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 			// increment flux registers
 			auto expandedFluxes = expandFluxArrays(fluxArrays, 0, state_new_[lev].nComp());
 			incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, expandedFluxes, lev,
-					       0.5 * dt_lev);
+					       fluxScaleFactor * dt_lev);
 		}
 	}
 
-	// check intermediate state validity
-	AMREX_ASSERT(!state_new_[lev].contains_nan(0, state_new_[lev].nComp()));
-	AMREX_ASSERT(!state_new_[lev].contains_nan()); // check ghost zones
+	if (integratorOrder_ == 2) {
+		// check intermediate state validity
+		AMREX_ASSERT(!state_new_[lev].contains_nan(0, state_new_[lev].nComp()));
+		AMREX_ASSERT(!state_new_[lev].contains_nan()); // check ghost zones
 
-	// update ghost zones [intermediate stage stored in state_new_]
-	fillBoundaryConditions(state_new_[lev], state_new_[lev], lev, time + dt_lev);
+		// update ghost zones [intermediate stage stored in state_new_]
+		fillBoundaryConditions(state_new_[lev], state_new_[lev], lev, time + dt_lev);
 
-	// advance all grids on local processor (Stage 2 of integrator)
-	for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
-		const amrex::Box &indexRange = iter.validbox(); // 'validbox' == exclude ghost zones
-		auto const &stateOld = state_old_[lev].const_array(iter);
-		auto const &stateInter = state_new_[lev].const_array(iter);
-		auto const &stateNew = state_new_[lev].array(iter);
-		auto fluxArrays = computeHydroFluxes(stateInter, indexRange, ncompHydro_);
+		// advance all grids on local processor (Stage 2 of integrator)
+		for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
+			const amrex::Box &indexRange = iter.validbox(); // 'validbox' == exclude ghost zones
+			auto const &stateOld = state_old_[lev].const_array(iter);
+			auto const &stateInter = state_new_[lev].const_array(iter);
+			auto const &stateNew = state_new_[lev].array(iter);
+			auto fluxArrays = computeHydroFluxes(stateInter, indexRange, ncompHydro_);
 
-		// Stage 2 of RK2-SSP
-		HydroSystem<problem_t>::AddFluxesRK2(
-		    stateNew, stateOld, stateInter,
-		    {AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
-				  fluxArrays[2].const_array())},
-		    dt_lev, geom[lev].CellSizeArray(), indexRange, ncompHydro_);
+			// Stage 2 of RK2-SSP
+			HydroSystem<problem_t>::AddFluxesRK2(
+				stateNew, stateOld, stateInter,
+				{AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
+					fluxArrays[2].const_array())},
+				dt_lev, geom[lev].CellSizeArray(), indexRange, ncompHydro_);
 
-		if (do_reflux) {
-			// increment flux registers
-			auto expandedFluxes = expandFluxArrays(fluxArrays, 0, state_new_[lev].nComp());
-			incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, expandedFluxes, lev,
-						0.5 * dt_lev);
+			if (do_reflux) {
+				// increment flux registers
+				auto expandedFluxes = expandFluxArrays(fluxArrays, 0, state_new_[lev].nComp());
+				incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, expandedFluxes, lev,
+							fluxScaleFactor * dt_lev);
+			}
 		}
 	}
 }
@@ -446,10 +458,17 @@ void RadhydroSimulation<problem_t>::hydroFluxFunction(
 	// cell-centered kernel
 	HydroSystem<problem_t>::ConservedToPrimitive(consState, primVar.array(), ghostRange);
 
-	// mixed interface/cell-centered kernel
-	HydroSystem<problem_t>::template ReconstructStatesPPM<DIR>(
-	    primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange,
-	    x1ReconstructRange, nvars);
+	if (reconstructionOrder_ == 3) {
+		// mixed interface/cell-centered kernel
+		HydroSystem<problem_t>::template ReconstructStatesPPM<DIR>(
+			primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange,
+			x1ReconstructRange, nvars);
+	} else if (reconstructionOrder_ == 1) {
+		// interface-centered kernel
+		HydroSystem<problem_t>::template ReconstructStatesConstant<DIR>(
+			primVar.array(), x1LeftState.array(), x1RightState.array(),
+			x1ReconstructRange, nvars);
+	}
 
 	// cell-centered kernel
 	HydroSystem<problem_t>::template ComputeFlatteningCoefficients<DIR>(
