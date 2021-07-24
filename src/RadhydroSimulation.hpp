@@ -305,12 +305,15 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 	// since we are starting a new timestep, need to swap old and new state vectors
 	std::swap(state_old_[lev], state_new_[lev]);
 
+	// check hydro states before update
+	checkHydroStates(lev);
+
 	// advance hydro
 	if (is_hydro_enabled_) {
 		advanceHydroAtLevel(lev, time, dt_lev, fr_as_crse, fr_as_fine);
 	}
 
-	// check hydro states
+	// check hydro states after update
 	checkHydroStates(lev);
 
 	// subcycle radiation
