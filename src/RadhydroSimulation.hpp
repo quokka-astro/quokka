@@ -598,7 +598,8 @@ void RadhydroSimulation<problem_t>::advanceRadiationSubstepAtLevel(
 	amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine)
 {
 	if (Verbose()) {
-		amrex::Print() << "\tsubstep " << iter << " t = " << time << " dt = " << dt_radiation << std::endl;
+		amrex::Print() << "\tsubstep " << iter << " t = " << time
+					   << "\t t+dt = " << time+dt_radiation << std::endl;
 	}
 
 	// get cell sizes
