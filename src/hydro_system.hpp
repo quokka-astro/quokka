@@ -12,12 +12,16 @@
 // c++ headers
 
 // library headers
+#include "AMReX_Arena.H"
 #include "AMReX_BLassert.H"
+#include "AMReX_FArrayBox.H"
+#include "AMReX_Loop.H"
 #include "AMReX_REAL.H"
 
 // internal headers
 #include "ArrayView.hpp"
 #include "hyperbolic_system.hpp"
+#include "radiation_system.hpp"
 #include "valarray.hpp"
 
 // this struct is specialized by the user application code
@@ -54,7 +58,8 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	static void ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real> const &cons,
 					  array_t &maxSignal, amrex::Box const &indexRange);
 	// requires GPU reductions
-	// static auto CheckStatesValid(array_t &cons, const std::pair<int, int> range) -> bool;
+	static auto CheckStatesValid(amrex::Box const &indexRange, amrex::Array4<const amrex::Real> const &cons)
+    				  -> bool;
 
 	AMREX_GPU_DEVICE static auto ComputePressure(amrex::Array4<const amrex::Real> const &cons,
 						     int i, int j, int k) -> amrex::Real;
@@ -109,8 +114,8 @@ void HydroSystem<problem_t>::ConservedToPrimitive(amrex::Array4<const amrex::Rea
 
 		const auto P = thermal_energy * (HydroSystem<problem_t>::gamma_ - 1.0);
 
-		AMREX_ASSERT(rho > 0.); // NOLINT
-		AMREX_ASSERT(P > 0.);	// NOLINT
+		AMREX_ASSERT(rho > 0.);
+		AMREX_ASSERT(P > 0.);
 
 		primVar(i, j, k, primDensity_index) = rho;
 		primVar(i, j, k, x1Velocity_index) = vx;
@@ -146,7 +151,7 @@ void HydroSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Re
 		const auto P = thermal_energy * (HydroSystem<problem_t>::gamma_ - 1.0);
 
 		const double cs = std::sqrt(HydroSystem<problem_t>::gamma_ * P / rho);
-		AMREX_ASSERT(cs > 0.); // NOLINT
+		AMREX_ASSERT(cs > 0.);
 
 		const double vel_mag = std::sqrt(vx * vx + vy * vy + vz * vz);
 		const double signal_max = vel_mag + cs;
@@ -154,37 +159,36 @@ void HydroSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Re
 	});
 }
 
-#if 0
+
 template <typename problem_t>
-auto HydroSystem<problem_t>::CheckStatesValid(amrex::Array4<const amrex::Real> const &cons, amrex::Box const &indexRange)
+auto HydroSystem<problem_t>::CheckStatesValid(amrex::Box const &indexRange, amrex::Array4<const amrex::Real> const &cons)
     -> bool
 {
 	bool areValid = true;
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		const auto rho = cons(density_index, i);
-		const auto px = cons(x1Momentum_index, i);
-		const auto E = cons(energy_index, i); // *total* gas energy per unit volume
-
+	AMREX_LOOP_3D(indexRange, i, j, k, {
+		const auto rho = cons(i, j, k, density_index);
+		const auto px = cons(i, j, k, x1Momentum_index);
+		const auto py = cons(i, j, k, x2Momentum_index);
+		const auto pz = cons(i, j, k, x3Momentum_index);
+		const auto E = cons(i, j, k, energy_index); // *total* gas energy per unit volume
 		const auto vx = px / rho;
-		const auto kinetic_energy = 0.5 * rho * std::pow(vx, 2);
+		const auto vy = py / rho;
+		const auto vz = pz / rho;
+		const auto kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
 		const auto thermal_energy = E - kinetic_energy;
+		const auto P = thermal_energy * (HydroSystem<problem_t>::gamma_ - 1.0);
 
-		const auto P = thermal_energy * (gamma_ - 1.0);
+		bool negativeDensity = (rho <= 0.);
+		bool negativePressure = (P <= 0.);
 
-		if (rho <= 0.) {
-			amrex::Print() << "Bad cell i = " << i << " (negative density = " << rho
-				       << ")." << std::endl;
+		if (negativeDensity || negativePressure) {
 			areValid = false;
 		}
-		if (P <= 0.) {
-			amrex::Print() << "Bad cell i = " << i << " (negative pressure = " << P
-				       << ")." << std::endl;
-			areValid = false;
-		}
-	});
+	})
+
 	return areValid;
 }
-#endif
+
 
 template <typename problem_t>
 AMREX_GPU_DEVICE auto

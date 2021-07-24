@@ -107,6 +107,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 				   "x-RadFlux",	    "y-RadFlux",     "z-RadFlux"};
 	}
 
+	void checkHydroStates(int level);
 	void computeMaxSignalLocal(int level) override;
 	void setInitialConditionsAtLevel(int level) override;
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev,
@@ -128,8 +129,9 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 				 amrex::YAFluxRegister *fr_as_fine);
 
 	// radiation subcycle
-	void advanceSingleTimestepAtLevelRadiation(int lev, amrex::Real time,
-						   amrex::Real dt_radiation,
+	void swapRadiationState(amrex::MultiFab &stateOld, amrex::MultiFab const &stateNew);
+	void advanceRadiationSubstepAtLevel(int lev, amrex::Real time,
+						   amrex::Real dt_radiation, int iteration, int nsubsteps,
 						   amrex::YAFluxRegister *fr_as_crse,
 						   amrex::YAFluxRegister *fr_as_fine);
 	void subcycleRadiationAtLevel(int lev, amrex::Real time, amrex::Real dt_lev_hydro,
@@ -137,8 +139,9 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 				      amrex::YAFluxRegister *fr_as_fine);
 
 	void operatorSplitSourceTerms(amrex::Array4<amrex::Real> const &stateNew,
-				      const amrex::Box &indexRange, int /*nvars*/, amrex::Real time,
-				      double dt, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx);
+			const amrex::Box &indexRange, amrex::Real time, double dt,
+			amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+			amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo);
 
 	auto computeRadiationFluxes(amrex::Array4<const amrex::Real> const &consVar,
 				    const amrex::Box &indexRange, int nvars,
@@ -171,6 +174,7 @@ void RadhydroSimulation<problem_t>::computeMaxSignalLocal(int const level)
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &stateNew = state_new_[level].const_array(iter);
 		auto const &maxSignal = max_signal_speed_[level].array(iter);
+
 		if (is_hydro_enabled_) {
 			// hydro enabled
 			HydroSystem<problem_t>::ComputeMaxSignalSpeed(stateNew, maxSignal,
@@ -184,6 +188,18 @@ void RadhydroSimulation<problem_t>::computeMaxSignalLocal(int const level)
 			amrex::Abort("At least one of hydro or radiation must be enabled! Cannot "
 				     "compute a time step.");
 		}
+	}
+}
+
+template <typename problem_t>
+void RadhydroSimulation<problem_t>::checkHydroStates(int const level)
+{
+	BL_PROFILE("RadhydroSimulation::checkHydroStates()");
+
+	for (amrex::MFIter iter(state_new_[level]); iter.isValid(); ++iter) {
+		const amrex::Box &indexRange = iter.validbox();
+		auto const &stateNew = state_new_[level].const_array(iter);
+		AMREX_ALWAYS_ASSERT(HydroSystem<problem_t>::CheckStatesValid(indexRange, stateNew));
 	}
 }
 
@@ -273,13 +289,6 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 {
 	BL_PROFILE("RadhydroSimulation::advanceSingleTimestepAtLevel()");
 
-	// since we are starting a new timestep, need to swap old and new states on this level
-	std::swap(state_old_[lev], state_new_[lev]);
-
-	// check state validity
-	AMREX_ASSERT(!state_old_[lev].contains_nan(0, state_old_[lev].nComp()));
-	AMREX_ASSERT(!state_old_[lev].contains_nan()); // check ghost cells
-
 	// get flux registers
 	amrex::YAFluxRegister *fr_as_crse = nullptr;
 	amrex::YAFluxRegister *fr_as_fine = nullptr;
@@ -293,10 +302,16 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 		}
 	}
 
+	// since we are starting a new timestep, need to swap old and new state vectors
+	std::swap(state_old_[lev], state_new_[lev]);
+
 	// advance hydro
 	if (is_hydro_enabled_) {
 		advanceHydroAtLevel(lev, time, dt_lev, fr_as_crse, fr_as_fine);
 	}
+
+	// check hydro states
+	checkHydroStates(lev);
 
 	// subcycle radiation
 	if (is_radiation_enabled_) {
@@ -326,6 +341,10 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 	// update ghost zones [old timestep]
 	fillBoundaryConditions(state_old_[lev], state_old_[lev], lev, time);
 
+	// check state validity
+	AMREX_ASSERT(!state_old_[lev].contains_nan(0, state_old_[lev].nComp()));
+	AMREX_ASSERT(!state_old_[lev].contains_nan()); // check ghost cells
+
 	// advance all grids on local processor (Stage 1 of integrator)
 	for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox(); // 'validbox' == exclude ghost zones
@@ -346,15 +365,17 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 			incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, expandedFluxes, lev,
 					       fluxScaleFactor * dt_lev);
 		}
+
+		AMREX_ASSERT(HydroSystem<problem_t>::CheckStatesValid(indexRange, stateNew));
 	}
 
 	if (integratorOrder_ == 2) {
+		// update ghost zones [intermediate stage stored in state_new_]
+		fillBoundaryConditions(state_new_[lev], state_new_[lev], lev, time + dt_lev);
+
 		// check intermediate state validity
 		AMREX_ASSERT(!state_new_[lev].contains_nan(0, state_new_[lev].nComp()));
 		AMREX_ASSERT(!state_new_[lev].contains_nan()); // check ghost zones
-
-		// update ghost zones [intermediate stage stored in state_new_]
-		fillBoundaryConditions(state_new_[lev], state_new_[lev], lev, time + dt_lev);
 
 		// advance all grids on local processor (Stage 2 of integrator)
 		for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
@@ -377,6 +398,8 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 				incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, expandedFluxes, lev,
 							fluxScaleFactor * dt_lev);
 			}
+
+			AMREX_ASSERT(HydroSystem<problem_t>::CheckStatesValid(indexRange, stateNew));
 		}
 	}
 }
@@ -489,12 +512,19 @@ void RadhydroSimulation<problem_t>::hydroFluxFunction(
 }
 
 template <typename problem_t>
+void RadhydroSimulation<problem_t>::swapRadiationState(amrex::MultiFab &stateOld, amrex::MultiFab const &stateNew)
+{
+	// copy radiation state variables from stateNew to stateOld
+	amrex::MultiFab::Copy(stateOld, stateNew, nstartHyperbolic_, nstartHyperbolic_, ncompHyperbolic_, 0);
+}
+
+template <typename problem_t>
 void RadhydroSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real time,
 							     amrex::Real dt_lev_hydro,
 							     amrex::YAFluxRegister *fr_as_crse,
 							     amrex::YAFluxRegister *fr_as_fine)
 {
-	// compute radiation timestep 'dtrad_tmp'
+	// compute radiation timestep
 	amrex::Real domain_signal_max = RadSystem<problem_t>::c_hat_;
 	auto const &dx = geom[lev].CellSizeArray();
 	amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
@@ -505,9 +535,8 @@ void RadhydroSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Rea
 
 	if (is_hydro_enabled_ && !(constantDt_ > 0.)) {
 		// adjust to get integer number of substeps
-		amrex::Real dt_hydro = dt_lev_hydro;
-		nsubSteps = std::ceil(dt_hydro / dtrad_tmp);
-		dt_radiation = dt_hydro / static_cast<double>(nsubSteps);
+		nsubSteps = std::ceil(dt_lev_hydro / dtrad_tmp);
+		dt_radiation = dt_lev_hydro / static_cast<double>(nsubSteps);
 	} else { // no hydro, or using constant dt (this is necessary for radiation test problems)
 		dt_radiation = dt_lev_hydro;
 		nsubSteps = 1;
@@ -522,101 +551,132 @@ void RadhydroSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Rea
 			       << "\n";
 	}
 
-	// subcycle
+	// perform subcycle
+	amrex::Real time_subcycle = time;
 	for (int i = 0; i < nsubSteps; ++i) {
-		advanceSingleTimestepAtLevelRadiation(lev, time, dt_radiation, fr_as_crse,
-						      fr_as_fine);
+		if (i > 0) {
+			// since we are starting a new substep, we need to copy radiation state from
+			// 	new state vector to old state vector
+			// (this is not necessary for the i=0 substep because we have already swapped
+			//  the full hydro+radiation state vectors at the beginning of the level advance)
+			swapRadiationState(state_old_[lev], state_new_[lev]);
+		}
+
+		// advance hyperbolic radiation subsystem starting from state_old_ to state_new_
+		advanceRadiationSubstepAtLevel(lev, time_subcycle, dt_radiation, i, nsubSteps,
+							  fr_as_crse, fr_as_fine);
+
+		// new radiation state is stored in state_new_
+		// new hydro state is stored in state_new_ (always the case during radiation update)
+
+		// matter-radiation exchange source terms
+		for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
+			const amrex::Box &indexRange = iter.validbox();
+			auto const &stateNew = state_new_[lev].array(iter);
+			auto const &prob_lo = geom[lev].ProbLoArray();
+			// update state_new_[lev] in place (updates both radiation and hydro vars)
+			operatorSplitSourceTerms(stateNew, indexRange, time_subcycle, dt_radiation, dx, prob_lo);
+		}
+
+		// new hydro+radiation state is stored in state_new_
+
+		// check hydro states post-update
+		// [If this fails, the *most likely* cause is that the flow is radiation-pressure-dominated,
+		//  and the hydro timestep is larger than the timescale of radiative acceleration.
+		//  In this case, in the radiation work term \vec{v} dot (-\vec{F_rad}/c^2),
+		//  v cannot be approximated as constant!]
+		checkHydroStates(lev);
+
+		// update 'time_subcycle'
+		time_subcycle += dt_radiation;
 	}
 }
 
 template <typename problem_t>
-void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevelRadiation(
-    int lev, amrex::Real time, amrex::Real dt_radiation, amrex::YAFluxRegister *fr_as_crse,
-    amrex::YAFluxRegister *fr_as_fine)
+void RadhydroSimulation<problem_t>::advanceRadiationSubstepAtLevel(
+    int lev, amrex::Real time, amrex::Real dt_radiation, int const iter, int const /*nsubsteps*/,
+	amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine)
 {
+	if (Verbose()) {
+		amrex::Print() << "\tsubstep " << iter << " t = " << time << " dt = " << dt_radiation << std::endl;
+	}
+
 	// get cell sizes
 	auto const &dx = geom[lev].CellSizeArray();
 
 	// We use the RK2-SSP method here. It needs two registers: one to store the old timestep,
 	// and another to store the intermediate stage (which is reused for the final stage).
 
-	if (!disable_radiation_transport_terms) {
-		// update ghost zones [old timestep]
-		fillBoundaryConditions(state_old_[lev], state_old_[lev], lev, time);
+	// update ghost zones [old timestep]
+	fillBoundaryConditions(state_old_[lev], state_old_[lev], lev, time);
 
-		// advance all grids on local processor (Stage 1 of integrator)
-		for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
-			const amrex::Box &indexRange = iter.validbox();
-			auto const &stateOld = state_old_[lev].const_array(iter);
-			auto const &stateNew = state_new_[lev].array(iter);
-			auto [fluxArrays, fluxDiffusiveArrays] =
-				computeRadiationFluxes(stateOld, indexRange, ncompHyperbolic_, dx);
+	// advance all grids on local processor (Stage 1 of integrator)
+	for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
+		const amrex::Box &indexRange = iter.validbox();
+		auto const &stateOld = state_old_[lev].const_array(iter);
+		auto const &stateNew = state_new_[lev].array(iter);
+		auto [fluxArrays, fluxDiffusiveArrays] =
+			computeRadiationFluxes(stateOld, indexRange, ncompHyperbolic_, dx);
 
-			// Stage 1 of RK2-SSP
-			RadSystem<problem_t>::PredictStep(
-				stateOld, stateNew,
-				{AMREX_D_DECL(fluxArrays[0].array(), fluxArrays[1].array(),
-					fluxArrays[2].array())},
-				{AMREX_D_DECL(fluxDiffusiveArrays[0].const_array(),
-					fluxDiffusiveArrays[1].const_array(),
-					fluxDiffusiveArrays[2].const_array())},
-				dt_radiation, dx, indexRange, ncompHyperbolic_);
+		// Stage 1 of RK2-SSP
+		RadSystem<problem_t>::PredictStep(
+			stateOld, stateNew,
+			{AMREX_D_DECL(fluxArrays[0].array(), fluxArrays[1].array(),
+				fluxArrays[2].array())},
+			{AMREX_D_DECL(fluxDiffusiveArrays[0].const_array(),
+				fluxDiffusiveArrays[1].const_array(),
+				fluxDiffusiveArrays[2].const_array())},
+			dt_radiation, dx, indexRange, ncompHyperbolic_);
 
-			if (do_reflux) {
-				// increment flux registers
-				// WARNING: as written, diffusive flux correction is not compatible with reflux!!
-				auto expandedFluxes =
-					expandFluxArrays(fluxArrays, nstartHyperbolic_, state_new_[lev].nComp());
-				incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, expandedFluxes, lev,
-							0.5 * dt_radiation);
-			}
-		}
-
-		// update ghost zones [intermediate stage stored in state_new_]
-		fillBoundaryConditions(state_new_[lev], state_new_[lev], lev, time + dt_radiation);
-
-		// advance all grids on local processor (Stage 2 of integrator)
-		for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
-			const amrex::Box &indexRange = iter.validbox();
-			auto const &stateOld = state_old_[lev].const_array(iter);
-			auto const &stateInter = state_new_[lev].const_array(iter);
-			auto const &stateNew = state_new_[lev].array(iter);
-			auto [fluxArrays, fluxDiffusiveArrays] =
-				computeRadiationFluxes(stateInter, indexRange, ncompHyperbolic_, dx);
-
-			// Stage 2 of RK2-SSP
-			RadSystem<problem_t>::AddFluxesRK2(
-				stateNew, stateOld, stateInter,
-				{AMREX_D_DECL(fluxArrays[0].array(), fluxArrays[1].array(),
-					fluxArrays[2].array())},
-				{AMREX_D_DECL(fluxDiffusiveArrays[0].const_array(),
-					fluxDiffusiveArrays[1].const_array(),
-					fluxDiffusiveArrays[2].const_array())},
-				dt_radiation, dx, indexRange, ncompHyperbolic_);
-
-			if (do_reflux) {
-				// increment flux registers
-				// WARNING: as written, diffusive flux correction is not compatible with reflux!!
-				auto expandedFluxes =
-					expandFluxArrays(fluxArrays, nstartHyperbolic_, state_new_[lev].nComp());
-				incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, expandedFluxes, lev,
-							0.5 * dt_radiation);
-			}
+		if (do_reflux) {
+			// increment flux registers
+			// WARNING: as written, diffusive flux correction is not compatible with reflux!!
+			auto expandedFluxes =
+				expandFluxArrays(fluxArrays, nstartHyperbolic_, state_new_[lev].nComp());
+			incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, expandedFluxes, lev,
+						0.5 * dt_radiation);
 		}
 	}
 
-	// matter-radiation exchange source terms
+	// update ghost zones [intermediate stage stored in state_new_]
+	fillBoundaryConditions(state_new_[lev], state_new_[lev], lev, time + dt_radiation);
+
+	// advance all grids on local processor (Stage 2 of integrator)
 	for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
+		auto const &stateOld = state_old_[lev].const_array(iter);
+		auto const &stateInter = state_new_[lev].const_array(iter);
 		auto const &stateNew = state_new_[lev].array(iter);
-		operatorSplitSourceTerms(stateNew, indexRange, ncomp_, time, dt_radiation, dx);
+		auto [fluxArrays, fluxDiffusiveArrays] =
+			computeRadiationFluxes(stateInter, indexRange, ncompHyperbolic_, dx);
+
+		// Stage 2 of RK2-SSP
+		RadSystem<problem_t>::AddFluxesRK2(
+			stateNew, stateOld, stateInter,
+			{AMREX_D_DECL(fluxArrays[0].array(), fluxArrays[1].array(),
+				fluxArrays[2].array())},
+			{AMREX_D_DECL(fluxDiffusiveArrays[0].const_array(),
+				fluxDiffusiveArrays[1].const_array(),
+				fluxDiffusiveArrays[2].const_array())},
+			dt_radiation, dx, indexRange, ncompHyperbolic_);
+
+		if (do_reflux) {
+			// increment flux registers
+			// WARNING: as written, diffusive flux correction is not compatible with reflux!!
+			auto expandedFluxes =
+				expandFluxArrays(fluxArrays, nstartHyperbolic_, state_new_[lev].nComp());
+			incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, expandedFluxes, lev,
+						0.5 * dt_radiation);
+		}
 	}
 }
 
 template <typename problem_t>
 void RadhydroSimulation<problem_t>::operatorSplitSourceTerms(
-    amrex::Array4<amrex::Real> const &stateNew, const amrex::Box &indexRange, const int /*nvars*/,
-    const amrex::Real time, const double dt, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx)
+    amrex::Array4<amrex::Real> const &stateNew, const amrex::Box &indexRange, 
+	const amrex::Real time, const double dt,
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
 	amrex::FArrayBox radEnergySource(indexRange, 1,
 					 amrex::The_Async_Arena()); // cell-centered scalar
@@ -627,8 +687,8 @@ void RadhydroSimulation<problem_t>::operatorSplitSourceTerms(
 	advectionFluxes.setVal<amrex::RunOn::Device>(0.);
 
 	// cell-centered radiation energy source (used only in test problems)
-	RadSystem<problem_t>::SetRadEnergySource(radEnergySource.array(), indexRange, dx,
-						 time + dt);
+	RadSystem<problem_t>::SetRadEnergySource(radEnergySource.array(), indexRange,
+						 dx, prob_lo, time + dt);
 
 	// cell-centered source terms
 	RadSystem<problem_t>::AddSourceTerms(stateNew, radEnergySource.const_array(),
