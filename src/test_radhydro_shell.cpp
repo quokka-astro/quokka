@@ -244,6 +244,7 @@ auto problem_main() -> int
 	sim.reconstructionOrder_ = 1; // donor cell
 	sim.integratorOrder_ = 1; // forward Euler
 	sim.plotfileInterval_ = 100;
+	sim.checkpointInterval_ = 500;
 
 	// initialize
 	sim.setInitialConditions();
