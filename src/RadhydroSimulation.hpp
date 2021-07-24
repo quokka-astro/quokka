@@ -489,6 +489,11 @@ void RadhydroSimulation<problem_t>::hydroFluxFunction(
 		HydroSystem<problem_t>::template ReconstructStatesPPM<DIR>(
 			primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange,
 			x1ReconstructRange, nvars);
+	} else if (reconstructionOrder_ == 2) {
+		// interface-centered kernel
+		HydroSystem<problem_t>::template ReconstructStatesPLM<DIR>(
+			primVar.array(), x1LeftState.array(), x1RightState.array(),
+			x1ReconstructRange, nvars);
 	} else if (reconstructionOrder_ == 1) {
 		// interface-centered kernel
 		HydroSystem<problem_t>::template ReconstructStatesConstant<DIR>(
@@ -601,8 +606,7 @@ void RadhydroSimulation<problem_t>::advanceRadiationSubstepAtLevel(
 	amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine)
 {
 	if (Verbose()) {
-		amrex::Print() << "\tsubstep " << iter << " t = " << time
-					   << "\t t+dt = " << time+dt_radiation << std::endl;
+		amrex::Print() << "\tsubstep " << iter << " t = " << time << std::endl;
 	}
 
 	// get cell sizes
