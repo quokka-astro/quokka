@@ -241,8 +241,8 @@ auto problem_main() -> int
 	sim.stopTime_ = 0.076 * t0;
 	sim.cflNumber_ = 0.3;
 	sim.maxTimesteps_ = 5000;
-	sim.reconstructionOrder_ = 2; // PLM
-	sim.integratorOrder_ = 2; // RK2-SSP
+	sim.reconstructionOrder_ = 1; // donor cell
+	sim.integratorOrder_ = 1; // forward Euler
 	sim.plotfileInterval_ = 100;
 
 	// initialize
