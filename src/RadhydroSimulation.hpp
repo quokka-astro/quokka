@@ -305,9 +305,6 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 	// since we are starting a new timestep, need to swap old and new state vectors
 	std::swap(state_old_[lev], state_new_[lev]);
 
-	// check hydro states before update
-	checkHydroStates(lev);
-
 	// advance hydro
 	if (is_hydro_enabled_) {
 		advanceHydroAtLevel(lev, time, dt_lev, fr_as_crse, fr_as_fine);
@@ -368,8 +365,6 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 			incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, expandedFluxes, lev,
 					       fluxScaleFactor * dt_lev);
 		}
-
-		AMREX_ASSERT(HydroSystem<problem_t>::CheckStatesValid(indexRange, stateNew));
 	}
 
 	if (integratorOrder_ == 2) {
@@ -401,8 +396,6 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 				incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, expandedFluxes, lev,
 							fluxScaleFactor * dt_lev);
 			}
-
-			AMREX_ASSERT(HydroSystem<problem_t>::CheckStatesValid(indexRange, stateNew));
 		}
 	}
 }
@@ -593,7 +586,7 @@ void RadhydroSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Rea
 		//  and the hydro timestep is larger than the timescale of radiative acceleration.
 		//  In this case, in the radiation work term \vec{v} dot (-\vec{F_rad}/c^2),
 		//  v cannot be approximated as constant!]
-		checkHydroStates(lev);
+		//checkHydroStates(lev);
 
 		// update 'time_subcycle'
 		time_subcycle += dt_radiation;

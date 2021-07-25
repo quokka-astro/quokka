@@ -75,7 +75,7 @@ void RadSystem<ShellProblem>::SetRadEnergySource(array_t &radEnergy, const amrex
 	amrex::Real const y0 = 0.;
 	amrex::Real const z0 = 0.;
 
-	amrex::Real sigma = 2.0*dx[0];
+	amrex::Real sigma = 8.0*dx[0];
 	amrex::Real normalisation = (4.0*M_PI/c) * L_star / std::pow(2.0*M_PI*sigma*sigma, 1.5);
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -241,8 +241,8 @@ auto problem_main() -> int
 	sim.maxTimesteps_ = 5000;
 	sim.reconstructionOrder_ = 1; // donor cell
 	sim.integratorOrder_ = 1; // forward Euler
-	sim.plotfileInterval_ = 100;
-	sim.checkpointInterval_ = 500;
+	sim.plotfileInterval_ = 500;
+	sim.checkpointInterval_ = 1000;
 
 	// initialize
 	sim.setInitialConditions();
