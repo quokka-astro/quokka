@@ -75,7 +75,7 @@ void RadSystem<ShellProblem>::SetRadEnergySource(array_t &radEnergy, const amrex
 	amrex::Real const y0 = 0.;
 	amrex::Real const z0 = 0.;
 
-	amrex::Real sigma = 0.1*r_0; //2.0*dx[0];
+	amrex::Real sigma = 2.0*dx[0];
 	amrex::Real normalisation = (4.0*M_PI/c) * L_star / std::pow(2.0*M_PI*sigma*sigma, 1.5);
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -92,7 +92,7 @@ void RadSystem<ShellProblem>::SetRadEnergySource(array_t &radEnergy, const amrex
 template <>
 auto RadSystem<ShellProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> double
 {
-	return 0.0; // (0.01 * kappa0);
+	return 0.0;
 }
 
 template <>
@@ -122,17 +122,15 @@ template <> void RadhydroSimulation<ShellProblem>::setInitialConditionsAtLevel(i
 			amrex::Real const r = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2) +
 							std::pow(z - z0, 2));
 
-			double rho = NAN;
+			double rho = rho_0;
 			double vx = 0.;
 			double vy = 0.;
 			double vz = 0.;
 			double P = P_0;
 
-			if (r < r_0) { // inside sphere
-				rho = rho_0;
-			} else {
-				rho = 0.01 * rho_0;
-			}
+			//if (r > r_0) {
+			//	rho = 0.01 * rho_0;
+			//}
 
 			AMREX_ASSERT(!std::isnan(vx));
 			AMREX_ASSERT(!std::isnan(vy));
