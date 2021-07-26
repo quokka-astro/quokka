@@ -44,7 +44,7 @@ constexpr double Egas0 = rho0 * c_v * T0;
 constexpr double Erad1 = a_rad * (T1*T1*T1*T1);
 constexpr double Egas1 = rho1 * c_v * T1;
 
-constexpr double shock_position = 0.0128; // 0.0132; // cm
+constexpr double shock_position = 0.0130; // 0.0132; // cm
 		// (shock position drifts to the right slightly during the simulation, so
 	    // we initialize slightly to the left...)
 
