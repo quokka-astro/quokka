@@ -13,10 +13,10 @@
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 
-#include "test_hydro_leblanc.hpp"
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
 #include "hydro_system.hpp"
+#include "test_hydro_leblanc.hpp"
 
 struct ShocktubeProblem {};
 
@@ -71,6 +71,52 @@ void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsAtLevel(
 
   // set flag
   areInitialConditionsDefined_ = true;
+}
+
+template <>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(
+    const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar,
+    int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
+    const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
+    int /*orig_comp*/) {
+#if (AMREX_SPACEDIM == 1)
+  auto i = iv.toArray()[0];
+  int j = 0;
+  int k = 0;
+#endif
+#if (AMREX_SPACEDIM == 2)
+  auto [i, j] = iv.toArray();
+  int k = 0;
+#endif
+#if (AMREX_SPACEDIM == 3)
+  auto [i, j, k] = iv.toArray();
+#endif
+
+  amrex::Box const &box = geom.Domain();
+  amrex::GpuArray<int, 3> lo = box.loVect3d();
+  amrex::GpuArray<int, 3> hi = box.hiVect3d();
+
+  const double vx = 0.0;
+  double rho = NAN;
+  double P = NAN;
+
+  if (i < lo[0]) {
+    rho = 1.0;
+    P = (2. / 3.) * 1.0e-1;
+  } else if (i >= hi[0]) {
+    rho = 1.0e-3;
+    P = (2. / 3.) * 1.0e-10;
+  }
+
+  double E =
+      P / (HydroSystem<ShocktubeProblem>::gamma_ - 1.) + 0.5 * rho * (vx * vx);
+
+  consVar(i, j, k, RadSystem<ShocktubeProblem>::gasDensity_index) = rho;
+  consVar(i, j, k, RadSystem<ShocktubeProblem>::x1GasMomentum_index) = rho * vx;
+  consVar(i, j, k, RadSystem<ShocktubeProblem>::x2GasMomentum_index) = 0.;
+  consVar(i, j, k, RadSystem<ShocktubeProblem>::x3GasMomentum_index) = 0.;
+  consVar(i, j, k, RadSystem<ShocktubeProblem>::gasEnergy_index) = E;
 }
 
 template <>
@@ -172,29 +218,33 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
   auto [pos_exact, val_exact] = fextract(ref, geom[0], 0, 0.5);
 
   if (amrex::ParallelDescriptor::IOProcessor()) {
-	// extract values
-	std::vector<double> d(nx);
-	std::vector<double> vx(nx);
-	std::vector<double> P(nx);
-	std::vector<double> eint(nx);
+    // extract values
+    std::vector<double> d(nx);
+    std::vector<double> vx(nx);
+    std::vector<double> P(nx);
+    std::vector<double> eint(nx);
 
-	for(int i = 0; i < nx; ++i) {
-		amrex::Real rho = values.at(HydroSystem<ShocktubeProblem>::density_index).at(i);
-		amrex::Real xmom = values.at(HydroSystem<ShocktubeProblem>::x1Momentum_index).at(i);
-		amrex::Real Egas = values.at(HydroSystem<ShocktubeProblem>::energy_index).at(i);
+    for (int i = 0; i < nx; ++i) {
+      amrex::Real rho =
+          values.at(HydroSystem<ShocktubeProblem>::density_index).at(i);
+      amrex::Real xmom =
+          values.at(HydroSystem<ShocktubeProblem>::x1Momentum_index).at(i);
+      amrex::Real Egas =
+          values.at(HydroSystem<ShocktubeProblem>::energy_index).at(i);
 
-		amrex::Real xvel = xmom / rho;
-		amrex::Real Eint = Egas - xmom*xmom/(2.0*rho);
-		amrex::Real specific_Eint = Eint / rho;
-		amrex::Real pressure = (HydroSystem<ShocktubeProblem>::gamma_ - 1.) * Eint;
+      amrex::Real xvel = xmom / rho;
+      amrex::Real Eint = Egas - xmom * xmom / (2.0 * rho);
+      amrex::Real specific_Eint = Eint / rho;
+      amrex::Real pressure =
+          (HydroSystem<ShocktubeProblem>::gamma_ - 1.) * Eint;
 
-		d.at(i) = rho;
-		vx.at(i) = xvel;
-		P.at(i) = pressure;
-		eint.at(i) = specific_Eint;
-	}
+      d.at(i) = rho;
+      vx.at(i) = xvel;
+      P.at(i) = pressure;
+      eint.at(i) = specific_Eint;
+    }
 
-	// density, velocity, pressure plot
+    // density, velocity, pressure plot
     matplotlibcpp::clf();
 
     std::map<std::string, std::string> d_args;
@@ -214,8 +264,7 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
 
     matplotlibcpp::legend();
     matplotlibcpp::title(fmt::format("t = {:.4f}", tNew_[0]));
-    matplotlibcpp::save(
-        fmt::format("./hydro_leblanc_{:.4f}.pdf", tNew_[0]));
+    matplotlibcpp::save(fmt::format("./hydro_leblanc_{:.4f}.pdf", tNew_[0]));
 
     // internal energy plot
     matplotlibcpp::clf();

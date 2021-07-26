@@ -49,6 +49,8 @@ AMREX_GPU_DEVICE void computeWaveSolution(
 
   state(i, j, k, HydroSystem<WaveProblem>::density_index) = U_0[0] + dU[0];
   state(i, j, k, HydroSystem<WaveProblem>::x1Momentum_index) = U_0[1] + dU[1];
+  state(i, j, k, HydroSystem<WaveProblem>::x2Momentum_index) = 0;
+  state(i, j, k, HydroSystem<WaveProblem>::x3Momentum_index) = 0;
   state(i, j, k, HydroSystem<WaveProblem>::energy_index) = U_0[2] + dU[2];
 }
 
@@ -62,6 +64,9 @@ void RadhydroSimulation<WaveProblem>::setInitialConditionsAtLevel(int lev) {
     const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
     auto const &state = state_new_[lev].array(iter);
     amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+      for(int n = 0; n < ncomp_; ++n) {
+        state(i, j, k, n) = 0; // fill unused components with zeros
+      }
       computeWaveSolution(i, j, k, state, dx, prob_lo);
     });
   }

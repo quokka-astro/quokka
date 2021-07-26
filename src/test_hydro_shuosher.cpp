@@ -95,22 +95,32 @@ AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(
   amrex::GpuArray<int, 3> lo = box.loVect3d();
   amrex::GpuArray<int, 3> hi = box.hiVect3d();
   const auto gamma = HydroSystem<ShocktubeProblem>::gamma_;
-  double rho = NAN;
+
   double vx = NAN;
+  double rho = NAN;
   double P = NAN;
 
-if (i >= hi[0]) {
-    // x1 right-side boundary -- constant
+  if (i < lo[0]) {
+    rho = 3.857143;
+    vx = 2.629369;
+    P = 10.33333;
+  } else if (i >= hi[0]) {
     rho = 1.0;
     vx = 0.0;
     P = 1.0;
-    consVar(i, j, k, RadSystem<ShocktubeProblem>::gasDensity_index) = rho;
-    consVar(i, j, k, RadSystem<ShocktubeProblem>::x1GasMomentum_index) = rho*vx;
-    consVar(i, j, k, RadSystem<ShocktubeProblem>::x2GasMomentum_index) = 0.;
-    consVar(i, j, k, RadSystem<ShocktubeProblem>::x3GasMomentum_index) = 0.;
-    consVar(i, j, k, RadSystem<ShocktubeProblem>::gasEnergy_index) =
-        P / (gamma - 1.);
   }
+
+  consVar(i, j, k, RadSystem<ShocktubeProblem>::gasDensity_index) = rho;
+  consVar(i, j, k, RadSystem<ShocktubeProblem>::x1GasMomentum_index) = rho * vx;
+  consVar(i, j, k, RadSystem<ShocktubeProblem>::x2GasMomentum_index) = 0;
+  consVar(i, j, k, RadSystem<ShocktubeProblem>::x3GasMomentum_index) = 0;
+  consVar(i, j, k, RadSystem<ShocktubeProblem>::gasEnergy_index) =
+      P / (gamma - 1.) + 0.5 * rho * (vx * vx);
+  // must also set radiation variables to zero, otherwise we get NaN asserts
+  consVar(i, j, k, RadSystem<ShocktubeProblem>::radEnergy_index) = 0;
+  consVar(i, j, k, RadSystem<ShocktubeProblem>::x1RadFlux_index) = 0;
+  consVar(i, j, k, RadSystem<ShocktubeProblem>::x2RadFlux_index) = 0;
+  consVar(i, j, k, RadSystem<ShocktubeProblem>::x3RadFlux_index) = 0;
 }
 
 template <>
@@ -127,7 +137,7 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
 
   std::string filename = "../extern/ShuOsher_athena_3c_hllc_vl.txt";
   std::ifstream fstream(filename, std::ios::in);
-  assert(fstream.is_open());
+  AMREX_ALWAYS_ASSERT(fstream.is_open());
 
   std::string header;
   std::string blank_line;

@@ -69,7 +69,7 @@ void AdvectionSimulation<SemiellipseProblem>::computeReferenceSolution(
     auto const &stateExact = ref.array(iter);
     auto const ncomp = ref.nComp();
 
-    amrex::ParallelFor(indexRange, ncomp_,
+    amrex::ParallelFor(indexRange, ncomp,
 		[=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
           ComputeExactSolution(i, j, k, n, stateExact, dx, prob_lo);
         });
