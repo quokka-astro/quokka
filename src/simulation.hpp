@@ -373,7 +373,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	for (int step = istep[0]; step < maxTimesteps_ && cur_time < stopTime_; ++step) {
 		if (suppress_output == 0) {
 			amrex::Print() << "\nCoarse STEP " << step + 1
-						   << " at t = " << cur_time << " starts ..." << std::endl;
+						   << " at t = " << cur_time << " ("
+						   << (cur_time / stopTime_) * 100. << "%) starts ..." << std::endl;
 		}
 
 		doRegridIfNeeded(step, cur_time);
@@ -642,6 +643,9 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(int level, amrex::Real ti
 
 	// set state_new_[lev] to desired initial condition
 	setInitialConditionsAtLevel(level);
+
+	// check that state_new_[lev] is properly filled
+	AMREX_ALWAYS_ASSERT(!state_new_[level].contains_nan(0, ncomp));
 
 	// fill ghost zones
 	fillBoundaryConditions(state_new_[level], state_new_[level], level, time);

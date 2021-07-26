@@ -117,10 +117,11 @@ public:
                 amrex::Box const &indexRange, arrayconst_t &consVar_in,
                 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx);
 
-  static void
-  SetRadEnergySource(array_t &radEnergy, amrex::Box const &indexRange,
-                     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
-                     amrex::Real time);
+  static void SetRadEnergySource(
+      array_t &radEnergySource, amrex::Box const &indexRange,
+      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+      amrex::Real time);
 
   static void AddSourceTerms(array_t &consVar, arrayconst_t &radEnergySource,
                              arrayconst_t &advectionFluxes,
@@ -169,7 +170,9 @@ public:
 template <typename problem_t>
 void RadSystem<problem_t>::SetRadEnergySource(
     array_t &radEnergySource, amrex::Box const &indexRange,
-    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, amrex::Real time) {
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+    amrex::Real time) {
   // do nothing -- user implemented
 }
 
@@ -784,6 +787,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeEintFromEgas(
       X1GasMom * X1GasMom + X2GasMom * X2GasMom + X3GasMom * X3GasMom;
   const double Ekin = p_sq / (2.0 * density);
   const double Eint = Etot - Ekin;
+  AMREX_ASSERT_WITH_MESSAGE(Eint > 0., "Gas internal energy is not positive!");
   return Eint;
 }
 
@@ -827,9 +831,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
     const double x1GasMom0 = consPrev(i, j, k, x1GasMomentum_index);
     const double x2GasMom0 = consPrev(i, j, k, x2GasMomentum_index);
     const double x3GasMom0 = consPrev(i, j, k, x3GasMomentum_index);
-    amrex::GpuArray<const amrex::Real, 3> vel0 = {
-        x1GasMom0 / rho, x2GasMom0 / rho,
-        x3GasMom0 / rho}; // needed to update kinetic energy
     const double Egas0 =
         ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0);
 
@@ -928,14 +929,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
     AMREX_ALWAYS_ASSERT(Erad_guess > 0.0);
     AMREX_ALWAYS_ASSERT(Egas_guess > 0.0);
 
-    const double Etot1 = Egas_guess + (c / chat) * Erad_guess;
-    AMREX_ALWAYS_ASSERT(std::abs((Etot1 - Src) - Etot0) < resid_tol*Etot0);
-
-    // store new radiation energy, gas energy
-    consNew(i, j, k, radEnergy_index) = Erad_guess;
-    consNew(i, j, k, gasEnergy_index) =
-        ComputeEgasFromEint(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egas_guess);
-
     // 2. Compute radiation flux update
     amrex::GpuArray<amrex::Real, 3> Frad_t0{};
     amrex::GpuArray<amrex::Real, 3> Frad_t1{};
@@ -944,19 +937,19 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
     Frad_t0[1] = consPrev(i, j, k, x2RadFlux_index);
     Frad_t0[2] = consPrev(i, j, k, x3RadFlux_index);
 
-    //amrex::Real const kappaRosseland = ComputeRosselandOpacity(rho, T_gas);
+    amrex::Real const kappaRosseland = ComputeRosselandOpacity(rho, T_gas);
 
     for (int n = 0; n < 3; ++n) {
       // this should use the flux mean; in the gray approximation, we follow
       // Mihalas & Mihalas (1984) and use the Rosseland mean
       Frad_t1[n] = (Frad_t0[n] + (dt * advectionFluxes(i, j, k, n))) /
-                   (1.0 + (rho * kappa) * chat * dt);
+                   (1.0 + (rho * kappaRosseland) * chat * dt);
     }
     consNew(i, j, k, x1RadFlux_index) = Frad_t1[0];
     consNew(i, j, k, x2RadFlux_index) = Frad_t1[1];
     consNew(i, j, k, x3RadFlux_index) = Frad_t1[2];
 
-    // 3. Compute conservative gas momentum update -- modify in 3d
+    // 3. Compute conservative gas momentum update
     //	[N.B. should this step happen after the Lorentz	transform?]
     amrex::GpuArray<amrex::Real, 3> dF{};
     amrex::GpuArray<amrex::Real, 3> dMomentum{};
@@ -970,12 +963,26 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
     consNew(i, j, k, x2GasMomentum_index) += dMomentum[1];
     consNew(i, j, k, x3GasMomentum_index) += dMomentum[2];
 
-    // 4. Update kinetic energy of gas
+    amrex::Real x1GasMom1 = consNew(i, j, k, x1GasMomentum_index);
+    amrex::Real x2GasMom1 = consNew(i, j, k, x2GasMomentum_index);
+    amrex::Real x3GasMom1 = consNew(i, j, k, x3GasMomentum_index);
+
+#if 0 
+    // 4. Update kinetic energy of gas [OLD METHOD]
+    amrex::GpuArray<const amrex::Real, 3> vel0 = {
+        x1GasMom0 / rho, x2GasMom0 / rho,
+        x3GasMom0 / rho}; // velocity at *beginning* of timestep
     double dEkin = 0.;
     for (int n = 0; n < 3; ++n) {
       dEkin += (vel0[n] * dMomentum[n]);
     }
     consNew(i, j, k, gasEnergy_index) += dEkin;
+#endif
+
+    // 4. Store new radiation energy, gas energy
+    consNew(i, j, k, radEnergy_index) = Erad_guess;
+    consNew(i, j, k, gasEnergy_index) =
+        ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess);
 
     // Lorentz transform back to 'laboratory' frame
     // TransformIntoComovingFrame(-fluid_velocity);

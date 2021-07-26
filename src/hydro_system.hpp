@@ -12,12 +12,16 @@
 // c++ headers
 
 // library headers
+#include "AMReX_Arena.H"
+#include "AMReX_BLassert.H"
+#include "AMReX_FArrayBox.H"
+#include "AMReX_Loop.H"
+#include "AMReX_REAL.H"
 
 // internal headers
-#include "AMReX_BLassert.H"
-#include "AMReX_REAL.H"
 #include "ArrayView.hpp"
 #include "hyperbolic_system.hpp"
+#include "radiation_system.hpp"
 #include "valarray.hpp"
 
 // this struct is specialized by the user application code
@@ -54,7 +58,8 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	static void ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real> const &cons,
 					  array_t &maxSignal, amrex::Box const &indexRange);
 	// requires GPU reductions
-	// static auto CheckStatesValid(array_t &cons, const std::pair<int, int> range) -> bool;
+	static auto CheckStatesValid(amrex::Box const &indexRange, amrex::Array4<const amrex::Real> const &cons)
+    				  -> bool;
 
 	AMREX_GPU_DEVICE static auto ComputePressure(amrex::Array4<const amrex::Real> const &cons,
 						     int i, int j, int k) -> amrex::Real;
@@ -109,8 +114,8 @@ void HydroSystem<problem_t>::ConservedToPrimitive(amrex::Array4<const amrex::Rea
 
 		const auto P = thermal_energy * (HydroSystem<problem_t>::gamma_ - 1.0);
 
-		AMREX_ASSERT(rho > 0.); // NOLINT
-		AMREX_ASSERT(P > 0.);	// NOLINT
+		AMREX_ASSERT(rho > 0.);
+		AMREX_ASSERT(P > 0.);
 
 		primVar(i, j, k, primDensity_index) = rho;
 		primVar(i, j, k, x1Velocity_index) = vx;
@@ -146,7 +151,7 @@ void HydroSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Re
 		const auto P = thermal_energy * (HydroSystem<problem_t>::gamma_ - 1.0);
 
 		const double cs = std::sqrt(HydroSystem<problem_t>::gamma_ * P / rho);
-		AMREX_ASSERT(cs > 0.); // NOLINT
+		AMREX_ASSERT(cs > 0.);
 
 		const double vel_mag = std::sqrt(vx * vx + vy * vy + vz * vz);
 		const double signal_max = vel_mag + cs;
@@ -154,37 +159,36 @@ void HydroSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Re
 	});
 }
 
-#if 0
+
 template <typename problem_t>
-auto HydroSystem<problem_t>::CheckStatesValid(amrex::Array4<const amrex::Real> const &cons, amrex::Box const &indexRange)
+auto HydroSystem<problem_t>::CheckStatesValid(amrex::Box const &indexRange, amrex::Array4<const amrex::Real> const &cons)
     -> bool
 {
 	bool areValid = true;
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		const auto rho = cons(density_index, i);
-		const auto px = cons(x1Momentum_index, i);
-		const auto E = cons(energy_index, i); // *total* gas energy per unit volume
-
+	AMREX_LOOP_3D(indexRange, i, j, k, {
+		const auto rho = cons(i, j, k, density_index);
+		const auto px = cons(i, j, k, x1Momentum_index);
+		const auto py = cons(i, j, k, x2Momentum_index);
+		const auto pz = cons(i, j, k, x3Momentum_index);
+		const auto E = cons(i, j, k, energy_index); // *total* gas energy per unit volume
 		const auto vx = px / rho;
-		const auto kinetic_energy = 0.5 * rho * std::pow(vx, 2);
+		const auto vy = py / rho;
+		const auto vz = pz / rho;
+		const auto kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
 		const auto thermal_energy = E - kinetic_energy;
+		const auto P = thermal_energy * (HydroSystem<problem_t>::gamma_ - 1.0);
 
-		const auto P = thermal_energy * (gamma_ - 1.0);
+		bool negativeDensity = (rho <= 0.);
+		bool negativePressure = (P <= 0.);
 
-		if (rho <= 0.) {
-			amrex::Print() << "Bad cell i = " << i << " (negative density = " << rho
-				       << ")." << std::endl;
+		if (negativeDensity || negativePressure) {
 			areValid = false;
 		}
-		if (P <= 0.) {
-			amrex::Print() << "Bad cell i = " << i << " (negative pressure = " << P
-				       << ")." << std::endl;
-			areValid = false;
-		}
-	});
+	})
+
 	return areValid;
 }
-#endif
+
 
 template <typename problem_t>
 AMREX_GPU_DEVICE auto
@@ -312,72 +316,6 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::Array4<const amrex::Real> cons
 	    });
 }
 
-// TODO(ben): modify for 3D!
-template <typename problem_t>
-template <FluxDir DIR>
-void HydroSystem<problem_t>::ComputeFirstOrderFluxes(
-    amrex::Array4<const amrex::Real> const &consVar_in, array_t &x1FluxDiffusive_in,
-    amrex::Box const &indexRange)
-{
-	quokka::Array4View<const amrex::Real, DIR> consVar(consVar_in);
-	quokka::Array4View<amrex::Real, DIR> x1FluxDiffusive(x1FluxDiffusive_in);
-
-	// By convention, the interfaces are defined on the left edge of each
-	// zone, i.e. x1Flux_(i) is the solution to the Riemann problem at
-	// the left edge of zone i.
-
-	// compute Lax-Friedrichs fluxes for use in flux-limiting to ensure realizable states
-
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in) {
-		auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
-
-		// gather L/R states
-		const double rho_L = consVar(i - 1, j, k, density_index);
-		const double rho_R = consVar(i, j, k, density_index);
-
-		const double xmom_L = consVar(i - 1, j, k, x1Momentum_index);
-		const double xmom_R = consVar(i, j, k, x1Momentum_index);
-
-		const double E_L = consVar(i - 1, j, k, energy_index);
-		const double E_R = consVar(i, j, k, energy_index);
-
-		// compute primitive variables
-		const double vx_L = xmom_L / rho_L;
-		const double vx_R = xmom_R / rho_R;
-
-		const double ke_L = 0.5 * rho_L * (vx_L * vx_L);
-		const double ke_R = 0.5 * rho_R * (vx_R * vx_R);
-
-		const double P_L = (E_L - ke_L) * (gamma_ - 1.0);
-		const double P_R = (E_R - ke_R) * (gamma_ - 1.0);
-
-		const double cs_L = std::sqrt(gamma_ * P_L / rho_L);
-		const double cs_R = std::sqrt(gamma_ * P_R / rho_R);
-
-		const double s_L = std::abs(vx_L) + cs_L;
-		const double s_R = std::abs(vx_R) + cs_R;
-		const double sstar = std::max(s_L, s_R);
-
-		// compute (using local signal speed) Lax-Friedrichs flux
-		constexpr int dim = 3;
-
-		const quokka::valarray<double, dim> F_L = {
-		    rho_L * vx_L, rho_L * (vx_L * vx_L) + P_L, (E_L + P_L) * vx_L};
-
-		const quokka::valarray<double, dim> F_R = {
-		    rho_R * vx_R, rho_R * (vx_R * vx_R) + P_R, (E_R + P_R) * vx_R};
-
-		const quokka::valarray<double, dim> U_L = {rho_L, xmom_L, E_L};
-		const quokka::valarray<double, dim> U_R = {rho_R, xmom_R, E_R};
-
-		const quokka::valarray<double, dim> LLF = 0.5 * (F_L + F_R - sstar * (U_R - U_L));
-
-		x1FluxDiffusive(i, j, k, density_index) = LLF[0];
-		x1FluxDiffusive(i, j, k, x1Momentum_index) = LLF[1];
-		x1FluxDiffusive(i, j, k, energy_index) = LLF[2];
-	});
-}
-
 template <typename problem_t>
 template <FluxDir DIR>
 void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
@@ -426,8 +364,8 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 		const double cs_L = std::sqrt(gamma_ * P_L / rho_L);
 		const double cs_R = std::sqrt(gamma_ * P_R / rho_R);
 
-		AMREX_ASSERT(cs_L > 0.0); // NOLINT
-		AMREX_ASSERT(cs_R > 0.0); // NOLINT
+		AMREX_ASSERT(cs_L > 0.0);
+		AMREX_ASSERT(cs_R > 0.0);
 
 		// assign normal component of velocity according to DIR
 
@@ -464,8 +402,8 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 
 		// compute wave speeds
 
-		const double S_L = u_L - q_L * cs_L;
-		const double S_R = u_R + q_R * cs_R;
+		double S_L = u_L - q_L * cs_L;
+		double S_R = u_R + q_R * cs_R;
 		const double S_star =
 		    ((P_R - P_L) + (rho_L * u_L * (S_L - u_L) - rho_R * u_R * (S_R - u_R))) /
 		    (rho_L * (S_L - u_L) - rho_R * (S_R - u_R));
@@ -473,10 +411,8 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 		const double P_LR = 0.5 * (P_L + P_R + rho_L * (S_L - u_L) * (S_star - u_L) +
 					   rho_R * (S_R - u_R) * (S_star - u_R));
 
-		AMREX_ASSERT(S_L <= S_R);
-
 		// compute fluxes
-		constexpr int fluxdim = 5;
+		constexpr int fluxdim = nvar_;
 
 		quokka::valarray<double, fluxdim> D_L{};
 		quokka::valarray<double, fluxdim> D_R{};
@@ -502,17 +438,6 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 		const quokka::valarray<double, fluxdim> U_R = {rho_R, rho_R * vx_R, rho_R * vy_R,
 							       rho_R * vz_R, E_R};
 
-#if 0
-		// x-dir
-		const quokka::valarray<double, fluxdim> Fx_L = {
-		    rho_L * vx_L, rho_L * (vx_L * vx_L) + P_L, rho_L * (vx_L * vy_L),
-		    rho_L * (vx_L * vz_L), (E_L + P_L) * vx_L};
-
-		const quokka::valarray<double, fluxdim> Fx_R = {
-		    rho_R * vx_R, rho_R * (vx_R * vx_R) + P_R, rho_R * (vx_R * vy_R),
-		    rho_R * (vx_R * vz_R), (E_R + P_R) * vx_R};
-#endif
-
 		quokka::valarray<double, fluxdim> F_L = u_L * U_L + P_L * D_L;
 		quokka::valarray<double, fluxdim> F_R = u_R * U_R + P_R * D_R;
 
@@ -536,16 +461,12 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 			F = F_R;
 		}
 
-		// if((i==0) && (j==0)) {
-		//	std::raise(SIGINT); //breakpoint
-		//}
-
 		// check states are valid
-		AMREX_ASSERT(!std::isnan(F[0])); // NOLINT
-		AMREX_ASSERT(!std::isnan(F[1])); // NOLINT
-		AMREX_ASSERT(!std::isnan(F[2])); // NOLINT
-		AMREX_ASSERT(!std::isnan(F[3])); // NOLINT
-		AMREX_ASSERT(!std::isnan(F[4])); // NOLINT
+		AMREX_ASSERT(!std::isnan(F[0]));
+		AMREX_ASSERT(!std::isnan(F[1]));
+		AMREX_ASSERT(!std::isnan(F[2]));
+		AMREX_ASSERT(!std::isnan(F[3]));
+		AMREX_ASSERT(!std::isnan(F[4]));
 
 		x1Flux(i, j, k, density_index) = F[0];
 		x1Flux(i, j, k, x1Momentum_index) = F[1];
