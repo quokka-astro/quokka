@@ -126,7 +126,7 @@ auto problem_main() -> int {
   // const int nx = 4;
   // const double Lx = 1e5; // cm
   const double CFL_number = 1.0;
-  const double max_time = 1.0e-4; // s
+  const double max_time = 1.0e-2; // s
   const int max_timesteps = 1e6;
   const double constant_dt = 1.0e-8; // s
 
@@ -141,8 +141,7 @@ auto problem_main() -> int {
   }
 
   RadhydroSimulation<CouplingProblem> sim(boundaryConditions);
-  sim.is_hydro_enabled_ = true; // for unknown reasons, setting this to false
-                                // gives incorrect results!
+  sim.is_hydro_enabled_ = false;
   sim.is_radiation_enabled_ = true;
   sim.cflNumber_ = CFL_number;
   sim.radiationCflNumber_ = CFL_number;
