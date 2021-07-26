@@ -308,6 +308,10 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 	// advance hydro
 	if (is_hydro_enabled_) {
 		advanceHydroAtLevel(lev, time, dt_lev, fr_as_crse, fr_as_fine);
+	} else {
+		// copy hydro vars from state_old_ to state_new_
+		// (otherwise radiation update will be wrong!)
+		amrex::MultiFab::Copy(state_new_[lev], state_old_[lev], 0, 0, ncompHydro_, 0);
 	}
 
 	// check hydro states after update
@@ -582,10 +586,6 @@ void RadhydroSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Rea
 		// new hydro+radiation state is stored in state_new_
 
 		// check hydro states post-update
-		// [If this fails, the *most likely* cause is that the flow is radiation-pressure-dominated,
-		//  and the hydro timestep is larger than the timescale of radiative acceleration.
-		//  In this case, in the radiation work term \vec{v} dot (-\vec{F_rad}/c^2),
-		//  v cannot be approximated as constant!]
 		//checkHydroStates(lev);
 
 		// update 'time_subcycle'
