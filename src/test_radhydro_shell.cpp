@@ -244,12 +244,12 @@ auto problem_main() -> int
 	RadhydroSimulation<ShellProblem> sim(boundaryConditions);
 	sim.is_hydro_enabled_ = true;
 	sim.is_radiation_enabled_ = true;
-	sim.stopTime_ = 0.076 * t0;
+	sim.stopTime_ = 0.02 * t0;
 	sim.cflNumber_ = 0.2;
 	sim.initDt_ = 1.0e9; // seconds
 	sim.maxDt_ = 1.0e10; // seconds
 	sim.maxTimesteps_ = 5000;
-	sim.reconstructionOrder_ = 1; // donor cell
+	sim.reconstructionOrder_ = 2; // PLM
 	sim.integratorOrder_ = 2; // RK2
 	sim.checkpointInterval_ = 500;
 	sim.plotfileInterval_ = 50;
