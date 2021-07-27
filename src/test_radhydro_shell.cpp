@@ -32,7 +32,7 @@ constexpr double cs0 = 2.0e5; // (2 km/s) [cm s^-1]
 constexpr double chat = 260. * cs0; // cm s^-1
 constexpr double k_B = 1.380658e-16;  // erg K^-1
 constexpr double m_H = 1.6726231e-24; // mass of hydrogen atom [g]
-constexpr double gamma_gas = 5. / 3.;
+constexpr double gamma_gas = 1.00001; // approximate isothermal EOS
 
 template <> struct RadSystem_Traits<ShellProblem> {
 	static constexpr double c_light = c;
@@ -64,6 +64,8 @@ constexpr amrex::Real kappa0 = 20.0; // specific opacity [cm^2 g^-1]
 constexpr amrex::Real Trad_0 = 10.0; // Kelvins
 constexpr amrex::Real t0 = r_0 / cs0; // seconds
 
+constexpr double c_v = k_B / ((2.2*m_H) * (gamma_gas - 1.0));
+
 template <>
 void RadSystem<ShellProblem>::SetRadEnergySource(array_t &radEnergy, const amrex::Box &indexRange,
 												 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
@@ -92,7 +94,7 @@ void RadSystem<ShellProblem>::SetRadEnergySource(array_t &radEnergy, const amrex
 template <>
 auto RadSystem<ShellProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> double
 {
-	return 0.0;
+	return 0.;
 }
 
 template <>
@@ -127,10 +129,6 @@ template <> void RadhydroSimulation<ShellProblem>::setInitialConditionsAtLevel(i
 			double vy = 0.;
 			double vz = 0.;
 			double P = P_0;
-
-			//if (r > r_0) {
-			//	rho = 0.01 * rho_0;
-			//}
 
 			AMREX_ASSERT(!std::isnan(vx));
 			AMREX_ASSERT(!std::isnan(vy));
@@ -206,13 +204,23 @@ auto problem_main() -> int
 	static_assert(AMREX_SPACEDIM == 3);
 
 	auto isNormalComp = [=](int n, int dim) {
-		if ((n == HydroSystem<ShellProblem>::x1Momentum_index) && (dim == 0)) {
+		// it is critical to reflect both the radiation and gas momenta!
+		if ((n == RadSystem<ShellProblem>::x1GasMomentum_index) && (dim == 0)) {
 			return true;
 		}
-		if ((n == HydroSystem<ShellProblem>::x2Momentum_index) && (dim == 1)) {
+		if ((n == RadSystem<ShellProblem>::x2GasMomentum_index) && (dim == 1)) {
 			return true;
 		}
-		if ((n == HydroSystem<ShellProblem>::x3Momentum_index) && (dim == 2)) {
+		if ((n == RadSystem<ShellProblem>::x3GasMomentum_index) && (dim == 2)) {
+			return true;
+		}
+		if ((n == RadSystem<ShellProblem>::x1RadFlux_index) && (dim == 0)) {
+			return true;
+		}
+		if ((n == RadSystem<ShellProblem>::x2RadFlux_index) && (dim == 1)) {
+			return true;
+		}
+		if ((n == RadSystem<ShellProblem>::x3RadFlux_index) && (dim == 2)) {
 			return true;
 		}
 		return false;
@@ -237,12 +245,14 @@ auto problem_main() -> int
 	sim.is_hydro_enabled_ = true;
 	sim.is_radiation_enabled_ = true;
 	sim.stopTime_ = 0.076 * t0;
-	sim.cflNumber_ = 0.3;
+	sim.cflNumber_ = 0.2;
+	sim.initDt_ = 1.0e9; // seconds
+	sim.maxDt_ = 1.0e10; // seconds
 	sim.maxTimesteps_ = 5000;
 	sim.reconstructionOrder_ = 1; // donor cell
-	sim.integratorOrder_ = 1; // forward Euler
-	sim.plotfileInterval_ = 500;
-	sim.checkpointInterval_ = 1000;
+	sim.integratorOrder_ = 2; // RK2
+	sim.checkpointInterval_ = 500;
+	sim.plotfileInterval_ = 50;
 
 	// initialize
 	sim.setInitialConditions();

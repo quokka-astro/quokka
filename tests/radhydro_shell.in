@@ -15,8 +15,8 @@ amr.v              = 1       # verbosity in Amr
 # *****************************************************************
 amr.n_cell          = 128 128 128
 amr.max_level       = 0     # number of levels = max_level + 1
-amr.max_grid_size   = 32
-amr.blocking_factor = 32    # grid size must be divisible by this
+amr.max_grid_size   = 32    # default
+amr.blocking_factor = 16    # grid size must be divisible by this
 amr.n_error_buf     = 3     # minimum 3 cell buffer around tagged cells
 
 ## grid_eff = 1 forces refinement to respect symmetries of the tagged cells

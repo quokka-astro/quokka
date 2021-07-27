@@ -833,6 +833,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
     const double x3GasMom0 = consPrev(i, j, k, x3GasMomentum_index);
     const double Egas0 =
         ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0);
+    const double Ekin0 = Egastot0 - Egas0;
 
     // load radiation energy
     const double Erad0 = consPrev(i, j, k, radEnergy_index);
@@ -967,22 +968,15 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
     amrex::Real x2GasMom1 = consNew(i, j, k, x2GasMomentum_index);
     amrex::Real x3GasMom1 = consNew(i, j, k, x3GasMomentum_index);
 
-#if 0 
-    // 4. Update kinetic energy of gas [OLD METHOD]
-    amrex::GpuArray<const amrex::Real, 3> vel0 = {
-        x1GasMom0 / rho, x2GasMom0 / rho,
-        x3GasMom0 / rho}; // velocity at *beginning* of timestep
-    double dEkin = 0.;
-    for (int n = 0; n < 3; ++n) {
-      dEkin += (vel0[n] * dMomentum[n]);
-    }
-    consNew(i, j, k, gasEnergy_index) += dEkin;
-#endif
+    // 4a. Compute radiation work term
+    amrex::Real Egastot1 = ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess);
+    amrex::Real Ekin1 = Egastot1 - Egas_guess;
+    amrex::Real dEkin_work = Ekin1 - Ekin0; // change in kinetic energy of gas
+    amrex::Real dErad_work = -(c_hat_ / c_light_) * dEkin_work; // loss of radiation energy to gas kinetic energy
 
-    // 4. Store new radiation energy, gas energy
-    consNew(i, j, k, radEnergy_index) = Erad_guess;
-    consNew(i, j, k, gasEnergy_index) =
-        ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess);
+    // 4b. Store new radiation energy, gas energy
+    consNew(i, j, k, radEnergy_index) = Erad_guess + dErad_work;
+    consNew(i, j, k, gasEnergy_index) = Egastot1;
 
     // Lorentz transform back to 'laboratory' frame
     // TransformIntoComovingFrame(-fluid_velocity);
