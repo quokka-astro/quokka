@@ -113,6 +113,8 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev,
 					  int iteration, int ncycle) override;
 	void computeAfterTimestep() override;
+	void computeAfterLevelAdvance(int lev, amrex::Real time,
+								 amrex::Real dt_lev, int /*iteration*/, int /*ncycle*/);
 	void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) override;
 	void computeReferenceSolution(amrex::MultiFab &ref,
 		amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
@@ -215,6 +217,13 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::computeAfterTi
 }
 
 template <typename problem_t>
+void RadhydroSimulation<problem_t>::computeAfterLevelAdvance(int lev, amrex::Real time,
+								 amrex::Real dt_lev, int /*iteration*/, int /*ncycle*/)
+{
+	// user should implement if desired
+}
+
+template <typename problem_t>
 void RadhydroSimulation<problem_t>::ErrorEst(int lev, amrex::TagBoxArray &tags,
 					     amrex::Real /*time*/, int /*ngrow*/)
 {
@@ -285,7 +294,7 @@ void RadhydroSimulation<problem_t>::computeAfterEvolve(amrex::Vector<amrex::Real
 template <typename problem_t>
 void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex::Real time,
 								 amrex::Real dt_lev,
-								 int /*iteration*/, int /*ncycle*/)
+								 int iteration, int ncycle)
 {
 	BL_PROFILE("RadhydroSimulation::advanceSingleTimestepAtLevel()");
 
@@ -314,13 +323,16 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 		amrex::MultiFab::Copy(state_new_[lev], state_old_[lev], 0, 0, ncompHydro_, 0);
 	}
 
-	// check hydro states after update
-	checkHydroStates(lev);
-
 	// subcycle radiation
 	if (is_radiation_enabled_) {
 		subcycleRadiationAtLevel(lev, time, dt_lev, fr_as_crse, fr_as_fine);
 	}
+
+	// enforce density, pressure floors
+	computeAfterLevelAdvance(lev, time, dt_lev, iteration, ncycle);
+
+	// check hydro states after update
+	checkHydroStates(lev);
 
 	// check state validity
 	AMREX_ASSERT(!state_new_[lev].contains_nan(0, state_new_[lev].nComp()));

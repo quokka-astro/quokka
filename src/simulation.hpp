@@ -697,7 +697,6 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 			// 'time'
 			GetData(lev - 1, time, coarseData, coarseTime);
 		}
-
 		AMREX_ASSERT(!state.contains_nan(0, state.nComp()));
 
 		for (int i = 0; i < coarseData.size(); ++i) {
@@ -709,7 +708,6 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 				S_filled.nComp());
 	} else { // AMR is disabled, only level 0 exists
 		AMREX_ASSERT(lev == 0);
-		//AMREX_ASSERT(S_filled == state);
 		// fill internal and periodic boundaries
 		state.FillBoundary(geom[lev].periodicity());
 
