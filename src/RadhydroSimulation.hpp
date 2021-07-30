@@ -107,7 +107,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 				   "x-RadFlux",	    "y-RadFlux",     "z-RadFlux"};
 	}
 
-	void checkHydroStates(int level);
+	void checkHydroStates(amrex::MultiFab &mf, char const *file, int line);
 	void computeMaxSignalLocal(int level) override;
 	void setInitialConditionsAtLevel(int level) override;
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev,
@@ -193,15 +193,19 @@ void RadhydroSimulation<problem_t>::computeMaxSignalLocal(int const level)
 	}
 }
 
+#define CHECK_HYDRO_STATES(mf) checkHydroStates(mf, __FILE__, __LINE__)
+
 template <typename problem_t>
-void RadhydroSimulation<problem_t>::checkHydroStates(int const level)
+void RadhydroSimulation<problem_t>::checkHydroStates(amrex::MultiFab &mf, char const *file, int line)
 {
 	BL_PROFILE("RadhydroSimulation::checkHydroStates()");
 
-	for (amrex::MFIter iter(state_new_[level]); iter.isValid(); ++iter) {
+	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
-		auto const &stateNew = state_new_[level].const_array(iter);
-		AMREX_ALWAYS_ASSERT(HydroSystem<problem_t>::CheckStatesValid(indexRange, stateNew));
+		auto const &state = mf.const_array(iter);
+		if(!HydroSystem<problem_t>::CheckStatesValid(indexRange, state)) {
+			amrex::Abort("Hydro states invalid (" + std::string(file) + ":" + std::to_string(line) + ")");
+		}
 	}
 }
 
@@ -314,6 +318,9 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 	// since we are starting a new timestep, need to swap old and new state vectors
 	std::swap(state_old_[lev], state_new_[lev]);
 
+	// check hydro states before update
+	CHECK_HYDRO_STATES(state_old_[lev]);
+
 	// advance hydro
 	if (is_hydro_enabled_) {
 		advanceHydroAtLevel(lev, time, dt_lev, fr_as_crse, fr_as_fine);
@@ -323,16 +330,16 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 		amrex::MultiFab::Copy(state_new_[lev], state_old_[lev], 0, 0, ncompHydro_, 0);
 	}
 
+	// check hydro states after hydro update
+	CHECK_HYDRO_STATES(state_new_[lev]);
+	
 	// subcycle radiation
 	if (is_radiation_enabled_) {
 		subcycleRadiationAtLevel(lev, time, dt_lev, fr_as_crse, fr_as_fine);
 	}
 
-	// enforce density, pressure floors
-	computeAfterLevelAdvance(lev, time, dt_lev, iteration, ncycle);
-
-	// check hydro states after update
-	checkHydroStates(lev);
+	// check hydro states after radiation update
+	CHECK_HYDRO_STATES(state_new_[lev]);
 
 	// check state validity
 	AMREX_ASSERT(!state_new_[lev].contains_nan(0, state_new_[lev].nComp()));
@@ -383,6 +390,9 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 		}
 	}
 
+	// enforce density, pressure floors
+	computeAfterLevelAdvance(lev, time, dt_lev, 0, 0);
+
 	if (integratorOrder_ == 2) {
 		// update ghost zones [intermediate stage stored in state_new_]
 		fillBoundaryConditions(state_new_[lev], state_new_[lev], lev, time + dt_lev);
@@ -413,6 +423,9 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 							fluxScaleFactor * dt_lev);
 			}
 		}
+
+		// enforce density, pressure floors
+		computeAfterLevelAdvance(lev, time, dt_lev, 0, 0);
 	}
 }
 
