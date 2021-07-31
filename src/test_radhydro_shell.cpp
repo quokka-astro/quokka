@@ -203,7 +203,7 @@ void RadhydroSimulation<ShellProblem>::ErrorEst(int lev, amrex::TagBoxArray &tag
 {
 	// tag cells for refinement
 
-	const amrex::Real eta_threshold = 0.1; // gradient refinement threshold
+	const amrex::Real eta_threshold = 0.2; // gradient refinement threshold
 	const amrex::Real P_min = P_0;      // minimum pressure for refinement
 
 	for (amrex::MFIter mfi(state_new_[lev]); mfi.isValid(); ++mfi) {
@@ -289,7 +289,7 @@ auto problem_main() -> int
 	sim.initDt_ = 1.0e9; // seconds
 	sim.maxDt_ = 1.0e10; // seconds
 	sim.maxTimesteps_ = 5000;
-	sim.reconstructionOrder_ = 1; // 1 == donor cell, 2 == PLM
+	sim.reconstructionOrder_ = 2; // 1 == donor cell, 2 == PLM
 	sim.integratorOrder_ = 2; // RK2
 	sim.checkpointInterval_ = 500;
 	sim.plotfileInterval_ = 100;
