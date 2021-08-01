@@ -1,0 +1,161 @@
+\RequirePackage{snapshot}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Basic setup. Most papers should leave these options alone.
+\documentclass[fleqn,usenatbib]{mnras}
+
+% MNRAS is set in Times font. If you don't have this installed (most LaTeX
+% installations will be fine) or prefer the old Computer Modern fonts, comment
+% out the following line
+\usepackage{newtxtext,newtxmath}
+% Depending on your LaTeX fonts installation, you might get better results with one of these:
+%\usepackage{mathptmx}
+%\usepackage{txfonts}
+
+% Use vector fonts, so it zooms properly in on-screen viewing software
+% Don't change these lines unless you know what you are doing
+\usepackage[T1]{fontenc}
+
+% Allow "Thomas van Noord" and "Simon de Laguarde" and alike to be sorted by "N" and "L" etc. in the bibliography.
+% Write the name in the bibliography as "\VAN{Noord}{Van}{van} Noord, Thomas"
+\DeclareRobustCommand{\VAN}[3]{#2}
+\let\VANthebibliography\thebibliography
+\def\thebibliography{\DeclareRobustCommand{\VAN}[3]{##3}\VANthebibliography}
+
+
+%%%%% AUTHORS - PLACE YOUR OWN PACKAGES HERE %%%%%
+
+% Only include extra packages if you really need them. Common packages are:
+\usepackage{graphicx}	% Including figure files
+\usepackage{amsmath}	% Advanced maths commands
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%% AUTHORS - PLACE YOUR OWN COMMANDS HERE %%%%%
+
+\newcommand{\Msun}{M$_{\odot}$} % Msun (solar mass)
+\newcommand{\microgauss}{$\mu$G} % microgauss
+
+% Workaround to fix the bug that prevents autoref from handling appendices properly
+\newcommand{\aref}[1]{\hyperref[#1]{Appendix~\ref{#1}}}
+
+% Autoref section names
+\def\sectionautorefname{Section}
+\def\subsectionautorefname{Section}
+\def\subsubsectionautorefname{Section}
+\def\paragraphautorefname{Section}
+\def\figureautorefname{Figure}
+\def\tableautorefname{Table}
+\def\equationautorefname{equation}
+\def\appendixautorefname{Appendix}
+
+
+% MRK's editing macros
+\usepackage{color}
+\usepackage[normalem]{ulem}
+\definecolor{darkgreen}{rgb}{0.13, 0.55, 0.13}
+\newcommand{\red}[1]{{\textcolor{red}{#1}}}
+\newcommand{\cyan}[1]{{\textcolor{cyan}{#1}}}
+\newcommand{\mrkcut}[1]{{\red{\sout{#1}}}}
+\newcommand{\mrkadd}[1]{{\cyan{#1}}}
+\newcommand{\mrknote}[1]{{\textcolor{darkgreen}{[MRK: #1]}}}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%% TITLE PAGE %%%%%%%%%%%%%%%%%%%
+
+% Title of the paper, and the short title which is used in the headers.
+% Keep the title short and informative.
+\title[Two-moment radiation hydrodynamics on GPUs]{\textsc{Quokka}: A new code for two-moment radiation hydrodynamics on GPUs}
+
+% The list of authors, and the short list which is used in the headers.
+% If you need two or more lines of authors, add an extra line using \newauthor
+\author[B. D. Wibking et al.]{
+Benjamin D. Wibking,$^{1}$\thanks{E-mail: ben.wibking@anu.edu.au (BDW)}
+and Mark R. Krumholz$^{1}$
+\\
+% List of institutions
+$^{1}$Research School of Astronomy \& Astrophysics, Mount Stromlo Observatory, Cotter Road, Weston Creek, ACT 2611 Australia\\
+}
+
+% These dates will be filled out by the publisher
+\date{Accepted XXX. Received YYY; in original form ZZZ}
+
+% Enter the current year, for the copyright statements etc.
+\pubyear{2021}
+
+% Don't change these lines
+\begin{document}
+\label{firstpage}
+\pagerange{\pageref{firstpage}--\pageref{lastpage}}
+\maketitle
+
+% Abstract of the paper
+\begin{abstract}
+    We present a new subcycling-in-time, block-structured adaptive mesh refinement (AMR) code designed for radiation hydrodynamics problems in star formation. The equations of hydrodynamics are solved with the piecewise parabolic method in a method-of-lines formulation and the radiative transfer is solved via the variable Eddington tensor (VET) radiation moment equations with a local closure. We combine explicit-in-time evolution of the radiation moment equations with the reduced speed-of-light approximation. We show results for a selection of test problems, including radiative shocks, blast waves, and turbulent radiation-gas interactions. On uniform grids in 3D, we achieve $\sim 60$ million hydrodynamic cell-updates per second per GPU. Implemented in C++, our code runs portably with high performance on any platform---either CPUs only, or NVIDIA, AMD, or Intel GPUs. The code is publicly released under an open-source license.
+\end{abstract}
+
+% Select between one and six entries from the list of approved keywords.
+% Don't make up new ones.
+\begin{keywords}
+
+\end{keywords}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%% BODY OF PAPER %%%%%%%%%%%%%%%%%%
+
+\section{Introduction}
+
+\section{Methods}
+\label{section:methods}
+\section{Simulations}
+\label{section:simulations}
+
+\section{Discussion}
+\label{section:discussion}
+\section{Conclusions}
+\label{section:conclusions}
+
+\section*{Acknowledgements}
+
+This research was supported by the Australian Research Council through its Discovery Projects and Future Fellowship Funding Schemes, awards DP190101258 and FT180100375. This research was undertaken with the assistance of resources and services from the National Computational Infrastructure (NCI), which is supported by the Australian Government.
+
+The simulations in this work were run at a datacentre using 100 per cent renewable electricity sources.\footnote{For details, see \url{https://www.environment.act.gov.au/energy/cleaner-energy/renewable-energy-target-legislation-reporting}.}
+
+\emph{Software:} matplotlib \citep{Hunter:2007},
+scipy \citep{2020SciPy-NMeth},
+pandas \citep{reback2020pandas,mckinney-proc-scipy-2010},
+numpy \citep{harris2020array},
+h5py \citep{h5py_package},
+Snakemake \citep{snakemake:2021},
+lic \citep{lic_package},
+Meshoid \citep{meshoid_package},
+GIZMO \citep{Hopkins_2015},
+Grackle \citep{Smith_2017}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section*{Data Availability}
+
+
+%%%%%%%%%%%%%%%%%%%% REFERENCES %%%%%%%%%%%%%%%%%%
+
+% The best way to enter references is to use BibTeX:
+
+\bibliographystyle{mnras}
+\bibliography{quokka} % if your bibtex file is called example.bib
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%% APPENDICES %%%%%%%%%%%%%%%%%%%%%
+
+\appendix
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+% Don't change these lines
+\bsp	% typesetting comment
+\label{lastpage}
+\end{document}
+
+% End of mnras_template.tex
