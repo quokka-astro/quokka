@@ -64,7 +64,7 @@ constexpr amrex::Real kappa0 = 20.0; // specific opacity [cm^2 g^-1]
 constexpr amrex::Real Trad_0 = 10.0; // Kelvins
 constexpr amrex::Real t0 = r_0 / cs0; // seconds
 
-constexpr double c_v = k_B / ((2.2*m_H) * (gamma_gas - 1.0));
+//constexpr double c_v = k_B / ((2.2*m_H) * (gamma_gas - 1.0));
 
 template <>
 void RadSystem<ShellProblem>::SetRadEnergySource(array_t &radEnergy, const amrex::Box &indexRange,
@@ -288,10 +288,10 @@ auto problem_main() -> int
 	sim.cflNumber_ = 0.2;
 	sim.initDt_ = 1.0e9; // seconds
 	sim.maxDt_ = 1.0e10; // seconds
-	sim.maxTimesteps_ = 5000;
+	sim.maxTimesteps_ = 500;
 	sim.reconstructionOrder_ = 2; // 1 == donor cell, 2 == PLM
 	sim.integratorOrder_ = 2; // RK2
-	sim.checkpointInterval_ = 500;
+	sim.checkpointInterval_ = -1;
 	sim.plotfileInterval_ = 100;
 
 	// initialize

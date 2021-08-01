@@ -27,6 +27,7 @@ constexpr double v_contact = 0.0; // contact wave velocity
 
 template <>
 void RadhydroSimulation<ContactProblem>::setInitialConditionsAtLevel(int lev) {
+  int ncomp = ncomp_;
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo =
       geom[lev].ProbLoArray();
@@ -56,7 +57,7 @@ void RadhydroSimulation<ContactProblem>::setInitialConditionsAtLevel(int lev) {
       AMREX_ASSERT(!std::isnan(P));
 
       const auto gamma = HydroSystem<ContactProblem>::gamma_;
-      for (int n = 0; n < ncomp_; ++n) {
+      for (int n = 0; n < ncomp; ++n) {
         state(i, j, k, n) = 0.;
       }
       state(i, j, k, HydroSystem<ContactProblem>::density_index) = rho;
