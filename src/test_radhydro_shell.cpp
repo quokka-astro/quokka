@@ -107,7 +107,6 @@ template <> void RadhydroSimulation<ShellProblem>::setInitialConditionsAtLevel(i
 {
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = geom[lev].ProbHiArray();
 
 	amrex::Real const x0 = 0.;
 	amrex::Real const y0 = 0.;
@@ -155,46 +154,6 @@ template <> void RadhydroSimulation<ShellProblem>::setInitialConditionsAtLevel(i
 
 	// set flag
 	areInitialConditionsDefined_ = true;
-}
-
-template <>
-void RadhydroSimulation<ShellProblem>::computeAfterLevelAdvance(int lev, amrex::Real /*time*/,
-								 amrex::Real /*dt_lev*/, int /*iteration*/, int /*ncycle*/)
-{
-	amrex::Real const rho_floor = 1.0e-10 * rho_0;
-	amrex::Real const P_floor = 1.0e-10 * P_0;
-
-	// enforce density floor to prevent vacuum creation
-	for (amrex::MFIter mfi(state_new_[lev]); mfi.isValid(); ++mfi) {
-		const amrex::Box &box = mfi.validbox();
-		const auto state = state_new_[lev].array(mfi);
-
-		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			amrex::Real const rho = state(i, j, k, RadSystem<ShellProblem>::gasDensity_index);
-			amrex::Real const vx1 = state(i, j, k, RadSystem<ShellProblem>::x1GasMomentum_index) / rho;
-			amrex::Real const vx2 = state(i, j, k, RadSystem<ShellProblem>::x2GasMomentum_index) / rho;
-			amrex::Real const vx3 = state(i, j, k, RadSystem<ShellProblem>::x3GasMomentum_index) / rho;
-			amrex::Real const Etot = state(i, j, k, RadSystem<ShellProblem>::gasEnergy_index);
-
-			amrex::Real rho_new = rho;
-			if (rho < rho_floor) {
-				rho_new = rho_floor;
-			}
-
-			// recompute gas energy (to prevent P < 0)
-			amrex::Real const Eint = Etot - 0.5 * rho * (vx1*vx1 + vx2*vx2 + vx3*vx3);
-			amrex::Real const P = Eint * (gamma_gas - 1.);
-			amrex::Real P_new = P;
-			if (P < P_floor) {
-				P_new = P_floor;
-			}
-			amrex::Real const Etot_new = P_new / (gamma_gas - 1.) + 
-										 0.5 * rho_new * (vx1*vx1 + vx2*vx2 + vx3*vx3);
-
-			state(i, j, k, RadSystem<ShellProblem>::gasDensity_index) = rho_new;
-			state(i, j, k, RadSystem<ShellProblem>::gasEnergy_index) = Etot_new;
-		});
-	}
 }
 
 template <>
@@ -284,6 +243,9 @@ auto problem_main() -> int
 	RadhydroSimulation<ShellProblem> sim(boundaryConditions);
 	sim.is_hydro_enabled_ = true;
 	sim.is_radiation_enabled_ = true;
+	sim.densityFloor_ = 1.0e-10 * rho_0;
+	sim.pressureFloor_ = 1.0e-10 * P_0;
+
 	sim.stopTime_ = 0.02 * t0;
 	sim.cflNumber_ = 0.2;
 	sim.initDt_ = 1.0e9; // seconds

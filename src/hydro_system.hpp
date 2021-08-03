@@ -60,6 +60,9 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	// requires GPU reductions
 	static auto CheckStatesValid(amrex::Box const &indexRange, amrex::Array4<const amrex::Real> const &cons)
     				  -> bool;
+	static void	EnforcePressureFloor(amrex::Real rho_floor, amrex::Real P_floor, 
+												  amrex::Box const &indexRange,
+												  amrex::Array4<amrex::Real> const &state);
 
 	AMREX_GPU_DEVICE static auto ComputePressure(amrex::Array4<const amrex::Real> const &cons,
 						     int i, int j, int k) -> amrex::Real;
@@ -189,6 +192,38 @@ auto HydroSystem<problem_t>::CheckStatesValid(amrex::Box const &indexRange, amre
 	return areValid;
 }
 
+template <typename problem_t>
+void HydroSystem<problem_t>::EnforcePressureFloor(amrex::Real const rho_floor, amrex::Real const P_floor, 
+												  amrex::Box const &indexRange,
+												  amrex::Array4<amrex::Real> const &state)
+{
+	// prevent vacuum creation
+
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+		amrex::Real const rho = state(i, j, k, density_index);
+		amrex::Real const vx1 = state(i, j, k, x1Momentum_index) / rho;
+		amrex::Real const vx2 = state(i, j, k, x2Momentum_index) / rho;
+		amrex::Real const vx3 = state(i, j, k, x3Momentum_index) / rho;
+		amrex::Real const vsq = (vx1*vx1 + vx2*vx2 + vx3*vx3);
+		amrex::Real const Etot = state(i, j, k, energy_index);
+
+		amrex::Real rho_new = rho;
+		if (rho < rho_floor) {
+			rho_new = rho_floor;
+			state(i, j, k, density_index) = rho_new;
+		}
+
+		// recompute gas energy (to prevent P < 0)
+		amrex::Real const Eint_star = Etot - 0.5 * rho_new * vsq;
+		amrex::Real const P_star = Eint_star * (gamma_ - 1.);
+		amrex::Real P_new = P_star;
+		if (P_star < P_floor) {
+			P_new = P_floor;
+			amrex::Real const Etot_new = P_new / (gamma_ - 1.) + 0.5 * rho_new * vsq;
+			state(i, j, k, energy_index) = Etot_new;
+		}
+	});
+}
 
 template <typename problem_t>
 AMREX_GPU_DEVICE auto

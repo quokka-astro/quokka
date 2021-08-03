@@ -221,13 +221,13 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
       amrex::Real xmom =
           values.at(HydroSystem<ShocktubeProblem>::x1Momentum_index).at(i);
       amrex::Real Egas =
-          values.at(HydroSystem<ShocktubeProblem>::energy_index).at(i) / 10;
+          values.at(HydroSystem<ShocktubeProblem>::energy_index).at(i);
 
       amrex::Real Eint = Egas - (xmom * xmom) / (2.0 * rho);
       amrex::Real const gamma = HydroSystem<ShocktubeProblem>::gamma_;
       d.at(i) = rho;
       vx.at(i) = xmom / rho;
-      P.at(i) = (gamma - 1.0) * Eint;
+      P.at(i) = ((gamma - 1.0) * Eint) / 10.;
     }
 
     // Plot results

@@ -82,6 +82,8 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	bool is_radiation_enabled_ = true;
 	bool computeReferenceSolution_ = false;
 	amrex::Real errorNorm_ = NAN;
+	amrex::Real densityFloor_ = 0.;
+	amrex::Real pressureFloor_ = 0.;
 
 	int integratorOrder_ = 2; // 1 == forward Euler; 2 == RK2-SSP (default)
 	int reconstructionOrder_ = 3; // 1 == donor cell; 2 == PLM; 3 == PPM (default)
@@ -193,7 +195,11 @@ void RadhydroSimulation<problem_t>::computeMaxSignalLocal(int const level)
 	}
 }
 
+#if !defined(NDEBUG)
 #define CHECK_HYDRO_STATES(mf) checkHydroStates(mf, __FILE__, __LINE__)
+#else
+#define CHECK_HYDRO_STATES(mf) 
+#endif
 
 template <typename problem_t>
 void RadhydroSimulation<problem_t>::checkHydroStates(amrex::MultiFab &mf, char const *file, int line)
@@ -298,7 +304,7 @@ void RadhydroSimulation<problem_t>::computeAfterEvolve(amrex::Vector<amrex::Real
 template <typename problem_t>
 void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex::Real time,
 								 amrex::Real dt_lev,
-								 int iteration, int ncycle)
+								 int  /*iteration*/, int  /*ncycle*/)
 {
 	BL_PROFILE("RadhydroSimulation::advanceSingleTimestepAtLevel()");
 
@@ -382,6 +388,9 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 				  fluxArrays[2].const_array())},
 		    dt_lev, geom[lev].CellSizeArray(), indexRange, ncompHydro_);
 
+		// prevent vacuum
+		HydroSystem<problem_t>::EnforcePressureFloor(densityFloor_, pressureFloor_, indexRange, stateNew);
+
 		if (do_reflux) {
 			// increment flux registers
 			auto expandedFluxes = expandFluxArrays(fluxArrays, 0, state_new_[lev].nComp());
@@ -389,9 +398,6 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 					       fluxScaleFactor * dt_lev);
 		}
 	}
-
-	// enforce density, pressure floors
-	computeAfterLevelAdvance(lev, time, dt_lev, 0, 0);
 
 	if (integratorOrder_ == 2) {
 		// update ghost zones [intermediate stage stored in state_new_]
@@ -416,6 +422,9 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 					fluxArrays[2].const_array())},
 				dt_lev, geom[lev].CellSizeArray(), indexRange, ncompHydro_);
 
+			// prevent vacuum
+			HydroSystem<problem_t>::EnforcePressureFloor(densityFloor_, pressureFloor_, indexRange, stateNew);
+
 			if (do_reflux) {
 				// increment flux registers
 				auto expandedFluxes = expandFluxArrays(fluxArrays, 0, state_new_[lev].nComp());
@@ -423,9 +432,6 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 							fluxScaleFactor * dt_lev);
 			}
 		}
-
-		// enforce density, pressure floors
-		computeAfterLevelAdvance(lev, time, dt_lev, 0, 0);
 	}
 }
 
