@@ -36,6 +36,7 @@
 #include "AMReX_IndexType.H"
 #include "AMReX_IntVect.H"
 #include "AMReX_Interpolater.H"
+#include "AMReX_MFInterpolater.H"
 #include "AMReX_MultiFabUtil.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_REAL.H"
@@ -757,7 +758,7 @@ void AMRSimulation<problem_t>::FillPatchWithData(int lev, amrex::Real time, amre
 
 		// use CellConservativeLinear interpolation onto fine grid
 		//amrex::Interpolater *mapper = &amrex::cell_cons_interp;
-		amrex::Interpolater *mapper = &amrex::pc_interp;
+		amrex::MFInterpolater *mapper = &amrex::mf_pc_interp;
 
 		// copies interior zones, fills ghost zones with space-time interpolated
 		// data
