@@ -193,11 +193,13 @@ auto HydroSystem<problem_t>::CheckStatesValid(amrex::Box const &indexRange, amre
 }
 
 template <typename problem_t>
-void HydroSystem<problem_t>::EnforcePressureFloor(amrex::Real const rho_floor, amrex::Real const P_floor, 
+void HydroSystem<problem_t>::EnforcePressureFloor(amrex::Real const densityFloor, amrex::Real const pressureFloor, 
 												  amrex::Box const &indexRange,
 												  amrex::Array4<amrex::Real> const &state)
 {
 	// prevent vacuum creation
+	amrex::Real const rho_floor = densityFloor; // workaround nvcc bug
+	amrex::Real const P_floor = pressureFloor;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 		amrex::Real const rho = state(i, j, k, density_index);

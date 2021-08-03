@@ -20,6 +20,11 @@
 (AMR max_level=1) 1 GPU (gcc-8 + nvcc + noFMA) Performance figure-of-merit: 0.06562001939 μs/zone-update [15.23925182 Mupdates/s]
 (AMR max_level=0, blocking_factor=32) 1 GPU (clang12 + nvcc + noFMA) Performance figure-of-merit: 0.01598570885 μs/zone-update [62.55587472 Mupdates/s]
 (AMR max_level=1, blocking_factor=32) 1 GPU (clang12 + nvcc + noFMA) Performance figure-of-merit: 0.03372307539 μs/zone-update [29.65328602 Mupdates/s]
+(AMR max_level=1, blocking_factor=32) 1 GPU (gcc 8.4.1 + nvcc 11.4 + noFMA) Performance figure-of-merit: 0.02449444493 μs/zone-update [40.82558322 Mupdates/s]
+
+[3D Radhydro Shell Test 256^3]
+(AMR max_level=0, blocking_factor=32) (gcc-8 + nvcc + noFMA) Performance figure-of-merit: 0.02688963336 μs/zone-update [37.189053 Mupdates/s]
+(AMR max_level=1, blocking_factor=32) (gcc-8 + nvcc + noFMA) Performance figure-of-merit: 0.03583629779 μs/zone-update [27.90466822 Mupdates/s]
 
 [2D Beam Test 1024^2]
 1 GPU V100-32GB (gcc-8 + nvcc + noFMA)     Performance figure-of-merit: 0.01584891696 μs/zone-update [63.09579402 Mupdates/s]
