@@ -42,6 +42,7 @@ template <typename problem_t> struct RadSystem_Traits {
   static constexpr double boltzmann_constant = boltzmann_constant_cgs_;
   static constexpr double gamma = 5. / 3.;
   static constexpr double Erad_floor = 0.;
+  static constexpr bool compute_v_over_c_terms = true;
 };
 
 /// Class for the radiation moment equations
@@ -85,6 +86,8 @@ public:
   static constexpr double gamma_ = RadSystem_Traits<problem_t>::gamma;
 
   static constexpr double Erad_floor_ = RadSystem_Traits<problem_t>::Erad_floor;
+  static constexpr bool compute_v_over_c_terms_ =
+      RadSystem_Traits<problem_t>::compute_v_over_c_terms;
 
   // static functions
 
@@ -968,11 +971,20 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
     amrex::Real x2GasMom1 = consNew(i, j, k, x2GasMomentum_index);
     amrex::Real x3GasMom1 = consNew(i, j, k, x3GasMomentum_index);
 
-    // 4a. Compute radiation work term
-    amrex::Real Egastot1 = ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess);
-    amrex::Real Ekin1 = Egastot1 - Egas_guess;
-    amrex::Real dEkin_work = Ekin1 - Ekin0; // change in kinetic energy of gas
-    amrex::Real dErad_work = -(c_hat_ / c_light_) * dEkin_work; // loss of radiation energy to gas kinetic energy
+    // 4a. Compute radiation work terms
+    amrex::Real const Egastot1 = ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess);
+    amrex::Real dErad_work = NAN;
+
+    if constexpr (compute_v_over_c_terms_ == true) {
+      // compute difference in gas kinetic energy before and after momentum update
+      amrex::Real const Ekin1 = Egastot1 - Egas_guess;
+      amrex::Real const dEkin_work = Ekin1 - Ekin0;
+      // compute loss of radiation energy to gas kinetic energy
+      dErad_work = -(c_hat_ / c_light_) * dEkin_work;
+    } else {
+      // do not subtract radiation work in new radiation energy
+      dErad_work = 0.;
+    }
 
     // 4b. Store new radiation energy, gas energy
     consNew(i, j, k, radEnergy_index) = Erad_guess + dErad_work;

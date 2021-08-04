@@ -32,6 +32,7 @@ template <> struct RadSystem_Traits<CouplingProblem> {
   static constexpr double boltzmann_constant = boltzmann_constant_cgs_;
   static constexpr double gamma = 5. / 3.;
   static constexpr double Erad_floor = 0.;
+	static constexpr bool compute_v_over_c_terms = true;
 };
 
 template <>
@@ -207,6 +208,8 @@ auto problem_main() -> int {
       status = 1;
     }
 
+#ifdef HAVE_PYTHON
+
     // Plot results
     std::vector<double> &Tgas = sim.Tgas_vec_;
     std::vector<double> &Trad = sim.Trad_vec_;
@@ -249,6 +252,7 @@ auto problem_main() -> int {
     matplotlibcpp::xlabel("time t (s)");
     matplotlibcpp::ylabel("fractional error in material temperature");
     matplotlibcpp::save(fmt::format("./radcoupling_fractional_error.pdf"));
+#endif
   }
 
   // Cleanup and exit

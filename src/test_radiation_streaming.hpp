@@ -10,7 +10,9 @@
 ///
 
 // external headers
+#ifdef HAVE_PYTHON
 #include "matplotlibcpp.h"
+#endif
 #include <fmt/format.h>
 
 // internal headers
@@ -18,7 +20,5 @@
 #include "radiation_system.hpp"
 
 // function definitions
-auto main(int argc, char** argv) -> int;
-auto testproblem_radiation_streaming() -> int;
 
 #endif // TEST_RADIATION_STREAMING_HPP_

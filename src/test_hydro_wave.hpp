@@ -10,13 +10,14 @@
 ///
 
 // external headers
+#ifdef HAVE_PYTHON
 #include "matplotlibcpp.h"
+#endif
 #include <fmt/format.h>
 
 // internal headers
 #include "hydro_system.hpp"
 
 // function definitions
-int testproblem_hydro_wave();
 
 #endif // TEST_HYDRO_WAVE_HPP_

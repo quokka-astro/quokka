@@ -74,46 +74,48 @@ void RadhydroSimulation<ContactProblem>::setInitialConditionsAtLevel(int lev) {
 }
 
 template <>
-void RadhydroSimulation<ContactProblem>::computeReferenceSolution(amrex::MultiFab &ref,
-    	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-    	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
-{
+void RadhydroSimulation<ContactProblem>::computeReferenceSolution(
+    amrex::MultiFab &ref,
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo) {
   for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
     const amrex::Box &indexRange = iter.validbox();
     auto const &stateExact = ref.array(iter);
-	auto const ncomp = ref.nComp();
+    auto const ncomp = ref.nComp();
 
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-		double vx = NAN;
-		double rho = NAN;
-		double P = NAN;
-		amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j,
+                                                        int k) noexcept {
+      double vx = NAN;
+      double rho = NAN;
+      double P = NAN;
+      amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
 
-		if (x < 0.5) {
-			rho = 1.4;
-			vx = v_contact;
-			P = 1.0;
-		} else {
-			rho = 1.0;
-			vx = v_contact;
-			P = 1.0;
-		}
-    	
-		for (int n = 0; n < ncomp; ++n) {
-        	stateExact(i, j, k, n) = 0.;
-    	}
+      if (x < 0.5) {
+        rho = 1.4;
+        vx = v_contact;
+        P = 1.0;
+      } else {
+        rho = 1.0;
+        vx = v_contact;
+        P = 1.0;
+      }
 
-		const auto gamma = HydroSystem<ContactProblem>::gamma_;
-		stateExact(i, j, k, HydroSystem<ContactProblem>::density_index) = rho;
-		stateExact(i, j, k, HydroSystem<ContactProblem>::x1Momentum_index) =
-			rho * vx;
-		stateExact(i, j, k, HydroSystem<ContactProblem>::x2Momentum_index) = 0.;
-		stateExact(i, j, k, HydroSystem<ContactProblem>::x3Momentum_index) = 0.;
-		stateExact(i, j, k, HydroSystem<ContactProblem>::energy_index) =
-			P / (gamma - 1.) + 0.5 * rho * (vx * vx);
-	});
+      for (int n = 0; n < ncomp; ++n) {
+        stateExact(i, j, k, n) = 0.;
+      }
+
+      const auto gamma = HydroSystem<ContactProblem>::gamma_;
+      stateExact(i, j, k, HydroSystem<ContactProblem>::density_index) = rho;
+      stateExact(i, j, k, HydroSystem<ContactProblem>::x1Momentum_index) =
+          rho * vx;
+      stateExact(i, j, k, HydroSystem<ContactProblem>::x2Momentum_index) = 0.;
+      stateExact(i, j, k, HydroSystem<ContactProblem>::x3Momentum_index) = 0.;
+      stateExact(i, j, k, HydroSystem<ContactProblem>::energy_index) =
+          P / (gamma - 1.) + 0.5 * rho * (vx * vx);
+    });
   }
 
+#ifdef HAVE_PYTHON
   // Plot results
   auto [position, values] = fextract(state_new_[0], geom[0], 0, 0.5);
   auto [pos_exact, val_exact] = fextract(ref, geom[0], 0, 0.5);
@@ -132,29 +134,35 @@ void RadhydroSimulation<ContactProblem>::computeReferenceSolution(amrex::MultiFa
       amrex::Real const this_x = position.at(i);
       x.push_back(this_x);
 
-	  {
-		const auto rho = val_exact.at(HydroSystem<ContactProblem>::density_index).at(i);
-		const auto xmom = val_exact.at(HydroSystem<ContactProblem>::x1Momentum_index).at(i);
-		const auto E = val_exact.at(HydroSystem<ContactProblem>::energy_index).at(i);
-		const auto vx = xmom / rho;
-		const auto Eint = E - 0.5 * rho * (vx * vx);
-		const auto P = (HydroSystem<ContactProblem>::gamma_ - 1.) * Eint;
-		d_exact.push_back(rho);
-		vx_exact.push_back(vx);
-		P_exact.push_back(P);
-	  }
+      {
+        const auto rho =
+            val_exact.at(HydroSystem<ContactProblem>::density_index).at(i);
+        const auto xmom =
+            val_exact.at(HydroSystem<ContactProblem>::x1Momentum_index).at(i);
+        const auto E =
+            val_exact.at(HydroSystem<ContactProblem>::energy_index).at(i);
+        const auto vx = xmom / rho;
+        const auto Eint = E - 0.5 * rho * (vx * vx);
+        const auto P = (HydroSystem<ContactProblem>::gamma_ - 1.) * Eint;
+        d_exact.push_back(rho);
+        vx_exact.push_back(vx);
+        P_exact.push_back(P);
+      }
 
-	  {
-		const auto frho = values.at(HydroSystem<ContactProblem>::density_index).at(i);
-		const auto fxmom = values.at(HydroSystem<ContactProblem>::x1Momentum_index).at(i);
-		const auto fE = values.at(HydroSystem<ContactProblem>::energy_index).at(i);
-		const auto fvx = fxmom / frho;
-		const auto fEint = fE - 0.5 * frho * (fvx * fvx);
-		const auto fP = (HydroSystem<ContactProblem>::gamma_ - 1.) * fEint;
-		d_final.push_back(frho);
-		vx_final.push_back(fvx);
-		P_final.push_back(fP);
-	  }
+      {
+        const auto frho =
+            values.at(HydroSystem<ContactProblem>::density_index).at(i);
+        const auto fxmom =
+            values.at(HydroSystem<ContactProblem>::x1Momentum_index).at(i);
+        const auto fE =
+            values.at(HydroSystem<ContactProblem>::energy_index).at(i);
+        const auto fvx = fxmom / frho;
+        const auto fEint = fE - 0.5 * frho * (fvx * fvx);
+        const auto fP = (HydroSystem<ContactProblem>::gamma_ - 1.) * fEint;
+        d_final.push_back(frho);
+        vx_final.push_back(fvx);
+        P_final.push_back(fP);
+      }
     }
 
     std::unordered_map<std::string, std::string> d_args;
@@ -169,6 +177,7 @@ void RadhydroSimulation<ContactProblem>::computeReferenceSolution(amrex::MultiFa
     matplotlibcpp::title(fmt::format("t = {:.4f}", tNew_[0]));
     matplotlibcpp::save("./hydro_contact.pdf");
   }
+#endif
 }
 
 auto problem_main() -> int {
@@ -176,8 +185,8 @@ auto problem_main() -> int {
   const int nvars = RadhydroSimulation<ContactProblem>::nvarTotal_;
   amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
   for (int n = 0; n < nvars; ++n) {
-	boundaryConditions[0].setLo(0, amrex::BCType::int_dir); // periodic
-	boundaryConditions[0].setHi(0, amrex::BCType::int_dir);
+    boundaryConditions[0].setLo(0, amrex::BCType::int_dir); // periodic
+    boundaryConditions[0].setHi(0, amrex::BCType::int_dir);
     for (int i = 1; i < AMREX_SPACEDIM; ++i) {
       boundaryConditions[n].setLo(i, amrex::BCType::int_dir); // periodic
       boundaryConditions[n].setHi(i, amrex::BCType::int_dir);

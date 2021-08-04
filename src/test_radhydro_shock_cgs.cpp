@@ -64,6 +64,7 @@ template <> struct RadSystem_Traits<ShockProblem> {
 	static constexpr double boltzmann_constant = k_B;
 	static constexpr double gamma = gamma_gas;
 	static constexpr double Erad_floor = 0.;
+	static constexpr bool compute_v_over_c_terms = true;
 };
 
 template <> struct EOS_Traits<ShockProblem> {
@@ -335,6 +336,7 @@ auto problem_main() -> int
 			status = 1;
 		}
 
+#ifdef HAVE_PYTHON
 		// plot results
 		std::map<std::string, std::string> Trad_args;
 		Trad_args["label"] = "Trad";
@@ -374,6 +376,7 @@ auto problem_main() -> int
 		matplotlibcpp::ylabel("temperature (dimensionless)");
 		matplotlibcpp::legend();
 		matplotlibcpp::save("./radshock_cgs_temperature.pdf");
+#endif
 	}
 
 	return status;

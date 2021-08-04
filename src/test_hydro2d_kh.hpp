@@ -10,7 +10,9 @@
 ///
 
 // external headers
+#ifdef HAVE_PYTHON
 #include "matplotlibcpp.h"
+#endif
 #include <fstream>
 
 // internal headers
@@ -21,6 +23,5 @@ extern "C" {
 }
 
 // function definitions
-auto testproblem_hydro_kelvinhelmholz() -> int;
 
 #endif // TEST_HYDRO2D_BLAST_HPP_

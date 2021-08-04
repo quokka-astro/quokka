@@ -10,7 +10,9 @@
 ///
 
 // external headers
+#ifdef HAVE_PYTHON
 #include "matplotlibcpp.h"
+#endif
 #include <fmt/format.h>
 
 // internal headers
@@ -22,6 +24,5 @@ extern "C" {
 }
 
 // function definitions
-auto testproblem_radiation_matter_coupling() -> int;
 
 #endif // TEST_RADIATION_MATTER_COUPLING_HPP_

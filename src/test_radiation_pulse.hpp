@@ -10,7 +10,9 @@
 ///
 
 // external headers
+#ifdef HAVE_PYTHON
 #include "matplotlibcpp.h"
+#endif
 #include <fmt/format.h>
 #include <fstream>
 
@@ -23,6 +25,5 @@ extern "C" {
 }
 
 // function definitions
-auto testproblem_radiation_pulse() -> int;
 
 #endif // TEST_RADIATION_PULSE_HPP_

@@ -37,6 +37,7 @@ template <> struct RadSystem_Traits<SuOlsonProblemCgs> {
 	static constexpr double boltzmann_constant = boltzmann_constant_cgs_;
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double Erad_floor = 0.;
+	static constexpr bool compute_v_over_c_terms = true;
 };
 
 template <>
@@ -314,6 +315,7 @@ auto problem_main() -> int
 			status = 1;
 		}
 
+#ifdef HAVE_PYTHON
 		// plot results
 
 		// radiation temperature
@@ -355,6 +357,8 @@ auto problem_main() -> int
 		matplotlibcpp::legend();
 		matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
 		matplotlibcpp::save("./marshak_wave_cgs_gastemperature.pdf");
+#endif
+
 	}
 
 	return status;

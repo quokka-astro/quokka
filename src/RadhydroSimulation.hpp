@@ -616,9 +616,6 @@ void RadhydroSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Rea
 
 		// new hydro+radiation state is stored in state_new_
 
-		// check hydro states post-update
-		//checkHydroStates(lev);
-
 		// update 'time_subcycle'
 		time_subcycle += dt_radiation;
 	}

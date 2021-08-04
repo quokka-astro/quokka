@@ -10,7 +10,9 @@
 ///
 
 // external headers
+#ifdef HAVE_PYTHON
 #include "matplotlibcpp.h"
+#endif
 #include <fmt/format.h>
 #include <fstream>
 
@@ -24,6 +26,5 @@ extern "C" {
 }
 
 // function definitions
-auto testproblem_radhydro_shock() -> int;
 
 #endif // TEST_RADHYDRO_SHOCK_HPP_

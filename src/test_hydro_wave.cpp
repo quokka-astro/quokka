@@ -150,6 +150,7 @@ void RadhydroSimulation<WaveProblem>::computeReferenceSolution(
       pressure_exact.at(i) = (pressure - P0) / A;
     }
 
+#ifdef HAVE_PYTHON
     // Plot results
     amrex::Real const t = tNew_[0];
 
@@ -191,6 +192,7 @@ void RadhydroSimulation<WaveProblem>::computeReferenceSolution(
     matplotlibcpp::legend();
     matplotlibcpp::title(fmt::format("t = {:.4f}", t));
     matplotlibcpp::save(fmt::format("./velocity_{:.4f}.pdf", t));
+#endif
   }
 }
 
