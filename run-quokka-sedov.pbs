@@ -9,16 +9,16 @@
 #PBS -m aeb
 #PBS -M ben.wibking@anu.edu.au
 #PBS -l wd
-#PBS -l walltime=2:00:00
+#PBS -l walltime=1:00:00
 #PBS -l storage=scratch/jh2+gdata/jh2
 #PBS -l jobfs=400GB
 
 # --- initialize Quokka ---
-#MPI_OPTIONS="-np $PBS_NGPUS --map-by numa:SPAN --bind-to numa"
-MPI_OPTIONS="-np 1 --map-by numa:SPAN --bind-to numa"
+MPI_OPTIONS="-np $PBS_NGPUS --map-by numa:SPAN --bind-to numa"
+#MPI_OPTIONS="-np 1 --map-by numa:SPAN --bind-to numa"
 echo "Using MPI_OPTIONS = $MPI_OPTIONS"
 
-mpirun $MPI_OPTIONS ./gpu_wrapper.sh > radhydro_shell.log
+mpirun $MPI_OPTIONS ./gpu_wrapper_sedov.sh > sedov.log
 
 
 
