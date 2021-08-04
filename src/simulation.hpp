@@ -809,7 +809,6 @@ void AMRSimulation<problem_t>::FillCoarsePatch(int lev, amrex::Real time, amrex:
 	amrex::Vector<amrex::MultiFab *> cmf;
 	amrex::Vector<amrex::Real> ctime;
 	GetData(lev - 1, time, cmf, ctime);
-	amrex::Interpolater *mapper = &amrex::cell_cons_interp;
 
 	if (cmf.size() != 1) {
 		amrex::Abort("FillCoarsePatch: how did this happen?");
@@ -821,6 +820,10 @@ void AMRSimulation<problem_t>::FillCoarsePatch(int lev, amrex::Real time, amrex:
 	    finePhysicalBoundaryFunctor(geom[lev], boundaryConditions_, boundaryFunctor);
 	amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>>
 	    coarsePhysicalBoundaryFunctor(geom[lev - 1], boundaryConditions_, boundaryFunctor);
+
+	// use CellConservativeLinear interpolation onto fine grid
+	//amrex::Interpolater *mapper = &amrex::cell_cons_interp;
+	amrex::MFInterpolater *mapper = &amrex::mf_pc_interp;
 
 	amrex::InterpFromCoarseLevel(mf, time, *cmf[0], 0, icomp, ncomp, geom[lev - 1], geom[lev],
 				     coarsePhysicalBoundaryFunctor, 0, finePhysicalBoundaryFunctor,
