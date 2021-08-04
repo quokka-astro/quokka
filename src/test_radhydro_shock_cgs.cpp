@@ -64,6 +64,7 @@ template <> struct RadSystem_Traits<ShockProblem> {
 	static constexpr double boltzmann_constant = k_B;
 	static constexpr double gamma = gamma_gas;
 	static constexpr double Erad_floor = 0.;
+	static constexpr bool compute_v_over_c_terms = true;
 };
 
 template <> struct EOS_Traits<ShockProblem> {

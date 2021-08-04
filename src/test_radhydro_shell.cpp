@@ -42,6 +42,7 @@ template <> struct RadSystem_Traits<ShellProblem> {
 	static constexpr double boltzmann_constant = k_B;
 	static constexpr double gamma = gamma_gas;
 	static constexpr double Erad_floor = 0.;
+	static constexpr bool compute_v_over_c_terms = true;
 };
 
 template <> struct EOS_Traits<ShellProblem> {
@@ -245,16 +246,17 @@ auto problem_main() -> int
 	sim.is_radiation_enabled_ = true;
 	sim.densityFloor_ = 1.0e-10 * rho_0;
 	sim.pressureFloor_ = 1.0e-10 * P_0;
+	sim.reconstructionOrder_ = 2; // 1 == donor cell, 2 == PLM, 3 == PPM (not recommended)
+	sim.integratorOrder_ = 2; // RK2
 
 	sim.stopTime_ = 0.02 * t0;
 	sim.cflNumber_ = 0.2;
 	sim.initDt_ = 1.0e9; // seconds
 	sim.maxDt_ = 1.0e10; // seconds
-	sim.maxTimesteps_ = 500;
-	sim.reconstructionOrder_ = 2; // 1 == donor cell, 2 == PLM
-	sim.integratorOrder_ = 2; // RK2
+	sim.maxTimesteps_ = 5000;
+
 	sim.checkpointInterval_ = -1;
-	sim.plotfileInterval_ = 100;
+	sim.plotfileInterval_ = 10;
 
 	// initialize
 	sim.setInitialConditions();

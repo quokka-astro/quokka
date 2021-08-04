@@ -41,6 +41,7 @@ template <> struct RadSystem_Traits<BeamProblem> {
 	static constexpr double boltzmann_constant = boltzmann_constant_cgs_;
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double Erad_floor = 0.;
+	static constexpr bool compute_v_over_c_terms = true;
 };
 
 template <>

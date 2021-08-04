@@ -38,6 +38,7 @@ template <> struct RadSystem_Traits<SuOlsonProblem> {
 	static constexpr double boltzmann_constant = 1.0;
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double Erad_floor = 0.;
+	static constexpr bool compute_v_over_c_terms = false;
 };
 
 template <>
@@ -175,6 +176,8 @@ template <> void RadhydroSimulation<SuOlsonProblem>::setInitialConditionsAtLevel
 
 auto problem_main() -> int
 {
+    // TODO(ben): disable v/c terms for this problem!
+
 	// Problem parameters
 
 	const int max_timesteps = 2e4;
