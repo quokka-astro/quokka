@@ -1,10 +1,13 @@
-find_package(PythonLibs REQUIRED)
+find_package(PythonLibs)
+if(PythonLibs_FOUND)
+    add_compile_definitions(HAVE_PYTHON)
+    include_directories(${PYTHON_INCLUDE_DIRS})
+    link_libraries(${PYTHON_LIBRARY})
+endif()
 
-include_directories(${PYTHON_INCLUDE_DIRS})
 include_directories(${amrex_INCLUDE_DIRS_RET})
 include_directories(${fmt_INCLUDE_DIRS_RET})
 
-link_libraries(${PYTHON_LIBRARY})
 link_libraries(AMReX::amrex)
 link_libraries(fmt::fmt)
 

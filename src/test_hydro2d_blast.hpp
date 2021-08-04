@@ -10,7 +10,9 @@
 ///
 
 // external headers
+#ifdef HAVE_PYTHON
 #include "matplotlibcpp.h"
+#endif
 #include <fmt/format.h>
 #include <fstream>
 
@@ -22,6 +24,5 @@ extern "C" {
 }
 
 // function definitions
-auto testproblem_hydro_blast() -> int;
 
 #endif // TEST_HYDRO2D_BLAST_HPP_

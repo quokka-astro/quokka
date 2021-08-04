@@ -10,7 +10,9 @@
 ///
 
 // external headers
+#ifdef HAVE_PYTHON
 #include "matplotlibcpp.h"
+#endif
 #include <fmt/format.h>
 
 // internal headers
@@ -18,7 +20,5 @@
 #include "linear_advection.hpp"
 
 // function definitions
-template <typename problem_t> void write_density(LinearAdvectionSystem<problem_t> &advection_system);
-int testproblem_advection();
 
 #endif // TEST_ADVECTION_HPP_

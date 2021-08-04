@@ -220,6 +220,8 @@ auto problem_main() -> int {
       status = 1;
     }
 
+#ifdef HAVE_PYTHON
+
     // Plot results
     matplotlibcpp::clf();
     matplotlibcpp::yscale("log");
@@ -256,6 +258,8 @@ auto problem_main() -> int {
     matplotlibcpp::xlabel("time t (s)");
     matplotlibcpp::ylabel("fractional error in material temperature");
     matplotlibcpp::save(fmt::format("./radcoupling_rsla_fractional_error.pdf"));
+#endif
+
   }
 
   return status;

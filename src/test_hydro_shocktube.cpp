@@ -205,6 +205,8 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
     });
   }
 
+#ifdef HAVE_PYTHON
+
   // Plot results
   auto [position, values] = fextract(state_new_[0], geom[0], 0, 0.5);
   auto [pos_exact, val_exact] = fextract(ref, geom[0], 0, 0.5);
@@ -252,6 +254,8 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
     matplotlibcpp::title(fmt::format("t = {:.4f}", tNew_[0]));
     matplotlibcpp::save(fmt::format("./hydro_shocktube_{:.4f}.pdf", tNew_[0]));
   }
+#endif
+
 }
 
 auto problem_main() -> int {

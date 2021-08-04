@@ -326,6 +326,7 @@ auto problem_main() -> int {
       status = 1;
     }
 
+#ifdef HAVE_PYTHON
     // Plot solution
 
     matplotlibcpp::clf();
@@ -411,6 +412,8 @@ auto problem_main() -> int {
     matplotlibcpp::xlim(0.2, 8.0); // cm
     matplotlibcpp::ylim(1e-3, 3.0);
     matplotlibcpp::save("./SuOlsonTest_loglog.pdf");
+#endif
+
   }
 
   return status;

@@ -97,6 +97,7 @@ void AdvectionSimulation<SemiellipseProblem>::computeReferenceSolution(
       d_exact.at(i) = rho_exact;
     }
 
+#ifdef HAVE_PYTHON
     // Plot results
     std::map<std::string, std::string> d_initial_args;
     std::map<std::string, std::string> d_final_args;
@@ -107,6 +108,7 @@ void AdvectionSimulation<SemiellipseProblem>::computeReferenceSolution(
     matplotlibcpp::plot(xs, d, d_final_args);
     matplotlibcpp::legend();
     matplotlibcpp::save(std::string("./advection_semiellipse.pdf"));
+#endif
   }
 }
 

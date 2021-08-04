@@ -78,6 +78,7 @@ void AdvectionSimulation<SawtoothProblem>::computeReferenceSolution(
         });
   }
 
+#ifdef HAVE_PYTHON
   // Plot results
   auto [position, values] = fextract(state_new_[0], geom[0], 0, 0.5);
   auto [pos_exact, val_exact] = fextract(ref, geom[0], 0, 0.5);
@@ -111,6 +112,7 @@ void AdvectionSimulation<SawtoothProblem>::computeReferenceSolution(
 	matplotlibcpp::legend();
 	matplotlibcpp::save(std::string("./advection_sawtooth.pdf"));
   }
+#endif
 }
 
 

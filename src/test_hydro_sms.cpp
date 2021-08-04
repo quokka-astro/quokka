@@ -199,6 +199,7 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
       P.at(i) = pressure;
     }
 
+#ifdef HAVE_PYTHON
     // Plot results
     matplotlibcpp::clf();
     std::map<std::string, std::string> d_args;
@@ -210,6 +211,7 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
     matplotlibcpp::legend();
     matplotlibcpp::title(fmt::format("t = {:.4f}", tNew_[0]));
     matplotlibcpp::save(fmt::format("./hydro_sms_{:.4f}.pdf", tNew_[0]));
+#endif
   }
 }
 

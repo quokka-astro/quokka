@@ -208,6 +208,8 @@ auto problem_main() -> int {
       status = 1;
     }
 
+#ifdef HAVE_PYTHON
+
     // Plot results
     std::vector<double> &Tgas = sim.Tgas_vec_;
     std::vector<double> &Trad = sim.Trad_vec_;
@@ -250,6 +252,7 @@ auto problem_main() -> int {
     matplotlibcpp::xlabel("time t (s)");
     matplotlibcpp::ylabel("fractional error in material temperature");
     matplotlibcpp::save(fmt::format("./radcoupling_fractional_error.pdf"));
+#endif
   }
 
   // Cleanup and exit

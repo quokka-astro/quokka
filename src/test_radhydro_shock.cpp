@@ -351,6 +351,7 @@ auto problem_main() -> int {
       status = 1;
     }
 
+#ifdef HAVE_PYTHON
     // plot results
 
     // temperature
@@ -402,6 +403,8 @@ auto problem_main() -> int {
     matplotlibcpp::ylabel("mass density (dimensionless)");
     matplotlibcpp::legend();
     matplotlibcpp::save("./radshock_gasdensity.pdf");
+#endif
+
   }
 
   return status;

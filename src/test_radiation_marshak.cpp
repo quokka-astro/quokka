@@ -309,6 +309,8 @@ auto problem_main() -> int
 			status = 1;
 		}
 
+#ifdef HAVE_PYTHON
+
 		// plot results
 
 		// radiation temperature
@@ -348,8 +350,9 @@ auto problem_main() -> int
 		matplotlibcpp::legend();
 		matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
 		matplotlibcpp::save("./marshak_wave_gastemperature.pdf");
-	}
+#endif
 
+	}
 
 	return status;
 }

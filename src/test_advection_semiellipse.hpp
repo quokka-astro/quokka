@@ -10,7 +10,9 @@
 ///
 
 // external headers
+#ifdef HAVE_PYTHON
 #include "matplotlibcpp.h"
+#endif
 #include <fmt/format.h>
 
 // internal headers
@@ -19,6 +21,5 @@
 #include "AdvectionSimulation.hpp"
 
 // function definitions
-auto testproblem_advection() -> int;
 
 #endif // TEST_ADVECTION_HPP_

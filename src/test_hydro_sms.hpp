@@ -10,7 +10,9 @@
 ///
 
 // external headers
+#ifdef HAVE_PYTHON
 #include "matplotlibcpp.h"
+#endif
 #include <fmt/format.h>
 #include <fstream>
 
@@ -21,6 +23,5 @@ extern "C" {
 }
 
 // function definitions
-auto testproblem_hydro_shocktube() -> int;
 
 #endif // TEST_HYDRO_LEBLANC_HPP_

@@ -336,6 +336,7 @@ auto problem_main() -> int
 			status = 1;
 		}
 
+#ifdef HAVE_PYTHON
 		// plot results
 		std::map<std::string, std::string> Trad_args;
 		Trad_args["label"] = "Trad";
@@ -375,6 +376,7 @@ auto problem_main() -> int
 		matplotlibcpp::ylabel("temperature (dimensionless)");
 		matplotlibcpp::legend();
 		matplotlibcpp::save("./radshock_cgs_temperature.pdf");
+#endif
 	}
 
 	return status;
