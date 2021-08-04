@@ -67,6 +67,10 @@ template <> void RadhydroSimulation<SedovProblem>::setInitialConditionsAtLevel(i
 			const auto v_sq = vx * vx + vy * vy + vz * vz;
 			const auto gamma = HydroSystem<SedovProblem>::gamma_;
 
+			for(int n = 0; n < state.nComp(); ++n) {
+				state(i, j, k, n) = 0.; // zero fill all components
+			}
+
 			state(i, j, k, HydroSystem<SedovProblem>::density_index) = rho;
 			state(i, j, k, HydroSystem<SedovProblem>::x1Momentum_index) = rho * vx;
 			state(i, j, k, HydroSystem<SedovProblem>::x2Momentum_index) = rho * vy;
