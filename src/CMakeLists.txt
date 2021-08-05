@@ -10,7 +10,7 @@ if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
     setup_target_for_coverage_lcov(
           NAME coverage
           EXECUTABLE ${CMAKE_CTEST_COMMAND} -j2
-          EXCLUDE "${PROJECT_SOURCE_DIR}/extern/*")
+          EXCLUDE "${PROJECT_SOURCE_DIR}/extern/*" "cxx/*" "/usr/*" "${PROJECT_SOURCE_DIR}/src/test_*.cpp")
     SET(CMAKE_CXX_FLAGS "-O1")
     SET(CMAKE_C_FLAGS "-O1")
     append_coverage_compiler_flags()
