@@ -5,12 +5,14 @@ if(PythonLibs_FOUND)
     link_libraries(${PYTHON_LIBRARY})
 endif()
 
-if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
     include(CodeCoverage) # only works with gcc!
     setup_target_for_coverage_lcov(
           NAME coverage
           EXECUTABLE ${CMAKE_CTEST_COMMAND} -j2
           EXCLUDE "${PROJECT_SOURCE_DIR}/extern/*")
+    SET(CMAKE_CXX_FLAGS "-O1")
+    SET(CMAKE_C_FLAGS "-O1")
     append_coverage_compiler_flags()
 endif()
 
