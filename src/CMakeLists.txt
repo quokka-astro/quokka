@@ -1,8 +1,17 @@
-find_package(PythonLibs)
+#find_package(PythonLibs)
 if(PythonLibs_FOUND)
     add_compile_definitions(HAVE_PYTHON)
     include_directories(${PYTHON_INCLUDE_DIRS})
     link_libraries(${PYTHON_LIBRARY})
+endif()
+
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+    include(CodeCoverage) # only works with gcc!
+    setup_target_for_coverage_lcov(
+          NAME coverage
+          EXECUTABLE ${CMAKE_CTEST_COMMAND}
+          EXCLUDE "${PROJECT_SOURCE_DIR}/extern/*")
+    append_coverage_compiler_flags()
 endif()
 
 include_directories(${amrex_INCLUDE_DIRS_RET})
