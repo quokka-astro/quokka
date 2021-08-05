@@ -9,7 +9,7 @@ if (CMAKE_BUILD_TYPE STREQUAL "Debug")
     include(CodeCoverage) # only works with gcc!
     setup_target_for_coverage_lcov(
           NAME coverage
-          EXECUTABLE ${CMAKE_CTEST_COMMAND}
+          EXECUTABLE ${CMAKE_CTEST_COMMAND} -j2
           EXCLUDE "${PROJECT_SOURCE_DIR}/extern/*")
     append_coverage_compiler_flags()
 endif()
