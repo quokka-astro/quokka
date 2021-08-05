@@ -1,1 +1,0 @@
-[avatargpue linux-centos8-cascadelake CPU][test_hydro_contact] Performance figure-of-merit: 0.280794147 μs/zone-update

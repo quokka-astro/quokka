@@ -1,0 +1,25 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  0.0  0.0  0.0 
+geometry.prob_hi     =  1.0  1.0  1.0
+geometry.is_periodic =  0    0    0
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v              = 0       # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          = 512 512 512
+amr.max_level       = 1     # number of levels = max_level + 1
+amr.blocking_factor = 32   # grid size must be divisible by this
+amr.n_error_buf     = 3     # minimum 3 cell buffer around tagged cells
+
+## grid_eff = 1 forces refinement to respect symmetries of the tagged cells
+amr.grid_eff        = 0.7   # default
+
+do_reflux = 1
+do_subcycle = 1
