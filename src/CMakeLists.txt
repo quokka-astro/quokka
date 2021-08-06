@@ -14,7 +14,7 @@ if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
         EXECUTABLE ${CMAKE_CTEST_COMMAND} -j2
         BASE_DIRECTORY "../"
         EXCLUDE "${PROJECT_SOURCE_DIR}/extern" "${PROJECT_SOURCE_DIR}/src/test_" "include/openmpi/ompi/mpi/cxx/" "9.4.0/" "/usr/"
-        POST_CMD perl -i -pe s!${PROJECT_SOURCE_DIR}/!!g coverage.json
+        POST_CMD perl -i -pe s!${PROJECT_SOURCE_DIR}/!!g coverage.json && fastcov_to_sonarqube coverage.json
     )
     SET(CMAKE_CXX_FLAGS "-O1")
     SET(CMAKE_C_FLAGS "-O1")
