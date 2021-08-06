@@ -6,11 +6,16 @@ if(PythonLibs_FOUND)
 endif()
 
 if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
-    include(CodeCoverage) # only works with gcc!
-    setup_target_for_coverage_lcov(
-          NAME coverage
-          EXECUTABLE ${CMAKE_CTEST_COMMAND} -j2
-          EXCLUDE "${PROJECT_SOURCE_DIR}/extern/*" "cxx/*" "/usr/*" "${PROJECT_SOURCE_DIR}/src/test_*.cpp")
+    # only works with gcc!
+    include(CodeCoverage)
+    # `pip3 install fastcov --user`
+    setup_target_for_coverage_fastcov(
+        NAME coverage
+        EXECUTABLE ${CMAKE_CTEST_COMMAND} -j2
+        BASE_DIRECTORY "../"
+        EXCLUDE "${PROJECT_SOURCE_DIR}/extern" "${PROJECT_SOURCE_DIR}/src/test_" "include/openmpi/ompi/mpi/cxx/" "9.4.0/" "/usr/"
+        POST_CMD perl -i -pe s!${PROJECT_SOURCE_DIR}/!!g coverage.json
+    )
     SET(CMAKE_CXX_FLAGS "-O1")
     SET(CMAKE_C_FLAGS "-O1")
     append_coverage_compiler_flags()
