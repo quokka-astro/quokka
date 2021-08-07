@@ -80,4 +80,4 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-      run: ${{runner.workspace}}/sonar-scanner-4.5.0.2216-linux/bin/sonar-scanner -Dsonar.cfamily.build-wrapper-output=${{runner.workspace}}/build/bw-output -Dsonar.coverageReportPaths=${{runner.workspace}}/build/coverage.xml
+      run: ${{runner.workspace}}/sonar-scanner-4.5.0.2216-linux/bin/sonar-scanner -Dsonar.cfamily.build-wrapper-output=${{runner.workspace}}/build/bw-output
