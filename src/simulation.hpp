@@ -50,6 +50,9 @@
 #include <AMReX_PlotFileUtil.H>
 #include <AMReX_Print.H>
 #include <AMReX_Utility.H>
+#ifdef AMREX_USE_HDF5_ASYNC
+#include "h5_vol_external_async_native.h"
+#endif
 
 // internal headers
 #include "CheckNaN.hpp"
@@ -909,8 +912,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile() con
 
 	amrex::Print() << "Writing plotfile " << plotfilename << "\n";
 
+#ifdef AMREX_USE_HDF5
+	amrex::WriteMultiLevelPlotfileHDF5(plotfilename, finest_level + 1, mf, varnames, Geom(),
+				       tNew_[0], istep, refRatio());
+#else
 	amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, mf, varnames, Geom(),
 				       tNew_[0], istep, refRatio());
+#endif
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile() const
