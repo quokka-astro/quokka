@@ -1,4 +1,4 @@
-#find_package(PythonLibs)
+find_package(PythonLibs)
 if(PythonLibs_FOUND)
     add_compile_definitions(HAVE_PYTHON)
     include_directories(${PYTHON_INCLUDE_DIRS})
@@ -13,7 +13,7 @@ if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
         NAME coverage
         EXECUTABLE ${CMAKE_CTEST_COMMAND} -j2
         BASE_DIRECTORY "../"
-        EXCLUDE "${PROJECT_SOURCE_DIR}/extern" "${PROJECT_SOURCE_DIR}/src/test_" "include/openmpi/ompi/mpi/cxx/" "9.4.0/" "/usr/"
+        EXCLUDE "${PROJECT_SOURCE_DIR}/extern" "${PROJECT_SOURCE_DIR}/src/test_" "include/openmpi/ompi/mpi/cxx/" "/usr/"
         POST_CMD perl -i -pe s!${PROJECT_SOURCE_DIR}/!!g coverage.json && fastcov_to_sonarqube coverage.json
     )
     SET(CMAKE_CXX_FLAGS "-O1")
