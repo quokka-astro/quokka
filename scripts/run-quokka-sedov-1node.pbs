@@ -14,7 +14,7 @@
 #PBS -l jobfs=400GB
 
 # --- initialize Quokka ---
-MPI_OPTIONS="-np $PBS_NGPUS --map-by numa:SPAN --bind-to numa --mca pml ucx -x UCX_TLS=rc,sm,cuda_copy,cuda_ipc"
+MPI_OPTIONS="-np $PBS_NGPUS --map-by numa:SPAN --bind-to numa --mca pml ucx"
 echo "Using MPI_OPTIONS = $MPI_OPTIONS"
 
 mpirun $MPI_OPTIONS ./scripts/gpu_wrapper_sedov_512.sh > sedov.log

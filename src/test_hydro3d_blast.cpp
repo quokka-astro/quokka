@@ -158,10 +158,10 @@ auto problem_main() -> int
 	RadhydroSimulation<SedovProblem> sim(boundaryConditions);
 	sim.is_hydro_enabled_ = true;
 	sim.is_radiation_enabled_ = false;
-	sim.stopTime_ = 0.5; //0.05;
+	sim.stopTime_ = 0.5; //0.01;
 	sim.cflNumber_ = 0.3; // *must* be less than 1/3 in 3D!
 	sim.maxTimesteps_ = 500;
-	sim.plotfileInterval_ = 50;
+	sim.plotfileInterval_ = 1000;
 
 	// initialize
 	sim.setInitialConditions();
