@@ -105,6 +105,9 @@ $^{1}$Research School of Astronomy \& Astrophysics, Mount Stromlo Observatory, C
 %%%%%%%%%%%%%%%%% BODY OF PAPER %%%%%%%%%%%%%%%%%%
 
 \section{Introduction}
+Detailed simulations of star formation require treating the dynamical effects of radiation produced by protostars and re-radiated by dust grains in the interstellar medium. A long-standing method to compute the radiation transport in hydrodynamic simulations is the approximation of flux-limited diffusion (FLD) \citep{Alme_1973}. This method evolves the radiation energy density under the assumption of a given closure for the radiation pressure tensor and the assumption that the time derivative of the radiation flux is zero.
+
+A more accurate approximation is to evolve both the radiation energy density and the radiation flux, while still invoking a closure relation for the radiation pressure tensor. When the radiation pressure tensor is computed via a formal solution of the angle-dependent radiative transfer equation, we obtain the quasidiffusion or variable Eddington tensor (VET) method \citep{Goldin_1964}. When retaining a local closure for the radiation pressure tensor in terms of the radiation energy density $E$ and the flux $F$, we obtain a local VET method, commonly referred to as the M1 (`moment-one`) method \citep{Minerbo_1978,Levermore_1984,Dubroca_1999,Gonzalez_2007}.
 
 \section{Methods}
 \label{section:methods}
