@@ -160,8 +160,8 @@ auto problem_main() -> int
 	sim.is_radiation_enabled_ = false;
 	sim.stopTime_ = 0.5; //0.01;
 	sim.cflNumber_ = 0.3; // *must* be less than 1/3 in 3D!
-	sim.maxTimesteps_ = 500;
-	sim.plotfileInterval_ = 1000;
+	sim.maxTimesteps_ = 100;
+	sim.plotfileInterval_ = -1;
 
 	// initialize
 	sim.setInitialConditions();

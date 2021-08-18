@@ -1,0 +1,25 @@
+#!/bin/bash
+
+#PBS -N quokka_CPU_64nodes
+#PBS -P jh2
+#PBS -q normal
+#PBS -l ncpus=3072
+#PBS -l mem=12160GB
+#PBS -m aeb
+#PBS -M ben.wibking@anu.edu.au
+#PBS -l wd
+#PBS -l walltime=1:00:00
+#PBS -l storage=scratch/jh2+gdata/jh2
+#PBS -l jobfs=25600GB
+
+# --- initialize Quokka ---
+MPI_OPTIONS="-np $PBS_NCPUS --mca pml ucx"
+echo "Using MPI_OPTIONS = $MPI_OPTIONS"
+
+mpirun $MPI_OPTIONS ./scripts/gpu_wrapper_sedov_2048.sh > sedov.log
+
+
+
+
+
+
