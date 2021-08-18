@@ -91,13 +91,13 @@ $^{1}$Research School of Astronomy \& Astrophysics, Mount Stromlo Observatory, C
 
 % Abstract of the paper
 \begin{abstract}
-    We present a new subcycling-in-time, block-structured adaptive mesh refinement (AMR) code designed for radiation hydrodynamics problems in star formation. The equations of hydrodynamics are solved with the piecewise parabolic method in a method-of-lines formulation and the radiative transfer is solved via the variable Eddington tensor (VET) radiation moment equations with a local closure. We combine explicit-in-time evolution of the radiation moment equations with the reduced speed-of-light approximation. We show results for a selection of test problems, including radiative shocks, blast waves, and turbulent radiation-gas interactions. On uniform grids in 3D, we achieve $\sim 60$ million hydrodynamic cell-updates per second per GPU. Implemented in C++, our code runs portably with high performance on any platform---either CPUs only, or NVIDIA, AMD, or Intel GPUs. The code is publicly released under an open-source license.
+    We present a new subcycling-in-time, block-structured adaptive mesh refinement (AMR) code designed for radiation hydrodynamics problems in star formation. The equations of hydrodynamics are solved with the piecewise parabolic method in a method-of-lines formulation and the radiative transfer is solved via the variable Eddington tensor (VET) radiation moment equations with a local closure. We combine explicit-in-time evolution of the radiation moment equations with the reduced speed-of-light approximation. We show results for a range of test problems, including radiative shocks, blast waves, and turbulent radiation-gas interactions. On uniform grids, we achieve a peak of $60$ million hydrodynamic updates per second per GPU, scaling to 256 GPUs with a scaling effiency of greater than $75$ per cent. The code is publicly released under an open-source license.
 \end{abstract}
 
 % Select between one and six entries from the list of approved keywords.
 % Don't make up new ones.
 \begin{keywords}
-
+radiation hydrodynamics -- numerical methods
 \end{keywords}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
