@@ -127,7 +127,7 @@ template <> void RadhydroSimulation<ShellProblem>::setInitialConditionsAtLevel(i
 
 			double sigma_sh = H_shell / (2.0*std::sqrt(2.0*std::log(2.0)));
 			double rho_norm = M_shell / (4.0*M_PI*r*r*std::sqrt(2.0*M_PI*sigma_sh*sigma_sh));
-			double rho = rho_norm * std::exp(-std::pow(r - r0, 2) / (2.0*sigma_sh*sigma_sh));
+			double rho = rho_norm * std::exp(-std::pow(r - r_0, 2) / (2.0*sigma_sh*sigma_sh));
 
 			double vx = 0.;
 			double vy = 0.;
