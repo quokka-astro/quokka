@@ -16,7 +16,7 @@
 MPI_OPTIONS="-np $PBS_NCPUS --mca pml ucx"
 echo "Using MPI_OPTIONS = $MPI_OPTIONS"
 
-mpirun $MPI_OPTIONS ./scripts/gpu_wrapper_sedov_1024.sh > sedov.log
+mpirun $MPI_OPTIONS ./scripts/gpu_wrapper_sedov_1024.sh > sedov_8nodes.log
 
 
 
