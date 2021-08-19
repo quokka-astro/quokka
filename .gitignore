@@ -8,6 +8,15 @@ __pycache__
 *.code-workspace
 *.sarif
 
+*.aux
+*.dbl
+*.bbl
+*.blg
+*.dep
+*.fdb_latexmk
+*.fls
+*.synctex.gz
+
 *.mp4
 *.pdf
 .DS_Store
