@@ -12,9 +12,11 @@
 // c++ headers
 #include <array>
 #include <cmath>
+#include <iostream>
 #include <vector>
 
 // library headers
+#include "AMReX.H"
 #include "AMReX_Array.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_GpuQualifiers.H"
@@ -841,10 +843,16 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
     // load radiation energy
     const double Erad0 = consPrev(i, j, k, radEnergy_index);
 
+    // load radiation energy source term
+    // plus advection source term (for well-balanced/SDC integrators)
+    const double Src =
+        dt * ((chat * radEnergySource(i, j, k)) + advectionFluxes(i, j, k));
+
+    AMREX_ASSERT(Src >= 0.0);
     AMREX_ASSERT(Egas0 > 0.0);
     AMREX_ASSERT(Erad0 > 0.0);
 
-    const double Etot0 = Egas0 + (c / chat) * Erad0;
+    const double Etot0 = Egas0 + (c / chat) * (Erad0 + Src);
 
     // BEGIN NEWTON-RAPHSON LOOP
     double F_G = NAN;
@@ -858,7 +866,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
     double dFG_dErad = NAN;
     double dFR_dEgas = NAN;
     double dFR_dErad = NAN;
-    double Src = NAN;
     double eta = NAN;
     double deltaErad = NAN;
     double deltaEgas = NAN;
@@ -866,8 +873,8 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
     double Egas_guess = Egas0;
     double Erad_guess = Erad0;
     // const double T_floor = 1e-10;
-    const double resid_tol = 1e-10;
-    const int maxIter = 200;
+    const double resid_tol = 1e-15;
+    const int maxIter = 400;
     int n = 0;
     for (n = 0; n < maxIter; ++n) {
 
@@ -879,11 +886,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
       kappa = RadSystem<problem_t>::ComputePlanckOpacity(rho, T_gas);
       AMREX_ASSERT(kappa >= 0.);
       fourPiB = chat * a_rad * std::pow(T_gas, 4);
-
-      // constant radiation energy source term
-      // plus advection source term (for well-balanced/SDC integrators)
-      Src = dt * ((chat * radEnergySource(i, j, k)) + advectionFluxes(i, j, k));
-      AMREX_ASSERT(!std::isnan(Src));
 
       // compute derivatives w/r/t T_gas
       const double dB_dTgas = (4.0 * fourPiB) / T_gas;
@@ -927,6 +929,17 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
 
     } // END NEWTON-RAPHSON LOOP
 
+#if 0
+    if (!((std::abs(F_G / Etot0) < resid_tol) &&
+          (std::abs(F_R / Etot0) < resid_tol))) {
+      // temperature update failed to converge!!
+      std::cout << "F_G / Etot0 = " << (F_G / Etot0) << std::endl;
+      std::cout << "F_R / Etot0 = " << (F_R / Etot0) << std::endl;
+      std::cout << "Tgas = " << T_gas << std::endl;
+      std::cout << "Trad = " << std::pow(Erad_guess / a_rad, 1./4.) << std::endl;
+      amrex::Abort("Newton solver failed to converge!");
+    }
+#endif
     AMREX_ALWAYS_ASSERT(std::abs(F_G / Etot0) < resid_tol);
     AMREX_ALWAYS_ASSERT(std::abs(F_R / Etot0) < resid_tol);
 
@@ -972,11 +985,13 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
     amrex::Real x3GasMom1 = consNew(i, j, k, x3GasMomentum_index);
 
     // 4a. Compute radiation work terms
-    amrex::Real const Egastot1 = ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess);
+    amrex::Real const Egastot1 =
+        ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess);
     amrex::Real dErad_work = NAN;
 
     if constexpr (compute_v_over_c_terms_ == true) {
-      // compute difference in gas kinetic energy before and after momentum update
+      // compute difference in gas kinetic energy before and after momentum
+      // update
       amrex::Real const Ekin1 = Egastot1 - Egas_guess;
       amrex::Real const dEkin_work = Ekin1 - Ekin0;
       // compute loss of radiation energy to gas kinetic energy

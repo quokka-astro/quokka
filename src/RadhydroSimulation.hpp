@@ -28,7 +28,6 @@
 #include "AMReX_FArrayBox.H"
 #include "AMReX_FabFactory.H"
 #include "AMReX_Geometry.H"
-#include "AMReX_GpuControl.H"
 #include "AMReX_IntVect.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_MultiFabUtil.H"
@@ -227,7 +226,7 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::computeAfterTi
 
 template <typename problem_t>
 void RadhydroSimulation<problem_t>::computeAfterLevelAdvance(int lev, amrex::Real time,
-								 amrex::Real dt_lev, int /*iteration*/, int /*ncycle*/)
+								 amrex::Real dt_lev, int iteration, int ncycle)
 {
 	// user should implement if desired
 }
@@ -303,7 +302,7 @@ void RadhydroSimulation<problem_t>::computeAfterEvolve(amrex::Vector<amrex::Real
 template <typename problem_t>
 void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex::Real time,
 								 amrex::Real dt_lev,
-								 int  /*iteration*/, int  /*ncycle*/)
+								 int iteration, int ncycle)
 {
 	BL_PROFILE("RadhydroSimulation::advanceSingleTimestepAtLevel()");
 
@@ -345,6 +344,12 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 
 	// check hydro states after radiation update
 	CHECK_HYDRO_STATES(state_new_[lev]);
+
+	// compute any operator-split terms here (user-defined)
+	computeAfterLevelAdvance(lev, time, dt_lev, iteration, ncycle);
+
+	// check hydro states after user work
+	CHECK_HYDRO_STATES(states_new_[lev]);
 
 	// check state validity
 	AMREX_ASSERT(!state_new_[lev].contains_nan(0, state_new_[lev].nComp()));

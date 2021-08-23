@@ -8,12 +8,12 @@ geometry.is_periodic =  0    0    0
 # *****************************************************************
 # VERBOSITY
 # *****************************************************************
-amr.v              = 0       # verbosity in Amr
+amr.v              = 1       # verbosity in Amr
 
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 256 256 256
+amr.n_cell          = 128 128 128
 amr.max_level       = 0     # number of levels = max_level + 1
 amr.max_grid_size   = 32    # default
 amr.blocking_factor = 32    # grid size must be divisible by this

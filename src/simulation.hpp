@@ -30,7 +30,6 @@
 #include "AMReX_FArrayBox.H"
 #include "AMReX_FillPatchUtil.H"
 #include "AMReX_FluxRegister.H"
-#include "AMReX_GpuControl.H"
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_INT.H"
 #include "AMReX_IndexType.H"
@@ -44,7 +43,6 @@
 #include "AMReX_VisMF.H"
 #include "AMReX_YAFluxRegister.H"
 #include <AMReX_Geometry.H>
-#include <AMReX_Gpu.H>
 #include <AMReX_MultiFab.H>
 #include <AMReX_ParmParse.H>
 #include <AMReX_PlotFileUtil.H>
