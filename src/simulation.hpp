@@ -50,9 +50,6 @@
 #include <AMReX_PlotFileUtil.H>
 #include <AMReX_Print.H>
 #include <AMReX_Utility.H>
-#ifdef AMREX_USE_HDF5_ASYNC
-#include "h5_vol_external_async_native.h"
-#endif
 
 // internal headers
 #include "CheckNaN.hpp"
@@ -199,7 +196,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	int do_reflux = 1;   // 1 == reflux, 0 == no reflux
 	int do_subcycle = 1; // 1 == subcycle, 0 == no subcyle
 	int suppress_output = 0; // 1 == show timestepping, 0 == do not output each timestep
-	int disable_radiation_transport_terms = 0; // 1 == disable hyperbolic radiation subsystem; 0 == default
 
 	// performance metrics
 	amrex::Long cellUpdates_ = 0;
@@ -273,12 +269,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 	// Default suppress_output = 0
 	pp.query("suppress_output", suppress_output);
-
-	// Default disable_radiation_transport_terms = 0
-	pp.query("disable_radiation_transport_terms", disable_radiation_transport_terms);
-	if (disable_radiation_transport_terms != 0) {
-		amrex::Print() << "Transport terms disabled!" << std::endl;
-	}
 
 	// specify this on the commmand-line in order to restart from a checkpoint
 	// file

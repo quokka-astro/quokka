@@ -29,7 +29,7 @@ struct ShellProblem {
 constexpr double a_rad = 7.5646e-15;  // erg cm^-3 K^-4
 constexpr double c = 2.99792458e10;   // cm s^-1
 constexpr double cs0 = 2.0e5; // (2 km/s) [cm s^-1]
-constexpr double chat = 260. * cs0; // cm s^-1
+constexpr double chat = 860. * cs0; // cm s^-1
 constexpr double k_B = 1.380658e-16;  // erg K^-1
 constexpr double m_H = 1.6726231e-24; // mass of hydrogen atom [g]
 constexpr double gamma_gas = 1.00001; // approximate isothermal EOS
@@ -59,6 +59,7 @@ constexpr amrex::Real M_shell = (1 - epsilon)*GMC_mass; // g
 constexpr amrex::Real L_star = GMC_mass * specific_luminosity; // erg s^-1
 
 constexpr amrex::Real r_0 = 5.0 * parsec_in_cm; // cm 
+constexpr amrex::Real H_shell = 0.1 * r_0; // cm
 constexpr amrex::Real rho_0 = M_shell / ((4./3.) * M_PI * r_0*r_0*r_0); // g cm^-3
 constexpr amrex::Real P_0 = rho_0 * cs0*cs0; // erg cm^-3
 constexpr amrex::Real kappa0 = 20.0; // specific opacity [cm^2 g^-1]
@@ -124,7 +125,10 @@ template <> void RadhydroSimulation<ShellProblem>::setInitialConditionsAtLevel(i
 			amrex::Real const r = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2) +
 							std::pow(z - z0, 2));
 
-			double rho = rho_0;
+			double sigma_sh = H_shell / (2.0*std::sqrt(2.0*std::log(2.0)));
+			double rho_norm = M_shell / (4.0*M_PI*r*r*std::sqrt(2.0*M_PI*sigma_sh*sigma_sh));
+			double rho = rho_norm * std::exp(-std::pow(r - r_0, 2) / (2.0*sigma_sh*sigma_sh));
+
 			double vx = 0.;
 			double vy = 0.;
 			double vz = 0.;
