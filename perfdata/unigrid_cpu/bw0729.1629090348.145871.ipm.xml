@@ -1,0 +1,1756 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+<ipm_job_profile>
+<calltable nsections="1" >
+<section module="MPI" nentries="69" >
+<entry name="MPI_Init" />
+<entry name="MPI_Init_thread" />
+<entry name="MPI_Finalize" />
+<entry name="MPI_Comm_rank" />
+<entry name="MPI_Comm_size" />
+<entry name="MPI_Send" />
+<entry name="MPI_Ssend" />
+<entry name="MPI_Rsend" />
+<entry name="MPI_Bsend" />
+<entry name="MPI_Isend" />
+<entry name="MPI_Issend" />
+<entry name="MPI_Irsend" />
+<entry name="MPI_Ibsend" />
+<entry name="MPI_Recv" />
+<entry name="MPI_Irecv" />
+<entry name="MPI_Sendrecv" />
+<entry name="MPI_Sendrecv_replace" />
+<entry name="MPI_Wait" />
+<entry name="MPI_Waitany" />
+<entry name="MPI_Waitall" />
+<entry name="MPI_Waitsome" />
+<entry name="MPI_Probe" />
+<entry name="MPI_Iprobe" />
+<entry name="MPI_Send_init" />
+<entry name="MPI_Ssend_init" />
+<entry name="MPI_Rsend_init" />
+<entry name="MPI_Bsend_init" />
+<entry name="MPI_Recv_init" />
+<entry name="MPI_Buffer_attach" />
+<entry name="MPI_Buffer_detach" />
+<entry name="MPI_Test" />
+<entry name="MPI_Testany" />
+<entry name="MPI_Testall" />
+<entry name="MPI_Testsome" />
+<entry name="MPI_Start" />
+<entry name="MPI_Startall" />
+<entry name="MPI_Bcast" />
+<entry name="MPI_Reduce" />
+<entry name="MPI_Reduce_scatter" />
+<entry name="MPI_Barrier" />
+<entry name="MPI_Gather" />
+<entry name="MPI_Gatherv" />
+<entry name="MPI_Scatter" />
+<entry name="MPI_Scatterv" />
+<entry name="MPI_Scan" />
+<entry name="MPI_Allgather" />
+<entry name="MPI_Allgatherv" />
+<entry name="MPI_Allreduce" />
+<entry name="MPI_Alltoall" />
+<entry name="MPI_Alltoallv" />
+<entry name="MPI_Comm_group" />
+<entry name="MPI_Comm_compare" />
+<entry name="MPI_Comm_dup" />
+<entry name="MPI_Comm_create" />
+<entry name="MPI_Comm_split" />
+<entry name="MPI_Comm_free" />
+<entry name="MPI_Ibcast" />
+<entry name="MPI_Ireduce" />
+<entry name="MPI_Ireduce_scatter" />
+<entry name="MPI_Igather" />
+<entry name="MPI_Igatherv" />
+<entry name="MPI_Iscatter" />
+<entry name="MPI_Iscatterv" />
+<entry name="MPI_Iscan" />
+<entry name="MPI_Iallgather" />
+<entry name="MPI_Iallgatherv" />
+<entry name="MPI_Iallreduce" />
+<entry name="MPI_Ialltoall" />
+<entry name="MPI_Ialltoallv" />
+</section>
+</calltable>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="0" mpi_size="48" stamp_init="1629090348.145871" stamp_final="1629091035.657529" username="bw0729" allocationname="unknown" flags="0" pid="3166377" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87512e+02" utime="5.95143e+02" stime="7.57521e+01" mtime="6.61340e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb83e15e87f00003c151d003e1552" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87301e+02" utime="5.95065e+02" stime="7.57019e+01" mtime="6.61340e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 1.1921e-06 </func>
+<func name="MPI_Isend" count="3030" bytes="9.4344e+09" > 5.4194e+01 </func>
+<func name="MPI_Irecv" count="3030" bytes="9.4344e+09" > 1.5674e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="1.7121e+10" > 8.8325e+00 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 7.7726e-02 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 9.0599e-06 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 2.6393e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 2.3568e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 3.0251e+00 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 9.5367e-07 </func>
+</region>
+</regions>
+<internal rank="0" log_i="1629091035.657529" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="1" mpi_size="48" stamp_init="1629090348.145845" stamp_final="1629091035.657770" username="bw0729" allocationname="unknown" flags="0" pid="3166370" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87512e+02" utime="6.02591e+02" stime="8.12174e+01" mtime="7.14112e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb8fb14b37f0000f9142000fb14d2" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87297e+02" utime="6.02500e+02" stime="8.11724e+01" mtime="7.14112e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Isend" count="4848" bytes="1.0829e+10" > 5.7696e+01 </func>
+<func name="MPI_Irecv" count="4848" bytes="1.0829e+10" > 1.4105e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="2.0519e+10" > 1.0464e+01 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 2.9808e-02 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.3072e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 4.8089e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 2.4490e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 3.2145e+00 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 1.9073e-06 </func>
+</region>
+</regions>
+<internal rank="1" log_i="1629091035.657770" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="2" mpi_size="48" stamp_init="1629090348.145875" stamp_final="1629091035.657505" username="bw0729" allocationname="unknown" flags="0" pid="3166369" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87512e+02" utime="6.18897e+02" stime="6.58032e+01" mtime="8.03623e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb8d315777f0000d2159d00d31522" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87301e+02" utime="6.18816e+02" stime="6.57528e+01" mtime="8.03623e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 1.1921e-06 </func>
+<func name="MPI_Isend" count="2626" bytes="8.5068e+09" > 4.8102e+01 </func>
+<func name="MPI_Irecv" count="2626" bytes="8.5068e+09" > 1.9403e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="1.5443e+10" > 2.3345e+01 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 2.2465e-01 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.3651e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 4.4680e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 2.4259e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 8.6835e+00 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 1.9073e-06 </func>
+</region>
+</regions>
+<internal rank="2" log_i="1629091035.657505" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="3" mpi_size="48" stamp_init="1629090348.145789" stamp_final="1629091035.657802" username="bw0729" allocationname="unknown" flags="0" pid="3166367" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87512e+02" utime="6.07255e+02" stime="7.70421e+01" mtime="7.07225e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb88514467f00008314250085145d" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87296e+02" utime="6.07165e+02" stime="7.69950e+01" mtime="7.07225e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 2.1458e-06 </func>
+<func name="MPI_Isend" count="3636" bytes="9.8659e+09" > 5.5894e+01 </func>
+<func name="MPI_Irecv" count="3636" bytes="9.8659e+09" > 1.4842e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="1.8807e+10" > 1.0677e+01 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 7.4430e-02 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.5091e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 4.8685e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 2.3363e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 4.0700e+00 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 1.1921e-06 </func>
+</region>
+</regions>
+<internal rank="3" log_i="1629091035.657802" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="4" mpi_size="48" stamp_init="1629090348.145863" stamp_final="1629091035.657782" username="bw0729" allocationname="unknown" flags="0" pid="3166387" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87512e+02" utime="6.23401e+02" stime="6.15318e+01" mtime="8.42657e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb83d144e7f00003b1418003d14fb" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87297e+02" utime="6.23312e+02" stime="6.14848e+01" mtime="8.42657e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Isend" count="2020" bytes="7.3973e+09" > 4.4457e+01 </func>
+<func name="MPI_Irecv" count="2020" bytes="7.3973e+09" > 1.6744e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="1.3640e+10" > 3.0858e+01 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 2.4486e-01 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.2602e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 4.9472e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 2.0220e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 8.6992e+00 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 9.5367e-07 </func>
+</region>
+</regions>
+<internal rank="4" log_i="1629091035.657782" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="5" mpi_size="48" stamp_init="1629090348.145809" stamp_final="1629091035.657789" username="bw0729" allocationname="unknown" flags="0" pid="3166371" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87512e+02" utime="6.13515e+02" stime="7.11064e+01" mtime="7.52663e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb86615847f00006515160066154d" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87301e+02" utime="6.13435e+02" stime="7.10559e+01" mtime="7.52663e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 9.5367e-07 </func>
+<func name="MPI_Isend" count="3232" bytes="8.7565e+09" > 5.2470e+01 </func>
+<func name="MPI_Irecv" count="3232" bytes="8.7565e+09" > 1.6351e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="1.5443e+10" > 1.6756e+01 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 5.9111e-02 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.2850e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 5.0092e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 2.0621e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 5.9749e+00 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 9.5367e-07 </func>
+</region>
+</regions>
+<internal rank="5" log_i="1629091035.657789" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="6" mpi_size="48" stamp_init="1629090348.145806" stamp_final="1629091035.657824" username="bw0729" allocationname="unknown" flags="0" pid="3166373" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87512e+02" utime="6.31847e+02" stime="5.30731e+01" mtime="9.03677e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb83b15677f00003915da003b1530" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87296e+02" utime="6.31757e+02" stime="5.30257e+01" mtime="9.03677e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 1.1921e-06 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 9.5367e-07 </func>
+<func name="MPI_Isend" count="1414" bytes="6.4859e+09" > 3.6804e+01 </func>
+<func name="MPI_Irecv" count="1414" bytes="6.4859e+09" > 1.2565e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="1.3573e+10" > 4.7192e+01 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 1.6820e-01 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.2981e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 5.0974e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 2.0251e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 6.1969e+00 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 2.1458e-06 </func>
+</region>
+</regions>
+<internal rank="6" log_i="1629091035.657824" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="7" mpi_size="48" stamp_init="1629090348.145862" stamp_final="1629091035.657823" username="bw0729" allocationname="unknown" flags="0" pid="3166386" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87512e+02" utime="6.20006e+02" stime="6.46108e+01" mtime="7.74970e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb87715d47f00007515c700771553" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87301e+02" utime="6.19918e+02" stime="6.45657e+01" mtime="7.74970e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 1.1921e-06 </func>
+<func name="MPI_Isend" count="2020" bytes="7.8103e+09" > 4.6976e+01 </func>
+<func name="MPI_Irecv" count="2020" bytes="7.8103e+09" > 1.0333e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="1.3724e+10" > 2.5958e+01 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 2.0772e-01 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.4619e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 4.9472e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 2.0580e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 4.3486e+00 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 9.5367e-07 </func>
+</region>
+</regions>
+<internal rank="7" log_i="1629091035.657823" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="8" mpi_size="48" stamp_init="1629090348.145837" stamp_final="1629091035.657774" username="bw0729" allocationname="unknown" flags="0" pid="3166415" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87512e+02" utime="6.02355e+02" stime="8.21023e+01" mtime="7.25347e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb8ba15fa7f0000b8152200ba1525" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87301e+02" utime="6.02268e+02" stime="8.20576e+01" mtime="7.25347e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 9.5367e-07 </func>
+<func name="MPI_Isend" count="4848" bytes="1.0829e+10" > 5.8422e+01 </func>
+<func name="MPI_Irecv" count="4848" bytes="1.0829e+10" > 1.5919e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="1.8841e+10" > 1.0709e+01 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 2.3336e-02 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.2700e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 4.9186e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 2.2960e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 3.3744e+00 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 2.1458e-06 </func>
+</region>
+</regions>
+<internal rank="8" log_i="1629091035.657774" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="9" mpi_size="48" stamp_init="1629090348.145856" stamp_final="1629091035.657702" username="bw0729" allocationname="unknown" flags="0" pid="3166413" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87512e+02" utime="6.15665e+02" stime="6.91839e+01" mtime="7.52758e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb87d157e7f00007c15c6007d1517" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87301e+02" utime="6.15578e+02" stime="6.91397e+01" mtime="7.52758e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 1.1921e-06 </func>
+<func name="MPI_Isend" count="3434" bytes="8.3316e+09" > 5.0592e+01 </func>
+<func name="MPI_Irecv" count="3434" bytes="8.3316e+09" > 1.7564e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="1.5443e+10" > 1.8041e+01 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 2.2386e-01 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.2562e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 4.9186e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 2.0111e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 6.4123e+00 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 1.9073e-06 </func>
+</region>
+</regions>
+<internal rank="9" log_i="1629091035.657702" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="10" mpi_size="48" stamp_init="1629090348.145784" stamp_final="1629091035.657595" username="bw0729" allocationname="unknown" flags="0" pid="3166390" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87512e+02" utime="6.07371e+02" stime="7.74158e+01" mtime="7.16419e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb8c614b87f0000c4141e00c61495" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87301e+02" utime="6.07283e+02" stime="7.73730e+01" mtime="7.16419e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Isend" count="3636" bytes="9.8659e+09" > 5.5119e+01 </func>
+<func name="MPI_Irecv" count="3636" bytes="9.8659e+09" > 1.3702e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="1.7130e+10" > 1.3610e+01 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 1.3000e-01 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.5349e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 4.9782e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 2.3360e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 2.7766e+00 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 2.1458e-06 </func>
+</region>
+</regions>
+<internal rank="10" log_i="1629091035.657595" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="11" mpi_size="48" stamp_init="1629090348.145864" stamp_final="1629091035.657804" username="bw0729" allocationname="unknown" flags="0" pid="3166401" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87512e+02" utime="6.21817e+02" stime="6.31543e+01" mtime="7.98596e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb8a715b67f0000a5152400a7150d" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87301e+02" utime="6.21729e+02" stime="6.31086e+01" mtime="7.98596e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 9.5367e-07 </func>
+<func name="MPI_Isend" count="2424" bytes="7.3863e+09" > 4.5097e+01 </func>
+<func name="MPI_Irecv" count="2424" bytes="7.3863e+09" > 1.2467e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="1.1954e+10" > 3.0298e+01 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 1.6447e-01 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.5392e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 4.8184e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 1.8799e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 4.2938e+00 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 1.9073e-06 </func>
+</region>
+</regions>
+<internal rank="11" log_i="1629091035.657804" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="12" mpi_size="48" stamp_init="1629090348.145784" stamp_final="1629091035.657517" username="bw0729" allocationname="unknown" flags="0" pid="3166452" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87512e+02" utime="6.13580e+02" stime="7.12468e+01" mtime="8.71590e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb8f4148f7f0000f214ae00f414cc" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87297e+02" utime="6.13488e+02" stime="7.12025e+01" mtime="8.71590e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 9.5367e-07 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 9.5367e-07 </func>
+<func name="MPI_Isend" count="3232" bytes="8.7565e+09" > 5.1598e+01 </func>
+<func name="MPI_Irecv" count="3232" bytes="8.7565e+09" > 1.2982e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="1.5360e+10" > 2.9254e+01 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 1.7919e-01 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.3859e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 4.8494e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 2.4033e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 6.1207e+00 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 9.5367e-07 </func>
+</region>
+</regions>
+<internal rank="12" log_i="1629091035.657517" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="13" mpi_size="48" stamp_init="1629090348.145782" stamp_final="1629091035.657496" username="bw0729" allocationname="unknown" flags="0" pid="3166426" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87512e+02" utime="6.31131e+02" stime="5.38335e+01" mtime="9.84064e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb87414ee7f0000721426007414ed" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87300e+02" utime="6.31041e+02" stime="5.37904e+01" mtime="9.84064e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 9.5367e-07 </func>
+<func name="MPI_Isend" count="2222" bytes="6.3276e+09" > 3.7933e+01 </func>
+<func name="MPI_Irecv" count="2222" bytes="6.3276e+09" > 1.3921e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="1.1870e+10" > 5.1663e+01 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 2.0275e-01 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.2838e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 4.9996e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 2.3310e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 8.6015e+00 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 9.5367e-07 </func>
+</region>
+</regions>
+<internal rank="13" log_i="1629091035.657496" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="14" mpi_size="48" stamp_init="1629090348.145825" stamp_final="1629091035.657426" username="bw0729" allocationname="unknown" flags="0" pid="3166420" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87512e+02" utime="6.20193e+02" stime="6.47214e+01" mtime="9.30205e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb86315db7f000062151800631525" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87301e+02" utime="6.20103e+02" stime="6.46812e+01" mtime="9.30205e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Isend" count="2020" bytes="7.8103e+09" > 4.6920e+01 </func>
+<func name="MPI_Irecv" count="2020" bytes="7.8103e+09" > 1.2975e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="1.3648e+10" > 3.9278e+01 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 1.9241e-01 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.2941e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 5.0306e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 2.1021e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 6.6236e+00 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 1.1921e-06 </func>
+</region>
+</regions>
+<internal rank="14" log_i="1629091035.657426" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="15" mpi_size="48" stamp_init="1629090348.145859" stamp_final="1629091035.657487" username="bw0729" allocationname="unknown" flags="0" pid="3166438" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87512e+02" utime="6.42801e+02" stime="4.22121e+01" mtime="9.85630e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb8ae14c37f0000ac141100ae14fc" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87296e+02" utime="6.42708e+02" stime="4.21671e+01" mtime="9.85630e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Isend" count="1212" bytes="5.3992e+09" > 2.7891e+01 </func>
+<func name="MPI_Irecv" count="1212" bytes="5.3992e+09" > 1.1642e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="6.7948e+09" > 6.3552e+01 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 4.8310e-02 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.2860e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 5.0092e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 2.0282e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 7.0662e+00 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 9.5367e-07 </func>
+</region>
+</regions>
+<internal rank="15" log_i="1629091035.657487" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="16" mpi_size="48" stamp_init="1629090348.145889" stamp_final="1629091035.657444" username="bw0729" allocationname="unknown" flags="0" pid="3166459" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87512e+02" utime="6.60432e+02" stime="2.48802e+01" mtime="1.01276e+02" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb81115e97f0000fe151000111523" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87301e+02" utime="6.60342e+02" stime="2.48383e+01" mtime="1.01276e+02" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Isend" count="1212" bytes="5.3992e+09" > 1.2472e+01 </func>
+<func name="MPI_Irecv" count="1212" bytes="5.3992e+09" > 1.5910e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="1.0150e+10" > 7.4196e+01 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 1.2113e-01 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.2650e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 5.1403e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 2.3038e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 1.4480e+01 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 9.5367e-07 </func>
+</region>
+</regions>
+<internal rank="16" log_i="1629091035.657444" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="17" mpi_size="48" stamp_init="1629090348.145771" stamp_final="1629091035.657366" username="bw0729" allocationname="unknown" flags="0" pid="3166451" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87512e+02" utime="6.21914e+02" stime="6.29298e+01" mtime="9.54921e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb8a4141b7f0000a2141800a4147c" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87300e+02" utime="6.21824e+02" stime="6.28872e+01" mtime="9.54921e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 9.5367e-07 </func>
+<func name="MPI_Isend" count="2222" bytes="1.0183e+10" > 4.2850e+01 </func>
+<func name="MPI_Irecv" count="2222" bytes="1.0183e+10" > 1.6754e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="1.8732e+10" > 3.8549e+01 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 2.1215e-01 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.3379e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 4.9901e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 1.9622e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 1.3874e+01 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 2.1458e-06 </func>
+</region>
+</regions>
+<internal rank="17" log_i="1629091035.657366" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="18" mpi_size="48" stamp_init="1629090348.145853" stamp_final="1629091035.657517" username="bw0729" allocationname="unknown" flags="0" pid="3166425" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87512e+02" utime="6.41252e+02" stime="4.39689e+01" mtime="9.89936e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb8d0151e7f0000cf159600d0150c" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87300e+02" utime="6.41161e+02" stime="4.39260e+01" mtime="9.89936e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Isend" count="2020" bytes="7.8103e+09" > 2.7058e+01 </func>
+<func name="MPI_Irecv" count="2020" bytes="7.8103e+09" > 1.7872e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="1.3724e+10" > 5.6510e+01 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 1.9806e-01 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.4791e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 4.9400e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 2.3360e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 1.5221e+01 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 1.1921e-06 </func>
+</region>
+</regions>
+<internal rank="18" log_i="1629091035.657517" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="19" mpi_size="48" stamp_init="1629090348.145853" stamp_final="1629091035.657372" username="bw0729" allocationname="unknown" flags="0" pid="3166465" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87512e+02" utime="6.01785e+02" stime="8.25956e+01" mtime="9.40776e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb8e015417f0000de15dd00e01522" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87300e+02" utime="6.01694e+02" stime="8.25524e+01" mtime="9.40776e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 1.1921e-06 </func>
+<func name="MPI_Isend" count="3636" bytes="1.1983e+10" > 6.0974e+01 </func>
+<func name="MPI_Irecv" count="3636" bytes="1.1983e+10" > 1.8547e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="2.2238e+10" > 2.1126e+01 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 6.2969e-02 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.2948e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 4.9305e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 2.0430e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 1.1908e+01 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 1.9073e-06 </func>
+</region>
+</regions>
+<internal rank="19" log_i="1629091035.657372" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="20" mpi_size="48" stamp_init="1629090348.145861" stamp_final="1629091035.655578" username="bw0729" allocationname="unknown" flags="0" pid="3166482" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87510e+02" utime="6.48219e+02" stime="3.71552e+01" mtime="1.04084e+02" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb8f714ca7f0000f5142600f71490" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87300e+02" utime="6.48129e+02" stime="3.71143e+01" mtime="1.04084e+02" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Isend" count="2222" bytes="6.3276e+09" > 2.1642e+01 </func>
+<func name="MPI_Irecv" count="2222" bytes="6.3276e+09" > 1.9991e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="1.1887e+10" > 5.0827e+01 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 1.8841e-01 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.2941e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 5.0592e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 2.3112e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 3.1420e+01 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 9.5367e-07 </func>
+</region>
+</regions>
+<internal rank="20" log_i="1629091035.655578" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="21" mpi_size="48" stamp_init="1629090348.145826" stamp_final="1629091035.657480" username="bw0729" allocationname="unknown" flags="0" pid="3166472" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87512e+02" utime="6.24095e+02" stime="6.07064e+01" mtime="9.31576e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb8e4141d7f0000e2141e00e41491" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87300e+02" utime="6.24005e+02" stime="6.06636e+01" mtime="9.31576e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 9.5367e-07 </func>
+<func name="MPI_Isend" count="2626" bytes="1.0184e+10" > 4.0486e+01 </func>
+<func name="MPI_Irecv" count="2626" bytes="1.0184e+10" > 1.8234e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="1.8715e+10" > 3.8154e+01 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 2.1551e-01 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.2678e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 5.0306e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 2.0039e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 1.4295e+01 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 2.1458e-06 </func>
+</region>
+</regions>
+<internal rank="21" log_i="1629091035.657480" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="22" mpi_size="48" stamp_init="1629090348.145866" stamp_final="1629091035.657407" username="bw0729" allocationname="unknown" flags="0" pid="3166457" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87512e+02" utime="6.24794e+02" stime="6.02256e+01" mtime="9.59519e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb86214ca7f00006014240062146b" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87301e+02" utime="6.24705e+02" stime="6.01838e+01" mtime="9.59519e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 9.5367e-07 </func>
+<func name="MPI_Isend" count="3232" bytes="8.7565e+09" > 4.2613e+01 </func>
+<func name="MPI_Irecv" count="3232" bytes="8.7565e+09" > 1.7140e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="1.5477e+10" > 3.9063e+01 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 2.0790e-01 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.3158e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 4.9591e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 2.3143e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 1.4061e+01 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 9.5367e-07 </func>
+</region>
+</regions>
+<internal rank="22" log_i="1629091035.657407" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="23" mpi_size="48" stamp_init="1629090348.145848" stamp_final="1629091035.657524" username="bw0729" allocationname="unknown" flags="0" pid="3166479" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87512e+02" utime="6.00684e+02" stime="8.38700e+01" mtime="9.20790e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb8a114707f00009f141900a114ce" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87300e+02" utime="6.00593e+02" stime="8.38282e+01" mtime="9.20790e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 2.1458e-06 </func>
+<func name="MPI_Isend" count="4242" bytes="1.2002e+10" > 6.1544e+01 </func>
+<func name="MPI_Irecv" count="4242" bytes="1.2002e+10" > 1.8270e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="2.2163e+10" > 1.9241e+01 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 1.2387e-01 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.2800e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 4.8399e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 2.3022e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 1.1163e+01 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 9.5367e-07 </func>
+</region>
+</regions>
+<internal rank="23" log_i="1629091035.657524" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="24" mpi_size="48" stamp_init="1629090348.145768" stamp_final="1629091035.657365" username="bw0729" allocationname="unknown" flags="0" pid="3166502" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87512e+02" utime="6.36732e+02" stime="4.83323e+01" mtime="9.79572e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb84815fb7f000046152200481549" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87298e+02" utime="6.36642e+02" stime="4.82873e+01" mtime="9.79572e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Isend" count="2424" bytes="7.3863e+09" > 3.1184e+01 </func>
+<func name="MPI_Irecv" count="2424" bytes="7.3863e+09" > 2.2540e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="1.2801e+10" > 5.3840e+01 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 1.7843e-01 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.2409e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 5.0402e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 1.9288e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 1.2749e+01 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 1.9073e-06 </func>
+</region>
+</regions>
+<internal rank="24" log_i="1629091035.657365" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="25" mpi_size="48" stamp_init="1629090348.145809" stamp_final="1629091035.656340" username="bw0729" allocationname="unknown" flags="0" pid="3166484" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87511e+02" utime="6.02406e+02" stime="8.21193e+01" mtime="8.05492e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb89614ac7f0000941421009614bc" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87294e+02" utime="6.02315e+02" stime="8.20733e+01" mtime="8.05492e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Isend" count="3232" bytes="1.0236e+10" > 5.9969e+01 </func>
+<func name="MPI_Irecv" count="3232" bytes="1.0236e+10" > 1.5666e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="1.8757e+10" > 9.4918e+00 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 1.5899e-01 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.2941e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 4.8804e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 2.3978e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 1.0923e+01 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 9.5367e-07 </func>
+</region>
+</regions>
+<internal rank="25" log_i="1629091035.656340" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="26" mpi_size="48" stamp_init="1629090348.145856" stamp_final="1629091035.657361" username="bw0729" allocationname="unknown" flags="0" pid="3166475" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87512e+02" utime="6.03946e+02" stime="8.02390e+01" mtime="8.22260e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb8f615ba7f0000f4152100f6150f" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87301e+02" utime="6.03857e+02" stime="8.01967e+01" mtime="8.22260e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Isend" count="3636" bytes="9.8659e+09" > 5.9421e+01 </func>
+<func name="MPI_Irecv" count="3636" bytes="9.8659e+09" > 1.6713e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="1.8841e+10" > 1.3563e+01 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 1.6234e-01 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.2869e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 4.9186e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 1.7190e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 9.0735e+00 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 1.9073e-06 </func>
+</region>
+</regions>
+<internal rank="26" log_i="1629091035.657361" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="27" mpi_size="48" stamp_init="1629090348.145756" stamp_final="1629091035.657314" username="bw0729" allocationname="unknown" flags="0" pid="3166486" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87512e+02" utime="5.99835e+02" stime="8.42564e+01" mtime="7.32264e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb8f914d07f0000f7141900f914de" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87298e+02" utime="5.99746e+02" stime="8.42272e+01" mtime="7.32264e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 9.5367e-07 </func>
+<func name="MPI_Isend" count="4242" bytes="1.2002e+10" > 5.7850e+01 </func>
+<func name="MPI_Irecv" count="4242" bytes="1.2002e+10" > 1.3742e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="2.2163e+10" > 1.0553e+01 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 1.1410e-01 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.2638e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 4.8304e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 2.5120e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 4.7029e+00 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 9.5367e-07 </func>
+</region>
+</regions>
+<internal rank="27" log_i="1629091035.657314" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="28" mpi_size="48" stamp_init="1629090348.145853" stamp_final="1629091035.657358" username="bw0729" allocationname="unknown" flags="0" pid="3166509" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87512e+02" utime="6.20337e+02" stime="6.45117e+01" mtime="9.07222e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb85414167f00005214f900541476" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87298e+02" utime="6.20248e+02" stime="6.44666e+01" mtime="9.07222e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 1.1921e-06 </func>
+<func name="MPI_Isend" count="3434" bytes="8.3316e+09" > 4.5844e+01 </func>
+<func name="MPI_Irecv" count="3434" bytes="8.3316e+09" > 1.8959e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="1.2054e+10" > 3.1544e+01 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 2.7755e-01 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.3451e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 4.9567e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 1.8258e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 1.3050e+01 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 9.5367e-07 </func>
+</region>
+</regions>
+<internal rank="28" log_i="1629091035.657358" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="29" mpi_size="48" stamp_init="1629090348.145885" stamp_final="1629091035.657245" username="bw0729" allocationname="unknown" flags="0" pid="3166495" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87511e+02" utime="6.03046e+02" stime="8.14911e+01" mtime="7.53194e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb84414b77f00002914de00441466" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87301e+02" utime="6.02956e+02" stime="8.14505e+01" mtime="7.53194e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 9.5367e-07 </func>
+<func name="MPI_Isend" count="2626" bytes="1.0201e+10" > 5.8780e+01 </func>
+<func name="MPI_Irecv" count="2626" bytes="1.0201e+10" > 1.3273e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="1.5485e+10" > 8.2631e+00 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 1.8412e-01 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.3069e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 5.0282e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 1.8198e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 8.0867e+00 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 9.5367e-07 </func>
+</region>
+</regions>
+<internal rank="29" log_i="1629091035.657245" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="30" mpi_size="48" stamp_init="1629090348.145863" stamp_final="1629091035.657359" username="bw0729" allocationname="unknown" flags="0" pid="3166481" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87511e+02" utime="6.00421e+02" stime="8.38545e+01" mtime="7.70100e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb81c148f7f00001b1426001c147b" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87298e+02" utime="6.00331e+02" stime="8.38117e+01" mtime="7.70100e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Isend" count="4848" bytes="1.0829e+10" > 6.0021e+01 </func>
+<func name="MPI_Irecv" count="4848" bytes="1.0829e+10" > 1.6353e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="1.6421e+10" > 9.2552e+00 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 1.1129e-01 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.3599e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 4.8900e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 1.9441e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 7.6157e+00 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 1.9073e-06 </func>
+</region>
+</regions>
+<internal rank="30" log_i="1629091035.657359" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="31" mpi_size="48" stamp_init="1629090348.145885" stamp_final="1629091035.657298" username="bw0729" allocationname="unknown" flags="0" pid="3166511" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87511e+02" utime="6.00109e+02" stime="8.42068e+01" mtime="7.28310e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb81d14a67f00001b14f0001d147c" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87301e+02" utime="6.00020e+02" stime="8.41669e+01" mtime="7.28310e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 1.1921e-06 </func>
+<func name="MPI_Isend" count="3636" bytes="1.1983e+10" > 5.7650e+01 </func>
+<func name="MPI_Irecv" count="3636" bytes="1.1983e+10" > 1.2662e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="2.2272e+10" > 1.0431e+01 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 1.6524e-01 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.3358e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 4.8971e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 2.3379e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 4.5782e+00 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 2.1458e-06 </func>
+</region>
+</regions>
+<internal rank="31" log_i="1629091035.657298" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="32" mpi_size="48" stamp_init="1629090348.145884" stamp_final="1629091035.657265" username="bw0729" allocationname="unknown" flags="0" pid="3166512" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87511e+02" utime="6.23877e+02" stime="6.07485e+01" mtime="9.69470e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb82a143f7f0000281411002a14a2" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87300e+02" utime="6.23780e+02" stime="6.07118e+01" mtime="9.69470e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 9.5367e-07 </func>
+<func name="MPI_Isend" count="2020" bytes="7.8103e+09" > 4.2689e+01 </func>
+<func name="MPI_Irecv" count="2020" bytes="7.8103e+09" > 1.4744e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="1.3724e+10" > 4.3155e+01 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 2.9468e-01 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.2271e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 5.0759e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 2.4719e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 1.0801e+01 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 1.9073e-06 </func>
+</region>
+</regions>
+<internal rank="32" log_i="1629091035.657265" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="33" mpi_size="48" stamp_init="1629090348.145776" stamp_final="1629091035.656954" username="bw0729" allocationname="unknown" flags="0" pid="3166506" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87511e+02" utime="6.00413e+02" stime="8.37038e+01" mtime="7.31923e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb85a143d7f0000581427005a14e8" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87301e+02" utime="6.00325e+02" stime="8.36650e+01" mtime="7.31923e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 9.5367e-07 </func>
+<func name="MPI_Isend" count="3636" bytes="1.1983e+10" > 5.7430e+01 </func>
+<func name="MPI_Irecv" count="3636" bytes="1.1983e+10" > 1.2343e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="2.3916e+10" > 1.0352e+01 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 1.4038e-01 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.3167e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 4.9686e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 1.7550e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 5.2639e+00 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 9.5367e-07 </func>
+</region>
+</regions>
+<internal rank="33" log_i="1629091035.656954" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="34" mpi_size="48" stamp_init="1629090348.145817" stamp_final="1629091035.657259" username="bw0729" allocationname="unknown" flags="0" pid="3166508" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87511e+02" utime="6.42542e+02" stime="4.24871e+01" mtime="9.45518e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb82d14887f00002b1424002d149c" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87301e+02" utime="6.42463e+02" stime="4.24356e+01" mtime="9.45518e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Isend" count="1414" bytes="6.4859e+09" > 2.7945e+01 </func>
+<func name="MPI_Irecv" count="1414" bytes="6.4859e+09" > 1.5709e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="1.3573e+10" > 5.5566e+01 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 1.0804e-01 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.2819e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 5.0712e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 2.4180e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 1.0926e+01 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 9.5367e-07 </func>
+</region>
+</regions>
+<internal rank="34" log_i="1629091035.657259" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="35" mpi_size="48" stamp_init="1629090348.145875" stamp_final="1629091035.656289" username="bw0729" allocationname="unknown" flags="0" pid="3166507" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87510e+02" utime="6.02649e+02" stime="8.17202e+01" mtime="7.48729e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb83c14eb7f00003b1415003c145b" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87298e+02" utime="6.02551e+02" stime="8.16826e+01" mtime="7.48729e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 9.5367e-07 </func>
+<func name="MPI_Isend" count="2626" bytes="1.0201e+10" > 5.8979e+01 </func>
+<func name="MPI_Irecv" count="2626" bytes="1.0201e+10" > 1.2920e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="1.8715e+10" > 8.6560e+00 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 1.8554e-01 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.2018e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 4.8876e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 1.8160e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 7.0464e+00 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 9.5367e-07 </func>
+</region>
+</regions>
+<internal rank="35" log_i="1629091035.656289" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="36" mpi_size="48" stamp_init="1629090348.145815" stamp_final="1629091035.657488" username="bw0729" allocationname="unknown" flags="0" pid="3166532" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87512e+02" utime="6.08359e+02" stime="7.64348e+01" mtime="7.81136e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb88a14c17f0000881414008a146c" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87301e+02" utime="6.08280e+02" stime="7.63841e+01" mtime="7.81136e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 9.5367e-07 </func>
+<func name="MPI_Isend" count="3232" bytes="8.7565e+09" > 5.5842e+01 </func>
+<func name="MPI_Irecv" count="3232" bytes="8.7565e+09" > 1.5197e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="1.2960e+10" > 1.6651e+01 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 9.5284e-02 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.2581e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 4.9281e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 2.1398e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 5.5193e+00 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 1.9073e-06 </func>
+</region>
+</regions>
+<internal rank="36" log_i="1629091035.657488" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="37" mpi_size="48" stamp_init="1629090348.145863" stamp_final="1629091035.657475" username="bw0729" allocationname="unknown" flags="0" pid="3166517" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87512e+02" utime="6.00345e+02" stime="8.28008e+01" mtime="6.91518e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb89014777f00008e14fb00901464" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87301e+02" utime="6.00266e+02" stime="8.27489e+01" mtime="6.91518e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Isend" count="4242" bytes="1.2002e+10" > 5.6186e+01 </func>
+<func name="MPI_Irecv" count="4242" bytes="1.2002e+10" > 1.3068e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="2.2163e+10" > 1.1673e+01 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 1.2646e-01 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.2109e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 4.9305e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 2.4359e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 1.1600e+00 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 1.9073e-06 </func>
+</region>
+</regions>
+<internal rank="37" log_i="1629091035.657475" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="38" mpi_size="48" stamp_init="1629090348.145809" stamp_final="1629091035.657370" username="bw0729" allocationname="unknown" flags="0" pid="3166514" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87512e+02" utime="6.21633e+02" stime="6.35237e+01" mtime="9.48635e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb87415677f00007215170074150d" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87298e+02" utime="6.21552e+02" stime="6.34694e+01" mtime="9.48635e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 9.5367e-07 </func>
+<func name="MPI_Isend" count="2020" bytes="7.3973e+09" > 4.5545e+01 </func>
+<func name="MPI_Irecv" count="2020" bytes="7.3973e+09" > 1.6732e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="1.1207e+10" > 4.1141e+01 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 2.5308e-01 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.2349e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 4.6372e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 1.8721e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 7.9182e+00 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 9.5367e-07 </func>
+</region>
+</regions>
+<internal rank="38" log_i="1629091035.657370" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="39" mpi_size="48" stamp_init="1629090348.145731" stamp_final="1629091035.657286" username="bw0729" allocationname="unknown" flags="0" pid="3166529" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87512e+02" utime="6.02628e+02" stime="8.17651e+01" mtime="7.10919e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb84b14257f0000301417004b14be" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87300e+02" utime="6.02541e+02" stime="8.17187e+01" mtime="7.10919e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 9.5367e-07 </func>
+<func name="MPI_Isend" count="3232" bytes="1.0236e+10" > 5.7973e+01 </func>
+<func name="MPI_Irecv" count="3232" bytes="1.0236e+10" > 1.2562e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="1.8732e+10" > 8.9272e+00 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 1.9945e-01 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.2848e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 4.9591e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 2.3251e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 3.9863e+00 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 2.1458e-06 </func>
+</region>
+</regions>
+<internal rank="39" log_i="1629091035.657286" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="40" mpi_size="48" stamp_init="1629090348.145837" stamp_final="1629091035.656261" username="bw0729" allocationname="unknown" flags="0" pid="3166539" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87510e+02" utime="6.03704e+02" stime="8.09057e+01" mtime="7.71115e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb82114ee7f00001f141f002114ac" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87297e+02" utime="6.03624e+02" stime="8.08505e+01" mtime="7.71115e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 9.5367e-07 </func>
+<func name="MPI_Isend" count="3636" bytes="9.8659e+09" > 5.9793e+01 </func>
+<func name="MPI_Irecv" count="3636" bytes="9.8659e+09" > 1.7128e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="1.4613e+10" > 1.0665e+01 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 7.8818e-02 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.3479e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 4.9281e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 1.7197e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 6.5685e+00 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 9.5367e-07 </func>
+</region>
+</regions>
+<internal rank="40" log_i="1629091035.656261" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="41" mpi_size="48" stamp_init="1629090348.145853" stamp_final="1629091035.657463" username="bw0729" allocationname="unknown" flags="0" pid="3166535" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87512e+02" utime="6.00194e+02" stime="8.42447e+01" mtime="7.01637e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb87614fe7f00007414ba00761468" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87299e+02" utime="6.00114e+02" stime="8.41898e+01" mtime="7.01637e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 9.5367e-07 </func>
+<func name="MPI_Isend" count="4242" bytes="1.2002e+10" > 5.7693e+01 </func>
+<func name="MPI_Irecv" count="4242" bytes="1.2002e+10" > 1.2991e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="2.0485e+10" > 1.0117e+01 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 1.0676e-01 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.2230e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 4.9305e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 1.6589e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 2.2421e+00 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 9.5367e-07 </func>
+</region>
+</regions>
+<internal rank="41" log_i="1629091035.657463" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="42" mpi_size="48" stamp_init="1629090348.145814" stamp_final="1629091035.657499" username="bw0729" allocationname="unknown" flags="0" pid="3166533" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87512e+02" utime="6.14680e+02" stime="7.02469e+01" mtime="8.90359e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb812158e7f000011159500121533" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87299e+02" utime="6.14600e+02" stime="7.01925e+01" mtime="8.90359e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 1.9073e-06 </func>
+<func name="MPI_Isend" count="2626" bytes="8.5068e+09" > 5.1147e+01 </func>
+<func name="MPI_Irecv" count="2626" bytes="8.5068e+09" > 1.8432e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="1.7121e+10" > 2.9787e+01 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 2.5371e-01 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.2509e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 4.8900e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 2.4850e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 7.8414e+00 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 9.5367e-07 </func>
+</region>
+</regions>
+<internal rank="42" log_i="1629091035.657499" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="43" mpi_size="48" stamp_init="1629090348.145834" stamp_final="1629091035.657288" username="bw0729" allocationname="unknown" flags="0" pid="3166530" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87511e+02" utime="6.02938e+02" stime="8.17126e+01" mtime="7.24211e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb89314e27f000078147d009314a7" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87301e+02" utime="6.02860e+02" stime="8.16598e+01" mtime="7.24211e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Isend" count="2626" bytes="1.0184e+10" > 5.8800e+01 </func>
+<func name="MPI_Irecv" count="2626" bytes="1.0184e+10" > 1.2228e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="1.8807e+10" > 8.3541e+00 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 2.1547e-01 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.3019e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 4.7088e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 1.8551e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 5.0459e+00 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 9.5367e-07 </func>
+</region>
+</regions>
+<internal rank="43" log_i="1629091035.657288" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="44" mpi_size="48" stamp_init="1629090348.145863" stamp_final="1629091035.657416" username="bw0729" allocationname="unknown" flags="0" pid="3166542" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87512e+02" utime="6.01524e+02" stime="8.21693e+01" mtime="6.92953e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb8a515487f0000a3151c00a51528" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87300e+02" utime="6.01445e+02" stime="8.21154e+01" mtime="6.92953e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 9.5367e-07 </func>
+<func name="MPI_Isend" count="4848" bytes="1.0829e+10" > 5.7328e+01 </func>
+<func name="MPI_Irecv" count="4848" bytes="1.0829e+10" > 1.5116e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="1.5552e+10" > 1.0395e+01 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 1.2020e-02 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.2869e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 4.8709e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 1.6081e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 1.5539e+00 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 9.5367e-07 </func>
+</region>
+</regions>
+<internal rank="44" log_i="1629091035.657416" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="45" mpi_size="48" stamp_init="1629090348.145862" stamp_final="1629091035.657513" username="bw0729" allocationname="unknown" flags="0" pid="3166541" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87512e+02" utime="6.01123e+02" stime="8.32535e+01" mtime="6.84186e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb89b15307f0000991513009b1524" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87301e+02" utime="6.01044e+02" stime="8.32015e+01" mtime="6.84186e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Isend" count="3636" bytes="1.1983e+10" > 5.6456e+01 </func>
+<func name="MPI_Irecv" count="3636" bytes="1.1983e+10" > 1.1787e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="1.8916e+10" > 1.0558e+01 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 7.0231e-02 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.2421e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 4.9686e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 1.6820e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 1.3279e+00 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 1.1921e-06 </func>
+</region>
+</regions>
+<internal rank="45" log_i="1629091035.657513" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="46" mpi_size="48" stamp_init="1629090348.145818" stamp_final="1629091035.657390" username="bw0729" allocationname="unknown" flags="0" pid="3166531" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87512e+02" utime="6.05615e+02" stime="7.91507e+01" mtime="7.78792e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb82c14e67f00002a141d002c14e7" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87295e+02" utime="6.05528e+02" stime="7.90993e+01" mtime="7.78792e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 1.1921e-06 </func>
+<func name="MPI_Isend" count="3030" bytes="9.4344e+09" > 5.8432e+01 </func>
+<func name="MPI_Irecv" count="3030" bytes="9.4344e+09" > 1.7512e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="1.3803e+10" > 1.1632e+01 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 2.1449e-01 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.2728e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 4.9305e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 1.9252e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 7.5943e+00 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 1.9073e-06 </func>
+</region>
+</regions>
+<internal rank="46" log_i="1629091035.657390" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+<task ipm_version="2.0.6" cookie="nocookie" mpi_rank="47" mpi_size="48" stamp_init="1629090348.145884" stamp_final="1629091035.657489" username="bw0729" allocationname="unknown" flags="0" pid="3166540" >
+<job nhosts="1" ntasks="48" start="1629090348" final="1629091035" cookie="nocookie" code="unknown" >26907847.gadi-pbs</job>
+<host mach_name="x86_64" mach_info="x86_64_Linux" >gadi-cpu-clx-20</host>
+<perf wtime="6.87512e+02" utime="6.02369e+02" stime="8.23207e+01" mtime="7.34811e+01" gflop="0.00000e+00" gbyte="1.38987e+00" omp_num_threads="1"></perf>
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<switch bytes_tx="0.00000e+00" bytes_rx="0.00000e+00" ></switch>
+<cmdline realpath="/g/data/jh2/bw0729/quokka-code/build/src/test_hydro3d_blast" md5sum="9b5f6fb8e315807f0000e1151a00e31509" >./build/src/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 </cmdline>
+<regions n="1" >
+<region label="ipm_noregion" nexits="1" wtime="6.87298e+02" utime="6.02289e+02" stime="8.22652e+01" mtime="7.34811e+01" id="0">
+<modules nmod="2">
+<module name="MPI" time="6.61340e+01" ></module>
+<module name="PAPI" time="0.0" ncpu="24" nnodes="4" totalcpus="96" threads="2" cores="24"  vendor="1" vendor_string="GenuineIntel" model="85" model_string="Intel(R) Xeon(R) Platinum 8274 CPU @ 3.20GHz" revision="7.000000" min_mhz="1200" max_mhz="4000" domain="15"></module>
+</modules>
+<hpm api="PAPI" ncounter="0" eventset="0" gflop="0.00000e+00" >
+</hpm>
+<func name="MPI_Init" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Finalize" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_rank" count="1" bytes="0.0000e+00" > 0.0000e+00 </func>
+<func name="MPI_Comm_size" count="3" bytes="0.0000e+00" > 2.1458e-06 </func>
+<func name="MPI_Isend" count="2222" bytes="1.0183e+10" > 5.8851e+01 </func>
+<func name="MPI_Irecv" count="2222" bytes="1.0183e+10" > 1.3022e-03 </func>
+<func name="MPI_Waitall" count="404" bytes="1.6324e+10" > 8.6459e+00 </func>
+<func name="MPI_Testall" count="402" bytes="0.0000e+00" > 2.2650e-01 </func>
+<func name="MPI_Bcast" count="2" bytes="9.0400e+02" > 2.2249e-03 </func>
+<func name="MPI_Reduce" count="2" bytes="1.6000e+01" > 5.0187e-04 </func>
+<func name="MPI_Allgather" count="2" bytes="1.2000e+01" > 2.4471e-03 </func>
+<func name="MPI_Allreduce" count="121" bytes="9.6400e+02" > 5.7513e+00 </func>
+<func name="MPI_Comm_group" count="1" bytes="0.0000e+00" > 9.5367e-07 </func>
+</region>
+</regions>
+<internal rank="47" log_i="1629091035.657489" log_t="1.6291e+09" report_delta="-1.0000e+00" fname="./bw0729.1629090348.145871.ipm.xml" logrank="0" ></internal>
+</task>
+</ipm_job_profile>
