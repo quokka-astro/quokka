@@ -10,9 +10,14 @@
 #include <limits>
 
 #include "AMReX_Array.H"
+#include "AMReX_Array4.H"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_Config.H"
+#include "AMReX_Extension.H"
+#include "AMReX_FArrayBox.H"
+#include "AMReX_FabArrayUtility.H"
+#include "AMReX_Loop.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
@@ -29,6 +34,7 @@ constexpr double a_rad = 7.5646e-15;  // erg cm^-3 K^-4
 constexpr double c = 2.99792458e10;   // cm s^-1
 constexpr double cs0 = 0.633e5;       // (0.633 km/s) [cm s^-1]
 constexpr double a0 = 2.0e5;          // ('reference' sound speed) [cm s^-1]
+//constexpr double chat = c;            // cm s^-1
 constexpr double chat = 860. * a0;    // cm s^-1
 constexpr double k_B = 1.380658e-16;  // erg K^-1
 constexpr double m_H = 1.6726231e-24; // mass of hydrogen atom [g]
@@ -63,8 +69,8 @@ constexpr amrex::Real sigma_star = 0.0625 * r_0;
 constexpr amrex::Real H_shell = 0.1 * r_0; // cm
 
 constexpr amrex::Real rho_0 =
-    M_shell / ((4. / 3.) * M_PI * r_0 * r_0 * r_0);           // g cm^-3
-constexpr amrex::Real P_0 = gamma_gas * rho_0 * (cs0 * cs0);  // erg cm^-3
+    M_shell / ((4. / 3.) * M_PI * r_0 * r_0 * r_0);          // g cm^-3
+constexpr amrex::Real P_0 = gamma_gas * rho_0 * (cs0 * cs0); // erg cm^-3
 constexpr double c_v = k_B / ((2.2 * m_H) * (gamma_gas - 1.0));
 
 constexpr amrex::Real kappa0 = 20.0; // specific opacity [cm^2 g^-1]
@@ -81,9 +87,14 @@ void RadSystem<ShellProblem>::SetRadEnergySource(
   amrex::Real const y0 = 0.;
   amrex::Real const z0 = 0.;
 
+// wrong normalisation!!! bad!!
+//  const amrex::Real source_norm =
+//      (4.0 * M_PI / c) * L_star /
+//      std::pow(2.0 * M_PI * sigma_star * sigma_star, 1.5);
+
   const amrex::Real source_norm =
-    (4.0 * M_PI / c) * L_star /
-    std::pow(2.0 * M_PI * sigma_star * sigma_star, 1.5);
+      (1.0 / c) * L_star /
+      std::pow(2.0 * M_PI * sigma_star * sigma_star, 1.5);
 
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
     amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
@@ -101,7 +112,6 @@ template <>
 auto RadSystem<ShellProblem>::ComputePlanckOpacity(const double /*rho*/,
                                                    const double /*Tgas*/)
     -> double {
-  // you *cannot* set this to zero, because otherwise the gas can't re-radiate!
   return kappa0;
 }
 
@@ -150,11 +160,13 @@ void RadhydroSimulation<ShellProblem>::setInitialConditionsAtLevel(int lev) {
                     std::exp(-(r * r) / (2.0 * sigma_star_sq)));
 
       // compute approximate Erad
-      const double Frad_shell = L_star / (4.0 * M_PI * r_0 * r_0);
-      const double Erad = (3.0 * Frad_shell / c) * (tau0 + 2. / 3.);
-      const double Trad = std::pow(Erad / a_rad, 1. / 4.);
-      const double Tgas = Trad; // assume radiative equilibrium
-      const double Eint = rho * c_v * Tgas;
+      //const double Frad_shell = L_star / (4.0 * M_PI * r_0 * r_0);
+      //const double Erad_shell = (3.0 * Frad_shell / c) * (tau0 + 2. / 3.);
+
+      const double T_rad0 = 1000.; // K
+      const double Erad = a_rad * std::pow(T_rad0, 4.);
+      const double Tgas0 = T_rad0; // assume radiative equilibrium
+      const double Eint = rho * c_v * Tgas0;
 
       AMREX_ASSERT(!std::isnan(vx));
       AMREX_ASSERT(!std::isnan(vy));
@@ -182,11 +194,75 @@ void RadhydroSimulation<ShellProblem>::setInitialConditionsAtLevel(int lev) {
   areInitialConditionsDefined_ = true;
 }
 
-template <>
-void RadhydroSimulation<ShellProblem>::computeAfterLevelAdvance(
-    int lev, amrex::Real time, amrex::Real dt_lev, int iteration, int ncycle) {
-  // reset gas temperature to radiation temperature
-  // TODO(ben): test if this is actually necessary!
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto
+vec_dot_r(amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> vec, int i, int j, int k)
+    -> amrex::Real {
+  // compute dot product of vec into rhat
+  amrex::Real xhat = (i + amrex::Real(0.5));
+  amrex::Real yhat = (j + amrex::Real(0.5));
+  amrex::Real zhat = (k + amrex::Real(0.5));
+  amrex::Real const norminv =
+      1.0 / std::sqrt(xhat * xhat + yhat * yhat + zhat * zhat);
+
+  xhat *= norminv;
+  yhat *= norminv;
+  zhat *= norminv;
+
+  amrex::Real const dotproduct = vec[0] * xhat + vec[1] * yhat + vec[2] * zhat;
+  return dotproduct;
+}
+
+template <> void RadhydroSimulation<ShellProblem>::computeAfterTimestep() {
+  // compute radial momentum for gas, radiation on level 0
+  // (assuming octant symmetry)
+
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 =
+      geom[0].CellSizeArray();
+  amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
+  auto const &state = state_new_[0];
+
+  double radialMom =
+      vol *
+      amrex::ReduceSum(
+          state, 0,
+          [=] AMREX_GPU_DEVICE(amrex::Box const &bx,
+                               amrex::Array4<amrex::Real const> const &arr) {
+            amrex::Real result = 0.;
+            amrex::Loop(bx, [&](int i, int j, int k) {
+              amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> vec{
+                  arr(i, j, k, RadSystem<ShellProblem>::x1GasMomentum_index),
+                  arr(i, j, k, RadSystem<ShellProblem>::x2GasMomentum_index),
+                  arr(i, j, k, RadSystem<ShellProblem>::x3GasMomentum_index)};
+              result += vec_dot_r(vec, i, j, k);
+            });
+            return result;
+          });
+
+  amrex::ParallelAllReduce::Sum(radialMom,
+                                amrex::ParallelContext::CommunicatorSub());
+
+  double radialRadMom =
+      (vol / c) *
+      amrex::ReduceSum(
+          state, 0,
+          [=] AMREX_GPU_DEVICE(amrex::Box const &bx,
+                               amrex::Array4<amrex::Real const> const &arr) {
+            amrex::Real result = 0.;
+            amrex::Loop(bx, [&](int i, int j, int k) {
+              amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> vec{
+                  arr(i, j, k, RadSystem<ShellProblem>::x1RadFlux_index),
+                  arr(i, j, k, RadSystem<ShellProblem>::x2RadFlux_index),
+                  arr(i, j, k, RadSystem<ShellProblem>::x3RadFlux_index)};
+              result += vec_dot_r(vec, i, j, k);
+            });
+            return result;
+          });
+
+  amrex::ParallelAllReduce::Sum(radialRadMom,
+                                amrex::ParallelContext::CommunicatorSub());
+
+  amrex::Print() << "radial gas momentum = " << radialMom << std::endl;
+  amrex::Print() << "radial radiation momentum = " << radialRadMom << std::endl;
 }
 
 template <>
@@ -278,17 +354,20 @@ auto problem_main() -> int {
       2; // 1 == donor cell, 2 == PLM, 3 == PPM (not recommended)
   sim.integratorOrder_ = 2; // RK2
 
-  constexpr amrex::Real t0 = r_0 / a0; // seconds
-  sim.stopTime_ = 0.03 * t0;
+  constexpr amrex::Real t0_hydro = r_0 / a0; // seconds
+  //constexpr amrex::Real t0_light = r_0 / c; // seconds
+  sim.stopTime_ = 0.124 * t0_hydro;
+  //sim.stopTime_ = 20.0 * t0_light;
   sim.cflNumber_ = 0.3;
-  sim.initDt_ = 1.0e9; // seconds
-  sim.maxTimesteps_ = 20000;
+  //sim.initDt_ = 1.0e9; // seconds
+  sim.maxTimesteps_ = 5000;
 
   sim.checkpointInterval_ = 1000;
   sim.plotfileInterval_ = 10;
 
   // initialize
   sim.setInitialConditions();
+  sim.computeAfterTimestep(); // compute radial momentum at t=0
 
   // evolve
   sim.evolve();

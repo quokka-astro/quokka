@@ -689,11 +689,12 @@ void RadSystem<problem_t>::ComputeFluxes(
     //		      tau_cell; // Jiang et al. (2013)
     const double S_corr = std::min(1.0, 1.0 / tau_cell); // Skinner et al.
 
-    // adjust the wavespeeds (cancels out except for the last term in the HLL
-    // flux) const quokka::valarray<double, nvarHyperbolic_> epsilon =
-    // {S_corr, 1.0, 1.0, 1.0}; // Skinner et al. (2019) const
-    // quokka::valarray<double, nvarHyperbolic_> epsilon = {S_corr, S_corr,
-    // S_corr, S_corr}; // Jiang et al. (2013)
+    // adjust the wavespeeds
+    // (this factor cancels out except for the last term in the HLL flux)
+    //const quokka::valarray<double, nvarHyperbolic_> epsilon = {
+    //    S_corr, 1.0, 1.0, 1.0}; // Skinner et al. (2019)
+    //const quokka::valarray<double, nvarHyperbolic_> epsilon = {S_corr, S_corr,
+    //    S_corr, S_corr}; // Jiang et al. (2013)
     const quokka::valarray<double, nvarHyperbolic_> epsilon = {
         S_corr * S_corr, S_corr, S_corr, S_corr}; // this code
 
@@ -917,7 +918,8 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
       dFR_dEgas = -drhs_dEgas;                       // -Rinv * epsilon;
       dFR_dErad = 1.0 + dt * ((rho * kappa) * chat); // 1.0 + alpha;
       eta = -dFR_dEgas / dFG_dEgas;
-      // eta = (eta > 0.0) ? eta : 0.0;
+      eta = (eta > 0.0) ? eta : 0.0;
+
       deltaErad = -(F_R + eta * F_G) / (dFR_dErad + eta * dFG_dErad);
       deltaEgas = -(F_G + dFG_dErad * deltaErad) / dFG_dEgas;
 
@@ -936,6 +938,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
       std::cout << "F_G / Etot0 = " << (F_G / Etot0) << std::endl;
       std::cout << "F_R / Etot0 = " << (F_R / Etot0) << std::endl;
       std::cout << "Tgas = " << T_gas << std::endl;
+      std::cout << "Egas/a_rad = " << (Erad_guess/a_rad) << std::endl;
       std::cout << "Trad = " << std::pow(Erad_guess / a_rad, 1./4.) << std::endl;
       amrex::Abort("Newton solver failed to converge!");
     }
