@@ -204,6 +204,7 @@ vec_dot_r(amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> vec, int i, int j, int k)
   return dotproduct;
 }
 
+#if 0
 template <> void RadhydroSimulation<ShellProblem>::computeAfterTimestep() {
   // compute radial momentum for gas, radiation on level 0
   // (assuming octant symmetry)
@@ -256,6 +257,7 @@ template <> void RadhydroSimulation<ShellProblem>::computeAfterTimestep() {
   amrex::Print() << "radial gas momentum = " << radialMom << std::endl;
   amrex::Print() << "radial radiation momentum = " << radialRadMom << std::endl;
 }
+#endif
 
 template <>
 void RadhydroSimulation<ShellProblem>::ErrorEst(int lev,
@@ -352,10 +354,11 @@ auto problem_main() -> int {
   //sim.stopTime_ = 20.0 * t0_light;
   sim.cflNumber_ = 0.3;
   //sim.initDt_ = 1.0e9; // seconds
-  sim.maxTimesteps_ = 5000;
 
-  sim.checkpointInterval_ = 1000;
-  sim.plotfileInterval_ = 10;
+  sim.maxTimesteps_ = 100; // for scaling tests
+
+  sim.checkpointInterval_ = -1;
+  sim.plotfileInterval_ = 100;
 
   // initialize
   sim.setInitialConditions();
