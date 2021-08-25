@@ -35,7 +35,7 @@ constexpr double c = 2.99792458e10;   // cm s^-1
 constexpr double cs0 = 0.633e5;       // (0.633 km/s) [cm s^-1]
 constexpr double a0 = 2.0e5;          // ('reference' sound speed) [cm s^-1]
 //constexpr double chat = c;            // cm s^-1
-constexpr double chat = 860. * a0;    // cm s^-1
+constexpr double chat = 1720. * a0;    // cm s^-1
 constexpr double k_B = 1.380658e-16;  // erg K^-1
 constexpr double m_H = 1.6726231e-24; // mass of hydrogen atom [g]
 constexpr double gamma_gas = 5. / 3.; // monoatomic ideal gas
@@ -74,7 +74,7 @@ constexpr amrex::Real P_0 = gamma_gas * rho_0 * (cs0 * cs0); // erg cm^-3
 constexpr double c_v = k_B / ((2.2 * m_H) * (gamma_gas - 1.0));
 
 constexpr amrex::Real kappa0 = 20.0; // specific opacity [cm^2 g^-1]
-constexpr amrex::Real tau0 = M_shell * kappa0 / (4.0 * M_PI * r_0 * r_0);
+//constexpr amrex::Real tau0 = M_shell * kappa0 / (4.0 * M_PI * r_0 * r_0);
 
 template <>
 void RadSystem<ShellProblem>::SetRadEnergySource(
@@ -86,11 +86,6 @@ void RadSystem<ShellProblem>::SetRadEnergySource(
   amrex::Real const x0 = 0.;
   amrex::Real const y0 = 0.;
   amrex::Real const z0 = 0.;
-
-// wrong normalisation!!! bad!!
-//  const amrex::Real source_norm =
-//      (4.0 * M_PI / c) * L_star /
-//      std::pow(2.0 * M_PI * sigma_star * sigma_star, 1.5);
 
   const amrex::Real source_norm =
       (1.0 / c) * L_star /
@@ -159,14 +154,11 @@ void RadhydroSimulation<ShellProblem>::setInitialConditionsAtLevel(int lev) {
                 (2.0 * r) / std::sqrt(2.0 * M_PI * sigma_star_sq) *
                     std::exp(-(r * r) / (2.0 * sigma_star_sq)));
 
-      // compute approximate Erad
-      //const double Frad_shell = L_star / (4.0 * M_PI * r_0 * r_0);
-      //const double Erad_shell = (3.0 * Frad_shell / c) * (tau0 + 2. / 3.);
-
-      const double T_rad0 = 1000.; // K
-      const double Erad = a_rad * std::pow(T_rad0, 4.);
-      const double Tgas0 = T_rad0; // assume radiative equilibrium
-      const double Eint = rho * c_v * Tgas0;
+      // compute Erad from (isothermal) sound speed a0
+      const double Eint = rho * (a0*a0);
+      constexpr double Tgas0 = (a0*a0) / c_v;
+      constexpr double Trad0 = Tgas0; // assume radiative equilibrium
+      const double Erad = a_rad * std::pow(Trad0, 4);
 
       AMREX_ASSERT(!std::isnan(vx));
       AMREX_ASSERT(!std::isnan(vy));
