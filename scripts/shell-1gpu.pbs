@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#PBS -N quokka_GPU_1node
+#PBS -N quokka_GPU_1gpu
 #PBS -P jh2
 #PBS -q gpuvolta
 #PBS -l ncpus=48
@@ -9,19 +9,13 @@
 #PBS -m aeb
 #PBS -M ben.wibking@anu.edu.au
 #PBS -l wd
-#PBS -l walltime=2:00:00
+#PBS -l walltime=0:30:00
 #PBS -l storage=scratch/jh2+gdata/jh2
 #PBS -l jobfs=400GB
 
 # --- initialize Quokka ---
-#MPI_OPTIONS="-np $PBS_NGPUS --map-by numa:SPAN --bind-to numa"
-MPI_OPTIONS="-np 1 --map-by numa:SPAN --bind-to numa"
+# (only use 1 GPU -- for scaling tests only)
+MPI_OPTIONS="-np 1 --map-by numa:SPAN --bind-to numa --mca pml ucx"
 echo "Using MPI_OPTIONS = $MPI_OPTIONS"
 
-mpirun $MPI_OPTIONS ./gpu_wrapper.sh > radhydro_shell.log
-
-
-
-
-
-
+mpirun $MPI_OPTIONS ./scripts/gpu_wrapper_shell_256.sh > shell_1gpu.log
