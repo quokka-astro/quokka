@@ -65,6 +65,8 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	using AMRSimulation<problem_t>::constantDt_;
 	using AMRSimulation<problem_t>::boxArray;
 	using AMRSimulation<problem_t>::DistributionMap;
+	using AMRSimulation<problem_t>::cellUpdates_;
+	using AMRSimulation<problem_t>::CountCells;
 
 	std::vector<double> t_vec_;
 	std::vector<double> Trad_vec_;
@@ -85,6 +87,8 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 
 	int integratorOrder_ = 2; // 1 == forward Euler; 2 == RK2-SSP (default)
 	int reconstructionOrder_ = 3; // 1 == donor cell; 2 == PLM; 3 == PPM (default)
+
+	amrex::Long radiationCellUpdates_ = 0; // number of radiation cell-updates
 
 	// member functions
 
@@ -296,6 +300,11 @@ void RadhydroSimulation<problem_t>::computeAfterEvolve(amrex::Vector<amrex::Real
 		errorNorm_ = rel_error;
 		amrex::Print() << "Relative rms L1 error norm = " << rel_error << std::endl;
 	}
+	amrex::Print() << std::endl;
+
+	// compute average number of radiation subcycles per timestep
+	double const avg_rad_subcycles = static_cast<double>(radiationCellUpdates_) / static_cast<double>(cellUpdates_);
+	amrex::Print() << "avg. num. of radiation subcycles = " << avg_rad_subcycles << std::endl;
 	amrex::Print() << std::endl;
 }
 
@@ -622,6 +631,9 @@ void RadhydroSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Rea
 
 		// update 'time_subcycle'
 		time_subcycle += dt_radiation;
+
+		// update cell update counter
+		radiationCellUpdates_ += CountCells(lev); // keep track of number of cell updates
 	}
 }
 
