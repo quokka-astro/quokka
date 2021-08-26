@@ -77,7 +77,7 @@ if (AMReX_SPACEDIM GREATER_EQUAL 2)
 endif()
 
 if (AMReX_SPACEDIM EQUAL 3)
-    add_executable(test_radhydro3d_shell main.cpp test_radhydro_shell.cpp)
+    add_executable(test_radhydro3d_shell main.cpp test_radhydro_shell.cpp interpolate.c)
     add_executable(test_hydro3d_blast main.cpp test_hydro3d_blast.cpp)
     if(AMReX_GPU_BACKEND MATCHES "CUDA")
         setup_target_for_cuda_compilation(test_radhydro3d_shell)

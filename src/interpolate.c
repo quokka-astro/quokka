@@ -126,3 +126,28 @@ void interpolate_arrays(double *x, double *y, int len,
 		assert( !isnan(y[i]) );
 	}
 }
+
+double interpolate_value(double x, double const *arr_x, double const *arr_y, int arr_len)
+{
+	/* Note: arr_x must be sorted in ascending order,
+		and arr_len must be >= 3. */
+
+	int64_t j = 0;
+	j = binary_search_with_guess(x, arr_x, arr_len, j);
+
+	double y = NAN;
+	if (j == -1) {
+		y = NAN;
+	} else if (j == arr_len) {
+		y = NAN;
+	} else if (j == arr_len - 1) {
+		y = arr_y[j];
+	} else if (x == arr_x[j]) { // avoid roundoff error
+		y = arr_y[j];
+	} else {
+		const double slope = (arr_y[j+1] - arr_y[j]) / (arr_x[j+1] - arr_x[j]);
+		y = slope*(x - arr_x[j]) + arr_y[j];
+	}
+	assert( !isnan(y[i]) );
+	return y;
+}
