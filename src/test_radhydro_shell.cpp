@@ -355,7 +355,7 @@ auto problem_main() -> int {
   sim.cflNumber_ = 0.3;
   //sim.initDt_ = 1.0e9; // seconds
 
-  sim.maxTimesteps_ = 100; // for scaling tests
+  sim.maxTimesteps_ = 50; // for scaling tests
 
   sim.checkpointInterval_ = -1;
   sim.plotfileInterval_ = 100;
