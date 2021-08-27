@@ -3,12 +3,13 @@
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file test_hydro3d_blast.cpp
-/// \brief Defines a test problem for a 3D explosion.
+/// \file test_radhydro_shell.cpp
+/// \brief Defines a test problem for a 3D radiation pressure-driven shell.
 ///
 
 #include <limits>
 
+#include "AMReX_Arena.H"
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
 #include "AMReX_BC_TYPES.H"
@@ -22,7 +23,11 @@
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
+#include "AMReX_Vector.H"
 
+extern "C" {
+  #include "interpolate.h"
+}
 #include "RadhydroSimulation.hpp"
 #include "hydro_system.hpp"
 #include "radiation_system.hpp"
@@ -34,7 +39,6 @@ constexpr double a_rad = 7.5646e-15;  // erg cm^-3 K^-4
 constexpr double c = 2.99792458e10;   // cm s^-1
 constexpr double cs0 = 0.633e5;       // (0.633 km/s) [cm s^-1]
 constexpr double a0 = 2.0e5;          // ('reference' sound speed) [cm s^-1]
-//constexpr double chat = c;            // cm s^-1
 constexpr double chat = 860. * a0;    // cm s^-1
 constexpr double k_B = 1.380658e-16;  // erg K^-1
 constexpr double m_H = 1.6726231e-24; // mass of hydrogen atom [g]
@@ -65,16 +69,14 @@ constexpr amrex::Real M_shell = (1 - epsilon) * GMC_mass;      // g
 constexpr amrex::Real L_star = GMC_mass * specific_luminosity; // erg s^-1
 
 constexpr amrex::Real r_0 = 5.0 * parsec_in_cm; // cm
-constexpr amrex::Real sigma_star = 0.0625 * r_0;
-constexpr amrex::Real H_shell = 0.1 * r_0; // cm
+constexpr amrex::Real sigma_star = 0.25 * r_0;  // cm
+constexpr amrex::Real H_shell = 0.1 * r_0;      // cm
+constexpr amrex::Real kappa0 = 20.0;            // specific opacity [cm^2 g^-1]
 
 constexpr amrex::Real rho_0 =
     M_shell / ((4. / 3.) * M_PI * r_0 * r_0 * r_0);          // g cm^-3
 constexpr amrex::Real P_0 = gamma_gas * rho_0 * (cs0 * cs0); // erg cm^-3
 constexpr double c_v = k_B / ((2.2 * m_H) * (gamma_gas - 1.0));
-
-constexpr amrex::Real kappa0 = 20.0; // specific opacity [cm^2 g^-1]
-//constexpr amrex::Real tau0 = M_shell * kappa0 / (4.0 * M_PI * r_0 * r_0);
 
 template <>
 void RadSystem<ShellProblem>::SetRadEnergySource(
@@ -88,8 +90,7 @@ void RadSystem<ShellProblem>::SetRadEnergySource(
   amrex::Real const z0 = 0.;
 
   const amrex::Real source_norm =
-      (1.0 / c) * L_star /
-      std::pow(2.0 * M_PI * sigma_star * sigma_star, 1.5);
+      (1.0 / c) * L_star / std::pow(2.0 * M_PI * sigma_star * sigma_star, 1.5);
 
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
     amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
@@ -119,6 +120,32 @@ auto RadSystem<ShellProblem>::ComputeRosselandOpacity(const double /*rho*/,
 
 template <>
 void RadhydroSimulation<ShellProblem>::setInitialConditionsAtLevel(int lev) {
+  // read initial conditions from file
+  amrex::Vector<double> r_arr;
+  amrex::Vector<double> Erad_arr;
+  amrex::Vector<double> Frad_arr;
+
+  std::string filename = "./initial_conditions.txt";
+  std::ifstream fstream(filename, std::ios::in);
+  AMREX_ALWAYS_ASSERT(fstream.is_open());
+  std::string header;
+  std::getline(fstream, header);
+
+  for (std::string line; std::getline(fstream, line);) {
+    std::istringstream iss(line);
+    std::vector<double> values;
+    for (double value = NAN; iss >> value;) {
+      values.push_back(value);
+    }
+    auto r = values.at(0) * r_0; // cm
+    auto Erad = values.at(2);    // cgs
+    auto Frad = values.at(3);    // cgs
+
+    r_arr.push_back(r);
+    Erad_arr.push_back(Erad);
+    Frad_arr.push_back(Frad);
+  }
+
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo =
       geom[lev].ProbLoArray();
@@ -131,7 +158,8 @@ void RadhydroSimulation<ShellProblem>::setInitialConditionsAtLevel(int lev) {
     const amrex::Box &indexRange = iter.validbox();
     auto const &state = state_new_[lev].array(iter);
 
-    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+    // this must run on host so it can access amrex::Vectors!!
+    amrex::ParallelFor(indexRange, [=](int i, int j, int k) {
       amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
       amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
       amrex::Real const z = prob_lo[2] + (k + amrex::Real(0.5)) * dx[2];
@@ -148,17 +176,19 @@ void RadhydroSimulation<ShellProblem>::setInitialConditionsAtLevel(int lev) {
       const double F0 = L_star / (4.0 * M_PI * r * r);
       const double sigma_star_sq = sigma_star * sigma_star;
 
-      // compute steady-state Frad (exact)
+      // interpolate Frad from table
       const double Frad =
-          F0 * (std::erf(r / (std::sqrt(2.0) * sigma_star)) -
-                (2.0 * r) / std::sqrt(2.0 * M_PI * sigma_star_sq) *
-                    std::exp(-(r * r) / (2.0 * sigma_star_sq)));
+          interpolate_value(r, r_arr.dataPtr(), Frad_arr.dataPtr(),
+                            static_cast<int>(r_arr.size()));
 
-      // compute Erad from (isothermal) sound speed a0
-      const double Eint = rho * (a0*a0);
-      constexpr double Tgas0 = (a0*a0) / c_v;
-      constexpr double Trad0 = Tgas0; // assume radiative equilibrium
-      const double Erad = a_rad * std::pow(Trad0, 4);
+      // interpolate Erad from table
+      const double Erad =
+          interpolate_value(r, r_arr.dataPtr(), Erad_arr.dataPtr(),
+                            static_cast<int>(r_arr.size()));
+
+      const double Trad = std::pow(Erad / a_rad, 1. / 4.);
+      const double Tgas = Trad;
+      const double Eint = rho * c_v * Tgas;
 
       AMREX_ASSERT(!std::isnan(vx));
       AMREX_ASSERT(!std::isnan(vy));
@@ -342,27 +372,29 @@ auto problem_main() -> int {
   RadhydroSimulation<ShellProblem> sim(boundaryConditions);
   sim.is_hydro_enabled_ = true;
   sim.is_radiation_enabled_ = true;
+  sim.cflNumber_ = 0.3;
   sim.densityFloor_ = 1.0e-8 * rho_0;
   sim.pressureFloor_ = 1.0e-8 * P_0;
-  sim.reconstructionOrder_ =
-      2; // 1 == donor cell, 2 == PLM, 3 == PPM (not recommended)
+  // reconstructionOrder: 1 == donor cell, 2 == PLM, 3 == PPM (not recommended)
+  sim.reconstructionOrder_ = 2;
   sim.integratorOrder_ = 2; // RK2
 
   constexpr amrex::Real t0_hydro = r_0 / a0; // seconds
-  //constexpr amrex::Real t0_light = r_0 / c; // seconds
   sim.stopTime_ = 0.124 * t0_hydro;
-  //sim.stopTime_ = 20.0 * t0_light;
-  sim.cflNumber_ = 0.3;
-  //sim.initDt_ = 1.0e9; // seconds
 
-  sim.maxTimesteps_ = 50; // for scaling tests
+  // for production
+  sim.checkpointInterval_ = 1000;
+  sim.plotfileInterval_ = 10;
+  sim.maxTimesteps_ = 5000;
 
-  sim.checkpointInterval_ = -1;
-  sim.plotfileInterval_ = 100;
-
+  // for scaling tests
+  //sim.checkpointInterval_ = -1;
+  //sim.plotfileInterval_ = 100;
+  //sim.maxTimesteps_ = 50;
+  
   // initialize
   sim.setInitialConditions();
-  sim.computeAfterTimestep(); // compute radial momentum at t=0
+  sim.computeAfterTimestep();
 
   // evolve
   sim.evolve();

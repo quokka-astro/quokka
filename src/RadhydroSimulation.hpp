@@ -806,15 +806,15 @@ void RadhydroSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real
 	RadSystem<problem_t>::ConservedToPrimitive(consState, primVar.array(), ghostRange);
 
 	// mixed interface/cell-centered kernel
-	RadSystem<problem_t>::template ReconstructStatesPPM<DIR>(
-	    primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange,
-	    x1ReconstructRange, nvars);
+	//RadSystem<problem_t>::template ReconstructStatesPPM<DIR>(
+	//    primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange,
+	//    x1ReconstructRange, nvars);
 	// PLM and donor cell are interface-centered kernels
 	// RadSystem<problem_t>::template ReconstructStatesConstant<DIR>(
 	//     primVar.array(), x1LeftState.array(), x1RightState.array(), x1ReconstructRange,
 	//     nvars);
-	//RadSystem<problem_t>::template ReconstructStatesPLM<DIR>(
-	//    primVar.array(), x1LeftState.array(), x1RightState.array(), x1ReconstructRange, nvars);
+	RadSystem<problem_t>::template ReconstructStatesPLM<DIR>(
+	    primVar.array(), x1LeftState.array(), x1RightState.array(), x1ReconstructRange, nvars);
 
 	// interface-centered kernel
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, dir);
