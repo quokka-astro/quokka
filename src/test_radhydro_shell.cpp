@@ -372,8 +372,9 @@ auto problem_main() -> int {
   sim.cflNumber_ = 0.3;
   sim.densityFloor_ = 1.0e-8 * rho_0;
   sim.pressureFloor_ = 1.0e-8 * P_0;
-  // reconstructionOrder: 1 == donor cell, 2 == PLM, 3 == PPM (not recommended)
+  // reconstructionOrder: 1 == donor cell, 2 == PLM, 3 == PPM (not recommended for this problem)
   sim.reconstructionOrder_ = 2;
+  sim.radiationReconstructionOrder_ = 2;
   sim.integratorOrder_ = 2; // RK2
 
   constexpr amrex::Real t0_hydro = r_0 / a0; // seconds

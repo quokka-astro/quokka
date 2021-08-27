@@ -87,8 +87,9 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 
 	int integratorOrder_ = 2; // 1 == forward Euler; 2 == RK2-SSP (default)
 	int reconstructionOrder_ = 3; // 1 == donor cell; 2 == PLM; 3 == PPM (default)
+	int radiationReconstructionOrder_ = 3; // 1 == donor cell; 2 == PLM; 3 == PPM (default)
 
-	amrex::Long radiationCellUpdates_ = 0; // number of radiation cell-updates
+	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
 
 	// member functions
 
@@ -805,16 +806,22 @@ void RadhydroSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real
 	// cell-centered kernel
 	RadSystem<problem_t>::ConservedToPrimitive(consState, primVar.array(), ghostRange);
 
-	// mixed interface/cell-centered kernel
-	//RadSystem<problem_t>::template ReconstructStatesPPM<DIR>(
-	//    primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange,
-	//    x1ReconstructRange, nvars);
-	// PLM and donor cell are interface-centered kernels
-	// RadSystem<problem_t>::template ReconstructStatesConstant<DIR>(
-	//     primVar.array(), x1LeftState.array(), x1RightState.array(), x1ReconstructRange,
-	//     nvars);
-	RadSystem<problem_t>::template ReconstructStatesPLM<DIR>(
-	    primVar.array(), x1LeftState.array(), x1RightState.array(), x1ReconstructRange, nvars);
+	if (radiationReconstructionOrder_ == 3) {
+		// mixed interface/cell-centered kernel
+		RadSystem<problem_t>::template ReconstructStatesPPM<DIR>(
+	    	primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange,
+	    	x1ReconstructRange, nvars);
+	} else if (radiationReconstructionOrder_ == 2) {
+		// PLM and donor cell are interface-centered kernels
+		RadSystem<problem_t>::template ReconstructStatesPLM<DIR>(
+	    	primVar.array(), x1LeftState.array(), x1RightState.array(), x1ReconstructRange, nvars);
+	} else if (radiationReconstructionOrder_ == 1) {
+		RadSystem<problem_t>::template ReconstructStatesConstant<DIR>(
+			primVar.array(), x1LeftState.array(), x1RightState.array(), x1ReconstructRange,
+			nvars);
+	} else {
+		amrex::Abort("Invalid reconstruction order for radiation variables! Aborting...")
+	}
 
 	// interface-centered kernel
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, dir);
