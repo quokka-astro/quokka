@@ -92,7 +92,7 @@ void RadSystem<ShellProblem>::SetRadEnergySource(
   const amrex::Real source_norm =
       (1.0 / c) * L_star / std::pow(2.0 * M_PI * sigma_star * sigma_star, 1.5);
 
-  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
     amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
     amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
     amrex::Real const z = prob_lo[2] + (k + amrex::Real(0.5)) * dx[2];
@@ -159,7 +159,7 @@ void RadhydroSimulation<ShellProblem>::setInitialConditionsAtLevel(int lev) {
     auto const &state = state_new_[lev].array(iter);
 
     // this must run on host so it can access amrex::Vectors!!
-    amrex::ParallelFor(indexRange, [=](int i, int j, int k) {
+    amrex::LoopConcurrentOnCpu(indexRange, [=](int i, int j, int k) noexcept {
       amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
       amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
       amrex::Real const z = prob_lo[2] + (k + amrex::Real(0.5)) * dx[2];
@@ -172,9 +172,6 @@ void RadhydroSimulation<ShellProblem>::setInitialConditionsAtLevel(int lev) {
       double rho_shell = rho_norm * std::exp(-std::pow(r - r_0, 2) /
                                              (2.0 * sigma_sh * sigma_sh));
       double rho = std::max(rho_shell, 1.0e-8 * rho_0);
-
-      const double F0 = L_star / (4.0 * M_PI * r * r);
-      const double sigma_star_sq = sigma_star * sigma_star;
 
       // interpolate Frad from table
       const double Frad =
