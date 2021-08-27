@@ -820,7 +820,7 @@ void RadhydroSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real
 			primVar.array(), x1LeftState.array(), x1RightState.array(), x1ReconstructRange,
 			nvars);
 	} else {
-		amrex::Abort("Invalid reconstruction order for radiation variables! Aborting...")
+		amrex::Abort("Invalid reconstruction order for radiation variables! Aborting...");
 	}
 
 	// interface-centered kernel
