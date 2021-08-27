@@ -135,7 +135,7 @@ if __name__ == "__main__":
 
     # solve right branch
     r_start = r_crit + eps
-    r_end = 2.0  # in units of r_0
+    r_end = 3.5  # in units of r_0
     f_start = f_crit + eps * df_dr_crit
     print(f"r_crit = {r_crit}; r_start = {r_start}")
     print(f"f_crit = {f_crit}; f_start = {f_start}")
@@ -162,7 +162,7 @@ if __name__ == "__main__":
 
     plt.xlabel('radius r (dimensionless)')
     plt.ylabel('reduced flux f (dimensionless)')
-    plt.xlim(0., 2.)
+    plt.xlim(0., 3.5)
     plt.ylim(0., 1.)
     plt.savefig('solution.pdf')
 

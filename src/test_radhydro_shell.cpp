@@ -3,8 +3,8 @@
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file test_hydro3d_blast.cpp
-/// \brief Defines a test problem for a 3D explosion.
+/// \file test_radhydro_shell.cpp
+/// \brief Defines a test problem for a 3D radiation pressure-driven shell.
 ///
 
 #include <limits>
@@ -25,18 +25,20 @@
 #include "AMReX_REAL.H"
 #include "AMReX_Vector.H"
 
+extern "C" {
+  #include "interpolate.h"
+}
 #include "RadhydroSimulation.hpp"
 #include "hydro_system.hpp"
-#include "interpolate.h"
 #include "radiation_system.hpp"
 #include "test_radhydro_shell.hpp"
 
 struct ShellProblem {};
 
-constexpr double a_rad = 7.5646e-15; // erg cm^-3 K^-4
-constexpr double c = 2.99792458e10;  // cm s^-1
-constexpr double cs0 = 0.633e5;      // (0.633 km/s) [cm s^-1]
-constexpr double a0 = 2.0e5;         // ('reference' sound speed) [cm s^-1]
+constexpr double a_rad = 7.5646e-15;  // erg cm^-3 K^-4
+constexpr double c = 2.99792458e10;   // cm s^-1
+constexpr double cs0 = 0.633e5;       // (0.633 km/s) [cm s^-1]
+constexpr double a0 = 2.0e5;          // ('reference' sound speed) [cm s^-1]
 constexpr double chat = 860. * a0;    // cm s^-1
 constexpr double k_B = 1.380658e-16;  // erg K^-1
 constexpr double m_H = 1.6726231e-24; // mass of hydrogen atom [g]
@@ -67,9 +69,9 @@ constexpr amrex::Real M_shell = (1 - epsilon) * GMC_mass;      // g
 constexpr amrex::Real L_star = GMC_mass * specific_luminosity; // erg s^-1
 
 constexpr amrex::Real r_0 = 5.0 * parsec_in_cm; // cm
-constexpr amrex::Real sigma_star = 0.25 * r_0; // cm
-constexpr amrex::Real H_shell = 0.1 * r_0; // cm
-constexpr amrex::Real kappa0 = 20.0; // specific opacity [cm^2 g^-1]
+constexpr amrex::Real sigma_star = 0.25 * r_0;  // cm
+constexpr amrex::Real H_shell = 0.1 * r_0;      // cm
+constexpr amrex::Real kappa0 = 20.0;            // specific opacity [cm^2 g^-1]
 
 constexpr amrex::Real rho_0 =
     M_shell / ((4. / 3.) * M_PI * r_0 * r_0 * r_0);          // g cm^-3
@@ -123,7 +125,7 @@ void RadhydroSimulation<ShellProblem>::setInitialConditionsAtLevel(int lev) {
   amrex::Vector<double> Erad_arr;
   amrex::Vector<double> Frad_arr;
 
-  std::string filename = "../extern/dust_shell/initial_conditions.txt";
+  std::string filename = "./initial_conditions.txt";
   std::ifstream fstream(filename, std::ios::in);
   AMREX_ALWAYS_ASSERT(fstream.is_open());
   std::string header;
@@ -174,20 +176,16 @@ void RadhydroSimulation<ShellProblem>::setInitialConditionsAtLevel(int lev) {
       const double F0 = L_star / (4.0 * M_PI * r * r);
       const double sigma_star_sq = sigma_star * sigma_star;
 
-      // compute steady-state Frad (exact)
-      // const double Frad =
-      //    F0 * (std::erf(r / (std::sqrt(2.0) * sigma_star)) -
-      //          (2.0 * r) / std::sqrt(2.0 * M_PI * sigma_star_sq) *
-      //              std::exp(-(r * r) / (2.0 * sigma_star_sq)));
+      // interpolate Frad from table
       const double Frad =
           interpolate_value(r, r_arr.dataPtr(), Frad_arr.dataPtr(),
                             static_cast<int>(r_arr.size()));
 
-      // compute Erad from (isothermal) sound speed a0
+      // interpolate Erad from table
       const double Erad =
           interpolate_value(r, r_arr.dataPtr(), Erad_arr.dataPtr(),
                             static_cast<int>(r_arr.size()));
-      
+
       const double Trad = std::pow(Erad / a_rad, 1. / 4.);
       const double Tgas = Trad;
       const double Eint = rho * c_v * Tgas;
@@ -383,12 +381,15 @@ auto problem_main() -> int {
 
   constexpr amrex::Real t0_hydro = r_0 / a0; // seconds
   sim.stopTime_ = 0.124 * t0_hydro;
-  // constexpr amrex::Real t0_light = r_0 / c; // seconds
-  // sim.stopTime_ = 20.0 * t0_light;
+  //constexpr amrex::Real t0_light = r_0 / c; // seconds
+  //sim.stopTime_ = 20.0 * t0_light;
 
-  sim.maxTimesteps_ = 100; // for scaling tests
-  sim.checkpointInterval_ = -1;
-  sim.plotfileInterval_ = 100;
+  //sim.maxTimesteps_ = 100; // for scaling tests
+  //sim.checkpointInterval_ = -1;
+  //sim.plotfileInterval_ = 100;
+  sim.maxTimesteps_ = 5000;
+  sim.checkpointInterval_ = 1000;
+  sim.plotfileInterval_ = 10;
 
   // initialize
   sim.setInitialConditions();
