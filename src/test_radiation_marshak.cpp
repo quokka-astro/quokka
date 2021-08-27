@@ -176,8 +176,6 @@ template <> void RadhydroSimulation<SuOlsonProblem>::setInitialConditionsAtLevel
 
 auto problem_main() -> int
 {
-    // TODO(ben): disable v/c terms for this problem!
-
 	// Problem parameters
 
 	const int max_timesteps = 2e4;
