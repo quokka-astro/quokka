@@ -7,16 +7,19 @@
 /// \brief Defines a test problem for radiation in the diffusion regime.
 ///
 
-#include "test_radiation_tophat.hpp"
+#include <tuple>
+
 #include "AMReX_Array.H"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_Config.H"
 #include "AMReX_IntVect.H"
 #include "AMReX_REAL.H"
+
+#include "test_radiation_tophat.hpp"
 #include "radiation_system.hpp"
+#include "simulation.hpp"
 #include "test_radhydro_shock_cgs.hpp"
-#include <tuple>
 
 struct TophatProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
@@ -43,12 +46,26 @@ template <> struct RadSystem_Traits<TophatProblem> {
 	static constexpr double boltzmann_constant = boltzmann_constant_cgs_;
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double Erad_floor = 0.;
-	static constexpr bool do_marshak_left_boundary = false;
-	static constexpr double T_marshak_left = T_hohlraum;
+	static constexpr bool compute_v_over_c_terms = false;
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeOpacity(const double rho,
+AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputePlanckOpacity(const double rho,
+								    const double /*Tgas*/) -> double
+{
+	amrex::Real kappa = 0.;
+	if (rho == rho_pipe) {
+		kappa = kappa_pipe;
+	} else if (rho == rho_wall) {
+		kappa = kappa_wall;
+	} else {
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(true, "opacity not defined!");
+	}
+	return kappa;
+}
+
+template <>
+AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeRosselandOpacity(const double rho,
 								    const double /*Tgas*/) -> double
 {
 	amrex::Real kappa = 0.;
@@ -104,7 +121,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeEddingtonFactor(cons
 
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-RadhydroSimulation<TophatProblem>::setCustomBoundaryConditions(
+AMRSimulation<TophatProblem>::setCustomBoundaryConditions(
     const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
     amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/,
     int /*bcomp*/, int /*orig_comp*/)
@@ -119,11 +136,8 @@ RadhydroSimulation<TophatProblem>::setCustomBoundaryConditions(
 
 	amrex::Real const *dx = geom.CellSize();
 	auto const *prob_lo = geom.ProbLo();
-	// auto const *prob_hi = geom.ProbHi();
 	amrex::Box const &box = geom.Domain();
-
 	amrex::GpuArray<int, 3> lo = box.loVect3d();
-	// amrex::GpuArray<int, 3> hi = box.hiVect3d();
 
 	amrex::Real const y0 = 0.;
 	amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
@@ -156,23 +170,11 @@ RadhydroSimulation<TophatProblem>::setCustomBoundaryConditions(
 			Fy_bdry = 0.;
 			Fz_bdry = 0.;
 		} else {
-			// reflecting boundary
-			// E_inc = E_0;
-			// Fx_bdry = -Fx_0;
-			// Fy_bdry = Fy_0;
-			// Fz_bdry = Fz_0;
-
 			// extrapolated boundary
 			E_inc = E_0;
 			Fx_bdry = Fx_0;
 			Fy_bdry = Fy_0;
 			Fz_bdry = Fz_0;
-
-			// Marshak boundary (does not work)
-			// E_inc = a_rad * std::pow(T_initial, 4);
-			// Fx_bdry = 0.5 * c * E_inc - 0.5 * (c * E_0 + 2.0 * Fx_0);
-			// Fy_bdry = 0.;
-			// Fz_bdry = 0.;
 		}
 		const amrex::Real Fnorm =
 		    std::sqrt(Fx_bdry * Fx_bdry + Fy_bdry * Fy_bdry + Fz_bdry * Fz_bdry);
@@ -193,15 +195,14 @@ RadhydroSimulation<TophatProblem>::setCustomBoundaryConditions(
 	}
 }
 
-template <> void RadhydroSimulation<TophatProblem>::setInitialConditions()
+template <> void RadhydroSimulation<TophatProblem>::setInitialConditionsAtLevel(int lev)
 {
-	auto const prob_lo = simGeometry_.ProbLoArray();
-	// auto const prob_hi = simGeometry_.ProbHiArray();
-	auto dx = dx_;
+	auto const prob_lo = geom[lev].ProbLoArray();
+	auto dx = geom[lev].CellSizeArray();
 
-	for (amrex::MFIter iter(state_old_); iter.isValid(); ++iter) {
+	for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
-		auto const &state = state_new_.array(iter);
+		auto const &state = state_new_[lev].array(iter);
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 			const double Erad = a_rad * std::pow(T_initial, 4);
@@ -248,17 +249,11 @@ auto problem_main() -> int
 	// Problem parameters
 	const int max_timesteps = 10000;
 	const double CFL_number = 0.4;
-	const int nx = 700; // 280;
-	const int ny = 200; // 80;
-
-	const double Lx = 7.0;		 // cm
-	const double Ly = 4.0;		 // cm
 	const double max_time = 5.0e-10; // s
-
-	amrex::IntVect gridDims{AMREX_D_DECL(nx, ny, 4)};
-	amrex::RealBox boxSize{
-	    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.), amrex::Real(0.0))},       // NOLINT
-	    {AMREX_D_DECL(amrex::Real(Lx), amrex::Real(Ly / 2.0), amrex::Real(1.0))}}; // NOLINT
+	//const int nx = 700;
+	//const int ny = 200;
+	//const double Lx = 7.0;	// cm
+	//const double Ly = 2.0;	// cm
 
 	auto isNormalComp = [=](int n, int dim) {
 		if ((n == RadSystem<TophatProblem>::x1RadFlux_index) && (dim == 0)) {
@@ -282,7 +277,8 @@ auto problem_main() -> int
 		return false;
 	};
 
-	constexpr int nvars = 9;
+	// boundary conditions
+	constexpr int nvars = RadhydroSimulation<TophatProblem>::nvarTotal_;
 	amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
 	for (int n = 0; n < nvars; ++n) {
 		boundaryConditions[n].setLo(0, amrex::BCType::ext_dir);	 // left x1 -- Marshak
@@ -299,12 +295,14 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	RadhydroSimulation<TophatProblem> sim(gridDims, boxSize, boundaryConditions);
+	RadhydroSimulation<TophatProblem> sim(boundaryConditions);
+	sim.is_hydro_enabled_ = false;
+	sim.is_radiation_enabled_ = true;
+	sim.radiationReconstructionOrder_ = 2; // PLM
 	sim.stopTime_ = max_time;
 	sim.radiationCflNumber_ = CFL_number;
 	sim.maxTimesteps_ = max_timesteps;
-	sim.outputAtInterval_ = true;
-	sim.plotfileInterval_ = 20; // for debugging
+	sim.plotfileInterval_ = 20;
 
 	// initialize
 	sim.setInitialConditions();
