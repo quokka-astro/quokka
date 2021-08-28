@@ -8,276 +8,236 @@
 ///
 
 #include "test_radiation_pulse.hpp"
-
-auto main(int argc, char** argv) -> int
-{
-	// Initialization
-
-	amrex::Initialize(argc, argv);
-
-	int result = 0;
-
-	{ // objects must be destroyed before Kokkos::finalize, so enter new
-	  // scope here to do that automatically
-
-		result = testproblem_radiation_pulse();
-
-	} // destructors must be called before amrex::Finalize()
-	amrex::Finalize();
-
-	return result;
-}
+#include "AMReX_BC_TYPES.H"
+#include "RadhydroSimulation.hpp"
+#include "fextract.hpp"
+#include "test_radhydro_shock_cgs.hpp"
 
 struct PulseProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-const double kappa0 = 1.0e5;   // cm^-1 (opacity at temperature T0)
-const double T0 = 1.0;		   // K (temperature)
-const double rho = 1.0;	       // g cm^-3 (matter density)
-const double a_rad = 4.0e-10;  // radiation constant == 4sigma_SB/c (dimensionless)
-const double c = 1.0e8;	   // speed of light (dimensionless)
-const double chat = 1.0e7;
-const double Erad_floor = a_rad * std::pow(1.0e-2, 4);
+constexpr double kappa0 = 1.0e5; // cm^-1 (opacity at temperature T0)
+constexpr double T0 = 1.0;       // K (temperature)
+constexpr double rho = 1.0;      // g cm^-3 (matter density)
+constexpr double a_rad =
+    4.0e-10;                // radiation constant == 4sigma_SB/c (dimensionless)
+constexpr double c = 1.0e8; // speed of light (dimensionless)
+constexpr double chat = 1.0e7;
+constexpr double erad_floor = a_rad * (1.0e-8);
 
-const double Lx = 1.0;	  // dimensionless length
-const double x0 = Lx / 2.0;
-const double initial_time = 1.0e-8;
+// constexpr double Lx = 1.0; // dimensionless length
+constexpr double initial_time = 1.0e-8;
 
-auto compute_exact_Trad(const double x, const double t) -> double
-{
-	// compute exact solution for Gaussian radiation pulse
-	// 		assuming diffusion approximation
-	const double sigma = 0.025;
-	const double D = 4.0 * c * a_rad * std::pow(T0, 3) / (3.0 * kappa0);
-	const double width_sq = (sigma*sigma + D*t);
-	const double normfac = 1.0 / (2.0 * std::sqrt( M_PI * width_sq ));
-	return 0.5 * normfac * std::exp( -(x*x) / (4.0*width_sq) );
-}
+template <> struct RadSystem_Traits<PulseProblem> {
+  static constexpr double c_light = c;
+  static constexpr double c_hat = chat;
+  static constexpr double radiation_constant = a_rad;
+  static constexpr double mean_molecular_mass = 1.0;
+  static constexpr double boltzmann_constant = (2. / 3.);
+  static constexpr double gamma = 5. / 3.;
+  static constexpr double Erad_floor = erad_floor;
+  static constexpr bool compute_v_over_c_terms = false;
+};
 
-template <> void RadSystem<PulseProblem>::FillGhostZones(array_t &cons)
-{
-	// x1 left side boundary
-	for (int i = 0; i < nghost_; ++i) {
-		const double Erad = Erad_floor_;
-		const double Frad = 0.;
-		
-		cons(radEnergy_index, i) = Erad;
-		cons(x1RadFlux_index, i) = Frad;
-	}
-
-	// x1 right side boundary
-	for (int i = nghost_ + nx_; i < nghost_ + nx_ + nghost_; ++i) {
-		const double Erad = Erad_floor_;
-		const double Frad = 0.;
-		
-		cons(radEnergy_index, i) = Erad;
-		cons(x1RadFlux_index, i) = Frad;
-	}
+auto compute_exact_Trad(const double x, const double t) -> double {
+  // compute exact solution for Gaussian radiation pulse
+  // 		assuming diffusion approximation
+  const double sigma = 0.025;
+  const double D = 4.0 * c * a_rad * std::pow(T0, 3) / (3.0 * kappa0);
+  const double width_sq = (sigma * sigma + D * t);
+  const double normfac = 1.0 / (2.0 * std::sqrt(M_PI * width_sq));
+  return 0.5 * normfac * std::exp(-(x * x) / (4.0 * width_sq));
 }
 
 template <>
-auto RadSystem<PulseProblem>::ComputeOpacity(const double rho,
-					       const double Tgas) -> double
-{
-	return (kappa0 / rho) * std::max( std::pow(Tgas/T0, 3), 1.0 );
+AMREX_GPU_HOST_DEVICE auto
+RadSystem<PulseProblem>::ComputePlanckOpacity(const double rho,
+                                              const double Tgas) -> double {
+  return (kappa0 / rho) * std::max(std::pow(Tgas / T0, 3), 1.0);
 }
 
 template <>
-auto RadSystem<PulseProblem>::ComputeOpacityTempDerivative(const double rho,
-							const double Tgas)
-    -> double
-{
-	if (Tgas > 1.0) {
-		return (kappa0 / rho) * (3.0/T0) * std::pow(Tgas/T0, 2);
-	}
-	return 0.;
+AMREX_GPU_HOST_DEVICE auto
+RadSystem<PulseProblem>::ComputeRosselandOpacity(const double rho,
+                                                 const double Tgas) -> double {
+  return (kappa0 / rho) * std::max(std::pow(Tgas / T0, 3), 1.0);
 }
 
-auto testproblem_radiation_pulse() -> int
-{
-	// This problem is a *linear* radiation diffusion problem, i.e.
-	// parameters are chosen such that the radiation and gas temperatures
-	// should be near equilibrium, and the opacity is chosen to go as
-	// T^3, such that the radiation diffusion equation becomes linear in T.
+template <>
+AMREX_GPU_HOST_DEVICE auto
+RadSystem<PulseProblem>::ComputePlanckOpacityTempDerivative(const double rho,
+                                                            const double Tgas)
+    -> double {
+  if (Tgas > 1.0) {
+    return (kappa0 / rho) * (3.0 / T0) * std::pow(Tgas / T0, 2);
+  }
+  return 0.;
+}
 
-	// This makes this problem a stringent test of the asymptotic-
-	// preserving property of the computational method, since the
-	// optical depth per cell at the peak of the temperature profile is
-	// of order 10^5.
+template <>
+void RadhydroSimulation<PulseProblem>::setInitialConditionsAtLevel(int lev) {
+  // compute initial conditions
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo =
+      geom[lev].ProbLoArray();
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi =
+      geom[lev].ProbHiArray();
+  amrex::Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
 
-	// Problem parameters
+  for (amrex::MFIter iter(state_old_[lev]); iter.isValid(); ++iter) {
+    const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
+    auto const &state = state_new_[lev].array(iter);
 
-	const int max_timesteps = 1e5;
-	const double CFL_number = 0.8;
-	const int nx = 32;
+    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+      amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+      const double Trad = compute_exact_Trad(x - x0, initial_time);
 
-	const double max_dt = 1e-3;	  	// dimensionless time
-	const double max_time = 1.0e-4;	// dimensionless time
+      state(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = erad_floor;
+      state(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index) = 0;
+      state(i, j, k, RadSystem<PulseProblem>::x2RadFlux_index) = 0;
+      state(i, j, k, RadSystem<PulseProblem>::x3RadFlux_index) = 0;
 
-	// Problem initialization
+      state(i, j, k, RadSystem<PulseProblem>::gasEnergy_index) =
+          RadSystem<PulseProblem>::ComputeEgasFromTgas(rho, Trad);
+      state(i, j, k, RadSystem<PulseProblem>::gasDensity_index) = rho;
+      state(i, j, k, RadSystem<PulseProblem>::x1GasMomentum_index) = 0.;
+      state(i, j, k, RadSystem<PulseProblem>::x2GasMomentum_index) = 0.;
+      state(i, j, k, RadSystem<PulseProblem>::x3GasMomentum_index) = 0.;
+    });
+  }
 
-	std::vector<double> T_initial(nx);
-	std::vector<double> Erad_initial(nx);
-	std::vector<double> Frad_initial(nx);
+  // set flag
+  areInitialConditionsDefined_ = true;
+}
 
-	for (int i = 0; i < nx; ++i) {
-		// initialize initial temperature
-		const double x = Lx * ((i + 0.5) / static_cast<double>(nx));
-		const double Trad = compute_exact_Trad(x - x0, initial_time);
-		const double Erad = a_rad * std::pow(Trad, 4);
-		T_initial.at(i) = Trad;
-		Erad_initial.at(i) = Erad;
-	}
+auto problem_main() -> int {
+  // This problem is a *linear* radiation diffusion problem, i.e.
+  // parameters are chosen such that the radiation and gas temperatures
+  // should be near equilibrium, and the opacity is chosen to go as
+  // T^3, such that the radiation diffusion equation becomes linear in T.
 
-	RadSystem<PulseProblem> rad_system(
-	    {.nx = nx, .lx = Lx, .cflNumber = CFL_number});
+  // This makes this problem a stringent test of the asymptotic-
+  // preserving property of the computational method, since the
+  // optical depth per cell at the peak of the temperature profile is
+  // of order 10^5.
 
-	rad_system.set_radiation_constant(a_rad);
-	rad_system.set_lx(Lx);
-	rad_system.c_light_ = c;
-	rad_system.c_hat_ = chat;
-	rad_system.Erad_floor_ = Erad_floor;
-	rad_system.boltzmann_constant_ = (2./3.);
-	rad_system.mean_molecular_mass_ = 1.0;
-	rad_system.gamma_ = 5./3.;
+  // Problem parameters
+  const int max_timesteps = 1e5;
+  const double CFL_number = 0.8;
+  // const int nx = 32;
 
-	auto nghost = rad_system.nghost();
-	for (int i = nghost; i < nx + nghost; ++i) {
-		rad_system.set_radEnergy(i) = Erad_floor;
-		rad_system.set_x1RadFlux(i) = 0.;
-		rad_system.set_radEnergySource(i) = 0.0;
+  const double max_dt = 1e-3;     // dimensionless time
+  const double max_time = 1.0e-4; // dimensionless time
 
-		rad_system.set_gasEnergy(i) = rad_system.ComputeEgasFromTgas(rho, T_initial.at(i - nghost));
-		rad_system.set_staticGasDensity(i) = rho;
-		rad_system.set_x1GasMomentum(i) = 0.0;
-	}
+  // Boundary conditions
+  constexpr int nvars = RadSystem<PulseProblem>::nvar_;
+  amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
+  for (int n = 0; n < nvars; ++n) {
+    boundaryConditions[n].setLo(0, amrex::BCType::foextrap); // extrapolate
+    boundaryConditions[n].setHi(0, amrex::BCType::foextrap);
+    for (int i = 1; i < AMREX_SPACEDIM; ++i) {
+      boundaryConditions[n].setLo(i, amrex::BCType::int_dir); // periodic
+      boundaryConditions[n].setHi(i, amrex::BCType::int_dir);
+    }
+  }
 
-	const auto Erad0 = rad_system.ComputeRadEnergy();
-	const auto Egas0 = rad_system.ComputeGasEnergy();
-	const auto Etot0 = Erad0 + Egas0;
+  // Problem initialization
+  RadhydroSimulation<PulseProblem> sim(boundaryConditions);
+  sim.is_hydro_enabled_ = false;
+  sim.is_radiation_enabled_ = true;
+  sim.radiationReconstructionOrder_ = 3; // PPM
+  sim.stopTime_ = max_time;
+  sim.radiationCflNumber_ = CFL_number;
+  sim.maxDt_ = max_dt;
+  sim.maxTimesteps_ = max_timesteps;
+  sim.plotfileInterval_ = -1;
 
-	amrex::Print() << "radiation constant (code units) = " << a_rad << "\n";
-	amrex::Print() << "c_light (code units) = " << c << "\n";
-	amrex::Print() << "Lx = " << Lx << "\n";
-	amrex::Print() << "max_dt = " << max_dt << "\n";
-	amrex::Print() << "initial time = " << initial_time << std::endl;
-	amrex::Print() << "initial gas energy = " << Egas0 << std::endl;
-	amrex::Print() << "initial radiation energy = " << Erad0 << "\n" << std::endl;
+  // initialize
+  sim.setInitialConditions();
 
-	// Main time loop
-	double dt_prev = NAN;
-	int j = 0;
-	for (; j < max_timesteps; ++j) {
-		if (rad_system.time() >= max_time) {
-			break;
-		}
+  // evolve
+  sim.evolve();
 
-		// Compute timestep
-		const double dt_expand_fac = 1.2;
-		const double computed_dt = rad_system.ComputeTimestep(max_dt);
-		const double this_dt = std::min(computed_dt, dt_expand_fac*dt_prev);
+  // read output variables
+  auto [position, values] = fextract(sim.state_new_[0], sim.Geom(0), 0, 0.0);
+  const int nx = static_cast<int>(position.size());
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo =
+      sim.geom[0].ProbLoArray();
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi =
+      sim.geom[0].ProbHiArray();
+  amrex::Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
 
-		rad_system.AdvanceTimestepSDC2(this_dt);
-		dt_prev = this_dt;
-	}
+  std::vector<double> xs(nx);
+  std::vector<double> Trad(nx);
+  std::vector<double> Tgas(nx);
+  std::vector<double> Erad(nx);
+  std::vector<double> Egas(nx);
+  std::vector<double> T_initial(nx);
+  std::vector<double> xs_exact;
+  std::vector<double> Trad_exact;
+  std::vector<double> Erad_exact;
 
-	amrex::Print() << "Timestep " << j << "; t = " << rad_system.time()
-		  << "; dt = " << rad_system.dt() << "\n";
+  for (int i = 0; i < nx; ++i) {
+    amrex::Real const x = position.at(i);
+    xs.at(i) = x;
+    const auto Erad_t =
+        values.at(RadSystem<PulseProblem>::radEnergy_index).at(i);
+    const auto Trad_t = std::pow(Erad_t / a_rad, 1. / 4.);
+    Erad.at(i) = Erad_t;
+    Trad.at(i) = Trad_t;
+    Egas.at(i) = values.at(RadSystem<PulseProblem>::gasEnergy_index).at(i);
+    Tgas.at(i) = RadSystem<PulseProblem>::ComputeTgasFromEgas(rho, Egas.at(i));
 
-	const auto Erad_tot = rad_system.ComputeRadEnergy();
-	const auto Egas_tot = rad_system.ComputeGasEnergy();
-	const auto Etot = Erad_tot + Egas_tot;
-	const auto Ediff = std::fabs(Etot - Etot0);
+    auto Trad_val = compute_exact_Trad(x - x0, initial_time + sim.tNew_[0]);
+    auto Erad_val = a_rad * std::pow(Trad_val, 4);
+    xs_exact.push_back(x);
+    Trad_exact.push_back(Trad_val);
+    Erad_exact.push_back(Erad_val);
+  }
 
-	amrex::Print() << "radiation energy = " << Erad_tot << "\n";
-	amrex::Print() << "gas energy = " << Egas_tot << "\n";
-	amrex::Print() << "Total energy = " << Etot << "\n";
-	amrex::Print() << "(Energy nonconservation = " << Ediff << ")\n";
-	amrex::Print() << "\n";
+  // compute error norm
+  double err_norm = 0.;
+  double sol_norm = 0.;
+  for (int i = 0; i < xs.size(); ++i) {
+    err_norm += std::abs(Trad[i] - Trad_exact[i]);
+    sol_norm += std::abs(Trad_exact[i]);
+  }
+  const double error_tol = 0.003;
+  const double rel_error = err_norm / sol_norm;
+  amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
 
+  // plot temperature
+  matplotlibcpp::clf();
 
-	// read out results
+  std::map<std::string, std::string> Trad_args;
+  std::map<std::string, std::string> Tgas_args;
+  std::map<std::string, std::string> Tinit_args;
+  std::map<std::string, std::string> Trad_exact_args;
+  Trad_args["label"] = "radiation temperature";
+  Trad_args["linestyle"] = "-.";
+  Tgas_args["label"] = "gas temperature";
+  Tgas_args["linestyle"] = "--";
+  // Tinit_args["label"] = "initial temperature";
+  // Tinit_args["color"] = "grey";
+  Trad_exact_args["label"] = "radiation temperature (exact)";
+  Trad_exact_args["linestyle"] = ":";
 
-	std::vector<double> xs(nx);
-	std::vector<double> Trad(nx);
-	std::vector<double> Tgas(nx);
-	std::vector<double> Erad(nx);
-	std::vector<double> Egas(nx);
+  // matplotlibcpp::plot(xs, T_initial, Tinit_args);
+  matplotlibcpp::plot(xs, Trad, Trad_args);
+  matplotlibcpp::plot(xs, Tgas, Tgas_args);
+  matplotlibcpp::plot(xs, Trad_exact, Trad_exact_args);
 
-	for (int i = 0; i < nx; ++i) {
-		const double x = Lx * ((i + 0.5) / static_cast<double>(nx));
-		xs.at(i) = x;
+  matplotlibcpp::xlabel("length x (dimensionless)");
+  matplotlibcpp::ylabel("temperature (dimensionless)");
+  matplotlibcpp::legend();
+  matplotlibcpp::title(
+      fmt::format("time ct = {:.4g}", initial_time + sim.tNew_[0] * c));
+  matplotlibcpp::save("./radiation_pulse_temperature.pdf");
 
-		const auto Erad_t = rad_system.radEnergy(i + nghost);
-		const auto Trad_t = std::pow(Erad_t / a_rad, 1./4.);
-		Erad.at(i) = Erad_t;
-		Trad.at(i) = Trad_t;
-		Egas.at(i) = rad_system.gasEnergy(i + nghost);
-		Tgas.at(i) = rad_system.ComputeTgasFromEgas(rho, Egas.at(i));
-	}
-
-	// compute exact solution
-	std::vector<double> xs_exact;
-	std::vector<double> Trad_exact;
-	std::vector<double> Erad_exact;
-
-	for (int i = 0; i < nx; ++i) {
-		const double x = Lx * ((i + 0.5) / static_cast<double>(nx));
-
-		auto Trad_val = compute_exact_Trad(x - x0, initial_time + rad_system.time());
-		auto Erad_val = a_rad * std::pow(Trad_val, 4);
-
-		xs_exact.push_back(x);
-		Trad_exact.push_back(Trad_val);
-		Erad_exact.push_back(Erad_val);
-	}
-
-	// compute error norm
-
-	double err_norm = 0.;
-	double sol_norm = 0.;
-	for (int i = 0; i < xs.size(); ++i) {
-		err_norm += std::abs(Trad[i] - Trad_exact[i]);
-		sol_norm += std::abs(Trad_exact[i]);
-	}
-
-	const double error_tol = 0.02;
-	const double rel_error = err_norm / sol_norm;
-	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
-
-	// plot temperature
-	matplotlibcpp::clf();
-
-	std::map<std::string, std::string> Trad_args;
-	std::map<std::string, std::string> Tgas_args;
-	std::map<std::string, std::string> Tinit_args;
-	Trad_args["label"] = "radiation temperature";
-	Trad_args["linestyle"] = "-.";
-	Tgas_args["label"] = "gas temperature";
-	Tgas_args["linestyle"] = "--";
-	Tinit_args["label"] = "initial temperature";
-	Tinit_args["color"] = "grey";
-	//Trad_exact_args["label"] = "radiation temperature (exact)";
-	//Trad_exact_args["linestyle"] = ":";
-	matplotlibcpp::plot(xs, T_initial, Tinit_args);
-	matplotlibcpp::plot(xs, Trad, Trad_args);
-	matplotlibcpp::plot(xs, Tgas, Tgas_args);
-	//matplotlibcpp::plot(xs, Trad_exact, Trad_exact_args);
-
-	matplotlibcpp::xlabel("length x (dimensionless)");
-	matplotlibcpp::ylabel("temperature (dimensionless)");
-	matplotlibcpp::legend();
-	matplotlibcpp::title(fmt::format("time ct = {:.4g}", initial_time + rad_system.time() * c));
-	matplotlibcpp::save("./radiation_pulse_temperature.pdf");
-
-	// Cleanup and exit
-	amrex::Print() << "Finished." << std::endl;
-
-	int status = 0;
-
-	if ((rel_error > error_tol) || std::isnan(rel_error)) {
-		status = 1;
-	}
-
-	return status;
+  // Cleanup and exit
+  int status = 0;
+  if ((rel_error > error_tol) || std::isnan(rel_error)) {
+    status = 1;
+  }
+  return status;
 }
