@@ -3,8 +3,8 @@
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file test_radiation_marshak.cpp
-/// \brief Defines a test problem for radiation in the diffusion regime.
+/// \file test_radiation_marshak_asymptotic.cpp
+/// \brief Defines a test problem for radiation in the asymptotic diffusion regime.
 ///
 
 #include "test_radiation_marshak_asymptotic.hpp"
@@ -176,48 +176,37 @@ auto problem_main() -> int {
   // This requires both a spatial discretization *and* a temporal discretization
   // that have the asymptotic-preserving property. Operator splitting the
   // transport and source terms can give a splitting error that is arbitrarily
-  // large in the asymptotic limit! [SDC (or a semi-implicit predictor-corrector
-  // method) is REQUIRED for a correct solution.]
-
-  // For discussion of the asymptotic-preserving property:
-  // 1. R.G. McClarren, R.B. Lowrie, The effects of slope limiting on
-  // asymptotic-preserving
+  // large in the asymptotic limit! A fully implicit method or a semi-implicit
+  // predictor-corrector method [2] similar to SDC is REQUIRED for a correct solution.
+  //
+  // For discussion of the asymptotic-preserving property, see [1] and [2]. For
+  // a discussion of the exact, self-similar solution to this problem, see [3].
+  // Note that when used with an SDC time integrator, PLM (w/ asymptotic correction
+  // in Riemann solver) does a good job, but not quite as good as linear DG on this
+  // problem. There are some 'stair-stepping' artifacts that appear with PLM at low
+  // resolution that do not appear when using DG. This is likely the "wide stencil"
+  // issue discussed in [4].
+  //
+  // 1. R.G. McClarren, R.B. Lowrie, The effects of slope limiting on asymptotic-preserving
   //     numerical methods for hyperbolic conservation laws, Journal of
   //     Computational Physics 227 (2008) 9711–9726.
-  // 2. R.G. McClarren, T.M. Evans, R.B. Lowrie, J.D. Densmore, Semi-implicit
-  // time integration
+  // 2. R.G. McClarren, T.M. Evans, R.B. Lowrie, J.D. Densmore, Semi-implicit time integration
   //     for PN thermal radiative transfer, Journal of Computational Physics 227
   //     (2008) 7561-7586.
-
-  // For a discussion of the exact, self-similar solution to this problem:
-  // 3. Y. Zel'dovich, Y. Raizer, Physics of Shock Waves and High-Temperature
-  // Hydrodynamic
-  //     Phenomena (1964), Ch. X. Thermal Waves.
-
-  // Note: PLM (w/ asymptotic correction in Riemann solver) does a good job, but
-  // not quite as good as linear DG on this problem. There are some
-  // 'stair-stepping' artifacts that appear with PLM at low resolution that do
-  // not appear when using DG. This is likely the "wide stencil" issue discussed
-  // in [4].
-  // 4. Lowrie, R. B. and Morel, J. E., Issues with high-resolution Godunov
-  // methods for
+  // 3. Y. Zel'dovich, Y. Raizer, Physics of Shock Waves and High-Temperature Hydrodynamic
+  //     Phenomena (1964), Ch. X.: Thermal Waves.
+  // 4. Lowrie, R. B. and Morel, J. E., Issues with high-resolution Godunov methods for
   //     radiation hydrodynamics, Journal of Quantitative Spectroscopy and
   //     Radiative Transfer, 69, 475–489, 2001.
 
   // Problem parameters
-
   const int max_timesteps = 1e5;
   const double CFL_number = 0.9;
   const double initial_dt = 5.0e-12; // s
   const double max_dt = 5.0e-12;     // s
   const double max_time = 10.0e-9;   // s
-
   // const int nx = 60; // [18 == matches resolution of McClarren & Lowrie (2008)]
   // const double Lx = 0.66; // cm
-  // const double dx = Lx / nx; // cm
-  // const double tau_cell = kappa * dx; // dimensionless optical depth
-  // std::cout << "Lx = " << Lx << "\n";
-  // std::cout << "tau_cell = " << tau_cell << "\n";
 
   // Problem initialization
   std::cout << "radiation constant (code units) = "
@@ -335,10 +324,7 @@ auto problem_main() -> int {
   amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
 
   // plot results
-
-  // material temperature
   matplotlibcpp::clf();
-
   std::map<std::string, std::string> Tgas_args;
   std::map<std::string, std::string> Tgas_exact_args;
   Tgas_args["label"] = "gas temperature";
