@@ -1,0 +1,215 @@
+//==============================================================================
+// TwoMomentRad - a radiation transport library for patch-based AMR codes
+// Copyright 2020 Benjamin Wibking.
+// Released under the MIT license. See LICENSE file included in the GitHub repo.
+//==============================================================================
+/// \file test_radiation_tube.cpp
+/// \brief Defines a test problem for radiation pressure terms.
+///
+
+#include "test_radiation_tube.hpp"
+#include "AMReX.H"
+#include "AMReX_BC_TYPES.H"
+#include "RadhydroSimulation.hpp"
+#include "fextract.hpp"
+
+struct TubeProblem {};
+
+constexpr double initial_Erad = 1.0e-5;
+constexpr double initial_Egas = 1.0e-5;
+constexpr double c = 1.0;     // speed of light
+constexpr double chat = 0.2;  // reduced speed of light
+constexpr double kappa0 = 1.0e-10; // opacity
+constexpr double rho = 1.0;
+
+template <> struct RadSystem_Traits<TubeProblem> {
+  static constexpr double c_light = c;
+  static constexpr double c_hat = chat;
+  static constexpr double radiation_constant = 1.0;
+  static constexpr double mean_molecular_mass = 1.0;
+  static constexpr double boltzmann_constant = 1.0;
+  static constexpr double gamma = 5. / 3.;
+  static constexpr double Erad_floor = initial_Erad;
+  static constexpr bool compute_v_over_c_terms = false;
+};
+
+template <>
+AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputePlanckOpacity(
+    const double /*rho*/, const double /*Tgas*/) -> double {
+  return kappa0;
+}
+
+template <>
+AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputeRosselandOpacity(
+    const double /*rho*/, const double /*Tgas*/) -> double {
+  return kappa0;
+}
+
+template <>
+void RadhydroSimulation<TubeProblem>::setInitialConditionsAtLevel(
+    int lev) {
+  const auto Erad0 = initial_Erad;
+  const auto Egas0 = initial_Egas;
+
+  for (amrex::MFIter iter(state_old_[lev]); iter.isValid(); ++iter) {
+    const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
+    auto const &state = state_new_[lev].array(iter);
+
+    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+      state(i, j, k, RadSystem<TubeProblem>::radEnergy_index) = Erad0;
+      state(i, j, k, RadSystem<TubeProblem>::x1RadFlux_index) = 0;
+      state(i, j, k, RadSystem<TubeProblem>::x2RadFlux_index) = 0;
+      state(i, j, k, RadSystem<TubeProblem>::x3RadFlux_index) = 0;
+
+      state(i, j, k, RadSystem<TubeProblem>::gasEnergy_index) = Egas0;
+      state(i, j, k, RadSystem<TubeProblem>::gasDensity_index) = rho;
+      state(i, j, k, RadSystem<TubeProblem>::x1GasMomentum_index) = 0.;
+      state(i, j, k, RadSystem<TubeProblem>::x2GasMomentum_index) = 0.;
+      state(i, j, k, RadSystem<TubeProblem>::x3GasMomentum_index) = 0.;
+    });
+  }
+
+  // set flag
+  areInitialConditionsDefined_ = true;
+}
+
+template <>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+AMRSimulation<TubeProblem>::setCustomBoundaryConditions(
+    const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar,
+    int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
+    const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
+    int /*orig_comp*/) {
+#if (AMREX_SPACEDIM == 1)
+  auto i = iv.toArray()[0];
+  int j = 0;
+  int k = 0;
+#endif
+#if (AMREX_SPACEDIM == 2)
+  auto [i, j] = iv.toArray();
+  int k = 0;
+#endif
+#if (AMREX_SPACEDIM == 3)
+  auto [i, j, k] = iv.toArray();
+#endif
+
+  amrex::Box const &box = geom.Domain();
+  amrex::GpuArray<int, 3> lo = box.loVect3d();
+  amrex::GpuArray<int, 3> hi = box.hiVect3d();
+
+  if (i < lo[0]) {
+    // streaming inflow boundary
+    const double Erad = 1.0;
+    const double Frad = c * Erad;
+
+    // x1 left side boundary (Marshak)
+    consVar(i, j, k, RadSystem<TubeProblem>::radEnergy_index) = Erad;
+    consVar(i, j, k, RadSystem<TubeProblem>::x1RadFlux_index) = Frad;
+    consVar(i, j, k, RadSystem<TubeProblem>::x2RadFlux_index) = 0.;
+    consVar(i, j, k, RadSystem<TubeProblem>::x3RadFlux_index) = 0.;
+  } else if (i >= hi[0]) {
+    // right-side boundary -- constant
+    const double Erad = initial_Erad;
+    consVar(i, j, k, RadSystem<TubeProblem>::radEnergy_index) = Erad;
+    consVar(i, j, k, RadSystem<TubeProblem>::x1RadFlux_index) = 0;
+    consVar(i, j, k, RadSystem<TubeProblem>::x2RadFlux_index) = 0;
+    consVar(i, j, k, RadSystem<TubeProblem>::x3RadFlux_index) = 0;
+  }
+
+  // gas boundary conditions are the same everywhere
+  const double Egas = initial_Egas;
+  consVar(i, j, k, RadSystem<TubeProblem>::gasEnergy_index) = Egas;
+  consVar(i, j, k, RadSystem<TubeProblem>::gasDensity_index) = rho;
+  consVar(i, j, k, RadSystem<TubeProblem>::x1GasMomentum_index) = 0.;
+  consVar(i, j, k, RadSystem<TubeProblem>::x2GasMomentum_index) = 0.;
+  consVar(i, j, k, RadSystem<TubeProblem>::x3GasMomentum_index) = 0.;
+}
+
+auto problem_main() -> int {
+  // Problem parameters
+  // const int nx = 1000;
+  // const double Lx = 1.0;
+  const double CFL_number = 0.8;
+  const double dt_max = 1e-2;
+  const double tmax = 1.0;
+  const int max_timesteps = 5000;
+
+  // Boundary conditions
+  constexpr int nvars = RadSystem<TubeProblem>::nvar_;
+  amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
+  for (int n = 0; n < nvars; ++n) {
+    boundaryConditions[n].setLo(0, amrex::BCType::ext_dir);  // Dirichlet x1
+    boundaryConditions[n].setHi(0, amrex::BCType::ext_dir); // Dirichlet x1
+    for (int i = 1; i < AMREX_SPACEDIM; ++i) {
+      boundaryConditions[n].setLo(i, amrex::BCType::int_dir); // periodic
+      boundaryConditions[n].setHi(i, amrex::BCType::int_dir);
+    }
+  }
+
+  // Problem initialization
+  RadhydroSimulation<TubeProblem> sim(boundaryConditions);
+  sim.is_hydro_enabled_ = false;
+  sim.is_radiation_enabled_ = true;
+  sim.radiationReconstructionOrder_ = 3; // PPM
+  sim.stopTime_ = tmax;
+  sim.radiationCflNumber_ = CFL_number;
+  sim.maxDt_ = dt_max;
+  sim.maxTimesteps_ = max_timesteps;
+  sim.plotfileInterval_ = -1;
+
+  // initialize
+  sim.setInitialConditions();
+
+  // evolve
+  sim.evolve();
+
+  // read output variables
+  auto [position, values] = fextract(sim.state_new_[0], sim.Geom(0), 0, 0.0);
+  const int nx = static_cast<int>(position.size());
+
+  // compute error norm
+  std::vector<double> erad(nx);
+  std::vector<double> erad_exact(nx);
+  std::vector<double> xs(nx);
+  for (int i = 0; i < nx; ++i) {
+    amrex::Real const x = position.at(i);
+    xs.at(i) = x;
+    erad_exact.at(i) = (x <= chat * tmax) ? 1.0 : 0.0;
+    erad.at(i) = values.at(RadSystem<TubeProblem>::radEnergy_index).at(i);
+  }
+
+  double err_norm = 0.;
+  double sol_norm = 0.;
+  for (int i = 0; i < nx; ++i) {
+    err_norm += std::abs(erad[i] - erad_exact[i]);
+    sol_norm += std::abs(erad_exact[i]);
+  }
+
+  const double rel_err_norm = err_norm / sol_norm;
+  const double rel_err_tol = 0.01;
+  int status = 1;
+  if (rel_err_norm < rel_err_tol) {
+    status = 0;
+  }
+  amrex::Print() << "Relative L1 norm = " << rel_err_norm << std::endl;
+
+  // Plot results
+  matplotlibcpp::clf();
+  matplotlibcpp::ylim(0.0, 1.1);
+
+  std::map<std::string, std::string> erad_args;
+  std::map<std::string, std::string> erad_exact_args;
+  erad_args["label"] = "numerical solution";
+  erad_exact_args["label"] = "exact solution";
+  erad_exact_args["linestyle"] = "--";
+  matplotlibcpp::plot(xs, erad, erad_args);
+  matplotlibcpp::plot(xs, erad_exact, erad_exact_args);
+
+  matplotlibcpp::legend();
+  matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
+  matplotlibcpp::save("./radiation_pressure_tube.pdf");
+
+  // Cleanup and exit
+  amrex::Print() << "Finished." << std::endl;
+  return status;
+}
