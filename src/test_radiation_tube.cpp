@@ -12,30 +12,41 @@
 #include "AMReX_BC_TYPES.H"
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
+#include "matplotlibcpp.h"
+#include <string>
+extern "C" {
+#include "interpolate.h"
+}
+#include "radiation_system.hpp"
 
 struct TubeProblem {};
 
-constexpr double initial_Erad = 1.0e-5;
-constexpr double initial_Egas = 1.0e-5;
-constexpr double c = 1.0;     // speed of light
-constexpr double chat = 0.2;  // reduced speed of light
-constexpr double kappa0 = 1.0e-10; // opacity
-constexpr double rho = 1.0;
+constexpr double kappa0 = 100.;                  // cm^2 g^-1
+constexpr double mu = 2.33 * hydrogen_mass_cgs_; // g
+constexpr double gamma_gas = 5. / 3.;
+
+constexpr double rho0 = 1.0;                // g cm^-3
+constexpr double T0 = 2.75e7;               // K
+constexpr double rho1 = 2.1940476649492044; // g cm^-3
+constexpr double T1 = 2.2609633884436745e7; // K
+
+constexpr double a0 = 4.0295519855200705e7; // cm s^-1
 
 template <> struct RadSystem_Traits<TubeProblem> {
-  static constexpr double c_light = c;
-  static constexpr double c_hat = chat;
-  static constexpr double radiation_constant = 1.0;
-  static constexpr double mean_molecular_mass = 1.0;
-  static constexpr double boltzmann_constant = 1.0;
-  static constexpr double gamma = 5. / 3.;
-  static constexpr double Erad_floor = initial_Erad;
-  static constexpr bool compute_v_over_c_terms = false;
+  static constexpr double c_light = c_light_cgs_;
+  static constexpr double c_hat = 10.0 * a0;
+  static constexpr double radiation_constant = radiation_constant_cgs_;
+  static constexpr double mean_molecular_mass = mu;
+  static constexpr double boltzmann_constant = boltzmann_constant_cgs_;
+  static constexpr double gamma = gamma_gas;
+  static constexpr double Erad_floor = 0.;
+  static constexpr bool compute_v_over_c_terms = true;
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputePlanckOpacity(
-    const double /*rho*/, const double /*Tgas*/) -> double {
+AMREX_GPU_HOST_DEVICE auto
+RadSystem<TubeProblem>::ComputePlanckOpacity(const double /*rho*/,
+                                             const double /*Tgas*/) -> double {
   return kappa0;
 }
 
@@ -46,22 +57,64 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputeRosselandOpacity(
 }
 
 template <>
-void RadhydroSimulation<TubeProblem>::setInitialConditionsAtLevel(
-    int lev) {
-  const auto Erad0 = initial_Erad;
-  const auto Egas0 = initial_Egas;
+void RadhydroSimulation<TubeProblem>::setInitialConditionsAtLevel(int lev) {
+  // read initial conditions from file
+  amrex::Vector<double> x_arr;
+  amrex::Vector<double> rho_arr;
+  amrex::Vector<double> Pgas_arr;
+  amrex::Vector<double> Erad_arr;
+
+  std::string filename = "../extern/pressure_tube/initial_conditions.txt";
+  std::ifstream fstream(filename, std::ios::in);
+  AMREX_ALWAYS_ASSERT(fstream.is_open());
+  std::string header;
+  std::getline(fstream, header);
+
+  for (std::string line; std::getline(fstream, line);) {
+    std::istringstream iss(line);
+    std::vector<double> values;
+    for (double value = NAN; iss >> value;) {
+      values.push_back(value);
+    }
+    auto x = values.at(0);    // position
+    auto rho = values.at(1);  // density
+    auto Pgas = values.at(2); // gas pressure
+    auto Erad = values.at(3); // radiation energy density
+
+    x_arr.push_back(x);
+    rho_arr.push_back(rho);
+    Pgas_arr.push_back(Pgas);
+    Erad_arr.push_back(Erad);
+  }
+
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo =
+      geom[lev].ProbLoArray();
 
   for (amrex::MFIter iter(state_old_[lev]); iter.isValid(); ++iter) {
     const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
     auto const &state = state_new_[lev].array(iter);
 
-    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-      state(i, j, k, RadSystem<TubeProblem>::radEnergy_index) = Erad0;
+    amrex::LoopConcurrentOnCpu(indexRange, [=](int i, int j, int k) noexcept {
+      amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+
+      amrex::Real const rho =
+          interpolate_value(x, x_arr.dataPtr(), rho_arr.dataPtr(),
+                            static_cast<int>(x_arr.size()));
+      amrex::Real const Pgas =
+          interpolate_value(x, x_arr.dataPtr(), Pgas_arr.dataPtr(),
+                            static_cast<int>(x_arr.size()));
+      amrex::Real const Erad =
+          interpolate_value(x, x_arr.dataPtr(), Erad_arr.dataPtr(),
+                            static_cast<int>(x_arr.size()));
+
+      state(i, j, k, RadSystem<TubeProblem>::radEnergy_index) = Erad;
       state(i, j, k, RadSystem<TubeProblem>::x1RadFlux_index) = 0;
       state(i, j, k, RadSystem<TubeProblem>::x2RadFlux_index) = 0;
       state(i, j, k, RadSystem<TubeProblem>::x3RadFlux_index) = 0;
 
-      state(i, j, k, RadSystem<TubeProblem>::gasEnergy_index) = Egas0;
+      state(i, j, k, RadSystem<TubeProblem>::gasEnergy_index) =
+          Pgas / (gamma_gas - 1.0);
       state(i, j, k, RadSystem<TubeProblem>::gasDensity_index) = rho;
       state(i, j, k, RadSystem<TubeProblem>::x1GasMomentum_index) = 0.;
       state(i, j, k, RadSystem<TubeProblem>::x2GasMomentum_index) = 0.;
@@ -98,47 +151,64 @@ AMRSimulation<TubeProblem>::setCustomBoundaryConditions(
   amrex::GpuArray<int, 3> hi = box.hiVect3d();
 
   if (i < lo[0]) {
-    // streaming inflow boundary
-    const double Erad = 1.0;
-    const double Frad = c * Erad;
-
-    // x1 left side boundary (Marshak)
+    // left side boundary -- constant
+    const double Erad =
+        RadSystem<TubeProblem>::radiation_constant_ * std::pow(T0, 4);
+    const double Frad =
+        consVar(lo[0], j, k, RadSystem<TubeProblem>::x1RadFlux_index);
     consVar(i, j, k, RadSystem<TubeProblem>::radEnergy_index) = Erad;
     consVar(i, j, k, RadSystem<TubeProblem>::x1RadFlux_index) = Frad;
     consVar(i, j, k, RadSystem<TubeProblem>::x2RadFlux_index) = 0.;
     consVar(i, j, k, RadSystem<TubeProblem>::x3RadFlux_index) = 0.;
-  } else if (i >= hi[0]) {
+
+    const double Egas =
+        (boltzmann_constant_cgs_ / mu) * rho0 * T0 / (gamma_gas - 1.0);
+    const double x1Mom =
+        consVar(lo[0], j, k, RadSystem<TubeProblem>::x1GasMomentum_index);
+    const double Ekin = 0.5 * (x1Mom * x1Mom) / rho0;
+    consVar(i, j, k, RadSystem<TubeProblem>::gasEnergy_index) = Egas + Ekin;
+    consVar(i, j, k, RadSystem<TubeProblem>::gasDensity_index) = rho0;
+    consVar(i, j, k, RadSystem<TubeProblem>::x1GasMomentum_index) = x1Mom;
+    consVar(i, j, k, RadSystem<TubeProblem>::x2GasMomentum_index) = 0.;
+    consVar(i, j, k, RadSystem<TubeProblem>::x3GasMomentum_index) = 0.;
+
+  } else if (i > hi[0]) {
     // right-side boundary -- constant
-    const double Erad = initial_Erad;
+    const double Erad =
+        RadSystem<TubeProblem>::radiation_constant_ * std::pow(T1, 4);
+    const double Frad =
+        consVar(hi[0], j, k, RadSystem<TubeProblem>::x1RadFlux_index);
     consVar(i, j, k, RadSystem<TubeProblem>::radEnergy_index) = Erad;
-    consVar(i, j, k, RadSystem<TubeProblem>::x1RadFlux_index) = 0;
+    consVar(i, j, k, RadSystem<TubeProblem>::x1RadFlux_index) = Frad;
     consVar(i, j, k, RadSystem<TubeProblem>::x2RadFlux_index) = 0;
     consVar(i, j, k, RadSystem<TubeProblem>::x3RadFlux_index) = 0;
-  }
 
-  // gas boundary conditions are the same everywhere
-  const double Egas = initial_Egas;
-  consVar(i, j, k, RadSystem<TubeProblem>::gasEnergy_index) = Egas;
-  consVar(i, j, k, RadSystem<TubeProblem>::gasDensity_index) = rho;
-  consVar(i, j, k, RadSystem<TubeProblem>::x1GasMomentum_index) = 0.;
-  consVar(i, j, k, RadSystem<TubeProblem>::x2GasMomentum_index) = 0.;
-  consVar(i, j, k, RadSystem<TubeProblem>::x3GasMomentum_index) = 0.;
+    const double Egas =
+        (boltzmann_constant_cgs_ / mu) * rho1 * T1 / (gamma_gas - 1.0);
+    const double x1Mom =
+        consVar(hi[0], j, k, RadSystem<TubeProblem>::x1GasMomentum_index);
+    const double Ekin = 0.5 * (x1Mom * x1Mom) / rho1;
+    consVar(i, j, k, RadSystem<TubeProblem>::gasEnergy_index) = Egas + Ekin;
+    consVar(i, j, k, RadSystem<TubeProblem>::gasDensity_index) = rho1;
+    consVar(i, j, k, RadSystem<TubeProblem>::x1GasMomentum_index) = x1Mom;
+    consVar(i, j, k, RadSystem<TubeProblem>::x2GasMomentum_index) = 0.;
+    consVar(i, j, k, RadSystem<TubeProblem>::x3GasMomentum_index) = 0.;
+  }
 }
 
 auto problem_main() -> int {
   // Problem parameters
-  // const int nx = 1000;
-  // const double Lx = 1.0;
-  const double CFL_number = 0.8;
-  const double dt_max = 1e-2;
-  const double tmax = 1.0;
-  const int max_timesteps = 5000;
+  // const int nx = 128;
+  constexpr double Lx = 128.0;
+  constexpr double CFL_number = 0.4;
+  constexpr double tmax = Lx / a0;
+  constexpr int max_timesteps = 2000;
 
   // Boundary conditions
   constexpr int nvars = RadSystem<TubeProblem>::nvar_;
   amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
   for (int n = 0; n < nvars; ++n) {
-    boundaryConditions[n].setLo(0, amrex::BCType::ext_dir);  // Dirichlet x1
+    boundaryConditions[n].setLo(0, amrex::BCType::ext_dir); // Dirichlet x1
     boundaryConditions[n].setHi(0, amrex::BCType::ext_dir); // Dirichlet x1
     for (int i = 1; i < AMREX_SPACEDIM; ++i) {
       boundaryConditions[n].setLo(i, amrex::BCType::int_dir); // periodic
@@ -148,45 +218,93 @@ auto problem_main() -> int {
 
   // Problem initialization
   RadhydroSimulation<TubeProblem> sim(boundaryConditions);
-  sim.is_hydro_enabled_ = false;
+  sim.is_hydro_enabled_ = true;
   sim.is_radiation_enabled_ = true;
-  sim.radiationReconstructionOrder_ = 3; // PPM
+  sim.radiationReconstructionOrder_ = 2; // PLM
+  sim.reconstructionOrder_ = 2; // PLM
   sim.stopTime_ = tmax;
+  sim.cflNumber_ = CFL_number;
   sim.radiationCflNumber_ = CFL_number;
-  sim.maxDt_ = dt_max;
   sim.maxTimesteps_ = max_timesteps;
   sim.plotfileInterval_ = -1;
 
   // initialize
   sim.setInitialConditions();
+  auto [position0, values0] = fextract(sim.state_new_[0], sim.Geom(0), 0, 0.0);
 
   // evolve
   sim.evolve();
 
   // read output variables
   auto [position, values] = fextract(sim.state_new_[0], sim.Geom(0), 0, 0.0);
-  const int nx = static_cast<int>(position.size());
+  const int nx = static_cast<int>(position0.size());
 
   // compute error norm
-  std::vector<double> erad(nx);
-  std::vector<double> erad_exact(nx);
+  std::vector<double> Trad_arr(nx);
+  std::vector<double> Trad_exact_arr(nx);
+  std::vector<double> Trad_err(nx);
+  std::vector<double> Tgas_err(nx);
+  std::vector<double> rho_err(nx);
   std::vector<double> xs(nx);
+
   for (int i = 0; i < nx; ++i) {
-    amrex::Real const x = position.at(i);
-    xs.at(i) = x;
-    erad_exact.at(i) = (x <= chat * tmax) ? 1.0 : 0.0;
-    erad.at(i) = values.at(RadSystem<TubeProblem>::radEnergy_index).at(i);
+    xs.at(i) = position.at(i);
+
+    double rho_exact =
+        values0.at(RadSystem<TubeProblem>::gasDensity_index).at(i);
+    double rho = values.at(RadSystem<TubeProblem>::gasDensity_index).at(i);
+    rho_err.at(i) = (rho - rho_exact) / rho_exact;
+
+    double Trad_exact =
+        std::pow(values0.at(RadSystem<TubeProblem>::radEnergy_index).at(i) /
+                     radiation_constant_cgs_,
+                 1. / 4.);
+    double Trad =
+        std::pow(values.at(RadSystem<TubeProblem>::radEnergy_index).at(i) /
+                     radiation_constant_cgs_,
+                 1. / 4.);
+    Trad_arr.at(i) = Trad;
+    Trad_exact_arr.at(i) = Trad_exact;
+    Trad_err.at(i) = (Trad - Trad_exact) / Trad_exact;
+
+    double Egas_exact =
+        values0.at(RadSystem<TubeProblem>::gasEnergy_index).at(i);
+    double x1GasMom_exact =
+        values0.at(RadSystem<TubeProblem>::x1GasMomentum_index).at(i);
+    double x2GasMom_exact =
+        values0.at(RadSystem<TubeProblem>::x2GasMomentum_index).at(i);
+    double x3GasMom_exact =
+        values0.at(RadSystem<TubeProblem>::x3GasMomentum_index).at(i);
+
+    double Egas = values.at(RadSystem<TubeProblem>::gasEnergy_index).at(i);
+    double x1GasMom =
+        values.at(RadSystem<TubeProblem>::x1GasMomentum_index).at(i);
+    double x2GasMom =
+        values.at(RadSystem<TubeProblem>::x2GasMomentum_index).at(i);
+    double x3GasMom =
+        values.at(RadSystem<TubeProblem>::x3GasMomentum_index).at(i);
+
+    double Eint_exact = RadSystem<TubeProblem>::ComputeEintFromEgas(
+        rho_exact, x1GasMom_exact, x2GasMom_exact, x3GasMom_exact, Egas_exact);
+    double Tgas_exact =
+        RadSystem<TubeProblem>::ComputeTgasFromEgas(rho_exact, Eint_exact);
+
+    double Eint = RadSystem<TubeProblem>::ComputeEintFromEgas(
+        rho, x1GasMom, x2GasMom, x3GasMom, Egas);
+    double Tgas = RadSystem<TubeProblem>::ComputeTgasFromEgas(rho, Eint);
+
+    Tgas_err.at(i) = (Tgas - Tgas_exact) / Tgas_exact;
   }
 
   double err_norm = 0.;
   double sol_norm = 0.;
   for (int i = 0; i < nx; ++i) {
-    err_norm += std::abs(erad[i] - erad_exact[i]);
-    sol_norm += std::abs(erad_exact[i]);
+    err_norm += std::abs(Trad_arr[i] - Trad_exact_arr[i]);
+    sol_norm += std::abs(Trad_exact_arr[i]);
   }
 
   const double rel_err_norm = err_norm / sol_norm;
-  const double rel_err_tol = 0.01;
+  const double rel_err_tol = 0.0008;
   int status = 1;
   if (rel_err_norm < rel_err_tol) {
     status = 0;
@@ -194,19 +312,22 @@ auto problem_main() -> int {
   amrex::Print() << "Relative L1 norm = " << rel_err_norm << std::endl;
 
   // Plot results
-  matplotlibcpp::clf();
-  matplotlibcpp::ylim(0.0, 1.1);
-
-  std::map<std::string, std::string> erad_args;
-  std::map<std::string, std::string> erad_exact_args;
-  erad_args["label"] = "numerical solution";
-  erad_exact_args["label"] = "exact solution";
-  erad_exact_args["linestyle"] = "--";
-  matplotlibcpp::plot(xs, erad, erad_args);
-  matplotlibcpp::plot(xs, erad_exact, erad_exact_args);
+  std::map<std::string, std::string> Traderr_args;
+  std::map<std::string, std::string> Tgaserr_args;
+  std::map<std::string, std::string> rhoerr_args;
+  Traderr_args["label"] = "radiation temperature";
+  Tgaserr_args["label"] = "gas temperature";
+  rhoerr_args["label"] = "density";
+  rhoerr_args["linestyle"] = "--";
+  matplotlibcpp::plot(xs, Trad_err, Traderr_args);
+  matplotlibcpp::plot(xs, Tgas_err, Tgaserr_args);
+  matplotlibcpp::plot(xs, rho_err, rhoerr_args);
+  matplotlibcpp::ylim(-0.005, 0.005);
 
   matplotlibcpp::legend();
-  matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
+  matplotlibcpp::title(fmt::format("t = {:.4g} s", sim.tNew_[0]));
+  matplotlibcpp::xlabel("x (cm)");
+  matplotlibcpp::ylabel("relative error");
   matplotlibcpp::save("./radiation_pressure_tube.pdf");
 
   // Cleanup and exit

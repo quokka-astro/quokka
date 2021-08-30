@@ -313,7 +313,6 @@ auto problem_main() -> int {
 
   double err_norm = 0.;
   double sol_norm = 0.;
-  const double t = sim.tNew_[0];
   for (int i = 0; i < xs_exact.size(); ++i) {
     err_norm += std::abs(Tmat_interp[i] - Tmat_exact[i]);
     sol_norm += std::abs(Tmat_exact[i]);

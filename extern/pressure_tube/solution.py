@@ -45,6 +45,8 @@ if __name__ == "__main__":
     Pgas = (k_B/mu)*rho*T
     Erad = a_rad*T**4
     Prad = (1./3.)*Erad
+    print(f"rho1 = {rho[-1]}")
+    print(f"T1 = {T[-1]}")
 
     # save to file
 

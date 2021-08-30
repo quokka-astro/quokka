@@ -202,7 +202,7 @@ auto problem_main() -> int {
     err_norm += std::abs(Trad[i] - Trad_exact[i]);
     sol_norm += std::abs(Trad_exact[i]);
   }
-  const double error_tol = 0.003;
+  const double error_tol = 0.005;
   const double rel_error = err_norm / sol_norm;
   amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
 

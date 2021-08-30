@@ -148,6 +148,6 @@ double interpolate_value(double x, double const *arr_x, double const *arr_y, int
 		const double slope = (arr_y[j+1] - arr_y[j]) / (arr_x[j+1] - arr_x[j]);
 		y = slope*(x - arr_x[j]) + arr_y[j];
 	}
-	assert( !isnan(y[i]) );
+	assert( !isnan(y) );
 	return y;
 }

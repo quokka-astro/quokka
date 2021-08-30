@@ -359,7 +359,7 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 	computeAfterLevelAdvance(lev, time, dt_lev, iteration, ncycle);
 
 	// check hydro states after user work
-	CHECK_HYDRO_STATES(states_new_[lev]);
+	CHECK_HYDRO_STATES(state_new_[lev]);
 
 	// check state validity
 	AMREX_ASSERT(!state_new_[lev].contains_nan(0, state_new_[lev].nComp()));

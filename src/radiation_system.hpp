@@ -817,9 +817,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
   arrayconst_t &consPrev = consVar; // make read-only
   array_t &consNew = consVar;
 
-  // Lorentz transform the radiation variables into the comoving frame
-  // TransformIntoComovingFrame(fluid_velocity);
-
   // Add source terms
 
   // 1. Compute gas energy and radiation energy update following Howell &
@@ -873,8 +870,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
 
     double Egas_guess = Egas0;
     double Erad_guess = Erad0;
-    // const double T_floor = 1e-10;
-    const double resid_tol = 1e-15;
+    const double resid_tol = 1.0e-10; // 1.0e-15
     const int maxIter = 400;
     int n = 0;
     for (n = 0; n < maxIter; ++n) {
@@ -900,7 +896,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
 
       // check if converged
       if ((std::abs(F_G / Etot0) < resid_tol) &&
-          (std::abs(F_R / Etot0) < resid_tol)) {
+          (std::abs(((c/chat)*F_R) / Etot0) < resid_tol)) {
         break;
       }
 
@@ -913,10 +909,10 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
           (kappa * dB_dTgas + dkappa_dTgas * (fourPiB - chat * Erad_guess));
 
       // Update variables
-      dFG_dEgas = 1.0 + (c / chat) * drhs_dEgas;     // 1.0 + epsilon;
-      dFG_dErad = dt * (-(rho * kappa) * c);         // -R*alpha
-      dFR_dEgas = -drhs_dEgas;                       // -Rinv * epsilon;
-      dFR_dErad = 1.0 + dt * ((rho * kappa) * chat); // 1.0 + alpha;
+      dFG_dEgas = 1.0 + (c / chat) * drhs_dEgas;
+      dFG_dErad = dt * (-(rho * kappa) * c);
+      dFR_dEgas = -drhs_dEgas;
+      dFR_dErad = 1.0 + dt * ((rho * kappa) * chat);
       eta = -dFR_dEgas / dFG_dEgas;
       eta = (eta > 0.0) ? eta : 0.0;
 
@@ -933,10 +929,10 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
 
 #if 0
     if (!((std::abs(F_G / Etot0) < resid_tol) &&
-          (std::abs(F_R / Etot0) < resid_tol))) {
-      // temperature update failed to converge!!
+          (std::abs(((c/chat)*F_R) / Etot0) < resid_tol))) {
+      // temperature update failed to converge
       std::cout << "F_G / Etot0 = " << (F_G / Etot0) << std::endl;
-      std::cout << "F_R / Etot0 = " << (F_R / Etot0) << std::endl;
+      std::cout << "(c/chat) F_R / Etot0 = " << (c/chat)*(F_R / Etot0) << std::endl;
       std::cout << "Tgas = " << T_gas << std::endl;
       std::cout << "Egas/a_rad = " << (Erad_guess/a_rad) << std::endl;
       std::cout << "Trad = " << std::pow(Erad_guess / a_rad, 1./4.) << std::endl;
@@ -944,7 +940,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
     }
 #endif
     AMREX_ALWAYS_ASSERT(std::abs(F_G / Etot0) < resid_tol);
-    AMREX_ALWAYS_ASSERT(std::abs(F_R / Etot0) < resid_tol);
+    AMREX_ALWAYS_ASSERT(std::abs(((c/chat)*F_R) / Etot0) < resid_tol);
 
     AMREX_ALWAYS_ASSERT(Erad_guess > 0.0);
     AMREX_ALWAYS_ASSERT(Egas_guess > 0.0);
@@ -970,7 +966,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
     consNew(i, j, k, x3RadFlux_index) = Frad_t1[2];
 
     // 3. Compute conservative gas momentum update
-    //	[N.B. should this step happen after the Lorentz	transform?]
     amrex::GpuArray<amrex::Real, 3> dF{};
     amrex::GpuArray<amrex::Real, 3> dMomentum{};
 
@@ -1007,9 +1002,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
     // 4b. Store new radiation energy, gas energy
     consNew(i, j, k, radEnergy_index) = Erad_guess + dErad_work;
     consNew(i, j, k, gasEnergy_index) = Egastot1;
-
-    // Lorentz transform back to 'laboratory' frame
-    // TransformIntoComovingFrame(-fluid_velocity);
   });
 }
 
