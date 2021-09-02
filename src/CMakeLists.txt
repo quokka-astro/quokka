@@ -37,6 +37,7 @@ add_executable(test_radiation_marshak_cgs main.cpp test_radiation_marshak_cgs.cp
 add_executable(test_radiation_marshak_asymptotic main.cpp test_radiation_marshak_asymptotic.cpp fextract.cpp interpolate.c)
 add_executable(test_radiation_pulse main.cpp test_radiation_pulse.cpp fextract.cpp)
 add_executable(test_radiation_tube main.cpp test_radiation_tube.cpp fextract.cpp interpolate.c)
+add_executable(test_radiation_force main.cpp test_radiation_force.cpp fextract.cpp)
 add_executable(test_radiation_streaming main.cpp test_radiation_streaming.cpp fextract.cpp)
 add_executable(test_radhydro_shock main.cpp test_radhydro_shock.cpp fextract.cpp interpolate.c)
 add_executable(test_radhydro_shock_cgs main.cpp test_radhydro_shock_cgs.cpp fextract.cpp interpolate.c)
