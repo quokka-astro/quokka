@@ -99,7 +99,8 @@ template <>
 void RadSystem<MarshakProblem>::SetRadEnergySource(
     array_t &radEnergySource, amrex::Box const &indexRange,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_lo*/, amrex::Real time) {
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_lo*/,
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_hi*/, amrex::Real time) {
 
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
     amrex::Real const xl = (i + amrex::Real(0.)) * dx[0];

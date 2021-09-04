@@ -148,7 +148,8 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	void operatorSplitSourceTerms(amrex::Array4<amrex::Real> const &stateNew,
 			const amrex::Box &indexRange, amrex::Real time, double dt,
 			amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-			amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo);
+			amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+			amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi);
 
 	auto computeRadiationFluxes(amrex::Array4<const amrex::Real> const &consVar,
 				    const amrex::Box &indexRange, int nvars,
@@ -624,8 +625,9 @@ void RadhydroSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Rea
 			const amrex::Box &indexRange = iter.validbox();
 			auto const &stateNew = state_new_[lev].array(iter);
 			auto const &prob_lo = geom[lev].ProbLoArray();
+			auto const &prob_hi = geom[lev].ProbHiArray();
 			// update state_new_[lev] in place (updates both radiation and hydro vars)
-			operatorSplitSourceTerms(stateNew, indexRange, time_subcycle, dt_radiation, dx, prob_lo);
+			operatorSplitSourceTerms(stateNew, indexRange, time_subcycle, dt_radiation, dx, prob_lo, prob_hi);
 		}
 
 		// new hydro+radiation state is stored in state_new_
@@ -722,7 +724,8 @@ void RadhydroSimulation<problem_t>::operatorSplitSourceTerms(
     amrex::Array4<amrex::Real> const &stateNew, const amrex::Box &indexRange, 
 	const amrex::Real time, const double dt,
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi)
 {
 	amrex::FArrayBox radEnergySource(indexRange, 1,
 					 amrex::The_Async_Arena()); // cell-centered scalar
@@ -732,9 +735,9 @@ void RadhydroSimulation<problem_t>::operatorSplitSourceTerms(
 	radEnergySource.setVal<amrex::RunOn::Device>(0.);
 	advectionFluxes.setVal<amrex::RunOn::Device>(0.);
 
-	// cell-centered radiation energy source (used only in test problems)
+	// cell-centered radiation energy source
 	RadSystem<problem_t>::SetRadEnergySource(radEnergySource.array(), indexRange,
-						 dx, prob_lo, time + dt);
+						 dx, prob_lo, prob_hi, time + dt);
 
 	// cell-centered source terms
 	RadSystem<problem_t>::AddSourceTerms(stateNew, radEnergySource.const_array(),

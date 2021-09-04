@@ -26,7 +26,7 @@
 #include "AMReX_Vector.H"
 
 extern "C" {
-  #include "interpolate.h"
+#include "interpolate.h"
 }
 #include "RadhydroSimulation.hpp"
 #include "hydro_system.hpp"
@@ -34,6 +34,8 @@ extern "C" {
 #include "test_radhydro_shell.hpp"
 
 struct ShellProblem {};
+// if false, use octant symmetry
+constexpr bool simulate_full_box = true;
 
 constexpr double a_rad = 7.5646e-15;  // erg cm^-3 K^-4
 constexpr double c = 2.99792458e10;   // cm s^-1
@@ -83,16 +85,28 @@ void RadSystem<ShellProblem>::SetRadEnergySource(
     array_t &radEnergy, const amrex::Box &indexRange,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi,
     amrex::Real /*time*/) {
   // point-like radiation source
-  amrex::Real const x0 = 0.;
-  amrex::Real const y0 = 0.;
-  amrex::Real const z0 = 0.;
+
+  amrex::Real x0 = NAN;
+  amrex::Real y0 = NAN;
+  amrex::Real z0 = NAN;
+  if constexpr (simulate_full_box) {
+    x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
+    y0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
+    z0 = prob_lo[2] + 0.5 * (prob_hi[2] - prob_lo[2]);
+  } else {
+    x0 = 0.;
+    y0 = 0.;
+    z0 = 0.;
+  }
 
   const amrex::Real source_norm =
       (1.0 / c) * L_star / std::pow(2.0 * M_PI * sigma_star * sigma_star, 1.5);
 
-  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j,
+                                                      int k) noexcept {
     amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
     amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
     amrex::Real const z = prob_lo[2] + (k + amrex::Real(0.5)) * dx[2];
@@ -149,10 +163,21 @@ void RadhydroSimulation<ShellProblem>::setInitialConditionsAtLevel(int lev) {
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo =
       geom[lev].ProbLoArray();
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi =
+      geom[lev].ProbHiArray();
 
-  amrex::Real const x0 = 0.;
-  amrex::Real const y0 = 0.;
-  amrex::Real const z0 = 0.;
+  amrex::Real x0 = NAN;
+  amrex::Real y0 = NAN;
+  amrex::Real z0 = NAN;
+  if constexpr (simulate_full_box) {
+    x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
+    y0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
+    z0 = prob_lo[2] + 0.5 * (prob_hi[2] - prob_lo[2]);
+  } else {
+    x0 = 0.;
+    y0 = 0.;
+    z0 = 0.;
+  }
 
   for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
     const amrex::Box &indexRange = iter.validbox();
@@ -355,12 +380,19 @@ auto problem_main() -> int {
   amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
   for (int n = 0; n < nvars; ++n) {
     for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-      if (isNormalComp(n, i)) {
-        boundaryConditions[n].setLo(i, amrex::BCType::reflect_odd);
-        boundaryConditions[n].setHi(i, amrex::BCType::foextrap); // outflow
+      if constexpr (simulate_full_box) {
+        // periodic boundaries
+        boundaryConditions[n].setLo(i, amrex::BCType::int_dir);
+        boundaryConditions[n].setHi(i, amrex::BCType::int_dir);
       } else {
-        boundaryConditions[n].setLo(i, amrex::BCType::reflect_even);
-        boundaryConditions[n].setHi(i, amrex::BCType::foextrap); // outflow
+        // reflecting boundaries, outflow boundaries
+        if (isNormalComp(n, i)) {
+          boundaryConditions[n].setLo(i, amrex::BCType::reflect_odd);
+          boundaryConditions[n].setHi(i, amrex::BCType::foextrap); // outflow
+        } else {
+          boundaryConditions[n].setLo(i, amrex::BCType::reflect_even);
+          boundaryConditions[n].setHi(i, amrex::BCType::foextrap); // outflow
+        }
       }
     }
   }
@@ -372,7 +404,8 @@ auto problem_main() -> int {
   sim.cflNumber_ = 0.3;
   sim.densityFloor_ = 1.0e-8 * rho_0;
   sim.pressureFloor_ = 1.0e-8 * P_0;
-  // reconstructionOrder: 1 == donor cell, 2 == PLM, 3 == PPM (not recommended for this problem)
+  // reconstructionOrder: 1 == donor cell, 2 == PLM, 3 == PPM (not recommended
+  // for this problem)
   sim.reconstructionOrder_ = 2;
   sim.radiationReconstructionOrder_ = 2;
   sim.integratorOrder_ = 2; // RK2
@@ -386,10 +419,10 @@ auto problem_main() -> int {
   sim.maxTimesteps_ = 5000;
 
   // for scaling tests
-  //sim.checkpointInterval_ = -1;
-  //sim.plotfileInterval_ = 100;
-  //sim.maxTimesteps_ = 50;
-  
+  // sim.checkpointInterval_ = -1;
+  // sim.plotfileInterval_ = 100;
+  // sim.maxTimesteps_ = 50;
+
   // initialize
   sim.setInitialConditions();
   sim.computeAfterTimestep();

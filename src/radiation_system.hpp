@@ -126,6 +126,7 @@ public:
       array_t &radEnergySource, amrex::Box const &indexRange,
       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi,
       amrex::Real time);
 
   static void AddSourceTerms(array_t &consVar, arrayconst_t &radEnergySource,
@@ -167,9 +168,6 @@ public:
 
   AMREX_GPU_DEVICE static auto
   isStateValid(std::array<amrex::Real, nvarHyperbolic_> &cons) -> bool;
-
-  // requires GPU reductions
-  // auto CheckStatesValid(array_t &cons, std::pair<int, int> range) -> bool;
 };
 
 template <typename problem_t>
@@ -177,6 +175,7 @@ void RadSystem<problem_t>::SetRadEnergySource(
     array_t &radEnergySource, amrex::Box const &indexRange,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi,
     amrex::Real time) {
   // do nothing -- user implemented
 }
