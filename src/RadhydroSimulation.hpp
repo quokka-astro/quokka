@@ -184,7 +184,7 @@ auto RadhydroSimulation<problem_t>::computeNumberOfRadiationSubsteps(int lev, am
 	amrex::Real c_hat = RadSystem<problem_t>::c_hat_;
 	amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
 	amrex::Real dtrad_tmp = radiationCflNumber_ * (dx_min / c_hat);
-	amrex::Long nsubSteps = std::ceil(dt_lev_hydro / dtrad_tmp);
+	int nsubSteps = std::ceil(dt_lev_hydro / dtrad_tmp);
 	return nsubSteps;
 }
 
@@ -208,8 +208,13 @@ void RadhydroSimulation<problem_t>::computeMaxSignalLocal(int const level)
 			RadSystem<problem_t>::ComputeMaxSignalSpeed(stateNew, maxSignal,
 								    indexRange);
 			if (is_hydro_enabled_) {
+				auto maxSignalHydroFAB = amrex::FArrayBox(indexRange);
+				auto const &maxSignalHydro = maxSignalHydroFAB.array();
+				HydroSystem<problem_t>::ComputeMaxSignalSpeed(stateNew, maxSignalHydro, indexRange);
+				// ensure that we use the smaller of the two timesteps
 				amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept {
-					maxSignal(i, j, k) *= (1.0 / static_cast<double>(maxSubsteps));
+					amrex::Real const maxSignalRadiation = maxSignal(i,j,k) / static_cast<double>(maxSubsteps);
+					maxSignal(i, j, k) = std::max(maxSignalRadiation, maxSignalHydro(i, j, k));
 				});
 			}
 		} else {
@@ -597,7 +602,7 @@ void RadhydroSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Rea
 							     amrex::YAFluxRegister *fr_as_fine)
 {
 	// compute radiation timestep
-	amrex::Long nsubSteps = 0;
+	int nsubSteps = 0;
 	amrex::Real dt_radiation = NAN;
 
 	if (is_hydro_enabled_ && !(constantDt_ > 0.)) {
