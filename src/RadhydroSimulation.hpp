@@ -24,7 +24,6 @@
 #include "AMReX_BCRec.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_Box.H"
-#include "AMReX_Config.H"
 #include "AMReX_FArrayBox.H"
 #include "AMReX_FabArrayUtility.H"
 #include "AMReX_FabFactory.H"
@@ -80,7 +79,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	static constexpr int nstartHyperbolic_ = RadSystem<problem_t>::nstartHyperbolic_;
 
 	amrex::Real radiationCflNumber_ = 0.3;
-	int maxSubsteps = 10; // maximum number of radiation subcycles per hydro step
+	int maxSubsteps_ = 10; // maximum number of radiation subcycles per hydro step
 	bool is_hydro_enabled_ = false;
 	bool is_radiation_enabled_ = true;
 	bool computeReferenceSolution_ = false;
@@ -211,6 +210,7 @@ void RadhydroSimulation<problem_t>::computeMaxSignalLocal(int const level)
 				auto maxSignalHydroFAB = amrex::FArrayBox(indexRange);
 				auto const &maxSignalHydro = maxSignalHydroFAB.array();
 				HydroSystem<problem_t>::ComputeMaxSignalSpeed(stateNew, maxSignalHydro, indexRange);
+				const int maxSubsteps = maxSubsteps_;
 				// ensure that we use the smaller of the two timesteps
 				amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept {
 					amrex::Real const maxSignalRadiation = maxSignal(i,j,k) / static_cast<double>(maxSubsteps);
@@ -619,7 +619,7 @@ void RadhydroSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Rea
 			       << "\n";
 	}
 	AMREX_ALWAYS_ASSERT(nsubSteps >= 1);
-	AMREX_ALWAYS_ASSERT(nsubSteps <= (maxSubsteps+1));
+	AMREX_ALWAYS_ASSERT(nsubSteps <= (maxSubsteps_+1));
 	AMREX_ALWAYS_ASSERT(dt_radiation > 0.0);
 
 	// perform subcycle
