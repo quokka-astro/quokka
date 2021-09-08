@@ -26,8 +26,10 @@
 #include "AMReX_Box.H"
 #include "AMReX_Config.H"
 #include "AMReX_FArrayBox.H"
+#include "AMReX_FabArrayUtility.H"
 #include "AMReX_FabFactory.H"
 #include "AMReX_Geometry.H"
+#include "AMReX_GpuQualifiers.H"
 #include "AMReX_IntVect.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_MultiFabUtil.H"
@@ -78,6 +80,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	static constexpr int nstartHyperbolic_ = RadSystem<problem_t>::nstartHyperbolic_;
 
 	amrex::Real radiationCflNumber_ = 0.3;
+	int maxSubsteps = 10; // maximum number of radiation subcycles per hydro step
 	bool is_hydro_enabled_ = false;
 	bool is_radiation_enabled_ = true;
 	bool computeReferenceSolution_ = false;
@@ -137,6 +140,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 
 	// radiation subcycle
 	void swapRadiationState(amrex::MultiFab &stateOld, amrex::MultiFab const &stateNew);
+	auto computeNumberOfRadiationSubsteps(int lev, amrex::Real dt_lev_hydro) -> int;
 	void advanceRadiationSubstepAtLevel(int lev, amrex::Real time,
 						   amrex::Real dt_radiation, int iteration, int nsubsteps,
 						   amrex::YAFluxRegister *fr_as_crse,
@@ -173,6 +177,18 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 };
 
 template <typename problem_t>
+auto RadhydroSimulation<problem_t>::computeNumberOfRadiationSubsteps(int lev, amrex::Real dt_lev_hydro) -> int
+{
+	// compute radiation timestep
+	auto const &dx = geom[lev].CellSizeArray();
+	amrex::Real c_hat = RadSystem<problem_t>::c_hat_;
+	amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
+	amrex::Real dtrad_tmp = radiationCflNumber_ * (dx_min / c_hat);
+	amrex::Long nsubSteps = std::ceil(dt_lev_hydro / dtrad_tmp);
+	return nsubSteps;
+}
+
+template <typename problem_t>
 void RadhydroSimulation<problem_t>::computeMaxSignalLocal(int const level)
 {
 	BL_PROFILE("RadhydroSimulation::computeMaxSignalLocal()");
@@ -183,16 +199,21 @@ void RadhydroSimulation<problem_t>::computeMaxSignalLocal(int const level)
 		auto const &stateNew = state_new_[level].const_array(iter);
 		auto const &maxSignal = max_signal_speed_[level].array(iter);
 
-		if (is_hydro_enabled_) {
-			// hydro enabled
+		if (is_hydro_enabled_ && !(is_radiation_enabled_)) {
+			// hydro only
 			HydroSystem<problem_t>::ComputeMaxSignalSpeed(stateNew, maxSignal,
 								      indexRange);
 		} else if (is_radiation_enabled_) {
-			// hydro disabled, radiation enabled
+			// radiation hydro, or radiation only
 			RadSystem<problem_t>::ComputeMaxSignalSpeed(stateNew, maxSignal,
 								    indexRange);
+			if (is_hydro_enabled_) {
+				amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept {
+					maxSignal(i, j, k) *= (1.0 / static_cast<double>(maxSubsteps));
+				});
+			}
 		} else {
-			// hydro disabled, radiation disabled
+			// no physics modules enabled, why are we running?
 			amrex::Abort("At least one of hydro or radiation must be enabled! Cannot "
 				     "compute a time step.");
 		}
@@ -576,33 +597,28 @@ void RadhydroSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Rea
 							     amrex::YAFluxRegister *fr_as_fine)
 {
 	// compute radiation timestep
-	amrex::Real domain_signal_max = RadSystem<problem_t>::c_hat_;
-	auto const &dx = geom[lev].CellSizeArray();
-	amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
-	amrex::Real dtrad_tmp = radiationCflNumber_ * (dx_min / domain_signal_max);
-
 	amrex::Long nsubSteps = 0;
 	amrex::Real dt_radiation = NAN;
 
 	if (is_hydro_enabled_ && !(constantDt_ > 0.)) {
 		// adjust to get integer number of substeps
-		nsubSteps = std::ceil(dt_lev_hydro / dtrad_tmp);
+		nsubSteps = computeNumberOfRadiationSubsteps(lev, dt_lev_hydro);
 		dt_radiation = dt_lev_hydro / static_cast<double>(nsubSteps);
 	} else { // no hydro, or using constant dt (this is necessary for radiation test problems)
 		dt_radiation = dt_lev_hydro;
 		nsubSteps = 1;
 	}
 
-	AMREX_ALWAYS_ASSERT(nsubSteps >= 1);
-	AMREX_ALWAYS_ASSERT(nsubSteps < 1e4);
-	AMREX_ALWAYS_ASSERT(dt_radiation > 0.0);
-
 	if (Verbose() != 0) {
 		amrex::Print() << "\tRadiation substeps: " << nsubSteps << "\tdt: " << dt_radiation
 			       << "\n";
 	}
+	AMREX_ALWAYS_ASSERT(nsubSteps >= 1);
+	AMREX_ALWAYS_ASSERT(nsubSteps <= (maxSubsteps+1));
+	AMREX_ALWAYS_ASSERT(dt_radiation > 0.0);
 
 	// perform subcycle
+	auto const &dx = geom[lev].CellSizeArray();
 	amrex::Real time_subcycle = time;
 	for (int i = 0; i < nsubSteps; ++i) {
 		if (i > 0) {
@@ -627,7 +643,8 @@ void RadhydroSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Rea
 			auto const &prob_lo = geom[lev].ProbLoArray();
 			auto const &prob_hi = geom[lev].ProbHiArray();
 			// update state_new_[lev] in place (updates both radiation and hydro vars)
-			operatorSplitSourceTerms(stateNew, indexRange, time_subcycle, dt_radiation, dx, prob_lo, prob_hi);
+			operatorSplitSourceTerms(stateNew, indexRange, time_subcycle, dt_radiation, 
+									 dx, prob_lo, prob_hi);
 		}
 
 		// new hydro+radiation state is stored in state_new_
