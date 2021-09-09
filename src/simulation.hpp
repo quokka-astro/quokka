@@ -192,6 +192,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	// performance metrics
 	amrex::Long cellUpdates_ = 0;
+	amrex::Vector<amrex::Long> cellUpdatesEachLevel_;
 };
 
 template <typename problem_t>
@@ -217,6 +218,7 @@ void AMRSimulation<problem_t>::initialize(amrex::Vector<amrex::BCRec> &boundaryC
 	state_old_.resize(nlevs_max);
 	max_signal_speed_.resize(nlevs_max);
 	flux_reg_.resize(nlevs_max + 1);
+	cellUpdatesEachLevel_.resize(nlevs_max, 0);
 
 	boundaryConditions_ = boundaryConditions;
 
@@ -421,6 +423,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	const double megaupdates_per_second = 1.0 / microseconds_per_update;
 	amrex::Print() << "Performance figure-of-merit: " << microseconds_per_update
 		       << " μs/zone-update [" << megaupdates_per_second << " Mupdates/s]\n";
+	for(int lev = 0; lev <= max_level; ++lev) {
+		amrex::Print() << "Zone-updates on level " << lev << ": "
+					   << cellUpdatesEachLevel_[lev] << "\n";
+	}
+	amrex::Print() << std::endl;
 
 	// write final plotfile
 	if (plotfileInterval_ > 0 && istep[0] > last_plot_file_step) {
@@ -464,6 +471,7 @@ void AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time,
 	advanceSingleTimestepAtLevel(lev, time, dt_[lev], iteration, nsubsteps[lev]);
 	++istep[lev];
 	cellUpdates_ += CountCells(lev); // keep track of total number of cell updates
+	cellUpdatesEachLevel_[lev] += CountCells(lev);
 
 	if (Verbose()) {
 		amrex::Print() << "[Level " << lev << " step " << istep[lev] << "] ";
