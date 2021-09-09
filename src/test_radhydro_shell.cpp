@@ -318,7 +318,7 @@ void RadhydroSimulation<ShellProblem>::ErrorEst(int lev,
                                                 int /*ngrow*/) {
   // tag cells for refinement
 
-  const amrex::Real eta_threshold = 0.2;      // gradient refinement threshold
+  const amrex::Real eta_threshold = 0.3;      // gradient refinement threshold
   const amrex::Real rho_min = 1.0e-2 * rho_0; // minimum density for refinement
 
   for (amrex::MFIter mfi(state_new_[lev]); mfi.isValid(); ++mfi) {
@@ -414,14 +414,14 @@ auto problem_main() -> int {
   sim.stopTime_ = 0.124 * t0_hydro;
 
   // for production
-  sim.checkpointInterval_ = 1000;
-  sim.plotfileInterval_ = 10;
-  sim.maxTimesteps_ = 5000;
+  // sim.checkpointInterval_ = 1000;
+  // sim.plotfileInterval_ = 10;
+  // sim.maxTimesteps_ = 5000;
 
   // for scaling tests
-  // sim.checkpointInterval_ = -1;
-  // sim.plotfileInterval_ = 100;
-  // sim.maxTimesteps_ = 50;
+  sim.checkpointInterval_ = -1;
+  sim.plotfileInterval_ = 100;
+  sim.maxTimesteps_ = 50;
 
   // initialize
   sim.setInitialConditions();

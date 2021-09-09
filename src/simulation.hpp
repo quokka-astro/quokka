@@ -34,7 +34,6 @@
 #include "AMReX_INT.H"
 #include "AMReX_IndexType.H"
 #include "AMReX_IntVect.H"
-#include "AMReX_Interpolater.H"
 #include "AMReX_MFInterpolater.H"
 #include "AMReX_MultiFabUtil.H"
 #include "AMReX_ParallelDescriptor.H"
@@ -170,11 +169,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// the lev/lev-1 interface (and has grid spacing associated with lev-1)
 	// therefore flux_reg[0] and flux_reg[nlevs_max] are never actually used in
 	// the reflux operation
-#ifdef USE_YAFLUXREGISTER
 	amrex::Vector<std::unique_ptr<amrex::YAFluxRegister>> flux_reg_;
-#else
-	amrex::Vector<std::unique_ptr<amrex::FluxRegister>> flux_reg_;
-#endif // USE_YAFLUXREGISTER
 
 	// Nghost = number of ghost cells for each array
 	int nghost_ = 4;	   // PPM needs nghost >= 3, PPM+flattening needs nghost >= 4
@@ -372,7 +367,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		}
 
 		doRegridIfNeeded(step, cur_time);
-		computeTimestep(); // very important to call this *after* regrid!
+		computeTimestep(); // important to call this *after* regrid (when a global timestep is used)
 
 		int lev = 0;
 		int iteration = 1;
@@ -401,6 +396,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		}
 	}
 
+	amrex::Real elapsed_sec = amrex::ParallelDescriptor::second() - start_time;
+
 	// compute reference solution (if it's a test problem)
 	computeAfterEvolve(init_sum_cons);
 
@@ -418,7 +415,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	}
 
 	// compute zone-cycles/sec
-	amrex::Real elapsed_sec = amrex::ParallelDescriptor::second() - start_time;
 	const int IOProc = amrex::ParallelDescriptor::IOProcessorNumber();
 	amrex::ParallelDescriptor::ReduceRealMax(elapsed_sec, IOProc);
 	const double microseconds_per_update = 1.0e6 * elapsed_sec / cellUpdates_;
@@ -482,18 +478,13 @@ void AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time,
 
 		if (do_reflux != 0) {
 			// update lev based on coarse-fine flux mismatch
-#ifdef USE_YAFLUXREGISTER
 			flux_reg_[lev + 1]->Reflux(state_new_[lev]);
-#else
-			flux_reg_[lev + 1]->Reflux(state_new_[lev], 1.0, 0, 0, ncomp_, geom[lev]);
-#endif // USE_YAFLUXREGISTER
 		}
 
 		AverageDownTo(lev); // average lev+1 down to lev
 	}
 }
 
-#ifdef USE_YAFLUXREGISTER
 template <typename problem_t>
 void AMRSimulation<problem_t>::incrementFluxRegisters(
     amrex::MFIter &mfi, amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine,
@@ -518,7 +509,6 @@ void AMRSimulation<problem_t>::incrementFluxRegisters(
 		    geom[lev].CellSize(), dt_lev, amrex::RunOn::Gpu);
 	}
 }
-#endif // USE_YAFLUXREGISTER
 
 // Make a new level using provided BoxArray and DistributionMapping and fill
 // with interpolated coarse level data. Overrides the pure virtual function in
@@ -541,14 +531,9 @@ void AMRSimulation<problem_t>::MakeNewLevelFromCoarse(int level, amrex::Real tim
 	tOld_[level] = time - 1.e200;
 
 	if (level > 0 && (do_reflux != 0)) {
-#ifdef USE_YAFLUXREGISTER
 		flux_reg_[level] = std::make_unique<amrex::YAFluxRegister>(
 		    ba, boxArray(level - 1), dm, DistributionMap(level - 1), Geom(level),
 		    Geom(level - 1), refRatio(level - 1), level, ncomp);
-#else
-		flux_reg_[level] = std::make_unique<amrex::FluxRegister>(
-		    ba, dm, refRatio(level - 1), level, ncomp_);
-#endif
 	}
 
 	FillCoarsePatch(level, time, state_new_[level], 0, ncomp);
@@ -582,14 +567,9 @@ void AMRSimulation<problem_t>::RemakeLevel(int level, amrex::Real time, const am
 	tOld_[level] = time - 1.e200;
 
 	if (level > 0 && (do_reflux != 0)) {
-#ifdef USE_YAFLUXREGISTER
 		flux_reg_[level] = std::make_unique<amrex::YAFluxRegister>(
 		    ba, boxArray(level - 1), dm, DistributionMap(level - 1), Geom(level),
 		    Geom(level - 1), refRatio(level - 1), level, ncomp);
-#else
-		flux_reg_[level] = std::make_unique<amrex::FluxRegister>(
-		    ba, dm, refRatio(level - 1), level, ncomp_);
-#endif
 	}
 }
 
@@ -625,14 +605,9 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(int level, amrex::Real ti
 	tOld_[level] = time - 1.e200;
 
 	if (level > 0 && (do_reflux != 0)) {
-#ifdef USE_YAFLUXREGISTER
 		flux_reg_[level] = std::make_unique<amrex::YAFluxRegister>(
 		    ba, boxArray(level - 1), dm, DistributionMap(level - 1), Geom(level),
 		    Geom(level - 1), refRatio(level - 1), level, ncomp);
-#else
-		flux_reg_[level] = std::make_unique<amrex::FluxRegister>(
-		    ba, dm, refRatio(level - 1), level, ncomp_);
-#endif
 	}
 
 	// set state_new_[lev] to desired initial condition
@@ -1077,14 +1052,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 		max_signal_speed_[lev].define(ba, dm, 1, nghost);
 
 		if (lev > 0 && (do_reflux != 0)) {
-#ifdef USE_YAFLUXREGISTER
 			flux_reg_[lev] = std::make_unique<amrex::YAFluxRegister>(
 			    ba, boxArray(lev - 1), dm, DistributionMap(lev - 1), Geom(lev),
 			    Geom(lev - 1), refRatio(lev - 1), lev, ncomp);
-#else
-			flux_reg_[lev] = std::make_unique<amrex::FluxRegister>(
-			    ba, dm, refRatio(lev - 1), lev, ncomp_);
-#endif
 		}
 	}
 
