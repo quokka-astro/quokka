@@ -16,7 +16,7 @@ amr.v              = 1       # verbosity in Amr
 amr.n_cell          = 256 256 256
 amr.max_level       = 2     # number of levels = max_level + 1
 amr.max_grid_size   = 32    # default
-amr.blocking_factor = 16    # grid size must be divisible by this
+amr.blocking_factor = 32    # grid size must be divisible by this
 amr.n_error_buf     = 3     # minimum 3 cell buffer around tagged cells
 amr.grid_eff        = 0.7   # default
 
