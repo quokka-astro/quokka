@@ -17,7 +17,7 @@
 MPI_OPTIONS="-np $PBS_NGPUS --map-by numa:SPAN --bind-to numa --mca pml ucx"
 echo "Using MPI_OPTIONS = $MPI_OPTIONS"
 
-mpirun $MPI_OPTIONS ./scripts/gpu_wrapper_sedov_1024.sh > sedov.log
+mpirun $MPI_OPTIONS ./scripts/gpu_wrapper_sedov_1024.sh > sedov_8nodes.log
 
 
 

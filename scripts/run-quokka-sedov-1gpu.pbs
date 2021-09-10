@@ -18,4 +18,4 @@
 MPI_OPTIONS="-np 1 --map-by numa:SPAN --bind-to numa --mca pml ucx"
 echo "Using MPI_OPTIONS = $MPI_OPTIONS"
 
-mpirun $MPI_OPTIONS ./scripts/gpu_wrapper_sedov_256.sh > sedov.log
+mpirun $MPI_OPTIONS ./scripts/gpu_wrapper_sedov_256.sh > sedov_1gpu.log
