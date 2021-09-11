@@ -26,12 +26,16 @@ jobs:
     - name: Install dependencies
       run: sudo apt-get update && sudo apt-get -y install cuda libopenmpi-dev libhdf5-mpi-dev
 
+    - name: Update PATH
+      shell: bash
+      run: export PATH=/usr/local/cuda-11.4/bin${PATH:+:${PATH}}
+
     - name: Configure CMake
       # Use a bash shell so we can use the same syntax for environment variable
       # access regardless of the host operating system
       shell: bash
       working-directory: ${{runner.workspace}}/build
-      run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DAMReX_GPU_BACKEND=CUDA
+      run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DCMAKE_CUDA_COMPILER=/usr/local/cuda-11.4/bin/nvcc -DAMReX_GPU_BACKEND=CUDA
 
     - name: Build
       working-directory: ${{runner.workspace}}/build
