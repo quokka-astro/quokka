@@ -14,7 +14,7 @@
 #PBS -l jobfs=25600GB
 
 # --- initialize Quokka ---
-MPI_OPTIONS="-np $PBS_NGPUS --map-by numa:SPAN --bind-to numa --mca pml ucx"
+MPI_OPTIONS="-np $PBS_NGPUS --map-by numa:SPAN --bind-to numa --mca pml ucx -x HCOLL_ENABLE_MCAST=0"
 echo "Using MPI_OPTIONS = $MPI_OPTIONS"
 
 mpirun $MPI_OPTIONS ./scripts/gpu_wrapper_shell_2048.sh > shell_64nodes.log
