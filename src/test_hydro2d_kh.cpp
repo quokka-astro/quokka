@@ -7,13 +7,13 @@
 /// \brief Defines a test problem for a shock tube.
 ///
 
+#include <cmath>
+
 #include "AMReX_BLassert.H"
 #include "AMReX_Config.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
-#include "AMReX_Random.H"
-#include "AMReX_RandomEngine.H"
 
 #include "RadhydroSimulation.hpp"
 #include "hydro_system.hpp"
@@ -28,69 +28,96 @@ template <> struct EOS_Traits<KelvinHelmholzProblem> {
 template <>
 void RadhydroSimulation<KelvinHelmholzProblem>::setInitialConditionsAtLevel(
     int lev) {
+  // use parameters from Athena++ paper, section 3.4.3
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo =
       geom[lev].ProbLoArray();
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi =
       geom[lev].ProbHiArray();
 
+  amrex::Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
   amrex::Real const y0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
-  amrex::Real const amp = 0.01;
+  amrex::Real const A = 0.01;
 
   for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
-    const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
+    const amrex::Box &indexRange = iter.validbox();
     auto const &state = state_new_[lev].array(iter);
 
-    amrex::ParallelForRNG(
-        indexRange,
-        [=] AMREX_GPU_DEVICE(int i, int j, int k,
-                             amrex::RandomEngine const &engine) noexcept {
-          amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
+    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j,
+                                                        int k) noexcept {
+      amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+      amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
 
-          // drawn from [0.0, 1.0)
-          amrex::Real const rand_x = amrex::Random(engine) - 0.5;
-          amrex::Real const rand_y = amrex::Random(engine) - 0.5;
+      double const L = 0.01;    // shearing layer thickness
+      double const sigma = 0.2; // perturbation thickness
+      double const yy = std::abs(y - y0) - 0.25;
 
-          double vx = 0.;
-          double vy = 0.;
-          double vz = 0.;
-          double rho = 1.0;
-          double P = 2.5;
+      double rho = 1.5 - 0.5 * std::tanh(yy / L);
+      double vx = 0.5 * std::tanh(yy / L);
+      double vy = A * std::cos(4.0 * M_PI * (x - x0)) *
+                  std::exp(-(yy * yy) / (sigma * sigma));
+      double vz = 0.;
+      double P = 2.5;
 
-          if (std::abs(y - y0) <= 0.25) {
-            rho = 2.0;
-            vx = 0.5 + amp * rand_x;
-            vy = amp * rand_y;
-          } else {
-            rho = 1.0;
-            vx = -0.5 + amp * rand_x;
-            vy = amp * rand_y;
-          }
+      AMREX_ASSERT(!std::isnan(vx));
+      AMREX_ASSERT(!std::isnan(vy));
+      AMREX_ASSERT(!std::isnan(vz));
+      AMREX_ASSERT(!std::isnan(rho));
+      AMREX_ASSERT(!std::isnan(P));
 
-          AMREX_ASSERT(!std::isnan(vx));
-          AMREX_ASSERT(!std::isnan(vy));
-          AMREX_ASSERT(!std::isnan(vz));
-          AMREX_ASSERT(!std::isnan(rho));
-          AMREX_ASSERT(!std::isnan(P));
+      const auto v_sq = vx * vx + vy * vy + vz * vz;
+      const auto gamma = HydroSystem<KelvinHelmholzProblem>::gamma_;
 
-          const auto v_sq = vx * vx + vy * vy + vz * vz;
-          const auto gamma = HydroSystem<KelvinHelmholzProblem>::gamma_;
-
-          state(i, j, k, HydroSystem<KelvinHelmholzProblem>::density_index) =
-              rho;
-          state(i, j, k, HydroSystem<KelvinHelmholzProblem>::x1Momentum_index) =
-              rho * vx;
-          state(i, j, k, HydroSystem<KelvinHelmholzProblem>::x2Momentum_index) =
-              rho * vy;
-          state(i, j, k, HydroSystem<KelvinHelmholzProblem>::x3Momentum_index) =
-              rho * vz;
-          state(i, j, k, HydroSystem<KelvinHelmholzProblem>::energy_index) =
-              P / (gamma - 1.) + 0.5 * rho * v_sq;
-        });
+      state(i, j, k, HydroSystem<KelvinHelmholzProblem>::density_index) = rho;
+      state(i, j, k, HydroSystem<KelvinHelmholzProblem>::x1Momentum_index) =
+          rho * vx;
+      state(i, j, k, HydroSystem<KelvinHelmholzProblem>::x2Momentum_index) =
+          rho * vy;
+      state(i, j, k, HydroSystem<KelvinHelmholzProblem>::x3Momentum_index) =
+          rho * vz;
+      state(i, j, k, HydroSystem<KelvinHelmholzProblem>::energy_index) =
+          P / (gamma - 1.) + 0.5 * rho * v_sq;
+    });
   }
 
   // set flag
   areInitialConditionsDefined_ = true;
+}
+
+template <>
+void RadhydroSimulation<KelvinHelmholzProblem>::ErrorEst(
+    int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/) {
+  // tag cells for refinement
+
+  const amrex::Real eta_threshold = 0.2; // gradient refinement threshold
+  const amrex::Real rho_min = 0.1;       // minimum density for refinement
+
+  for (amrex::MFIter mfi(state_new_[lev]); mfi.isValid(); ++mfi) {
+    const amrex::Box &box = mfi.validbox();
+    const auto state = state_new_[lev].const_array(mfi);
+    const auto tag = tags.array(mfi);
+
+    amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+      const int n = HydroSystem<KelvinHelmholzProblem>::density_index;
+      amrex::Real const rho = state(i, j, k, n);
+      amrex::Real const rho_xplus = state(i + 1, j, k, n);
+      amrex::Real const rho_xminus = state(i - 1, j, k, n);
+      amrex::Real const rho_yplus = state(i, j + 1, k, n);
+      amrex::Real const rho_yminus = state(i, j - 1, k, n);
+
+      amrex::Real const del_x =
+          std::max(std::abs(rho_xplus - rho), std::abs(rho - rho_xminus));
+      amrex::Real const del_y =
+          std::max(std::abs(rho_yplus - rho), std::abs(rho - rho_yminus));
+
+      amrex::Real const gradient_indicator =
+          std::max(del_x, del_y) / std::max(rho, rho_min);
+
+      if (gradient_indicator > eta_threshold) {
+        tag(i, j, k) = amrex::TagBox::SET;
+      }
+    });
+  }
 }
 
 auto problem_main() -> int {
