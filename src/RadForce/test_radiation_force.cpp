@@ -68,7 +68,7 @@ void RadhydroSimulation<TubeProblem>::setInitialConditionsAtLevel(int lev) {
     const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
     auto const &state = state_new_[lev].array(iter);
 
-    amrex::ParallelFor(indexRange, [=](int i, int j, int k) noexcept {
+    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
       amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
 
       amrex::Real const B = (kappa0 * Frad0) / (a0 * a0 * c_light_cgs_);
@@ -158,7 +158,7 @@ void RadhydroSimulation<TubeProblem>::computeAfterLevelAdvance(
     const amrex::Box &indexRange = iter.validbox();
     auto const &state = state_new_[lev].array(iter);
 
-    amrex::ParallelFor(indexRange, [=](int i, int j, int k) noexcept {
+    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
       amrex::Real const rho =
           state(i, j, k, RadSystem<TubeProblem>::gasDensity_index);
       amrex::Real px =

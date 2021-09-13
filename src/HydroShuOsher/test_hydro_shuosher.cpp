@@ -8,13 +8,12 @@
 ///
 
 #include <cmath>
+#include <vector>
 
 #include "AMReX_BC_TYPES.H"
-
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
-#include "hydro_system.hpp"
-#include "test_hydro_shocktube.hpp"
+#include "test_hydro_shuosher.hpp"
 
 struct ShocktubeProblem {};
 
@@ -22,18 +21,13 @@ template <> struct EOS_Traits<ShocktubeProblem> {
   static constexpr double gamma = 1.4;
 };
 
-// left- and right- side shock states
-constexpr amrex::Real rho_L = 10.0;
-constexpr amrex::Real P_L = 100.0;
-constexpr amrex::Real rho_R = 1.0;
-constexpr amrex::Real P_R = 1.0;
-
 template <>
 void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsAtLevel(
     int lev) {
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo =
       geom[lev].ProbLoArray();
+  const int ncomp = ncomp_;
 
   for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
     const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
@@ -41,27 +35,29 @@ void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsAtLevel(
 
     amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
       amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
-
-      const double vx = 0.0;
+      double vx = NAN;
       double rho = NAN;
       double P = NAN;
 
-      if (x < 2.0) {
-        rho = rho_L;
-        P = P_L;
+      if (x < 1.0) {
+        rho = 3.857143;
+        vx = 2.629369;
+        P = 10.33333;
       } else {
-        rho = rho_R;
-        P = P_R;
+        rho = 1.0 + 0.2 * std::sin(5.0 * x);
+        vx = 0.0;
+        P = 1.0;
       }
 
       AMREX_ASSERT(!std::isnan(vx));
       AMREX_ASSERT(!std::isnan(rho));
       AMREX_ASSERT(!std::isnan(P));
 
-      const auto gamma = HydroSystem<ShocktubeProblem>::gamma_;
-      for (int n = 0; n < ncomp_; ++n) {
+      for (int n = 0; n < ncomp; ++n) {
         state(i, j, k, n) = 0.;
       }
+
+      const auto gamma = HydroSystem<ShocktubeProblem>::gamma_;
       state(i, j, k, HydroSystem<ShocktubeProblem>::density_index) = rho;
       state(i, j, k, HydroSystem<ShocktubeProblem>::x1Momentum_index) =
           rho * vx;
@@ -82,8 +78,7 @@ AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(
     const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar,
     int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
     const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
-    int /*orig_comp*/)
-{
+    int /*orig_comp*/) {
 #if (AMREX_SPACEDIM == 1)
   auto i = iv.toArray()[0];
   int j = 0;
@@ -102,21 +97,31 @@ AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(
   amrex::GpuArray<int, 3> hi = box.hiVect3d();
   const auto gamma = HydroSystem<ShocktubeProblem>::gamma_;
 
+  double vx = NAN;
+  double rho = NAN;
+  double P = NAN;
+
   if (i < lo[0]) {
-    // x1 left side boundary -- constant
-    consVar(i, j, k, RadSystem<ShocktubeProblem>::gasEnergy_index) = P_L / (gamma - 1.);
-    consVar(i, j, k, RadSystem<ShocktubeProblem>::gasDensity_index) = rho_L;
-    consVar(i, j, k, RadSystem<ShocktubeProblem>::x1GasMomentum_index) = 0.;
-    consVar(i, j, k, RadSystem<ShocktubeProblem>::x2GasMomentum_index) = 0.;
-    consVar(i, j, k, RadSystem<ShocktubeProblem>::x3GasMomentum_index) = 0.;
+    rho = 3.857143;
+    vx = 2.629369;
+    P = 10.33333;
   } else if (i >= hi[0]) {
-    // x1 right-side boundary -- constant
-    consVar(i, j, k, RadSystem<ShocktubeProblem>::gasEnergy_index) = P_R / (gamma - 1.);
-    consVar(i, j, k, RadSystem<ShocktubeProblem>::gasDensity_index) = rho_R;
-    consVar(i, j, k, RadSystem<ShocktubeProblem>::x1GasMomentum_index) = 0.;
-    consVar(i, j, k, RadSystem<ShocktubeProblem>::x2GasMomentum_index) = 0.;
-    consVar(i, j, k, RadSystem<ShocktubeProblem>::x3GasMomentum_index) = 0.;
+    rho = 1.0;
+    vx = 0.0;
+    P = 1.0;
   }
+
+  consVar(i, j, k, RadSystem<ShocktubeProblem>::gasDensity_index) = rho;
+  consVar(i, j, k, RadSystem<ShocktubeProblem>::x1GasMomentum_index) = rho * vx;
+  consVar(i, j, k, RadSystem<ShocktubeProblem>::x2GasMomentum_index) = 0;
+  consVar(i, j, k, RadSystem<ShocktubeProblem>::x3GasMomentum_index) = 0;
+  consVar(i, j, k, RadSystem<ShocktubeProblem>::gasEnergy_index) =
+      P / (gamma - 1.) + 0.5 * rho * (vx * vx);
+  // must also set radiation variables to zero, otherwise we get NaN asserts
+  consVar(i, j, k, RadSystem<ShocktubeProblem>::radEnergy_index) = 0;
+  consVar(i, j, k, RadSystem<ShocktubeProblem>::x1RadFlux_index) = 0;
+  consVar(i, j, k, RadSystem<ShocktubeProblem>::x2RadFlux_index) = 0;
+  consVar(i, j, k, RadSystem<ShocktubeProblem>::x3RadFlux_index) = 0;
 }
 
 template <>
@@ -131,9 +136,10 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
   std::vector<double> pressure_exact;
   std::vector<double> velocity_exact;
 
-  std::string filename = "../extern/ppm1d/output";
+  std::string filename = "../extern/ShuOsher_athena_3c_hllc_vl.txt";
   std::ifstream fstream(filename, std::ios::in);
   AMREX_ALWAYS_ASSERT(fstream.is_open());
+
   std::string header;
   std::string blank_line;
   std::getline(fstream, header);
@@ -142,6 +148,7 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
   for (std::string line; std::getline(fstream, line);) {
     std::istringstream iss(line);
     std::vector<double> values;
+
     for (double value = NAN; iss >> value;) {
       values.push_back(value);
     }
@@ -184,12 +191,10 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
     auto const &stateExact = ref.array(iter);
     auto const ncomp = ref.nComp();
 
-    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j,
-                                                        int k) noexcept {
+    amrex::LoopConcurrentOnCpu(indexRange, [=](int i, int j, int k) noexcept {
       for (int n = 0; n < ncomp; ++n) {
         stateExact(i, j, k, n) = 0.;
       }
-
       amrex::Real rho = density_exact_interp.at(i);
       amrex::Real vx = velocity_exact_interp.at(i);
       amrex::Real P = pressure_exact_interp.at(i);
@@ -206,17 +211,16 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
   }
 
 #ifdef HAVE_PYTHON
-
   // Plot results
   auto [position, values] = fextract(state_new_[0], geom[0], 0, 0.5);
   auto [pos_exact, val_exact] = fextract(ref, geom[0], 0, 0.5);
 
   if (amrex::ParallelDescriptor::IOProcessor()) {
+    // extract values
     std::vector<double> d(nx);
     std::vector<double> vx(nx);
     std::vector<double> P(nx);
 
-    // extract solution
     for (int i = 0; i < nx; ++i) {
       amrex::Real rho =
           values.at(HydroSystem<ShocktubeProblem>::density_index).at(i);
@@ -225,54 +229,49 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
       amrex::Real Egas =
           values.at(HydroSystem<ShocktubeProblem>::energy_index).at(i);
 
-      amrex::Real Eint = Egas - (xmom * xmom) / (2.0 * rho);
-      amrex::Real const gamma = HydroSystem<ShocktubeProblem>::gamma_;
+      amrex::Real xvel = xmom / rho;
+      amrex::Real Eint = Egas - xmom * xmom / (2.0 * rho);
+      amrex::Real pressure =
+          (HydroSystem<ShocktubeProblem>::gamma_ - 1.) * Eint;
+
       d.at(i) = rho;
-      vx.at(i) = xmom / rho;
-      P.at(i) = ((gamma - 1.0) * Eint) / 10.;
+      vx.at(i) = xvel;
+      P.at(i) = pressure;
     }
 
-    // Plot results
     matplotlibcpp::clf();
-    using mpl_arg = std::map<std::string, std::string>;
-    mpl_arg d_args;
-    mpl_arg dexact_args;
+    std::unordered_map<std::string, std::string> d_args;
+    std::map<std::string, std::string> dexact_args;
     d_args["label"] = "density";
-    dexact_args["label"] = "density (exact solution)";
-    matplotlibcpp::plot(xs, d, d_args);
+    d_args["marker"] = "x";
+    d_args["color"] = "black";
+    dexact_args["label"] = "density (reference solution)";
+    dexact_args["color"] = "gray";
+
+    matplotlibcpp::scatter(xs, d, 5.0, d_args);
     matplotlibcpp::plot(xs, density_exact_interp, dexact_args);
-
-    std::map<std::string, std::string> vx_args;
-    vx_args["label"] = "velocity";
-    matplotlibcpp::plot(xs, vx, vx_args);
-
-    std::map<std::string, std::string> P_args;
-    P_args["label"] = "pressure / 10";
-    matplotlibcpp::plot(xs, P, P_args);
 
     matplotlibcpp::legend();
     matplotlibcpp::title(fmt::format("t = {:.4f}", tNew_[0]));
-    matplotlibcpp::save(fmt::format("./hydro_shocktube_{:.4f}.pdf", tNew_[0]));
+    matplotlibcpp::save(fmt::format("./hydro_shuosher.pdf", tNew_[0]));
   }
 #endif
-
 }
 
 auto problem_main() -> int {
   // Problem parameters
-  // const int nx = 1000;
-  // const double Lx = 5.0;
-  const double CFL_number = 0.1;
-  const double max_time = 0.4;
-  const double max_dt = 1e-4;
-  const double initial_dt = 1e-6;
-  const int max_timesteps = 8000;
+  // const int nx = 400;
+  // const double Lx = 10.0;
+  const double CFL_number = 0.2;
+  const double max_time = 1.8;
+  const double fixed_dt = 1e-4;
+  const int max_timesteps = 20000;
 
   // Problem initialization
   const int nvars = RadhydroSimulation<ShocktubeProblem>::nvarTotal_;
   amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
   for (int n = 0; n < nvars; ++n) {
-    boundaryConditions[0].setLo(0, amrex::BCType::ext_dir); // Dirichlet
+    boundaryConditions[0].setLo(0, amrex::BCType::foextrap); // Dirichlet
     boundaryConditions[0].setHi(0, amrex::BCType::ext_dir);
     for (int i = 1; i < AMREX_SPACEDIM; ++i) {
       boundaryConditions[n].setLo(i, amrex::BCType::int_dir); // periodic
@@ -284,10 +283,9 @@ auto problem_main() -> int {
   sim.is_hydro_enabled_ = true;
   sim.is_radiation_enabled_ = false;
   sim.cflNumber_ = CFL_number;
-  sim.maxDt_ = max_dt;
+  sim.constantDt_ = fixed_dt;
   sim.stopTime_ = max_time;
   sim.maxTimesteps_ = max_timesteps;
-  sim.initDt_ = initial_dt;
   sim.computeReferenceSolution_ = true;
   sim.plotfileInterval_ = -1;
 
@@ -297,9 +295,10 @@ auto problem_main() -> int {
 
   // Compute test success condition
   int status = 0;
-  const double error_tol = 0.002;
+  const double error_tol = 0.01;
   if (sim.errorNorm_ > error_tol) {
     status = 1;
   }
+
   return status;
 }

@@ -19,7 +19,6 @@
 #include "test_radiation_tophat.hpp"
 #include "radiation_system.hpp"
 #include "simulation.hpp"
-#include "test_radhydro_shock_cgs.hpp"
 
 struct TophatProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization

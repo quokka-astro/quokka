@@ -11,7 +11,6 @@
 #include "AMReX_BC_TYPES.H"
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
-#include "test_radhydro_shock_cgs.hpp"
 
 struct PulseProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
@@ -39,6 +38,7 @@ template <> struct RadSystem_Traits<PulseProblem> {
   static constexpr bool compute_v_over_c_terms = false;
 };
 
+AMREX_GPU_HOST_DEVICE
 auto compute_exact_Trad(const double x, const double t) -> double {
   // compute exact solution for Gaussian radiation pulse
   // 		assuming diffusion approximation

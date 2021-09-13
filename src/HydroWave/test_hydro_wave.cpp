@@ -28,7 +28,7 @@ constexpr double rho0 = 1.0; // background density
 constexpr double P0 =
     1.0 / HydroSystem<WaveProblem>::gamma_; // background pressure
 constexpr double v0 = 0.;                   // background velocity
-constexpr double A = 1.0e-6;                // perturbation amplitude
+constexpr double amp = 1.0e-6;                // perturbation amplitude
 
 AMREX_GPU_DEVICE void computeWaveSolution(
     int i, int j, int k, amrex::Array4<amrex::Real> const &state,
@@ -36,14 +36,15 @@ AMREX_GPU_DEVICE void computeWaveSolution(
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo) {
   const amrex::Real x_L = prob_lo[0] + (i + amrex::Real(0.0)) * dx[0];
   const amrex::Real x_R = prob_lo[0] + (i + amrex::Real(1.0)) * dx[0];
+  const amrex::Real A = amp;
 
-  const std::valarray<double> R = {1.0, -1.0,
-                                   1.5}; // right eigenvector of sound wave
-  const std::valarray<double> U_0 = {
+  const quokka::valarray<double, 3> R = {
+      1.0, -1.0, 1.5}; // right eigenvector of sound wave
+  const quokka::valarray<double, 3> U_0 = {
       rho0, rho0 * v0,
       P0 / (HydroSystem<WaveProblem>::gamma_ - 1.0) +
           0.5 * rho0 * std::pow(v0, 2)};
-  const std::valarray<double> dU =
+  const quokka::valarray<double, 3> dU =
       (A * R / (2.0 * M_PI * dx[0])) *
       (std::cos(2.0 * M_PI * x_L) - std::cos(2.0 * M_PI * x_R));
 
@@ -59,12 +60,13 @@ void RadhydroSimulation<WaveProblem>::setInitialConditionsAtLevel(int lev) {
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo =
       geom[lev].ProbLoArray();
+  const int ncomp = ncomp_;
 
   for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
     const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
     auto const &state = state_new_[lev].array(iter);
     amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-      for(int n = 0; n < ncomp_; ++n) {
+      for (int n = 0; n < ncomp; ++n) {
         state(i, j, k, n) = 0; // fill unused components with zeros
       }
       computeWaveSolution(i, j, k, state, dx, prob_lo);
@@ -124,9 +126,9 @@ void RadhydroSimulation<WaveProblem>::computeReferenceSolution(
       amrex::Real Eint = Egas - xmom * xmom / (2.0 * rho);
       amrex::Real pressure = Eint * (HydroSystem<WaveProblem>::gamma_ - 1.);
 
-      d.at(i) = (rho - rho0) / A;
-      vx.at(i) = (xvel - v0) / A;
-      P.at(i) = (pressure - P0) / A;
+      d.at(i) = (rho - rho0) / amp;
+      vx.at(i) = (xvel - v0) / amp;
+      P.at(i) = (pressure - P0) / amp;
     }
 
     std::vector<double> density_exact(nx);
@@ -145,9 +147,9 @@ void RadhydroSimulation<WaveProblem>::computeReferenceSolution(
       amrex::Real Eint = Egas - xmom * xmom / (2.0 * rho);
       amrex::Real pressure = Eint * (HydroSystem<WaveProblem>::gamma_ - 1.);
 
-      density_exact.at(i) = (rho - rho0) / A;
-      velocity_exact.at(i) = (xvel - v0) / A;
-      pressure_exact.at(i) = (pressure - P0) / A;
+      density_exact.at(i) = (rho - rho0) / amp;
+      velocity_exact.at(i) = (xvel - v0) / amp;
+      pressure_exact.at(i) = (pressure - P0) / amp;
     }
 
 #ifdef HAVE_PYTHON

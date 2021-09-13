@@ -7,11 +7,11 @@
 /// \brief Defines a test problem for radiation in the asymptotic diffusion regime.
 ///
 
-#include "test_radiation_marshak_asymptotic.hpp"
 #include "AMReX_BLassert.H"
+
+#include "test_radiation_marshak_asymptotic.hpp"
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
-#include "test_radhydro_shock_cgs.hpp"
 
 struct SuOlsonProblemCgs {
 }; // dummy type to allow compile-type polymorphism via template specialization
