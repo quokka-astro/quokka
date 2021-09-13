@@ -27,6 +27,7 @@
 % Only include extra packages if you really need them. Common packages are:
 \usepackage{graphicx}	% Including figure files
 \usepackage{amsmath}	% Advanced maths commands
+\usepackage{fontawesome}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -91,7 +92,7 @@ $^{1}$Research School of Astronomy \& Astrophysics, Mount Stromlo Observatory, C
 
 % Abstract of the paper
 \begin{abstract}
-    We present a new subcycling-in-time, block-structured adaptive mesh refinement (AMR) code designed for radiation hydrodynamics problems in star formation. The equations of hydrodynamics are solved with the piecewise parabolic method in a method-of-lines formulation and the radiative transfer is solved via the variable Eddington tensor (VET) radiation moment equations with a local closure. We combine explicit-in-time evolution of the radiation moment equations with the reduced speed-of-light approximation. We show results for a range of test problems, including radiative shocks, blast waves, and turbulent radiation-gas interactions. On uniform grids, we achieve a peak of $60$ million hydrodynamic updates per second per GPU, scaling to 256 GPUs with a scaling effiency of greater than $75$ per cent. The code is publicly released under an open-source license.
+    We present a new subcycling-in-time, block-structured adaptive mesh refinement (AMR) radiation hydrodynamics code for graphics processing units (GPUs). The equations of hydrodynamics are solved with the piecewise parabolic method (PPM) in a method-of-lines formulation and the radiative transfer is solved via the variable Eddington tensor (VET) radiation moment equations with a local closure. We combine explicit-in-time evolution of the radiation moment equations with the reduced speed-of-light approximation. We show results for a range of test problems, including radiative shocks, blast waves, and turbulent radiation-gas interactions. On uniform grids in 3D, we achieve a peak of $69$ million hydrodynamic updates per second per GPU. For radiation hydrodynamics problems on uniform grids in 3D, our code scales from 4 GPUs to 256 GPUs with an efficiency of $>93$ per cent. The code is publicly released under an open-source license on \faGithub\href{https://github.com/BenWibking/quokka-code}{GitHub}.
 \end{abstract}
 
 % Select between one and six entries from the list of approved keywords.
@@ -115,6 +116,32 @@ A more accurate approximation is to evolve both the radiation energy density and
 \section{Test problems}
 \label{section:tests}
 
+\subsection{Hydrodynamics}
+\subsubsection{Sound wave}
+\subsubsection{Contact wave}
+\subsubsection{Stationary shock tube}
+\subsubsection{`Leblanc' test}
+\subsubsection{Wave-shock interaction (Shu-Osher test)}
+\subsubsection{Slow-moving shock}
+\subsubsection{Strong rarefaction}
+\subsubsection{Kelvin-Helmholtz problem}
+\subsubsection{2D Implosion problem}
+
+\subsection{Radiation}
+\subsubsection{Marshak wave}
+\subsubsection{Su-Olson problem}
+\subsubsection{Radiation pressure tube}
+\subsubsection{Radiation-matter energy exchange}
+\subsubsection{Shadow test}
+\subsubsection{Beam test}
+\subsubsection{Optically-thin wind}
+\subsubsection{Crooked-pipe problem}
+
+\subsection{Radiation hydrodynamics}
+\subsubsection{Subcritical radiative shock}
+\subsubsection{Radiation-driven dust shell}
+\subsubsection{Radiation Rayleigh-Taylor instability}
+
 \section{Discussion}
 \label{section:discussion}
 
@@ -125,16 +152,9 @@ A more accurate approximation is to evolve both the radiation energy density and
 
 This research was supported by the Australian Research Council through its Discovery Projects and Future Fellowship Funding Schemes, awards DP190101258 and FT180100375. This research was undertaken with the assistance of resources and services from the National Computational Infrastructure (NCI), which is supported by the Australian Government.
 
-\emph{Software:} matplotlib \citep{Hunter:2007},
-scipy \citep{2020SciPy-NMeth},
-pandas \citep{reback2020pandas,mckinney-proc-scipy-2010},
-numpy \citep{harris2020array},
-h5py \citep{h5py_package},
-Snakemake \citep{snakemake:2021},
-lic \citep{lic_package},
-Meshoid \citep{meshoid_package},
-GIZMO \citep{Hopkins_2015},
-Grackle \citep{Smith_2017}.
+\emph{Software:} AMReX \citep{the_amrex_development_team_2021_5363443},
+matplotlib \citep{Hunter:2007},
+numpy \citep{harris2020array}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section*{Data Availability}
