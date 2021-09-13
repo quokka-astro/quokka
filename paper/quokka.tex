@@ -108,10 +108,29 @@ radiation hydrodynamics -- numerical methods
 \section{Introduction}
 Detailed simulations of star formation require treating the dynamical effects of radiation produced by protostars and re-radiated by dust grains in the interstellar medium. A long-standing method to compute the radiation transport in hydrodynamic simulations is the approximation of flux-limited diffusion (FLD) \citep{Alme_1973}. This method evolves the radiation energy density under the assumption of a given closure for the radiation pressure tensor and the assumption that the time derivative of the radiation flux is zero.
 
-A more accurate approximation is to evolve both the radiation energy density and the radiation flux, while still invoking a closure relation for the radiation pressure tensor. When the radiation pressure tensor is computed via a formal solution of the angle-dependent radiative transfer equation, we obtain the quasidiffusion or variable Eddington tensor (VET) method \citep{Goldin_1964}. When retaining a local closure for the radiation pressure tensor in terms of the radiation energy density $E$ and the flux $F$, we obtain a local VET method, commonly referred to as the M1 (`moment-one`) method \citep{Minerbo_1978,Levermore_1984,Dubroca_1999,Gonzalez_2007}.
+A more accurate approximation is to evolve both the radiation energy density and the radiation flux, while still invoking a closure relation for the radiation pressure tensor. When the radiation pressure tensor (or rather, the ratio of the radiation pressure tensor to the radiatio energy density, known as the Eddington tensor) is computed via a formal solution of the angle-dependent radiative transfer equation, we obtain the quasidiffusion or variable Eddington tensor (VET) method \citep{Goldin_1964}. When retaining a local closure for the radiation pressure tensor in terms of the radiation energy density $E$ and the flux $F$, we obtain a local VET method, commonly referred to as the M1 (`moment-one`) method \citep{Minerbo_1978,Levermore_1984,Dubroca_1999,Gonzalez_2007}.
+
+Something about the reduced speed of light method, citing \cite{Gnedin_2001} and \cite{Skinner_2013}\dots
 
 \section{Methods}
 \label{section:methods}
+\subsection{Equations}
+We solve the equations of radiation hydrodynamics \citep{Pomraning_1973,Mihalas_1984,Castor_2004} for an inviscid, ideal, nonrelativistic fluid in the so-called `mixed frame,' where the radiation variables are in the laboratory frame (or simulation coordinates) and the radiation-matter interaction terms are written as an expansion in the ratio of the fluid velocity to the speed of light $\beta = v/c$. We write the equations as follows:
+\begin{align}
+    \frac{\partial \rho}{\partial t} = \dots \, \\
+    \frac{\partial (\rho \vec{v})}{\partial t} = \dots \, \\
+    \frac{\partial E_g}{\partial t} = \dots \, \\
+    \frac{\partial E_r}{\partial t} = \dots \, \\\
+    \frac{\partial F_r}{\partial t} = \dots \,
+\end{align}
+where $G$ is the radiation four-force (see e.g., \citealt{Mihalas_1984}). Expanding in $v/c$, we obtain:
+\begin{align}
+G^0 = \dots \,
+\end{align}
+
+\subsection{Hydrodynamics}
+
+\subsection{Radiation}
 
 \section{Test problems}
 \label{section:tests}
@@ -144,9 +163,12 @@ A more accurate approximation is to evolve both the radiation energy density and
 
 \section{Discussion}
 \label{section:discussion}
+\subsection{Range of applicability}
+\subsection{Planned applications}
 
 \section{Conclusions}
 \label{section:conclusions}
+The future is bright for radiation hydrodynamics on GPUs\dots
 
 \section*{Acknowledgements}
 
@@ -158,7 +180,7 @@ numpy \citep{harris2020array}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section*{Data Availability}
-
+The source code and entire commit history for \textsc{Quokka} is hosted in this public \faGithub\href{https://github.com/BenWibking/quokka-code}{GitHub repository}. The version of the source code used to produce the results in this paper as well as the output files at the final timestep for the simulations shown in the Figures are permanently archived at Zenodo DOI:XXX.
 
 %%%%%%%%%%%%%%%%%%%% REFERENCES %%%%%%%%%%%%%%%%%%
 
