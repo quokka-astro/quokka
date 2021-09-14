@@ -123,18 +123,37 @@ We solve the equations of radiation hydrodynamics \citep{Pomraning_1973,Mihalas_
     \frac{\partial E_r}{\partial t} + \nabla \cdot {\vec{F}_r} = -c G^0 \, , \\\
     \frac{1}{c^2}\frac{\partial \vec{F}_r}{\partial t} + \nabla \cdot \mathsf{P_r} = -\vec{G} \, ,
 \end{align}
-where $\rho$ is the gas density, $\vec{v}$ is the gas velocity, $E$ is the total energy density of the gas, $\mathsf{P} = \delta_{ij} P$ is the gas pressure tensor, $E_r$ is the radiation energy density, $F_r$ is the radiation flux, $\mathsf{P_r}$ is the radiation pressure tensor, $\nabla \cdot \rho \vec{v} \vec{v}$ denotes the sum $(\rho v_i v^j)_{,j}\,$, and $G^i$ is the radiation four-force, with $G_0$ the time-like component and $\vec{G}$ consisting of the space-like components. Expanding to linear order in $\beta$, we obtain the radiation four-force in terms of the laboratory-frame radiation quantities with a gray specific opacity $\kappa$:
+where $\rho$ is the gas density, $\vec{v}$ is the gas velocity, $E$ is the total energy density of the gas, $\mathsf{P} = \delta_{ij} P$ is the gas pressure tensor, $E_r$ is the radiation energy density, $F_r$ is the radiation flux, $\mathsf{P_r}$ is the radiation pressure tensor, $\nabla \cdot \rho \vec{v} \vec{v}$ denotes the sum $(\rho v_i v^j)_{,j}\,$, and $G^i$ is the radiation four-force, with $G_0$ the time-like component and $\vec{G}$ consisting of the space-like components. Expanding the right-hand side of the comoving-frame radiative transfer equation to linear order in $\beta$ and taking angular moments, we obtain the radiation four-force in terms of the laboratory-frame radiation quantities with a gray (i.e., frequency averaged) comoving-frame opacity $\rho \kappa$:
 \begin{align}
 -c G^0 = \rho \kappa(4 \pi B - c E_r) + \rho \kappa \left( \frac{\vec{v}}{c} \cdot \vec{F_r} \right) \, , \\
 -\vec{G} = -\rho \kappa \frac{\vec{F_r}}{c} + \rho \kappa \left(\frac{4 \pi B}{c}\right) \frac{\vec{v}}{c} + \rho \kappa \frac{\vec{v}\mathsf{P_r}}{c} \, ,
 \end{align}
-where $4\pi B$ is the emissivity of the gas and $\vec{v} \mathsf{P_r}$ is the tensor contraction $v_j \mathsf{P}^{ij}$ \citep{Mihalas_1984}. The latter two terms in the expression for $\vec{G}$ correspond to the relativistic work term of \cite{Krumholz_2007} and are only important in the regime $\beta \tau \gtrsim 1$ (where $\tau$ is a characteristic optical depth), so we neglect them hereafter. However, the term of order $\beta$ in the expression for $cG^0$ corresponds to the work done by the radiation force on the gas and can be the dominant term for problems of interest.
+where $4\pi B$ is the emissivity of the gas and $\vec{v} \mathsf{P_r}$ is the tensor contraction $v_j \mathsf{P}^{ij}$ \citep{Mihalas_1984}. The latter two terms in the expression for $\vec{G}$ correspond to the relativistic work term of \cite{Krumholz_2007} and are only important in the regime $\beta \tau \gtrsim 1$ (where $\tau$ is a characteristic optical depth), and the reduced-speed-of-light approximation cannot treat this regime (as discussed in the following section) so we neglect them. However, the term of order $\beta$ in the expression for $cG^0$ corresponds to the work done by the radiation force on the gas and can be the dominant term for problems of interest. In the nonrelativistic regime, we can neglect the difference between the comoving-frame opacity and the laboratory frame opacity, which we do for the remainder of this work, separately considering $\rho$ as the (nonrelativistic) gas mass density and $\kappa$ as the specific opacity.
 
-Reduced-speed-of-light equations here\dots
+To apply the reduced-speed-of-light approximation to these equations, we first rewrite the radiation moment equations so that they have a factor of exactly $\frac{1}{c}$ next to each of the time derivatives:
+\begin{align}
+    \frac{1}{c} \frac{\partial E_r}{\partial t} + \nabla \cdot \left( \frac{\vec{F}_r}{c} \right) = -G^0 \, , \\\
+    \frac{1}{c} \frac{\partial}{\partial t} \left( \frac{\vec{F_r}}{c} \right) + \nabla \cdot \mathsf{P_r} = -\vec{G} \, ,
+\end{align}
+then we replace this $\frac{1}{c}$ factor with a factor of $\frac{1}{\hat c}$, where $\hat c$ is the reduced speed of light, and multiply through by factors of $\hat c$ to obtain the conservation law form of the reduced speed of light radiation moment equations:
+\begin{align}
+    \frac{\partial E_r}{\partial t} + \nabla \cdot \left( \frac{\hat c}{c} \vec{F}_r \right) = -\hat c G^0 \, , \\\
+    \frac{\partial \vec{F_r}}{\partial t} + \nabla \cdot (c \hat c \, \mathsf{P_r}) = -c \hat c \, \vec{G} \, .
+\end{align}
+As emphasized by \cite{Skinner_2013}, all other factors of $c$ remain unchanged. In particular, since the factors of $c$ are unchanged on the right-hand side of the hydrodynamic equations, the reduced speed of light radiation hydrodynamic system does not conserve total energy or momentum. In steady state, this implies that the equilibrium temperature of the reduced speed of light system is modified with respect to the correct equilibrium temperature (see section \ref{test:exchange}). Writing out the right-hand side terms explicitly, we obtain
+\begin{align}
+    \frac{\partial \rho}{\partial t} + \nabla \cdot (\rho \vec{v}) = 0 \, , \\
+    \frac{\partial (\rho \vec{v})}{\partial t} + \nabla \cdot (\rho \vec{v} \vec{v} + \mathsf{P}) = \rho \kappa_R {\vec{F_r} / c} \, , \\
+    \frac{\partial E}{\partial t} + \nabla \cdot \left[(E + \mathsf{P})\vec{v}\right] = -\rho \kappa_P (4 \pi B - c E_r) - \rho \kappa_R \left( \frac{\vec{v}}{c} \cdot \vec{F_r} \right) \, , \\
+    \frac{\partial E_r}{\partial t} + \nabla \cdot \left( \frac{\hat c}{c} \vec{F}_r \right) = \rho \kappa_P \left( \frac{\hat c}{c} 4 \pi B - \hat c E_r \right) + \rho \kappa_R \left( \frac{\hat c}{c} \frac{\vec{v}}{c} \cdot \vec{F_r} \right) \, , \\\
+    \frac{\partial \vec{F_r}}{\partial t} + \nabla \cdot (c \hat c \, \mathsf{P_r}) = -\hat c \rho \kappa_R \vec{F_r} \, ,
+\end{align}
+where we have additionally make the conventional association in grey radiation hydrodynamics of the opacities in the momentum equation with the Rosseland mean opacity $\kappa_R$ and the opacities in the energy equation with the Planck mean opacity $\kappa_P$. Since the work done by radiation is an integral of the momentum source term, the work term also uses the Rosseland mean opacity. This choice of opacities yields the correct radiation force in the diffusion limit, and yields the correct energy absorption and emission in the optically-thin limit for fluids at rest \citep{Mihalas_1984}. This set of equations is sufficient for nonrelativistic radiation hydrodynamics in the semi-transparent regime, where we can neglect the `relativistic work term' that is important only in the dynamic diffusion ($\beta \tau \gtrsim 1$) regime, as described earlier.
 
 \subsection{Hydrodynamics}
 
 \subsection{Radiation}
+\subsubsection{Closure relations}
 
 \section{Test problems}
 \label{section:tests}
