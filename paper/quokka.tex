@@ -115,18 +115,22 @@ Something about the reduced speed of light method, citing \cite{Gnedin_2001} and
 \section{Methods}
 \label{section:methods}
 \subsection{Equations}
-We solve the equations of radiation hydrodynamics \citep{Pomraning_1973,Mihalas_1984,Castor_2004} for an inviscid, ideal, nonrelativistic fluid in the so-called `mixed frame,' where the radiation variables are in the laboratory frame (or simulation coordinates) and the radiation-matter interaction terms are written as an expansion in the ratio of the fluid velocity to the speed of light $\beta = v/c$. We write the equations as follows:
+We solve the equations of radiation hydrodynamics \citep{Pomraning_1973,Mihalas_1984,Castor_2004} for an inviscid, nonrelativistic fluid in the so-called `mixed frame,' where the radiation variables are defined in an inertial frame (i.e., Eulerian simulation coordinates) and the radiation-matter interaction terms are written as an expansion in the ratio of the fluid velocity to the speed of light $\beta = v/c$. We write the equations as follows:
 \begin{align}
-    \frac{\partial \rho}{\partial t} = \dots \, \\
-    \frac{\partial (\rho \vec{v})}{\partial t} = \dots \, \\
-    \frac{\partial E_g}{\partial t} = \dots \, \\
-    \frac{\partial E_r}{\partial t} = \dots \, \\\
-    \frac{\partial F_r}{\partial t} = \dots \,
+    \frac{\partial \rho}{\partial t} + \nabla \cdot (\rho \vec{v}) = 0 \, , \\
+    \frac{\partial (\rho \vec{v})}{\partial t} + \nabla \cdot (\rho \vec{v} \vec{v} + \mathsf{P}) = \vec{G} \, , \\
+    \frac{\partial E}{\partial t} + \nabla \cdot \left[(E + \mathsf{P})\vec{v}\right] = c G^0 \, , \\
+    \frac{\partial E_r}{\partial t} + \nabla \cdot {\vec{F}_r} = -c G^0 \, , \\\
+    \frac{1}{c^2}\frac{\partial \vec{F}_r}{\partial t} + \nabla \cdot \mathsf{P_r} = -\vec{G} \, ,
 \end{align}
-where $G$ is the radiation four-force (see e.g., \citealt{Mihalas_1984}). Expanding in $v/c$, we obtain:
+where $\rho$ is the gas density, $\vec{v}$ is the gas velocity, $E$ is the total energy density of the gas, $\mathsf{P} = \delta_{ij} P$ is the gas pressure tensor, $E_r$ is the radiation energy density, $F_r$ is the radiation flux, $\mathsf{P_r}$ is the radiation pressure tensor, $\nabla \cdot \rho \vec{v} \vec{v}$ denotes the sum $(\rho v_i v^j)_{,j}\,$, and $G^i$ is the radiation four-force, with $G_0$ the time-like component and $\vec{G}$ consisting of the space-like components. Expanding to linear order in $\beta$, we obtain the radiation four-force in terms of the laboratory-frame radiation quantities with a gray specific opacity $\kappa$:
 \begin{align}
-G^0 = \dots \,
+-c G^0 = \rho \kappa(4 \pi B - c E_r) + \rho \kappa \left( \frac{\vec{v}}{c} \cdot \vec{F_r} \right) \, , \\
+-\vec{G} = -\rho \kappa \frac{\vec{F_r}}{c} + \rho \kappa \left(\frac{4 \pi B}{c}\right) \frac{\vec{v}}{c} + \rho \kappa \frac{\vec{v}\mathsf{P_r}}{c} \, ,
 \end{align}
+where $4\pi B$ is the emissivity of the gas and $\vec{v} \mathsf{P_r}$ is the tensor contraction $v_j \mathsf{P}^{ij}$ \citep{Mihalas_1984}. The latter two terms in the expression for $\vec{G}$ correspond to the relativistic work term of \cite{Krumholz_2007} and are only important in the regime $\beta \tau \gtrsim 1$ (where $\tau$ is a characteristic optical depth), so we neglect them hereafter. However, the term of order $\beta$ in the expression for $cG^0$ corresponds to the work done by the radiation force on the gas and can be the dominant term for problems of interest.
+
+Reduced-speed-of-light equations here\dots
 
 \subsection{Hydrodynamics}
 
