@@ -67,7 +67,7 @@
 
 % Title of the paper, and the short title which is used in the headers.
 % Keep the title short and informative.
-\title[Two-moment radiation hydrodynamics on GPUs]{\textsc{Quokka}: A new code for two-moment radiation hydrodynamics on GPUs}
+\title[Two-moment AMR radiation hydrodynamics on GPUs]{\textsc{Quokka}: Two-moment AMR radiation hydrodynamics on GPUs}
 
 % The list of authors, and the short list which is used in the headers.
 % If you need two or more lines of authors, add an extra line using \newauthor
@@ -189,7 +189,7 @@ Piecewise-linear (PLM) reconstruction based on the monotonized-central (MC) slop
 
 In some cases, especially in underresolved strong shocks, the previous steps do not provide sufficient dissipation to avoid oscillations. This problem was recognized by CW84, who proposed a shock flattening procedure in combination with a small amount of artificial viscosity. We fine that this shock flattening procedure is not sufficient in multidimensional problems. Instead, we follow \cite{Miller_2002}, who generalize the CW84 procedure for multidimensional hydrodynamics. Using this latter method, we find that no artificial viscosity is needed and we do not include any in our implementation.
 
-Finally, in order to compute the flux of mass, momentum and energy between cells, we use the HLLC Riemann solver with the `primitive variable Riemann solver' wavespeeds and intermediate states \citep{Toro_2013}. We make the standard approximation that the face-average flux is the same as the face-centered flux, and therefore this step is also second-order accurate in spatial resolution. For each cell, the fluxes across each face are then added together to produce an unsplit spatial divergence term used by the Runge-Kutta integrator to advance the cell in time.
+Finally, in order to compute the flux of mass, momentum and energy between cells, we use the HLLC Riemann solver with the `primitive variable Riemann solver' wavespeeds and intermediate states \citep{Toro_2013}. We make the standard approximation that the face-average flux is the same as the face-centered flux, and therefore this step is also second-order accurate in spatial resolution. For each cell, the fluxes across each face are then added together to produce an unsplit spatial divergence term used by each stage of the Runge-Kutta integrator to advance the cell in time.
 
 \subsection{Radiation}
 Why did we choose these methods: efficiency, GPU, etc.
