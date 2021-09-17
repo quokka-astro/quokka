@@ -118,11 +118,7 @@ Something about the reduced speed of light (RSLA) method, citing \cite{Gnedin_20
 \section{Methods}
 \label{section:methods}
 \subsection{Equations}
-We solve the equations of radiation hydrodynamics \citep{Pomraning_1973,Mihalas_1984,Castor_2004} for an inviscid, nonrelativistic fluid
-% MRK added note about LTE, since you're going to use the Planck function below
-in local thermodynamic equilibrium in the so-called ``mixed frame,'' where the radiation variables are defined in an inertial frame (i.e., Eulerian simulation coordinates) and the radiation-matter interaction terms are written 
-%MRK rephrased, because it is in fact possible to write the mixed-frame equations in a way that is exact, without series expanding in v/c -- there's a paper by Mihalas & Auer that does this. Of course the resulting expressions are terrifying, so no one uses them...
-in the frame comoving with the fluid, with the transformations between the frames accounted for via the addition of radiation-matter exchange terms that depend explicitly on the ratio of fluid velocity to the speed of light, $\beta=v/c$.
+We solve the equations of radiation hydrodynamics \citep{Pomraning_1973,Mihalas_1984,Castor_2004} for an inviscid, nonrelativistic fluid in local thermodynamic equilibrium in the so-called ``mixed frame,'' where the radiation variables are defined in an inertial frame (i.e., Eulerian simulation coordinates) and the radiation-matter interaction terms are written in the frame comoving with the fluid, with the transformations between the frames accounted for via the addition of radiation-matter exchange terms that depend explicitly on the ratio of fluid velocity to the speed of light, $\beta=v/c$.
 We write the equations as follows:
 \begin{align}
     \frac{\partial \rho}{\partial t} + \nabla \cdot (\rho \vc{v}) = 0 \, , \\
@@ -131,9 +127,7 @@ We write the equations as follows:
     \frac{\partial E_r}{\partial t} + \nabla \cdot {\vc{F}_r} = -c G^0 \, , \\\
     \frac{1}{c^2}\frac{\partial \vc{F}_r}{\partial t} + \nabla \cdot \mathsf{P}_r = -\vc{G} \, ,
 \end{align}
-where $\rho$ is the gas density, $\vc{v}$ is the gas velocity, $E$ is the total energy density of the gas, $\mathsf{P} = \delta_{ij} P$ is the gas pressure tensor, $E_r$ is the radiation energy density, $F_r$ is the radiation flux, $\mathsf{P_r}$ is the radiation pressure tensor, $\nabla \cdot \rho \vc{v} \vc{v}$ denotes the sum $(\rho v_i v^j)_{,j}\,$, and $G^i$ is the radiation four-force, with $G_0$ the time-like component and $\vc{G}$ consisting of the space-like components. 
-% MRK I expanded this to properly distinguish between flux mean and Planck mean, since your code does; also, rephrased to make the mixed versus comoving frame issue clear
-In the mixed-frame formulation, the radiation four-force to order $\beta$ is
+where $\rho$ is the gas density, $\vc{v}$ is the gas velocity, $E$ is the total energy density of the gas, $\mathsf{P} = \delta_{ij} P$ is the gas pressure tensor, $E_r$ is the radiation energy density, $F_r$ is the radiation flux, $\mathsf{P}_r$ is the radiation pressure tensor, $\nabla \cdot \rho \vc{v} \vc{v}$ denotes the sum $(\rho v_i v^j)_{,j}\,$, and $G^i$ is the radiation four-force, with $G^0$ the time-like component and $\vc{G}$ consisting of the space-like components. In the mixed-frame formulation, the radiation four-force to order $\beta$ is
 \begin{align}
 -c G^0 = \rho (\kappa_P 4 \pi B - \kappa_E c E_r) + \rho \kappa_F \left( \frac{\vc{v}}{c} \cdot \vc{F}_r \right) \, , \\
 -\vc{G} = -\rho \kappa_F \frac{\vc{F}_r}{c} + \rho \kappa_P \left(\frac{4 \pi B}{c}\right) \frac{\vc{v}}{c} + \rho \kappa_F \frac{\vc{v}\mathsf{P}_r}{c} \, ,
@@ -144,12 +138,11 @@ $B$ is the Planck function evaluated at the gas temperature,
 and $\vc{v} \mathsf{P}_r$ is the tensor contraction $v_j \mathsf{P}^{ij}$ \citep{Mihalas_1984}. The latter two terms in the expression for $\vc{G}$ correspond to the relativistic work term of \cite{Krumholz_2007} and are only important in the regime $\beta \tau \gtrsim 1$ (where $\tau$ is a characteristic optical depth), 
 to which we cannot apply the RSLA (as discussed below),
 so we neglect them. However, the term of order $\beta$ in the expression for $cG^0$ corresponds to the work done by the radiation force on the gas and can be the dominant term for problems of interest. 
-% MRK I commented out the statement below because it is not correct. The whole point of the mixed-frame formulation is that kappa is the opacity evaluated in the comoving frame. We're not neglecting the difference between the comoving and lab-frame opacities; that difference is the reason that the various velocity-dependent terms in G appeared. 
 
 To apply the RSLA to these equations, we first rewrite the radiation moment equations so that they have a factor of exactly $1/c$ next to each of the time derivatives:
 \begin{align}
     \frac{1}{c} \frac{\partial E_r}{\partial t} + \nabla \cdot \left( \frac{\vc{F}_r}{c} \right) = -G^0 \, , \\\
-    \frac{1}{c} \frac{\partial}{\partial t} \left( \frac{\vc{F_r}}{c} \right) + \nabla \cdot \mathsf{P_r} = -\vc{G} \, ,
+    \frac{1}{c} \frac{\partial}{\partial t} \left( \frac{\vc{F_r}}{c} \right) + \nabla \cdot \mathsf{P}_r = -\vc{G} \, ,
 \end{align}
 then we replace this $1/c$ factor with a factor of $1/\hat c$, where $\hat c$ is the reduced speed of light, and multiply through by factors of $\hat c$ to obtain the conservation law form of the reduced speed of light radiation moment equations (e.g., \citealt{Skinner_2013}):
 \begin{align}
