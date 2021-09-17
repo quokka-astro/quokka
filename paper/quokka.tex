@@ -67,7 +67,7 @@
 
 % Title of the paper, and the short title which is used in the headers.
 % Keep the title short and informative.
-\title[Two-moment AMR radiation hydrodynamics on GPUs]{\textsc{Quokka}: Two-moment AMR radiation hydrodynamics on GPUs}
+\title[Two-moment AMR radiation hydrodynamics on GPUs]{\textsc{Quokka}: A new code for two-moment AMR radiation hydrodynamics on GPUs}
 
 % The list of authors, and the short list which is used in the headers.
 % If you need two or more lines of authors, add an extra line using \newauthor
@@ -160,7 +160,9 @@ Writing out the right-hand side terms explicitly, we obtain
     \frac{\partial (\rho \vc{v})}{\partial t} + \nabla \cdot (\rho \vc{v} \vc{v} + \mathsf{P}) = \rho \kappa_F {\vc{F}_r / c} \, , \\
     \label{eq:hydro_energy}
     \frac{\partial E}{\partial t} + \nabla \cdot \left[(E + \mathsf{P})\vc{v}\right] = -c \rho (\kappa_P a_r T^4 - \kappa_E E_r) - \rho \kappa_F \left( \frac{\vc{v}}{c} \cdot \vc{F}_r \right) \, , \\
+    \label{eq:rad_energy}
     \frac{\partial E_r}{\partial t} + \nabla \cdot \left( \frac{\hat c}{c} \vc{F}_r \right) = \hat c \rho \left(\kappa_P a_r T^4 - \kappa_E E_r \right) + \rho \kappa_F \left( \frac{\hat c}{c} \frac{\vc{v}}{c} \cdot \vc{F}_r \right) \, , \\\
+    \label{eq:rad_flux}
     \frac{\partial \vc{F}_r}{\partial t} + \nabla \cdot (c \hat c \, \mathsf{P}_r) = -\hat c \rho \kappa_F \vc{F}_r \, .
 \end{align}
 These equations make no approximations about the frequency dependence of the radiation field. However, for computational tractability, in what follows we will approximate $\kappa_F$ with the Rosseland mean opacity $\kappa_R$, which yields the correct radiation force in the diffusion limit, and approximate $\kappa_E$ with the Planck mean opacity $\kappa_P$, which yields the correct energy absorption and emission in the optically-thin limit for fluids at rest \citep{Mihalas_1984}. However, we emphasise that the choice to set $\kappa_F \approx \kappa_R$ and $\kappa_E \approx \kappa_P$ is an additional approximation, and that others might be preferable depending on the physical system being simulated.  In future work, we plan to address the limitations of these approximate grey opacities via an extension of our method to the multigroup solution of the radiation moment equations.  Our present set of equations is sufficient for grey nonrelativistic radiation hydrodynamics in the semi-transparent regime, where we can neglect the `relativistic work term' that is important only in the dynamic diffusion ($\beta \tau \gtrsim 1$) regime, as described earlier.
@@ -184,11 +186,31 @@ In some cases, especially in underresolved strong shocks, the previous steps do 
 
 Finally, in order to compute the flux of mass, momentum and energy between cells, we use the HLLC Riemann solver with the `primitive variable Riemann solver' wavespeeds and intermediate states \citep{Toro_2013}. We make the standard approximation that the face-average flux is the same as the face-centered flux, and therefore this step is also second-order accurate in spatial resolution. For each cell, the fluxes across each face are then added together to produce an unsplit spatial divergence term used by each stage of the Runge-Kutta integrator to advance the cell in time.
 
+However, it has been long recognized that in strong grid-aligned shocks, the HLLC Riemann solver can unphysically amplify the so-called `carbuncle' instability \citep{Quirk_1994}. In astrophysical problems, this is most often encountered in strong explosions. Implementing additional dissipation in the form of artificial viscosity (e.g., \citealt{Gittings_2008}), the `H-correction' \citep{Sanders_1998}, or by adaptively switching to an HLL Riemann solver for computing fluxes perpendicular to strong shocks (e.g., \citealt{Quirk_1994,Skinner_2019}) are possible solutions to this issue. For future applications, we plan to implement an adaptive procedure to fix the carbuncle instability via the latter method.
+
 \subsection{Radiation}
-Why did we choose these methods: efficiency, GPU, etc.
-%The maximum stable foward Euler timestep is only ${\Delta x}/{\hat c}$ rather than ${\Delta x}/{c}$
+The radiation subsystem (\autoref{eq:rad_energy}--\autoref{eq:rad_flux}) is treated in a similar method-of-lines fashion. Our approach is most similar to that of \cite{Skinner_2019}, who evolve the radiation moment equations with a time-explicit method-of-lines approach but do not use a reduced speed of light nor a PPM reconstruction. In this work, we adopt the reduced speed of light radiation moment equations \citep{Skinner_2013} and evolve them explicitly in time with several radiation timesteps per hydrodynamic timestep. In the regime of applicability of the reduced-speed-of-light approximation, this approach allows a much more computationally efficient solution to the radiation moment equations, due to the fact that explicit methods have a greater arithmetic intensity per byte of data and do not require global communication across the computational domain in order to advance the solution in time. A high arithmetic intensity of the algorithm is greatly beneficial on GPUs, where the ratio of floating-point arithmetic performance to memory bandwidth is typically greater than on CPUs.
+
+For the time integration on each AMR level, we evolve multiple radiation timesteps per hydrodynamic timestep using the RK2-SSP integrator \citep{Shu_1988}. We likewise use a finite volume representation of the radiation variables, with a PPM spatial reconstruction (or optionally, PLM) of the radiation energy density $E_r$ and reduced flux $\mathbf{f} = \mathbf{F_r} / cE_r$ carried out in the same fashion as described previously for the hydrodynamic variables, with the only exception that we do not employ a shock flattening procedure. There can exist unphysical radiation shocks when using local closures, since in general such closures make the radiation subsystem nonlinear, but there is no applicable shock flattening procedure to suppress this effect. Reconstruction is done in terms of the reduced flux $\mathbf{f}$ rather than the flux $\mathbf{F_r}$ in order to suppress unphysical fluxes $|\mathbf{F_r}| > cE$. This is effective in 1D problems, but in multidimensional problems, the magnitude of the radiation flux may still exceed $cE_r$, which is an unphysical state in which local closures cannot compute the Eddington factor at all. Reducing the order of reconstruction to first order (piecewise constant) when the interface states violate this constraint helps but does not eliminate the issue in all cases. For the purpose of computing the local closure only, we use rescale the flux such that $|\mathbf{F_r}| = cE_r$ whenever $|\mathbf{F_r}| > cE_r$.  For particularly difficult problems, especially in order to avoid unphysical instabilities in the propagation of non-grid-aligned optically-thin radiation fronts, we find that it is necessary to reconstruct the radiation variables using PLM reconstruction.
+
+An issue with upwind finite volume methods for radiation transport is that in naive form, they do not give the correct behavior for diffusive regions where the optical depth per cell is much greater than 1 because the numerical diffusion dominates over the physical diffusion \citep{Lowrie_2001}. A common fix for this incorrect behavior is a modification of the Riemann solver in the optically thick regime \citep{Audit_2002,Skinner_2019,Mezzacappa_2020}, but this can lead to violations of the flux-limiting condition ($F_r \leq cE_r$) in the streaming regime \citep{Audit_2002}, especially at discontinuities in the opacity from optically-thin cells to optically-thick cells. The only apparent fix for this problem is to disable the optical-depth correction in the Riemann solver for those cells in which a flux-violating state is produced. We find that this fix is only activated when $f \rightarrow 1$, so it may not qualitatively affect the solution. However, we advocate refining on the gradient in the optical depth per cell in order to resolve the boundary layers in such situations whenever it is computationally feasible. In Appendix \ref{appendix:asymptotic_correction}, we show that such an optical-depth correction substantially improves the behavior of the method in the diffusive regime, but is not sufficient to obtain the correct diffusion solution in thermal waves.
+
+For computing the flux of radiation quantities between cells, we use an HLL Riemann solver, with wavespeeds computed assuming the Eddington factors are fixed at the beginning of the timestep \citep{Balsara_1999}. This approach allows us to substitute different closure relations for the Eddington factors without requiring a modification of the Riemann solver, unlike previous implementations that are restricted to a single local closure (e.g., \citealt{Gonzalez_2007,Skinner_2013,Skinner_2019}). In principle, we could even use Eddington tensors computed via a short characteristics formal solution of the radiative transfer equation (e.g., \citealt{Davis_2012}), but we leave exploration of a non-local VET method to future work.
 
 \subsubsection{Closure relations}
+By default, we use the \cite{Levermore_1984} closure, which is derived by assuming that the radiation field is isotropic in some (unknown) reference frame and then computing a Lorentz transform from this reference frame to that of the given reduced flux $\mathbf{f}$. The radiation pressure tensor $\mathsf{P}$ produced by this closure can be expressed as (e.g., \citealt{Gonzalez_2007,Rosdahl_2013,Skinner_2013}):
+\begin{align}
+\mathsf{P} = \left( \frac{1 - \chi}{2} \mathsf{I} + \frac{3\chi - 1}{2} \mathbf{\hat n} \mathbf{\hat n} \right) E_r
+\end{align}
+where $\mathsf{I}$ is the identity tensor, and the Eddington factor $\chi$ and the flux direction cosine $\mathbf{\hat n}$ are
+\begin{align}
+\chi = \frac{3 + 4f^2}{5 + 2 \sqrt{4 - 3 f^2}} \, , \\
+\mathbf{\hat n} = \frac{\mathbf{F_r}}{|F_r|} \, .
+\end{align}
+Other local closures have been derived based on other principles, e.g. \cite{Minerbo_1978,Levermore_1981}. There exists several comparisons of their performance with respect to angle-dependent transport solutions for both neutrino transport (e.g., \citealt{Janka_1992,Koerner_1992}) and radiation transport (e.g., \citealt{Olson_2000}). Because of its prominence in the neutrino transport literature as well as marginally favorable performance on some test problems, we also provide an implementation of the \cite{Minerbo_1978} closure. Any local closure is available to users given that they provide an implementation of a function that maps $f \rightarrow \chi$ for their preferred closure; no computational performance is sacrificed due to this flexibility.
+
+\subsection{Matter-radiation coupling}
+We use an implicit method to evaluate the source terms for both the radiation and hydrodynamic subsystems based on that of \cite{Howell_2003}\dots
 
 \section{Test problems}
 \label{section:tests}
@@ -252,6 +274,8 @@ The source code and entire commit history for \textsc{Quokka} is hosted in this 
 %%%%%%%%%%%%%%%%% APPENDICES %%%%%%%%%%%%%%%%%%%%%
 
 \appendix
+\section{Asymptotic diffusion correction}
+\label{appendix:asymptotic_correction}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
