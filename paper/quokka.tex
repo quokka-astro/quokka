@@ -225,10 +225,67 @@ We emphasise that this is only one possible choice of closure, and a variety of 
 
 \subsubsection{Matter-radiation coupling}
 \label{sssec:coupling}
-We use an implicit method to evaluate the source terms for both the radiation and hydrodynamic subsystems based on that of \cite{Howell_2003}\dots
+Following the computation of the hyperbolic part of the radiation subsystem, we use an implicit method to evaluate the source terms for both the radiation and hydrodynamic subsystems. Since there are no spatial derivatives in these terms, each cell can be updated independently.
+
+The energy source terms are handled via the backward-Euler implicit method of \cite{Howell_2003}, specialized to the case of a single material and extended to include a reduced speed of light. The following system of equations is iteratively solved using a Newton-Raphson method:
+\begin{align}
+R &\equiv \Delta t \rho \kappa_P (4 \pi B - \hat c E_r) \, , \\
+F_G &\equiv (E_g^{t+1} - E_g^{t}) + \left( \frac{c}{\hat c} \right) R \, , \\
+F_R &\equiv (E_{r}^{t+1} - E_{r}^{t}) - \left( R + S \right) \, , \\
+F_G &= 0 \, , \\
+F_R &= 0 \, ,
+\end{align}
+where $\Delta t$ is the radiation substep timestep, $E_g^{t+1}$ is the new internal gas energy, $E_g^{t}$ is the internal gas energy prior to the update, $E_r^{t+1}$ is the new radiation energy, $E_r^t$ is the radiation energy prior to the update, $S$ is an external radiation energy source term, and $F_G$ and $F_R$ are the residual errors in the gas energy and radiation energy, respectively.
+
+The elements of the Jacobian matrix are
+\begin{align}
+\frac{\partial F_G}{\partial E_g} &= 1 + \left( \frac{c}{\hat c} \right) \frac{\partial R}{\partial E_g} \, , \\
+\frac{\partial F_G}{\partial E_r} &= -c \Delta t \rho \kappa_P \, , \\
+\frac{\partial F_R}{\partial E_g} &= -\frac{\partial R}{\partial E_g} \, , \\
+\frac{\partial F_R}{\partial E_r} &= 1 + \hat c \Delta t \rho \kappa_P \, ,
+\end{align}
+where
+\begin{align}
+\frac{\partial R}{\partial E_g} &= \frac{\rho \Delta t}{C_v} \left[ \kappa_P \frac{\partial B}{\partial T} + \frac{\partial \kappa_P}{\partial T} \left( 4\pi B - \hat c E_r^{t+1} \right) \right] \, ,
+\end{align}
+and the iterative update can be written as
+\begin{align}
+\Delta E_r &= -\frac{F_R + \eta F_G}{ \frac{\partial F_R}{\partial E_r} + \eta \frac{\partial F_G}{\partial E_r} } \, , \\ 
+\Delta E_g &= -\frac{F_G + \Delta E_r \frac{\partial F_G}{\partial E_r}}{ \frac{\partial F_G}{\partial E_g} } \, .
+\end{align}
+where $\eta \equiv - \frac{\partial F_R}{\partial E_g} \left( \frac{\partial F_G}{\partial E_g} \right)^{-1}$.
+\cite{Howell_2003} leave unspecified the convergence criteria they use for their solver. After experimenting with many possible criteria, we decide to stop the Newton-Raphson iterations when the residuals $F_R$ and $F_G$ satisfy
+\begin{align}
+\left| \frac{F_G}{E_{\text{tot}}} \right| &< \epsilon \, \, \text{and} \\
+\left| \frac{c}{\hat c} \frac{F_R}{E_{\text{tot}}} \right| &< \epsilon \, ,
+\end{align}
+where
+\begin{align}
+E_{\text{tot}} &\equiv E_g^t + \frac{c}{\hat c} \left( E_r^t + S \right) \, .
+\end{align}
+When $\hat c = c$, $E_{\text{tot}}$ is the total (internal gas plus radiation) energy at the end of the timestep. By default, the relative tolerance $\epsilon$ is set to $10^{-10}$. We find that larger tolerances produce unacceptably inaccurate solutions for many problems. In especially stiff problems, it may be necessary to reduce the tolerance to the order of machine precision for double-precision floating point arithmetic ($\sim 10^{-15}$). If the solver exceeds a specified maximum number of iterations (400 by default) without converging, the code prints an error message and exits. Convergence failure usually occurs only when the intial timestep has not been sufficently reduced compared to the CFL timestep at the start of a simulation.
+
+Once the Newton-Raphson iterations have converged, we have obtained the updated gas internal energy and radiation energy. We then compute the Rosseland mean opacity $\kappa_R$ using the updated gas temperature, and proceed to update the gas and radiation momenta. Following \cite{Skinner_2019}, we use a backward-Euler discretization of the radiation flux source term (modified to include a reduced speed of light):
+\begin{align}
+\vc{F_r}^{t+1} = \frac{\vc{F_r}^t}{1 + \rho \kappa_R \hat c \Delta t} \, .
+\end{align}
+In order to ensure momentum conservation when $\hat c = c$, we apply the difference in radiation flux in an equal and opposite manner to the gas momenta (as advocated by \citealt{Skinner_2019}):
+\begin{align}
+\Delta \vc{F_r} &\equiv \vc{F_r}^{t+1} - \vc{F_r}^{t} \, , \\
+{(\rho \vc{v})}^{t+1} &= {(\rho \vc{v})}^{t} - \frac{\Delta \vc{F_r}}{\hat c c} \, .
+\end{align}
+
+Finally, we compute the work done by the radiation force on the gas. Since we are evolving the conserved variables, this term cannot be computed explicitly as written in \autoref{eq:rad_energy} without causing a significant error in the gas internal energy when the radiation force is stiff. We instead compute this term as the difference in gas kinetic energy over the timestep $\Delta E_{\text{kin}}$, then add this quantity to the total gas energy and subtract this quantity from the radiation energy:
+\begin{align}
+E^{t+1} &\leftarrow E_g^{t+1} + \left( E_{\text{kin}}^t + \Delta E_{\text{kin}} \right) \, , \\
+E_r^{t+1} &\leftarrow E_r^{t+1} - \left( \frac{\hat c}{c} \right) \Delta E_{\text{kin}} \, ,
+\end{align}
+where $E^{t+1}$ denotes the total gas energy at the end of the timestep.
 
 \subsubsection{Level synchronization procedure}
 \label{sssec:sync}
+
+As explained by \cite{Berger:1989}, it is necessary to adjust the solution on the coarse AMR level following the solution on any refined level in order to maintain conservation of the evolved quantities (e.g., mass, momentum, energy)\dots
 
 \section{Test problems}
 \label{section:tests}
