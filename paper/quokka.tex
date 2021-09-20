@@ -179,7 +179,7 @@ This update cycle operates within a \citet{Berger:1984} / \citet{Berger:1989} ad
 
 \subsubsection{Hydrodynamics}
 \label{sssec:hydro}
-For the solution of the hydrodynamic subsystem (\autoref{eq:hydro_continuity}--\autoref{eq:hydro_energy}), we adopt a method-of-lines (or semi-discrete) approach, discretizing the spatial variables while initially keeping the time variable continuous, thereby transforming the partial differential equations into a large set of ordinary differential equations that can be integrated in time using a standard ordinary differential equation (ODE) integrator \citep{Jameson_1981}. For the latter, we use the second-order strong stability preserving Runge-Kutta method (RK2-SSP; \citealt{Shu_1988}). Such an approach has been successfully employed in several recent astrophysical hydrodynamics codes \citep{Skinner_2019,Stone_2020}. Somewhat surprisingly, we find that such a method-of-lines scheme is not stable when combining higher-order spatial reconstruction with forward Euler time integration, but is stable for timesteps $\mathcal{O}(\Delta x / (c_s + |v|))$ when used with higher-order Runge-Kutta methods. This is consistent with the findings of \cite{Stone_2020}, who also find that the maximum stable timestep corresponding to the linear stability region of a given (second order or higher) Runge-Kutta integrator divided by the number of spatial dimensions. As \cite{Skinner_2019} notes, in contrast to fully-discrete unsplit hydrodynamic methods such as the corner transport upwind (CTU) method \citep{Colella_1990}, the coupling across corners of each cell is achieved via the use of a multi-stage time integrator, rather than via direct computation of fluxes from diagonal neighbors of each cell. While we are formally limited to a smaller timestep compared to the CTU method, our method may be more robust in practice, as the CTU integrator has been found to be unstable in supersonic turbulence with strong radiative cooling unless very small ($\lesssim 0.1$) CFL numbers are employed \citep{Schneider_2017}.
+For the solution of the hydrodynamic subsystem (\autoref{eq:hydro_continuity}--\autoref{eq:hydro_energy}, omitting the matter-radiation coupling terms on the right hand sides), we adopt a method-of-lines (or semi-discrete) approach, discretizing the spatial variables while initially keeping the time variable continuous, thereby transforming the partial differential equations into a large set of ordinary differential equations that can be integrated in time using a standard ordinary differential equation (ODE) integrator \citep{Jameson_1981}. For the latter, we use the second-order strong stability preserving Runge-Kutta method (RK2-SSP; \citealt{Shu_1988}). Such an approach has been successfully employed in several recent astrophysical hydrodynamics codes \citep{Skinner_2019,Stone_2020}. Somewhat surprisingly, we find that such a method-of-lines scheme is not stable when combining higher-order spatial reconstruction with forward Euler time integration, but is stable for timesteps $\mathcal{O}(\Delta x / (c_s + |v|))$ when used with higher-order Runge-Kutta methods. This is consistent with the findings of \cite{Stone_2020}, who also find that the maximum stable timestep corresponding to the linear stability region of a given (second order or higher) Runge-Kutta integrator divided by the number of spatial dimensions. As \cite{Skinner_2019} notes, in contrast to fully-discrete unsplit hydrodynamic methods such as the corner transport upwind (CTU) method \citep{Colella_1990}, the coupling across corners of each cell is achieved via the use of a multi-stage time integrator, rather than via direct computation of fluxes from diagonal neighbors of each cell. While we are formally limited to a smaller timestep compared to the CTU method, our method may be more robust in practice, as the CTU integrator has been found to be unstable in supersonic turbulence with strong radiative cooling unless very small ($\lesssim 0.1$) CFL numbers are employed \citep{Schneider_2017}.
 
 We reconstruct the hydrodynamic variables on each face of each cell from the cell-average variables of the neighbouring cells. We perform this reconstruction using the piecewise parabolic method (PPM) \citep[hereafter \citetalias{Colella_1984}]{Colella_1984} using the primitive hydrodynamic variables (density, velocity, and pressure). As is standard, the conversion from conserved (density, momentum, and energy) to primitive variables is carried out assuming that the volume average and cell centered states are equivalent, which is an approximation accurate to $\mathcal{O}(\Delta x^2)$. As noted by several authors, the PPM algorithm is therefore formally second-order accurate in spatial resolution. After the primitive variables have been defined, for the reconstruction step proper, we use the standard interface-centered PPM stencil:
 \begin{align}
@@ -202,7 +202,7 @@ Future work may also include implementing an adaptive method to reduce the order
 \subsubsection{Radiation}
 \label{sssec:radiation}
 
-We solve the radiation subsystem (\autoref{eq:rad_energy}--\autoref{eq:rad_flux}) in a similar method-of-lines fashion. Our approach is most similar to that of \cite{Skinner_2019}, who also evolve the radiation moment equations with a time-explicit method-of-lines approach; however, they do not use either PPM reconstruction or a reduced speed of light. Because even with the RSLA the signal speed for the radiation subsystem is substantially larger than for the hydrodynamic subsystem, we evolve the former explicitly in time with several radiation timesteps per hydrodynamic timestep. In the regime of applicability of the RSLA, this approach allows a much more computationally efficient solution to the radiation moment equations, due to the fact that explicit methods have a greater arithmetic intensity per byte of data and do not require global communication across the computational domain in order to advance the solution in time. This high arithmetic intensity is greatly beneficial on GPUs, where the ratio of floating-point arithmetic performance to memory bandwidth is typically greater than on CPUs.
+We solve the radiation transport subsystem (\autoref{eq:rad_energy}--\autoref{eq:rad_flux}, again omitting the terms on the right-hand side) in a similar method-of-lines fashion. Our approach is most similar to that of \cite{Skinner_2019}, who also evolve the radiation moment equations with a time-explicit method-of-lines approach; however, they do not use either PPM reconstruction or a reduced speed of light. Because even with the RSLA the signal speed for the radiation subsystem is substantially larger than for the hydrodynamic subsystem, we evolve the former explicitly in time with several radiation timesteps per hydrodynamic timestep. In the regime of applicability of the RSLA, this approach allows a much more computationally efficient solution to the radiation moment equations, due to the fact that explicit methods have a greater arithmetic intensity per byte of data and do not require global communication across the computational domain in order to advance the solution in time. This high arithmetic intensity is greatly beneficial on GPUs, where the ratio of floating-point arithmetic performance to memory bandwidth is typically greater than on CPUs.
 
 We carry out each radiation subcycle using the same RK2-SSP integrator \citep{Shu_1988} that we use for hydrodynamics. We likewise use a finite volume representation of the radiation variables, with a PPM spatial reconstruction (or optionally, PLM) of the radiation energy density $E_r$ and reduced flux $\mathbf{f} = \mathbf{F_r} / cE_r$; the only difference in our procedures for hydrodynamics and radiation is that for radiation we do not employ a shock flattening procedure. There can exist unphysical radiation shocks when using local closures, since in general such closures make the radiation subsystem nonlinear, but there is no applicable shock flattening procedure to suppress this effect. We carry out reconstruction in terms of the reduced flux $\mathbf{f}$ rather than the absolute flux $\mathbf{F_r}$ in order to suppress unphysical fluxes $|\mathbf{F_r}| > cE$. This is effective in 1D problems, but in multidimensional problems, the magnitude of the radiation flux may still exceed $cE_r$, which is an unphysical state in which local closures cannot compute the Eddington factor at all. Reducing the order of reconstruction to first order (piecewise constant) when the interface states violate this constraint helps but does not eliminate the issue in all cases. For the purpose of computing the local closure only, we use rescale the flux such that $|\mathbf{F_r}| = cE_r$ whenever $|\mathbf{F_r}| > cE_r$.  For particularly difficult problems, especially in order to avoid unphysical instabilities in the propagation of non-grid-aligned optically-thin radiation fronts, we find that it is necessary to reconstruct the radiation variables using PLM reconstruction.
 
@@ -226,19 +226,21 @@ We emphasise that this is only one possible choice of closure, and a variety of 
 
 \subsubsection{Matter-radiation coupling}
 \label{sssec:coupling}
-Following the computation of the hyperbolic part of the radiation subsystem, we use an implicit method to evaluate the source terms for both the radiation and hydrodynamic subsystems. Since there are no spatial derivatives in these terms, each cell can be updated independently.
 
-The energy source terms are handled via the backward-Euler implicit method of \cite{Howell_2003}, specialized to the case of a single material and extended to include a reduced speed of light. The following system of equations is iteratively solved using a Newton-Raphson method:
-\begin{align}
-R &\equiv \Delta t \rho \kappa_P (4 \pi B - \hat c E_r) \, , \\
-F_G &\equiv (E_g^{t+1} - E_g^{t}) + \left( \frac{c}{\hat c} \right) R \, , \\
-F_R &\equiv (E_{r}^{t+1} - E_{r}^{t}) - \left( R + S \right) \, , \\
-F_G &= 0 \, , \\
-F_R &= 0 \, ,
-\end{align}
-where $\Delta t$ is the radiation substep timestep, $E_g^{t+1}$ is the new internal gas energy, $E_g^{t}$ is the internal gas energy prior to the update, $E_r^{t+1}$ is the new radiation energy, $E_r^t$ is the radiation energy prior to the update, $S$ is an external radiation energy source term, and $F_G$ and $F_R$ are the residual errors in the gas energy and radiation energy, respectively.
+Following the computation of the hyperbolic part of the radiation subsystem, we use an implicit method to evaluate the source terms (those appearing on the right-hand sides of \autoref{eq:hydro_continuity}--\autoref{eq:rad_flux}) for both the radiation and hydrodynamic subsystems; this update occurs once per radiation subcycle, and thus several times per hydrodynamic step. Since there are no spatial derivatives in these terms, each cell can be updated independently.
 
-The elements of the Jacobian matrix are
+The radiation-matter coupling update occurs in three steps. The first is to handle the energy source terms $c\rho (\kappa_P a_r T^4 - \kappa_E E_r)$ that appear in \autoref{eq:hydro_energy} and \autoref{eq:rad_energy}. In the regime of problems to which we can apply the RSLA this term is often the stiffest, and we therefore update it using the backward-Euler implicit method of \cite{Howell_2003}, specialized to the case of a single material and extended to include a reduced speed of light. Let $E_g = E - \rho v^2/2$ be the gas internal energy, and let $E_g^t$ and $E_r^t$ be the gas internal energy and radiation energy at the end of the hyperbolic update. We compute the new gas internal energy $E_g^{t+1}$ and radiation energy $E_r^{t+1}$ after accounting for the exchange term by solving the implicit system
+\begin{eqnarray}
+0 = F_G &\equiv &(E_g^{t+1} - E_g^{t}) + \left( \frac{c}{\hat c} \right) R \\
+0 = F_R &\equiv & (E_{r}^{t+1} - E_{r}^{t}) - \left( R + S \right),
+\end{eqnarray}
+where 
+\begin{equation}
+R \equiv \Delta t \rho \kappa_P (4 \pi B - \hat c E_r),
+\end{equation}
+$\Delta t$ is the radiation substep timestep, and $S$ is an optional source term that we include to allow, for example, addition of radiation by stellar sources. The quantities $F_G$ and $F_R$ are the residual errors in the gas energy and radiation energy, respectively.
+
+To solve this system via Newton-Raphson iteration, we require the Jacobian matrix, the elements of which are
 \begin{align}
 \frac{\partial F_G}{\partial E_g} &= 1 + \left( \frac{c}{\hat c} \right) \frac{\partial R}{\partial E_g} \, , \\
 \frac{\partial F_G}{\partial E_r} &= -c \Delta t \rho \kappa_P \, , \\
@@ -249,13 +251,14 @@ where
 \begin{align}
 \frac{\partial R}{\partial E_g} &= \frac{\rho \Delta t}{C_v} \left[ \kappa_P \frac{\partial B}{\partial T} + \frac{\partial \kappa_P}{\partial T} \left( 4\pi B - \hat c E_r^{t+1} \right) \right] \, ,
 \end{align}
-and the iterative update can be written as
+$C_v$ is the gas specific heat at constant volume. From the Jacobian, we can write the change in radiation and gas temperature for each iterative update as
 \begin{align}
+\label{eq:delta_er}
 \Delta E_r &= -\frac{F_R + \eta F_G}{ \frac{\partial F_R}{\partial E_r} + \eta \frac{\partial F_G}{\partial E_r} } \, , \\ 
+\label{eq:delta_eg}
 \Delta E_g &= -\frac{F_G + \Delta E_r \frac{\partial F_G}{\partial E_r}}{ \frac{\partial F_G}{\partial E_g} } \, .
 \end{align}
-where $\eta \equiv - \frac{\partial F_R}{\partial E_g} \left( \frac{\partial F_G}{\partial E_g} \right)^{-1}$.
-\cite{Howell_2003} leave unspecified the convergence criteria they use for their solver. After experimenting with many possible criteria, we decide to stop the Newton-Raphson iterations when the residuals $F_R$ and $F_G$ satisfy
+where $\eta \equiv - (\partial F_R/\partial E_g) ( \partial F_G/\partial E_g )^{-1}$. We repeatedly apply \autoref{eq:delta_er} and \autoref{eq:delta_eg} to the radiation and gas energies until the system converges. \citet{Howell_2003} leave unspecified the convergence criteria they use for their solver. After experimenting with several possibilites, we decide to stop the Newton-Raphson iterations when the residuals $F_R$ and $F_G$ satisfy
 \begin{align}
 \left| \frac{F_G}{E_{\text{tot}}} \right| &< \epsilon \, \, \text{and} \\
 \left| \frac{c}{\hat c} \frac{F_R}{E_{\text{tot}}} \right| &< \epsilon \, ,
@@ -266,29 +269,30 @@ E_{\text{tot}} &\equiv E_g^t + \frac{c}{\hat c} \left( E_r^t + S \right) \, .
 \end{align}
 When $\hat c = c$, $E_{\text{tot}}$ is the total (internal gas plus radiation) energy at the end of the timestep. By default, the relative tolerance $\epsilon$ is set to $10^{-10}$. We find that larger tolerances produce unacceptably inaccurate solutions for many problems. In especially stiff problems, it may be necessary to reduce the tolerance to the order of machine precision for double-precision floating point arithmetic ($\sim 10^{-15}$). If the solver exceeds a specified maximum number of iterations (400 by default) without converging, the code prints an error message and exits. Convergence failure usually occurs only when the intial timestep has not been sufficently reduced compared to the CFL timestep at the start of a simulation.
 
-Once the Newton-Raphson iterations have converged, we have obtained the updated gas internal energy and radiation energy. We then compute the Rosseland mean opacity $\kappa_R$ using the updated gas temperature, and proceed to update the gas and radiation momenta. Following \cite{Skinner_2019}, we use a backward-Euler discretization of the radiation flux source term (modified to include a reduced speed of light):
+Once the Newton-Raphson iterations have converged, we have obtained the updated gas internal energy and radiation energy, and we proceed to the next two steps of updating the coupling terms. We first update the radiation and gas momenta, accounting for the coupling term $\rho \kappa_F \mathbf{F}_r/c$. To do so compute the flux mean opacity $\kappa_F$ using the updated gas temperature. Then, following \cite{Skinner_2019}, we use a backward-Euler discretization of the radiation flux source term (modified to include a reduced speed of light):
 \begin{align}
-\vc{F_r}^{t+1} = \frac{\vc{F_r}^t}{1 + \rho \kappa_R \hat c \Delta t} \, .
+\vc{F}_r^{t+1} = \frac{\vc{F}_r^t}{1 + \rho \kappa_F \hat c \Delta t} \, .
 \end{align}
 In order to ensure momentum conservation when $\hat c = c$, we apply the difference in radiation flux in an equal and opposite manner to the gas momenta (as advocated by \citealt{Skinner_2019}):
 \begin{align}
-\Delta \vc{F_r} &\equiv \vc{F_r}^{t+1} - \vc{F_r}^{t} \, , \\
-{(\rho \vc{v})}^{t+1} &= {(\rho \vc{v})}^{t} - \frac{\Delta \vc{F_r}}{\hat c c} \, .
+\Delta \vc{F}_r &\equiv \vc{F}_r^{t+1} - \vc{F}_r^{t} \, , \\
+{(\rho \vc{v})}^{t+1} &= {(\rho \vc{v})}^{t} - \frac{\Delta \vc{F}_r}{\hat c c} \, .
 \end{align}
 
-Finally, we compute the work done by the radiation force on the gas. Since we are evolving the conserved variables, this term cannot be computed explicitly as written in \autoref{eq:rad_energy} without causing a significant error in the gas internal energy when the radiation force is stiff. We instead compute this term as the difference in gas kinetic energy over the timestep $\Delta E_{\text{kin}}$, then add this quantity to the total gas energy and subtract this quantity from the radiation energy:
+The final step is to compute the work done by the radiation force on the gas. Since we are evolving the conserved variables, this term cannot be computed explicitly as written in \autoref{eq:rad_energy} without causing a significant error in the gas internal energy when the radiation force is stiff. We instead compute this term as the difference in gas kinetic energy over the timestep $\Delta E_{\text{kin}}$, then add this quantity to the total gas energy and subtract this quantity from the radiation energy:
 \begin{align}
 E^{t+1} &\leftarrow E_g^{t+1} + \left( E_{\text{kin}}^t + \Delta E_{\text{kin}} \right) \, , \\
 E_r^{t+1} &\leftarrow E_r^{t+1} - \left( \frac{\hat c}{c} \right) \Delta E_{\text{kin}} \, ,
 \end{align}
-where $E^{t+1}$ denotes the total gas energy at the end of the timestep.
+where $E^{t+1}$ denotes the total gas energy at the end of the timestep. This completes the update for all radiation-matter coupling terms.
+
 
 \subsubsection{Level synchronization procedure}
 \label{sssec:sync}
 
-As explained by \cite{Berger:1989}, it is necessary to adjust the solution on the coarse AMR level following the solution on any refined level in order to maintain conservation of the evolved quantities (e.g., mass, momentum, energy). For hyperbolic equations evolved explicitly in time, this is traditionally done by saving the flux at the coarse-fine grid boundary in a `flux register' for both the flux computed on the fine level and the flux computed at the fine level. In general, these fluxes are different due to the differing stencil used on the coarse and fine levels, and without correction, this would lead to a loss of conservation of energy (and any other conserved quantities). The flux register stores this mismatch, and in the synchronization step, adds the missing mass, momentum, or energy to the cells on the coarse level immediately adjacent to the coarse-fine boundary.
+As explained by \cite{Berger:1989}, in an AMR calculation it is necessary to adjust the solution on the coarse AMR level following the solution on any refined level in order to maintain conservation of the evolved quantities (e.g., mass, momentum, energy). For hyperbolic equations evolved explicitly in time, this is traditionally done by saving the flux at the coarse-fine grid boundary in a `flux register' for both the flux computed on the fine level and the flux computed at the fine level. In general, these fluxes are different due to the differing stencil used on the coarse and fine levels, and without correction, this would lead to a loss of conservation of energy (and any other conserved quantities). The flux register stores this mismatch, and in the synchronization step, adds the missing mass, momentum, or energy to the cells on the coarse level immediately adjacent to the coarse-fine boundary.
 
-As noted by \cite{Howell_2003}, an implicit radiation update has additional difficulties in ensuring conservation, since radiation can propagate much further than a single grid cell on the coarse grid. Our radiation update is fully explicit, but we would like to advance each AMR level on the hydrodynamic timescale, rather than on the radiation timescale, so we have a similar long-range signal propagation difficulty. \cite{Rosdahl_2013} outline three possible solutions to the problem: i) perform the radiation solve after each coarse hydrodynamic step, keeping subcycling-in-time on refined levels (which would be very inaccurate), ii) use a single global timestep for all AMR levels, which allows one to advance the radiation solution on all levels in each radiation substep (which would be very computationally expensive, since in our applications of interest, the global timestep is typically limited by the timestep of the highest-resolution level) or iii) restrict the timestep for each level to the minimum of the radiation and hydrodynamic timesteps. In our code, we set the coarse timestep such that the number of radiation substeps per level is limited to a maximum value $N_{\text{sub,max}}$ in order to minimize the signal propagation distance from the coarse-fine boundaries. The flux mismatch at the coarse-fine boundaries is added to the immediately adjacent cells on the coarse grid at the end of each level advance. When $N_{\text{sub,max}} = 1$, our solution is identical to the flux synchronization method used in the \textsc{RAMSES} AMR code \citep{Rosdahl_2013}. We set the parameter $N_{\text{sub,max}}$ to a default of $10$, which appears to be sufficient to avoid significant glitches in the radiation energy and flux at coarse-fine boundaries and is used for all of the test problems shown in this work. Users are able to set this parameter as desired for either greater efficiency or greater consistency at refinement boundaries. When this parameter is too large, however, it is possible for the coarse level to fail to maintain positivity of the radiation energy or causality of the radiation flux.
+As noted by \cite{Howell_2003}, an implicit radiation update has additional difficulties in ensuring conservation, since radiation can propagate much further than a single grid cell on the coarse grid. Our radiation update is fully explicit, but we would like to advance each AMR level on the hydrodynamic timescale, rather than on the radiation timescale, so we have a similar long-range signal propagation difficulty. \cite{Rosdahl_2013} outline three possible solutions to the problem: i) perform the radiation solve after each coarse hydrodynamic step, keeping subcycling-in-time on refined levels (which would be very inaccurate), ii) use a single global timestep for all AMR levels, which allows one to advance the radiation solution on all levels in each radiation substep (which would be very computationally expensive, since in our applications of interest, the global timestep is typically limited by the timestep of the highest-resolution level) or iii) restrict the timestep for each level to the minimum of the radiation and hydrodynamic timesteps. In our code, we set the coarse timestep such that the number of radiation substeps per level is limited to a maximum value $N_{\text{sub,max}}$ in order to minimize the signal propagation distance from the coarse-fine boundaries. The flux mismatch at the coarse-fine boundaries is added to the immediately adjacent cells on the coarse grid at the end of each level advance. When $N_{\text{sub,max}} = 1$, our solution is identical to the flux synchronization method used in the \textsc{RAMSES} AMR code \citep{Rosdahl_2013}. However, as a default we set the parameter $N_{\text{sub,max}}$ to $10$, which appears to be sufficient to avoid significant discontinuities in the radiation energy and flux at coarse-fine boundaries, but still allows for significant subcycling and thus a substantially lower computational cost. We use this value for all test problems shown in this work, but users are able to set this parameter as desired for either greater efficiency or greater consistency at refinement boundaries. When this parameter is too large, however, it is possible for the coarse level to fail to maintain positivity of the radiation energy or causality of the radiation flux.
 
 \section{Test problems}
 \label{section:tests}
@@ -296,46 +300,46 @@ As noted by \cite{Howell_2003}, an implicit radiation update has additional diff
 \subsection{Hydrodynamics}
 \subsubsection{Sound wave}
 \begin{figure}
-    \includegraphics[width=\columnwidth]{../tests/density_1.0000.pdf}
-    \includegraphics[width=\columnwidth]{../tests/pressure_1.0000.pdf}
+    %\includegraphics[width=\columnwidth]{../tests/density_1.0000.pdf}
+    %\includegraphics[width=\columnwidth]{../tests/pressure_1.0000.pdf}
     \caption{A sound wave.}
     \label{fig:sound_wave}
 \end{figure}
 \subsubsection{Contact wave}
 \begin{figure}
-    \includegraphics[width=\columnwidth]{../tests/hydro_contact.pdf}
+    %\includegraphics[width=\columnwidth]{../tests/hydro_contact.pdf}
     \caption{A contact discontinuity.}
     \label{fig:contact_wave}
 \end{figure}
 \subsubsection{Stationary shock tube}
 \begin{figure}
-    \includegraphics[width=\columnwidth]{../tests/hydro_0.4000.pdf}
+    %\includegraphics[width=\columnwidth]{../tests/hydro_0.4000.pdf}
     \caption{A shock tube.}
     \label{fig:shocktube}
 \end{figure}
 \subsubsection{`LeBlanc' test}
 \begin{figure}
-    \includegraphics[width=\columnwidth]{../tests/hydro_leblanc_6.0000.pdf}
-    \includegraphics[width=\columnwidth]{../tests/hydro_leblanc_eint_6.0000.pdf}
+    %\includegraphics[width=\columnwidth]{../tests/hydro_leblanc_6.0000.pdf}
+    %\includegraphics[width=\columnwidth]{../tests/hydro_leblanc_eint_6.0000.pdf}
     \caption{The LeBlanc test problem.}
     \label{fig:leblanc}
 \end{figure}
 \subsubsection{Wave-shock interaction (Shu-Osher test)}
 \begin{figure}
-    \includegraphics[width=\columnwidth]{../tests/hydro_shuosher.pdf}
+    %\includegraphics[width=\columnwidth]{../tests/hydro_shuosher.pdf}
     \caption{The Shu-Osher wave-shock interaction problem.}
     \label{fig:shu_osher}
 \end{figure}
 \subsubsection{Slow-moving shock}
 \begin{figure}
-    \includegraphics[width=\columnwidth]{../tests/hydro_sms_1.0000.pdf}
+   % \includegraphics[width=\columnwidth]{../tests/hydro_sms_1.0000.pdf}
     \caption{A slow-moving shock test problem.}
     \label{fig:sms}
 \end{figure}
 \subsubsection{Strong rarefaction}
 \begin{figure}
-    \includegraphics[width=\columnwidth]{../tests/hydro_vacuum_0.1500.pdf}
-    \includegraphics[width=\columnwidth]{../tests/hydro_vacuum_eint_0.1500.pdf}
+    %\includegraphics[width=\columnwidth]{../tests/hydro_vacuum_0.1500.pdf}
+    %\includegraphics[width=\columnwidth]{../tests/hydro_vacuum_eint_0.1500.pdf}
     \caption{A strong rarefaction test problem.}
     \label{fig:vacuum}
 \end{figure}
@@ -353,25 +357,25 @@ We illustrate this problem in \autoref{fig:kh_zoom}.
 \subsection{Radiation}
 \subsubsection{Marshak wave}
 \begin{figure}
-    \includegraphics[width=\columnwidth]{../tests/marshak_wave_cgs_gastemperature.pdf}
+    %\includegraphics[width=\columnwidth]{../tests/marshak_wave_cgs_gastemperature.pdf}
     \caption{A Marshak wave test problem \citep{Su_1996}.}
     \label{fig:marshak}
 \end{figure}
 \subsubsection{Su-Olson problem}
 \begin{figure}
-    \includegraphics[width=\columnwidth]{../tests/SuOlsonTest.pdf}
+    %\includegraphics[width=\columnwidth]{../tests/SuOlsonTest.pdf}
     \caption{The Su-Olson test problem \citep{Su_1997}.}
     \label{fig:suolson}
 \end{figure}
 \subsubsection{Radiation pressure tube}
 \begin{figure}
-    \includegraphics[width=\columnwidth]{../tests/radiation_pressure_tube.pdf}
+    %\includegraphics[width=\columnwidth]{../tests/radiation_pressure_tube.pdf}
     \caption{The radiation pressure tube \citep{Krumholz_2007}.}
     \label{fig:radiation_pressure_tube}
 \end{figure}
 \subsubsection{Radiation-matter energy exchange}
 \begin{figure}
-    \includegraphics[width=\columnwidth]{../tests/radcoupling.pdf}
+    %\includegraphics[width=\columnwidth]{../tests/radcoupling.pdf}
     \caption{The radiation-matter coupling test \citep{Turner_2001}.}
     \label{fig:radcoupling}
 \end{figure}
@@ -382,7 +386,7 @@ We illustrate this problem in \autoref{fig:kh_zoom}.
 \subsection{Radiation hydrodynamics}
 \subsubsection{Subcritical radiative shock}
 \begin{figure}
-    \includegraphics[width=\columnwidth]{../tests/radshock_cgs_temperature.pdf}
+    %\includegraphics[width=\columnwidth]{../tests/radshock_cgs_temperature.pdf}
     \caption{A $\mathcal{M} = 3$ subcritical radiative shock test.}
     \label{fig:radshock}
 \end{figure}
