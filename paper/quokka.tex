@@ -195,7 +195,7 @@ In some cases, especially in underresolved strong shocks, the previous steps do 
 
 Finally, in order to compute the flux of mass, momentum and energy between cells, we use the HLLC Riemann solver with the `primitive variable Riemann solver' wavespeeds and intermediate states \citep{Toro_2013}. We make the standard approximation that the face-average flux is the same as the face-centered flux, and therefore this step is also second-order accurate in spatial resolution. For each cell, the fluxes across each face are then added together to produce an unsplit spatial divergence term used by each stage of the Runge-Kutta integrator to advance the cell in time.
 
-In multidimensional simulations, it has been long recognized that in strong grid-aligned shocks, the HLLC Riemann solver can unphysically amplify the so-called `carbuncle' instability \citep{Quirk_1994}. In astrophysical problems, this is most often encountered in strong explosions. Implementing additional dissipation in the form of artificial viscosity (e.g., \citealt{Gittings_2008}), the `H-correction' \citep{Sanders_1998}, or by adaptively switching to an HLL Riemann solver for computing fluxes perpendicular to strong shocks (e.g., \citealt{Quirk_1994,Skinner_2019}) are possible solutions to this issue. In future work we plan to implement an adaptive procedure to fix the carbuncle instability via the latter method.
+In multidimensional simulations, it has been long recognized that in strong grid-aligned shocks, the HLLC Riemann solver can unphysically amplify the so-called `carbuncle' instability \citep{Quirk_1994}. In astrophysical problems, this is most often encountered in strong explosions. Implementing additional dissipation in the form of artificial viscosity (e.g., \citealt{Gittings_2008}), the `H-correction' \citep{Sanders_1998}, or by adaptively switching to an HLL Riemann solver \citep{Harten_1983} for computing fluxes perpendicular to strong shocks (e.g., \citealt{Quirk_1994,Skinner_2019}) are possible solutions to this issue. In future work we plan to implement an adaptive procedure to fix the carbuncle instability via the latter method.
 
 Future work may also include implementing an adaptive method to reduce the order of reconstruction in order to preserve density and pressure positivity in near-vacuum regions, such as the multidimensional optimal order detection (MOOD) method of \cite{Clain_2011}. An alternative solution may be to adaptively switch to an exact (iterative) Riemann solver depending on the flow conditions \citep{Toro_2013}.
 
@@ -319,7 +319,7 @@ For a varying number of grid cells $N_x$, we run simulations using PPM reconstru
 \end{figure}
 
 \subsubsection{Contact discontinuity}
-We show a contact discontinuity in \autoref{fig:contact_wave}\dots
+The HLLC Riemann solver has the property that it can resolve an isolated stationary contact discontinuity with infinite resolution \citep{Toro_2013}. The HLL solver, on the other hand, introduces a large amount of numerical diffusion for this problem (see Figure 10.20 of \citealt{Toro_2013}). We show that a stationary contact discontinuity in \autoref{fig:contact_wave} computed with the HLLC solver. The error with respect to the correct solution is exactly zero.
 \begin{figure}
     \includegraphics[width=\columnwidth]{hydro_contact.pdf}
     \caption{A contact discontinuity.}
