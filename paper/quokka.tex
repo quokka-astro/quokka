@@ -37,6 +37,7 @@
 \newcommand{\Msun}{M$_{\odot}$} % Msun (solar mass)
 \newcommand{\microgauss}{$\mu$G} % microgauss
 \newcommand{\vc}[1]{{\mathbf{#1}}}
+\newcommand{\hatn}{\hat{\mathbf{n}}}
 
 % Workaround to fix the bug that prevents autoref from handling appendices properly
 \newcommand{\aref}[1]{\hyperref[#1]{Appendix~\ref{#1}}}
@@ -110,11 +111,26 @@ radiation hydrodynamics -- numerical methods
 %%%%%%%%%%%%%%%%% BODY OF PAPER %%%%%%%%%%%%%%%%%%
 
 \section{Introduction}
-Detailed simulations of star formation require treating the dynamical effects of radiation produced by protostars and re-radiated by dust grains in the interstellar medium. A long-standing method to compute the radiation transport in hydrodynamic simulations is the approximation of flux-limited diffusion (FLD) \citep{Alme_1973}. This method evolves the radiation energy density under the assumption of a given closure for the radiation pressure tensor and the assumption that the time derivative of the radiation flux is zero.
 
-A more accurate approximation is to evolve both the radiation energy density and the radiation flux, while still invoking a closure relation for the radiation pressure tensor. When the radiation pressure tensor (or rather, the ratio of the radiation pressure tensor to the radiatio energy density, known as the Eddington tensor) is computed via a formal solution of the angle-dependent radiative transfer equation, we obtain the quasidiffusion or variable Eddington tensor (VET) method \citep{Goldin_1964}. When retaining a local closure for the radiation pressure tensor in terms of the radiation energy density $E$ and the flux $F$, we obtain a local VET method, commonly referred to as the M1 (`moment-one`) method \citep{Minerbo_1978,Levermore_1984,Dubroca_1999,Gonzalez_2007}.
+%%% MRK version %%%
 
-Something about the reduced speed of light (RSLA) method, citing \cite{Gnedin_2001} and \cite{Skinner_2013}\dots
+In many astrophysical systems, the radiation field carries a substantial portion of the total momentum and energy budget, and therefore must be included in any numerical simulation. However, simulating such systems, particularly at high resolution, presents a fundamental challenge in both physics and numerics. Part of this challenge is dimensionality: in full generality the radiation field is governed by the time-dependent equation of radiative transfer,
+\begin{equation}
+\frac{1}{c} \frac{\partial}{\partial t} I_\nu + \hatn\cdot\nabla I_\nu = \eta_\nu - \kappa^{\rm (tot)}_\nu I_\nu + \frac{1}{4\pi} \int \kappa^{\rm (scat)}_\nu I_\nu \, d\Omega,
+\autoref{eq:transfer}
+\end{equation}
+where $I_\nu$ is the radiation intensity travelling in the direction specified by the unit vector $\hatn$, $\eta_\nu$ is the matter emissivity, and $\kappa_\nu^{\rm (tot)}$ and $\kappa_\nu^{\rm (sca)}$ are the total and scatting opacities, respectively. This is a time-dependent integro-differential equation with six dimensions: three positions, two angles (parameterised by $\hatn$), and the frequency. Full numerical solution of a problem of this dimensionality, at least if it must be done millions of times to run in tandem with a hydrodynamic or magnetohydrodynamics simulation, is computationally intractable. 
+
+Within the astrophysics community, there are two general approaches to this problem. One is characteristic methods, which solve \autoref{eq:transfer} (or its time-independent form), but only only rays pointing back to particular sources \citep[e.g.,][]{Abel02a, Rijkhorst06a, Krumholz07f} or rays randomly assigned by Monte Carlo \citep[e.g.,][]{Fleck71a, Tsang15a}. A second approach is moment methods \citep[e.g.,][]{Mihalas_1984,Castor_2004}, whereby one takes moments of the transfer equation and solves the resulting moment equations rather than solving the equation of radiative transfer directly. This approach eliminates two of the dimensions, rending the problem computationally feasible, but at the price of introducing the need for a closure relation to approximate the higher moments that appear in the equations being solved.
+
+One of the simplest closures is the flux-limited diffusion (FLD) approximation \citep{Alme_1973}
+
+%%% BDW version %%%
+%Detailed simulations of star formation require treating the dynamical effects of radiation produced by protostars and re-radiated by dust grains in the interstellar medium. A long-standing method to compute the radiation transport in hydrodynamic simulations is the approximation of flux-limited diffusion (FLD) \citep{Alme_1973}. This method evolves the radiation energy density under the assumption of a given closure for the radiation pressure tensor and the assumption that the time derivative of the radiation flux is zero.
+
+%A more accurate approximation is to evolve both the radiation energy density and the radiation flux, while still invoking a closure relation for the radiation pressure tensor. When the radiation pressure tensor (or rather, the ratio of the radiation pressure tensor to the radiatio energy density, known as the Eddington tensor) is computed via a formal solution of the angle-dependent radiative transfer equation, we obtain the quasidiffusion or variable Eddington tensor (VET) method \citep{Goldin_1964}. When retaining a local closure for the radiation pressure tensor in terms of the radiation energy density $E$ and the flux $F$, we obtain a local VET method, commonly referred to as the M1 (`moment-one`) method \citep{Minerbo_1978,Levermore_1984,Dubroca_1999,Gonzalez_2007}.
+
+%Something about the reduced speed of light (RSLA) method, citing \cite{Gnedin_2001} and \cite{Skinner_2013}\dots
 
 % MRK I replaced all your reduced-speed-of-light's with RSLA, on the assumption that you will introduce this acronym at some point in the intro
 
