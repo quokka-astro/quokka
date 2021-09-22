@@ -300,21 +300,21 @@ As noted by \cite{Howell_2003}, an implicit radiation update has additional diff
 \subsection{Hydrodynamics}
 
 \subsubsection{Sound wave}
-We compute the propagation of a sound wave in one dimension in order to measure the convergence of our numerical method to the exact solution as a function of spatial resolution, following the test described by \cite{Stone_2008}. With $\vc{U}$ the vector of conserved variables $(\rho, \rho v_x, \rho v_y, \rho v_z, E)$, we initialize the simulation in the state:
+We compute the propagation of a sound wave in one dimension in order to measure the convergence of our numerical method to the exact solution as a function of spatial resolution, following the test described by \cite{Stone_2008}. With $\vc{U}$ denoting the vector of conserved variables $(\rho, \rho v_x, \rho v_y, \rho v_z, E)$, we initialize the simulations with the initial state $\vc{U}_0 + \delta \vc{U}$, where
 \begin{align}
 \delta \vc{U} = A \vc{R} \sin(2\pi x)
 \end{align}
-where $\vc{R} = (1,-1,1,1,1.5)$ is the right eigenvector of the linearized hydrodynamic system, with background density $\rho = 1$, background velocity $\vc{v} = 0$, and background pressure $P = 1/\gamma$, with adiabatic index $\gamma = 5/3$, and wave amplitude $A = 10^{-6}$. We use periodic boundary conditions and evolve for one wave period, allowing us to compare the error of the solution by direct comparison of the initial conditions and the final state of the simulation. We compute the error vector
+where $\vc{R} = (1,-1,1,1,1.5)$ is the right eigenvector of the linearized hydrodynamic system, and $\vc{U}_0$ is the background state with density $\rho = 1$, velocity $\vc{v} = 0$, and pressure $P = 1/\gamma$. We set the adiabatic index $\gamma = 5/3$ and the wave amplitude $A = 10^{-6}$. Periodic boundary conditions on the domain $[0, 1]$ are adopted and the simulations are evolved for one wave period, allowing us to compute the error of the solution by direct comparison of the initial conditions and the final state of the simulation. The error vector is computed as
 \begin{align}
 (\Delta \vc{U})_{k} = \frac{1}{N_x} \sum_{i} \left| U_{i,k} - U_{i,k}^{0} \right|
 \label{eq:convergence_error}
 \end{align}
 where $k$ denotes a component of each state vector, $\vc{U_i}$ is the vector of conserved variables in cell $i$ at the final timestep, and $\vc{U_i}^{0}$ is the vector of conserved variables in cell $i$ in the initial conditions. The accuracy of the solution is assessed with the $L_2$ norm $||\Delta \vc{U}||_{2}$.
 
-We run simulations using PPM reconstruction and a CFL number of $0.1$ while varying the number of grid cells $N_x$. In \autoref{fig:sound_wave}, we show the error norm as a function of spatial resolution for this test. For $N_x = 16$, we obtain $||\Delta \vc{U}|| = 1.0 \times 10^{-7}$, for $N_x = 128$, we obtain $||\Delta \vc{U}|| = 1.6 \times 10^{-9}$, and for $N_x = 1024$, we obtain $||\Delta \vc{U}|| = 1.7 \times 10^{-11}$. These results may be directly compared to Figure 7 of \cite{Stone_2008}, with excellent agreement. Our results indicate our hydrodynamic algorithm converges at second order in spatial resolution as expected. 
+For a varying number of grid cells $N_x$, we run simulations using PPM reconstruction and a CFL number of $0.1$. In \autoref{fig:sound_wave}, we show the error norm as a function of spatial resolution for these simulations. For $N_x = 16$, we obtain $||\Delta \vc{U}|| = 1.0 \times 10^{-7}$, for $N_x = 128$, we obtain $||\Delta \vc{U}|| = 1.6 \times 10^{-9}$, and for $N_x = 1024$, we obtain $||\Delta \vc{U}|| = 1.7 \times 10^{-11}$. The results for our code are in excellent agreement with those from the \textsc{Athena} hydrodynamic solver (Figure 7 of \citealt{Stone_2008}). The $N_x^{-2}$ scaling of the error norm indicates that our hydrodynamic solver converges at second order in spatial resolution, as expected from the formal order of accuracy of the method.
 \begin{figure}
     \includegraphics[width=\columnwidth]{wave_convergence.pdf}
-    \caption{The error $||\Delta \vc{U}||_{2}$ in the solution (\autoref{eq:convergence_error}) for a sound wave as a function of spatial resolution per wavelength $N_x$ is shown by the black circles. The dashed line shows a power-law that scales as $N_x^{-2}$.}
+    \caption{The error $||\Delta \vc{U}||_{2}$ in the solution (\autoref{eq:convergence_error}) for a sound wave as a function of spatial resolution per wavelength $N_x$ is shown by the black circles. The dashed line is a power law that scales as $N_x^{-2}$ normalised to the observed error at the smallest $N_x$.}
     \label{fig:sound_wave}
 \end{figure}
 
