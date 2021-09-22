@@ -298,63 +298,78 @@ As noted by \cite{Howell_2003}, an implicit radiation update has additional diff
 \label{section:tests}
 
 \subsection{Hydrodynamics}
+
 \subsubsection{Sound wave}
-In \autoref{fig:sound_wave}, we show the initial and final density and pressure for a sound wave initialized according to the linear wave test of \cite{Stone_2008} with a number of cells $N_x = 100$. With $\vc{U}$ the vector of conserved variables $(\rho, \rho v_x, \rho v_y, \rho v_z, E)$, we have the initial state:
+We compute the propagation of a sound wave in one dimension in order to measure the convergence of our numerical method to the exact solution as a function of spatial resolution, following the test described by \cite{Stone_2008}. With $\vc{U}$ the vector of conserved variables $(\rho, \rho v_x, \rho v_y, \rho v_z, E)$, we initialize the simulation in the state:
 \begin{align}
 \delta \vc{U} = A \vc{R} \sin(2\pi x)
 \end{align}
-where $\vc{R} = (1,-1,1,1,1.5)$ is the right eigenvector of the linearized hydrodynamic system with background density $\rho = 1$, background velocity $\vc{v} = 0$, and background pressure $P = 1/\gamma$, with adiabatic index $\gamma = 5/3$ and wave amplitude $A = 10^{-6}$, following the parameters used by \cite{Stone_2008}. We use periodic boundary conditions and evolve for one wave period, allowing us to compare the error of the solution by the error norm of the initial condition and the final state. We compute an error vector
+where $\vc{R} = (1,-1,1,1,1.5)$ is the right eigenvector of the linearized hydrodynamic system, with background density $\rho = 1$, background velocity $\vc{v} = 0$, and background pressure $P = 1/\gamma$, with adiabatic index $\gamma = 5/3$, and wave amplitude $A = 10^{-6}$. We use periodic boundary conditions and evolve for one wave period, allowing us to compare the error of the solution by direct comparison of the initial conditions and the final state of the simulation. We compute the error vector
 \begin{align}
-\Delta \vc{U} = \frac{1}{N_x} \sum_{i} | U_i - U_{i,0} |
+(\Delta \vc{U})_{k} = \frac{1}{N_x} \sum_{i} \left| U_{i,k} - U_{i,k}^{0} \right|
+\label{eq:convergence_error}
 \end{align}
-and assess the quality of the solution by the $L_2$ norm of this vector. We carry out convergence tests using PPM reconstruction and a CFL number of $0.1$. For $N_x = 16$, we obtain $||\Delta \vc{U}|| = 1.0 \times 10^{-7}$, for $N_x = 128$, we obtain $||\Delta \vc{U}|| = 1.6 \times 10^{-9}$, and for $N_x = 1024$, we obtain $||\Delta \vc{U}|| = 1.7 \times 10^{-11}$. These results may be directly compared to Figure 7 of \cite{Stone_2008}, and we find that they agree to within a factor of two. Our results indicate our hydrodynamic algorithm converges at second order in spatial resolution, as expected.
+where $k$ denotes a component of each state vector, $\vc{U_i}$ is the vector of conserved variables in cell $i$ at the final timestep, and $\vc{U_i}^{0}$ is the vector of conserved variables in cell $i$ in the initial conditions. The accuracy of the solution is assessed with the $L_2$ norm $||\Delta \vc{U}||_{2}$.
 
+We run simulations using PPM reconstruction and a CFL number of $0.1$ while varying the number of grid cells $N_x$. In \autoref{fig:sound_wave}, we show the error norm as a function of spatial resolution for this test. For $N_x = 16$, we obtain $||\Delta \vc{U}|| = 1.0 \times 10^{-7}$, for $N_x = 128$, we obtain $||\Delta \vc{U}|| = 1.6 \times 10^{-9}$, and for $N_x = 1024$, we obtain $||\Delta \vc{U}|| = 1.7 \times 10^{-11}$. These results may be directly compared to Figure 7 of \cite{Stone_2008}, with excellent agreement. Our results indicate our hydrodynamic algorithm converges at second order in spatial resolution as expected. 
 \begin{figure}
-    \includegraphics[width=\columnwidth]{density_1.0000.pdf}
-    \includegraphics[width=\columnwidth]{pressure_1.0000.pdf}
-    \caption{A sound wave.}
+    \includegraphics[width=\columnwidth]{wave_convergence.pdf}
+    \caption{The error $||\Delta \vc{U}||_{2}$ in the solution (\autoref{eq:convergence_error}) for a sound wave as a function of spatial resolution per wavelength $N_x$ is shown by the black circles. The dashed line shows a power-law that scales as $N_x^{-2}$.}
     \label{fig:sound_wave}
 \end{figure}
-\subsubsection{Contact wave}
+
+\subsubsection{Contact discontinuity}
+We show a contact discontinuity in \autoref{fig:contact_wave}\dots
 \begin{figure}
     \includegraphics[width=\columnwidth]{hydro_contact.pdf}
     \caption{A contact discontinuity.}
     \label{fig:contact_wave}
 \end{figure}
+
 \subsubsection{Stationary shock tube}
+We show a stationary shock tube in \autoref{fig:shocktube}\dots
 \begin{figure}
     \includegraphics[width=\columnwidth]{hydro_shocktube_0.4000.pdf}
     \caption{A shock tube.}
     \label{fig:shocktube}
 \end{figure}
+
 \subsubsection{`LeBlanc' test}
+We show the `LeBlanc' shock tube test in \autoref{fig:leblanc}\dots
 \begin{figure}
     \includegraphics[width=\columnwidth]{hydro_leblanc_6.0000.pdf}
     \includegraphics[width=\columnwidth]{hydro_leblanc_eint_6.0000.pdf}
     \caption{The LeBlanc test problem.}
     \label{fig:leblanc}
 \end{figure}
-\subsubsection{Wave-shock interaction (Shu-Osher test)}
+
+\subsubsection{Wave-shock interaction (Shu-Osher) test}
+We show the Shu-Osher test in \autoref{fig:shu_osher}\dots
 \begin{figure}
     \includegraphics[width=\columnwidth]{hydro_shuosher.pdf}
     \caption{The Shu-Osher wave-shock interaction problem.}
     \label{fig:shu_osher}
 \end{figure}
+
 \subsubsection{Slow-moving shock}
+We show a slow-moving shock in \autoref{fig:sms}\dots
 \begin{figure}
     \includegraphics[width=\columnwidth]{hydro_sms_1.0000.pdf}
     \caption{A slow-moving shock test problem.}
     \label{fig:sms}
 \end{figure}
+
 \subsubsection{Strong rarefaction}
+We show a strong rarefaction in \autoref{fig:vacuum}\dots
 \begin{figure}
     \includegraphics[width=\columnwidth]{hydro_vacuum_0.1500.pdf}
     \includegraphics[width=\columnwidth]{hydro_vacuum_eint_0.1500.pdf}
     \caption{A strong rarefaction test problem.}
     \label{fig:vacuum}
 \end{figure}
+
 \subsubsection{Kelvin-Helmholtz problem}
-We illustrate this problem in \autoref{fig:kh_zoom}.
+We illustrate this problem in \autoref{fig:kh_zoom}\dots
 \begin{figure}
     \includegraphics[width=0.9\columnwidth]{quokka_full.pdf}
     \includegraphics[width=0.9\columnwidth]{quokka_zoom.pdf}
@@ -362,44 +377,59 @@ We illustrate this problem in \autoref{fig:kh_zoom}.
     \caption{A Kelvin-Helmholz problem with 4 levels of refinement.}
     \label{fig:kh_zoom}
 \end{figure}
+
 \subsubsection{2D Implosion problem}
 
 \subsection{Radiation}
+
 \subsubsection{Marshak wave}
+We show a Marshak wave in \autoref{fig:marshak}\dots
 \begin{figure}
     \includegraphics[width=\columnwidth]{marshak_wave_cgs_gastemperature.pdf}
     \caption{A Marshak wave test problem \citep{Su_1996}.}
     \label{fig:marshak}
 \end{figure}
+
 \subsubsection{Su-Olson problem}
+We show the Su-Olson problem in \autoref{fig:suolson}\dots
 \begin{figure}
     \includegraphics[width=\columnwidth]{SuOlsonTest.pdf}
     \caption{The Su-Olson test problem \citep{Su_1997}.}
     \label{fig:suolson}
 \end{figure}
+
 \subsubsection{Radiation pressure tube}
+We show the radiation pressure tube \citep{Krumholz_2007} in \autoref{fig:radiation_pressure_tube}\dots
 \begin{figure}
     \includegraphics[width=\columnwidth]{radiation_pressure_tube.pdf}
     \caption{The radiation pressure tube \citep{Krumholz_2007}.}
     \label{fig:radiation_pressure_tube}
 \end{figure}
+
 \subsubsection{Radiation-matter energy exchange}
+We show the radiation-matter energy exchange test in \autoref{fig:radcoupling}\dots
 \begin{figure}
     \includegraphics[width=\columnwidth]{radcoupling.pdf}
     \caption{The radiation-matter coupling test \citep{Turner_2001}.}
     \label{fig:radcoupling}
 \end{figure}
+
 \subsubsection{Shadow test}
+
 \subsubsection{Beam test}
+
 \subsubsection{Optically-thin wind}
 
 \subsection{Radiation hydrodynamics}
+
 \subsubsection{Subcritical radiative shock}
+We show a radiative shock in \autoref{fig:radshock}\dots
 \begin{figure}
     \includegraphics[width=\columnwidth]{radshock_cgs_temperature.pdf}
     \caption{A $\mathcal{M} = 3$ subcritical radiative shock test.}
     \label{fig:radshock}
 \end{figure}
+
 \subsubsection{Radiation-driven dust shell}
 
 \section{Performance and scaling}
