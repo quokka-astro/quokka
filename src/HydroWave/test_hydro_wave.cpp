@@ -28,7 +28,7 @@ constexpr double rho0 = 1.0; // background density
 constexpr double P0 =
     1.0 / HydroSystem<WaveProblem>::gamma_; // background pressure
 constexpr double v0 = 0.;                   // background velocity
-constexpr double amp = 1.0e-6;                // perturbation amplitude
+constexpr double amp = 1.0e-6;              // perturbation amplitude
 
 AMREX_GPU_DEVICE void computeWaveSolution(
     int i, int j, int k, amrex::Array4<amrex::Real> const &state,
@@ -77,37 +77,65 @@ void RadhydroSimulation<WaveProblem>::setInitialConditionsAtLevel(int lev) {
   areInitialConditionsDefined_ = true;
 }
 
-template <>
-void RadhydroSimulation<WaveProblem>::computeReferenceSolution(
-    amrex::MultiFab &ref,
-    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo) {
+auto problem_main() -> int {
+  // Based on the ATHENA test page:
+  // https://www.astro.princeton.edu/~jstone/Athena/tests/linear-waves/linear-waves.html
 
-  // fill reference solution multifab
-  for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
-    const amrex::Box &indexRange = iter.validbox();
-    auto const &stateExact = ref.array(iter);
-    auto const ncomp = ref.nComp();
+  // Problem parameters
+  // const int nx = 100;
+  // const double Lx = 1.0;
+  const double CFL_number = 0.1;
+  const double max_time = 1.0;
+  const int max_timesteps = 2e4;
 
-    amrex::ParallelFor(indexRange,
-                       [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-                         for (int n = 0; n < ncomp; ++n) {
-                           stateExact(i, j, k, n) = 0.;
-                         }
-                         computeWaveSolution(i, j, k, stateExact, dx, prob_lo);
-                       });
+  // Problem initialization
+  const int nvars = RadhydroSimulation<WaveProblem>::nvarTotal_;
+  amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
+  for (int n = 0; n < nvars; ++n) {
+    for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+      boundaryConditions[n].setLo(i, amrex::BCType::int_dir); // periodic
+      boundaryConditions[n].setHi(i, amrex::BCType::int_dir);
+    }
   }
 
-  // Plot results
-  auto [position, values] = fextract(state_new_[0], geom[0], 0, 0.5);
-  auto [pos_exact, val_exact] = fextract(ref, geom[0], 0, 0.5);
+  RadhydroSimulation<WaveProblem> sim(boundaryConditions);
+  sim.is_hydro_enabled_ = true;
+  sim.is_radiation_enabled_ = false;
+  sim.cflNumber_ = CFL_number;
+  sim.stopTime_ = max_time;
+  sim.maxTimesteps_ = max_timesteps;
+  sim.plotfileInterval_ = -1;
 
+  // set initial conditions
+  sim.setInitialConditions();
+  auto [pos_exact, val_exact] =
+      fextract(sim.state_new_[0], sim.geom[0], 0, 0.5);
+
+  // Main time loop
+  sim.evolve();
+
+  auto [position, values] = fextract(sim.state_new_[0], sim.geom[0], 0, 0.5);
   int nx = static_cast<int>(position.size());
-  std::vector<double> xs(nx);
-  for (int i = 0; i < nx; ++i) {
-    xs.at(i) = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
-  }
+  std::vector<double> xs = position;
 
+  // compute error norm
+  amrex::Real err_sq = 0.;
+  for (int n = 0; n < RadhydroSimulation<WaveProblem>::ncompHydro_; ++n) {
+    amrex::Real dU_k = 0.;
+    for (int i = 0; i < nx; ++i) {
+      // Δ Uk = ∑i |Uk,in - Uk,i0| / Nx
+      const amrex::Real U_k0 = val_exact.at(n).at(i);
+      const amrex::Real U_k1 = values.at(n).at(i);
+      dU_k += std::abs(U_k1 - U_k0) / static_cast<double>(nx);
+    }
+    // ε = || Δ U || = [&sum_k (Δ Uk)2]^{1/2}
+    err_sq += dU_k * dU_k;
+  }
+  const amrex::Real epsilon = std::sqrt(err_sq);
+  amrex::Print() << "rms of component-wise L1 error norms = " << epsilon << std::endl;
+
+#ifdef HAVE_PYTHON
+  // plot results
   if (amrex::ParallelDescriptor::IOProcessor()) {
     // extract values
     std::vector<double> d(nx);
@@ -152,9 +180,8 @@ void RadhydroSimulation<WaveProblem>::computeReferenceSolution(
       pressure_exact.at(i) = (pressure - P0) / amp;
     }
 
-#ifdef HAVE_PYTHON
     // Plot results
-    amrex::Real const t = tNew_[0];
+    amrex::Real const t = sim.tNew_[0];
 
     std::map<std::string, std::string> d_args;
     std::map<std::string, std::string> dinit_args;
@@ -194,51 +221,12 @@ void RadhydroSimulation<WaveProblem>::computeReferenceSolution(
     matplotlibcpp::legend();
     matplotlibcpp::title(fmt::format("t = {:.4f}", t));
     matplotlibcpp::save(fmt::format("./velocity_{:.4f}.pdf", t));
+  }
 #endif
-  }
-}
 
-auto problem_main() -> int {
-  // Based on the ATHENA test page:
-  // https://www.astro.princeton.edu/~jstone/Athena/tests/linear-waves/linear-waves.html
-
-  // Problem parameters
-  // const int nx = 100;
-  // const double Lx = 1.0;
-  const double CFL_number = 0.8;
-  const double max_time = 1.0;
-  const double max_dt = 1e-3;
-  const int max_timesteps = 1e3;
-
-  // Problem initialization
-  const int nvars = RadhydroSimulation<WaveProblem>::nvarTotal_;
-  amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
-  for (int n = 0; n < nvars; ++n) {
-    for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-      boundaryConditions[n].setLo(i, amrex::BCType::int_dir); // periodic
-      boundaryConditions[n].setHi(i, amrex::BCType::int_dir);
-    }
-  }
-
-  RadhydroSimulation<WaveProblem> sim(boundaryConditions);
-  sim.is_hydro_enabled_ = true;
-  sim.is_radiation_enabled_ = false;
-  sim.cflNumber_ = CFL_number;
-  sim.maxDt_ = max_dt;
-  sim.stopTime_ = max_time;
-  sim.maxTimesteps_ = max_timesteps;
-  sim.computeReferenceSolution_ = true;
-  sim.plotfileInterval_ = -1;
-
-  // Main time loop
-  sim.setInitialConditions();
-  sim.evolve();
-
-  // const double err_tol = 0.003; // in delta primitive variables, e.g. (rho -
-  // rho0)
-  const double err_tol = 3.0e-9; // in conserved variables
+  const double err_tol = 3.0e-9; // for Nx = 100
   int status = 0;
-  if (sim.errorNorm_ > err_tol) {
+  if (epsilon > err_tol) {
     status = 1;
   }
 

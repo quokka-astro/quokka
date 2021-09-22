@@ -258,7 +258,7 @@ $C_v$ is the gas specific heat at constant volume. From the Jacobian, we can wri
 \label{eq:delta_eg}
 \Delta E_g &= -\frac{F_G + \Delta E_r \frac{\partial F_G}{\partial E_r}}{ \frac{\partial F_G}{\partial E_g} } \, .
 \end{align}
-where $\eta \equiv - (\partial F_R/\partial E_g) ( \partial F_G/\partial E_g )^{-1}$. We repeatedly apply \autoref{eq:delta_er} and \autoref{eq:delta_eg} to the radiation and gas energies until the system converges. \citet{Howell_2003} leave unspecified the convergence criteria they use for their solver. After experimenting with several possibilites, we decide to stop the Newton-Raphson iterations when the residuals $F_R$ and $F_G$ satisfy
+where $\eta \equiv - (\partial F_R/\partial E_g) ( \partial F_G/\partial E_g )^{-1}$. We repeatedly apply \autoref{eq:delta_er} and \autoref{eq:delta_eg} to the radiation and gas energies until the system converges. \citet{Howell_2003} leave unspecified the convergence criteria they use for their solver. After experimenting with several possibilities, we decide to stop the Newton-Raphson iterations when the residuals $F_R$ and $F_G$ satisfy
 \begin{align}
 \left| \frac{F_G}{E_{\text{tot}}} \right| &< \epsilon \, \, \text{and} \\
 \left| \frac{c}{\hat c} \frac{F_R}{E_{\text{tot}}} \right| &< \epsilon \, ,
@@ -290,7 +290,7 @@ where $E^{t+1}$ denotes the total gas energy at the end of the timestep. This co
 \subsubsection{Level synchronization procedure}
 \label{sssec:sync}
 
-As explained by \cite{Berger:1989}, in an AMR calculation it is necessary to adjust the solution on the coarse AMR level following the solution on any refined level in order to maintain conservation of the evolved quantities (e.g., mass, momentum, energy). For hyperbolic equations evolved explicitly in time, this is traditionally done by saving the flux at the coarse-fine grid boundary in a `flux register' for both the flux computed on the fine level and the flux computed at the fine level. In general, these fluxes are different due to the differing stencil used on the coarse and fine levels, and without correction, this would lead to a loss of conservation of energy (and any other conserved quantities). The flux register stores this mismatch, and in the synchronization step, adds the missing mass, momentum, or energy to the cells on the coarse level immediately adjacent to the coarse-fine boundary.
+As explained by \cite{Berger:1989}, in an AMR calculation it is necessary to adjust the solution on the coarse AMR level following the solution on any refined level in order to maintain conservation of the evolved quantities (e.g., mass, momentum, energy). For hyperbolic equations evolved explicitly in time, this is traditionally done by saving the flux at the coarse-fine grid boundary in a `flux register' for both the flux computed on the fine level and the flux computed on the coarse level. In general, these fluxes are different due to the differing stencil used on the coarse and fine levels, and without correction, this would lead to a loss of conservation of energy (and any other conserved quantities). The flux register stores this mismatch, and in the synchronization step, adds the missing mass, momentum, or energy to the cells on the coarse level immediately adjacent to the coarse-fine boundary.
 
 As noted by \cite{Howell_2003}, an implicit radiation update has additional difficulties in ensuring conservation, since radiation can propagate much further than a single grid cell on the coarse grid. Our radiation update is fully explicit, but we would like to advance each AMR level on the hydrodynamic timescale, rather than on the radiation timescale, so we have a similar long-range signal propagation difficulty. \cite{Rosdahl_2013} outline three possible solutions to the problem: i) perform the radiation solve after each coarse hydrodynamic step, keeping subcycling-in-time on refined levels (which would be very inaccurate), ii) use a single global timestep for all AMR levels, which allows one to advance the radiation solution on all levels in each radiation substep (which would be very computationally expensive, since in our applications of interest, the global timestep is typically limited by the timestep of the highest-resolution level) or iii) restrict the timestep for each level to the minimum of the radiation and hydrodynamic timesteps. In our code, we set the coarse timestep such that the number of radiation substeps per level is limited to a maximum value $N_{\text{sub,max}}$ in order to minimize the signal propagation distance from the coarse-fine boundaries. The flux mismatch at the coarse-fine boundaries is added to the immediately adjacent cells on the coarse grid at the end of each level advance. When $N_{\text{sub,max}} = 1$, our solution is identical to the flux synchronization method used in the \textsc{RAMSES} AMR code \citep{Rosdahl_2013}. However, as a default we set the parameter $N_{\text{sub,max}}$ to $10$, which appears to be sufficient to avoid significant discontinuities in the radiation energy and flux at coarse-fine boundaries, but still allows for significant subcycling and thus a substantially lower computational cost. We use this value for all test problems shown in this work, but users are able to set this parameter as desired for either greater efficiency or greater consistency at refinement boundaries. When this parameter is too large, however, it is possible for the coarse level to fail to maintain positivity of the radiation energy or causality of the radiation flux.
 
@@ -299,47 +299,57 @@ As noted by \cite{Howell_2003}, an implicit radiation update has additional diff
 
 \subsection{Hydrodynamics}
 \subsubsection{Sound wave}
+In \autoref{fig:sound_wave}, we show the initial and final density and pressure for a sound wave initialized according to the linear wave test of \cite{Stone_2008} with a number of cells $N_x = 100$. With $\vc{U}$ the vector of conserved variables $(\rho, \rho v_x, \rho v_y, \rho v_z, E)$, we have the initial state:
+\begin{align}
+\delta \vc{U} = A \vc{R} \sin(2\pi x)
+\end{align}
+where $\vc{R} = (1,-1,1,1,1.5)$ is the right eigenvector of the linearized hydrodynamic system with background density $\rho = 1$, background velocity $\vc{v} = 0$, and background pressure $P = 1/\gamma$, with adiabatic index $\gamma = 5/3$ and wave amplitude $A = 10^{-6}$, following the parameters used by \cite{Stone_2008}. We use periodic boundary conditions and evolve for one wave period, allowing us to compare the error of the solution by the error norm of the initial condition and the final state. We compute an error vector
+\begin{align}
+\Delta \vc{U} = \frac{1}{N_x} \sum_{i} | U_i - U_{i,0} |
+\end{align}
+and assess the quality of the solution by the $L_2$ norm of this vector. We carry out convergence tests using PPM reconstruction and a CFL number of $0.1$. For $N_x = 16$, we obtain $||\Delta \vc{U}|| = 1.0 \times 10^{-7}$, for $N_x = 128$, we obtain $||\Delta \vc{U}|| = 1.6 \times 10^{-9}$, and for $N_x = 1024$, we obtain $||\Delta \vc{U}|| = 1.7 \times 10^{-11}$. These results may be directly compared to Figure 7 of \cite{Stone_2008}, and we find that they agree to within a factor of two. Our results indicate our hydrodynamic algorithm converges at second order in spatial resolution, as expected.
+
 \begin{figure}
-    %\includegraphics[width=\columnwidth]{../tests/density_1.0000.pdf}
-    %\includegraphics[width=\columnwidth]{../tests/pressure_1.0000.pdf}
+    \includegraphics[width=\columnwidth]{density_1.0000.pdf}
+    \includegraphics[width=\columnwidth]{pressure_1.0000.pdf}
     \caption{A sound wave.}
     \label{fig:sound_wave}
 \end{figure}
 \subsubsection{Contact wave}
 \begin{figure}
-    %\includegraphics[width=\columnwidth]{../tests/hydro_contact.pdf}
+    \includegraphics[width=\columnwidth]{../tests/hydro_contact.pdf}
     \caption{A contact discontinuity.}
     \label{fig:contact_wave}
 \end{figure}
 \subsubsection{Stationary shock tube}
 \begin{figure}
-    %\includegraphics[width=\columnwidth]{../tests/hydro_0.4000.pdf}
+    \includegraphics[width=\columnwidth]{../tests/hydro_0.4000.pdf}
     \caption{A shock tube.}
     \label{fig:shocktube}
 \end{figure}
 \subsubsection{`LeBlanc' test}
 \begin{figure}
-    %\includegraphics[width=\columnwidth]{../tests/hydro_leblanc_6.0000.pdf}
-    %\includegraphics[width=\columnwidth]{../tests/hydro_leblanc_eint_6.0000.pdf}
+    \includegraphics[width=\columnwidth]{../tests/hydro_leblanc_6.0000.pdf}
+    \includegraphics[width=\columnwidth]{../tests/hydro_leblanc_eint_6.0000.pdf}
     \caption{The LeBlanc test problem.}
     \label{fig:leblanc}
 \end{figure}
 \subsubsection{Wave-shock interaction (Shu-Osher test)}
 \begin{figure}
-    %\includegraphics[width=\columnwidth]{../tests/hydro_shuosher.pdf}
+    \includegraphics[width=\columnwidth]{../tests/hydro_shuosher.pdf}
     \caption{The Shu-Osher wave-shock interaction problem.}
     \label{fig:shu_osher}
 \end{figure}
 \subsubsection{Slow-moving shock}
 \begin{figure}
-   % \includegraphics[width=\columnwidth]{../tests/hydro_sms_1.0000.pdf}
+    \includegraphics[width=\columnwidth]{../tests/hydro_sms_1.0000.pdf}
     \caption{A slow-moving shock test problem.}
     \label{fig:sms}
 \end{figure}
 \subsubsection{Strong rarefaction}
 \begin{figure}
-    %\includegraphics[width=\columnwidth]{../tests/hydro_vacuum_0.1500.pdf}
-    %\includegraphics[width=\columnwidth]{../tests/hydro_vacuum_eint_0.1500.pdf}
+    \includegraphics[width=\columnwidth]{../tests/hydro_vacuum_0.1500.pdf}
+    \includegraphics[width=\columnwidth]{../tests/hydro_vacuum_eint_0.1500.pdf}
     \caption{A strong rarefaction test problem.}
     \label{fig:vacuum}
 \end{figure}
@@ -357,25 +367,25 @@ We illustrate this problem in \autoref{fig:kh_zoom}.
 \subsection{Radiation}
 \subsubsection{Marshak wave}
 \begin{figure}
-    %\includegraphics[width=\columnwidth]{../tests/marshak_wave_cgs_gastemperature.pdf}
+    \includegraphics[width=\columnwidth]{../tests/marshak_wave_cgs_gastemperature.pdf}
     \caption{A Marshak wave test problem \citep{Su_1996}.}
     \label{fig:marshak}
 \end{figure}
 \subsubsection{Su-Olson problem}
 \begin{figure}
-    %\includegraphics[width=\columnwidth]{../tests/SuOlsonTest.pdf}
+    \includegraphics[width=\columnwidth]{../tests/SuOlsonTest.pdf}
     \caption{The Su-Olson test problem \citep{Su_1997}.}
     \label{fig:suolson}
 \end{figure}
 \subsubsection{Radiation pressure tube}
 \begin{figure}
-    %\includegraphics[width=\columnwidth]{../tests/radiation_pressure_tube.pdf}
+    \includegraphics[width=\columnwidth]{../tests/radiation_pressure_tube.pdf}
     \caption{The radiation pressure tube \citep{Krumholz_2007}.}
     \label{fig:radiation_pressure_tube}
 \end{figure}
 \subsubsection{Radiation-matter energy exchange}
 \begin{figure}
-    %\includegraphics[width=\columnwidth]{../tests/radcoupling.pdf}
+    \includegraphics[width=\columnwidth]{../tests/radcoupling.pdf}
     \caption{The radiation-matter coupling test \citep{Turner_2001}.}
     \label{fig:radcoupling}
 \end{figure}
@@ -386,7 +396,7 @@ We illustrate this problem in \autoref{fig:kh_zoom}.
 \subsection{Radiation hydrodynamics}
 \subsubsection{Subcritical radiative shock}
 \begin{figure}
-    %\includegraphics[width=\columnwidth]{../tests/radshock_cgs_temperature.pdf}
+    \includegraphics[width=\columnwidth]{../tests/radshock_cgs_temperature.pdf}
     \caption{A $\mathcal{M} = 3$ subcritical radiative shock test.}
     \label{fig:radshock}
 \end{figure}
