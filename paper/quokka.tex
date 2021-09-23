@@ -400,7 +400,7 @@ We compute a reference solution using \textsc{Athena++} \citep{Stone_2020} with 
 \end{figure}
 
 \subsubsection{Slow-moving shock}
-We show a slow-moving shock in \autoref{fig:sms} using the parameters from \cite{Jin_1996}, where $\rho_L = 3.86$, $(\rho v)_L = -3.1266$, and $E_L = 27.0913$, and the right-side state $\rho_R = 1.0$, $(\rho v)_R = -3.44$, and $E_R = 8.4168$, with $\gamma = 1.4$. This corresponds to a shock moving to the right with a velocity $v_{\text{shock}} = 0.1096$. For a CFL number of $0.2$, this corresponds to the shock taking $\sim 250$ timesteps to move across a single cell. This may not be a common scenario for our applications, but it may occur in a protostellar accretion shock, for instance. The quality of the solution is again significantly improved by shock flattening. The post-shock oscillations for slow-moving shocks may still be present with first-order reconstruction \citep{Jin_1996,Lee_2011}, so it is difficult to completely eliminate. We also find that adding a small amount of artificial viscosity does not significantly reduce the oscillations. A modification to PPM reconstruction based on a characteristic wave decomposition succeeds in significantly reducing this oscillation \citep{Lee_2011}, which we may consider implementing in a future version of the code.
+We show a slow-moving shock in \autoref{fig:sms} using the parameters from \cite{Jin_1996}, where $\rho_L = 3.86$, $(\rho v)_L = -3.1266$, and $E_L = 27.0913$, and the right-side state $\rho_R = 1.0$, $(\rho v)_R = -3.44$, and $E_R = 8.4168$, with $\gamma = 1.4$. This corresponds to the shock jump moving to the right with a velocity $v_{\text{shock}} = 0.1096$. For a CFL number of $0.2$, this corresponds to the shock taking $\sim 250$ timesteps to move across a single cell. This may not be a common scenario for our applications, but it may occur in a protostellar accretion shock, for instance. The quality of the solution is again significantly improved by shock flattening. The post-shock oscillations for slow-moving shocks may still be present with first-order reconstruction \citep{Jin_1996,Lee_2011}, so it is difficult to completely eliminate. We also find that adding a small amount of artificial viscosity does not significantly reduce the oscillations. A modification to PPM reconstruction based on a characteristic wave decomposition succeeds in significantly reducing this oscillation \citep{Lee_2011}, which we may consider implementing in a future version of the code.
 \begin{figure}
     \includegraphics[width=\columnwidth]{hydro_sms_1.0000.pdf}
     \caption{A slow-moving shock test problem.}
@@ -408,7 +408,7 @@ We show a slow-moving shock in \autoref{fig:sms} using the parameters from \cite
 \end{figure}
 
 \subsubsection{Strong rarefaction}
-We show a strong rarefaction in \autoref{fig:vacuum}\dots
+We show a strong rarefaction in \autoref{fig:vacuum} using the initial conditions of the 1-2-3 problem of \cite{Einfeldt_1991} (see also \citealt{Toro_2013}) until $t = 0.15$. The exact solution is obtained with an exact, iterative Riemann solver. The solution for the density profile is very close to the exact solution, except for a small discrepancy at the lowest density near $x = 0.5$. However, as \cite{Toro_2013} shows, the most difficult aspect of this problem is obtaining the correct specific internal energy. Our results compare favorably with solutions obtained with approximate Riemann solvers shown in \cite{Toro_2013}, where factors of two or three errors are obtained at $x = 0.5$. Obtaining the correct specific internal energy in the lowest density part of the flow may require the adaptive use of an exact Riemann solver in near-vacuum regions. An alternative solution is to implement a dual-energy method to evolve both the internal energy and total energy of the gas. Nonetheless, our code is stable and well-behaved.
 \begin{figure}
     \includegraphics[width=\columnwidth]{hydro_vacuum_0.1500.pdf}
     \includegraphics[width=\columnwidth]{hydro_vacuum_eint_0.1500.pdf}
@@ -431,7 +431,7 @@ We illustrate this problem in \autoref{fig:kh_zoom}\dots
 \subsection{Radiation}
 
 \subsubsection{Marshak wave}
-We show a Marshak wave in \autoref{fig:marshak}\dots
+We show a Marshak wave in \autoref{fig:marshak} based on the parameters of \cite{Su_1996}.
 \begin{figure}
     \includegraphics[width=\columnwidth]{marshak_wave_cgs_gastemperature.pdf}
     \caption{A Marshak wave test problem \citep{Su_1996}.}
