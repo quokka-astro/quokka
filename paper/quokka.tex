@@ -353,7 +353,7 @@ For a varying number of grid cells $N_x$, we run simulations using PPM reconstru
 \end{figure}
 
 \subsubsection{Contact discontinuity}
-The HLLC Riemann solver has the property that it can resolve an isolated stationary contact discontinuity with infinite resolution \citep{Toro_2013}. The HLL solver, on the other hand, introduces a large amount of numerical diffusion for this problem (see Figure 10.20 of \citealt{Toro_2013}). We show that a stationary contact discontinuity in \autoref{fig:contact_wave} computed with the HLLC solver. The error with respect to the correct solution is exactly zero.
+The HLLC Riemann solver has the property that it can resolve an isolated stationary contact discontinuity with infinite resolution \citep{Toro_2013}. The HLL solver, on the other hand, introduces a large amount of numerical diffusion for this problem (see Figure 10.20 of \citealt{Toro_2013}). We show that a stationary contact discontinuity in \autoref{fig:contact_wave} computed with the HLLC solver. The initial conditions have a left and right state separated with a discontinuity at $x = 0.5$. The left state is $\rho_L = 1.4$, $p_L = 1.0$, and the right state is $\rho_R = 1.0$ and $p_R = 1.0$. Since this is a pure contact discontinuity, the solution should not evolve from the initial state. We set the velocity to zero, and use an adiabatic index $\gamma = 1.4$. We evolve the solution numerically until $t = 2$. The error with respect to the correct solution is exactly zero.
 \begin{figure}
     \includegraphics[width=\columnwidth]{hydro_contact.pdf}
     \caption{A contact discontinuity.}
@@ -361,7 +361,9 @@ The HLLC Riemann solver has the property that it can resolve an isolated station
 \end{figure}
 
 \subsubsection{Stationary shock tube}
-We show a stationary shock tube in \autoref{fig:shocktube}\dots
+We show a stationary shock tube in \autoref{fig:shocktube} using the parameters suggested on the website of F.X. Timmes\footnote{\url{http://cococubed.asu.edu/code_pages/exact_riemann.shtml}}. This shock tube problem is substantially more difficult to solve than the standard \cite{Sod_1978} shock tube test due to the larger jump in pressure and density at the discontinuity. We initialize a left and right states with a discontinuity at $x_0 = 2$, with the left state $\rho_L = 10$, and $p_L = 100$, and the right state $\rho_R = 1$ and $p_R = 1$. The initial velocity is zero. We evolve the solution using a CFL number of 0.1 until $t = 0.4$ on a grid of 1000 cells on the domain $[0, 5]$. We use a small CFL number since the wave structure at the discontinuity creates waves that propagate faster than the linearized Roe eigenvalues would predict.
+
+As for the sound wave test, we compute the $L_1$ error norm for each of the conserved variables, and then compute the root-mean-square of those error norms. The rms $L_1$ error norm divided by the rms norm of the exact solution is $1.12 \times 10^{-3}$. Inspecting the solution in \autoref{fig:shocktube}, we see that there agreement between the exact solution and the numerical solution is very good, with the only noticiable differences are small oscillations near discontinuties in the derivative of the solution at $x \approx 2.4$ and near the density discontinutity at $x \approx 3.6$. We find that the shock flattening method of \cite{Miller_2002} is essential to produce a reasonable solution to this problem. Without it, we find unacceptably large post-shock oscillations (not shown).
 \begin{figure}
     \includegraphics[width=\columnwidth]{hydro_shocktube_0.4000.pdf}
     \caption{A shock tube.}
@@ -369,7 +371,7 @@ We show a stationary shock tube in \autoref{fig:shocktube}\dots
 \end{figure}
 
 \subsubsection{`LeBlanc' test}
-We show the `LeBlanc' shock tube test in \autoref{fig:leblanc}\dots
+We show the `LeBlanc' shock tube test in \autoref{fig:leblanc}. This was originally published by \cite{Benson_1992} and is further described by \cite{Pember_2001}. In this problem, we initialize a left state with $\rho_L = 1$ and $p_L = \frac{2}{3} \times 10^{-1}$, and a right state with $\rho_R = 10^{-3}$ and $p_R = \frac{2}{3} \times 10^{-10}$. We set the initial velocity to zero and use an adiabatic index $\gamma = 5/3$. This is an extreme shock tube that far exceeds any shock that may be encountered in any conceivable application, featuring a pressure jump of nine orders of magnitude, and is therefore an excellent test problem.  We evolve this simulation until $t = 6$ using a grid of 2000 cells and a CFL number of 0.1. The resulting state is shown in \autoref{fig:leblanc}. The difficulty of obtaining the correct specific internal energy in the solution in highlighted by \cite{Pember_2001}. We show that we obtain the correct shock location and specific internal energy, with the exception of a small overshoot at the shock location. The use of shock flattening is essential for this problem. Overall, the performance of our code on this problem is excellent.
 \begin{figure}
     \includegraphics[width=\columnwidth]{hydro_leblanc_6.0000.pdf}
     \includegraphics[width=\columnwidth]{hydro_leblanc_eint_6.0000.pdf}
@@ -378,7 +380,19 @@ We show the `LeBlanc' shock tube test in \autoref{fig:leblanc}\dots
 \end{figure}
 
 \subsubsection{Wave-shock interaction (Shu-Osher) test}
-We show the Shu-Osher test in \autoref{fig:shu_osher}\dots
+We show the Shu-Osher test in \autoref{fig:shu_osher} following the description of \cite{Shu_1989}. The initial conditions are, on the left side,
+\begin{align}
+\rho_L(x) &= 3.857143 \, , \\
+v_L(x) &= 2.629369 \, , \\
+P_L(x) &= 10.33333 \, ,
+\end{align}
+and the right-hand state is
+\begin{align}
+\rho_R(x) &= 1 + 0.2 \sin(5x) \, , \\
+v_R(x) &= 0 \, , \\
+P_R(x) &= 1 \, .
+\end{align}
+We compute a reference solution using \textsc{Athena++} \citep{Stone_2020} with the VL2 integrator, PPM reconstruction in the characteristic variables, and the HLLC Riemann solver on a grid of 1600 cells. Our solution is computed using PPM reconstruction (in the primitive variables), the RK2-SSP integrator, and the HLLC Riemann solver on a grid of 400 cells. The agreement is very good, with comparable resolution of the high-frequency features to the third-order essentially-non-oscillatory (ENO) scheme of \cite{Shu_1989}. When PLM reconstruction is used instead for the same number of grid cells, the high-frequency features are aliased (not shown; see also Figure 14 of \citealt{Shu_1989}), indicating a significantly higher effective resolution for PPM-based methods.
 \begin{figure}
     \includegraphics[width=\columnwidth]{hydro_shuosher.pdf}
     \caption{The Shu-Osher wave-shock interaction problem.}
