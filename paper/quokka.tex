@@ -392,7 +392,7 @@ and the right-hand state is
 v_R(x) &= 0 \, , \\
 P_R(x) &= 1 \, .
 \end{align}
-We compute a reference solution using \textsc{Athena++} \citep{Stone_2020} with the VL2 integrator, PPM reconstruction in the characteristic variables, and the HLLC Riemann solver on a grid of 1600 cells. Our solution is computed using PPM reconstruction (in the primitive variables), the RK2-SSP integrator, and the HLLC Riemann solver on a grid of 400 cells. The agreement is very good, with comparable resolution of the high-frequency features to the third-order essentially-non-oscillatory (ENO) scheme of \cite{Shu_1989}. When PLM reconstruction is used instead for the same number of grid cells, the high-frequency features are aliased (not shown; see also Figure 14 of \citealt{Shu_1989}), indicating a significantly higher effective resolution for PPM-based methods.
+We compute a reference solution using \textsc{Athena++} \citep{Stone_2020} with the VL2 integrator, PPM reconstruction in the characteristic variables, and the HLLC Riemann solver on a grid of 1600 cells. Our solution is computed using PPM reconstruction (in the primitive variables), the RK2-SSP integrator, and the HLLC Riemann solver on a grid of 400 cells. The agreement is very good, with comparable resolution of the high-frequency features to the third-order essentially-non-oscillatory (ENO) scheme of \cite{Shu_1989}. When PLM reconstruction is used instead for the same number of grid cells, the high-frequency features are aliased (not shown; see also Figure 14 of \citealt{Shu_1989}), indicating a significantly higher effective resolution for PPM-based methods even in the presence of shocks.
 \begin{figure}
     \includegraphics[width=\columnwidth]{hydro_shuosher.pdf}
     \caption{The Shu-Osher wave-shock interaction problem.}
@@ -400,7 +400,7 @@ We compute a reference solution using \textsc{Athena++} \citep{Stone_2020} with 
 \end{figure}
 
 \subsubsection{Slow-moving shock}
-We show a slow-moving shock in \autoref{fig:sms}\dots
+We show a slow-moving shock in \autoref{fig:sms} using the parameters from \cite{Jin_1996}, where $\rho_L = 3.86$, $(\rho v)_L = -3.1266$, and $E_L = 27.0913$, and the right-side state $\rho_R = 1.0$, $(\rho v)_R = -3.44$, and $E_R = 8.4168$, with $\gamma = 1.4$. This corresponds to a shock moving to the right with a velocity $v_{\text{shock}} = 0.1096$. For a CFL number of $0.2$, this corresponds to the shock taking $\sim 250$ timesteps to move across a single cell. This may not be a common scenario for our applications, but it may occur in a protostellar accretion shock, for instance. The quality of the solution is again significantly improved by shock flattening. The post-shock oscillations for slow-moving shocks may still be present with first-order reconstruction \citep{Jin_1996,Lee_2011}, so it is difficult to completely eliminate. We also find that adding a small amount of artificial viscosity does not significantly reduce the oscillations. A modification to PPM reconstruction based on a characteristic wave decomposition succeeds in significantly reducing this oscillation \citep{Lee_2011}, which we may consider implementing in a future version of the code.
 \begin{figure}
     \includegraphics[width=\columnwidth]{hydro_sms_1.0000.pdf}
     \caption{A slow-moving shock test problem.}
