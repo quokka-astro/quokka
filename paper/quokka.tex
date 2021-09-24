@@ -28,7 +28,8 @@
 \usepackage{graphicx}	% Including figure files
 \usepackage{amsmath}	% Advanced maths commands
 \usepackage{fontawesome}
-\usepackage[export]{adjustbox}
+\usepackage{physunits}
+%\usepackage[export]{adjustbox}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -355,20 +356,21 @@ We run simulations using PPM reconstruction and a CFL number of $0.1$, using gri
 \end{figure}
 
 \subsubsection{Contact discontinuity}
-The HLLC Riemann solver has the property that it can resolve an isolated stationary contact discontinuity with infinite resolution \citep{Toro_2013}. The HLL solver, on the other hand, introduces a large amount of numerical diffusion for this problem (see Figure 10.20 of \citealt{Toro_2013}). To verify that our hydrodynamic implementation can maintain a perfect contact discontinuity, we simulation a system where the initial conditions have a left and right state separated with a discontinuity at $x = 0.5$. The left state is $\rho_L = 1.4$, $p_L = 1.0$, and the right state is $\rho_R = 1.0$ and $p_R = 1.0$. Since this is a pure contact discontinuity, the solution should not evolve from the initial state. We set the velocity to zero, and use an adiabatic index $\gamma = 1.4$. We evolve the solution numerically until $t = 2$. We show the state of the system at this time in \autoref{fig:contact_wave}. The error with respect to the correct solution is exactly zero.
-\begin{figure}
-    \includegraphics[width=\columnwidth]{hydro_contact.pdf}
-    \caption{Results for a simulation of a stationary contact discontinuity. Black points show the simulation result, while the blue line shows the exact solution.}
-    \label{fig:contact_wave}
-\end{figure}
+The HLLC Riemann solver has the property that it can resolve an isolated stationary contact discontinuity with infinite resolution \citep{Toro_2013}. The HLL solver, on the other hand, introduces a large amount of numerical diffusion for this problem (see Figure 10.20 of \citealt{Toro_2013}). To verify that our hydrodynamic implementation can maintain a perfect contact discontinuity, we simulate a system where the initial conditions have a left and right state separated with a discontinuity at $x = 0.5$. The left state is $\rho_L = 1.4$, $p_L = 1.0$, and the right state is $\rho_R = 1.0$ and $p_R = 1.0$. Since this is a pure contact discontinuity, the solution should not evolve from the initial state. We set the velocity to zero, and use an adiabatic index $\gamma = 1.4$. We evolve the solution numerically until $t = 2$. The error with respect to the correct solution is exactly zero.
+% \begin{figure}
+%     \includegraphics[width=\columnwidth]{hydro_contact.pdf}
+%     \caption{Results for a simulation of a stationary contact discontinuity. Black points show the simulation result, while the blue line shows the exact solution.}
+%     \label{fig:contact_wave}
+% \end{figure}
 
 \subsubsection{Stationary shock tube}
+\label{section:shocktube}
 Our next test is a stationary shock tube, which we set up using the parameters suggested on the website of F.X. Timmes\footnote{\url{http://cococubed.asu.edu/code_pages/exact_riemann.shtml}}. This shock tube problem is substantially more difficult to solve than the standard \cite{Sod_1978} shock tube test due to the larger jump in pressure and density at the discontinuity. We initialize left and right states with a discontinuity at $x_0 = 2$, with the left state $\rho_L = 10$, and $p_L = 100$, and the right state $\rho_R = 1$ and $p_R = 1$. The initial velocity is zero. We evolve the solution using a CFL number of 0.1 until $t = 0.4$ on a grid of 1000 cells on the domain $[0, 5]$. We use a small CFL number since the wave structure at the discontinuity creates waves that propagate faster than the linearized Roe eigenvalues would predict.
 
 We show \quokka's results for this test in \autoref{fig:shocktube}. As for the sound wave test, we compute the $L_1$ error norm for each of the conserved variables, and then compute the root-mean-square of those error norms. The rms $L_1$ error norm divided by the rms norm of the exact solution is $1.12 \times 10^{-3}$. Inspecting the solution in \autoref{fig:shocktube}, we see that the agreement between the exact solution and the numerical solution is very good. The only noticeable differences are small oscillations near discontinuities in the derivative of the solution at $x \approx 2.4$ and near the density discontinuity at $x \approx 3.6$. We find that the shock flattening method of \cite{Miller_2002} is essential to produce a reasonable solution to this problem. Without it, we find unacceptably large post-shock oscillations (not shown).
 \begin{figure}
     \includegraphics[width=\columnwidth]{hydro_shocktube_0.4000.pdf}
-    \caption{A shock tube.}
+    \caption{A stationary shock tube problem (\autoref{section:shocktube}).}
     \label{fig:shocktube}
 \end{figure}
 
@@ -382,7 +384,7 @@ We next carry out the `LeBlanc' shock tube test, originally published by \cite{B
 \end{figure}
 
 \subsubsection{Wave-shock interaction (Shu-Osher) test}
-We show the Shu-Osher test in \autoref{fig:shu_osher}. Following the description of \cite{Shu_1989}. The initial conditions are, on the left side,
+We show the Shu-Osher test in \autoref{fig:shu_osher}. Following the description of \cite{Shu_1989}, the initial conditions are, on the left side,
 \begin{align}
 \rho_L(x) &= 3.857143 \, , \\
 v_L(x) &= 2.629369 \, , \\
@@ -434,7 +436,14 @@ We illustrate this problem in \autoref{fig:kh_zoom}\dots
 \label{ssec:radiation_tests}
 
 \subsubsection{Marshak wave}
-We show a Marshak wave in \autoref{fig:marshak} based on the parameters of \cite{Su_1996}.
+We next compute a Marshak wave \citep{Marshak_1958}. We allow the radiation and matter temperatures to evolve self-consistently according to the matter-radiation coupling terms. The opacities are constant, with $\kappa_P = \kappa_R = 577 \gm \cm^{-2}$. The density $\rho = 10 \gm \cm^{-3}$ is constant. The left-side boundary condition is an incoming half-isotropic flux with a radiation temperature of $3.481334 \times 10^6 \Kelvin$. We set the initial temperature to $10^4 \Kelvin$ everywhere. Following \cite{Su_1996}, we use an artifical form of the heat capacity at constant volume $C_v$ in order to linearize the matter-radiation coupling terms:
+\begin{align}
+C_v &\equiv \frac{\partial E_{\text{int}}}{\partial T} = \alpha T^3 \, ,
+\label{eq:heat_capacity}
+\end{align}
+where $E_{\text{int}} = (\alpha / 4) \, T^4$, $\alpha = 4 a_r / \epsilon$ and $\epsilon = 1$. With this heat capacity, \cite{Su_1996} obtain a semi-analytic quadrature solution of the radiation diffusion equation for this problem as a function of $\epsilon$. We evolve the solution until time $t = \tau / (\epsilon c \rho \kappa)$ where $\tau = 10$.
+
+Since we solve the moment equations, rather than just the diffusion equation, our numerical solution will not agree with the diffusion solution in the leading edge of the wave where streaming behavior is obtained. In the diffusion region ($F_r \ll cE_r$), we obtain excellent agreement with the semi-analytic solution, as shown in \autoref{fig:marshak}. On the right side of this region, the hyperbolic speed-of-light constraint prevents the radiation from advancing into this region in our numerical solution, but the semi-analytic diffusion solution allows radiation to propagate at infinite speed and therefore shows some unphysical heating in this region.
 \begin{figure}
     \includegraphics[width=\columnwidth]{marshak_wave_cgs_gastemperature.pdf}
     \caption{A Marshak wave test problem \citep{Su_1996}.}
@@ -442,7 +451,7 @@ We show a Marshak wave in \autoref{fig:marshak} based on the parameters of \cite
 \end{figure}
 
 \subsubsection{Su-Olson problem}
-We show the Su-Olson problem in \autoref{fig:suolson}\dots
+We compute a problem similar to the previous Marshak wave problem but with an internal radiation source rather than an external source of radiation. When using the heat capacity given by \autoref{eq:heat_capacity}, a semi-analytic solution of the angle-dependent transport equation may be obtained with a Fourier-Laplace transform \citep{Su_1997}. Our numerical solution is shown in \autoref{fig:suolson} along with the exact transport solution and the exact diffusion solution. We find that with the \cite{Levermore_1984} closure, we obtain a solution in between the diffusion solution and the transport solution. In this problem, some regions near the internal radiation source have Eddington factors $\chi < 1/3$, which cannot be represented by any local closure of the form given by \autoref{eq:M1_closure}. Reassuringly, we obtain a solution that is nonetheless more accurate than one would obtain by using a radiation diffusion equation.
 \begin{figure}
     \includegraphics[width=\columnwidth]{SuOlsonTest.pdf}
     \caption{The Su-Olson test problem \citep{Su_1997}.}
