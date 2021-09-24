@@ -187,7 +187,7 @@ then we replace this $1/c$ factor with a factor of $1/\hat c$, where $\hat c$ is
     \frac{\partial \vc{F_r}}{\partial t} + \nabla \cdot (c \hat c \, \mathsf{P}_r) = -c \hat c \, \vc{G} \, .
 \end{align}
 The maximum wave speed of this system of equations is bounded by $\hat c$ (as long as the flux satisfies causality, i.e. $F_r \leq cE_r$). As emphasised by \cite{Skinner_2013}, all other factors of $c$ remain unchanged, and, since the factors of $c$ are unchanged on the right-hand side of the hydrodynamic equations, the reduced speed of light radiation hydrodynamic system does not conserve total energy or momentum for $\hat{c} \neq c$. 
-When the left-hand side flux divergence terms are negligible, this nonconservation implies that the equilibrium temperature of the reduced speed of light system is slightly modified with respect to the correct equilibrium temperature, implying that we cannot apply the RSLA to problems in the equilibrium diffusion limit in general (see section \ref{test:exchange}).
+When the left-hand side flux divergence terms are negligible, this nonconservation implies that the equilibrium temperature of the reduced speed of light system is slightly modified with respect to the correct equilibrium temperature, implying that we cannot apply the RSLA to problems in the equilibrium diffusion limit in general (see section \ref{section:equilibrium}).
 
 Writing out the right-hand side terms explicitly, we obtain
 \begin{align}
@@ -431,6 +431,7 @@ We illustrate this problem in \autoref{fig:kh_zoom}\dots
 \end{figure}
 
 \subsubsection{2D Implosion problem}
+To be written\dots
 
 \subsection{Radiation}
 \label{ssec:radiation_tests}
@@ -451,7 +452,7 @@ Since we solve the moment equations, rather than just the diffusion equation, ou
 \end{figure}
 
 \subsubsection{Su-Olson problem}
-We compute a problem similar to the previous Marshak wave problem but with an internal radiation source rather than an external source of radiation. When using the heat capacity given by \autoref{eq:heat_capacity}, a semi-analytic solution of the angle-dependent transport equation may be obtained with a Fourier-Laplace transform \citep{Su_1997}. Our numerical solution is shown in \autoref{fig:suolson} along with the exact transport solution and the exact diffusion solution. We find that with the \cite{Levermore_1984} closure, we obtain a solution in between the diffusion solution and the transport solution. In this problem, some regions near the internal radiation source have Eddington factors $\chi < 1/3$, which cannot be represented by any local closure of the form given by \autoref{eq:M1_closure}. Reassuringly, we obtain a solution that is nonetheless more accurate than one would obtain by using a radiation diffusion equation.
+We compute a problem similar to the previous Marshak wave problem but with an internal radiation source rather than a radiation source from the domain boundary. When using the heat capacity given by \autoref{eq:heat_capacity}, a semi-analytic solution of the angle-dependent transport equation may be obtained with a Fourier-Laplace transform \citep{Su_1997}. Our numerical solution is shown in \autoref{fig:suolson} along with the exact transport solution and the exact diffusion solution. We find that with the \cite{Levermore_1984} closure, we obtain a solution in between the diffusion solution and the transport solution. In this problem, some regions near the internal radiation source have Eddington factors $\chi < 1/3$, which cannot be represented by any local closure of the form given by \autoref{eq:M1_closure}. Reassuringly, we obtain a solution that is nonetheless more accurate than one would obtain by using a radiation diffusion equation.
 \begin{figure}
     \includegraphics[width=\columnwidth]{SuOlsonTest.pdf}
     \caption{The Su-Olson test problem \citep{Su_1997}.}
@@ -459,39 +460,51 @@ We compute a problem similar to the previous Marshak wave problem but with an in
 \end{figure}
 
 \subsubsection{Radiation pressure tube}
-We show the radiation pressure tube \citep{Krumholz_2007} in \autoref{fig:radiation_pressure_tube}\dots
+We show the radiation pressure tube problem of \cite{Krumholz_2007} in \autoref{fig:radiation_pressure_tube}. This problem is designed to show that the radiation pressure can stably balance the gas pressure both in the regime where radiation pressure dominates and the in the regime where gas pressure dominates for a problem where the optical depth is very large and the radiation is in the diffusion regime. Our numerical solution agrees with the exact diffusion solution to better than $0.2$ per cent. 
 \begin{figure}
     \includegraphics[width=\columnwidth]{radiation_pressure_tube.pdf}
-    \caption{The radiation pressure tube \citep{Krumholz_2007}.}
+    \caption{The fractional error for the radiation pressure tube \citep{Krumholz_2007}.}
     \label{fig:radiation_pressure_tube}
 \end{figure}
 
 \subsubsection{Radiation-matter energy exchange}
-We show the radiation-matter energy exchange test in \autoref{fig:radcoupling}\dots
+\label{section:equilibrium}
+A radiation-matter energy exchange test based on the test of \cite{Turner_2001} is considered next. The initial energy densities are radiation energy $E_r = 10^{12} \, \text{erg} \, \text{cm}^{-3}$ and gas energy $E_g = 10^2 \, \text{erg} \, \text{cm}^{-3}$. The density $\rho = 10^{-7} \, \text{g} \, \text{cm}^{-3}$ and opacity $\kappa_P = 1.0 \, \cm^{2} \gm^{-1}$. We replace the constant heat capacity used by \cite{Turner_2001} with the heat capacity of \autoref{eq:heat_capacity} in order to obtain an algebraic solution for the matter temperature $T$ as a function of time $t$:
+\begin{align}
+T^4 &= \left( T_{0}^4 - \frac{\hat c}{c} \tilde E_0 \right) \, \exp \left[ -\frac{4}{\alpha} \left( a_r + \frac{\hat c}{c} \frac{\alpha}{4} \right) \kappa \rho c t \right] \, + \, \frac{\hat c}{c} \tilde E_0 \, .
+\end{align}
+where $E_0 = E_{g} + (c/\hat c) \, E_{r}$ and $\tilde E_0 = E_0 \left[ a_r + (\hat c / c) (\alpha / 4) \right]^{-1}$ are constant as a function of time. Taking the limit $t \rightarrow \infty$, we immediately see (contrary to previous claims in the literature) that the equilibrium temperature is modified whenever $\hat c \neq c$. Fundamentally, this occurs when the RSLA is employed ($\hat c \neq c$) because the quantity $E_0 = E_g + (c / \hat c) \, E_r$ is conserved in this problem, \emph{not} the total energy $E_{\text{tot}} = E_g + E_r$. When the boundary conditions are such that the quantity $E_0$ is \emph{not} conserved, the physically correct steady state solution may still be obtained (e.g., in a radiative shock; \autoref{section:radshock}). Fortunately, this is the situation for most applications of interest.
+
+We evolve our solution numerically with a constant timestep $\Delta t = 10^{-8} \s$ until $t = 10^{-2} \s$, as shown in \autoref{fig:radcoupling}. The numerical solution agrees with the exact solution to better than one part in $10^{5}$ at each timestep.
 \begin{figure}
     \includegraphics[width=\columnwidth]{radcoupling.pdf}
-    \caption{The radiation-matter coupling test \citep{Turner_2001}.}
+    \caption{A radiation-matter coupling test (\autoref{section:equilibrium}).}
     \label{fig:radcoupling}
 \end{figure}
 
 \subsubsection{Shadow test}
+To be written\dots
 
 \subsubsection{Beam test}
+To be written\dots
 
 \subsubsection{Optically-thin wind}
+To be written\dots
 
 \subsection{Radiation hydrodynamics}
 \label{ssec:radhydro_tests}
 
 \subsubsection{Subcritical radiative shock}
-We show a radiative shock in \autoref{fig:radshock}\dots
+\label{section:radshock}
+As a combined test of radiation hydrodynamics, we simulate a subcritical radiative shock, following the parameters given by \cite{Skinner_2019}\dots
 \begin{figure}
     \includegraphics[width=\columnwidth]{radshock_cgs_temperature.pdf}
-    \caption{A $\mathcal{M} = 3$ subcritical radiative shock test.}
+    \caption{A subcritical radiative shock with $\mathcal{M} = 3$.}
     \label{fig:radshock}
 \end{figure}
 
 \subsubsection{Radiation-driven dust shell}
+To be written\dots
 
 \section{Performance and scaling}
 \label{section:performance}
