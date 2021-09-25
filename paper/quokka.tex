@@ -324,7 +324,9 @@ As noted by \cite{Howell_2003}, an implicit radiation update has additional diff
 \section{Test problems}
 \label{section:tests}
 
-We now proceed to describe a series of tests that we have conducted to verify \quokka's accuracy and convergence characteristics, starting with tests of they hydrodynamic subsystem (\autoref{ssec:hydro_tests}), followed by tests of the radiation transport and radiation-matter exchange subsystems (\autoref{ssec:radiation_tests}), and concluding with tests of coupled radiation-hydrodynamics (\autoref{ssec:radhydro_tests}).
+We now proceed to describe a series of tests that we have conducted to verify \quokka's accuracy and convergence characteristics, starting with tests of the hydrodynamic subsystem (\autoref{ssec:hydro_tests}), followed by tests of the radiation transport and radiation-matter exchange subsystems (\autoref{ssec:radiation_tests}), and concluding with tests of coupled radiation-hydrodynamics (\autoref{ssec:radhydro_tests}).
+
+Additional example problems and an automated test suite of $19$ test problems with checks against exact solutions are included with \textsc{Quokka}'s source code. We run this test suite for each commit and pull request in our GitHub repository. While continuous integration tests such as ours cannot guarantee bug-free software, this practice has flagged and prevented the introduction of several bugs during the development of \textsc{Quokka}. In order to maintain high software quality, we also run the commercial static code analyzer \textsc{SonarQube}\footnote{Available from SonarSource S.A, Switzerland via \url{https://www.sonarqube.org}. We have detected several bugs affecting solution correctness in other hydrodynamics codes using this tool.} on every commit and pull request.
 
 \subsection{Hydrodynamics}
 \label{ssec:hydro_tests}
@@ -523,7 +525,7 @@ numpy \citep{harris2020array}, yt \citep{Turk11a}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section*{Data Availability}
-The source code and entire commit history for \textsc{Quokka} is hosted in this public \faGithub\href{https://github.com/BenWibking/quokka-code}{GitHub repository}. The version of the source code used to produce the results in this paper as well as the output files at the final timestep for the simulations shown in the Figures are permanently archived at Zenodo DOI:XXX.
+The source code and entire commit history for \textsc{Quokka} is hosted in this public \faGithub\href{https://github.com/BenWibking/quokka-code}{GitHub repository}. The version of the source code used to produce the results in this paper as well as the output files at the final timestep for the simulations shown in the Figures are permanently archived at Zenodo DOI:\textbf{XXX}.
 
 %%%%%%%%%%%%%%%%%%%% REFERENCES %%%%%%%%%%%%%%%%%%
 
