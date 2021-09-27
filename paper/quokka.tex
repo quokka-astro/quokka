@@ -488,16 +488,13 @@ To be written\dots
 \subsubsection{Beam test}
 To be written\dots
 
-\subsubsection{Optically-thin wind}
-To be written\dots
-
 \subsection{Radiation hydrodynamics}
 \label{ssec:radhydro_tests}
 
 Our final suite of tests use the full suite of physics in \quokka, and involve coupled radiation and hydrodynamics.
 
 \subsubsection{Radiation pressure tube}
-Our first radiation-hydrodynamic test is the the radiation pressure tube problem of \cite{Krumholz_2007}. This problem is designed to show that the radiation pressure can stably balance the gas pressure both in the regime where radiation pressure dominates and the in the regime where gas pressure dominates for a problem where the optical depth is very large and the radiation is in the equilibrium diffusion regime. We adopt the opacities $\kappa_P = \kappa_R = 100 \cm^2 \gm^{-1}$, mean molecular weight $\mu = 2.33 \, m_H$, and adiabatic index $\gamma = 5/3$. The exact steady-state solution in the diffusion approximation is given by the solution to the differential equations
+Our first radiation-hydrodynamic test is the the radiation pressure tube problem of \cite{Krumholz_2007}. This problem is designed to show that the radiation pressure gradient can stably balance the gas pressure gradient both in the regime where radiation pressure dominates and the in the regime where gas pressure dominates for a problem where the optical depth is sufficiently large that the radiation is in the equilibrium diffusion regime. We adopt the opacities $\kappa_P = \kappa_R = 100 \cm^2 \gm^{-1}$, mean molecular weight $\mu = 2.33 \, m_H$, and adiabatic index $\gamma = 5/3$. The exact steady-state solution in the diffusion approximation is given by the solution to the differential equations
 \begin{align}
 \frac{d \rho}{dx} &= -\frac{\mu}{k_B T} \left( \frac{k_B}{\mu} \rho + \frac{4}{3} a_r T^3 \right) \frac{dT}{dx} \, , \\
 \frac{d^2 T}{dx^2} &= -\frac{3}{T} \left(\frac{dT}{dx}\right)^2 + \frac{1}{\rho} \frac{d\rho}{dx} \frac{dT}{dx} \, ,
@@ -512,6 +509,8 @@ After evolving for a sound crossing time $t = L_x / c_{s,0} \approx 3.177 \times
     \label{fig:radiation_pressure_tube}
 \end{figure}
 
+\subsubsection{Optically-thin wind}
+To be written\dots
 
 \subsubsection{Subcritical radiative shock}
 \label{section:radshock}
