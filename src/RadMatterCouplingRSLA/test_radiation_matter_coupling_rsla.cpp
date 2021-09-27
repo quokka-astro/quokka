@@ -229,6 +229,12 @@ auto problem_main() -> int {
     matplotlibcpp::ylim(0.1 * std::min(Tgas.front(), Trad.front()),
                         10.0 * std::max(Trad.back(), Tgas.back()));
 
+    std::map<std::string, std::string> rsla_args;
+    rsla_args["label"] = "gas temperature (numerical, RSLA)";
+    rsla_args["linestyle"] = "-";
+    rsla_args["color"] = "red";
+    matplotlibcpp::plot(t, Tgas, rsla_args);
+
     std::map<std::string, std::string> exactsolrsla_args;
     exactsolrsla_args["label"] = "gas temperature (exact, RSLA)";
     exactsolrsla_args["linestyle"] = "--";

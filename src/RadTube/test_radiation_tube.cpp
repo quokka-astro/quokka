@@ -243,6 +243,7 @@ auto problem_main() -> int {
   std::vector<double> Trad_arr(nx);
   std::vector<double> Trad_exact_arr(nx);
   std::vector<double> Trad_err(nx);
+  std::vector<double> Tgas_arr(nx);
   std::vector<double> Tgas_err(nx);
   std::vector<double> rho_err(nx);
   std::vector<double> xs(nx);
@@ -293,6 +294,7 @@ auto problem_main() -> int {
         rho, x1GasMom, x2GasMom, x3GasMom, Egas);
     double Tgas = RadSystem<TubeProblem>::ComputeTgasFromEgas(rho, Eint);
 
+    Tgas_arr.at(i) = Tgas;
     Tgas_err.at(i) = (Tgas - Tgas_exact) / Tgas_exact;
   }
 
@@ -312,22 +314,32 @@ auto problem_main() -> int {
   amrex::Print() << "Relative L1 norm = " << rel_err_norm << std::endl;
 
   // Plot results
-  std::map<std::string, std::string> Traderr_args;
-  std::map<std::string, std::string> Tgaserr_args;
-  std::map<std::string, std::string> rhoerr_args;
-  Traderr_args["label"] = "radiation temperature";
-  Tgaserr_args["label"] = "gas temperature";
-  rhoerr_args["label"] = "density";
-  rhoerr_args["linestyle"] = "--";
-  matplotlibcpp::plot(xs, Trad_err, Traderr_args);
-  matplotlibcpp::plot(xs, Tgas_err, Tgaserr_args);
-  matplotlibcpp::plot(xs, rho_err, rhoerr_args);
-  matplotlibcpp::ylim(-0.005, 0.005);
+  std::map<std::string, std::string> Trad_args;
+  std::map<std::string, std::string> Tgas_args;
+  std::unordered_map<std::string, std::string> Texact_args;
+  Trad_args["label"] = "radiation";
+  Trad_args["color"] = "red";
+  Tgas_args["label"] = "gas";
+  Tgas_args["color"] = "black";
+  Texact_args["label"] = "exact";
+  Texact_args["color"] = "black";
+
+  matplotlibcpp::plot(xs, Trad_arr, Trad_args);
+  matplotlibcpp::plot(xs, Tgas_arr, Tgas_args);
+  matplotlibcpp::scatter(xs, Trad_exact_arr, 1.0, Texact_args);
+
+  // std::map<std::string, std::string> rho_args;
+  // rho_args["label"] = "density";
+  // rho_args["linestyle"] = "--";
+  // matplotlibcpp::plot(xs, Trad_err, Traderr_args);
+  // matplotlibcpp::plot(xs, Tgas_err, Tgaserr_args);
+  // matplotlibcpp::plot(xs, rho_err, rhoerr_args);
+  // matplotlibcpp::ylim(-0.005, 0.005);
 
   matplotlibcpp::legend();
   matplotlibcpp::title(fmt::format("t = {:.4g} s", sim.tNew_[0]));
   matplotlibcpp::xlabel("x (cm)");
-  matplotlibcpp::ylabel("relative error");
+  matplotlibcpp::ylabel("temperature (K)");
   matplotlibcpp::save("./radiation_pressure_tube.pdf");
 
   // Cleanup and exit

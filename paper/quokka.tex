@@ -354,11 +354,6 @@ We run simulations using PPM reconstruction and a CFL number of $0.1$, using gri
 
 \subsubsection{Contact discontinuity}
 The HLLC Riemann solver has the property that it can resolve an isolated stationary contact discontinuity with infinite resolution \citep{Toro_2013}. The HLL solver, on the other hand, introduces a large amount of numerical diffusion for this problem (see Figure 10.20 of \citealt{Toro_2013}). To verify that our hydrodynamic implementation can maintain a perfect contact discontinuity, we simulate a system where the initial conditions have a left and right state separated with a discontinuity at $x = 0.5$. The left state is $\rho_L = 1.4$, $p_L = 1.0$, and the right state is $\rho_R = 1.0$ and $p_R = 1.0$. Since this is a pure contact discontinuity, the solution should not evolve from the initial state. We set the velocity to zero, and use an adiabatic index $\gamma = 1.4$. We evolve the solution numerically until $t = 2$. The error with respect to the correct solution is exactly zero.
-% \begin{figure}
-%     \includegraphics[width=\columnwidth]{hydro_contact.pdf}
-%     \caption{Results for a simulation of a stationary contact discontinuity. Black points show the simulation result, while the blue line shows the exact solution.}
-%     \label{fig:contact_wave}
-% \end{figure}
 
 \subsubsection{Stationary shock tube}
 \label{section:shocktube}
@@ -409,7 +404,7 @@ We show a slow-moving shock in \autoref{fig:sms} using the parameters from \cite
 \end{figure}
 
 \subsubsection{Strong rarefaction}
-We next test the performance of our code on the 1-2-3 problem of \cite{Einfeldt_1991}, which features a strong rarefaction and is designed to induce failures in approximate Riemann solvers. The initial conditions consist of left and right states with equal density and energy, $\rho_L = \rho_R = 1$ and $E_L = E_R = 3$, and equal magnitude but oppositely-directed velocities, $(\rho v)_L = -2$, $(\rho v)_R = 2$. We evolve the system to $t=0.15$, using a CFL number \textcolor{red}{XX} and a grid of $N_x = \textcolor{red}{XX}$ cells \textcolor{red}{[BEN: FILL IN THE XX's]}, and show the resulting state in \autoref{fig:vacuum}. We obtain the exact solution to which we compare the \quokka~result using an exact Riemann solver. We find that the solution for the density profile is very close to the exact solution, except for a small discrepancy at the lowest density near $x = 0.5$. However, the most difficult aspect of this problem is obtaining the correct specific internal energy. Our results compare favorably with other solutions obtained with approximate Riemann solvers, where factors of two or three errors are obtained near $x \approx 0.5$ \citep{Toro_2013}. Obtaining the correct specific internal energy in the lowest density part of the flow may require the adaptive use of an exact Riemann solver in near-vacuum regions. Nonetheless, our code is stable and well-behaved for this problem.
+We next test the performance of our code on the 1-2-3 problem of \cite{Einfeldt_1991}, which features a strong rarefaction and is designed to induce failures in approximate Riemann solvers. The initial conditions consist of left and right states with equal density and energy, $\rho_L = \rho_R = 1$ and $E_L = E_R = 3$, and equal magnitude but oppositely-directed velocities, $(\rho v)_L = -2$, $(\rho v)_R = 2$. We evolve the system to $t=0.15$, using a CFL number $0.8$ and a grid of $N_x = 100$ cells, and show the resulting state in \autoref{fig:vacuum}. We obtain the exact solution to which we compare the \quokka~result using an exact Riemann solver. We find that the solution for the density profile is very close to the exact solution, except for a small discrepancy at the lowest density near $x = 0.5$. However, the most difficult aspect of this problem is obtaining the correct specific internal energy. Our results compare favorably with other solutions obtained with approximate Riemann solvers, where factors of two or three errors are obtained near $x \approx 0.5$ \citep{Toro_2013}. Obtaining the correct specific internal energy in the lowest density part of the flow may require the adaptive use of an exact Riemann solver in near-vacuum regions. Nonetheless, our code is stable and well-behaved for this problem.
 \begin{figure}
     \includegraphics[width=\columnwidth]{hydro_vacuum_0.1500.pdf}
     \includegraphics[width=\columnwidth]{hydro_vacuum_eint_0.1500.pdf}
@@ -441,7 +436,7 @@ We next compute a Marshak wave \citep{Marshak_1958}. The problem consists of a u
 C_v &\equiv \frac{\partial E_{\text{int}}}{\partial T} = \alpha T^3 \, ,
 \label{eq:heat_capacity}
 \end{align}
-where $E_{\text{int}} = (\alpha / 4) \, T^4$, $\alpha = 4 a_r / \epsilon$ and $\epsilon = 1$. With this heat capacity, \cite{Su_1996} obtain a semi-analytic quadrature solution of the radiation diffusion equation for this problem as a function of $\epsilon$. We evolve the solution until time $t = \tau / (\epsilon c \rho \kappa)$ where $\tau = 10$, using a domain form $x=\textcolor{red}{XX-YY}$ resolved by grid of $N_x = \textcolor{red}{XX}$ cells. \textcolor{red}{[BEN: FILL IN; ALSO, DO YOU USE RSLA FOR THIS PROBLEM? SAY ONE WAY OR THE OTHER, AND, IF YOU DO USE RSLA, GIVE THE VALUE OF $\hat{c}$ YOU ADOPT]}.
+where $E_{\text{int}} = (\alpha / 4) \, T^4$, $\alpha = 4 a_r / \epsilon$ and $\epsilon = 1$. With this heat capacity, \cite{Su_1996} obtain a semi-analytic quadrature solution of the radiation diffusion equation for this problem as a function of $\epsilon$. We evolve the solution until time $t = \tau / (\epsilon c \rho \kappa)$ where $\tau = 10$, using a simulation domain on the interval $[0 \cm, 3.466205 \times 10^{-3}\cm]$ resolved by grid of $N_x = 400$ cells. We do not use a reduced speed of light for this test.
 
 Since we solve the moment equations, rather than just the diffusion equation, we do not expect our numerical solution will to agree with the \citeauthor{Su_1996} solution at the leading edge of the wave, where our code respects causality and restricts the propagation speed of the wave to $c$; this constraint is violated in the diffusion approximation that \citeauthor{Su_1996} adopt. However, we can still compare to their solution in the region where $F_r \ll cE_r$ and diffusion is a good approximation. In this region, we obtain excellent agreement with the semi-analytic solution, as shown in \autoref{fig:marshak}. Note that the difference between our numerical solution and the ``exact'' solution at $x \gtrsim 3\times 10^{-3}$ cm is not an error in our solution. Rather, it is a result our code properly capturing the finite speed of light, while the semi-analytic solution does not.
 \begin{figure}
@@ -451,9 +446,17 @@ Since we solve the moment equations, rather than just the diffusion equation, we
 \end{figure}
 
 \subsubsection{Su-Olson problem}
-\textcolor{red}{There isn't enough detail on the problem setup here. What do you mean an internal radiation source? Implemented how? With what properties? I know the answer's are in Su \& Olson, but you should give enough description here that readers can follow how the problem setup works.}
+We next compute a problem involving radiation penetrating a cold medium but with an internal radiation source rather than a radiation source at the boundary. This problem is defined in dimensionless units where $a_r = c = 1$, with opacities $\kappa_P = \kappa_R = 1$, a constant density $\rho = 1$, and a radiation source
+\begin{align}
+S(x,t) =
+\begin{cases}
+    Q \, a_r T_H^4 & 0 \leq x < x_0 \, \text{and} \, t < t_0 \, , \\
+    0 & x \geq x_0 \, \text{or} \, t \geq t_0 \, ,
+\end{cases}
+\end{align}
+where we have a normalisation factor $Q = (2 x_0)^{-1}$, radiation source temperature $T_H = 1$, and spatial extent of the source $x_0 = 0.5$ and temporal extent $t_0 = 10$. The initial radiation and gas energies are zero in the idealized problem, but we set them to $10^{-10}$ in our simulation since the radiation solver requires nonzero gas and radiation energies. The gas velocity is zero. We adopt reflecting boundary conditions on the domain $[0, 30]$ on a grid of $N_x = 1500$ cells. A reduced speed of light is not used.
 
-We compute a problem similar to the previous Marshak wave problem but with an internal radiation source rather than a radiation source from the domain boundary. When using the heat capacity given by \autoref{eq:heat_capacity}, a semi-analytic solution of the angle-dependent transport equation may be obtained with a Fourier-Laplace transform \citep{Su_1997}. Our numerical solution is shown in \autoref{fig:suolson} along with the exact transport solution and the exact diffusion solution. We find that with the \cite{Levermore_1984} closure, we obtain a solution in between the diffusion solution and the transport solution. In this problem, some regions near the internal radiation source have Eddington factors $\chi < 1/3$, which cannot be represented by any local closure of the form given by \autoref{eq:M1_closure}. Reassuringly, we obtain a solution that is nonetheless more accurate than one would obtain by using a radiation diffusion equation.
+When using the heat capacity given by \autoref{eq:heat_capacity}, a semi-analytic solution of the angle-dependent transport equation may be obtained with a Fourier-Laplace transform \citep{Su_1997}. This solution assumes that $\vc{v} = 0$ at all times, so we drop all $v/c$ terms for this problem. Our numerical solution using CFL number $0.4$ at time $t = 10$ is shown in \autoref{fig:suolson} along with the exact transport solution and the exact diffusion solution. We find that with the \cite{Levermore_1984} closure, we obtain a solution in between the diffusion solution and the transport solution. While it makes little difference at $t = 10$, we find better agreement with the transport solution at earlier times when using the \cite{Minerbo_1978} closure (not shown). In this problem, some regions near the internal radiation source (located at $0 \leq x < 0.5$) have Eddington factors $\chi < 1/3$, which cannot be represented by any local closure of the form given by \autoref{eq:M1_closure}.  Nonetheless, we obtain a solution that is more accurate than one would obtain by using a radiation diffusion equation.
 \begin{figure}
     \includegraphics[width=\columnwidth]{SuOlsonTest.pdf}
     \caption{The Su-Olson test problem \citep{Su_1997}.}
@@ -472,9 +475,9 @@ T_{\text{eq}}^4 &= \frac{\hat c}{c} \tilde E_0 = \frac{\hat c}{c} E_0 \left[ a_r
 \end{align}
 Fundamentally, this occurs whenever RSLA is employed (and $\hat c \neq c$) because the quantity $E_0 = E_g + (c / \hat c) \, E_r$ is conserved in this problem, \emph{not} the total energy $E_{\text{tot}} = E_g + E_r$. This is a generic failing of the RSLA, which does not conserve total energy. However, in practice when the boundary conditions are such that the quantity $E_0$ is \emph{not} conserved, the physically correct steady-state solution may still be obtained (e.g., in a radiative shock, as we show below -- see \autoref{section:radshock}). Fortunately, this is the situation for most applications of interest.
 
-To test \quokka's ability to recover the analytic solution, we simulate the problem using a constant timestep $\Delta t = 10^{-8} \s$ until $t = 10^{-2} \s$. \textcolor{red}{WHAT VALUE OF $\hat{c}$ ARE YOU USING HERE? SPECIFY.} We show the time evolution of the matter and radiation temperatures in \autoref{fig:radcoupling}. We find that the numerical solution agrees with the exact solution to better than one part in $10^{5}$ at each timestep.
+To test \quokka's ability to recover the analytic solution, we simulate the problem using a constant timestep $\Delta t = 10^{-8} \s$ until $t = 10^{-2} \s$. We use a reduced speed of light $\hat c = 0.1 c$. We show the time evolution of the matter and radiation temperatures in \autoref{fig:radcoupling}. We find that the numerical solution agrees with the exact solution to better than one part in $10^{5}$ at each timestep.
 \begin{figure}
-    \includegraphics[width=\columnwidth]{radcoupling.pdf}
+    \includegraphics[width=\columnwidth]{radcoupling_rsla.pdf}
     \caption{A radiation-matter coupling test (\autoref{section:equilibrium}).}
     \label{fig:radcoupling}
 \end{figure}
@@ -494,14 +497,18 @@ To be written\dots
 Our final suite of tests use the full suite of physics in \quokka, and involve coupled radiation and hydrodynamics.
 
 \subsubsection{Radiation pressure tube}
-Our first radiation-hydrodynamic test is the the radiation pressure tube problem of \cite{Krumholz_2007}. This problem is designed to show that the radiation pressure can stably balance the gas pressure both in the regime where radiation pressure dominates and the in the regime where gas pressure dominates for a problem where the optical depth is very large and the radiation is in the diffusion regime. \textcolor{red}{DESCRIBE THE PROBLEM SETUP, BOTH IN TERMS OF THE INITIAL CONDITION AND THE NUMERICS (RESOLUTION, RUN TIME, CHOICE OF RSLA PARAMETER, ETC.). ASLO, IT SEEMS ODD THAT FOR THIS PROBLEM YOU'RE PLOTTING THE ERROR, WHEREAS EVERYWHERE ELSE YOU PLOTTED THE SOLUTION ITSELF.}
+Our first radiation-hydrodynamic test is the the radiation pressure tube problem of \cite{Krumholz_2007}. This problem is designed to show that the radiation pressure can stably balance the gas pressure both in the regime where radiation pressure dominates and the in the regime where gas pressure dominates for a problem where the optical depth is very large and the radiation is in the equilibrium diffusion regime. We adopt the opacities $\kappa_P = \kappa_R = 100 \cm^2 \gm^{-1}$, mean molecular weight $\mu = 2.33 \, m_H$, and adiabatic index $\gamma = 5/3$. The exact steady-state solution in the diffusion approximation is given by the solution to the differential equations
+\begin{align}
+\frac{d \rho}{dx} &= -\frac{\mu}{k_B T} \left( \frac{k_B}{\mu} \rho + \frac{4}{3} a_r T^3 \right) \frac{dT}{dx} \, , \\
+\frac{d^2 T}{dx^2} &= -\frac{3}{T} \left(\frac{dT}{dx}\right)^2 + \frac{1}{\rho} \frac{d\rho}{dx} \frac{dT}{dx} \, ,
+\end{align}
+where the left-side temperature, density, and density gradient are $T_0 = 2.75 \times 10^7 \K$, $\rho_0 = 1.0 \gm \cm^{-3}$, and ${d\rho_0}/{dx} = 0.005 \gm \cm^{-4}$. We solve this equation on the domain $[0 \cm, 128 \cm]$ in order to obtain the initial conditions for this problem. The left and right side initial conditions are adopted as Dirichlet boundary conditions for our simulation. The reduced speed of light $\hat c$ is set to $10 \, c_{s,0} \approx 4.03 \times 10^8 \cm \s^{-1}$, where $c_{s,0}$ is the sound speed at the left boundary.
 
-Our numerical solution agrees with the exact diffusion solution to better than $0.2$ per cent. 
+After evolving for a sound crossing time $t = L_x / c_{s,0} \approx 3.177 \times 10^{-6} \s$ with a CFL number of $0.4$, we obtain the numerical solution shown in \autoref{fig:radiation_pressure_tube}. Our numerical solution agrees with the initial conditions (obtained from the exact diffusion solution) to better than $0.2$ per cent. Since the boundary conditions do not require conservation of the quantity $E_0$ (see \autoref{section:equilibrium}), we find that we are able to obtain the physically correct solution even when $\hat c \neq c$.
 
-in \autoref{fig:radiation_pressure_tube}
 \begin{figure}
     \includegraphics[width=\columnwidth]{radiation_pressure_tube.pdf}
-    \caption{The fractional error for the radiation pressure tube \citep{Krumholz_2007}.}
+    \caption{The temperature for the radiation pressure tube \citep{Krumholz_2007}. The radiation and gas temperatures should be identical. The temperature for the exact diffusion solution is shown in the black circles. The temperatures agree to within 0.2 per cent.}
     \label{fig:radiation_pressure_tube}
 \end{figure}
 
