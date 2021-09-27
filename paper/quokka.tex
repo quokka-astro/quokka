@@ -522,21 +522,47 @@ We next simulate a subcritical radiative shock, following the set-up used by \ci
 \end{figure}
 
 \subsubsection{Radiation-driven dust shell}
+\label{section:shell}
 To be written\dots
 
 \section{Performance and scaling}
 \label{section:performance}
-Weak scaling results are shown in \autoref{table:weak_hydro_scaling}.
+\subsection{Weak scaling}
+Weak scaling results are shown in \autoref{table:weak_hydro_scaling} and \autoref{table:weak_radhydro_scaling}.
 
 \begin{table}
 \begin{tabular}{l|r|r|r|r|r|r}\hline
-Nodes & GPUs & Mzones/GPU & Parallel efficiency (per cent)\\\hline
+Nodes & GPUs & Mzones/GPU & Scaling efficiency\\\hline
 \csvreader
     {weak_scaling_hydro.csv}{1=\nodes,2=\gpus,3=\mzones,4=\mzonespergpu,5=\gpufill,6=\scaling,7=\scalingnode}
     {\nodes & \gpus & \mzonespergpu & \scalingnode \\}
 \end{tabular}
 \caption{Weak scaling efficiency for hydrodynamics as a function of the number of GPUs for a Sedov blast wave with periodic boundary conditions.}
 \label{table:weak_hydro_scaling}
+\end{table}
+
+\begin{table}
+\begin{tabular}{l|r|r|r|r|r|r}\hline
+Nodes & GPUs & Mzones/GPU & Scaling efficiency\\\hline
+\csvreader
+    {weak_scaling_radhydro.csv}{1=\nodes,2=\gpus,3=\mzones,4=\mzonespergpu,5=\gpufill,6=\scaling,7=\scalingnode}
+    {\nodes & \gpus & \mzonespergpu & \scalingnode \\}
+\end{tabular}
+\caption{Weak scaling efficiency for radiation hydrodynamics as a function of the number of GPUs for the radiation-driven shell test (\autoref{section:shell}) with periodic boundary conditions.}
+\label{table:weak_radhydro_scaling}
+\end{table}
+
+\subsection{Strong scaling with AMR}
+Shown in \autoref{table:strong_scaling}.
+\begin{table}
+\begin{tabular}{l|r|r|r|r|r|r}\hline
+Nodes & GPUs & Mzones/GPU & $\left(\frac{\text{Cells}}{\text{GPU}}\right)^{1/3}$ & Scaling efficiency\\\hline
+\csvreader
+    {strong_scaling.csv}{1=\nodes,2=\gpus,3=\mzones,4=\mzonespergpu,5=\gpufill,6=\scaling,7=\cellspergpu}
+    {\nodes & \gpus & \mzonespergpu & \cellspergpu & \scaling \\}
+\end{tabular}
+\caption{Strong scaling efficiency for radiation hydrodynamics as a function of the number of GPUs for the radiation-driven shell test (\autoref{section:shell}) with periodic boundary conditions on a base grid of $256^3$ cells and 2 levels of refinement.}
+\label{table:strong_scaling}
 \end{table}
 
 \section{Discussion and Conclusions}
