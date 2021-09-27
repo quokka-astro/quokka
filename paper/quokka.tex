@@ -27,9 +27,9 @@
 % Only include extra packages if you really need them. Common packages are:
 \usepackage{graphicx}	% Including figure files
 \usepackage{amsmath}	% Advanced maths commands
-\usepackage{fontawesome}
-\usepackage{physunits}
-%\usepackage[export]{adjustbox}
+\usepackage{fontawesome} % GitHub icon
+\usepackage{physunits}  % units
+\usepackage{csvsimple}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -526,6 +526,18 @@ To be written\dots
 
 \section{Performance and scaling}
 \label{section:performance}
+Weak scaling results are shown in \autoref{table:weak_hydro_scaling}.
+
+\begin{table}
+\begin{tabular}{l|r|r|r|r|r|r}\hline
+Nodes & GPUs & Mzones/GPU & Parallel efficiency (per cent)\\\hline
+\csvreader
+    {weak_scaling_hydro.csv}{1=\nodes,2=\gpus,3=\mzones,4=\mzonespergpu,5=\gpufill,6=\scaling,7=\scalingnode}
+    {\nodes & \gpus & \mzonespergpu & \scalingnode \\}
+\end{tabular}
+\caption{Weak scaling efficiency for hydrodynamics as a function of the number of GPUs for a Sedov blast wave with periodic boundary conditions.}
+\label{table:weak_hydro_scaling}
+\end{table}
 
 \section{Discussion and Conclusions}
 \label{section:discussion}
