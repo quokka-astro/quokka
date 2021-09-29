@@ -7,17 +7,21 @@
 /// \brief Defines a test problem for radiation pressure terms.
 ///
 
-#include "test_radiation_tube.hpp"
+#include <string>
+
 #include "AMReX.H"
 #include "AMReX_BC_TYPES.H"
+
+#include "test_radiation_tube.hpp"
 #include "RadhydroSimulation.hpp"
+#include "radiation_system.hpp"
 #include "fextract.hpp"
-#include "matplotlibcpp.h"
-#include <string>
 extern "C" {
 #include "interpolate.h"
 }
-#include "radiation_system.hpp"
+#ifdef HAVE_PYTHON
+#include "matplotlibcpp.h"
+#endif
 
 struct TubeProblem {};
 
@@ -313,6 +317,7 @@ auto problem_main() -> int {
   }
   amrex::Print() << "Relative L1 norm = " << rel_err_norm << std::endl;
 
+#ifdef HAVE_PYTHON
   // Plot results
   std::map<std::string, std::string> Trad_args;
   std::map<std::string, std::string> Tgas_args;
@@ -341,6 +346,7 @@ auto problem_main() -> int {
   matplotlibcpp::xlabel("x (cm)");
   matplotlibcpp::ylabel("temperature (K)");
   matplotlibcpp::save("./radiation_pressure_tube.pdf");
+#endif // HAVE_PYTHON
 
   // Cleanup and exit
   amrex::Print() << "Finished." << std::endl;

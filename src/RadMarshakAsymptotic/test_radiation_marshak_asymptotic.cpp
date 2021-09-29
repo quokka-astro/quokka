@@ -322,6 +322,7 @@ auto problem_main() -> int {
   const double rel_error = err_norm / sol_norm;
   amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
 
+#ifdef HAVE_PYTHON
   // plot results
   matplotlibcpp::clf();
   std::map<std::string, std::string> Tgas_args;
@@ -340,6 +341,7 @@ auto problem_main() -> int {
   matplotlibcpp::legend();
   matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
   matplotlibcpp::save("./marshak_wave_asymptotic_gastemperature.pdf");
+#endif // HAVE_PYTHON
 
   // Cleanup and exit
   std::cout << "Finished." << std::endl;

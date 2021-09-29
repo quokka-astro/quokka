@@ -206,6 +206,7 @@ auto problem_main() -> int {
   const double rel_error = err_norm / sol_norm;
   amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
 
+#ifdef HAVE_PYTHON
   // plot temperature
   matplotlibcpp::clf();
 
@@ -233,6 +234,7 @@ auto problem_main() -> int {
   matplotlibcpp::title(
       fmt::format("time ct = {:.4g}", initial_time + sim.tNew_[0] * c));
   matplotlibcpp::save("./radiation_pulse_temperature.pdf");
+#endif
 
   // Cleanup and exit
   int status = 0;

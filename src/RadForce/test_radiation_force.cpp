@@ -17,12 +17,14 @@
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
 #include "hydro_system.hpp"
-#include "matplotlibcpp.h"
 #include "radiation_system.hpp"
 #include "test_radiation_force.hpp"
 extern "C" {
 #include "interpolate.h"
 }
+#ifdef HAVE_PYTHON
+#include "matplotlibcpp.h"
+#endif
 
 struct TubeProblem {};
 
@@ -305,6 +307,7 @@ auto problem_main() -> int {
   }
   amrex::Print() << "Relative L1 norm = " << rel_err_norm << std::endl;
 
+#ifdef HAVE_PYTHON
   // Plot density
   std::map<std::string, std::string> rho_args;
   std::unordered_map<std::string, std::string> rhoexact_args;
@@ -347,6 +350,7 @@ auto problem_main() -> int {
   matplotlibcpp::tight_layout();
   matplotlibcpp::save("./radiation_force_tube_flux.pdf");
 #endif
+#endif // HAVE_PYTHON
 
   // Cleanup and exit
   amrex::Print() << "Finished." << std::endl;
