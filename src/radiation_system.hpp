@@ -690,9 +690,10 @@ void RadSystem<problem_t>::ComputeFluxes(
 
     // adjust the wavespeeds
     // (this factor cancels out except for the last term in the HLL flux)
-    //const quokka::valarray<double, nvarHyperbolic_> epsilon = {
+    // const quokka::valarray<double, nvarHyperbolic_> epsilon = {
     //    S_corr, 1.0, 1.0, 1.0}; // Skinner et al. (2019)
-    //const quokka::valarray<double, nvarHyperbolic_> epsilon = {S_corr, S_corr,
+    // const quokka::valarray<double, nvarHyperbolic_> epsilon = {S_corr,
+    // S_corr,
     //    S_corr, S_corr}; // Jiang et al. (2013)
     const quokka::valarray<double, nvarHyperbolic_> epsilon = {
         S_corr * S_corr, S_corr, S_corr, S_corr}; // this code
@@ -872,59 +873,61 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
     const double resid_tol = 1.0e-10; // 1.0e-15
     const int maxIter = 400;
     int n = 0;
-    for (n = 0; n < maxIter; ++n) {
+    if constexpr (gamma_ != 1.0) {
+      for (n = 0; n < maxIter; ++n) {
 
-      // compute material temperature
-      T_gas = RadSystem<problem_t>::ComputeTgasFromEgas(rho, Egas_guess);
-      AMREX_ASSERT(T_gas >= 0.);
+        // compute material temperature
+        T_gas = RadSystem<problem_t>::ComputeTgasFromEgas(rho, Egas_guess);
+        AMREX_ASSERT(T_gas >= 0.);
 
-      // compute opacity, emissivity
-      kappa = RadSystem<problem_t>::ComputePlanckOpacity(rho, T_gas);
-      AMREX_ASSERT(kappa >= 0.);
-      fourPiB = chat * a_rad * std::pow(T_gas, 4);
+        // compute opacity, emissivity
+        kappa = RadSystem<problem_t>::ComputePlanckOpacity(rho, T_gas);
+        AMREX_ASSERT(kappa >= 0.);
+        fourPiB = chat * a_rad * std::pow(T_gas, 4);
 
-      // compute derivatives w/r/t T_gas
-      const double dB_dTgas = (4.0 * fourPiB) / T_gas;
-      const double dkappa_dTgas =
-          RadSystem<problem_t>::ComputePlanckOpacityTempDerivative(rho, T_gas);
+        // compute derivatives w/r/t T_gas
+        const double dB_dTgas = (4.0 * fourPiB) / T_gas;
+        const double dkappa_dTgas =
+            RadSystem<problem_t>::ComputePlanckOpacityTempDerivative(rho,
+                                                                     T_gas);
 
-      // compute residuals
-      rhs = dt * (rho * kappa) * (fourPiB - chat * Erad_guess);
-      F_G = (Egas_guess - Egas0) + ((c / chat) * rhs);
-      F_R = (Erad_guess - Erad0) - (rhs + Src);
+        // compute residuals
+        rhs = dt * (rho * kappa) * (fourPiB - chat * Erad_guess);
+        F_G = (Egas_guess - Egas0) + ((c / chat) * rhs);
+        F_R = (Erad_guess - Erad0) - (rhs + Src);
 
-      // check if converged
-      if ((std::abs(F_G / Etot0) < resid_tol) &&
-          (std::abs(((c/chat)*F_R) / Etot0) < resid_tol)) {
-        break;
-      }
+        // check if converged
+        if ((std::abs(F_G / Etot0) < resid_tol) &&
+            (std::abs(((c / chat) * F_R) / Etot0) < resid_tol)) {
+          break;
+        }
 
-      // compute Jacobian elements
-      const double c_v =
-          RadSystem<problem_t>::ComputeEgasTempDerivative(rho, T_gas);
+        // compute Jacobian elements
+        const double c_v =
+            RadSystem<problem_t>::ComputeEgasTempDerivative(rho, T_gas);
 
-      drhs_dEgas =
-          (rho * dt / c_v) *
-          (kappa * dB_dTgas + dkappa_dTgas * (fourPiB - chat * Erad_guess));
+        drhs_dEgas =
+            (rho * dt / c_v) *
+            (kappa * dB_dTgas + dkappa_dTgas * (fourPiB - chat * Erad_guess));
 
-      // Update variables
-      dFG_dEgas = 1.0 + (c / chat) * drhs_dEgas;
-      dFG_dErad = dt * (-(rho * kappa) * c);
-      dFR_dEgas = -drhs_dEgas;
-      dFR_dErad = 1.0 + dt * ((rho * kappa) * chat);
-      eta = -dFR_dEgas / dFG_dEgas;
-      eta = (eta > 0.0) ? eta : 0.0;
+        // Update variables
+        dFG_dEgas = 1.0 + (c / chat) * drhs_dEgas;
+        dFG_dErad = dt * (-(rho * kappa) * c);
+        dFR_dEgas = -drhs_dEgas;
+        dFR_dErad = 1.0 + dt * ((rho * kappa) * chat);
+        eta = -dFR_dEgas / dFG_dEgas;
+        eta = (eta > 0.0) ? eta : 0.0;
 
-      deltaErad = -(F_R + eta * F_G) / (dFR_dErad + eta * dFG_dErad);
-      deltaEgas = -(F_G + dFG_dErad * deltaErad) / dFG_dEgas;
+        deltaErad = -(F_R + eta * F_G) / (dFR_dErad + eta * dFG_dErad);
+        deltaEgas = -(F_G + dFG_dErad * deltaErad) / dFG_dEgas;
 
-      AMREX_ASSERT(!std::isnan(deltaErad));
-      AMREX_ASSERT(!std::isnan(deltaEgas));
+        AMREX_ASSERT(!std::isnan(deltaErad));
+        AMREX_ASSERT(!std::isnan(deltaEgas));
 
-      Egas_guess += deltaEgas;
-      Erad_guess += deltaErad;
+        Egas_guess += deltaEgas;
+        Erad_guess += deltaErad;
 
-    } // END NEWTON-RAPHSON LOOP
+      } // END NEWTON-RAPHSON LOOP
 
 #if 0
     if (!((std::abs(F_G / Etot0) < resid_tol) &&
@@ -938,11 +941,12 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
       amrex::Abort("Newton solver failed to converge!");
     }
 #endif
-    AMREX_ALWAYS_ASSERT(std::abs(F_G / Etot0) < resid_tol);
-    AMREX_ALWAYS_ASSERT(std::abs(((c/chat)*F_R) / Etot0) < resid_tol);
+      AMREX_ALWAYS_ASSERT(std::abs(F_G / Etot0) < resid_tol);
+      AMREX_ALWAYS_ASSERT(std::abs(((c / chat) * F_R) / Etot0) < resid_tol);
 
-    AMREX_ALWAYS_ASSERT(Erad_guess > 0.0);
-    AMREX_ALWAYS_ASSERT(Egas_guess > 0.0);
+      AMREX_ALWAYS_ASSERT(Erad_guess > 0.0);
+      AMREX_ALWAYS_ASSERT(Egas_guess > 0.0);
+    } // endif gamma != 1.0
 
     // 2. Compute radiation flux update
     amrex::GpuArray<amrex::Real, 3> Frad_t0{};
@@ -977,30 +981,32 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
     consNew(i, j, k, x2GasMomentum_index) += dMomentum[1];
     consNew(i, j, k, x3GasMomentum_index) += dMomentum[2];
 
-    amrex::Real x1GasMom1 = consNew(i, j, k, x1GasMomentum_index);
-    amrex::Real x2GasMom1 = consNew(i, j, k, x2GasMomentum_index);
-    amrex::Real x3GasMom1 = consNew(i, j, k, x3GasMomentum_index);
+    if constexpr (gamma_ != 1.0) {
+      amrex::Real x1GasMom1 = consNew(i, j, k, x1GasMomentum_index);
+      amrex::Real x2GasMom1 = consNew(i, j, k, x2GasMomentum_index);
+      amrex::Real x3GasMom1 = consNew(i, j, k, x3GasMomentum_index);
 
-    // 4a. Compute radiation work terms
-    amrex::Real const Egastot1 =
-        ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess);
-    amrex::Real dErad_work = NAN;
+      // 4a. Compute radiation work terms
+      amrex::Real const Egastot1 =
+          ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess);
+      amrex::Real dErad_work = NAN;
 
-    if constexpr (compute_v_over_c_terms_ == true) {
-      // compute difference in gas kinetic energy before and after momentum
-      // update
-      amrex::Real const Ekin1 = Egastot1 - Egas_guess;
-      amrex::Real const dEkin_work = Ekin1 - Ekin0;
-      // compute loss of radiation energy to gas kinetic energy
-      dErad_work = -(c_hat_ / c_light_) * dEkin_work;
-    } else {
-      // do not subtract radiation work in new radiation energy
-      dErad_work = 0.;
-    }
+      if constexpr (compute_v_over_c_terms_ == true) {
+        // compute difference in gas kinetic energy before and after momentum
+        // update
+        amrex::Real const Ekin1 = Egastot1 - Egas_guess;
+        amrex::Real const dEkin_work = Ekin1 - Ekin0;
+        // compute loss of radiation energy to gas kinetic energy
+        dErad_work = -(c_hat_ / c_light_) * dEkin_work;
+      } else {
+        // do not subtract radiation work in new radiation energy
+        dErad_work = 0.;
+      }
 
-    // 4b. Store new radiation energy, gas energy
-    consNew(i, j, k, radEnergy_index) = Erad_guess + dErad_work;
-    consNew(i, j, k, gasEnergy_index) = Egastot1;
+      // 4b. Store new radiation energy, gas energy
+      consNew(i, j, k, radEnergy_index) = Erad_guess + dErad_work;
+      consNew(i, j, k, gasEnergy_index) = Egastot1;
+    } // endif gamma != 1.0
   });
 }
 
