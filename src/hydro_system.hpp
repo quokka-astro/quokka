@@ -28,6 +28,7 @@
 //
 template <typename problem_t> struct EOS_Traits {
 	static constexpr double gamma = 5. / 3.; // default value
+	static constexpr double cs_isothermal = NAN; // only used when gamma = 1
 };
 
 /// Class for the Euler equations of inviscid hydrodynamics
@@ -60,7 +61,7 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	// requires GPU reductions
 	static auto CheckStatesValid(amrex::Box const &indexRange, amrex::Array4<const amrex::Real> const &cons)
     				  -> bool;
-	static void	EnforcePressureFloor(amrex::Real rho_floor, amrex::Real P_floor, 
+	static void	EnforcePressureFloor(amrex::Real densityFloor, amrex::Real pressureFloor, 
 												  amrex::Box const &indexRange,
 												  amrex::Array4<amrex::Real> const &state);
 
@@ -87,9 +88,13 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 				  array_t &x1LeftState, array_t &x1RightState,
 				  amrex::Box const &indexRange, int nvars);
 
+	// C++ does not allow constexpr to be uninitialized, even in a templated class!
 	static constexpr double gamma_ = EOS_Traits<problem_t>::gamma;
-	// static constexpr double gamma_; // C++ standard does not allow constexpr to be
-	// uninitialized, even in a templated class!
+	static constexpr double cs_iso_ = EOS_Traits<problem_t>::cs_isothermal;
+
+	static constexpr auto is_eos_isothermal() -> bool {
+		return (gamma_ == 1.0);
+	}
 };
 
 template <typename problem_t>
@@ -389,17 +394,34 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 		const double vz_L = x1LeftState(i, j, k, x3Velocity_index);
 		const double vz_R = x1RightState(i, j, k, x3Velocity_index);
 
-		const double P_L = x1LeftState(i, j, k, pressure_index);
-		const double P_R = x1RightState(i, j, k, pressure_index);
-
 		const double ke_L = 0.5 * rho_L * (vx_L * vx_L + vy_L * vy_L + vz_L * vz_L);
 		const double ke_R = 0.5 * rho_R * (vx_R * vx_R + vy_R * vy_R + vz_R * vz_R);
 
-		const double E_L = P_L / (gamma_ - 1.0) + ke_L;
-		const double E_R = P_R / (gamma_ - 1.0) + ke_R;
+		double P_L = NAN;
+		double P_R = NAN;
 
-		const double cs_L = std::sqrt(gamma_ * P_L / rho_L);
-		const double cs_R = std::sqrt(gamma_ * P_R / rho_R);
+		double E_L = NAN;
+		double E_R = NAN;
+
+		double cs_L = NAN;
+		double cs_R = NAN;
+
+		if constexpr (is_eos_isothermal()) {
+			P_L = rho_L * (cs_iso_ * cs_iso_);
+			P_R = rho_R * (cs_iso_ * cs_iso_);
+
+			cs_L = cs_iso_;
+			cs_R = cs_iso_;
+		} else {
+			P_L = x1LeftState(i, j, k, pressure_index);
+			P_R = x1RightState(i, j, k, pressure_index);
+
+			cs_L = std::sqrt(gamma_ * P_L / rho_L);
+			cs_R = std::sqrt(gamma_ * P_R / rho_R);
+
+			E_L = P_L / (gamma_ - 1.0) + ke_L;
+			E_R = P_R / (gamma_ - 1.0) + ke_R;
+		}
 
 		AMREX_ASSERT(cs_L > 0.0);
 		AMREX_ASSERT(cs_R > 0.0);
@@ -503,13 +525,17 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 		AMREX_ASSERT(!std::isnan(F[1]));
 		AMREX_ASSERT(!std::isnan(F[2]));
 		AMREX_ASSERT(!std::isnan(F[3]));
-		AMREX_ASSERT(!std::isnan(F[4]));
 
 		x1Flux(i, j, k, density_index) = F[0];
 		x1Flux(i, j, k, x1Momentum_index) = F[1];
 		x1Flux(i, j, k, x2Momentum_index) = F[2];
 		x1Flux(i, j, k, x3Momentum_index) = F[3];
-		x1Flux(i, j, k, energy_index) = F[4];
+		if constexpr (!is_eos_isothermal()) {
+			AMREX_ASSERT(!std::isnan(F[4]));
+			x1Flux(i, j, k, energy_index) = F[4];
+		} else {
+			x1Flux(i, j, k, energy_index) = 0;
+		}
 	});
 }
 

@@ -7,4 +7,4 @@ Two-moment radiation hydrodynamics using the piecewise-parabolic method, with AM
 
 ...with advanced Adaptive Quokka Refinement:tm: technology:
 
-![Image of Quokka with Baby in Pouch](extern/quokka.png)
+![Image of Quokka with Baby in Pouch](extern/quokka2.png)
