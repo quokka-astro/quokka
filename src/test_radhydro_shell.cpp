@@ -420,7 +420,7 @@ auto problem_main() -> int {
 
   // for scaling tests
   sim.checkpointInterval_ = -1;
-  sim.plotfileInterval_ = 100;
+  sim.plotfileInterval_ = -1;
   sim.maxTimesteps_ = 50;
 
   // initialize
