@@ -509,8 +509,19 @@ After evolving for a sound crossing time $t = L_x / c_{s,0} \approx 3.177 \times
     \label{fig:radiation_pressure_tube}
 \end{figure}
 
-\subsubsection{Optically-thin wind}
-In \autoref{fig:wind}\dots
+\subsubsection{Optically-thin radiation-driven wind}
+In order to test the radiation-gas momentum coupling in the optically-thin limit, we next simulate a problem based on the radiation-inhibited Bondi accretion test of \cite{Krumholz_2007}. Since we have not yet implemented sink particles or gravity, we use the plane-parallel modification of \cite{Skinner_2013}. The opacities are $\kappa_P = 0$ and $\kappa_R = 5 \cm^2 \gm^{-1}$. The gas is isothermal with a sound speed of $c_T = 0.2 \km \s^{-1}$. The optical depth across the domain is $10^{-6}$. The initial Mach number $\mathcal{M}_0$ is $1.1$. The radiation flux $F_{r,0}$, acceleration $g_0$, and scale height $L$ are
+\begin{align}
+F_{r,0} = \rho_0 c_T c / \tau \, , \\
+g_0 = \kappa_R F_{r,0} / c \, , \\
+L = c_T^2 / g_0 \, .
+\end{align}
+where $\rho_0$ is the density at the base of the wind. We choose $\rho_0 = 3.897212 \times 10^{-19} \gm \cm^{-3}$. The length of the computational domain is one scale height $L$. As \cite{Skinner_2013} show, the steady-state solution for the Mach number $M$ is implicitly given by the Bernoulli equation
+\begin{align}
+\frac{1}{2} \mathcal{M}_0^2 = \frac{1}{2} \mathcal{M}^2 + \log \left({\frac{\mathcal{M}_0}{\mathcal{M}}}\right) - \left( \frac{x}{L} \right) \, ,
+\end{align}
+where $x$ is the position above the base of the wind. We neglect gravitational forces in this problem. The solution of the equation above is used for the initial conditions, and Dirichlet boundary conditions are adopted using the values of the solution at the boundaries. An exact isothermal Riemann solver is used for this simulation. Using a CFL number of 0.4, we evolve until $t = 10 \, (L/c_T)$.
+In \autoref{fig:wind}, we show the exact solution and our numerical solution for the Mach number as a function of height, finding excellent agreement.
 \begin{figure}
     \includegraphics[width=\columnwidth]{radiation_force_tube_vel.pdf}
     \caption{A radiation-driven wind.}
@@ -573,7 +584,7 @@ Nodes & GPUs & Mzones/GPU & $\left(\frac{\text{Cells}}{\text{GPU}}\right)^{1/3}$
 \section{Discussion and Conclusions}
 \label{section:discussion}
 \subsection{Range of applicability}
-\subsection{Planned applications}
+\subsection{Future extensions}
 
 The future is bright for radiation hydrodynamics on GPUs\dots
 
