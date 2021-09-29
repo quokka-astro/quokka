@@ -192,6 +192,7 @@ auto problem_main() -> int {
   }
   amrex::Print() << "Relative L1 norm = " << rel_err_norm << std::endl;
 
+#ifdef HAVE_PYTHON
   // Plot results
   matplotlibcpp::clf();
   matplotlibcpp::ylim(0.0, 1.1);
@@ -207,6 +208,7 @@ auto problem_main() -> int {
   matplotlibcpp::legend();
   matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
   matplotlibcpp::save("./radiation_streaming.pdf");
+#endif // HAVE_PYTHON 
 
   // Cleanup and exit
   amrex::Print() << "Finished." << std::endl;
