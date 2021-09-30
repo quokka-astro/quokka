@@ -584,10 +584,16 @@ Nodes & GPUs & Mzones/GPU & $\left(\frac{\text{Cells}}{\text{GPU}}\right)^{1/3}$
 
 \section{Discussion and Conclusions}
 \label{section:discussion}
-\subsection{Range of applicability}
-\subsection{Future extensions}
 
-The future is bright for radiation hydrodynamics on GPUs\dots
+\subsection{Range of applicability}
+Our method is limited in its range of applicability due to the use of a reduced speed of light. In the streaming limit, $\hat c$ may be chosen so that it is larger than the fastest ionization fronts in order to maintain the correct dynamics \citep{Gnedin_2001}. In the diffusion limit, $\hat c$ may be chosen so that it is larger than the effective diffusion speed $\sim c / \tau$. In this regime, we see that energy nonconservation may cause the equilibrium temperature in a closed box to differ from the physically correct equilibrium temperature (\autoref{section:equilibrium}), but in many applications, the boundary conditions are not those of a closed system, enabling the correct solution to still be obtained (e.g., \autoref{section:radshock}). However, as emphasized by \cite{Skinner_2013}, there is no $\hat c$ that enables one to preserve the ordering of the hydrodynamic signal speed $c_s + |\vc{v}|$, the dynamic diffusion speed $\sim |\vc{v}| + c / \tau$, and the reduced speed of light $\hat c$ such that $v_{\text{hydro}} \ll v_{\text{diffusion}} \ll \hat c$. Extensions to the reduced speed of light method are possible that enable qualitatively correct behavior in a larger diffusion parameter space, but we leave their implementation to future work (Wibking, et al., in prep.).
+
+\subsection{Future extensions}
+There are several ways in which our code may be extended to include more physics or more accurate radiation transport. The easiest additional radiative process to include is monoenergetic, isotropic scattering, with a straightforward extension for moment methods (e.g., \citealt{Jiang12a}). Also relatively straightforward would be an extension to include coarse frequency dependence of the radiation via a multigroup extension of our radiation-matter coupling implicit solver. Even with a relatively small number of energy groups, many additional applications would be possible, including observational comparisons. In order to improve the accuracy of the solution, one may consider eschewing local closures entirely and substituting a non-local closure for the Eddington tensor based on solution of the discrete ordinates ($S_N$) equations (e.g. \citealt{Davis_2012,Jiang12a}), or using our moment method as a nonlinear preconditioner to accelerate the convergence of the thermal emission term in the $S_N$ equations themselves \citep{Park_2012}.
+
+In the near future, we plan to add support for self-gravity with \textsc{AMReX}'s geometric multigrid solver for GPUs \citep{AMReX_JOSS}, sink particles for star cluster simulations (e.g., \cite{Krumholz07f}), and optically-thin line cooling for the interstellar medium. This additions will enable simulations of the interstellar medium, galactic winds, and star clusters, among others.
+
+Radiation hydrodynamics codes like ours will enable the widespread use of more accurate radiation transport methods and an ever-greater dynamic range in both space and time. As we approach the era of exascale supercomputers, we see a bright future for AMR radiation hydrodynamics on GPU architectures.
 
 \section*{Acknowledgements}
 
