@@ -413,7 +413,14 @@ We next test the performance of our code on the 1-2-3 problem of \cite{Einfeldt_
 \end{figure}
 
 \subsubsection{Kelvin-Helmholtz problem}
-We illustrate this problem in \autoref{fig:kh_zoom}\dots
+To show the performance of \textsc{Quokka} in two dimensions, we simulate counter-propagating gas flows with a shear layer in between in order to illustrate the ability of the code to maintain the contact discontinuity between the flows as Kelvin-Helmholz rolls develop. Following \cite{Stone_2020}, we use a two-dimensional periodic box on the domain $[0, 1]$ along each axis with density and velocity given by:
+\begin{align}
+\rho &=  1.5 - 0.5 \tanh(\tilde y / L) \, , \\
+v_x &= 0.5 \tanh(\tilde y / L) \, , \\
+v_y &= A \cos(4\pi (x - x_0)) \, \exp(-{\tilde y}^2 / \sigma^2) \, ,
+\end{align}
+where $x_0 = 0.5$, $y_0 = 0.5$, $\tilde y = |y - y_0| - 0.25$, the shearing layer thickness $L = 0.01$, $\sigma = 0.2$, and perturbation amplitude $A = 0.01$. The initial pressure is uniform with $P = 2.5$ and we adopt an adiabatic index $\gamma = 1.4$. AMR is enabled with cells tagged for refinement if the relative density gradient on either side of the cell in either direction exceeds $0.2$, and we allow up to four levels of refinement on a base grid size of $2048^2$. Each local AMR grid has a uniform size of $128^2$. After evolving to $t = 1.5$ with a CFL number of $0.4$, we show the numerical solution in \autoref{fig:kh_zoom}. We are able to carry out this calculation on a single GPU in $\sim 4.5$ hours of wallclock time. While there appears to be no converged solution to this problem without explicit dissipation, we find that our hydrodynamic solver is able to resolve the Kelvin-Helmholz rolls with very little dissipation and with significant small-scale structure caused by secondary instabilities, as expected for inviscid simulations \citep{Lecoanet_2016}.
+
 \begin{figure}
     \includegraphics[width=0.9\columnwidth]{quokka_full.pdf}
     \includegraphics[width=0.9\columnwidth]{quokka_zoom.pdf}
