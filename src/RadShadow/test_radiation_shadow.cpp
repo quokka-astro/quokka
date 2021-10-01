@@ -37,7 +37,7 @@ template <> struct RadSystem_Traits<ShadowProblem> {
 	static constexpr double c_light = c;
 	static constexpr double c_hat = c;
 	static constexpr double radiation_constant = a_rad;
-	static constexpr double mean_molecular_mass = 1.0e5 * hydrogen_mass_cgs_;
+	static constexpr double mean_molecular_mass = 10. * hydrogen_mass_cgs_;
 	static constexpr double boltzmann_constant = boltzmann_constant_cgs_;
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double Erad_floor = 0.;
@@ -259,6 +259,9 @@ auto problem_main() -> int
 	const auto machine_epsilon = std::numeric_limits<amrex::Real>::epsilon();
 	amrex::Print() << "radiation epsilon (stiffness parameter) = " << epsilon << "\n"
 		       << "machine epsilon = " << machine_epsilon << "\n";
+
+	// radiation-matter implicit solver must have a tolerance near machine precision!
+    //const double resid_tol = 1.0e-15;
 
 	// Problem initialization
 	RadhydroSimulation<ShadowProblem> sim(boundaryConditions);

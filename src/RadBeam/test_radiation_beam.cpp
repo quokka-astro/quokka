@@ -355,6 +355,7 @@ auto problem_main() -> int
 	RadhydroSimulation<BeamProblem> sim(boundaryConditions);
 	sim.stopTime_ = max_time;
 	sim.radiationCflNumber_ = CFL_number;
+	sim.radiationReconstructionOrder_ = 2; // PLM
 	sim.maxTimesteps_ = max_timesteps;
 	sim.plotfileInterval_ = 20; // for debugging
 	sim.is_hydro_enabled_ = false;

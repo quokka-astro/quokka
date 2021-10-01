@@ -870,7 +870,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
 
     double Egas_guess = Egas0;
     double Erad_guess = Erad0;
-    const double resid_tol = 1.0e-10; // 1.0e-15
+    const double resid_tol = 1.0e-15; //1.0e-10;
     const int maxIter = 400;
     int n = 0;
     if constexpr (gamma_ != 1.0) {
