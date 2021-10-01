@@ -362,20 +362,22 @@ Our next test is a stationary shock tube, which we set up using the parameters s
 We show \quokka's results for this test in \autoref{fig:shocktube}. As for the sound wave test, we compute the $L_1$ error norm for each of the conserved variables, and then compute the root-mean-square of those error norms. The rms $L_1$ error norm divided by the rms norm of the exact solution is $1.12 \times 10^{-3}$. Inspecting the solution in \autoref{fig:shocktube}, we see that the agreement between the exact solution and the numerical solution is very good. The only noticeable differences are small oscillations near discontinuities in the derivative of the solution at $x \approx 2.4$ and near the density discontinuity at $x \approx 3.6$. We find that the shock flattening method of \cite{Miller_2002} is essential to produce a reasonable solution to this problem. Without it, we find unacceptably large post-shock oscillations (not shown).
 \begin{figure}
     \includegraphics[width=\columnwidth]{hydro_shocktube_0.4000.pdf}
-    \caption{A stationary shock tube problem (\autoref{section:shocktube}).}
+    \caption{Density, velocity, and pressure profiles for the stationary shock tube test (\autoref{section:shocktube}). For comparison, we also show the exact solution for the density.}
     \label{fig:shocktube}
 \end{figure}
 
 \subsubsection{`LeBlanc' test}
+\label{section:leblanc}
 We next carry out the `LeBlanc' shock tube test, originally published by \cite{Benson_1992} and further described by \cite{Pember_2001}. In this problem, we initialize a left state with $\rho_L = 1$ and $p_L = \frac{2}{3} \times 10^{-1}$, and a right state with $\rho_R = 10^{-3}$ and $p_R = \frac{2}{3} \times 10^{-10}$. We set the initial velocity to zero and use an adiabatic index $\gamma = 5/3$. This is an extreme shock tube that far exceeds any shock that may be encountered in any conceivable application, featuring a pressure jump of nine orders of magnitude, and is therefore an excellent test problem.  We evolve this simulation until $t = 6$ using a grid of 2000 cells and a CFL number of 0.1. The resulting state is shown in \autoref{fig:leblanc}. \cite{Pember_2001} highlight the difficulty of obtaining the correct specific internal energy in the solution for this test, but we find that \quokka~produces the correct shock location and specific internal energy, with the exception of a small overshoot at the shock location. The use of shock flattening is essential for this problem. Overall, the performance of our code on this problem is excellent.
 \begin{figure}
     \includegraphics[width=\columnwidth]{hydro_leblanc_6.0000.pdf}
     \includegraphics[width=\columnwidth]{hydro_leblanc_eint_6.0000.pdf}
-    \caption{The LeBlanc test problem.}
+    \caption{Density, velocity, and pressure profiles for the `LeBlanc' shock tube test problem (\autoref{section:leblanc}). For comparison, we also show the exact solution for density.}
     \label{fig:leblanc}
 \end{figure}
 
 \subsubsection{Wave-shock interaction (Shu-Osher) test}
+\label{section:shu-osher}
 We show the Shu-Osher test in \autoref{fig:shu_osher}. Following the description of \cite{Shu_1989}, the initial conditions are, on the left side,
 \begin{align}
 \rho_L(x) &= 3.857143 \, , \\
@@ -391,24 +393,26 @@ P_R(x) &= 1 \, .
 We compute a reference solution using \textsc{Athena++} \citep{Stone_2020} with the VL2 integrator, PPM reconstruction in the characteristic variables, and the HLLC Riemann solver on a grid of 1600 cells. Our solution is computed using PPM reconstruction (in the primitive variables), the RK2-SSP integrator, and the HLLC Riemann solver on a grid of 400 cells. The agreement is very good, with comparable resolution of the high-frequency features to the third-order essentially-non-oscillatory (ENO) scheme of \cite{Shu_1989}. When PLM reconstruction is used instead for the same number of grid cells, the high-frequency features are aliased (not shown; see also Figure 14 of \citealt{Shu_1989}), indicating a significantly higher effective resolution for PPM-based methods even in the presence of shocks.
 \begin{figure}
     \includegraphics[width=\columnwidth]{hydro_shuosher.pdf}
-    \caption{The Shu-Osher wave-shock interaction problem.}
+    \caption{Density as a function of position for the Shu-Osher wave-shock interaction problem (\autoref{section:shu-osher}). Here we show a comparison between the \quokka~solution and a reference solution computed using \textsc{Athena++} \citep{Stone_2020}.}
     \label{fig:shu_osher}
 \end{figure}
 
 \subsubsection{Slow-moving shock}
+\label{section:slowshock}
 We show a slow-moving shock in \autoref{fig:sms} using the parameters from \cite{Jin_1996}, where $\rho_L = 3.86$, $(\rho v)_L = -3.1266$, and $E_L = 27.0913$, and the right-side state $\rho_R = 1.0$, $(\rho v)_R = -3.44$, and $E_R = 8.4168$, with $\gamma = 1.4$. This corresponds to the shock jump moving to the right with a velocity $v_{\text{shock}} = 0.1096$. For a CFL number of $0.2$, this corresponds to the shock taking $\sim 250$ timesteps to move across a single cell. This may not be a common scenario for our applications, but it may occur in a protostellar accretion shock, for instance. The quality of the solution is again significantly improved by shock flattening. The post-shock oscillations for slow-moving shocks may still be present with first-order reconstruction \citep{Jin_1996,Lee_2011}, so it is difficult to completely eliminate. We also find that adding a small amount of artificial viscosity does not significantly reduce the oscillations. A modification to PPM reconstruction based on a characteristic wave decomposition succeeds in significantly reducing this oscillation \citep{Lee_2011}, which we may consider implementing in a future version of the code.
 \begin{figure}
     \includegraphics[width=\columnwidth]{hydro_sms_1.0000.pdf}
-    \caption{A slow-moving shock test problem.}
+    \caption{Density profiles for the slow-moving shock test problem (\autoref{section:slowshock}). We show a comparison between the \quokka~and exact solutions.}
     \label{fig:sms}
 \end{figure}
 
 \subsubsection{Strong rarefaction}
+\label{section:rarefaction}
 We next test the performance of our code on the 1-2-3 problem of \cite{Einfeldt_1991}, which features a strong rarefaction and is designed to induce failures in approximate Riemann solvers. The initial conditions consist of left and right states with equal density and energy, $\rho_L = \rho_R = 1$ and $E_L = E_R = 3$, and equal magnitude but oppositely-directed velocities, $(\rho v)_L = -2$, $(\rho v)_R = 2$. We evolve the system to $t=0.15$, using a CFL number $0.8$ and a grid of $N_x = 100$ cells, and show the resulting state in \autoref{fig:vacuum}. We obtain the exact solution to which we compare the \quokka~result using an exact Riemann solver. We find that the solution for the density profile is very close to the exact solution, except for a small discrepancy at the lowest density near $x = 0.5$. However, the most difficult aspect of this problem is obtaining the correct specific internal energy. Our results compare favorably with other solutions obtained with approximate Riemann solvers, where factors of two or three errors are obtained near $x \approx 0.5$ \citep{Toro_2013}. Obtaining the correct specific internal energy in the lowest density part of the flow may require the adaptive use of an exact Riemann solver in near-vacuum regions. Nonetheless, our code is stable and well-behaved for this problem.
 \begin{figure}
     \includegraphics[width=\columnwidth]{hydro_vacuum_0.1500.pdf}
     \includegraphics[width=\columnwidth]{hydro_vacuum_eint_0.1500.pdf}
-    \caption{A strong rarefaction test problem.}
+    \caption{Profiles of density (top) and specific internal energy (bottom) for the strong rarefaction test problem (\autoref{section:rarefaction}). In both panels we show a comparison between the \quokka~solution computed using the default HLLC Riemann solver and a solution computed using an exact, iterative Riemann solver.}
     \label{fig:vacuum}
 \end{figure}
 
@@ -432,7 +436,7 @@ where $x_0 = 0.5$, $y_0 = 0.5$, $\tilde y = |y - y_0| - 0.25$, the shearing laye
 \end{figure}
 
 \subsubsection{Liska-Wendroff Implosion}
-We next present our results for the so-called Liska-Wendroff implosion test \citep{Hui_1999,Liska_2003}. This problem consists of the square domain $[0, 0.3]^2$, with an inner region $x+y \leq 0.15$ and an exterior region where $x + y > 0.15$ for an ideal gas with adiabatic index $\gamma = 1.4$. The inner region has density $\rho = 0.125$ and pressure $P = 0.14$ and the outer region has density $\rho = 1$ and pressure $P = 1$. We simulate this problem on a uniform grid of $1024^2$ cells with reflecting boundary conditions until $t = 2.5$ with a CFL number of $0.4$. These initial conditions lead to a shock directed toward the origin, which is then reflected many times by the upper and right walls before finally converging in a jet traveling away from the origin along the diagonal $x=y$, as shown in \autoref{fig:implosion}. \cite{Liska_2003} note that this jet is only produced by codes that discretely preserve symmetry between x- and y-directions. We found it necessary to code the RK2-SSP integrator so that the fluxes in the x- and y-direction are added in an exactly symmetrical manner for each stage of the update. Additionally, it is necessary when running on NVIDIA GPUs to disable fused multiply-add (FMA) operations via the \texttt{nvcc} compiler option \texttt{fmad=false}, since the compiler otherwise breaks the symmetry expressed in the source code between the x- and y-direction fluxes. \textsc{Quokka} exactly preserves symmetry along the diagonal.
+We next present our results for the so-called Liska-Wendroff implosion test \citep{Hui_1999,Liska_2003}. This problem consists of the square domain $[0, 0.3]^2$, with an inner region $x+y \leq 0.15$ and an exterior region where $x + y > 0.15$ for an ideal gas with adiabatic index $\gamma = 1.4$. The inner region has initial density $\rho = 0.125$ and pressure $P = 0.14$ and the outer region begins with density $\rho = 1$ and pressure $P = 1$. We simulate the subsequent evolution to $t=2.5$ on a uniform grid of $1024^2$ cells with reflecting boundary conditions with a CFL number of $0.4$. These initial conditions lead to a shock directed toward the origin, which is then reflected many times by the upper and right walls before finally converging in a jet traveling away from the origin along the diagonal $x=y$, as shown in \autoref{fig:implosion}. \cite{Liska_2003} note that only codes that discretely preserve symmetry between x- and y-directions successfully produce the jet. In order to recover the jet in \quokka, we found it necessary to code the RK2-SSP integrator so that the fluxes in the x- and y-direction are added in an exactly symmetrical manner for each stage of the update. Additionally, when running the problem on NVIDIA GPUs, we preserve this symmetry only if we disable fused multiply-add (FMA) operations via the \texttt{nvcc} compiler option \texttt{fmad=false}, since the compiler otherwise breaks the symmetry expressed in the source code between the x- and y-direction fluxes. With this compiler option, \quokka~exactly preserves symmetry along the diagonal and successfully recovers the jet.
 
 \begin{figure}
 \includegraphics[width=\columnwidth]{implosion.png}
