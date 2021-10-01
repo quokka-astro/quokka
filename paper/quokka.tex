@@ -498,10 +498,21 @@ To test \quokka's ability to recover the analytic solution, we simulate the prob
 \end{figure}
 
 \subsubsection{Shadow test}
-To be written\dots
+We next illustrate the performance of our radiation solver in two dimensions with a shadowing test based on that of \cite{Hayes_2003}, except we use planar $x-y$ geometry instead of $r-z$ coordinates. This problem consists of a rectangular domain of $1.0 \cm$ by $0.12 \cm$ with a streaming radiation source incident from the left boundary and an outflow boundary condition on the right. The lower boundary is reflecting, and the upper boundary allows outflow. In the middle lies an optically-thick cylinder. The initial gas and radiation temperatures are $290 \K$ and the incident flux has a radiation temperature of $1740 \K$. The background has a density of $\rho_{\text{bg}} = 10^{-3} \gm \cm^{-3}$, and the cylinder has a density of $\rho_{\text{cl}} = 1.0 \gm \cm^{-3}$. The gas has an opacity $\rho \kappa = (\rho/\rho_{\text{bg}})^2 \, 0.1 \cm^{-1}$, a mean molecular weight $\mu = 10 \, m_H$, and an adiabatic index $\gamma = 5/3$. We allow two levels of mesh refinement on top of a base grid of $280 \times 80$ cells, tagging cells for refinement when the relative gradient in radiation energy density exceeds $0.1$. The problem is evolved until $t = 5 \times 10^{-11} \s$ with a CFL number of $0.4$. We do not reduce the speed of light for this test. For this problem, we find it necessary to reduce the relative tolerance of the implicit matter-radiation coupling solver to $10^{-15}$. Otherwise, there are unphysical radiation shocks reflected from the cylinder. The radiation temperature is shown in \autoref{fig:shadow}. After the beam of light has crossed the domain, we find a sharp shadow cast behind the cylinder, as one would expect physically. However, there are some residual artefacts from a transient beam of light that initially curved around the cylinder and reflected against the lower boundary, as seen in the low-temperature shock-like features within the shadow near the right edge of the domain. This appears to be an unavoidable artefact of using a local VET closure. Overall, the code performs reasonably for this problem and shows that qualitatively correct behavior is obtained for semitransparent problems.
+\begin{figure*}
+    \includegraphics[width=\textwidth]{shadow1.png}
+    \caption{The shadow test. Color shows the radiation temperature. The solid line shows a density contour indicating the position of the `cloud.'}
+    \label{fig:shadow}
+\end{figure*}
 
 \subsubsection{Beam test}
-To be written\dots
+We next test the code on a test involving streaming radiation without any absorption. The domain is a square box with zero density and negligible opacity\dots
+The result is shown in \autoref{fig:beam}.
+\begin{figure}
+    \includegraphics[width=\columnwidth]{beam1.png}
+    \caption{The beam test.}
+    \label{fig:beam}
+\end{figure}
 
 \subsection{Radiation hydrodynamics}
 \label{ssec:radhydro_tests}

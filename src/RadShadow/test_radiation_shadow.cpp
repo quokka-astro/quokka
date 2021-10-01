@@ -49,8 +49,6 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<ShadowProblem>::ComputePlanckOpacity(const 
 								    const double /*Tgas*/) -> double
 {
 	const amrex::Real sigma = sigma0 * std::pow(rho / rho_bg, 2);
-	// sigma0 * std::pow(Tgas / T_initial, -3.5) * std::pow(rho / rho_bg, 2);
-
 	const amrex::Real kappa = sigma / rho; // specific opacity [cm^2 g^-1]
 	return kappa;
 }
@@ -248,17 +246,14 @@ auto problem_main() -> int
 	}
 
 	// Print radiation epsilon ("stiffness parameter" from Su & Olson).
-	// (if epsilon is smaller than machine epsilon, there are unphysical radiation shocks.)
-
+	// (if epsilon is smaller than tolerance, there can be unphysical radiation shocks.)
 	const auto dt_CFL = CFL_number * std::min(Lx / nx, Ly / ny) / c;
 	const auto c_v = RadSystem_Traits<ShadowProblem>::boltzmann_constant /
 			 (RadSystem_Traits<ShadowProblem>::mean_molecular_mass *
 			  (RadSystem_Traits<ShadowProblem>::gamma - 1.0));
 	const auto epsilon =
 	    4.0 * a_rad * (T_initial * T_initial * T_initial) * sigma0 * (c * dt_CFL) / c_v;
-	const auto machine_epsilon = std::numeric_limits<amrex::Real>::epsilon();
-	amrex::Print() << "radiation epsilon (stiffness parameter) = " << epsilon << "\n"
-		       << "machine epsilon = " << machine_epsilon << "\n";
+	amrex::Print() << "radiation epsilon (stiffness parameter) = " << epsilon << "\n";
 
 	// radiation-matter implicit solver must have a tolerance near machine precision!
     //const double resid_tol = 1.0e-15;
