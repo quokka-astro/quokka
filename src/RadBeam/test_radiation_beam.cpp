@@ -306,33 +306,34 @@ auto problem_main() -> int {
   amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
   for (int n = 0; n < nvars; ++n) {
     boundaryConditions[n].setLo(0, amrex::BCType::ext_dir); // left x1 -- inflow
-    boundaryConditions[n].setHi(0, amrex::BCType::foextrap); // right x1 -- extrapolate
+    boundaryConditions[n].setHi(
+        0, amrex::BCType::foextrap); // right x1 -- extrapolate
     boundaryConditions[n].setLo(1, amrex::BCType::ext_dir); // left x2 -- inflow
-    boundaryConditions[n].setHi(1, amrex::BCType::foextrap); // right x2 -- extrapolate
+    boundaryConditions[n].setHi(
+        1, amrex::BCType::foextrap); // right x2 -- extrapolate
     if (AMREX_SPACEDIM == 3) {
       boundaryConditions[n].setLo(2, amrex::BCType::int_dir); // periodic
       boundaryConditions[n].setHi(2, amrex::BCType::int_dir);
     }
   }
-}
 
-// Problem initialization
-RadhydroSimulation<BeamProblem> sim(boundaryConditions);
-sim.stopTime_ = max_time;
-sim.radiationCflNumber_ = CFL_number;
-sim.radiationReconstructionOrder_ = 2; // PLM
-sim.maxTimesteps_ = max_timesteps;
-sim.plotfileInterval_ = 20; // for debugging
-sim.is_hydro_enabled_ = false;
-sim.is_radiation_enabled_ = true;
+  // Problem initialization
+  RadhydroSimulation<BeamProblem> sim(boundaryConditions);
+  sim.stopTime_ = max_time;
+  sim.radiationCflNumber_ = CFL_number;
+  sim.radiationReconstructionOrder_ = 2; // PLM
+  sim.maxTimesteps_ = max_timesteps;
+  sim.plotfileInterval_ = 20; // for debugging
+  sim.is_hydro_enabled_ = false;
+  sim.is_radiation_enabled_ = true;
 
-// initialize
-sim.setInitialConditions();
+  // initialize
+  sim.setInitialConditions();
 
-// evolve
-sim.evolve();
+  // evolve
+  sim.evolve();
 
-// Cleanup and exit
-amrex::Print() << "Finished." << std::endl;
-return 0;
+  // Cleanup and exit
+  amrex::Print() << "Finished." << std::endl;
+  return 0;
 }
