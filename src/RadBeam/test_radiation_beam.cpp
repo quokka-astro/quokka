@@ -3,8 +3,8 @@
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file test_radiation_marshak.cpp
-/// \brief Defines a test problem for radiation in the diffusion regime.
+/// \file test_radiation_beam.cpp
+/// \brief Defines a test problem for radiation in the streaming regime.
 ///
 
 #include <csignal>
@@ -17,357 +17,322 @@
 #include "AMReX_IntVect.H"
 #include "AMReX_REAL.H"
 
+#include "RadhydroSimulation.hpp"
 #include "radiation_system.hpp"
 #include "test_radiation_beam.hpp"
 
 struct BeamProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-constexpr double kelvin_to_eV = 8.617385e-5;
-constexpr double kappa0 = 0.01;				 // cm^2 g^-1 (specific opacity)
-constexpr double rho0 = 1.0;				 // g cm^-3 (matter density)
-constexpr double T_hohlraum = 1000.;			 // K
-constexpr double T_initial = 300.;			 // K
-constexpr double c_v = (1.0e15 * 1.0e-6 * kelvin_to_eV); // erg g^-1 K^-1
+constexpr double kappa0 = 0.0;       // cm^2 g^-1 (specific opacity)
+constexpr double rho0 = 1.0;         // g cm^-3 (matter density)
+constexpr double T_hohlraum = 1000.; // K
+constexpr double T_initial = 300.;   // K
 
 constexpr double a_rad = 7.5646e-15; // erg cm^-3 K^-4
 constexpr double c = 2.99792458e10;  // cm s^-1
 
 template <> struct RadSystem_Traits<BeamProblem> {
-	static constexpr double c_light = c_light_cgs_;
-	static constexpr double c_hat = c_light_cgs_;
-	static constexpr double radiation_constant = radiation_constant_cgs_;
-	static constexpr double mean_molecular_mass = hydrogen_mass_cgs_;
-	static constexpr double boltzmann_constant = boltzmann_constant_cgs_;
-	static constexpr double gamma = 5. / 3.;
-	static constexpr double Erad_floor = 0.;
-	static constexpr bool compute_v_over_c_terms = true;
+  static constexpr double c_light = c_light_cgs_;
+  static constexpr double c_hat = c_light_cgs_;
+  static constexpr double radiation_constant = radiation_constant_cgs_;
+  static constexpr double mean_molecular_mass = hydrogen_mass_cgs_;
+  static constexpr double boltzmann_constant = boltzmann_constant_cgs_;
+  static constexpr double gamma = 5. / 3.;
+  static constexpr double Erad_floor = 0.;
+  static constexpr bool compute_v_over_c_terms = true;
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<BeamProblem>::ComputePlanckOpacity(const double /*rho*/,
-								  const double /*Tgas*/) -> double
-{
-	return kappa0;
+AMREX_GPU_HOST_DEVICE auto
+RadSystem<BeamProblem>::ComputePlanckOpacity(const double /*rho*/,
+                                             const double /*Tgas*/) -> double {
+  return kappa0;
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<BeamProblem>::ComputeRosselandOpacity(const double /*rho*/,
-								  const double /*Tgas*/) -> double
-{
-	return kappa0;
+AMREX_GPU_HOST_DEVICE auto RadSystem<BeamProblem>::ComputeRosselandOpacity(
+    const double /*rho*/, const double /*Tgas*/) -> double {
+  return kappa0;
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<BeamProblem>::ComputeTgasFromEgas(const double rho,
-								       const double Egas) -> double
-{
-	return Egas / (rho * c_v);
-}
-
-template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<BeamProblem>::ComputeEgasFromTgas(const double rho,
-								       const double Tgas) -> double
-{
-	return rho * c_v * Tgas;
-}
-
-template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<BeamProblem>::ComputeEgasTempDerivative(const double rho,
-									     const double /*Tgas*/)
-    -> double
-{
-	// This is also known as the heat capacity, i.e.
-	// 		\del E_g / \del T = \rho c_v,
-	// for normal materials.
-
-	return rho * c_v;
-}
-
-template <>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<BeamProblem>::setCustomBoundaryConditions(
-    const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/,
-    int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
-    const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
-{
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+AMRSimulation<BeamProblem>::setCustomBoundaryConditions(
+    const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar,
+    int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
+    const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
+    int /*orig_comp*/) {
 #if (AMREX_SPACEDIM == 2)
-	auto [i, j] = iv.toArray();
-	int k = 0;
+  auto [i, j] = iv.toArray();
+  int k = 0;
 #endif
 #if (AMREX_SPACEDIM == 3)
-	auto [i, j, k] = iv.toArray();
+  auto [i, j, k] = iv.toArray();
 #endif
 
-	amrex::Real const *dx = geom.CellSize();
-	amrex::Real const *prob_lo = geom.ProbLo();
-	amrex::Box const &box = geom.Domain();
-	amrex::GpuArray<int, 3> lo = box.loVect3d();
+  amrex::Real const *dx = geom.CellSize();
+  amrex::Real const *prob_lo = geom.ProbLo();
+  amrex::Box const &box = geom.Domain();
+  amrex::GpuArray<int, 3> lo = box.loVect3d();
 
-	amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
-	amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
+  amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+  amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
 
-	if ((i < lo[0]) && !(j < lo[1])) {
-		// streaming boundary condition
+  if ((i < lo[0]) && !(j < lo[1])) {
+    // streaming boundary condition
 
-		const double E_0 = consVar(lo[0], j, k, RadSystem<BeamProblem>::radEnergy_index);
-		const double Fx_0 = consVar(lo[0], j, k, RadSystem<BeamProblem>::x1RadFlux_index);
-		const double Fy_0 = consVar(lo[0], j, k, RadSystem<BeamProblem>::x2RadFlux_index);
-		const double Fz_0 = consVar(lo[0], j, k, RadSystem<BeamProblem>::x3RadFlux_index);
+    const double E_0 =
+        consVar(lo[0], j, k, RadSystem<BeamProblem>::radEnergy_index);
+    const double Fx_0 =
+        consVar(lo[0], j, k, RadSystem<BeamProblem>::x1RadFlux_index);
+    const double Fy_0 =
+        consVar(lo[0], j, k, RadSystem<BeamProblem>::x2RadFlux_index);
+    const double Fz_0 =
+        consVar(lo[0], j, k, RadSystem<BeamProblem>::x3RadFlux_index);
 
-		const double Egas = consVar(lo[0], j, k, RadSystem<BeamProblem>::gasEnergy_index);
-		const double rho = consVar(lo[0], j, k, RadSystem<BeamProblem>::gasDensity_index);
-		const double px = consVar(lo[0], j, k, RadSystem<BeamProblem>::x1GasMomentum_index);
-		const double py = consVar(lo[0], j, k, RadSystem<BeamProblem>::x2GasMomentum_index);
-		const double pz = consVar(lo[0], j, k, RadSystem<BeamProblem>::x3GasMomentum_index);
+    const double Egas =
+        consVar(lo[0], j, k, RadSystem<BeamProblem>::gasEnergy_index);
+    const double rho =
+        consVar(lo[0], j, k, RadSystem<BeamProblem>::gasDensity_index);
+    const double px =
+        consVar(lo[0], j, k, RadSystem<BeamProblem>::x1GasMomentum_index);
+    const double py =
+        consVar(lo[0], j, k, RadSystem<BeamProblem>::x2GasMomentum_index);
+    const double pz =
+        consVar(lo[0], j, k, RadSystem<BeamProblem>::x3GasMomentum_index);
 
-		double E_inc = NAN;
-		double Fx_bdry = NAN;
-		double Fy_bdry = NAN;
-		double Fz_bdry = NAN;
+    double E_inc = NAN;
+    double Fx_bdry = NAN;
+    double Fy_bdry = NAN;
+    double Fz_bdry = NAN;
 
-		const double y_max = 0.0625;
+    const double y_max = 0.0625;
 
-		if (y <= y_max) {
-			E_inc = a_rad * std::pow(T_hohlraum, 4);
-			Fx_bdry = (1.0 / std::sqrt(2.0)) * c * E_inc;
-			Fy_bdry = (1.0 / std::sqrt(2.0)) * c * E_inc;
-			Fz_bdry = 0.;
-		} else {
-			// reflecting/absorbing boundary
-			E_inc = E_0;
-			Fx_bdry = -Fx_0;
-			Fy_bdry = Fy_0;
-			Fz_bdry = Fz_0;
-		}
+    if (y <= y_max) {
+      E_inc = a_rad * std::pow(T_hohlraum, 4);
+      Fx_bdry = (1.0 / std::sqrt(2.0)) * c * E_inc;
+      Fy_bdry = (1.0 / std::sqrt(2.0)) * c * E_inc;
+      Fz_bdry = 0.;
+    } else {
+      // reflecting/absorbing boundary
+      E_inc = E_0;
+      Fx_bdry = -Fx_0;
+      Fy_bdry = Fy_0;
+      Fz_bdry = Fz_0;
+    }
 
-		// x1, x2 left side boundary
-		consVar(i, j, k, RadSystem<BeamProblem>::radEnergy_index) = E_inc;
-		consVar(i, j, k, RadSystem<BeamProblem>::x1RadFlux_index) = Fx_bdry;
-		consVar(i, j, k, RadSystem<BeamProblem>::x2RadFlux_index) = Fy_bdry;
-		consVar(i, j, k, RadSystem<BeamProblem>::x3RadFlux_index) = Fz_bdry;
+    // x1, x2 left side boundary
+    consVar(i, j, k, RadSystem<BeamProblem>::radEnergy_index) = E_inc;
+    consVar(i, j, k, RadSystem<BeamProblem>::x1RadFlux_index) = Fx_bdry;
+    consVar(i, j, k, RadSystem<BeamProblem>::x2RadFlux_index) = Fy_bdry;
+    consVar(i, j, k, RadSystem<BeamProblem>::x3RadFlux_index) = Fz_bdry;
 
-		// extrapolated/outflow boundary for gas variables
-		consVar(i, j, k, RadSystem<BeamProblem>::gasEnergy_index) = Egas;
-		consVar(i, j, k, RadSystem<BeamProblem>::gasDensity_index) = rho;
-		consVar(i, j, k, RadSystem<BeamProblem>::x1GasMomentum_index) = px;
-		consVar(i, j, k, RadSystem<BeamProblem>::x2GasMomentum_index) = py;
-		consVar(i, j, k, RadSystem<BeamProblem>::x3GasMomentum_index) = pz;
-	} else if ((j < lo[1]) && !(i < lo[0])) {
-		// streaming boundary condition
-		double E_inc = NAN;
+    // extrapolated/outflow boundary for gas variables
+    consVar(i, j, k, RadSystem<BeamProblem>::gasEnergy_index) = Egas;
+    consVar(i, j, k, RadSystem<BeamProblem>::gasDensity_index) = rho;
+    consVar(i, j, k, RadSystem<BeamProblem>::x1GasMomentum_index) = px;
+    consVar(i, j, k, RadSystem<BeamProblem>::x2GasMomentum_index) = py;
+    consVar(i, j, k, RadSystem<BeamProblem>::x3GasMomentum_index) = pz;
+  } else if ((j < lo[1]) && !(i < lo[0])) {
+    // streaming boundary condition
+    double E_inc = NAN;
 
-		const double E_0 = consVar(i, lo[1], k, RadSystem<BeamProblem>::radEnergy_index);
-		const double Fx_0 = consVar(i, lo[1], k, RadSystem<BeamProblem>::x1RadFlux_index);
-		const double Fy_0 = consVar(i, lo[1], k, RadSystem<BeamProblem>::x2RadFlux_index);
-		const double Fz_0 = consVar(i, lo[1], k, RadSystem<BeamProblem>::x3RadFlux_index);
+    const double E_0 =
+        consVar(i, lo[1], k, RadSystem<BeamProblem>::radEnergy_index);
+    const double Fx_0 =
+        consVar(i, lo[1], k, RadSystem<BeamProblem>::x1RadFlux_index);
+    const double Fy_0 =
+        consVar(i, lo[1], k, RadSystem<BeamProblem>::x2RadFlux_index);
+    const double Fz_0 =
+        consVar(i, lo[1], k, RadSystem<BeamProblem>::x3RadFlux_index);
 
-		const double Egas = consVar(i, lo[1], k, RadSystem<BeamProblem>::gasEnergy_index);
-		const double rho = consVar(i, lo[1], k, RadSystem<BeamProblem>::gasDensity_index);
-		const double px = consVar(i, lo[1], k, RadSystem<BeamProblem>::x1GasMomentum_index);
-		const double py = consVar(i, lo[1], k, RadSystem<BeamProblem>::x2GasMomentum_index);
-		const double pz = consVar(i, lo[1], k, RadSystem<BeamProblem>::x3GasMomentum_index);
+    const double Egas =
+        consVar(i, lo[1], k, RadSystem<BeamProblem>::gasEnergy_index);
+    const double rho =
+        consVar(i, lo[1], k, RadSystem<BeamProblem>::gasDensity_index);
+    const double px =
+        consVar(i, lo[1], k, RadSystem<BeamProblem>::x1GasMomentum_index);
+    const double py =
+        consVar(i, lo[1], k, RadSystem<BeamProblem>::x2GasMomentum_index);
+    const double pz =
+        consVar(i, lo[1], k, RadSystem<BeamProblem>::x3GasMomentum_index);
 
-		double Fx_bdry = NAN;
-		double Fy_bdry = NAN;
-		double Fz_bdry = NAN;
+    double Fx_bdry = NAN;
+    double Fy_bdry = NAN;
+    double Fz_bdry = NAN;
 
-		const double x_max = 0.0625;
+    const double x_max = 0.0625;
 
-		if (x <= x_max) {
-			E_inc = a_rad * std::pow(T_hohlraum, 4);
-			Fx_bdry = (1.0 / std::sqrt(2.0)) * c * E_inc;
-			Fy_bdry = (1.0 / std::sqrt(2.0)) * c * E_inc;
-			Fz_bdry = 0.;
-		} else {
-			// reflecting/absorbing boundary
-			E_inc = E_0;
-			Fx_bdry = Fx_0;
-			Fy_bdry = -Fy_0;
-			Fz_bdry = Fz_0;
-		}
+    if (x <= x_max) {
+      E_inc = a_rad * std::pow(T_hohlraum, 4);
+      Fx_bdry = (1.0 / std::sqrt(2.0)) * c * E_inc;
+      Fy_bdry = (1.0 / std::sqrt(2.0)) * c * E_inc;
+      Fz_bdry = 0.;
+    } else {
+      // reflecting/absorbing boundary
+      E_inc = E_0;
+      Fx_bdry = Fx_0;
+      Fy_bdry = -Fy_0;
+      Fz_bdry = Fz_0;
+    }
 
-		// x1, x2 left side boundary
-		consVar(i, j, k, RadSystem<BeamProblem>::radEnergy_index) = E_inc;
-		consVar(i, j, k, RadSystem<BeamProblem>::x1RadFlux_index) = Fx_bdry;
-		consVar(i, j, k, RadSystem<BeamProblem>::x2RadFlux_index) = Fy_bdry;
-		consVar(i, j, k, RadSystem<BeamProblem>::x3RadFlux_index) = Fz_bdry;
+    // x1, x2 left side boundary
+    consVar(i, j, k, RadSystem<BeamProblem>::radEnergy_index) = E_inc;
+    consVar(i, j, k, RadSystem<BeamProblem>::x1RadFlux_index) = Fx_bdry;
+    consVar(i, j, k, RadSystem<BeamProblem>::x2RadFlux_index) = Fy_bdry;
+    consVar(i, j, k, RadSystem<BeamProblem>::x3RadFlux_index) = Fz_bdry;
 
-		// extrapolated/outflow boundary for gas variables
-		consVar(i, j, k, RadSystem<BeamProblem>::gasEnergy_index) = Egas;
-		consVar(i, j, k, RadSystem<BeamProblem>::gasDensity_index) = rho;
-		consVar(i, j, k, RadSystem<BeamProblem>::x1GasMomentum_index) = px;
-		consVar(i, j, k, RadSystem<BeamProblem>::x2GasMomentum_index) = py;
-		consVar(i, j, k, RadSystem<BeamProblem>::x3GasMomentum_index) = pz;
-	} else if ((i < lo[0]) && (j < lo[1])) {
-		// streaming boundary condition
+    // extrapolated/outflow boundary for gas variables
+    consVar(i, j, k, RadSystem<BeamProblem>::gasEnergy_index) = Egas;
+    consVar(i, j, k, RadSystem<BeamProblem>::gasDensity_index) = rho;
+    consVar(i, j, k, RadSystem<BeamProblem>::x1GasMomentum_index) = px;
+    consVar(i, j, k, RadSystem<BeamProblem>::x2GasMomentum_index) = py;
+    consVar(i, j, k, RadSystem<BeamProblem>::x3GasMomentum_index) = pz;
+  } else if ((i < lo[0]) && (j < lo[1])) {
+    // streaming boundary condition
 
-		const double Egas =
-		    consVar(lo[0], lo[1], k, RadSystem<BeamProblem>::gasEnergy_index);
-		const double rho =
-		    consVar(lo[0], lo[1], k, RadSystem<BeamProblem>::gasDensity_index);
-		const double px =
-		    consVar(lo[0], lo[1], k, RadSystem<BeamProblem>::x1GasMomentum_index);
-		const double py =
-		    consVar(lo[0], lo[1], k, RadSystem<BeamProblem>::x2GasMomentum_index);
-		const double pz =
-		    consVar(lo[0], lo[1], k, RadSystem<BeamProblem>::x3GasMomentum_index);
+    const double Egas =
+        consVar(lo[0], lo[1], k, RadSystem<BeamProblem>::gasEnergy_index);
+    const double rho =
+        consVar(lo[0], lo[1], k, RadSystem<BeamProblem>::gasDensity_index);
+    const double px =
+        consVar(lo[0], lo[1], k, RadSystem<BeamProblem>::x1GasMomentum_index);
+    const double py =
+        consVar(lo[0], lo[1], k, RadSystem<BeamProblem>::x2GasMomentum_index);
+    const double pz =
+        consVar(lo[0], lo[1], k, RadSystem<BeamProblem>::x3GasMomentum_index);
 
-		double E_inc = a_rad * std::pow(T_hohlraum, 4);
-		double Fx_bdry = (1.0 / std::sqrt(2.0)) * c * E_inc;
-		double Fy_bdry = (1.0 / std::sqrt(2.0)) * c * E_inc;
-		double Fz_bdry = 0.;
+    double E_inc = a_rad * std::pow(T_hohlraum, 4);
+    double Fx_bdry = (1.0 / std::sqrt(2.0)) * c * E_inc;
+    double Fy_bdry = (1.0 / std::sqrt(2.0)) * c * E_inc;
+    double Fz_bdry = 0.;
 
-		// x1, x2 left side boundary
-		consVar(i, j, k, RadSystem<BeamProblem>::radEnergy_index) = E_inc;
-		consVar(i, j, k, RadSystem<BeamProblem>::x1RadFlux_index) = Fx_bdry;
-		consVar(i, j, k, RadSystem<BeamProblem>::x2RadFlux_index) = Fy_bdry;
-		consVar(i, j, k, RadSystem<BeamProblem>::x3RadFlux_index) = Fz_bdry;
+    // x1, x2 left side boundary
+    consVar(i, j, k, RadSystem<BeamProblem>::radEnergy_index) = E_inc;
+    consVar(i, j, k, RadSystem<BeamProblem>::x1RadFlux_index) = Fx_bdry;
+    consVar(i, j, k, RadSystem<BeamProblem>::x2RadFlux_index) = Fy_bdry;
+    consVar(i, j, k, RadSystem<BeamProblem>::x3RadFlux_index) = Fz_bdry;
 
-		// extrapolated/outflow boundary for gas variables
-		consVar(i, j, k, RadSystem<BeamProblem>::gasEnergy_index) = Egas;
-		consVar(i, j, k, RadSystem<BeamProblem>::gasDensity_index) = rho;
-		consVar(i, j, k, RadSystem<BeamProblem>::x1GasMomentum_index) = px;
-		consVar(i, j, k, RadSystem<BeamProblem>::x2GasMomentum_index) = py;
-		consVar(i, j, k, RadSystem<BeamProblem>::x3GasMomentum_index) = pz;
-	}
-}
-
-template <> void RadhydroSimulation<BeamProblem>::setInitialConditionsAtLevel(int lev)
-{
-	for (amrex::MFIter iter(state_old_[lev]); iter.isValid(); ++iter) {
-		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
-		auto const &state = state_new_[lev].array(iter);
-
-		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-			const double Erad = a_rad * std::pow(T_initial, 4);
-			const double rho = rho0;
-			const double Egas =
-			    RadSystem<BeamProblem>::ComputeEgasFromTgas(rho, T_initial);
-
-			state(i, j, k, RadSystem<BeamProblem>::radEnergy_index) = Erad;
-			state(i, j, k, RadSystem<BeamProblem>::x1RadFlux_index) = 0;
-			state(i, j, k, RadSystem<BeamProblem>::x2RadFlux_index) = 0;
-			state(i, j, k, RadSystem<BeamProblem>::x3RadFlux_index) = 0;
-
-			state(i, j, k, RadSystem<BeamProblem>::gasEnergy_index) = Egas;
-			state(i, j, k, RadSystem<BeamProblem>::gasDensity_index) = rho;
-			state(i, j, k, RadSystem<BeamProblem>::x1GasMomentum_index) = 0.;
-			state(i, j, k, RadSystem<BeamProblem>::x2GasMomentum_index) = 0.;
-			state(i, j, k, RadSystem<BeamProblem>::x3GasMomentum_index) = 0.;
-		});
-	}
-
-	// set flag
-	areInitialConditionsDefined_ = true;
+    // extrapolated/outflow boundary for gas variables
+    consVar(i, j, k, RadSystem<BeamProblem>::gasEnergy_index) = Egas;
+    consVar(i, j, k, RadSystem<BeamProblem>::gasDensity_index) = rho;
+    consVar(i, j, k, RadSystem<BeamProblem>::x1GasMomentum_index) = px;
+    consVar(i, j, k, RadSystem<BeamProblem>::x2GasMomentum_index) = py;
+    consVar(i, j, k, RadSystem<BeamProblem>::x3GasMomentum_index) = pz;
+  }
 }
 
 template <>
-void RadhydroSimulation<BeamProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags,
-					       amrex::Real /*time*/, int /*ngrow*/)
-{
-	// tag cells for refinement
+void RadhydroSimulation<BeamProblem>::setInitialConditionsAtLevel(int lev) {
+  for (amrex::MFIter iter(state_old_[lev]); iter.isValid(); ++iter) {
+    const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
+    auto const &state = state_new_[lev].array(iter);
 
-	const amrex::Real eta_threshold = 0.1; // gradient refinement threshold
-	const amrex::Real erad_min = 1.0e-3;   // minimum erad for refinement
+    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+      const double Erad = a_rad * std::pow(T_initial, 4);
+      const double rho = rho0;
+      const double Egas =
+          RadSystem<BeamProblem>::ComputeEgasFromTgas(rho, T_initial);
 
-	for (amrex::MFIter mfi(state_new_[lev]); mfi.isValid(); ++mfi) {
-		const amrex::Box &box = mfi.validbox();
-		const auto state = state_new_[lev].const_array(mfi);
-		const auto tag = tags.array(mfi);
+      state(i, j, k, RadSystem<BeamProblem>::radEnergy_index) = Erad;
+      state(i, j, k, RadSystem<BeamProblem>::x1RadFlux_index) = 0;
+      state(i, j, k, RadSystem<BeamProblem>::x2RadFlux_index) = 0;
+      state(i, j, k, RadSystem<BeamProblem>::x3RadFlux_index) = 0;
 
-		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			amrex::Real const P =
-			    state(i, j, k, RadSystem<BeamProblem>::radEnergy_index);
-			amrex::Real const P_xplus =
-			    state(i + 1, j, k, RadSystem<BeamProblem>::radEnergy_index);
-			amrex::Real const P_xminus =
-			    state(i - 1, j, k, RadSystem<BeamProblem>::radEnergy_index);
-			amrex::Real const P_yplus =
-			    state(i, j + 1, k, RadSystem<BeamProblem>::radEnergy_index);
-			amrex::Real const P_yminus =
-			    state(i, j - 1, k, RadSystem<BeamProblem>::radEnergy_index);
+      state(i, j, k, RadSystem<BeamProblem>::gasEnergy_index) = Egas;
+      state(i, j, k, RadSystem<BeamProblem>::gasDensity_index) = rho;
+      state(i, j, k, RadSystem<BeamProblem>::x1GasMomentum_index) = 0.;
+      state(i, j, k, RadSystem<BeamProblem>::x2GasMomentum_index) = 0.;
+      state(i, j, k, RadSystem<BeamProblem>::x3GasMomentum_index) = 0.;
+    });
+  }
 
-			amrex::Real const del_x =
-			    std::max(std::abs(P_xplus - P), std::abs(P - P_xminus));
-			amrex::Real const del_y =
-			    std::max(std::abs(P_yplus - P), std::abs(P - P_yminus));
-
-			amrex::Real const gradient_indicator =
-			    std::max(del_x, del_y) / std::max(P, erad_min);
-
-			if (gradient_indicator > eta_threshold) {
-				tag(i, j, k) = amrex::TagBox::SET;
-			}
-		});
-	}
+  // set flag
+  areInitialConditionsDefined_ = true;
 }
 
-auto problem_main() -> int
-{
-	// Problem parameters
-	const int max_timesteps = 10000;
-	const double CFL_number = 0.2;
-	//const int nx = 128;
-	const double Lx = 2.0;			// cm
-	const double max_time = 2.0 * (Lx / c); // s
+template <>
+void RadhydroSimulation<BeamProblem>::ErrorEst(int lev,
+                                               amrex::TagBoxArray &tags,
+                                               amrex::Real /*time*/,
+                                               int /*ngrow*/) {
+  // tag cells for refinement
 
-	auto isNormalComp = [=](int n, int dim) {
-		if ((n == RadSystem<BeamProblem>::x1RadFlux_index) && (dim == 0)) {
-			return true;
-		}
-		if ((n == RadSystem<BeamProblem>::x2RadFlux_index) && (dim == 1)) {
-			return true;
-		}
-		if ((n == RadSystem<BeamProblem>::x3RadFlux_index) && (dim == 2)) {
-			return true;
-		}
-		if ((n == RadSystem<BeamProblem>::x1GasMomentum_index) && (dim == 0)) {
-			return true;
-		}
-		if ((n == RadSystem<BeamProblem>::x2GasMomentum_index) && (dim == 1)) {
-			return true;
-		}
-		if ((n == RadSystem<BeamProblem>::x3GasMomentum_index) && (dim == 2)) {
-			return true;
-		}
-		return false;
-	};
+  const amrex::Real eta_threshold = 0.1; // gradient refinement threshold
+  const amrex::Real erad_min = 1.0e-3;   // minimum erad for refinement
 
-	constexpr int nvars = 9;
-	amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
-	for (int n = 0; n < nvars; ++n) {
-		boundaryConditions[n].setLo(0, amrex::BCType::ext_dir);	 // left x1 -- inflow
-		boundaryConditions[n].setHi(0, amrex::BCType::foextrap); // right x1 -- extrapolate
-		boundaryConditions[n].setLo(1, amrex::BCType::ext_dir);	 // left x2 -- inflow
-		boundaryConditions[n].setHi(1, amrex::BCType::foextrap); // right x2 -- extrapolate
-		for (int i = 2; i < AMREX_SPACEDIM; ++i) {
-			if (isNormalComp(n, i)) { // reflect lower
-				boundaryConditions[n].setLo(i, amrex::BCType::reflect_odd);
-			} else {
-				boundaryConditions[n].setLo(i, amrex::BCType::reflect_even);
-			}
-			// extrapolate upper
-			boundaryConditions[n].setHi(i, amrex::BCType::foextrap);
-		}
-	}
+  for (amrex::MFIter mfi(state_new_[lev]); mfi.isValid(); ++mfi) {
+    const amrex::Box &box = mfi.validbox();
+    const auto state = state_new_[lev].const_array(mfi);
+    const auto tag = tags.array(mfi);
 
-	// Problem initialization
-	RadhydroSimulation<BeamProblem> sim(boundaryConditions);
-	sim.stopTime_ = max_time;
-	sim.radiationCflNumber_ = CFL_number;
-	sim.radiationReconstructionOrder_ = 2; // PLM
-	sim.maxTimesteps_ = max_timesteps;
-	sim.plotfileInterval_ = 20; // for debugging
-	sim.is_hydro_enabled_ = false;
-	sim.is_radiation_enabled_ = true;
+    amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+      amrex::Real const P =
+          state(i, j, k, RadSystem<BeamProblem>::radEnergy_index);
+      amrex::Real const P_xplus =
+          state(i + 1, j, k, RadSystem<BeamProblem>::radEnergy_index);
+      amrex::Real const P_xminus =
+          state(i - 1, j, k, RadSystem<BeamProblem>::radEnergy_index);
+      amrex::Real const P_yplus =
+          state(i, j + 1, k, RadSystem<BeamProblem>::radEnergy_index);
+      amrex::Real const P_yminus =
+          state(i, j - 1, k, RadSystem<BeamProblem>::radEnergy_index);
 
-	// initialize
-	sim.setInitialConditions();
+      amrex::Real const del_x =
+          std::max(std::abs(P_xplus - P), std::abs(P - P_xminus));
+      amrex::Real const del_y =
+          std::max(std::abs(P_yplus - P), std::abs(P - P_yminus));
 
-	// evolve
-	sim.evolve();
+      amrex::Real const gradient_indicator =
+          std::max(del_x, del_y) / std::max(P, erad_min);
 
-	// Cleanup and exit
-	amrex::Print() << "Finished." << std::endl;
-	return 0;
+      if (gradient_indicator > eta_threshold) {
+        tag(i, j, k) = amrex::TagBox::SET;
+      }
+    });
+  }
+}
+
+auto problem_main() -> int {
+  // Problem parameters
+  const int max_timesteps = 10000;
+  const double CFL_number = 0.4;
+  // const int nx = 128;
+  const double Lx = 2.0;                  // cm
+  const double max_time = 2.0 * (Lx / c); // s
+
+  constexpr int nvars = RadSystem<BeamProblem>::nvar_;
+  amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
+  for (int n = 0; n < nvars; ++n) {
+    boundaryConditions[n].setLo(0, amrex::BCType::ext_dir); // left x1 -- inflow
+    boundaryConditions[n].setHi(0, amrex::BCType::foextrap); // right x1 -- extrapolate
+    boundaryConditions[n].setLo(1, amrex::BCType::ext_dir); // left x2 -- inflow
+    boundaryConditions[n].setHi(1, amrex::BCType::foextrap); // right x2 -- extrapolate
+    if (AMREX_SPACEDIM == 3) {
+      boundaryConditions[n].setLo(2, amrex::BCType::int_dir); // periodic
+      boundaryConditions[n].setHi(2, amrex::BCType::int_dir);
+    }
+  }
+}
+
+// Problem initialization
+RadhydroSimulation<BeamProblem> sim(boundaryConditions);
+sim.stopTime_ = max_time;
+sim.radiationCflNumber_ = CFL_number;
+sim.radiationReconstructionOrder_ = 2; // PLM
+sim.maxTimesteps_ = max_timesteps;
+sim.plotfileInterval_ = 20; // for debugging
+sim.is_hydro_enabled_ = false;
+sim.is_radiation_enabled_ = true;
+
+// initialize
+sim.setInitialConditions();
+
+// evolve
+sim.evolve();
+
+// Cleanup and exit
+amrex::Print() << "Finished." << std::endl;
+return 0;
 }
