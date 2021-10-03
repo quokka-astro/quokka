@@ -115,6 +115,7 @@ void RadhydroSimulation<SedovProblem>::ErrorEst(int lev,
     amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
       amrex::Real const P =
           HydroSystem<SedovProblem>::ComputePressure(state, i, j, k);
+
       amrex::Real const P_xplus =
           HydroSystem<SedovProblem>::ComputePressure(state, i + 1, j, k);
       amrex::Real const P_xminus =
@@ -123,14 +124,20 @@ void RadhydroSimulation<SedovProblem>::ErrorEst(int lev,
           HydroSystem<SedovProblem>::ComputePressure(state, i, j + 1, k);
       amrex::Real const P_yminus =
           HydroSystem<SedovProblem>::ComputePressure(state, i, j - 1, k);
+      amrex::Real const P_zplus =
+          HydroSystem<SedovProblem>::ComputePressure(state, i, j, k + 1);
+      amrex::Real const P_zminus =
+          HydroSystem<SedovProblem>::ComputePressure(state, i, j, k - 1);
 
       amrex::Real const del_x =
           std::max(std::abs(P_xplus - P), std::abs(P - P_xminus));
       amrex::Real const del_y =
           std::max(std::abs(P_yplus - P), std::abs(P - P_yminus));
+      amrex::Real const del_z =
+          std::max(std::abs(P_zplus - P), std::abs(P - P_zminus));
 
       amrex::Real const gradient_indicator =
-          std::max(del_x, del_y) / std::max(P, P_min);
+          std::max({del_x, del_y, del_z}) / std::max(P, P_min);
 
       if (gradient_indicator > eta_threshold) {
         tag(i, j, k) = amrex::TagBox::SET;
