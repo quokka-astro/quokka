@@ -577,20 +577,20 @@ where $M_{\text{sh}}$ is the mass of the shell and $\sigma_{\text{sh}}$ is the t
 \begin{align}
 j(r) = \frac{L_{\star}}{(2\pi \sigma_{\star}^2)^{3/2}} \exp \left( -\frac{r^2}{2 \sigma_{\star}^2} \right)
 \end{align}
-where $L_{\star}$ is the luminosity of the source and $\sigma_{\star}$ is a smoothing parameter defining the spatial extent of the source. Under the approximation of an isothermal equation-of-state, constant opacity $\kappa_R$ and a perfectly thin shell, SO13 obtain an equation of motion for the shell. Starting from rest, the resulting shell velocity, written in terms of the shell Mach number, is
+where $L_{\star}$ is the luminosity of the source and $\sigma_{\star}$ is a smoothing parameter defining the spatial extent of the source. Under the thin-shell approximation and neglecting gas pressure forces, SO13 obtain an equation of motion for the shell. Starting from rest, the resulting shell velocity, written in terms of the shell Mach number $\mathcal{M}_{\text{sh}}$, is
 \begin{align}
 \mathcal{M}_{\text{sh}} \equiv \frac{dR}{dT} = \sqrt{2} \mathcal{M}_0 \sqrt{1 - \frac{1}{R}} \, .
 \end{align}
-with dimensionless radius $R \equiv r/r_0$, dimensionless time $T \equiv t/t_0$, characteristic time $t_0 = r_0/c_T$, isothermal sound speed $c_T$, and reference Mach number $\mathcal{M}_0$:
+with dimensionless radius $R \equiv r/r_0$, dimensionless time $T \equiv t/t_0$, characteristic time $t_0 = r_0/c_T$, reference sound speed $c_s$, and reference Mach number $\mathcal{M}_0$:
 \begin{align}
-\mathcal{M}_0 = c_T^{-1} \sqrt{\frac{L_{\star} \kappa_R}{4\pi r_0 c}} \, .
+\mathcal{M}_0 = c_s^{-1} \sqrt{\frac{L_{\star} \kappa_R}{4\pi r_0 c}} \, .
 \end{align}
-Following the parameters used by SO13, we set $\kappa_P = 20 \cm^2 \gm^{-1}$, $c_T = 2 \km \s^{-1}$, $r_0 = 5 \pc$, $M_{\text{sh}} = 5 \times 10^5$ \Msun, and $L_{\star} = 4 \times 10^{42} \erg \s^{-1}$. SO13 do not specify their values for the parameters $\sigma_{\star}$ and $\sigma_{\text{sh}}$. We adopt values of $\sigma_{\star} = 0.25 r_0$ and $\sigma_{\text{sh}} = 0.1 r_0/(2\sqrt{2 \log 2})$.
+Following the parameters used by SO13, we set $\kappa_P = \kappa_R = 20 \cm^2 \gm^{-1}$, $c_s = 2 \km \s^{-1}$, $r_0 = 5 \pc$, $M_{\text{sh}} = 5 \times 10^5$ \Msun, and $L_{\star} = 2 \times 10^{42} \erg \s^{-1}$. We note that $c_s$ is only a reference sound speed and does not change the thin-shell solution since pressure forces are assumed to be negligible. We adopt values of $\sigma_{\star} = 0.3 r_0$ and $\sigma_{\text{sh}} = 0.3 r_0/(2\sqrt{2 \log 2})$.
 
-We initialize our simulation of this problem using the density profile (\autoref{eq:shell_density}) and the quasi-static radiation energy and flux derived by SO13 (their equations 107 and 110). A density floor is set at $\rho_{\text{floor}} = 10^{-8} \rho_0$, where $\rho_0 = M_{\text{sh}} / (4 \pi r_0^3 / 3)$. We use AMR on a base grid of $128^3$, tagging cells for refinement when the relative density gradient exceeds $0.3$. PLM reconstruction is used for both hydrodynamic and radiation variables and an isothermal Riemann solver is used. Following SO13, we reduce the speed of light to $\hat c = 860 \, c_T$. The simulation is evolved until $t = 0.124 \, t_0$ using a CFL number of $0.3$. The shell velocity as a function of time is shown in \autoref{fig:radshell}.
+We initialize our simulation of this problem using the density profile (\autoref{eq:shell_density}) and the quasi-static radiation energy and flux derived by SO13. We initialize the gas temperature in equilibrium with the radiation temperature. A density floor is set at $\rho_{\text{floor}} = 10^{-8} \rho_0$, where $\rho_0 = M_{\text{sh}} / (4 \pi r_0^3 / 3)$. A pressure floor is likewise set at $P_{\text{floor}} = 10^{-8} P_0$, where $P_0 = \gamma \rho_0 c_T^2$. We use an adiabatic equation of state with $\gamma = 5/3$ and a mean molecular weight $\mu = 2.33 m_H$, where $m_H$ is the mass of the hydrogen atom. We use a uniform grid of $128^3$ and PLM reconstruction for both hydrodynamic and radiation variables. Following SO13, we reduce the speed of light to $\hat c = 860 \, c_s$. The simulation is evolved until $t = 0.125 \, t_0$ using a CFL number of $0.3$. The shell velocity as a function of time is shown in \autoref{fig:radshell}. Our simulation has values slightly lower than expected from the thin-shell solution, whereas SO13 find simulated shell velocities slightly higher than the thin shell solution. Exact agreement cannot be expected due to the underspecification of the problem parameters by SO13 and different implementation details of our radiation hydrodynamic solvers. Overall, we find very good agreement between the simulation (shown as crosses) and the thin-shell solution (solid line). 
 
 \begin{figure}
-    %\includegraphics[width=\columnwidth]{radshell.pdf}
+    \includegraphics[width=\columnwidth]{shell_velocity.pdf}
     \caption{The shell velocity as a function of time $T = t/t_0$.}
     \label{fig:radshell}
 \end{figure}
