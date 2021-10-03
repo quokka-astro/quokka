@@ -763,26 +763,38 @@ template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto
 RadSystem<problem_t>::ComputeTgasFromEgas(const double rho, const double Egas)
     -> double {
-  constexpr double c_v =
-      boltzmann_constant_ / (mean_molecular_mass_ * (gamma_ - 1.0));
-  return (Egas / (rho * c_v));
+  if constexpr (gamma_ != 1.0) {
+    constexpr double c_v =
+        boltzmann_constant_ / (mean_molecular_mass_ * (gamma_ - 1.0));
+    return (Egas / (rho * c_v));
+  } else {
+    return NAN;
+  }
 }
 
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto
 RadSystem<problem_t>::ComputeEgasFromTgas(const double rho, const double Tgas)
     -> double {
-  constexpr double c_v =
-      boltzmann_constant_ / (mean_molecular_mass_ * (gamma_ - 1.0));
-  return (rho * c_v * Tgas);
+  if constexpr (gamma_ != 1.0) {
+    constexpr double c_v =
+        boltzmann_constant_ / (mean_molecular_mass_ * (gamma_ - 1.0));
+    return (rho * c_v * Tgas);
+  } else {
+    return NAN;
+  }
 }
 
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeEgasTempDerivative(
     const double rho, const double /*Tgas*/) -> double {
-  constexpr double c_v =
-      boltzmann_constant_ / (mean_molecular_mass_ * (gamma_ - 1.0));
-  return (rho * c_v);
+  if constexpr (gamma_ != 1.0) {
+    constexpr double c_v =
+        boltzmann_constant_ / (mean_molecular_mass_ * (gamma_ - 1.0));
+    return (rho * c_v);
+  } else {
+    return NAN;
+  }
 }
 
 template <typename problem_t>
@@ -870,7 +882,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
 
     double Egas_guess = Egas0;
     double Erad_guess = Erad0;
-    const double resid_tol = 1.0e-10; //1.0e-15;
+    const double resid_tol = 1.0e-10; // 1.0e-15;
     const int maxIter = 400;
     int n = 0;
     if constexpr (gamma_ != 1.0) {

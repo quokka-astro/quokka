@@ -61,26 +61,6 @@ template <> struct EOS_Traits<TubeProblem> {
 
 template <>
 AMREX_GPU_HOST_DEVICE auto
-RadSystem<TubeProblem>::ComputeTgasFromEgas(const double /*rho*/,
-                                            const double /*Egas*/) -> double {
-  return 1.0; // dummy value (unused because gamma == 1)
-}
-
-template <>
-AMREX_GPU_HOST_DEVICE auto
-RadSystem<TubeProblem>::ComputeEgasFromTgas(const double /*rho*/,
-                                            const double /*Tgas*/) -> double {
-  return 1.0; // dummy value (unused because gamma == 1)
-}
-
-template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputeEgasTempDerivative(
-    const double /*rho*/, const double /*Tgas*/) -> double {
-  return 0.0; // dummy value (unused because gamma == 1)
-}
-
-template <>
-AMREX_GPU_HOST_DEVICE auto
 RadSystem<TubeProblem>::ComputePlanckOpacity(const double /*rho*/,
                                              const double /*Tgas*/) -> double {
   return 0.; // no heating/cooling

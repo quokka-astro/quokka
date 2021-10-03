@@ -142,27 +142,30 @@ void HydroSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Re
 		const auto px = cons(i, j, k, x1Momentum_index);
 		const auto py = cons(i, j, k, x2Momentum_index);
 		const auto pz = cons(i, j, k, x3Momentum_index);
-		const auto E = cons(i, j, k, energy_index); // *total* gas energy per unit volume
-
 		AMREX_ASSERT(!std::isnan(rho));
 		AMREX_ASSERT(!std::isnan(px));
 		AMREX_ASSERT(!std::isnan(py));
 		AMREX_ASSERT(!std::isnan(pz));
-		AMREX_ASSERT(!std::isnan(E));
 
 		const auto vx = px / rho;
 		const auto vy = py / rho;
 		const auto vz = pz / rho;
-		const auto kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
-		const auto thermal_energy = E - kinetic_energy;
-
-		const auto P = thermal_energy * (HydroSystem<problem_t>::gamma_ - 1.0);
-
-		const double cs = std::sqrt(HydroSystem<problem_t>::gamma_ * P / rho);
-		AMREX_ASSERT(cs > 0.);
-
 		const double vel_mag = std::sqrt(vx * vx + vy * vy + vz * vz);
-		const double signal_max = vel_mag + cs;
+		double cs = NAN;
+
+		if constexpr (is_eos_isothermal()) {
+			cs = cs_iso_;
+		} else {
+			const auto E = cons(i, j, k, energy_index); // *total* gas energy per unit volume
+			AMREX_ASSERT(!std::isnan(E));
+			const auto kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
+			const auto thermal_energy = E - kinetic_energy;
+			const auto P = thermal_energy * (HydroSystem<problem_t>::gamma_ - 1.0);
+			cs = std::sqrt(HydroSystem<problem_t>::gamma_ * P / rho);
+		}
+		AMREX_ASSERT(cs > 0.);
+		
+		const double signal_max = cs + vel_mag;
 		maxSignal(i, j, k) = signal_max;
 	});
 }

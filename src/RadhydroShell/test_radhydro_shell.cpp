@@ -35,16 +35,16 @@ extern "C" {
 
 struct ShellProblem {};
 // if false, use octant symmetry
-constexpr bool simulate_full_box = true;
+constexpr bool simulate_full_box = false;
 
-constexpr double a_rad = 7.5646e-15;  // erg cm^-3 K^-4
-constexpr double c = 2.99792458e10;   // cm s^-1
-constexpr double cs0 = 0.633e5;       // (0.633 km/s) [cm s^-1]
+constexpr double a_rad = 7.5646e-15; // erg cm^-3 K^-4
+constexpr double c = 2.99792458e10;  // cm s^-1
+// constexpr double cs0 = 0.633e5;       // (0.633 km/s) [cm s^-1]
 constexpr double a0 = 2.0e5;          // ('reference' sound speed) [cm s^-1]
 constexpr double chat = 860. * a0;    // cm s^-1
 constexpr double k_B = 1.380658e-16;  // erg K^-1
 constexpr double m_H = 1.6726231e-24; // mass of hydrogen atom [g]
-constexpr double gamma_gas = 5. / 3.; // monoatomic ideal gas
+constexpr double gamma_gas = 1.0;     // 5. / 3.;
 
 template <> struct RadSystem_Traits<ShellProblem> {
   static constexpr double c_light = c;
@@ -59,6 +59,7 @@ template <> struct RadSystem_Traits<ShellProblem> {
 
 template <> struct EOS_Traits<ShellProblem> {
   static constexpr double gamma = gamma_gas;
+  static constexpr double cs_isothermal = a0; // isothermal sound speed
 };
 
 constexpr amrex::Real Msun = 2.0e33;           // g
@@ -76,9 +77,10 @@ constexpr amrex::Real H_shell = 0.1 * r_0;      // cm
 constexpr amrex::Real kappa0 = 20.0;            // specific opacity [cm^2 g^-1]
 
 constexpr amrex::Real rho_0 =
-    M_shell / ((4. / 3.) * M_PI * r_0 * r_0 * r_0);          // g cm^-3
-constexpr amrex::Real P_0 = gamma_gas * rho_0 * (cs0 * cs0); // erg cm^-3
-constexpr double c_v = k_B / ((2.2 * m_H) * (gamma_gas - 1.0));
+    M_shell / ((4. / 3.) * M_PI * r_0 * r_0 * r_0); // g cm^-3
+
+// constexpr amrex::Real P_0 = gamma_gas * rho_0 * (cs0 * cs0); // erg cm^-3
+// constexpr double c_v = k_B / ((2.2 * m_H) * (gamma_gas - 1.0));
 
 template <>
 void RadSystem<ShellProblem>::SetRadEnergySource(
@@ -210,7 +212,7 @@ void RadhydroSimulation<ShellProblem>::setInitialConditionsAtLevel(int lev) {
 
       const double Trad = std::pow(Erad / a_rad, 1. / 4.);
       const double Tgas = Trad;
-      const double Eint = rho * c_v * Tgas;
+      // const double Eint = rho * c_v * Tgas;
 
       AMREX_ASSERT(!std::isnan(vx));
       AMREX_ASSERT(!std::isnan(vy));
@@ -224,7 +226,7 @@ void RadhydroSimulation<ShellProblem>::setInitialConditionsAtLevel(int lev) {
       state(i, j, k, HydroSystem<ShellProblem>::x1Momentum_index) = 0;
       state(i, j, k, HydroSystem<ShellProblem>::x2Momentum_index) = 0;
       state(i, j, k, HydroSystem<ShellProblem>::x3Momentum_index) = 0;
-      state(i, j, k, HydroSystem<ShellProblem>::energy_index) = Eint;
+      state(i, j, k, HydroSystem<ShellProblem>::energy_index) = 0;
 
       const double Frad_xyz = Frad / std::sqrt(3.0);
       state(i, j, k, RadSystem<ShellProblem>::radEnergy_index) = Erad;
@@ -329,18 +331,25 @@ void RadhydroSimulation<ShellProblem>::ErrorEst(int lev,
     amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
       const int n = HydroSystem<ShellProblem>::density_index;
       amrex::Real const rho = state(i, j, k, n);
+      
       amrex::Real const rho_xplus = state(i + 1, j, k, n);
       amrex::Real const rho_xminus = state(i - 1, j, k, n);
+
       amrex::Real const rho_yplus = state(i, j + 1, k, n);
       amrex::Real const rho_yminus = state(i, j - 1, k, n);
+      
+      amrex::Real const rho_zplus = state(i, j, k + 1, n);
+      amrex::Real const rho_zminus = state(i, j, k - 1, n);
 
       amrex::Real const del_x =
           std::max(std::abs(rho_xplus - rho), std::abs(rho - rho_xminus));
       amrex::Real const del_y =
           std::max(std::abs(rho_yplus - rho), std::abs(rho - rho_yminus));
+      amrex::Real const del_z =
+          std::max(std::abs(rho_zplus - rho), std::abs(rho - rho_zminus));
 
       amrex::Real const gradient_indicator =
-          std::max(del_x, del_y) / std::max(rho, rho_min);
+          std::max({del_x, del_y, del_z}) / std::max(rho, rho_min);
 
       if (gradient_indicator > eta_threshold) {
         tag(i, j, k) = amrex::TagBox::SET;
@@ -403,7 +412,7 @@ auto problem_main() -> int {
   sim.is_radiation_enabled_ = true;
   sim.cflNumber_ = 0.3;
   sim.densityFloor_ = 1.0e-8 * rho_0;
-  sim.pressureFloor_ = 1.0e-8 * P_0;
+  //sim.pressureFloor_ = 1.0e-8 * P_0;
   // reconstructionOrder: 1 == donor cell, 2 == PLM, 3 == PPM (not recommended
   // for this problem)
   sim.reconstructionOrder_ = 2;
@@ -414,14 +423,14 @@ auto problem_main() -> int {
   sim.stopTime_ = 0.124 * t0_hydro;
 
   // for production
-  // sim.checkpointInterval_ = 1000;
-  // sim.plotfileInterval_ = 10;
-  // sim.maxTimesteps_ = 5000;
+  sim.checkpointInterval_ = 1000;
+  sim.plotfileInterval_ = 10;
+  sim.maxTimesteps_ = 5000;
 
   // for scaling tests
-  sim.checkpointInterval_ = -1;
-  sim.plotfileInterval_ = -1;
-  sim.maxTimesteps_ = 50;
+  //sim.checkpointInterval_ = -1;
+  //sim.plotfileInterval_ = -1;
+  //sim.maxTimesteps_ = 50;
 
   // initialize
   sim.setInitialConditions();
