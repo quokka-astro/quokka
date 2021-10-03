@@ -11,12 +11,7 @@ if __name__ == "__main__":
     # compute ODE solution for radiation-driven dusty shell
     a_rad = 7.5646e-15      # erg cm^-3 K^-4
     c = 2.99792458e10       # cm s^-1
-    cs0 = 0.633e5           # (0.633 km/s) [cm s^-1]
     a0 = 2.0e5              # ('reference' sound speed) [cm s^-1]
-    chat = c                # 860. * a0    # cm s^-1
-    k_B = 1.380658e-16      # erg K^-1
-    m_H = 1.6726231e-24     # mass of hydrogen atom [g]
-    gamma_gas = 5. / 3.     # monoatomic ideal gas
     Msun = 2.0e33           # g
     parsec_in_cm = 3.086e18  # cm
 
@@ -24,13 +19,13 @@ if __name__ == "__main__":
     GMC_mass = 1.0e6 * Msun                 # g
     epsilon = 0.5                           # dimensionless
     M_shell = (1 - epsilon) * GMC_mass      # g
-    L_star = GMC_mass * specific_luminosity  # erg s^-1
-
+    L_star = (epsilon * GMC_mass) * specific_luminosity  # erg s^-1
     r_0 = 5.0 * parsec_in_cm  # cm
-    sigma_star = 0.25 * r_0 # 0.125 * r_0  # 0.0625 * r_0
-    H_shell = 0.1 * r_0  # cm
-    sigma_shell = H_shell / (2.0*sqrt(2.0*log(2.0)))
+    
+    sigma_star = 0.3 * r_0  # N.B.: smaller values yield unphysical reduced flux f
+    H_shell = 0.3 * r_0  # cm
 
+    sigma_shell = H_shell / (2.0*sqrt(2.0*log(2.0)))
     rho_0 = M_shell / ((4. / 3.) * np.pi * r_0 * r_0 * r_0)  # g cm^-3
     kappa0 = 20.0           # specific opacity [cm^2 g^-1]
     tau0 = M_shell * kappa0 / (4.0 * np.pi * r_0 * r_0)
@@ -119,7 +114,16 @@ if __name__ == "__main__":
     def g(r):
         return 3.0*r_0*dlnF_dr(r*r_0) + (4.0/r) + 2.0*sqrt(3.0)*r_0*rho(r*r_0)*kappa0
 
-    root_sol = root_scalar(g, bracket=[1.0, 1.2], method='bisect')
+    #plt.figure()
+    #r_arr = np.linspace(1.0e-3, 2.0, 100)
+    #g_vec = np.vectorize(g)
+    #plt.plot(r_arr, g_vec(r_arr))
+    #plt.hlines(y=0., xmin=0., xmax=2, color='black', linestyles='--')
+    #plt.ylim(-1, 10)
+    #plt.savefig("critical_point.pdf")
+    #plt.clf()
+
+    root_sol = root_scalar(g, bracket=[1.0, 1.5], method='bisect')
     print(f"critical point r_crit = {root_sol}\n")
 
     r_crit = root_sol.root  # critical point at f(r_crit) = f_crit
