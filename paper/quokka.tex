@@ -58,8 +58,9 @@
 \newcommand{\jcompphys}{J.~Comp.~Phys.}
 \newcommand{\joss}{J.~Open Source Software}
 
-% Citation alias
+% Citation aliases
 \defcitealias{Colella_1984}{CW84}
+\defcitealias{Skinner_2013}{SO13}
 
 % MRK's editing macros
 \usepackage{color}
@@ -83,10 +84,11 @@
 % If you need two or more lines of authors, add an extra line using \newauthor
 \author[B. D. Wibking et al.]{
     Benjamin D. Wibking$^{1}$\thanks{E-mail: ben.wibking@anu.edu.au (BDW)}
-    and Mark R. Krumholz$^{1}$
+    and Mark R. Krumholz$^{1,2}$
 \\
 % List of institutions
 $^{1}$Research School of Astronomy \& Astrophysics, Mount Stromlo Observatory, Cotter Road, Weston Creek, ACT 2611 Australia\\
+$^{2}$ARC Centre of Excellence for Astronomy in Three Dimensions (ASTRO-3D), Canberra ACT 2600, Australia
 }
 
 % These dates will be filled out by the publisher
@@ -527,6 +529,7 @@ We next test our code on a beam or `searchlight' test involving streaming radiat
 Our final suite of tests use the full suite of physics in \quokka, and involve coupled radiation and hydrodynamics.
 
 \subsubsection{Radiation pressure tube}
+\label{section:radtube}
 Our first radiation-hydrodynamic test is the the radiation pressure tube problem of \cite{Krumholz_2007}. This problem is designed to show that the radiation pressure gradient can stably balance the gas pressure gradient both in the regime where radiation pressure dominates and the in the regime where gas pressure dominates for a problem where the optical depth is sufficiently large that the radiation is in the equilibrium diffusion regime. We adopt the opacities $\kappa_P = \kappa_R = 100 \cm^2 \gm^{-1}$, mean molecular weight $\mu = 2.33 \, m_H$, and adiabatic index $\gamma = 5/3$. The exact steady-state solution in the diffusion approximation is given by the solution to the differential equations
 \begin{align}
 \frac{d \rho}{dx} &= -\frac{\mu}{k_B T} \left( \frac{k_B}{\mu} \rho + \frac{4}{3} a_r T^3 \right) \frac{dT}{dx} \, , \\
@@ -538,11 +541,12 @@ After evolving for a sound crossing time $t = L_x / c_{s,0} \approx 3.177 \times
 
 \begin{figure}
     \includegraphics[width=\columnwidth]{radiation_pressure_tube.pdf}
-    \caption{The temperature for the radiation pressure tube \citep{Krumholz_2007}. The radiation and gas temperatures should be identical. The temperature for the exact diffusion solution is shown in the black circles. The temperatures agree to within 0.2 per cent.}
+    \caption{Temperature profiles for the radiation pressure tube test (\autoref{section:radtube}). The radiation and gas temperatures are both plotted, but only the latter line is visible because the two temperatures are nearly identical. The temperature for the exact diffusion solution is shown in the black circles. The temperatures agree to within 0.2 per cent.}
     \label{fig:radiation_pressure_tube}
 \end{figure}
 
 \subsubsection{Optically-thin radiation-driven wind}
+\label{section:thinwind}
 In order to test the radiation-gas momentum coupling in the optically-thin limit, we next simulate a radiation-driven wind in the limit of very low optical depth. We consider an isothermal gas with sound speed $c_T = 0.2 \km \s^{-1}$, with constant opacities $\kappa_P = 0$ and $\kappa_R = 5 \cm^2 \gm^{-1}$. A flux of radiation $F_{r,0}$ enters the computational domain from the left side at $x=0$, inducing an acceleration $a_0 = \kappa_R F_{r,0}/c$ in the gas; we choose the density of the gas low enough that the optical depth is negligible, so the flux and acceleration are constant across the domain. Consider a fluid parcel moving at Mach number $\mathcal{M}_0$ at $x = 0$, where the radiation flux enters the domain. Integrating the gas momentum equation with respect to position $x$ yields a Bernoulli equation for the Mach number $\mathcal{M}$ as a function of position
 \begin{align}
 \frac{1}{2} \mathcal{M}_0^2 = \frac{1}{2} \mathcal{M}^2 + \log \left({\frac{\mathcal{M}_0}{\mathcal{M}}}\right) - \left( \frac{x}{L} \right) \, ,
@@ -553,7 +557,7 @@ where $L = c_T^2/a_0$ is the characteristic acceleration length of the problem. 
 To simulate this problem, we set up a domain from $x = 0$ to $x=L$, resolved by $N_x = 128$ cells. We initialize the system with the exact solution (\autoref{eq:wind}), and also use the exact solution to impose Dirichlet boundary conditions on the density, velocity, and radiation flux. We evolve the system until $t=10\,(L/c_T)$ using a CFL number of 0.4; for this calculation we use an isothermal Riemann solver. We set the reduced speed of light to $\hat c = 10 \mathcal{M}_1 c_T$, where $\mathcal{M}_1$ is the Mach number at the right-side boundary. In \autoref{fig:wind}, we show the exact solution for the Mach number (circles) compared to the solution produced by \textsc{Quokka} (solid line), finding excellent agreement.
 \begin{figure}
     \includegraphics[width=\columnwidth]{radiation_force_tube_vel.pdf}
-    \caption{Mach number as a function of position for a radiation-driven wind. The solid line is the \quokka~numerical solution, while the points show the exact solution given by \autoref{eq:wind}.}
+    \caption{Mach number as a function of position for a radiation-driven wind (\autoref{section:thinwind}). The solid line is the \quokka~numerical solution, while the points show the exact solution given by \autoref{eq:wind}.}
     \label{fig:wind}
 \end{figure}
 
@@ -562,22 +566,22 @@ To simulate this problem, we set up a domain from $x = 0$ to $x=L$, resolved by 
 We next simulate a subcritical radiative shock, following the set-up used by \cite{Skinner_2019} with the dimensionless parameters for the Mach $\mathcal{M} = 3$ example given by \cite{Lowrie_2008}. We scale to cgs units with the opacities $\kappa_P = \kappa_R = 577 \cm^{2} \gm^{-1} (1 \gm \cm^{-3} / \rho)$, mean molecular weight $\mu = m_{\rm H}$, and adiabatic index $\gamma = 5/3$. The left-side state consists of $\rho_L = 5.69 \gm \cm^{-3}$, velocity $v_L = 5.19 \times 10^7 \cm \s^{-1}$, and temperature (gas and radiation) $T_L = 2.18 \times 10^6 \Kelvin$. The right-side state is $\rho_R = 17.1 \gm \cm^{-3}$, $v_R = 1.73 \times 10^7 \cm \s^{-1}$, and $T_R = 7.98 \times 10^6 \K$. These states are also used as Dirichlet boundary conditions for the simulation. In order to exactly match the assumptions used in the semi-analytic solution of \cite{Lowrie_2008}, we use the Eddington approximation (i.e., $\textsf{P}_r = (1/3) E_r \textsf{I}$) to close the radiation pressure tensor for this problem.\footnote{We provide a \textsc{Python} code that computes the semi-analytic solution for radiative shocks using the Eddington approximation \citep{Lowrie_2008} in our \faGithub\href{https://github.com/BenWibking/quokka-code}{GitHub repository}.} Following \cite{Skinner_2019}, we use a reduced speed of light $\hat c = 10(v_L + c_{s,L})$, where $c_{s,L}$ is the adiabatic sound speed of the left-side state.  We use a CFL number of 0.4 and evolve until $t = 10^{-9} \s$ on a grid of $512$ cells on the domain $[0 \cm, 0.01575 \cm]$, with the discontinuity placed between the left- and right-side states $x_0 = 0.0130 \cm$. The shock drifts $1.5$ per cent of the domain length to the right from the location of the initial discontinuity, which may be due to a combination of the initial numerical transient and our use of the asymptotic states as boundary conditions, rather than the exact states expected at a finite distance from the shock location. This makes the steady-state location of the shock on the simulation grid not well-defined. After accounting for this drift, the agreement between the numerical and semi-analytic solution is excellent, as shown in \autoref{fig:radshock}. We find the that the relative error of the gas temperature in $L_1$ norm is $0.4$ per cent, which is at least as good as the solution of \cite{Skinner_2019} for the same spatial resolution.  In this problem, we find that using shock flattening is essential to obtain a non-oscillatory temperature structure for the Zel'dovich spike (the gas temperature discontinuity shown in \autoref{fig:radcoupling}; \citealt{Zeldovich_1967}).
 \begin{figure}
     \includegraphics[width=\columnwidth]{radshock_cgs_temperature.pdf}
-    \caption{Radiation and matter temperatures in a subcritical radiative shock with $\mathcal{M} = 3$.}
+    \caption{Radiation and matter temperatures in a subcritical radiative shock with $\mathcal{M} = 3$ (\autoref{section:radshock}).}
     \label{fig:radshock}
 \end{figure}
 
 \subsubsection{Radiation-driven dust shell}
 \label{section:shell}
-As a final example, we consider a non-steady-state radiation hydrodynamics problem. This problem is the radiation-driven dust shell problem from \cite{Skinner_2013} (SO13), consisting of an initial shell of dusty gas initialized at radius $r_0$ with the radial profile:
+As a final example, we consider a non-steady-state radiation hydrodynamics problem: the radiation-driven dust shell problem from \citet[hereafter \citetalias{Skinner_2013}]{Skinner_2013}, consisting of an initial shell of dusty gas placed at radius $r_0$ with the radial density profile:
 \begin{align}
 \rho(r) = \frac{M_\text{sh}}{4\pi r^2 \sqrt{2\pi \sigma_{\text{sh}}^2}} \exp \left( -\frac{(r - r_0)^2}{2\sigma_{\text{sh}}^2} \right) \, ,
 \label{eq:shell_density}
 \end{align}
-where $M_{\text{sh}}$ is the mass of the shell and $\sigma_{\text{sh}}$ is the thickness of the shell. At $r = 0$ there is a point-like source of radiation, representing that from a star. The radiation source is smoothed so that it can be resolved on the computational grid, using a Gaussian profile of the form
+where $M_{\text{sh}}$ is the mass of the shell and $\sigma_{\text{sh}}$ is the thickness of the shell. We place a point-like source of radiation, representing a central star, at $r = 0$. The radiation source is smoothed so that it can be resolved on the computational grid, using a Gaussian profile of the form
 \begin{align}
 j(r) = \frac{L_{\star}}{(2\pi \sigma_{\star}^2)^{3/2}} \exp \left( -\frac{r^2}{2 \sigma_{\star}^2} \right)
 \end{align}
-where $L_{\star}$ is the luminosity of the source and $\sigma_{\star}$ is a smoothing parameter defining the spatial extent of the source. Under the thin-shell approximation and neglecting gas pressure forces, SO13 obtain an equation of motion for the shell. Starting from rest, the resulting shell velocity, written in terms of the shell Mach number $\mathcal{M}_{\text{sh}}$, is
+where $L_{\star}$ is the luminosity of the source and $\sigma_{\star}$ is a smoothing parameter defining the spatial extent of the source. Under the thin-shell approximation and neglecting gas pressure forces, \citetalias{Skinner_2013} obtain an equation of motion for the shell. Starting from rest, the resulting shell velocity, written in terms of the shell Mach number $\mathcal{M}_{\text{sh}}$, is
 \begin{align}
 \mathcal{M}_{\text{sh}} \equiv \frac{dR}{dT} = \sqrt{2} \mathcal{M}_0 \sqrt{1 - \frac{1}{R}} \, .
 \end{align}
@@ -585,13 +589,13 @@ with dimensionless radius $R \equiv r/r_0$, dimensionless time $T \equiv t/t_0$,
 \begin{align}
 \mathcal{M}_0 = c_s^{-1} \sqrt{\frac{L_{\star} \kappa_R}{4\pi r_0 c}} \, .
 \end{align}
-Following the parameters used by SO13, we set $\kappa_P = \kappa_R = 20 \cm^2 \gm^{-1}$, $c_s = 2 \km \s^{-1}$, $r_0 = 5 \pc$, $M_{\text{sh}} = 5 \times 10^5$ \Msun, and $L_{\star} = 2 \times 10^{42} \erg \s^{-1}$. We note that $c_s$ is only a reference sound speed and does not change the thin-shell solution since pressure forces are assumed to be negligible. We adopt values of $\sigma_{\star} = 0.3 r_0$ and $\sigma_{\text{sh}} = 0.3 r_0/(2\sqrt{2 \log 2})$.
+Following the parameters used by \citetalias{Skinner_2013}, we set $\kappa_P = \kappa_R = 20 \cm^2 \gm^{-1}$, $c_s = 2 \km \s^{-1}$, $r_0 = 5 \pc$, $M_{\text{sh}} = 5 \times 10^5$ \Msun, and $L_{\star} = 2 \times 10^{42} \erg \s^{-1}$. We note that $c_s$ is only a reference sound speed and does not change the thin-shell solution since pressure forces are assumed to be negligible. We adopt values of $\sigma_{\star} = 0.3 r_0$ and $\sigma_{\text{sh}} = 0.3 r_0/(2\sqrt{2 \log 2})$.
 
-We initialize our simulation of this problem using the density profile (\autoref{eq:shell_density}) and the quasi-static radiation energy and flux derived by SO13. We initialize the gas temperature in equilibrium with the radiation temperature. A density floor is set at $\rho_{\text{floor}} = 10^{-8} \rho_0$, where $\rho_0 = M_{\text{sh}} / (4 \pi r_0^3 / 3)$. A pressure floor is likewise set at $P_{\text{floor}} = 10^{-8} P_0$, where $P_0 = \gamma \rho_0 c_T^2$. We use an adiabatic equation of state with $\gamma = 5/3$ and a mean molecular weight $\mu = 2.33 m_H$, where $m_H$ is the mass of the hydrogen atom. We use a uniform grid of $128^3$ and PLM reconstruction for both hydrodynamic and radiation variables. Following SO13, we reduce the speed of light to $\hat c = 860 \, c_s$. The simulation is evolved until $t = 0.125 \, t_0$ using a CFL number of $0.3$. The shell velocity as a function of time is shown in \autoref{fig:radshell}. Our simulation has values slightly lower than expected from the thin-shell solution, whereas SO13 find simulated shell velocities slightly higher than the thin shell solution. Exact agreement cannot be expected due to the underspecification of the problem parameters by SO13 and different implementation details of our radiation hydrodynamic solvers. Overall, we find very good agreement between the simulation (shown as crosses) and the thin-shell solution (solid line). 
+We initialize our simulation of this problem using the density profile (\autoref{eq:shell_density}) and the quasi-static radiation energy and flux derived by \citetalias{Skinner_2013}. We initialize the gas temperature in equilibrium with the radiation temperature. A density floor is set at $\rho_{\text{floor}} = 10^{-8} \rho_0$, where $\rho_0 = M_{\text{sh}} / (4 \pi r_0^3 / 3)$. A pressure floor is likewise set at $P_{\text{floor}} = 10^{-8} P_0$, where $P_0 = \gamma \rho_0 c_T^2$. We use an adiabatic equation of state with $\gamma = 5/3$ and a mean molecular weight $\mu = 2.33 m_H$, where $m_H$ is the mass of the hydrogen atom. We use a uniform grid of $128^3$ and PLM reconstruction for both hydrodynamic and radiation variables. Following \citet{Skinner_2013}, we reduce the speed of light to $\hat c = 860 \, c_s$. The simulation is evolved until $t = 0.125 \, t_0$ using a CFL number of $0.3$. The shell velocity as a function of time is shown in \autoref{fig:radshell}. Our simulation has values slightly lower than expected from the thin-shell solution, whereas \citetalias{Skinner_2013} find simulated shell velocities slightly higher than the thin shell solution. Exact agreement cannot be expected due to the underspecification of the problem parameters \textcolor{red}{MRK: What do you mean by underspecification? Explain this more.} by \citetalias{Skinner_2013} and different implementation details of our radiation hydrodynamic solvers. Overall, we find very good agreement between the simulation (shown as crosses) and the thin-shell solution (solid line). 
 
 \begin{figure}
     \includegraphics[width=\columnwidth]{shell_velocity.pdf}
-    \caption{The shell velocity as a function of time $T = t/t_0$.}
+    \caption{Shell velocity as a function of dimensionless time $T = t/t_0$ in the radiation-driven dust shell test (\autoref{section:shell}).}
     \label{fig:radshell}
 \end{figure}
 
