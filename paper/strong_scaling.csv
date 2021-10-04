@@ -1,5 +1,5 @@
-nodes,gpus,mzones,mzones_per_gpu,GPU_FillBoundary,GPU_scaling,average_cells_per_gpu
-1,4,14.84,3.71,56.43,100.00,369.77
-2,8,26.29,3.29,62.82,88.59,293.49
-4,16,40.11,2.51,71.24,67.57,232.94
-8,32,54.50,1.70,80.83,45.91,184.89
+nodes,gpus,mzones,mzones_per_gpu,GPU_FillBoundary,GPU_scaling,average_cells_per_gpu,speedup
+1,4,19.57,4.89,70.60,100.00,421.81,1.00
+2,8,34.21,4.28,74.77,87.40,334.79,1.75
+4,16,52.39,3.27,80.23,66.92,265.73,2.68
+8,32,85.20,2.66,84.00,54.42,210.91,4.35
