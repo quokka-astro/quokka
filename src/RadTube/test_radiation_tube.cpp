@@ -323,10 +323,11 @@ auto problem_main() -> int {
   std::map<std::string, std::string> Tgas_args;
   std::unordered_map<std::string, std::string> Texact_args;
   Trad_args["label"] = "radiation";
-  Trad_args["color"] = "red";
+  Trad_args["color"] = "C1";
   Tgas_args["label"] = "gas";
-  Tgas_args["color"] = "black";
-  Texact_args["label"] = "exact";
+  Tgas_args["color"] = "C2";
+  //Texact_args["label"] = "exact";
+  Texact_args["marker"] = "o";
   Texact_args["color"] = "black";
 
   matplotlibcpp::plot(xs, Trad_arr, Trad_args);
@@ -342,9 +343,10 @@ auto problem_main() -> int {
   // matplotlibcpp::ylim(-0.005, 0.005);
 
   matplotlibcpp::legend();
-  matplotlibcpp::title(fmt::format("t = {:.4g} s", sim.tNew_[0]));
-  matplotlibcpp::xlabel("x (cm)");
-  matplotlibcpp::ylabel("temperature (K)");
+  //matplotlibcpp::title(fmt::format("t = {:.4g} s", sim.tNew_[0]));
+  matplotlibcpp::xlabel("length x (cm)");
+  matplotlibcpp::ylabel("temperature (Kelvins)");
+  matplotlibcpp::tight_layout();
   matplotlibcpp::save("./radiation_pressure_tube.pdf");
 #endif // HAVE_PYTHON
 

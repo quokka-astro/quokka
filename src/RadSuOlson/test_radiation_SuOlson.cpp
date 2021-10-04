@@ -16,6 +16,7 @@
 #include "AMReX_SPACE.H"
 
 #include "fextract.hpp"
+#include "matplotlibcpp.h"
 #include "radiation_system.hpp"
 #include "test_radiation_SuOlson.hpp"
 
@@ -381,31 +382,33 @@ auto problem_main() -> int {
     matplotlibcpp::clf();
 
     std::map<std::string, std::string> Erad_args;
-    Erad_args["label"] = "Numerical solution";
-    Erad_args["color"] = "black";
+    Erad_args["label"] = "numerical solution";
+    Erad_args["color"] = "C1";
     matplotlibcpp::plot(xs, Erad, Erad_args);
 
     std::map<std::string, std::string> diffusion_args;
-    diffusion_args["label"] = "diffusion solution (exact)";
-    diffusion_args["color"] = "gray";
-    diffusion_args["linestyle"] = "dashed";
-    diffusion_args["marker"] = ".";
+    diffusion_args["label"] = "exact diffusion solution";
+    diffusion_args["color"] = "C1";
+    diffusion_args["linestyle"] = "none";
+    diffusion_args["marker"] = "o";
+    //diffusion_args["edgecolors"] = "k";
     matplotlibcpp::plot(xs_exact, Erad_diffusion_exact_10p0, diffusion_args);
 
     std::map<std::string, std::string> transport_args;
-    transport_args["label"] = "transport solution (exact)";
-    transport_args["color"] = "red";
+    transport_args["label"] = "exact transport solution";
+    transport_args["color"] = "C1";
     transport_args["linestyle"] = "none";
-    transport_args["marker"] = "*";
+    transport_args["marker"] = "x";
+    //transport_args["edgecolors"] = "k";
     matplotlibcpp::plot(xs_exact, Erad_transport_exact_10p0, transport_args);
 
     matplotlibcpp::legend();
-    matplotlibcpp::xlabel("length x (dimensionless)");
-    matplotlibcpp::ylabel("radiation energy density (dimensionless)");
-    matplotlibcpp::title(fmt::format(
-        "time ct = {:.4g}", sim.tNew_[0] * (eps_SuOlson * c * rho * kappa)));
+    matplotlibcpp::xlabel("length x");
+    matplotlibcpp::ylabel("radiation energy density");
+    //matplotlibcpp::title(fmt::format("time ct = {:.4g}", sim.tNew_[0] * (eps_SuOlson * c * rho * kappa)));
     matplotlibcpp::xlim(0.0, 3.0); // cm
     //	matplotlibcpp::ylim(0.0, 2.3);
+    matplotlibcpp::tight_layout();
     matplotlibcpp::save("./SuOlsonTest.pdf");
 
     matplotlibcpp::xscale("log");

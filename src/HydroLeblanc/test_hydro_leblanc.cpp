@@ -8,6 +8,8 @@
 ///
 
 #include <cmath>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "AMReX_BC_TYPES.H"
@@ -16,6 +18,7 @@
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
 #include "hydro_system.hpp"
+#include "matplotlibcpp.h"
 #include "test_hydro_leblanc.hpp"
 
 struct ShocktubeProblem {};
@@ -250,36 +253,58 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
     matplotlibcpp::clf();
 
     std::map<std::string, std::string> d_args;
-    std::map<std::string, std::string> dexact_args;
+    std::unordered_map<std::string, std::string> dexact_args;
     d_args["label"] = "density";
-    dexact_args["label"] = "density (exact solution)";
+    d_args["color"] = "C0";
+    dexact_args["marker"] = "o";
+    dexact_args["color"] = "C0";
+    dexact_args["edgecolors"] = "k";
     matplotlibcpp::plot(xs, d, d_args);
-    matplotlibcpp::plot(xs, density_exact_interp, dexact_args);
+    matplotlibcpp::scatter(xs_exact, density_exact, 1.0, dexact_args);
 
     std::map<std::string, std::string> vx_args;
     vx_args["label"] = "velocity";
+    vx_args["color"] = "C3";
+    std::unordered_map<std::string, std::string> vexact_args;
+    vexact_args["marker"] = "o";
+    vexact_args["color"] = "C3";
+    vexact_args["edgecolors"] = "k";
     matplotlibcpp::plot(xs, vx, vx_args);
+    matplotlibcpp::scatter(xs_exact, velocity_exact, 1.0, vexact_args);
 
     std::map<std::string, std::string> P_args;
     P_args["label"] = "pressure";
+    P_args["color"] = "C4";
+    std::unordered_map<std::string, std::string> Pexact_args;
+    Pexact_args["color"] = "C4";
+    Pexact_args["edgecolors"] = "k";
+    Pexact_args["marker"] = "o";
     matplotlibcpp::plot(xs, P, P_args);
+    matplotlibcpp::scatter(xs_exact, pressure_exact, 1.0, Pexact_args);
 
     matplotlibcpp::legend();
-    matplotlibcpp::title(fmt::format("t = {:.4f}", tNew_[0]));
+    matplotlibcpp::xlabel("length x");
+    //matplotlibcpp::title(fmt::format("t = {:.4f}", tNew_[0]));
+    matplotlibcpp::tight_layout();
     matplotlibcpp::save(fmt::format("./hydro_leblanc_{:.4f}.pdf", tNew_[0]));
 
     // internal energy plot
     matplotlibcpp::clf();
 
     std::map<std::string, std::string> e_args;
-    std::map<std::string, std::string> eexact_args;
+    std::unordered_map<std::string, std::string> eexact_args;
     e_args["label"] = "specific internal energy";
-    eexact_args["label"] = "exact solution";
+    e_args["color"] = "C5";
+    eexact_args["marker"] = "o";
+    eexact_args["color"] = "C5";
+    eexact_args["edgecolors"] = "k";
     matplotlibcpp::plot(xs, eint, e_args);
-    matplotlibcpp::plot(xs, eint_exact_interp, eexact_args);
+    matplotlibcpp::scatter(xs_exact, eint_exact, 1.0, eexact_args);
 
     matplotlibcpp::legend();
-    matplotlibcpp::title(fmt::format("t = {:.4f}", tNew_[0]));
+    //matplotlibcpp::title(fmt::format("t = {:.4f}", tNew_[0]));
+    matplotlibcpp::xlabel("length x");
+    matplotlibcpp::tight_layout();
     matplotlibcpp::save(
         fmt::format("./hydro_leblanc_eint_{:.4f}.pdf", tNew_[0]));
   }

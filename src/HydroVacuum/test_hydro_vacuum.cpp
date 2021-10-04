@@ -15,6 +15,7 @@
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
 #include "hydro_system.hpp"
+#include "matplotlibcpp.h"
 #include "test_hydro_vacuum.hpp"
 
 struct ShocktubeProblem {};
@@ -236,25 +237,35 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
     // Plot results
     matplotlibcpp::clf();
     std::map<std::string, std::string> d_args;
-    std::map<std::string, std::string> dexact_args;
+    std::unordered_map<std::string, std::string> dexact_args;
     d_args["label"] = "density";
-    dexact_args["label"] = "density (exact solution)";
+    d_args["color"] = "C0";
+    dexact_args["marker"] = "o";
+    dexact_args["color"] = "C0";
+    dexact_args["edgecolors"] = "k";
     matplotlibcpp::plot(xs, d, d_args);
-    matplotlibcpp::plot(xs, density_exact_interp, dexact_args);
+    matplotlibcpp::scatter(xs_exact, density_exact, 1.0, dexact_args);
     matplotlibcpp::legend();
-    matplotlibcpp::title(fmt::format("t = {:.4f}", tNew_[0]));
+    matplotlibcpp::xlabel("length x");
+    matplotlibcpp::tight_layout();
+    //matplotlibcpp::title(fmt::format("t = {:.4f}", tNew_[0]));
     matplotlibcpp::save(fmt::format("./hydro_vacuum_{:.4f}.pdf", tNew_[0]));
 
     // internal energy plot
     matplotlibcpp::clf();
     std::map<std::string, std::string> e_args;
-    std::map<std::string, std::string> eexact_args;
+    std::unordered_map<std::string, std::string> eexact_args;
     e_args["label"] = "specific internal energy";
-    eexact_args["label"] = "exact solution";
+    e_args["color"] = "C5";
+    eexact_args["marker"] = "o";
+    eexact_args["color"] = "C5";
+    eexact_args["edgecolors"] = "k";
     matplotlibcpp::plot(xs, e, e_args);
-    matplotlibcpp::plot(xs, eint_exact_interp, eexact_args);
+    matplotlibcpp::scatter(xs_exact, eint_exact, 1.0, eexact_args);
     matplotlibcpp::legend();
-    matplotlibcpp::title(fmt::format("t = {:.4f}", tNew_[0]));
+    matplotlibcpp::xlabel("length x");
+    matplotlibcpp::tight_layout();
+    //matplotlibcpp::title(fmt::format("t = {:.4f}", tNew_[0]));
     matplotlibcpp::save(
         fmt::format("./hydro_vacuum_eint_{:.4f}.pdf", tNew_[0]));
   }

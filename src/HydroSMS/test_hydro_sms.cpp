@@ -11,6 +11,7 @@
 
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
+#include "matplotlibcpp.h"
 #include "test_hydro_sms.hpp"
 
 struct ShocktubeProblem {};
@@ -203,13 +204,18 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
     // Plot results
     matplotlibcpp::clf();
     std::map<std::string, std::string> d_args;
-    std::map<std::string, std::string> dexact_args;
+    std::unordered_map<std::string, std::string> dexact_args;
     d_args["label"] = "density";
-    dexact_args["label"] = "density (exact solution)";
+    d_args["color"] = "C0";
+    dexact_args["marker"] = "o";
+    dexact_args["color"] = "C0";
+    dexact_args["edgecolors"] = "k";
     matplotlibcpp::plot(xs, d, d_args);
-    matplotlibcpp::plot(xs, density_exact, dexact_args);
+    matplotlibcpp::scatter(xs, density_exact, 1.0, dexact_args);
     matplotlibcpp::legend();
-    matplotlibcpp::title(fmt::format("t = {:.4f}", tNew_[0]));
+    matplotlibcpp::xlabel("length x");
+    matplotlibcpp::tight_layout();
+    //matplotlibcpp::title(fmt::format("t = {:.4f}", tNew_[0]));
     matplotlibcpp::save(fmt::format("./hydro_sms_{:.4f}.pdf", tNew_[0]));
 #endif
   }

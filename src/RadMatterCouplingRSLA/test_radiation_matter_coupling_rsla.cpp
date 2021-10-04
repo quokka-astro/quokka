@@ -10,6 +10,7 @@
 #include "test_radiation_matter_coupling_rsla.hpp"
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
+#include "matplotlibcpp.h"
 
 struct CouplingProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
@@ -230,28 +231,28 @@ auto problem_main() -> int {
                         10.0 * std::max(Trad.back(), Tgas.back()));
 
     std::map<std::string, std::string> rsla_args;
-    rsla_args["label"] = "gas temperature (numerical, RSLA)";
+    rsla_args["label"] = "gas temperature (RSLA)";
     rsla_args["linestyle"] = "-";
-    rsla_args["color"] = "red";
+    rsla_args["color"] = "C2";
     matplotlibcpp::plot(t, Tgas, rsla_args);
 
     std::map<std::string, std::string> exactsolrsla_args;
-    exactsolrsla_args["label"] = "gas temperature (exact, RSLA)";
+    //exactsolrsla_args["label"] = "gas temperature (exact, RSLA)";
     exactsolrsla_args["linestyle"] = "--";
-    exactsolrsla_args["color"] = "black";
+    exactsolrsla_args["color"] = "C2";
     matplotlibcpp::plot(t, Tgas_rsla_exact, exactsolrsla_args);
 
     std::map<std::string, std::string> exactsol_args;
-    exactsol_args["label"] = "gas temperature (exact)";
+    exactsol_args["label"] = "gas temperature (no RSLA)";
     exactsol_args["linestyle"] = ":";
-    exactsol_args["color"] = "black";
+    exactsol_args["color"] = "C2";
     matplotlibcpp::plot(t, Tgas_exact, exactsol_args);
 
     matplotlibcpp::legend();
-    matplotlibcpp::xlabel("time t (s)");
-    matplotlibcpp::ylabel("temperature T (K)");
-    matplotlibcpp::title(
-        fmt::format("dt = {:.4g}\nt = {:.4g}", constant_dt, sim.tNew_[0]));
+    matplotlibcpp::xlabel("time t (seconds)");
+    matplotlibcpp::ylabel("temperature T (Kelvins)");
+    //matplotlibcpp::title(fmt::format("dt = {:.4g}\nt = {:.4g}", constant_dt, sim.tNew_[0]));
+    matplotlibcpp::tight_layout();
     matplotlibcpp::save(fmt::format("./radcoupling_rsla.pdf"));
 
     matplotlibcpp::clf();

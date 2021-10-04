@@ -8,12 +8,15 @@
 ///
 
 #include <cmath>
+#include <string>
+#include <unordered_map>
 
 #include "AMReX_BC_TYPES.H"
 
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
 #include "hydro_system.hpp"
+#include "matplotlibcpp.h"
 #include "test_hydro_shocktube.hpp"
 
 struct ShocktubeProblem {};
@@ -233,26 +236,49 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
       P.at(i) = ((gamma - 1.0) * Eint) / 10.;
     }
 
+    std::vector<double> Pexact(xs_exact.size());
+    for (int i = 0; i < xs_exact.size(); ++i) {
+      Pexact.at(i) = pressure_exact.at(i) / 10.;
+    }
+
     // Plot results
     matplotlibcpp::clf();
     using mpl_arg = std::map<std::string, std::string>;
+    using mpl_sarg = std::unordered_map<std::string, std::string>;
     mpl_arg d_args;
-    mpl_arg dexact_args;
+    mpl_sarg dexact_args;
     d_args["label"] = "density";
-    dexact_args["label"] = "density (exact solution)";
+    d_args["color"] = "C0";
+    dexact_args["marker"] = "o";
+    dexact_args["color"] = "C0";
+    dexact_args["edgecolors"] = "k";
     matplotlibcpp::plot(xs, d, d_args);
-    matplotlibcpp::plot(xs, density_exact_interp, dexact_args);
+    matplotlibcpp::scatter(xs_exact, density_exact, 1.0, dexact_args);
 
     std::map<std::string, std::string> vx_args;
     vx_args["label"] = "velocity";
+    vx_args["color"] = "C3";
     matplotlibcpp::plot(xs, vx, vx_args);
+    mpl_sarg vexact_args;
+    vexact_args["marker"] = "o";
+    vexact_args["color"] = "C3";
+    vexact_args["edgecolors"] = "k";
+    matplotlibcpp::scatter(xs_exact, velocity_exact, 1.0, vexact_args);
 
     std::map<std::string, std::string> P_args;
     P_args["label"] = "pressure / 10";
+    P_args["color"] = "C4";
     matplotlibcpp::plot(xs, P, P_args);
+    mpl_sarg Pexact_args;
+    Pexact_args["marker"] = "o";
+    Pexact_args["color"] = "C4";
+    Pexact_args["edgecolors"] = "k";
+    matplotlibcpp::scatter(xs_exact, Pexact, 1.0, Pexact_args);
 
     matplotlibcpp::legend();
-    matplotlibcpp::title(fmt::format("t = {:.4f}", tNew_[0]));
+    //matplotlibcpp::title(fmt::format("t = {:.4f}", tNew_[0]));
+    matplotlibcpp::xlabel("length x");
+    matplotlibcpp::tight_layout();
     matplotlibcpp::save(fmt::format("./hydro_shocktube_{:.4f}.pdf", tNew_[0]));
   }
 #endif

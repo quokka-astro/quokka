@@ -58,10 +58,10 @@ if __name__ == "__main__":
                             np.log(np.sqrt(R) + np.sqrt(R - 1.0)))
 
     plt.figure()
-    plt.plot(T, Mach_analytic, label='thin shell solution', color='black')
-    plt.scatter(time, mach_number, marker='x', label='simulation')
+    plt.plot(T, Mach_analytic, color='C3')
+    plt.scatter(time, mach_number, marker='o', color='C3', edgecolors='k')
     plt.xlabel('time (dimensionless)')
     plt.ylabel(r'shell velocity (dimensionless)')
-    plt.legend(loc='best')
+    #plt.legend(loc='best')
     plt.tight_layout()
     plt.savefig("shell_velocity.pdf")

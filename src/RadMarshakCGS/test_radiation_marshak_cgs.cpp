@@ -12,6 +12,7 @@
 #include "AMReX_IntVect.H"
 
 #include "fextract.hpp"
+#include "matplotlibcpp.h"
 #include "radiation_system.hpp"
 #include "simulation.hpp"
 #include "test_radiation_marshak_cgs.hpp"
@@ -321,32 +322,26 @@ auto problem_main() -> int
 		// radiation temperature
 		std::map<std::string, std::string> Trad_args;
 		Trad_args["label"] = "radiation temperature";
+		Trad_args["color"] = "C1";
 		matplotlibcpp::plot(xs, Trad, Trad_args);
 
-		std::map<std::string, std::string> Trad_exact_args;
-		Trad_exact_args["label"] = "radiation temperature (exact)";
-		matplotlibcpp::plot(xs_exact, Trad_exact, Trad_exact_args);
+		std::unordered_map<std::string, std::string> Trad_exact_args;
+		Trad_exact_args["marker"] = "o";
+		Trad_exact_args["color"] = "C1";
+		Trad_exact_args["edgecolors"] = "k";
+		matplotlibcpp::scatter(xs_exact, Trad_exact, 1.0, Trad_exact_args);
 
-		matplotlibcpp::xlabel("length x (cm)");
-		matplotlibcpp::ylabel("temperature (Kelvins)");
-		matplotlibcpp::xlim(0.4 / chi, 100. / chi);	  // cm
-		matplotlibcpp::ylim(0.1 * T_initial, T_hohlraum); // K
-		matplotlibcpp::xscale("log");
-		//matplotlibcpp::yscale("log");
-		matplotlibcpp::legend();
-		matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
-		matplotlibcpp::save("./marshak_wave_cgs_temperature.pdf");
-
-		// material temperature
-		matplotlibcpp::clf();
-
+		// gas temperature
 		std::map<std::string, std::string> Tgas_args;
 		Tgas_args["label"] = "gas temperature";
+		Tgas_args["color"] = "C2";
 		matplotlibcpp::plot(xs, Tgas, Tgas_args);
 
-		std::map<std::string, std::string> Tgas_exact_args;
-		Tgas_exact_args["label"] = "gas temperature (exact)";
-		matplotlibcpp::plot(xs_exact, Tmat_exact, Tgas_exact_args);
+		std::unordered_map<std::string, std::string> Tgas_exact_args;
+		Tgas_exact_args["marker"] = "o";
+		Tgas_exact_args["color"] = "C2";
+		Tgas_exact_args["edgecolors"] = "k";
+		matplotlibcpp::scatter(xs_exact, Tmat_exact, 1.0, Tgas_exact_args);
 
 		matplotlibcpp::xlabel("length x (cm)");
 		matplotlibcpp::ylabel("temperature (Kelvins)");
@@ -355,7 +350,8 @@ auto problem_main() -> int
 		matplotlibcpp::xscale("log");
 		//matplotlibcpp::yscale("log");
 		matplotlibcpp::legend();
-		matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
+		matplotlibcpp::tight_layout();
+		//matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
 		matplotlibcpp::save("./marshak_wave_cgs_gastemperature.pdf");
 #endif
 

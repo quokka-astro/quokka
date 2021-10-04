@@ -305,14 +305,18 @@ auto problem_main() -> int {
   // plot velocity
   std::map<std::string, std::string> vx_args;
   std::unordered_map<std::string, std::string> vxexact_args;
-  vxexact_args["label"] = "exact solution";
-  vx_args["label"] = "Mach number";
+  //vxexact_args["label"] = "exact solution";
+  vx_args["label"] = "wind velocity";
+  vx_args["color"] = "C3";
+  vxexact_args["color"] = "C3";
+  vxexact_args["marker"] = "o";
+  vxexact_args["edgecolors"] = "k";
   matplotlibcpp::clf();
   matplotlibcpp::plot(xs, vx_arr, vx_args);
   matplotlibcpp::scatter(xs, vx_exact_arr, 1.0, vxexact_args);
   matplotlibcpp::legend();
-  matplotlibcpp::title(fmt::format("t = {:.4g} s", sim.tNew_[0]));
-  matplotlibcpp::xlabel("x (cm)");
+  //matplotlibcpp::title(fmt::format("t = {:.4g} s", sim.tNew_[0]));
+  matplotlibcpp::xlabel("length x (cm)");
   matplotlibcpp::ylabel("Mach number");
   matplotlibcpp::tight_layout();
   matplotlibcpp::save("./radiation_force_tube_vel.pdf");

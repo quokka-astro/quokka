@@ -13,6 +13,7 @@
 #include "AMReX_BC_TYPES.H"
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
+#include "matplotlibcpp.h"
 #include "test_hydro_shuosher.hpp"
 
 struct ShocktubeProblem {};
@@ -243,16 +244,20 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
     std::unordered_map<std::string, std::string> d_args;
     std::map<std::string, std::string> dexact_args;
     d_args["label"] = "density";
-    d_args["marker"] = "x";
-    d_args["color"] = "black";
+    d_args["marker"] = "o";
+    d_args["edgecolors"] = "k";
+    d_args["color"] = "C0";
     dexact_args["label"] = "density (reference solution)";
-    dexact_args["color"] = "gray";
+    dexact_args["color"] = "C0";
 
     matplotlibcpp::scatter(xs, d, 5.0, d_args);
     matplotlibcpp::plot(xs, density_exact_interp, dexact_args);
 
-    matplotlibcpp::legend();
-    matplotlibcpp::title(fmt::format("t = {:.4f}", tNew_[0]));
+    //matplotlibcpp::legend();
+    //matplotlibcpp::title(fmt::format("t = {:.4f}", tNew_[0]));
+    matplotlibcpp::ylabel("density");
+    matplotlibcpp::xlabel("length x");
+    matplotlibcpp::tight_layout();
     matplotlibcpp::save(fmt::format("./hydro_shuosher.pdf", tNew_[0]));
   }
 #endif

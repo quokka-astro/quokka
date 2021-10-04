@@ -13,6 +13,7 @@
 #include "AMReX_BC_TYPES.H"
 
 #include "fextract.hpp"
+#include "matplotlibcpp.h"
 #include "test_radhydro_shock_cgs.hpp"
 
 struct ShockProblem {
@@ -337,44 +338,56 @@ auto problem_main() -> int
 		}
 
 #ifdef HAVE_PYTHON
+		std::vector<double> xs_scaled(xs.size());
+		std::vector<double> xs_exact_scaled(xs_exact.size());
+		for(int i = 0; i < xs.size(); ++i) {
+			xs_scaled.at(i) = xs.at(i) / Lx;
+		}
+		for(int i = 0; i < xs_exact.size(); ++i) {
+			xs_exact_scaled.at(i) = xs_exact.at(i) / Lx;
+		}
+
 		// plot results
 		std::map<std::string, std::string> Trad_args;
-		Trad_args["label"] = "Trad";
-		Trad_args["color"] = "black";
-		matplotlibcpp::plot(xs, Trad, Trad_args);
+		Trad_args["label"] = "radiation";
+		Trad_args["color"] = "C1";
+		matplotlibcpp::plot(xs_scaled, Trad, Trad_args);
 
 		if (fstream.is_open()) {
-			std::map<std::string, std::string> Trad_exact_args;
-			Trad_exact_args["label"] = "Trad (diffusion ODE)";
-			Trad_exact_args["color"] = "black";
-			Trad_exact_args["linestyle"] = "dashed";
-			matplotlibcpp::plot(xs_exact, Trad_exact, Trad_exact_args);
+			std::unordered_map<std::string, std::string> Trad_exact_args;
+			//Trad_exact_args["label"] = "Trad (diffusion ODE)";
+			Trad_exact_args["color"] = "C1";
+			Trad_exact_args["marker"] = "o";
+			Trad_exact_args["edgecolors"] = "k";
+			matplotlibcpp::scatter(xs_exact_scaled, Trad_exact, 1.0, Trad_exact_args);
 		}
 
 		std::map<std::string, std::string> Tgas_args;
-		Tgas_args["label"] = "Tmat";
-		Tgas_args["color"] = "red";
-		matplotlibcpp::plot(xs, Tgas, Tgas_args);
+		Tgas_args["label"] = "gas";
+		Tgas_args["color"] = "C2";
+		matplotlibcpp::plot(xs_scaled, Tgas, Tgas_args);
 
 		if (fstream.is_open()) {
-			std::map<std::string, std::string> Tgas_exact_args;
-			Tgas_exact_args["label"] = "Tmat (diffusion ODE)";
-			Tgas_exact_args["color"] = "red";
-			Tgas_exact_args["linestyle"] = "dashed";
-			matplotlibcpp::plot(xs_exact, Tmat_exact, Tgas_exact_args);
+			std::unordered_map<std::string, std::string> Tgas_exact_args;
+			//Tgas_exact_args["label"] = "Tmat (diffusion ODE)";
+			Tgas_exact_args["color"] = "C2";
+			Tgas_exact_args["marker"] = "o";
+			Tgas_exact_args["edgecolors"] = "k";
+			matplotlibcpp::scatter(xs_exact_scaled, Tmat_exact, 1.0, Tgas_exact_args);
 		}
 
-		std::map<std::string, std::string> shock_args;
-		shock_args["label"] = "shock";
-		shock_args["color"] = "gray";
-		shock_args["linestyle"] = "dashed";
-		std::vector<double> shock_x({shock_position, shock_position});
-		std::vector<double> shock_y({1., 4.5});
-		//matplotlibcpp::plot(shock_x, shock_y, shock_args);
+		// std::map<std::string, std::string> shock_args;
+		// shock_args["label"] = "shock";
+		// shock_args["color"] = "gray";
+		// shock_args["linestyle"] = "dashed";
+		// std::vector<double> shock_x({shock_position, shock_position});
+		// std::vector<double> shock_y({1., 4.5});
+		// matplotlibcpp::plot(shock_x, shock_y, shock_args);
 
-		matplotlibcpp::xlabel("length x (cm)");
+		matplotlibcpp::xlabel("length x (dimensionless)");
 		matplotlibcpp::ylabel("temperature (dimensionless)");
 		matplotlibcpp::legend();
+		matplotlibcpp::tight_layout();
 		matplotlibcpp::save("./radshock_cgs_temperature.pdf");
 #endif
 	}
