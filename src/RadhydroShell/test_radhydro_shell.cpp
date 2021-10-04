@@ -35,10 +35,10 @@ extern "C" {
 
 struct ShellProblem {};
 // if false, use octant symmetry
-constexpr bool simulate_full_box = false;
+constexpr bool simulate_full_box = true;
 
-constexpr double a_rad = 7.5646e-15; // erg cm^-3 K^-4
-constexpr double c = 2.99792458e10;  // cm s^-1
+constexpr double a_rad = 7.5646e-15;  // erg cm^-3 K^-4
+constexpr double c = 2.99792458e10;   // cm s^-1
 constexpr double a0 = 2.0e5;          // ('reference' sound speed) [cm s^-1]
 constexpr double chat = 860. * a0;    // cm s^-1
 constexpr double k_B = 1.380658e-16;  // erg K^-1
@@ -63,14 +63,15 @@ template <> struct EOS_Traits<ShellProblem> {
 constexpr amrex::Real Msun = 2.0e33;           // g
 constexpr amrex::Real parsec_in_cm = 3.086e18; // cm
 
-constexpr amrex::Real specific_luminosity = 2000.;             // erg s^-1 g^-1
-constexpr amrex::Real GMC_mass = 1.0e6 * Msun;                 // g
-constexpr amrex::Real epsilon = 0.5;                           // dimensionless
-constexpr amrex::Real M_shell = (1 - epsilon) * GMC_mass;      // g
-constexpr amrex::Real L_star = (epsilon * GMC_mass) * specific_luminosity; // erg s^-1
+constexpr amrex::Real specific_luminosity = 2000.;        // erg s^-1 g^-1
+constexpr amrex::Real GMC_mass = 1.0e6 * Msun;            // g
+constexpr amrex::Real epsilon = 0.5;                      // dimensionless
+constexpr amrex::Real M_shell = (1 - epsilon) * GMC_mass; // g
+constexpr amrex::Real L_star =
+    (epsilon * GMC_mass) * specific_luminosity; // erg s^-1
 
 constexpr amrex::Real r_0 = 5.0 * parsec_in_cm; // cm
-constexpr amrex::Real sigma_star = 0.3 * r_0;  // cm
+constexpr amrex::Real sigma_star = 0.3 * r_0;   // cm
 constexpr amrex::Real H_shell = 0.3 * r_0;      // cm
 constexpr amrex::Real kappa0 = 20.0;            // specific opacity [cm^2 g^-1]
 
@@ -314,7 +315,7 @@ void RadhydroSimulation<ShellProblem>::ErrorEst(int lev,
                                                 int /*ngrow*/) {
   // tag cells for refinement
 
-  const amrex::Real eta_threshold = 0.3;      // gradient refinement threshold
+  const amrex::Real eta_threshold = 0.1;      // gradient refinement threshold
   const amrex::Real rho_min = 1.0e-2 * rho_0; // minimum density for refinement
 
   for (amrex::MFIter mfi(state_new_[lev]); mfi.isValid(); ++mfi) {
@@ -325,13 +326,13 @@ void RadhydroSimulation<ShellProblem>::ErrorEst(int lev,
     amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
       const int n = HydroSystem<ShellProblem>::density_index;
       amrex::Real const rho = state(i, j, k, n);
-      
+
       amrex::Real const rho_xplus = state(i + 1, j, k, n);
       amrex::Real const rho_xminus = state(i - 1, j, k, n);
 
       amrex::Real const rho_yplus = state(i, j + 1, k, n);
       amrex::Real const rho_yminus = state(i, j - 1, k, n);
-      
+
       amrex::Real const rho_zplus = state(i, j, k + 1, n);
       amrex::Real const rho_zminus = state(i, j, k - 1, n);
 
@@ -343,9 +344,9 @@ void RadhydroSimulation<ShellProblem>::ErrorEst(int lev,
           std::max(std::abs(rho_zplus - rho), std::abs(rho - rho_zminus));
 
       amrex::Real const gradient_indicator =
-          std::max({del_x, del_y, del_z}) / std::max(rho, rho_min);
+          std::max({del_x, del_y, del_z}) / rho;
 
-      if (gradient_indicator > eta_threshold) {
+      if ((gradient_indicator > eta_threshold) && (rho >= rho_min)) {
         tag(i, j, k) = amrex::TagBox::SET;
       }
     });
@@ -414,17 +415,17 @@ auto problem_main() -> int {
   sim.integratorOrder_ = 2; // RK2
 
   constexpr amrex::Real t0_hydro = r_0 / a0; // seconds
-  sim.stopTime_ = 0.125 * t0_hydro; // 0.124 * t0_hydro;
+  sim.stopTime_ = 0.125 * t0_hydro;          // 0.124 * t0_hydro;
 
   // for production
-  sim.checkpointInterval_ = 1000;
-  sim.plotfileInterval_ = 100;
-  sim.maxTimesteps_ = 5000;
+  //sim.checkpointInterval_ = 1000;
+  //sim.plotfileInterval_ = 100;
+  //sim.maxTimesteps_ = 5000;
 
   // for scaling tests
-  //sim.checkpointInterval_ = -1;
-  //sim.plotfileInterval_ = -1;
-  //sim.maxTimesteps_ = 50;
+  sim.checkpointInterval_ = -1;
+  sim.plotfileInterval_ = -1;
+  sim.maxTimesteps_ = 50;
 
   // initialize
   sim.setInitialConditions();
