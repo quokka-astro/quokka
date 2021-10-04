@@ -14,6 +14,7 @@
 
 #include "fextract.hpp"
 #include "matplotlibcpp.h"
+#include "ArrayUtil.hpp"
 #include "test_radhydro_shock_cgs.hpp"
 
 struct ShockProblem {
@@ -348,6 +349,7 @@ auto problem_main() -> int
 		}
 
 		// plot results
+		int s = 48; // stride
 		std::map<std::string, std::string> Trad_args;
 		Trad_args["label"] = "radiation";
 		Trad_args["color"] = "C1";
@@ -358,8 +360,8 @@ auto problem_main() -> int
 			//Trad_exact_args["label"] = "Trad (diffusion ODE)";
 			Trad_exact_args["color"] = "C1";
 			Trad_exact_args["marker"] = "o";
-			Trad_exact_args["edgecolors"] = "k";
-			matplotlibcpp::scatter(xs_exact_scaled, Trad_exact, 1.0, Trad_exact_args);
+			//Trad_exact_args["edgecolors"] = "k";
+			matplotlibcpp::scatter(strided_vector_from(xs_exact_scaled, s), strided_vector_from(Trad_exact, s), 10.0, Trad_exact_args);
 		}
 
 		std::map<std::string, std::string> Tgas_args;
@@ -372,17 +374,9 @@ auto problem_main() -> int
 			//Tgas_exact_args["label"] = "Tmat (diffusion ODE)";
 			Tgas_exact_args["color"] = "C2";
 			Tgas_exact_args["marker"] = "o";
-			Tgas_exact_args["edgecolors"] = "k";
-			matplotlibcpp::scatter(xs_exact_scaled, Tmat_exact, 1.0, Tgas_exact_args);
+			//Tgas_exact_args["edgecolors"] = "k";
+			matplotlibcpp::scatter(strided_vector_from(xs_exact_scaled, s), strided_vector_from(Tmat_exact, s), 10.0, Tgas_exact_args);
 		}
-
-		// std::map<std::string, std::string> shock_args;
-		// shock_args["label"] = "shock";
-		// shock_args["color"] = "gray";
-		// shock_args["linestyle"] = "dashed";
-		// std::vector<double> shock_x({shock_position, shock_position});
-		// std::vector<double> shock_y({1., 4.5});
-		// matplotlibcpp::plot(shock_x, shock_y, shock_args);
 
 		matplotlibcpp::xlabel("length x (dimensionless)");
 		matplotlibcpp::ylabel("temperature (dimensionless)");

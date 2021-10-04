@@ -383,12 +383,12 @@ auto problem_main() -> int {
 
     std::map<std::string, std::string> Erad_args;
     Erad_args["label"] = "numerical solution";
-    Erad_args["color"] = "C1";
+    Erad_args["color"] = "black";
     matplotlibcpp::plot(xs, Erad, Erad_args);
 
     std::map<std::string, std::string> diffusion_args;
     diffusion_args["label"] = "exact diffusion solution";
-    diffusion_args["color"] = "C1";
+    diffusion_args["color"] = "black";
     diffusion_args["linestyle"] = "none";
     diffusion_args["marker"] = "o";
     //diffusion_args["edgecolors"] = "k";
@@ -396,7 +396,7 @@ auto problem_main() -> int {
 
     std::map<std::string, std::string> transport_args;
     transport_args["label"] = "exact transport solution";
-    transport_args["color"] = "C1";
+    transport_args["color"] = "black";
     transport_args["linestyle"] = "none";
     transport_args["marker"] = "x";
     //transport_args["edgecolors"] = "k";

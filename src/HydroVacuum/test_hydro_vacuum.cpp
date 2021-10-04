@@ -16,6 +16,7 @@
 #include "fextract.hpp"
 #include "hydro_system.hpp"
 #include "matplotlibcpp.h"
+#include "ArrayUtil.hpp"
 #include "test_hydro_vacuum.hpp"
 
 struct ShocktubeProblem {};
@@ -235,17 +236,20 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
     }
 
     // Plot results
+    int s = 12; // stride
     matplotlibcpp::clf();
     std::map<std::string, std::string> d_args;
     std::unordered_map<std::string, std::string> dexact_args;
-    d_args["label"] = "density";
+    d_args["label"] = "simulation";
     d_args["color"] = "C0";
+    dexact_args["label"] = "exact solution";
     dexact_args["marker"] = "o";
     dexact_args["color"] = "C0";
-    dexact_args["edgecolors"] = "k";
+    //dexact_args["edgecolors"] = "k";
     matplotlibcpp::plot(xs, d, d_args);
-    matplotlibcpp::scatter(xs_exact, density_exact, 1.0, dexact_args);
+    matplotlibcpp::scatter(strided_vector_from(xs_exact, s), strided_vector_from(density_exact, s), 5.0, dexact_args);
     matplotlibcpp::legend();
+    matplotlibcpp::ylabel("density");
     matplotlibcpp::xlabel("length x");
     matplotlibcpp::tight_layout();
     //matplotlibcpp::title(fmt::format("t = {:.4f}", tNew_[0]));
@@ -255,14 +259,17 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
     matplotlibcpp::clf();
     std::map<std::string, std::string> e_args;
     std::unordered_map<std::string, std::string> eexact_args;
-    e_args["label"] = "specific internal energy";
+    e_args["label"] = "simulation";
     e_args["color"] = "C5";
+    eexact_args["label"] = "exact solution";
     eexact_args["marker"] = "o";
     eexact_args["color"] = "C5";
-    eexact_args["edgecolors"] = "k";
+    //eexact_args["edgecolors"] = "k";
     matplotlibcpp::plot(xs, e, e_args);
-    matplotlibcpp::scatter(xs_exact, eint_exact, 1.0, eexact_args);
+    matplotlibcpp::scatter(strided_vector_from(xs_exact, s),
+                           strided_vector_from(eint_exact, s), 5.0, eexact_args);
     matplotlibcpp::legend();
+    matplotlibcpp::ylabel("specific internal energy");
     matplotlibcpp::xlabel("length x");
     matplotlibcpp::tight_layout();
     //matplotlibcpp::title(fmt::format("t = {:.4f}", tNew_[0]));

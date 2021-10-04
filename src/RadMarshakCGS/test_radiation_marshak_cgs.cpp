@@ -328,8 +328,8 @@ auto problem_main() -> int
 		std::unordered_map<std::string, std::string> Trad_exact_args;
 		Trad_exact_args["marker"] = "o";
 		Trad_exact_args["color"] = "C1";
-		Trad_exact_args["edgecolors"] = "k";
-		matplotlibcpp::scatter(xs_exact, Trad_exact, 1.0, Trad_exact_args);
+		//Trad_exact_args["edgecolors"] = "k";
+		matplotlibcpp::scatter(xs_exact, Trad_exact, 5.0, Trad_exact_args);
 
 		// gas temperature
 		std::map<std::string, std::string> Tgas_args;
@@ -340,8 +340,8 @@ auto problem_main() -> int
 		std::unordered_map<std::string, std::string> Tgas_exact_args;
 		Tgas_exact_args["marker"] = "o";
 		Tgas_exact_args["color"] = "C2";
-		Tgas_exact_args["edgecolors"] = "k";
-		matplotlibcpp::scatter(xs_exact, Tmat_exact, 1.0, Tgas_exact_args);
+		//Tgas_exact_args["edgecolors"] = "k";
+		matplotlibcpp::scatter(xs_exact, Tmat_exact, 5.0, Tgas_exact_args);
 
 		matplotlibcpp::xlabel("length x (cm)");
 		matplotlibcpp::ylabel("temperature (Kelvins)");

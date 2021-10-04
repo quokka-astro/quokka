@@ -362,7 +362,7 @@ Our next test is a stationary shock tube, which we set up using the parameters s
 We show \quokka's results for this test in \autoref{fig:shocktube}. As for the sound wave test, we compute the $L_1$ error norm for each of the conserved variables, and then compute the root-mean-square of those error norms. The rms $L_1$ error norm divided by the rms norm of the exact solution is $1.12 \times 10^{-3}$. Inspecting the solution in \autoref{fig:shocktube}, we see that the agreement between the exact solution and the numerical solution is very good. The only noticeable differences are small oscillations near discontinuities in the derivative of the solution at $x \approx 2.4$ and near the density discontinuity at $x \approx 3.6$. We find that the shock flattening method of \cite{Miller_2002} is essential to produce a reasonable solution to this problem. Without it, we find unacceptably large post-shock oscillations (not shown).
 \begin{figure}
     \includegraphics[width=\columnwidth]{hydro_shocktube_0.4000.pdf}
-    \caption{Density, velocity, and pressure profiles for the stationary shock tube test (\autoref{section:shocktube}). For comparison, we also show the exact solution for the density.}
+    \caption{Density, velocity, and pressure profiles for the stationary shock tube test (\autoref{section:shocktube}). For comparison, we show the exact solutions for density, velocity, and pressure as circles of the same color.}
     \label{fig:shocktube}
 \end{figure}
 
@@ -372,7 +372,7 @@ We next carry out the `LeBlanc' shock tube test, originally published by \cite{B
 \begin{figure}
     \includegraphics[width=\columnwidth]{hydro_leblanc_6.0000.pdf}
     \includegraphics[width=\columnwidth]{hydro_leblanc_eint_6.0000.pdf}
-    \caption{Density, velocity, and pressure profiles for the `LeBlanc' shock tube test problem (\autoref{section:leblanc}). For comparison, we also show the exact solution for density.}
+    \caption{\emph{Upper:} Density, velocity, and pressure profiles for the `LeBlanc' shock tube test problem (\autoref{section:leblanc}). For comparison, we show the exact solutions for density, velocity, and pressure as the circles of the same color. \emph{Lower:} The specific internal energy, with the exact solution shown as circles.}
     \label{fig:leblanc}
 \end{figure}
 
@@ -393,7 +393,7 @@ P_R(x) &= 1 \, .
 We compute a reference solution using \textsc{Athena++} \citep{Stone_2020} with the VL2 integrator, PPM reconstruction in the characteristic variables, and the HLLC Riemann solver on a grid of 1600 cells. Our solution is computed using PPM reconstruction (in the primitive variables), the RK2-SSP integrator, and the HLLC Riemann solver on a grid of 400 cells. The agreement is very good, with comparable resolution of the high-frequency features to the third-order essentially-non-oscillatory (ENO) scheme of \cite{Shu_1989}. When PLM reconstruction is used instead for the same number of grid cells, the high-frequency features are aliased (not shown; see also Figure 14 of \citealt{Shu_1989}), indicating a significantly higher effective resolution for PPM-based methods even in the presence of shocks.
 \begin{figure}
     \includegraphics[width=\columnwidth]{hydro_shuosher.pdf}
-    \caption{Density as a function of position for the Shu-Osher wave-shock interaction problem (\autoref{section:shu-osher}). Here we show a comparison between the \quokka~solution and a reference solution computed using \textsc{Athena++} \citep{Stone_2020}.}
+    \caption{Density as a function of position for the Shu-Osher wave-shock interaction problem (\autoref{section:shu-osher}). Here we show a comparison between the \quokka~solution (shown as circles) and a reference solution (shown as a solid line) computed using \textsc{Athena++} \citep{Stone_2020}.}
     \label{fig:shu_osher}
 \end{figure}
 
@@ -402,7 +402,7 @@ We compute a reference solution using \textsc{Athena++} \citep{Stone_2020} with 
 We show a slow-moving shock in \autoref{fig:sms} using the parameters from \cite{Jin_1996}, where $\rho_L = 3.86$, $(\rho v)_L = -3.1266$, and $E_L = 27.0913$, and the right-side state $\rho_R = 1.0$, $(\rho v)_R = -3.44$, and $E_R = 8.4168$, with $\gamma = 1.4$. This corresponds to the shock jump moving to the right with a velocity $v_{\text{shock}} = 0.1096$. For a CFL number of $0.2$, this corresponds to the shock taking $\sim 250$ timesteps to move across a single cell. This may not be a common scenario for our applications, but it may occur in a protostellar accretion shock, for instance. The quality of the solution is again significantly improved by shock flattening. The post-shock oscillations for slow-moving shocks may still be present with first-order reconstruction \citep{Jin_1996,Lee_2011}, so it is difficult to completely eliminate. We also find that adding a small amount of artificial viscosity does not significantly reduce the oscillations. A modification to PPM reconstruction based on a characteristic wave decomposition succeeds in significantly reducing this oscillation \citep{Lee_2011}, which we may consider implementing in a future version of the code.
 \begin{figure}
     \includegraphics[width=\columnwidth]{hydro_sms_1.0000.pdf}
-    \caption{Density profiles for the slow-moving shock test problem (\autoref{section:slowshock}). We show a comparison between the \quokka~and exact solutions.}
+    \caption{Density profiles for the slow-moving shock test problem (\autoref{section:slowshock}). We show a comparison between the \quokka~(solid line) and exact solutions (circles).}
     \label{fig:sms}
 \end{figure}
 
@@ -412,7 +412,7 @@ We next test the performance of our code on the 1-2-3 problem of \cite{Einfeldt_
 \begin{figure}
     \includegraphics[width=\columnwidth]{hydro_vacuum_0.1500.pdf}
     \includegraphics[width=\columnwidth]{hydro_vacuum_eint_0.1500.pdf}
-    \caption{Profiles of density (top) and specific internal energy (bottom) for the strong rarefaction test problem (\autoref{section:rarefaction}). In both panels we show a comparison between the \quokka~solution computed using the default HLLC Riemann solver and a solution computed using an exact, iterative Riemann solver.}
+    \caption{Profiles of density (top) and specific internal energy (bottom) for the strong rarefaction test problem (\autoref{section:rarefaction}). In both panels we show a comparison between the \quokka~solution computed using the default HLLC Riemann solver (solid line) and a solution computed using an exact, iterative Riemann solver (circles).}
     \label{fig:vacuum}
 \end{figure}
 
@@ -450,6 +450,7 @@ We next present our results for the so-called Liska-Wendroff implosion test \cit
 For our radiation tests we disable the hydrodynamic part of the code and only use the radiation transport and gas-radiation exchange updates. These tests evaluate the accuracy of those portions of the code.
 
 \subsubsection{Marshak wave}
+\label{ssec:marshak}
 We next compute a Marshak wave \citep{Marshak_1958}. The problem consists of a uniform gas with a constant density $\rho = 10 \gm \cm^{-3}$ and constant opacities $\kappa_P = \kappa_R = 577 \cm^{2} \gm^{-1}$. The gas has a uniform initial temperature of $10^4 \Kelvin$, but at $t=0$ we impose on the left-hand side of the domain a boundary condition consisting of a half-isotropic flux with a radiation temperature of $3.481334 \times 10^6 \Kelvin$. The radiation drives a wave of heat into the gas. Following \cite{Su_1996}, we set the gas heat capacity at constant volume $C_v$ so a functional form that makes it possible to linearize the matter-radiation coupling terms, and thus obtain a semi-analytic solution:
 \begin{align}
 C_v &\equiv \frac{\partial E_{\text{int}}}{\partial T} = \alpha T^3 \, ,
@@ -460,11 +461,12 @@ where $E_{\text{int}} = (\alpha / 4) \, T^4$, $\alpha = 4 a_r / \epsilon$ and $\
 Since we solve the moment equations, rather than just the diffusion equation, we do not expect our numerical solution to agree with the \citeauthor{Su_1996} solution at the leading edge of the wave, where our code respects causality and restricts the propagation speed of the wave to $c$; this constraint is violated in the diffusion approximation that \citeauthor{Su_1996} adopt. However, we can still compare to their solution in the region where $F_r \ll cE_r$ and diffusion is a good approximation. In this region, we obtain excellent agreement with the semi-analytic solution, as shown in \autoref{fig:marshak}. Note that the difference between our numerical solution and the ``exact'' solution at $x \gtrsim 3\times 10^{-3}$ cm is not an error in our solution. Rather, it is a result of our code properly capturing the finite speed of light, while the semi-analytic solution does not.
 \begin{figure}
     \includegraphics[width=\columnwidth]{marshak_wave_cgs_gastemperature.pdf}
-    \caption{A Marshak wave test problem \citep{Su_1996}.}
+    \caption{A Marshak wave test problem (\autoref{ssec:marshak}). The radiation temperature and gas temperature are shown as solid lines, with the diffusion solution shown as circles.}
     \label{fig:marshak}
 \end{figure}
 
 \subsubsection{Su-Olson problem}
+\label{ssec:suolson}
 We next compute a problem involving radiation penetrating a cold medium but with an internal radiation source rather than a radiation source at the boundary. This problem is defined in dimensionless units where $a_r = c = 1$, with opacities $\kappa_P = \kappa_R = 1$, a constant density $\rho = 1$, and a radiation source
 \begin{align}
 S(x,t) =
@@ -478,7 +480,7 @@ where we have a normalisation factor $Q = (2 x_0)^{-1}$, radiation source temper
 When using the heat capacity given by \autoref{eq:heat_capacity}, a semi-analytic solution of the angle-dependent transport equation may be obtained with a Fourier-Laplace transform \citep{Su_1997}. This solution assumes that $\vc{v} = 0$ at all times, so we drop all $v/c$ terms for this problem. We show our numerical solution using CFL number $0.4$ at time $t = 10$  in \autoref{fig:suolson}; for comparison, we also show the exact transport solution and the exact diffusion solution. We find that with the \cite{Levermore_1984} closure, we obtain a solution in between the diffusion solution and the transport solution. While it makes little difference at $t = 10$, we find better agreement with the transport solution at earlier times when using the \cite{Minerbo_1978} closure (not shown). In this problem, some regions near the internal radiation source (located at $0 \leq x < 0.5$) have Eddington factors $\chi < 1/3$, which cannot be represented by any local closure of the form given by \autoref{eq:M1_closure}.  Nonetheless, we obtain a solution that is more accurate than one would obtain by using a radiation diffusion equation.
 \begin{figure}
     \includegraphics[width=\columnwidth]{SuOlsonTest.pdf}
-    \caption{The Su-Olson test problem \citep{Su_1997}.}
+    \caption{The Su-Olson test problem (\autoref{ssec:suolson}). The numerical solution is the solid line, with the exact diffusion solution shown as circles and the exact transport solution shown as crosses.}
     \label{fig:suolson}
 \end{figure}
 
@@ -487,6 +489,7 @@ When using the heat capacity given by \autoref{eq:heat_capacity}, a semi-analyti
 We next isolate the implicit matter-radiation energy exchange solver by solving a problem with no transport. Following \citet{Turner_2001}, we set up a uniform domain with periodic boundary conditions, where the gas and radiation are initially out of thermal equilibrium. The initial radiation energy density is $E_r = 10^{12} \, \text{erg} \, \text{cm}^{-3}$ and, the initial gas energy density $E_g = 10^2 \, \text{erg} \, \text{cm}^{-3}$. The density $\rho = 10^{-7} \, \text{g} \, \text{cm}^{-3}$ and the specific opacity $\kappa_P = 1.0 \, \cm^{2} \gm^{-1}$. Rather than using a constant heat capacity (as \citealt{Turner_2001} do) we use the heat capacity given by \autoref{eq:heat_capacity}, which allows us to obtain an algebraic solution for the matter temperature $T$ as a function of time $t$:
 \begin{align}
 T^4 &= \left( T_{0}^4 - \frac{\hat c}{c} \tilde E_0 \right) \, \exp \left[ -\frac{4}{\alpha} \left( a_r + \frac{\hat c}{c} \frac{\alpha}{4} \right) \kappa \rho c t \right] \, + \, \frac{\hat c}{c} \tilde E_0 \, .
+\label{eq:rsla_temperature}
 \end{align}
 where $E_0 = E_{g} + (c/\hat c) \, E_{r}$ and $\tilde E_0 = E_0 \left[ a_r + (\hat c / c) (\alpha / 4) \right]^{-1}$ are constant as a function of time. Taking the limit $t \rightarrow \infty$, we immediately see that the equilibrium temperature $T_{\text{eq}}$ is modified whenever $\hat c \neq c$, contrary to previous claims in the literature:
 \begin{align}
@@ -497,7 +500,7 @@ Fundamentally, this occurs whenever RSLA is employed (and $\hat c \neq c$) becau
 To test \quokka's ability to recover the analytic solution, we simulate the problem using a constant timestep $\Delta t = 10^{-8} \s$ until $t = 10^{-2} \s$. We use a reduced speed of light $\hat c = 0.1 c$. We show the time evolution of the matter temperature in \autoref{fig:radcoupling} both when using RSLA and without. We find that the numerical solution agrees with the exact solution to better than one part in $10^{5}$ at each timestep for both cases. The RSLA equilibrium temperature is approximately 20 per cent higher than the physically correct equilibrium temperature.
 \begin{figure}
     \includegraphics[width=\columnwidth]{radcoupling_rsla.pdf}
-    \caption{Time evolution of the gas temperature in the radiation-matter coupling test (\autoref{section:equilibrium}).}
+    \caption{Time evolution of the gas temperature in the radiation-matter coupling test (\autoref{section:equilibrium}). The simulated gas temperature using RSLA is shown as the solid line. The exact solution for the physically-correct gas temperature (i.e., without RSLA; \autoref{eq:rsla_temperature}) is shown as the dashed line.}
     \label{fig:radcoupling}
 \end{figure}
 
@@ -539,7 +542,7 @@ After evolving for a sound crossing time $t = L_x / c_{s,0} \approx 3.177 \times
 
 \begin{figure}
     \includegraphics[width=\columnwidth]{radiation_pressure_tube.pdf}
-    \caption{Temperature profiles for the radiation pressure tube test (\autoref{section:radtube}). The radiation and gas temperatures are both plotted, but only the latter line is visible because the two temperatures are nearly identical. The temperature for the exact diffusion solution is shown in the black circles. The temperatures agree to within 0.2 per cent.}
+    \caption{Temperature profiles for the radiation pressure tube test (\autoref{section:radtube}). The radiation and gas temperatures are both shown, but only the latter line is visible because the two temperatures are nearly identical. The temperature for the exact diffusion solution is shown in the black circles. The simulated and exact temperatures agree to within 0.2 per cent.}
     \label{fig:radiation_pressure_tube}
 \end{figure}
 
@@ -564,7 +567,7 @@ To simulate this problem, we set up a domain from $x = 0$ to $x=L$, resolved by 
 We next simulate a subcritical radiative shock, following the set-up used by \cite{Skinner_2019} with the dimensionless parameters for the Mach $\mathcal{M} = 3$ example given by \cite{Lowrie_2008}. We scale to cgs units with the opacities $\kappa_P = \kappa_R = 577 \cm^{2} \gm^{-1} (1 \gm \cm^{-3} / \rho)$, mean molecular weight $\mu = m_{\rm H}$, and adiabatic index $\gamma = 5/3$. The left-side state consists of $\rho_L = 5.69 \gm \cm^{-3}$, velocity $v_L = 5.19 \times 10^7 \cm \s^{-1}$, and temperature (gas and radiation) $T_L = 2.18 \times 10^6 \Kelvin$. The right-side state is $\rho_R = 17.1 \gm \cm^{-3}$, $v_R = 1.73 \times 10^7 \cm \s^{-1}$, and $T_R = 7.98 \times 10^6 \K$. These states are also used as Dirichlet boundary conditions for the simulation. In order to exactly match the assumptions used in the semi-analytic solution of \cite{Lowrie_2008}, we use the Eddington approximation (i.e., $\textsf{P}_r = (1/3) E_r \textsf{I}$) to close the radiation pressure tensor for this problem.\footnote{We provide a \textsc{Python} code that computes the semi-analytic solution for radiative shocks using the Eddington approximation \citep{Lowrie_2008} in our \faGithub\href{https://github.com/BenWibking/quokka-code}{GitHub repository}.} Following \cite{Skinner_2019}, we use a reduced speed of light $\hat c = 10(v_L + c_{s,L})$, where $c_{s,L}$ is the adiabatic sound speed of the left-side state.  We use a CFL number of 0.4 and evolve until $t = 10^{-9} \s$ on a grid of $512$ cells on the domain $[0 \cm, 0.01575 \cm]$, with the discontinuity placed between the left- and right-side states $x_0 = 0.0130 \cm$. The shock drifts $1.5$ per cent of the domain length to the right from the location of the initial discontinuity, which may be due to a combination of the initial numerical transient and our use of the asymptotic states as boundary conditions, rather than the exact states expected at a finite distance from the shock location. This makes the steady-state location of the shock on the simulation grid not well-defined. After accounting for this drift, the agreement between the numerical and semi-analytic solution is excellent, as shown in \autoref{fig:radshock}. We find the that the relative error of the gas temperature in $L_1$ norm is $0.4$ per cent, which is at least as good as the solution of \cite{Skinner_2019} for the same spatial resolution.  In this problem, we find that using shock flattening is essential to obtain a non-oscillatory temperature structure for the Zel'dovich spike (the gas temperature discontinuity shown in \autoref{fig:radcoupling}; \citealt{Zeldovich_1967}).
 \begin{figure}
     \includegraphics[width=\columnwidth]{radshock_cgs_temperature.pdf}
-    \caption{Radiation and matter temperatures in a subcritical radiative shock with $\mathcal{M} = 3$ (\autoref{section:radshock}).}
+    \caption{Radiation and matter temperatures in a subcritical radiative shock with $\mathcal{M} = 3$ (\autoref{section:radshock}). The simulation results as shown as solid lines, while the exact steady-state solution is shown as circles.}
     \label{fig:radshock}
 \end{figure}
 
@@ -593,7 +596,7 @@ We initialize our simulation of this problem using the density profile (\autoref
 
 \begin{figure}
     \includegraphics[width=\columnwidth]{shell_velocity.pdf}
-    \caption{Shell velocity as a function of dimensionless time $T = t/t_0$ in the radiation-driven dust shell test (\autoref{section:shell}).}
+    \caption{Shell velocity as a function of dimensionless time $T = t/t_0$ in the radiation-driven dust shell test (\autoref{section:shell}). The exact thin-shell solution is shown as the solid line, while the circles show the mass-weighted shell velocity from the simulation.}
     \label{fig:radshell}
 \end{figure}
 

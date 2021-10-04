@@ -9,6 +9,7 @@
 
 #include "AMReX_BC_TYPES.H"
 
+#include "ArrayUtil.hpp"
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
 #include "matplotlibcpp.h"
@@ -203,19 +204,24 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
 #ifdef HAVE_PYTHON
     // Plot results
     matplotlibcpp::clf();
+    int s = 2; // stride
     std::map<std::string, std::string> d_args;
     std::unordered_map<std::string, std::string> dexact_args;
-    d_args["label"] = "density";
+    d_args["label"] = "simulation";
     d_args["color"] = "C0";
+    dexact_args["label"] = "exact solution";
     dexact_args["marker"] = "o";
     dexact_args["color"] = "C0";
-    dexact_args["edgecolors"] = "k";
+    // dexact_args["edgecolors"] = "k";
     matplotlibcpp::plot(xs, d, d_args);
-    matplotlibcpp::scatter(xs, density_exact, 1.0, dexact_args);
+    matplotlibcpp::scatter(strided_vector_from(xs, s),
+                           strided_vector_from(density_exact, s), 3.0,
+                           dexact_args);
     matplotlibcpp::legend();
     matplotlibcpp::xlabel("length x");
+    matplotlibcpp::ylabel("density");
     matplotlibcpp::tight_layout();
-    //matplotlibcpp::title(fmt::format("t = {:.4f}", tNew_[0]));
+    // matplotlibcpp::title(fmt::format("t = {:.4f}", tNew_[0]));
     matplotlibcpp::save(fmt::format("./hydro_sms_{:.4f}.pdf", tNew_[0]));
 #endif
   }

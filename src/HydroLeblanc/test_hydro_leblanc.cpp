@@ -15,6 +15,7 @@
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 
+#include "ArrayUtil.hpp"
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
 #include "hydro_system.hpp"
@@ -251,6 +252,8 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
 
     // density, velocity, pressure plot
     matplotlibcpp::clf();
+    double msize = 5.0;
+    int s = 8; // stride
 
     std::map<std::string, std::string> d_args;
     std::unordered_map<std::string, std::string> dexact_args;
@@ -258,9 +261,11 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
     d_args["color"] = "C0";
     dexact_args["marker"] = "o";
     dexact_args["color"] = "C0";
-    dexact_args["edgecolors"] = "k";
+    // dexact_args["edgecolors"] = "k";
     matplotlibcpp::plot(xs, d, d_args);
-    matplotlibcpp::scatter(xs_exact, density_exact, 1.0, dexact_args);
+    matplotlibcpp::scatter(strided_vector_from(xs_exact, s),
+                           strided_vector_from(density_exact, s), msize,
+                           dexact_args);
 
     std::map<std::string, std::string> vx_args;
     vx_args["label"] = "velocity";
@@ -268,23 +273,27 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
     std::unordered_map<std::string, std::string> vexact_args;
     vexact_args["marker"] = "o";
     vexact_args["color"] = "C3";
-    vexact_args["edgecolors"] = "k";
+    // vexact_args["edgecolors"] = "k";
     matplotlibcpp::plot(xs, vx, vx_args);
-    matplotlibcpp::scatter(xs_exact, velocity_exact, 1.0, vexact_args);
+    matplotlibcpp::scatter(strided_vector_from(xs_exact, s),
+                           strided_vector_from(velocity_exact, s), msize,
+                           vexact_args);
 
     std::map<std::string, std::string> P_args;
     P_args["label"] = "pressure";
     P_args["color"] = "C4";
     std::unordered_map<std::string, std::string> Pexact_args;
     Pexact_args["color"] = "C4";
-    Pexact_args["edgecolors"] = "k";
+    // Pexact_args["edgecolors"] = "k";
     Pexact_args["marker"] = "o";
     matplotlibcpp::plot(xs, P, P_args);
-    matplotlibcpp::scatter(xs_exact, pressure_exact, 1.0, Pexact_args);
+    matplotlibcpp::scatter(strided_vector_from(xs_exact, s),
+                           strided_vector_from(pressure_exact, s), msize,
+                           Pexact_args);
 
     matplotlibcpp::legend();
     matplotlibcpp::xlabel("length x");
-    //matplotlibcpp::title(fmt::format("t = {:.4f}", tNew_[0]));
+    // matplotlibcpp::title(fmt::format("t = {:.4f}", tNew_[0]));
     matplotlibcpp::tight_layout();
     matplotlibcpp::save(fmt::format("./hydro_leblanc_{:.4f}.pdf", tNew_[0]));
 
@@ -299,10 +308,12 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
     eexact_args["color"] = "C5";
     eexact_args["edgecolors"] = "k";
     matplotlibcpp::plot(xs, eint, e_args);
-    matplotlibcpp::scatter(xs_exact, eint_exact, 1.0, eexact_args);
+    matplotlibcpp::scatter(strided_vector_from(xs_exact, s),
+                           strided_vector_from(eint_exact, s), msize,
+                           eexact_args);
 
     matplotlibcpp::legend();
-    //matplotlibcpp::title(fmt::format("t = {:.4f}", tNew_[0]));
+    // matplotlibcpp::title(fmt::format("t = {:.4f}", tNew_[0]));
     matplotlibcpp::xlabel("length x");
     matplotlibcpp::tight_layout();
     matplotlibcpp::save(

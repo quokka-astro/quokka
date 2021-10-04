@@ -227,24 +227,24 @@ auto problem_main() -> int {
     matplotlibcpp::clf();
     matplotlibcpp::yscale("log");
     matplotlibcpp::xscale("log");
-    matplotlibcpp::ylim(0.1 * std::min(Tgas.front(), Trad.front()),
-                        10.0 * std::max(Trad.back(), Tgas.back()));
+    matplotlibcpp::ylim(0.5 * std::min(Tgas.front(), Trad.front()),
+                        4.0 * std::max(Trad.back(), Tgas.back()));
 
     std::map<std::string, std::string> rsla_args;
-    rsla_args["label"] = "gas temperature (RSLA)";
+    rsla_args["label"] = "simulated gas temperature (RSLA)";
     rsla_args["linestyle"] = "-";
     rsla_args["color"] = "C2";
     matplotlibcpp::plot(t, Tgas, rsla_args);
 
-    std::map<std::string, std::string> exactsolrsla_args;
+    //std::map<std::string, std::string> exactsolrsla_args;
     //exactsolrsla_args["label"] = "gas temperature (exact, RSLA)";
-    exactsolrsla_args["linestyle"] = "--";
-    exactsolrsla_args["color"] = "C2";
-    matplotlibcpp::plot(t, Tgas_rsla_exact, exactsolrsla_args);
+    //exactsolrsla_args["linestyle"] = "--";
+    //exactsolrsla_args["color"] = "C2";
+    //matplotlibcpp::plot(t, Tgas_rsla_exact, exactsolrsla_args);
 
     std::map<std::string, std::string> exactsol_args;
-    exactsol_args["label"] = "gas temperature (no RSLA)";
-    exactsol_args["linestyle"] = ":";
+    exactsol_args["label"] = "exact gas temperature (no RSLA)";
+    exactsol_args["linestyle"] = "--";
     exactsol_args["color"] = "C2";
     matplotlibcpp::plot(t, Tgas_exact, exactsol_args);
 

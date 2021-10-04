@@ -19,6 +19,7 @@
 #include "hydro_system.hpp"
 #include "radiation_system.hpp"
 #include "test_radiation_force.hpp"
+#include "ArrayUtil.hpp"
 extern "C" {
 #include "interpolate.h"
 }
@@ -303,37 +304,24 @@ auto problem_main() -> int {
   matplotlibcpp::save("./radiation_force_tube.pdf");
 
   // plot velocity
+  int s = 4; // stride
   std::map<std::string, std::string> vx_args;
   std::unordered_map<std::string, std::string> vxexact_args;
-  //vxexact_args["label"] = "exact solution";
-  vx_args["label"] = "wind velocity";
+  vxexact_args["label"] = "exact solution";
+  vx_args["label"] = "simulation";
   vx_args["color"] = "C3";
   vxexact_args["color"] = "C3";
   vxexact_args["marker"] = "o";
-  vxexact_args["edgecolors"] = "k";
+  //vxexact_args["edgecolors"] = "k";
   matplotlibcpp::clf();
   matplotlibcpp::plot(xs, vx_arr, vx_args);
-  matplotlibcpp::scatter(xs, vx_exact_arr, 1.0, vxexact_args);
+  matplotlibcpp::scatter(strided_vector_from(xs, s), strided_vector_from(vx_exact_arr, s), 10.0, vxexact_args);
   matplotlibcpp::legend();
   //matplotlibcpp::title(fmt::format("t = {:.4g} s", sim.tNew_[0]));
   matplotlibcpp::xlabel("length x (cm)");
   matplotlibcpp::ylabel("Mach number");
   matplotlibcpp::tight_layout();
   matplotlibcpp::save("./radiation_force_tube_vel.pdf");
-
-#if 0
-  // plot radiation flux
-  std::map<std::string, std::string> Frad_args;
-  Frad_args["label"] = "radiation flux";
-  matplotlibcpp::clf();
-  matplotlibcpp::plot(xs, Frad_err, Frad_args);
-  matplotlibcpp::legend();
-  matplotlibcpp::title(fmt::format("t = {:.4g} s", sim.tNew_[0]));
-  matplotlibcpp::xlabel("x (cm)");
-  matplotlibcpp::ylabel("relative error");
-  matplotlibcpp::tight_layout();
-  matplotlibcpp::save("./radiation_force_tube_flux.pdf");
-#endif
 #endif // HAVE_PYTHON
 
   // Cleanup and exit

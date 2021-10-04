@@ -16,6 +16,7 @@
 #include "RadhydroSimulation.hpp"
 #include "radiation_system.hpp"
 #include "fextract.hpp"
+#include "ArrayUtil.hpp"
 extern "C" {
 #include "interpolate.h"
 }
@@ -319,6 +320,7 @@ auto problem_main() -> int {
 
 #ifdef HAVE_PYTHON
   // Plot results
+  int s = 4; // stride
   std::map<std::string, std::string> Trad_args;
   std::map<std::string, std::string> Tgas_args;
   std::unordered_map<std::string, std::string> Texact_args;
@@ -326,21 +328,13 @@ auto problem_main() -> int {
   Trad_args["color"] = "C1";
   Tgas_args["label"] = "gas";
   Tgas_args["color"] = "C2";
-  //Texact_args["label"] = "exact";
+  Texact_args["label"] = "exact";
   Texact_args["marker"] = "o";
   Texact_args["color"] = "black";
 
   matplotlibcpp::plot(xs, Trad_arr, Trad_args);
   matplotlibcpp::plot(xs, Tgas_arr, Tgas_args);
-  matplotlibcpp::scatter(xs, Trad_exact_arr, 1.0, Texact_args);
-
-  // std::map<std::string, std::string> rho_args;
-  // rho_args["label"] = "density";
-  // rho_args["linestyle"] = "--";
-  // matplotlibcpp::plot(xs, Trad_err, Traderr_args);
-  // matplotlibcpp::plot(xs, Tgas_err, Tgaserr_args);
-  // matplotlibcpp::plot(xs, rho_err, rhoerr_args);
-  // matplotlibcpp::ylim(-0.005, 0.005);
+  matplotlibcpp::scatter(strided_vector_from(xs, s), strided_vector_from(Trad_exact_arr, s), 10.0, Texact_args);
 
   matplotlibcpp::legend();
   //matplotlibcpp::title(fmt::format("t = {:.4g} s", sim.tNew_[0]));

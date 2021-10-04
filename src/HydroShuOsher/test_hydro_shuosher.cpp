@@ -243,17 +243,17 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
     matplotlibcpp::clf();
     std::unordered_map<std::string, std::string> d_args;
     std::map<std::string, std::string> dexact_args;
-    d_args["label"] = "density";
+    d_args["label"] = "simulation";
     d_args["marker"] = "o";
-    d_args["edgecolors"] = "k";
+    //d_args["edgecolors"] = "k";
     d_args["color"] = "C0";
-    dexact_args["label"] = "density (reference solution)";
+    dexact_args["label"] = "reference solution";
     dexact_args["color"] = "C0";
 
     matplotlibcpp::scatter(xs, d, 5.0, d_args);
-    matplotlibcpp::plot(xs, density_exact_interp, dexact_args);
+    matplotlibcpp::plot(xs_exact, density_exact, dexact_args);
 
-    //matplotlibcpp::legend();
+    matplotlibcpp::legend();
     //matplotlibcpp::title(fmt::format("t = {:.4f}", tNew_[0]));
     matplotlibcpp::ylabel("density");
     matplotlibcpp::xlabel("length x");
