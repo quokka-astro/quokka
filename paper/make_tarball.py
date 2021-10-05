@@ -35,7 +35,11 @@ if __name__ == '__main__':
                         if alt is None:
                             alt2 = scanf('*{file} {%s}{Graphic v0.0}', line, collapseWhitespace=True)
                             if alt2 is None:
-                                continue
+                                alt3 = scanf('*{file} {%s} {Graphic v0.0}', line, collapseWhitespace=True)
+                                if alt3 is None:
+                                    continue
+                                else:
+                                    match = alt3
                             else:
                                 match = alt2
                         else:
