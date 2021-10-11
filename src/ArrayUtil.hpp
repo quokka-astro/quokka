@@ -1,4 +1,4 @@
-#ifndef ARRAYUTIL_HPP // NOLINT
+#ifndef ARRAYUTIL_HPP_ // NOLINT
 #define ARRAYUTIL_HPP_
 //==============================================================================
 // TwoMomentRad - a radiation transport library for patch-based AMR codes
