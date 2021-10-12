@@ -58,7 +58,11 @@ jobs:
     #    and modify them (or add more) to build your code if your project
     #    uses a compiled language
 
-    - run: |
+    - name: Checkout submodules
+      run: git submodule update --init --recursive
+
+    - name: Build
+      run: |
         mkdir build; cd build
         cmake .. -DCMAKE_BUILD_TYPE=Release
         cmake --build .
