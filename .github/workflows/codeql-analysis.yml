@@ -59,10 +59,9 @@ jobs:
     #    uses a compiled language
 
     - run: |
-      mkdir build
-      cd build
-      cmake .. -DCMAKE_BUILD_TYPE=Release
-      cmake --build .
+        mkdir build; cd build
+        cmake .. -DCMAKE_BUILD_TYPE=Release
+        cmake --build .
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v1
