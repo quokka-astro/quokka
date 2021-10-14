@@ -9,7 +9,7 @@ Welcome to Quokka's documentation!
 Quokka is a high-resolution shock capturing AMR radiation hydrodynamics code using the AMReX
 library :cite:`AMReX_JOSS` to provide patch-based adaptive mesh functionality.
 We take advantage of the C++ loop abstractions in AMReX in order to
-run with high performance on either CPUs or NVIDIA GPUs.
+run with high performance on either CPUs or GPUs.
 
 .. toctree::
    :maxdepth: 2

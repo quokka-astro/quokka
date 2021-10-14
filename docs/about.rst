@@ -8,8 +8,8 @@ Quokka is a high-resolution shock capturing AMR radiation hydrodynamics code usi
 Development methodology
 -----------------------
 The code is written in modern C++17, using MPI for distributed-memory
-parallelism, and OpenMP for multithreading on CPUs, with the AMReX GPU
-abstraction compiling as either native CUDA code or native HIP code when GPU support is enabled. 
+parallelism, with the AMReX GPU abstraction compiling as either native
+CUDA code or native HIP code when GPU support is enabled. 
 
 We use a modern C++ development methodology, using CMake, CTest,
 and Doxygen. We use :code:`clang-format` for automated code formatting, and :code:`clang-tidy` and SonarCloud for static analysis, in order to audit code adherence to the ISO C++ Core Guidelines and the MISRA C/C++ guidelines. We additionally ensure the code is free of memory corruption bugs using Clang's :code:`AddressSanitizer`.
