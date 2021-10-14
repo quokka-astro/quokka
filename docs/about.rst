@@ -22,7 +22,7 @@ all code must be written in C++17 following the Coding Guidelines, it must compi
 tests must pass, and the static analyzers must show zero new bugs
 before a pull request is merged with the main branch.
 
-User interaction/assistance and bug reports are managed via Issues
+User assistance and bug reports are managed via Discussions and Issues
 in the GitHub repository.
 
 
@@ -31,16 +31,14 @@ Numerical methods
 
 Hydrodynamics
 ~~~~~~~~~~~~~
-The hydrodynamics solver is an unsplit Godunov method, using the
+The hydrodynamics solver is an unsplit method, using the
 piecewise parabolic method :cite:`CW84` for reconstruction
 in the primitive variables, the HLLC Riemann solver
 :cite:`Toro2013` for flux computations, and a method-of-lines formulation for the time integration.
 
-We use the method of :cite:`Mignone2005` to reduce the order of
+We use the method of :cite:`Miller_2002` to reduce the order of
 reconstruction in zones where shocks are detected in order to suppress
-spurious oscillations in strong shocks. We also apply a small amount
-of artificial viscosity in shocks following the original prescription
-of :cite:`CW84`.
+spurious oscillations in strong shocks.
 
 Radiation
 ~~~~~~~~~
@@ -51,7 +49,7 @@ followed by the radiation update, with the latter update including
 the source terms corresponding to the radiation four-force applied
 to both the radiation and hydrodynamic variables. A method-of-lines formulation is also used for the time integration, with the time integration done by the same integrator chosen for the hydrodynamic subsystem.
 
-The hyperbolic radiation subsystem is solved using an unsplit Godunov method, using PPM for reconstruction of the moment variables, with fluxes computed via the HLL Riemann solver, with the wavespeeds computed using the 'frozen Eddington factor' approximation :cite:`Balsara_1999`, which is more robust than using the eigenvalues of the M1 system :cite:`Skinner_2013` itself.
+The hyperbolic radiation subsystem is solved using an unsplit method, using PPM for reconstruction of the moment variables, with fluxes computed via the HLL Riemann solver, with the wavespeeds computed using the 'frozen Eddington factor' approximation :cite:`Balsara_1999`, which is more robust than using the eigenvalues of the M1 system :cite:`Skinner_2013` itself.
 
 We reconstruct the energy density and the `reduced flux` :math:`f = F/cE`, in order to maintain the flux-limiting condition :math:`F \le cE` in discontinuous and near-discontinuous radiation flows.
 
