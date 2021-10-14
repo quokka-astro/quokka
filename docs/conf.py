@@ -18,12 +18,12 @@ from pathlib import Path
 
 # -- Project information -----------------------------------------------------
 
-project = 'TwoMomentRad'
-copyright = '2020, Ben Wibking'
-author = 'Ben Wibking'
+project = 'Quokka'
+copyright = '2020-2021, Ben Wibking and Quokka Developers'
+author = 'Ben Wibking and Quokka Developers'
 
 # The full version, including alpha/beta/rc tags
-release = 'dev0.1'
+release = '1.0'
 
 
 # -- General configuration ---------------------------------------------------
@@ -39,14 +39,14 @@ bibtex_bibfiles = ["references.bib"]
 #bibtex_default_style = "plain"
 
 breathe_projects = {
-    "TwoMomentRad": "./doxyoutput/xml"
+    "Quokka": "./doxyoutput/xml"
 }
 
 #breathe_projects_source = {
-#    "TwoMomentRad": ( "../src", Path("../src").glob("*.cpp") )
+#    "Quokka": ( "../src", Path("../src").glob("*.cpp") )
 #    }
 
-breathe_default_project = "TwoMomentRad"
+breathe_default_project = "Quokka"
 
 primary_domain = 'cpp'
 
