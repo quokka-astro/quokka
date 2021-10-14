@@ -3,7 +3,7 @@
 About
 =====
 
-TwoMomentRad is a high-resolution shock capturing AMR radiation hydrodynamics code using the AMReX library :cite:`AMReX_JOSS` to provide patch-based adaptive mesh functionality. We take advantage of the C++ loop abstractions in AMReX in order to run with high performance on either CPUs, NVIDIA GPUs, or AMD GPUs.
+Quokka is a high-resolution shock capturing AMR radiation hydrodynamics code using the AMReX library :cite:`AMReX_JOSS` to provide patch-based adaptive mesh functionality. We take advantage of the C++ loop abstractions in AMReX in order to run with high performance on either CPUs, NVIDIA GPUs, or AMD GPUs.
 
 Development methodology
 -----------------------

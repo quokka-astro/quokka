@@ -1,0 +1,3 @@
+breathe==4.31
+sphinx==4.2.0
+sphinxcontrib_bibtex==2.4.1
