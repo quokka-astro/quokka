@@ -29,7 +29,11 @@ Then download all submodules (this downloads `AMReX` and the string-formatting l
 cd quokka
 git submodule update --init
 ```
-Create a build/ subdirectory and compile Quokka:
+Quokka uses CMake as its build system. If you don't have CMake installed, the easiest way to install it is to run
+```
+pip install cmake
+```
+Now that CMake is installed, create a build/ subdirectory and compile Quokka:
 ```
 mkdir build; cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
@@ -52,6 +56,9 @@ set(AMReX_SPACEDIM 3 CACHE STRING "" FORCE)
 to compile Quokka for 3D problems.
 
 Have fun!
+
+## CMake
+Quokka uses CMake for its build system. If you don't have CMake installed already, you can simply `pip install cmake` or use another [installation method](https://cliutils.gitlab.io/modern-cmake/chapters/intro/installing.html). If you are unfamiliar with CMake, [this tutorial](https://hsf-training.github.io/hsf-training-cmake-webpage/) may be useful.
 
 ## Running on GPUs
 By default, Quokka compiles itself to run only on CPUs. If you want to run on NVIDIA GPUs, re-build Quokka with the following options:
