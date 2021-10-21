@@ -12,8 +12,10 @@
 #include "ArrayUtil.hpp"
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
-#include "matplotlibcpp.h"
 #include "test_hydro_sms.hpp"
+#ifdef HAVE_PYTHON
+#include "matplotlibcpp.h"
+#endif
 
 struct ShocktubeProblem {};
 

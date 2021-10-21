@@ -13,7 +13,6 @@
 #include "AMReX_BC_TYPES.H"
 
 #include "fextract.hpp"
-#include "matplotlibcpp.h"
 #include "ArrayUtil.hpp"
 #include "test_radhydro_shock_cgs.hpp"
 

@@ -16,9 +16,11 @@
 #include "AMReX_SPACE.H"
 
 #include "fextract.hpp"
-#include "matplotlibcpp.h"
 #include "radiation_system.hpp"
 #include "test_radiation_SuOlson.hpp"
+#ifdef HAVE_PYTHON
+#include "matplotlibcpp.h"
+#endif
 
 struct MarshakProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization

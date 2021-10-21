@@ -19,8 +19,10 @@
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
 #include "hydro_system.hpp"
-#include "matplotlibcpp.h"
 #include "test_hydro_leblanc.hpp"
+#ifdef HAVE_PYTHON
+#include "matplotlibcpp.h"
+#endif
 
 struct ShocktubeProblem {};
 

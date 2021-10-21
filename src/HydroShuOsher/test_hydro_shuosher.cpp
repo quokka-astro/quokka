@@ -13,8 +13,10 @@
 #include "AMReX_BC_TYPES.H"
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
-#include "matplotlibcpp.h"
 #include "test_hydro_shuosher.hpp"
+#ifdef HAVE_PYTHON
+#include "matplotlibcpp.h"
+#endif
 
 struct ShocktubeProblem {};
 

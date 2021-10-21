@@ -12,10 +12,12 @@
 #include "AMReX_IntVect.H"
 
 #include "fextract.hpp"
-#include "matplotlibcpp.h"
 #include "radiation_system.hpp"
 #include "simulation.hpp"
 #include "test_radiation_marshak_cgs.hpp"
+#ifdef HAVE_PYTHON
+#include "matplotlibcpp.h"
+#endif
 
 struct SuOlsonProblemCgs {
 }; // dummy type to allow compile-type polymorphism via template specialization

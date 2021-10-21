@@ -10,7 +10,9 @@
 #include "test_radiation_matter_coupling_rsla.hpp"
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
+#ifdef HAVE_PYTHON
 #include "matplotlibcpp.h"
+#endif
 
 struct CouplingProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
