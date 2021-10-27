@@ -1,3 +1,4 @@
+from os import abort
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -6,6 +7,38 @@ import scipy.optimize
 import scipy.interpolate
 from scikits.odes import ode  # use CVODE
 from math import sqrt
+
+## dimensionless shock parameters
+
+gamma = 5./3.   # adiabatic index
+P0 = 1.0e-4     # pre-shock radiation to gas pressure ratio
+sigma_a = 1e6   # absorption coefficient
+c = 1.0         # dimensionless speed of light
+cs0 = 1.0/sqrt(3.0*sigma_a) # dimensionless pre-shock gas sound speed
+M0 = 3.0        # Mach number (subcritical shock)
+#M0 = 30.0       # Mach number (supercritical shock)
+
+## numerical integration and plotting parameters
+
+if M0 == 3.0:
+    eps = 1e-6
+    options = {'max_steps': 50000, 'rtol': 1e-8, 'atol': 1e-12}
+    L = 9.112876254180604 * (1.0 / sigma_a) * (c/cs0)
+    pos_offset = (0.0132 / 0.01575)*L
+    xlim = (0., L)
+    ylim = (1, 4.5)
+elif M0 == 30.0:
+    eps = 1e-11   # this must be very small for this case
+    options = {'max_steps': 50000, 'rtol': 1e-7, 'atol': 1e-10}
+    xlim = (-0.25, 0.05)
+    ylim = (1., 70.)
+    pos_offset = 0.
+else:
+    print(f"numerical integration tolerances not defined!")
+    exit(1)
+
+
+## rest of code follows below
 
 def shock_jump(gamma, P0, M0):
     """Compute shock jump conditions for a radiative shock
@@ -100,10 +133,6 @@ def dT_dTrad(rho, T, Trad, gamma, M0, P0, sign=-1.0, sign2=1.0):
         return (dF_T - dG_Trad + sign2*sqrt((dF_T - dG_Trad)**2 + 4*dG_T*dF_Trad)) / (2*dG_T)
 
 ## compute asymptotic states
-gamma = 5./3.
-P0 = 1.0e-4
-M0 = 3.0
-
 T0 = 1.0
 Trad0 = T0
 rho0 = 1.0
@@ -118,24 +147,11 @@ print(f"v1 = {v1}")
 print(f"post-shock radiation-to-gas pressure ratio = {P1}")
 
 ## define absorption coefficients, diffusivity
-sigma_a = 1e6           # absorption coefficient
-#cs0 = 1.0
-#c = sqrt(3.0*sigma_a) * cs0 # dimensionless speed of light
-c = 1.0
-cs0 = 1.0/sqrt(3.0*sigma_a)
-# when setting c=1 and cs0 appropriately, Frad is normalized wrong by several orders of magnitude...
-
-#c = 100.0 * (M0 + cs0)
-L = 9.112876254180604 * (1.0 / sigma_a) * (c/cs0)
 kappa_opacity = sigma_a * (cs0 / c)
 kappa_diffusivity = c / (3.0*kappa_opacity*cs0)
 kappa = kappa_diffusivity
-#kappa = 1.0
-print(f"dimensionless speed of light = {c}")
-print(f"gradient length L = {L}")
 
 ## compute solution
-eps = 1e-6
 assert(eps <= 1e-3) # never make it larger than 1e-3, otherwise solutions are quite wrong
 epsA = eps
 epsB = -eps
@@ -183,7 +199,6 @@ xsol_A = np.linspace(x0_A, x1_A, 1024, endpoint=True)
 xsol_B = np.linspace(x0_B, x1_B, 1024, endpoint=True)
 fun = lambda x,y,ydot: shock(x,y,ydot, gamma=gamma, P0=P0, M0=M0, kappa=kappa)
 
-options = {'max_steps': 50000, 'rtol': 1e-8, 'atol': 1e-12}
 print("Integrating precursor region...")
 solution_A = ode('cvode', fun, old_api=False, **options).solve(xsol_A, y0_A)
 print("Integrating relaxation region...")
@@ -277,8 +292,8 @@ def objective(dx):
     j_s = np.array([Frad_b, Prad_b, S_b])
 
     my_norm = lambda v: np.sum( v**2 )
-    rel_norm = my_norm(j_p - j_s) / my_norm(j_s)    # good
-    #norm = (rhoA*velA - rhoB*velB)**2 + (TradA - TradB)**2  # bad!
+    rel_norm = my_norm(j_p - j_s) / my_norm(j_s)                 # works
+    #old_norm = (rhoA*velA - rhoB*velB)**2 + (TradA - TradB)**2  # does not work!
     return rel_norm
 
 bounds_dxA = (-np.max(x_A), 0.)
@@ -287,6 +302,7 @@ print(f"bounds dx_A = {bounds_dxA}")
 print(f"bounds dx_B = {bounds_dxB}")
 
 # global optimization
+print(f"Finding global minimum of matching condition...")
 res = scipy.optimize.shgo(objective, bounds=[bounds_dxA, bounds_dxB], n=300, iters=10)
 dx_guess = res.x
 print(f"global minimum = {dx_guess} with value = {res.fun}")
@@ -296,7 +312,12 @@ my_method = 'L-BFGS-B'
 sol = scipy.optimize.minimize(objective, dx_guess, method=my_method,
                                 bounds=[bounds_dxA, bounds_dxB], tol=jump_tol)
 print(f"objective = {sol.fun} after {sol.nit} iterations.")
-assert(sol.fun <= jump_tol)
+
+if (sol.fun > jump_tol):
+    print(f"\n*************************************************************************************")
+    print(f"WARNING: the matching conditions were NOT satisfied! the solution may be quite wrong.")
+    print(f"*************************************************************************************\n")
+
 dx_A, dx_B = sol.x
 print(f"dx_A = {dx_A}")
 print(f"dx_B = {dx_B}")
@@ -308,48 +329,32 @@ print(f"x_B ranges from [{np.min(x_B)}, {np.max(x_B)}] = {np.max(x_B) - np.min(x
 A_mask = (x_A <= 0.)
 B_mask = (x_B >= 0.)
 
+
 ## output to file
+
 x = np.concatenate((x_A[A_mask], x_B[B_mask][::-1]))
 rho = np.concatenate((rho_A[A_mask], rho_B[B_mask][::-1]))
 vel = np.concatenate((vel_A[A_mask], vel_B[B_mask][::-1]))
 Tmat = np.concatenate((T_A[A_mask], T_B[B_mask][::-1]))
 Trad = np.concatenate((Trad_A[A_mask], Trad_B[B_mask][::-1]))
-
 Erad = Trad**4
-Frad = -kappa*dErad_dx_fun(rho, Tmat, Trad, gamma=gamma, M0=M0, P0=P0, kappa=kappa)
-Frad += (4./3.)*(vel/c)*Erad
-reduced_Frad = ( Frad / Erad ) * (1.0 / c)
-print(f"reduced flux min/max = {np.min(reduced_Frad)} {np.max(reduced_Frad)}")
 
-pos_offset = (0.0132 / 0.01575)*L
 x += pos_offset
 x_A += pos_offset
 x_B += pos_offset
-np.savetxt("./shock.txt", np.c_[x, rho, vel, Tmat, Trad, Frad/c], header="x rho vel Tmat Trad Frad/c")
 
-#plt.plot(x_A[A_mask], rho_A[A_mask], color='blue', label='density')
+## save solution to text file
+np.savetxt(f"./shock_Mach_{M0}.txt", np.c_[x, rho, vel, Tmat, Trad], header="x rho vel Tmat Trad")
+
+
+## plot temperature
+plt.figure()
+
 plt.plot(x_A[A_mask], T_A[A_mask], color='black', label='gas temperature')
 plt.plot(x_A[A_mask], Trad_A[A_mask], '-.', color='black', label='radiation temperature')
-#plt.plot(x_A[A_mask], vel_A[A_mask], color='red', label='velocity')
 
-#plt.plot(x_B[B_mask], rho_B[B_mask], color='blue')
 plt.plot(x_B[B_mask], T_B[B_mask], color='black')
 plt.plot(x_B[B_mask], Trad_B[B_mask], '-.', color='black')
-#plt.plot(x_B[B_mask], vel_B[B_mask], color='red')
-
-import pandas as pd
-fornax = pd.read_csv("./Trad_fig30.csv")
-fornax['x'] *= 1.0e-2
-fornax['x'] += pos_offset
-plt.plot(fornax['x'], fornax['Trad'], '.', color='red', label='Fornax Trad')
-fornax = pd.read_csv("./Tmat_fig30.csv")
-fornax['x'] *= 1.0e-2
-fornax['x'] += pos_offset
-plt.plot(fornax['x'], fornax['Tmat'], '.', color='blue', label='Fornax Tmat')
-
-#extend_B = 0.05
-##plt.plot([x_B[B_mask][0], x_B[B_mask][0] + extend_B], np.ones(2)*rho_B[B_mask][0], color='blue')
-#plt.plot([x_B[B_mask][0], x_B[B_mask][0] + extend_B], np.ones(2)*T_B[B_mask][0], color='black')
 
 plot_jump = True
 if plot_jump:
@@ -359,23 +364,13 @@ if plot_jump:
     plt.scatter(x_B[B_mask][-1], T_B[B_mask][-1], color='black', s=size)
     plt.plot([x_A[A_mask][-1], x_B[B_mask][-1]], [T_A[A_mask][-1], T_B[B_mask][-1]], color='black')
 
-    # plot density shock jump
-    #plt.scatter(x_A[A_mask][-1], rho_A[A_mask][-1], color='blue', s=size)
-    #plt.scatter(x_B[B_mask][-1], rho_B[B_mask][-1], color='blue', s=size)
-    #plt.plot([x_A[A_mask][-1], x_B[B_mask][-1]], [rho_A[A_mask][-1], rho_B[B_mask][-1]], color='blue')
-
-# plot discarded (unphysical) regions of solutions
+# plot discarded (unphysical) regions of solutions [only for debugging]
 plot_discarded = False
 if plot_discarded:
-    #plt.plot(x_A[~A_mask], rho_A[~A_mask], '--', color='blue', alpha=0.5)
     plt.plot(x_A[~A_mask], T_A[~A_mask], '--', color='black',  alpha=0.5)
     plt.plot(x_A[~A_mask], Trad_A[~A_mask], '--', color='black', alpha=0.5)
-    #plt.plot(x_A[~A_mask], vel_A[~A_mask], '--', color='red', alpha=0.5)
-
-    #plt.plot(x_B[~B_mask], rho_B[~B_mask], '--', color='blue',  alpha=0.5)
     plt.plot(x_B[~B_mask], T_B[~B_mask], '--', color='black', alpha=0.5)
     plt.plot(x_B[~B_mask], Trad_B[~B_mask], '--', color='black', alpha=0.5)
-    #plt.plot(x_B[~B_mask], vel_B[~B_mask], '--', color='red', alpha=0.5)
 
 plt.legend(loc='best')
 plt.title(f"M0 = {M0}, P0 = {P0}, kappa = {kappa:.3f}, sigma_a = {sigma_a:.1e}")
@@ -408,10 +403,6 @@ plt.title(f"M0 = {M0}, P0 = {P0}, kappa = {kappa:.3f}, sigma_a = {sigma_a:.1e}")
 #plt.xlim(-0.25, 0.05)
 #plt.ylim(1., 70.)
 
-# Mach 30 plot
-#plt.xlim(-0.25, 0.05)
-#plt.ylim(1., 70.)
-
 # Mach 50 plot
 #plt.xlim(-0.25, 0.05)
 #plt.ylim(1., 90.)
@@ -420,24 +411,26 @@ plt.title(f"M0 = {M0}, P0 = {P0}, kappa = {kappa:.3f}, sigma_a = {sigma_a:.1e}")
 #plt.xlim(1e5, 3e5)
 #plt.ylim(1.25, 2.5)
 
-# Mach 3 plot, reduced dimensionless speed of light
-plt.xlim(0., L)
-plt.ylim(1, 4.5)
-
-#plt.tight_layout()
+plt.xlim(xlim)
+plt.ylim(ylim)
 plt.savefig('ode_solution.pdf')
 
-plt.clf()
-plt.xlim(0., L)
-plt.ylim(0., 1.1)
-plt.ylabel('reduced flux')
-plt.plot(x, np.abs(reduced_Frad), '.-', color='green', label='radiation flux')
-plt.plot([0., L], [1., 1.], '--', color='black')
-plt.savefig('reduced_flux.pdf')
 
-plt.clf()
-plt.ylabel('radiation flux')
-plt.plot(x, Frad/c, '.-', color='green', label='radiation flux')
-#plt.plot(x, Erad, '.-', color='black', label='radiation energy density')
+## plot density
+plt.figure()
+
+plt.plot(x_A[A_mask], rho_A[A_mask], color='blue', label='density')
+plt.plot(x_B[B_mask], rho_B[B_mask], color='blue')
+#plt.plot(x_A[A_mask], vel_A[A_mask], color='red', label='velocity')
+#plt.plot(x_B[B_mask], vel_B[B_mask], color='red')
+    
+if plot_jump:
+    size = 20.0
+    # plot density shock jump
+    plt.scatter(x_A[A_mask][-1], rho_A[A_mask][-1], color='blue', s=size)
+    plt.scatter(x_B[B_mask][-1], rho_B[B_mask][-1], color='blue', s=size)
+    plt.plot([x_A[A_mask][-1], x_B[B_mask][-1]], [rho_A[A_mask][-1], rho_B[B_mask][-1]], color='blue')
+
 plt.legend(loc='best')
-plt.savefig('flux.pdf')
+plt.title(f"M0 = {M0}, P0 = {P0}, kappa = {kappa:.3f}, sigma_a = {sigma_a:.1e}")
+plt.savefig('ode_density.pdf')
