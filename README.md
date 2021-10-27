@@ -33,7 +33,7 @@ Quokka uses CMake as its build system. If you don't have CMake installed, the ea
 ```
 pip install cmake
 ```
-Now that CMake is installed, create a build/ subdirectory and compile Quokka:
+Now that CMake is installed, create a build/ subdirectory and compile Quokka, as shown below. **(Warning to Intel compiler users: the 'classic' Intel compilers `icc` and `icpc` generate incorrect code; see issue [5](https://github.com/BenWibking/quokka/issues/5). Use the newer `icpx` Intel compiler instead by [setting the CMAKE_C_COMPILER and CMAKE_CXX_COMPILER options](https://cmake.org/cmake/help/latest/variable/CMAKE_LANG_COMPILER.html).)**
 ```
 mkdir build; cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
