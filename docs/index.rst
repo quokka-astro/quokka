@@ -17,10 +17,7 @@ run with high performance on either CPUs or GPUs.
    about
    installation
    equations
-   tests/radshock
-   tests/shu_osher
-   tests/sms
-   tests/energy_exchange
+   tests/index
    bibliography
    
    
