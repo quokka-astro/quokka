@@ -18,6 +18,7 @@ run with high performance on either CPUs or GPUs.
    installation
    equations
    tests/index
+   api
    bibliography
    
    
