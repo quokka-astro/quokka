@@ -1,6 +1,7 @@
 *.log
 .vscode/
 build/
+docs/doxygen/
 tests/plt*
 tests/chk*
 .clangd
