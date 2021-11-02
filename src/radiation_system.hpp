@@ -741,7 +741,7 @@ template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto
 RadSystem<problem_t>::ComputePlanckOpacity(const double /*rho*/,
                                            const double /*Tgas*/) -> double {
-  return 1.0;
+  return NAN;
 }
 
 template <typename problem_t>
@@ -756,7 +756,7 @@ template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto
 RadSystem<problem_t>::ComputeRosselandOpacity(const double /*rho*/,
                                               const double /*Tgas*/) -> double {
-  return 1.0;
+  return NAN;
 }
 
 template <typename problem_t>
@@ -838,7 +838,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
     const double c = c_light_;
     const double chat = c_hat_;
-    const double a_rad = radiation_constant_;
 
     // load fluid properties
     const double rho = consPrev(i, j, k, gasDensity_index);
@@ -870,6 +869,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
     double T_gas = NAN;
 
     if constexpr (gamma_ != 1.0) {
+      const double a_rad = radiation_constant_;
       double F_G = NAN;
       double F_R = NAN;
       double rhs = NAN;

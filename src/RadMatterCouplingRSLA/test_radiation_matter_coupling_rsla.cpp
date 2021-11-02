@@ -38,6 +38,20 @@ template <> struct RadSystem_Traits<CouplingProblem> {
 
 template <>
 AMREX_GPU_HOST_DEVICE auto
+RadSystem<CouplingProblem>::ComputePlanckOpacity(const double /*rho*/,
+                                           const double /*Tgas*/) -> double {
+  return 1.0;
+}
+
+template <>
+AMREX_GPU_HOST_DEVICE auto
+RadSystem<CouplingProblem>::ComputeRosselandOpacity(const double /*rho*/,
+                                              const double /*Tgas*/) -> double {
+  return 1.0;
+}
+
+template <>
+AMREX_GPU_HOST_DEVICE auto
 RadSystem<CouplingProblem>::ComputeTgasFromEgas(const double /*rho*/,
                                                 const double Egas) -> double {
   return std::pow(4.0 * Egas / alpha_SuOlson, 1. / 4.);
