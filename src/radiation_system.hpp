@@ -865,27 +865,28 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
     const double Etot0 = Egas0 + (c / chat) * (Erad0 + Src);
 
     // BEGIN NEWTON-RAPHSON LOOP
-    double F_G = NAN;
-    double F_R = NAN;
-    double rhs = NAN;
-    double T_gas = NAN;
-    double kappa = NAN;
-    double fourPiB = NAN;
-    double drhs_dEgas = NAN;
-    double dFG_dEgas = NAN;
-    double dFG_dErad = NAN;
-    double dFR_dEgas = NAN;
-    double dFR_dErad = NAN;
-    double eta = NAN;
-    double deltaErad = NAN;
-    double deltaEgas = NAN;
-
     double Egas_guess = Egas0;
     double Erad_guess = Erad0;
-    const double resid_tol = 1.0e-10; // 1.0e-15;
-    const int maxIter = 400;
-    int n = 0;
+    double T_gas = NAN;
+
     if constexpr (gamma_ != 1.0) {
+      double F_G = NAN;
+      double F_R = NAN;
+      double rhs = NAN;
+      double kappa = NAN;
+      double fourPiB = NAN;
+      double drhs_dEgas = NAN;
+      double dFG_dEgas = NAN;
+      double dFG_dErad = NAN;
+      double dFR_dEgas = NAN;
+      double dFR_dErad = NAN;
+      double eta = NAN;
+      double deltaErad = NAN;
+      double deltaEgas = NAN;
+
+      const double resid_tol = 1.0e-10; // 1.0e-15;
+      const int maxIter = 400;
+      int n = 0;
       for (n = 0; n < maxIter; ++n) {
 
         // compute material temperature
