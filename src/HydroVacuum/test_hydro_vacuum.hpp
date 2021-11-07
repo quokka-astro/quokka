@@ -1,5 +1,5 @@
-#ifndef TEST_HYDRO_LEBLANC_HPP_ // NOLINT
-#define TEST_HYDRO_LEBLANC_HPP_
+#ifndef TEST_HYDRO_VACUUM_HPP_ // NOLINT
+#define TEST_HYDRO_VACUUM_HPP_
 //==============================================================================
 // TwoMomentRad - a radiation transport library for patch-based AMR codes
 // Copyright 2020 Benjamin Wibking.
@@ -25,4 +25,4 @@ extern "C" {
 
 // function definitions
 
-#endif // TEST_HYDRO_LEBLANC_HPP_
+#endif // TEST_HYDRO_VACUUM_HPP_

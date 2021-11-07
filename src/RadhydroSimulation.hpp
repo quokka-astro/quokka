@@ -664,11 +664,11 @@ void RadhydroSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Rea
 
 template <typename problem_t>
 void RadhydroSimulation<problem_t>::advanceRadiationSubstepAtLevel(
-    int lev, amrex::Real time, amrex::Real dt_radiation, int const iter, int const /*nsubsteps*/,
+    int lev, amrex::Real time, amrex::Real dt_radiation, int const iter_count, int const /*nsubsteps*/,
 	amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine)
 {
 	if (Verbose()) {
-		amrex::Print() << "\tsubstep " << iter << " t = " << time << std::endl;
+		amrex::Print() << "\tsubstep " << iter_count << " t = " << time << std::endl;
 	}
 
 	// get cell sizes

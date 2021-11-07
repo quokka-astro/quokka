@@ -25,10 +25,10 @@ struct SuOlsonProblemCgs {
 // Su & Olson (1997) parameters
 constexpr double eps_SuOlson = 1.0;	  // dimensionless
 constexpr double kappa = 577.0;		  // g cm^-2 (opacity)
-constexpr double rho = 10.0;		  // g cm^-3 (matter density)
+constexpr double rho0 = 10.0;		  // g cm^-3 (matter density)
 constexpr double T_hohlraum = 3.481334e6; // K
 constexpr double a_rad = 7.5646e-15;	  // erg cm^-3 K^-4
-constexpr double c = 2.99792458e10;	  // cm s^-1
+//constexpr double c = 2.99792458e10;	  // cm s^-1
 constexpr double alpha_SuOlson = 4.0 * a_rad / eps_SuOlson;
 constexpr double T_initial = 1.0e4; // K
 
@@ -151,9 +151,9 @@ AMRSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(
 	}
 
 	// gas boundary conditions are the same on both sides
-	const double Egas = RadSystem<SuOlsonProblemCgs>::ComputeEgasFromTgas(rho, T_initial);
+	const double Egas = RadSystem<SuOlsonProblemCgs>::ComputeEgasFromTgas(rho0, T_initial);
 	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::gasEnergy_index) = Egas;
-	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::gasDensity_index) = rho;
+	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::gasDensity_index) = rho0;
 	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x1GasMomentum_index) = 0.;
 	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x2GasMomentum_index) = 0.;
 	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x3GasMomentum_index) = 0.;
@@ -167,7 +167,7 @@ template <> void RadhydroSimulation<SuOlsonProblemCgs>::setInitialConditionsAtLe
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 			const double Egas =
-			    RadSystem<SuOlsonProblemCgs>::ComputeEgasFromTgas(rho, T_initial);
+			    RadSystem<SuOlsonProblemCgs>::ComputeEgasFromTgas(rho0, T_initial);
 			const double Erad = a_rad * std::pow(T_initial, 4);
 
 			state(i, j, k, RadSystem<SuOlsonProblemCgs>::radEnergy_index) = Erad;
@@ -175,7 +175,7 @@ template <> void RadhydroSimulation<SuOlsonProblemCgs>::setInitialConditionsAtLe
 			state(i, j, k, RadSystem<SuOlsonProblemCgs>::x2RadFlux_index) = 0;
 			state(i, j, k, RadSystem<SuOlsonProblemCgs>::x3RadFlux_index) = 0;
 
-			state(i, j, k, RadSystem<SuOlsonProblemCgs>::gasDensity_index) = rho;
+			state(i, j, k, RadSystem<SuOlsonProblemCgs>::gasDensity_index) = rho0;
 			state(i, j, k, RadSystem<SuOlsonProblemCgs>::x1GasMomentum_index) = 0.;
 			state(i, j, k, RadSystem<SuOlsonProblemCgs>::x2GasMomentum_index) = 0.;
 			state(i, j, k, RadSystem<SuOlsonProblemCgs>::x3GasMomentum_index) = 0.;
@@ -200,9 +200,9 @@ auto problem_main() -> int
 	constexpr double Lz = 20.0;	     // dimensionless length
 
 	// Su & Olson (1997) parameters
-	constexpr double chi = rho * kappa;				   // cm^-1 (total matter opacity)
+	constexpr double chi = rho0 * kappa;				   // cm^-1 (total matter opacity)
 	constexpr double Lx = Lz / chi;				   // cm
-	constexpr double max_time = max_tau / (eps_SuOlson * c * chi); // s
+	constexpr double max_time = max_tau / (eps_SuOlson * c_light_cgs_ * chi); // s
 	// const double max_dt = max_dtau / (eps_SuOlson * c * chi);  // s
 	// const double initial_dt = initial_dtau / (eps_SuOlson * c * chi); // s
 
@@ -302,7 +302,7 @@ auto problem_main() -> int
 		double err_norm = 0.;
 		double sol_norm = 0.;
 		const double t = sim.tNew_[0];
-		const double xmax = c * t;
+		const double xmax = c_light_cgs_ * t;
 		amrex::Print() << "diffusion length = " << xmax << std::endl;
 		for (int i = 0; i < xs_exact.size(); ++i) {
 			if (xs_exact[i] < xmax) {

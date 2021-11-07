@@ -28,7 +28,7 @@ struct MarshakProblem {
 // Su & Olson (1997) parameters
 constexpr double eps_SuOlson = 1.0;
 constexpr double kappa = 1.0;
-constexpr double rho = 1.0;        // g cm^-3 (matter density)
+constexpr double rho0 = 1.0;        // g cm^-3 (matter density)
 constexpr double T_hohlraum = 1.0; // dimensionless
 constexpr double x0 = 0.5;         // dimensionless length scale
 constexpr double t0 = 10.0;        // dimensionless time scale
@@ -94,7 +94,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputeEgasTempDerivative(
 }
 
 const auto initial_Egas =
-    1e-10 * RadSystem<MarshakProblem>::ComputeEgasFromTgas(rho, T_hohlraum);
+    1e-10 * RadSystem<MarshakProblem>::ComputeEgasFromTgas(rho0, T_hohlraum);
 const auto initial_Erad =
     1e-10 * (a_rad * (T_hohlraum * T_hohlraum * T_hohlraum * T_hohlraum));
 
@@ -142,7 +142,7 @@ void RadhydroSimulation<MarshakProblem>::setInitialConditionsAtLevel(int lev) {
       state(i, j, k, RadSystem<MarshakProblem>::x3RadFlux_index) = 0;
 
       state(i, j, k, RadSystem<MarshakProblem>::gasEnergy_index) = Egas0;
-      state(i, j, k, RadSystem<MarshakProblem>::gasDensity_index) = rho;
+      state(i, j, k, RadSystem<MarshakProblem>::gasDensity_index) = rho0;
       state(i, j, k, RadSystem<MarshakProblem>::x1GasMomentum_index) = 0.;
       state(i, j, k, RadSystem<MarshakProblem>::x2GasMomentum_index) = 0.;
       state(i, j, k, RadSystem<MarshakProblem>::x3GasMomentum_index) = 0.;
@@ -302,9 +302,9 @@ auto problem_main() -> int {
           std::pow(Erad_transport_exact_1p0.at(i) / a_rad, 1. / 4.);
 
       Tgas_exact_10.at(i) = RadSystem<MarshakProblem>::ComputeTgasFromEgas(
-          rho, Egas_transport_exact_10p0.at(i));
+          rho0, Egas_transport_exact_10p0.at(i));
       Tgas_exact_1.at(i) = RadSystem<MarshakProblem>::ComputeTgasFromEgas(
-          rho, Egas_transport_exact_1p0.at(i));
+          rho0, Egas_transport_exact_1p0.at(i));
     }
 
     // interpolate numerical solution onto exact solution tabulated points
@@ -407,9 +407,7 @@ auto problem_main() -> int {
     matplotlibcpp::legend();
     matplotlibcpp::xlabel("length x");
     matplotlibcpp::ylabel("radiation energy density");
-    //matplotlibcpp::title(fmt::format("time ct = {:.4g}", sim.tNew_[0] * (eps_SuOlson * c * rho * kappa)));
     matplotlibcpp::xlim(0.0, 3.0); // cm
-    //	matplotlibcpp::ylim(0.0, 2.3);
     matplotlibcpp::tight_layout();
     matplotlibcpp::save("./SuOlsonTest.pdf");
 

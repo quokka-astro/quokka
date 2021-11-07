@@ -1,5 +1,7 @@
 *.log
+compile_commands.json
 .vscode/
+codeql-db/
 build/
 docs/doxygen/
 tests/plt*

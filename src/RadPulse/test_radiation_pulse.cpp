@@ -17,7 +17,7 @@ struct PulseProblem {
 
 constexpr double kappa0 = 1.0e5; // cm^-1 (opacity at temperature T0)
 constexpr double T0 = 1.0;       // K (temperature)
-constexpr double rho = 1.0;      // g cm^-3 (matter density)
+constexpr double rho0 = 1.0;      // g cm^-3 (matter density)
 constexpr double a_rad =
     4.0e-10;                // radiation constant == 4sigma_SB/c (dimensionless)
 constexpr double c = 1.0e8; // speed of light (dimensionless)
@@ -98,8 +98,8 @@ void RadhydroSimulation<PulseProblem>::setInitialConditionsAtLevel(int lev) {
       state(i, j, k, RadSystem<PulseProblem>::x3RadFlux_index) = 0;
 
       state(i, j, k, RadSystem<PulseProblem>::gasEnergy_index) =
-          RadSystem<PulseProblem>::ComputeEgasFromTgas(rho, Trad);
-      state(i, j, k, RadSystem<PulseProblem>::gasDensity_index) = rho;
+          RadSystem<PulseProblem>::ComputeEgasFromTgas(rho0, Trad);
+      state(i, j, k, RadSystem<PulseProblem>::gasDensity_index) = rho0;
       state(i, j, k, RadSystem<PulseProblem>::x1GasMomentum_index) = 0.;
       state(i, j, k, RadSystem<PulseProblem>::x2GasMomentum_index) = 0.;
       state(i, j, k, RadSystem<PulseProblem>::x3GasMomentum_index) = 0.;
@@ -186,7 +186,7 @@ auto problem_main() -> int {
     Erad.at(i) = Erad_t;
     Trad.at(i) = Trad_t;
     Egas.at(i) = values.at(RadSystem<PulseProblem>::gasEnergy_index).at(i);
-    Tgas.at(i) = RadSystem<PulseProblem>::ComputeTgasFromEgas(rho, Egas.at(i));
+    Tgas.at(i) = RadSystem<PulseProblem>::ComputeTgasFromEgas(rho0, Egas.at(i));
 
     auto Trad_val = compute_exact_Trad(x - x0, initial_time + sim.tNew_[0]);
     auto Erad_val = a_rad * std::pow(Trad_val, 4);

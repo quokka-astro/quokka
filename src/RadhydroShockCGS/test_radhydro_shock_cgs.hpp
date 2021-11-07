@@ -1,5 +1,5 @@
-#ifndef TEST_RADHYDRO_SHOCK_HPP_ // NOLINT
-#define TEST_RADHYDRO_SHOCK_HPP_
+#ifndef TEST_RADHYDRO_SHOCK_CGS_HPP_ // NOLINT
+#define TEST_RADHYDRO_SHOCK_CGS_HPP_
 //==============================================================================
 // TwoMomentRad - a radiation transport library for patch-based AMR codes
 // Copyright 2020 Benjamin Wibking.
@@ -28,4 +28,4 @@ extern "C" {
 // function definitions
 auto problem_main() -> int;
 
-#endif // TEST_RADHYDRO_SHOCK_HPP_
+#endif // TEST_RADHYDRO_SHOCK_CGS_HPP_

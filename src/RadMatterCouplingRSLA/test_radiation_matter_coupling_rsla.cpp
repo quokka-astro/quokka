@@ -10,6 +10,7 @@
 #include "test_radiation_matter_coupling_rsla.hpp"
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
+#include "radiation_system.hpp"
 #ifdef HAVE_PYTHON
 #include "matplotlibcpp.h"
 #endif
@@ -17,8 +18,8 @@
 struct CouplingProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-constexpr double c = 2.99792458e10; // cgs
-constexpr double c_rsla = 0.1 * c;
+//constexpr double c = 2.99792458e10; // cgs
+constexpr double c_rsla = 0.1 * c_light_cgs_;
 
 // Su & Olson (1997) test problem
 constexpr double eps_SuOlson = 1.0;
@@ -26,7 +27,7 @@ constexpr double a_rad = 7.5646e-15; // cgs
 constexpr double alpha_SuOlson = 4.0 * a_rad / eps_SuOlson;
 
 template <> struct RadSystem_Traits<CouplingProblem> {
-  static constexpr double c_light = c;
+  static constexpr double c_light = c_light_cgs_;
   static constexpr double c_hat = c_rsla;
   static constexpr double radiation_constant = radiation_constant_cgs_;
   static constexpr double mean_molecular_mass = hydrogen_mass_cgs_;
@@ -80,9 +81,9 @@ RadSystem<CouplingProblem>::ComputeEgasTempDerivative(const double /*rho*/,
   return alpha_SuOlson * std::pow(Tgas, 3);
 }
 
-constexpr double Erad = 1.0e12; // erg cm^-3
-constexpr double Egas = 1.0e2;  // erg cm^-3
-constexpr double rho = 1.0e-7;  // g cm^-3
+constexpr double Erad0 = 1.0e12; // erg cm^-3
+constexpr double Egas0 = 1.0e2;  // erg cm^-3
+constexpr double rho0 = 1.0e-7;  // g cm^-3
 
 template <>
 void RadhydroSimulation<CouplingProblem>::setInitialConditionsAtLevel(int lev) {
@@ -91,13 +92,13 @@ void RadhydroSimulation<CouplingProblem>::setInitialConditionsAtLevel(int lev) {
     auto const &state = state_new_[lev].array(iter);
 
     amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-      state(i, j, k, RadSystem<CouplingProblem>::radEnergy_index) = Erad;
+      state(i, j, k, RadSystem<CouplingProblem>::radEnergy_index) = Erad0;
       state(i, j, k, RadSystem<CouplingProblem>::x1RadFlux_index) = 0;
       state(i, j, k, RadSystem<CouplingProblem>::x2RadFlux_index) = 0;
       state(i, j, k, RadSystem<CouplingProblem>::x3RadFlux_index) = 0;
 
-      state(i, j, k, RadSystem<CouplingProblem>::gasEnergy_index) = Egas;
-      state(i, j, k, RadSystem<CouplingProblem>::gasDensity_index) = rho;
+      state(i, j, k, RadSystem<CouplingProblem>::gasEnergy_index) = Egas0;
+      state(i, j, k, RadSystem<CouplingProblem>::gasDensity_index) = rho0;
       state(i, j, k, RadSystem<CouplingProblem>::x1GasMomentum_index) = 0.;
       state(i, j, k, RadSystem<CouplingProblem>::x2GasMomentum_index) = 0.;
       state(i, j, k, RadSystem<CouplingProblem>::x3GasMomentum_index) = 0.;
@@ -183,33 +184,33 @@ auto problem_main() -> int {
     std::vector<double> Tgas_rsla_exact(nmax);
 
     const double initial_Tgas =
-        RadSystem<CouplingProblem>::ComputeTgasFromEgas(rho, Egas);
+        RadSystem<CouplingProblem>::ComputeTgasFromEgas(rho0, Egas0);
     const auto kappa =
-        RadSystem<CouplingProblem>::ComputePlanckOpacity(rho, initial_Tgas);
+        RadSystem<CouplingProblem>::ComputePlanckOpacity(rho0, initial_Tgas);
 
     for (int n = 0; n < nmax; ++n) {
       const double time_t = sim.t_vec_.at(n);
       const double arad = RadSystem<CouplingProblem>::radiation_constant_;
       const double c = RadSystem<CouplingProblem>::c_light_;
-      const double E0 = (Erad + Egas) / (arad + alpha_SuOlson / 4.0);
+      const double E0 = (Erad0 + Egas0) / (arad + alpha_SuOlson / 4.0);
 
       const double T0_4 = std::pow(initial_Tgas, 4);
 
-      const double E0_rsla = ((c / c_rsla) * Erad + Egas) /
+      const double E0_rsla = ((c / c_rsla) * Erad0 + Egas0) /
                              (a_rad + (c_rsla / c) * alpha_SuOlson / 4.0);
 
       const double T4_rsla =
           (T0_4 - (c_rsla / c) * E0_rsla) *
               std::exp(-(4. / alpha_SuOlson) *
                        (a_rad + (c_rsla / c) * alpha_SuOlson / 4.0) * kappa *
-                       rho * c * time_t) +
+                       rho0 * c * time_t) +
           (c_rsla / c) * E0_rsla;
 
       const double T_gas_rsla = std::pow(T4_rsla, 1. / 4.);
 
       const double T4 = (T0_4 - E0) * std::exp(-(4. / alpha_SuOlson) *
                                                (arad + alpha_SuOlson / 4.0) *
-                                               kappa * rho * c * time_t) +
+                                               kappa * rho0 * c * time_t) +
                         E0;
 
       const double T_gas = std::pow(T4, 1. / 4.);
@@ -267,7 +268,6 @@ auto problem_main() -> int {
     matplotlibcpp::legend();
     matplotlibcpp::xlabel("time t (seconds)");
     matplotlibcpp::ylabel("temperature T (Kelvins)");
-    //matplotlibcpp::title(fmt::format("dt = {:.4g}\nt = {:.4g}", constant_dt, sim.tNew_[0]));
     matplotlibcpp::tight_layout();
     matplotlibcpp::save(fmt::format("./radcoupling_rsla.pdf"));
 
