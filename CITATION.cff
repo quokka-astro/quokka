@@ -8,14 +8,12 @@ message: >-
   'preferred-citation'.
 type: software
 authors:
-  - given-names: Benjamin
-    name-particle: D
+  - given-names: Benjamin D
     family-names: Wibking
     email: ben.wibking@anu.edu.au
     affiliation: Australian National University
     orcid: 'https://orcid.org/0000-0003-3175-2291'
-  - given-names: Mark
-    name-particle: R
+  - given-names: Mark R
     family-names: Krumholz
     email: mark.krumholz@anu.edu.au
     affiliation: Australian National University
@@ -25,14 +23,12 @@ url: 'https://github.com/BenWibking/quokka'
 preferred-citation:
   type: article
   authors:
-    - given-names: Benjamin
-      name-particle: D
+    - given-names: Benjamin D
       family-names: Wibking
       email: ben.wibking@anu.edu.au
       affiliation: Australian National University
       orcid: 'https://orcid.org/0000-0003-3175-2291'
-    - given-names: Mark
-      name-particle: R
+    - given-names: Mark R
       family-names: Krumholz
       email: mark.krumholz@anu.edu.au
       affiliation: Australian National University
