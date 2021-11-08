@@ -6,6 +6,7 @@
 #include "AMReX_Config.H"
 #include "AMReX_Geometry.H"
 #include "AMReX_MultiFab.H"
+#include "AMReX_SPACE.H"
 #include <AMReX.H>
 #include <AMReX_MultiFabUtil.H>
 #include <AMReX_ParallelDescriptor.H>
@@ -31,13 +32,11 @@ auto fextract(MultiFab &mf, Geometry &geom, const int idir,
   // coarse grid.  These are used to set the position of the slice in
   // the transverse direction.
 
-  int iloc = 0;
-  int jloc = 0;
-  int kloc = 0;
+  AMREX_D_TERM(int iloc = 0;, int jloc = 0;, int kloc = 0;)
   if (center) {
-    iloc = (hi0.x - lo0.x + 1) / 2 + lo0.x;
-    jloc = (hi0.y - lo0.y + 1) / 2 + lo0.y;
-    kloc = (hi0.z - lo0.z + 1) / 2 + lo0.z;
+    AMREX_D_TERM( iloc = (hi0.x - lo0.x + 1) / 2 + lo0.x;,
+                  jloc = (hi0.y - lo0.y + 1) / 2 + lo0.y;,
+                  kloc = (hi0.z - lo0.z + 1) / 2 + lo0.z; )
   }
 
   if (idir == 0) {
@@ -52,6 +51,7 @@ auto fextract(MultiFab &mf, Geometry &geom, const int idir,
     }
   }
 
+#if AMREX_SPACEDIM >= 2
   if (idir == 1) {
     // we specified the y value to pass through
     jloc = hi0.y;
@@ -63,7 +63,9 @@ auto fextract(MultiFab &mf, Geometry &geom, const int idir,
       }
     }
   }
+#endif
 
+#if AMREX_SPACEDIM == 3
   if (idir == 2) {
     // we specified the z value to pass through
     kloc = hi0.z;
@@ -75,6 +77,7 @@ auto fextract(MultiFab &mf, Geometry &geom, const int idir,
       }
     }
   }
+#endif
 
   if (idir < 0 || idir >= AMREX_SPACEDIM) {
     amrex::Abort("invalid direction!");
