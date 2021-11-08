@@ -18,9 +18,9 @@ using namespace amrex; // NOLINT
 auto fextract(MultiFab &mf, Geometry &geom, const int idir,
               const Real slice_coord, const bool center = false)
     -> std::tuple<Vector<Real>, Vector<Vector<Real>>> {
-  Real xcoord = slice_coord;
-  Real ycoord = slice_coord;
-  Real zcoord = slice_coord;
+  AMREX_D_TERM( Real xcoord = slice_coord;,
+		Real ycoord = slice_coord;,
+		Real zcoord = slice_coord; )
 
   GpuArray<Real, AMREX_SPACEDIM> problo = geom.ProbLoArray();
   GpuArray<Real, AMREX_SPACEDIM> dx0 = geom.CellSizeArray();
