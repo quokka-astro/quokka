@@ -68,6 +68,17 @@ make -j6
 ```
 The compiled test problems are in the test problem subdirectories in `build/src/`. Example scripts for running Quokka on compute clusters are in the `scripts/` subdirectory. Please note that you must configure your compute cluster to run with 1 MPI rank per GPU in order for Quokka to work correctly. Quokka is only supported on Volta-class (V100) GPUs or newer.
 
+Note that 1D problems can run very slowly on GPUs due to a lack of sufficient parallelism. To run the test suite in a reasonable amount of time, you may wish to exclude the matter-energy exchange tests, e.g.:
+```
+ctest -E "MatterEnergyExchange*"
+```
+which should end with output similar to the following:
+```
+100% tests passed, 0 tests failed out of 18
+
+Total Test time (real) = 353.77 sec
+```
+
 **AMD or Intel GPUs:** Running on AMD or Intel GPUs is currently experimental and has *not been tested* by the Quokka developers. AMReX is currently undergoing rapid advances in its support for GPUs from these vendors, so please get in touch by starting a Discussion before attempting this.
 
 ## Problems?
