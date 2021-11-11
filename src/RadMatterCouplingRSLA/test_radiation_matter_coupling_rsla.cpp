@@ -221,7 +221,6 @@ auto problem_main() -> int {
     }
 
     std::vector<double> &Tgas = sim.Tgas_vec_;
-    std::vector<double> &Trad = sim.Trad_vec_;
     std::vector<double> &t = sim.t_vec_;
 
     // compute L1 error norm
@@ -239,6 +238,7 @@ auto problem_main() -> int {
     }
 
 #ifdef HAVE_PYTHON
+    std::vector<double> &Trad = sim.Trad_vec_;
 
     // Plot results
     matplotlibcpp::clf();
