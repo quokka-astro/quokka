@@ -183,6 +183,7 @@ auto problem_main() -> int {
   RadhydroSimulation<SedovProblem> sim(boundaryConditions);
   sim.is_hydro_enabled_ = true;
   sim.is_radiation_enabled_ = false;
+  sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
   sim.stopTime_ = 0.5;   // 0.01;
   sim.cflNumber_ = 0.25; // *must* be less than 1/3 in 3D!
   sim.maxTimesteps_ = 100;
