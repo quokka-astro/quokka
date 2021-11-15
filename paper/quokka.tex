@@ -206,19 +206,19 @@ This update cycle operates within a \citet{Berger:1984} / \citet{Berger:1989} ad
 
 \subsubsection{Hydrodynamics}
 \label{sssec:hydro}
-For the solution of the hydrodynamic subsystem (\autoref{eq:hydro_continuity}--\autoref{eq:hydro_energy}, omitting the matter-radiation coupling terms on the right hand sides), we adopt a method-of-lines (or semi-discrete) approach, discretizing the spatial variables while initially keeping the time variable continuous, thereby transforming the partial differential equations into a large set of ordinary differential equations that can be integrated in time using a standard ordinary differential equation (ODE) integrator \citep{Jameson_1981}. For the latter, we use the second-order strong stability preserving Runge-Kutta method (RK2-SSP; \citealt{Shu_1988}). Such an approach has been successfully employed in several recent astrophysical hydrodynamics codes \citep{Skinner_2019,Stone_2020}.
+For the solution of the hydrodynamic subsystem (\autoref{eq:hydro_continuity}--\autoref{eq:hydro_energy}, omitting the matter-radiation coupling terms on the right hand sides), we adopt a method-of-lines (or semi-discrete) approach, discretizing the spatial variables while initially keeping the time variable continuous, thereby transforming the partial differential equations into a large set of ordinary differential equations that can be integrated in time using a standard ordinary differential equation (ODE) integrator \citep{Hyman_1979,Jameson_1981}. For the latter, we use the second-order strong stability preserving Runge-Kutta method (RK2-SSP; \citealt{Shu_1988}). Such an approach has been successfully employed in several recent astrophysical hydrodynamics codes \citep{Skinner_2019,Stone_2020}.
 
 We write the timestep $\Delta t$ used for the RK2-SSP integration as
 \begin{align}
 \Delta t = C_0 \, \frac{\Delta x}{|\lambda|} \, ,
 \end{align}
 where $\Delta x$ is the minimum grid spacing, $|\lambda|$ is the maximum signal speed, and $C_0$ is the stability coefficient.
-Analysis of the stability polynomial of the linearized hydrodynamics equations \citep{Colella_2011} yields a value for the maximum signal speed $|\tilde \lambda|$ of
+Analysis of the stability polynomial of a Runge-Kutta integrator applied to the linearized hydrodynamics equations \citep{Colella_2011,McCorquodale_2011} yields a value for the maximum signal speed $|\lambda|$ of
 \begin{align}
-|\tilde \lambda| = \max \sum_{d=1}^{D} [(\vc{v} \cdot \vc{\hat{e}_d}) + c_s] \, ,
+|\lambda| = \max \sum_{d=1}^{D} [(\vc{v} \cdot \vc{\hat{e}_d}) + c_s] \, ,
 \label{eq:colella_stability}
 \end{align}
-where $\vc{v}$ is the fluid velocity, $\vc{\hat{e}}$ is the unit vector in coordinate direction $d$, $c_s$ is the adiabatic sound speed, and the maximum is taken over all cells. This signal speed does not take nonlinear effects into account. Because of this, we conservatively estimate the maximum signal speed as 
+where $\vc{v}$ is the fluid velocity, $\vc{\hat{e}}$ is the unit vector in coordinate direction $d$, $c_s$ is the adiabatic sound speed, and the maximum is taken over all cells. However, even in the linear case, such an eigenvalue analysis in general produces only a necessary condition rather than a sufficient condition for stability \citep{Reddy_1992}. For this reason, we more conservatively estimate the value of $|\lambda|$ as 
 \begin{align}
 |\lambda| = D \max (|\vc{v}| + c_s) \, ,
 \label{eq:signal}
@@ -227,8 +227,8 @@ and compute the timestep $\Delta t$ on each AMR level as
 \begin{align}
 \Delta t = \frac{C_0}{D} \frac{\Delta x}{\max (|\vc{v}| + c_s)} \, ,
 \end{align}
-where we define the dimensionless factor $C_0 / D$ to be the CFL number. For both forward Euler and RK2-SSP, the maximum stable coefficient $C_0$ for a system of constant-coefficient, linear equations is $C_0 = 1$. The maximum stable CFL number in 3D for the RK2-SSP integrator is therefore $1/3$.
-We note that it is not sufficient to estimate $|\lambda|$ as $\max (|\vc{v}| + c_s)$, since the component-wise sum of the velocities may exceed the vector magnitude $|\vc{v}|$ and therefore violate the lower bound implied by \autoref{eq:colella_stability}.\footnote{As an example, consider the velocity vector with unit magnitude $|\vc{v}|$ and equal components $v_x = v_y = v_z$. Then each component $v_i = \sqrt{3}/3$ and the sum of components $\sum_{d=1}^{3} \vc{v} \cdot \vc{\hat{e}_d} = \sqrt{3} \approx 1.732$.}
+where we define the dimensionless factor $C_0 / D$ to be the CFL number so as to be consistent with its standard definition in one spatial dimension.\footnote{This is the same timestep criterion used in the \textsc{Fornax} code, with $D=3$ and $\Delta x = \Delta r / \sqrt{2}$; see Eq. 37 of \citealt{Skinner_2019}.} For both forward Euler and RK2-SSP, the maximum stable coefficient $C_0$ for a system of constant-coefficient, linear equations is $C_0 = 1$. The maximum stable CFL number in 3D for the RK2-SSP integrator is therefore $1/3$.
+We note that it is not sufficient to estimate $|\lambda|$ as $\max (|\vc{v}| + c_s)$, since the component-wise sum of the velocities may exceed the vector magnitude $|\vc{v}|$ and therefore violate the lower bound given by \autoref{eq:colella_stability}.\footnote{As an example, consider the velocity vector with unit magnitude $|\vc{v}|$ and equal components $v_x = v_y = v_z$. Then each component $v_i = \sqrt{3}/3$ and the sum of components $\sum_{d=1}^{3} \vc{v} \cdot \vc{\hat{e}_d} = \sqrt{3} \approx 1.732$.}
 
 Somewhat surprisingly, we find that such a method-of-lines scheme is not stable when combining higher-order spatial reconstruction with forward Euler time integration. However, we find it is stable for timesteps satisfying the above timestep criterion when used with higher-order (second-order or higher) Runge-Kutta methods. We note that this stability problem with forward Euler is also found by \cite{Stone_2020} in the method-of-lines implementation of \textsc{Athena++}.
 
