@@ -1,4 +1,7 @@
 \RequirePackage{snapshot}
+%DIF LATEXDIFF DIFFERENCE FILE
+%DIF DEL quokka_v1.tex   Mon Nov 15 11:24:08 2021
+%DIF ADD quokka.tex      Mon Nov 15 15:17:51 2021
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Basic setup. Most papers should leave these options alone.
 \documentclass[fleqn,usenatbib]{mnras}
@@ -98,6 +101,85 @@ $^{2}$ARC Centre of Excellence for Astronomy in Three Dimensions (ASTRO-3D), Can
 \pubyear{2021}
 
 % Don't change these lines
+%DIF PREAMBLE EXTENSION ADDED BY LATEXDIFF
+%DIF UNDERLINE PREAMBLE %DIF PREAMBLE
+\RequirePackage[normalem]{ulem} %DIF PREAMBLE
+\RequirePackage{color}\definecolor{RED}{rgb}{1,0,0}\definecolor{BLUE}{rgb}{0,0,1} %DIF PREAMBLE
+\providecommand{\DIFadd}[1]{{\protect\color{blue}\uwave{#1}}} %DIF PREAMBLE
+\providecommand{\DIFdel}[1]{{\protect\color{red}\sout{#1}}}                      %DIF PREAMBLE
+%DIF SAFE PREAMBLE %DIF PREAMBLE
+\providecommand{\DIFaddbegin}{} %DIF PREAMBLE
+\providecommand{\DIFaddend}{} %DIF PREAMBLE
+\providecommand{\DIFdelbegin}{} %DIF PREAMBLE
+\providecommand{\DIFdelend}{} %DIF PREAMBLE
+\providecommand{\DIFmodbegin}{} %DIF PREAMBLE
+\providecommand{\DIFmodend}{} %DIF PREAMBLE
+%DIF FLOATSAFE PREAMBLE %DIF PREAMBLE
+\providecommand{\DIFaddFL}[1]{\DIFadd{#1}} %DIF PREAMBLE
+\providecommand{\DIFdelFL}[1]{\DIFdel{#1}} %DIF PREAMBLE
+\providecommand{\DIFaddbeginFL}{} %DIF PREAMBLE
+\providecommand{\DIFaddendFL}{} %DIF PREAMBLE
+\providecommand{\DIFdelbeginFL}{} %DIF PREAMBLE
+\providecommand{\DIFdelendFL}{} %DIF PREAMBLE
+\newcommand{\DIFscaledelfig}{0.5}
+%DIF HIGHLIGHTGRAPHICS PREAMBLE %DIF PREAMBLE
+\RequirePackage{settobox} %DIF PREAMBLE
+\RequirePackage{letltxmacro} %DIF PREAMBLE
+\newsavebox{\DIFdelgraphicsbox} %DIF PREAMBLE
+\newlength{\DIFdelgraphicswidth} %DIF PREAMBLE
+\newlength{\DIFdelgraphicsheight} %DIF PREAMBLE
+% store original definition of \includegraphics %DIF PREAMBLE
+\LetLtxMacro{\DIFOincludegraphics}{\includegraphics} %DIF PREAMBLE
+\newcommand{\DIFaddincludegraphics}[2][]{{\color{blue}\fbox{\DIFOincludegraphics[#1]{#2}}}} %DIF PREAMBLE
+\newcommand{\DIFdelincludegraphics}[2][]{% %DIF PREAMBLE
+\sbox{\DIFdelgraphicsbox}{\DIFOincludegraphics[#1]{#2}}% %DIF PREAMBLE
+\settoboxwidth{\DIFdelgraphicswidth}{\DIFdelgraphicsbox} %DIF PREAMBLE
+\settoboxtotalheight{\DIFdelgraphicsheight}{\DIFdelgraphicsbox} %DIF PREAMBLE
+\scalebox{\DIFscaledelfig}{% %DIF PREAMBLE
+\parbox[b]{\DIFdelgraphicswidth}{\usebox{\DIFdelgraphicsbox}\\[-\baselineskip] \rule{\DIFdelgraphicswidth}{0em}}\llap{\resizebox{\DIFdelgraphicswidth}{\DIFdelgraphicsheight}{% %DIF PREAMBLE
+\setlength{\unitlength}{\DIFdelgraphicswidth}% %DIF PREAMBLE
+\begin{picture}(1,1)% %DIF PREAMBLE
+\thicklines\linethickness{2pt} %DIF PREAMBLE
+{\color[rgb]{1,0,0}\put(0,0){\framebox(1,1){}}}% %DIF PREAMBLE
+{\color[rgb]{1,0,0}\put(0,0){\line( 1,1){1}}}% %DIF PREAMBLE
+{\color[rgb]{1,0,0}\put(0,1){\line(1,-1){1}}}% %DIF PREAMBLE
+\end{picture}% %DIF PREAMBLE
+}\hspace*{3pt}}} %DIF PREAMBLE
+} %DIF PREAMBLE
+\LetLtxMacro{\DIFOaddbegin}{\DIFaddbegin} %DIF PREAMBLE
+\LetLtxMacro{\DIFOaddend}{\DIFaddend} %DIF PREAMBLE
+\LetLtxMacro{\DIFOdelbegin}{\DIFdelbegin} %DIF PREAMBLE
+\LetLtxMacro{\DIFOdelend}{\DIFdelend} %DIF PREAMBLE
+\DeclareRobustCommand{\DIFaddbegin}{\DIFOaddbegin \let\includegraphics\DIFaddincludegraphics} %DIF PREAMBLE
+\DeclareRobustCommand{\DIFaddend}{\DIFOaddend \let\includegraphics\DIFOincludegraphics} %DIF PREAMBLE
+\DeclareRobustCommand{\DIFdelbegin}{\DIFOdelbegin \let\includegraphics\DIFdelincludegraphics} %DIF PREAMBLE
+\DeclareRobustCommand{\DIFdelend}{\DIFOaddend \let\includegraphics\DIFOincludegraphics} %DIF PREAMBLE
+\LetLtxMacro{\DIFOaddbeginFL}{\DIFaddbeginFL} %DIF PREAMBLE
+\LetLtxMacro{\DIFOaddendFL}{\DIFaddendFL} %DIF PREAMBLE
+\LetLtxMacro{\DIFOdelbeginFL}{\DIFdelbeginFL} %DIF PREAMBLE
+\LetLtxMacro{\DIFOdelendFL}{\DIFdelendFL} %DIF PREAMBLE
+\DeclareRobustCommand{\DIFaddbeginFL}{\DIFOaddbeginFL \let\includegraphics\DIFaddincludegraphics} %DIF PREAMBLE
+\DeclareRobustCommand{\DIFaddendFL}{\DIFOaddendFL \let\includegraphics\DIFOincludegraphics} %DIF PREAMBLE
+\DeclareRobustCommand{\DIFdelbeginFL}{\DIFOdelbeginFL \let\includegraphics\DIFdelincludegraphics} %DIF PREAMBLE
+\DeclareRobustCommand{\DIFdelendFL}{\DIFOaddendFL \let\includegraphics\DIFOincludegraphics} %DIF PREAMBLE
+%DIF LISTINGS PREAMBLE %DIF PREAMBLE
+\RequirePackage{listings} %DIF PREAMBLE
+\RequirePackage{color} %DIF PREAMBLE
+\lstdefinelanguage{DIFcode}{ %DIF PREAMBLE
+%DIF DIFCODE_UNDERLINE %DIF PREAMBLE
+  moredelim=[il][\color{red}\sout]{\%DIF\ <\ }, %DIF PREAMBLE
+  moredelim=[il][\color{blue}\uwave]{\%DIF\ >\ } %DIF PREAMBLE
+} %DIF PREAMBLE
+\lstdefinestyle{DIFverbatimstyle}{ %DIF PREAMBLE
+	language=DIFcode, %DIF PREAMBLE
+	basicstyle=\ttfamily, %DIF PREAMBLE
+	columns=fullflexible, %DIF PREAMBLE
+	keepspaces=true %DIF PREAMBLE
+} %DIF PREAMBLE
+\lstnewenvironment{DIFverbatim}{\lstset{style=DIFverbatimstyle}}{} %DIF PREAMBLE
+\lstnewenvironment{DIFverbatim*}{\lstset{style=DIFverbatimstyle,showspaces=true}}{} %DIF PREAMBLE
+%DIF END PREAMBLE EXTENSION ADDED BY LATEXDIFF
+
 \begin{document}
 \label{firstpage}
 \pagerange{\pageref{firstpage}--\pageref{lastpage}}
@@ -105,7 +187,7 @@ $^{2}$ARC Centre of Excellence for Astronomy in Three Dimensions (ASTRO-3D), Can
 
 % Abstract of the paper
 \begin{abstract}
-    We present \quokka, a new subcycling-in-time, block-structured adaptive mesh refinement (AMR) radiation hydrodynamics code optimised for graphics processing units (GPUs). \quokka~solves the equations of hydrodynamics with the piecewise parabolic method (PPM) in a method-of-lines formulation, and handles radiative transfer via the variable Eddington tensor (VET) radiation moment equations with a local closure. We use the AMReX library to handle the adaptive mesh management. In order to maximise GPU performance, we combine explicit-in-time evolution of the radiation moment equations with the reduced speed-of-light approximation. We show results for a wide range of test problems for hydrodynamics, radiation, and coupled radiation hydrodynamics. On uniform grids in 3D, we achieve a peak of 93 million hydrodynamic updates per second per GPU, and 22 million radiation hydrodynamic updates per second per GPU. For radiation hydrodynamics problems on uniform grids in 3D, our code also scales from 4 GPUs to 256 GPUs with an efficiency of 80 per cent. The code is publicly released under an open-source license on \faGithub\href{https://github.com/BenWibking/quokka-code}{GitHub}.
+    We present \quokka, a new subcycling-in-time, block-structured adaptive mesh refinement (AMR) radiation hydrodynamics code optimised for graphics processing units (GPUs). \quokka~solves the equations of hydrodynamics with the piecewise parabolic method (PPM) in a method-of-lines formulation, and handles radiative transfer via the variable Eddington tensor (VET) radiation moment equations with a local closure. \DIFaddbegin \DIFadd{We use the AMReX library to handle the adaptive mesh management. }\DIFaddend In order to maximise GPU performance, we combine explicit-in-time evolution of the radiation moment equations with the reduced speed-of-light approximation. We show results for a wide range of test problems for hydrodynamics, radiation, and coupled radiation hydrodynamics. On uniform grids in 3D, we achieve a peak of 93 million hydrodynamic updates per second per GPU, and 22 million radiation hydrodynamic updates per second per GPU. For radiation hydrodynamics problems on uniform grids in 3D, our code also scales from 4 GPUs to 256 GPUs with an efficiency of 80 per cent. The code is publicly released under an open-source license on \faGithub\href{https://github.com/BenWibking/quokka-code}{GitHub}.
 \end{abstract}
 
 % Select between one and six entries from the list of approved keywords.
@@ -207,40 +289,57 @@ This update cycle operates within a \citet{Berger:1984} / \citet{Berger:1989} ad
 \subsubsection{Hydrodynamics}
 \label{sssec:hydro}
 For the solution of the hydrodynamic subsystem (\autoref{eq:hydro_continuity}--\autoref{eq:hydro_energy}, omitting the matter-radiation coupling terms on the right hand sides), we adopt a method-of-lines (or semi-discrete) approach, discretizing the spatial variables while initially keeping the time variable continuous, thereby transforming the partial differential equations into a large set of ordinary differential equations that can be integrated in time using a standard ordinary differential equation (ODE) integrator \citep{Jameson_1981}. For the latter, we use the second-order strong stability preserving Runge-Kutta method (RK2-SSP; \citealt{Shu_1988}). Such an approach has been successfully employed in several recent astrophysical hydrodynamics codes \citep{Skinner_2019,Stone_2020}.
+\DIFaddbegin 
 
-We write the timestep $\Delta t$ used for the RK2-SSP integration as
-\begin{align}
-\Delta t = C_0 \, \frac{\Delta x}{|\lambda|} \, ,
-\end{align}
-where $\Delta x$ is the minimum grid spacing, $|\lambda|$ is the maximum signal speed, and $C_0$ is the stability coefficient.
-Analysis of the stability polynomial of the linearized hydrodynamics equations \citep{Colella_2011} yields a value for the maximum signal speed $|\tilde \lambda|$ of
-\begin{align}
-|\tilde \lambda| = \max \sum_{d=1}^{D} [(\vc{v} \cdot \vc{\hat{e}_d}) + c_s] \, ,
+\DIFadd{We write the timestep $\Delta t$ used for the RK2-SSP integration as
+}\begin{align}
+\DIFadd{\Delta t = C_0 \, \frac{\Delta x}{|\lambda|} \, ,
+}\end{align}
+\DIFadd{where $\Delta x$ is the minimum grid spacing, $|\lambda|$ is the maximum signal speed, and $C_0$ is the stability coefficient.
+Analysis of the stability polynomial of the linearized hydrodynamics equations \mbox{%DIFAUXCMD
+\citep{Colella_2011} }\hspace{0pt}%DIFAUXCMD
+yields a value for the maximum signal speed $|\tilde \lambda|$ of
+}\begin{align}
+\DIFadd{|\tilde \lambda| = \max \sum_{d=1}^{D} }[\DIFadd{(\vc{v} \cdot \vc{\hat{e}_d}) + c_s}] \DIFadd{\, ,
 \label{eq:colella_stability}
-\end{align}
-where $\vc{v}$ is the fluid velocity, $\vc{\hat{e}}$ is the unit vector in coordinate direction $d$, $c_s$ is the adiabatic sound speed, and the maximum is taken over all cells. This signal speed does not take nonlinear effects into account. Because of this, we conservatively estimate the maximum signal speed as 
-\begin{align}
-|\lambda| = D \max (|\vc{v}| + c_s) \, ,
+}\end{align}
+\DIFadd{where $\vc{v}$ is the fluid velocity, $\vc{\hat{e}}$ is the unit vector in coordinate direction $d$, $c_s$ is the adiabatic sound speed, and the maximum is taken over all cells. This signal speed does not take nonlinear effects into account. Because of this, we conservatively estimate the maximum signal speed as 
+}\begin{align}
+\DIFadd{|\lambda| = D \max (|\vc{v}| + c_s) \, ,
 \label{eq:signal}
-\end{align}
-and compute the timestep $\Delta t$ on each AMR level as
-\begin{align}
-\Delta t = \frac{C_0}{D} \frac{\Delta x}{\max (|\vc{v}| + c_s)} \, ,
-\end{align}
-where we define the dimensionless factor $C_0 / D$ to be the CFL number. For both forward Euler and RK2-SSP, the maximum stable coefficient $C_0$ for a system of constant-coefficient, linear equations is $C_0 = 1$. The maximum stable CFL number in 3D for the RK2-SSP integrator is therefore $1/3$.
-We note that it is not sufficient to estimate $|\lambda|$ as $\max (|\vc{v}| + c_s)$, since the component-wise sum of the velocities may exceed the vector magnitude $|\vc{v}|$ and therefore violate the lower bound implied by \autoref{eq:colella_stability}.\footnote{As an example, consider the velocity vector with unit magnitude $|\vc{v}|$ and equal components $v_x = v_y = v_z$. Then each component $v_i = \sqrt{3}/3$ and the sum of components $\sum_{d=1}^{3} \vc{v} \cdot \vc{\hat{e}_d} = \sqrt{3} \approx 1.732$.}
+}\end{align}
+\DIFadd{and compute the timestep $\Delta t$ on each AMR level as
+}\begin{align}
+\DIFadd{\Delta t = \frac{C_0}{D} \frac{\Delta x}{\max (|\vc{v}| + c_s)} \, ,
+}\end{align}
+\DIFadd{where we define the dimensionless factor $C_0 / D$ to be the CFL number. For both forward Euler and RK2-SSP, the maximum stable coefficient $C_0$ for a system of constant-coefficient, linear equations is $C_0 = 1$. The maximum stable CFL number in 3D for the RK2-SSP integrator is therefore $1/3$.
+We note that it is not sufficient to estimate $|\lambda|$ as $\max (|\vc{v}| + c_s)$, since the component-wise sum of the velocities may exceed the vector magnitude $|\vc{v}|$ and therefore violate the lower bound implied by }\autoref{eq:colella_stability}\DIFadd{.}\footnote{\DIFadd{As an example, consider the velocity vector with unit magnitude $|\vc{v}|$ and equal components $v_x = v_y = v_z$. Then each component $v_i = \sqrt{3}/3$ and the sum of components $\sum_{d=1}^{3} \vc{v} \cdot \vc{\hat{e}_d} = \sqrt{3} \approx 1.732$.}}
 
-Somewhat surprisingly, we find that such a method-of-lines scheme is not stable when combining higher-order spatial reconstruction with forward Euler time integration. However, we find it is stable for timesteps satisfying the above timestep criterion when used with higher-order (second-order or higher) Runge-Kutta methods. We note that this stability problem with forward Euler is also found by \cite{Stone_2020} in the method-of-lines implementation of \textsc{Athena++}.
+\DIFaddend Somewhat surprisingly, we find that such a method-of-lines scheme is not stable when combining higher-order spatial reconstruction with forward Euler time integration\DIFdelbegin \DIFdel{, but }\DIFdelend \DIFaddbegin \DIFadd{. However, we find it }\DIFaddend is stable for timesteps \DIFdelbegin \DIFdel{$\mathcal{O}(\Delta x / (c_s + |v|))$ }\DIFdelend \DIFaddbegin \DIFadd{satisfying the above timestep criterion }\DIFaddend when used with higher-order \DIFdelbegin \DIFdel{Runge-Kutta methods. This is consistent with the findings of \mbox{%DIFAUXCMD
+\cite{Stone_2020}}\hspace{0pt}%DIFAUXCMD
+, who also find that the maximum stable timestep corresponding to the linear stability region of a given (second order }\DIFdelend \DIFaddbegin \DIFadd{(second-order }\DIFaddend or higher) Runge-Kutta \DIFdelbegin \DIFdel{integrator divided by the number of spatial dimensions.
+}\DIFdelend \DIFaddbegin \DIFadd{methods. We note that this stability problem with forward Euler is also found by \mbox{%DIFAUXCMD
+\cite{Stone_2020} }\hspace{0pt}%DIFAUXCMD
+in the method-of-lines implementation of }\textsc{\DIFadd{Athena++}}\DIFadd{.
+}
 
-As \cite{Skinner_2019} notes, in contrast to fully-discrete unsplit hydrodynamic methods such as the corner transport upwind (CTU) method \citep{Colella_1990}, the coupling across corners of each cell is achieved via the use of a multi-stage time integrator, rather than via direct computation of fluxes from diagonal neighbors of each cell. While we are formally limited to a smaller timestep compared to the CTU method (due to the factor of $1/D$), our method may be more robust in practice, as the CTU integrator has been found to be unstable in supersonic turbulence with strong radiative cooling unless very small ($\lesssim 0.1$) CFL numbers are employed \citep{Schneider_2017}.
+\DIFaddend As \cite{Skinner_2019} notes, in contrast to fully-discrete unsplit hydrodynamic methods such as the corner transport upwind (CTU) method \citep{Colella_1990}, the coupling across corners of each cell is achieved via the use of a multi-stage time integrator, rather than via direct computation of fluxes from diagonal neighbors of each cell. While we are formally limited to a smaller timestep compared to the CTU method \DIFaddbegin \DIFadd{(due to the factor of $1/D$)}\DIFaddend , our method may be more robust in practice, as the CTU integrator has been found to be unstable in supersonic turbulence with strong radiative cooling unless very small ($\lesssim 0.1$) CFL numbers are employed \citep{Schneider_2017}.
 
-We reconstruct the hydrodynamic variables on each face of each cell from the cell-average variables of the neighbouring cells. We perform this reconstruction using the piecewise parabolic method \citep[PPM;][hereafter \citetalias{Colella_1984}]{Colella_1984} using the primitive hydrodynamic variables (density, velocity, and pressure). As is standard, the conversion from conserved (density, momentum, and energy) to primitive variables is carried out assuming that the volume average and cell centered states are equivalent, which is an approximation accurate to $\mathcal{O}(\Delta x^2)$. As noted by several authors, the PPM algorithm is therefore formally second-order accurate in spatial resolution.\footnote{ We note that there exist fully fourth-order versions of PPM \citep{Felker_2018}, but because fourth-order accuracy does not permit local source terms to be evaluated independently for each cell, we choose to implement a second-order method.} After the primitive variables have been defined, for the reconstruction step proper, we use the standard interface-centered PPM stencil:
+We reconstruct the hydrodynamic variables on each face of each cell from the cell-average variables of the neighbouring cells. We perform this reconstruction using the piecewise parabolic method \citep[PPM;][hereafter \citetalias{Colella_1984}]{Colella_1984} using the primitive hydrodynamic variables (density, velocity, and pressure). As is standard, the conversion from conserved (density, momentum, and energy) to primitive variables is carried out assuming that the volume average and cell centered states are equivalent, which is an approximation accurate to $\mathcal{O}(\Delta x^2)$. As noted by several authors, the PPM algorithm is therefore formally second-order accurate in spatial resolution.\DIFaddbegin \footnote{ \DIFadd{We note that there exist fully fourth-order versions of PPM \mbox{%DIFAUXCMD
+\citep{Felker_2018}}\hspace{0pt}%DIFAUXCMD
+, but because fourth-order accuracy does not permit local source terms to be evaluated independently for each cell, we choose to implement a second-order method.}} \DIFaddend After the primitive variables have been defined, for the reconstruction step proper, we use the standard interface-centered PPM stencil:
 \begin{align}
 q_{j+1/2} = \frac{7}{12} (q_j + q_{j+1}) - \frac{1}{12} (q_{j+2} + q_{j-1}).
 \end{align}
 We follow the implementation of \cite{Stone_2020} in re-grouping the above terms symmetrically with respect to the interface ${i+{1/2}}$ so as to preserve exact symmetry in floating point arithmetic.
+\DIFdelbegin \DIFdel{On a mesh with uniform spacing between cells along the direction perpendicular to the reconstructed face, this stencil is fourth-order accurate.
+}\DIFdelend 
 
-We do not perform the slope-limiting and contact steepening steps of \citetalias{Colella_1984}. We instead enforce monotonicity of the reconstructed state by re-setting the interface state to lie between the values of all cells (including those in transverse directions) adjacent to the interface, following \cite{Mignone_2005}. This is followed by the extrema detection and overshoot correction step within each cell as described by \citetalias{Colella_1984}. In this step, the parabola assumed to exist across each cell is examined. If an `overshoot' (as defined by \citetalias{Colella_1984}) of the parabola is detected, we follow the original \citetalias{Colella_1984} prescription of performing linear reconstruction on the side of the cell affected by the overshoot. If an extremum is instead detected, rather than forcing the reconstruction to a constant value across the cell as done by \citetalias{Colella_1984}, we revert to performing a linear reconstruction within the affected cell, following \cite{Balsara_2017}. Either of these steps may make the interface states discontinuous, with distinct states associated with each of the two cells adjacent to an interface.
+We do not perform the slope-limiting and contact steepening steps of \citetalias{Colella_1984}. We instead enforce monotonicity of the reconstructed state by re-setting the interface state to lie between the values of \DIFdelbegin \DIFdel{the cells }\DIFdelend \DIFaddbegin \DIFadd{all cells (including those in transverse directions) }\DIFaddend adjacent to the interface, following \cite{Mignone_2005}. This is followed by the extrema detection and overshoot correction step within each cell as described by \citetalias{Colella_1984}. In this step, the parabola assumed to exist across each cell is examined. If an `overshoot' (as defined by \citetalias{Colella_1984}) of the parabola is detected, we follow the original \citetalias{Colella_1984} prescription of performing linear reconstruction on the side of the cell affected by the overshoot. If an extremum is instead detected, rather than forcing the reconstruction to a constant value across the cell as done by \citetalias{Colella_1984}, we revert to performing a linear reconstruction within the affected cell, following \cite{Balsara_2017}. Either of these steps may make the interface states discontinuous, with distinct states associated with each of the two cells adjacent to an interface\DIFdelbegin \DIFdel{, which reduces the order of accuracy of the stencil. Since the overall algorithm is a combination of second order and (usually) fourth order steps, the overall order of accuracy of PPM is often referred to as `third order' (e.g., \mbox{%DIFAUXCMD
+\citealt{Stone_2020}}\hspace{0pt}%DIFAUXCMD
+). However, we note that there exist fully fourth-order extensions of PPM \mbox{%DIFAUXCMD
+\citep{Felker_2018}}\hspace{0pt}%DIFAUXCMD
+, but these methods do not allow local source terms to be evaluated independently for each cell while maintaining fourth-order accuracy}\DIFdelend .
 
 We also implement reconstruction based on a piecewise-linear method (PLM) using the monotonized-central (MC) slope limiter \citep{VanLeer_1977}. We use PPM reconstruction by default, but allow PLM reconstruction via a compile-time option.
 
