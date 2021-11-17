@@ -83,10 +83,12 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 						  array_t &x1Chi, amrex::Box const &indexRange);
 
 	template <FluxDir DIR>
-	static void FlattenShocks(amrex::Array4<const amrex::Real> const &q,
-				  amrex::Array4<const amrex::Real> const &x1Chi,
-				  array_t &x1LeftState, array_t &x1RightState,
-				  amrex::Box const &indexRange, int nvars);
+	static void FlattenShocks(amrex::Array4<const amrex::Real> const &q_in,
+				   amrex::Array4<const amrex::Real> const &x1Chi_in,
+   				   amrex::Array4<const amrex::Real> const &x2Chi_in,
+				   amrex::Array4<const amrex::Real> const &x3Chi_in,
+				   array_t &x1LeftState_in, array_t &x1RightState_in,
+				   amrex::Box const &indexRange, int nvars);
 
 	// C++ does not allow constexpr to be uninitialized, even in a templated class!
 	static constexpr double gamma_ = EOS_Traits<problem_t>::gamma;
@@ -317,11 +319,12 @@ template <typename problem_t>
 template <FluxDir DIR>
 void HydroSystem<problem_t>::FlattenShocks(amrex::Array4<const amrex::Real> const &q_in,
 					   amrex::Array4<const amrex::Real> const &x1Chi_in,
+   					   amrex::Array4<const amrex::Real> const &x2Chi_in,
+					   amrex::Array4<const amrex::Real> const &x3Chi_in,
 					   array_t &x1LeftState_in, array_t &x1RightState_in,
 					   amrex::Box const &indexRange, const int nvars)
 {
 	quokka::Array4View<const amrex::Real, DIR> q(q_in);
-	quokka::Array4View<const amrex::Real, DIR> x1Chi(x1Chi_in);
 	quokka::Array4View<amrex::Real, DIR> x1LeftState(x1LeftState_in);
 	quokka::Array4View<amrex::Real, DIR> x1RightState(x1RightState_in);
 
@@ -332,20 +335,22 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::Array4<const amrex::Real> cons
 	// cell-centered kernel
 	amrex::ParallelFor(
 	    indexRange, nvars, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) {
-		    auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
-
-		    // compute coefficient as the minimum from all surrounding cells
-		    //  (Eq. 78 of Miller & Colella 2002)
-		    double chi = std::min({
+		    // compute coefficient as the minimum from adjacent cells along *each axis*
+		    //  (Eq. 86 of Miller & Colella 2001; Eq. 78 of Miller & Colella 2002)
+		    double chi_ijk = std::min({
 			    x1Chi_in(i_in - 1, j_in, k_in), x1Chi_in(i_in, j_in, k_in),
 				x1Chi_in(i_in + 1, j_in, k_in),
 #if (AMREX_SPACEDIM >= 2)
-				x1Chi_in(i_in, j_in - 1, k_in), x1Chi_in(i_in, j_in + 1, k_in),
+				x2Chi_in(i_in, j_in - 1, k_in), x2Chi_in(i_in, j_in, k_in),
+				x2Chi_in(i_in, j_in + 1, k_in),
 #endif
 #if (AMREX_SPACEDIM == 3)
-				x1Chi_in(i_in, j_in, k_in - 1), x1Chi_in(i_in, j_in, k_in + 1),
+				x3Chi_in(i_in, j_in, k_in - 1), x3Chi_in(i_in, j_in, k_in),
+				x3Chi_in(i_in, j_in, k_in + 1),
 #endif
 		    });
+			
+		    auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
 
 		    // get interfaces
 		    const double a_minus = x1RightState(i, j, k, n);
@@ -353,10 +358,10 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::Array4<const amrex::Real> cons
 		    const double a_mean = q(i, j, k, n);
 
 		    // left side of zone i (Eq. 70a)
-		    const double new_a_minus = chi * a_minus + (1. - chi) * a_mean;
+		    const double new_a_minus = chi_ijk * a_minus + (1. - chi_ijk) * a_mean;
 
 		    // right side of zone i (Eq. 70b)
-		    const double new_a_plus = chi * a_plus + (1. - chi) * a_mean;
+		    const double new_a_plus = chi_ijk * a_plus + (1. - chi_ijk) * a_mean;
 
 		    x1RightState(i, j, k, n) = new_a_minus;
 		    x1LeftState(i + 1, j, k, n) = new_a_plus;

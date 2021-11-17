@@ -217,13 +217,38 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array
 		    // permute array indices according to dir
 		    auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
 
-		    // (2.) Constrain interface value to lie between adjacent cell-averaged
-		    // values (equivalent to step 2b in Athena++ [ppm_simple.cpp]). [See Eq. B8
-		    // of Mignone+ 2005]
-
-		    // compute bounds from surrounding cells
-		    const std::pair<double, double> bounds = std::minmax(
-			{q(i - 1, j, k, n), q(i, j, k, n), q(i + 1, j, k, n)}); // modify in 3d !!
+		    // (2.) Constrain interfaces to lie between surrounding cell-averaged
+		    // values (equivalent to step 2b in Athena++ [ppm_simple.cpp]).
+			// [See Eq. B8 of Mignone+ 2005.]
+			std::pair<double, double> bounds;
+		    
+			if constexpr (AMREX_SPACEDIM == 1) {
+				// 1D: compute bounds from self + all 2 surrounding cells
+				bounds = std::minmax({q(i, j, k, n), q(i - 1, j, k, n), q(i + 1, j, k, n)});
+			} else if constexpr (AMREX_SPACEDIM == 2) {
+				// 2D: compute bounds from self + all 8 surrounding cells
+				bounds = std::minmax({q(i, j, k, n),
+					q(i - 1, j, k, n), q(i + 1, j, k, n),
+					q(i, j - 1, k, n), q(i, j + 1, k, n),
+					q(i - 1, j - 1, k, n), q(i + 1, j - 1, k, n),
+					q(i - 1, j + 1, k, n), q(i + 1, j + 1, k, n)});
+			} else {
+				// 3D: compute bounds from self + all 26 surrounding cells			
+				bounds = std::minmax({q(i, j, k, n),
+					q(i - 1, j, k, n), q(i + 1, j, k, n),
+					q(i, j - 1, k, n), q(i, j + 1, k, n),
+					q(i, j, k - 1, n), q(i, j, k + 1, n),
+					q(i - 1, j - 1, k, n), q(i + 1, j - 1, k, n),
+					q(i - 1, j + 1, k, n), q(i + 1, j + 1, k, n),
+					q(i, j - 1, k - 1, n), q(i, j + 1, k - 1, n),
+					q(i, j - 1, k + 1, n), q(i, j + 1, k + 1, n),
+					q(i - 1, j, k - 1, n), q(i + 1, j, k - 1, n),
+					q(i - 1, j, k + 1, n), q(i + 1, j, k + 1, n),
+					q(i - 1, j - 1, k - 1, n), q(i + 1, j - 1, k - 1, n),
+					q(i - 1, j - 1, k + 1, n), q(i + 1, j - 1, k + 1, n),
+					q(i - 1, j + 1, k - 1, n), q(i + 1, j + 1, k - 1, n),
+					q(i - 1, j + 1, k + 1, n), q(i + 1, j + 1, k + 1, n)});
+			}
 
 		    // get interfaces
 		    const double a_minus = rightState(i, j, k, n);
