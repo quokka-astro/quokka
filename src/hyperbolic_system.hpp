@@ -220,21 +220,20 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array
 		    // (2.) Constrain interfaces to lie between surrounding cell-averaged
 		    // values (equivalent to step 2b in Athena++ [ppm_simple.cpp]).
 			// [See Eq. B8 of Mignone+ 2005.]
-			std::pair<double, double> bounds;
 		    
 #if (AMREX_SPACEDIM == 1)
 			// 1D: compute bounds from self + all 2 surrounding cells
-			bounds = std::minmax({q(i, j, k, n), q(i - 1, j, k, n), q(i + 1, j, k, n)});
+			const std::pair<double, double> bounds = std::minmax({q(i, j, k, n), q(i - 1, j, k, n), q(i + 1, j, k, n)});
 #elif (AMREX_SPACEDIM == 2)
 			// 2D: compute bounds from self + all 8 surrounding cells
-			bounds = std::minmax({q(i, j, k, n),
+			const std::pair<double, double> bounds = std::minmax({q(i, j, k, n),
 				q(i - 1, j, k, n), q(i + 1, j, k, n),
 				q(i, j - 1, k, n), q(i, j + 1, k, n),
 				q(i - 1, j - 1, k, n), q(i + 1, j - 1, k, n),
 				q(i - 1, j + 1, k, n), q(i + 1, j + 1, k, n)});
 #else
 			// 3D: compute bounds from self + all 26 surrounding cells			
-			bounds = std::minmax({q(i, j, k, n),
+			const std::pair<double, double> bounds = std::minmax({q(i, j, k, n),
 				q(i - 1, j, k, n), q(i + 1, j, k, n),
 				q(i, j - 1, k, n), q(i, j + 1, k, n),
 				q(i, j, k - 1, n), q(i, j, k + 1, n),
