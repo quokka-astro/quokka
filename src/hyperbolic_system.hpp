@@ -222,33 +222,33 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array
 			// [See Eq. B8 of Mignone+ 2005.]
 			std::pair<double, double> bounds;
 		    
-			if constexpr (AMREX_SPACEDIM == 1) {
-				// 1D: compute bounds from self + all 2 surrounding cells
-				bounds = std::minmax({q(i, j, k, n), q(i - 1, j, k, n), q(i + 1, j, k, n)});
-			} else if constexpr (AMREX_SPACEDIM == 2) {
-				// 2D: compute bounds from self + all 8 surrounding cells
-				bounds = std::minmax({q(i, j, k, n),
-					q(i - 1, j, k, n), q(i + 1, j, k, n),
-					q(i, j - 1, k, n), q(i, j + 1, k, n),
-					q(i - 1, j - 1, k, n), q(i + 1, j - 1, k, n),
-					q(i - 1, j + 1, k, n), q(i + 1, j + 1, k, n)});
-			} else {
-				// 3D: compute bounds from self + all 26 surrounding cells			
-				bounds = std::minmax({q(i, j, k, n),
-					q(i - 1, j, k, n), q(i + 1, j, k, n),
-					q(i, j - 1, k, n), q(i, j + 1, k, n),
-					q(i, j, k - 1, n), q(i, j, k + 1, n),
-					q(i - 1, j - 1, k, n), q(i + 1, j - 1, k, n),
-					q(i - 1, j + 1, k, n), q(i + 1, j + 1, k, n),
-					q(i, j - 1, k - 1, n), q(i, j + 1, k - 1, n),
-					q(i, j - 1, k + 1, n), q(i, j + 1, k + 1, n),
-					q(i - 1, j, k - 1, n), q(i + 1, j, k - 1, n),
-					q(i - 1, j, k + 1, n), q(i + 1, j, k + 1, n),
-					q(i - 1, j - 1, k - 1, n), q(i + 1, j - 1, k - 1, n),
-					q(i - 1, j - 1, k + 1, n), q(i + 1, j - 1, k + 1, n),
-					q(i - 1, j + 1, k - 1, n), q(i + 1, j + 1, k - 1, n),
-					q(i - 1, j + 1, k + 1, n), q(i + 1, j + 1, k + 1, n)});
-			}
+#if (AMREX_SPACEDIM == 1)
+			// 1D: compute bounds from self + all 2 surrounding cells
+			bounds = std::minmax({q(i, j, k, n), q(i - 1, j, k, n), q(i + 1, j, k, n)});
+#elif (AMREX_SPACEDIM == 2)
+			// 2D: compute bounds from self + all 8 surrounding cells
+			bounds = std::minmax({q(i, j, k, n),
+				q(i - 1, j, k, n), q(i + 1, j, k, n),
+				q(i, j - 1, k, n), q(i, j + 1, k, n),
+				q(i - 1, j - 1, k, n), q(i + 1, j - 1, k, n),
+				q(i - 1, j + 1, k, n), q(i + 1, j + 1, k, n)});
+#else
+			// 3D: compute bounds from self + all 26 surrounding cells			
+			bounds = std::minmax({q(i, j, k, n),
+				q(i - 1, j, k, n), q(i + 1, j, k, n),
+				q(i, j - 1, k, n), q(i, j + 1, k, n),
+				q(i, j, k - 1, n), q(i, j, k + 1, n),
+				q(i - 1, j - 1, k, n), q(i + 1, j - 1, k, n),
+				q(i - 1, j + 1, k, n), q(i + 1, j + 1, k, n),
+				q(i, j - 1, k - 1, n), q(i, j + 1, k - 1, n),
+				q(i, j - 1, k + 1, n), q(i, j + 1, k + 1, n),
+				q(i - 1, j, k - 1, n), q(i + 1, j, k - 1, n),
+				q(i - 1, j, k + 1, n), q(i + 1, j, k + 1, n),
+				q(i - 1, j - 1, k - 1, n), q(i + 1, j - 1, k - 1, n),
+				q(i - 1, j - 1, k + 1, n), q(i + 1, j - 1, k + 1, n),
+				q(i - 1, j + 1, k - 1, n), q(i + 1, j + 1, k - 1, n),
+				q(i - 1, j + 1, k + 1, n), q(i + 1, j + 1, k + 1, n)});
+#endif // AMREX_SPACEDIM
 
 		    // get interfaces
 		    const double a_minus = rightState(i, j, k, n);
