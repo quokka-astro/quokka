@@ -221,6 +221,7 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array
 		    // values (equivalent to step 2b in Athena++ [ppm_simple.cpp]).
 			// [See Eq. B8 of Mignone+ 2005.]
 		    
+#ifdef MULTIDIM_EXTREMA_CHECK
 #if (AMREX_SPACEDIM == 1)
 			// 1D: compute bounds from self + all 2 surrounding cells
 			const std::pair<double, double> bounds = std::minmax({q(i, j, k, n), q(i - 1, j, k, n), q(i + 1, j, k, n)});
@@ -231,7 +232,7 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array
 				q(i, j - 1, k, n), q(i, j + 1, k, n),
 				q(i - 1, j - 1, k, n), q(i + 1, j - 1, k, n),
 				q(i - 1, j + 1, k, n), q(i + 1, j + 1, k, n)});
-#else
+#else // AMREX_SPACEDIM == 3
 			// 3D: compute bounds from self + all 26 surrounding cells			
 			const std::pair<double, double> bounds = std::minmax({q(i, j, k, n),
 				q(i - 1, j, k, n), q(i + 1, j, k, n),
@@ -248,6 +249,10 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array
 				q(i - 1, j + 1, k - 1, n), q(i + 1, j + 1, k - 1, n),
 				q(i - 1, j + 1, k + 1, n), q(i + 1, j + 1, k + 1, n)});
 #endif // AMREX_SPACEDIM
+#else // MULTIDIM_EXTREMA_CHECK
+			// compute bounds from self + all 2 surrounding cells
+			const std::pair<double, double> bounds = std::minmax({q(i, j, k, n), q(i - 1, j, k, n), q(i + 1, j, k, n)});
+#endif // MULTIDIM_EXTREMA_CHECK
 
 		    // get interfaces
 		    const double a_minus = rightState(i, j, k, n);
