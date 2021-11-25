@@ -663,17 +663,14 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 {
 	BL_PROFILE("AMRSimulation::fillBoundaryConditions()");
 
-	if (max_level > 0) { // AMR is enabled
+	if (lev > 0) { // refined level
 		amrex::Vector<amrex::MultiFab *> fineData{&state};
 		amrex::Vector<amrex::Real> fineTime = {time};
 		amrex::Vector<amrex::MultiFab *> coarseData;
 		amrex::Vector<amrex::Real> coarseTime;
 
-		if (lev > 0) {
-			// on coarse level, returns old state, new state, or both depending on
-			// 'time'
-			GetData(lev - 1, time, coarseData, coarseTime);
-		}
+		// returns old state, new state, or both depending on 'time'
+		GetData(lev - 1, time, coarseData, coarseTime);
 		AMREX_ASSERT(!state.contains_nan(0, state.nComp()));
 
 		for (int i = 0; i < coarseData.size(); ++i) {
@@ -683,10 +680,9 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 
 		FillPatchWithData(lev, time, S_filled, coarseData, coarseTime, fineData, fineTime, 0,
 				S_filled.nComp());
-	} else { // AMR is disabled, only level 0 exists
-		AMREX_ASSERT(lev == 0);
-		// fill internal and periodic boundaries
-		state.FillBoundary(geom[lev].periodicity());
+	} else { // level 0
+		// fill internal and periodic boundaries, ignoring corners (cross=true)
+		state.FillBoundary(geom[lev].periodicity(), true);
 
 		if (!geom[lev].isAllPeriodic()) {
 			amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>> boundaryFunctor(
@@ -723,7 +719,7 @@ void AMRSimulation<problem_t>::FillPatchWithData(int lev, amrex::Real time, amre
 	amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>>
 	    finePhysicalBoundaryFunctor(geom[lev], boundaryConditions_, boundaryFunctor);
 
-	if (lev == 0) {
+	if (lev == 0) { // NOTE: used by RemakeLevel
 		// copies interior zones, fills ghost zones
 		amrex::FillPatchSingleLevel(mf, time, fineData, fineTime, 0, icomp, ncomp,
 					    geom[lev], finePhysicalBoundaryFunctor, 0);
