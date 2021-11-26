@@ -1,0 +1,26 @@
+#!/bin/bash
+
+#PBS -N quokka_GPU_1node
+#PBS -P jh2
+#PBS -q gpuvolta
+#PBS -l ncpus=48
+#PBS -l ngpus=4
+#PBS -l mem=382GB
+#PBS -m aeb
+#PBS -M ben.wibking@anu.edu.au
+#PBS -l wd
+#PBS -l walltime=0:30:00
+#PBS -l storage=scratch/jh2+gdata/jh2
+#PBS -l jobfs=400GB
+
+# --- initialize Quokka ---
+export PATH=$HOME/mpich3.4.2/bin:$PATH
+#export MPICH_RDMA_ENABLED_CUDA=1
+#export MPICH_GPU_SUPPORT_ENABLED=1
+
+MPI_OPTIONS="-np $PBS_NGPUS -bind-to numa -gpus-per-proc=1"
+echo "Using MPI_OPTIONS = $MPI_OPTIONS"
+
+mpiexec $MPI_OPTIONS ./build/src/HydroBlast3D/test_hydro3d_blast tests/blast_unigrid_512.in amrex.async_out=1 amrex.use_gpu_aware_mpi=0 > mpich_1node.log
+
+
