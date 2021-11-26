@@ -682,7 +682,9 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 				S_filled.nComp());
 	} else { // level 0
 		// fill internal and periodic boundaries, ignoring corners (cross=true)
-		state.FillBoundary(geom[lev].periodicity(), true);
+	        // (there is no performance benefit for this in practice)
+		// state.FillBoundary(geom[lev].periodicity(), true);
+		state.FillBoundary(geom[lev].periodicity());
 
 		if (!geom[lev].isAllPeriodic()) {
 			amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>> boundaryFunctor(
