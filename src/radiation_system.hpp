@@ -770,6 +770,7 @@ RadSystem<problem_t>::ComputeTgasFromEgas(const double rho, const double Egas)
   } else {
     return NAN;
   }
+  #pragma diag_suppress implicit_return_from_non_void_function
 }
 
 template <typename problem_t>
@@ -1019,7 +1020,10 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
       // 4b. Store new radiation energy, gas energy
       consNew(i, j, k, radEnergy_index) = Erad_guess + dErad_work;
       consNew(i, j, k, gasEnergy_index) = Egastot1;
-    } // endif gamma != 1.0
+    } else {
+      amrex::ignore_unused(Erad_guess);
+      amrex::ignore_unused(Egas_guess);
+    }  // endif gamma != 1.0
   });
 }
 
