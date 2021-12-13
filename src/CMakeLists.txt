@@ -1,4 +1,11 @@
-find_package(PythonLibs)
+if(QUOKKA_PYTHON) 
+  message(STATUS "Building Quokka with Python support (to disable, add
+  '-DQUOKKA_PYTHON=OFF' to the CMake command-line options)")
+  find_package(PythonLibs)
+else()
+  message(STATUS "Building Quokka *without* Python support")
+endif()
+
 if(PythonLibs_FOUND)
     add_compile_definitions(HAVE_PYTHON)
     include_directories(${PYTHON_INCLUDE_DIRS})
