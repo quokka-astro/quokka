@@ -60,6 +60,13 @@ Have fun!
 ## CMake
 Quokka uses CMake for its build system. If you don't have CMake installed already, you can simply `pip install cmake` or use another [installation method](https://cliutils.gitlab.io/modern-cmake/chapters/intro/installing.html). If you are unfamiliar with CMake, [this tutorial](https://hsf-training.github.io/hsf-training-cmake-webpage/) may be useful.
 
+## Python header file not found error
+If you get an error saying that a NumPy header file is not found, you can work around this problem by disabling Python support. Python and NumPy are only used to plot the results of some test problems, so this does not otherwise affect Quokka's functionality. Add the option
+```
+-DQUOKKA_PYTHON=OFF
+```
+to the CMake command-line options (or change the `QUOKKA_PYTHON` option to `OFF` in CMakeLists.txt).
+
 ## Running on GPUs
 By default, Quokka compiles itself to run only on CPUs. If you want to run on NVIDIA GPUs, re-build Quokka with the following options:
 ```
