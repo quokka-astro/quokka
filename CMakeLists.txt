@@ -34,6 +34,11 @@ if(AMReX_GPU_BACKEND MATCHES "CUDA")
   endif(CMAKE_VERSION VERSION_LESS 3.20)
 endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 
+if(CMAKE_CXX_COMPILER_ID STREQUAL "Intel")
+  # abort! Intel Compiler Classic cannot compile Quokka!
+  message(FATAL_ERROR "You have configured CMake to use the 'classic' Intel compilers (icc/icpc), which are the old Intel compilers. They cannot compile Quokka correctly! You must use the new LLVM-based Intel compilers (icx/icpx) instead by adding the following CMake command-line options: -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx")
+endif(CMAKE_CXX_COMPILER_ID STREQUAL "Intel")
+
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/amrex ${QuokkaCode_BINARY_DIR}/amrex)
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/fmt ${QuokkaCode_BINARY_DIR}/fmt)
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/src ${QuokkaCode_BINARY_DIR}/src)
