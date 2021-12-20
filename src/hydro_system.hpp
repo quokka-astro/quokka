@@ -389,7 +389,8 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in) {
 		auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
 
-		// HLLC solver following Toro (1998) and Balsara (2017).
+		// HLLC-LM solver [N. Fleischmann, S. Adami and N.A. Adams, JCP 423 (2020) 109762.]
+		// Original HLLC solver following Toro (1998) and Balsara (2017).
 
 		// gather left- and right- state variables
 
@@ -405,8 +406,11 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 		const double vz_L = x1LeftState(i, j, k, x3Velocity_index);
 		const double vz_R = x1RightState(i, j, k, x3Velocity_index);
 
-		const double ke_L = 0.5 * rho_L * (vx_L * vx_L + vy_L * vy_L + vz_L * vz_L);
-		const double ke_R = 0.5 * rho_R * (vx_R * vx_R + vy_R * vy_R + vz_R * vz_R);
+		const double vsq_L = (vx_L * vx_L + vy_L * vy_L + vz_L * vz_L);
+		const double vsq_R = (vx_R * vx_R + vy_R * vy_R + vz_R * vz_R);
+
+		const double ke_L = 0.5 * rho_L * vsq_L;
+		const double ke_R = 0.5 * rho_R * vsq_R;
 
 		double P_L = NAN;
 		double P_R = NAN;
@@ -484,6 +488,7 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 		// compute fluxes
 		constexpr int fluxdim = nvar_;
 
+		quokka::valarray<double, fluxdim> D{};
 		quokka::valarray<double, fluxdim> D_L{};
 		quokka::valarray<double, fluxdim> D_R{};
 		quokka::valarray<double, fluxdim> D_star{};
@@ -511,24 +516,32 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 		quokka::valarray<double, fluxdim> F_L = u_L * U_L + P_L * D_L;
 		quokka::valarray<double, fluxdim> F_R = u_R * U_R + P_R * D_R;
 
-		const quokka::valarray<double, fluxdim> F_starL =
-		    (S_star * (S_L * U_L - F_L) + S_L * P_LR * D_star) / (S_L - S_star);
+		const quokka::valarray<double, fluxdim> U_starL =
+			(S_L * U_L - F_L + P_LR * D_star) / (S_L - S_star);
 
-		const quokka::valarray<double, fluxdim> F_starR =
-		    (S_star * (S_R * U_R - F_R) + S_R * P_LR * D_star) / (S_R - S_star);
+		const quokka::valarray<double, fluxdim> U_starR =
+			(S_R * U_R - F_R + P_LR * D_star) / (S_R - S_star);
+
+		// Eq. 19 of HLLC-LM paper
+		const quokka::valarray<double, fluxdim> F_star = 0.5 * (F_L + F_R) + 
+			0.5 * (S_L * (U_starL - U_L) + std::abs(S_star) * (U_starL - U_starR) + S_R  * (U_starR - U_R));
+
+		// compute 'low-dissipation' correction to F_star
+		const double cu_L = std::sqrt(vsq_L);
+		const double cu_R = std::sqrt(vsq_R);
+		const double chi = std::min(1.0, std::max(cu_L, cu_R) / std::max(cs_L, cs_R));
+		const double phi = chi * (2.0 - chi);
 
 		// open the Riemann fan
 		quokka::valarray<double, fluxdim> F{};
 
-		// HLLC flux
-		if (S_L > 0.0) {
+		// HLLC-LM flux (Eq. 18)
+		if (S_L >= 0.0) {
 			F = F_L;
-		} else if ((S_star > 0.0) && (S_L <= 0.0)) {
-			F = F_starL;
-		} else if ((S_star <= 0.0) && (S_R >= 0.0)) {
-			F = F_starR;
-		} else { // S_R < 0.0
+		} else if (S_R <= 0.0) {
 			F = F_R;
+		} else { // intermediate state
+			F = F_star;
 		}
 
 		// check states are valid
