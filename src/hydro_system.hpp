@@ -488,7 +488,6 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 		// compute fluxes
 		constexpr int fluxdim = nvar_;
 
-		quokka::valarray<double, fluxdim> D{};
 		quokka::valarray<double, fluxdim> D_L{};
 		quokka::valarray<double, fluxdim> D_R{};
 		quokka::valarray<double, fluxdim> D_star{};
@@ -522,15 +521,14 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 		const quokka::valarray<double, fluxdim> U_starR =
 			(S_R * U_R - F_R + P_LR * D_star) / (S_R - S_star);
 
+		// compute 'low-dissipation' correction (Eq. 24 of HLLC-LM paper)
+		const double Mach_max = std::max(std::abs(u_L / cs_L), std::abs(u_R / cs_R));
+		const double phi = std::sin(0.5 * M_PI * std::min(1., Mach_max / 0.1));
+
 		// Eq. 19 of HLLC-LM paper
 		const quokka::valarray<double, fluxdim> F_star = 0.5 * (F_L + F_R) + 
-			0.5 * (S_L * (U_starL - U_L) + std::abs(S_star) * (U_starL - U_starR) + S_R  * (U_starR - U_R));
-
-		// compute 'low-dissipation' correction to F_star
-		const double cu_L = std::sqrt(vsq_L);
-		const double cu_R = std::sqrt(vsq_R);
-		const double chi = std::min(1.0, std::max(cu_L, cu_R) / std::max(cs_L, cs_R));
-		const double phi = chi * (2.0 - chi);
+			0.5 * (phi * S_L * (U_starL - U_L) +
+				   std::abs(S_star) * (U_starL - U_starR) + phi * S_R  * (U_starR - U_R));
 
 		// open the Riemann fan
 		quokka::valarray<double, fluxdim> F{};
