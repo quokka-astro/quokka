@@ -390,6 +390,9 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 		auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
 
 		// HLLC solver following Toro (1998) and Balsara (2017).
+		// [Carbuncle correction:
+		//  Minoshima & Miyoshi, "A low-dissipation HLLD approximate Riemann solver
+		//  	for a very wide range of Mach numbers," JCP (2021).]
 
 		// gather left- and right- state variables
 
@@ -474,14 +477,21 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 
 		double S_L = u_L - q_L * cs_L;
 		double S_R = u_R + q_R * cs_R;
+
+		// carbuncle correction [Eq. 10 of Minoshima & Miyoshi (2021)]
+		const double cs_max = std::max(cs_L, cs_R);
+		// TODO(ben): compute velocity differences
+		const double du = 0; // difference in normal velocity along normal axis
+		const double dv = 0; // difference in transverse velocity along its axis
+		const double dw = 0; // difference in other transverse velocity
+		const double tp = std::min(1., (cs_max - std::min(du, 0.)) / (cs_max - std::min({dv, dw, 0.})));
+		const double theta = tp*tp*tp*tp;
+
 		const double S_star =
-		    ((P_R - P_L) + (rho_L * u_L * (S_L - u_L) - rho_R * u_R * (S_R - u_R))) /
+		    (theta * (P_R - P_L) + (rho_L * u_L * (S_L - u_L) - rho_R * u_R * (S_R - u_R))) /
 		    (rho_L * (S_L - u_L) - rho_R * (S_R - u_R));
 
 		// Low-dissipation pressure correction 'phi' [Eq. 23 of Minoshima & Miyoshi]
-		// [Minoshima & Miyoshi, "A low-dissipation HLLD approximate Riemann solver
-		//  for a very wide range of Mach numbers," JCP (2021)]
-		const double cs_max = std::max(cs_L, cs_R);
 		const double vmag_L = std::sqrt(vx_L*vx_L + vy_L*vy_L + vz_L+vz_L);
 		const double vmag_R = std::sqrt(vx_R*vx_R + vy_R*vy_R + vz_R*vz_R);
 		const double chi = std::min(1., std::max(vmag_L, vmag_R) / cs_max);
