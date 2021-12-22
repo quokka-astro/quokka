@@ -457,27 +457,23 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 			u_R = vz_R;
 		}
 
-		// compute PVRS states (Toro 10.5.2)
+		// compute wavespeeds
+		// (use Einfeldt / Roe-average wavespeeds)
+		const double rhosqrt_L = std::sqrt(rho_L);
+		const double rhosqrt_R = std::sqrt(rho_R);
+		const double cssq_L = cs_L * cs_L;
+		const double cssq_R = cs_R * cs_R;
 
-		const double rho_bar = 0.5 * (rho_L + rho_R);
-		const double cs_bar = 0.5 * (cs_L + cs_R);
-		const double P_PVRS = 0.5 * (P_L + P_R) - 0.5 * (u_R - u_L) * (rho_bar * cs_bar);
-		const double P_star = std::max(P_PVRS, 0.0);
+		const double uhat = (u_L * rhosqrt_L + u_R * rhosqrt_R) / (rhosqrt_L + rhosqrt_R);
+		const double cshat_sq = (cssq_L * rhosqrt_L + cssq_R * rhosqrt_R) / (rhosqrt_L + rhosqrt_R) + 
+			0.5 * (rhosqrt_L * rhosqrt_R) / std::pow(rhosqrt_L + rhosqrt_R, 2) * std::pow(u_R - u_L, 2);
 
-		const double q_L = (P_star <= P_L)
-				       ? 1.0
-				       : std::sqrt(1.0 + ((gamma_ + 1.0) / (2.0 * gamma_)) *
-							     ((P_star / P_L) - 1.0));
+		const double cshat = std::sqrt(cshat_sq);
 
-		const double q_R = (P_star <= P_R)
-				       ? 1.0
-				       : std::sqrt(1.0 + ((gamma_ + 1.0) / (2.0 * gamma_)) *
-							     ((P_star / P_R) - 1.0));
+		const double S_L = std::min(u_L - cs_L, uhat - cshat);
+		const double S_R = std::max(u_R + cs_R, uhat + cshat);
 
-		// compute wave speeds
-
-		double S_L = u_L - q_L * cs_L;
-		double S_R = u_R + q_R * cs_R;
+		// contact wavespeed
 		const double S_star =
 		    ((P_R - P_L) + (rho_L * u_L * (S_L - u_L) - rho_R * u_R * (S_R - u_R))) /
 		    (rho_L * (S_L - u_L) - rho_R * (S_R - u_R));
