@@ -232,7 +232,7 @@ void HydroSystem<problem_t>::EnforcePressureFloor(amrex::Real const densityFloor
 			amrex::Real P_new = P_star;
 			if (P_star < P_floor) {
 				P_new = P_floor;
-				#pragma diag_suppress divide_by_zero
+				#pragma nv_diag_suppress divide_by_zero
 				amrex::Real const Etot_new = P_new / (gamma_ - 1.) + 0.5 * rho_new * vsq;
 				state(i, j, k, energy_index) = Etot_new;
 			}

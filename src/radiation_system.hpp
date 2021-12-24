@@ -770,7 +770,7 @@ RadSystem<problem_t>::ComputeTgasFromEgas(const double rho, const double Egas)
   } else {
     return NAN;
   }
-  #pragma diag_suppress implicit_return_from_non_void_function
+  #pragma nv_diag_suppress implicit_return_from_non_void_function
 }
 
 template <typename problem_t>
