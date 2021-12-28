@@ -165,7 +165,7 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array
 						       amrex::Box const &interfaceRange,
 						       const int nvars)
 {
-	//BL_PROFILE("HyperbolicSystem::ReconstructStatesPPM()");
+	BL_PROFILE("HyperbolicSystem::ReconstructStatesPPM()");
 
 	// construct ArrayViews for permuted indices
 	quokka::Array4View<amrex::Real const, DIR> q(q_in);
@@ -178,6 +178,9 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array
 	// at the *left* edge of zone i.
 
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
+
+	// TODO(benwibking): combine these loops into a single GPU kernel to
+	//  avoid kernel launch overhead (very high, ~10 microseconds per launch).
 
 	// interface-centered kernel
 	amrex::ParallelFor(interfaceRange, nvars,
@@ -220,11 +223,15 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array
 		    // (2.) Constrain interfaces to lie between surrounding cell-averaged
 		    // values (equivalent to step 2b in Athena++ [ppm_simple.cpp]).
 			// [See Eq. B8 of Mignone+ 2005.]
-		    
+
 #ifdef MULTIDIM_EXTREMA_CHECK
+			// N.B.: Checking all 27 nearest neighbors is *very* expensive on GPU
+			// (presumably due to lots of cache misses), so it is hard-coded disabled.
+			// Fortunately, almost all problems run stably without enabling this.
 #if (AMREX_SPACEDIM == 1)
 			// 1D: compute bounds from self + all 2 surrounding cells
-			const std::pair<double, double> bounds = std::minmax({q(i, j, k, n), q(i - 1, j, k, n), q(i + 1, j, k, n)});
+			const std::pair<double, double> bounds =
+				std::minmax({q(i, j, k, n), q(i - 1, j, k, n), q(i + 1, j, k, n)});
 #elif (AMREX_SPACEDIM == 2)
 			// 2D: compute bounds from self + all 8 surrounding cells
 			const std::pair<double, double> bounds = std::minmax({q(i, j, k, n),
@@ -233,7 +240,7 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array
 				q(i - 1, j - 1, k, n), q(i + 1, j - 1, k, n),
 				q(i - 1, j + 1, k, n), q(i + 1, j + 1, k, n)});
 #else // AMREX_SPACEDIM == 3
-			// 3D: compute bounds from self + all 26 surrounding cells			
+			// 3D: compute bounds from self + all 26 surrounding cells
 			const std::pair<double, double> bounds = std::minmax({q(i, j, k, n),
 				q(i - 1, j, k, n), q(i + 1, j, k, n),
 				q(i, j - 1, k, n), q(i, j + 1, k, n),
@@ -250,8 +257,9 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array
 				q(i - 1, j + 1, k + 1, n), q(i + 1, j + 1, k + 1, n)});
 #endif // AMREX_SPACEDIM
 #else // MULTIDIM_EXTREMA_CHECK
-			// compute bounds from self + all 2 surrounding cells
-			const std::pair<double, double> bounds = std::minmax({q(i, j, k, n), q(i - 1, j, k, n), q(i + 1, j, k, n)});
+			// compute bounds from neighboring cell-averaged values along axis
+			const std::pair<double, double> bounds =
+				std::minmax({q(i, j, k, n), q(i - 1, j, k, n), q(i + 1, j, k, n)});
 #endif // MULTIDIM_EXTREMA_CHECK
 
 		    // get interfaces
@@ -289,7 +297,7 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array
 
 		    const double qa = dq_plus * dq_minus; // interface extrema
 
-		    if ((qa <= 0.0)) { // local extremum
+		    if (qa <= 0.0) { // local extremum
 
 			    // Causes subtle, but very weird, oscillations in the Shu-Osher test
 			    // problem. However, it is necessary to get a reasonable solution
@@ -416,7 +424,7 @@ void HyperbolicSystem<problem_t>::AddFluxesRK2(
 		    const double FyU_1 = (dt / dy) * (x2Flux(i, j, k, n) - x2Flux(i, j + 1, k, n));
 #endif
 #if (AMREX_SPACEDIM == 3)
-		    const double FzU_1 = (dt / dz) * (x3Flux(i, j, k, n) - x3Flux(i, j, k + 1, n));	
+		    const double FzU_1 = (dt / dz) * (x3Flux(i, j, k, n) - x3Flux(i, j, k + 1, n));
 #endif
 
 		    // save results in U_new
