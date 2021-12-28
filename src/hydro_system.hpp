@@ -68,6 +68,11 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	AMREX_GPU_DEVICE static auto ComputePressure(amrex::Array4<const amrex::Real> const &cons,
 						     int i, int j, int k) -> amrex::Real;
 
+	
+	template <FluxDir DIR>
+	void ComputeVelocityDifferences(amrex::Array4<const amrex::Real> const &primVar_in,
+				  array_t &dv_in, amrex::Box const &indexRange);
+
 	template <FluxDir DIR>
 	static void ComputeFluxes(array_t &x1Flux,
 				  amrex::Array4<const amrex::Real> const &x1LeftState,
@@ -371,6 +376,27 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::Array4<const amrex::Real> cons
 
 template <typename problem_t>
 template <FluxDir DIR>
+void HydroSystem<problem_t>::ComputeVelocityDifferences(
+    amrex::Array4<const amrex::Real> const &primVar_in, array_t &dv_in,
+    amrex::Box const &indexRange)
+{
+	quokka::Array4View<const amrex::Real, DIR> primVar(primVar_in);
+	quokka::Array4View<amrex::Real, DIR> dv(dv_in);
+
+	// compute velocity differences from cell-average data for normal
+	//   and transverse directions (w/r/t DIR)
+	// (required by Minoshima+ 2021 carbuncle fix in Riemann solver)
+
+	// cell-centered kernel
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in) {
+		auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
+
+		// TODO(benwibking): implement here
+	});
+}
+
+template <typename problem_t>
+template <FluxDir DIR>
 void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 					   amrex::Array4<const amrex::Real> const &x1LeftState_in,
 					   amrex::Array4<const amrex::Real> const &x1RightState_in,
@@ -480,7 +506,7 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 
 		// carbuncle correction [Eq. 10 of Minoshima & Miyoshi (2021)]
 		const double cs_max = std::max(cs_L, cs_R);
-		// TODO(ben): compute velocity differences
+		// TODO(ben): compute normal/transverse velocity differences
 		const double du = 0; // difference in normal velocity along normal axis
 		const double dv = 0; // difference in transverse velocity along its axis
 		const double dw = 0; // difference in other transverse velocity
@@ -491,13 +517,16 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 		    (theta * (P_R - P_L) + (rho_L * u_L * (S_L - u_L) - rho_R * u_R * (S_R - u_R))) /
 		    (rho_L * (S_L - u_L) - rho_R * (S_R - u_R));
 
+#if 0
 		// Low-dissipation pressure correction 'phi' [Eq. 23 of Minoshima & Miyoshi]
 		const double vmag_L = std::sqrt(vx_L*vx_L + vy_L*vy_L + vz_L+vz_L);
 		const double vmag_R = std::sqrt(vx_R*vx_R + vy_R*vy_R + vz_R*vz_R);
 		const double chi = std::min(1., std::max(vmag_L, vmag_R) / cs_max);
 		const double phi = chi * (2. - chi);
-
 		const double P_LR = 0.5 * (P_L + P_R) + 0.5 * phi * (rho_L * (S_L - u_L) * (S_star - u_L) +
+					   rho_R * (S_R - u_R) * (S_star - u_R));
+#endif
+		const double P_LR = 0.5 * (P_L + P_R) + 0.5 * (rho_L * (S_L - u_L) * (S_star - u_L) + 
 					   rho_R * (S_R - u_R) * (S_star - u_R));
 
 		// compute fluxes
