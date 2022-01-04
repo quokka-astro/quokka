@@ -179,12 +179,9 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array
 
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
 
-	// TODO(benwibking): combine these loops into a single GPU kernel to
-	//  avoid kernel launch overhead (very high, ~10 microseconds per launch).
-
-	// interface-centered kernel
-	amrex::ParallelFor(interfaceRange, nvars,
-			   [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
+	// fuse loops into a single GPU kernel to avoid kernel launch overhead
+	amrex::ParallelFor(interfaceRange, nvars, // interface-centered kernel
+				[=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
 				   // permute array indices according to dir
 				   auto [i, j, k] =
 				       quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
@@ -212,11 +209,9 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array
 
 				   // a_L,i in C&W
 				   rightState(i, j, k, n) = interface;
-			   });
-
-	// cell-centered kernel
-	amrex::ParallelFor(
-	    cellRange, nvars, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
+			   },
+			   cellRange, nvars, // cell-centered kernel
+		[=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
 		    // permute array indices according to dir
 		    auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
 
@@ -274,11 +269,9 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array
 
 		    rightState(i, j, k, n) = new_a_minus;
 		    leftState(i + 1, j, k, n) = new_a_plus;
-	    });
-
-	// cell-centered kernel
-	amrex::ParallelFor(
-	    cellRange, nvars, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
+	    },
+		cellRange, nvars, // cell-centered kernel
+		 [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
 		    // permute array indices according to dir
 		    auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
 
@@ -329,7 +322,7 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array
 
 		    rightState(i, j, k, n) = new_a_minus;
 		    leftState(i + 1, j, k, n) = new_a_plus;
-	    });
+	});
 }
 
 #if 0
