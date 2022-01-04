@@ -180,7 +180,8 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
 
 	// fuse loops into a single GPU kernel to avoid kernel launch overhead
-	amrex::ParallelFor(interfaceRange, nvars, // interface-centered kernel
+	amrex::ParallelFor(
+		interfaceRange, nvars, // interface-centered kernel
 				[=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
 				   // permute array indices according to dir
 				   auto [i, j, k] =
@@ -210,7 +211,7 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array
 				   // a_L,i in C&W
 				   rightState(i, j, k, n) = interface;
 			   },
-			   cellRange, nvars, // cell-centered kernel
+		cellRange, nvars, // cell-centered kernel
 		[=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
 		    // permute array indices according to dir
 		    auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
@@ -262,31 +263,17 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array
 		    const double a_plus = leftState(i + 1, j, k, n);
 
 		    // left side of zone i
-		    const double new_a_minus = clamp(a_minus, bounds.first, bounds.second);
+		    double new_a_minus = clamp(a_minus, bounds.first, bounds.second);
 
 		    // right side of zone i
-		    const double new_a_plus = clamp(a_plus, bounds.first, bounds.second);
-
-		    rightState(i, j, k, n) = new_a_minus;
-		    leftState(i + 1, j, k, n) = new_a_plus;
-	    },
-		cellRange, nvars, // cell-centered kernel
-		 [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
-		    // permute array indices according to dir
-		    auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
-
-		    const double a_minus = rightState(i, j, k, n);   // a_L,i in C&W
-		    const double a_plus = leftState(i + 1, j, k, n); // a_R,i in C&W
-		    const double a = q(i, j, k, n);		     // a_i in C&W
-
-		    const double dq_minus = (a - a_minus);
-		    const double dq_plus = (a_plus - a);
-
-		    double new_a_minus = a_minus;
-		    double new_a_plus = a_plus;
+		    double new_a_plus = clamp(a_plus, bounds.first, bounds.second);
 
 		    // (3.) Monotonicity correction, using Eq. (1.10) in PPM paper. Equivalent
 		    // to step 4b in Athena++ [ppm_simple.cpp].
+			
+		    const double a = q(i, j, k, n);	// a_i in C&W
+		    const double dq_minus = (a - new_a_minus);
+		    const double dq_plus = (new_a_plus - a);
 
 		    const double qa = dq_plus * dq_minus; // interface extrema
 
