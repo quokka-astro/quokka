@@ -16,7 +16,7 @@
 MPI_OPTIONS="-np $PBS_NCPUS --mca pml ucx"
 echo "Using MPI_OPTIONS = $MPI_OPTIONS"
 
-mpirun $MPI_OPTIONS ./scripts/gpu_wrapper_sedov_512.sh > sedov_1node_cpu.log
+mpirun $MPI_OPTIONS ./build/src/HydroBlast3D/test_hydro3d_blast tests/blast_unigrid_512_cpu.in amrex.async_out=1 > sedov_1node_cpu.log
 
 
 
