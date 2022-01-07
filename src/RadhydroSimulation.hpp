@@ -596,9 +596,13 @@ void RadhydroSimulation<problem_t>::hydroFluxFunction(
 	    primVar, x1Flat, x2Flat, x3Flat, x1LeftState.array(), x1RightState.array(),
 	    reconstructRange, nvars);
 
+	amrex::FArrayBox dvn(x1FluxRange, 1, amrex::The_Async_Arena());
+	amrex::FArrayBox dvt(x1FluxRange, 1, amrex::The_Async_Arena());
+
 	// interface-centered kernel
 	HydroSystem<problem_t>::template ComputeFluxes<DIR>(
-	    x1Flux.array(), x1LeftState.array(), x1RightState.array(), x1FluxRange);
+	    x1Flux.array(), x1LeftState.array(), x1RightState.array(),
+		primVar, dvn.array(), dvt.array(), x1FluxRange);
 }
 
 template <typename problem_t>
