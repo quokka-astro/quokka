@@ -549,21 +549,19 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 		const double dw = dvt(i, j, k); // difference in transverse velocity
 		const double tp = std::min(1., (cs_max - std::min(du, 0.)) / (cs_max - std::min(dw, 0.)));
 		const double theta = tp*tp*tp*tp;
+		//const double theta = 1.0;
 
 		const double S_star =
 		    (theta * (P_R - P_L) + (rho_L * u_L * (S_L - u_L) - rho_R * u_R * (S_R - u_R))) /
 		    (rho_L * (S_L - u_L) - rho_R * (S_R - u_R));
 
-#if 0
 		// Low-dissipation pressure correction 'phi' [Eq. 23 of Minoshima & Miyoshi]
 		const double vmag_L = std::sqrt(vx_L*vx_L + vy_L*vy_L + vz_L+vz_L);
 		const double vmag_R = std::sqrt(vx_R*vx_R + vy_R*vy_R + vz_R*vz_R);
 		const double chi = std::min(1., std::max(vmag_L, vmag_R) / cs_max);
 		const double phi = chi * (2. - chi);
+		//const double phi = 1.0;
 		const double P_LR = 0.5 * (P_L + P_R) + 0.5 * phi * (rho_L * (S_L - u_L) * (S_star - u_L) +
-					   rho_R * (S_R - u_R) * (S_star - u_R));
-#endif
-		const double P_LR = 0.5 * (P_L + P_R) + 0.5 * (rho_L * (S_L - u_L) * (S_star - u_L) + 
 					   rho_R * (S_R - u_R) * (S_star - u_R));
 
 		// compute fluxes
