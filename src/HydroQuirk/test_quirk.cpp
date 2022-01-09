@@ -40,6 +40,10 @@ Real pr =  0.6;
 
 template <> void RadhydroSimulation<QuirkProblem>::setInitialConditionsAtLevel(int lev)
 {
+	// Initial conditions from:
+	// T. Hanawa et al. / Journal of Computational Physics 227 (2008) 7952–7976
+	// and based on Athena++'s quirk.cpp.
+
 	amrex::GpuArray<Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
 	amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
 
