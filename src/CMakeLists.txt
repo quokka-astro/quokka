@@ -52,6 +52,7 @@ add_subdirectory(HydroShuOsher)
 add_subdirectory(HydroSMS)
 add_subdirectory(HydroVacuum)
 add_subdirectory(HydroWave)
+add_subdirectory(HydroQuirk)
 
 add_subdirectory(RadBeam)
 add_subdirectory(RadForce)

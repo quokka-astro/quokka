@@ -67,12 +67,18 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	AMREX_GPU_DEVICE static auto ComputePressure(amrex::Array4<const amrex::Real> const &cons,
 						     int i, int j, int k) -> amrex::Real;
+	
+	template <FluxDir DIR>
+	static void ComputeVelocityDifferences(amrex::Array4<const amrex::Real> const &primVar_in,
+				  array_t &dvn_in, array_t &dvt_in, amrex::Box const &indexRange);
 
 	template <FluxDir DIR>
-	static void ComputeFluxes(array_t &x1Flux,
-				  amrex::Array4<const amrex::Real> const &x1LeftState,
-				  amrex::Array4<const amrex::Real> const &x1RightState,
-				  amrex::Box const &indexRange);
+	static void ComputeFluxes(array_t &x1Flux_in,
+					amrex::Array4<const amrex::Real> const &x1LeftState_in,
+					amrex::Array4<const amrex::Real> const &x1RightState_in,
+					amrex::Array4<const amrex::Real> const &primVar_in,
+					array_t &dvn_in, array_t &dvt_in,
+					amrex::Box const &indexRange);
 
 	template <FluxDir DIR>
 	static void ComputeFirstOrderFluxes(amrex::Array4<const amrex::Real> const &consVar,
@@ -371,11 +377,70 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::Array4<const amrex::Real> cons
 
 template <typename problem_t>
 template <FluxDir DIR>
+void HydroSystem<problem_t>::ComputeVelocityDifferences(
+    amrex::Array4<const amrex::Real> const &primVar_in,
+	array_t &dvn_in, array_t &dvt_in, amrex::Box const &indexRange)
+{
+	quokka::Array4View<const amrex::Real, DIR> q(primVar_in);
+	quokka::Array4View<amrex::Real, DIR> dvn(dvn_in);
+	quokka::Array4View<amrex::Real, DIR> dvt(dvt_in);
+
+	// compute velocity differences from cell-average data for normal
+	//   and transverse directions (w/r/t DIR)
+	// (required by Minoshima+ 2021 carbuncle fix in Riemann solver)
+
+	// cell-centered kernel
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in) {
+		auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
+		int velN_index = x1Velocity_index;
+		int velV_index = x2Velocity_index;
+		int velW_index = x3Velocity_index;
+
+		if constexpr (DIR == FluxDir::X1) {
+			velN_index = x1Velocity_index;
+			velV_index = x2Velocity_index;
+			velW_index = x3Velocity_index;
+		} else if constexpr (DIR == FluxDir::X2) {
+			velN_index = x2Velocity_index;
+			velV_index = x3Velocity_index;
+			velW_index = x1Velocity_index;
+		} else if constexpr (DIR == FluxDir::X3) {
+			velN_index = x3Velocity_index;
+			velV_index = x1Velocity_index;
+			velW_index = x2Velocity_index;
+		}
+
+		// normal velocity difference
+		dvn(i, j, k) = q(i, j, k, velN_index) - q(i - 1, j, k, velN_index);
+
+		amrex::Real dvl = std::min(q(i - 1, j + 1, k, velV_index) - q(i - 1, j, k, velV_index),
+								   q(i - 1, j, k, velV_index) - q(i - 1, j - 1, k, velV_index));
+		amrex::Real dvr = std::min(q(i, j + 1, k, velV_index) - q(i, j, k, velV_index),
+								   q(i, j, k, velV_index) - q(i, j - 1, k, velV_index));
+		
+		amrex::Real dwl = std::min(q(i - 1, j, k + 1, velW_index) - q(i - 1, j, k, velW_index),
+								   q(i - 1, j, k, velW_index) - q(i - 1, j, k - 1, velW_index));
+		amrex::Real dwr = std::min(q(i, j, k + 1, velW_index) - q(i, j, k, velW_index),
+								   q(i, j, k, velW_index) - q(i, j, k - 1, velW_index));
+
+		// transverse velocity difference
+		dvt(i, j, k) = std::min(std::min(dvl, dvr), std::min(dwl, dwr));
+	});
+}
+
+template <typename problem_t>
+template <FluxDir DIR>
 void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 					   amrex::Array4<const amrex::Real> const &x1LeftState_in,
 					   amrex::Array4<const amrex::Real> const &x1RightState_in,
+					   amrex::Array4<const amrex::Real> const &primVar_in,
+					   array_t &dvn_in, array_t &dvt_in,
 					   amrex::Box const &indexRange)
 {
+	ComputeVelocityDifferences<DIR>(primVar_in, dvn_in, dvt_in, indexRange);
+
+	quokka::Array4View<const amrex::Real, DIR> dvn(dvn_in);
+	quokka::Array4View<const amrex::Real, DIR> dvt(dvt_in);
 	quokka::Array4View<const amrex::Real, DIR> x1LeftState(x1LeftState_in);
 	quokka::Array4View<const amrex::Real, DIR> x1RightState(x1RightState_in);
 	quokka::Array4View<amrex::Real, DIR> x1Flux(x1Flux_in);
@@ -390,6 +455,9 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 		auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
 
 		// HLLC solver following Toro (1998) and Balsara (2017).
+		// [Carbuncle correction:
+		//  Minoshima & Miyoshi, "A low-dissipation HLLD approximate Riemann solver
+		//  	for a very wide range of Mach numbers," JCP (2021).]
 
 		// gather left- and right- state variables
 
@@ -474,11 +542,24 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 
 		double S_L = u_L - q_L * cs_L;
 		double S_R = u_R + q_R * cs_R;
+
+		// carbuncle correction [Eq. 10 of Minoshima & Miyoshi (2021)]
+		const double cs_max = std::max(cs_L, cs_R);
+		const double du = dvn(i, j, k); // difference in normal velocity along normal axis
+		const double dw = dvt(i, j, k); // difference in transverse velocity
+		const double tp = std::min(1., (cs_max - std::min(du, 0.)) / (cs_max - std::min(dw, 0.)));
+		const double theta = tp*tp*tp*tp;
+
 		const double S_star =
-		    ((P_R - P_L) + (rho_L * u_L * (S_L - u_L) - rho_R * u_R * (S_R - u_R))) /
+		    (theta * (P_R - P_L) + (rho_L * u_L * (S_L - u_L) - rho_R * u_R * (S_R - u_R))) /
 		    (rho_L * (S_L - u_L) - rho_R * (S_R - u_R));
 
-		const double P_LR = 0.5 * (P_L + P_R + rho_L * (S_L - u_L) * (S_star - u_L) +
+		// Low-dissipation pressure correction 'phi' [Eq. 23 of Minoshima & Miyoshi]
+		const double vmag_L = std::sqrt(vx_L*vx_L + vy_L*vy_L + vz_L+vz_L);
+		const double vmag_R = std::sqrt(vx_R*vx_R + vy_R*vy_R + vz_R*vz_R);
+		const double chi = std::min(1., std::max(vmag_L, vmag_R) / cs_max);
+		const double phi = chi * (2. - chi);
+		const double P_LR = 0.5 * (P_L + P_R) + 0.5 * phi * (rho_L * (S_L - u_L) * (S_star - u_L) +
 					   rho_R * (S_R - u_R) * (S_star - u_R));
 
 		// compute fluxes

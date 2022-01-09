@@ -224,7 +224,7 @@ auto problem_main() -> int {
   }
 #endif
 
-  const double err_tol = 3.0e-9; // for Nx = 100
+  const double err_tol = 1.0e-8; // for Nx = 100
   int status = 0;
   if (epsilon > err_tol) {
     status = 1;
