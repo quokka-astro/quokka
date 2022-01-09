@@ -31,12 +31,12 @@ template <> struct EOS_Traits<QuirkProblem> {
 	static constexpr double gamma = 5. / 3.;
 };
 
-Real dl =  3.692;
-Real ul = -0.625;
-Real pl =  26.85;
-Real dr =  1.0;
-Real ur = -5.0;
-Real pr =  0.6;
+constexpr Real dl =  3.692;
+constexpr Real ul = -0.625;
+constexpr Real pl =  26.85;
+constexpr Real dr =  1.0;
+constexpr Real ur = -5.0;
+constexpr Real pr =  0.6;
 
 template <> void RadhydroSimulation<QuirkProblem>::setInitialConditionsAtLevel(int lev)
 {
