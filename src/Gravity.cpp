@@ -23,6 +23,7 @@
 #include <AMReX_MLPoisson.H>
 #include <AMReX_ParmParse.H>
 
+#include "hydro_system.hpp"
 #include <Gravity.H>
 
 using namespace amrex;
@@ -82,6 +83,10 @@ Gravity::Gravity(Amr *Parent, int /*_finest_level*/, BCRec *_phys_bc,
     init_multipole_grav();
   }
   max_rhs = 0.0;
+
+  // uninitialized:
+  //  mlmg_lobc, mlmg_hibc -- set by Gravity::make_mg_bc()
+  //  numpts_at_level -- set by Gravity::set_numpts_in_gravity()
 }
 
 void Gravity::read_params() {
@@ -874,7 +879,7 @@ void Gravity::average_fine_ec_onto_crse_ec(int level, int is_new) {
 }
 
 // this is used for periodic domains only
-void Gravity::set_mass_offset(Real time, bool multi_level) {
+void Gravity::set_mass_offset(Real time, bool multi_level) const {
   BL_PROFILE("Gravity::set_mass_offset()");
 
   const Geometry &geom = parent->Geom(0);
@@ -887,11 +892,11 @@ void Gravity::set_mass_offset(Real time, bool multi_level) {
 
     if (multi_level) {
       for (int lev = 0; lev <= parent->finestLevel(); lev++) {
-        Castro *cs = dynamic_cast<Castro *>(&parent->getLevel(lev));
+        // Castro *cs = dynamic_cast<Castro *>(&parent->getLevel(lev));
         mass_offset += cs->volWgtSum("density", time);
       }
     } else {
-      Castro *cs = dynamic_cast<Castro *>(&parent->getLevel(0));
+      // Castro *cs = dynamic_cast<Castro *>(&parent->getLevel(0));
       mass_offset = cs->volWgtSum("density", time, false,
                                   false); // do not mask off fine grids
     }
@@ -926,19 +931,18 @@ auto Gravity::get_rhs(int crse_level, int nlevs, int is_new)
     MultiFab &state = (is_new == 1)
                           ? LevelData[amr_lev]->get_new_data(State_Type)
                           : LevelData[amr_lev]->get_old_data(State_Type);
-    MultiFab::Copy(*rhs[ilev], state, URHO, 0, 1, 0);
+    MultiFab::Copy(*rhs[ilev], state, density_index, 0, 1, 0);
   }
   return rhs;
 }
 
 void Gravity::sanity_check(int level) {
   // This is a sanity check on whether we are trying to fill multipole boundary
-  // conditiosn
-  //  for grids at this level > 0 -- this case is not currently supported.
-  //  Here we shrink the domain at this level by 1 in any direction which is not
-  //  symmetry or periodic, then ask if the grids at this level are contained in
-  //  the shrunken domain.  If not, then grids at this level touch the domain
-  //  boundary and we must abort.
+  // conditions for grids at this level > 0 -- this case is not currently
+  // supported. Here we shrink the domain at this level by 1 in any direction
+  // which is not symmetry or periodic, then ask if the grids at this level are
+  // contained in the shrunken domain.  If not, then grids at this level touch
+  // the domain boundary and we must abort.
 
   const Geometry &geom = parent->Geom(level);
 
@@ -1083,7 +1087,7 @@ auto Gravity::actual_solve_with_mlmg(
         &grad_phi,
     const amrex::Vector<amrex::MultiFab *> &res,
     const amrex::MultiFab *const crse_bcdata, amrex::Real rel_eps,
-    amrex::Real abs_eps) -> Real {
+    amrex::Real abs_eps) const -> Real {
   BL_PROFILE("Gravity::actual_solve_with_mlmg()");
 
   Real final_resnorm = -1.0;
@@ -1100,8 +1104,8 @@ auto Gravity::actual_solve_with_mlmg(
   }
 
   LPInfo info;
-  info.setAgglomeration(gravity::mlmg_agglomeration);
-  info.setConsolidation(gravity::mlmg_consolidation);
+  info.setAgglomeration(gravity::mlmg_agglomeration != 0);
+  info.setConsolidation(gravity::mlmg_consolidation != 0);
 
   MLPoisson mlpoisson(gmv, bav, dmv, info);
 

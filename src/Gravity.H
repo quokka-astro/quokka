@@ -43,6 +43,12 @@ const int no_sync = 0;
 const int no_composite = 0;
 const int do_composite_phi_correction = 1;
 const int direct_sum_bcs = 0;
+
+// multigrid solve parameters
+const int mlmg_agglomeration = 1;
+const int mlmg_consolidation = 1;
+const int mlmg_max_fmg_iter = 1;
+const int mlmg_nsolve = 50;
 } // namespace gravity
 
 enum StateType {
@@ -127,32 +133,32 @@ public:
   ///
   /// Returns ``gravity_type``
   ///
-  auto get_gravity_type() -> std::string;
+  static auto get_gravity_type() -> std::string;
 
   ///
   /// Returns ``max_solve_level``
   ///
-  auto get_max_solve_level() -> int;
+  static auto get_max_solve_level() -> int;
 
   ///
   /// Returns ``no_sync``
   ///
-  auto NoSync() -> int;
+  static auto NoSync() -> int;
 
   ///
   /// Returns ``no_composite``
   ///
-  auto NoComposite() -> int;
+  static auto NoComposite() -> int;
 
   ///
   /// Returns ``do_composite_phi_correction``
   ///
-  auto DoCompositeCorrection() -> int;
+  static auto DoCompositeCorrection() -> int;
 
   ///
   /// Returns ``test_solves``
   ///
-  auto test_results_of_solves() -> int;
+  static auto test_results_of_solves() -> int;
 
   ///
   /// Set the ``mass_offset``
@@ -161,7 +167,7 @@ public:
   /// @param multi_level      boolean, do we iterate over all levels or mask off
   /// fine grids?
   ///
-  void set_mass_offset(amrex::Real time, bool multi_level = true);
+  void set_mass_offset(amrex::Real time, bool multi_level = true) const;
 
   ///
   /// Return ``grad_phi_prev`` at given level
@@ -290,8 +296,8 @@ public:
   void create_comp_minus_level_grad_phi(
       int level, amrex::MultiFab &comp_phi,
       const amrex::Vector<amrex::MultiFab *> &comp_gphi,
-      amrex::MultiFab &cml_phi,
-      amrex::Vector<std::unique_ptr<amrex::MultiFab>> &cml_gphi);
+      amrex::MultiFab &comp_minus_level_phi,
+      amrex::Vector<std::unique_ptr<amrex::MultiFab>> &comp_minus_level_grad_phi);
 
   ///
   /// Get coarse phi on level ``level``-1
@@ -430,7 +436,7 @@ public:
   amrex::Vector<amrex::MultiFab *> area;
 
   int Density;
-  int finest_level;
+  // int finest_level;
   int finest_level_allocated;
 
   amrex::BCRec *phys_bc;
@@ -490,7 +496,7 @@ public:
           &grad_phi,
       const amrex::Vector<amrex::MultiFab *> &res,
       const amrex::MultiFab *crse_bcdata, amrex::Real rel_eps,
-      amrex::Real abs_eps) -> amrex::Real;
+      amrex::Real abs_eps) const -> amrex::Real;
 
   ///
   /// Do multigrid solve to find phi
