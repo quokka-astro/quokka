@@ -15,10 +15,10 @@
 #include "AMReX_Array4.H"
 #include "AMReX_Extension.H"
 #include "AMReX_GpuQualifiers.H"
+#include "AMReX_GpuReduce.H"
 #include "AMReX_REAL.H"
 
 #include "Gravity.H"
-#include "fundamental_constants.H"
 
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto factorial(int n) -> amrex::Real {
   amrex::Real fact = 1.0;
