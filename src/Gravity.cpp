@@ -1,12 +1,17 @@
 //==============================================================================
-// Poisson gravity solver, adapted from Castro's gravity module:
-//   Commit history:
+// Poisson gravity solver, adapted from Castro's gravity module.
+//   Note that Quokka's modified version only handles Poisson gravity in 3D
+//   Cartesian geometry, which makes the code significantly simpler. There are
+//   also significant style changes to modernize to C++17. Also, we do not use
+//   amrex::AmrLevel here since Quokka uses amrex::AmrCore instead.
+// Commit history:
 //   https://github.com/AMReX-Astro/Castro/commits/main/Source/gravity/Gravity.cpp
 // Used under the terms of the open-source license (BSD 3-clause) given here:
 //   https://github.com/AMReX-Astro/Castro/blob/main/license.txt
 //==============================================================================
 /// \file gravity.cpp
-/// \brief Implements a class for solving the Poisson equation.
+/// \brief Implements a class for solving the Poisson equation for 3D, Cartesian
+/// geometry problems.
 ///
 
 #include <cmath>
