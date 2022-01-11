@@ -399,6 +399,14 @@ public:
   AMRSimulation<T> &sim;
 
   ///
+  /// MultiFabs for potential, acceleration
+  ///
+  amrex::Vector<amrex::MultiFab> phi_old_;
+  amrex::Vector<amrex::MultiFab> phi_new_;
+  amrex::Vector<amrex::MultiFab> g_old_;
+  amrex::Vector<amrex::MultiFab> g_new_;
+
+  ///
   /// Pointers to grad_phi at previous and current time
   ///
   amrex::Vector<amrex::Vector<std::unique_ptr<amrex::MultiFab>>> grad_phi_curr;

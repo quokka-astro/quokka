@@ -23,20 +23,18 @@
 using namespace amrex;
 
 #ifdef AMREX_DEBUG
-template <typename T>
-int Gravity<T>::test_solves = 1;
+template <typename T> int Gravity<T>::test_solves = 1;
 #else
-template <typename T>
-int Gravity<T>::test_solves = 0;
+template <typename T> int Gravity<T>::test_solves = 0;
 #endif
 
 template <typename T>
 void Gravity<T>::test_residual(const Box &bx, Array4<Real> const &rhs,
-                            Array4<Real> const &ecx, Array4<Real> const &ecy,
-                            Array4<Real> const &ecz,
-                            GpuArray<Real, AMREX_SPACEDIM> dx,
-                            GpuArray<Real, AMREX_SPACEDIM> /*problo*/,
-                            int coord_type) {
+                               Array4<Real> const &ecx, Array4<Real> const &ecy,
+                               Array4<Real> const &ecz,
+                               GpuArray<Real, AMREX_SPACEDIM> dx,
+                               GpuArray<Real, AMREX_SPACEDIM> /*problo*/,
+                               int coord_type) {
   // Test whether using the edge-based gradients
   // to compute Div(Grad(Phi)) satisfies Lap(phi) = RHS
   // Fill the RHS array with the residual
@@ -51,12 +49,11 @@ void Gravity<T>::test_residual(const Box &bx, Array4<Real> const &rhs,
   });
 }
 
-template <typename T>
-void Gravity<T>::test_level_grad_phi_prev(int level) {
+template <typename T> void Gravity<T>::test_level_grad_phi_prev(int level) {
   BL_PROFILE("Gravity::test_level_grad_phi_prev()");
 
   // Fill the RHS for the solve
-  MultiFab &S_old = LevelData[level]->get_old_data(State_Type);
+  MultiFab &S_old = sim.state_old_[level];
   MultiFab Rhs(grids[level], dmap[level], 1, 0);
   MultiFab::Copy(Rhs, S_old, Density, 0, 1, 0);
 
@@ -100,12 +97,11 @@ void Gravity<T>::test_level_grad_phi_prev(int level) {
   }
 }
 
-template <typename T>
-void Gravity<T>::test_level_grad_phi_curr(int level) {
+template <typename T> void Gravity<T>::test_level_grad_phi_curr(int level) {
   BL_PROFILE("Gravity::test_level_grad_phi_curr()");
 
   // Fill the RHS for the solve
-  MultiFab &S_new = LevelData[level]->get_new_data(State_Type);
+  MultiFab &S_new = sim.state_new_[level];
   MultiFab Rhs(grids[level], dmap[level], 1, 0);
   MultiFab::Copy(Rhs, S_new, Density, 0, 1, 0);
 
@@ -155,8 +151,7 @@ void Gravity<T>::test_level_grad_phi_curr(int level) {
   }
 }
 
-template <typename T>
-void Gravity<T>::test_composite_phi(int crse_level) {
+template <typename T> void Gravity<T>::test_composite_phi(int crse_level) {
   BL_PROFILE("Gravity::test_composite_phi()");
 
   if (gravity::verbose > 1 && ParallelDescriptor::IOProcessor()) {
@@ -174,12 +169,10 @@ void Gravity<T>::test_composite_phi(int crse_level) {
     int amr_lev = crse_level + ilev;
 
     phi[ilev] = std::make_unique<MultiFab>(grids[amr_lev], dmap[amr_lev], 1, 1);
-    MultiFab::Copy(*phi[ilev], LevelData[amr_lev]->get_new_data(PhiGrav_Type),
-                   0, 0, 1, 1);
+    MultiFab::Copy(*phi[ilev], phi_new_[amr_lev], 0, 0, 1, 1);
 
     rhs[ilev] = std::make_unique<MultiFab>(grids[amr_lev], dmap[amr_lev], 1, 1);
-    MultiFab::Copy(*rhs[ilev], LevelData[amr_lev]->get_new_data(State_Type),
-                   Density, 0, 1, 0);
+    MultiFab::Copy(*rhs[ilev], sim.state_new_[amr_lev], Density, 0, 1, 0);
 
     res[ilev] = std::make_unique<MultiFab>(grids[amr_lev], dmap[amr_lev], 1, 0);
     res[ilev]->setVal(0.);
