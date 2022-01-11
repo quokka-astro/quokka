@@ -19,7 +19,6 @@
 #include <AMReX_ParmParse.H>
 
 #include <Gravity.H>
-#include "hydro_system.hpp"
 
 using namespace amrex;
 

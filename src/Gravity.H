@@ -61,9 +61,9 @@ const int mlmg_nsolve = 50;
 } // namespace gravity
 
 enum StateType {
-  State_Type = 0,
-  PhiGrav_Type,
-  Gravity_Type,
+  State_Type = 0, // conserved fluid variables
+  PhiGrav_Type, // gravitational potential 'phi'
+  Gravity_Type, // gravitational acceleration 'g'
 };
 
 ///
