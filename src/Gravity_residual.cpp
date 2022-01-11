@@ -55,12 +55,12 @@ void Gravity::test_level_grad_phi_prev(int level) {
   // Fill the RHS for the solve
   MultiFab &S_old = LevelData[level]->get_old_data(State_Type);
   MultiFab Rhs(grids[level], dmap[level], 1, 0);
-  MultiFab::Copy(Rhs, S_old, density_index, 0, 1, 0);
+  MultiFab::Copy(Rhs, S_old, Density, 0, 1, 0);
 
-  const Geometry &geom = parent->Geom(level);
+  const Geometry &geom_lev = geom[level];
 
   // This is a correction for fully periodic domains only
-  if (geom.isAllPeriodic()) {
+  if (geom_lev.isAllPeriodic()) {
     if (gravity::verbose > 1 && ParallelDescriptor::IOProcessor() &&
         mass_offset != 0.0) {
       std::cout << " ... subtracting average density from RHS at level ... "
@@ -78,9 +78,9 @@ void Gravity::test_level_grad_phi_prev(int level) {
     amrex::Print() << "       norm of RHS             " << rhsnorm << std::endl;
   }
 
-  auto dx = parent->Geom(level).CellSizeArray();
-  auto problo = parent->Geom(level).ProbLoArray();
-  const int coord_type = geom.Coord();
+  auto dx = geom[level].CellSizeArray();
+  auto problo = geom[level].ProbLoArray();
+  const int coord_type = geom_lev.Coord();
 
   for (MFIter mfi(Rhs, TilingIfNotGPU()); mfi.isValid(); ++mfi) {
     const Box &bx = mfi.tilebox();
@@ -103,12 +103,12 @@ void Gravity::test_level_grad_phi_curr(int level) {
   // Fill the RHS for the solve
   MultiFab &S_new = LevelData[level]->get_new_data(State_Type);
   MultiFab Rhs(grids[level], dmap[level], 1, 0);
-  MultiFab::Copy(Rhs, S_new, density_index, 0, 1, 0);
+  MultiFab::Copy(Rhs, S_new, Density, 0, 1, 0);
 
-  const Geometry &geom = parent->Geom(level);
+  const Geometry &geom_lev = geom[level];
 
   // This is a correction for fully periodic domains only
-  if (geom.isAllPeriodic()) {
+  if (geom_lev.isAllPeriodic()) {
     if (gravity::verbose > 1 && ParallelDescriptor::IOProcessor() &&
         mass_offset != 0.0) {
       std::cout << " ... subtracting average density from RHS in solve ... "
@@ -128,9 +128,9 @@ void Gravity::test_level_grad_phi_curr(int level) {
     }
   }
 
-  auto dx = geom.CellSizeArray();
-  auto problo = geom.ProbLoArray();
-  const int coord_type = geom.Coord();
+  auto dx = geom_lev.CellSizeArray();
+  auto problo = geom_lev.ProbLoArray();
+  const int coord_type = geom_lev.Coord();
 
   for (MFIter mfi(Rhs, TilingIfNotGPU()); mfi.isValid(); ++mfi) {
     const Box &bx = mfi.tilebox();
@@ -159,7 +159,7 @@ void Gravity::test_composite_phi(int crse_level) {
     std::cout << "... test_composite_phi at base level " << crse_level << '\n';
   }
 
-  int finest_level_local = parent->finestLevel();
+  int finest_level_local = finest_level;
   int nlevels = finest_level_local - crse_level + 1;
 
   Vector<std::unique_ptr<MultiFab>> phi(nlevels);
@@ -174,7 +174,7 @@ void Gravity::test_composite_phi(int crse_level) {
 
     rhs[ilev] = std::make_unique<MultiFab>(grids[amr_lev], dmap[amr_lev], 1, 1);
     MultiFab::Copy(*rhs[ilev], LevelData[amr_lev]->get_new_data(State_Type),
-                   density_index, 0, 1, 0);
+                   Density, 0, 1, 0);
 
     res[ilev] = std::make_unique<MultiFab>(grids[amr_lev], dmap[amr_lev], 1, 0);
     res[ilev]->setVal(0.);
@@ -189,7 +189,7 @@ void Gravity::test_composite_phi(int crse_level) {
 
   // Average residual from fine to coarse level before printing the norm
   for (int amr_lev = finest_level_local - 1; amr_lev >= 0; --amr_lev) {
-    const IntVect &ratio = parent->refRatio(amr_lev);
+    const IntVect &ratio = refRatio[amr_lev];
     int ilev = amr_lev - crse_level;
     amrex::average_down(*res[ilev + 1], *res[ilev], 0, 1, ratio);
   }

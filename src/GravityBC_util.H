@@ -2,8 +2,9 @@
 #define GRAVITY_UTIL_H
 //==============================================================================
 // Poisson gravity solver, adapted from Castro's gravity module:
-//   Commit history: https://github.com/AMReX-Astro/Castro/commits/main/Source/gravity/Gravity_util.H
-// Used under the terms of the open-source license (BSD 3-clause) given here: 
+//   Commit history:
+//   https://github.com/AMReX-Astro/Castro/commits/main/Source/gravity/Gravity_util.H
+// Used under the terms of the open-source license (BSD 3-clause) given here:
 //   https://github.com/AMReX-Astro/Castro/blob/main/license.txt
 //==============================================================================
 /// \file Gravity_util.H
@@ -104,7 +105,7 @@ AMREX_GPU_DEVICE AMREX_INLINE void multipole_add(
     amrex::Array4<amrex::Real> const &qUC,
     amrex::Array4<amrex::Real> const &qUS, int npts, int nlo, int index,
     amrex::Gpu::Handler const &handler, bool parity = false) {
-        
+
   amrex::Real legPolyL = NAN;
   amrex::Real legPolyL1 = NAN;
   amrex::Real legPolyL2 = NAN;
@@ -213,310 +214,98 @@ AMREX_GPU_DEVICE AMREX_INLINE void multipole_add(
 AMREX_GPU_DEVICE AMREX_INLINE void multipole_symmetric_add(
     amrex::Real x, amrex::Real y, amrex::Real z,
     const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &problo,
-    const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> & /*probhi*/, amrex::Real rho,
-    amrex::Real vol, amrex::Array4<amrex::Real> const &qU0,
+    const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &coordCenter,
+    amrex::Real rho, amrex::Real vol, amrex::Array4<amrex::Real> const &qU0,
     amrex::Array4<amrex::Real> const &qUC,
     amrex::Array4<amrex::Real> const &qUS,
     amrex::Array4<amrex::Real> const &qL0,
     amrex::Array4<amrex::Real> const &qLC,
     amrex::Array4<amrex::Real> const &qLS, int npts, int nlo, int index,
     amrex::Gpu::Handler const &handler) {
-        
-  amrex::Real xLo =
-      (2.0 * (problo[0] - problem::center[0])) / multipole::rmax - x;
+
+  amrex::Real xLo = (2.0 * (problo[0] - coordCenter[0])) / multipole::rmax - x;
 
 #if AMREX_SPACEDIM >= 2
-  amrex::Real yLo =
-      (2.0 * (problo[1] - problem::center[1])) / multipole::rmax - y;
+  amrex::Real yLo = (2.0 * (problo[1] - coordCenter[1])) / multipole::rmax - y;
 #else
-    Real yLo = 0.0;
+  Real yLo = 0.0;
 #endif
 
 #if AMREX_SPACEDIM == 3
-  amrex::Real zLo =
-      (2.0 * (problo[2] - problem::center[2])) / multipole::rmax - z;
+  amrex::Real zLo = (2.0 * (problo[2] - coordCenter[2])) / multipole::rmax - z;
 #else
-    Real zLo = 0.0;
+  Real zLo = 0.0;
 #endif
 
-    if (multipole::doSymmetricAddLo(0)) {
+  if (multipole::doSymmetricAddLo(0)) {
 
-      amrex::Real r = std::sqrt(xLo * xLo + y * y + z * z);
-      amrex::Real phiAngle = std::atan2(y, xLo);
-      amrex::Real cosTheta = z / r;
+    amrex::Real r = std::sqrt(xLo * xLo + y * y + z * z);
+    amrex::Real phiAngle = std::atan2(y, xLo);
+    amrex::Real cosTheta = z / r;
 
-      multipole_add(cosTheta, phiAngle, r, rho, vol, qL0, qLC, qLS, qU0, qUC,
-                    qUS, npts, nlo, index, handler);
-
-      if (multipole::doSymmetricAddLo(1)) {
-
-        amrex::Real r = std::sqrt(xLo * xLo + yLo * yLo + z * z);
-        amrex::Real phiAngle = std::atan2(yLo, xLo);
-        amrex::Real cosTheta = z / r;
-
-        multipole_add(cosTheta, phiAngle, r, rho, vol, qL0, qLC, qLS, qU0, qUC,
-                      qUS, npts, nlo, index, handler);
-
-        }
-
-        if (multipole::doSymmetricAddLo(2)) {
-
-          amrex::Real r = std::sqrt(xLo * xLo + y * y + zLo * zLo);
-          amrex::Real phiAngle = std::atan2(y, xLo);
-          amrex::Real cosTheta = zLo / r;
-
-          multipole_add(cosTheta, phiAngle, r, rho, vol, qL0, qLC, qLS, qU0,
-                        qUC, qUS, npts, nlo, index, handler);
-
-        }
-
-        if (multipole::doSymmetricAddLo(1) && multipole::doSymmetricAddLo(2)) {
-
-          amrex::Real r = std::sqrt(xLo * xLo + yLo * yLo + zLo * zLo);
-          amrex::Real phiAngle = std::atan2(yLo, xLo);
-          amrex::Real cosTheta = zLo / r;
-
-          multipole_add(cosTheta, phiAngle, r, rho, vol, qL0, qLC, qLS, qU0,
-                        qUC, qUS, npts, nlo, index, handler);
-
-        }
-
-    }
+    multipole_add(cosTheta, phiAngle, r, rho, vol, qL0, qLC, qLS, qU0, qUC, qUS,
+                  npts, nlo, index, handler);
 
     if (multipole::doSymmetricAddLo(1)) {
 
-      amrex::Real r = std::sqrt(x * x + yLo * yLo + z * z);
-      amrex::Real phiAngle = std::atan2(yLo, x);
+      amrex::Real r = std::sqrt(xLo * xLo + yLo * yLo + z * z);
+      amrex::Real phiAngle = std::atan2(yLo, xLo);
       amrex::Real cosTheta = z / r;
 
       multipole_add(cosTheta, phiAngle, r, rho, vol, qL0, qLC, qLS, qU0, qUC,
                     qUS, npts, nlo, index, handler);
-
-      if (multipole::doSymmetricAddLo(2)) {
-
-        amrex::Real r = std::sqrt(x * x + yLo * yLo + zLo * zLo);
-        amrex::Real phiAngle = std::atan2(yLo, x);
-        amrex::Real cosTheta = zLo / r;
-
-        multipole_add(cosTheta, phiAngle, r, rho, vol, qL0, qLC, qLS, qU0, qUC,
-                      qUS, npts, nlo, index, handler);
-
-        }
-
     }
 
     if (multipole::doSymmetricAddLo(2)) {
 
-      amrex::Real r = std::sqrt(x * x + y * y + zLo * zLo);
-      amrex::Real phiAngle = std::atan2(y, x);
+      amrex::Real r = std::sqrt(xLo * xLo + y * y + zLo * zLo);
+      amrex::Real phiAngle = std::atan2(y, xLo);
       amrex::Real cosTheta = zLo / r;
 
       multipole_add(cosTheta, phiAngle, r, rho, vol, qL0, qLC, qLS, qU0, qUC,
                     qUS, npts, nlo, index, handler);
-
-    }
-}
-
-AMREX_GPU_HOST_DEVICE AMREX_INLINE auto
-direct_sum_symmetric_add(const amrex::GpuArray<amrex::Real, 3> &loc,
-                         const amrex::GpuArray<amrex::Real, 3> &locb,
-                         const amrex::GpuArray<amrex::Real, 3> &problo,
-                         const amrex::GpuArray<amrex::Real, 3> &probhi,
-                         amrex::Real rho, amrex::Real dV,
-                         const amrex::GpuArray<bool, 3> &doSymmetricAddLo,
-                         const amrex::GpuArray<bool, 3> &doSymmetricAddHi) -> amrex::Real {
-  // Add contributions from any symmetric boundaries.
-
-  amrex::Real bcTerm = 0.0;
-
-  amrex::Real x = NAN;
-  amrex::Real y = NAN;
-  amrex::Real z = NAN;
-  amrex::Real r = NAN;
-
-  if (doSymmetricAddLo[0]) {
-
-    x = 2.0 * problo[0] - loc[0];
-    y = loc[1];
-    z = loc[2];
-
-    r = std::sqrt((x - locb[0]) * (x - locb[0]) +
-                  (y - locb[1]) * (y - locb[1]) +
-                  (z - locb[2]) * (z - locb[2]));
-
-    bcTerm -= C::Gconst * rho * dV / r;
-
-    if (doSymmetricAddLo[1]) {
-
-      x = 2.0 * problo[0] - loc[0];
-      y = 2.0 * problo[1] - loc[1];
-      z = loc[2];
-
-      r = std::sqrt((x - locb[0]) * (x - locb[0]) +
-                    (y - locb[1]) * (y - locb[1]) +
-                    (z - locb[2]) * (z - locb[2]));
-
-      bcTerm -= C::Gconst * rho * dV / r;
     }
 
-    if (doSymmetricAddLo[2]) {
+    if (multipole::doSymmetricAddLo(1) && multipole::doSymmetricAddLo(2)) {
 
-      x = 2.0 * problo[0] - loc[0];
-      y = loc[1];
-      z = 2.0 * problo[2] - loc[2];
+      amrex::Real r = std::sqrt(xLo * xLo + yLo * yLo + zLo * zLo);
+      amrex::Real phiAngle = std::atan2(yLo, xLo);
+      amrex::Real cosTheta = zLo / r;
 
-      r = std::sqrt((x - locb[0]) * (x - locb[0]) +
-                    (y - locb[1]) * (y - locb[1]) +
-                    (z - locb[2]) * (z - locb[2]));
-
-      bcTerm -= C::Gconst * rho * dV / r;
-    }
-
-    if (doSymmetricAddLo[1] && doSymmetricAddLo[2]) {
-
-      x = 2.0 * problo[0] - loc[0];
-      y = 2.0 * problo[1] - loc[1];
-      z = 2.0 * problo[2] - loc[2];
-
-      r = std::sqrt((x - locb[0]) * (x - locb[0]) +
-                    (y - locb[1]) * (y - locb[1]) +
-                    (z - locb[2]) * (z - locb[2]));
-
-      bcTerm -= C::Gconst * rho * dV / r;
+      multipole_add(cosTheta, phiAngle, r, rho, vol, qL0, qLC, qLS, qU0, qUC,
+                    qUS, npts, nlo, index, handler);
     }
   }
 
-  if (doSymmetricAddLo[1]) {
+  if (multipole::doSymmetricAddLo(1)) {
 
-    x = loc[0];
-    y = 2.0 * problo[1] - loc[1];
-    z = loc[2];
+    amrex::Real r = std::sqrt(x * x + yLo * yLo + z * z);
+    amrex::Real phiAngle = std::atan2(yLo, x);
+    amrex::Real cosTheta = z / r;
 
-    r = std::sqrt((x - locb[0]) * (x - locb[0]) +
-                  (y - locb[1]) * (y - locb[1]) +
-                  (z - locb[2]) * (z - locb[2]));
+    multipole_add(cosTheta, phiAngle, r, rho, vol, qL0, qLC, qLS, qU0, qUC, qUS,
+                  npts, nlo, index, handler);
 
-    bcTerm -= C::Gconst * rho * dV / r;
+    if (multipole::doSymmetricAddLo(2)) {
 
-    if (doSymmetricAddLo[2]) {
+      amrex::Real r = std::sqrt(x * x + yLo * yLo + zLo * zLo);
+      amrex::Real phiAngle = std::atan2(yLo, x);
+      amrex::Real cosTheta = zLo / r;
 
-      x = loc[0];
-      y = 2.0 * problo[1] - loc[1];
-      z = 2.0 * problo[2] - loc[2];
-
-      r = std::sqrt((x - locb[0]) * (x - locb[0]) +
-                    (y - locb[1]) * (y - locb[1]) +
-                    (z - locb[2]) * (z - locb[2]));
-
-      bcTerm -= C::Gconst * rho * dV / r;
+      multipole_add(cosTheta, phiAngle, r, rho, vol, qL0, qLC, qLS, qU0, qUC,
+                    qUS, npts, nlo, index, handler);
     }
   }
 
-  if (doSymmetricAddLo[2]) {
+  if (multipole::doSymmetricAddLo(2)) {
 
-    x = loc[0];
-    y = loc[1];
-    z = 2.0 * problo[2] - loc[2];
+    amrex::Real r = std::sqrt(x * x + y * y + zLo * zLo);
+    amrex::Real phiAngle = std::atan2(y, x);
+    amrex::Real cosTheta = zLo / r;
 
-    r = std::sqrt((x - locb[0]) * (x - locb[0]) +
-                  (y - locb[1]) * (y - locb[1]) +
-                  (z - locb[2]) * (z - locb[2]));
-
-    bcTerm -= C::Gconst * rho * dV / r;
+    multipole_add(cosTheta, phiAngle, r, rho, vol, qL0, qLC, qLS, qU0, qUC, qUS,
+                  npts, nlo, index, handler);
   }
-
-  if (doSymmetricAddHi[0]) {
-
-    x = 2.0 * probhi[0] - loc[0];
-    y = loc[1];
-    z = loc[2];
-
-    r = std::sqrt((x - locb[0]) * (x - locb[0]) +
-                  (y - locb[1]) * (y - locb[1]) +
-                  (z - locb[2]) * (z - locb[2]));
-
-    bcTerm -= C::Gconst * rho * dV / r;
-
-    if (doSymmetricAddHi[1]) {
-
-      x = 2.0 * probhi[0] - loc[0];
-      y = 2.0 * probhi[1] - loc[1];
-      z = loc[2];
-
-      r = std::sqrt((x - locb[0]) * (x - locb[0]) +
-                    (y - locb[1]) * (y - locb[1]) +
-                    (z - locb[2]) * (z - locb[2]));
-
-      bcTerm -= C::Gconst * rho * dV / r;
-    }
-
-    if (doSymmetricAddHi[2]) {
-
-      x = 2.0 * probhi[0] - loc[0];
-      y = loc[1];
-      z = 2.0 * probhi[2] - loc[2];
-
-      r = std::sqrt((x - locb[0]) * (x - locb[0]) +
-                    (y - locb[1]) * (y - locb[1]) +
-                    (z - locb[2]) * (z - locb[2]));
-
-      bcTerm -= C::Gconst * rho * dV / r;
-    }
-
-    if (doSymmetricAddHi[1] && doSymmetricAddHi[2]) {
-
-      x = 2.0 * probhi[0] - loc[0];
-      y = 2.0 * probhi[1] - loc[1];
-      z = 2.0 * probhi[2] - loc[2];
-
-      r = std::sqrt((x - locb[0]) * (x - locb[0]) +
-                    (y - locb[1]) * (y - locb[1]) +
-                    (z - locb[2]) * (z - locb[2]));
-
-      bcTerm -= C::Gconst * rho * dV / r;
-    }
-  }
-
-  if (doSymmetricAddHi[1]) {
-
-    x = loc[0];
-    y = 2.0 * probhi[1] - loc[1];
-    z = loc[2];
-
-    r = std::sqrt((x - locb[0]) * (x - locb[0]) +
-                  (y - locb[1]) * (y - locb[1]) +
-                  (z - locb[2]) * (z - locb[2]));
-
-    bcTerm -= C::Gconst * rho * dV / r;
-
-    if (doSymmetricAddHi[2]) {
-
-      x = loc[0];
-      y = 2.0 * probhi[1] - loc[1];
-      z = 2.0 * probhi[2] - loc[2];
-
-      r = std::sqrt((x - locb[0]) * (x - locb[0]) +
-                    (y - locb[1]) * (y - locb[1]) +
-                    (z - locb[2]) * (z - locb[2]));
-
-      bcTerm -= C::Gconst * rho * dV / r;
-    }
-  }
-
-  if (doSymmetricAddHi[2]) {
-
-    x = loc[0];
-    y = loc[1];
-    z = 2.0 * probhi[2] - loc[2];
-
-    r = std::sqrt((x - locb[0]) * (x - locb[0]) +
-                  (y - locb[1]) * (y - locb[1]) +
-                  (z - locb[2]) * (z - locb[2]));
-
-    bcTerm -= C::Gconst * rho * dV / r;
-  }
-
-  return bcTerm;
 }
 
 #endif

@@ -31,21 +31,18 @@ template <typename problem_t> struct EOS_Traits {
 	static constexpr double cs_isothermal = NAN; // only used when gamma = 1
 };
 
-// this must also be used by Gravity.cpp, so we make it global scope
-enum consVarIndex {
-	density_index = 0,
-	x1Momentum_index = 1,
-	x2Momentum_index = 2,
-	x3Momentum_index = 3,
-	energy_index = 4
-};
-
 /// Class for the Euler equations of inviscid hydrodynamics
 ///
 template <typename problem_t> class HydroSystem : public HyperbolicSystem<problem_t>
 {
       public:
-
+	enum consVarIndex {
+		density_index = 0,
+		x1Momentum_index = 1,
+		x2Momentum_index = 2,
+		x3Momentum_index = 3,
+		energy_index = 4
+	};
 	enum primVarIndex {
 		primDensity_index = 0,
 		x1Velocity_index = 1,

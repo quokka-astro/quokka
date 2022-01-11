@@ -5,7 +5,7 @@
 // Used under the terms of the open-source license (BSD 3-clause) given here:
 //   https://github.com/AMReX-Astro/Castro/blob/main/license.txt
 //==============================================================================
-/// \file gravity.cpp
+/// \file GravityBC.cpp
 /// \brief Implements a class for solving the Poisson equation.
 ///
 
@@ -43,8 +43,8 @@ void Gravity::init_multipole_grav() {
     hi_bc[dir] = -1;
   }
 
-  const auto problo = parent->Geom(0).ProbLoArray();
-  const auto probhi = parent->Geom(0).ProbHiArray();
+  const auto problo = geom[0].ProbLoArray();
+  const auto probhi = geom[0].ProbHiArray();
 
   // If any of the boundaries are symmetric, we need to account for the mass
   // that is assumed to lie on the opposite side of the symmetric axis. If the
@@ -70,8 +70,8 @@ void Gravity::init_multipole_grav() {
 
   for (int b = 0; b < AMREX_SPACEDIM; ++b) {
 
-    if ((lo_bc[b] == Symmetry) && (parent->Geom(0).Coord() == 0)) {
-      if (std::abs(problem::center[b] - problo[b]) < edgeTolerance) {
+    if ((lo_bc[b] == Symmetry) && (geom[0].Coord() == 0)) {
+      if (std::abs(coordCenter[b] - problo[b]) < edgeTolerance) {
         multipole::volumeFactor *= 2.0;
         multipole::doReflectionLo(b) = true;
       } else {
@@ -80,8 +80,8 @@ void Gravity::init_multipole_grav() {
       }
     }
 
-    if ((hi_bc[b] == Symmetry) && (parent->Geom(0).Coord() == 0)) {
-      if (std::abs(problem::center[b] - probhi[b]) < edgeTolerance) {
+    if ((hi_bc[b] == Symmetry) && (geom[0].Coord() == 0)) {
+      if (std::abs(coordCenter[b] - probhi[b]) < edgeTolerance) {
         multipole::volumeFactor *= 2.0;
         multipole::doReflectionHi(b) = true;
       } else {
@@ -236,11 +236,11 @@ void Gravity::fill_multipole_BCs(int crse_level, int fine_level,
     // is coded to only add to the moment arrays, so it is safe
     // to directly hand the arrays to them.
 
-    const Box &domain = parent->Geom(lev).Domain();
-    const auto dx = parent->Geom(lev).CellSizeArray();
-    const auto problo = parent->Geom(lev).ProbLoArray();
-    const auto probhi = parent->Geom(lev).ProbHiArray();
-    int coord_type = parent->Geom(lev).Coord();
+    const Box &domain = geom[lev].Domain();
+    const auto dx = geom[lev].CellSizeArray();
+    const auto problo = geom[lev].ProbLoArray();
+    const auto probhi = geom[lev].ProbHiArray();
+    int coord_type = geom[lev].Coord();
 
     {
       for (MFIter mfi(source, TilingIfNotGPU()); mfi.isValid(); ++mfi) {
@@ -277,15 +277,15 @@ void Gravity::fill_multipole_BCs(int crse_level, int fine_level,
                   1.0 / (multipole::rmax * multipole::rmax * multipole::rmax);
 
               Real x = (problo[0] + (static_cast<Real>(i) + 0.5) * dx[0] -
-                        problem::center[0]) /
+                        coordCenter[0]) /
                        multipole::rmax;
 
               Real y = (problo[1] + (static_cast<Real>(j) + 0.5) * dx[1] -
-                        problem::center[1]) /
+                        coordCenter[1]) /
                        multipole::rmax;
 
               Real z = (problo[2] + (static_cast<Real>(k) + 0.5) * dx[2] -
-                        problem::center[2]) /
+                        coordCenter[2]) /
                        multipole::rmax;
 
               Real r = std::sqrt(x * x + y * y + z * z);
@@ -311,10 +311,10 @@ void Gravity::fill_multipole_BCs(int crse_level, int fine_level,
 
               if (multipole::doSymmetricAdd) {
 
-                multipole_symmetric_add(x, y, z, problo, probhi, rho(i, j, k),
-                                        vol(i, j, k) * rmax_cubed_inv, qL0_arr,
-                                        qLC_arr, qLS_arr, qU0_arr, qUC_arr,
-                                        qUS_arr, npts, nlo, index, handler);
+                multipole_symmetric_add(
+                    x, y, z, problo, coordCenter, rho(i, j, k),
+                    vol(i, j, k) * rmax_cubed_inv, qL0_arr, qLC_arr, qLS_arr,
+                    qU0_arr, qUC_arr, qUS_arr, npts, nlo, index, handler);
               }
             });
       }
@@ -363,10 +363,10 @@ void Gravity::fill_multipole_BCs(int crse_level, int fine_level,
   // complete multipole moments, for all points on the
   // boundary that are held on this process.
 
-  const Box &domain = parent->Geom(crse_level).Domain();
-  const auto dx = parent->Geom(crse_level).CellSizeArray();
-  const auto problo = parent->Geom(crse_level).ProbLoArray();
-  int coord_type = parent->Geom(crse_level).Coord();
+  const Box &domain = geom[crse_level].Domain();
+  const auto dx = geom[crse_level].CellSizeArray();
+  const auto problo = geom[crse_level].ProbLoArray();
+  int coord_type = geom[crse_level].Coord();
 
   for (MFIter mfi(phi, TilingIfNotGPU()); mfi.isValid(); ++mfi) {
     const Box &bx = mfi.growntilebox();
@@ -395,36 +395,33 @@ void Gravity::fill_multipole_BCs(int crse_level, int fine_level,
 
       Real x = NAN;
       if (i > domhi[0]) {
-        x = problo[0] + (static_cast<Real>(i)) * dx[0] - problem::center[0];
+        x = problo[0] + (static_cast<Real>(i)) * dx[0] - coordCenter[0];
       } else if (i < domlo[0]) {
-        x = problo[0] + (static_cast<Real>(i + 1)) * dx[0] - problem::center[0];
+        x = problo[0] + (static_cast<Real>(i + 1)) * dx[0] - coordCenter[0];
       } else {
-        x = problo[0] + (static_cast<Real>(i) + 0.5) * dx[0] -
-            problem::center[0];
+        x = problo[0] + (static_cast<Real>(i) + 0.5) * dx[0] - coordCenter[0];
       }
 
       x = x / multipole::rmax;
 
       Real y = NAN;
       if (j > domhi[1]) {
-        y = problo[1] + (static_cast<Real>(j)) * dx[1] - problem::center[1];
+        y = problo[1] + (static_cast<Real>(j)) * dx[1] - coordCenter[1];
       } else if (j < domlo[1]) {
-        y = problo[1] + (static_cast<Real>(j + 1)) * dx[1] - problem::center[1];
+        y = problo[1] + (static_cast<Real>(j + 1)) * dx[1] - coordCenter[1];
       } else {
-        y = problo[1] + (static_cast<Real>(j) + 0.5) * dx[1] -
-            problem::center[1];
+        y = problo[1] + (static_cast<Real>(j) + 0.5) * dx[1] - coordCenter[1];
       }
 
       y = y / multipole::rmax;
 
       Real z = NAN;
       if (k > domhi[2]) {
-        z = problo[2] + (static_cast<Real>(k)) * dx[2] - problem::center[2];
+        z = problo[2] + (static_cast<Real>(k)) * dx[2] - coordCenter[2];
       } else if (k < domlo[2]) {
-        z = problo[2] + (static_cast<Real>(k + 1)) * dx[2] - problem::center[2];
+        z = problo[2] + (static_cast<Real>(k + 1)) * dx[2] - coordCenter[2];
       } else {
-        z = problo[2] + (static_cast<Real>(k) + 0.5) * dx[2] -
-            problem::center[2];
+        z = problo[2] + (static_cast<Real>(k) + 0.5) * dx[2] - coordCenter[2];
       }
 
       z = z / multipole::rmax;
@@ -518,7 +515,7 @@ void Gravity::fill_multipole_BCs(int crse_level, int fine_level,
 }
 
 void Gravity::make_mg_bc() {
-  const Geometry &geom = parent->Geom(0);
+  const Geometry &geom = this->geom[0];
 
   for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
     if (geom.isPeriodic(idim)) {

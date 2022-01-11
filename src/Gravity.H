@@ -11,11 +11,13 @@
 /// \brief Defines a class for solving the Poisson equation.
 ///
 
+#include "AMReX_Array.H"
+#include "AMReX_Config.H"
 #include "AMReX_GpuContainers.H"
-#include <AMReX_AmrLevel.H>
+#include "AMReX_IntVect.H"
+#include "AMReX_PhysBCFunct.H"
+#include "AMReX_REAL.H"
 #include <AMReX_MLLinOp.H>
-
-#define MAX_LEV 15 // defined in Castro_limits.H
 
 namespace C {
 // newton's gravitational constant taken from NIST's 2010 CODATA recommended
@@ -31,7 +33,12 @@ using RealVector = amrex::Gpu::ManagedVector<amrex::Real>;
 ///
 
 namespace gravity {
-const std::string gravity_type = "PoissonGrav";
+enum class GravityMode {
+  Poisson,
+  Constant,
+};
+
+const GravityMode gravity_type = GravityMode::Poisson;
 const amrex::Real const_grav = 0.0;
 const int lnum = 4;
 const int max_solve_level = 0;
@@ -94,17 +101,15 @@ public:
   /// Constructor
   ///
   /// @param Parent           Parent ``Amr`` object
-  /// @param _finest_level    finest level
   /// @param _phys_bc         ``BCRec`` object, physical boundary conditions
   /// @param _Density         index of density component
   ///
-  Gravity(amrex::Amr *Parent, int _finest_level, amrex::BCRec *_phys_bc,
-          int _Density);
-
-  ///
-  /// Destructor
-  ///
-  ~Gravity() = default;
+  Gravity(amrex::Vector<amrex::Geometry> &geom,
+          amrex::Vector<amrex::BoxArray> &ba,
+          amrex::Vector<amrex::DistributionMapping> &dmap,
+          amrex::Vector<amrex::IntVect> &ref_ratio,
+          amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &coordCenter,
+          int &finest_lev, int &max_lev, amrex::BCRec *_phys_bc, int _Density);
 
   ///
   /// Read gravity-related parameters from parameter file
@@ -122,18 +127,15 @@ public:
   /// Setup gravity at level ``level``.
   ///
   /// @param level        integer, level number
-  /// @param level_data   ``AmrLevel`` object containing state data at that
-  /// level
   /// @param volume       MultiFab, volume elements of cells
   /// @param area         MultiFab, area elements of cells
   ///
-  void install_level(int level, amrex::AmrLevel *level_data,
-                     amrex::MultiFab &volume, amrex::MultiFab *area);
+  void install_level(int level, amrex::MultiFab &volume, amrex::MultiFab *area);
 
   ///
   /// Returns ``gravity_type``
   ///
-  static auto get_gravity_type() -> std::string;
+  static auto get_gravity_type() -> gravity::GravityMode;
 
   ///
   /// Returns ``max_solve_level``
@@ -159,15 +161,6 @@ public:
   /// Returns ``test_solves``
   ///
   static auto test_results_of_solves() -> int;
-
-  ///
-  /// Set the ``mass_offset``
-  ///
-  /// @param time             Current time
-  /// @param multi_level      boolean, do we iterate over all levels or mask off
-  /// fine grids?
-  ///
-  void set_mass_offset(amrex::Real time, bool multi_level = true) const;
 
   ///
   /// Return ``grad_phi_prev`` at given level
@@ -297,7 +290,8 @@ public:
       int level, amrex::MultiFab &comp_phi,
       const amrex::Vector<amrex::MultiFab *> &comp_gphi,
       amrex::MultiFab &comp_minus_level_phi,
-      amrex::Vector<std::unique_ptr<amrex::MultiFab>> &comp_minus_level_grad_phi);
+      amrex::Vector<std::unique_ptr<amrex::MultiFab>>
+          &comp_minus_level_grad_phi);
 
   ///
   /// Get coarse phi on level ``level``-1
@@ -339,14 +333,14 @@ public:
   /// @param ecz         gradients wrt z
   /// @param coord_type  coordinate system
 
-  void test_residual(const amrex::Box &bx,
-                     amrex::Array4<amrex::Real> const &rhs,
-                     amrex::Array4<amrex::Real> const &ecx,
-                     amrex::Array4<amrex::Real> const &ecy,
-                     amrex::Array4<amrex::Real> const &ecz,
-                     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
-                     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> problo,
-                     int coord_type);
+  static void test_residual(const amrex::Box &bx,
+                            amrex::Array4<amrex::Real> const &rhs,
+                            amrex::Array4<amrex::Real> const &ecx,
+                            amrex::Array4<amrex::Real> const &ecy,
+                            amrex::Array4<amrex::Real> const &ecz,
+                            amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
+                            amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> problo,
+                            int coord_type);
 
   ///
   /// @param level
@@ -394,8 +388,8 @@ public:
   ///
   /// Pointers to amr,amrlevel.
   ///
-  amrex::Amr *parent;
-  amrex::Vector<amrex::AmrLevel *> LevelData;
+  //  amrex::Amr *parent;
+  //  amrex::Vector<amrex::AmrLevel *> LevelData;
 
   ///
   /// Pointers to grad_phi at previous and current time
@@ -406,8 +400,11 @@ public:
   ///
   /// BoxArray at each level
   ///
-  const amrex::Vector<amrex::BoxArray> &grids;
+  amrex::Vector<amrex::BoxArray> &grids;
   const amrex::Vector<amrex::DistributionMapping> &dmap;
+  const amrex::Vector<amrex::Geometry> &geom;
+  const amrex::Vector<amrex::IntVect> &refRatio;
+  const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> coordCenter;
 
   ///
   /// Absolute tolerance on each level
@@ -435,9 +432,10 @@ public:
   amrex::Vector<amrex::MultiFab *> volume;
   amrex::Vector<amrex::MultiFab *> area;
 
-  int Density;
-  // int finest_level;
+  int Density; // index of density component
+  int &finest_level;
   int finest_level_allocated;
+  int &max_lev;
 
   amrex::BCRec *phys_bc;
 
@@ -448,9 +446,8 @@ public:
 
   static int test_solves;
   static amrex::Real mass_offset;
+  static amrex::Real Ggravity;
   static int stencil_type;
-
-  static amrex::Real max_radius_all_in_domain;
 
   ///
   /// Get the rhs
