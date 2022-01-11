@@ -24,12 +24,15 @@
 using namespace amrex;
 
 #ifdef AMREX_DEBUG
-int Gravity::test_solves = 1;
+template <typename T>
+int Gravity<T>::test_solves = 1;
 #else
-int Gravity::test_solves = 0;
+template <typename T>
+int Gravity<T>::test_solves = 0;
 #endif
 
-void Gravity::test_residual(const Box &bx, Array4<Real> const &rhs,
+template <typename T>
+void Gravity<T>::test_residual(const Box &bx, Array4<Real> const &rhs,
                             Array4<Real> const &ecx, Array4<Real> const &ecy,
                             Array4<Real> const &ecz,
                             GpuArray<Real, AMREX_SPACEDIM> dx,
@@ -49,7 +52,8 @@ void Gravity::test_residual(const Box &bx, Array4<Real> const &rhs,
   });
 }
 
-void Gravity::test_level_grad_phi_prev(int level) {
+template <typename T>
+void Gravity<T>::test_level_grad_phi_prev(int level) {
   BL_PROFILE("Gravity::test_level_grad_phi_prev()");
 
   // Fill the RHS for the solve
@@ -97,7 +101,8 @@ void Gravity::test_level_grad_phi_prev(int level) {
   }
 }
 
-void Gravity::test_level_grad_phi_curr(int level) {
+template <typename T>
+void Gravity<T>::test_level_grad_phi_curr(int level) {
   BL_PROFILE("Gravity::test_level_grad_phi_curr()");
 
   // Fill the RHS for the solve
@@ -151,7 +156,8 @@ void Gravity::test_level_grad_phi_curr(int level) {
   }
 }
 
-void Gravity::test_composite_phi(int crse_level) {
+template <typename T>
+void Gravity<T>::test_composite_phi(int crse_level) {
   BL_PROFILE("Gravity::test_composite_phi()");
 
   if (gravity::verbose > 1 && ParallelDescriptor::IOProcessor()) {
@@ -180,7 +186,7 @@ void Gravity::test_composite_phi(int crse_level) {
     res[ilev]->setVal(0.);
   }
 
-  Real time = LevelData[crse_level]->get_state_data(PhiGrav_Type).curTime();
+  Real time = sim.tNew_[crse_level];
 
   Vector<Vector<MultiFab *>> grad_phi_null;
   solve_phi_with_mlmg(crse_level, finest_level_local, amrex::GetVecOfPtrs(phi),

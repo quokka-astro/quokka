@@ -22,19 +22,18 @@
 
 #include "AMReX_Config.H"
 #include "AMReX_Geometry.H"
+#include "AMReX_IntVect.H"
 #include <AMReX_FillPatchUtil.H>
 #include <AMReX_MLMG.H>
 #include <AMReX_MLPoisson.H>
 #include <AMReX_ParmParse.H>
-#include "AMReX_IntVect.H"
 
-#include "hydro_system.hpp"
 #include <Gravity.H>
 
 using namespace amrex;
 using GravityMode = gravity::GravityMode;
 
-Real Gravity::mass_offset = 0.0;
+template <typename T> Real Gravity<T>::mass_offset = 0.0;
 
 // **************************************************************************************
 // Ggravity is defined as 4 * pi * G, where G is the gravitational constant.
@@ -43,7 +42,7 @@ Real Gravity::mass_offset = 0.0;
 //      Gconst   =  6.67428e-8           cm^3/g/s^2 , which results in
 //      Ggravity =  83.8503442814844e-8  cm^3/g/s^2
 // **************************************************************************************
-Real Gravity::Ggravity = 0.;
+template <typename T> Real Gravity<T>::Ggravity = 0.;
 
 ///
 /// Multipole gravity data
@@ -66,15 +65,18 @@ AMREX_GPU_MANAGED Array1D<Real, 0, multipole::lnum_max> multipole::parity_q0;
 AMREX_GPU_MANAGED Array2D<Real, 0, multipole::lnum_max, 0, multipole::lnum_max>
     multipole::parity_qC_qS;
 
-Gravity::Gravity(Vector<Geometry> &geom, Vector<BoxArray> &ba,
-                 Vector<DistributionMapping> &dmap, Vector<IntVect> &ref_ratio,
-                 GpuArray<Real, AMREX_SPACEDIM> &_coordCenter, int &finest_lev,
-                 int &max_lev, BCRec *_phys_bc, int _Density)
-    : grad_phi_curr(max_lev), grad_phi_prev(max_lev), grids(ba), dmap(dmap),
-      geom(geom), refRatio(ref_ratio), abs_tol(max_lev), rel_tol(max_lev),
-      level_solver_resnorm(max_lev), volume(max_lev), area(max_lev),
-      coordCenter(_coordCenter), finest_level(finest_lev), max_lev(max_lev),
-      phys_bc(_phys_bc) {
+template <typename T>
+Gravity<T>::Gravity(AMRSimulation<T> &_sim, Vector<Geometry> &geom,
+                    Vector<BoxArray> &ba, Vector<DistributionMapping> &dmap,
+                    Vector<IntVect> &ref_ratio,
+                    GpuArray<Real, AMREX_SPACEDIM> &_coordCenter,
+                    int &finest_lev, int &max_lev, BCRec *_phys_bc,
+                    int _Density)
+    : grad_phi_curr(max_lev), grad_phi_prev(max_lev), sim(_sim), grids(ba),
+      dmap(dmap), geom(geom), refRatio(ref_ratio), abs_tol(max_lev),
+      rel_tol(max_lev), level_solver_resnorm(max_lev), volume(max_lev),
+      area(max_lev), coordCenter(_coordCenter), finest_level(finest_lev),
+      max_lev(max_lev), phys_bc(_phys_bc) {
   Density = _Density; // index of density component
   read_params();
   finest_level_allocated = -1;
@@ -86,11 +88,11 @@ Gravity::Gravity(Vector<Geometry> &geom, Vector<BoxArray> &ba,
   max_rhs = 0.0;
 
   // possibly uninitialized:
-  //   mlmg_lobc, mlmg_hibc -- set by Gravity::make_mg_bc() above
-  //   numpts_at_level -- set by Gravity::set_numpts_in_gravity()
+  //   mlmg_lobc, mlmg_hibc -- set by Gravity<T>::make_mg_bc() above
+  //   numpts_at_level -- set by Gravity<T>::set_numpts_in_gravity()
 }
 
-void Gravity::read_params() {
+template <typename T> void Gravity<T>::read_params() {
   static bool done = false;
 
   if (!done) {
@@ -196,9 +198,12 @@ void Gravity::read_params() {
   }
 }
 
-void Gravity::set_numpts_in_gravity(int numpts) { numpts_at_level = numpts; }
+template <typename T> void Gravity<T>::set_numpts_in_gravity(int numpts) {
+  numpts_at_level = numpts;
+}
 
-void Gravity::install_level(int level, MultiFab &_volume, MultiFab *_area) {
+template <typename T>
+void Gravity<T>::install_level(int level, MultiFab &_volume, MultiFab *_area) {
   if (gravity::verbose > 1 && ParallelDescriptor::IOProcessor()) {
     std::cout << "Installing Gravity level " << level << '\n';
   }
@@ -229,46 +234,59 @@ void Gravity::install_level(int level, MultiFab &_volume, MultiFab *_area) {
   finest_level_allocated = level;
 }
 
-auto Gravity::get_gravity_type() -> gravity::GravityMode {
+template <typename T>
+auto Gravity<T>::get_gravity_type() -> gravity::GravityMode {
   return gravity::gravity_type;
 }
 
-auto Gravity::get_max_solve_level() -> int { return gravity::max_solve_level; }
+template <typename T> auto Gravity<T>::get_max_solve_level() -> int {
+  return gravity::max_solve_level;
+}
 
-auto Gravity::NoSync() -> int { return gravity::no_sync; }
+template <typename T> auto Gravity<T>::NoSync() -> int {
+  return gravity::no_sync;
+}
 
-auto Gravity::NoComposite() -> int { return gravity::no_composite; }
+template <typename T> auto Gravity<T>::NoComposite() -> int {
+  return gravity::no_composite;
+}
 
-auto Gravity::DoCompositeCorrection() -> int {
+template <typename T> auto Gravity<T>::DoCompositeCorrection() -> int {
   return gravity::do_composite_phi_correction;
 }
 
-// if so, check the residuals manually
-auto Gravity::test_results_of_solves() -> int { return test_solves; }
+// if true, check the residuals manually
+template <typename T> auto Gravity<T>::test_results_of_solves() -> int {
+  return test_solves;
+}
 
-auto Gravity::get_grad_phi_prev(int level)
+template <typename T>
+auto Gravity<T>::get_grad_phi_prev(int level)
     -> Vector<std::unique_ptr<MultiFab>> & {
   return grad_phi_prev[level];
 }
 
-auto Gravity::get_grad_phi_prev_comp(int level, int comp) -> MultiFab * {
+template <typename T>
+auto Gravity<T>::get_grad_phi_prev_comp(int level, int comp) -> MultiFab * {
   return grad_phi_prev[level][comp].get();
 }
 
-auto Gravity::get_grad_phi_curr(int level)
+template <typename T>
+auto Gravity<T>::get_grad_phi_curr(int level)
     -> Vector<std::unique_ptr<MultiFab>> & {
   return grad_phi_curr[level];
 }
 
-void Gravity::plus_grad_phi_curr(int level,
-                                 Vector<std::unique_ptr<MultiFab>> &addend) {
+template <typename T>
+void Gravity<T>::plus_grad_phi_curr(int level,
+                                    Vector<std::unique_ptr<MultiFab>> &addend) {
   for (int n = 0; n < AMREX_SPACEDIM; n++) {
     grad_phi_curr[level][n]->plus(*addend[n], 0, 1, 0);
   }
 }
 
-void Gravity::swapTimeLevels(int level) {
-  BL_PROFILE("Gravity::swapTimeLevels()");
+template <typename T> void Gravity<T>::swapTimeLevels(int level) {
+  BL_PROFILE("Gravity<T>::swapTimeLevels()");
 
   if (gravity::gravity_type == GravityMode::Poisson) {
     for (int n = 0; n < AMREX_SPACEDIM; n++) {
@@ -278,9 +296,10 @@ void Gravity::swapTimeLevels(int level) {
   }
 }
 
-void Gravity::solve_for_phi(int level, MultiFab &phi,
-                            const Vector<MultiFab *> &grad_phi, int is_new) {
-  BL_PROFILE("Gravity::solve_for_phi()");
+template <typename T>
+void Gravity<T>::solve_for_phi(int level, MultiFab &phi,
+                               const Vector<MultiFab *> &grad_phi, int is_new) {
+  BL_PROFILE("Gravity<T>::solve_for_phi()");
 
   if (gravity::verbose > 1 && ParallelDescriptor::IOProcessor()) {
     std::cout << " ... solve for phi at level " << level << std::endl;
@@ -294,9 +313,9 @@ void Gravity::solve_for_phi(int level, MultiFab &phi,
 
   Real time = NAN;
   if (is_new == 1) {
-    time = LevelData[level]->get_state_data(PhiGrav_Type).curTime();
+    time = sim.tNew_[level];
   } else {
-    time = LevelData[level]->get_state_data(PhiGrav_Type).prevTime();
+    time = sim.tOld_[level];
   }
 
   // If we are below the max_solve_level, do the Poisson solve.
@@ -322,7 +341,7 @@ void Gravity::solve_for_phi(int level, MultiFab &phi,
 
   } else {
 
-    LevelData[level]->FillCoarsePatch(phi, 0, time, PhiGrav_Type, 0, 1, 1);
+    sim.FillCoarsePatch(phi, 0, time, PhiGrav_Type, 0, 1, 1);
   }
 
   if (gravity::verbose != 0) {
@@ -330,16 +349,17 @@ void Gravity::solve_for_phi(int level, MultiFab &phi,
     Real end = ParallelDescriptor::second() - strt;
     ParallelDescriptor::ReduceRealMax(end, IOProc);
     if (ParallelDescriptor::IOProcessor()) {
-      std::cout << "Gravity::solve_for_phi() time = " << end << std::endl
+      std::cout << "Gravity<T>::solve_for_phi() time = " << end << std::endl
                 << std::endl;
     }
   }
 }
 
-void Gravity::gravity_sync(int crse_level, int fine_level,
-                           const Vector<MultiFab *> &drho,
-                           const Vector<MultiFab *> &dphi) {
-  BL_PROFILE("Gravity::gravity_sync()");
+template <typename T>
+void Gravity<T>::gravity_sync(int crse_level, int fine_level,
+                              const Vector<MultiFab *> &drho,
+                              const Vector<MultiFab *> &dphi) {
+  BL_PROFILE("Gravity<T>::gravity_sync()");
 
   // There is no need to do a synchronization if
   // we didn't solve on the fine levels.
@@ -483,7 +503,7 @@ void Gravity::gravity_sync(int crse_level, int fine_level,
     }
 
     get_new_grav_vector(lev, LevelData[lev]->get_new_data(Gravity_Type),
-                        LevelData[lev]->get_state_data(State_Type).curTime());
+                        sim.tNew_[lev]);
   }
 
   int is_new = 1;
@@ -510,15 +530,14 @@ void Gravity::gravity_sync(int crse_level, int fine_level,
   }
 }
 
-void Gravity::GetCrsePhi(int level, MultiFab &phi_crse, Real time) {
-  BL_PROFILE("Gravity::GetCrsePhi()");
+template <typename T>
+void Gravity<T>::GetCrsePhi(int level, MultiFab &phi_crse, Real time) {
+  BL_PROFILE("Gravity<T>::GetCrsePhi()");
 
   BL_ASSERT(level != 0);
 
-  const Real t_old =
-      LevelData[level - 1]->get_state_data(PhiGrav_Type).prevTime();
-  const Real t_new =
-      LevelData[level - 1]->get_state_data(PhiGrav_Type).curTime();
+  const Real t_old = sim.tOld_[level - 1];
+  const Real t_new = sim.tNew_[level - 1];
   Real alpha = (time - t_old) / (t_new - t_old);
   Real omalpha = 1.0 - alpha;
 
@@ -531,12 +550,13 @@ void Gravity::GetCrsePhi(int level, MultiFab &phi_crse, Real time) {
 
   MultiFab::LinComb(phi_crse, alpha, phi_new, 0, omalpha, phi_old, 0, 0, 1, 1);
 
-  const Geometry &geom = geom(level - 1);
+  const Geometry &geom = this->geom[level - 1];
   phi_crse.FillBoundary(geom.periodicity());
 }
 
-void Gravity::multilevel_solve_for_new_phi(int level, int finest_level_in) {
-  BL_PROFILE("Gravity::multilevel_solve_for_new_phi()");
+template <typename T>
+void Gravity<T>::multilevel_solve_for_new_phi(int level, int finest_level_in) {
+  BL_PROFILE("Gravity<T>::multilevel_solve_for_new_phi()");
 
   if (gravity::verbose > 1 && ParallelDescriptor::IOProcessor()) {
     std::cout << "... multilevel solve for new phi at base level " << level
@@ -556,10 +576,11 @@ void Gravity::multilevel_solve_for_new_phi(int level, int finest_level_in) {
                           amrex::GetVecOfVecOfPtrs(grad_phi_curr), is_new);
 }
 
-void Gravity::actual_multilevel_solve(
+template <typename T>
+void Gravity<T>::actual_multilevel_solve(
     int crse_level, int finest_level_in,
     const Vector<Vector<MultiFab *>> &grad_phi, int is_new) {
-  BL_PROFILE("Gravity::actual_multilevel_solve()");
+  BL_PROFILE("Gravity<T>::actual_multilevel_solve()");
 
   for (int ilev = crse_level; ilev <= finest_level_in; ++ilev) {
     sanity_check(ilev);
@@ -587,9 +608,9 @@ void Gravity::actual_multilevel_solve(
 
   Real time = NAN;
   if (is_new == 1) {
-    time = LevelData[crse_level]->get_state_data(PhiGrav_Type).curTime();
+    time = sim.tNew_[crse_level];
   } else {
-    time = LevelData[crse_level]->get_state_data(PhiGrav_Type).prevTime();
+    time = sim.tOld_[crse_level];
   }
 
   int fine_level = amrex::min(finest_level_in, gravity::max_solve_level);
@@ -670,8 +691,10 @@ void Gravity::actual_multilevel_solve(
   }
 }
 
-void Gravity::get_old_grav_vector(int level, MultiFab &grav_vector, Real time) {
-  BL_PROFILE("Gravity::get_old_grav_vector()");
+template <typename T>
+void Gravity<T>::get_old_grav_vector(int level, MultiFab &grav_vector,
+                                     Real time) {
+  BL_PROFILE("Gravity<T>::get_old_grav_vector()");
 
   int ng = grav_vector.nGrow();
 
@@ -729,8 +752,9 @@ void Gravity::get_old_grav_vector(int level, MultiFab &grav_vector, Real time) {
   }
 }
 
-void Gravity::get_new_grav_vector(int level, MultiFab &grav_vector, Real time) {
-  BL_PROFILE("Gravity::get_new_grav_vector()");
+void Gravity<T>::get_new_grav_vector(int level, MultiFab &grav_vector,
+                                     Real time) {
+  BL_PROFILE("Gravity<T>::get_new_grav_vector()");
 
   int ng = grav_vector.nGrow();
 
@@ -786,11 +810,12 @@ void Gravity::get_new_grav_vector(int level, MultiFab &grav_vector, Real time) {
   }
 }
 
-void Gravity::create_comp_minus_level_grad_phi(
+template <typename T>
+void Gravity<T>::create_comp_minus_level_grad_phi(
     int level, MultiFab &comp_phi, const Vector<MultiFab *> &comp_gphi,
     MultiFab &comp_minus_level_phi,
     Vector<std::unique_ptr<MultiFab>> &comp_minus_level_grad_phi) {
-  BL_PROFILE("Gravity::create_comp_minus_level_grad_phi()");
+  BL_PROFILE("Gravity<T>::create_comp_minus_level_grad_phi()");
 
   if (gravity::verbose > 1 && ParallelDescriptor::IOProcessor()) {
     std::cout << "\n";
@@ -815,8 +840,9 @@ void Gravity::create_comp_minus_level_grad_phi(
   }
 }
 
-void Gravity::average_fine_ec_onto_crse_ec(int level, int is_new) {
-  BL_PROFILE("Gravity::average_fine_ec_onto_crse_ec()");
+template <typename T>
+void Gravity<T>::average_fine_ec_onto_crse_ec(int level, int is_new) {
+  BL_PROFILE("Gravity<T>::average_fine_ec_onto_crse_ec()");
 
   // NOTE: this is called with level == the coarser of the two levels involved
   if (level == parent->finestLevel()) {
@@ -853,7 +879,8 @@ void Gravity::average_fine_ec_onto_crse_ec(int level, int is_new) {
   }
 }
 
-auto Gravity::get_rhs(int crse_level, int nlevs, int is_new)
+template <typename T>
+auto Gravity<T>::get_rhs(int crse_level, int nlevs, int is_new)
     -> Vector<std::unique_ptr<MultiFab>> {
   Vector<std::unique_ptr<MultiFab>> rhs(nlevs);
 
@@ -868,7 +895,7 @@ auto Gravity::get_rhs(int crse_level, int nlevs, int is_new)
   return rhs;
 }
 
-void Gravity::sanity_check(int level) {
+template <typename T> void Gravity<T>::sanity_check(int level) {
   // This is a sanity check on whether we are trying to fill multipole boundary
   // conditions for grids at this level > 0 -- this case is not currently
   // supported. Here we shrink the domain at this level by 1 in any direction
@@ -897,8 +924,8 @@ void Gravity::sanity_check(int level) {
   }
 }
 
-void Gravity::update_max_rhs() {
-  BL_PROFILE("Gravity::update_max_rhs()");
+template <typename T> void Gravity<T>::update_max_rhs() {
+  BL_PROFILE("Gravity<T>::update_max_rhs()");
 
   // Calculate the maximum value of the RHS over all levels.
   // This should only be called at a synchronization point where
@@ -931,13 +958,14 @@ void Gravity::update_max_rhs() {
   }
 }
 
-auto Gravity::solve_phi_with_mlmg(int crse_level, int fine_level,
-                                  const Vector<MultiFab *> &phi,
-                                  const Vector<MultiFab *> &rhs,
-                                  const Vector<Vector<MultiFab *>> &grad_phi,
-                                  const Vector<MultiFab *> &res, Real time)
+template <typename T>
+auto Gravity<T>::solve_phi_with_mlmg(int crse_level, int fine_level,
+                                     const Vector<MultiFab *> &phi,
+                                     const Vector<MultiFab *> &rhs,
+                                     const Vector<Vector<MultiFab *>> &grad_phi,
+                                     const Vector<MultiFab *> &res, Real time)
     -> Real {
-  BL_PROFILE("Gravity::solve_phi_with_mlmg()");
+  BL_PROFILE("Gravity<T>::solve_phi_with_mlmg()");
 
   int nlevs = fine_level - crse_level + 1;
 
@@ -981,11 +1009,12 @@ auto Gravity::solve_phi_with_mlmg(int crse_level, int fine_level,
                                 crse_bcdata, rel_eps, abs_eps);
 }
 
-void Gravity::solve_for_delta_phi(
+template <typename T>
+void Gravity<T>::solve_for_delta_phi(
     int crse_level, int fine_level, const Vector<MultiFab *> &rhs,
     const Vector<MultiFab *> &delta_phi,
     const Vector<Vector<MultiFab *>> &grad_delta_phi) {
-  BL_PROFILE("Gravity::solve_for_delta_phi");
+  BL_PROFILE("Gravity<T>::solve_for_delta_phi");
 
   BL_ASSERT(grad_delta_phi.size() == fine_level - crse_level + 1);
   BL_ASSERT(delta_phi.size() == fine_level - crse_level + 1);
@@ -1012,7 +1041,8 @@ void Gravity::solve_for_delta_phi(
                          nullptr, rel_eps, abs_eps);
 }
 
-auto Gravity::actual_solve_with_mlmg(
+template <typename T>
+auto Gravity<T>::actual_solve_with_mlmg(
     int crse_level, int fine_level, const amrex::Vector<amrex::MultiFab *> &phi,
     const amrex::Vector<const amrex::MultiFab *> &rhs,
     const amrex::Vector<std::array<amrex::MultiFab *, AMREX_SPACEDIM>>
@@ -1020,7 +1050,7 @@ auto Gravity::actual_solve_with_mlmg(
     const amrex::Vector<amrex::MultiFab *> &res,
     const amrex::MultiFab *const crse_bcdata, amrex::Real rel_eps,
     amrex::Real abs_eps) const -> Real {
-  BL_PROFILE("Gravity::actual_solve_with_mlmg()");
+  BL_PROFILE("Gravity<T>::actual_solve_with_mlmg()");
 
   Real final_resnorm = -1.0;
 

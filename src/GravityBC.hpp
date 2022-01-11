@@ -22,7 +22,7 @@
 
 using namespace amrex;
 
-void Gravity::init_multipole_grav() {
+template <typename T> void Gravity<T>::init_multipole_grav() {
   if (gravity::lnum < 0) {
     amrex::Abort("lnum negative");
   }
@@ -162,9 +162,11 @@ void Gravity::init_multipole_grav() {
       0.5 * maxWidth * std::sqrt(static_cast<Real>(AMREX_SPACEDIM));
 }
 
-void Gravity::fill_multipole_BCs(int crse_level, int fine_level,
-                                 const Vector<MultiFab *> &Rhs, MultiFab &phi) {
-  BL_PROFILE("Gravity::fill_multipole_BCs()");
+template <typename T>
+void Gravity<T>::fill_multipole_BCs(int crse_level, int fine_level,
+                                    const Vector<MultiFab *> &Rhs,
+                                    MultiFab &phi) {
+  BL_PROFILE("Gravity<T>::fill_multipole_BCs()");
 
   // Multipole BCs only make sense to construct if we are starting from the
   // coarse level.
@@ -224,10 +226,7 @@ void Gravity::fill_multipole_BCs(int crse_level, int fine_level,
     MultiFab::Copy(source, *Rhs[lev - crse_level], 0, 0, 1, 0);
 
     if (lev < fine_level) {
-      const MultiFab &mask =
-          dynamic_cast<Castro *>(&(parent->getLevel(lev + 1)))
-              ->build_fine_mask();
-
+      const MultiFab &mask = sim.getLevel(lev + 1)->build_fine_mask();
       MultiFab::Multiply(source, mask, 0, 0, 1, 0);
     }
 
@@ -508,13 +507,14 @@ void Gravity::fill_multipole_BCs(int crse_level, int fine_level,
     Real end = ParallelDescriptor::second() - strt;
     ParallelDescriptor::ReduceRealMax(end, IOProc);
     if (ParallelDescriptor::IOProcessor()) {
-      std::cout << "Gravity::fill_multipole_BCs() time = " << end << std::endl
+      std::cout << "Gravity<T>::fill_multipole_BCs() time = " << end
+                << std::endl
                 << std::endl;
     }
   }
 }
 
-void Gravity::make_mg_bc() {
+template <typename T> void Gravity<T>::make_mg_bc() {
   const Geometry &geom = this->geom[0];
 
   for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {

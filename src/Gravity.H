@@ -19,6 +19,8 @@
 #include "AMReX_REAL.H"
 #include <AMReX_MLLinOp.H>
 
+#include "simulation.hpp"
+
 namespace C {
 // newton's gravitational constant taken from NIST's 2010 CODATA recommended
 // value
@@ -62,7 +64,6 @@ enum StateType {
   State_Type = 0,
   PhiGrav_Type,
   Gravity_Type,
-  Source_Type,
 };
 
 ///
@@ -94,7 +95,7 @@ extern AMREX_GPU_MANAGED amrex::Array2D<amrex::Real, 0, lnum_max, 0, lnum_max>
 /// @class Gravity
 /// @brief
 ///
-class Gravity {
+template <typename T> class Gravity {
 
 public:
   ///
@@ -104,7 +105,8 @@ public:
   /// @param _phys_bc         ``BCRec`` object, physical boundary conditions
   /// @param _Density         index of density component
   ///
-  Gravity(amrex::Vector<amrex::Geometry> &geom,
+  Gravity(AMRSimulation<T> &sim,
+          amrex::Vector<amrex::Geometry> &geom,
           amrex::Vector<amrex::BoxArray> &ba,
           amrex::Vector<amrex::DistributionMapping> &dmap,
           amrex::Vector<amrex::IntVect> &ref_ratio,
@@ -390,6 +392,11 @@ public:
   ///
   //  amrex::Amr *parent;
   //  amrex::Vector<amrex::AmrLevel *> LevelData;
+
+  ///
+  /// Reference to AMRSimulation<problem_t>
+  ///
+  AMRSimulation<T> &sim;
 
   ///
   /// Pointers to grad_phi at previous and current time
