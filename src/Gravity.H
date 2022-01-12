@@ -54,11 +54,11 @@ const int no_composite = 0;
 const int do_composite_phi_correction = 1;
 const int direct_sum_bcs = 0;
 
-// multigrid solve parameters
-const int mlmg_agglomeration = 1;
-const int mlmg_consolidation = 1;
+// multigrid solve parameters (all boolean)
+const int mlmg_agglomeration = 0;
+const int mlmg_consolidation = 0;
 const int mlmg_max_fmg_iter = 1;
-const int mlmg_nsolve = 50;
+const int mlmg_nsolve = 0;
 } // namespace gravity
 
 enum StateType {

@@ -108,16 +108,17 @@ auto problem_main() -> int {
   gravity_solver.g_new_[0].define(sim.boxArray(0), sim.DistributionMap(0), 3, 1);
 
   gravity_solver.phi_old_[0].setVal(0.);
+  gravity_solver.phi_new_[0].setVal(0.);
 
-  // create temporary arrays for \grad \phi
+  // create temporary arrays for (face-centered) \grad \phi
   gravity_solver.install_level(0);
 
   amrex::Print() <<  "Starting solve..." << std::endl;
 
-  int is_new = 0;
+  int is_new = 1;
   gravity_solver.solve_for_phi(
-      0, gravity_solver.phi_old_[0],
-      amrex::GetVecOfPtrs(gravity_solver.get_grad_phi_prev(0)), is_new);
+      0, gravity_solver.phi_new_[0],
+      amrex::GetVecOfPtrs(gravity_solver.get_grad_phi_curr(0)), is_new);
 
   // Cleanup and exit
   amrex::Print() << "Finished." << std::endl;
