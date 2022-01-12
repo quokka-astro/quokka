@@ -37,6 +37,7 @@
 #include "AMReX_MFInterpolater.H"
 #include "AMReX_MultiFabUtil.H"
 #include "AMReX_ParallelDescriptor.H"
+#include "AMReX_PhysBCFunct.H"
 #include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
 #include "AMReX_Vector.H"
@@ -51,14 +52,16 @@
 
 // internal headers
 #include "CheckNaN.hpp"
+#include "Gravity.H"
 #include "math_impl.hpp"
-#include "memory"
 
 #define USE_YAFLUXREGISTER
 
 // Main simulation class; solvers should inherit from this
 template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 {
+	friend Gravity<problem_t>;
+	
       public:
 	amrex::Real maxDt_ = std::numeric_limits<double>::max(); // no limit by default
 	amrex::Real initDt_ = std::numeric_limits<double>::max(); // no limit by default
@@ -74,6 +77,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Long maxTimesteps_ = 1e4; // default
 	int plotfileInterval_ = 10;	 // -1 == no output
 	int checkpointInterval_ = -1;	 // -1 == no output
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> coordCenter_{};
 
 	// constructors
 	
@@ -131,8 +135,15 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 			       amrex::Vector<amrex::Real> &fineTime, int icomp, int ncomp);
 	void FillPatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp);
 	void FillCoarsePatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp);
+	void FillCoarsePatch(int lev, amrex::Real time, amrex::MultiFab &mf,
+							amrex::Vector<amrex::MultiFab> &phi_old,
+							amrex::Vector<amrex::MultiFab> &phi_new,
+							int icomp = 0, int ncomp = 1);
 	void GetData(int lev, amrex::Real time, amrex::Vector<amrex::MultiFab *> &data,
 		     amrex::Vector<amrex::Real> &datatime);
+	void GetData(amrex::Real time, amrex::Vector<amrex::MultiFab *> &data,
+			amrex::Vector<amrex::Real> &datatime, amrex::MultiFab &oldState,
+			amrex::MultiFab &newState, amrex::Real oldTime, amrex::Real newTime);
 	void AverageDown();
 	void AverageDownTo(int crse_lev);
 	void timeStepWithSubcycling(int lev, amrex::Real time, int iteration);
@@ -292,6 +303,16 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 	if (plotfileInterval_ > 0) {
 		WritePlotFile();
 	}
+
+	// initialize convenience variables
+	using Real = amrex::Real;
+	amrex::GpuArray<Real, AMREX_SPACEDIM> dx = geom[0].CellSizeArray();
+	amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo = geom[0].ProbLoArray();
+	amrex::GpuArray<Real, AMREX_SPACEDIM> prob_hi = geom[0].ProbHiArray();
+
+	coordCenter_ = { AMREX_D_DECL(prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]),
+								  prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]),
+								  prob_lo[2] + 0.5 * (prob_hi[2] - prob_lo[2])) };
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
@@ -683,7 +704,9 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 				S_filled.nComp());
 	} else { // level 0
 		// fill internal and periodic boundaries, ignoring corners (cross=true)
-	        // (there is no performance benefit for this in practice)
+	        // (there is no performance benefit for this in practice,
+			//  and is not compatible with the new version of the Riemann solver,
+			//  which requires corner cells for the carbuncle correction)
 		// state.FillBoundary(geom[lev].periodicity(), true);
 		state.FillBoundary(geom[lev].periodicity());
 
@@ -772,7 +795,7 @@ void AMRSimulation<problem_t>::FillPatch(int lev, amrex::Real time, amrex::Multi
 }
 
 // Fill an entire multifab by interpolating from the coarser level
-// this comes into play when a new level of refinement appears
+// Used when a new level of refinement appears
 template <typename problem_t>
 void AMRSimulation<problem_t>::FillCoarsePatch(int lev, amrex::Real time, amrex::MultiFab &mf,
 					       int icomp, int ncomp)
@@ -805,6 +828,39 @@ void AMRSimulation<problem_t>::FillCoarsePatch(int lev, amrex::Real time, amrex:
 				     0, refRatio(lev - 1), mapper, boundaryConditions_, 0);
 }
 
+// Fill an entire multifab by interpolating from the coarser level
+// Used when doing a Poisson solve with AMR subcycling
+template <typename problem_t>
+void AMRSimulation<problem_t>::FillCoarsePatch(int lev, amrex::Real time, amrex::MultiFab &mf,
+							amrex::Vector<amrex::MultiFab> &phi_old,
+							amrex::Vector<amrex::MultiFab> &phi_new,
+							int icomp, int ncomp)
+{
+	BL_PROFILE("AMRSimulation::FillCoarsePatch()");
+
+	AMREX_ASSERT(lev > 0);
+
+	amrex::Vector<amrex::MultiFab *> cmf;
+	amrex::Vector<amrex::Real> ctime;
+	GetData(time, cmf, ctime, phi_old[lev], phi_new[lev], tOld_[lev], tNew_[lev]);
+
+	if (cmf.size() != 1) {
+		amrex::Abort("FillCoarsePatchPoisson: how did this happen?");
+	}
+
+	// use CellConservativeLinear interpolation onto fine grid
+	amrex::MFInterpolater *mapper = &amrex::mf_cell_cons_interp;
+
+	// do not fill physical boundaries (does not make sense for potential)
+	amrex::PhysBCFunctNoOp coarsePhysicalBoundaryFunctor;
+	amrex::PhysBCFunctNoOp finePhysicalBoundaryFunctor;
+
+	// interpolates onto mf with mf.nGrowVect() ghost cells
+	amrex::InterpFromCoarseLevel(mf, time, *cmf[0], 0, icomp, ncomp, geom[lev - 1], geom[lev],
+				     coarsePhysicalBoundaryFunctor, 0, finePhysicalBoundaryFunctor,
+				     0, refRatio(lev - 1), mapper, boundaryConditions_, 0);
+}
+
 // utility to copy in data from state_old_ and/or state_new_ into another
 // multifab
 template <typename problem_t>
@@ -812,27 +868,39 @@ void AMRSimulation<problem_t>::GetData(int lev, amrex::Real time,
 				       amrex::Vector<amrex::MultiFab *> &data,
 				       amrex::Vector<amrex::Real> &datatime)
 {
+	GetData(time, data, datatime, state_old_[lev], state_new_[lev], tOld_[lev], tNew_[lev]);
+}
+
+// utility to copy in data from state_old_ and/or state_new_ into another
+// multifab
+template <typename problem_t>
+void AMRSimulation<problem_t>::GetData(amrex::Real time,
+				       amrex::Vector<amrex::MultiFab *> &data,
+				       amrex::Vector<amrex::Real> &datatime,
+					   amrex::MultiFab &oldState, amrex::MultiFab &newState,
+					   amrex::Real oldTime, amrex::Real newTime)
+{
 	BL_PROFILE("AMRSimulation::GetData()");
 
 	data.clear();
 	datatime.clear();
 
 	const amrex::Real teps =
-	    (tNew_[lev] - tOld_[lev]) * 1.e-3; // generous roundoff error threshold
+	    (newTime - oldTime) * 1.e-3; // generous roundoff error threshold
 
-	if (time > tNew_[lev] - teps &&
-	    time < tNew_[lev] + teps) { // if time == tNew_[lev] within roundoff
-		data.push_back(&state_new_[lev]);
-		datatime.push_back(tNew_[lev]);
-	} else if (time > tOld_[lev] - teps &&
-		   time < tOld_[lev] + teps) { // if time == tOld_[lev] within roundoff
-		data.push_back(&state_old_[lev]);
-		datatime.push_back(tOld_[lev]);
+	if (time > newTime - teps &&
+	    time < newTime + teps) { // if time == newTime within roundoff
+		data.push_back(&newState);
+		datatime.push_back(newTime);
+	} else if (time > oldTime - teps &&
+		   time < oldTime + teps) { // if time == oldTime within roundoff
+		data.push_back(&oldState);
+		datatime.push_back(oldTime);
 	} else { // otherwise return both old and new states for interpolation
-		data.push_back(&state_old_[lev]);
-		data.push_back(&state_new_[lev]);
-		datatime.push_back(tOld_[lev]);
-		datatime.push_back(tNew_[lev]);
+		data.push_back(&oldState);
+		data.push_back(&newState);
+		datatime.push_back(oldTime);
+		datatime.push_back(newTime);
 	}
 }
 

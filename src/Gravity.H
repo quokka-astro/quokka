@@ -19,7 +19,8 @@
 #include "AMReX_REAL.H"
 #include <AMReX_MLLinOp.H>
 
-#include "simulation.hpp"
+// forward declaration
+template <typename T> class AMRSimulation;
 
 namespace C {
 // newton's gravitational constant taken from NIST's 2010 CODATA recommended
@@ -62,8 +63,8 @@ const int mlmg_nsolve = 50;
 
 enum StateType {
   State_Type = 0, // conserved fluid variables
-  PhiGrav_Type, // gravitational potential 'phi'
-  Gravity_Type, // gravitational acceleration 'g'
+  PhiGrav_Type,   // gravitational potential 'phi'
+  Gravity_Type,   // gravitational acceleration 'g'
 };
 
 ///
@@ -101,17 +102,12 @@ public:
   ///
   /// Constructor
   ///
-  /// @param Parent           Parent ``Amr`` object
-  /// @param _phys_bc         ``BCRec`` object, physical boundary conditions
   /// @param _Density         index of density component
   ///
-  Gravity(AMRSimulation<T> &sim,
-          amrex::Vector<amrex::Geometry> &geom,
-          amrex::Vector<amrex::BoxArray> &ba,
-          amrex::Vector<amrex::DistributionMapping> &dmap,
-          amrex::Vector<amrex::IntVect> &ref_ratio,
-          amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &coordCenter,
-          int &finest_lev, int &max_lev, amrex::BCRec *_phys_bc, int _Density);
+  Gravity(AMRSimulation<T> *_sim,
+          amrex::BCRec &phys_bc,
+          amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &_coordCenter,
+          int _Density);
 
   ///
   /// Read gravity-related parameters from parameter file
@@ -121,18 +117,15 @@ public:
   ///
   /// Set ``Gravity`` object's ``numpts_at_level`` variable.
   ///
-  /// @param numpts       number of points
   ///
-  void set_numpts_in_gravity(int numpts);
+  void set_numpts_in_gravity();
 
   ///
   /// Setup gravity at level ``level``.
   ///
   /// @param level        integer, level number
-  /// @param volume       MultiFab, volume elements of cells
-  /// @param area         MultiFab, area elements of cells
   ///
-  void install_level(int level, amrex::MultiFab &volume, amrex::MultiFab *area);
+  void install_level(int level);
 
   ///
   /// Returns ``gravity_type``
@@ -394,9 +387,9 @@ public:
   //  amrex::Vector<amrex::AmrLevel *> LevelData;
 
   ///
-  /// Reference to AMRSimulation<problem_t>
+  /// Pointer to AMRSimulation<problem_t>
   ///
-  AMRSimulation<T> &sim;
+  AMRSimulation<T> *sim;
 
   ///
   /// MultiFabs for potential, acceleration
@@ -415,11 +408,6 @@ public:
   ///
   /// BoxArray at each level
   ///
-  amrex::Vector<amrex::BoxArray> &grids;
-  const amrex::Vector<amrex::DistributionMapping> &dmap;
-  const amrex::Vector<amrex::Geometry> &geom;
-  const amrex::Vector<amrex::IntVect> &refRatio;
-  const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> coordCenter;
 
   ///
   /// Absolute tolerance on each level
@@ -441,18 +429,14 @@ public:
   ///
   amrex::Real max_rhs;
 
-  ///
-  /// Volume and area fractions.
-  ///
-  amrex::Vector<amrex::MultiFab *> volume;
-  amrex::Vector<amrex::MultiFab *> area;
+  const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> coordCenter;
 
   int Density; // index of density component
-  int &finest_level;
   int finest_level_allocated;
-  int &max_lev;
+  int max_lev;
 
-  amrex::BCRec *phys_bc;
+  amrex::BCRec *phys_bc; // used to specify whether any axes are
+                         // reflection-symmetric (e.g., in octant symmetry)
 
   std::array<amrex::MLLinOp::BCType, AMREX_SPACEDIM> mlmg_lobc;
   std::array<amrex::MLLinOp::BCType, AMREX_SPACEDIM> mlmg_hibc;

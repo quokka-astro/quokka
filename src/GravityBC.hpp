@@ -12,6 +12,8 @@
 #include <cmath>
 #include <limits>
 
+#include "AMReX_MultiFabUtil.H"
+#include "AMReX_SPACE.H"
 #include <AMReX_FillPatchUtil.H>
 #include <AMReX_MLMG.H>
 #include <AMReX_MLPoisson.H>
@@ -43,8 +45,8 @@ template <typename T> void Gravity<T>::init_multipole_grav() {
     hi_bc[dir] = -1;
   }
 
-  const auto problo = geom[0].ProbLoArray();
-  const auto probhi = geom[0].ProbHiArray();
+  const auto problo = sim->Geom(0).ProbLoArray();
+  const auto probhi = sim->Geom(0).ProbHiArray();
 
   // If any of the boundaries are symmetric, we need to account for the mass
   // that is assumed to lie on the opposite side of the symmetric axis. If the
@@ -70,7 +72,7 @@ template <typename T> void Gravity<T>::init_multipole_grav() {
 
   for (int b = 0; b < AMREX_SPACEDIM; ++b) {
 
-    if ((lo_bc[b] == Symmetry) && (geom[0].Coord() == 0)) {
+    if ((lo_bc[b] == Symmetry) && (sim->Geom(0).Coord() == 0)) {
       if (std::abs(coordCenter[b] - problo[b]) < edgeTolerance) {
         multipole::volumeFactor *= 2.0;
         multipole::doReflectionLo(b) = true;
@@ -80,7 +82,7 @@ template <typename T> void Gravity<T>::init_multipole_grav() {
       }
     }
 
-    if ((hi_bc[b] == Symmetry) && (geom[0].Coord() == 0)) {
+    if ((hi_bc[b] == Symmetry) && (sim->Geom(0).Coord() == 0)) {
       if (std::abs(coordCenter[b] - probhi[b]) < edgeTolerance) {
         multipole::volumeFactor *= 2.0;
         multipole::doReflectionHi(b) = true;
@@ -226,7 +228,12 @@ void Gravity<T>::fill_multipole_BCs(int crse_level, int fine_level,
     MultiFab::Copy(source, *Rhs[lev - crse_level], 0, 0, 1, 0);
 
     if (lev < fine_level) {
-      const MultiFab &mask = sim.getLevel(lev + 1)->build_fine_mask();
+      // const MultiFab &mask = parent->getLevel(lev + 1)->build_fine_mask();
+      auto mask =
+          amrex::makeFineMask(sim->boxArray(lev), sim->DistributionMap(lev),
+                              sim->boxArray(lev - 1), sim->refRatio(lev - 1),
+                              1.0,  // coarse
+                              0.0); // fine
       MultiFab::Multiply(source, mask, 0, 0, 1, 0);
     }
 
@@ -235,11 +242,11 @@ void Gravity<T>::fill_multipole_BCs(int crse_level, int fine_level,
     // is coded to only add to the moment arrays, so it is safe
     // to directly hand the arrays to them.
 
-    const Box &domain = geom[lev].Domain();
-    const auto dx = geom[lev].CellSizeArray();
-    const auto problo = geom[lev].ProbLoArray();
-    const auto probhi = geom[lev].ProbHiArray();
-    int coord_type = geom[lev].Coord();
+    //const Box &domain = sim->Geom(lev).Domain();
+    const auto dx = sim->Geom(lev).CellSizeArray();
+    const auto problo = sim->Geom(lev).ProbLoArray();
+    const auto probhi = sim->Geom(lev).ProbHiArray();
+    //int coord_type = sim->Geom(lev).Coord();
 
     {
       for (MFIter mfi(source, TilingIfNotGPU()); mfi.isValid(); ++mfi) {
@@ -253,7 +260,7 @@ void Gravity<T>::fill_multipole_BCs(int crse_level, int fine_level,
         auto qUS_arr = qUS.array();
 
         auto rho = source[mfi].array();
-        auto vol = (*volume[lev])[mfi].array();
+        auto vol = AMREX_D_TERM(dx[0], * dx[1], * dx[2]);
 
         amrex::ParallelFor(
             amrex::Gpu::KernelInfo().setReduction(true), bx,
@@ -300,7 +307,7 @@ void Gravity<T>::fill_multipole_BCs(int crse_level, int fine_level,
               // Now, compute the multipole moments.
 
               multipole_add(cosTheta, phiAngle, r, rho(i, j, k),
-                            vol(i, j, k) * rmax_cubed_inv, qL0_arr, qLC_arr,
+                            vol * rmax_cubed_inv, qL0_arr, qLC_arr,
                             qLS_arr, qU0_arr, qUC_arr, qUS_arr, npts, nlo,
                             index, handler, true);
 
@@ -312,7 +319,7 @@ void Gravity<T>::fill_multipole_BCs(int crse_level, int fine_level,
 
                 multipole_symmetric_add(
                     x, y, z, problo, coordCenter, rho(i, j, k),
-                    vol(i, j, k) * rmax_cubed_inv, qL0_arr, qLC_arr, qLS_arr,
+                    vol * rmax_cubed_inv, qL0_arr, qLC_arr, qLS_arr,
                     qU0_arr, qUC_arr, qUS_arr, npts, nlo, index, handler);
               }
             });
@@ -362,10 +369,10 @@ void Gravity<T>::fill_multipole_BCs(int crse_level, int fine_level,
   // complete multipole moments, for all points on the
   // boundary that are held on this process.
 
-  const Box &domain = geom[crse_level].Domain();
-  const auto dx = geom[crse_level].CellSizeArray();
-  const auto problo = geom[crse_level].ProbLoArray();
-  int coord_type = geom[crse_level].Coord();
+  const Box &domain = sim->Geom(crse_level).Domain();
+  const auto dx = sim->Geom(crse_level).CellSizeArray();
+  const auto problo = sim->Geom(crse_level).ProbLoArray();
+  int coord_type = sim->Geom(crse_level).Coord();
 
   for (MFIter mfi(phi, TilingIfNotGPU()); mfi.isValid(); ++mfi) {
     const Box &bx = mfi.growntilebox();
@@ -515,7 +522,7 @@ void Gravity<T>::fill_multipole_BCs(int crse_level, int fine_level,
 }
 
 template <typename T> void Gravity<T>::make_mg_bc() {
-  const Geometry &geom = this->geom[0];
+  const Geometry &geom = this->sim->Geom(0);
 
   for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
     if (geom.isPeriodic(idim)) {

@@ -1,0 +1,7 @@
+if (AMReX_SPACEDIM EQUAL 3)
+    add_executable(test_poisson ../main.cpp ../Gravity.cpp test_poisson.cpp)
+    if(AMReX_GPU_BACKEND MATCHES "CUDA")
+        setup_target_for_cuda_compilation(test_poisson)
+    endif()
+    add_test(NAME PoissonFreeSpace COMMAND test_poisson poisson.in WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+endif()

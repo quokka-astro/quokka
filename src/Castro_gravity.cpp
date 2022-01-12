@@ -3,7 +3,7 @@
 
 using namespace amrex;
 
-void construct_old_gravity(int amr_iteration, int amr_ncycle, Real time) {
+void construct_old_gravity(Real time) {
   BL_PROFILE("Castro::construct_old_gravity()");
 
   MultiFab &grav_old = get_old_data(Gravity_Type);
@@ -102,7 +102,7 @@ void construct_old_gravity(int amr_iteration, int amr_ncycle, Real time) {
   gravity->get_old_grav_vector(level, grav_old, time);
 }
 
-void construct_new_gravity(int amr_iteration, int amr_ncycle, Real time) {
+void construct_new_gravity(Real time) {
   BL_PROFILE("Castro::construct_new_gravity()");
 
   MultiFab &grav_new = get_new_data(Gravity_Type);
@@ -222,28 +222,21 @@ void construct_new_gravity(int amr_iteration, int amr_ncycle, Real time) {
   }
 }
 
-void construct_old_gravity_source(MultiFab &source, MultiFab &state_in,
+void construct_gravity_source(MultiFab &source, MultiFab &state_in,
                                   Real time, Real dt) {
   BL_PROFILE("Castro::construct_old_gravity_source()");
-
-  const Real strt_time = ParallelDescriptor::second();
-
-  const MultiFab &phi_old = get_old_data(PhiGrav_Type);
-  const MultiFab &grav_old = get_old_data(Gravity_Type);
 
   if (!do_grav)
     return;
 
-  // Gravitational source term for the time-level n data.
-
-  AMREX_ALWAYS_ASSERT(castro::grav_source_type >= 1 &&
-                      castro::grav_source_type <= 4);
+  // Gravitational source term for the time-level n+1 data.
+  const MultiFab &grav_new = get_new_data(Gravity_Type);
 
   for (MFIter mfi(state_in, TilingIfNotGPU()); mfi.isValid(); ++mfi) {
     const Box &bx = mfi.tilebox();
 
     Array4<Real const> const uold = state_in.array(mfi);
-    Array4<Real const> const grav = grav_old.array(mfi);
+    Array4<Real const> const grav = grav_new.array(mfi);
     Array4<Real> const source_arr = source.array(mfi);
 
     amrex::ParallelFor(bx, [=] AMREX_GPU_HOST_DEVICE(int i, int j, int k) {
@@ -261,13 +254,6 @@ void construct_old_gravity_source(MultiFab &source, MultiFab &state_in,
       for (int n = 0; n < NSRC; ++n) {
         src[n] = 0.0;
       }
-
-      // Gravitational source options for how to add the work to (rho E):
-      // grav_source_type =
-      // 1: Original version ("does work")
-      // 2: Modification of type 1 that updates the momentum before constructing
-      // the energy corrector 3: Puts all gravitational work into KE, not (rho
-      // e) 4: Conservative energy formulation
 
       Real rho = uold(i, j, k, URHO);
       Real rhoInv = 1.0 / rho;
@@ -292,37 +278,11 @@ void construct_old_gravity_source(MultiFab &source, MultiFab &state_in,
 
       Real SrE;
 
-      if (castro::grav_source_type == 1 || castro::grav_source_type == 2) {
-
-        // Src = rho u dot g, evaluated with all quantities at t^n
-
-        SrE = (uold(i, j, k, UMX) * Sr[0] + uold(i, j, k, UMY) * Sr[1] +
-               uold(i, j, k, UMZ) * Sr[2]) *
-              rhoInv;
-
-      } else if (castro::grav_source_type == 3) {
-
-        Real new_ke = 0.5 *
-                      (snew[UMX] * snew[UMX] + snew[UMY] * snew[UMY] +
-                       snew[UMZ] * snew[UMZ]) *
-                      rhoInv;
-        SrE = new_ke - old_ke;
-
-      } else if (castro::grav_source_type == 4) {
-
-        // The conservative energy formulation does not strictly require
-        // any energy source-term here, because it depends only on the
-        // fluid motions from the hydrodynamical fluxes which we will only
-        // have when we get to the 'corrector' step. Nevertheless we add a
-        // predictor energy source term in the way that the other methods
-        // do, for consistency. We will fully subtract this predictor value
-        // during the corrector step, so that the final result is correct.
-        // Here we use the same approach as grav_source_type == 2.
-
-        SrE = (uold(i, j, k, UMX) * Sr[0] + uold(i, j, k, UMY) * Sr[1] +
-               uold(i, j, k, UMZ) * Sr[2]) *
-              rhoInv;
-      }
+      Real new_ke = 0.5 *
+                    (snew[UMX] * snew[UMX] + snew[UMY] * snew[UMY] +
+                     snew[UMZ] * snew[UMZ]) *
+                    rhoInv;
+      SrE = new_ke - old_ke;
 
       src[UEDEN] = SrE;
 
@@ -334,250 +294,5 @@ void construct_old_gravity_source(MultiFab &source, MultiFab &state_in,
         source_arr(i, j, k, n) += src[n];
       }
     });
-  }
-
-  if (castro::verbose > 1) {
-    const int IOProc = ParallelDescriptor::IOProcessorNumber();
-    Real run_time = ParallelDescriptor::second() - strt_time;
-
-#ifdef BL_LAZY
-    Lazy::QueueReduction([=]() mutable {
-#endif
-      ParallelDescriptor::ReduceRealMax(run_time, IOProc);
-
-      if (ParallelDescriptor::IOProcessor())
-        std::cout << "Castro::construct_old_gravity_source() time = "
-                  << run_time << "\n"
-                  << "\n";
-#ifdef BL_LAZY
-    });
-#endif
-  }
-}
-
-void construct_new_gravity_source(MultiFab &source, MultiFab &state_old,
-                                  MultiFab &state_new, Real time, Real dt) {
-  BL_PROFILE("Castro::construct_new_gravity_source()");
-
-  const Real strt_time = ParallelDescriptor::second();
-
-  MultiFab &grav_old = get_old_data(Gravity_Type);
-  MultiFab &grav_new = get_new_data(Gravity_Type);
-
-  if (!do_grav)
-    return;
-
-  GpuArray<Real, 3> dx;
-  for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-    dx[i] = geom.CellSizeArray()[i];
-  }
-  for (int i = AMREX_SPACEDIM; i < 3; ++i) {
-    dx[i] = 0.0;
-  }
-
-  AMREX_ALWAYS_ASSERT(castro::grav_source_type >= 1 &&
-                      castro::grav_source_type <= 4);
-
-  {
-    for (MFIter mfi(state_new, TilingIfNotGPU()); mfi.isValid(); ++mfi) {
-      const Box &bx = mfi.tilebox();
-
-      Array4<Real const> const uold = state_old.array(mfi);
-      Array4<Real const> const unew = state_new.array(mfi);
-      Array4<Real const> const gold = grav_old.array(mfi);
-      Array4<Real const> const gnew = grav_new.array(mfi);
-      Array4<Real const> const vol = volume.array(mfi);
-      Array4<Real const> const flux0 = (*mass_fluxes[0]).array(mfi);
-      Array4<Real const> const flux1 = (*mass_fluxes[1]).array(mfi);
-      Array4<Real const> const flux2 = (*mass_fluxes[2]).array(mfi);
-      Array4<Real> const source_arr = source.array(mfi);
-
-      amrex::ParallelFor(bx, [=] AMREX_GPU_HOST_DEVICE(int i, int j, int k) {
-        GpuArray<Real, NSRC> src{};
-
-        Real hdtInv = 0.5 / dt;
-
-        // Gravitational source options for how to add the work to (rho E):
-        // grav_source_type =
-        // 1: Original version ("does work")
-        // 2: Modification of type 1 that updates the U before constructing
-        // SrEcorr 3: Puts all gravitational work into KE, not (rho e) 4:
-        // Conservative gravity approach (discussed in first white dwarf merger
-        // paper).
-
-        Real rhoo = uold(i, j, k, URHO);
-        Real rhooinv = 1.0 / uold(i, j, k, URHO);
-
-        Real rhon = unew(i, j, k, URHO);
-        Real rhoninv = 1.0 / unew(i, j, k, URHO);
-
-        // Temporary array for seeing what the new state would be if the update
-        // were applied here.
-
-        GpuArray<Real, NUM_STATE> snew{};
-        for (int n = 0; n < NUM_STATE; ++n) {
-          snew[n] = unew(i, j, k, n);
-        }
-
-        Real old_ke = 0.5 *
-                      (snew[UMX] * snew[UMX] + snew[UMY] * snew[UMY] +
-                       snew[UMZ] * snew[UMZ]) *
-                      rhoninv;
-
-        // Define old source terms
-
-        GpuArray<Real, 3> vold;
-        for (int n = 0; n < 3; ++n) {
-          vold[n] = uold(i, j, k, UMX + n) * rhooinv;
-        }
-
-        GpuArray<Real, 3> Sr_old;
-        for (int n = 0; n < 3; ++n) {
-          Sr_old[n] = rhoo * gold(i, j, k, n);
-        }
-
-        Real SrE_old =
-            vold[0] * Sr_old[0] + vold[1] * Sr_old[1] + vold[2] * Sr_old[2];
-
-        // Define new source terms
-
-        GpuArray<Real, 3> vnew;
-        for (int n = 0; n < 3; ++n) {
-          vnew[n] = snew[UMX + n] * rhoninv;
-        }
-
-        GpuArray<Real, 3> Sr_new;
-        for (int n = 0; n < 3; ++n) {
-          Sr_new[n] = rhon * gnew(i, j, k, n);
-        }
-
-        Real SrE_new =
-            vnew[0] * Sr_new[0] + vnew[1] * Sr_new[1] + vnew[2] * Sr_new[2];
-
-        // Define corrections to source terms
-
-        GpuArray<Real, 3> Srcorr;
-        for (int n = 0; n < 3; ++n) {
-          Srcorr[n] = 0.5 * (Sr_new[n] - Sr_old[n]);
-        }
-
-        // Correct momenta
-
-        for (int n = 0; n < 3; ++n) {
-          src[UMX + n] = Srcorr[n];
-          snew[UMX + n] += dt * src[UMX + n];
-        }
-
-        // Correct energy
-
-        Real SrEcorr;
-
-        if (castro::grav_source_type == 1) {
-
-          // If grav_source_type == 1, then we calculated SrEcorr before
-          // updating the velocities.
-
-          SrEcorr = 0.5 * (SrE_new - SrE_old);
-
-        } else if (castro::grav_source_type == 2) {
-
-          // For this source type, we first update the momenta
-          // before we calculate the energy source term.
-
-          for (int n = 0; n < 3; ++n) {
-            vnew[n] = snew[UMX + n] * rhoninv;
-          }
-          SrE_new =
-              vnew[0] * Sr_new[0] + vnew[1] * Sr_new[1] + vnew[2] * Sr_new[2];
-
-          SrEcorr = 0.5 * (SrE_new - SrE_old);
-
-        } else if (castro::grav_source_type == 3) {
-
-          // Instead of calculating the energy source term explicitly,
-          // we simply update the kinetic energy.
-
-          Real new_ke = 0.5 *
-                        (snew[UMX] * snew[UMX] + snew[UMY] * snew[UMY] +
-                         snew[UMZ] * snew[UMZ]) *
-                        rhoninv;
-          SrEcorr = new_ke - old_ke;
-
-        } else if (castro::grav_source_type == 4) {
-
-          // First, subtract the predictor step we applied earlier.
-
-          SrEcorr = -SrE_old;
-
-          // For an explanation of this approach, see wdmerger paper I.
-          // The main idea is that we are evaluating the change of the
-          // potential energy at zone edges and applying that in an equal
-          // and opposite sense to the gas energy. The physics is described
-          // in Section 2.4; we are using a version of the formula similar to
-          // Equation 94 in Springel (2010) based on the gradient rather than
-          // the potential because the gradient-version works for all forms
-          // of gravity we use, some of which do not explicitly calculate phi.
-
-          // Construct the time-averaged edge-centered gravity.
-
-          GpuArray<Real, 3> g;
-          for (int n = 0; n < 3; ++n) {
-            g[n] = 0.5 * (gnew(i, j, k, n) + gold(i, j, k, n));
-          }
-
-          Real gxl = 0.5 * (g[0] + 0.5 * (gnew(i - 1 * dg0, j, k, 0) +
-                                          gold(i - 1 * dg0, j, k, 0)));
-          Real gxr = 0.5 * (g[0] + 0.5 * (gnew(i + 1 * dg0, j, k, 0) +
-                                          gold(i + 1 * dg0, j, k, 0)));
-
-          Real gyl = 0.5 * (g[1] + 0.5 * (gnew(i, j - 1 * dg1, k, 1) +
-                                          gold(i, j - 1 * dg1, k, 1)));
-          Real gyr = 0.5 * (g[1] + 0.5 * (gnew(i, j + 1 * dg1, k, 1) +
-                                          gold(i, j + 1 * dg1, k, 1)));
-
-          Real gzl = 0.5 * (g[2] + 0.5 * (gnew(i, j, k - 1 * dg2, 2) +
-                                          gold(i, j, k - 1 * dg2, 2)));
-          Real gzr = 0.5 * (g[2] + 0.5 * (gnew(i, j, k + 1 * dg2, 2) +
-                                          gold(i, j, k + 1 * dg2, 2)));
-
-          SrEcorr += hdtInv *
-                     (flux0(i, j, k) * gxl * dx[0] +
-                      flux0(i + 1 * dg0, j, k) * gxr * dx[0] +
-                      flux1(i, j, k) * gyl * dx[1] +
-                      flux1(i, j + 1 * dg1, k) * gyr * dx[1] +
-                      flux2(i, j, k) * gzl * dx[2] +
-                      flux2(i, j, k + 1 * dg2) * gzr * dx[2]) /
-                     vol(i, j, k);
-        }
-
-        src[UEDEN] = SrEcorr;
-
-        snew[UEDEN] += dt * SrEcorr;
-
-        // Add to the outgoing source array.
-
-        for (int n = 0; n < NSRC; ++n) {
-          source_arr(i, j, k, n) += src[n];
-        }
-      });
-    }
-  }
-
-  if (castro::verbose > 1) {
-    const int IOProc = ParallelDescriptor::IOProcessorNumber();
-    Real run_time = ParallelDescriptor::second() - strt_time;
-
-#ifdef BL_LAZY
-    Lazy::QueueReduction([=]() mutable {
-#endif
-      ParallelDescriptor::ReduceRealMax(run_time, IOProc);
-
-      if (ParallelDescriptor::IOProcessor())
-        std::cout << "Castro::construct_new_gravity_source() time = "
-                  << run_time << "\n"
-                  << "\n";
-#ifdef BL_LAZY
-    });
-#endif
   }
 }

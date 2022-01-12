@@ -9,6 +9,7 @@
 /// \brief Implements a class for solving the Poisson equation.
 ///
 
+#include "AMReX_MultiFabUtil.H"
 #include <cmath>
 #include <limits>
 #include <memory>
@@ -54,10 +55,10 @@ template <typename T> void Gravity<T>::test_level_grad_phi_prev(int level) {
 
   // Fill the RHS for the solve
   MultiFab &S_old = sim.state_old_[level];
-  MultiFab Rhs(grids[level], dmap[level], 1, 0);
+  MultiFab Rhs(sim.grids[level], sim.DistributionMapping(level), 1, 0);
   MultiFab::Copy(Rhs, S_old, Density, 0, 1, 0);
 
-  const Geometry &geom_lev = geom[level];
+  const Geometry &geom_lev = sim.Geom(level);
 
   // This is a correction for fully periodic domains only
   if (geom_lev.isAllPeriodic()) {
@@ -78,8 +79,8 @@ template <typename T> void Gravity<T>::test_level_grad_phi_prev(int level) {
     amrex::Print() << "       norm of RHS             " << rhsnorm << std::endl;
   }
 
-  auto dx = geom[level].CellSizeArray();
-  auto problo = geom[level].ProbLoArray();
+  auto dx = sim.Geom(level).CellSizeArray();
+  auto problo = sim.Geom(level).ProbLoArray();
   const int coord_type = geom_lev.Coord();
 
   for (MFIter mfi(Rhs, TilingIfNotGPU()); mfi.isValid(); ++mfi) {
@@ -102,10 +103,10 @@ template <typename T> void Gravity<T>::test_level_grad_phi_curr(int level) {
 
   // Fill the RHS for the solve
   MultiFab &S_new = sim.state_new_[level];
-  MultiFab Rhs(grids[level], dmap[level], 1, 0);
+  MultiFab Rhs(sim.grids[level], sim.DistributionMapping(level), 1, 0);
   MultiFab::Copy(Rhs, S_new, Density, 0, 1, 0);
 
-  const Geometry &geom_lev = geom[level];
+  const Geometry &geom_lev = sim.Geom(level);
 
   // This is a correction for fully periodic domains only
   if (geom_lev.isAllPeriodic()) {
@@ -159,7 +160,7 @@ template <typename T> void Gravity<T>::test_composite_phi(int crse_level) {
     std::cout << "... test_composite_phi at base level " << crse_level << '\n';
   }
 
-  int finest_level_local = finest_level;
+  int finest_level_local = sim.finestLevel();
   int nlevels = finest_level_local - crse_level + 1;
 
   Vector<std::unique_ptr<MultiFab>> phi(nlevels);
@@ -168,13 +169,16 @@ template <typename T> void Gravity<T>::test_composite_phi(int crse_level) {
   for (int ilev = 0; ilev < nlevels; ++ilev) {
     int amr_lev = crse_level + ilev;
 
-    phi[ilev] = std::make_unique<MultiFab>(grids[amr_lev], dmap[amr_lev], 1, 1);
+    phi[ilev] = std::make_unique<MultiFab>(
+        sim.grids[amr_lev], sim.DistributionMapping(amr_lev), 1, 1);
     MultiFab::Copy(*phi[ilev], phi_new_[amr_lev], 0, 0, 1, 1);
 
-    rhs[ilev] = std::make_unique<MultiFab>(grids[amr_lev], dmap[amr_lev], 1, 1);
+    rhs[ilev] = std::make_unique<MultiFab>(
+        sim.grids[amr_lev], sim.DistributionMapping(amr_lev), 1, 1);
     MultiFab::Copy(*rhs[ilev], sim.state_new_[amr_lev], Density, 0, 1, 0);
 
-    res[ilev] = std::make_unique<MultiFab>(grids[amr_lev], dmap[amr_lev], 1, 0);
+    res[ilev] = std::make_unique<MultiFab>(
+        sim.grids[amr_lev], sim.DistributionMapping(amr_lev), 1, 0);
     res[ilev]->setVal(0.);
   }
 
@@ -187,7 +191,7 @@ template <typename T> void Gravity<T>::test_composite_phi(int crse_level) {
 
   // Average residual from fine to coarse level before printing the norm
   for (int amr_lev = finest_level_local - 1; amr_lev >= 0; --amr_lev) {
-    const IntVect &ratio = refRatio[amr_lev];
+    const IntVect &ratio = sim.refRatio(amr_lev);
     int ilev = amr_lev - crse_level;
     amrex::average_down(*res[ilev + 1], *res[ilev], 0, 1, ratio);
   }
