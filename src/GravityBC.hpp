@@ -247,6 +247,7 @@ void Gravity<T>::fill_multipole_BCs(int crse_level, int fine_level,
     const auto problo = sim->Geom(lev).ProbLoArray();
     const auto probhi = sim->Geom(lev).ProbHiArray();
     //int coord_type = sim->Geom(lev).Coord();
+    const auto coord_center = coordCenter;
 
     {
       for (MFIter mfi(source, TilingIfNotGPU()); mfi.isValid(); ++mfi) {
@@ -283,15 +284,15 @@ void Gravity<T>::fill_multipole_BCs(int crse_level, int fine_level,
                   1.0 / (multipole::rmax * multipole::rmax * multipole::rmax);
 
               Real x = (problo[0] + (static_cast<Real>(i) + 0.5) * dx[0] -
-                        coordCenter[0]) /
+                        coord_center[0]) /
                        multipole::rmax;
 
               Real y = (problo[1] + (static_cast<Real>(j) + 0.5) * dx[1] -
-                        coordCenter[1]) /
+                        coord_center[1]) /
                        multipole::rmax;
 
               Real z = (problo[2] + (static_cast<Real>(k) + 0.5) * dx[2] -
-                        coordCenter[2]) /
+                        coord_center[2]) /
                        multipole::rmax;
 
               Real r = std::sqrt(x * x + y * y + z * z);
@@ -318,7 +319,7 @@ void Gravity<T>::fill_multipole_BCs(int crse_level, int fine_level,
               if (multipole::doSymmetricAdd) {
 
                 multipole_symmetric_add(
-                    x, y, z, problo, coordCenter, rho(i, j, k),
+                    x, y, z, problo, coord_center, rho(i, j, k),
                     vol * rmax_cubed_inv, qL0_arr, qLC_arr, qLS_arr,
                     qU0_arr, qUC_arr, qUS_arr, npts, nlo, index, handler);
               }
@@ -373,6 +374,7 @@ void Gravity<T>::fill_multipole_BCs(int crse_level, int fine_level,
   const auto dx = sim->Geom(crse_level).CellSizeArray();
   const auto problo = sim->Geom(crse_level).ProbLoArray();
   int coord_type = sim->Geom(crse_level).Coord();
+  const auto coord_center = coordCenter;
 
   for (MFIter mfi(phi, TilingIfNotGPU()); mfi.isValid(); ++mfi) {
     const Box &bx = mfi.growntilebox();
@@ -401,33 +403,33 @@ void Gravity<T>::fill_multipole_BCs(int crse_level, int fine_level,
 
       Real x = NAN;
       if (i > domhi[0]) {
-        x = problo[0] + (static_cast<Real>(i)) * dx[0] - coordCenter[0];
+        x = problo[0] + (static_cast<Real>(i)) * dx[0] - coord_center[0];
       } else if (i < domlo[0]) {
-        x = problo[0] + (static_cast<Real>(i + 1)) * dx[0] - coordCenter[0];
+        x = problo[0] + (static_cast<Real>(i + 1)) * dx[0] - coord_center[0];
       } else {
-        x = problo[0] + (static_cast<Real>(i) + 0.5) * dx[0] - coordCenter[0];
+        x = problo[0] + (static_cast<Real>(i) + 0.5) * dx[0] - coord_center[0];
       }
 
       x = x / multipole::rmax;
 
       Real y = NAN;
       if (j > domhi[1]) {
-        y = problo[1] + (static_cast<Real>(j)) * dx[1] - coordCenter[1];
+        y = problo[1] + (static_cast<Real>(j)) * dx[1] - coord_center[1];
       } else if (j < domlo[1]) {
-        y = problo[1] + (static_cast<Real>(j + 1)) * dx[1] - coordCenter[1];
+        y = problo[1] + (static_cast<Real>(j + 1)) * dx[1] - coord_center[1];
       } else {
-        y = problo[1] + (static_cast<Real>(j) + 0.5) * dx[1] - coordCenter[1];
+        y = problo[1] + (static_cast<Real>(j) + 0.5) * dx[1] - coord_center[1];
       }
 
       y = y / multipole::rmax;
 
       Real z = NAN;
       if (k > domhi[2]) {
-        z = problo[2] + (static_cast<Real>(k)) * dx[2] - coordCenter[2];
+        z = problo[2] + (static_cast<Real>(k)) * dx[2] - coord_center[2];
       } else if (k < domlo[2]) {
-        z = problo[2] + (static_cast<Real>(k + 1)) * dx[2] - coordCenter[2];
+        z = problo[2] + (static_cast<Real>(k + 1)) * dx[2] - coord_center[2];
       } else {
-        z = problo[2] + (static_cast<Real>(k) + 0.5) * dx[2] - coordCenter[2];
+        z = problo[2] + (static_cast<Real>(k) + 0.5) * dx[2] - coord_center[2];
       }
 
       z = z / multipole::rmax;
