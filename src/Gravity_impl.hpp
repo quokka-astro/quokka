@@ -216,18 +216,16 @@ template <typename T> void Gravity<T>::install_level(int level) {
 
     grad_phi_prev[level].resize(AMREX_SPACEDIM);
     for (int n = 0; n < AMREX_SPACEDIM; ++n) {
-      auto ba = sim->boxArray(level);
-      ba.surroundingNodes(n);
-      
-      grad_phi_prev[level][n] = std::make_unique<MultiFab>(ba, dm, 1, 1);
+      grad_phi_prev[level][n] = std::make_unique<MultiFab>(
+          amrex::convert(sim->boxArray(level), IntVect::TheDimensionVector(n)),
+          dm, 1, 1);
     }
 
     grad_phi_curr[level].resize(AMREX_SPACEDIM);
     for (int n = 0; n < AMREX_SPACEDIM; ++n) {
-      auto ba = sim->boxArray(level);
-      ba.surroundingNodes(n);
-
-      grad_phi_curr[level][n] = std::make_unique<MultiFab>(ba, dm, 1, 1);
+      grad_phi_curr[level][n] = std::make_unique<MultiFab>(
+          amrex::convert(sim->boxArray(level), IntVect::TheDimensionVector(n)),
+          dm, 1, 1);
     }
   }
 
@@ -411,7 +409,8 @@ void Gravity<T>::gravity_sync(int crse_level, int fine_level,
     const DistributionMapping &dm = sim->DistributionMap(lev);
     for (int n = 0; n < AMREX_SPACEDIM; ++n) {
       ec_gdPhi[lev - crse_level][n] = std::make_unique<MultiFab>(
-          sim->boxArray(lev).surroundingNodes(n), dm, 1, 0);
+          amrex::convert(sim->boxArray(lev), IntVect::TheDimensionVector(n)),
+          dm, 1, 0);
       ec_gdPhi[lev - crse_level][n]->setVal(0.0);
     }
   }
@@ -571,9 +570,9 @@ void Gravity<T>::multilevel_solve_for_new_phi(int level, int finest_level_in) {
   for (int lev = level; lev <= finest_level_in; lev++) {
     BL_ASSERT(grad_phi_curr[lev].size() == AMREX_SPACEDIM);
     for (int n = 0; n < AMREX_SPACEDIM; ++n) {
-      grad_phi_curr[lev][n] =
-          std::make_unique<MultiFab>(sim->boxArray(lev).surroundingNodes(n),
-                                     sim->DistributionMap(lev), 1, 1);
+      grad_phi_curr[lev][n] = std::make_unique<MultiFab>(
+          amrex::convert(sim->boxArray(lev), IntVect::TheDimensionVector(n)),
+          sim->DistributionMap(lev), 1, 1);
     }
   }
 
@@ -824,9 +823,9 @@ void Gravity<T>::create_comp_minus_level_grad_phi(
 
   comp_minus_level_grad_phi.resize(AMREX_SPACEDIM);
   for (int n = 0; n < AMREX_SPACEDIM; ++n) {
-    comp_minus_level_grad_phi[n] =
-        std::make_unique<MultiFab>(sim->boxArray(level).surroundingNodes(n),
-                                   sim->DistributionMap(level), 1, 0);
+    comp_minus_level_grad_phi[n] = std::make_unique<MultiFab>(
+        amrex::convert(sim->boxArray(level), IntVect::TheDimensionVector(n)),
+        sim->DistributionMap(level), 1, 0);
     MultiFab::Copy(*comp_minus_level_grad_phi[n], *comp_gphi[n], 0, 0, 1, 0);
     comp_minus_level_grad_phi[n]->minus(*grad_phi_prev[level][n], 0, 1, 0);
   }
