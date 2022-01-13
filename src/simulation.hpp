@@ -313,6 +313,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 	coordCenter_ = { AMREX_D_DECL(prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]),
 								  prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]),
 								  prob_lo[2] + 0.5 * (prob_hi[2] - prob_lo[2])) };
+	//amrex::Print() << "Coordinate center = " << coordCenter_ << std::endl;
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
@@ -626,6 +627,9 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(int level, amrex::Real ti
 
 	const int ncomp = ncomp_;
 	const int nghost = nghost_;
+
+	amrex::Print() << "Initializing level = " << level << std::endl;
+	AMREX_ASSERT(ba.ixType().cellCentered());
 
 	state_new_[level].define(ba, dm, ncomp, nghost);
 	state_old_[level].define(ba, dm, ncomp, nghost);

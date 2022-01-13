@@ -309,6 +309,11 @@ void Gravity<T>::solve_for_phi(int level, MultiFab &phi,
 
     const auto &rhs = get_rhs(level, 1, is_new);
 
+    // check rhs validity
+    for (int i = 0; i < rhs.size(); ++i) {
+      AMREX_ASSERT(rhs[i]->is_cell_centered());
+    }
+
     Vector<Vector<MultiFab *>> grad_phi_p(1);
     grad_phi_p[0].resize(AMREX_SPACEDIM);
     for (int i = 0; i < AMREX_SPACEDIM; i++) {
@@ -541,8 +546,9 @@ void Gravity<T>::multilevel_solve_for_new_phi(int level, int finest_level_in) {
   for (int lev = level; lev <= finest_level_in; lev++) {
     BL_ASSERT(grad_phi_curr[lev].size() == AMREX_SPACEDIM);
     for (int n = 0; n < AMREX_SPACEDIM; ++n) {
-      grad_phi_curr[lev][n] = std::make_unique<MultiFab>(
-          sim->boxArray(lev).surroundingNodes(n), sim->DistributionMap(lev), 1, 1);
+      grad_phi_curr[lev][n] =
+          std::make_unique<MultiFab>(sim->boxArray(lev).surroundingNodes(n),
+                                     sim->DistributionMap(lev), 1, 1);
     }
   }
 
@@ -687,8 +693,8 @@ void Gravity<T>::get_old_grav_vector(int level, MultiFab &grav_vector,
   // the outgoing grav_vector, leaving any higher dimensions unchanged.
   // TODO(ben): is this actually necessary for (constant-grav) 2D problems?
 
-  MultiFab grav(sim->boxArray(level), sim->DistributionMap(level), AMREX_SPACEDIM,
-                ng);
+  MultiFab grav(sim->boxArray(level), sim->DistributionMap(level),
+                AMREX_SPACEDIM, ng);
   grav.setVal(0.0, ng);
 
   if (gravity::gravity_type == GravityMode::Constant) {
@@ -739,8 +745,8 @@ void Gravity<T>::get_new_grav_vector(int level, MultiFab &grav_vector,
   // Then at the end we'll copy in all AMREX_SPACEDIM dimensions from this into
   // the outgoing grav_vector, leaving any higher dimensions unchanged.
 
-  MultiFab grav(sim->boxArray(level), sim->DistributionMap(level), AMREX_SPACEDIM,
-                ng);
+  MultiFab grav(sim->boxArray(level), sim->DistributionMap(level),
+                AMREX_SPACEDIM, ng);
   grav.setVal(0.0, ng);
 
   if (gravity::gravity_type == GravityMode::Constant) {
@@ -785,8 +791,8 @@ void Gravity<T>::create_comp_minus_level_grad_phi(
     std::cout << "\n";
   }
 
-  comp_minus_level_phi.define(sim->boxArray(level), sim->DistributionMap(level), 1,
-                              0);
+  comp_minus_level_phi.define(sim->boxArray(level), sim->DistributionMap(level),
+                              1, 0);
 
   MultiFab::Copy(comp_minus_level_phi, comp_phi, 0, 0, 1, 0);
   comp_minus_level_phi.minus(phi_old_[level], 0, 1, 0);
@@ -818,8 +824,8 @@ void Gravity<T>::average_fine_ec_onto_crse_ec(int level, int is_new) {
   IntVect fine_ratio = sim->refRatio(level);
 
   for (int i = 0; i < crse_gphi_fine_BA.size(); ++i) {
-    crse_gphi_fine_BA.set(i,
-                          amrex::coarsen(sim->boxArray(level + 1)[i], fine_ratio));
+    crse_gphi_fine_BA.set(
+        i, amrex::coarsen(sim->boxArray(level + 1)[i], fine_ratio));
   }
 
   Vector<std::unique_ptr<MultiFab>> crse_gphi_fine(AMREX_SPACEDIM);
@@ -849,8 +855,13 @@ auto Gravity<T>::get_rhs(int crse_level, int nlevs, int is_new)
 
   for (int ilev = 0; ilev < nlevs; ++ilev) {
     int amr_lev = ilev + crse_level;
+    amrex::Print() << "creating rhs from amr_lev = " << amr_lev << std::endl;
+
+    AMREX_ASSERT(sim->boxArray(amr_lev).ixType().cellCentered());
     rhs[ilev] = std::make_unique<MultiFab>(sim->boxArray(amr_lev),
                                            sim->DistributionMap(amr_lev), 1, 0);
+    AMREX_ASSERT(rhs[ilev]->is_cell_centered());
+
     MultiFab &state =
         (is_new == 1) ? sim->state_new_[amr_lev] : sim->state_old_[amr_lev];
     MultiFab::Copy(*rhs[ilev], state, Density, 0, 1, 0);
@@ -932,11 +943,25 @@ auto Gravity<T>::solve_phi_with_mlmg(int crse_level, int fine_level,
     if (gravity::verbose > 1) {
       amrex::Print() << " ... Making bc's for phi at level 0\n";
     }
+    // check rhs validity
+    for (int i = 0; i < rhs.size(); ++i) {
+      AMREX_ASSERT(rhs[i]->is_cell_centered());
+    }
     fill_multipole_BCs(crse_level, fine_level, rhs, *phi[0]);
+  }
+
+  // check rhs validity
+  for (int i = 0; i < rhs.size(); ++i) {
+    AMREX_ASSERT(rhs[i]->is_cell_centered());
   }
 
   for (int ilev = 0; ilev < nlevs; ++ilev) {
     rhs[ilev]->mult(Ggravity);
+  }
+
+  // check rhs validity
+  for (int i = 0; i < rhs.size(); ++i) {
+    AMREX_ASSERT(rhs[i]->is_cell_centered());
   }
 
   MultiFab CPhi;
@@ -958,7 +983,18 @@ auto Gravity<T>::solve_phi_with_mlmg(int crse_level, int fine_level,
 
   Real abs_eps = abs_tol[fine_level] * max_rhs;
 
+  // check rhs validity
+  for (int i = 0; i < rhs.size(); ++i) {
+    AMREX_ASSERT(rhs[i]->is_cell_centered());
+  }
+
   Vector<const MultiFab *> crhs{rhs.begin(), rhs.end()};
+
+  // check crhs validity
+  for (int i = 0; i < crhs.size(); ++i) {
+    AMREX_ASSERT(crhs[i]->is_cell_centered());
+  }
+
   Vector<std::array<MultiFab *, AMREX_SPACEDIM>> gp;
   for (const auto &x : grad_phi) {
     gp.push_back({AMREX_D_DECL(x[0], x[1], x[2])});
@@ -1015,12 +1051,20 @@ auto Gravity<T>::actual_solve_with_mlmg(
 
   int nlevs = fine_level - crse_level + 1;
 
+  // check input rhs
+  for (int i = 0; i < rhs.size(); ++i) {
+    amrex::Print() << "checking rhs[" << i << "]...\n";
+    AMREX_ASSERT(rhs[i]->is_cell_centered());
+  }
+
   Vector<Geometry> gmv;
   Vector<BoxArray> bav;
   Vector<DistributionMapping> dmv;
   for (int ilev = 0; ilev < nlevs; ++ilev) {
     gmv.push_back(sim->Geom(ilev + crse_level));
-    bav.push_back(rhs[ilev]->boxArray());
+    auto box = rhs[ilev]->boxArray();
+    AMREX_ASSERT(box.ixType().cellCentered());
+    bav.push_back(box);
     dmv.push_back(rhs[ilev]->DistributionMap());
   }
 
