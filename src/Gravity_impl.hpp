@@ -56,6 +56,13 @@ Gravity<T>::Gravity(AMRSimulation<T> *_sim, BCRec &_phys_bc,
       abs_tol(_sim->maxLevel() + 1), rel_tol(_sim->maxLevel() + 1),
       level_solver_resnorm(_sim->maxLevel() + 1), coordCenter(_coordCenter),
       max_lev(_sim->maxLevel()), phys_bc(&_phys_bc) {
+  // test whether sim has been properly initialized
+  for (int i = 0; i < sim->maxLevel(); ++i) {
+    AMREX_ASSERT(
+        sim->boxArray(i).ixType().cellCentered()); // should always be the case
+    AMREX_ASSERT(sim->Geom(i).IsCartesian());
+  }
+
   Density = _Density; // index of density component
   read_params();
   finest_level_allocated = -1;
@@ -186,12 +193,19 @@ template <typename T> void Gravity<T>::set_numpts_in_gravity() {
   std::int64_t ny = bx.size()[1];
   std::int64_t nz = bx.size()[2];
   Real ndiagsq = Real(nx * nx + ny * ny + nz * nz);
-  numpts_at_level = int(sqrt(ndiagsq)) + 2 * sim->nghost_;
+  numpts_at_level = int(sqrt(ndiagsq)) + 2 * sim->nghost();
 }
 
 template <typename T> void Gravity<T>::install_level(int level) {
   if (gravity::verbose > 1 && ParallelDescriptor::IOProcessor()) {
     std::cout << "Installing Gravity level " << level << '\n';
+  }
+
+  // test whether sim has been properly initialized
+  for (int i = 0; i < sim->maxLevel(); ++i) {
+    AMREX_ASSERT(
+        sim->boxArray(i).ixType().cellCentered()); // should always be the case
+    AMREX_ASSERT(sim->Geom(i).IsCartesian());
   }
 
   level_solver_resnorm[level] = 0.0;
@@ -202,15 +216,26 @@ template <typename T> void Gravity<T>::install_level(int level) {
 
     grad_phi_prev[level].resize(AMREX_SPACEDIM);
     for (int n = 0; n < AMREX_SPACEDIM; ++n) {
-      grad_phi_prev[level][n] = std::make_unique<MultiFab>(
-          sim->grids[level].surroundingNodes(n), dm, 1, 1);
+      auto ba = sim->boxArray(level);
+      ba.surroundingNodes(n);
+      
+      grad_phi_prev[level][n] = std::make_unique<MultiFab>(ba, dm, 1, 1);
     }
 
     grad_phi_curr[level].resize(AMREX_SPACEDIM);
     for (int n = 0; n < AMREX_SPACEDIM; ++n) {
-      grad_phi_curr[level][n] = std::make_unique<MultiFab>(
-          sim->grids[level].surroundingNodes(n), dm, 1, 1);
+      auto ba = sim->boxArray(level);
+      ba.surroundingNodes(n);
+
+      grad_phi_curr[level][n] = std::make_unique<MultiFab>(ba, dm, 1, 1);
     }
+  }
+
+  // test whether sim has been properly initialized
+  for (int i = 0; i < sim->maxLevel(); ++i) {
+    AMREX_ASSERT(
+        sim->boxArray(i).ixType().cellCentered()); // should always be the case
+    AMREX_ASSERT(sim->Geom(i).IsCartesian());
   }
 
   finest_level_allocated = level;
@@ -862,8 +887,8 @@ auto Gravity<T>::get_rhs(int crse_level, int nlevs, int is_new)
                                            sim->DistributionMap(amr_lev), 1, 0);
     AMREX_ASSERT(rhs[ilev]->is_cell_centered());
 
-    MultiFab &state =
-        (is_new == 1) ? sim->state_new_[amr_lev] : sim->state_old_[amr_lev];
+    MultiFab &state = (is_new == 1) ? *(sim->getStateNew(amr_lev))
+                                    : *(sim->getStateOld(amr_lev));
     MultiFab::Copy(*rhs[ilev], state, Density, 0, 1, 0);
   }
   return rhs;

@@ -34,6 +34,7 @@
 #include "AMReX_INT.H"
 #include "AMReX_IndexType.H"
 #include "AMReX_IntVect.H"
+#include "AMReX_Interpolater.H"
 #include "AMReX_MFInterpolater.H"
 #include "AMReX_MultiFabUtil.H"
 #include "AMReX_ParallelDescriptor.H"
@@ -52,7 +53,6 @@
 
 // internal headers
 #include "CheckNaN.hpp"
-#include "Gravity.H"
 #include "math_impl.hpp"
 
 #define USE_YAFLUXREGISTER
@@ -60,8 +60,6 @@
 // Main simulation class; solvers should inherit from this
 template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 {
-	friend Gravity<problem_t>;
-	
       public:
 	amrex::Real maxDt_ = std::numeric_limits<double>::max(); // no limit by default
 	amrex::Real initDt_ = std::numeric_limits<double>::max(); // no limit by default
@@ -77,7 +75,11 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Long maxTimesteps_ = 1e4; // default
 	int plotfileInterval_ = 10;	 // -1 == no output
 	int checkpointInterval_ = -1;	 // -1 == no output
+
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> coordCenter_{};
+	auto nghost() -> int;
+	auto getStateNew(int lev) -> amrex::MultiFab*;
+	auto getStateOld(int lev) -> amrex::MultiFab*;
 
 	// constructors
 	
@@ -208,6 +210,21 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 };
 
 template <typename problem_t>
+auto AMRSimulation<problem_t>::nghost() -> int { return nghost_; }
+
+template <typename problem_t>
+auto AMRSimulation<problem_t>::getStateNew(int lev) -> amrex::MultiFab* {
+	AMREX_ASSERT(lev < state_new_.size());
+	return &state_new_[lev];
+}
+
+template <typename problem_t>
+auto AMRSimulation<problem_t>::getStateOld(int lev) -> amrex::MultiFab* {
+	AMREX_ASSERT(lev < state_old_.size());
+	return &state_old_[lev];
+}
+
+template <typename problem_t>
 void AMRSimulation<problem_t>::initialize(amrex::Vector<amrex::BCRec> &boundaryConditions)
 {
 	BL_PROFILE("AMRSimulation::initialize()");
@@ -306,7 +323,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 
 	// initialize convenience variables
 	using Real = amrex::Real;
-	amrex::GpuArray<Real, AMREX_SPACEDIM> dx = geom[0].CellSizeArray();
 	amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo = geom[0].ProbLoArray();
 	amrex::GpuArray<Real, AMREX_SPACEDIM> prob_hi = geom[0].ProbHiArray();
 
@@ -852,8 +868,8 @@ void AMRSimulation<problem_t>::FillCoarsePatch(int lev, amrex::Real time, amrex:
 		amrex::Abort("FillCoarsePatchPoisson: how did this happen?");
 	}
 
-	// use CellConservativeLinear interpolation onto fine grid
-	amrex::MFInterpolater *mapper = &amrex::mf_cell_cons_interp;
+	// use quadratic interpolation onto fine grid
+	amrex::Interpolater *mapper = &amrex::quadratic_interp;
 
 	// do not fill physical boundaries (does not make sense for potential)
 	amrex::PhysBCFunctNoOp coarsePhysicalBoundaryFunctor;

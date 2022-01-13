@@ -19,8 +19,9 @@
 #include "AMReX_REAL.H"
 #include <AMReX_MLLinOp.H>
 
+#include "simulation.hpp"
 // forward declaration
-template <typename T> class AMRSimulation;
+//template <typename T> class AMRSimulation;
 
 namespace C {
 // newton's gravitational constant taken from NIST's 2010 CODATA recommended
