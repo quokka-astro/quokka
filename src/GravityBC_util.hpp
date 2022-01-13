@@ -19,7 +19,7 @@
 #include "AMReX_GpuReduce.H"
 #include "AMReX_REAL.H"
 
-#include "Gravity.H"
+#include "Gravity.hpp"
 
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto factorial(int n) -> amrex::Real {
   amrex::Real fact = 1.0;

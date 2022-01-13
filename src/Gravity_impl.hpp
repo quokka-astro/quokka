@@ -16,7 +16,6 @@
 /// geometry problems.
 ///
 
-#include <bits/stdint-intn.h>
 #include <cmath>
 #include <limits>
 #include <memory>
@@ -31,7 +30,7 @@
 #include <AMReX_MLPoisson.H>
 #include <AMReX_ParmParse.H>
 
-#include <Gravity.H>
+#include "Gravity.hpp"
 
 using namespace amrex;
 using GravityMode = gravity::GravityMode;

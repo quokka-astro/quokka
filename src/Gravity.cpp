@@ -1,7 +1,7 @@
 #include "AMReX_Array.H"
 #include "AMReX_GpuQualifiers.H"
 
-#include <Gravity.H>
+#include "Gravity.hpp"
 
 using Real = amrex::Real;
 

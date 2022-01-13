@@ -19,8 +19,8 @@
 #include <AMReX_MLPoisson.H>
 #include <AMReX_ParmParse.H>
 
-#include <Gravity.H>
-#include <GravityBC_util.H>
+#include "Gravity.hpp"
+#include "GravityBC_util.hpp"
 
 using namespace amrex;
 

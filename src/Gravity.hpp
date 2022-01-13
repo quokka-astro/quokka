@@ -525,4 +525,8 @@ public:
 ///
 using GradPhiPhysBCFunct = amrex::PhysBCFunctNoOp;
 
+#include "Gravity_impl.hpp"
+#include "Gravity_residual_impl.hpp"
+#include "GravityBC.hpp"
+
 #endif

@@ -14,12 +14,10 @@
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
 
-#include "Gravity.H"
-#include "GravityBC.hpp"
-#include "Gravity_impl.hpp"
-#include "Gravity_residual_impl.hpp"
 #include "RadhydroSimulation.hpp"
 #include "hydro_system.hpp"
+#include "Gravity.hpp"
+
 #include "test_poisson.hpp"
 
 using Real = amrex::Real;

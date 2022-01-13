@@ -19,7 +19,7 @@
 #include <AMReX_MLPoisson.H>
 #include <AMReX_ParmParse.H>
 
-#include <Gravity.H>
+#include "Gravity.hpp"
 
 using namespace amrex;
 
