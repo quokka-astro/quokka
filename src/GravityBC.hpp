@@ -454,10 +454,12 @@ void Gravity<T>::fill_multipole_BCs(int crse_level, int fine_level,
 
         Real cosTheta = NAN;
         Real phiAngle = NAN;
-        if constexpr (AMREX_SPACEDIM == 3) {
+        // cannot make this if constexpr
+        // (nvcc: An extended __host__ __device__ lambda cannot first-capture variable in constexpr-if context)
+        if (AMREX_SPACEDIM == 3) { 
           cosTheta = z / r;
           phiAngle = std::atan2(y, x);
-        } else if constexpr (AMREX_SPACEDIM == 2) {
+        } else if (AMREX_SPACEDIM == 2) {
           if (coord_type == 1) {
             cosTheta = y / r;
             phiAngle = 0.0;
