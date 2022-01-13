@@ -8,6 +8,7 @@ using Real = amrex::Real;
 ///
 /// Multipole gravity data
 ///
+// TODO(benwibking): move these into Gravity class as static member variables
 
 AMREX_GPU_MANAGED Real multipole::volumeFactor;
 AMREX_GPU_MANAGED Real multipole::parityFactor;
