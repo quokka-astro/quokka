@@ -111,9 +111,10 @@ template <typename T> void Gravity<T>::init_multipole_grav() {
     multipole::parity_q0(l) = 1.0;
 
     if (l % 2 != 0) {
-      if (AMREX_SPACEDIM == 3 &&
-          (multipole::doReflectionLo(2) || multipole::doReflectionHi(2))) {
-        multipole::parity_q0(l) = 0.0;
+      if constexpr (AMREX_SPACEDIM == 3) {
+        if (multipole::doReflectionLo(2) || multipole::doReflectionHi(2)) {
+          multipole::parity_q0(l) = 0.0;
+        }
       }
     }
 
@@ -242,11 +243,11 @@ void Gravity<T>::fill_multipole_BCs(int crse_level, int fine_level,
     // is coded to only add to the moment arrays, so it is safe
     // to directly hand the arrays to them.
 
-    //const Box &domain = sim->Geom(lev).Domain();
+    // const Box &domain = sim->Geom(lev).Domain();
     const auto dx = sim->Geom(lev).CellSizeArray();
     const auto problo = sim->Geom(lev).ProbLoArray();
     const auto probhi = sim->Geom(lev).ProbHiArray();
-    //int coord_type = sim->Geom(lev).Coord();
+    // int coord_type = sim->Geom(lev).Coord();
     const auto coord_center = coordCenter;
 
     {
@@ -261,7 +262,7 @@ void Gravity<T>::fill_multipole_BCs(int crse_level, int fine_level,
         auto qUS_arr = qUS.array();
 
         auto rho = source[mfi].array();
-        auto vol = AMREX_D_TERM(dx[0], * dx[1], * dx[2]);
+        auto vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
         amrex::ParallelFor(
             amrex::Gpu::KernelInfo().setReduction(true), bx,
@@ -308,9 +309,9 @@ void Gravity<T>::fill_multipole_BCs(int crse_level, int fine_level,
               // Now, compute the multipole moments.
 
               multipole_add(cosTheta, phiAngle, r, rho(i, j, k),
-                            vol * rmax_cubed_inv, qL0_arr, qLC_arr,
-                            qLS_arr, qU0_arr, qUC_arr, qUS_arr, npts, nlo,
-                            index, handler, true);
+                            vol * rmax_cubed_inv, qL0_arr, qLC_arr, qLS_arr,
+                            qU0_arr, qUC_arr, qUS_arr, npts, nlo, index,
+                            handler, true);
 
               // Now add in contributions if we have any symmetric boundaries in
               // 3D. The symmetric boundary in 2D axisymmetric is handled
@@ -320,8 +321,8 @@ void Gravity<T>::fill_multipole_BCs(int crse_level, int fine_level,
 
                 multipole_symmetric_add(
                     x, y, z, problo, coord_center, rho(i, j, k),
-                    vol * rmax_cubed_inv, qL0_arr, qLC_arr, qLS_arr,
-                    qU0_arr, qUC_arr, qUS_arr, npts, nlo, index, handler);
+                    vol * rmax_cubed_inv, qL0_arr, qLC_arr, qLS_arr, qU0_arr,
+                    qUC_arr, qUS_arr, npts, nlo, index, handler);
               }
             });
       }
@@ -453,12 +454,14 @@ void Gravity<T>::fill_multipole_BCs(int crse_level, int fine_level,
 
         Real cosTheta = NAN;
         Real phiAngle = NAN;
-        if (AMREX_SPACEDIM == 3) {
+        if constexpr (AMREX_SPACEDIM == 3) {
           cosTheta = z / r;
           phiAngle = std::atan2(y, x);
-        } else if (AMREX_SPACEDIM == 2 && coord_type == 1) {
-          cosTheta = y / r;
-          phiAngle = 0.0;
+        } else if constexpr (AMREX_SPACEDIM == 2) {
+          if (coord_type == 1) {
+            cosTheta = y / r;
+            phiAngle = 0.0;
+          }
         }
 
         phi_arr(i, j, k) = 0.0;
