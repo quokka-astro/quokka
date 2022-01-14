@@ -1006,6 +1006,9 @@ auto Gravity<T>::solve_phi_with_mlmg(int crse_level, int fine_level,
 
   Real abs_eps = abs_tol[fine_level] * max_rhs;
 
+  amrex::Print() << "using reltol = " << rel_eps << std::endl;
+  amrex::Print() << "using abstol = " << abs_eps << std::endl;
+
   // check rhs validity
   for (int i = 0; i < rhs.size(); ++i) {
     AMREX_ASSERT(rhs[i]->is_cell_centered());

@@ -23,7 +23,9 @@
 
 using namespace amrex;
 
-#ifdef AMREX_DEBUG
+#define GRAVITY_DEBUG
+
+#ifdef GRAVITY_DEBUG
 template <typename T> int Gravity<T>::test_solves = 1;
 #else
 template <typename T> int Gravity<T>::test_solves = 0;
@@ -55,7 +57,7 @@ template <typename T> void Gravity<T>::test_level_grad_phi_prev(int level) {
 
   // Fill the RHS for the solve
   MultiFab &S_old = sim->state_old_[level];
-  MultiFab Rhs(sim->grids[level], sim->DistributionMapping(level), 1, 0);
+  MultiFab Rhs(sim->boxArray(level), sim->DistributionMapping(level), 1, 0);
   MultiFab::Copy(Rhs, S_old, Density, 0, 1, 0);
 
   const Geometry &geom_lev = sim->Geom(level);
@@ -102,8 +104,8 @@ template <typename T> void Gravity<T>::test_level_grad_phi_curr(int level) {
   BL_PROFILE("Gravity::test_level_grad_phi_curr()");
 
   // Fill the RHS for the solve
-  MultiFab &S_new = sim->state_new_[level];
-  MultiFab Rhs(sim->grids[level], sim->DistributionMapping(level), 1, 0);
+  MultiFab &S_new = *(sim->getStateNew(level));
+  MultiFab Rhs(sim->boxArray(level), sim->DistributionMap(level), 1, 0);
   MultiFab::Copy(Rhs, S_new, Density, 0, 1, 0);
 
   const Geometry &geom_lev = sim->Geom(level);
@@ -170,15 +172,15 @@ template <typename T> void Gravity<T>::test_composite_phi(int crse_level) {
     int amr_lev = crse_level + ilev;
 
     phi[ilev] = std::make_unique<MultiFab>(
-        sim->grids[amr_lev], sim->DistributionMapping(amr_lev), 1, 1);
+        sim->boxArray(amr_lev), sim->DistributionMapping(amr_lev), 1, 1);
     MultiFab::Copy(*phi[ilev], phi_new_[amr_lev], 0, 0, 1, 1);
 
     rhs[ilev] = std::make_unique<MultiFab>(
-        sim->grids[amr_lev], sim->DistributionMapping(amr_lev), 1, 1);
+        sim->boxArray(amr_lev), sim->DistributionMapping(amr_lev), 1, 1);
     MultiFab::Copy(*rhs[ilev], sim->state_new_[amr_lev], Density, 0, 1, 0);
 
     res[ilev] = std::make_unique<MultiFab>(
-        sim->grids[amr_lev], sim->DistributionMapping(amr_lev), 1, 0);
+        sim->boxArray(amr_lev), sim->DistributionMapping(amr_lev), 1, 0);
     res[ilev]->setVal(0.);
   }
 

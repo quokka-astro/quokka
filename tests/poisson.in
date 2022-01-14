@@ -13,7 +13,7 @@ amr.v              = 0       # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 8 8 8
+amr.n_cell          = 16 16 16
 amr.max_level       = 0     # number of levels = max_level + 1
 amr.max_grid_size   = 8     # at least 128 for GPUs
 amr.blocking_factor = 8     # grid size must be divisible by this

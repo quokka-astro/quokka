@@ -48,7 +48,7 @@ const int lnum = 4;
 const int max_solve_level = 0;
 const double drdxfac = 0;
 
-const int verbose = 1;
+const int verbose = 2;
 const int get_g_from_phi = 1;
 const int no_sync = 0;
 const int no_composite = 0;

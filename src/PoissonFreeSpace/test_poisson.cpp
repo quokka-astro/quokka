@@ -46,7 +46,7 @@ void RadhydroSimulation<PoissonProblem>::setInitialConditionsAtLevel(int lev) {
                                std::pow(z - z0, 2));
 
       double rho = 0.;
-      if (r < 0.1) { // spherical mass
+      if (r < 0.2) { // spherical mass
         rho = 1.0;
       }
 
@@ -113,10 +113,17 @@ auto problem_main() -> int {
 
   amrex::Print() <<  "Starting solve..." << std::endl;
 
+  // this is necessary to call before solving, otherwise abs_tol = 0!
+  gravity_solver.update_max_rhs();
+
   int is_new = 1;
   gravity_solver.solve_for_phi(
       0, gravity_solver.phi_new_[0],
       amrex::GetVecOfPtrs(gravity_solver.get_grad_phi_curr(0)), is_new);
+
+  amrex::Print() << "... testing grad_phi_curr after doing single level solve " << '\n';
+
+  gravity_solver.test_level_grad_phi_curr(0);
 
   // Cleanup and exit
   amrex::Print() << "Finished." << std::endl;
