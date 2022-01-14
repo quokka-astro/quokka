@@ -42,12 +42,13 @@ void RadhydroSimulation<PoissonProblem>::setInitialConditionsAtLevel(int lev) {
       Real const x = prob_lo[0] + (i + Real(0.5)) * dx[0];
       Real const y = prob_lo[1] + (j + Real(0.5)) * dx[1];
       Real const z = prob_lo[2] + (k + Real(0.5)) * dx[2];
+      Real const R0 = 1./4.;
       Real const r = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2) +
-                               std::pow(z - z0, 2));
+                               std::pow(z - z0, 2)) / R0;
 
       double rho = 0.;
-      if (r < 0.2) { // spherical mass
-        rho = 1.0;
+      if (r < 1.0) {
+        rho = std::pow(r - r*r, 4.0);
       }
 
       for (int n = 0; n < state.nComp(); ++n) {
@@ -124,6 +125,10 @@ auto problem_main() -> int {
   amrex::Print() << "... testing grad_phi_curr after doing single level solve " << '\n';
 
   gravity_solver.test_level_grad_phi_curr(0);
+
+  // compare to exact solution for phi (as done in Ch 5.1 of Van Straalen thesis)
+  //amrex::MultiFab phi_exact(sim->boxArray(0), sim->DistributionMap(0), 1, 0);
+  //compute_exact_phi(phi_exact);
 
   // Cleanup and exit
   amrex::Print() << "Finished." << std::endl;
