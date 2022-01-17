@@ -21,6 +21,8 @@
 
 #include "simulation.hpp"
 
+#define GRAVITY_DEBUG
+
 namespace C {
 // newton's gravitational constant taken from NIST's 2010 CODATA recommended
 // value
@@ -44,14 +46,11 @@ const GravityMode gravity_type = GravityMode::Poisson;
 const amrex::Real const_grav = 0.0;
 const int lnum = 16;
 const int max_solve_level = 0;
-const double drdxfac = 0;
 
 const int verbose = 2;
-const int get_g_from_phi = 1;
 const int no_sync = 0;
 const int no_composite = 0;
 const int do_composite_phi_correction = 1;
-const int direct_sum_bcs = 0;
 
 // multigrid solve parameters (all boolean)
 const int mlmg_agglomeration = 0;
@@ -199,6 +198,10 @@ public:
   /// multiplied by the metric terms, just as it would be in a real solve.
   ///
   void update_max_rhs();
+
+  void construct_old_gravity(amrex::Real time, int level);
+
+  void construct_new_gravity(amrex::Real time, int level);
 
   ///
   /// Solve Poisson's equation to find the gravitational potential
@@ -391,11 +394,15 @@ public:
   amrex::Vector<amrex::MultiFab> g_old_;
   amrex::Vector<amrex::MultiFab> g_new_;
 
+  amrex::Vector<amrex::MultiFab> corr_phi_;
+
   ///
   /// Pointers to grad_phi at previous and current time
   ///
   amrex::Vector<amrex::Vector<std::unique_ptr<amrex::MultiFab>>> grad_phi_curr;
   amrex::Vector<amrex::Vector<std::unique_ptr<amrex::MultiFab>>> grad_phi_prev;
+
+  amrex::Vector<amrex::Vector<std::unique_ptr<amrex::MultiFab>>> corr_grad_phi_;
 
   ///
   /// BoxArray at each level
@@ -434,9 +441,8 @@ public:
   std::array<amrex::MLLinOp::BCType, AMREX_SPACEDIM> mlmg_hibc;
 
   amrex::Vector<int> numpts;
-  //int numpts_at_level;
 
-  static int test_solves;
+  static const int test_solves;
   static amrex::Real mass_offset;
   static amrex::Real Ggravity;
   static int stencil_type;
@@ -516,6 +522,12 @@ public:
 /// @brief A physical boundary condition function for grad phi
 ///
 using GradPhiPhysBCFunct = amrex::PhysBCFunctNoOp;
+
+#ifdef GRAVITY_DEBUG
+template <typename T> const int Gravity<T>::test_solves = 1;
+#else
+template <typename T> int Gravity<T>::test_solves = 0;
+#endif
 
 #include "GravityBC.hpp"
 #include "Gravity_impl.hpp"

@@ -23,14 +23,6 @@
 
 using namespace amrex;
 
-#define GRAVITY_DEBUG
-
-#ifdef GRAVITY_DEBUG
-template <typename T> int Gravity<T>::test_solves = 1;
-#else
-template <typename T> int Gravity<T>::test_solves = 0;
-#endif
-
 template <typename T>
 void Gravity<T>::test_residual(const Box &bx, Array4<Real> const &rhs,
                                Array4<Real> const &ecx, Array4<Real> const &ecy,

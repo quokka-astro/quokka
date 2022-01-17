@@ -152,15 +152,10 @@ auto problem_main() -> int {
   // this is necessary to call before solving, otherwise abs_tol = 0!
   grav.update_max_rhs();
 
-  // solve on root level
-  int is_new = 1;
-  grav.solve_for_phi(0, grav.phi_new_[0],
-                     amrex::GetVecOfPtrs(grav.get_grad_phi_curr(0)), is_new);
-
-  amrex::Print() << "... testing grad_phi_curr after doing single level solve "
-                 << '\n';
-
-  grav.test_level_grad_phi_curr(0);
+  // solve
+  grav.construct_new_gravity(0., 0);
+  // grav.solve_for_phi(0, grav.phi_new_[0],
+  //                    amrex::GetVecOfPtrs(grav.get_grad_phi_curr(0)), 1);
 
   // compare to exact solution for phi
   // (for this test problem, see Ch 5.1 of Van Straalen thesis)
