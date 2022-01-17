@@ -69,9 +69,9 @@ void RadhydroSimulation<PoissonProblem>::setInitialConditionsAtLevel(int lev) {
 
 void computeReferenceSolution(
     amrex::MultiFab &ref,
-    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
-    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_hi*/) {
+    amrex::GpuArray<Real, AMREX_SPACEDIM> const &dx,
+    amrex::GpuArray<Real, AMREX_SPACEDIM> const &prob_lo,
+    amrex::GpuArray<Real, AMREX_SPACEDIM> const & /*prob_hi*/) {
   // (For this test problem, see Ch 5.1 of Van Straalen thesis)
 
   // fill reference solution multifab
@@ -101,6 +101,31 @@ void computeReferenceSolution(
           }
           phiExact(i, j, k) = (R0 * R0) * phi;
         });
+  }
+}
+
+template <>
+void RadhydroSimulation<PoissonProblem>::ErrorEst(int lev,
+                                                  amrex::TagBoxArray &tags,
+                                                  Real /*time*/,
+                                                  int /*ngrow*/) {
+  // tag cells for refinement
+  Real const jeans_threshold = 0.25;
+
+  for (amrex::MFIter mfi(state_new_[lev]); mfi.isValid(); ++mfi) {
+    const amrex::Box &box = mfi.validbox();
+    const auto state = state_new_[lev].const_array(mfi);
+    const auto tag = tags.array(mfi);
+
+    amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+      Real const P =
+          HydroSystem<PoissonProblem>::ComputePressure(state, i, j, k);
+      Real const jeans_number = 0;
+
+      if (jeans_number > jeans_threshold) {
+        tag(i, j, k) = amrex::TagBox::SET;
+      }
+    });
   }
 }
 
@@ -188,8 +213,8 @@ auto problem_main() -> int {
     amrex::MultiFab::Saxpy(residual, -1., grav.phi_new_[0], 0, 0, ncomp,
                            nghost);
 
-    amrex::Real sol_norm = phi_exact.norm1(0);
-    amrex::Real err_norm = residual.norm1(0);
+    Real sol_norm = phi_exact.norm1(0);
+    Real err_norm = residual.norm1(0);
     const double rel_error = err_norm / sol_norm;
     amrex::Print() << "[level " << i << "] Relative error norm = " << rel_error
                    << "\n";
