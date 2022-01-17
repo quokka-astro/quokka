@@ -112,7 +112,7 @@ void Gravity<T>::fill_multipole_BCs(int crse_level, int fine_level,
   BL_ASSERT(gravity::lnum >= 0);
 
   const Real strt = amrex::ParallelDescriptor::second();
-  const int npts = numpts_at_level;
+  const int npts = numpts[crse_level];
 
   // Storage arrays for the multipole moments.
   // We will initialize them to zero, and then
@@ -146,11 +146,6 @@ void Gravity<T>::fill_multipole_BCs(int crse_level, int fine_level,
   qU0.setVal<amrex::RunOn::Device>(0.0);
   qUC.setVal<amrex::RunOn::Device>(0.0);
   qUS.setVal<amrex::RunOn::Device>(0.0);
-
-  // This section needs to be generalized for computing
-  // full multipole gravity, not just BCs. At present this
-  // does nothing.
-  int boundary_only = 1;
 
   // Use all available data in constructing the boundary conditions,
   // unless the user has indicated that a maximum level at which
@@ -195,6 +190,7 @@ void Gravity<T>::fill_multipole_BCs(int crse_level, int fine_level,
       auto qUS_arr = qUS.array();
 
       auto rho = source[mfi].array();
+
       // assume Cartesian coordinates
       auto vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
@@ -205,10 +201,7 @@ void Gravity<T>::fill_multipole_BCs(int crse_level, int fine_level,
             // If we're using this to construct boundary values, then only
             // fill the outermost bin.
 
-            int nlo = 0;
-            if (boundary_only == 1) {
-              nlo = npts - 1;
-            }
+            int nlo = npts - 1;
 
             // Note that we don't currently support dx != dy != dz, so this is
             // acceptable.
@@ -272,28 +265,6 @@ void Gravity<T>::fill_multipole_BCs(int crse_level, int fine_level,
     qLS.prefetchToDevice();
   }
 
-  if (boundary_only != 1) {
-
-    if (!amrex::ParallelDescriptor::UseGpuAwareMpi()) {
-      qU0.prefetchToHost();
-      qUC.prefetchToHost();
-      qUS.prefetchToHost();
-    }
-
-    amrex::ParallelDescriptor::ReduceRealSum(qU0.dataPtr(),
-                                             static_cast<int>(boxq0.numPts()));
-    amrex::ParallelDescriptor::ReduceRealSum(qUC.dataPtr(),
-                                             static_cast<int>(boxqC.numPts()));
-    amrex::ParallelDescriptor::ReduceRealSum(qUS.dataPtr(),
-                                             static_cast<int>(boxqS.numPts()));
-
-    if (!amrex::ParallelDescriptor::UseGpuAwareMpi()) {
-      qU0.prefetchToDevice();
-      qUC.prefetchToDevice();
-      qUS.prefetchToDevice();
-    }
-  }
-
   // Finally, construct the boundary conditions using the
   // complete multipole moments, for all points on the
   // boundary that are held on this process.
@@ -322,10 +293,7 @@ void Gravity<T>::fill_multipole_BCs(int crse_level, int fine_level,
       // If we're using this to construct boundary values, then only use
       // the outermost bin.
 
-      int nlo = 0;
-      if (boundary_only == 1) {
-        nlo = npts - 1;
-      }
+      int nlo = npts - 1;
 
       Real rmax_cubed = multipole::rmax * multipole::rmax * multipole::rmax;
 

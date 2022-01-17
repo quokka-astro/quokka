@@ -110,7 +110,7 @@ public:
   /// Set ``Gravity`` object's ``numpts_at_level`` variable.
   ///
   ///
-  void set_numpts_in_gravity();
+  void set_numpts_in_gravity(int level);
 
   ///
   /// Setup gravity at level ``level``.
@@ -433,7 +433,8 @@ public:
   std::array<amrex::MLLinOp::BCType, AMREX_SPACEDIM> mlmg_lobc;
   std::array<amrex::MLLinOp::BCType, AMREX_SPACEDIM> mlmg_hibc;
 
-  int numpts_at_level;
+  amrex::Vector<int> numpts;
+  //int numpts_at_level;
 
   static int test_solves;
   static amrex::Real mass_offset;

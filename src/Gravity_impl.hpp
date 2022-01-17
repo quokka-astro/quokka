@@ -65,16 +65,15 @@ Gravity<T>::Gravity(AMRSimulation<T> *_sim, BCRec &_phys_bc,
   Density = Density_; // index of density component
   read_params();
   finest_level_allocated = -1;
+  make_mg_bc();
 
   if (gravity::gravity_type == GravityMode::Poisson) {
-    make_mg_bc();
     init_multipole_grav();
-    set_numpts_in_gravity();
+    numpts.resize(max_lev + 1);
   }
   max_rhs = 0.0;
   // possibly uninitialized:
   //   mlmg_lobc, mlmg_hibc -- set by Gravity<T>::make_mg_bc() above
-  //   numpts_at_level -- set by Gravity<T>::set_numpts_in_gravity()
 }
 
 template <typename T> void Gravity<T>::read_params() {
@@ -83,10 +82,6 @@ template <typename T> void Gravity<T>::read_params() {
   if (!done) {
     static_assert(gravity::gravity_type == GravityMode::Constant ||
                   gravity::gravity_type == GravityMode::Poisson);
-
-#if (AMREX_SPACEDIM < 3)
-    static_assert(gravity::gravity_type != GravityMode::Poisson);
-#endif
 
     int nlevs = max_lev + 1;
 
@@ -145,12 +140,6 @@ template <typename T> void Gravity<T>::read_params() {
     // two criteria in determining whether the solve has
     // converged.
 
-    // Note that the parameter rel_tol used to be known as ml_tol,
-    // so if we detect that the user has set ml_tol but not
-    // rel_tol, we'll accept that for specifying the relative
-    // tolerance. ml_tol is now considered deprecated and will be
-    // removed in a future release.
-
     std::string rel_tol_name = "rel_tol";
     int n_rel_tol = pp.countval(rel_tol_name.c_str());
 
@@ -185,15 +174,15 @@ template <typename T> void Gravity<T>::read_params() {
   }
 }
 
-template <typename T> void Gravity<T>::set_numpts_in_gravity() {
+template <typename T> void Gravity<T>::set_numpts_in_gravity(int level) {
   AMREX_ASSERT(AMREX_SPACEDIM == 3);
 
-  Box bx(sim->Geom(0).Domain());
+  Box bx(sim->Geom(level).Domain());
   std::int64_t nx = bx.size()[0];
   std::int64_t ny = bx.size()[1];
   std::int64_t nz = bx.size()[2];
   Real ndiagsq = Real(nx * nx + ny * ny + nz * nz);
-  numpts_at_level = int(sqrt(ndiagsq)) + 2 * sim->nghost();
+  numpts[level] = int(sqrt(ndiagsq)) + 2 * sim->nghost();
 }
 
 template <typename T> void Gravity<T>::install_level(int level) {
@@ -208,6 +197,7 @@ template <typename T> void Gravity<T>::install_level(int level) {
   level_solver_resnorm[level] = 0.0;
 
   if (gravity::gravity_type == GravityMode::Poisson) {
+    set_numpts_in_gravity(level);
 
     const DistributionMapping &dm = sim->DistributionMap(level);
 
@@ -366,7 +356,7 @@ void Gravity<T>::gravity_sync(int crse_level, int fine_level,
   }
   fine_level = amrex::min(fine_level, gravity::max_solve_level);
 
-  BL_ASSERT(sim->finestLevel() > crse_level);
+  AMREX_ASSERT(sim->finestLevel() > crse_level);
   if (gravity::verbose > 1) {
     amrex::Print() << " ... gravity_sync at crse_level " << crse_level << '\n';
     amrex::Print() << " ...     up to finest_level     " << fine_level << '\n';
@@ -453,9 +443,7 @@ void Gravity<T>::gravity_sync(int crse_level, int fine_level,
 
     // We assume that if we're fully periodic then we're going to be in
     // Cartesian coordinates, so to get the average value of the RHS we can
-    // divide the sum of the RHS by the number of points. This correction should
-    // probably be volume weighted if we somehow got here without being
-    // Cartesian.
+    // divide the sum of the RHS by the number of points.
 
     Real local_correction = rhs[0]->sum() / sim->boxArray(crse_level).numPts();
 
@@ -526,7 +514,7 @@ template <typename T>
 void Gravity<T>::GetCrsePhi(int level, MultiFab &phi_crse, Real time) {
   BL_PROFILE("Gravity<T>::GetCrsePhi()");
 
-  BL_ASSERT(level != 0);
+  AMREX_ASSERT(level != 0);
 
   const Real t_old = sim->tOld_[level - 1];
   const Real t_new = sim->tNew_[level - 1];
@@ -556,7 +544,7 @@ void Gravity<T>::multilevel_solve_for_new_phi(int level, int finest_level_in) {
   }
 
   for (int lev = level; lev <= finest_level_in; lev++) {
-    BL_ASSERT(grad_phi_curr[lev].size() == AMREX_SPACEDIM);
+    AMREX_ASSERT(grad_phi_curr[lev].size() == AMREX_SPACEDIM);
     for (int n = 0; n < AMREX_SPACEDIM; ++n) {
       grad_phi_curr[lev][n] = std::make_unique<MultiFab>(
           amrex::convert(sim->boxArray(lev), IntVect::TheDimensionVector(n)),
@@ -1001,8 +989,8 @@ void Gravity<T>::solve_for_delta_phi(
     const Vector<Vector<MultiFab *>> &grad_delta_phi) {
   BL_PROFILE("Gravity<T>::solve_for_delta_phi");
 
-  BL_ASSERT(grad_delta_phi.size() == fine_level - crse_level + 1);
-  BL_ASSERT(delta_phi.size() == fine_level - crse_level + 1);
+  AMREX_ASSERT(grad_delta_phi.size() == fine_level - crse_level + 1);
+  AMREX_ASSERT(delta_phi.size() == fine_level - crse_level + 1);
 
   if (gravity::verbose > 1) {
     amrex::Print() << "... solving for delta_phi at crse_level = " << crse_level
