@@ -174,10 +174,11 @@ template <typename T> void Gravity<T>::read_params() {
     }
 
     Ggravity = 4.0 * M_PI * C::Gconst;
-    if (gravity::verbose > 1 && ParallelDescriptor::IOProcessor()) {
-      std::cout << "Getting Gconst from constants: " << C::Gconst << std::endl;
-      std::cout << "Using " << Ggravity << " for 4 pi G in Gravity.cpp "
-                << std::endl;
+    if (gravity::verbose > 1) {
+      amrex::Print() << "Getting Gconst from constants: " << C::Gconst
+                     << std::endl;
+      amrex::Print() << "Using " << Ggravity << " for 4 pi G in Gravity.cpp "
+                     << std::endl;
     }
 
     done = true;
@@ -196,16 +197,13 @@ template <typename T> void Gravity<T>::set_numpts_in_gravity() {
 }
 
 template <typename T> void Gravity<T>::install_level(int level) {
-  if (gravity::verbose > 1 && ParallelDescriptor::IOProcessor()) {
-    std::cout << "Installing Gravity level " << level << '\n';
+  if (gravity::verbose > 1) {
+    amrex::Print() << "Installing Gravity level " << level << '\n';
   }
 
   // test whether sim has been properly initialized
-  for (int i = 0; i < sim->maxLevel(); ++i) {
-    AMREX_ASSERT(
-        sim->boxArray(i).ixType().cellCentered()); // should always be the case
-    AMREX_ASSERT(sim->Geom(i).IsCartesian());
-  }
+  AMREX_ASSERT(sim->boxArray(level).ixType().cellCentered());
+  AMREX_ASSERT(sim->Geom(level).IsCartesian());
 
   level_solver_resnorm[level] = 0.0;
 
@@ -226,13 +224,6 @@ template <typename T> void Gravity<T>::install_level(int level) {
           amrex::convert(sim->boxArray(level), IntVect::TheDimensionVector(n)),
           dm, 1, 1);
     }
-  }
-
-  // test whether sim has been properly initialized
-  for (int i = 0; i < sim->maxLevel(); ++i) {
-    AMREX_ASSERT(
-        sim->boxArray(i).ixType().cellCentered()); // should always be the case
-    AMREX_ASSERT(sim->Geom(i).IsCartesian());
   }
 
   finest_level_allocated = level;
@@ -305,8 +296,8 @@ void Gravity<T>::solve_for_phi(int level, MultiFab &phi,
                                const Vector<MultiFab *> &grad_phi, int is_new) {
   BL_PROFILE("Gravity<T>::solve_for_phi()");
 
-  if (gravity::verbose > 1 && ParallelDescriptor::IOProcessor()) {
-    std::cout << " ... solve for phi at level " << level << std::endl;
+  if (gravity::verbose > 1) {
+    amrex::Print() << " ... solve for phi at level " << level << std::endl;
   }
 
   const Real strt = ParallelDescriptor::second();
@@ -356,10 +347,8 @@ void Gravity<T>::solve_for_phi(int level, MultiFab &phi,
     const int IOProc = ParallelDescriptor::IOProcessorNumber();
     Real end = ParallelDescriptor::second() - strt;
     ParallelDescriptor::ReduceRealMax(end, IOProc);
-    if (ParallelDescriptor::IOProcessor()) {
-      std::cout << "Gravity<T>::solve_for_phi() time = " << end << std::endl
-                << std::endl;
-    }
+    amrex::Print() << "Gravity<T>::solve_for_phi() time = " << end << std::endl
+                   << std::endl;
   }
 }
 
@@ -378,9 +367,9 @@ void Gravity<T>::gravity_sync(int crse_level, int fine_level,
   fine_level = amrex::min(fine_level, gravity::max_solve_level);
 
   BL_ASSERT(sim->finestLevel() > crse_level);
-  if (gravity::verbose > 1 && ParallelDescriptor::IOProcessor()) {
-    std::cout << " ... gravity_sync at crse_level " << crse_level << '\n';
-    std::cout << " ...     up to finest_level     " << fine_level << '\n';
+  if (gravity::verbose > 1) {
+    amrex::Print() << " ... gravity_sync at crse_level " << crse_level << '\n';
+    amrex::Print() << " ...     up to finest_level     " << fine_level << '\n';
   }
 
   const Geometry &crse_geom = sim->Geom(crse_level);
@@ -437,9 +426,9 @@ void Gravity<T>::gravity_sync(int crse_level, int fine_level,
 
   if (crse_level == 0 && !crse_geom.isAllPeriodic()) {
 
-    if (gravity::verbose > 1 && ParallelDescriptor::IOProcessor()) {
-      std::cout << " ... Making bc's for delta_phi at crse_level 0"
-                << std::endl;
+    if (gravity::verbose > 1) {
+      amrex::Print() << " ... Making bc's for delta_phi at crse_level 0"
+                     << std::endl;
     }
 
     fill_multipole_BCs(crse_level, fine_level, amrex::GetVecOfPtrs(rhs),
@@ -470,9 +459,9 @@ void Gravity<T>::gravity_sync(int crse_level, int fine_level,
 
     Real local_correction = rhs[0]->sum() / sim->boxArray(crse_level).numPts();
 
-    if (gravity::verbose > 1 && ParallelDescriptor::IOProcessor()) {
-      std::cout << "WARNING: Adjusting RHS in gravity_sync solve by "
-                << local_correction << '\n';
+    if (gravity::verbose > 1) {
+      amrex::Print() << "WARNING: Adjusting RHS in gravity_sync solve by "
+                     << local_correction << '\n';
     }
 
     for (int lev = fine_level; lev >= crse_level; --lev) {
@@ -561,9 +550,9 @@ template <typename T>
 void Gravity<T>::multilevel_solve_for_new_phi(int level, int finest_level_in) {
   BL_PROFILE("Gravity<T>::multilevel_solve_for_new_phi()");
 
-  if (gravity::verbose > 1 && ParallelDescriptor::IOProcessor()) {
-    std::cout << "... multilevel solve for new phi at base level " << level
-              << " to finest level " << finest_level_in << std::endl;
+  if (gravity::verbose > 1) {
+    amrex::Print() << "... multilevel solve for new phi at base level " << level
+                   << " to finest level " << finest_level_in << std::endl;
   }
 
   for (int lev = level; lev <= finest_level_in; lev++) {
@@ -806,12 +795,12 @@ void Gravity<T>::create_comp_minus_level_grad_phi(
     Vector<std::unique_ptr<MultiFab>> &comp_minus_level_grad_phi) {
   BL_PROFILE("Gravity<T>::create_comp_minus_level_grad_phi()");
 
-  if (gravity::verbose > 1 && ParallelDescriptor::IOProcessor()) {
-    std::cout << "\n";
-    std::cout
+  if (gravity::verbose > 1) {
+    amrex::Print() << "\n";
+    amrex::Print()
         << "... compute difference between level and composite solves at level "
         << level << "\n";
-    std::cout << "\n";
+    amrex::Print() << "\n";
   }
 
   comp_minus_level_phi.define(sim->boxArray(level), sim->DistributionMap(level),
@@ -883,7 +872,6 @@ auto Gravity<T>::get_rhs(int crse_level, int nlevs, int is_new)
     AMREX_ASSERT(sim->boxArray(amr_lev).ixType().cellCentered());
     rhs[ilev] = std::make_unique<MultiFab>(sim->boxArray(amr_lev),
                                            sim->DistributionMap(amr_lev), 1, 0);
-    AMREX_ASSERT(rhs[ilev]->is_cell_centered());
 
     MultiFab &state = (is_new == 1) ? *(sim->getStateNew(amr_lev))
                                     : *(sim->getStateOld(amr_lev));
@@ -966,25 +954,11 @@ auto Gravity<T>::solve_phi_with_mlmg(int crse_level, int fine_level,
     if (gravity::verbose > 1) {
       amrex::Print() << " ... Making bc's for phi at level 0\n";
     }
-    // check rhs validity
-    for (int i = 0; i < rhs.size(); ++i) {
-      AMREX_ASSERT(rhs[i]->is_cell_centered());
-    }
     fill_multipole_BCs(crse_level, fine_level, rhs, *phi[0]);
-  }
-
-  // check rhs validity
-  for (int i = 0; i < rhs.size(); ++i) {
-    AMREX_ASSERT(rhs[i]->is_cell_centered());
   }
 
   for (int ilev = 0; ilev < nlevs; ++ilev) {
     rhs[ilev]->mult(Ggravity);
-  }
-
-  // check rhs validity
-  for (int i = 0; i < rhs.size(); ++i) {
-    AMREX_ASSERT(rhs[i]->is_cell_centered());
   }
 
   MultiFab CPhi;
@@ -1009,17 +983,7 @@ auto Gravity<T>::solve_phi_with_mlmg(int crse_level, int fine_level,
   amrex::Print() << "using reltol = " << rel_eps << std::endl;
   amrex::Print() << "using abstol = " << abs_eps << std::endl;
 
-  // check rhs validity
-  for (int i = 0; i < rhs.size(); ++i) {
-    AMREX_ASSERT(rhs[i]->is_cell_centered());
-  }
-
   Vector<const MultiFab *> crhs{rhs.begin(), rhs.end()};
-
-  // check crhs validity
-  for (int i = 0; i < crhs.size(); ++i) {
-    AMREX_ASSERT(crhs[i]->is_cell_centered());
-  }
 
   Vector<std::array<MultiFab *, AMREX_SPACEDIM>> gp;
   for (const auto &x : grad_phi) {
@@ -1040,11 +1004,11 @@ void Gravity<T>::solve_for_delta_phi(
   BL_ASSERT(grad_delta_phi.size() == fine_level - crse_level + 1);
   BL_ASSERT(delta_phi.size() == fine_level - crse_level + 1);
 
-  if (gravity::verbose > 1 && ParallelDescriptor::IOProcessor()) {
-    std::cout << "... solving for delta_phi at crse_level = " << crse_level
-              << std::endl;
-    std::cout << "...                    up to fine_level = " << fine_level
-              << std::endl;
+  if (gravity::verbose > 1) {
+    amrex::Print() << "... solving for delta_phi at crse_level = " << crse_level
+                   << std::endl;
+    amrex::Print() << "...                    up to fine_level = " << fine_level
+                   << std::endl;
   }
 
   Vector<const MultiFab *> crhs{rhs.begin(), rhs.end()};
@@ -1074,23 +1038,14 @@ auto Gravity<T>::actual_solve_with_mlmg(
   BL_PROFILE("Gravity<T>::actual_solve_with_mlmg()");
 
   Real final_resnorm = -1.0;
-
   int nlevs = fine_level - crse_level + 1;
-
-  // check input rhs
-  for (int i = 0; i < rhs.size(); ++i) {
-    amrex::Print() << "checking rhs[" << i << "]...\n";
-    AMREX_ASSERT(rhs[i]->is_cell_centered());
-  }
 
   Vector<Geometry> gmv;
   Vector<BoxArray> bav;
   Vector<DistributionMapping> dmv;
   for (int ilev = 0; ilev < nlevs; ++ilev) {
     gmv.push_back(sim->Geom(ilev + crse_level));
-    auto box = rhs[ilev]->boxArray();
-    AMREX_ASSERT(box.ixType().cellCentered());
-    bav.push_back(box);
+    bav.push_back(rhs[ilev]->boxArray());
     dmv.push_back(rhs[ilev]->DistributionMap());
   }
 

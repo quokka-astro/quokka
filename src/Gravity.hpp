@@ -42,7 +42,7 @@ enum class GravityMode {
 
 const GravityMode gravity_type = GravityMode::Poisson;
 const amrex::Real const_grav = 0.0;
-const int lnum = 8;
+const int lnum = 16;
 const int max_solve_level = 0;
 const double drdxfac = 0;
 
