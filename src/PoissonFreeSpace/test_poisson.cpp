@@ -31,6 +31,8 @@ constexpr Real R0 = 1. / 4.;
 
 template <>
 void RadhydroSimulation<PoissonProblem>::setInitialConditionsAtLevel(int lev) {
+  // (For this test problem, see Ch 5.1 of Van Straalen thesis)
+
   amrex::GpuArray<Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
   amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
 
@@ -70,6 +72,7 @@ void computeReferenceSolution(
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_hi*/) {
+  // (For this test problem, see Ch 5.1 of Van Straalen thesis)
 
   // fill reference solution multifab
   for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
@@ -121,7 +124,7 @@ auto problem_main() -> int {
   // initialize
   sim.setInitialConditions();
 
-  // set physical boundary conditions (periodic, free space, or reflecting)
+  // set physical boundary conditions (periodic or free space)
   amrex::BCRec phys_bc;
   for (int i = 0; i < AMREX_SPACEDIM; ++i) {
     phys_bc.setLo(i, amrex::PhysBCType::outflow);
@@ -136,6 +139,7 @@ auto problem_main() -> int {
 
   // initialize gravity MultiFabs
   for (int i = 0; i <= sim.finestLevel(); ++i) {
+    // allocate cell-centered MultiFabs for potential, acceleration
     grav.phi_old_[i].define(sim.boxArray(i), sim.DistributionMap(i), 1, 1);
     grav.phi_new_[i].define(sim.boxArray(i), sim.DistributionMap(i), 1, 1);
     grav.g_old_[i].define(sim.boxArray(i), sim.DistributionMap(i), 3, 1);
@@ -156,40 +160,45 @@ auto problem_main() -> int {
   grav.multilevel_solve_for_new_phi(0, sim.finestLevel());
   grav.test_composite_phi(0);
 
-  // single-level solves
+  // test single-level solves
   for (int i = 0; i <= sim.finestLevel(); ++i) {
     grav.construct_old_gravity(0., i);
     grav.construct_new_gravity(0., i);
   }
 
   // compare to exact solution for phi
-  // (for this test problem, see Ch 5.1 of Van Straalen thesis)
   int ncomp = 1;
   int nghost = 0;
-  amrex::MultiFab phi_exact(sim.boxArray(0), sim.DistributionMap(0), ncomp,
-                            nghost);
-  auto dx = sim.Geom(0).CellSizeArray();
-  auto prob_lo = sim.Geom(0).ProbLoArray();
-  auto prob_hi = sim.Geom(0).ProbHiArray();
-  computeReferenceSolution(phi_exact, dx, prob_lo, prob_hi);
-
-  // compute error norm
-  amrex::MultiFab residual(sim.boxArray(0), sim.DistributionMap(0), ncomp,
-                           nghost);
-  amrex::MultiFab::Copy(residual, phi_exact, 0, 0, ncomp, nghost);
-  amrex::MultiFab::Saxpy(residual, -1., grav.phi_new_[0], 0, 0, ncomp, nghost);
-
-  amrex::Real sol_norm = phi_exact.norm1(0);
-  amrex::Real err_norm = residual.norm1(0);
-  const double rel_error = err_norm / sol_norm;
-  amrex::Print() << "\nRelative error norm = " << rel_error << "\n";
-
   int status = 0;
   const double err_tol = 1.2e-4; // for 2nd-order discretization, 64^3 grid
-  if (rel_error > err_tol) {
-    status = 1;
+
+  for (int i = 0; i <= sim.finestLevel(); ++i) {
+    // compute exact solution on level i
+    amrex::MultiFab phi_exact(sim.boxArray(0), sim.DistributionMap(0), ncomp,
+                              nghost);
+    auto dx = sim.Geom(0).CellSizeArray();
+    auto prob_lo = sim.Geom(0).ProbLoArray();
+    auto prob_hi = sim.Geom(0).ProbHiArray();
+    computeReferenceSolution(phi_exact, dx, prob_lo, prob_hi);
+
+    // compute error norm on level i
+    amrex::MultiFab residual(sim.boxArray(0), sim.DistributionMap(0), ncomp,
+                             nghost);
+    amrex::MultiFab::Copy(residual, phi_exact, 0, 0, ncomp, nghost);
+    amrex::MultiFab::Saxpy(residual, -1., grav.phi_new_[0], 0, 0, ncomp,
+                           nghost);
+
+    amrex::Real sol_norm = phi_exact.norm1(0);
+    amrex::Real err_norm = residual.norm1(0);
+    const double rel_error = err_norm / sol_norm;
+    amrex::Print() << "[level " << i << "] Relative error norm = " << rel_error
+                   << "\n";
+
+    if (rel_error > err_tol) {
+      status = 1;
+    }
   }
 
-  // Cleanup and exit
+  amrex::Print() << std::endl;
   return status;
 }
