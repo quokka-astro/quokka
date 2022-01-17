@@ -59,8 +59,8 @@ Gravity<T>::Gravity(AMRSimulation<T> *_sim, BCRec &_phys_bc,
       max_lev(_sim->maxLevel()), phys_bc(&_phys_bc) {
   // test whether sim has been properly initialized
   for (int i = 0; i < sim->maxLevel(); ++i) {
-    AMREX_ASSERT(sim->boxArray(i).ixType().cellCentered());
-    AMREX_ASSERT(sim->Geom(i).IsCartesian());
+    AMREX_ALWAYS_ASSERT(sim->boxArray(i).ixType().cellCentered());
+    AMREX_ALWAYS_ASSERT(sim->Geom(i).IsCartesian());
   }
 
   Density = Density_; // index of density component

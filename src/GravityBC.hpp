@@ -272,7 +272,6 @@ void Gravity<T>::fill_multipole_BCs(int crse_level, int fine_level,
   const amrex::Box &domain = sim->Geom(crse_level).Domain();
   const auto dx = sim->Geom(crse_level).CellSizeArray();
   const auto problo = sim->Geom(crse_level).ProbLoArray();
-  int coord_type = sim->Geom(crse_level).Coord();
   const auto coord_center = coordCenter;
 
   for (amrex::MFIter mfi(phi); mfi.isValid(); ++mfi) {
@@ -281,9 +280,6 @@ void Gravity<T>::fill_multipole_BCs(int crse_level, int fine_level,
     auto qL0_arr = qL0.array();
     auto qLC_arr = qLC.array();
     auto qLS_arr = qLS.array();
-    auto qU0_arr = qU0.array();
-    auto qUC_arr = qUC.array();
-    auto qUS_arr = qUS.array();
     auto phi_arr = phi[mfi].array();
 
     amrex::ParallelFor(bx, [=] AMREX_GPU_HOST_DEVICE(int i, int j, int k) {

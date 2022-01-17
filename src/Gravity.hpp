@@ -394,14 +394,16 @@ public:
   amrex::Vector<amrex::MultiFab> g_old_;
   amrex::Vector<amrex::MultiFab> g_new_;
 
-  amrex::Vector<amrex::MultiFab> corr_phi_;
-
   ///
   /// Pointers to grad_phi at previous and current time
   ///
   amrex::Vector<amrex::Vector<std::unique_ptr<amrex::MultiFab>>> grad_phi_curr;
   amrex::Vector<amrex::Vector<std::unique_ptr<amrex::MultiFab>>> grad_phi_prev;
 
+  ///
+  /// MultiFabs for composite-level corrections
+  ///
+  amrex::Vector<amrex::MultiFab> corr_phi_;
   amrex::Vector<amrex::Vector<std::unique_ptr<amrex::MultiFab>>> corr_grad_phi_;
 
   ///
@@ -512,9 +514,6 @@ public:
       const amrex::Vector<amrex::MultiFab *> &res, amrex::Real time)
       -> amrex::Real;
 
-  static inline auto get_const_grav() -> amrex::Real {
-    return gravity::const_grav;
-  }
 };
 
 ///
