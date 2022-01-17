@@ -14,9 +14,9 @@
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
 
+#include "Gravity.hpp"
 #include "RadhydroSimulation.hpp"
 #include "hydro_system.hpp"
-#include "Gravity.hpp"
 
 #include "test_poisson.hpp"
 
@@ -33,6 +33,7 @@ void RadhydroSimulation<PoissonProblem>::setInitialConditionsAtLevel(int lev) {
   Real x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
   Real y0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
   Real z0 = prob_lo[2] + 0.5 * (prob_hi[2] - prob_lo[2]);
+  Real const R0 = 1. / 4.;
 
   for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
     const amrex::Box &indexRange = iter.validbox();
@@ -42,26 +43,67 @@ void RadhydroSimulation<PoissonProblem>::setInitialConditionsAtLevel(int lev) {
       Real const x = prob_lo[0] + (i + Real(0.5)) * dx[0];
       Real const y = prob_lo[1] + (j + Real(0.5)) * dx[1];
       Real const z = prob_lo[2] + (k + Real(0.5)) * dx[2];
-      Real const R0 = 1./4.;
       Real const r = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2) +
-                               std::pow(z - z0, 2)) / R0;
+                               std::pow(z - z0, 2)) /
+                     R0;
 
-      double rho = 0.;
+      double f = 0.;
       if (r < 1.0) {
-        rho = std::pow(r - r*r, 4.0);
+        f = std::pow(r - r * r, 4.0);
       }
 
       for (int n = 0; n < state.nComp(); ++n) {
         state(i, j, k, n) = 0.; // zero fill all components
       }
 
-      AMREX_ASSERT(!std::isnan(rho));
-      state(i, j, k, HydroSystem<PoissonProblem>::density_index) = rho;
+      AMREX_ASSERT(!std::isnan(f));
+      state(i, j, k, HydroSystem<PoissonProblem>::density_index) = f / (4.0*M_PI*C::Gconst);
     });
   }
 
   // set flag
   areInitialConditionsDefined_ = true;
+}
+
+void computeReferenceSolution(
+    amrex::MultiFab &ref,
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi) {
+
+  Real x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
+  Real y0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
+  Real z0 = prob_lo[2] + 0.5 * (prob_hi[2] - prob_lo[2]);
+  Real const R0 = 1. / 4.;
+
+  // fill reference solution multifab
+  for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
+    const amrex::Box &indexRange = iter.validbox();
+    auto const &phiExact = ref.array(iter);
+    auto const ncomp = ref.nComp();
+    AMREX_ASSERT(ncomp == 1);
+
+    amrex::ParallelFor(
+        indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+          // compute exact phi
+          Real const x = prob_lo[0] + (i + Real(0.5)) * dx[0];
+          Real const y = prob_lo[1] + (j + Real(0.5)) * dx[1];
+          Real const z = prob_lo[2] + (k + Real(0.5)) * dx[2];
+          Real const r = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2) +
+                                   std::pow(z - z0, 2)) /
+                         R0;
+
+          Real phi = NAN;
+          if (r < 1.0) {
+            phi = std::pow(r, 6) / 42. - std::pow(r, 7) / 14. +
+                  std::pow(r, 8) / 12. - 2. * std::pow(r, 9) / 45. +
+                  std::pow(r, 10) / 110. - (1. / 1260.);
+          } else {
+            phi = -1.0 / (2310. * r);
+          }
+          phiExact(i, j, k) = (R0 * R0) * phi;
+        });
+  }
 }
 
 auto problem_main() -> int {
@@ -93,7 +135,7 @@ auto problem_main() -> int {
 
   // solve Poisson equation
   amrex::Print() << "Initializing gravity solver..." << std::endl;
-  
+
   Gravity<PoissonProblem> gravity_solver(
       &sim, phys_bc, sim.coordCenter_,
       HydroSystem<PoissonProblem>::density_index);
@@ -101,10 +143,14 @@ auto problem_main() -> int {
   amrex::Print() << "Initialized gravity solver." << std::endl;
 
   // initialize gravity MultiFabs
-  gravity_solver.phi_old_[0].define(sim.boxArray(0), sim.DistributionMap(0), 1, 1);
-  gravity_solver.phi_new_[0].define(sim.boxArray(0), sim.DistributionMap(0), 1, 1);
-  gravity_solver.g_old_[0].define(sim.boxArray(0), sim.DistributionMap(0), 3, 1);
-  gravity_solver.g_new_[0].define(sim.boxArray(0), sim.DistributionMap(0), 3, 1);
+  gravity_solver.phi_old_[0].define(sim.boxArray(0), sim.DistributionMap(0), 1,
+                                    1);
+  gravity_solver.phi_new_[0].define(sim.boxArray(0), sim.DistributionMap(0), 1,
+                                    1);
+  gravity_solver.g_old_[0].define(sim.boxArray(0), sim.DistributionMap(0), 3,
+                                  1);
+  gravity_solver.g_new_[0].define(sim.boxArray(0), sim.DistributionMap(0), 3,
+                                  1);
 
   gravity_solver.phi_old_[0].setVal(0.);
   gravity_solver.phi_new_[0].setVal(0.);
@@ -112,7 +158,7 @@ auto problem_main() -> int {
   // create temporary arrays for (face-centered) \grad \phi
   gravity_solver.install_level(0);
 
-  amrex::Print() <<  "Starting solve..." << std::endl;
+  amrex::Print() << "Starting solve..." << std::endl;
 
   // this is necessary to call before solving, otherwise abs_tol = 0!
   gravity_solver.update_max_rhs();
@@ -122,15 +168,43 @@ auto problem_main() -> int {
       0, gravity_solver.phi_new_[0],
       amrex::GetVecOfPtrs(gravity_solver.get_grad_phi_curr(0)), is_new);
 
-  amrex::Print() << "... testing grad_phi_curr after doing single level solve " << '\n';
+  amrex::Print() << "... testing grad_phi_curr after doing single level solve "
+                 << '\n';
 
   gravity_solver.test_level_grad_phi_curr(0);
 
-  // compare to exact solution for phi (as done in Ch 5.1 of Van Straalen thesis)
-  //amrex::MultiFab phi_exact(sim->boxArray(0), sim->DistributionMap(0), 1, 0);
-  //compute_exact_phi(phi_exact);
+  // compare to exact solution for phi (as done in Ch 5.1 of Van Straalen
+  // thesis)
+  int ncomp = 1;
+  int nghost = 0;
+  amrex::MultiFab phi_exact(sim.boxArray(0), sim.DistributionMap(0), ncomp,
+                            nghost);
+  auto dx = sim.Geom(0).CellSizeArray();
+  auto prob_lo = sim.Geom(0).ProbLoArray();
+  auto prob_hi = sim.Geom(0).ProbHiArray();
+  computeReferenceSolution(phi_exact, dx, prob_lo, prob_hi);
+
+  // compute error norm
+  amrex::MultiFab residual(sim.boxArray(0), sim.DistributionMap(0), ncomp,
+                           nghost);
+  amrex::MultiFab::Copy(residual, phi_exact, 0, 0, ncomp, nghost);
+  amrex::MultiFab::Saxpy(residual, -1., gravity_solver.phi_new_[0], 0, 0, ncomp,
+                         nghost);
+
+  amrex::Real sol_norm = phi_exact.norm1(0);
+  amrex::Real err_norm = residual.norm1(0);
+  const double rel_error = err_norm / sol_norm;
+  amrex::Print() << std::endl;
+  amrex::Print() << "Exact solution L1 norm = " << sol_norm << std::endl;
+  amrex::Print() << "Error norm (L1) = " << err_norm << std::endl;
+  amrex::Print() << "Relative error norm = " << rel_error << std::endl;
+
+  int status = 0;
+  const double err_tol = 1.2e-4; // for 2nd-order discretization, 64^3 grid
+  if (rel_error > err_tol) {
+    status = 1;
+  }
 
   // Cleanup and exit
-  amrex::Print() << "Finished." << std::endl;
-  return 0;
+  return status;
 }

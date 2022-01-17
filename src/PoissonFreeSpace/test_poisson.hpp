@@ -15,4 +15,10 @@
 // internal headers
 #include "hydro_system.hpp"
 
+void computeReferenceSolution(
+    amrex::MultiFab &ref,
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi);
+
 #endif // TEST_POISSON_HPP_
