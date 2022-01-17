@@ -258,7 +258,7 @@ void Gravity<T>::construct_old_gravity(Real time, int level) {
             amrex::convert(sim->boxArray(level),
                            IntVect::TheDimensionVector(n)),
             sim->DistributionMap(level), 1, 0);
-        MultiFab::Copy(*comp_gphi[n], get_grad_phi_prev(level)[n], 0, 0, 1, 0);
+        MultiFab::Copy(*comp_gphi[n], *get_grad_phi_prev(level)[n], 0, 0, 1, 0);
       }
     }
 
@@ -292,7 +292,7 @@ void Gravity<T>::construct_old_gravity(Real time, int level) {
       MultiFab::Copy(phi_old, comp_phi, 0, 0, phi_old.nComp(), phi_old.nGrow());
 
       for (int n = 0; n < AMREX_SPACEDIM; ++n) {
-        MultiFab::Copy(get_grad_phi_prev(level)[n], *comp_gphi[n], 0, 0, 1, 0);
+        MultiFab::Copy(*get_grad_phi_prev(level)[n], *comp_gphi[n], 0, 0, 1, 0);
       }
     }
 
@@ -919,7 +919,7 @@ void Gravity<T>::get_old_grav_vector(int level, MultiFab &grav_vector,
 
   } else if (gravity::gravity_type == GravityMode::Poisson) {
 
-    const Geometry &geom = this->geom[level];
+    const Geometry &geom = sim->Geom(level);
     amrex::average_face_to_cellcenter(
         grav, amrex::GetVecOfConstPtrs(grad_phi_prev[level]), geom);
     grav.mult(-1.0, ng); // g = - grad(phi)

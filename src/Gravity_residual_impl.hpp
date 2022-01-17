@@ -48,18 +48,18 @@ template <typename T> void Gravity<T>::test_level_grad_phi_prev(int level) {
   BL_PROFILE("Gravity::test_level_grad_phi_prev()");
 
   // Fill the RHS for the solve
-  MultiFab &S_old = sim->state_old_[level];
-  MultiFab Rhs(sim->boxArray(level), sim->DistributionMapping(level), 1, 0);
+  MultiFab &S_old = *(sim->getStateOld(level));
+  MultiFab Rhs(sim->boxArray(level), sim->DistributionMap(level), 1, 0);
   MultiFab::Copy(Rhs, S_old, Density, 0, 1, 0);
 
   const Geometry &geom_lev = sim->Geom(level);
 
   // This is a correction for fully periodic domains only
   if (geom_lev.isAllPeriodic()) {
-    if (gravity::verbose > 1 && ParallelDescriptor::IOProcessor() &&
-        mass_offset != 0.0) {
-      std::cout << " ... subtracting average density from RHS at level ... "
-                << level << " " << mass_offset << std::endl;
+    if (gravity::verbose > 1 && mass_offset != 0.0) {
+      amrex::Print()
+          << " ... subtracting average density from RHS at level ... " << level
+          << " " << mass_offset << std::endl;
     }
     Rhs.plus(-mass_offset, 0, 1, 0);
   }
@@ -163,16 +163,16 @@ template <typename T> void Gravity<T>::test_composite_phi(int crse_level) {
   for (int ilev = 0; ilev < nlevels; ++ilev) {
     int amr_lev = crse_level + ilev;
 
-    phi[ilev] = std::make_unique<MultiFab>(
-        sim->boxArray(amr_lev), sim->DistributionMapping(amr_lev), 1, 1);
+    phi[ilev] = std::make_unique<MultiFab>(sim->boxArray(amr_lev),
+                                           sim->DistributionMap(amr_lev), 1, 1);
     MultiFab::Copy(*phi[ilev], phi_new_[amr_lev], 0, 0, 1, 1);
 
-    rhs[ilev] = std::make_unique<MultiFab>(
-        sim->boxArray(amr_lev), sim->DistributionMapping(amr_lev), 1, 1);
-    MultiFab::Copy(*rhs[ilev], sim->state_new_[amr_lev], Density, 0, 1, 0);
+    rhs[ilev] = std::make_unique<MultiFab>(sim->boxArray(amr_lev),
+                                           sim->DistributionMap(amr_lev), 1, 1);
+    MultiFab::Copy(*rhs[ilev], *(sim->getStateNew(amr_lev)), Density, 0, 1, 0);
 
-    res[ilev] = std::make_unique<MultiFab>(
-        sim->boxArray(amr_lev), sim->DistributionMapping(amr_lev), 1, 0);
+    res[ilev] = std::make_unique<MultiFab>(sim->boxArray(amr_lev),
+                                           sim->DistributionMap(amr_lev), 1, 0);
     res[ilev]->setVal(0.);
   }
 
