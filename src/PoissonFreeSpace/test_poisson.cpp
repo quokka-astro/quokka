@@ -57,7 +57,8 @@ void RadhydroSimulation<PoissonProblem>::setInitialConditionsAtLevel(int lev) {
       }
 
       AMREX_ASSERT(!std::isnan(f));
-      state(i, j, k, HydroSystem<PoissonProblem>::density_index) = f / (4.0*M_PI*C::Gconst);
+      state(i, j, k, HydroSystem<PoissonProblem>::density_index) =
+          f / (4.0 * M_PI * C::Gconst);
     });
   }
 

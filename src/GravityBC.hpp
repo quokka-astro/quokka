@@ -12,6 +12,7 @@
 #include <cmath>
 #include <limits>
 
+#include "AMReX.H"
 #include "AMReX_MultiFabUtil.H"
 #include "AMReX_SPACE.H"
 #include <AMReX_FillPatchUtil.H>
@@ -22,7 +23,7 @@
 #include "Gravity.hpp"
 #include "GravityBC_util.hpp"
 
-using namespace amrex;
+using Real = amrex::Real;
 
 template <typename T> void Gravity<T>::init_multipole_grav() {
   if (gravity::lnum < 0) {
@@ -33,65 +34,8 @@ template <typename T> void Gravity<T>::init_multipole_grav() {
     amrex::Abort("lnum greater than lnum_max");
   }
 
-  int lo_bc[3];
-  int hi_bc[3];
-
-  for (int dir = 0; dir < AMREX_SPACEDIM; dir++) {
-    lo_bc[dir] = phys_bc->lo(dir);
-    hi_bc[dir] = phys_bc->hi(dir);
-  }
-  for (int dir = AMREX_SPACEDIM; dir < 3; dir++) {
-    lo_bc[dir] = -1;
-    hi_bc[dir] = -1;
-  }
-
   const auto problo = sim->Geom(0).ProbLoArray();
   const auto probhi = sim->Geom(0).ProbHiArray();
-
-  // If any of the boundaries are symmetric, we need to account for the mass
-  // that is assumed to lie on the opposite side of the symmetric axis. If the
-  // center in any direction coincides with the boundary, then we can simply
-  // double the mass as a result of that reflection. Otherwise, we need to do a
-  // more general solve. We include a logical that is set to true if any
-  // boundary is symmetric, so that we can avoid unnecessary function calls.
-
-  multipole::volumeFactor = 1.0;
-  multipole::parityFactor = 1.0;
-
-  multipole::doSymmetricAdd = false;
-
-  for (int n = 0; n < 3; ++n) {
-    multipole::doSymmetricAddLo(n) = false;
-    multipole::doSymmetricAddHi(n) = false;
-
-    multipole::doReflectionLo(n) = false;
-    multipole::doReflectionHi(n) = false;
-  }
-
-  const Real edgeTolerance = 1.0e-2;
-
-  for (int b = 0; b < AMREX_SPACEDIM; ++b) {
-
-    if ((lo_bc[b] == Symmetry) && (sim->Geom(0).Coord() == 0)) {
-      if (std::abs(coordCenter[b] - problo[b]) < edgeTolerance) {
-        multipole::volumeFactor *= 2.0;
-        multipole::doReflectionLo(b) = true;
-      } else {
-        multipole::doSymmetricAddLo(b) = true;
-        multipole::doSymmetricAdd = true;
-      }
-    }
-
-    if ((hi_bc[b] == Symmetry) && (sim->Geom(0).Coord() == 0)) {
-      if (std::abs(coordCenter[b] - probhi[b]) < edgeTolerance) {
-        multipole::volumeFactor *= 2.0;
-        multipole::doReflectionHi(b) = true;
-      } else {
-        multipole::doSymmetricAddHi(b) = true;
-        multipole::doSymmetricAdd = true;
-      }
-    }
-  }
 
   // Compute pre-factors now to save computation time, for qC and qS
 
@@ -111,10 +55,8 @@ template <typename T> void Gravity<T>::init_multipole_grav() {
     multipole::parity_q0(l) = 1.0;
 
     if (l % 2 != 0) {
-      if constexpr (AMREX_SPACEDIM == 3) {
-        if (multipole::doReflectionLo(2) || multipole::doReflectionHi(2)) {
-          multipole::parity_q0(l) = 0.0;
-        }
+      if (multipole::doReflectionLo(2) || multipole::doReflectionHi(2)) {
+        multipole::parity_q0(l) = 0.0;
       }
     }
 
@@ -146,16 +88,9 @@ template <typename T> void Gravity<T>::init_multipole_grav() {
     }
   }
 
-  // Now let's take care of a safety issue. The multipole calculation involves
-  // taking powers of r^l, which can overflow the floating point exponent limit
-  // if lnum is very large. Therefore, we will normalize all distances to the
-  // maximum possible physical distance from the center, which is the diagonal
-  // from the center to the edge of the box. Then r^l will always be less than
-  // or equal to one. For large enough lnum, this may still result in roundoff
-  // errors that don't make your answer any more precise, but at least it avoids
-  // possible NaN issues from having numbers that are too large for double
-  // precision. We will put the rmax factor back in at the end of
-  // ca_put_multipole_phi.
+  // Normalize all distances to the maximum possible physical distance from the
+  // center, which is the diagonal from the center to the edge of the box. Then
+  // r^l will always be less than or equal to one.
 
   Real maxWidth = probhi[0] - problo[0];
   maxWidth = amrex::max(maxWidth, probhi[1] - problo[1]);
@@ -167,8 +102,8 @@ template <typename T> void Gravity<T>::init_multipole_grav() {
 
 template <typename T>
 void Gravity<T>::fill_multipole_BCs(int crse_level, int fine_level,
-                                    const Vector<MultiFab *> &Rhs,
-                                    MultiFab &phi) {
+                                    const amrex::Vector<amrex::MultiFab *> &Rhs,
+                                    amrex::MultiFab &phi) {
   BL_PROFILE("Gravity<T>::fill_multipole_BCs()");
 
   // Multipole BCs only make sense to construct if we are starting from the
@@ -176,7 +111,7 @@ void Gravity<T>::fill_multipole_BCs(int crse_level, int fine_level,
   BL_ASSERT(crse_level == 0);
   BL_ASSERT(gravity::lnum >= 0);
 
-  const Real strt = ParallelDescriptor::second();
+  const Real strt = amrex::ParallelDescriptor::second();
   const int npts = numpts_at_level;
 
   // Storage arrays for the multipole moments.
@@ -188,27 +123,29 @@ void Gravity<T>::fill_multipole_BCs(int crse_level, int fine_level,
   // domain in 2D, since we can only have one
   // radial index for calculating the multipole moments.
 
-  Box boxq0(IntVect(D_DECL(0, 0, 0)),
-            IntVect(D_DECL(gravity::lnum, 0, npts - 1)));
-  Box boxqC(IntVect(D_DECL(0, 0, 0)),
-            IntVect(D_DECL(gravity::lnum, gravity::lnum, npts - 1)));
-  Box boxqS(IntVect(D_DECL(0, 0, 0)),
-            IntVect(D_DECL(gravity::lnum, gravity::lnum, npts - 1)));
+  amrex::Box boxq0(amrex::IntVect(D_DECL(0, 0, 0)),
+                   amrex::IntVect(D_DECL(gravity::lnum, 0, npts - 1)));
+  amrex::Box boxqC(
+      amrex::IntVect(D_DECL(0, 0, 0)),
+      amrex::IntVect(D_DECL(gravity::lnum, gravity::lnum, npts - 1)));
+  amrex::Box boxqS(
+      amrex::IntVect(D_DECL(0, 0, 0)),
+      amrex::IntVect(D_DECL(gravity::lnum, gravity::lnum, npts - 1)));
 
-  FArrayBox qL0(boxq0);
-  FArrayBox qLC(boxqC);
-  FArrayBox qLS(boxqS);
+  amrex::FArrayBox qL0(boxq0);
+  amrex::FArrayBox qLC(boxqC);
+  amrex::FArrayBox qLS(boxqS);
 
-  FArrayBox qU0(boxq0);
-  FArrayBox qUC(boxqC);
-  FArrayBox qUS(boxqS);
+  amrex::FArrayBox qU0(boxq0);
+  amrex::FArrayBox qUC(boxqC);
+  amrex::FArrayBox qUS(boxqS);
 
-  qL0.setVal<RunOn::Device>(0.0);
-  qLC.setVal<RunOn::Device>(0.0);
-  qLS.setVal<RunOn::Device>(0.0);
-  qU0.setVal<RunOn::Device>(0.0);
-  qUC.setVal<RunOn::Device>(0.0);
-  qUS.setVal<RunOn::Device>(0.0);
+  qL0.setVal<amrex::RunOn::Device>(0.0);
+  qLC.setVal<amrex::RunOn::Device>(0.0);
+  qLS.setVal<amrex::RunOn::Device>(0.0);
+  qU0.setVal<amrex::RunOn::Device>(0.0);
+  qUC.setVal<amrex::RunOn::Device>(0.0);
+  qUS.setVal<amrex::RunOn::Device>(0.0);
 
   // This section needs to be generalized for computing
   // full multipole gravity, not just BCs. At present this
@@ -223,19 +160,18 @@ void Gravity<T>::fill_multipole_BCs(int crse_level, int fine_level,
 
     // Create a local copy of the RHS so that we can mask it.
 
-    MultiFab source(Rhs[lev - crse_level]->boxArray(),
-                    Rhs[lev - crse_level]->DistributionMap(), 1, 0);
+    amrex::MultiFab source(Rhs[lev - crse_level]->boxArray(),
+                           Rhs[lev - crse_level]->DistributionMap(), 1, 0);
 
-    MultiFab::Copy(source, *Rhs[lev - crse_level], 0, 0, 1, 0);
+    amrex::MultiFab::Copy(source, *Rhs[lev - crse_level], 0, 0, 1, 0);
 
     if (lev < fine_level) {
-      // const MultiFab &mask = parent->getLevel(lev + 1)->build_fine_mask();
       auto mask =
           amrex::makeFineMask(sim->boxArray(lev), sim->DistributionMap(lev),
                               sim->boxArray(lev - 1), sim->refRatio(lev - 1),
                               1.0,  // coarse
                               0.0); // fine
-      MultiFab::Multiply(source, mask, 0, 0, 1, 0);
+      amrex::MultiFab::Multiply(source, mask, 0, 0, 1, 0);
     }
 
     // Loop through the grids and compute the individual contributions
@@ -243,106 +179,94 @@ void Gravity<T>::fill_multipole_BCs(int crse_level, int fine_level,
     // is coded to only add to the moment arrays, so it is safe
     // to directly hand the arrays to them.
 
-    // const Box &domain = sim->Geom(lev).Domain();
     const auto dx = sim->Geom(lev).CellSizeArray();
     const auto problo = sim->Geom(lev).ProbLoArray();
     const auto probhi = sim->Geom(lev).ProbHiArray();
-    // int coord_type = sim->Geom(lev).Coord();
     const auto coord_center = coordCenter;
 
-    {
-      for (MFIter mfi(source, TilingIfNotGPU()); mfi.isValid(); ++mfi) {
-        const Box &bx = mfi.tilebox();
+    for (amrex::MFIter mfi(source, TilingIfNotGPU()); mfi.isValid(); ++mfi) {
+      const amrex::Box &bx = mfi.tilebox();
 
-        auto qL0_arr = qL0.array();
-        auto qLC_arr = qLC.array();
-        auto qLS_arr = qLS.array();
-        auto qU0_arr = qU0.array();
-        auto qUC_arr = qUC.array();
-        auto qUS_arr = qUS.array();
+      auto qL0_arr = qL0.array();
+      auto qLC_arr = qLC.array();
+      auto qLS_arr = qLS.array();
+      auto qU0_arr = qU0.array();
+      auto qUC_arr = qUC.array();
+      auto qUS_arr = qUS.array();
 
-        auto rho = source[mfi].array();
-        auto vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
+      auto rho = source[mfi].array();
+      // assume Cartesian coordinates
+      auto vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
-        amrex::ParallelFor(
-            amrex::Gpu::KernelInfo().setReduction(true), bx,
-            [=] AMREX_GPU_DEVICE(int i, int j, int k,
-                                 amrex::Gpu::Handler const &handler) {
-              // If we're using this to construct boundary values, then only
-              // fill the outermost bin.
+      amrex::ParallelFor(
+          amrex::Gpu::KernelInfo().setReduction(true), bx,
+          [=] AMREX_GPU_DEVICE(int i, int j, int k,
+                               amrex::Gpu::Handler const &handler) {
+            // If we're using this to construct boundary values, then only
+            // fill the outermost bin.
 
-              int nlo = 0;
-              if (boundary_only == 1) {
-                nlo = npts - 1;
-              }
+            int nlo = 0;
+            if (boundary_only == 1) {
+              nlo = npts - 1;
+            }
 
-              // Note that we don't currently support dx != dy != dz, so this is
-              // acceptable.
+            // Note that we don't currently support dx != dy != dz, so this is
+            // acceptable.
 
-              Real drInv = multipole::rmax / dx[0];
+            Real drInv = multipole::rmax / dx[0];
 
-              Real rmax_cubed_inv =
-                  1.0 / (multipole::rmax * multipole::rmax * multipole::rmax);
+            Real rmax_cubed_inv =
+                1.0 / (multipole::rmax * multipole::rmax * multipole::rmax);
 
-              Real x = (problo[0] + (static_cast<Real>(i) + 0.5) * dx[0] -
-                        coord_center[0]) /
-                       multipole::rmax;
+            Real x = (problo[0] + (static_cast<Real>(i) + 0.5) * dx[0] -
+                      coord_center[0]) /
+                     multipole::rmax;
 
-              Real y = (problo[1] + (static_cast<Real>(j) + 0.5) * dx[1] -
-                        coord_center[1]) /
-                       multipole::rmax;
+            Real y = (problo[1] + (static_cast<Real>(j) + 0.5) * dx[1] -
+                      coord_center[1]) /
+                     multipole::rmax;
 
-              Real z = (problo[2] + (static_cast<Real>(k) + 0.5) * dx[2] -
-                        coord_center[2]) /
-                       multipole::rmax;
+            Real z = (problo[2] + (static_cast<Real>(k) + 0.5) * dx[2] -
+                      coord_center[2]) /
+                     multipole::rmax;
 
-              Real r = std::sqrt(x * x + y * y + z * z);
+            Real r = std::sqrt(x * x + y * y + z * z);
 
-              Real cosTheta = NAN;
-              Real phiAngle = NAN;
-              int index = 0;
+            Real cosTheta = NAN;
+            Real phiAngle = NAN;
+            int index = 0;
 
-              index = static_cast<int>(r * drInv);
-              cosTheta = z / r;
-              phiAngle = std::atan2(y, x);
+            index = static_cast<int>(r * drInv);
+            cosTheta = z / r;
+            phiAngle = std::atan2(y, x);
 
-              // Now, compute the multipole moments.
+            // Now, compute the multipole moments.
 
-              multipole_add(cosTheta, phiAngle, r, rho(i, j, k),
-                            vol * rmax_cubed_inv, qL0_arr, qLC_arr, qLS_arr,
-                            qU0_arr, qUC_arr, qUS_arr, npts, nlo, index,
-                            handler, true);
-
-              // Now add in contributions if we have any symmetric boundaries in
-              // 3D. The symmetric boundary in 2D axisymmetric is handled
-              // separately.
-
-              if (multipole::doSymmetricAdd) {
-
-                multipole_symmetric_add(
-                    x, y, z, problo, coord_center, rho(i, j, k),
-                    vol * rmax_cubed_inv, qL0_arr, qLC_arr, qLS_arr, qU0_arr,
-                    qUC_arr, qUS_arr, npts, nlo, index, handler);
-              }
-            });
-      }
+            multipole_add(cosTheta, phiAngle, r, rho(i, j, k),
+                          vol * rmax_cubed_inv, qL0_arr, qLC_arr, qLS_arr,
+                          qU0_arr, qUC_arr, qUS_arr, npts, nlo, index, handler,
+                          true);
+          });
     }
 
   } // end loop over levels
 
   // Now, do a global reduce over all processes.
 
-  if (!ParallelDescriptor::UseGpuAwareMpi()) {
+  if (!amrex::ParallelDescriptor::UseGpuAwareMpi()) {
     qL0.prefetchToHost();
     qLC.prefetchToHost();
     qLS.prefetchToHost();
   }
 
-  ParallelDescriptor::ReduceRealSum(qL0.dataPtr(), boxq0.numPts());
-  ParallelDescriptor::ReduceRealSum(qLC.dataPtr(), boxqC.numPts());
-  ParallelDescriptor::ReduceRealSum(qLS.dataPtr(), boxqS.numPts());
+  amrex::ParallelDescriptor::ReduceRealSum(qL0.dataPtr(),
+                                           static_cast<int>(boxq0.numPts()));
+  amrex::ParallelDescriptor::ReduceRealSum(qLC.dataPtr(),
+                                           static_cast<int>(boxqC.numPts()));
+  amrex::ParallelDescriptor::ReduceRealSum(qLS.dataPtr(),
+                                           static_cast<int>(boxqS.numPts()));
 
-  if (!ParallelDescriptor::UseGpuAwareMpi()) {
+  if (!amrex::ParallelDescriptor::UseGpuAwareMpi()) {
     qL0.prefetchToDevice();
     qLC.prefetchToDevice();
     qLS.prefetchToDevice();
@@ -350,17 +274,20 @@ void Gravity<T>::fill_multipole_BCs(int crse_level, int fine_level,
 
   if (boundary_only != 1) {
 
-    if (!ParallelDescriptor::UseGpuAwareMpi()) {
+    if (!amrex::ParallelDescriptor::UseGpuAwareMpi()) {
       qU0.prefetchToHost();
       qUC.prefetchToHost();
       qUS.prefetchToHost();
     }
 
-    ParallelDescriptor::ReduceRealSum(qU0.dataPtr(), boxq0.numPts());
-    ParallelDescriptor::ReduceRealSum(qUC.dataPtr(), boxqC.numPts());
-    ParallelDescriptor::ReduceRealSum(qUS.dataPtr(), boxqS.numPts());
+    amrex::ParallelDescriptor::ReduceRealSum(qU0.dataPtr(),
+                                             static_cast<int>(boxq0.numPts()));
+    amrex::ParallelDescriptor::ReduceRealSum(qUC.dataPtr(),
+                                             static_cast<int>(boxqC.numPts()));
+    amrex::ParallelDescriptor::ReduceRealSum(qUS.dataPtr(),
+                                             static_cast<int>(boxqS.numPts()));
 
-    if (!ParallelDescriptor::UseGpuAwareMpi()) {
+    if (!amrex::ParallelDescriptor::UseGpuAwareMpi()) {
       qU0.prefetchToDevice();
       qUC.prefetchToDevice();
       qUS.prefetchToDevice();
@@ -371,14 +298,14 @@ void Gravity<T>::fill_multipole_BCs(int crse_level, int fine_level,
   // complete multipole moments, for all points on the
   // boundary that are held on this process.
 
-  const Box &domain = sim->Geom(crse_level).Domain();
+  const amrex::Box &domain = sim->Geom(crse_level).Domain();
   const auto dx = sim->Geom(crse_level).CellSizeArray();
   const auto problo = sim->Geom(crse_level).ProbLoArray();
   int coord_type = sim->Geom(crse_level).Coord();
   const auto coord_center = coordCenter;
 
-  for (MFIter mfi(phi, TilingIfNotGPU()); mfi.isValid(); ++mfi) {
-    const Box &bx = mfi.growntilebox();
+  for (amrex::MFIter mfi(phi, TilingIfNotGPU()); mfi.isValid(); ++mfi) {
+    const amrex::Box &bx = mfi.growntilebox();
 
     auto qL0_arr = qL0.array();
     auto qLC_arr = qLC.array();
@@ -454,17 +381,10 @@ void Gravity<T>::fill_multipole_BCs(int crse_level, int fine_level,
 
         Real cosTheta = NAN;
         Real phiAngle = NAN;
-        // cannot make this if constexpr
-        // (nvcc: An extended __host__ __device__ lambda cannot first-capture variable in constexpr-if context)
-        if (AMREX_SPACEDIM == 3) { 
-          cosTheta = z / r;
-          phiAngle = std::atan2(y, x);
-        } else if (AMREX_SPACEDIM == 2) {
-          if (coord_type == 1) {
-            cosTheta = y / r;
-            phiAngle = 0.0;
-          }
-        }
+
+        // assume 3D cartesian coordinates
+        cosTheta = z / r;
+        phiAngle = std::atan2(y, x);
 
         phi_arr(i, j, k) = 0.0;
 
@@ -517,10 +437,10 @@ void Gravity<T>::fill_multipole_BCs(int crse_level, int fine_level,
   }
 
   if (gravity::verbose != 0) {
-    const int IOProc = ParallelDescriptor::IOProcessorNumber();
-    Real end = ParallelDescriptor::second() - strt;
-    ParallelDescriptor::ReduceRealMax(end, IOProc);
-    if (ParallelDescriptor::IOProcessor()) {
+    const int IOProc = amrex::ParallelDescriptor::IOProcessorNumber();
+    Real end = amrex::ParallelDescriptor::second() - strt;
+    amrex::ParallelDescriptor::ReduceRealMax(end, IOProc);
+    if (amrex::ParallelDescriptor::IOProcessor()) {
       std::cout << "Gravity<T>::fill_multipole_BCs() time = " << end
                 << std::endl
                 << std::endl;
@@ -529,22 +449,24 @@ void Gravity<T>::fill_multipole_BCs(int crse_level, int fine_level,
 }
 
 template <typename T> void Gravity<T>::make_mg_bc() {
-  const Geometry &geom = this->sim->Geom(0);
+  const amrex::Geometry &geom = this->sim->Geom(0);
 
   for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
     if (geom.isPeriodic(idim)) {
-      mlmg_lobc[idim] = MLLinOp::BCType::Periodic;
-      mlmg_hibc[idim] = MLLinOp::BCType::Periodic;
+      mlmg_lobc[idim] = amrex::MLLinOp::BCType::Periodic;
+      mlmg_hibc[idim] = amrex::MLLinOp::BCType::Periodic;
     } else {
       if (phys_bc->lo(idim) == Symmetry) {
-        mlmg_lobc[idim] = MLLinOp::BCType::Neumann;
+        amrex::Abort(
+            "Reflecting boundaries not supported for Poisson gravity!");
       } else {
-        mlmg_lobc[idim] = MLLinOp::BCType::Dirichlet;
+        mlmg_lobc[idim] = amrex::MLLinOp::BCType::Dirichlet;
       }
       if (phys_bc->hi(idim) == Symmetry) {
-        mlmg_hibc[idim] = MLLinOp::BCType::Neumann;
+        amrex::Abort(
+            "Reflecting boundaries not supported for Poisson gravity!");
       } else {
-        mlmg_hibc[idim] = MLLinOp::BCType::Dirichlet;
+        mlmg_hibc[idim] = amrex::MLLinOp::BCType::Dirichlet;
       }
     }
   }

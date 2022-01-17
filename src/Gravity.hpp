@@ -20,8 +20,6 @@
 #include <AMReX_MLLinOp.H>
 
 #include "simulation.hpp"
-// forward declaration
-//template <typename T> class AMRSimulation;
 
 namespace C {
 // newton's gravitational constant taken from NIST's 2010 CODATA recommended
@@ -62,29 +60,23 @@ const int mlmg_max_fmg_iter = 1;
 const int mlmg_nsolve = 0;
 } // namespace gravity
 
-enum StateType {
-  State_Type = 0, // conserved fluid variables
-  PhiGrav_Type,   // gravitational potential 'phi'
-  Gravity_Type,   // gravitational acceleration 'g'
-};
-
 ///
 /// Multipole gravity data
 ///
 namespace multipole {
 const int lnum_max = 30;
 
-extern AMREX_GPU_MANAGED amrex::Real volumeFactor;
-extern AMREX_GPU_MANAGED amrex::Real parityFactor;
+constexpr amrex::Real volumeFactor = 1.0;
+constexpr amrex::Real parityFactor = 1.0;
+
+amrex::Array1D<bool, 0, 2> constexpr doSymmetricAddLo = {false};
+amrex::Array1D<bool, 0, 2> constexpr doSymmetricAddHi = {false};
+bool constexpr doSymmetricAdd = false;
+
+amrex::Array1D<bool, 0, 2> constexpr doReflectionLo = {false};
+amrex::Array1D<bool, 0, 2> constexpr doReflectionHi = {false};
 
 extern AMREX_GPU_MANAGED amrex::Real rmax;
-
-extern AMREX_GPU_MANAGED amrex::Array1D<bool, 0, 2> doSymmetricAddLo;
-extern AMREX_GPU_MANAGED amrex::Array1D<bool, 0, 2> doSymmetricAddHi;
-extern AMREX_GPU_MANAGED bool doSymmetricAdd;
-
-extern AMREX_GPU_MANAGED amrex::Array1D<bool, 0, 2> doReflectionLo;
-extern AMREX_GPU_MANAGED amrex::Array1D<bool, 0, 2> doReflectionHi;
 
 extern AMREX_GPU_MANAGED amrex::Array2D<amrex::Real, 0, lnum_max, 0, lnum_max>
     factArray;
@@ -105,8 +97,7 @@ public:
   ///
   /// @param _Density         index of density component
   ///
-  Gravity(AMRSimulation<T> *_sim,
-          amrex::BCRec &phys_bc,
+  Gravity(AMRSimulation<T> *_sim, amrex::BCRec &phys_bc,
           amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &_coordCenter,
           int _Density);
 
@@ -525,8 +516,8 @@ public:
 ///
 using GradPhiPhysBCFunct = amrex::PhysBCFunctNoOp;
 
+#include "GravityBC.hpp"
 #include "Gravity_impl.hpp"
 #include "Gravity_residual_impl.hpp"
-#include "GravityBC.hpp"
 
 #endif
