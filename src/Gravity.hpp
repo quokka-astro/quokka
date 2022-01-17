@@ -99,7 +99,7 @@ public:
   ///
   Gravity(AMRSimulation<T> *_sim, amrex::BCRec &phys_bc,
           amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &_coordCenter,
-          int _Density);
+          int Density_);
 
   ///
   /// Read gravity-related parameters from parameter file

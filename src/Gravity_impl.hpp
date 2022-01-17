@@ -48,7 +48,7 @@ template <typename T> Real Gravity<T>::Ggravity = 0.;
 
 template <typename T>
 Gravity<T>::Gravity(AMRSimulation<T> *_sim, BCRec &_phys_bc,
-                    GpuArray<Real, AMREX_SPACEDIM> &_coordCenter, int _Density)
+                    GpuArray<Real, AMREX_SPACEDIM> &_coordCenter, int Density_)
     : sim(_sim), phi_old_(_sim->maxLevel() + 1), phi_new_(_sim->maxLevel() + 1),
       g_old_(_sim->maxLevel() + 1), g_new_(_sim->maxLevel() + 1),
       grad_phi_curr(_sim->maxLevel() + 1), grad_phi_prev(_sim->maxLevel() + 1),
@@ -62,7 +62,7 @@ Gravity<T>::Gravity(AMRSimulation<T> *_sim, BCRec &_phys_bc,
     AMREX_ASSERT(sim->Geom(i).IsCartesian());
   }
 
-  Density = _Density; // index of density component
+  Density = Density_; // index of density component
   read_params();
   finest_level_allocated = -1;
 

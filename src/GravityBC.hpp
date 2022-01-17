@@ -184,7 +184,7 @@ void Gravity<T>::fill_multipole_BCs(int crse_level, int fine_level,
     const auto probhi = sim->Geom(lev).ProbHiArray();
     const auto coord_center = coordCenter;
 
-    for (amrex::MFIter mfi(source, TilingIfNotGPU()); mfi.isValid(); ++mfi) {
+    for (amrex::MFIter mfi(source); mfi.isValid(); ++mfi) {
       const amrex::Box &bx = mfi.tilebox();
 
       auto qL0_arr = qL0.array();
@@ -304,7 +304,7 @@ void Gravity<T>::fill_multipole_BCs(int crse_level, int fine_level,
   int coord_type = sim->Geom(crse_level).Coord();
   const auto coord_center = coordCenter;
 
-  for (amrex::MFIter mfi(phi, TilingIfNotGPU()); mfi.isValid(); ++mfi) {
+  for (amrex::MFIter mfi(phi); mfi.isValid(); ++mfi) {
     const amrex::Box &bx = mfi.growntilebox();
 
     auto qL0_arr = qL0.array();
