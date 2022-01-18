@@ -27,14 +27,10 @@ template <typename T>
 void Gravity<T>::test_residual(const Box &bx, Array4<Real> const &rhs,
                                Array4<Real> const &ecx, Array4<Real> const &ecy,
                                Array4<Real> const &ecz,
-                               GpuArray<Real, AMREX_SPACEDIM> dx,
-                               GpuArray<Real, AMREX_SPACEDIM> /*problo*/,
-                               int coord_type) {
+                               GpuArray<Real, AMREX_SPACEDIM> dx) {
   // Test whether using the edge-based gradients
   // to compute Div(Grad(Phi)) satisfies Lap(phi) = RHS
   // Fill the RHS array with the residual
-
-  AMREX_ALWAYS_ASSERT(coord_type == 0);
 
   amrex::ParallelFor(bx, [=] AMREX_GPU_HOST_DEVICE(int i, int j, int k) {
     Real lapphi = (ecx(i + 1, j, k) - ecx(i, j, k)) / dx[0];
@@ -73,17 +69,14 @@ template <typename T> void Gravity<T>::test_level_grad_phi_prev(int level) {
     amrex::Print() << "       norm of RHS             " << rhsnorm << std::endl;
   }
 
-  auto dx = sim->Geom(level).CellSizeArray();
-  auto problo = sim->Geom(level).ProbLoArray();
-  const int coord_type = geom_lev.Coord();
+  auto dx = geom_lev.CellSizeArray();
 
   for (MFIter mfi(Rhs); mfi.isValid(); ++mfi) {
     const Box &bx = mfi.tilebox();
 
     test_residual(bx, Rhs.array(mfi), (*grad_phi_prev[level][0]).array(mfi),
                   (*grad_phi_prev[level][1]).array(mfi),
-                  (*grad_phi_prev[level][2]).array(mfi), dx, problo,
-                  coord_type);
+                  (*grad_phi_prev[level][2]).array(mfi), dx);
   }
 
   if (gravity::verbose > 1) {
@@ -122,16 +115,13 @@ template <typename T> void Gravity<T>::test_level_grad_phi_curr(int level) {
   }
 
   auto dx = geom_lev.CellSizeArray();
-  auto problo = geom_lev.ProbLoArray();
-  const int coord_type = geom_lev.Coord();
 
   for (MFIter mfi(Rhs); mfi.isValid(); ++mfi) {
     const Box &bx = mfi.tilebox();
 
     test_residual(bx, Rhs.array(mfi), (*grad_phi_curr[level][0]).array(mfi),
                   (*grad_phi_curr[level][1]).array(mfi),
-                  (*grad_phi_curr[level][2]).array(mfi), dx, problo,
-                  coord_type);
+                  (*grad_phi_curr[level][2]).array(mfi), dx);
   }
 
   if (gravity::verbose > 1) {

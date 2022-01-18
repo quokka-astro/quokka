@@ -524,11 +524,6 @@ void Gravity<T>::solve_for_phi(int level, MultiFab &phi,
 
     const auto &rhs = get_rhs(level, 1, is_new);
 
-    // check rhs validity
-    for (int i = 0; i < rhs.size(); ++i) {
-      AMREX_ASSERT(rhs[i]->is_cell_centered());
-    }
-
     Vector<Vector<MultiFab *>> grad_phi_p(1);
     grad_phi_p[0].resize(AMREX_SPACEDIM);
     for (int i = 0; i < AMREX_SPACEDIM; i++) {

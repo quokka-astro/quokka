@@ -321,16 +321,13 @@ public:
   /// @param ecx         gradients wrt x
   /// @param ecy         gradients wrt y
   /// @param ecz         gradients wrt z
-  /// @param coord_type  coordinate system
 
   static void test_residual(const amrex::Box &bx,
                             amrex::Array4<amrex::Real> const &rhs,
                             amrex::Array4<amrex::Real> const &ecx,
                             amrex::Array4<amrex::Real> const &ecy,
                             amrex::Array4<amrex::Real> const &ecz,
-                            amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
-                            amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> problo,
-                            int coord_type);
+                            amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx);
 
   ///
   /// @param level
