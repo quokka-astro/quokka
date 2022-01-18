@@ -196,7 +196,7 @@ auto problem_main() -> int {
   grav.test_composite_phi(0);
 
   // test single-level solves
-  // N.B.: the residuals printed here do not make sense for l = 0
+  // N.B.: the residuals printed here do not make sense...
   for (int i = 0; i <= sim.finestLevel(); ++i) {
     amrex::Print() << "--- Doing single-level solve for l = " << i << " ---\n";
 
@@ -210,7 +210,7 @@ auto problem_main() -> int {
   int ncomp = 1;
   int nghost = 0;
   int status = 0;
-  const double err_tol = 1.2e-4; // for 2nd-order discretization, 64^3 grid
+  const double err_tol = 1.0e-4; // for 2nd-order discretization, 64^3 base grid, order-16 multipole BC
 
   for (int ilev = 0; ilev <= sim.finestLevel(); ++ilev) {
     // compute exact solution on level ilev
