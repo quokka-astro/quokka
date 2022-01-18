@@ -19,6 +19,7 @@
 #include <AMReX_MLPoisson.H>
 #include <AMReX_ParmParse.H>
 
+#include "AMReX_SPACE.H"
 #include "Gravity.hpp"
 
 using namespace amrex;
@@ -32,10 +33,10 @@ void Gravity<T>::test_residual(const Box &bx, Array4<Real> const &rhs,
   // to compute Div(Grad(Phi)) satisfies Lap(phi) = RHS
   // Fill the RHS array with the residual
 
-  amrex::ParallelFor(bx, [=] AMREX_GPU_HOST_DEVICE(int i, int j, int k) {
-    Real lapphi = (ecx(i + 1, j, k) - ecx(i, j, k)) / dx[0];
-    lapphi += (ecy(i, j + 1, k) - ecy(i, j, k)) / dx[1];
-    lapphi += (ecz(i, j, k + 1) - ecz(i, j, k)) / dx[2];
+  amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+    Real lapphi = AMREX_D_TERM( (ecx(i + 1, j, k) - ecx(i, j, k)) / dx[0] ,
+                              + (ecy(i, j + 1, k) - ecy(i, j, k)) / dx[1] ,
+                              + (ecz(i, j, k + 1) - ecz(i, j, k)) / dx[2] );
     rhs(i, j, k) -= lapphi;
   });
 }

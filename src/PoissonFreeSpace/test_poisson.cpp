@@ -123,8 +123,10 @@ void RadhydroSimulation<PoissonProblem>::ErrorEst(int lev,
     amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
       Real const rho =
           state(i, j, k, HydroSystem<PoissonProblem>::density_index);
-      Real const cs = 1.0 / (4. * 1024. * M_PI); // arbitrary for this test problem
-      //Real const cs = 1.0 / (1024. * M_PI); // arbitrary for this test problem
+      Real const cs =
+          1.0 / (4. * 1024. * M_PI); // arbitrary for this test problem
+      // Real const cs = 1.0 / (1024. * M_PI); // arbitrary for this test
+      // problem
       Real const lambda_jeans = cs * std::sqrt(M_PI / (C::Gconst * rho));
       Real const jeans_number = dx_min / lambda_jeans;
 
@@ -194,10 +196,13 @@ auto problem_main() -> int {
   grav.test_composite_phi(0);
 
   // test single-level solves
-  // N.B.: there is a bug here!
+  // N.B.: the residuals printed here do not make sense for l = 0
   for (int i = 0; i <= sim.finestLevel(); ++i) {
     amrex::Print() << "--- Doing single-level solve for l = " << i << " ---\n";
+
+    amrex::Print() << "---- Old-time solve for l = " << i << " ---\n";
     grav.construct_old_gravity(0., i);
+    amrex::Print() << "---- New-time solve for l = " << i << " ---\n";
     grav.construct_new_gravity(0., i);
   }
 
@@ -207,28 +212,31 @@ auto problem_main() -> int {
   int status = 0;
   const double err_tol = 1.2e-4; // for 2nd-order discretization, 64^3 grid
 
-  for (int i = 0; i <= sim.finestLevel(); ++i) {
-    // compute exact solution on level i
-    amrex::MultiFab phi_exact(sim.boxArray(0), sim.DistributionMap(0), ncomp,
-                              nghost);
-    auto dx = sim.Geom(0).CellSizeArray();
-    auto prob_lo = sim.Geom(0).ProbLoArray();
-    auto prob_hi = sim.Geom(0).ProbHiArray();
+  for (int ilev = 0; ilev <= sim.finestLevel(); ++ilev) {
+    // compute exact solution on level ilev
+    auto ba = sim.boxArray(ilev);
+    auto dmap = sim.DistributionMap(ilev);
+    amrex::MultiFab phi_exact(ba, dmap, ncomp, nghost);
+
+    amrex::Geometry &geom = sim.Geom(ilev);
+    auto dx = geom.CellSizeArray();
+    auto prob_lo = geom.ProbLoArray();
+    auto prob_hi = geom.ProbHiArray();
     computeReferenceSolution(phi_exact, dx, prob_lo, prob_hi);
 
     // compute error norm on level i
-    amrex::MultiFab residual(sim.boxArray(0), sim.DistributionMap(0), ncomp,
-                             nghost);
+    amrex::MultiFab residual(ba, dmap, ncomp, nghost);
+    amrex::MultiFab &phi_new = grav.phi_new_[ilev];
+
     amrex::MultiFab::Copy(residual, phi_exact, 0, 0, ncomp, nghost);
-    amrex::MultiFab::Saxpy(residual, -1., grav.phi_new_[0], 0, 0, ncomp,
-                           nghost);
+    amrex::MultiFab::Saxpy(residual, -1., phi_new, 0, 0, ncomp, nghost);
 
     Real sol_norm = phi_exact.norm1(0);
     Real err_norm = residual.norm1(0);
-    // this gets larger when more AMR levels are used...
+
     const double rel_error = err_norm / sol_norm;
-    amrex::Print() << "[level " << i << "] Relative error norm = " << rel_error
-                   << "\n";
+    amrex::Print() << "[level " << ilev
+                   << "] Relative error norm = " << rel_error << "\n";
 
     if (rel_error > err_tol) {
       status = 1;

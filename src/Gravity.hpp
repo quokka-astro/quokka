@@ -44,7 +44,7 @@ enum class GravityMode {
 
 const GravityMode gravity_type = GravityMode::Poisson;
 const amrex::Real const_grav = 0.0;
-const int lnum = 16;
+const int lnum = 6;
 const int max_solve_level = 10;
 
 const int verbose = 2;
@@ -53,9 +53,9 @@ const int no_composite = 0;
 const int do_composite_phi_correction = 1;
 
 // multigrid solve parameters (all boolean)
-const int mlmg_agglomeration = 0;
-const int mlmg_consolidation = 0;
-const int mlmg_max_fmg_iter = 1;
+const int mlmg_agglomeration = 1;
+const int mlmg_consolidation = 1;
+const int mlmg_max_fmg_iter = 0;
 const int mlmg_nsolve = 0;
 } // namespace gravity
 
@@ -279,7 +279,7 @@ public:
   void create_comp_minus_level_grad_phi(
       int level, amrex::MultiFab &comp_phi,
       const amrex::Vector<amrex::MultiFab *> &comp_gphi,
-      amrex::MultiFab &comp_minus_level_phi,
+      std::unique_ptr<amrex::MultiFab> &comp_minus_level_phi,
       amrex::Vector<std::unique_ptr<amrex::MultiFab>>
           &comp_minus_level_grad_phi);
 
@@ -400,7 +400,7 @@ public:
   ///
   /// MultiFabs for composite-level corrections
   ///
-  amrex::Vector<amrex::MultiFab> corr_phi_;
+  amrex::Vector<std::unique_ptr<amrex::MultiFab>> corr_phi_;
   amrex::Vector<amrex::Vector<std::unique_ptr<amrex::MultiFab>>> corr_grad_phi_;
 
   ///

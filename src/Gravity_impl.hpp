@@ -16,6 +16,7 @@
 /// geometry problems.
 ///
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
 #include <memory>
@@ -207,6 +208,7 @@ template <typename T> void Gravity<T>::install_level(int level) {
       grad_phi_prev[level][n] = std::make_unique<MultiFab>(
           amrex::convert(sim->boxArray(level), IntVect::TheDimensionVector(n)),
           dm, 1, 1);
+      grad_phi_prev[level][n]->setVal(0.);
     }
 
     grad_phi_curr[level].resize(AMREX_SPACEDIM);
@@ -214,6 +216,7 @@ template <typename T> void Gravity<T>::install_level(int level) {
       grad_phi_curr[level][n] = std::make_unique<MultiFab>(
           amrex::convert(sim->boxArray(level), IntVect::TheDimensionVector(n)),
           dm, 1, 1);
+      grad_phi_curr[level][n]->setVal(0.);
     }
   }
 
@@ -230,7 +233,7 @@ void Gravity<T>::construct_old_gravity(Real time, int level) {
   MultiFab &grav_old = g_old_[level];
   MultiFab &phi_old = phi_old_[level];
 
-  MultiFab &comp_minus_level_phi = corr_phi_[level];
+  std::unique_ptr<MultiFab> &comp_minus_level_phi = corr_phi_[level];
   Vector<std::unique_ptr<MultiFab>> &comp_minus_level_grad_phi =
       corr_grad_phi_[level];
 
@@ -239,7 +242,7 @@ void Gravity<T>::construct_old_gravity(Real time, int level) {
   // Note that we don't need to do this solve for single-level runs,
   // since the solution at the end of the last timestep won't have changed.
 
-  if (get_gravity_type() == GravityMode::Poisson && sim->finestLevel() > 0) {
+  if (get_gravity_type() == GravityMode::Poisson) {
 
     // Create a copy of the current (composite) data on this level.
 
@@ -258,7 +261,7 @@ void Gravity<T>::construct_old_gravity(Real time, int level) {
             amrex::convert(sim->boxArray(level),
                            IntVect::TheDimensionVector(n)),
             sim->DistributionMap(level), 1, 0);
-        MultiFab::Copy(*comp_gphi[n], *get_grad_phi_prev(level)[n], 0, 0, 1, 0);
+        MultiFab::Copy(*comp_gphi[n], *grad_phi_prev[level][n], 0, 0, 1, 0);
       }
     }
 
@@ -274,7 +277,7 @@ void Gravity<T>::construct_old_gravity(Real time, int level) {
     // to get the difference between the composite and level solutions. If
     // we are only doing level solves, then this is the main result.
 
-    solve_for_phi(level, phi_old, amrex::GetVecOfPtrs(get_grad_phi_prev(level)),
+    solve_for_phi(level, phi_old, amrex::GetVecOfPtrs(grad_phi_prev[level]),
                   is_new);
 
     if (NoComposite() != 1 && (DoCompositeCorrection() != 0) &&
@@ -292,7 +295,7 @@ void Gravity<T>::construct_old_gravity(Real time, int level) {
       MultiFab::Copy(phi_old, comp_phi, 0, 0, phi_old.nComp(), phi_old.nGrow());
 
       for (int n = 0; n < AMREX_SPACEDIM; ++n) {
-        MultiFab::Copy(*get_grad_phi_prev(level)[n], *comp_gphi[n], 0, 0, 1, 0);
+        MultiFab::Copy(*grad_phi_prev[level][n], *comp_gphi[n], 0, 0, 1, 0);
       }
     }
 
@@ -325,7 +328,7 @@ void Gravity<T>::construct_new_gravity(Real time, int level) {
   MultiFab &grav_new = g_new_[level];
   MultiFab &phi_new = phi_new_[level];
 
-  MultiFab &comp_minus_level_phi = corr_phi_[level];
+  std::unique_ptr<MultiFab> &comp_minus_level_phi = corr_phi_[level];
   Vector<std::unique_ptr<MultiFab>> &comp_minus_level_grad_phi =
       corr_grad_phi_[level];
 
@@ -344,7 +347,7 @@ void Gravity<T>::construct_new_gravity(Real time, int level) {
 
     if (NoComposite() != 1 && (DoCompositeCorrection() != 0) &&
         level <= get_max_solve_level()) {
-      phi_new.minus(comp_minus_level_phi, 0, 1, 0);
+      phi_new.minus(*comp_minus_level_phi, 0, 1, 0);
     }
 
     if (gravity::verbose != 0) {
@@ -380,7 +383,7 @@ void Gravity<T>::construct_new_gravity(Real time, int level) {
       // between the composite and level solves added to the force we
       // calculate, so it is slightly more accurate than it would have been.
 
-      phi_new.plus(comp_minus_level_phi, 0, 1, 0);
+      phi_new.plus(*comp_minus_level_phi, 0, 1, 0);
       for (int n = 0; n < AMREX_SPACEDIM; ++n) {
         get_grad_phi_curr(level)[n]->plus(*comp_minus_level_grad_phi[n], 0, 1,
                                           0);
@@ -415,7 +418,7 @@ void Gravity<T>::construct_new_gravity(Real time, int level) {
 
       if (NoSync() == 0) {
 
-        phi_new.minus(comp_minus_level_phi, 0, 1, 0);
+        phi_new.minus(*comp_minus_level_phi, 0, 1, 0);
 
         for (int n = 0; n < AMREX_SPACEDIM; ++n) {
           get_grad_phi_curr(level)[n]->minus(*comp_minus_level_grad_phi[n], 0,
@@ -424,8 +427,7 @@ void Gravity<T>::construct_new_gravity(Real time, int level) {
       }
 
       // In any event we can now clear this memory, as we no longer need it.
-
-      comp_minus_level_phi.clear();
+      comp_minus_level_phi.reset();
       comp_minus_level_grad_phi.clear();
     }
   }
@@ -819,23 +821,23 @@ void Gravity<T>::get_new_grav_vector(int level, MultiFab &grav_vector,
 template <typename T>
 void Gravity<T>::create_comp_minus_level_grad_phi(
     int level, MultiFab &comp_phi, const Vector<MultiFab *> &comp_gphi,
-    MultiFab &comp_minus_level_phi,
+    std::unique_ptr<MultiFab> &comp_minus_level_phi,
     Vector<std::unique_ptr<MultiFab>> &comp_minus_level_grad_phi) {
   BL_PROFILE("Gravity<T>::create_comp_minus_level_grad_phi()");
 
   if (gravity::verbose > 1) {
     amrex::Print() << "\n";
     amrex::Print()
-        << "... compute difference between level and composite solves at level "
+        << "... creating MultiFab for difference between level and composite solves at level "
         << level << "\n";
     amrex::Print() << "\n";
   }
 
-  comp_minus_level_phi.define(sim->boxArray(level), sim->DistributionMap(level),
-                              1, 0);
+  comp_minus_level_phi = std::make_unique<MultiFab>(
+      sim->boxArray(level), sim->DistributionMap(level), 1, 0);
 
-  MultiFab::Copy(comp_minus_level_phi, comp_phi, 0, 0, 1, 0);
-  comp_minus_level_phi.minus(phi_old_[level], 0, 1, 0);
+  MultiFab::Copy(*comp_minus_level_phi, comp_phi, 0, 0, 1, 0);
+  comp_minus_level_phi->minus(phi_old_[level], 0, 1, 0);
 
   comp_minus_level_grad_phi.resize(AMREX_SPACEDIM);
   for (int n = 0; n < AMREX_SPACEDIM; ++n) {
