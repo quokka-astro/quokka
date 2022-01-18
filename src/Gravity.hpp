@@ -527,6 +527,7 @@ template <typename T> int Gravity<T>::test_solves = 0;
 
 #include "GravityBC.hpp"
 #include "Gravity_impl.hpp"
+#include "Gravity_level.hpp"
 #include "Gravity_residual_impl.hpp"
 
 #endif
