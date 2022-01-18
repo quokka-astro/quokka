@@ -163,7 +163,7 @@ void Gravity<T>::fill_multipole_BCs(int crse_level, int fine_level,
     if (lev < fine_level) {
       auto mask =
           amrex::makeFineMask(sim->boxArray(lev), sim->DistributionMap(lev),
-                              sim->boxArray(lev - 1), sim->refRatio(lev - 1),
+                              sim->boxArray(lev + 1), sim->refRatio(lev),
                               1.0,  // coarse
                               0.0); // fine
       amrex::MultiFab::Multiply(source, mask, 0, 0, 1, 0);

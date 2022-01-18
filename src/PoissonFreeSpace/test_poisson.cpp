@@ -14,6 +14,7 @@
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
 
+#include "AMReX_SPACE.H"
 #include "Gravity.hpp"
 #include "RadhydroSimulation.hpp"
 #include "hydro_system.hpp"
@@ -68,8 +69,7 @@ void RadhydroSimulation<PoissonProblem>::setInitialConditionsAtLevel(int lev) {
 }
 
 void computeReferenceSolution(
-    amrex::MultiFab &ref,
-    amrex::GpuArray<Real, AMREX_SPACEDIM> const &dx,
+    amrex::MultiFab &ref, amrex::GpuArray<Real, AMREX_SPACEDIM> const &dx,
     amrex::GpuArray<Real, AMREX_SPACEDIM> const &prob_lo,
     amrex::GpuArray<Real, AMREX_SPACEDIM> const & /*prob_hi*/) {
   // (For this test problem, see Ch 5.1 of Van Straalen thesis)
@@ -112,17 +112,23 @@ void RadhydroSimulation<PoissonProblem>::ErrorEst(int lev,
   // tag cells for refinement
   Real const jeans_threshold = 0.25;
 
+  auto dx = Geom(lev).CellSizeArray();
+  Real const dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
+
   for (amrex::MFIter mfi(state_new_[lev]); mfi.isValid(); ++mfi) {
     const amrex::Box &box = mfi.validbox();
     const auto state = state_new_[lev].const_array(mfi);
     const auto tag = tags.array(mfi);
 
     amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-      Real const P =
-          HydroSystem<PoissonProblem>::ComputePressure(state, i, j, k);
-      Real const jeans_number = 0;
+      Real const rho =
+          state(i, j, k, HydroSystem<PoissonProblem>::density_index);
+      //Real const cs = 1.0 / (4. * 1024. * M_PI); // arbitrary for this test problem
+      Real const cs = 1.0 / (1024. * M_PI); // arbitrary for this test problem
+      Real const lambda_jeans = cs * std::sqrt(M_PI / (C::Gconst * rho));
+      Real const jeans_number = dx_min / lambda_jeans;
 
-      if (jeans_number > jeans_threshold) {
+      if (jeans_number > jeans_threshold && rho > 0.0) {
         tag(i, j, k) = amrex::TagBox::SET;
       }
     });
@@ -215,6 +221,7 @@ auto problem_main() -> int {
 
     Real sol_norm = phi_exact.norm1(0);
     Real err_norm = residual.norm1(0);
+    // this gets larger when more AMR levels are used...
     const double rel_error = err_norm / sol_norm;
     amrex::Print() << "[level " << i << "] Relative error norm = " << rel_error
                    << "\n";
