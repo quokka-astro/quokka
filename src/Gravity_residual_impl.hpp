@@ -77,7 +77,7 @@ template <typename T> void Gravity<T>::test_level_grad_phi_prev(int level) {
   auto problo = sim->Geom(level).ProbLoArray();
   const int coord_type = geom_lev.Coord();
 
-  for (MFIter mfi(Rhs, TilingIfNotGPU()); mfi.isValid(); ++mfi) {
+  for (MFIter mfi(Rhs); mfi.isValid(); ++mfi) {
     const Box &bx = mfi.tilebox();
 
     test_residual(bx, Rhs.array(mfi), (*grad_phi_prev[level][0]).array(mfi),
@@ -104,10 +104,10 @@ template <typename T> void Gravity<T>::test_level_grad_phi_curr(int level) {
 
   // This is a correction for fully periodic domains only
   if (geom_lev.isAllPeriodic()) {
-    if (gravity::verbose > 1 && ParallelDescriptor::IOProcessor() &&
-        mass_offset != 0.0) {
-      std::cout << " ... subtracting average density from RHS in solve ... "
-                << mass_offset << std::endl;
+    if (gravity::verbose > 1 && mass_offset != 0.0) {
+      amrex::Print()
+          << " ... subtracting average density from RHS in solve ... "
+          << mass_offset << std::endl;
     }
     Rhs.plus(-mass_offset, 0, 1, 0);
   }
@@ -116,28 +116,22 @@ template <typename T> void Gravity<T>::test_level_grad_phi_curr(int level) {
 
   if (gravity::verbose > 1) {
     Real rhsnorm = Rhs.norm0();
-    if (ParallelDescriptor::IOProcessor()) {
-      std::cout << "... test_level_grad_phi_curr at level " << level
-                << std::endl;
-      std::cout << "       norm of RHS             " << rhsnorm << std::endl;
-    }
+    amrex::Print() << "... test_level_grad_phi_curr at level " << level
+                   << std::endl;
+    amrex::Print() << "       norm of RHS             " << rhsnorm << std::endl;
   }
 
   auto dx = geom_lev.CellSizeArray();
   auto problo = geom_lev.ProbLoArray();
   const int coord_type = geom_lev.Coord();
 
-  for (MFIter mfi(Rhs, TilingIfNotGPU()); mfi.isValid(); ++mfi) {
+  for (MFIter mfi(Rhs); mfi.isValid(); ++mfi) {
     const Box &bx = mfi.tilebox();
 
     test_residual(bx, Rhs.array(mfi), (*grad_phi_curr[level][0]).array(mfi),
-#if AMREX_SPACEDIM >= 2
                   (*grad_phi_curr[level][1]).array(mfi),
-#endif
-#if AMREX_SPACEDIM == 3
-                  (*grad_phi_curr[level][2]).array(mfi),
-#endif
-                  dx, problo, coord_type);
+                  (*grad_phi_curr[level][2]).array(mfi), dx, problo,
+                  coord_type);
   }
 
   if (gravity::verbose > 1) {
@@ -149,9 +143,10 @@ template <typename T> void Gravity<T>::test_level_grad_phi_curr(int level) {
 template <typename T> void Gravity<T>::test_composite_phi(int crse_level) {
   BL_PROFILE("Gravity::test_composite_phi()");
 
-  if (gravity::verbose > 1 && ParallelDescriptor::IOProcessor()) {
-    std::cout << "   " << '\n';
-    std::cout << "... test_composite_phi at base level " << crse_level << '\n';
+  if (gravity::verbose > 1) {
+    amrex::Print() << "   " << '\n';
+    amrex::Print() << "... test_composite_phi at base level " << crse_level
+                   << '\n';
   }
 
   int finest_level_local = sim->finestLevel();
@@ -192,12 +187,8 @@ template <typename T> void Gravity<T>::test_composite_phi(int crse_level) {
 
   for (int amr_lev = crse_level; amr_lev <= finest_level_local; ++amr_lev) {
     Real resnorm = res[amr_lev]->norm0();
-    if (ParallelDescriptor::IOProcessor()) {
-      std::cout << "      ... norm of composite residual at level " << amr_lev
-                << "  " << resnorm << '\n';
-    }
+    amrex::Print() << "      ... norm of composite residual at level "
+                   << amr_lev << "  " << resnorm << '\n';
   }
-  if (ParallelDescriptor::IOProcessor()) {
-    std::cout << std::endl;
-  }
+  amrex::Print() << std::endl;
 }

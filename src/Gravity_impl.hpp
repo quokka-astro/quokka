@@ -247,7 +247,7 @@ void Gravity<T>::construct_old_gravity(Real time, int level) {
     Vector<std::unique_ptr<MultiFab>> comp_gphi(AMREX_SPACEDIM);
 
     if (NoComposite() != 1 && (DoCompositeCorrection() != 0) &&
-        level < sim->finestLevel() && level <= get_max_solve_level()) {
+        level <= get_max_solve_level()) {
 
       comp_phi.define(phi_old.boxArray(), phi_old.DistributionMap(),
                       phi_old.nComp(), phi_old.nGrow());
@@ -278,7 +278,7 @@ void Gravity<T>::construct_old_gravity(Real time, int level) {
                   is_new);
 
     if (NoComposite() != 1 && (DoCompositeCorrection() != 0) &&
-        level < sim->finestLevel() && level <= get_max_solve_level()) {
+        level <= get_max_solve_level()) {
 
       // Subtract the level solve from the composite solution.
 
@@ -343,7 +343,7 @@ void Gravity<T>::construct_new_gravity(Real time, int level) {
     // of the level solve. We'll add it back later.
 
     if (NoComposite() != 1 && (DoCompositeCorrection() != 0) &&
-        level < sim->finestLevel() && level <= get_max_solve_level()) {
+        level <= get_max_solve_level()) {
       phi_new.minus(comp_minus_level_phi, 0, 1, 0);
     }
 
@@ -361,7 +361,7 @@ void Gravity<T>::construct_new_gravity(Real time, int level) {
                   is_new);
 
     if (NoComposite() != 1 && DoCompositeCorrection() == 1 &&
-        level < sim->finestLevel() && level <= get_max_solve_level()) {
+        level <= get_max_solve_level()) {
 
       if (test_results_of_solves() == 1) {
 
@@ -407,8 +407,7 @@ void Gravity<T>::construct_new_gravity(Real time, int level) {
   if (get_gravity_type() == GravityMode::Poisson &&
       level <= get_max_solve_level()) {
 
-    if (NoComposite() != 1 && DoCompositeCorrection() == 1 &&
-        level < sim->finestLevel()) {
+    if (NoComposite() != 1 && DoCompositeCorrection() == 1) {
 
       // Now that we have calculated the force, if we are going to do a sync
       // solve then subtract off the (composite - level) contribution, as it
@@ -736,7 +735,7 @@ void Gravity<T>::get_old_grav_vector(int level, MultiFab &grav_vector,
   // So we'll define a temporary MultiFab with AMREX_SPACEDIM dimensions.
   // Then at the end we'll copy in all AMREX_SPACEDIM dimensions from this into
   // the outgoing grav_vector, leaving any higher dimensions unchanged.
-  
+
   // TODO(ben): is this actually necessary for (constant-grav) 2D problems?
 
   MultiFab grav(sim->boxArray(level), sim->DistributionMap(level),
@@ -1014,8 +1013,8 @@ auto Gravity<T>::solve_phi_with_mlmg(int crse_level, int fine_level,
 
   Real abs_eps = abs_tol[fine_level] * max_rhs;
 
-  amrex::Print() << "using reltol = " << rel_eps << std::endl;
-  amrex::Print() << "using abstol = " << abs_eps << std::endl;
+  // amrex::Print() << "using reltol = " << rel_eps << std::endl;
+  // amrex::Print() << "using abstol = " << abs_eps << std::endl;
 
   Vector<const MultiFab *> crhs{rhs.begin(), rhs.end()};
 

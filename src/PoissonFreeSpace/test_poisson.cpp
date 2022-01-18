@@ -123,8 +123,8 @@ void RadhydroSimulation<PoissonProblem>::ErrorEst(int lev,
     amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
       Real const rho =
           state(i, j, k, HydroSystem<PoissonProblem>::density_index);
-      //Real const cs = 1.0 / (4. * 1024. * M_PI); // arbitrary for this test problem
-      Real const cs = 1.0 / (1024. * M_PI); // arbitrary for this test problem
+      Real const cs = 1.0 / (4. * 1024. * M_PI); // arbitrary for this test problem
+      //Real const cs = 1.0 / (1024. * M_PI); // arbitrary for this test problem
       Real const lambda_jeans = cs * std::sqrt(M_PI / (C::Gconst * rho));
       Real const jeans_number = dx_min / lambda_jeans;
 
@@ -187,12 +187,16 @@ auto problem_main() -> int {
   // this is necessary to call before solving, otherwise abs_tol = 0!
   grav.update_max_rhs();
 
+  AMREX_ALWAYS_ASSERT(gravity::max_solve_level >= sim.finestLevel());
+
   // multilevel solve
   grav.multilevel_solve_for_new_phi(0, sim.finestLevel());
   grav.test_composite_phi(0);
 
   // test single-level solves
+  // N.B.: there is a bug here!
   for (int i = 0; i <= sim.finestLevel(); ++i) {
+    amrex::Print() << "--- Doing single-level solve for l = " << i << " ---\n";
     grav.construct_old_gravity(0., i);
     grav.construct_new_gravity(0., i);
   }
