@@ -5,8 +5,6 @@
 
 #include "Gravity.hpp"
 
-using namespace amrex;
-
 template <typename T>
 void Gravity<T>::construct_old_gravity(Real time, int level) {
   // Note: this function does NOT do a composite solve! That must be done

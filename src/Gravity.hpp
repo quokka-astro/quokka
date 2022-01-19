@@ -1,5 +1,5 @@
-#ifndef GRAVITY_H
-#define GRAVITY_H
+#ifndef GRAVITY_HPP_
+#define GRAVITY_HPP_
 //==============================================================================
 // Poisson gravity solver, adapted from Castro's gravity module:
 //   Commit history:
@@ -11,8 +11,26 @@
 /// \brief Defines a class for solving the Poisson equation.
 ///
 
-#include "AMReX_Array.H"
+#include <algorithm>
+#include <cmath>
+#include <limits>
+#include <memory>
+
+#include "AMReX_BC_TYPES.H"
 #include "AMReX_Config.H"
+#include "AMReX_BoxArray.H"
+#include "AMReX_Geometry.H"
+#include "AMReX_IntVect.H"
+#include "AMReX_MFIter.H"
+#include "AMReX_MultiFabUtil.H"
+#include <AMReX_FillPatchUtil.H>
+#include <AMReX_MLMG.H>
+#include <AMReX_MLPoisson.H>
+#include <AMReX_ParmParse.H>
+#include "AMReX_Array.H"
+#include "AMReX_BCRec.H"
+#include "AMReX_Config.H"
+#include "AMReX_DistributionMapping.H"
 #include "AMReX_GpuContainers.H"
 #include "AMReX_IntVect.H"
 #include "AMReX_PhysBCFunct.H"
@@ -31,6 +49,19 @@ constexpr amrex::Real Gconst = 6.67428e-8; // cm^3/g/s^2
 
 // This vector can be accessed on the GPU.
 using RealVector = amrex::Gpu::ManagedVector<amrex::Real>;
+using Real = amrex::Real;
+using Box = amrex::Box;
+using BoxArray = amrex::BoxArray;
+using MultiFab = amrex::MultiFab;
+using BCRec = amrex::BCRec;
+using ParmParse = amrex::ParmParse;
+using IntVect = amrex::IntVect;
+using Geometry = amrex::Geometry;
+using DistributionMapping = amrex::DistributionMapping;
+using MFIter = amrex::MFIter;
+template <typename T> using Array4 = amrex::Array4<T>;
+template <typename T, int N> using GpuArray = amrex::GpuArray<T, N>;
+template <typename T> using Vector = amrex::Vector<T>;
 
 ///
 /// Gravity solve parameters
@@ -525,9 +556,11 @@ template <typename T> const int Gravity<T>::test_solves = 1;
 template <typename T> int Gravity<T>::test_solves = 0;
 #endif
 
+using GravityMode = gravity::GravityMode;
+
 #include "GravityBC.hpp"
-#include "Gravity_impl.hpp"
 #include "Gravity_level.hpp"
 #include "Gravity_residual_impl.hpp"
+#include "Gravity_impl.hpp"
 
-#endif
+#endif // GRAVITY_HPP_

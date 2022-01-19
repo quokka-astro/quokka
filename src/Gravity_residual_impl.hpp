@@ -5,24 +5,11 @@
 // Used under the terms of the open-source license (BSD 3-clause) given here:
 //   https://github.com/AMReX-Astro/Castro/blob/main/license.txt
 //==============================================================================
-/// \file gravity.cpp
+/// \file Gravity_residual_impl.hpp
 /// \brief Implements a class for solving the Poisson equation.
 ///
 
-#include "AMReX_MultiFabUtil.H"
-#include <cmath>
-#include <limits>
-#include <memory>
-
-#include <AMReX_FillPatchUtil.H>
-#include <AMReX_MLMG.H>
-#include <AMReX_MLPoisson.H>
-#include <AMReX_ParmParse.H>
-
-#include "AMReX_SPACE.H"
 #include "Gravity.hpp"
-
-using namespace amrex;
 
 template <typename T>
 void Gravity<T>::test_residual(const Box &bx, Array4<Real> const &rhs,
@@ -34,9 +21,9 @@ void Gravity<T>::test_residual(const Box &bx, Array4<Real> const &rhs,
   // Fill the RHS array with the residual
 
   amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-    Real lapphi = AMREX_D_TERM( (ecx(i + 1, j, k) - ecx(i, j, k)) / dx[0] ,
-                              + (ecy(i, j + 1, k) - ecy(i, j, k)) / dx[1] ,
-                              + (ecz(i, j, k + 1) - ecz(i, j, k)) / dx[2] );
+    Real lapphi = AMREX_D_TERM((ecx(i + 1, j, k) - ecx(i, j, k)) / dx[0],
+                               +(ecy(i, j + 1, k) - ecy(i, j, k)) / dx[1],
+                               +(ecz(i, j, k + 1) - ecz(i, j, k)) / dx[2]);
     rhs(i, j, k) -= lapphi;
   });
 }

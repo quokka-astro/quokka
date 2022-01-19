@@ -5,20 +5,9 @@
 // Used under the terms of the open-source license (BSD 3-clause) given here:
 //   https://github.com/AMReX-Astro/Castro/blob/main/license.txt
 //==============================================================================
-/// \file GravityBC.cpp
+/// \file GravityBC.hpp
 /// \brief Implements a class for solving the Poisson equation.
 ///
-
-#include <cmath>
-#include <limits>
-
-#include "AMReX.H"
-#include "AMReX_MultiFabUtil.H"
-#include "AMReX_SPACE.H"
-#include <AMReX_FillPatchUtil.H>
-#include <AMReX_MLMG.H>
-#include <AMReX_MLPoisson.H>
-#include <AMReX_ParmParse.H>
 
 #include "Gravity.hpp"
 #include "GravityBC_util.hpp"

@@ -11,40 +11,14 @@
 // Used under the terms of the open-source license (BSD 3-clause) given here:
 //   https://github.com/AMReX-Astro/Castro/blob/main/license.txt
 //==============================================================================
-/// \file Gravity.cpp
+/// \file Gravity_impl.hpp
 /// \brief Implements a class for solving the Poisson equation for 3D, Cartesian
 /// geometry problems.
 ///
 
-#include <algorithm>
-#include <cmath>
-#include <limits>
-#include <memory>
-
-#include "AMReX_BC_TYPES.H"
-#include "AMReX_Config.H"
-#include "AMReX_Geometry.H"
-#include "AMReX_IntVect.H"
-#include "AMReX_MultiFabUtil.H"
-#include <AMReX_FillPatchUtil.H>
-#include <AMReX_MLMG.H>
-#include <AMReX_MLPoisson.H>
-#include <AMReX_ParmParse.H>
-
 #include "Gravity.hpp"
 
-using namespace amrex;
-using GravityMode = gravity::GravityMode;
-
 template <typename T> Real Gravity<T>::mass_offset = 0.0;
-
-// **************************************************************************************
-// Ggravity is defined as 4 * pi * G, where G is the gravitational constant.
-
-// In CGS, this constant is currently
-//      Gconst   =  6.67428e-8           cm^3/g/s^2 , which results in
-//      Ggravity =  83.8503442814844e-8  cm^3/g/s^2
-// **************************************************************************************
 template <typename T> Real Gravity<T>::Ggravity = 0.;
 
 template <typename T>
@@ -291,7 +265,7 @@ void Gravity<T>::solve_for_phi(int level, MultiFab &phi,
     amrex::Print() << " ... solve for phi at level " << level << std::endl;
   }
 
-  const Real strt = ParallelDescriptor::second();
+  const Real strt = amrex::ParallelDescriptor::second();
 
   if (is_new == 0) {
     sanity_check(level);
@@ -330,9 +304,9 @@ void Gravity<T>::solve_for_phi(int level, MultiFab &phi,
   }
 
   if (gravity::verbose != 0) {
-    const int IOProc = ParallelDescriptor::IOProcessorNumber();
-    Real end = ParallelDescriptor::second() - strt;
-    ParallelDescriptor::ReduceRealMax(end, IOProc);
+    const int IOProc = amrex::ParallelDescriptor::IOProcessorNumber();
+    Real end = amrex::ParallelDescriptor::second() - strt;
+    amrex::ParallelDescriptor::ReduceRealMax(end, IOProc);
     amrex::Print() << "Gravity<T>::solve_for_phi() time = " << end << std::endl
                    << std::endl;
   }
@@ -481,14 +455,14 @@ void Gravity<T>::actual_multilevel_solve(
 
     // We need to use a interpolater that works with data on faces.
 
-    Interpolater *gp_interp = &face_linear_interp;
+    amrex::Interpolater *gp_interp = &amrex::face_linear_interp;
 
     // (Will not do anything because we do not fill on physical boundaries.)
 
     Vector<BCRec> gp_bcs;
     BCRec dirichlet_bcs;
     for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-      dirichlet_bcs.setHi(i, BCType::ext_dir);
+      dirichlet_bcs.setHi(i, amrex::BCType::ext_dir);
     }
     gp_bcs.push_back(dirichlet_bcs);
 
@@ -513,7 +487,7 @@ void Gravity<T>::average_fine_ec_onto_crse_ec(int level, int is_new) {
   //
   // Coarsen() the fine stuff on processors owning the fine data.
   //
-  BoxArray crse_gphi_fine_BA(sim->boxArray(level + 1).size());
+  amrex::BoxArray crse_gphi_fine_BA(sim->boxArray(level + 1).size());
 
   IntVect fine_ratio = sim->refRatio(level);
 
@@ -524,7 +498,7 @@ void Gravity<T>::average_fine_ec_onto_crse_ec(int level, int is_new) {
 
   Vector<std::unique_ptr<MultiFab>> crse_gphi_fine(AMREX_SPACEDIM);
   for (int n = 0; n < AMREX_SPACEDIM; ++n) {
-    BoxArray eba = crse_gphi_fine_BA;
+    amrex::BoxArray eba = crse_gphi_fine_BA;
     eba.surroundingNodes(n);
     crse_gphi_fine[n] =
         std::make_unique<MultiFab>(eba, sim->DistributionMap(level + 1), 1, 0);
@@ -693,11 +667,11 @@ auto Gravity<T>::actual_solve_with_mlmg(
     dmv.push_back(rhs[ilev]->DistributionMap());
   }
 
-  LPInfo info;
+  amrex::LPInfo info;
   info.setAgglomeration(gravity::mlmg_agglomeration != 0);
   info.setConsolidation(gravity::mlmg_consolidation != 0);
 
-  MLPoisson mlpoisson(gmv, bav, dmv, info);
+  amrex::MLPoisson mlpoisson(gmv, bav, dmv, info);
 
   // BC
   mlpoisson.setDomainBC(mlmg_lobc, mlmg_hibc);
@@ -709,7 +683,7 @@ auto Gravity<T>::actual_solve_with_mlmg(
     mlpoisson.setLevelBC(ilev, phi[ilev]);
   }
 
-  MLMG mlmg(mlpoisson);
+  amrex::MLMG mlmg(mlpoisson);
   mlmg.setVerbose(gravity::verbose -
                   1); // With normal verbosity we don't want MLMG information
   if (crse_level == 0) {
