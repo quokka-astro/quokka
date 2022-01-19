@@ -10,11 +10,13 @@
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_Config.H"
+#include "AMReX_FabArray.H"
+#include "AMReX_MultiFab.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
-
 #include "AMReX_SPACE.H"
+
 #include "Gravity.hpp"
 #include "RadhydroSimulation.hpp"
 #include "hydro_system.hpp"
@@ -195,14 +197,23 @@ auto problem_main() -> int {
   grav.multilevel_solve_for_new_phi(0, sim.finestLevel());
   grav.test_composite_phi(0);
 
+  // copy phi_new -> phi_old
+  for (int ilev = 0; ilev <= sim.finestLevel(); ++ilev) {
+    amrex::MultiFab::Copy(grav.phi_old_[ilev], grav.phi_new_[ilev], 0, 0, 1, 1);
+    for (int n = 0; n < AMREX_SPACEDIM; ++n) {
+      amrex::MultiFab::Copy(*grav.grad_phi_prev[ilev][n],
+                            *grav.grad_phi_curr[ilev][n], 0, 0, 1, 1);
+    }
+  }
+
   // test single-level solves
-  // N.B.: the residuals printed here do not make sense...
+  // N.B.: the residuals printed here do not make sense when finestLevel() > 1...
   for (int i = 0; i <= sim.finestLevel(); ++i) {
     amrex::Print() << "--- Doing single-level solve for l = " << i << " ---\n";
 
-    amrex::Print() << "---- Old-time solve for l = " << i << " ---\n";
+    amrex::Print() << "\n---- Old-time solve for l = " << i << " ---\n";
     grav.construct_old_gravity(0., i);
-    amrex::Print() << "---- New-time solve for l = " << i << " ---\n";
+    amrex::Print() << "\n---- New-time solve for l = " << i << " ---\n";
     grav.construct_new_gravity(0., i);
   }
 
@@ -210,8 +221,10 @@ auto problem_main() -> int {
   int ncomp = 1;
   int nghost = 0;
   int status = 0;
-  const double err_tol = 1.0e-4; // for 2nd-order discretization, 64^3 base grid, order-16 multipole BC
+  const double err_tol = 1.0e-4; // for 2nd-order discretization, 64^3 base
+                                 // grid, order-16 multipole BC
 
+  amrex::Print() << "\n";
   for (int ilev = 0; ilev <= sim.finestLevel(); ++ilev) {
     // compute exact solution on level ilev
     auto ba = sim.boxArray(ilev);

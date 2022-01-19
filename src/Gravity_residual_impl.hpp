@@ -48,6 +48,7 @@ template <typename T> void Gravity<T>::test_level_grad_phi_prev(int level) {
     Rhs.plus(-mass_offset, 0, 1, 0);
   }
 
+  AMREX_ALWAYS_ASSERT(Ggravity != 0.);
   Rhs.mult(Ggravity);
 
   if (gravity::verbose > 1) {
@@ -93,6 +94,7 @@ template <typename T> void Gravity<T>::test_level_grad_phi_curr(int level) {
     Rhs.plus(-mass_offset, 0, 1, 0);
   }
 
+  AMREX_ALWAYS_ASSERT(Ggravity != 0.);
   Rhs.mult(Ggravity);
 
   if (gravity::verbose > 1) {
@@ -133,6 +135,7 @@ template <typename T> void Gravity<T>::test_composite_phi(int crse_level) {
   Vector<std::unique_ptr<MultiFab>> phi(nlevels);
   Vector<std::unique_ptr<MultiFab>> rhs(nlevels);
   Vector<std::unique_ptr<MultiFab>> res(nlevels);
+
   for (int ilev = 0; ilev < nlevels; ++ilev) {
     int amr_lev = crse_level + ilev;
 

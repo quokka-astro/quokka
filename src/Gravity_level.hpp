@@ -21,18 +21,22 @@ void Gravity<T>::construct_old_gravity(Real time, int level) {
 
   // Do level solve at beginning of time step in order to compute the
   // difference between the multilevel and the single level solutions.
-  // Note that we don't need to do this solve for single-level runs,
-  // since the solution at the end of the last timestep won't have changed.
+  // [Note that we don't need to do this solve for single-level runs, since
+  //  there is no difference between the composite and level solves in this
+  //  case.]
 
-  if (get_gravity_type() == GravityMode::Poisson) {
+  if (get_gravity_type() == GravityMode::Poisson && sim->finestLevel() > 0) {
 
     // Create a copy of the current (composite) data on this level.
 
     MultiFab comp_phi;
     Vector<std::unique_ptr<MultiFab>> comp_gphi(AMREX_SPACEDIM);
 
-    if (NoComposite() != 1 && (DoCompositeCorrection() != 0) &&
-        level <= get_max_solve_level()) {
+    // When level == sim->finestLevel(), the composite correction is zero, so
+    // only compute it for lower levels
+
+    if (NoComposite() != 1 && DoCompositeCorrection() != 0 &&
+        level < sim->finestLevel() && level <= get_max_solve_level()) {
 
       comp_phi.define(phi_old.boxArray(), phi_old.DistributionMap(),
                       phi_old.nComp(), phi_old.nGrow());
@@ -42,28 +46,31 @@ void Gravity<T>::construct_old_gravity(Real time, int level) {
         comp_gphi[n] = std::make_unique<MultiFab>(
             amrex::convert(sim->boxArray(level),
                            IntVect::TheDimensionVector(n)),
-            sim->DistributionMap(level), 1, 0);
-        MultiFab::Copy(*comp_gphi[n], *grad_phi_prev[level][n], 0, 0, 1, 0);
+            sim->DistributionMap(level), 1, 1);
+        MultiFab::Copy(*comp_gphi[n], *grad_phi_prev[level][n], 0, 0, 1, 1);
       }
     }
 
     if (gravity::verbose != 0) {
-      amrex::Print() << "... old-time level Poisson gravity solve at level "
-                     << level << std::endl
-                     << std::endl;
+      amrex::Print()
+          << "... doing old-time level Poisson gravity solve at level " << level
+          << std::endl
+          << std::endl;
     }
 
     int is_new = 0;
 
-    // If we are doing composite solves, then this is a placeholder solve
-    // to get the difference between the composite and level solutions. If
-    // we are only doing level solves, then this is the main result.
+    // This is a placeholder solve to get the difference between the composite
+    // and level solutions.
 
     solve_for_phi(level, phi_old, amrex::GetVecOfPtrs(grad_phi_prev[level]),
                   is_new);
 
-    if (NoComposite() != 1 && (DoCompositeCorrection() != 0) &&
-        level <= get_max_solve_level()) {
+    // When level == sim->finestLevel(), the composite correction is zero, so
+    // only compute it for lower levels
+
+    if (NoComposite() != 1 && DoCompositeCorrection() != 0 &&
+        level < sim->finestLevel() && level <= get_max_solve_level()) {
 
       // Subtract the level solve from the composite solution.
 
@@ -71,31 +78,28 @@ void Gravity<T>::construct_old_gravity(Real time, int level) {
           level, comp_phi, amrex::GetVecOfPtrs(comp_gphi), comp_minus_level_phi,
           comp_minus_level_grad_phi);
 
-      // Copy the composite data back. This way the forcing
-      // uses the most accurate data we have.
+      // Copy the composite data back. This way the forcing (prior to the hydro
+      // solve) uses the most accurate data we have.
 
       MultiFab::Copy(phi_old, comp_phi, 0, 0, phi_old.nComp(), phi_old.nGrow());
 
       for (int n = 0; n < AMREX_SPACEDIM; ++n) {
-        MultiFab::Copy(*grad_phi_prev[level][n], *comp_gphi[n], 0, 0, 1, 0);
+        MultiFab::Copy(*grad_phi_prev[level][n], *comp_gphi[n], 0, 0, 1, 1);
       }
     }
 
     if (test_results_of_solves() == 1) {
 
       if (gravity::verbose != 0) {
-        amrex::Print() << " " << '\n';
         amrex::Print()
-            << "... testing grad_phi_curr after doing single level solve "
-            << '\n';
+            << "... testing grad_phi_prev (with composite solution)\n";
       }
 
       test_level_grad_phi_prev(level);
     }
   }
 
-  // Define the old gravity vector.
-
+  // Set the old-time gravity vector
   get_old_grav_vector(level, grav_old, time);
 }
 
@@ -124,18 +128,19 @@ void Gravity<T>::construct_new_gravity(Real time, int level) {
 
     MultiFab::Copy(phi_new, phi_old, 0, 0, 1, phi_new.nGrow());
 
-    // Subtract off the (composite - level) contribution for the purposes
-    // of the level solve. We'll add it back later.
+    // Subtract off the (composite - level) contribution
 
-    if (NoComposite() != 1 && (DoCompositeCorrection() != 0) &&
-        level <= get_max_solve_level()) {
+    if (NoComposite() != 1 && DoCompositeCorrection() != 0 &&
+        level < sim->finestLevel() && level <= get_max_solve_level()) {
+      // When level == sim->finestLevel(), the composite correction is zero, so
+      // only compute it for lower levels, if they exist.
       phi_new.minus(*comp_minus_level_phi, 0, 1, 0);
     }
 
     if (gravity::verbose != 0) {
-      amrex::Print() << "... new-time level Poisson gravity solve at level "
-                     << level << std::endl
-                     << std::endl;
+      amrex::Print()
+          << "... doing new-time level Poisson gravity solve at level " << level
+          << std::endl;
     }
 
     // Do the level solve
@@ -145,39 +150,31 @@ void Gravity<T>::construct_new_gravity(Real time, int level) {
     solve_for_phi(level, phi_new, amrex::GetVecOfPtrs(get_grad_phi_curr(level)),
                   is_new);
 
-    if (NoComposite() != 1 && DoCompositeCorrection() == 1 &&
-        level <= get_max_solve_level()) {
-
-      if (test_results_of_solves() == 1) {
-
-        if (gravity::verbose != 0) {
-          amrex::Print() << " " << '\n';
-          amrex::Print() << "... testing grad_phi_curr before adding "
-                            "comp_minus_level_grad_phi "
-                         << '\n';
-        }
-
-        test_level_grad_phi_curr(level);
+    if (test_results_of_solves() == 1) {
+      if (gravity::verbose != 0) {
+        amrex::Print() << "... testing grad_phi_curr\n";
       }
+      test_level_grad_phi_curr(level);
+    }
 
-      // Add back the (composite - level) contribution. This ensures that
-      // if we are not doing a sync solve, then we still get the difference
-      // between the composite and level solves added to the force we
-      // calculate, so it is slightly more accurate than it would have been.
+    // [When level == sim->finestLevel(), the composite correction is zero, so
+    // only compute it for lower levels, if they exist.]
+    if (NoComposite() != 1 && DoCompositeCorrection() != 0 &&
+        level < sim->finestLevel() && level <= get_max_solve_level()) {
 
+      // Add back the (composite - level) contribution.
       phi_new.plus(*comp_minus_level_phi, 0, 1, 0);
+
       for (int n = 0; n < AMREX_SPACEDIM; ++n) {
         get_grad_phi_curr(level)[n]->plus(*comp_minus_level_grad_phi[n], 0, 1,
-                                          0);
+                                          1);
       }
 
       if (test_results_of_solves() == 1) {
 
         if (gravity::verbose != 0) {
-          amrex::Print() << " " << '\n';
-          amrex::Print() << "... testing grad_phi_curr after adding "
-                            "comp_minus_level_grad_phi "
-                         << '\n';
+          amrex::Print()
+              << "... testing grad_phi_curr after composite correction\n";
         }
 
         test_level_grad_phi_curr(level);
@@ -185,30 +182,29 @@ void Gravity<T>::construct_new_gravity(Real time, int level) {
     }
   }
 
-  // Define new gravity vector.
-
+  // Set new-time gravity vector
   get_new_grav_vector(level, grav_new, time);
 
   if (get_gravity_type() == GravityMode::Poisson &&
-      level <= get_max_solve_level()) {
+      level < sim->finestLevel() && level <= get_max_solve_level()) {
 
     if (NoComposite() != 1 && DoCompositeCorrection() == 1) {
 
-      // Now that we have calculated the force, if we are going to do a sync
-      // solve then subtract off the (composite - level) contribution, as it
-      // interferes with the sync solve.
-
       if (NoSync() == 0) {
+        // Now that we have calculated the force, if we are going to do a sync
+        // solve then subtract off the (composite - level) contribution, as it
+        // interferes with the sync solve.
 
         phi_new.minus(*comp_minus_level_phi, 0, 1, 0);
 
         for (int n = 0; n < AMREX_SPACEDIM; ++n) {
           get_grad_phi_curr(level)[n]->minus(*comp_minus_level_grad_phi[n], 0,
-                                             1, 0);
+                                             1, 1);
         }
       }
 
-      // In any event we can now clear this memory, as we no longer need it.
+      // Clear the pointers for the correction MultiFabs (deallocated via
+      // unique_ptr)
       comp_minus_level_phi.reset();
       comp_minus_level_grad_phi.clear();
     }
@@ -223,12 +219,13 @@ void Gravity<T>::create_comp_minus_level_grad_phi(
   BL_PROFILE("Gravity<T>::create_comp_minus_level_grad_phi()");
 
   if (gravity::verbose > 1) {
-    amrex::Print() << "\n";
-    amrex::Print() << "... creating MultiFab for difference between level and "
-                      "composite solves at level "
-                   << level << "\n";
-    amrex::Print() << "\n";
+    amrex::Print()
+        << "... creating MultiFabs for differences between level and "
+           "composite solves at level "
+        << level << "\n";
   }
+
+  // create comp_minus_level_phi
 
   comp_minus_level_phi = std::make_unique<MultiFab>(
       sim->boxArray(level), sim->DistributionMap(level), 1, 0);
@@ -236,13 +233,17 @@ void Gravity<T>::create_comp_minus_level_grad_phi(
   MultiFab::Copy(*comp_minus_level_phi, comp_phi, 0, 0, 1, 0);
   comp_minus_level_phi->minus(phi_old_[level], 0, 1, 0);
 
+  // create comp_minus_level_grad_phi
+
   comp_minus_level_grad_phi.resize(AMREX_SPACEDIM);
+
   for (int n = 0; n < AMREX_SPACEDIM; ++n) {
     comp_minus_level_grad_phi[n] = std::make_unique<MultiFab>(
         amrex::convert(sim->boxArray(level), IntVect::TheDimensionVector(n)),
-        sim->DistributionMap(level), 1, 0);
-    MultiFab::Copy(*comp_minus_level_grad_phi[n], *comp_gphi[n], 0, 0, 1, 0);
-    comp_minus_level_grad_phi[n]->minus(*grad_phi_prev[level][n], 0, 1, 0);
+        sim->DistributionMap(level), 1, 1);
+
+    MultiFab::Copy(*comp_minus_level_grad_phi[n], *comp_gphi[n], 0, 0, 1, 1);
+    comp_minus_level_grad_phi[n]->minus(*grad_phi_prev[level][n], 0, 1, 1);
   }
 }
 
@@ -251,52 +252,23 @@ void Gravity<T>::get_old_grav_vector(int level, MultiFab &grav_vector,
                                      Real time) {
   BL_PROFILE("Gravity<T>::get_old_grav_vector()");
 
-  int ng = grav_vector.nGrow();
-
-  // Fill data from the level below if we're not doing a solve on this level.
+  // Fill data from the level below if we're not doing a solve on this level
 
   if (level > gravity::max_solve_level) {
     sim->FillCoarsePatch(level, time, grav_vector, g_old_, g_new_, 0, 3);
     return;
   }
 
-  // Note that grav_vector coming into this routine always has three components.
-  // So we'll define a temporary MultiFab with AMREX_SPACEDIM dimensions.
-  // Then at the end we'll copy in all AMREX_SPACEDIM dimensions from this into
-  // the outgoing grav_vector, leaving any higher dimensions unchanged.
+  if (gravity::gravity_type == GravityMode::Poisson) {
 
-  // TODO(ben): is this actually necessary for (constant-grav) 2D problems?
-
-  MultiFab grav(sim->boxArray(level), sim->DistributionMap(level),
-                AMREX_SPACEDIM, ng);
-  grav.setVal(0.0, ng);
-
-  if (gravity::gravity_type == GravityMode::Constant) {
-
-    // Set to constant value in the AMREX_SPACEDIM direction and zero in all
-    // others.
-
-    grav.setVal(gravity::const_grav, AMREX_SPACEDIM - 1, 1, ng);
-
-  } else if (gravity::gravity_type == GravityMode::Poisson) {
-
+    int ng = grav_vector.nGrow();
     const Geometry &geom = sim->Geom(level);
     amrex::average_face_to_cellcenter(
-        grav, amrex::GetVecOfConstPtrs(grad_phi_prev[level]), geom);
-    grav.mult(-1.0, ng); // g = - grad(phi)
+        grav_vector, amrex::GetVecOfConstPtrs(grad_phi_prev[level]), geom);
+    grav_vector.mult(-1.0, ng); // g = - grad(phi)
 
   } else {
     amrex::Abort("Unknown gravity_type in get_old_grav_vector");
-  }
-
-  // Do the copy to the output vector.
-
-  for (int dir = 0; dir < 3; dir++) {
-    if (dir < AMREX_SPACEDIM) {
-      MultiFab::Copy(grav_vector, grav, dir, dir, 1, ng);
-    } else {
-      grav_vector.setVal(0., dir, 1, ng);
-    }
   }
 }
 
@@ -305,49 +277,22 @@ void Gravity<T>::get_new_grav_vector(int level, MultiFab &grav_vector,
                                      Real time) {
   BL_PROFILE("Gravity<T>::get_new_grav_vector()");
 
-  int ng = grav_vector.nGrow();
-
-  // Fill data from the level below if we're not doing a solve on this level.
+  // Fill data from the level below if we're not doing a solve on this level
 
   if (level > gravity::max_solve_level) {
     sim->FillCoarsePatch(level, time, grav_vector, g_old_, g_new_, 0, 3);
     return;
   }
 
-  // Note that grav_vector coming into this routine always has three components.
-  // So we'll define a temporary MultiFab with AMREX_SPACEDIM dimensions.
-  // Then at the end we'll copy in all AMREX_SPACEDIM dimensions from this into
-  // the outgoing grav_vector, leaving any higher dimensions unchanged.
+  if (gravity::gravity_type == GravityMode::Poisson) {
 
-  // TODO(ben): is this actually necessary for (constant-grav) 2D problems?
-
-  MultiFab grav(sim->boxArray(level), sim->DistributionMap(level),
-                AMREX_SPACEDIM, ng);
-  grav.setVal(0.0, ng);
-
-  if (gravity::gravity_type == GravityMode::Constant) {
-
-    // Set to constant value in the AMREX_SPACEDIM direction
-    grav.setVal(gravity::const_grav, AMREX_SPACEDIM - 1, 1, ng);
-
-  } else if (gravity::gravity_type == GravityMode::Poisson) {
-
+    int ng = grav_vector.nGrow();
     const Geometry &geom = sim->Geom(level);
     amrex::average_face_to_cellcenter(
-        grav, amrex::GetVecOfConstPtrs(grad_phi_curr[level]), geom);
-    grav.mult(-1.0, ng); // g = - grad(phi)
+        grav_vector, amrex::GetVecOfConstPtrs(grad_phi_curr[level]), geom);
+    grav_vector.mult(-1.0, ng); // g = - grad(phi)
 
   } else {
     amrex::Abort("Unknown gravity_type in get_new_grav_vector");
-  }
-
-  // Do the copy to the output vector.
-
-  for (int dir = 0; dir < 3; dir++) {
-    if (dir < AMREX_SPACEDIM) {
-      MultiFab::Copy(grav_vector, grav, dir, dir, 1, ng);
-    } else {
-      grav_vector.setVal(0., dir, 1, ng);
-    }
   }
 }
