@@ -46,8 +46,8 @@ void Gravity<T>::construct_old_gravity(Real time, int level) {
         comp_gphi[n] = std::make_unique<MultiFab>(
             amrex::convert(sim->boxArray(level),
                            IntVect::TheDimensionVector(n)),
-            sim->DistributionMap(level), 1, 1);
-        MultiFab::Copy(*comp_gphi[n], *grad_phi_prev[level][n], 0, 0, 1, 1);
+            sim->DistributionMap(level), 1, 0);
+        MultiFab::Copy(*comp_gphi[n], *grad_phi_prev[level][n], 0, 0, 1, 0);
       }
     }
 
@@ -84,7 +84,7 @@ void Gravity<T>::construct_old_gravity(Real time, int level) {
       MultiFab::Copy(phi_old, comp_phi, 0, 0, phi_old.nComp(), phi_old.nGrow());
 
       for (int n = 0; n < AMREX_SPACEDIM; ++n) {
-        MultiFab::Copy(*grad_phi_prev[level][n], *comp_gphi[n], 0, 0, 1, 1);
+        MultiFab::Copy(*grad_phi_prev[level][n], *comp_gphi[n], 0, 0, 1, 0);
       }
     }
 
@@ -167,7 +167,7 @@ void Gravity<T>::construct_new_gravity(Real time, int level) {
 
       for (int n = 0; n < AMREX_SPACEDIM; ++n) {
         get_grad_phi_curr(level)[n]->plus(*comp_minus_level_grad_phi[n], 0, 1,
-                                          1);
+                                          0);
       }
 
       if (test_results_of_solves() == 1) {
@@ -199,7 +199,7 @@ void Gravity<T>::construct_new_gravity(Real time, int level) {
 
         for (int n = 0; n < AMREX_SPACEDIM; ++n) {
           get_grad_phi_curr(level)[n]->minus(*comp_minus_level_grad_phi[n], 0,
-                                             1, 1);
+                                             1, 0);
         }
       }
 
@@ -240,10 +240,10 @@ void Gravity<T>::create_comp_minus_level_grad_phi(
   for (int n = 0; n < AMREX_SPACEDIM; ++n) {
     comp_minus_level_grad_phi[n] = std::make_unique<MultiFab>(
         amrex::convert(sim->boxArray(level), IntVect::TheDimensionVector(n)),
-        sim->DistributionMap(level), 1, 1);
+        sim->DistributionMap(level), 1, 0);
 
-    MultiFab::Copy(*comp_minus_level_grad_phi[n], *comp_gphi[n], 0, 0, 1, 1);
-    comp_minus_level_grad_phi[n]->minus(*grad_phi_prev[level][n], 0, 1, 1);
+    MultiFab::Copy(*comp_minus_level_grad_phi[n], *comp_gphi[n], 0, 0, 1, 0);
+    comp_minus_level_grad_phi[n]->minus(*grad_phi_prev[level][n], 0, 1, 0);
   }
 }
 

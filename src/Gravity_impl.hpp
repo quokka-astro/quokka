@@ -178,7 +178,7 @@ template <typename T> void Gravity<T>::install_level(int level) {
     for (int n = 0; n < AMREX_SPACEDIM; ++n) {
       grad_phi_prev[level][n] = std::make_unique<MultiFab>(
           amrex::convert(sim->boxArray(level), IntVect::TheDimensionVector(n)),
-          dm, 1, 1);
+          dm, 1, 0);
       grad_phi_prev[level][n]->setVal(0.);
     }
 
@@ -186,7 +186,7 @@ template <typename T> void Gravity<T>::install_level(int level) {
     for (int n = 0; n < AMREX_SPACEDIM; ++n) {
       grad_phi_curr[level][n] = std::make_unique<MultiFab>(
           amrex::convert(sim->boxArray(level), IntVect::TheDimensionVector(n)),
-          dm, 1, 1);
+          dm, 1, 0);
       grad_phi_curr[level][n]->setVal(0.);
     }
   }

@@ -202,7 +202,7 @@ auto problem_main() -> int {
     amrex::MultiFab::Copy(grav.phi_old_[ilev], grav.phi_new_[ilev], 0, 0, 1, 1);
     for (int n = 0; n < AMREX_SPACEDIM; ++n) {
       amrex::MultiFab::Copy(*grav.grad_phi_prev[ilev][n],
-                            *grav.grad_phi_curr[ilev][n], 0, 0, 1, 1);
+                            *grav.grad_phi_curr[ilev][n], 0, 0, 1, 0);
     }
   }
 
