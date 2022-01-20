@@ -62,6 +62,7 @@ template <typename T> void Gravity<T>::test_level_grad_phi_prev(int level) {
 
   for (MFIter mfi(Rhs); mfi.isValid(); ++mfi) {
     const Box &bx = mfi.tilebox();
+    // does this make sense if the box is covered by a fine grid?
 
     test_residual(bx, Rhs.array(mfi), (*grad_phi_prev[level][0]).array(mfi),
                   (*grad_phi_prev[level][1]).array(mfi),
@@ -161,8 +162,8 @@ template <typename T> void Gravity<T>::test_composite_phi(int crse_level) {
 
   // Average residual from fine to coarse level before printing the norm
   for (int amr_lev = finest_level_local - 1; amr_lev >= 0; --amr_lev) {
-    const IntVect &ratio = sim->refRatio(amr_lev);
     int ilev = amr_lev - crse_level;
+    const IntVect &ratio = sim->refRatio(ilev);
     amrex::average_down(*res[ilev + 1], *res[ilev], 0, 1, ratio);
   }
 

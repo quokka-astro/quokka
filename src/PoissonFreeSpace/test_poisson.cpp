@@ -199,11 +199,19 @@ auto problem_main() -> int {
 
   // copy phi_new -> phi_old
   for (int ilev = 0; ilev <= sim.finestLevel(); ++ilev) {
+    amrex::MultiFab::Copy(*sim.getStateOld(ilev), *sim.getStateNew(ilev),
+                          HydroSystem<PoissonProblem>::density_index, 0, 1, 0); // how did this get screwed up??
     amrex::MultiFab::Copy(grav.phi_old_[ilev], grav.phi_new_[ilev], 0, 0, 1, 1);
     for (int n = 0; n < AMREX_SPACEDIM; ++n) {
       amrex::MultiFab::Copy(*grav.grad_phi_prev[ilev][n],
                             *grav.grad_phi_curr[ilev][n], 0, 0, 1, 0);
     }
+  }
+
+  for (int i = 0; i <= sim.finestLevel(); ++i) {
+    grav.test_level_grad_phi_prev(
+        i); // on a given level, these should be identical!
+    grav.test_level_grad_phi_curr(i);
   }
 
   // test single-level solves

@@ -52,10 +52,9 @@ void Gravity<T>::construct_old_gravity(Real time, int level) {
     }
 
     if (gravity::verbose != 0) {
-      amrex::Print()
-          << "... doing old-time level Poisson gravity solve at level " << level
-          << std::endl
-          << std::endl;
+      amrex::Print() << "... doing (old-time) level placeholder solve at level "
+                     << level << std::endl
+                     << std::endl;
     }
 
     int is_new = 0;
@@ -66,36 +65,54 @@ void Gravity<T>::construct_old_gravity(Real time, int level) {
     solve_for_phi(level, phi_old, amrex::GetVecOfPtrs(grad_phi_prev[level]),
                   is_new);
 
+    // phi_old and grav_phi_prev now hold the level solution, which ignores the
+    // effects of finer levels on the current level, so we *only* use it to
+    // compute the differences between the composite (correct) solve and the
+    // level placeholder solve, which we apply as a correction later
+
+    if (test_results_of_solves() == 1) {
+
+      if (gravity::verbose != 0) {
+        amrex::Print() << "... testing grad_phi_prev (with level solution)\n";
+      }
+
+      test_level_grad_phi_prev(level);
+    }
+
     // When level == sim->finestLevel(), the composite correction is zero, so
-    // only compute it for lower levels
+    // only compute it when level < finestLevel.
 
     if (NoComposite() != 1 && DoCompositeCorrection() != 0 &&
         level < sim->finestLevel() && level <= get_max_solve_level()) {
 
-      // Subtract the level solve from the composite solution.
+      // Subtract the level (placeholder) solve from the composite solution.
 
       create_comp_minus_level_grad_phi(
           level, comp_phi, amrex::GetVecOfPtrs(comp_gphi), comp_minus_level_phi,
           comp_minus_level_grad_phi);
 
-      // Copy the composite data back. This way the forcing (prior to the hydro
-      // solve) uses the most accurate data we have.
+      // Copy the composite data back to phi_old and grad_phi_prev. This way the
+      // source terms (added prior to the hydro solve) use the most accurate
+      // data.
 
       MultiFab::Copy(phi_old, comp_phi, 0, 0, phi_old.nComp(), phi_old.nGrow());
 
       for (int n = 0; n < AMREX_SPACEDIM; ++n) {
         MultiFab::Copy(*grad_phi_prev[level][n], *comp_gphi[n], 0, 0, 1, 0);
       }
-    }
 
-    if (test_results_of_solves() == 1) {
+      // This residual calculation includes the part of the coarse level that is
+      // covered by finer grids, so it should not be expected to agree to be
+      // within the solve tolerance!
+      if (test_results_of_solves() == 1) {
 
-      if (gravity::verbose != 0) {
-        amrex::Print()
-            << "... testing grad_phi_prev (with composite solution)\n";
+        if (gravity::verbose != 0) {
+          amrex::Print()
+              << "... testing grad_phi_prev (with composite solution)\n";
+        }
+
+        test_level_grad_phi_prev(level);
       }
-
-      test_level_grad_phi_prev(level);
     }
   }
 
@@ -128,7 +145,9 @@ void Gravity<T>::construct_new_gravity(Real time, int level) {
 
     MultiFab::Copy(phi_new, phi_old, 0, 0, 1, phi_new.nGrow());
 
-    // Subtract off the (composite - level) contribution
+    // Subtract off the (composite - level) contribution that was computed in
+    // construct_old_gravity() in order to obtain a more accurate initial guess
+    // for the (real) level solve
 
     if (NoComposite() != 1 && DoCompositeCorrection() != 0 &&
         level < sim->finestLevel() && level <= get_max_solve_level()) {
@@ -143,7 +162,8 @@ void Gravity<T>::construct_new_gravity(Real time, int level) {
           << std::endl;
     }
 
-    // Do the level solve
+    // Do the (real) level solve (since in general the density has changed over
+    // the timestep due to hydro)
 
     int is_new = 1;
 
@@ -152,7 +172,7 @@ void Gravity<T>::construct_new_gravity(Real time, int level) {
 
     if (test_results_of_solves() == 1) {
       if (gravity::verbose != 0) {
-        amrex::Print() << "... testing grad_phi_curr\n";
+        amrex::Print() << "... testing grad_phi_curr (level solution)\n";
       }
       test_level_grad_phi_curr(level);
     }
@@ -174,7 +194,7 @@ void Gravity<T>::construct_new_gravity(Real time, int level) {
 
         if (gravity::verbose != 0) {
           amrex::Print()
-              << "... testing grad_phi_curr after composite correction\n";
+              << "... testing grad_phi_curr (with composite correction)\n";
         }
 
         test_level_grad_phi_curr(level);
@@ -220,9 +240,7 @@ void Gravity<T>::create_comp_minus_level_grad_phi(
 
   if (gravity::verbose > 1) {
     amrex::Print()
-        << "... creating MultiFabs for differences between level and "
-           "composite solves at level "
-        << level << "\n";
+        << "... saving the difference between composite and level solves\n";
   }
 
   // create comp_minus_level_phi

@@ -16,6 +16,7 @@
 /// geometry problems.
 ///
 
+#include "AMReX_BLassert.H"
 #include "Gravity.hpp"
 
 template <typename T> Real Gravity<T>::mass_offset = 0.0;
@@ -312,6 +313,8 @@ void Gravity<T>::solve_for_phi(int level, MultiFab &phi,
   }
 }
 
+// This is used to obtain boundary conditions at coarse-fine interfaces for
+// level solves
 template <typename T>
 void Gravity<T>::GetCrsePhi(int level, MultiFab &phi_crse, Real time) {
   BL_PROFILE("Gravity<T>::GetCrsePhi()");
@@ -321,6 +324,7 @@ void Gravity<T>::GetCrsePhi(int level, MultiFab &phi_crse, Real time) {
   const Real t_old = sim->tOld_[level - 1];
   const Real t_new = sim->tNew_[level - 1];
   Real alpha = (time - t_old) / (t_new - t_old);
+  AMREX_ASSERT(alpha >= 0.);
   Real omalpha = 1.0 - alpha;
 
   MultiFab const &phi_old = phi_old_[level - 1];
@@ -350,7 +354,7 @@ void Gravity<T>::multilevel_solve_for_new_phi(int level, int finest_level_in) {
     for (int n = 0; n < AMREX_SPACEDIM; ++n) {
       grad_phi_curr[lev][n] = std::make_unique<MultiFab>(
           amrex::convert(sim->boxArray(lev), IntVect::TheDimensionVector(n)),
-          sim->DistributionMap(lev), 1, 1);
+          sim->DistributionMap(lev), 1, 0);
     }
   }
 
