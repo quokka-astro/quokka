@@ -22,7 +22,6 @@
 #include "hydro_system.hpp"
 
 #include "test_poisson.hpp"
-#include <memory>
 
 using Real = amrex::Real;
 
@@ -210,23 +209,23 @@ auto problem_main() -> int {
     }
   }
 
-  for (int i = 0; i <= sim.finestLevel(); ++i) {
-    grav.test_level_grad_phi_prev(i);
-    grav.test_level_grad_phi_curr(i);
-  }
-
   // do single-level solves
-  for (int i = 0; i <= sim.finestLevel(); ++i) {
-    amrex::Print() << "--- Doing single-level solve for l = " << i << " ---\n";
+  bool do_level_solves = true;
+  if (do_level_solves) {
+    for (int i = 0; i <= sim.finestLevel(); ++i) {
+      amrex::Print() << "--- Doing single-level solve for l = " << i
+                     << " ---\n";
 
-    amrex::Print() << "\n---- Old-time solve for l = " << i << " ---\n";
-    grav.construct_old_gravity(0., i);
-    amrex::Print() << "\n---- New-time solve for l = " << i << " ---\n";
-    grav.construct_new_gravity(0., i);
+      amrex::Print() << "\n---- Old-time solve for l = " << i << " ---\n";
+      grav.construct_old_gravity(0., i);
+      amrex::Print() << "\n---- New-time solve for l = " << i << " ---\n";
+      grav.construct_new_gravity(0., i);
 
-    amrex::Print() << "\n---Testing solutions again...\n";
-    grav.test_level_grad_phi_prev(i);
-    grav.test_level_grad_phi_curr(i);
+      amrex::Print() << "\n---Testing solutions again...\n";
+      AMREX_ALWAYS_ASSERT(gravity::no_sync == 1);
+      grav.test_level_grad_phi_prev(i);
+      grav.test_level_grad_phi_curr(i);
+    }
   }
 
   // compare to exact solution for phi

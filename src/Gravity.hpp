@@ -79,7 +79,7 @@ const int lnum = 16;
 const int max_solve_level = 10;
 
 const int verbose = 2;
-const int no_sync = 0;
+const int no_sync = 1;
 const int no_composite = 0;
 const int do_composite_phi_correction = 1;
 
