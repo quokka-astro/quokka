@@ -644,8 +644,7 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(int level, amrex::Real ti
 	const int ncomp = ncomp_;
 	const int nghost = nghost_;
 
-	amrex::Print() << "Initializing level = " << level << std::endl;
-	AMREX_ASSERT(ba.ixType().cellCentered());
+	amrex::Print() << "Setting initial conditions at level = " << level << std::endl;
 
 	state_new_[level].define(ba, dm, ncomp, nghost);
 	state_old_[level].define(ba, dm, ncomp, nghost);

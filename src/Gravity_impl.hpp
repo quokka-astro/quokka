@@ -522,7 +522,6 @@ auto Gravity<T>::get_rhs(int crse_level, int nlevs, int is_new)
 
   for (int ilev = 0; ilev < nlevs; ++ilev) {
     int amr_lev = ilev + crse_level;
-    amrex::Print() << "creating rhs from amr_lev = " << amr_lev << std::endl;
 
     AMREX_ASSERT(sim->boxArray(amr_lev).ixType().cellCentered());
     rhs[ilev] = std::make_unique<MultiFab>(sim->boxArray(amr_lev),

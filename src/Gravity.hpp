@@ -37,7 +37,7 @@
 
 #include "simulation.hpp"
 
-#define GRAVITY_DEBUG
+//#define GRAVITY_DEBUG
 
 namespace C {
 // newton's gravitational constant taken from NIST's 2010 CODATA recommended
@@ -76,7 +76,7 @@ const amrex::Real const_grav = 0.0;
 const int lnum = 16;
 const int max_solve_level = 10;
 
-const int verbose = 2;
+const int verbose = 0;
 const int no_sync = 1;
 const int do_composite_phi_correction = 1;
 
@@ -543,7 +543,7 @@ using GradPhiPhysBCFunct = amrex::PhysBCFunctNoOp;
 #ifdef GRAVITY_DEBUG
 template <typename T> const int Gravity<T>::test_solves = 1;
 #else
-template <typename T> int Gravity<T>::test_solves = 0;
+template <typename T> const int Gravity<T>::test_solves = 0;
 #endif
 
 using GravityMode = gravity::GravityMode;
