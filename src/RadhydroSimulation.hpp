@@ -12,6 +12,7 @@
 #include <array>
 #include <climits>
 #include <limits>
+#include <memory>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -40,6 +41,7 @@
 
 #include "hydro_system.hpp"
 #include "radiation_system.hpp"
+#include "Gravity.hpp"
 #include "simulation.hpp"
 
 // Simulation class should be initialized only once per program (i.e., is a singleton)
@@ -68,6 +70,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	using AMRSimulation<problem_t>::DistributionMap;
 	using AMRSimulation<problem_t>::cellUpdates_;
 	using AMRSimulation<problem_t>::CountCells;
+	using AMRSimulation<problem_t>::coordCenter_;
 
 	std::vector<double> t_vec_;
 	std::vector<double> Trad_vec_;
@@ -93,11 +96,24 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
 
+	std::unique_ptr<Gravity<problem_t>> gravitySolver;
+
 	// member functions
 
 	explicit RadhydroSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions)
 	    : AMRSimulation<problem_t>(boundaryConditions,
-				       RadSystem<problem_t>::nvar_, ncompHyperbolic_)
+				       RadSystem<problem_t>::nvar_, ncompHyperbolic_),
+		  gravitySolver(nullptr)
+	{
+		componentNames_ = {"gasDensity",    "x-GasMomentum", "y-GasMomentum",
+				   "z-GasMomentum", "gasEnergy",     "radEnergy",
+				   "x-RadFlux",	    "y-RadFlux",     "z-RadFlux"};
+	}
+
+	RadhydroSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions, amrex::BCRec &gravityBC)
+	    : AMRSimulation<problem_t>(boundaryConditions,
+				       RadSystem<problem_t>::nvar_, ncompHyperbolic_),
+		  gravitySolver(std::make_unique<Gravity<problem_t>>(this, gravityBC, coordCenter_, HydroSystem<problem_t>::density_index))
 	{
 		componentNames_ = {"gasDensity",    "x-GasMomentum", "y-GasMomentum",
 				   "z-GasMomentum", "gasEnergy",     "radEnergy",
@@ -136,6 +152,10 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	void advanceHydroAtLevel(int lev, amrex::Real time, amrex::Real dt_lev,
 				 amrex::YAFluxRegister *fr_as_crse,
 				 amrex::YAFluxRegister *fr_as_fine);
+
+	// source terms
+	void addGravitySourceOld(int lev, amrex::Real time, amrex::Real dt_lev);
+	void addGravitySourceNew(int lev, amrex::Real time, amrex::Real dt_lev);
 
 	// radiation subcycle
 	void swapRadiationState(amrex::MultiFab &stateOld, amrex::MultiFab const &stateNew);
@@ -363,6 +383,9 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 	// since we are starting a new timestep, need to swap old and new state vectors
 	std::swap(state_old_[lev], state_new_[lev]);
 
+	// apply half-step gravity update at beginning of timestep
+	addGravitySourceOld(lev, time, dt_lev);
+
 	// check hydro states before update
 	CHECK_HYDRO_STATES(state_old_[lev]);
 
@@ -386,6 +409,9 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 	// check hydro states after radiation update
 	CHECK_HYDRO_STATES(state_new_[lev]);
 
+	// add half-step gravity update after timestep
+	addGravitySourceNew(lev, time, dt_lev);
+
 	// compute any operator-split terms here (user-defined)
 	computeAfterLevelAdvance(lev, time, dt_lev, iteration, ncycle);
 
@@ -395,6 +421,22 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 	// check state validity
 	AMREX_ASSERT(!state_new_[lev].contains_nan(0, state_new_[lev].nComp()));
 	AMREX_ASSERT(!state_new_[lev].contains_nan()); // check ghost zones
+}
+
+template <typename problem_t>
+void RadhydroSimulation<problem_t>::addGravitySourceOld(int lev, amrex::Real time,
+								 amrex::Real dt_lev)
+{
+	gravitySolver->construct_old_gravity(time, lev);
+	// TODO(benwibking): add sources to hydro state
+}
+
+template <typename problem_t>
+void RadhydroSimulation<problem_t>::addGravitySourceNew(int lev, amrex::Real time,
+								 amrex::Real dt_lev)
+{
+	gravitySolver->construct_new_gravity(time, lev);
+	// TODO(benwibking): add sources to hydro state
 }
 
 template <typename problem_t>
