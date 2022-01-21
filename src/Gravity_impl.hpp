@@ -332,7 +332,7 @@ void Gravity<T>::GetCrsePhi(int level, MultiFab &phi_crse, Real time) {
 
   phi_crse.clear();
   phi_crse.define(sim->boxArray(level - 1), sim->DistributionMap(level - 1), 1,
-                  1); // BUT NOTE we don't trust phi's ghost cells.
+                  1);
 
   MultiFab::LinComb(phi_crse, alpha, phi_new, 0, omalpha, phi_old, 0, 0, 1, 1);
 

@@ -22,6 +22,7 @@
 #include "hydro_system.hpp"
 
 #include "test_poisson.hpp"
+#include <memory>
 
 using Real = amrex::Real;
 
@@ -200,7 +201,8 @@ auto problem_main() -> int {
   // copy phi_new -> phi_old
   for (int ilev = 0; ilev <= sim.finestLevel(); ++ilev) {
     amrex::MultiFab::Copy(*sim.getStateOld(ilev), *sim.getStateNew(ilev),
-                          HydroSystem<PoissonProblem>::density_index, 0, 1, 0); // how did this get screwed up??
+                          HydroSystem<PoissonProblem>::density_index, 0, 1,
+                          0); // how did this get screwed up??
     amrex::MultiFab::Copy(grav.phi_old_[ilev], grav.phi_new_[ilev], 0, 0, 1, 1);
     for (int n = 0; n < AMREX_SPACEDIM; ++n) {
       amrex::MultiFab::Copy(*grav.grad_phi_prev[ilev][n],
@@ -209,13 +211,11 @@ auto problem_main() -> int {
   }
 
   for (int i = 0; i <= sim.finestLevel(); ++i) {
-    grav.test_level_grad_phi_prev(
-        i); // on a given level, these should be identical!
+    grav.test_level_grad_phi_prev(i);
     grav.test_level_grad_phi_curr(i);
   }
 
-  // test single-level solves
-  // N.B.: the residuals printed here do not make sense when finestLevel() > 1...
+  // do single-level solves
   for (int i = 0; i <= sim.finestLevel(); ++i) {
     amrex::Print() << "--- Doing single-level solve for l = " << i << " ---\n";
 
@@ -223,6 +223,10 @@ auto problem_main() -> int {
     grav.construct_old_gravity(0., i);
     amrex::Print() << "\n---- New-time solve for l = " << i << " ---\n";
     grav.construct_new_gravity(0., i);
+
+    amrex::Print() << "\n---Testing solutions again...\n";
+    grav.test_level_grad_phi_prev(i);
+    grav.test_level_grad_phi_curr(i);
   }
 
   // compare to exact solution for phi
@@ -233,27 +237,37 @@ auto problem_main() -> int {
                                  // grid, order-16 multipole BC
 
   amrex::Print() << "\n";
-  for (int ilev = 0; ilev <= sim.finestLevel(); ++ilev) {
-    // compute exact solution on level ilev
+
+  int nlevels = sim.finestLevel() + 1;
+  Vector<std::unique_ptr<MultiFab>> err(nlevels);
+  Vector<std::unique_ptr<MultiFab>> phi_exact(nlevels);
+
+  for (int ilev = 0; ilev < nlevels; ++ilev) {
     auto ba = sim.boxArray(ilev);
     auto dmap = sim.DistributionMap(ilev);
-    amrex::MultiFab phi_exact(ba, dmap, ncomp, nghost);
+    err[ilev] = std::make_unique<MultiFab>(ba, dmap, 1, 0);
+    phi_exact[ilev] = std::make_unique<MultiFab>(ba, dmap, 1, 0);
 
     amrex::Geometry &geom = sim.Geom(ilev);
     auto dx = geom.CellSizeArray();
     auto prob_lo = geom.ProbLoArray();
     auto prob_hi = geom.ProbHiArray();
-    computeReferenceSolution(phi_exact, dx, prob_lo, prob_hi);
+    computeReferenceSolution(*phi_exact[ilev], dx, prob_lo, prob_hi);
 
     // compute error norm on level i
-    amrex::MultiFab residual(ba, dmap, ncomp, nghost);
-    amrex::MultiFab &phi_new = grav.phi_new_[ilev];
+    amrex::MultiFab::Copy(*err[ilev], *phi_exact[ilev], 0, 0, ncomp, nghost);
+    err[ilev]->minus(grav.phi_new_[ilev], 0, ncomp, nghost);
+  }
 
-    amrex::MultiFab::Copy(residual, phi_exact, 0, 0, ncomp, nghost);
-    amrex::MultiFab::Saxpy(residual, -1., phi_new, 0, 0, ncomp, nghost);
+  // Average residual from fine to coarse level before printing the norm
+  for (int ilev = sim.finestLevel() - 1; ilev >= 0; --ilev) {
+    const IntVect &ratio = sim.refRatio(ilev);
+    amrex::average_down(*err[ilev + 1], *err[ilev], 0, 1, ratio);
+  }
 
-    Real sol_norm = phi_exact.norm1(0);
-    Real err_norm = residual.norm1(0);
+  for (int ilev = 0; ilev <= sim.finestLevel(); ++ilev) {
+    Real sol_norm = phi_exact[ilev]->norm1(0);
+    Real err_norm = err[ilev]->norm1(0);
 
     const double rel_error = err_norm / sol_norm;
     amrex::Print() << "[level " << ilev
