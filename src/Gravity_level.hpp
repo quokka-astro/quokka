@@ -4,7 +4,6 @@
 ///
 
 #include "Gravity.hpp"
-#include <memory>
 
 template <typename T>
 void Gravity<T>::construct_old_gravity(Real time, int level) {
@@ -36,8 +35,8 @@ void Gravity<T>::construct_old_gravity(Real time, int level) {
     // When level == sim->finestLevel(), the composite correction is zero, so
     // only compute it for lower levels
 
-    if (NoComposite() != 1 && DoCompositeCorrection() != 0 &&
-        level < sim->finestLevel() && level <= get_max_solve_level()) {
+    if (DoCompositeCorrection() != 0 && level < sim->finestLevel() &&
+        level <= get_max_solve_level()) {
 
       comp_phi.define(phi_old.boxArray(), phi_old.DistributionMap(),
                       phi_old.nComp(), phi_old.nGrow());
@@ -73,8 +72,8 @@ void Gravity<T>::construct_old_gravity(Real time, int level) {
     // When level == sim->finestLevel(), the composite correction is zero, so
     // only compute it when level < finestLevel.
 
-    if (NoComposite() != 1 && DoCompositeCorrection() != 0 &&
-        level < sim->finestLevel() && level <= get_max_solve_level()) {
+    if (DoCompositeCorrection() != 0 && level < sim->finestLevel() &&
+        level <= get_max_solve_level()) {
 
       // Subtract the level (placeholder) solve from the composite solution.
 
@@ -139,8 +138,8 @@ void Gravity<T>::construct_new_gravity(Real time, int level) {
     // construct_old_gravity() in order to obtain a more accurate initial guess
     // for the (real) level solve
 
-    if (NoComposite() != 1 && DoCompositeCorrection() != 0 &&
-        level < sim->finestLevel() && level <= get_max_solve_level()) {
+    if (DoCompositeCorrection() != 0 && level < sim->finestLevel() &&
+        level <= get_max_solve_level()) {
       if (gravity::verbose > 1) {
         amrex::Print() << "phi correction norm = "
                        << comp_minus_level_phi->norm0() << "\n";
@@ -167,8 +166,8 @@ void Gravity<T>::construct_new_gravity(Real time, int level) {
 
     // [When level == sim->finestLevel(), the composite correction is zero, so
     // only compute it for lower levels, if they exist.]
-    if (NoComposite() != 1 && DoCompositeCorrection() != 0 &&
-        level < sim->finestLevel() && level <= get_max_solve_level()) {
+    if (DoCompositeCorrection() != 0 && level < sim->finestLevel() &&
+        level <= get_max_solve_level()) {
 
       // Add back the (composite - level) contribution.
       phi_new.plus(*comp_minus_level_phi, 0, 1, 0);
@@ -196,7 +195,7 @@ void Gravity<T>::construct_new_gravity(Real time, int level) {
   if (get_gravity_type() == GravityMode::Poisson &&
       level < sim->finestLevel() && level <= get_max_solve_level()) {
 
-    if (NoComposite() != 1 && DoCompositeCorrection() == 1) {
+    if (DoCompositeCorrection() == 1) {
 
       if (NoSync() == 0) {
         // Now that we have calculated the force, if we are going to do a sync

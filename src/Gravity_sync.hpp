@@ -11,27 +11,12 @@
 // Used under the terms of the open-source license (BSD 3-clause) given here:
 //   https://github.com/AMReX-Astro/Castro/blob/main/license.txt
 //==============================================================================
-/// \file Gravity.cpp
-/// \brief Implements a class for solving the Poisson equation for 3D, Cartesian
-/// geometry problems.
+/// \file Gravity_sync.hpp
+/// \brief Implements methods to do the elliptic synchronization solve for AMR
+/// subcycling-in-time Poisson solves.
 ///
 
-#include <cmath>
-#include <limits>
-#include <memory>
-
-#include "AMReX_BC_TYPES.H"
-#include "AMReX_Config.H"
-#include "AMReX_Geometry.H"
-#include "AMReX_IntVect.H"
-#include "AMReX_MultiFabUtil.H"
-#include <AMReX_FillPatchUtil.H>
-#include <AMReX_MLMG.H>
-#include <AMReX_MLPoisson.H>
-
 #include "Gravity.hpp"
-
-using namespace amrex;
 
 template <typename T>
 void Gravity<T>::gravity_sync(int crse_level, int fine_level,

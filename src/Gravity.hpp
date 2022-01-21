@@ -7,7 +7,7 @@
 // Used under the terms of the open-source license (BSD 3-clause) given here:
 //   https://github.com/AMReX-Astro/Castro/blob/main/license.txt
 //==============================================================================
-/// \file gravity.H
+/// \file gravity.hpp
 /// \brief Defines a class for solving the Poisson equation.
 ///
 
@@ -17,25 +17,24 @@
 #include <memory>
 
 #include "AMReX_BC_TYPES.H"
-#include "AMReX_Config.H"
+#include "AMReX_Array.H"
+#include "AMReX_BCRec.H"
 #include "AMReX_BoxArray.H"
+#include "AMReX_Config.H"
+#include "AMReX_Config.H"
+#include "AMReX_DistributionMapping.H"
 #include "AMReX_Geometry.H"
+#include "AMReX_GpuContainers.H"
 #include "AMReX_IntVect.H"
 #include "AMReX_MFIter.H"
 #include "AMReX_MultiFabUtil.H"
+#include "AMReX_PhysBCFunct.H"
+#include "AMReX_REAL.H"
 #include <AMReX_FillPatchUtil.H>
+#include <AMReX_MLLinOp.H>
 #include <AMReX_MLMG.H>
 #include <AMReX_MLPoisson.H>
 #include <AMReX_ParmParse.H>
-#include "AMReX_Array.H"
-#include "AMReX_BCRec.H"
-#include "AMReX_Config.H"
-#include "AMReX_DistributionMapping.H"
-#include "AMReX_GpuContainers.H"
-#include "AMReX_IntVect.H"
-#include "AMReX_PhysBCFunct.H"
-#include "AMReX_REAL.H"
-#include <AMReX_MLLinOp.H>
 
 #include "simulation.hpp"
 
@@ -80,7 +79,6 @@ const int max_solve_level = 10;
 
 const int verbose = 2;
 const int no_sync = 1;
-const int no_composite = 0;
 const int do_composite_phi_correction = 1;
 
 // multigrid solve parameters (all boolean)
@@ -163,11 +161,6 @@ public:
   /// Returns ``no_sync``
   ///
   static auto NoSync() -> int;
-
-  ///
-  /// Returns ``no_composite``
-  ///
-  static auto NoComposite() -> int;
 
   ///
   /// Returns ``do_composite_phi_correction``
@@ -559,8 +552,8 @@ template <typename T> int Gravity<T>::test_solves = 0;
 using GravityMode = gravity::GravityMode;
 
 #include "GravityBC.hpp"
+#include "Gravity_impl.hpp"
 #include "Gravity_level.hpp"
 #include "Gravity_residual_impl.hpp"
-#include "Gravity_impl.hpp"
 
 #endif // GRAVITY_HPP_

@@ -16,7 +16,6 @@
 /// geometry problems.
 ///
 
-#include "AMReX_BLassert.H"
 #include "Gravity.hpp"
 
 template <typename T> Real Gravity<T>::mass_offset = 0.0;
@@ -206,10 +205,6 @@ template <typename T> auto Gravity<T>::get_max_solve_level() -> int {
 
 template <typename T> auto Gravity<T>::NoSync() -> int {
   return gravity::no_sync;
-}
-
-template <typename T> auto Gravity<T>::NoComposite() -> int {
-  return gravity::no_composite;
 }
 
 template <typename T> auto Gravity<T>::DoCompositeCorrection() -> int {
