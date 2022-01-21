@@ -215,7 +215,7 @@ public:
   ///
   /// Calculate the maximum value of the RHS over all levels.
   /// This should only be called at a synchronization point where
-  /// all Castro levels have valid new time data at the same simulation time.
+  /// all Quokka levels have valid new time data at the same simulation time.
   /// The RHS we will use is the density multiplied by 4*pi*G and also
   /// multiplied by the metric terms, just as it would be in a real solve.
   ///
@@ -237,34 +237,6 @@ public:
   void solve_for_phi(int level, amrex::MultiFab &phi,
                      const amrex::Vector<amrex::MultiFab *> &grad_phi,
                      int is_new);
-
-  ///
-  /// Find delta phi
-  ///
-  /// @param crse_level       index of coarse level
-  /// @param fine_level       index of fine level
-  /// @param rhs              Vector of MultiFabs with right hand side source
-  /// terms
-  /// @param delta_phi        Vector of MultiFabs delta phi will be saved to
-  /// @param grad_delta_phi   Vector of MultiFabs, gradient of delta phi
-  ///
-  void solve_for_delta_phi(
-      int crse_level, int fine_level,
-      const amrex::Vector<amrex::MultiFab *> &rhs,
-      const amrex::Vector<amrex::MultiFab *> &delta_phi,
-      const amrex::Vector<amrex::Vector<amrex::MultiFab *>> &grad_delta_phi);
-
-  ///
-  /// Sync gravity across levels
-  ///
-  /// @param crse_level       index of coarse level
-  /// @param fine_level       index of fine level
-  /// @param drho
-  /// @param dphi
-  ///
-  void gravity_sync(int crse_level, int fine_level,
-                    const amrex::Vector<amrex::MultiFab *> &drho,
-                    const amrex::Vector<amrex::MultiFab *> &dphi);
 
   ///
   /// Multilevel solve for new phi from base level to finest level
