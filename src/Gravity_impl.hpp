@@ -699,7 +699,6 @@ auto Gravity<T>::actual_solve_with_mlmg(
       mlmg.setAlwaysUseBNorm(1);
     }
 
-    mlmg.setNSolve(gravity::mlmg_nsolve); // what does this do??
     final_resnorm = mlmg.solve(phi, rhs, rel_eps, abs_eps);
 
     mlmg.getGradSolution(grad_phi);

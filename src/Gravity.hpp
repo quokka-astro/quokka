@@ -16,11 +16,10 @@
 #include <limits>
 #include <memory>
 
-#include "AMReX_BC_TYPES.H"
 #include "AMReX_Array.H"
 #include "AMReX_BCRec.H"
+#include "AMReX_BC_TYPES.H"
 #include "AMReX_BoxArray.H"
-#include "AMReX_Config.H"
 #include "AMReX_Config.H"
 #include "AMReX_DistributionMapping.H"
 #include "AMReX_Geometry.H"
@@ -85,7 +84,6 @@ const int do_composite_phi_correction = 1;
 const int mlmg_agglomeration = 1;
 const int mlmg_consolidation = 1;
 const int mlmg_max_fmg_iter = 0;
-const int mlmg_nsolve = 0;
 } // namespace gravity
 
 ///
@@ -482,8 +480,8 @@ public:
 
   ///
   /// This is a sanity check on whether we are trying to fill multipole boundary
-  /// conditiosn
-  ///  for grids at this level > 0 -- this case is not currently supported.
+  /// conditions for grids at this level > 0 -- this case is not currently
+  /// supported.
   ///  Here we shrink the domain at this level by 1 in any direction which is
   ///  not symmetry or periodic, then ask if the grids at this level are
   ///  contained in the shrunken domain.  If not, then grids at this level touch
@@ -534,7 +532,6 @@ public:
       const amrex::Vector<amrex::Vector<amrex::MultiFab *>> &grad_phi,
       const amrex::Vector<amrex::MultiFab *> &res, amrex::Real time)
       -> amrex::Real;
-
 };
 
 ///
