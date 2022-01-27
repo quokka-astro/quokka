@@ -188,6 +188,8 @@ auto problem_main() -> int {
   sim.cflNumber_ = 0.25; // *must* be less than 1/3 in 3D!
   sim.maxTimesteps_ = 100;
   sim.plotfileInterval_ = -1;
+  //sim.maxTimesteps_ = 10000;
+  //sim.plotfileInterval_ = 100;
 
   // initialize
   sim.setInitialConditions();
