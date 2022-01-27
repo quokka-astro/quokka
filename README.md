@@ -68,7 +68,7 @@ If you get an error saying that a NumPy header file is not found, you can work a
 to the CMake command-line options (or change the `QUOKKA_PYTHON` option to `OFF` in CMakeLists.txt).
 
 ## Running on GPUs
-By default, Quokka compiles itself to run only on CPUs. If you want to run on NVIDIA GPUs, re-build Quokka with the following options:
+By default, Quokka compiles itself to run only on CPUs. (If you want to run on NVIDIA GPUs, re-build Quokka as shown below. **(Warning: CUDA 11.6 generates invalid device code; see issue [21](https://github.com/BenWibking/quokka/issues/21). Use CUDA <= 11.5 instead.)**
 ```
 cmake .. -DCMAKE_BUILD_TYPE=Release -DAMReX_GPU_BACKEND=CUDA
 make -j6
