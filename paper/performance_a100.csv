@@ -1,0 +1,5 @@
+nodes,gpus,mzones,mzones_per_gpu,mzones_per_gpu_ideal,GPU_FillBoundary,GPU_scaling,node_scaling,size,problem_type
+0.25,1,254.05,254.05,259.23,2.00,100.00,--,256^3,Sedov
+1,4,601.05,150.26,259.21,42.03,59.15,100.00,512^3,Sedov
+0.25,1,39.04,39.04,40.30,3.12,100.00,--,256^3,Rad. shell
+1,4,72.67,18.17,38.88,53.27,46.54,100.00,512^3,Rad. shell
