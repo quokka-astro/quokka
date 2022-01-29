@@ -1,7 +1,7 @@
 \RequirePackage{snapshot}
 %DIF LATEXDIFF DIFFERENCE FILE
-%DIF DEL quokka_v1.tex   Mon Nov 15 11:24:08 2021
-%DIF ADD quokka.tex      Fri Jan 28 16:20:51 2022
+%DIF DEL quokka_v1.tex   Tue Jan 25 19:43:41 2022
+%DIF ADD quokka.tex      Sat Jan 29 17:29:55 2022
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Basic setup. Most papers should leave these options alone.
 \documentclass[fleqn,usenatbib]{mnras}
@@ -121,7 +121,48 @@ $^{2}$ARC Centre of Excellence for Astronomy in Three Dimensions (ASTRO-3D), Can
 \providecommand{\DIFaddendFL}{} %DIF PREAMBLE
 \providecommand{\DIFdelbeginFL}{} %DIF PREAMBLE
 \providecommand{\DIFdelendFL}{} %DIF PREAMBLE
-%DIF LISTINGS PREAMBLE %DIF PREAMBLE
+\newcommand{\DIFscaledelfig}{0.5}
+%DIF HIGHLIGHTGRAPHICS PREAMBLE %DIF PREAMBLE
+\RequirePackage{settobox} %DIF PREAMBLE
+\RequirePackage{letltxmacro} %DIF PREAMBLE
+\newsavebox{\DIFdelgraphicsbox} %DIF PREAMBLE
+\newlength{\DIFdelgraphicswidth} %DIF PREAMBLE
+\newlength{\DIFdelgraphicsheight} %DIF PREAMBLE
+% store original definition of \includegraphics %DIF PREAMBLE
+\LetLtxMacro{\DIFOincludegraphics}{\includegraphics} %DIF PREAMBLE
+\newcommand{\DIFaddincludegraphics}[2][]{{\color{blue}\fbox{\DIFOincludegraphics[#1]{#2}}}} %DIF PREAMBLE
+\newcommand{\DIFdelincludegraphics}[2][]{% %DIF PREAMBLE
+\sbox{\DIFdelgraphicsbox}{\DIFOincludegraphics[#1]{#2}}% %DIF PREAMBLE
+\settoboxwidth{\DIFdelgraphicswidth}{\DIFdelgraphicsbox} %DIF PREAMBLE
+\settoboxtotalheight{\DIFdelgraphicsheight}{\DIFdelgraphicsbox} %DIF PREAMBLE
+\scalebox{\DIFscaledelfig}{% %DIF PREAMBLE
+\parbox[b]{\DIFdelgraphicswidth}{\usebox{\DIFdelgraphicsbox}\\[-\baselineskip] \rule{\DIFdelgraphicswidth}{0em}}\llap{\resizebox{\DIFdelgraphicswidth}{\DIFdelgraphicsheight}{% %DIF PREAMBLE
+\setlength{\unitlength}{\DIFdelgraphicswidth}% %DIF PREAMBLE
+\begin{picture}(1,1)% %DIF PREAMBLE
+\thicklines\linethickness{2pt} %DIF PREAMBLE
+{\color[rgb]{1,0,0}\put(0,0){\framebox(1,1){}}}% %DIF PREAMBLE
+{\color[rgb]{1,0,0}\put(0,0){\line( 1,1){1}}}% %DIF PREAMBLE
+{\color[rgb]{1,0,0}\put(0,1){\line(1,-1){1}}}% %DIF PREAMBLE
+\end{picture}% %DIF PREAMBLE
+}\hspace*{3pt}}} %DIF PREAMBLE
+} %DIF PREAMBLE
+\LetLtxMacro{\DIFOaddbegin}{\DIFaddbegin} %DIF PREAMBLE
+\LetLtxMacro{\DIFOaddend}{\DIFaddend} %DIF PREAMBLE
+\LetLtxMacro{\DIFOdelbegin}{\DIFdelbegin} %DIF PREAMBLE
+\LetLtxMacro{\DIFOdelend}{\DIFdelend} %DIF PREAMBLE
+\DeclareRobustCommand{\DIFaddbegin}{\DIFOaddbegin \let\includegraphics\DIFaddincludegraphics} %DIF PREAMBLE
+\DeclareRobustCommand{\DIFaddend}{\DIFOaddend \let\includegraphics\DIFOincludegraphics} %DIF PREAMBLE
+\DeclareRobustCommand{\DIFdelbegin}{\DIFOdelbegin \let\includegraphics\DIFdelincludegraphics} %DIF PREAMBLE
+\DeclareRobustCommand{\DIFdelend}{\DIFOaddend \let\includegraphics\DIFOincludegraphics} %DIF PREAMBLE
+\LetLtxMacro{\DIFOaddbeginFL}{\DIFaddbeginFL} %DIF PREAMBLE
+\LetLtxMacro{\DIFOaddendFL}{\DIFaddendFL} %DIF PREAMBLE
+\LetLtxMacro{\DIFOdelbeginFL}{\DIFdelbeginFL} %DIF PREAMBLE
+\LetLtxMacro{\DIFOdelendFL}{\DIFdelendFL} %DIF PREAMBLE
+\DeclareRobustCommand{\DIFaddbeginFL}{\DIFOaddbeginFL \let\includegraphics\DIFaddincludegraphics} %DIF PREAMBLE
+\DeclareRobustCommand{\DIFaddendFL}{\DIFOaddendFL \let\includegraphics\DIFOincludegraphics} %DIF PREAMBLE
+\DeclareRobustCommand{\DIFdelbeginFL}{\DIFOdelbeginFL \let\includegraphics\DIFdelincludegraphics} %DIF PREAMBLE
+\DeclareRobustCommand{\DIFdelendFL}{\DIFOaddendFL \let\includegraphics\DIFOincludegraphics} %DIF PREAMBLE
+%DIF COLORLISTINGS PREAMBLE %DIF PREAMBLE
 \RequirePackage{listings} %DIF PREAMBLE
 \RequirePackage{color} %DIF PREAMBLE
 \lstdefinelanguage{DIFcode}{ %DIF PREAMBLE
@@ -173,31 +214,31 @@ In many astrophysical systems, the radiation field carries a substantial portion
 where $I_\nu$ is the radiation intensity at frequency $\nu$ travelling in the direction specified by the unit vector $\hatn$, $\eta_\nu$ is the matter emissivity, $\rho$ is the matter density, and $\kappa_\nu^{\rm (tot)}$ and $\kappa_\nu^{\rm (sca)}$ are the total and scatting specific opacities, respectively. This is a time-dependent integro-differential equation with six dimensions: three positions, two angles (parameterised by $\hatn$), and the frequency. Full numerical solution of a problem of this dimensionality, at least if it must be done millions of times to run in tandem with a hydrodynamic (HD) or magnetohydrodynamic (MHD) simulation, remains out of reach for most applications.
 
 Within the astrophysics community, there are two general approaches to numerical radiation hydrodynamics (RHD). One is characteristic methods, which solve \autoref{eq:transfer} (or its time-independent form), but only along rays pointing back to particular sources \citep[e.g.,][]{Abel02a, Rijkhorst06a, Krumholz07f} or rays randomly assigned by Monte Carlo \citep[e.g.,][]{Fleck71a, Tsang15a}. A second approach, which we will pursue here, is moment methods \citep[e.g.,][]{Mihalas_1984,Castor_2004}, whereby one takes moments of the transfer equation, thereby eliminating the angular dimensions of the problem. \DIFdelbegin \footnote{\DIFdel{Fully eliminating the angular dependence requires some care, since in general for a moving medium the emissivity and opacity depend on direction, even if the medium itself interacts with light isotropically in its own rest frame. While one might guess velocity-dependent beaming effects are unimportant in non-relativistic problems, it turns out that one cannot formulate a consistent, energy-conserving theory of non-relativistic radiation-hydrodynamics without including them, at least to leading order \mbox{%DIFAUXCMD
-\citep{Mihalas82a, Lowrie99a, Krumholz_2007}}\hspace{0pt}%DIFAUXCMD
+\citep{Mihalas82a, Lowrie99a, Krumholz_2007}}\hskip0pt%DIFAUXCMD
 . Systems of moment equations where the radiation moments are written in the lab frame but the emissivity and absorption are written in the comoving frame, where they can be assumed to be isotropic, are known as mixed-frame formulations. This is the most common approach in modern RHD codes.}} %DIFAUXCMD
 \addtocounter{footnote}{-1}%DIFAUXCMD
-\DIFdelend \DIFaddbegin \DIFadd{Fully eliminating the angular dependence requires some care, since in general for a moving medium the emissivity and opacity depend on direction, even if the medium itself interacts with light isotropically in its own rest frame. While one might guess velocity-dependent beaming effects are unimportant in non-relativistic problems, it turns out that one cannot formulate a consistent, energy-conserving theory of non-relativistic radiation-hydrodynamics without including them, at least to leading order \mbox{%DIFAUXCMD
-\citep{Mihalas82a, Lowrie99a, Krumholz_2007}}\hspace{0pt}%DIFAUXCMD
+\DIFdel{This }\DIFdelend \DIFaddbegin \DIFadd{Fully eliminating the angular dependence requires some care, since in general for a moving medium the emissivity and opacity depend on direction, even if the medium itself interacts with light isotropically in its own rest frame. While one might guess velocity-dependent beaming effects are unimportant in non-relativistic problems, it turns out that one cannot formulate a consistent, energy-conserving theory of non-relativistic radiation-hydrodynamics without including them, at least to leading order \mbox{%DIFAUXCMD
+\citep{Mihalas82a, Lowrie99a, Krumholz_2007}}\hskip0pt%DIFAUXCMD
 . Systems of moment equations where the radiation moments are written in the lab frame but the emissivity and absorption are written in the comoving frame, where they can be assumed to be isotropic, are known as mixed-frame formulations. This is the most common approach in modern RHD codes (although the comoving frame is increasingly popular; e.g., \mbox{%DIFAUXCMD
-\citealt{Skinner_2019}}\hspace{0pt}%DIFAUXCMD
-). }\DIFaddend This results in a series of moment equations that one can solve in lieu of solving the equation of radiative transfer directly, but at the price of introducing the need for a closure relation to approximate the higher moments that appear in the equations being solved. Some authors also combine moment and characteristic methods \citep[e.g.,][]{Rosen17a}. \DIFdelbegin \footnote{\DIFdel{While characteristic and moment methods are the only ones widely used in astrophysics, in terrestrial applications (for example neutron transport calculations for nuclear reactor design) there are two other widely-used approaches to handle the angular dependence of the transfer equation. One is to discretise the unit sphere using weighted quadratures (the discrete ordinates, or $S_n$, method; e.g., \mbox{%DIFAUXCMD
-\citealt{Lathrop_1964,Adams97a}}\hspace{0pt}%DIFAUXCMD
+\citealt{Skinner_2019}}\hskip0pt%DIFAUXCMD
+). This }\DIFaddend results in a series of moment equations that one can solve in lieu of solving the equation of radiative transfer directly, but at the price of introducing the need for a closure relation to approximate the higher moments that appear in the equations being solved. Some authors also combine moment and characteristic methods \citep[e.g.,][]{Rosen17a}. \DIFdelbegin \footnote{\DIFdel{While characteristic and moment methods are the only ones widely used in astrophysics, in terrestrial applications (for example neutron transport calculations for nuclear reactor design) there are two other widely-used approaches to handle the angular dependence of the transfer equation. One is to discretise the unit sphere using weighted quadratures (the discrete ordinates, or $S_n$, method; e.g., \mbox{%DIFAUXCMD
+\citealt{Lathrop_1964,Adams97a}}\hskip0pt%DIFAUXCMD
 ). The other is to expand the angular integration in spherical harmonics (the $P_n$ method; e.g., \mbox{%DIFAUXCMD
-\citealt{Modest89a}}\hspace{0pt}%DIFAUXCMD
+\citealt{Modest89a}}\hskip0pt%DIFAUXCMD
 ).}}
 %DIFAUXCMD
 \addtocounter{footnote}{-1}%DIFAUXCMD
 \DIFdelend \DIFaddbegin \DIFadd{While characteristic and moment methods are the only ones widely used in astrophysics, in terrestrial applications (for example neutron transport calculations for nuclear reactor design) there are two other widely-used approaches to handle the angular dependence of the transfer equation. One is to discretise the unit sphere using weighted quadratures (the discrete ordinates, or $S_n$, method; e.g., \mbox{%DIFAUXCMD
-\citealt{Lathrop_1964,Adams97a}}\hspace{0pt}%DIFAUXCMD
+\citealt{Lathrop_1964,Adams97a}}\hskip0pt%DIFAUXCMD
 ). The other is to expand the angular integration in spherical harmonics (the $P_n$ method; e.g., \mbox{%DIFAUXCMD
-\citealt{Modest89a}}\hspace{0pt}%DIFAUXCMD
+\citealt{Modest89a}}\hskip0pt%DIFAUXCMD
 ). These methods can be much more computationally expensive than moment methods, possibly by several orders of magnitude.
 }\DIFaddend 
 
 One of the simplest closures is the flux-limited diffusion (FLD) approximation \DIFdelbegin \DIFdel{\mbox{%DIFAUXCMD
-\citep{Alme_1973}}\hspace{0pt}%DIFAUXCMD
+\citep{Alme_1973}}\hskip0pt%DIFAUXCMD
 }\DIFdelend \DIFaddbegin \DIFadd{\mbox{%DIFAUXCMD
-\citep{LeBlanc_1970,Alme_1973}}\hspace{0pt}%DIFAUXCMD
+\citep{LeBlanc_1970,Alme_1973}}\hskip0pt%DIFAUXCMD
 }\DIFaddend , which retains only the first moment equation, for the radiation energy density, and closes the system by assuming both that the time derivative of the radiation flux is zero and that the Eddington tensor, defined as the ratio of the radiation pressure tensor to the radiation energy density, has a fixed value. However, a long-understood deficiency of flux-limited diffusion is that it cannot cast shadows (e.g., \citealt{Hayes_2003}), a property that can make a critical difference in the dynamics of some semitransparent problems (e.g., \citealt{Davis_2014}). A more accurate approximation is to evolve both the radiation energy density and the radiation flux, while still invoking a closure relation for the Eddington tensor; this is called a two-moment approach, since one solves for the first two moments of the radiation field. When the Eddington tensor is computed via a formal solution of the angle-dependent radiative transfer equation, we obtain the quasidiffusion or variable Eddington tensor (VET) method \citep{Goldin_1964}. When retaining a local closure for the radiation pressure tensor in terms of the radiation energy density $E$ and the flux $F$, we obtain a local VET method, commonly referred to as the M1 (`moment-one`) method \citep{Minerbo_1978,Levermore_1984,Dubroca_1999,Gonzalez_2007}. There are a number of moment-based astrophysical RHD codes, implementing a wide variety of closures, in wide use, including \textsc{Zeus} \citep{Turner_2001}, \textsc{FLASH} \citep{Fryxell_2000}, \textsc{Orion} \citep{Krumholz_2007, Shestakov08a, Li21a}, \textsc{Ramses} \citep{Commercon11a, Rosdahl_2013}, \textsc{Athena} \citep{Davis_2012, Jiang12a}, \textsc{Enzo} \citep{Reynolds_2009,Bryan_2014}, \textsc{Castro} \citep{Zhang_2011,Zhang_2013,Almgren_2020}, and \textsc{Fornax} \citep{Skinner_2019}, to give a partial list.
 
 While the use of moment methods removes the dimensionality problem, it leaves a second problem, which is the strong mismatch in signal speeds between radiation and sound (or MHD) waves, which in a non-relativistic system travel at far less than the speed of light. This mismatch renders simple explicit methods, as are commonly used for HD and MHD, impractically slow for radiative transfer, due to the tiny time steps that would be imposed by the Courant-Friedrichs-Lewy (CFL) condition. For this reason, numerical methods for RHD either use an implicit method for the radiation part of the problem (e.g., \textsc{Zeus}, \textsc{Orion}, some versions of \textsc{Ramses} and \textsc{Athena}) or adopt the reduced speed of light approximation (\citealt{Gnedin_2001, Skinner_2013}; \textsc{Fornax}, other versions of \textsc{Ramses} and \textsc{Athena}). The reduced speed of light approximation (RSLA) consists of replacing the speed of light $c$ that defines the signal speed in the radiation moment equations with a lower speed $\hat{c}$, while keeping the terms that describe the rate of momentum and energy exchange between gas and radiation unchanged. The lower speed $\hat{c}$, while still substantially larger than the HD or MHD signal speeds, is close enough to those speeds to allow radiation time steps large enough to render explicit methods computationally feasible.
@@ -267,17 +308,19 @@ These equations make no approximations about the frequency dependence of the rad
 
 We solve the system formed by \autoref{eq:hydro_continuity}--\autoref{eq:rad_flux} using an operator split approach, whereby we first advance the hydrodynamic transport subsystem (\autoref{sssec:hydro}), then the radiation transport subsystem (\autoref{sssec:radiation}), and finally update the local coupling terms (\autoref{sssec:coupling}). The first subsystem uses a single explicit update step, the second a set of subcycled explicit updates, and the third a purely local implicit update. We describe each of these steps below.
 
-This update cycle operates within a \citet{Berger:1984} / \citet{Berger:1989} adaptive mesh refinement (AMR) framework, whereby each spatial variable is represented by a volume average in each cell, on a rectangular, Cartesian grid. We cover the entire computational domain with a coarse grid with cell spacings $\Delta x_0$, $\Delta y_0$, $\Delta z_0$ in the $x$, $y$, and $z$ directions; the grid spacings need not be the same, but for most applications we choose them to be the same. We denote this coarse grid level 0. We then dynamically add (or remove) additional, finer grids over parts of the domain in response to user-specified refinement criteria. We denote these additional levels 1, 2, $\ldots$, with each grid on level $l$ having cells a factor of $2$ smaller than those on level $l-1$, so that the cell spacing on level $l$ is $\Delta x_0/2^l$ in the $x$ direction, and similarly for $y$ and $z$. We use only factor of 2 refinements in order to minimize numerical glitches arising from the discontinuous change in resolution, which can arise especially in problems where shocks cross the coarse-fine mesh interface at an oblique angle (e.g., \citealt{Fryxell_2000}). When adding finer grids we conservatively interpolate the underlying coarse data \DIFaddbegin \DIFadd{(using linear interpolation for robustness, regardless of the spatial reconstruction used to compute the fluxes)}\DIFaddend , and when removing finer grids we conservatively average down the fine data. Time steps on different AMR levels are sub-cycled, such that the time step on level $l$ is $\Delta t_l = \Delta t_0/2^l$. At the end of every two time steps on level $l > 0$, we perform a synchronization step to ensure that we maintain machine-precision conservation for all conserved quantities (\autoref{sssec:sync}).
+This update cycle operates within a \citet{Berger:1984} / \citet{Berger:1989} adaptive mesh refinement (AMR) framework, whereby each spatial variable is represented by a volume average in each cell, on a rectangular, Cartesian grid. We cover the entire computational domain with a coarse grid with cell spacings $\Delta x_0$, $\Delta y_0$, $\Delta z_0$ in the $x$, $y$, and $z$ directions; the grid spacings need not be the same, but for most applications we choose them to be the same. We denote this coarse grid level 0. We then dynamically add (or remove) additional, finer grids over parts of the domain in response to user-specified refinement criteria. We denote these additional levels 1, 2, $\ldots$, with each grid on level $l$ having cells a factor of $2$ smaller than those on level $l-1$, so that the cell spacing on level $l$ is $\Delta x_0/2^l$ in the $x$ direction, and similarly for $y$ and $z$. We use only factor of 2 refinements in order to minimize numerical glitches arising from the discontinuous change in resolution, which can arise especially in problems where shocks cross the coarse-fine mesh interface at an oblique angle (e.g., \citealt{Fryxell_2000}). When adding finer grids we conservatively interpolate the underlying coarse data \DIFdelbegin \DIFdel{, }\DIFdelend \DIFaddbegin \DIFadd{(using linear interpolation for robustness, regardless of the spatial reconstruction used to compute the fluxes), }\DIFaddend and when removing finer grids we conservatively average down the fine data. Time steps on different AMR levels are sub-cycled, such that the time step on level $l$ is $\Delta t_l = \Delta t_0/2^l$. At the end of every two time steps on level $l > 0$, we perform a synchronization step to ensure that we maintain machine-precision conservation for all conserved quantities (\autoref{sssec:sync}).
 \DIFaddbegin 
 
-\DIFaddend Our implementation of AMR in \quokka~\DIFdelbegin \DIFdel{is based on }\DIFdelend \DIFaddbegin \DIFadd{uses the lower-level }\texttt{\DIFadd{AMRCore}} \DIFadd{interface provided by }\DIFaddend the \textsc{AMReX} library \citep{AMReX_JOSS, the_amrex_development_team_2021_5363443} \DIFaddbegin \DIFadd{for adaptive mesh grid generation and coarse/fine grid interpolation, domain decomposition, and parallel communication. In addition to solving the radiation hydrodynamics equations, }\textsc{\DIFadd{Quokka}} \DIFadd{itself handles the timestepping and mesh refinement criteria}\DIFaddend .
+\DIFaddend Our implementation of AMR in \quokka~\DIFdelbegin \DIFdel{is based on the }\DIFdelend \DIFaddbegin \DIFadd{uses the lower-level }\texttt{\DIFadd{AMRCore}} \DIFadd{interface provided by the }\DIFaddend \textsc{AMReX} library \citep{AMReX_JOSS, the_amrex_development_team_2021_5363443} \DIFdelbegin \DIFdel{.
+}\DIFdelend \DIFaddbegin \DIFadd{for adaptive mesh grid generation and coarse/fine grid interpolation, domain decomposition, and parallel communication. In addition to solving the radiation hydrodynamics equations, }\textsc{\DIFadd{Quokka}} \DIFadd{itself handles the timestepping and mesh refinement criteria.
+}\DIFaddend 
 
 \subsubsection{Hydrodynamics}
 \label{sssec:hydro}
 For the solution of the hydrodynamic subsystem (\autoref{eq:hydro_continuity}--\autoref{eq:hydro_energy}, omitting the matter-radiation coupling terms on the right hand sides), we adopt a method-of-lines (or semi-discrete) approach, discretizing the spatial variables while initially keeping the time variable continuous, thereby transforming the partial differential equations into a large set of ordinary differential equations that can be integrated in time using a standard ordinary differential equation (ODE) integrator \DIFdelbegin \DIFdel{\mbox{%DIFAUXCMD
-\citep{Jameson_1981}}\hspace{0pt}%DIFAUXCMD
+\citep{Jameson_1981}}\hskip0pt%DIFAUXCMD
 }\DIFdelend \DIFaddbegin \DIFadd{\mbox{%DIFAUXCMD
-\citep{Hyman_1979,Jameson_1981}}\hspace{0pt}%DIFAUXCMD
+\citep{Hyman_1979,Jameson_1981}}\hskip0pt%DIFAUXCMD
 }\DIFaddend . For the latter, we use the second-order strong stability preserving Runge-Kutta method (RK2-SSP; \citealt{Shu_1988}). Such an approach has been successfully employed in several recent astrophysical hydrodynamics codes \citep{Skinner_2019,Stone_2020}.
 \DIFdelbegin \DIFdel{Somewhat surprisingly, we }\DIFdelend \DIFaddbegin 
 
@@ -287,14 +330,14 @@ For the solution of the hydrodynamic subsystem (\autoref{eq:hydro_continuity}--\
 }\end{align}
 \DIFadd{where $\Delta x$ is the minimum grid spacing, $|\lambda|$ is a maximum signal speed, and $C_0$ is a stability coefficient.
 Analysis of the stability polynomial of a Runge-Kutta integrator applied to the linearized hydrodynamics equations \mbox{%DIFAUXCMD
-\citep{Colella_2011,McCorquodale_2011} }\hspace{0pt}%DIFAUXCMD
+\citep{Colella_2011,McCorquodale_2011} }\hskip0pt%DIFAUXCMD
 yields a value for $|\lambda|$ of
 }\begin{align}
     \DIFadd{|\lambda| = \max \sum_{d=1}^{D} }[\DIFadd{(\vc{v} \cdot \vc{\hat{e}_d}) + c_s}] \DIFadd{\, ,
     \label{eq:colella_stability}
 }\end{align}
 \DIFadd{where $\vc{v}$ is the fluid velocity, $\vc{\hat{e}}$ is the unit vector in coordinate direction $d$, $c_s$ is the adiabatic sound speed, and the maximum is taken over all cells. However, even in the linear case, such an eigenvalue analysis gives, in general, only a necessary condition for stability and not a sufficient condition \mbox{%DIFAUXCMD
-\citep{Reddy_1992}}\hspace{0pt}%DIFAUXCMD
+\citep{Reddy_1992}}\hskip0pt%DIFAUXCMD
 . For this reason, we more conservatively estimate the value of $|\lambda|$ as
 }\begin{align}
     \DIFadd{|\lambda| = D \max (|\vc{v}| + c_s) \, ,
@@ -305,24 +348,24 @@ yields a value for $|\lambda|$ of
     \DIFadd{\Delta t = \frac{C_0}{D} \frac{\Delta x}{\max (|\vc{v}| + c_s)} \, ,
 }\end{align}
 \DIFadd{where we define the dimensionless factor $C_0 / D$ to be the CFL number so as to be consistent with its standard definition in one spatial dimension.}\footnote{\DIFadd{This is the same timestep criterion used in the }\textsc{\DIFadd{Fornax}} \DIFadd{code, with $D=3$ and $\Delta x = \Delta r / \sqrt{2}$; see Eq. 37 of \mbox{%DIFAUXCMD
-\citealt{Skinner_2019}}\hspace{0pt}%DIFAUXCMD
+\citealt{Skinner_2019}}\hskip0pt%DIFAUXCMD
 .}} \DIFadd{When written in this form, for both forward Euler and RK2-SSP, the maximum stable coefficient $C_0$ for a system of constant-coefficient, linear equations is $C_0 = 1$. The maximum stable CFL number in 3D for the RK2-SSP integrator is therefore $1/3$.
 We note that it is not sufficient to estimate $|\lambda|$ as $\max (|\vc{v}| + c_s)$, since the component-wise sum of the velocities may exceed the vector magnitude $|\vc{v}|$ and therefore violate the lower bound given by }\autoref{eq:colella_stability}\DIFadd{.}\footnote{\DIFadd{As an example, consider the velocity vector with unit magnitude $|\vc{v}|$ and equal components $v_x = v_y = v_z$. Then each component $v_i = \sqrt{3}/3$ and the sum of components $\sum_{d=1}^{3} \vc{v} \cdot \vc{\hat{e}_d} = \sqrt{3} \approx 1.732$.}}
 
 \DIFadd{We }\DIFaddend find that such a method-of-lines scheme is not stable when combining higher-order spatial reconstruction with forward Euler time integration\DIFdelbegin \DIFdel{, but }\DIFdelend \DIFaddbegin \DIFadd{. However, we find it }\DIFaddend is stable for timesteps \DIFdelbegin \DIFdel{$\mathcal{O}(\Delta x / (c_s + |v|))$ }\DIFdelend \DIFaddbegin \DIFadd{satisfying the above timestep criterion }\DIFaddend when used with higher-order \DIFaddbegin \DIFadd{(second-order or higher) }\DIFaddend Runge-Kutta methods. \DIFdelbegin \DIFdel{This is consistent with the findings of \mbox{%DIFAUXCMD
-\cite{Stone_2020}}\hspace{0pt}%DIFAUXCMD
+\cite{Stone_2020}}\hskip0pt%DIFAUXCMD
 , who also find that the maximum stable timestep corresponding to the linear stability region of a given (second order or higher) Runge-Kutta integrator divided by the number of spatial dimensions.
 }\DIFdelend \DIFaddbegin \DIFadd{We note that this stability problem with forward Euler is also found by \mbox{%DIFAUXCMD
-\cite{Stone_2020} }\hspace{0pt}%DIFAUXCMD
+\cite{Stone_2020} }\hskip0pt%DIFAUXCMD
 in the method-of-lines implementation of }\textsc{\DIFadd{Athena++}}\DIFadd{, but does not appear for single-step integrators that average in time the reconstructed profiles of characteristic waves over the cell interfaces, as done in the original version of PPM \mbox{%DIFAUXCMD
-\citep{Colella_1984}}\hspace{0pt}%DIFAUXCMD
+\citep{Colella_1984}}\hskip0pt%DIFAUXCMD
 .
 }
 
 \DIFaddend As \cite{Skinner_2019} notes, in contrast to fully-discrete unsplit hydrodynamic methods such as the corner transport upwind (CTU) method \citep{Colella_1990}, the coupling across corners of each cell is achieved via the use of a multi-stage time integrator, rather than via direct computation of fluxes from diagonal neighbors of each cell. While we are formally limited to a smaller timestep compared to the CTU method \DIFaddbegin \DIFadd{(due to the factor of $1/D$)}\DIFaddend , our method may be more robust in practice, as the CTU integrator has been found to be unstable in supersonic turbulence with strong radiative cooling unless very small ($\lesssim 0.1$) CFL numbers are employed \citep{Schneider_2017}.
 
 We reconstruct the hydrodynamic variables on each face of each cell from the cell-average variables of the neighbouring cells. We perform this reconstruction using the piecewise parabolic method \citep[PPM;][hereafter \citetalias{Colella_1984}]{Colella_1984} using the primitive hydrodynamic variables (density, velocity, and pressure). As is standard, the conversion from conserved (density, momentum, and energy) to primitive variables is carried out assuming that the volume average and cell centered states are equivalent, which is an approximation accurate to $\mathcal{O}(\Delta x^2)$. As noted by several authors, the PPM algorithm is therefore formally second-order accurate in spatial resolution.\DIFaddbegin \footnote{ \DIFadd{We note that there exist fully fourth-order versions of PPM \mbox{%DIFAUXCMD
-\citep{Felker_2018}}\hspace{0pt}%DIFAUXCMD
+\citep{Felker_2018}}\hskip0pt%DIFAUXCMD
 , but because fourth-order accuracy does not permit local source terms to be evaluated independently for each cell, we choose to implement a second-order method.}} \DIFaddend After the primitive variables have been defined, for the reconstruction step proper, we use the standard interface-centered PPM stencil:
 \begin{align}
     q_{j+1/2} = \frac{7}{12} (q_j + q_{j+1}) - \frac{1}{12} (q_{j+2} + q_{j-1}).
@@ -331,11 +374,14 @@ We follow the implementation of \cite{Stone_2020} in re-grouping the above terms
 \DIFdelbegin \DIFdel{On a mesh with uniform spacing between cells along the direction perpendicular to the reconstructed face, this stencil is fourth-order accurate.
 }\DIFdelend 
 
-We do not perform the slope-limiting and contact steepening steps of \citetalias{Colella_1984}. We instead \DIFdelbegin \DIFdel{enforce monotonicity of the reconstructed state by re-setting the interface state to lie between the values of the cells adjacent to the interface, following }\DIFdelend \DIFaddbegin \DIFadd{prevent new extrema in the reconstructed states by limiting the interface states at the faces of a given cell to the minimum and maximum of the cell-average values of cell under consideration and its two neighbouring cells along the axis of reconstruction, similar to the monotonicity constraint introduced by }\DIFaddend \cite{Mignone_2005}. This is followed by the extrema detection and overshoot correction step within each cell as described by \citetalias{Colella_1984}. In this step, the parabola assumed to exist across each cell is examined. If an `overshoot' (as defined by \citetalias{Colella_1984}) of the parabola is detected, we follow the original \citetalias{Colella_1984} prescription of performing linear reconstruction on the side of the cell affected by the overshoot. If an extremum is instead detected, rather than forcing the reconstruction to a constant value across the cell as done by \citetalias{Colella_1984}, we revert to performing a linear reconstruction within the affected cell, following \cite{Balsara_2017}. \DIFdelbegin \DIFdel{Either of these }\DIFdelend \DIFaddbegin \DIFadd{We note that these latter two steps only examine the interface values, and do not guarantee that the interface states lie within neighbouring cell-average values, and therefore the cell-average limiting carried out in the first step is not redundant. Any of these limiting }\DIFaddend steps may make the interface states discontinuous, with distinct states associated with each of the two cells adjacent to an interface\DIFdelbegin \DIFdel{, which reduces the order of accuracy of the stencil. Since the overall algorithm is a combination of second order and (usually) fourth order steps, the overall order of accuracy of PPM is often referred to as `third order' (e.g., \mbox{%DIFAUXCMD
-\citealt{Stone_2020}}\hspace{0pt}%DIFAUXCMD
+We do not perform the slope-limiting and contact steepening steps of \citetalias{Colella_1984}. We instead \DIFdelbegin \DIFdel{enforce monotonicity of the reconstructed state by re-setting the interface state to lie between the values of the cells adjacent to the interface, following }\DIFdelend \DIFaddbegin \DIFadd{prevent new extrema in the reconstructed states by limiting the interface states at the faces of a given cell to the minimum and maximum of the cell-average values of cell under consideration and its two neighbouring cells along the axis of reconstruction, similar to the monotonicity constraint introduced by }\DIFaddend \cite{Mignone_2005}. This is followed by the extrema detection and overshoot correction step within each cell as described by \citetalias{Colella_1984}. In this step, the parabola assumed to exist across each cell is examined. If an `overshoot' (as defined by \citetalias{Colella_1984}) of the parabola is detected, we follow the original \citetalias{Colella_1984} prescription of performing linear reconstruction on the side of the cell affected by the overshoot. If an extremum is instead detected, rather than forcing the reconstruction to a constant value across the cell as done by \citetalias{Colella_1984}, we revert to performing a linear reconstruction within the affected cell, following \cite{Balsara_2017}. \DIFdelbegin \DIFdel{Either of these }\DIFdelend \DIFaddbegin \DIFadd{We note that these latter two steps only examine the interface values, and do not guarantee that the interface states lie within neighbouring cell-average values, and therefore the cell-average limiting carried out in the first step is not redundant. Any of these limiting }\DIFaddend steps may make the interface states discontinuous, with distinct states associated with each of the two cells adjacent to an interface\DIFdelbegin \DIFdel{, which reduces the order of accuracy of the stencil.
+Since the overall algorithm is a combination of second order and (usually) fourth order steps, the overall order of accuracy of PPM is often referred to as `third order' (e.g., \mbox{%DIFAUXCMD
+\citealt{Stone_2020}}\hskip0pt%DIFAUXCMD
 ). However, we note that there exist fully fourth-order extensions of PPM \mbox{%DIFAUXCMD
-\citep{Felker_2018}}\hspace{0pt}%DIFAUXCMD
-, but these methods do not allow local source terms to be evaluated independently for each cell while maintaining fourth-order accuracy}\DIFdelend .
+\citep{Felker_2018}}\hskip0pt%DIFAUXCMD
+, but these methods do not allow local source terms to be evaluated independently for each cell while maintaining fourth-order accuracy.
+}\DIFdelend \DIFaddbegin \DIFadd{.
+}\DIFaddend 
 
 We also implement reconstruction based on a piecewise-linear method (PLM) using the monotonized-central (MC) slope limiter \citep{VanLeer_1977}. We use PPM reconstruction by default, but allow PLM reconstruction via a compile-time option.
 
@@ -732,12 +778,15 @@ We run with a varying number of GPUs with two $256^3$ grids per GPU, increasing 
 
 We find a \DIFdelbegin \DIFdel{$\approx 30\%$ }\DIFdelend \DIFaddbegin \DIFadd{$\approx 40\%$ }\DIFaddend drop in performance per GPU when going from 1 GPU to 4 GPUs, corresponding to using all 4 GPUs on a single node of the compute cluster. We hypothesize that this is due to the limited communication bandwidth between GPUs on a node\DIFdelbegin \DIFdel{, which is limited here by the bandwidth of the PCI-Express bus. Similar scaling behavior is observed when running the }\textsc{\DIFdel{K-Athena}} %DIFAUXCMD
 \DIFdel{hydrodynamics code on GPUs \mbox{%DIFAUXCMD
-\citep{Grete_2019}}\hspace{0pt}%DIFAUXCMD
-, which uses an entirely different GPU programming framework and domain decomposition implementation. Nor is the phenomenon unique to GPU codes: }\DIFdelend \DIFaddbegin \DIFadd{. For intra-node scaling on CPUs, }\DIFaddend \citet{Stone_2020} report a similar decrease in performance when going from one CPU to all the CPUs on a node for \textsc{Athena++}, which they \DIFdelbegin \DIFdel{also }\DIFdelend attribute to limitations of memory bandwidth. \DIFdelbegin \DIFdel{Regardless of the origin of the slow down}\DIFdelend \DIFaddbegin \DIFadd{However, significantly different scaling behavior is observed when running the }\textsc{\DIFadd{K-Athena}} \DIFadd{hydrodynamics code on GPUs \mbox{%DIFAUXCMD
-\citep{Grete_2019} }\hspace{0pt}%DIFAUXCMD
-on the Summit supercomputer}\footnote{\url{https://www.olcf.ornl.gov/olcf-resources/compute-systems/summit/}}\DIFadd{, finding a $99$ per cent weak scaling efficiency going from 1 GPU to 6 GPUs on a single node, so there may be some inefficiency in our current GPU-to-GPU communication method. We find that using CUDA-aware MPI does not improve performance for our code. However}\DIFaddend , we observe \DIFdelbegin \DIFdel{very little further degradation }\DIFdelend \DIFaddbegin \DIFadd{only a modest drop }\DIFaddend in performance per GPU when going from 1 node (4 GPUs) to 64 nodes (256 GPUs), yielding a parallel efficiency of \DIFdelbegin \DIFdel{88 }\DIFdelend \DIFaddbegin \DIFadd{83 }\DIFaddend per cent on 64 nodes when compared to running on 1 node.  We could not run on larger numbers of GPU nodes due to job size limitations, but we expect scaling to continue to thousands of GPUs based on the parallel scaling observed for other GPU hydrodynamics codes based on \textsc{AMReX}, such as \textsc{Castro} \citep{Almgren_2020}.
+\citep{Grete_2019}}\hskip0pt%DIFAUXCMD
+, which uses an entirely different GPU programming framework and domain decomposition implementation. Nor is the phenomenon unique to GPU codes: }\DIFdelend \DIFaddbegin \DIFadd{. For intra-node scaling on CPUs, }\DIFaddend \citet{Stone_2020} report a similar decrease in performance when going from one CPU to all the CPUs on a node for \textsc{Athena++}, which they \DIFdelbegin \DIFdel{also }\DIFdelend attribute to limitations of memory bandwidth. \DIFdelbegin \DIFdel{Regardless of the origin of the slow down, we observe very little further degradation }\DIFdelend \DIFaddbegin \DIFadd{However, significantly different scaling behavior is observed when running the }\textsc{\DIFadd{K-Athena}} \DIFadd{hydrodynamics code on GPUs \mbox{%DIFAUXCMD
+\citep{Grete_2019} }\hskip0pt%DIFAUXCMD
+on the Summit supercomputer}\footnote{\url{https://www.olcf.ornl.gov/olcf-resources/compute-systems/summit/}}\DIFadd{, finding a $99$ per cent weak scaling efficiency going from 1 GPU to 6 GPUs on a single node, so there may be some inefficiency in our current GPU-to-GPU communication method. We find that using CUDA-aware MPI does not improve performance for our code. However, we observe only a modest drop }\DIFaddend in performance per GPU when going from 1 node (4 GPUs) to 64 nodes (256 GPUs), yielding a parallel efficiency of \DIFdelbegin \DIFdel{88 }\DIFdelend \DIFaddbegin \DIFadd{83 }\DIFaddend per cent on 64 nodes when compared to running on 1 node.  We could not run on larger numbers of GPU nodes due to job size limitations, but we expect scaling to continue to thousands of GPUs based on the parallel scaling observed for other GPU hydrodynamics codes based on \textsc{AMReX}, such as \textsc{Castro} \citep{Almgren_2020}.
 
-\begin{table}
+\DIFaddbegin \DIFadd{In }\autoref{table:weak_hydro_scaling_plm}\DIFadd{, we show the same performance numbers as in }\autoref{table:weak_hydro_scaling}\DIFadd{, but using PLM reconstruction for each simulation instead of PPM reconstruction. We find that the performance improves significantly on a single GPU, going from $113$ million zone-updates per second to $158$ million zone-updates per second. However, communication overheads limit the relative performance improvement when using large numbers of nodes, as the $64$-node case goes from $59$ million zone-updates per GPU per second using PPM to only $65$ million zone-updates per GPU per second using PLM. Since the computations on each local grid are less expensive with PLM but the communication costs remain the same, the scaling efficiency decreases slightly as well, from $83$ per cent to $76$ per cent.
+}
+
+\DIFaddend \begin{table}
     \DIFdelbeginFL %DIFDELCMD < \begin{tabular}{l|r|r|r|r|r|r|r}\hline
 %DIFDELCMD <     Nodes & GPUs & Mzones/GPU/s & Scaling efficiency & Grid size\\\hline
 %DIFDELCMD <     \csvreader
@@ -768,7 +817,10 @@ on the Summit supercomputer}\footnote{\url{https://www.olcf.ornl.gov/olcf-resour
 
 \DIFaddend We next test the scaling behaviour for full radiation hydrodynamics solver on uniform grids. \autoref{table:weak_radhydro_scaling} lists the performance per GPU and parallel efficiency measured with respect to single-node performance for the radiation-driven shell test problem run for $50$ timesteps. Since we have many radiation substeps per hydrodynamic step (set here to 10; see \autoref{sssec:sync}), the performance metric in units of Mzones/GPU/s is lower by a factor comparable to but somewhat smaller than the number of radiation substeps per hydro step; a single radiation update is slightly less costly than a single hydrodynamic update. In this case, we observe a steeper drop in performance when going from 1 GPU to 4 GPUs (approximately a factor of 2). The lower parallel efficiency is not surprising, since \emph{each} radiation substep requires communicating boundary conditions between grids, so the amount of inter-GPU communication per hydro timestep increases significantly for radiation hydrodynamics. Nonetheless, as is the case for hydrodynamics, there is little additional performance penalty when scaling from 1 node to 64 nodes. We measure a parallel efficiency in this case of \DIFdelbegin \DIFdel{$80$ }\DIFdelend \DIFaddbegin \DIFadd{$76$ }\DIFaddend per cent.
 
-Finally, we point out that absolute speed of \quokka~is excellent. Comparison between CPU and GPU codes is non-trivial, since it obviously depends on the CPU-to-GPU ratio on a particular compute platform. However, it is worth pointing out that \quokka's update rate per core (normalised by the number of CPU cores per compute node) for \textit{radiation}-hydrodynamics on GPU is comparable to or better than \textsc{Athena++}'s for \textit{hydrodynamics} on CPU.
+\DIFaddbegin \DIFadd{in }\autoref{table:scaling_a100}\DIFadd{, we list the performance metrics of the code on both the Sedov problem and the radiation-driven shell problem running on a compute node with newer NVIDIA A100 GPUs. Since we only have access to a limited number of these GPUs, we only show performance data for a single GPU and a single compute node (4 GPUs). The single GPU case achieves $254$ million hydrodynamic zone-updates per second using PPM, making Quokka, as far as we are aware, the fastest PPM hydrodynamics code that currently exists. On the radiation-driven shell problem, the code achieves $39$ million radiation hydrodynamic zone-updates per second. In both cases, the performance per GPU drops by a factor of approximately 2 when using all 4 GPUs on the node. This is almost entirely due to the time spent communicating boundary conditions, as shown in the table (`B.C. fill time', which denotes the percentage of total wall time spent filling ghost cells for each local grid). If communication of boundary data and computation over the local grids could be perfectly overlapped, the parallel efficiency going from 1 GPU to 4 GPUs would be $> 99$ per cent for hydrodynamics and $> 96$ for radiation hydrodynamics.
+}
+
+\DIFaddend Finally, we point out that absolute speed of \quokka~is excellent. Comparison between CPU and GPU codes is non-trivial, since it obviously depends on the CPU-to-GPU ratio on a particular compute platform. However, it is worth pointing out that \quokka's update rate per core (normalised by the number of CPU cores per compute node) for \textit{radiation}-hydrodynamics on GPU is comparable to or better than \textsc{Athena++}'s for \textit{hydrodynamics} on CPU.
 
 \begin{table}
     \DIFdelbeginFL %DIFDELCMD < \begin{tabular}{l|r|r|r|r|r|r}\hline
