@@ -25,6 +25,7 @@ struct TurbBox {};
 
 template <> struct EOS_Traits<TurbBox> {
   static constexpr double gamma = 1.0;
+  static constexpr double cs_isothermal = 1.0;
 };
 
 template <>
