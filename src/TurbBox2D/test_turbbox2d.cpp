@@ -50,11 +50,11 @@ void RadhydroSimulation<TurbBox>::setInitialConditionsAtLevel(int lev) {
       const auto v_sq = vx * vx + vy * vy + vz * vz;
       const auto gamma = HydroSystem<TurbBox>::gamma_;
 
-      state(i, j, k, HydroSystem<TurbBox>::density_index) = rho;
-      state(i, j, k, HydroSystem<TurbBox>::x1Momentum_index) = rho * vx;
-      state(i, j, k, HydroSystem<TurbBox>::x2Momentum_index) = rho * vy;
-      state(i, j, k, HydroSystem<TurbBox>::x3Momentum_index) = rho * vz;
-      state(i, j, k, HydroSystem<TurbBox>::energy_index) =
+      state(i, j, k, density_index) = rho;
+      state(i, j, k, x1Momentum_index) = rho * vx;
+      state(i, j, k, x2Momentum_index) = rho * vy;
+      state(i, j, k, x3Momentum_index) = rho * vz;
+      state(i, j, k, energy_index) =
           P / (gamma - 1.) + 0.5 * rho * v_sq;
 
       // initialize radiation variables to zero

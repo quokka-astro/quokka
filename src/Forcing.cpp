@@ -3,6 +3,7 @@
 
 #include "Forcing.H"
 #include "MersenneTwister.hpp"
+#include "hydro_system.hpp"
 
 using Real = amrex::Real;
 
@@ -297,7 +298,7 @@ auto StochasticForcing::rms() -> Real {
 void StochasticForcing::integrate_state_force(
     amrex::Box const &bx, amrex::Array4<Real> const &state,
     amrex::Array4<Real> const & /*diag_eos*/,
-    amrex::GeometryData const &geomdata, Real a, Real half_dt,
+    amrex::GeometryData const &geomdata, Real /*a*/, Real dt,
     Real /*small_eint*/, Real /*small_temp*/) {
   int mi = 0;
   int mj = 0;
@@ -483,28 +484,30 @@ void StochasticForcing::integrate_state_force(
 
           accel[n] = M_SQRT2 * accel[n];
         }
-        // add forcing to state
-        state(i, j, k, Xmom_comp) =
-            state(i, j, k, Xmom_comp) +
-            half_dt * state(i, j, k, Density_comp) * accel[0] / a;
-        state(i, j, k, Ymom_comp) =
-            state(i, j, k, Ymom_comp) +
-            half_dt * state(i, j, k, Density_comp) * accel[1] / a;
-        state(i, j, k, Zmom_comp) =
-            state(i, j, k, Zmom_comp) +
-            half_dt * state(i, j, k, Density_comp) * accel[2] / a;
+
+        auto compute_KE = [=](int i, int j, int k) {
+          const amrex::Real rho = state(i, j, k, density_index);
+          const amrex::Real px = state(i, j, k, x1Momentum_index);
+          const amrex::Real py = state(i, j, k, x2Momentum_index);
+          const amrex::Real pz = state(i, j, k, x3Momentum_index);
+          return (px * px + py * py + pz * pz) / (2.0 * rho);
+        };
+
+        // compute old kinetic energy
+        amrex::Real old_KE = compute_KE(i, j, k);
+
+        // add forcing
+        const amrex::Real rho = state(i, j, k, density_index);
+        state(i, j, k, x1Momentum_index) += dt * rho * accel[0];
+        state(i, j, k, x2Momentum_index) += dt * rho * accel[1];
+        state(i, j, k, x3Momentum_index) += dt * rho * accel[2];
+
+        // compute new kinetic energy
+        amrex::Real new_KE = compute_KE(i, j, k);
+
+        // update total energy
+        state(i, j, k, energy_index) += (new_KE - old_KE);
       }
     }
   }
-
-  // update total energy
-  amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-    state(i, j, k, Eden_comp) =
-        state(i, j, k, Eint_comp) +
-        0.5 *
-            (state(i, j, k, Xmom_comp) * state(i, j, k, Xmom_comp) +
-             state(i, j, k, Ymom_comp) * state(i, j, k, Ymom_comp) +
-             state(i, j, k, Zmom_comp) * state(i, j, k, Zmom_comp)) /
-            state(i, j, k, Density_comp);
-  });
 }
