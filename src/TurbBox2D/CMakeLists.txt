@@ -1,0 +1,6 @@
+if (AMReX_SPACEDIM GREATER_EQUAL 2)
+    add_executable(test_turbbox2d ../main.cpp test_turbbox2d.cpp ../Forcing.cpp)
+    if(AMReX_GPU_BACKEND MATCHES "CUDA")
+        setup_target_for_cuda_compilation(test_turbbox2d)
+    endif()
+endif()
