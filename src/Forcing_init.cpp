@@ -13,6 +13,7 @@ using Real = amrex::Real;
 /  date:       May, 2005
 /  modified1:  Oct, 2014: updated to support Enzo 2.4 // P. Grete
 /  modified2:  May, 2017: ported to Nyx
+/  modified3:  Feb, 2022: ported to Quokka by Ben Wibking
 /
 /  PURPOSE: initializes StochasticForcing object with given parameters;
 /           de facto, this is a parametrized constructor;
