@@ -22,6 +22,7 @@ constexpr int LENVEC = 4; // assumed minimal vector length
  *  written by: Wolfram Schmidt
  *  date:       May, 2005
  *  modified1:  May, 2017: ported to Nyx
+ *  modified2:  Feb, 2022: ported to Quokka by Ben Wibking
  *
  *  PURPOSE: composes and evolves a stochastic driving force in Fourier space
  *
@@ -290,24 +291,6 @@ inline void StochasticForcing::copy_ExpandedSpectrum(int dim,
 
   for (int n = NumModes + 1, m = 0; n <= 2 * NumModes; n++) {
     target[n] = mask[n - NumModes - 1] ? SpectrumEven[dim][m++] : 0.0;
-  }
-}
-
-inline void StochasticForcing::read_Spectrum(std::ifstream &input) {
-  for (int dim = 0; dim < SpectralRank; dim++) {
-    for (int m = 0; m < NumNonZeroModes; m++)
-      input >> SpectrumEven[dim][m];
-    for (int m = 0; m < NumNonZeroModes; m++)
-      input >> SpectrumOdd[dim][m];
-  }
-}
-
-inline void StochasticForcing::write_Spectrum(std::ofstream &output) {
-  for (int dim = 0; dim < SpectralRank; dim++) {
-    for (int m = 0; m < NumNonZeroModes; m++)
-      output << SpectrumEven[dim][m] << '\n';
-    for (int m = 0; m < NumNonZeroModes; m++)
-      output << SpectrumOdd[dim][m] << '\n';
   }
 }
 

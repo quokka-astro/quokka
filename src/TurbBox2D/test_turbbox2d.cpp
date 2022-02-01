@@ -24,41 +24,21 @@
 struct TurbBox {};
 
 template <> struct EOS_Traits<TurbBox> {
-  static constexpr double gamma = 5. / 3.;
+  static constexpr double gamma = 1.0;
 };
 
 template <>
 void RadhydroSimulation<TurbBox>::setInitialConditionsAtLevel(int lev) {
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo =
-      geom[lev].ProbLoArray();
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi =
-      geom[lev].ProbHiArray();
-
-  amrex::Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
-  amrex::Real const y0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
-
   for (amrex::MFIter iter(state_old_[lev]); iter.isValid(); ++iter) {
-    const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
+    const amrex::Box &indexRange = iter.validbox();
     auto const &state = state_new_[lev].array(iter);
 
     amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-      amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
-      amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
-      amrex::Real const R =
-          std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2));
-
       double vx = 0.;
       double vy = 0.;
       double vz = 0.;
       double rho = 1.0;
-      double P = NAN;
-
-      if (R < 0.1) { // inside circle
-        P = 10.;
-      } else {
-        P = 0.1;
-      }
+      double P = 1.0;
 
       AMREX_ASSERT(!std::isnan(vx));
       AMREX_ASSERT(!std::isnan(vy));
@@ -90,12 +70,10 @@ void RadhydroSimulation<TurbBox>::setInitialConditionsAtLevel(int lev) {
 
 auto problem_main() -> int {
   // Problem parameters
-
   const int nvars = RadhydroSimulation<TurbBox>::nvarTotal_;
   amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
   for (int n = 0; n < nvars; ++n) {
     for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-
       // periodic
       boundaryConditions[n].setLo(i, amrex::BCType::int_dir);
       boundaryConditions[n].setHi(i, amrex::BCType::int_dir);
@@ -118,6 +96,5 @@ auto problem_main() -> int {
   sim.evolve();
 
   // Cleanup and exit
-  amrex::Print() << "Finished." << std::endl;
   return 0;
 }

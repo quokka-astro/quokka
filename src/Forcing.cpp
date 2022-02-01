@@ -2,10 +2,9 @@
 #include "AMReX_FArrayBox.H"
 
 #include "Forcing.H"
+#include "MersenneTwister.hpp"
 
 using Real = amrex::Real;
-
-unsigned long int mt_random();
 
 int StochasticForcing::verbose = 0;
 int StochasticForcing::SpectralRank = 3;
@@ -37,16 +36,16 @@ StochasticForcing::StochasticForcing() {
     IntgrTime[dim] = 0.0;
     AutoCorrlTime[dim] = 1.0;
 
-    Amplitude[dim] = NULL;
-    InjectionEven[dim] = NULL;
-    InjectionOdd[dim] = NULL;
-    SpectrumEven[dim] = NULL;
-    SpectrumOdd[dim] = NULL;
-    wavevectors[dim] = NULL;
-    modes_even[dim] = NULL;
-    modes_odd[dim] = NULL;
+    Amplitude[dim] = nullptr;
+    InjectionEven[dim] = nullptr;
+    InjectionOdd[dim] = nullptr;
+    SpectrumEven[dim] = nullptr;
+    SpectrumOdd[dim] = nullptr;
+    wavevectors[dim] = nullptr;
+    modes_even[dim] = nullptr;
+    modes_odd[dim] = nullptr;
   }
-  mask = NULL;
+  mask = nullptr;
 }
 
 /***********************************************************************
@@ -57,6 +56,7 @@ StochasticForcing::StochasticForcing() {
  *  date:       May, 2005
  *  modified1:  Oct, 2014: updated to support Enzo 2.4 // P. Grete
  *  modified2:  May, 2017: ported to Nyx
+ *  modified3:  Feb, 2022: ported to Quokka by Ben Wibking
  *
  *  PURPOSE: evolves the random forcing spectrum in the fashion of
  *           a multi-dimensional Ornstein-Uhlenbeck process
@@ -71,7 +71,8 @@ StochasticForcing::StochasticForcing() {
 void StochasticForcing::evolve(Real dt) {
   if (amrex::ParallelDescriptor::IOProcessor()) {
 
-    Real DriftCoeff[MAX_DIMENSION], DiffCoeff[MAX_DIMENSION];
+    Real DriftCoeff[MAX_DIMENSION];
+    Real DiffCoeff[MAX_DIMENSION];
 
     if (decay == 0) {
 
@@ -86,14 +87,15 @@ void StochasticForcing::evolve(Real dt) {
       for (int dim = 0; dim < SpectralRank; dim++) {
         DriftCoeff[dim] = exp(-dt / AutoCorrlTime[dim]);
         DiffCoeff[dim] = sqrt(1 - DriftCoeff[dim] * DriftCoeff[dim]);
-        for (int n = 0, m = 0; n < NumModes; n++)
-          if (mask[n]) {
+        for (int n = 0, m = 0; n < NumModes; n++) {
+          if (mask[n] != 0) {
             SpectrumEven[dim][m] = DriftCoeff[dim] * SpectrumEven[dim][m] +
                                    DiffCoeff[dim] * InjectionEven[dim][n];
             SpectrumOdd[dim][m] = DriftCoeff[dim] * SpectrumOdd[dim][m] +
                                   DiffCoeff[dim] * InjectionOdd[dim][n];
             ++m;
           }
+        }
       }
 
     } else {
@@ -118,17 +120,23 @@ void StochasticForcing::evolve(Real dt) {
 //
 // Compute new random injection
 //
-void StochasticForcing::inject(void) {
+void StochasticForcing::inject() {
   if (amrex::ParallelDescriptor::IOProcessor()) {
 
-    int i, j, k, n, dim;
-    Real a, b, contr;
+    int i;
+    int j;
+    int k;
+    int n;
+    int dim;
+    Real a;
+    Real b;
+    Real contr;
 
     /* compute Gaussian deviates */
 
-    for (dim = 0; dim < SpectralRank; dim++)
+    for (dim = 0; dim < SpectralRank; dim++) {
       for (n = 0; n < NumModes; n++) {
-        if (mask[n]) {
+        if (mask[n] != 0) {
           gauss_deviate(Amplitude[dim][n], &a, &b);
         } else {
           a = 0.0;
@@ -137,6 +145,7 @@ void StochasticForcing::inject(void) {
         InjectionEven[dim][n] = a;
         InjectionOdd[dim][n] = b;
       }
+    }
 
     /* project modes
      * see eq (8) in Schmidt et al., A&A (2009)
@@ -221,12 +230,16 @@ void StochasticForcing::inject(void) {
 // (Box-Muller-Algorithm)
 //
 void StochasticForcing::gauss_deviate(Real amplt, Real *x, Real *y) {
-  Real v_sqr, v1, v2;
+  Real v_sqr;
+  Real v1;
+  Real v2;
   Real norm;
 
   do {
-    v1 = 2.0 * (Real)(mt_random() % 2147483563) / (2147483563.0) - 1.0;
-    v2 = 2.0 * (Real)(mt_random() % 2147483563) / (2147483563.0) - 1.0;
+    v1 = 2.0 * static_cast<Real>(mt_random() % 2147483563) / (2147483563.0) -
+         1.0;
+    v2 = 2.0 * static_cast<Real>(mt_random() % 2147483563) / (2147483563.0) -
+         1.0;
     v_sqr = v1 * v1 + v2 * v2;
   } while (v_sqr >= 1.0 || v_sqr == 0.0);
 
@@ -253,25 +266,29 @@ void StochasticForcing::distribute(void) {
 
   /* copy sepctrum to forcing_spect_module */
 
-  for (int dim = 0; dim < SpectralRank; dim++)
+  for (int dim = 0; dim < SpectralRank; dim++) {
     for (int l = 0; l < NumNonZeroModes; l++) {
       modes_even[dim][l] = SpectrumEven[dim][l];
       modes_odd[dim][l] = SpectrumOdd[dim][l];
     }
+  }
 }
 
 //
 // Compute RMS magnitude
 //
-Real StochasticForcing::rms(void) {
+auto StochasticForcing::rms() -> Real {
   int m;
-  Real sum_even = 0.0, sum_odd = 0.0;
+  Real sum_even = 0.0;
+  Real sum_odd = 0.0;
 
   for (int dim = 0; dim < SpectralRank; dim++) {
-    for (m = 0; m < NumNonZeroModes; m++)
+    for (m = 0; m < NumNonZeroModes; m++) {
       sum_even += SpectrumEven[dim][m] * SpectrumEven[dim][m];
-    for (m = 0; m < NumNonZeroModes; m++)
+    }
+    for (m = 0; m < NumNonZeroModes; m++) {
       sum_odd += SpectrumOdd[dim][m] * SpectrumOdd[dim][m];
+    }
   }
 
   return sqrt(sum_even + sum_odd);
@@ -279,9 +296,12 @@ Real StochasticForcing::rms(void) {
 
 void StochasticForcing::integrate_state_force(
     amrex::Box const &bx, amrex::Array4<Real> const &state,
-    amrex::Array4<Real> const &diag_eos, amrex::GeometryData const &geomdata,
-    Real a, Real half_dt, Real small_eint, Real small_temp) {
-  int mi, mj, mk;
+    amrex::Array4<Real> const & /*diag_eos*/,
+    amrex::GeometryData const &geomdata, Real a, Real half_dt,
+    Real /*small_eint*/, Real /*small_temp*/) {
+  int mi = 0;
+  int mj = 0;
+  int mk = 0;
   int num_phases[3];
   Real delta_phase[3];
   Real phase_lo[3];
@@ -303,38 +323,15 @@ void StochasticForcing::integrate_state_force(
   amrex::Vector<Real> phasefct_yz0(num_modes);
   amrex::Vector<Real> phasefct_yz1(num_modes);
 
-  Real *phasefct_even_x, *phasefct_even_y, *phasefct_even_z;
-  Real *phasefct_odd_x, *phasefct_odd_y, *phasefct_odd_z;
+  Real *phasefct_even_x = nullptr;
+  Real *phasefct_even_y = nullptr;
+  Real *phasefct_even_z = nullptr;
+  Real *phasefct_odd_x = nullptr;
+  Real *phasefct_odd_y = nullptr;
+  Real *phasefct_odd_z = nullptr;
 
   Real alpha_const = 100.0;
   Real temp0_const = 10.0;
-
-  // Note that (lo,hi) define the region of the box containing the grow cells
-  // Do *not* assume this is just the valid region
-  // apply heating-cooling to Eden_comp and Eint_comp
-  
-  amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-    // Original values
-    Real rho = state(i, j, k, Density_comp);
-    Real rho_e_orig = state(i, j, k, Eint_comp);
-    Real rho_K_res = state(i, j, k, Eden_comp) - state(i, j, k, Eint_comp);
-    Real T_orig = diag_eos(i, j, k, Temp_comp);
-
-    // Compute temperature increment and ensure that new temperature is positive
-    Real delta = half_dt * alpha_const * (temp0_const - T_orig) / a;
-    diag_eos(i, j, k, Temp_comp) = amrex::max(T_orig + delta, small_temp);
-
-    // Call EOS to get internal energy for constant equilibrium temperature
-    Real eint0 = temp0_const / (small_temp / small_eint);
-    Real delta_re = half_dt * alpha_const * (rho * eint0 - rho_e_orig) / a;
-
-    // Call EOS to get the internal energy floor
-
-    // Update cell quantities
-    state(i, j, k, Eint_comp) =
-        amrex::max(rho_e_orig + delta_re, rho * small_eint);
-    state(i, j, k, Eden_comp) = state(i, j, k, Eint_comp) + rho_K_res;
-  });
 
   const auto prob_hi = geomdata.ProbHi();
   const auto prob_lo = geomdata.ProbLo();
@@ -391,6 +388,7 @@ void StochasticForcing::integrate_state_force(
     phasefct_even_x[m] = 1.0;
     phasefct_odd_x[m] = 0.0;
   }
+
   for (int i = bx.smallEnd(0) + 1; i <= bx.bigEnd(0); i++) {
     mi = (i - bx.smallEnd(0)) * num_modes;
     for (int m = 0; m < num_modes; m++) {
@@ -409,6 +407,7 @@ void StochasticForcing::integrate_state_force(
     phasefct_even_y[m] = 1.0;
     phasefct_odd_y[m] = 0.0;
   }
+
   for (int j = bx.smallEnd(1) + 1; j <= bx.bigEnd(1); j++) {
     mj = (j - bx.smallEnd(1)) * num_modes;
     for (int m = 0; m < num_modes; m++) {
@@ -427,6 +426,7 @@ void StochasticForcing::integrate_state_force(
     phasefct_even_z[m] = phasefct_init_even[m];
     phasefct_odd_z[m] = phasefct_init_odd[m];
   }
+
   for (int k = bx.smallEnd(2) + 1; k <= bx.bigEnd(2); k++) {
     mk = (k - bx.smallEnd(2)) * num_modes;
     for (int m = 0; m < num_modes; m++) {
@@ -442,6 +442,8 @@ void StochasticForcing::integrate_state_force(
   }
 
   // apply forcing in physical space
+  // TODO(bwibking): fix this to run on GPU
+
   for (int k = bx.smallEnd(2); k <= bx.bigEnd(2); k++) {
     for (int j = bx.smallEnd(1); j <= bx.bigEnd(1); j++) {
       mj = (j - bx.smallEnd(1)) * num_modes;
