@@ -731,7 +731,8 @@ void AMRSimulation<problem_t>::FillPatchWithData(int lev, amrex::Real time, amre
 						  boundaryFunctor);
 
 		// use CellConservativeLinear interpolation onto fine grid
-		amrex::MFInterpolater *mapper = &amrex::mf_cell_cons_interp;
+		amrex::Interpolater *mapper = &amrex::cell_cons_interp;
+		//amrex::MFInterpolater *mapper = &amrex::mf_cell_cons_interp;
 		//amrex::MFInterpolater *mapper = &amrex::mf_pc_interp;
 
 		// copies interior zones, fills ghost zones with space-time interpolated
