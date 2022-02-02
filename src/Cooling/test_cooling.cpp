@@ -10,6 +10,8 @@
 #include <vector>
 
 #include "AMReX_BC_TYPES.H"
+#include "AMReX_MultiFab.H"
+#include "AMReX_NVector_MultiFab.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_Sundials.H"
 
@@ -21,8 +23,8 @@
 struct CouplingProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-constexpr double Egas0 = 1.0e2;  // erg cm^-3
-constexpr double rho0 = 1.0e-7;  // g cm^-3
+constexpr double Egas0 = 1.0e2; // erg cm^-3
+constexpr double rho0 = 1.0e-7; // g cm^-3
 
 template <>
 void RadhydroSimulation<CouplingProblem>::setInitialConditionsAtLevel(int lev) {
@@ -97,16 +99,22 @@ auto problem_main() -> int {
   sim.is_hydro_enabled_ = true;
   sim.is_radiation_enabled_ = false;
   sim.cflNumber_ = CFL_number;
-  //sim.constantDt_ = constant_dt;
+  // sim.constantDt_ = constant_dt;
   sim.maxTimesteps_ = max_timesteps;
   sim.stopTime_ = max_time;
   sim.plotfileInterval_ = -1;
 
+  // Create an N_Vector wrapper for the state MultiFab
+  amrex::MultiFab &base_mf = sim.state_new_[0];
+  int nComp = base_mf.n_comp;
+  sunindextype length = nComp * base_mf.boxArray().numPts();
+  N_Vector nv_sol = amrex::sundials::N_VMake_MultiFab(length, &base_mf);
+
   // initialize
   sim.setInitialConditions();
 
-  // evolve
-  sim.evolve();
+  // use Sundials to integrate the internal energy (ignoring other MultiFab components)
+
 
   // copy solution slice to vector
   int status = 0;
