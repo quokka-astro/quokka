@@ -17,6 +17,7 @@
 
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
+#include "AMReX_FabArray.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_NVector_MultiFab.H"
 #include "AMReX_ParallelContext.H"
@@ -93,43 +94,42 @@ static auto userdata_f(realtype t, N_Vector y_data, N_Vector y_rhs,
   return udata->f(t, y_data, y_rhs, user_data);
 }
 
-void rhs_cooling(amrex::MultiFab &S_rhs, amrex::MultiFab & /*S_data*/, realtype /*t*/) {
+void rhs_cooling(amrex::MultiFab &S_rhs, amrex::MultiFab & /*S_data*/,
+                 realtype /*t*/) {
   // compute cooling ODE right-hand side (== dy/dt) at time t
   for (amrex::MFIter iter(S_rhs); iter.isValid(); ++iter) {
     const amrex::Box &indexRange = iter.validbox();
-    //auto const &state = S_data.const_array(iter);
+    // auto const &state = S_data.const_array(iter);
     auto const &rhs = S_rhs.array(iter);
 
     amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-      rhs(i, j, k, RadSystem<CoolingTest>::radEnergy_index) = 0;
-      rhs(i, j, k, RadSystem<CoolingTest>::x1RadFlux_index) = 0;
-      rhs(i, j, k, RadSystem<CoolingTest>::x2RadFlux_index) = 0;
-      rhs(i, j, k, RadSystem<CoolingTest>::x3RadFlux_index) = 0;
-
-      rhs(i, j, k, RadSystem<CoolingTest>::gasEnergy_index) = 1.0e-5;
-      rhs(i, j, k, RadSystem<CoolingTest>::gasDensity_index) = 0;
-      rhs(i, j, k, RadSystem<CoolingTest>::x1GasMomentum_index) = 0;
-      rhs(i, j, k, RadSystem<CoolingTest>::x2GasMomentum_index) = 0;
-      rhs(i, j, k, RadSystem<CoolingTest>::x3GasMomentum_index) = 0;
+      rhs(i, j, k) = 1.0e-5;
     });
   }
 }
 
-void computeCooling(amrex::MultiFab &mf) {
+void computeCooling(amrex::MultiFab &mf, amrex::Real dt) {
   // Initialise SUNContext
   SUNContext sundialsContext = nullptr;
   auto *mpi_comm = amrex::ParallelContext::CommunicatorSub();
   SUNContext_Create(mpi_comm, &sundialsContext);
 
-  // Create an N_Vector wrapper for the state MultiFab
-  int nComp = mf.n_comp;
-  sunindextype length = nComp * mf.boxArray().numPts();
-  N_Vector y_vec = amrex::sundials::N_VMake_MultiFab(length, &mf);
+  // Create MultiFab 'S_eint' with only gas internal energy
+  const auto &ba = mf.boxArray();
+  const auto &dmap = mf.DistributionMap();
+  int nghost = mf.nGrow();
+  amrex::MultiFab S_eint(ba, dmap, 1, nghost);
+
+  // Copy gas internal energy to S_eint
+  amrex::MultiFab::Copy(S_eint, mf, HydroSystem<CoolingTest>::energy_index, 0,
+                        1, nghost);
+
+  // Create an N_Vector wrapper for S_eint
+  sunindextype length = S_eint.n_comp * S_eint.boxArray().numPts();
+  N_Vector y_vec = amrex::sundials::N_VMake_MultiFab(length, &S_eint);
 
   // create CVode object
   void *cvode_mem = CVodeCreate(CV_ADAMS, sundialsContext);
-  amrex::Real time = 0.;
-  amrex::Real dt = 1.0;
 
   // create user data object
   SundialsUserData user_data;
@@ -153,12 +153,14 @@ void computeCooling(amrex::MultiFab &mf) {
   AMREX_ALWAYS_ASSERT(CVodeSetUserData(cvode_mem, &user_data) == CV_SUCCESS);
 
   // set RHS function and initial conditions t0, y0
-  AMREX_ALWAYS_ASSERT(CVodeInit(cvode_mem, userdata_f, time, y_vec) ==
-                      CV_SUCCESS);
+  // (NOTE: CVODE allocates the rhs MultiFab itself!)
+  AMREX_ALWAYS_ASSERT(CVodeInit(cvode_mem, userdata_f, 0, y_vec) == CV_SUCCESS);
 
   // set integration tolerances
   amrex::Real reltol = 1.0e-6;
   amrex::Real abstol = 1.0e-6;
+  AMREX_ALWAYS_ASSERT(reltol > 0.);
+  AMREX_ALWAYS_ASSERT(abstol > 0.); // CVODE requires this to be nonzero
   CVodeSStolerances(cvode_mem, reltol, abstol);
 
   // set nonlinear solver to fixed-point
@@ -169,9 +171,13 @@ void computeCooling(amrex::MultiFab &mf) {
 
   // solve ODEs
   realtype time_reached = NAN;
-  int ierr = CVode(cvode_mem, time + dt, y_vec, &time_reached, CV_NORMAL);
+  int ierr = CVode(cvode_mem, dt, y_vec, &time_reached, CV_NORMAL);
   AMREX_ALWAYS_ASSERT_WITH_MESSAGE(ierr == CV_SUCCESS,
                                    "Cooling solve with CVODE failed!");
+
+  // copy solution back to MultiFab 'mf'
+  amrex::MultiFab::Copy(mf, S_eint, 0, HydroSystem<CoolingTest>::energy_index,
+                        1, nghost);
 
   // free SUNDIALS objects
   N_VDestroy(y_vec);
@@ -207,7 +213,8 @@ auto problem_main() -> int {
   sim.setInitialConditions();
 
   // compute cooling
-  computeCooling(sim.state_new_[0]);
+  amrex::Real level_dt = 1.0;
+  computeCooling(sim.state_new_[0], level_dt);
 
 #ifdef HAVE_PYTHON
   if (amrex::ParallelDescriptor::IOProcessor()) {
