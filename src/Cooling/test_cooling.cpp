@@ -228,7 +228,7 @@ auto problem_main() -> int {
 
     matplotlibcpp::yscale("log");
     matplotlibcpp::xscale("log");
-    if (Tgas.size() > 0) {
+    if (!Tgas.empty()) {
       matplotlibcpp::ylim(0.1 * Tgas.front(), 10.0 * Tgas.back());
     }
     matplotlibcpp::legend();
