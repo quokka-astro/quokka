@@ -8,7 +8,6 @@
 ///
 
 #include <cvode/cvode.h>
-#include <nvector/nvector_manyvector.h>
 #include <sundials/sundials_context.h>
 #include <sundials/sundials_nonlinearsolver.h>
 #include <sundials/sundials_nvector.h>
@@ -29,29 +28,29 @@
 #include "hydro_system.hpp"
 #include "test_cooling.hpp"
 
-struct CouplingProblem {
+struct CoolingTest {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
 constexpr double Egas0 = 1.0e2; // erg cm^-3
 constexpr double rho0 = 1.0e-7; // g cm^-3
 
 template <>
-void RadhydroSimulation<CouplingProblem>::setInitialConditionsAtLevel(int lev) {
+void RadhydroSimulation<CoolingTest>::setInitialConditionsAtLevel(int lev) {
   for (amrex::MFIter iter(state_old_[lev]); iter.isValid(); ++iter) {
     const amrex::Box &indexRange = iter.validbox();
     auto const &state = state_new_[lev].array(iter);
 
     amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-      state(i, j, k, RadSystem<CouplingProblem>::radEnergy_index) = 0;
-      state(i, j, k, RadSystem<CouplingProblem>::x1RadFlux_index) = 0;
-      state(i, j, k, RadSystem<CouplingProblem>::x2RadFlux_index) = 0;
-      state(i, j, k, RadSystem<CouplingProblem>::x3RadFlux_index) = 0;
+      state(i, j, k, RadSystem<CoolingTest>::radEnergy_index) = 0;
+      state(i, j, k, RadSystem<CoolingTest>::x1RadFlux_index) = 0;
+      state(i, j, k, RadSystem<CoolingTest>::x2RadFlux_index) = 0;
+      state(i, j, k, RadSystem<CoolingTest>::x3RadFlux_index) = 0;
 
-      state(i, j, k, RadSystem<CouplingProblem>::gasEnergy_index) = Egas0;
-      state(i, j, k, RadSystem<CouplingProblem>::gasDensity_index) = rho0;
-      state(i, j, k, RadSystem<CouplingProblem>::x1GasMomentum_index) = 0;
-      state(i, j, k, RadSystem<CouplingProblem>::x2GasMomentum_index) = 0;
-      state(i, j, k, RadSystem<CouplingProblem>::x3GasMomentum_index) = 0;
+      state(i, j, k, RadSystem<CoolingTest>::gasEnergy_index) = Egas0;
+      state(i, j, k, RadSystem<CoolingTest>::gasDensity_index) = rho0;
+      state(i, j, k, RadSystem<CoolingTest>::x1GasMomentum_index) = 0;
+      state(i, j, k, RadSystem<CoolingTest>::x2GasMomentum_index) = 0;
+      state(i, j, k, RadSystem<CoolingTest>::x3GasMomentum_index) = 0;
     });
   }
 
@@ -59,28 +58,28 @@ void RadhydroSimulation<CouplingProblem>::setInitialConditionsAtLevel(int lev) {
   areInitialConditionsDefined_ = true;
 }
 
-template <> void RadhydroSimulation<CouplingProblem>::computeAfterTimestep() {
+template <> void RadhydroSimulation<CoolingTest>::computeAfterTimestep() {
   auto [position, values] = fextract(state_new_[0], Geom(0), 0, 0.5);
 
   if (amrex::ParallelDescriptor::IOProcessor()) {
     t_vec_.push_back(tNew_[0]);
 
     const amrex::Real Etot_i =
-        values.at(HydroSystem<CouplingProblem>::energy_index).at(0);
+        values.at(HydroSystem<CoolingTest>::energy_index).at(0);
     const amrex::Real x1GasMom =
-        values.at(HydroSystem<CouplingProblem>::x1Momentum_index).at(0);
+        values.at(HydroSystem<CoolingTest>::x1Momentum_index).at(0);
     const amrex::Real x2GasMom =
-        values.at(HydroSystem<CouplingProblem>::x2Momentum_index).at(0);
+        values.at(HydroSystem<CoolingTest>::x2Momentum_index).at(0);
     const amrex::Real x3GasMom =
-        values.at(HydroSystem<CouplingProblem>::x3Momentum_index).at(0);
+        values.at(HydroSystem<CoolingTest>::x3Momentum_index).at(0);
     const amrex::Real rho =
-        values.at(HydroSystem<CouplingProblem>::density_index).at(0);
+        values.at(HydroSystem<CoolingTest>::density_index).at(0);
 
-    const amrex::Real Egas_i = RadSystem<CouplingProblem>::ComputeEintFromEgas(
+    const amrex::Real Egas_i = RadSystem<CoolingTest>::ComputeEintFromEgas(
         rho, x1GasMom, x2GasMom, x3GasMom, Etot_i);
 
     Tgas_vec_.push_back(
-        RadSystem<CouplingProblem>::ComputeTgasFromEgas(rho, Egas_i));
+        RadSystem<CoolingTest>::ComputeTgasFromEgas(rho, Egas_i));
   }
 }
 
@@ -88,102 +87,82 @@ struct SundialsUserData {
   std::function<int(realtype, N_Vector, N_Vector, void *)> f;
 };
 
-static auto f(realtype t, N_Vector y_data, N_Vector y_rhs, void *user_data)
-    -> int {
+static auto userdata_f(realtype t, N_Vector y_data, N_Vector y_rhs,
+                       void *user_data) -> int {
   auto *udata = static_cast<SundialsUserData *>(user_data);
   return udata->f(t, y_data, y_rhs, user_data);
 }
 
-auto problem_main() -> int {
-  // Problem parameters
+void rhs_cooling(amrex::MultiFab &S_rhs, amrex::MultiFab & /*S_data*/, realtype /*t*/) {
+  // compute cooling ODE right-hand side (== dy/dt) at time t
+  for (amrex::MFIter iter(S_rhs); iter.isValid(); ++iter) {
+    const amrex::Box &indexRange = iter.validbox();
+    //auto const &state = S_data.const_array(iter);
+    auto const &rhs = S_rhs.array(iter);
 
-  // const int nx = 4;
-  // const double Lx = 1e5; // cm
-  const double CFL_number = 1.0;
-  const double max_time = 1.0e-2; // s
-  const int max_timesteps = 1e3;
+    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+      rhs(i, j, k, RadSystem<CoolingTest>::radEnergy_index) = 0;
+      rhs(i, j, k, RadSystem<CoolingTest>::x1RadFlux_index) = 0;
+      rhs(i, j, k, RadSystem<CoolingTest>::x2RadFlux_index) = 0;
+      rhs(i, j, k, RadSystem<CoolingTest>::x3RadFlux_index) = 0;
 
-  // Problem initialization
-  constexpr int nvars = RadhydroSimulation<CouplingProblem>::nvarTotal_;
-  amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
-  for (int n = 0; n < nvars; ++n) {
-    for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-      boundaryConditions[n].setLo(i, amrex::BCType::foextrap); // extrapolate
-      boundaryConditions[n].setHi(i, amrex::BCType::foextrap);
-    }
+      rhs(i, j, k, RadSystem<CoolingTest>::gasEnergy_index) = 1.0e-5;
+      rhs(i, j, k, RadSystem<CoolingTest>::gasDensity_index) = 0;
+      rhs(i, j, k, RadSystem<CoolingTest>::x1GasMomentum_index) = 0;
+      rhs(i, j, k, RadSystem<CoolingTest>::x2GasMomentum_index) = 0;
+      rhs(i, j, k, RadSystem<CoolingTest>::x3GasMomentum_index) = 0;
+    });
   }
+}
 
-  RadhydroSimulation<CouplingProblem> sim(boundaryConditions);
-  sim.is_hydro_enabled_ = true;
-  sim.is_radiation_enabled_ = false;
-  sim.cflNumber_ = CFL_number;
-  // sim.constantDt_ = constant_dt;
-  sim.maxTimesteps_ = max_timesteps;
-  sim.stopTime_ = max_time;
-  sim.plotfileInterval_ = -1;
-
+void computeCooling(amrex::MultiFab &mf) {
   // Initialise SUNContext
   SUNContext sundialsContext = nullptr;
   auto *mpi_comm = amrex::ParallelContext::CommunicatorSub();
   SUNContext_Create(mpi_comm, &sundialsContext);
 
   // Create an N_Vector wrapper for the state MultiFab
-  amrex::MultiFab &base_mf = sim.state_new_[0];
-  int nComp = base_mf.n_comp;
-  sunindextype length = nComp * base_mf.boxArray().numPts();
-  N_Vector nv_sol = amrex::sundials::N_VMake_MultiFab(length, &base_mf);
+  int nComp = mf.n_comp;
+  sunindextype length = nComp * mf.boxArray().numPts();
+  N_Vector y_vec = amrex::sundials::N_VMake_MultiFab(length, &mf);
 
-  // initialize
-  sim.setInitialConditions();
-
-  // use CVODE to integrate the internal energy (ignoring other MultiFab
-  // components)
+  // create CVode object
   void *cvode_mem = CVodeCreate(CV_ADAMS, sundialsContext);
   amrex::Real time = 0.;
   amrex::Real dt = 1.0;
-  N_Vector y_vec = nullptr;
-  SundialsUserData user_data;
 
+  // create user data object
+  SundialsUserData user_data;
   user_data.f = [&](realtype rhs_time, N_Vector y_data, N_Vector y_rhs, void *
                     /* user_data */) -> int {
-    amrex::Vector<amrex::MultiFab> S_data;
-    amrex::Vector<amrex::MultiFab> S_rhs;
+    amrex::MultiFab S_data;
+    amrex::MultiFab S_rhs;
 
-    const int num_vecs = N_VGetNumSubvectors_ManyVector(y_data);
-    S_data.resize(num_vecs);
-    S_rhs.resize(num_vecs);
+    S_data =
+        amrex::MultiFab(*amrex::sundials::getMFptr(y_data), amrex::make_alias,
+                        0, amrex::sundials::getMFptr(y_data)->nComp());
+    S_rhs =
+        amrex::MultiFab(*amrex::sundials::getMFptr(y_rhs), amrex::make_alias, 0,
+                        amrex::sundials::getMFptr(y_rhs)->nComp());
 
-    for (int i = 0; i < num_vecs; i++) {
-      S_data.at(i) = amrex::MultiFab(
-          *amrex::sundials::getMFptr(N_VGetSubvector_ManyVector(y_data, i)),
-          amrex::make_alias, 0,
-          amrex::sundials::getMFptr(N_VGetSubvector_ManyVector(y_data, i))
-              ->nComp());
-      S_rhs.at(i) = amrex::MultiFab(
-          *amrex::sundials::getMFptr(N_VGetSubvector_ManyVector(y_rhs, i)),
-          amrex::make_alias, 0,
-          amrex::sundials::getMFptr(N_VGetSubvector_ManyVector(y_rhs, i))
-              ->nComp());
-    }
-
-    // BaseT::post_update(S_data, rhs_time);
-    // BaseT::rhs(S_rhs, S_data, rhs_time);
-
+    rhs_cooling(S_rhs, S_data, rhs_time);
     return 0;
   };
 
+  // set user data
+  AMREX_ALWAYS_ASSERT(CVodeSetUserData(cvode_mem, &user_data) == CV_SUCCESS);
+
   // set RHS function and initial conditions t0, y0
-  AMREX_ALWAYS_ASSERT(CVodeInit(cvode_mem, f, time, y_vec) == CV_SUCCESS);
+  AMREX_ALWAYS_ASSERT(CVodeInit(cvode_mem, userdata_f, time, y_vec) ==
+                      CV_SUCCESS);
 
   // set integration tolerances
   amrex::Real reltol = 1.0e-6;
-  // absolute tolerances should be set by consideration of the minimum physical
-  // temperature
-  amrex::Real abstol = 0;
+  amrex::Real abstol = 1.0e-6;
   CVodeSStolerances(cvode_mem, reltol, abstol);
 
   // set nonlinear solver to fixed-point
-  int m_accel = 0; // (optional) use Anderson acceleration
+  int m_accel = 0; // (optional) use Anderson acceleration with m_accel iterates
   SUNNonlinearSolver NLS =
       SUNNonlinSol_FixedPoint(y_vec, m_accel, sundialsContext);
   CVodeSetNonlinearSolver(cvode_mem, NLS);
@@ -195,10 +174,40 @@ auto problem_main() -> int {
                                    "Cooling solve with CVODE failed!");
 
   // free SUNDIALS objects
+  N_VDestroy(y_vec);
   CVodeFree(&cvode_mem);
   SUNContext_Free(&sundialsContext);
+}
 
-  // plot results
+auto problem_main() -> int {
+  // Problem parameters
+  const double CFL_number = 1.0;
+  const double max_time = 1.0e-2; // s
+  const int max_timesteps = 1e3;
+
+  // Problem initialization
+  constexpr int nvars = RadhydroSimulation<CoolingTest>::nvarTotal_;
+  amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
+  for (int n = 0; n < nvars; ++n) {
+    for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+      boundaryConditions[n].setLo(i, amrex::BCType::foextrap); // extrapolate
+      boundaryConditions[n].setHi(i, amrex::BCType::foextrap);
+    }
+  }
+
+  RadhydroSimulation<CoolingTest> sim(boundaryConditions);
+  sim.is_hydro_enabled_ = true;
+  sim.is_radiation_enabled_ = false;
+  sim.cflNumber_ = CFL_number;
+  sim.maxTimesteps_ = max_timesteps;
+  sim.stopTime_ = max_time;
+  sim.plotfileInterval_ = -1;
+
+  // initialize
+  sim.setInitialConditions();
+
+  // compute cooling
+  computeCooling(sim.state_new_[0]);
 
 #ifdef HAVE_PYTHON
   if (amrex::ParallelDescriptor::IOProcessor()) {
