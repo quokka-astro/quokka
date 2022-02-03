@@ -83,7 +83,6 @@ auto problem_main() -> int {
   const double CFL_number = 1.0;
   const double max_time = 1.0e-2; // s
   const int max_timesteps = 1e3;
-  const double constant_dt = 1.0e-8; // s
 
   // Problem initialization
   constexpr int nvars = RadhydroSimulation<CouplingProblem>::nvarTotal_;
@@ -131,22 +130,12 @@ auto problem_main() -> int {
 
     matplotlibcpp::yscale("log");
     matplotlibcpp::xscale("log");
-    matplotlibcpp::ylim(0.1 * std::min(Tgas.front(), Trad.front()),
-                        10.0 * std::max(Trad.back(), Tgas.back()));
+    matplotlibcpp::ylim(0.1 * Tgas.front(),
+                        10.0 * Tgas.back());
     matplotlibcpp::legend();
     matplotlibcpp::xlabel("time t (s)");
     matplotlibcpp::ylabel("temperature T (K)");
     matplotlibcpp::save(fmt::format("./cooling.pdf"));
-
-    std::vector<double> frac_err(t.size());
-    for (int i = 0; i < t.size(); ++i) {
-      frac_err.at(i) = Tgas_exact_interp.at(i) / Tgas.at(i) - 1.0;
-    }
-    matplotlibcpp::clf();
-    matplotlibcpp::plot(t, frac_err);
-    matplotlibcpp::xlabel("time t (s)");
-    matplotlibcpp::ylabel("fractional error in gas temperature");
-    matplotlibcpp::save(fmt::format("./cooling_error.pdf"));
   }
 #endif
 
