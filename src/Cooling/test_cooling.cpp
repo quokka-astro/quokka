@@ -112,8 +112,8 @@ auto problem_main() -> int {
   // initialize
   sim.setInitialConditions();
 
-  // use Sundials to integrate the internal energy (ignoring other MultiFab components)
-
+  // use Sundials to integrate the internal energy (ignoring other MultiFab
+  // components)
 
   // copy solution slice to vector
   int status = 0;
@@ -130,8 +130,9 @@ auto problem_main() -> int {
 
     matplotlibcpp::yscale("log");
     matplotlibcpp::xscale("log");
-    matplotlibcpp::ylim(0.1 * Tgas.front(),
-                        10.0 * Tgas.back());
+    if (Tgas.size() > 0) {
+      matplotlibcpp::ylim(0.1 * Tgas.front(), 10.0 * Tgas.back());
+    }
     matplotlibcpp::legend();
     matplotlibcpp::xlabel("time t (s)");
     matplotlibcpp::ylabel("temperature T (K)");
