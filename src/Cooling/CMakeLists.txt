@@ -1,6 +1,3 @@
-
-find_package(SUNDIALS REQUIRED)
-
 add_executable(test_cooling ../main.cpp test_cooling.cpp ../fextract.cpp)
 target_link_libraries(test_cooling PUBLIC SUNDIALS::cvode)
 
