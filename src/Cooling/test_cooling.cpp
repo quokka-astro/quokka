@@ -7,11 +7,20 @@
 /// \brief Defines a test problem for SUNDIALS cooling.
 ///
 
+#include <cvode/cvode.h>
+#include <nvector/nvector_manyvector.h>
+#include <sundials/sundials_context.h>
+#include <sundials/sundials_nonlinearsolver.h>
+#include <sundials/sundials_nvector.h>
+#include <sundials/sundials_types.h>
+#include <sunnonlinsol/sunnonlinsol_fixedpoint.h>
 #include <vector>
 
 #include "AMReX_BC_TYPES.H"
+#include "AMReX_BLassert.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_NVector_MultiFab.H"
+#include "AMReX_ParallelContext.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_Sundials.H"
 
@@ -75,6 +84,16 @@ template <> void RadhydroSimulation<CouplingProblem>::computeAfterTimestep() {
   }
 }
 
+struct SundialsUserData {
+  std::function<int(realtype, N_Vector, N_Vector, void *)> f;
+};
+
+static auto f(realtype t, N_Vector y_data, N_Vector y_rhs, void *user_data)
+    -> int {
+  auto *udata = static_cast<SundialsUserData *>(user_data);
+  return udata->f(t, y_data, y_rhs, user_data);
+}
+
 auto problem_main() -> int {
   // Problem parameters
 
@@ -103,6 +122,11 @@ auto problem_main() -> int {
   sim.stopTime_ = max_time;
   sim.plotfileInterval_ = -1;
 
+  // Initialise SUNContext
+  SUNContext sundialsContext = nullptr;
+  auto *mpi_comm = amrex::ParallelContext::CommunicatorSub();
+  SUNContext_Create(mpi_comm, &sundialsContext);
+
   // Create an N_Vector wrapper for the state MultiFab
   amrex::MultiFab &base_mf = sim.state_new_[0];
   int nComp = base_mf.n_comp;
@@ -112,11 +136,69 @@ auto problem_main() -> int {
   // initialize
   sim.setInitialConditions();
 
-  // use Sundials to integrate the internal energy (ignoring other MultiFab
+  // use CVODE to integrate the internal energy (ignoring other MultiFab
   // components)
+  void *cvode_mem = CVodeCreate(CV_ADAMS, sundialsContext);
+  amrex::Real time = 0.;
+  amrex::Real dt = 1.0;
+  N_Vector y_vec = nullptr;
+  SundialsUserData user_data;
 
-  // copy solution slice to vector
-  int status = 0;
+  user_data.f = [&](realtype rhs_time, N_Vector y_data, N_Vector y_rhs, void *
+                    /* user_data */) -> int {
+    amrex::Vector<amrex::MultiFab> S_data;
+    amrex::Vector<amrex::MultiFab> S_rhs;
+
+    const int num_vecs = N_VGetNumSubvectors_ManyVector(y_data);
+    S_data.resize(num_vecs);
+    S_rhs.resize(num_vecs);
+
+    for (int i = 0; i < num_vecs; i++) {
+      S_data.at(i) = amrex::MultiFab(
+          *amrex::sundials::getMFptr(N_VGetSubvector_ManyVector(y_data, i)),
+          amrex::make_alias, 0,
+          amrex::sundials::getMFptr(N_VGetSubvector_ManyVector(y_data, i))
+              ->nComp());
+      S_rhs.at(i) = amrex::MultiFab(
+          *amrex::sundials::getMFptr(N_VGetSubvector_ManyVector(y_rhs, i)),
+          amrex::make_alias, 0,
+          amrex::sundials::getMFptr(N_VGetSubvector_ManyVector(y_rhs, i))
+              ->nComp());
+    }
+
+    // BaseT::post_update(S_data, rhs_time);
+    // BaseT::rhs(S_rhs, S_data, rhs_time);
+
+    return 0;
+  };
+
+  // set RHS function and initial conditions t0, y0
+  AMREX_ALWAYS_ASSERT(CVodeInit(cvode_mem, f, time, y_vec) == CV_SUCCESS);
+
+  // set integration tolerances
+  amrex::Real reltol = 1.0e-6;
+  // absolute tolerances should be set by consideration of the minimum physical
+  // temperature
+  amrex::Real abstol = 0;
+  CVodeSStolerances(cvode_mem, reltol, abstol);
+
+  // set nonlinear solver to fixed-point
+  int m_accel = 0; // (optional) use Anderson acceleration
+  SUNNonlinearSolver NLS =
+      SUNNonlinSol_FixedPoint(y_vec, m_accel, sundialsContext);
+  CVodeSetNonlinearSolver(cvode_mem, NLS);
+
+  // solve ODEs
+  realtype time_reached = NAN;
+  int ierr = CVode(cvode_mem, time + dt, y_vec, &time_reached, CV_NORMAL);
+  AMREX_ALWAYS_ASSERT_WITH_MESSAGE(ierr == CV_SUCCESS,
+                                   "Cooling solve with CVODE failed!");
+
+  // free SUNDIALS objects
+  CVodeFree(&cvode_mem);
+  SUNContext_Free(&sundialsContext);
+
+  // plot results
 
 #ifdef HAVE_PYTHON
   if (amrex::ParallelDescriptor::IOProcessor()) {
@@ -142,5 +224,6 @@ auto problem_main() -> int {
 
   // Cleanup and exit
   amrex::Print() << "Finished." << std::endl;
+  int status = 0;
   return status;
 }
