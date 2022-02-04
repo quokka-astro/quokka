@@ -51,13 +51,19 @@ void RadhydroSimulation<CoolingTest>::setInitialConditionsAtLevel(int lev) {
       state(i, j, k, RadSystem<CoolingTest>::x2RadFlux_index) = 0;
       state(i, j, k, RadSystem<CoolingTest>::x3RadFlux_index) = 0;
 
-      amrex::Real Egas0 =
+      amrex::Real xmom = rho0 * 1.0e5;
+      amrex::Real ymom = rho0 * 2.0e5;
+      amrex::Real zmom = rho0 * 1.0e5;
+
+      amrex::Real Eint0 =
           RadSystem<CoolingTest>::ComputeEgasFromTgas(rho0, Tgas0);
+      amrex::Real Egas0 = RadSystem<CoolingTest>::ComputeEgasFromEint(
+          rho0, xmom, ymom, zmom, Eint0);
       state(i, j, k, RadSystem<CoolingTest>::gasEnergy_index) = Egas0;
       state(i, j, k, RadSystem<CoolingTest>::gasDensity_index) = rho0;
-      state(i, j, k, RadSystem<CoolingTest>::x1GasMomentum_index) = 0;
-      state(i, j, k, RadSystem<CoolingTest>::x2GasMomentum_index) = 0;
-      state(i, j, k, RadSystem<CoolingTest>::x3GasMomentum_index) = 0;
+      state(i, j, k, RadSystem<CoolingTest>::x1GasMomentum_index) = xmom;
+      state(i, j, k, RadSystem<CoolingTest>::x2GasMomentum_index) = ymom;
+      state(i, j, k, RadSystem<CoolingTest>::x3GasMomentum_index) = zmom;
     });
   }
 
@@ -134,14 +140,52 @@ void rhs_cooling(amrex::MultiFab &S_rhs, amrex::MultiFab &S_data,
 
 void computeEintFromMultiFab(amrex::MultiFab &S_eint, amrex::MultiFab &mf) {
   // compute gas internal energy for each cell, save in S_eint
-  amrex::MultiFab::Copy(S_eint, mf, HydroSystem<CoolingTest>::energy_index, 0,
-                        1, mf.nGrow());
+  for (amrex::MFIter iter(S_eint); iter.isValid(); ++iter) {
+    const amrex::Box &indexRange = iter.validbox();
+    auto const &Eint = S_eint.array(iter);
+    auto const &state = mf.const_array(iter);
+
+    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+      const amrex::Real rho =
+          state(i, j, k, HydroSystem<CoolingTest>::density_index);
+      const amrex::Real x1Mom =
+          state(i, j, k, HydroSystem<CoolingTest>::x1Momentum_index);
+      const amrex::Real x2Mom =
+          state(i, j, k, HydroSystem<CoolingTest>::x2Momentum_index);
+      const amrex::Real x3Mom =
+          state(i, j, k, HydroSystem<CoolingTest>::x3Momentum_index);
+      const amrex::Real Egas =
+          state(i, j, k, HydroSystem<CoolingTest>::energy_index);
+
+      Eint(i, j, k) = RadSystem<CoolingTest>::ComputeEintFromEgas(
+          rho, x1Mom, x2Mom, x3Mom, Egas);
+    });
+  }
 }
 
 void updateEgasToMultiFab(amrex::MultiFab &S_eint, amrex::MultiFab &mf) {
   // copy solution back to MultiFab 'mf'
-  amrex::MultiFab::Copy(mf, S_eint, 0, HydroSystem<CoolingTest>::energy_index,
-                        1, mf.nGrow());
+  for (amrex::MFIter iter(S_eint); iter.isValid(); ++iter) {
+    const amrex::Box &indexRange = iter.validbox();
+    auto const &Eint = S_eint.const_array(iter);
+    auto const &state = mf.array(iter);
+
+    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+      const amrex::Real rho =
+          state(i, j, k, HydroSystem<CoolingTest>::density_index);
+      const amrex::Real x1Mom =
+          state(i, j, k, HydroSystem<CoolingTest>::x1Momentum_index);
+      const amrex::Real x2Mom =
+          state(i, j, k, HydroSystem<CoolingTest>::x2Momentum_index);
+      const amrex::Real x3Mom =
+          state(i, j, k, HydroSystem<CoolingTest>::x3Momentum_index);
+      const amrex::Real Eint_new = Eint(i, j, k);
+
+      state(i, j, k, HydroSystem<CoolingTest>::energy_index) =
+          RadSystem<CoolingTest>::ComputeEgasFromEint(rho, x1Mom, x2Mom, x3Mom,
+                                                      Eint_new);
+    });
+  }
 }
 
 void computeCooling(amrex::MultiFab &mf, amrex::Real dt, void *cvode_mem,
@@ -266,12 +310,14 @@ auto problem_main() -> int {
   CVodeFree(&cvode_mem);
   SUNContext_Free(&sundialsContext);
 
-#ifdef HAVE_PYTHON
   if (amrex::ParallelDescriptor::IOProcessor()) {
     // Plot results
     std::vector<double> &Tgas = sim.Tgas_vec_;
     std::vector<double> &t = sim.t_vec_;
 
+    amrex::Print() << "final temperature: " << Tgas.back() << "\n";
+
+#ifdef HAVE_PYTHON
     std::map<std::string, std::string> Tgas_args;
     Tgas_args["label"] = "gas temperature (numerical)";
     matplotlibcpp::plot(t, Tgas, Tgas_args);
@@ -285,8 +331,8 @@ auto problem_main() -> int {
     matplotlibcpp::title(fmt::format("density = {:.3e}", rho0 / m_H));
     matplotlibcpp::tight_layout();
     matplotlibcpp::save(fmt::format("./cooling.pdf"));
-  }
 #endif
+  }
 
   // Cleanup and exit
   amrex::Print() << "Finished." << std::endl;
