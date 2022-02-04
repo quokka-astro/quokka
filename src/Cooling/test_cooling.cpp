@@ -6,6 +6,7 @@
 /// \file test_cooling.cpp
 /// \brief Defines a test problem for SUNDIALS cooling.
 ///
+#include <vector>
 
 #include <cvode/cvode.h>
 #include <sundials/sundials_context.h>
@@ -13,7 +14,6 @@
 #include <sundials/sundials_nvector.h>
 #include <sundials/sundials_types.h>
 #include <sunnonlinsol/sunnonlinsol_fixedpoint.h>
-#include <vector>
 
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
@@ -27,15 +27,17 @@
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
 #include "hydro_system.hpp"
+#include "matplotlibcpp.h"
 #include "radiation_system.hpp"
 #include "test_cooling.hpp"
 
 struct CoolingTest {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-constexpr double Tgas0 = 1.0e4;     // K
-constexpr double m_H = 1.6733e-24;  // g
-constexpr double rho0 = 10.0 * m_H; // g cm^-3
+constexpr double Tgas0 = 1.0e5; // K
+constexpr double m_H = hydrogen_mass_cgs_;
+constexpr double rho0 = 1.0e-3 * m_H; // g cm^-3
+constexpr double seconds_in_year = 3.154e7;
 
 template <>
 void RadhydroSimulation<CoolingTest>::setInitialConditionsAtLevel(int lev) {
@@ -67,7 +69,7 @@ template <> void RadhydroSimulation<CoolingTest>::computeAfterTimestep() {
   auto [position, values] = fextract(state_new_[0], Geom(0), 0, 0.5);
 
   if (amrex::ParallelDescriptor::IOProcessor()) {
-    t_vec_.push_back(tNew_[0]);
+    t_vec_.push_back(tNew_[0] / seconds_in_year);
 
     const amrex::Real Etot_i =
         values.at(HydroSystem<CoolingTest>::energy_index).at(0);
@@ -98,8 +100,15 @@ static auto userdata_f(realtype t, N_Vector y_data, N_Vector y_rhs,
   return udata->f(t, y_data, y_rhs, user_data);
 }
 
-auto cooling_function(amrex::Real const /*rho*/, amrex::Real const /*T*/) {
-  amrex::Real cooling_source_term = 1.0e-5;
+auto cooling_function(amrex::Real const rho, amrex::Real const T) {
+  // use fitting function from Koyama & Inutsuka (2002)
+  amrex::Real gamma_heat = 2.0e-26; // Koyama & Inutsuka value
+  amrex::Real lambda_cool =
+      gamma_heat * (1.0e7 * std::exp(-114800. / (T + 1000.)) +
+                    14. * std::sqrt(T) * std::exp(-92. / T));
+  amrex::Real rho_over_mh = rho / m_H;
+  amrex::Real cooling_source_term =
+      rho_over_mh * gamma_heat - (rho_over_mh * rho_over_mh) * lambda_cool;
   return cooling_source_term;
 }
 
@@ -123,28 +132,31 @@ void rhs_cooling(amrex::MultiFab &S_rhs, amrex::MultiFab &S_data,
   }
 }
 
-void computeCooling(amrex::MultiFab &mf, amrex::Real dt) {
-  // Initialise SUNContext
-  SUNContext sundialsContext = nullptr;
-  auto *mpi_comm = amrex::ParallelContext::CommunicatorSub();
-  SUNContext_Create(mpi_comm, &sundialsContext);
+void computeEintFromMultiFab(amrex::MultiFab &S_eint, amrex::MultiFab &mf) {
+  // compute gas internal energy for each cell, save in S_eint
+  amrex::MultiFab::Copy(S_eint, mf, HydroSystem<CoolingTest>::energy_index, 0,
+                        1, mf.nGrow());
+}
 
+void updateEgasToMultiFab(amrex::MultiFab &S_eint, amrex::MultiFab &mf) {
+  // copy solution back to MultiFab 'mf'
+  amrex::MultiFab::Copy(mf, S_eint, 0, HydroSystem<CoolingTest>::energy_index,
+                        1, mf.nGrow());
+}
+
+void computeCooling(amrex::MultiFab &mf, amrex::Real dt, void *cvode_mem,
+                    SUNContext sundialsContext) {
   // Create MultiFab 'S_eint' with only gas internal energy
   const auto &ba = mf.boxArray();
   const auto &dmap = mf.DistributionMap();
-  int nghost = mf.nGrow();
-  amrex::MultiFab S_eint(ba, dmap, 1, nghost);
+  amrex::MultiFab S_eint(ba, dmap, 1, mf.nGrow());
 
-  // Copy gas internal energy to S_eint
-  amrex::MultiFab::Copy(S_eint, mf, HydroSystem<CoolingTest>::energy_index, 0,
-                        1, nghost);
+  // Get gas internal energy from hydro state
+  computeEintFromMultiFab(S_eint, mf);
 
   // Create an N_Vector wrapper for S_eint
   sunindextype length = S_eint.n_comp * S_eint.boxArray().numPts();
   N_Vector y_vec = amrex::sundials::N_VMake_MultiFab(length, &S_eint);
-
-  // create CVode object
-  void *cvode_mem = CVodeCreate(CV_ADAMS, sundialsContext);
 
   // create user data object
   SundialsUserData user_data;
@@ -173,7 +185,8 @@ void computeCooling(amrex::MultiFab &mf, amrex::Real dt) {
 
   // set integration tolerances
   amrex::Real reltol = 1.0e-6;
-  amrex::Real abstol = 1.0e-6;
+  amrex::Real abstol =
+      reltol * RadSystem<CoolingTest>::ComputeEgasFromTgas(rho0, Tgas0);
   AMREX_ALWAYS_ASSERT(reltol > 0.);
   AMREX_ALWAYS_ASSERT(abstol > 0.); // CVODE requires this to be nonzero
   CVodeSStolerances(cvode_mem, reltol, abstol);
@@ -190,20 +203,17 @@ void computeCooling(amrex::MultiFab &mf, amrex::Real dt) {
   AMREX_ALWAYS_ASSERT_WITH_MESSAGE(ierr == CV_SUCCESS,
                                    "Cooling solve with CVODE failed!");
 
-  // copy solution back to MultiFab 'mf'
-  amrex::MultiFab::Copy(mf, S_eint, 0, HydroSystem<CoolingTest>::energy_index,
-                        1, nghost);
+  // update hydro state with new Eint
+  updateEgasToMultiFab(S_eint, mf);
 
-  // free SUNDIALS objects
+  // free N_Vec objects
   N_VDestroy(y_vec);
-  CVodeFree(&cvode_mem);
-  SUNContext_Free(&sundialsContext);
 }
 
 auto problem_main() -> int {
   // Problem parameters
   const double CFL_number = 1.0;
-  const double max_time = 1.0e-2; // s
+  const double max_time = 1.0e15; // s
   const int max_timesteps = 1e3;
 
   // Problem initialization
@@ -226,10 +236,35 @@ auto problem_main() -> int {
 
   // initialize
   sim.setInitialConditions();
+  sim.computeAfterTimestep();
+
+  // compute cooling time
+  amrex::Real Eint0 = RadSystem<CoolingTest>::ComputeEgasFromTgas(rho0, Tgas0);
+  amrex::Real t_cool = std::abs(Eint0 / cooling_function(rho0, Tgas0));
+  amrex::Print() << "cooling time = " << t_cool << "\n\n";
+
+  // Initialise SUNContext
+  SUNContext sundialsContext = nullptr;
+  auto *mpi_comm = amrex::ParallelContext::CommunicatorSub();
+  SUNContext_Create(mpi_comm, &sundialsContext);
+
+  // create CVode object
+  void *cvode_mem = CVodeCreate(CV_ADAMS, sundialsContext);
 
   // compute cooling
-  amrex::Real level_dt = 1.0;
-  computeCooling(sim.state_new_[0], level_dt);
+  amrex::Real fixed_dt = 1.0e12; // s
+  for (int i = 0; i < max_timesteps; ++i) {
+    if (sim.tNew_[0] > max_time) {
+      break;
+    }
+    computeCooling(sim.state_new_[0], fixed_dt, cvode_mem, sundialsContext);
+    sim.tNew_[0] += fixed_dt;
+    sim.computeAfterTimestep();
+  }
+
+  // free sundials objects
+  CVodeFree(&cvode_mem);
+  SUNContext_Free(&sundialsContext);
 
 #ifdef HAVE_PYTHON
   if (amrex::ParallelDescriptor::IOProcessor()) {
@@ -241,14 +276,14 @@ auto problem_main() -> int {
     Tgas_args["label"] = "gas temperature (numerical)";
     matplotlibcpp::plot(t, Tgas, Tgas_args);
 
+    matplotlibcpp::ylim(1.0e3, 1.0e5);
     matplotlibcpp::yscale("log");
     matplotlibcpp::xscale("log");
-    if (!Tgas.empty()) {
-      matplotlibcpp::ylim(0.1 * Tgas.front(), 10.0 * Tgas.back());
-    }
     matplotlibcpp::legend();
-    matplotlibcpp::xlabel("time t (s)");
+    matplotlibcpp::xlabel("time t (yr)");
     matplotlibcpp::ylabel("temperature T (K)");
+    matplotlibcpp::title(fmt::format("density = {:.3e}", rho0 / m_H));
+    matplotlibcpp::tight_layout();
     matplotlibcpp::save(fmt::format("./cooling.pdf"));
   }
 #endif
