@@ -27,13 +27,15 @@
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
 #include "hydro_system.hpp"
+#include "radiation_system.hpp"
 #include "test_cooling.hpp"
 
 struct CoolingTest {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-constexpr double Egas0 = 1.0e2; // erg cm^-3
-constexpr double rho0 = 1.0e-7; // g cm^-3
+constexpr double Tgas0 = 1.0e4;     // K
+constexpr double m_H = 1.6733e-24;  // g
+constexpr double rho0 = 10.0 * m_H; // g cm^-3
 
 template <>
 void RadhydroSimulation<CoolingTest>::setInitialConditionsAtLevel(int lev) {
@@ -47,6 +49,8 @@ void RadhydroSimulation<CoolingTest>::setInitialConditionsAtLevel(int lev) {
       state(i, j, k, RadSystem<CoolingTest>::x2RadFlux_index) = 0;
       state(i, j, k, RadSystem<CoolingTest>::x3RadFlux_index) = 0;
 
+      amrex::Real Egas0 =
+          RadSystem<CoolingTest>::ComputeEgasFromTgas(rho0, Tgas0);
       state(i, j, k, RadSystem<CoolingTest>::gasEnergy_index) = Egas0;
       state(i, j, k, RadSystem<CoolingTest>::gasDensity_index) = rho0;
       state(i, j, k, RadSystem<CoolingTest>::x1GasMomentum_index) = 0;
@@ -94,16 +98,27 @@ static auto userdata_f(realtype t, N_Vector y_data, N_Vector y_rhs,
   return udata->f(t, y_data, y_rhs, user_data);
 }
 
-void rhs_cooling(amrex::MultiFab &S_rhs, amrex::MultiFab & /*S_data*/,
-                 realtype /*t*/) {
+auto cooling_function(amrex::Real const /*rho*/, amrex::Real const /*T*/) {
+  amrex::Real cooling_source_term = 1.0e-5;
+  return cooling_source_term;
+}
+
+void rhs_cooling(amrex::MultiFab &S_rhs, amrex::MultiFab &S_data,
+                 amrex::MultiFab &hydro_state_mf, realtype /*t*/) {
   // compute cooling ODE right-hand side (== dy/dt) at time t
   for (amrex::MFIter iter(S_rhs); iter.isValid(); ++iter) {
     const amrex::Box &indexRange = iter.validbox();
-    // auto const &state = S_data.const_array(iter);
+    auto const &Eint_arr = S_data.const_array(iter);
+    auto const &hydro_state = hydro_state_mf.const_array(iter);
     auto const &rhs = S_rhs.array(iter);
 
     amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-      rhs(i, j, k) = 1.0e-5;
+      const amrex::Real Eint = Eint_arr(i, j, k);
+      const amrex::Real rho =
+          hydro_state(i, j, k, HydroSystem<CoolingTest>::density_index);
+      const amrex::Real Tgas =
+          RadSystem<CoolingTest>::ComputeTgasFromEgas(rho, Eint);
+      rhs(i, j, k) = cooling_function(rho, Tgas);
     });
   }
 }
@@ -145,7 +160,7 @@ void computeCooling(amrex::MultiFab &mf, amrex::Real dt) {
         amrex::MultiFab(*amrex::sundials::getMFptr(y_rhs), amrex::make_alias, 0,
                         amrex::sundials::getMFptr(y_rhs)->nComp());
 
-    rhs_cooling(S_rhs, S_data, rhs_time);
+    rhs_cooling(S_rhs, S_data, mf, rhs_time);
     return 0;
   };
 
