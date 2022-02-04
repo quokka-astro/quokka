@@ -31,6 +31,8 @@
 #include "radiation_system.hpp"
 #include "test_cooling.hpp"
 
+using amrex::Real;
+
 struct CoolingTest {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
@@ -51,14 +53,13 @@ void RadhydroSimulation<CoolingTest>::setInitialConditionsAtLevel(int lev) {
       state(i, j, k, RadSystem<CoolingTest>::x2RadFlux_index) = 0;
       state(i, j, k, RadSystem<CoolingTest>::x3RadFlux_index) = 0;
 
-      amrex::Real xmom = rho0 * 1.0e5;
-      amrex::Real ymom = rho0 * 2.0e5;
-      amrex::Real zmom = rho0 * 1.0e5;
+      Real xmom = rho0 * 1.0e5;
+      Real ymom = rho0 * 2.0e5;
+      Real zmom = rho0 * 1.0e5;
 
-      amrex::Real Eint0 =
-          RadSystem<CoolingTest>::ComputeEgasFromTgas(rho0, Tgas0);
-      amrex::Real Egas0 = RadSystem<CoolingTest>::ComputeEgasFromEint(
-          rho0, xmom, ymom, zmom, Eint0);
+      Real Eint0 = RadSystem<CoolingTest>::ComputeEgasFromTgas(rho0, Tgas0);
+      Real Egas0 = RadSystem<CoolingTest>::ComputeEgasFromEint(rho0, xmom, ymom,
+                                                               zmom, Eint0);
       state(i, j, k, RadSystem<CoolingTest>::gasEnergy_index) = Egas0;
       state(i, j, k, RadSystem<CoolingTest>::gasDensity_index) = rho0;
       state(i, j, k, RadSystem<CoolingTest>::x1GasMomentum_index) = xmom;
@@ -77,18 +78,16 @@ template <> void RadhydroSimulation<CoolingTest>::computeAfterTimestep() {
   if (amrex::ParallelDescriptor::IOProcessor()) {
     t_vec_.push_back(tNew_[0] / seconds_in_year);
 
-    const amrex::Real Etot_i =
-        values.at(HydroSystem<CoolingTest>::energy_index).at(0);
-    const amrex::Real x1GasMom =
+    const Real Etot_i = values.at(HydroSystem<CoolingTest>::energy_index).at(0);
+    const Real x1GasMom =
         values.at(HydroSystem<CoolingTest>::x1Momentum_index).at(0);
-    const amrex::Real x2GasMom =
+    const Real x2GasMom =
         values.at(HydroSystem<CoolingTest>::x2Momentum_index).at(0);
-    const amrex::Real x3GasMom =
+    const Real x3GasMom =
         values.at(HydroSystem<CoolingTest>::x3Momentum_index).at(0);
-    const amrex::Real rho =
-        values.at(HydroSystem<CoolingTest>::density_index).at(0);
+    const Real rho = values.at(HydroSystem<CoolingTest>::density_index).at(0);
 
-    const amrex::Real Egas_i = RadSystem<CoolingTest>::ComputeEintFromEgas(
+    const Real Egas_i = RadSystem<CoolingTest>::ComputeEintFromEgas(
         rho, x1GasMom, x2GasMom, x3GasMom, Etot_i);
 
     Tgas_vec_.push_back(
@@ -106,14 +105,14 @@ static auto userdata_f(realtype t, N_Vector y_data, N_Vector y_rhs,
   return udata->f(t, y_data, y_rhs, user_data);
 }
 
-auto cooling_function(amrex::Real const rho, amrex::Real const T) {
+AMREX_GPU_HOST_DEVICE AMREX_INLINE auto cooling_function(Real const rho,
+                                                    Real const T) -> Real {
   // use fitting function from Koyama & Inutsuka (2002)
-  amrex::Real gamma_heat = 2.0e-26; // Koyama & Inutsuka value
-  amrex::Real lambda_cool =
-      gamma_heat * (1.0e7 * std::exp(-114800. / (T + 1000.)) +
-                    14. * std::sqrt(T) * std::exp(-92. / T));
-  amrex::Real rho_over_mh = rho / m_H;
-  amrex::Real cooling_source_term =
+  Real gamma_heat = 2.0e-26; // Koyama & Inutsuka value
+  Real lambda_cool = gamma_heat * (1.0e7 * std::exp(-114800. / (T + 1000.)) +
+                                   14. * std::sqrt(T) * std::exp(-92. / T));
+  Real rho_over_mh = rho / m_H;
+  Real cooling_source_term =
       rho_over_mh * gamma_heat - (rho_over_mh * rho_over_mh) * lambda_cool;
   return cooling_source_term;
 }
@@ -128,11 +127,10 @@ void rhs_cooling(amrex::MultiFab &S_rhs, amrex::MultiFab &S_data,
     auto const &rhs = S_rhs.array(iter);
 
     amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-      const amrex::Real Eint = Eint_arr(i, j, k);
-      const amrex::Real rho =
+      const Real Eint = Eint_arr(i, j, k);
+      const Real rho =
           hydro_state(i, j, k, HydroSystem<CoolingTest>::density_index);
-      const amrex::Real Tgas =
-          RadSystem<CoolingTest>::ComputeTgasFromEgas(rho, Eint);
+      const Real Tgas = RadSystem<CoolingTest>::ComputeTgasFromEgas(rho, Eint);
       rhs(i, j, k) = cooling_function(rho, Tgas);
     });
   }
@@ -146,16 +144,14 @@ void computeEintFromMultiFab(amrex::MultiFab &S_eint, amrex::MultiFab &mf) {
     auto const &state = mf.const_array(iter);
 
     amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-      const amrex::Real rho =
-          state(i, j, k, HydroSystem<CoolingTest>::density_index);
-      const amrex::Real x1Mom =
+      const Real rho = state(i, j, k, HydroSystem<CoolingTest>::density_index);
+      const Real x1Mom =
           state(i, j, k, HydroSystem<CoolingTest>::x1Momentum_index);
-      const amrex::Real x2Mom =
+      const Real x2Mom =
           state(i, j, k, HydroSystem<CoolingTest>::x2Momentum_index);
-      const amrex::Real x3Mom =
+      const Real x3Mom =
           state(i, j, k, HydroSystem<CoolingTest>::x3Momentum_index);
-      const amrex::Real Egas =
-          state(i, j, k, HydroSystem<CoolingTest>::energy_index);
+      const Real Egas = state(i, j, k, HydroSystem<CoolingTest>::energy_index);
 
       Eint(i, j, k) = RadSystem<CoolingTest>::ComputeEintFromEgas(
           rho, x1Mom, x2Mom, x3Mom, Egas);
@@ -171,15 +167,14 @@ void updateEgasToMultiFab(amrex::MultiFab &S_eint, amrex::MultiFab &mf) {
     auto const &state = mf.array(iter);
 
     amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-      const amrex::Real rho =
-          state(i, j, k, HydroSystem<CoolingTest>::density_index);
-      const amrex::Real x1Mom =
+      const Real rho = state(i, j, k, HydroSystem<CoolingTest>::density_index);
+      const Real x1Mom =
           state(i, j, k, HydroSystem<CoolingTest>::x1Momentum_index);
-      const amrex::Real x2Mom =
+      const Real x2Mom =
           state(i, j, k, HydroSystem<CoolingTest>::x2Momentum_index);
-      const amrex::Real x3Mom =
+      const Real x3Mom =
           state(i, j, k, HydroSystem<CoolingTest>::x3Momentum_index);
-      const amrex::Real Eint_new = Eint(i, j, k);
+      const Real Eint_new = Eint(i, j, k);
 
       state(i, j, k, HydroSystem<CoolingTest>::energy_index) =
           RadSystem<CoolingTest>::ComputeEgasFromEint(rho, x1Mom, x2Mom, x3Mom,
@@ -188,7 +183,7 @@ void updateEgasToMultiFab(amrex::MultiFab &S_eint, amrex::MultiFab &mf) {
   }
 }
 
-void computeCooling(amrex::MultiFab &mf, amrex::Real dt, void *cvode_mem,
+void computeCooling(amrex::MultiFab &mf, Real dt, void *cvode_mem,
                     SUNContext sundialsContext) {
   // Create MultiFab 'S_eint' with only gas internal energy
   const auto &ba = mf.boxArray();
@@ -228,8 +223,8 @@ void computeCooling(amrex::MultiFab &mf, amrex::Real dt, void *cvode_mem,
   AMREX_ALWAYS_ASSERT(CVodeInit(cvode_mem, userdata_f, 0, y_vec) == CV_SUCCESS);
 
   // set integration tolerances
-  amrex::Real reltol = 1.0e-6;
-  amrex::Real abstol =
+  Real reltol = 1.0e-6;
+  Real abstol =
       reltol * RadSystem<CoolingTest>::ComputeEgasFromTgas(rho0, Tgas0);
   AMREX_ALWAYS_ASSERT(reltol > 0.);
   AMREX_ALWAYS_ASSERT(abstol > 0.); // CVODE requires this to be nonzero
@@ -283,8 +278,8 @@ auto problem_main() -> int {
   sim.computeAfterTimestep();
 
   // compute cooling time
-  amrex::Real Eint0 = RadSystem<CoolingTest>::ComputeEgasFromTgas(rho0, Tgas0);
-  amrex::Real t_cool = std::abs(Eint0 / cooling_function(rho0, Tgas0));
+  Real Eint0 = RadSystem<CoolingTest>::ComputeEgasFromTgas(rho0, Tgas0);
+  Real t_cool = std::abs(Eint0 / cooling_function(rho0, Tgas0));
   amrex::Print() << "cooling time = " << t_cool << "\n\n";
 
   // Initialise SUNContext
@@ -296,7 +291,7 @@ auto problem_main() -> int {
   void *cvode_mem = CVodeCreate(CV_ADAMS, sundialsContext);
 
   // compute cooling
-  amrex::Real fixed_dt = 1.0e12; // s
+  Real fixed_dt = 1.0e12; // s
   for (int i = 0; i < max_timesteps; ++i) {
     if (sim.tNew_[0] > max_time) {
       break;

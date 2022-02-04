@@ -28,6 +28,7 @@ option(QUOKKA_PYTHON "Compile with Python support (on/off)" ON)
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
   enable_language(CUDA)
+  set(ENABLE_CUDA ON CACHE BOOL "" FORCE) # for SUNDIALS superbuild
   set(CMAKE_CUDA_ARCHITECTURES 70 80 CACHE STRING "")
   set(AMReX_CUDA_FASTMATH OFF CACHE BOOL "" FORCE)
   # fused MAD causes directional asymmetry
