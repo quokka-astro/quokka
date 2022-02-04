@@ -50,6 +50,7 @@ endif(CMAKE_CXX_COMPILER_ID STREQUAL "Intel")
 # )
 # FetchContent_MakeAvailable(sundials)
 
+set(EXAMPLES_ENABLE_C OFF CACHE BOOL "" FORCE)
 set_property(GLOBAL PROPERTY ALLOW_DUPLICATE_CUSTOM_TARGETS ON) # sundials superbuild requires this
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/sundials ${QuokkaCode_BINARY_DIR}/sundials EXCLUDE_FROM_ALL)
 
