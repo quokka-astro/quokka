@@ -120,12 +120,14 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto cooling_function(Real const rho,
 void rhs_cooling(amrex::MultiFab &S_rhs, amrex::MultiFab &S_data,
                  amrex::MultiFab &hydro_state_mf, realtype /*t*/) {
   // compute cooling ODE right-hand side (== dy/dt) at time t
+  
   for (amrex::MFIter iter(S_rhs); iter.isValid(); ++iter) {
     const amrex::Box &indexRange = iter.validbox();
     auto const &Eint_arr = S_data.const_array(iter);
     auto const &hydro_state = hydro_state_mf.const_array(iter);
     auto const &rhs = S_rhs.array(iter);
 
+    // TODO(bwibking): convert to MFParallelFor
     amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
       const Real Eint = Eint_arr(i, j, k);
       const Real rho =
@@ -143,6 +145,7 @@ void computeEintFromMultiFab(amrex::MultiFab &S_eint, amrex::MultiFab &mf) {
     auto const &Eint = S_eint.array(iter);
     auto const &state = mf.const_array(iter);
 
+    // TODO(bwibking): convert to MFParallelFor
     amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
       const Real rho = state(i, j, k, HydroSystem<CoolingTest>::density_index);
       const Real x1Mom =
@@ -166,6 +169,7 @@ void updateEgasToMultiFab(amrex::MultiFab &S_eint, amrex::MultiFab &mf) {
     auto const &Eint = S_eint.const_array(iter);
     auto const &state = mf.array(iter);
 
+    // TODO(bwibking): convert to MFParallelFor
     amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
       const Real rho = state(i, j, k, HydroSystem<CoolingTest>::density_index);
       const Real x1Mom =
