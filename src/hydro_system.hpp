@@ -381,15 +381,16 @@ void HydroSystem<problem_t>::ComputeVelocityDifferences(
     amrex::Array4<const amrex::Real> const &primVar_in,
 	array_t &dvn_in, array_t &dvt_in, amrex::Box const &indexRange)
 {
-	quokka::Array4View<const amrex::Real, DIR> q(primVar_in);
-	quokka::Array4View<amrex::Real, DIR> dvn(dvn_in);
-	quokka::Array4View<amrex::Real, DIR> dvt(dvt_in);
-
 	// compute velocity differences from cell-average data for normal
 	//   and transverse directions (w/r/t DIR)
 	// (required by Minoshima+ 2021 carbuncle fix in Riemann solver)
 
 	// cell-centered kernel
+#if AMREX_SPACEDIM == 3
+	quokka::Array4View<const amrex::Real, DIR> q(primVar_in);
+	quokka::Array4View<amrex::Real, DIR> dvn(dvn_in);
+	quokka::Array4View<amrex::Real, DIR> dvt(dvt_in);
+
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in) {
 		auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
 		int velN_index = x1Velocity_index;
@@ -413,6 +414,7 @@ void HydroSystem<problem_t>::ComputeVelocityDifferences(
 		// normal velocity difference
 		dvn(i, j, k) = q(i, j, k, velN_index) - q(i - 1, j, k, velN_index);
 
+		// transverse velocity difference
 		amrex::Real dvl = std::min(q(i - 1, j + 1, k, velV_index) - q(i - 1, j, k, velV_index),
 								   q(i - 1, j, k, velV_index) - q(i - 1, j - 1, k, velV_index));
 		amrex::Real dvr = std::min(q(i, j + 1, k, velV_index) - q(i, j, k, velV_index),
@@ -423,9 +425,52 @@ void HydroSystem<problem_t>::ComputeVelocityDifferences(
 		amrex::Real dwr = std::min(q(i, j, k + 1, velW_index) - q(i, j, k, velW_index),
 								   q(i, j, k, velW_index) - q(i, j, k - 1, velW_index));
 
-		// transverse velocity difference
 		dvt(i, j, k) = std::min(std::min(dvl, dvr), std::min(dwl, dwr));
 	});
+#elif AMREX_SPACEDIM == 2
+    const auto &q = primVar_in;
+    const auto &dvn = dvn_in;
+	const auto &dvt = dvt_in;
+
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		// normal velocity difference
+		if constexpr (DIR == FluxDir::X1) {
+			dvn(i, j, k) = q(i, j, k, x1Velocity_index) - q(i - 1, j, k, x1Velocity_index);
+		} else if constexpr (DIR == FluxDir::X2) {
+			dvn(i, j, k) = q(i, j, k, x2Velocity_index) - q(i, j - 1, k, x2Velocity_index);
+		}
+
+		// transverse velocity difference
+		amrex::Real dvl = NAN;
+		amrex::Real dvr = NAN;
+
+		if constexpr (DIR == FluxDir::X1) {
+			dvl = std::min(q(i - 1, j + 1, k, x2Velocity_index) - q(i - 1, j, k, x2Velocity_index),
+						   q(i - 1, j, k, x2Velocity_index) - q(i - 1, j - 1, k, x2Velocity_index));
+			dvr = std::min(q(i, j + 1, k, x2Velocity_index) - q(i, j, k, x2Velocity_index),
+						   q(i, j, k, x2Velocity_index) - q(i, j - 1, k, x2Velocity_index));
+		} else if constexpr (DIR == FluxDir::X2) {
+			dvl = std::min(q(i + 1, j - 1, k, x1Velocity_index) - q(i, j - 1, k, x1Velocity_index),
+						   q(i, j - 1, k, x1Velocity_index) - q(i - 1, j - 1, k, x1Velocity_index));
+			dvr = std::min(q(i + 1, j, k, x1Velocity_index) - q(i, j, k, x1Velocity_index),
+						   q(i, j, k, x1Velocity_index) - q(i - 1, j, k, x1Velocity_index));			
+		}
+		
+		dvt(i, j, k) = std::min(dvl, dvr);
+	});
+#else  // AMREX_SPACEDIM == 1
+    const auto &q = primVar_in;
+    const auto &dvn = dvn_in;
+	const auto &dvt = dvt_in;
+
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		// normal velocity difference
+		dvn(i, j, k) = q(i, j, k, x1Velocity_index) - q(i - 1, j, k, x1Velocity_index);
+
+		// transverse velocity difference
+		dvt(i, j, k) = 0.;
+	});
+#endif
 }
 
 template <typename problem_t>
@@ -549,6 +594,7 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 		const double dw = dvt(i, j, k); // difference in transverse velocity
 		const double tp = std::min(1., (cs_max - std::min(du, 0.)) / (cs_max - std::min(dw, 0.)));
 		const double theta = tp*tp*tp*tp;
+		//const double theta = 1.0;
 
 		const double S_star =
 		    (theta * (P_R - P_L) + (rho_L * u_L * (S_L - u_L) - rho_R * u_R * (S_R - u_R))) /
@@ -559,6 +605,8 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 		const double vmag_R = std::sqrt(vx_R*vx_R + vy_R*vy_R + vz_R*vz_R);
 		const double chi = std::min(1., std::max(vmag_L, vmag_R) / cs_max);
 		const double phi = chi * (2. - chi);
+		//const double phi = 1.0;
+
 		const double P_LR = 0.5 * (P_L + P_R) + 0.5 * phi * (rho_L * (S_L - u_L) * (S_star - u_L) +
 					   rho_R * (S_R - u_R) * (S_star - u_R));
 
