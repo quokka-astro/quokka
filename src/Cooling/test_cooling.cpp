@@ -252,11 +252,19 @@ void computeCooling(amrex::MultiFab &mf, Real dt, void *cvode_mem,
   N_VDestroy(y_vec);
 }
 
+template <>
+void RadhydroSimulation<CoolingTest>::computeAfterLevelAdvance(
+    int lev, amrex::Real time, amrex::Real dt_lev, int iteration, int ncycle) {
+    // compute operator split physics
+    computeCooling(state_new_[lev], dt_lev, cvodeObject, sundialsContext);
+}
+
 auto problem_main() -> int {
   // Problem parameters
   const double CFL_number = 1.0;
   const double max_time = 1.0e15; // s
   const int max_timesteps = 1e3;
+  Real fixed_dt = 1.0e12; // s
 
   // Problem initialization
   constexpr int nvars = RadhydroSimulation<CoolingTest>::nvarTotal_;
@@ -272,50 +280,35 @@ auto problem_main() -> int {
   sim.is_hydro_enabled_ = true;
   sim.is_radiation_enabled_ = false;
   sim.cflNumber_ = CFL_number;
+  sim.constantDt_ = fixed_dt;
   sim.maxTimesteps_ = max_timesteps;
   sim.stopTime_ = max_time;
   sim.plotfileInterval_ = -1;
 
-  // initialize
+  // Set initial conditions
   sim.setInitialConditions();
-  sim.computeAfterTimestep();
-
-  // compute cooling time
-  Real Eint0 = RadSystem<CoolingTest>::ComputeEgasFromTgas(rho0, Tgas0);
-  Real t_cool = std::abs(Eint0 / cooling_function(rho0, Tgas0));
-  amrex::Print() << "cooling time = " << t_cool << "\n\n";
 
   // Initialise SUNContext
-  SUNContext sundialsContext = nullptr;
-  auto *mpi_comm = amrex::ParallelContext::CommunicatorSub();
-  SUNContext_Create(mpi_comm, &sundialsContext);
+  SUNContext_Create(amrex::ParallelContext::CommunicatorSub(), &sim.sundialsContext);
 
   // create CVode object
-  void *cvode_mem = CVodeCreate(CV_ADAMS, sundialsContext);
+  sim.cvodeObject = CVodeCreate(CV_ADAMS, sim.sundialsContext);
 
-  // compute cooling
-  Real fixed_dt = 1.0e12; // s
-  for (int i = 0; i < max_timesteps; ++i) {
-    if (sim.tNew_[0] > max_time) {
-      break;
-    }
-    computeCooling(sim.state_new_[0], fixed_dt, cvode_mem, sundialsContext);
-    sim.tNew_[0] += fixed_dt;
-    sim.computeAfterTimestep();
-  }
+  // run simulation
+  sim.evolve();
 
   // free sundials objects
-  CVodeFree(&cvode_mem);
-  SUNContext_Free(&sundialsContext);
+  CVodeFree(&sim.cvodeObject);
+  SUNContext_Free(&sim.sundialsContext);
 
+  // check results
   if (amrex::ParallelDescriptor::IOProcessor()) {
-    // Plot results
     std::vector<double> &Tgas = sim.Tgas_vec_;
     std::vector<double> &t = sim.t_vec_;
-
     amrex::Print() << "final temperature: " << Tgas.back() << "\n";
 
 #ifdef HAVE_PYTHON
+    // Plot results
     std::map<std::string, std::string> Tgas_args;
     Tgas_args["label"] = "gas temperature (numerical)";
     matplotlibcpp::plot(t, Tgas, Tgas_args);

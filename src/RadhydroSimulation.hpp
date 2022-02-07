@@ -16,6 +16,8 @@
 #include <tuple>
 #include <utility>
 
+#include "sundials/sundials_context.h"
+
 #include "AMReX.H"
 #include "AMReX_Algorithm.H"
 #include "AMReX_Arena.H"
@@ -72,6 +74,9 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	std::vector<double> t_vec_;
 	std::vector<double> Trad_vec_;
 	std::vector<double> Tgas_vec_;
+
+	SUNContext sundialsContext = nullptr;
+	void *cvodeObject = nullptr;
 
 	static constexpr int nvarTotal_ = RadSystem<problem_t>::nvar_;
 	static constexpr int ncompHydro_ = HydroSystem<problem_t>::nvar_; // hydro
