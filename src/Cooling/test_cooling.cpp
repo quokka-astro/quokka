@@ -160,7 +160,6 @@ AMRSimulation<CoolingTest>::setCustomBoundaryConditions(
   amrex::Box const &box = geom.Domain();
   amrex::GpuArray<int, 3> lo = box.loVect3d();
   amrex::GpuArray<int, 3> hi = box.hiVect3d();
-  const auto gamma = HydroSystem<CoolingTest>::gamma_;
 
   if (j >= hi[1]) {
     // x2 upper boundary -- constant
@@ -318,7 +317,7 @@ void computeCooling(amrex::MultiFab &mf, Real dt, void *cvode_mem,
   AMREX_ALWAYS_ASSERT(CVodeInit(cvode_mem, userdata_f, 0, y_vec) == CV_SUCCESS);
 
   // set integration tolerances
-  Real reltol = 1.0e-6;
+  Real reltol = 1.0e-5;
   Real abstol = reltol * Eint_min;
   AMREX_ALWAYS_ASSERT(reltol > 0.);
   AMREX_ALWAYS_ASSERT(abstol > 0.); // CVODE requires this to be nonzero
@@ -356,7 +355,7 @@ auto problem_main() -> int {
   // Problem parameters
   const double CFL_number = 0.4;
   const double max_time = 5.0e4 * seconds_in_year; // 50 kyr
-  const int max_timesteps = 1e4;
+  const int max_timesteps = 2e4;
 
   // Problem initialization
   constexpr int nvars = RadhydroSimulation<CoolingTest>::nvarTotal_;
