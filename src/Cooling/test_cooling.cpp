@@ -120,6 +120,7 @@ void RadhydroSimulation<CoolingTest>::setInitialConditionsAtLevel(int lev) {
       Real zmom = 0;
       Real const P = 4.0e4 * boltzmann_constant_cgs_; // erg cm^-3
       Real Eint = (HydroSystem<CoolingTest>::gamma_ - 1.) * P;
+      //Real Eint = RadSystem<CoolingTest>::ComputeEgasFromTgas(rho, 1.0e4);
 
       Real const Egas = RadSystem<CoolingTest>::ComputeEgasFromEint(
           rho, xmom, ymom, zmom, Eint);
@@ -354,7 +355,7 @@ void RadhydroSimulation<CoolingTest>::computeAfterLevelAdvance(
 auto problem_main() -> int {
   // Problem parameters
   const double CFL_number = 0.4;
-  const double max_time = 1.0e5 * seconds_in_year; // 0.1 Myr
+  const double max_time = 5.0e4 * seconds_in_year; // 50 kyr
   const int max_timesteps = 1e4;
 
   // Problem initialization
