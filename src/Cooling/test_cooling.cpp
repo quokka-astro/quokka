@@ -56,7 +56,7 @@ void RadhydroSimulation<CoolingTest>::setInitialConditionsAtLevel(int lev) {
   // perturbation parameters
   const int kmin = 0;
   const int kmax = 16;
-  Real const A = 0.05;
+  Real const A = 0.05 / kmax;
 
   // generate random phases
   amrex::Array<int, 2> tlo{kmin, kmin}; // lower bounds
@@ -109,8 +109,7 @@ void RadhydroSimulation<CoolingTest>::setInitialConditionsAtLevel(int lev) {
           }
           Real const kx = 2.0 * M_PI * Real(ki) / Lx;
           Real const ky = 2.0 * M_PI * Real(kj) / Lx;
-          Real const ksq = ki * ki + kj * kj;
-          delta_rho += A * std::sin(x * kx + y * ky + phase(ki, kj)) / ksq;
+          delta_rho += A * std::sin(x * kx + y * ky + phase(ki, kj));
         }
       }
       AMREX_ALWAYS_ASSERT(delta_rho > -1.0);
@@ -166,7 +165,7 @@ AMRSimulation<CoolingTest>::setCustomBoundaryConditions(
     // x2 upper boundary -- constant
     Real rho = rho0;
     Real xmom = 0;
-    Real ymom = rho * (-2.6e5); // -2.6 km s^-1 [literature value is -26 km/s]
+    Real ymom = rho * (-26.0e5); // [-26 km/s]
     Real zmom = 0;
     Real Eint = RadSystem<CoolingTest>::ComputeEgasFromTgas(rho, Tgas0);
     Real const Egas = RadSystem<CoolingTest>::ComputeEgasFromEint(
@@ -285,7 +284,8 @@ void computeCooling(amrex::MultiFab &mf, Real dt, void *cvode_mem,
 
   // Get gas internal energy from hydro state
   computeEintFromMultiFab(S_eint, mf);
-  AMREX_ALWAYS_ASSERT(S_eint.min(0) > 0.);
+  const Real Eint_min = S_eint.min(0);
+  AMREX_ALWAYS_ASSERT(Eint_min > 0.);
 
   // Create an N_Vector wrapper for S_eint
   sunindextype length = S_eint.n_comp * S_eint.boxArray().numPts();
@@ -318,8 +318,7 @@ void computeCooling(amrex::MultiFab &mf, Real dt, void *cvode_mem,
 
   // set integration tolerances
   Real reltol = 1.0e-6;
-  Real abstol =
-      reltol * RadSystem<CoolingTest>::ComputeEgasFromTgas(rho0, 10.0);
+  Real abstol = reltol * Eint_min;
   AMREX_ALWAYS_ASSERT(reltol > 0.);
   AMREX_ALWAYS_ASSERT(abstol > 0.); // CVODE requires this to be nonzero
   CVodeSStolerances(cvode_mem, reltol, abstol);
@@ -354,9 +353,9 @@ void RadhydroSimulation<CoolingTest>::computeAfterLevelAdvance(
 
 auto problem_main() -> int {
   // Problem parameters
-  const double CFL_number = 0.1;
-  const double max_time = 1.0e15; // s
-  const int max_timesteps = 5e3;
+  const double CFL_number = 0.4;
+  const double max_time = 1.0e5 * seconds_in_year; // 0.1 Myr
+  const int max_timesteps = 1e4;
 
   // Problem initialization
   constexpr int nvars = RadhydroSimulation<CoolingTest>::nvarTotal_;
@@ -373,7 +372,7 @@ auto problem_main() -> int {
   RadhydroSimulation<CoolingTest> sim(boundaryConditions);
   sim.is_hydro_enabled_ = true;
   sim.is_radiation_enabled_ = false;
-  sim.radiationReconstructionOrder_ = 2; // PLM
+  sim.reconstructionOrder_ = 2; // PLM
   sim.cflNumber_ = CFL_number;
   sim.maxTimesteps_ = max_timesteps;
   sim.stopTime_ = max_time;
