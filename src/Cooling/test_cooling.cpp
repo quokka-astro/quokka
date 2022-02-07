@@ -18,6 +18,7 @@
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_FabArray.H"
+#include "AMReX_GpuDevice.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_NVector_MultiFab.H"
 #include "AMReX_ParallelContext.H"
@@ -27,7 +28,6 @@
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
 #include "hydro_system.hpp"
-#include "matplotlibcpp.h"
 #include "radiation_system.hpp"
 #include "test_cooling.hpp"
 
@@ -106,7 +106,7 @@ static auto userdata_f(realtype t, N_Vector y_data, N_Vector y_rhs,
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto cooling_function(Real const rho,
-                                                    Real const T) -> Real {
+                                                         Real const T) -> Real {
   // use fitting function from Koyama & Inutsuka (2002)
   Real gamma_heat = 2.0e-26; // Koyama & Inutsuka value
   Real lambda_cool = gamma_heat * (1.0e7 * std::exp(-114800. / (T + 1000.)) +
@@ -120,71 +120,70 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto cooling_function(Real const rho,
 void rhs_cooling(amrex::MultiFab &S_rhs, amrex::MultiFab &S_data,
                  amrex::MultiFab &hydro_state_mf, realtype /*t*/) {
   // compute cooling ODE right-hand side (== dy/dt) at time t
-  
-  for (amrex::MFIter iter(S_rhs); iter.isValid(); ++iter) {
-    const amrex::Box &indexRange = iter.validbox();
-    auto const &Eint_arr = S_data.const_array(iter);
-    auto const &hydro_state = hydro_state_mf.const_array(iter);
-    auto const &rhs = S_rhs.array(iter);
 
-    // TODO(bwibking): convert to MFParallelFor
-    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-      const Real Eint = Eint_arr(i, j, k);
-      const Real rho =
-          hydro_state(i, j, k, HydroSystem<CoolingTest>::density_index);
-      const Real Tgas = RadSystem<CoolingTest>::ComputeTgasFromEgas(rho, Eint);
-      rhs(i, j, k) = cooling_function(rho, Tgas);
-    });
-  }
+  auto const &Eint_arr = S_data.const_arrays();
+  auto const &state = hydro_state_mf.const_arrays();
+  auto const &rhs = S_rhs.arrays();
+
+  amrex::ParallelFor(S_rhs, [=] AMREX_GPU_DEVICE(int box_no, int i, int j,
+                                                 int k) noexcept {
+    const Real Eint = Eint_arr[box_no](i, j, k);
+    const Real rho =
+        state[box_no](i, j, k, HydroSystem<CoolingTest>::density_index);
+    const Real Tgas = RadSystem<CoolingTest>::ComputeTgasFromEgas(rho, Eint);
+
+    rhs[box_no](i, j, k) = cooling_function(rho, Tgas);
+  });
+  amrex::Gpu::streamSynchronize();
 }
 
 void computeEintFromMultiFab(amrex::MultiFab &S_eint, amrex::MultiFab &mf) {
   // compute gas internal energy for each cell, save in S_eint
-  for (amrex::MFIter iter(S_eint); iter.isValid(); ++iter) {
-    const amrex::Box &indexRange = iter.validbox();
-    auto const &Eint = S_eint.array(iter);
-    auto const &state = mf.const_array(iter);
+  auto const &Eint = S_eint.arrays();
+  auto const &state = mf.const_arrays();
 
-    // TODO(bwibking): convert to MFParallelFor
-    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-      const Real rho = state(i, j, k, HydroSystem<CoolingTest>::density_index);
-      const Real x1Mom =
-          state(i, j, k, HydroSystem<CoolingTest>::x1Momentum_index);
-      const Real x2Mom =
-          state(i, j, k, HydroSystem<CoolingTest>::x2Momentum_index);
-      const Real x3Mom =
-          state(i, j, k, HydroSystem<CoolingTest>::x3Momentum_index);
-      const Real Egas = state(i, j, k, HydroSystem<CoolingTest>::energy_index);
+  amrex::ParallelFor(
+      S_eint, [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept {
+        const Real rho =
+            state[box_no](i, j, k, HydroSystem<CoolingTest>::density_index);
+        const Real x1Mom =
+            state[box_no](i, j, k, HydroSystem<CoolingTest>::x1Momentum_index);
+        const Real x2Mom =
+            state[box_no](i, j, k, HydroSystem<CoolingTest>::x2Momentum_index);
+        const Real x3Mom =
+            state[box_no](i, j, k, HydroSystem<CoolingTest>::x3Momentum_index);
+        const Real Egas =
+            state[box_no](i, j, k, HydroSystem<CoolingTest>::energy_index);
 
-      Eint(i, j, k) = RadSystem<CoolingTest>::ComputeEintFromEgas(
-          rho, x1Mom, x2Mom, x3Mom, Egas);
-    });
-  }
+        Eint[box_no](i, j, k) = RadSystem<CoolingTest>::ComputeEintFromEgas(
+            rho, x1Mom, x2Mom, x3Mom, Egas);
+      });
+  amrex::Gpu::streamSynchronize();
 }
 
 void updateEgasToMultiFab(amrex::MultiFab &S_eint, amrex::MultiFab &mf) {
   // copy solution back to MultiFab 'mf'
-  for (amrex::MFIter iter(S_eint); iter.isValid(); ++iter) {
-    const amrex::Box &indexRange = iter.validbox();
-    auto const &Eint = S_eint.const_array(iter);
-    auto const &state = mf.array(iter);
+  auto const &Eint = S_eint.const_arrays();
+  auto const &state = mf.arrays();
 
-    // TODO(bwibking): convert to MFParallelFor
-    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-      const Real rho = state(i, j, k, HydroSystem<CoolingTest>::density_index);
-      const Real x1Mom =
-          state(i, j, k, HydroSystem<CoolingTest>::x1Momentum_index);
-      const Real x2Mom =
-          state(i, j, k, HydroSystem<CoolingTest>::x2Momentum_index);
-      const Real x3Mom =
-          state(i, j, k, HydroSystem<CoolingTest>::x3Momentum_index);
-      const Real Eint_new = Eint(i, j, k);
+  amrex::ParallelFor(
+      mf, [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept {
+        const Real rho =
+            state[box_no](i, j, k, HydroSystem<CoolingTest>::density_index);
+        const Real x1Mom =
+            state[box_no](i, j, k, HydroSystem<CoolingTest>::x1Momentum_index);
+        const Real x2Mom =
+            state[box_no](i, j, k, HydroSystem<CoolingTest>::x2Momentum_index);
+        const Real x3Mom =
+            state[box_no](i, j, k, HydroSystem<CoolingTest>::x3Momentum_index);
 
-      state(i, j, k, HydroSystem<CoolingTest>::energy_index) =
-          RadSystem<CoolingTest>::ComputeEgasFromEint(rho, x1Mom, x2Mom, x3Mom,
-                                                      Eint_new);
-    });
-  }
+        const Real Eint_new = Eint[box_no](i, j, k);
+
+        state[box_no](i, j, k, HydroSystem<CoolingTest>::energy_index) =
+            RadSystem<CoolingTest>::ComputeEgasFromEint(rho, x1Mom, x2Mom,
+                                                        x3Mom, Eint_new);
+      });
+  amrex::Gpu::streamSynchronize();
 }
 
 void computeCooling(amrex::MultiFab &mf, Real dt, void *cvode_mem,
