@@ -352,6 +352,8 @@ void RadhydroSimulation<CoolingTest>::computeAfterLevelAdvance(
 }
 
 auto problem_main() -> int {
+  // TODO(bwibking): fix Sundials memory leak (?)
+
   // Problem parameters
   const double CFL_number = 0.4;
   const double max_time = 5.0e4 * seconds_in_year; // 50 kyr

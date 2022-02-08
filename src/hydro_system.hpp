@@ -250,7 +250,7 @@ void HydroSystem<problem_t>::EnforcePressureFloor(amrex::Real const densityFloor
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE auto
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto
 HydroSystem<problem_t>::ComputePressure(amrex::Array4<const amrex::Real> const &cons, int i, int j,
 					int k) -> amrex::Real
 {
@@ -269,7 +269,7 @@ HydroSystem<problem_t>::ComputePressure(amrex::Array4<const amrex::Real> const &
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE auto HydroSystem<problem_t>::isStateValid(
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::isStateValid(
 		amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> bool {
 	// check if cons(i, j, k) is a valid state
 	const auto rho = cons(i, j, k, density_index);
@@ -449,9 +449,9 @@ void HydroSystem<problem_t>::ComputeVelocityDifferences(
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		// normal velocity difference
-		if constexpr (DIR == FluxDir::X1) {
+		if (DIR == FluxDir::X1) {
 			dvn(i, j, k) = q(i, j, k, x1Velocity_index) - q(i - 1, j, k, x1Velocity_index);
-		} else if constexpr (DIR == FluxDir::X2) {
+		} else if (DIR == FluxDir::X2) {
 			dvn(i, j, k) = q(i, j, k, x2Velocity_index) - q(i, j - 1, k, x2Velocity_index);
 		}
 
@@ -459,12 +459,12 @@ void HydroSystem<problem_t>::ComputeVelocityDifferences(
 		amrex::Real dvl = NAN;
 		amrex::Real dvr = NAN;
 
-		if constexpr (DIR == FluxDir::X1) {
+		if (DIR == FluxDir::X1) {
 			dvl = std::min(q(i - 1, j + 1, k, x2Velocity_index) - q(i - 1, j, k, x2Velocity_index),
 						   q(i - 1, j, k, x2Velocity_index) - q(i - 1, j - 1, k, x2Velocity_index));
 			dvr = std::min(q(i, j + 1, k, x2Velocity_index) - q(i, j, k, x2Velocity_index),
 						   q(i, j, k, x2Velocity_index) - q(i, j - 1, k, x2Velocity_index));
-		} else if constexpr (DIR == FluxDir::X2) {
+		} else if (DIR == FluxDir::X2) {
 			dvl = std::min(q(i + 1, j - 1, k, x1Velocity_index) - q(i, j - 1, k, x1Velocity_index),
 						   q(i, j - 1, k, x1Velocity_index) - q(i - 1, j - 1, k, x1Velocity_index));
 			dvr = std::min(q(i + 1, j, k, x1Velocity_index) - q(i, j, k, x1Velocity_index),

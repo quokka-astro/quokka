@@ -461,7 +461,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 			HydroSystem<problem_t>::isStateValid, redoFlag.array());
 
 		// first-order flux correction (FOFC)
-		if (redoFlag.max() != quokka::redoFlag::none) {
+		if (redoFlag.max<amrex::RunOn::Device>() != quokka::redoFlag::none) {
 			// compute first-order fluxes (on the whole FAB)
 			auto FOFluxArrays = computeFOHydroFluxes(stateOld, indexRange, ncompHydro_);
 
@@ -470,7 +470,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 					std::cout << "[FOFC] iter = "
 							  << i
 							  << ", ncells = "
-							  << redoFlag.sum(0)
+							  << redoFlag.sum<amrex::RunOn::Device>(0)
 							  << "\n";
 				}
 
@@ -486,7 +486,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 					dt_lev, geom[lev].CellSizeArray(), indexRange, ncompHydro_,
 					HydroSystem<problem_t>::isStateValid, redoFlag.array());
 
-				if(redoFlag.max() == quokka::redoFlag::none) {
+				if(redoFlag.max<amrex::RunOn::Device>() == quokka::redoFlag::none) {
 					break;
 				}
 			}
@@ -533,7 +533,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 				HydroSystem<problem_t>::isStateValid, redoFlag.array());
 
 			// first-order flux correction (FOFC)
-			if (redoFlag.max() != quokka::redoFlag::none) {
+			if (redoFlag.max<amrex::RunOn::Device>() != quokka::redoFlag::none) {
 				// compute first-order fluxes (on the whole FAB)
 				auto FOFluxArrays = computeFOHydroFluxes(stateInter, indexRange, ncompHydro_);
 
@@ -542,7 +542,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 						std::cout << "[FOFC] iter = "
 								<< i
 								<< ", ncells = "
-								<< redoFlag.sum(0)
+								<< redoFlag.sum<amrex::RunOn::Device>(0)
 								<< "\n";
 					}
 					
@@ -558,7 +558,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 						dt_lev, geom[lev].CellSizeArray(), indexRange, ncompHydro_,
 						HydroSystem<problem_t>::isStateValid, redoFlag.array());
 
-					if(redoFlag.max() == quokka::redoFlag::none) {
+					if(redoFlag.max<amrex::RunOn::Device>() == quokka::redoFlag::none) {
 						break;
 					}
 				}
