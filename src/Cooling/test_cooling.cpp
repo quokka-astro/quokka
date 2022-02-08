@@ -372,7 +372,7 @@ auto problem_main() -> int {
   RadhydroSimulation<CoolingTest> sim(boundaryConditions);
   sim.is_hydro_enabled_ = true;
   sim.is_radiation_enabled_ = false;
-  sim.reconstructionOrder_ = 2; // PLM
+  sim.reconstructionOrder_ = 3; // PLM
   sim.cflNumber_ = CFL_number;
   sim.maxTimesteps_ = max_timesteps;
   sim.stopTime_ = max_time;

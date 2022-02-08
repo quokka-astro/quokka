@@ -68,6 +68,9 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	AMREX_GPU_DEVICE static auto ComputePressure(amrex::Array4<const amrex::Real> const &cons,
 						     int i, int j, int k) -> amrex::Real;
 	
+	AMREX_GPU_DEVICE static auto isStateValid(amrex::Array4<const amrex::Real> const &cons,
+							 int i, int j, int k) -> bool;
+
 	template <FluxDir DIR>
 	static void ComputeVelocityDifferences(amrex::Array4<const amrex::Real> const &primVar_in,
 				  array_t &dvn_in, array_t &dvt_in, amrex::Box const &indexRange);
@@ -263,6 +266,18 @@ HydroSystem<problem_t>::ComputePressure(amrex::Array4<const amrex::Real> const &
 	const auto thermal_energy = E - kinetic_energy;
 	const auto P = thermal_energy * (HydroSystem<problem_t>::gamma_ - 1.0);
 	return P;
+}
+
+template <typename problem_t>
+AMREX_GPU_DEVICE auto HydroSystem<problem_t>::isStateValid(
+		amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> bool {
+	// check if cons(i, j, k) is a valid state
+	const auto rho = cons(i, j, k, density_index);
+	const auto P = ComputePressure(cons, i, j, k);
+
+	bool isDensityPositive = (rho > 0.);
+	bool isPressurePositive = (P > 0.);
+	return (isDensityPositive && isPressurePositive);
 }
 
 template <typename problem_t>
