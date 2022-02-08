@@ -37,6 +37,9 @@ template <typename problem_t> class LinearAdvectionSystem : public HyperbolicSys
 					  amrex::Array4<amrex::Real> const &maxSignal,
 					  double advectionVx, double advectionVy,
 					  double advectionVz, amrex::Box const &indexRange);
+	AMREX_GPU_DEVICE
+	static auto isStateValid(amrex::Array4<const amrex::Real> const &cons,
+					  int i, int j, int k) -> bool;
 	template <FluxDir DIR>
 	static void ComputeFluxes(array_t &x1Flux, arrayconst_t &x1LeftState,
 				  arrayconst_t &x1RightState, double advectionVx,
@@ -66,6 +69,15 @@ void LinearAdvectionSystem<problem_t>::ConservedToPrimitive(arrayconst_t &cons, 
 	amrex::ParallelFor(indexRange, nvars, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
 		primVar(i, j, k, n) = cons(i, j, k, n);
 	});
+}
+
+template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto LinearAdvectionSystem<problem_t>::isStateValid(
+		amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> bool {
+	// check if cons(i, j, k) is a valid state
+	const auto rho = cons(i, j, k, density_index);
+	bool isDensityPositive = (rho > 0.);
+	return isDensityPositive;
 }
 
 template <typename problem_t>
