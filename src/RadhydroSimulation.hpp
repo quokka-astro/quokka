@@ -96,7 +96,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	amrex::Real errorNorm_ = NAN;
 	amrex::Real densityFloor_ = 0.;
 	amrex::Real pressureFloor_ = 0.;
-	int fofcMaxIterations_ = 5; // maximum number of flux correction iterations
+	int fofcMaxIterations_ = 0; // maximum number of flux correction iterations
 
 	int integratorOrder_ = 2; // 1 == forward Euler; 2 == RK2-SSP (default)
 	int reconstructionOrder_ = 3; // 1 == donor cell; 2 == PLM; 3 == PPM (default)
@@ -518,10 +518,10 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 			auto const &stateInter = state_new_[lev].const_array(iter);
 			auto fluxArrays = computeHydroFluxes(stateInter, indexRange, ncompHydro_);
 
-			// temporary FABs for RK stage
-			amrex::FArrayBox stateNewFAB = amrex::FArrayBox(indexRange, ncompHydro_,
-															amrex::The_Async_Arena());
-			auto const &stateNew = stateNewFAB.array();
+			//amrex::FArrayBox stateNewFAB = amrex::FArrayBox(indexRange, state_new_[lev].nComp(),
+			//												amrex::The_Async_Arena());
+			//auto const &stateNew = stateNewFAB.array();
+			auto const &stateNew = state_new_[lev].array(iter); // old version (no FOFC!)
 			amrex::IArrayBox redoFlag(indexRange, 1, amrex::The_Async_Arena());
 
 			// Stage 2 of RK2-SSP
@@ -567,10 +567,11 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 			// prevent vacuum
 			HydroSystem<problem_t>::EnforcePressureFloor(densityFloor_, pressureFloor_, indexRange, stateNew);
 
+			// TODO(bwibking): fix bug here -- related to unused radiation components?
 			// copy stateNew to state_new_[lev]
-			auto const &stateNewArr = state_new_[lev].array(iter);
-			amrex::FArrayBox stateNewMFFAB = amrex::FArrayBox(stateNewArr, amrex::IndexType::TheCellType());
-			stateNewMFFAB.copy<amrex::RunOn::Device>(stateNewFAB);
+			//auto const &stateNewArr = state_new_[lev].array(iter);
+			//amrex::FArrayBox stateNewMFFAB = amrex::FArrayBox(stateNewArr, amrex::IndexType::TheCellType());
+			//stateNewMFFAB.copy<amrex::RunOn::Device>(stateNewFAB, 0, 0, state_new_[lev].nComp());
 
 			if (do_reflux) {
 				// increment flux registers
