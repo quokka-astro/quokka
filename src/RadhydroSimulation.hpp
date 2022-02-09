@@ -454,7 +454,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 		    {AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
 				  fluxArrays[2].const_array())},
 		    dt_lev, geom[lev].CellSizeArray(), indexRange, ncompHydro_,
-			HydroSystem<problem_t>::isStateValid, redoFlag.array());
+			redoFlag.array());
 
 		// first-order flux correction (FOFC)
 		if (redoFlag.max<amrex::RunOn::Device>() != quokka::redoFlag::none) {
@@ -480,7 +480,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 					{AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
 						fluxArrays[2].const_array())},
 					dt_lev, geom[lev].CellSizeArray(), indexRange, ncompHydro_,
-					HydroSystem<problem_t>::isStateValid, redoFlag.array());
+					redoFlag.array());
 
 				if(redoFlag.max<amrex::RunOn::Device>() == quokka::redoFlag::none) {
 					break;
@@ -525,7 +525,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 				{AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
 					fluxArrays[2].const_array())},
 				dt_lev, geom[lev].CellSizeArray(), indexRange, ncompHydro_,
-				HydroSystem<problem_t>::isStateValid, redoFlag.array());
+				redoFlag.array());
 
 			// first-order flux correction (FOFC)
 			if (redoFlag.max<amrex::RunOn::Device>() != quokka::redoFlag::none) {
@@ -551,7 +551,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 						{AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
 							fluxArrays[2].const_array())},
 						dt_lev, geom[lev].CellSizeArray(), indexRange, ncompHydro_,
-						HydroSystem<problem_t>::isStateValid, redoFlag.array());
+						redoFlag.array());
 
 					if(redoFlag.max<amrex::RunOn::Device>() == quokka::redoFlag::none) {
 						break;
