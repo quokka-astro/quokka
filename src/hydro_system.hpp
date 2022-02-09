@@ -272,11 +272,17 @@ template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::isStateValid(
 		amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> bool {
 	// check if cons(i, j, k) is a valid state
-	const auto rho = cons(i, j, k, density_index);
-	const auto P = ComputePressure(cons, i, j, k);
-
+	const amrex::Real rho = cons(i, j, k, density_index);
 	bool isDensityPositive = (rho > 0.);
-	bool isPressurePositive = (P > 0.);
+	bool isPressurePositive = false;
+	
+	if (!is_eos_isothermal()) {
+		const amrex::Real P = ComputePressure(cons, i, j, k);
+		isPressurePositive = (P > 0.);
+	} else {
+		isPressurePositive = true;
+	}
+
 	return (isDensityPositive && isPressurePositive);
 }
 
