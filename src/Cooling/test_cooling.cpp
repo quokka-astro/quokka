@@ -317,7 +317,7 @@ void computeCooling(amrex::MultiFab &mf, Real dt, void *cvode_mem,
   AMREX_ALWAYS_ASSERT(CVodeInit(cvode_mem, userdata_f, 0, y_vec) == CV_SUCCESS);
 
   // set integration tolerances
-  Real reltol = 1.0e-15;  // should not be higher than 1e-6
+  Real reltol = 1.0e-6;  // should not be higher than 1e-6
   Real abstol = reltol * Eint_min;
   AMREX_ALWAYS_ASSERT(reltol > 0.);
   AMREX_ALWAYS_ASSERT(abstol > 0.); // CVODE requires this to be nonzero
@@ -358,7 +358,7 @@ void HydroSystem<CoolingTest>::EnforcePressureFloor(
     amrex::Box const &indexRange, amrex::Array4<amrex::Real> const &state) {
   // prevent vacuum creation
   amrex::Real const rho_floor = densityFloor; // workaround nvcc bug
-  amrex::Real const T_floor = 10.; // Kelvins
+  amrex::Real const T_floor = 1.0; // Kelvins
 
   amrex::ParallelFor(
       indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
@@ -395,8 +395,6 @@ void HydroSystem<CoolingTest>::EnforcePressureFloor(
 }
 
 auto problem_main() -> int {
-  // TODO(bwibking): fix Sundials memory leak (?)
-
   // Problem parameters
   const double CFL_number = 0.4;
   const double max_time = 7.5e4 * seconds_in_year; // 75 kyr
