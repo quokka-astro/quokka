@@ -272,7 +272,7 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 		    {AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
 				  fluxArrays[2].const_array())},
 		    dt_lev, geomLevel.CellSizeArray(), indexRange, ncomp_,
-			LinearAdvectionSystem<problem_t>::isStateValid, redoFlag.array());
+			redoFlag.array());
 
 		if (do_reflux) {
 #ifdef USE_YAFLUXREGISTER
@@ -307,7 +307,7 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 			    {AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
 					  fluxArrays[2].const_array())},
 			    dt_lev, geomLevel.CellSizeArray(), indexRange, ncomp_,
-				LinearAdvectionSystem<problem_t>::isStateValid, redoFlag.array());
+				redoFlag.array());
 
 			if (do_reflux) {
 #ifdef USE_YAFLUXREGISTER

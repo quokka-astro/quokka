@@ -96,7 +96,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	amrex::Real errorNorm_ = NAN;
 	amrex::Real densityFloor_ = 0.;
 	amrex::Real pressureFloor_ = 0.;
-	int fofcMaxIterations_ = 0; // maximum number of flux correction iterations
+	int fofcMaxIterations_ = 3; // maximum number of flux correction iterations -- only 1 is needed in almost all cases, but in rare cases a second iteration is needed
 
 	int integratorOrder_ = 2; // 1 == forward Euler; 2 == RK2-SSP (default)
 	int reconstructionOrder_ = 3; // 1 == donor cell; 2 == PLM; 3 == PPM (default)
@@ -152,7 +152,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	void swapRadiationState(amrex::MultiFab &stateOld, amrex::MultiFab const &stateNew);
 	auto computeNumberOfRadiationSubsteps(int lev, amrex::Real dt_lev_hydro) -> int;
 	void advanceRadiationSubstepAtLevel(int lev, amrex::Real time,
-						   amrex::Real dt_radiation, int iteration, int nsubsteps,
+						   amrex::Real dt_radiation, int iter_count, int nsubsteps,
 						   amrex::YAFluxRegister *fr_as_crse,
 						   amrex::YAFluxRegister *fr_as_fine);
 	void subcycleRadiationAtLevel(int lev, amrex::Real time, amrex::Real dt_lev_hydro,
@@ -458,7 +458,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 		    {AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
 				  fluxArrays[2].const_array())},
 		    dt_lev, geom[lev].CellSizeArray(), indexRange, ncompHydro_,
-			HydroSystem<problem_t>::isStateValid, redoFlag.array());
+			redoFlag.array());
 
 		// first-order flux correction (FOFC)
 		if (redoFlag.max<amrex::RunOn::Device>() != quokka::redoFlag::none) {
@@ -467,7 +467,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 
 			for(int i = 0; i < fofcMaxIterations_; ++i) {
 				if (Verbose()) {
-					std::cout << "[FOFC] iter = "
+					std::cout << "[FOFC-1] iter = "
 							  << i
 							  << ", ncells = "
 							  << redoFlag.sum<amrex::RunOn::Device>(0)
@@ -484,7 +484,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 					{AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
 						fluxArrays[2].const_array())},
 					dt_lev, geom[lev].CellSizeArray(), indexRange, ncompHydro_,
-					HydroSystem<problem_t>::isStateValid, redoFlag.array());
+					redoFlag.array());
 
 				if(redoFlag.max<amrex::RunOn::Device>() == quokka::redoFlag::none) {
 					break;
@@ -518,19 +518,18 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 			auto const &stateInter = state_new_[lev].const_array(iter);
 			auto fluxArrays = computeHydroFluxes(stateInter, indexRange, ncompHydro_);
 
-			//amrex::FArrayBox stateNewFAB = amrex::FArrayBox(indexRange, state_new_[lev].nComp(),
-			//												amrex::The_Async_Arena());
-			//auto const &stateNew = stateNewFAB.array();
-			auto const &stateNew = state_new_[lev].array(iter); // old version (no FOFC!)
+			amrex::FArrayBox stateFinalFAB = amrex::FArrayBox(indexRange, ncompHydro_,
+															amrex::The_Async_Arena());
+			auto const &stateFinal = stateFinalFAB.array();
 			amrex::IArrayBox redoFlag(indexRange, 1, amrex::The_Async_Arena());
 
 			// Stage 2 of RK2-SSP
 			HydroSystem<problem_t>::AddFluxesRK2(
-				stateNew, stateOld, stateInter,
+				stateFinal, stateOld, stateInter,
 				{AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
 					fluxArrays[2].const_array())},
 				dt_lev, geom[lev].CellSizeArray(), indexRange, ncompHydro_,
-				HydroSystem<problem_t>::isStateValid, redoFlag.array());
+				redoFlag.array());
 
 			// first-order flux correction (FOFC)
 			if (redoFlag.max<amrex::RunOn::Device>() != quokka::redoFlag::none) {
@@ -539,7 +538,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 
 				for(int i = 0; i < fofcMaxIterations_; ++i) {
 					if (Verbose()) {
-						std::cout << "[FOFC] iter = "
+						std::cout << "[FOFC-2] iter = "
 								<< i
 								<< ", ncells = "
 								<< redoFlag.sum<amrex::RunOn::Device>(0)
@@ -552,11 +551,11 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 					// re-do RK stage update for *all* cells
 					// (since neighbors of problem cells will have modified states as well)
 					HydroSystem<problem_t>::AddFluxesRK2(
-						stateNew, stateOld, stateInter,
+						stateFinal, stateOld, stateInter,
 						{AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
 							fluxArrays[2].const_array())},
 						dt_lev, geom[lev].CellSizeArray(), indexRange, ncompHydro_,
-						HydroSystem<problem_t>::isStateValid, redoFlag.array());
+						redoFlag.array());
 
 					if(redoFlag.max<amrex::RunOn::Device>() == quokka::redoFlag::none) {
 						break;
@@ -565,7 +564,12 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 			}
 
 			// prevent vacuum
-			HydroSystem<problem_t>::EnforcePressureFloor(densityFloor_, pressureFloor_, indexRange, stateNew);
+			HydroSystem<problem_t>::EnforcePressureFloor(densityFloor_, pressureFloor_, indexRange, stateFinal);
+
+			// copy stateNew to state_new_[lev]
+			auto const &stateNew = state_new_[lev].array(iter);
+			amrex::FArrayBox stateNewFAB = amrex::FArrayBox(stateNew);
+			stateNewFAB.copy<amrex::RunOn::Device>(stateFinalFAB, 0, 0, ncompHydro_);
 
 			// TODO(bwibking): fix bug here -- related to unused radiation components?
 			// copy stateNew to state_new_[lev]
