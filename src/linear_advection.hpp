@@ -98,7 +98,7 @@ void LinearAdvectionSystem<problem_t>::PredictStep(
     arrayconst_t &consVarOld, array_t &consVarNew,
     std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray, const double dt_in,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange,
-    const int nvars, amrex::Array4<int> const &redoFlag)
+    const int nvars_in, amrex::Array4<int> const &redoFlag)
 {
 	BL_PROFILE("LinearAdvectionSystem::PredictStep()");
 
@@ -107,6 +107,7 @@ void LinearAdvectionSystem<problem_t>::PredictStep(
 	// left of zone i, and -1.0*flux(i+1) is the flux *into* zone i through
 	// the interface on the right of zone i.
 
+	int const nvars = nvars_in; // workaround nvcc bug
 	auto const dt = dt_in;
 	auto const dx = dx_in[0];
 	auto const x1Flux = fluxArray[0];
@@ -144,7 +145,7 @@ void LinearAdvectionSystem<problem_t>::AddFluxesRK2(
     array_t &U_new, arrayconst_t &U0, arrayconst_t &U1,
     std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray, const double dt_in,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange,
-    const int nvars, amrex::Array4<int> const &redoFlag)
+    const int nvars_in, amrex::Array4<int> const &redoFlag)
 {
 	BL_PROFILE("LinearAdvectionSystem::AddFluxesRK2()");
 
@@ -152,6 +153,8 @@ void LinearAdvectionSystem<problem_t>::AddFluxesRK2(
 	// i.e. flux_(i) is the flux *into* zone i through the interface on the
 	// left of zone i, and -1.0*flux(i+1) is the flux *into* zone i through
 	// the interface on the right of zone i.
+
+	int const nvars = nvars_in; // workaround nvcc bug
 
 	auto const dt = dt_in;
 	auto const dx = dx_in[0];
