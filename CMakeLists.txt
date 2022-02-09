@@ -12,14 +12,14 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake ${PROJECT_SOURCE_DIR}/extern/amrex/Tools/CMake)
 include(CTest)
 
-set(AMReX_SPACEDIM 1 CACHE STRING "")
+set(AMReX_SPACEDIM 2 CACHE STRING "")
 set(AMReX_MPI ON CACHE BOOL "" FORCE)
 set(AMReX_HDF5 OFF CACHE BOOL "" FORCE)
 #set(AMReX_HDF5_ASYNC ON CACHE BOOL "" FORCE)
 set(AMReX_AMRLEVEL OFF CACHE BOOL "" FORCE)
 set(AMReX_PROBINIT OFF CACHE BOOL "" FORCE)
 set(AMReX_LINEAR_SOLVERS OFF CACHE BOOL "" FORCE)
-set(AMReX_SUNDIALS ON CACHE BOOL "" FORCE)
+set(AMReX_SUNDIALS OFF CACHE BOOL "" FORCE)
 set(AMReX_ASSERTIONS OFF CACHE BOOL "" FORCE)
 set(AMReX_FPE OFF CACHE BOOL "" FORCE)
 set(AMReX_TINY_PROFILE ON CACHE BOOL "" FORCE)
@@ -43,17 +43,9 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "Intel")
   message(FATAL_ERROR "You have configured CMake to use the 'classic' Intel compilers (icc/icpc), which are the old Intel compilers. They cannot compile Quokka correctly! You must use the new LLVM-based Intel compilers (icx/icpx) instead by adding the following CMake command-line options: -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx")
 endif(CMAKE_CXX_COMPILER_ID STREQUAL "Intel")
 
-# include(FetchContent)
-# FetchContent_Declare(
-#   sundials
-#   GIT_REPOSITORY https://github.com/LLNL/sundials.git
-#   GIT_TAG c0097c0bfd56e8f94dbb588e0894fdceacf6f737 # version 6.0.0
-# )
-# FetchContent_MakeAvailable(sundials)
-
-set(EXAMPLES_ENABLE_C OFF CACHE BOOL "" FORCE)
-set_property(GLOBAL PROPERTY ALLOW_DUPLICATE_CUSTOM_TARGETS ON) # sundials superbuild requires this
-add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/sundials ${QuokkaCode_BINARY_DIR}/sundials EXCLUDE_FROM_ALL)
+#set(EXAMPLES_ENABLE_C OFF CACHE BOOL "" FORCE)
+#set_property(GLOBAL PROPERTY ALLOW_DUPLICATE_CUSTOM_TARGETS ON) # sundials superbuild requires this
+#add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/sundials ${QuokkaCode_BINARY_DIR}/sundials EXCLUDE_FROM_ALL)
 
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/amrex ${QuokkaCode_BINARY_DIR}/amrex)
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/fmt ${QuokkaCode_BINARY_DIR}/fmt)
