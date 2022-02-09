@@ -120,7 +120,7 @@ void RadhydroSimulation<CoolingTest>::setInitialConditionsAtLevel(int lev) {
       Real zmom = 0;
       Real const P = 4.0e4 * boltzmann_constant_cgs_; // erg cm^-3
       Real Eint = (HydroSystem<CoolingTest>::gamma_ - 1.) * P;
-      //Real Eint = RadSystem<CoolingTest>::ComputeEgasFromTgas(rho, 1.0e4);
+      // Real Eint = RadSystem<CoolingTest>::ComputeEgasFromTgas(rho, 1.0e4);
 
       Real const Egas = RadSystem<CoolingTest>::ComputeEgasFromEint(
           rho, xmom, ymom, zmom, Eint);
@@ -351,6 +351,48 @@ void RadhydroSimulation<CoolingTest>::computeAfterLevelAdvance(
   computeCooling(state_new_[lev], dt_lev, cvodeObject, sundialsContext);
 }
 
+template <>
+void HydroSystem<CoolingTest>::EnforcePressureFloor(
+    amrex::Real const densityFloor, amrex::Real const /*pressureFloor*/,
+    amrex::Box const &indexRange, amrex::Array4<amrex::Real> const &state) {
+  // prevent vacuum creation
+  amrex::Real const rho_floor = densityFloor; // workaround nvcc bug
+  amrex::Real const T_floor = 10.; // Kelvins
+
+  amrex::ParallelFor(
+      indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+        amrex::Real const rho = state(i, j, k, density_index);
+        amrex::Real const vx1 = state(i, j, k, x1Momentum_index) / rho;
+        amrex::Real const vx2 = state(i, j, k, x2Momentum_index) / rho;
+        amrex::Real const vx3 = state(i, j, k, x3Momentum_index) / rho;
+        amrex::Real const vsq = (vx1 * vx1 + vx2 * vx2 + vx3 * vx3);
+        amrex::Real const Etot = state(i, j, k, energy_index);
+
+        amrex::Real rho_new = rho;
+        if (rho < rho_floor) {
+          rho_new = rho_floor;
+          state(i, j, k, density_index) = rho_new;
+        }
+
+        amrex::Real const P_floor =
+            (rho_new / m_H) * boltzmann_constant_cgs_ * T_floor;
+
+        if (!is_eos_isothermal()) {
+          // recompute gas energy (to prevent P < 0)
+          amrex::Real const Eint_star = Etot - 0.5 * rho_new * vsq;
+          amrex::Real const P_star = Eint_star * (gamma_ - 1.);
+          amrex::Real P_new = P_star;
+          if (P_star < P_floor) {
+            P_new = P_floor;
+#pragma nv_diag_suppress divide_by_zero
+            amrex::Real const Etot_new =
+                P_new / (gamma_ - 1.) + 0.5 * rho_new * vsq;
+            state(i, j, k, energy_index) = Etot_new;
+          }
+        }
+      });
+}
+
 auto problem_main() -> int {
   // TODO(bwibking): fix Sundials memory leak (?)
 
@@ -374,7 +416,7 @@ auto problem_main() -> int {
   RadhydroSimulation<CoolingTest> sim(boundaryConditions);
   sim.is_hydro_enabled_ = true;
   sim.is_radiation_enabled_ = false;
-  sim.reconstructionOrder_ = 3; // PLM
+  sim.reconstructionOrder_ = 3; // PPM
   sim.cflNumber_ = CFL_number;
   sim.maxTimesteps_ = max_timesteps;
   sim.stopTime_ = max_time;
