@@ -317,7 +317,7 @@ void computeCooling(amrex::MultiFab &mf, Real dt, void *cvode_mem,
   AMREX_ALWAYS_ASSERT(CVodeInit(cvode_mem, userdata_f, 0, y_vec) == CV_SUCCESS);
 
   // set integration tolerances
-  Real reltol = 1.0e-5;
+  Real reltol = 1.0e-15;  // should not be higher than 1e-6
   Real abstol = reltol * Eint_min;
   AMREX_ALWAYS_ASSERT(reltol > 0.);
   AMREX_ALWAYS_ASSERT(abstol > 0.); // CVODE requires this to be nonzero
@@ -339,8 +339,9 @@ void computeCooling(amrex::MultiFab &mf, Real dt, void *cvode_mem,
   updateEgasToMultiFab(S_eint, mf);
 
   // free SUNDIALS objects
-  N_VDestroy(y_vec);
   CVodeFree(&cvode_mem);
+  SUNNonlinSolFree(NLS);
+  N_VDestroy(y_vec);
 }
 
 template <>
@@ -398,7 +399,7 @@ auto problem_main() -> int {
 
   // Problem parameters
   const double CFL_number = 0.4;
-  const double max_time = 5.0e4 * seconds_in_year; // 50 kyr
+  const double max_time = 7.5e4 * seconds_in_year; // 75 kyr
   const int max_timesteps = 2e4;
 
   // Problem initialization
