@@ -264,12 +264,15 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 		auto const &stateNew = state_new_[lev].array(iter);
 		auto fluxArrays = computeFluxes(stateOld, indexRange, ncomp_);
 
+		amrex::IArrayBox redoFlag(indexRange, 1, amrex::The_Async_Arena());
+
 		// Stage 1 of RK2-SSP
 		LinearAdvectionSystem<problem_t>::PredictStep(
 		    stateOld, stateNew,
 		    {AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
 				  fluxArrays[2].const_array())},
-		    dt_lev, geomLevel.CellSizeArray(), indexRange, ncomp_);
+		    dt_lev, geomLevel.CellSizeArray(), indexRange, ncomp_,
+			redoFlag.array());
 
 		if (do_reflux) {
 #ifdef USE_YAFLUXREGISTER
@@ -296,12 +299,15 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 			auto const &stateOut = state_new_[lev].array(iter);
 			auto fluxArrays = computeFluxes(stateInStar, indexRange, ncomp_);
 
+			amrex::IArrayBox redoFlag(indexRange, 1, amrex::The_Async_Arena());
+
 			// Stage 2 of RK2-SSP
 			LinearAdvectionSystem<problem_t>::AddFluxesRK2(
 			    stateOut, stateInOld, stateInStar,
 			    {AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
 					  fluxArrays[2].const_array())},
-			    dt_lev, geomLevel.CellSizeArray(), indexRange, ncomp_);
+			    dt_lev, geomLevel.CellSizeArray(), indexRange, ncomp_,
+				redoFlag.array());
 
 			if (do_reflux) {
 #ifdef USE_YAFLUXREGISTER

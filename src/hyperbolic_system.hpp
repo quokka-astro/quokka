@@ -20,6 +20,7 @@
 // library headers
 #include "AMReX_Array4.H"
 #include "AMReX_Dim3.H"
+#include "AMReX_ErrorList.H"
 #include "AMReX_FArrayBox.H"
 #include "AMReX_FabArrayUtility.H"
 #include "AMReX_IntVect.H"
@@ -28,6 +29,7 @@
 #include "AMReX_SPACE.H"
 
 // internal headers
+#include "AMReX_TagBox.H"
 #include "ArrayView.hpp"
 #include "simulation.hpp"
 
@@ -36,6 +38,10 @@ template <typename T> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto sgn(T val) -
 {
 	return (T(0) < val) - (val < T(0));
 }
+
+namespace quokka {
+	enum redoFlag {none = 0, redo = 1};
+} // namespace quokka
 
 using array_t = amrex::Array4<amrex::Real> const;
 using arrayconst_t = amrex::Array4<const amrex::Real> const;
@@ -66,22 +72,21 @@ template <typename problem_t> class HyperbolicSystem
 					 amrex::Box const &cellRange,
 					 amrex::Box const &interfaceRange, int nvars);
 
+	template <typename F>
 	__attribute__ ((__target__ ("no-fma")))
 	static void AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayconst_t &U1,
 				 std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray,
 				 double dt_in, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,
-				 amrex::Box const &indexRange, int nvars);
+				 amrex::Box const &indexRange, int nvars, F&& isStateValid,
+				 amrex::Array4<int> const &redoFlag);
 
+	template <typename F>
 	__attribute__ ((__target__ ("no-fma")))
 	static void PredictStep(arrayconst_t &consVarOld, array_t &consVarNew,
 				std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray,
 				double dt_in, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,
-				amrex::Box const &indexRange, int nvars);
-
-#if 0
-	static void SaveFluxes(array_t &advectionFluxes, arrayconst_t &x1Flux, double dx,
-			       amrex::Box const &indexRange, int nvars);
-#endif
+				amrex::Box const &indexRange, int nvars, F&& isStateValid,
+				 amrex::Array4<int> const &redoFlag);
 };
 
 template <typename problem_t>
@@ -312,30 +317,13 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array
 	});
 }
 
-#if 0
 template <typename problem_t>
-void HyperbolicSystem<problem_t>::SaveFluxes(array_t &advectionFluxes, arrayconst_t &x1Flux,
-					     const double dx, amrex::Box const &indexRange,
-					     const int nvars)
-{
-	// By convention, the fluxes are defined on the left edge of each zone,
-	// i.e. flux_(i) is the flux *into* zone i through the interface on the
-	// left of zone i, and -1.0*flux(i+1) is the flux *into* zone i through
-	// the interface on the right of zone i.
-
-	amrex::ParallelFor(indexRange, nvars, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
-		advectionFluxes(i, j, k, n) =
-		    (-1.0 / dx) * (x1Flux(i + 1, j, k, n) - x1Flux(i, j, k, n));
-	});
-}
-#endif
-
-template <typename problem_t>
+template <typename F>
 void HyperbolicSystem<problem_t>::PredictStep(
     arrayconst_t &consVarOld, array_t &consVarNew,
     std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray, const double dt_in,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange,
-    const int nvars)
+    const int nvars, F&& isStateValid, amrex::Array4<int> const &redoFlag)
 {
 	BL_PROFILE("HyperbolicSystem::PredictStep()");
 
@@ -357,22 +345,32 @@ void HyperbolicSystem<problem_t>::PredictStep(
 #endif
 
 	amrex::ParallelFor(
-	    indexRange, nvars, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
-		    consVarNew(i, j, k, n) =
-			consVarOld(i, j, k, n) +
-			(AMREX_D_TERM( (dt / dx) * (x1Flux(i, j, k, n) - x1Flux(i + 1, j, k, n)),
-				      	 + (dt / dy) * (x2Flux(i, j, k, n) - x2Flux(i, j + 1, k, n)),
-				      	 + (dt / dz) * (x3Flux(i, j, k, n) - x3Flux(i, j, k + 1, n))
-						   ));
+	    indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			for (int n = 0; n < nvars; ++n) {
+				consVarNew(i, j, k, n) =
+				consVarOld(i, j, k, n) +
+				(AMREX_D_TERM( (dt / dx) * (x1Flux(i, j, k, n) - x1Flux(i + 1, j, k, n)),
+							+ (dt / dy) * (x2Flux(i, j, k, n) - x2Flux(i, j + 1, k, n)),
+							+ (dt / dz) * (x3Flux(i, j, k, n) - x3Flux(i, j, k + 1, n))
+							));
+			}
+
+			// check if state is valid -- flag for re-do if not
+			if (!isStateValid(consVarNew, i, j, k)) {
+				redoFlag(i, j, k) = quokka::redoFlag::redo;
+			} else {
+				redoFlag(i, j, k) = quokka::redoFlag::none;
+			}
 	    });
 }
 
 template <typename problem_t>
+template <typename F>
 void HyperbolicSystem<problem_t>::AddFluxesRK2(
     array_t &U_new, arrayconst_t &U0, arrayconst_t &U1,
     std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray, const double dt_in,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange,
-    const int nvars)
+    const int nvars, F&& isStateValid, amrex::Array4<int> const &redoFlag)
 {
 	BL_PROFILE("HyperbolicSystem::AddFluxesRK2()");
 
@@ -394,25 +392,34 @@ void HyperbolicSystem<problem_t>::AddFluxesRK2(
 #endif
 
 	amrex::ParallelFor(
-	    indexRange, nvars, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
-		    // RK-SSP2 integrator
-		    const double U_0 = U0(i, j, k, n);
-		    const double U_1 = U1(i, j, k, n);
+	    indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			for (int n = 0; n < nvars; ++n) {
+				// RK-SSP2 integrator
+				const double U_0 = U0(i, j, k, n);
+				const double U_1 = U1(i, j, k, n);
 
-		    const double FxU_1 = (dt / dx) * (x1Flux(i, j, k, n) - x1Flux(i + 1, j, k, n));
-#if (AMREX_SPACEDIM >= 2)
-		    const double FyU_1 = (dt / dy) * (x2Flux(i, j, k, n) - x2Flux(i, j + 1, k, n));
-#endif
-#if (AMREX_SPACEDIM == 3)
-		    const double FzU_1 = (dt / dz) * (x3Flux(i, j, k, n) - x3Flux(i, j, k + 1, n));
-#endif
+				const double FxU_1 = (dt / dx) * (x1Flux(i, j, k, n) - x1Flux(i + 1, j, k, n));
+	#if (AMREX_SPACEDIM >= 2)
+				const double FyU_1 = (dt / dy) * (x2Flux(i, j, k, n) - x2Flux(i, j + 1, k, n));
+	#endif
+	#if (AMREX_SPACEDIM == 3)
+				const double FzU_1 = (dt / dz) * (x3Flux(i, j, k, n) - x3Flux(i, j, k + 1, n));
+	#endif
 
-		    // save results in U_new
-		    U_new(i, j, k, n) = (0.5 * U_0 + 0.5 * U_1) + (
-				AMREX_D_TERM( 0.5 * FxU_1 ,
-							+ 0.5 * FyU_1 ,
-							+ 0.5 * FzU_1 )
-							);
+				// save results in U_new
+				U_new(i, j, k, n) = (0.5 * U_0 + 0.5 * U_1) + (
+					AMREX_D_TERM( 0.5 * FxU_1 ,
+								+ 0.5 * FyU_1 ,
+								+ 0.5 * FzU_1 )
+								);
+			}
+
+			// check if state is valid -- flag for re-do if not
+			if (!isStateValid(U_new, i, j, k)) {
+				redoFlag(i, j, k) = quokka::redoFlag::redo;
+			} else {
+				redoFlag(i, j, k) = quokka::redoFlag::none;
+			}
 	    });
 }
 
