@@ -25,11 +25,11 @@
 #include "AMReX_NVector_MultiFab.H"
 #include "AMReX_ParallelContext.H"
 #include "AMReX_ParallelDescriptor.H"
+#include "AMReX_SPACE.H"
 #include "AMReX_Sundials.H"
 #include "AMReX_TableData.H"
 
 #include "RadhydroSimulation.hpp"
-#include "fextract.hpp"
 #include "hydro_system.hpp"
 #include "radiation_system.hpp"
 #include "test_cooling.hpp"
@@ -51,6 +51,9 @@ void RadhydroSimulation<CoolingTest>::setInitialConditionsAtLevel(int lev) {
   amrex::GpuArray<Real, AMREX_SPACEDIM> prob_hi = geom[lev].ProbHiArray();
   Real const Lx = (prob_hi[0] - prob_lo[0]);
   Real const Ly = (prob_hi[1] - prob_lo[1]);
+#if AMREX_SPACEDIM == 3
+  Real const Lz = (prob_hi[2] - prob_lo[2]);
+#endif
   Real const y0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
 
   // perturbation parameters
@@ -59,31 +62,42 @@ void RadhydroSimulation<CoolingTest>::setInitialConditionsAtLevel(int lev) {
   Real const A = 0.05 / kmax;
 
   // generate random phases
-  amrex::Array<int, 2> tlo{kmin, kmin}; // lower bounds
-  amrex::Array<int, 2> thi{kmax, kmax}; // upper bounds
-  amrex::TableData<Real, 2> table_data(tlo, thi);
+  amrex::Array<int, AMREX_SPACEDIM> tlo{
+      AMREX_D_DECL(kmin, kmin, kmin)}; // lower bounds
+  amrex::Array<int, AMREX_SPACEDIM> thi{
+      AMREX_D_DECL(kmax, kmax, kmax)}; // upper bounds
+  amrex::TableData<Real, AMREX_SPACEDIM> table_data(tlo, thi);
 #ifdef AMREX_USE_GPU
-  amrex::TableData<Real, 2> h_table_data(tlo, thi, The_Pinned_Arena());
+  amrex::TableData<Real, AMREX_SPACEDIM> h_table_data(
+      tlo, thi, amrex::The_Pinned_Arena());
   auto const &h_table = h_table_data.table();
 #else
   auto const &h_table = table_data.table();
 #endif
-  // 64-bit Mersenne Twister (do not use 32-bit version!)
+  // 64-bit Mersenne Twister (do not use 32-bit version for sampling doubles!)
   std::mt19937_64 rng(1); // NOLINT
   std::uniform_real_distribution<double> sample_phase(0., 2.0 * M_PI);
 
   // Initialize data on the host
+#if AMREX_SPACEDIM == 3
+  for (int j = tlo[0]; j <= thi[0]; ++j) {
+    for (int i = tlo[1]; i <= thi[1]; ++i) {
+      for (int k = tlo[2]; k <= thi[2]; ++k) {
+        h_table(i, j, k) = sample_phase(rng);
+      }
+    }
+  }
+#else
   for (int j = tlo[0]; j <= thi[0]; ++j) {
     for (int i = tlo[1]; i <= thi[1]; ++i) {
       h_table(i, j) = sample_phase(rng);
     }
   }
-
+#endif
 #ifdef AMREX_USE_GPU
   // Copy data to GPU memory
   table_data.copy(h_table_data);
-  amrex::Gpu::streamSynchronize(); // not needed if the kernel using it is on
-                                   // the same stream
+  amrex::Gpu::streamSynchronize();
 #endif
   auto const &phase = table_data.const_table(); // const makes it read only
 
@@ -94,6 +108,7 @@ void RadhydroSimulation<CoolingTest>::setInitialConditionsAtLevel(int lev) {
     amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
       Real const x = prob_lo[0] + (i + Real(0.5)) * dx[0];
       Real const y = prob_lo[1] + (j + Real(0.5)) * dx[1];
+      Real const z = prob_lo[2] + (k + Real(0.5)) * dx[2];
 
       state(i, j, k, RadSystem<CoolingTest>::radEnergy_index) = 0;
       state(i, j, k, RadSystem<CoolingTest>::x1RadFlux_index) = 0;
@@ -102,6 +117,22 @@ void RadhydroSimulation<CoolingTest>::setInitialConditionsAtLevel(int lev) {
 
       // compute perturbations
       Real delta_rho = 0;
+#if AMREX_SPACEDIM == 3
+      for (int ki = kmin; ki < kmax; ++ki) {
+        for (int kj = kmin; kj < kmax; ++kj) {
+          for (int kk = kmin; kk < kmax; ++kk) {
+            if ((ki == 0) && (kj == 0) && (kk == 0)) {
+              continue;
+            }
+            Real const kx = 2.0 * M_PI * Real(ki) / Lx;
+            Real const ky = 2.0 * M_PI * Real(kj) / Lx;
+            Real const kz = 2.0 * M_PI * Real(kk) / Lx;
+            delta_rho +=
+                A * std::sin(x * kx + y * ky + z * kz + phase(ki, kj, kk));
+          }
+        }
+      }
+#else
       for (int ki = kmin; ki < kmax; ++ki) {
         for (int kj = kmin; kj < kmax; ++kj) {
           if ((ki == 0) && (kj == 0)) {
@@ -112,6 +143,7 @@ void RadhydroSimulation<CoolingTest>::setInitialConditionsAtLevel(int lev) {
           delta_rho += A * std::sin(x * kx + y * ky + phase(ki, kj));
         }
       }
+#endif
       AMREX_ALWAYS_ASSERT(delta_rho > -1.0);
 
       Real rho = 0.12 * m_H * (1.0 + delta_rho); // g cm^-3
@@ -317,7 +349,7 @@ void computeCooling(amrex::MultiFab &mf, Real dt, void *cvode_mem,
   AMREX_ALWAYS_ASSERT(CVodeInit(cvode_mem, userdata_f, 0, y_vec) == CV_SUCCESS);
 
   // set integration tolerances
-  Real reltol = 1.0e-6;  // should not be higher than 1e-6
+  Real reltol = 1.0e-6; //1.0e-10; // should not be higher than 1e-6
   Real abstol = reltol * Eint_min;
   AMREX_ALWAYS_ASSERT(reltol > 0.);
   AMREX_ALWAYS_ASSERT(abstol > 0.); // CVODE requires this to be nonzero
@@ -358,7 +390,7 @@ void HydroSystem<CoolingTest>::EnforcePressureFloor(
     amrex::Box const &indexRange, amrex::Array4<amrex::Real> const &state) {
   // prevent vacuum creation
   amrex::Real const rho_floor = densityFloor; // workaround nvcc bug
-  amrex::Real const T_floor = 1.0; // Kelvins
+  amrex::Real const T_floor = 1.0;            // Kelvins
 
   amrex::ParallelFor(
       indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
@@ -406,10 +438,12 @@ auto problem_main() -> int {
   for (int n = 0; n < nvars; ++n) {
     boundaryConditions[n].setLo(0, amrex::BCType::int_dir); // periodic
     boundaryConditions[n].setHi(0, amrex::BCType::int_dir);
-    for (int i = 1; i < AMREX_SPACEDIM; ++i) {
-      boundaryConditions[n].setLo(i, amrex::BCType::foextrap); // extrapolate
-      boundaryConditions[n].setHi(i, amrex::BCType::ext_dir);  // Dirichlet
-    }
+    boundaryConditions[n].setLo(1, amrex::BCType::foextrap); // extrapolate
+    boundaryConditions[n].setHi(1, amrex::BCType::ext_dir);  // Dirichlet
+#if AMREX_SPACEDIM == 3
+    boundaryConditions[n].setLo(2, amrex::BCType::int_dir); // periodic
+    boundaryConditions[n].setHi(2, amrex::BCType::int_dir);
+#endif
   }
 
   RadhydroSimulation<CoolingTest> sim(boundaryConditions);
