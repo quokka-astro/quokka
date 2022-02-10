@@ -39,7 +39,8 @@ using amrex::Real;
 struct CoolingTest {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-constexpr double Tgas0 = 6000.; // K
+constexpr double Tgas0 = 6000.;      // K
+constexpr amrex::Real T_floor = 10.0; // K
 constexpr double m_H = hydrogen_mass_cgs_;
 constexpr double rho0 = 0.6 * m_H; // g cm^-3
 constexpr double seconds_in_year = 3.154e7;
@@ -277,6 +278,23 @@ void computeEintFromMultiFab(amrex::MultiFab &S_eint, amrex::MultiFab &mf) {
   amrex::Gpu::streamSynchronize();
 }
 
+void computeAbstolFromMultiFab(amrex::MultiFab &abstol_mf,
+                               amrex::MultiFab &mf) {
+  // compute gas internal energy for each cell, save in S_eint
+  auto const &abstol = abstol_mf.arrays();
+  auto const &state = mf.const_arrays();
+  amrex::Real const reltol_floor = 0.01;
+
+  amrex::ParallelFor(abstol_mf,
+  [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept {
+    const Real rho =
+        state[box_no](i, j, k, HydroSystem<CoolingTest>::density_index);
+    abstol[box_no](i, j, k) = reltol_floor *
+        RadSystem<CoolingTest>::ComputeEgasFromTgas(rho, T_floor);
+  });
+  amrex::Gpu::streamSynchronize();
+}
+
 void updateEgasToMultiFab(amrex::MultiFab &S_eint, amrex::MultiFab &mf) {
   // copy solution back to MultiFab 'mf'
   auto const &Eint = S_eint.const_arrays();
@@ -313,15 +331,20 @@ void computeCooling(amrex::MultiFab &mf, Real dt, void *cvode_mem,
   const auto &ba = mf.boxArray();
   const auto &dmap = mf.DistributionMap();
   amrex::MultiFab S_eint(ba, dmap, 1, mf.nGrow());
+  amrex::MultiFab abstol(ba, dmap, 1, mf.nGrow());
 
   // Get gas internal energy from hydro state
   computeEintFromMultiFab(S_eint, mf);
   const Real Eint_min = S_eint.min(0);
   AMREX_ALWAYS_ASSERT(Eint_min > 0.);
 
-  // Create an N_Vector wrapper for S_eint
+  // Compute absolute tolerances, set based on T_floor for each cell
+  computeAbstolFromMultiFab(abstol, mf); 
+
+  // Create an N_Vector wrapper for S_eint, abstol multifabs
   sunindextype length = S_eint.n_comp * S_eint.boxArray().numPts();
   N_Vector y_vec = amrex::sundials::N_VMake_MultiFab(length, &S_eint);
+  N_Vector abstol_vec = amrex::sundials::N_VMake_MultiFab(length, &abstol);
 
   // create user data object
   SundialsUserData user_data;
@@ -349,11 +372,9 @@ void computeCooling(amrex::MultiFab &mf, Real dt, void *cvode_mem,
   AMREX_ALWAYS_ASSERT(CVodeInit(cvode_mem, userdata_f, 0, y_vec) == CV_SUCCESS);
 
   // set integration tolerances
-  Real reltol = 1.0e-6; //1.0e-10; // should not be higher than 1e-6
-  Real abstol = reltol * Eint_min;
+  Real reltol = 1.0e-6; // 1.0e-10; // should not be higher than 1e-6
   AMREX_ALWAYS_ASSERT(reltol > 0.);
-  AMREX_ALWAYS_ASSERT(abstol > 0.); // CVODE requires this to be nonzero
-  CVodeSStolerances(cvode_mem, reltol, abstol);
+  CVodeSVtolerances(cvode_mem, reltol, abstol_vec);
 
   // set nonlinear solver to fixed-point
   int m_accel = 0; // (optional) use Anderson acceleration with m_accel iterates
@@ -374,6 +395,7 @@ void computeCooling(amrex::MultiFab &mf, Real dt, void *cvode_mem,
   CVodeFree(&cvode_mem);
   SUNNonlinSolFree(NLS);
   N_VDestroy(y_vec);
+  N_VDestroy(abstol_vec);
 }
 
 template <>
@@ -390,7 +412,6 @@ void HydroSystem<CoolingTest>::EnforcePressureFloor(
     amrex::Box const &indexRange, amrex::Array4<amrex::Real> const &state) {
   // prevent vacuum creation
   amrex::Real const rho_floor = densityFloor; // workaround nvcc bug
-  amrex::Real const T_floor = 1.0;            // Kelvins
 
   amrex::ParallelFor(
       indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
@@ -428,7 +449,8 @@ void HydroSystem<CoolingTest>::EnforcePressureFloor(
 
 auto problem_main() -> int {
   // Problem parameters
-  const double CFL_number = 0.4;
+  const double CFL_number = 0.1;
+  //const double max_time = 1.0e4 * seconds_in_year; // 10 kyr
   const double max_time = 7.5e4 * seconds_in_year; // 75 kyr
   const int max_timesteps = 2e4;
 
@@ -449,7 +471,12 @@ auto problem_main() -> int {
   RadhydroSimulation<CoolingTest> sim(boundaryConditions);
   sim.is_hydro_enabled_ = true;
   sim.is_radiation_enabled_ = false;
-  sim.reconstructionOrder_ = 3; // PPM
+
+  // PPM gives unphysically enormous temperatures when used for this problem
+  // (e.g., ~1e14 K or higher)
+  // Not clear how to fix...
+  sim.reconstructionOrder_ = 2; // PLM
+  
   sim.cflNumber_ = CFL_number;
   sim.maxTimesteps_ = max_timesteps;
   sim.stopTime_ = max_time;
