@@ -29,6 +29,8 @@
 template <typename problem_t> struct EOS_Traits {
 	static constexpr double gamma = 5. / 3.; // default value
 	static constexpr double cs_isothermal = NAN; // only used when gamma = 1
+	static constexpr bool reconstruct_eint = false; // if true, reconstruct e_int instead of pressure
+	static constexpr double density_vacuum_floor = 0.;
 };
 
 /// Class for the Euler equations of inviscid hydrodynamics
@@ -112,6 +114,8 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	// C++ does not allow constexpr to be uninitialized, even in a templated class!
 	static constexpr double gamma_ = EOS_Traits<problem_t>::gamma;
 	static constexpr double cs_iso_ = EOS_Traits<problem_t>::cs_isothermal;
+	static constexpr bool reconstruct_eint = EOS_Traits<problem_t>::reconstruct_eint;
+	static constexpr double density_vacuum_floor = EOS_Traits<problem_t>::density_vacuum_floor;
 
 	static constexpr auto is_eos_isothermal() -> bool {
 		return (gamma_ == 1.0);
@@ -142,6 +146,7 @@ void HydroSystem<problem_t>::ConservedToPrimitive(amrex::Array4<const amrex::Rea
 		const auto thermal_energy = E - kinetic_energy;
 
 		const auto P = thermal_energy * (HydroSystem<problem_t>::gamma_ - 1.0);
+		const auto eint = thermal_energy / rho; // specific internal energy
 
 		AMREX_ASSERT(rho > 0.);
 		AMREX_ASSERT(P > 0.);
@@ -150,7 +155,13 @@ void HydroSystem<problem_t>::ConservedToPrimitive(amrex::Array4<const amrex::Rea
 		primVar(i, j, k, x1Velocity_index) = vx;
 		primVar(i, j, k, x2Velocity_index) = vy;
 		primVar(i, j, k, x3Velocity_index) = vz;
-		primVar(i, j, k, pressure_index) = P;
+		if constexpr (reconstruct_eint) {
+			// save eint
+			primVar(i, j, k, pressure_index) = eint;
+		} else {
+			// save pressure
+			primVar(i, j, k, pressure_index) = P;			
+		}
 	});
 }
 
@@ -283,7 +294,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::isStateValid(
 		amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> bool {
 	// check if cons(i, j, k) is a valid state
 	const amrex::Real rho = cons(i, j, k, density_index);
-	bool isDensityPositive = (rho > 0.);
+	bool isDensityPositive = (rho > density_vacuum_floor);
 	bool isPressurePositive = false;
 	
 	if (!is_eos_isothermal()) {
@@ -427,21 +438,30 @@ void HydroSystem<problem_t>::ComputeFlatteningCoefficients(
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in) {
 		auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
 
+		amrex::Real Pplus2 = primVar(i + 2, j, k, pressure_index);
+		amrex::Real Pplus1 = primVar(i + 1, j, k, pressure_index);
+		amrex::Real P = primVar(i, j, k, pressure_index);
+		amrex::Real Pminus1 = primVar(i - 1, j, k, pressure_index);
+		amrex::Real Pminus2 = primVar(i - 2, j, k, pressure_index);
+
+		if constexpr (reconstruct_eint) {
+			Pplus2 *= primVar(i + 2, j, k, primDensity_index) * (gamma_ - 1.0);
+			Pplus1 *= primVar(i + 1, j, k, primDensity_index) * (gamma_ - 1.0);
+			P *= primVar(i, j, k, primDensity_index) * (gamma_ - 1.0);
+			Pminus1 *= primVar(i - 1, j, k, primDensity_index) * (gamma_ - 1.0);
+			Pminus2 *= primVar(i - 2, j, k, primDensity_index) * (gamma_ - 1.0);
+		}
+
 		// beta is a measure of shock resolution (Eq. 74 of Miller & Colella 2002)
-		const double beta = std::abs(primVar(i + 1, j, k, pressure_index) -
-					     primVar(i - 1, j, k, pressure_index)) /
-				    std::abs(primVar(i + 2, j, k, pressure_index) -
-					     primVar(i - 2, j, k, pressure_index));
+		const double beta = std::abs(Pplus1 - Pminus1) / std::abs(Pplus2 - Pminus2);
 
 		// Eq. 75 of Miller & Colella 2002
 		const double chi_min =
 		    std::max(0., std::min(1., (beta_max - beta) / (beta_max - beta_min)));
 
 		// Z is a measure of shock strength (Eq. 76 of Miller & Colella 2002)
-		const double K_S = gamma_ * primVar(i, j, k, pressure_index); // equal to \rho c_s^2
-		const double Z = std::abs(primVar(i + 1, j, k, pressure_index) -
-					  primVar(i - 1, j, k, pressure_index)) /
-				 K_S;
+		const double K_S = gamma_ * P; // equal to \rho c_s^2
+		const double Z = std::abs(Pplus1 - Pminus1) / K_S;
 
 		// check for converging flow along the normal direction DIR (Eq. 77)
 		int velocity_index = 0;
@@ -676,8 +696,18 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 			cs_L = cs_iso_;
 			cs_R = cs_iso_;
 		} else {
-			P_L = x1LeftState(i, j, k, pressure_index);
-			P_R = x1RightState(i, j, k, pressure_index);
+			if constexpr (reconstruct_eint) { // pressure_index is actually eint
+				// compute pressure from specific internal energy
+				const double eint_L = x1LeftState(i, j, k, pressure_index);
+				const double eint_R = x1RightState(i, j, k, pressure_index);
+
+				P_L = rho_L * eint_L * (gamma_ - 1.0);
+				P_R = rho_R * eint_R * (gamma_ - 1.0);
+
+			} else { // pressure_index is actually pressure
+				P_L = x1LeftState(i, j, k, pressure_index);
+				P_R = x1RightState(i, j, k, pressure_index);
+			}
 
 			cs_L = std::sqrt(gamma_ * P_L / rho_L);
 			cs_R = std::sqrt(gamma_ * P_R / rho_R);

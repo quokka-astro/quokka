@@ -39,11 +39,18 @@ using amrex::Real;
 struct CoolingTest {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
+constexpr double m_H = hydrogen_mass_cgs_;
+constexpr double seconds_in_year = 3.154e7;
+
+template <> struct EOS_Traits<CoolingTest> {
+	static constexpr double gamma = 5. / 3.; // default value
+	static constexpr bool reconstruct_eint = true; // if true, reconstruct e_int instead of pressure
+  static constexpr double density_vacuum_floor = 0.01 * m_H;
+};
+
 constexpr double Tgas0 = 6000.;      // K
 constexpr amrex::Real T_floor = 10.0; // K
-constexpr double m_H = hydrogen_mass_cgs_;
 constexpr double rho0 = 0.6 * m_H; // g cm^-3
-constexpr double seconds_in_year = 3.154e7;
 
 template <>
 void RadhydroSimulation<CoolingTest>::setInitialConditionsAtLevel(int lev) {
@@ -472,10 +479,10 @@ auto problem_main() -> int {
   sim.is_hydro_enabled_ = true;
   sim.is_radiation_enabled_ = false;
 
-  // PPM gives unphysically enormous temperatures when used for this problem
-  // (e.g., ~1e14 K or higher)
-  // Not clear how to fix...
-  sim.reconstructionOrder_ = 2; // PLM
+  // Standard PPM gives unphysically enormous temperatures when used for
+  // this problem (e.g., ~1e14 K or higher), but can be fixed by
+  // reconstructing the temperature instead of the pressure
+  sim.reconstructionOrder_ = 3; // PLM
   
   sim.cflNumber_ = CFL_number;
   sim.maxTimesteps_ = max_timesteps;
