@@ -45,7 +45,7 @@ constexpr double seconds_in_year = 3.154e7;
 template <> struct EOS_Traits<CoolingTest> {
 	static constexpr double gamma = 5. / 3.; // default value
 	static constexpr bool reconstruct_eint = true; // if true, reconstruct e_int instead of pressure
-  static constexpr double density_vacuum_floor = 0.01 * m_H;
+  //static constexpr double density_vacuum_floor = 0.01 * m_H;
 };
 
 constexpr double Tgas0 = 6000.;      // K

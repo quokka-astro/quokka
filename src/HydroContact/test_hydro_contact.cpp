@@ -22,6 +22,7 @@ struct ContactProblem {};
 
 template <> struct EOS_Traits<ContactProblem> {
   static constexpr double gamma = 1.4;
+  static constexpr bool reconstruct_eint = true;
 };
 constexpr double v_contact = 0.0; // contact wave velocity
 

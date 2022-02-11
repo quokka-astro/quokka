@@ -29,8 +29,8 @@
 template <typename problem_t> struct EOS_Traits {
 	static constexpr double gamma = 5. / 3.; // default value
 	static constexpr double cs_isothermal = NAN; // only used when gamma = 1
-	static constexpr bool reconstruct_eint = false; // if true, reconstruct e_int instead of pressure
-	static constexpr double density_vacuum_floor = 0.;
+	static constexpr bool reconstruct_eint = true; // if true, reconstruct e_int instead of pressure
+	//static constexpr double density_vacuum_floor = 0.;
 };
 
 /// Class for the Euler equations of inviscid hydrodynamics
@@ -115,7 +115,6 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	static constexpr double gamma_ = EOS_Traits<problem_t>::gamma;
 	static constexpr double cs_iso_ = EOS_Traits<problem_t>::cs_isothermal;
 	static constexpr bool reconstruct_eint = EOS_Traits<problem_t>::reconstruct_eint;
-	static constexpr double density_vacuum_floor = EOS_Traits<problem_t>::density_vacuum_floor;
 
 	static constexpr auto is_eos_isothermal() -> bool {
 		return (gamma_ == 1.0);
@@ -294,7 +293,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::isStateValid(
 		amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> bool {
 	// check if cons(i, j, k) is a valid state
 	const amrex::Real rho = cons(i, j, k, density_index);
-	bool isDensityPositive = (rho > density_vacuum_floor);
+	bool isDensityPositive = (rho > 0.);
 	bool isPressurePositive = false;
 	
 	if (!is_eos_isothermal()) {
