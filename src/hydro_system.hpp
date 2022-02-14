@@ -817,6 +817,7 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 			}
 
 			// dual energy switch
+#if 0
 			{
 				double Eintavg_L = Eavg_L - 0.5 * (x1momavg_L*x1momavg_L + x2momavg_L*x2momavg_L + x3momavg_L*x3momavg_L) / rhoavg_L;
 				double Eintavg_R = Eavg_R - 0.5 * (x1momavg_R*x1momavg_R + x2momavg_R*x2momavg_R + x3momavg_R*x3momavg_R) / rhoavg_R;
@@ -830,6 +831,7 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 					P_R = Eint_R * (gamma_ - 1.0);
 				}
 			}
+#endif
 
 			cs_L = std::sqrt(gamma_ * P_L / rho_L);
 			cs_R = std::sqrt(gamma_ * P_R / rho_R);

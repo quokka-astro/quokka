@@ -289,7 +289,7 @@ void computeEintFromMultiFab(amrex::MultiFab &S_eint, amrex::MultiFab &mf) {
 
     const Real Eint =
         state[box_no](i, j, k, HydroSystem<CoolingTest>::internalEnergy_index);
-   
+
     if (Eint_cons > eta3 * Etot) {
       Eint_arr[box_no](i, j, k) = Eint_cons;
     } else {
@@ -450,18 +450,15 @@ void HydroSystem<CoolingTest>::EnforcePressureFloor(
           state(i, j, k, density_index) = rho_new;
         }
 
-#pragma nv_diag_suppress divide_by_zero
         amrex::Real const Eint_floor =
             (rho_new / m_H) * boltzmann_constant_cgs_ * T_floor / (gamma_ - 1.);
-
-        if (!is_eos_isothermal()) {
-          amrex::Real const Eint_conserved = Etot - 0.5 * rho_new * vsq;
-          if (Eint_conserved < Eint_floor) {
-            state(i, j, k, energy_index) = Eint_floor + 0.5 * rho_new * vsq;
-          }
-          if (Eint_auxiliary < Eint_floor) {
-            state(i, j, k, internalEnergy_index) = Eint_floor;
-          }
+        amrex::Real const Eint_conserved = Etot - 0.5 * rho_new * vsq;
+        
+        if (Eint_conserved < Eint_floor) {
+          state(i, j, k, energy_index) = Eint_floor + 0.5 * rho_new * vsq;
+        }
+        if (Eint_auxiliary < Eint_floor) {
+          state(i, j, k, internalEnergy_index) = Eint_floor;
         }
       });
 }
