@@ -30,7 +30,6 @@ template <typename problem_t> struct EOS_Traits {
 	static constexpr double gamma = 5. / 3.; // default value
 	static constexpr double cs_isothermal = NAN; // only used when gamma = 1
 	static constexpr bool reconstruct_eint = true; // if true, reconstruct e_int instead of pressure
-	//static constexpr double density_vacuum_floor = 0.;
 };
 
 /// Class for the Euler equations of inviscid hydrodynamics
