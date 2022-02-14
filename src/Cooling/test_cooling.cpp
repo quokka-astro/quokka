@@ -43,14 +43,15 @@ constexpr double m_H = hydrogen_mass_cgs_;
 constexpr double seconds_in_year = 3.154e7;
 
 template <> struct EOS_Traits<CoolingTest> {
-	static constexpr double gamma = 5. / 3.; // default value
-	static constexpr bool reconstruct_eint = true; // if true, reconstruct e_int instead of pressure
-  //static constexpr double density_vacuum_floor = 0.01 * m_H;
+  static constexpr double gamma = 5. / 3.; // default value
+  static constexpr bool reconstruct_eint =
+      true; // if true, reconstruct e_int instead of pressure
+  // static constexpr double density_vacuum_floor = 0.01 * m_H;
 };
 
-constexpr double Tgas0 = 6000.;      // K
+constexpr double Tgas0 = 6000.;       // K
 constexpr amrex::Real T_floor = 10.0; // K
-constexpr double rho0 = 0.6 * m_H; // g cm^-3
+constexpr double rho0 = 0.6 * m_H;    // g cm^-3
 
 template <>
 void RadhydroSimulation<CoolingTest>::setInitialConditionsAtLevel(int lev) {
@@ -159,13 +160,12 @@ void RadhydroSimulation<CoolingTest>::setInitialConditionsAtLevel(int lev) {
       Real ymom = 0;
       Real zmom = 0;
       Real const P = 4.0e4 * boltzmann_constant_cgs_; // erg cm^-3
-      Real Eint = (HydroSystem<CoolingTest>::gamma_ - 1.) * P;
-      // Real Eint = RadSystem<CoolingTest>::ComputeEgasFromTgas(rho, 1.0e4);
-
+      Real const Eint = (HydroSystem<CoolingTest>::gamma_ - 1.) * P;
       Real const Egas = RadSystem<CoolingTest>::ComputeEgasFromEint(
           rho, xmom, ymom, zmom, Eint);
 
       state(i, j, k, RadSystem<CoolingTest>::gasEnergy_index) = Egas;
+      state(i, j, k, RadSystem<CoolingTest>::gasInternalEnergy_index) = Eint;
       state(i, j, k, RadSystem<CoolingTest>::gasDensity_index) = rho;
       state(i, j, k, RadSystem<CoolingTest>::x1GasMomentum_index) = xmom;
       state(i, j, k, RadSystem<CoolingTest>::x2GasMomentum_index) = ymom;
@@ -216,6 +216,7 @@ AMRSimulation<CoolingTest>::setCustomBoundaryConditions(
     consVar(i, j, k, RadSystem<CoolingTest>::x2GasMomentum_index) = ymom;
     consVar(i, j, k, RadSystem<CoolingTest>::x3GasMomentum_index) = zmom;
     consVar(i, j, k, RadSystem<CoolingTest>::gasEnergy_index) = Egas;
+    consVar(i, j, k, RadSystem<CoolingTest>::gasInternalEnergy_index) = Eint;
   }
 }
 
@@ -263,25 +264,38 @@ void rhs_cooling(amrex::MultiFab &S_rhs, amrex::MultiFab &S_data,
 
 void computeEintFromMultiFab(amrex::MultiFab &S_eint, amrex::MultiFab &mf) {
   // compute gas internal energy for each cell, save in S_eint
-  auto const &Eint = S_eint.arrays();
+
+  // eta3 is defined here:
+  // https://amrex-astro.github.io/Castro/docs/Hydrodynamics.html#internal-energy-and-temperature
+  const Real eta3 = 0.001;
+
+  auto const &Eint_arr = S_eint.arrays();
   auto const &state = mf.const_arrays();
 
-  amrex::ParallelFor(
-      S_eint, [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept {
-        const Real rho =
-            state[box_no](i, j, k, HydroSystem<CoolingTest>::density_index);
-        const Real x1Mom =
-            state[box_no](i, j, k, HydroSystem<CoolingTest>::x1Momentum_index);
-        const Real x2Mom =
-            state[box_no](i, j, k, HydroSystem<CoolingTest>::x2Momentum_index);
-        const Real x3Mom =
-            state[box_no](i, j, k, HydroSystem<CoolingTest>::x3Momentum_index);
-        const Real Egas =
-            state[box_no](i, j, k, HydroSystem<CoolingTest>::energy_index);
+  amrex::ParallelFor(S_eint, [=] AMREX_GPU_DEVICE(int box_no, int i, int j,
+                                                  int k) noexcept {
+    const Real rho =
+        state[box_no](i, j, k, HydroSystem<CoolingTest>::density_index);
+    const Real x1Mom =
+        state[box_no](i, j, k, HydroSystem<CoolingTest>::x1Momentum_index);
+    const Real x2Mom =
+        state[box_no](i, j, k, HydroSystem<CoolingTest>::x2Momentum_index);
+    const Real x3Mom =
+        state[box_no](i, j, k, HydroSystem<CoolingTest>::x3Momentum_index);
+    const Real Etot =
+        state[box_no](i, j, k, HydroSystem<CoolingTest>::energy_index);
+    const Real Eint_cons = RadSystem<CoolingTest>::ComputeEintFromEgas(
+        rho, x1Mom, x2Mom, x3Mom, Etot);
 
-        Eint[box_no](i, j, k) = RadSystem<CoolingTest>::ComputeEintFromEgas(
-            rho, x1Mom, x2Mom, x3Mom, Egas);
-      });
+    const Real Eint =
+        state[box_no](i, j, k, HydroSystem<CoolingTest>::internalEnergy_index);
+   
+    if (Eint_cons > eta3 * Etot) {
+      Eint_arr[box_no](i, j, k) = Eint_cons;
+    } else {
+      Eint_arr[box_no](i, j, k) = Eint;
+    }
+  });
   amrex::Gpu::streamSynchronize();
 }
 
@@ -292,38 +306,34 @@ void computeAbstolFromMultiFab(amrex::MultiFab &abstol_mf,
   auto const &state = mf.const_arrays();
   amrex::Real const reltol_floor = 0.01;
 
-  amrex::ParallelFor(abstol_mf,
-  [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept {
+  amrex::ParallelFor(abstol_mf, [=] AMREX_GPU_DEVICE(int box_no, int i, int j,
+                                                     int k) noexcept {
     const Real rho =
         state[box_no](i, j, k, HydroSystem<CoolingTest>::density_index);
-    abstol[box_no](i, j, k) = reltol_floor *
+    abstol[box_no](i, j, k) =
+        reltol_floor *
         RadSystem<CoolingTest>::ComputeEgasFromTgas(rho, T_floor);
   });
   amrex::Gpu::streamSynchronize();
 }
 
-void updateEgasToMultiFab(amrex::MultiFab &S_eint, amrex::MultiFab &mf) {
+void updateEgasToMultiFab(amrex::MultiFab &S_eint_old,
+                          amrex::MultiFab &S_eint_new, amrex::MultiFab &mf) {
   // copy solution back to MultiFab 'mf'
-  auto const &Eint = S_eint.const_arrays();
+  auto const &Eint_old_arr = S_eint_old.const_arrays();
+  auto const &Eint_new_arr = S_eint_new.const_arrays();
   auto const &state = mf.arrays();
 
-  amrex::ParallelFor(
-      mf, [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept {
-        const Real rho =
-            state[box_no](i, j, k, HydroSystem<CoolingTest>::density_index);
-        const Real x1Mom =
-            state[box_no](i, j, k, HydroSystem<CoolingTest>::x1Momentum_index);
-        const Real x2Mom =
-            state[box_no](i, j, k, HydroSystem<CoolingTest>::x2Momentum_index);
-        const Real x3Mom =
-            state[box_no](i, j, k, HydroSystem<CoolingTest>::x3Momentum_index);
+  amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int box_no, int i, int j,
+                                              int k) noexcept {
+    const Real Eint_old = Eint_old_arr[box_no](i, j, k);
+    const Real Eint_new = Eint_new_arr[box_no](i, j, k);
+    const Real dEint = Eint_new - Eint_old;
 
-        const Real Eint_new = Eint[box_no](i, j, k);
-
-        state[box_no](i, j, k, HydroSystem<CoolingTest>::energy_index) =
-            RadSystem<CoolingTest>::ComputeEgasFromEint(rho, x1Mom, x2Mom,
-                                                        x3Mom, Eint_new);
-      });
+    state[box_no](i, j, k, HydroSystem<CoolingTest>::internalEnergy_index) +=
+        dEint;
+    state[box_no](i, j, k, HydroSystem<CoolingTest>::energy_index) += dEint;
+  });
   amrex::Gpu::streamSynchronize();
 }
 
@@ -337,6 +347,7 @@ void computeCooling(amrex::MultiFab &mf, Real dt, void *cvode_mem,
   // Create MultiFab 'S_eint' with only gas internal energy
   const auto &ba = mf.boxArray();
   const auto &dmap = mf.DistributionMap();
+  amrex::MultiFab S_eint0(ba, dmap, 1, mf.nGrow());
   amrex::MultiFab S_eint(ba, dmap, 1, mf.nGrow());
   amrex::MultiFab abstol(ba, dmap, 1, mf.nGrow());
 
@@ -345,8 +356,11 @@ void computeCooling(amrex::MultiFab &mf, Real dt, void *cvode_mem,
   const Real Eint_min = S_eint.min(0);
   AMREX_ALWAYS_ASSERT(Eint_min > 0.);
 
+  // save initial internal energy
+  amrex::MultiFab::Copy(S_eint0, S_eint, 0, 0, 1, 0);
+
   // Compute absolute tolerances, set based on T_floor for each cell
-  computeAbstolFromMultiFab(abstol, mf); 
+  computeAbstolFromMultiFab(abstol, mf);
 
   // Create an N_Vector wrapper for S_eint, abstol multifabs
   sunindextype length = S_eint.n_comp * S_eint.boxArray().numPts();
@@ -396,7 +410,7 @@ void computeCooling(amrex::MultiFab &mf, Real dt, void *cvode_mem,
                                    "Cooling solve with CVODE failed!");
 
   // update hydro state with new Eint
-  updateEgasToMultiFab(S_eint, mf);
+  updateEgasToMultiFab(S_eint0, S_eint, mf);
 
   // free SUNDIALS objects
   CVodeFree(&cvode_mem);
@@ -428,6 +442,7 @@ void HydroSystem<CoolingTest>::EnforcePressureFloor(
         amrex::Real const vx3 = state(i, j, k, x3Momentum_index) / rho;
         amrex::Real const vsq = (vx1 * vx1 + vx2 * vx2 + vx3 * vx3);
         amrex::Real const Etot = state(i, j, k, energy_index);
+        amrex::Real const Eint_auxiliary = state(i, j, k, internalEnergy_index);
 
         amrex::Real rho_new = rho;
         if (rho < rho_floor) {
@@ -435,20 +450,17 @@ void HydroSystem<CoolingTest>::EnforcePressureFloor(
           state(i, j, k, density_index) = rho_new;
         }
 
-        amrex::Real const P_floor =
-            (rho_new / m_H) * boltzmann_constant_cgs_ * T_floor;
+#pragma nv_diag_suppress divide_by_zero
+        amrex::Real const Eint_floor =
+            (rho_new / m_H) * boltzmann_constant_cgs_ * T_floor / (gamma_ - 1.);
 
         if (!is_eos_isothermal()) {
-          // recompute gas energy (to prevent P < 0)
-          amrex::Real const Eint_star = Etot - 0.5 * rho_new * vsq;
-          amrex::Real const P_star = Eint_star * (gamma_ - 1.);
-          amrex::Real P_new = P_star;
-          if (P_star < P_floor) {
-            P_new = P_floor;
-#pragma nv_diag_suppress divide_by_zero
-            amrex::Real const Etot_new =
-                P_new / (gamma_ - 1.) + 0.5 * rho_new * vsq;
-            state(i, j, k, energy_index) = Etot_new;
+          amrex::Real const Eint_conserved = Etot - 0.5 * rho_new * vsq;
+          if (Eint_conserved < Eint_floor) {
+            state(i, j, k, energy_index) = Eint_floor + 0.5 * rho_new * vsq;
+          }
+          if (Eint_auxiliary < Eint_floor) {
+            state(i, j, k, internalEnergy_index) = Eint_floor;
           }
         }
       });
@@ -457,7 +469,7 @@ void HydroSystem<CoolingTest>::EnforcePressureFloor(
 auto problem_main() -> int {
   // Problem parameters
   const double CFL_number = 0.1;
-  //const double max_time = 1.0e4 * seconds_in_year; // 10 kyr
+  // const double max_time = 1.0e4 * seconds_in_year; // 10 kyr
   const double max_time = 7.5e4 * seconds_in_year; // 75 kyr
   const int max_timesteps = 2e4;
 
@@ -483,7 +495,7 @@ auto problem_main() -> int {
   // this problem (e.g., ~1e14 K or higher), but can be fixed by
   // reconstructing the temperature instead of the pressure
   sim.reconstructionOrder_ = 3; // PLM
-  
+
   sim.cflNumber_ = CFL_number;
   sim.maxTimesteps_ = max_timesteps;
   sim.stopTime_ = max_time;
