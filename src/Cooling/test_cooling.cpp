@@ -34,6 +34,7 @@
 #include "hydro_system.hpp"
 #include "radiation_system.hpp"
 #include "test_cooling.hpp"
+#include "rk4.hpp"
 
 using amrex::Real;
 

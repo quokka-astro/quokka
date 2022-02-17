@@ -115,6 +115,15 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator*(quokka::valarray<T, d> c
 }
 
 template <typename T, int d>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void operator*=(quokka::valarray<T, d> &v,
+							T const &scalar)
+{
+	for (size_t i = 0; i < v.size(); ++i) {
+		v[i] *= scalar;
+	}
+}
+
+template <typename T, int d>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator/(quokka::valarray<T, d> const &v,
 							T const &scalar) -> quokka::valarray<T, d>
 {
