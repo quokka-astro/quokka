@@ -10,6 +10,7 @@
 #include <vector>
 
 #include <cvode/cvode.h>
+#include <arkode/arkode_erkstep.h>
 #include <sundials/sundials_context.h>
 #include <sundials/sundials_nonlinearsolver.h>
 #include <sundials/sundials_nvector.h>
@@ -328,11 +329,8 @@ void updateEgasToMultiFab(amrex::MultiFab &S_eint, amrex::MultiFab &mf) {
 }
 
 void computeCooling(amrex::MultiFab &mf, Real dt, void *cvode_mem,
-                    SUNContext sundialsContext) {
+                    SUNContext sundialsContext, bool do_implicit_integration = false) {
   BL_PROFILE("RadhydroSimulation::computeCooling()")
-
-  // create CVode object
-  cvode_mem = CVodeCreate(CV_ADAMS, sundialsContext);
 
   // Create MultiFab 'S_eint' with only gas internal energy
   const auto &ba = mf.boxArray();
@@ -371,36 +369,67 @@ void computeCooling(amrex::MultiFab &mf, Real dt, void *cvode_mem,
     return 0;
   };
 
-  // set user data
-  AMREX_ALWAYS_ASSERT(CVodeSetUserData(cvode_mem, &user_data) == CV_SUCCESS);
-
-  // set RHS function and initial conditions t0, y0
-  // (NOTE: CVODE allocates the rhs MultiFab itself!)
-  AMREX_ALWAYS_ASSERT(CVodeInit(cvode_mem, userdata_f, 0, y_vec) == CV_SUCCESS);
-
-  // set integration tolerances
   Real reltol = 1.0e-6; // 1.0e-10; // should not be higher than 1e-6
   AMREX_ALWAYS_ASSERT(reltol > 0.);
-  CVodeSVtolerances(cvode_mem, reltol, abstol_vec);
 
-  // set nonlinear solver to fixed-point
-  int m_accel = 0; // (optional) use Anderson acceleration with m_accel iterates
-  SUNNonlinearSolver NLS =
-      SUNNonlinSol_FixedPoint(y_vec, m_accel, sundialsContext);
-  CVodeSetNonlinearSolver(cvode_mem, NLS);
+  if (do_implicit_integration) {
+    // use CVode for implicit integration
 
-  // solve ODEs
-  realtype time_reached = NAN;
-  int ierr = CVode(cvode_mem, dt, y_vec, &time_reached, CV_NORMAL);
-  AMREX_ALWAYS_ASSERT_WITH_MESSAGE(ierr == CV_SUCCESS,
-                                   "Cooling solve with CVODE failed!");
+    // create CVode object
+    cvode_mem = CVodeCreate(CV_ADAMS, sundialsContext);
+
+    // set user data
+    AMREX_ALWAYS_ASSERT(CVodeSetUserData(cvode_mem, &user_data) == CV_SUCCESS);
+
+    // set RHS function and initial conditions t0, y0
+    // (NOTE: CVODE allocates the rhs MultiFab itself!)
+    AMREX_ALWAYS_ASSERT(CVodeInit(cvode_mem, userdata_f, 0, y_vec) == CV_SUCCESS);
+
+    // set integration tolerances
+    CVodeSVtolerances(cvode_mem, reltol, abstol_vec);
+
+    // set nonlinear solver to fixed-point
+    int m_accel = 0; // (optional) use Anderson acceleration with m_accel iterates
+    SUNNonlinearSolver NLS =
+        SUNNonlinSol_FixedPoint(y_vec, m_accel, sundialsContext);
+    CVodeSetNonlinearSolver(cvode_mem, NLS);
+
+    // solve ODEs
+    realtype time_reached = NAN;
+    int ierr = CVode(cvode_mem, dt, y_vec, &time_reached, CV_NORMAL);
+    AMREX_ALWAYS_ASSERT_WITH_MESSAGE(ierr == CV_SUCCESS,
+                                    "Cooling solve with CVODE failed!");
+
+    // free CVode objects
+    CVodeFree(&cvode_mem);
+    SUNNonlinSolFree(NLS);
+  } else {
+    // use ARKode for explicit integration
+
+    // create ARKode object with ERKStep integrator
+    //  ('ERK' = Explicit Runge-Kutta)
+    void *arkode_mem = ERKStepCreate(userdata_f, 0, y_vec, sundialsContext);
+
+    // set integration tolerances
+    ERKStepSVtolerances(arkode_mem, reltol, abstol_vec);
+
+    // set user data
+    ERKStepSetUserData(arkode_mem, &user_data);
+
+    // solve ODEs
+    realtype time_reached = NAN;
+    int ierr = ERKStepEvolve(arkode_mem, dt, y_vec, &time_reached, ARK_NORMAL);
+    AMREX_ALWAYS_ASSERT_WITH_MESSAGE(ierr == ARK_SUCCESS,
+                                    "Cooling solve with ARKODE failed!");
+
+    // free ARKode object
+    ERKStepFree(&arkode_mem);
+  }
 
   // update hydro state with new Eint
   updateEgasToMultiFab(S_eint, mf);
 
-  // free SUNDIALS objects
-  CVodeFree(&cvode_mem);
-  SUNNonlinSolFree(NLS);
+  // free SUNDIALS N_Vectors
   N_VDestroy(y_vec);
   N_VDestroy(abstol_vec);
 }
