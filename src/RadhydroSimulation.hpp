@@ -81,7 +81,6 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	std::vector<double> Tgas_vec_;
 
 	SUNContext sundialsContext = nullptr;
-	void *cvodeObject = nullptr;
 
 	static constexpr int nvarTotal_ = RadSystem<problem_t>::nvar_;
 	static constexpr int ncompHydro_ = HydroSystem<problem_t>::nvar_; // hydro
