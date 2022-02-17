@@ -369,9 +369,6 @@ void computeCooling(amrex::MultiFab &mf, Real dt, void *cvode_mem,
     return 0;
   };
 
-  Real reltol = 1.0e-6; // 1.0e-10; // should not be higher than 1e-6
-  AMREX_ALWAYS_ASSERT(reltol > 0.);
-
   if (do_implicit_integration) {
     // use CVode for implicit integration
 
@@ -386,6 +383,8 @@ void computeCooling(amrex::MultiFab &mf, Real dt, void *cvode_mem,
     AMREX_ALWAYS_ASSERT(CVodeInit(cvode_mem, userdata_f, 0, y_vec) == CV_SUCCESS);
 
     // set integration tolerances
+    Real reltol = 1.0e-6; // 1.0e-10; // should not be higher than 1e-6
+    AMREX_ALWAYS_ASSERT(reltol > 0.);
     CVodeSVtolerances(cvode_mem, reltol, abstol_vec);
 
     // set nonlinear solver to fixed-point
@@ -411,6 +410,8 @@ void computeCooling(amrex::MultiFab &mf, Real dt, void *cvode_mem,
     void *arkode_mem = ERKStepCreate(userdata_f, 0, y_vec, sundialsContext);
 
     // set integration tolerances
+    Real reltol = 1.0e-4;
+    AMREX_ALWAYS_ASSERT(reltol > 0.);
     ERKStepSVtolerances(arkode_mem, reltol, abstol_vec);
 
     // set user data
