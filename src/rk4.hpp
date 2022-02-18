@@ -26,31 +26,33 @@
 using Real = amrex::Real;
 
 // Cash-Karp constants
-static const std::array<Real, 5> ah = {1.0 / 5.0, 0.3, 3.0 / 5.0, 1.0,
-                                       7.0 / 8.0};
+AMREX_GPU_DEVICE static const std::array<Real, 5> ah = {
+    1.0 / 5.0, 0.3, 3.0 / 5.0, 1.0, 7.0 / 8.0};
 
-static const Real b21 = 1.0 / 5.0;
-static const std::array<Real, 2> b3 = {3.0 / 40.0, 9.0 / 40.0};
-static const std::array<Real, 3> b4 = {0.3, -0.9, 1.2};
-static const std::array<Real, 4> b5 = {-11.0 / 54.0, 2.5, -70.0 / 27.0,
-                                       35.0 / 27.0};
-static const std::array<Real, 5> b6 = {1631.0 / 55296.0, 175.0 / 512.0,
-                                       575.0 / 13824.0, 44275.0 / 110592.0,
-                                       253.0 / 4096.0};
+AMREX_GPU_DEVICE static const Real b21 = 1.0 / 5.0;
+AMREX_GPU_DEVICE static const std::array<Real, 2> b3 = {3.0 / 40.0,
+                                                             9.0 / 40.0};
+AMREX_GPU_DEVICE static const std::array<Real, 3> b4 = {0.3, -0.9, 1.2};
+AMREX_GPU_DEVICE static const std::array<Real, 4> b5 = {
+    -11.0 / 54.0, 2.5, -70.0 / 27.0, 35.0 / 27.0};
+AMREX_GPU_DEVICE static const std::array<Real, 5> b6 = {
+    1631.0 / 55296.0, 175.0 / 512.0, 575.0 / 13824.0, 44275.0 / 110592.0,
+    253.0 / 4096.0};
 
-static const Real c1 = 37.0 / 378.0;
-static const Real c3 = 250.0 / 621.0;
-static const Real c4 = 125.0 / 594.0;
-static const Real c6 = 512.0 / 1771.0;
+AMREX_GPU_DEVICE static const Real c1 = 37.0 / 378.0;
+AMREX_GPU_DEVICE static const Real c3 = 250.0 / 621.0;
+AMREX_GPU_DEVICE static const Real c4 = 125.0 / 594.0;
+AMREX_GPU_DEVICE static const Real c6 = 512.0 / 1771.0;
 
 // ec == (c - c*) gives the error estimate from the embedded method
-static const std::array<Real, 7> ec = {0.0,
-                                       37.0 / 378.0 - 2825.0 / 27648.0,
-                                       0.0,
-                                       250.0 / 621.0 - 18575.0 / 48384.0,
-                                       125.0 / 594.0 - 13525.0 / 55296.0,
-                                       -277.0 / 14336.0,
-                                       512.0 / 1771.0 - 0.25};
+AMREX_GPU_DEVICE static const std::array<Real, 7> ec = {
+    0.0,
+    37.0 / 378.0 - 2825.0 / 27648.0,
+    0.0,
+    250.0 / 621.0 - 18575.0 / 48384.0,
+    125.0 / 594.0 - 13525.0 / 55296.0,
+    -277.0 / 14336.0,
+    512.0 / 1771.0 - 0.25};
 
 template <typename F, int N>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void

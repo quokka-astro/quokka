@@ -26,10 +26,6 @@ constexpr double seconds_in_year = 3.154e7;
 constexpr double Tgas0 = 6000.;     // K
 constexpr double rho0 = 0.01 * m_H; // g cm^-3
 
-struct ODEUserData {
-  Real rho = NAN;
-};
-
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto cooling_function(Real const rho,
                                                          Real const T) -> Real {
   // use fitting function from Koyama & Inutsuka (2002)
@@ -42,7 +38,12 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto cooling_function(Real const rho,
   return cooling_source_term;
 }
 
-static auto user_rhs(Real t, quokka::valarray<Real, 1> &y_data,
+struct ODEUserData {
+  Real rho = NAN;
+};
+
+AMREX_GPU_HOST_DEVICE AMREX_INLINE
+auto user_rhs(Real t, quokka::valarray<Real, 1> &y_data,
                      quokka::valarray<Real, 1> &y_rhs, void *user_data) -> int {
   auto *udata = static_cast<ODEUserData *>(user_data);
   Real rho = udata->rho;
