@@ -9,8 +9,8 @@
 #include <random>
 #include <vector>
 
-#include <cvode/cvode.h>
 #include <arkode/arkode_erkstep.h>
+#include <cvode/cvode.h>
 #include <sundials/sundials_context.h>
 #include <sundials/sundials_nonlinearsolver.h>
 #include <sundials/sundials_nvector.h>
@@ -33,8 +33,8 @@
 #include "RadhydroSimulation.hpp"
 #include "hydro_system.hpp"
 #include "radiation_system.hpp"
-#include "test_cooling.hpp"
 #include "rk4.hpp"
+#include "test_cooling.hpp"
 
 using amrex::Real;
 
@@ -45,14 +45,15 @@ constexpr double m_H = hydrogen_mass_cgs_;
 constexpr double seconds_in_year = 3.154e7;
 
 template <> struct EOS_Traits<CoolingTest> {
-	static constexpr double gamma = 5. / 3.; // default value
-	static constexpr bool reconstruct_eint = true; // if true, reconstruct e_int instead of pressure
-  //static constexpr double density_vacuum_floor = 0.01 * m_H;
+  static constexpr double gamma = 5. / 3.; // default value
+  static constexpr bool reconstruct_eint =
+      true; // if true, reconstruct e_int instead of pressure
+  // static constexpr double density_vacuum_floor = 0.01 * m_H;
 };
 
-constexpr double Tgas0 = 6000.;      // K
+constexpr double Tgas0 = 6000.;       // K
 constexpr amrex::Real T_floor = 10.0; // K
-constexpr double rho0 = 0.6 * m_H; // g cm^-3
+constexpr double rho0 = 0.6 * m_H;    // g cm^-3
 
 template <>
 void RadhydroSimulation<CoolingTest>::setInitialConditionsAtLevel(int lev) {
@@ -294,11 +295,12 @@ void computeAbstolFromMultiFab(amrex::MultiFab &abstol_mf,
   auto const &state = mf.const_arrays();
   amrex::Real const reltol_floor = 0.01;
 
-  amrex::ParallelFor(abstol_mf,
-  [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept {
+  amrex::ParallelFor(abstol_mf, [=] AMREX_GPU_DEVICE(int box_no, int i, int j,
+                                                     int k) noexcept {
     const Real rho =
         state[box_no](i, j, k, HydroSystem<CoolingTest>::density_index);
-    abstol[box_no](i, j, k) = reltol_floor *
+    abstol[box_no](i, j, k) =
+        reltol_floor *
         RadSystem<CoolingTest>::ComputeEgasFromTgas(rho, T_floor);
   });
   amrex::Gpu::streamSynchronize();
@@ -329,8 +331,9 @@ void updateEgasToMultiFab(amrex::MultiFab &S_eint, amrex::MultiFab &mf) {
   amrex::Gpu::streamSynchronize();
 }
 
-void computeCooling(amrex::MultiFab &mf, Real dt, void *cvode_mem,
-                    SUNContext sundialsContext, bool do_implicit_integration = false) {
+void computeCoolingSundials(amrex::MultiFab &mf, Real dt, void *cvode_mem,
+                            SUNContext sundialsContext,
+                            bool do_implicit_integration = false) {
   BL_PROFILE("RadhydroSimulation::computeCooling()")
 
   // Create MultiFab 'S_eint' with only gas internal energy
@@ -345,7 +348,7 @@ void computeCooling(amrex::MultiFab &mf, Real dt, void *cvode_mem,
   AMREX_ALWAYS_ASSERT(Eint_min > 0.);
 
   // Compute absolute tolerances, set based on T_floor for each cell
-  computeAbstolFromMultiFab(abstol, mf); 
+  computeAbstolFromMultiFab(abstol, mf);
 
   // Create an N_Vector wrapper for S_eint, abstol multifabs
   sunindextype length = S_eint.n_comp * S_eint.boxArray().numPts();
@@ -381,7 +384,8 @@ void computeCooling(amrex::MultiFab &mf, Real dt, void *cvode_mem,
 
     // set RHS function and initial conditions t0, y0
     // (NOTE: CVODE allocates the rhs MultiFab itself!)
-    AMREX_ALWAYS_ASSERT(CVodeInit(cvode_mem, userdata_f, 0, y_vec) == CV_SUCCESS);
+    AMREX_ALWAYS_ASSERT(CVodeInit(cvode_mem, userdata_f, 0, y_vec) ==
+                        CV_SUCCESS);
 
     // set integration tolerances
     Real reltol = 1.0e-6; // 1.0e-10; // should not be higher than 1e-6
@@ -389,7 +393,8 @@ void computeCooling(amrex::MultiFab &mf, Real dt, void *cvode_mem,
     CVodeSVtolerances(cvode_mem, reltol, abstol_vec);
 
     // set nonlinear solver to fixed-point
-    int m_accel = 0; // (optional) use Anderson acceleration with m_accel iterates
+    int m_accel =
+        0; // (optional) use Anderson acceleration with m_accel iterates
     SUNNonlinearSolver NLS =
         SUNNonlinSol_FixedPoint(y_vec, m_accel, sundialsContext);
     CVodeSetNonlinearSolver(cvode_mem, NLS);
@@ -398,7 +403,7 @@ void computeCooling(amrex::MultiFab &mf, Real dt, void *cvode_mem,
     realtype time_reached = NAN;
     int ierr = CVode(cvode_mem, dt, y_vec, &time_reached, CV_NORMAL);
     AMREX_ALWAYS_ASSERT_WITH_MESSAGE(ierr == CV_SUCCESS,
-                                    "Cooling solve with CVODE failed!");
+                                     "Cooling solve with CVODE failed!");
 
     // free CVode objects
     CVodeFree(&cvode_mem);
@@ -422,7 +427,7 @@ void computeCooling(amrex::MultiFab &mf, Real dt, void *cvode_mem,
     realtype time_reached = NAN;
     int ierr = ERKStepEvolve(arkode_mem, dt, y_vec, &time_reached, ARK_NORMAL);
     AMREX_ALWAYS_ASSERT_WITH_MESSAGE(ierr == ARK_SUCCESS,
-                                    "Cooling solve with ARKODE failed!");
+                                     "Cooling solve with ARKODE failed!");
 
     // free ARKode object
     ERKStepFree(&arkode_mem);
@@ -436,12 +441,69 @@ void computeCooling(amrex::MultiFab &mf, Real dt, void *cvode_mem,
   N_VDestroy(abstol_vec);
 }
 
+struct ODEUserData {
+  Real rho = NAN;
+};
+
+AMREX_GPU_HOST_DEVICE AMREX_INLINE auto
+user_rhs(Real t, quokka::valarray<Real, 1> &y_data,
+         quokka::valarray<Real, 1> &y_rhs, void *user_data) -> int {
+  auto *udata = static_cast<ODEUserData *>(user_data);
+  Real rho = udata->rho;
+  Real Eint = y_data[0];
+  Real T = RadSystem<CoolingTest>::ComputeTgasFromEgas(rho, Eint);
+  y_rhs[0] = cooling_function(rho, T);
+  return 0;
+}
+
+void computeCooling(amrex::MultiFab &mf, const Real dt_in) {
+  BL_PROFILE("RadhydroSimulation::computeCooling()")
+
+  const Real dt = dt_in;
+  const Real reltol_floor = 0.01;
+  const Real rtol = 1.0e-4; // should be 1e-4 or smaller
+
+  // loop over all cells in MultiFab mf
+  for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
+    const amrex::Box &indexRange = iter.validbox();
+    auto const &state = mf.array(iter);
+
+    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+      const Real rho = state(i, j, k, HydroSystem<CoolingTest>::density_index);
+      const Real x1Mom =
+          state(i, j, k, HydroSystem<CoolingTest>::x1Momentum_index);
+      const Real x2Mom =
+          state(i, j, k, HydroSystem<CoolingTest>::x2Momentum_index);
+      const Real x3Mom =
+          state(i, j, k, HydroSystem<CoolingTest>::x3Momentum_index);
+      const Real Egas = state(i, j, k, HydroSystem<CoolingTest>::energy_index);
+
+      Real Eint = RadSystem<CoolingTest>::ComputeEintFromEgas(rho, x1Mom, x2Mom,
+                                                              x3Mom, Egas);
+
+      ODEUserData user_data{rho};
+      quokka::valarray<Real, 1> y = {Eint};
+      quokka::valarray<Real, 1> abstol = {
+          reltol_floor *
+          RadSystem<CoolingTest>::ComputeEgasFromTgas(rho, T_floor)};
+
+      // do integration with RK45 method
+      rk45_adaptive_integrate(user_rhs, 0, y, dt, &user_data, rtol, abstol);
+
+      const Real Egas_new = RadSystem<CoolingTest>::ComputeEgasFromEint(
+          rho, x1Mom, x2Mom, x3Mom, y[0]);
+
+      state(i, j, k, HydroSystem<CoolingTest>::energy_index) = Egas_new;
+    });
+  }
+}
+
 template <>
 void RadhydroSimulation<CoolingTest>::computeAfterLevelAdvance(
     int lev, amrex::Real /*time*/, amrex::Real dt_lev, int /*iteration*/,
     int /*ncycle*/) {
   // compute operator split physics
-  computeCooling(state_new_[lev], dt_lev, cvodeObject, sundialsContext);
+  computeCooling(state_new_[lev], dt_lev);
 }
 
 template <>
@@ -488,9 +550,9 @@ void HydroSystem<CoolingTest>::EnforcePressureFloor(
 auto problem_main() -> int {
   // Problem parameters
   const double CFL_number = 0.1;
-  //const double max_time = 1.0e4 * seconds_in_year; // 10 kyr
+  // const double max_time = 1.0e4 * seconds_in_year; // 10 kyr
   const double max_time = 7.5e4 * seconds_in_year; // 75 kyr
-  const int max_timesteps = 2e4;
+  const int max_timesteps = 1000; // 2e4;
 
   // Problem initialization
   constexpr int nvars = RadhydroSimulation<CoolingTest>::nvarTotal_;
@@ -514,7 +576,7 @@ auto problem_main() -> int {
   // this problem (e.g., ~1e14 K or higher), but can be fixed by
   // reconstructing the temperature instead of the pressure
   sim.reconstructionOrder_ = 3; // PLM
-  
+
   sim.cflNumber_ = CFL_number;
   sim.maxTimesteps_ = max_timesteps;
   sim.stopTime_ = max_time;
