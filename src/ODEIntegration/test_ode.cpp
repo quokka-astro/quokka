@@ -23,8 +23,8 @@ struct ODETest {};
 constexpr double m_H = hydrogen_mass_cgs_;
 constexpr double seconds_in_year = 3.154e7;
 
-constexpr double Tgas0 = 6000.;       // K
-constexpr double rho0 = 0.1 * m_H;    // g cm^-3
+constexpr double Tgas0 = 6000.;     // K
+constexpr double rho0 = 0.01 * m_H; // g cm^-3
 
 struct ODEUserData {
   Real rho = NAN;
@@ -52,35 +52,9 @@ static auto user_rhs(Real t, quokka::valarray<Real, 1> &y_data,
   return 0;
 }
 
-void computeCooling(amrex::MultiFab &mf, Real dt) {
-  BL_PROFILE("RadhydroSimulation::computeCooling()")
-
-  // Create MultiFab 'S_eint' with only gas internal energy
-  const auto &ba = mf.boxArray();
-  const auto &dmap = mf.DistributionMap();
-  amrex::MultiFab S_eint(ba, dmap, 1, mf.nGrow());
-  auto Eint_arr = S_eint.arrays();
-
-  // loop over all cells in MultiFab mf
-  amrex::ParallelFor(
-      S_eint, [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept {
-        // get internal energy
-        const Real Eint = Eint_arr[box_no](i, j, k);
-
-        // call RK4 integrator
-        ODEUserData user_data{rho0};
-        quokka::valarray<Real, 1> y = {Eint};
-        quokka::valarray<Real, 1> yerr{};
-        rk4_single_step(user_rhs, 0, y, dt, yerr, &user_data);
-        Eint_arr[box_no](i, j, k) = y[0];
-      });
-  amrex::Gpu::streamSynchronize();
-}
-
 auto problem_main() -> int {
   // Problem parameters
-  const double max_time = 8.0e4 * seconds_in_year; // 80 kyr
-  const int max_timesteps = 1e4;
+  const double max_time = 1.0e7 * seconds_in_year; // 10 Myr
 
   // run simulation
   const Real Eint0 = RadSystem<ODETest>::ComputeEgasFromTgas(rho0, Tgas0);
@@ -91,21 +65,22 @@ auto problem_main() -> int {
 
   ODEUserData user_data{rho0};
   quokka::valarray<Real, 1> y = {Eint0};
-  quokka::valarray<Real, 1> yerr{};
-  Real time = 0.;
-  const Real dt = max_time / max_timesteps;
+  quokka::valarray<Real, 1> abstol = 1.0e-20 * y;
+  const Real rtol = 1.0e-15;
 
-  int i = 0;
-  for (i = 0; i < max_timesteps; ++i) {
-    rk4_single_step(user_rhs, 0, y, dt, yerr, &user_data);
-    time += dt;
-  }
+  rk45_adaptive_integrate(user_rhs, 0, y, max_time, &user_data, rtol, abstol);
+
   const Real Tgas = RadSystem<ODETest>::ComputeTgasFromEgas(rho0, y[0]);
-  std::cout << "nsteps = " << i << std::endl;
-  std::cout << "Final time: " << time / seconds_in_year << std::endl;
+  const Real Teq = 160.52611612610758; // for n_H = 0.01 cm^{-3}
+  const Real Terr_rel = std::abs(Tgas - Teq) / Teq;
+  const Real reltol = 1.0e-15; // relative error tolerance
   std::cout << "Final temperature: " << Tgas << std::endl;
+  std::cout << "Relative error: " << Terr_rel << std::endl;
 
   // Cleanup and exit
   int status = 0;
+  if ((Terr_rel > reltol) || (std::isnan(Terr_rel))) {
+    status = 1;
+  }
   return status;
 }

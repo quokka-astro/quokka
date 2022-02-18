@@ -10,8 +10,14 @@
 /// control.
 ///
 
+#include <algorithm>
 #include <array>
+#include <cmath>
+#include <cstdlib>
+#include <iostream>
 
+#include "AMReX.H"
+#include "AMReX_BLassert.H"
 #include "AMReX_Extension.H"
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
@@ -48,8 +54,9 @@ static const std::array<Real, 7> ec = {0.0,
 
 template <typename F, int N>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void
-rk4_single_step(F &&rhs, Real t0, quokka::valarray<Real, N> &y, Real dt,
-                quokka::valarray<Real, N> &yerr, void *user_data) {
+rk45_single_step(F &&rhs, Real t0, quokka::valarray<Real, N> const &y, Real dt,
+                 quokka::valarray<Real, N> &ynew,
+                 quokka::valarray<Real, N> &yerr, void *user_data) {
   // Compute one step of the Runge-Kutta Cash-Karp method
 
   // Initial time t0, initial values y
@@ -94,11 +101,106 @@ rk4_single_step(F &&rhs, Real t0, quokka::valarray<Real, N> &y, Real dt,
   k6 *= dt;
 
   // compute 5th-order solution in-place
-  y = y + c1 * k1 + c3 * k3 + c4 * k4 + c6 * k6;
+  ynew = y + c1 * k1 + c3 * k3 + c4 * k4 + c6 * k6;
 
   // error estimate
   yerr = ec[1] * k1 + ec[2] * k2 + ec[3] * k3 + ec[4] * k4 + ec[5] * k5 +
          ec[6] * k6;
+}
+
+template <int N>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
+error_norm(quokka::valarray<Real, N> const &y0,
+           quokka::valarray<Real, N> const &yerr, Real reltol,
+           quokka::valarray<Real, N> const &abstol) -> Real {
+  // compute a weighted rms error norm
+  // https://sundials.readthedocs.io/en/latest/arkode/Mathematics_link.html#error-norms
+
+  Real err_sq = 0;
+  for (int i = 0; i < N; ++i) {
+    Real w_i = 1. / (reltol * y0[i] + abstol[i]);
+    err_sq += (yerr[i] * yerr[i]) * (w_i * w_i);
+  }
+  const Real err = std::sqrt(err_sq / N);
+  return err;
+}
+
+template <typename F, int N>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void
+rk45_adaptive_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0,
+                        Real t1, void *user_data, Real reltol,
+                        quokka::valarray<Real, N> const &abstol) {
+  // Integrate dy/dt = rhs(y, t) from t0 to t1,
+  // with local truncation error bounded by relative tolerance 'reltol'
+  // and absolute tolerances 'abstol'.
+
+  // initial timestep
+  quokka::valarray<Real, N> ydot0{};
+  rhs(t0, y0, ydot0, user_data);
+  const Real dt_guess = 0.1 * std::abs(min(y0 / ydot0));
+
+  // adaptive timestep controller
+  const int maxRetries = 7;
+  const int p = 4; // integration order of embedded method
+  const Real eta_max = 20.;
+  const Real eta_max_errfail_prevstep = 1.0;
+  const Real eta_max_errfail_again = 0.3;
+  const Real eta_min_errfail_multiple = 0.1;
+
+  // integration loop
+  const int maxSteps = 1e5;
+  Real time = t0;
+  Real dt = dt_guess;
+  quokka::valarray<Real, N> &y = y0;
+  quokka::valarray<Real, N> yerr{};
+  quokka::valarray<Real, N> ynew{};
+
+  for (int i = 0; i < maxSteps; ++i) {
+    if ((time + dt) > t1) {
+      // reduce dt to end at t1
+      dt = t1 - time;
+    }
+
+    bool step_success = false;
+    for (int k = 0; k < maxRetries; ++k) {
+      // compute single step
+      rk45_single_step(rhs, time, y, dt, ynew, yerr, user_data);
+      const Real epsilon = error_norm(y, yerr, reltol, abstol);
+
+      // compute new timestep with 'I' controller
+      // https://sundials.readthedocs.io/en/latest/arkode/Mathematics_link.html#i-controller
+      Real eta = std::pow(epsilon, -1.0 / static_cast<Real>(p));
+
+      if (epsilon < 1.0) { // error passed
+        y = ynew;
+        time += dt; // increment time
+        if (k == 0) {
+          eta = std::min(eta, eta_max); // limit timestep increase
+        } else {
+          eta = std::min(eta, eta_max_errfail_prevstep);
+        }
+        dt *= eta; // use new timestep
+        step_success = true;
+        break;
+      }
+
+      // error is too large, use smaller timestep and redo
+      if (k == 1) {
+        eta = std::min(eta, eta_max_errfail_again);
+      } else if (k > 1) {
+        eta = std::clamp(eta, eta_min_errfail_multiple, eta_max_errfail_again);
+      }
+      dt *= eta; // use new timestep
+    }
+    AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+        step_success, "ODE integrator failed to reach accuracy tolerance after "
+                      "maximum step-size iterations reached!");
+
+    if (std::abs((time - t1) / t1) < 1.0e-3) {
+      // we are at t1 within a reasonable tolerance, so stop
+      break;
+    }
+  }
 }
 
 #endif // RK4_HPP_

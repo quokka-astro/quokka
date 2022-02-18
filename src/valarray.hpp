@@ -92,6 +92,18 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator*(quokka::valarray<T, d> c
 }
 
 template <typename T, int d>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator/(quokka::valarray<T, d> const &a,
+							quokka::valarray<T, d> const &b)
+    -> quokka::valarray<T, d>
+{
+	quokka::valarray<T, d> div;
+	for (size_t i = 0; i < a.size(); ++i) {
+		div[i] = a[i] / b[i];
+	}
+	return div;
+}
+
+template <typename T, int d>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator*(T const &scalar,
 							quokka::valarray<T, d> const &v)
     -> quokka::valarray<T, d>
@@ -132,6 +144,16 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator/(quokka::valarray<T, d> c
 		scalardiv[i] = v[i] / scalar;
 	}
 	return scalardiv;
+}
+
+template <typename T, int d>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto min(quokka::valarray<T, d> const &v) -> T
+{
+	T min_val;
+	for (size_t i = 0; i < v.size(); ++i) {
+		min_val = std::min(min_val, v[i]);
+	}
+	return min_val;
 }
 
 #endif // VALARRAY_HPP_
