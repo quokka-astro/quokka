@@ -11,6 +11,7 @@
 
 #include <arkode/arkode_erkstep.h>
 #include <cvode/cvode.h>
+#include <cvode/cvode_diag.h>
 #include <sundials/sundials_context.h>
 #include <sundials/sundials_nonlinearsolver.h>
 #include <sundials/sundials_nvector.h>
@@ -331,9 +332,9 @@ void updateEgasToMultiFab(amrex::MultiFab &S_eint, amrex::MultiFab &mf) {
   amrex::Gpu::streamSynchronize();
 }
 
-void computeCoolingSundials(amrex::MultiFab &mf, Real dt, void *cvode_mem,
+void computeCoolingSundials(amrex::MultiFab &mf, Real dt,
                             SUNContext sundialsContext,
-                            bool do_implicit_integration = false) {
+                            bool do_implicit_integration = true) {
   BL_PROFILE("RadhydroSimulation::computeCooling()")
 
   // Create MultiFab 'S_eint' with only gas internal energy
@@ -373,11 +374,14 @@ void computeCoolingSundials(amrex::MultiFab &mf, Real dt, void *cvode_mem,
     return 0;
   };
 
+  // N.B.: Adams with fixed point is almost *always* the fastest integrator for
+  // cooling.
   if (do_implicit_integration) {
     // use CVode for implicit integration
 
     // create CVode object
-    cvode_mem = CVodeCreate(CV_ADAMS, sundialsContext);
+    void *cvode_mem = CVodeCreate(CV_ADAMS, sundialsContext);
+    // void *cvode_mem = CVodeCreate(CV_BDF, sundialsContext);
 
     // set user data
     AMREX_ALWAYS_ASSERT(CVodeSetUserData(cvode_mem, &user_data) == CV_SUCCESS);
@@ -388,16 +392,19 @@ void computeCoolingSundials(amrex::MultiFab &mf, Real dt, void *cvode_mem,
                         CV_SUCCESS);
 
     // set integration tolerances
-    Real reltol = 1.0e-6; // 1.0e-10; // should not be higher than 1e-6
+    Real reltol = 1.0e-4; // recommended to be 1e-5 or smaller
     AMREX_ALWAYS_ASSERT(reltol > 0.);
     CVodeSVtolerances(cvode_mem, reltol, abstol_vec);
 
     // set nonlinear solver to fixed-point
-    int m_accel =
-        0; // (optional) use Anderson acceleration with m_accel iterates
+    // (optional) use Anderson acceleration with m_accel iterates
+    int m_accel = 0; // 0 is usually the fastest time-to-solution
     SUNNonlinearSolver NLS =
         SUNNonlinSol_FixedPoint(y_vec, m_accel, sundialsContext);
     CVodeSetNonlinearSolver(cvode_mem, NLS);
+
+    // use finite-difference diagonal Jacobian
+    // CVDiag(cvode_mem);
 
     // solve ODEs
     realtype time_reached = NAN;
@@ -503,7 +510,8 @@ void RadhydroSimulation<CoolingTest>::computeAfterLevelAdvance(
     int lev, amrex::Real /*time*/, amrex::Real dt_lev, int /*iteration*/,
     int /*ncycle*/) {
   // compute operator split physics
-  computeCooling(state_new_[lev], dt_lev);
+  // computeCooling(state_new_[lev], dt_lev);
+  computeCoolingSundials(state_new_[lev], dt_lev, sundialsContext);
 }
 
 template <>
@@ -552,7 +560,7 @@ auto problem_main() -> int {
   const double CFL_number = 0.1;
   // const double max_time = 1.0e4 * seconds_in_year; // 10 kyr
   const double max_time = 7.5e4 * seconds_in_year; // 75 kyr
-  const int max_timesteps = 1000; // 2e4;
+  const int max_timesteps = 1000;                  // 2e4;
 
   // Problem initialization
   constexpr int nvars = RadhydroSimulation<CoolingTest>::nvarTotal_;
