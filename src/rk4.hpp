@@ -24,15 +24,14 @@
 using Real = amrex::Real;
 
 // Cash-Karp constants
-AMREX_GPU_DEVICE constexpr std::array<Real, 5> ah = {
-    1.0 / 5.0, 0.3, 3.0 / 5.0, 1.0, 7.0 / 8.0};
+AMREX_GPU_DEVICE constexpr std::array<Real, 5> ah = {1.0 / 5.0, 0.3, 3.0 / 5.0,
+                                                     1.0, 7.0 / 8.0};
 
 AMREX_GPU_DEVICE constexpr Real b21 = 1.0 / 5.0;
-AMREX_GPU_DEVICE constexpr std::array<Real, 2> b3 = {3.0 / 40.0,
-                                                             9.0 / 40.0};
+AMREX_GPU_DEVICE constexpr std::array<Real, 2> b3 = {3.0 / 40.0, 9.0 / 40.0};
 AMREX_GPU_DEVICE constexpr std::array<Real, 3> b4 = {0.3, -0.9, 1.2};
-AMREX_GPU_DEVICE constexpr std::array<Real, 4> b5 = {
-    -11.0 / 54.0, 2.5, -70.0 / 27.0, 35.0 / 27.0};
+AMREX_GPU_DEVICE constexpr std::array<Real, 4> b5 = {-11.0 / 54.0, 2.5,
+                                                     -70.0 / 27.0, 35.0 / 27.0};
 AMREX_GPU_DEVICE constexpr std::array<Real, 5> b6 = {
     1631.0 / 55296.0, 175.0 / 512.0, 575.0 / 13824.0, 44275.0 / 110592.0,
     253.0 / 4096.0};
@@ -54,10 +53,75 @@ AMREX_GPU_DEVICE constexpr std::array<Real, 7> ec = {
 
 template <typename F, int N>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void
+rk12_single_step(F &&rhs, Real t0, quokka::valarray<Real, N> const &y, Real dt,
+                 quokka::valarray<Real, N> &ynew,
+                 quokka::valarray<Real, N> &yerr, void *user_data) {
+  // Compute one step of the RK Heun-Euler (1)2 method
+
+  // stage 1 [Forward Euler step at t0]
+  quokka::valarray<Real, N> k1{};
+  quokka::valarray<Real, N> y_arg = y;
+  int ierr = rhs(t0, y_arg, k1, user_data);
+  k1 *= dt;
+
+  // stage 2 [Forward Euler step at t1]
+  quokka::valarray<Real, N> k2{};
+  y_arg = y + k1;
+  ierr = rhs(t0 + dt, y_arg, k2, user_data);
+  k2 *= dt;
+
+  // N.B.: equivalent to RK2-SSP
+  ynew = y + 0.5 * k1 + 0.5 * k2;
+
+  // difference between RK2-SSP and Forward Euler
+  yerr = -0.5 * k1 + 0.5 * k2;
+}
+
+template <typename F, int N>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void
+rk23_single_step(F &&rhs, Real t0, quokka::valarray<Real, N> const &y, Real dt,
+                 quokka::valarray<Real, N> &ynew,
+                 quokka::valarray<Real, N> &yerr, void *user_data) {
+  // Compute one step of the RK Bogaki-Shampine (2)3 method
+  // https://sundials.readthedocs.io/en/latest/arkode/Butcher_link.html#bogacki-shampine-4-2-3
+
+  // stage 1
+  quokka::valarray<Real, N> k1{};
+  quokka::valarray<Real, N> y_arg = y;
+  int ierr = rhs(t0, y_arg, k1, user_data);
+  k1 *= dt;
+
+  // stage 2
+  quokka::valarray<Real, N> k2{};
+  y_arg = y + 0.5 * k1;
+  ierr = rhs(t0 + 0.5 * dt, y_arg, k2, user_data);
+  k2 *= dt;
+
+  // stage 3
+  quokka::valarray<Real, N> k3{};
+  y_arg = y + (3. / 4.) * k2;
+  ierr = rhs(t0 + (3. / 4.) * dt, y_arg, k3, user_data);
+  k3 *= dt;
+
+  // stage 4
+  quokka::valarray<Real, N> k4{};
+  y_arg = y + (2. / 9.) * k1 + (1. / 3.) * k2 + (4. / 9.) * k3;
+  ierr = rhs(t0 + dt, y_arg, k4, user_data);
+  k4 *= dt;
+
+  ynew = y_arg; // use FSAL (first same as last) property
+
+  yerr = (2. / 9. - 7. / 24.) * k1 + (1. / 3. - 1. / 4.) * k2 +
+         (4. / 9. - 1. / 3.) * k3 - (1. / 8.) * k4;
+}
+
+template <typename F, int N>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void
 rk45_single_step(F &&rhs, Real t0, quokka::valarray<Real, N> const &y, Real dt,
                  quokka::valarray<Real, N> &ynew,
                  quokka::valarray<Real, N> &yerr, void *user_data) {
-  // Compute one step of the Runge-Kutta Cash-Karp method
+  // Compute one step of the RK Cash-Karp (4)5 method
+  // https://sundials.readthedocs.io/en/latest/arkode/Butcher_link.html#cash-karp-6-4-5
 
   // Initial time t0, initial values y
   // Right-hand side given by function 'rhs' with signature:
@@ -100,7 +164,7 @@ rk45_single_step(F &&rhs, Real t0, quokka::valarray<Real, N> const &y, Real dt,
   ierr = rhs(t0 + dt * ah[4], y_arg, k6, user_data);
   k6 *= dt;
 
-  // compute 5th-order solution in-place
+  // compute 5th-order solution
   ynew = y + c1 * k1 + c3 * k3 + c4 * k4 + c6 * k6;
 
   // error estimate
@@ -127,9 +191,9 @@ error_norm(quokka::valarray<Real, N> const &y0,
 
 template <typename F, int N>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void
-rk45_adaptive_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0,
-                        Real t1, void *user_data, Real reltol,
-                        quokka::valarray<Real, N> const &abstol) {
+rk_adaptive_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0, Real t1,
+                      void *user_data, Real reltol,
+                      quokka::valarray<Real, N> const &abstol) {
   // Integrate dy/dt = rhs(y, t) from t0 to t1,
   // with local truncation error bounded by relative tolerance 'reltol'
   // and absolute tolerances 'abstol'.
@@ -141,14 +205,14 @@ rk45_adaptive_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0,
 
   // adaptive timestep controller
   const int maxRetries = 7;
-  const int p = 4; // integration order of embedded method
+  const int p = 2; // integration order of (high-order) method
   const Real eta_max = 20.;
   const Real eta_max_errfail_prevstep = 1.0;
   const Real eta_max_errfail_again = 0.3;
   const Real eta_min_errfail_multiple = 0.1;
 
   // integration loop
-  const int maxSteps = 1e5;
+  const int maxSteps = 1000;
   Real time = t0;
   Real dt = dt_guess;
   quokka::valarray<Real, N> &y = y0;
@@ -161,10 +225,14 @@ rk45_adaptive_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0,
       dt = t1 - time;
     }
 
+    // std::cout << "Step i = " << i << " dt = " << dt << std::endl;
+
     bool step_success = false;
     for (int k = 0; k < maxRetries; ++k) {
-      // compute single step
-      rk45_single_step(rhs, time, y, dt, ynew, yerr, user_data);
+      // compute single step of chosen RK method
+      rk12_single_step(rhs, time, y, dt, ynew, yerr, user_data);
+
+      // compute error norm from embedded error estimate
       const Real epsilon = error_norm(y, yerr, reltol, abstol);
 
       // compute new timestep with 'I' controller
@@ -181,6 +249,8 @@ rk45_adaptive_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0,
         }
         dt *= eta; // use new timestep
         step_success = true;
+        // std::cout << "\tsuccess k = " << k << " epsilon = " << epsilon << "
+        // eta = " << eta << std::endl;
         break;
       }
 
@@ -191,6 +261,8 @@ rk45_adaptive_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0,
         eta = std::clamp(eta, eta_min_errfail_multiple, eta_max_errfail_again);
       }
       dt *= eta; // use new timestep
+      // std::cout << "\tfailed step k = " << k << " epsilon = " << epsilon << "
+      // eta = " << eta << std::endl;
     }
     AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
         step_success, "ODE integrator failed to reach accuracy tolerance after "
@@ -201,6 +273,9 @@ rk45_adaptive_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0,
       break;
     }
   }
+
+  AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::abs((time - t1) / t1) < 1.0e-3,
+                                   "ODE integration exceeded maxSteps!");
 }
 
 #endif // RK4_HPP_

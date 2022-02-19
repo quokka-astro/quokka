@@ -468,7 +468,7 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in) {
 
   const Real dt = dt_in;
   const Real reltol_floor = 0.01;
-  const Real rtol = 1.0e-4; // should be 1e-4 or smaller
+  const Real rtol = 1.0e-4;
 
   // loop over all cells in MultiFab mf
   for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
@@ -494,8 +494,8 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in) {
           reltol_floor *
           RadSystem<CoolingTest>::ComputeEgasFromTgas(rho, T_floor)};
 
-      // do integration with RK45 method
-      rk45_adaptive_integrate(user_rhs, 0, y, dt, &user_data, rtol, abstol);
+      // do integration with RK2 (Heun's method)
+      rk_adaptive_integrate(user_rhs, 0, y, dt, &user_data, rtol, abstol);
 
       const Real Egas_new = RadSystem<CoolingTest>::ComputeEgasFromEint(
           rho, x1Mom, x2Mom, x3Mom, y[0]);
@@ -510,8 +510,8 @@ void RadhydroSimulation<CoolingTest>::computeAfterLevelAdvance(
     int lev, amrex::Real /*time*/, amrex::Real dt_lev, int /*iteration*/,
     int /*ncycle*/) {
   // compute operator split physics
-  // computeCooling(state_new_[lev], dt_lev);
-  computeCoolingSundials(state_new_[lev], dt_lev, sundialsContext);
+  computeCooling(state_new_[lev], dt_lev);
+  //computeCoolingSundials(state_new_[lev], dt_lev, sundialsContext);
 }
 
 template <>
@@ -557,10 +557,9 @@ void HydroSystem<CoolingTest>::EnforcePressureFloor(
 
 auto problem_main() -> int {
   // Problem parameters
-  const double CFL_number = 0.1;
-  // const double max_time = 1.0e4 * seconds_in_year; // 10 kyr
+  const double CFL_number = 0.25;
   const double max_time = 7.5e4 * seconds_in_year; // 75 kyr
-  const int max_timesteps = 1000;                  // 2e4;
+  const int max_timesteps = 2e4;                  // 2e4;
 
   // Problem initialization
   constexpr int nvars = RadhydroSimulation<CoolingTest>::nvarTotal_;
@@ -588,7 +587,7 @@ auto problem_main() -> int {
   sim.cflNumber_ = CFL_number;
   sim.maxTimesteps_ = max_timesteps;
   sim.stopTime_ = max_time;
-  sim.plotfileInterval_ = 100;
+  sim.plotfileInterval_ = 1000;
 
   // Set initial conditions
   sim.setInitialConditions();

@@ -67,14 +67,16 @@ auto problem_main() -> int {
   ODEUserData user_data{rho0};
   quokka::valarray<Real, 1> y = {Eint0};
   quokka::valarray<Real, 1> abstol = 1.0e-20 * y;
-  const Real rtol = 1.0e-15;
+  // const Real rtol = 1.0e-15; // RK45 tol
+  // const Real rtol = 1.0e-6; // RK23 tol
+  const Real rtol = 1.0e-4; // RK12
 
-  rk45_adaptive_integrate(user_rhs, 0, y, max_time, &user_data, rtol, abstol);
+  rk_adaptive_integrate(user_rhs, 0, y, max_time, &user_data, rtol, abstol);
 
   const Real Tgas = RadSystem<ODETest>::ComputeTgasFromEgas(rho0, y[0]);
   const Real Teq = 160.52611612610758; // for n_H = 0.01 cm^{-3}
   const Real Terr_rel = std::abs(Tgas - Teq) / Teq;
-  const Real reltol = 1.0e-15; // relative error tolerance
+  const Real reltol = 1.0e-4; // relative error tolerance
   std::cout << "Final temperature: " << Tgas << std::endl;
   std::cout << "Relative error: " << Terr_rel << std::endl;
 
