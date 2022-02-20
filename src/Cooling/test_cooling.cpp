@@ -468,7 +468,7 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in) {
 
   const Real dt = dt_in;
   const Real reltol_floor = 0.01;
-  const Real rtol = 1.0e-4;
+  const Real rtol = 1.0e-4; // not recommended to change this
 
   // loop over all cells in MultiFab mf
   for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
@@ -496,6 +496,9 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in) {
 
       // do integration with RK2 (Heun's method)
       rk_adaptive_integrate(user_rhs, 0, y, dt, &user_data, rtol, abstol);
+
+      // do integration with Adams-1 (Backward Euler) [*slower* than RK2]
+      //adams_adaptive_integrate(user_rhs, 0, y, dt, &user_data, rtol, abstol);
 
       const Real Egas_new = RadSystem<CoolingTest>::ComputeEgasFromEint(
           rho, x1Mom, x2Mom, x3Mom, y[0]);
@@ -559,7 +562,7 @@ auto problem_main() -> int {
   // Problem parameters
   const double CFL_number = 0.25;
   const double max_time = 7.5e4 * seconds_in_year; // 75 kyr
-  const int max_timesteps = 2e4;                  // 2e4;
+  const int max_timesteps = 1000;                  // 2e4;
 
   // Problem initialization
   constexpr int nvars = RadhydroSimulation<CoolingTest>::nvarTotal_;
