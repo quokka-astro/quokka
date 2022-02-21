@@ -12,6 +12,9 @@ if(PythonLibs_FOUND)
     link_libraries(${PYTHON_LIBRARY})
 endif()
 
+# HDF5
+find_package(HDF5 REQUIRED)
+
 if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
     # only works with gcc!
     include(CodeCoverage)
@@ -30,10 +33,12 @@ endif()
 
 include_directories(${amrex_INCLUDE_DIRS_RET})
 include_directories(${fmt_INCLUDE_DIRS_RET})
+include_directories(${HDF5_INCLUDE_DIRS_RET})
 include_directories(${CMAKE_SOURCE_DIR}/src)
 
 link_libraries(AMReX::amrex)
 link_libraries(fmt::fmt)
+link_libraries(hdf5::hdf5)
 
 include(CTest)
 

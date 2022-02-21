@@ -7,24 +7,9 @@
 /// \brief Defines a test problem for ODE integration.
 ///
 
-#include "AMReX_MultiFab.H"
-#include "AMReX_REAL.H"
-
-#include "hydro_system.hpp"
-#include "radiation_system.hpp"
-#include "rk4.hpp"
 #include "test_ode.hpp"
-#include "valarray.hpp"
 
 using amrex::Real;
-
-struct ODETest {};
-
-constexpr double m_H = hydrogen_mass_cgs_;
-constexpr double seconds_in_year = 3.154e7;
-
-constexpr double Tgas0 = 6000.;     // K
-constexpr double rho0 = 0.01 * m_H; // g cm^-3
 
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto cooling_function(Real const rho,
                                                          Real const T) -> Real {
@@ -38,24 +23,74 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto cooling_function(Real const rho,
   return cooling_source_term;
 }
 
-struct ODEUserData {
-  Real rho = NAN;
-};
+AMREX_GPU_HOST_DEVICE AMREX_INLINE auto
+cloudy_cooling_function(Real const rho, Real const T, cloudy_tables *tables)
+    -> Real {
+  // interpolate cooling rates from Cloudy tables
+  // TODO(benwibking): implement this using interpolate2d()
+  return 0;
+}
 
-AMREX_GPU_HOST_DEVICE AMREX_INLINE
-auto user_rhs(Real t, quokka::valarray<Real, 1> &y_data,
-                     quokka::valarray<Real, 1> &y_rhs, void *user_data) -> int {
+AMREX_GPU_HOST_DEVICE AMREX_INLINE auto
+user_rhs(Real t, quokka::valarray<Real, 1> &y_data,
+         quokka::valarray<Real, 1> &y_rhs, void *user_data) -> int {
+  // unpack user_data
   auto *udata = static_cast<ODEUserData *>(user_data);
   Real rho = udata->rho;
+  cloudy_tables *tables = udata->tables;
+
+  // compute temperature (may depend on composition)
   Real Eint = y_data[0];
   Real T = RadSystem<ODETest>::ComputeTgasFromEgas(rho, Eint);
+
+  // compute cooling function
   y_rhs[0] = cooling_function(rho, T);
   return 0;
+}
+
+void readCloudyData(cloudy_tables &cloudyTables) {
+  cloudy_data cloudy_primordial;
+  cloudy_data cloudy_metals;
+  code_units my_units; // cgs
+  my_units.density_units = 1.0;
+  my_units.length_units = 1.0;
+  my_units.time_units = 1.0;
+  my_units.velocity_units = 1.0;
+  amrex::ParmParse pp;
+  std::string grackle_hdf5_file;
+
+  pp.query("grackle_data_file", grackle_hdf5_file);
+  initialize_cloudy_data(cloudy_primordial, "Primordial", grackle_hdf5_file,
+                         my_units);
+  initialize_cloudy_data(cloudy_metals, "Metals", grackle_hdf5_file, my_units);
+
+  cloudyTables.log_nH = std::make_unique<std::vector<double>>(
+      cloudy_primordial.grid_parameters[0]);
+  cloudyTables.log_Tgas = std::make_unique<std::vector<double>>(
+      cloudy_primordial.grid_parameters[2]);
+
+  int z_index = 0; // index along the redshift dimension
+
+  cloudyTables.primCooling = std::make_unique<amrex::TableData<double, 2>>(
+      extract_2d_table(cloudy_primordial.cooling_data, z_index));
+  cloudyTables.primHeating = std::make_unique<amrex::TableData<double, 2>>(
+      extract_2d_table(cloudy_primordial.heating_data, z_index));
+  cloudyTables.mean_mol_weight = std::make_unique<amrex::TableData<double, 2>>(
+      extract_2d_table(cloudy_primordial.mmw_data, z_index));
+
+  cloudyTables.metalCooling = std::make_unique<amrex::TableData<double, 2>>(
+      extract_2d_table(cloudy_metals.cooling_data, z_index));
+  cloudyTables.metalHeating = std::make_unique<amrex::TableData<double, 2>>(
+      extract_2d_table(cloudy_metals.heating_data, z_index));
 }
 
 auto problem_main() -> int {
   // Problem parameters
   const double max_time = 1.0e7 * seconds_in_year; // 10 Myr
+
+  // read tables
+  cloudy_tables cloudyTables;
+  readCloudyData(cloudyTables);
 
   // run simulation
   const Real Eint0 = RadSystem<ODETest>::ComputeEgasFromTgas(rho0, Tgas0);
@@ -64,7 +99,7 @@ auto problem_main() -> int {
   std::cout << "Initial temperature: " << Tgas0 << std::endl;
   std::cout << "Initial cooling time: " << tcool << std::endl;
 
-  ODEUserData user_data{rho0};
+  ODEUserData user_data{rho0, &cloudyTables};
   quokka::valarray<Real, 1> y = {Eint0};
   quokka::valarray<Real, 1> abstol = 1.0e-20 * y;
   // const Real rtol = 1.0e-15; // RK45 tol
