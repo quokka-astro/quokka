@@ -12,8 +12,10 @@
 // library headers
 #include "AMReX_Extension.H"
 #include <AMReX_GpuQualifiers.H>
+#include <cmath>
 #include <cstddef>
 #include <iterator>
+#include <limits>
 
 namespace quokka
 {
@@ -147,9 +149,22 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator/(quokka::valarray<T, d> c
 }
 
 template <typename T, int d>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto abs(quokka::valarray<T, d> const &v)
+							-> quokka::valarray<T, d>
+{
+	quokka::valarray<T, d> abs_v;
+	for (size_t i = 0; i < v.size(); ++i) {
+		abs_v[i] = std::abs(v[i]);
+	}
+	return abs_v;
+}
+
+template <typename T, int d>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto min(quokka::valarray<T, d> const &v) -> T
 {
-	T min_val;
+	assert(v.size() >= 1);
+	T min_val = v[0]; // v must have at least 1 element
+	
 	for (size_t i = 0; i < v.size(); ++i) {
 		min_val = std::min(min_val, v[i]);
 	}

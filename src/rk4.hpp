@@ -153,7 +153,9 @@ rk_adaptive_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0, Real t1,
   // initial timestep
   quokka::valarray<Real, N> ydot0{};
   rhs(t0, y0, ydot0, user_data);
-  const Real dt_guess = 0.1 * std::abs(min(y0 / ydot0));
+  const Real dt_guess = 0.1 * min(abs(y0 / ydot0));
+
+  AMREX_ALWAYS_ASSERT(dt_guess > 0.);
 
   // adaptive timestep controller
   const int maxRetries = 7;
@@ -171,13 +173,16 @@ rk_adaptive_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0, Real t1,
   quokka::valarray<Real, N> yerr{};
   quokka::valarray<Real, N> ynew{};
 
+  //std::cout << "initial dt = " << dt << std::endl;
+
   for (int i = 0; i < maxSteps; ++i) {
     if ((time + dt) > t1) {
       // reduce dt to end at t1
       dt = t1 - time;
     }
 
-    // std::cout << "Step i = " << i << " t = " << time << std::endl;
+    AMREX_ALWAYS_ASSERT(dt > 0.0);
+    //std::cout << "Step i = " << i << " t = " << time << " dt = " << dt << std::endl;
 
     bool step_success = false;
     for (int k = 0; k < maxRetries; ++k) {
@@ -201,7 +206,7 @@ rk_adaptive_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0, Real t1,
         }
         dt *= eta; // use new timestep
         step_success = true;
-        // std::cout << "\tsuccess k = " << k << " epsilon = " << epsilon
+        //std::cout << "\tsuccess k = " << k << " epsilon = " << epsilon
         //           << " eta = " << eta << std::endl;
         break;
       }
@@ -213,8 +218,8 @@ rk_adaptive_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0, Real t1,
         eta = std::clamp(eta, eta_min_errfail_multiple, eta_max_errfail_again);
       }
       dt *= eta; // use new timestep
-      // std::cout << "\tfailed step k = " << k << " epsilon = " << epsilon
-      //           << " eta = " << eta << std::endl;
+      //std::cout << "\tfailed step k = " << k << " epsilon = " << epsilon
+      //          << " eta = " << eta << std::endl;
     }
     AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
         step_success, "ODE integrator failed to reach accuracy tolerance after "
@@ -242,7 +247,7 @@ adams_adaptive_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0,
   // initial timestep
   quokka::valarray<Real, N> ydot0{};
   rhs(t0, y0, ydot0, user_data);
-  const Real dt_guess = 0.1 * std::abs(min(y0 / ydot0));
+  const Real dt_guess = 0.1 * min(abs(y0 / ydot0));
 
   // adaptive timestep controller
   const int maxRetries = 7;
