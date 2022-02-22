@@ -517,6 +517,7 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
           RadSystem<CoolingTest>::ComputeEgasFromTgas(rho, T_floor)};
 
       // do integration with RK2 (Heun's method)
+      // TODO(benwibking): return number of internal steps taken
       rk_adaptive_integrate(user_rhs, 0, y, dt, &user_data, rtol, abstol);
 
       // do integration with Adams-1 (Backward Euler) [*slower* than RK2]
@@ -614,6 +615,7 @@ auto problem_main() -> int {
   sim.maxTimesteps_ = max_timesteps;
   sim.stopTime_ = max_time;
   sim.plotfileInterval_ = 100;
+  sim.checkpointInterval_ = 1000;
 
   // Read Cloudy tables
   readCloudyData(sim.cloudyTables);
