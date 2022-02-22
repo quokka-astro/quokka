@@ -9,26 +9,15 @@
 #include <random>
 #include <vector>
 
-#include <arkode/arkode_erkstep.h>
-#include <cvode/cvode.h>
-#include <cvode/cvode_diag.h>
-#include <sundials/sundials_context.h>
-#include <sundials/sundials_nonlinearsolver.h>
-#include <sundials/sundials_nvector.h>
-#include <sundials/sundials_types.h>
-#include <sunnonlinsol/sunnonlinsol_fixedpoint.h>
-
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLProfiler.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_FabArray.H"
 #include "AMReX_GpuDevice.H"
 #include "AMReX_MultiFab.H"
-#include "AMReX_NVector_MultiFab.H"
 #include "AMReX_ParallelContext.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_SPACE.H"
-#include "AMReX_Sundials.H"
 #include "AMReX_TableData.H"
 
 #include "CloudyCooling.hpp"
@@ -223,16 +212,6 @@ AMRSimulation<CoolingTest>::setCustomBoundaryConditions(
   }
 }
 
-struct SundialsUserData {
-  std::function<int(realtype, N_Vector, N_Vector, void *)> f;
-};
-
-static auto userdata_f(realtype t, N_Vector y_data, N_Vector y_rhs,
-                       void *user_data) -> int {
-  auto *udata = static_cast<SundialsUserData *>(user_data);
-  return udata->f(t, y_data, y_rhs, user_data);
-}
-
 #if 0
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto cooling_function(Real const rho,
                                                          Real const T) -> Real {
@@ -246,218 +225,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto cooling_function(Real const rho,
   return cooling_source_term;
 }
 #endif
-
-void rhs_cooling(amrex::MultiFab &S_rhs, amrex::MultiFab &S_data,
-                 amrex::MultiFab &hydro_state_mf, realtype /*t*/,
-                 cloudy_tables &cloudyTables) {
-  // compute cooling ODE right-hand side (== dy/dt) at time t
-
-  auto const &Eint_arr = S_data.const_arrays();
-  auto const &state = hydro_state_mf.const_arrays();
-  auto const &rhs = S_rhs.arrays();
-  auto tables = cloudyTables.const_tables();
-
-  amrex::ParallelFor(
-      S_rhs, [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept {
-        const Real Eint = Eint_arr[box_no](i, j, k);
-        const Real rho =
-            state[box_no](i, j, k, HydroSystem<CoolingTest>::density_index);
-
-        // compute temperature (implicit solve, depends on composition)
-        Real T = ComputeTgasFromEgas(rho, Eint,
-                                     HydroSystem<CoolingTest>::gamma_, tables);
-
-        // compute cooling function
-        rhs[box_no](i, j, k) = cloudy_cooling_function(rho, T, tables);
-      });
-  amrex::Gpu::streamSynchronize();
-}
-
-void computeEintFromMultiFab(amrex::MultiFab &S_eint, amrex::MultiFab &mf) {
-  // compute gas internal energy for each cell, save in S_eint
-  auto const &Eint = S_eint.arrays();
-  auto const &state = mf.const_arrays();
-
-  amrex::ParallelFor(
-      S_eint, [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept {
-        const Real rho =
-            state[box_no](i, j, k, HydroSystem<CoolingTest>::density_index);
-        const Real x1Mom =
-            state[box_no](i, j, k, HydroSystem<CoolingTest>::x1Momentum_index);
-        const Real x2Mom =
-            state[box_no](i, j, k, HydroSystem<CoolingTest>::x2Momentum_index);
-        const Real x3Mom =
-            state[box_no](i, j, k, HydroSystem<CoolingTest>::x3Momentum_index);
-        const Real Egas =
-            state[box_no](i, j, k, HydroSystem<CoolingTest>::energy_index);
-
-        Eint[box_no](i, j, k) = RadSystem<CoolingTest>::ComputeEintFromEgas(
-            rho, x1Mom, x2Mom, x3Mom, Egas);
-      });
-  amrex::Gpu::streamSynchronize();
-}
-
-void computeAbstolFromMultiFab(amrex::MultiFab &abstol_mf,
-                               amrex::MultiFab &mf) {
-  // compute gas internal energy for each cell, save in S_eint
-  auto const &abstol = abstol_mf.arrays();
-  auto const &state = mf.const_arrays();
-  amrex::Real const reltol_floor = 0.01;
-
-  amrex::ParallelFor(abstol_mf, [=] AMREX_GPU_DEVICE(int box_no, int i, int j,
-                                                     int k) noexcept {
-    const Real rho =
-        state[box_no](i, j, k, HydroSystem<CoolingTest>::density_index);
-    abstol[box_no](i, j, k) =
-        reltol_floor *
-        RadSystem<CoolingTest>::ComputeEgasFromTgas(rho, T_floor);
-  });
-  amrex::Gpu::streamSynchronize();
-}
-
-void updateEgasToMultiFab(amrex::MultiFab &S_eint, amrex::MultiFab &mf) {
-  // copy solution back to MultiFab 'mf'
-  auto const &Eint = S_eint.const_arrays();
-  auto const &state = mf.arrays();
-
-  amrex::ParallelFor(
-      mf, [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept {
-        const Real rho =
-            state[box_no](i, j, k, HydroSystem<CoolingTest>::density_index);
-        const Real x1Mom =
-            state[box_no](i, j, k, HydroSystem<CoolingTest>::x1Momentum_index);
-        const Real x2Mom =
-            state[box_no](i, j, k, HydroSystem<CoolingTest>::x2Momentum_index);
-        const Real x3Mom =
-            state[box_no](i, j, k, HydroSystem<CoolingTest>::x3Momentum_index);
-
-        const Real Eint_new = Eint[box_no](i, j, k);
-
-        state[box_no](i, j, k, HydroSystem<CoolingTest>::energy_index) =
-            RadSystem<CoolingTest>::ComputeEgasFromEint(rho, x1Mom, x2Mom,
-                                                        x3Mom, Eint_new);
-      });
-  amrex::Gpu::streamSynchronize();
-}
-
-void computeCoolingSundials(amrex::MultiFab &mf, Real dt,
-                            cloudy_tables &cloudyTables,
-                            SUNContext sundialsContext,
-                            bool do_implicit_integration = true) {
-  BL_PROFILE("RadhydroSimulation::computeCooling()")
-
-  // Create MultiFab 'S_eint' with only gas internal energy
-  const auto &ba = mf.boxArray();
-  const auto &dmap = mf.DistributionMap();
-  amrex::MultiFab S_eint(ba, dmap, 1, mf.nGrow());
-  amrex::MultiFab abstol(ba, dmap, 1, mf.nGrow());
-
-  // Get gas internal energy from hydro state
-  computeEintFromMultiFab(S_eint, mf);
-  const Real Eint_min = S_eint.min(0);
-  AMREX_ALWAYS_ASSERT(Eint_min > 0.);
-
-  // Compute absolute tolerances, set based on T_floor for each cell
-  computeAbstolFromMultiFab(abstol, mf);
-
-  // Create an N_Vector wrapper for S_eint, abstol multifabs
-  sunindextype length = S_eint.n_comp * S_eint.boxArray().numPts();
-  N_Vector y_vec = amrex::sundials::N_VMake_MultiFab(length, &S_eint);
-  N_Vector abstol_vec = amrex::sundials::N_VMake_MultiFab(length, &abstol);
-
-  // create user data object
-  SundialsUserData user_data;
-  user_data.f = [&](realtype rhs_time, N_Vector y_data, N_Vector y_rhs, void *
-                    /* user_data */) -> int {
-    amrex::MultiFab S_data;
-    amrex::MultiFab S_rhs;
-
-    S_data =
-        amrex::MultiFab(*amrex::sundials::getMFptr(y_data), amrex::make_alias,
-                        0, amrex::sundials::getMFptr(y_data)->nComp());
-    S_rhs =
-        amrex::MultiFab(*amrex::sundials::getMFptr(y_rhs), amrex::make_alias, 0,
-                        amrex::sundials::getMFptr(y_rhs)->nComp());
-
-    rhs_cooling(S_rhs, S_data, mf, rhs_time, cloudyTables);
-    return 0;
-  };
-
-  // N.B.: Adams with fixed point is almost *always* the fastest integrator for
-  // cooling.
-  if (do_implicit_integration) {
-    // use CVode for implicit integration
-
-    // create CVode object
-    //void *cvode_mem = CVodeCreate(CV_ADAMS, sundialsContext);
-    void *cvode_mem = CVodeCreate(CV_BDF, sundialsContext);
-
-    // set user data
-    AMREX_ALWAYS_ASSERT(CVodeSetUserData(cvode_mem, &user_data) == CV_SUCCESS);
-
-    // set RHS function and initial conditions t0, y0
-    // (NOTE: CVODE allocates the rhs MultiFab itself!)
-    AMREX_ALWAYS_ASSERT(CVodeInit(cvode_mem, userdata_f, 0, y_vec) ==
-                        CV_SUCCESS);
-
-    // set integration tolerances
-    Real reltol = 1.0e-4; // recommended to be 1e-5 or smaller
-    AMREX_ALWAYS_ASSERT(reltol > 0.);
-    CVodeSVtolerances(cvode_mem, reltol, abstol_vec);
-
-#if 0
-    // set nonlinear solver to fixed-point
-    // (optional) use Anderson acceleration with m_accel iterates
-    int m_accel = 0; // 0 is usually the fastest time-to-solution
-    SUNNonlinearSolver NLS =
-        SUNNonlinSol_FixedPoint(y_vec, m_accel, sundialsContext);
-    CVodeSetNonlinearSolver(cvode_mem, NLS);
-#endif
-
-    // use finite-difference diagonal Jacobian
-    CVDiag(cvode_mem);
-
-    // solve ODEs
-    realtype time_reached = NAN;
-    int ierr = CVode(cvode_mem, dt, y_vec, &time_reached, CV_NORMAL);
-    AMREX_ALWAYS_ASSERT_WITH_MESSAGE(ierr == CV_SUCCESS,
-                                     "Cooling solve with CVODE failed!");
-
-    // free CVode objects
-    CVodeFree(&cvode_mem);
-    //SUNNonlinSolFree(NLS);
-  } else {
-    // use ARKode for explicit integration
-
-    // create ARKode object with ERKStep integrator
-    //  ('ERK' = Explicit Runge-Kutta)
-    void *arkode_mem = ERKStepCreate(userdata_f, 0, y_vec, sundialsContext);
-
-    // set integration tolerances
-    Real reltol = 1.0e-4;
-    AMREX_ALWAYS_ASSERT(reltol > 0.);
-    ERKStepSVtolerances(arkode_mem, reltol, abstol_vec);
-
-    // set user data
-    ERKStepSetUserData(arkode_mem, &user_data);
-
-    // solve ODEs
-    realtype time_reached = NAN;
-    int ierr = ERKStepEvolve(arkode_mem, dt, y_vec, &time_reached, ARK_NORMAL);
-    AMREX_ALWAYS_ASSERT_WITH_MESSAGE(ierr == ARK_SUCCESS,
-                                     "Cooling solve with ARKODE failed!");
-
-    // free ARKode object
-    ERKStepFree(&arkode_mem);
-  }
-
-  // update hydro state with new Eint
-  updateEgasToMultiFab(S_eint, mf);
-
-  // free SUNDIALS N_Vectors
-  N_VDestroy(y_vec);
-  N_VDestroy(abstol_vec);
-}
 
 struct ODEUserData {
   amrex::Real rho;
@@ -488,7 +255,7 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
 
   const Real dt = dt_in;
   const Real reltol_floor = 0.01;
-  const Real rtol = 0.05; // not recommended to change this
+  const Real rtol = 1.0e-4; // not recommended to change this
 
   auto tables = cloudyTables.const_tables();
 
@@ -520,7 +287,6 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
       //forward_euler_integrate(user_rhs, 0, y, dt, &user_data);
 
       // do integration with RK2 (Heun's method)
-      // TODO(benwibking): return number of internal steps taken
       rk_adaptive_integrate(user_rhs, 0, y, dt, &user_data, rtol, abstol);
 
       // do integration with Adams-1 (Backward Euler) [*slower* than RK2]
@@ -539,9 +305,7 @@ void RadhydroSimulation<CoolingTest>::computeAfterLevelAdvance(
     int lev, amrex::Real /*time*/, amrex::Real dt_lev, int /*iteration*/,
     int /*ncycle*/) {
   // compute operator split physics
-
   computeCooling(state_new_[lev], dt_lev, cloudyTables);
-  //computeCoolingSundials(state_new_[lev], dt_lev, cloudyTables, sundialsContext);
 }
 
 template <>
@@ -589,7 +353,7 @@ auto problem_main() -> int {
   // Problem parameters
   const double CFL_number = 0.25;
   const double max_time = 7.5e4 * seconds_in_year; // 75 kyr
-  const int max_timesteps = 1000;                  // 2e4;
+  const int max_timesteps = 2e4;
 
   // Problem initialization
   constexpr int nvars = RadhydroSimulation<CoolingTest>::nvarTotal_;
@@ -626,15 +390,8 @@ auto problem_main() -> int {
   // Set initial conditions
   sim.setInitialConditions();
 
-  // Initialise SUNContext
-  SUNContext_Create(amrex::ParallelContext::CommunicatorSub(),
-                    &sim.sundialsContext);
-
   // run simulation
   sim.evolve();
-
-  // free sundials objects
-  SUNContext_Free(&sim.sundialsContext);
 
   // Cleanup and exit
   int status = 0;
