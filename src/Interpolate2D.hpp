@@ -13,7 +13,7 @@
 #include "AMReX_BLassert.H"
 #include "AMReX_TableData.H"
 
-AMREX_GPU_HOST_DEVICE AMREX_INLINE auto
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 interpolate2d(double x, double y, amrex::Table1D<const double> const &xv,
               amrex::Table1D<const double> const &yv,
               amrex::Table2D<const double> const &table) -> double {
@@ -22,19 +22,15 @@ interpolate2d(double x, double y, amrex::Table1D<const double> const &xv,
 
   double dx = (xv(xv.end - 1) - xv(xv.begin)) / (xv.end - xv.begin);
   double dy = (yv(yv.end - 1) - yv(yv.begin)) / (yv.end - yv.begin);
-  AMREX_ASSERT(dx > 0.);
-  AMREX_ASSERT(dy > 0.);
+
+  x = std::clamp(x, xv(xv.begin), xv(xv.end - 1));
+  y = std::clamp(y, yv(yv.begin), yv(yv.end - 1));
 
   // compute indices
-  int ix = std::clamp(static_cast<int>((x - xv(xv.begin)) / dx), xv.begin, xv.end - 1);
-  int iy = std::clamp(static_cast<int>((y - yv(yv.begin)) / dy), yv.begin, yv.end - 1);
+  int ix = static_cast<int>((x - xv(xv.begin)) / dx);
+  int iy = static_cast<int>((y - yv(yv.begin)) / dy);
   int iix = (ix == xv.end - 1) ? ix : ix + 1;
   int iiy = (iy == yv.end - 1) ? iy : iy + 1;
-
-  AMREX_ASSERT(ix < table.end[0]);
-  AMREX_ASSERT(iix < table.end[0]);
-  AMREX_ASSERT(iy < table.end[1]);
-  AMREX_ASSERT(iiy < table.end[1]);
 
   // get values
   double x1 = xv(ix);

@@ -234,7 +234,7 @@ static auto userdata_f(realtype t, N_Vector y_data, N_Vector y_rhs,
 }
 
 #if 0
-AMREX_GPU_HOST_DEVICE AMREX_INLINE auto cooling_function(Real const rho,
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto cooling_function(Real const rho,
                                                          Real const T) -> Real {
   // use fitting function from Koyama & Inutsuka (2002)
   Real gamma_heat = 2.0e-26; // Koyama & Inutsuka value
@@ -460,11 +460,11 @@ void computeCoolingSundials(amrex::MultiFab &mf, Real dt,
 }
 
 struct ODEUserData {
-  amrex::Real rho = NAN;
+  amrex::Real rho;
   cloudyGpuConstTables tables;
 };
 
-AMREX_GPU_HOST_DEVICE AMREX_INLINE auto
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 user_rhs(Real /*t*/, quokka::valarray<Real, 1> &y_data,
          quokka::valarray<Real, 1> &y_rhs, void *user_data) -> int {
   // unpack user_data
@@ -497,7 +497,7 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
     const amrex::Box &indexRange = iter.validbox();
     auto const &state = mf.array(iter);
 
-    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
       const Real rho = state(i, j, k, HydroSystem<CoolingTest>::density_index);
       const Real x1Mom =
           state(i, j, k, HydroSystem<CoolingTest>::x1Momentum_index);
@@ -515,6 +515,9 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
       quokka::valarray<Real, 1> abstol = {
           reltol_floor *
           RadSystem<CoolingTest>::ComputeEgasFromTgas(rho, T_floor)};
+
+      // use Grackle method (forward Euler with relative change limiting)
+      //forward_euler_integrate(user_rhs, 0, y, dt, &user_data);
 
       // do integration with RK2 (Heun's method)
       // TODO(benwibking): return number of internal steps taken
@@ -615,7 +618,7 @@ auto problem_main() -> int {
   sim.maxTimesteps_ = max_timesteps;
   sim.stopTime_ = max_time;
   sim.plotfileInterval_ = 100;
-  sim.checkpointInterval_ = 1000;
+  sim.checkpointInterval_ = -1;
 
   // Read Cloudy tables
   readCloudyData(sim.cloudyTables);

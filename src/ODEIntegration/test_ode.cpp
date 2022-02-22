@@ -21,7 +21,7 @@ struct ODEUserData {
   cloudyGpuConstTables tables;
 };
 
-AMREX_GPU_HOST_DEVICE AMREX_INLINE auto
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 user_rhs(Real /*t*/, quokka::valarray<Real, 1> &y_data,
          quokka::valarray<Real, 1> &y_rhs, void *user_data) -> int {
   // unpack user_data
@@ -61,7 +61,8 @@ auto problem_main() -> int {
   quokka::valarray<Real, 1> abstol = 1.0e-20 * y;
   const Real rtol = 1.0e-2; // appropriate for RK12
 
-  rk_adaptive_integrate(user_rhs, 0, y, max_time, &user_data, rtol, abstol);
+  forward_euler_integrate(user_rhs, 0, y, max_time, &user_data);
+  //rk_adaptive_integrate(user_rhs, 0, y, max_time, &user_data, rtol, abstol);
   //adams_adaptive_integrate(user_rhs, 0, y, max_time, &user_data, rtol, abstol);
 
   const Real Tgas = ComputeTgasFromEgas(

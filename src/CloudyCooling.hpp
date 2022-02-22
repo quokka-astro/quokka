@@ -51,7 +51,7 @@ public:
   [[nodiscard]] auto const_tables() const -> cloudyGpuConstTables;
 };
 
-AMREX_GPU_HOST_DEVICE AMREX_INLINE auto
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 cloudy_cooling_function(Real const rho, Real const T,
                         cloudyGpuConstTables const &tables) -> Real {
   // interpolate cooling rates from Cloudy tables
@@ -85,7 +85,7 @@ cloudy_cooling_function(Real const rho, Real const T,
   return netLambda;
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_INLINE auto
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 ComputeTgasFromEgas(double rho, double Egas, double gamma,
                     cloudyGpuConstTables const &tables) -> Real {
   // convert Egas (internal gas energy) to temperature
@@ -102,38 +102,38 @@ ComputeTgasFromEgas(double rho, double Egas, double gamma,
 
   // solve for mu(T)*C == T.
   // (Grackle does this with a fixed-point iteration.)
-  Real mu_prev = NAN;
+  Real mu_prev = 1.;
   Real mu_guess = 1.;
-  Real Tgas = NAN;
-  Real T_guess = NAN;
+  Real Tgas = C * mu_guess;
   const Real reltol = 1.0e-3;
-  const int maxIter = 50;
+  const int maxIter = 40;
+  bool success = false;
 
   for (int n = 0; n < maxIter; ++n) {
     mu_prev = mu_guess; // save old mu
 
     // compute new guess for Tgas, bounded between 10 K and 1e9 K
-    T_guess = std::clamp(C * mu_guess, 10., 1.0e9);
+    Tgas = std::clamp(C * mu_guess, 10., 1.0e9);
 
     // compute new mu from mu(T) table
-    mu_guess = interpolate2d(log_nH, std::log10(T_guess), tables.log_nH,
+    mu_guess = interpolate2d(log_nH, std::log10(Tgas), tables.log_nH,
                              tables.log_Tgas, tables.meanMolWeight);
 
     // damp iteration
     mu_guess = 0.5 * (mu_guess + mu_prev);
 
     // check if converged
-    if (std::abs((C * mu_guess - T_guess) / T_guess) < reltol) {
-      Tgas = T_guess;
+    if (std::abs((C * mu_guess - Tgas) / Tgas) < reltol) {
+      success = true;
       break;
     }
   }
-  AMREX_ALWAYS_ASSERT(!std::isnan(Tgas));
+  AMREX_ALWAYS_ASSERT(success);
   //   "Tgas iteration failed to converge!"
   return Tgas;
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_INLINE auto
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 ComputeEgasFromTgas(double rho, double Tgas, double gamma,
                     cloudyGpuConstTables const &tables) -> Real {
   // convert Egas (internal gas energy) to temperature

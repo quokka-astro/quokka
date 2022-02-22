@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <limits>
 
 #include "AMReX.H"
 #include "AMReX_BLassert.H"
@@ -22,6 +23,40 @@
 #include "valarray.hpp"
 
 using Real = amrex::Real;
+
+template <typename F, int N>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void
+forward_euler_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0,
+                        Real t1, void *user_data) {
+  // Compute multiple forward Euler steps, limiting the fractional change in y.
+
+  quokka::valarray<Real, N> ydot{};
+  quokka::valarray<Real, N> &y = y0;
+  Real time = t0;
+  const int maxSteps = 1000;
+  const Real rel_change = 0.1; // limit to 10% change in y per substep
+  bool success = false;
+
+  for (int i = 0; i < maxSteps; ++i) {
+    // evaluate rhs
+    int ierr = rhs(t0, y, ydot, user_data);
+
+    // compute dt such that dt = 0.1 (y/ydot), or dt = t1 - t.
+    const Real dt = std::min(rel_change * min(abs(y / ydot)), t1 - time);
+
+    // advance single step
+    y = y + dt * ydot;
+    time += dt;
+
+    //std::cout << "[" << i << "] t = " << time << " dt = " << dt << std::endl;
+
+    if (time >= t1) {
+      success = true;
+      break;
+    }
+  }
+  AMREX_ALWAYS_ASSERT(success);
+}
 
 template <typename F, int N>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void
@@ -174,8 +209,7 @@ rk_adaptive_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0, Real t1,
   quokka::valarray<Real, N> yerr{};
   quokka::valarray<Real, N> ynew{};
 
-  // std::cout << "initial dt = " << dt << std::endl;
-
+  bool success = false;
   for (int i = 0; i < maxSteps; ++i) {
     if ((time + dt) > t1) {
       // reduce dt to end at t1
@@ -229,13 +263,13 @@ rk_adaptive_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0, Real t1,
         step_success, "ODE integrator failed to reach accuracy tolerance after "
                       "maximum step-size iterations reached!");
 
-    if (std::abs((time - t1) / t1) < 1.0e-3) {
-      // we are at t1 within a reasonable tolerance, so stop
+    if (time >= t1) {
+      // we are at t1
+      success = true;
       break;
     }
   }
-
-  AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::abs((time - t1) / t1) < 1.0e-3,
+  AMREX_ALWAYS_ASSERT_WITH_MESSAGE(success,
                                    "ODE integration exceeded maxSteps!");
 }
 

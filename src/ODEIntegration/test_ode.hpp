@@ -35,7 +35,7 @@ constexpr double seconds_in_year = 3.154e7;
 
 // function definitions
 
-AMREX_GPU_HOST_DEVICE AMREX_INLINE auto
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 user_rhs(Real t, quokka::valarray<Real, 1> &y_data,
          quokka::valarray<Real, 1> &y_rhs, void *user_data) -> int;
 
