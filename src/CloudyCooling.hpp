@@ -53,7 +53,7 @@ public:
 
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto
 cloudy_cooling_function(Real const rho, Real const T,
-                        cloudyGpuConstTables &tables) -> Real {
+                        cloudyGpuConstTables const &tables) -> Real {
   // interpolate cooling rates from Cloudy tables
   const Real rhoH = rho * cloudy_H_mass_fraction; // mass density of H species
   const Real nH = rhoH / hydrogen_mass_cgs_;
@@ -87,7 +87,7 @@ cloudy_cooling_function(Real const rho, Real const T,
 
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto
 ComputeTgasFromEgas(double rho, double Egas, double gamma,
-                    cloudyGpuConstTables &tables) -> Real {
+                    cloudyGpuConstTables const &tables) -> Real {
   // convert Egas (internal gas energy) to temperature
 
   // solve for temperature given Eint (with fixed adiabatic index gamma)
@@ -128,14 +128,14 @@ ComputeTgasFromEgas(double rho, double Egas, double gamma,
       break;
     }
   }
-  AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!std::isnan(Tgas),
-                                   "Tgas iteration failed to converge!");
+  AMREX_ALWAYS_ASSERT(!std::isnan(Tgas));
+  //   "Tgas iteration failed to converge!"
   return Tgas;
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto
 ComputeEgasFromTgas(double rho, double Tgas, double gamma,
-                    cloudyGpuConstTables &tables) -> Real {
+                    cloudyGpuConstTables const &tables) -> Real {
   // convert Egas (internal gas energy) to temperature
   const Real rhoH = rho * cloudy_H_mass_fraction;
   const Real nH = rhoH / hydrogen_mass_cgs_;

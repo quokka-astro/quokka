@@ -59,9 +59,10 @@ auto problem_main() -> int {
   ODEUserData user_data{rho0, tables};
   quokka::valarray<Real, 1> y = {Eint0};
   quokka::valarray<Real, 1> abstol = 1.0e-20 * y;
-  const Real rtol = 1.0e-4; // appropriate for RK12
+  const Real rtol = 1.0e-2; // appropriate for RK12
 
   rk_adaptive_integrate(user_rhs, 0, y, max_time, &user_data, rtol, abstol);
+  //adams_adaptive_integrate(user_rhs, 0, y, max_time, &user_data, rtol, abstol);
 
   const Real Tgas = ComputeTgasFromEgas(
       rho0, y[0], HydroSystem<ODETest>::gamma_, tables);

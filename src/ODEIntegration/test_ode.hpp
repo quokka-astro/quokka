@@ -18,9 +18,6 @@
 #include "AMReX_ParmParse.H"
 #include "AMReX_REAL.H"
 
-#ifdef HAVE_PYTHON
-#include "matplotlibcpp.h"
-#endif
 #include <fmt/format.h>
 
 // internal headers

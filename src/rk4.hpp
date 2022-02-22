@@ -169,11 +169,12 @@ rk_adaptive_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0, Real t1,
   const int maxSteps = 2000;
   Real time = t0;
   Real dt = dt_guess;
+  const Real hmin = 1.0e-3;
   quokka::valarray<Real, N> &y = y0;
   quokka::valarray<Real, N> yerr{};
   quokka::valarray<Real, N> ynew{};
 
-  //std::cout << "initial dt = " << dt << std::endl;
+  // std::cout << "initial dt = " << dt << std::endl;
 
   for (int i = 0; i < maxSteps; ++i) {
     if ((time + dt) > t1) {
@@ -181,11 +182,14 @@ rk_adaptive_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0, Real t1,
       dt = t1 - time;
     }
 
-    AMREX_ALWAYS_ASSERT(dt > 0.0);
-    //std::cout << "Step i = " << i << " t = " << time << " dt = " << dt << std::endl;
+    // std::cout << "Step i = " << i << " t = " << time << " dt = " << dt <<
+    // std::endl;
 
     bool step_success = false;
     for (int k = 0; k < maxRetries; ++k) {
+      // check that timestep is not infinitesimal
+      AMREX_ALWAYS_ASSERT(dt > (hmin * (t1 - t0)));
+
       // compute single step of chosen RK method
       rk12_single_step(rhs, time, y, dt, ynew, yerr, user_data);
 
@@ -206,8 +210,8 @@ rk_adaptive_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0, Real t1,
         }
         dt *= eta; // use new timestep
         step_success = true;
-        //std::cout << "\tsuccess k = " << k << " epsilon = " << epsilon
-        //           << " eta = " << eta << std::endl;
+        // std::cout << "\tsuccess k = " << k << " epsilon = " << epsilon
+        //            << " eta = " << eta << std::endl;
         break;
       }
 
@@ -218,8 +222,8 @@ rk_adaptive_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0, Real t1,
         eta = std::clamp(eta, eta_min_errfail_multiple, eta_max_errfail_again);
       }
       dt *= eta; // use new timestep
-      //std::cout << "\tfailed step k = " << k << " epsilon = " << epsilon
-      //          << " eta = " << eta << std::endl;
+      // std::cout << "\tfailed step k = " << k << " epsilon = " << epsilon
+      //           << " eta = " << eta << std::endl;
     }
     AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
         step_success, "ODE integrator failed to reach accuracy tolerance after "
