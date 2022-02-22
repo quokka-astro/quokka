@@ -1,4 +1,4 @@
-add_executable(test_ode ../main.cpp test_ode.cpp ../GrackleDataReader.cpp ../Interpolate2D.cpp)
+add_executable(test_ode ../main.cpp test_ode.cpp ../GrackleDataReader.cpp ../CloudyCooling.cpp)
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
     setup_target_for_cuda_compilation(test_ode)

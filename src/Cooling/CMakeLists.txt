@@ -1,5 +1,5 @@
 if (AMReX_SPACEDIM GREATER_EQUAL 2)
-add_executable(test_cooling ../main.cpp test_cooling.cpp)
+add_executable(test_cooling ../main.cpp test_cooling.cpp ../GrackleDataReader.cpp ../CloudyCooling.cpp)
 target_link_libraries(test_cooling PUBLIC SUNDIALS::cvode SUNDIALS::arkode)
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")

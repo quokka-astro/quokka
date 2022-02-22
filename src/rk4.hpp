@@ -166,7 +166,7 @@ rk_adaptive_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0, Real t1,
   const Real eta_min_errfail_multiple = 0.1;
 
   // integration loop
-  const int maxSteps = 1000;
+  const int maxSteps = 2000;
   Real time = t0;
   Real dt = dt_guess;
   quokka::valarray<Real, N> &y = y0;

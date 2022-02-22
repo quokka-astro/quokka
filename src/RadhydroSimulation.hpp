@@ -20,6 +20,7 @@
 #include "AMReX_GpuControl.H"
 #include "AMReX_IArrayBox.H"
 #include "AMReX_IndexType.H"
+#include "CloudyCooling.hpp"
 #include "hyperbolic_system.hpp"
 #include "sundials/sundials_context.h"
 
@@ -81,6 +82,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	std::vector<double> Tgas_vec_;
 
 	SUNContext sundialsContext = nullptr;
+	cloudy_tables cloudyTables{};
 
 	static constexpr int nvarTotal_ = RadSystem<problem_t>::nvar_;
 	static constexpr int ncompHydro_ = HydroSystem<problem_t>::nvar_; // hydro

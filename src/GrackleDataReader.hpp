@@ -54,7 +54,7 @@ using cloudy_data = struct cloudy_data {
   std::vector<int64_t> grid_dimension;
 
   // Dataset parameter values.
-  std::vector<std::vector<double>> grid_parameters;
+  std::vector<amrex::Table1D<double>> grid_parameters;
 
   // Heating values
   amrex::Table3D<double> heating_data;
@@ -82,5 +82,8 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name,
 
 auto extract_2d_table(amrex::Table3D<double> const &table3D, int redshift_index)
     -> amrex::TableData<double, 2>;
+
+auto copy_1d_table(amrex::Table1D<double> const &table1D)
+    -> amrex::TableData<double, 1>;
 
 #endif // GRACKLEDATAREADER_HPP_

@@ -160,7 +160,7 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name,
       parameter_name = "Temperature";
     }
 
-    std::vector<double> temp_data(my_cloudy.grid_dimension[q]);
+    double *temp_data = new double[my_cloudy.grid_dimension[q]];
 
     attr_id = H5Aopen_name(dset_id, parameter_name.c_str());
 
@@ -170,7 +170,7 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name,
       amrex::Abort();
     }
 
-    status = H5Aread(attr_id, HDF5_R8, temp_data.data());
+    status = H5Aread(attr_id, HDF5_R8, temp_data);
 
     if (attr_id == h5_error) {
       fprintf(stderr, "Failed to read %s attribute in Cooling dataset.\n",
@@ -178,22 +178,23 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name,
       amrex::Abort();
     }
 
-    my_cloudy.grid_parameters[q].resize(my_cloudy.grid_dimension[q]);
+    my_cloudy.grid_parameters[q] =
+        amrex::Table1D<double>(temp_data, 0, static_cast<int>(my_cloudy.grid_dimension[q]));
 
     for (int64_t w = 0; w < my_cloudy.grid_dimension[q]; w++) {
       if (q < my_cloudy.grid_rank - 1) {
-        my_cloudy.grid_parameters[q][w] = temp_data[w];
+        my_cloudy.grid_parameters[q](w) = temp_data[w];
       } else {
         // convert temperature to log
-        my_cloudy.grid_parameters[q][w] = log10(temp_data[w]);
+        my_cloudy.grid_parameters[q](w) = log10(temp_data[w]);
       }
     }
 
     if (grackle_verbose) {
       std::cout << fmt::format(
           "{}: {} to {} ({} steps).\n", parameter_name,
-          my_cloudy.grid_parameters[q][0],
-          my_cloudy.grid_parameters[q][my_cloudy.grid_dimension[q] - 1],
+          my_cloudy.grid_parameters[q](0),
+          my_cloudy.grid_parameters[q](my_cloudy.grid_dimension[q] - 1),
           my_cloudy.grid_dimension[q]);
     }
 
@@ -226,10 +227,12 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name,
     }
 
     amrex::GpuArray<int, 3> lo{0, 0, 0};
-    amrex::GpuArray<int, 3> hi{static_cast<int>(my_cloudy.grid_dimension[0]),
+    amrex::GpuArray<int, 3> hi{static_cast<int>(my_cloudy.grid_dimension[2]),
                                static_cast<int>(my_cloudy.grid_dimension[1]),
-                               static_cast<int>(my_cloudy.grid_dimension[2])};
+                               static_cast<int>(my_cloudy.grid_dimension[0])};
 
+    // N.B.: Table3D uses column-major (Fortran-order) indexing, but Grackle
+    // tables use row-major (C-order) indexing!
     my_cloudy.cooling_data = amrex::Table3D<double>(temp_data, lo, hi);
 
     for (int64_t q = 0; q < my_cloudy.data_size; q++) {
@@ -269,10 +272,12 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name,
     }
 
     amrex::GpuArray<int, 3> lo{0, 0, 0};
-    amrex::GpuArray<int, 3> hi{static_cast<int>(my_cloudy.grid_dimension[0]),
+    amrex::GpuArray<int, 3> hi{static_cast<int>(my_cloudy.grid_dimension[2]),
                                static_cast<int>(my_cloudy.grid_dimension[1]),
-                               static_cast<int>(my_cloudy.grid_dimension[2])};
+                               static_cast<int>(my_cloudy.grid_dimension[0])};
 
+    // N.B.: Table3D uses column-major (Fortran-order) indexing, but Grackle
+    // tables use row-major (C-order) indexing!
     my_cloudy.heating_data = amrex::Table3D<double>(temp_data, lo, hi);
 
     for (int64_t q = 0; q < my_cloudy.data_size; q++) {
@@ -294,10 +299,12 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name,
     double *temp_data = new double[my_cloudy.data_size];
 
     amrex::GpuArray<int, 3> lo{0, 0, 0};
-    amrex::GpuArray<int, 3> hi{static_cast<int>(my_cloudy.grid_dimension[0]),
+    amrex::GpuArray<int, 3> hi{static_cast<int>(my_cloudy.grid_dimension[2]),
                                static_cast<int>(my_cloudy.grid_dimension[1]),
-                               static_cast<int>(my_cloudy.grid_dimension[2])};
+                               static_cast<int>(my_cloudy.grid_dimension[0])};
 
+    // N.B.: Table3D uses column-major (Fortran-order) indexing, but Grackle
+    // tables use row-major (C-order) indexing!
     my_cloudy.mmw_data = amrex::Table3D<double>(temp_data, lo, hi);
 
     parameter_name = fmt::format("/CoolingRates/{}/MMW", group_name);
@@ -339,19 +346,42 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name,
 
 auto extract_2d_table(amrex::Table3D<double> const &table3D, int redshift_index)
     -> amrex::TableData<double, 2> {
-  // array dimensions are: density, redshift, temperature
+  // table3d dimensions (F-ordering) are: temperature, redshift, density
+  // (but the table3d data is stored with C-ordering)
   auto lo = table3D.begin;
   auto hi = table3D.end;
-  std::array<int, 2> newlo{lo[0], lo[2]};
-  std::array<int, 2> newhi{hi[0], hi[2]};
 
-  amrex::TableData<double, 2> tableData(newlo, newhi, amrex::The_Pinned_Arena());
+  // N.B.: Table3D uses column-major (Fortran-order) indexing, but
+  // Grackle tables use row-major (C-order) indexing, so we reverse the indices
+  // here
+  amrex::Array<int, 2> newlo{lo[2], lo[0]};
+  amrex::Array<int, 2> newhi{hi[2] - 1, hi[0] - 1};
+  amrex::TableData<double, 2> tableData(newlo, newhi, amrex::The_Managed_Arena());
   auto table = tableData.table();
 
-  for (int i = lo[0]; i < hi[0]; ++i) {
-    for (int j = lo[2]; j < hi[2]; ++j) {
-      table(i, j) = table3D(i, redshift_index, j);
+  for (int i = newlo[0]; i <= newhi[0]; ++i) {
+    for (int j = newlo[1]; j <= newhi[1]; ++j) {
+      // swap index ordering so we can use Table2D's F-ordering accessor ()
+      table(i, j) = table3D(j, redshift_index, i);
     }
+  }
+  // N.B.: table should now be F-ordered: density, temperature
+  //  and the Table2D accessor function (which is F-ordered) can be used.
+  return tableData;
+}
+
+auto copy_1d_table(amrex::Table1D<double> const &table1D)
+    -> amrex::TableData<double, 1> {
+  auto lo = table1D.begin;
+  auto hi = table1D.end;
+  amrex::Array<int, 1> newlo{lo};
+  amrex::Array<int, 1> newhi{hi - 1};
+  
+  amrex::TableData<double, 1> tableData(newlo, newhi, amrex::The_Managed_Arena());
+  auto table = tableData.table();
+
+  for (int i = newlo[0]; i <= newhi[0]; ++i) {
+    table(i) = table1D(i);
   }
   return tableData;
 }

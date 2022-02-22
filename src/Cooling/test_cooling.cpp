@@ -31,6 +31,7 @@
 #include "AMReX_Sundials.H"
 #include "AMReX_TableData.H"
 
+#include "CloudyCooling.hpp"
 #include "RadhydroSimulation.hpp"
 #include "hydro_system.hpp"
 #include "radiation_system.hpp"
@@ -449,26 +450,37 @@ void computeCoolingSundials(amrex::MultiFab &mf, Real dt,
 }
 
 struct ODEUserData {
-  Real rho = NAN;
+  amrex::Real rho = NAN;
+  cloudyGpuConstTables tables;
 };
 
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto
-user_rhs(Real t, quokka::valarray<Real, 1> &y_data,
+user_rhs(Real /*t*/, quokka::valarray<Real, 1> &y_data,
          quokka::valarray<Real, 1> &y_rhs, void *user_data) -> int {
+  // unpack user_data
   auto *udata = static_cast<ODEUserData *>(user_data);
   Real rho = udata->rho;
+  cloudyGpuConstTables &tables = udata->tables;
+
+  // compute temperature (implicit solve, depends on composition)
   Real Eint = y_data[0];
-  Real T = RadSystem<CoolingTest>::ComputeTgasFromEgas(rho, Eint);
-  y_rhs[0] = cooling_function(rho, T);
+  Real T =
+      ComputeTgasFromEgas(rho, Eint, HydroSystem<CoolingTest>::gamma_, tables);
+
+  // compute cooling function
+  y_rhs[0] = cloudy_cooling_function(rho, T, tables);
   return 0;
 }
 
-void computeCooling(amrex::MultiFab &mf, const Real dt_in) {
+void computeCooling(amrex::MultiFab &mf, const Real dt_in,
+                    cloudy_tables &cloudyTables) {
   BL_PROFILE("RadhydroSimulation::computeCooling()")
 
   const Real dt = dt_in;
   const Real reltol_floor = 0.01;
   const Real rtol = 1.0e-4; // not recommended to change this
+
+  auto tables = cloudyTables.const_tables();
 
   // loop over all cells in MultiFab mf
   for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
@@ -488,7 +500,7 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in) {
       Real Eint = RadSystem<CoolingTest>::ComputeEintFromEgas(rho, x1Mom, x2Mom,
                                                               x3Mom, Egas);
 
-      ODEUserData user_data{rho};
+      ODEUserData user_data{rho, tables};
       quokka::valarray<Real, 1> y = {Eint};
       quokka::valarray<Real, 1> abstol = {
           reltol_floor *
@@ -498,7 +510,7 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in) {
       rk_adaptive_integrate(user_rhs, 0, y, dt, &user_data, rtol, abstol);
 
       // do integration with Adams-1 (Backward Euler) [*slower* than RK2]
-      //adams_adaptive_integrate(user_rhs, 0, y, dt, &user_data, rtol, abstol);
+      // adams_adaptive_integrate(user_rhs, 0, y, dt, &user_data, rtol, abstol);
 
       const Real Egas_new = RadSystem<CoolingTest>::ComputeEgasFromEint(
           rho, x1Mom, x2Mom, x3Mom, y[0]);
@@ -513,8 +525,9 @@ void RadhydroSimulation<CoolingTest>::computeAfterLevelAdvance(
     int lev, amrex::Real /*time*/, amrex::Real dt_lev, int /*iteration*/,
     int /*ncycle*/) {
   // compute operator split physics
-  computeCooling(state_new_[lev], dt_lev);
-  //computeCoolingSundials(state_new_[lev], dt_lev, sundialsContext);
+
+  computeCooling(state_new_[lev], dt_lev, cloudyTables);
+  // computeCoolingSundials(state_new_[lev], dt_lev, sundialsContext);
 }
 
 template <>
@@ -590,7 +603,10 @@ auto problem_main() -> int {
   sim.cflNumber_ = CFL_number;
   sim.maxTimesteps_ = max_timesteps;
   sim.stopTime_ = max_time;
-  sim.plotfileInterval_ = 1000;
+  sim.plotfileInterval_ = 100;
+
+  // Read Cloudy tables
+  readCloudyData(sim.cloudyTables);
 
   // Set initial conditions
   sim.setInitialConditions();
