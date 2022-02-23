@@ -21,10 +21,10 @@
 #include "AMReX_TableData.H"
 
 #include "CloudyCooling.hpp"
+#include "ODEIntegrate.hpp"
 #include "RadhydroSimulation.hpp"
 #include "hydro_system.hpp"
 #include "radiation_system.hpp"
-#include "ODEIntegrate.hpp"
 #include "test_cooling.hpp"
 
 using amrex::Real;
@@ -212,20 +212,6 @@ AMRSimulation<CoolingTest>::setCustomBoundaryConditions(
   }
 }
 
-#if 0
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto cooling_function(Real const rho,
-                                                         Real const T) -> Real {
-  // use fitting function from Koyama & Inutsuka (2002)
-  Real gamma_heat = 2.0e-26; // Koyama & Inutsuka value
-  Real lambda_cool = gamma_heat * (1.0e7 * std::exp(-114800. / (T + 1000.)) +
-                                   14. * std::sqrt(T) * std::exp(-92. / T));
-  Real rho_over_mh = rho / m_H;
-  Real cooling_source_term =
-      rho_over_mh * gamma_heat - (rho_over_mh * rho_over_mh) * lambda_cool;
-  return cooling_source_term;
-}
-#endif
-
 struct ODEUserData {
   amrex::Real rho;
   cloudyGpuConstTables tables;
@@ -264,7 +250,8 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
     const amrex::Box &indexRange = iter.validbox();
     auto const &state = mf.array(iter);
 
-    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j,
+                                                        int k) noexcept {
       const Real rho = state(i, j, k, HydroSystem<CoolingTest>::density_index);
       const Real x1Mom =
           state(i, j, k, HydroSystem<CoolingTest>::x1Momentum_index);
@@ -280,17 +267,12 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
       ODEUserData user_data{rho, tables};
       quokka::valarray<Real, 1> y = {Eint};
       quokka::valarray<Real, 1> abstol = {
-          reltol_floor *
-          RadSystem<CoolingTest>::ComputeEgasFromTgas(rho, T_floor)};
-
-      // use Grackle method (forward Euler with relative change limiting)
-      //forward_euler_integrate(user_rhs, 0, y, dt, &user_data);
+          reltol_floor * ComputeEgasFromTgas(rho, T_floor,
+                                             HydroSystem<CoolingTest>::gamma_,
+                                             tables)};
 
       // do integration with RK2 (Heun's method)
       rk_adaptive_integrate(user_rhs, 0, y, dt, &user_data, rtol, abstol);
-
-      // do integration with Adams-1 (Backward Euler) [*slower* than RK2]
-      //adams_adaptive_integrate(user_rhs, 0, y, dt, &user_data, rtol, abstol);
 
       const Real Egas_new = RadSystem<CoolingTest>::ComputeEgasFromEint(
           rho, x1Mom, x2Mom, x3Mom, y[0]);
@@ -340,7 +322,6 @@ void HydroSystem<CoolingTest>::EnforcePressureFloor(
           amrex::Real P_new = P_star;
           if (P_star < P_floor) {
             P_new = P_floor;
-#pragma nv_diag_suppress divide_by_zero
             amrex::Real const Etot_new =
                 P_new / (gamma_ - 1.) + 0.5 * rho_new * vsq;
             state(i, j, k, energy_index) = Etot_new;
