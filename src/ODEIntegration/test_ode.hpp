@@ -24,7 +24,7 @@
 #include "CloudyCooling.hpp"
 #include "hydro_system.hpp"
 #include "radiation_system.hpp"
-#include "rk4.hpp"
+#include "ODEIntegrate.hpp"
 #include "valarray.hpp"
 
 // types
