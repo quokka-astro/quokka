@@ -166,7 +166,7 @@ rk_adaptive_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0, Real t1,
   const int maxSteps = 2000;
   Real time = t0;
   Real dt = dt_guess;
-  const Real hmin = 1.0e-3;
+  const Real hmin = 1.0e-4;
   quokka::valarray<Real, N> &y = y0;
   quokka::valarray<Real, N> yerr{};
   quokka::valarray<Real, N> ynew{};

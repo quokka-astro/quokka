@@ -8,18 +8,29 @@
 ///
 
 #include "test_ode.hpp"
-#include "CloudyCooling.hpp"
 #include "radiation_system.hpp"
 
 using amrex::Real;
 
-constexpr double Tgas0 = 1.0e5;       // 6000.;    // K
+constexpr double Tgas0 = 6000.;                    // K
 constexpr double rho0 = 0.01 * hydrogen_mass_cgs_; // g cm^-3
 
 struct ODEUserData {
-  amrex::Real rho = NAN;
-  cloudyGpuConstTables tables;
+  amrex::Real rho;
 };
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto cooling_function(Real const rho,
+                                                               Real const T)
+    -> Real {
+  // use fitting function from Koyama & Inutsuka (2002)
+  Real gamma_heat = 2.0e-26;
+  Real lambda_cool = gamma_heat * (1.0e7 * std::exp(-114800. / (T + 1000.)) +
+                                   14. * std::sqrt(T) * std::exp(-92. / T));
+  Real rho_over_mh = rho / hydrogen_mass_cgs_;
+  Real cooling_source_term =
+      rho_over_mh * gamma_heat - (rho_over_mh * rho_over_mh) * lambda_cool;
+  return cooling_source_term;
+}
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 user_rhs(Real /*t*/, quokka::valarray<Real, 1> &y_data,
@@ -27,27 +38,20 @@ user_rhs(Real /*t*/, quokka::valarray<Real, 1> &y_data,
   // unpack user_data
   auto *udata = static_cast<ODEUserData *>(user_data);
   Real rho = udata->rho;
-  cloudyGpuConstTables &tables = udata->tables;
 
-  // compute temperature (implicit solve, depends on composition)
+  // compute temperature
   Real Eint = y_data[0];
-  Real T = ComputeTgasFromEgas(rho, Eint, HydroSystem<ODETest>::gamma_, tables);
+  Real T = RadSystem<ODETest>::ComputeTgasFromEgas(rho, Eint);
 
   // compute cooling function
-  y_rhs[0] = cloudy_cooling_function(rho, T, tables);
+  y_rhs[0] = cooling_function(rho, T);
   return 0;
 }
 
 auto problem_main() -> int {
-  // read tables
-  cloudy_tables cloudyTables;
-  readCloudyData(cloudyTables);
-  cloudyGpuConstTables tables = cloudyTables.const_tables();
-
-  // run simulation
-  const Real Eint0 = ComputeEgasFromTgas(
-      rho0, Tgas0, HydroSystem<ODETest>::gamma_, tables);
-  const Real Edot0 = cloudy_cooling_function(rho0, Tgas0, tables);
+  // set up initial conditions
+  const Real Eint0 = RadSystem<ODETest>::ComputeEgasFromTgas(rho0, Tgas0);
+  const Real Edot0 = cooling_function(rho0, Tgas0);
   const Real tcool = std::abs(Eint0 / Edot0);
   const Real max_time = 10.0 * tcool;
 
@@ -56,22 +60,18 @@ auto problem_main() -> int {
   std::cout << "Initial edot = " << Edot0 << std::endl;
 
   // solve cooling
-  ODEUserData user_data{rho0, tables};
+  ODEUserData user_data{rho0};
   quokka::valarray<Real, 1> y = {Eint0};
   quokka::valarray<Real, 1> abstol = 1.0e-20 * y;
-  const Real rtol = 1.0e-2; // appropriate for RK12
+  const Real rtol = 1.0e-4; // appropriate for RK12
+  rk_adaptive_integrate(user_rhs, 0, y, max_time, &user_data, rtol, abstol);
 
-  forward_euler_integrate(user_rhs, 0, y, max_time, &user_data);
-  //rk_adaptive_integrate(user_rhs, 0, y, max_time, &user_data, rtol, abstol);
-  //adams_adaptive_integrate(user_rhs, 0, y, max_time, &user_data, rtol, abstol);
-
-  const Real Tgas = ComputeTgasFromEgas(
-      rho0, y[0], HydroSystem<ODETest>::gamma_, tables);
-  const Real Teq =
-      160.52611612610758; // for n_H = 0.01 cm^{-3} (for IK cooling function)
+  const Real Tgas = RadSystem<ODETest>::ComputeTgasFromEgas(rho0, y[0]);
+  // for n_H = 0.01 cm^{-3} (for IK cooling function)
+  const Real Teq = 160.52611612610758;
   const Real Terr_rel = std::abs(Tgas - Teq) / Teq;
   const Real reltol = 1.0e-4; // relative error tolerance
-  
+
   std::cout << "Final temperature: " << Tgas << std::endl;
   std::cout << "Relative error: " << Terr_rel << std::endl;
 
