@@ -23,7 +23,12 @@
 //   of 0.76 will result in negative electron densities at low
 //   temperature. Below, we set X = 1 / (1 + hydrogen_mass_cgs_e * n_He / n_H).
 
-constexpr Real cloudy_H_mass_fraction = 1. / (1. + 0.1 * 3.971);
+constexpr double cloudy_H_mass_fraction = 1. / (1. + 0.1 * 3.971);
+constexpr double sigma_T = 6.6524e-25; // Thomson cross section (cm^2)
+constexpr double electron_mass_cgs = 9.1093897e-28; // electron mass (g)
+constexpr double T_cmb = 2.725;                     // * (1 + z); // K
+constexpr double E_cmb =
+    radiation_constant_cgs_ * (T_cmb * T_cmb * T_cmb * T_cmb);
 
 struct cloudyGpuConstTables {
   // these are non-owning, so can make a copy of the whole struct
@@ -80,7 +85,23 @@ cloudy_cooling_function(Real const rho, Real const T,
       netLambda_over_nsq_prim + netLambda_over_nsq_metals;
 
   // multiply by the square of H mass density (**NOT number density**)
-  const double netLambda = (rhoH * rhoH) * netLambda_over_nsq;
+  double netLambda = (rhoH * rhoH) * netLambda_over_nsq;
+
+  // compute dimensionless mean mol. weight mu from mu(T) table
+  const double mu = interpolate2d(log_nH, log_T, tables.log_nH, tables.log_Tgas,
+                                  tables.meanMolWeight);
+
+  // compute electron density
+  const double n_e =
+      (rho / mu) * (1.0 - mu * (3.0 * cloudy_H_mass_fraction + 1.0) / 4.0);
+
+  // Compton term (CMB photons)
+  // [e.g., Hirata 2018: doi:10.1093/mnras/stx2854]
+  constexpr double Gamma_C =
+      (8. * sigma_T * E_cmb) / (3. * electron_mass_cgs * c_light_cgs_);
+  constexpr double C_n = Gamma_C * boltzmann_constant_cgs_ / (5. / 3. - 1.0);
+  const double compton_CMB = -C_n * (T - T_cmb) * n_e;
+  netLambda += compton_CMB;
 
   return netLambda;
 }
