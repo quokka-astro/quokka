@@ -1,0 +1,23 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  0.0  0.0  0.0 
+geometry.prob_hi     =  7.715e+19  3.086e+20  7.715e+19
+geometry.is_periodic =  1    0    1
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v               = 0     # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          = 128 512 128
+amr.max_level       = 0     # number of levels = max_level + 1
+amr.blocking_factor = 128   # grid size must be divisible by this
+amr.max_grid_size   = 128
+
+do_reflux = 0
+do_subcycle = 0
+grackle_data_file = "../extern/grackle_data_files/input/CloudyData_UVB=HM2012.h5"
