@@ -77,15 +77,14 @@ cloudy_cooling_function(Real const rho, Real const T,
   const double logMetalHeat = interpolate2d(log_nH, log_T, tables.log_nH,
                                             tables.log_Tgas, tables.metalHeat);
 
-  const double netLambda_over_nsq_prim =
+  const double netLambda_prim =
       std::pow(10., logPrimHeat) - std::pow(10., logPrimCool);
-  const double netLambda_over_nsq_metals =
+  const double netLambda_metals =
       std::pow(10., logMetalHeat) - std::pow(10., logMetalCool);
-  const double netLambda_over_nsq =
-      netLambda_over_nsq_prim + netLambda_over_nsq_metals;
+  const double netLambda = netLambda_prim + netLambda_metals;
 
   // multiply by the square of H mass density (**NOT number density**)
-  double netLambda = (rhoH * rhoH) * netLambda_over_nsq;
+  double Edot = (rhoH * rhoH) * netLambda;
 
   // compute dimensionless mean mol. weight mu from mu(T) table
   const double mu = interpolate2d(log_nH, log_T, tables.log_nH, tables.log_Tgas,
@@ -95,15 +94,26 @@ cloudy_cooling_function(Real const rho, Real const T,
   const double n_e =
       (rho / mu) * (1.0 - mu * (3.0 * cloudy_H_mass_fraction + 1.0) / 4.0);
 
+  // photoelectric heating term
+  const double Tsqrt = std::sqrt(T);
+  constexpr double phi = 0.5; // phi_PAH from Wolfire et al. (2003)
+  constexpr double G_0 = 1.7; // ISRF from Wolfire et al. (2003)
+  const double epsilon =
+      4.9e-2 / (1. + 4.0e-3 * std::pow(G_0 * Tsqrt / (n_e * phi), 0.73)) +
+      3.7e-2 * std::pow(T / 1.0e4, 0.7) /
+          (1. + 2.0e-4 * (G_0 * Tsqrt / (n_e * phi)));
+  const double Gamma_pe = 1.3e-24 * nH * epsilon * G_0;
+  Edot += Gamma_pe;
+
   // Compton term (CMB photons)
   // [e.g., Hirata 2018: doi:10.1093/mnras/stx2854]
   constexpr double Gamma_C =
       (8. * sigma_T * E_cmb) / (3. * electron_mass_cgs * c_light_cgs_);
   constexpr double C_n = Gamma_C * boltzmann_constant_cgs_ / (5. / 3. - 1.0);
   const double compton_CMB = -C_n * (T - T_cmb) * n_e;
-  netLambda += compton_CMB;
+  Edot += compton_CMB;
 
-  return netLambda;
+  return Edot;
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
