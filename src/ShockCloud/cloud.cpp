@@ -23,9 +23,9 @@
 #include "CloudyCooling.hpp"
 #include "ODEIntegrate.hpp"
 #include "RadhydroSimulation.hpp"
+#include "cloud.hpp"
 #include "hydro_system.hpp"
 #include "radiation_system.hpp"
-#include "cloud.hpp"
 
 using amrex::Real;
 
@@ -41,10 +41,11 @@ template <> struct EOS_Traits<ShockCloud> {
   static constexpr bool reconstruct_eint = true;
 };
 
-constexpr Real Tgas0 = 1.0e7; // K
-constexpr Real nH0 = 1.0e-4;  // cm^-3
-constexpr Real nH1 = 1.0e-1;  // cm^-3
+constexpr Real Tgas0 = 1.0e7;            // K
+constexpr Real nH0 = 1.0e-4;             // cm^-3
+constexpr Real nH1 = 1.0e-1;             // cm^-3
 constexpr Real R_cloud = 5.0 * 3.086e18; // cm [5 pc]
+constexpr Real M0 = 2.0;                 // Mach number of shock
 
 constexpr Real T_floor = 10.0;                             // K
 constexpr Real P0 = nH0 * Tgas0 * boltzmann_constant_cgs_; // erg cm^-3
@@ -186,13 +187,20 @@ AMRSimulation<ShockCloud>::setCustomBoundaryConditions(
 
   if (j >= hi[1]) {
     // x2 upper boundary -- constant
-    Real const rho = rho0;
+    // compute downstream shock conditions from rho0, P0, and M0
+    constexpr Real gamma = HydroSystem<ShockCloud>::gamma_;
+    constexpr Real rho2 =
+        rho0 * (gamma + 1.) * M0 * M0 / ((gamma - 1.) * M0 * M0 + 2.);
+    constexpr Real P2 = P0 * (2. * gamma * M0 * M0 - (gamma - 1.)) / (gamma + 1.);
+    Real const v2 = -M0 * std::sqrt(gamma * P2 / rho2);
+
+    Real const rho = rho2;
     Real const xmom = 0;
-    Real const ymom = rho * (-600.0e5); // [-600 km/s]
+    Real const ymom = rho2 * v2;
     Real const zmom = 0;
-    Real const Eint = (HydroSystem<ShockCloud>::gamma_ - 1.) * P0;
-    Real const Egas = RadSystem<ShockCloud>::ComputeEgasFromEint(
-        rho, xmom, ymom, zmom, Eint);
+    Real const Eint = (gamma - 1.) * P2;
+    Real const Egas =
+        RadSystem<ShockCloud>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
 
     consVar(i, j, k, RadSystem<ShockCloud>::gasDensity_index) = rho;
     consVar(i, j, k, RadSystem<ShockCloud>::x1GasMomentum_index) = xmom;
@@ -252,7 +260,7 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
       const Real Egas = state(i, j, k, HydroSystem<ShockCloud>::energy_index);
 
       Real Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom,
-                                                              x3Mom, Egas);
+                                                             x3Mom, Egas);
 
       ODEUserData user_data{rho, tables};
       quokka::valarray<Real, 1> y = {Eint};
