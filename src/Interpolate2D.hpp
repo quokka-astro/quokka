@@ -27,8 +27,10 @@ interpolate2d(double x, double y, amrex::Table1D<const double> const &xv,
   y = std::clamp(y, yv(yv.begin), yv(yv.end - 1));
 
   // compute indices
-  int ix = static_cast<int>((x - xv(xv.begin)) / dx);
-  int iy = static_cast<int>((y - yv(yv.begin)) / dy);
+  int ix = std::clamp(static_cast<int>((x - xv(xv.begin)) / dx), xv.begin,
+                      xv.end - 1);
+  int iy = std::clamp(static_cast<int>((y - yv(yv.begin)) / dy), yv.begin,
+                      yv.end - 1);
   int iix = (ix == xv.end - 1) ? ix : ix + 1;
   int iiy = (iy == yv.end - 1) ? iy : iy + 1;
 
