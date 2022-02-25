@@ -663,6 +663,16 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 {
 	BL_PROFILE("AMRSimulation::fillBoundaryConditions()");
 
+	// On a single level, any periodic boundaries are filled first
+	// 	then built-in boundary conditions are filled (with amrex::FilccCell()),
+	//	then user-defined Dirichlet boundary conditions are filled.
+	// (N.B.: The user-defined boundary function is called for *all* ghost cells.)
+
+	// [NOTE: If user-defined and periodic boundaries are both used
+	//  (for different coordinate dimensions), the edge/corner cells *will* be filled
+	//  by amrex::FilccCell(). Remember to fill *all* variables in the MultiFab, 
+	//  both hydro and radiation).
+
 	if (lev > 0) { // refined level
 		amrex::Vector<amrex::MultiFab *> fineData{&state};
 		amrex::Vector<amrex::Real> fineTime = {time};

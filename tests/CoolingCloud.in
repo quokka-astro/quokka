@@ -2,7 +2,7 @@
 # Problem size and geometry
 # *****************************************************************
 geometry.prob_lo     =  0.0  0.0  0.0 
-geometry.prob_hi     =  7.715e+19  3.086e+20  7.715e+19
+geometry.prob_hi     =  2.4688e+20  4.9376e+20  2.4688e+20  # 80 x 160 x 80 pc
 geometry.is_periodic =  1    0    1
 
 # *****************************************************************
@@ -13,7 +13,7 @@ amr.v               = 0     # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 128 512 128
+amr.n_cell          = 256 512 256
 amr.max_level       = 0     # number of levels = max_level + 1
 amr.blocking_factor = 128   # grid size must be divisible by this
 amr.max_grid_size   = 128

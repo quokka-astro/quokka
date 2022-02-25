@@ -82,11 +82,13 @@ void RadhydroSimulation<ShockCloud>::setInitialConditionsAtLevel(int lev) {
 #else
   auto const &h_table = table_data.table();
 #endif
+
+  // Initialize data on the host
+
   // 64-bit Mersenne Twister (do not use 32-bit version for sampling doubles!)
   std::mt19937_64 rng(1); // NOLINT
   std::uniform_real_distribution<double> sample_phase(0., 2.0 * M_PI);
 
-  // Initialize data on the host
   for (int j = tlo[0]; j <= thi[0]; ++j) {
     for (int i = tlo[1]; i <= thi[1]; ++i) {
       for (int k = tlo[2]; k <= thi[2]; ++k) {
@@ -94,11 +96,13 @@ void RadhydroSimulation<ShockCloud>::setInitialConditionsAtLevel(int lev) {
       }
     }
   }
+
 #ifdef AMREX_USE_GPU
   // Copy data to GPU memory
   table_data.copy(h_table_data);
   amrex::Gpu::streamSynchronize();
 #endif
+
   auto const &phase = table_data.const_table(); // const makes it read only
 
   // cooling tables
@@ -114,11 +118,6 @@ void RadhydroSimulation<ShockCloud>::setInitialConditionsAtLevel(int lev) {
       Real const z = prob_lo[2] + (k + Real(0.5)) * dx[2];
       Real const R = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2) +
                                std::pow(z - z0, 2));
-
-      state(i, j, k, RadSystem<ShockCloud>::radEnergy_index) = 0;
-      state(i, j, k, RadSystem<ShockCloud>::x1RadFlux_index) = 0;
-      state(i, j, k, RadSystem<ShockCloud>::x2RadFlux_index) = 0;
-      state(i, j, k, RadSystem<ShockCloud>::x3RadFlux_index) = 0;
 
       // compute perturbations
       Real delta_rho = 0;
@@ -154,6 +153,11 @@ void RadhydroSimulation<ShockCloud>::setInitialConditionsAtLevel(int lev) {
       state(i, j, k, RadSystem<ShockCloud>::x1GasMomentum_index) = xmom;
       state(i, j, k, RadSystem<ShockCloud>::x2GasMomentum_index) = ymom;
       state(i, j, k, RadSystem<ShockCloud>::x3GasMomentum_index) = zmom;
+
+      state(i, j, k, RadSystem<ShockCloud>::radEnergy_index) = 0;
+      state(i, j, k, RadSystem<ShockCloud>::x1RadFlux_index) = 0;
+      state(i, j, k, RadSystem<ShockCloud>::x2RadFlux_index) = 0;
+      state(i, j, k, RadSystem<ShockCloud>::x3RadFlux_index) = 0;
     });
   }
 
@@ -168,30 +172,26 @@ AMRSimulation<ShockCloud>::setCustomBoundaryConditions(
     int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
     const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
     int /*orig_comp*/) {
-#if (AMREX_SPACEDIM == 1)
-  auto i = iv.toArray()[0];
-  int j = 0;
-  int k = 0;
-#endif
-#if (AMREX_SPACEDIM == 2)
-  auto [i, j] = iv.toArray();
-  int k = 0;
-#endif
-#if (AMREX_SPACEDIM == 3)
   auto [i, j, k] = iv.toArray();
-#endif
 
   amrex::Box const &box = geom.Domain();
-  amrex::GpuArray<int, 3> lo = box.loVect3d();
-  amrex::GpuArray<int, 3> hi = box.hiVect3d();
+  const auto &domain_lo = box.loVect();
+  const auto &domain_hi = box.hiVect();
+  const int ilo = domain_lo[0];
+  const int jlo = domain_lo[1];
+  const int klo = domain_lo[2];
+  const int ihi = domain_hi[0];
+  const int jhi = domain_hi[1];
+  const int khi = domain_hi[2];
 
-  if (j >= hi[1]) {
+  if (j >= jhi) {
     // x2 upper boundary -- constant
     // compute downstream shock conditions from rho0, P0, and M0
     constexpr Real gamma = HydroSystem<ShockCloud>::gamma_;
     constexpr Real rho2 =
         rho0 * (gamma + 1.) * M0 * M0 / ((gamma - 1.) * M0 * M0 + 2.);
-    constexpr Real P2 = P0 * (2. * gamma * M0 * M0 - (gamma - 1.)) / (gamma + 1.);
+    constexpr Real P2 =
+        P0 * (2. * gamma * M0 * M0 - (gamma - 1.)) / (gamma + 1.);
     Real const v2 = -M0 * std::sqrt(gamma * P2 / rho2);
 
     Real const rho = rho2;
@@ -207,6 +207,11 @@ AMRSimulation<ShockCloud>::setCustomBoundaryConditions(
     consVar(i, j, k, RadSystem<ShockCloud>::x2GasMomentum_index) = ymom;
     consVar(i, j, k, RadSystem<ShockCloud>::x3GasMomentum_index) = zmom;
     consVar(i, j, k, RadSystem<ShockCloud>::gasEnergy_index) = Egas;
+
+    consVar(i, j, k, RadSystem<ShockCloud>::radEnergy_index) = 0;
+    consVar(i, j, k, RadSystem<ShockCloud>::x1RadFlux_index) = 0;
+    consVar(i, j, k, RadSystem<ShockCloud>::x2RadFlux_index) = 0;
+    consVar(i, j, k, RadSystem<ShockCloud>::x3RadFlux_index) = 0;
   }
 }
 
@@ -295,37 +300,34 @@ void HydroSystem<ShockCloud>::EnforcePressureFloor(
   // prevent vacuum creation
   amrex::Real const rho_floor = densityFloor; // workaround nvcc bug
 
-  amrex::ParallelFor(
-      indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-        amrex::Real const rho = state(i, j, k, density_index);
-        amrex::Real const vx1 = state(i, j, k, x1Momentum_index) / rho;
-        amrex::Real const vx2 = state(i, j, k, x2Momentum_index) / rho;
-        amrex::Real const vx3 = state(i, j, k, x3Momentum_index) / rho;
-        amrex::Real const vsq = (vx1 * vx1 + vx2 * vx2 + vx3 * vx3);
-        amrex::Real const Etot = state(i, j, k, energy_index);
+  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j,
+                                                      int k) noexcept {
+    amrex::Real const rho = state(i, j, k, density_index);
+    amrex::Real const vx1 = state(i, j, k, x1Momentum_index) / rho;
+    amrex::Real const vx2 = state(i, j, k, x2Momentum_index) / rho;
+    amrex::Real const vx3 = state(i, j, k, x3Momentum_index) / rho;
+    amrex::Real const vsq = (vx1 * vx1 + vx2 * vx2 + vx3 * vx3);
+    amrex::Real const Etot = state(i, j, k, energy_index);
 
-        amrex::Real rho_new = rho;
-        if (rho < rho_floor) {
-          rho_new = rho_floor;
-          state(i, j, k, density_index) = rho_new;
-        }
+    amrex::Real rho_new = rho;
+    if (rho < rho_floor) {
+      rho_new = rho_floor;
+      state(i, j, k, density_index) = rho_new;
+    }
 
-        amrex::Real const P_floor =
-            (rho_new / m_H) * boltzmann_constant_cgs_ * T_floor;
+    amrex::Real const P_floor =
+        (rho_new / m_H) * boltzmann_constant_cgs_ * T_floor;
 
-        if (!is_eos_isothermal()) {
-          // recompute gas energy (to prevent P < 0)
-          amrex::Real const Eint_star = Etot - 0.5 * rho_new * vsq;
-          amrex::Real const P_star = Eint_star * (gamma_ - 1.);
-          amrex::Real P_new = P_star;
-          if (P_star < P_floor) {
-            P_new = P_floor;
-            amrex::Real const Etot_new =
-                P_new / (gamma_ - 1.) + 0.5 * rho_new * vsq;
-            state(i, j, k, energy_index) = Etot_new;
-          }
-        }
-      });
+    // recompute gas energy (to prevent P < 0)
+    amrex::Real const Eint_star = Etot - 0.5 * rho_new * vsq;
+    amrex::Real const P_star = Eint_star * (gamma_ - 1.);
+    amrex::Real P_new = P_star;
+    if (P_star < P_floor) {
+      P_new = P_floor;
+      amrex::Real const Etot_new = P_new / (gamma_ - 1.) + 0.5 * rho_new * vsq;
+      state(i, j, k, energy_index) = Etot_new;
+    }
+  });
 }
 
 auto problem_main() -> int {
@@ -340,10 +342,12 @@ auto problem_main() -> int {
   for (int n = 0; n < nvars; ++n) {
     boundaryConditions[n].setLo(0, amrex::BCType::int_dir); // periodic
     boundaryConditions[n].setHi(0, amrex::BCType::int_dir);
+
     boundaryConditions[n].setLo(1, amrex::BCType::foextrap); // extrapolate
     boundaryConditions[n].setHi(1, amrex::BCType::ext_dir);  // Dirichlet
+
 #if AMREX_SPACEDIM == 3
-    boundaryConditions[n].setLo(2, amrex::BCType::int_dir); // periodic
+    boundaryConditions[n].setLo(2, amrex::BCType::int_dir);
     boundaryConditions[n].setHi(2, amrex::BCType::int_dir);
 #endif
   }
