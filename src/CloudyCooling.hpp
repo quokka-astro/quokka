@@ -139,7 +139,7 @@ ComputeTgasFromEgas(double rho, double Egas, double gamma,
   // (Grackle does this with a fixed-point iteration. We use a more robust
   // method, similar to Brent's method, the TOMS748 method.)
   const Real reltol = 1.0e-6;
-  const Real reltol_abort = 1.0e-2;
+  const Real reltol_abort = 0.02;
   const int maxIterLimit = 100;
   int maxIter = maxIterLimit;
 
@@ -168,8 +168,8 @@ ComputeTgasFromEgas(double rho, double Egas, double gamma,
                                     tables.log_Tgas, tables.meanMolWeight);
   const Real relerr = std::abs((C * mu_sol - T_sol) / T_sol);
   if (relerr > reltol_abort) {
-    printf("Tgas iteration failed! mu = %f, nH = %f, Tgas = %f, relerr = %f\n",
-           mu_sol, nH, T_sol, relerr);
+    printf("Tgas iteration failed! mu = %f, nH = %f, Tgas = %f, maxIter = %d, relerr = %f\n",
+           mu_sol, nH, T_sol, maxIter, relerr);
     amrex::Abort(
         "Tgas iteration failed to converge to better than reltol_abort!");
   }
