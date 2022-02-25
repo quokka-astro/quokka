@@ -139,7 +139,11 @@ ComputeTgasFromEgas(double rho, double Egas, double gamma,
   // (Grackle does this with a fixed-point iteration. We use a more robust
   // method, similar to Brent's method, the TOMS748 method.)
   const Real reltol = 1.0e-6;
-  const Real reltol_abort = 0.02;
+  const Real reltol_abort =
+      0.02; // for the Grackle tables, the interpolation accuracy is low enough
+            // that a root does not exist to better than this tolerance for some
+            // parts of temperature space. Setting this less than 0.02 will lead
+            // to *lots* of warning messages for gas around ~17,000 K.
   const int maxIterLimit = 100;
   int maxIter = maxIterLimit;
 
@@ -168,7 +172,8 @@ ComputeTgasFromEgas(double rho, double Egas, double gamma,
                                     tables.log_Tgas, tables.meanMolWeight);
   const Real relerr = std::abs((C * mu_sol - T_sol) / T_sol);
   if (relerr > reltol_abort) {
-    printf("Tgas iteration failed! mu = %f, nH = %f, Tgas = %f, maxIter = %d, relerr = %f\n",
+    printf("Tgas iteration failed! mu = %f, nH = %f, Tgas = %f, maxIter = %d, "
+           "relerr = %f\n",
            mu_sol, nH, T_sol, maxIter, relerr);
     amrex::Abort(
         "Tgas iteration failed to converge to better than reltol_abort!");
