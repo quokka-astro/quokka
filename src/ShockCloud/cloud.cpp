@@ -177,12 +177,7 @@ AMRSimulation<ShockCloud>::setCustomBoundaryConditions(
   amrex::Box const &box = geom.Domain();
   const auto &domain_lo = box.loVect();
   const auto &domain_hi = box.hiVect();
-  const int ilo = domain_lo[0];
-  const int jlo = domain_lo[1];
-  const int klo = domain_lo[2];
-  const int ihi = domain_hi[0];
   const int jhi = domain_hi[1];
-  const int khi = domain_hi[2];
 
   if (j >= jhi) {
     // x2 upper boundary -- constant

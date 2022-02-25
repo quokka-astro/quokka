@@ -15,6 +15,9 @@ endif()
 # HDF5
 find_package(HDF5 REQUIRED)
 
+# Boost
+find_package(Boost 1.76.0 REQUIRED)
+
 if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
     # only works with gcc!
     include(CodeCoverage)
@@ -34,6 +37,7 @@ endif()
 include_directories(${amrex_INCLUDE_DIRS_RET})
 include_directories(${fmt_INCLUDE_DIRS_RET})
 include_directories(${HDF5_INCLUDE_DIRS_RET})
+include_directories(${Boost_INCLUDE_DIRS_RET})
 include_directories(${CMAKE_SOURCE_DIR}/src)
 
 link_libraries(AMReX::amrex)

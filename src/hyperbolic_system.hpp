@@ -36,12 +36,6 @@
 
 //#define MULTIDIM_EXTREMA_CHECK
 
-/// Provide type-safe global sign ('sgn') function.
-template <typename T> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto sgn(T val) -> int
-{
-	return (T(0) < val) - (val < T(0));
-}
-
 namespace quokka {
 	enum redoFlag {none = 0, redo = 1};
 } // namespace quokka

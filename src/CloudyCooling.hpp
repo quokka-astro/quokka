@@ -17,6 +17,8 @@
 #include "GrackleDataReader.hpp"
 #include "Interpolate2D.hpp"
 #include "radiation_system.hpp"
+#include "root_finding.hpp"
+#include <limits>
 
 // From Grackle source code (initialize_chemistry_data.c, line 114):
 //   In fully tabulated mode, set H mass fraction according to
@@ -134,44 +136,45 @@ ComputeTgasFromEgas(double rho, double Egas, double gamma,
                  (boltzmann_constant_cgs_ * (rho / hydrogen_mass_cgs_));
 
   // solve for mu(T)*C == T.
-  // (Grackle does this with a fixed-point iteration.)
-  Real mu_prev = 1.;
-  Real mu_guess = 1.;
-  Real Tgas = C * mu_guess;
-  const Real reltol = 1.0e-3;
+  // (Grackle does this with a fixed-point iteration. We use a more robust
+  // method, similar to Brent's method, the TOMS748 method.)
+  const Real reltol = 1.0e-6;
   const Real reltol_abort = 1.0e-2;
-  const int maxIter = 40;
-  bool success = false;
+  const int maxIterLimit = 100;
+  int maxIter = maxIterLimit;
 
-  for (int n = 0; n < maxIter; ++n) {
-    mu_prev = mu_guess; // save old mu
+  auto f = [log_nH, C, tables](const Real &T) noexcept {
+    // compute new mu from mu(log10 T) table
+    Real log_T = clamp(std::log10(T), 1., 9.);
+    Real mu = interpolate2d(log_nH, log_T, tables.log_nH, tables.log_Tgas,
+                            tables.meanMolWeight);
+    Real fun = C * mu - T;
+    return fun;
+  };
 
-    // compute new guess for Tgas, bounded between 10 K and 1e9 K
-    Tgas = std::clamp(C * mu_guess, 10., 1.0e9);
+  // compute temperature bounds using physics
+  const Real T_min = C * 0.60; // assuming fully ionized (mu ~ 0.6)
+  const Real T_max = C * 2.33; // assuming neutral fully molecular (mu ~ 2.33)
 
-    // compute new mu from mu(T) table
-    mu_guess = interpolate2d(log_nH, std::log10(Tgas), tables.log_nH,
-                             tables.log_Tgas, tables.meanMolWeight);
+  // do root-finding
+  eps_tolerance<Real> tol(reltol);
+  auto bounds = toms748_solve(f, T_min, T_max, tol, maxIter);
+  const Real T_sol = 0.5 * (bounds.first + bounds.second);
+  AMREX_ALWAYS_ASSERT_WITH_MESSAGE(maxIter < maxIterLimit,
+                                   "Temperature bisection failed!");
 
-    // damp iteration
-    mu_guess = 0.5 * (mu_guess + mu_prev);
-
-    // check if converged
-    if (std::abs((C * mu_guess - Tgas) / Tgas) < reltol) {
-      success = true;
-      break;
-    }
-  }
-  
   // check if convergence is really bad. if so, abort the simulation.
-  if (std::abs((C * mu_guess - Tgas) / Tgas) > reltol_abort) {
-    printf("mu_guess = %f, mu_prev = %f, nH = %f, Tgas = %f\n", mu_guess,
-           mu_prev, nH, Tgas);
+  const Real mu_sol = interpolate2d(log_nH, std::log10(T_sol), tables.log_nH,
+                                    tables.log_Tgas, tables.meanMolWeight);
+  const Real relerr = std::abs((C * mu_sol - T_sol) / T_sol);
+  if (relerr > reltol_abort) {
+    printf("Tgas iteration failed! mu = %f, nH = %f, Tgas = %f, relerr = %f\n",
+           mu_sol, nH, T_sol, relerr);
     amrex::Abort(
         "Tgas iteration failed to converge to better than reltol_abort!");
   }
 
-  return Tgas;
+  return T_sol;
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
