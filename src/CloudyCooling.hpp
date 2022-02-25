@@ -9,6 +9,8 @@
 /// \brief Defines methods for interpolating cooling rates from Cloudy tables.
 ///
 
+#include "AMReX.H"
+#include "AMReX_BLassert.H"
 #include "AMReX_Extension.H"
 #include "AMReX_GpuQualifiers.H"
 
@@ -137,6 +139,7 @@ ComputeTgasFromEgas(double rho, double Egas, double gamma,
   Real mu_guess = 1.;
   Real Tgas = C * mu_guess;
   const Real reltol = 1.0e-3;
+  const Real reltol_abort = 1.0e-2;
   const int maxIter = 40;
   bool success = false;
 
@@ -159,8 +162,15 @@ ComputeTgasFromEgas(double rho, double Egas, double gamma,
       break;
     }
   }
-  AMREX_ALWAYS_ASSERT(success);
-  //   "Tgas iteration failed to converge!"
+  
+  // check if convergence is really bad. if so, abort the simulation.
+  if (std::abs((C * mu_guess - Tgas) / Tgas) > reltol_abort) {
+    printf("mu_guess = %f, mu_prev = %f, nH = %f, Tgas = %f\n", mu_guess,
+           mu_prev, nH, Tgas);
+    amrex::Abort(
+        "Tgas iteration failed to converge to better than reltol_abort!");
+  }
+
   return Tgas;
 }
 
