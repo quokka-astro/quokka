@@ -230,7 +230,8 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array
 
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
 
-	// fuse loops into a single GPU kernel to avoid kernel launch overhead
+	// TODO(benwibking): fuse loops into a single GPU kernel to avoid kernel launch overhead
+	// (WARNING: do not do this! this causes a race condition. need to investigate why.)
 	amrex::ParallelFor(
 		interfaceRange, nvars, // interface-centered kernel
 		[=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
@@ -261,7 +262,8 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array
 
 		   // a_L,i in C&W
 		   rightState(i, j, k, n) = interface;
-		},
+		});
+	amrex::ParallelFor(
 		cellRange, nvars, // cell-centered kernel
 		[=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
 		    // permute array indices according to dir
