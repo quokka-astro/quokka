@@ -140,9 +140,9 @@ ComputeTgasFromEgas(double rho, double Egas, double gamma,
   // method, similar to Brent's method, the TOMS748 method.)
   const Real reltol = 1.0e-6;
   const Real reltol_abort =
-      0.03; // for the Grackle tables, the interpolation accuracy is low enough
+      0.04; // for the Grackle tables, the interpolation accuracy is low enough
             // that a root does not exist to better than this tolerance for some
-            // parts of temperature space. Setting this less than 0.03 will lead
+            // parts of temperature space. Setting this less than 0.04 will lead
             // to *lots* of warning messages for gas around ~17,000 K.
   const int maxIterLimit = 100;
   int maxIter = maxIterLimit;
