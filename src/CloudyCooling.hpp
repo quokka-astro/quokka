@@ -161,13 +161,13 @@ ComputeTgasFromEgas(double rho, double Egas, double gamma,
   const Real T_max = C * 2.33; // assuming neutral fully molecular (mu ~ 2.33)
 
   // do root-finding
-  eps_tolerance<Real> tol(reltol);
-  auto bounds = toms748_solve(f, T_min, T_max, tol, maxIter);
+  quokka::math::eps_tolerance<Real> tol(reltol);
+  auto bounds = quokka::math::toms748_solve(f, T_min, T_max, tol, maxIter);
   const Real T_sol = 0.5 * (bounds.first + bounds.second);
   AMREX_ALWAYS_ASSERT_WITH_MESSAGE(maxIter < maxIterLimit,
                                    "Temperature bisection failed!");
 
-  // check if convergence is really bad. if so, abort the simulation.
+  // check if convergence is really bad
   const Real mu_sol = interpolate2d(log_nH, std::log10(T_sol), tables.log_nH,
                                     tables.log_Tgas, tables.meanMolWeight);
   const Real relerr = std::abs((C * mu_sol - T_sol) / T_sol);
@@ -175,8 +175,6 @@ ComputeTgasFromEgas(double rho, double Egas, double gamma,
     printf("Tgas iteration failed! mu = %f, nH = %f, Tgas = %f, maxIter = %d, "
            "relerr = %f\n",
            mu_sol, nH, T_sol, maxIter, relerr);
-    amrex::Abort(
-        "Tgas iteration failed to converge to better than reltol_abort!");
   }
 
   return T_sol;
