@@ -4,9 +4,6 @@
 [submodule "extern/amrex"]
 	path = extern/amrex
 	url = https://github.com/AMReX-Codes/amrex.git
-[submodule "extern/sundials"]
-	path = extern/sundials
-	url = https://github.com/LLNL/sundials.git
 [submodule "extern/grackle_data_files"]
 	path = extern/grackle_data_files
 	url = https://github.com/grackle-project/grackle_data_files.git
