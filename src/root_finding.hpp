@@ -12,11 +12,51 @@
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
 
-//#include <boost/math/tools/precision.hpp>
-//#include <boost/math/policies/error_handling.hpp>
-#include <boost/math/tools/config.hpp>
-//#include <boost/math/special_functions/sign.hpp>
-//#include <boost/cstdint.hpp>
+#define BOOST_MATH_STD_USING_CORE                                              \
+  using std::abs;                                                              \
+  using std::acos;                                                             \
+  using std::cos;                                                              \
+  using std::fmod;                                                             \
+  using std::modf;                                                             \
+  using std::tan;                                                              \
+  using std::asin;                                                             \
+  using std::cosh;                                                             \
+  using std::frexp;                                                            \
+  using std::pow;                                                              \
+  using std::tanh;                                                             \
+  using std::atan;                                                             \
+  using std::exp;                                                              \
+  using std::ldexp;                                                            \
+  using std::sin;                                                              \
+  using std::atan2;                                                            \
+  using std::fabs;                                                             \
+  using std::log;                                                              \
+  using std::sinh;                                                             \
+  using std::ceil;                                                             \
+  using std::floor;                                                            \
+  using std::log10;                                                            \
+  using std::sqrt;
+
+#define BOOST_MATH_STD_USING BOOST_MATH_STD_USING_CORE
+
+#ifdef BOOST_MATH_INSTRUMENT
+
+#include <iomanip>
+#include <iostream>
+#include <typeinfo>
+
+#define BOOST_MATH_INSTRUMENT_CODE(x)                                          \
+  std::cout << std::setprecision(35) << __FILE__ << ":" << __LINE__ << " "     \
+            << x << std::endl;
+#define BOOST_MATH_INSTRUMENT_VARIABLE(name)                                   \
+  BOOST_MATH_INSTRUMENT_CODE(BOOST_STRINGIZE(name) << " = " << name)
+
+#else
+
+#define BOOST_MATH_INSTRUMENT_CODE(x)
+#define BOOST_MATH_INSTRUMENT_VARIABLE(name)
+
+#endif
 
 #include "math_impl.hpp"
 

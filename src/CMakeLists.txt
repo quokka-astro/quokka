@@ -15,9 +15,6 @@ endif()
 # HDF5
 find_package(HDF5 REQUIRED)
 
-# Boost
-find_package(Boost 1.71.0 REQUIRED)
-
 if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
     # only works with gcc!
     include(CodeCoverage)
