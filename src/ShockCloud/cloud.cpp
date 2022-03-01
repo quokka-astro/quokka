@@ -289,6 +289,39 @@ void RadhydroSimulation<ShockCloud>::computeAfterLevelAdvance(
 }
 
 template <>
+void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(int lev,
+                                                       std::string const &dname,
+                                                       amrex::MultiFab &mf,
+                                                       const int ncomp_in) const {
+  // compute derived variables and save in 'mf'
+  if (dname == "temperature") {
+    const int ncomp = ncomp_in;
+    auto tables = cloudyTables.const_tables();
+
+    for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
+      const amrex::Box &indexRange = iter.validbox();
+      auto const &output = mf.array(iter);
+      auto const &state = state_new_[lev].const_array(iter);
+
+      amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j,
+                                                          int k) noexcept {
+        Real rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
+        Real x1Mom = state(i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
+        Real x2Mom = state(i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
+        Real x3Mom = state(i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
+        Real Egas = state(i, j, k, HydroSystem<ShockCloud>::energy_index);
+        Real Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(
+            rho, x1Mom, x2Mom, x3Mom, Egas);
+        Real Tgas = ComputeTgasFromEgas(
+            rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
+
+        output(i, j, k, ncomp) = Tgas;
+      });
+    }
+  }
+}
+
+template <>
 void HydroSystem<ShockCloud>::EnforcePressureFloor(
     amrex::Real const densityFloor, amrex::Real const /*pressureFloor*/,
     amrex::Box const &indexRange, amrex::Array4<amrex::Real> const &state) {

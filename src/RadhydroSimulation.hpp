@@ -136,6 +136,9 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 		amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
     	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo);
 
+	// compute derived variables
+	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const override;
+
 	// tag cells for refinement
 	void ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override;
 
@@ -286,6 +289,13 @@ void RadhydroSimulation<problem_t>::computeAfterLevelAdvance(int lev, amrex::Rea
 								 amrex::Real dt_lev, int iteration, int ncycle)
 {
 	// user should implement if desired
+}
+
+template <typename problem_t>
+void RadhydroSimulation<problem_t>::ComputeDerivedVar(int lev, std::string const &dname,
+								amrex::MultiFab &mf, const int ncomp) const
+{
+	// compute derived variables and save in 'mf' -- user should implement
 }
 
 template <typename problem_t>
