@@ -19,17 +19,21 @@ interpolate2d(double x, double y, amrex::Table1D<const double> const &xv,
               amrex::Table2D<const double> const &table) -> double {
   // return the bilinearly-interpolated value in table
   // NOTE: table must be uniformly spaced in xv and yv
+  double xi = xv(xv.begin);
+  double xf = xv(xv.end - 1);
+  double yi = yv(yv.begin);
+  double yf = yv(yv.end - 1);
 
-  double dx = (xv(xv.end - 1) - xv(xv.begin)) / (xv.end - xv.begin);
-  double dy = (yv(yv.end - 1) - yv(yv.begin)) / (yv.end - yv.begin);
+  double dx = (xf - xi) / static_cast<double>(xv.end - xv.begin);
+  double dy = (yf - yi) / static_cast<double>(yv.end - yv.begin);
 
-  x = std::clamp(x, xv(xv.begin), xv(xv.end - 1));
-  y = std::clamp(y, yv(yv.begin), yv(yv.end - 1));
+  x = std::clamp(x, xi, xf);
+  y = std::clamp(y, yi, yf);
 
   // compute indices
-  int ix = std::clamp(static_cast<int>((x - xv(xv.begin)) / dx), xv.begin,
+  int ix = std::clamp(static_cast<int>(std::floor((x - xi) / dx)), xv.begin,
                       xv.end - 1);
-  int iy = std::clamp(static_cast<int>((y - yv(yv.begin)) / dy), yv.begin,
+  int iy = std::clamp(static_cast<int>(std::floor((y - yi) / dy)), yv.begin,
                       yv.end - 1);
   int iix = (ix == xv.end - 1) ? ix : ix + 1;
   int iiy = (iy == yv.end - 1) ? iy : iy + 1;
@@ -41,11 +45,11 @@ interpolate2d(double x, double y, amrex::Table1D<const double> const &xv,
   double y2 = yv(iiy);
 
   // compute weights
-  double volinv = 1.0 / ((x2 - x1) * (y2 - y1));
-  double w11 = (x2 - x) * (y2 - y) * volinv;
-  double w12 = (x2 - x) * (y - y1) * volinv;
-  double w21 = (x - x1) * (y2 - y) * volinv;
-  double w22 = (x - x1) * (y - y1) * volinv;
+  double vol = ((x2 - x1) * (y2 - y1));
+  double w11 = (x2 - x) * (y2 - y) / vol;
+  double w12 = (x2 - x) * (y - y1) / vol;
+  double w21 = (x - x1) * (y2 - y) / vol;
+  double w22 = (x - x1) * (y - y1) / vol;
 
   double value = w11 * table(ix, iy) + w12 * table(ix, iiy) +
                  w21 * table(iix, iy) + w22 * table(iix, iiy);

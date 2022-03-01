@@ -138,12 +138,7 @@ ComputeTgasFromEgas(double rho, double Egas, double gamma,
   // solve for mu(T)*C == T.
   // (Grackle does this with a fixed-point iteration. We use a more robust
   // method, similar to Brent's method, the TOMS748 method.)
-  const Real reltol = 1.0e-6;
-  const Real reltol_abort =
-      0.04; // for the Grackle tables, the interpolation accuracy is low enough
-            // that a root does not exist to better than this tolerance for some
-            // parts of temperature space. Setting this less than 0.04 will lead
-            // to *lots* of warning messages for gas around ~17,000 K.
+  const Real reltol = 1.0e-5;
   const int maxIterLimit = 100;
   int maxIter = maxIterLimit;
 
@@ -167,16 +162,22 @@ ComputeTgasFromEgas(double rho, double Egas, double gamma,
   AMREX_ALWAYS_ASSERT_WITH_MESSAGE(maxIter < maxIterLimit,
                                    "Temperature bisection failed!");
 
+#if 0
+  const Real reltol_abort =
+      0.03; // For some reason, setting this less than 0.04 will lead
+            // to *lots* of warning messages for gas around ~17,000 K.
   // check if convergence is really bad
   const Real mu_sol = interpolate2d(log_nH, std::log10(T_sol), tables.log_nH,
                                     tables.log_Tgas, tables.meanMolWeight);
   const Real relerr = std::abs((C * mu_sol - T_sol) / T_sol);
   if (relerr > reltol_abort) {
-    printf("Tgas iteration failed! mu = %f, nH = %f, Tgas = %f, maxIter = %d, "
-           "relerr = %f\n",
-           mu_sol, nH, T_sol, maxIter, relerr);
+    printf(
+        "\nTgas iteration failed! rho = %.17g, Eint = %.17g, mu = %f, Tgas = %f, "
+        "bounds.first = "
+        "%f, bounds.second = %f, maxIter = %d, relerr = %f\n",
+        rho, Egas, mu_sol, T_sol, bounds.first, bounds.second, maxIter, relerr);
   }
-
+#endif
   return T_sol;
 }
 
