@@ -25,6 +25,7 @@ constexpr bool simulate_full_box = true;
 
 template <> struct EOS_Traits<SedovProblem> {
   static constexpr double gamma = 5. / 3.;
+  static constexpr bool reconstruct_eint = false;
 };
 
 template <>

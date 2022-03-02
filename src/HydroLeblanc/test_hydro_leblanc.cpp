@@ -28,6 +28,7 @@ struct ShocktubeProblem {};
 
 template <> struct EOS_Traits<ShocktubeProblem> {
   static constexpr double gamma = (5. / 3.);
+  static constexpr bool reconstruct_eint = true;
 };
 
 template <>

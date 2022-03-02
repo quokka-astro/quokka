@@ -90,6 +90,9 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
     	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
 		amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi);
 
+	// compute derived variables
+	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const override;
+
 	// tag cells for refinement
 	void ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override;
 
@@ -135,6 +138,12 @@ void AdvectionSimulation<problem_t>::setInitialConditionsAtLevel(int level)
 template <typename problem_t> void AdvectionSimulation<problem_t>::computeAfterTimestep()
 {
 	// do nothing -- user should implement using problem-specific template specialization
+}
+
+
+template <typename problem_t> void AdvectionSimulation<problem_t>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const
+{
+	// user should implement
 }
 
 template <typename problem_t>

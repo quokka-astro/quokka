@@ -39,6 +39,7 @@
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
+#include "AMReX_Vector.H"
 #include "AMReX_VisMF.H"
 #include "AMReX_YAFluxRegister.H"
 #include <AMReX_Geometry.H>
@@ -101,6 +102,9 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	virtual void computeAfterTimestep() = 0;
 	virtual void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) = 0;
 
+	// compute derived variables
+	virtual void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const = 0;
+
 	// tag cells for refinement
 	void ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override = 0;
 
@@ -152,7 +156,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	// I/O functions
 	[[nodiscard]] auto PlotFileName(int lev) const -> std::string;
-	[[nodiscard]] auto PlotFileMF() const -> amrex::Vector<const amrex::MultiFab *>;
+	[[nodiscard]] auto PlotFileMF() const -> amrex::Vector<amrex::MultiFab>;
+	[[nodiscard]] auto PlotFileMFAtLevel(int lev) const -> amrex::MultiFab;
 	void WritePlotFile() const;
 	void WriteCheckpointFile() const;
 	void ReadCheckpointFile();
@@ -176,6 +181,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	int ncomp_ = 0;	   // = number of components (conserved variables) for each array
 	int ncompPrimitive_ = 0; // number of primitive variables
 	amrex::Vector<std::string> componentNames_;
+	amrex::Vector<std::string> derivedNames_;
 	bool areInitialConditionsDefined_ = false;
 
 	/// output parameters
@@ -201,6 +207,15 @@ void AMRSimulation<problem_t>::initialize(amrex::Vector<amrex::BCRec> &boundaryC
 	BL_PROFILE("AMRSimulation::initialize()");
 
 	readParameters();
+
+	// print derived vars
+	if (!derivedNames_.empty()) {
+		amrex::Print() << "Using derived variables:\n";
+		for (auto const &name : derivedNames_) {
+			amrex::Print() << "\t" << name << "\n";
+		}
+		amrex::Print() << "\n";
+	}
 
 	int nlevs_max = max_level + 1;
 	istep.resize(nlevs_max, 0);
@@ -268,6 +283,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// specify this on the commmand-line in order to restart from a checkpoint
 	// file
 	pp.query("restartfile", restart_chkfile);
+
+	// Specify derived variables to save to plotfiles
+	pp.queryarr("derived_vars", derivedNames_);
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::setInitialConditions()
@@ -663,6 +681,16 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 {
 	BL_PROFILE("AMRSimulation::fillBoundaryConditions()");
 
+	// On a single level, any periodic boundaries are filled first
+	// 	then built-in boundary conditions are filled (with amrex::FilccCell()),
+	//	then user-defined Dirichlet boundary conditions are filled.
+	// (N.B.: The user-defined boundary function is called for *all* ghost cells.)
+
+	// [NOTE: If user-defined and periodic boundaries are both used
+	//  (for different coordinate dimensions), the edge/corner cells *will* be filled
+	//  by amrex::FilccCell(). Remember to fill *all* variables in the MultiFab, 
+	//  both hydro and radiation).
+
 	if (lev > 0) { // refined level
 		amrex::Vector<amrex::MultiFab *> fineData{&state};
 		amrex::Vector<amrex::Real> fineTime = {time};
@@ -862,13 +890,40 @@ auto AMRSimulation<problem_t>::PlotFileName(int lev) const -> std::string
 	return amrex::Concatenate(plot_file, lev, 5);
 }
 
+template <typename problem_t>
+auto AMRSimulation<problem_t>::PlotFileMFAtLevel(int lev) const
+    -> amrex::MultiFab
+{
+	// Combine state_new_[lev] and derived variables in a new MF
+	int comp = 0;
+	const int nGrow = 0;
+	const int nCompState = state_new_[lev].nComp();
+	const int nCompDeriv = derivedNames_.size();
+	const int nCompPlotMF = nCompState + nCompDeriv;
+	amrex::MultiFab plotMF(grids[lev], dmap[lev], nCompPlotMF, nGrow);
+
+	// Copy data from state variables
+	for (int i = 0; i < nCompState; i++) {
+		amrex::MultiFab::Copy(plotMF, state_new_[lev], i, comp, 1, nGrow);
+		comp++;
+	}
+
+	// Compute derived vars
+	for (auto const &dname : derivedNames_) {
+		ComputeDerivedVar(lev, dname, plotMF, comp);
+		comp++;
+	}
+
+	return plotMF;
+}
+
 // put together an array of multifabs for writing
 template <typename problem_t>
-auto AMRSimulation<problem_t>::PlotFileMF() const -> amrex::Vector<const amrex::MultiFab *>
+auto AMRSimulation<problem_t>::PlotFileMF() const -> amrex::Vector<amrex::MultiFab>
 {
-	amrex::Vector<const amrex::MultiFab *> r;
+	amrex::Vector<amrex::MultiFab> r;
 	for (int i = 0; i <= finest_level; ++i) {
-		r.push_back(&state_new_[i]);
+		r.push_back(PlotFileMFAtLevel(i));
 	}
 	return r;
 }
@@ -879,17 +934,21 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile() con
 	BL_PROFILE("AMRSimulation::WritePlotFile()");
 
 	const std::string &plotfilename = PlotFileName(istep[0]);
-	const auto &mf = PlotFileMF();
-	const auto &varnames = componentNames_;
+	amrex::Vector<amrex::MultiFab> mf = PlotFileMF();
+	amrex::Vector<const amrex::MultiFab*> mf_ptr = amrex::GetVecOfConstPtrs(mf);
+
+	amrex::Vector<std::string> varnames;
+	varnames.insert(varnames.end(), componentNames_.begin(), componentNames_.end());
+	varnames.insert(varnames.end(), derivedNames_.begin(), derivedNames_.end());
 
 	amrex::Print() << "Writing plotfile " << plotfilename << "\n";
 
 #ifdef AMREX_USE_HDF5
-	amrex::WriteMultiLevelPlotfileHDF5(plotfilename, finest_level + 1, mf, varnames, Geom(),
+	amrex::WriteMultiLevelPlotfileHDF5(plotfilename, finest_level + 1, mf_ptr, varnames, Geom(),
 				       tNew_[0], istep, refRatio());
 #else
-	amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, mf, varnames, Geom(),
-				       tNew_[0], istep, refRatio());
+	amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, mf_ptr,
+					   varnames, Geom(), tNew_[0], istep, refRatio());
 #endif
 }
 

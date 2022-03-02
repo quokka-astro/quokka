@@ -22,6 +22,7 @@ struct WaveProblem {};
 
 template <> struct EOS_Traits<WaveProblem> {
   static constexpr double gamma = 5. / 3.;
+  static constexpr bool reconstruct_eint = true;
 };
 
 constexpr double rho0 = 1.0; // background density
