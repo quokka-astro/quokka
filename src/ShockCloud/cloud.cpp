@@ -168,10 +168,9 @@ void RadhydroSimulation<ShockCloud>::setInitialConditionsAtLevel(int lev) {
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 AMRSimulation<ShockCloud>::setCustomBoundaryConditions(
-    const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar,
-    int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
-    const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
-    int /*orig_comp*/) {
+    const amrex::IntVect &iv, amrex::Array4<Real> const &consVar, int /*dcomp*/,
+    int /*numcomp*/, amrex::GeometryData const &geom, const Real /*time*/,
+    const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/) {
   auto [i, j, k] = iv.toArray();
 
   amrex::Box const &box = geom.Domain();
@@ -211,7 +210,7 @@ AMRSimulation<ShockCloud>::setCustomBoundaryConditions(
 }
 
 struct ODEUserData {
-  amrex::Real rho;
+  Real rho;
   cloudyGpuConstTables tables;
 };
 
@@ -282,17 +281,15 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
 
 template <>
 void RadhydroSimulation<ShockCloud>::computeAfterLevelAdvance(
-    int lev, amrex::Real /*time*/, amrex::Real dt_lev, int /*iteration*/,
-    int /*ncycle*/) {
+    int lev, Real /*time*/, Real dt_lev, int /*iteration*/, int /*ncycle*/) {
   // compute operator split physics
   computeCooling(state_new_[lev], dt_lev, cloudyTables);
 }
 
 template <>
-void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(int lev,
-                                                       std::string const &dname,
-                                                       amrex::MultiFab &mf,
-                                                       const int ncomp_in) const {
+void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(
+    int lev, std::string const &dname, amrex::MultiFab &mf,
+    const int ncomp_in) const {
   // compute derived variables and save in 'mf'
   if (dname == "temperature") {
     const int ncomp = ncomp_in;
@@ -323,39 +320,77 @@ void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(int lev,
 
 template <>
 void HydroSystem<ShockCloud>::EnforcePressureFloor(
-    amrex::Real const densityFloor, amrex::Real const /*pressureFloor*/,
-    amrex::Box const &indexRange, amrex::Array4<amrex::Real> const &state) {
+    Real const densityFloor, Real const /*pressureFloor*/,
+    amrex::Box const &indexRange, amrex::Array4<Real> const &state) {
   // prevent vacuum creation
-  amrex::Real const rho_floor = densityFloor; // workaround nvcc bug
+  Real const rho_floor = densityFloor; // workaround nvcc bug
 
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j,
                                                       int k) noexcept {
-    amrex::Real const rho = state(i, j, k, density_index);
-    amrex::Real const vx1 = state(i, j, k, x1Momentum_index) / rho;
-    amrex::Real const vx2 = state(i, j, k, x2Momentum_index) / rho;
-    amrex::Real const vx3 = state(i, j, k, x3Momentum_index) / rho;
-    amrex::Real const vsq = (vx1 * vx1 + vx2 * vx2 + vx3 * vx3);
-    amrex::Real const Etot = state(i, j, k, energy_index);
+    Real const rho = state(i, j, k, density_index);
+    Real const vx1 = state(i, j, k, x1Momentum_index) / rho;
+    Real const vx2 = state(i, j, k, x2Momentum_index) / rho;
+    Real const vx3 = state(i, j, k, x3Momentum_index) / rho;
+    Real const vsq = (vx1 * vx1 + vx2 * vx2 + vx3 * vx3);
+    Real const Etot = state(i, j, k, energy_index);
 
-    amrex::Real rho_new = rho;
+    Real rho_new = rho;
     if (rho < rho_floor) {
       rho_new = rho_floor;
       state(i, j, k, density_index) = rho_new;
     }
 
-    amrex::Real const P_floor =
-        (rho_new / m_H) * boltzmann_constant_cgs_ * T_floor;
+    Real const P_floor = (rho_new / m_H) * boltzmann_constant_cgs_ * T_floor;
 
     // recompute gas energy (to prevent P < 0)
-    amrex::Real const Eint_star = Etot - 0.5 * rho_new * vsq;
-    amrex::Real const P_star = Eint_star * (gamma_ - 1.);
-    amrex::Real P_new = P_star;
+    Real const Eint_star = Etot - 0.5 * rho_new * vsq;
+    Real const P_star = Eint_star * (gamma_ - 1.);
+    Real P_new = P_star;
     if (P_star < P_floor) {
       P_new = P_floor;
-      amrex::Real const Etot_new = P_new / (gamma_ - 1.) + 0.5 * rho_new * vsq;
+      Real const Etot_new = P_new / (gamma_ - 1.) + 0.5 * rho_new * vsq;
       state(i, j, k, energy_index) = Etot_new;
     }
   });
+}
+
+template <>
+void RadhydroSimulation<ShockCloud>::ErrorEst(int lev, amrex::TagBoxArray &tags,
+                                              Real /*time*/, int /*ngrow*/) {
+  // tag cells for refinement
+  const Real eta_threshold = 0.2; // gradient refinement threshold
+  const Real q_min = rho0;        // minimum density for refinement
+
+  for (amrex::MFIter mfi(state_new_[lev]); mfi.isValid(); ++mfi) {
+    const amrex::Box &box = mfi.validbox();
+    const auto state = state_new_[lev].const_array(mfi);
+    const auto tag = tags.array(mfi);
+    const int nidx = HydroSystem<ShockCloud>::density_index;
+
+    amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+      Real const q = state(i, j, k, nidx);
+
+      Real const q_xplus = state(i + 1, j, k, nidx);
+      Real const q_xminus = state(i - 1, j, k, nidx);
+      Real const q_yplus = state(i, j + 1, k, nidx);
+      Real const q_yminus = state(i, j - 1, k, nidx);
+      Real const q_zplus = state(i, j, k + 1, nidx);
+      Real const q_zminus = state(i, j, k - 1, nidx);
+
+      Real const del_x =
+          std::max(std::abs(q_xplus - q), std::abs(q - q_xminus));
+      Real const del_y =
+          std::max(std::abs(q_yplus - q), std::abs(q - q_yminus));
+      Real const del_z =
+          std::max(std::abs(q_zplus - q), std::abs(q - q_zminus));
+
+      Real const gradient_indicator = std::max({del_x, del_y, del_z}) / q;
+
+      if ((gradient_indicator > eta_threshold) && (q > q_min)) {
+        tag(i, j, k) = amrex::TagBox::SET;
+      }
+    });
+  }
 }
 
 auto problem_main() -> int {
@@ -374,10 +409,8 @@ auto problem_main() -> int {
     boundaryConditions[n].setLo(1, amrex::BCType::foextrap); // extrapolate
     boundaryConditions[n].setHi(1, amrex::BCType::ext_dir);  // Dirichlet
 
-#if AMREX_SPACEDIM == 3
     boundaryConditions[n].setLo(2, amrex::BCType::int_dir);
     boundaryConditions[n].setHi(2, amrex::BCType::int_dir);
-#endif
   }
 
   RadhydroSimulation<ShockCloud> sim(boundaryConditions);
