@@ -20,6 +20,8 @@
 
 #include "GrackleDataReader.hpp"
 #include "AMReX_Arena.H"
+#include "AMReX_BLassert.H"
+#include "AMReX_Print.H"
 #include "AMReX_TableData.H"
 
 static const bool grackle_verbose = true;
@@ -35,8 +37,10 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name,
   }
 
   if (grackle_verbose) {
-    fprintf(stdout, "Initializing Cloudy cooling: %s.\n", group_name);
-    fprintf(stdout, "cloudy_table_file: %s.\n", grackle_data_file.c_str());
+    amrex::Print() << fmt::format("Initializing Cloudy cooling: {}.\n",
+                                  group_name);
+    amrex::Print() << fmt::format("cloudy_table_file: {}.\n",
+                                  grackle_data_file);
   }
 
   // Get unit conversion factors (assuming z=0)
@@ -62,9 +66,9 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name,
   AMREX_ALWAYS_ASSERT_WITH_MESSAGE(file_id != h5_error,
                                    "Failed to open Grackle data file!");
 
-  if (H5Aexists(file_id, "old_style") != 0) {
-    amrex::Abort("Old-style Grackle data tables are not supported!");
-  }
+  AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+      H5Aexists(file_id, "old_style") == 0,
+      "Old-style Grackle data tables are not supported!");
 
   // Open cooling dataset and get grid dimensions
   std::string parameter_name;
@@ -73,40 +77,18 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name,
   dset_id = H5Dopen2(file_id, parameter_name.c_str(),
                      H5P_DEFAULT); // new API in HDF5 1.8.0+
 
-  if (dset_id == h5_error) {
-    fprintf(stderr, "Can't open Cooling in %s.\n", grackle_data_file.c_str());
-    amrex::Abort();
-  }
+  AMREX_ALWAYS_ASSERT_WITH_MESSAGE(dset_id != h5_error,
+                                   "Can't open Cooling table!");
 
   {
     // Grid rank
     attr_id = H5Aopen_name(dset_id, "Rank");
 
-    if (attr_id == h5_error) {
-      fprintf(stderr, "Failed to open Rank attribute in Cooling dataset.\n");
-      amrex::Abort();
-    }
-
     int64_t temp_int = 0;
     status = H5Aread(attr_id, HDF5_I8, &temp_int);
-
-    if (attr_id == h5_error) {
-      fprintf(stderr, "Failed to read Rank attribute in Cooling dataset.\n");
-      amrex::Abort();
-    }
-
     my_cloudy.grid_rank = temp_int;
 
-    if (grackle_verbose) {
-      fprintf(stdout, "Cloudy cooling grid rank: %ld.\n", my_cloudy.grid_rank);
-    }
-
     status = H5Aclose(attr_id);
-
-    if (attr_id == h5_error) {
-      fprintf(stderr, "Failed to close Rank attribute in Cooling dataset.\n");
-      amrex::Abort();
-    }
   }
 
   {
@@ -114,41 +96,13 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name,
     std::vector<int64_t> temp_int_arr(my_cloudy.grid_rank);
     attr_id = H5Aopen_name(dset_id, "Dimension");
 
-    if (attr_id == h5_error) {
-      fprintf(stderr,
-              "Failed to open Dimension attribute in Cooling dataset.\n");
-      amrex::Abort();
-    }
-
     status = H5Aread(attr_id, HDF5_I8, temp_int_arr.data());
-
-    if (attr_id == h5_error) {
-      fprintf(stderr,
-              "Failed to read Dimension attribute in Cooling dataset.\n");
-      amrex::Abort();
-    }
-
-    if (grackle_verbose) {
-      fprintf(stdout, "Cloudy cooling grid dimensions:");
-    }
 
     for (int64_t q = 0; q < my_cloudy.grid_rank; q++) {
       my_cloudy.grid_dimension[q] = temp_int_arr[q];
-      if (grackle_verbose) {
-        fprintf(stdout, " %ld", my_cloudy.grid_dimension[q]);
-      }
-    }
-    if (grackle_verbose) {
-      std::cout << std::endl;
     }
 
     status = H5Aclose(attr_id);
-
-    if (attr_id == h5_error) {
-      fprintf(stderr,
-              "Failed to close Dimension attribute in Cooling dataset.\n");
-      amrex::Abort();
-    }
   }
 
   // Grid parameters
@@ -164,22 +118,10 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name,
 
     attr_id = H5Aopen_name(dset_id, parameter_name.c_str());
 
-    if (attr_id == h5_error) {
-      fprintf(stderr, "Failed to open %s attribute in Cooling dataset.\n",
-              parameter_name.c_str());
-      amrex::Abort();
-    }
-
     status = H5Aread(attr_id, HDF5_R8, temp_data);
 
-    if (attr_id == h5_error) {
-      fprintf(stderr, "Failed to read %s attribute in Cooling dataset.\n",
-              parameter_name.c_str());
-      amrex::Abort();
-    }
-
-    my_cloudy.grid_parameters[q] =
-        amrex::Table1D<double>(temp_data, 0, static_cast<int>(my_cloudy.grid_dimension[q]));
+    my_cloudy.grid_parameters[q] = amrex::Table1D<double>(
+        temp_data, 0, static_cast<int>(my_cloudy.grid_dimension[q]));
 
     for (int64_t w = 0; w < my_cloudy.grid_dimension[q]; w++) {
       if (q < my_cloudy.grid_rank - 1) {
@@ -191,21 +133,14 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name,
     }
 
     if (grackle_verbose) {
-      std::cout << fmt::format(
-          "{}: {} to {} ({} steps).\n", parameter_name,
+      amrex::Print() << fmt::format(
+          "\t{}: {} to {} ({} steps).\n", parameter_name,
           my_cloudy.grid_parameters[q](0),
           my_cloudy.grid_parameters[q](my_cloudy.grid_dimension[q] - 1),
           my_cloudy.grid_dimension[q]);
     }
 
     status = H5Aclose(attr_id);
-
-    if (attr_id == h5_error) {
-      std::cerr << fmt::format(
-          "Failed to close {} attribute in Cooling dataset.\n",
-          parameter_name.c_str());
-      amrex::Abort();
-    }
   }
 
   my_cloudy.data_size = 1;
@@ -221,10 +156,8 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name,
     status =
         H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, temp_data);
 
-    if (status == h5_error) {
-      fprintf(stderr, "Failed to read Cooling dataset.\n");
-      amrex::Abort();
-    }
+    AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error,
+                                     "Failed to read Cooling dataset!");
 
     amrex::GpuArray<int, 3> lo{0, 0, 0};
     amrex::GpuArray<int, 3> hi{static_cast<int>(my_cloudy.grid_dimension[2]),
@@ -242,11 +175,6 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name,
     }
 
     status = H5Dclose(dset_id);
-
-    if (status == h5_error) {
-      fprintf(stderr, "Failed to close Cooling dataset.\n");
-      amrex::Abort();
-    }
   }
 
   {
@@ -258,18 +186,11 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name,
     dset_id = H5Dopen2(file_id, parameter_name.c_str(),
                        H5P_DEFAULT); // new API in HDF5 1.8.0+
 
-    if (dset_id == h5_error) {
-      fprintf(stderr, "Can't open Heating in %s.\n", grackle_data_file.c_str());
-      amrex::Abort();
-    }
-
     status =
         H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, temp_data);
 
-    if (status == h5_error) {
-      fprintf(stderr, "Failed to read Heating dataset.\n");
-      amrex::Abort();
-    }
+    AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error,
+                                     "Failed to read Heating dataset!");
 
     amrex::GpuArray<int, 3> lo{0, 0, 0};
     amrex::GpuArray<int, 3> hi{static_cast<int>(my_cloudy.grid_dimension[2]),
@@ -287,11 +208,6 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name,
     }
 
     status = H5Dclose(dset_id);
-
-    if (status == h5_error) {
-      fprintf(stderr, "Failed to close Heating dataset.\n");
-      amrex::Abort();
-    }
   }
 
   if (std::string(group_name) == "Primordial") {
@@ -312,36 +228,21 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name,
     dset_id = H5Dopen2(file_id, parameter_name.c_str(),
                        H5P_DEFAULT); // new API in HDF5 1.8.0+
 
-    if (dset_id == h5_error) {
-      fprintf(stderr, "Can't open MMW in %s.\n", grackle_data_file.c_str());
-      amrex::Abort();
-    }
-
     status =
         H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, temp_data);
 
-    if (status == h5_error) {
-      fprintf(stderr, "Failed to read MMW dataset.\n");
-      amrex::Abort();
-    }
+    AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error,
+                                     "Failed to read MMW dataset!");
 
     status = H5Dclose(dset_id);
-
-    if (status == h5_error) {
-      fprintf(stderr, "Failed to close MMW dataset.\n");
-      amrex::Abort();
-    }
   }
 
   status = H5Fclose(file_id);
 
-  if (my_cloudy.grid_rank > CLOUDY_MAX_DIMENSION) {
-    fprintf(stderr,
-            "Error: rank of Cloudy cooling data must be less than or equal to "
-            "%d.\n",
-            CLOUDY_MAX_DIMENSION);
-    amrex::Abort();
-  }
+  AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+      my_cloudy.grid_rank <= CLOUDY_MAX_DIMENSION,
+      "Error: rank of Cloudy cooling data must be less than or equal to "
+      "CLOUDY_MAX_DIMENSION");
 }
 
 auto extract_2d_table(amrex::Table3D<double> const &table3D, int redshift_index)
@@ -356,7 +257,8 @@ auto extract_2d_table(amrex::Table3D<double> const &table3D, int redshift_index)
   // here
   amrex::Array<int, 2> newlo{lo[2], lo[0]};
   amrex::Array<int, 2> newhi{hi[2] - 1, hi[0] - 1};
-  amrex::TableData<double, 2> tableData(newlo, newhi, amrex::The_Managed_Arena());
+  amrex::TableData<double, 2> tableData(newlo, newhi,
+                                        amrex::The_Managed_Arena());
   auto table = tableData.table();
 
   for (int i = newlo[0]; i <= newhi[0]; ++i) {
@@ -376,8 +278,9 @@ auto copy_1d_table(amrex::Table1D<double> const &table1D)
   auto hi = table1D.end;
   amrex::Array<int, 1> newlo{lo};
   amrex::Array<int, 1> newhi{hi - 1};
-  
-  amrex::TableData<double, 1> tableData(newlo, newhi, amrex::The_Managed_Arena());
+
+  amrex::TableData<double, 1> tableData(newlo, newhi,
+                                        amrex::The_Managed_Arena());
   auto table = tableData.table();
 
   for (int i = newlo[0]; i <= newhi[0]; ++i) {
