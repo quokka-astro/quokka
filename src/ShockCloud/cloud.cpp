@@ -359,7 +359,7 @@ void RadhydroSimulation<ShockCloud>::ErrorEst(int lev, amrex::TagBoxArray &tags,
                                               Real /*time*/, int /*ngrow*/) {
   // tag cells for refinement
   const Real eta_threshold = 0.2; // gradient refinement threshold
-  const Real q_min = rho0;        // minimum density for refinement
+  const Real q_min = 0.1 * rho1;  // minimum density for refinement
 
   for (amrex::MFIter mfi(state_new_[lev]); mfi.isValid(); ++mfi) {
     const amrex::Box &box = mfi.validbox();
