@@ -13,6 +13,7 @@
 #include "AMReX_BLProfiler.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_FabArray.H"
+#include "AMReX_Geometry.H"
 #include "AMReX_GpuDevice.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParallelContext.H"
@@ -20,6 +21,7 @@
 #include "AMReX_SPACE.H"
 #include "AMReX_TableData.H"
 
+#include "AMReX_iMultiFab.H"
 #include "CloudyCooling.hpp"
 #include "ODEIntegrate.hpp"
 #include "RadhydroSimulation.hpp"
@@ -242,10 +244,15 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
 
   auto tables = cloudyTables.const_tables();
 
+  const auto &ba = mf.boxArray();
+  const auto &dmap = mf.DistributionMap();
+  amrex::iMultiFab nsubstepsMF(ba, dmap, 1, 0);
+
   // loop over all cells in MultiFab mf
   for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
     const amrex::Box &indexRange = iter.validbox();
     auto const &state = mf.array(iter);
+    auto const &nsubsteps = nsubstepsMF.array(iter);
 
     amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j,
                                                         int k) noexcept {
@@ -269,7 +276,10 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
                                              tables)};
 
       // do integration with RK2 (Heun's method)
-      rk_adaptive_integrate(user_rhs, 0, y, dt, &user_data, rtol, abstol);
+      int nsteps = 0;
+      rk_adaptive_integrate(user_rhs, 0, y, dt, &user_data, rtol, abstol,
+                            nsteps);
+      nsubsteps(i, j, k) = nsteps;
 
       const Real Egas_new = RadSystem<ShockCloud>::ComputeEgasFromEint(
           rho, x1Mom, x2Mom, x3Mom, y[0]);
@@ -277,6 +287,14 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
       state(i, j, k, HydroSystem<ShockCloud>::energy_index) = Egas_new;
     });
   }
+
+  int nmin = nsubstepsMF.min(0);
+  int nmax = nsubstepsMF.max(0);
+  Real navg = static_cast<Real>(nsubstepsMF.sum(0)) /
+              static_cast<Real>(nsubstepsMF.boxArray().numPts());
+  amrex::Print() << fmt::format(
+      "\tcooling substeps (per cell): min {}, avg {}, max {}\n", nmin, navg,
+      nmax);
 }
 
 template <>

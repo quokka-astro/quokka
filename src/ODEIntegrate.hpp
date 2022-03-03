@@ -142,7 +142,8 @@ template <typename F, int N>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void
 rk_adaptive_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0, Real t1,
                       void *user_data, Real reltol,
-                      quokka::valarray<Real, N> const &abstol) {
+                      quokka::valarray<Real, N> const &abstol,
+                      int &steps_taken) {
   // Integrate dy/dt = rhs(y, t) from t0 to t1,
   // with local truncation error bounded by relative tolerance 'reltol'
   // and absolute tolerances 'abstol'.
@@ -228,6 +229,7 @@ rk_adaptive_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0, Real t1,
     if (time >= t1) {
       // we are at t1
       success = true;
+      steps_taken = i + 1;
       break;
     }
   }
