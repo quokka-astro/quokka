@@ -8,7 +8,7 @@
 ///
 
 // uncomment this to debug the root-finding code (does NOT work on GPU!)
-#define BOOST_MATH_INSTRUMENT
+//#define BOOST_MATH_INSTRUMENT
 
 #include <random>
 #include <vector>

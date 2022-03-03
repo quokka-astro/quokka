@@ -64,7 +64,8 @@ auto problem_main() -> int {
   quokka::valarray<Real, 1> y = {Eint0};
   quokka::valarray<Real, 1> abstol = 1.0e-20 * y;
   const Real rtol = 1.0e-4; // appropriate for RK12
-  rk_adaptive_integrate(user_rhs, 0, y, max_time, &user_data, rtol, abstol);
+  int steps_taken = 0;
+  rk_adaptive_integrate(user_rhs, 0, y, max_time, &user_data, rtol, abstol, steps_taken);
 
   const Real Tgas = RadSystem<ODETest>::ComputeTgasFromEgas(rho0, y[0]);
   // for n_H = 0.01 cm^{-3} (for IK cooling function)
