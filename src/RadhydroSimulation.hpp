@@ -438,6 +438,8 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 template <typename problem_t>
 void RadhydroSimulation<problem_t>::FixupState(int lev)
 {
+	BL_PROFILE("RadhydroSimulation::FixupState()");
+
 	for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.fabbox(); // include ghost zones!
 		auto const &stateNew = state_new_[lev].array(iter);
