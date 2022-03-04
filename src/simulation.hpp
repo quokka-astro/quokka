@@ -432,8 +432,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::LoadBalance()
 		// actually do the load balancing
         if (doLoadBalance)
         {
-			amrex::Print() << "Re-balancing grids on level " << lev << "...\n";
-			
+			amrex::Print() << "Re-balancing grids on level " << lev
+						   << " with proposedEfficiency = " << proposedEfficiency << "...\n";
+
             amrex::Vector<int> pmap;
             if (amrex::ParallelDescriptor::MyProc() == amrex::ParallelDescriptor::IOProcessorNumber())
             {
