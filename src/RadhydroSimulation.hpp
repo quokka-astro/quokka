@@ -141,6 +141,9 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	// compute derived variables
 	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const override;
 
+	// fix-up states
+	void FixupState(int level) override;
+
 	// tag cells for refinement
 	void ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override;
 
@@ -396,7 +399,7 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 	// since we are starting a new timestep, need to swap old and new state vectors
 	std::swap(state_old_[lev], state_new_[lev]);
 
-	// check hydro states before update
+	// check hydro states before update (this can be caused by the flux register!)
 	CHECK_HYDRO_STATES(state_old_[lev]);
 
 	// advance hydro
@@ -428,6 +431,20 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 	// check state validity
 	AMREX_ASSERT(!state_new_[lev].contains_nan(0, state_new_[lev].nComp()));
 	AMREX_ASSERT(!state_new_[lev].contains_nan()); // check ghost zones
+}
+
+// fix-up any unphysical states created by AMR operations
+// (e.g., caused by the flux register or from interpolation)
+template <typename problem_t>
+void RadhydroSimulation<problem_t>::FixupState(int lev)
+{
+	for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
+		const amrex::Box &indexRange = iter.fabbox(); // include ghost zones!
+		auto const &stateNew = state_new_[lev].array(iter);
+
+		// fix hydro state
+		HydroSystem<problem_t>::EnforcePressureFloor(densityFloor_, pressureFloor_, indexRange, stateNew);
+	}
 }
 
 template <typename problem_t>

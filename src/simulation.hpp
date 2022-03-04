@@ -108,6 +108,10 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// compute derived variables
 	virtual void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const = 0;
 
+	// fix-up any unphysical states created by AMR operations
+	// (e.g., caused by the flux register or from interpolation)
+	virtual void FixupState(int level) = 0;
+
 	// tag cells for refinement
 	void ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override = 0;
 
@@ -626,6 +630,7 @@ void AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time,
 		}
 
 		AverageDownTo(lev); // average lev+1 down to lev
+		FixupState(lev); // fix any unphysical states created by reflux or averaging
 	}
 }
 
