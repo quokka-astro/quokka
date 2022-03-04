@@ -164,7 +164,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void WritePlotFile() const;
 	void WriteCheckpointFile() const;
 	void ReadCheckpointFile();
-	void LoadBalance() const;
+	void LoadBalance();
 	void ResetCosts();
 
       protected:
@@ -185,7 +185,9 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
     // Collection of LayoutData to keep track of weights used in load balancing
     amrex::Vector<std::unique_ptr<amrex::LayoutData<amrex::Real> > > costs_;
 	int do_timing = 1; // 1 == measure hydro advance time per grid, 0 == don't time
-    // reads the "load_balance_intervals" string int the input file
+	amrex::Real load_balance_efficiency_ratio_threshold = 1.1;
+	amrex::Real load_balance_knapsack_factor = 1.5;
+    // reads the "load_balance_intervals" string from the input file
     IntervalsParser load_balance_intervals;
 
 	// Nghost = number of ghost cells for each array
@@ -379,10 +381,10 @@ auto ComputeLBStatistics (const amrex::DistributionMapping& dm,
                           const amrex::Vector<amrex::Real>& cost)
 						  -> std::tuple<amrex::Real, amrex::Real, amrex::Real>;
 
-template <typename problem_t> void AMRSimulation<problem_t>::LoadBalance() const
+template <typename problem_t> void AMRSimulation<problem_t>::LoadBalance()
 {
-	// output load balancing statistics (for now)
-	amrex::Print() << "\nLoad balancing statistics "
+	// output load balance statistics
+	amrex::Print() << "\nLoad balance statistics "
 					  "(efficiency = avg cost_per_rank / max cost_per_rank):\n";
 	
 	for(int lev = 0; lev <= finest_level; ++lev) {
@@ -395,10 +397,62 @@ template <typename problem_t> void AMRSimulation<problem_t>::LoadBalance() const
 		if (amrex::ParallelDescriptor::IOProcessor()) {
 			auto [minCost, avgCost, maxCost] = ComputeLBStatistics(dm, cost_vec);
 			amrex::Real efficiency = avgCost / maxCost;
-			amrex::Print() << 
-				fmt::format("\t[level {}] efficiency {}\tmin {:e}\tavg {:e}\tmax {:e}\n",
-					lev, efficiency, minCost, avgCost, maxCost);
+			amrex::Print() << fmt::format("\t[level {}] efficiency {}\n", lev, efficiency);
 		}
+	}
+
+	const int nLevels = finestLevel();
+    for (int lev = 0; lev <= nLevels; ++lev)
+    {
+        int doLoadBalance = false;
+
+        // Compute a new distribution mapping based on costs
+        amrex::DistributionMapping newdm;
+        const amrex::Real nboxes = costs_[lev]->size();
+        const amrex::Real nprocs = amrex::ParallelContext::NProcsSub();
+        const int nmax = static_cast<int>(std::ceil(nboxes/nprocs*load_balance_knapsack_factor));
+        amrex::Real currentEfficiency = 0.0;
+        amrex::Real proposedEfficiency = 0.0;
+
+        newdm = amrex::DistributionMapping::makeKnapSack(*costs_[lev],
+                                                currentEfficiency, proposedEfficiency,
+                                                nmax,
+                                                false,
+                                                amrex::ParallelDescriptor::IOProcessorNumber());
+
+		// decide whether to load balance
+        if ((load_balance_efficiency_ratio_threshold > 0.0)
+            && (amrex::ParallelDescriptor::MyProc() == amrex::ParallelDescriptor::IOProcessorNumber()))
+        {
+            doLoadBalance = (proposedEfficiency > load_balance_efficiency_ratio_threshold*currentEfficiency);
+        }
+        amrex::ParallelDescriptor::Bcast(&doLoadBalance, 1,
+                                  amrex::ParallelDescriptor::IOProcessorNumber());
+
+		// actually do the load balancing
+        if (doLoadBalance)
+        {
+			amrex::Print() << "Re-balancing grids on level " << lev << "...\n";
+			
+            amrex::Vector<int> pmap;
+            if (amrex::ParallelDescriptor::MyProc() == amrex::ParallelDescriptor::IOProcessorNumber())
+            {
+                pmap = newdm.ProcessorMap();
+            } else
+            {
+                pmap.resize(static_cast<std::size_t>(nboxes));
+            }
+            amrex::ParallelDescriptor::Bcast(&pmap[0], pmap.size(),
+				amrex::ParallelDescriptor::IOProcessorNumber());
+
+            if (amrex::ParallelDescriptor::MyProc() != amrex::ParallelDescriptor::IOProcessorNumber())
+            {
+                newdm = amrex::DistributionMapping(pmap);
+            }
+
+			// move grids to new ranks
+            RemakeLevel(lev, tNew_[lev], boxArray(lev), newdm);
+        }
 	}
 }
 
@@ -693,6 +747,10 @@ void AMRSimulation<problem_t>::RemakeLevel(int level, amrex::Real time, const am
 			(*costs_[level])[i] = 0.0;
 		}
 	}
+
+	// if this is called from LoadBalance(),
+	// we need to save the new DistributionMapping in AmrCore
+	SetDistributionMap(level, dm);
 }
 
 // Delete level data. Overrides the pure virtual function in AmrCore
