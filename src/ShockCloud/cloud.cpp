@@ -16,6 +16,7 @@
 #include "AMReX_FabArray.H"
 #include "AMReX_Geometry.H"
 #include "AMReX_GpuDevice.H"
+#include "AMReX_IntVect.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParallelContext.H"
 #include "AMReX_ParallelDescriptor.H"
@@ -288,6 +289,17 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
                             nsteps);
       nsubsteps(i, j, k) = nsteps;
 
+      // check if integration failed
+      if (nsteps >= maxStepsODEIntegrate) {
+        Real T = ComputeTgasFromEgas(rho, Eint, HydroSystem<ShockCloud>::gamma_,
+                                     tables);
+        Real Edot = cloudy_cooling_function(rho, T, tables);
+        Real t_cool = Eint / Edot;
+        printf("max substeps exceeded! rho = %g, Eint = %g, T = %g, cooling "
+               "time = %g\n",
+               rho, Eint, T, t_cool);
+      }
+
       const Real Egas_new = RadSystem<ShockCloud>::ComputeEgasFromEint(
           rho, x1Mom, x2Mom, x3Mom, y[0]);
 
@@ -309,6 +321,7 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
   amrex::Print() << fmt::format(
       "\tcooling substeps (per cell): min {}, avg {}, max {}\n", nmin, navg,
       nmax);
+  
   if (nmax >= maxStepsODEIntegrate) {
     amrex::Abort("Max steps exceeded in cooling solve!");
   }
