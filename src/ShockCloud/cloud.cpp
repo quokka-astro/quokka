@@ -9,6 +9,7 @@
 #include <random>
 #include <vector>
 
+#include "AMReX.H"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLProfiler.H"
 #include "AMReX_BLassert.H"
@@ -235,7 +236,8 @@ user_rhs(Real /*t*/, quokka::valarray<Real, 1> &y_data,
 }
 
 void computeCooling(amrex::MultiFab &mf, const Real dt_in,
-                    cloudy_tables &cloudyTables, amrex::LayoutData<amrex::Real> *cost) {
+                    cloudy_tables &cloudyTables,
+                    amrex::LayoutData<amrex::Real> *cost) {
   BL_PROFILE("RadhydroSimulation::computeCooling()")
 
   const Real dt = dt_in;
@@ -307,6 +309,9 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
   amrex::Print() << fmt::format(
       "\tcooling substeps (per cell): min {}, avg {}, max {}\n", nmin, navg,
       nmax);
+  if (nmax >= maxStepsODEIntegrate) {
+    amrex::Abort("Max steps exceeded in cooling solve!");
+  }
 }
 
 template <>

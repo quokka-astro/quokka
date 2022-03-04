@@ -138,6 +138,8 @@ error_norm(quokka::valarray<Real, N> const &y0,
   return err;
 }
 
+constexpr int maxStepsODEIntegrate = 2000;
+
 template <typename F, int N>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void
 rk_adaptive_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0, Real t1,
@@ -164,7 +166,6 @@ rk_adaptive_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0, Real t1,
   const Real eta_min_errfail_multiple = 0.1;
 
   // integration loop
-  const int maxSteps = 2000;
   Real time = t0;
   Real dt = dt_guess;
   const Real hmin = 1.0e-4;
@@ -173,7 +174,7 @@ rk_adaptive_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0, Real t1,
   quokka::valarray<Real, N> ynew{};
 
   bool success = false;
-  for (int i = 0; i < maxSteps; ++i) {
+  for (int i = 0; i < maxStepsODEIntegrate; ++i) {
     if ((time + dt) > t1) {
       // reduce dt to end at t1
       dt = t1 - time;
@@ -233,8 +234,11 @@ rk_adaptive_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0, Real t1,
       break;
     }
   }
+  if (!success) {
+    steps_taken = maxStepsODEIntegrate;
+  }
   AMREX_ALWAYS_ASSERT_WITH_MESSAGE(success,
-                                   "ODE integration exceeded maxSteps!");
+                                   "ODE integration exceeded maxStepsODEIntegrate!");
 }
 
 
