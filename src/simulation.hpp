@@ -15,6 +15,7 @@
 #include <limits>
 #include <memory>
 #include <ostream>
+#include <tuple>
 
 // library headers
 #include "AMReX.H"
@@ -49,6 +50,7 @@
 #include <AMReX_PlotFileUtil.H>
 #include <AMReX_Print.H>
 #include <AMReX_Utility.H>
+#include <fmt/core.h>
 
 // internal headers
 #include "CheckNaN.hpp"
@@ -163,6 +165,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void WriteCheckpointFile() const;
 	void ReadCheckpointFile();
 	void LoadBalance() const;
+	void ResetCosts();
 
       protected:
 	amrex::Vector<amrex::BCRec> boundaryConditions_; // on level 0
@@ -372,6 +375,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 	}
 }
 
+auto ComputeLBStatistics (const amrex::DistributionMapping& dm,
+                          const amrex::Vector<amrex::Real>& cost)
+						  -> std::tuple<amrex::Real, amrex::Real, amrex::Real>;
+
 template <typename problem_t> void AMRSimulation<problem_t>::LoadBalance() const
 {
 	// output load balancing statistics (for now)
@@ -381,15 +388,30 @@ template <typename problem_t> void AMRSimulation<problem_t>::LoadBalance() const
 	for(int lev = 0; lev <= finest_level; ++lev) {
 		auto const &dm = dmap[lev];
 		amrex::LayoutData<amrex::Real>* cost = costs_[lev].get();
-		amrex::Vector<Real> cost_vec(cost->size());
-	    amrex::ParallelDescriptor::GatherLayoutDataToVector<Real>(*cost, cost_vec,
+		amrex::Vector<amrex::Real> cost_vec(cost->size());
+	    amrex::ParallelDescriptor::GatherLayoutDataToVector<amrex::Real>(*cost, cost_vec,
 			amrex::ParallelDescriptor::IOProcessorNumber());
 		
 		if (amrex::ParallelDescriptor::IOProcessor()) {
-			amrex::Real efficiency = NAN;
-			amrex::DistributionMapping::ComputeDistributionMappingEfficiency(
-				dm, cost_vec, &efficiency);
-			amrex::Print() << fmt::format("\t[level {}] efficiency = {}\n", lev, efficiency);
+			auto [minCost, avgCost, maxCost] = ComputeLBStatistics(dm, cost_vec);
+			amrex::Real efficiency = avgCost / maxCost;
+			amrex::Print() << 
+				fmt::format("\t[level {}] efficiency = {}\tmin {} avg {} max {}\n",
+					lev, efficiency, minCost, avgCost, maxCost);
+		}
+	}
+}
+
+template <typename problem_t> void AMRSimulation<problem_t>::ResetCosts()
+{
+	// set cost counters to zero
+	for(int lev = 0; lev <= finest_level; ++lev) {
+		auto const &dm = dmap[lev];
+		amrex::LayoutData<amrex::Real>* cost = costs_[lev].get();
+		const auto iarr = cost->IndexArray();
+		for (int i : iarr)
+		{
+			(*cost)[i] = 0.0;
 		}
 	}
 }
@@ -421,7 +443,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
         if (step > 0 && load_balance_intervals.contains(step+1))
         {
             LoadBalance();
-            //ResetCosts();
+            ResetCosts();
         }
         for (int lev = 0; lev <= finest_level; ++lev)
         {
