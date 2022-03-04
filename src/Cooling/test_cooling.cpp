@@ -272,7 +272,8 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
                                              tables)};
 
       // do integration with RK2 (Heun's method)
-      rk_adaptive_integrate(user_rhs, 0, y, dt, &user_data, rtol, abstol);
+      int steps_taken = 0;
+      rk_adaptive_integrate(user_rhs, 0, y, dt, &user_data, rtol, abstol, steps_taken);
 
       const Real Egas_new = RadSystem<CoolingTest>::ComputeEgasFromEint(
           rho, x1Mom, x2Mom, x3Mom, y[0]);
