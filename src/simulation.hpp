@@ -34,6 +34,7 @@
 #include "AMReX_INT.H"
 #include "AMReX_IndexType.H"
 #include "AMReX_IntVect.H"
+#include "AMReX_LayoutData.H"
 #include "AMReX_MFInterpolater.H"
 #include "AMReX_MultiFabUtil.H"
 #include "AMReX_ParallelDescriptor.H"
@@ -52,7 +53,7 @@
 // internal headers
 #include "CheckNaN.hpp"
 #include "math_impl.hpp"
-#include "memory"
+#include "IntervalsParser.H"
 
 #define USE_YAFLUXREGISTER
 
@@ -161,6 +162,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void WritePlotFile() const;
 	void WriteCheckpointFile() const;
 	void ReadCheckpointFile();
+	void LoadBalance() const;
 
       protected:
 	amrex::Vector<amrex::BCRec> boundaryConditions_; // on level 0
@@ -175,6 +177,13 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// therefore flux_reg[0] and flux_reg[nlevs_max] are never actually used in
 	// the reflux operation
 	amrex::Vector<std::unique_ptr<amrex::YAFluxRegister>> flux_reg_;
+
+	// Load balancing (borrowed from WarpX implementation):
+    // Collection of LayoutData to keep track of weights used in load balancing
+    amrex::Vector<std::unique_ptr<amrex::LayoutData<amrex::Real> > > costs_;
+	int do_timing = 1; // 1 == measure hydro advance time per grid, 0 == don't time
+    // reads the "load_balance_intervals" string int the input file
+    IntervalsParser load_balance_intervals;
 
 	// Nghost = number of ghost cells for each array
 	int nghost_ = 4;	   // PPM needs nghost >= 3, PPM+flattening needs nghost >= 4
@@ -233,6 +242,7 @@ void AMRSimulation<problem_t>::initialize(amrex::Vector<amrex::BCRec> &boundaryC
 	state_old_.resize(nlevs_max);
 	max_signal_speed_.resize(nlevs_max);
 	flux_reg_.resize(nlevs_max + 1);
+	costs_.resize(nlevs_max);
 	cellUpdatesEachLevel_.resize(nlevs_max, 0);
 
 	boundaryConditions_ = boundaryConditions;
@@ -286,6 +296,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 	// Specify derived variables to save to plotfiles
 	pp.queryarr("derived_vars", derivedNames_);
+
+    // Load balancing parameters
+    std::vector<std::string> load_balance_intervals_string_vec = {"0"};
+    pp.queryarr("load_balance_intervals", load_balance_intervals_string_vec);
+    load_balance_intervals = IntervalsParser(load_balance_intervals_string_vec);
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::setInitialConditions()
@@ -357,6 +372,28 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 	}
 }
 
+template <typename problem_t> void AMRSimulation<problem_t>::LoadBalance() const
+{
+	// output load balancing statistics (for now)
+	amrex::Print() << "\nLoad balancing statistics "
+					  "(efficiency = avg cost_per_rank / max cost_per_rank):\n";
+	
+	for(int lev = 0; lev <= finest_level; ++lev) {
+		auto const &dm = dmap[lev];
+		amrex::LayoutData<amrex::Real>* cost = costs_[lev].get();
+		amrex::Vector<Real> cost_vec(cost->size());
+	    amrex::ParallelDescriptor::GatherLayoutDataToVector<Real>(*cost, cost_vec,
+			amrex::ParallelDescriptor::IOProcessorNumber());
+		
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			amrex::Real efficiency = NAN;
+			amrex::DistributionMapping::ComputeDistributionMappingEfficiency(
+				dm, cost_vec, &efficiency);
+			amrex::Print() << fmt::format("\t[level {}] efficiency = {}\n", lev, efficiency);
+		}
+	}
+}
+
 template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 {
 	BL_PROFILE("AMRSimulation::evolve()");
@@ -380,6 +417,25 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	for (int step = istep[0]; step < maxTimesteps_ && cur_time < stopTime_; ++step) {
 		amrex::ParallelDescriptor::Barrier(); // synchronize all MPI ranks
 		
+		// do load balancing
+        if (step > 0 && load_balance_intervals.contains(step+1))
+        {
+            LoadBalance();
+            //ResetCosts();
+        }
+        for (int lev = 0; lev <= finest_level; ++lev)
+        {
+            amrex::LayoutData<amrex::Real>* cost = costs_[lev].get();
+            if (cost && do_timing)
+            {
+                // Perform running average of the costs
+                for (int i : cost->IndexArray())
+                {
+                    (*cost)[i] *= (1. - 2./load_balance_intervals.localPeriod(step+1));
+                }
+            }
+        }
+
 		if (suppress_output == 0) {
 			amrex::Print() << "\nCoarse STEP " << step + 1
 						   << " at t = " << cur_time << " ("
@@ -562,6 +618,15 @@ void AMRSimulation<problem_t>::MakeNewLevelFromCoarse(int level, amrex::Real tim
 		    Geom(level - 1), refRatio(level - 1), level, ncomp);
 	}
 
+	if (do_timing) {
+		costs_[level] = std::make_unique<amrex::LayoutData<amrex::Real>>(ba, dm);
+		const auto iarr = costs_[level]->IndexArray();
+		for (int i : iarr)
+		{
+			(*costs_[level])[i] = 0.0;
+		}
+	}
+
 	FillCoarsePatch(level, time, state_new_[level], 0, ncomp);
 	FillCoarsePatch(level, time, state_old_[level], 0, ncomp); // also necessary
 }
@@ -596,6 +661,15 @@ void AMRSimulation<problem_t>::RemakeLevel(int level, amrex::Real time, const am
 		flux_reg_[level] = std::make_unique<amrex::YAFluxRegister>(
 		    ba, boxArray(level - 1), dm, DistributionMap(level - 1), Geom(level),
 		    Geom(level - 1), refRatio(level - 1), level, ncomp);
+	}
+
+	if (do_timing) {
+		costs_[level] = std::make_unique<amrex::LayoutData<amrex::Real>>(ba, dm);
+		const auto iarr = costs_[level]->IndexArray();
+		for (int i : iarr)
+		{
+			(*costs_[level])[i] = 0.0;
+		}
 	}
 }
 
@@ -634,6 +708,15 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(int level, amrex::Real ti
 		flux_reg_[level] = std::make_unique<amrex::YAFluxRegister>(
 		    ba, boxArray(level - 1), dm, DistributionMap(level - 1), Geom(level),
 		    Geom(level - 1), refRatio(level - 1), level, ncomp);
+	}
+
+	if (do_timing) {
+		costs_[level] = std::make_unique<amrex::LayoutData<amrex::Real>>(ba, dm);
+		const auto iarr = costs_[level]->IndexArray();
+		for (int i : iarr)
+		{
+			(*costs_[level])[i] = 0.0;
+		}
 	}
 
 	// set state_new_[lev] to desired initial condition
@@ -1121,6 +1204,15 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 			flux_reg_[lev] = std::make_unique<amrex::YAFluxRegister>(
 			    ba, boxArray(lev - 1), dm, DistributionMap(lev - 1), Geom(lev),
 			    Geom(lev - 1), refRatio(lev - 1), lev, ncomp);
+		}
+
+		if (do_timing) {
+			costs_[lev] = std::make_unique<amrex::LayoutData<amrex::Real>>(ba, dm);
+			const auto iarr = costs_[lev]->IndexArray();
+			for (int i : iarr)
+			{
+				(*costs_[lev])[i] = 0.0;
+			}
 		}
 	}
 
