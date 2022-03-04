@@ -377,30 +377,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 	}
 }
 
-auto ComputeLBStatistics (const amrex::DistributionMapping& dm,
-                          const amrex::Vector<amrex::Real>& cost)
-						  -> std::tuple<amrex::Real, amrex::Real, amrex::Real>;
-
 template <typename problem_t> void AMRSimulation<problem_t>::LoadBalance()
 {
 	// output load balance statistics
 	amrex::Print() << "\nLoad balance statistics "
 					  "(efficiency = avg cost_per_rank / max cost_per_rank):\n";
 	
-	for(int lev = 0; lev <= finest_level; ++lev) {
-		auto const &dm = dmap[lev];
-		amrex::LayoutData<amrex::Real>* cost = costs_[lev].get();
-		amrex::Vector<amrex::Real> cost_vec(cost->size());
-	    amrex::ParallelDescriptor::GatherLayoutDataToVector<amrex::Real>(*cost, cost_vec,
-			amrex::ParallelDescriptor::IOProcessorNumber());
-		
-		if (amrex::ParallelDescriptor::IOProcessor()) {
-			auto [minCost, avgCost, maxCost] = ComputeLBStatistics(dm, cost_vec);
-			amrex::Real efficiency = avgCost / maxCost;
-			amrex::Print() << fmt::format("\t[level {}] efficiency {}\n", lev, efficiency);
-		}
-	}
-
 	const int nLevels = finestLevel();
     for (int lev = 0; lev <= nLevels; ++lev)
     {
@@ -419,6 +401,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::LoadBalance()
                                                 nmax,
                                                 false,
                                                 amrex::ParallelDescriptor::IOProcessorNumber());
+
+		// print currentEfficiency
+		amrex::Print() << fmt::format("\t[level {}] efficiency {}\n", lev, currentEfficiency);
 
 		// decide whether to load balance
         if ((load_balance_efficiency_ratio_threshold > 0.0)
