@@ -8,7 +8,7 @@
 ///
 
 // uncomment this to debug the root-finding code (does NOT work on GPU!)
-#define BOOST_MATH_INSTRUMENT
+//#define BOOST_MATH_INSTRUMENT
 
 #include <random>
 #include <vector>
@@ -59,6 +59,24 @@ auto problem_main() -> int {
   printf("\nrho = %.17e, Eint = %.17e, mu = %f, Tgas = %f, relerr = %f\n", rho,
          Eint, mu_sol, T, relerr);
   //});
+
+  // compute Field length
+  auto lambda_F = [=] (Real nH0, Real T0) {
+    const Real rho0 = nH0 * hydrogen_mass_cgs_ / cloudy_H_mass_fraction; // g cm^-3
+    const Real Edot = cloudy_cooling_function(rho0, T0, tables);
+    const Real ln_L = 29.7 + std::log(std::pow(nH0, -1./2.) * (T0 / 1.0e6));
+    const Real conductivity = 1.84e-5 * std::pow(T0, 5./2.) / ln_L;
+    const Real l = std::sqrt( conductivity * T0 / std::abs(Edot) );
+    return std::make_pair(Edot, l);
+  };
+
+  auto [Edot0, l0] = lambda_F(1.0, 4.0e5);
+  amrex::Print() << "Edot(nH = 1.0, T = 4e5) = " << Edot0 << "\n";
+  amrex::Print() << "lambda_F = " << (l0 / 3.086e18) << " pc\n\n";
+
+  auto [Edot1, l1] = lambda_F(0.1, 4.0e5);
+  amrex::Print() << "Edot(nH = 0.1, T = 4e5) = " << Edot1 << "\n";
+  amrex::Print() << "lambda_F = " << (l1 / 3.086e18) << " pc\n\n";
 
   // Cleanup and exit
   int status = 0;
