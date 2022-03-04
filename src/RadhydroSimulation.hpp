@@ -258,7 +258,7 @@ void RadhydroSimulation<problem_t>::computeMaxSignalLocal(int const level)
 #if !defined(NDEBUG)
 #define CHECK_HYDRO_STATES(mf) checkHydroStates(mf, __FILE__, __LINE__)
 #else
-#define CHECK_HYDRO_STATES(mf) 
+#define CHECK_HYDRO_STATES(mf) checkHydroStates(mf, __FILE__, __LINE__)
 #endif
 
 template <typename problem_t>
