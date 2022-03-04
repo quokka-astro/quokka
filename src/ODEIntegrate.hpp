@@ -167,7 +167,7 @@ rk_adaptive_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0, Real t1,
 
   // integration loop
   Real time = t0;
-  Real dt = dt_guess;
+  Real dt = std::isnan(dt_guess) ? (t1 - t0) : dt_guess;
   const Real hmin = 1.0e-4;
   quokka::valarray<Real, N> &y = y0;
   quokka::valarray<Real, N> yerr{};
