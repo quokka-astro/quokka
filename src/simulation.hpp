@@ -396,7 +396,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::LoadBalance() const
 			auto [minCost, avgCost, maxCost] = ComputeLBStatistics(dm, cost_vec);
 			amrex::Real efficiency = avgCost / maxCost;
 			amrex::Print() << 
-				fmt::format("\t[level {}] efficiency = {}\tmin {} avg {} max {}\n",
+				fmt::format("\t[level {}] efficiency {}\tmin {:e}\tavg {:e}\tmax {:e}\n",
 					lev, efficiency, minCost, avgCost, maxCost);
 		}
 	}
