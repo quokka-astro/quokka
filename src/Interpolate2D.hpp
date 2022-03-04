@@ -24,8 +24,8 @@ interpolate2d(double x, double y, amrex::Table1D<const double> const &xv,
   double yi = yv(yv.begin);
   double yf = yv(yv.end - 1);
 
-  double dx = (xf - xi) / static_cast<double>(xv.end - xv.begin);
-  double dy = (yf - yi) / static_cast<double>(yv.end - yv.begin);
+  double dx = (xf - xi) / static_cast<double>(xv.end - xv.begin - 1);
+  double dy = (yf - yi) / static_cast<double>(yv.end - yv.begin - 1);
 
   x = std::clamp(x, xi, xf);
   y = std::clamp(y, yi, yf);
@@ -51,8 +51,12 @@ interpolate2d(double x, double y, amrex::Table1D<const double> const &xv,
   double w21 = (x - x1) * (y2 - y) / vol;
   double w22 = (x - x1) * (y - y1) / vol;
 
-  double value = w11 * table(ix, iy) + w12 * table(ix, iiy) +
-                 w21 * table(iix, iy) + w22 * table(iix, iiy);
+  double A = table(ix, iy);
+  double B = table(ix, iiy);
+  double C = table(iix, iy);
+  double D = table(iix, iiy);
+
+  double value = w11 * A + w12 * B + w21 * C + w22 * D;
 
   return value;
 }
