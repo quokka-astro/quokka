@@ -55,7 +55,6 @@
 // internal headers
 #include "CheckNaN.hpp"
 #include "math_impl.hpp"
-#include "IntervalsParser.H"
 
 #define USE_YAFLUXREGISTER
 
@@ -187,12 +186,11 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	// Load balancing (borrowed from WarpX implementation):
     // Collection of LayoutData to keep track of weights used in load balancing
-    amrex::Vector<std::unique_ptr<amrex::LayoutData<amrex::Real> > > costs_;
+    amrex::Vector<std::unique_ptr<amrex::LayoutData<amrex::Real>>> costs_;
 	int do_timing = 1; // 1 == measure hydro advance time per grid, 0 == don't time
 	amrex::Real load_balance_efficiency_ratio_threshold = 1.1;
 	amrex::Real load_balance_knapsack_factor = 1.5;
-    // reads the "load_balance_intervals" string from the input file
-    IntervalsParser load_balance_intervals;
+    int load_balance_interval = 0;
 
 	// Nghost = number of ghost cells for each array
 	int nghost_ = 4;	   // PPM needs nghost >= 3, PPM+flattening needs nghost >= 4
@@ -306,10 +304,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Specify derived variables to save to plotfiles
 	pp.queryarr("derived_vars", derivedNames_);
 
-    // Load balancing parameters
-    std::vector<std::string> load_balance_intervals_string_vec = {"0"};
-    pp.queryarr("load_balance_intervals", load_balance_intervals_string_vec);
-    load_balance_intervals = IntervalsParser(load_balance_intervals_string_vec);
+    // Load balancing interval
+    pp.query("load_balance_interval", load_balance_interval);
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::setInitialConditions()
@@ -484,23 +480,25 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		amrex::ParallelDescriptor::Barrier(); // synchronize all MPI ranks
 		
 		// do load balancing
-        if (step > 0 && load_balance_intervals.contains(step+1))
-        {
+		if (load_balance_interval > 0 && step > 0 && (step + 1) % load_balance_interval == 0)
+		{
             LoadBalance();
             ResetCosts();
         }
-        for (int lev = 0; lev <= finest_level; ++lev)
-        {
-            amrex::LayoutData<amrex::Real>* cost = costs_[lev].get();
-            if (cost && do_timing)
-            {
-                // Perform running average of the costs
-                for (int i : cost->IndexArray())
-                {
-                    (*cost)[i] *= (1. - 2./load_balance_intervals.localPeriod(step+1));
-                }
-            }
-        }
+		if (do_timing) {
+			for (int lev = 0; lev <= finest_level; ++lev)
+			{
+				amrex::LayoutData<amrex::Real>* cost = costs_[lev].get();
+				if (cost)
+				{
+					// Perform running average of the costs
+					for (int i : cost->IndexArray())
+					{
+						(*cost)[i] *= (1. - 2./load_balance_interval);
+					}
+				}
+			}
+		}
 
 		if (suppress_output == 0) {
 			amrex::Print() << "\nCoarse STEP " << step + 1
