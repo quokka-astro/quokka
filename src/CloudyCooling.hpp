@@ -121,9 +121,38 @@ cloudy_cooling_function(Real const rho, Real const T,
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
+ComputeEgasFromTgas(double rho, double Tgas, double gamma,
+                    cloudyGpuConstTables const &tables) -> Real {
+  // convert Egas (internal gas energy) to temperature
+  const Real rhoH = rho * cloudy_H_mass_fraction;
+  const Real nH = rhoH / hydrogen_mass_cgs_;
+
+  // compute mu from mu(T) table
+  const Real mu = interpolate2d(std::log10(nH), std::log10(Tgas), tables.log_nH,
+                                tables.log_Tgas, tables.meanMolWeight);
+
+  // compute thermal gas energy
+  const Real Egas = (rho / (hydrogen_mass_cgs_ * mu)) *
+                    boltzmann_constant_cgs_ * Tgas / (gamma - 1.);
+  return Egas;
+}
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 ComputeTgasFromEgas(double rho, double Egas, double gamma,
                     cloudyGpuConstTables const &tables) -> Real {
   // convert Egas (internal gas energy) to temperature
+
+  // check whether temperature is out-of-bounds
+  const Real Tmin = 10.;
+  const Real Tmax = 1.0e9;
+  const Real Eint_min = ComputeEgasFromTgas(rho, Tmin, gamma, tables);
+  const Real Eint_max = ComputeEgasFromTgas(rho, Tmax, gamma, tables);
+
+  if (Egas <= Eint_min) {
+    return Tmin;
+  } else if (Egas >= Eint_max) {
+    return Tmax;
+  }
 
   // solve for temperature given Eint (with fixed adiabatic index gamma)
   const Real rhoH = rho * cloudy_H_mass_fraction;
@@ -159,10 +188,16 @@ ComputeTgasFromEgas(double rho, double Egas, double gamma,
   quokka::math::eps_tolerance<Real> tol(reltol);
   auto bounds = quokka::math::toms748_solve(f, T_min, T_max, tol, maxIter);
   const Real T_sol = 0.5 * (bounds.first + bounds.second);
+
+  if ((maxIter >= maxIterLimit) || std::isnan(T_sol)) {
+    printf(
+        "\nTgas iteration failed! rho = %.17g, Eint = %.17g, nH = %f, Tgas = %f, "
+        "bounds.first = %f, bounds.second = %f, maxIter = %d\n",
+        rho, Egas, nH, T_sol, bounds.first, bounds.second, maxIter);
+  }
   AMREX_ALWAYS_ASSERT_WITH_MESSAGE(maxIter < maxIterLimit,
                                    "Temperature bisection failed!");
 
-#if 0
   const Real reltol_abort =
       0.03; // For some reason, setting this less than 0.04 will lead
             // to *lots* of warning messages for gas around ~17,000 K.
@@ -177,25 +212,7 @@ ComputeTgasFromEgas(double rho, double Egas, double gamma,
         "%f, bounds.second = %f, maxIter = %d, relerr = %f\n",
         rho, Egas, mu_sol, T_sol, bounds.first, bounds.second, maxIter, relerr);
   }
-#endif
   return T_sol;
-}
-
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
-ComputeEgasFromTgas(double rho, double Tgas, double gamma,
-                    cloudyGpuConstTables const &tables) -> Real {
-  // convert Egas (internal gas energy) to temperature
-  const Real rhoH = rho * cloudy_H_mass_fraction;
-  const Real nH = rhoH / hydrogen_mass_cgs_;
-
-  // compute mu from mu(T) table
-  const Real mu = interpolate2d(std::log10(nH), std::log10(Tgas), tables.log_nH,
-                                tables.log_Tgas, tables.meanMolWeight);
-
-  // compute thermal gas energy
-  const Real Egas = (rho / (hydrogen_mass_cgs_ * mu)) *
-                    boltzmann_constant_cgs_ * Tgas / (gamma - 1.);
-  return Egas;
 }
 
 void readCloudyData(cloudy_tables &cloudyTables);

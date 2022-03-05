@@ -76,6 +76,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	using AMRSimulation<problem_t>::CountCells;
 	using AMRSimulation<problem_t>::costs_;
 	using AMRSimulation<problem_t>::do_timing;
+	using AMRSimulation<problem_t>::WriteCheckpointFile;
 
 	std::vector<double> t_vec_;
 	std::vector<double> Trad_vec_;
@@ -273,6 +274,10 @@ void RadhydroSimulation<problem_t>::checkHydroStates(amrex::MultiFab &mf, char c
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &state = mf.const_array(iter);
 		if(!HydroSystem<problem_t>::CheckStatesValid(indexRange, state)) {
+			amrex::Print() << "Hydro states invalid (" + std::string(file) + ":" + std::to_string(line) + ")\n";
+			amrex::Print() << "Writing checkpoint for debugging...\n";
+			amrex::MFIter::allowMultipleMFIters(true);
+			WriteCheckpointFile();
 			amrex::Abort("Hydro states invalid (" + std::string(file) + ":" + std::to_string(line) + ")");
 		}
 	}
@@ -399,6 +404,9 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 	// since we are starting a new timestep, need to swap old and new state vectors
 	std::swap(state_old_[lev], state_new_[lev]);
 
+	// various AMR operations can create negative pressures, etc.
+	FixupState(lev);
+
 	// check hydro states before update (this can be caused by the flux register!)
 	CHECK_HYDRO_STATES(state_old_[lev]);
 
@@ -443,9 +451,11 @@ void RadhydroSimulation<problem_t>::FixupState(int lev)
 	for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.fabbox(); // include ghost zones!
 		auto const &stateNew = state_new_[lev].array(iter);
+		auto const &stateOld = state_old_[lev].array(iter);
 
 		// fix hydro state
 		HydroSystem<problem_t>::EnforcePressureFloor(densityFloor_, pressureFloor_, indexRange, stateNew);
+		HydroSystem<problem_t>::EnforcePressureFloor(densityFloor_, pressureFloor_, indexRange, stateOld);
 	}
 }
 

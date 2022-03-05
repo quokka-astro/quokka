@@ -587,6 +587,11 @@ void AMRSimulation<problem_t>::doRegridIfNeeded(int const step, amrex::Real cons
 				amrex::Print() << "regridding..." << std::endl;
 			}
 			regrid(0, time);
+
+			// do fix-up on all levels that have been re-gridded
+			for(int lev = 0; lev <= finest_level; ++lev) {
+				FixupState(lev);
+			}
 		}
 	}
 }

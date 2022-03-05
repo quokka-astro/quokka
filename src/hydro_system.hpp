@@ -224,6 +224,8 @@ auto HydroSystem<problem_t>::CheckStatesValid(amrex::Box const &indexRange, amre
 
 		if (negativeDensity || negativePressure) {
 			areValid = false;
+			printf("invalid state at (%d, %d, %d): "
+				   "rho %g, Etot %g, Eint %g, P %g\n", i, j, k, rho, E, thermal_energy, P);
 		}
 	})
 
