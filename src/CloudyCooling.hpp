@@ -198,20 +198,6 @@ ComputeTgasFromEgas(double rho, double Egas, double gamma,
   AMREX_ALWAYS_ASSERT_WITH_MESSAGE(maxIter < maxIterLimit,
                                    "Temperature bisection failed!");
 
-  const Real reltol_abort =
-      0.03; // For some reason, setting this less than 0.04 will lead
-            // to *lots* of warning messages for gas around ~17,000 K.
-  // check if convergence is really bad
-  const Real mu_sol = interpolate2d(log_nH, std::log10(T_sol), tables.log_nH,
-                                    tables.log_Tgas, tables.meanMolWeight);
-  const Real relerr = std::abs((C * mu_sol - T_sol) / T_sol);
-  if (relerr > reltol_abort) {
-    printf(
-        "\nTgas iteration failed! rho = %.17g, Eint = %.17g, mu = %f, Tgas = %f, "
-        "bounds.first = "
-        "%f, bounds.second = %f, maxIter = %d, relerr = %f\n",
-        rho, Egas, mu_sol, T_sol, bounds.first, bounds.second, maxIter, relerr);
-  }
   return T_sol;
 }
 

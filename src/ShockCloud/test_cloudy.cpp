@@ -56,7 +56,7 @@ auto problem_main() -> int {
                                     tables.log_Tgas, tables.meanMolWeight);
   const Real relerr = std::abs((C * mu_sol - T) / T);
 
-  printf("\nrho = %.17e, Eint = %.17e, mu = %f, Tgas = %f, relerr = %f\n", rho,
+  printf("\nrho = %.17e, Eint = %.17e, mu = %f, Tgas = %f, relerr = %e\n", rho,
          Eint, mu_sol, T, relerr);
   //});
 
