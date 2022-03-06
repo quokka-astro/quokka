@@ -184,14 +184,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// the reflux operation
 	amrex::Vector<std::unique_ptr<amrex::YAFluxRegister>> flux_reg_;
 
-	// Load balancing (borrowed from WarpX implementation):
-    // Collection of LayoutData to keep track of weights used in load balancing
-    amrex::Vector<std::unique_ptr<amrex::LayoutData<amrex::Real>>> costs_;
-	int do_timing = 1; // 1 == measure hydro advance time per grid, 0 == don't time
-	amrex::Real load_balance_efficiency_ratio_threshold = 1.1;
-	amrex::Real load_balance_knapsack_factor = 1.5;
-    int load_balance_interval = 0;
-
 	// Nghost = number of ghost cells for each array
 	int nghost_ = 4;	   // PPM needs nghost >= 3, PPM+flattening needs nghost >= 4
 	int ncomp_ = 0;	   // = number of components (conserved variables) for each array
@@ -249,7 +241,6 @@ void AMRSimulation<problem_t>::initialize(amrex::Vector<amrex::BCRec> &boundaryC
 	state_old_.resize(nlevs_max);
 	max_signal_speed_.resize(nlevs_max);
 	flux_reg_.resize(nlevs_max + 1);
-	costs_.resize(nlevs_max);
 	cellUpdatesEachLevel_.resize(nlevs_max, 0);
 
 	boundaryConditions_ = boundaryConditions;
@@ -304,8 +295,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Specify derived variables to save to plotfiles
 	pp.queryarr("derived_vars", derivedNames_);
 
-    // Load balancing interval
-    pp.query("load_balance_interval", load_balance_interval);
+	// re-grid interval
+	pp.query("regrid_interval", regrid_int);
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::setInitialConditions()
@@ -377,85 +368,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 	}
 }
 
-template <typename problem_t> void AMRSimulation<problem_t>::LoadBalance()
-{
-	// output load balance statistics
-	amrex::Print() << "\nLoad balance statistics "
-					  "(efficiency = avg cost_per_rank / max cost_per_rank):\n";
-	
-	const int nLevels = finestLevel();
-    for (int lev = 0; lev <= nLevels; ++lev)
-    {
-        int doLoadBalance = false;
-
-        // Compute a new distribution mapping based on costs
-        amrex::DistributionMapping newdm;
-        const amrex::Real nboxes = costs_[lev]->size();
-        const amrex::Real nprocs = amrex::ParallelContext::NProcsSub();
-        const int nmax = static_cast<int>(std::ceil(nboxes/nprocs*load_balance_knapsack_factor));
-        amrex::Real currentEfficiency = 0.0;
-        amrex::Real proposedEfficiency = 0.0;
-
-        newdm = amrex::DistributionMapping::makeKnapSack(*costs_[lev],
-                                                currentEfficiency, proposedEfficiency,
-                                                nmax,
-                                                false,
-                                                amrex::ParallelDescriptor::IOProcessorNumber());
-
-		// print currentEfficiency
-		amrex::Print() << fmt::format("\t[level {}] efficiency {}\n", lev, currentEfficiency);
-
-		// decide whether to load balance
-        if ((load_balance_efficiency_ratio_threshold > 0.0)
-            && (amrex::ParallelDescriptor::MyProc() == amrex::ParallelDescriptor::IOProcessorNumber()))
-        {
-            doLoadBalance = (proposedEfficiency > load_balance_efficiency_ratio_threshold*currentEfficiency);
-        }
-        amrex::ParallelDescriptor::Bcast(&doLoadBalance, 1,
-                                  amrex::ParallelDescriptor::IOProcessorNumber());
-
-		// actually do the load balancing
-        if (doLoadBalance)
-        {
-			amrex::Print() << "Re-balancing grids on level " << lev
-						   << " with proposedEfficiency = " << proposedEfficiency << "...\n";
-
-            amrex::Vector<int> pmap;
-            if (amrex::ParallelDescriptor::MyProc() == amrex::ParallelDescriptor::IOProcessorNumber())
-            {
-                pmap = newdm.ProcessorMap();
-            } else
-            {
-                pmap.resize(static_cast<std::size_t>(nboxes));
-            }
-            amrex::ParallelDescriptor::Bcast(&pmap[0], pmap.size(),
-				amrex::ParallelDescriptor::IOProcessorNumber());
-
-            if (amrex::ParallelDescriptor::MyProc() != amrex::ParallelDescriptor::IOProcessorNumber())
-            {
-                newdm = amrex::DistributionMapping(pmap);
-            }
-
-			// move grids to new ranks
-            RemakeLevel(lev, tNew_[lev], boxArray(lev), newdm);
-        }
-	}
-}
-
-template <typename problem_t> void AMRSimulation<problem_t>::ResetCosts()
-{
-	// set cost counters to zero
-	for(int lev = 0; lev <= finest_level; ++lev) {
-		auto const &dm = dmap[lev];
-		amrex::LayoutData<amrex::Real>* cost = costs_[lev].get();
-		const auto iarr = cost->IndexArray();
-		for (int i : iarr)
-		{
-			(*cost)[i] = 0.0;
-		}
-	}
-}
-
 template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 {
 	BL_PROFILE("AMRSimulation::evolve()");
@@ -479,27 +391,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	for (int step = istep[0]; step < maxTimesteps_ && cur_time < stopTime_; ++step) {
 		amrex::ParallelDescriptor::Barrier(); // synchronize all MPI ranks
 		
-		// do load balancing
-		if (load_balance_interval > 0 && step > 0 && (step + 1) % load_balance_interval == 0)
-		{
-            LoadBalance();
-            ResetCosts();
-        }
-		if (do_timing) {
-			for (int lev = 0; lev <= finest_level; ++lev)
-			{
-				amrex::LayoutData<amrex::Real>* cost = costs_[lev].get();
-				if (cost)
-				{
-					// Perform running average of the costs
-					for (int i : cost->IndexArray())
-					{
-						(*cost)[i] *= (1. - 2./load_balance_interval);
-					}
-				}
-			}
-		}
-
 		if (suppress_output == 0) {
 			amrex::Print() << "\nCoarse STEP " << step + 1
 						   << " at t = " << cur_time << " ("
@@ -688,15 +579,6 @@ void AMRSimulation<problem_t>::MakeNewLevelFromCoarse(int level, amrex::Real tim
 		    Geom(level - 1), refRatio(level - 1), level, ncomp);
 	}
 
-	if (do_timing) {
-		costs_[level] = std::make_unique<amrex::LayoutData<amrex::Real>>(ba, dm);
-		const auto iarr = costs_[level]->IndexArray();
-		for (int i : iarr)
-		{
-			(*costs_[level])[i] = 0.0;
-		}
-	}
-
 	FillCoarsePatch(level, time, state_new_[level], 0, ncomp);
 	FillCoarsePatch(level, time, state_old_[level], 0, ncomp); // also necessary
 }
@@ -733,18 +615,6 @@ void AMRSimulation<problem_t>::RemakeLevel(int level, amrex::Real time, const am
 		    Geom(level - 1), refRatio(level - 1), level, ncomp);
 	}
 
-	if (do_timing) {
-		costs_[level] = std::make_unique<amrex::LayoutData<amrex::Real>>(ba, dm);
-		const auto iarr = costs_[level]->IndexArray();
-		for (int i : iarr)
-		{
-			(*costs_[level])[i] = 0.0;
-		}
-	}
-
-	// if this is called from LoadBalance(),
-	// we need to save the new DistributionMapping in AmrCore
-	SetDistributionMap(level, dm);
 }
 
 // Delete level data. Overrides the pure virtual function in AmrCore
@@ -782,15 +652,6 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(int level, amrex::Real ti
 		flux_reg_[level] = std::make_unique<amrex::YAFluxRegister>(
 		    ba, boxArray(level - 1), dm, DistributionMap(level - 1), Geom(level),
 		    Geom(level - 1), refRatio(level - 1), level, ncomp);
-	}
-
-	if (do_timing) {
-		costs_[level] = std::make_unique<amrex::LayoutData<amrex::Real>>(ba, dm);
-		const auto iarr = costs_[level]->IndexArray();
-		for (int i : iarr)
-		{
-			(*costs_[level])[i] = 0.0;
-		}
 	}
 
 	// set state_new_[lev] to desired initial condition
@@ -1280,14 +1141,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 			    Geom(lev - 1), refRatio(lev - 1), lev, ncomp);
 		}
 
-		if (do_timing) {
-			costs_[lev] = std::make_unique<amrex::LayoutData<amrex::Real>>(ba, dm);
-			const auto iarr = costs_[lev]->IndexArray();
-			for (int i : iarr)
-			{
-				(*costs_[lev])[i] = 0.0;
-			}
-		}
 	}
 
 	// read in the MultiFab data

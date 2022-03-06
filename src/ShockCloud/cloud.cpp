@@ -257,8 +257,7 @@ user_rhs(Real /*t*/, quokka::valarray<Real, 1> &y_data,
 }
 
 void computeCooling(amrex::MultiFab &mf, const Real dt_in,
-                    cloudy_tables &cloudyTables,
-                    amrex::LayoutData<amrex::Real> *cost) {
+                    cloudy_tables &cloudyTables) {
   BL_PROFILE("RadhydroSimulation::computeCooling()")
 
   const Real dt = dt_in;
@@ -272,12 +271,6 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
   amrex::iMultiFab nsubstepsMF(ba, dmap, 1, 0);
 
   for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
-    // measure timing for load balancing
-    if (cost) {
-      amrex::Gpu::synchronize();
-    }
-    amrex::Real wt = amrex::second();
-
     const amrex::Box &indexRange = iter.validbox();
     auto const &state = mf.array(iter);
     auto const &nsubsteps = nsubstepsMF.array(iter);
@@ -325,13 +318,6 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
 
       state(i, j, k, HydroSystem<ShockCloud>::energy_index) = Egas_new;
     });
-
-    // measure timing for load balancing
-    if (cost) {
-      amrex::Gpu::synchronize();
-      wt = amrex::second() - wt;
-      amrex::HostDevice::Atomic::Add(&(*cost)[iter.index()], wt);
-    }
   }
 
   int nmin = nsubstepsMF.min(0);
@@ -351,7 +337,7 @@ template <>
 void RadhydroSimulation<ShockCloud>::computeAfterLevelAdvance(
     int lev, Real /*time*/, Real dt_lev, int /*iteration*/, int /*ncycle*/) {
   // compute operator split physics
-  computeCooling(state_new_[lev], dt_lev, cloudyTables, costs_[lev].get());
+  computeCooling(state_new_[lev], dt_lev, cloudyTables);
 }
 
 template <>

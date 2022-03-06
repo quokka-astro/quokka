@@ -74,8 +74,6 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	using AMRSimulation<problem_t>::DistributionMap;
 	using AMRSimulation<problem_t>::cellUpdates_;
 	using AMRSimulation<problem_t>::CountCells;
-	using AMRSimulation<problem_t>::costs_;
-	using AMRSimulation<problem_t>::do_timing;
 	using AMRSimulation<problem_t>::WriteCheckpointFile;
 
 	std::vector<double> t_vec_;
@@ -262,7 +260,7 @@ void RadhydroSimulation<problem_t>::computeMaxSignalLocal(int const level)
 #if !defined(NDEBUG)
 #define CHECK_HYDRO_STATES(mf) checkHydroStates(mf, __FILE__, __LINE__)
 #else
-#define CHECK_HYDRO_STATES(mf) checkHydroStates(mf, __FILE__, __LINE__)
+#define CHECK_HYDRO_STATES(mf) 
 #endif
 
 template <typename problem_t>
@@ -467,9 +465,6 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 {
 	BL_PROFILE("RadhydroSimulation::advanceHydroAtLevel()");
 
-	// get load balancing data
-	amrex::LayoutData<amrex::Real> *cost = costs_[lev].get();
-
 	amrex::Real fluxScaleFactor = NAN;
 	if (integratorOrder_ == 2) {
 		fluxScaleFactor = 0.5;
@@ -486,12 +481,6 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 
 	// advance all grids on local processor (Stage 1 of integrator)
 	for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
-        if (cost && do_timing)
-        {
-			// measure timing for load balancing
-            amrex::Gpu::synchronize();
-        }
-        amrex::Real wt = amrex::second();
 
 		const amrex::Box &indexRange = iter.validbox(); // 'validbox' == exclude ghost zones
 		auto const &stateOld = state_old_[lev].const_array(iter);
@@ -550,14 +539,6 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 			incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, expandedFluxes, lev,
 					       fluxScaleFactor * dt_lev);
 		}
-
-		if (cost && do_timing)
-        {
-			// measure timing for load balancing
-            amrex::Gpu::synchronize();
-            wt = amrex::second() - wt;
-            amrex::HostDevice::Atomic::Add( &(*cost)[iter.index()], wt);
-        }
 	}
 
 	if (integratorOrder_ == 2) {
@@ -570,12 +551,6 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 
 		// advance all grids on local processor (Stage 2 of integrator)
 		for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
-			if (cost && do_timing)
-			{
-				// measure timing for load balancing
-				amrex::Gpu::synchronize();
-			}
-			amrex::Real wt = amrex::second();
 
 			const amrex::Box &indexRange = iter.validbox(); // 'validbox' == exclude ghost zones
 			auto const &stateOld = state_old_[lev].const_array(iter);
@@ -640,14 +615,6 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 				auto expandedFluxes = expandFluxArrays(fluxArrays, 0, state_new_[lev].nComp());
 				incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, expandedFluxes, lev,
 							fluxScaleFactor * dt_lev);
-			}
-
-			if (cost && do_timing)
-			{
-				// measure timing for load balancing
-				amrex::Gpu::synchronize();
-				wt = amrex::second() - wt;
-				amrex::HostDevice::Atomic::Add( &(*cost)[iter.index()], wt);
 			}
 		}
 	}
