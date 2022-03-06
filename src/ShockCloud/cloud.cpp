@@ -245,10 +245,15 @@ user_rhs(Real /*t*/, quokka::valarray<Real, 1> &y_data,
   } else {
     // ok, within tabulated cooling limits
     const Real T = ComputeTgasFromEgas(rho, Eint, gamma, tables);
-    y_rhs[0] = cloudy_cooling_function(rho, T, tables);
+    if (!std::isnan(T)) { // temp iteration succeeded
+      y_rhs[0] = cloudy_cooling_function(rho, T, tables);
+    } else { // temp iteration failed
+      y_rhs[0] = NAN;
+      return 1; // failed
+    }
   }
 
-  return 0;
+  return 0; // success
 }
 
 void computeCooling(amrex::MultiFab &mf, const Real dt_in,

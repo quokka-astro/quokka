@@ -187,16 +187,15 @@ ComputeTgasFromEgas(double rho, double Egas, double gamma,
   // do root-finding
   quokka::math::eps_tolerance<Real> tol(reltol);
   auto bounds = quokka::math::toms748_solve(f, T_min, T_max, tol, maxIter);
-  const Real T_sol = 0.5 * (bounds.first + bounds.second);
+  Real T_sol = 0.5 * (bounds.first + bounds.second);
 
   if ((maxIter >= maxIterLimit) || std::isnan(T_sol)) {
     printf(
         "\nTgas iteration failed! rho = %.17g, Eint = %.17g, nH = %f, Tgas = %f, "
         "bounds.first = %f, bounds.second = %f, maxIter = %d\n",
         rho, Egas, nH, T_sol, bounds.first, bounds.second, maxIter);
+    T_sol = NAN;
   }
-  AMREX_ALWAYS_ASSERT_WITH_MESSAGE(maxIter < maxIterLimit,
-                                   "Temperature bisection failed!");
 
   return T_sol;
 }
