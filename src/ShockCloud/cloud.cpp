@@ -9,12 +9,14 @@
 #include <random>
 #include <vector>
 
+#include "AMReX.H"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLProfiler.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_FabArray.H"
 #include "AMReX_Geometry.H"
 #include "AMReX_GpuDevice.H"
+#include "AMReX_IntVect.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParallelContext.H"
 #include "AMReX_ParallelDescriptor.H"
@@ -49,7 +51,7 @@ constexpr Real nH1 = 1.0e-1;             // cm^-3
 constexpr Real R_cloud = 5.0 * 3.086e18; // cm [5 pc]
 constexpr Real M0 = 2.0;                 // Mach number of shock
 
-constexpr Real T_floor = 10.0;                             // K
+constexpr Real T_floor = 100.0;                             // K
 constexpr Real P0 = nH0 * Tgas0 * boltzmann_constant_cgs_; // erg cm^-3
 constexpr Real rho0 = nH0 * m_H;                           // g cm^-3
 constexpr Real rho1 = nH1 * m_H;
@@ -221,17 +223,37 @@ user_rhs(Real /*t*/, quokka::valarray<Real, 1> &y_data,
          quokka::valarray<Real, 1> &y_rhs, void *user_data) -> int {
   // unpack user_data
   auto *udata = static_cast<ODEUserData *>(user_data);
-  Real rho = udata->rho;
+  const Real rho = udata->rho;
+  const Real gamma = HydroSystem<ShockCloud>::gamma_;
   cloudyGpuConstTables &tables = udata->tables;
 
-  // compute temperature (implicit solve, depends on composition)
-  Real Eint = y_data[0];
-  Real T =
-      ComputeTgasFromEgas(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
+  // check whether temperature is out-of-bounds
+  const Real Tmin = 10.;
+  const Real Tmax = 1.0e9;
+  const Real Eint_min = ComputeEgasFromTgas(rho, Tmin, gamma, tables);
+  const Real Eint_max = ComputeEgasFromTgas(rho, Tmax, gamma, tables);
 
-  // compute cooling function
-  y_rhs[0] = cloudy_cooling_function(rho, T, tables);
-  return 0;
+  // compute temperature and cooling rate
+  const Real Eint = y_data[0];
+
+  if (Eint <= Eint_min) {
+    // set cooling to value at Tmin
+    y_rhs[0] = cloudy_cooling_function(rho, Tmin, tables);
+  } else if (Eint >= Eint_max) {
+    // set cooling to value at Tmax
+    y_rhs[0] = cloudy_cooling_function(rho, Tmax, tables);
+  } else {
+    // ok, within tabulated cooling limits
+    const Real T = ComputeTgasFromEgas(rho, Eint, gamma, tables);
+    if (!std::isnan(T)) { // temp iteration succeeded
+      y_rhs[0] = cloudy_cooling_function(rho, T, tables);
+    } else { // temp iteration failed
+      y_rhs[0] = NAN;
+      return 1; // failed
+    }
+  }
+
+  return 0; // success
 }
 
 void computeCooling(amrex::MultiFab &mf, const Real dt_in,
@@ -248,7 +270,6 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
   const auto &dmap = mf.DistributionMap();
   amrex::iMultiFab nsubstepsMF(ba, dmap, 1, 0);
 
-  // loop over all cells in MultiFab mf
   for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
     const amrex::Box &indexRange = iter.validbox();
     auto const &state = mf.array(iter);
@@ -281,6 +302,17 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
                             nsteps);
       nsubsteps(i, j, k) = nsteps;
 
+      // check if integration failed
+      if (nsteps >= maxStepsODEIntegrate) {
+        Real T = ComputeTgasFromEgas(rho, Eint, HydroSystem<ShockCloud>::gamma_,
+                                     tables);
+        Real Edot = cloudy_cooling_function(rho, T, tables);
+        Real t_cool = Eint / Edot;
+        printf("max substeps exceeded! rho = %g, Eint = %g, T = %g, cooling "
+               "time = %g\n",
+               rho, Eint, T, t_cool);
+      }
+
       const Real Egas_new = RadSystem<ShockCloud>::ComputeEgasFromEint(
           rho, x1Mom, x2Mom, x3Mom, y[0]);
 
@@ -295,6 +327,10 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
   amrex::Print() << fmt::format(
       "\tcooling substeps (per cell): min {}, avg {}, max {}\n", nmin, navg,
       nmax);
+  
+  if (nmax >= maxStepsODEIntegrate) {
+    amrex::Abort("Max steps exceeded in cooling solve!");
+  }
 }
 
 template <>
@@ -439,6 +475,7 @@ auto problem_main() -> int {
   // this problem (e.g., ~1e14 K or higher), but can be fixed by
   // reconstructing the temperature instead of the pressure
   sim.reconstructionOrder_ = 3; // PLM
+  sim.densityFloor_ = 1.0e-2 * rho0; // density floor (to prevent vacuum)
 
   sim.cflNumber_ = CFL_number;
   sim.maxTimesteps_ = max_timesteps;

@@ -33,8 +33,8 @@ template <> struct EOS_Traits<ShockCloud> {
 
 auto problem_main() -> int {
   // Problem parameters
-  const Real rho = 1.06569690624977e-24;   // g cm^-3;
-  const Real Eint = 2.874790473172443e-12; // erg cm^-3
+  const Real rho = 2.2821435890860612e-30;   // g cm^-3;
+  const Real Eint = 3.8522186325360341e-13; // erg cm^-3
 
   // Read Cloudy tables
   cloudy_tables cloudyTables;
@@ -56,10 +56,11 @@ auto problem_main() -> int {
                                     tables.log_Tgas, tables.meanMolWeight);
   const Real relerr = std::abs((C * mu_sol - T) / T);
 
-  printf("\nrho = %.17e, Eint = %.17e, mu = %f, Tgas = %f, relerr = %f\n", rho,
+  printf("\nrho = %.17e, Eint = %.17e, mu = %f, Tgas = %e, relerr = %e\n", rho,
          Eint, mu_sol, T, relerr);
   //});
 
+#if 0
   // compute Field length
   auto lambda_F = [=] (Real nH0, Real T0) {
     const Real rho0 = nH0 * hydrogen_mass_cgs_ / cloudy_H_mass_fraction; // g cm^-3
@@ -77,6 +78,7 @@ auto problem_main() -> int {
   auto [Edot1, l1] = lambda_F(0.1, 4.0e5);
   amrex::Print() << "Edot(nH = 0.1, T = 4e5) = " << Edot1 << "\n";
   amrex::Print() << "lambda_F = " << (l1 / 3.086e18) << " pc\n\n";
+#endif
 
   // Cleanup and exit
   int status = 0;

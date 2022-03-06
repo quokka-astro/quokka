@@ -74,6 +74,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	using AMRSimulation<problem_t>::DistributionMap;
 	using AMRSimulation<problem_t>::cellUpdates_;
 	using AMRSimulation<problem_t>::CountCells;
+	using AMRSimulation<problem_t>::WriteCheckpointFile;
 
 	std::vector<double> t_vec_;
 	std::vector<double> Trad_vec_;
@@ -138,6 +139,9 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 
 	// compute derived variables
 	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const override;
+
+	// fix-up states
+	void FixupState(int level) override;
 
 	// tag cells for refinement
 	void ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override;
@@ -268,6 +272,10 @@ void RadhydroSimulation<problem_t>::checkHydroStates(amrex::MultiFab &mf, char c
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &state = mf.const_array(iter);
 		if(!HydroSystem<problem_t>::CheckStatesValid(indexRange, state)) {
+			amrex::Print() << "Hydro states invalid (" + std::string(file) + ":" + std::to_string(line) + ")\n";
+			amrex::Print() << "Writing checkpoint for debugging...\n";
+			amrex::MFIter::allowMultipleMFIters(true);
+			WriteCheckpointFile();
 			amrex::Abort("Hydro states invalid (" + std::string(file) + ":" + std::to_string(line) + ")");
 		}
 	}
@@ -394,7 +402,10 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 	// since we are starting a new timestep, need to swap old and new state vectors
 	std::swap(state_old_[lev], state_new_[lev]);
 
-	// check hydro states before update
+	// various AMR operations can create negative pressures, etc.
+	FixupState(lev);
+
+	// check hydro states before update (this can be caused by the flux register!)
 	CHECK_HYDRO_STATES(state_old_[lev]);
 
 	// advance hydro
@@ -428,6 +439,24 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 	AMREX_ASSERT(!state_new_[lev].contains_nan()); // check ghost zones
 }
 
+// fix-up any unphysical states created by AMR operations
+// (e.g., caused by the flux register or from interpolation)
+template <typename problem_t>
+void RadhydroSimulation<problem_t>::FixupState(int lev)
+{
+	BL_PROFILE("RadhydroSimulation::FixupState()");
+
+	for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
+		const amrex::Box &indexRange = iter.fabbox(); // include ghost zones!
+		auto const &stateNew = state_new_[lev].array(iter);
+		auto const &stateOld = state_old_[lev].array(iter);
+
+		// fix hydro state
+		HydroSystem<problem_t>::EnforcePressureFloor(densityFloor_, pressureFloor_, indexRange, stateNew);
+		HydroSystem<problem_t>::EnforcePressureFloor(densityFloor_, pressureFloor_, indexRange, stateOld);
+	}
+}
+
 template <typename problem_t>
 void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real time,
 							amrex::Real dt_lev,
@@ -452,6 +481,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 
 	// advance all grids on local processor (Stage 1 of integrator)
 	for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
+
 		const amrex::Box &indexRange = iter.validbox(); // 'validbox' == exclude ghost zones
 		auto const &stateOld = state_old_[lev].const_array(iter);
 		auto const &stateNew = state_new_[lev].array(iter);
@@ -521,6 +551,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 
 		// advance all grids on local processor (Stage 2 of integrator)
 		for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
+
 			const amrex::Box &indexRange = iter.validbox(); // 'validbox' == exclude ghost zones
 			auto const &stateOld = state_old_[lev].const_array(iter);
 			auto const &stateInter = state_new_[lev].const_array(iter);

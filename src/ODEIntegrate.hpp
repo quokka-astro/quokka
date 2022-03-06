@@ -24,56 +24,28 @@
 using Real = amrex::Real;
 
 template <typename F, int N>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void
-forward_euler_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0,
-                        Real t1, void *user_data) {
-  // Compute multiple forward Euler steps, limiting the fractional change in y.
-
-  quokka::valarray<Real, N> ydot{};
-  quokka::valarray<Real, N> &y = y0;
-  Real time = t0;
-  const int maxSteps = 1000;
-  const Real rel_change = 0.1; // limit to 10% change in y per substep
-  bool success = false;
-
-  for (int i = 0; i < maxSteps; ++i) {
-    // evaluate rhs
-    int ierr = rhs(t0, y, ydot, user_data);
-
-    // compute dt such that dt = 0.1 (y/ydot), or dt = t1 - t.
-    const Real dt = std::min(rel_change * min(abs(y / ydot)), t1 - time);
-
-    // advance single step
-    y = y + dt * ydot;
-    time += dt;
-
-    //std::cout << "[" << i << "] t = " << time << " dt = " << dt << std::endl;
-
-    if (time >= t1) {
-      success = true;
-      break;
-    }
-  }
-  AMREX_ALWAYS_ASSERT(success);
-}
-
-template <typename F, int N>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 rk12_single_step(F &&rhs, Real t0, quokka::valarray<Real, N> const &y, Real dt,
                  quokka::valarray<Real, N> &ynew,
-                 quokka::valarray<Real, N> &yerr, void *user_data) {
+                 quokka::valarray<Real, N> &yerr, void *user_data) -> int {
   // Compute one step of the RK Heun-Euler (1)2 method
 
   // stage 1 [Forward Euler step at t0]
   quokka::valarray<Real, N> k1{};
   quokka::valarray<Real, N> y_arg = y;
   int ierr = rhs(t0, y_arg, k1, user_data);
+  if (ierr != 0) {
+    return ierr;
+  }
   k1 *= dt;
 
   // stage 2 [Forward Euler step at t1]
   quokka::valarray<Real, N> k2{};
   y_arg = y + k1;
   ierr = rhs(t0 + dt, y_arg, k2, user_data);
+  if (ierr != 0) {
+    return ierr;
+  }
   k2 *= dt;
 
   // N.B.: equivalent to RK2-SSP
@@ -81,13 +53,15 @@ rk12_single_step(F &&rhs, Real t0, quokka::valarray<Real, N> const &y, Real dt,
 
   // difference between RK2-SSP and Forward Euler
   yerr = -0.5 * k1 + 0.5 * k2;
+
+  return 0; // success
 }
 
 template <typename F, int N>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 rk23_single_step(F &&rhs, Real t0, quokka::valarray<Real, N> const &y, Real dt,
                  quokka::valarray<Real, N> &ynew,
-                 quokka::valarray<Real, N> &yerr, void *user_data) {
+                 quokka::valarray<Real, N> &yerr, void *user_data) -> int {
   // Compute one step of the RK Bogaki-Shampine (2)3 method
   // https://sundials.readthedocs.io/en/latest/arkode/Butcher_link.html#bogacki-shampine-4-2-3
 
@@ -95,30 +69,44 @@ rk23_single_step(F &&rhs, Real t0, quokka::valarray<Real, N> const &y, Real dt,
   quokka::valarray<Real, N> k1{};
   quokka::valarray<Real, N> y_arg = y;
   int ierr = rhs(t0, y_arg, k1, user_data);
+  if (ierr != 0) {
+    return ierr;
+  }
   k1 *= dt;
 
   // stage 2
   quokka::valarray<Real, N> k2{};
   y_arg = y + 0.5 * k1;
   ierr = rhs(t0 + 0.5 * dt, y_arg, k2, user_data);
+  if (ierr != 0) {
+    return ierr;
+  }
   k2 *= dt;
 
   // stage 3
   quokka::valarray<Real, N> k3{};
   y_arg = y + (3. / 4.) * k2;
   ierr = rhs(t0 + (3. / 4.) * dt, y_arg, k3, user_data);
+  if (ierr != 0) {
+    return ierr;
+  }
   k3 *= dt;
 
   // stage 4
   quokka::valarray<Real, N> k4{};
   y_arg = y + (2. / 9.) * k1 + (1. / 3.) * k2 + (4. / 9.) * k3;
   ierr = rhs(t0 + dt, y_arg, k4, user_data);
+  if (ierr != 0) {
+    return ierr;
+  }
   k4 *= dt;
 
   ynew = y_arg; // use FSAL (first same as last) property
 
   yerr = (2. / 9. - 7. / 24.) * k1 + (1. / 3. - 1. / 4.) * k2 +
          (4. / 9. - 1. / 3.) * k3 - (1. / 8.) * k4;
+
+  return 0; // success
 }
 
 template <int N>
@@ -137,6 +125,8 @@ error_norm(quokka::valarray<Real, N> const &y0,
   const Real err = std::sqrt(err_sq / N);
   return err;
 }
+
+constexpr int maxStepsODEIntegrate = 2000;
 
 template <typename F, int N>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void
@@ -162,18 +152,18 @@ rk_adaptive_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0, Real t1,
   const Real eta_max_errfail_prevstep = 1.0;
   const Real eta_max_errfail_again = 0.3;
   const Real eta_min_errfail_multiple = 0.1;
+  const Real eta_retry_failed_rhs = 0.5;
 
   // integration loop
-  const int maxSteps = 2000;
   Real time = t0;
-  Real dt = dt_guess;
+  Real dt = std::isnan(dt_guess) ? (t1 - t0) : dt_guess;
   const Real hmin = 1.0e-4;
   quokka::valarray<Real, N> &y = y0;
   quokka::valarray<Real, N> yerr{};
   quokka::valarray<Real, N> ynew{};
 
   bool success = false;
-  for (int i = 0; i < maxSteps; ++i) {
+  for (int i = 0; i < maxStepsODEIntegrate; ++i) {
     if ((time + dt) > t1) {
       // reduce dt to end at t1
       dt = t1 - time;
@@ -188,31 +178,38 @@ rk_adaptive_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0, Real t1,
       AMREX_ALWAYS_ASSERT(dt > (hmin * (t1 - t0)));
 
       // compute single step of chosen RK method
-      rk12_single_step(rhs, time, y, dt, ynew, yerr, user_data);
+      int ierr = rk12_single_step(rhs, time, y, dt, ynew, yerr, user_data);
 
-      // compute error norm from embedded error estimate
-      const Real epsilon = error_norm(y, yerr, reltol, abstol);
+      Real eta = NAN;
+      if (ierr != 0) {
+        // function evaluation failed, re-try with smaller timestep
+        eta = eta_retry_failed_rhs;
+      } else {
+        // function evaluation succeeded
+        // compute error norm from embedded error estimate
+        const Real epsilon = error_norm(y, yerr, reltol, abstol);
 
-      // compute new timestep with 'I' controller
-      // https://sundials.readthedocs.io/en/latest/arkode/Mathematics_link.html#i-controller
-      Real eta = std::pow(epsilon, -1.0 / static_cast<Real>(p));
+        // compute new timestep with 'I' controller
+        // https://sundials.readthedocs.io/en/latest/arkode/Mathematics_link.html#i-controller
+        eta = std::pow(epsilon, -1.0 / static_cast<Real>(p));
 
-      if (epsilon < 1.0) { // error passed
-        y = ynew;
-        time += dt; // increment time
-        if (k == 0) {
-          eta = std::min(eta, eta_max); // limit timestep increase
-        } else {
-          eta = std::min(eta, eta_max_errfail_prevstep);
+        if (epsilon < 1.0) { // error passed
+          y = ynew;
+          time += dt; // increment time
+          if (k == 0) {
+            eta = std::min(eta, eta_max); // limit timestep increase
+          } else {
+            eta = std::min(eta, eta_max_errfail_prevstep);
+          }
+          dt *= eta; // use new timestep
+          step_success = true;
+          // std::cout << "\tsuccess k = " << k << " epsilon = " << epsilon
+          //            << " eta = " << eta << std::endl;
+          break;
         }
-        dt *= eta; // use new timestep
-        step_success = true;
-        // std::cout << "\tsuccess k = " << k << " epsilon = " << epsilon
-        //            << " eta = " << eta << std::endl;
-        break;
       }
 
-      // error is too large, use smaller timestep and redo
+      // error is too large or rhs evaluation failed, use smaller timestep and redo
       if (k == 1) {
         eta = std::min(eta, eta_max_errfail_again);
       } else if (k > 1) {
@@ -222,9 +219,13 @@ rk_adaptive_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0, Real t1,
       // std::cout << "\tfailed step k = " << k << " epsilon = " << epsilon
       //           << " eta = " << eta << std::endl;
     }
-    AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-        step_success, "ODE integrator failed to reach accuracy tolerance after "
-                      "maximum step-size iterations reached!");
+
+    if (!step_success) {
+      success = false;
+      printf("ODE integrator failed to reach accuracy tolerance after "
+             "maximum step-size re-tries reached! dt = %g\n", dt);
+      break;
+    }
 
     if (time >= t1) {
       // we are at t1
@@ -233,8 +234,11 @@ rk_adaptive_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0, Real t1,
       break;
     }
   }
-  AMREX_ALWAYS_ASSERT_WITH_MESSAGE(success,
-                                   "ODE integration exceeded maxSteps!");
+
+  if (!success) {
+    steps_taken = maxStepsODEIntegrate;
+    printf("ODE integration exceeded maxStepsODEIntegrate! steps_taken = %d\n", steps_taken);
+  }
 }
 
 

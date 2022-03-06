@@ -15,6 +15,7 @@
 #include <limits>
 #include <memory>
 #include <ostream>
+#include <tuple>
 
 // library headers
 #include "AMReX.H"
@@ -34,6 +35,7 @@
 #include "AMReX_INT.H"
 #include "AMReX_IndexType.H"
 #include "AMReX_IntVect.H"
+#include "AMReX_LayoutData.H"
 #include "AMReX_MFInterpolater.H"
 #include "AMReX_MultiFabUtil.H"
 #include "AMReX_ParallelDescriptor.H"
@@ -48,11 +50,11 @@
 #include <AMReX_PlotFileUtil.H>
 #include <AMReX_Print.H>
 #include <AMReX_Utility.H>
+#include <fmt/core.h>
 
 // internal headers
 #include "CheckNaN.hpp"
 #include "math_impl.hpp"
-#include "memory"
 
 #define USE_YAFLUXREGISTER
 
@@ -104,6 +106,10 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	// compute derived variables
 	virtual void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const = 0;
+
+	// fix-up any unphysical states created by AMR operations
+	// (e.g., caused by the flux register or from interpolation)
+	virtual void FixupState(int level) = 0;
 
 	// tag cells for refinement
 	void ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override = 0;
@@ -161,6 +167,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void WritePlotFile() const;
 	void WriteCheckpointFile() const;
 	void ReadCheckpointFile();
+	void LoadBalance();
+	void ResetCosts();
 
       protected:
 	amrex::Vector<amrex::BCRec> boundaryConditions_; // on level 0
@@ -286,6 +294,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 	// Specify derived variables to save to plotfiles
 	pp.queryarr("derived_vars", derivedNames_);
+
+	// re-grid interval
+	pp.query("regrid_interval", regrid_int);
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::setInitialConditions()
@@ -465,6 +476,11 @@ void AMRSimulation<problem_t>::doRegridIfNeeded(int const step, amrex::Real cons
 				amrex::Print() << "regridding..." << std::endl;
 			}
 			regrid(0, time);
+
+			// do fix-up on all levels that have been re-gridded
+			for(int lev = 0; lev <= finest_level; ++lev) {
+				FixupState(lev);
+			}
 		}
 	}
 }
@@ -508,6 +524,7 @@ void AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time,
 		}
 
 		AverageDownTo(lev); // average lev+1 down to lev
+		FixupState(lev); // fix any unphysical states created by reflux or averaging
 	}
 }
 
@@ -597,6 +614,7 @@ void AMRSimulation<problem_t>::RemakeLevel(int level, amrex::Real time, const am
 		    ba, boxArray(level - 1), dm, DistributionMap(level - 1), Geom(level),
 		    Geom(level - 1), refRatio(level - 1), level, ncomp);
 	}
+
 }
 
 // Delete level data. Overrides the pure virtual function in AmrCore
@@ -1122,6 +1140,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 			    ba, boxArray(lev - 1), dm, DistributionMap(lev - 1), Geom(lev),
 			    Geom(lev - 1), refRatio(lev - 1), lev, ncomp);
 		}
+
 	}
 
 	// read in the MultiFab data
