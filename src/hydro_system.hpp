@@ -222,10 +222,17 @@ auto HydroSystem<problem_t>::CheckStatesValid(amrex::Box const &indexRange, amre
 		bool negativeDensity = (rho <= 0.);
 		bool negativePressure = (P <= 0.);
 
-		if (negativeDensity || negativePressure) {
-			areValid = false;
-			printf("invalid state at (%d, %d, %d): "
-				   "rho %g, Etot %g, Eint %g, P %g\n", i, j, k, rho, E, thermal_energy, P);
+		if constexpr (is_eos_isothermal()) {
+			if (negativeDensity) {
+				areValid = false;
+				printf("invalid state at (%d, %d, %d): rho %g\n", i, j, k, rho);
+			}
+		} else {
+			if (negativeDensity || negativePressure) {
+				areValid = false;
+				printf("invalid state at (%d, %d, %d): "
+					"rho %g, Etot %g, Eint %g, P %g\n", i, j, k, rho, E, thermal_energy, P);
+			}
 		}
 	})
 
