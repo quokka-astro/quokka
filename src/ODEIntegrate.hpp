@@ -222,8 +222,8 @@ rk_adaptive_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0, Real t1,
 
     if (!step_success) {
       success = false;
-      amrex::Abort("ODE integrator failed to reach accuracy tolerance after "
-                   "maximum step-size re-tries reached!");
+      printf("ODE integrator failed to reach accuracy tolerance after "
+             "maximum step-size re-tries reached! dt = %g\n", dt);
       break;
     }
 
@@ -237,7 +237,7 @@ rk_adaptive_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0, Real t1,
 
   if (!success) {
     steps_taken = maxStepsODEIntegrate;
-    amrex::Abort("ODE integration exceeded maxStepsODEIntegrate!");
+    printf("ODE integration exceeded maxStepsODEIntegrate! steps_taken = %d\n", steps_taken);
   }
 }
 
