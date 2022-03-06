@@ -31,18 +31,60 @@ template <> struct EOS_Traits<ShockCloud> {
   static constexpr bool reconstruct_eint = true;
 };
 
+struct ODEUserData {
+  Real rho;
+  cloudyGpuConstTables tables;
+};
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
+user_rhs(Real /*t*/, quokka::valarray<Real, 1> &y_data,
+         quokka::valarray<Real, 1> &y_rhs, void *user_data) -> int {
+  // unpack user_data
+  auto *udata = static_cast<ODEUserData *>(user_data);
+  const Real rho = udata->rho;
+  const Real gamma = HydroSystem<ShockCloud>::gamma_;
+  cloudyGpuConstTables &tables = udata->tables;
+
+  // check whether temperature is out-of-bounds
+  const Real Tmin = 10.;
+  const Real Tmax = 1.0e9;
+  const Real Eint_min = ComputeEgasFromTgas(rho, Tmin, gamma, tables);
+  const Real Eint_max = ComputeEgasFromTgas(rho, Tmax, gamma, tables);
+
+  // compute temperature and cooling rate
+  const Real Eint = y_data[0];
+
+  if (Eint <= Eint_min) {
+    // set cooling to value at Tmin
+    y_rhs[0] = cloudy_cooling_function(rho, Tmin, tables);
+  } else if (Eint >= Eint_max) {
+    // set cooling to value at Tmax
+    y_rhs[0] = cloudy_cooling_function(rho, Tmax, tables);
+  } else {
+    // ok, within tabulated cooling limits
+    const Real T = ComputeTgasFromEgas(rho, Eint, gamma, tables);
+    if (!std::isnan(T)) { // temp iteration succeeded
+      y_rhs[0] = cloudy_cooling_function(rho, T, tables);
+    } else { // temp iteration failed
+      y_rhs[0] = NAN;
+      return 1; // failed
+    }
+  }
+
+  return 0; // success
+}
+
 auto problem_main() -> int {
   // Problem parameters
-  const Real rho = 2.2821435890860612e-30;   // g cm^-3;
-  const Real Eint = 3.8522186325360341e-13; // erg cm^-3
+  const Real rho = 2.2775031827161193e-22; // g cm^-3;
+  const Real Eint = 1.11724e-11;           // erg cm^-3
+  const Real dt = 189075103.3;
 
   // Read Cloudy tables
   cloudy_tables cloudyTables;
   readCloudyData(cloudyTables);
   auto tables = cloudyTables.const_tables();
 
-  // int iter_count = 1;
-  // amrex::launch(iter_count, [=] AMREX_GPU_DEVICE(int /*iter*/) {
   const Real T =
       ComputeTgasFromEgas(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
 
@@ -58,7 +100,39 @@ auto problem_main() -> int {
 
   printf("\nrho = %.17e, Eint = %.17e, mu = %f, Tgas = %e, relerr = %e\n", rho,
          Eint, mu_sol, T, relerr);
-  //});
+
+  const Real reltol_floor = 0.01;
+  const Real rtol = 1.0e-4;       // not recommended to change this
+  constexpr Real T_floor = 100.0; // K
+
+  ODEUserData user_data{rho, tables};
+  quokka::valarray<Real, 1> y = {Eint};
+  quokka::valarray<Real, 1> abstol = {
+      reltol_floor * ComputeEgasFromTgas(rho, T_floor,
+                                         HydroSystem<ShockCloud>::gamma_,
+                                         tables)};
+
+  // do integration with RK2 (Heun's method)
+  int nsteps = 0;
+  rk_adaptive_integrate(user_rhs, 0, y, dt, &user_data, rtol, abstol, nsteps);
+
+  // check if integration failed
+  if (nsteps >= maxStepsODEIntegrate) {
+    Real T =
+        ComputeTgasFromEgas(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
+    Real Edot = cloudy_cooling_function(rho, T, tables);
+    Real t_cool = Eint / Edot;
+    printf("max substeps exceeded! rho = %g, Eint = %g, T = %g, cooling "
+           "time = %g\n",
+           rho, Eint, T, t_cool);
+  } else {
+    Real T =
+        ComputeTgasFromEgas(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
+    Real Edot = cloudy_cooling_function(rho, T, tables);
+    Real t_cool = Eint / Edot;
+    printf("success! rho = %g, Eint = %g, T = %g, cooling time = %g\n", rho,
+           Eint, T, t_cool);
+  }
 
 #if 0
   // compute Field length

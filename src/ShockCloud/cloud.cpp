@@ -308,9 +308,9 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
                                      tables);
         Real Edot = cloudy_cooling_function(rho, T, tables);
         Real t_cool = Eint / Edot;
-        printf("max substeps exceeded! rho = %g, Eint = %g, T = %g, cooling "
-               "time = %g\n",
-               rho, Eint, T, t_cool);
+        printf("max substeps exceeded! rho = %.17e, Eint = %.17e, T = %g, cooling "
+               "time = %g, dt = %.17e\n",
+               rho, Eint, T, t_cool, dt);
       }
 
       const Real Egas_new = RadSystem<ShockCloud>::ComputeEgasFromEint(
