@@ -45,11 +45,31 @@ interpolate2d(double x, double y, amrex::Table1D<const double> const &xv,
   double y2 = yv(iiy);
 
   // compute weights
-  double vol = ((x2 - x1) * (y2 - y1));
-  double w11 = (x2 - x) * (y2 - y) / vol;
-  double w12 = (x2 - x) * (y - y1) / vol;
-  double w21 = (x - x1) * (y2 - y) / vol;
-  double w22 = (x - x1) * (y - y1) / vol;
+  double w11 = 0;
+  double w12 = 0;
+  double w21 = 0;
+  double w22 = 0;
+
+  if (ix != iix && iy != iiy) {
+    const double vol = ((x2 - x1) * (y2 - y1));
+    AMREX_ASSERT(vol > 0.);
+    w11 = (x2 - x) * (y2 - y) / vol;
+    w12 = (x2 - x) * (y - y1) / vol;
+    w21 = (x - x1) * (y2 - y) / vol;
+    w22 = (x - x1) * (y - y1) / vol;
+  } else if (ix == iix && yi != iiy) {
+    const double vol = (y2 - y1);
+    AMREX_ASSERT(vol > 0.);
+    w11 = (y2 - y) / vol;
+    w12 = (y - y1) / vol;
+  } else if (ix != iix && yi == iiy) {
+    const double vol = (x2 - x1);
+    AMREX_ASSERT(vol > 0.);
+    w11 = (x2 - x) / vol;
+    w21 = (x - x1) / vol;
+  } else { // ix == iix && yi == iiy
+    w11 = 1.0;
+  }
 
   double A = table(ix, iy);
   double B = table(ix, iiy);
@@ -57,6 +77,7 @@ interpolate2d(double x, double y, amrex::Table1D<const double> const &xv,
   double D = table(iix, iiy);
 
   double value = w11 * A + w12 * B + w21 * C + w22 * D;
+  AMREX_ASSERT(!std::isnan(value));
 
   return value;
 }

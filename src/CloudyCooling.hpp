@@ -143,15 +143,15 @@ ComputeTgasFromEgas(double rho, double Egas, double gamma,
   // convert Egas (internal gas energy) to temperature
 
   // check whether temperature is out-of-bounds
-  const Real Tmin = 10.;
-  const Real Tmax = 1.0e9;
-  const Real Eint_min = ComputeEgasFromTgas(rho, Tmin, gamma, tables);
-  const Real Eint_max = ComputeEgasFromTgas(rho, Tmax, gamma, tables);
+  const Real Tmin_table = 10.;
+  const Real Tmax_table = 1.0e9;
+  const Real Eint_min = ComputeEgasFromTgas(rho, Tmin_table, gamma, tables);
+  const Real Eint_max = ComputeEgasFromTgas(rho, Tmax_table, gamma, tables);
 
   if (Egas <= Eint_min) {
-    return Tmin;
+    return Tmin_table;
   } else if (Egas >= Eint_max) {
-    return Tmax;
+    return Tmax_table;
   }
 
   // solve for temperature given Eint (with fixed adiabatic index gamma)
@@ -181,8 +181,10 @@ ComputeTgasFromEgas(double rho, double Egas, double gamma,
   };
 
   // compute temperature bounds using physics
-  const Real T_min = C * 0.60; // assuming fully ionized (mu ~ 0.6)
-  const Real T_max = C * 2.33; // assuming neutral fully molecular (mu ~ 2.33)
+  const Real mu_min = 0.60; // assuming fully ionized (mu ~ 0.6)
+  const Real mu_max = 2.33; // assuming neutral fully molecular (mu ~ 2.33)
+  const Real T_min = std::clamp(C * mu_min, Tmin_table, Tmax_table);
+  const Real T_max = std::clamp(C * mu_max, Tmin_table, Tmax_table);
 
   // do root-finding
   quokka::math::eps_tolerance<Real> tol(reltol);
@@ -191,9 +193,9 @@ ComputeTgasFromEgas(double rho, double Egas, double gamma,
 
   if ((maxIter >= maxIterLimit) || std::isnan(T_sol)) {
     printf(
-        "\nTgas iteration failed! rho = %.17g, Eint = %.17g, nH = %f, Tgas = %f, "
-        "bounds.first = %f, bounds.second = %f, maxIter = %d\n",
-        rho, Egas, nH, T_sol, bounds.first, bounds.second, maxIter);
+        "\nTgas iteration failed! rho = %.17g, Eint = %.17g, nH = %e, Tgas = %e, "
+        "bounds.first = %e, bounds.second = %e, T_min = %e, T_max = %e, maxIter = %d\n",
+        rho, Egas, nH, T_sol, bounds.first, bounds.second, T_min, T_max, maxIter);
     T_sol = NAN;
   }
 
