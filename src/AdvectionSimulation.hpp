@@ -93,6 +93,8 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	// compute derived variables
 	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const override;
 
+	void FixupState(int lev) override;
+
 	// tag cells for refinement
 	void ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override;
 
@@ -151,6 +153,12 @@ void AdvectionSimulation<problem_t>::ErrorEst(int lev, amrex::TagBoxArray &tags,
 					      amrex::Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for refinement -- implement in problem generator
+}
+
+template <typename problem_t>
+void AdvectionSimulation<problem_t>::FixupState(int lev)
+{
+	// fix negative states
 }
 
 template <typename problem_t>
