@@ -50,6 +50,8 @@
 #include <AMReX_PlotFileUtil.H>
 #include <AMReX_Print.H>
 #include <AMReX_Utility.H>
+#include <AMReX_Conduit_Blueprint.H>
+#include <ascent.hpp>
 #include <fmt/core.h>
 
 // internal headers
@@ -57,6 +59,10 @@
 #include "math_impl.hpp"
 
 #define USE_YAFLUXREGISTER
+
+using namespace conduit;
+using namespace ascent;
+
 
 // Main simulation class; solvers should inherit from this
 template <typename problem_t> class AMRSimulation : public amrex::AmrCore
@@ -167,8 +173,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void WritePlotFile() const;
 	void WriteCheckpointFile() const;
 	void ReadCheckpointFile();
-	void LoadBalance();
-	void ResetCosts();
+	void AscentCustomRender(conduit::Node const &blueprintMesh,
+							std::string const &plotfilename) const;
 
       protected:
 	amrex::Vector<amrex::BCRec> boundaryConditions_; // on level 0
@@ -947,6 +953,35 @@ auto AMRSimulation<problem_t>::PlotFileMF() const -> amrex::Vector<amrex::MultiF
 }
 
 // write plotfile to disk
+template <typename problem_t>
+void AMRSimulation<problem_t>::AscentCustomRender(conduit::Node const &blueprintMesh,
+												  std::string const &plotfilename) const
+{
+	BL_PROFILE("AMRSimulation::AscentCustomRender()");
+
+    // add a scene with a pseudocolor plot
+    Node scenes;
+    scenes["s1/plots/p1/type"] = "pseudocolor";
+    scenes["s1/plots/p1/field"] = "gasDensity";
+    // Set the output file name (ascent will add ".png")
+    scenes["s1/image_prefix"] = "ascent_render_" + plotfilename;
+
+    // setup actions
+    Node actions;
+    Node &add_act = actions.append();
+    add_act["action"] = "add_scenes";
+    add_act["scenes"] = scenes;
+    actions.append()["action"] = "execute";
+    actions.append()["action"] = "reset";
+
+    Ascent ascent;
+    ascent.open();
+    ascent.publish(blueprintMesh);
+    ascent.execute(actions);
+    ascent.close();
+}
+
+// write plotfile to disk
 template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile() const
 {
 	BL_PROFILE("AMRSimulation::WritePlotFile()");
@@ -959,6 +994,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile() con
 	varnames.insert(varnames.end(), componentNames_.begin(), componentNames_.end());
 	varnames.insert(varnames.end(), derivedNames_.begin(), derivedNames_.end());
 
+	// wrap MultiFabs into a Blueprint mesh, to be passed to Ascent
+    conduit::Node blueprintMesh;
+    amrex::MultiLevelToBlueprint(finest_level + 1, mf_ptr, varnames, Geom(),
+		tNew_[0], istep, refRatio(), blueprintMesh);
+	AscentCustomRender(blueprintMesh, plotfilename);
+
+	// write plotfile
 	amrex::Print() << "Writing plotfile " << plotfilename << "\n";
 
 #ifdef AMREX_USE_HDF5
