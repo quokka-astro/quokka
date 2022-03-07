@@ -132,8 +132,8 @@ template <typename F, int N>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void
 rk_adaptive_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0, Real t1,
                       void *user_data, Real reltol,
-                      quokka::valarray<Real, N> const &abstol,
-                      int &steps_taken) {
+                      quokka::valarray<Real, N> const &abstol, int &steps_taken,
+                      bool debug = false) {
   // Integrate dy/dt = rhs(y, t) from t0 to t1,
   // with local truncation error bounded by relative tolerance 'reltol'
   // and absolute tolerances 'abstol'.
@@ -169,8 +169,9 @@ rk_adaptive_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0, Real t1,
       dt = t1 - time;
     }
 
-    // std::cout << "Step i = " << i << " t = " << time << " dt = " << dt <<
-    // std::endl;
+    if (debug) {
+      printf("Step i = %d t = %e dt = %e\n", i, time, dt);
+    }
 
     bool step_success = false;
     for (int k = 0; k < maxRetries; ++k) {
@@ -181,13 +182,15 @@ rk_adaptive_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0, Real t1,
       int ierr = rk12_single_step(rhs, time, y, dt, ynew, yerr, user_data);
 
       Real eta = NAN;
+      Real epsilon = NAN;
+      
       if (ierr != 0) {
         // function evaluation failed, re-try with smaller timestep
         eta = eta_retry_failed_rhs;
       } else {
         // function evaluation succeeded
         // compute error norm from embedded error estimate
-        const Real epsilon = error_norm(y, yerr, reltol, abstol);
+        epsilon = error_norm(y, yerr, reltol, abstol);
 
         // compute new timestep with 'I' controller
         // https://sundials.readthedocs.io/en/latest/arkode/Mathematics_link.html#i-controller
@@ -203,27 +206,32 @@ rk_adaptive_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0, Real t1,
           }
           dt *= eta; // use new timestep
           step_success = true;
-          // std::cout << "\tsuccess k = " << k << " epsilon = " << epsilon
-          //            << " eta = " << eta << std::endl;
+          if (debug) {
+            printf("\tsuccess k = %d epsilon = %e eta = %e\n", k, epsilon, eta);
+          }
           break;
         }
       }
 
-      // error is too large or rhs evaluation failed, use smaller timestep and redo
+      // error is too large or rhs evaluation failed, use smaller timestep and
+      // redo
       if (k == 1) {
         eta = std::min(eta, eta_max_errfail_again);
       } else if (k > 1) {
         eta = std::clamp(eta, eta_min_errfail_multiple, eta_max_errfail_again);
       }
       dt *= eta; // use new timestep
-      // std::cout << "\tfailed step k = " << k << " epsilon = " << epsilon
-      //           << " eta = " << eta << std::endl;
+      AMREX_ASSERT(!std::isnan(dt));
+      if (debug) {
+        printf("\tfailed step k = %d eta = %e\n", k, eta);
+      }
     }
 
     if (!step_success) {
       success = false;
       printf("ODE integrator failed to reach accuracy tolerance after "
-             "maximum step-size re-tries reached! dt = %g\n", dt);
+             "maximum step-size re-tries reached! dt = %g\n",
+             dt);
       break;
     }
 
@@ -237,9 +245,9 @@ rk_adaptive_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0, Real t1,
 
   if (!success) {
     steps_taken = maxStepsODEIntegrate;
-    printf("ODE integration exceeded maxStepsODEIntegrate! steps_taken = %d\n", steps_taken);
+    printf("ODE integration exceeded maxStepsODEIntegrate! steps_taken = %d\n",
+           steps_taken);
   }
 }
-
 
 #endif // ODEINTEGRATE_HPP_

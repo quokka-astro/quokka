@@ -28,6 +28,11 @@
 //   temperature. Below, we set X = 1 / (1 + hydrogen_mass_cgs_e * n_He / n_H).
 
 constexpr double cloudy_H_mass_fraction = 1. / (1. + 0.1 * 3.971);
+constexpr double X = cloudy_H_mass_fraction;
+constexpr double Z = 0.02; // metal fraction by mass
+constexpr double Y = 1. - X - Z;
+constexpr double mean_metals_A = 16.; // mean atomic weight of metals
+
 constexpr double sigma_T = 6.6524e-25; // Thomson cross section (cm^2)
 constexpr double electron_mass_cgs = 9.1093897e-28; // electron mass (g)
 constexpr double T_cmb = 2.725;                     // * (1 + z); // K
@@ -95,8 +100,11 @@ cloudy_cooling_function(Real const rho, Real const T,
                                   tables.meanMolWeight);
 
   // compute electron density
-  const double n_e =
-      (rho / mu) * (1.0 - mu * (3.0 * cloudy_H_mass_fraction + 1.0) / 4.0);
+  // N.B. it is absolutely critical to include the metal contribution here!
+  const double n_e = (rho / hydrogen_mass_cgs_) *
+                     (1.0 - mu * (X + Y / 4. + Z / mean_metals_A)) /
+                     (mu - (electron_mass_cgs / hydrogen_mass_cgs_));
+  AMREX_ASSERT(n_e > 0.);
 
   // photoelectric heating term
   const double Tsqrt = std::sqrt(T);
@@ -192,10 +200,12 @@ ComputeTgasFromEgas(double rho, double Egas, double gamma,
   Real T_sol = 0.5 * (bounds.first + bounds.second);
 
   if ((maxIter >= maxIterLimit) || std::isnan(T_sol)) {
-    printf(
-        "\nTgas iteration failed! rho = %.17g, Eint = %.17g, nH = %e, Tgas = %e, "
-        "bounds.first = %e, bounds.second = %e, T_min = %e, T_max = %e, maxIter = %d\n",
-        rho, Egas, nH, T_sol, bounds.first, bounds.second, T_min, T_max, maxIter);
+    printf("\nTgas iteration failed! rho = %.17g, Eint = %.17g, nH = %e, Tgas "
+           "= %e, "
+           "bounds.first = %e, bounds.second = %e, T_min = %e, T_max = %e, "
+           "maxIter = %d\n",
+           rho, Egas, nH, T_sol, bounds.first, bounds.second, T_min, T_max,
+           maxIter);
     T_sol = NAN;
   }
 
