@@ -473,7 +473,7 @@ void AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time,
     {
         // help keep track of whether a level was already regridded
         // from a coarser level call to regrid
-        static Vector<int> last_regrid_step(max_level+1, 0);
+        static amrex::Vector<int> last_regrid_step(max_level+1, 0);
 
         // regrid changes level "lev+1" so we don't regrid on max_level
         // also make sure we don't regrid fine levels again if
@@ -484,7 +484,7 @@ void AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time,
             {
 				if (Verbose()) {
 					amrex::Print() << "regridding level " << lev
-								   << "and above..." << std::endl;
+								   << " and higher..." << std::endl;
 				}
         
 		        // regrid could add newly refine levels (if finest_level < max_level)
@@ -500,9 +500,9 @@ void AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time,
                 // if there are newly created levels, set the time step
                 for (int k = old_finest+1; k <= finest_level; ++k) {
 					if (do_subcycle) {
-	                    dt[k] = dt[k-1] / MaxRefRatio(k-1);
+	                    dt_[k] = dt_[k-1] / nsubsteps[k];
 					} else {
-						dt[k] = dt[k-1];
+						dt_[k] = dt_[k-1];
 					}
                 }
 
