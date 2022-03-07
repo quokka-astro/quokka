@@ -482,12 +482,7 @@ void AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time,
         {
             if (istep[lev] % regrid_int == 0)
             {
-				if (Verbose()) {
-					amrex::Print() << "regridding level " << lev
-								   << " and higher..." << std::endl;
-				}
-        
-		        // regrid could add newly refine levels (if finest_level < max_level)
+		        // regrid could add newly refined levels (if finest_level < max_level)
                 // so we save the previous finest level index
                 int old_finest = finest_level;
                 regrid(lev, time);
