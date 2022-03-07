@@ -65,6 +65,7 @@ user_rhs(Real /*t*/, quokka::valarray<Real, 1> &y_data,
     const Real T = ComputeTgasFromEgas(rho, Eint, gamma, tables);
     if (!std::isnan(T)) { // temp iteration succeeded
       y_rhs[0] = cloudy_cooling_function(rho, T, tables);
+      AMREX_ASSERT(!std::isnan(y_rhs[0]));
     } else { // temp iteration failed
       y_rhs[0] = NAN;
       return 1; // failed
@@ -76,9 +77,9 @@ user_rhs(Real /*t*/, quokka::valarray<Real, 1> &y_data,
 
 auto problem_main() -> int {
   // Problem parameters
-  const Real rho = 2.2775031827161193e-22; // g cm^-3;
-  const Real Eint = 1.11724e-11;           // erg cm^-3
-  const Real dt = 189075103.3;
+  const Real rho = 2.27766918428822386e-22;  // g cm^-3;
+  const Real Eint = 1.11777608454088878e-11; // erg cm^-3
+  const Real dt = 1.92399749834457487e8;     // s
 
   // Read Cloudy tables
   cloudy_tables cloudyTables;
@@ -94,12 +95,17 @@ auto problem_main() -> int {
 
   const Real C = (HydroSystem<ShockCloud>::gamma_ - 1.) * Eint /
                  (boltzmann_constant_cgs_ * (rho / hydrogen_mass_cgs_));
-  const Real mu_sol = interpolate2d(log_nH, std::log10(T), tables.log_nH,
+  const Real mu = interpolate2d(log_nH, std::log10(T), tables.log_nH,
                                     tables.log_Tgas, tables.meanMolWeight);
-  const Real relerr = std::abs((C * mu_sol - T) / T);
+  const Real relerr = std::abs((C * mu - T) / T);
+
+  const Real n_e = (rho / hydrogen_mass_cgs_) *
+                     (1.0 - mu * (X + Y / 4. + Z / mean_metals_A)) /
+                     (mu - (electron_mass_cgs / hydrogen_mass_cgs_));
 
   printf("\nrho = %.17e, Eint = %.17e, mu = %f, Tgas = %e, relerr = %e\n", rho,
-         Eint, mu_sol, T, relerr);
+         Eint, mu, T, relerr);
+  printf("n_e = %e, n_e/n_H = %e\n", n_e, n_e/nH);
 
   const Real reltol_floor = 0.01;
   const Real rtol = 1.0e-4;       // not recommended to change this
@@ -114,7 +120,7 @@ auto problem_main() -> int {
 
   // do integration with RK2 (Heun's method)
   int nsteps = 0;
-  rk_adaptive_integrate(user_rhs, 0, y, dt, &user_data, rtol, abstol, nsteps);
+  rk_adaptive_integrate(user_rhs, 0, y, dt, &user_data, rtol, abstol, nsteps, true);
 
   // check if integration failed
   if (nsteps >= maxStepsODEIntegrate) {
