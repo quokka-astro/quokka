@@ -389,16 +389,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 	// Main time loop
 	for (int step = istep[0]; step < maxTimesteps_ && cur_time < stopTime_; ++step) {
-		amrex::ParallelDescriptor::Barrier(); // synchronize all MPI ranks
-		
 		if (suppress_output == 0) {
 			amrex::Print() << "\nCoarse STEP " << step + 1
 						   << " at t = " << cur_time << " ("
 						   << (cur_time / stopTime_) * 100. << "%) starts ..." << std::endl;
 		}
 
-		doRegridIfNeeded(step, cur_time);
-		computeTimestep(); // important to call this *after* regrid (when a global timestep is used)
+		amrex::ParallelDescriptor::Barrier(); // synchronize all MPI ranks
+		computeTimestep();
 
 		int lev = 0;
 		int iteration = 1;
@@ -464,33 +462,52 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	}
 }
 
-template <typename problem_t>
-void AMRSimulation<problem_t>::doRegridIfNeeded(int const step, amrex::Real const time)
-{
-	BL_PROFILE("AMRSimulation::doRegridIfNeeded()");
-
-	if (max_level > 0 && regrid_int > 0) // regridding is possible
-	{
-		if (step % regrid_int == 0) { // regrid on this coarse step
-			if (Verbose()) {
-				amrex::Print() << "regridding..." << std::endl;
-			}
-			regrid(0, time);
-
-			// do fix-up on all levels that have been re-gridded
-			for(int lev = 0; lev <= finest_level; ++lev) {
-				FixupState(lev);
-			}
-		}
-	}
-}
-
 // N.B.: This function actually works for subcycled or not subcycled, as long as
 // nsubsteps[lev] is set correctly.
 template <typename problem_t>
 void AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time, int iteration)
 {
 	BL_PROFILE("AMRSimulation::timeStepWithSubcycling()");
+
+	if (regrid_int > 0) // regridding is possible
+    {
+        // help keep track of whether a level was already regridded
+        // from a coarser level call to regrid
+        static amrex::Vector<int> last_regrid_step(max_level+1, 0);
+
+        // regrid changes level "lev+1" so we don't regrid on max_level
+        // also make sure we don't regrid fine levels again if
+        // it was taken care of during a coarser regrid
+        if (lev < max_level && istep[lev] > last_regrid_step[lev])
+        {
+            if (istep[lev] % regrid_int == 0)
+            {
+		        // regrid could add newly refined levels (if finest_level < max_level)
+                // so we save the previous finest level index
+                int old_finest = finest_level;
+                regrid(lev, time);
+
+                // mark that we have regridded this level already
+                for (int k = lev; k <= finest_level; ++k) {
+                    last_regrid_step[k] = istep[k];
+                }
+
+                // if there are newly created levels, set the time step
+                for (int k = old_finest+1; k <= finest_level; ++k) {
+					if (do_subcycle) {
+	                    dt_[k] = dt_[k-1] / nsubsteps[k];
+					} else {
+						dt_[k] = dt_[k-1];
+					}
+                }
+
+				// do fix-up on all levels that have been re-gridded
+                for (int k = lev; k <= finest_level; ++k) {
+					FixupState(k);
+				}
+            }
+        }
+    }
 
 	if (Verbose()) {
 		amrex::Print() << "[Level " << lev << " step " << istep[lev] + 1 << "] ";
