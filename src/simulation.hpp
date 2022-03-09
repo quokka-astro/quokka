@@ -11,11 +11,14 @@
 
 // c++ headers
 #include <csignal>
+#include <fstream>
 #include <iomanip>
 #include <limits>
 #include <memory>
 #include <ostream>
 #include <tuple>
+#include <unordered_map>
+#include <any>
 
 // library headers
 #include "AMReX.H"
@@ -59,166 +62,156 @@
 #define USE_YAFLUXREGISTER
 
 // Main simulation class; solvers should inherit from this
-template <typename problem_t> class AMRSimulation : public amrex::AmrCore {
-public:
-  amrex::Real maxDt_ =
-      std::numeric_limits<double>::max(); // no limit by default
-  amrex::Real initDt_ =
-      std::numeric_limits<double>::max(); // no limit by default
-  amrex::Real constantDt_ = 0.0;
-  amrex::Vector<int> istep;         // which step?
-  amrex::Vector<int> nsubsteps;     // how many substeps on each level?
-  amrex::Vector<amrex::Real> tNew_; // for state_new_
-  amrex::Vector<amrex::Real> tOld_; // for state_old_
-  amrex::Vector<amrex::Real> dt_;   // timestep for each level
-  amrex::Real stopTime_ = 1.0;      // default
-  amrex::Real cflNumber_ = 0.3;     // default
-  amrex::Long cycleCount_ = 0;
-  amrex::Long maxTimesteps_ = 1e4; // default
-  int plotfileInterval_ = 10;      // -1 == no output
-  int checkpointInterval_ = -1;    // -1 == no output
+template <typename problem_t> class AMRSimulation : public amrex::AmrCore
+{
+      public:
+	amrex::Real maxDt_ = std::numeric_limits<double>::max(); // no limit by default
+	amrex::Real initDt_ = std::numeric_limits<double>::max(); // no limit by default
+	amrex::Real constantDt_ = 0.0;
+	amrex::Vector<int> istep;				 // which step?
+	amrex::Vector<int> nsubsteps;				 // how many substeps on each level?
+	amrex::Vector<amrex::Real> tNew_;			 // for state_new_
+	amrex::Vector<amrex::Real> tOld_;			 // for state_old_
+	amrex::Vector<amrex::Real> dt_;				 // timestep for each level
+	amrex::Real stopTime_ = 1.0;				 // default
+	amrex::Real cflNumber_ = 0.3;				 // default
+	amrex::Long cycleCount_ = 0;
+	amrex::Long maxTimesteps_ = 1e4; // default
+	int plotfileInterval_ = 10;	 // -1 == no output
+	int checkpointInterval_ = -1;	 // -1 == no output
+	std::unordered_map<std::string, std::any> simulationMetadata_;
 
-  // constructors
+	// constructors
+	
+	AMRSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions, const int ncomp, const int ncompPrim)
+	    : ncomp_(ncomp), ncompPrimitive_(ncompPrim)
+	{
+		initialize(boundaryConditions);
+	}
 
-  AMRSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions,
-                const int ncomp, const int ncompPrim)
-      : ncomp_(ncomp), ncompPrimitive_(ncompPrim) {
-    initialize(boundaryConditions);
-  }
+	AMRSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions, const int ncomp)
+	    : ncomp_(ncomp), ncompPrimitive_(ncomp)
+	{
+		initialize(boundaryConditions);
+	}
 
-  AMRSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions,
-                const int ncomp)
-      : ncomp_(ncomp), ncompPrimitive_(ncomp) {
-    initialize(boundaryConditions);
-  }
+	void initialize(amrex::Vector<amrex::BCRec> &boundaryConditions);
+	void readParameters();
+	void setInitialConditions();
+	void evolve();
+	void computeTimestep();
 
-  void initialize(amrex::Vector<amrex::BCRec> &boundaryConditions);
-  void readParameters();
-  void setInitialConditions();
-  void evolve();
-  void computeTimestep();
+	virtual void computeMaxSignalLocal(int level) = 0;
+	virtual void setInitialConditionsAtLevel(int level) = 0;
+	virtual void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev,
+						  int iteration, int ncycle) = 0;
+	virtual void computeAfterTimestep(const amrex::Real dt) = 0;
+	virtual void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) = 0;
 
-  virtual void computeMaxSignalLocal(int level) = 0;
-  virtual void setInitialConditionsAtLevel(int level) = 0;
-  virtual void advanceSingleTimestepAtLevel(int lev, amrex::Real time,
-                                            amrex::Real dt_lev, int iteration,
-                                            int ncycle) = 0;
-  virtual void computeAfterTimestep() = 0;
-  virtual void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) = 0;
+	// compute derived variables
+	virtual void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const = 0;
 
-  // compute derived variables
-  virtual void ComputeDerivedVar(int lev, std::string const &dname,
-                                 amrex::MultiFab &mf, int ncomp) const = 0;
+	// fix-up any unphysical states created by AMR operations
+	// (e.g., caused by the flux register or from interpolation)
+	virtual void FixupState(int level) = 0;
 
-  // fix-up any unphysical states created by AMR operations
-  // (e.g., caused by the flux register or from interpolation)
-  virtual void FixupState(int level) = 0;
+	// tag cells for refinement
+	void ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override = 0;
 
-  // tag cells for refinement
-  void ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time,
-                int ngrow) override = 0;
+	// Make a new level using provided BoxArray and DistributionMapping
+	void MakeNewLevelFromCoarse(int lev, amrex::Real time, const amrex::BoxArray &ba,
+				    const amrex::DistributionMapping &dm) override;
 
-  // Make a new level using provided BoxArray and DistributionMapping
-  void MakeNewLevelFromCoarse(int lev, amrex::Real time,
-                              const amrex::BoxArray &ba,
-                              const amrex::DistributionMapping &dm) override;
+	// Remake an existing level using provided BoxArray and DistributionMapping
+	void RemakeLevel(int lev, amrex::Real time, const amrex::BoxArray &ba,
+			 const amrex::DistributionMapping &dm) override;
 
-  // Remake an existing level using provided BoxArray and DistributionMapping
-  void RemakeLevel(int lev, amrex::Real time, const amrex::BoxArray &ba,
-                   const amrex::DistributionMapping &dm) override;
+	// Delete level data
+	void ClearLevel(int lev) override;
 
-  // Delete level data
-  void ClearLevel(int lev) override;
+	// Make a new level from scratch using provided BoxArray and
+	// DistributionMapping
+	void MakeNewLevelFromScratch(int lev, amrex::Real time, const amrex::BoxArray &ba,
+				     const amrex::DistributionMapping &dm) override;
 
-  // Make a new level from scratch using provided BoxArray and
-  // DistributionMapping
-  void MakeNewLevelFromScratch(int lev, amrex::Real time,
-                               const amrex::BoxArray &ba,
-                               const amrex::DistributionMapping &dm) override;
+	// AMR utility functions
+	void fillBoundaryConditions(amrex::MultiFab &S_filled, amrex::MultiFab &state, int lev,
+				    amrex::Real time);
+	void FillPatchWithData(int lev, amrex::Real time, amrex::MultiFab &mf,
+			       amrex::Vector<amrex::MultiFab *> &coarseData,
+			       amrex::Vector<amrex::Real> &coarseTime,
+			       amrex::Vector<amrex::MultiFab *> &fineData,
+			       amrex::Vector<amrex::Real> &fineTime, int icomp, int ncomp);
+	void FillPatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp);
+	void FillCoarsePatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp);
+	void GetData(int lev, amrex::Real time, amrex::Vector<amrex::MultiFab *> &data,
+		     amrex::Vector<amrex::Real> &datatime);
+	void AverageDown();
+	void AverageDownTo(int crse_lev);
+	void timeStepWithSubcycling(int lev, amrex::Real time, int iteration);
+	void doRegridIfNeeded(int step, amrex::Real time);
 
-  // AMR utility functions
-  void fillBoundaryConditions(amrex::MultiFab &S_filled, amrex::MultiFab &state,
-                              int lev, amrex::Real time);
-  void FillPatchWithData(int lev, amrex::Real time, amrex::MultiFab &mf,
-                         amrex::Vector<amrex::MultiFab *> &coarseData,
-                         amrex::Vector<amrex::Real> &coarseTime,
-                         amrex::Vector<amrex::MultiFab *> &fineData,
-                         amrex::Vector<amrex::Real> &fineTime, int icomp,
-                         int ncomp);
-  void FillPatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp,
-                 int ncomp);
-  void FillCoarsePatch(int lev, amrex::Real time, amrex::MultiFab &mf,
-                       int icomp, int ncomp);
-  void GetData(int lev, amrex::Real time,
-               amrex::Vector<amrex::MultiFab *> &data,
-               amrex::Vector<amrex::Real> &datatime);
-  void AverageDown();
-  void AverageDownTo(int crse_lev);
-  void timeStepWithSubcycling(int lev, amrex::Real time, int iteration);
-  void doRegridIfNeeded(int step, amrex::Real time);
+	void incrementFluxRegisters(amrex::MFIter &mfi, amrex::YAFluxRegister *fr_as_crse,
+				    amrex::YAFluxRegister *fr_as_fine,
+				    std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxArrays,
+				    int lev, amrex::Real dt_lev);
 
-  void incrementFluxRegisters(
-      amrex::MFIter &mfi, amrex::YAFluxRegister *fr_as_crse,
-      amrex::YAFluxRegister *fr_as_fine,
-      std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxArrays, int lev,
-      amrex::Real dt_lev);
+	// boundary condition
+	AMREX_GPU_DEVICE static void
+	setCustomBoundaryConditions(const amrex::IntVect &iv,
+				    amrex::Array4<amrex::Real> const &dest, int dcomp, int numcomp,
+				    amrex::GeometryData const &geom, amrex::Real time,
+				    const amrex::BCRec *bcr, int bcomp,
+				    int orig_comp); // template specialized by problem generator
 
-  // boundary condition
-  AMREX_GPU_DEVICE static void setCustomBoundaryConditions(
-      const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest,
-      int dcomp, int numcomp, amrex::GeometryData const &geom, amrex::Real time,
-      const amrex::BCRec *bcr, int bcomp,
-      int orig_comp); // template specialized by problem generator
+	// I/O functions
+	[[nodiscard]] auto PlotFileName(int lev) const -> std::string;
+	[[nodiscard]] auto PlotFileMF() const -> amrex::Vector<amrex::MultiFab>;
+	[[nodiscard]] auto PlotFileMFAtLevel(int lev) const -> amrex::MultiFab;
+	void WritePlotFile();
+	virtual void WriteCustomMetadata(std::ofstream &file) = 0;
+	void WriteCheckpointFile() const;
+	void ReadCheckpointFile();
+	void LoadBalance();
+	void ResetCosts();
 
-  // I/O functions
-  [[nodiscard]] auto PlotFileName(int lev) const -> std::string;
-  [[nodiscard]] auto PlotFileMF() const -> amrex::Vector<amrex::MultiFab>;
-  [[nodiscard]] auto PlotFileMFAtLevel(int lev) const -> amrex::MultiFab;
-  void WritePlotFile() const;
-  void WriteCheckpointFile() const;
-  void ReadCheckpointFile();
-  void LoadBalance();
-  void ResetCosts();
+      protected:
+	amrex::Vector<amrex::BCRec> boundaryConditions_; // on level 0
+	amrex::Vector<amrex::MultiFab> state_old_;
+	amrex::Vector<amrex::MultiFab> state_new_;
+	amrex::Vector<amrex::MultiFab> max_signal_speed_; // needed to compute CFL timestep
 
-protected:
-  amrex::Vector<amrex::BCRec> boundaryConditions_; // on level 0
-  amrex::Vector<amrex::MultiFab> state_old_;
-  amrex::Vector<amrex::MultiFab> state_new_;
-  amrex::Vector<amrex::MultiFab>
-      max_signal_speed_; // needed to compute CFL timestep
+	// flux registers: store fluxes at coarse-fine interface for synchronization
+	// this will be sized "nlevs_max+1"
+	// NOTE: the flux register associated with flux_reg[lev] is associated with
+	// the lev/lev-1 interface (and has grid spacing associated with lev-1)
+	// therefore flux_reg[0] and flux_reg[nlevs_max] are never actually used in
+	// the reflux operation
+	amrex::Vector<std::unique_ptr<amrex::YAFluxRegister>> flux_reg_;
 
-  // flux registers: store fluxes at coarse-fine interface for synchronization
-  // this will be sized "nlevs_max+1"
-  // NOTE: the flux register associated with flux_reg[lev] is associated with
-  // the lev/lev-1 interface (and has grid spacing associated with lev-1)
-  // therefore flux_reg[0] and flux_reg[nlevs_max] are never actually used in
-  // the reflux operation
-  amrex::Vector<std::unique_ptr<amrex::YAFluxRegister>> flux_reg_;
+	// Nghost = number of ghost cells for each array
+	int nghost_ = 4;	   // PPM needs nghost >= 3, PPM+flattening needs nghost >= 4
+	int ncomp_ = 0;	   // = number of components (conserved variables) for each array
+	int ncompPrimitive_ = 0; // number of primitive variables
+	amrex::Vector<std::string> componentNames_;
+	amrex::Vector<std::string> derivedNames_;
+	bool areInitialConditionsDefined_ = false;
 
-  // Nghost = number of ghost cells for each array
-  int nghost_ = 4; // PPM needs nghost >= 3, PPM+flattening needs nghost >= 4
-  int ncomp_ = 0; // = number of components (conserved variables) for each array
-  int ncompPrimitive_ = 0; // number of primitive variables
-  amrex::Vector<std::string> componentNames_;
-  amrex::Vector<std::string> derivedNames_;
-  bool areInitialConditionsDefined_ = false;
+	/// output parameters
+	std::string plot_file{"plt"}; // plotfile prefix
+	std::string chk_file{"chk"};  // checkpoint prefix
+	/// input parameters (if >= 0 we restart from a checkpoint)
+	std::string restart_chkfile;
 
-  /// output parameters
-  std::string plot_file{"plt"}; // plotfile prefix
-  std::string chk_file{"chk"};  // checkpoint prefix
-  /// input parameters (if >= 0 we restart from a checkpoint)
-  std::string restart_chkfile;
+	/// AMR-specific parameters
+	int regrid_int = 2;  // regrid interval (number of coarse steps)
+	int do_reflux = 1;   // 1 == reflux, 0 == no reflux
+	int do_subcycle = 1; // 1 == subcycle, 0 == no subcyle
+	int suppress_output = 0; // 1 == show timestepping, 0 == do not output each timestep
 
-  /// AMR-specific parameters
-  int regrid_int = 2;  // regrid interval (number of coarse steps)
-  int do_reflux = 1;   // 1 == reflux, 0 == no reflux
-  int do_subcycle = 1; // 1 == subcycle, 0 == no subcyle
-  int suppress_output =
-      0; // 1 == show timestepping, 0 == do not output each timestep
-
-  // performance metrics
-  amrex::Long cellUpdates_ = 0;
-  amrex::Vector<amrex::Long> cellUpdatesEachLevel_;
+	// performance metrics
+	amrex::Long cellUpdates_ = 0;
+	amrex::Vector<amrex::Long> cellUpdatesEachLevel_;
 };
 
 template <typename problem_t>
@@ -379,103 +372,101 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep() {
   }
 }
 
-template <typename problem_t> void AMRSimulation<problem_t>::evolve() {
-  BL_PROFILE("AMRSimulation::evolve()");
+template <typename problem_t> void AMRSimulation<problem_t>::evolve()
+{
+	BL_PROFILE("AMRSimulation::evolve()");
 
-  AMREX_ALWAYS_ASSERT(areInitialConditionsDefined_);
+	AMREX_ALWAYS_ASSERT(areInitialConditionsDefined_);
 
-  amrex::Real cur_time = tNew_[0];
-  int last_plot_file_step = 0;
+	amrex::Real cur_time = tNew_[0];
+	int last_plot_file_step = 0;
 
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 =
-      geom[0].CellSizeArray();
-  amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
-  amrex::Vector<amrex::Real> init_sum_cons(ncomp_);
-  for (int n = 0; n < ncomp_; ++n) {
-    const int lev = 0;
-    init_sum_cons[n] = state_new_[lev].sum(n) * vol;
-  }
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = geom[0].CellSizeArray();
+	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
+	amrex::Vector<amrex::Real> init_sum_cons(ncomp_);
+	for (int n = 0; n < ncomp_; ++n) {
+		const int lev = 0;
+		init_sum_cons[n] = state_new_[lev].sum(n) * vol;
+	}
 
-  amrex::Real const start_time = amrex::ParallelDescriptor::second();
+	amrex::Real const start_time = amrex::ParallelDescriptor::second();
 
-  // Main time loop
-  for (int step = istep[0]; step < maxTimesteps_ && cur_time < stopTime_;
-       ++step) {
-    if (suppress_output == 0) {
-      amrex::Print() << "\nCoarse STEP " << step + 1 << " at t = " << cur_time
-                     << " (" << (cur_time / stopTime_) * 100. << "%) starts ..."
-                     << std::endl;
-    }
+	// Main time loop
+	for (int step = istep[0]; step < maxTimesteps_ && cur_time < stopTime_; ++step) {
+		if (suppress_output == 0) {
+			amrex::Print() << "\nCoarse STEP " << step + 1
+						   << " at t = " << cur_time << " ("
+						   << (cur_time / stopTime_) * 100. << "%) starts ..." << std::endl;
+		}
 
-    amrex::ParallelDescriptor::Barrier(); // synchronize all MPI ranks
-    computeTimestep();
+		amrex::ParallelDescriptor::Barrier(); // synchronize all MPI ranks
+		computeTimestep();
 
-    int lev = 0;
-    int iteration = 1;
-    timeStepWithSubcycling(lev, cur_time, iteration);
+		int lev = 0;
+		int iteration = 1;
+		timeStepWithSubcycling(lev, cur_time, iteration);
 
-    cur_time += dt_[0];
-    ++cycleCount_;
-    computeAfterTimestep();
+		cur_time += dt_[0];
+		++cycleCount_;
+		computeAfterTimestep(dt_[0]);
 
-    // sync up time (to avoid roundoff error)
-    for (lev = 0; lev <= finest_level; ++lev) {
-      tNew_[lev] = cur_time;
-    }
+		// sync up time (to avoid roundoff error)
+		for (lev = 0; lev <= finest_level; ++lev) {
+			tNew_[lev] = cur_time;
+		}
 
-    if (plotfileInterval_ > 0 && (step + 1) % plotfileInterval_ == 0) {
-      last_plot_file_step = step + 1;
-      WritePlotFile();
-    }
+		if (plotfileInterval_ > 0 && (step + 1) % plotfileInterval_ == 0) {
+			last_plot_file_step = step + 1;
+			WritePlotFile();
+		}
 
-    if (checkpointInterval_ > 0 && (step + 1) % checkpointInterval_ == 0) {
-      WriteCheckpointFile();
-    }
+		if (checkpointInterval_ > 0 && (step + 1) % checkpointInterval_ == 0) {
+			WriteCheckpointFile();
+		}
 
-    if (cur_time >= stopTime_ - 1.e-6 * dt_[0]) {
-      break;
-    }
-  }
+		if (cur_time >= stopTime_ - 1.e-6 * dt_[0]) {
+			break;
+		}
+	}
 
-  amrex::Real elapsed_sec = amrex::ParallelDescriptor::second() - start_time;
+	amrex::Real elapsed_sec = amrex::ParallelDescriptor::second() - start_time;
 
-  // compute reference solution (if it's a test problem)
-  computeAfterEvolve(init_sum_cons);
+	// compute reference solution (if it's a test problem)
+	computeAfterEvolve(init_sum_cons);
 
-  // compute conservation error
-  for (int n = 0; n < ncomp_; ++n) {
-    amrex::Real const final_sum = state_new_[0].sum(n) * vol;
-    amrex::Real const abs_err = (final_sum - init_sum_cons[n]);
-    amrex::Print() << "Initial " << componentNames_[n] << " = "
-                   << init_sum_cons[n] << std::endl;
-    amrex::Print() << "\tabsolute conservation error = " << abs_err
-                   << std::endl;
-    if (init_sum_cons[n] != 0.0) {
-      amrex::Real const rel_err = abs_err / init_sum_cons[n];
-      amrex::Print() << "\trelative conservation error = " << rel_err
-                     << std::endl;
-    }
-    amrex::Print() << std::endl;
-  }
+	// compute conservation error
+	for (int n = 0; n < ncomp_; ++n) {
+		amrex::Real const final_sum = state_new_[0].sum(n) * vol;
+		amrex::Real const abs_err = (final_sum - init_sum_cons[n]);
+		amrex::Print() << "Initial " << componentNames_[n] << " = "
+					<< init_sum_cons[n] << std::endl;
+		amrex::Print() << "\tabsolute conservation error = " << abs_err
+					<< std::endl;
+		if (init_sum_cons[n] != 0.0) {
+		amrex::Real const rel_err = abs_err / init_sum_cons[n];
+		amrex::Print() << "\trelative conservation error = " << rel_err
+						<< std::endl;
+		}
+		amrex::Print() << std::endl;
+	}
 
-  // compute zone-cycles/sec
-  const int IOProc = amrex::ParallelDescriptor::IOProcessorNumber();
-  amrex::ParallelDescriptor::ReduceRealMax(elapsed_sec, IOProc);
-  const double microseconds_per_update = 1.0e6 * elapsed_sec / cellUpdates_;
-  const double megaupdates_per_second = 1.0 / microseconds_per_update;
-  amrex::Print() << "Performance figure-of-merit: " << microseconds_per_update
-                 << " μs/zone-update [" << megaupdates_per_second
-                 << " Mupdates/s]\n";
-  for (int lev = 0; lev <= max_level; ++lev) {
-    amrex::Print() << "Zone-updates on level " << lev << ": "
-                   << cellUpdatesEachLevel_[lev] << "\n";
-  }
-  amrex::Print() << std::endl;
+	// compute zone-cycles/sec
+	const int IOProc = amrex::ParallelDescriptor::IOProcessorNumber();
+	amrex::ParallelDescriptor::ReduceRealMax(elapsed_sec, IOProc);
+	const double microseconds_per_update = 1.0e6 * elapsed_sec / cellUpdates_;
+	const double megaupdates_per_second = 1.0 / microseconds_per_update;
+	amrex::Print() << "Performance figure-of-merit: " << microseconds_per_update
+		       << " μs/zone-update [" << megaupdates_per_second << " Mupdates/s]\n";
+	for(int lev = 0; lev <= max_level; ++lev) {
+		amrex::Print() << "Zone-updates on level " << lev << ": "
+					   << cellUpdatesEachLevel_[lev] << "\n";
+	}
+	amrex::Print() << std::endl;
 
-  // write final plotfile
-  if (plotfileInterval_ > 0 && istep[0] > last_plot_file_step) {
-    WritePlotFile();
-  }
+	// write final plotfile
+	if (plotfileInterval_ > 0 && istep[0] > last_plot_file_step) {
+		WritePlotFile();
+	}
 }
 
 // N.B.: This function actually works for subcycled or not subcycled, as long as
@@ -982,23 +973,47 @@ auto AMRSimulation<problem_t>::PlotFileMF() const
 }
 
 // write plotfile to disk
-template <typename problem_t>
-void AMRSimulation<problem_t>::WritePlotFile() const {
-  BL_PROFILE("AMRSimulation::WritePlotFile()");
+template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
+{
+	BL_PROFILE("AMRSimulation::WritePlotFile()");
 
-  const std::string &plotfilename = PlotFileName(istep[0]);
-  amrex::Vector<amrex::MultiFab> mf = PlotFileMF();
-  amrex::Vector<const amrex::MultiFab *> mf_ptr = amrex::GetVecOfConstPtrs(mf);
+	const std::string &plotfilename = PlotFileName(istep[0]);
+	amrex::Vector<amrex::MultiFab> mf = PlotFileMF();
+	amrex::Vector<const amrex::MultiFab*> mf_ptr = amrex::GetVecOfConstPtrs(mf);
 
-  amrex::Vector<std::string> varnames;
-  varnames.insert(varnames.end(), componentNames_.begin(),
-                  componentNames_.end());
-  varnames.insert(varnames.end(), derivedNames_.begin(), derivedNames_.end());
+	amrex::Vector<std::string> varnames;
+	varnames.insert(varnames.end(), componentNames_.begin(), componentNames_.end());
+	varnames.insert(varnames.end(), derivedNames_.begin(), derivedNames_.end());
 
-  amrex::Print() << "Writing plotfile " << plotfilename << "\n";
+	amrex::Print() << "Writing plotfile " << plotfilename << "\n";
 
-  amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, mf_ptr,
-                                 varnames, Geom(), tNew_[0], istep, refRatio());
+#ifdef AMREX_USE_HDF5
+	amrex::WriteMultiLevelPlotfileHDF5(plotfilename, finest_level + 1, mf_ptr, varnames, Geom(),
+				       tNew_[0], istep, refRatio());
+#else
+	amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, mf_ptr,
+					   varnames, Geom(), tNew_[0], istep, refRatio());
+	
+	// write metadata file
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		std::string MetadataFileName(plotfilename + "/Metadata");
+		amrex::VisMF::IO_Buffer io_buffer(amrex::VisMF::IO_Buffer_Size);
+		std::ofstream MetadataFile;
+		MetadataFile.rdbuf()->pubsetbuf(io_buffer.dataPtr(), io_buffer.size());
+		MetadataFile.open(MetadataFileName.c_str(),
+				std::ofstream::out | std::ofstream::trunc | std::ofstream::binary);
+		if (!MetadataFile.good()) {
+			amrex::FileOpenFailed(MetadataFileName);
+		}
+		MetadataFile.precision(17);
+		WriteCustomMetadata(MetadataFile);
+		// write out each (key, value) of simulationMetadata_
+		// for(const auto& [key, value] : simulationMetadata_) {
+		// 	 MetadataFile << key;
+		// 	 MetadataFile << value;
+		// }
+	}
+#endif
 }
 
 template <typename problem_t>

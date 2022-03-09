@@ -11,6 +11,7 @@
 
 #include <array>
 #include <climits>
+#include <fstream>
 #include <limits>
 #include <string>
 #include <tuple>
@@ -75,6 +76,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	using AMRSimulation<problem_t>::cellUpdates_;
 	using AMRSimulation<problem_t>::CountCells;
 	using AMRSimulation<problem_t>::WriteCheckpointFile;
+	using AMRSimulation<problem_t>::simulationMetadata_;
 
 	std::vector<double> t_vec_;
 	std::vector<double> Trad_vec_;
@@ -110,7 +112,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 				       RadSystem<problem_t>::nvar_, ncompHyperbolic_)
 	{
 		componentNames_ = {"gasDensity",    "x-GasMomentum", "y-GasMomentum",
-				   "z-GasMomentum", "gasEnergy",     "radEnergy",
+				   "z-GasMomentum", "gasEnergy",     "scalar",		"radEnergy",
 				   "x-RadFlux",	    "y-RadFlux",     "z-RadFlux"};
 	}
 
@@ -120,7 +122,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 				       RadSystem<problem_t>::nvar_, ncompHyperbolic_)
 	{
 		componentNames_ = {"gasDensity",    "x-GasMomentum", "y-GasMomentum",
-				   "z-GasMomentum", "gasEnergy",     "radEnergy",
+				   "z-GasMomentum", "gasEnergy",     "scalar",		"radEnergy",
 				   "x-RadFlux",	    "y-RadFlux",     "z-RadFlux"};
 	}
 
@@ -129,7 +131,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	void setInitialConditionsAtLevel(int level) override;
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev,
 					  int iteration, int ncycle) override;
-	void computeAfterTimestep() override;
+	void computeAfterTimestep(const amrex::Real dt) override;
 	void computeAfterLevelAdvance(int lev, amrex::Real time,
 								 amrex::Real dt_lev, int /*iteration*/, int /*ncycle*/);
 	void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) override;
@@ -139,6 +141,8 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 
 	// compute derived variables
 	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const override;
+
+	void WriteCustomMetadata(std::ofstream &file) override;
 
 	// fix-up states
 	void FixupState(int level) override;
@@ -287,7 +291,8 @@ void RadhydroSimulation<problem_t>::setInitialConditionsAtLevel(int level)
 	// do nothing -- user should implement using problem-specific template specialization
 }
 
-template <typename problem_t> void RadhydroSimulation<problem_t>::computeAfterTimestep()
+template <typename problem_t>
+void RadhydroSimulation<problem_t>::computeAfterTimestep(const amrex::Real dt)
 {
 	// do nothing -- user should implement if desired
 }
@@ -304,6 +309,12 @@ void RadhydroSimulation<problem_t>::ComputeDerivedVar(int lev, std::string const
 								amrex::MultiFab &mf, const int ncomp) const
 {
 	// compute derived variables and save in 'mf' -- user should implement
+}
+
+template <typename problem_t>
+void RadhydroSimulation<problem_t>::WriteCustomMetadata(std::ofstream &file)
+{
+	// write any metadata saved in simulationMetadata_ to file
 }
 
 template <typename problem_t>
