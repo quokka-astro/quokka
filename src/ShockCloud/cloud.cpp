@@ -15,11 +15,15 @@
 #include "AMReX_BLassert.H"
 #include "AMReX_FabArray.H"
 #include "AMReX_Geometry.H"
+#include "AMReX_GpuContainers.H"
 #include "AMReX_GpuDevice.H"
+#include "AMReX_GpuQualifiers.H"
 #include "AMReX_IntVect.H"
+#include "AMReX_MFParallelFor.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParallelContext.H"
 #include "AMReX_ParallelDescriptor.H"
+#include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
 #include "AMReX_TableData.H"
 
@@ -32,6 +36,7 @@
 #include "radiation_system.hpp"
 
 using amrex::Real;
+using namespace amrex::literals;
 
 struct ShockCloud {
 }; // dummy type to allow compile-type polymorphism via template specialization
@@ -51,10 +56,13 @@ constexpr Real nH1 = 1.0e-1;             // cm^-3
 constexpr Real R_cloud = 5.0 * 3.086e18; // cm [5 pc]
 constexpr Real M0 = 2.0;                 // Mach number of shock
 
-constexpr Real T_floor = 100.0;                             // K
+constexpr Real T_floor = 100.0;                            // K
 constexpr Real P0 = nH0 * Tgas0 * boltzmann_constant_cgs_; // erg cm^-3
 constexpr Real rho0 = nH0 * m_H;                           // g cm^-3
 constexpr Real rho1 = nH1 * m_H;
+
+// needed for Dirichlet boundary condition
+AMREX_GPU_MANAGED static Real delta_vy = 0;
 
 template <>
 void RadhydroSimulation<ShockCloud>::setInitialConditionsAtLevel(int lev) {
@@ -142,8 +150,10 @@ void RadhydroSimulation<ShockCloud>::setInitialConditionsAtLevel(int lev) {
       AMREX_ALWAYS_ASSERT(delta_rho > -1.0);
 
       Real rho = rho0 * (1.0 + delta_rho); // background density
+      Real C = 0.0; // concentration is zero on the background
       if (R < R_cloud) {
         rho = rho1 * (1.0 + delta_rho); // cloud density
+        C = 1.0; // concentration is unity inside the cloud
       }
       Real const xmom = 0;
       Real const ymom = 0;
@@ -157,6 +167,7 @@ void RadhydroSimulation<ShockCloud>::setInitialConditionsAtLevel(int lev) {
       state(i, j, k, RadSystem<ShockCloud>::x1GasMomentum_index) = xmom;
       state(i, j, k, RadSystem<ShockCloud>::x2GasMomentum_index) = ymom;
       state(i, j, k, RadSystem<ShockCloud>::x3GasMomentum_index) = zmom;
+      state(i, j, k, RadSystem<ShockCloud>::passiveScalar_index) = C;
 
       state(i, j, k, RadSystem<ShockCloud>::radEnergy_index) = 0;
       state(i, j, k, RadSystem<ShockCloud>::x1RadFlux_index) = 0;
@@ -182,6 +193,8 @@ AMRSimulation<ShockCloud>::setCustomBoundaryConditions(
   const auto &domain_hi = box.hiVect();
   const int jhi = domain_hi[1];
 
+  const Real delta_vy = ::delta_vy;
+
   if (j >= jhi) {
     // x2 upper boundary -- constant
     // compute downstream shock conditions from rho0, P0, and M0
@@ -194,7 +207,7 @@ AMRSimulation<ShockCloud>::setCustomBoundaryConditions(
 
     Real const rho = rho2;
     Real const xmom = 0;
-    Real const ymom = rho2 * v2;
+    Real const ymom = rho2 * (v2 + delta_vy);
     Real const zmom = 0;
     Real const Eint = (gamma - 1.) * P2;
     Real const Egas =
@@ -205,6 +218,7 @@ AMRSimulation<ShockCloud>::setCustomBoundaryConditions(
     consVar(i, j, k, RadSystem<ShockCloud>::x2GasMomentum_index) = ymom;
     consVar(i, j, k, RadSystem<ShockCloud>::x3GasMomentum_index) = zmom;
     consVar(i, j, k, RadSystem<ShockCloud>::gasEnergy_index) = Egas;
+    consVar(i, j, k, RadSystem<ShockCloud>::passiveScalar_index) = 0;
 
     consVar(i, j, k, RadSystem<ShockCloud>::radEnergy_index) = 0;
     consVar(i, j, k, RadSystem<ShockCloud>::x1RadFlux_index) = 0;
@@ -308,9 +322,10 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
                                      tables);
         Real Edot = cloudy_cooling_function(rho, T, tables);
         Real t_cool = Eint / Edot;
-        printf("max substeps exceeded! rho = %.17e, Eint = %.17e, T = %g, cooling "
-               "time = %g, dt = %.17e\n",
-               rho, Eint, T, t_cool, dt);
+        printf(
+            "max substeps exceeded! rho = %.17e, Eint = %.17e, T = %g, cooling "
+            "time = %g, dt = %.17e\n",
+            rho, Eint, T, t_cool, dt);
       }
 
       const Real Egas_new = RadSystem<ShockCloud>::ComputeEgasFromEint(
@@ -327,7 +342,7 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
   amrex::Print() << fmt::format(
       "\tcooling substeps (per cell): min {}, avg {}, max {}\n", nmin, navg,
       nmax);
-  
+
   if (nmax >= maxStepsODEIntegrate) {
     amrex::Abort("Max steps exceeded in cooling solve!");
   }
@@ -338,6 +353,87 @@ void RadhydroSimulation<ShockCloud>::computeAfterLevelAdvance(
     int lev, Real /*time*/, Real dt_lev, int /*iteration*/, int /*ncycle*/) {
   // compute operator split physics
   computeCooling(state_new_[lev], dt_lev, cloudyTables);
+}
+
+template <>
+void RadhydroSimulation<ShockCloud>::computeAfterTimestep(
+    const amrex::Real dt_coarse) {
+  // perform Galilean transformation (velocity shift to center-of-mass frame)
+
+  // N.B. must weight by passive scalar of cloud, since the background has
+  // non-negligible momentum!
+  int nc = 1; // number of components in temporary MF
+  int ng = 0; // number of ghost cells in temporary MF
+  amrex::MultiFab temp_mf(boxArray(0), DistributionMap(0), nc, ng);
+  amrex::MultiFab::Copy(temp_mf, state_new_[0],
+                        HydroSystem<ShockCloud>::x2Momentum_index, 0, nc, ng);
+  amrex::MultiFab::Multiply(temp_mf, state_new_[0],
+                            HydroSystem<ShockCloud>::scalar_index, 0, nc, ng);
+  const Real ymom = temp_mf.sum(0);
+
+  amrex::MultiFab::Copy(temp_mf, state_new_[0],
+                        HydroSystem<ShockCloud>::density_index, 0, nc, ng);
+  amrex::MultiFab::Multiply(temp_mf, state_new_[0],
+                            HydroSystem<ShockCloud>::scalar_index, 0, nc, ng);
+  const Real cloud_mass = temp_mf.sum(0);
+
+  // compute center-of-mass velocity of the cloud
+  const Real vy_cm = ymom / cloud_mass;
+
+  // save cumulative position, velocity offsets in simulationMetadata_
+  const Real delta_y_prev = std::any_cast<Real>(simulationMetadata_["delta_y"]);
+  const Real delta_vy_prev =
+      std::any_cast<Real>(simulationMetadata_["delta_vy"]);
+  const Real delta_y = delta_y_prev + dt_coarse * delta_vy_prev;
+  const Real delta_vy = delta_vy_prev + vy_cm;
+  simulationMetadata_["delta_y"] = delta_y;
+  simulationMetadata_["delta_vy"] = delta_vy;
+  ::delta_vy = delta_vy;
+
+  amrex::Print() << "\tDelta y = " << (delta_y / 3.086e18)
+                 << " Delta vy = " << (delta_vy / 1.0e5) << "\n";
+
+  // subtract center-of-mass y-velocity on each level
+  // N.B. must update both y-momentum *and* energy!
+  for (int lev = 0; lev <= finest_level; ++lev) {
+    auto const &mf = state_new_[lev];
+    auto const &state = state_new_[lev].arrays();
+    amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int box, int i, int j,
+                                                int k) noexcept {
+      Real rho = state[box](i, j, k, HydroSystem<ShockCloud>::density_index);
+      Real xmom =
+          state[box](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
+      Real ymom =
+          state[box](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
+      Real zmom =
+          state[box](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
+      Real E = state[box](i, j, k, HydroSystem<ShockCloud>::energy_index);
+      Real KE = 0.5 * (xmom * xmom + ymom * ymom + zmom * zmom) / rho;
+      Real Eint = E - KE;
+      Real new_ymom = ymom - rho * vy_cm;
+      Real new_KE =
+          0.5 * (xmom * xmom + new_ymom * new_ymom + zmom * zmom) / rho;
+
+      state[box](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index) = new_ymom;
+      state[box](i, j, k, HydroSystem<ShockCloud>::energy_index) =
+          Eint + new_KE;
+    });
+  }
+  amrex::Gpu::streamSynchronize();
+}
+
+template <>
+void RadhydroSimulation<ShockCloud>::WriteCustomMetadata(std::ofstream &file) {
+  // write any metadata saved in simulationMetadata_ to file
+  std::string delta_y_name = "delta_y";
+  file << delta_y_name << '\n';
+  Real delta_y = std::any_cast<Real>(simulationMetadata_["delta_y"]);
+  file << delta_y << '\n';
+
+  std::string delta_vy_name = "delta_vy";
+  file << delta_vy_name << '\n';
+  Real delta_vy = std::any_cast<Real>(simulationMetadata_["delta_vy"]);
+  file << delta_vy << '\n';
 }
 
 template <>
@@ -412,8 +508,8 @@ template <>
 void RadhydroSimulation<ShockCloud>::ErrorEst(int lev, amrex::TagBoxArray &tags,
                                               Real /*time*/, int /*ngrow*/) {
   // tag cells for refinement
-  const Real eta_threshold = 0.1;            // gradient refinement threshold
-  const Real q_min = std::sqrt(rho0 * rho1); // minimum density for refinement
+  const Real eta_threshold = 0.1; // gradient refinement threshold
+  const Real C_min = 1.0e-5;      // minimum concentration for refinement
 
   for (amrex::MFIter mfi(state_new_[lev]); mfi.isValid(); ++mfi) {
     const amrex::Box &box = mfi.validbox();
@@ -423,6 +519,7 @@ void RadhydroSimulation<ShockCloud>::ErrorEst(int lev, amrex::TagBoxArray &tags,
 
     amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
       Real const q = state(i, j, k, nidx);
+      Real const C = state(i, j, k, HydroSystem<ShockCloud>::scalar_index);
 
       Real const q_xplus = state(i + 1, j, k, nidx);
       Real const q_xminus = state(i - 1, j, k, nidx);
@@ -440,7 +537,7 @@ void RadhydroSimulation<ShockCloud>::ErrorEst(int lev, amrex::TagBoxArray &tags,
 
       Real const gradient_indicator = std::max({del_x, del_y, del_z}) / q;
 
-      if ((gradient_indicator > eta_threshold) && (q > q_min)) {
+      if ((gradient_indicator > eta_threshold) && (C > C_min)) {
         tag(i, j, k) = amrex::TagBox::SET;
       }
     });
@@ -474,7 +571,7 @@ auto problem_main() -> int {
   // Standard PPM gives unphysically enormous temperatures when used for
   // this problem (e.g., ~1e14 K or higher), but can be fixed by
   // reconstructing the temperature instead of the pressure
-  sim.reconstructionOrder_ = 3; // PLM
+  sim.reconstructionOrder_ = 3;      // PLM
   sim.densityFloor_ = 1.0e-2 * rho0; // density floor (to prevent vacuum)
 
   sim.cflNumber_ = CFL_number;
@@ -482,6 +579,10 @@ auto problem_main() -> int {
   sim.stopTime_ = max_time;
   sim.plotfileInterval_ = 100;
   sim.checkpointInterval_ = 2000;
+
+  // set metadata
+  sim.simulationMetadata_["delta_y"] = 0._rt;
+  sim.simulationMetadata_["delta_vy"] = 0._rt;
 
   // Read Cloudy tables
   readCloudyData(sim.cloudyTables);

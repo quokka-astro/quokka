@@ -58,13 +58,14 @@ public:
     x2GasMomentum_index = 2,
     x3GasMomentum_index = 3,
     gasEnergy_index = 4,
-    radEnergy_index = 5,
-    x1RadFlux_index = 6,
-    x2RadFlux_index = 7,
-    x3RadFlux_index = 8
+    passiveScalar_index = 5,
+    radEnergy_index = 6,
+    x1RadFlux_index = 7,
+    x2RadFlux_index = 8,
+    x3RadFlux_index = 9
   };
 
-  static constexpr int nvar_ = 9;
+  static constexpr int nvar_ = 10;
   static constexpr int nvarHyperbolic_ = 4;
   static constexpr int nstartHyperbolic_ = radEnergy_index;
 

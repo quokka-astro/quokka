@@ -11,11 +11,14 @@
 
 // c++ headers
 #include <csignal>
+#include <fstream>
 #include <iomanip>
 #include <limits>
 #include <memory>
 #include <ostream>
 #include <tuple>
+#include <unordered_map>
+#include <any>
 
 // library headers
 #include "AMReX.H"
@@ -76,6 +79,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Long maxTimesteps_ = 1e4; // default
 	int plotfileInterval_ = 10;	 // -1 == no output
 	int checkpointInterval_ = -1;	 // -1 == no output
+	std::unordered_map<std::string, std::any> simulationMetadata_;
 
 	// constructors
 	
@@ -101,7 +105,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	virtual void setInitialConditionsAtLevel(int level) = 0;
 	virtual void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev,
 						  int iteration, int ncycle) = 0;
-	virtual void computeAfterTimestep() = 0;
+	virtual void computeAfterTimestep(const amrex::Real dt) = 0;
 	virtual void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) = 0;
 
 	// compute derived variables
@@ -164,7 +168,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	[[nodiscard]] auto PlotFileName(int lev) const -> std::string;
 	[[nodiscard]] auto PlotFileMF() const -> amrex::Vector<amrex::MultiFab>;
 	[[nodiscard]] auto PlotFileMFAtLevel(int lev) const -> amrex::MultiFab;
-	void WritePlotFile() const;
+	void WritePlotFile();
+	virtual void WriteCustomMetadata(std::ofstream &file) = 0;
 	void WriteCheckpointFile() const;
 	void ReadCheckpointFile();
 	void LoadBalance();
@@ -404,7 +409,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 		cur_time += dt_[0];
 		++cycleCount_;
-		computeAfterTimestep();
+		computeAfterTimestep(dt_[0]);
 
 		// sync up time (to avoid roundoff error)
 		for (lev = 0; lev <= finest_level; ++lev) {
@@ -964,7 +969,7 @@ auto AMRSimulation<problem_t>::PlotFileMF() const -> amrex::Vector<amrex::MultiF
 }
 
 // write plotfile to disk
-template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile() const
+template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 {
 	BL_PROFILE("AMRSimulation::WritePlotFile()");
 
@@ -984,6 +989,26 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile() con
 #else
 	amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, mf_ptr,
 					   varnames, Geom(), tNew_[0], istep, refRatio());
+	
+	// write metadata file
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		std::string MetadataFileName(plotfilename + "/Metadata");
+		amrex::VisMF::IO_Buffer io_buffer(amrex::VisMF::IO_Buffer_Size);
+		std::ofstream MetadataFile;
+		MetadataFile.rdbuf()->pubsetbuf(io_buffer.dataPtr(), io_buffer.size());
+		MetadataFile.open(MetadataFileName.c_str(),
+				std::ofstream::out | std::ofstream::trunc | std::ofstream::binary);
+		if (!MetadataFile.good()) {
+			amrex::FileOpenFailed(MetadataFileName);
+		}
+		MetadataFile.precision(17);
+		WriteCustomMetadata(MetadataFile);
+		// write out each (key, value) of simulationMetadata_
+		// for(const auto& [key, value] : simulationMetadata_) {
+		// 	 MetadataFile << key;
+		// 	 MetadataFile << value;
+		// }
+	}
 #endif
 }
 

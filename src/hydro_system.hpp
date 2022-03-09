@@ -42,17 +42,19 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 		x1Momentum_index = 1,
 		x2Momentum_index = 2,
 		x3Momentum_index = 3,
-		energy_index = 4
+		energy_index = 4,
+		scalar_index = 5
 	};
 	enum primVarIndex {
 		primDensity_index = 0,
 		x1Velocity_index = 1,
 		x2Velocity_index = 2,
 		x3Velocity_index = 3,
-		pressure_index = 4
+		pressure_index = 4,
+		primScalar_index = 5
 	};
 
-	static constexpr int nvar_ = 5;
+	static constexpr int nvar_ = 6;
 
 	static void ConservedToPrimitive(amrex::Array4<const amrex::Real> const &cons,
 					 array_t &primVar, amrex::Box const &indexRange);
@@ -130,6 +132,7 @@ void HydroSystem<problem_t>::ConservedToPrimitive(amrex::Array4<const amrex::Rea
 		const auto py = cons(i, j, k, x2Momentum_index);
 		const auto pz = cons(i, j, k, x3Momentum_index);
 		const auto E = cons(i, j, k, energy_index); // *total* gas energy per unit volume
+		const auto C = cons(i, j, k, scalar_index); // passive scalar (or concentration) 'C'
 
 		AMREX_ASSERT(!std::isnan(rho));
 		AMREX_ASSERT(!std::isnan(px));
@@ -160,6 +163,7 @@ void HydroSystem<problem_t>::ConservedToPrimitive(amrex::Array4<const amrex::Rea
 			// save pressure
 			primVar(i, j, k, pressure_index) = P;			
 		}
+		primVar(i, j, k, primScalar_index) = C;
 	});
 }
 
@@ -684,6 +688,9 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 		const double vz_L = x1LeftState(i, j, k, x3Velocity_index);
 		const double vz_R = x1RightState(i, j, k, x3Velocity_index);
 
+		const double scalar_L = x1LeftState(i, j, k, primScalar_index);
+		const double scalar_R = x1RightState(i, j, k, primScalar_index);
+
 		const double ke_L = 0.5 * rho_L * (vx_L * vx_L + vy_L * vy_L + vz_L * vz_L);
 		const double ke_R = 0.5 * rho_R * (vx_R * vx_R + vy_R * vy_R + vz_R * vz_R);
 
@@ -793,25 +800,26 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 		quokka::valarray<double, fluxdim> D_R{};
 		quokka::valarray<double, fluxdim> D_star{};
 
+		// N.B. a passive scalar behaves exactly like the transverse velocity components
 		if constexpr (DIR == FluxDir::X1) {
-			D_L = {0., 1., 0., 0., u_L};
-			D_R = {0., 1., 0., 0., u_R};
-			D_star = {0., 1., 0., 0., S_star};
+			D_L = {0., 1., 0., 0., u_L, 0.};
+			D_R = {0., 1., 0., 0., u_R, 0.};
+			D_star = {0., 1., 0., 0., S_star, 0.};
 		} else if constexpr (DIR == FluxDir::X2) {
-			D_L = {0., 0., 1., 0., u_L};
-			D_R = {0., 0., 1., 0., u_R};
-			D_star = {0., 0., 1., 0., S_star};
+			D_L = {0., 0., 1., 0., u_L, 0.};
+			D_R = {0., 0., 1., 0., u_R, 0.};
+			D_star = {0., 0., 1., 0., S_star, 0.};
 		} else if constexpr (DIR == FluxDir::X3) {
-			D_L = {0., 0., 0., 1., u_L};
-			D_R = {0., 0., 0., 1., u_R};
-			D_star = {0., 0., 0., 1., S_star};
+			D_L = {0., 0., 0., 1., u_L, 0.};
+			D_R = {0., 0., 0., 1., u_R, 0.};
+			D_star = {0., 0., 0., 1., S_star, 0.};
 		}
 
 		const quokka::valarray<double, fluxdim> U_L = {rho_L, rho_L * vx_L, rho_L * vy_L,
-							       rho_L * vz_L, E_L};
+							       rho_L * vz_L, E_L, scalar_L};
 
 		const quokka::valarray<double, fluxdim> U_R = {rho_R, rho_R * vx_R, rho_R * vy_R,
-							       rho_R * vz_R, E_R};
+							       rho_R * vz_R, E_R, scalar_R};
 
 		quokka::valarray<double, fluxdim> F_L = u_L * U_L + P_L * D_L;
 		quokka::valarray<double, fluxdim> F_R = u_R * U_R + P_R * D_R;
@@ -852,6 +860,8 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 		} else {
 			x1Flux(i, j, k, energy_index) = 0;
 		}
+		AMREX_ASSERT(!std::isnan(F[5]));
+		x1Flux(i, j, k, scalar_index) = F[5];
 	});
 }
 
