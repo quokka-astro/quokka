@@ -1005,7 +1005,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 		if (!MetadataFile.good()) {
 			amrex::FileOpenFailed(MetadataFileName);
 		}
-		MetadataFile.precision(17);
 
 		// construct YAML from each (key, value) of simulationMetadata_
 		YAML::Emitter out;
@@ -1018,6 +1017,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 		out << YAML::EndMap;
 
 		// write YAML to MetadataFile
+		// (N.B. yaml-cpp is smart enough to emit sufficient digits for
+		//  floating-point types to represent their values to machine precision!)
 		MetadataFile << out.c_str();
 	}
 #endif
