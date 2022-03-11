@@ -15,6 +15,9 @@ endif()
 # HDF5
 find_package(HDF5 REQUIRED)
 
+# yaml-cpp
+find_package(yaml-cpp REQUIRED)
+
 if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
     # only works with gcc!
     include(CodeCoverage)

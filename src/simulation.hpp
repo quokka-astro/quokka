@@ -18,7 +18,7 @@
 #include <ostream>
 #include <tuple>
 #include <unordered_map>
-#include <any>
+#include <variant>
 
 // library headers
 #include "AMReX.H"
@@ -54,6 +54,7 @@
 #include <AMReX_Print.H>
 #include <AMReX_Utility.H>
 #include <fmt/core.h>
+#include <yaml-cpp/yaml.h>
 
 // internal headers
 #include "CheckNaN.hpp"
@@ -79,7 +80,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Long maxTimesteps_ = 1e4; // default
 	int plotfileInterval_ = 10;	 // -1 == no output
 	int checkpointInterval_ = -1;	 // -1 == no output
-	std::unordered_map<std::string, std::any> simulationMetadata_;
+	std::unordered_map<std::string, std::variant<amrex::Real, std::string>> simulationMetadata_;
 
 	// constructors
 	
@@ -169,7 +170,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	[[nodiscard]] auto PlotFileMF() const -> amrex::Vector<amrex::MultiFab>;
 	[[nodiscard]] auto PlotFileMFAtLevel(int lev) const -> amrex::MultiFab;
 	void WritePlotFile();
-	virtual void WriteCustomMetadata(std::ofstream &file) = 0;
 	void WriteCheckpointFile() const;
 	void ReadCheckpointFile();
 	void LoadBalance();
@@ -1002,12 +1002,19 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 			amrex::FileOpenFailed(MetadataFileName);
 		}
 		MetadataFile.precision(17);
-		WriteCustomMetadata(MetadataFile);
-		// write out each (key, value) of simulationMetadata_
-		// for(const auto& [key, value] : simulationMetadata_) {
-		// 	 MetadataFile << key;
-		// 	 MetadataFile << value;
-		// }
+
+		// construct YAML from each (key, value) of simulationMetadata_
+		YAML::Emitter out;
+		out << YAML::BeginMap;
+		auto PrintVisitor = [&out](const auto& t) { out << YAML::Value << t; };
+		for ( auto const& [key, value] : simulationMetadata_ ) {
+			out << YAML::Key << key;
+			std::visit(PrintVisitor, value);
+		}
+		out << YAML::EndMap;
+
+		// write YAML to MetadataFile
+		MetadataFile << out.c_str();
 	}
 #endif
 }
