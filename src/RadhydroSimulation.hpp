@@ -142,8 +142,6 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	// compute derived variables
 	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const override;
 
-	void WriteCustomMetadata(std::ofstream &file) override;
-
 	// fix-up states
 	void FixupState(int level) override;
 
@@ -309,12 +307,6 @@ void RadhydroSimulation<problem_t>::ComputeDerivedVar(int lev, std::string const
 								amrex::MultiFab &mf, const int ncomp) const
 {
 	// compute derived variables and save in 'mf' -- user should implement
-}
-
-template <typename problem_t>
-void RadhydroSimulation<problem_t>::WriteCustomMetadata(std::ofstream &file)
-{
-	// write any metadata saved in simulationMetadata_ to file
 }
 
 template <typename problem_t>

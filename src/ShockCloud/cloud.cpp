@@ -7,6 +7,7 @@
 /// \brief Implements a shock-cloud problem with radiative cooling.
 ///
 #include <random>
+#include <variant>
 #include <vector>
 
 #include "AMReX.H"
@@ -381,9 +382,8 @@ void RadhydroSimulation<ShockCloud>::computeAfterTimestep(
   const Real vy_cm = ymom / cloud_mass;
 
   // save cumulative position, velocity offsets in simulationMetadata_
-  const Real delta_y_prev = std::any_cast<Real>(simulationMetadata_["delta_y"]);
-  const Real delta_vy_prev =
-      std::any_cast<Real>(simulationMetadata_["delta_vy"]);
+  const Real delta_y_prev = std::get<Real>(simulationMetadata_["delta_y"]);
+  const Real delta_vy_prev = std::get<Real>(simulationMetadata_["delta_vy"]);
   const Real delta_y = delta_y_prev + dt_coarse * delta_vy_prev;
   const Real delta_vy = delta_vy_prev + vy_cm;
   simulationMetadata_["delta_y"] = delta_y;
@@ -420,20 +420,6 @@ void RadhydroSimulation<ShockCloud>::computeAfterTimestep(
     });
   }
   amrex::Gpu::streamSynchronize();
-}
-
-template <>
-void RadhydroSimulation<ShockCloud>::WriteCustomMetadata(std::ofstream &file) {
-  // write any metadata saved in simulationMetadata_ to file
-  std::string delta_y_name = "delta_y";
-  file << delta_y_name << '\n';
-  Real delta_y = std::any_cast<Real>(simulationMetadata_["delta_y"]);
-  file << delta_y << '\n';
-
-  std::string delta_vy_name = "delta_vy";
-  file << delta_vy_name << '\n';
-  Real delta_vy = std::any_cast<Real>(simulationMetadata_["delta_vy"]);
-  file << delta_vy << '\n';
 }
 
 template <>
