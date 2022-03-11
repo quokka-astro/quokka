@@ -38,6 +38,7 @@
 #include "AMReX_LayoutData.H"
 #include "AMReX_MFInterpolater.H"
 #include "AMReX_MultiFabUtil.H"
+#include "AMReX_ParallelContext.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
@@ -975,7 +976,12 @@ void AMRSimulation<problem_t>::AscentCustomRender(conduit::Node const &blueprint
     actions.append()["action"] = "reset";
 
     Ascent ascent;
-    ascent.open();
+	conduit::Node ascent_options;
+	ascent_options["mpi_comm"] = MPI_Comm_c2f(amrex::ParallelContext::CommunicatorSub());
+	ascent_options["runtime/type"] = "ascent";
+	//ascent_options["exceptions"] = "catch";
+
+    ascent.open(ascent_options);
     ascent.publish(blueprintMesh);
     ascent.execute(actions);
     ascent.close();
