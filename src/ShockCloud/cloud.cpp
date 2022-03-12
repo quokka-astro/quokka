@@ -57,7 +57,7 @@ constexpr Real Tgas0 = 1.0e7;            // K
 constexpr Real nH0 = 1.0e-4;             // cm^-3
 constexpr Real nH1 = 1.0e-2;             // cm^-3
 constexpr Real R_cloud = 5.0 * 3.086e18; // cm [5 pc]
-constexpr Real M0 = 2.0;                 // Mach number of shock
+constexpr Real M0 = 4.0;                 // Mach number of shock
 
 constexpr Real T_floor = 100.0;                            // K
 constexpr Real P0 = nH0 * Tgas0 * boltzmann_constant_cgs_; // erg cm^-3
@@ -65,7 +65,10 @@ constexpr Real rho0 = nH0 * m_H;                           // g cm^-3
 constexpr Real rho1 = nH1 * m_H;
 
 // needed for Dirichlet boundary condition
+AMREX_GPU_MANAGED static Real v_wind = 0;
 AMREX_GPU_MANAGED static Real delta_vx = 0;
+AMREX_GPU_MANAGED static Real rho_wind = 0;
+AMREX_GPU_MANAGED static Real P_wind = 0;
 
 template <>
 void RadhydroSimulation<ShockCloud>::setInitialConditionsAtLevel(int lev) {
@@ -196,22 +199,19 @@ AMRSimulation<ShockCloud>::setCustomBoundaryConditions(
   const int ilo = domain_lo[0];
 
   const Real delta_vx = ::delta_vx;
+  const Real v_wind = ::v_wind;
+  const Real rho_wind = ::rho_wind;
+  const Real P_wind = ::P_wind;
 
   if (i < ilo) {
     // x1 lower boundary -- constant
-    // compute downstream shock conditions from rho0, P0, and M0
-    constexpr Real gamma = HydroSystem<ShockCloud>::gamma_;
-    constexpr Real rho_shock =
-        rho0 * (gamma + 1.) * M0 * M0 / ((gamma - 1.) * M0 * M0 + 2.);
-    constexpr Real P_shock =
-        P0 * (2. * gamma * M0 * M0 - (gamma - 1.)) / (gamma + 1.);
-    Real const v_shock = M0 * std::sqrt(gamma * P_shock / rho_shock);
+    const Real vx = v_wind - delta_vx;
 
-    Real const rho = rho_shock;
-    Real const xmom = rho_shock * (v_shock - delta_vx);
+    Real const rho = rho_wind;
+    Real const xmom = rho_wind * vx;
     Real const ymom = 0;
     Real const zmom = 0;
-    Real const Eint = (gamma - 1.) * P_shock;
+    Real const Eint = (HydroSystem<ShockCloud>::gamma_ - 1.) * P_wind;
     Real const Egas =
         RadSystem<ShockCloud>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
 
@@ -536,6 +536,21 @@ void RadhydroSimulation<ShockCloud>::ErrorEst(int lev, amrex::TagBoxArray &tags,
 
 auto problem_main() -> int {
   // Problem parameters
+  // compute shock jump conditions from rho0, P0, and M0
+  constexpr Real gamma = HydroSystem<ShockCloud>::gamma_;
+  const Real v_pre = M0 * std::sqrt(gamma * P0 / rho0);
+  constexpr Real rho_post =
+      rho0 * (gamma + 1.) * M0 * M0 / ((gamma - 1.) * M0 * M0 + 2.);
+  const Real v_post = v_pre * (rho0 / rho_post);
+  constexpr Real P_post =
+      P0 * (2. * gamma * M0 * M0 - (gamma - 1.)) / (gamma + 1.);
+  const Real v_wind = v_pre - v_post;
+  ::v_wind = v_wind; // set global variable
+  ::rho_wind = rho_post;
+  ::P_wind = P_post;
+  amrex::Print() << fmt::format("v_wind = {} km/s (v_pre = {}, v_post = {})\n",
+                                v_wind / 1.0e5, v_pre / 1.0e5, v_post / 1.0e5);
+
   const double CFL_number = 0.25;
   const double max_time = 10.0e6 * seconds_in_year; // 10 Myr
   const int max_timesteps = 1e5;
@@ -573,6 +588,10 @@ auto problem_main() -> int {
   // set metadata
   sim.simulationMetadata_["delta_x"] = 0._rt;
   sim.simulationMetadata_["delta_vx"] = 0._rt;
+  sim.simulationMetadata_["rho_wind"] = rho_wind;
+  sim.simulationMetadata_["v_wind"] = v_wind;
+  sim.simulationMetadata_["P_wind"] = P_wind;
+  sim.simulationMetadata_["M0"] = M0;
 
   // Read Cloudy tables
   readCloudyData(sim.cloudyTables);
