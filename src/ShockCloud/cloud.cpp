@@ -53,7 +53,7 @@ template <> struct EOS_Traits<ShockCloud> {
 
 constexpr Real Tgas0 = 1.0e7;            // K
 constexpr Real nH0 = 1.0e-4;             // cm^-3
-constexpr Real nH1 = 1.0e-1;             // cm^-3
+constexpr Real nH1 = 1.0e-2;             // cm^-3
 constexpr Real R_cloud = 5.0 * 3.086e18; // cm [5 pc]
 constexpr Real M0 = 2.0;                 // Mach number of shock
 
@@ -208,7 +208,7 @@ AMRSimulation<ShockCloud>::setCustomBoundaryConditions(
 
     Real const rho = rho2;
     Real const xmom = 0;
-    Real const ymom = rho2 * (v2 + delta_vy);
+    Real const ymom = rho2 * (v2 - delta_vy);
     Real const zmom = 0;
     Real const Eint = (gamma - 1.) * P2;
     Real const Egas =
@@ -533,7 +533,7 @@ void RadhydroSimulation<ShockCloud>::ErrorEst(int lev, amrex::TagBoxArray &tags,
 auto problem_main() -> int {
   // Problem parameters
   const double CFL_number = 0.25;
-  const double max_time = 2.0e6 * seconds_in_year; // 2 Myr
+  const double max_time = 10.0e6 * seconds_in_year; // 10 Myr
   const int max_timesteps = 1e5;
 
   // Problem initialization
