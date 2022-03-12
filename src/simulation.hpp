@@ -169,11 +169,10 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	[[nodiscard]] auto PlotFileName(int lev) const -> std::string;
 	[[nodiscard]] auto PlotFileMF() const -> amrex::Vector<amrex::MultiFab>;
 	[[nodiscard]] auto PlotFileMFAtLevel(int lev) const -> amrex::MultiFab;
-	void WritePlotFile();
+	void WritePlotFile() const;
+	void WriteMetadataFile(std::string const &plotfilename) const;
 	void WriteCheckpointFile() const;
 	void ReadCheckpointFile();
-	void LoadBalance();
-	void ResetCosts();
 
       protected:
 	amrex::Vector<amrex::BCRec> boundaryConditions_; // on level 0
@@ -968,29 +967,12 @@ auto AMRSimulation<problem_t>::PlotFileMF() const -> amrex::Vector<amrex::MultiF
 	return r;
 }
 
-// write plotfile to disk
-template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
+template <typename problem_t>
+void AMRSimulation<problem_t>::WriteMetadataFile(std::string const &plotfilename) const
 {
-	BL_PROFILE("AMRSimulation::WritePlotFile()");
-
-	const std::string &plotfilename = PlotFileName(istep[0]);
-	amrex::Vector<amrex::MultiFab> mf = PlotFileMF();
-	amrex::Vector<const amrex::MultiFab*> mf_ptr = amrex::GetVecOfConstPtrs(mf);
-
-	amrex::Vector<std::string> varnames;
-	varnames.insert(varnames.end(), componentNames_.begin(), componentNames_.end());
-	varnames.insert(varnames.end(), derivedNames_.begin(), derivedNames_.end());
-
-	amrex::Print() << "Writing plotfile " << plotfilename << "\n";
-
-#ifdef AMREX_USE_HDF5
-	amrex::WriteMultiLevelPlotfileHDF5(plotfilename, finest_level + 1, mf_ptr, varnames, Geom(),
-				       tNew_[0], istep, refRatio());
-#else
-	amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, mf_ptr,
-					   varnames, Geom(), tNew_[0], istep, refRatio());
-	
 	// write metadata file
+	// (this is written for both checkpoints and plotfiles)
+	
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		std::string MetadataFileName(plotfilename + "/Metadata");
 		amrex::VisMF::IO_Buffer io_buffer(amrex::VisMF::IO_Buffer_Size);
@@ -1015,9 +997,28 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 		// write YAML to MetadataFile
 		// (N.B. yaml-cpp is smart enough to emit sufficient digits for
 		//  floating-point types to represent their values to machine precision!)
-		MetadataFile << out.c_str();
+		MetadataFile << out.c_str() << '\n';
 	}
-#endif
+}
+
+// write plotfile to disk
+template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile() const
+{
+	BL_PROFILE("AMRSimulation::WritePlotFile()");
+
+	const std::string &plotfilename = PlotFileName(istep[0]);
+	amrex::Vector<amrex::MultiFab> mf = PlotFileMF();
+	amrex::Vector<const amrex::MultiFab*> mf_ptr = amrex::GetVecOfConstPtrs(mf);
+
+	amrex::Vector<std::string> varnames;
+	varnames.insert(varnames.end(), componentNames_.begin(), componentNames_.end());
+	varnames.insert(varnames.end(), derivedNames_.begin(), derivedNames_.end());
+
+	amrex::Print() << "Writing plotfile " << plotfilename << "\n";
+
+	amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, mf_ptr,
+					   varnames, Geom(), tNew_[0], istep, refRatio());
+	WriteMetadataFile(plotfilename);
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile() const
@@ -1093,6 +1094,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile
 			HeaderFile << '\n';
 		}
 	}
+
+	// write Metadata file
+	WriteMetadataFile(checkpointname);
 
 	// write the MultiFab data to, e.g., chk00010/Level_0/
 	for (int lev = 0; lev <= finest_level; ++lev) {
