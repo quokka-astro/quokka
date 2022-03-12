@@ -54,12 +54,12 @@ template <> struct EOS_Traits<ShockCloud> {
 };
 
 constexpr Real Tgas0 = 1.0e7;            // K
-constexpr Real nH0 = 1.0e-4;             // cm^-3
-constexpr Real nH1 = 1.0e-2;             // cm^-3
+constexpr Real nH0 = 1.0e-3;             // cm^-3
+constexpr Real nH1 = 1.0e-1;             // cm^-3
 constexpr Real R_cloud = 5.0 * 3.086e18; // cm [5 pc]
 constexpr Real M0 = 4.0;                 // Mach number of shock
 
-constexpr Real T_floor = 100.0;                            // K
+constexpr Real T_floor = 10.0;                             // K
 constexpr Real P0 = nH0 * Tgas0 * boltzmann_constant_cgs_; // erg cm^-3
 constexpr Real rho0 = nH0 * m_H;                           // g cm^-3
 constexpr Real rho1 = nH1 * m_H;
@@ -577,7 +577,7 @@ auto problem_main() -> int {
   // this problem (e.g., ~1e14 K or higher), but can be fixed by
   // reconstructing the temperature instead of the pressure
   sim.reconstructionOrder_ = 3;      // PLM
-  sim.densityFloor_ = 1.0e-2 * rho0; // density floor (to prevent vacuum)
+  sim.densityFloor_ = 1.0e-3 * rho0; // density floor (to prevent vacuum)
 
   sim.cflNumber_ = CFL_number;
   sim.maxTimesteps_ = max_timesteps;
