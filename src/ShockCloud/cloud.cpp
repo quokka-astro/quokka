@@ -54,7 +54,7 @@ template <> struct EOS_Traits<ShockCloud> {
 };
 
 constexpr Real Tgas0 = 1.0e7;            // K
-constexpr Real nH0 = 1.0e-3;             // cm^-3
+constexpr Real nH0 = 1.0e-4;             // cm^-3
 constexpr Real nH1 = 1.0e-1;             // cm^-3
 constexpr Real R_cloud = 5.0 * 3.086e18; // cm [5 pc]
 constexpr Real M0 = 4.0;                 // Mach number of shock
@@ -551,8 +551,13 @@ auto problem_main() -> int {
   amrex::Print() << fmt::format("v_wind = {} km/s (v_pre = {}, v_post = {})\n",
                                 v_wind / 1.0e5, v_pre / 1.0e5, v_post / 1.0e5);
 
+  // compute cloud-crushing time
+  constexpr Real chi = rho1 / rho0;
+  const Real t_cc = std::sqrt(chi) * R_cloud / v_wind;
+  amrex::Print() << fmt::format("t_cc = {} kyr\n", t_cc / (1.0e3 * 3.15e7));
+
   const double CFL_number = 0.25;
-  const double max_time = 10.0e6 * seconds_in_year; // 10 Myr
+  const double max_time = 30.0 * t_cc;
   const int max_timesteps = 1e5;
 
   // Problem initialization
@@ -592,6 +597,7 @@ auto problem_main() -> int {
   sim.simulationMetadata_["v_wind"] = v_wind;
   sim.simulationMetadata_["P_wind"] = P_wind;
   sim.simulationMetadata_["M0"] = M0;
+  sim.simulationMetadata_["t_cc"] = t_cc;
 
   // Read Cloudy tables
   readCloudyData(sim.cloudyTables);
