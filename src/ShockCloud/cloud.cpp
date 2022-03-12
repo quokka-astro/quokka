@@ -6,6 +6,7 @@
 /// \file cloud.cpp
 /// \brief Implements a shock-cloud problem with radiative cooling.
 ///
+
 #include <random>
 #include <variant>
 #include <vector>
@@ -27,14 +28,15 @@
 #include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
 #include "AMReX_TableData.H"
-
 #include "AMReX_iMultiFab.H"
+
 #include "CloudyCooling.hpp"
 #include "ODEIntegrate.hpp"
 #include "RadhydroSimulation.hpp"
-#include "cloud.hpp"
 #include "hydro_system.hpp"
 #include "radiation_system.hpp"
+
+#include "cloud.hpp"
 
 using amrex::Real;
 using namespace amrex::literals;
@@ -63,7 +65,7 @@ constexpr Real rho0 = nH0 * m_H;                           // g cm^-3
 constexpr Real rho1 = nH1 * m_H;
 
 // needed for Dirichlet boundary condition
-AMREX_GPU_MANAGED static Real delta_vy = 0;
+AMREX_GPU_MANAGED static Real delta_vx = 0;
 
 template <>
 void RadhydroSimulation<ShockCloud>::setInitialConditionsAtLevel(int lev) {
@@ -75,8 +77,8 @@ void RadhydroSimulation<ShockCloud>::setInitialConditionsAtLevel(int lev) {
   Real const Ly = (prob_hi[1] - prob_lo[1]);
   Real const Lz = (prob_hi[2] - prob_lo[2]);
 
-  Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
-  Real const y0 = prob_lo[1] + 0.8 * (prob_hi[1] - prob_lo[1]);
+  Real const x0 = prob_lo[0] + 0.2 * (prob_hi[0] - prob_lo[0]);
+  Real const y0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
   Real const z0 = prob_lo[2] + 0.5 * (prob_hi[2] - prob_lo[2]);
 
   // perturbation parameters
@@ -191,26 +193,25 @@ AMRSimulation<ShockCloud>::setCustomBoundaryConditions(
 
   amrex::Box const &box = geom.Domain();
   const auto &domain_lo = box.loVect();
-  const auto &domain_hi = box.hiVect();
-  const int jhi = domain_hi[1];
+  const int ilo = domain_lo[0];
 
-  const Real delta_vy = ::delta_vy;
+  const Real delta_vx = ::delta_vx;
 
-  if (j >= jhi) {
-    // x2 upper boundary -- constant
+  if (i < ilo) {
+    // x1 lower boundary -- constant
     // compute downstream shock conditions from rho0, P0, and M0
     constexpr Real gamma = HydroSystem<ShockCloud>::gamma_;
-    constexpr Real rho2 =
+    constexpr Real rho_shock =
         rho0 * (gamma + 1.) * M0 * M0 / ((gamma - 1.) * M0 * M0 + 2.);
-    constexpr Real P2 =
+    constexpr Real P_shock =
         P0 * (2. * gamma * M0 * M0 - (gamma - 1.)) / (gamma + 1.);
-    Real const v2 = -M0 * std::sqrt(gamma * P2 / rho2);
+    Real const v_shock = M0 * std::sqrt(gamma * P_shock / rho_shock);
 
-    Real const rho = rho2;
-    Real const xmom = 0;
-    Real const ymom = rho2 * (v2 - delta_vy);
+    Real const rho = rho_shock;
+    Real const xmom = rho_shock * (v_shock - delta_vx);
+    Real const ymom = 0;
     Real const zmom = 0;
-    Real const Eint = (gamma - 1.) * P2;
+    Real const Eint = (gamma - 1.) * P_shock;
     Real const Egas =
         RadSystem<ShockCloud>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
 
@@ -340,11 +341,11 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
   int nmax = nsubstepsMF.max(0);
   Real navg = static_cast<Real>(nsubstepsMF.sum(0)) /
               static_cast<Real>(nsubstepsMF.boxArray().numPts());
-  amrex::Print() << fmt::format(
-      "\tcooling substeps (per cell): min {}, avg {}, max {}\n", nmin, navg,
-      nmax);
 
   if (nmax >= maxStepsODEIntegrate) {
+    amrex::Print() << fmt::format(
+        "\tcooling substeps (per cell): min {}, avg {}, max {}\n", nmin, navg,
+        nmax);
     amrex::Abort("Max steps exceeded in cooling solve!");
   }
 }
@@ -366,12 +367,15 @@ void RadhydroSimulation<ShockCloud>::computeAfterTimestep(
   int nc = 1; // number of components in temporary MF
   int ng = 0; // number of ghost cells in temporary MF
   amrex::MultiFab temp_mf(boxArray(0), DistributionMap(0), nc, ng);
+
+  // compute x-momentum
   amrex::MultiFab::Copy(temp_mf, state_new_[0],
-                        HydroSystem<ShockCloud>::x2Momentum_index, 0, nc, ng);
+                        HydroSystem<ShockCloud>::x1Momentum_index, 0, nc, ng);
   amrex::MultiFab::Multiply(temp_mf, state_new_[0],
                             HydroSystem<ShockCloud>::scalar_index, 0, nc, ng);
-  const Real ymom = temp_mf.sum(0);
+  const Real xmom = temp_mf.sum(0);
 
+  // compute cloud mass within simulation box
   amrex::MultiFab::Copy(temp_mf, state_new_[0],
                         HydroSystem<ShockCloud>::density_index, 0, nc, ng);
   amrex::MultiFab::Multiply(temp_mf, state_new_[0],
@@ -379,19 +383,19 @@ void RadhydroSimulation<ShockCloud>::computeAfterTimestep(
   const Real cloud_mass = temp_mf.sum(0);
 
   // compute center-of-mass velocity of the cloud
-  const Real vy_cm = ymom / cloud_mass;
+  const Real vx_cm = xmom / cloud_mass;
 
   // save cumulative position, velocity offsets in simulationMetadata_
-  const Real delta_y_prev = std::get<Real>(simulationMetadata_["delta_y"]);
-  const Real delta_vy_prev = std::get<Real>(simulationMetadata_["delta_vy"]);
-  const Real delta_y = delta_y_prev + dt_coarse * delta_vy_prev;
-  const Real delta_vy = delta_vy_prev + vy_cm;
-  simulationMetadata_["delta_y"] = delta_y;
-  simulationMetadata_["delta_vy"] = delta_vy;
-  ::delta_vy = delta_vy;
+  const Real delta_x_prev = std::get<Real>(simulationMetadata_["delta_x"]);
+  const Real delta_vx_prev = std::get<Real>(simulationMetadata_["delta_vx"]);
+  const Real delta_x = delta_x_prev + dt_coarse * delta_vx_prev;
+  const Real delta_vx = delta_vx_prev + vx_cm;
+  simulationMetadata_["delta_x"] = delta_x;
+  simulationMetadata_["delta_vx"] = delta_vx;
+  ::delta_vx = delta_vx;
 
-  amrex::Print() << "\tDelta y = " << (delta_y / 3.086e18)
-                 << " Delta vy = " << (delta_vy / 1.0e5) << "\n";
+  amrex::Print() << "\tDelta x = " << (delta_x / 3.086e18) << " pc,"
+                 << " Delta vx = " << (delta_vx / 1.0e5) << " km/s\n";
 
   // subtract center-of-mass y-velocity on each level
   // N.B. must update both y-momentum *and* energy!
@@ -410,11 +414,11 @@ void RadhydroSimulation<ShockCloud>::computeAfterTimestep(
       Real E = state[box](i, j, k, HydroSystem<ShockCloud>::energy_index);
       Real KE = 0.5 * (xmom * xmom + ymom * ymom + zmom * zmom) / rho;
       Real Eint = E - KE;
-      Real new_ymom = ymom - rho * vy_cm;
+      Real new_xmom = xmom - rho * vx_cm;
       Real new_KE =
-          0.5 * (xmom * xmom + new_ymom * new_ymom + zmom * zmom) / rho;
+          0.5 * (new_xmom * new_xmom + ymom * ymom + zmom * zmom) / rho;
 
-      state[box](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index) = new_ymom;
+      state[box](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index) = new_xmom;
       state[box](i, j, k, HydroSystem<ShockCloud>::energy_index) =
           Eint + new_KE;
     });
@@ -540,11 +544,11 @@ auto problem_main() -> int {
   constexpr int nvars = RadhydroSimulation<ShockCloud>::nvarTotal_;
   amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
   for (int n = 0; n < nvars; ++n) {
-    boundaryConditions[n].setLo(0, amrex::BCType::int_dir); // periodic
-    boundaryConditions[n].setHi(0, amrex::BCType::int_dir);
+    boundaryConditions[n].setLo(0, amrex::BCType::ext_dir);  // Dirichlet
+    boundaryConditions[n].setHi(0, amrex::BCType::foextrap); // extrapolate
 
-    boundaryConditions[n].setLo(1, amrex::BCType::foextrap); // extrapolate
-    boundaryConditions[n].setHi(1, amrex::BCType::ext_dir);  // Dirichlet
+    boundaryConditions[n].setLo(1, amrex::BCType::int_dir); // periodic
+    boundaryConditions[n].setHi(1, amrex::BCType::int_dir);
 
     boundaryConditions[n].setLo(2, amrex::BCType::int_dir);
     boundaryConditions[n].setHi(2, amrex::BCType::int_dir);
@@ -567,8 +571,8 @@ auto problem_main() -> int {
   sim.checkpointInterval_ = 2000;
 
   // set metadata
-  sim.simulationMetadata_["delta_y"] = 0._rt;
-  sim.simulationMetadata_["delta_vy"] = 0._rt;
+  sim.simulationMetadata_["delta_x"] = 0._rt;
+  sim.simulationMetadata_["delta_vx"] = 0._rt;
 
   // Read Cloudy tables
   readCloudyData(sim.cloudyTables);
