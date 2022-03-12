@@ -82,7 +82,7 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	void setInitialConditionsAtLevel(int level) override;
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev,
 					  int /*iteration*/, int /*ncycle*/) override;
-	void computeAfterTimestep() override;
+	void computeAfterTimestep(amrex::Real dt) override;
 	void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) override;
 	void computeReferenceSolution(
 	    amrex::MultiFab &ref,
@@ -137,7 +137,8 @@ void AdvectionSimulation<problem_t>::setInitialConditionsAtLevel(int level)
 	// do nothing -- user should implement using problem-specific template specialization
 }
 
-template <typename problem_t> void AdvectionSimulation<problem_t>::computeAfterTimestep()
+template <typename problem_t> void
+AdvectionSimulation<problem_t>::computeAfterTimestep(const amrex::Real dt)
 {
 	// do nothing -- user should implement using problem-specific template specialization
 }
