@@ -45,7 +45,7 @@ struct ShockCloud {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
 constexpr double m_H = hydrogen_mass_cgs_;
-constexpr double seconds_in_year = 3.154e7;
+//constexpr double seconds_in_year = 3.154e7;
 
 template <> struct EOS_Traits<ShockCloud> {
   static constexpr double gamma = 5. / 3.; // default value
