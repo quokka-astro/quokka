@@ -69,6 +69,17 @@ constexpr Real G_0 = 5.29e-14;          // erg cm^-3
 constexpr Real Erad0 = 1.0 * G_0;       // initial FUV radiation field
 constexpr Real Erad_bdry = 1000. * G_0; // incident FUV radiation field
 
+template <> struct RadSystem_Traits<ShockCloud> {
+  static constexpr double c_light = c_light_cgs_;
+  static constexpr double c_hat = 0.1 * c_light_cgs_;
+  static constexpr double radiation_constant = radiation_constant_cgs_;
+  static constexpr double mean_molecular_mass = hydrogen_mass_cgs_;
+  static constexpr double boltzmann_constant = boltzmann_constant_cgs_;
+  static constexpr double gamma = 5. / 3.;
+  static constexpr double Erad_floor = 0.;
+  static constexpr bool compute_v_over_c_terms = true;
+};
+
 // needed for Dirichlet boundary condition
 AMREX_GPU_MANAGED static Real v_wind = 0;
 AMREX_GPU_MANAGED static Real delta_vx = 0;
@@ -210,8 +221,7 @@ AMRSimulation<ShockCloud>::setCustomBoundaryConditions(
 
   if (i < ilo) {
     // x1 lower boundary -- constant
-    const Real vx = v_wind - delta_vx;
-
+    Real const vx = v_wind - delta_vx;
     Real const rho = rho_wind;
     Real const xmom = rho_wind * vx;
     Real const ymom = 0;
@@ -227,10 +237,20 @@ AMRSimulation<ShockCloud>::setCustomBoundaryConditions(
     consVar(i, j, k, RadSystem<ShockCloud>::gasEnergy_index) = Egas;
     consVar(i, j, k, RadSystem<ShockCloud>::passiveScalar_index) = 0;
 
-    // assume a perfectly beamed incoming radiation field
-    consVar(i, j, k, RadSystem<ShockCloud>::radEnergy_index) = Erad_bdry;
-    consVar(i, j, k, RadSystem<ShockCloud>::x1RadFlux_index) =
-        Erad_bdry / c_light_cgs_;
+    // Marshak boundary condition
+    const double E_inc = Erad_bdry;
+    const double c = c_light_cgs_;
+    // const double F_inc = c * E_inc / 4.0; // half-isotropic incident flux
+    const double E_0 =
+        consVar(ilo, j, k, RadSystem<ShockCloud>::radEnergy_index);
+    const double F_0 =
+        consVar(ilo, j, k, RadSystem<ShockCloud>::x1RadFlux_index);
+    // use value at interface to solve for F_rad in the ghost zones
+    const double F_bdry = 0.5 * c * E_inc - 0.5 * (c * E_0 + 2.0 * F_0);
+    AMREX_ASSERT(std::abs(F_bdry / (c * E_inc)) < 1.0);
+
+    consVar(i, j, k, RadSystem<ShockCloud>::radEnergy_index) = E_inc;
+    consVar(i, j, k, RadSystem<ShockCloud>::x1RadFlux_index) = F_bdry;
     consVar(i, j, k, RadSystem<ShockCloud>::x2RadFlux_index) = 0;
     consVar(i, j, k, RadSystem<ShockCloud>::x3RadFlux_index) = 0;
   }
