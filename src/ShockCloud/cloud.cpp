@@ -557,7 +557,7 @@ auto problem_main() -> int {
   amrex::Print() << fmt::format("t_cc = {} kyr\n", t_cc / (1.0e3 * 3.15e7));
 
   const double CFL_number = 0.25;
-  const double max_time = 30.0 * t_cc;
+  const double max_time = 20.0 * t_cc;
   const int max_timesteps = 1e5;
 
   // Problem initialization
