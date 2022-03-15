@@ -1049,29 +1049,28 @@ void AMRSimulation<problem_t>::WriteMetadataFile(std::string const &plotfilename
 template <typename problem_t>
 void AMRSimulation<problem_t>::ReadMetadataFile(std::string const &chkfilename)
 {
-	// read metadata file (needed when restarting from checkpoint)
-	if (amrex::ParallelDescriptor::IOProcessor()) {
-		std::string MetadataFileName(chkfilename + "/Metadata");
+	// read metadata file in on all ranks (needed when restarting from checkpoint)
+	std::string MetadataFileName(chkfilename + "/Metadata");
 
-		// read YAML file into simulationMetadata_ std::map
-		YAML::Node metadata = YAML::LoadFile(MetadataFileName);
-		amrex::Print() << "Reading " << MetadataFileName << "...\n";
-		for(YAML::const_iterator it = metadata.begin(); it != metadata.end(); ++it) {
-			std::string key = it->first.as<std::string>();
-			std::optional<amrex::Real> value_real = 
+	// read YAML file into simulationMetadata_ std::map
+	YAML::Node metadata = YAML::LoadFile(MetadataFileName);
+	amrex::Print() << "Reading " << MetadataFileName << "...\n";
+
+	for(YAML::const_iterator it = metadata.begin(); it != metadata.end(); ++it) {
+		std::string key = it->first.as<std::string>();
+		std::optional<amrex::Real> value_real = 
 				YAML::as_if<amrex::Real, std::optional<amrex::Real>>(it->second)();
-			std::optional<std::string> value_string =
+		std::optional<std::string> value_string =
 				YAML::as_if<std::string, std::optional<std::string>>(it->second)();
-				
-			if (value_real) {
-				simulationMetadata_[key] = value_real.value();
-				amrex::Print() << fmt::format("\t{} = {}\n", key, value_real.value());
-			} else if (value_string) {
-				simulationMetadata_[key] = value_string.value();
-				amrex::Print() << fmt::format("\t{} = {}\n", key, value_string.value());
-			} else {
-				amrex::Print() << fmt::format("\t{} has unknown type! skipping this entry.\n", key);
-			}
+
+		if (value_real) {
+			simulationMetadata_[key] = value_real.value();
+			amrex::Print() << fmt::format("\t{} = {}\n", key, value_real.value());
+		} else if (value_string) {
+			simulationMetadata_[key] = value_string.value();
+			amrex::Print() << fmt::format("\t{} = {}\n", key, value_string.value());
+		} else {
+			amrex::Print() << fmt::format("\t{} has unknown type! skipping this entry.\n", key);
 		}
 	}
 }
