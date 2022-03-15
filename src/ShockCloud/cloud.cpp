@@ -73,7 +73,7 @@ template <> struct RadSystem_Traits<ShockCloud> {
   static constexpr double c_light = c_light_cgs_;
   static constexpr double c_hat = 0.1 * c_light_cgs_;
   static constexpr double radiation_constant = radiation_constant_cgs_;
-  static constexpr double mean_molecular_mass = hydrogen_mass_cgs_;
+  static constexpr double mean_molecular_mass = hydrogen_mass_cgs_; // unused
   static constexpr double boltzmann_constant = boltzmann_constant_cgs_;
   static constexpr double gamma = 5. / 3.;
   static constexpr double Erad_floor = 0.;
@@ -717,11 +717,8 @@ auto problem_main() -> int {
   sim.is_hydro_enabled_ = true;
   sim.is_radiation_enabled_ = true;
 
-  // Standard PPM gives unphysically enormous temperatures when used for
-  // this problem (e.g., ~1e14 K or higher), but can be fixed by
-  // reconstructing the temperature instead of the pressure
-  sim.reconstructionOrder_ = 3;          // PPM
-  sim.radiationReconstructionOrder_ = 2; // PLM for radiation
+  sim.reconstructionOrder_ = 3;          // PPM for hydro
+  sim.radiationReconstructionOrder_ = 3; // PPM for radiation
   sim.densityFloor_ = 1.0e-3 * rho0;     // density floor (to prevent vacuum)
 
   sim.cflNumber_ = CFL_number;
