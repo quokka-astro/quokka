@@ -567,11 +567,11 @@ auto problem_main() -> int {
     boundaryConditions[n].setLo(0, amrex::BCType::ext_dir);  // Dirichlet
     boundaryConditions[n].setHi(0, amrex::BCType::foextrap); // extrapolate
 
-    boundaryConditions[n].setLo(1, amrex::BCType::int_dir); // periodic
-    boundaryConditions[n].setHi(1, amrex::BCType::int_dir);
+    boundaryConditions[n].setLo(1, amrex::BCType::foextrap); // extrapolate
+    boundaryConditions[n].setHi(1, amrex::BCType::foextrap);
 
-    boundaryConditions[n].setLo(2, amrex::BCType::int_dir);
-    boundaryConditions[n].setHi(2, amrex::BCType::int_dir);
+    boundaryConditions[n].setLo(2, amrex::BCType::foextrap);
+    boundaryConditions[n].setHi(2, amrex::BCType::foextrap);
   }
 
   RadhydroSimulation<ShockCloud> sim(boundaryConditions);
