@@ -19,6 +19,7 @@
 #include <tuple>
 #include <unordered_map>
 #include <variant>
+#include <optional>
 
 // library headers
 #include "AMReX.H"
@@ -62,6 +63,45 @@
 
 #define USE_YAFLUXREGISTER
 
+using variant_t = std::variant<amrex::Real, std::string>;
+
+namespace YAML
+{
+    template <typename T>
+    struct as_if<T, std::optional<T> >
+    {
+        explicit as_if(const Node& node_) : node(node_) {}
+        const Node& node;
+        const std::optional<T> operator()() const
+        {
+            std::optional<T> val;
+            T t;
+            if (node.m_pNode && convert<T>::decode(node, t))
+                val = std::move(t);
+
+            return val;
+        }
+    };
+
+    // There is already a std::string partial specialisation,
+	// so we need a full specialisation here
+    template <>
+    struct as_if<std::string, std::optional<std::string> >
+    {
+        explicit as_if(const Node& node_) : node(node_) {}
+        const Node& node;
+        const std::optional<std::string> operator()() const
+        {
+            std::optional<std::string> val;
+            std::string t;
+            if (node.m_pNode && convert<std::string>::decode(node, t))
+                val = std::move(t);
+
+            return val;
+        }
+    };
+} // namespace YAML
+
 // Main simulation class; solvers should inherit from this
 template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 {
@@ -80,7 +120,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Long maxTimesteps_ = 1e4; // default
 	int plotfileInterval_ = 10;	 // -1 == no output
 	int checkpointInterval_ = -1;	 // -1 == no output
-	std::unordered_map<std::string, std::variant<amrex::Real, std::string>> simulationMetadata_;
+	std::unordered_map<std::string, variant_t> simulationMetadata_;
 
 	// constructors
 	
@@ -173,6 +213,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void WriteMetadataFile(std::string const &plotfilename) const;
 	void WriteCheckpointFile() const;
 	void ReadCheckpointFile();
+	void ReadMetadataFile(std::string const &chkfilename);
 
       protected:
 	amrex::Vector<amrex::BCRec> boundaryConditions_; // on level 0
@@ -1005,6 +1046,36 @@ void AMRSimulation<problem_t>::WriteMetadataFile(std::string const &plotfilename
 	}
 }
 
+template <typename problem_t>
+void AMRSimulation<problem_t>::ReadMetadataFile(std::string const &chkfilename)
+{
+	// read metadata file (needed when restarting from checkpoint)
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		std::string MetadataFileName(chkfilename + "/Metadata");
+
+		// read YAML file into simulationMetadata_ std::map
+		YAML::Node metadata = YAML::LoadFile(MetadataFileName);
+		amrex::Print() << "Reading " << MetadataFileName << "...\n";
+		for(YAML::const_iterator it = metadata.begin(); it != metadata.end(); ++it) {
+			std::string key = it->first.as<std::string>();
+			std::optional<amrex::Real> value_real = 
+				YAML::as_if<amrex::Real, std::optional<amrex::Real>>(it->second)();
+			std::optional<std::string> value_string =
+				YAML::as_if<std::string, std::optional<std::string>>(it->second)();
+				
+			if (value_real) {
+				simulationMetadata_[key] = value_real.value();
+				amrex::Print() << fmt::format("\t{} = {}\n", key, value_real.value());
+			} else if (value_string) {
+				simulationMetadata_[key] = value_string.value();
+				amrex::Print() << fmt::format("\t{} = {}\n", key, value_string.value());
+			} else {
+				amrex::Print() << fmt::format("\t{} has unknown type! skipping this entry.\n", key);
+			}
+		}
+	}
+}
+
 // write plotfile to disk
 template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile() const
 {
@@ -1200,13 +1271,14 @@ void AMRSimulation<problem_t>::ReadCheckpointFile() {
     }
   }
 
-  // read in the MultiFab data
-  for (int lev = 0; lev <= finest_level; ++lev) {
-    amrex::VisMF::Read(
-        state_new_[lev],
-        amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", "Cell"));
-  }
-  areInitialConditionsDefined_ = true;
+	ReadMetadataFile(restart_chkfile);
+
+	// read in the MultiFab data
+	for (int lev = 0; lev <= finest_level; ++lev) {
+		amrex::VisMF::Read(state_new_[lev], amrex::MultiFabFileFullPrefix(
+							lev, restart_chkfile, "Level_", "Cell"));
+	}
+	areInitialConditionsDefined_ = true;
 }
 
 #endif // SIMULATION_HPP_
