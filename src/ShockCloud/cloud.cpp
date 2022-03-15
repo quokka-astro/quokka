@@ -237,20 +237,13 @@ AMRSimulation<ShockCloud>::setCustomBoundaryConditions(
     consVar(i, j, k, RadSystem<ShockCloud>::gasEnergy_index) = Egas;
     consVar(i, j, k, RadSystem<ShockCloud>::passiveScalar_index) = 0;
 
-    // Marshak boundary condition
-    const double E_inc = Erad_bdry;
-    const double c = c_light_cgs_;
-    // const double F_inc = c * E_inc / 4.0; // half-isotropic incident flux
-    const double E_0 =
-        consVar(ilo, j, k, RadSystem<ShockCloud>::radEnergy_index);
-    const double F_0 =
-        consVar(ilo, j, k, RadSystem<ShockCloud>::x1RadFlux_index);
-    // use value at interface to solve for F_rad in the ghost zones
-    const double F_bdry = 0.5 * c * E_inc - 0.5 * (c * E_0 + 2.0 * F_0);
-    AMREX_ASSERT(std::abs(F_bdry / (c * E_inc)) < 1.0);
+    // radiation boundary condition -- streaming
+    constexpr double c = c_light_cgs_;
+    constexpr double E_inc = Erad_bdry;
+    constexpr double F_inc = c * E_inc; // streaming incident flux
 
     consVar(i, j, k, RadSystem<ShockCloud>::radEnergy_index) = E_inc;
-    consVar(i, j, k, RadSystem<ShockCloud>::x1RadFlux_index) = F_bdry;
+    consVar(i, j, k, RadSystem<ShockCloud>::x1RadFlux_index) = F_inc;
     consVar(i, j, k, RadSystem<ShockCloud>::x2RadFlux_index) = 0;
     consVar(i, j, k, RadSystem<ShockCloud>::x3RadFlux_index) = 0;
   }
