@@ -45,7 +45,7 @@ struct ShockCloud {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
 constexpr double m_H = hydrogen_mass_cgs_;
-//constexpr double seconds_in_year = 3.154e7;
+// constexpr double seconds_in_year = 3.154e7;
 
 template <> struct EOS_Traits<ShockCloud> {
   static constexpr double gamma = 5. / 3.; // default value
@@ -63,6 +63,11 @@ constexpr Real T_floor = 10.0;                             // K
 constexpr Real P0 = nH0 * Tgas0 * boltzmann_constant_cgs_; // erg cm^-3
 constexpr Real rho0 = nH0 * m_H;                           // g cm^-3
 constexpr Real rho1 = nH1 * m_H;
+
+// [Habing FUV field, see Eq. 12.6 of Draine, Physics of the ISM/IGM.]
+constexpr Real G_0 = 5.29e-14;          // erg cm^-3
+constexpr Real Erad0 = 1.0 * G_0;       // initial FUV radiation field
+constexpr Real Erad_bdry = 1000. * G_0; // incident FUV radiation field
 
 // needed for Dirichlet boundary condition
 AMREX_GPU_MANAGED static Real v_wind = 0;
@@ -175,7 +180,7 @@ void RadhydroSimulation<ShockCloud>::setInitialConditionsAtLevel(int lev) {
       state(i, j, k, RadSystem<ShockCloud>::x3GasMomentum_index) = zmom;
       state(i, j, k, RadSystem<ShockCloud>::passiveScalar_index) = C;
 
-      state(i, j, k, RadSystem<ShockCloud>::radEnergy_index) = 0;
+      state(i, j, k, RadSystem<ShockCloud>::radEnergy_index) = Erad0;
       state(i, j, k, RadSystem<ShockCloud>::x1RadFlux_index) = 0;
       state(i, j, k, RadSystem<ShockCloud>::x2RadFlux_index) = 0;
       state(i, j, k, RadSystem<ShockCloud>::x3RadFlux_index) = 0;
@@ -222,8 +227,10 @@ AMRSimulation<ShockCloud>::setCustomBoundaryConditions(
     consVar(i, j, k, RadSystem<ShockCloud>::gasEnergy_index) = Egas;
     consVar(i, j, k, RadSystem<ShockCloud>::passiveScalar_index) = 0;
 
-    consVar(i, j, k, RadSystem<ShockCloud>::radEnergy_index) = 0;
-    consVar(i, j, k, RadSystem<ShockCloud>::x1RadFlux_index) = 0;
+    // assume a perfectly beamed incoming radiation field
+    consVar(i, j, k, RadSystem<ShockCloud>::radEnergy_index) = Erad_bdry;
+    consVar(i, j, k, RadSystem<ShockCloud>::x1RadFlux_index) =
+        Erad_bdry / c_light_cgs_;
     consVar(i, j, k, RadSystem<ShockCloud>::x2RadFlux_index) = 0;
     consVar(i, j, k, RadSystem<ShockCloud>::x3RadFlux_index) = 0;
   }
@@ -534,6 +541,118 @@ void RadhydroSimulation<ShockCloud>::ErrorEst(int lev, amrex::TagBoxArray &tags,
   }
 }
 
+template <>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
+RadSystem<ShockCloud>::ComputePlanckOpacity(const double /*rho*/,
+                                            const double /*Tgas*/) -> double {
+  return 1000.; // cm^2 g^-1
+}
+
+template <>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
+RadSystem<ShockCloud>::ComputeRosselandOpacity(const double /*rho*/,
+                                               const double /*Tgas*/)
+    -> double {
+  return 1000.; // cm^2 g^-1
+}
+
+template <>
+void RadSystem<ShockCloud>::AddSourceTerms(array_t &consVar,
+                                           arrayconst_t &radEnergySource,
+                                           arrayconst_t &advectionFluxes,
+                                           amrex::Box const &indexRange,
+                                           amrex::Real dt) {
+  arrayconst_t &consPrev = consVar; // make read-only
+  array_t &consNew = consVar;
+
+  // Add source terms
+  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+    const double c = c_light_;
+    const double chat = c_hat_;
+
+    // load fluid properties
+    const double rho = consPrev(i, j, k, gasDensity_index);
+    const double Egastot0 = consPrev(i, j, k, gasEnergy_index);
+    const double x1GasMom0 = consPrev(i, j, k, x1GasMomentum_index);
+    const double x2GasMom0 = consPrev(i, j, k, x2GasMomentum_index);
+    const double x3GasMom0 = consPrev(i, j, k, x3GasMomentum_index);
+    const double Egas0 =
+        ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0);
+    const double Ekin0 = Egastot0 - Egas0;
+
+    // load radiation energy
+    const double Erad0 = consPrev(i, j, k, radEnergy_index);
+    AMREX_ASSERT(Egas0 > 0.0);
+    AMREX_ASSERT(Erad0 > 0.0);
+
+    // 1. Compute radiation energy update
+    // (Assuming 4\piB == 0, the implicit update can be written in closed form.
+    //  In this limit, the opacity cannot be temperature-dependent.)
+    const double T_gas = 0;
+
+    // compute Planck opacity
+    const double kappa = ComputePlanckOpacity(rho, T_gas);
+    AMREX_ASSERT(kappa >= 0.);
+
+    // compute update in closed form, assuming zero emissivity
+    const double Erad_guess = Erad0 / (1.0 + (rho * kappa) * chat * dt);
+
+    // 2. Compute radiation flux update
+    amrex::GpuArray<amrex::Real, 3> Frad_t0{};
+    amrex::GpuArray<amrex::Real, 3> Frad_t1{};
+
+    Frad_t0[0] = consPrev(i, j, k, x1RadFlux_index);
+    Frad_t0[1] = consPrev(i, j, k, x2RadFlux_index);
+    Frad_t0[2] = consPrev(i, j, k, x3RadFlux_index);
+
+    amrex::Real const kappaRosseland = ComputeRosselandOpacity(rho, T_gas);
+
+    for (int n = 0; n < 3; ++n) {
+      Frad_t1[n] = Frad_t0[n] / (1.0 + (rho * kappaRosseland) * chat * dt);
+    }
+    consNew(i, j, k, x1RadFlux_index) = Frad_t1[0];
+    consNew(i, j, k, x2RadFlux_index) = Frad_t1[1];
+    consNew(i, j, k, x3RadFlux_index) = Frad_t1[2];
+
+    // 3. Compute conservative gas momentum update
+    amrex::GpuArray<amrex::Real, 3> dF{};
+    amrex::GpuArray<amrex::Real, 3> dMomentum{};
+
+    for (int n = 0; n < 3; ++n) {
+      dF[n] = Frad_t1[n] - Frad_t0[n];
+      dMomentum[n] = -dF[n] / (c * chat);
+    }
+
+    consNew(i, j, k, x1GasMomentum_index) += dMomentum[0];
+    consNew(i, j, k, x2GasMomentum_index) += dMomentum[1];
+    consNew(i, j, k, x3GasMomentum_index) += dMomentum[2];
+
+    if constexpr (gamma_ != 1.0) {
+      amrex::Real x1GasMom1 = consNew(i, j, k, x1GasMomentum_index);
+      amrex::Real x2GasMom1 = consNew(i, j, k, x2GasMomentum_index);
+      amrex::Real x3GasMom1 = consNew(i, j, k, x3GasMomentum_index);
+
+      // 4a. Compute radiation work terms
+      amrex::Real const Egastot1 =
+          ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas0);
+
+      // compute difference in gas kinetic energy
+      amrex::Real const Ekin1 = Egastot1 - Egas0;
+      amrex::Real const dEkin_work = Ekin1 - Ekin0;
+
+      // compute loss of radiation energy to gas kinetic energy
+      amrex::Real const dErad_work = -(c_hat_ / c_light_) * dEkin_work;
+
+      // 4b. Store new radiation energy, gas energy
+      consNew(i, j, k, radEnergy_index) = Erad_guess + dErad_work;
+      consNew(i, j, k, gasEnergy_index) = Egastot1;
+
+    } else {
+      amrex::ignore_unused(Egas0);
+    } // endif gamma != 1.0
+  });
+}
+
 auto problem_main() -> int {
   // Problem parameters
   // compute shock jump conditions from rho0, P0, and M0
@@ -576,13 +695,14 @@ auto problem_main() -> int {
 
   RadhydroSimulation<ShockCloud> sim(boundaryConditions);
   sim.is_hydro_enabled_ = true;
-  sim.is_radiation_enabled_ = false;
+  sim.is_radiation_enabled_ = true;
 
   // Standard PPM gives unphysically enormous temperatures when used for
   // this problem (e.g., ~1e14 K or higher), but can be fixed by
   // reconstructing the temperature instead of the pressure
-  sim.reconstructionOrder_ = 3;      // PLM
-  sim.densityFloor_ = 1.0e-3 * rho0; // density floor (to prevent vacuum)
+  sim.reconstructionOrder_ = 3;          // PPM
+  sim.radiationReconstructionOrder_ = 2; // PLM for radiation
+  sim.densityFloor_ = 1.0e-3 * rho0;     // density floor (to prevent vacuum)
 
   sim.cflNumber_ = CFL_number;
   sim.maxTimesteps_ = max_timesteps;
