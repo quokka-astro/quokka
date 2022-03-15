@@ -928,10 +928,6 @@ void RadhydroSimulation<problem_t>::advanceRadiationSubstepAtLevel(
     int lev, amrex::Real time, amrex::Real dt_radiation, int const iter_count, int const /*nsubsteps*/,
 	amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine)
 {
-	if (Verbose()) {
-		amrex::Print() << "\tsubstep " << iter_count << " t = " << time << std::endl;
-	}
-
 	// get cell sizes
 	auto const &dx = geom[lev].CellSizeArray();
 
