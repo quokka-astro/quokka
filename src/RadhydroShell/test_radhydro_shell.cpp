@@ -58,6 +58,7 @@ template <> struct RadSystem_Traits<ShellProblem> {
 
 template <> struct EOS_Traits<ShellProblem> {
   static constexpr double gamma = gamma_gas;
+  static constexpr bool reconstruct_eint = false;
 };
 
 constexpr amrex::Real Msun = 2.0e33;           // g

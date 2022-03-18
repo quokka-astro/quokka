@@ -70,6 +70,7 @@ template <> struct RadSystem_Traits<ShockProblem> {
 
 template <> struct EOS_Traits<ShockProblem> {
 	static constexpr double gamma = gamma_gas;
+	static constexpr bool reconstruct_eint = true;
 };
 
 template <>

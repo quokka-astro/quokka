@@ -21,6 +21,7 @@
 #include "AMReX_Array4.H"
 #include "AMReX_Dim3.H"
 #include "AMReX_ErrorList.H"
+#include "AMReX_Extension.H"
 #include "AMReX_FArrayBox.H"
 #include "AMReX_FabArrayUtility.H"
 #include "AMReX_IntVect.H"
@@ -33,30 +34,28 @@
 #include "ArrayView.hpp"
 #include "simulation.hpp"
 
-/// Provide type-safe global sign ('sgn') function.
-template <typename T> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto sgn(T val) -> int
-{
-	return (T(0) < val) - (val < T(0));
-}
+//#define MULTIDIM_EXTREMA_CHECK
 
 namespace quokka {
 	enum redoFlag {none = 0, redo = 1};
 } // namespace quokka
 
-using array_t = amrex::Array4<amrex::Real> const;
-using arrayconst_t = amrex::Array4<const amrex::Real> const;
 
 /// Class for a hyperbolic system of conservation laws
 template <typename problem_t> class HyperbolicSystem
 {
       public:
-	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto MC(double a, double b)
-	    -> double
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
+	static auto MC(double a, double b) -> double
 	{
 		return 0.5 * (sgn(a) + sgn(b)) *
 		       std::min(0.5 * std::abs(a + b),
 				std::min(2.0 * std::abs(a), 2.0 * std::abs(b)));
 	}
+
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
+	static auto GetMinmaxSurroundingCell(arrayconst_t &q,
+						  int i, int j, int k, int n) -> std::pair<double, double>;
 
 	template <FluxDir DIR>
 	static void ReconstructStatesConstant(arrayconst_t &q, array_t &leftState,
@@ -163,6 +162,45 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPLM(arrayconst_t &q_in, array
 }
 
 template <typename problem_t>
+AMREX_GPU_DEVICE
+auto HyperbolicSystem<problem_t>::GetMinmaxSurroundingCell(arrayconst_t &q,
+							   int i, int j, int k, int n) -> std::pair<double, double>
+{
+#if (AMREX_SPACEDIM == 1)
+	// 1D: compute bounds from self + all 2 surrounding cells
+	const std::pair<double, double> bounds =
+		std::minmax({q(i, j, k, n), q(i - 1, j, k, n), q(i + 1, j, k, n)});
+
+#elif (AMREX_SPACEDIM == 2)
+	// 2D: compute bounds from self + all 8 surrounding cells
+	const std::pair<double, double> bounds = std::minmax({q(i, j, k, n),
+		q(i - 1, j, k, n), q(i + 1, j, k, n),
+		q(i, j - 1, k, n), q(i, j + 1, k, n),
+		q(i - 1, j - 1, k, n), q(i + 1, j - 1, k, n),
+		q(i - 1, j + 1, k, n), q(i + 1, j + 1, k, n)});
+
+#else // AMREX_SPACEDIM == 3
+	// 3D: compute bounds from self + all 26 surrounding cells
+	const std::pair<double, double> bounds = std::minmax({q(i, j, k, n),
+		q(i - 1, j, k, n), q(i + 1, j, k, n),
+		q(i, j - 1, k, n), q(i, j + 1, k, n),
+		q(i, j, k - 1, n), q(i, j, k + 1, n),
+		q(i - 1, j - 1, k, n), q(i + 1, j - 1, k, n),
+		q(i - 1, j + 1, k, n), q(i + 1, j + 1, k, n),
+		q(i, j - 1, k - 1, n), q(i, j + 1, k - 1, n),
+		q(i, j - 1, k + 1, n), q(i, j + 1, k + 1, n),
+		q(i - 1, j, k - 1, n), q(i + 1, j, k - 1, n),
+		q(i - 1, j, k + 1, n), q(i + 1, j, k + 1, n),
+		q(i - 1, j - 1, k - 1, n), q(i + 1, j - 1, k - 1, n),
+		q(i - 1, j - 1, k + 1, n), q(i + 1, j - 1, k + 1, n),
+		q(i - 1, j + 1, k - 1, n), q(i + 1, j + 1, k - 1, n),
+		q(i - 1, j + 1, k + 1, n), q(i + 1, j + 1, k + 1, n)});
+#endif // AMREX_SPACEDIM
+
+	return bounds;
+}
+
+template <typename problem_t>
 template <FluxDir DIR>
 void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array_t &leftState_in,
 						       array_t &rightState_in,
@@ -184,38 +222,40 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array
 
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
 
-	// fuse loops into a single GPU kernel to avoid kernel launch overhead
+	// TODO(benwibking): fuse loops into a single GPU kernel to avoid kernel launch overhead
+	// (WARNING: do not do this! this causes a race condition. need to investigate why.)
 	amrex::ParallelFor(
 		interfaceRange, nvars, // interface-centered kernel
-				[=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
-				   // permute array indices according to dir
-				   auto [i, j, k] =
-				       quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
+		[=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
+		   // permute array indices according to dir
+		   auto [i, j, k] =
+		       quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
 
-				   // PPM reconstruction following Colella & Woodward (1984), with
-				   // some modifications following Mignone (2014), as implemented in
-				   // Athena++.
+		   // PPM reconstruction following Colella & Woodward (1984), with
+		   // some modifications following Mignone (2014), as implemented in
+		   // Athena++.
 
-				   // (1.) Estimate the interface a_{i - 1/2}. Equivalent to step 1
-				   // in Athena++ [ppm_simple.cpp].
+		   // (1.) Estimate the interface a_{i - 1/2}. Equivalent to step 1
+		   // in Athena++ [ppm_simple.cpp].
 
-				   // C&W Eq. (1.9) [parabola midpoint for the case of
-				   // equally-spaced zones]: a_{j+1/2} = (7/12)(a_j + a_{j+1}) -
-				   // (1/12)(a_{j+2} + a_{j-1}). Terms are grouped to preserve exact
-				   // symmetry in floating-point arithmetic, following Athena++.
+		   // C&W Eq. (1.9) [parabola midpoint for the case of
+		   // equally-spaced zones]: a_{j+1/2} = (7/12)(a_j + a_{j+1}) -
+		   // (1/12)(a_{j+2} + a_{j-1}). Terms are grouped to preserve exact
+		   // symmetry in floating-point arithmetic, following Athena++.
 
-				   const double coef_1 = (7. / 12.);
-				   const double coef_2 = (-1. / 12.);
-				   const double interface =
-				       (coef_1 * q(i, j, k, n) + coef_2 * q(i + 1, j, k, n)) +
-				       (coef_1 * q(i - 1, j, k, n) + coef_2 * q(i - 2, j, k, n));
+		   const double coef_1 = (7. / 12.);
+		   const double coef_2 = (-1. / 12.);
+		   const double interface =
+		       (coef_1 * q(i, j, k, n) + coef_2 * q(i + 1, j, k, n)) +
+		       (coef_1 * q(i - 1, j, k, n) + coef_2 * q(i - 2, j, k, n));
 
-				   // a_R,(i-1) in C&W
-				   leftState(i, j, k, n) = interface;
+		   // a_R,(i-1) in C&W
+		   leftState(i, j, k, n) = interface;
 
-				   // a_L,i in C&W
-				   rightState(i, j, k, n) = interface;
-			   },
+		   // a_L,i in C&W
+		   rightState(i, j, k, n) = interface;
+		});
+	amrex::ParallelFor(
 		cellRange, nvars, // cell-centered kernel
 		[=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
 		    // permute array indices according to dir
@@ -229,39 +269,12 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array
 			// N.B.: Checking all 27 nearest neighbors is *very* expensive on GPU
 			// (presumably due to lots of cache misses), so it is hard-coded disabled.
 			// Fortunately, almost all problems run stably without enabling this.
-#if (AMREX_SPACEDIM == 1)
-			// 1D: compute bounds from self + all 2 surrounding cells
-			const std::pair<double, double> bounds =
-				std::minmax({q(i, j, k, n), q(i - 1, j, k, n), q(i + 1, j, k, n)});
-#elif (AMREX_SPACEDIM == 2)
-			// 2D: compute bounds from self + all 8 surrounding cells
-			const std::pair<double, double> bounds = std::minmax({q(i, j, k, n),
-				q(i - 1, j, k, n), q(i + 1, j, k, n),
-				q(i, j - 1, k, n), q(i, j + 1, k, n),
-				q(i - 1, j - 1, k, n), q(i + 1, j - 1, k, n),
-				q(i - 1, j + 1, k, n), q(i + 1, j + 1, k, n)});
-#else // AMREX_SPACEDIM == 3
-			// 3D: compute bounds from self + all 26 surrounding cells
-			const std::pair<double, double> bounds = std::minmax({q(i, j, k, n),
-				q(i - 1, j, k, n), q(i + 1, j, k, n),
-				q(i, j - 1, k, n), q(i, j + 1, k, n),
-				q(i, j, k - 1, n), q(i, j, k + 1, n),
-				q(i - 1, j - 1, k, n), q(i + 1, j - 1, k, n),
-				q(i - 1, j + 1, k, n), q(i + 1, j + 1, k, n),
-				q(i, j - 1, k - 1, n), q(i, j + 1, k - 1, n),
-				q(i, j - 1, k + 1, n), q(i, j + 1, k + 1, n),
-				q(i - 1, j, k - 1, n), q(i + 1, j, k - 1, n),
-				q(i - 1, j, k + 1, n), q(i + 1, j, k + 1, n),
-				q(i - 1, j - 1, k - 1, n), q(i + 1, j - 1, k - 1, n),
-				q(i - 1, j - 1, k + 1, n), q(i + 1, j - 1, k + 1, n),
-				q(i - 1, j + 1, k - 1, n), q(i + 1, j + 1, k - 1, n),
-				q(i - 1, j + 1, k + 1, n), q(i + 1, j + 1, k + 1, n)});
-#endif // AMREX_SPACEDIM
-#else // MULTIDIM_EXTREMA_CHECK
+			auto bounds = GetMinmaxSurroundingCell(q_in, i_in, j_in, k_in, n);
+#else
 			// compute bounds from neighboring cell-averaged values along axis
 			const std::pair<double, double> bounds =
 				std::minmax({q(i, j, k, n), q(i - 1, j, k, n), q(i + 1, j, k, n)});
-#endif // MULTIDIM_EXTREMA_CHECK
+#endif
 
 		    // get interfaces
 		    const double a_minus = rightState(i, j, k, n);

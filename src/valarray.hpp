@@ -12,8 +12,10 @@
 // library headers
 #include "AMReX_Extension.H"
 #include <AMReX_GpuQualifiers.H>
+#include <cmath>
 #include <cstddef>
 #include <iterator>
+#include <limits>
 
 namespace quokka
 {
@@ -92,6 +94,18 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator*(quokka::valarray<T, d> c
 }
 
 template <typename T, int d>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator/(quokka::valarray<T, d> const &a,
+							quokka::valarray<T, d> const &b)
+    -> quokka::valarray<T, d>
+{
+	quokka::valarray<T, d> div;
+	for (size_t i = 0; i < a.size(); ++i) {
+		div[i] = a[i] / b[i];
+	}
+	return div;
+}
+
+template <typename T, int d>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator*(T const &scalar,
 							quokka::valarray<T, d> const &v)
     -> quokka::valarray<T, d>
@@ -115,6 +129,15 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator*(quokka::valarray<T, d> c
 }
 
 template <typename T, int d>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void operator*=(quokka::valarray<T, d> &v,
+							T const &scalar)
+{
+	for (size_t i = 0; i < v.size(); ++i) {
+		v[i] *= scalar;
+	}
+}
+
+template <typename T, int d>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator/(quokka::valarray<T, d> const &v,
 							T const &scalar) -> quokka::valarray<T, d>
 {
@@ -123,6 +146,29 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator/(quokka::valarray<T, d> c
 		scalardiv[i] = v[i] / scalar;
 	}
 	return scalardiv;
+}
+
+template <typename T, int d>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto abs(quokka::valarray<T, d> const &v)
+							-> quokka::valarray<T, d>
+{
+	quokka::valarray<T, d> abs_v;
+	for (size_t i = 0; i < v.size(); ++i) {
+		abs_v[i] = std::abs(v[i]);
+	}
+	return abs_v;
+}
+
+template <typename T, int d>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto min(quokka::valarray<T, d> const &v) -> T
+{
+	assert(v.size() >= 1);
+	T min_val = v[0]; // v must have at least 1 element
+	
+	for (size_t i = 0; i < v.size(); ++i) {
+		min_val = std::min(min_val, v[i]);
+	}
+	return min_val;
 }
 
 #endif // VALARRAY_HPP_

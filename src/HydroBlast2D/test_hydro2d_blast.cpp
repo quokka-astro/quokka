@@ -27,6 +27,7 @@ struct BlastProblem {
 
 template <> struct EOS_Traits<BlastProblem> {
 	static constexpr double gamma = 5. / 3.;
+	static constexpr bool reconstruct_eint = false;
 };
 
 template <> void RadhydroSimulation<BlastProblem>::setInitialConditionsAtLevel(int lev)
