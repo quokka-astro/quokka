@@ -29,6 +29,7 @@ struct QuirkProblem {
 
 template <> struct EOS_Traits<QuirkProblem> {
 	static constexpr double gamma = 5. / 3.;
+	static constexpr bool reconstruct_eint = false;
 };
 
 constexpr Real dl =  3.692;

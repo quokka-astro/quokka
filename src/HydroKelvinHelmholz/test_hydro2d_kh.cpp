@@ -23,6 +23,7 @@ struct KelvinHelmholzProblem {};
 
 template <> struct EOS_Traits<KelvinHelmholzProblem> {
   static constexpr double gamma = 1.4;
+  static constexpr bool reconstruct_eint = false;
 };
 
 template <>

@@ -58,6 +58,7 @@ template <> struct RadSystem_Traits<TubeProblem> {
 template <> struct EOS_Traits<TubeProblem> {
   static constexpr double gamma = gamma_gas;
   static constexpr double cs_isothermal = a0; // only used when gamma = 1
+  static constexpr bool reconstruct_eint = false; // unused if isothermal
 };
 
 template <>
