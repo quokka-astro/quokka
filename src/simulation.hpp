@@ -978,13 +978,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile() con
 
 	amrex::Print() << "Writing plotfile " << plotfilename << "\n";
 
-#ifdef AMREX_USE_HDF5
-	amrex::WriteMultiLevelPlotfileHDF5(plotfilename, finest_level + 1, mf_ptr, varnames, Geom(),
-				       tNew_[0], istep, refRatio());
-#else
 	amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, mf_ptr,
 					   varnames, Geom(), tNew_[0], istep, refRatio());
-#endif
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile() const
