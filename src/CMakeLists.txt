@@ -34,6 +34,8 @@ if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
     append_coverage_compiler_flags()
 endif()
 
+add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:--ptxas-options=-v>)
+
 include_directories(${amrex_INCLUDE_DIRS_RET})
 include_directories(${fmt_INCLUDE_DIRS_RET})
 include_directories(${HDF5_INCLUDE_DIRS_RET})
