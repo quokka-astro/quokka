@@ -21,3 +21,7 @@ leak:set_table_resize
 leak:PyBytes_FromStringAndSize
 leak:PyFT2Image_init
 leak:FT2Image::resize
+leak:opal_free_list_grow_st
+leak:_PyObject_GC_Resize
+leak:libpython
+leak:_multiarray_umath
