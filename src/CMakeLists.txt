@@ -37,6 +37,9 @@ if (CMAKE_BUILD_TYPE STREQUAL "Debug")
   add_link_options(-fsanitize=address -fsanitize=undefined)
 endif()
 
+# this is necessary to prevent the host compiler from complaining about nv_pragmas
+add_compile_options(-Wno-unknown-pragmas)
+
 add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:--ptxas-options=-v>)
 
 

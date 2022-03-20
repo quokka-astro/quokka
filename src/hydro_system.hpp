@@ -147,7 +147,9 @@ void HydroSystem<problem_t>::ConservedToPrimitive(amrex::Array4<const amrex::Rea
 		const auto eint = thermal_energy / rho; // specific internal energy
 
 		AMREX_ASSERT(rho > 0.);
-		AMREX_ASSERT(P > 0.);
+		if (!is_eos_isothermal()) {
+			AMREX_ASSERT(P > 0.);
+		}
 
 		primVar(i, j, k, primDensity_index) = rho;
 		primVar(i, j, k, x1Velocity_index) = vx;
@@ -460,6 +462,7 @@ void HydroSystem<problem_t>::ComputeFlatteningCoefficients(
 		}
 
 		// beta is a measure of shock resolution (Eq. 74 of Miller & Colella 2002)
+		// TODO(benwibking): what to do when Pplus2 == Pminus2??
 		const double beta = std::abs(Pplus1 - Pminus1) / std::abs(Pplus2 - Pminus2);
 
 		// Eq. 75 of Miller & Colella 2002

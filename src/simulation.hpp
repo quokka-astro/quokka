@@ -434,10 +434,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	for (int n = 0; n < ncomp_; ++n) {
 		amrex::Real const final_sum = state_new_[0].sum(n) * vol;
 		amrex::Real const abs_err = (final_sum - init_sum_cons[n]);
-		amrex::Real const rel_err = abs_err / init_sum_cons[n];
 		amrex::Print() << "Initial " << componentNames_[n] << " = " << init_sum_cons[n] << std::endl;
 		amrex::Print() << "\tabsolute conservation error = " << abs_err << std::endl;
 		if (init_sum_cons[n] != 0.0) {
+			amrex::Real const rel_err = abs_err / init_sum_cons[n];
 			amrex::Print() << "\trelative conservation error = " << rel_err << std::endl;
 		}
 		amrex::Print() << std::endl;
