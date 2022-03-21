@@ -41,7 +41,7 @@ if(ENABLE_ASAN)
 endif(ENABLE_ASAN)
 
 # this is necessary to prevent the host compiler from complaining about nv_pragmas
-add_compile_options(-Wno-unknown-pragmas)
+#add_compile_options(-Wno-unknown-pragmas)
 
 add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:--ptxas-options=-v>)
 
