@@ -177,6 +177,7 @@ AMRSimulation<TubeProblem>::setCustomBoundaryConditions(
     consVar(i, j, k, RadSystem<TubeProblem>::x1GasMomentum_index) = x1Mom;
     consVar(i, j, k, RadSystem<TubeProblem>::x2GasMomentum_index) = 0.;
     consVar(i, j, k, RadSystem<TubeProblem>::x3GasMomentum_index) = 0.;
+  	consVar(i, j, k, RadSystem<TubeProblem>::passiveScalar_index) = 0;
 
   } else if (i > hi[0]) {
     // right-side boundary -- constant
@@ -199,6 +200,7 @@ AMRSimulation<TubeProblem>::setCustomBoundaryConditions(
     consVar(i, j, k, RadSystem<TubeProblem>::x1GasMomentum_index) = x1Mom;
     consVar(i, j, k, RadSystem<TubeProblem>::x2GasMomentum_index) = 0.;
     consVar(i, j, k, RadSystem<TubeProblem>::x3GasMomentum_index) = 0.;
+  	consVar(i, j, k, RadSystem<TubeProblem>::passiveScalar_index) = 0;
   }
 }
 

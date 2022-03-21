@@ -123,6 +123,7 @@ AMRSimulation<StreamingProblem>::setCustomBoundaryConditions(
   consVar(i, j, k, RadSystem<StreamingProblem>::x1GasMomentum_index) = 0.;
   consVar(i, j, k, RadSystem<StreamingProblem>::x2GasMomentum_index) = 0.;
   consVar(i, j, k, RadSystem<StreamingProblem>::x3GasMomentum_index) = 0.;
+	consVar(i, j, k, RadSystem<StreamingProblem>::passiveScalar_index) = 0;
 }
 
 auto problem_main() -> int {

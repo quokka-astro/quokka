@@ -169,6 +169,7 @@ template <> void RadhydroSimulation<SuOlsonProblem>::setInitialConditionsAtLevel
 			state(i, j, k, RadSystem<SuOlsonProblem>::x2GasMomentum_index) = 0.;
 			state(i, j, k, RadSystem<SuOlsonProblem>::x3GasMomentum_index) = 0.;
 			state(i, j, k, RadSystem<SuOlsonProblem>::gasEnergy_index) = Egas;
+			state(i, j, k, RadSystem<SuOlsonProblem>::passiveScalar_index) = 0;
 		});
 	}
 
