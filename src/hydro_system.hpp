@@ -35,92 +35,107 @@ template <typename problem_t> struct EOS_Traits {
 
 /// Class for the Euler equations of inviscid hydrodynamics
 ///
-template <typename problem_t> class HydroSystem : public HyperbolicSystem<problem_t>
-{
-      public:
-	enum consVarIndex {
-		density_index = 0,
-		x1Momentum_index = 1,
-		x2Momentum_index = 2,
-		x3Momentum_index = 3,
-		energy_index = 4,
-		scalar_index = 5
-	};
-	enum primVarIndex {
-		primDensity_index = 0,
-		x1Velocity_index = 1,
-		x2Velocity_index = 2,
-		x3Velocity_index = 3,
-		pressure_index = 4,
-		primScalar_index = 5
-	};
+template <typename problem_t>
+class HydroSystem : public HyperbolicSystem<problem_t> {
+public:
+  enum consVarIndex {
+    density_index = 0,
+    x1Momentum_index = 1,
+    x2Momentum_index = 2,
+    x3Momentum_index = 3,
+    energy_index = 4,
+    scalar_index = 5
+  };
+  enum primVarIndex {
+    primDensity_index = 0,
+    x1Velocity_index = 1,
+    x2Velocity_index = 2,
+    x3Velocity_index = 3,
+    pressure_index = 4,
+    primScalar_index = 5
+  };
 
-	static constexpr int nvar_ = 6;
+  static constexpr int nvar_ = 6;
 
-	static void ConservedToPrimitive(amrex::Array4<const amrex::Real> const &cons,
-					 array_t &primVar, amrex::Box const &indexRange);
+  static void ConservedToPrimitive(amrex::Array4<const amrex::Real> const &cons,
+                                   array_t &primVar,
+                                   amrex::Box const &indexRange);
 
-	static void ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real> const &cons,
-					  array_t &maxSignal, amrex::Box const &indexRange);
-	// requires GPU reductions
-	static auto CheckStatesValid(amrex::Box const &indexRange, amrex::Array4<const amrex::Real> const &cons)
-    				  -> bool;
-	static void	EnforcePressureFloor(amrex::Real densityFloor, amrex::Real pressureFloor, 
-												  amrex::Box const &indexRange,
-												  amrex::Array4<amrex::Real> const &state);
+  static void
+  ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real> const &cons,
+                        array_t &maxSignal, amrex::Box const &indexRange);
+  // requires GPU reductions
+  static auto CheckStatesValid(amrex::Box const &indexRange,
+                               amrex::Array4<const amrex::Real> const &cons)
+      -> bool;
+  static void EnforcePressureFloor(amrex::Real densityFloor,
+                                   amrex::Real pressureFloor,
+                                   amrex::Box const &indexRange,
+                                   amrex::Array4<amrex::Real> const &state);
 
-	AMREX_GPU_DEVICE static auto ComputePressure(amrex::Array4<const amrex::Real> const &cons,
-						     int i, int j, int k) -> amrex::Real;
-	
-	AMREX_GPU_DEVICE static auto isStateValid(amrex::Array4<const amrex::Real> const &cons,
-							 int i, int j, int k) -> bool;
+  AMREX_GPU_DEVICE static auto
+  ComputePressure(amrex::Array4<const amrex::Real> const &cons, int i, int j,
+                  int k) -> amrex::Real;
 
-	static void PredictStep(arrayconst_t &consVarOld, array_t &consVarNew,
-    				std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray, double dt_in,
-					amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange,
-					int nvars, amrex::Array4<int> const &redoFlag);
+  AMREX_GPU_DEVICE static auto
+  isStateValid(amrex::Array4<const amrex::Real> const &cons, int i, int j,
+               int k) -> bool;
 
-	static void AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayconst_t &U1,
-					std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray, double dt_in,
-					amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange,
-					int nvars, amrex::Array4<int> const &redoFlag);
+  static void PredictStep(arrayconst_t &consVarOld, array_t &consVarNew,
+                          std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray,
+                          double dt_in,
+                          amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,
+                          amrex::Box const &indexRange, int nvars,
+                          amrex::Array4<int> const &redoFlag);
 
-	template <FluxDir DIR>
-	static void ComputeVelocityDifferences(amrex::Array4<const amrex::Real> const &primVar_in,
-				  array_t &dvn_in, array_t &dvt_in, amrex::Box const &indexRange);
+  static void AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayconst_t &U1,
+                           std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray,
+                           double dt_in,
+                           amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,
+                           amrex::Box const &indexRange, int nvars,
+                           amrex::Array4<int> const &redoFlag);
 
-	template <FluxDir DIR>
-	static void ComputeFluxes(array_t &x1Flux_in,
-					amrex::Array4<const amrex::Real> const &x1LeftState_in,
-					amrex::Array4<const amrex::Real> const &x1RightState_in,
-					amrex::Array4<const amrex::Real> const &primVar_in,
-					array_t &dvn_in, array_t &dvt_in,
-					amrex::Box const &indexRange);
+  template <FluxDir DIR>
+  static void
+  ComputeVelocityDifferences(amrex::Array4<const amrex::Real> const &primVar_in,
+                             array_t &dvn_in, array_t &dvt_in,
+                             amrex::Box const &indexRange);
 
-	template <FluxDir DIR>
-	static void ComputeFirstOrderFluxes(amrex::Array4<const amrex::Real> const &consVar,
-					    array_t &x1FluxDiffusive, amrex::Box const &indexRange);
+  template <FluxDir DIR>
+  static void
+  ComputeFluxes(array_t &x1Flux_in,
+                amrex::Array4<const amrex::Real> const &x1LeftState_in,
+                amrex::Array4<const amrex::Real> const &x1RightState_in,
+                amrex::Array4<const amrex::Real> const &primVar_in,
+                array_t &dvn_in, array_t &dvt_in, amrex::Box const &indexRange);
 
-	template <FluxDir DIR>
-	static void ComputeFlatteningCoefficients(amrex::Array4<const amrex::Real> const &primVar,
-						  array_t &x1Chi, amrex::Box const &indexRange);
+  template <FluxDir DIR>
+  static void
+  ComputeFirstOrderFluxes(amrex::Array4<const amrex::Real> const &consVar,
+                          array_t &x1FluxDiffusive,
+                          amrex::Box const &indexRange);
 
-	template <FluxDir DIR>
-	static void FlattenShocks(amrex::Array4<const amrex::Real> const &q_in,
-				   amrex::Array4<const amrex::Real> const &x1Chi_in,
-   				   amrex::Array4<const amrex::Real> const &x2Chi_in,
-				   amrex::Array4<const amrex::Real> const &x3Chi_in,
-				   array_t &x1LeftState_in, array_t &x1RightState_in,
-				   amrex::Box const &indexRange, int nvars);
+  template <FluxDir DIR>
+  static void
+  ComputeFlatteningCoefficients(amrex::Array4<const amrex::Real> const &primVar,
+                                array_t &x1Chi, amrex::Box const &indexRange);
 
-	// C++ does not allow constexpr to be uninitialized, even in a templated class!
-	static constexpr double gamma_ = EOS_Traits<problem_t>::gamma;
-	static constexpr double cs_iso_ = EOS_Traits<problem_t>::cs_isothermal;
-	static constexpr bool reconstruct_eint = EOS_Traits<problem_t>::reconstruct_eint;
+  template <FluxDir DIR>
+  static void FlattenShocks(amrex::Array4<const amrex::Real> const &q_in,
+                            amrex::Array4<const amrex::Real> const &x1Chi_in,
+                            amrex::Array4<const amrex::Real> const &x2Chi_in,
+                            amrex::Array4<const amrex::Real> const &x3Chi_in,
+                            array_t &x1LeftState_in, array_t &x1RightState_in,
+                            amrex::Box const &indexRange, int nvars);
 
-	static constexpr auto is_eos_isothermal() -> bool {
-		return (gamma_ == 1.0);
-	}
+  // C++ does not allow constexpr to be uninitialized, even in a templated
+  // class!
+  static constexpr double gamma_ = EOS_Traits<problem_t>::gamma;
+  static constexpr double cs_iso_ = EOS_Traits<problem_t>::cs_isothermal;
+  static constexpr bool reconstruct_eint =
+      EOS_Traits<problem_t>::reconstruct_eint;
+
+  static constexpr auto is_eos_isothermal() -> bool { return (gamma_ == 1.0); }
 };
 
 template <typename problem_t>
@@ -707,6 +722,13 @@ void HydroSystem<problem_t>::ComputeFluxes(
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i_in, int j_in,
                                                       int k_in) {
     auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
+
+    // HLLC solver following Toro (1998) and Balsara (2017).
+    // [Carbuncle correction:
+    //  Minoshima & Miyoshi, "A low-dissipation HLLD approximate Riemann solver
+    //  	for a very wide range of Mach numbers," JCP (2021).]
+
+    // gather left- and right- state variables
 
     const double rho_L = x1LeftState(i, j, k, primDensity_index);
     const double rho_R = x1RightState(i, j, k, primDensity_index);
