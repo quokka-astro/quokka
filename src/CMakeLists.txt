@@ -30,12 +30,18 @@ if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
     append_coverage_compiler_flags()
 endif()
 
+<<<<<<< HEAD
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
   # enable AddressSanitizer when debugging
   add_compile_options(-O1 -fno-omit-frame-pointer)
+=======
+if(ENABLE_ASAN)
+  # enable AddressSanitizer for debugging
+  message(STATUS "Compiling with AddressSanitizer and UndefinedBehaviorSanitizer *enabled*")
+>>>>>>> cfa1631... build RelWithDebInfo + ASAN for CI
   add_compile_options(-fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all -fsanitize=float-divide-by-zero -fsanitize=float-cast-overflow -fno-sanitize=null -fno-sanitize=alignment)
   add_link_options(-fsanitize=address -fsanitize=undefined)
-endif()
+endif(ENABLE_ASAN)
 
 # this is necessary to prevent the host compiler from complaining about nv_pragmas
 <<<<<<< HEAD
