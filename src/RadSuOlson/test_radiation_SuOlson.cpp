@@ -146,6 +146,7 @@ void RadhydroSimulation<MarshakProblem>::setInitialConditionsAtLevel(int lev) {
       state(i, j, k, RadSystem<MarshakProblem>::x1GasMomentum_index) = 0.;
       state(i, j, k, RadSystem<MarshakProblem>::x2GasMomentum_index) = 0.;
       state(i, j, k, RadSystem<MarshakProblem>::x3GasMomentum_index) = 0.;
+    	state(i, j, k, RadSystem<MarshakProblem>::passiveScalar_index) = 0.;
     });
   }
 

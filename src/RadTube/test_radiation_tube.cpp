@@ -124,6 +124,7 @@ void RadhydroSimulation<TubeProblem>::setInitialConditionsAtLevel(int lev) {
       state(i, j, k, RadSystem<TubeProblem>::x1GasMomentum_index) = 0.;
       state(i, j, k, RadSystem<TubeProblem>::x2GasMomentum_index) = 0.;
       state(i, j, k, RadSystem<TubeProblem>::x3GasMomentum_index) = 0.;
+    	state(i, j, k, RadSystem<TubeProblem>::passiveScalar_index) = 0.;
     });
   }
 

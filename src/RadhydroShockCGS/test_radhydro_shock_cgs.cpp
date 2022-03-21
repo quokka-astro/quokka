@@ -136,6 +136,7 @@ AMRSimulation<ShockProblem>::setCustomBoundaryConditions(
 
 		consVar(i, j, k, RadSystem<ShockProblem>::x2GasMomentum_index) = 0.;
 		consVar(i, j, k, RadSystem<ShockProblem>::x3GasMomentum_index) = 0.;
+	    consVar(i, j, k, RadSystem<ShockProblem>::passiveScalar_index) = 0.;
 	} else if (i >= hi[0]) {
 		// x1 right-side boundary -- constant
 		consVar(i, j, k, RadSystem<ShockProblem>::radEnergy_index) = Erad1;
@@ -151,8 +152,10 @@ AMRSimulation<ShockProblem>::setCustomBoundaryConditions(
 		consVar(i, j, k, RadSystem<ShockProblem>::gasDensity_index) = rho1;
 		consVar(i, j, k, RadSystem<ShockProblem>::x1GasMomentum_index) =
 		    (xmom_R > (rho1 * v1)) ? xmom_R : (rho1 * v1); // xmom_R;
+
 		consVar(i, j, k, RadSystem<ShockProblem>::x2GasMomentum_index) = 0.;
 		consVar(i, j, k, RadSystem<ShockProblem>::x3GasMomentum_index) = 0.;
+	    consVar(i, j, k, RadSystem<ShockProblem>::passiveScalar_index) = 0.;
 	}
 }
 
@@ -198,6 +201,7 @@ template <> void RadhydroSimulation<ShockProblem>::setInitialConditionsAtLevel(i
 			state(i, j, k, RadSystem<ShockProblem>::x1GasMomentum_index) = x1Momentum;
 			state(i, j, k, RadSystem<ShockProblem>::x2GasMomentum_index) = 0;
 			state(i, j, k, RadSystem<ShockProblem>::x3GasMomentum_index) = 0;
+    		state(i, j, k, RadSystem<ShockProblem>::passiveScalar_index) = 0.;
 		});
 	}
 

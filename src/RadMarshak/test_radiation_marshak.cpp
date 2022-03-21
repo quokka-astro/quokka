@@ -14,6 +14,7 @@
 
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
+#include "radiation_system.hpp"
 #include "test_radiation_marshak.hpp"
 
 struct SuOlsonProblem {
@@ -144,6 +145,7 @@ AMRSimulation<SuOlsonProblem>::setCustomBoundaryConditions(
 	consVar(i, j, k, RadSystem<SuOlsonProblem>::x1GasMomentum_index) = 0.;
 	consVar(i, j, k, RadSystem<SuOlsonProblem>::x2GasMomentum_index) = 0.;
 	consVar(i, j, k, RadSystem<SuOlsonProblem>::x3GasMomentum_index) = 0.;
+	consVar(i, j, k, RadSystem<SuOlsonProblem>::passiveScalar_index) = 0.;
 }
 
 template <> void RadhydroSimulation<SuOlsonProblem>::setInitialConditionsAtLevel(int lev)

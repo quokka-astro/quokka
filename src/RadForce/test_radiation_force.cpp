@@ -137,6 +137,7 @@ void RadhydroSimulation<TubeProblem>::setInitialConditionsAtLevel(int lev) {
       state(i, j, k, RadSystem<TubeProblem>::x2GasMomentum_index) = 0;
       state(i, j, k, RadSystem<TubeProblem>::x3GasMomentum_index) = 0;
       state(i, j, k, RadSystem<TubeProblem>::gasEnergy_index) = 0;
+      state(i, j, k, RadSystem<TubeProblem>::passiveScalar_index) = 0;
     });
   }
 
@@ -195,6 +196,7 @@ AMRSimulation<TubeProblem>::setCustomBoundaryConditions(
     consVar(i, j, k, RadSystem<TubeProblem>::x2GasMomentum_index) = 0;
     consVar(i, j, k, RadSystem<TubeProblem>::x3GasMomentum_index) = 0;
     consVar(i, j, k, RadSystem<TubeProblem>::gasEnergy_index) = 0;
+    consVar(i, j, k, RadSystem<TubeProblem>::passiveScalar_index) = 0;
   }
 }
 

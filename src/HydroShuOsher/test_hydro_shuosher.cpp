@@ -13,6 +13,7 @@
 #include "AMReX_BC_TYPES.H"
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
+#include "radiation_system.hpp"
 #include "test_hydro_shuosher.hpp"
 #ifdef HAVE_PYTHON
 #include "matplotlibcpp.h"
@@ -121,6 +122,8 @@ AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(
   consVar(i, j, k, RadSystem<ShocktubeProblem>::x3GasMomentum_index) = 0;
   consVar(i, j, k, RadSystem<ShocktubeProblem>::gasEnergy_index) =
       P / (gamma - 1.) + 0.5 * rho * (vx * vx);
+  consVar(i, j, k, RadSystem<ShocktubeProblem>::passiveScalar_index) = 0;
+  
   // must also set radiation variables to zero, otherwise we get NaN asserts
   consVar(i, j, k, RadSystem<ShocktubeProblem>::radEnergy_index) = 0;
   consVar(i, j, k, RadSystem<ShocktubeProblem>::x1RadFlux_index) = 0;
