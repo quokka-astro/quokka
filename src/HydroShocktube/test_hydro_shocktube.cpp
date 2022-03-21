@@ -88,7 +88,7 @@ template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(
     const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar,
-    int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
+    int /*dcomp*/, int numcomp, amrex::GeometryData const &geom,
     const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
     int /*orig_comp*/) {
 #if (AMREX_SPACEDIM == 1)
@@ -111,14 +111,23 @@ AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(
 
   if (i < lo[0]) {
     // x1 left side boundary -- constant
+    for (int n = 0; n < numcomp; ++n) {
+      consVar(i, j, k, n) = 0;
+    }
+
     consVar(i, j, k, RadSystem<ShocktubeProblem>::gasEnergy_index) =
         P_L / (gamma - 1.);
     consVar(i, j, k, RadSystem<ShocktubeProblem>::gasDensity_index) = rho_L;
     consVar(i, j, k, RadSystem<ShocktubeProblem>::x1GasMomentum_index) = 0.;
     consVar(i, j, k, RadSystem<ShocktubeProblem>::x2GasMomentum_index) = 0.;
     consVar(i, j, k, RadSystem<ShocktubeProblem>::x3GasMomentum_index) = 0.;
+    
   } else if (i >= hi[0]) {
     // x1 right-side boundary -- constant
+    for (int n = 0; n < numcomp; ++n) {
+      consVar(i, j, k, n) = 0;
+    }
+
     consVar(i, j, k, RadSystem<ShocktubeProblem>::gasEnergy_index) =
         P_R / (gamma - 1.);
     consVar(i, j, k, RadSystem<ShocktubeProblem>::gasDensity_index) = rho_R;
@@ -246,7 +255,7 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
     }
 
     // Plot results
-    int skip = 8; // only plot every 8 elements of exact solution
+    int skip = 8;       // only plot every 8 elements of exact solution
     double msize = 5.0; // marker size
     matplotlibcpp::clf();
     using mpl_arg = std::map<std::string, std::string>;
@@ -255,10 +264,10 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
     mpl_sarg dexact_args;
     d_args["label"] = "density";
     d_args["color"] = "C0";
-    //dexact_args["label"] = "density (exact)";
+    // dexact_args["label"] = "density (exact)";
     dexact_args["marker"] = "o";
     dexact_args["color"] = "C0";
-    //dexact_args["edgecolors"] = "k";
+    // dexact_args["edgecolors"] = "k";
     matplotlibcpp::plot(xs, d, d_args);
     matplotlibcpp::scatter(strided_vector_from(xs_exact, skip),
                            strided_vector_from(density_exact, skip), msize,
@@ -271,7 +280,7 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
     mpl_sarg vexact_args;
     vexact_args["marker"] = "o";
     vexact_args["color"] = "C3";
-    //vexact_args["edgecolors"] = "k";
+    // vexact_args["edgecolors"] = "k";
     matplotlibcpp::scatter(strided_vector_from(xs_exact, skip),
                            strided_vector_from(velocity_exact, skip), msize,
                            vexact_args);
@@ -283,9 +292,10 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
     mpl_sarg Pexact_args;
     Pexact_args["marker"] = "o";
     Pexact_args["color"] = "C4";
-    //Pexact_args["edgecolors"] = "k";
+    // Pexact_args["edgecolors"] = "k";
     matplotlibcpp::scatter(strided_vector_from(xs_exact, skip),
-                           strided_vector_from(Pexact, skip), msize, Pexact_args);
+                           strided_vector_from(Pexact, skip), msize,
+                           Pexact_args);
 
     matplotlibcpp::legend();
     // matplotlibcpp::title(fmt::format("t = {:.4f}", tNew_[0]));
