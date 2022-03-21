@@ -125,7 +125,6 @@ void RadhydroSimulation<TubeProblem>::setInitialConditionsAtLevel(int lev) {
 
       amrex::Real const rho = D * rho0;
       amrex::Real const vel = Mach * a0;
-      amrex::Real const Pgas = rho * (a0 * a0);
 
       state(i, j, k, RadSystem<TubeProblem>::radEnergy_index) =
           Frad0 / c_light_cgs_;

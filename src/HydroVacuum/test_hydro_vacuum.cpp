@@ -12,10 +12,10 @@
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 
+#include "ArrayUtil.hpp"
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
 #include "hydro_system.hpp"
-#include "ArrayUtil.hpp"
 #include "test_hydro_vacuum.hpp"
 #ifdef HAVE_PYTHON
 #include "matplotlibcpp.h"
@@ -79,7 +79,7 @@ template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(
     const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar,
-    int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
+    int /*dcomp*/, int numcomp, amrex::GeometryData const &geom,
     const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
     int /*orig_comp*/) {
 #if (AMREX_SPACEDIM == 1)
@@ -113,8 +113,13 @@ AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(
     P = 0.4;
   }
 
-  double E =
-      P / (HydroSystem<ShocktubeProblem>::gamma_ - 1.) + 0.5 * rho * (vx * vx);
+  const double gamma = HydroSystem<ShocktubeProblem>::gamma_;
+  const double E = P / (gamma - 1.) + 0.5 * rho * (vx * vx);
+
+  // zero-fill unused components
+  for (int n = 0; n < numcomp; ++n) {
+    consVar(i, j, k, n) = 0;
+  }
 
   consVar(i, j, k, RadSystem<ShocktubeProblem>::gasDensity_index) = rho;
   consVar(i, j, k, RadSystem<ShocktubeProblem>::x1GasMomentum_index) = rho * vx;
@@ -248,14 +253,16 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
     dexact_args["label"] = "exact solution";
     dexact_args["marker"] = "o";
     dexact_args["color"] = "C0";
-    //dexact_args["edgecolors"] = "k";
+    // dexact_args["edgecolors"] = "k";
     matplotlibcpp::plot(xs, d, d_args);
-    matplotlibcpp::scatter(strided_vector_from(xs_exact, s), strided_vector_from(density_exact, s), 5.0, dexact_args);
+    matplotlibcpp::scatter(strided_vector_from(xs_exact, s),
+                           strided_vector_from(density_exact, s), 5.0,
+                           dexact_args);
     matplotlibcpp::legend();
     matplotlibcpp::ylabel("density");
     matplotlibcpp::xlabel("length x");
     matplotlibcpp::tight_layout();
-    //matplotlibcpp::title(fmt::format("t = {:.4f}", tNew_[0]));
+    // matplotlibcpp::title(fmt::format("t = {:.4f}", tNew_[0]));
     matplotlibcpp::save(fmt::format("./hydro_vacuum_{:.4f}.pdf", tNew_[0]));
 
     // internal energy plot
@@ -267,15 +274,16 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
     eexact_args["label"] = "exact solution";
     eexact_args["marker"] = "o";
     eexact_args["color"] = "C5";
-    //eexact_args["edgecolors"] = "k";
+    // eexact_args["edgecolors"] = "k";
     matplotlibcpp::plot(xs, e, e_args);
     matplotlibcpp::scatter(strided_vector_from(xs_exact, s),
-                           strided_vector_from(eint_exact, s), 5.0, eexact_args);
+                           strided_vector_from(eint_exact, s), 5.0,
+                           eexact_args);
     matplotlibcpp::legend();
     matplotlibcpp::ylabel("specific internal energy");
     matplotlibcpp::xlabel("length x");
     matplotlibcpp::tight_layout();
-    //matplotlibcpp::title(fmt::format("t = {:.4f}", tNew_[0]));
+    // matplotlibcpp::title(fmt::format("t = {:.4f}", tNew_[0]));
     matplotlibcpp::save(
         fmt::format("./hydro_vacuum_eint_{:.4f}.pdf", tNew_[0]));
   }
