@@ -859,6 +859,12 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
     double Erad_guess = NAN;
     double T_gas = NAN;
 
+    // load radiation energy source term
+    // plus advection source term (for well-balanced/SDC integrators)
+    // (CUDA cannot first-capture inside constexpr, so can't put it in if statement below)
+    const double Src =
+          dt * ((chat * radEnergySource(i, j, k)) + advectionFluxes(i, j, k));
+
     if constexpr (gamma_ != 1.0) {
       Egas0 =
           ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0);
@@ -866,11 +872,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
 
       // load radiation energy
       const double Erad0 = consPrev(i, j, k, radEnergy_index);
-
-      // load radiation energy source term
-      // plus advection source term (for well-balanced/SDC integrators)
-      const double Src =
-          dt * ((chat * radEnergySource(i, j, k)) + advectionFluxes(i, j, k));
 
       AMREX_ASSERT(Src >= 0.0);
       AMREX_ASSERT(Egas0 > 0.0);

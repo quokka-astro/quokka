@@ -254,61 +254,6 @@ vec_dot_r(amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> vec, int i, int j, int k)
   return dotproduct;
 }
 
-#if 0
-template <> void RadhydroSimulation<ShellProblem>::computeAfterTimestep() {
-  // compute radial momentum for gas, radiation on level 0
-  // (assuming octant symmetry)
-
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 =
-      geom[0].CellSizeArray();
-  amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
-  auto const &state = state_new_[0];
-
-  double radialMom =
-      vol *
-      amrex::ReduceSum(
-          state, 0,
-          [=] AMREX_GPU_DEVICE(amrex::Box const &bx,
-                               amrex::Array4<amrex::Real const> const &arr) {
-            amrex::Real result = 0.;
-            amrex::Loop(bx, [&](int i, int j, int k) {
-              amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> vec{
-                  arr(i, j, k, RadSystem<ShellProblem>::x1GasMomentum_index),
-                  arr(i, j, k, RadSystem<ShellProblem>::x2GasMomentum_index),
-                  arr(i, j, k, RadSystem<ShellProblem>::x3GasMomentum_index)};
-              result += vec_dot_r(vec, i, j, k);
-            });
-            return result;
-          });
-
-  amrex::ParallelAllReduce::Sum(radialMom,
-                                amrex::ParallelContext::CommunicatorSub());
-
-  double radialRadMom =
-      (vol / c) *
-      amrex::ReduceSum(
-          state, 0,
-          [=] AMREX_GPU_DEVICE(amrex::Box const &bx,
-                               amrex::Array4<amrex::Real const> const &arr) {
-            amrex::Real result = 0.;
-            amrex::Loop(bx, [&](int i, int j, int k) {
-              amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> vec{
-                  arr(i, j, k, RadSystem<ShellProblem>::x1RadFlux_index),
-                  arr(i, j, k, RadSystem<ShellProblem>::x2RadFlux_index),
-                  arr(i, j, k, RadSystem<ShellProblem>::x3RadFlux_index)};
-              result += vec_dot_r(vec, i, j, k);
-            });
-            return result;
-          });
-
-  amrex::ParallelAllReduce::Sum(radialRadMom,
-                                amrex::ParallelContext::CommunicatorSub());
-
-  amrex::Print() << "radial gas momentum = " << radialMom << std::endl;
-  amrex::Print() << "radial radiation momentum = " << radialRadMom << std::endl;
-}
-#endif
-
 template <>
 void RadhydroSimulation<ShellProblem>::ErrorEst(int lev,
                                                 amrex::TagBoxArray &tags,
@@ -430,7 +375,6 @@ auto problem_main() -> int {
 
   // initialize
   sim.setInitialConditions();
-  sim.computeAfterTimestep();
 
   // evolve
   sim.evolve();

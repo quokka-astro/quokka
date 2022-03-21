@@ -27,7 +27,8 @@ template <> struct EOS_Traits<RichtmeyerMeshkovProblem> {
 };
 
 //#define DEBUG_SYMMETRY
-template <> void RadhydroSimulation<RichtmeyerMeshkovProblem>::computeAfterTimestep()
+template <>
+void RadhydroSimulation<RichtmeyerMeshkovProblem>::computeAfterTimestep(const amrex::Real dt)
 {
 #ifdef DEBUG_SYMMETRY
 	// this code does not actually work with Nranks > 1 ...
