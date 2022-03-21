@@ -35,7 +35,7 @@ endif()
 
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
   # enable AddressSanitizer when debugging
-  add_compile_options(-O1 -fno-omit-frame-pointer)
+  add_compile_options(-O1)
   add_compile_options(-fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all -fsanitize=float-divide-by-zero -fsanitize=float-cast-overflow -fno-sanitize=null -fno-sanitize=alignment)
   add_link_options(-fsanitize=address -fsanitize=undefined)
 endif()
