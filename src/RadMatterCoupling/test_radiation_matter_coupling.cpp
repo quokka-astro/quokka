@@ -107,7 +107,7 @@ void RadhydroSimulation<CouplingProblem>::setInitialConditionsAtLevel(int lev) {
   areInitialConditionsDefined_ = true;
 }
 
-template <> void RadhydroSimulation<CouplingProblem>::computeAfterTimestep() {
+template <> void RadhydroSimulation<CouplingProblem>::computeAfterTimestep(const amrex::Real dt) {
   auto [position, values] = fextract(state_new_[0], Geom(0), 0, 0.5);
 
   if (amrex::ParallelDescriptor::IOProcessor()) {
