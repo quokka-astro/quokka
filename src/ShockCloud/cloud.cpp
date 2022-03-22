@@ -45,7 +45,6 @@ struct ShockCloud {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
 constexpr double m_H = hydrogen_mass_cgs_;
-// constexpr double seconds_in_year = 3.154e7;
 
 template <> struct EOS_Traits<ShockCloud> {
   static constexpr double gamma = 5. / 3.; // default value
@@ -688,9 +687,8 @@ auto problem_main() -> int {
   const Real t_cc = std::sqrt(chi) * R_cloud / v_wind;
   amrex::Print() << fmt::format("t_cc = {} kyr\n", t_cc / (1.0e3 * 3.15e7));
 
-  const double CFL_number = 0.25;
+  // compute maximum simulation time
   const double max_time = 20.0 * t_cc;
-  const int max_timesteps = 1e5;
 
   // Problem initialization
   constexpr int nvars = RadhydroSimulation<ShockCloud>::nvarTotal_;
@@ -711,14 +709,9 @@ auto problem_main() -> int {
   sim.is_radiation_enabled_ = true;
 
   sim.reconstructionOrder_ = 3;          // PPM for hydro
-  sim.radiationReconstructionOrder_ = 3; // PPM for radiation
+  sim.radiationReconstructionOrder_ = 2; // PLM for radiation
   sim.densityFloor_ = 1.0e-3 * rho0;     // density floor (to prevent vacuum)
-
-  sim.cflNumber_ = CFL_number;
-  sim.maxTimesteps_ = max_timesteps;
   sim.stopTime_ = max_time;
-  sim.plotfileInterval_ = 100;
-  sim.checkpointInterval_ = 2000;
 
   // set metadata
   sim.simulationMetadata_["delta_x"] = 0._rt;

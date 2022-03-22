@@ -112,7 +112,7 @@ public:
   amrex::Real cflNumber_ = 0.3;     // default
   amrex::Long cycleCount_ = 0;
   amrex::Long maxTimesteps_ = 1e4; // default
-  int plotfileInterval_ = 10;      // -1 == no output
+  int plotfileInterval_ = -1;      // -1 == no output
   int checkpointInterval_ = -1;    // -1 == no output
   std::unordered_map<std::string, variant_t> simulationMetadata_;
 
@@ -328,6 +328,15 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters() {
 
   // Default CFL number == 0.3, set to whatever is in the file
   pp.query("cfl", cflNumber_);
+
+  // Default stopping time
+  pp.query("stop_time", stopTime_);
+
+  // Default output interval
+  pp.query("plotfile_interval", plotfileInterval_);
+
+  // Default checkpoint interval
+  pp.query("checkpoint_interval", checkpointInterval_);
 
   // Default do_reflux = 1
   pp.query("do_reflux", do_reflux);
