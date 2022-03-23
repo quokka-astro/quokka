@@ -25,6 +25,7 @@
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParallelContext.H"
 #include "AMReX_ParallelDescriptor.H"
+#include "AMReX_ParmParse.H"
 #include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
 #include "AMReX_TableData.H"
@@ -44,29 +45,15 @@ using namespace amrex::literals;
 struct ShockCloud {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-constexpr double m_H = hydrogen_mass_cgs_;
+constexpr double m_H = hydrogen_mass_cgs_; // mass of hydrogen atom
+// [Habing FUV field, see Eq. 12.6 of Draine, Physics of the ISM/IGM.]
+constexpr static Real G_0 = 5.29e-14; // erg cm^-3
 
 template <> struct EOS_Traits<ShockCloud> {
   static constexpr double gamma = 5. / 3.; // default value
   // if true, reconstruct e_int instead of pressure
   static constexpr bool reconstruct_eint = true;
 };
-
-constexpr Real Tgas0 = 1.0e7;            // K
-constexpr Real nH0 = 1.0e-4;             // cm^-3
-constexpr Real nH1 = 1.0e-1;             // cm^-3
-constexpr Real R_cloud = 5.0 * 3.086e18; // cm [5 pc]
-constexpr Real M0 = 4.0;                 // Mach number of shock
-
-constexpr Real T_floor = 10.0;                             // K
-constexpr Real P0 = nH0 * Tgas0 * boltzmann_constant_cgs_; // erg cm^-3
-constexpr Real rho0 = nH0 * m_H;                           // g cm^-3
-constexpr Real rho1 = nH1 * m_H;
-
-// [Habing FUV field, see Eq. 12.6 of Draine, Physics of the ISM/IGM.]
-constexpr Real G_0 = 5.29e-14;          // erg cm^-3
-constexpr Real Erad0 = 1.0 * G_0;       // initial FUV radiation field
-constexpr Real Erad_bdry = 1000. * G_0; // incident FUV radiation field
 
 template <> struct RadSystem_Traits<ShockCloud> {
   static constexpr double c_light = c_light_cgs_;
@@ -79,7 +66,24 @@ template <> struct RadSystem_Traits<ShockCloud> {
   static constexpr bool compute_v_over_c_terms = true;
 };
 
-// needed for Dirichlet boundary condition
+// Cloud parameters are now set inside problem_main()
+
+AMREX_GPU_MANAGED static Real Tgas0 = NAN;
+AMREX_GPU_MANAGED static Real nH0 = NAN;
+AMREX_GPU_MANAGED static Real nH1 = NAN;
+AMREX_GPU_MANAGED static Real R_cloud = NAN;
+AMREX_GPU_MANAGED static Real M0 = NAN;
+
+AMREX_GPU_MANAGED static Real T_floor = NAN;
+AMREX_GPU_MANAGED static Real P0 = NAN;
+AMREX_GPU_MANAGED static Real rho0 = NAN;
+AMREX_GPU_MANAGED static Real rho1 = NAN;
+
+AMREX_GPU_MANAGED static Real Erad0 = NAN;
+AMREX_GPU_MANAGED static Real Erad_bdry = NAN;
+
+// cloud-tracking variables needed for Dirichlet boundary condition
+
 AMREX_GPU_MANAGED static Real v_wind = 0;
 AMREX_GPU_MANAGED static Real delta_vx = 0;
 AMREX_GPU_MANAGED static Real rho_wind = 0;
@@ -238,8 +242,8 @@ AMRSimulation<ShockCloud>::setCustomBoundaryConditions(
 
     // radiation boundary condition -- streaming
     constexpr double c = c_light_cgs_;
-    constexpr double E_inc = Erad_bdry;
-    constexpr double F_inc = c * E_inc; // streaming incident flux
+    const double E_inc = Erad_bdry;
+    const double F_inc = c * E_inc; // streaming incident flux
 
     consVar(i, j, k, RadSystem<ShockCloud>::radEnergy_index) = E_inc;
     consVar(i, j, k, RadSystem<ShockCloud>::x1RadFlux_index) = F_inc;
@@ -667,23 +671,63 @@ void RadSystem<ShockCloud>::AddSourceTerms(array_t &consVar,
 
 auto problem_main() -> int {
   // Problem parameters
+  // set global variables (read-only after setting them here)
+  amrex::ParmParse pp;
+
+  // background gas temperature
+  pp.query("Tgas0", ::Tgas0); // K
+
+  // background gas number density
+  pp.query("nH0", ::nH0); // cm^-3
+
+  // cloud gas number density
+  pp.query("nH_cloud", ::nH1); // cm^-3
+
+  // cloud radius
+  pp.query("R_cloud_pc", ::R_cloud); // pc
+  ::R_cloud *= 3.086e18;             // convert to cm
+
+  // (pre-shock) Mach number
+  pp.query("Mach", ::M0); // dimensionless
+
+  // gas temperature floor
+  pp.query("T_floor", ::T_floor); // K
+
+  // initial FUV radiation field
+  pp.query("Erad_initial_Habing", ::Erad0); // G_0
+  ::Erad0 *= G_0;                           // convert to cgs
+
+  // incident FUV radiation field
+  pp.query("Erad_incident_Habing", ::Erad_bdry); // G_0
+  ::Erad_bdry *= G_0;                            // convert to cgs
+
+  // compute background pressure (pre-shock)
+  ::P0 = ::nH0 * ::Tgas0 * boltzmann_constant_cgs_; // erg cm^-3
+
+  // compute mass density of background, cloud
+  ::rho0 = ::nH0 * m_H; // g cm^-3
+  ::rho1 = ::nH1 * m_H; // g cm^-3
+
+  AMREX_ALWAYS_ASSERT(!std::isnan(::rho0));
+  AMREX_ALWAYS_ASSERT(!std::isnan(::rho1));
+  AMREX_ALWAYS_ASSERT(!std::isnan(::P0));
+
   // compute shock jump conditions from rho0, P0, and M0
   constexpr Real gamma = HydroSystem<ShockCloud>::gamma_;
   const Real v_pre = M0 * std::sqrt(gamma * P0 / rho0);
-  constexpr Real rho_post =
+  const Real rho_post =
       rho0 * (gamma + 1.) * M0 * M0 / ((gamma - 1.) * M0 * M0 + 2.);
   const Real v_post = v_pre * (rho0 / rho_post);
-  constexpr Real P_post =
-      P0 * (2. * gamma * M0 * M0 - (gamma - 1.)) / (gamma + 1.);
+  const Real P_post = P0 * (2. * gamma * M0 * M0 - (gamma - 1.)) / (gamma + 1.);
   const Real v_wind = v_pre - v_post;
-  ::v_wind = v_wind; // set global variable
+  ::v_wind = v_wind; // set global variables
   ::rho_wind = rho_post;
   ::P_wind = P_post;
   amrex::Print() << fmt::format("v_wind = {} km/s (v_pre = {}, v_post = {})\n",
                                 v_wind / 1.0e5, v_pre / 1.0e5, v_post / 1.0e5);
 
   // compute cloud-crushing time
-  constexpr Real chi = rho1 / rho0;
+  const Real chi = rho1 / rho0;
   const Real t_cc = std::sqrt(chi) * R_cloud / v_wind;
   amrex::Print() << fmt::format("t_cc = {} kyr\n", t_cc / (1.0e3 * 3.15e7));
 
