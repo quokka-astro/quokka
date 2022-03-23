@@ -13,8 +13,8 @@ amr.v               = 1     # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 512 512 512
-amr.max_level       = 3     # number of levels = max_level + 1
+amr.n_cell          = 256 256 256
+amr.max_level       = 2     # number of levels = max_level + 1
 amr.blocking_factor = 32    # grid size must be divisible by this
 amr.max_grid_size   = 128
 
@@ -41,4 +41,3 @@ R_cloud_pc = 5.0   # pc
 
 Erad_initial_Habing = 1        # G_0
 Erad_incident_Habing = 1000    # G_0
-
