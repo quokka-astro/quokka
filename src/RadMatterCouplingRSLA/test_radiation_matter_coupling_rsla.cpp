@@ -18,7 +18,7 @@
 struct CouplingProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-//constexpr double c = 2.99792458e10; // cgs
+// constexpr double c = 2.99792458e10; // cgs
 constexpr double c_rsla = 0.1 * c_light_cgs_;
 
 // Su & Olson (1997) test problem
@@ -34,20 +34,18 @@ template <> struct RadSystem_Traits<CouplingProblem> {
   static constexpr double boltzmann_constant = boltzmann_constant_cgs_;
   static constexpr double gamma = 5. / 3.;
   static constexpr double Erad_floor = 0.;
-	static constexpr bool compute_v_over_c_terms = true;
+  static constexpr bool compute_v_over_c_terms = true;
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto
-RadSystem<CouplingProblem>::ComputePlanckOpacity(const double /*rho*/,
-                                           const double /*Tgas*/) -> double {
+AMREX_GPU_HOST_DEVICE auto RadSystem<CouplingProblem>::ComputePlanckOpacity(
+    const double /*rho*/, const double /*Tgas*/) -> double {
   return 1.0;
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto
-RadSystem<CouplingProblem>::ComputeRosselandOpacity(const double /*rho*/,
-                                              const double /*Tgas*/) -> double {
+AMREX_GPU_HOST_DEVICE auto RadSystem<CouplingProblem>::ComputeRosselandOpacity(
+    const double /*rho*/, const double /*Tgas*/) -> double {
   return 1.0;
 }
 
@@ -86,27 +84,21 @@ constexpr double Egas0 = 1.0e2;  // erg cm^-3
 constexpr double rho0 = 1.0e-7;  // g cm^-3
 
 template <>
-void RadhydroSimulation<CouplingProblem>::setInitialConditionsAtLevel(int lev) {
-  for (amrex::MFIter iter(state_old_[lev]); iter.isValid(); ++iter) {
-    const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
-    auto const &state = state_new_[lev].array(iter);
+void RadhydroSimulation<CouplingProblem>::setInitialConditionsOnGrid(
+    array_t &state, const amrex::Box &indexRange, const amrex::Geometry &geom) {
+  // loop over the grid and set the initial condition
+  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+    state(i, j, k, RadSystem<CouplingProblem>::radEnergy_index) = Erad0;
+    state(i, j, k, RadSystem<CouplingProblem>::x1RadFlux_index) = 0;
+    state(i, j, k, RadSystem<CouplingProblem>::x2RadFlux_index) = 0;
+    state(i, j, k, RadSystem<CouplingProblem>::x3RadFlux_index) = 0;
 
-    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-      state(i, j, k, RadSystem<CouplingProblem>::radEnergy_index) = Erad0;
-      state(i, j, k, RadSystem<CouplingProblem>::x1RadFlux_index) = 0;
-      state(i, j, k, RadSystem<CouplingProblem>::x2RadFlux_index) = 0;
-      state(i, j, k, RadSystem<CouplingProblem>::x3RadFlux_index) = 0;
-
-      state(i, j, k, RadSystem<CouplingProblem>::gasEnergy_index) = Egas0;
-      state(i, j, k, RadSystem<CouplingProblem>::gasDensity_index) = rho0;
-      state(i, j, k, RadSystem<CouplingProblem>::x1GasMomentum_index) = 0.;
-      state(i, j, k, RadSystem<CouplingProblem>::x2GasMomentum_index) = 0.;
-      state(i, j, k, RadSystem<CouplingProblem>::x3GasMomentum_index) = 0.;
-    });
-  }
-
-  // set flag
-  areInitialConditionsDefined_ = true;
+    state(i, j, k, RadSystem<CouplingProblem>::gasEnergy_index) = Egas0;
+    state(i, j, k, RadSystem<CouplingProblem>::gasDensity_index) = rho0;
+    state(i, j, k, RadSystem<CouplingProblem>::x1GasMomentum_index) = 0.;
+    state(i, j, k, RadSystem<CouplingProblem>::x2GasMomentum_index) = 0.;
+    state(i, j, k, RadSystem<CouplingProblem>::x3GasMomentum_index) = 0.;
+  });
 }
 
 template <> void RadhydroSimulation<CouplingProblem>::computeAfterTimestep() {
@@ -253,11 +245,11 @@ auto problem_main() -> int {
     rsla_args["color"] = "C2";
     matplotlibcpp::plot(t, Tgas, rsla_args);
 
-    //std::map<std::string, std::string> exactsolrsla_args;
-    //exactsolrsla_args["label"] = "gas temperature (exact, RSLA)";
-    //exactsolrsla_args["linestyle"] = "--";
-    //exactsolrsla_args["color"] = "C2";
-    //matplotlibcpp::plot(t, Tgas_rsla_exact, exactsolrsla_args);
+    // std::map<std::string, std::string> exactsolrsla_args;
+    // exactsolrsla_args["label"] = "gas temperature (exact, RSLA)";
+    // exactsolrsla_args["linestyle"] = "--";
+    // exactsolrsla_args["color"] = "C2";
+    // matplotlibcpp::plot(t, Tgas_rsla_exact, exactsolrsla_args);
 
     std::map<std::string, std::string> exactsol_args;
     exactsol_args["label"] = "exact gas temperature (no RSLA)";
@@ -282,7 +274,6 @@ auto problem_main() -> int {
     matplotlibcpp::ylabel("fractional error in material temperature");
     matplotlibcpp::save(fmt::format("./radcoupling_rsla_fractional_error.pdf"));
 #endif
-
   }
 
   return status;

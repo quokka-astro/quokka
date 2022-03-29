@@ -14,12 +14,12 @@
 #include "AMReX_BLassert.H"
 #include "AMReX_REAL.H"
 
+#include "ArrayUtil.hpp"
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
 #include "hydro_system.hpp"
 #include "radiation_system.hpp"
 #include "test_radiation_force.hpp"
-#include "ArrayUtil.hpp"
 extern "C" {
 #include "interpolate.h"
 }
@@ -57,7 +57,7 @@ template <> struct RadSystem_Traits<TubeProblem> {
 
 template <> struct EOS_Traits<TubeProblem> {
   static constexpr double gamma = gamma_gas;
-  static constexpr double cs_isothermal = a0; // only used when gamma = 1
+  static constexpr double cs_isothermal = a0;     // only used when gamma = 1
   static constexpr bool reconstruct_eint = false; // unused if isothermal
 };
 
@@ -74,13 +74,14 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputeRosselandOpacity(
   return kappa0;
 }
 
-template <>
-void RadhydroSimulation<TubeProblem>::setInitialConditionsAtLevel(int lev) {
-  // read initial conditions from file
-  amrex::Vector<double> x_arr;
-  amrex::Vector<double> rho_arr;
-  amrex::Vector<double> Mach_arr;
+// declare global variables
+// read initial conditions from file
+amrex::Vector<double> x_arr;
+amrex::Vector<double> rho_arr;
+amrex::Vector<double> Mach_arr;
 
+template <>
+void RadhydroSimulation<TubeProblem>::preCalculateInitialConditions() {
   std::string filename = "../extern/pressure_tube/optically_thin_wind.txt";
   std::ifstream fstream(filename, std::ios::in);
   AMREX_ALWAYS_ASSERT(fstream.is_open());
@@ -101,48 +102,41 @@ void RadhydroSimulation<TubeProblem>::setInitialConditionsAtLevel(int lev) {
     rho_arr.push_back(rho);
     Mach_arr.push_back(Mach);
   }
+}
 
-  // set initial conditions
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo =
-      geom[lev].ProbLoArray();
+template <>
+void RadhydroSimulation<TubeProblem>::setInitialConditionsOnGrid(
+    array_t &state, const amrex::Box &indexRange, const amrex::Geometry &geom) {
+  // extract variables required from the geom object
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom.CellSizeArray();
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom.ProbLoArray();
+  // loop over the grid and set the initial condition
+  amrex::LoopConcurrentOnCpu(indexRange, [=](int i, int j, int k) noexcept {
+    amrex::Real const x = (prob_lo[0] + (i + amrex::Real(0.5)) * dx[0]) / Lx;
+    amrex::Real const D = interpolate_value(
+        x, x_arr.dataPtr(), rho_arr.dataPtr(), static_cast<int>(x_arr.size()));
+    AMREX_ALWAYS_ASSERT(D > 0.);
 
-  for (amrex::MFIter iter(state_old_[lev]); iter.isValid(); ++iter) {
-    const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
-    auto const &state = state_new_[lev].array(iter);
+    amrex::Real const Mach = interpolate_value(
+        x, x_arr.dataPtr(), Mach_arr.dataPtr(), static_cast<int>(x_arr.size()));
+    AMREX_ALWAYS_ASSERT(!std::isnan(Mach));
 
-    amrex::LoopConcurrentOnCpu(indexRange, [=](int i, int j, int k) noexcept {
-      amrex::Real const x = (prob_lo[0] + (i + amrex::Real(0.5)) * dx[0]) / Lx;
-      amrex::Real const D =
-          interpolate_value(x, x_arr.dataPtr(), rho_arr.dataPtr(),
-                            static_cast<int>(x_arr.size()));
-      AMREX_ALWAYS_ASSERT(D > 0.);
+    amrex::Real const rho = D * rho0;
+    amrex::Real const vel = Mach * a0;
+    amrex::Real const Pgas = rho * (a0 * a0);
 
-      amrex::Real const Mach =
-          interpolate_value(x, x_arr.dataPtr(), Mach_arr.dataPtr(),
-                            static_cast<int>(x_arr.size()));
-      AMREX_ALWAYS_ASSERT(!std::isnan(Mach));
+    state(i, j, k, RadSystem<TubeProblem>::radEnergy_index) =
+        Frad0 / c_light_cgs_;
+    state(i, j, k, RadSystem<TubeProblem>::x1RadFlux_index) = Frad0;
+    state(i, j, k, RadSystem<TubeProblem>::x2RadFlux_index) = 0;
+    state(i, j, k, RadSystem<TubeProblem>::x3RadFlux_index) = 0;
 
-      amrex::Real const rho = D * rho0;
-      amrex::Real const vel = Mach * a0;
-      amrex::Real const Pgas = rho * (a0 * a0);
-
-      state(i, j, k, RadSystem<TubeProblem>::radEnergy_index) =
-          Frad0 / c_light_cgs_;
-      state(i, j, k, RadSystem<TubeProblem>::x1RadFlux_index) = Frad0;
-      state(i, j, k, RadSystem<TubeProblem>::x2RadFlux_index) = 0;
-      state(i, j, k, RadSystem<TubeProblem>::x3RadFlux_index) = 0;
-
-      state(i, j, k, RadSystem<TubeProblem>::gasDensity_index) = rho;
-      state(i, j, k, RadSystem<TubeProblem>::x1GasMomentum_index) = rho * vel;
-      state(i, j, k, RadSystem<TubeProblem>::x2GasMomentum_index) = 0;
-      state(i, j, k, RadSystem<TubeProblem>::x3GasMomentum_index) = 0;
-      state(i, j, k, RadSystem<TubeProblem>::gasEnergy_index) = 0;
-    });
-  }
-
-  // set flag
-  areInitialConditionsDefined_ = true;
+    state(i, j, k, RadSystem<TubeProblem>::gasDensity_index) = rho;
+    state(i, j, k, RadSystem<TubeProblem>::x1GasMomentum_index) = rho * vel;
+    state(i, j, k, RadSystem<TubeProblem>::x2GasMomentum_index) = 0;
+    state(i, j, k, RadSystem<TubeProblem>::x3GasMomentum_index) = 0;
+    state(i, j, k, RadSystem<TubeProblem>::gasEnergy_index) = 0;
+  });
 }
 
 template <>
@@ -313,12 +307,14 @@ auto problem_main() -> int {
   vx_args["color"] = "C3";
   vxexact_args["color"] = "C3";
   vxexact_args["marker"] = "o";
-  //vxexact_args["edgecolors"] = "k";
+  // vxexact_args["edgecolors"] = "k";
   matplotlibcpp::clf();
   matplotlibcpp::plot(xs, vx_arr, vx_args);
-  matplotlibcpp::scatter(strided_vector_from(xs, s), strided_vector_from(vx_exact_arr, s), 10.0, vxexact_args);
+  matplotlibcpp::scatter(strided_vector_from(xs, s),
+                         strided_vector_from(vx_exact_arr, s), 10.0,
+                         vxexact_args);
   matplotlibcpp::legend();
-  //matplotlibcpp::title(fmt::format("t = {:.4g} s", sim.tNew_[0]));
+  // matplotlibcpp::title(fmt::format("t = {:.4g} s", sim.tNew_[0]));
   matplotlibcpp::xlabel("length x (cm)");
   matplotlibcpp::ylabel("Mach number");
   matplotlibcpp::tight_layout();

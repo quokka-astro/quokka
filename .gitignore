@@ -6,8 +6,8 @@ build/
 build1D/
 tests/
 docs/doxygen/
-tests/plt*
-tests/chk*
+tests/*/plt*
+tests/*/chk*
 .clangd
 __pycache__
 *.code-workspace

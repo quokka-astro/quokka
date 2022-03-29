@@ -158,9 +158,10 @@ AMRSimulation<ShockProblem>::setCustomBoundaryConditions(
 
 template <>
 void RadhydroSimulation<ShockProblem>::setInitialConditionsOnGrid(
-    array_t &state, const amrex::Box &indexRange,
-    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
-    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo) {
+    array_t &state, const amrex::Box &indexRange, const amrex::Geometry &geom) {
+  // extract variables required from the geom object
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom.CellSizeArray();
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom.ProbLoArray();
   // loop over the grid and set the initial condition
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
     amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
@@ -197,59 +198,6 @@ void RadhydroSimulation<ShockProblem>::setInitialConditionsOnGrid(
     state(i, j, k, RadSystem<ShockProblem>::x3GasMomentum_index) = 0;
   });
 }
-
-// template <>
-// void RadhydroSimulation<ShockProblem>::setInitialConditionsAtLevel(int lev) {
-//   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx =
-//   geom[lev].CellSizeArray(); amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>
-//   prob_lo =
-//       geom[lev].ProbLoArray();
-
-//   for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
-//     const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
-//     auto const &state = state_new_[lev].array(iter);
-
-//     amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k)
-//     {
-//       amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
-
-//       amrex::Real radEnergy = NAN;
-//       amrex::Real x1RadFlux = NAN;
-//       amrex::Real energy = NAN;
-//       amrex::Real density = NAN;
-//       amrex::Real x1Momentum = NAN;
-
-//       if (x < shock_position) {
-//         radEnergy = Erad0;
-//         x1RadFlux = 0.0;
-//         energy = Egas0 + 0.5 * rho0 * (v0 * v0);
-//         density = rho0;
-//         x1Momentum = rho0 * v0;
-//       } else {
-//         radEnergy = Erad1;
-//         x1RadFlux = 0.0;
-//         energy = Egas1 + 0.5 * rho1 * (v1 * v1);
-//         density = rho1;
-//         x1Momentum = rho1 * v1;
-//       }
-
-//       state(i, j, k, RadSystem<ShockProblem>::radEnergy_index) = radEnergy;
-//       state(i, j, k, RadSystem<ShockProblem>::x1RadFlux_index) = x1RadFlux;
-//       state(i, j, k, RadSystem<ShockProblem>::x2RadFlux_index) = 0;
-//       state(i, j, k, RadSystem<ShockProblem>::x3RadFlux_index) = 0;
-
-//       state(i, j, k, RadSystem<ShockProblem>::gasEnergy_index) = energy;
-//       state(i, j, k, RadSystem<ShockProblem>::gasDensity_index) = density;
-//       state(i, j, k, RadSystem<ShockProblem>::x1GasMomentum_index) =
-//       x1Momentum; state(i, j, k,
-//       RadSystem<ShockProblem>::x2GasMomentum_index) = 0; state(i, j, k,
-//       RadSystem<ShockProblem>::x3GasMomentum_index) = 0;
-//     });
-//   }
-
-//   // set flag
-//   areInitialConditionsDefined_ = true;
-// }
 
 auto problem_main() -> int {
   // Problem parameters
@@ -343,8 +291,8 @@ auto problem_main() -> int {
     std::vector<double> Frad_over_c_exact;
 
     std::string filename =
-        "../../extern/LowrieEdwards/shock.txt"; // NK changed: added ../ for single
-                                             // sim runs
+        "../extern/LowrieEdwards/shock.txt"; // NK changed: added ../ for
+                                                // single sim runs
     std::ifstream fstream(filename, std::ios::in);
     AMREX_ALWAYS_ASSERT(fstream.is_open());
     std::string header;

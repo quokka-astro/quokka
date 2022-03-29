@@ -224,32 +224,29 @@ AMRSimulation<BeamProblem>::setCustomBoundaryConditions(
 }
 
 template <>
-void RadhydroSimulation<BeamProblem>::setInitialConditionsAtLevel(int lev) {
-  for (amrex::MFIter iter(state_old_[lev]); iter.isValid(); ++iter) {
-    const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
-    auto const &state = state_new_[lev].array(iter);
+void RadhydroSimulation<BeamProblem>::setInitialConditionsOnGrid(
+    array_t &state, const amrex::Box &indexRange, const amrex::Geometry &geom) {
+  // extract variables required from the geom object
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom.CellSizeArray();
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom.ProbLoArray();
+  // loop over the grid and set the initial condition
+  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+    const double Erad = a_rad * std::pow(T_initial, 4);
+    const double rho = rho0;
+    const double Egas =
+        RadSystem<BeamProblem>::ComputeEgasFromTgas(rho, T_initial);
 
-    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-      const double Erad = a_rad * std::pow(T_initial, 4);
-      const double rho = rho0;
-      const double Egas =
-          RadSystem<BeamProblem>::ComputeEgasFromTgas(rho, T_initial);
+    state(i, j, k, RadSystem<BeamProblem>::radEnergy_index) = Erad;
+    state(i, j, k, RadSystem<BeamProblem>::x1RadFlux_index) = 0;
+    state(i, j, k, RadSystem<BeamProblem>::x2RadFlux_index) = 0;
+    state(i, j, k, RadSystem<BeamProblem>::x3RadFlux_index) = 0;
 
-      state(i, j, k, RadSystem<BeamProblem>::radEnergy_index) = Erad;
-      state(i, j, k, RadSystem<BeamProblem>::x1RadFlux_index) = 0;
-      state(i, j, k, RadSystem<BeamProblem>::x2RadFlux_index) = 0;
-      state(i, j, k, RadSystem<BeamProblem>::x3RadFlux_index) = 0;
-
-      state(i, j, k, RadSystem<BeamProblem>::gasEnergy_index) = Egas;
-      state(i, j, k, RadSystem<BeamProblem>::gasDensity_index) = rho;
-      state(i, j, k, RadSystem<BeamProblem>::x1GasMomentum_index) = 0.;
-      state(i, j, k, RadSystem<BeamProblem>::x2GasMomentum_index) = 0.;
-      state(i, j, k, RadSystem<BeamProblem>::x3GasMomentum_index) = 0.;
-    });
-  }
-
-  // set flag
-  areInitialConditionsDefined_ = true;
+    state(i, j, k, RadSystem<BeamProblem>::gasEnergy_index) = Egas;
+    state(i, j, k, RadSystem<BeamProblem>::gasDensity_index) = rho;
+    state(i, j, k, RadSystem<BeamProblem>::x1GasMomentum_index) = 0.;
+    state(i, j, k, RadSystem<BeamProblem>::x2GasMomentum_index) = 0.;
+    state(i, j, k, RadSystem<BeamProblem>::x3GasMomentum_index) = 0.;
+  });
 }
 
 template <>

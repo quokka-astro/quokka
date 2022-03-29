@@ -26,54 +26,45 @@ template <> struct EOS_Traits<ShocktubeProblem> {
 };
 
 template <>
-void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsAtLevel(
-    int lev) {
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo =
-      geom[lev].ProbLoArray();
+void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsOnGrid(
+    array_t &state, const amrex::Box &indexRange, const amrex::Geometry &geom) {
+  // extract variables required from the geom object
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom.CellSizeArray();
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom.ProbLoArray();
   const int ncomp = ncomp_;
+  // loop over the grid and set the initial condition
+  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+    amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+    double vx = NAN;
+    double rho = NAN;
+    double P = NAN;
 
-  for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
-    const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
-    auto const &state = state_new_[lev].array(iter);
+    if (x < 1.0) {
+      rho = 3.857143;
+      vx = 2.629369;
+      P = 10.33333;
+    } else {
+      rho = 1.0 + 0.2 * std::sin(5.0 * x);
+      vx = 0.0;
+      P = 1.0;
+    }
 
-    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-      amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
-      double vx = NAN;
-      double rho = NAN;
-      double P = NAN;
+    AMREX_ASSERT(!std::isnan(vx));
+    AMREX_ASSERT(!std::isnan(rho));
+    AMREX_ASSERT(!std::isnan(P));
 
-      if (x < 1.0) {
-        rho = 3.857143;
-        vx = 2.629369;
-        P = 10.33333;
-      } else {
-        rho = 1.0 + 0.2 * std::sin(5.0 * x);
-        vx = 0.0;
-        P = 1.0;
-      }
+    for (int n = 0; n < ncomp; ++n) {
+      state(i, j, k, n) = 0.;
+    }
 
-      AMREX_ASSERT(!std::isnan(vx));
-      AMREX_ASSERT(!std::isnan(rho));
-      AMREX_ASSERT(!std::isnan(P));
-
-      for (int n = 0; n < ncomp; ++n) {
-        state(i, j, k, n) = 0.;
-      }
-
-      const auto gamma = HydroSystem<ShocktubeProblem>::gamma_;
-      state(i, j, k, HydroSystem<ShocktubeProblem>::density_index) = rho;
-      state(i, j, k, HydroSystem<ShocktubeProblem>::x1Momentum_index) =
-          rho * vx;
-      state(i, j, k, HydroSystem<ShocktubeProblem>::x2Momentum_index) = 0.;
-      state(i, j, k, HydroSystem<ShocktubeProblem>::x3Momentum_index) = 0.;
-      state(i, j, k, HydroSystem<ShocktubeProblem>::energy_index) =
-          P / (gamma - 1.) + 0.5 * rho * (vx * vx);
-    });
-  }
-
-  // set flag
-  areInitialConditionsDefined_ = true;
+    const auto gamma = HydroSystem<ShocktubeProblem>::gamma_;
+    state(i, j, k, HydroSystem<ShocktubeProblem>::density_index) = rho;
+    state(i, j, k, HydroSystem<ShocktubeProblem>::x1Momentum_index) = rho * vx;
+    state(i, j, k, HydroSystem<ShocktubeProblem>::x2Momentum_index) = 0.;
+    state(i, j, k, HydroSystem<ShocktubeProblem>::x3Momentum_index) = 0.;
+    state(i, j, k, HydroSystem<ShocktubeProblem>::energy_index) =
+        P / (gamma - 1.) + 0.5 * rho * (vx * vx);
+  });
 }
 
 template <>
@@ -248,7 +239,7 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
     std::map<std::string, std::string> dexact_args;
     d_args["label"] = "simulation";
     d_args["marker"] = "o";
-    //d_args["edgecolors"] = "k";
+    // d_args["edgecolors"] = "k";
     d_args["color"] = "C0";
     dexact_args["label"] = "reference solution";
     dexact_args["color"] = "C0";
@@ -257,7 +248,7 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
     matplotlibcpp::plot(xs_exact, density_exact, dexact_args);
 
     matplotlibcpp::legend();
-    //matplotlibcpp::title(fmt::format("t = {:.4f}", tNew_[0]));
+    // matplotlibcpp::title(fmt::format("t = {:.4f}", tNew_[0]));
     matplotlibcpp::ylabel("density");
     matplotlibcpp::xlabel("length x");
     matplotlibcpp::tight_layout();

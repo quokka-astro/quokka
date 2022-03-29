@@ -4,22 +4,23 @@
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 /// \file test_radiation_marshak_asymptotic.cpp
-/// \brief Defines a test problem for radiation in the asymptotic diffusion regime.
+/// \brief Defines a test problem for radiation in the asymptotic diffusion
+/// regime.
 ///
 
 #include "AMReX_BLassert.H"
 
-#include "test_radiation_marshak_asymptotic.hpp"
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
+#include "test_radiation_marshak_asymptotic.hpp"
 
 struct SuOlsonProblemCgs {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-constexpr double kappa = 300.0;                   // cm^-1 (opacity)
-constexpr double rho0 = 2.0879373766122384;       // g cm^-3 (matter density)
-constexpr double T_hohlraum = 1.1604448449e7;     // K (1 keV)
-constexpr double T_initial = 300.; // K
+constexpr double kappa = 300.0;               // cm^-1 (opacity)
+constexpr double rho0 = 2.0879373766122384;   // g cm^-3 (matter density)
+constexpr double T_hohlraum = 1.1604448449e7; // K (1 keV)
+constexpr double T_initial = 300.;            // K
 
 // constexpr double kelvin_to_eV = 8.617385e-5;
 constexpr double a_rad = radiation_constant_cgs_;
@@ -62,7 +63,8 @@ auto RadSystem<SuOlsonProblemCgs>::ComputePlanckOpacityTempDerivative(
 }
 
 template <>
-auto RadSystem<SuOlsonProblemCgs>::ComputeEddingtonFactor(double /*f*/) -> double {
+auto RadSystem<SuOlsonProblemCgs>::ComputeEddingtonFactor(double /*f*/)
+    -> double {
   return (1. / 3.); // Eddington approximation
 }
 
@@ -143,32 +145,25 @@ AMRSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(
 }
 
 template <>
-void RadhydroSimulation<SuOlsonProblemCgs>::setInitialConditionsAtLevel(
-    int lev) {
-  for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
-    const amrex::Box &indexRange = iter.validbox();
-    auto const &state = state_new_[lev].array(iter);
+void RadhydroSimulation<SuOlsonProblemCgs>::setInitialConditionsOnGrid(
+    array_t &state, const amrex::Box &indexRange, const amrex::Geometry &geom) {
+  // loop over the grid and set the initial condition
+  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+    const double Egas =
+        RadSystem<SuOlsonProblemCgs>::ComputeEgasFromTgas(rho0, T_initial);
+    const double Erad = a_rad * std::pow(T_initial, 4);
 
-    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-      const double Egas =
-          RadSystem<SuOlsonProblemCgs>::ComputeEgasFromTgas(rho0, T_initial);
-      const double Erad = a_rad * std::pow(T_initial, 4);
+    state(i, j, k, RadSystem<SuOlsonProblemCgs>::radEnergy_index) = Erad;
+    state(i, j, k, RadSystem<SuOlsonProblemCgs>::x1RadFlux_index) = 0;
+    state(i, j, k, RadSystem<SuOlsonProblemCgs>::x2RadFlux_index) = 0;
+    state(i, j, k, RadSystem<SuOlsonProblemCgs>::x3RadFlux_index) = 0;
 
-      state(i, j, k, RadSystem<SuOlsonProblemCgs>::radEnergy_index) = Erad;
-      state(i, j, k, RadSystem<SuOlsonProblemCgs>::x1RadFlux_index) = 0;
-      state(i, j, k, RadSystem<SuOlsonProblemCgs>::x2RadFlux_index) = 0;
-      state(i, j, k, RadSystem<SuOlsonProblemCgs>::x3RadFlux_index) = 0;
-
-      state(i, j, k, RadSystem<SuOlsonProblemCgs>::gasDensity_index) = rho0;
-      state(i, j, k, RadSystem<SuOlsonProblemCgs>::x1GasMomentum_index) = 0.;
-      state(i, j, k, RadSystem<SuOlsonProblemCgs>::x2GasMomentum_index) = 0.;
-      state(i, j, k, RadSystem<SuOlsonProblemCgs>::x3GasMomentum_index) = 0.;
-      state(i, j, k, RadSystem<SuOlsonProblemCgs>::gasEnergy_index) = Egas;
-    });
-  }
-
-  // set flag
-  areInitialConditionsDefined_ = true;
+    state(i, j, k, RadSystem<SuOlsonProblemCgs>::gasDensity_index) = rho0;
+    state(i, j, k, RadSystem<SuOlsonProblemCgs>::x1GasMomentum_index) = 0.;
+    state(i, j, k, RadSystem<SuOlsonProblemCgs>::x2GasMomentum_index) = 0.;
+    state(i, j, k, RadSystem<SuOlsonProblemCgs>::x3GasMomentum_index) = 0.;
+    state(i, j, k, RadSystem<SuOlsonProblemCgs>::gasEnergy_index) = Egas;
+  });
 }
 
 auto problem_main() -> int {
@@ -177,25 +172,30 @@ auto problem_main() -> int {
   // that have the asymptotic-preserving property. Operator splitting the
   // transport and source terms can give a splitting error that is arbitrarily
   // large in the asymptotic limit! A fully implicit method or a semi-implicit
-  // predictor-corrector method [2] similar to SDC is REQUIRED for a correct solution.
+  // predictor-corrector method [2] similar to SDC is REQUIRED for a correct
+  // solution.
   //
   // For discussion of the asymptotic-preserving property, see [1] and [2]. For
   // a discussion of the exact, self-similar solution to this problem, see [3].
-  // Note that when used with an SDC time integrator, PLM (w/ asymptotic correction
-  // in Riemann solver) does a good job, but not quite as good as linear DG on this
-  // problem. There are some 'stair-stepping' artifacts that appear with PLM at low
-  // resolution that do not appear when using DG. This is likely the "wide stencil"
-  // issue discussed in [4].
+  // Note that when used with an SDC time integrator, PLM (w/ asymptotic
+  // correction in Riemann solver) does a good job, but not quite as good as
+  // linear DG on this problem. There are some 'stair-stepping' artifacts that
+  // appear with PLM at low resolution that do not appear when using DG. This is
+  // likely the "wide stencil" issue discussed in [4].
   //
-  // 1. R.G. McClarren, R.B. Lowrie, The effects of slope limiting on asymptotic-preserving
+  // 1. R.G. McClarren, R.B. Lowrie, The effects of slope limiting on
+  // asymptotic-preserving
   //     numerical methods for hyperbolic conservation laws, Journal of
   //     Computational Physics 227 (2008) 9711–9726.
-  // 2. R.G. McClarren, T.M. Evans, R.B. Lowrie, J.D. Densmore, Semi-implicit time integration
+  // 2. R.G. McClarren, T.M. Evans, R.B. Lowrie, J.D. Densmore, Semi-implicit
+  // time integration
   //     for PN thermal radiative transfer, Journal of Computational Physics 227
   //     (2008) 7561-7586.
-  // 3. Y. Zel'dovich, Y. Raizer, Physics of Shock Waves and High-Temperature Hydrodynamic
+  // 3. Y. Zel'dovich, Y. Raizer, Physics of Shock Waves and High-Temperature
+  // Hydrodynamic
   //     Phenomena (1964), Ch. X.: Thermal Waves.
-  // 4. Lowrie, R. B. and Morel, J. E., Issues with high-resolution Godunov methods for
+  // 4. Lowrie, R. B. and Morel, J. E., Issues with high-resolution Godunov
+  // methods for
   //     radiation hydrodynamics, Journal of Quantitative Spectroscopy and
   //     Radiative Transfer, 69, 475–489, 2001.
 
@@ -205,8 +205,8 @@ auto problem_main() -> int {
   const double initial_dt = 5.0e-12; // s
   const double max_dt = 5.0e-12;     // s
   const double max_time = 10.0e-9;   // s
-  // const int nx = 60; // [18 == matches resolution of McClarren & Lowrie (2008)]
-  // const double Lx = 0.66; // cm
+  // const int nx = 60; // [18 == matches resolution of McClarren & Lowrie
+  // (2008)] const double Lx = 0.66; // cm
 
   // Problem initialization
   std::cout << "radiation constant (code units) = "
@@ -273,7 +273,9 @@ auto problem_main() -> int {
     const double Ekin = (x1GasMom * x1GasMom) / (2.0 * rho);
     const double Egas_t = (Etot_t - Ekin);
 
-    Tgas_keV.at(i) = RadSystem<SuOlsonProblemCgs>::ComputeTgasFromEgas(rho, Egas_t) / T_hohlraum;
+    Tgas_keV.at(i) =
+        RadSystem<SuOlsonProblemCgs>::ComputeTgasFromEgas(rho, Egas_t) /
+        T_hohlraum;
     Trad_keV.at(i) = std::pow(Erad_t / a_rad, 1. / 4.) / T_hohlraum;
   }
 
@@ -308,8 +310,8 @@ auto problem_main() -> int {
   // interpolate numerical solution onto exact tabulated solution
   std::vector<double> Tmat_interp(xs_exact.size());
   interpolate_arrays(xs_exact.data(), Tmat_interp.data(),
-                     static_cast<int>(xs_exact.size()), xs.data(), Tgas_keV.data(),
-                     static_cast<int>(xs.size()));
+                     static_cast<int>(xs_exact.size()), xs.data(),
+                     Tgas_keV.data(), static_cast<int>(xs.size()));
 
   double err_norm = 0.;
   double sol_norm = 0.;

@@ -98,18 +98,17 @@ public:
   void initialize(amrex::Vector<amrex::BCRec> &boundaryConditions);
   void readParameters();
   void setInitialConditions();
+  void setInitialConditionsAtLevel(int lev);
   void evolve();
   void computeTimestep();
 
   virtual void computeMaxSignalLocal(int level) = 0;
-  virtual void setInitialConditionsAtLevel(int lev) = 0;
-  virtual void setInitialConditionsOnGrid(
-      array_t &state, const amrex::Box &indexRange,
-      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
-      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo) = 0;
   virtual void advanceSingleTimestepAtLevel(int lev, amrex::Real time,
                                             amrex::Real dt_lev, int iteration,
                                             int ncycle) = 0;
+  virtual void preCalculateInitialConditions() = 0;
+  virtual void setInitialConditionsOnGrid(array_t &state, const amrex::Box &indexRange,
+                                  const amrex::Geometry &geom) = 0;
   virtual void computeAfterTimestep() = 0;
   virtual void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) = 0;
 
@@ -284,6 +283,22 @@ void AMRSimulation<problem_t>::initialize(
       amrex::Abort("Grids not properly nested!");
     }
   }
+}
+
+template <typename problem_t>
+void AMRSimulation<problem_t>::setInitialConditionsAtLevel(int lev) {
+  // perform precalculation
+  preCalculateInitialConditions();
+  // itterate over the domain
+  for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
+    const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
+    auto const &state = state_new_[lev].array(iter);
+    // execute initial conditions that have been provided / defined by the user
+    setInitialConditionsOnGrid(state, indexRange,
+                                                         geom[lev]);
+  }
+  // set flag
+  areInitialConditionsDefined_ = true;
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::readParameters() {

@@ -27,51 +27,44 @@ template <> struct EOS_Traits<ContactProblem> {
 constexpr double v_contact = 0.0; // contact wave velocity
 
 template <>
-void RadhydroSimulation<ContactProblem>::setInitialConditionsAtLevel(int lev) {
+void RadhydroSimulation<ContactProblem>::setInitialConditionsOnGrid(
+    array_t &state, const amrex::Box &indexRange, const amrex::Geometry &geom) {
+  // extract variables required from the geom object
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom.CellSizeArray();
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom.ProbLoArray();
   int ncomp = ncomp_;
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo =
-      geom[lev].ProbLoArray();
+  // loop over the grid and set the initial condition
+  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+    amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
 
-  for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
-    const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
-    auto const &state = state_new_[lev].array(iter);
+    double vx = NAN;
+    double rho = NAN;
+    double P = NAN;
 
-    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-      amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+    if (x < 0.5) {
+      rho = 1.4;
+      vx = v_contact;
+      P = 1.0;
+    } else {
+      rho = 1.0;
+      vx = v_contact;
+      P = 1.0;
+    }
+    AMREX_ASSERT(!std::isnan(vx));
+    AMREX_ASSERT(!std::isnan(rho));
+    AMREX_ASSERT(!std::isnan(P));
 
-      double vx = NAN;
-      double rho = NAN;
-      double P = NAN;
-
-      if (x < 0.5) {
-        rho = 1.4;
-        vx = v_contact;
-        P = 1.0;
-      } else {
-        rho = 1.0;
-        vx = v_contact;
-        P = 1.0;
-      }
-      AMREX_ASSERT(!std::isnan(vx));
-      AMREX_ASSERT(!std::isnan(rho));
-      AMREX_ASSERT(!std::isnan(P));
-
-      const auto gamma = HydroSystem<ContactProblem>::gamma_;
-      for (int n = 0; n < ncomp; ++n) {
-        state(i, j, k, n) = 0.;
-      }
-      state(i, j, k, HydroSystem<ContactProblem>::density_index) = rho;
-      state(i, j, k, HydroSystem<ContactProblem>::x1Momentum_index) = rho * vx;
-      state(i, j, k, HydroSystem<ContactProblem>::x2Momentum_index) = 0.;
-      state(i, j, k, HydroSystem<ContactProblem>::x3Momentum_index) = 0.;
-      state(i, j, k, HydroSystem<ContactProblem>::energy_index) =
-          P / (gamma - 1.) + 0.5 * rho * (vx * vx);
-    });
-  }
-
-  // set flag
-  areInitialConditionsDefined_ = true;
+    const auto gamma = HydroSystem<ContactProblem>::gamma_;
+    for (int n = 0; n < ncomp; ++n) {
+      state(i, j, k, n) = 0.;
+    }
+    state(i, j, k, HydroSystem<ContactProblem>::density_index) = rho;
+    state(i, j, k, HydroSystem<ContactProblem>::x1Momentum_index) = rho * vx;
+    state(i, j, k, HydroSystem<ContactProblem>::x2Momentum_index) = 0.;
+    state(i, j, k, HydroSystem<ContactProblem>::x3Momentum_index) = 0.;
+    state(i, j, k, HydroSystem<ContactProblem>::energy_index) =
+        P / (gamma - 1.) + 0.5 * rho * (vx * vx);
+  });
 }
 
 template <>

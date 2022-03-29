@@ -24,94 +24,83 @@
 
 using Real = amrex::Real;
 
-struct QuirkProblem {
-};
+struct QuirkProblem {};
 
 template <> struct EOS_Traits<QuirkProblem> {
-	static constexpr double gamma = 5. / 3.;
-	static constexpr bool reconstruct_eint = false;
+  static constexpr double gamma = 5. / 3.;
+  static constexpr bool reconstruct_eint = false;
 };
 
-constexpr Real dl =  3.692;
+constexpr Real dl = 3.692;
 constexpr Real ul = -0.625;
-constexpr Real pl =  26.85;
-constexpr Real dr =  1.0;
+constexpr Real pl = 26.85;
+constexpr Real dr = 1.0;
 constexpr Real ur = -5.0;
-constexpr Real pr =  0.6;
+constexpr Real pr = 0.6;
 
-template <> void RadhydroSimulation<QuirkProblem>::setInitialConditionsAtLevel(int lev)
-{
-	// Initial conditions from:
-	// T. Hanawa et al. / Journal of Computational Physics 227 (2008) 7952–7976
-	// and based on Athena++'s quirk.cpp.
+template <>
+void RadhydroSimulation<QuirkProblem>::setInitialConditionsOnGrid(
+    array_t &state, const amrex::Box &indexRange, const amrex::Geometry &geom) {
+  // extract variables required from the geom object
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom.CellSizeArray();
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom.ProbLoArray();
+  Real xshock = 0.4;
+  int ishock = 0;
+  for (ishock = 0; (prob_lo[0] + dx[0] * (ishock + Real(0.5))) < xshock;
+       ++ishock) {
+  }
+  ishock--;
+  amrex::Print() << "ishock = " << ishock << "\n";
 
-	amrex::GpuArray<Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
-	amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
+  Real dd = dl - 0.135;
+  Real ud = ul + 0.219;
+  Real pd = pl - 1.31;
+  // loop over the grid and set the initial condition
+  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+    double vx = NAN;
+    double vy = 0.;
+    double vz = 0.;
+    double rho = NAN;
+    double P = NAN;
 
-	Real xshock = 0.4;
-	int ishock = 0;
-	for (ishock = 0; (prob_lo[0] + dx[0]*(ishock + Real(0.5))) < xshock; ++ishock) {}
-	ishock--;
-	amrex::Print() << "ishock = " << ishock << "\n";
+    if (i <= ishock) {
+      rho = dl;
+      vx = ul;
+      P = pl;
+    } else {
+      rho = dr;
+      vx = ur;
+      P = pr;
+    }
 
+    if ((i == ishock) && (j % 2 == 0)) {
+      rho = dd;
+      vx = ud;
+      P = pd;
+    }
 
-	Real dd = dl - 0.135;
-	Real ud = ul + 0.219;
-	Real pd = pl - 1.31;
+    AMREX_ASSERT(!std::isnan(vx));
+    AMREX_ASSERT(!std::isnan(vy));
+    AMREX_ASSERT(!std::isnan(vz));
+    AMREX_ASSERT(!std::isnan(rho));
+    AMREX_ASSERT(!std::isnan(P));
 
-	for (amrex::MFIter iter(state_old_[lev]); iter.isValid(); ++iter) {
-		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
-		auto const &state = state_new_[lev].array(iter);
+    const auto v_sq = vx * vx + vy * vy + vz * vz;
+    const auto gamma = HydroSystem<QuirkProblem>::gamma_;
 
-		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-			double vx = NAN;
-			double vy = 0.;
-			double vz = 0.;
-			double rho = NAN;
-			double P = NAN;
+    state(i, j, k, HydroSystem<QuirkProblem>::density_index) = rho;
+    state(i, j, k, HydroSystem<QuirkProblem>::x1Momentum_index) = rho * vx;
+    state(i, j, k, HydroSystem<QuirkProblem>::x2Momentum_index) = rho * vy;
+    state(i, j, k, HydroSystem<QuirkProblem>::x3Momentum_index) = rho * vz;
+    state(i, j, k, HydroSystem<QuirkProblem>::energy_index) =
+        P / (gamma - 1.) + 0.5 * rho * v_sq;
 
-			if (i <= ishock) {
-				rho = dl;
-				vx = ul;
-				P = pl;
-			} else {
-				rho = dr;
-				vx = ur;
-				P = pr;
-			}
-
-			if ((i == ishock) && (j % 2 == 0)) {
-				rho = dd;
-				vx = ud;
-				P = pd;
-			}
-
-			AMREX_ASSERT(!std::isnan(vx));
-			AMREX_ASSERT(!std::isnan(vy));
-			AMREX_ASSERT(!std::isnan(vz));
-			AMREX_ASSERT(!std::isnan(rho));
-			AMREX_ASSERT(!std::isnan(P));
-
-			const auto v_sq = vx * vx + vy * vy + vz * vz;
-			const auto gamma = HydroSystem<QuirkProblem>::gamma_;
-
-			state(i, j, k, HydroSystem<QuirkProblem>::density_index) = rho;
-			state(i, j, k, HydroSystem<QuirkProblem>::x1Momentum_index) = rho * vx;
-			state(i, j, k, HydroSystem<QuirkProblem>::x2Momentum_index) = rho * vy;
-			state(i, j, k, HydroSystem<QuirkProblem>::x3Momentum_index) = rho * vz;
-			state(i, j, k, HydroSystem<QuirkProblem>::energy_index) =
-			    P / (gamma - 1.) + 0.5 * rho * v_sq;
-
-			// initialize radiation variables to zero
-			state(i, j, k, RadSystem<QuirkProblem>::radEnergy_index) = 0;
-			state(i, j, k, RadSystem<QuirkProblem>::x1RadFlux_index) = 0;
-			state(i, j, k, RadSystem<QuirkProblem>::x2RadFlux_index) = 0;
-			state(i, j, k, RadSystem<QuirkProblem>::x3RadFlux_index) = 0;
-		});
-	}
-
-	// set flag
-	areInitialConditionsDefined_ = true;
+    // initialize radiation variables to zero
+    state(i, j, k, RadSystem<QuirkProblem>::radEnergy_index) = 0;
+    state(i, j, k, RadSystem<QuirkProblem>::x1RadFlux_index) = 0;
+    state(i, j, k, RadSystem<QuirkProblem>::x2RadFlux_index) = 0;
+    state(i, j, k, RadSystem<QuirkProblem>::x3RadFlux_index) = 0;
+  });
 }
 
 template <>
@@ -144,7 +133,7 @@ AMRSimulation<QuirkProblem>::setCustomBoundaryConditions(
     consVar(i, j, k, RadSystem<QuirkProblem>::gasEnergy_index) =
         pl / (gamma - 1.) + 0.5 * dl * ul * ul;
     consVar(i, j, k, RadSystem<QuirkProblem>::gasDensity_index) = dl;
-    consVar(i, j, k, RadSystem<QuirkProblem>::x1GasMomentum_index) = dl*ul;
+    consVar(i, j, k, RadSystem<QuirkProblem>::x1GasMomentum_index) = dl * ul;
     consVar(i, j, k, RadSystem<QuirkProblem>::x2GasMomentum_index) = 0.;
     consVar(i, j, k, RadSystem<QuirkProblem>::x3GasMomentum_index) = 0.;
   } else if (i >= hi[0]) {
@@ -152,45 +141,44 @@ AMRSimulation<QuirkProblem>::setCustomBoundaryConditions(
     consVar(i, j, k, RadSystem<QuirkProblem>::gasEnergy_index) =
         pr / (gamma - 1.) + 0.5 * dr * ur * ur;
     consVar(i, j, k, RadSystem<QuirkProblem>::gasDensity_index) = dr;
-    consVar(i, j, k, RadSystem<QuirkProblem>::x1GasMomentum_index) = dr*ur;
+    consVar(i, j, k, RadSystem<QuirkProblem>::x1GasMomentum_index) = dr * ur;
     consVar(i, j, k, RadSystem<QuirkProblem>::x2GasMomentum_index) = 0.;
     consVar(i, j, k, RadSystem<QuirkProblem>::x3GasMomentum_index) = 0.;
   }
 }
 
-auto problem_main() -> int
-{
-	// Boundary conditions
-	const int nvars = RadhydroSimulation<QuirkProblem>::nvarTotal_;
-	amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
-	for (int n = 0; n < nvars; ++n) {
-		// outflow
-		boundaryConditions[0].setLo(0, amrex::BCType::ext_dir);
-		boundaryConditions[0].setHi(0, amrex::BCType::ext_dir);
-		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
-			// periodic
-			boundaryConditions[n].setLo(i, amrex::BCType::int_dir);
-			boundaryConditions[n].setHi(i, amrex::BCType::int_dir);
-		}
-	}
+auto problem_main() -> int {
+  // Boundary conditions
+  const int nvars = RadhydroSimulation<QuirkProblem>::nvarTotal_;
+  amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
+  for (int n = 0; n < nvars; ++n) {
+    // outflow
+    boundaryConditions[0].setLo(0, amrex::BCType::ext_dir);
+    boundaryConditions[0].setHi(0, amrex::BCType::ext_dir);
+    for (int i = 1; i < AMREX_SPACEDIM; ++i) {
+      // periodic
+      boundaryConditions[n].setLo(i, amrex::BCType::int_dir);
+      boundaryConditions[n].setHi(i, amrex::BCType::int_dir);
+    }
+  }
 
-	// Problem initialization
-	RadhydroSimulation<QuirkProblem> sim(boundaryConditions);
-	sim.is_hydro_enabled_ = true;
-	sim.is_radiation_enabled_ = false;
-	sim.reconstructionOrder_ = 2; // PLM
-	sim.stopTime_ = 0.4;
-	sim.cflNumber_ = 0.4;
-	sim.maxTimesteps_ = 2000;
-	sim.plotfileInterval_ = 10;
+  // Problem initialization
+  RadhydroSimulation<QuirkProblem> sim(boundaryConditions);
+  sim.is_hydro_enabled_ = true;
+  sim.is_radiation_enabled_ = false;
+  sim.reconstructionOrder_ = 2; // PLM
+  sim.stopTime_ = 0.4;
+  sim.cflNumber_ = 0.4;
+  sim.maxTimesteps_ = 2000;
+  sim.plotfileInterval_ = 10;
 
-	// initialize
-	sim.setInitialConditions();
+  // initialize
+  sim.setInitialConditions();
 
-	// evolve
-	sim.evolve();
+  // evolve
+  sim.evolve();
 
-	// Cleanup and exit
-	amrex::Print() << "Finished." << std::endl;
-	return 0;
+  // Cleanup and exit
+  amrex::Print() << "Finished." << std::endl;
+  return 0;
 }

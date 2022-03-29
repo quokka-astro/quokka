@@ -28,7 +28,7 @@ struct MarshakProblem {
 // Su & Olson (1997) parameters
 constexpr double eps_SuOlson = 1.0;
 constexpr double kappa = 1.0;
-constexpr double rho0 = 1.0;        // g cm^-3 (matter density)
+constexpr double rho0 = 1.0;       // g cm^-3 (matter density)
 constexpr double T_hohlraum = 1.0; // dimensionless
 constexpr double x0 = 0.5;         // dimensionless length scale
 constexpr double t0 = 10.0;        // dimensionless time scale
@@ -37,8 +37,9 @@ constexpr double a_rad = 1.0;
 constexpr double c = 1.0;
 constexpr double alpha_SuOlson = 4.0 * a_rad / eps_SuOlson;
 
-constexpr double Q = (1.0 / (2.0 * x0));                    // do NOT change this
-constexpr double S = Q * (a_rad * (T_hohlraum*T_hohlraum*T_hohlraum*T_hohlraum)); // erg cm^{-3}
+constexpr double Q = (1.0 / (2.0 * x0)); // do NOT change this
+constexpr double S = Q * (a_rad * (T_hohlraum * T_hohlraum * T_hohlraum *
+                                   T_hohlraum)); // erg cm^{-3}
 
 template <> struct RadSystem_Traits<MarshakProblem> {
   static constexpr double c_light = c;
@@ -48,20 +49,18 @@ template <> struct RadSystem_Traits<MarshakProblem> {
   static constexpr double boltzmann_constant = 1.0;
   static constexpr double gamma = 5. / 3.;
   static constexpr double Erad_floor = 0.;
- 	static constexpr bool compute_v_over_c_terms = false;
+  static constexpr bool compute_v_over_c_terms = false;
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto
-RadSystem<MarshakProblem>::ComputePlanckOpacity(const double rho,
-                                           const double /*Tgas*/) -> double {
+AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputePlanckOpacity(
+    const double rho, const double /*Tgas*/) -> double {
   return (kappa / rho);
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto
-RadSystem<MarshakProblem>::ComputeRosselandOpacity(const double rho,
-                                              const double /*Tgas*/) -> double {
+AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputeRosselandOpacity(
+    const double rho, const double /*Tgas*/) -> double {
   return (kappa / rho);
 }
 
@@ -103,7 +102,8 @@ void RadSystem<MarshakProblem>::SetRadEnergySource(
     array_t &radEnergySource, amrex::Box const &indexRange,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_lo*/,
-    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_hi*/, amrex::Real time) {
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_hi*/,
+    amrex::Real time) {
 
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
     amrex::Real const xl = (i + amrex::Real(0.)) * dx[0];
@@ -127,35 +127,28 @@ void RadSystem<MarshakProblem>::SetRadEnergySource(
 }
 
 template <>
-void RadhydroSimulation<MarshakProblem>::setInitialConditionsAtLevel(int lev) {
+void RadhydroSimulation<MarshakProblem>::setInitialConditionsOnGrid(
+    array_t &state, const amrex::Box &indexRange, const amrex::Geometry &geom) {
   const auto Erad0 = initial_Erad;
   const auto Egas0 = initial_Egas;
+  // loop over the grid and set the initial condition
+  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+    state(i, j, k, RadSystem<MarshakProblem>::radEnergy_index) = Erad0;
+    state(i, j, k, RadSystem<MarshakProblem>::x1RadFlux_index) = 0;
+    state(i, j, k, RadSystem<MarshakProblem>::x2RadFlux_index) = 0;
+    state(i, j, k, RadSystem<MarshakProblem>::x3RadFlux_index) = 0;
 
-  for (amrex::MFIter iter(state_old_[lev]); iter.isValid(); ++iter) {
-    const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
-    auto const &state = state_new_[lev].array(iter);
-
-    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-      state(i, j, k, RadSystem<MarshakProblem>::radEnergy_index) = Erad0;
-      state(i, j, k, RadSystem<MarshakProblem>::x1RadFlux_index) = 0;
-      state(i, j, k, RadSystem<MarshakProblem>::x2RadFlux_index) = 0;
-      state(i, j, k, RadSystem<MarshakProblem>::x3RadFlux_index) = 0;
-
-      state(i, j, k, RadSystem<MarshakProblem>::gasEnergy_index) = Egas0;
-      state(i, j, k, RadSystem<MarshakProblem>::gasDensity_index) = rho0;
-      state(i, j, k, RadSystem<MarshakProblem>::x1GasMomentum_index) = 0.;
-      state(i, j, k, RadSystem<MarshakProblem>::x2GasMomentum_index) = 0.;
-      state(i, j, k, RadSystem<MarshakProblem>::x3GasMomentum_index) = 0.;
-    });
-  }
-
-  // set flag
-  areInitialConditionsDefined_ = true;
+    state(i, j, k, RadSystem<MarshakProblem>::gasEnergy_index) = Egas0;
+    state(i, j, k, RadSystem<MarshakProblem>::gasDensity_index) = rho0;
+    state(i, j, k, RadSystem<MarshakProblem>::x1GasMomentum_index) = 0.;
+    state(i, j, k, RadSystem<MarshakProblem>::x2GasMomentum_index) = 0.;
+    state(i, j, k, RadSystem<MarshakProblem>::x3GasMomentum_index) = 0.;
+  });
 }
 
 auto problem_main() -> int {
   // TODO(ben): disable v/c terms for this problem!
-  
+
   // Problem parameters
 
   // const int nx = 1500;
@@ -164,7 +157,7 @@ auto problem_main() -> int {
   const double max_dt = 1e-2;     // dimensionless time
   const double initial_dt = 1e-9; // dimensionless time
   const double max_time = 10.0;   // dimensionless time
-  //const double max_time = 3.16228;	  // dimensionless time
+  // const double max_time = 3.16228;	  // dimensionless time
 
   auto isNormalComp = [=](int n, int dim) {
     if ((n == RadSystem<MarshakProblem>::x1RadFlux_index) && (dim == 0)) {
@@ -203,10 +196,10 @@ auto problem_main() -> int {
   }
 
   RadhydroSimulation<MarshakProblem> sim(boundaryConditions);
- 	sim.is_hydro_enabled_ = false;
-	sim.is_radiation_enabled_ = true;
-	sim.cflNumber_ = CFL_number;
-	sim.radiationCflNumber_ = CFL_number;
+  sim.is_hydro_enabled_ = false;
+  sim.is_radiation_enabled_ = true;
+  sim.cflNumber_ = CFL_number;
+  sim.radiationCflNumber_ = CFL_number;
   sim.stopTime_ = max_time;
   sim.maxTimesteps_ = max_timesteps;
   sim.maxDt_ = max_dt;
@@ -393,7 +386,7 @@ auto problem_main() -> int {
     diffusion_args["color"] = "black";
     diffusion_args["linestyle"] = "none";
     diffusion_args["marker"] = "o";
-    //diffusion_args["edgecolors"] = "k";
+    // diffusion_args["edgecolors"] = "k";
     matplotlibcpp::plot(xs_exact, Erad_diffusion_exact_10p0, diffusion_args);
 
     std::map<std::string, std::string> transport_args;
@@ -401,7 +394,7 @@ auto problem_main() -> int {
     transport_args["color"] = "black";
     transport_args["linestyle"] = "none";
     transport_args["marker"] = "x";
-    //transport_args["edgecolors"] = "k";
+    // transport_args["edgecolors"] = "k";
     matplotlibcpp::plot(xs_exact, Erad_transport_exact_10p0, transport_args);
 
     matplotlibcpp::legend();
@@ -417,7 +410,6 @@ auto problem_main() -> int {
     matplotlibcpp::ylim(1e-3, 3.0);
     matplotlibcpp::save("./SuOlsonTest_loglog.pdf");
 #endif
-
   }
 
   return status;

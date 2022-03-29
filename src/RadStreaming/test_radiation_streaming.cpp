@@ -16,8 +16,8 @@ struct StreamingProblem {};
 
 constexpr double initial_Erad = 1.0e-5;
 constexpr double initial_Egas = 1.0e-5;
-constexpr double c = 1.0;     // speed of light
-constexpr double chat = 0.2;  // reduced speed of light
+constexpr double c = 1.0;          // speed of light
+constexpr double chat = 0.2;       // reduced speed of light
 constexpr double kappa0 = 1.0e-10; // opacity
 constexpr double rho = 1.0;
 
@@ -45,31 +45,23 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputeRosselandOpacity(
 }
 
 template <>
-void RadhydroSimulation<StreamingProblem>::setInitialConditionsAtLevel(
-    int lev) {
+void RadhydroSimulation<StreamingProblem>::setInitialConditionsOnGrid(
+    array_t &state, const amrex::Box &indexRange, const amrex::Geometry &geom) {
   const auto Erad0 = initial_Erad;
   const auto Egas0 = initial_Egas;
+  // loop over the grid and set the initial condition
+  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+    state(i, j, k, RadSystem<StreamingProblem>::radEnergy_index) = Erad0;
+    state(i, j, k, RadSystem<StreamingProblem>::x1RadFlux_index) = 0;
+    state(i, j, k, RadSystem<StreamingProblem>::x2RadFlux_index) = 0;
+    state(i, j, k, RadSystem<StreamingProblem>::x3RadFlux_index) = 0;
 
-  for (amrex::MFIter iter(state_old_[lev]); iter.isValid(); ++iter) {
-    const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
-    auto const &state = state_new_[lev].array(iter);
-
-    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-      state(i, j, k, RadSystem<StreamingProblem>::radEnergy_index) = Erad0;
-      state(i, j, k, RadSystem<StreamingProblem>::x1RadFlux_index) = 0;
-      state(i, j, k, RadSystem<StreamingProblem>::x2RadFlux_index) = 0;
-      state(i, j, k, RadSystem<StreamingProblem>::x3RadFlux_index) = 0;
-
-      state(i, j, k, RadSystem<StreamingProblem>::gasEnergy_index) = Egas0;
-      state(i, j, k, RadSystem<StreamingProblem>::gasDensity_index) = rho;
-      state(i, j, k, RadSystem<StreamingProblem>::x1GasMomentum_index) = 0.;
-      state(i, j, k, RadSystem<StreamingProblem>::x2GasMomentum_index) = 0.;
-      state(i, j, k, RadSystem<StreamingProblem>::x3GasMomentum_index) = 0.;
-    });
-  }
-
-  // set flag
-  areInitialConditionsDefined_ = true;
+    state(i, j, k, RadSystem<StreamingProblem>::gasEnergy_index) = Egas0;
+    state(i, j, k, RadSystem<StreamingProblem>::gasDensity_index) = rho;
+    state(i, j, k, RadSystem<StreamingProblem>::x1GasMomentum_index) = 0.;
+    state(i, j, k, RadSystem<StreamingProblem>::x2GasMomentum_index) = 0.;
+    state(i, j, k, RadSystem<StreamingProblem>::x3GasMomentum_index) = 0.;
+  });
 }
 
 template <>
@@ -208,7 +200,7 @@ auto problem_main() -> int {
   matplotlibcpp::legend();
   matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
   matplotlibcpp::save("./radiation_streaming.pdf");
-#endif // HAVE_PYTHON 
+#endif // HAVE_PYTHON
 
   // Cleanup and exit
   amrex::Print() << "Finished." << std::endl;

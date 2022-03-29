@@ -57,25 +57,19 @@ AMREX_GPU_DEVICE void computeWaveSolution(
 }
 
 template <>
-void RadhydroSimulation<WaveProblem>::setInitialConditionsAtLevel(int lev) {
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo =
-      geom[lev].ProbLoArray();
+void RadhydroSimulation<WaveProblem>::setInitialConditionsOnGrid(
+    array_t &state, const amrex::Box &indexRange, const amrex::Geometry &geom) {
+  // extract variables required from the geom object
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom.CellSizeArray();
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom.ProbLoArray();
   const int ncomp = ncomp_;
-
-  for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
-    const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
-    auto const &state = state_new_[lev].array(iter);
-    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-      for (int n = 0; n < ncomp; ++n) {
-        state(i, j, k, n) = 0; // fill unused components with zeros
-      }
-      computeWaveSolution(i, j, k, state, dx, prob_lo);
-    });
-  }
-
-  // set flag
-  areInitialConditionsDefined_ = true;
+  // loop over the grid and set the initial condition
+  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+    for (int n = 0; n < ncomp; ++n) {
+      state(i, j, k, n) = 0; // fill unused components with zeros
+    }
+    computeWaveSolution(i, j, k, state, dx, prob_lo);
+  });
 }
 
 auto problem_main() -> int {
@@ -133,7 +127,8 @@ auto problem_main() -> int {
     err_sq += dU_k * dU_k;
   }
   const amrex::Real epsilon = std::sqrt(err_sq);
-  amrex::Print() << "rms of component-wise L1 error norms = " << epsilon << std::endl;
+  amrex::Print() << "rms of component-wise L1 error norms = " << epsilon
+                 << std::endl;
 
 #ifdef HAVE_PYTHON
   // plot results

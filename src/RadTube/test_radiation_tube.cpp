@@ -12,11 +12,11 @@
 #include "AMReX.H"
 #include "AMReX_BC_TYPES.H"
 
-#include "test_radiation_tube.hpp"
-#include "RadhydroSimulation.hpp"
-#include "radiation_system.hpp"
-#include "fextract.hpp"
 #include "ArrayUtil.hpp"
+#include "RadhydroSimulation.hpp"
+#include "fextract.hpp"
+#include "radiation_system.hpp"
+#include "test_radiation_tube.hpp"
 extern "C" {
 #include "interpolate.h"
 }
@@ -61,14 +61,15 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputeRosselandOpacity(
   return kappa0;
 }
 
-template <>
-void RadhydroSimulation<TubeProblem>::setInitialConditionsAtLevel(int lev) {
-  // read initial conditions from file
-  amrex::Vector<double> x_arr;
-  amrex::Vector<double> rho_arr;
-  amrex::Vector<double> Pgas_arr;
-  amrex::Vector<double> Erad_arr;
+// define global variables that will be used for initialising the simulation
+// (initial conditions to be read from a file)
+amrex::Vector<double> x_arr;
+amrex::Vector<double> rho_arr;
+amrex::Vector<double> Pgas_arr;
+amrex::Vector<double> Erad_arr;
 
+template <> void RadhydroSimulation<TubeProblem>::preCalculateInitialConditions() {
+  // map initial conditions to the global variables
   std::string filename = "../extern/pressure_tube/initial_conditions.txt";
   std::ifstream fstream(filename, std::ios::in);
   AMREX_ALWAYS_ASSERT(fstream.is_open());
@@ -91,44 +92,37 @@ void RadhydroSimulation<TubeProblem>::setInitialConditionsAtLevel(int lev) {
     Pgas_arr.push_back(Pgas);
     Erad_arr.push_back(Erad);
   }
+}
 
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo =
-      geom[lev].ProbLoArray();
+template <>
+void RadhydroSimulation<TubeProblem>::setInitialConditionsOnGrid(
+    array_t &state, const amrex::Box &indexRange, const amrex::Geometry &geom) {
+  // extract variables required from the geom object
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom.CellSizeArray();
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom.ProbLoArray();
+  // loop over the grid and set the initial condition
+  amrex::LoopConcurrentOnCpu(indexRange, [=](int i, int j, int k) noexcept {
+    amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
 
-  for (amrex::MFIter iter(state_old_[lev]); iter.isValid(); ++iter) {
-    const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
-    auto const &state = state_new_[lev].array(iter);
+    amrex::Real const rho = interpolate_value(
+        x, x_arr.dataPtr(), rho_arr.dataPtr(), static_cast<int>(x_arr.size()));
+    amrex::Real const Pgas = interpolate_value(
+        x, x_arr.dataPtr(), Pgas_arr.dataPtr(), static_cast<int>(x_arr.size()));
+    amrex::Real const Erad = interpolate_value(
+        x, x_arr.dataPtr(), Erad_arr.dataPtr(), static_cast<int>(x_arr.size()));
 
-    amrex::LoopConcurrentOnCpu(indexRange, [=](int i, int j, int k) noexcept {
-      amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+    state(i, j, k, RadSystem<TubeProblem>::radEnergy_index) = Erad;
+    state(i, j, k, RadSystem<TubeProblem>::x1RadFlux_index) = 0;
+    state(i, j, k, RadSystem<TubeProblem>::x2RadFlux_index) = 0;
+    state(i, j, k, RadSystem<TubeProblem>::x3RadFlux_index) = 0;
 
-      amrex::Real const rho =
-          interpolate_value(x, x_arr.dataPtr(), rho_arr.dataPtr(),
-                            static_cast<int>(x_arr.size()));
-      amrex::Real const Pgas =
-          interpolate_value(x, x_arr.dataPtr(), Pgas_arr.dataPtr(),
-                            static_cast<int>(x_arr.size()));
-      amrex::Real const Erad =
-          interpolate_value(x, x_arr.dataPtr(), Erad_arr.dataPtr(),
-                            static_cast<int>(x_arr.size()));
-
-      state(i, j, k, RadSystem<TubeProblem>::radEnergy_index) = Erad;
-      state(i, j, k, RadSystem<TubeProblem>::x1RadFlux_index) = 0;
-      state(i, j, k, RadSystem<TubeProblem>::x2RadFlux_index) = 0;
-      state(i, j, k, RadSystem<TubeProblem>::x3RadFlux_index) = 0;
-
-      state(i, j, k, RadSystem<TubeProblem>::gasEnergy_index) =
-          Pgas / (gamma_gas - 1.0);
-      state(i, j, k, RadSystem<TubeProblem>::gasDensity_index) = rho;
-      state(i, j, k, RadSystem<TubeProblem>::x1GasMomentum_index) = 0.;
-      state(i, j, k, RadSystem<TubeProblem>::x2GasMomentum_index) = 0.;
-      state(i, j, k, RadSystem<TubeProblem>::x3GasMomentum_index) = 0.;
-    });
-  }
-
-  // set flag
-  areInitialConditionsDefined_ = true;
+    state(i, j, k, RadSystem<TubeProblem>::gasEnergy_index) =
+        Pgas / (gamma_gas - 1.0);
+    state(i, j, k, RadSystem<TubeProblem>::gasDensity_index) = rho;
+    state(i, j, k, RadSystem<TubeProblem>::x1GasMomentum_index) = 0.;
+    state(i, j, k, RadSystem<TubeProblem>::x2GasMomentum_index) = 0.;
+    state(i, j, k, RadSystem<TubeProblem>::x3GasMomentum_index) = 0.;
+  });
 }
 
 template <>
@@ -226,7 +220,7 @@ auto problem_main() -> int {
   sim.is_hydro_enabled_ = true;
   sim.is_radiation_enabled_ = true;
   sim.radiationReconstructionOrder_ = 2; // PLM
-  sim.reconstructionOrder_ = 2; // PLM
+  sim.reconstructionOrder_ = 2;          // PLM
   sim.stopTime_ = tmax;
   sim.cflNumber_ = CFL_number;
   sim.radiationCflNumber_ = CFL_number;
@@ -334,10 +328,12 @@ auto problem_main() -> int {
 
   matplotlibcpp::plot(xs, Trad_arr, Trad_args);
   matplotlibcpp::plot(xs, Tgas_arr, Tgas_args);
-  matplotlibcpp::scatter(strided_vector_from(xs, s), strided_vector_from(Trad_exact_arr, s), 10.0, Texact_args);
+  matplotlibcpp::scatter(strided_vector_from(xs, s),
+                         strided_vector_from(Trad_exact_arr, s), 10.0,
+                         Texact_args);
 
   matplotlibcpp::legend();
-  //matplotlibcpp::title(fmt::format("t = {:.4g} s", sim.tNew_[0]));
+  // matplotlibcpp::title(fmt::format("t = {:.4g} s", sim.tNew_[0]));
   matplotlibcpp::xlabel("length x (cm)");
   matplotlibcpp::ylabel("temperature (Kelvins)");
   matplotlibcpp::tight_layout();

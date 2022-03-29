@@ -131,11 +131,9 @@ public:
 
   void checkHydroStates(amrex::MultiFab &mf, char const *file, int line);
   void computeMaxSignalLocal(int level) override;
-  void setInitialConditionsAtLevel(int level) override;
-  void setInitialConditionsOnGrid(
-      array_t &state, const amrex::Box &indexRange,
-      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
-      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo) override;
+  void preCalculateInitialConditions() override;
+  void setInitialConditionsOnGrid(array_t &state, const amrex::Box &indexRange,
+                                  const amrex::Geometry &geom) override;
   void advanceSingleTimestepAtLevel(int lev, amrex::Real time,
                                     amrex::Real dt_lev, int iteration,
                                     int ncycle) override;
@@ -309,20 +307,16 @@ void RadhydroSimulation<problem_t>::checkHydroStates(amrex::MultiFab &mf,
 }
 
 template <typename problem_t>
-void RadhydroSimulation<problem_t>::setInitialConditionsAtLevel(int lev) {
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo =
-      geom[lev].ProbLoArray();
+void RadhydroSimulation<problem_t>::preCalculateInitialConditions() {
+  // default empty implementation
+  // user should implement using problem-specific template specialization
+}
 
-  for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
-    const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
-    auto const &state = state_new_[lev].array(iter);
-    // execute initial conditions that have been provided / defined by the user
-    RadhydroSimulation<problem_t>::setInitialConditionsOnGrid(state, indexRange,
-                                                              dx, prob_lo);
-  }
-  // set flag
-  areInitialConditionsDefined_ = true;
+template <typename problem_t>
+void RadhydroSimulation<problem_t>::setInitialConditionsOnGrid(
+    array_t &state, const amrex::Box &indexRange, const amrex::Geometry &geom) {
+  // default empty implementation
+  // user should implement using problem-specific template specialization
 }
 
 template <typename problem_t>

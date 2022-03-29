@@ -23,48 +23,40 @@
 #include "fextract.hpp"
 #include "test_advection.hpp"
 
-struct SawtoothProblem {
-};
+struct SawtoothProblem {};
 
 AMREX_GPU_DEVICE void ComputeExactSolution(
     int i, int j, int k, int n, amrex::Array4<amrex::Real> const &exact_arr,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi)
-{
-	// compute exact solution
-	amrex::Real const x_length = prob_hi[0] - prob_lo[0];
-	amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
-	auto value = std::fmod(x + 0.5*x_length, x_length);
-	exact_arr(i, j, k, n) = value;
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi) {
+  // compute exact solution
+  amrex::Real const x_length = prob_hi[0] - prob_lo[0];
+  amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+  auto value = std::fmod(x + 0.5 * x_length, x_length);
+  exact_arr(i, j, k, n) = value;
 }
 
-template <> void AdvectionSimulation<SawtoothProblem>::setInitialConditionsAtLevel(int level)
-{
-	auto const &prob_lo = geom[level].ProbLoArray();
-	auto const &prob_hi = geom[level].ProbHiArray();
-	auto const &dx = geom[level].CellSizeArray();
-
-	for (amrex::MFIter iter(state_old_[level]); iter.isValid(); ++iter) {
-		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
-		auto const &state = state_new_[level].array(iter);
-		amrex::ParallelFor(indexRange, ncomp_,
-				   [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
-						ComputeExactSolution(i, j, k, n, state, dx, prob_lo, prob_hi);
-				   });
-	}
-
-	// set flag
-	areInitialConditionsDefined_ = true;
+template <>
+void AdvectionSimulation<SawtoothProblem>::setInitialConditionsOnGrid(
+array_t &state, const amrex::Box &indexRange, const amrex::Geometry &geom) {
+  // extract variables required from the geom object
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom.CellSizeArray();
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom.ProbLoArray();
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = geom.ProbHiArray();
+  // loop over the grid and set the initial condition
+  amrex::ParallelFor(
+        indexRange, ncomp_, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
+          ComputeExactSolution(i, j, k, n, state, dx, prob_lo, prob_hi);
+        });
 }
-
 
 template <>
 void AdvectionSimulation<SawtoothProblem>::computeReferenceSolution(
     amrex::MultiFab &ref,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi) {
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi) {
 
   // fill reference solution multifab
   for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
@@ -72,8 +64,9 @@ void AdvectionSimulation<SawtoothProblem>::computeReferenceSolution(
     auto const &stateExact = ref.array(iter);
     auto const ncomp = ref.nComp();
 
-    amrex::ParallelFor(indexRange, ncomp,
-		[=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
+    amrex::ParallelFor(
+        indexRange, ncomp,
+        [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
           ComputeExactSolution(i, j, k, n, stateExact, dx, prob_lo, prob_hi);
         });
   }
@@ -101,61 +94,59 @@ void AdvectionSimulation<SawtoothProblem>::computeReferenceSolution(
       d_exact.at(i) = rho_exact;
     }
 
-	// Plot results
-	std::map<std::string, std::string> d_initial_args;
-	std::map<std::string, std::string> d_final_args;
-	d_initial_args["label"] = "density (initial)";
-	d_final_args["label"] = "density (final)";
+    // Plot results
+    std::map<std::string, std::string> d_initial_args;
+    std::map<std::string, std::string> d_final_args;
+    d_initial_args["label"] = "density (initial)";
+    d_final_args["label"] = "density (final)";
 
-	matplotlibcpp::plot(xs, d_exact, d_initial_args);
-	matplotlibcpp::plot(xs, d, d_final_args);
-	matplotlibcpp::legend();
-	matplotlibcpp::save(std::string("./advection_sawtooth.pdf"));
+    matplotlibcpp::plot(xs, d_exact, d_initial_args);
+    matplotlibcpp::plot(xs, d, d_final_args);
+    matplotlibcpp::legend();
+    matplotlibcpp::save(std::string("./advection_sawtooth.pdf"));
   }
 #endif
 }
 
+auto problem_main() -> int {
+  // Problem parameters
+  // const int nx = 400;
+  // const double Lx = 1.0;
+  const double advection_velocity = 1.0;
+  const double CFL_number = 0.4;
+  const double max_time = 1.0;
+  const double max_dt = 1.0e-4;
+  const int max_timesteps = 1e4;
+  const int nvars = 1; // only density
 
-auto problem_main() -> int
-{
-	// Problem parameters
-	//const int nx = 400;
-	//const double Lx = 1.0;
-	const double advection_velocity = 1.0;
-	const double CFL_number = 0.4;
-	const double max_time = 1.0;
-	const double max_dt = 1.0e-4;
-	const int max_timesteps = 1e4;
-	const int nvars = 1; // only density
+  amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
+  for (int n = 0; n < nvars; ++n) {
+    for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+      boundaryConditions[n].setLo(i, amrex::BCType::int_dir); // periodic
+      boundaryConditions[n].setHi(i, amrex::BCType::int_dir);
+    }
+  }
 
-	amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
-	for (int n = 0; n < nvars; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			boundaryConditions[n].setLo(i, amrex::BCType::int_dir); // periodic
-			boundaryConditions[n].setHi(i, amrex::BCType::int_dir);
-		}
-	}
+  // Problem initialization
+  AdvectionSimulation<SawtoothProblem> sim(boundaryConditions);
+  sim.maxDt_ = max_dt;
+  sim.stopTime_ = max_time;
+  sim.cflNumber_ = CFL_number;
+  sim.maxTimesteps_ = max_timesteps;
+  sim.plotfileInterval_ = -1;
+  sim.advectionVx_ = 1.0;
+  sim.advectionVy_ = advection_velocity;
 
-	// Problem initialization
-	AdvectionSimulation<SawtoothProblem> sim(boundaryConditions);
-	sim.maxDt_ = max_dt;
-	sim.stopTime_ = max_time;
-	sim.cflNumber_ = CFL_number;
-	sim.maxTimesteps_ = max_timesteps;
-	sim.plotfileInterval_ = -1;
-	sim.advectionVx_ = 1.0;
-	sim.advectionVy_ = advection_velocity;
+  // set initial conditions
+  sim.setInitialConditions();
 
-	// set initial conditions
-	sim.setInitialConditions();
+  // run simulation
+  sim.evolve();
 
-	// run simulation
-	sim.evolve();
-
-	int status = 0;
-	const double err_tol = 0.015;
-	if (sim.errorNorm_ > err_tol) {
-		status = 1;
-	}
-	return status;
+  int status = 0;
+  const double err_tol = 0.015;
+  if (sim.errorNorm_ > err_tol) {
+    status = 1;
+  }
+  return status;
 }
