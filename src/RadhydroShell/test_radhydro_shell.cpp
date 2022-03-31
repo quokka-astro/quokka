@@ -121,14 +121,16 @@ void RadSystem<ShellProblem>::SetRadEnergySource(
 }
 
 template <>
-auto RadSystem<ShellProblem>::ComputePlanckOpacity(const double /*rho*/,
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
+RadSystem<ShellProblem>::ComputePlanckOpacity(const double /*rho*/,
                                                    const double /*Tgas*/)
     -> double {
   return kappa0;
 }
 
 template <>
-auto RadSystem<ShellProblem>::ComputeRosselandOpacity(const double /*rho*/,
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
+RadSystem<ShellProblem>::ComputeRosselandOpacity(const double /*rho*/,
                                                       const double /*Tgas*/)
     -> double {
   return kappa0;
