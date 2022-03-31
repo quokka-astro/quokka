@@ -26,16 +26,25 @@ option(ENABLE_ASAN "Enable AddressSanitizer and UndefinedBehavior Sanitizer" OFF
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
   enable_language(CUDA)
+  
   if(CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 11.2)
     message(FATAL_ERROR "For best performance, you must use CUDA 11.2 or higher to compile Quokka. It is strongly recommended to use a newer version of CUDA.")
   endif()
   if(CMAKE_CUDA_COMPILER_VERSION MATCHES 11.6)
     message(FATAL_ERROR "You must use a CUDA version 11.2-11.5 to compile Quokka. CUDA 11.6 has compiler bugs that cause Quokka to crash.")
   endif()
+
   set(CMAKE_CUDA_ARCHITECTURES 70 80 CACHE STRING "")
+  
   set(AMReX_CUDA_FASTMATH OFF CACHE BOOL "" FORCE)
   # fused MAD causes directional asymmetry
-  set(CMAKE_CUDA_FLAGS "--fmad=false" CACHE STRING "" FORCE)
+  if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA")
+    add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:--fmad=false>)
+  endif()
+  if(CMAKE_CUDA_COMPILER_ID STREQUAL "Clang")
+    add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:-ffp-contract=off>)
+  endif()
+  
   if(CMAKE_VERSION VERSION_LESS 3.20)
     include(AMReX_SetupCUDA)
   endif(CMAKE_VERSION VERSION_LESS 3.20)

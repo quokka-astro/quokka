@@ -55,7 +55,7 @@ template <typename problem_t> class HyperbolicSystem
 				std::min(2.0 * std::abs(a), 2.0 * std::abs(b)));
 	}
 
-	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
+	[[nodiscard]] AMREX_GPU_DEVICE AMREX_FORCE_INLINE
 	static auto GetMinmaxSurroundingCell(arrayconst_t &q,
 						  int i, int j, int k, int n) -> std::pair<double, double>;
 

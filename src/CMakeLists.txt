@@ -50,7 +50,14 @@ endif(ENABLE_ASAN)
 >>>>>>> 939463a... disable -Wno-unknown-pragmas
 #add_compile_options(-Wno-unknown-pragmas)
 
-add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:--ptxas-options=-v>)
+if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA")
+  add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:--ptxas-options=-v>)
+endif()
+if(CMAKE_CUDA_COMPILER_ID STREQUAL "Clang")
+  add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:-Xcuda-ptxas>)
+  add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:-v>)
+  add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:-Wno-unused-command-line-argument>)
+endif()
 
 
 include_directories(${amrex_INCLUDE_DIRS_RET})

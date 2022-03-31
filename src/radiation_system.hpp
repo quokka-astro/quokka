@@ -224,10 +224,10 @@ template <typename problem_t>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::isStateValid(
     std::array<amrex::Real, nvarHyperbolic_> &cons) -> bool {
   // check if the state variable 'cons' is a valid state
-  const auto E_r = cons.at(radEnergy_index - nstartHyperbolic_);
-  const auto Fx = cons.at(x1RadFlux_index - nstartHyperbolic_);
-  const auto Fy = cons.at(x2RadFlux_index - nstartHyperbolic_);
-  const auto Fz = cons.at(x3RadFlux_index - nstartHyperbolic_);
+  const auto E_r = cons[radEnergy_index - nstartHyperbolic_];
+  const auto Fx = cons[x1RadFlux_index - nstartHyperbolic_];
+  const auto Fy = cons[x2RadFlux_index - nstartHyperbolic_];
+  const auto Fz = cons[x3RadFlux_index - nstartHyperbolic_];
 
   const auto Fnorm = std::sqrt(Fx * Fx + Fy * Fy + Fz * Fz);
   const auto f = Fnorm / (c_light_ * E_r);
@@ -269,7 +269,7 @@ void RadSystem<problem_t>::PredictStep(
         std::array<amrex::Real, nvarHyperbolic_> cons{};
 
         for (int n = 0; n < nvarHyperbolic_; ++n) {
-          cons.at(n) =
+          cons[n] =
               consVarOld(i, j, k, nstartHyperbolic_ + n) +
               (AMREX_D_TERM(
                   (dt / dx) * (x1Flux(i, j, k, n) - x1Flux(i + 1, j, k, n)),
@@ -280,7 +280,7 @@ void RadSystem<problem_t>::PredictStep(
         if (!isStateValid(cons)) {
           // use diffusive fluxes instead
           for (int n = 0; n < nvarHyperbolic_; ++n) {
-            cons.at(n) =
+            cons[n] =
                 consVarOld(i, j, k, nstartHyperbolic_ + n) +
                 (AMREX_D_TERM((dt / dx) * (x1FluxDiffusive(i, j, k, n) -
                                            x1FluxDiffusive(i + 1, j, k, n)),
@@ -297,7 +297,7 @@ void RadSystem<problem_t>::PredictStep(
         }
 
         for (int n = 0; n < nvarHyperbolic_; ++n) {
-          consVarNew(i, j, k, nstartHyperbolic_ + n) = cons.at(n);
+          consVarNew(i, j, k, nstartHyperbolic_ + n) = cons[n];
         }
       });
 }
@@ -347,7 +347,7 @@ void RadSystem<problem_t>::AddFluxesRK2(
           (dt / dz) * (x3Flux(i, j, k, n) - x3Flux(i, j, k + 1, n));
 #endif
       // save results in cons_new
-      cons_new.at(n) = (0.5 * U_0 + 0.5 * U_1) +
+      cons_new[n] = (0.5 * U_0 + 0.5 * U_1) +
                        (AMREX_D_TERM(0.5 * FxU_1, +0.5 * FyU_1, +0.5 * FzU_1));
     }
 
@@ -367,20 +367,20 @@ void RadSystem<problem_t>::AddFluxesRK2(
                                           x3FluxDiffusive(i, j, k + 1, n));
 #endif
         // save results in cons_new
-        cons_new.at(n) =
+        cons_new[n] =
             (0.5 * U_0 + 0.5 * U_1) +
             (AMREX_D_TERM(0.5 * FxU_1, +0.5 * FyU_1, +0.5 * FzU_1));
       }
     }
 
     for (int n = 0; n < nvarHyperbolic_; ++n) {
-      U_new(i, j, k, nstartHyperbolic_ + n) = cons_new.at(n);
+      U_new(i, j, k, nstartHyperbolic_ + n) = cons_new[n];
     }
   });
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeEddingtonFactor(double f_in)
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeEddingtonFactor(double f_in)
     -> double {
   // f is the reduced flux == |F|/cE.
   // compute Levermore (1984) closure [Eq. 25]
