@@ -4,6 +4,10 @@ compile_commands.json
 codeql-db/
 build/
 build1D/
+build2D/
+build3D/
+sim/
+sims/
 tests/
 docs/doxygen/
 tests/*/plt*

@@ -291,8 +291,7 @@ auto problem_main() -> int {
     std::vector<double> Frad_over_c_exact;
 
     std::string filename =
-        "../extern/LowrieEdwards/shock.txt"; // NK changed: added ../ for
-                                                // single sim runs
+        "../extern/LowrieEdwards/shock.txt";
     std::ifstream fstream(filename, std::ios::in);
     AMREX_ALWAYS_ASSERT(fstream.is_open());
     std::string header;

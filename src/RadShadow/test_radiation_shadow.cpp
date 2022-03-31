@@ -115,7 +115,7 @@ AMRSimulation<ShadowProblem>::setCustomBoundaryConditions(
 }
 
 template <>
-void RadhydroSimulation<ShockProblem>::setInitialConditionsOnGrid(
+void RadhydroSimulation<ShadowProblem>::setInitialConditionsOnGrid(
     array_t &state, const amrex::Box &indexRange, const amrex::Geometry &geom) {
   // extract variables required from the geom object
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom.CellSizeArray();

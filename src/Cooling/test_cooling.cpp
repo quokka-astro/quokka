@@ -50,7 +50,8 @@ const int kmin = 0;
 const int kmax = 16;
 Real const A = 0.05 / kmax;
 // initialise pointer to phase table
-const amrex::TableData<Real, AMREX_SPACEDIM>::const_table_type *phase_ptr;
+const amrex::TableData<Real, AMREX_SPACEDIM>::const_table_type *phase_ptr =
+    nullptr;
 
 template <>
 void RadhydroSimulation<CoolingTest>::preCalculateInitialConditions() {
@@ -92,13 +93,17 @@ void RadhydroSimulation<CoolingTest>::preCalculateInitialConditions() {
   table_data.copy(h_table_data);
   amrex::Gpu::streamSynchronize();
 #endif
-  auto const &phase = table_data.const_table(); // const makes it read only
+  auto static const &phase =
+      table_data.const_table(); // const makes it read only
   phase_ptr = &phase;
 }
 
 template <>
 void RadhydroSimulation<CoolingTest>::setInitialConditionsOnGrid(
     array_t &state, const amrex::Box &indexRange, const amrex::Geometry &geom) {
+  // dereference phase table pointer
+  const amrex::TableData<Real, AMREX_SPACEDIM>::const_table_type &phase_ref =
+      *phase_ptr;
   // extract variables required from the geom object
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom.CellSizeArray();
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom.ProbLoArray();
@@ -133,7 +138,7 @@ void RadhydroSimulation<CoolingTest>::setInitialConditionsOnGrid(
           Real const ky = 2.0 * M_PI * Real(kj) / Lx;
           Real const kz = 2.0 * M_PI * Real(kk) / Lx;
           delta_rho +=
-              A * std::sin(x * kx + y * ky + z * kz + phase(ki, kj, kk));
+              A * std::sin(x * kx + y * ky + z * kz + phase_ref(ki, kj, kk));
         }
       }
     }
@@ -145,7 +150,7 @@ void RadhydroSimulation<CoolingTest>::setInitialConditionsOnGrid(
           }
           Real const kx = 2.0 * M_PI * Real(ki) / Lx;
           Real const ky = 2.0 * M_PI * Real(kj) / Lx;
-          delta_rho += A * std::sin(x * kx + y * ky + *phase_ptr(ki, kj));
+          delta_rho += A * std::sin(x * kx + y * ky + phase_ref(ki, kj));
         }
       }
 #endif
