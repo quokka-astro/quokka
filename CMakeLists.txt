@@ -22,6 +22,7 @@ set(AMReX_FPE OFF CACHE BOOL "" FORCE)
 set(AMReX_TINY_PROFILE ON CACHE BOOL "" FORCE)
 
 option(QUOKKA_PYTHON "Compile with Python support (on/off)" ON)
+option(DISABLE_FMAD "Disable fused multiply-add instructions on GPU (on/off)" ON)
 option(ENABLE_ASAN "Enable AddressSanitizer and UndefinedBehavior Sanitizer" OFF)
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
@@ -35,15 +36,6 @@ if(AMReX_GPU_BACKEND MATCHES "CUDA")
   endif()
 
   set(CMAKE_CUDA_ARCHITECTURES 70 80 CACHE STRING "")
-  
-  set(AMReX_CUDA_FASTMATH OFF CACHE BOOL "" FORCE)
-  # fused MAD causes directional asymmetry
-  if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA")
-    add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:--fmad=false>)
-  endif()
-  if(CMAKE_CUDA_COMPILER_ID STREQUAL "Clang")
-    add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:-ffp-contract=off>)
-  endif()
   
   if(CMAKE_VERSION VERSION_LESS 3.20)
     include(AMReX_SetupCUDA)
