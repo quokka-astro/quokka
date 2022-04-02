@@ -104,6 +104,7 @@ cloudy_cooling_function(Real const rho, Real const T,
   double n_e = (rho / hydrogen_mass_cgs_) *
                      (1.0 - mu * (X + Y / 4. + Z / mean_metals_A)) /
                      (mu - (electron_mass_cgs / hydrogen_mass_cgs_));
+  // the approximation for the metals contribution to n_e fails at n_H >~ 1e3
   n_e = std::max(n_e, 1.0e-4 * nH); // set X_e floor
 
   // photoelectric heating term
