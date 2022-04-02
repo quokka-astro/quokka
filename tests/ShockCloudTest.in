@@ -13,7 +13,7 @@ amr.v               = 1     # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 256 256 256
+amr.n_cell          = 128 128 128
 amr.max_level       = 2     # number of levels = max_level + 1
 amr.blocking_factor = 32    # grid size must be divisible by this
 amr.max_grid_size   = 128
@@ -25,7 +25,7 @@ grackle_data_file = "../extern/grackle_data_files/input/CloudyData_UVB=HM2012.h5
 derived_vars = temperature
 
 cfl = 0.25
-max_timesteps = 100000
+max_timesteps = 1000
 plotfile_interval = 100
 checkpoint_interval = 1000
 
