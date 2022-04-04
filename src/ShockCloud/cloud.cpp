@@ -66,28 +66,24 @@ template <> struct RadSystem_Traits<ShockCloud> {
   static constexpr bool compute_v_over_c_terms = true;
 };
 
-// Cloud parameters are now set inside problem_main()
-
-AMREX_GPU_MANAGED static Real Tgas0 = NAN;
-AMREX_GPU_MANAGED static Real nH0 = NAN;
-AMREX_GPU_MANAGED static Real nH1 = NAN;
-AMREX_GPU_MANAGED static Real R_cloud = NAN;
-AMREX_GPU_MANAGED static Real M0 = NAN;
-
+// temperature floor
 AMREX_GPU_MANAGED static Real T_floor = NAN;
-AMREX_GPU_MANAGED static Real P0 = NAN;
+
+// Cloud parameters (set inside problem_main())
 AMREX_GPU_MANAGED static Real rho0 = NAN;
 AMREX_GPU_MANAGED static Real rho1 = NAN;
+AMREX_GPU_MANAGED static Real P0 = NAN;
+AMREX_GPU_MANAGED static Real R_cloud = NAN;
 
+// FUV radiation field parameters
 AMREX_GPU_MANAGED static Real Erad0 = NAN;
 AMREX_GPU_MANAGED static Real Erad_bdry = NAN;
 
 // cloud-tracking variables needed for Dirichlet boundary condition
-
-AMREX_GPU_MANAGED static Real v_wind = 0;
-AMREX_GPU_MANAGED static Real delta_vx = 0;
 AMREX_GPU_MANAGED static Real rho_wind = 0;
+AMREX_GPU_MANAGED static Real v_wind = 0;
 AMREX_GPU_MANAGED static Real P_wind = 0;
+AMREX_GPU_MANAGED static Real delta_vx = 0;
 
 template <>
 void RadhydroSimulation<ShockCloud>::setInitialConditionsAtLevel(int lev) {
@@ -95,52 +91,9 @@ void RadhydroSimulation<ShockCloud>::setInitialConditionsAtLevel(int lev) {
   amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
   amrex::GpuArray<Real, AMREX_SPACEDIM> prob_hi = geom[lev].ProbHiArray();
 
-  Real const Lx = (prob_hi[0] - prob_lo[0]);
-  Real const Ly = (prob_hi[1] - prob_lo[1]);
-  Real const Lz = (prob_hi[2] - prob_lo[2]);
-
   Real const x0 = prob_lo[0] + 0.2 * (prob_hi[0] - prob_lo[0]);
   Real const y0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
   Real const z0 = prob_lo[2] + 0.5 * (prob_hi[2] - prob_lo[2]);
-
-  // perturbation parameters
-  const int kmin = 0;
-  const int kmax = 16;
-  Real const A = 0.05 / kmax;
-
-  // generate random phases
-  amrex::Array<int, AMREX_SPACEDIM> tlo{AMREX_D_DECL(kmin, kmin, kmin)};
-  amrex::Array<int, AMREX_SPACEDIM> thi{AMREX_D_DECL(kmax, kmax, kmax)};
-  amrex::TableData<Real, AMREX_SPACEDIM> table_data(tlo, thi);
-#ifdef AMREX_USE_GPU
-  amrex::TableData<Real, AMREX_SPACEDIM> h_table_data(
-      tlo, thi, amrex::The_Pinned_Arena());
-  auto const &h_table = h_table_data.table();
-#else
-  auto const &h_table = table_data.table();
-#endif
-
-  // Initialize data on the host
-
-  // 64-bit Mersenne Twister (do not use 32-bit version for sampling doubles!)
-  std::mt19937_64 rng(1); // NOLINT
-  std::uniform_real_distribution<double> sample_phase(0., 2.0 * M_PI);
-
-  for (int j = tlo[0]; j <= thi[0]; ++j) {
-    for (int i = tlo[1]; i <= thi[1]; ++i) {
-      for (int k = tlo[2]; k <= thi[2]; ++k) {
-        h_table(i, j, k) = sample_phase(rng);
-      }
-    }
-  }
-
-#ifdef AMREX_USE_GPU
-  // Copy data to GPU memory
-  table_data.copy(h_table_data);
-  amrex::Gpu::streamSynchronize();
-#endif
-
-  auto const &phase = table_data.const_table(); // const makes it read only
 
   // cooling tables
   auto tables = cloudyTables.const_tables();
@@ -158,28 +111,15 @@ void RadhydroSimulation<ShockCloud>::setInitialConditionsAtLevel(int lev) {
 
       // compute perturbations
       Real delta_rho = 0;
-      for (int ki = kmin; ki < kmax; ++ki) {
-        for (int kj = kmin; kj < kmax; ++kj) {
-          for (int kk = kmin; kk < kmax; ++kk) {
-            if ((ki == 0) && (kj == 0) && (kk == 0)) {
-              continue;
-            }
-            Real const kx = 2.0 * M_PI * Real(ki) / Lx;
-            Real const ky = 2.0 * M_PI * Real(kj) / Lx;
-            Real const kz = 2.0 * M_PI * Real(kk) / Lx;
-            delta_rho +=
-                A * std::sin(x * kx + y * ky + z * kz + phase(ki, kj, kk));
-          }
-        }
-      }
-      AMREX_ALWAYS_ASSERT(delta_rho > -1.0);
 
+      // compute cloud properties
       Real rho = rho0 * (1.0 + delta_rho); // background density
       Real C = 0.0; // concentration is zero on the background
       if (R < R_cloud) {
         rho = rho1 * (1.0 + delta_rho); // cloud density
         C = 1.0; // concentration is unity inside the cloud
       }
+
       Real const xmom = 0;
       Real const ymom = 0;
       Real const zmom = 0;
@@ -670,25 +610,48 @@ void RadSystem<ShockCloud>::AddSourceTerms(array_t &consVar,
 }
 
 auto problem_main() -> int {
-  // Problem parameters
+  // Problem initialization
+  constexpr int nvars = RadhydroSimulation<ShockCloud>::nvarTotal_;
+  amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
+  for (int n = 0; n < nvars; ++n) {
+    boundaryConditions[n].setLo(0, amrex::BCType::ext_dir);  // Dirichlet
+    boundaryConditions[n].setHi(0, amrex::BCType::foextrap); // extrapolate
+
+    boundaryConditions[n].setLo(1, amrex::BCType::foextrap); // extrapolate
+    boundaryConditions[n].setHi(1, amrex::BCType::foextrap);
+
+    boundaryConditions[n].setLo(2, amrex::BCType::foextrap);
+    boundaryConditions[n].setHi(2, amrex::BCType::foextrap);
+  }
+  RadhydroSimulation<ShockCloud> sim(boundaryConditions);
+
+  // Read Cloudy tables
+  readCloudyData(sim.cloudyTables);
+
+  // Read problem parameters
   // set global variables (read-only after setting them here)
   amrex::ParmParse pp;
+  Real nH_bg = NAN;
+  Real nH_cloud = NAN;
+  Real P_over_k = NAN;
+  Real M0 = NAN;
 
-  // background gas temperature
-  pp.query("Tgas0", ::Tgas0); // K
+  // background gas H number density
+  pp.query("nH_bg", nH_bg); // cm^-3
 
-  // background gas number density
-  pp.query("nH0", ::nH0); // cm^-3
+  // cloud H number density
+  pp.query("nH_cloud", nH_cloud); // cm^-3
 
-  // cloud gas number density
-  pp.query("nH_cloud", ::nH1); // cm^-3
+  // background gas pressure
+  pp.query("P_over_k", P_over_k); // K cm^-3
 
   // cloud radius
   pp.query("R_cloud_pc", ::R_cloud); // pc
   ::R_cloud *= 3.086e18;             // convert to cm
 
   // (pre-shock) Mach number
-  pp.query("Mach", ::M0); // dimensionless
+  // (N.B. *not* the same as Mach_wind!)
+  pp.query("Mach_shock", M0); // dimensionless
 
   // gas temperature floor
   pp.query("T_floor", ::T_floor); // K
@@ -701,12 +664,13 @@ auto problem_main() -> int {
   pp.query("Erad_incident_Habing", ::Erad_bdry); // G_0
   ::Erad_bdry *= G_0;                            // convert to cgs
 
-  // compute background pressure (pre-shock)
-  ::P0 = ::nH0 * ::Tgas0 * boltzmann_constant_cgs_; // erg cm^-3
+  // compute background pressure
+  // (pressure equilibrium should hold *before* the shock enters the box)
+  ::P0 = P_over_k * boltzmann_constant_cgs_; // erg cm^-3
 
   // compute mass density of background, cloud
-  ::rho0 = ::nH0 * m_H; // g cm^-3
-  ::rho1 = ::nH1 * m_H; // g cm^-3
+  ::rho0 = nH_bg * m_H / cloudy_H_mass_fraction;    // g cm^-3
+  ::rho1 = nH_cloud * m_H / cloudy_H_mass_fraction; // g cm^-3
 
   AMREX_ALWAYS_ASSERT(!std::isnan(::rho0));
   AMREX_ALWAYS_ASSERT(!std::isnan(::rho1));
@@ -720,6 +684,7 @@ auto problem_main() -> int {
   const Real v_post = v_pre * (rho0 / rho_post);
   const Real P_post = P0 * (2. * gamma * M0 * M0 - (gamma - 1.)) / (gamma + 1.);
   const Real v_wind = v_pre - v_post;
+
   ::v_wind = v_wind; // set global variables
   ::rho_wind = rho_post;
   ::P_wind = P_post;
@@ -734,24 +699,9 @@ auto problem_main() -> int {
   // compute maximum simulation time
   const double max_time = 20.0 * t_cc;
 
-  // Problem initialization
-  constexpr int nvars = RadhydroSimulation<ShockCloud>::nvarTotal_;
-  amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
-  for (int n = 0; n < nvars; ++n) {
-    boundaryConditions[n].setLo(0, amrex::BCType::ext_dir);  // Dirichlet
-    boundaryConditions[n].setHi(0, amrex::BCType::foextrap); // extrapolate
-
-    boundaryConditions[n].setLo(1, amrex::BCType::foextrap); // extrapolate
-    boundaryConditions[n].setHi(1, amrex::BCType::foextrap);
-
-    boundaryConditions[n].setLo(2, amrex::BCType::foextrap);
-    boundaryConditions[n].setHi(2, amrex::BCType::foextrap);
-  }
-
-  RadhydroSimulation<ShockCloud> sim(boundaryConditions);
+  // set simulation parameters
   sim.is_hydro_enabled_ = true;
-  sim.is_radiation_enabled_ = true;
-
+  sim.is_radiation_enabled_ = false;
   sim.reconstructionOrder_ = 3;          // PPM for hydro
   sim.radiationReconstructionOrder_ = 2; // PLM for radiation
   sim.densityFloor_ = 1.0e-3 * rho0;     // density floor (to prevent vacuum)
@@ -765,9 +715,6 @@ auto problem_main() -> int {
   sim.simulationMetadata_["P_wind"] = P_wind;
   sim.simulationMetadata_["M0"] = M0;
   sim.simulationMetadata_["t_cc"] = t_cc;
-
-  // Read Cloudy tables
-  readCloudyData(sim.cloudyTables);
 
   // Set initial conditions
   sim.setInitialConditions();
