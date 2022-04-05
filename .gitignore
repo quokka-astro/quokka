@@ -1,5 +1,6 @@
 *.log
 compile_commands.json
+*.visit
 .vscode/
 codeql-db/
 build/
