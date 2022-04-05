@@ -2,7 +2,7 @@
 # Problem size and geometry
 # *****************************************************************
 geometry.prob_lo     =  0.0  0.0  0.0 
-geometry.prob_hi     =  4.9376e+20  4.9376e+20  4.9376e+20  # 160 x 160 x 160 pc
+geometry.prob_hi     =  1.5425e+20  1.5425e+20  1.5425e+20  # 50 x 50 x 50 pc
 geometry.is_periodic =  0    0    0
 
 # *****************************************************************
@@ -23,21 +23,21 @@ amr.max_grid_size   = 128
 # *****************************************************************
 do_reflux = 1
 do_subcycle = 1
-grackle_data_file = "/g/data/jh2/bw0729/quokka-code/extern/grackle_data_files/input/CloudyData_UVB=HM2012.h5"
+grackle_data_file = "../extern/grackle_data_files/input/CloudyData_UVB=HM2012.h5"
 derived_vars = temperature
 
 cfl = 0.25
-max_timesteps = 100000
+max_timesteps = 1000
 plotfile_interval = 100
 checkpoint_interval = 1000
-
 T_floor = 10.0  # K
-Tgas0 = 1.0e7   # K
-nH0 = 1.0e-4    # cm^-3
-Mach = 4        # Mach number (pre-shock)
 
-nH_cloud = 1.0e-1    # cm^-3
-R_cloud_pc = 5.0   # pc
+nH_bg    = 1.017043e-03 # cm^-3
+nH_cloud = 1.017043e+01 # cm^-3
+P_over_k = 3.400897e+03 # K cm^-3
+
+R_cloud_pc = 1.593069235869149 # pc
+Mach_shock = 7.481459266645044 # Mach number (pre-shock)
 
 Erad_initial_Habing = 1        # G_0
 Erad_incident_Habing = 1000    # G_0

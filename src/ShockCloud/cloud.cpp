@@ -123,7 +123,7 @@ void RadhydroSimulation<ShockCloud>::setInitialConditionsAtLevel(int lev) {
       Real const xmom = 0;
       Real const ymom = 0;
       Real const zmom = 0;
-      Real const Eint = (HydroSystem<ShockCloud>::gamma_ - 1.) * P0;
+      Real const Eint = P0 / (HydroSystem<ShockCloud>::gamma_ - 1.);
       Real const Egas = RadSystem<ShockCloud>::ComputeEgasFromEint(
           rho, xmom, ymom, zmom, Eint);
 
@@ -169,7 +169,7 @@ AMRSimulation<ShockCloud>::setCustomBoundaryConditions(
     Real const xmom = rho_wind * vx;
     Real const ymom = 0;
     Real const zmom = 0;
-    Real const Eint = (HydroSystem<ShockCloud>::gamma_ - 1.) * P_wind;
+    Real const Eint = P_wind / (HydroSystem<ShockCloud>::gamma_ - 1.);
     Real const Egas =
         RadSystem<ShockCloud>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
 
@@ -627,6 +627,7 @@ auto problem_main() -> int {
 
   // Read Cloudy tables
   readCloudyData(sim.cloudyTables);
+  amrex::Print() << std::endl;
 
   // Read problem parameters
   // set global variables (read-only after setting them here)
@@ -667,6 +668,7 @@ auto problem_main() -> int {
   // compute background pressure
   // (pressure equilibrium should hold *before* the shock enters the box)
   ::P0 = P_over_k * boltzmann_constant_cgs_; // erg cm^-3
+  amrex::Print() << fmt::format("Pressure = {} K cm^-3\n", P_over_k);
 
   // compute mass density of background, cloud
   ::rho0 = nH_bg * m_H / cloudy_H_mass_fraction;    // g cm^-3
@@ -676,14 +678,27 @@ auto problem_main() -> int {
   AMREX_ALWAYS_ASSERT(!std::isnan(::rho1));
   AMREX_ALWAYS_ASSERT(!std::isnan(::P0));
 
-  // compute shock jump conditions from rho0, P0, and M0
+  // check temperature of cloud, background
   constexpr Real gamma = HydroSystem<ShockCloud>::gamma_;
+  auto tables = sim.cloudyTables.const_tables();
+  const Real Eint_bg = ::P0 / (gamma - 1.);
+  const Real Eint_cl = ::P0 / (gamma - 1.);
+  const Real T_bg = ComputeTgasFromEgas(rho0, Eint_bg, gamma, tables);
+  const Real T_cl = ComputeTgasFromEgas(rho1, Eint_cl, gamma, tables);
+  amrex::Print() << fmt::format("T_bg = {} K\n", T_bg);
+  amrex::Print() << fmt::format("T_cl = {} K\n", T_cl);
+
+  // compute shock jump conditions from rho0, P0, and M0
   const Real v_pre = M0 * std::sqrt(gamma * P0 / rho0);
   const Real rho_post =
       rho0 * (gamma + 1.) * M0 * M0 / ((gamma - 1.) * M0 * M0 + 2.);
   const Real v_post = v_pre * (rho0 / rho_post);
-  const Real P_post = P0 * (2. * gamma * M0 * M0 - (gamma - 1.)) / (gamma + 1.);
   const Real v_wind = v_pre - v_post;
+
+  const Real P_post = P0 * (2. * gamma * M0 * M0 - (gamma - 1.)) / (gamma + 1.);
+  const Real Eint_post = P_post / (gamma - 1.);
+  const Real T_post = ComputeTgasFromEgas(rho_post, Eint_post, gamma, tables);
+  amrex::Print() << fmt::format("T_wind = {} K\n", T_post);
 
   ::v_wind = v_wind; // set global variables
   ::rho_wind = rho_post;
@@ -695,7 +710,8 @@ auto problem_main() -> int {
   const Real chi = rho1 / rho0;
   const Real t_cc = std::sqrt(chi) * R_cloud / v_wind;
   amrex::Print() << fmt::format("t_cc = {} kyr\n", t_cc / (1.0e3 * 3.15e7));
-
+  amrex::Print() << std::endl;
+  
   // compute maximum simulation time
   const double max_time = 20.0 * t_cc;
 
