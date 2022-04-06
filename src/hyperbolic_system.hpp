@@ -224,39 +224,6 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array
 
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
 
-	// TODO(benwibking): fuse loops into a single GPU kernel to avoid kernel launch overhead
-	// (WARNING: do not do this! this causes a race condition. need to investigate why.)
-	amrex::ParallelFor(
-		interfaceRange, nvars, // interface-centered kernel
-		[=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
-		   // permute array indices according to dir
-		   auto [i, j, k] =
-		       quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
-
-		   // PPM reconstruction following Colella & Woodward (1984), with
-		   // some modifications following Mignone (2014), as implemented in
-		   // Athena++.
-
-		   // (1.) Estimate the interface a_{i - 1/2}. Equivalent to step 1
-		   // in Athena++ [ppm_simple.cpp].
-
-		   // C&W Eq. (1.9) [parabola midpoint for the case of
-		   // equally-spaced zones]: a_{j+1/2} = (7/12)(a_j + a_{j+1}) -
-		   // (1/12)(a_{j+2} + a_{j-1}). Terms are grouped to preserve exact
-		   // symmetry in floating-point arithmetic, following Athena++.
-
-		   const double coef_1 = (7. / 12.);
-		   const double coef_2 = (-1. / 12.);
-		   const double interface =
-		       (coef_1 * q(i, j, k, n) + coef_2 * q(i + 1, j, k, n)) +
-		       (coef_1 * q(i - 1, j, k, n) + coef_2 * q(i - 2, j, k, n));
-
-		   // a_R,(i-1) in C&W
-		   leftState(i, j, k, n) = interface;
-
-		   // a_L,i in C&W
-		   rightState(i, j, k, n) = interface;
-		});
 	amrex::ParallelFor(
 		cellRange, nvars, // cell-centered kernel
 		[=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
@@ -279,8 +246,23 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array
 #endif
 
 		    // get interfaces
-		    const double a_minus = rightState(i, j, k, n);
-		    const double a_plus = leftState(i + 1, j, k, n);
+			// PPM reconstruction following Colella & Woodward (1984), with
+			// some modifications following Mignone (2014), as implemented in
+			// Athena++.
+
+			// (1.) Estimate the interface a_{i - 1/2}. Equivalent to step 1
+			// in Athena++ [ppm_simple.cpp].
+
+			// C&W Eq. (1.9) [parabola midpoint for the case of
+			// equally-spaced zones]: a_{j+1/2} = (7/12)(a_j + a_{j+1}) -
+			// (1/12)(a_{j+2} + a_{j-1}). Terms are grouped to preserve exact
+			// symmetry in floating-point arithmetic, following Athena++.
+			const double coef_1 = (7. / 12.);
+		    const double coef_2 = (-1. / 12.);
+		    const double a_minus = (coef_1 * q(i, j, k, n) + coef_2 * q(i + 1, j, k, n)) +
+		       					   (coef_1 * q(i - 1, j, k, n) + coef_2 * q(i - 2, j, k, n));
+		    const double a_plus =  (coef_1 * q(i + 1, j, k, n) + coef_2 * q(i + 2, j, k, n)) +
+		       					   (coef_1 * q(i, j, k, n) + coef_2 * q(i - 1, j, k, n));;
 
 		    // left side of zone i
 		    double new_a_minus = clamp(a_minus, bounds.first, bounds.second);
@@ -290,7 +272,7 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array
 
 		    // (3.) Monotonicity correction, using Eq. (1.10) in PPM paper. Equivalent
 		    // to step 4b in Athena++ [ppm_simple.cpp].
-			
+
 		    const double a = q(i, j, k, n);	// a_i in C&W
 		    const double dq_minus = (a - new_a_minus);
 		    const double dq_plus = (new_a_plus - a);
