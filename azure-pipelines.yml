@@ -6,8 +6,7 @@
 trigger:
 - development
 
-pool:
-  vmImage: ubuntu-latest
+pool: avatar
 
 steps:
 - script: echo Hello, world!
