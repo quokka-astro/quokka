@@ -259,10 +259,10 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array
 			// symmetry in floating-point arithmetic, following Athena++.
 			const double coef_1 = (7. / 12.);
 		    const double coef_2 = (-1. / 12.);
-		    const double a_minus = (coef_1 * q(i, j, k, n) + coef_2 * q(i + 1, j, k, n)) +
-		       					   (coef_1 * q(i - 1, j, k, n) + coef_2 * q(i - 2, j, k, n));
-		    const double a_plus =  (coef_1 * q(i + 1, j, k, n) + coef_2 * q(i + 2, j, k, n)) +
-		       					   (coef_1 * q(i, j, k, n) + coef_2 * q(i - 1, j, k, n));;
+		    const double a_minus = (coef_1 * q(i,     j, k, n) + coef_2 * q(i + 1, j, k, n)) +
+		       					   (coef_1 * q(i - 1, j, k, n) + coef_2 * q(i - 2, j, k, n)) ;
+		    const double a_plus  = (coef_1 * q(i + 1, j, k, n) + coef_2 * q(i + 2, j, k, n)) +
+		       					   (coef_1 * q(i    , j, k, n) + coef_2 * q(i - 1, j, k, n)) ;
 
 		    // left side of zone i
 		    double new_a_minus = clamp(a_minus, bounds.first, bounds.second);
