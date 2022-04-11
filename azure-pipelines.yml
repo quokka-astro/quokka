@@ -23,7 +23,7 @@ steps:
 - task: CMake@1
   displayName: 'Run CTest'
   inputs:
-    cmakeArgs: '-E chdir . ctest -E "MatterEnergyExchange*"'
+    cmakeArgs: '-E chdir . ctest -E "MatterEnergyExchange*" -T Test'
 
 - task: PublishTestResults@2
   inputs:
