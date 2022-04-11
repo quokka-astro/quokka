@@ -131,6 +131,7 @@ public:
   }
 
   void initialize(amrex::Vector<amrex::BCRec> &boundaryConditions);
+  void PerformanceHints();
   void readParameters();
   void setInitialConditions();
   void evolve();
@@ -317,6 +318,60 @@ void AMRSimulation<problem_t>::initialize(
   }
 }
 
+template <typename problem_t>
+void AMRSimulation<problem_t>::PerformanceHints() {
+  // Check requested MPI ranks and available boxes
+  for (int ilev = 0; ilev <= finestLevel(); ++ilev) {
+    const amrex::Long nboxes = boxArray(ilev).size();
+    if (amrex::ParallelDescriptor::NProcs() > nboxes) {
+      amrex::Print()
+          << "\n[Warning] [Performance] Too many resources / too little work!\n"
+          << "  It looks like you requested more compute resources than "
+          << "  the number of boxes of cells available on level " << ilev
+          << " (" << nboxes << "). "
+          << "You started with (" << amrex::ParallelDescriptor::NProcs()
+          << ") MPI ranks, so (" << amrex::ParallelDescriptor::NProcs() - nboxes
+          << ") rank(s) will have no work on this level.\n"
+#ifdef AMREX_USE_GPU
+          << "  On GPUs, consider using 1-8 boxes per GPU per level that "
+             "together fill each GPU's memory sufficiently.\n"
+#endif
+          << "\n";
+    }
+  }
+
+  // check that blocking_factor and max_grid_size are set to reasonable values
+#ifdef AMREX_USE_GPU
+  const int recommended_blocking_factor = 32;
+  const int recommended_max_grid_size = 128;
+#else
+  const int recommended_blocking_factor = 16;
+  const int recommended_max_grid_size = 64;
+#endif
+  int min_blocking_factor = INT_MAX;
+  int min_max_grid_size = INT_MAX;
+  for (int ilev = 0; ilev <= finestLevel(); ++ilev) {
+    min_blocking_factor =
+        std::min(min_blocking_factor, blocking_factor[ilev].min());
+    min_max_grid_size = std::min(min_max_grid_size, max_grid_size[ilev].min());
+  }
+  if (min_blocking_factor < recommended_blocking_factor) {
+    amrex::Print()
+        << "\n[Warning] [Performance] The grid blocking factor ("
+        << min_blocking_factor
+        << ") is too small for reasonable performance. It should be 32 (or "
+           "greater) when running on GPUs, and 16 (or greater) when running on "
+           "CPUs.\n";
+  }
+  if (min_max_grid_size < recommended_max_grid_size) {
+    amrex::Print() << "\n[Warning] [Performance] The maximum grid size ("
+                   << min_max_grid_size
+                   << ") is too small for reasonable performance. It should be "
+                      "128 (or greater) when running on GPUs, and 64 (or "
+                      "greater) when running on CPUs.\n";
+  }
+}
+
 template <typename problem_t> void AMRSimulation<problem_t>::readParameters() {
   BL_PROFILE("AMRSimulation::readParameters()");
 
@@ -379,6 +434,9 @@ void AMRSimulation<problem_t>::setInitialConditions() {
   if (plotfileInterval_ > 0) {
     WritePlotFile();
   }
+
+  // ensure that there are enough boxes per MPI rank
+  PerformanceHints();
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep() {
@@ -426,101 +484,103 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep() {
   }
 }
 
-template <typename problem_t> void AMRSimulation<problem_t>::evolve()
-{
-	BL_PROFILE("AMRSimulation::evolve()");
+template <typename problem_t> void AMRSimulation<problem_t>::evolve() {
+  BL_PROFILE("AMRSimulation::evolve()");
 
-	AMREX_ALWAYS_ASSERT(areInitialConditionsDefined_);
+  AMREX_ALWAYS_ASSERT(areInitialConditionsDefined_);
 
-	amrex::Real cur_time = tNew_[0];
-	int last_plot_file_step = 0;
+  amrex::Real cur_time = tNew_[0];
+  int last_plot_file_step = 0;
 
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = geom[0].CellSizeArray();
-	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
-	amrex::Vector<amrex::Real> init_sum_cons(ncomp_);
-	for (int n = 0; n < ncomp_; ++n) {
-		const int lev = 0;
-		init_sum_cons[n] = state_new_[lev].sum(n) * vol;
-	}
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 =
+      geom[0].CellSizeArray();
+  amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
+  amrex::Vector<amrex::Real> init_sum_cons(ncomp_);
+  for (int n = 0; n < ncomp_; ++n) {
+    const int lev = 0;
+    init_sum_cons[n] = state_new_[lev].sum(n) * vol;
+  }
 
-	amrex::Real const start_time = amrex::ParallelDescriptor::second();
+  amrex::Real const start_time = amrex::ParallelDescriptor::second();
 
-	// Main time loop
-	for (int step = istep[0]; step < maxTimesteps_ && cur_time < stopTime_; ++step) {
-		if (suppress_output == 0) {
-			amrex::Print() << "\nCoarse STEP " << step + 1
-						   << " at t = " << cur_time << " ("
-						   << (cur_time / stopTime_) * 100. << "%) starts ..." << std::endl;
-		}
+  // Main time loop
+  for (int step = istep[0]; step < maxTimesteps_ && cur_time < stopTime_;
+       ++step) {
+    if (suppress_output == 0) {
+      amrex::Print() << "\nCoarse STEP " << step + 1 << " at t = " << cur_time
+                     << " (" << (cur_time / stopTime_) * 100. << "%) starts ..."
+                     << std::endl;
+    }
 
-		amrex::ParallelDescriptor::Barrier(); // synchronize all MPI ranks
-		computeTimestep();
+    amrex::ParallelDescriptor::Barrier(); // synchronize all MPI ranks
+    computeTimestep();
 
-		int lev = 0;
-		int iteration = 1;
-		timeStepWithSubcycling(lev, cur_time, iteration);
+    int lev = 0;
+    int iteration = 1;
+    timeStepWithSubcycling(lev, cur_time, iteration);
 
-		cur_time += dt_[0];
-		++cycleCount_;
-		computeAfterTimestep(dt_[0]);
+    cur_time += dt_[0];
+    ++cycleCount_;
+    computeAfterTimestep(dt_[0]);
 
-		// sync up time (to avoid roundoff error)
-		for (lev = 0; lev <= finest_level; ++lev) {
-			tNew_[lev] = cur_time;
-		}
+    // sync up time (to avoid roundoff error)
+    for (lev = 0; lev <= finest_level; ++lev) {
+      tNew_[lev] = cur_time;
+    }
 
-		if (plotfileInterval_ > 0 && (step + 1) % plotfileInterval_ == 0) {
-			last_plot_file_step = step + 1;
-			WritePlotFile();
-		}
+    if (plotfileInterval_ > 0 && (step + 1) % plotfileInterval_ == 0) {
+      last_plot_file_step = step + 1;
+      WritePlotFile();
+    }
 
-		if (checkpointInterval_ > 0 && (step + 1) % checkpointInterval_ == 0) {
-			WriteCheckpointFile();
-		}
+    if (checkpointInterval_ > 0 && (step + 1) % checkpointInterval_ == 0) {
+      WriteCheckpointFile();
+    }
 
-		if (cur_time >= stopTime_ - 1.e-6 * dt_[0]) {
-			break;
-		}
-	}
+    if (cur_time >= stopTime_ - 1.e-6 * dt_[0]) {
+      break;
+    }
+  }
 
-	amrex::Real elapsed_sec = amrex::ParallelDescriptor::second() - start_time;
+  amrex::Real elapsed_sec = amrex::ParallelDescriptor::second() - start_time;
 
-	// compute reference solution (if it's a test problem)
-	computeAfterEvolve(init_sum_cons);
+  // compute reference solution (if it's a test problem)
+  computeAfterEvolve(init_sum_cons);
 
-	// compute conservation error
-	for (int n = 0; n < ncomp_; ++n) {
-		amrex::Real const final_sum = state_new_[0].sum(n) * vol;
-		amrex::Real const abs_err = (final_sum - init_sum_cons[n]);
-		amrex::Print() << "Initial " << componentNames_[n] << " = "
-					<< init_sum_cons[n] << std::endl;
-		amrex::Print() << "\tabsolute conservation error = " << abs_err
-					<< std::endl;
-		if (init_sum_cons[n] != 0.0) {
-		  amrex::Real const rel_err = abs_err / init_sum_cons[n];
-		  amrex::Print() << "\trelative conservation error = " << rel_err
-						         << std::endl;
-		}
-		amrex::Print() << std::endl;
-	}
+  // compute conservation error
+  for (int n = 0; n < ncomp_; ++n) {
+    amrex::Real const final_sum = state_new_[0].sum(n) * vol;
+    amrex::Real const abs_err = (final_sum - init_sum_cons[n]);
+    amrex::Print() << "Initial " << componentNames_[n] << " = "
+                   << init_sum_cons[n] << std::endl;
+    amrex::Print() << "\tabsolute conservation error = " << abs_err
+                   << std::endl;
+    if (init_sum_cons[n] != 0.0) {
+      amrex::Real const rel_err = abs_err / init_sum_cons[n];
+      amrex::Print() << "\trelative conservation error = " << rel_err
+                     << std::endl;
+    }
+    amrex::Print() << std::endl;
+  }
 
-	// compute zone-cycles/sec
-	const int IOProc = amrex::ParallelDescriptor::IOProcessorNumber();
-	amrex::ParallelDescriptor::ReduceRealMax(elapsed_sec, IOProc);
-	const double microseconds_per_update = 1.0e6 * elapsed_sec / cellUpdates_;
-	const double megaupdates_per_second = 1.0 / microseconds_per_update;
-	amrex::Print() << "Performance figure-of-merit: " << microseconds_per_update
-		       << " μs/zone-update [" << megaupdates_per_second << " Mupdates/s]\n";
-	for(int lev = 0; lev <= max_level; ++lev) {
-		amrex::Print() << "Zone-updates on level " << lev << ": "
-					   << cellUpdatesEachLevel_[lev] << "\n";
-	}
-	amrex::Print() << std::endl;
+  // compute zone-cycles/sec
+  const int IOProc = amrex::ParallelDescriptor::IOProcessorNumber();
+  amrex::ParallelDescriptor::ReduceRealMax(elapsed_sec, IOProc);
+  const double microseconds_per_update = 1.0e6 * elapsed_sec / cellUpdates_;
+  const double megaupdates_per_second = 1.0 / microseconds_per_update;
+  amrex::Print() << "Performance figure-of-merit: " << microseconds_per_update
+                 << " μs/zone-update [" << megaupdates_per_second
+                 << " Mupdates/s]\n";
+  for (int lev = 0; lev <= max_level; ++lev) {
+    amrex::Print() << "Zone-updates on level " << lev << ": "
+                   << cellUpdatesEachLevel_[lev] << "\n";
+  }
+  amrex::Print() << std::endl;
 
-	// write final plotfile
-	if (plotfileInterval_ > 0 && istep[0] > last_plot_file_step) {
-		WritePlotFile();
-	}
+  // write final plotfile
+  if (plotfileInterval_ > 0 && istep[0] > last_plot_file_step) {
+    WritePlotFile();
+  }
 }
 
 // N.B.: This function actually works for subcycled or not subcycled, as long as
