@@ -38,7 +38,8 @@ if (CMAKE_BUILD_TYPE STREQUAL "Debug")
 endif()
 
 # this is necessary to prevent the host compiler from complaining about nv_pragmas
-add_compile_options(-Wno-unknown-pragmas)
+# only works for gcc
+#add_compile_options(-Wno-unknown-pragmas)
 
 add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:--ptxas-options=-v>)
 

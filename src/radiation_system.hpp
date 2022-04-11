@@ -852,6 +852,13 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
     const double x3GasMom0 = consPrev(i, j, k, x3GasMomentum_index);
     const double Egastot0 = consPrev(i, j, k, gasEnergy_index);
 
+    // load radiation energy
+    const double Erad0 = consPrev(i, j, k, radEnergy_index);
+
+    // load radiation energy source term
+    // plus advection source term (for well-balanced/SDC integrators)
+    const double Src = dt * ((chat * radEnergySource(i, j, k)) + advectionFluxes(i, j, k));
+
     double Egas0 = NAN;
     double Ekin0 = NAN;
     double Egas_guess = NAN;
@@ -862,14 +869,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
       Egas0 =
           ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0);
       Ekin0 = Egastot0 - Egas0;
-
-      // load radiation energy
-      const double Erad0 = consPrev(i, j, k, radEnergy_index);
-
-      // load radiation energy source term
-      // plus advection source term (for well-balanced/SDC integrators)
-      const double Src =
-          dt * ((chat * radEnergySource(i, j, k)) + advectionFluxes(i, j, k));
 
       AMREX_ASSERT(Src >= 0.0);
       AMREX_ASSERT(Egas0 > 0.0);
