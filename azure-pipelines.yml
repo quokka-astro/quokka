@@ -11,7 +11,24 @@ pool: avatar
 steps:
 
 - task: CMake@1
+  displayName: 'Configure CMake'
   inputs:
-    cmakeArgs: '.. -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++'
-    runInsideShell: true
+    cmakeArgs: '.. -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DAMReX_SPACEDIM=3 -DAMReX_GPU_BACKEND=CUDA'
 
+- task: CMake@1
+  displayName: 'Build Quokka'
+  inputs:
+    cmakeArgs: '--build .'
+
+- task: CMake@1
+  displayName: 'Run CTest'
+  inputs:
+    cmakeArgs: '-E chdir . ctest -j1'
+
+- task: PublishTestResults@2
+  inputs:
+    testResultsFormat: cTest
+    testResultsFiles: build/Testing/*/Test.xml
+    testRunTitle: $(Agent.JobName)
+  condition: succeededOrFailed()
+  displayName: Publish test results
