@@ -13,7 +13,7 @@ steps:
 - task: CMake@1
   displayName: 'Configure CMake'
   inputs:
-    cmakeArgs: '.. -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DAMReX_SPACEDIM=3 -DAMReX_GPU_BACKEND=CUDA'
+    cmakeArgs: '.. -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DAMReX_SPACEDIM=3 -DAMReX_GPU_BACKEND=CUDA -G Ninja'
 
 - task: CMake@1
   displayName: 'Build Quokka'
