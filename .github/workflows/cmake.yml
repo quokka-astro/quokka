@@ -33,7 +33,7 @@ jobs:
       run: pip3 install fastcov --user
 
     - name: Install Sonarscan CLI
-      run: ( curl https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-4.5.0.2216-linux.zip > sonar-scanner.zip ) && unzip sonar-scanner.zip -d ${{runner.workspace}}
+      run: ( curl https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-4.7.0.2747-linux.zip > sonar-scanner.zip ) && unzip sonar-scanner.zip -d ${{runner.workspace}}
       
     - name: Install Sonarscan Build Wrapper
       run: ( curl https://sonarcloud.io/static/cpp/build-wrapper-linux-x86.zip > build-wrapper.zip ) && unzip build-wrapper.zip -d ${{runner.workspace}}
@@ -80,4 +80,4 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-      run: ${{runner.workspace}}/sonar-scanner-4.5.0.2216-linux/bin/sonar-scanner -Dsonar.cfamily.build-wrapper-output=${{runner.workspace}}/build/bw-output
+      run: ${{runner.workspace}}/sonar-scanner-4.7.0.2747-linux/bin/sonar-scanner -Dsonar.cfamily.build-wrapper-output=${{runner.workspace}}/build/bw-output
