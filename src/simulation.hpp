@@ -93,6 +93,7 @@ public:
   }
 
   void initialize(amrex::Vector<amrex::BCRec> &boundaryConditions);
+  void PerformanceHints();
   void readParameters();
   void setInitialConditions();
   void evolve();
@@ -279,6 +280,60 @@ void AMRSimulation<problem_t>::initialize(
   }
 }
 
+template <typename problem_t>
+void AMRSimulation<problem_t>::PerformanceHints() {
+  // Check requested MPI ranks and available boxes
+  for (int ilev = 0; ilev <= finestLevel(); ++ilev) {
+    const amrex::Long nboxes = boxArray(ilev).size();
+    if (amrex::ParallelDescriptor::NProcs() > nboxes) {
+      amrex::Print()
+          << "\n[Warning] [Performance] Too many resources / too little work!\n"
+          << "  It looks like you requested more compute resources than "
+          << "  the number of boxes of cells available on level " << ilev
+          << " (" << nboxes << "). "
+          << "You started with (" << amrex::ParallelDescriptor::NProcs()
+          << ") MPI ranks, so (" << amrex::ParallelDescriptor::NProcs() - nboxes
+          << ") rank(s) will have no work on this level.\n"
+#ifdef AMREX_USE_GPU
+          << "  On GPUs, consider using 1-8 boxes per GPU per level that "
+             "together fill each GPU's memory sufficiently.\n"
+#endif
+          << "\n";
+    }
+  }
+
+  // check that blocking_factor and max_grid_size are set to reasonable values
+#ifdef AMREX_USE_GPU
+  const int recommended_blocking_factor = 32;
+  const int recommended_max_grid_size = 128;
+#else
+  const int recommended_blocking_factor = 16;
+  const int recommended_max_grid_size = 64;
+#endif
+  int min_blocking_factor = INT_MAX;
+  int min_max_grid_size = INT_MAX;
+  for (int ilev = 0; ilev <= finestLevel(); ++ilev) {
+    min_blocking_factor =
+        std::min(min_blocking_factor, blocking_factor[ilev].min());
+    min_max_grid_size = std::min(min_max_grid_size, max_grid_size[ilev].min());
+  }
+  if (min_blocking_factor < recommended_blocking_factor) {
+    amrex::Print()
+        << "\n[Warning] [Performance] The grid blocking factor ("
+        << min_blocking_factor
+        << ") is too small for reasonable performance. It should be 32 (or "
+           "greater) when running on GPUs, and 16 (or greater) when running on "
+           "CPUs.\n";
+  }
+  if (min_max_grid_size < recommended_max_grid_size) {
+    amrex::Print() << "\n[Warning] [Performance] The maximum grid size ("
+                   << min_max_grid_size
+                   << ") is too small for reasonable performance. It should be "
+                      "128 (or greater) when running on GPUs, and 64 (or "
+                      "greater) when running on CPUs.\n";
+  }
+}
+
 template <typename problem_t> void AMRSimulation<problem_t>::readParameters() {
   BL_PROFILE("AMRSimulation::readParameters()");
 
@@ -332,6 +387,9 @@ void AMRSimulation<problem_t>::setInitialConditions() {
   if (plotfileInterval_ > 0) {
     WritePlotFile();
   }
+
+  // ensure that there are enough boxes per MPI rank
+  PerformanceHints();
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep() {
