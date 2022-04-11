@@ -283,7 +283,7 @@ void HydroSystem<problem_t>::EnforcePressureFloor(
           state(i, j, k, density_index) = rho_new;
         }
 
-        if constexpr (!is_eos_isothermal()) {
+        if (!is_eos_isothermal()) {
           // recompute gas energy (to prevent P < 0)
           amrex::Real const Eint_star = Etot - 0.5 * rho_new * vsq;
           amrex::Real const P_star = Eint_star * (gamma_ - 1.);
