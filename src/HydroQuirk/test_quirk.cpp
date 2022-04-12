@@ -8,11 +8,19 @@
 ///
 
 #include "AMReX.H"
+#include "AMReX_Arena.H"
 #include "AMReX_Array.H"
 #include "AMReX_BCRec.H"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
+#include "AMReX_Box.H"
 #include "AMReX_Config.H"
+#include "AMReX_FArrayBox.H"
+#include "AMReX_FabArrayBase.H"
+#include "AMReX_FabArrayUtility.H"
+#include "AMReX_GpuAsyncArray.H"
+#include "AMReX_GpuContainers.H"
+#include "AMReX_GpuQualifiers.H"
 #include "AMReX_IntVect.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParallelDescriptor.H"
@@ -129,29 +137,52 @@ template <> void RadhydroSimulation<QuirkProblem>::computeAfterTimestep() {
   if (amrex::ParallelDescriptor::IOProcessor()) {
     // it should be sufficient examine a single box on level 0
     // (no AMR should be used for this problem, and the odd-even decoupling will
-    // manifest in every box, if it happens)
+    // manifest in every row along the shock, if it happens)
+
     amrex::MultiFab &mf_state = state_new_[0];
-    const int box_no = 0;
-    auto const &state = mf_state.array(box_no);
-    amrex::GpuArray<int, 3> box_lo = mf_state.box(box_no).loVect3d();
-    const int jlo = box_lo[2];
-    const int klo = box_lo[3];
+    int box_no = -1;
+    int ilo = ishock;
+    int jlo = 0;
+    int klo = 0;
+    for (amrex::MFIter mfi(mf_state); mfi.isValid(); ++mfi) {
+      const amrex::Box &bx = mfi.validbox();
+      amrex::GpuArray<int, 3> box_lo = bx.loVect3d();
+      jlo = box_lo[2];
+      klo = box_lo[3];
+      amrex::IntVect cell{ilo, jlo, klo};
+      if (bx.contains(cell)) {
+        box_no = mfi.index();
+        break;
+      }
+    }
 
-    Real dodd =
-        state(ishock, jlo + 1, klo, HydroSystem<QuirkProblem>::density_index);
-    Real podd =
-        HydroSystem<QuirkProblem>::ComputePressure(state, ishock, jlo + 1, klo);
-    Real deven =
-        state(ishock, jlo, klo, HydroSystem<QuirkProblem>::density_index);
-    Real peven =
-        HydroSystem<QuirkProblem>::ComputePressure(state, ishock, jlo, klo);
+    AMREX_ALWAYS_ASSERT(box_no != -1);
+    auto const &state = mf_state.const_array(box_no);
+    amrex::Box bx = amrex::makeSingleCellBox(ilo, jlo, klo);
+    Real host_s = NAN;
+    amrex::AsyncArray async_s(&host_s, 1);
+    Real *s = async_s.data();
 
-    // the 'entropy function' s == P / rho^gamma
-    const Real gamma = HydroSystem<QuirkProblem>::gamma_;
-    Real sodd = podd / std::pow(dodd, gamma);
-    Real seven = peven / std::pow(deven, gamma);
-    Real deltas = std::abs(sodd - seven);
-    getDeltaEntropyVector().push_back(deltas);
+    amrex::launch(bx, [=] AMREX_GPU_DEVICE(amrex::Box const &tbx) {
+      amrex::GpuArray<int, 3> const idx = tbx.loVect3d();
+      int i = idx[0];
+      int j = idx[1];
+      int k = idx[2];
+      Real dodd = state(i, j + 1, k, HydroSystem<QuirkProblem>::density_index);
+      Real podd =
+          HydroSystem<QuirkProblem>::ComputePressure(state, i, j + 1, k);
+      Real deven = state(i, j, k, HydroSystem<QuirkProblem>::density_index);
+      Real peven = HydroSystem<QuirkProblem>::ComputePressure(state, i, j, k);
+
+      // the 'entropy function' s == P / rho^gamma
+      const Real gamma = HydroSystem<QuirkProblem>::gamma_;
+      Real sodd = podd / std::pow(dodd, gamma);
+      Real seven = peven / std::pow(deven, gamma);
+      s[0] = std::abs(sodd - seven);
+    });
+
+    async_s.copyToHost(&host_s, 1);
+    getDeltaEntropyVector().push_back(host_s);
   }
 }
 
@@ -218,6 +249,12 @@ AMRSimulation<QuirkProblem>::setCustomBoundaryConditions(
     consVar(i, j, k, RadSystem<QuirkProblem>::x2GasMomentum_index) = 0.;
     consVar(i, j, k, RadSystem<QuirkProblem>::x3GasMomentum_index) = 0.;
   }
+
+  // initialize radiation variables to zero
+  consVar(i, j, k, RadSystem<QuirkProblem>::radEnergy_index) = 0;
+  consVar(i, j, k, RadSystem<QuirkProblem>::x1RadFlux_index) = 0;
+  consVar(i, j, k, RadSystem<QuirkProblem>::x2RadFlux_index) = 0;
+  consVar(i, j, k, RadSystem<QuirkProblem>::x3RadFlux_index) = 0;
 }
 
 auto problem_main() -> int {
