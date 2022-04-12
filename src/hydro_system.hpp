@@ -107,17 +107,11 @@ public:
 
   template <FluxDir DIR>
   static void
-  ComputeVelocityDifferences(amrex::Array4<const amrex::Real> const &primVar_in,
-                             array_t &dvn_in, array_t &dvt_in,
-                             amrex::Box const &indexRange);
-
-  template <FluxDir DIR>
-  static void
   ComputeFluxes(array_t &x1Flux_in,
                 amrex::Array4<const amrex::Real> const &x1LeftState_in,
                 amrex::Array4<const amrex::Real> const &x1RightState_in,
                 amrex::Array4<const amrex::Real> const &primVar_in,
-                array_t &dvn_in, array_t &dvt_in, amrex::Box const &indexRange);
+                amrex::Box const &indexRange);
 
   template <FluxDir DIR>
   static void
@@ -668,129 +662,16 @@ void HydroSystem<problem_t>::AddInternalEnergyPressureTerm(
 
 template <typename problem_t>
 template <FluxDir DIR>
-void HydroSystem<problem_t>::ComputeVelocityDifferences(
-    amrex::Array4<const amrex::Real> const &primVar_in, array_t &dvn_in,
-    array_t &dvt_in, amrex::Box const &indexRange) {
-  // compute velocity differences from cell-average data for normal
-  //   and transverse directions (w/r/t DIR)
-  // (required by Minoshima+ 2021 carbuncle fix in Riemann solver)
-
-  // cell-centered kernel
-#if AMREX_SPACEDIM == 3
-  quokka::Array4View<const amrex::Real, DIR> q(primVar_in);
-  quokka::Array4View<amrex::Real, DIR> dvn(dvn_in);
-  quokka::Array4View<amrex::Real, DIR> dvt(dvt_in);
-
-  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i_in, int j_in,
-                                                      int k_in) {
-    auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
-    int velN_index = x1Velocity_index;
-    int velV_index = x2Velocity_index;
-    int velW_index = x3Velocity_index;
-
-    if constexpr (DIR == FluxDir::X1) {
-      velN_index = x1Velocity_index;
-      velV_index = x2Velocity_index;
-      velW_index = x3Velocity_index;
-    } else if constexpr (DIR == FluxDir::X2) {
-      velN_index = x2Velocity_index;
-      velV_index = x3Velocity_index;
-      velW_index = x1Velocity_index;
-    } else if constexpr (DIR == FluxDir::X3) {
-      velN_index = x3Velocity_index;
-      velV_index = x1Velocity_index;
-      velW_index = x2Velocity_index;
-    }
-
-    // normal velocity difference
-    dvn(i, j, k) = q(i, j, k, velN_index) - q(i - 1, j, k, velN_index);
-
-    // transverse velocity difference
-    amrex::Real dvl =
-        std::min(q(i - 1, j + 1, k, velV_index) - q(i - 1, j, k, velV_index),
-                 q(i - 1, j, k, velV_index) - q(i - 1, j - 1, k, velV_index));
-    amrex::Real dvr =
-        std::min(q(i, j + 1, k, velV_index) - q(i, j, k, velV_index),
-                 q(i, j, k, velV_index) - q(i, j - 1, k, velV_index));
-
-    amrex::Real dwl =
-        std::min(q(i - 1, j, k + 1, velW_index) - q(i - 1, j, k, velW_index),
-                 q(i - 1, j, k, velW_index) - q(i - 1, j, k - 1, velW_index));
-    amrex::Real dwr =
-        std::min(q(i, j, k + 1, velW_index) - q(i, j, k, velW_index),
-                 q(i, j, k, velW_index) - q(i, j, k - 1, velW_index));
-
-    dvt(i, j, k) = std::min(std::min(dvl, dvr), std::min(dwl, dwr));
-  });
-#elif AMREX_SPACEDIM == 2
-  const auto &q = primVar_in;
-  const auto &dvn = dvn_in;
-  const auto &dvt = dvt_in;
-
-  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-    // normal velocity difference
-    if (DIR == FluxDir::X1) {
-      dvn(i, j, k) =
-          q(i, j, k, x1Velocity_index) - q(i - 1, j, k, x1Velocity_index);
-    } else if (DIR == FluxDir::X2) {
-      dvn(i, j, k) =
-          q(i, j, k, x2Velocity_index) - q(i, j - 1, k, x2Velocity_index);
-    }
-
-    // transverse velocity difference
-    amrex::Real dvl = NAN;
-    amrex::Real dvr = NAN;
-
-    if (DIR == FluxDir::X1) {
-      dvl = std::min(q(i - 1, j + 1, k, x2Velocity_index) -
-                         q(i - 1, j, k, x2Velocity_index),
-                     q(i - 1, j, k, x2Velocity_index) -
-                         q(i - 1, j - 1, k, x2Velocity_index));
-      dvr = std::min(
-          q(i, j + 1, k, x2Velocity_index) - q(i, j, k, x2Velocity_index),
-          q(i, j, k, x2Velocity_index) - q(i, j - 1, k, x2Velocity_index));
-    } else if (DIR == FluxDir::X2) {
-      dvl = std::min(q(i + 1, j - 1, k, x1Velocity_index) -
-                         q(i, j - 1, k, x1Velocity_index),
-                     q(i, j - 1, k, x1Velocity_index) -
-                         q(i - 1, j - 1, k, x1Velocity_index));
-      dvr = std::min(
-          q(i + 1, j, k, x1Velocity_index) - q(i, j, k, x1Velocity_index),
-          q(i, j, k, x1Velocity_index) - q(i - 1, j, k, x1Velocity_index));
-    }
-
-    dvt(i, j, k) = std::min(dvl, dvr);
-  });
-#else // AMREX_SPACEDIM == 1
-  const auto &q = primVar_in;
-  const auto &dvn = dvn_in;
-  const auto &dvt = dvt_in;
-
-  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-    // normal velocity difference
-    dvn(i, j, k) =
-        q(i, j, k, x1Velocity_index) - q(i - 1, j, k, x1Velocity_index);
-
-    // transverse velocity difference
-    dvt(i, j, k) = 0.;
-  });
-#endif
-}
-
-template <typename problem_t>
-template <FluxDir DIR>
 void HydroSystem<problem_t>::ComputeFluxes(
     array_t &x1Flux_in, amrex::Array4<const amrex::Real> const &x1LeftState_in,
     amrex::Array4<const amrex::Real> const &x1RightState_in,
-    amrex::Array4<const amrex::Real> const &primVar_in, array_t &dvn_in,
-    array_t &dvt_in, amrex::Box const &indexRange) {
-  ComputeVelocityDifferences<DIR>(primVar_in, dvn_in, dvt_in, indexRange);
+    amrex::Array4<const amrex::Real> const &primVar_in,
+    amrex::Box const &indexRange) {
 
-  quokka::Array4View<const amrex::Real, DIR> dvn(dvn_in);
-  quokka::Array4View<const amrex::Real, DIR> dvt(dvt_in);
   quokka::Array4View<const amrex::Real, DIR> x1LeftState(x1LeftState_in);
   quokka::Array4View<const amrex::Real, DIR> x1RightState(x1RightState_in);
   quokka::Array4View<amrex::Real, DIR> x1Flux(x1Flux_in);
+  quokka::Array4View<const amrex::Real, DIR> q(primVar_in);
 
   // By convention, the interfaces are defined on the left edge of each
   // zone, i.e. xinterface_(i) is the solution to the Riemann problem at
@@ -874,16 +755,28 @@ void HydroSystem<problem_t>::ComputeFluxes(
 
     double u_L = NAN;
     double u_R = NAN;
+    int velN_index = x1Velocity_index;
+    int velV_index = x2Velocity_index;
+    int velW_index = x3Velocity_index;
 
     if constexpr (DIR == FluxDir::X1) {
       u_L = vx_L;
       u_R = vx_R;
+      velN_index = x1Velocity_index;
+      velV_index = x2Velocity_index;
+      velW_index = x3Velocity_index;
     } else if constexpr (DIR == FluxDir::X2) {
       u_L = vy_L;
       u_R = vy_R;
+      velN_index = x2Velocity_index;
+      velV_index = x3Velocity_index;
+      velW_index = x1Velocity_index;
     } else if constexpr (DIR == FluxDir::X3) {
       u_L = vz_L;
       u_R = vz_R;
+      velN_index = x3Velocity_index;
+      velV_index = x1Velocity_index;
+      velW_index = x2Velocity_index;
     }
 
     // compute PVRS states (Toro 10.5.2)
