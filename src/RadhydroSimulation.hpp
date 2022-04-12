@@ -201,7 +201,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	template <FluxDir DIR>
 	void hydroFOFluxFunction(amrex::Array4<const amrex::Real> const &primVar,
 			  amrex::FArrayBox &x1Flux, const amrex::Box &indexRange, int nvars);
-	
+
 	void replaceFluxes(std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxes,
 			  std::array<amrex::FArrayBox, AMREX_SPACEDIM> &FOfluxes,
 			  amrex::IArrayBox &redoFlag, amrex::Box const &validBox, int ncomp);
@@ -260,7 +260,7 @@ void RadhydroSimulation<problem_t>::computeMaxSignalLocal(int const level)
 #if !defined(NDEBUG)
 #define CHECK_HYDRO_STATES(mf) checkHydroStates(mf, __FILE__, __LINE__)
 #else
-#define CHECK_HYDRO_STATES(mf) 
+#define CHECK_HYDRO_STATES(mf)
 #endif
 
 template <typename problem_t>
@@ -416,7 +416,7 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 
 	// check hydro states after hydro update
 	CHECK_HYDRO_STATES(state_new_[lev]);
-	
+
 	// subcycle radiation
 	if (is_radiation_enabled_) {
 		subcycleRadiationAtLevel(lev, time, dt_lev, fr_as_crse, fr_as_fine);
@@ -580,7 +580,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 								<< redoFlag.sum<amrex::RunOn::Device>(0)
 								<< "\n";
 					}
-					
+
 					// replace fluxes in fluxArrays with first-order fluxes at faces of flagged cells
 					replaceFluxes(fluxArrays, FOFluxArrays, redoFlag, indexRange, ncompHydro_);
 
@@ -606,7 +606,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 			auto const &stateNew = state_new_[lev].array(iter);
 			amrex::FArrayBox stateNewFAB = amrex::FArrayBox(stateNew);
 			stateNewFAB.copy<amrex::RunOn::Device>(stateFinalFAB, 0, 0, ncompHydro_);
-			
+
 			if (do_reflux) {
 				// increment flux registers
 				auto expandedFluxes = expandFluxArrays(fluxArrays, 0, state_new_[lev].nComp());
@@ -771,13 +771,10 @@ void RadhydroSimulation<problem_t>::hydroFluxFunction(
 	    primVar, x1Flat, x2Flat, x3Flat, x1LeftState.array(), x1RightState.array(),
 	    reconstructRange, nvars);
 
-	amrex::FArrayBox dvn(x1FluxRange, 1, amrex::The_Async_Arena());
-	amrex::FArrayBox dvt(x1FluxRange, 1, amrex::The_Async_Arena());
-
 	// interface-centered kernel
 	HydroSystem<problem_t>::template ComputeFluxes<DIR>(
 	    x1Flux.array(), x1LeftState.array(), x1RightState.array(),
-		primVar, dvn.array(), dvt.array(), x1FluxRange);
+		primVar, x1FluxRange);
 }
 
 template <typename problem_t>
@@ -837,13 +834,10 @@ void RadhydroSimulation<problem_t>::hydroFOFluxFunction(
 			primVar, x1LeftState.array(), x1RightState.array(),
 			x1ReconstructRange, nvars);
 
-	amrex::FArrayBox dvn(x1FluxRange, 1, amrex::The_Async_Arena());
-	amrex::FArrayBox dvt(x1FluxRange, 1, amrex::The_Async_Arena());
-
 	// interface-centered kernel
 	HydroSystem<problem_t>::template ComputeFluxes<DIR>(
 	    x1Flux.array(), x1LeftState.array(), x1RightState.array(),
-		primVar, dvn.array(), dvt.array(), x1FluxRange);
+		primVar, x1FluxRange);
 }
 
 template <typename problem_t>
@@ -906,7 +900,7 @@ void RadhydroSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Rea
 			auto const &prob_lo = geom[lev].ProbLoArray();
 			auto const &prob_hi = geom[lev].ProbHiArray();
 			// update state_new_[lev] in place (updates both radiation and hydro vars)
-			operatorSplitSourceTerms(stateNew, indexRange, time_subcycle, dt_radiation, 
+			operatorSplitSourceTerms(stateNew, indexRange, time_subcycle, dt_radiation,
 									 dx, prob_lo, prob_hi);
 		}
 
@@ -1001,7 +995,7 @@ void RadhydroSimulation<problem_t>::advanceRadiationSubstepAtLevel(
 
 template <typename problem_t>
 void RadhydroSimulation<problem_t>::operatorSplitSourceTerms(
-    amrex::Array4<amrex::Real> const &stateNew, const amrex::Box &indexRange, 
+    amrex::Array4<amrex::Real> const &stateNew, const amrex::Box &indexRange,
 	const amrex::Real time, const double dt,
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
