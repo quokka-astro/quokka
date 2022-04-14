@@ -22,19 +22,15 @@ Quokka is a two-moment radiation hydrodynamics code that uses the piecewise-para
 
 To run Quokka, download this repository to your local machine:
 ```
-git clone git@github.com:BenWibking/quokka.git
+git clone --recursive git@github.com:BenWibking/quokka.git
 ```
-Then download all submodules (this downloads `AMReX` and the string-formatting library `fmt`):
+Quokka uses CMake as its build system. If you don't have CMake installed, the easiest way to install it is to run:
 ```
-cd quokka
-git submodule update --init
-```
-Quokka uses CMake as its build system. If you don't have CMake installed, the easiest way to install it is to run
-```
-pip install cmake
+pip install cmake --user
 ```
 Now that CMake is installed, create a build/ subdirectory and compile Quokka, as shown below. **(Warning to Intel compiler users: the 'classic' Intel compilers `icc` and `icpc` generate incorrect code; see issue [5](https://github.com/BenWibking/quokka/issues/5). Use the newer `icpx` Intel compiler instead by [setting the CMAKE_C_COMPILER and CMAKE_CXX_COMPILER options](https://cmake.org/cmake/help/latest/variable/CMAKE_LANG_COMPILER.html).)**
 ```
+cd quokka
 mkdir build; cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
 make -j6
