@@ -148,8 +148,8 @@ template <> void RadhydroSimulation<QuirkProblem>::computeAfterTimestep() {
     for (amrex::MFIter mfi(mf_state); mfi.isValid(); ++mfi) {
       const amrex::Box &bx = mfi.validbox();
       amrex::GpuArray<int, 3> box_lo = bx.loVect3d();
-      jlo = box_lo[2];
-      klo = box_lo[3];
+      jlo = box_lo[1];
+      klo = box_lo[2];
       amrex::IntVect cell{ilo, jlo, klo};
       if (bx.contains(cell)) {
         box_no = mfi.index();
