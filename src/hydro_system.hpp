@@ -744,7 +744,7 @@ void HydroSystem<problem_t>::ComputeFluxes(
                           (rho_L * (S_L - u_L) - rho_R * (S_R - u_R));
 
     // Low-dissipation pressure correction 'phi' [Eq. 23 of Minoshima & Miyoshi]
-    const double vmag_L = std::sqrt(vx_L * vx_L + vy_L * vy_L + vz_L + vz_L);
+    const double vmag_L = std::sqrt(vx_L * vx_L + vy_L * vy_L + vz_L * vz_L);
     const double vmag_R = std::sqrt(vx_R * vx_R + vy_R * vy_R + vz_R * vz_R);
     const double chi = std::min(1., std::max(vmag_L, vmag_R) / cs_max);
     const double phi = chi * (2. - chi);
