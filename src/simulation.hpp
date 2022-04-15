@@ -26,6 +26,7 @@
 #include "AMReX_AmrCore.H"
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
+#include "AMReX_AsyncOut.H"
 #include "AMReX_BCRec.H"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
@@ -1156,6 +1157,10 @@ template <typename problem_t>
 void AMRSimulation<problem_t>::WritePlotFile() const {
   BL_PROFILE("AMRSimulation::WritePlotFile()");
 
+  // ensure that we flush any plotfiles that are currently being written (if any)
+  amrex::AsyncOut::Finish();
+
+  // now construct output and submit to async write queue
   const std::string &plotfilename = PlotFileName(istep[0]);
   amrex::Vector<amrex::MultiFab> mf = PlotFileMF();
   amrex::Vector<const amrex::MultiFab *> mf_ptr = amrex::GetVecOfConstPtrs(mf);
