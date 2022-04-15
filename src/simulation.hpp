@@ -385,6 +385,16 @@ void AMRSimulation<problem_t>::setInitialConditions() {
     ReadCheckpointFile();
   }
 
+  // abort if amrex.async_out=1, it is currently broken
+  if (amrex::AsyncOut::UseAsyncOut()) {
+    amrex::Print()
+        << "[ERROR] [FATAL] AsyncOut is currently broken! If you want to "
+           "run with AsyncOut anyway (THIS MAY CAUSE DATA CORRUPTION), comment "
+           "out this line in src/simulation.hpp. Aborting."
+        << std::endl;
+    amrex::Abort();
+  }
+
   if (plotfileInterval_ > 0) {
     WritePlotFile();
   }
@@ -1045,8 +1055,10 @@ template <typename problem_t>
 void AMRSimulation<problem_t>::WritePlotFile() const {
   BL_PROFILE("AMRSimulation::WritePlotFile()");
 
-  // ensure that we flush any plotfiles that are currently being written (if any)
-  amrex::AsyncOut::Finish();
+  if (amrex::AsyncOut::UseAsyncOut()) {
+    // ensure that we flush any plotfiles that are currently being written=
+    amrex::AsyncOut::Finish();
+  }
 
   // now construct output and submit to async write queue
   const std::string &plotfilename = PlotFileName(istep[0]);
