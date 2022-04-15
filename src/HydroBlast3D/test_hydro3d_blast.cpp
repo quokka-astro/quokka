@@ -232,7 +232,7 @@ void RadhydroSimulation<SedovProblem>::computeAfterEvolve(
   amrex::Print() << "\trelative K.E. error = " << rel_err_Ekin << std::endl;
   amrex::Print() << std::endl;
 
-  if ((std::abs(rel_err) > 1.0e-15) || std::isnan(rel_err)) {
+  if ((std::abs(rel_err) > 2.0e-15) || std::isnan(rel_err)) {
     amrex::Abort("Energy not conserved to machine precision!");
   } else {
     amrex::Print() << "Energy conservation is OK.\n";
