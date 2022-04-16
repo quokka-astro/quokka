@@ -1089,16 +1089,11 @@ auto AMRSimulation<problem_t>::PlotFileMF() const
 
 template <typename problem_t>
 void AMRSimulation<problem_t>::WriteMetadataFile(
-    std::string const &plotfilename) const {
+    std::string const &MetadataFileName) const {
   // write metadata file
   // (this is written for both checkpoints and plotfiles)
 
   if (amrex::ParallelDescriptor::IOProcessor()) {
-#ifdef AMREX_USE_HDF5
-    std::string MetadataFileName(plotfilename + ".yaml");
-#else
-    std::string MetadataFileName(plotfilename + "/Metadata");
-#endif
     amrex::VisMF::IO_Buffer io_buffer(amrex::VisMF::IO_Buffer_Size);
     std::ofstream MetadataFile;
     MetadataFile.rdbuf()->pubsetbuf(io_buffer.dataPtr(), io_buffer.size());
@@ -1183,11 +1178,12 @@ void AMRSimulation<problem_t>::WritePlotFile() const {
 #ifdef AMREX_USE_HDF5
   amrex::WriteMultiLevelPlotfileHDF5(plotfilename, finest_level + 1, mf_ptr,
                                  varnames, Geom(), tNew_[0], istep, refRatio());
+  WriteMetadataFile(plotfilename + ".yaml");
 #else
   amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, mf_ptr,
                                  varnames, Geom(), tNew_[0], istep, refRatio());
+  WriteMetadataFile(plotfilename + "/Metadata");
 #endif
-  WriteMetadataFile(plotfilename);
 }
 
 template <typename problem_t>
@@ -1266,8 +1262,8 @@ void AMRSimulation<problem_t>::WriteCheckpointFile() const {
   }
 
   // write Metadata file
-  WriteMetadataFile(checkpointname);
-
+  WriteMetadataFile(checkpointname + "/Metadata");
+  
   // write the MultiFab data to, e.g., chk00010/Level_0/
   for (int lev = 0; lev <= finest_level; ++lev) {
     amrex::VisMF::Write(
