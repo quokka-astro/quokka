@@ -1055,10 +1055,12 @@ template <typename problem_t>
 void AMRSimulation<problem_t>::WritePlotFile() const {
   BL_PROFILE("AMRSimulation::WritePlotFile()");
 
+#ifndef AMREX_USE_HDF5
   if (amrex::AsyncOut::UseAsyncOut()) {
-    // ensure that we flush any plotfiles that are currently being written=
+    // ensure that we flush any plotfiles that are currently being written
     amrex::AsyncOut::Finish();
   }
+#endif
 
   // now construct output and submit to async write queue
   const std::string &plotfilename = PlotFileName(istep[0]);
@@ -1072,8 +1074,13 @@ void AMRSimulation<problem_t>::WritePlotFile() const {
 
   amrex::Print() << "Writing plotfile " << plotfilename << "\n";
 
+#ifdef AMREX_USE_HDF5
+  amrex::WriteMultiLevelPlotfileHDF5(plotfilename, finest_level + 1, mf_ptr,
+                                 varnames, Geom(), tNew_[0], istep, refRatio());
+#else
   amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, mf_ptr,
                                  varnames, Geom(), tNew_[0], istep, refRatio());
+#endif
 }
 
 template <typename problem_t>
