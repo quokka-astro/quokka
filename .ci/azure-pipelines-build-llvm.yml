@@ -8,7 +8,7 @@ steps:
 - task: CMake@1
   displayName: 'Configure CMake'
   inputs:
-    cmakeArgs: '.. -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_CUDA_COMPILER=clang -DAMReX_SPACEDIM=3 -DAMReX_GPU_BACKEND=CUDA -DQUOKKA_PYTHON=OFF -G Ninja'
+    cmakeArgs: '.. -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_CUDA_COMPILER=clang -DAMReX_SPACEDIM=3 -DAMReX_GPU_BACKEND=CUDA -DCMAKE_CUDA_ARCHITECTURES=70 -DQUOKKA_PYTHON=OFF -G Ninja'
 
 - task: CMake@1
   displayName: 'Build Quokka'
