@@ -1094,7 +1094,11 @@ void AMRSimulation<problem_t>::WriteMetadataFile(
   // (this is written for both checkpoints and plotfiles)
 
   if (amrex::ParallelDescriptor::IOProcessor()) {
+#ifdef AMREX_USE_HDF5
+    std::string MetadataFileName(plotfilename + ".yaml");
+#else
     std::string MetadataFileName(plotfilename + "/Metadata");
+#endif
     amrex::VisMF::IO_Buffer io_buffer(amrex::VisMF::IO_Buffer_Size);
     std::ofstream MetadataFile;
     MetadataFile.rdbuf()->pubsetbuf(io_buffer.dataPtr(), io_buffer.size());
@@ -1157,8 +1161,12 @@ template <typename problem_t>
 void AMRSimulation<problem_t>::WritePlotFile() const {
   BL_PROFILE("AMRSimulation::WritePlotFile()");
 
-  // ensure that we flush any plotfiles that are currently being written (if any)
-  amrex::AsyncOut::Finish();
+#ifndef AMREX_USE_HDF5
+  if (amrex::AsyncOut::UseAsyncOut()) {
+    // ensure that we flush any plotfiles that are currently being written
+    amrex::AsyncOut::Finish();
+  }
+#endif
 
   // now construct output and submit to async write queue
   const std::string &plotfilename = PlotFileName(istep[0]);
@@ -1172,8 +1180,13 @@ void AMRSimulation<problem_t>::WritePlotFile() const {
 
   amrex::Print() << "Writing plotfile " << plotfilename << "\n";
 
+#ifdef AMREX_USE_HDF5
+  amrex::WriteMultiLevelPlotfileHDF5(plotfilename, finest_level + 1, mf_ptr,
+                                 varnames, Geom(), tNew_[0], istep, refRatio());
+#else
   amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, mf_ptr,
                                  varnames, Geom(), tNew_[0], istep, refRatio());
+#endif
   WriteMetadataFile(plotfilename);
 }
 
