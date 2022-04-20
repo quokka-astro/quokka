@@ -300,7 +300,7 @@ enum class centering { cc, fc, ec };
 enum class direction { na=-1, x=0, y=1, z=2 };
 
 struct grid {
-  amrex::Array4<double> &array;
+  amrex::Array4<double> const &array;
   amrex::Box indexRange;
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx;
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo;
