@@ -472,8 +472,6 @@ void RadhydroSimulation<ShockCloud>::ErrorEst(int lev, amrex::TagBoxArray &tags,
 
     amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
       Real const q = state(i, j, k, nidx);
-      Real const C = state(i, j, k, HydroSystem<ShockCloud>::scalar_index);
-
       Real const q_xplus = state(i + 1, j, k, nidx);
       Real const q_xminus = state(i - 1, j, k, nidx);
       Real const q_yplus = state(i, j + 1, k, nidx);
@@ -481,16 +479,15 @@ void RadhydroSimulation<ShockCloud>::ErrorEst(int lev, amrex::TagBoxArray &tags,
       Real const q_zplus = state(i, j, k + 1, nidx);
       Real const q_zminus = state(i, j, k - 1, nidx);
 
-      Real const del_x =
-          std::max(std::abs(q_xplus - q), std::abs(q - q_xminus));
-      Real const del_y =
-          std::max(std::abs(q_yplus - q), std::abs(q - q_yminus));
-      Real const del_z =
-          std::max(std::abs(q_zplus - q), std::abs(q - q_zminus));
+      Real const del_x = 0.5 * (q_xplus - q_xminus);
+      Real const del_y = 0.5 * (q_yplus - q_yminus);
+      Real const del_z = 0.5 * (q_zplus - q_zminus);
 
-      Real const gradient_indicator = std::max({del_x, del_y, del_z}) / q;
+      Real const eta =
+          std::sqrt(del_x * del_x + del_y * del_y + del_z * del_z) / q;
+      Real const C = state(i, j, k, HydroSystem<ShockCloud>::scalar_index);
 
-      if ((gradient_indicator > eta_threshold) && (C > C_min)) {
+      if ((eta > eta_threshold) && (C > C_min)) {
         tag(i, j, k) = amrex::TagBox::SET;
       }
     });
@@ -711,7 +708,7 @@ auto problem_main() -> int {
   const Real t_cc = std::sqrt(chi) * R_cloud / v_wind;
   amrex::Print() << fmt::format("t_cc = {} kyr\n", t_cc / (1.0e3 * 3.15e7));
   amrex::Print() << std::endl;
-  
+
   // compute maximum simulation time
   const double max_time = 20.0 * t_cc;
 
