@@ -256,7 +256,7 @@ template <> void RadhydroSimulation<ShellProblem>::computeAfterTimestep() {
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 =
       geom[0].CellSizeArray();
   amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
-  auto const &state = state_new_[0];
+  auto const &state = state_new_cc_[0];
 
   double radialMom =
       vol *
@@ -313,9 +313,9 @@ void RadhydroSimulation<ShellProblem>::ErrorEst(int lev,
   const amrex::Real eta_threshold = 0.1;      // gradient refinement threshold
   const amrex::Real rho_min = 1.0e-2 * rho_0; // minimum density for refinement
 
-  for (amrex::MFIter mfi(state_new_[lev]); mfi.isValid(); ++mfi) {
+  for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
     const amrex::Box &box = mfi.validbox();
-    const auto state = state_new_[lev].const_array(mfi);
+    const auto state = state_new_cc_[lev].const_array(mfi);
     const auto tag = tags.array(mfi);
 
     amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {

@@ -166,7 +166,7 @@ void RadhydroSimulation<ShockProblem>::setInitialConditionsOnGrid(
   // extract variables required from the geom object
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom.CellSizeArray();
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom.ProbLoArray();
-  // loop over the grid and set the initial condition
+  // loop over the cell-centered quantities and set the initial condition
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
     amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
 
@@ -201,6 +201,20 @@ void RadhydroSimulation<ShockProblem>::setInitialConditionsOnGrid(
     state(i, j, k, RadSystem<ShockProblem>::x2GasMomentum_index) = 0;
     state(i, j, k, RadSystem<ShockProblem>::x3GasMomentum_index) = 0;
   });
+  // // loop over the face-centered quantities and set the initial condition
+  // amrex::ParallelFor
+  //   (AMREX_D_DECL(indexRange, indexRange, indexRange),
+  //   AMREX_D_DECL(
+  //     [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+
+  //     },
+  //     [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+
+  //     },
+  //     [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+
+  //     }
+  // ));
 }
 
 auto problem_main() -> int {
@@ -240,7 +254,7 @@ auto problem_main() -> int {
   sim.evolve();
 
   // read output variables
-  auto [position, values] = fextract(sim.state_new_[0], sim.Geom(0), 0, 0.0);
+  auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
   int nx = static_cast<int>(position.size());
 
   // Plot results

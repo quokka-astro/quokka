@@ -104,12 +104,12 @@ auto problem_main() -> int {
   // set initial conditions
   sim.setInitialConditions();
   auto [pos_exact, val_exact] =
-      fextract(sim.state_new_[0], sim.geom[0], 0, 0.5);
+      fextract(sim.state_new_cc_[0], sim.geom[0], 0, 0.5);
 
   // Main time loop
   sim.evolve();
 
-  auto [position, values] = fextract(sim.state_new_[0], sim.geom[0], 0, 0.5);
+  auto [position, values] = fextract(sim.state_new_cc_[0], sim.geom[0], 0, 0.5);
   int nx = static_cast<int>(position.size());
   std::vector<double> xs = position;
 

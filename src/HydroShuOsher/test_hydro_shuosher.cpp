@@ -207,7 +207,7 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
 
 #ifdef HAVE_PYTHON
   // Plot results
-  auto [position, values] = fextract(state_new_[0], geom[0], 0, 0.5);
+  auto [position, values] = fextract(state_new_cc_[0], geom[0], 0, 0.5);
   auto [pos_exact, val_exact] = fextract(ref, geom[0], 0, 0.5);
 
   if (amrex::ParallelDescriptor::IOProcessor()) {

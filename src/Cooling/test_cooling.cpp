@@ -294,7 +294,7 @@ void RadhydroSimulation<CoolingTest>::computeAfterLevelAdvance(
     int lev, amrex::Real /*time*/, amrex::Real dt_lev, int /*iteration*/,
     int /*ncycle*/) {
   // compute operator split physics
-  computeCooling(state_new_[lev], dt_lev, cloudyTables);
+  computeCooling(state_new_cc_[lev], dt_lev, cloudyTables);
 }
 
 template <>

@@ -83,9 +83,9 @@ void RadhydroSimulation<KelvinHelmholzProblem>::ErrorEst(
   const amrex::Real eta_threshold = 0.2; // gradient refinement threshold
   const amrex::Real rho_min = 0.1;       // minimum density for refinement
 
-  for (amrex::MFIter mfi(state_new_[lev]); mfi.isValid(); ++mfi) {
+  for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
     const amrex::Box &box = mfi.validbox();
-    const auto state = state_new_[lev].const_array(mfi);
+    const auto state = state_new_cc_[lev].const_array(mfi);
     const auto tag = tags.array(mfi);
 
     amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {

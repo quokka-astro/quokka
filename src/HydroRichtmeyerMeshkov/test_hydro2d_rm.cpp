@@ -35,7 +35,7 @@ void RadhydroSimulation<RichtmeyerMeshkovProblem>::computeAfterTimestep() {
   amrex::BoxArray localBoxes(domain_);
   amrex::DistributionMapping localDistribution(localBoxes, 1);
   amrex::MultiFab state_mf(localBoxes, localDistribution, ncomp_, 0);
-  state_mf.ParallelCopy(state_new_);
+  state_mf.ParallelCopy(state_new_cc_);
 
   if (amrex::ParallelDescriptor::IOProcessor()) {
     auto const &state = state_mf.array(0);
