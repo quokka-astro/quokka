@@ -960,31 +960,31 @@ void AMRSimulation<problem_t>::AscentCustomRender(conduit::Node const &blueprint
 {
 	BL_PROFILE("AMRSimulation::AscentCustomRender()");
 
-    // add a scene with a pseudocolor plot
-    Node scenes;
-    scenes["s1/plots/p1/type"] = "pseudocolor";
-    scenes["s1/plots/p1/field"] = "gasDensity";
-    // Set the output file name (ascent will add ".png")
-    scenes["s1/image_prefix"] = "ascent_render_" + plotfilename;
+  // add a scene with a pseudocolor plot
+  Node scenes;
+  scenes["s1/plots/p1/type"] = "pseudocolor";
+  scenes["s1/plots/p1/field"] = "gasDensity";
+  // Set the output file name (ascent will add ".png")
+  scenes["s1/image_prefix"] = "ascent_render_";
 
-    // setup actions
-    Node actions;
-    Node &add_act = actions.append();
-    add_act["action"] = "add_scenes";
-    add_act["scenes"] = scenes;
-    actions.append()["action"] = "execute";
-    actions.append()["action"] = "reset";
+  // setup actions
+  Node actions;
+  Node &add_act = actions.append();
+  add_act["action"] = "add_scenes";
+  add_act["scenes"] = scenes;
+  actions.append()["action"] = "execute";
+  actions.append()["action"] = "reset";
 
-    Ascent ascent;
+  Ascent ascent;
 	conduit::Node ascent_options;
 	ascent_options["mpi_comm"] = MPI_Comm_c2f(amrex::ParallelContext::CommunicatorSub());
 	ascent_options["runtime/type"] = "ascent";
 	//ascent_options["exceptions"] = "catch";
 
-    ascent.open(ascent_options);
-    ascent.publish(blueprintMesh);
-    ascent.execute(actions);
-    ascent.close();
+  ascent.open(ascent_options);
+  ascent.publish(blueprintMesh);
+  ascent.execute(actions);
+  ascent.close();
 }
 
 // write plotfile to disk
@@ -1001,9 +1001,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile() con
 	varnames.insert(varnames.end(), derivedNames_.begin(), derivedNames_.end());
 
 	// wrap MultiFabs into a Blueprint mesh, to be passed to Ascent
-    conduit::Node blueprintMesh;
-    amrex::MultiLevelToBlueprint(finest_level + 1, mf_ptr, varnames, Geom(),
-		tNew_[0], istep, refRatio(), blueprintMesh);
+  conduit::Node blueprintMesh;
+  amrex::MultiLevelToBlueprint(finest_level + 1, mf_ptr, varnames, Geom(),
+	                             tNew_[0], istep, refRatio(), blueprintMesh);
 	AscentCustomRender(blueprintMesh, plotfilename);
 
 	// write plotfile
