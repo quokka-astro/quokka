@@ -171,11 +171,11 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	[[nodiscard]] auto PlotFileName(int lev) const -> std::string;
 	[[nodiscard]] auto PlotFileMF() const -> amrex::Vector<amrex::MultiFab>;
 	[[nodiscard]] auto PlotFileMFAtLevel(int lev) const -> amrex::MultiFab;
-	void WritePlotFile() const;
+	void WritePlotFile(); // cannot be const due to Ascent
 	void WriteCheckpointFile() const;
 	void ReadCheckpointFile();
 	void AscentCustomRender(conduit::Node const &blueprintMesh,
-							std::string const &plotfilename) const;
+							std::string const &plotfilename);
 
       protected:
 	amrex::Vector<amrex::BCRec> boundaryConditions_; // on level 0
@@ -214,6 +214,9 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// performance metrics
 	amrex::Long cellUpdates_ = 0;
 	amrex::Vector<amrex::Long> cellUpdatesEachLevel_;
+
+	// external objects
+	Ascent ascent_;
 };
 
 template <typename problem_t>
@@ -271,6 +274,11 @@ void AMRSimulation<problem_t>::initialize(amrex::Vector<amrex::BCRec> &boundaryC
 			amrex::Abort("Grids not properly nested!");
 		}
 	}
+
+	// initialize Ascent
+	conduit::Node ascent_options;
+	ascent_options["mpi_comm"] = MPI_Comm_c2f(amrex::ParallelContext::CommunicatorSub());
+	ascent_.open(ascent_options);
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
@@ -469,6 +477,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	if (plotfileInterval_ > 0 && istep[0] > last_plot_file_step) {
 		WritePlotFile();
 	}
+
+	// close Ascent
+	ascent_.close();
 }
 
 template <typename problem_t>
@@ -956,39 +967,42 @@ auto AMRSimulation<problem_t>::PlotFileMF() const -> amrex::Vector<amrex::MultiF
 // write plotfile to disk
 template <typename problem_t>
 void AMRSimulation<problem_t>::AscentCustomRender(conduit::Node const &blueprintMesh,
-												  std::string const &plotfilename) const
+												  std::string const &plotfilename)
 {
 	BL_PROFILE("AMRSimulation::AscentCustomRender()");
 
-  // add a scene with a pseudocolor plot
-  Node scenes;
-  scenes["s1/plots/p1/type"] = "pseudocolor";
-  scenes["s1/plots/p1/field"] = "gasDensity";
-  // Set the output file name (ascent will add ".png")
-  scenes["s1/image_prefix"] = "ascent_render_";
+	// add a scene with a pseudocolor plot
+	Node scenes;
+	scenes["s1/plots/p1/type"] = "pseudocolor";
+	scenes["s1/plots/p1/field"] = "gasDensity";
 
-  // setup actions
-  Node actions;
-  Node &add_act = actions.append();
-  add_act["action"] = "add_scenes";
-  add_act["scenes"] = scenes;
-  actions.append()["action"] = "execute";
-  actions.append()["action"] = "reset";
+	// set the output file name (ascent will add ".png")
+	scenes["s1/renders/r1/image_prefix"] = "render_gasDensity%05d";
 
-  Ascent ascent;
-	conduit::Node ascent_options;
-	ascent_options["mpi_comm"] = MPI_Comm_c2f(amrex::ParallelContext::CommunicatorSub());
-	ascent_options["runtime/type"] = "ascent";
-	//ascent_options["exceptions"] = "catch";
+	// set camera position
+	amrex::RealBox domain = geom[0].ProbDomain();
+	amrex::Array<double, 3> position = {-0.6*domain.length(0), -0.6*domain.length(1), -0.8*domain.length(2)};
+	scenes["s1/renders/r1/camera/position"].set_float64_ptr(position.data(), 3);
 
-  ascent.open(ascent_options);
-  ascent.publish(blueprintMesh);
-  ascent.execute(actions);
-  ascent.close();
+	// set point camera looks at
+	//amrex::Array<double, 3> look_at = {0.5*domain.length(0), 0.5*domain.length(1), 0.5*domain.length(2)};
+	//scenes["s1/renders/r1/camera/look_at"].set_float64_ptr(look_at.data(), 3);
+	
+	// setup actions
+	Node actions;
+	Node &add_plots = actions.append();
+	add_plots["action"] = "add_scenes";
+	add_plots["scenes"] = scenes;
+	actions.append()["action"] = "execute";
+	actions.append()["action"] = "reset";
+
+	// send AMR mesh to ascent, do render
+	ascent_.publish(blueprintMesh);
+	ascent_.execute(actions);
 }
 
 // write plotfile to disk
-template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile() const
+template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 {
 	BL_PROFILE("AMRSimulation::WritePlotFile()");
 
@@ -1001,8 +1015,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile() con
 	varnames.insert(varnames.end(), derivedNames_.begin(), derivedNames_.end());
 
 	// wrap MultiFabs into a Blueprint mesh, to be passed to Ascent
-  conduit::Node blueprintMesh;
-  amrex::MultiLevelToBlueprint(finest_level + 1, mf_ptr, varnames, Geom(),
+  	conduit::Node blueprintMesh;
+  	amrex::MultiLevelToBlueprint(finest_level + 1, mf_ptr, varnames, Geom(),
 	                             tNew_[0], istep, refRatio(), blueprintMesh);
 	AscentCustomRender(blueprintMesh, plotfilename);
 

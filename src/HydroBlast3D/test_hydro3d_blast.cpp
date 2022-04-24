@@ -21,7 +21,7 @@
 struct SedovProblem {};
 
 // if false, use octant symmetry instead
-constexpr bool simulate_full_box = true;
+constexpr bool simulate_full_box = false;
 
 template <> struct EOS_Traits<SedovProblem> {
   static constexpr double gamma = 5. / 3.;
@@ -187,10 +187,10 @@ auto problem_main() -> int {
   sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
   sim.stopTime_ = 0.5;   // 0.01;
   sim.cflNumber_ = 0.25; // *must* be less than 1/3 in 3D!
-  sim.maxTimesteps_ = 100;
-  sim.plotfileInterval_ = -1;
+  sim.maxTimesteps_ = 1000;
+  //sim.plotfileInterval_ = -1;
   //sim.maxTimesteps_ = 10000;
-  //sim.plotfileInterval_ = 100;
+  sim.plotfileInterval_ = 100;
 
   // initialize
   sim.setInitialConditions();
