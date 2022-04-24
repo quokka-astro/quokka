@@ -973,15 +973,18 @@ void AMRSimulation<problem_t>::AscentCustomRender(conduit::Node const &blueprint
 
 	// add a scene with a pseudocolor plot
 	Node scenes;
+	//scenes["s1/plots/p1/type"] = "mesh";
 	scenes["s1/plots/p1/type"] = "pseudocolor";
 	scenes["s1/plots/p1/field"] = "gasDensity";
 
 	// set the output file name (ascent will add ".png")
-	scenes["s1/renders/r1/image_prefix"] = "render_gasDensity%05d";
+	scenes["s1/renders/r1/image_prefix"] = "render_density%05d";
 
 	// set camera position
-	amrex::RealBox domain = geom[0].ProbDomain();
-	amrex::Array<double, 3> position = {-0.6*domain.length(0), -0.6*domain.length(1), -0.8*domain.length(2)};
+	//amrex::RealBox domain = geom[0].ProbDomain();
+	//amrex::Array<double, 3> position = {-0.6*domain.length(0), -0.6*domain.length(1), -0.8*domain.length(2)};
+	//scenes["s1/renders/r1/camera/position"].set_float64_ptr(position.data(), 3);
+	amrex::Array<double, 3> position = {-0.6, -0.6, -0.8};
 	scenes["s1/renders/r1/camera/position"].set_float64_ptr(position.data(), 3);
 
 	// set point camera looks at
@@ -1014,9 +1017,26 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 	varnames.insert(varnames.end(), componentNames_.begin(), componentNames_.end());
 	varnames.insert(varnames.end(), derivedNames_.begin(), derivedNames_.end());
 
+	// rescale geometry
+	// (Ascent fails to render if you use parsec-size boxes in units of cm...)
+	amrex::Vector<amrex::Geometry> rescaledGeom = Geom();
+	const amrex::Real length = geom[0].ProbLength(0);
+	for(int i = 0; i < rescaledGeom.size(); ++i) {
+		auto const &dlo = rescaledGeom[i].ProbLoArray();
+		auto const &dhi = rescaledGeom[i].ProbHiArray();
+		std::array<amrex::Real, AMREX_SPACEDIM> new_dlo;
+		std::array<amrex::Real, AMREX_SPACEDIM> new_dhi;
+		for(int k = 0; k < AMREX_SPACEDIM; ++k) {
+			new_dlo[k] = dlo[k] / length;
+			new_dhi[k] = dhi[k] / length;
+		}
+		amrex::RealBox rescaledRealBox(new_dlo, new_dhi);
+		rescaledGeom[i].ProbDomain(rescaledRealBox);
+	}
+
 	// wrap MultiFabs into a Blueprint mesh, to be passed to Ascent
-  	conduit::Node blueprintMesh;
-  	amrex::MultiLevelToBlueprint(finest_level + 1, mf_ptr, varnames, Geom(),
+  	conduit::Node blueprintMesh;	
+  	amrex::MultiLevelToBlueprint(finest_level + 1, mf_ptr, varnames, rescaledGeom,
 	                             tNew_[0], istep, refRatio(), blueprintMesh);
 	AscentCustomRender(blueprintMesh, plotfilename);
 
