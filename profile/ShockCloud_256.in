@@ -27,7 +27,7 @@ grackle_data_file = "../extern/grackle_data_files/input/CloudyData_UVB=HM2012.h5
 derived_vars = temperature
 
 cfl = 0.25
-max_timesteps = 200
+max_timesteps = 10
 plotfile_interval = 100
 checkpoint_interval = 1000
 T_floor = 10.0  # K

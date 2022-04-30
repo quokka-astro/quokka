@@ -3,18 +3,18 @@
 #PBS -N quokka_GPUrsaa
 #PBS -P dg97
 #PBS -q gpursaa
-#PBS -l ncpus=112
-#PBS -l ngpus=8
-#PBS -l mem=1000GB
+#PBS -l ncpus=224
+#PBS -l ngpus=16
+#PBS -l mem=2000GB
 #PBS -m aeb
 #PBS -M ben.wibking@anu.edu.au
 #PBS -l wd
 #PBS -l walltime=0:15:00
 #PBS -l storage=scratch/jh2+gdata/jh2
-#PBS -l jobfs=800GB
+#PBS -l jobfs=1600GB
 
 # --- initialize Quokka ---
-MPI_OPTIONS="-np 8 --map-by numa:SPAN --bind-to numa --mca pml ucx"
+MPI_OPTIONS="-np 16 --map-by numa:SPAN --bind-to numa --mca pml ucx"
 echo "Using MPI_OPTIONS = $MPI_OPTIONS"
 
 mpirun $MPI_OPTIONS ./gpu_wrapper_profile.sh > quokka_profile.log
