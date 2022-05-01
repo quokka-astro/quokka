@@ -487,8 +487,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		WritePlotFile();
 	}
 
+#ifdef AMREX_USE_ASCENT
 	// close Ascent
 	ascent_.close();
+#endif
 }
 
 template <typename problem_t>
@@ -973,7 +975,8 @@ auto AMRSimulation<problem_t>::PlotFileMF() const -> amrex::Vector<amrex::MultiF
 	return r;
 }
 
-// write plotfile to disk
+// do in-situ rendering with Ascent
+#ifdef AMREX_USE_ASCENT
 template <typename problem_t>
 void AMRSimulation<problem_t>::AscentCustomRender(conduit::Node const &blueprintMesh,
 												  std::string const &plotfilename)
@@ -1004,6 +1007,7 @@ void AMRSimulation<problem_t>::AscentCustomRender(conduit::Node const &blueprint
 	ascent_.publish(blueprintMesh);
 	ascent_.execute(actions); // will be replaced by ascent_actions.yml if present
 }
+#endif
 
 // write plotfile to disk
 template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
