@@ -1,12 +1,10 @@
-# An example of using the log filter.
-# Note that this is the natural log, not log10!
-
 - 
   action: "add_pipelines"
   pipelines: 
     pl1: 
       f1: 
         type: "log"
+        # Note that this is the natural log, not log10!
         params: 
           field: "gasDensity"
           output_name: "log_gasDensity"
