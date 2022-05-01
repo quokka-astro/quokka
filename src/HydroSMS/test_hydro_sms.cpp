@@ -71,7 +71,7 @@ template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(
     const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar,
-    int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
+    int /*dcomp*/, int numcomp, amrex::GeometryData const &geom,
     const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
     int /*orig_comp*/) {
 #if (AMREX_SPACEDIM == 1)
@@ -103,6 +103,10 @@ AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(
     rho = 1.0;
     m = -3.44;
     E = 8.4168;
+  }
+
+  for (int n = 0; n < numcomp; ++n) {
+    consVar(i, j, k, n) = 0;
   }
 
   consVar(i, j, k, RadSystem<ShocktubeProblem>::gasDensity_index) = rho;

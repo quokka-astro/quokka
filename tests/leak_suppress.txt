@@ -1,0 +1,27 @@
+# tell LeakSanitizer to ignore leaks in MPI libraries, Python, glibc
+leak:hwloc_bitmap_alloc
+leak:vasprintf
+leak:mca_mpool_hugepage_open
+leak:mca_mpool_hugepage_open
+leak:ompi_mpi_init
+leak:ompi_op_base_op_select
+leak:avx_component_op_query
+leak:PyMem_Malloc
+leak:PyUFunc_FromFuncAndDataAndSignatureAndIdentity
+leak:PyType_GenericAlloc
+leak:PyUnicode_New
+leak:PyObject_Malloc
+leak:_PyObject_Alloc
+leak:_PyObject_Realloc
+leak:_PyObject_GC_Alloc
+leak:PyThread_allocate_lock
+leak:npy_alloc_cache_zero
+leak:npy_alloc_cache
+leak:set_table_resize
+leak:PyBytes_FromStringAndSize
+leak:PyFT2Image_init
+leak:FT2Image::resize
+leak:opal_free_list_grow_st
+leak:_PyObject_GC_Resize
+leak:libpython
+leak:_multiarray_umath

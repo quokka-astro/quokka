@@ -14,12 +14,11 @@ include(CTest)
 
 set(AMReX_SPACEDIM 1 CACHE STRING "")
 set(AMReX_MPI ON CACHE BOOL "" FORCE)
-set(AMReX_HDF5 OFF CACHE BOOL "" FORCE)
-set(AMReX_AMRLEVEL OFF CACHE BOOL "" FORCE)
-set(AMReX_PROBINIT OFF CACHE BOOL "" FORCE)
 set(AMReX_LINEAR_SOLVERS OFF CACHE BOOL "" FORCE)
 set(AMReX_CONDUIT OFF CACHE BOOL "") # optional
 set(AMReX_ASCENT OFF CACHE BOOL "") # optional
+set(AMReX_AMRLEVEL OFF CACHE BOOL "" FORCE)
+set(AMReX_PROBINIT OFF CACHE BOOL "" FORCE)
 set(AMReX_ASSERTIONS OFF CACHE BOOL "" FORCE)
 set(AMReX_FPE OFF CACHE BOOL "" FORCE)
 set(AMReX_TINY_PROFILE ON CACHE BOOL "" FORCE)
@@ -28,6 +27,12 @@ option(QUOKKA_PYTHON "Compile with Python support (on/off)" ON)
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
   enable_language(CUDA)
+  if(CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 11.2)
+    message(FATAL_ERROR "For best performance, you must use CUDA 11.2 or higher to compile Quokka. It is strongly recommended to use a newer version of CUDA.")
+  endif()
+  if(CMAKE_CUDA_COMPILER_VERSION MATCHES 11.6)
+    message(FATAL_ERROR "You must use a CUDA version 11.2-11.5 to compile Quokka. CUDA 11.6 has compiler bugs that cause Quokka to crash.")
+  endif()
   set(CMAKE_CUDA_ARCHITECTURES 70 80 CACHE STRING "")
   set(AMReX_CUDA_FASTMATH OFF CACHE BOOL "" FORCE)
   # fused MAD causes directional asymmetry

@@ -26,10 +26,23 @@ if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
         EXCLUDE "${PROJECT_SOURCE_DIR}/extern" "${PROJECT_SOURCE_DIR}/src/test_" "include/openmpi/ompi/mpi/cxx/" "/usr/"
         POST_CMD perl -i -pe s!${PROJECT_SOURCE_DIR}/!!g coverage.json && fastcov_to_sonarqube coverage.json
     )
-    SET(CMAKE_CXX_FLAGS "-O1")
-    SET(CMAKE_C_FLAGS "-O1")
+    add_compile_options("-O1")
     append_coverage_compiler_flags()
 endif()
+
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+  # enable AddressSanitizer when debugging
+  add_compile_options(-O1 -fno-omit-frame-pointer)
+  add_compile_options(-fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all -fsanitize=float-divide-by-zero -fsanitize=float-cast-overflow -fno-sanitize=null -fno-sanitize=alignment)
+  add_link_options(-fsanitize=address -fsanitize=undefined)
+endif()
+
+# this is necessary to prevent the host compiler from complaining about nv_pragmas
+# only works for gcc
+#add_compile_options(-Wno-unknown-pragmas)
+
+add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:--ptxas-options=-v>)
+
 
 include_directories(${amrex_INCLUDE_DIRS_RET})
 include_directories(${fmt_INCLUDE_DIRS_RET})
