@@ -42,35 +42,35 @@ template <> struct RadSystem_Traits<SuOlsonProblem> {
 };
 
 template <>
-AMREX_GPU_DEVICE auto RadSystem<SuOlsonProblem>::ComputePlanckOpacity(const double  /*rho*/,
+AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblem>::ComputePlanckOpacity(const double  /*rho*/,
 					       const double  /*Tgas*/) -> double
 {
 	return kappa;
 }
 
 template <>
-AMREX_GPU_DEVICE auto RadSystem<SuOlsonProblem>::ComputeRosselandOpacity(const double  /*rho*/,
+AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblem>::ComputeRosselandOpacity(const double  /*rho*/,
 					       const double  /*Tgas*/) -> double
 {
 	return kappa;
 }
 
 template <>
-AMREX_GPU_DEVICE auto RadSystem<SuOlsonProblem>::ComputeTgasFromEgas(const double  /*rho*/,
+AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblem>::ComputeTgasFromEgas(const double  /*rho*/,
 						    const double Egas) -> double
 {
 	return std::pow(4.0 * Egas / alpha_SuOlson, 1. / 4.);
 }
 
 template <>
-AMREX_GPU_DEVICE auto RadSystem<SuOlsonProblem>::ComputeEgasFromTgas(const double  /*rho*/,
+AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblem>::ComputeEgasFromTgas(const double  /*rho*/,
 						    const double Tgas) -> double
 {
 	return (alpha_SuOlson / 4.0) * std::pow(Tgas, 4);
 }
 
 template <>
-AMREX_GPU_DEVICE auto RadSystem<SuOlsonProblem>::ComputeEgasTempDerivative(const double  /*rho*/,
+AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblem>::ComputeEgasTempDerivative(const double  /*rho*/,
 							  const double Tgas)
     -> double
 {

@@ -51,7 +51,7 @@ constexpr Real pl = 26.85;
 constexpr Real dr = 1.0;
 constexpr Real ur = -5.0;
 constexpr Real pr = 0.6;
-AMREX_GPU_MANAGED int ishock = 0;
+int ishock_g = 0;
 
 template <>
 void RadhydroSimulation<QuirkProblem>::setInitialConditionsAtLevel(int lev) {
@@ -63,11 +63,11 @@ void RadhydroSimulation<QuirkProblem>::setInitialConditionsAtLevel(int lev) {
   amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
 
   Real xshock = 0.4;
-  for (ishock = 0; (prob_lo[0] + dx[0] * (ishock + Real(0.5))) < xshock;
-       ++ishock) {
+  for (ishock_g = 0; (prob_lo[0] + dx[0] * (ishock_g + Real(0.5))) < xshock;
+       ++ishock_g) {
   }
-  ishock--;
-  amrex::Print() << "ishock = " << ishock << "\n";
+  ishock_g--;
+  amrex::Print() << "ishock = " << ishock_g << "\n";
 
   Real dd = dl - 0.135;
   Real ud = ul + 0.219;
@@ -76,6 +76,7 @@ void RadhydroSimulation<QuirkProblem>::setInitialConditionsAtLevel(int lev) {
   for (amrex::MFIter iter(state_old_[lev]); iter.isValid(); ++iter) {
     const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
     auto const &state = state_new_[lev].array(iter);
+    int ishock = ishock_g; // globals cannot be lambda-captured
 
     amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
       double vx = NAN;
@@ -141,14 +142,14 @@ template <> void RadhydroSimulation<QuirkProblem>::computeAfterTimestep() {
 
     amrex::MultiFab &mf_state = state_new_[0];
     int box_no = -1;
-    int ilo = ishock;
+    int ilo = ishock_g;
     int jlo = 0;
     int klo = 0;
     for (amrex::MFIter mfi(mf_state); mfi.isValid(); ++mfi) {
       const amrex::Box &bx = mfi.validbox();
       amrex::GpuArray<int, 3> box_lo = bx.loVect3d();
-      jlo = box_lo[2];
-      klo = box_lo[3];
+      jlo = box_lo[1];
+      klo = box_lo[2];
       amrex::IntVect cell{ilo, jlo, klo};
       if (bx.contains(cell)) {
         box_no = mfi.index();
