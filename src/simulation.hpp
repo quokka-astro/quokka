@@ -62,6 +62,7 @@
 #include "CheckNaN.hpp"
 #include "math_impl.hpp"
 
+#define USE_YAFLUXREGISTER
 
 #ifdef AMREX_USE_ASCENT
 using namespace conduit;
