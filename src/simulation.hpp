@@ -51,19 +51,22 @@
 #include <AMReX_PlotFileUtil.H>
 #include <AMReX_Print.H>
 #include <AMReX_Utility.H>
+#include <fmt/core.h>
+
+#ifdef AMREX_USE_ASCENT
 #include <AMReX_Conduit_Blueprint.H>
 #include <ascent.hpp>
-#include <fmt/core.h>
+#endif
 
 // internal headers
 #include "CheckNaN.hpp"
 #include "math_impl.hpp"
 
-#define USE_YAFLUXREGISTER
 
+#ifdef AMREX_USE_ASCENT
 using namespace conduit;
 using namespace ascent;
-
+#endif
 
 // Main simulation class; solvers should inherit from this
 template <typename problem_t> class AMRSimulation : public amrex::AmrCore
@@ -174,9 +177,10 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void WritePlotFile(); // cannot be const due to Ascent
 	void WriteCheckpointFile() const;
 	void ReadCheckpointFile();
+#ifdef AMREX_USE_ASCENT
 	void AscentCustomRender(conduit::Node const &blueprintMesh,
 							std::string const &plotfilename);
-
+#endif
       protected:
 	amrex::Vector<amrex::BCRec> boundaryConditions_; // on level 0
 	amrex::Vector<amrex::MultiFab> state_old_;
@@ -216,7 +220,9 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Vector<amrex::Long> cellUpdatesEachLevel_;
 
 	// external objects
+#ifdef AMREX_USE_ASCENT
 	Ascent ascent_;
+#endif
 };
 
 template <typename problem_t>
@@ -275,10 +281,12 @@ void AMRSimulation<problem_t>::initialize(amrex::Vector<amrex::BCRec> &boundaryC
 		}
 	}
 
+#ifdef AMREX_USE_ASCENT
 	// initialize Ascent
 	conduit::Node ascent_options;
 	ascent_options["mpi_comm"] = MPI_Comm_c2f(amrex::ParallelContext::CommunicatorSub());
 	ascent_.open(ascent_options);
+#endif
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
@@ -973,7 +981,6 @@ void AMRSimulation<problem_t>::AscentCustomRender(conduit::Node const &blueprint
 
 	// add a scene with a pseudocolor plot
 	Node scenes;
-	//scenes["s1/plots/p1/type"] = "mesh";
 	scenes["s1/plots/p1/type"] = "pseudocolor";
 	scenes["s1/plots/p1/field"] = "gasDensity";
 
@@ -981,16 +988,9 @@ void AMRSimulation<problem_t>::AscentCustomRender(conduit::Node const &blueprint
 	scenes["s1/renders/r1/image_prefix"] = "render_density%05d";
 
 	// set camera position
-	//amrex::RealBox domain = geom[0].ProbDomain();
-	//amrex::Array<double, 3> position = {-0.6*domain.length(0), -0.6*domain.length(1), -0.8*domain.length(2)};
-	//scenes["s1/renders/r1/camera/position"].set_float64_ptr(position.data(), 3);
 	amrex::Array<double, 3> position = {-0.6, -0.6, -0.8};
 	scenes["s1/renders/r1/camera/position"].set_float64_ptr(position.data(), 3);
 
-	// set point camera looks at
-	//amrex::Array<double, 3> look_at = {0.5*domain.length(0), 0.5*domain.length(1), 0.5*domain.length(2)};
-	//scenes["s1/renders/r1/camera/look_at"].set_float64_ptr(look_at.data(), 3);
-	
 	// setup actions
 	Node actions;
 	Node &add_plots = actions.append();
@@ -1001,7 +1001,7 @@ void AMRSimulation<problem_t>::AscentCustomRender(conduit::Node const &blueprint
 
 	// send AMR mesh to ascent, do render
 	ascent_.publish(blueprintMesh);
-	ascent_.execute(actions);
+	ascent_.execute(actions); // will be replaced by ascent_actions.yml if present
 }
 
 // write plotfile to disk
@@ -1017,6 +1017,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 	varnames.insert(varnames.end(), componentNames_.begin(), componentNames_.end());
 	varnames.insert(varnames.end(), derivedNames_.begin(), derivedNames_.end());
 
+#ifdef AMREX_USE_ASCENT
 	// rescale geometry
 	// (Ascent fails to render if you use parsec-size boxes in units of cm...)
 	amrex::Vector<amrex::Geometry> rescaledGeom = Geom();
@@ -1034,11 +1035,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 		rescaledGeom[i].ProbDomain(rescaledRealBox);
 	}
 
-	// wrap MultiFabs into a Blueprint mesh, to be passed to Ascent
+	// wrap MultiFabs into a Blueprint mesh
   	conduit::Node blueprintMesh;	
   	amrex::MultiLevelToBlueprint(finest_level + 1, mf_ptr, varnames, rescaledGeom,
 	                             tNew_[0], istep, refRatio(), blueprintMesh);
+	// pass Blueprint mesh to Ascent
 	AscentCustomRender(blueprintMesh, plotfilename);
+#endif
 
 	// write plotfile
 	amrex::Print() << "Writing plotfile " << plotfilename << "\n";
