@@ -105,6 +105,7 @@ public:
   }
 
   void initialize(amrex::Vector<amrex::BCRec> &boundaryConditions);
+  void PerformanceHints();
   void readParameters();
   void setInitialConditions();
   void evolve();
@@ -167,8 +168,6 @@ public:
   void AverageDown();
   void AverageDownTo(int crse_lev);
   void timeStepWithSubcycling(int lev, amrex::Real time, int iteration);
-  void doRegridIfNeeded(int step, amrex::Real time);
-  void PerformanceHints() const;
 
   void incrementFluxRegisters(
       amrex::MFIter &mfi, amrex::YAFluxRegister *fr_as_crse,
@@ -307,7 +306,7 @@ void AMRSimulation<problem_t>::initialize(
 }
 
 template <typename problem_t>
-void AMRSimulation<problem_t>::PerformanceHints() const {
+void AMRSimulation<problem_t>::PerformanceHints() {
   // Check requested MPI ranks and available boxes
   for (int ilev = 0; ilev <= finestLevel(); ++ilev) {
     const amrex::Long nboxes = boxArray(ilev).size();
@@ -428,134 +427,6 @@ void AMRSimulation<problem_t>::setInitialConditions() {
   PerformanceHints();
 }
 
-template <typename problem_t> void AMRSimulation<problem_t>::evolve() {
-  BL_PROFILE("AMRSimulation::evolve()");
-
-  AMREX_ALWAYS_ASSERT(areInitialConditionsDefined_);
-
-  amrex::Real cur_time = tNew_[0];
-  int last_plot_file_step = 0;
-
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 =
-      geom[0].CellSizeArray();
-  amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
-  amrex::Vector<amrex::Real> init_sum_cons(ncomp_);
-  for (int n = 0; n < ncomp_; ++n) {
-    const int lev = 0;
-    init_sum_cons[n] = state_new_[lev].sum(n) * vol;
-  }
-
-  amrex::Real const start_time = amrex::ParallelDescriptor::second();
-
-  // Main time loop
-  for (int step = istep[0]; step < maxTimesteps_ && cur_time < stopTime_;
-       ++step) {
-    amrex::ParallelDescriptor::Barrier(); // synchronize all MPI ranks
-
-    if (suppress_output == 0) {
-      amrex::Print() << "\nCoarse STEP " << step + 1 << " at t = " << cur_time
-                     << " (" << (cur_time / stopTime_) * 100. << "%) starts ..."
-                     << std::endl;
-    }
-
-    doRegridIfNeeded(step, cur_time);
-    computeTimestep(); // important to call this *after* regrid (when a global
-                       // timestep is used)
-
-    int lev = 0;
-    int iteration = 1;
-    timeStepWithSubcycling(lev, cur_time, iteration);
-
-    cur_time += dt_[0];
-    ++cycleCount_;
-    computeAfterTimestep();
-
-    // sync up time (to avoid roundoff error)
-    for (lev = 0; lev <= finest_level; ++lev) {
-      tNew_[lev] = cur_time;
-    }
-
-    if (plotfileInterval_ > 0 && (step + 1) % plotfileInterval_ == 0) {
-      last_plot_file_step = step + 1;
-      WritePlotFile();
-    }
-
-    if (checkpointInterval_ > 0 && (step + 1) % checkpointInterval_ == 0) {
-      WriteCheckpointFile();
-    }
-
-    if (cur_time >= stopTime_ - 1.e-6 * dt_[0]) {
-      break;
-    }
-  }
-
-  amrex::Real elapsed_sec = amrex::ParallelDescriptor::second() - start_time;
-
-  // compute reference solution (if it's a test problem)
-  computeAfterEvolve(init_sum_cons);
-
-  // compute conservation error
-  for (int n = 0; n < ncomp_; ++n) {
-    amrex::Real const final_sum = state_new_[0].sum(n) * vol;
-    amrex::Real const abs_err = (final_sum - init_sum_cons[n]);
-    amrex::Real const rel_err = abs_err / init_sum_cons[n];
-    amrex::Print() << "Initial " << componentNames_[n] << " = "
-                   << init_sum_cons[n] << std::endl;
-    amrex::Print() << "\tabsolute conservation error = " << abs_err
-                   << std::endl;
-    if (init_sum_cons[n] != 0.0) {
-      amrex::Print() << "\trelative conservation error = " << rel_err
-                     << std::endl;
-    }
-    amrex::Print() << std::endl;
-  }
-
-  // compute zone-cycles/sec
-  const int IOProc = amrex::ParallelDescriptor::IOProcessorNumber();
-  amrex::ParallelDescriptor::ReduceRealMax(elapsed_sec, IOProc);
-  const double microseconds_per_update = 1.0e6 * elapsed_sec / cellUpdates_;
-  const double megaupdates_per_second = 1.0 / microseconds_per_update;
-  amrex::Print() << "Performance figure-of-merit: " << microseconds_per_update
-                 << " μs/zone-update [" << megaupdates_per_second
-                 << " Mupdates/s]\n";
-  for (int lev = 0; lev <= max_level; ++lev) {
-    amrex::Print() << "Zone-updates on level " << lev << ": "
-                   << cellUpdatesEachLevel_[lev] << "\n";
-  }
-  amrex::Print() << std::endl;
-
-  // write final plotfile
-  if (plotfileInterval_ > 0 && istep[0] > last_plot_file_step) {
-    WritePlotFile();
-  }
-
-#ifdef AMREX_USE_ASCENT
-  // close Ascent
-  ascent_.close();
-#endif
-}
-
-template <typename problem_t>
-void AMRSimulation<problem_t>::doRegridIfNeeded(int const step,
-                                                amrex::Real const time) {
-  BL_PROFILE("AMRSimulation::doRegridIfNeeded()");
-
-  if (max_level > 0 && regrid_int > 0) // regridding is possible
-  {
-    if (step % regrid_int == 0) { // regrid on this coarse step
-      if (Verbose()) {
-        amrex::Print() << "regridding..." << std::endl;
-      }
-      regrid(0, time);
-
-      // do fix-up on all levels that have been re-gridded
-      for (int lev = 0; lev <= finest_level; ++lev) {
-        FixupState(lev);
-      }
-    }
-  }
-}
-
 template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep() {
   BL_PROFILE("AMRSimulation::computeTimestep()");
 
@@ -599,6 +470,111 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep() {
   for (int level = 1; level <= finest_level; ++level) {
     dt_[level] = dt_[level - 1] / nsubsteps[level];
   }
+}
+
+template <typename problem_t> void AMRSimulation<problem_t>::evolve() {
+  BL_PROFILE("AMRSimulation::evolve()");
+
+  AMREX_ALWAYS_ASSERT(areInitialConditionsDefined_);
+
+  amrex::Real cur_time = tNew_[0];
+  int last_plot_file_step = 0;
+
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 =
+      geom[0].CellSizeArray();
+  amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
+  amrex::Vector<amrex::Real> init_sum_cons(ncomp_);
+  for (int n = 0; n < ncomp_; ++n) {
+    const int lev = 0;
+    init_sum_cons[n] = state_new_[lev].sum(n) * vol;
+  }
+
+  amrex::Real const start_time = amrex::ParallelDescriptor::second();
+
+  // Main time loop
+  for (int step = istep[0]; step < maxTimesteps_ && cur_time < stopTime_;
+       ++step) {
+
+    if (suppress_output == 0) {
+      amrex::Print() << "\nCoarse STEP " << step + 1 << " at t = " << cur_time
+                     << " (" << (cur_time / stopTime_) * 100. << "%) starts ..."
+                     << std::endl;
+    }
+
+    amrex::ParallelDescriptor::Barrier(); // synchronize all MPI ranks
+    computeTimestep();
+
+    int lev = 0;
+    int iteration = 1;
+    timeStepWithSubcycling(lev, cur_time, iteration);
+
+    cur_time += dt_[0];
+    ++cycleCount_;
+    computeAfterTimestep();
+
+    // sync up time (to avoid roundoff error)
+    for (lev = 0; lev <= finest_level; ++lev) {
+      tNew_[lev] = cur_time;
+    }
+
+    if (plotfileInterval_ > 0 && (step + 1) % plotfileInterval_ == 0) {
+      last_plot_file_step = step + 1;
+      WritePlotFile();
+    }
+
+    if (checkpointInterval_ > 0 && (step + 1) % checkpointInterval_ == 0) {
+      WriteCheckpointFile();
+    }
+
+    if (cur_time >= stopTime_ - 1.e-6 * dt_[0]) {
+      break;
+    }
+  }
+
+  amrex::Real elapsed_sec = amrex::ParallelDescriptor::second() - start_time;
+
+  // compute reference solution (if it's a test problem)
+  computeAfterEvolve(init_sum_cons);
+
+  // compute conservation error
+  for (int n = 0; n < ncomp_; ++n) {
+    amrex::Real const final_sum = state_new_[0].sum(n) * vol;
+    amrex::Real const abs_err = (final_sum - init_sum_cons[n]);
+    amrex::Print() << "Initial " << componentNames_[n] << " = "
+                   << init_sum_cons[n] << std::endl;
+    amrex::Print() << "\tabsolute conservation error = " << abs_err
+                   << std::endl;
+    if (init_sum_cons[n] != 0.0) {
+      amrex::Real const rel_err = abs_err / init_sum_cons[n];
+      amrex::Print() << "\trelative conservation error = " << rel_err
+                     << std::endl;
+    }
+    amrex::Print() << std::endl;
+  }
+
+  // compute zone-cycles/sec
+  const int IOProc = amrex::ParallelDescriptor::IOProcessorNumber();
+  amrex::ParallelDescriptor::ReduceRealMax(elapsed_sec, IOProc);
+  const double microseconds_per_update = 1.0e6 * elapsed_sec / cellUpdates_;
+  const double megaupdates_per_second = 1.0 / microseconds_per_update;
+  amrex::Print() << "Performance figure-of-merit: " << microseconds_per_update
+                 << " μs/zone-update [" << megaupdates_per_second
+                 << " Mupdates/s]\n";
+  for (int lev = 0; lev <= max_level; ++lev) {
+    amrex::Print() << "Zone-updates on level " << lev << ": "
+                   << cellUpdatesEachLevel_[lev] << "\n";
+  }
+  amrex::Print() << std::endl;
+
+  // write final plotfile
+  if (plotfileInterval_ > 0 && istep[0] > last_plot_file_step) {
+    WritePlotFile();
+  }
+
+#ifdef AMREX_USE_ASCENT
+  // close Ascent
+  ascent_.close();
+#endif
 }
 
 // N.B.: This function actually works for subcycled or not subcycled, as long as
@@ -1184,12 +1160,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile() {
   AscentCustomRender(blueprintMesh, plotfilename);
 #endif
 
-	// write plotfile
-	amrex::Print() << "Writing plotfile " << plotfilename << "\n";
-  
+  // write plotfile
+  amrex::Print() << "Writing plotfile " << plotfilename << "\n";
+
 #ifdef AMREX_USE_HDF5
   amrex::WriteMultiLevelPlotfileHDF5(plotfilename, finest_level + 1, mf_ptr,
-                                 varnames, Geom(), tNew_[0], istep, refRatio());
+                                     varnames, Geom(), tNew_[0], istep,
+                                     refRatio());
 #else
   amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, mf_ptr,
                                  varnames, Geom(), tNew_[0], istep, refRatio());
