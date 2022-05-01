@@ -38,14 +38,15 @@ template <> struct RadSystem_Traits<SuOlsonProblemCgs> {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblemCgs>::ComputePlanckOpacity(
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
+RadSystem<SuOlsonProblemCgs>::ComputePlanckOpacity(
     const double rho, const double Tgas) -> double {
   auto sigma = kappa * std::pow(Tgas / T_hohlraum, -3); // cm^-1
   return (sigma / rho);                                 // cm^2 g^-1
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 RadSystem<SuOlsonProblemCgs>::ComputeRosselandOpacity(const double rho,
                                                       const double Tgas)
     -> double {
@@ -54,7 +55,8 @@ RadSystem<SuOlsonProblemCgs>::ComputeRosselandOpacity(const double rho,
 }
 
 template <>
-auto RadSystem<SuOlsonProblemCgs>::ComputePlanckOpacityTempDerivative(
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
+RadSystem<SuOlsonProblemCgs>::ComputePlanckOpacityTempDerivative(
     const double rho, const double Tgas) -> double {
   auto sigma_dT =
       (-3.0 * kappa / Tgas) * std::pow(Tgas / T_hohlraum, -3); // cm^-1
@@ -62,7 +64,8 @@ auto RadSystem<SuOlsonProblemCgs>::ComputePlanckOpacityTempDerivative(
 }
 
 template <>
-auto RadSystem<SuOlsonProblemCgs>::ComputeEddingtonFactor(double /*f*/) -> double {
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
+RadSystem<SuOlsonProblemCgs>::ComputeEddingtonFactor(double /*f*/) -> double {
   return (1. / 3.); // Eddington approximation
 }
 
