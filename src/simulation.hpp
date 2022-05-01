@@ -39,6 +39,7 @@
 #include "AMReX_LayoutData.H"
 #include "AMReX_MFInterpolater.H"
 #include "AMReX_MultiFabUtil.H"
+#include "AMReX_ParallelContext.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
@@ -53,11 +54,21 @@
 #include <AMReX_Utility.H>
 #include <fmt/core.h>
 
+#ifdef AMREX_USE_ASCENT
+#include <AMReX_Conduit_Blueprint.H>
+#include <ascent.hpp>
+#endif
+
 // internal headers
 #include "CheckNaN.hpp"
 #include "math_impl.hpp"
 
 #define USE_YAFLUXREGISTER
+
+#ifdef AMREX_USE_ASCENT
+using namespace conduit;
+using namespace ascent;
+#endif
 
 // Main simulation class; solvers should inherit from this
 template <typename problem_t> class AMRSimulation : public amrex::AmrCore {
@@ -157,7 +168,6 @@ public:
   void AverageDown();
   void AverageDownTo(int crse_lev);
   void timeStepWithSubcycling(int lev, amrex::Real time, int iteration);
-  void doRegridIfNeeded(int step, amrex::Real time);
 
   void incrementFluxRegisters(
       amrex::MFIter &mfi, amrex::YAFluxRegister *fr_as_crse,
@@ -176,12 +186,13 @@ public:
   [[nodiscard]] auto PlotFileName(int lev) const -> std::string;
   [[nodiscard]] auto PlotFileMF() const -> amrex::Vector<amrex::MultiFab>;
   [[nodiscard]] auto PlotFileMFAtLevel(int lev) const -> amrex::MultiFab;
-  void WritePlotFile() const;
+  void WritePlotFile(); // cannot be const due to Ascent
   void WriteCheckpointFile() const;
   void ReadCheckpointFile();
-  void LoadBalance();
-  void ResetCosts();
-
+#ifdef AMREX_USE_ASCENT
+  void AscentCustomRender(conduit::Node const &blueprintMesh,
+                          std::string const &plotfilename);
+#endif
 protected:
   amrex::Vector<amrex::BCRec> boundaryConditions_; // on level 0
   amrex::Vector<amrex::MultiFab> state_old_;
@@ -221,6 +232,11 @@ protected:
   // performance metrics
   amrex::Long cellUpdates_ = 0;
   amrex::Vector<amrex::Long> cellUpdatesEachLevel_;
+
+  // external objects
+#ifdef AMREX_USE_ASCENT
+  Ascent ascent_;
+#endif
 };
 
 template <typename problem_t>
@@ -279,6 +295,14 @@ void AMRSimulation<problem_t>::initialize(
       amrex::Abort("Grids not properly nested!");
     }
   }
+
+#ifdef AMREX_USE_ASCENT
+  // initialize Ascent
+  conduit::Node ascent_options;
+  ascent_options["mpi_comm"] =
+      MPI_Comm_c2f(amrex::ParallelContext::CommunicatorSub());
+  ascent_.open(ascent_options);
+#endif
 }
 
 template <typename problem_t>
@@ -470,6 +494,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve() {
   // Main time loop
   for (int step = istep[0]; step < maxTimesteps_ && cur_time < stopTime_;
        ++step) {
+
     if (suppress_output == 0) {
       amrex::Print() << "\nCoarse STEP " << step + 1 << " at t = " << cur_time
                      << " (" << (cur_time / stopTime_) * 100. << "%) starts ..."
@@ -545,6 +570,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve() {
   if (plotfileInterval_ > 0 && istep[0] > last_plot_file_step) {
     WritePlotFile();
   }
+
+#ifdef AMREX_USE_ASCENT
+  // close Ascent
+  ascent_.close();
+#endif
 }
 
 // N.B.: This function actually works for subcycled or not subcycled, as long as
@@ -1050,9 +1080,41 @@ auto AMRSimulation<problem_t>::PlotFileMF() const
   return r;
 }
 
-// write plotfile to disk
+// do in-situ rendering with Ascent
+#ifdef AMREX_USE_ASCENT
 template <typename problem_t>
-void AMRSimulation<problem_t>::WritePlotFile() const {
+void AMRSimulation<problem_t>::AscentCustomRender(
+    conduit::Node const &blueprintMesh, std::string const &plotfilename) {
+  BL_PROFILE("AMRSimulation::AscentCustomRender()");
+
+  // add a scene with a pseudocolor plot
+  Node scenes;
+  scenes["s1/plots/p1/type"] = "pseudocolor";
+  scenes["s1/plots/p1/field"] = "gasDensity";
+
+  // set the output file name (ascent will add ".png")
+  scenes["s1/renders/r1/image_prefix"] = "render_density%05d";
+
+  // set camera position
+  amrex::Array<double, 3> position = {-0.6, -0.6, -0.8};
+  scenes["s1/renders/r1/camera/position"].set_float64_ptr(position.data(), 3);
+
+  // setup actions
+  Node actions;
+  Node &add_plots = actions.append();
+  add_plots["action"] = "add_scenes";
+  add_plots["scenes"] = scenes;
+  actions.append()["action"] = "execute";
+  actions.append()["action"] = "reset";
+
+  // send AMR mesh to ascent, do render
+  ascent_.publish(blueprintMesh);
+  ascent_.execute(actions); // will be replaced by ascent_actions.yml if present
+}
+#endif
+
+// write plotfile to disk
+template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile() {
   BL_PROFILE("AMRSimulation::WritePlotFile()");
 
 #ifndef AMREX_USE_HDF5
@@ -1072,11 +1134,39 @@ void AMRSimulation<problem_t>::WritePlotFile() const {
                   componentNames_.end());
   varnames.insert(varnames.end(), derivedNames_.begin(), derivedNames_.end());
 
+#ifdef AMREX_USE_ASCENT
+  // rescale geometry
+  // (Ascent fails to render if you use parsec-size boxes in units of cm...)
+  amrex::Vector<amrex::Geometry> rescaledGeom = Geom();
+  const amrex::Real length = geom[0].ProbLength(0);
+  for (int i = 0; i < rescaledGeom.size(); ++i) {
+    auto const &dlo = rescaledGeom[i].ProbLoArray();
+    auto const &dhi = rescaledGeom[i].ProbHiArray();
+    std::array<amrex::Real, AMREX_SPACEDIM> new_dlo;
+    std::array<amrex::Real, AMREX_SPACEDIM> new_dhi;
+    for (int k = 0; k < AMREX_SPACEDIM; ++k) {
+      new_dlo[k] = dlo[k] / length;
+      new_dhi[k] = dhi[k] / length;
+    }
+    amrex::RealBox rescaledRealBox(new_dlo, new_dhi);
+    rescaledGeom[i].ProbDomain(rescaledRealBox);
+  }
+
+  // wrap MultiFabs into a Blueprint mesh
+  conduit::Node blueprintMesh;
+  amrex::MultiLevelToBlueprint(finest_level + 1, mf_ptr, varnames, rescaledGeom,
+                               tNew_[0], istep, refRatio(), blueprintMesh);
+  // pass Blueprint mesh to Ascent
+  AscentCustomRender(blueprintMesh, plotfilename);
+#endif
+
+  // write plotfile
   amrex::Print() << "Writing plotfile " << plotfilename << "\n";
 
 #ifdef AMREX_USE_HDF5
   amrex::WriteMultiLevelPlotfileHDF5(plotfilename, finest_level + 1, mf_ptr,
-                                 varnames, Geom(), tNew_[0], istep, refRatio());
+                                     varnames, Geom(), tNew_[0], istep,
+                                     refRatio());
 #else
   amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, mf_ptr,
                                  varnames, Geom(), tNew_[0], istep, refRatio());
