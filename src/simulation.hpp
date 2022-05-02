@@ -52,10 +52,10 @@
 #include <AMReX_Utility.H>
 #include <fmt/core.h>
 
-#include "CheckType.hpp"
-
 // internal headers
 #include "CheckNaN.hpp"
+#include "CheckType.hpp"
+#include "grid.hpp"
 #include "math_impl.hpp"
 
 #define USE_YAFLUXREGISTER
@@ -109,9 +109,7 @@ public:
                                             amrex::Real dt_lev, int iteration,
                                             int ncycle) = 0;
   virtual void preCalculateInitialConditions() = 0;
-  virtual void setInitialConditionsOnGrid(array_t &state,
-                                          const amrex::Box &indexRange,
-                                          const amrex::Geometry &geom) = 0;
+  virtual void setInitialConditionsOnGrid(std::vector<grid> &grid_vec) = 0;
   virtual void computeAfterTimestep() = 0;
   virtual void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) = 0;
 
@@ -296,29 +294,9 @@ void AMRSimulation<problem_t>::initialize(
   }
 }
 
-enum class centering { cc, fc, ec };
-enum class direction { na=-1, x=0, y=1, z=2 };
-
-struct grid {
-  amrex::Array4<double> const &array;
-  amrex::Box indexRange;
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx;
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo;
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi;
-  enum centering cen;
-  enum direction dir;
-  grid(amrex::Array4<double> &array, amrex::Box indexRange,
-       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
-       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo,
-       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi,
-       centering cen, direction dir)
-      : array(array), indexRange(indexRange), dx(dx), prob_lo(prob_lo),
-        prob_hi(prob_hi), cen(cen), dir(dir) {}
-};
-
 template <typename problem_t>
 void AMRSimulation<problem_t>::setInitialConditionsAtLevel(int lev) {
-  // iitialise grid-struct for the user to opperate on
+  // iitialise grid-struct, which the user will opperate on
   std::vector<grid> grid_vec;
   // perform precalculation
   preCalculateInitialConditions();
@@ -327,40 +305,22 @@ void AMRSimulation<problem_t>::setInitialConditionsAtLevel(int lev) {
     const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
     auto const &state = state_new_cc_[lev].array(iter);
 
-    // std::cout << "\n" << quokka::type_name<decltype(state_new_cc_[lev].array(iter))>();
-    // std::cout << "\n" << quokka::type_name<decltype(iter.validbox())>();
-    // std::cout << "\n" << quokka::type_name<decltype(geom[lev].CellSizeArray())>();
-    // std::cout << "\n" << quokka::type_name<decltype(geom[lev].ProbLoArray())>();
-    // std::cout << "\n" << quokka::type_name<decltype(geom[lev].ProbHiArray())>();
-    // std::cout << "\n" << quokka::type_name<decltype(centering::cc)>();
-    // std::cout << "\n" << quokka::type_name<decltype(direction::na)>() << "\n";
-
     // cell-centred states
-    grid_vec.emplace_back(grid(
-      state_new_cc_[lev].array(iter),
-      iter.validbox(),
-      geom[lev].CellSizeArray(),
-      geom[lev].ProbLoArray(),
-      geom[lev].ProbHiArray(),
-      centering::cc,
-      direction::na
-    ));
+    grid_vec.emplace_back(state_new_cc_[lev].array(iter), iter.validbox(),
+                          geom[lev].CellSizeArray(), geom[lev].ProbLoArray(),
+                          geom[lev].ProbHiArray(), centering::cc,
+                          direction::na);
 
     // // face-centred states
     // for (int idim = 0; idim < AMREX_SPACEDIM; idim++) {
-    //   grid_vec.emplace_back(grid(
-    //     state_new_fc_[lev].array(iter),
-    //     iter.validbox(),
-    //     geom[lev].CellSizeArray(),
-    //     geom[lev].ProbLoArray(),
-    //     geom[lev].ProbHiArray(),
-    //     centering::fc,
-    //     direction(idim)
-    //   ));
+    //   grid_vec.emplace_back(state_new_fc_[lev][idim].array(iter),
+    //                         iter.validbox(), geom[lev].CellSizeArray(),
+    //                         geom[lev].ProbLoArray(), geom[lev].ProbHiArray(),
+    //                         centering::fc, direction(idim));
     // }
 
     // apply initial conditions provided / defined by the user
-    setInitialConditionsOnGrid(state, indexRange, geom[lev]);
+    setInitialConditionsOnGrid(grid_vec);
   }
   // set flag
   areInitialConditionsDefined_ = true;

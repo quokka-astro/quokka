@@ -134,8 +134,7 @@ public:
   void checkHydroStates(amrex::MultiFab &mf, char const *file, int line);
   void computeMaxSignalLocal(int level) override;
   void preCalculateInitialConditions() override;
-  void setInitialConditionsOnGrid(array_t &state, const amrex::Box &indexRange,
-                                  const amrex::Geometry &geom) override;
+  void setInitialConditionsOnGrid(std::vector<grid> &grid_vec) override;
   void advanceSingleTimestepAtLevel(int lev, amrex::Real time,
                                     amrex::Real dt_lev, int iteration,
                                     int ncycle) override;
@@ -316,7 +315,7 @@ void RadhydroSimulation<problem_t>::preCalculateInitialConditions() {
 
 template <typename problem_t>
 void RadhydroSimulation<problem_t>::setInitialConditionsOnGrid(
-    array_t &state, const amrex::Box &indexRange, const amrex::Geometry &geom) {
+    std::vector<grid> &grid_vec) {
   // default empty implementation
   // user should implement using problem-specific template specialization
 }
