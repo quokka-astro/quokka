@@ -14,6 +14,9 @@ endif()
 # HDF5
 find_package(HDF5 REQUIRED)
 
+# std::filesystem (required for GCC < 9)
+link_libraries(stdc++fs)
+
 if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
     # only works with gcc!
     include(CodeCoverage)
