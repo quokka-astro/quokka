@@ -402,8 +402,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters() {
   int hours = 0;
   int minutes = 0;
   int seconds = 0;
-  std::sscanf(maxWalltimeInput.c_str(), "%d:%d:%d", hours, minutes, seconds);
-  maxWalltime_ = 3600 * hours + 60 * minutes + seconds;
+  int nargs = std::sscanf(maxWalltimeInput.c_str(), "%d:%d:%d", &hours,
+                          &minutes, &seconds);
+  if (nargs == 3) {
+    maxWalltime_ = 3600 * hours + 60 * minutes + seconds;
+    amrex::Print() << fmt::format(
+        "Setting walltime limit to {} hours, {} minutes, {} seconds.\n", hours,
+        minutes, seconds);
+  }
 }
 
 template <typename problem_t>
