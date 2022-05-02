@@ -11,9 +11,9 @@
 
 // c++ headers
 #include <csignal>
-#include <fstream>
 #include <cstdio>
 #include <filesystem>
+#include <fstream>
 #include <iomanip>
 #include <limits>
 #include <memory>
@@ -1311,7 +1311,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile() {
 
 #ifdef AMREX_USE_HDF5
   amrex::WriteMultiLevelPlotfileHDF5(plotfilename, finest_level + 1, mf_ptr,
-                                 varnames, Geom(), tNew_[0], istep, refRatio());
+                                     varnames, Geom(), tNew_[0], istep,
+                                     refRatio());
   WriteMetadataFile(plotfilename + ".yaml");
 #else
   amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, mf_ptr,
@@ -1323,15 +1324,18 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile() {
 template <typename problem_t>
 void AMRSimulation<problem_t>::SetLastCheckpointSymlink(
     std::string const &checkpointname) const {
-  // creates a symlink in the current working directory to the most recent
-  // checkpoint file
-  std::string lastSymlinkName = "last_chk";
+  // creates a symlink pointing to the most recent checkpoint
 
-  // remove any previous symlink
-  if (std::filesystem::is_symlink(lastSymlinkName)) {
-    std::filesystem::remove(lastSymlinkName);
+  if (amrex::ParallelDescriptor::IOProcessor()) {
+    std::string lastSymlinkName = "last_chk";
+
+    // remove previous symlink, if it exists
+    if (std::filesystem::is_symlink(lastSymlinkName)) {
+      std::filesystem::remove(lastSymlinkName);
+    }
+    // create symlink
+    std::filesystem::create_directory_symlink(checkpointname, lastSymlinkName);
   }
-  std::filesystem::create_directory_symlink(checkpointname, lastSymlinkName);
 }
 
 template <typename problem_t>
@@ -1411,7 +1415,7 @@ void AMRSimulation<problem_t>::WriteCheckpointFile() const {
 
   // write Metadata file
   WriteMetadataFile(checkpointname + "/Metadata");
-  
+
   // write the MultiFab data to, e.g., chk00010/Level_0/
   for (int lev = 0; lev <= finest_level; ++lev) {
     amrex::VisMF::Write(
