@@ -4,6 +4,8 @@
 ## for ascent support:
 ##   Ascent_DIR=../../ascent/install cmake -C ../cmake/avatar_gcc_cuda.cmake .. -G Ninja
 
+#set(CMAKE_C_COMPILER "/opt/rh/gcc-toolset-11/root/usr/bin/gcc" CACHE PATH "")
+#set(CMAKE_CXX_COMPILER "/opt/rh/gcc-toolset-11/root/usr/bin/g++" CACHE PATH "")
 set(CMAKE_C_COMPILER "gcc" CACHE PATH "")
 set(CMAKE_CXX_COMPILER "g++" CACHE PATH "")
 set(CMAKE_CUDA_COMPILER "nvcc" CACHE PATH "")

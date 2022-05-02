@@ -12,6 +12,8 @@
 // c++ headers
 #include <csignal>
 #include <fstream>
+#include <cstdio>
+#include <filesystem>
 #include <iomanip>
 #include <limits>
 #include <memory>
@@ -124,6 +126,7 @@ public:
   amrex::Real cflNumber_ = 0.3;     // default
   amrex::Long cycleCount_ = 0;
   amrex::Long maxTimesteps_ = 1e4; // default
+  amrex::Long maxWalltime_ = 0;    // default: no limit
   int plotfileInterval_ = -1;      // -1 == no output
   int checkpointInterval_ = -1;    // -1 == no output
   std::unordered_map<std::string, variant_t> simulationMetadata_;
@@ -228,7 +231,9 @@ public:
   void ReadMetadataFile(std::string const &chkfilename);
   void WritePlotFile(); // cannot be const due to Ascent
   void WriteCheckpointFile() const;
+  void SetLastCheckpointSymlink(std::string const &checkpointname) const;
   void ReadCheckpointFile();
+  auto getWalltime() -> amrex::Real;
 #ifdef AMREX_USE_ASCENT
   void AscentCustomRender(conduit::Node const &blueprintMesh,
                           std::string const &plotfilename);
@@ -438,6 +443,22 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters() {
 
   // re-grid interval
   pp.query("regrid_interval", regrid_int);
+
+  // specify maximum walltime in HH:MM:SS format
+  std::string maxWalltimeInput;
+  pp.query("max_walltime", maxWalltimeInput);
+  // convert to seconds
+  int hours = 0;
+  int minutes = 0;
+  int seconds = 0;
+  int nargs = std::sscanf(maxWalltimeInput.c_str(), "%d:%d:%d", &hours,
+                          &minutes, &seconds);
+  if (nargs == 3) {
+    maxWalltime_ = 3600 * hours + 60 * minutes + seconds;
+    amrex::Print() << fmt::format(
+        "Setting walltime limit to {} hours, {} minutes, {} seconds.\n", hours,
+        minutes, seconds);
+  }
 }
 
 template <typename problem_t>
@@ -511,6 +532,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep() {
   }
 }
 
+template <typename problem_t>
+auto AMRSimulation<problem_t>::getWalltime() -> amrex::Real {
+  const static amrex::Real start_time =
+      amrex::ParallelDescriptor::second(); // initialized on first call
+  const amrex::Real time = amrex::ParallelDescriptor::second();
+  return time - start_time;
+}
+
 template <typename problem_t> void AMRSimulation<problem_t>::evolve() {
   BL_PROFILE("AMRSimulation::evolve()");
 
@@ -518,6 +547,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve() {
 
   amrex::Real cur_time = tNew_[0];
   int last_plot_file_step = 0;
+  int last_chk_file_step = 0;
 
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 =
       geom[0].CellSizeArray();
@@ -528,7 +558,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve() {
     init_sum_cons[n] = state_new_[lev].sum(n) * vol;
   }
 
-  amrex::Real const start_time = amrex::ParallelDescriptor::second();
+  getWalltime(); // initialize start_time
 
   // Main time loop
   for (int step = istep[0]; step < maxTimesteps_ && cur_time < stopTime_;
@@ -562,15 +592,22 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve() {
     }
 
     if (checkpointInterval_ > 0 && (step + 1) % checkpointInterval_ == 0) {
+      last_chk_file_step = step + 1;
       WriteCheckpointFile();
     }
 
     if (cur_time >= stopTime_ - 1.e-6 * dt_[0]) {
+      // we have reached stopTime_
+      break;
+    }
+
+    if (maxWalltime_ > 0 && getWalltime() > 0.9 * maxWalltime_) {
+      // we have exceeded 90% of maxWalltime_
       break;
     }
   }
 
-  amrex::Real elapsed_sec = amrex::ParallelDescriptor::second() - start_time;
+  amrex::Real elapsed_sec = getWalltime();
 
   // compute reference solution (if it's a test problem)
   computeAfterEvolve(init_sum_cons);
@@ -604,6 +641,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve() {
                    << cellUpdatesEachLevel_[lev] << "\n";
   }
   amrex::Print() << std::endl;
+
+  // write final checkpoint
+  if (checkpointInterval_ > 0 && istep[0] > last_chk_file_step) {
+    WriteCheckpointFile();
+  }
 
   // write final plotfile
   if (plotfileInterval_ > 0 && istep[0] > last_plot_file_step) {
@@ -1279,6 +1321,20 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile() {
 }
 
 template <typename problem_t>
+void AMRSimulation<problem_t>::SetLastCheckpointSymlink(
+    std::string const &checkpointname) const {
+  // creates a symlink in the current working directory to the most recent
+  // checkpoint file
+  std::string lastSymlinkName = "last_chk";
+
+  // remove any previous symlink
+  if (std::filesystem::is_symlink(lastSymlinkName)) {
+    std::filesystem::remove(lastSymlinkName);
+  }
+  std::filesystem::create_directory_symlink(checkpointname, lastSymlinkName);
+}
+
+template <typename problem_t>
 void AMRSimulation<problem_t>::WriteCheckpointFile() const {
   BL_PROFILE("AMRSimulation::WriteCheckpointFile()");
 
@@ -1362,6 +1418,9 @@ void AMRSimulation<problem_t>::WriteCheckpointFile() const {
         state_new_[lev],
         amrex::MultiFabFileFullPrefix(lev, checkpointname, "Level_", "Cell"));
   }
+
+  // create symlink and point it at this checkpoint dir
+  SetLastCheckpointSymlink(checkpointname);
 }
 
 // utility to skip to next line in Header
