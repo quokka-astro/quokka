@@ -1222,9 +1222,8 @@ void AMRSimulation<problem_t>::SetLastCheckpointSymlink(
   // checkpoint file
   std::string lastSymlinkName = "last_chk";
 
-  if (std::filesystem::exists(lastSymlinkName) &&
-      std::filesystem::is_symlink(lastSymlinkName)) {
-    // delete previous symlink
+  if (std::filesystem::exists(lastSymlinkName)) {
+    // delete previous symlink (its target may not exist anymore)
     std::filesystem::remove(lastSymlinkName);
   }
   std::filesystem::create_directory_symlink(checkpointname, lastSymlinkName);
