@@ -13,6 +13,7 @@
 #include <csignal>
 #include <cstdio>
 #include <filesystem>
+#include <fstream>
 #include <iomanip>
 #include <limits>
 #include <memory>
@@ -1218,15 +1219,18 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile() {
 template <typename problem_t>
 void AMRSimulation<problem_t>::SetLastCheckpointSymlink(
     std::string const &checkpointname) const {
-  // creates a symlink in the current working directory to the most recent
-  // checkpoint file
-  std::string lastSymlinkName = "last_chk";
+  // creates a symlink pointing to the most recent checkpoint
 
-  // remove any previous symlink
-  if (std::filesystem::is_symlink(lastSymlinkName)) {
-    std::filesystem::remove(lastSymlinkName);
+  if (amrex::ParallelDescriptor::IOProcessor()) {
+    std::string lastSymlinkName = "last_chk";
+
+    // remove previous symlink, if it exists
+    if (std::filesystem::is_symlink(lastSymlinkName)) {
+      std::filesystem::remove(lastSymlinkName);
+    }
+    // create symlink
+    std::filesystem::create_directory_symlink(checkpointname, lastSymlinkName);
   }
-  std::filesystem::create_directory_symlink(checkpointname, lastSymlinkName);
 }
 
 template <typename problem_t>
