@@ -1221,6 +1221,12 @@ void AMRSimulation<problem_t>::SetLastCheckpointSymlink(
   // creates a symlink in the current working directory to the most recent
   // checkpoint file
   std::string lastSymlinkName = "last_chk";
+
+  if (std::filesystem::exists(lastSymlinkName) &&
+      std::filesystem::is_symlink(lastSymlinkName)) {
+    // delete previous symlink
+    std::filesystem::remove(lastSymlinkName);
+  }
   std::filesystem::create_directory_symlink(checkpointname, lastSymlinkName);
 }
 
