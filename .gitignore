@@ -1,6 +1,7 @@
 *.log
 compile_commands.json
 *.visit
+last_chk
 .vscode/
 codeql-db/
 build/
