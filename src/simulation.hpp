@@ -258,7 +258,6 @@ void AMRSimulation<problem_t>::initialize(
   }
 
   // vectors to cover the number of grid levels
-  amrex::Print() << "\nAMRSimulation::initialize()\n";
   tNew_.resize(nlevs_max, 0.0);
   tOld_.resize(nlevs_max, -1.e100);
   dt_.resize(nlevs_max, 1.e100);
@@ -296,15 +295,14 @@ void AMRSimulation<problem_t>::initialize(
 
 template <typename problem_t>
 void AMRSimulation<problem_t>::setInitialConditionsAtLevel(int lev) {
-  // iitialise grid-struct, which the user will opperate on
+  // initialise grid-struct, which the user will opperate on
   std::vector<grid> grid_vec;
+
   // perform precalculation
   preCalculateInitialConditions();
+
   // itterate over the domain
   for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
-    const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
-    auto const &state = state_new_cc_[lev].array(iter);
-
     // cell-centred states
     grid_vec.emplace_back(state_new_cc_[lev].array(iter), iter.validbox(),
                           geom[lev].CellSizeArray(), geom[lev].ProbLoArray(),
@@ -315,13 +313,15 @@ void AMRSimulation<problem_t>::setInitialConditionsAtLevel(int lev) {
     // for (int idim = 0; idim < AMREX_SPACEDIM; idim++) {
     //   grid_vec.emplace_back(state_new_fc_[lev][idim].array(iter),
     //                         iter.validbox(), geom[lev].CellSizeArray(),
-    //                         geom[lev].ProbLoArray(), geom[lev].ProbHiArray(),
-    //                         centering::fc, direction(idim));
+    //                         geom[lev].ProbLoArray(),
+    //                         geom[lev].ProbHiArray(), centering::fc,
+    //                         direction(idim));
     // }
 
     // apply initial conditions provided / defined by the user
     setInitialConditionsOnGrid(grid_vec);
   }
+
   // set flag
   areInitialConditionsDefined_ = true;
 }
@@ -525,8 +525,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve() {
   }
 }
 
-// N.B.: This function actually works for subcycled or not subcycled, as long as
-// nsubsteps[lev] is set correctly.
+// N.B.: This function actually works for subcycled or not subcycled, as long
+// as nsubsteps[lev] is set correctly.
 template <typename problem_t>
 void AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time,
                                                       int iteration) {
@@ -671,9 +671,9 @@ void AMRSimulation<problem_t>::MakeNewLevelFromCoarse(
   FillCoarsePatch(level, time, state_old_cc_[level], 0, ncomp);
 }
 
-// Remake an existing level using provided BoxArray and DistributionMapping and
-// fill with existing fine and coarse data. Overrides the pure virtual function
-// in AmrCore
+// Remake an existing level using provided BoxArray and DistributionMapping
+// and fill with existing fine and coarse data. Overrides the pure virtual
+// function in AmrCore
 template <typename problem_t>
 void AMRSimulation<problem_t>::RemakeLevel(
     int level, amrex::Real time, const amrex::BoxArray &ba,
@@ -809,7 +809,8 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
   // On a single level, any periodic boundaries are filled first
   // 	then built-in boundary conditions are filled (with amrex::FilccCell()),
   //	then user-defined Dirichlet boundary conditions are filled.
-  // (N.B.: The user-defined boundary function is called for *all* ghost cells.)
+  // (N.B.: The user-defined boundary function is called for *all* ghost
+  // cells.)
 
   // [NOTE: If user-defined and periodic boundaries are both used
   //  (for different coordinate dimensions), the edge/corner cells *will* be
@@ -1103,7 +1104,8 @@ void AMRSimulation<problem_t>::WriteCheckpointFile() const {
   const int nlevels = finest_level + 1;
 
   // ---- prebuild a hierarchy of directories
-  // ---- dirName is built first.  if dirName exists, it is renamed.  then build
+  // ---- dirName is built first.  if dirName exists, it is renamed.  then
+  // build
   // ---- dirName/subDirPrefix_0 .. dirName/subDirPrefix_nlevels-1
   // ---- if callBarrier is true, call ParallelDescriptor::Barrier()
   // ---- after all directories are built
@@ -1237,7 +1239,8 @@ void AMRSimulation<problem_t>::ReadCheckpointFile() {
     // create a distribution mapping
     amrex::DistributionMapping dm{ba, amrex::ParallelDescriptor::NProcs()};
 
-    // set BoxArray grids and DistributionMapping dmap in AMReX_AmrMesh.H class
+    // set BoxArray grids and DistributionMapping dmap in AMReX_AmrMesh.H
+    // class
     SetBoxArray(lev, ba);
     SetDistributionMap(lev, dm);
 

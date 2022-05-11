@@ -12,6 +12,8 @@
 #include "AMReX_Array.H"
 #include "AMReX_BC_TYPES.H"
 
+#include "AMReX_Config.H"
+#include "AMReX_Print.H"
 #include "ArrayUtil.hpp"
 #include "fextract.hpp"
 #include "test_radhydro_shock_cgs.hpp"
@@ -166,8 +168,10 @@ void RadhydroSimulation<ShockProblem>::setInitialConditionsOnGrid(
   // extract variables required from the geom object
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_vec[0].dx;
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
+  const amrex::Box &indexRange = grid_vec[0].indexRange;
+
   // loop over the cell-centered quantities and set the initial condition
-  amrex::ParallelFor(grid_vec[0].indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
     amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
 
     amrex::Real radEnergy = NAN;
@@ -194,7 +198,6 @@ void RadhydroSimulation<ShockProblem>::setInitialConditionsOnGrid(
     grid_vec[0].array(i, j, k, RadSystem<ShockProblem>::x1RadFlux_index) = x1RadFlux;
     grid_vec[0].array(i, j, k, RadSystem<ShockProblem>::x2RadFlux_index) = 0;
     grid_vec[0].array(i, j, k, RadSystem<ShockProblem>::x3RadFlux_index) = 0;
-
     grid_vec[0].array(i, j, k, RadSystem<ShockProblem>::gasEnergy_index) = energy;
     grid_vec[0].array(i, j, k, RadSystem<ShockProblem>::gasDensity_index) = density;
     grid_vec[0].array(i, j, k, RadSystem<ShockProblem>::x1GasMomentum_index) = x1Momentum;

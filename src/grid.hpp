@@ -9,13 +9,13 @@ enum class direction { na=-1, x=0, y=1, z=2 };
 
 struct grid {
   amrex::Array4<double> const &array;
-  amrex::Box indexRange;
+  const amrex::Box &indexRange; // this needed to be const &
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx;
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo;
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi;
   enum centering cen;
   enum direction dir;
-  grid(amrex::Array4<double> const &array, amrex::Box indexRange,
+  grid(amrex::Array4<double> const &array, const amrex::Box &indexRange,
        amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
        amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo,
        amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi,
