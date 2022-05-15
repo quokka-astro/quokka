@@ -186,13 +186,13 @@ HyperbolicSystem<problem_t>::MonotonizeEdges(double qL_in, double qR_in,
                                              double qplus)
     -> std::pair<double, double> {
   // compute monotone edge values
-  double qL = median(q, qL_in, qminus);
-  double qR = median(q, qR_in, qplus);
+  const double qL_star = median(q, qL_in, qminus);
+  const double qR_star = median(q, qR_in, qplus);
 
   // this does something weird to the left side of the sawtooth advection
   // problem, but is absolutely essential for stability in other problems
-  qL = median(q, qL, 3. * q - 2. * qR);
-  qR = median(q, qR, 3. * q - 2. * qL);
+  const double qL = median(q, qL_star, 3. * q - 2. * qR_star);
+  const double qR = median(q, qR_star, 3. * q - 2. * qL_star);
 
   return std::make_pair(qL, qR);
 }
@@ -372,27 +372,22 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(
           }
         }
 #else
-        /// use the 7th-order extrema-preserving (xs) PPM method of Rider,
-        /// Greenough & Kamm (2007).
+        /// extrema-preserving hybrid PPM-WENO from Rider, Greenough & Kamm (2007).
 
-        // 7-point interface-centered stencil
-        const double c1 = -3. / 420.;
-        const double c2 = 25. / 420.;
-        const double c3 = -101. / 420.;
-        const double c4 = 319. / 420.;
-        const double c5 = 214. / 420.;
-        const double c6 = -38. / 420.;
-        const double c7 = 4. / 420.;
+        // 5-point interface-centered stencil (Suresh & Huynh, JCP 136, 83-99, 1997)
+        const double c1 = 2. / 60.;
+        const double c2 = -13. / 60.;
+        const double c3 = 47. / 60.;
+        const double c4 = 27. / 60.;
+        const double c5 = -3. / 60.;
 
-        const double a_minus = c1 * q(i + 3, j, k, n) + c2 * q(i + 2, j, k, n) +
-                               c3 * q(i + 1, j, k, n) + c4 * q(i, j, k, n) +
-                               c5 * q(i - 1, j, k, n) + c6 * q(i - 2, j, k, n) +
-                               c7 * q(i - 3, j, k, n);
+        const double a_minus = c1 * q(i + 2, j, k, n) + c2 * q(i + 1, j, k, n) +
+                               c3 * q(i, j, k, n) + c4 * q(i - 1, j, k, n) +
+                               c5 * q(i - 2, j, k, n);
 
-        const double a_plus = c1 * q(i - 3, j, k, n) + c2 * q(i - 2, j, k, n) +
-                              c3 * q(i - 1, j, k, n) + c4 * q(i, j, k, n) +
-                              c5 * q(i + 1, j, k, n) + c6 * q(i + 2, j, k, n) +
-                              c7 * q(i + 3, j, k, n);
+        const double a_plus = c1 * q(i - 2, j, k, n) + c2 * q(i - 1, j, k, n) +
+                              c3 * q(i, j, k, n) + c4 * q(i + 1, j, k, n) +
+                              c5 * q(i + 2, j, k, n);
 
         // save neighboring values
         const double a = q(i, j, k, n);
