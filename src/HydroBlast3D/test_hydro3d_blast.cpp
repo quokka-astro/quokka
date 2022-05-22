@@ -30,11 +30,12 @@ template <> struct EOS_Traits<SedovProblem> {
 
 template <>
 void RadhydroSimulation<SedovProblem>::setInitialConditionsOnGrid(
-    array_t &state, const amrex::Box &indexRange, const amrex::Geometry &geom) {
+    std::vector<grid> &grid_vec) {
   // extract variables required from the geom object
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom.CellSizeArray();
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom.ProbLoArray();
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = geom.ProbHiArray();
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_vec[0].dx;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_vec[0].prob_hi;
+  const amrex::Box &indexRange = grid_vec[0].indexRange;
 
   amrex::Real x0 = NAN;
   amrex::Real y0 = NAN;
@@ -77,15 +78,15 @@ void RadhydroSimulation<SedovProblem>::setInitialConditionsOnGrid(
     const auto v_sq = vx * vx + vy * vy + vz * vz;
     const auto gamma = HydroSystem<SedovProblem>::gamma_;
 
-    for (int n = 0; n < state.nComp(); ++n) {
-      state(i, j, k, n) = 0.; // zero fill all components
+    for (int n = 0; n < grid_vec[0].array.nComp(); ++n) {
+      grid_vec[0].array(i, j, k, n) = 0.; // zero fill all components
     }
 
-    state(i, j, k, HydroSystem<SedovProblem>::density_index) = rho;
-    state(i, j, k, HydroSystem<SedovProblem>::x1Momentum_index) = rho * vx;
-    state(i, j, k, HydroSystem<SedovProblem>::x2Momentum_index) = rho * vy;
-    state(i, j, k, HydroSystem<SedovProblem>::x3Momentum_index) = rho * vz;
-    state(i, j, k, HydroSystem<SedovProblem>::energy_index) =
+    grid_vec[0].array(i, j, k, HydroSystem<SedovProblem>::density_index) = rho;
+    grid_vec[0].array(i, j, k, HydroSystem<SedovProblem>::x1Momentum_index) = rho * vx;
+    grid_vec[0].array(i, j, k, HydroSystem<SedovProblem>::x2Momentum_index) = rho * vy;
+    grid_vec[0].array(i, j, k, HydroSystem<SedovProblem>::x3Momentum_index) = rho * vz;
+    grid_vec[0].array(i, j, k, HydroSystem<SedovProblem>::energy_index) =
         P / (gamma - 1.) + 0.5 * rho * v_sq;
   });
 }

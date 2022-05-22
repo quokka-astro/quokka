@@ -90,11 +90,13 @@ void RadhydroSimulation<RichtmeyerMeshkovProblem>::computeAfterTimestep() {
 
 template <>
 void RadhydroSimulation<RichtmeyerMeshkovProblem>::setInitialConditionsOnGrid(
-    array_t &state, const amrex::Box &indexRange, const amrex::Geometry &geom) {
+    std::vector<grid> &grid_vec) {
   // extract variables required from the geom object
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom.CellSizeArray();
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom.ProbLoArray();
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = geom.ProbHiArray();
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_vec[0].dx;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_vec[0].prob_hi;
+  const amrex::Box &indexRange = grid_vec[0].indexRange;
+
   // loop over the grid and set the initial condition
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
     amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
@@ -123,14 +125,14 @@ void RadhydroSimulation<RichtmeyerMeshkovProblem>::setInitialConditionsOnGrid(
     const auto v_sq = vx * vx + vy * vy + vz * vz;
     const auto gamma = HydroSystem<RichtmeyerMeshkovProblem>::gamma_;
 
-    state(i, j, k, HydroSystem<RichtmeyerMeshkovProblem>::density_index) = rho;
-    state(i, j, k, HydroSystem<RichtmeyerMeshkovProblem>::x1Momentum_index) =
+    grid_vec[0].array(i, j, k, HydroSystem<RichtmeyerMeshkovProblem>::density_index) = rho;
+    grid_vec[0].array(i, j, k, HydroSystem<RichtmeyerMeshkovProblem>::x1Momentum_index) =
         rho * vx;
-    state(i, j, k, HydroSystem<RichtmeyerMeshkovProblem>::x2Momentum_index) =
+    grid_vec[0].array(i, j, k, HydroSystem<RichtmeyerMeshkovProblem>::x2Momentum_index) =
         rho * vy;
-    state(i, j, k, HydroSystem<RichtmeyerMeshkovProblem>::x3Momentum_index) =
+    grid_vec[0].array(i, j, k, HydroSystem<RichtmeyerMeshkovProblem>::x3Momentum_index) =
         rho * vz;
-    state(i, j, k, HydroSystem<RichtmeyerMeshkovProblem>::energy_index) =
+    grid_vec[0].array(i, j, k, HydroSystem<RichtmeyerMeshkovProblem>::energy_index) =
         P / (gamma - 1.) + 0.5 * rho * v_sq;
   });
 }

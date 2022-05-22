@@ -166,11 +166,12 @@ void RadhydroSimulation<ShellProblem>::preCalculateInitialConditions() {
 
 template <>
 void RadhydroSimulation<ShellProblem>::setInitialConditionsOnGrid(
-    array_t &state, const amrex::Box &indexRange, const amrex::Geometry &geom) {
+    std::vector<grid> &grid_vec) {
   // extract variables required from the geom object
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom.CellSizeArray();
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom.ProbLoArray();
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = geom.ProbHiArray();
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_vec[0].dx;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_vec[0].prob_hi;
+  const amrex::Box &indexRange = grid_vec[0].indexRange;
 
   amrex::Real x0 = NAN;
   amrex::Real y0 = NAN;
@@ -216,17 +217,17 @@ void RadhydroSimulation<ShellProblem>::setInitialConditionsOnGrid(
     AMREX_ASSERT(!std::isnan(Erad));
     AMREX_ASSERT(!std::isnan(Frad));
 
-    state(i, j, k, HydroSystem<ShellProblem>::density_index) = rho;
-    state(i, j, k, HydroSystem<ShellProblem>::x1Momentum_index) = 0;
-    state(i, j, k, HydroSystem<ShellProblem>::x2Momentum_index) = 0;
-    state(i, j, k, HydroSystem<ShellProblem>::x3Momentum_index) = 0;
-    state(i, j, k, HydroSystem<ShellProblem>::energy_index) = Eint;
+    grid_vec[0].array(i, j, k, HydroSystem<ShellProblem>::density_index) = rho;
+    grid_vec[0].array(i, j, k, HydroSystem<ShellProblem>::x1Momentum_index) = 0;
+    grid_vec[0].array(i, j, k, HydroSystem<ShellProblem>::x2Momentum_index) = 0;
+    grid_vec[0].array(i, j, k, HydroSystem<ShellProblem>::x3Momentum_index) = 0;
+    grid_vec[0].array(i, j, k, HydroSystem<ShellProblem>::energy_index) = Eint;
 
     const double Frad_xyz = Frad / std::sqrt(3.0);
-    state(i, j, k, RadSystem<ShellProblem>::radEnergy_index) = Erad;
-    state(i, j, k, RadSystem<ShellProblem>::x1RadFlux_index) = Frad_xyz;
-    state(i, j, k, RadSystem<ShellProblem>::x2RadFlux_index) = Frad_xyz;
-    state(i, j, k, RadSystem<ShellProblem>::x3RadFlux_index) = Frad_xyz;
+    grid_vec[0].array(i, j, k, RadSystem<ShellProblem>::radEnergy_index) = Erad;
+    grid_vec[0].array(i, j, k, RadSystem<ShellProblem>::x1RadFlux_index) = Frad_xyz;
+    grid_vec[0].array(i, j, k, RadSystem<ShellProblem>::x2RadFlux_index) = Frad_xyz;
+    grid_vec[0].array(i, j, k, RadSystem<ShellProblem>::x3RadFlux_index) = Frad_xyz;
   });
 }
 

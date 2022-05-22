@@ -148,23 +148,23 @@ AMRSimulation<SuOlsonProblem>::setCustomBoundaryConditions(
 
 template <>
 void RadhydroSimulation<SuOlsonProblem>::setInitialConditionsOnGrid(
-    array_t &state, const amrex::Box &indexRange, const amrex::Geometry &geom) {
+    std::vector<grid> &grid_vec) {
+  const amrex::Box &indexRange = grid_vec[0].indexRange;
   // loop over the grid and set the initial condition
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
     const double Egas =
         RadSystem<SuOlsonProblem>::ComputeEgasFromTgas(rho0, T_initial);
     const double Erad = a_rad * std::pow(T_initial, 4);
 
-    state(i, j, k, RadSystem<SuOlsonProblem>::radEnergy_index) = Erad;
-    state(i, j, k, RadSystem<SuOlsonProblem>::x1RadFlux_index) = 0;
-    state(i, j, k, RadSystem<SuOlsonProblem>::x2RadFlux_index) = 0;
-    state(i, j, k, RadSystem<SuOlsonProblem>::x3RadFlux_index) = 0;
-
-    state(i, j, k, RadSystem<SuOlsonProblem>::gasDensity_index) = rho0;
-    state(i, j, k, RadSystem<SuOlsonProblem>::x1GasMomentum_index) = 0.;
-    state(i, j, k, RadSystem<SuOlsonProblem>::x2GasMomentum_index) = 0.;
-    state(i, j, k, RadSystem<SuOlsonProblem>::x3GasMomentum_index) = 0.;
-    state(i, j, k, RadSystem<SuOlsonProblem>::gasEnergy_index) = Egas;
+    grid_vec[0].array(i, j, k, RadSystem<SuOlsonProblem>::radEnergy_index) = Erad;
+    grid_vec[0].array(i, j, k, RadSystem<SuOlsonProblem>::x1RadFlux_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<SuOlsonProblem>::x2RadFlux_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<SuOlsonProblem>::x3RadFlux_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<SuOlsonProblem>::gasDensity_index) = rho0;
+    grid_vec[0].array(i, j, k, RadSystem<SuOlsonProblem>::x1GasMomentum_index) = 0.;
+    grid_vec[0].array(i, j, k, RadSystem<SuOlsonProblem>::x2GasMomentum_index) = 0.;
+    grid_vec[0].array(i, j, k, RadSystem<SuOlsonProblem>::x3GasMomentum_index) = 0.;
+    grid_vec[0].array(i, j, k, RadSystem<SuOlsonProblem>::gasEnergy_index) = Egas;
   });
 }
 

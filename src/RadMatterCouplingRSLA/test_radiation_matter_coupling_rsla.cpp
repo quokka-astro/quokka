@@ -85,19 +85,19 @@ constexpr double rho0 = 1.0e-7;  // g cm^-3
 
 template <>
 void RadhydroSimulation<CouplingProblem>::setInitialConditionsOnGrid(
-    array_t &state, const amrex::Box &indexRange, const amrex::Geometry &geom) {
+    std::vector<grid> &grid_vec) {
+  const amrex::Box &indexRange = grid_vec[0].indexRange;
   // loop over the grid and set the initial condition
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-    state(i, j, k, RadSystem<CouplingProblem>::radEnergy_index) = Erad0;
-    state(i, j, k, RadSystem<CouplingProblem>::x1RadFlux_index) = 0;
-    state(i, j, k, RadSystem<CouplingProblem>::x2RadFlux_index) = 0;
-    state(i, j, k, RadSystem<CouplingProblem>::x3RadFlux_index) = 0;
-
-    state(i, j, k, RadSystem<CouplingProblem>::gasEnergy_index) = Egas0;
-    state(i, j, k, RadSystem<CouplingProblem>::gasDensity_index) = rho0;
-    state(i, j, k, RadSystem<CouplingProblem>::x1GasMomentum_index) = 0.;
-    state(i, j, k, RadSystem<CouplingProblem>::x2GasMomentum_index) = 0.;
-    state(i, j, k, RadSystem<CouplingProblem>::x3GasMomentum_index) = 0.;
+    grid_vec[0].array(i, j, k, RadSystem<CouplingProblem>::radEnergy_index) = Erad0;
+    grid_vec[0].array(i, j, k, RadSystem<CouplingProblem>::x1RadFlux_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<CouplingProblem>::x2RadFlux_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<CouplingProblem>::x3RadFlux_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<CouplingProblem>::gasEnergy_index) = Egas0;
+    grid_vec[0].array(i, j, k, RadSystem<CouplingProblem>::gasDensity_index) = rho0;
+    grid_vec[0].array(i, j, k, RadSystem<CouplingProblem>::x1GasMomentum_index) = 0.;
+    grid_vec[0].array(i, j, k, RadSystem<CouplingProblem>::x2GasMomentum_index) = 0.;
+    grid_vec[0].array(i, j, k, RadSystem<CouplingProblem>::x3GasMomentum_index) = 0.;
   });
 }
 

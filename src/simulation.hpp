@@ -320,6 +320,10 @@ void AMRSimulation<problem_t>::setInitialConditionsAtLevel(int lev) {
 
     // apply initial conditions provided / defined by the user
     setInitialConditionsOnGrid(grid_vec);
+
+    // auto const &state = state_new_cc_[lev].array(iter);
+    // amrex::Print() << state(0,0,0,0) << std::endl;
+    // amrex::Print() << grid_vec[0].array(0,0,0,0) << std::endl;
   }
 
   // set flag
@@ -818,6 +822,7 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
   //  MultiFab, both hydro and radiation).
 
   if (lev > 0) { // refined level
+    amrex::Print() << "lev > 0" << std::endl;
     amrex::Vector<amrex::MultiFab *> fineData{&state};
     amrex::Vector<amrex::Real> fineTime = {time};
     amrex::Vector<amrex::MultiFab *> coarseData;

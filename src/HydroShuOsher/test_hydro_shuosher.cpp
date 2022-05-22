@@ -27,10 +27,12 @@ template <> struct EOS_Traits<ShocktubeProblem> {
 
 template <>
 void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsOnGrid(
-    array_t &state, const amrex::Box &indexRange, const amrex::Geometry &geom) {
+    std::vector<grid> &grid_vec) {
   // extract variables required from the geom object
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom.CellSizeArray();
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom.ProbLoArray();
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_vec[0].dx;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
+  const amrex::Box &indexRange = grid_vec[0].indexRange;
+  
   const int ncomp = ncomp_;
   // loop over the grid and set the initial condition
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -54,15 +56,15 @@ void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsOnGrid(
     AMREX_ASSERT(!std::isnan(P));
 
     for (int n = 0; n < ncomp; ++n) {
-      state(i, j, k, n) = 0.;
+      grid_vec[0].array(i, j, k, n) = 0.;
     }
 
     const auto gamma = HydroSystem<ShocktubeProblem>::gamma_;
-    state(i, j, k, HydroSystem<ShocktubeProblem>::density_index) = rho;
-    state(i, j, k, HydroSystem<ShocktubeProblem>::x1Momentum_index) = rho * vx;
-    state(i, j, k, HydroSystem<ShocktubeProblem>::x2Momentum_index) = 0.;
-    state(i, j, k, HydroSystem<ShocktubeProblem>::x3Momentum_index) = 0.;
-    state(i, j, k, HydroSystem<ShocktubeProblem>::energy_index) =
+    grid_vec[0].array(i, j, k, HydroSystem<ShocktubeProblem>::density_index) = rho;
+    grid_vec[0].array(i, j, k, HydroSystem<ShocktubeProblem>::x1Momentum_index) = rho * vx;
+    grid_vec[0].array(i, j, k, HydroSystem<ShocktubeProblem>::x2Momentum_index) = 0.;
+    grid_vec[0].array(i, j, k, HydroSystem<ShocktubeProblem>::x3Momentum_index) = 0.;
+    grid_vec[0].array(i, j, k, HydroSystem<ShocktubeProblem>::energy_index) =
         P / (gamma - 1.) + 0.5 * rho * (vx * vx);
   });
 }

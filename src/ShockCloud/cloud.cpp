@@ -108,14 +108,15 @@ void RadhydroSimulation<ShockCloud>::preCalculateInitialConditions() {
 
 template <>
 void RadhydroSimulation<ShockCloud>::setInitialConditionsOnGrid(
-    array_t &state, const amrex::Box &indexRange, const amrex::Geometry &geom) {
+    std::vector<grid> &grid_vec) {
   // dereference phase table pointer
   const amrex::TableData<Real, AMREX_SPACEDIM>::const_table_type &phase_ref =
       *phase_ptr;
   // extract variables required from the geom object
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom.CellSizeArray();
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom.ProbLoArray();
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = geom.ProbHiArray();
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_vec[0].dx;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_vec[0].prob_hi;
+  const amrex::Box &indexRange = grid_vec[0].indexRange;
 
   Real const Lx = (prob_hi[0] - prob_lo[0]);
   Real const Ly = (prob_hi[1] - prob_lo[1]);
@@ -161,16 +162,15 @@ void RadhydroSimulation<ShockCloud>::setInitialConditionsOnGrid(
     Real const Egas =
         RadSystem<ShockCloud>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
 
-    state(i, j, k, RadSystem<ShockCloud>::gasEnergy_index) = Egas;
-    state(i, j, k, RadSystem<ShockCloud>::gasDensity_index) = rho;
-    state(i, j, k, RadSystem<ShockCloud>::x1GasMomentum_index) = xmom;
-    state(i, j, k, RadSystem<ShockCloud>::x2GasMomentum_index) = ymom;
-    state(i, j, k, RadSystem<ShockCloud>::x3GasMomentum_index) = zmom;
-
-    state(i, j, k, RadSystem<ShockCloud>::radEnergy_index) = 0;
-    state(i, j, k, RadSystem<ShockCloud>::x1RadFlux_index) = 0;
-    state(i, j, k, RadSystem<ShockCloud>::x2RadFlux_index) = 0;
-    state(i, j, k, RadSystem<ShockCloud>::x3RadFlux_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<ShockCloud>::gasEnergy_index) = Egas;
+    grid_vec[0].array(i, j, k, RadSystem<ShockCloud>::gasDensity_index) = rho;
+    grid_vec[0].array(i, j, k, RadSystem<ShockCloud>::x1GasMomentum_index) = xmom;
+    grid_vec[0].array(i, j, k, RadSystem<ShockCloud>::x2GasMomentum_index) = ymom;
+    grid_vec[0].array(i, j, k, RadSystem<ShockCloud>::x3GasMomentum_index) = zmom;
+    grid_vec[0].array(i, j, k, RadSystem<ShockCloud>::radEnergy_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<ShockCloud>::x1RadFlux_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<ShockCloud>::x2RadFlux_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<ShockCloud>::x3RadFlux_index) = 0;
   });
 }
 

@@ -58,17 +58,18 @@ AMREX_GPU_DEVICE void computeWaveSolution(
 
 template <>
 void RadhydroSimulation<WaveProblem>::setInitialConditionsOnGrid(
-    array_t &state, const amrex::Box &indexRange, const amrex::Geometry &geom) {
+    std::vector<grid> &grid_vec) {
   // extract variables required from the geom object
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom.CellSizeArray();
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom.ProbLoArray();
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_vec[0].dx;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
+  const amrex::Box &indexRange = grid_vec[0].indexRange;
   const int ncomp = ncomp_;
   // loop over the grid and set the initial condition
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
     for (int n = 0; n < ncomp; ++n) {
-      state(i, j, k, n) = 0; // fill unused components with zeros
+      grid_vec[0].array(i, j, k, n) = 0; // fill unused components with zeros
     }
-    computeWaveSolution(i, j, k, state, dx, prob_lo);
+    computeWaveSolution(i, j, k, grid_vec[0].array, dx, prob_lo);
   });
 }
 

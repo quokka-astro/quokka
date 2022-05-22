@@ -48,15 +48,16 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto exactSolutionAtIndex(
 
 template <>
 void AdvectionSimulation<SquareProblem>::setInitialConditionsOnGrid(
-    array_t &state, const amrex::Box &indexRange, const amrex::Geometry &geom) {
+    std::vector<grid> &grid_vec) {
   // extract variables required from the geom object
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom.CellSizeArray();
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom.ProbLoArray();
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = geom.ProbHiArray();
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_vec[0].dx;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_vec[0].prob_hi;
+  const amrex::Box &indexRange = grid_vec[0].indexRange;
   // loop over the grid and set the initial condition
   amrex::ParallelFor(
       indexRange, ncomp_, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
-        state(i, j, k, n) = exactSolutionAtIndex(i, j, prob_lo, prob_hi, dx);
+        grid_vec[0].array(i, j, k, n) = exactSolutionAtIndex(i, j, prob_lo, prob_hi, dx);
       });
 }
 

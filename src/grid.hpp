@@ -4,8 +4,8 @@
 #include <AMReX_Box.H>
 #include <AMReX_REAL.H>
 
-enum class centering { cc, fc, ec };
-enum class direction { na=-1, x=0, y=1, z=2 };
+enum class centering { cc=0, fc, ec };
+enum class direction { na=-1, x, y, z };
 
 struct grid {
   amrex::Array4<double> const &array;

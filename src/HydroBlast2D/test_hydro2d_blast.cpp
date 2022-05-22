@@ -31,11 +31,12 @@ template <> struct EOS_Traits<BlastProblem> {
 
 template <>
 void RadhydroSimulation<BlastProblem>::setInitialConditionsOnGrid(
-    array_t &state, const amrex::Box &indexRange, const amrex::Geometry &geom) {
+    std::vector<grid> &grid_vec) {
   // extract variables required from the geom object
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom.CellSizeArray();
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom.ProbLoArray();
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = geom.ProbHiArray();
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_vec[0].dx;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_vec[0].prob_hi;
+  const amrex::Box &indexRange = grid_vec[0].indexRange;
 
   amrex::Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
   amrex::Real const y0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
@@ -66,18 +67,18 @@ void RadhydroSimulation<BlastProblem>::setInitialConditionsOnGrid(
     const auto v_sq = vx * vx + vy * vy + vz * vz;
     const auto gamma = HydroSystem<BlastProblem>::gamma_;
 
-    state(i, j, k, HydroSystem<BlastProblem>::density_index) = rho;
-    state(i, j, k, HydroSystem<BlastProblem>::x1Momentum_index) = rho * vx;
-    state(i, j, k, HydroSystem<BlastProblem>::x2Momentum_index) = rho * vy;
-    state(i, j, k, HydroSystem<BlastProblem>::x3Momentum_index) = rho * vz;
-    state(i, j, k, HydroSystem<BlastProblem>::energy_index) =
+    grid_vec[0].array(i, j, k, HydroSystem<BlastProblem>::density_index) = rho;
+    grid_vec[0].array(i, j, k, HydroSystem<BlastProblem>::x1Momentum_index) = rho * vx;
+    grid_vec[0].array(i, j, k, HydroSystem<BlastProblem>::x2Momentum_index) = rho * vy;
+    grid_vec[0].array(i, j, k, HydroSystem<BlastProblem>::x3Momentum_index) = rho * vz;
+    grid_vec[0].array(i, j, k, HydroSystem<BlastProblem>::energy_index) =
         P / (gamma - 1.) + 0.5 * rho * v_sq;
 
     // initialize radiation variables to zero
-    state(i, j, k, RadSystem<BlastProblem>::radEnergy_index) = 0;
-    state(i, j, k, RadSystem<BlastProblem>::x1RadFlux_index) = 0;
-    state(i, j, k, RadSystem<BlastProblem>::x2RadFlux_index) = 0;
-    state(i, j, k, RadSystem<BlastProblem>::x3RadFlux_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<BlastProblem>::radEnergy_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<BlastProblem>::x1RadFlux_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<BlastProblem>::x2RadFlux_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<BlastProblem>::x3RadFlux_index) = 0;
   });
 }
 

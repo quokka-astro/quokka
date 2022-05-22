@@ -195,10 +195,12 @@ AMRSimulation<TophatProblem>::setCustomBoundaryConditions(
 
 template <>
 void RadhydroSimulation<TophatProblem>::setInitialConditionsOnGrid(
-    array_t &state, const amrex::Box &indexRange, const amrex::Geometry &geom) {
+    std::vector<grid> &grid_vec) {
   // extract variables required from the geom object
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom.CellSizeArray();
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom.ProbLoArray();
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_vec[0].dx;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
+  const amrex::Box &indexRange = grid_vec[0].indexRange;
+
   // loop over the grid and set the initial condition
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
     const double Erad = a_rad * std::pow(T_initial, 4);
@@ -223,16 +225,15 @@ void RadhydroSimulation<TophatProblem>::setInitialConditionsOnGrid(
     const double Egas =
         RadSystem<TophatProblem>::ComputeEgasFromTgas(rho, T_initial);
 
-    state(i, j, k, RadSystem<TophatProblem>::radEnergy_index) = Erad;
-    state(i, j, k, RadSystem<TophatProblem>::x1RadFlux_index) = 0;
-    state(i, j, k, RadSystem<TophatProblem>::x2RadFlux_index) = 0;
-    state(i, j, k, RadSystem<TophatProblem>::x3RadFlux_index) = 0;
-
-    state(i, j, k, RadSystem<TophatProblem>::gasEnergy_index) = Egas;
-    state(i, j, k, RadSystem<TophatProblem>::gasDensity_index) = rho;
-    state(i, j, k, RadSystem<TophatProblem>::x1GasMomentum_index) = 0.;
-    state(i, j, k, RadSystem<TophatProblem>::x2GasMomentum_index) = 0.;
-    state(i, j, k, RadSystem<TophatProblem>::x3GasMomentum_index) = 0.;
+    grid_vec[0].array(i, j, k, RadSystem<TophatProblem>::radEnergy_index) = Erad;
+    grid_vec[0].array(i, j, k, RadSystem<TophatProblem>::x1RadFlux_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<TophatProblem>::x2RadFlux_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<TophatProblem>::x3RadFlux_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<TophatProblem>::gasEnergy_index) = Egas;
+    grid_vec[0].array(i, j, k, RadSystem<TophatProblem>::gasDensity_index) = rho;
+    grid_vec[0].array(i, j, k, RadSystem<TophatProblem>::x1GasMomentum_index) = 0.;
+    grid_vec[0].array(i, j, k, RadSystem<TophatProblem>::x2GasMomentum_index) = 0.;
+    grid_vec[0].array(i, j, k, RadSystem<TophatProblem>::x3GasMomentum_index) = 0.;
   });
 }
 

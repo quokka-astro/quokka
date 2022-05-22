@@ -106,10 +106,11 @@ void RadhydroSimulation<TubeProblem>::preCalculateInitialConditions() {
 
 template <>
 void RadhydroSimulation<TubeProblem>::setInitialConditionsOnGrid(
-    array_t &state, const amrex::Box &indexRange, const amrex::Geometry &geom) {
+    std::vector<grid> &grid_vec) {
   // extract variables required from the geom object
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom.CellSizeArray();
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom.ProbLoArray();
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_vec[0].dx;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
+  const amrex::Box &indexRange = grid_vec[0].indexRange;
   // loop over the grid and set the initial condition
   amrex::LoopConcurrentOnCpu(indexRange, [=](int i, int j, int k) noexcept {
     amrex::Real const x = (prob_lo[0] + (i + amrex::Real(0.5)) * dx[0]) / Lx;
@@ -125,17 +126,17 @@ void RadhydroSimulation<TubeProblem>::setInitialConditionsOnGrid(
     amrex::Real const vel = Mach * a0;
     amrex::Real const Pgas = rho * (a0 * a0);
 
-    state(i, j, k, RadSystem<TubeProblem>::radEnergy_index) =
+    grid_vec[0].array(i, j, k, RadSystem<TubeProblem>::radEnergy_index) =
         Frad0 / c_light_cgs_;
-    state(i, j, k, RadSystem<TubeProblem>::x1RadFlux_index) = Frad0;
-    state(i, j, k, RadSystem<TubeProblem>::x2RadFlux_index) = 0;
-    state(i, j, k, RadSystem<TubeProblem>::x3RadFlux_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<TubeProblem>::x1RadFlux_index) = Frad0;
+    grid_vec[0].array(i, j, k, RadSystem<TubeProblem>::x2RadFlux_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<TubeProblem>::x3RadFlux_index) = 0;
 
-    state(i, j, k, RadSystem<TubeProblem>::gasDensity_index) = rho;
-    state(i, j, k, RadSystem<TubeProblem>::x1GasMomentum_index) = rho * vel;
-    state(i, j, k, RadSystem<TubeProblem>::x2GasMomentum_index) = 0;
-    state(i, j, k, RadSystem<TubeProblem>::x3GasMomentum_index) = 0;
-    state(i, j, k, RadSystem<TubeProblem>::gasEnergy_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<TubeProblem>::gasDensity_index) = rho;
+    grid_vec[0].array(i, j, k, RadSystem<TubeProblem>::x1GasMomentum_index) = rho * vel;
+    grid_vec[0].array(i, j, k, RadSystem<TubeProblem>::x2GasMomentum_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<TubeProblem>::x3GasMomentum_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<TubeProblem>::gasEnergy_index) = 0;
   });
 }
 

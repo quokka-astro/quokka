@@ -88,8 +88,7 @@ public:
                                     amrex::Real dt_lev, int /*iteration*/,
                                     int /*ncycle*/) override;
   void preCalculateInitialConditions() override;
-  void setInitialConditionsOnGrid(array_t &state, const amrex::Box &indexRange,
-                                  const amrex::Geometry &geom) override;
+  void setInitialConditionsOnGrid(std::vector<grid> &grid_vec) override;
   void computeAfterTimestep() override;
   void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) override;
   void computeReferenceSolution(
@@ -150,7 +149,7 @@ void AdvectionSimulation<problem_t>::preCalculateInitialConditions() {
 
 template <typename problem_t>
 void AdvectionSimulation<problem_t>::setInitialConditionsOnGrid(
-    array_t &state, const amrex::Box &indexRange, const amrex::Geometry &geom) {
+    std::vector<grid> &grid_vec) {
   // default empty implementation
   // user should implement using problem-specific template specialization
 }

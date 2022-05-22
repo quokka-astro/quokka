@@ -158,10 +158,12 @@ AMRSimulation<ShockProblem>::setCustomBoundaryConditions(
 
 template <>
 void RadhydroSimulation<ShockProblem>::setInitialConditionsOnGrid(
-    array_t &state, const amrex::Box &indexRange, const amrex::Geometry &geom) {
+    std::vector<grid> &grid_vec) {
   // extract variables required from the geom object
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom.CellSizeArray();
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom.ProbLoArray();
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_vec[0].dx;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
+  const amrex::Box &indexRange = grid_vec[0].indexRange;
+
   // loop over the grid and set the initial condition
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
     amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
@@ -186,16 +188,15 @@ void RadhydroSimulation<ShockProblem>::setInitialConditionsOnGrid(
       x1Momentum = rho1 * v1;
     }
 
-    state(i, j, k, RadSystem<ShockProblem>::radEnergy_index) = radEnergy;
-    state(i, j, k, RadSystem<ShockProblem>::x1RadFlux_index) = x1RadFlux;
-    state(i, j, k, RadSystem<ShockProblem>::x2RadFlux_index) = 0;
-    state(i, j, k, RadSystem<ShockProblem>::x3RadFlux_index) = 0;
-
-    state(i, j, k, RadSystem<ShockProblem>::gasEnergy_index) = energy;
-    state(i, j, k, RadSystem<ShockProblem>::gasDensity_index) = density;
-    state(i, j, k, RadSystem<ShockProblem>::x1GasMomentum_index) = x1Momentum;
-    state(i, j, k, RadSystem<ShockProblem>::x2GasMomentum_index) = 0;
-    state(i, j, k, RadSystem<ShockProblem>::x3GasMomentum_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<ShockProblem>::radEnergy_index) = radEnergy;
+    grid_vec[0].array(i, j, k, RadSystem<ShockProblem>::x1RadFlux_index) = x1RadFlux;
+    grid_vec[0].array(i, j, k, RadSystem<ShockProblem>::x2RadFlux_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<ShockProblem>::x3RadFlux_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<ShockProblem>::gasEnergy_index) = energy;
+    grid_vec[0].array(i, j, k, RadSystem<ShockProblem>::gasDensity_index) = density;
+    grid_vec[0].array(i, j, k, RadSystem<ShockProblem>::x1GasMomentum_index) = x1Momentum;
+    grid_vec[0].array(i, j, k, RadSystem<ShockProblem>::x2GasMomentum_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<ShockProblem>::x3GasMomentum_index) = 0;
   });
 }
 
