@@ -150,7 +150,7 @@ template <> void RadhydroSimulation<QuirkProblem>::computeAfterTimestep() {
       amrex::GpuArray<int, 3> box_lo = bx.loVect3d();
       jlo = box_lo[1];
       klo = box_lo[2];
-      amrex::IntVect cell{ilo, jlo, klo};
+      amrex::IntVect cell{AMREX_D_DECL(ilo, jlo, klo)};
       if (bx.contains(cell)) {
         box_no = mfi.index();
         break;
