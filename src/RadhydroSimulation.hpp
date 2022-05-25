@@ -684,7 +684,7 @@ auto RadhydroSimulation<problem_t>::computeHydroFluxes(
 	BL_PROFILE("RadhydroSimulation::computeHydroFluxes()");
 
 	// convert conserved to primitive variables
-	amrex::Box const &ghostRange = amrex::grow(indexRange, nghost_);
+	amrex::Box const &ghostRange = amrex::grow(indexRange, nghost_ - 4); // modified for 4th-order cons2prim
 	amrex::FArrayBox primVar(ghostRange, nvars, amrex::The_Async_Arena());
 	HydroSystem<problem_t>::ConservedToPrimitive(consVar, primVar.array(), ghostRange);
 
@@ -785,7 +785,7 @@ auto RadhydroSimulation<problem_t>::computeFOHydroFluxes(
 	BL_PROFILE("RadhydroSimulation::computeFOHydroFluxes()");
 
 	// convert conserved to primitive variables
-	amrex::Box const &ghostRange = amrex::grow(indexRange, nghost_);
+	amrex::Box const &ghostRange = amrex::grow(indexRange, nghost_ - 4); // modified for 4th-order cons2prim
 	amrex::FArrayBox primVar(ghostRange, nvars, amrex::The_Async_Arena());
 	HydroSystem<problem_t>::ConservedToPrimitive(consVar, primVar.array(), ghostRange);
 

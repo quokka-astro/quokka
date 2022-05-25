@@ -215,7 +215,7 @@ protected:
   amrex::Vector<std::unique_ptr<amrex::YAFluxRegister>> flux_reg_;
 
   // Nghost = number of ghost cells for each array
-  int nghost_ = 4; // PPM needs nghost >= 3, PPM+flattening needs nghost >= 4, PPM5/WENO5 needs >= 4
+  int nghost_ = 8; // PPM needs nghost >= 3, PPM+flattening needs nghost >= 4, PPM5/WENO5 needs >= 4
   int ncomp_ = 0; // = number of components (conserved variables) for each array
   int ncompPrimitive_ = 0; // number of primitive variables
   amrex::Vector<std::string> componentNames_;

@@ -66,6 +66,12 @@ public:
 
   template <FluxDir DIR>
   [[nodiscard]] AMREX_GPU_DEVICE AMREX_FORCE_INLINE static auto
+  ComputeWENOMoments(quokka::Array4View<const amrex::Real, DIR> const &q, int i,
+                     int j, int k, int n)
+      -> std::pair<amrex::Real, amrex::Real>;
+
+  template <FluxDir DIR>
+  [[nodiscard]] AMREX_GPU_DEVICE AMREX_FORCE_INLINE static auto
   ComputeWENO(quokka::Array4View<const amrex::Real, DIR> const &q, int i, int j,
               int k, int n) -> std::pair<amrex::Real, amrex::Real>;
 
@@ -73,6 +79,14 @@ public:
   [[nodiscard]] AMREX_GPU_DEVICE AMREX_FORCE_INLINE static auto
   ComputeSteepPPM(quokka::Array4View<const amrex::Real, DIR> const &q, int i,
                   int j, int k, int n) -> amrex::Real;
+
+  [[nodiscard]] AMREX_GPU_DEVICE AMREX_FORCE_INLINE static auto
+  ComputeFourthOrderPointValue(amrex::Array4<const amrex::Real> const &q, int i,
+                               int j, int k, int n) -> amrex::Real;
+
+  [[nodiscard]] AMREX_GPU_DEVICE AMREX_FORCE_INLINE static auto
+  ComputeFourthOrderCellAverage(amrex::Array4<const amrex::Real> const &q,
+                                int i, int j, int k, int n) -> amrex::Real;
 
   template <FluxDir DIR>
   static void ReconstructStatesConstant(arrayconst_t &q, array_t &leftState,
@@ -119,9 +133,9 @@ void HyperbolicSystem<problem_t>::ReconstructStatesConstant(
   quokka::Array4View<amrex::Real, DIR> rightState(rightState_in);
 
   // By convention, the interfaces are defined on the left edge of each zone,
-  // i.e. xleft_(i) is the "left"-side of the interface at the left edge of zone
-  // i, and xright_(i) is the "right"-side of the interface at the *left* edge
-  // of zone i. [Indexing note: There are (nx
+  // i.e. xleft_(i) is the "left"-side of the interface at the left edge of
+  // zone i, and xright_(i) is the "right"-side of the interface at the *left*
+  // edge of zone i. [Indexing note: There are (nx
   // + 1) interfaces for nx zones.]
 
   amrex::ParallelFor(
@@ -219,7 +233,7 @@ HyperbolicSystem<problem_t>::ComputeSteepPPM(
 template <typename problem_t>
 template <FluxDir DIR>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto
-HyperbolicSystem<problem_t>::ComputeWENO(
+HyperbolicSystem<problem_t>::ComputeWENOMoments(
     quokka::Array4View<const amrex::Real, DIR> const &q, int i, int j, int k,
     int n) -> std::pair<amrex::Real, amrex::Real> {
   /// compute WENO-Z reconstruction following Balsara (2017).
@@ -249,7 +263,10 @@ HyperbolicSystem<problem_t>::ComputeWENO(
 
   // use WENO-Z smoothness indicators with *symmetric* linear weights
   // (1-2-3 problem fails with the [asymmetric] 'optimal' weights)
-  const double eps = 1.0e-40;
+  const double q_mean = (std::abs(q(i - 1, j, k, n)) + std::abs(q(i, j, k, n)) +
+                         std::abs(q(i + 1, j, k, n))) /
+                        3.0;
+  const double eps = (q_mean > 0.0) ? 1.0e-40 * q_mean : 1.0e-40;
   const double tau = std::abs(IS_L - IS_R);
   double wL = 0.2 * (1. + tau / (IS_L + eps));
   double wC = 0.6 * (1. + tau / (IS_C + eps));
@@ -265,11 +282,77 @@ HyperbolicSystem<problem_t>::ComputeWENO(
   const double q_x = wL * sL_x + wC * sC_x + wR * sR_x;
   const double q_xx = wL * sL_xx + wC * sC_xx + wR * sR_xx;
 
+  return std::make_pair(q_x, q_xx);
+}
+
+template <typename problem_t>
+template <FluxDir DIR>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto
+HyperbolicSystem<problem_t>::ComputeWENO(
+    quokka::Array4View<const amrex::Real, DIR> const &q, int i, int j, int k,
+    int n) -> std::pair<amrex::Real, amrex::Real> {
+  /// compute WENO-Z reconstruction following Balsara (2017).
+  auto [q_x, q_xx] = ComputeWENOMoments(q, i, j, k, n);
+
   // evaluate i-(1/2) and i+(1/2) values
   const double qL = q(i, j, k, n) - 0.5 * q_x + (0.25 - 1. / 12.) * q_xx;
   const double qR = q(i, j, k, n) + 0.5 * q_x + (0.25 - 1. / 12.) * q_xx;
 
   return std::make_pair(qL, qR);
+}
+
+template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto
+HyperbolicSystem<problem_t>::ComputeFourthOrderPointValue(
+    amrex::Array4<const amrex::Real> const &q, int i_in, int j_in, int k_in,
+    int n) -> amrex::Real {
+  // calculate a fourth-order approximation to the cell-centered point value
+  // (assuming dx == dy == dz)
+  // note: q is an array of the *cell-average* values
+
+  quokka::Array4View<const amrex::Real, FluxDir::X1> qview_x1(q);
+  auto [i1, j1, k1] = quokka::reorderMultiIndex<FluxDir::X1>(i_in, j_in, k_in);
+  auto [qx, qxx] = ComputeWENOMoments(qview_x1, i1, j1, k1, n);
+#if AMREX_SPACEDIM >= 2
+  quokka::Array4View<const amrex::Real, FluxDir::X2> qview_x2(q);
+  auto [i2, j2, k2] = quokka::reorderMultiIndex<FluxDir::X2>(i_in, j_in, k_in);
+  auto [qy, qyy] = ComputeWENOMoments(qview_x2, i2, j2, k2, n);
+#endif
+#if AMREX_SPACEDIM == 3
+  quokka::Array4View<const amrex::Real, FluxDir::X3> qview_x3(q);
+  auto [i3, j3, k3] = quokka::reorderMultiIndex<FluxDir::X3>(i_in, j_in, k_in);
+  auto [qz, qzz] = ComputeWENOMoments(qview_x3, i3, j3, k3, n);
+#endif
+
+  const double qbar = q(i_in, j_in, k_in, n);
+  return qbar - (AMREX_D_TERM(qxx, +qyy, +qzz)) / 12.;
+}
+
+template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto
+HyperbolicSystem<problem_t>::ComputeFourthOrderCellAverage(
+    amrex::Array4<const amrex::Real> const &q, int i_in, int j_in, int k_in,
+    int n) -> amrex::Real {
+  // calculate a fourth-order approximation to the cell-centered point value
+  // (assuming dx == dy == dz)
+  // note: q is an array of the *cell-centered* point values
+
+  quokka::Array4View<const amrex::Real, FluxDir::X1> qview_x1(q);
+  auto [i1, j1, k1] = quokka::reorderMultiIndex<FluxDir::X1>(i_in, j_in, k_in);
+  auto [qx, qxx] = ComputeWENOMoments(qview_x1, i1, j1, k1, n);
+#if AMREX_SPACEDIM >= 2
+  quokka::Array4View<const amrex::Real, FluxDir::X2> qview_x2(q);
+  auto [i2, j2, k2] = quokka::reorderMultiIndex<FluxDir::X2>(i_in, j_in, k_in);
+  auto [qy, qyy] = ComputeWENOMoments(qview_x2, i2, j2, k2, n);
+#endif
+#if AMREX_SPACEDIM == 3
+  quokka::Array4View<const amrex::Real, FluxDir::X3> qview_x3(q);
+  auto [i3, j3, k3] = quokka::reorderMultiIndex<FluxDir::X3>(i_in, j_in, k_in);
+  auto [qz, qzz] = ComputeWENOMoments(qview_x3, i3, j3, k3, n);
+#endif
+
+  const double q0 = q(i_in, j_in, k_in, n);
+  return q0 + (AMREX_D_TERM(qxx, +qyy, +qzz)) / 12.;
 }
 
 template <typename problem_t>
@@ -372,9 +455,11 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(
           }
         }
 #else
-        /// extrema-preserving hybrid PPM-WENO from Rider, Greenough & Kamm (2007).
+        /// extrema-preserving hybrid PPM-WENO from Rider, Greenough & Kamm
+        /// (2007).
 
-        // 5-point interface-centered stencil (Suresh & Huynh, JCP 136, 83-99, 1997)
+        // 5-point interface-centered stencil (Suresh & Huynh, JCP 136, 83-99,
+        // 1997)
         const double c1 = 2. / 60.;
         const double c2 = -13. / 60.;
         const double c3 = 47. / 60.;
@@ -399,7 +484,12 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(
             MonotonizeEdges(a_minus, a_plus, a, am, ap);
 
         // 2. check whether limiter was triggered on either side
-        const double eps = 1.0e-6;
+        const double q_mean =
+            (std::abs(q(i - 1, j, k, n)) + std::abs(q(i, j, k, n)) +
+             std::abs(q(i + 1, j, k, n))) /
+            3.0;
+        const double eps = 1.0e-6 * q_mean;
+
         if (std::abs(new_a_minus - a_minus) > eps ||
             std::abs(new_a_plus - a_plus) > eps) {
 
