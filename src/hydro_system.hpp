@@ -740,9 +740,15 @@ void HydroSystem<problem_t>::ComputeFluxes(
     } else if constexpr (DIR == FluxDir::X2) {
       u_L = vy_L;
       u_R = vy_R;
-      velN_index = x2Velocity_index;
-      velV_index = x3Velocity_index;
-      velW_index = x1Velocity_index;
+      if constexpr (AMREX_SPACEDIM == 2) {
+        velN_index = x2Velocity_index;
+        velV_index = x1Velocity_index;
+        velW_index = x3Velocity_index; // unchanged in 2D
+      } else if constexpr (AMREX_SPACEDIM == 3) {
+        velN_index = x2Velocity_index;
+        velV_index = x3Velocity_index;
+        velW_index = x1Velocity_index;
+      }
     } else if constexpr (DIR == FluxDir::X3) {
       u_L = vz_L;
       u_R = vz_R;
