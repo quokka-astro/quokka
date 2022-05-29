@@ -13,7 +13,6 @@
 
 // library headers
 #include "AMReX_Arena.H"
-#include "AMReX_Array4.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_FArrayBox.H"
 #include "AMReX_Loop.H"
@@ -55,9 +54,6 @@ public:
   };
 
   static constexpr int nvar_ = 5;
-
-  using HyperbolicSystem<problem_t>::ComputeFourthOrderCellAverage;
-  using HyperbolicSystem<problem_t>::ComputeFourthOrderPointValue;
 
   static void ConservedToPrimitive(amrex::Array4<const amrex::Real> const &cons,
                                    array_t &primVar,
@@ -136,81 +132,34 @@ public:
 
 template <typename problem_t>
 void HydroSystem<problem_t>::ConservedToPrimitive(
-    amrex::Array4<const amrex::Real> const &cons, array_t &primVarAvg,
+    amrex::Array4<const amrex::Real> const &cons, array_t &primVar,
     amrex::Box const &indexRange) {
-  // convert conserved variables to primitive variables over indexRange
+  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+    const auto rho = cons(i, j, k, density_index);
+    const auto px = cons(i, j, k, x1Momentum_index);
+    const auto py = cons(i, j, k, x2Momentum_index);
+    const auto pz = cons(i, j, k, x3Momentum_index);
+    const auto E =
+        cons(i, j, k, energy_index); // *total* gas energy per unit volume
 
-  amrex::Box const &pointRange = amrex::grow(indexRange, 2);
-  amrex::FArrayBox primVarFAB(pointRange, nvar_, amrex::The_Async_Arena());
-  amrex::Array4<amrex::Real> primVar = primVarFAB.array();
+    AMREX_ASSERT(!std::isnan(rho));
+    AMREX_ASSERT(!std::isnan(px));
+    AMREX_ASSERT(!std::isnan(py));
+    AMREX_ASSERT(!std::isnan(pz));
+    AMREX_ASSERT(!std::isnan(E));
 
-  amrex::ParallelFor(pointRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-    // compute high-order primitive point values
-    auto HighOrderPrimPoint = [=] AMREX_GPU_DEVICE() {
-      const auto rho =
-          ComputeFourthOrderPointValue(cons, i, j, k, density_index);
-      const auto px =
-          ComputeFourthOrderPointValue(cons, i, j, k, x1Momentum_index);
-      const auto py =
-          ComputeFourthOrderPointValue(cons, i, j, k, x2Momentum_index);
-      const auto pz =
-          ComputeFourthOrderPointValue(cons, i, j, k, x3Momentum_index);
-      const auto E = ComputeFourthOrderPointValue(
-          cons, i, j, k,
-          energy_index); // *total* gas energy per unit volume
+    const auto vx = px / rho;
+    const auto vy = py / rho;
+    const auto vz = pz / rho;
+    const auto kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
+    const auto thermal_energy = E - kinetic_energy;
 
-      const auto vx = px / rho;
-      const auto vy = py / rho;
-      const auto vz = pz / rho;
-      const auto kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
-      const auto thermal_energy = E - kinetic_energy;
+    const auto P = thermal_energy * (HydroSystem<problem_t>::gamma_ - 1.0);
+    const auto eint = thermal_energy / rho; // specific internal energy
 
-      AMREX_ASSERT(!std::isnan(rho));
-      AMREX_ASSERT(!std::isnan(px));
-      AMREX_ASSERT(!std::isnan(py));
-      AMREX_ASSERT(!std::isnan(pz));
-      AMREX_ASSERT(!std::isnan(E));
-
-      const auto P = thermal_energy * (HydroSystem<problem_t>::gamma_ - 1.0);
-      const auto eint = thermal_energy / rho; // specific internal energy
-      return std::make_tuple(rho, vx, vy, vz, P, eint);
-    };
-
-    auto LowOrderPrimPoint = [=] AMREX_GPU_DEVICE() {
-      const auto rho = cons(i, j, k, density_index);
-      const auto px = cons(i, j, k, x1Momentum_index);
-      const auto py = cons(i, j, k, x2Momentum_index);
-      const auto pz = cons(i, j, k, x3Momentum_index);
-      const auto E =
-          cons(i, j, k, energy_index); // *total* gas energy per unit volume
-
-      const auto vx = px / rho;
-      const auto vy = py / rho;
-      const auto vz = pz / rho;
-      const auto kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
-      const auto thermal_energy = E - kinetic_energy;
-
-      AMREX_ASSERT(!std::isnan(rho));
-      AMREX_ASSERT(!std::isnan(px));
-      AMREX_ASSERT(!std::isnan(py));
-      AMREX_ASSERT(!std::isnan(pz));
-      AMREX_ASSERT(!std::isnan(E));
-
-      const auto P = thermal_energy * (HydroSystem<problem_t>::gamma_ - 1.0);
-      const auto eint = thermal_energy / rho; // specific internal energy
-      return std::make_tuple(rho, vx, vy, vz, P, eint);
-    };
-
-    auto [rho, vx, vy, vz, P, eint] = HighOrderPrimPoint();
-    // fallback to 2nd-order primitive values if high-order fails
-    if (rho <= 0. || (!is_eos_isothermal() && P <= 0.)) {
-      auto [rho_lo, vx_lo, vy_lo, vz_lo, P_lo, eint_lo] = LowOrderPrimPoint();
-      rho = rho_lo;
-      vx = vx_lo;
-      vy = vy_lo;
-      vz = vz_lo;
-      P = P_lo;
-      eint = eint_lo;
+    AMREX_ASSERT(rho > 0.);
+    if constexpr (!is_eos_isothermal()) {
+      AMREX_ASSERT(P > 0.);
     }
 
     primVar(i, j, k, primDensity_index) = rho;
@@ -225,13 +174,6 @@ void HydroSystem<problem_t>::ConservedToPrimitive(
       primVar(i, j, k, pressure_index) = P;
     }
   });
-
-  amrex::ParallelFor(indexRange, nvar_,
-                     [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
-                       // convert to cell-average primitive values
-                       primVarAvg(i, j, k, n) =
-                           ComputeFourthOrderCellAverage(primVar, i, j, k, n);
-                     });
 }
 
 template <typename problem_t>
@@ -713,9 +655,6 @@ void HydroSystem<problem_t>::ComputeFluxes(
       cs_L = std::sqrt(gamma_ * P_L / rho_L);
       cs_R = std::sqrt(gamma_ * P_R / rho_R);
 
-      // cs_L = (cs_L > 0.) ? std::sqrt(cs_L) : 0.;
-      // cs_R = (cs_R > 0.) ? std::sqrt(cs_R) : 0.;
-
       E_L = P_L / (gamma_ - 1.0) + ke_L;
       E_R = P_R / (gamma_ - 1.0) + ke_R;
     }
@@ -788,7 +727,6 @@ void HydroSystem<problem_t>::ComputeFluxes(
 #if AMREX_SPACEDIM == 1
     const double dw = 0.;
 #else
-  // FIXME: out-of-bounds when AMREX_SPACEDIM == 2 !!
     amrex::Real dvl = std::min(q(i - 1, j + 1, k, velV_index) - q(i - 1, j, k, velV_index),
                  q(i - 1, j, k, velV_index) - q(i - 1, j - 1, k, velV_index));
     amrex::Real dvr = std::min(q(i, j + 1, k, velV_index) - q(i, j, k, velV_index),
@@ -796,11 +734,9 @@ void HydroSystem<problem_t>::ComputeFluxes(
     double dw = std::min(dvl, dvr);
 #endif
 #if AMREX_SPACEDIM == 3
-    amrex::Real dwl =
-        std::min(q(i - 1, j, k + 1, velW_index) - q(i - 1, j, k, velW_index),
+    amrex::Real dwl = std::min(q(i - 1, j, k + 1, velW_index) - q(i - 1, j, k, velW_index),
                  q(i - 1, j, k, velW_index) - q(i - 1, j, k - 1, velW_index));
-    amrex::Real dwr =
-        std::min(q(i, j, k + 1, velW_index) - q(i, j, k, velW_index),
+    amrex::Real dwr = std::min(q(i, j, k + 1, velW_index) - q(i, j, k, velW_index),
                  q(i, j, k, velW_index) - q(i, j, k - 1, velW_index));
     dw = std::min(std::min(dwl, dwr), dw);
 #endif
