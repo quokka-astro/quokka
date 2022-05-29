@@ -14,6 +14,8 @@
 
 Quokka is a two-moment radiation hydrodynamics code that uses the piecewise-parabolic method, with AMR and subcycling in time. Runs on CPUs (MPI+vectorized) or NVIDIA GPUs (MPI+CUDA) with a single-source codebase. Written in C++17. (100% Fortran-free.)
 
+[![Video of KH Instability](https://videoapi-muybridge.vimeocdn.com/animated-thumbnails/image/1f468be6-6d7b-4d53-a02c-4dd8f3ad5154.gif?ClientID=vimeo-core-prod&Date=1653705774&Signature=9bea89d5c9657180391a9538a10fd4f8f7099025)](https://vimeo.com/714653592)
+
 ...with advanced Adaptive Quokka Refinement:tm: technology:
 
 ![Image of Quokka with Baby in Pouch](extern/quokka2.png)
