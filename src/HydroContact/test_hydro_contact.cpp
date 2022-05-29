@@ -12,11 +12,13 @@
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParmParse.H"
 
+#include "AMReX_REAL.H"
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
 #include "hydro_system.hpp"
 #include "radiation_system.hpp"
 #include "test_hydro_contact.hpp"
+#include <limits>
 
 struct ContactProblem {};
 
@@ -199,7 +201,7 @@ auto problem_main() -> int {
   sim.is_hydro_enabled_ = true;
   sim.is_radiation_enabled_ = false;
   sim.stopTime_ = 2.0;
-  sim.cflNumber_ = 0.8;
+  sim.cflNumber_ = 0.4;
   sim.maxTimesteps_ = 2000;
   sim.computeReferenceSolution_ = true;
   sim.plotfileInterval_ = -1;
@@ -211,7 +213,8 @@ auto problem_main() -> int {
   // For a stationary isolated contact wave using the HLLC solver,
   // the error should be *exactly* (i.e., to *every* digit) zero.
   // [See Section 10.7 and Figure 10.20 of Toro (1998).]
-  const double error_tol = 0.0; // this is not a typo
+  //const double error_tol = 0.0; // this is not a typo
+  const double error_tol = 3.0 * std::numeric_limits<amrex::Real>::epsilon();
   int status = 0;
   if (sim.errorNorm_ > error_tol) {
     status = 1;
