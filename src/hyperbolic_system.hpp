@@ -355,6 +355,8 @@ HyperbolicSystem<problem_t>::ComputeFourthOrderCellAverage(
   return q0 + (AMREX_D_TERM(qxx, +qyy, +qzz)) / 12.;
 }
 
+//#define CLASSIC_PPM
+
 template <typename problem_t>
 template <FluxDir DIR>
 void HyperbolicSystem<problem_t>::ReconstructStatesPPM(
@@ -488,7 +490,7 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(
             (std::abs(q(i - 1, j, k, n)) + std::abs(q(i, j, k, n)) +
              std::abs(q(i + 1, j, k, n))) /
             3.0;
-        const double eps = 1.0e-6 * q_mean;
+        const double eps = 1.0e-14 * q_mean;
 
         if (std::abs(new_a_minus - a_minus) > eps ||
             std::abs(new_a_plus - a_plus) > eps) {
