@@ -136,10 +136,11 @@ auto problem_main() -> int {
   RadhydroSimulation<KelvinHelmholzProblem> sim(boundaryConditions);
   sim.is_hydro_enabled_ = true;
   sim.is_radiation_enabled_ = false;
-  sim.stopTime_ = 1.5;
+  sim.stopTime_ = 20.0;
   sim.cflNumber_ = 0.4;
-  sim.maxTimesteps_ = 40000;
+  sim.maxTimesteps_ = 100000;
   sim.plotfileInterval_ = 100;
+  sim.checkpointInterval_ = 1000;
 
   // initialize
   sim.setInitialConditions();
