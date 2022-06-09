@@ -48,6 +48,8 @@
 #include "radiation_system.hpp"
 #include "simulation.hpp"
 
+#include <omp.h>
+
 // Simulation class should be initialized only once per program (i.e., is a singleton)
 template <typename problem_t> class RadhydroSimulation : public AMRSimulation<problem_t>
 {
@@ -474,6 +476,8 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
   {
     #pragma omp section
     {
+      int tid = omp_get_thread_num();
+      printf("Filling boundary conditions on thread %d\n", tid);
       // update ghost zones [old timestep]
 
       fillBoundaryConditions(state_old_[lev], state_old_[lev], lev, time);
@@ -485,6 +489,8 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
     #pragma omp section
     {
       // DO INTERIORS
+      int tid = omp_get_thread_num();
+      printf("Doing interiors on thread %d\n", tid);
 
       // advance all grids on local processor (Stage 1 of integrator)
       // amrex::MFIter::allowMultipleMFIters(true);
