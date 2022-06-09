@@ -495,6 +495,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 		    dt_lev, geom[lev].CellSizeArray(), indexRange, ncompHydro_,
 			redoFlag.array());
 
+#if 0
 		// first-order flux correction (FOFC)
 		if (redoFlag.max<amrex::RunOn::Device>() != quokka::redoFlag::none) {
 			// compute first-order fluxes (on the whole FAB)
@@ -526,6 +527,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 				}
 			}
 		}
+#endif
 
 		// prevent vacuum
 		HydroSystem<problem_t>::EnforcePressureFloor(densityFloor_, pressureFloor_, indexRange, stateNew);
@@ -552,21 +554,25 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 			const amrex::Box &indexRange = iter.validbox(); // 'validbox' == exclude ghost zones
 			auto const &stateOld = state_old_[lev].const_array(iter);
 			auto const &stateInter = state_new_[lev].const_array(iter);
+			auto const &stateNew = state_new_[lev].array(iter);
 			auto fluxArrays = computeHydroFluxes(stateInter, indexRange, ncompHydro_);
 
+#if 0
 			amrex::FArrayBox stateFinalFAB = amrex::FArrayBox(indexRange, ncompHydro_,
 															amrex::The_Async_Arena());
 			auto const &stateFinal = stateFinalFAB.array();
+#endif
 			amrex::IArrayBox redoFlag(indexRange, 1, amrex::The_Async_Arena());
 
 			// Stage 2 of RK2-SSP
 			HydroSystem<problem_t>::AddFluxesRK2(
-				stateFinal, stateOld, stateInter,
+				stateNew, stateOld, stateInter,
 				{AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
 					fluxArrays[2].const_array())},
 				dt_lev, geom[lev].CellSizeArray(), indexRange, ncompHydro_,
 				redoFlag.array());
 
+#if 0
 			// first-order flux correction (FOFC)
 			if (redoFlag.max<amrex::RunOn::Device>() != quokka::redoFlag::none) {
 				// compute first-order fluxes (on the whole FAB)
@@ -599,13 +605,14 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 				}
 			}
 
-			// prevent vacuum
-			HydroSystem<problem_t>::EnforcePressureFloor(densityFloor_, pressureFloor_, indexRange, stateFinal);
-
 			// copy stateNew to state_new_[lev]
 			auto const &stateNew = state_new_[lev].array(iter);
 			amrex::FArrayBox stateNewFAB = amrex::FArrayBox(stateNew);
 			stateNewFAB.copy<amrex::RunOn::Device>(stateFinalFAB, 0, 0, ncompHydro_);
+#endif
+
+			// prevent vacuum
+			HydroSystem<problem_t>::EnforcePressureFloor(densityFloor_, pressureFloor_, indexRange, stateNew);
 
 			if (do_reflux) {
 				// increment flux registers
