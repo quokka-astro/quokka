@@ -288,7 +288,7 @@ auto problem_main() -> int {
   sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
   sim.stopTime_ = 1.0;          // seconds
   sim.cflNumber_ = 0.3;         // *must* be less than 1/3 in 3D!
-  sim.maxTimesteps_ = 20000;
+  // sim.maxTimesteps_ = 20000;
   sim.plotfileInterval_ = -1;
 
   // initialize
