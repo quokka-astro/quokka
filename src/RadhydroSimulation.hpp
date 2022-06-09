@@ -472,6 +472,9 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 	}
   amrex::MFIter::allowMultipleMFIters(true);
 
+  int maxthreads = omp_get_max_threads();
+  printf("max threads = %d\n",maxthreads);
+
   #pragma omp parallel sections
   {
     #pragma omp section
