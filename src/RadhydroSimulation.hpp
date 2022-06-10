@@ -470,7 +470,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 	} else if (integratorOrder_ == 1) {
 		fluxScaleFactor = 1.0;
 	}
-  amrex::MFIter::allowMultipleMFIters(true);
+  // amrex::MFIter::allowMultipleMFIters(true);
 
   int maxthreads = omp_get_max_threads();
   printf("max threads = %d\n",maxthreads);
@@ -483,7 +483,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
       printf("Filling boundary conditions on thread %d\n", tid);
       // update ghost zones [old timestep]
 
-      fillBoundaryConditions(state_old_[lev], state_old_[lev], lev, time);
+      // fillBoundaryConditions(state_old_[lev], state_old_[lev], lev, time);
       // check state validity
       AMREX_ASSERT(!state_old_[lev].contains_nan(0, state_old_[lev].nComp()));
       AMREX_ASSERT(!state_old_[lev].contains_nan()); // check ghost cells
@@ -564,7 +564,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
     }
   }
 
-  amrex::MFIter::allowMultipleMFIters(false);
+  // amrex::MFIter::allowMultipleMFIters(false);
 
   amrex::Print() << "done RK2 stage 1\n";
 
