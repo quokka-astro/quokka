@@ -471,7 +471,6 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 	} else if (integratorOrder_ == 1) {
 		fluxScaleFactor = 1.0;
 	}
-
   // amrex::MFIter::allowMultipleMFIters(true);
 
   int maxthreads = omp_get_max_threads();
