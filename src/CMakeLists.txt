@@ -1,4 +1,4 @@
-if(QUOKKA_PYTHON) 
+if(QUOKKA_PYTHON)
   message(STATUS "Building Quokka with Python support (to disable, add '-DQUOKKA_PYTHON=OFF' to the CMake command-line options)")
   find_package(PythonLibs)
 else()
@@ -65,6 +65,16 @@ if(CMAKE_CUDA_COMPILER_ID STREQUAL "Clang")
   add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:-Xcuda-ptxas>)
   add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:-v>)
   add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:-Wno-unused-command-line-argument>)
+endif()
+
+find_package(OpenMP)
+if (OPENMP_FOUND)
+    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+    set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
+    if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA")
+        add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:-fopenmp>)
+    endif()
 endif()
 
 
