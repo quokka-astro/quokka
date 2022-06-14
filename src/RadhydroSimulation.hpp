@@ -480,15 +480,14 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
   {
     #pragma omp section
     {
-      // int tid = omp_get_thread_num();
-      // printf("Filling boundary conditions on thread %d\n", tid);
-      // //  update ghost zones [old timestep]
+      int tid = omp_get_thread_num();
+      printf("Filling boundary conditions on thread %d\n", tid);
+      //  update ghost zones [old timestep]
 
-      // fillBoundaryConditions(state_old_[lev], state_old_[lev], lev, time);
-      // sleep(1);
-      // // check state validity
-      // AMREX_ASSERT(!state_old_[lev].contains_nan(0, state_old_[lev].nComp()));
-      // AMREX_ASSERT(!state_old_[lev].contains_nan()); // check ghost cells
+      fillBoundaryConditions(state_old_[lev], state_old_[lev], lev, time);
+      // check state validity
+      AMREX_ASSERT(!state_old_[lev].contains_nan(0, state_old_[lev].nComp()));
+      AMREX_ASSERT(!state_old_[lev].contains_nan()); // check ghost cells
    }
 
     #pragma omp section
@@ -563,10 +562,6 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
                     fluxScaleFactor * dt_lev);
         }
       }
-    }
-    #pragma omp section
-    {
-      sleep(1);
     }
   }
 
