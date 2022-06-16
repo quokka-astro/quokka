@@ -128,10 +128,10 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	void computeMaxSignalLocal(int level) override;
 	void setInitialConditionsAtLevel(int level) override;
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev,
-					  int iteration, int ncycle) override;
+									  int ncycle) override;
 	void computeAfterTimestep() override;
 	void computeAfterLevelAdvance(int lev, amrex::Real time,
-								 amrex::Real dt_lev, int /*iteration*/, int /*ncycle*/);
+								 amrex::Real dt_lev, int /*ncycle*/);
 	void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) override;
 	void computeReferenceSolution(amrex::MultiFab &ref,
 		amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
@@ -294,7 +294,7 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::computeAfterTi
 
 template <typename problem_t>
 void RadhydroSimulation<problem_t>::computeAfterLevelAdvance(int lev, amrex::Real time,
-								 amrex::Real dt_lev, int iteration, int ncycle)
+								 amrex::Real dt_lev, int ncycle)
 {
 	// user should implement if desired
 }
@@ -381,8 +381,7 @@ void RadhydroSimulation<problem_t>::computeAfterEvolve(amrex::Vector<amrex::Real
 
 template <typename problem_t>
 void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex::Real time,
-								 amrex::Real dt_lev,
-								 int iteration, int ncycle)
+								 amrex::Real dt_lev, int ncycle)
 {
 	BL_PROFILE("RadhydroSimulation::advanceSingleTimestepAtLevel()");
 
@@ -426,7 +425,7 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 	CHECK_HYDRO_STATES(state_new_[lev]);
 
 	// compute any operator-split terms here (user-defined)
-	computeAfterLevelAdvance(lev, time, dt_lev, iteration, ncycle);
+	computeAfterLevelAdvance(lev, time, dt_lev, ncycle);
 
 	// check hydro states after user work
 	CHECK_HYDRO_STATES(state_new_[lev]);

@@ -1,0 +1,22 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  0.0  0.0  0.0 
+geometry.prob_hi     =  1.0  1.0  1.0
+geometry.is_periodic =  1    1    1
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v              = 1       # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          = 64 64 4
+amr.max_level       = 1      # number of levels = max_level + 1
+amr.blocking_factor = 16     # grid size must be divisible by this
+amr.max_grid_size   = 64
+
+do_reflux = 1
+do_subcycle = 1

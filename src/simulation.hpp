@@ -86,6 +86,8 @@ public:
   amrex::Vector<amrex::Real> tNew_; // for state_new_
   amrex::Vector<amrex::Real> tOld_; // for state_old_
   amrex::Vector<amrex::Real> dt_;   // timestep for each level
+  // amrex::Vector<amrex::Real> dtCur_; // timestep for each level
+  // (recalculated)
   amrex::Vector<int>
       reductionFactor_;         // timestep reduction factor for each level
   amrex::Real stopTime_ = 1.0;  // default
@@ -117,12 +119,12 @@ public:
   void setInitialConditions();
   void evolve();
   void computeTimestep();
+  auto computeTimestepAtLevel(int lev) -> amrex::Real;
 
   virtual void computeMaxSignalLocal(int level) = 0;
   virtual void setInitialConditionsAtLevel(int level) = 0;
   virtual void advanceSingleTimestepAtLevel(int lev, amrex::Real time,
-                                            amrex::Real dt_lev, int iteration,
-                                            int ncycle) = 0;
+                                            amrex::Real dt_lev, int ncycle) = 0;
   virtual void computeAfterTimestep() = 0;
   virtual void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) = 0;
 
@@ -174,7 +176,8 @@ public:
                amrex::Vector<amrex::Real> &datatime);
   void AverageDown();
   void AverageDownTo(int crse_lev);
-  void timeStepWithSubcycling(int lev, amrex::Real time, int iteration);
+  auto timeStepWithSubcycling(int lev, amrex::Real time,
+                              bool coarseTimeBoundary, int stepsLeft) -> int;
 
   void incrementFluxRegisters(
       amrex::MFIter &mfi, amrex::YAFluxRegister *fr_as_crse,
@@ -276,6 +279,7 @@ void AMRSimulation<problem_t>::initialize(
   tNew_.resize(nlevs_max, 0.0);
   tOld_.resize(nlevs_max, -1.e100);
   dt_.resize(nlevs_max, 1.e100);
+  // dtCur_.resize(nlevs_max, 1.e100);
   reductionFactor_.resize(nlevs_max, 1);
   state_new_.resize(nlevs_max);
   state_old_.resize(nlevs_max);
@@ -462,18 +466,26 @@ void AMRSimulation<problem_t>::setInitialConditions() {
   PerformanceHints();
 }
 
+template <typename problem_t>
+auto AMRSimulation<problem_t>::computeTimestepAtLevel(int lev) -> amrex::Real {
+  // compute CFL timestep on level 'lev'
+  BL_PROFILE("AMRSimulation::computeTimestepAtLevel()");
+
+  computeMaxSignalLocal(lev);
+  amrex::Real domain_signal_max = max_signal_speed_[lev].norminf();
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx =
+      geom[lev].CellSizeArray();
+  amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
+
+  return cflNumber_ * (dx_min / domain_signal_max);
+}
+
 template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep() {
   BL_PROFILE("AMRSimulation::computeTimestep()");
 
   amrex::Vector<amrex::Real> dt_tmp(finest_level + 1);
   for (int level = 0; level <= finest_level; ++level) {
-    computeMaxSignalLocal(level);
-    amrex::Real domain_signal_max = max_signal_speed_[level].norminf();
-    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx =
-        geom[level].CellSizeArray();
-
-    amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
-    dt_tmp[level] = cflNumber_ * (dx_min / domain_signal_max);
+    dt_tmp[level] = computeTimestepAtLevel(level);
   }
 
   constexpr amrex::Real change_max = 1.1;
@@ -548,9 +560,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve() {
     amrex::ParallelDescriptor::Barrier(); // synchronize all MPI ranks
     computeTimestep();
 
-    int lev = 0;
-    int iteration = 1;
-    timeStepWithSubcycling(lev, cur_time, iteration);
+    int lev = 0;       // coarsest level
+    int stepsLeft = 1; // coarsest level is advanced one step
+    bool coarseTimeBoundary = true;
+    timeStepWithSubcycling(lev, cur_time, coarseTimeBoundary, stepsLeft);
 
     cur_time += dt_[0];
     ++cycleCount_;
@@ -636,10 +649,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve() {
 // N.B.: This function actually works for subcycled or not subcycled, as long as
 // nsubsteps[lev] is set correctly.
 template <typename problem_t>
-void AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time,
-                                                      int iteration,
+auto AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time,
                                                       bool coarseTimeBoundary,
-                                                      int stepsLeft) {
+                                                      int stepsLeft) -> int {
   BL_PROFILE("AMRSimulation::timeStepWithSubcycling()");
 
   if (regrid_int > 0) // regridding is possible
@@ -665,7 +677,7 @@ void AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time,
 
         // if there are newly created levels, set the time step
         for (int k = old_finest + 1; k <= finest_level; ++k) {
-          if (do_subcycle) {
+          if (do_subcycle != 0) {
             dt_[k] = dt_[k - 1] / nsubsteps[k];
           } else {
             dt_[k] = dt_[k - 1];
@@ -695,9 +707,9 @@ void AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time,
     // Compute the new subcycling factor for this level and all finer
     // levels and find the maximum
     for (int i = lev; i <= finest_level; i++) {
-      int factor;
-      Real dtCur = computeTimestepAtLevel(i);
-      Real dtNew = dt_[i];
+      int factor = 1;
+      amrex::Real dtCur = computeTimestepAtLevel(i);
+      amrex::Real dtNew = dt_[i];
 
       // The current factor for level "i"
       factor = reductionFactor_[i];
@@ -717,7 +729,8 @@ void AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time,
     // More subcycling is necessary
     if (maxFactor > reductionFactor_[lev]) {
       if (verbose) {
-        pout() << "  Subcycling --- maxFactor: " << maxFactor << endl;
+        amrex::Print() << "  Subcycling --- maxFactor: " << maxFactor
+                       << std::endl;
       }
 
       // Adjust the number of time steps left for the current level
@@ -725,15 +738,13 @@ void AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time,
 
       // Adjust the dt's on this and all finer levels
       for (int i = lev; i <= finest_level; i++) {
-        int factor;
-
-        factor = maxFactor / reductionFactor_[i];
-        m_amrlevels[i]->dt(m_amrlevels[i]->dt() / factor);
+        int factor = maxFactor / reductionFactor_[i];
+        dt_[i] = std::min(dt_[i], dt_[i] / factor);
 
         if (verbose) {
-          pout() << "    Level " << i << ": factor: " << factor << " ("
-                 << reductionFactor_[i]
-                 << "), dt: " << computeTimestepAtLevel(i) << endl;
+          amrex::Print() << "    Level " << i << ": factor: " << factor << " ("
+                         << reductionFactor_[i] << "), dt: " << dt_[i]
+                         << std::endl;
         }
 
         reductionFactor_[i] = maxFactor;
@@ -751,7 +762,7 @@ void AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time,
   tOld_[lev] = tNew_[lev];
   tNew_[lev] += dt_[lev]; // critical that this is done *before* advanceAtLevel
 
-  advanceSingleTimestepAtLevel(lev, time, dt_[lev], iteration, nsubsteps[lev]);
+  advanceSingleTimestepAtLevel(lev, time, dt_[lev], nsubsteps[lev]);
   ++istep[lev];
   cellUpdates_ += CountCells(lev); // keep track of total number of cell updates
   cellUpdatesEachLevel_[lev] += CountCells(lev);
@@ -772,12 +783,12 @@ void AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time,
     while (r_stepsLeft > 0) {
       if (lev < finest_level) { // this may change during a regrid!
         r_stepsLeft = timeStepWithSubcycling(
-            lev + 1, time + (r_iteration - 1) * dt_[lev + 1], r_iteration,
-            r_timeBoundary, r_stepsLeft);
+            lev + 1, time + (r_iteration - 1) * dt_[lev + 1], r_timeBoundary,
+            r_stepsLeft);
         r_iteration++;
       }
-      r_timeBoundary = false; // the next (and subsequent) subcycles are not at
-                              // a time boundary
+      // the next (and subsequent) subcycles are not at a time boundary
+      r_timeBoundary = false;
     }
 
     // do post-timestep operations
@@ -1220,7 +1231,7 @@ auto AMRSimulation<problem_t>::PlotFileMF() const
 #ifdef AMREX_USE_ASCENT
 template <typename problem_t>
 void AMRSimulation<problem_t>::AscentCustomRender(
-    conduit::Node const &blueprintMesh, std::string const &plotfilename) {
+    conduit::Node const &blueprintMesh, std::string const & /*plotfilename*/) {
   BL_PROFILE("AMRSimulation::AscentCustomRender()");
 
   // add a scene with a pseudocolor plot
@@ -1278,8 +1289,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile() {
   for (int i = 0; i < rescaledGeom.size(); ++i) {
     auto const &dlo = rescaledGeom[i].ProbLoArray();
     auto const &dhi = rescaledGeom[i].ProbHiArray();
-    std::array<amrex::Real, AMREX_SPACEDIM> new_dlo;
-    std::array<amrex::Real, AMREX_SPACEDIM> new_dhi;
+    std::array<amrex::Real, AMREX_SPACEDIM> new_dlo{};
+    std::array<amrex::Real, AMREX_SPACEDIM> new_dhi{};
     for (int k = 0; k < AMREX_SPACEDIM; ++k) {
       new_dlo[k] = dlo[k] / length;
       new_dhi[k] = dhi[k] / length;
