@@ -198,7 +198,7 @@ void AdvectionSimulation<problem_t>::computeAfterEvolve(amrex::Vector<amrex::Rea
 	const double rel_error = err_norm / sol_norm;
 	errorNorm_ = rel_error;
 
-	amrex::Print() << "Relative rms L1 error norm = " << rel_error << "\n\n";
+	amrex::Print() << "\nRelative rms L1 error norm = " << rel_error << "\n\n";
 }
 
 template <typename problem_t>

@@ -654,8 +654,8 @@ auto AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time,
                                                       int stepsLeft) -> int {
   BL_PROFILE("AMRSimulation::timeStepWithSubcycling()");
 
-  if (regrid_int > 0) // regridding is possible
-  {
+  // perform regrid if needed
+  if (regrid_int > 0) {
     // help keep track of whether a level was already regridded
     // from a coarser level call to regrid
     static amrex::Vector<int> last_regrid_step(max_level + 1, 0);
@@ -692,9 +692,8 @@ auto AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time,
     }
   }
 
-  stepsLeft--;
-
   /// "additional AMR subcycling" code borrowed from Chombo:
+  stepsLeft--;
 
   // If this wasn't just done by the next coarser level, check to see if
   // it is necessary to do additional subcycling in time.
@@ -702,52 +701,52 @@ auto AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time,
 
     // The factor by which the current time step at the current level
     // has been divided (so far) for subcycling.
-    int maxFactor = reductionFactor_[lev];
+    int maxFactorSublevels = reductionFactor_[lev];
 
     // Compute the new subcycling factor for this level and all finer
     // levels and find the maximum
     for (int i = lev; i <= finest_level; i++) {
-      int factor = 1;
-      amrex::Real dtCur = computeTimestepAtLevel(i);
-      amrex::Real dtNew = dt_[i];
+      amrex::Real dtCFL = computeTimestepAtLevel(i);
+      amrex::Real dtCur = dt_[i];
 
       // The current factor for level "i"
-      factor = reductionFactor_[i];
+      int factor = reductionFactor_[i];
 
-      // While the current dt exceeds the new (max) dt by a tolerance,
-      // double the subcycling factor and half the current dt
-      while (dtCur > dtToleranceFactor_ * dtNew) {
+      // While the current dt exceeds the CFL-limited dt by a tolerance,
+      // double the subcycling factor and halve the current dt
+      while (dtCur > dtToleranceFactor_ * dtCFL) {
         factor *= 2;
         dtCur *= 0.5;
       }
 
-      if (factor > maxFactor) {
-        maxFactor = factor;
+      if (factor > maxFactorSublevels) {
+        maxFactorSublevels = factor;
       }
     }
 
     // More subcycling is necessary
-    if (maxFactor > reductionFactor_[lev]) {
+    if (maxFactorSublevels > reductionFactor_[lev]) {
       if (verbose) {
-        amrex::Print() << "  Subcycling --- maxFactor: " << maxFactor
-                       << std::endl;
+        amrex::Print() << "\tSubcycling --- maxFactorSublevels: "
+                       << maxFactorSublevels << std::endl;
       }
 
       // Adjust the number of time steps left for the current level
-      stepsLeft = (stepsLeft + 1) * maxFactor / reductionFactor_[lev] - 1;
+      stepsLeft =
+          (stepsLeft + 1) * maxFactorSublevels / reductionFactor_[lev] - 1;
 
       // Adjust the dt's on this and all finer levels
       for (int i = lev; i <= finest_level; i++) {
-        int factor = maxFactor / reductionFactor_[i];
-        dt_[i] = std::min(dt_[i], dt_[i] / factor);
+        const int divisor = maxFactorSublevels / reductionFactor_[i];
+        dt_[i] /= static_cast<amrex::Real>(divisor);
 
         if (verbose) {
-          amrex::Print() << "    Level " << i << ": factor: " << factor << " ("
+          amrex::Print() << "\t\tLevel " << i << ": factor: " << divisor << " ("
                          << reductionFactor_[i] << "), dt: " << dt_[i]
                          << std::endl;
         }
 
-        reductionFactor_[i] = maxFactor;
+        reductionFactor_[i] = maxFactorSublevels;
       }
     }
   }
@@ -771,6 +770,8 @@ auto AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time,
     amrex::Print() << "[Level " << lev << " step " << istep[lev] << "] ";
     amrex::Print() << "Advanced " << CountCells(lev) << " cells" << std::endl;
   }
+
+  // advance finer levels
 
   if (lev < finest_level) {
     int r_iteration = 1;

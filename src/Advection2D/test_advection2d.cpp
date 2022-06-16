@@ -26,136 +26,147 @@
 #include "AdvectionSimulation.hpp"
 #include "test_advection2d.hpp"
 
-struct SquareProblem {
-};
+using amrex::Real;
+
+struct SquareProblem {};
 
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto
-exactSolutionAtIndex(int i, int j, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
-		     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi,
-		     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx) -> amrex::Real
-{
-	amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
-	amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
-	amrex::Real const x0 = prob_lo[0] + amrex::Real(0.5) * (prob_hi[0] - prob_lo[0]);
-	amrex::Real const y0 = prob_lo[1] + amrex::Real(0.5) * (prob_hi[1] - prob_lo[1]);
-	amrex::Real rho = 0.;
+exactSolutionAtIndex(int i, int j,
+                     amrex::GpuArray<Real, AMREX_SPACEDIM> const &prob_lo,
+                     amrex::GpuArray<Real, AMREX_SPACEDIM> const &prob_hi,
+                     amrex::GpuArray<Real, AMREX_SPACEDIM> const &dx) -> Real {
+  Real const x = prob_lo[0] + (i + Real(0.5)) * dx[0];
+  Real const y = prob_lo[1] + (j + Real(0.5)) * dx[1];
+  Real const x0 = prob_lo[0] + Real(0.5) * (prob_hi[0] - prob_lo[0]);
+  Real const y0 = prob_lo[1] + Real(0.5) * (prob_hi[1] - prob_lo[1]);
 
-	if ((std::abs(x - x0) < 0.1) && (std::abs(y - y0) < 0.1)) {
-		rho = 1.;
-	}
-	return rho;
-}
-
-template <> void AdvectionSimulation<SquareProblem>::setInitialConditionsAtLevel(int level)
-{
-	auto prob_lo = geom[level].ProbLoArray();
-	auto prob_hi = geom[level].ProbHiArray();
-	auto dx = geom[level].CellSizeArray();
-
-	for (amrex::MFIter iter(state_old_[level]); iter.isValid(); ++iter) {
-		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
-		auto const &state = state_new_[level].array(iter);
-
-		amrex::ParallelFor(
-		    indexRange, ncomp_, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
-			    state(i, j, k, n) = exactSolutionAtIndex(i, j, prob_lo, prob_hi, dx);
-		    });
-	}
-
-	// set flag
-	areInitialConditionsDefined_ = true;
-}
-
-void ComputeExactSolution(amrex::Array4<amrex::Real> const &exact_arr, amrex::Box const &indexRange,
-			  const int nvars,
-			  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_lo,
-			  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_hi,
-			  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx)
-{
-	amrex::ParallelFor(indexRange, nvars, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
-		exact_arr(i, j, k, n) = exactSolutionAtIndex(i, j, prob_lo, prob_hi, dx);
-	});
+  Real rho = 0.;
+  if ((std::abs(x - x0) < 0.1) && (std::abs(y - y0) < 0.1)) {
+    rho = 1.;
+  }
+  return rho;
 }
 
 template <>
-void AdvectionSimulation<SquareProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags,
-						  amrex::Real /*time*/, int /*ngrow*/)
-{
-	// tag cells for refinement
+void AdvectionSimulation<SquareProblem>::setInitialConditionsAtLevel(
+    int level) {
+  auto prob_lo = geom[level].ProbLoArray();
+  auto prob_hi = geom[level].ProbHiArray();
+  auto dx = geom[level].CellSizeArray();
 
-	const amrex::Real eta_threshold = 0.5; // gradient refinement threshold
-	const amrex::Real rho_min = 0.1;       // minimum rho for refinement
+  for (amrex::MFIter iter(state_old_[level]); iter.isValid(); ++iter) {
+    const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
+    auto const &state = state_new_[level].array(iter);
 
-	for (amrex::MFIter mfi(state_new_[lev]); mfi.isValid(); ++mfi) {
-		const amrex::Box &box = mfi.validbox();
-		const auto state = state_new_[lev].const_array(mfi);
-		const auto tag = tags.array(mfi);
+    amrex::ParallelFor(
+        indexRange, ncomp_, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
+          state(i, j, k, n) = exactSolutionAtIndex(i, j, prob_lo, prob_hi, dx);
+        });
+  }
 
-		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			int const n = 0;
-			amrex::Real const rho = state(i, j, k, n);
-
-			amrex::Real const del_x = std::max(std::abs(state(i + 1, j, k, n) - rho),
-							   std::abs(rho - state(i - 1, j, k, n)));
-			amrex::Real const del_y = std::max(std::abs(state(i, j + 1, k, n) - rho),
-							   std::abs(rho - state(i, j - 1, k, n)));
-			amrex::Real const gradient_indicator =
-			    std::max(del_x, del_y) / std::max(rho, rho_min);
-
-			if (gradient_indicator > eta_threshold) {
-				tag(i, j, k) = amrex::TagBox::SET;
-			}
-		});
-	}
+  // set flag
+  areInitialConditionsDefined_ = true;
 }
 
-auto problem_main() -> int
-{
-	// check that we are in strict IEEE 754 mode
-	// (If we are, then the results should be symmetric [about the diagonal of the grid] not
-	// only to machine epsilon but to every last digit! BUT not necessarily true when refinement
-	// is enabled.)
-	static_assert(std::numeric_limits<double>::is_iec559);
+template <>
+void AdvectionSimulation<SquareProblem>::computeReferenceSolution(
+    amrex::MultiFab &ref,
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi) {
+  // compute exact solution
 
-	// Problem parameters
-	const int nx = 100;
-	const double Lx = 1.0;
-	const double advection_velocity = 1.0; // same for x- and y- directions
-	const double CFL_number = 0.4;
-	const double max_time = 1.0;
-	const int max_timesteps = 1e4;
-	const int nvars = 1; // only density
+  for (amrex::MFIter iter(state_old_[0]); iter.isValid(); ++iter) {
+    const amrex::Box &indexRange = iter.validbox();
+    auto const &state = ref.array(iter);
 
-	amrex::IntVect gridDims{AMREX_D_DECL(nx, nx, 4)};
+    amrex::ParallelFor(
+        indexRange, ncomp_, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
+          state(i, j, k, n) = exactSolutionAtIndex(i, j, prob_lo, prob_hi, dx);
+        });
+  }
+}
 
-	amrex::RealBox boxSize{{AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.0), amrex::Real(0.0))},
-			       {AMREX_D_DECL(amrex::Real(Lx), amrex::Real(Lx), amrex::Real(1.0))}};
+template <>
+void AdvectionSimulation<SquareProblem>::ErrorEst(int lev,
+                                                  amrex::TagBoxArray &tags,
+                                                  Real /*time*/,
+                                                  int /*ngrow*/) {
+  // tag cells for refinement
 
-	amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
-	for (int n = 0; n < nvars; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			boundaryConditions[n].setLo(i, amrex::BCType::int_dir); // periodic
-			boundaryConditions[n].setHi(i, amrex::BCType::int_dir);
-		}
-	}
+  const Real eta_threshold = 0.5; // gradient refinement threshold
+  const Real rho_min = 0.1;       // minimum rho for refinement
+  auto const &dx = geom[lev].CellSizeArray();
 
-	// Problem initialization
-	AdvectionSimulation<SquareProblem> sim(gridDims, boxSize, boundaryConditions);
-	sim.stopTime_ = max_time;
-	sim.cflNumber_ = CFL_number;
-	sim.maxTimesteps_ = max_timesteps;
-	sim.plotfileInterval_ = 100;   // for debugging
-	sim.checkpointInterval_ = 1000; // for debugging
+  for (amrex::MFIter mfi(state_new_[lev]); mfi.isValid(); ++mfi) {
+    const amrex::Box &box = mfi.validbox();
+    const auto state = state_new_[lev].const_array(mfi);
+    const auto tag = tags.array(mfi);
 
-	sim.advectionVx_ = advection_velocity;
-	sim.advectionVy_ = advection_velocity;
+    amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+      int const n = 0;
+      Real const rho = state(i, j, k, n);
 
-	// set initial conditions
-	sim.setInitialConditions();
+      Real const del_x =
+          (state(i + 1, j, k, n) - state(i - 1, j, k, n)) / (2.0 * dx[0]);
+      Real const del_y =
+          (state(i, j + 1, k, n) - state(i, j - 1, k, n)) / (2.0 * dx[1]);
+      Real const gradient_indicator =
+          std::sqrt(del_x * del_x + del_y * del_y) / rho;
 
-	// run simulation
-	sim.evolve();
+      if (gradient_indicator > eta_threshold && rho >= rho_min) {
+        tag(i, j, k) = amrex::TagBox::SET;
+      }
+    });
+  }
+}
 
-	int status = 0;
-	return status;
+auto problem_main() -> int {
+  // check that we are in strict IEEE 754 mode
+  // (If we are, then the results should be symmetric [about the diagonal of the
+  // grid] not only to machine epsilon but to every last digit! BUT not
+  // necessarily true when refinement is enabled.)
+  static_assert(std::numeric_limits<double>::is_iec559);
+
+  // Problem parameters
+  // const int nx = 100;
+  // const double Lx = 1.0;
+  const double advection_velocity = 1.0; // same for x- and y- directions
+  const double CFL_number = 0.4;
+  const double max_time = 1.0;
+  const int max_timesteps = 1e4;
+  const int nvars = 1;
+
+  amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
+  for (int n = 0; n < nvars; ++n) {
+    for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+      boundaryConditions[n].setLo(i, amrex::BCType::int_dir); // periodic
+      boundaryConditions[n].setHi(i, amrex::BCType::int_dir);
+    }
+  }
+
+  // Problem initialization
+  AdvectionSimulation<SquareProblem> sim(boundaryConditions);
+  sim.stopTime_ = max_time;
+  sim.cflNumber_ = CFL_number;
+  sim.maxTimesteps_ = max_timesteps;
+  sim.plotfileInterval_ = 1000;
+  sim.checkpointInterval_ = -1;
+
+  sim.advectionVx_ = advection_velocity;
+  sim.advectionVy_ = advection_velocity;
+
+  // set initial conditions
+  sim.setInitialConditions();
+
+  // run simulation
+  sim.evolve();
+
+  int status;
+  if (sim.errorNorm_ < 0.15) {
+    status = 0;
+  } else {
+    status = 1;
+  }
+  return status;
 }
