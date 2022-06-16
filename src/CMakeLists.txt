@@ -59,7 +59,7 @@ endif(DISABLE_FMAD)
 # this is necessary to prevent the host compiler from complaining about nv_pragmas
 #add_compile_options(-Wno-unknown-pragmas)
 
-# emit register counts per thread from CUDA assembler
+# emit register usage per thread from CUDA assembler
 # if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA")
 #   add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:--ptxas-options=-v>)
 # endif()

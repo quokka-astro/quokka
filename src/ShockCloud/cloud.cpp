@@ -315,7 +315,7 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
 
 template <>
 void RadhydroSimulation<ShockCloud>::computeAfterLevelAdvance(
-    int lev, Real /*time*/, Real dt_lev, int /*iteration*/, int /*ncycle*/) {
+    int lev, Real /*time*/, Real dt_lev, int /*ncycle*/) {
   // compute operator split physics
   computeCooling(state_new_[lev], dt_lev, cloudyTables);
 }
