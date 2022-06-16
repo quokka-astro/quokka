@@ -739,8 +739,8 @@ auto AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time,
 
         if (verbose) {
           amrex::Print() << "\t\tLevel " << i << ": factor: " << divisor << " ("
-                         << reductionFactor_[i] << "), dt: " << dt_[i]
-                         << std::endl;
+                         << reductionFactor_[i] << "), "
+                         << "dt: " << dt_[i] << std::endl;
         }
 
         reductionFactor_[i] = maxFactorSublevels;
