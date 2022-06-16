@@ -86,8 +86,6 @@ public:
   amrex::Vector<amrex::Real> tNew_; // for state_new_
   amrex::Vector<amrex::Real> tOld_; // for state_old_
   amrex::Vector<amrex::Real> dt_;   // timestep for each level
-  // amrex::Vector<amrex::Real> dtCur_; // timestep for each level
-  // (recalculated)
   amrex::Vector<int>
       reductionFactor_;         // timestep reduction factor for each level
   amrex::Real stopTime_ = 1.0;  // default
@@ -279,7 +277,6 @@ void AMRSimulation<problem_t>::initialize(
   tNew_.resize(nlevs_max, 0.0);
   tOld_.resize(nlevs_max, -1.e100);
   dt_.resize(nlevs_max, 1.e100);
-  // dtCur_.resize(nlevs_max, 1.e100);
   reductionFactor_.resize(nlevs_max, 1);
   state_new_.resize(nlevs_max);
   state_old_.resize(nlevs_max);
