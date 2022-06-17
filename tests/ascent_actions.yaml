@@ -45,3 +45,8 @@
       params: 
         field: "mass"
         filename: "mass_volume%05d"
+    e3: 
+      type: "volume"
+      params: 
+        field: "temperature"
+        filename: "temperature_volume%05d"
