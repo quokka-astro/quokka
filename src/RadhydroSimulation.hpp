@@ -131,7 +131,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	void setInitialConditionsAtLevel(int level) override;
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev,
 									  int ncycle) override;
-	void computeAfterTimestep() override;
+	void computeAfterTimestep(amrex::Real dt) override;
 	void computeAfterLevelAdvance(int lev, amrex::Real time,
 								 amrex::Real dt_lev, int /*ncycle*/);
 	void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) override;

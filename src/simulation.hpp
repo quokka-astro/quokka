@@ -160,7 +160,7 @@ public:
   virtual void setInitialConditionsAtLevel(int level) = 0;
   virtual void advanceSingleTimestepAtLevel(int lev, amrex::Real time,
                                             amrex::Real dt_lev, int ncycle) = 0;
-  virtual void computeAfterTimestep() = 0;
+  virtual void computeAfterTimestep(amrex::Real dt) = 0;
   virtual void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) = 0;
 
   // compute derived variables
