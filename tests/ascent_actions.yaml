@@ -32,8 +32,6 @@
         r1:
           image_prefix: "log_density%05d"
           annotations: "false"
-          #camera:
-          #  position: [-0.6, -0.6, -0.8]
 - 
   action: "add_extracts"
   extracts: 
@@ -41,5 +39,9 @@
       type: "volume"
       params: 
         field: "gasDensity"
-        pipeline: "pl1"
         filename: "volume%05d"
+    e2: 
+      type: "volume"
+      params: 
+        field: "mass"
+        filename: "mass_volume%05d"

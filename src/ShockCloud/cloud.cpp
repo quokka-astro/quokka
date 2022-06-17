@@ -314,8 +314,10 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
 }
 
 template <>
-void RadhydroSimulation<ShockCloud>::computeAfterLevelAdvance(
-    int lev, Real /*time*/, Real dt_lev, int /*ncycle*/) {
+void RadhydroSimulation<ShockCloud>::computeAfterLevelAdvance(int lev,
+                                                              Real /*time*/,
+                                                              Real dt_lev,
+                                                              int /*ncycle*/) {
   // compute operator split physics
   computeCooling(state_new_[lev], dt_lev, cloudyTables);
 }
@@ -417,6 +419,23 @@ void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(
 
         output(i, j, k, ncomp) = Tgas;
       });
+    }
+  } else if (dname == "mass") {
+    const int ncomp = ncomp_in;
+    auto const &dx = geom[lev].CellSizeArray();
+    const Real cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
+
+    for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
+      const amrex::Box &indexRange = iter.validbox();
+      auto const &output = mf.array(iter);
+      auto const &state = state_new_[lev].const_array(iter);
+
+      amrex::ParallelFor(
+          indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+            Real rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
+            Real mass = rho * cell_vol;
+            output(i, j, k, ncomp) = mass;
+          });
     }
   }
 }
