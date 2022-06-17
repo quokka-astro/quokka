@@ -301,8 +301,7 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
 
 template <>
 void RadhydroSimulation<CoolingTest>::computeAfterLevelAdvance(
-    int lev, amrex::Real /*time*/, amrex::Real dt_lev, int /*iteration*/,
-    int /*ncycle*/) {
+    int lev, amrex::Real /*time*/, amrex::Real dt_lev, int /*ncycle*/) {
   // compute operator split physics
   computeCooling(state_new_cc_[lev], dt_lev, cloudyTables);
 }
@@ -332,7 +331,7 @@ void HydroSystem<CoolingTest>::EnforcePressureFloor(
         amrex::Real const P_floor =
             (rho_new / m_H) * boltzmann_constant_cgs_ * T_floor;
 
-        if (!is_eos_isothermal()) {
+        if constexpr (!is_eos_isothermal()) {
           // recompute gas energy (to prevent P < 0)
           amrex::Real const Eint_star = Etot - 0.5 * rho_new * vsq;
           amrex::Real const P_star = Eint_star * (gamma_ - 1.);

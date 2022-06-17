@@ -14,7 +14,11 @@
 
 Quokka is a two-moment radiation hydrodynamics code that uses the piecewise-parabolic method, with AMR and subcycling in time. Runs on CPUs (MPI+vectorized) or NVIDIA GPUs (MPI+CUDA) with a single-source codebase. Written in C++17. (100% Fortran-free.)
 
-...with advanced Adaptive Quokka Refinement:tm: technology:
+Here is a [a Kelvin-Helmholz instability simulated with Quokka](https://vimeo.com/714653592) on a 512x512 uniform grid:
+
+![Animated GIF of KH Instability](https://videoapi-muybridge.vimeocdn.com/animated-thumbnails/image/1f468be6-6d7b-4d53-a02c-4dd8f3ad5154.gif?ClientID=vimeo-core-prod&Date=1653705774&Signature=9bea89d5c9657180391a9538a10fd4f8f7099025)
+
+Quokka also features advanced Adaptive Quokka Refinement:tm: technology:
 
 ![Image of Quokka with Baby in Pouch](extern/quokka2.png)
 
@@ -22,19 +26,15 @@ Quokka is a two-moment radiation hydrodynamics code that uses the piecewise-para
 
 To run Quokka, download this repository to your local machine:
 ```
-git clone git@github.com:BenWibking/quokka.git
+git clone --recursive git@github.com:BenWibking/quokka.git
 ```
-Then download all submodules (this downloads `AMReX` and the string-formatting library `fmt`):
+Quokka uses CMake as its build system. If you don't have CMake installed, the easiest way to install it is to run:
 ```
-cd quokka
-git submodule update --init
-```
-Quokka uses CMake as its build system. If you don't have CMake installed, the easiest way to install it is to run
-```
-pip install cmake
+pip install cmake --user
 ```
 Now that CMake is installed, create a build/ subdirectory and compile Quokka, as shown below. **(Warning to Intel compiler users: the 'classic' Intel compilers `icc` and `icpc` generate incorrect code; see issue [5](https://github.com/BenWibking/quokka/issues/5). Use the newer `icpx` Intel compiler instead by [setting the CMAKE_C_COMPILER and CMAKE_CXX_COMPILER options](https://cmake.org/cmake/help/latest/variable/CMAKE_LANG_COMPILER.html).)**
 ```
+cd quokka
 mkdir build; cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
 make -j6

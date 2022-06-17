@@ -123,12 +123,11 @@ public:
   void computeMaxSignalLocal(int level) override;
   void preCalculateInitialConditions() override;
   void setInitialConditionsOnGrid(std::vector<grid> &grid_vec) override;
-  void advanceSingleTimestepAtLevel(int lev, amrex::Real time,
-                                    amrex::Real dt_lev, int iteration,
-                                    int ncycle) override;
-  void computeAfterTimestep() override;
-  void computeAfterLevelAdvance(int lev, amrex::Real time, amrex::Real dt_lev,
-                                int /*iteration*/, int /*ncycle*/);
+	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev,
+									  int ncycle) override;
+	void computeAfterTimestep() override;
+	void computeAfterLevelAdvance(int lev, amrex::Real time,
+								 amrex::Real dt_lev, int /*ncycle*/);
   void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) override;
   void computeReferenceSolution(
       amrex::MultiFab &ref,
@@ -315,8 +314,9 @@ void RadhydroSimulation<problem_t>::computeAfterTimestep() {
 }
 
 template <typename problem_t>
-void RadhydroSimulation<problem_t>::computeAfterLevelAdvance(
-    int lev, amrex::Real time, amrex::Real dt_lev, int iteration, int ncycle) {
+void RadhydroSimulation<problem_t>::computeAfterLevelAdvance(int lev, amrex::Real time,
+								 amrex::Real dt_lev, int ncycle)
+{
   // user should implement if desired
 }
 
@@ -422,8 +422,9 @@ void RadhydroSimulation<problem_t>::computeAfterEvolve(
 }
 
 template <typename problem_t>
-void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(
-    int lev, amrex::Real time, amrex::Real dt_lev, int iteration, int ncycle) {
+void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex::Real time,
+								 amrex::Real dt_lev, int ncycle)
+{
   BL_PROFILE("RadhydroSimulation::advanceSingleTimestepAtLevel()");
 
   // get flux registers
@@ -468,7 +469,7 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(
   CHECK_HYDRO_STATES(state_new_cc_[lev]);
 
   // compute any operator-split terms here (user-defined)
-  computeAfterLevelAdvance(lev, time, dt_lev, iteration, ncycle);
+	computeAfterLevelAdvance(lev, time, dt_lev, ncycle);
 
   // check hydro states after user work
   CHECK_HYDRO_STATES(state_new_cc_[lev]);
@@ -839,13 +840,10 @@ void RadhydroSimulation<problem_t>::hydroFluxFunction(
       primVar, x1Flat, x2Flat, x3Flat, x1LeftState.array(),
       x1RightState.array(), reconstructRange, nvars);
 
-  amrex::FArrayBox dvn(x1FluxRange, 1, amrex::The_Async_Arena());
-  amrex::FArrayBox dvt(x1FluxRange, 1, amrex::The_Async_Arena());
-
   // interface-centered kernel
   HydroSystem<problem_t>::template ComputeFluxes<DIR>(
-      x1Flux.array(), x1LeftState.array(), x1RightState.array(), primVar,
-      dvn.array(), dvt.array(), x1FluxRange);
+	    x1Flux.array(), x1LeftState.array(), x1RightState.array(),
+		primVar, x1FluxRange);
 }
 
 template <typename problem_t>
@@ -915,13 +913,10 @@ void RadhydroSimulation<problem_t>::hydroFOFluxFunction(
       primVar, x1LeftState.array(), x1RightState.array(), x1ReconstructRange,
       nvars);
 
-  amrex::FArrayBox dvn(x1FluxRange, 1, amrex::The_Async_Arena());
-  amrex::FArrayBox dvt(x1FluxRange, 1, amrex::The_Async_Arena());
-
   // interface-centered kernel
   HydroSystem<problem_t>::template ComputeFluxes<DIR>(
-      x1Flux.array(), x1LeftState.array(), x1RightState.array(), primVar,
-      dvn.array(), dvt.array(), x1FluxRange);
+	    x1Flux.array(), x1LeftState.array(), x1RightState.array(),
+		primVar, x1FluxRange);
 }
 
 template <typename problem_t>

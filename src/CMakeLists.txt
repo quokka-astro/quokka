@@ -1,6 +1,5 @@
 if(QUOKKA_PYTHON) 
-  message(STATUS "Building Quokka with Python support (to disable, add
-  '-DQUOKKA_PYTHON=OFF' to the CMake command-line options)")
+  message(STATUS "Building Quokka with Python support (to disable, add '-DQUOKKA_PYTHON=OFF' to the CMake command-line options)")
   find_package(PythonLibs)
 else()
   message(STATUS "Building Quokka *without* Python support")
@@ -15,6 +14,9 @@ endif()
 # HDF5
 find_package(HDF5 REQUIRED)
 
+# std::filesystem (required for GCC < 9)
+link_libraries(stdc++fs)
+
 if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
     # only works with gcc!
     include(CodeCoverage)
@@ -26,10 +28,46 @@ if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
         EXCLUDE "${PROJECT_SOURCE_DIR}/extern" "${PROJECT_SOURCE_DIR}/src/test_" "include/openmpi/ompi/mpi/cxx/" "/usr/"
         POST_CMD perl -i -pe s!${PROJECT_SOURCE_DIR}/!!g coverage.json && fastcov_to_sonarqube coverage.json
     )
-    SET(CMAKE_CXX_FLAGS "-O1")
-    SET(CMAKE_C_FLAGS "-O1")
+    add_compile_options("-O1")
     append_coverage_compiler_flags()
 endif()
+
+if(ENABLE_ASAN)
+  # enable AddressSanitizer for debugging
+  message(STATUS "Compiling with AddressSanitizer and UndefinedBehaviorSanitizer *enabled*")
+  add_compile_options(-fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all -fsanitize=float-divide-by-zero -fsanitize=float-cast-overflow -fno-sanitize=null -fno-sanitize=alignment)
+  add_link_options(-fsanitize=address -fsanitize=undefined)
+endif(ENABLE_ASAN)
+
+if(DISABLE_FMAD)
+  message(STATUS "Fused multiply-add (FMAD) is disabled for device code.")
+  set(AMReX_CUDA_FASTMATH OFF CACHE BOOL "" FORCE)
+  if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA")
+    add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:--fmad=false>)
+  endif()
+  if(CMAKE_CUDA_COMPILER_ID STREQUAL "Clang")
+    add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:-ffp-contract=off>)
+    add_compile_options($<$<COMPILE_LANGUAGE:C>:-ffp-contract=off>)
+    add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-ffp-contract=off>)
+    endif()
+else()
+  # fused MAD causes directional asymmetry -- enabled by default by nvcc and clang
+  message(STATUS "Fused multiply-add (FMAD) is *enabled* for device code. Exact direction symmetry will NOT be preserved.")
+endif(DISABLE_FMAD)
+
+# this is necessary to prevent the host compiler from complaining about nv_pragmas
+#add_compile_options(-Wno-unknown-pragmas)
+
+# emit register usage per thread from CUDA assembler
+# if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA")
+#   add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:--ptxas-options=-v>)
+# endif()
+# if(CMAKE_CUDA_COMPILER_ID STREQUAL "Clang")
+#   add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:-Xcuda-ptxas>)
+#   add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:-v>)
+#   add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:-Wno-unused-command-line-argument>)
+# endif()
+
 
 include_directories(${amrex_INCLUDE_DIRS_RET})
 include_directories(${fmt_INCLUDE_DIRS_RET})

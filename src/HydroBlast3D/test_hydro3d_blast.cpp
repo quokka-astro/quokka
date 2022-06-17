@@ -7,24 +7,30 @@
 /// \brief Defines a test problem for a 3D explosion.
 ///
 
+#include "AMReX.H"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_Config.H"
+#include "AMReX_FabArrayUtility.H"
+#include "AMReX_MultiFab.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
 
+#include "AMReX_SPACE.H"
 #include "RadhydroSimulation.hpp"
 #include "hydro_system.hpp"
+#include "radiation_system.hpp"
 #include "test_hydro3d_blast.hpp"
+#include <limits>
 
 struct SedovProblem {};
 
 // if false, use octant symmetry instead
-constexpr bool simulate_full_box = true;
+constexpr bool simulate_full_box = false;
 
 template <> struct EOS_Traits<SedovProblem> {
-  static constexpr double gamma = 5. / 3.;
+  static constexpr double gamma = 1.4;
   static constexpr bool reconstruct_eint = false;
 };
 
@@ -57,38 +63,49 @@ void RadhydroSimulation<SedovProblem>::setInitialConditionsOnGrid(
     y0 = 0.;
     z0 = 0.;
   }
-  // loop over the grid and set the initial condition
+
+  double rho = 1.0;          // g cm^-3
+  double E_blast = 0.851072; // ergs
+  double R0 = 0.025;         // cm
+
+  if (!simulate_full_box) {
+    E_blast /= 8.0; // only one octant, so 1/8 of the total energy
+  }
+
+  for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
+    const amrex::Box &indexRange = iter.validbox();
+    auto const &state = state_new_[lev].array(iter);
+
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+      double rho_e = NAN;
+#if 0
     amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
     amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
     amrex::Real const z = prob_lo[2] + (k + amrex::Real(0.5)) * dx[2];
     amrex::Real const r = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2) +
                                     std::pow(z - z0, 2));
 
-    double vx = 0.;
-    double vy = 0.;
-    double vz = 0.;
-    double rho = 1.0;
-    double P = NAN;
-
-    if (r < 0.1) { // inside sphere
-      P = 10.;
+      if (r < R0) {
+        rho_e = 1.0;
+      } else {
+        rho_e = 1.0e-10;
+      }
+#endif
+      static_assert(!simulate_full_box, "single-cell initialization is only "
+                                        "implemented for octant symmetry!");
+      if ((i == 0) && (j == 0) && (k == 0)) {
+        rho_e = E_blast / cell_vol;
     } else {
-      P = 0.1;
+        rho_e = 1.0e-10 * (E_blast / cell_vol);
     }
 
-    AMREX_ASSERT(!std::isnan(vx));
-    AMREX_ASSERT(!std::isnan(vy));
-    AMREX_ASSERT(!std::isnan(vz));
     AMREX_ASSERT(!std::isnan(rho));
-    AMREX_ASSERT(!std::isnan(P));
-
-    const auto v_sq = vx * vx + vy * vy + vz * vz;
-    const auto gamma = HydroSystem<SedovProblem>::gamma_;
+      AMREX_ASSERT(!std::isnan(rho_e));
 
     for (int n = 0; n < grid_vec[0].array.nComp(); ++n) {
       grid_vec[0].array(i, j, k, n) = 0.; // zero fill all components
     }
+      const auto gamma = HydroSystem<SedovProblem>::gamma_;
 
     grid_vec[0].array(i, j, k, HydroSystem<SedovProblem>::density_index) = rho;
     grid_vec[0].array(i, j, k, HydroSystem<SedovProblem>::x1Momentum_index) = rho * vx;
@@ -139,13 +156,87 @@ void RadhydroSimulation<SedovProblem>::ErrorEst(int lev,
           std::max(std::abs(P_zplus - P), std::abs(P - P_zminus));
 
       amrex::Real const gradient_indicator =
-          std::max({del_x, del_y, del_z}) / std::max(P, P_min);
+          std::max({del_x, del_y, del_z}) / P;
 
-      if (gradient_indicator > eta_threshold) {
+      if ((gradient_indicator > eta_threshold) && (P > P_min)) {
         tag(i, j, k) = amrex::TagBox::SET;
       }
     });
   }
+}
+
+template <>
+void RadhydroSimulation<SedovProblem>::computeAfterEvolve(
+    amrex::Vector<amrex::Real> &initSumCons) {
+  // check conservation of total energy
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 =
+      geom[0].CellSizeArray();
+  amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
+
+  amrex::Real const Egas0 =
+      initSumCons[RadSystem<SedovProblem>::gasEnergy_index];
+  amrex::Real const Erad0 =
+      initSumCons[RadSystem<SedovProblem>::radEnergy_index];
+  amrex::Real const Etot0 = Egas0 + (RadSystem<SedovProblem>::c_light_ /
+                                     RadSystem<SedovProblem>::c_hat_) *
+                                        Erad0;
+
+  amrex::Real const Egas =
+      state_new_[0].sum(RadSystem<SedovProblem>::gasEnergy_index) * vol;
+  amrex::Real const Erad =
+      state_new_[0].sum(RadSystem<SedovProblem>::radEnergy_index) * vol;
+  amrex::Real const Etot = Egas + (RadSystem<SedovProblem>::c_light_ /
+                                   RadSystem<SedovProblem>::c_hat_) *
+                                      Erad;
+
+  // compute kinetic energy
+  amrex::MultiFab Ekin_mf(boxArray(0), DistributionMap(0), 1, 0);
+  for (amrex::MFIter iter(state_new_[0]); iter.isValid(); ++iter) {
+    const amrex::Box &indexRange = iter.validbox();
+    auto const &state = state_new_[0].const_array(iter);
+    auto const &ekin = Ekin_mf.array(iter);
+    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+      // compute kinetic energy
+      Real rho = state(i, j, k, HydroSystem<SedovProblem>::density_index);
+      Real px = state(i, j, k, HydroSystem<SedovProblem>::x1Momentum_index);
+      Real py = state(i, j, k, HydroSystem<SedovProblem>::x2Momentum_index);
+      Real pz = state(i, j, k, HydroSystem<SedovProblem>::x3Momentum_index);
+      Real psq = px * px + py * py + pz * pz;
+      ekin(i, j, k) = psq / (2.0 * rho) * vol;
+    });
+  }
+  amrex::Real const Ekin = Ekin_mf.sum(0);
+
+  amrex::Real const frac_Ekin = Ekin / Egas;
+  amrex::Real const frac_Ekin_exact = 0.218729;
+
+  amrex::Real const abs_err = (Etot - Etot0);
+  amrex::Real const rel_err = abs_err / Etot0;
+
+  amrex::Real const rel_err_Ekin = frac_Ekin - frac_Ekin_exact;
+
+  amrex::Print() << "\nInitial gas+radiation energy = " << Etot0 << std::endl;
+  amrex::Print() << "Final gas+radiation energy = " << Etot << std::endl;
+  amrex::Print() << "\tabsolute conservation error = " << abs_err << std::endl;
+  amrex::Print() << "\trelative conservation error = " << rel_err << std::endl;
+  amrex::Print() << "\tkinetic energy = " << Ekin << std::endl;
+  amrex::Print() << "\trelative K.E. error = " << rel_err_Ekin << std::endl;
+  amrex::Print() << std::endl;
+
+  if ((std::abs(rel_err) > 2.0e-15) || std::isnan(rel_err)) {
+    amrex::Abort("Energy not conserved to machine precision!");
+  } else {
+    amrex::Print() << "Energy conservation is OK.\n";
+  }
+
+  if ((std::abs(rel_err_Ekin) > 0.01) || std::isnan(rel_err_Ekin)) {
+    amrex::Abort(
+        "Kinetic energy production is incorrect by more than 1 percent!");
+  } else {
+    amrex::Print() << "Kinetic energy production is OK.\n";
+  }
+
+  amrex::Print() << "\n";
 }
 
 auto problem_main() -> int {
@@ -184,12 +275,10 @@ auto problem_main() -> int {
   // Problem initialization
   RadhydroSimulation<SedovProblem> sim(boundaryConditions);
   sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
-  sim.stopTime_ = 0.5;          // 0.01;
-  sim.cflNumber_ = 0.25;        // *must* be less than 1/3 in 3D!
-  sim.maxTimesteps_ = 100;
+  sim.stopTime_ = 1.0;          // seconds
+  sim.cflNumber_ = 0.3;         // *must* be less than 1/3 in 3D!
+  sim.maxTimesteps_ = 20000;
   sim.plotfileInterval_ = -1;
-  // sim.maxTimesteps_ = 10000;
-  // sim.plotfileInterval_ = 100;
 
   // initialize
   sim.setInitialConditions();

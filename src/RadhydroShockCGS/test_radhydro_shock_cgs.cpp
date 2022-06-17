@@ -85,21 +85,23 @@ template <> struct EOS_Traits<ShockProblem> {
 };
 
 template <>
-auto RadSystem<ShockProblem>::ComputePlanckOpacity(const double rho,
-                                                   const double /*Tgas*/)
-    -> double {
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
+RadSystem<ShockProblem>::ComputePlanckOpacity(const double rho, const double /*Tgas*/) -> double
+{
   return (kappa / rho);
 }
 
 template <>
-auto RadSystem<ShockProblem>::ComputeRosselandOpacity(const double rho,
-                                                      const double /*Tgas*/)
-    -> double {
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
+RadSystem<ShockProblem>::ComputeRosselandOpacity(const double rho, const double /*Tgas*/) -> double
+{
   return (kappa / rho);
 }
 
 template <>
-auto RadSystem<ShockProblem>::ComputeEddingtonFactor(double /*f*/) -> double {
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
+RadSystem<ShockProblem>::ComputeEddingtonFactor(double /*f*/) -> double
+{
   return (1. / 3.); // Eddington approximation
 }
 

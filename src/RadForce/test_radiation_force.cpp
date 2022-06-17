@@ -132,7 +132,6 @@ void RadhydroSimulation<TubeProblem>::setInitialConditionsOnGrid(
 
     amrex::Real const rho = D * rho0;
     amrex::Real const vel = Mach * a0;
-    amrex::Real const Pgas = rho * (a0 * a0);
 
     grid_vec[0].array(i, j, k, RadSystem<TubeProblem>::radEnergy_index) =
         Frad0 / c_light_cgs_;

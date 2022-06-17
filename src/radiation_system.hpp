@@ -24,6 +24,7 @@
 
 // internal headers
 #include "ArrayView.hpp"
+#include "hydro_system.hpp"
 #include "hyperbolic_system.hpp"
 #include "simulation.hpp"
 #include "valarray.hpp"
@@ -223,10 +224,10 @@ template <typename problem_t>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::isStateValid(
     std::array<amrex::Real, nvarHyperbolic_> &cons) -> bool {
   // check if the state variable 'cons' is a valid state
-  const auto E_r = cons.at(radEnergy_index - nstartHyperbolic_);
-  const auto Fx = cons.at(x1RadFlux_index - nstartHyperbolic_);
-  const auto Fy = cons.at(x2RadFlux_index - nstartHyperbolic_);
-  const auto Fz = cons.at(x3RadFlux_index - nstartHyperbolic_);
+  const auto E_r = cons[radEnergy_index - nstartHyperbolic_];
+  const auto Fx = cons[x1RadFlux_index - nstartHyperbolic_];
+  const auto Fy = cons[x2RadFlux_index - nstartHyperbolic_];
+  const auto Fz = cons[x3RadFlux_index - nstartHyperbolic_];
 
   const auto Fnorm = std::sqrt(Fx * Fx + Fy * Fy + Fz * Fz);
   const auto f = Fnorm / (c_light_ * E_r);
@@ -268,7 +269,7 @@ void RadSystem<problem_t>::PredictStep(
         std::array<amrex::Real, nvarHyperbolic_> cons{};
 
         for (int n = 0; n < nvarHyperbolic_; ++n) {
-          cons.at(n) =
+          cons[n] =
               consVarOld(i, j, k, nstartHyperbolic_ + n) +
               (AMREX_D_TERM(
                   (dt / dx) * (x1Flux(i, j, k, n) - x1Flux(i + 1, j, k, n)),
@@ -279,7 +280,7 @@ void RadSystem<problem_t>::PredictStep(
         if (!isStateValid(cons)) {
           // use diffusive fluxes instead
           for (int n = 0; n < nvarHyperbolic_; ++n) {
-            cons.at(n) =
+            cons[n] =
                 consVarOld(i, j, k, nstartHyperbolic_ + n) +
                 (AMREX_D_TERM((dt / dx) * (x1FluxDiffusive(i, j, k, n) -
                                            x1FluxDiffusive(i + 1, j, k, n)),
@@ -296,7 +297,7 @@ void RadSystem<problem_t>::PredictStep(
         }
 
         for (int n = 0; n < nvarHyperbolic_; ++n) {
-          consVarNew(i, j, k, nstartHyperbolic_ + n) = cons.at(n);
+          consVarNew(i, j, k, nstartHyperbolic_ + n) = cons[n];
         }
       });
 }
@@ -346,7 +347,7 @@ void RadSystem<problem_t>::AddFluxesRK2(
           (dt / dz) * (x3Flux(i, j, k, n) - x3Flux(i, j, k + 1, n));
 #endif
       // save results in cons_new
-      cons_new.at(n) = (0.5 * U_0 + 0.5 * U_1) +
+      cons_new[n] = (0.5 * U_0 + 0.5 * U_1) +
                        (AMREX_D_TERM(0.5 * FxU_1, +0.5 * FyU_1, +0.5 * FzU_1));
     }
 
@@ -366,20 +367,20 @@ void RadSystem<problem_t>::AddFluxesRK2(
                                           x3FluxDiffusive(i, j, k + 1, n));
 #endif
         // save results in cons_new
-        cons_new.at(n) =
+        cons_new[n] =
             (0.5 * U_0 + 0.5 * U_1) +
             (AMREX_D_TERM(0.5 * FxU_1, +0.5 * FyU_1, +0.5 * FzU_1));
       }
     }
 
     for (int n = 0; n < nvarHyperbolic_; ++n) {
-      U_new(i, j, k, nstartHyperbolic_ + n) = cons_new.at(n);
+      U_new(i, j, k, nstartHyperbolic_ + n) = cons_new[n];
     }
   });
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeEddingtonFactor(double f_in)
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeEddingtonFactor(double f_in)
     -> double {
   // f is the reduced flux == |F|/cE.
   // compute Levermore (1984) closure [Eq. 25]
@@ -427,15 +428,19 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeCellOpticalDepth(
   const double Egas_L = consVar(i - 1, j, k, gasEnergy_index);
   const double Egas_R = consVar(i, j, k, gasEnergy_index);
 
-  const double Eint_L = RadSystem<problem_t>::ComputeEintFromEgas(
-      rho_L, x1GasMom_L, x2GasMom_L, x3GasMom_L, Egas_L);
-  const double Eint_R = RadSystem<problem_t>::ComputeEintFromEgas(
-      rho_R, x1GasMom_R, x2GasMom_R, x3GasMom_R, Egas_R);
+  double Eint_L = NAN;
+  double Eint_R = NAN;
+  double Tgas_L = NAN;
+  double Tgas_R = NAN;
 
-  const double Tgas_L =
-      RadSystem<problem_t>::ComputeTgasFromEgas(rho_L, Eint_L);
-  const double Tgas_R =
-      RadSystem<problem_t>::ComputeTgasFromEgas(rho_R, Eint_R);
+  if constexpr (gamma_ != 1.0) {
+    Eint_L = RadSystem<problem_t>::ComputeEintFromEgas(
+      rho_L, x1GasMom_L, x2GasMom_L, x3GasMom_L, Egas_L);
+    Eint_R = RadSystem<problem_t>::ComputeEintFromEgas(
+      rho_R, x1GasMom_R, x2GasMom_R, x3GasMom_R, Egas_R);
+    Tgas_L = RadSystem<problem_t>::ComputeTgasFromEgas(rho_L, Eint_L);
+    Tgas_R = RadSystem<problem_t>::ComputeTgasFromEgas(rho_R, Eint_R);
+  }
 
   double dl = NAN;
   if constexpr (DIR == FluxDir::X1) {
@@ -770,7 +775,7 @@ RadSystem<problem_t>::ComputeTgasFromEgas(const double rho, const double Egas)
   } else {
     return NAN;
   }
-  #pragma nv_diag_suppress implicit_return_from_non_void_function
+#pragma nv_diag_suppress implicit_return_from_non_void_function
 }
 
 template <typename problem_t>
@@ -842,21 +847,28 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
 
     // load fluid properties
     const double rho = consPrev(i, j, k, gasDensity_index);
-    const double Egastot0 = consPrev(i, j, k, gasEnergy_index);
     const double x1GasMom0 = consPrev(i, j, k, x1GasMomentum_index);
     const double x2GasMom0 = consPrev(i, j, k, x2GasMomentum_index);
     const double x3GasMom0 = consPrev(i, j, k, x3GasMomentum_index);
-    const double Egas0 =
-        ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0);
-    const double Ekin0 = Egastot0 - Egas0;
+    const double Egastot0 = consPrev(i, j, k, gasEnergy_index);
 
     // load radiation energy
     const double Erad0 = consPrev(i, j, k, radEnergy_index);
 
     // load radiation energy source term
     // plus advection source term (for well-balanced/SDC integrators)
-    const double Src =
-        dt * ((chat * radEnergySource(i, j, k)) + advectionFluxes(i, j, k));
+    const double Src = dt * ((chat * radEnergySource(i, j, k)) + advectionFluxes(i, j, k));
+
+    double Egas0 = NAN;
+    double Ekin0 = NAN;
+    double Egas_guess = NAN;
+    double Erad_guess = NAN;
+    double T_gas = NAN;
+
+    if constexpr (gamma_ != 1.0) {
+      Egas0 =
+          ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0);
+      Ekin0 = Egastot0 - Egas0;
 
     AMREX_ASSERT(Src >= 0.0);
     AMREX_ASSERT(Egas0 > 0.0);
@@ -865,11 +877,9 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
     const double Etot0 = Egas0 + (c / chat) * (Erad0 + Src);
 
     // BEGIN NEWTON-RAPHSON LOOP
-    double Egas_guess = Egas0;
-    double Erad_guess = Erad0;
-    double T_gas = NAN;
+      Egas_guess = Egas0;
+      Erad_guess = Erad0;
 
-    if constexpr (gamma_ != 1.0) {
       const double a_rad = radiation_constant_;
       double F_G = NAN;
       double F_R = NAN;
@@ -1005,7 +1015,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
           ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess);
       amrex::Real dErad_work = NAN;
 
-      if constexpr (compute_v_over_c_terms_ == true) {
+      if constexpr (compute_v_over_c_terms_) {
         // compute difference in gas kinetic energy before and after momentum
         // update
         amrex::Real const Ekin1 = Egastot1 - Egas_guess;
