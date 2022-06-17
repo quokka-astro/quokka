@@ -21,6 +21,14 @@
 struct ShockProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
+template <> struct Physics_Traits<ShockProblem> {
+  static constexpr bool is_hydro_enabled = true;
+  static constexpr bool is_radiation_enabled = true;
+  static constexpr bool is_mhd_enabled = false;
+  static constexpr bool is_primordial_chem_enabled = false;
+  static constexpr bool is_metalicity_enabled = false;
+};
+
 // parameters taken from Section 9.5 of Skinner et al. (2019)
 // [The Astrophysical Journal Supplement Series, 241:7 (27pp), 2019 March]
 
@@ -244,8 +252,6 @@ auto problem_main() -> int {
 
   // Problem initialization
   RadhydroSimulation<ShockProblem> sim(boundaryConditions);
-  sim.is_hydro_enabled_ = true;
-  sim.is_radiation_enabled_ = true;
   sim.cflNumber_ = CFL_number;
   sim.radiationCflNumber_ = CFL_number;
   sim.maxTimesteps_ = max_timesteps;

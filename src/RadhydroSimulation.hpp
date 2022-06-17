@@ -93,8 +93,6 @@ public:
 
   amrex::Real radiationCflNumber_ = 0.3;
   int maxSubsteps_ = 10; // maximum number of radiation subcycles per hydro step
-  bool is_hydro_enabled_ = false;
-  bool is_radiation_enabled_ = true;
   bool computeReferenceSolution_ = false;
   amrex::Real errorNorm_ = NAN;
   amrex::Real densityFloor_ = 0.;
@@ -111,26 +109,16 @@ public:
   amrex::Long radiationCellUpdates_ =
       0; // total number of radiation cell-updates
 
-  // member functions
-
+  // constructors
   explicit RadhydroSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions)
-      : AMRSimulation<problem_t>(
-            boundaryConditions, RadSystem<problem_t>::nvar_, ncompHyperbolic_) {
-    componentNames_ = {"gasDensity",    "x-GasMomentum", "y-GasMomentum",
-                       "z-GasMomentum", "gasEnergy",     "radEnergy",
-                       "x-RadFlux",     "y-RadFlux",     "z-RadFlux"};
-  }
+      : AMRSimulation<problem_t>(boundaryConditions) {}
 
   RadhydroSimulation(amrex::IntVect & /*gridDims*/,
                      amrex::RealBox & /*boxSize*/,
                      amrex::Vector<amrex::BCRec> &boundaryConditions)
-      : AMRSimulation<problem_t>(
-            boundaryConditions, RadSystem<problem_t>::nvar_, ncompHyperbolic_) {
-    componentNames_ = {"gasDensity",    "x-GasMomentum", "y-GasMomentum",
-                       "z-GasMomentum", "gasEnergy",     "radEnergy",
-                       "x-RadFlux",     "y-RadFlux",     "z-RadFlux"};
-  }
+      : AMRSimulation<problem_t>(boundaryConditions) {}
 
+  // member functions
   void checkHydroStates(amrex::MultiFab &mf, char const *file, int line);
   void computeMaxSignalLocal(int level) override;
   void preCalculateInitialConditions() override;
@@ -249,15 +237,16 @@ void RadhydroSimulation<problem_t>::computeMaxSignalLocal(int const level) {
     auto const &stateNew = state_new_cc_[level].const_array(iter);
     auto const &maxSignal = max_signal_speed_[level].array(iter);
 
-    if (is_hydro_enabled_ && !(is_radiation_enabled_)) {
+    if constexpr (Physics_Traits<problem_t>::is_hydro_enabled &&
+                  !(Physics_Traits<problem_t>::is_radiation_enabled)) {
       // hydro only
       HydroSystem<problem_t>::ComputeMaxSignalSpeed(stateNew, maxSignal,
                                                     indexRange);
-    } else if (is_radiation_enabled_) {
-      // radiation hydro, or radiation only
+    } else if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
+      // radiation + hydro, or radiation only
       RadSystem<problem_t>::ComputeMaxSignalSpeed(stateNew, maxSignal,
                                                   indexRange);
-      if (is_hydro_enabled_) {
+      if constexpr (Physics_Traits<problem_t>::is_hydro_enabled) {
         auto maxSignalHydroFAB = amrex::FArrayBox(indexRange);
         auto const &maxSignalHydro = maxSignalHydroFAB.array();
         HydroSystem<problem_t>::ComputeMaxSignalSpeed(stateNew, maxSignalHydro,
@@ -361,24 +350,32 @@ void RadhydroSimulation<problem_t>::computeAfterEvolve(
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 =
       geom[0].CellSizeArray();
   amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
-
-  amrex::Real const Egas0 = initSumCons[RadSystem<problem_t>::gasEnergy_index];
-  amrex::Real const Erad0 = initSumCons[RadSystem<problem_t>::radEnergy_index];
-  amrex::Real const Etot0 =
+  // hydro vars
+  amrex::Real Egas0 = 0;
+  amrex::Real Egas = 0;
+  if constexpr (Physics_Traits<problem_t>::is_hydro_enabled ||
+                Physics_Traits<problem_t>::is_radiation_enabled) {
+    Egas0 = initSumCons[RadSystem<problem_t>::gasEnergy_index];
+    Egas = state_new_cc_[0].sum(RadSystem<problem_t>::gasEnergy_index) * vol;
+  }
+  // radiation vars
+  amrex::Real Erad0 = 0;
+  amrex::Real Erad = 0;
+  if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
+    amrex::Real Erad0 = initSumCons[RadSystem<problem_t>::radEnergy_index];
+    amrex::Real Erad =
+        state_new_cc_[0].sum(RadSystem<problem_t>::radEnergy_index) * vol;
+  }
+  // compute total energies
+  amrex::Real Etot0 =
       Egas0 +
       (RadSystem<problem_t>::c_light_ / RadSystem<problem_t>::c_hat_) * Erad0;
-
-  amrex::Real const Egas =
-      state_new_cc_[0].sum(RadSystem<problem_t>::gasEnergy_index) * vol;
-  amrex::Real const Erad =
-      state_new_cc_[0].sum(RadSystem<problem_t>::radEnergy_index) * vol;
-  amrex::Real const Etot =
+  amrex::Real Etot =
       Egas +
       (RadSystem<problem_t>::c_light_ / RadSystem<problem_t>::c_hat_) * Erad;
-
-  amrex::Real const abs_err = (Etot - Etot0);
-  amrex::Real const rel_err = abs_err / Etot0;
-
+  // compute absolute and relative error
+  amrex::Real abs_err = (Etot - Etot0);
+  amrex::Real rel_err = abs_err / Etot0;
   amrex::Print() << "\nInitial gas+radiation energy = " << Etot0 << std::endl;
   amrex::Print() << "Final gas+radiation energy = " << Etot << std::endl;
   amrex::Print() << "\tabsolute conservation error = " << abs_err << std::endl;
@@ -450,7 +447,7 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(
   CHECK_HYDRO_STATES(state_old_cc_[lev]);
 
   // advance hydro
-  if (is_hydro_enabled_) {
+  if constexpr (Physics_Traits<problem_t>::is_hydro_enabled) {
     advanceHydroAtLevel(lev, time, dt_lev, fr_as_crse, fr_as_fine);
   } else {
     // copy hydro vars from state_old_cc_ to state_new_cc_
@@ -463,7 +460,7 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(
   CHECK_HYDRO_STATES(state_new_cc_[lev]);
 
   // subcycle radiation
-  if (is_radiation_enabled_) {
+  if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
     subcycleRadiationAtLevel(lev, time, dt_lev, fr_as_crse, fr_as_fine);
   }
 
@@ -943,7 +940,7 @@ void RadhydroSimulation<problem_t>::subcycleRadiationAtLevel(
   int nsubSteps = 0;
   amrex::Real dt_radiation = NAN;
 
-  if (is_hydro_enabled_ && !(constantDt_ > 0.)) {
+  if (Physics_Traits<problem_t>::is_hydro_enabled && !(constantDt_ > 0.)) {
     // adjust to get integer number of substeps
     nsubSteps = computeNumberOfRadiationSubsteps(lev, dt_lev_hydro);
     dt_radiation = dt_lev_hydro / static_cast<double>(nsubSteps);

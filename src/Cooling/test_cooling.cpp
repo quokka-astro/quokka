@@ -41,6 +41,14 @@ template <> struct EOS_Traits<CoolingTest> {
   static constexpr bool reconstruct_eint = true;
 };
 
+template <> struct Physics_Traits<CoolingTest> {
+  static constexpr bool is_hydro_enabled = true;
+  static constexpr bool is_radiation_enabled = false;
+  static constexpr bool is_mhd_enabled = false;
+  static constexpr bool is_primordial_chem_enabled = false;
+  static constexpr bool is_metalicity_enabled = false;
+};
+
 constexpr double Tgas0 = 6000.;       // K
 constexpr amrex::Real T_floor = 10.0; // K
 constexpr double rho0 = 0.6 * m_H;    // g cm^-3
@@ -360,8 +368,6 @@ auto problem_main() -> int {
   }
 
   RadhydroSimulation<CoolingTest> sim(boundaryConditions);
-  sim.is_hydro_enabled_ = true;
-  sim.is_radiation_enabled_ = false;
 
   // Standard PPM gives unphysically enormous temperatures when used for
   // this problem (e.g., ~1e14 K or higher), but can be fixed by

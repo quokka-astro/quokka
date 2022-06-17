@@ -68,18 +68,15 @@ public:
   using AMRSimulation<problem_t>::boxArray;
   using AMRSimulation<problem_t>::DistributionMap;
 
-  AdvectionSimulation(amrex::IntVect & /*gridDims*/,
-                      amrex::RealBox & /*boxSize*/,
-                      amrex::Vector<amrex::BCRec> &boundaryConditions,
-                      const int ncomp = 1)
-      : AMRSimulation<problem_t>(boundaryConditions, ncomp) {
-    componentNames_ = {"density"};
+  // constructors
+  explicit AdvectionSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions)
+      : AMRSimulation<problem_t>(boundaryConditions) {
   }
 
-  explicit AdvectionSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions,
-                               const int ncomp = 1)
-      : AMRSimulation<problem_t>(boundaryConditions, ncomp) {
-    componentNames_ = {"density"};
+  AdvectionSimulation(amrex::IntVect & /*gridDims*/,
+                      amrex::RealBox & /*boxSize*/,
+                      amrex::Vector<amrex::BCRec> &boundaryConditions)
+      : AMRSimulation<problem_t>(boundaryConditions) {
   }
 
   void computeMaxSignalLocal(int level) override;
@@ -139,7 +136,6 @@ void AdvectionSimulation<problem_t>::computeMaxSignalLocal(int const level) {
         indexRange);
   }
 }
-
 
 template <typename problem_t>
 void AdvectionSimulation<problem_t>::preCalculateInitialConditions() {

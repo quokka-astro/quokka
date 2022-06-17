@@ -8,14 +8,14 @@ enum class centering { cc=0, fc, ec };
 enum class direction { na=-1, x, y, z };
 
 struct grid {
-  amrex::Array4<double> const &array;
-  const amrex::Box &indexRange; // this needed to be const &
+  const amrex::Array4<double>& array;
+  const amrex::Box& indexRange;
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx;
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo;
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi;
   enum centering cen;
   enum direction dir;
-  grid(amrex::Array4<double> const &array, const amrex::Box &indexRange,
+  grid(const amrex::Array4<double>& array, const amrex::Box& indexRange,
        amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
        amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo,
        amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi,

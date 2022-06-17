@@ -52,27 +52,27 @@ template <typename problem_t> struct RadSystem_Traits {
 template <typename problem_t>
 class RadSystem : public HyperbolicSystem<problem_t> {
 public:
-  enum consVarIndex {
-    gasDensity_index = 0,
-    x1GasMomentum_index = 1,
-    x2GasMomentum_index = 2,
-    x3GasMomentum_index = 3,
-    gasEnergy_index = 4,
-    radEnergy_index = 5,
-    x1RadFlux_index = 6,
-    x2RadFlux_index = 7,
-    x3RadFlux_index = 8
+  enum consVarIndex { // move to AMRSimulation.
+    gasDensity_index = Physics_Indices<problem_t>::hydroCompStarts,
+    x1GasMomentum_index,
+    x2GasMomentum_index,
+    x3GasMomentum_index,
+    gasEnergy_index,
+    radEnergy_index,
+    x1RadFlux_index,
+    x2RadFlux_index,
+    x3RadFlux_index
   };
 
-  static constexpr int nvar_ = 9;
-  static constexpr int nvarHyperbolic_ = 4;
+  static constexpr int nvar_ = Physics_NumVars<problem_t>::numHydroVars + Physics_NumVars<problem_t>::numRadVars;
+  static constexpr int nvarHyperbolic_ = Physics_NumVars<problem_t>::numRadVars;
   static constexpr int nstartHyperbolic_ = radEnergy_index;
 
   enum primVarIndex {
-    primRadEnergy_index = 0,
-    x1ReducedFlux_index = 1,
-    x2ReducedFlux_index = 2,
-    x3ReducedFlux_index = 3,
+    primRadEnergy_index = Physics_Indices<problem_t>::radCompStarts,
+    x1ReducedFlux_index,
+    x2ReducedFlux_index,
+    x3ReducedFlux_index
   };
 
   // C++ standard does not allow constexpr to be uninitialized, even in a

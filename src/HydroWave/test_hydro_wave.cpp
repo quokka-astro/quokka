@@ -25,6 +25,14 @@ template <> struct EOS_Traits<WaveProblem> {
   static constexpr bool reconstruct_eint = true;
 };
 
+template <> struct Physics_Traits<WaveProblem> {
+  static constexpr bool is_hydro_enabled = true;
+  static constexpr bool is_radiation_enabled = false;
+  static constexpr bool is_mhd_enabled = false;
+  static constexpr bool is_primordial_chem_enabled = false;
+  static constexpr bool is_metalicity_enabled = false;
+};
+
 constexpr double rho0 = 1.0; // background density
 constexpr double P0 =
     1.0 / HydroSystem<WaveProblem>::gamma_; // background pressure
@@ -95,8 +103,6 @@ auto problem_main() -> int {
   }
 
   RadhydroSimulation<WaveProblem> sim(boundaryConditions);
-  sim.is_hydro_enabled_ = true;
-  sim.is_radiation_enabled_ = false;
   sim.cflNumber_ = CFL_number;
   sim.stopTime_ = max_time;
   sim.maxTimesteps_ = max_timesteps;

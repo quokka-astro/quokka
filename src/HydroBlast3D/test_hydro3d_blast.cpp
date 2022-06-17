@@ -28,6 +28,14 @@ template <> struct EOS_Traits<SedovProblem> {
   static constexpr bool reconstruct_eint = false;
 };
 
+template <> struct Physics_Traits<SedovProblem> {
+  static constexpr bool is_hydro_enabled = true;
+  static constexpr bool is_radiation_enabled = false;
+  static constexpr bool is_mhd_enabled = false;
+  static constexpr bool is_primordial_chem_enabled = false;
+  static constexpr bool is_metalicity_enabled = false;
+};
+
 template <>
 void RadhydroSimulation<SedovProblem>::setInitialConditionsOnGrid(
     std::vector<grid> &grid_vec) {
@@ -175,8 +183,6 @@ auto problem_main() -> int {
 
   // Problem initialization
   RadhydroSimulation<SedovProblem> sim(boundaryConditions);
-  sim.is_hydro_enabled_ = true;
-  sim.is_radiation_enabled_ = false;
   sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
   sim.stopTime_ = 0.5;          // 0.01;
   sim.cflNumber_ = 0.25;        // *must* be less than 1/3 in 3D!

@@ -57,6 +57,7 @@
 #include "CheckType.hpp"
 #include "grid.hpp"
 #include "math_impl.hpp"
+#include "physics_info.hpp"
 
 #define USE_YAFLUXREGISTER
 
@@ -64,7 +65,8 @@ using array_t = amrex::Array4<amrex::Real> const;
 using arrayconst_t = amrex::Array4<const amrex::Real> const;
 
 // Main simulation class; solvers should inherit from this
-template <typename problem_t> class AMRSimulation : public amrex::AmrCore {
+template <typename problem_t>
+class AMRSimulation : public amrex::AmrCore {
 public:
   amrex::Real maxDt_ =
       std::numeric_limits<double>::max(); // no limit by default
@@ -83,17 +85,40 @@ public:
   int plotfileInterval_ = 10;      // -1 == no output
   int checkpointInterval_ = -1;    // -1 == no output
 
-  // constructors
-
-  AMRSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions,
-                const int ncomp, const int ncompPrim)
-      : ncomp_(ncomp), ncompPrimitive_(ncompPrim) {
-    initialize(boundaryConditions);
-  }
-
-  AMRSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions,
-                const int ncomp)
-      : ncomp_(ncomp), ncompPrimitive_(ncomp) {
+  // constructor
+  explicit AMRSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions) {
+    int num_comps_prev_add = 0;
+    int num_comps_post_add = 0;
+    int num_comps_added = 0;
+    if constexpr (Physics_Traits<problem_t>::is_hydro_enabled ||
+                  Physics_Traits<problem_t>::is_radiation_enabled) {
+      num_comps_prev_add = componentNames_.size();
+      componentNames_.push_back({"gasDensity"});
+      componentNames_.push_back({"x-GasMomentum"});
+      componentNames_.push_back({"y-GasMomentum"});
+      componentNames_.push_back({"z-GasMomentum"});
+      componentNames_.push_back({"gasEnergy"});
+      num_comps_post_add = componentNames_.size();
+      num_comps_added = num_comps_post_add - num_comps_prev_add;
+      ncomp_ += num_comps_added;
+      ncompPrimitive_ += num_comps_added;
+    }
+    if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
+      num_comps_prev_add = componentNames_.size();
+      componentNames_.push_back({"radEnergy"});
+      componentNames_.push_back({"x-RadFlux"});
+      componentNames_.push_back({"y-RadFlux"});
+      componentNames_.push_back({"z-RadFlux"});
+      num_comps_post_add = componentNames_.size();
+      num_comps_added = num_comps_post_add - num_comps_prev_add;
+      ncomp_ += num_comps_added;
+      ncompPrimitive_ += num_comps_added;
+    }
+    if (ncomp_ == 0) {
+      ncomp_ = 1;
+      ncompPrimitive_ = 1;
+      componentNames_.push_back({"density"});
+    }
     initialize(boundaryConditions);
   }
 
@@ -320,10 +345,6 @@ void AMRSimulation<problem_t>::setInitialConditionsAtLevel(int lev) {
 
     // apply initial conditions provided / defined by the user
     setInitialConditionsOnGrid(grid_vec);
-
-    // auto const &state = state_new_cc_[lev].array(iter);
-    // amrex::Print() << state(0,0,0,0) << std::endl;
-    // amrex::Print() << grid_vec[0].array(0,0,0,0) << std::endl;
   }
 
   // set flag

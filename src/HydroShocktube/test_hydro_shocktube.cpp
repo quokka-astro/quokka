@@ -30,6 +30,14 @@ template <> struct EOS_Traits<ShocktubeProblem> {
   static constexpr bool reconstruct_eint = true;
 };
 
+template <> struct Physics_Traits<ShocktubeProblem> {
+  static constexpr bool is_hydro_enabled = true;
+  static constexpr bool is_radiation_enabled = false;
+  static constexpr bool is_mhd_enabled = false;
+  static constexpr bool is_primordial_chem_enabled = false;
+  static constexpr bool is_metalicity_enabled = false;
+};
+
 // left- and right- side shock states
 constexpr amrex::Real rho_L = 10.0;
 constexpr amrex::Real P_L = 100.0;
@@ -314,8 +322,6 @@ auto problem_main() -> int {
   }
 
   RadhydroSimulation<ShocktubeProblem> sim(boundaryConditions);
-  sim.is_hydro_enabled_ = true;
-  sim.is_radiation_enabled_ = false;
   sim.cflNumber_ = CFL_number;
   sim.maxDt_ = max_dt;
   sim.stopTime_ = max_time;

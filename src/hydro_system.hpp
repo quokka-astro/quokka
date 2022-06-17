@@ -38,21 +38,21 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 {
       public:
 	enum consVarIndex {
-		density_index = 0,
-		x1Momentum_index = 1,
-		x2Momentum_index = 2,
-		x3Momentum_index = 3,
-		energy_index = 4
+		density_index = Physics_Indices<problem_t>::hydroCompStarts,
+		x1Momentum_index,
+		x2Momentum_index,
+		x3Momentum_index,
+		energy_index
 	};
 	enum primVarIndex {
-		primDensity_index = 0,
-		x1Velocity_index = 1,
-		x2Velocity_index = 2,
-		x3Velocity_index = 3,
-		pressure_index = 4
+		primDensity_index = Physics_Indices<problem_t>::hydroCompStarts,
+		x1Velocity_index,
+		x2Velocity_index,
+		x3Velocity_index,
+		pressure_index
 	};
 
-	static constexpr int nvar_ = 5;
+	static constexpr int nvar_ = Physics_NumVars<problem_t>::numHydroVars;
 
 	static void ConservedToPrimitive(amrex::Array4<const amrex::Real> const &cons,
 					 array_t &primVar, amrex::Box const &indexRange);
@@ -147,7 +147,7 @@ void HydroSystem<problem_t>::ConservedToPrimitive(amrex::Array4<const amrex::Rea
 		const auto eint = thermal_energy / rho; // specific internal energy
 
 		AMREX_ASSERT(rho > 0.);
-		AMREX_ASSERT(P > 0.);
+    AMREX_ASSERT(P > 0.);
 
 		primVar(i, j, k, primDensity_index) = rho;
 		primVar(i, j, k, x1Velocity_index) = vx;
@@ -158,7 +158,7 @@ void HydroSystem<problem_t>::ConservedToPrimitive(amrex::Array4<const amrex::Rea
 			primVar(i, j, k, pressure_index) = eint;
 		} else {
 			// save pressure
-			primVar(i, j, k, pressure_index) = P;			
+			primVar(i, j, k, pressure_index) = P;
 		}
 	});
 }

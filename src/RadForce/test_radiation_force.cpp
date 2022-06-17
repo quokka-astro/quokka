@@ -55,6 +55,14 @@ template <> struct RadSystem_Traits<TubeProblem> {
   static constexpr bool compute_v_over_c_terms = true;
 };
 
+template <> struct Physics_Traits<TubeProblem> {
+  static constexpr bool is_hydro_enabled = true;
+  static constexpr bool is_radiation_enabled = true;
+  static constexpr bool is_mhd_enabled = false;
+  static constexpr bool is_primordial_chem_enabled = false;
+  static constexpr bool is_metalicity_enabled = false;
+};
+
 template <> struct EOS_Traits<TubeProblem> {
   static constexpr double gamma = gamma_gas;
   static constexpr double cs_isothermal = a0;     // only used when gamma = 1
@@ -218,8 +226,6 @@ auto problem_main() -> int {
 
   // Problem initialization
   RadhydroSimulation<TubeProblem> sim(boundaryConditions);
-  sim.is_hydro_enabled_ = true;
-  sim.is_radiation_enabled_ = true;
   sim.radiationReconstructionOrder_ = 3; // PPM
   sim.reconstructionOrder_ = 3;          // PPM
   sim.stopTime_ = tmax;
