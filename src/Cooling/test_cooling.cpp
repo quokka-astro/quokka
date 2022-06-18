@@ -273,7 +273,8 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
 
       // do integration with RK2 (Heun's method)
       int steps_taken = 0;
-      rk_adaptive_integrate(user_rhs, 0, y, dt, &user_data, rtol, abstol, steps_taken);
+      rk_adaptive_integrate(user_rhs, 0, y, dt, &user_data, rtol, abstol,
+                            steps_taken);
 
       const Real Egas_new = RadSystem<CoolingTest>::ComputeEgasFromEint(
           rho, x1Mom, x2Mom, x3Mom, y[0]);
@@ -285,8 +286,7 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
 
 template <>
 void RadhydroSimulation<CoolingTest>::computeAfterLevelAdvance(
-    int lev, amrex::Real /*time*/, amrex::Real dt_lev, int /*iteration*/,
-    int /*ncycle*/) {
+    int lev, amrex::Real /*time*/, amrex::Real dt_lev, int /*ncycle*/) {
   // compute operator split physics
   computeCooling(state_new_[lev], dt_lev, cloudyTables);
 }

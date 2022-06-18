@@ -81,7 +81,7 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	void computeMaxSignalLocal(int level) override;
 	void setInitialConditionsAtLevel(int level) override;
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev,
-					  int /*iteration*/, int /*ncycle*/) override;
+					  				  int /*ncycle*/) override;
 	void computeAfterTimestep() override;
 	void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) override;
 	void computeReferenceSolution(
@@ -198,13 +198,12 @@ void AdvectionSimulation<problem_t>::computeAfterEvolve(amrex::Vector<amrex::Rea
 	const double rel_error = err_norm / sol_norm;
 	errorNorm_ = rel_error;
 
-	amrex::Print() << "Relative rms L1 error norm = " << rel_error << "\n\n";
+	amrex::Print() << "\nRelative rms L1 error norm = " << rel_error << "\n\n";
 }
 
 template <typename problem_t>
 void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex::Real time,
-								  amrex::Real dt_lev,
-								  int /*iteration*/, int /*ncycle*/)
+								  amrex::Real dt_lev, int /*ncycle*/)
 {
 	// based on amrex/Tests/EB/CNS/Source/CNS_advance.cpp
 

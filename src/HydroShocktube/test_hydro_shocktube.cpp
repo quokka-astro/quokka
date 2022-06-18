@@ -121,7 +121,7 @@ AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(
     consVar(i, j, k, RadSystem<ShocktubeProblem>::x1GasMomentum_index) = 0.;
     consVar(i, j, k, RadSystem<ShocktubeProblem>::x2GasMomentum_index) = 0.;
     consVar(i, j, k, RadSystem<ShocktubeProblem>::x3GasMomentum_index) = 0.;
-    
+
   } else if (i >= hi[0]) {
     // x1 right-side boundary -- constant
     for (int n = 0; n < numcomp; ++n) {
@@ -134,6 +134,36 @@ AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(
     consVar(i, j, k, RadSystem<ShocktubeProblem>::x1GasMomentum_index) = 0.;
     consVar(i, j, k, RadSystem<ShocktubeProblem>::x2GasMomentum_index) = 0.;
     consVar(i, j, k, RadSystem<ShocktubeProblem>::x3GasMomentum_index) = 0.;
+  }
+}
+
+template <>
+void RadhydroSimulation<ShocktubeProblem>::ErrorEst(int lev,
+                                                    amrex::TagBoxArray &tags,
+                                                    Real /*time*/,
+                                                    int /*ngrow*/) {
+  // tag cells for refinement
+
+  const Real eta_threshold = 0.1; // gradient refinement threshold
+  const Real rho_min = 0.01;       // minimum rho for refinement
+  auto const &dx = geom[lev].CellSizeArray();
+
+  for (amrex::MFIter mfi(state_new_[lev]); mfi.isValid(); ++mfi) {
+    const amrex::Box &box = mfi.validbox();
+    const auto state = state_new_[lev].const_array(mfi);
+    const auto tag = tags.array(mfi);
+
+    amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+      int const n = 0;
+      Real const rho = state(i, j, k, n);
+      Real const del_x =
+          (state(i + 1, j, k, n) - state(i - 1, j, k, n)) / (2.0 * dx[0]);
+      Real const gradient_indicator = std::sqrt(del_x * del_x) / rho;
+
+      if (gradient_indicator > eta_threshold && rho >= rho_min) {
+        tag(i, j, k) = amrex::TagBox::SET;
+      }
+    });
   }
 }
 
@@ -308,12 +338,12 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
 
 auto problem_main() -> int {
   // Problem parameters
-  // const int nx = 1000;
-  // const double Lx = 5.0;
-  const double CFL_number = 0.1;
+  //const int nx = 1000;
+  //const double Lx = 5.0;
+  //const double CFL_number = 0.1;
+  //const double initial_dt = 1e-6;
+  //const double max_dt = 1e-4;
   const double max_time = 0.4;
-  const double max_dt = 1e-4;
-  const double initial_dt = 1e-6;
   const int max_timesteps = 8000;
 
   // Problem initialization
@@ -331,13 +361,12 @@ auto problem_main() -> int {
   RadhydroSimulation<ShocktubeProblem> sim(boundaryConditions);
   sim.is_hydro_enabled_ = true;
   sim.is_radiation_enabled_ = false;
-  sim.cflNumber_ = CFL_number;
-  sim.maxDt_ = max_dt;
+  // sim.cflNumber_ = CFL_number;
+  // sim.maxDt_ = max_dt;
+  // sim.initDt_ = initial_dt;
   sim.stopTime_ = max_time;
   sim.maxTimesteps_ = max_timesteps;
-  sim.initDt_ = initial_dt;
   sim.computeReferenceSolution_ = true;
-  sim.plotfileInterval_ = -1;
 
   // Main time loop
   sim.setInitialConditions();
