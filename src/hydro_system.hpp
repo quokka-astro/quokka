@@ -676,8 +676,6 @@ void HydroSystem<problem_t>::ComputeFluxes(
                                                       int k_in) {
     auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
 
-    const double eta1 = 0.001; // eta_1 dual energy parameter
-
     // HLLC solver following Toro (1998) and Balsara (2017).
     // [Carbuncle correction:
     //  Minoshima & Miyoshi, "A low-dissipation HLLD approximate Riemann solver
