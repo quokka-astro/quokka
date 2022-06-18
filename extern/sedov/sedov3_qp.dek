@@ -1,0 +1,9 @@
+! common block communication
+      logical       :: ltransitional,lstandard,lvacuum,lomega2,lomega3
+      real*16       :: gamma,gamm1,gamp1,gpogm,xgeom,xg2,rwant,r2, &
+                       a0,a1,a2,a3,a4,a5,a_val,b_val,c_val,d_val,e_val, &
+                       omega,vv,xlam_want,vwant,rvv
+      common /slap/    gamma,gamm1,gamp1,gpogm,xgeom,xg2,rwant,r2, &
+                       a0,a1,a2,a3,a4,a5,a_val,b_val,c_val,d_val,e_val, &
+                       omega,vv,xlam_want,vwant,rvv, &
+                       ltransitional,lstandard,lvacuum,lomega2,lomega3

@@ -7,11 +7,22 @@
 /// \brief Defines a test problem for the odd-even decoupling instability.
 ///
 
+#include "AMReX.H"
+#include "AMReX_Arena.H"
 #include "AMReX_Array.H"
 #include "AMReX_BCRec.H"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
+#include "AMReX_Box.H"
 #include "AMReX_Config.H"
+#include "AMReX_FArrayBox.H"
+#include "AMReX_FabArrayBase.H"
+#include "AMReX_FabArrayUtility.H"
+#include "AMReX_GpuAsyncArray.H"
+#include "AMReX_GpuContainers.H"
+#include "AMReX_GpuQualifiers.H"
+#include "AMReX_IntVect.H"
+#include "AMReX_MultiFab.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
@@ -20,12 +31,14 @@
 
 #include "RadhydroSimulation.hpp"
 #include "hydro_system.hpp"
+#include "radiation_system.hpp"
 #include "test_quirk.hpp"
+#include <algorithm>
+#include <vector>
 
 using Real = amrex::Real;
 
-struct QuirkProblem {
-};
+struct QuirkProblem {};
 
 template <> struct EOS_Traits<QuirkProblem> {
 	static constexpr double gamma = 5. / 3.;
@@ -38,9 +51,10 @@ constexpr Real pl =  26.85;
 constexpr Real dr =  1.0;
 constexpr Real ur = -5.0;
 constexpr Real pr =  0.6;
+int ishock_g = 0;
 
-template <> void RadhydroSimulation<QuirkProblem>::setInitialConditionsAtLevel(int lev)
-{
+template <>
+void RadhydroSimulation<QuirkProblem>::setInitialConditionsAtLevel(int lev) {
 	// Initial conditions from:
 	// T. Hanawa et al. / Journal of Computational Physics 227 (2008) 7952–7976
 	// and based on Athena++'s quirk.cpp.
@@ -49,11 +63,11 @@ template <> void RadhydroSimulation<QuirkProblem>::setInitialConditionsAtLevel(i
 	amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
 
 	Real xshock = 0.4;
-	int ishock = 0;
-	for (ishock = 0; (prob_lo[0] + dx[0]*(ishock + Real(0.5))) < xshock; ++ishock) {}
-	ishock--;
-	amrex::Print() << "ishock = " << ishock << "\n";
-
+  for (ishock_g = 0; (prob_lo[0] + dx[0] * (ishock_g + Real(0.5))) < xshock;
+       ++ishock_g) {
+  }
+  ishock_g--;
+  amrex::Print() << "ishock = " << ishock_g << "\n";
 
 	Real dd = dl - 0.135;
 	Real ud = ul + 0.219;
@@ -62,6 +76,7 @@ template <> void RadhydroSimulation<QuirkProblem>::setInitialConditionsAtLevel(i
 	for (amrex::MFIter iter(state_old_[lev]); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
 		auto const &state = state_new_[lev].array(iter);
+    int ishock = ishock_g; // globals cannot be lambda-captured
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 			double vx = NAN;
@@ -114,6 +129,85 @@ template <> void RadhydroSimulation<QuirkProblem>::setInitialConditionsAtLevel(i
 	areInitialConditionsDefined_ = true;
 }
 
+auto getDeltaEntropyVector() -> std::vector<Real> & {
+  static std::vector<Real> delta_s_vec;
+  return delta_s_vec;
+}
+
+template <> void RadhydroSimulation<QuirkProblem>::computeAfterTimestep() {
+  if (amrex::ParallelDescriptor::IOProcessor()) {
+    // it should be sufficient examine a single box on level 0
+    // (no AMR should be used for this problem, and the odd-even decoupling will
+    // manifest in every row along the shock, if it happens)
+
+    amrex::MultiFab &mf_state = state_new_[0];
+    int box_no = -1;
+    int ilo = ishock_g;
+    int jlo = 0;
+    int klo = 0;
+    for (amrex::MFIter mfi(mf_state); mfi.isValid(); ++mfi) {
+      const amrex::Box &bx = mfi.validbox();
+      amrex::GpuArray<int, 3> box_lo = bx.loVect3d();
+      jlo = box_lo[1];
+      klo = box_lo[2];
+      amrex::IntVect cell{AMREX_D_DECL(ilo, jlo, klo)};
+      if (bx.contains(cell)) {
+        box_no = mfi.index();
+        break;
+      }
+    }
+
+    AMREX_ALWAYS_ASSERT(box_no != -1);
+    auto const &state = mf_state.const_array(box_no);
+    amrex::Box bx = amrex::makeSingleCellBox(ilo, jlo, klo);
+    Real host_s = NAN;
+    amrex::AsyncArray async_s(&host_s, 1);
+    Real *s = async_s.data();
+
+    amrex::launch(bx, [=] AMREX_GPU_DEVICE(amrex::Box const &tbx) {
+      amrex::GpuArray<int, 3> const idx = tbx.loVect3d();
+      int i = idx[0];
+      int j = idx[1];
+      int k = idx[2];
+      Real dodd = state(i, j + 1, k, HydroSystem<QuirkProblem>::density_index);
+      Real podd =
+          HydroSystem<QuirkProblem>::ComputePressure(state, i, j + 1, k);
+      Real deven = state(i, j, k, HydroSystem<QuirkProblem>::density_index);
+      Real peven = HydroSystem<QuirkProblem>::ComputePressure(state, i, j, k);
+
+      // the 'entropy function' s == P / rho^gamma
+      const Real gamma = HydroSystem<QuirkProblem>::gamma_;
+      Real sodd = podd / std::pow(dodd, gamma);
+      Real seven = peven / std::pow(deven, gamma);
+      s[0] = std::abs(sodd - seven);
+    });
+
+    async_s.copyToHost(&host_s, 1);
+    getDeltaEntropyVector().push_back(host_s);
+  }
+}
+
+template <>
+void RadhydroSimulation<QuirkProblem>::computeAfterEvolve(
+    amrex::Vector<amrex::Real> & /*initSumCons*/) {
+  if (amrex::ParallelDescriptor::IOProcessor()) {
+    auto const &deltas_vec = getDeltaEntropyVector();
+    const Real deltas = *std::max_element(deltas_vec.begin(), deltas_vec.end());
+
+    if (deltas > 0.06) {
+      amrex::Print()
+          << "The scheme suffers from the Carbuncle phenomenon : max delta s = "
+          << deltas << "\n\n";
+      amrex::Abort("Carbuncle detected!");
+    } else {
+      amrex::Print()
+          << "The scheme looks stable against the Carbuncle phenomenon : "
+             "max delta s = "
+          << deltas << "\n\n";
+    }
+  }
+}
+
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 AMRSimulation<QuirkProblem>::setCustomBoundaryConditions(
@@ -144,7 +238,7 @@ AMRSimulation<QuirkProblem>::setCustomBoundaryConditions(
     consVar(i, j, k, RadSystem<QuirkProblem>::gasEnergy_index) =
         pl / (gamma - 1.) + 0.5 * dl * ul * ul;
     consVar(i, j, k, RadSystem<QuirkProblem>::gasDensity_index) = dl;
-    consVar(i, j, k, RadSystem<QuirkProblem>::x1GasMomentum_index) = dl*ul;
+    consVar(i, j, k, RadSystem<QuirkProblem>::x1GasMomentum_index) = dl * ul;
     consVar(i, j, k, RadSystem<QuirkProblem>::x2GasMomentum_index) = 0.;
     consVar(i, j, k, RadSystem<QuirkProblem>::x3GasMomentum_index) = 0.;
   } else if (i >= hi[0]) {
@@ -152,14 +246,19 @@ AMRSimulation<QuirkProblem>::setCustomBoundaryConditions(
     consVar(i, j, k, RadSystem<QuirkProblem>::gasEnergy_index) =
         pr / (gamma - 1.) + 0.5 * dr * ur * ur;
     consVar(i, j, k, RadSystem<QuirkProblem>::gasDensity_index) = dr;
-    consVar(i, j, k, RadSystem<QuirkProblem>::x1GasMomentum_index) = dr*ur;
+    consVar(i, j, k, RadSystem<QuirkProblem>::x1GasMomentum_index) = dr * ur;
     consVar(i, j, k, RadSystem<QuirkProblem>::x2GasMomentum_index) = 0.;
     consVar(i, j, k, RadSystem<QuirkProblem>::x3GasMomentum_index) = 0.;
   }
+
+  // initialize radiation variables to zero
+  consVar(i, j, k, RadSystem<QuirkProblem>::radEnergy_index) = 0;
+  consVar(i, j, k, RadSystem<QuirkProblem>::x1RadFlux_index) = 0;
+  consVar(i, j, k, RadSystem<QuirkProblem>::x2RadFlux_index) = 0;
+  consVar(i, j, k, RadSystem<QuirkProblem>::x3RadFlux_index) = 0;
 }
 
-auto problem_main() -> int
-{
+auto problem_main() -> int {
 	// Boundary conditions
 	const int nvars = RadhydroSimulation<QuirkProblem>::nvarTotal_;
 	amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
@@ -182,7 +281,7 @@ auto problem_main() -> int
 	sim.stopTime_ = 0.4;
 	sim.cflNumber_ = 0.4;
 	sim.maxTimesteps_ = 2000;
-	sim.plotfileInterval_ = 10;
+  sim.plotfileInterval_ = -1;
 
 	// initialize
 	sim.setInitialConditions();

@@ -81,7 +81,7 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	void computeMaxSignalLocal(int level) override;
 	void setInitialConditionsAtLevel(int level) override;
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev,
-					  int /*iteration*/, int /*ncycle*/) override;
+					  				  int /*ncycle*/) override;
 	void computeAfterTimestep() override;
 	void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) override;
 	void computeReferenceSolution(
@@ -89,6 +89,11 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
     	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
     	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
 		amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi);
+
+	// compute derived variables
+	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const override;
+
+	void FixupState(int lev) override;
 
 	// tag cells for refinement
 	void ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override;
@@ -137,11 +142,23 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::computeAfterT
 	// do nothing -- user should implement using problem-specific template specialization
 }
 
+
+template <typename problem_t> void AdvectionSimulation<problem_t>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const
+{
+	// user should implement
+}
+
 template <typename problem_t>
 void AdvectionSimulation<problem_t>::ErrorEst(int lev, amrex::TagBoxArray &tags,
 					      amrex::Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for refinement -- implement in problem generator
+}
+
+template <typename problem_t>
+void AdvectionSimulation<problem_t>::FixupState(int lev)
+{
+	// fix negative states
 }
 
 template <typename problem_t>
@@ -181,13 +198,12 @@ void AdvectionSimulation<problem_t>::computeAfterEvolve(amrex::Vector<amrex::Rea
 	const double rel_error = err_norm / sol_norm;
 	errorNorm_ = rel_error;
 
-	amrex::Print() << "Relative rms L1 error norm = " << rel_error << "\n\n";
+	amrex::Print() << "\nRelative rms L1 error norm = " << rel_error << "\n\n";
 }
 
 template <typename problem_t>
 void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex::Real time,
-								  amrex::Real dt_lev,
-								  int /*iteration*/, int /*ncycle*/)
+								  amrex::Real dt_lev, int /*ncycle*/)
 {
 	// based on amrex/Tests/EB/CNS/Source/CNS_advance.cpp
 

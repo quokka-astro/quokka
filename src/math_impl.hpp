@@ -17,4 +17,10 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto clamp(double v, double lo, double 
 	return (v < lo) ? lo : (hi < v) ? hi : v;
 }
 
+/// Provide type-safe global sign ('sgn') function.
+template <typename T> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto sgn(T val) -> int
+{
+	return (T(0) < val) - (val < T(0));
+}
+
 #endif // MATH_IMPL_HPP_

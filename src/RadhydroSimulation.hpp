@@ -20,9 +20,6 @@
 #include "AMReX_GpuControl.H"
 #include "AMReX_IArrayBox.H"
 #include "AMReX_IndexType.H"
-#include "hyperbolic_system.hpp"
-#include "sundials/sundials_context.h"
-
 #include "AMReX.H"
 #include "AMReX_Algorithm.H"
 #include "AMReX_Arena.H"
@@ -45,6 +42,8 @@
 #include "AMReX_Utility.H"
 #include "AMReX_YAFluxRegister.H"
 
+#include "CloudyCooling.hpp"
+#include "hyperbolic_system.hpp"
 #include "hydro_system.hpp"
 #include "radiation_system.hpp"
 #include "simulation.hpp"
@@ -75,13 +74,13 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	using AMRSimulation<problem_t>::DistributionMap;
 	using AMRSimulation<problem_t>::cellUpdates_;
 	using AMRSimulation<problem_t>::CountCells;
+	using AMRSimulation<problem_t>::WriteCheckpointFile;
 
 	std::vector<double> t_vec_;
 	std::vector<double> Trad_vec_;
 	std::vector<double> Tgas_vec_;
 
-	SUNContext sundialsContext = nullptr;
-	void *cvodeObject = nullptr;
+	cloudy_tables cloudyTables{};
 
 	static constexpr int nvarTotal_ = RadSystem<problem_t>::nvar_;
 	static constexpr int ncompHydro_ = HydroSystem<problem_t>::nvar_; // hydro
@@ -129,14 +128,20 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	void computeMaxSignalLocal(int level) override;
 	void setInitialConditionsAtLevel(int level) override;
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev,
-					  int iteration, int ncycle) override;
+									  int ncycle) override;
 	void computeAfterTimestep() override;
 	void computeAfterLevelAdvance(int lev, amrex::Real time,
-								 amrex::Real dt_lev, int /*iteration*/, int /*ncycle*/);
+								 amrex::Real dt_lev, int /*ncycle*/);
 	void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) override;
 	void computeReferenceSolution(amrex::MultiFab &ref,
 		amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
     	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo);
+
+	// compute derived variables
+	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const override;
+
+	// fix-up states
+	void FixupState(int level) override;
 
 	// tag cells for refinement
 	void ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override;
@@ -275,6 +280,10 @@ void RadhydroSimulation<problem_t>::checkHydroStates(amrex::MultiFab &mf, char c
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &state = mf.const_array(iter);
 		if(!HydroSystem<problem_t>::CheckStatesValid(indexRange, state)) {
+			amrex::Print() << "Hydro states invalid (" + std::string(file) + ":" + std::to_string(line) + ")\n";
+			amrex::Print() << "Writing checkpoint for debugging...\n";
+			amrex::MFIter::allowMultipleMFIters(true);
+			WriteCheckpointFile();
 			amrex::Abort("Hydro states invalid (" + std::string(file) + ":" + std::to_string(line) + ")");
 		}
 	}
@@ -293,9 +302,16 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::computeAfterTi
 
 template <typename problem_t>
 void RadhydroSimulation<problem_t>::computeAfterLevelAdvance(int lev, amrex::Real time,
-								 amrex::Real dt_lev, int iteration, int ncycle)
+								 amrex::Real dt_lev, int ncycle)
 {
 	// user should implement if desired
+}
+
+template <typename problem_t>
+void RadhydroSimulation<problem_t>::ComputeDerivedVar(int lev, std::string const &dname,
+								amrex::MultiFab &mf, const int ncomp) const
+{
+	// compute derived variables and save in 'mf' -- user should implement
 }
 
 template <typename problem_t>
@@ -373,8 +389,7 @@ void RadhydroSimulation<problem_t>::computeAfterEvolve(amrex::Vector<amrex::Real
 
 template <typename problem_t>
 void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex::Real time,
-								 amrex::Real dt_lev,
-								 int iteration, int ncycle)
+								 amrex::Real dt_lev, int ncycle)
 {
 	BL_PROFILE("RadhydroSimulation::advanceSingleTimestepAtLevel()");
 
@@ -394,7 +409,7 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 	// since we are starting a new timestep, need to swap old and new state vectors
 	std::swap(state_old_[lev], state_new_[lev]);
 
-	// check hydro states before update
+	// check hydro states before update (this can be caused by the flux register!)
 	CHECK_HYDRO_STATES(state_old_[lev]);
 
 	// advance hydro
@@ -418,7 +433,7 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 	CHECK_HYDRO_STATES(state_new_[lev]);
 
 	// compute any operator-split terms here (user-defined)
-	computeAfterLevelAdvance(lev, time, dt_lev, iteration, ncycle);
+	computeAfterLevelAdvance(lev, time, dt_lev, ncycle);
 
 	// check hydro states after user work
 	CHECK_HYDRO_STATES(state_new_[lev]);
@@ -426,6 +441,24 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 	// check state validity
 	AMREX_ASSERT(!state_new_[lev].contains_nan(0, state_new_[lev].nComp()));
 	AMREX_ASSERT(!state_new_[lev].contains_nan()); // check ghost zones
+}
+
+// fix-up any unphysical states created by AMR operations
+// (e.g., caused by the flux register or from interpolation)
+template <typename problem_t>
+void RadhydroSimulation<problem_t>::FixupState(int lev)
+{
+	BL_PROFILE("RadhydroSimulation::FixupState()");
+
+	for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
+		const amrex::Box &indexRange = iter.fabbox(); // include ghost zones!
+		auto const &stateNew = state_new_[lev].array(iter);
+		auto const &stateOld = state_old_[lev].array(iter);
+
+		// fix hydro state
+		HydroSystem<problem_t>::EnforcePressureFloor(densityFloor_, pressureFloor_, indexRange, stateNew);
+		HydroSystem<problem_t>::EnforcePressureFloor(densityFloor_, pressureFloor_, indexRange, stateOld);
+	}
 }
 
 template <typename problem_t>
@@ -452,6 +485,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 
 	// advance all grids on local processor (Stage 1 of integrator)
 	for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
+
 		const amrex::Box &indexRange = iter.validbox(); // 'validbox' == exclude ghost zones
 		auto const &stateOld = state_old_[lev].const_array(iter);
 		auto const &stateNew = state_new_[lev].array(iter);
@@ -525,6 +559,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 
 		// advance all grids on local processor (Stage 2 of integrator)
 		for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
+
 			const amrex::Box &indexRange = iter.validbox(); // 'validbox' == exclude ghost zones
 			auto const &stateOld = state_old_[lev].const_array(iter);
 			auto const &stateInter = state_new_[lev].const_array(iter);
@@ -766,13 +801,10 @@ void RadhydroSimulation<problem_t>::hydroFluxFunction(
 	    primVar, x1Flat, x2Flat, x3Flat, x1LeftState.array(), x1RightState.array(),
 	    reconstructRange, nvars);
 
-	amrex::FArrayBox dvn(x1FluxRange, 1, amrex::The_Async_Arena());
-	amrex::FArrayBox dvt(x1FluxRange, 1, amrex::The_Async_Arena());
-
 	// interface-centered kernel
 	HydroSystem<problem_t>::template ComputeFluxes<DIR>(
 	    x1Flux.array(), x1LeftState.array(), x1RightState.array(),
-		primVar, consVar, dvn.array(), dvt.array(), x1FluxRange);
+		primVar, x1FluxRange);
 }
 
 template <typename problem_t>
@@ -834,13 +866,10 @@ void RadhydroSimulation<problem_t>::hydroFOFluxFunction(
 			primVar, x1LeftState.array(), x1RightState.array(),
 			x1ReconstructRange, nvars);
 
-	amrex::FArrayBox dvn(x1FluxRange, 1, amrex::The_Async_Arena());
-	amrex::FArrayBox dvt(x1FluxRange, 1, amrex::The_Async_Arena());
-
 	// interface-centered kernel
 	HydroSystem<problem_t>::template ComputeFluxes<DIR>(
 	    x1Flux.array(), x1LeftState.array(), x1RightState.array(),
-		primVar, consVar, dvn.array(), dvt.array(), x1FluxRange);
+		primVar, x1FluxRange);
 }
 
 template <typename problem_t>

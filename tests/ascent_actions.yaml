@@ -1,0 +1,45 @@
+- 
+  action: "add_pipelines"
+  pipelines: 
+    pl1: 
+      f1: 
+        type: "log"
+        # Note that this is the natural log, not log10!
+        params: 
+          field: "gasDensity"
+          output_name: "log_gasDensity"
+      f2:
+        type: "slice"
+        params: 
+          point: 
+            x: 0.5
+            y: 0.5
+            z: 0.5
+          normal: 
+            x: 0.0
+            y: 0.0
+            z: 1.0
+- 
+  action: "add_scenes"
+  scenes: 
+    s1: 
+      plots: 
+        p1: 
+          type: "pseudocolor"
+          field: "log_gasDensity"
+          pipeline: "pl1"
+      renders:
+        r1:
+          image_prefix: "log_density%05d"
+          annotations: "false"
+          #camera:
+          #  position: [-0.6, -0.6, -0.8]
+- 
+  action: "add_extracts"
+  extracts: 
+    e1: 
+      type: "volume"
+      params: 
+        field: "gasDensity"
+        pipeline: "pl1"
+        filename: "volume%05d"
