@@ -653,22 +653,6 @@ void HydroSystem<problem_t>::ComputeFluxes(
     double cs_L = NAN;
     double cs_R = NAN;
 
-    // used in dual energy switch
-    double Eavg_L = consVar(i - 1, j, k, energy_index);
-    double Eavg_R = consVar(i, j, k, energy_index);
-
-    double rhoavg_L = consVar(i - 1, j, k, density_index);
-    double rhoavg_R = consVar(i, j, k, density_index);
-
-    double x1momavg_L = consVar(i - 1, j, k, x1Momentum_index);
-    double x1momavg_R = consVar(i, j, k, x1Momentum_index);
-
-    double x2momavg_L = consVar(i - 1, j, k, x2Momentum_index);
-    double x2momavg_R = consVar(i, j, k, x2Momentum_index);
-
-    double x3momavg_L = consVar(i - 1, j, k, x3Momentum_index);
-    double x3momavg_R = consVar(i, j, k, x3Momentum_index);
-
     if constexpr (is_eos_isothermal()) {
       P_L = rho_L * (cs_iso_ * cs_iso_);
       P_R = rho_R * (cs_iso_ * cs_iso_);
