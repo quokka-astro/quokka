@@ -272,7 +272,7 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array
 
 		    // (3.) Monotonicity correction, using Eq. (1.10) in PPM paper. Equivalent
 		    // to step 4b in Athena++ [ppm_simple.cpp].
-			
+
 		    const double a = q(i, j, k, n);	// a_i in C&W
 		    const double dq_minus = (a - new_a_minus);
 		    const double dq_plus = (new_a_plus - a);

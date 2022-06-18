@@ -285,7 +285,7 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
     }
 
     // Plot results
-    int skip = 8; // only plot every 8 elements of exact solution
+    int skip = 8;       // only plot every 8 elements of exact solution
     double msize = 5.0; // marker size
     matplotlibcpp::clf();
     using mpl_arg = std::map<std::string, std::string>;
