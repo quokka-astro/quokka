@@ -600,8 +600,7 @@ void HydroSystem<problem_t>::AddInternalEnergyPressureTerm(
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
     amrex::Real const dt_in) {
   // first-order pressure term is added separately to the internal energy
-  // [See Eq. (13) of Schneider & Robertson (2017).]
-  // [See also Li et al. (2007).]
+  // [See Li et al. (2007) and Schneider & Robertson (2017).]
 
   amrex::Real const dt = dt_in; // workaround nvcc bug
 
@@ -641,9 +640,10 @@ void HydroSystem<problem_t>::AddInternalEnergyPressureTerm(
     amrex::Real const Etot = consVar(i, j, k, energy_index);
     amrex::Real const Eint_cons = Etot - Ekin;
 
-    // Li et al. method
+    // eta value from Flash (https://flash-x.github.io/Flash-X-docs/Hydro.html)
     const amrex::Real eta = 1.0e-4; // dual energy parameter 'eta'
 
+    // Li et al. sync method
     if (Eint_cons > eta * Etot) {
       consVar(i, j, k, internalEnergy_index) = Eint_cons;
     } else { // non-conservative sync
