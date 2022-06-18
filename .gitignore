@@ -3,6 +3,7 @@ compile_commands.json
 *.visit
 last_chk
 .vscode/
+tmp_build_dir/
 codeql-db/
 build/
 docs/doxygen/
@@ -12,6 +13,7 @@ tests/chk*
 __pycache__
 *.code-workspace
 *.sarif
+*.gnu.ex
 
 *.aux
 *.dbl

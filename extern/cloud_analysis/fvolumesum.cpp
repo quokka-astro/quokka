@@ -8,7 +8,8 @@
 #include <iterator>
 #include <fstream>
 
-// compute the integral of f dV, where f is one of the fields in the plotfile
+// compute the integral of w f dV,
+//   where f is one of the fields in the plotfile and w is a weight function
 // this understands axisymmetric geometry.
 
 using amrex::Real;
