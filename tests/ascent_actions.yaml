@@ -40,13 +40,13 @@
       params: 
         field: "gasDensity"
         filename: "volume%05d"
-    # e2: 
-    #   type: "volume"
-    #   params: 
-    #     field: "mass"
-    #     filename: "mass_volume%05d"
-    e3: 
+    e2: 
       type: "volume"
       params: 
         field: "temperature"
         filename: "temperature_volume%05d"
+    e3:
+      type: "relay"
+      params:
+        path: "./conduit_blueprint"
+        protocol: "blueprint/mesh/hdf5"
