@@ -34,19 +34,22 @@ template <> struct EOS_Traits<SedovProblem> {
   static constexpr bool reconstruct_eint = false;
 };
 
-template <>
-void RadhydroSimulation<SedovProblem>::setInitialConditionsAtLevel(int lev) {
-  // initialize a Sedov test problem using parameters due to
-  // Richard Klein and J. Bolstad
-  // [Reference: J.R. Kamm and F.X. Timmes, On Efficient Generation of
-  //   Numerically Robust Sedov Solutions, LA-UR-07-2849.]
+template <> struct Physics_Traits<SedovProblem> {
+  static constexpr bool is_hydro_enabled = true;
+  static constexpr bool is_radiation_enabled = false;
+  static constexpr bool is_mhd_enabled = false;
+  static constexpr bool is_primordial_chem_enabled = false;
+  static constexpr bool is_metalicity_enabled = false;
+};
 
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
-  const Real cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo =
-      geom[lev].ProbLoArray();
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi =
-      geom[lev].ProbHiArray();
+template <>
+void RadhydroSimulation<SedovProblem>::setInitialConditionsOnGrid(
+    std::vector<grid> &grid_vec) {
+  // extract variables required from the geom object
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_vec[0].dx;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_vec[0].prob_hi;
+  const amrex::Box &indexRange = grid_vec[0].indexRange;
 
   amrex::Real x0 = NAN;
   amrex::Real y0 = NAN;
@@ -73,14 +76,14 @@ void RadhydroSimulation<SedovProblem>::setInitialConditionsAtLevel(int lev) {
     const amrex::Box &indexRange = iter.validbox();
     auto const &state = state_new_[lev].array(iter);
 
-    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
       double rho_e = NAN;
 #if 0
-      amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
-      amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
-      amrex::Real const z = prob_lo[2] + (k + amrex::Real(0.5)) * dx[2];
-      amrex::Real const r = std::sqrt(
-          std::pow(x - x0, 2) + std::pow(y - y0, 2) + std::pow(z - z0, 2));
+    amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+    amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
+    amrex::Real const z = prob_lo[2] + (k + amrex::Real(0.5)) * dx[2];
+    amrex::Real const r = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2) +
+                                    std::pow(z - z0, 2));
 
       if (r < R0) {
         rho_e = 1.0;
@@ -92,37 +95,25 @@ void RadhydroSimulation<SedovProblem>::setInitialConditionsAtLevel(int lev) {
                                         "implemented for octant symmetry!");
       if ((i == 0) && (j == 0) && (k == 0)) {
         rho_e = E_blast / cell_vol;
-      } else {
+    } else {
         rho_e = 1.0e-10 * (E_blast / cell_vol);
-      }
+    }
 
-      AMREX_ASSERT(!std::isnan(rho));
+    AMREX_ASSERT(!std::isnan(rho));
       AMREX_ASSERT(!std::isnan(rho_e));
 
-      for (int n = 0; n < state.nComp(); ++n) {
-        state(i, j, k, n) = 0.; // zero fill all components
-      }
+    for (int n = 0; n < grid_vec[0].array.nComp(); ++n) {
+      grid_vec[0].array(i, j, k, n) = 0.; // zero fill all components
+    }
       const auto gamma = HydroSystem<SedovProblem>::gamma_;
 
-      state(i, j, k, HydroSystem<SedovProblem>::density_index) = rho;
-      state(i, j, k, HydroSystem<SedovProblem>::x1Momentum_index) = 0;
-      state(i, j, k, HydroSystem<SedovProblem>::x2Momentum_index) = 0;
-      state(i, j, k, HydroSystem<SedovProblem>::x3Momentum_index) = 0;
-      state(i, j, k, HydroSystem<SedovProblem>::energy_index) = rho_e;
-    });
-  }
-
-#if 0
-  // normalize blast energy (does not work with AMR!)
-  const Real E_sum =
-      state_new_[lev].sum(HydroSystem<SedovProblem>::energy_index);
-  const Real E_tot = E_sum * cell_vol;
-  const Real norm = E_blast / E_tot;
-  state_new_[lev].mult(norm, HydroSystem<SedovProblem>::energy_index, 1, 0);
-#endif
-
-  // set flag
-  areInitialConditionsDefined_ = true;
+    grid_vec[0].array(i, j, k, HydroSystem<SedovProblem>::density_index) = rho;
+    grid_vec[0].array(i, j, k, HydroSystem<SedovProblem>::x1Momentum_index) = rho * vx;
+    grid_vec[0].array(i, j, k, HydroSystem<SedovProblem>::x2Momentum_index) = rho * vy;
+    grid_vec[0].array(i, j, k, HydroSystem<SedovProblem>::x3Momentum_index) = rho * vz;
+    grid_vec[0].array(i, j, k, HydroSystem<SedovProblem>::energy_index) =
+        P / (gamma - 1.) + 0.5 * rho * v_sq;
+  });
 }
 
 template <>
@@ -135,9 +126,9 @@ void RadhydroSimulation<SedovProblem>::ErrorEst(int lev,
   const amrex::Real eta_threshold = 0.1; // gradient refinement threshold
   const amrex::Real P_min = 1.0e-3;      // minimum pressure for refinement
 
-  for (amrex::MFIter mfi(state_new_[lev]); mfi.isValid(); ++mfi) {
+  for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
     const amrex::Box &box = mfi.validbox();
-    const auto state = state_new_[lev].const_array(mfi);
+    const auto state = state_new_cc_[lev].const_array(mfi);
     const auto tag = tags.array(mfi);
 
     amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
@@ -283,8 +274,6 @@ auto problem_main() -> int {
 
   // Problem initialization
   RadhydroSimulation<SedovProblem> sim(boundaryConditions);
-  sim.is_hydro_enabled_ = true;
-  sim.is_radiation_enabled_ = false;
   sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
   sim.stopTime_ = 1.0;          // seconds
   sim.cflNumber_ = 0.3;         // *must* be less than 1/3 in 3D!

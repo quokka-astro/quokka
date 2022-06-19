@@ -26,63 +26,62 @@ template <> struct EOS_Traits<KelvinHelmholzProblem> {
   static constexpr bool reconstruct_eint = false;
 };
 
+template <> struct Physics_Traits<KelvinHelmholzProblem> {
+  static constexpr bool is_hydro_enabled = true;
+  static constexpr bool is_radiation_enabled = false;
+  static constexpr bool is_mhd_enabled = false;
+  static constexpr bool is_primordial_chem_enabled = false;
+  static constexpr bool is_metalicity_enabled = false;
+};
+
 template <>
-void RadhydroSimulation<KelvinHelmholzProblem>::setInitialConditionsAtLevel(
-    int lev) {
-  // use parameters from Athena++ paper, section 3.4.3
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo =
-      geom[lev].ProbLoArray();
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi =
-      geom[lev].ProbHiArray();
+void RadhydroSimulation<KelvinHelmholzProblem>::setInitialConditionsOnGrid(
+    std::vector<grid> &grid_vec) {
+  // extract variables required from the geom object
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_vec[0].dx;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_vec[0].prob_hi;
+  const amrex::Box &indexRange = grid_vec[0].indexRange;
 
   amrex::Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
   amrex::Real const y0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
   amrex::Real const A = 0.01;
+  // loop over the grid and set the initial condition
+  amrex::ParallelFor(
+      indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+        amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+        amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
 
-  for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
-    const amrex::Box &indexRange = iter.validbox();
-    auto const &state = state_new_[lev].array(iter);
+        double const L = 0.01;    // shearing layer thickness
+        double const sigma = 0.2; // perturbation thickness
+        double const yy = std::abs(y - y0) - 0.25;
 
-    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j,
-                                                        int k) noexcept {
-      amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
-      amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
+        double rho = 1.5 - 0.5 * std::tanh(yy / L);
+        double vx = 0.5 * std::tanh(yy / L);
+        double vy = A * std::cos(4.0 * M_PI * (x - x0)) *
+                    std::exp(-(yy * yy) / (sigma * sigma));
+        double vz = 0.;
+        double P = 2.5;
 
-      double const L = 0.01;    // shearing layer thickness
-      double const sigma = 0.2; // perturbation thickness
-      double const yy = std::abs(y - y0) - 0.25;
+        AMREX_ASSERT(!std::isnan(vx));
+        AMREX_ASSERT(!std::isnan(vy));
+        AMREX_ASSERT(!std::isnan(vz));
+        AMREX_ASSERT(!std::isnan(rho));
+        AMREX_ASSERT(!std::isnan(P));
 
-      double rho = 1.5 - 0.5 * std::tanh(yy / L);
-      double vx = 0.5 * std::tanh(yy / L);
-      double vy = A * std::cos(4.0 * M_PI * (x - x0)) *
-                  std::exp(-(yy * yy) / (sigma * sigma));
-      double vz = 0.;
-      double P = 2.5;
+        const auto v_sq = vx * vx + vy * vy + vz * vz;
+        const auto gamma = HydroSystem<KelvinHelmholzProblem>::gamma_;
 
-      AMREX_ASSERT(!std::isnan(vx));
-      AMREX_ASSERT(!std::isnan(vy));
-      AMREX_ASSERT(!std::isnan(vz));
-      AMREX_ASSERT(!std::isnan(rho));
-      AMREX_ASSERT(!std::isnan(P));
-
-      const auto v_sq = vx * vx + vy * vy + vz * vz;
-      const auto gamma = HydroSystem<KelvinHelmholzProblem>::gamma_;
-
-      state(i, j, k, HydroSystem<KelvinHelmholzProblem>::density_index) = rho;
-      state(i, j, k, HydroSystem<KelvinHelmholzProblem>::x1Momentum_index) =
-          rho * vx;
-      state(i, j, k, HydroSystem<KelvinHelmholzProblem>::x2Momentum_index) =
-          rho * vy;
-      state(i, j, k, HydroSystem<KelvinHelmholzProblem>::x3Momentum_index) =
-          rho * vz;
-      state(i, j, k, HydroSystem<KelvinHelmholzProblem>::energy_index) =
-          P / (gamma - 1.) + 0.5 * rho * v_sq;
-    });
-  }
-
-  // set flag
-  areInitialConditionsDefined_ = true;
+        grid_vec[0].array(i, j, k, HydroSystem<KelvinHelmholzProblem>::density_index) = rho;
+        grid_vec[0].array(i, j, k, HydroSystem<KelvinHelmholzProblem>::x1Momentum_index) =
+            rho * vx;
+        grid_vec[0].array(i, j, k, HydroSystem<KelvinHelmholzProblem>::x2Momentum_index) =
+            rho * vy;
+        grid_vec[0].array(i, j, k, HydroSystem<KelvinHelmholzProblem>::x3Momentum_index) =
+            rho * vz;
+        grid_vec[0].array(i, j, k, HydroSystem<KelvinHelmholzProblem>::energy_index) =
+            P / (gamma - 1.) + 0.5 * rho * v_sq;
+      });
 }
 
 template <>
@@ -93,9 +92,9 @@ void RadhydroSimulation<KelvinHelmholzProblem>::ErrorEst(
   const amrex::Real eta_threshold = 0.2; // gradient refinement threshold
   const amrex::Real rho_min = 0.1;       // minimum density for refinement
 
-  for (amrex::MFIter mfi(state_new_[lev]); mfi.isValid(); ++mfi) {
+  for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
     const amrex::Box &box = mfi.validbox();
-    const auto state = state_new_[lev].const_array(mfi);
+    const auto state = state_new_cc_[lev].const_array(mfi);
     const auto tag = tags.array(mfi);
 
     amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
@@ -134,8 +133,6 @@ auto problem_main() -> int {
 
   // Problem initialization
   RadhydroSimulation<KelvinHelmholzProblem> sim(boundaryConditions);
-  sim.is_hydro_enabled_ = true;
-  sim.is_radiation_enabled_ = false;
   sim.stopTime_ = 1.5;
   sim.cflNumber_ = 0.4;
   sim.maxTimesteps_ = 40000;

@@ -24,54 +24,58 @@ template <> struct EOS_Traits<ContactProblem> {
   static constexpr double gamma = 1.4;
   static constexpr bool reconstruct_eint = true;
 };
+
+template <> struct Physics_Traits<ContactProblem> {
+  static constexpr bool is_hydro_enabled = true;
+  static constexpr bool is_radiation_enabled = false;
+  static constexpr bool is_mhd_enabled = false;
+  static constexpr bool is_primordial_chem_enabled = false;
+  static constexpr bool is_metalicity_enabled = false;
+};
+
 constexpr double v_contact = 0.0; // contact wave velocity
 
 template <>
-void RadhydroSimulation<ContactProblem>::setInitialConditionsAtLevel(int lev) {
+void RadhydroSimulation<ContactProblem>::setInitialConditionsOnGrid(
+    std::vector<grid> &grid_vec) {
+  // extract variables required from the geom object
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_vec[0].dx;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
+  const amrex::Box &indexRange = grid_vec[0].indexRange;
+
   int ncomp = ncomp_;
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo =
-      geom[lev].ProbLoArray();
+  // loop over the grid and set the initial condition
+  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+    amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
 
-  for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
-    const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
-    auto const &state = state_new_[lev].array(iter);
+    double vx = NAN;
+    double rho = NAN;
+    double P = NAN;
 
-    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-      amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+    if (x < 0.5) {
+      rho = 1.4;
+      vx = v_contact;
+      P = 1.0;
+    } else {
+      rho = 1.0;
+      vx = v_contact;
+      P = 1.0;
+    }
+    AMREX_ASSERT(!std::isnan(vx));
+    AMREX_ASSERT(!std::isnan(rho));
+    AMREX_ASSERT(!std::isnan(P));
 
-      double vx = NAN;
-      double rho = NAN;
-      double P = NAN;
-
-      if (x < 0.5) {
-        rho = 1.4;
-        vx = v_contact;
-        P = 1.0;
-      } else {
-        rho = 1.0;
-        vx = v_contact;
-        P = 1.0;
-      }
-      AMREX_ASSERT(!std::isnan(vx));
-      AMREX_ASSERT(!std::isnan(rho));
-      AMREX_ASSERT(!std::isnan(P));
-
-      const auto gamma = HydroSystem<ContactProblem>::gamma_;
-      for (int n = 0; n < ncomp; ++n) {
-        state(i, j, k, n) = 0.;
-      }
-      state(i, j, k, HydroSystem<ContactProblem>::density_index) = rho;
-      state(i, j, k, HydroSystem<ContactProblem>::x1Momentum_index) = rho * vx;
-      state(i, j, k, HydroSystem<ContactProblem>::x2Momentum_index) = 0.;
-      state(i, j, k, HydroSystem<ContactProblem>::x3Momentum_index) = 0.;
-      state(i, j, k, HydroSystem<ContactProblem>::energy_index) =
-          P / (gamma - 1.) + 0.5 * rho * (vx * vx);
-    });
-  }
-
-  // set flag
-  areInitialConditionsDefined_ = true;
+    const auto gamma = HydroSystem<ContactProblem>::gamma_;
+    for (int n = 0; n < ncomp; ++n) {
+      grid_vec[0].array(i, j, k, n) = 0.;
+    }
+    grid_vec[0].array(i, j, k, HydroSystem<ContactProblem>::density_index) = rho;
+    grid_vec[0].array(i, j, k, HydroSystem<ContactProblem>::x1Momentum_index) = rho * vx;
+    grid_vec[0].array(i, j, k, HydroSystem<ContactProblem>::x2Momentum_index) = 0.;
+    grid_vec[0].array(i, j, k, HydroSystem<ContactProblem>::x3Momentum_index) = 0.;
+    grid_vec[0].array(i, j, k, HydroSystem<ContactProblem>::energy_index) =
+        P / (gamma - 1.) + 0.5 * rho * (vx * vx);
+  });
 }
 
 template <>
@@ -118,7 +122,7 @@ void RadhydroSimulation<ContactProblem>::computeReferenceSolution(
 
 #ifdef HAVE_PYTHON
   // Plot results
-  auto [position, values] = fextract(state_new_[0], geom[0], 0, 0.5);
+  auto [position, values] = fextract(state_new_cc_[0], geom[0], 0, 0.5);
   auto [pos_exact, val_exact] = fextract(ref, geom[0], 0, 0.5);
   auto const nx = position.size();
 
@@ -196,8 +200,6 @@ auto problem_main() -> int {
 
   // Problem initialization
   RadhydroSimulation<ContactProblem> sim(boundaryConditions);
-  sim.is_hydro_enabled_ = true;
-  sim.is_radiation_enabled_ = false;
   sim.stopTime_ = 2.0;
   sim.cflNumber_ = 0.8;
   sim.maxTimesteps_ = 2000;

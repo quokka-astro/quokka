@@ -16,8 +16,8 @@ struct StreamingProblem {};
 
 constexpr double initial_Erad = 1.0e-5;
 constexpr double initial_Egas = 1.0e-5;
-constexpr double c = 1.0;     // speed of light
-constexpr double chat = 0.2;  // reduced speed of light
+constexpr double c = 1.0;          // speed of light
+constexpr double chat = 0.2;       // reduced speed of light
 constexpr double kappa0 = 1.0e-10; // opacity
 constexpr double rho = 1.0;
 
@@ -30,6 +30,14 @@ template <> struct RadSystem_Traits<StreamingProblem> {
   static constexpr double gamma = 5. / 3.;
   static constexpr double Erad_floor = initial_Erad;
   static constexpr bool compute_v_over_c_terms = false;
+};
+
+template <> struct Physics_Traits<StreamingProblem> {
+  static constexpr bool is_hydro_enabled = false;
+  static constexpr bool is_radiation_enabled = true;
+  static constexpr bool is_mhd_enabled = false;
+  static constexpr bool is_primordial_chem_enabled = false;
+  static constexpr bool is_metalicity_enabled = false;
 };
 
 template <>
@@ -45,31 +53,24 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputeRosselandOpacity(
 }
 
 template <>
-void RadhydroSimulation<StreamingProblem>::setInitialConditionsAtLevel(
-    int lev) {
+void RadhydroSimulation<StreamingProblem>::setInitialConditionsOnGrid(
+    std::vector<grid> &grid_vec) {
+  const amrex::Box &indexRange = grid_vec[0].indexRange;
   const auto Erad0 = initial_Erad;
   const auto Egas0 = initial_Egas;
-
-  for (amrex::MFIter iter(state_old_[lev]); iter.isValid(); ++iter) {
-    const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
-    auto const &state = state_new_[lev].array(iter);
-
-    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-      state(i, j, k, RadSystem<StreamingProblem>::radEnergy_index) = Erad0;
-      state(i, j, k, RadSystem<StreamingProblem>::x1RadFlux_index) = 0;
-      state(i, j, k, RadSystem<StreamingProblem>::x2RadFlux_index) = 0;
-      state(i, j, k, RadSystem<StreamingProblem>::x3RadFlux_index) = 0;
-
-      state(i, j, k, RadSystem<StreamingProblem>::gasEnergy_index) = Egas0;
-      state(i, j, k, RadSystem<StreamingProblem>::gasDensity_index) = rho;
-      state(i, j, k, RadSystem<StreamingProblem>::x1GasMomentum_index) = 0.;
-      state(i, j, k, RadSystem<StreamingProblem>::x2GasMomentum_index) = 0.;
-      state(i, j, k, RadSystem<StreamingProblem>::x3GasMomentum_index) = 0.;
-    });
-  }
-
-  // set flag
-  areInitialConditionsDefined_ = true;
+  
+  // loop over the grid and set the initial condition
+  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+    grid_vec[0].array(i, j, k, RadSystem<StreamingProblem>::radEnergy_index) = Erad0;
+    grid_vec[0].array(i, j, k, RadSystem<StreamingProblem>::x1RadFlux_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<StreamingProblem>::x2RadFlux_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<StreamingProblem>::x3RadFlux_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<StreamingProblem>::gasEnergy_index) = Egas0;
+    grid_vec[0].array(i, j, k, RadSystem<StreamingProblem>::gasDensity_index) = rho;
+    grid_vec[0].array(i, j, k, RadSystem<StreamingProblem>::x1GasMomentum_index) = 0.;
+    grid_vec[0].array(i, j, k, RadSystem<StreamingProblem>::x2GasMomentum_index) = 0.;
+    grid_vec[0].array(i, j, k, RadSystem<StreamingProblem>::x3GasMomentum_index) = 0.;
+  });
 }
 
 template <>
@@ -147,8 +148,6 @@ auto problem_main() -> int {
 
   // Problem initialization
   RadhydroSimulation<StreamingProblem> sim(boundaryConditions);
-  sim.is_hydro_enabled_ = false;
-  sim.is_radiation_enabled_ = true;
   sim.radiationReconstructionOrder_ = 3; // PPM
   sim.stopTime_ = tmax;
   sim.radiationCflNumber_ = CFL_number;
@@ -163,7 +162,7 @@ auto problem_main() -> int {
   sim.evolve();
 
   // read output variables
-  auto [position, values] = fextract(sim.state_new_[0], sim.Geom(0), 0, 0.0);
+  auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
   const int nx = static_cast<int>(position.size());
 
   // compute error norm
@@ -208,7 +207,7 @@ auto problem_main() -> int {
   matplotlibcpp::legend();
   matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
   matplotlibcpp::save("./radiation_streaming.pdf");
-#endif // HAVE_PYTHON 
+#endif // HAVE_PYTHON
 
   // Cleanup and exit
   amrex::Print() << "Finished." << std::endl;

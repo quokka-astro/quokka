@@ -25,6 +25,14 @@ template <> struct EOS_Traits<WaveProblem> {
   static constexpr bool reconstruct_eint = true;
 };
 
+template <> struct Physics_Traits<WaveProblem> {
+  static constexpr bool is_hydro_enabled = true;
+  static constexpr bool is_radiation_enabled = false;
+  static constexpr bool is_mhd_enabled = false;
+  static constexpr bool is_primordial_chem_enabled = false;
+  static constexpr bool is_metalicity_enabled = false;
+};
+
 constexpr double rho0 = 1.0; // background density
 constexpr double P0 =
     1.0 / HydroSystem<WaveProblem>::gamma_; // background pressure
@@ -57,25 +65,20 @@ AMREX_GPU_DEVICE void computeWaveSolution(
 }
 
 template <>
-void RadhydroSimulation<WaveProblem>::setInitialConditionsAtLevel(int lev) {
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo =
-      geom[lev].ProbLoArray();
+void RadhydroSimulation<WaveProblem>::setInitialConditionsOnGrid(
+    std::vector<grid> &grid_vec) {
+  // extract variables required from the geom object
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_vec[0].dx;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
+  const amrex::Box &indexRange = grid_vec[0].indexRange;
   const int ncomp = ncomp_;
-
-  for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
-    const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
-    auto const &state = state_new_[lev].array(iter);
-    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-      for (int n = 0; n < ncomp; ++n) {
-        state(i, j, k, n) = 0; // fill unused components with zeros
-      }
-      computeWaveSolution(i, j, k, state, dx, prob_lo);
-    });
-  }
-
-  // set flag
-  areInitialConditionsDefined_ = true;
+  // loop over the grid and set the initial condition
+  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+    for (int n = 0; n < ncomp; ++n) {
+      grid_vec[0].array(i, j, k, n) = 0; // fill unused components with zeros
+    }
+    computeWaveSolution(i, j, k, grid_vec[0].array, dx, prob_lo);
+  });
 }
 
 auto problem_main() -> int {
@@ -100,8 +103,6 @@ auto problem_main() -> int {
   }
 
   RadhydroSimulation<WaveProblem> sim(boundaryConditions);
-  sim.is_hydro_enabled_ = true;
-  sim.is_radiation_enabled_ = false;
   sim.cflNumber_ = CFL_number;
   sim.stopTime_ = max_time;
   sim.maxTimesteps_ = max_timesteps;
@@ -110,12 +111,12 @@ auto problem_main() -> int {
   // set initial conditions
   sim.setInitialConditions();
   auto [pos_exact, val_exact] =
-      fextract(sim.state_new_[0], sim.geom[0], 0, 0.5);
+      fextract(sim.state_new_cc_[0], sim.geom[0], 0, 0.5);
 
   // Main time loop
   sim.evolve();
 
-  auto [position, values] = fextract(sim.state_new_[0], sim.geom[0], 0, 0.5);
+  auto [position, values] = fextract(sim.state_new_cc_[0], sim.geom[0], 0, 0.5);
   int nx = static_cast<int>(position.size());
   std::vector<double> xs = position;
 
@@ -133,7 +134,8 @@ auto problem_main() -> int {
     err_sq += dU_k * dU_k;
   }
   const amrex::Real epsilon = std::sqrt(err_sq);
-  amrex::Print() << "rms of component-wise L1 error norms = " << epsilon << std::endl;
+  amrex::Print() << "rms of component-wise L1 error norms = " << epsilon
+                 << std::endl;
 
 #ifdef HAVE_PYTHON
   // plot results

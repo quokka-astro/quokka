@@ -45,40 +45,43 @@ template <> struct EOS_Traits<ShockCloud> {
   static constexpr bool reconstruct_eint = true;
 };
 
+template <> struct Physics_Traits<ShockCloud> {
+  static constexpr bool is_hydro_enabled = true;
+  static constexpr bool is_radiation_enabled = false;
+  static constexpr bool is_mhd_enabled = false;
+  static constexpr bool is_primordial_chem_enabled = false;
+  static constexpr bool is_metalicity_enabled = false;
+};
+
 constexpr Real Tgas0 = 1.0e7;            // K
 constexpr Real nH0 = 1.0e-4;             // cm^-3
 constexpr Real nH1 = 1.0e-1;             // cm^-3
 constexpr Real R_cloud = 5.0 * 3.086e18; // cm [5 pc]
 constexpr Real M0 = 2.0;                 // Mach number of shock
 
-constexpr Real T_floor = 100.0;                             // K
+constexpr Real T_floor = 100.0;                            // K
 constexpr Real P0 = nH0 * Tgas0 * boltzmann_constant_cgs_; // erg cm^-3
 constexpr Real rho0 = nH0 * m_H;                           // g cm^-3
 constexpr Real rho1 = nH1 * m_H;
 
+// ==============================================
+// GLOBAL VARIABLES
+// ==============================================
+// perturbation parameters
+const int kmin = 0;
+const int kmax = 16;
+Real const A = 0.05 / kmax;
+// initialise pointer to phase table
+const amrex::TableData<Real, AMREX_SPACEDIM>::const_table_type *phase_ptr =
+    nullptr;
+
 template <>
-void RadhydroSimulation<ShockCloud>::setInitialConditionsAtLevel(int lev) {
-  amrex::GpuArray<Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
-  amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
-  amrex::GpuArray<Real, AMREX_SPACEDIM> prob_hi = geom[lev].ProbHiArray();
-
-  Real const Lx = (prob_hi[0] - prob_lo[0]);
-  Real const Ly = (prob_hi[1] - prob_lo[1]);
-  Real const Lz = (prob_hi[2] - prob_lo[2]);
-
-  Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
-  Real const y0 = prob_lo[1] + 0.8 * (prob_hi[1] - prob_lo[1]);
-  Real const z0 = prob_lo[2] + 0.5 * (prob_hi[2] - prob_lo[2]);
-
-  // perturbation parameters
-  const int kmin = 0;
-  const int kmax = 16;
-  Real const A = 0.05 / kmax;
-
+void RadhydroSimulation<ShockCloud>::preCalculateInitialConditions() {
   // generate random phases
   amrex::Array<int, AMREX_SPACEDIM> tlo{AMREX_D_DECL(kmin, kmin, kmin)};
   amrex::Array<int, AMREX_SPACEDIM> thi{AMREX_D_DECL(kmax, kmax, kmax)};
   amrex::TableData<Real, AMREX_SPACEDIM> table_data(tlo, thi);
+
 #ifdef AMREX_USE_GPU
   amrex::TableData<Real, AMREX_SPACEDIM> h_table_data(
       tlo, thi, amrex::The_Pinned_Arena());
@@ -88,7 +91,6 @@ void RadhydroSimulation<ShockCloud>::setInitialConditionsAtLevel(int lev) {
 #endif
 
   // Initialize data on the host
-
   // 64-bit Mersenne Twister (do not use 32-bit version for sampling doubles!)
   std::mt19937_64 rng(1); // NOLINT
   std::uniform_real_distribution<double> sample_phase(0., 2.0 * M_PI);
@@ -107,66 +109,77 @@ void RadhydroSimulation<ShockCloud>::setInitialConditionsAtLevel(int lev) {
   amrex::Gpu::streamSynchronize();
 #endif
 
-  auto const &phase = table_data.const_table(); // const makes it read only
+  // const makes it read only
+  auto const &phase = table_data.const_table();
+  phase_ptr = &phase;
+}
 
-  // cooling tables
-  auto tables = cloudyTables.const_tables();
+template <>
+void RadhydroSimulation<ShockCloud>::setInitialConditionsOnGrid(
+    std::vector<grid> &grid_vec) {
+  // dereference phase table pointer
+  const amrex::TableData<Real, AMREX_SPACEDIM>::const_table_type &phase_ref =
+      *phase_ptr;
+  // extract variables required from the geom object
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_vec[0].dx;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_vec[0].prob_hi;
+  const amrex::Box &indexRange = grid_vec[0].indexRange;
 
-  for (amrex::MFIter iter(state_old_[lev]); iter.isValid(); ++iter) {
-    const amrex::Box &indexRange = iter.validbox();
-    auto const &state = state_new_[lev].array(iter);
+  Real const Lx = (prob_hi[0] - prob_lo[0]);
+  Real const Ly = (prob_hi[1] - prob_lo[1]);
+  Real const Lz = (prob_hi[2] - prob_lo[2]);
 
-    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-      Real const x = prob_lo[0] + (i + Real(0.5)) * dx[0];
-      Real const y = prob_lo[1] + (j + Real(0.5)) * dx[1];
-      Real const z = prob_lo[2] + (k + Real(0.5)) * dx[2];
-      Real const R = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2) +
-                               std::pow(z - z0, 2));
+  Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
+  Real const y0 = prob_lo[1] + 0.8 * (prob_hi[1] - prob_lo[1]);
+  Real const z0 = prob_lo[2] + 0.5 * (prob_hi[2] - prob_lo[2]);
+  // loop over the grid and set the initial condition
+  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+    Real const x = prob_lo[0] + (i + Real(0.5)) * dx[0];
+    Real const y = prob_lo[1] + (j + Real(0.5)) * dx[1];
+    Real const z = prob_lo[2] + (k + Real(0.5)) * dx[2];
+    Real const R = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2) +
+                             std::pow(z - z0, 2));
 
-      // compute perturbations
-      Real delta_rho = 0;
-      for (int ki = kmin; ki < kmax; ++ki) {
-        for (int kj = kmin; kj < kmax; ++kj) {
-          for (int kk = kmin; kk < kmax; ++kk) {
-            if ((ki == 0) && (kj == 0) && (kk == 0)) {
-              continue;
-            }
-            Real const kx = 2.0 * M_PI * Real(ki) / Lx;
-            Real const ky = 2.0 * M_PI * Real(kj) / Lx;
-            Real const kz = 2.0 * M_PI * Real(kk) / Lx;
-            delta_rho +=
-                A * std::sin(x * kx + y * ky + z * kz + phase(ki, kj, kk));
+    // compute perturbations
+    Real delta_rho = 0;
+    for (int ki = kmin; ki < kmax; ++ki) {
+      for (int kj = kmin; kj < kmax; ++kj) {
+        for (int kk = kmin; kk < kmax; ++kk) {
+          if ((ki == 0) && (kj == 0) && (kk == 0)) {
+            continue;
           }
+          Real const kx = 2.0 * M_PI * Real(ki) / Lx;
+          Real const ky = 2.0 * M_PI * Real(kj) / Lx;
+          Real const kz = 2.0 * M_PI * Real(kk) / Lx;
+          delta_rho +=
+              A * std::sin(x * kx + y * ky + z * kz + phase_ref(ki, kj, kk));
         }
       }
-      AMREX_ALWAYS_ASSERT(delta_rho > -1.0);
+    }
+    AMREX_ALWAYS_ASSERT(delta_rho > -1.0);
 
-      Real rho = rho0 * (1.0 + delta_rho); // background density
-      if (R < R_cloud) {
-        rho = rho1 * (1.0 + delta_rho); // cloud density
-      }
-      Real const xmom = 0;
-      Real const ymom = 0;
-      Real const zmom = 0;
-      Real const Eint = (HydroSystem<ShockCloud>::gamma_ - 1.) * P0;
-      Real const Egas = RadSystem<ShockCloud>::ComputeEgasFromEint(
-          rho, xmom, ymom, zmom, Eint);
+    Real rho = rho0 * (1.0 + delta_rho); // background density
+    if (R < R_cloud) {
+      rho = rho1 * (1.0 + delta_rho); // cloud density
+    }
+    Real const xmom = 0;
+    Real const ymom = 0;
+    Real const zmom = 0;
+    Real const Eint = (HydroSystem<ShockCloud>::gamma_ - 1.) * P0;
+    Real const Egas =
+        RadSystem<ShockCloud>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
 
-      state(i, j, k, RadSystem<ShockCloud>::gasEnergy_index) = Egas;
-      state(i, j, k, RadSystem<ShockCloud>::gasDensity_index) = rho;
-      state(i, j, k, RadSystem<ShockCloud>::x1GasMomentum_index) = xmom;
-      state(i, j, k, RadSystem<ShockCloud>::x2GasMomentum_index) = ymom;
-      state(i, j, k, RadSystem<ShockCloud>::x3GasMomentum_index) = zmom;
-
-      state(i, j, k, RadSystem<ShockCloud>::radEnergy_index) = 0;
-      state(i, j, k, RadSystem<ShockCloud>::x1RadFlux_index) = 0;
-      state(i, j, k, RadSystem<ShockCloud>::x2RadFlux_index) = 0;
-      state(i, j, k, RadSystem<ShockCloud>::x3RadFlux_index) = 0;
-    });
-  }
-
-  // set flag
-  areInitialConditionsDefined_ = true;
+    grid_vec[0].array(i, j, k, RadSystem<ShockCloud>::gasEnergy_index) = Egas;
+    grid_vec[0].array(i, j, k, RadSystem<ShockCloud>::gasDensity_index) = rho;
+    grid_vec[0].array(i, j, k, RadSystem<ShockCloud>::x1GasMomentum_index) = xmom;
+    grid_vec[0].array(i, j, k, RadSystem<ShockCloud>::x2GasMomentum_index) = ymom;
+    grid_vec[0].array(i, j, k, RadSystem<ShockCloud>::x3GasMomentum_index) = zmom;
+    grid_vec[0].array(i, j, k, RadSystem<ShockCloud>::radEnergy_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<ShockCloud>::x1RadFlux_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<ShockCloud>::x2RadFlux_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<ShockCloud>::x3RadFlux_index) = 0;
+  });
 }
 
 template <>
@@ -308,9 +321,10 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
                                      tables);
         Real Edot = cloudy_cooling_function(rho, T, tables);
         Real t_cool = Eint / Edot;
-        printf("max substeps exceeded! rho = %.17e, Eint = %.17e, T = %g, cooling "
-               "time = %g, dt = %.17e\n",
-               rho, Eint, T, t_cool, dt);
+        printf(
+            "max substeps exceeded! rho = %.17e, Eint = %.17e, T = %g, cooling "
+            "time = %g, dt = %.17e\n",
+            rho, Eint, T, t_cool, dt);
       }
 
       const Real Egas_new = RadSystem<ShockCloud>::ComputeEgasFromEint(
@@ -327,7 +341,7 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
   amrex::Print() << fmt::format(
       "\tcooling substeps (per cell): min {}, avg {}, max {}\n", nmin, navg,
       nmax);
-  
+
   if (nmax >= maxStepsODEIntegrate) {
     amrex::Abort("Max steps exceeded in cooling solve!");
   }
@@ -337,7 +351,7 @@ template <>
 void RadhydroSimulation<ShockCloud>::computeAfterLevelAdvance(
     int lev, Real /*time*/, Real dt_lev, int /*ncycle*/) {
   // compute operator split physics
-  computeCooling(state_new_[lev], dt_lev, cloudyTables);
+  computeCooling(state_new_cc_[lev], dt_lev, cloudyTables);
 }
 
 template <>
@@ -352,7 +366,7 @@ void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(
     for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
       const amrex::Box &indexRange = iter.validbox();
       auto const &output = mf.array(iter);
-      auto const &state = state_new_[lev].const_array(iter);
+      auto const &state = state_new_cc_[lev].const_array(iter);
 
       amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j,
                                                           int k) noexcept {
@@ -415,9 +429,9 @@ void RadhydroSimulation<ShockCloud>::ErrorEst(int lev, amrex::TagBoxArray &tags,
   const Real eta_threshold = 0.1;            // gradient refinement threshold
   const Real q_min = std::sqrt(rho0 * rho1); // minimum density for refinement
 
-  for (amrex::MFIter mfi(state_new_[lev]); mfi.isValid(); ++mfi) {
+  for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
     const amrex::Box &box = mfi.validbox();
-    const auto state = state_new_[lev].const_array(mfi);
+    const auto state = state_new_cc_[lev].const_array(mfi);
     const auto tag = tags.array(mfi);
     const int nidx = HydroSystem<ShockCloud>::density_index;
 
@@ -468,13 +482,11 @@ auto problem_main() -> int {
   }
 
   RadhydroSimulation<ShockCloud> sim(boundaryConditions);
-  sim.is_hydro_enabled_ = true;
-  sim.is_radiation_enabled_ = false;
 
   // Standard PPM gives unphysically enormous temperatures when used for
   // this problem (e.g., ~1e14 K or higher), but can be fixed by
   // reconstructing the temperature instead of the pressure
-  sim.reconstructionOrder_ = 3; // PLM
+  sim.reconstructionOrder_ = 3;      // PLM
   sim.densityFloor_ = 1.0e-2 * rho0; // density floor (to prevent vacuum)
 
   sim.cflNumber_ = CFL_number;

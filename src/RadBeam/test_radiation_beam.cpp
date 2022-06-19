@@ -43,6 +43,14 @@ template <> struct RadSystem_Traits<BeamProblem> {
   static constexpr bool compute_v_over_c_terms = true;
 };
 
+template <> struct Physics_Traits<BeamProblem> {
+  static constexpr bool is_hydro_enabled = false;
+  static constexpr bool is_radiation_enabled = true;
+  static constexpr bool is_mhd_enabled = false;
+  static constexpr bool is_primordial_chem_enabled = false;
+  static constexpr bool is_metalicity_enabled = false;
+};
+
 template <>
 AMREX_GPU_HOST_DEVICE auto
 RadSystem<BeamProblem>::ComputePlanckOpacity(const double /*rho*/,
@@ -224,32 +232,30 @@ AMRSimulation<BeamProblem>::setCustomBoundaryConditions(
 }
 
 template <>
-void RadhydroSimulation<BeamProblem>::setInitialConditionsAtLevel(int lev) {
-  for (amrex::MFIter iter(state_old_[lev]); iter.isValid(); ++iter) {
-    const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
-    auto const &state = state_new_[lev].array(iter);
+void RadhydroSimulation<BeamProblem>::setInitialConditionsOnGrid(
+    std::vector<grid> &grid_vec) {
+  // extract variables required from the geom object
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_vec[0].dx;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
+  const amrex::Box &indexRange = grid_vec[0].indexRange;
+  
+  // loop over the grid and set the initial condition
+  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+    const double Erad = a_rad * std::pow(T_initial, 4);
+    const double rho = rho0;
+    const double Egas =
+        RadSystem<BeamProblem>::ComputeEgasFromTgas(rho, T_initial);
 
-    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-      const double Erad = a_rad * std::pow(T_initial, 4);
-      const double rho = rho0;
-      const double Egas =
-          RadSystem<BeamProblem>::ComputeEgasFromTgas(rho, T_initial);
-
-      state(i, j, k, RadSystem<BeamProblem>::radEnergy_index) = Erad;
-      state(i, j, k, RadSystem<BeamProblem>::x1RadFlux_index) = 0;
-      state(i, j, k, RadSystem<BeamProblem>::x2RadFlux_index) = 0;
-      state(i, j, k, RadSystem<BeamProblem>::x3RadFlux_index) = 0;
-
-      state(i, j, k, RadSystem<BeamProblem>::gasEnergy_index) = Egas;
-      state(i, j, k, RadSystem<BeamProblem>::gasDensity_index) = rho;
-      state(i, j, k, RadSystem<BeamProblem>::x1GasMomentum_index) = 0.;
-      state(i, j, k, RadSystem<BeamProblem>::x2GasMomentum_index) = 0.;
-      state(i, j, k, RadSystem<BeamProblem>::x3GasMomentum_index) = 0.;
-    });
-  }
-
-  // set flag
-  areInitialConditionsDefined_ = true;
+    grid_vec[0].array(i, j, k, RadSystem<BeamProblem>::radEnergy_index) = Erad;
+    grid_vec[0].array(i, j, k, RadSystem<BeamProblem>::x1RadFlux_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<BeamProblem>::x2RadFlux_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<BeamProblem>::x3RadFlux_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<BeamProblem>::gasEnergy_index) = Egas;
+    grid_vec[0].array(i, j, k, RadSystem<BeamProblem>::gasDensity_index) = rho;
+    grid_vec[0].array(i, j, k, RadSystem<BeamProblem>::x1GasMomentum_index) = 0.;
+    grid_vec[0].array(i, j, k, RadSystem<BeamProblem>::x2GasMomentum_index) = 0.;
+    grid_vec[0].array(i, j, k, RadSystem<BeamProblem>::x3GasMomentum_index) = 0.;
+  });
 }
 
 template <>
@@ -262,9 +268,9 @@ void RadhydroSimulation<BeamProblem>::ErrorEst(int lev,
   const amrex::Real eta_threshold = 0.1; // gradient refinement threshold
   const amrex::Real erad_min = 1.0e-3;   // minimum erad for refinement
 
-  for (amrex::MFIter mfi(state_new_[lev]); mfi.isValid(); ++mfi) {
+  for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
     const amrex::Box &box = mfi.validbox();
-    const auto state = state_new_[lev].const_array(mfi);
+    const auto state = state_new_cc_[lev].const_array(mfi);
     const auto tag = tags.array(mfi);
 
     amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
@@ -324,8 +330,6 @@ auto problem_main() -> int {
   sim.radiationReconstructionOrder_ = 2; // PLM
   sim.maxTimesteps_ = max_timesteps;
   sim.plotfileInterval_ = 20; // for debugging
-  sim.is_hydro_enabled_ = false;
-  sim.is_radiation_enabled_ = true;
 
   // initialize
   sim.setInitialConditions();

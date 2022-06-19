@@ -32,20 +32,26 @@ template <> struct RadSystem_Traits<CouplingProblem> {
   static constexpr double boltzmann_constant = boltzmann_constant_cgs_;
   static constexpr double gamma = 5. / 3.;
   static constexpr double Erad_floor = 0.;
-	static constexpr bool compute_v_over_c_terms = true;
+  static constexpr bool compute_v_over_c_terms = true;
+};
+
+template <> struct Physics_Traits<CouplingProblem> {
+  static constexpr bool is_hydro_enabled = false;
+  static constexpr bool is_radiation_enabled = true;
+  static constexpr bool is_mhd_enabled = false;
+  static constexpr bool is_primordial_chem_enabled = false;
+  static constexpr bool is_metalicity_enabled = false;
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto
-RadSystem<CouplingProblem>::ComputePlanckOpacity(const double /*rho*/,
-                                           const double /*Tgas*/) -> double {
+AMREX_GPU_HOST_DEVICE auto RadSystem<CouplingProblem>::ComputePlanckOpacity(
+    const double /*rho*/, const double /*Tgas*/) -> double {
   return 1.0;
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto
-RadSystem<CouplingProblem>::ComputeRosselandOpacity(const double /*rho*/,
-                                              const double /*Tgas*/) -> double {
+AMREX_GPU_HOST_DEVICE auto RadSystem<CouplingProblem>::ComputeRosselandOpacity(
+    const double /*rho*/, const double /*Tgas*/) -> double {
   return 1.0;
 }
 
@@ -84,31 +90,25 @@ constexpr double Egas0 = 1.0e2;  // erg cm^-3
 constexpr double rho0 = 1.0e-7;  // g cm^-3
 
 template <>
-void RadhydroSimulation<CouplingProblem>::setInitialConditionsAtLevel(int lev) {
-  for (amrex::MFIter iter(state_old_[lev]); iter.isValid(); ++iter) {
-    const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
-    auto const &state = state_new_[lev].array(iter);
-
-    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-      state(i, j, k, RadSystem<CouplingProblem>::radEnergy_index) = Erad0;
-      state(i, j, k, RadSystem<CouplingProblem>::x1RadFlux_index) = 0;
-      state(i, j, k, RadSystem<CouplingProblem>::x2RadFlux_index) = 0;
-      state(i, j, k, RadSystem<CouplingProblem>::x3RadFlux_index) = 0;
-
-      state(i, j, k, RadSystem<CouplingProblem>::gasEnergy_index) = Egas0;
-      state(i, j, k, RadSystem<CouplingProblem>::gasDensity_index) = rho0;
-      state(i, j, k, RadSystem<CouplingProblem>::x1GasMomentum_index) = 0.;
-      state(i, j, k, RadSystem<CouplingProblem>::x2GasMomentum_index) = 0.;
-      state(i, j, k, RadSystem<CouplingProblem>::x3GasMomentum_index) = 0.;
-    });
-  }
-
-  // set flag
-  areInitialConditionsDefined_ = true;
+void RadhydroSimulation<CouplingProblem>::setInitialConditionsOnGrid(
+    std::vector<grid> &grid_vec) {
+  const amrex::Box &indexRange = grid_vec[0].indexRange;
+  // loop over the grid and set the initial condition
+  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+    grid_vec[0].array(i, j, k, RadSystem<CouplingProblem>::radEnergy_index) = Erad0;
+    grid_vec[0].array(i, j, k, RadSystem<CouplingProblem>::x1RadFlux_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<CouplingProblem>::x2RadFlux_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<CouplingProblem>::x3RadFlux_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<CouplingProblem>::gasEnergy_index) = Egas0;
+    grid_vec[0].array(i, j, k, RadSystem<CouplingProblem>::gasDensity_index) = rho0;
+    grid_vec[0].array(i, j, k, RadSystem<CouplingProblem>::x1GasMomentum_index) = 0.;
+    grid_vec[0].array(i, j, k, RadSystem<CouplingProblem>::x2GasMomentum_index) = 0.;
+    grid_vec[0].array(i, j, k, RadSystem<CouplingProblem>::x3GasMomentum_index) = 0.;
+  });
 }
 
 template <> void RadhydroSimulation<CouplingProblem>::computeAfterTimestep() {
-  auto [position, values] = fextract(state_new_[0], Geom(0), 0, 0.5);
+  auto [position, values] = fextract(state_new_cc_[0], Geom(0), 0, 0.5);
 
   if (amrex::ParallelDescriptor::IOProcessor()) {
     t_vec_.push_back(tNew_[0]);
@@ -156,8 +156,6 @@ auto problem_main() -> int {
   }
 
   RadhydroSimulation<CouplingProblem> sim(boundaryConditions);
-  sim.is_hydro_enabled_ = false;
-  sim.is_radiation_enabled_ = true;
   sim.cflNumber_ = CFL_number;
   sim.radiationCflNumber_ = CFL_number;
   sim.constantDt_ = constant_dt;

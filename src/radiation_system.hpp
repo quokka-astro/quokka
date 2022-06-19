@@ -53,27 +53,27 @@ template <typename problem_t> struct RadSystem_Traits {
 template <typename problem_t>
 class RadSystem : public HyperbolicSystem<problem_t> {
 public:
-  enum consVarIndex {
-    gasDensity_index = 0,
-    x1GasMomentum_index = 1,
-    x2GasMomentum_index = 2,
-    x3GasMomentum_index = 3,
-    gasEnergy_index = 4,
-    radEnergy_index = 5,
-    x1RadFlux_index = 6,
-    x2RadFlux_index = 7,
-    x3RadFlux_index = 8
+  enum consVarIndex { // move to AMRSimulation.
+    gasDensity_index = Physics_Indices<problem_t>::hydroCompStarts,
+    x1GasMomentum_index,
+    x2GasMomentum_index,
+    x3GasMomentum_index,
+    gasEnergy_index,
+    radEnergy_index,
+    x1RadFlux_index,
+    x2RadFlux_index,
+    x3RadFlux_index
   };
 
-  static constexpr int nvar_ = 9;
-  static constexpr int nvarHyperbolic_ = 4;
+  static constexpr int nvar_ = Physics_NumVars<problem_t>::numHydroVars + Physics_NumVars<problem_t>::numRadVars;
+  static constexpr int nvarHyperbolic_ = Physics_NumVars<problem_t>::numRadVars;
   static constexpr int nstartHyperbolic_ = radEnergy_index;
 
   enum primVarIndex {
-    primRadEnergy_index = 0,
-    x1ReducedFlux_index = 1,
-    x2ReducedFlux_index = 2,
-    x3ReducedFlux_index = 3,
+    primRadEnergy_index = Physics_Indices<problem_t>::radCompStarts,
+    x1ReducedFlux_index,
+    x2ReducedFlux_index,
+    x3ReducedFlux_index
   };
 
   // C++ standard does not allow constexpr to be uninitialized, even in a
@@ -435,9 +435,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeCellOpticalDepth(
 
   if constexpr (gamma_ != 1.0) {
     Eint_L = RadSystem<problem_t>::ComputeEintFromEgas(
-        rho_L, x1GasMom_L, x2GasMom_L, x3GasMom_L, Egas_L);
+      rho_L, x1GasMom_L, x2GasMom_L, x3GasMom_L, Egas_L);
     Eint_R = RadSystem<problem_t>::ComputeEintFromEgas(
-        rho_R, x1GasMom_R, x2GasMom_R, x3GasMom_R, Egas_R);
+      rho_R, x1GasMom_R, x2GasMom_R, x3GasMom_R, Egas_R);
     Tgas_L = RadSystem<problem_t>::ComputeTgasFromEgas(rho_L, Eint_L);
     Tgas_R = RadSystem<problem_t>::ComputeTgasFromEgas(rho_R, Eint_R);
   }
@@ -870,13 +870,13 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
           ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0);
       Ekin0 = Egastot0 - Egas0;
 
-      AMREX_ASSERT(Src >= 0.0);
-      AMREX_ASSERT(Egas0 > 0.0);
-      AMREX_ASSERT(Erad0 > 0.0);
+    AMREX_ASSERT(Src >= 0.0);
+    AMREX_ASSERT(Egas0 > 0.0);
+    AMREX_ASSERT(Erad0 > 0.0);
 
-      const double Etot0 = Egas0 + (c / chat) * (Erad0 + Src);
+    const double Etot0 = Egas0 + (c / chat) * (Erad0 + Src);
 
-      // BEGIN NEWTON-RAPHSON LOOP
+    // BEGIN NEWTON-RAPHSON LOOP
       Egas_guess = Egas0;
       Erad_guess = Erad0;
 
@@ -1033,7 +1033,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
     } else {
       amrex::ignore_unused(Erad_guess);
       amrex::ignore_unused(Egas_guess);
-    } // endif gamma != 1.0
+    }  // endif gamma != 1.0
   });
 }
 

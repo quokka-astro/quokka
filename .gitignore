@@ -3,9 +3,15 @@ compile_commands.json
 .vscode/
 codeql-db/
 build/
+build1D/
+build2D/
+build3D/
+sim/
+sims/
+tests/
 docs/doxygen/
-tests/plt*
-tests/chk*
+tests/*/plt*
+tests/*/chk*
 .clangd
 __pycache__
 *.code-workspace

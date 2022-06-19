@@ -37,23 +37,17 @@ AMREX_GPU_DEVICE void ComputeExactSolution(
 }
 
 template <>
-void AdvectionSimulation<SemiellipseProblem>::setInitialConditionsAtLevel(
-    int level) {
-  auto const &prob_lo = geom[level].ProbLoArray();
-  auto const &dx = geom[level].CellSizeArray();
-
-  for (amrex::MFIter iter(state_old_[level]); iter.isValid(); ++iter) {
-    const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
-    auto const &state = state_new_[level].array(iter);
-
-    amrex::ParallelFor(indexRange, ncomp_,
-                       [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
-                         ComputeExactSolution(i, j, k, n, state, dx, prob_lo);
-                       });
-  }
-
-  // set flag
-  areInitialConditionsDefined_ = true;
+void AdvectionSimulation<SemiellipseProblem>::setInitialConditionsOnGrid(
+    std::vector<grid> &grid_vec) {
+  // extract variables required from the geom object
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_vec[0].dx;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
+  const amrex::Box &indexRange = grid_vec[0].indexRange;
+  // loop over the grid and set the initial condition
+  amrex::ParallelFor(indexRange, ncomp_,
+                     [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
+                       ComputeExactSolution(i, j, k, n, grid_vec[0].array, dx, prob_lo);
+                     });
 }
 
 template <>
@@ -61,7 +55,7 @@ void AdvectionSimulation<SemiellipseProblem>::computeReferenceSolution(
     amrex::MultiFab &ref,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi) {
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi) {
 
   // fill reference solution multifab
   for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
@@ -69,14 +63,15 @@ void AdvectionSimulation<SemiellipseProblem>::computeReferenceSolution(
     auto const &stateExact = ref.array(iter);
     auto const ncomp = ref.nComp();
 
-    amrex::ParallelFor(indexRange, ncomp,
-		[=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
+    amrex::ParallelFor(
+        indexRange, ncomp,
+        [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
           ComputeExactSolution(i, j, k, n, stateExact, dx, prob_lo);
         });
   }
 
   // Plot results
-  auto [position, values] = fextract(state_new_[0], geom[0], 0, 0.5);
+  auto [position, values] = fextract(state_new_cc_[0], geom[0], 0, 0.5);
   auto [pos_exact, val_exact] = fextract(ref, geom[0], 0, 0.5);
 
   // interpolate exact solution onto coarse grid

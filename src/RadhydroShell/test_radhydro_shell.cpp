@@ -56,6 +56,14 @@ template <> struct RadSystem_Traits<ShellProblem> {
   static constexpr bool compute_v_over_c_terms = true;
 };
 
+template <> struct Physics_Traits<ShellProblem> {
+  static constexpr bool is_hydro_enabled = true;
+  static constexpr bool is_radiation_enabled = true;
+  static constexpr bool is_mhd_enabled = false;
+  static constexpr bool is_primordial_chem_enabled = false;
+  static constexpr bool is_metalicity_enabled = false;
+};
+
 template <> struct EOS_Traits<ShellProblem> {
   static constexpr double gamma = gamma_gas;
   static constexpr bool reconstruct_eint = false;
@@ -136,13 +144,14 @@ RadSystem<ShellProblem>::ComputeRosselandOpacity(const double /*rho*/,
   return kappa0;
 }
 
-template <>
-void RadhydroSimulation<ShellProblem>::setInitialConditionsAtLevel(int lev) {
-  // read initial conditions from file
-  amrex::Vector<double> r_arr;
-  amrex::Vector<double> Erad_arr;
-  amrex::Vector<double> Frad_arr;
+// declare global variables
+// read initial conditions from file
+amrex::Vector<double> r_arr;
+amrex::Vector<double> Erad_arr;
+amrex::Vector<double> Frad_arr;
 
+template <>
+void RadhydroSimulation<ShellProblem>::preCalculateInitialConditions() {
   std::string filename = "./initial_conditions.txt";
   std::ifstream fstream(filename, std::ios::in);
   AMREX_ALWAYS_ASSERT(fstream.is_open());
@@ -163,12 +172,16 @@ void RadhydroSimulation<ShellProblem>::setInitialConditionsAtLevel(int lev) {
     Erad_arr.push_back(Erad);
     Frad_arr.push_back(Frad);
   }
+}
 
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo =
-      geom[lev].ProbLoArray();
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi =
-      geom[lev].ProbHiArray();
+template <>
+void RadhydroSimulation<ShellProblem>::setInitialConditionsOnGrid(
+    std::vector<grid> &grid_vec) {
+  // extract variables required from the geom object
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_vec[0].dx;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_vec[0].prob_hi;
+  const amrex::Box &indexRange = grid_vec[0].indexRange;
 
   amrex::Real x0 = NAN;
   amrex::Real y0 = NAN;
@@ -182,60 +195,50 @@ void RadhydroSimulation<ShellProblem>::setInitialConditionsAtLevel(int lev) {
     y0 = 0.;
     z0 = 0.;
   }
+  // loop over the grid and set the initial condition
+  // this must run on host so it can access amrex::Vectors!!
+  amrex::LoopConcurrentOnCpu(indexRange, [=](int i, int j, int k) noexcept {
+    amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+    amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
+    amrex::Real const z = prob_lo[2] + (k + amrex::Real(0.5)) * dx[2];
+    amrex::Real const r = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2) +
+                                    std::pow(z - z0, 2));
 
-  for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
-    const amrex::Box &indexRange = iter.validbox();
-    auto const &state = state_new_[lev].array(iter);
+    double sigma_sh = H_shell / (2.0 * std::sqrt(2.0 * std::log(2.0)));
+    double rho_norm = M_shell / (4.0 * M_PI * r * r *
+                                 std::sqrt(2.0 * M_PI * sigma_sh * sigma_sh));
+    double rho_shell = rho_norm * std::exp(-std::pow(r - r_0, 2) /
+                                           (2.0 * sigma_sh * sigma_sh));
+    double rho = std::max(rho_shell, 1.0e-8 * rho_0);
 
-    // this must run on host so it can access amrex::Vectors!!
-    amrex::LoopConcurrentOnCpu(indexRange, [=](int i, int j, int k) noexcept {
-      amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
-      amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
-      amrex::Real const z = prob_lo[2] + (k + amrex::Real(0.5)) * dx[2];
-      amrex::Real const r = std::sqrt(
-          std::pow(x - x0, 2) + std::pow(y - y0, 2) + std::pow(z - z0, 2));
+    // interpolate Frad from table
+    const double Frad = interpolate_value(
+        r, r_arr.dataPtr(), Frad_arr.dataPtr(), static_cast<int>(r_arr.size()));
 
-      double sigma_sh = H_shell / (2.0 * std::sqrt(2.0 * std::log(2.0)));
-      double rho_norm = M_shell / (4.0 * M_PI * r * r *
-                                   std::sqrt(2.0 * M_PI * sigma_sh * sigma_sh));
-      double rho_shell = rho_norm * std::exp(-std::pow(r - r_0, 2) /
-                                             (2.0 * sigma_sh * sigma_sh));
-      double rho = std::max(rho_shell, 1.0e-8 * rho_0);
+    // interpolate Erad from table
+    const double Erad = interpolate_value(
+        r, r_arr.dataPtr(), Erad_arr.dataPtr(), static_cast<int>(r_arr.size()));
 
-      // interpolate Frad from table
-      const double Frad =
-          interpolate_value(r, r_arr.dataPtr(), Frad_arr.dataPtr(),
-                            static_cast<int>(r_arr.size()));
+    const double Trad = std::pow(Erad / a_rad, 1. / 4.);
+    const double Tgas = Trad;
+    const double Eint = rho * c_v * Tgas;
 
-      // interpolate Erad from table
-      const double Erad =
-          interpolate_value(r, r_arr.dataPtr(), Erad_arr.dataPtr(),
-                            static_cast<int>(r_arr.size()));
+    AMREX_ASSERT(!std::isnan(rho));
+    AMREX_ASSERT(!std::isnan(Erad));
+    AMREX_ASSERT(!std::isnan(Frad));
 
-      const double Trad = std::pow(Erad / a_rad, 1. / 4.);
-      const double Tgas = Trad;
-      const double Eint = rho * c_v * Tgas;
+    grid_vec[0].array(i, j, k, HydroSystem<ShellProblem>::density_index) = rho;
+    grid_vec[0].array(i, j, k, HydroSystem<ShellProblem>::x1Momentum_index) = 0;
+    grid_vec[0].array(i, j, k, HydroSystem<ShellProblem>::x2Momentum_index) = 0;
+    grid_vec[0].array(i, j, k, HydroSystem<ShellProblem>::x3Momentum_index) = 0;
+    grid_vec[0].array(i, j, k, HydroSystem<ShellProblem>::energy_index) = Eint;
 
-      AMREX_ASSERT(!std::isnan(rho));
-      AMREX_ASSERT(!std::isnan(Erad));
-      AMREX_ASSERT(!std::isnan(Frad));
-
-      state(i, j, k, HydroSystem<ShellProblem>::density_index) = rho;
-      state(i, j, k, HydroSystem<ShellProblem>::x1Momentum_index) = 0;
-      state(i, j, k, HydroSystem<ShellProblem>::x2Momentum_index) = 0;
-      state(i, j, k, HydroSystem<ShellProblem>::x3Momentum_index) = 0;
-      state(i, j, k, HydroSystem<ShellProblem>::energy_index) = Eint;
-
-      const double Frad_xyz = Frad / std::sqrt(3.0);
-      state(i, j, k, RadSystem<ShellProblem>::radEnergy_index) = Erad;
-      state(i, j, k, RadSystem<ShellProblem>::x1RadFlux_index) = Frad_xyz;
-      state(i, j, k, RadSystem<ShellProblem>::x2RadFlux_index) = Frad_xyz;
-      state(i, j, k, RadSystem<ShellProblem>::x3RadFlux_index) = Frad_xyz;
-    });
-  }
-
-  // set flag
-  areInitialConditionsDefined_ = true;
+    const double Frad_xyz = Frad / std::sqrt(3.0);
+    grid_vec[0].array(i, j, k, RadSystem<ShellProblem>::radEnergy_index) = Erad;
+    grid_vec[0].array(i, j, k, RadSystem<ShellProblem>::x1RadFlux_index) = Frad_xyz;
+    grid_vec[0].array(i, j, k, RadSystem<ShellProblem>::x2RadFlux_index) = Frad_xyz;
+    grid_vec[0].array(i, j, k, RadSystem<ShellProblem>::x3RadFlux_index) = Frad_xyz;
+  });
 }
 
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto
@@ -264,7 +267,7 @@ template <> void RadhydroSimulation<ShellProblem>::computeAfterTimestep() {
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 =
       geom[0].CellSizeArray();
   amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
-  auto const &state = state_new_[0];
+  auto const &state = state_new_cc_[0];
 
   double radialMom =
       vol *
@@ -321,9 +324,9 @@ void RadhydroSimulation<ShellProblem>::ErrorEst(int lev,
   const amrex::Real eta_threshold = 0.1;      // gradient refinement threshold
   const amrex::Real rho_min = 1.0e-2 * rho_0; // minimum density for refinement
 
-  for (amrex::MFIter mfi(state_new_[lev]); mfi.isValid(); ++mfi) {
+  for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
     const amrex::Box &box = mfi.validbox();
-    const auto state = state_new_[lev].const_array(mfi);
+    const auto state = state_new_cc_[lev].const_array(mfi);
     const auto tag = tags.array(mfi);
 
     amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
@@ -406,8 +409,6 @@ auto problem_main() -> int {
 
   // Problem initialization
   RadhydroSimulation<ShellProblem> sim(boundaryConditions);
-  sim.is_hydro_enabled_ = true;
-  sim.is_radiation_enabled_ = true;
   sim.cflNumber_ = 0.3;
   sim.densityFloor_ = 1.0e-8 * rho_0;
   sim.pressureFloor_ = 1.0e-8 * P_0;
@@ -421,9 +422,9 @@ auto problem_main() -> int {
   sim.stopTime_ = 0.125 * t0_hydro;          // 0.124 * t0_hydro;
 
   // for production
-  //sim.checkpointInterval_ = 1000;
-  //sim.plotfileInterval_ = 100;
-  //sim.maxTimesteps_ = 5000;
+  // sim.checkpointInterval_ = 1000;
+  // sim.plotfileInterval_ = 100;
+  // sim.maxTimesteps_ = 5000;
 
   // for scaling tests
   sim.checkpointInterval_ = -1;
