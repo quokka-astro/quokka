@@ -973,6 +973,9 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
       AMREX_ALWAYS_ASSERT(Egas_guess > 0.0);
     } // endif gamma != 1.0
 
+    // Erad_guess is the new radiation energy (excluding work term)
+    // Egas_guess is the new gas internal energy
+
     // 2. Compute radiation flux update
     amrex::GpuArray<amrex::Real, 3> Frad_t0{};
     amrex::GpuArray<amrex::Real, 3> Frad_t1{};
@@ -1030,6 +1033,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
 
       // 4b. Store new radiation energy, gas energy
       consNew(i, j, k, radEnergy_index) = Erad_guess + dErad_work;
+      consNew(i, j, k, gasInternalEnergy_index) = Egas_guess;
       consNew(i, j, k, gasEnergy_index) = Egastot1;
     } else {
       amrex::ignore_unused(Erad_guess);
