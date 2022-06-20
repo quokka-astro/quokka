@@ -18,6 +18,8 @@
 #include "matplotlibcpp.h"
 #include "radiation_system.hpp"
 #include "test_hydro_highmach.hpp"
+#include <fstream>
+#include <unistd.h>
 
 using amrex::Real;
 
@@ -75,8 +77,7 @@ void RadhydroSimulation<HighMachProblem>::computeReferenceSolution(
     amrex::MultiFab &ref, amrex::GpuArray<Real, AMREX_SPACEDIM> const &dx,
     amrex::GpuArray<Real, AMREX_SPACEDIM> const &prob_lo) {
 
-#ifdef HAVE_PYTHON
-  // Plot results
+  // save results to file
   auto [position, values] = fextract(state_new_[0], geom[0], 0, 0.5);
   auto const nx = position.size();
 
@@ -105,38 +106,122 @@ void RadhydroSimulation<HighMachProblem>::computeReferenceSolution(
       P_final.push_back(fP);
     }
 
-    std::map<std::string, std::string> d_args;
-    d_args["label"] = "density";
-    d_args["color"] = "black";
-    matplotlibcpp::plot(x, d_final, d_args);
+    // save solution values to csv file
+    std::ofstream csvfile;
+    csvfile.open("highmach_output.csv");
+    csvfile << "# x density velocity pressure\n";
+    for (int i = 0; i < nx; ++i) {
+      csvfile << x.at(i) << " ";
+      csvfile << d_final.at(i) << " ";
+      csvfile << vx_final.at(i) << " ";
+      csvfile << P_final.at(i) << "\n";
+    }
+    csvfile.close();
+
+    // read in exact solution
+    std::vector<double> x_exact;
+    std::vector<double> d_exact;
+    std::vector<double> vx_exact;
+    std::vector<double> P_exact;
+
+    std::string filename = "../extern/highmach_reference.txt";
+    std::ifstream fstream(filename, std::ios::in);
+    AMREX_ALWAYS_ASSERT(fstream.is_open());
+    std::string header;
+    std::getline(fstream, header);
+
+    for (std::string line; std::getline(fstream, line);) {
+      std::istringstream iss(line);
+      std::vector<double> values;
+
+      for (double value = NAN; iss >> value;) {
+        values.push_back(value);
+      }
+      Real x_val = values.at(0);
+      Real d_val = values.at(1);
+      Real vx_val = values.at(2);
+      Real P_val = values.at(3);
+
+      x_exact.push_back(x_val);
+      d_exact.push_back(d_val);
+      vx_exact.push_back(vx_val);
+      P_exact.push_back(P_val);
+    }
+
+    // interpolate density onto mesh
+    std::vector<double> d_interp(x.size());
+    interpolate_arrays(x.data(), d_interp.data(), static_cast<int>(x.size()),
+                       x_exact.data(), d_exact.data(),
+                       static_cast<int>(x_exact.size()));
+
+    // interpolate velocity onto mesh
+    std::vector<double> vx_interp(x.size());
+    interpolate_arrays(x.data(), vx_interp.data(), static_cast<int>(x.size()),
+                       x_exact.data(), vx_exact.data(),
+                       static_cast<int>(x_exact.size()));
+
+    // interpolate pressure onto mesh
+    std::vector<double> P_interp(x.size());
+    interpolate_arrays(x.data(), P_interp.data(), static_cast<int>(x.size()),
+                       x_exact.data(), P_exact.data(),
+                       static_cast<int>(x_exact.size()));
+
+    // save reference solution
+    const Real gamma = HydroSystem<HighMachProblem>::gamma_;
+    for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
+      const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
+      auto const &state = ref.array(iter);
+      amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+        Real rho = d_interp.at(i);
+        Real vx = vx_interp.at(i);
+        Real Pgas = P_interp.at(i);
+        Real Eint = Pgas / (gamma - 1.);
+        Real Etot = Eint + 0.5 * rho * (vx * vx);
+
+        state(i, j, k, HydroSystem<HighMachProblem>::density_index) = rho;
+        state(i, j, k, HydroSystem<HighMachProblem>::x1Momentum_index) =
+            rho * vx;
+        state(i, j, k, HydroSystem<HighMachProblem>::x2Momentum_index) = 0;
+        state(i, j, k, HydroSystem<HighMachProblem>::x3Momentum_index) = 0;
+        state(i, j, k, HydroSystem<HighMachProblem>::internalEnergy_index) =
+            Eint;
+        state(i, j, k, HydroSystem<HighMachProblem>::energy_index) = Etot;
+      });
+    }
+
+#ifdef HAVE_PYTHON
+    // plot solution
+    std::map<std::string, std::string> args_exact;
+    std::unordered_map<std::string, std::string> args;
+    args["color"] = "black";
+    args_exact["color"] = "black";
+
+    // density
+    matplotlibcpp::scatter(x, d_final, 5.0, args);
+    matplotlibcpp::plot(x_exact, d_exact, args_exact);
     matplotlibcpp::yscale("log");
     matplotlibcpp::ylim(0.1, 31.623);
-    matplotlibcpp::legend();
-    matplotlibcpp::title(fmt::format("t = {:.4f}", tNew_[0]));
+    matplotlibcpp::title(fmt::format("density (t = {:.4f})", tNew_[0]));
     matplotlibcpp::save("./hydro_highmach_density.pdf");
 
+    // velocity
     matplotlibcpp::clf();
-    std::map<std::string, std::string> vx_args;
-    vx_args["label"] = "velocity";
-    vx_args["color"] = "black";
-    matplotlibcpp::plot(x, vx_final, vx_args);
+    matplotlibcpp::scatter(x, vx_final, 5.0, args);
+    matplotlibcpp::plot(x_exact, vx_exact, args_exact);
     matplotlibcpp::ylim(-0.3, 0.3);
-    matplotlibcpp::legend();
-    matplotlibcpp::title(fmt::format("t = {:.4f}", tNew_[0]));
+    matplotlibcpp::title(fmt::format("velocity (t = {:.4f})", tNew_[0]));
     matplotlibcpp::save("./hydro_highmach_velocity.pdf");
 
+    // pressure
     matplotlibcpp::clf();
-    std::map<std::string, std::string> P_args;
-    P_args["label"] = "pressure";
-    P_args["color"] = "black";
-    matplotlibcpp::plot(x, P_final, P_args);
+    matplotlibcpp::scatter(x, P_final, 5.0, args);
+    matplotlibcpp::plot(x_exact, P_exact, args_exact);
     matplotlibcpp::yscale("log");
     matplotlibcpp::ylim(1.0e-17, 1.0);
-    matplotlibcpp::legend();
-    matplotlibcpp::title(fmt::format("t = {:.4f}", tNew_[0]));
+    matplotlibcpp::title(fmt::format("pressure (t = {:.4f})", tNew_[0]));
     matplotlibcpp::save("./hydro_highmach_pressure.pdf");
-  }
 #endif
+  }
 }
 
 auto problem_main() -> int {
@@ -162,7 +247,12 @@ auto problem_main() -> int {
   sim.setInitialConditions();
   sim.evolve();
 
+  const double error_tol = 0.26;
   int status = 0;
+  if (sim.errorNorm_ > error_tol) {
+    status = 1;
+  }
+  
   // Cleanup and exit
   amrex::Print() << "Finished." << std::endl;
   return status;
