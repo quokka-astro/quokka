@@ -474,7 +474,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 
   amrex::MFIter::allowMultipleMFIters(true);
 
-  #pragma omp parallel sections num_threads(2)
+  #pragma omp parallel sections
   {
     #pragma omp section
     {
@@ -484,6 +484,42 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
       // check state validity
       AMREX_ASSERT(!state_old_[lev].contains_nan(0, state_old_[lev].nComp()));
       AMREX_ASSERT(!state_old_[lev].contains_nan()); // check ghost cells
+
+      for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
+
+        const amrex::Box &realZones = iter.validbox(); // 'validbox' == exclude ghost zones
+        amrex::Box computeRange = realZones;
+
+        computeRange.grow(nghost_);
+        computeRange.growHi(0, -(computeRange.length(0)-nghost_));
+
+        auto const &stateOld = state_old_[lev].const_array(iter);
+        auto const &stateNew = state_new_[lev].array(iter);
+        auto fluxArrays = computeHydroFluxes(stateOld, computeRange, ncompHydro_);
+
+        // temporary FAB for RK stage
+        amrex::IArrayBox redoFlag(computeRange, 1, amrex::The_Async_Arena());
+
+        // Stage 1 of RK2-SSP
+        HydroSystem<problem_t>::PredictStep(
+            stateOld, stateNew,
+            {AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
+              fluxArrays[2].const_array())},
+            dt_lev, geom[lev].CellSizeArray(), computeRange, ncompHydro_,
+          redoFlag.array());
+
+        // redoflag stuff here...
+
+        // prevent vacuum
+        HydroSystem<problem_t>::EnforcePressureFloor(densityFloor_, pressureFloor_, computeRange, stateNew);
+
+        if (do_reflux) {
+          // increment flux registers
+          auto expandedFluxes = expandFluxArrays(fluxArrays, 0, state_new_[lev].nComp());
+          incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, expandedFluxes, lev,
+                    fluxScaleFactor * dt_lev);
+        }
+      }
    }
 
     #pragma omp section
@@ -493,8 +529,8 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
       // advance all grids on local processor (Stage 1 of integrator)
       for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
 
-        const amrex::Box &fullRange = iter.validbox(); // 'validbox' == exclude ghost zones
-        amrex::Box indexRange = fullRange;
+        const amrex::Box &realZones = iter.validbox(); // 'validbox' == exclude ghost zones
+        amrex::Box indexRange = realZones;
 
         indexRange.grow(-nghost_); // Only work on "interior" cells
 
