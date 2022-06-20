@@ -171,7 +171,7 @@ void RadhydroSimulation<HighMachProblem>::computeReferenceSolution(
     for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
       const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
       auto const &state = ref.array(iter);
-      amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+      amrex::LoopConcurrentOnCpu(indexRange, [=](int i, int j, int k) noexcept {
         Real rho = d_interp.at(i);
         Real vx = vx_interp.at(i);
         Real Pgas = P_interp.at(i);
@@ -252,7 +252,7 @@ auto problem_main() -> int {
   if (sim.errorNorm_ > error_tol) {
     status = 1;
   }
-  
+
   // Cleanup and exit
   amrex::Print() << "Finished." << std::endl;
   return status;
