@@ -1031,10 +1031,13 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
         dErad_work = 0.;
       }
 
+      // compute difference between new and old internal energy
+      amrex::Real const dEint = Egas_guess - Egas0;
+
       // 4b. Store new radiation energy, gas energy
       consNew(i, j, k, radEnergy_index) = Erad_guess + dErad_work;
-      consNew(i, j, k, gasInternalEnergy_index) = Egas_guess;
       consNew(i, j, k, gasEnergy_index) = Egastot1;
+      consNew(i, j, k, gasInternalEnergy_index) += dEint; // must compute difference
     } else {
       amrex::ignore_unused(Erad_guess);
       amrex::ignore_unused(Egas_guess);
