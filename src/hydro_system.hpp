@@ -333,16 +333,21 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::isStateValid(
   // check if cons(i, j, k) is a valid state
   const amrex::Real rho = cons(i, j, k, density_index);
   bool isDensityPositive = (rho > 0.);
-  bool isPressurePositive = false;
 
+  // when the dual energy method is used, we *cannot* reset on pressure failures.
+  // on the other hand, we don't need to -- the auxiliary internal energy is used instead!
+#if 0
+  bool isPressurePositive = false;
   if constexpr (!is_eos_isothermal()) {
     const amrex::Real P = ComputePressure(cons, i, j, k);
     isPressurePositive = (P > 0.);
   } else {
     isPressurePositive = true;
   }
-
-  return (isDensityPositive && isPressurePositive);
+#endif
+  // return (isDensityPositive && isPressurePositive);
+  
+  return isDensityPositive;
 }
 
 template <typename problem_t>
