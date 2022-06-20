@@ -471,19 +471,15 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 	} else if (integratorOrder_ == 1) {
 		fluxScaleFactor = 1.0;
 	}
-  // amrex::MFIter::allowMultipleMFIters(true);
 
-  int maxthreads = omp_get_max_threads();
-  printf("max threads = %d\n",maxthreads);
+  amrex::MFIter::allowMultipleMFIters(true);
 
   #pragma omp parallel sections num_threads(2)
   {
     #pragma omp section
     {
-      int tid = omp_get_thread_num();
-      printf("Filling boundary conditions on thread %d\n", tid);
+      AMREX_CUDA_SAFE_CALL(cudaSetDevice(amrex::Gpu::Device::deviceId()));
       //  update ghost zones [old timestep]
-
       fillBoundaryConditions(state_old_[lev], state_old_[lev], lev, time);
       // check state validity
       AMREX_ASSERT(!state_old_[lev].contains_nan(0, state_old_[lev].nComp()));
@@ -492,12 +488,9 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 
     #pragma omp section
     {
+      AMREX_CUDA_SAFE_CALL(cudaSetDevice(amrex::Gpu::Device::deviceId()));
       // DO INTERIORS
-      int tid = omp_get_thread_num();
-      printf("Doing interiors on thread %d\n", tid);
-
       // advance all grids on local processor (Stage 1 of integrator)
-      // amrex::MFIter::allowMultipleMFIters(true);
       for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
 
         const amrex::Box &fullRange = iter.validbox(); // 'validbox' == exclude ghost zones
@@ -520,6 +513,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
             dt_lev, geom[lev].CellSizeArray(), indexRange, ncompHydro_,
           redoFlag.array());
 
+#if 0
         // first-order flux correction (FOFC)
         if (redoFlag.max<amrex::RunOn::Device>() != quokka::redoFlag::none) {
           // compute first-order fluxes (on the whole FAB)
@@ -551,6 +545,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
             }
           }
         }
+#endif
 
         // prevent vacuum
         HydroSystem<problem_t>::EnforcePressureFloor(densityFloor_, pressureFloor_, indexRange, stateNew);
@@ -565,9 +560,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
     }
   }
 
-  // amrex::MFIter::allowMultipleMFIters(false);
-
-  amrex::Print() << "done RK2 stage 1\n";
+  amrex::MFIter::allowMultipleMFIters(false);
 
 // =======================================================================================================
 
