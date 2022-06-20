@@ -486,38 +486,72 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
       AMREX_ASSERT(!state_old_[lev].contains_nan()); // check ghost cells
 
       for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
-
         const amrex::Box &realZones = iter.validbox(); // 'validbox' == exclude ghost zones
-        amrex::Box computeRange = realZones;
 
-        computeRange.grow(nghost_);
-        computeRange.growHi(0, -(computeRange.length(0)-nghost_));
+          //6 should be 2*ndims
+        for (int i=1; i<=AMREX_SPACEDIM*2; ++i) {
+          amrex::Box computeRange = realZones;
 
-        auto const &stateOld = state_old_[lev].const_array(iter);
-        auto const &stateNew = state_new_[lev].array(iter);
-        auto fluxArrays = computeHydroFluxes(stateOld, computeRange, ncompHydro_);
+          computeRange.grow(nghost_);
 
-        // temporary FAB for RK stage
-        amrex::IArrayBox redoFlag(computeRange, 1, amrex::The_Async_Arena());
+          switch(i) {
+            case 1:
+              computeRange.growHi(0, -(computeRange.length(0)-nghost_));
+              break;
 
-        // Stage 1 of RK2-SSP
-        HydroSystem<problem_t>::PredictStep(
-            stateOld, stateNew,
-            {AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
-              fluxArrays[2].const_array())},
-            dt_lev, geom[lev].CellSizeArray(), computeRange, ncompHydro_,
-          redoFlag.array());
+            case 2:
+              computeRange.growLo(0, -(computeRange.length(0)-nghost_));
+              break;
 
-        // redoflag stuff here...
+            case 3:
+              computeRange.growHi(1, -(computeRange.length(1)-nghost_));
+              computeRange.grow(0, -nghost_);
+              break;
 
-        // prevent vacuum
-        HydroSystem<problem_t>::EnforcePressureFloor(densityFloor_, pressureFloor_, computeRange, stateNew);
+            case 4:
+              computeRange.growLo(1, -(computeRange.length(1)-nghost_));
+              computeRange.grow(0, -nghost_);
+              break;
 
-        if (do_reflux) {
-          // increment flux registers
-          auto expandedFluxes = expandFluxArrays(fluxArrays, 0, state_new_[lev].nComp());
-          incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, expandedFluxes, lev,
-                    fluxScaleFactor * dt_lev);
+            case 5:
+              computeRange.growHi(2, -(computeRange.length(2)-nghost_));
+              computeRange.grow(1, -nghost_);
+              computeRange.grow(0, -nghost_);
+              break;
+
+            case 6:
+              computeRange.growLo(2, -(computeRange.length(2)-nghost_));
+              computeRange.grow(1, -nghost_);
+              computeRange.grow(0, -nghost_);
+              break;
+          }
+
+          auto const &stateOld = state_old_[lev].const_array(iter);
+          auto const &stateNew = state_new_[lev].array(iter);
+          auto fluxArrays = computeHydroFluxes(stateOld, computeRange, ncompHydro_);
+
+          // temporary FAB for RK stage
+          amrex::IArrayBox redoFlag(computeRange, 1, amrex::The_Async_Arena());
+
+          // Stage 1 of RK2-SSP
+          HydroSystem<problem_t>::PredictStep(
+              stateOld, stateNew,
+              {AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
+                fluxArrays[2].const_array())},
+              dt_lev, geom[lev].CellSizeArray(), computeRange, ncompHydro_,
+            redoFlag.array());
+
+          // redoflag stuff here...
+
+          // prevent vacuum
+          HydroSystem<problem_t>::EnforcePressureFloor(densityFloor_, pressureFloor_, computeRange, stateNew);
+
+          if (do_reflux) {
+            // increment flux registers
+            auto expandedFluxes = expandFluxArrays(fluxArrays, 0, state_new_[lev].nComp());
+            incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, expandedFluxes, lev,
+                      fluxScaleFactor * dt_lev);
+          }
         }
       }
    }
