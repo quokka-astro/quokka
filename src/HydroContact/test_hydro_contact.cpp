@@ -67,6 +67,8 @@ void RadhydroSimulation<ContactProblem>::setInitialConditionsAtLevel(int lev) {
       state(i, j, k, HydroSystem<ContactProblem>::x3Momentum_index) = 0.;
       state(i, j, k, HydroSystem<ContactProblem>::energy_index) =
           P / (gamma - 1.) + 0.5 * rho * (vx * vx);
+      state(i, j, k, HydroSystem<ContactProblem>::internalEnergy_index) =
+          P / (gamma - 1.);
     });
   }
 
@@ -113,6 +115,8 @@ void RadhydroSimulation<ContactProblem>::computeReferenceSolution(
       stateExact(i, j, k, HydroSystem<ContactProblem>::x3Momentum_index) = 0.;
       stateExact(i, j, k, HydroSystem<ContactProblem>::energy_index) =
           P / (gamma - 1.) + 0.5 * rho * (vx * vx);
+      stateExact(i, j, k, HydroSystem<ContactProblem>::internalEnergy_index) =
+          P / (gamma - 1.);
     });
   }
 
