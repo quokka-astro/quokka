@@ -278,10 +278,11 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
       rk_adaptive_integrate(user_rhs, 0, y, dt, &user_data, rtol, abstol,
                             steps_taken);
 
-      const Real Egas_new = RadSystem<CoolingTest>::ComputeEgasFromEint(
-          rho, x1Mom, x2Mom, x3Mom, y[0]);
+      const Real Eint_new = y[0];
+      const Real dEint = Eint_new - Eint;
 
-      state(i, j, k, HydroSystem<CoolingTest>::energy_index) = Egas_new;
+      state(i, j, k, HydroSystem<CoolingTest>::energy_index) += dEint;
+      state(i, j, k, HydroSystem<CoolingTest>::internalEnergy_index) += dEint;
     });
   }
 }
