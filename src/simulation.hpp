@@ -1193,7 +1193,7 @@ auto AMRSimulation<problem_t>::PlotFileMFAtLevel(int lev) const
     -> amrex::MultiFab {
   // Combine state_new_[lev] and derived variables in a new MF
   int comp = 0;
-  const int nGrow = 0;
+  const int nGrow = state_new_[lev].nGrow(); // workaround Ascent bug
   const int nCompState = state_new_[lev].nComp();
   const int nCompDeriv = derivedNames_.size();
   const int nCompPlotMF = nCompState + nCompDeriv;
