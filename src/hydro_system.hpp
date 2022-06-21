@@ -864,7 +864,7 @@ void HydroSystem<problem_t>::ComputeFluxes(
       D_R = {0., 0., 1., 0., u_R, 0., 0.};
       D_star = {0., 0., 1., 0., S_star, 0., 0.};
     } else if constexpr (DIR == FluxDir::X3) {
-      D_L = {0., 0., 0., 1., u_L, 0. 0.};
+      D_L = {0., 0., 0., 1., u_L, 0., 0.};
       D_R = {0., 0., 0., 1., u_R, 0., 0.};
       D_star = {0., 0., 0., 1., S_star, 0., 0.};
     }
