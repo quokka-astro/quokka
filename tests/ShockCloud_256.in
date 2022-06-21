@@ -23,10 +23,10 @@ amr.max_grid_size   = 128
 # *****************************************************************
 do_reflux = 1
 do_subcycle = 1
-grackle_data_file = "../extern/grackle_data_files/input/CloudyData_UVB=HM2012.h5"
+grackle_data_file = "../extern/grackle_data_files/input/CloudyData_UVB=HM2012_high_density.h5"
 derived_vars = temperature
 
-cfl = 0.25
+cfl = 0.2
 max_timesteps = 100000
 plotfile_interval = 100
 checkpoint_interval = 1000
