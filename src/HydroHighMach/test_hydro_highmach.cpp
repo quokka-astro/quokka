@@ -7,6 +7,9 @@
 /// \brief Defines a test problem for a contact wave.
 ///
 
+#include <fstream>
+#include <unistd.h>
+
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_MultiFab.H"
@@ -15,11 +18,8 @@
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
 #include "hydro_system.hpp"
-#include "matplotlibcpp.h"
 #include "radiation_system.hpp"
 #include "test_hydro_highmach.hpp"
-#include <fstream>
-#include <unistd.h>
 
 using amrex::Real;
 
