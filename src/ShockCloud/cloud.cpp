@@ -265,7 +265,7 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
           state(i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
       const Real Egas = state(i, j, k, HydroSystem<ShockCloud>::energy_index);
 
-      Real Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom,
+      const Real Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom,
                                                              x3Mom, Egas);
 
       ODEUserData user_data{rho, tables};
@@ -292,11 +292,11 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
             "time = %g, dt = %.17e\n",
             rho, Eint, T, t_cool, dt);
       }
+      const Real Eint_new = y[0];
+      const Real dEint = Eint_new - Eint;
 
-      const Real Egas_new = RadSystem<ShockCloud>::ComputeEgasFromEint(
-          rho, x1Mom, x2Mom, x3Mom, y[0]);
-
-      state(i, j, k, HydroSystem<ShockCloud>::energy_index) = Egas_new;
+      state(i, j, k, HydroSystem<ShockCloud>::energy_index) += dEint;
+      state(i, j, k, HydroSystem<ShockCloud>::internalEnergy_index) += dEint;
     });
   }
 

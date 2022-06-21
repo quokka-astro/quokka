@@ -19,6 +19,7 @@
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
 #include "hydro_system.hpp"
+#include "radiation_system.hpp"
 #include "test_hydro_leblanc.hpp"
 #ifdef HAVE_PYTHON
 #include "matplotlibcpp.h"
@@ -74,6 +75,8 @@ void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsAtLevel(
       state(i, j, k, HydroSystem<ShocktubeProblem>::x3Momentum_index) = 0.;
       state(i, j, k, HydroSystem<ShocktubeProblem>::energy_index) =
           P / (gamma - 1.) + 0.5 * rho * (vx * vx);
+      state(i, j, k, HydroSystem<ShocktubeProblem>::internalEnergy_index) =
+          P / (gamma - 1.);
     });
   }
 
@@ -117,8 +120,8 @@ AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(
     P = (2. / 3.) * 1.0e-10;
   }
 
-  double E =
-      P / (HydroSystem<ShocktubeProblem>::gamma_ - 1.) + 0.5 * rho * (vx * vx);
+  double Eint = P / (HydroSystem<ShocktubeProblem>::gamma_ - 1.);
+  double E = Eint + 0.5 * rho * (vx * vx);
 
   for (int n = 0; n < numcomp; ++n) {
     consVar(i, j, k, n) = 0;
@@ -129,6 +132,7 @@ AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(
   consVar(i, j, k, RadSystem<ShocktubeProblem>::x2GasMomentum_index) = 0.;
   consVar(i, j, k, RadSystem<ShocktubeProblem>::x3GasMomentum_index) = 0.;
   consVar(i, j, k, RadSystem<ShocktubeProblem>::gasEnergy_index) = E;
+  consVar(i, j, k, RadSystem<ShocktubeProblem>::gasInternalEnergy_index) = Eint;
 }
 
 template <>
@@ -221,6 +225,8 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
       stateExact(i, j, k, HydroSystem<ShocktubeProblem>::x3Momentum_index) = 0.;
       stateExact(i, j, k, HydroSystem<ShocktubeProblem>::energy_index) =
           P / (gamma - 1.) + 0.5 * rho * (vx * vx);
+      stateExact(i, j, k, HydroSystem<ShocktubeProblem>::internalEnergy_index) =
+          P / (gamma - 1.);
     });
   }
 

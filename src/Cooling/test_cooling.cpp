@@ -159,6 +159,7 @@ void RadhydroSimulation<CoolingTest>::setInitialConditionsAtLevel(int lev) {
           rho, xmom, ymom, zmom, Eint);
 
       state(i, j, k, RadSystem<CoolingTest>::gasEnergy_index) = Egas;
+      state(i, j, k, RadSystem<CoolingTest>::gasInternalEnergy_index) = Eint;
       state(i, j, k, RadSystem<CoolingTest>::gasDensity_index) = rho;
       state(i, j, k, RadSystem<CoolingTest>::x1GasMomentum_index) = xmom;
       state(i, j, k, RadSystem<CoolingTest>::x2GasMomentum_index) = ymom;
@@ -209,6 +210,7 @@ AMRSimulation<CoolingTest>::setCustomBoundaryConditions(
     consVar(i, j, k, RadSystem<CoolingTest>::x2GasMomentum_index) = ymom;
     consVar(i, j, k, RadSystem<CoolingTest>::x3GasMomentum_index) = zmom;
     consVar(i, j, k, RadSystem<CoolingTest>::gasEnergy_index) = Egas;
+    consVar(i, j, k, RadSystem<CoolingTest>::gasInternalEnergy_index) = Eint;
   }
 }
 
@@ -276,10 +278,11 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
       rk_adaptive_integrate(user_rhs, 0, y, dt, &user_data, rtol, abstol,
                             steps_taken);
 
-      const Real Egas_new = RadSystem<CoolingTest>::ComputeEgasFromEint(
-          rho, x1Mom, x2Mom, x3Mom, y[0]);
+      const Real Eint_new = y[0];
+      const Real dEint = Eint_new - Eint;
 
-      state(i, j, k, HydroSystem<CoolingTest>::energy_index) = Egas_new;
+      state(i, j, k, HydroSystem<CoolingTest>::energy_index) += dEint;
+      state(i, j, k, HydroSystem<CoolingTest>::internalEnergy_index) += dEint;
     });
   }
 }
