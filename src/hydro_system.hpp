@@ -58,7 +58,7 @@ public:
     primScalar_index = 6
   };
 
-  static constexpr int nvar_ = 6;
+  static constexpr int nvar_ = 7;
 
   static void ConservedToPrimitive(amrex::Array4<const amrex::Real> const &cons,
                                    array_t &primVar,
