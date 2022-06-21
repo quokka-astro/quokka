@@ -77,20 +77,98 @@ void RadhydroSimulation<HighMachProblem>::computeReferenceSolution(
     amrex::MultiFab &ref, amrex::GpuArray<Real, AMREX_SPACEDIM> const &dx,
     amrex::GpuArray<Real, AMREX_SPACEDIM> const &prob_lo) {
 
-  // save results to file
+  // extract solution
   auto [position, values] = fextract(state_new_[0], geom[0], 0, 0.5);
   auto const nx = position.size();
+  std::vector<double> x;
 
+  for (int i = 0; i < nx; ++i) {
+    Real const this_x = position.at(i);
+    x.push_back(this_x);
+  }
+
+  // read in exact solution
+  std::vector<double> x_exact;
+  std::vector<double> d_exact;
+  std::vector<double> vx_exact;
+  std::vector<double> P_exact;
+
+  std::string filename = "../extern/highmach_reference.txt";
+  std::ifstream fstream(filename, std::ios::in);
+  AMREX_ALWAYS_ASSERT(fstream.is_open());
+  std::string header;
+  std::getline(fstream, header);
+
+  for (std::string line; std::getline(fstream, line);) {
+    std::istringstream iss(line);
+    std::vector<double> values;
+
+    for (double value = NAN; iss >> value;) {
+      values.push_back(value);
+    }
+    Real x_val = values.at(0);
+    Real d_val = values.at(1);
+    Real vx_val = values.at(2);
+    Real P_val = values.at(3);
+
+    x_exact.push_back(x_val);
+    d_exact.push_back(d_val);
+    vx_exact.push_back(vx_val);
+    P_exact.push_back(P_val);
+  }
+
+  // interpolate density onto mesh
+  std::vector<double> d_interp(x.size());
+  interpolate_arrays(x.data(), d_interp.data(), static_cast<int>(x.size()),
+                     x_exact.data(), d_exact.data(),
+                     static_cast<int>(x_exact.size()));
+
+  // interpolate velocity onto mesh
+  std::vector<double> vx_interp(x.size());
+  interpolate_arrays(x.data(), vx_interp.data(), static_cast<int>(x.size()),
+                     x_exact.data(), vx_exact.data(),
+                     static_cast<int>(x_exact.size()));
+
+  // interpolate pressure onto mesh
+  std::vector<double> P_interp(x.size());
+  interpolate_arrays(x.data(), P_interp.data(), static_cast<int>(x.size()),
+                     x_exact.data(), P_exact.data(),
+                     static_cast<int>(x_exact.size()));
+
+  // save reference solution
+  const Real gamma = HydroSystem<HighMachProblem>::gamma_;
+  for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
+    const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
+    auto const &state = ref.array(iter);
+    auto const ncomp = ref.nComp();
+
+    amrex::LoopConcurrentOnCpu(indexRange, [=](int i, int j, int k) noexcept {
+      for (int n = 0; n < ncomp; ++n) {
+        state(i, j, k, n) = 0.;
+      }
+
+      Real rho = d_interp.at(i);
+      Real vx = vx_interp.at(i);
+      Real Pgas = P_interp.at(i);
+      Real Eint = Pgas / (gamma - 1.);
+      Real Etot = Eint + 0.5 * rho * (vx * vx);
+
+      state(i, j, k, HydroSystem<HighMachProblem>::density_index) = rho;
+      state(i, j, k, HydroSystem<HighMachProblem>::x1Momentum_index) = rho * vx;
+      state(i, j, k, HydroSystem<HighMachProblem>::x2Momentum_index) = 0;
+      state(i, j, k, HydroSystem<HighMachProblem>::x3Momentum_index) = 0;
+      state(i, j, k, HydroSystem<HighMachProblem>::energy_index) = Etot;
+      state(i, j, k, HydroSystem<HighMachProblem>::internalEnergy_index) = Eint;
+    });
+  }
+
+  // save results to file
   if (amrex::ParallelDescriptor::IOProcessor()) {
-    std::vector<double> x;
     std::vector<double> d_final;
     std::vector<double> vx_final;
     std::vector<double> P_final;
 
     for (int i = 0; i < nx; ++i) {
-      Real const this_x = position.at(i);
-      x.push_back(this_x);
-
       const auto frho =
           values.at(HydroSystem<HighMachProblem>::density_index).at(i);
       const auto fxmom =
@@ -117,77 +195,6 @@ void RadhydroSimulation<HighMachProblem>::computeReferenceSolution(
       csvfile << P_final.at(i) << "\n";
     }
     csvfile.close();
-
-    // read in exact solution
-    std::vector<double> x_exact;
-    std::vector<double> d_exact;
-    std::vector<double> vx_exact;
-    std::vector<double> P_exact;
-
-    std::string filename = "../extern/highmach_reference.txt";
-    std::ifstream fstream(filename, std::ios::in);
-    AMREX_ALWAYS_ASSERT(fstream.is_open());
-    std::string header;
-    std::getline(fstream, header);
-
-    for (std::string line; std::getline(fstream, line);) {
-      std::istringstream iss(line);
-      std::vector<double> values;
-
-      for (double value = NAN; iss >> value;) {
-        values.push_back(value);
-      }
-      Real x_val = values.at(0);
-      Real d_val = values.at(1);
-      Real vx_val = values.at(2);
-      Real P_val = values.at(3);
-
-      x_exact.push_back(x_val);
-      d_exact.push_back(d_val);
-      vx_exact.push_back(vx_val);
-      P_exact.push_back(P_val);
-    }
-
-    // interpolate density onto mesh
-    std::vector<double> d_interp(x.size());
-    interpolate_arrays(x.data(), d_interp.data(), static_cast<int>(x.size()),
-                       x_exact.data(), d_exact.data(),
-                       static_cast<int>(x_exact.size()));
-
-    // interpolate velocity onto mesh
-    std::vector<double> vx_interp(x.size());
-    interpolate_arrays(x.data(), vx_interp.data(), static_cast<int>(x.size()),
-                       x_exact.data(), vx_exact.data(),
-                       static_cast<int>(x_exact.size()));
-
-    // interpolate pressure onto mesh
-    std::vector<double> P_interp(x.size());
-    interpolate_arrays(x.data(), P_interp.data(), static_cast<int>(x.size()),
-                       x_exact.data(), P_exact.data(),
-                       static_cast<int>(x_exact.size()));
-
-    // save reference solution
-    const Real gamma = HydroSystem<HighMachProblem>::gamma_;
-    for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
-      const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
-      auto const &state = ref.array(iter);
-      amrex::LoopConcurrentOnCpu(indexRange, [=](int i, int j, int k) noexcept {
-        Real rho = d_interp.at(i);
-        Real vx = vx_interp.at(i);
-        Real Pgas = P_interp.at(i);
-        Real Eint = Pgas / (gamma - 1.);
-        Real Etot = Eint + 0.5 * rho * (vx * vx);
-
-        state(i, j, k, HydroSystem<HighMachProblem>::density_index) = rho;
-        state(i, j, k, HydroSystem<HighMachProblem>::x1Momentum_index) =
-            rho * vx;
-        state(i, j, k, HydroSystem<HighMachProblem>::x2Momentum_index) = 0;
-        state(i, j, k, HydroSystem<HighMachProblem>::x3Momentum_index) = 0;
-        state(i, j, k, HydroSystem<HighMachProblem>::internalEnergy_index) =
-            Eint;
-        state(i, j, k, HydroSystem<HighMachProblem>::energy_index) = Etot;
-      });
-    }
 
 #ifdef HAVE_PYTHON
     // plot solution
@@ -247,9 +254,9 @@ auto problem_main() -> int {
   sim.setInitialConditions();
   sim.evolve();
 
-  const double error_tol = 0.26;
+  const double error_tol = 0.25;
   int status = 0;
-  if (sim.errorNorm_ > error_tol) {
+  if (sim.errorNorm_ > error_tol || std::isnan(sim.errorNorm_)) {
     status = 1;
   }
 
