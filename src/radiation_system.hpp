@@ -59,13 +59,14 @@ public:
     x2GasMomentum_index = 2,
     x3GasMomentum_index = 3,
     gasEnergy_index = 4,
-    radEnergy_index = 5,
-    x1RadFlux_index = 6,
-    x2RadFlux_index = 7,
-    x3RadFlux_index = 8
+    gasInternalEnergy_index = 5,
+    radEnergy_index = 6,
+    x1RadFlux_index = 7,
+    x2RadFlux_index = 8,
+    x3RadFlux_index = 9
   };
 
-  static constexpr int nvar_ = 9;
+  static constexpr int nvar_ = 10;
   static constexpr int nvarHyperbolic_ = 4;
   static constexpr int nstartHyperbolic_ = radEnergy_index;
 
@@ -435,9 +436,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeCellOpticalDepth(
 
   if constexpr (gamma_ != 1.0) {
     Eint_L = RadSystem<problem_t>::ComputeEintFromEgas(
-        rho_L, x1GasMom_L, x2GasMom_L, x3GasMom_L, Egas_L);
+      rho_L, x1GasMom_L, x2GasMom_L, x3GasMom_L, Egas_L);
     Eint_R = RadSystem<problem_t>::ComputeEintFromEgas(
-        rho_R, x1GasMom_R, x2GasMom_R, x3GasMom_R, Egas_R);
+      rho_R, x1GasMom_R, x2GasMom_R, x3GasMom_R, Egas_R);
     Tgas_L = RadSystem<problem_t>::ComputeTgasFromEgas(rho_L, Eint_L);
     Tgas_R = RadSystem<problem_t>::ComputeTgasFromEgas(rho_R, Eint_R);
   }
@@ -870,13 +871,13 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
           ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0);
       Ekin0 = Egastot0 - Egas0;
 
-      AMREX_ASSERT(Src >= 0.0);
-      AMREX_ASSERT(Egas0 > 0.0);
-      AMREX_ASSERT(Erad0 > 0.0);
+    AMREX_ASSERT(Src >= 0.0);
+    AMREX_ASSERT(Egas0 > 0.0);
+    AMREX_ASSERT(Erad0 > 0.0);
 
-      const double Etot0 = Egas0 + (c / chat) * (Erad0 + Src);
+    const double Etot0 = Egas0 + (c / chat) * (Erad0 + Src);
 
-      // BEGIN NEWTON-RAPHSON LOOP
+    // BEGIN NEWTON-RAPHSON LOOP
       Egas_guess = Egas0;
       Erad_guess = Erad0;
 
@@ -972,6 +973,9 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
       AMREX_ALWAYS_ASSERT(Egas_guess > 0.0);
     } // endif gamma != 1.0
 
+    // Erad_guess is the new radiation energy (excluding work term)
+    // Egas_guess is the new gas internal energy
+
     // 2. Compute radiation flux update
     amrex::GpuArray<amrex::Real, 3> Frad_t0{};
     amrex::GpuArray<amrex::Real, 3> Frad_t1{};
@@ -1027,13 +1031,17 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
         dErad_work = 0.;
       }
 
+      // compute difference between new and old internal energy
+      amrex::Real const dEint = Egas_guess - Egas0;
+
       // 4b. Store new radiation energy, gas energy
       consNew(i, j, k, radEnergy_index) = Erad_guess + dErad_work;
       consNew(i, j, k, gasEnergy_index) = Egastot1;
+      consNew(i, j, k, gasInternalEnergy_index) += dEint; // must compute difference
     } else {
       amrex::ignore_unused(Erad_guess);
       amrex::ignore_unused(Egas_guess);
-    } // endif gamma != 1.0
+    }  // endif gamma != 1.0
   });
 }
 

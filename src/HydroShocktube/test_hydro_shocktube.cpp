@@ -17,6 +17,7 @@
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
 #include "hydro_system.hpp"
+#include "radiation_system.hpp"
 #include "test_hydro_shocktube.hpp"
 #ifdef HAVE_PYTHON
 #include "matplotlibcpp.h"
@@ -77,6 +78,8 @@ void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsAtLevel(
       state(i, j, k, HydroSystem<ShocktubeProblem>::x3Momentum_index) = 0.;
       state(i, j, k, HydroSystem<ShocktubeProblem>::energy_index) =
           P / (gamma - 1.) + 0.5 * rho * (vx * vx);
+      state(i, j, k, HydroSystem<ShocktubeProblem>::internalEnergy_index) =
+          P / (gamma - 1.);
     });
   }
 
@@ -117,6 +120,8 @@ AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(
 
     consVar(i, j, k, RadSystem<ShocktubeProblem>::gasEnergy_index) =
         P_L / (gamma - 1.);
+    consVar(i, j, k, RadSystem<ShocktubeProblem>::gasInternalEnergy_index) =
+        P_L / (gamma - 1.);
     consVar(i, j, k, RadSystem<ShocktubeProblem>::gasDensity_index) = rho_L;
     consVar(i, j, k, RadSystem<ShocktubeProblem>::x1GasMomentum_index) = 0.;
     consVar(i, j, k, RadSystem<ShocktubeProblem>::x2GasMomentum_index) = 0.;
@@ -129,6 +134,8 @@ AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(
     }
 
     consVar(i, j, k, RadSystem<ShocktubeProblem>::gasEnergy_index) =
+        P_R / (gamma - 1.);
+    consVar(i, j, k, RadSystem<ShocktubeProblem>::gasInternalEnergy_index) =
         P_R / (gamma - 1.);
     consVar(i, j, k, RadSystem<ShocktubeProblem>::gasDensity_index) = rho_R;
     consVar(i, j, k, RadSystem<ShocktubeProblem>::x1GasMomentum_index) = 0.;
@@ -145,7 +152,7 @@ void RadhydroSimulation<ShocktubeProblem>::ErrorEst(int lev,
   // tag cells for refinement
 
   const Real eta_threshold = 0.1; // gradient refinement threshold
-  const Real rho_min = 0.01;       // minimum rho for refinement
+  const Real rho_min = 0.01;      // minimum rho for refinement
   auto const &dx = geom[lev].CellSizeArray();
 
   for (amrex::MFIter mfi(state_new_[lev]); mfi.isValid(); ++mfi) {
@@ -249,6 +256,8 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
       stateExact(i, j, k, HydroSystem<ShocktubeProblem>::x3Momentum_index) = 0.;
       stateExact(i, j, k, HydroSystem<ShocktubeProblem>::energy_index) =
           P / (gamma - 1.) + 0.5 * rho * (vx * vx);
+      stateExact(i, j, k, HydroSystem<ShocktubeProblem>::internalEnergy_index) =
+          P / (gamma - 1.);
     });
   }
 
@@ -338,11 +347,11 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
 
 auto problem_main() -> int {
   // Problem parameters
-  //const int nx = 1000;
-  //const double Lx = 5.0;
-  //const double CFL_number = 0.1;
-  //const double initial_dt = 1e-6;
-  //const double max_dt = 1e-4;
+  // const int nx = 1000;
+  // const double Lx = 5.0;
+  // const double CFL_number = 0.1;
+  // const double initial_dt = 1e-6;
+  // const double max_dt = 1e-4;
   const double max_time = 0.4;
   const int max_timesteps = 8000;
 

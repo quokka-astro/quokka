@@ -49,11 +49,17 @@ AMREX_GPU_DEVICE void computeWaveSolution(
       (A * R / (2.0 * M_PI * dx[0])) *
       (std::cos(2.0 * M_PI * x_L) - std::cos(2.0 * M_PI * x_R));
 
-  state(i, j, k, HydroSystem<WaveProblem>::density_index) = U_0[0] + dU[0];
-  state(i, j, k, HydroSystem<WaveProblem>::x1Momentum_index) = U_0[1] + dU[1];
+  double rho = U_0[0] + dU[0];
+  double xmom = U_0[1] + dU[1];
+  double Etot = U_0[2] + dU[2];
+  double Eint = Etot - 0.5 * (xmom * xmom) / rho;
+
+  state(i, j, k, HydroSystem<WaveProblem>::density_index) = rho;
+  state(i, j, k, HydroSystem<WaveProblem>::x1Momentum_index) = xmom;
   state(i, j, k, HydroSystem<WaveProblem>::x2Momentum_index) = 0;
   state(i, j, k, HydroSystem<WaveProblem>::x3Momentum_index) = 0;
-  state(i, j, k, HydroSystem<WaveProblem>::energy_index) = U_0[2] + dU[2];
+  state(i, j, k, HydroSystem<WaveProblem>::energy_index) = Etot;
+  state(i, j, k, HydroSystem<WaveProblem>::internalEnergy_index) = Eint;
 }
 
 template <>
@@ -122,6 +128,9 @@ auto problem_main() -> int {
   // compute error norm
   amrex::Real err_sq = 0.;
   for (int n = 0; n < RadhydroSimulation<WaveProblem>::ncompHydro_; ++n) {
+    if (n == HydroSystem<WaveProblem>::internalEnergy_index) {
+      continue;
+    }
     amrex::Real dU_k = 0.;
     for (int i = 0; i < nx; ++i) {
       // Δ Uk = ∑i |Uk,in - Uk,i0| / Nx
