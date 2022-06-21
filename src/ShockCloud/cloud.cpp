@@ -127,11 +127,12 @@ void RadhydroSimulation<ShockCloud>::setInitialConditionsAtLevel(int lev) {
       Real const Egas = RadSystem<ShockCloud>::ComputeEgasFromEint(
           rho, xmom, ymom, zmom, Eint);
 
-      state(i, j, k, RadSystem<ShockCloud>::gasEnergy_index) = Egas;
       state(i, j, k, RadSystem<ShockCloud>::gasDensity_index) = rho;
       state(i, j, k, RadSystem<ShockCloud>::x1GasMomentum_index) = xmom;
       state(i, j, k, RadSystem<ShockCloud>::x2GasMomentum_index) = ymom;
       state(i, j, k, RadSystem<ShockCloud>::x3GasMomentum_index) = zmom;
+      state(i, j, k, RadSystem<ShockCloud>::gasEnergy_index) = Egas;
+      state(i, j, k, RadSystem<ShockCloud>::gasInternalEnergy_index) = Eint;
       state(i, j, k, RadSystem<ShockCloud>::passiveScalar_index) = C;
 
       state(i, j, k, RadSystem<ShockCloud>::radEnergy_index) = Erad0;
