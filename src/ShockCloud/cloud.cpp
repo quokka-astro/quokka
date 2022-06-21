@@ -266,8 +266,8 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
           state(i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
       const Real Egas = state(i, j, k, HydroSystem<ShockCloud>::energy_index);
 
-      const Real Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom,
-                                                             x3Mom, Egas);
+      const Real Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(
+          rho, x1Mom, x2Mom, x3Mom, Egas);
 
       ODEUserData user_data{rho, tables};
       quokka::valarray<Real, 1> y = {Eint};
@@ -402,7 +402,8 @@ void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(
     auto tables = cloudyTables.const_tables();
 
     for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
-      const amrex::Box &indexRange = iter.validbox();
+      const amrex::Box &indexRange =
+          iter.fabbox(); // *include* ghost cells (if they're in the FAB)
       auto const &output = mf.array(iter);
       auto const &state = state_new_[lev].const_array(iter);
 
