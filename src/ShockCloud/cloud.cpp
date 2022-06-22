@@ -179,6 +179,7 @@ AMRSimulation<ShockCloud>::setCustomBoundaryConditions(
     consVar(i, j, k, RadSystem<ShockCloud>::x2GasMomentum_index) = ymom;
     consVar(i, j, k, RadSystem<ShockCloud>::x3GasMomentum_index) = zmom;
     consVar(i, j, k, RadSystem<ShockCloud>::gasEnergy_index) = Egas;
+    consVar(i, j, k, RadSystem<ShockCloud>::gasInternalEnergy_index) = Eint;
     consVar(i, j, k, RadSystem<ShockCloud>::passiveScalar_index) = 0;
 
     // radiation boundary condition -- streaming
