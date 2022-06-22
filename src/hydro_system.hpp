@@ -154,12 +154,15 @@ void HydroSystem<problem_t>::ConservedToPrimitive(
     const auto E =
         cons(i, j, k, energy_index); // *total* gas energy per unit volume
     const auto Eint_aux = cons(i, j, k, internalEnergy_index);
+    const auto scalar = cons(i, j, k, scalar_index);
 
     AMREX_ASSERT(!std::isnan(rho));
     AMREX_ASSERT(!std::isnan(px));
     AMREX_ASSERT(!std::isnan(py));
     AMREX_ASSERT(!std::isnan(pz));
     AMREX_ASSERT(!std::isnan(E));
+    AMREX_ASSERT(!std::isnan(Eint_aux));
+    AMREX_ASSERT(!std::isnan(scalar));
 
     const auto vx = px / rho;
     const auto vy = py / rho;
@@ -189,6 +192,8 @@ void HydroSystem<problem_t>::ConservedToPrimitive(
     }
     // save auxiliary internal energy (rho * e)
     primVar(i, j, k, primEint_index) = Eint_aux;
+    // save passive scalar
+    primVar(i, j, k, primScalar_index) = scalar;
   });
 }
 
@@ -336,8 +341,9 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::isStateValid(
   const amrex::Real rho = cons(i, j, k, density_index);
   bool isDensityPositive = (rho > 0.);
 
-  // when the dual energy method is used, we *cannot* reset on pressure failures.
-  // on the other hand, we don't need to -- the auxiliary internal energy is used instead!
+  // when the dual energy method is used, we *cannot* reset on pressure
+  // failures. on the other hand, we don't need to -- the auxiliary internal
+  // energy is used instead!
 #if 0
   bool isPressurePositive = false;
   if constexpr (!is_eos_isothermal()) {
@@ -348,7 +354,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::isStateValid(
   }
 #endif
   // return (isDensityPositive && isPressurePositive);
-  
+
   return isDensityPositive;
 }
 
@@ -630,7 +636,7 @@ void HydroSystem<problem_t>::AddInternalEnergyPressureTerm(
     const double v_zminus = primVar(i, j, k - 1, x3Velocity_index);
 #endif
     amrex::Real const div_v =
-        AMREX_D_TERM( (v_xminus - v_xplus) / (2.0 * dx[0]),
+        AMREX_D_TERM((v_xminus - v_xplus) / (2.0 * dx[0]),
                      +(v_yminus - v_yplus) / (2.0 * dx[1]),
                      +(v_zminus - v_zplus) / (2.0 * dx[2]));
 
