@@ -334,8 +334,9 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::isStateValid(
   const amrex::Real rho = cons(i, j, k, density_index);
   bool isDensityPositive = (rho > 0.);
 
-  // when the dual energy method is used, we *cannot* reset on pressure failures.
-  // on the other hand, we don't need to -- the auxiliary internal energy is used instead!
+  // when the dual energy method is used, we *cannot* reset on pressure
+  // failures. on the other hand, we don't need to -- the auxiliary internal
+  // energy is used instead!
 #if 0
   bool isPressurePositive = false;
   if constexpr (!is_eos_isothermal()) {
@@ -346,7 +347,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::isStateValid(
   }
 #endif
   // return (isDensityPositive && isPressurePositive);
-  
+
   return isDensityPositive;
 }
 
@@ -628,7 +629,7 @@ void HydroSystem<problem_t>::AddInternalEnergyPressureTerm(
     const double v_zminus = primVar(i, j, k - 1, x3Velocity_index);
 #endif
     amrex::Real const div_v =
-        AMREX_D_TERM( (v_xminus - v_xplus) / (2.0 * dx[0]),
+        AMREX_D_TERM((v_xminus - v_xplus) / (2.0 * dx[0]),
                      +(v_yminus - v_yplus) / (2.0 * dx[1]),
                      +(v_zminus - v_zplus) / (2.0 * dx[2]));
 
@@ -829,7 +830,6 @@ void HydroSystem<problem_t>::ComputeFluxes(
     const double tp =
         std::min(1., (cs_max - std::min(du, 0.)) / (cs_max - std::min(dw, 0.)));
     const double theta = tp * tp * tp * tp;
-    // const double theta = 1.0;
 
     const double S_star = (theta * (P_R - P_L) + (rho_L * u_L * (S_L - u_L) -
                                                   rho_R * u_R * (S_R - u_R))) /
@@ -840,20 +840,24 @@ void HydroSystem<problem_t>::ComputeFluxes(
     const double vmag_R = std::sqrt(vx_R * vx_R + vy_R * vy_R + vz_R * vz_R);
     const double chi = std::min(1., std::max(vmag_L, vmag_R) / cs_max);
     const double phi = chi * (2. - chi);
-    // const double phi = 1.0;
 
     const double P_LR =
         0.5 * (P_L + P_R) + 0.5 * phi *
                                 (rho_L * (S_L - u_L) * (S_star - u_L) +
                                  rho_R * (S_R - u_R) * (S_star - u_R));
 
-    // compute fluxes
-    constexpr int fluxdim = nvar_;
+    /// compute fluxes
 
-    quokka::valarray<double, fluxdim> D_L{};
-    quokka::valarray<double, fluxdim> D_R{};
-    quokka::valarray<double, fluxdim> D_star{};
+    constexpr int fluxdim = nvar_; // including passive scalar components
 
+    // initialize all components to zero
+    quokka::valarray<double, fluxdim> D_L(0.);
+    quokka::valarray<double, fluxdim> D_R(0.);
+    quokka::valarray<double, fluxdim> D_star(0.);
+
+    // N.B.: quokka::valarray is written to allow assigning <= fluxdim
+    // components, so this works even if there are more components than
+    // enumerated in the initializer list
     if constexpr (DIR == FluxDir::X1) {
       D_L = {0., 1., 0., 0., u_L, 0.};
       D_R = {0., 1., 0., 0., u_R, 0.};
@@ -868,14 +872,30 @@ void HydroSystem<problem_t>::ComputeFluxes(
       D_star = {0., 0., 0., 1., S_star, 0.};
     }
 
-    const quokka::valarray<double, fluxdim> U_L = {
+    const std::initializer_list<double> state_L = {
         rho_L, rho_L * vx_L, rho_L * vy_L, rho_L * vz_L, E_L, Eint_L};
 
-    const quokka::valarray<double, fluxdim> U_R = {
+    const std::initializer_list<double> state_R = {
         rho_R, rho_R * vx_R, rho_R * vy_R, rho_R * vz_R, E_R, Eint_R};
 
-    quokka::valarray<double, fluxdim> F_L = u_L * U_L + P_L * D_L;
-    quokka::valarray<double, fluxdim> F_R = u_R * U_R + P_R * D_R;
+    AMREX_ASSERT(state_L.size() == state_R.size());
+
+    // N.B.: quokka::valarray is written to allow assigning <= fluxdim
+    // components, so this works even if there are more components than
+    // enumerated in the initializer list
+    quokka::valarray<double, fluxdim> U_L = state_L;
+    quokka::valarray<double, fluxdim> U_R = state_R;
+
+    // The remaining components are passive scalars, so just copy them from
+    // x1LeftState and x1RightState into the (left, right) state vectors U_L and
+    // U_R
+    for (int nc = static_cast<int>(state_L.size()); nc < fluxdim; ++nc) {
+      U_L[nc] = x1LeftState(i, j, k, nc);
+      U_R[nc] = x1RightState(i, j, k, nc);
+    }
+
+    const quokka::valarray<double, fluxdim> F_L = u_L * U_L + P_L * D_L;
+    const quokka::valarray<double, fluxdim> F_R = u_R * U_R + P_R * D_R;
 
     const quokka::valarray<double, fluxdim> F_starL =
         (S_star * (S_L * U_L - F_L) + S_L * P_LR * D_star) / (S_L - S_star);
@@ -897,25 +917,16 @@ void HydroSystem<problem_t>::ComputeFluxes(
       F = F_R;
     }
 
-    // check states are valid
-    AMREX_ASSERT(!std::isnan(F[0]));
-    AMREX_ASSERT(!std::isnan(F[1]));
-    AMREX_ASSERT(!std::isnan(F[2]));
-    AMREX_ASSERT(!std::isnan(F[3]));
+    // set energy fluxes to zero if EOS is isothermal
+    if constexpr (is_eos_isothermal()) {
+      F[energy_index] = 0;
+      F[internalEnergy_index] = 0;
+    }
 
-    x1Flux(i, j, k, density_index) = F[0];
-    x1Flux(i, j, k, x1Momentum_index) = F[1];
-    x1Flux(i, j, k, x2Momentum_index) = F[2];
-    x1Flux(i, j, k, x3Momentum_index) = F[3];
-
-    if constexpr (!is_eos_isothermal()) {
-      AMREX_ASSERT(!std::isnan(F[4]));
-      AMREX_ASSERT(!std::isnan(F[5]));
-      x1Flux(i, j, k, energy_index) = F[4];
-      x1Flux(i, j, k, internalEnergy_index) = F[5];
-    } else {
-      x1Flux(i, j, k, energy_index) = 0;
-      x1Flux(i, j, k, internalEnergy_index) = 0;
+    // copy all flux components to the flux array
+    for (int nc = 0; nc < fluxdim; ++nc) {
+      AMREX_ASSERT(!std::isnan(F[nc])); // check flux is valid
+      x1Flux(i, j, k, nc) = F[nc];
     }
   });
 }
