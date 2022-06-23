@@ -137,7 +137,8 @@ public:
   // C++ does not allow constexpr to be uninitialized, even in a templated
   // class!
   static constexpr double gamma_ = HydroSystem_Traits<problem_t>::gamma;
-  static constexpr double cs_iso_ = HydroSystem_Traits<problem_t>::cs_isothermal;
+  static constexpr double cs_iso_ =
+      HydroSystem_Traits<problem_t>::cs_isothermal;
   static constexpr bool reconstruct_eint =
       HydroSystem_Traits<problem_t>::reconstruct_eint;
 
@@ -714,9 +715,6 @@ void HydroSystem<problem_t>::ComputeFluxes(
     const double vz_L = x1LeftState(i, j, k, x3Velocity_index);
     const double vz_R = x1RightState(i, j, k, x3Velocity_index);
 
-    const double scalar_L = x1LeftState(i, j, k, primScalar_index);
-    const double scalar_R = x1RightState(i, j, k, primScalar_index);
-
     const double ke_L = 0.5 * rho_L * (vx_L * vx_L + vy_L * vy_L + vz_L * vz_L);
     const double ke_R = 0.5 * rho_R * (vx_R * vx_R + vy_R * vy_R + vz_R * vz_R);
 
@@ -840,7 +838,6 @@ void HydroSystem<problem_t>::ComputeFluxes(
     const double tp =
         std::min(1., (cs_max - std::min(du, 0.)) / (cs_max - std::min(dw, 0.)));
     const double theta = tp * tp * tp * tp;
-    // const double theta = 1.0;
 
     const double S_star = (theta * (P_R - P_L) + (rho_L * u_L * (S_L - u_L) -
                                                   rho_R * u_R * (S_R - u_R))) /
@@ -851,22 +848,24 @@ void HydroSystem<problem_t>::ComputeFluxes(
     const double vmag_R = std::sqrt(vx_R * vx_R + vy_R * vy_R + vz_R * vz_R);
     const double chi = std::min(1., std::max(vmag_L, vmag_R) / cs_max);
     const double phi = chi * (2. - chi);
-    // const double phi = 1.0;
 
     const double P_LR =
         0.5 * (P_L + P_R) + 0.5 * phi *
                                 (rho_L * (S_L - u_L) * (S_star - u_L) +
                                  rho_R * (S_R - u_R) * (S_star - u_R));
 
-    // compute fluxes
-    constexpr int fluxdim = nvar_;
+    /// compute fluxes
 
-    quokka::valarray<double, fluxdim> D_L{};
-    quokka::valarray<double, fluxdim> D_R{};
-    quokka::valarray<double, fluxdim> D_star{};
+    constexpr int fluxdim = nvar_; // including passive scalar components
 
-    // N.B. a passive scalar behaves exactly like the transverse velocity
-    // components
+    // initialize all components to zero
+    quokka::valarray<double, fluxdim> D_L(0.);
+    quokka::valarray<double, fluxdim> D_R(0.);
+    quokka::valarray<double, fluxdim> D_star(0.);
+
+    // N.B.: quokka::valarray is written to allow assigning <= fluxdim
+    // components, so this works even if there are more components than
+    // enumerated in the initializer list
     if constexpr (DIR == FluxDir::X1) {
       D_L = {0., 1., 0., 0., u_L, 0., 0.};
       D_R = {0., 1., 0., 0., u_R, 0., 0.};
@@ -881,14 +880,30 @@ void HydroSystem<problem_t>::ComputeFluxes(
       D_star = {0., 0., 0., 1., S_star, 0., 0.};
     }
 
-    const quokka::valarray<double, fluxdim> U_L = {
-        rho_L, rho_L * vx_L, rho_L * vy_L, rho_L * vz_L, E_L, Eint_L, scalar_L};
+    const std::initializer_list<double> state_L = {
+        rho_L, rho_L * vx_L, rho_L * vy_L, rho_L * vz_L, E_L, Eint_L};
 
-    const quokka::valarray<double, fluxdim> U_R = {
-        rho_R, rho_R * vx_R, rho_R * vy_R, rho_R * vz_R, E_R, Eint_R, scalar_R};
+    const std::initializer_list<double> state_R = {
+        rho_R, rho_R * vx_R, rho_R * vy_R, rho_R * vz_R, E_R, Eint_R};
 
-    quokka::valarray<double, fluxdim> F_L = u_L * U_L + P_L * D_L;
-    quokka::valarray<double, fluxdim> F_R = u_R * U_R + P_R * D_R;
+    AMREX_ASSERT(state_L.size() == state_R.size());
+
+    // N.B.: quokka::valarray is written to allow assigning <= fluxdim
+    // components, so this works even if there are more components than
+    // enumerated in the initializer list
+    quokka::valarray<double, fluxdim> U_L = state_L;
+    quokka::valarray<double, fluxdim> U_R = state_R;
+
+    // The remaining components are passive scalars, so just copy them from
+    // x1LeftState and x1RightState into the (left, right) state vectors U_L and
+    // U_R
+    for (int nc = static_cast<int>(state_L.size()); nc < fluxdim; ++nc) {
+      U_L[nc] = x1LeftState(i, j, k, nc);
+      U_R[nc] = x1RightState(i, j, k, nc);
+    }
+
+    const quokka::valarray<double, fluxdim> F_L = u_L * U_L + P_L * D_L;
+    const quokka::valarray<double, fluxdim> F_R = u_R * U_R + P_R * D_R;
 
     const quokka::valarray<double, fluxdim> F_starL =
         (S_star * (S_L * U_L - F_L) + S_L * P_LR * D_star) / (S_L - S_star);
@@ -910,28 +925,17 @@ void HydroSystem<problem_t>::ComputeFluxes(
       F = F_R;
     }
 
-    // check states are valid
-    AMREX_ASSERT(!std::isnan(F[0]));
-    AMREX_ASSERT(!std::isnan(F[1]));
-    AMREX_ASSERT(!std::isnan(F[2]));
-    AMREX_ASSERT(!std::isnan(F[3]));
-
-    x1Flux(i, j, k, density_index) = F[0];
-    x1Flux(i, j, k, x1Momentum_index) = F[1];
-    x1Flux(i, j, k, x2Momentum_index) = F[2];
-    x1Flux(i, j, k, x3Momentum_index) = F[3];
-
-    if constexpr (!is_eos_isothermal()) {
-      AMREX_ASSERT(!std::isnan(F[4]));
-      AMREX_ASSERT(!std::isnan(F[5]));
-      x1Flux(i, j, k, energy_index) = F[4];
-      x1Flux(i, j, k, internalEnergy_index) = F[5];
-    } else {
-      x1Flux(i, j, k, energy_index) = 0;
-      x1Flux(i, j, k, internalEnergy_index) = 0;
+    // set energy fluxes to zero if EOS is isothermal
+    if constexpr (is_eos_isothermal()) {
+      F[energy_index] = 0;
+      F[internalEnergy_index] = 0;
     }
-    AMREX_ASSERT(!std::isnan(F[6]));
-    x1Flux(i, j, k, scalar_index) = F[6];
+
+    // copy all flux components to the flux array
+    for (int nc = 0; nc < fluxdim; ++nc) {
+      AMREX_ASSERT(!std::isnan(F[nc])); // check flux is valid
+      x1Flux(i, j, k, nc) = F[nc];
+    }
   });
 }
 
