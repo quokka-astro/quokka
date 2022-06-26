@@ -25,7 +25,7 @@
 
 struct ShocktubeProblem {};
 
-template <> struct EOS_Traits<ShocktubeProblem> {
+template <> struct HydroSystem_Traits<ShocktubeProblem> {
   static constexpr double gamma = 1.4;
   static constexpr bool reconstruct_eint = true;
 };
