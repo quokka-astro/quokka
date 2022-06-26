@@ -23,7 +23,7 @@ struct ContactProblem {};
 template <> struct HydroSystem_Traits<ContactProblem> {
   static constexpr double gamma = 1.4;
   static constexpr bool reconstruct_eint = true;
-  static constexpr int nscalars = 0;       // number of passive scalars
+  static constexpr int nscalars = 2;       // number of passive scalars
 };
 constexpr double v_contact = 0.0; // contact wave velocity
 

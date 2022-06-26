@@ -68,7 +68,7 @@ template <> struct RadSystem_Traits<ShockProblem> {
 template <> struct HydroSystem_Traits<ShockProblem> {
   static constexpr double gamma = gamma_gas;
   static constexpr bool reconstruct_eint = true;
-  static constexpr int nscalars = 0;       // number of passive scalars
+  static constexpr int nscalars = 1;       // number of passive scalars
 };
 
 template <>
