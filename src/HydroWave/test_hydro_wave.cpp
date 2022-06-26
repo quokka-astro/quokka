@@ -23,6 +23,7 @@ struct WaveProblem {};
 template <> struct HydroSystem_Traits<WaveProblem> {
   static constexpr double gamma = 5. / 3.;
   static constexpr bool reconstruct_eint = true;
+  static constexpr int nscalars = 0;       // number of passive scalars
 };
 
 constexpr double rho0 = 1.0; // background density

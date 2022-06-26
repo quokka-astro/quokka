@@ -28,6 +28,7 @@ struct ShocktubeProblem {};
 template <> struct HydroSystem_Traits<ShocktubeProblem> {
   static constexpr double gamma = 1.4;
   static constexpr bool reconstruct_eint = true;
+  static constexpr int nscalars = 0;       // number of passive scalars
 };
 
 // left- and right- side shock states

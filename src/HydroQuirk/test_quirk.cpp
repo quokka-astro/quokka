@@ -43,6 +43,7 @@ struct QuirkProblem {};
 template <> struct HydroSystem_Traits<QuirkProblem> {
   static constexpr double gamma = 5. / 3.;
   static constexpr bool reconstruct_eint = false;
+  static constexpr int nscalars = 0;       // number of passive scalars
 };
 
 constexpr Real dl = 3.692;
