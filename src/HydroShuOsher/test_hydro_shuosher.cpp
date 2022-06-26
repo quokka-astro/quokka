@@ -25,6 +25,7 @@ struct ShocktubeProblem {};
 template <> struct EOS_Traits<ShocktubeProblem> {
   static constexpr double gamma = 1.4;
   static constexpr bool reconstruct_eint = true;
+  static constexpr int nscalars = 0;       // number of passive scalars
 };
 
 template <>

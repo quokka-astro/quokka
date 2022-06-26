@@ -53,23 +53,26 @@ template <typename problem_t> struct RadSystem_Traits {
 template <typename problem_t>
 class RadSystem : public HyperbolicSystem<problem_t> {
 public:
-  enum consVarIndex {
+  static constexpr int nstartHyperbolic_ = HydroSystem<problem_t>::nvar_;
+
+  enum gasVarIndex {
     gasDensity_index = 0,
     x1GasMomentum_index = 1,
     x2GasMomentum_index = 2,
     x3GasMomentum_index = 3,
     gasEnergy_index = 4,
-    gasInternalEnergy_index = 5,
-    passiveScalar_index = 6,
-    radEnergy_index = 7,
-    x1RadFlux_index = 8,
-    x2RadFlux_index = 9,
-    x3RadFlux_index = 10
+    gasInternalEnergy_index = 5
   };
 
-  static constexpr int nvar_ = 11;
-  static constexpr int nvarHyperbolic_ = 4;
-  static constexpr int nstartHyperbolic_ = radEnergy_index;
+  enum radVarIndex {
+    radEnergy_index = nstartHyperbolic_,
+    x1RadFlux_index,
+    x2RadFlux_index,
+    x3RadFlux_index
+  };
+
+  static constexpr int nvarHyperbolic_ = 4; // number of radiation variables
+  static constexpr int nvar_ = nstartHyperbolic_ + nvarHyperbolic_;
 
   enum primVarIndex {
     primRadEnergy_index = 0,

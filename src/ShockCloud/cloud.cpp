@@ -53,6 +53,7 @@ template <> struct EOS_Traits<ShockCloud> {
   static constexpr double gamma = 5. / 3.; // default value
   // if true, reconstruct e_int instead of pressure
   static constexpr bool reconstruct_eint = true;
+  static constexpr int nscalars = 0;       // number of passive scalars
 };
 
 template <> struct RadSystem_Traits<ShockCloud> {

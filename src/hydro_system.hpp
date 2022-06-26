@@ -30,6 +30,7 @@
 template <typename problem_t> struct EOS_Traits {
   static constexpr double gamma = 5. / 3.;     // default value
   static constexpr double cs_isothermal = NAN; // only used when gamma = 1
+  static constexpr int nscalars = 0;           // number of passive scalars
   // if true, reconstruct e_int instead of pressure
   static constexpr bool reconstruct_eint = true;
 };
@@ -46,7 +47,7 @@ public:
     x3Momentum_index = 3,
     energy_index = 4,
     internalEnergy_index = 5, // auxiliary internal energy (rho * e)
-    scalar_index = 6
+    scalar0_index = 6 // first passive scalar (only present if nscalars > 0!)
   };
   enum primVarIndex {
     primDensity_index = 0,
@@ -55,10 +56,12 @@ public:
     x3Velocity_index = 3,
     pressure_index = 4,
     primEint_index = 5, // auxiliary internal energy (rho * e)
-    primScalar_index = 6
+    primScalar0_index =
+        6 // first passive scalar (only present if nscalars > 0!)
   };
 
-  static constexpr int nvar_ = 7;
+  static constexpr int nscalars_ = HydroSystem_Traits<problem_t>::nscalars;
+  static constexpr int nvar_ = 6 + nscalars_;
 
   static void ConservedToPrimitive(amrex::Array4<const amrex::Real> const &cons,
                                    array_t &primVar,
@@ -192,8 +195,12 @@ void HydroSystem<problem_t>::ConservedToPrimitive(
     }
     // save auxiliary internal energy (rho * e)
     primVar(i, j, k, primEint_index) = Eint_aux;
-    // save passive scalar
-    primVar(i, j, k, primScalar_index) = scalar;
+
+    // copy any passive scalars
+    for (int nc = 0; nc < nscalars_; ++nc) {
+      primVar(i, j, k, primScalar0_index + nc) =
+          cons(i, j, k, scalar0_index + nc);
+    }
   });
 }
 
