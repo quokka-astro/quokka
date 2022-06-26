@@ -25,7 +25,7 @@ using amrex::Real;
 struct ShockCloud {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-template <> struct EOS_Traits<ShockCloud> {
+template <> struct HydroSystem_Traits<ShockCloud> {
   static constexpr double gamma = 5. / 3.; // default value
   // if true, reconstruct e_int instead of pressure
   static constexpr bool reconstruct_eint = true;

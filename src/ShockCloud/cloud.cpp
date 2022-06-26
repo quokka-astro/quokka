@@ -49,7 +49,7 @@ constexpr double m_H = hydrogen_mass_cgs_; // mass of hydrogen atom
 // [Habing FUV field, see Eq. 12.6 of Draine, Physics of the ISM/IGM.]
 constexpr static Real G_0 = 5.29e-14; // erg cm^-3
 
-template <> struct EOS_Traits<ShockCloud> {
+template <> struct HydroSystem_Traits<ShockCloud> {
   static constexpr double gamma = 5. / 3.; // default value
   // if true, reconstruct e_int instead of pressure
   static constexpr bool reconstruct_eint = true;

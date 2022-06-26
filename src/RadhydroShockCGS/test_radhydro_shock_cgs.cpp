@@ -68,7 +68,7 @@ template <> struct RadSystem_Traits<ShockProblem> {
 	static constexpr bool compute_v_over_c_terms = true;
 };
 
-template <> struct EOS_Traits<ShockProblem> {
+template <> struct HydroSystem_Traits<ShockProblem> {
 	static constexpr double gamma = gamma_gas;
 	static constexpr bool reconstruct_eint = true;
   	static constexpr int nscalars = 0;       // number of passive scalars

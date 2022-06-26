@@ -20,7 +20,7 @@
 
 struct ContactProblem {};
 
-template <> struct EOS_Traits<ContactProblem> {
+template <> struct HydroSystem_Traits<ContactProblem> {
   static constexpr double gamma = 1.4;
   static constexpr bool reconstruct_eint = true;
   static constexpr int nscalars = 2;       // number of passive scalars

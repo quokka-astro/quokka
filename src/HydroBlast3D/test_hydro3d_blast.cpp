@@ -23,8 +23,8 @@ struct SedovProblem {};
 // if false, use octant symmetry instead
 constexpr bool simulate_full_box = true;
 
-template <> struct EOS_Traits<SedovProblem> {
-  static constexpr double gamma = 5. / 3.;
+template <> struct HydroSystem_Traits<SedovProblem> {
+  static constexpr double gamma = 1.4;
   static constexpr bool reconstruct_eint = false;
   static constexpr int nscalars = 0;       // number of passive scalars
 };
