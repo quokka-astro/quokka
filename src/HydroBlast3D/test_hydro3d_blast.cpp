@@ -29,7 +29,7 @@ struct SedovProblem {};
 // if false, use octant symmetry instead
 constexpr bool simulate_full_box = false;
 
-template <> struct EOS_Traits<SedovProblem> {
+template <> struct HydroSystem_Traits<SedovProblem> {
   static constexpr double gamma = 1.4;
   static constexpr bool reconstruct_eint = false;
 };

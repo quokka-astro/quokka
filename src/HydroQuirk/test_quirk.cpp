@@ -40,7 +40,7 @@ using Real = amrex::Real;
 
 struct QuirkProblem {};
 
-template <> struct EOS_Traits<QuirkProblem> {
+template <> struct HydroSystem_Traits<QuirkProblem> {
   static constexpr double gamma = 5. / 3.;
   static constexpr bool reconstruct_eint = false;
 };
