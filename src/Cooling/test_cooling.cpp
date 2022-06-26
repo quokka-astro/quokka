@@ -39,6 +39,7 @@ template <> struct HydroSystem_Traits<CoolingTest> {
   static constexpr double gamma = 5. / 3.; // default value
   // if true, reconstruct e_int instead of pressure
   static constexpr bool reconstruct_eint = true;
+  static constexpr int nscalars = 0;       // number of passive scalars
 };
 
 constexpr double Tgas0 = 6000.;       // K

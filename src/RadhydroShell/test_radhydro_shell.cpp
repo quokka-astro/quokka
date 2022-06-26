@@ -59,6 +59,7 @@ template <> struct RadSystem_Traits<ShellProblem> {
 template <> struct HydroSystem_Traits<ShellProblem> {
   static constexpr double gamma = gamma_gas;
   static constexpr bool reconstruct_eint = false;
+  static constexpr int nscalars = 0;       // number of passive scalars
 };
 
 constexpr amrex::Real Msun = 2.0e33;           // g
