@@ -119,7 +119,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 		componentNames_.insert(componentNames_.end(), radNames.begin(), radNames.end());
 	}
 
-	auto getScalarVariableNames() const -> std::vector<std::string>;
+	[[nodiscard]] auto getScalarVariableNames() const -> std::vector<std::string>;
 	void checkHydroStates(amrex::MultiFab &mf, char const *file, int line);
 	void computeMaxSignalLocal(int level) override;
 	void setInitialConditionsAtLevel(int level) override;
@@ -219,6 +219,7 @@ auto RadhydroSimulation<problem_t>::getScalarVariableNames() const -> std::vecto
 
 	std::vector<std::string> names;
 	int nscalars = HydroSystem<problem_t>::nscalars_;
+	names.reserve(nscalars);
 	for(int n = 0; n < nscalars; ++n) {
 		// write string 'scalar_1', etc.
 		names.push_back(fmt::format("scalar_{}", n));
