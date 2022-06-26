@@ -138,8 +138,7 @@ public:
   // C++ does not allow constexpr to be uninitialized, even in a templated
   // class!
   static constexpr double gamma_ = HydroSystem_Traits<problem_t>::gamma;
-  static constexpr double cs_iso_ =
-      HydroSystem_Traits<problem_t>::cs_isothermal;
+  static constexpr double cs_iso_ = HydroSystem_Traits<problem_t>::cs_isothermal;
   static constexpr bool reconstruct_eint =
       HydroSystem_Traits<problem_t>::reconstruct_eint;
 
