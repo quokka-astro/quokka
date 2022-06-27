@@ -21,7 +21,6 @@
 // internal headers
 #include "ArrayView.hpp"
 #include "hyperbolic_system.hpp"
-#include "radiation_system.hpp"
 #include "valarray.hpp"
 #include <math.h>
 
