@@ -861,14 +861,14 @@ void HydroSystem<problem_t>::ComputeFluxes(
 
     constexpr int fluxdim = nvar_; // including passive scalar components
 
-    // initialize all components to zero
-    quokka::valarray<double, fluxdim> D_L(0.);
-    quokka::valarray<double, fluxdim> D_R(0.);
-    quokka::valarray<double, fluxdim> D_star(0.);
+    quokka::valarray<double, fluxdim> D_L{};
+    quokka::valarray<double, fluxdim> D_R{};
+    quokka::valarray<double, fluxdim> D_star{};
 
     // N.B.: quokka::valarray is written to allow assigning <= fluxdim
     // components, so this works even if there are more components than
-    // enumerated in the initializer list
+    // enumerated in the initializer list. The remaining components are
+    // assigned a default value of zero.
     if constexpr (DIR == FluxDir::X1) {
       D_L = {0., 1., 0., 0., u_L, 0.};
       D_R = {0., 1., 0., 0., u_R, 0.};
@@ -893,7 +893,8 @@ void HydroSystem<problem_t>::ComputeFluxes(
 
     // N.B.: quokka::valarray is written to allow assigning <= fluxdim
     // components, so this works even if there are more components than
-    // enumerated in the initializer list
+    // enumerated in the initializer list. The remaining components are
+    // assigned a default value of zero.
     quokka::valarray<double, fluxdim> U_L = state_L;
     quokka::valarray<double, fluxdim> U_R = state_R;
 
