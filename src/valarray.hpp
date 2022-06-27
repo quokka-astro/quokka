@@ -35,11 +35,11 @@ template <typename T, int d> class valarray
 	// (although not cppcore-compliant)
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE valarray(std::initializer_list<T> list) // NOLINT
 	{
-		AMREX_ASSERT(list.size() <= d);
+		const int max_count = std::min(list.size(), static_cast<size_t>(d));
 		T const *input =
 		    std::data(list); // requires nvcc to be in C++17 mode! (if it fails, the
 				     // compiler flags are wrong, probably due to a CMake issue.)
-		for (size_t i = 0; i < list.size(); ++i) {
+		for (size_t i = 0; i < max_count; ++i) {
 			values[i] = input[i]; // NOLINT
 		}
 	}
@@ -54,7 +54,8 @@ template <typename T, int d> class valarray
 		return values[i];
 	}
 
-	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto size() const -> size_t
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
+	constexpr auto size() const -> size_t
 	{
 		return d;
 	}
@@ -169,7 +170,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto abs(quokka::valarray<T, d> const &
 template <typename T, int d>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto min(quokka::valarray<T, d> const &v) -> T
 {
-	assert(v.size() >= 1);
+	static_assert(v.size() >= 1);
 	T min_val = v[0]; // v must have at least 1 element
 	
 	for (size_t i = 0; i < v.size(); ++i) {
