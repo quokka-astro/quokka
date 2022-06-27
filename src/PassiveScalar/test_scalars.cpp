@@ -16,60 +16,61 @@
 #include "fextract.hpp"
 #include "hydro_system.hpp"
 #include "radiation_system.hpp"
-#include "test_hydro_contact.hpp"
+#include "test_scalars.hpp"
 
-struct ContactProblem {};
+using amrex::Real;
 
-template <> struct HydroSystem_Traits<ContactProblem> {
+struct ScalarProblem {};
+
+template <> struct HydroSystem_Traits<ScalarProblem> {
   static constexpr double gamma = 1.4;
   static constexpr bool reconstruct_eint = true;
-  static constexpr int nscalars = 2;       // number of passive scalars
+  static constexpr int nscalars = 1; // number of passive scalars
 };
-constexpr double v_contact = 0.0; // contact wave velocity
+constexpr double v_contact = 2.0; // contact wave velocity
 
 template <>
-void RadhydroSimulation<ContactProblem>::setInitialConditionsAtLevel(int lev) {
+void RadhydroSimulation<ScalarProblem>::setInitialConditionsAtLevel(int lev) {
   int ncomp = ncomp_;
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo =
-      geom[lev].ProbLoArray();
+  amrex::GpuArray<Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
+  amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
 
   for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
     const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
     auto const &state = state_new_[lev].array(iter);
 
     amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-      amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
-
+      Real const x = prob_lo[0] + (i + Real(0.5)) * dx[0];
       double vx = NAN;
       double rho = NAN;
       double P = NAN;
+      double scalar = NAN;
 
       if (x < 0.5) {
         rho = 1.4;
         vx = v_contact;
         P = 1.0;
+        scalar = 1.0;
       } else {
         rho = 1.0;
         vx = v_contact;
         P = 1.0;
+        scalar = 0.0;
       }
-      AMREX_ASSERT(!std::isnan(vx));
-      AMREX_ASSERT(!std::isnan(rho));
-      AMREX_ASSERT(!std::isnan(P));
 
-      const auto gamma = HydroSystem<ContactProblem>::gamma_;
+      const auto gamma = HydroSystem<ScalarProblem>::gamma_;
       for (int n = 0; n < ncomp; ++n) {
         state(i, j, k, n) = 0.;
       }
-      state(i, j, k, HydroSystem<ContactProblem>::density_index) = rho;
-      state(i, j, k, HydroSystem<ContactProblem>::x1Momentum_index) = rho * vx;
-      state(i, j, k, HydroSystem<ContactProblem>::x2Momentum_index) = 0.;
-      state(i, j, k, HydroSystem<ContactProblem>::x3Momentum_index) = 0.;
-      state(i, j, k, HydroSystem<ContactProblem>::energy_index) =
+      state(i, j, k, HydroSystem<ScalarProblem>::density_index) = rho;
+      state(i, j, k, HydroSystem<ScalarProblem>::x1Momentum_index) = rho * vx;
+      state(i, j, k, HydroSystem<ScalarProblem>::x2Momentum_index) = 0.;
+      state(i, j, k, HydroSystem<ScalarProblem>::x3Momentum_index) = 0.;
+      state(i, j, k, HydroSystem<ScalarProblem>::energy_index) =
           P / (gamma - 1.) + 0.5 * rho * (vx * vx);
-      state(i, j, k, HydroSystem<ContactProblem>::internalEnergy_index) =
+      state(i, j, k, HydroSystem<ScalarProblem>::internalEnergy_index) =
           P / (gamma - 1.);
+      state(i, j, k, HydroSystem<ScalarProblem>::scalar0_index) = scalar;
     });
   }
 
@@ -78,10 +79,9 @@ void RadhydroSimulation<ContactProblem>::setInitialConditionsAtLevel(int lev) {
 }
 
 template <>
-void RadhydroSimulation<ContactProblem>::computeReferenceSolution(
-    amrex::MultiFab &ref,
-    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo) {
+void RadhydroSimulation<ScalarProblem>::computeReferenceSolution(
+    amrex::MultiFab &ref, amrex::GpuArray<Real, AMREX_SPACEDIM> const &dx,
+    amrex::GpuArray<Real, AMREX_SPACEDIM> const &prob_lo) {
   for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
     const amrex::Box &indexRange = iter.validbox();
     auto const &stateExact = ref.array(iter);
@@ -89,35 +89,38 @@ void RadhydroSimulation<ContactProblem>::computeReferenceSolution(
 
     amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j,
                                                         int k) noexcept {
+      Real const x = prob_lo[0] + (i + Real(0.5)) * dx[0];
       double vx = NAN;
       double rho = NAN;
       double P = NAN;
-      amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+      double scalar = NAN;
 
       if (x < 0.5) {
         rho = 1.4;
         vx = v_contact;
         P = 1.0;
+        scalar = 1.0;
       } else {
         rho = 1.0;
         vx = v_contact;
         P = 1.0;
+        scalar = 0.0;
       }
 
+      const auto gamma = HydroSystem<ScalarProblem>::gamma_;
       for (int n = 0; n < ncomp; ++n) {
         stateExact(i, j, k, n) = 0.;
       }
-
-      const auto gamma = HydroSystem<ContactProblem>::gamma_;
-      stateExact(i, j, k, HydroSystem<ContactProblem>::density_index) = rho;
-      stateExact(i, j, k, HydroSystem<ContactProblem>::x1Momentum_index) =
+      stateExact(i, j, k, HydroSystem<ScalarProblem>::density_index) = rho;
+      stateExact(i, j, k, HydroSystem<ScalarProblem>::x1Momentum_index) =
           rho * vx;
-      stateExact(i, j, k, HydroSystem<ContactProblem>::x2Momentum_index) = 0.;
-      stateExact(i, j, k, HydroSystem<ContactProblem>::x3Momentum_index) = 0.;
-      stateExact(i, j, k, HydroSystem<ContactProblem>::energy_index) =
+      stateExact(i, j, k, HydroSystem<ScalarProblem>::x2Momentum_index) = 0.;
+      stateExact(i, j, k, HydroSystem<ScalarProblem>::x3Momentum_index) = 0.;
+      stateExact(i, j, k, HydroSystem<ScalarProblem>::energy_index) =
           P / (gamma - 1.) + 0.5 * rho * (vx * vx);
-      stateExact(i, j, k, HydroSystem<ContactProblem>::internalEnergy_index) =
+      stateExact(i, j, k, HydroSystem<ScalarProblem>::internalEnergy_index) =
           P / (gamma - 1.);
+      stateExact(i, j, k, HydroSystem<ScalarProblem>::scalar0_index) = scalar;
     });
   }
 
@@ -128,67 +131,83 @@ void RadhydroSimulation<ContactProblem>::computeReferenceSolution(
   auto const nx = position.size();
 
   if (amrex::ParallelDescriptor::IOProcessor()) {
-    std::vector<double> x(nx);
-    std::vector<double> d_final(nx);
-    std::vector<double> vx_final(nx);
-    std::vector<double> P_final(nx);
-    std::vector<double> d_exact(nx);
-    std::vector<double> vx_exact(nx);
-    std::vector<double> P_exact(nx);
+    std::vector<double> x;
+    std::vector<double> d_final;
+    std::vector<double> vx_final;
+    std::vector<double> P_final;
+    std::vector<double> s_final;
+    std::vector<double> d_exact;
+    std::vector<double> vx_exact;
+    std::vector<double> P_exact;
+    std::vector<double> s_exact;
 
     for (int i = 0; i < nx; ++i) {
-      amrex::Real const this_x = position.at(i);
+      Real const this_x = position.at(i);
       x.push_back(this_x);
 
       {
         const auto rho =
-            val_exact.at(HydroSystem<ContactProblem>::density_index).at(i);
+            val_exact.at(HydroSystem<ScalarProblem>::density_index).at(i);
         const auto xmom =
-            val_exact.at(HydroSystem<ContactProblem>::x1Momentum_index).at(i);
+            val_exact.at(HydroSystem<ScalarProblem>::x1Momentum_index).at(i);
         const auto E =
-            val_exact.at(HydroSystem<ContactProblem>::energy_index).at(i);
+            val_exact.at(HydroSystem<ScalarProblem>::energy_index).at(i);
+        const auto s =
+            val_exact.at(HydroSystem<ScalarProblem>::scalar0_index).at(i);
         const auto vx = xmom / rho;
         const auto Eint = E - 0.5 * rho * (vx * vx);
-        const auto P = (HydroSystem<ContactProblem>::gamma_ - 1.) * Eint;
+        const auto P = (HydroSystem<ScalarProblem>::gamma_ - 1.) * Eint;
         d_exact.push_back(rho);
         vx_exact.push_back(vx);
         P_exact.push_back(P);
+        s_exact.push_back(s);
       }
 
       {
         const auto frho =
-            values.at(HydroSystem<ContactProblem>::density_index).at(i);
+            values.at(HydroSystem<ScalarProblem>::density_index).at(i);
         const auto fxmom =
-            values.at(HydroSystem<ContactProblem>::x1Momentum_index).at(i);
+            values.at(HydroSystem<ScalarProblem>::x1Momentum_index).at(i);
         const auto fE =
-            values.at(HydroSystem<ContactProblem>::energy_index).at(i);
+            values.at(HydroSystem<ScalarProblem>::energy_index).at(i);
+        const auto fs =
+            values.at(HydroSystem<ScalarProblem>::scalar0_index).at(i);
         const auto fvx = fxmom / frho;
         const auto fEint = fE - 0.5 * frho * (fvx * fvx);
-        const auto fP = (HydroSystem<ContactProblem>::gamma_ - 1.) * fEint;
+        const auto fP = (HydroSystem<ScalarProblem>::gamma_ - 1.) * fEint;
         d_final.push_back(frho);
         vx_final.push_back(fvx);
         P_final.push_back(fP);
+        s_final.push_back(fs);
       }
     }
 
     std::unordered_map<std::string, std::string> d_args;
+    std::unordered_map<std::string, std::string> s_args;
     std::map<std::string, std::string> dexact_args;
+    std::map<std::string, std::string> sexact_args;
     d_args["label"] = "density";
     d_args["color"] = "black";
-    dexact_args["label"] = "density (exact solution)";
+    dexact_args["color"] = "black";
+    s_args["label"] = "passive scalar";
+    s_args["color"] = "blue";
+    sexact_args["color"] = "blue";
+    
     matplotlibcpp::scatter(x, d_final, 10.0, d_args);
     matplotlibcpp::plot(x, d_exact, dexact_args);
+    matplotlibcpp::scatter(x, s_final, 10.0, s_args);
+    matplotlibcpp::plot(x, s_exact, sexact_args);
 
     matplotlibcpp::legend();
     matplotlibcpp::title(fmt::format("t = {:.4f}", tNew_[0]));
-    matplotlibcpp::save("./hydro_contact.pdf");
+    matplotlibcpp::save("./passive_scalar.pdf");
   }
 #endif
 }
 
 auto problem_main() -> int {
   // Problem parameters
-  const int nvars = RadhydroSimulation<ContactProblem>::nvarTotal_;
+  const int nvars = RadhydroSimulation<ScalarProblem>::nvarTotal_;
   amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
   for (int n = 0; n < nvars; ++n) {
     boundaryConditions[0].setLo(0, amrex::BCType::int_dir); // periodic
@@ -200,23 +219,16 @@ auto problem_main() -> int {
   }
 
   // Problem initialization
-  RadhydroSimulation<ContactProblem> sim(boundaryConditions);
+  RadhydroSimulation<ScalarProblem> sim(boundaryConditions);
   sim.is_hydro_enabled_ = true;
   sim.is_radiation_enabled_ = false;
-  sim.stopTime_ = 2.0;
-  sim.cflNumber_ = 0.8;
-  sim.maxTimesteps_ = 2000;
   sim.computeReferenceSolution_ = true;
-  sim.plotfileInterval_ = -1;
 
   // initialize and evolve
   sim.setInitialConditions();
   sim.evolve();
 
-  // For a stationary isolated contact wave using the HLLC solver,
-  // the error should be *exactly* (i.e., to *every* digit) zero.
-  // [See Section 10.7 and Figure 10.20 of Toro (1998).]
-  const double error_tol = 0.0; // this is not a typo
+  const double error_tol = 0.008;
   int status = 0;
   if (sim.errorNorm_ > error_tol) {
     status = 1;

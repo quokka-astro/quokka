@@ -53,22 +53,26 @@ template <typename problem_t> struct RadSystem_Traits {
 template <typename problem_t>
 class RadSystem : public HyperbolicSystem<problem_t> {
 public:
-  enum consVarIndex {
+  static constexpr int nstartHyperbolic_ = HydroSystem<problem_t>::nvar_;
+
+  enum gasVarIndex {
     gasDensity_index = 0,
     x1GasMomentum_index = 1,
     x2GasMomentum_index = 2,
     x3GasMomentum_index = 3,
     gasEnergy_index = 4,
-    gasInternalEnergy_index = 5,
-    radEnergy_index = 6,
-    x1RadFlux_index = 7,
-    x2RadFlux_index = 8,
-    x3RadFlux_index = 9
+    gasInternalEnergy_index = 5
   };
 
-  static constexpr int nvar_ = 10;
-  static constexpr int nvarHyperbolic_ = 4;
-  static constexpr int nstartHyperbolic_ = radEnergy_index;
+  enum radVarIndex {
+    radEnergy_index = nstartHyperbolic_,
+    x1RadFlux_index,
+    x2RadFlux_index,
+    x3RadFlux_index
+  };
+
+  static constexpr int nvarHyperbolic_ = 4; // number of radiation variables
+  static constexpr int nvar_ = nstartHyperbolic_ + nvarHyperbolic_;
 
   enum primVarIndex {
     primRadEnergy_index = 0,
@@ -349,7 +353,7 @@ void RadSystem<problem_t>::AddFluxesRK2(
 #endif
       // save results in cons_new
       cons_new[n] = (0.5 * U_0 + 0.5 * U_1) +
-                       (AMREX_D_TERM(0.5 * FxU_1, +0.5 * FyU_1, +0.5 * FzU_1));
+                    (AMREX_D_TERM(0.5 * FxU_1, +0.5 * FyU_1, +0.5 * FzU_1));
     }
 
     if (!isStateValid(cons_new)) {
@@ -368,9 +372,8 @@ void RadSystem<problem_t>::AddFluxesRK2(
                                           x3FluxDiffusive(i, j, k + 1, n));
 #endif
         // save results in cons_new
-        cons_new[n] =
-            (0.5 * U_0 + 0.5 * U_1) +
-            (AMREX_D_TERM(0.5 * FxU_1, +0.5 * FyU_1, +0.5 * FzU_1));
+        cons_new[n] = (0.5 * U_0 + 0.5 * U_1) +
+                      (AMREX_D_TERM(0.5 * FxU_1, +0.5 * FyU_1, +0.5 * FzU_1));
       }
     }
 
@@ -381,8 +384,8 @@ void RadSystem<problem_t>::AddFluxesRK2(
 }
 
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeEddingtonFactor(double f_in)
-    -> double {
+AMREX_GPU_HOST_DEVICE auto
+RadSystem<problem_t>::ComputeEddingtonFactor(double f_in) -> double {
   // f is the reduced flux == |F|/cE.
   // compute Levermore (1984) closure [Eq. 25]
   // the is the M1 closure that is derived from Lorentz invariance
@@ -436,9 +439,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeCellOpticalDepth(
 
   if constexpr (gamma_ != 1.0) {
     Eint_L = RadSystem<problem_t>::ComputeEintFromEgas(
-      rho_L, x1GasMom_L, x2GasMom_L, x3GasMom_L, Egas_L);
+        rho_L, x1GasMom_L, x2GasMom_L, x3GasMom_L, Egas_L);
     Eint_R = RadSystem<problem_t>::ComputeEintFromEgas(
-      rho_R, x1GasMom_R, x2GasMom_R, x3GasMom_R, Egas_R);
+        rho_R, x1GasMom_R, x2GasMom_R, x3GasMom_R, Egas_R);
     Tgas_L = RadSystem<problem_t>::ComputeTgasFromEgas(rho_L, Eint_L);
     Tgas_R = RadSystem<problem_t>::ComputeTgasFromEgas(rho_R, Eint_R);
   }
@@ -858,7 +861,8 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
 
     // load radiation energy source term
     // plus advection source term (for well-balanced/SDC integrators)
-    const double Src = dt * ((chat * radEnergySource(i, j, k)) + advectionFluxes(i, j, k));
+    const double Src =
+        dt * ((chat * radEnergySource(i, j, k)) + advectionFluxes(i, j, k));
 
     double Egas0 = NAN;
     double Ekin0 = NAN;
@@ -871,13 +875,13 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
           ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0);
       Ekin0 = Egastot0 - Egas0;
 
-    AMREX_ASSERT(Src >= 0.0);
-    AMREX_ASSERT(Egas0 > 0.0);
-    AMREX_ASSERT(Erad0 > 0.0);
+      AMREX_ASSERT(Src >= 0.0);
+      AMREX_ASSERT(Egas0 > 0.0);
+      AMREX_ASSERT(Erad0 > 0.0);
 
-    const double Etot0 = Egas0 + (c / chat) * (Erad0 + Src);
+      const double Etot0 = Egas0 + (c / chat) * (Erad0 + Src);
 
-    // BEGIN NEWTON-RAPHSON LOOP
+      // BEGIN NEWTON-RAPHSON LOOP
       Egas_guess = Egas0;
       Erad_guess = Erad0;
 
@@ -1037,11 +1041,12 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar,
       // 4b. Store new radiation energy, gas energy
       consNew(i, j, k, radEnergy_index) = Erad_guess + dErad_work;
       consNew(i, j, k, gasEnergy_index) = Egastot1;
-      consNew(i, j, k, gasInternalEnergy_index) += dEint; // must compute difference
+      consNew(i, j, k, gasInternalEnergy_index) +=
+          dEint; // must compute difference
     } else {
       amrex::ignore_unused(Erad_guess);
       amrex::ignore_unused(Egas_guess);
-    }  // endif gamma != 1.0
+    } // endif gamma != 1.0
   });
 }
 

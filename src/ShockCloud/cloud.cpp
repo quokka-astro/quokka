@@ -39,10 +39,11 @@ struct ShockCloud {
 constexpr double m_H = hydrogen_mass_cgs_;
 constexpr double seconds_in_year = 3.154e7;
 
-template <> struct EOS_Traits<ShockCloud> {
+template <> struct HydroSystem_Traits<ShockCloud> {
   static constexpr double gamma = 5. / 3.; // default value
   // if true, reconstruct e_int instead of pressure
   static constexpr bool reconstruct_eint = true;
+  static constexpr int nscalars = 0;       // number of passive scalars
 };
 
 constexpr Real Tgas0 = 1.0e7;            // K

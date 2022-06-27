@@ -21,9 +21,10 @@
 struct RichtmeyerMeshkovProblem {
 };
 
-template <> struct EOS_Traits<RichtmeyerMeshkovProblem> {
+template <> struct HydroSystem_Traits<RichtmeyerMeshkovProblem> {
 	static constexpr double gamma = 1.4;
 	static constexpr bool reconstruct_eint = false;
+	static constexpr int nscalars = 0;       // number of passive scalars
 };
 
 //#define DEBUG_SYMMETRY

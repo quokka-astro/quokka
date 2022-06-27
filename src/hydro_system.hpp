@@ -27,9 +27,10 @@
 
 // this struct is specialized by the user application code
 //
-template <typename problem_t> struct EOS_Traits {
+template <typename problem_t> struct HydroSystem_Traits {
   static constexpr double gamma = 5. / 3.;     // default value
   static constexpr double cs_isothermal = NAN; // only used when gamma = 1
+  static constexpr int nscalars = 0;           // number of passive scalars
   // if true, reconstruct e_int instead of pressure
   static constexpr bool reconstruct_eint = true;
 };
@@ -45,7 +46,8 @@ public:
     x2Momentum_index = 2,
     x3Momentum_index = 3,
     energy_index = 4,
-    internalEnergy_index = 5 // auxiliary internal energy (rho * e)
+    internalEnergy_index = 5, // auxiliary internal energy (rho * e)
+    scalar0_index = 6 // first passive scalar (only present if nscalars > 0!)
   };
   enum primVarIndex {
     primDensity_index = 0,
@@ -53,10 +55,13 @@ public:
     x2Velocity_index = 2,
     x3Velocity_index = 3,
     pressure_index = 4,
-    primEint_index = 5 // auxiliary internal energy (rho * e)
+    primEint_index = 5, // auxiliary internal energy (rho * e)
+    primScalar0_index =
+        6 // first passive scalar (only present if nscalars > 0!)
   };
 
-  static constexpr int nvar_ = 6;
+  static constexpr int nscalars_ = HydroSystem_Traits<problem_t>::nscalars;
+  static constexpr int nvar_ = 6 + nscalars_;
 
   static void ConservedToPrimitive(amrex::Array4<const amrex::Real> const &cons,
                                    array_t &primVar,
@@ -132,10 +137,10 @@ public:
 
   // C++ does not allow constexpr to be uninitialized, even in a templated
   // class!
-  static constexpr double gamma_ = EOS_Traits<problem_t>::gamma;
-  static constexpr double cs_iso_ = EOS_Traits<problem_t>::cs_isothermal;
+  static constexpr double gamma_ = HydroSystem_Traits<problem_t>::gamma;
+  static constexpr double cs_iso_ = HydroSystem_Traits<problem_t>::cs_isothermal;
   static constexpr bool reconstruct_eint =
-      EOS_Traits<problem_t>::reconstruct_eint;
+      HydroSystem_Traits<problem_t>::reconstruct_eint;
 
   static constexpr auto is_eos_isothermal() -> bool { return (gamma_ == 1.0); }
 };
@@ -187,6 +192,12 @@ void HydroSystem<problem_t>::ConservedToPrimitive(
     }
     // save auxiliary internal energy (rho * e)
     primVar(i, j, k, primEint_index) = Eint_aux;
+
+    // copy any passive scalars
+    for (int nc = 0; nc < nscalars_; ++nc) {
+      primVar(i, j, k, primScalar0_index + nc) =
+          cons(i, j, k, scalar0_index + nc);
+    }
   });
 }
 
@@ -852,14 +863,14 @@ void HydroSystem<problem_t>::ComputeFluxes(
 
     constexpr int fluxdim = nvar_; // including passive scalar components
 
-    // initialize all components to zero
-    quokka::valarray<double, fluxdim> D_L(0.);
-    quokka::valarray<double, fluxdim> D_R(0.);
-    quokka::valarray<double, fluxdim> D_star(0.);
+    quokka::valarray<double, fluxdim> D_L{};
+    quokka::valarray<double, fluxdim> D_R{};
+    quokka::valarray<double, fluxdim> D_star{};
 
     // N.B.: quokka::valarray is written to allow assigning <= fluxdim
     // components, so this works even if there are more components than
-    // enumerated in the initializer list
+    // enumerated in the initializer list. The remaining components are
+    // assigned a default value of zero.
     if constexpr (DIR == FluxDir::X1) {
       D_L = {0., 1., 0., 0., u_L, 0.};
       D_R = {0., 1., 0., 0., u_R, 0.};
@@ -884,7 +895,8 @@ void HydroSystem<problem_t>::ComputeFluxes(
 
     // N.B.: quokka::valarray is written to allow assigning <= fluxdim
     // components, so this works even if there are more components than
-    // enumerated in the initializer list
+    // enumerated in the initializer list. The remaining components are
+    // assigned a default value of zero.
     quokka::valarray<double, fluxdim> U_L = state_L;
     quokka::valarray<double, fluxdim> U_R = state_R;
 

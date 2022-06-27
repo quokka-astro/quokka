@@ -109,21 +109,17 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	    : AMRSimulation<problem_t>(boundaryConditions,
 				       RadSystem<problem_t>::nvar_, ncompHyperbolic_)
 	{
-		componentNames_ = {"gasDensity",    "x-GasMomentum", "y-GasMomentum",
-				   "z-GasMomentum", "gasEnergy",     "gasInternalEnergy",	"radEnergy",
-				   "x-RadFlux",	    "y-RadFlux",     "z-RadFlux"};
+		std::vector<std::string> hydroNames = {"gasDensity", "x-GasMomentum", "y-GasMomentum",
+				   							   "z-GasMomentum", "gasEnergy", "gasInternalEnergy"};
+		std::vector<std::string> radNames = {"radEnergy", "x-RadFlux", "y-RadFlux", "z-RadFlux"};
+		std::vector<std::string> scalarNames = getScalarVariableNames();
+
+		componentNames_.insert(componentNames_.end(), hydroNames.begin(), hydroNames.end());
+		componentNames_.insert(componentNames_.end(), scalarNames.begin(), scalarNames.end());
+		componentNames_.insert(componentNames_.end(), radNames.begin(), radNames.end());
 	}
 
-	RadhydroSimulation(amrex::IntVect & /*gridDims*/, amrex::RealBox & /*boxSize*/,
-			   amrex::Vector<amrex::BCRec> &boundaryConditions)
-	    : AMRSimulation<problem_t>(boundaryConditions,
-				       RadSystem<problem_t>::nvar_, ncompHyperbolic_)
-	{
-		componentNames_ = {"gasDensity",    "x-GasMomentum", "y-GasMomentum",
-				   "z-GasMomentum", "gasEnergy",     "gasInternalEnergy",	"radEnergy",
-				   "x-RadFlux",	    "y-RadFlux",     "z-RadFlux"};
-	}
-
+	[[nodiscard]] auto getScalarVariableNames() const -> std::vector<std::string>;
 	void checkHydroStates(amrex::MultiFab &mf, char const *file, int line);
 	void computeMaxSignalLocal(int level) override;
 	void setInitialConditionsAtLevel(int level) override;
@@ -214,6 +210,22 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 			  std::array<amrex::FArrayBox, AMREX_SPACEDIM> &FOfluxes,
 			  amrex::IArrayBox &redoFlag, amrex::Box const &validBox, int ncomp);
 };
+
+template <typename problem_t>
+auto RadhydroSimulation<problem_t>::getScalarVariableNames() const -> std::vector<std::string> {
+	// return vector of names for the passive scalars
+	// this can be specialized by the user to provide more descriptive names
+	// (these names are used to label the variables in the plotfiles)
+
+	std::vector<std::string> names;
+	int nscalars = HydroSystem<problem_t>::nscalars_;
+	names.reserve(nscalars);
+	for(int n = 0; n < nscalars; ++n) {
+		// write string 'scalar_1', etc.
+		names.push_back(fmt::format("scalar_{}", n));
+	}
+	return names;
+}
 
 template <typename problem_t>
 auto RadhydroSimulation<problem_t>::computeNumberOfRadiationSubsteps(int lev, amrex::Real dt_lev_hydro) -> int
