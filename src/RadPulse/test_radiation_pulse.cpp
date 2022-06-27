@@ -103,7 +103,6 @@ void RadhydroSimulation<PulseProblem>::setInitialConditionsAtLevel(int lev) {
       state(i, j, k, RadSystem<PulseProblem>::x1GasMomentum_index) = 0.;
       state(i, j, k, RadSystem<PulseProblem>::x2GasMomentum_index) = 0.;
       state(i, j, k, RadSystem<PulseProblem>::x3GasMomentum_index) = 0.;
-    	state(i, j, k, RadSystem<PulseProblem>::passiveScalar_index) = 0.;
     });
   }
 

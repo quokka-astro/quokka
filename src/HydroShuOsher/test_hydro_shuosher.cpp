@@ -128,7 +128,6 @@ AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(
       P / (gamma - 1.) + 0.5 * rho * (vx * vx);
   consVar(i, j, k, RadSystem<ShocktubeProblem>::gasInternalEnergy_index) =
       P / (gamma - 1.);
-  consVar(i, j, k, RadSystem<ShocktubeProblem>::passiveScalar_index) = 0;
   
   // must also set radiation variables to zero, otherwise we get NaN asserts
   consVar(i, j, k, RadSystem<ShocktubeProblem>::radEnergy_index) = 0;

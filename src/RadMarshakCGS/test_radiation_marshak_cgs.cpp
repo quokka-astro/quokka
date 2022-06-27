@@ -157,7 +157,6 @@ AMRSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(
 	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x1GasMomentum_index) = 0.;
 	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x2GasMomentum_index) = 0.;
 	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x3GasMomentum_index) = 0.;
-	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::passiveScalar_index) = 0.;
 }
 
 template <> void RadhydroSimulation<SuOlsonProblemCgs>::setInitialConditionsAtLevel(int lev)
@@ -181,7 +180,6 @@ template <> void RadhydroSimulation<SuOlsonProblemCgs>::setInitialConditionsAtLe
 			state(i, j, k, RadSystem<SuOlsonProblemCgs>::x2GasMomentum_index) = 0.;
 			state(i, j, k, RadSystem<SuOlsonProblemCgs>::x3GasMomentum_index) = 0.;
 			state(i, j, k, RadSystem<SuOlsonProblemCgs>::gasEnergy_index) = Egas;
-			state(i, j, k, RadSystem<SuOlsonProblemCgs>::passiveScalar_index) = 0;
 		});
 	}
 

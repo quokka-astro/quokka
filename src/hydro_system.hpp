@@ -157,7 +157,6 @@ void HydroSystem<problem_t>::ConservedToPrimitive(
     const auto E =
         cons(i, j, k, energy_index); // *total* gas energy per unit volume
     const auto Eint_aux = cons(i, j, k, internalEnergy_index);
-    const auto scalar = cons(i, j, k, scalar_index);
 
     AMREX_ASSERT(!std::isnan(rho));
     AMREX_ASSERT(!std::isnan(px));
