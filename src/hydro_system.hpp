@@ -164,7 +164,6 @@ void HydroSystem<problem_t>::ConservedToPrimitive(
     AMREX_ASSERT(!std::isnan(pz));
     AMREX_ASSERT(!std::isnan(E));
     AMREX_ASSERT(!std::isnan(Eint_aux));
-    AMREX_ASSERT(!std::isnan(scalar));
 
     const auto vx = px / rho;
     const auto vy = py / rho;

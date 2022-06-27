@@ -170,7 +170,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto abs(quokka::valarray<T, d> const &
 template <typename T, int d>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto min(quokka::valarray<T, d> const &v) -> T
 {
-	static_assert(v.size() >= 1);
+	static_assert(d >= 1);
 	T min_val = v[0]; // v must have at least 1 element
 	
 	for (size_t i = 0; i < v.size(); ++i) {
