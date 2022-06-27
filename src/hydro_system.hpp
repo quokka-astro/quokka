@@ -857,25 +857,25 @@ void HydroSystem<problem_t>::ComputeFluxes(
     constexpr int fluxdim = nvar_; // including passive scalar components
 
     // initialize all components to zero
-    quokka::valarray<double, fluxdim> D_L(0.);
-    quokka::valarray<double, fluxdim> D_R(0.);
-    quokka::valarray<double, fluxdim> D_star(0.);
+    quokka::valarray<double, fluxdim> D_L{};
+    quokka::valarray<double, fluxdim> D_R{};
+    quokka::valarray<double, fluxdim> D_star{};
 
     // N.B.: quokka::valarray is written to allow assigning <= fluxdim
     // components, so this works even if there are more components than
     // enumerated in the initializer list
     if constexpr (DIR == FluxDir::X1) {
-      D_L = {0., 1., 0., 0., u_L, 0., 0.};
-      D_R = {0., 1., 0., 0., u_R, 0., 0.};
-      D_star = {0., 1., 0., 0., S_star, 0., 0.};
+      D_L = {0., 1., 0., 0., u_L, 0.};
+      D_R = {0., 1., 0., 0., u_R, 0.};
+      D_star = {0., 1., 0., 0., S_star, 0.};
     } else if constexpr (DIR == FluxDir::X2) {
-      D_L = {0., 0., 1., 0., u_L, 0., 0.};
-      D_R = {0., 0., 1., 0., u_R, 0., 0.};
-      D_star = {0., 0., 1., 0., S_star, 0., 0.};
+      D_L = {0., 0., 1., 0., u_L, 0.};
+      D_R = {0., 0., 1., 0., u_R, 0.};
+      D_star = {0., 0., 1., 0., S_star, 0.};
     } else if constexpr (DIR == FluxDir::X3) {
-      D_L = {0., 0., 0., 1., u_L, 0., 0.};
-      D_R = {0., 0., 0., 1., u_R, 0., 0.};
-      D_star = {0., 0., 0., 1., S_star, 0., 0.};
+      D_L = {0., 0., 0., 1., u_L, 0.};
+      D_R = {0., 0., 0., 1., u_R, 0.};
+      D_star = {0., 0., 0., 1., S_star, 0.};
     }
 
     const std::initializer_list<double> state_L = {

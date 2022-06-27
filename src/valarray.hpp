@@ -24,23 +24,25 @@ template <typename T, int d> class valarray
       public:
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE valarray() = default;
 
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE explicit valarray(T val) {
-		// initialize all components with input value 'val'
-		for(size_t i = 0; i < d; ++i) {
-			values[i] = val;
-		}
-	}
-
 	// we *want* implicit construction from initializer lists for valarrays,
 	// (although not cppcore-compliant)
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE valarray(std::initializer_list<T> list) // NOLINT
 	{
 		const int max_count = std::min(list.size(), static_cast<size_t>(d));
+		
 		T const *input =
 		    std::data(list); // requires nvcc to be in C++17 mode! (if it fails, the
 				     // compiler flags are wrong, probably due to a CMake issue.)
+		
 		for (size_t i = 0; i < max_count; ++i) {
 			values[i] = input[i]; // NOLINT
+		}
+
+		// it is undefined behavior to not fully initialize an object!
+		// (this does happen in practice with gcc 10+, which optimizes out ctor
+		//  calls if an object is unused before a subsequent assignment.)
+		for (size_t i = max_count; i < d; ++i) {
+			values[i] = default_value;
 		}
 	}
 
@@ -62,6 +64,7 @@ template <typename T, int d> class valarray
 
       private:
 	T values[d]; // NOLINT
+	static constexpr T default_value = 0;
 };
 } // namespace quokka
 
