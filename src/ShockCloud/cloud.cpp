@@ -53,7 +53,7 @@ template <> struct HydroSystem_Traits<ShockCloud> {
   static constexpr double gamma = 5. / 3.; // default value
   // if true, reconstruct e_int instead of pressure
   static constexpr bool reconstruct_eint = true;
-  static constexpr int nscalars = 0;       // number of passive scalars
+  static constexpr int nscalars = 1; // number of passive scalars
 };
 
 template <> struct RadSystem_Traits<ShockCloud> {
@@ -134,7 +134,7 @@ void RadhydroSimulation<ShockCloud>::setInitialConditionsAtLevel(int lev) {
       state(i, j, k, RadSystem<ShockCloud>::x3GasMomentum_index) = zmom;
       state(i, j, k, RadSystem<ShockCloud>::gasEnergy_index) = Egas;
       state(i, j, k, RadSystem<ShockCloud>::gasInternalEnergy_index) = Eint;
-      state(i, j, k, RadSystem<ShockCloud>::passiveScalar_index) = C;
+      state(i, j, k, RadSystem<ShockCloud>::scalar0_index) = C;
 
       state(i, j, k, RadSystem<ShockCloud>::radEnergy_index) = Erad0;
       state(i, j, k, RadSystem<ShockCloud>::x1RadFlux_index) = 0;
@@ -181,7 +181,7 @@ AMRSimulation<ShockCloud>::setCustomBoundaryConditions(
     consVar(i, j, k, RadSystem<ShockCloud>::x3GasMomentum_index) = zmom;
     consVar(i, j, k, RadSystem<ShockCloud>::gasEnergy_index) = Egas;
     consVar(i, j, k, RadSystem<ShockCloud>::gasInternalEnergy_index) = Eint;
-    consVar(i, j, k, RadSystem<ShockCloud>::passiveScalar_index) = 0;
+    consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index) = 0;
 
     // radiation boundary condition -- streaming
     constexpr double c = c_light_cgs_;
@@ -340,14 +340,14 @@ void RadhydroSimulation<ShockCloud>::computeAfterTimestep(
   amrex::MultiFab::Copy(temp_mf, state_new_[0],
                         HydroSystem<ShockCloud>::x1Momentum_index, 0, nc, ng);
   amrex::MultiFab::Multiply(temp_mf, state_new_[0],
-                            HydroSystem<ShockCloud>::scalar_index, 0, nc, ng);
+                            HydroSystem<ShockCloud>::scalar0_index, 0, nc, ng);
   const Real xmom = temp_mf.sum(0);
 
   // compute cloud mass within simulation box
   amrex::MultiFab::Copy(temp_mf, state_new_[0],
                         HydroSystem<ShockCloud>::density_index, 0, nc, ng);
   amrex::MultiFab::Multiply(temp_mf, state_new_[0],
-                            HydroSystem<ShockCloud>::scalar_index, 0, nc, ng);
+                            HydroSystem<ShockCloud>::scalar0_index, 0, nc, ng);
   const Real cloud_mass = temp_mf.sum(0);
 
   // compute center-of-mass velocity of the cloud
@@ -508,7 +508,7 @@ void RadhydroSimulation<ShockCloud>::ErrorEst(int lev, amrex::TagBoxArray &tags,
 
       Real const eta =
           std::sqrt(del_x * del_x + del_y * del_y + del_z * del_z) / q;
-      Real const C = state(i, j, k, HydroSystem<ShockCloud>::scalar_index);
+      Real const C = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index);
 
       if ((eta > eta_threshold) && (C > C_min)) {
         tag(i, j, k) = amrex::TagBox::SET;
@@ -534,8 +534,8 @@ RadSystem<ShockCloud>::ComputeRosselandOpacity(const double /*rho*/,
 
 template <>
 void RadSystem<ShockCloud>::AddSourceTerms(array_t &consVar,
-                                           arrayconst_t &radEnergySource,
-                                           arrayconst_t &advectionFluxes,
+                                           arrayconst_t & /*radEnergySource*/,
+                                           arrayconst_t & /*advectionFluxes*/,
                                            amrex::Box const &indexRange,
                                            amrex::Real dt) {
   arrayconst_t &consPrev = consVar; // make read-only

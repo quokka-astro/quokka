@@ -61,7 +61,8 @@ public:
     x2GasMomentum_index = 2,
     x3GasMomentum_index = 3,
     gasEnergy_index = 4,
-    gasInternalEnergy_index = 5
+    gasInternalEnergy_index = 5,
+    scalar0_index = 6
   };
 
   enum radVarIndex {
