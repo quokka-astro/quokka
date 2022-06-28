@@ -541,7 +541,39 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
               dt_lev, geom[lev].CellSizeArray(), computeRange, ncompHydro_,
             redoFlag.array());
 
-          // redoflag stuff here...
+#if 0
+          // first-order flux correction (FOFC)
+          if (redoFlag.max<amrex::RunOn::Device>() != quokka::redoFlag::none) {
+            // compute first-order fluxes (on the whole FAB)
+            auto FOFluxArrays = computeFOHydroFluxes(stateOld, computeRange, ncompHydro_);
+
+            for(int i = 0; i < fofcMaxIterations_; ++i) {
+              if (Verbose()) {
+                std::cout << "[FOFC-1] iter = "
+                      << i
+                      << ", ncells = "
+                      << redoFlag.sum<amrex::RunOn::Device>(0)
+                      << "\n";
+              }
+
+              // replace fluxes in fluxArrays with first-order fluxes at faces of flagged cells
+              replaceFluxes(fluxArrays, FOFluxArrays, redoFlag, computeRange, ncompHydro_);
+
+              // re-do RK stage update for *all* cells
+              // (since neighbors of problem cells will have modified states as well)
+              HydroSystem<problem_t>::PredictStep(
+                stateOld, stateNew,
+                {AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
+                  fluxArrays[2].const_array())},
+                dt_lev, geom[lev].CellSizeArray(), computeRange, ncompHydro_,
+                redoFlag.array());
+
+              if(redoFlag.max<amrex::RunOn::Device>() == quokka::redoFlag::none) {
+                break;
+              }
+            }
+          }
+#endif
 
           // prevent vacuum
           HydroSystem<problem_t>::EnforcePressureFloor(densityFloor_, pressureFloor_, computeRange, stateNew);
