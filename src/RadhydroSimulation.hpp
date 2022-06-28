@@ -50,6 +50,8 @@
 #include "simulation.hpp"
 
 #include <omp.h>
+#include <chrono>
+#include <AMReX_ParallelDescriptor.H>
 
 // Simulation class should be initialized only once per program (i.e., is a singleton)
 template <typename problem_t> class RadhydroSimulation : public AMRSimulation<problem_t>
@@ -472,6 +474,8 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 		fluxScaleFactor = 1.0;
 	}
 
+  std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+
   amrex::MFIter::allowMultipleMFIters(true);
 
   #pragma omp parallel sections
@@ -663,6 +667,10 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
   }
 
   amrex::MFIter::allowMultipleMFIters(false);
+
+  std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+
+  std::cout << amrex::ParallelDescriptor::MyProc() << " | Time difference = " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << "[ms]" << std::endl;
 
 // =======================================================================================================
 
