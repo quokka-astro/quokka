@@ -3,6 +3,9 @@ compile_commands.json
 .vscode/
 codeql-db/
 build/
+MetalProblem/
+NewMetal/
+Dummy/
 docs/doxygen/
 tests/plt*
 tests/chk*

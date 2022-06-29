@@ -297,6 +297,7 @@ void RadhydroSimulation<problem_t>::computeAfterLevelAdvance(int lev, amrex::Rea
 								 amrex::Real dt_lev, int iteration, int ncycle)
 {
 	// user should implement if desired
+
 }
 
 template <typename problem_t>
@@ -553,6 +554,8 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 			auto const &stateOld = state_old_[lev].const_array(iter);
 			auto const &stateInter = state_new_[lev].const_array(iter);
 			auto fluxArrays = computeHydroFluxes(stateInter, indexRange, ncompHydro_);
+			auto const &prob_lo = geom[lev].ProbLoArray();
+			
 
 			amrex::FArrayBox stateFinalFAB = amrex::FArrayBox(indexRange, ncompHydro_,
 															amrex::The_Async_Arena());
@@ -593,11 +596,20 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 						dt_lev, geom[lev].CellSizeArray(), indexRange, ncompHydro_,
 						redoFlag.array());
 
+					// HydroSystem<problem_t>::AddFixedPotentialSource(
+					// 	stateFinal, stateOld, stateInter,
+					// 	dt_lev, geom[lev].CellSizeArray(), indexRange, ncompHydro_,
+					// 	prob_lo);
 					if(redoFlag.max<amrex::RunOn::Device>() == quokka::redoFlag::none) {
 						break;
 					}
 				}
 			}
+
+			HydroSystem<problem_t>::AddFixedPotentialSource(
+						stateFinal, stateOld, stateInter,
+						dt_lev, geom[lev].CellSizeArray(), indexRange, ncompHydro_,
+						prob_lo);
 
 			// prevent vacuum
 			HydroSystem<problem_t>::EnforcePressureFloor(densityFloor_, pressureFloor_, indexRange, stateFinal);

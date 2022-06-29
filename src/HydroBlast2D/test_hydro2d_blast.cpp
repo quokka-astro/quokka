@@ -22,12 +22,27 @@
 #include "hydro_system.hpp"
 #include "test_hydro2d_blast.hpp"
 
+#include <time.h>
+#include <iostream>
+
+#define  CONST_mH                (1.67e-24)
+#define  Msun                    (2.e33)
+#define  Myr                     (3.154e13)
+
+
 struct BlastProblem {
 };
 
 template <> struct EOS_Traits<BlastProblem> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr bool reconstruct_eint = false;
+	
+	// static constexpr double UNIT_DENSITY = 1.0*CONST_mH;
+	// static constexpr double UNIT_LENGTH  = (1.0e3*CONST_pc);
+	// static constexpr double UNIT_VELOCITY = 1.0e7;
+	// static constexpr double UNIT_VOL      = std::pow(UNIT_LENGTH,3.0);
+	// static constexpr double UNIT_MASS     = (UNIT_DENSITY*UNIT_VOL);
+    // static constexpr double 
 };
 
 template <> void RadhydroSimulation<BlastProblem>::setInitialConditionsAtLevel(int lev)
@@ -36,9 +51,11 @@ template <> void RadhydroSimulation<BlastProblem>::setInitialConditionsAtLevel(i
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = geom[lev].ProbHiArray();
 
-	amrex::Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
-	amrex::Real const y0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
+	//amrex::Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
+	//amrex::Real const y0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
 
+	// amrex::Real const scale_height = 1.;
+	// amrex::Real const rho0 = 1.0;
 	for (amrex::MFIter iter(state_old_[lev]); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
 		auto const &state = state_new_[lev].array(iter);
@@ -46,19 +63,14 @@ template <> void RadhydroSimulation<BlastProblem>::setInitialConditionsAtLevel(i
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 			amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
 			amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
-			amrex::Real const R = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2));
+			// amrex::Real const R = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2));
 
 			double vx = 0.;
 			double vy = 0.;
 			double vz = 0.;
-			double rho = 1.0;
-			double P = NAN;
-
-			if (R < 0.1) { // inside circle
-				P = 10.;
-			} else {
-				P = 0.1;
-			}
+			double R = std::sqrt(x*x + y*y);
+			double rho = 2. * CONST_mH;         //in g/cc
+			double P   = rho * boltzmann_constant_cgs_ * 1.e6/CONST_mH;  //(rho kB * T ;
 
 			AMREX_ASSERT(!std::isnan(vx));
 			AMREX_ASSERT(!std::isnan(vy));
@@ -74,7 +86,7 @@ template <> void RadhydroSimulation<BlastProblem>::setInitialConditionsAtLevel(i
 			state(i, j, k, HydroSystem<BlastProblem>::x2Momentum_index) = rho * vy;
 			state(i, j, k, HydroSystem<BlastProblem>::x3Momentum_index) = rho * vz;
 			state(i, j, k, HydroSystem<BlastProblem>::energy_index) =
-			    P / (gamma - 1.) + 0.5 * rho * v_sq;
+			    P / (gamma - 1.) ;
 
 			// initialize radiation variables to zero
 			state(i, j, k, RadSystem<BlastProblem>::radEnergy_index) = 0;
@@ -129,6 +141,61 @@ void RadhydroSimulation<BlastProblem>::ErrorEst(int lev, amrex::TagBoxArray &tag
 	}
 }
 
+/**Adding Supernova Source Terms*/
+
+void AddSupernova(amrex::MultiFab &mf, const Real dt_in, int snidx_i, int snidx_j,  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx){
+  BL_PROFILE("RadhydroSimulation::AddSupernova()")
+  
+  const Real dt = dt_in;
+  // loop over all cells in MultiFab mf
+  //int snidx_i = 127;
+  //int snidx_j = 127;
+  //double Rin = 0.05;
+  double Mass_source = 8.* Msun;
+  double Energy_source = 1.e51;
+
+  for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
+    const amrex::Box &indexRange = iter.validbox();
+    auto const &state = mf.array(iter);
+
+    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j,
+                                                        int k) noexcept {
+
+	 // amrex::Real prob = amrex::Random();
+	  amrex::Real const vol =  AMREX_D_TERM(dx[0], *dx[1], *dx[2]) * 4.e-3;
+	  amrex::Real rho_cell  = state(i, j, k, HydroSystem<BlastProblem>::density_index);
+	  amrex::Real n_sn      = (rho_cell* vol)/(100.* Msun);	
+      if((i==snidx_i) && (j==snidx_j)) {
+         state(i, j, k, HydroSystem<BlastProblem>::density_index)+= n_sn * Mass_source/vol;
+         state(i, j, k, HydroSystem<BlastProblem>::energy_index) += n_sn * Energy_source/vol;
+      }
+    });
+  }
+}
+
+
+template <>
+void RadhydroSimulation<BlastProblem>::computeAfterLevelAdvance(int lev, amrex::Real time,
+								 amrex::Real dt_lev, int iteration, int ncycle)
+{
+     
+amrex::Real prob= amrex::Random();
+amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
+amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = geom[lev].ProbHiArray();
+amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx = geom[0].CellSizeArray();
+
+amrex::Real locx = amrex::Random() * (prob_hi[0] - prob_lo[0]);
+amrex::Real locy = amrex::Random() * (prob_hi[1] - prob_lo[1]);
+
+int indx_x = (locx-prob_lo[0])/dx[0];
+int indx_y = (locy-prob_lo[1])/dx[1];
+
+     if(prob>0.95){
+    // AddSupernova(state_new_[lev], dt_lev, indx_x, indx_y, dx);
+     }
+}
+
+
 auto problem_main() -> int
 {
 	// Problem parameters
@@ -176,10 +243,10 @@ auto problem_main() -> int
 	RadhydroSimulation<BlastProblem> sim(gridDims, boxSize, boundaryConditions);
 	sim.is_hydro_enabled_ = true;
 	sim.is_radiation_enabled_ = false;
-	sim.stopTime_ = 0.1; //1.5;
+	sim.stopTime_ = 1. * Myr; //1.5;
 	sim.cflNumber_ = 0.3;
-	sim.maxTimesteps_ = 20000;
-	sim.plotfileInterval_ = 2000;
+	sim.maxTimesteps_ = 10;
+	sim.plotfileInterval_ = 500;
 
 	// initialize
 	sim.setInitialConditions();

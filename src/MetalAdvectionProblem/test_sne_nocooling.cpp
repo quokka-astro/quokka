@@ -21,7 +21,7 @@
 #include "RadhydroSimulation.hpp"
 #include "hydro_system.hpp"
 #include "radiation_system.hpp"
-#include "test_hydro3d_blast.hpp"
+#include "test_sne.hpp"
 #include <limits>
 #include <math.h>
 #include <iostream>
@@ -34,15 +34,16 @@ constexpr double  yr_to_s  = 3.154e7;
 constexpr double  Myr      = 1.e6*yr_to_s;
 constexpr double  pc       = 3.018e18;
 constexpr double  Mu       = 0.6;
-constexpr double  tMAX     = 5.*Myr;
+constexpr double  tMAX     = 1.0*Myr;
 constexpr double  kmps     = 1.e5; 
+double *pointer = NULL;
 
 
 struct NewProblem {};
 
 // if false, use octant symmetry instead
 
-template <> struct EOS_Traits<SedovProblem> {
+template <> struct EOS_Traits<NewProblem> {
   static constexpr double gamma = 1.4;
   static constexpr bool reconstruct_eint = false;
 };
@@ -71,7 +72,7 @@ void RadhydroSimulation<NewProblem>::setInitialConditionsAtLevel(int lev) {
 			
       
 			//double R = std::sqrt(x*x + y*y);
-      double sigma1 = 7.  * kmps;
+      double sigma1 = 7. * kmps;
       double sigma2 = 70. * kmps;
       double rho01  = 2.85 * Const_mH;
       double rho02   = 1.e-5 * 2.85 * Const_mH;
@@ -256,7 +257,8 @@ double Phitot(double z){
 
 /**Adding Supernova Source Terms*/
 
-void AddSupernova(amrex::MultiFab &mf, const Real dt_in, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx){
+void AddSupernova(amrex::MultiFab &mf, const Real dt_in, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
+                   int index_i, int index_j, int index_k){
   BL_PROFILE("RadhydroSimulation::AddSupernova()")
   
   const Real dt = dt_in;
@@ -272,7 +274,6 @@ void AddSupernova(amrex::MultiFab &mf, const Real dt_in, amrex::GpuArray<amrex::
     amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j,
                                                         int k) noexcept {
 
-	 // amrex::Real prob = amrex::Random();
     double vol, rho_cell, n_sn, prob_sn, t_ff, mdot, eff=0.01;
 	  vol       =  AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 	  rho_cell  = state(i, j, k, HydroSystem<NewProblem>::density_index);
@@ -280,7 +281,7 @@ void AddSupernova(amrex::MultiFab &mf, const Real dt_in, amrex::GpuArray<amrex::
     t_ff      = std::sqrt(3.*(std::atan(1)*4.0)/(32.*Const_G*rho_cell));
     mdot      = (eff * rho_cell /t_ff) * vol;
     prob_sn   = mdot*dt/(100.*Msun);
-      if(prob>0.7) {
+      if((i==index_i) && (j==index_j) && (k==index_k)) {
          state(i, j, k, HydroSystem<NewProblem>::density_index)+= n_sn * Mass_source/vol;
          state(i, j, k, HydroSystem<NewProblem>::energy_index) += n_sn * Energy_source/vol;
       }
@@ -300,8 +301,15 @@ amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = geom[lev].ProbHiArray();
 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx = geom[0].CellSizeArray();
 
-if(prob>0.5){
-  AddSupernova(state_new_[lev], dt_lev, dx);
+int index_i = std::ceil(prob*(prob_hi[0]-prob_lo[0])/dx[0]);
+prob= amrex::Random();
+int index_j = std::ceil(prob*(prob_hi[1]-prob_lo[1])/dx[1]);
+prob= amrex::Random();
+int index_k = std::ceil(prob*(prob_hi[2]-prob_lo[2])/dx[2]);
+
+amrex::Real prob1= amrex::Random();
+if(prob1>0.5){
+  AddSupernova(state_new_[lev], dt_lev, dx, index_i, index_j, index_k);
 }
 }
 
@@ -324,7 +332,7 @@ auto problem_main() -> int {
   sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
   sim.stopTime_ = tMAX;          // seconds
   sim.cflNumber_ = 0.3;         // *must* be less than 1/3 in 3D!
-  sim.maxTimesteps_ = 20000;
+  sim.maxTimesteps_ = 5000;
   sim.plotfileInterval_ = 500;
 
   // initialize

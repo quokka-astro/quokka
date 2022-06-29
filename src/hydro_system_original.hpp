@@ -92,19 +92,6 @@ public:
                            amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,
                            amrex::Box const &indexRange, int nvars,
                            amrex::Array4<int> const &redoFlag);
-  
-  AMREX_GPU_DEVICE static auto GetGradFixedPotential(amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> posvec)
-                                  -> amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>;
-
-  AMREX_GPU_DEVICE static auto CalculateFixedPotentialSource(int i, int j, int k, 
-                          int n, arrayconst_t &U, 
-                          amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> GradPhi) -> amrex::Real;
-
-  static void AddFixedPotentialSource(array_t &U_new, arrayconst_t &U0, arrayconst_t &U1,
-                         const double dt_in,
-                         amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,
-                         amrex::Box const &indexRange, const int nvars_in,
-                         amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo);
 
   template <FluxDir DIR>
   static void
@@ -332,8 +319,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::isStateValid(
   // check if cons(i, j, k) is a valid state
   const amrex::Real rho = cons(i, j, k, density_index);
   bool isDensityPositive = (rho > 0.);
-
-  #if 0
   bool isPressurePositive = false;
 
   if constexpr (!is_eos_isothermal()) {
@@ -342,9 +327,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::isStateValid(
   } else {
     isPressurePositive = true;
   }
-#endif
 
-  return (isDensityPositive);
+  return (isDensityPositive && isPressurePositive);
 }
 
 template <typename problem_t>
@@ -373,7 +357,7 @@ void HydroSystem<problem_t>::PredictStep(
 #if (AMREX_SPACEDIM == 3)
   auto const dz = dx_in[2];
   auto const x3Flux = fluxArray[2];
-#endif  
+#endif
 
   amrex::ParallelFor(
       indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
@@ -394,133 +378,6 @@ void HydroSystem<problem_t>::PredictStep(
         }
       });
 }
-
-/*********************************************************************************/
-/*********************************************************************************/
-/*Functions for Adding the Fixed Potential Source Term*/
-template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto
-HydroSystem<problem_t>::GetGradFixedPotential(amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> posvec)
-                                  -> amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> {
- 
-     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> grav_force;
-
-     double G, R0, rho_dm;
-     double pc = 3.108e18;
-     double Msun = 2.e33;
-     double z_star = 245.0 * pc;
-     double Sigma_star = 42.0 * Msun/pc/pc;
-     G = 6.87e-8;
-     rho_dm = 0.0064 * Msun/pc/pc/pc;
-     R0     = 8.e3 * pc;
-     double x = posvec[0];
-     
-     grav_force[0] =  0.0;
-
-    #if (AMREX_SPACEDIM >= 2)
-       double y = posvec[1];
-       grav_force[1] = 0.0;
-    #endif
-    #if (AMREX_SPACEDIM >= 3)
-       double z      = posvec[2];
-       grav_force[2]  = -2.* 3.1415 * G * rho_dm * std::pow(R0,2) * (2.* z/std::pow(R0,2))/(1. + std::pow(z,2)/std::pow(R0,2));
-       grav_force[2] += -2.* 3.1415 * G * Sigma_star * (z/z_star) * (std::pow(1. + z*z/(z_star*z_star), -0.5));
-    #endif
-
-return grav_force;
-}
-
-
-/********Calculating Source Terms********/
-template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto
-HydroSystem<problem_t>::CalculateFixedPotentialSource(int i, int j, int k, int n,   
-                                                     arrayconst_t &U, amrex::GpuArray<amrex::Real, 
-                                                     AMREX_SPACEDIM> GradPhi) -> amrex::Real {
-amrex::Real source = 0.0;
-const double rho  = U(i, j, k, 0); 
- switch (n)
- {
- case 0:
-      {
-      source = 0.0;
-      break;
-      }
- case 1:
-      {
-      source = rho*GradPhi[n-1];
-      break;
-      }
-case 2:
-      {
-      source = rho*GradPhi[n-1];
-      break;
-      }
-case 3:
-      source = rho*GradPhi[n-1];
-      break;
-case 4:{
-      double x1GasMom = U(i, j, k, 1);
-      #if (AMREX_SPACEDIM >= 2)
-          double x2GasMom = U(i, j, k, 2);
-      #endif
-      #if (AMREX_SPACEDIM >= 3)
-          double x3GasMom = U(i, j, k, 3);
-       #endif
-     source = AMREX_D_TERM( x1GasMom*GradPhi[0],
-                           +x2GasMom*GradPhi[1],
-                           +x3GasMom*GradPhi[2]);
-      break;
- }
- default:
-      break;
- }
- return source;
-}
-
-/********Adding Source Terms to the New State********/
-template <typename problem_t>
-void HydroSystem<problem_t>::AddFixedPotentialSource(
-    array_t &U_new, arrayconst_t &U0, arrayconst_t &U1,
-    const double dt_in,
-    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,
-    amrex::Box const &indexRange, const int nvars_in,
-    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo) {
-      BL_PROFILE("HydroSystem::AddFixedPotentialSource()");
-
-int const nvars = nvars_in; // workaround nvcc bug
-auto const dt = dt_in;
-
-amrex::ParallelFor(
-      indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-        //calculate grav potential here 
-
-        amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> posvec, GradPhi;
-
-          posvec[0] = prob_lo[0] + i*dx_in[0];
-
-        #if (AMREX_SPACEDIM >= 2)
-          posvec[1] = prob_lo[1] + j*dx_in[1]; 
-        #endif
-
-        #if (AMREX_SPACEDIM >= 3)
-          posvec[2] = prob_lo[2] + k*dx_in[2]; 
-        #endif
-
-        GradPhi = GetGradFixedPotential(posvec);     
-
-        for (int n = 0; n < nvars; ++n) {
-          U_new(i, j, k, n) +=
-              0.5 * dt*(CalculateFixedPotentialSource(i, j, k, n, U0, GradPhi) 
-                      + CalculateFixedPotentialSource(i, j, k, n, U1, GradPhi));
-        }    
-      }
-     );
-
-} 
-/*********************************************************************************/
-/*********************************************************************************/
-
 
 template <typename problem_t>
 void HydroSystem<problem_t>::AddFluxesRK2(
@@ -559,7 +416,6 @@ void HydroSystem<problem_t>::AddFluxesRK2(
 
           const double FxU_1 =
               (dt / dx) * (x1Flux(i, j, k, n) - x1Flux(i + 1, j, k, n));
-            
 #if (AMREX_SPACEDIM >= 2)
           const double FyU_1 =
               (dt / dy) * (x2Flux(i, j, k, n) - x2Flux(i, j + 1, k, n));
@@ -568,6 +424,7 @@ void HydroSystem<problem_t>::AddFluxesRK2(
           const double FzU_1 =
               (dt / dz) * (x3Flux(i, j, k, n) - x3Flux(i, j, k + 1, n));
 #endif
+
           // save results in U_new
           U_new(i, j, k, n) =
               (0.5 * U_0 + 0.5 * U_1) +

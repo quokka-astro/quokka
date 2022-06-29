@@ -203,6 +203,7 @@ protected:
   amrex::Vector<amrex::BCRec> boundaryConditions_; // on level 0
   amrex::Vector<amrex::MultiFab> state_old_;
   amrex::Vector<amrex::MultiFab> state_new_;
+  amrex::Vector<amrex::MultiFab> set_feedback_;
   amrex::Vector<amrex::MultiFab>
       max_signal_speed_; // needed to compute CFL timestep
 
@@ -276,6 +277,7 @@ void AMRSimulation<problem_t>::initialize(
   state_new_.resize(nlevs_max);
   state_old_.resize(nlevs_max);
   max_signal_speed_.resize(nlevs_max);
+  set_feedback_.resize(nlevs_max);
   flux_reg_.resize(nlevs_max + 1);
   cellUpdatesEachLevel_.resize(nlevs_max, 0);
 
@@ -374,6 +376,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters() {
   // Default nsteps = 1e4
   pp.query("max_timesteps", maxTimesteps_);
 
+  // Plot File
+  pp.query("plotfileInterval", plotfileInterval_);
+
   // Default CFL number == 0.3, set to whatever is in the file
   pp.query("cfl", cflNumber_);
 
@@ -395,6 +400,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters() {
 
   // re-grid interval
   pp.query("regrid_interval", regrid_int);
+
+  // read stop time
+  pp.query("stop_time", stopTime_);
+
+
 
   // specify maximum walltime in HH:MM:SS format
   std::string maxWalltimeInput;
@@ -741,6 +751,7 @@ void AMRSimulation<problem_t>::MakeNewLevelFromCoarse(
   state_new_[level].define(ba, dm, ncomp, nghost);
   state_old_[level].define(ba, dm, ncomp, nghost);
   max_signal_speed_[level].define(ba, dm, 1, nghost);
+  set_feedback_[level].define(ba, dm, 1, nghost);
 
   tNew_[level] = time;
   tOld_[level] = time - 1.e200;
@@ -814,6 +825,7 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(
   state_new_[level].define(ba, dm, ncomp, nghost);
   state_old_[level].define(ba, dm, ncomp, nghost);
   max_signal_speed_[level].define(ba, dm, 1, nghost);
+  set_feedback_[level].define(ba, dm, 1, nghost);
 
   tNew_[level] = time;
   tOld_[level] = time - 1.e200;
