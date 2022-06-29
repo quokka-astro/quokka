@@ -4,7 +4,9 @@ compile_commands.json
 codeql-db/
 build/
 MetalProblem/
+NewProblem/
 NewMetal/
+Trash/
 Dummy/
 docs/doxygen/
 tests/plt*
