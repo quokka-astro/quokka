@@ -672,7 +672,6 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 		{
 			#pragma omp section
 			{
-
 				// update ghost zones [intermediate stage stored in state_new_]
 				fillBoundaryConditions(state_new_[lev], state_new_[lev], lev, time + dt_lev);
 
@@ -680,10 +679,18 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 				AMREX_ASSERT(!state_new_[lev].contains_nan(0, state_new_[lev].nComp()));
 				AMREX_ASSERT(!state_new_[lev].contains_nan()); // check ghost zones
 
+			}
+
+			#pragma omp section
+			{
 				// advance all grids on local processor (Stage 2 of integrator)
 				for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
 
-					const amrex::Box &indexRange = iter.validbox(); // 'validbox' == exclude ghost zones
+					const amrex::Box &realZones = iter.validbox(); // 'validbox' == exclude ghost zones
+					amrex::Box indexRange = realZones;
+
+					indexRange.grow(-nghost_); // Only work on "interior" cells
+
 					auto const &stateOld = state_old_[lev].const_array(iter);
 					auto const &stateInter = state_new_[lev].const_array(iter);
 					auto fluxArrays = computeHydroFluxes(stateInter, indexRange, ncompHydro_);
