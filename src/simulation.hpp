@@ -130,6 +130,7 @@ public:
   amrex::Long cycleCount_ = 0;
   amrex::Long maxTimesteps_ = 1e4; // default
   amrex::Long maxWalltime_ = 0;    // default: no limit
+  int ascentInterval_ = -1;        // -1 == no in-situ renders with Ascent
   int plotfileInterval_ = -1;      // -1 == no output
   int checkpointInterval_ = -1;    // -1 == no output
   std::unordered_map<std::string, variant_t> simulationMetadata_;
@@ -226,14 +227,14 @@ public:
   [[nodiscard]] auto PlotFileMFAtLevel(int lev) const -> amrex::MultiFab;
   void WriteMetadataFile(std::string const &plotfilename) const;
   void ReadMetadataFile(std::string const &chkfilename);
-  void WritePlotFile(); // cannot be const due to Ascent
+  void WritePlotFile() const;
   void WriteCheckpointFile() const;
   void SetLastCheckpointSymlink(std::string const &checkpointname) const;
   void ReadCheckpointFile();
   auto getWalltime() -> amrex::Real;
 #ifdef AMREX_USE_ASCENT
-  void AscentCustomRender(conduit::Node const &blueprintMesh,
-                          std::string const &plotfilename);
+  void AscentCustomActions(conduit::Node const &blueprintMesh);
+  void RenderAscent();
 #endif
 protected:
   amrex::Vector<amrex::BCRec> boundaryConditions_; // on level 0
@@ -416,6 +417,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters() {
   // Default stopping time
   pp.query("stop_time", stopTime_);
 
+  // Default ascent render interval
+  pp.query("ascent_interval", ascentInterval_);
+
   // Default output interval
   pp.query("plotfile_interval", plotfileInterval_);
 
@@ -475,6 +479,22 @@ void AMRSimulation<problem_t>::setInitialConditions() {
     // restart from a checkpoint
     ReadCheckpointFile();
   }
+
+  // abort if amrex.async_out=1, it is currently broken
+  if (amrex::AsyncOut::UseAsyncOut()) {
+    amrex::Print()
+        << "[ERROR] [FATAL] AsyncOut is currently broken! If you want to "
+           "run with AsyncOut anyway (THIS MAY CAUSE DATA CORRUPTION), comment "
+           "out this line in src/simulation.hpp. Aborting."
+        << std::endl;
+    amrex::Abort();
+  }
+  
+#ifdef AMREX_USE_ASCENT
+  if (ascentInterval_ > 0) {
+    RenderAscent();
+  }
+#endif
 
   if (plotfileInterval_ > 0) {
     WritePlotFile();
@@ -551,6 +571,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve() {
   AMREX_ALWAYS_ASSERT(areInitialConditionsDefined_);
 
   amrex::Real cur_time = tNew_[0];
+#ifdef AMREX_USE_ASCENT
+  int last_ascent_step = 0;
+#endif
   int last_plot_file_step = 0;
   int last_chk_file_step = 0;
 
@@ -591,6 +614,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve() {
     for (lev = 0; lev <= finest_level; ++lev) {
       tNew_[lev] = cur_time;
     }
+
+#ifdef AMREX_USE_ASCENT
+    if (ascentInterval_ > 0 && (step + 1) % ascentInterval_ == 0) {
+      last_ascent_step = step + 1;
+      RenderAscent();
+    }
+#endif
 
     if (plotfileInterval_ > 0 && (step + 1) % plotfileInterval_ == 0) {
       last_plot_file_step = step + 1;
@@ -1314,9 +1344,8 @@ void AMRSimulation<problem_t>::ReadMetadataFile(
 // do in-situ rendering with Ascent
 #ifdef AMREX_USE_ASCENT
 template <typename problem_t>
-void AMRSimulation<problem_t>::AscentCustomRender(
-    conduit::Node const &blueprintMesh, std::string const & /*plotfilename*/) {
-  BL_PROFILE("AMRSimulation::AscentCustomRender()");
+void AMRSimulation<problem_t>::AscentCustomActions(conduit::Node const &blueprintMesh) {
+  BL_PROFILE("AMRSimulation::AscentCustomActions()");
 
   // add a scene with a pseudocolor plot
   Node scenes;
@@ -1342,30 +1371,19 @@ void AMRSimulation<problem_t>::AscentCustomRender(
   ascent_.publish(blueprintMesh);
   ascent_.execute(actions); // will be replaced by ascent_actions.yml if present
 }
-#endif
 
-// write plotfile to disk
-template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile() {
-  BL_PROFILE("AMRSimulation::WritePlotFile()");
+// do Ascent render
+template <typename problem_t> void AMRSimulation<problem_t>::RenderAscent() {
+  BL_PROFILE("AMRSimulation::RenderAscent()");
 
-#ifndef AMREX_USE_HDF5
-  if (amrex::AsyncOut::UseAsyncOut()) {
-    // ensure that we flush any plotfiles that are currently being written
-    amrex::AsyncOut::Finish();
-  }
-#endif
-
-  // now construct output and submit to async write queue
-  const std::string &plotfilename = PlotFileName(istep[0]);
+  // combine multifabs
   amrex::Vector<amrex::MultiFab> mf = PlotFileMF();
   amrex::Vector<const amrex::MultiFab *> mf_ptr = amrex::GetVecOfConstPtrs(mf);
-
   amrex::Vector<std::string> varnames;
   varnames.insert(varnames.end(), componentNames_.begin(),
                   componentNames_.end());
   varnames.insert(varnames.end(), derivedNames_.begin(), derivedNames_.end());
 
-#ifdef AMREX_USE_ASCENT
   // rescale geometry
   // (Ascent fails to render if you use parsec-size boxes in units of cm...)
   amrex::Vector<amrex::Geometry> rescaledGeom = Geom();
@@ -1387,9 +1405,31 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile() {
   conduit::Node blueprintMesh;
   amrex::MultiLevelToBlueprint(finest_level + 1, mf_ptr, varnames, rescaledGeom,
                                tNew_[0], istep, refRatio(), blueprintMesh);
-  // pass Blueprint mesh to Ascent
-  AscentCustomRender(blueprintMesh, plotfilename);
+
+  // pass Blueprint mesh to Ascent, run actions
+  AscentCustomActions(blueprintMesh);
+}
+#endif // AMREX_USE_ASCENT
+
+// write plotfile to disk
+template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile() const {
+  BL_PROFILE("AMRSimulation::WritePlotFile()");
+
+#ifndef AMREX_USE_HDF5
+  if (amrex::AsyncOut::UseAsyncOut()) {
+    // ensure that we flush any plotfiles that are currently being written
+    amrex::AsyncOut::Finish();
+  }
 #endif
+
+  // now construct output and submit to async write queue
+  const std::string &plotfilename = PlotFileName(istep[0]);
+  amrex::Vector<amrex::MultiFab> mf = PlotFileMF();
+  amrex::Vector<const amrex::MultiFab *> mf_ptr = amrex::GetVecOfConstPtrs(mf);
+  amrex::Vector<std::string> varnames;
+  varnames.insert(varnames.end(), componentNames_.begin(),
+                  componentNames_.end());
+  varnames.insert(varnames.end(), derivedNames_.begin(), derivedNames_.end());
 
   // write plotfile
   amrex::Print() << "Writing plotfile " << plotfilename << "\n";
