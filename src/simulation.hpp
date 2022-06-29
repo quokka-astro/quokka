@@ -534,7 +534,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve() {
   AMREX_ALWAYS_ASSERT(areInitialConditionsDefined_);
 
   amrex::Real cur_time = tNew_[0];
+#ifdef AMREX_USE_ASCENT
   int last_ascent_step = 0;
+#endif
   int last_plot_file_step = 0;
   int last_chk_file_step = 0;
 
