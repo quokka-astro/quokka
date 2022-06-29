@@ -88,6 +88,8 @@ AMREX_GPU_MANAGED static Real v_wind = 0;
 AMREX_GPU_MANAGED static Real P_wind = 0;
 AMREX_GPU_MANAGED static Real delta_vx = 0;
 
+static bool enable_cooling = true;
+
 template <>
 void RadhydroSimulation<ShockCloud>::setInitialConditionsAtLevel(int lev) {
   amrex::GpuArray<Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
@@ -328,7 +330,9 @@ void RadhydroSimulation<ShockCloud>::computeAfterLevelAdvance(int lev,
                                                               Real dt_lev,
                                                               int /*ncycle*/) {
   // compute operator split physics
-  computeCooling(state_new_[lev], dt_lev, cloudyTables);
+  if (::enable_cooling) {
+    computeCooling(state_new_[lev], dt_lev, cloudyTables);
+  }
 }
 
 template <>
@@ -663,7 +667,16 @@ auto problem_main() -> int {
   Real nH_cloud = NAN;
   Real P_over_k = NAN;
   Real M0 = NAN;
-
+  int enable_cooling = 1; // default (0 = off, 1, = on)
+  
+  // enable cooling?
+  pp.query("enable_cooling", enable_cooling);
+  if (enable_cooling == 1) {
+    ::enable_cooling = true;
+  } else {
+    ::enable_cooling = false;
+  }
+  
   // background gas H number density
   pp.query("nH_bg", nH_bg); // cm^-3
 
