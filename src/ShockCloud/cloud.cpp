@@ -643,7 +643,9 @@ auto problem_main() -> int {
     boundaryConditions[n].setLo(2, amrex::BCType::foextrap);
     boundaryConditions[n].setHi(2, amrex::BCType::foextrap);
   }
-  RadhydroSimulation<ShockCloud> sim(boundaryConditions);
+
+  bool enableRadiation = false;
+  RadhydroSimulation<ShockCloud> sim(boundaryConditions, enableRadiation);
 
   // Read Cloudy tables
   readCloudyData(sim.cloudyTables);
@@ -737,7 +739,8 @@ auto problem_main() -> int {
 
   // set simulation parameters
   sim.is_hydro_enabled_ = true;
-  sim.is_radiation_enabled_ = false;
+  sim.is_radiation_enabled_ = enableRadiation;
+
   sim.reconstructionOrder_ = 3;          // PPM for hydro
   sim.radiationReconstructionOrder_ = 2; // PLM for radiation
   sim.densityFloor_ = 1.0e-3 * rho0;     // density floor (to prevent vacuum)

@@ -134,17 +134,10 @@ public:
   int checkpointInterval_ = -1;    // -1 == no output
   std::unordered_map<std::string, variant_t> simulationMetadata_;
 
-  // constructors
-
-  AMRSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions,
-                const int ncomp, const int ncompPrim)
-      : ncomp_(ncomp), ncompPrimitive_(ncompPrim) {
-    initialize(boundaryConditions);
-  }
-
+  // constructor
   AMRSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions,
                 const int ncomp)
-      : ncomp_(ncomp), ncompPrimitive_(ncomp) {
+      : ncomp_(ncomp) {
     initialize(boundaryConditions);
   }
 
@@ -260,7 +253,6 @@ protected:
   // Nghost = number of ghost cells for each array
   int nghost_ = 4; // PPM needs nghost >= 3, PPM+flattening needs nghost >= 4
   int ncomp_ = 0; // = number of components (conserved variables) for each array
-  int ncompPrimitive_ = 0; // number of primitive variables
   amrex::Vector<std::string> componentNames_;
   amrex::Vector<std::string> derivedNames_;
   bool areInitialConditionsDefined_ = false;

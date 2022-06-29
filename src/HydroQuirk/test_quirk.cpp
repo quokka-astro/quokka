@@ -159,39 +159,38 @@ AMRSimulation<QuirkProblem>::setCustomBoundaryConditions(
   }
 }
 
-auto problem_main() -> int
-{
-	// Boundary conditions
-	const int nvars = RadhydroSimulation<QuirkProblem>::nvarTotal_;
-	amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
-	for (int n = 0; n < nvars; ++n) {
-		// outflow
-		boundaryConditions[0].setLo(0, amrex::BCType::ext_dir);
-		boundaryConditions[0].setHi(0, amrex::BCType::ext_dir);
-		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
-			// periodic
-			boundaryConditions[n].setLo(i, amrex::BCType::int_dir);
-			boundaryConditions[n].setHi(i, amrex::BCType::int_dir);
-		}
-	}
+auto problem_main() -> int {
+  // Boundary conditions
+  const int nvars = RadhydroSimulation<QuirkProblem>::nvarTotal_;
+  amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
+  for (int n = 0; n < nvars; ++n) {
+    // outflow
+    boundaryConditions[0].setLo(0, amrex::BCType::ext_dir);
+    boundaryConditions[0].setHi(0, amrex::BCType::ext_dir);
+    for (int i = 1; i < AMREX_SPACEDIM; ++i) {
+      // periodic
+      boundaryConditions[n].setLo(i, amrex::BCType::int_dir);
+      boundaryConditions[n].setHi(i, amrex::BCType::int_dir);
+    }
+  }
 
-	// Problem initialization
-	RadhydroSimulation<QuirkProblem> sim(boundaryConditions);
-	sim.is_hydro_enabled_ = true;
-	sim.is_radiation_enabled_ = false;
-	sim.reconstructionOrder_ = 2; // PLM
-	sim.stopTime_ = 0.4;
-	sim.cflNumber_ = 0.4;
-	sim.maxTimesteps_ = 2000;
-	sim.plotfileInterval_ = 10;
+  // Problem initialization
+  RadhydroSimulation<QuirkProblem> sim(boundaryConditions, false);
+  sim.is_hydro_enabled_ = true;
+  sim.is_radiation_enabled_ = false;
+  sim.reconstructionOrder_ = 2; // PLM
+  sim.stopTime_ = 0.4;
+  sim.cflNumber_ = 0.4;
+  sim.maxTimesteps_ = 2000;
+  sim.plotfileInterval_ = -1;
 
-	// initialize
-	sim.setInitialConditions();
+  // initialize
+  sim.setInitialConditions();
 
-	// evolve
-	sim.evolve();
+  // evolve
+  sim.evolve();
 
-	// Cleanup and exit
-	amrex::Print() << "Finished." << std::endl;
-	return 0;
+  // Cleanup and exit
+  amrex::Print() << "Finished." << std::endl;
+  return 0;
 }

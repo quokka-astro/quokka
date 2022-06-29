@@ -219,7 +219,7 @@ auto problem_main() -> int {
   }
 
   // Problem initialization
-  RadhydroSimulation<ScalarProblem> sim(boundaryConditions);
+  RadhydroSimulation<ScalarProblem> sim(boundaryConditions, false);
   sim.is_hydro_enabled_ = true;
   sim.is_radiation_enabled_ = false;
   sim.computeReferenceSolution_ = true;

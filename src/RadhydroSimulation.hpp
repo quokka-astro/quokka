@@ -107,9 +107,9 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 
 	// member functions
 
-	explicit RadhydroSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions)
-	    : AMRSimulation<problem_t>(boundaryConditions,
-				       RadSystem<problem_t>::nvar_, ncompHyperbolic_)
+	explicit RadhydroSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions,
+		bool allocateRadVars = true)
+	    : AMRSimulation<problem_t>(boundaryConditions, getNumVars(allocateRadVars))
 	{
 		std::vector<std::string> hydroNames = {"gasDensity", "x-GasMomentum", "y-GasMomentum",
 				   							   "z-GasMomentum", "gasEnergy", "gasInternalEnergy"};
@@ -118,10 +118,15 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 
 		componentNames_.insert(componentNames_.end(), hydroNames.begin(), hydroNames.end());
 		componentNames_.insert(componentNames_.end(), scalarNames.begin(), scalarNames.end());
-		componentNames_.insert(componentNames_.end(), radNames.begin(), radNames.end());
+		
+		if (allocateRadVars) {
+			componentNames_.insert(componentNames_.end(), radNames.begin(), radNames.end());
+		}
 	}
 
 	[[nodiscard]] auto getScalarVariableNames() const -> std::vector<std::string>;
+	[[nodiscard]] auto getNumVars(bool allocateRadVars) const -> int;
+
 	void checkHydroStates(amrex::MultiFab &mf, char const *file, int line);
 	void computeMaxSignalLocal(int level) override;
 	void setInitialConditionsAtLevel(int level) override;
@@ -225,6 +230,20 @@ auto RadhydroSimulation<problem_t>::getScalarVariableNames() const -> std::vecto
 		names.push_back(fmt::format("scalar_{}", n));
 	}
 	return names;
+}
+
+template <typename problem_t>
+auto RadhydroSimulation<problem_t>::getNumVars(bool allocateRadVars) const -> int {
+	// return the number of cell-centered variables to be allocated
+	// in the state_new_ and state_old_ multifabs
+
+	int nvars = 0;
+	if (allocateRadVars) {
+		nvars = RadSystem<problem_t>::nvar_; // includes hydro vars
+	} else {
+		nvars = HydroSystem<problem_t>::nvar_; // includes hydro + scalars only
+	}
+	return nvars;
 }
 
 template <typename problem_t>
@@ -345,17 +364,24 @@ void RadhydroSimulation<problem_t>::computeReferenceSolution(amrex::MultiFab &re
 template <typename problem_t>
 void RadhydroSimulation<problem_t>::computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons)
 {
-	// check conservation of total energy
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = geom[0].CellSizeArray();
 	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
 
+	// check conservation of total energy
 	amrex::Real const Egas0 = initSumCons[RadSystem<problem_t>::gasEnergy_index];
-	amrex::Real const Erad0 = initSumCons[RadSystem<problem_t>::radEnergy_index];
-	amrex::Real const Etot0 = Egas0 + (RadSystem<problem_t>::c_light_ / RadSystem<problem_t>::c_hat_) * Erad0;
-
 	amrex::Real const Egas = state_new_[0].sum(RadSystem<problem_t>::gasEnergy_index) * vol;
-	amrex::Real const Erad = state_new_[0].sum(RadSystem<problem_t>::radEnergy_index) * vol;
-	amrex::Real const Etot = Egas + (RadSystem<problem_t>::c_light_ / RadSystem<problem_t>::c_hat_) * Erad;
+
+	amrex::Real Etot0 = NAN;
+	amrex::Real Etot = NAN;
+	if (is_radiation_enabled_) {
+		amrex::Real const Erad0 = initSumCons[RadSystem<problem_t>::radEnergy_index];
+		Etot0 = Egas0 + (RadSystem<problem_t>::c_light_ / RadSystem<problem_t>::c_hat_) * Erad0;
+		amrex::Real const Erad = state_new_[0].sum(RadSystem<problem_t>::radEnergy_index) * vol;
+		Etot = Egas + (RadSystem<problem_t>::c_light_ / RadSystem<problem_t>::c_hat_) * Erad;
+	} else {
+		Etot0 = Egas0;
+		Etot = Egas;
+	}
 
 	amrex::Real const abs_err = (Etot - Etot0);
 	amrex::Real const rel_err = abs_err / Etot0;
@@ -697,7 +723,7 @@ auto RadhydroSimulation<problem_t>::expandFluxArrays(
 		amrex::FArrayBox newFlux(fluxRange, ncompNew, amrex::The_Async_Arena());
 		newFlux.setVal<amrex::RunOn::Device>(0.);
 		// copy oldFlux (starting at 0) to newFlux (starting at nstart)
-		AMREX_ASSERT(ncompNew > oldFlux.nComp());
+		AMREX_ASSERT(ncompNew >= oldFlux.nComp());
 		newFlux.copy<amrex::RunOn::Device>(oldFlux, 0, nstartNew, oldFlux.nComp());
 		return newFlux;
 	};

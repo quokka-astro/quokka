@@ -192,7 +192,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	RadhydroSimulation<RichtmeyerMeshkovProblem> sim(boundaryConditions);
+	RadhydroSimulation<RichtmeyerMeshkovProblem> sim(boundaryConditions, false);
 	sim.is_hydro_enabled_ = true;
 	sim.is_radiation_enabled_ = false;
 	sim.stopTime_ = 2.5;

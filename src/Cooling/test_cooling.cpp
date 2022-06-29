@@ -355,7 +355,7 @@ auto problem_main() -> int {
 #endif
   }
 
-  RadhydroSimulation<CoolingTest> sim(boundaryConditions);
+  RadhydroSimulation<CoolingTest> sim(boundaryConditions, false);
   sim.is_hydro_enabled_ = true;
   sim.is_radiation_enabled_ = false;
 

@@ -246,7 +246,7 @@ auto problem_main() -> int {
   }
 
   // Problem initialization
-  RadhydroSimulation<HighMachProblem> sim(boundaryConditions);
+  RadhydroSimulation<HighMachProblem> sim(boundaryConditions, false);
   sim.is_hydro_enabled_ = true;
   sim.is_radiation_enabled_ = false;
   sim.computeReferenceSolution_ = true;
