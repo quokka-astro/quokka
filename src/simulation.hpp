@@ -453,9 +453,11 @@ void AMRSimulation<problem_t>::setInitialConditions() {
     amrex::Abort();
   }
   
+#ifdef AMREX_USE_ASCENT
   if (ascentInterval_ > 0) {
     RenderAscent();
   }
+#endif
 
   if (plotfileInterval_ > 0) {
     WritePlotFile();
@@ -574,10 +576,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve() {
       tNew_[lev] = cur_time;
     }
 
+#ifdef AMREX_USE_ASCENT
     if (ascentInterval_ > 0 && (step + 1) % ascentInterval_ == 0) {
       last_ascent_step = step + 1;
       RenderAscent();
     }
+#endif
 
     if (plotfileInterval_ > 0 && (step + 1) % plotfileInterval_ == 0) {
       last_plot_file_step = step + 1;
