@@ -703,6 +703,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 				dt_lev, geom[lev].CellSizeArray(), indexRange, ncompHydro_,
 				redoFlag.array());
 
+#if 0
 			// first-order flux correction (FOFC)
 			if (redoFlag.max<amrex::RunOn::Device>() != quokka::redoFlag::none) {
 				// compute first-order fluxes (on the whole FAB)
@@ -734,6 +735,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 					}
 				}
 			}
+#endif
 
 			// prevent vacuum
 			HydroSystem<problem_t>::EnforcePressureFloor(densityFloor_, pressureFloor_, indexRange, stateFinal);
