@@ -468,9 +468,10 @@ auto problem_main() -> int {
     boundaryConditions[n].setHi(2, amrex::BCType::int_dir);
   }
 
-  RadhydroSimulation<ShockCloud> sim(boundaryConditions);
+  bool enableRadiation = false;
+  RadhydroSimulation<ShockCloud> sim(boundaryConditions, enableRadiation);
   sim.is_hydro_enabled_ = true;
-  sim.is_radiation_enabled_ = false;
+  sim.is_radiation_enabled_ = enableRadiation;
 
   // Standard PPM gives unphysically enormous temperatures when used for
   // this problem (e.g., ~1e14 K or higher), but can be fixed by

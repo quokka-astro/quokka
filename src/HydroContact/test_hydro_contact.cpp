@@ -200,7 +200,7 @@ auto problem_main() -> int {
   }
 
   // Problem initialization
-  RadhydroSimulation<ContactProblem> sim(boundaryConditions);
+  RadhydroSimulation<ContactProblem> sim(boundaryConditions, false);
   sim.is_hydro_enabled_ = true;
   sim.is_radiation_enabled_ = false;
   sim.stopTime_ = 2.0;

@@ -106,7 +106,7 @@ auto problem_main() -> int {
     }
   }
 
-  RadhydroSimulation<WaveProblem> sim(boundaryConditions);
+  RadhydroSimulation<WaveProblem> sim(boundaryConditions, false);
   sim.is_hydro_enabled_ = true;
   sim.is_radiation_enabled_ = false;
   sim.cflNumber_ = CFL_number;

@@ -128,11 +128,6 @@ AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(
       P / (gamma - 1.) + 0.5 * rho * (vx * vx);
   consVar(i, j, k, RadSystem<ShocktubeProblem>::gasInternalEnergy_index) =
       P / (gamma - 1.);
-  // must also set radiation variables to zero, otherwise we get NaN asserts
-  consVar(i, j, k, RadSystem<ShocktubeProblem>::radEnergy_index) = 0;
-  consVar(i, j, k, RadSystem<ShocktubeProblem>::x1RadFlux_index) = 0;
-  consVar(i, j, k, RadSystem<ShocktubeProblem>::x2RadFlux_index) = 0;
-  consVar(i, j, k, RadSystem<ShocktubeProblem>::x3RadFlux_index) = 0;
 }
 
 template <>
@@ -296,7 +291,7 @@ auto problem_main() -> int {
     }
   }
 
-  RadhydroSimulation<ShocktubeProblem> sim(boundaryConditions);
+  RadhydroSimulation<ShocktubeProblem> sim(boundaryConditions, false);
   sim.is_hydro_enabled_ = true;
   sim.is_radiation_enabled_ = false;
   sim.cflNumber_ = CFL_number;
