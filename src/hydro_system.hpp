@@ -658,8 +658,8 @@ void HydroSystem<problem_t>::AddInternalEnergyPressureTerm(
     amrex::Real const Etot = consVar(i, j, k, energy_index);
     amrex::Real const Eint_cons = Etot - Ekin;
 
-    // eta value from Flash (https://flash-x.github.io/Flash-X-docs/Hydro.html)
-    const amrex::Real eta = 1.0e-4; // dual energy parameter 'eta'
+    // eta value
+    const amrex::Real eta = 1.0e-3; // dual energy parameter 'eta'
 
     // Li et al. sync method
     if (Eint_cons > eta * Etot) {
