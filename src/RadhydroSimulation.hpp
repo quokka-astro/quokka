@@ -105,9 +105,9 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 
 	// member functions
 
-	explicit RadhydroSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions)
-	    : AMRSimulation<problem_t>(boundaryConditions,
-				       RadSystem<problem_t>::nvar_, ncompHyperbolic_)
+	explicit RadhydroSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions,
+		bool allocateRadVars = true)
+	    : AMRSimulation<problem_t>(boundaryConditions, getNumVars(allocateRadVars))
 	{
 		std::vector<std::string> hydroNames = {"gasDensity", "x-GasMomentum", "y-GasMomentum",
 				   							   "z-GasMomentum", "gasEnergy", "gasInternalEnergy"};
@@ -116,10 +116,15 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 
 		componentNames_.insert(componentNames_.end(), hydroNames.begin(), hydroNames.end());
 		componentNames_.insert(componentNames_.end(), scalarNames.begin(), scalarNames.end());
-		componentNames_.insert(componentNames_.end(), radNames.begin(), radNames.end());
+		
+		if (allocateRadVars) {
+			componentNames_.insert(componentNames_.end(), radNames.begin(), radNames.end());
+		}
 	}
 
 	[[nodiscard]] auto getScalarVariableNames() const -> std::vector<std::string>;
+	[[nodiscard]] auto getNumVars(bool allocateRadVars) const -> int;
+
 	void checkHydroStates(amrex::MultiFab &mf, char const *file, int line);
 	void computeMaxSignalLocal(int level) override;
 	void setInitialConditionsAtLevel(int level) override;
@@ -225,6 +230,20 @@ auto RadhydroSimulation<problem_t>::getScalarVariableNames() const -> std::vecto
 		names.push_back(fmt::format("scalar_{}", n));
 	}
 	return names;
+}
+
+template <typename problem_t>
+auto RadhydroSimulation<problem_t>::getNumVars(bool allocateRadVars) const -> int {
+	// return the number of cell-centered variables to be allocated
+	// in the state_new_ and state_old_ multifabs
+
+	int nvars = 0;
+	if (allocateRadVars) {
+		nvars = RadSystem<problem_t>::nvar_; // includes hydro vars
+	} else {
+		nvars = HydroSystem<problem_t>::nvar_; // includes hydro + scalars only
+	}
+	return nvars;
 }
 
 template <typename problem_t>
