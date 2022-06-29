@@ -679,6 +679,117 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 				AMREX_ASSERT(!state_new_[lev].contains_nan(0, state_new_[lev].nComp()));
 				AMREX_ASSERT(!state_new_[lev].contains_nan()); // check ghost zones
 
+				// advance all grids on local processor (Stage 2 of integrator)
+				for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
+
+					const amrex::Box &realZones = iter.validbox(); // 'validbox' == exclude ghost zones
+
+						//6 should be 2*ndims
+						for (int i=1; i<=AMREX_SPACEDIM*2; ++i) {
+							amrex::Box computeRange = realZones;
+
+							computeRange.grow(nghost_);
+
+							switch(i) {
+								case 1:
+									computeRange.growHi(0, -(computeRange.length(0)-nghost_));
+									break;
+
+								case 2:
+									computeRange.growLo(0, -(computeRange.length(0)-nghost_));
+									break;
+
+								case 3:
+									computeRange.growHi(1, -(computeRange.length(1)-nghost_));
+									computeRange.grow(0, -nghost_);
+									break;
+
+								case 4:
+									computeRange.growLo(1, -(computeRange.length(1)-nghost_));
+									computeRange.grow(0, -nghost_);
+									break;
+
+								case 5:
+									computeRange.growHi(2, -(computeRange.length(2)-nghost_));
+									computeRange.grow(1, -nghost_);
+									computeRange.grow(0, -nghost_);
+									break;
+
+								case 6:
+									computeRange.growLo(2, -(computeRange.length(2)-nghost_));
+									computeRange.grow(1, -nghost_);
+									computeRange.grow(0, -nghost_);
+									break;
+							}
+
+						auto const &stateOld = state_old_[lev].const_array(iter);
+						auto const &stateInter = state_new_[lev].const_array(iter);
+						auto fluxArrays = computeHydroFluxes(stateInter, computeRange, ncompHydro_);
+
+						amrex::FArrayBox stateFinalFAB = amrex::FArrayBox(computeRange, ncompHydro_,
+																		amrex::The_Async_Arena());
+						auto const &stateFinal = stateFinalFAB.array();
+						amrex::IArrayBox redoFlag(computeRange, 1, amrex::The_Async_Arena());
+
+						// Stage 2 of RK2-SSP
+						HydroSystem<problem_t>::AddFluxesRK2(
+							stateFinal, stateOld, stateInter,
+							{AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
+								fluxArrays[2].const_array())},
+							dt_lev, geom[lev].CellSizeArray(), computeRange, ncompHydro_,
+							redoFlag.array());
+
+	#if 0
+						// first-order flux correction (FOFC)
+						if (redoFlag.max<amrex::RunOn::Device>() != quokka::redoFlag::none) {
+							// compute first-order fluxes (on the whole FAB)
+							auto FOFluxArrays = computeFOHydroFluxes(stateInter, computeRange, ncompHydro_);
+
+							for(int i = 0; i < fofcMaxIterations_; ++i) {
+								if (Verbose()) {
+									std::cout << "[FOFC-2] iter = "
+											<< i
+											<< ", ncells = "
+											<< redoFlag.sum<amrex::RunOn::Device>(0)
+											<< "\n";
+								}
+
+								// replace fluxes in fluxArrays with first-order fluxes at faces of flagged cells
+								replaceFluxes(fluxArrays, FOFluxArrays, redoFlag, computeRange, ncompHydro_);
+
+								// re-do RK stage update for *all* cells
+								// (since neighbors of problem cells will have modified states as well)
+								HydroSystem<problem_t>::AddFluxesRK2(
+									stateFinal, stateOld, stateInter,
+									{AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
+										fluxArrays[2].const_array())},
+									dt_lev, geom[lev].CellSizeArray(), computeRange, ncompHydro_,
+									redoFlag.array());
+
+								if(redoFlag.max<amrex::RunOn::Device>() == quokka::redoFlag::none) {
+									break;
+								}
+							}
+						}
+	#endif
+
+						// prevent vacuum
+						HydroSystem<problem_t>::EnforcePressureFloor(densityFloor_, pressureFloor_, computeRange, stateFinal);
+
+						// copy stateNew to state_new_[lev]
+						auto const &stateNew = state_new_[lev].array(iter);
+						amrex::FArrayBox stateNewFAB = amrex::FArrayBox(stateNew);
+						stateNewFAB.copy<amrex::RunOn::Device>(stateFinalFAB, 0, 0, ncompHydro_);
+
+						if (do_reflux) {
+							// increment flux registers
+							auto expandedFluxes = expandFluxArrays(fluxArrays, 0, state_new_[lev].nComp());
+							incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, expandedFluxes, lev,
+										fluxScaleFactor * dt_lev);
+						}
+					}
+				}
+
 			}
 
 			#pragma omp section
