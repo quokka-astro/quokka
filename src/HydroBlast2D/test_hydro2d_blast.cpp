@@ -169,7 +169,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	RadhydroSimulation<BlastProblem> sim(boundaryConditions, true);
+	RadhydroSimulation<BlastProblem> sim(boundaryConditions, false);
 	sim.is_hydro_enabled_ = true;
 	sim.is_radiation_enabled_ = false;
 	sim.stopTime_ = 0.1; //1.5;

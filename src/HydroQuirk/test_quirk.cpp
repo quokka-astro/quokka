@@ -275,7 +275,7 @@ auto problem_main() -> int {
   }
 
   // Problem initialization
-  RadhydroSimulation<QuirkProblem> sim(boundaryConditions, true);
+  RadhydroSimulation<QuirkProblem> sim(boundaryConditions, false);
   sim.is_hydro_enabled_ = true;
   sim.is_radiation_enabled_ = false;
   sim.reconstructionOrder_ = 2; // PLM

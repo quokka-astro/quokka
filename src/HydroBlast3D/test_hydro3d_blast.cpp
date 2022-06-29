@@ -272,7 +272,7 @@ auto problem_main() -> int {
   }
 
   // Problem initialization
-  RadhydroSimulation<SedovProblem> sim(boundaryConditions, true);
+  RadhydroSimulation<SedovProblem> sim(boundaryConditions, false);
   sim.is_hydro_enabled_ = true;
   sim.is_radiation_enabled_ = false;
   sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
