@@ -363,17 +363,24 @@ void RadhydroSimulation<problem_t>::computeReferenceSolution(amrex::MultiFab &re
 template <typename problem_t>
 void RadhydroSimulation<problem_t>::computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons)
 {
-	// check conservation of total energy
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = geom[0].CellSizeArray();
 	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
 
+	// check conservation of total energy
 	amrex::Real const Egas0 = initSumCons[RadSystem<problem_t>::gasEnergy_index];
-	amrex::Real const Erad0 = initSumCons[RadSystem<problem_t>::radEnergy_index];
-	amrex::Real const Etot0 = Egas0 + (RadSystem<problem_t>::c_light_ / RadSystem<problem_t>::c_hat_) * Erad0;
-
 	amrex::Real const Egas = state_new_[0].sum(RadSystem<problem_t>::gasEnergy_index) * vol;
-	amrex::Real const Erad = state_new_[0].sum(RadSystem<problem_t>::radEnergy_index) * vol;
-	amrex::Real const Etot = Egas + (RadSystem<problem_t>::c_light_ / RadSystem<problem_t>::c_hat_) * Erad;
+
+	amrex::Real Etot0 = NAN;
+	amrex::Real Etot = NAN;
+	if (is_radiation_enabled_) {
+		amrex::Real const Erad0 = initSumCons[RadSystem<problem_t>::radEnergy_index];
+		Etot0 = Egas0 + (RadSystem<problem_t>::c_light_ / RadSystem<problem_t>::c_hat_) * Erad0;
+		amrex::Real const Erad = state_new_[0].sum(RadSystem<problem_t>::radEnergy_index) * vol;
+		Etot = Egas + (RadSystem<problem_t>::c_light_ / RadSystem<problem_t>::c_hat_) * Erad;
+	} else {
+		Etot0 = Egas0;
+		Etot = Egas;
+	}
 
 	amrex::Real const abs_err = (Etot - Etot0);
 	amrex::Real const rel_err = abs_err / Etot0;
