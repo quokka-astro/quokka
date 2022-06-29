@@ -97,6 +97,8 @@ add_subdirectory(HydroVacuum)
 add_subdirectory(HydroWave)
 add_subdirectory(HydroQuirk)
 
+add_subdirectory(MetalAdvectionProblem)
+
 add_subdirectory(RadBeam)
 add_subdirectory(RadForce)
 add_subdirectory(RadMarshak)
