@@ -45,6 +45,8 @@ using namespace amrex::literals;
 struct ShockCloud {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
+constexpr static bool enableRadiation = false;
+
 constexpr double m_H = hydrogen_mass_cgs_; // mass of hydrogen atom
 // [Habing FUV field, see Eq. 12.6 of Draine, Physics of the ISM/IGM.]
 constexpr static Real G_0 = 5.29e-14; // erg cm^-3
@@ -136,10 +138,12 @@ void RadhydroSimulation<ShockCloud>::setInitialConditionsAtLevel(int lev) {
       state(i, j, k, RadSystem<ShockCloud>::gasInternalEnergy_index) = Eint;
       state(i, j, k, RadSystem<ShockCloud>::scalar0_index) = C;
 
-      state(i, j, k, RadSystem<ShockCloud>::radEnergy_index) = Erad0;
-      state(i, j, k, RadSystem<ShockCloud>::x1RadFlux_index) = 0;
-      state(i, j, k, RadSystem<ShockCloud>::x2RadFlux_index) = 0;
-      state(i, j, k, RadSystem<ShockCloud>::x3RadFlux_index) = 0;
+      if (::enableRadiation) {
+        state(i, j, k, RadSystem<ShockCloud>::radEnergy_index) = Erad0;
+        state(i, j, k, RadSystem<ShockCloud>::x1RadFlux_index) = 0;
+        state(i, j, k, RadSystem<ShockCloud>::x2RadFlux_index) = 0;
+        state(i, j, k, RadSystem<ShockCloud>::x3RadFlux_index) = 0;
+      }
     });
   }
 
@@ -188,10 +192,12 @@ AMRSimulation<ShockCloud>::setCustomBoundaryConditions(
     const double E_inc = Erad_bdry;
     const double F_inc = c * E_inc; // streaming incident flux
 
-    consVar(i, j, k, RadSystem<ShockCloud>::radEnergy_index) = E_inc;
-    consVar(i, j, k, RadSystem<ShockCloud>::x1RadFlux_index) = F_inc;
-    consVar(i, j, k, RadSystem<ShockCloud>::x2RadFlux_index) = 0;
-    consVar(i, j, k, RadSystem<ShockCloud>::x3RadFlux_index) = 0;
+    if (::enableRadiation) {
+      consVar(i, j, k, RadSystem<ShockCloud>::radEnergy_index) = E_inc;
+      consVar(i, j, k, RadSystem<ShockCloud>::x1RadFlux_index) = F_inc;
+      consVar(i, j, k, RadSystem<ShockCloud>::x2RadFlux_index) = 0;
+      consVar(i, j, k, RadSystem<ShockCloud>::x3RadFlux_index) = 0;
+    }
   }
 }
 
@@ -644,8 +650,7 @@ auto problem_main() -> int {
     boundaryConditions[n].setHi(2, amrex::BCType::foextrap);
   }
 
-  bool enableRadiation = false;
-  RadhydroSimulation<ShockCloud> sim(boundaryConditions, enableRadiation);
+  RadhydroSimulation<ShockCloud> sim(boundaryConditions, ::enableRadiation);
 
   // Read Cloudy tables
   readCloudyData(sim.cloudyTables);
@@ -739,7 +744,7 @@ auto problem_main() -> int {
 
   // set simulation parameters
   sim.is_hydro_enabled_ = true;
-  sim.is_radiation_enabled_ = enableRadiation;
+  sim.is_radiation_enabled_ = ::enableRadiation;
 
   sim.reconstructionOrder_ = 3;          // PPM for hydro
   sim.radiationReconstructionOrder_ = 2; // PLM for radiation
