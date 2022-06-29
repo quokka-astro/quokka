@@ -21,9 +21,10 @@
 
 struct KelvinHelmholzProblem {};
 
-template <> struct EOS_Traits<KelvinHelmholzProblem> {
+template <> struct HydroSystem_Traits<KelvinHelmholzProblem> {
   static constexpr double gamma = 1.4;
   static constexpr bool reconstruct_eint = false;
+  static constexpr int nscalars = 0;       // number of passive scalars
 };
 
 template <>
@@ -133,7 +134,7 @@ auto problem_main() -> int {
   }
 
   // Problem initialization
-  RadhydroSimulation<KelvinHelmholzProblem> sim(boundaryConditions);
+  RadhydroSimulation<KelvinHelmholzProblem> sim(boundaryConditions, false);
   sim.is_hydro_enabled_ = true;
   sim.is_radiation_enabled_ = false;
   sim.stopTime_ = 1.5;

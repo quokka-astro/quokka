@@ -33,7 +33,7 @@
 struct BlastProblem {
 };
 
-template <> struct EOS_Traits<BlastProblem> {
+template <> struct HydroSystem_Traits<BlastProblem> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr bool reconstruct_eint = false;
 	
@@ -43,6 +43,7 @@ template <> struct EOS_Traits<BlastProblem> {
 	// static constexpr double UNIT_VOL      = std::pow(UNIT_LENGTH,3.0);
 	// static constexpr double UNIT_MASS     = (UNIT_DENSITY*UNIT_VOL);
     // static constexpr double 
+  	static constexpr int nscalars = 0;       // number of passive scalars
 };
 
 template <> void RadhydroSimulation<BlastProblem>::setInitialConditionsAtLevel(int lev)
@@ -199,10 +200,7 @@ int indx_y = (locy-prob_lo[1])/dx[1];
 auto problem_main() -> int
 {
 	// Problem parameters
-	amrex::IntVect gridDims{AMREX_D_DECL(400, 600, 4)};
-	amrex::RealBox boxSize{
-	    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.0), amrex::Real(0.0))},
-	    {AMREX_D_DECL(amrex::Real(1.0), amrex::Real(1.5), amrex::Real(1.0))}};
+	constexpr bool reflecting_boundary = true;
 
 	auto isNormalComp = [=](int n, int dim) {
 		if ((n == HydroSystem<BlastProblem>::x1Momentum_index) && (dim == 0)) {
@@ -216,8 +214,6 @@ auto problem_main() -> int
 		}
 		return false;
 	};
-
-	constexpr bool reflecting_boundary = true;
 
 	const int nvars = RadhydroSimulation<BlastProblem>::nvarTotal_;
 	amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
@@ -240,7 +236,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	RadhydroSimulation<BlastProblem> sim(gridDims, boxSize, boundaryConditions);
+	RadhydroSimulation<BlastProblem> sim(boundaryConditions, false);
 	sim.is_hydro_enabled_ = true;
 	sim.is_radiation_enabled_ = false;
 	sim.stopTime_ = 1. * Myr; //1.5;

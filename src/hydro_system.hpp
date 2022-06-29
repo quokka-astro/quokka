@@ -23,12 +23,14 @@
 #include "hyperbolic_system.hpp"
 #include "radiation_system.hpp"
 #include "valarray.hpp"
+#include <math.h>
 
 // this struct is specialized by the user application code
 //
-template <typename problem_t> struct EOS_Traits {
+template <typename problem_t> struct HydroSystem_Traits {
   static constexpr double gamma = 5. / 3.;     // default value
   static constexpr double cs_isothermal = NAN; // only used when gamma = 1
+  static constexpr int nscalars = 0;           // number of passive scalars
   // if true, reconstruct e_int instead of pressure
   static constexpr bool reconstruct_eint = true;
 };
@@ -43,17 +45,23 @@ public:
     x1Momentum_index = 1,
     x2Momentum_index = 2,
     x3Momentum_index = 3,
-    energy_index = 4
+    energy_index = 4,
+    internalEnergy_index = 5, // auxiliary internal energy (rho * e)
+    scalar0_index = 6 // first passive scalar (only present if nscalars > 0!)
   };
   enum primVarIndex {
     primDensity_index = 0,
     x1Velocity_index = 1,
     x2Velocity_index = 2,
     x3Velocity_index = 3,
-    pressure_index = 4
+    pressure_index = 4,
+    primEint_index = 5, // auxiliary internal energy (rho * e)
+    primScalar0_index =
+        6 // first passive scalar (only present if nscalars > 0!)
   };
 
-  static constexpr int nvar_ = 5;
+  static constexpr int nscalars_ = HydroSystem_Traits<problem_t>::nscalars;
+  static constexpr int nvar_ = 6 + nscalars_;
 
   static void ConservedToPrimitive(amrex::Array4<const amrex::Real> const &cons,
                                    array_t &primVar,
@@ -106,6 +114,13 @@ public:
                          amrex::Box const &indexRange, const int nvars_in,
                          amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo);
 
+  static void AddInternalEnergyPressureTerm(
+      amrex::Array4<amrex::Real> const &consVar,
+      amrex::Array4<const amrex::Real> const &primVar,
+      amrex::Box const &indexRange,
+      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+      amrex::Real const dt_in);
+
   template <FluxDir DIR>
   static void
   ComputeFluxes(array_t &x1Flux_in,
@@ -135,10 +150,10 @@ public:
 
   // C++ does not allow constexpr to be uninitialized, even in a templated
   // class!
-  static constexpr double gamma_ = EOS_Traits<problem_t>::gamma;
-  static constexpr double cs_iso_ = EOS_Traits<problem_t>::cs_isothermal;
+  static constexpr double gamma_ = HydroSystem_Traits<problem_t>::gamma;
+  static constexpr double cs_iso_ = HydroSystem_Traits<problem_t>::cs_isothermal;
   static constexpr bool reconstruct_eint =
-      EOS_Traits<problem_t>::reconstruct_eint;
+      HydroSystem_Traits<problem_t>::reconstruct_eint;
 
   static constexpr auto is_eos_isothermal() -> bool { return (gamma_ == 1.0); }
 };
@@ -154,6 +169,7 @@ void HydroSystem<problem_t>::ConservedToPrimitive(
     const auto pz = cons(i, j, k, x3Momentum_index);
     const auto E =
         cons(i, j, k, energy_index); // *total* gas energy per unit volume
+    const auto Eint_aux = cons(i, j, k, internalEnergy_index);
 
     AMREX_ASSERT(!std::isnan(rho));
     AMREX_ASSERT(!std::isnan(px));
@@ -165,10 +181,11 @@ void HydroSystem<problem_t>::ConservedToPrimitive(
     const auto vy = py / rho;
     const auto vz = pz / rho;
     const auto kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
-    const auto thermal_energy = E - kinetic_energy;
+    const auto thermal_energy_cons = E - kinetic_energy;
 
-    const auto P = thermal_energy * (HydroSystem<problem_t>::gamma_ - 1.0);
-    const auto eint = thermal_energy / rho; // specific internal energy
+    const auto P = thermal_energy_cons * (HydroSystem<problem_t>::gamma_ - 1.0);
+    const auto eint_cons =
+        thermal_energy_cons / rho; // specific internal energy
 
     AMREX_ASSERT(rho > 0.);
     if constexpr (!is_eos_isothermal()) {
@@ -180,11 +197,19 @@ void HydroSystem<problem_t>::ConservedToPrimitive(
     primVar(i, j, k, x2Velocity_index) = vy;
     primVar(i, j, k, x3Velocity_index) = vz;
     if constexpr (reconstruct_eint) {
-      // save eint
-      primVar(i, j, k, pressure_index) = eint;
+      // save eint_cons
+      primVar(i, j, k, pressure_index) = eint_cons;
     } else {
       // save pressure
       primVar(i, j, k, pressure_index) = P;
+    }
+    // save auxiliary internal energy (rho * e)
+    primVar(i, j, k, primEint_index) = Eint_aux;
+
+    // copy any passive scalars
+    for (int nc = 0; nc < nscalars_; ++nc) {
+      primVar(i, j, k, primScalar0_index + nc) =
+          cons(i, j, k, scalar0_index + nc);
     }
   });
 }
@@ -333,9 +358,11 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::isStateValid(
   const amrex::Real rho = cons(i, j, k, density_index);
   bool isDensityPositive = (rho > 0.);
 
-  #if 0
+  // when the dual energy method is used, we *cannot* reset on pressure
+  // failures. on the other hand, we don't need to -- the auxiliary internal
+  // energy is used instead!
+#if 0
   bool isPressurePositive = false;
-
   if constexpr (!is_eos_isothermal()) {
     const amrex::Real P = ComputePressure(cons, i, j, k);
     isPressurePositive = (P > 0.);
@@ -343,8 +370,9 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::isStateValid(
     isPressurePositive = true;
   }
 #endif
+  // return (isDensityPositive && isPressurePositive);
 
-  return (isDensityPositive);
+  return isDensityPositive;
 }
 
 template <typename problem_t>
@@ -722,6 +750,69 @@ void HydroSystem<problem_t>::FlattenShocks(
 }
 
 template <typename problem_t>
+void HydroSystem<problem_t>::AddInternalEnergyPressureTerm(
+    amrex::Array4<amrex::Real> const &consVar,
+    amrex::Array4<const amrex::Real> const &primVar,
+    amrex::Box const &indexRange,
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+    amrex::Real const dt_in) {
+  // first-order pressure term is added separately to the internal energy
+  // [See Li et al. (2007) and Schneider & Robertson (2017).]
+
+  amrex::Real const dt = dt_in; // workaround nvcc bug
+
+  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+    // compute cell-centered pressure from primitive vars
+    double P = primVar(i, j, k, pressure_index);
+    if constexpr (reconstruct_eint) {
+      P *= primVar(i, j, k, primDensity_index) * (gamma_ - 1.0);
+    }
+
+    // compute velocity divergence
+    const double v_xplus = primVar(i + 1, j, k, x1Velocity_index);
+    const double v_xminus = primVar(i - 1, j, k, x1Velocity_index);
+#if AMREX_SPACEDIM >= 2
+    const double v_yplus = primVar(i, j + 1, k, x2Velocity_index);
+    const double v_yminus = primVar(i, j - 1, k, x2Velocity_index);
+#endif
+#if AMREX_SPACEDIM == 3
+    const double v_zplus = primVar(i, j, k + 1, x3Velocity_index);
+    const double v_zminus = primVar(i, j, k - 1, x3Velocity_index);
+#endif
+    amrex::Real const div_v =
+        AMREX_D_TERM((v_xminus - v_xplus) / (2.0 * dx[0]),
+                     +(v_yminus - v_yplus) / (2.0 * dx[1]),
+                     +(v_zminus - v_zplus) / (2.0 * dx[2]));
+
+    // add pressure term
+    amrex::Real const Eint_aux =
+        consVar(i, j, k, internalEnergy_index) + dt * (P * div_v);
+
+    // replace Eint with Eint_cons == (Etot - Ekin) if (Eint_cons / E) > eta
+    amrex::Real const rho = consVar(i, j, k, density_index);
+    amrex::Real const px = consVar(i, j, k, x1Momentum_index);
+    amrex::Real const py = consVar(i, j, k, x2Momentum_index);
+    amrex::Real const pz = consVar(i, j, k, x3Momentum_index);
+    amrex::Real const Ekin = 0.5 * (px * px + py * py + pz * pz) / rho;
+    amrex::Real const Etot = consVar(i, j, k, energy_index);
+    amrex::Real const Eint_cons = Etot - Ekin;
+
+    // eta value used in Li et al. is 1e-2; eta value used in FLASH is 1e-4
+    // the optimal value is problem-dependent, but probably lies within these limits
+    // (note that smaller eta values may require smaller CFL numbers for stability)
+    const amrex::Real eta = 1.0e-3; // dual energy parameter 'eta'
+
+    // Li et al. sync method
+    if (Eint_cons > eta * Etot) {
+      consVar(i, j, k, internalEnergy_index) = Eint_cons;
+    } else { // non-conservative sync
+      consVar(i, j, k, internalEnergy_index) = Eint_aux;
+      consVar(i, j, k, energy_index) = Eint_aux + Ekin;
+    }
+  });
+}
+
+template <typename problem_t>
 template <FluxDir DIR>
 void HydroSystem<problem_t>::ComputeFluxes(
     array_t &x1Flux_in, amrex::Array4<const amrex::Real> const &x1LeftState_in,
@@ -766,6 +857,11 @@ void HydroSystem<problem_t>::ComputeFluxes(
     const double ke_L = 0.5 * rho_L * (vx_L * vx_L + vy_L * vy_L + vz_L * vz_L);
     const double ke_R = 0.5 * rho_R * (vx_R * vx_R + vy_R * vy_R + vz_R * vz_R);
 
+    // auxiliary Eint (rho * e)
+    // this is evolved as a passive scalar by the Riemann solver
+    const double Eint_L = x1LeftState(i, j, k, primEint_index);
+    const double Eint_R = x1RightState(i, j, k, primEint_index);
+
     double P_L = NAN;
     double P_R = NAN;
 
@@ -789,7 +885,6 @@ void HydroSystem<problem_t>::ComputeFluxes(
 
         P_L = rho_L * eint_L * (gamma_ - 1.0);
         P_R = rho_R * eint_R * (gamma_ - 1.0);
-
       } else { // pressure_index is actually pressure
         P_L = x1LeftState(i, j, k, pressure_index);
         P_R = x1RightState(i, j, k, pressure_index);
@@ -822,9 +917,15 @@ void HydroSystem<problem_t>::ComputeFluxes(
     } else if constexpr (DIR == FluxDir::X2) {
       u_L = vy_L;
       u_R = vy_R;
-      velN_index = x2Velocity_index;
-      velV_index = x3Velocity_index;
-      velW_index = x1Velocity_index;
+      if constexpr (AMREX_SPACEDIM == 2) {
+        velN_index = x2Velocity_index;
+        velV_index = x1Velocity_index;
+        velW_index = x3Velocity_index; // unchanged in 2D
+      } else if constexpr (AMREX_SPACEDIM == 3) {
+        velN_index = x2Velocity_index;
+        velV_index = x3Velocity_index;
+        velW_index = x1Velocity_index;
+      }
     } else if constexpr (DIR == FluxDir::X3) {
       u_L = vz_L;
       u_R = vz_R;
@@ -871,16 +972,17 @@ void HydroSystem<problem_t>::ComputeFluxes(
     double dw = std::min(dvl, dvr);
 #endif
 #if AMREX_SPACEDIM == 3
-    amrex::Real dwl = std::min(q(i - 1, j, k + 1, velW_index) - q(i - 1, j, k, velW_index),
+    amrex::Real dwl =
+        std::min(q(i - 1, j, k + 1, velW_index) - q(i - 1, j, k, velW_index),
                  q(i - 1, j, k, velW_index) - q(i - 1, j, k - 1, velW_index));
-    amrex::Real dwr = std::min(q(i, j, k + 1, velW_index) - q(i, j, k, velW_index),
+    amrex::Real dwr =
+        std::min(q(i, j, k + 1, velW_index) - q(i, j, k, velW_index),
                  q(i, j, k, velW_index) - q(i, j, k - 1, velW_index));
     dw = std::min(std::min(dwl, dwr), dw);
 #endif
     const double tp =
         std::min(1., (cs_max - std::min(du, 0.)) / (cs_max - std::min(dw, 0.)));
     const double theta = tp * tp * tp * tp;
-    // const double theta = 1.0;
 
     const double S_star = (theta * (P_R - P_L) + (rho_L * u_L * (S_L - u_L) -
                                                   rho_R * u_R * (S_R - u_R))) /
@@ -891,42 +993,63 @@ void HydroSystem<problem_t>::ComputeFluxes(
     const double vmag_R = std::sqrt(vx_R * vx_R + vy_R * vy_R + vz_R * vz_R);
     const double chi = std::min(1., std::max(vmag_L, vmag_R) / cs_max);
     const double phi = chi * (2. - chi);
-    // const double phi = 1.0;
 
     const double P_LR =
         0.5 * (P_L + P_R) + 0.5 * phi *
                                 (rho_L * (S_L - u_L) * (S_star - u_L) +
                                  rho_R * (S_R - u_R) * (S_star - u_R));
 
-    // compute fluxes
-    constexpr int fluxdim = nvar_;
+    /// compute fluxes
+
+    constexpr int fluxdim = nvar_; // including passive scalar components
 
     quokka::valarray<double, fluxdim> D_L{};
     quokka::valarray<double, fluxdim> D_R{};
     quokka::valarray<double, fluxdim> D_star{};
 
+    // N.B.: quokka::valarray is written to allow assigning <= fluxdim
+    // components, so this works even if there are more components than
+    // enumerated in the initializer list. The remaining components are
+    // assigned a default value of zero.
     if constexpr (DIR == FluxDir::X1) {
-      D_L = {0., 1., 0., 0., u_L};
-      D_R = {0., 1., 0., 0., u_R};
-      D_star = {0., 1., 0., 0., S_star};
+      D_L = {0., 1., 0., 0., u_L, 0.};
+      D_R = {0., 1., 0., 0., u_R, 0.};
+      D_star = {0., 1., 0., 0., S_star, 0.};
     } else if constexpr (DIR == FluxDir::X2) {
-      D_L = {0., 0., 1., 0., u_L};
-      D_R = {0., 0., 1., 0., u_R};
-      D_star = {0., 0., 1., 0., S_star};
+      D_L = {0., 0., 1., 0., u_L, 0.};
+      D_R = {0., 0., 1., 0., u_R, 0.};
+      D_star = {0., 0., 1., 0., S_star, 0.};
     } else if constexpr (DIR == FluxDir::X3) {
-      D_L = {0., 0., 0., 1., u_L};
-      D_R = {0., 0., 0., 1., u_R};
-      D_star = {0., 0., 0., 1., S_star};
+      D_L = {0., 0., 0., 1., u_L, 0.};
+      D_R = {0., 0., 0., 1., u_R, 0.};
+      D_star = {0., 0., 0., 1., S_star, 0.};
     }
 
-    const quokka::valarray<double, fluxdim> U_L = {
-        rho_L, rho_L * vx_L, rho_L * vy_L, rho_L * vz_L, E_L};
+    const std::initializer_list<double> state_L = {
+        rho_L, rho_L * vx_L, rho_L * vy_L, rho_L * vz_L, E_L, Eint_L};
 
-    const quokka::valarray<double, fluxdim> U_R = {
-        rho_R, rho_R * vx_R, rho_R * vy_R, rho_R * vz_R, E_R};
+    const std::initializer_list<double> state_R = {
+        rho_R, rho_R * vx_R, rho_R * vy_R, rho_R * vz_R, E_R, Eint_R};
 
-    quokka::valarray<double, fluxdim> F_L = u_L * U_L + P_L * D_L;
-    quokka::valarray<double, fluxdim> F_R = u_R * U_R + P_R * D_R;
+    AMREX_ASSERT(state_L.size() == state_R.size());
+
+    // N.B.: quokka::valarray is written to allow assigning <= fluxdim
+    // components, so this works even if there are more components than
+    // enumerated in the initializer list. The remaining components are
+    // assigned a default value of zero.
+    quokka::valarray<double, fluxdim> U_L = state_L;
+    quokka::valarray<double, fluxdim> U_R = state_R;
+
+    // The remaining components are passive scalars, so just copy them from
+    // x1LeftState and x1RightState into the (left, right) state vectors U_L and
+    // U_R
+    for (int nc = static_cast<int>(state_L.size()); nc < fluxdim; ++nc) {
+      U_L[nc] = x1LeftState(i, j, k, nc);
+      U_R[nc] = x1RightState(i, j, k, nc);
+    }
+
+    const quokka::valarray<double, fluxdim> F_L = u_L * U_L + P_L * D_L;
+    const quokka::valarray<double, fluxdim> F_R = u_R * U_R + P_R * D_R;
 
     const quokka::valarray<double, fluxdim> F_starL =
         (S_star * (S_L * U_L - F_L) + S_L * P_LR * D_star) / (S_L - S_star);
@@ -948,21 +1071,16 @@ void HydroSystem<problem_t>::ComputeFluxes(
       F = F_R;
     }
 
-    // check states are valid
-    AMREX_ASSERT(!std::isnan(F[0]));
-    AMREX_ASSERT(!std::isnan(F[1]));
-    AMREX_ASSERT(!std::isnan(F[2]));
-    AMREX_ASSERT(!std::isnan(F[3]));
+    // set energy fluxes to zero if EOS is isothermal
+    if constexpr (is_eos_isothermal()) {
+      F[energy_index] = 0;
+      F[internalEnergy_index] = 0;
+    }
 
-    x1Flux(i, j, k, density_index) = F[0];
-    x1Flux(i, j, k, x1Momentum_index) = F[1];
-    x1Flux(i, j, k, x2Momentum_index) = F[2];
-    x1Flux(i, j, k, x3Momentum_index) = F[3];
-    if constexpr (!is_eos_isothermal()) {
-      AMREX_ASSERT(!std::isnan(F[4]));
-      x1Flux(i, j, k, energy_index) = F[4];
-    } else {
-      x1Flux(i, j, k, energy_index) = 0;
+    // copy all flux components to the flux array
+    for (int nc = 0; nc < fluxdim; ++nc) {
+      AMREX_ASSERT(!std::isnan(F[nc])); // check flux is valid
+      x1Flux(i, j, k, nc) = F[nc];
     }
   });
 }

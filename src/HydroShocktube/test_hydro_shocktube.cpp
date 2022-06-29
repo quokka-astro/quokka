@@ -17,6 +17,7 @@
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
 #include "hydro_system.hpp"
+#include "radiation_system.hpp"
 #include "test_hydro_shocktube.hpp"
 #ifdef HAVE_PYTHON
 #include "matplotlibcpp.h"
@@ -24,9 +25,10 @@
 
 struct ShocktubeProblem {};
 
-template <> struct EOS_Traits<ShocktubeProblem> {
+template <> struct HydroSystem_Traits<ShocktubeProblem> {
   static constexpr double gamma = 1.4;
   static constexpr bool reconstruct_eint = true;
+  static constexpr int nscalars = 0;       // number of passive scalars
 };
 
 // left- and right- side shock states
@@ -77,6 +79,8 @@ void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsAtLevel(
       state(i, j, k, HydroSystem<ShocktubeProblem>::x3Momentum_index) = 0.;
       state(i, j, k, HydroSystem<ShocktubeProblem>::energy_index) =
           P / (gamma - 1.) + 0.5 * rho * (vx * vx);
+      state(i, j, k, HydroSystem<ShocktubeProblem>::internalEnergy_index) =
+          P / (gamma - 1.);
     });
   }
 
@@ -117,11 +121,13 @@ AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(
 
     consVar(i, j, k, RadSystem<ShocktubeProblem>::gasEnergy_index) =
         P_L / (gamma - 1.);
+    consVar(i, j, k, RadSystem<ShocktubeProblem>::gasInternalEnergy_index) =
+        P_L / (gamma - 1.);
     consVar(i, j, k, RadSystem<ShocktubeProblem>::gasDensity_index) = rho_L;
     consVar(i, j, k, RadSystem<ShocktubeProblem>::x1GasMomentum_index) = 0.;
     consVar(i, j, k, RadSystem<ShocktubeProblem>::x2GasMomentum_index) = 0.;
     consVar(i, j, k, RadSystem<ShocktubeProblem>::x3GasMomentum_index) = 0.;
-    
+
   } else if (i >= hi[0]) {
     // x1 right-side boundary -- constant
     for (int n = 0; n < numcomp; ++n) {
@@ -130,10 +136,42 @@ AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(
 
     consVar(i, j, k, RadSystem<ShocktubeProblem>::gasEnergy_index) =
         P_R / (gamma - 1.);
+    consVar(i, j, k, RadSystem<ShocktubeProblem>::gasInternalEnergy_index) =
+        P_R / (gamma - 1.);
     consVar(i, j, k, RadSystem<ShocktubeProblem>::gasDensity_index) = rho_R;
     consVar(i, j, k, RadSystem<ShocktubeProblem>::x1GasMomentum_index) = 0.;
     consVar(i, j, k, RadSystem<ShocktubeProblem>::x2GasMomentum_index) = 0.;
     consVar(i, j, k, RadSystem<ShocktubeProblem>::x3GasMomentum_index) = 0.;
+  }
+}
+
+template <>
+void RadhydroSimulation<ShocktubeProblem>::ErrorEst(int lev,
+                                                    amrex::TagBoxArray &tags,
+                                                    Real /*time*/,
+                                                    int /*ngrow*/) {
+  // tag cells for refinement
+
+  const Real eta_threshold = 0.1; // gradient refinement threshold
+  const Real rho_min = 0.01;      // minimum rho for refinement
+  auto const &dx = geom[lev].CellSizeArray();
+
+  for (amrex::MFIter mfi(state_new_[lev]); mfi.isValid(); ++mfi) {
+    const amrex::Box &box = mfi.validbox();
+    const auto state = state_new_[lev].const_array(mfi);
+    const auto tag = tags.array(mfi);
+
+    amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+      int const n = 0;
+      Real const rho = state(i, j, k, n);
+      Real const del_x =
+          (state(i + 1, j, k, n) - state(i - 1, j, k, n)) / (2.0 * dx[0]);
+      Real const gradient_indicator = std::sqrt(del_x * del_x) / rho;
+
+      if (gradient_indicator > eta_threshold && rho >= rho_min) {
+        tag(i, j, k) = amrex::TagBox::SET;
+      }
+    });
   }
 }
 
@@ -219,6 +257,8 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
       stateExact(i, j, k, HydroSystem<ShocktubeProblem>::x3Momentum_index) = 0.;
       stateExact(i, j, k, HydroSystem<ShocktubeProblem>::energy_index) =
           P / (gamma - 1.) + 0.5 * rho * (vx * vx);
+      stateExact(i, j, k, HydroSystem<ShocktubeProblem>::internalEnergy_index) =
+          P / (gamma - 1.);
     });
   }
 
@@ -310,10 +350,10 @@ auto problem_main() -> int {
   // Problem parameters
   // const int nx = 1000;
   // const double Lx = 5.0;
-  const double CFL_number = 0.1;
+  // const double CFL_number = 0.1;
+  // const double initial_dt = 1e-6;
+  // const double max_dt = 1e-4;
   const double max_time = 0.4;
-  const double max_dt = 1e-4;
-  const double initial_dt = 1e-6;
   const int max_timesteps = 8000;
 
   // Problem initialization
@@ -328,16 +368,15 @@ auto problem_main() -> int {
     }
   }
 
-  RadhydroSimulation<ShocktubeProblem> sim(boundaryConditions);
+  RadhydroSimulation<ShocktubeProblem> sim(boundaryConditions, false);
   sim.is_hydro_enabled_ = true;
   sim.is_radiation_enabled_ = false;
-  sim.cflNumber_ = CFL_number;
-  sim.maxDt_ = max_dt;
+  // sim.cflNumber_ = CFL_number;
+  // sim.maxDt_ = max_dt;
+  // sim.initDt_ = initial_dt;
   sim.stopTime_ = max_time;
   sim.maxTimesteps_ = max_timesteps;
-  sim.initDt_ = initial_dt;
   sim.computeReferenceSolution_ = true;
-  sim.plotfileInterval_ = -1;
 
   // Main time loop
   sim.setInitialConditions();
