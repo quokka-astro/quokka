@@ -666,14 +666,6 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
     }
   }
 
-  amrex::MFIter::allowMultipleMFIters(false);
-
-  std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-
-  std::cout << amrex::ParallelDescriptor::MyProc() << " | Time difference = " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << "[ms]" << std::endl;
-
-// =======================================================================================================
-
 	if (integratorOrder_ == 2) {
 		// update ghost zones [intermediate stage stored in state_new_]
 		fillBoundaryConditions(state_new_[lev], state_new_[lev], lev, time + dt_lev);
@@ -753,6 +745,12 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 			}
 		}
 	}
+
+  std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+  std::cout << amrex::ParallelDescriptor::MyProc() << " | Time difference = " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << "[ms]" << std::endl;
+
+  amrex::MFIter::allowMultipleMFIters(false);
+
 }
 
 template <typename problem_t>
