@@ -22,16 +22,19 @@
 #include <cassert>
 #include <cmath>
 
+// this speeds up the *total walltime* for problems with cooling by ~30% on a
+// single V100
+#define USE_FASTMATH
+
+#ifdef USE_FASTMATH
 namespace FastMath {
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-auto as_int(double f) {
-  return *reinterpret_cast<int64_t*>(&f); // NOLINT
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto as_int(double f) {
+  return *reinterpret_cast<int64_t *>(&f); // NOLINT
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-auto as_double(int64_t i) {
-  return *reinterpret_cast<double*>(&i); // NOLINT
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto as_double(int64_t i) {
+  return *reinterpret_cast<double *>(&i); // NOLINT
 }
 
 // Reference implementations, however the integer cast implementation
@@ -54,8 +57,7 @@ double pow2(const double x) {
 }
 */
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-auto lg(const double x) -> double {
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto lg(const double x) -> double {
   // Magic numbers constexpr because C++ doesn't constexpr reinterpret casts
   // these are floating point numbers as reinterpreted as integers.
   // as_int(1.0)
@@ -65,47 +67,53 @@ auto lg(const double x) -> double {
   return static_cast<double>(as_int(x) - one_as_int) * scale_down;
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-auto pow2(const double x) -> double {
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto pow2(const double x) -> double {
   // Magic numbers constexpr because C++ doesn't constexpr reinterpret casts
   // these are floating point numbers as reinterpreted as integers.
   // as_int(1.0)
   constexpr int64_t one_as_int = 4607182418800017408;
   // as_int(2.0) - as_int(1.0)
   constexpr double scale_up = 4503599627370496;
-  return as_double(static_cast<int64_t>(x*scale_up) + one_as_int);
+  return as_double(static_cast<int64_t>(x * scale_up) + one_as_int);
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-auto ln(const double x) -> double {
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ln(const double x) -> double {
   constexpr double ILOG2E = 0.6931471805599453;
   return ILOG2E * lg(x);
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-auto exp(const double x) -> double {
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto exp(const double x) -> double {
   constexpr double LOG2E = 1.4426950408889634;
   return pow2(LOG2E * x);
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-auto log10(const double x) -> double {
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto log10(const double x) -> double {
   constexpr double LOG2OLOG10 = 0.301029995663981195;
   return LOG2OLOG10 * lg(x);
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-auto pow10(const double x) -> double {
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto pow10(const double x) -> double {
   constexpr double LOG10OLOG2 = 3.321928094887362626;
   return pow2(LOG10OLOG2 * x);
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-auto tanh(const double x) -> double {
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto tanh(const double x) -> double {
   const double expx = exp(2 * x);
   return (expx - 1) / (expx + 1);
 }
 
 } // namespace FastMath
+#else
+namespace FastMath {
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto log10(const double x) -> double {
+  return std::log10(x);
+}
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto pow10(const double x) -> double {
+  return std::pow(10., x);
+}
+} // namespace FastMath
+#endif // USE_FASTMATH
 
 #endif // FASTMATH_HPP_
