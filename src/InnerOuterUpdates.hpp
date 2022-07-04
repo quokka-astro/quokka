@@ -5,12 +5,22 @@ namespace quokka {
 
 auto innerUpdateRange(amrex::Box const &validBox, const int nghost)
     -> amrex::Box {
+  // check that validBox is big enough
+  for(int i = 0; i < AMREX_SPACEDIM; ++i) {
+    AMREX_ALWAYS_ASSERT(validBox.length(i) >= 2*nghost);
+  }
+
   // return interior box for this validBox
   return amrex::grow(validBox, -nghost);
 }
 
 auto outerUpdateRanges(amrex::Box const &validBox, const int nghost)
     -> std::vector<amrex::Box> {
+  // check that validBox is big enough
+  for(int i = 0; i < AMREX_SPACEDIM; ++i) {
+    AMREX_ALWAYS_ASSERT(validBox.length(i) >= 2*nghost);
+  }
+
   // return vector of outer boxes for this validBox
   std::vector<amrex::Box> boxes{};
 
@@ -27,11 +37,11 @@ auto outerUpdateRanges(amrex::Box const &validBox, const int nghost)
       break;
     case 2:
       computeRange.growHi(1, -(computeRange.length(1) - nghost)); // ?
-      computeRange.grow(0, -nghost);
+      //computeRange.grow(0, -nghost); // ??
       break;
     case 3:
       computeRange.growLo(1, -(computeRange.length(1) - nghost)); // ?
-      computeRange.grow(0, -nghost);
+      //computeRange.grow(0, -nghost); // ??
       break;
     case 4:
       computeRange.growHi(2, -(computeRange.length(2) - nghost)); // ?
