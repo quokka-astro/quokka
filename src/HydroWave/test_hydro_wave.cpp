@@ -104,7 +104,7 @@ auto problem_main() -> int {
   sim.is_radiation_enabled_ = false;
   sim.cflNumber_ = CFL_number;
   sim.stopTime_ = max_time;
-  sim.maxTimesteps_ = max_timesteps;
+  //sim.maxTimesteps_ = max_timesteps;
   sim.plotfileInterval_ = -1;
 
   // set initial conditions
