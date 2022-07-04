@@ -10,6 +10,7 @@
 /// timestepping, solving, and I/O of a simulation for linear advection.
 
 #include <array>
+#include <omp.h>
 
 #include "AMReX.H"
 #include "AMReX_Arena.H"
@@ -31,6 +32,7 @@
 #include <AMReX_FluxRegister.H>
 
 #include "ArrayView.hpp"
+#include "InnerOuterUpdates.hpp"
 #include "linear_advection.hpp"
 #include "simulation.hpp"
 
@@ -214,7 +216,6 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 
 	// check state validity
 	AMREX_ASSERT(!state_old_[lev].contains_nan(0, state_old_[lev].nComp()));
-	AMREX_ASSERT(!state_old_[lev].contains_nan()); // check ghost cells
 
 	// get geometry (used only for cell sizes)
 	auto const &geomLevel = geom[lev];
@@ -263,10 +264,6 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 	// registers: one to store the old timestep, and one to store the intermediate stage
 	// and final stage. The intermediate stage and final stage re-use the same register.
 
-	// update ghost zones [w/ old timestep]
-	// (N.B. the input and output multifabs are allowed to be the same, as done here)
-	fillBoundaryConditions(state_old_[lev], state_old_[lev], lev, time);
-
 	amrex::Real fluxScaleFactor = NAN;
 	if constexpr (integratorOrder_ == 2) {
 		fluxScaleFactor = 0.5;
@@ -274,35 +271,87 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 		fluxScaleFactor = 1.0;
 	}
 
-	// advance all grids on local processor (Stage 1 of integrator)
-	for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
-		const amrex::Box &indexRange = iter.validbox();
-		auto const &stateOld = state_old_[lev].const_array(iter);
-		auto const &stateNew = state_new_[lev].array(iter);
-		auto fluxArrays = computeFluxes(stateOld, indexRange, ncomp_);
+#ifndef AMREX_MPI_THREAD_MULTIPLE
+#error "AMReX_MPI_THREAD_MULTIPLE must be added to the CMake options."
+#endif
 
-		amrex::IArrayBox redoFlag(indexRange, 1, amrex::The_Async_Arena());
+	amrex::MFIter::allowMultipleMFIters(true);
 
-		// Stage 1 of RK2-SSP
-		LinearAdvectionSystem<problem_t>::PredictStep(
-		    stateOld, stateNew,
-		    {AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
-				  fluxArrays[2].const_array())},
-		    dt_lev, geomLevel.CellSizeArray(), indexRange, ncomp_,
-			redoFlag.array());
+#pragma omp parallel num_threads(2)
+	{
+		if (omp_get_thread_num() == 0) {
+			// update ghost zones [w/ old timestep]
+			// (N.B. the input and output multifabs are allowed to be the same, as done here)
+			fillBoundaryConditions(state_old_[lev], state_old_[lev], lev, time);
+		} else {
+			// do inner update for each FAB
+			// (Stage 1 of RK integrator)
+			for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
+				const amrex::Box &validBox = iter.validbox();
+				amrex::Print() << "[valid box = " << validBox << "]\n";
 
-		if (do_reflux) {
-#ifdef USE_YAFLUXREGISTER
-			// increment flux registers
-			incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, fluxArrays, lev,
-					       fluxScaleFactor * dt_lev);
-#else
-			for (int i = 0; i < AMREX_SPACEDIM; i++) {
-				fluxes[i][iter].plus<amrex::RunOn::Gpu>(fluxArrays[i]);
+				const amrex::Box &indexRange = quokka::innerUpdateRange(validBox, nghost_);
+				amrex::Print() << "updating inner box: " << indexRange << "\n";
+
+				auto const &stateOld = state_old_[lev].const_array(iter);
+				auto const &stateNew = state_new_[lev].array(iter);
+				auto fluxArrays = computeFluxes(stateOld, indexRange, ncomp_);
+
+				amrex::IArrayBox redoFlag(indexRange, 1, amrex::The_Async_Arena());
+
+				// Stage 1 of RK2-SSP
+				LinearAdvectionSystem<problem_t>::PredictStep(
+					stateOld, stateNew,
+					{AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
+						fluxArrays[2].const_array())},
+					dt_lev, geomLevel.CellSizeArray(), indexRange, ncomp_,
+					redoFlag.array());
 			}
-#endif // USE_YAFLUXREGISTER
 		}
 	}
+
+
+	// check ghost cell validity
+	AMREX_ASSERT(!state_old_[lev].contains_nan());
+
+	// do outer updates for each FAB
+	// (Stage 1 of RK integrator)
+	for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
+		auto const &stateOld = state_old_[lev].const_array(iter);
+		auto const &stateNew = state_new_[lev].array(iter);
+
+		const amrex::Box &validBox = iter.validbox();	
+		std::vector<amrex::Box> boxes = quokka::outerUpdateRanges(validBox, nghost_);
+
+		// loop over outer boxes on this FAB
+		for (auto &indexRange : boxes) {
+			amrex::Print() << "updating outer box: " << indexRange << "\n";
+
+			auto fluxArrays = computeFluxes(stateOld, indexRange, ncomp_);
+			amrex::IArrayBox redoFlag(indexRange, 1, amrex::The_Async_Arena());
+
+			// Stage 1 of RK2-SSP
+			LinearAdvectionSystem<problem_t>::PredictStep(
+				stateOld, stateNew,
+				{AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
+					fluxArrays[2].const_array())},
+				dt_lev, geomLevel.CellSizeArray(), indexRange, ncomp_,
+				redoFlag.array());
+
+			if (do_reflux) {
+		#ifdef USE_YAFLUXREGISTER
+				// increment flux registers
+				incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, fluxArrays, lev,
+					fluxScaleFactor * dt_lev);
+		#else
+				for (int i = 0; i < AMREX_SPACEDIM; i++) {
+					fluxes[i][iter].plus<amrex::RunOn::Gpu>(fluxArrays[i]);
+				}
+		#endif // USE_YAFLUXREGISTER
+			}
+		}
+	}
+
 
 	if constexpr (integratorOrder_ == 2) {
 		// update ghost zones [w/ intermediate stage stored in state_new_]
