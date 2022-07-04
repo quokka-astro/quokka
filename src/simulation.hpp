@@ -91,7 +91,7 @@ public:
   amrex::Long cycleCount_ = 0;
   amrex::Long maxTimesteps_ = 1e4; // default
   amrex::Long maxWalltime_ = 0;    // default: no limit
-  int plotfileInterval_ = 10;      // -1 == no output
+  int plotfileInterval_ = -1;      // -1 == no output
   int checkpointInterval_ = -1;    // -1 == no output
 
   // constructors
