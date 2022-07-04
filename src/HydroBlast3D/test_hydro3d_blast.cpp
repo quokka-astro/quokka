@@ -237,7 +237,7 @@ void RadhydroSimulation<SedovProblem>::computeAfterEvolve(
 
   bool energyOK = false;
   if ((std::abs(rel_err) > 2.0e-15) || std::isnan(rel_err)) {
-    amrex::Print() << "Energy not conserved to machine precision!";
+    amrex::Print() << "Energy not conserved to machine precision!\n";
   } else {
     amrex::Print() << "Energy conservation is OK.\n";
     energyOK = true;
@@ -246,7 +246,7 @@ void RadhydroSimulation<SedovProblem>::computeAfterEvolve(
   bool kineticEnergyOK = false;
   if ((std::abs(rel_err_Ekin) > 0.01) || std::isnan(rel_err_Ekin)) {
     amrex::Print()
-        << "Kinetic energy production is incorrect by more than 1 percent!";
+        << "Kinetic energy production is incorrect by more than 1 percent!\n";
   } else {
     amrex::Print() << "Kinetic energy production is OK.\n";
     kineticEnergyOK = true;
