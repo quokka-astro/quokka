@@ -637,12 +637,12 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 				redoFlag.array());
 
 			// add non-conservative term to internal energy
-			computeInternalEnergyUpdate(stateInter, stateFinal, indexRange, ncompHydro_,
+			computeInternalEnergyUpdate(stateInter, stateNew, indexRange, ncompHydro_,
 										geom[lev].CellSizeArray(), 0.5 * dt_lev);
 
 			// prevent vacuum
 			HydroSystem<problem_t>::EnforcePressureFloor(densityFloor_, pressureFloor_,
-				indexRange, stateFinal);
+				indexRange, stateNew);
 
 			if (do_reflux) {
 				// increment flux registers
