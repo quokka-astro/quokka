@@ -13,6 +13,8 @@
 #include "AMReX_BC_TYPES.H"
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
+#include "hydro_system.hpp"
+#include "radiation_system.hpp"
 #include "test_hydro_shuosher.hpp"
 #ifdef HAVE_PYTHON
 #include "matplotlibcpp.h"
@@ -20,9 +22,10 @@
 
 struct ShocktubeProblem {};
 
-template <> struct EOS_Traits<ShocktubeProblem> {
+template <> struct HydroSystem_Traits<ShocktubeProblem> {
   static constexpr double gamma = 1.4;
   static constexpr bool reconstruct_eint = true;
+  static constexpr int nscalars = 0;       // number of passive scalars
 };
 
 template <>
@@ -69,6 +72,8 @@ void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsAtLevel(
       state(i, j, k, HydroSystem<ShocktubeProblem>::x3Momentum_index) = 0.;
       state(i, j, k, HydroSystem<ShocktubeProblem>::energy_index) =
           P / (gamma - 1.) + 0.5 * rho * (vx * vx);
+      state(i, j, k, HydroSystem<ShocktubeProblem>::internalEnergy_index) =
+          P / (gamma - 1.);
     });
   }
 
@@ -121,11 +126,8 @@ AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(
   consVar(i, j, k, RadSystem<ShocktubeProblem>::x3GasMomentum_index) = 0;
   consVar(i, j, k, RadSystem<ShocktubeProblem>::gasEnergy_index) =
       P / (gamma - 1.) + 0.5 * rho * (vx * vx);
-  // must also set radiation variables to zero, otherwise we get NaN asserts
-  consVar(i, j, k, RadSystem<ShocktubeProblem>::radEnergy_index) = 0;
-  consVar(i, j, k, RadSystem<ShocktubeProblem>::x1RadFlux_index) = 0;
-  consVar(i, j, k, RadSystem<ShocktubeProblem>::x2RadFlux_index) = 0;
-  consVar(i, j, k, RadSystem<ShocktubeProblem>::x3RadFlux_index) = 0;
+  consVar(i, j, k, RadSystem<ShocktubeProblem>::gasInternalEnergy_index) =
+      P / (gamma - 1.);
 }
 
 template <>
@@ -211,6 +213,8 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
       stateExact(i, j, k, HydroSystem<ShocktubeProblem>::x3Momentum_index) = 0.;
       stateExact(i, j, k, HydroSystem<ShocktubeProblem>::energy_index) =
           P / (gamma - 1.) + 0.5 * rho * (vx * vx);
+      stateExact(i, j, k, HydroSystem<ShocktubeProblem>::internalEnergy_index) =
+          P / (gamma - 1.);
     });
   }
 
@@ -248,7 +252,7 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
     std::map<std::string, std::string> dexact_args;
     d_args["label"] = "simulation";
     d_args["marker"] = "o";
-    //d_args["edgecolors"] = "k";
+    // d_args["edgecolors"] = "k";
     d_args["color"] = "C0";
     dexact_args["label"] = "reference solution";
     dexact_args["color"] = "C0";
@@ -257,7 +261,7 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
     matplotlibcpp::plot(xs_exact, density_exact, dexact_args);
 
     matplotlibcpp::legend();
-    //matplotlibcpp::title(fmt::format("t = {:.4f}", tNew_[0]));
+    // matplotlibcpp::title(fmt::format("t = {:.4f}", tNew_[0]));
     matplotlibcpp::ylabel("density");
     matplotlibcpp::xlabel("length x");
     matplotlibcpp::tight_layout();
@@ -287,7 +291,7 @@ auto problem_main() -> int {
     }
   }
 
-  RadhydroSimulation<ShocktubeProblem> sim(boundaryConditions);
+  RadhydroSimulation<ShocktubeProblem> sim(boundaryConditions, false);
   sim.is_hydro_enabled_ = true;
   sim.is_radiation_enabled_ = false;
   sim.cflNumber_ = CFL_number;

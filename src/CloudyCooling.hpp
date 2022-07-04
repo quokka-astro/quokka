@@ -18,6 +18,7 @@
 #include "Interpolate2D.hpp"
 #include "radiation_system.hpp"
 #include "root_finding.hpp"
+#include "FastMath.hpp"
 #include <limits>
 
 // From Grackle source code (initialize_chemistry_data.c, line 114):
@@ -87,9 +88,9 @@ cloudy_cooling_function(Real const rho, Real const T,
                                             tables.log_Tgas, tables.metalHeat);
 
   const double netLambda_prim =
-      std::pow(10., logPrimHeat) - std::pow(10., logPrimCool);
+      FastMath::pow10(logPrimHeat) - FastMath::pow10(logPrimCool);
   const double netLambda_metals =
-      std::pow(10., logMetalHeat) - std::pow(10., logMetalCool);
+      FastMath::pow10(logMetalHeat) - FastMath::pow10(logMetalCool);
   const double netLambda = netLambda_prim + netLambda_metals;
 
   // multiply by the square of H mass density (**NOT number density**)

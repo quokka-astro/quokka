@@ -21,9 +21,10 @@
 struct RichtmeyerMeshkovProblem {
 };
 
-template <> struct EOS_Traits<RichtmeyerMeshkovProblem> {
+template <> struct HydroSystem_Traits<RichtmeyerMeshkovProblem> {
 	static constexpr double gamma = 1.4;
 	static constexpr bool reconstruct_eint = false;
+	static constexpr int nscalars = 0;       // number of passive scalars
 };
 
 //#define DEBUG_SYMMETRY
@@ -190,7 +191,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	RadhydroSimulation<RichtmeyerMeshkovProblem> sim(boundaryConditions);
+	RadhydroSimulation<RichtmeyerMeshkovProblem> sim(boundaryConditions, false);
 	sim.is_hydro_enabled_ = true;
 	sim.is_radiation_enabled_ = false;
 	sim.stopTime_ = 2.5;

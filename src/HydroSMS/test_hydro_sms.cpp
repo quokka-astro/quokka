@@ -12,6 +12,7 @@
 #include "ArrayUtil.hpp"
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
+#include "hydro_system.hpp"
 #include "test_hydro_sms.hpp"
 #ifdef HAVE_PYTHON
 #include "matplotlibcpp.h"
@@ -19,9 +20,10 @@
 
 struct ShocktubeProblem {};
 
-template <> struct EOS_Traits<ShocktubeProblem> {
+template <> struct HydroSystem_Traits<ShocktubeProblem> {
   static constexpr double gamma = 1.4;
   static constexpr bool reconstruct_eint = true;
+  static constexpr int nscalars = 0;       // number of passive scalars
 };
 
 template <>
@@ -52,6 +54,8 @@ void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsAtLevel(
         E = 8.4168;
       }
 
+      double Eint = E - 0.5 * (m * m) / rho;
+
       for (int n = 0; n < ncomp; ++n) {
         state(i, j, k, n) = 0.;
       }
@@ -60,6 +64,8 @@ void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsAtLevel(
       state(i, j, k, HydroSystem<ShocktubeProblem>::x2Momentum_index) = 0.;
       state(i, j, k, HydroSystem<ShocktubeProblem>::x3Momentum_index) = 0.;
       state(i, j, k, HydroSystem<ShocktubeProblem>::energy_index) = E;
+      state(i, j, k, HydroSystem<ShocktubeProblem>::internalEnergy_index) =
+          Eint;
     });
   }
 
@@ -105,6 +111,8 @@ AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(
     E = 8.4168;
   }
 
+  double Eint = E - 0.5 * (m * m) / rho;
+
   for (int n = 0; n < numcomp; ++n) {
     consVar(i, j, k, n) = 0;
   }
@@ -114,6 +122,7 @@ AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(
   consVar(i, j, k, RadSystem<ShocktubeProblem>::x2GasMomentum_index) = 0.;
   consVar(i, j, k, RadSystem<ShocktubeProblem>::x3GasMomentum_index) = 0.;
   consVar(i, j, k, RadSystem<ShocktubeProblem>::gasEnergy_index) = E;
+  consVar(i, j, k, HydroSystem<ShocktubeProblem>::internalEnergy_index) = Eint;
 }
 
 template <>
@@ -177,6 +186,8 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
       stateExact(i, j, k, HydroSystem<ShocktubeProblem>::x3Momentum_index) = 0.;
       stateExact(i, j, k, HydroSystem<ShocktubeProblem>::energy_index) =
           P / (gamma - 1.) + 0.5 * rho * (vx * vx);
+      stateExact(i, j, k, HydroSystem<ShocktubeProblem>::internalEnergy_index) =
+          P / (gamma - 1.);
     });
   }
 
@@ -255,7 +266,7 @@ auto problem_main() -> int {
     }
   }
 
-  RadhydroSimulation<ShocktubeProblem> sim(boundaryConditions);
+  RadhydroSimulation<ShocktubeProblem> sim(boundaryConditions, false);
   sim.is_hydro_enabled_ = true;
   sim.is_radiation_enabled_ = false;
   sim.cflNumber_ = CFL_number;
