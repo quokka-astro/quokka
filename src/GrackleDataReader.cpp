@@ -23,6 +23,7 @@
 #include "AMReX_BLassert.H"
 #include "AMReX_Print.H"
 #include "AMReX_TableData.H"
+#include "FastMath.hpp"
 
 static const bool grackle_verbose = true;
 
@@ -54,6 +55,8 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name,
   double mh = 1.67e-24;
   double CoolUnit =
       (xbase1 * xbase1 * mh * mh) / (tbase1 * tbase1 * tbase1 * dbase1);
+  
+  const double small_fastlog_value = FastMath::log10(1.0e-99 / CoolUnit);
 
   // Read cooling data from hdf5 file
   hid_t file_id = 0;
@@ -169,9 +172,10 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name,
     my_cloudy.cooling_data = amrex::Table3D<double>(temp_data, lo, hi);
 
     for (int64_t q = 0; q < my_cloudy.data_size; q++) {
-      temp_data[q] = temp_data[q] > 0 ? log10(temp_data[q]) : SMALL_LOG_VALUE;
       // Convert to code units
-      temp_data[q] -= log10(CoolUnit);
+      double value = temp_data[q] / CoolUnit;
+      // Convert to not-quite-log10 (using FastMath)
+      temp_data[q] = value > 0 ? FastMath::log10(value) : small_fastlog_value;
     }
 
     status = H5Dclose(dset_id);
@@ -202,9 +206,10 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name,
     my_cloudy.heating_data = amrex::Table3D<double>(temp_data, lo, hi);
 
     for (int64_t q = 0; q < my_cloudy.data_size; q++) {
-      temp_data[q] = temp_data[q] > 0 ? log10(temp_data[q]) : SMALL_LOG_VALUE;
       // Convert to code units
-      temp_data[q] -= log10(CoolUnit);
+      double value = temp_data[q] / CoolUnit;
+      // Convert to not-quite-log10 (using FastMath)
+      temp_data[q] = value > 0 ? FastMath::log10(value) : small_fastlog_value;
     }
 
     status = H5Dclose(dset_id);

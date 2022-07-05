@@ -39,10 +39,11 @@ struct ShockCloud {
 constexpr double m_H = hydrogen_mass_cgs_;
 constexpr double seconds_in_year = 3.154e7;
 
-template <> struct EOS_Traits<ShockCloud> {
+template <> struct HydroSystem_Traits<ShockCloud> {
   static constexpr double gamma = 5. / 3.; // default value
   // if true, reconstruct e_int instead of pressure
   static constexpr bool reconstruct_eint = true;
+  static constexpr int nscalars = 0;       // number of passive scalars
 };
 
 constexpr Real Tgas0 = 1.0e7;            // K
@@ -286,7 +287,7 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
           state(i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
       const Real Egas = state(i, j, k, HydroSystem<ShockCloud>::energy_index);
 
-      Real Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom,
+      const Real Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom,
                                                              x3Mom, Egas);
 
       ODEUserData user_data{rho, tables};
@@ -312,11 +313,11 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
                "time = %g, dt = %.17e\n",
                rho, Eint, T, t_cool, dt);
       }
+      const Real Eint_new = y[0];
+      const Real dEint = Eint_new - Eint;
 
-      const Real Egas_new = RadSystem<ShockCloud>::ComputeEgasFromEint(
-          rho, x1Mom, x2Mom, x3Mom, y[0]);
-
-      state(i, j, k, HydroSystem<ShockCloud>::energy_index) = Egas_new;
+      state(i, j, k, HydroSystem<ShockCloud>::energy_index) += dEint;
+      state(i, j, k, HydroSystem<ShockCloud>::internalEnergy_index) += dEint;
     });
   }
 
@@ -335,7 +336,7 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
 
 template <>
 void RadhydroSimulation<ShockCloud>::computeAfterLevelAdvance(
-    int lev, Real /*time*/, Real dt_lev, int /*iteration*/, int /*ncycle*/) {
+    int lev, Real /*time*/, Real dt_lev, int /*ncycle*/) {
   // compute operator split physics
   computeCooling(state_new_[lev], dt_lev, cloudyTables);
 }
@@ -467,9 +468,10 @@ auto problem_main() -> int {
     boundaryConditions[n].setHi(2, amrex::BCType::int_dir);
   }
 
-  RadhydroSimulation<ShockCloud> sim(boundaryConditions);
+  bool enableRadiation = false;
+  RadhydroSimulation<ShockCloud> sim(boundaryConditions, enableRadiation);
   sim.is_hydro_enabled_ = true;
-  sim.is_radiation_enabled_ = false;
+  sim.is_radiation_enabled_ = enableRadiation;
 
   // Standard PPM gives unphysically enormous temperatures when used for
   // this problem (e.g., ~1e14 K or higher), but can be fixed by

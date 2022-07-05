@@ -1,5 +1,5 @@
-#ifndef TEST_HYDRO2D_RM_HPP_ // NOLINT
-#define TEST_HYDRO2D_RM_HPP_
+#ifndef TEST_HYDRO_CONTACT_HPP_ // NOLINT
+#define TEST_HYDRO_CONTACT_HPP_
 //==============================================================================
 // TwoMomentRad - a radiation transport library for patch-based AMR codes
 // Copyright 2020 Benjamin Wibking.
@@ -18,10 +18,11 @@
 
 // internal headers
 
+#include "hydro_system.hpp"
 extern "C" {
     #include "interpolate.h"
 }
 
 // function definitions
 
-#endif // TEST_HYDRO2D_RM_HPP_
+#endif // TEST_HYDRO_CONTACT_HPP_

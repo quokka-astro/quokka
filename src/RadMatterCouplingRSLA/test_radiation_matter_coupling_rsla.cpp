@@ -98,6 +98,7 @@ void RadhydroSimulation<CouplingProblem>::setInitialConditionsAtLevel(int lev) {
       state(i, j, k, RadSystem<CouplingProblem>::x3RadFlux_index) = 0;
 
       state(i, j, k, RadSystem<CouplingProblem>::gasEnergy_index) = Egas0;
+      state(i, j, k, RadSystem<CouplingProblem>::gasInternalEnergy_index) = Egas0;
       state(i, j, k, RadSystem<CouplingProblem>::gasDensity_index) = rho0;
       state(i, j, k, RadSystem<CouplingProblem>::x1GasMomentum_index) = 0.;
       state(i, j, k, RadSystem<CouplingProblem>::x2GasMomentum_index) = 0.;
