@@ -21,6 +21,7 @@
 #include "AMReX_Config.H"
 #include "AMReX_DistributionMapping.H"
 #include "AMReX_FArrayBox.H"
+#include "AMReX_FabArray.H"
 #include "AMReX_FabArrayUtility.H"
 #include "AMReX_IntVect.H"
 #include "AMReX_MultiFab.H"
@@ -219,7 +220,6 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 	// get geometry (used only for cell sizes)
 	auto const &geomLevel = geom[lev];
 
-#ifdef USE_YAFLUXREGISTER
 	// get flux registers
 	amrex::YAFluxRegister *fr_as_crse = nullptr;
 	amrex::YAFluxRegister *fr_as_fine = nullptr;
@@ -233,20 +233,10 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 			fr_as_fine = flux_reg_[lev].get();
 		}
 	}
-#else
-	amrex::FluxRegister *fine = nullptr;
-	amrex::FluxRegister *current = nullptr;
-
-	if (do_reflux && lev < finest_level) {
-		fine = flux_reg_[lev + 1].get();
-		fine->setVal(0.0);
-	}
-
-	if (do_reflux && lev > 0) {
-		current = flux_reg_[lev].get();
-	}
 
 	// create temporary MultiFab to store the fluxes from each grid on this level
+	// NOTE: for unknown reasons, calling YAFluxRegister directly for each
+	//  outer grid does not work!
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> fluxes;
 
 	if (do_reflux) {
@@ -257,7 +247,6 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 			fluxes[j].setVal(0.);
 		}
 	}
-#endif // USE_YAFLUXREGISTER
 
 	// We use the RK2-SSP integrator in a method-of-lines framework. It needs 2
 	// registers: one to store the old timestep, and one to store the intermediate stage
@@ -287,10 +276,10 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 			// (Stage 1 of RK integrator)
 			for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
 				const amrex::Box &validBox = iter.validbox();
-				amrex::Print() << "[valid box = " << validBox << "]\n";
+				//amrex::Print() << "[valid box = " << validBox << "]\n";
 
 				const amrex::Box &indexRange = quokka::innerUpdateRange(validBox, nghost_);
-				amrex::Print() << "updating inner box: " << indexRange << "\n";
+				//amrex::Print() << "updating inner box: " << indexRange << "\n";
 
 				auto const &stateOld = state_old_[lev].const_array(iter);
 				auto const &stateNew = state_new_[lev].array(iter);
@@ -305,6 +294,12 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 						fluxArrays[2].const_array())},
 					dt_lev, geomLevel.CellSizeArray(), indexRange, ncomp_,
 					redoFlag.array());
+
+				if (do_reflux) {
+					for (int i = 0; i < AMREX_SPACEDIM; i++) {
+						fluxes[i][iter].plus<amrex::RunOn::Gpu>(fluxArrays[i]);
+					}
+				}
 			}
 		}
 	}
@@ -324,8 +319,7 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 
 		// loop over outer boxes on this FAB
 		for (auto &indexRange : boxes) {
-			amrex::Print() << "updating outer box: " << indexRange << "\n";
-
+			//amrex::Print() << "updating outer box: " << indexRange << "\n";
 			auto fluxArrays = computeFluxes(stateOld, indexRange, ncomp_);
 			amrex::IArrayBox redoFlag(indexRange, 1, amrex::The_Async_Arena());
 
@@ -337,24 +331,26 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 				dt_lev, geomLevel.CellSizeArray(), indexRange, ncomp_,
 				redoFlag.array());
 
-			// Flux registers do *not* work when any cells adjacent to the edge
-			// are undefined. This means that calling incrementFluxRegisters separately
-			// for each outer box gives wrong results when AMR is used.
-			// The implementation below is incorrect and must be fixed.
 			if (do_reflux) {
-		#ifdef USE_YAFLUXREGISTER
-				// increment flux registers
-				incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, fluxArrays, lev,
-					fluxScaleFactor * dt_lev);
-		#else
 				for (int i = 0; i < AMREX_SPACEDIM; i++) {
 					fluxes[i][iter].plus<amrex::RunOn::Gpu>(fluxArrays[i]);
 				}
-		#endif // USE_YAFLUXREGISTER
 			}
 		}
 	}
 
+	if (do_reflux) {
+		for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
+			const amrex::Box &validBox = iter.validbox();
+			std::array<amrex::FArrayBox, AMREX_SPACEDIM> fluxArrays = 
+				{AMREX_D_DECL(std::move(fluxes[0][iter]),
+							  std::move(fluxes[1][iter]),
+							  std::move(fluxes[2][iter]))};
+			// increment flux registers
+			incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, fluxArrays, lev,
+				fluxScaleFactor * dt_lev);
+		}
+	}
 
 	if constexpr (integratorOrder_ == 2) {
 		// update ghost zones [w/ intermediate stage stored in state_new_]
@@ -379,44 +375,12 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 				redoFlag.array());
 
 			if (do_reflux) {
-#ifdef USE_YAFLUXREGISTER
 				// increment flux registers
 				incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, fluxArrays,
 						       lev, fluxScaleFactor * dt_lev);
-#else
-				for (int i = 0; i < AMREX_SPACEDIM; i++) {
-					fluxes[i][iter].plus<amrex::RunOn::Gpu>(fluxArrays[i]);
-				}
-#endif // USE_YAFLUXREGISTER
 			}
 		}
 	}
-
-#ifndef USE_YAFLUXREGISTER
-	if (do_reflux) {
-		// rescale by face area
-		auto dx = geomLevel.CellSizeArray();
-		amrex::Real const cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
-
-		for (int i = 0; i < AMREX_SPACEDIM; i++) {
-			amrex::Real const face_area = cell_vol / dx[i];
-			amrex::Real const rescaleFactor = fluxScaleFactor * dt_lev * face_area;
-			fluxes[i].mult(rescaleFactor);
-		}
-
-		if (current != nullptr) {
-			for (int i = 0; i < AMREX_SPACEDIM; i++) {
-				current->FineAdd(fluxes[i], i, 0, 0, ncomp_, 1.);
-			}
-		}
-
-		if (fine != nullptr) {
-			for (int i = 0; i < AMREX_SPACEDIM; i++) {
-				fine->CrseInit(fluxes[i], i, 0, 0, ncomp_, -1.);
-			}
-		}
-	}
-#endif
 }
 
 template <typename problem_t>
