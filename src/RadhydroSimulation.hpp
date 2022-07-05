@@ -482,7 +482,9 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
   {
     #pragma omp section
     {
-      AMREX_CUDA_SAFE_CALL(cudaSetDevice(amrex::Gpu::Device::deviceId()));
+      AMREX_HIP_OR_CUDA(AMREX_HIP_SAFE_CALL (hipSetDevice(device_id));,
+                        AMREX_CUDA_SAFE_CALL(cudaSetDevice(device_id)); );
+
       //  update ghost zones [old timestep]
       fillBoundaryConditions(state_old_[lev], state_old_[lev], lev, time);
       // check state validity
@@ -594,7 +596,8 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 
     #pragma omp section
     {
-      AMREX_CUDA_SAFE_CALL(cudaSetDevice(amrex::Gpu::Device::deviceId()));
+      AMREX_HIP_OR_CUDA(AMREX_HIP_SAFE_CALL (hipSetDevice(device_id));,
+                        AMREX_CUDA_SAFE_CALL(cudaSetDevice(device_id)); );
       // DO INTERIORS
       // advance all grids on local processor (Stage 1 of integrator)
       for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
