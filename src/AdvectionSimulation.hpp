@@ -337,6 +337,10 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 				dt_lev, geomLevel.CellSizeArray(), indexRange, ncomp_,
 				redoFlag.array());
 
+			// Flux registers do *not* work when any cells adjacent to the edge
+			// are undefined. This means that calling incrementFluxRegisters separately
+			// for each outer box gives wrong results when AMR is used.
+			// The implementation below is incorrect and must be fixed.
 			if (do_reflux) {
 		#ifdef USE_YAFLUXREGISTER
 				// increment flux registers
