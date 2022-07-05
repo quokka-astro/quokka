@@ -65,6 +65,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	using AMRSimulation<problem_t>::componentNames_;
 	using AMRSimulation<problem_t>::fillBoundaryConditions;
 	using AMRSimulation<problem_t>::geom;
+	using AMRSimulation<problem_t>::dmap;
 	using AMRSimulation<problem_t>::flux_reg_;
 	using AMRSimulation<problem_t>::incrementFluxRegisters;
 	using AMRSimulation<problem_t>::finest_level;
@@ -509,6 +510,20 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 {
 	BL_PROFILE("RadhydroSimulation::advanceHydroAtLevel()");
 
+	// create temporary MultiFab to store the fluxes from each grid on this level
+	// NOTE: for unknown reasons, calling YAFluxRegister directly for each
+	// 		 outer box does not work!
+	std::array<amrex::MultiFab, AMREX_SPACEDIM> fluxes;
+	if (do_reflux) {
+		for (int j = 0; j < AMREX_SPACEDIM; j++) {
+			amrex::BoxArray ba = state_new_[lev].boxArray();
+			ba.surroundingNodes(j);
+			fluxes[j].define(ba, dmap[lev], ncomp_, 0);
+			fluxes[j].setVal(0.);
+		}
+	}
+
+	// compute prefactor for fluxes when adding to flux register
 	amrex::Real fluxScaleFactor = NAN;
 	if (integratorOrder_ == 2) {
 		fluxScaleFactor = 0.5;
@@ -535,9 +550,10 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 			// (Stage 1 of RK integrator)
 			for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
 				const amrex::Box &validBox = iter.validbox();
-				amrex::Print() << "[valid box = " << validBox << "]\n";
+				//amrex::Print() << "[valid box = " << validBox << "]\n";
+
 				const amrex::Box &indexRange = quokka::innerUpdateRange(validBox, nghost_);
-				amrex::Print() << "updating inner box: " << indexRange << "\n";
+				//amrex::Print() << "updating inner box: " << indexRange << "\n";
 
 				auto const &stateOld = state_old_[lev].const_array(iter);
 				auto const &stateNew = state_new_[lev].array(iter);
@@ -553,14 +569,13 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 						fluxArrays[2].const_array())},
 					dt_lev, geom[lev].CellSizeArray(), indexRange, ncompHydro_,
 					redoFlag.array());
-				
-				// add non-conservative term to internal energy
-				computeInternalEnergyUpdate(stateOld, stateNew, indexRange, ncompHydro_,
-											geom[lev].CellSizeArray(), dt_lev);
 
-				// prevent vacuum
-				HydroSystem<problem_t>::EnforcePressureFloor(densityFloor_, pressureFloor_,
-					indexRange, stateNew);
+				if (do_reflux) {
+					auto expandedFluxes = expandFluxArrays(fluxArrays, 0, state_new_[lev].nComp());
+					for (int i = 0; i < AMREX_SPACEDIM; i++) {
+						fluxes[i][iter].plus<amrex::RunOn::Gpu>(expandedFluxes[i]);
+					}
+				}
 			}
 		}
 	}
@@ -577,8 +592,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 		std::vector<amrex::Box> boxes = quokka::outerUpdateRanges(validBox, nghost_);
 
 		for (auto &indexRange : boxes) {
-			amrex::Print() << "updating outer box: " << indexRange << "\n";
-
+			//amrex::Print() << "updating outer box: " << indexRange << "\n";
 			auto fluxArrays = computeHydroFluxes(stateOld, indexRange, ncompHydro_);
 			amrex::IArrayBox redoFlag(indexRange, 1, amrex::The_Async_Arena());
 
@@ -590,24 +604,36 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 				dt_lev, geom[lev].CellSizeArray(), indexRange, ncompHydro_,
 				redoFlag.array());
 			
-			// add non-conservative term to internal energy
-			computeInternalEnergyUpdate(stateOld, stateNew, indexRange, ncompHydro_,
-										geom[lev].CellSizeArray(), dt_lev);
-
-			// prevent vacuum
-			HydroSystem<problem_t>::EnforcePressureFloor(densityFloor_, pressureFloor_,
-				indexRange, stateNew);
-
-			// increment flux registers
 			if (do_reflux) {
-				auto expandedFluxes = expandFluxArrays(fluxArrays,
-					0, state_new_[lev].nComp());
-				incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, expandedFluxes, lev,
-					fluxScaleFactor * dt_lev);
+				auto expandedFluxes = expandFluxArrays(fluxArrays, 0, state_new_[lev].nComp());
+				for (int i = 0; i < AMREX_SPACEDIM; i++) {
+					fluxes[i][iter].plus<amrex::RunOn::Gpu>(expandedFluxes[i]);
+				}
 			}
 		}
 	}
 	
+	for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
+		const amrex::Box &validBox = iter.validbox();
+		auto const &stateOld = state_old_[lev].const_array(iter);
+		auto const &stateNew = state_new_[lev].array(iter);
+
+		// add non-conservative term to internal energy
+		computeInternalEnergyUpdate(stateOld, stateNew, validBox, ncompHydro_, geom[lev].CellSizeArray(), dt_lev);
+
+		// prevent vacuum
+		HydroSystem<problem_t>::EnforcePressureFloor(densityFloor_, pressureFloor_, validBox, stateNew);
+
+		// increment flux registers
+		if (do_reflux) {
+			std::array<amrex::FArrayBox, AMREX_SPACEDIM> fluxArrays = 
+				{AMREX_D_DECL(std::move(fluxes[0][iter]),
+							std::move(fluxes[1][iter]),
+							std::move(fluxes[2][iter]))};
+			incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, fluxArrays, lev,
+				fluxScaleFactor * dt_lev);
+		}
+	}
 
 	if (integratorOrder_ == 2) {
 		// update ghost zones [intermediate stage stored in state_new_]
