@@ -29,9 +29,10 @@ struct SedovProblem {};
 // if false, use octant symmetry instead
 constexpr bool simulate_full_box = false;
 
-template <> struct EOS_Traits<SedovProblem> {
+template <> struct HydroSystem_Traits<SedovProblem> {
   static constexpr double gamma = 1.4;
   static constexpr bool reconstruct_eint = false;
+  static constexpr int nscalars = 0;       // number of passive scalars
 };
 
 template <>
@@ -177,26 +178,15 @@ void RadhydroSimulation<SedovProblem>::ErrorEst(int lev,
 template <>
 void RadhydroSimulation<SedovProblem>::computeAfterEvolve(
     amrex::Vector<amrex::Real> &initSumCons) {
-  // check conservation of total energy
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 =
       geom[0].CellSizeArray();
   amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
 
+  // check conservation of total energy
   amrex::Real const Egas0 =
       initSumCons[RadSystem<SedovProblem>::gasEnergy_index];
-  amrex::Real const Erad0 =
-      initSumCons[RadSystem<SedovProblem>::radEnergy_index];
-  amrex::Real const Etot0 = Egas0 + (RadSystem<SedovProblem>::c_light_ /
-                                     RadSystem<SedovProblem>::c_hat_) *
-                                        Erad0;
-
   amrex::Real const Egas =
       state_new_[0].sum(RadSystem<SedovProblem>::gasEnergy_index) * vol;
-  amrex::Real const Erad =
-      state_new_[0].sum(RadSystem<SedovProblem>::radEnergy_index) * vol;
-  amrex::Real const Etot = Egas + (RadSystem<SedovProblem>::c_light_ /
-                                   RadSystem<SedovProblem>::c_hat_) *
-                                      Erad;
 
   // compute kinetic energy
   amrex::MultiFab Ekin_mf(boxArray(0), DistributionMap(0), 1, 0);
@@ -219,13 +209,13 @@ void RadhydroSimulation<SedovProblem>::computeAfterEvolve(
   amrex::Real const frac_Ekin = Ekin / Egas;
   amrex::Real const frac_Ekin_exact = 0.218729;
 
-  amrex::Real const abs_err = (Etot - Etot0);
-  amrex::Real const rel_err = abs_err / Etot0;
+  amrex::Real const abs_err = (Egas - Egas0);
+  amrex::Real const rel_err = abs_err / Egas0;
 
   amrex::Real const rel_err_Ekin = frac_Ekin - frac_Ekin_exact;
 
-  amrex::Print() << "\nInitial gas+radiation energy = " << Etot0 << std::endl;
-  amrex::Print() << "Final gas+radiation energy = " << Etot << std::endl;
+  amrex::Print() << "\nInitial energy = " << Egas0 << std::endl;
+  amrex::Print() << "Final energy = " << Egas << std::endl;
   amrex::Print() << "\tabsolute conservation error = " << abs_err << std::endl;
   amrex::Print() << "\trelative conservation error = " << rel_err << std::endl;
   amrex::Print() << "\tkinetic energy = " << Ekin << std::endl;
@@ -281,7 +271,7 @@ auto problem_main() -> int {
   }
 
   // Problem initialization
-  RadhydroSimulation<SedovProblem> sim(boundaryConditions);
+  RadhydroSimulation<SedovProblem> sim(boundaryConditions, false);
   sim.is_hydro_enabled_ = true;
   sim.is_radiation_enabled_ = false;
   sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
