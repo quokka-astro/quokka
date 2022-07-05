@@ -149,9 +149,7 @@ auto problem_main() -> int {
   AdvectionSimulation<SquareProblem> sim(boundaryConditions);
   sim.stopTime_ = max_time;
   sim.cflNumber_ = CFL_number;
-  sim.maxTimesteps_ = max_timesteps;
-  sim.plotfileInterval_ = 1000;
-  sim.checkpointInterval_ = -1;
+  //sim.maxTimesteps_ = max_timesteps;
 
   sim.advectionVx_ = advection_velocity;
   sim.advectionVy_ = advection_velocity;
