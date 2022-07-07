@@ -550,6 +550,9 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 
 #pragma omp parallel num_threads(2)
 		{
+		    AMREX_HIP_OR_CUDA(AMREX_HIP_SAFE_CALL(hipSetDevice(amrex::Gpu::Device::deviceId()));,
+		        AMREX_CUDA_SAFE_CALL(cudaSetDevice(amrex::Gpu::Device::deviceId())); );
+			
 			if (omp_get_thread_num() == 0) {
 				// update ghost zones [old timestep]
 				fillBoundaryConditions(state_old_[lev], state_old_[lev], lev, time);
@@ -653,6 +656,9 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 
 #pragma omp parallel num_threads(2)
 		{
+		    AMREX_HIP_OR_CUDA(AMREX_HIP_SAFE_CALL(hipSetDevice(amrex::Gpu::Device::deviceId()));,
+		        AMREX_CUDA_SAFE_CALL(cudaSetDevice(amrex::Gpu::Device::deviceId())); );
+			
 			if (omp_get_thread_num() == 0) {
 				// update ghost zones [intermediate stage stored in state_inter_mf]
 				fillBoundaryConditions(state_inter_mf, state_inter_mf, lev, time + dt_lev);
