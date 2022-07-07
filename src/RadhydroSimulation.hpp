@@ -540,6 +540,9 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 
 	amrex::MFIter::allowMultipleMFIters(true);
 
+	// larger multiples improve performance, but limit the minimum box size
+	const int nwidth = nghost_; // 8 * nghost_;
+
 #pragma omp parallel num_threads(2)
 	{
 		if (omp_get_thread_num() == 0) {
@@ -550,7 +553,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 			// (Stage 1 of RK integrator)
 			for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
 				const amrex::Box &validBox = iter.validbox();
-				const amrex::Box &indexRange = quokka::innerUpdateRange(validBox, nghost_);
+				const amrex::Box &indexRange = quokka::innerUpdateRange(validBox, nwidth);
 				auto const &stateOld = state_old_[lev].const_array(iter);
 				auto const &stateNew = state_new_[lev].array(iter);
 				auto fluxArrays = computeHydroFluxes(stateOld, indexRange, ncompHydro_);
@@ -585,7 +588,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 		auto const &stateOld = state_old_[lev].const_array(iter);
 		auto const &stateNew = state_new_[lev].array(iter);
 		const amrex::Box &validBox = iter.validbox();			
-		std::vector<amrex::Box> boxes = quokka::outerUpdateRanges(validBox, nghost_);
+		std::vector<amrex::Box> boxes = quokka::outerUpdateRanges(validBox, nwidth);
 
 		// do outer boxes
 		for (auto &indexRange : boxes) {
