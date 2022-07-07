@@ -553,11 +553,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 			// (Stage 1 of RK integrator)
 			for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
 				const amrex::Box &validBox = iter.validbox();
-				//amrex::Print() << "[valid box = " << validBox << "]\n";
-
 				const amrex::Box &indexRange = quokka::innerUpdateRange(validBox, nghost_);
-				//amrex::Print() << "updating inner box: " << indexRange << "\n";
-
 				auto const &stateOld = state_old_[lev].const_array(iter);
 				auto const &stateNew = state_new_[lev].array(iter);
 				auto fluxArrays = computeHydroFluxes(stateOld, indexRange, ncompHydro_);
@@ -595,7 +591,6 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 		std::vector<amrex::Box> boxes = quokka::outerUpdateRanges(validBox, nghost_);
 
 		for (auto &indexRange : boxes) {
-			//amrex::Print() << "updating outer box: " << indexRange << "\n";
 			auto fluxArrays = computeHydroFluxes(stateOld, indexRange, ncompHydro_);
 			amrex::IArrayBox redoFlag(indexRange, 1, amrex::The_Async_Arena());
 
