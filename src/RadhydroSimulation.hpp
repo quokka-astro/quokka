@@ -633,45 +633,85 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 	}
 
 	if (integratorOrder_ == 2) {
-		// update ghost zones [intermediate stage stored in state_inter_mf]
-		fillBoundaryConditions(state_inter_mf, state_inter_mf, lev, time + dt_lev);
+		AMREX_ASSERT(!state_inter_mf.contains_nan(0, state_new_[lev].nComp()));
+
+#pragma omp parallel num_threads(2)
+		{
+			if (omp_get_thread_num() == 0) {
+				// update ghost zones [intermediate stage stored in state_inter_mf]
+				fillBoundaryConditions(state_inter_mf, state_inter_mf, lev, time + dt_lev);
+			} else {
+				// inner updates
+				// (stage 2 of RK integrator)
+				for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
+					const amrex::Box &validBox = iter.validbox();
+					const amrex::Box &indexRange = quokka::innerUpdateRange(validBox, nwidth);
+
+					auto const &stateOld = state_old_[lev].const_array(iter);
+					auto const &stateInter = state_inter_mf.const_array(iter);
+					auto const &stateNew = state_new_[lev].array(iter);
+					auto fluxArrays = computeHydroFluxes(stateInter, indexRange, ncompHydro_);
+
+					amrex::IArrayBox redoFlag(indexRange, 1, amrex::The_Async_Arena());
+
+					// Stage 2 of RK2-SSP
+					HydroSystem<problem_t>::AddFluxesRK2(
+						stateNew, stateOld, stateInter,
+						{AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
+							fluxArrays[2].const_array())},
+						dt_lev, geom[lev].CellSizeArray(), indexRange, ncompHydro_,
+						redoFlag.array());
+				}
+			}
+		}
 
 		// check intermediate state validity
-		AMREX_ASSERT(!state_inter_mf.contains_nan(0, state_new_[lev].nComp()));
 		AMREX_ASSERT(!state_inter_mf.contains_nan()); // check ghost zones
 
-		// advance all grids on local processor (Stage 2 of integrator)
 		for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
+			const amrex::Box &validBox = iter.validbox();
+			std::vector<amrex::Box> boxes = quokka::outerUpdateRanges(validBox, nwidth);
 
-			const amrex::Box &indexRange = iter.validbox(); // 'validbox' == exclude ghost zones
 			auto const &stateOld = state_old_[lev].const_array(iter);
 			auto const &stateInter = state_inter_mf.const_array(iter);
 			auto const &stateNew = state_new_[lev].array(iter);
-			auto fluxArrays = computeHydroFluxes(stateInter, indexRange, ncompHydro_);
 
-			amrex::IArrayBox redoFlag(indexRange, 1, amrex::The_Async_Arena());
+			// do outer boxes
+			for (auto &indexRange : boxes) {
+				auto fluxArrays = computeHydroFluxes(stateInter, indexRange, ncompHydro_);
+				amrex::IArrayBox redoFlag(indexRange, 1, amrex::The_Async_Arena());
 
-			// Stage 2 of RK2-SSP
-			HydroSystem<problem_t>::AddFluxesRK2(
-				stateNew, stateOld, stateInter,
-				{AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
-					fluxArrays[2].const_array())},
-				dt_lev, geom[lev].CellSizeArray(), indexRange, ncompHydro_,
-				redoFlag.array());
+				// Stage 2 of RK2-SSP
+				HydroSystem<problem_t>::AddFluxesRK2(
+					stateNew, stateOld, stateInter,
+					{AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
+						fluxArrays[2].const_array())},
+					dt_lev, geom[lev].CellSizeArray(), indexRange, ncompHydro_,
+					redoFlag.array());
+				
+				if (do_reflux) {
+					auto expandedFluxes = expandFluxArrays(fluxArrays, 0, state_new_[lev].nComp());
+					for (int i = 0; i < AMREX_SPACEDIM; i++) {
+						fluxes[i][iter].plus<amrex::RunOn::Gpu>(expandedFluxes[i]);
+					}
+				}
+			}
 
 			// add non-conservative term to internal energy
-			computeInternalEnergyUpdate(stateInter, stateNew, indexRange, ncompHydro_,
+			computeInternalEnergyUpdate(stateInter, stateNew, validBox, ncompHydro_,
 										geom[lev].CellSizeArray(), 0.5 * dt_lev);
 
 			// prevent vacuum
-			HydroSystem<problem_t>::EnforcePressureFloor(densityFloor_, pressureFloor_,
-				indexRange, stateNew);
+			HydroSystem<problem_t>::EnforcePressureFloor(densityFloor_, pressureFloor_, validBox, stateNew);
 
+			// increment flux registers
 			if (do_reflux) {
-				// increment flux registers
-				auto expandedFluxes = expandFluxArrays(fluxArrays, 0, state_new_[lev].nComp());
-				incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, expandedFluxes, lev,
-							fluxScaleFactor * dt_lev);
+				std::array<amrex::FArrayBox, AMREX_SPACEDIM> fluxArrays = 
+					{AMREX_D_DECL(std::move(fluxes[0][iter]),
+								std::move(fluxes[1][iter]),
+								std::move(fluxes[2][iter]))};
+				incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, fluxArrays, lev,
+					fluxScaleFactor * dt_lev);
 			}
 		}
 	}
