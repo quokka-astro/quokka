@@ -587,6 +587,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 		const amrex::Box &validBox = iter.validbox();			
 		std::vector<amrex::Box> boxes = quokka::outerUpdateRanges(validBox, nghost_);
 
+		// do outer boxes
 		for (auto &indexRange : boxes) {
 			auto fluxArrays = computeHydroFluxes(stateOld, indexRange, ncompHydro_);
 			amrex::IArrayBox redoFlag(indexRange, 1, amrex::The_Async_Arena());
@@ -606,12 +607,6 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 				}
 			}
 		}
-	}
-	
-	for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
-		const amrex::Box &validBox = iter.validbox();
-		auto const &stateOld = state_old_[lev].const_array(iter);
-		auto const &stateNew = state_new_[lev].array(iter);
 
 		// add non-conservative term to internal energy
 		computeInternalEnergyUpdate(stateOld, stateNew, validBox, ncompHydro_, geom[lev].CellSizeArray(), dt_lev);
