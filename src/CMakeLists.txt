@@ -34,6 +34,7 @@ endif()
 
 if(ENABLE_ASAN)
   # enable AddressSanitizer for debugging
+  # export ASAN_OPTIONS=abort_on_error=1:fast_unwind_on_malloc=0:detect_leaks=0 UBSAN_OPTIONS=print_stacktrace=1
   message(STATUS "Compiling with AddressSanitizer and UndefinedBehaviorSanitizer *enabled*")
   add_compile_options(-fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all -fsanitize=float-divide-by-zero -fsanitize=float-cast-overflow -fno-sanitize=null -fno-sanitize=alignment)
   add_link_options(-fsanitize=address -fsanitize=undefined)
