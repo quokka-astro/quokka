@@ -105,7 +105,7 @@ void AdvectionSimulation<SquareProblem>::ErrorEst(int lev,
 
     amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
       int const n = 0;
-      Real const rho = state(i, j, k, n);
+      Real const rho = std::max(state(i, j, k, n), 1e-5);
 
       Real const del_x =
           (state(i + 1, j, k, n) - state(i - 1, j, k, n)) / (2.0 * dx[0]);
