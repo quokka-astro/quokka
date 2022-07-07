@@ -125,8 +125,8 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 		}
 	}
 
-	[[nodiscard]] auto getScalarVariableNames() const -> std::vector<std::string>;
-	[[nodiscard]] auto getNumVars(bool allocateRadVars) const -> int;
+	[[nodiscard]] static auto getScalarVariableNames() -> std::vector<std::string>;
+	[[nodiscard]] static auto getNumVars(bool allocateRadVars) -> int;
 
 	void checkHydroStates(amrex::MultiFab &mf, char const *file, int line);
 	void computeMaxSignalLocal(int level) override;
@@ -220,7 +220,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 };
 
 template <typename problem_t>
-auto RadhydroSimulation<problem_t>::getScalarVariableNames() const -> std::vector<std::string> {
+auto RadhydroSimulation<problem_t>::getScalarVariableNames() -> std::vector<std::string> {
 	// return vector of names for the passive scalars
 	// this can be specialized by the user to provide more descriptive names
 	// (these names are used to label the variables in the plotfiles)
@@ -236,7 +236,7 @@ auto RadhydroSimulation<problem_t>::getScalarVariableNames() const -> std::vecto
 }
 
 template <typename problem_t>
-auto RadhydroSimulation<problem_t>::getNumVars(bool allocateRadVars) const -> int {
+auto RadhydroSimulation<problem_t>::getNumVars(bool allocateRadVars) -> int {
 	// return the number of cell-centered variables to be allocated
 	// in the state_new_ and state_old_ multifabs
 
