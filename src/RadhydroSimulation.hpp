@@ -523,6 +523,10 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 		}
 	}
 
+	// allocate MultiFab for intermediate RK state
+	amrex::BoxArray const &ba = state_new_[lev].boxArray();
+	amrex::MultiFab state_inter_mf(ba, dmap[lev], ncomp_, nghost_);
+
 	// compute prefactor for fluxes when adding to flux register
 	amrex::Real fluxScaleFactor = NAN;
 	if (integratorOrder_ == 2) {
@@ -551,11 +555,11 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 		} else {
 			// do inner updates
 			// (Stage 1 of RK integrator)
-			for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
+			for (amrex::MFIter iter(state_inter_mf); iter.isValid(); ++iter) {
 				const amrex::Box &validBox = iter.validbox();
 				const amrex::Box &indexRange = quokka::innerUpdateRange(validBox, nwidth);
 				auto const &stateOld = state_old_[lev].const_array(iter);
-				auto const &stateNew = state_new_[lev].array(iter);
+				auto const &stateNew = state_inter_mf.array(iter);
 				auto fluxArrays = computeHydroFluxes(stateOld, indexRange, ncompHydro_);
 
 				// temporary FAB for RK stage
@@ -584,9 +588,9 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 
 	// do outer updates
 	// (Stage 1 of RK integrator)
-	for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
+	for (amrex::MFIter iter(state_inter_mf); iter.isValid(); ++iter) {
 		auto const &stateOld = state_old_[lev].const_array(iter);
-		auto const &stateNew = state_new_[lev].array(iter);
+		auto const &stateNew = state_inter_mf.array(iter);
 		const amrex::Box &validBox = iter.validbox();			
 		std::vector<amrex::Box> boxes = quokka::outerUpdateRanges(validBox, nwidth);
 
@@ -629,19 +633,19 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 	}
 
 	if (integratorOrder_ == 2) {
-		// update ghost zones [intermediate stage stored in state_new_]
-		fillBoundaryConditions(state_new_[lev], state_new_[lev], lev, time + dt_lev);
+		// update ghost zones [intermediate stage stored in state_inter_mf]
+		fillBoundaryConditions(state_inter_mf, state_inter_mf, lev, time + dt_lev);
 
 		// check intermediate state validity
-		AMREX_ASSERT(!state_new_[lev].contains_nan(0, state_new_[lev].nComp()));
-		AMREX_ASSERT(!state_new_[lev].contains_nan()); // check ghost zones
+		AMREX_ASSERT(!state_inter_mf.contains_nan(0, state_new_[lev].nComp()));
+		AMREX_ASSERT(!state_inter_mf.contains_nan()); // check ghost zones
 
 		// advance all grids on local processor (Stage 2 of integrator)
 		for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
 
 			const amrex::Box &indexRange = iter.validbox(); // 'validbox' == exclude ghost zones
 			auto const &stateOld = state_old_[lev].const_array(iter);
-			auto const &stateInter = state_new_[lev].const_array(iter);
+			auto const &stateInter = state_inter_mf.const_array(iter);
 			auto const &stateNew = state_new_[lev].array(iter);
 			auto fluxArrays = computeHydroFluxes(stateInter, indexRange, ncompHydro_);
 
