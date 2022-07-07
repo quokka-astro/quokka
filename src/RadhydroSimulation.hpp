@@ -633,7 +633,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 	}
 
 	if (integratorOrder_ == 2) {
-		AMREX_ASSERT(!state_inter_mf.contains_nan(0, state_new_[lev].nComp()));
+		AMREX_ASSERT(!state_inter_mf.contains_nan(0, state_inter_mf.nComp()));
 
 #pragma omp parallel num_threads(2)
 		{
