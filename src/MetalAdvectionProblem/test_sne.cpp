@@ -45,7 +45,11 @@ constexpr double  Msun     = 2.e33;
 constexpr double  yr_to_s  = 3.154e7;
 constexpr double  Myr      = 1.e6*yr_to_s;
 constexpr double  pc       = 3.018e18;
-//constexpr double  kpc      = 3.018e21;
+constexpr double  kpc      = 1.e3 * pc;
+constexpr double  ks_sigma_sfr = 6.e-5/yr_to_s/kpc/kpc;
+constexpr double  hscale   = 150. * pc;
+constexpr double  pi       = 3.1415;
+constexpr double  probSN_prefac   = ks_sigma_sfr/(hscale*pi);
 //constexpr double  Mu       = 0.6;
 //constexpr double  tMAX     = 1.005*Myr;
 constexpr double  kmps     = 1.e5; 
@@ -61,9 +65,10 @@ struct NewProblem {};
 
 // if false, use octant symmetry instead
 
-template <> struct EOS_Traits<NewProblem> {
+template <> struct HydroSystem_Traits<NewProblem> {
   static constexpr double gamma = 1.4;
   static constexpr bool reconstruct_eint = false;
+  static constexpr int nscalars = 3;       // number of passive scalars
 };
 
 template <>
@@ -119,7 +124,6 @@ void RadhydroSimulation<NewProblem>::setInitialConditionsAtLevel(int lev) {
 			//double P   = rho * boltzmann_constant_cgs_ * 1.e6/Const_mH/Mu; //For an isothermal profile
       double P = rho01 * std::pow(sigma1, 2.0) + rho02 * std::pow(sigma2, 2.0);
 
-
       AMREX_ASSERT(!std::isnan(rho));
       AMREX_ASSERT(!std::isnan(vx));
 			AMREX_ASSERT(!std::isnan(vy));
@@ -131,17 +135,29 @@ void RadhydroSimulation<NewProblem>::setInitialConditionsAtLevel(int lev) {
 			const auto gamma = HydroSystem<NewProblem>::gamma_;
 
       setFB(i,j,k,0) = -10.0;
-      if(i==128 && j==128 && k==256){
-        setFB(i, j, k, 0) = 10.0;
-        // rho = 10.0 * Const_mH;
-      }
+      // if(i==128 && j==128 && k==256){
+      //   setFB(i, j, k, 0) = 10.0;
+      //   // rho = 10.0 * Const_mH;
+      // }
      
+      if(std::sqrt(z*z)<0.25*kpc) {
+        state(i, j, k, HydroSystem<NewProblem>::scalar0_index)    = 1.e2;  //Disk tracer
+        state(i, j, k, HydroSystem<NewProblem>::scalar1_index)    = 1.e-5;  //Halo tracer
+        state(i, j, k, HydroSystem<NewProblem>::scalar2_index)    = 1.e-5;  //Injected tracer
+       }
 
-      state(i, j, k, HydroSystem<NewProblem>::density_index) = rho;
+       else {
+        state(i, j, k, HydroSystem<NewProblem>::scalar0_index)    = 1.e-5;  //Disk tracer
+        state(i, j, k, HydroSystem<NewProblem>::scalar1_index)    = 1.e2;  //Halo tracer
+        state(i, j, k, HydroSystem<NewProblem>::scalar2_index)    = 1.e-5;  //Injected tracer
+       }
+
+      state(i, j, k, HydroSystem<NewProblem>::density_index)    = rho;
       state(i, j, k, HydroSystem<NewProblem>::x1Momentum_index) = 0.0;
       state(i, j, k, HydroSystem<NewProblem>::x2Momentum_index) = 0.0;
       state(i, j, k, HydroSystem<NewProblem>::x3Momentum_index) = 0.0;
-      state(i, j, k, HydroSystem<NewProblem>::energy_index) = P / (gamma - 1.);
+      state(i, j, k, HydroSystem<NewProblem>::energy_index)     = P / (gamma - 1.);
+      // state(i, j, k, HydroSystem<NewProblem>::scalar0_index)    = 10.;
 
     });
   }
@@ -359,7 +375,7 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
 }
 
 /**Adding Supernova Source Terms*/
-
+/*
 void AddSupernova(amrex::MultiFab &mf, amrex::MultiFab &mf1, const Real dt_in, 
                   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx){
   BL_PROFILE("HydroSimulation::AddSupernova()")
@@ -377,45 +393,43 @@ void AddSupernova(amrex::MultiFab &mf, amrex::MultiFab &mf1, const Real dt_in,
     // amrex::Real prob = amrex::Random();
     amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j,
                                                         int k) noexcept {
-
-    double vol, n_sn; //, rho_cell, n_sn, prob_sn, t_ff, mdot, eff=0.01;
-	  vol       =  AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
-	  // rho_cell  = state(i, j, k, HydroSystem<NewProblem>::density_index);
-	  // // n_sn      = (rho_cell* vol)/(100.* Msun);
-    //n_sn      = 5.0;
-    // t_ff      = std::sqrt(3.*(std::atan(1)*4.0)/(32.*Const_G*rho_cell));
-    // mdot      = (eff * rho_cell /t_ff) * vol;
-    // prob_sn   = mdot*dt/(100.*Msun);
       if(setFB(i,j,k,0)>=0.0 && setFB(i,j,k,0)<1.e2) {
          state(i, j, k, HydroSystem<NewProblem>::density_index)+= setFB(i,j,k,0) * Mass_source/vol;
          state(i, j, k, HydroSystem<NewProblem>::energy_index) += setFB(i,j,k,0) * Energy_source/vol;
+         state(i, j, k, HydroSystem<NewProblem>::scalar2_index) = 1.e2;
          setFB(i,j,k,0) = 1.e2;
       }
     });
   }
   
-}
+}*/
 
-void ResetFBFlag(amrex::MultiFab &mf, amrex::MultiFab &mf1){
+void AddSupernova(amrex::MultiFab &mf, const Real dt_in, amrex::GpuArray<amrex::Real, 
+                  AMREX_SPACEDIM> dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo){
   // BL_PROFILE("HydroSimulation::AddSupernova()")
+  const Real dt = dt_in;
   
+  double Mass_source = 8.* Msun;
+  double Energy_source = 1.e51;
+
   for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
     const amrex::Box &indexRange = iter.validbox();
     auto const &state = mf.array(iter);
-    auto const &setFB = mf1.array(iter);
     // engine.rand_state = amrex::getRandState();
 
     amrex::ParallelForRNG(indexRange, [=] AMREX_GPU_DEVICE(int i, int j,
                                                         int k, RandomEngine const& engine) noexcept {
     
-     double rho_cell, rho_thresh;
-     double prob = amrex::Random(engine);
-	   rho_cell   = state(i, j, k, HydroSystem<NewProblem>::density_index);
-     rho_thresh = 50. * Const_mH;
-     int n_sn = RandomPoisson(5.0, engine);
-      if(rho_cell>rho_thresh && setFB(i,j,k,0)<0.0 && prob>0.9) {
-         setFB(i, j, k, 0) = n_sn;
-      }
+     double vol       =  AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
+     double z = z = prob_lo[2] + (k + amrex::Real(0.5)) * dx[2];
+     double fz = std::exp(-z*z/(hscale*hscale));
+     double nsn_expect = probSN_prefac * fz * vol * dt;
+    //  double nsn_expect = 2;
+     int n_sn = RandomPoisson(nsn_expect, engine);
+     if(n_sn>0){
+     state(i, j, k, HydroSystem<NewProblem>::density_index)+= n_sn * Mass_source/vol;
+     state(i, j, k, HydroSystem<NewProblem>::energy_index) += n_sn * Energy_source/vol;
+     state(i, j, k, HydroSystem<NewProblem>::scalar2_index)+= n_sn * 3.0; }
     });
   }  
 }
@@ -423,25 +437,16 @@ void ResetFBFlag(amrex::MultiFab &mf, amrex::MultiFab &mf1){
 
 template <>
 void RadhydroSimulation<NewProblem>::computeAfterLevelAdvance(int lev, amrex::Real time,
-								 amrex::Real dt_lev, int iteration, int ncycle)
+								 amrex::Real dt_lev, int ncycle)
 {
   //computeCooling(state_new_[lev], dt_lev, cloudyTables);
   amrex::Real prob= amrex::Random();
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo   = geom[lev].ProbLoArray();
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi   = geom[lev].ProbHiArray();
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx = geom[0].CellSizeArray();
-
-  int index_i = std::ceil(prob*(prob_hi[0]-prob_lo[0])/dx[0]);
-  prob= amrex::Random();
-  int index_j = std::ceil(prob*(prob_hi[1]-prob_lo[1])/dx[1]);
-  prob= amrex::Random();
-  int index_k = std::ceil(prob*(prob_hi[2]-prob_lo[2])/dx[2]);
-
-  // RandomEngine engine;
-  // engine.rand_state = amrex::getRandState();
   
-  AddSupernova(state_new_[lev], set_feedback_[lev], dt_lev, dx); 
-  ResetFBFlag(state_new_[lev], set_feedback_[lev]); 
+  AddSupernova(state_new_[lev], dt_lev, dx, prob_lo); 
+  // ResetFBFlag(state_new_[lev], set_feedback_[lev], dt_lev, dx); 
 
 }
 

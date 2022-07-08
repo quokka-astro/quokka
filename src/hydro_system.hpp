@@ -47,7 +47,9 @@ public:
     x3Momentum_index = 3,
     energy_index = 4,
     internalEnergy_index = 5, // auxiliary internal energy (rho * e)
-    scalar0_index = 6 // first passive scalar (only present if nscalars > 0!)
+    scalar0_index = 6, // first passive scalar (only present if nscalars > 0!)
+    scalar1_index = 7, // first passive scalar (only present if nscalars > 0!)
+    scalar2_index = 8 // first passive scalar (only present if nscalars > 0!)
   };
   enum primVarIndex {
     primDensity_index = 0,
@@ -57,7 +59,11 @@ public:
     pressure_index = 4,
     primEint_index = 5, // auxiliary internal energy (rho * e)
     primScalar0_index =
-        6 // first passive scalar (only present if nscalars > 0!)
+        6, // first passive scalar (only present if nscalars > 0!)
+    primScalar1_index =
+        7, // first passive scalar (only present if nscalars > 0!)
+    primScalar2_index =
+        8 // first passive scalar (only present if nscalars > 0!)
   };
 
   static constexpr int nscalars_ = HydroSystem_Traits<problem_t>::nscalars;
