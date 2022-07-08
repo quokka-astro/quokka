@@ -21,7 +21,6 @@ auto main(int argc, char **argv) -> int {
   //  NOTE: This *must* be called before AMReX is initialized
   const int nthreads = 2;
   omp_set_num_threads(nthreads);
-  amrex::Print() << "Running with " << nthreads << "OMP threads.\n";
 
   // Initialization (copied from ExaWind)
   amrex::Initialize(argc, argv, true, MPI_COMM_WORLD, []() {
