@@ -14,10 +14,16 @@
 #include "AMReX_REAL.H"
 
 #include "main.hpp"
+#include <omp.h>
 
 auto main(int argc, char **argv) -> int {
-  // Initialization (copied from ExaWind)
+  // Ensure the OpenMP runtime starts 2 threads (used for inner-outer updates)
+  //  NOTE: This *must* be called before AMReX is initialized
+  const int nthreads = 2;
+  omp_set_num_threads(nthreads);
+  amrex::Print() << "Running with " << nthreads << "OMP threads.\n";
 
+  // Initialization (copied from ExaWind)
   amrex::Initialize(argc, argv, true, MPI_COMM_WORLD, []() {
     amrex::ParmParse pp("amrex");
     // Set the defaults so that we throw an exception instead of attempting
