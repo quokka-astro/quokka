@@ -23,6 +23,6 @@ amr.grid_eff        = 0.7   # default
 do_reflux = 0
 do_subcycle = 0
 
-max_timesteps = 20000
+max_timesteps = 1000
 ascent_interval = -1
 plotfile_interval = -1
