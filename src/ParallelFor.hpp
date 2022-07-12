@@ -28,7 +28,7 @@ void ParallelFor(const int nwidth, amrex::Box const &box, L &&func) noexcept {
       }
     });
   } else {
-    amrex::ParallelFor(box, func);
+    amrex::ParallelFor(box, std::forward<L>(func));
   }
 }
 
@@ -50,7 +50,7 @@ void ParallelFor(const int nwidth, amrex::Box const &box, T ncomp,
       }
     });
   } else {
-    amrex::ParallelFor(box, ncomp, func);
+    amrex::ParallelFor(box, ncomp, std::forward<L>(func));
   }
 }
 
