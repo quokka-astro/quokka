@@ -32,6 +32,7 @@
 // internal headers
 #include "AMReX_TagBox.H"
 #include "ArrayView.hpp"
+#include "ParallelFor.hpp"
 #include "simulation.hpp"
 
 //#define MULTIDIM_EXTREMA_CHECK
@@ -62,16 +63,16 @@ template <typename problem_t> class HyperbolicSystem
 	template <FluxDir DIR>
 	static void ReconstructStatesConstant(arrayconst_t &q, array_t &leftState,
 					      array_t &rightState, amrex::Box const &indexRange,
-					      int nvars);
+					      int nwidth, int nvars);
 
 	template <FluxDir DIR>
 	static void ReconstructStatesPLM(arrayconst_t &q, array_t &leftState, array_t &rightState,
-					 amrex::Box const &indexRange, int nvars);
+					 amrex::Box const &indexRange, int nwidth, int nvars);
 
 	template <FluxDir DIR>
 	static void ReconstructStatesPPM(arrayconst_t &q, array_t &leftState, array_t &rightState,
 					 amrex::Box const &cellRange,
-					 amrex::Box const &interfaceRange, int nvars);
+					 amrex::Box const &interfaceRange, int nwidth, int nvars);
 
 	template <typename F>
 	__attribute__ ((__target__ ("no-fma")))
@@ -96,7 +97,7 @@ void HyperbolicSystem<problem_t>::ReconstructStatesConstant(arrayconst_t &q_in,
 							    array_t &leftState_in,
 							    array_t &rightState_in,
 							    amrex::Box const &indexRange,
-							    const int nvars)
+							    const int nwidth, const int nvars)
 {
 	// construct ArrayViews for permuted indices
 	quokka::Array4View<amrex::Real const, DIR> q(q_in);
@@ -108,7 +109,7 @@ void HyperbolicSystem<problem_t>::ReconstructStatesConstant(arrayconst_t &q_in,
 	// "right"-side of the interface at the *left* edge of zone i. [Indexing note: There are (nx
 	// + 1) interfaces for nx zones.]
 
-	amrex::ParallelFor(
+	quokka::ParallelFor(nwidth,
 	    indexRange, nvars, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
 		    // permute array indices according to dir
 		    auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
@@ -125,7 +126,7 @@ template <FluxDir DIR>
 void HyperbolicSystem<problem_t>::ReconstructStatesPLM(arrayconst_t &q_in, array_t &leftState_in,
 						       array_t &rightState_in,
 						       amrex::Box const &indexRange,
-						       const int nvars)
+						       const int nwidth, const int nvars)
 {
 	// construct ArrayViews for permuted indices
 	quokka::Array4View<amrex::Real const, DIR> q(q_in);
@@ -146,7 +147,7 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPLM(arrayconst_t &q_in, array
 
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
 
-	amrex::ParallelFor(
+	quokka::ParallelFor(nwidth,
 	    indexRange, nvars, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
 		    // permute array indices according to dir
 		    auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
@@ -207,8 +208,8 @@ template <FluxDir DIR>
 void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array_t &leftState_in,
 						       array_t &rightState_in,
 						       amrex::Box const &cellRange,
-						       amrex::Box const &interfaceRange,
-						       const int nvars)
+						       amrex::Box const & /*interfaceRange*/,
+						       const int nwidth, const int nvars)
 {
 	BL_PROFILE("HyperbolicSystem::ReconstructStatesPPM()");
 
@@ -224,7 +225,7 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array
 
 	// Indexing note: There are (nx + 1) interfaces for nx zones.
 
-	amrex::ParallelFor(
+	quokka::ParallelFor(nwidth,
 		cellRange, nvars, // cell-centered kernel
 		[=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
 		    // permute array indices according to dir

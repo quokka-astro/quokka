@@ -20,6 +20,7 @@
 #include "AMReX_BLassert.H"
 #include "AMReX_FArrayBox.H"
 #include "AMReX_FabArrayUtility.H"
+#include "ParallelFor.hpp"
 #include "hyperbolic_system.hpp"
 
 /// Class for a linear, scalar advection equation
@@ -32,7 +33,7 @@ template <typename problem_t> class LinearAdvectionSystem : public HyperbolicSys
 	// static member functions
 
 	static void ConservedToPrimitive(arrayconst_t &cons, array_t &primVar,
-					 amrex::Box const &indexRange, int nvars);
+					 amrex::Box const &indexRange, int nwidth, int nvars);
 
 	static void ComputeMaxSignalSpeed(amrex::Array4<amrex::Real const> const & /*cons*/,
 					  amrex::Array4<amrex::Real> const &maxSignal,
@@ -46,17 +47,17 @@ template <typename problem_t> class LinearAdvectionSystem : public HyperbolicSys
 	static void PredictStep(arrayconst_t &consVarOld, array_t &consVarNew,
 					  std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray, double dt_in,
 					  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange,
-					  int nvars, amrex::Array4<int> const &redoFlag);
+					  int nwidth, int nvars, amrex::Array4<int> const &redoFlag);
 
 	static void AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayconst_t &U1,
     				  std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray, double dt_in,
 					  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange,
-					  int nvars, amrex::Array4<int> const &redoFlag);
+					  int nwidth, int nvars, amrex::Array4<int> const &redoFlag);
 
 	template <FluxDir DIR>
 	static void ComputeFluxes(array_t &x1Flux, arrayconst_t &x1LeftState,
 				  arrayconst_t &x1RightState, double advectionVx,
-				  amrex::Box const &indexRange, int nvars);
+				  amrex::Box const &indexRange, int nwidth, int nvars);
 };
 
 template <typename problem_t>
@@ -68,7 +69,8 @@ void LinearAdvectionSystem<problem_t>::ComputeMaxSignalSpeed(
 	const auto vx = advectionVx;
 	const auto vy = advectionVy;
 	const auto vz = advectionVz;
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+	const int nwidth = 0;
+	quokka::ParallelFor(nwidth, indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const double signal_max = std::sqrt(vx * vx + vy * vy + vz * vz);
 		maxSignal(i, j, k) = signal_max;
 	});
@@ -77,9 +79,10 @@ void LinearAdvectionSystem<problem_t>::ComputeMaxSignalSpeed(
 template <typename problem_t>
 void LinearAdvectionSystem<problem_t>::ConservedToPrimitive(arrayconst_t &cons, array_t &primVar,
 							    amrex::Box const &indexRange,
+								const int nwidth,
 							    const int nvars)
 {
-	amrex::ParallelFor(indexRange, nvars, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
+	quokka::ParallelFor(nwidth, indexRange, nvars, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
 		primVar(i, j, k, n) = cons(i, j, k, n);
 	});
 }
@@ -98,7 +101,7 @@ void LinearAdvectionSystem<problem_t>::PredictStep(
     arrayconst_t &consVarOld, array_t &consVarNew,
     std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray, const double dt_in,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange,
-    const int nvars_in, amrex::Array4<int> const &redoFlag)
+	const int nwidth,  const int nvars_in, amrex::Array4<int> const &redoFlag)
 {
 	BL_PROFILE("LinearAdvectionSystem::PredictStep()");
 
@@ -120,7 +123,7 @@ void LinearAdvectionSystem<problem_t>::PredictStep(
 	auto const x3Flux = fluxArray[2];
 #endif
 
-	amrex::ParallelFor(
+	quokka::ParallelFor(nwidth,
 	    indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			for (int n = 0; n < nvars; ++n) {
 				consVarNew(i, j, k, n) =
@@ -145,7 +148,7 @@ void LinearAdvectionSystem<problem_t>::AddFluxesRK2(
     array_t &U_new, arrayconst_t &U0, arrayconst_t &U1,
     std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray, const double dt_in,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange,
-    const int nvars_in, amrex::Array4<int> const &redoFlag)
+	const int nwidth, const int nvars_in, amrex::Array4<int> const &redoFlag)
 {
 	BL_PROFILE("LinearAdvectionSystem::AddFluxesRK2()");
 
@@ -168,7 +171,7 @@ void LinearAdvectionSystem<problem_t>::AddFluxesRK2(
 	auto const x3Flux = fluxArray[2];
 #endif
 
-	amrex::ParallelFor(
+	quokka::ParallelFor(nwidth,
 	    indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			for (int n = 0; n < nvars; ++n) {
 				// RK-SSP2 integrator
@@ -206,7 +209,7 @@ void LinearAdvectionSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 						     arrayconst_t &x1LeftState_in,
 						     arrayconst_t &x1RightState_in,
 						     const double advectionVx,
-						     amrex::Box const &indexRange, const int nvars)
+						     amrex::Box const &indexRange, const int nwidth, const int nvars)
 {
 	// construct ArrayViews for permuted indices
 	quokka::Array4View<amrex::Real const, DIR> x1LeftState(x1LeftState_in);
@@ -219,7 +222,7 @@ void LinearAdvectionSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in,
 	// xinterface_(i) is the solution to the Riemann problem at the left edge of zone i.
 	// [Indexing note: There are (nx + 1) interfaces for nx zones.]
 
-	amrex::ParallelFor(
+	quokka::ParallelFor(nwidth,
 	    indexRange, nvars, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
 		    // permute array indices according to dir
 		    auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);

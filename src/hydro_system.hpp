@@ -10,6 +10,7 @@
 ///
 
 // c++ headers
+#include <cmath>
 
 // library headers
 #include "AMReX_Arena.H"
@@ -20,10 +21,10 @@
 
 // internal headers
 #include "ArrayView.hpp"
+#include "ParallelFor.hpp"
 #include "hyperbolic_system.hpp"
 #include "radiation_system.hpp"
 #include "valarray.hpp"
-#include <math.h>
 
 // this struct is specialized by the user application code
 //
@@ -65,7 +66,7 @@ public:
 
   static void ConservedToPrimitive(amrex::Array4<const amrex::Real> const &cons,
                                    array_t &primVar,
-                                   amrex::Box const &indexRange);
+                                   amrex::Box const &indexRange, int nwidth);
 
   static void
   ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real> const &cons,
@@ -76,7 +77,7 @@ public:
       -> bool;
   static void EnforcePressureFloor(amrex::Real densityFloor,
                                    amrex::Real pressureFloor,
-                                   amrex::Box const &indexRange,
+                                   amrex::Box const &indexRange, int nwidth,
                                    amrex::Array4<amrex::Real> const &state);
 
   AMREX_GPU_DEVICE static auto
@@ -91,20 +92,20 @@ public:
                           std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray,
                           double dt_in,
                           amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,
-                          amrex::Box const &indexRange, int nvars,
+                          amrex::Box const &indexRange, int nwidth, int nvars,
                           amrex::Array4<int> const &redoFlag);
 
   static void AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayconst_t &U1,
                            std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray,
                            double dt_in,
                            amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,
-                           amrex::Box const &indexRange, int nvars,
+                           amrex::Box const &indexRange, int nwidth, int nvars,
                            amrex::Array4<int> const &redoFlag);
 
   static void AddInternalEnergyPressureTerm(
       amrex::Array4<amrex::Real> const &consVar,
       amrex::Array4<const amrex::Real> const &primVar,
-      amrex::Box const &indexRange,
+      amrex::Box const &indexRange, int nwidth,
       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
       amrex::Real const dt_in);
 
@@ -114,18 +115,18 @@ public:
                 amrex::Array4<const amrex::Real> const &x1LeftState_in,
                 amrex::Array4<const amrex::Real> const &x1RightState_in,
                 amrex::Array4<const amrex::Real> const &primVar_in,
-                amrex::Box const &indexRange);
+                amrex::Box const &indexRange, int nwidth);
 
   template <FluxDir DIR>
   static void
   ComputeFirstOrderFluxes(amrex::Array4<const amrex::Real> const &consVar,
                           array_t &x1FluxDiffusive,
-                          amrex::Box const &indexRange);
+                          amrex::Box const &indexRange, int nwidth);
 
   template <FluxDir DIR>
   static void
   ComputeFlatteningCoefficients(amrex::Array4<const amrex::Real> const &primVar,
-                                array_t &x1Chi, amrex::Box const &indexRange);
+                                array_t &x1Chi, amrex::Box const &indexRange, int nwidth);
 
   template <FluxDir DIR>
   static void FlattenShocks(amrex::Array4<const amrex::Real> const &q_in,
@@ -133,7 +134,7 @@ public:
                             amrex::Array4<const amrex::Real> const &x2Chi_in,
                             amrex::Array4<const amrex::Real> const &x3Chi_in,
                             array_t &x1LeftState_in, array_t &x1RightState_in,
-                            amrex::Box const &indexRange, int nvars);
+                            amrex::Box const &indexRange, int nwidth, int nvars);
 
   // C++ does not allow constexpr to be uninitialized, even in a templated
   // class!
@@ -148,8 +149,8 @@ public:
 template <typename problem_t>
 void HydroSystem<problem_t>::ConservedToPrimitive(
     amrex::Array4<const amrex::Real> const &cons, array_t &primVar,
-    amrex::Box const &indexRange) {
-  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+    amrex::Box const &indexRange, const int nwidth) {
+  quokka::ParallelFor(nwidth, indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
     const auto rho = cons(i, j, k, density_index);
     const auto px = cons(i, j, k, x1Momentum_index);
     const auto py = cons(i, j, k, x2Momentum_index);
@@ -205,7 +206,8 @@ template <typename problem_t>
 void HydroSystem<problem_t>::ComputeMaxSignalSpeed(
     amrex::Array4<const amrex::Real> const &cons, array_t &maxSignal,
     amrex::Box const &indexRange) {
-  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+  const int nwidth = 0; // compute over full indexRange
+  quokka::ParallelFor(nwidth, indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
     const auto rho = cons(i, j, k, density_index);
     const auto px = cons(i, j, k, x1Momentum_index);
     const auto py = cons(i, j, k, x2Momentum_index);
@@ -282,12 +284,12 @@ auto HydroSystem<problem_t>::CheckStatesValid(
 template <typename problem_t>
 void HydroSystem<problem_t>::EnforcePressureFloor(
     amrex::Real const densityFloor, amrex::Real const pressureFloor,
-    amrex::Box const &indexRange, amrex::Array4<amrex::Real> const &state) {
+    amrex::Box const &indexRange, const int nwidth, amrex::Array4<amrex::Real> const &state) {
   // prevent vacuum creation
   amrex::Real const rho_floor = densityFloor; // workaround nvcc bug
   amrex::Real const P_floor = pressureFloor;
 
-  amrex::ParallelFor(
+  quokka::ParallelFor(nwidth,
       indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
         amrex::Real const rho = state(i, j, k, density_index);
         amrex::Real const vx1 = state(i, j, k, x1Momentum_index) / rho;
@@ -367,7 +369,7 @@ void HydroSystem<problem_t>::PredictStep(
     arrayconst_t &consVarOld, array_t &consVarNew,
     std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray, const double dt_in,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,
-    amrex::Box const &indexRange, const int nvars_in,
+    amrex::Box const &indexRange, const int nwidth, const int nvars_in,
     amrex::Array4<int> const &redoFlag) {
   BL_PROFILE("HydroSystem::PredictStep()");
 
@@ -390,7 +392,7 @@ void HydroSystem<problem_t>::PredictStep(
   auto const x3Flux = fluxArray[2];
 #endif
 
-  amrex::ParallelFor(
+  quokka::ParallelFor(nwidth,
       indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
         for (int n = 0; n < nvars; ++n) {
           consVarNew(i, j, k, n) =
@@ -415,7 +417,7 @@ void HydroSystem<problem_t>::AddFluxesRK2(
     array_t &U_new, arrayconst_t &U0, arrayconst_t &U1,
     std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray, const double dt_in,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,
-    amrex::Box const &indexRange, const int nvars_in,
+    amrex::Box const &indexRange, const int nwidth, const int nvars_in,
     amrex::Array4<int> const &redoFlag) {
   BL_PROFILE("HyperbolicSystem::AddFluxesRK2()");
 
@@ -438,7 +440,7 @@ void HydroSystem<problem_t>::AddFluxesRK2(
   auto const x3Flux = fluxArray[2];
 #endif
 
-  amrex::ParallelFor(
+  quokka::ParallelFor(nwidth, 
       indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
         for (int n = 0; n < nvars; ++n) {
           // RK-SSP2 integrator
@@ -475,7 +477,7 @@ template <typename problem_t>
 template <FluxDir DIR>
 void HydroSystem<problem_t>::ComputeFlatteningCoefficients(
     amrex::Array4<const amrex::Real> const &primVar_in, array_t &x1Chi_in,
-    amrex::Box const &indexRange) {
+    amrex::Box const &indexRange, const int nwidth) {
   quokka::Array4View<const amrex::Real, DIR> primVar(primVar_in);
   quokka::Array4View<amrex::Real, DIR> x1Chi(x1Chi_in);
 
@@ -490,7 +492,7 @@ void HydroSystem<problem_t>::ComputeFlatteningCoefficients(
   constexpr double Zmin = 0.25;
 
   // cell-centered kernel
-  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i_in, int j_in,
+  quokka::ParallelFor(nwidth, indexRange, [=] AMREX_GPU_DEVICE(int i_in, int j_in,
                                                       int k_in) {
     auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
 
@@ -562,7 +564,7 @@ void HydroSystem<problem_t>::FlattenShocks(
     amrex::Array4<const amrex::Real> const &x1Chi_in,
     amrex::Array4<const amrex::Real> const &x2Chi_in,
     amrex::Array4<const amrex::Real> const &x3Chi_in, array_t &x1LeftState_in,
-    array_t &x1RightState_in, amrex::Box const &indexRange, const int nvars) {
+    array_t &x1RightState_in, amrex::Box const &indexRange, const int nwidth, const int nvars) {
   quokka::Array4View<const amrex::Real, DIR> q(q_in);
   quokka::Array4View<amrex::Real, DIR> x1LeftState(x1LeftState_in);
   quokka::Array4View<amrex::Real, DIR> x1RightState(x1RightState_in);
@@ -572,7 +574,7 @@ void HydroSystem<problem_t>::FlattenShocks(
   // shock problem, and reduces post-shock oscillations in other cases.]
 
   // cell-centered kernel
-  amrex::ParallelFor(
+  quokka::ParallelFor(nwidth,
       indexRange, nvars,
       [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) {
         // compute coefficient as the minimum from adjacent cells along *each
@@ -613,7 +615,7 @@ template <typename problem_t>
 void HydroSystem<problem_t>::AddInternalEnergyPressureTerm(
     amrex::Array4<amrex::Real> const &consVar,
     amrex::Array4<const amrex::Real> const &primVar,
-    amrex::Box const &indexRange,
+    amrex::Box const &indexRange, const int nwidth,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
     amrex::Real const dt_in) {
   // first-order pressure term is added separately to the internal energy
@@ -621,7 +623,7 @@ void HydroSystem<problem_t>::AddInternalEnergyPressureTerm(
 
   amrex::Real const dt = dt_in; // workaround nvcc bug
 
-  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+  quokka::ParallelFor(nwidth, indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
     // compute cell-centered pressure from primitive vars
     double P = primVar(i, j, k, pressure_index);
     if constexpr (reconstruct_eint) {
@@ -678,7 +680,7 @@ void HydroSystem<problem_t>::ComputeFluxes(
     array_t &x1Flux_in, amrex::Array4<const amrex::Real> const &x1LeftState_in,
     amrex::Array4<const amrex::Real> const &x1RightState_in,
     amrex::Array4<const amrex::Real> const &primVar_in,
-    amrex::Box const &indexRange) {
+    amrex::Box const &indexRange, const int nwidth) {
 
   quokka::Array4View<const amrex::Real, DIR> x1LeftState(x1LeftState_in);
   quokka::Array4View<const amrex::Real, DIR> x1RightState(x1RightState_in);
@@ -691,7 +693,7 @@ void HydroSystem<problem_t>::ComputeFluxes(
 
   // Indexing note: There are (nx + 1) interfaces for nx zones.
 
-  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i_in, int j_in,
+  quokka::ParallelFor(nwidth, indexRange, [=] AMREX_GPU_DEVICE(int i_in, int j_in,
                                                       int k_in) {
     auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
 
