@@ -298,11 +298,11 @@ void RadhydroSimulation<CoolingTest>::computeAfterLevelAdvance(
 template <>
 void HydroSystem<CoolingTest>::EnforcePressureFloor(
     amrex::Real const densityFloor, amrex::Real const /*pressureFloor*/,
-    amrex::Box const &indexRange, amrex::Array4<amrex::Real> const &state) {
+    amrex::Box const &indexRange, const int nwidth, amrex::Array4<amrex::Real> const &state) {
   // prevent vacuum creation
   amrex::Real const rho_floor = densityFloor; // workaround nvcc bug
 
-  amrex::ParallelFor(
+  quokka::ParallelFor(nwidth,
       indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
         amrex::Real const rho = state(i, j, k, density_index);
         amrex::Real const vx1 = state(i, j, k, x1Momentum_index) / rho;
