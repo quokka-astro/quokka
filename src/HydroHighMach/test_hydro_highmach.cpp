@@ -15,7 +15,9 @@
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
 #include "hydro_system.hpp"
+#ifdef HAVE_PYTHON
 #include "matplotlibcpp.h"
+#endif
 #include "radiation_system.hpp"
 #include "test_hydro_highmach.hpp"
 #include <fstream>
