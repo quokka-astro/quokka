@@ -376,11 +376,11 @@ void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(
 template <>
 void HydroSystem<ShockCloud>::EnforcePressureFloor(
     Real const densityFloor, Real const /*pressureFloor*/,
-    amrex::Box const &indexRange, amrex::Array4<Real> const &state) {
+    amrex::Box const &indexRange, const int nwidth, amrex::Array4<Real> const &state) {
   // prevent vacuum creation
   Real const rho_floor = densityFloor; // workaround nvcc bug
 
-  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j,
+  quokka::ParallelFor(nwidth, indexRange, [=] AMREX_GPU_DEVICE(int i, int j,
                                                       int k) noexcept {
     Real const rho = state(i, j, k, density_index);
     Real const vx1 = state(i, j, k, x1Momentum_index) / rho;
