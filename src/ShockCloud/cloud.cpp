@@ -96,7 +96,7 @@ void RadhydroSimulation<ShockCloud>::setInitialConditionsAtLevel(int lev) {
   amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
   amrex::GpuArray<Real, AMREX_SPACEDIM> prob_hi = geom[lev].ProbHiArray();
 
-  Real const x0 = prob_lo[0] + 0.2 * (prob_hi[0] - prob_lo[0]);
+  Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
   Real const y0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
   Real const z0 = prob_lo[2] + 0.5 * (prob_hi[2] - prob_lo[2]);
 
