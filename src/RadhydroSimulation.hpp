@@ -101,7 +101,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	amrex::Real pressureFloor_ = 0.;
 	int fofcMaxIterations_ = 3; // maximum number of flux correction iterations -- only 1 is needed in almost all cases, but in rare cases a second iteration is needed
 
-	int integratorOrder_ = 2; // 1 == forward Euler; 2 == RK2-SSP (default)
+	int integratorOrder_ = 3; // 1 == forward Euler; 2 == RK2-SSP; 3 == RK3-SSP (default)
 	int reconstructionOrder_ = 3; // 1 == donor cell; 2 == PLM; 3 == PPM (default)
 	int radiationReconstructionOrder_ = 3; // 1 == donor cell; 2 == PLM; 3 == PPM (default)
 
@@ -511,16 +511,18 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 {
 	BL_PROFILE("RadhydroSimulation::advanceHydroAtLevel()");
 
-	amrex::Real fluxScaleFactor = NAN;
-	if (integratorOrder_ == 2) {
-		fluxScaleFactor = 0.5;
-	} else if (integratorOrder_ == 1) {
-		fluxScaleFactor = 1.0;
+	amrex::Vector<amrex::Real> fluxScaleFactor{};
+	if (integratorOrder_ == 3) { // RK3-SSP
+		fluxScaleFactor = {1./6., 1./6., 2./3.};
+	} else if (integratorOrder_ == 2) { // RK2-SSP
+		fluxScaleFactor = {0.5, 0.5};
+	} else if (integratorOrder_ == 1) { // forward Euler
+		fluxScaleFactor = {1.0};
 	}
 
 	// intermediate state multifabs
-	amrex::BoxArray ba_state = state_new_[lev].boxArray();
-	amrex::MultiFab state_inter(grids[lev], dmap[lev], ncomp_, nghost_);
+	amrex::MultiFab state_U1(grids[lev], dmap[lev], ncomp_, nghost_);
+	amrex::MultiFab state_U2(grids[lev], dmap[lev], ncomp_, nghost_);
 
 	// update ghost zones [old timestep]
 	fillBoundaryConditions(state_old_[lev], state_old_[lev], lev, time);
@@ -530,11 +532,11 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 	AMREX_ASSERT(!state_old_[lev].contains_nan()); // check ghost cells
 
 	// RK3-SSP stage 1
-	for (amrex::MFIter iter(state_inter); iter.isValid(); ++iter) {
+	for (amrex::MFIter iter(state_U1); iter.isValid(); ++iter) {
 
 		const amrex::Box &indexRange = iter.validbox(); // 'validbox' == exclude ghost zones
 		auto const &stateOld = state_old_[lev].const_array(iter);
-		auto const &stateNew = state_inter.array(iter);
+		auto const &stateNew = state_U1.array(iter);
 		auto fluxArrays = computeHydroFluxes(stateOld, indexRange, ncompHydro_);
 
 		// temporary FAB for RK stage
@@ -591,30 +593,30 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 			// increment flux registers
 			auto expandedFluxes = expandFluxArrays(fluxArrays, 0, state_new_[lev].nComp());
 			incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, expandedFluxes, lev,
-					       fluxScaleFactor * dt_lev);
+					       fluxScaleFactor[0] * dt_lev);
 		}
 	}
 
-	// update ghost zones [intermediate stage stored in state_inter]
-	fillBoundaryConditions(state_inter, state_inter, lev, time + dt_lev);
+	// update ghost zones [intermediate stage stored in state_inter at time dt_lev]
+	fillBoundaryConditions(state_U1, state_U1, lev, time + dt_lev);
 
 	// check intermediate state validity
-	AMREX_ASSERT(!state_inter.contains_nan(0, state_inter.nComp()));
-	AMREX_ASSERT(!state_inter.contains_nan()); // check ghost zones
+	AMREX_ASSERT(!state_U1.contains_nan(0, state_U1.nComp()));
+	AMREX_ASSERT(!state_U1.contains_nan()); // check ghost zones
 
 	// RK3-SSP stage 2
-	for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
+	for (amrex::MFIter iter(state_U2); iter.isValid(); ++iter) {
 
 		const amrex::Box &indexRange = iter.validbox(); // 'validbox' == exclude ghost zones
 		auto const &stateOld = state_old_[lev].const_array(iter);
-		auto const &stateInter = state_inter.const_array(iter);
-		auto const &stateFinal = state_new_[lev].array(iter);
+		auto const &stateInter = state_U1.const_array(iter);
+		auto const &stateFinal = state_U2.array(iter);
 		auto fluxArrays = computeHydroFluxes(stateInter, indexRange, ncompHydro_);
 
 		amrex::IArrayBox redoFlag(indexRange, 1, amrex::The_Async_Arena());
 
 		// Stage 2 of RK2-SSP
-		HydroSystem<problem_t>::AddFluxesRK2(
+		HydroSystem<problem_t>::RK3_Stage2(
 				stateFinal, stateOld, stateInter,
 				{AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
 					fluxArrays[2].const_array())},
@@ -640,7 +642,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 
 				// re-do RK stage update for *all* cells
 				// (since neighbors of problem cells will have modified states as well)
-				HydroSystem<problem_t>::AddFluxesRK2(
+				HydroSystem<problem_t>::RK3_Stage2(
 					stateFinal, stateOld, stateInter,
 					{AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
 						fluxArrays[2].const_array())},
@@ -664,11 +666,83 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 			// increment flux registers
 			auto expandedFluxes = expandFluxArrays(fluxArrays, 0, state_new_[lev].nComp());
 			incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, expandedFluxes, lev,
-						fluxScaleFactor * dt_lev);
+						fluxScaleFactor[1] * dt_lev);
 		}
 	}
 
+	// update ghost zones [intermediate stage stored in state_U2 at time 0.5*dt_lev]
+	fillBoundaryConditions(state_U2, state_U2, lev, time + 0.5 * dt_lev);
 
+	// check intermediate state validity
+	AMREX_ASSERT(!state_U2.contains_nan(0, state_U2.nComp()));
+	AMREX_ASSERT(!state_U2.contains_nan()); // check ghost zones
+
+	// RK3-SSP stage 3
+	for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
+
+		const amrex::Box &indexRange = iter.validbox(); // 'validbox' == exclude ghost zones
+		auto const &stateOld = state_old_[lev].const_array(iter);
+		auto const &stateInter1 = state_U1.const_array(iter);
+		auto const &stateInter2 = state_U2.const_array(iter);
+		auto const &stateFinal = state_new_[lev].array(iter);
+		auto fluxArrays = computeHydroFluxes(stateInter2, indexRange, ncompHydro_);
+
+		amrex::IArrayBox redoFlag(indexRange, 1, amrex::The_Async_Arena());
+
+		// Stage 2 of RK2-SSP
+		HydroSystem<problem_t>::RK3_Stage3(
+				stateFinal, stateOld, stateInter1, stateInter2,
+				{AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
+					fluxArrays[2].const_array())},
+				dt_lev, geom[lev].CellSizeArray(), indexRange, ncompHydro_,
+				redoFlag.array());
+
+		// first-order flux correction (FOFC)
+		if (redoFlag.max<amrex::RunOn::Device>() != quokka::redoFlag::none) {
+			// compute first-order fluxes (on the whole FAB)
+			auto FOFluxArrays = computeFOHydroFluxes(stateInter2, indexRange, ncompHydro_);
+
+			for(int i = 0; i < fofcMaxIterations_; ++i) {
+				if (Verbose()) {
+					std::cout << "[FOFC-2] iter = "
+							<< i
+							<< ", ncells = "
+							<< redoFlag.sum<amrex::RunOn::Device>(0)
+							<< "\n";
+				}
+					
+				// replace fluxes in fluxArrays with first-order fluxes at faces of flagged cells
+				replaceFluxes(fluxArrays, FOFluxArrays, redoFlag, indexRange, ncompHydro_);
+
+				// re-do RK stage update for *all* cells
+				// (since neighbors of problem cells will have modified states as well)
+				HydroSystem<problem_t>::RK3_Stage3(
+					stateFinal, stateOld, stateInter1, stateInter2,
+					{AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
+						fluxArrays[2].const_array())},
+					dt_lev, geom[lev].CellSizeArray(), indexRange, ncompHydro_,
+					redoFlag.array());
+
+				if(redoFlag.max<amrex::RunOn::Device>() == quokka::redoFlag::none) {
+					break;
+				}
+			}
+		}
+
+		// add non-conservative term to internal energy
+		computeInternalEnergyUpdate(stateOld, stateFinal, indexRange, ncompHydro_,
+										geom[lev].CellSizeArray(), 0.5 * dt_lev);
+
+		// prevent vacuum
+		HydroSystem<problem_t>::EnforcePressureFloor(densityFloor_, pressureFloor_, indexRange, stateFinal);
+
+		if (do_reflux) {
+			// increment flux registers
+			auto expandedFluxes = expandFluxArrays(fluxArrays, 0, state_new_[lev].nComp());
+			incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, expandedFluxes, lev,
+						fluxScaleFactor[2] * dt_lev);
+		}
+	}
 }
 
 template <typename problem_t>
