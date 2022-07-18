@@ -74,7 +74,9 @@ template <typename problem_t> class HyperbolicSystem
 					 amrex::Box const &interfaceRange, int nvars);
 
 	template <typename F>
+#if defined(__x86_64__)
 	__attribute__ ((__target__ ("no-fma")))
+#endif
 	static void AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayconst_t &U1,
 				 std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray,
 				 double dt_in, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,
@@ -82,7 +84,9 @@ template <typename problem_t> class HyperbolicSystem
 				 amrex::Array4<int> const &redoFlag);
 
 	template <typename F>
+#if defined(__x86_64__)
 	__attribute__ ((__target__ ("no-fma")))
+#endif
 	static void PredictStep(arrayconst_t &consVarOld, array_t &consVarNew,
 				std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray,
 				double dt_in, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,
