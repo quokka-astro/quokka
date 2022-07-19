@@ -115,7 +115,7 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 
 	static constexpr int reconstructOrder_ =
 	    3; // PPM = 3 ['third order'], piecewise constant == 1
-	static constexpr int integratorOrder_ = 2; // RK2-SSP = 2, forward Euler = 1
+	static constexpr int integratorOrder_ = 3; // RK3-SSP = 3, RK2-SSP = 2, forward Euler = 1
 };
 
 template <typename problem_t>
@@ -211,14 +211,9 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 	// level
 	std::swap(state_old_[lev], state_new_[lev]);
 
-	// check state validity
-	AMREX_ASSERT(!state_old_[lev].contains_nan(0, state_old_[lev].nComp()));
-	AMREX_ASSERT(!state_old_[lev].contains_nan()); // check ghost cells
-
 	// get geometry (used only for cell sizes)
 	auto const &geomLevel = geom[lev];
 
-#ifdef USE_YAFLUXREGISTER
 	// get flux registers
 	amrex::YAFluxRegister *fr_as_crse = nullptr;
 	amrex::YAFluxRegister *fr_as_fine = nullptr;
@@ -232,138 +227,130 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 			fr_as_fine = flux_reg_[lev].get();
 		}
 	}
-#else
-	amrex::FluxRegister *fine = nullptr;
-	amrex::FluxRegister *current = nullptr;
 
-	if (do_reflux && lev < finest_level) {
-		fine = flux_reg_[lev + 1].get();
-		fine->setVal(0.0);
+	// set flux register scale factor for each stage
+	amrex::Vector<amrex::Real> fluxScaleFactor{};
+
+	if (integratorOrder_ == 3) {
+		fluxScaleFactor = {1./6., 1./6., 2./3.};
+	} else if (integratorOrder_ == 2) {
+		fluxScaleFactor = {0.5, 0.5};
 	}
 
-	if (do_reflux && lev > 0) {
-		current = flux_reg_[lev].get();
-	}
+	// We use the RK3-SSP integrator in a method-of-lines framework.
+	// Note that we cannot re-use multifabs for intermediate and final stages
+	// if first-order flux correction or inner-outer updates are used.
 
-	// create temporary MultiFab to store the fluxes from each grid on this level
-	std::array<amrex::MultiFab, AMREX_SPACEDIM> fluxes;
+	// intermediate stage multifabs
+	amrex::MultiFab state_U1(grids[lev], dmap[lev], ncomp_, nghost_);
+	amrex::MultiFab state_U2(grids[lev], dmap[lev], ncomp_, nghost_);
 
-	if (do_reflux) {
-		for (int j = 0; j < AMREX_SPACEDIM; j++) {
-			amrex::BoxArray ba = state_new_[lev].boxArray();
-			ba.surroundingNodes(j);
-			fluxes[j].define(ba, dmap[lev], ncomp_, 0);
-			fluxes[j].setVal(0.);
-		}
-	}
-#endif // USE_YAFLUXREGISTER
-
-	// We use the RK2-SSP integrator in a method-of-lines framework. It needs 2
-	// registers: one to store the old timestep, and one to store the intermediate stage
-	// and final stage. The intermediate stage and final stage re-use the same register.
+	// RK2/3-SSP stage 1
 
 	// update ghost zones [w/ old timestep]
-	// (N.B. the input and output multifabs are allowed to be the same, as done here)
 	fillBoundaryConditions(state_old_[lev], state_old_[lev], lev, time);
 
-	amrex::Real fluxScaleFactor = NAN;
-	if constexpr (integratorOrder_ == 2) {
-		fluxScaleFactor = 0.5;
-	} else if constexpr (integratorOrder_ == 1) {
-		fluxScaleFactor = 1.0;
-	}
+	// check state validity
+	AMREX_ASSERT(!state_old_[lev].contains_nan(0, state_old_[lev].nComp()));
+	AMREX_ASSERT(!state_old_[lev].contains_nan()); // check ghost cells
 
-	// advance all grids on local processor (Stage 1 of integrator)
-	for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
+	for (amrex::MFIter iter(state_U1); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &stateOld = state_old_[lev].const_array(iter);
-		auto const &stateNew = state_new_[lev].array(iter);
+		auto const &stateNew = state_U1.array(iter);
 		auto fluxArrays = computeFluxes(stateOld, indexRange, ncomp_);
 
-		amrex::IArrayBox redoFlag(indexRange, 1, amrex::The_Async_Arena());
-
-		// Stage 1 of RK2-SSP
 		LinearAdvectionSystem<problem_t>::PredictStep(
 		    stateOld, stateNew,
 		    {AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
 				  fluxArrays[2].const_array())},
-		    dt_lev, geomLevel.CellSizeArray(), indexRange, ncomp_,
-			redoFlag.array());
+		    dt_lev, geomLevel.CellSizeArray(), indexRange, ncomp_);
 
 		if (do_reflux) {
-#ifdef USE_YAFLUXREGISTER
-			// increment flux registers
 			incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, fluxArrays, lev,
-					       fluxScaleFactor * dt_lev);
-#else
-			for (int i = 0; i < AMREX_SPACEDIM; i++) {
-				fluxes[i][iter].plus<amrex::RunOn::Gpu>(fluxArrays[i]);
-			}
-#endif // USE_YAFLUXREGISTER
+					       fluxScaleFactor[0] * dt_lev);
 		}
 	}
 
-	if constexpr (integratorOrder_ == 2) {
-		// update ghost zones [w/ intermediate stage stored in state_new_]
-		fillBoundaryConditions(state_new_[lev], state_new_[lev], lev, time + dt_lev);
+	// update ghost zones [w/ intermediate stage stored in state_U1]
+	fillBoundaryConditions(state_U1, state_U1, lev, time + dt_lev);
 
-		// advance all grids on local processor (Stage 2 of integrator)
+	// check state validity
+	AMREX_ASSERT(!state_U1.contains_nan(0, state_U1.nComp()));
+	AMREX_ASSERT(!state_U1.contains_nan()); // check ghost cells
+
+	if (integratorOrder_ == 2) {
+		// RK2-SSP stage 2
+
 		for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
 			const amrex::Box &indexRange = iter.validbox();
 			auto const &stateInOld = state_old_[lev].const_array(iter);
-			auto const &stateInStar = state_new_[lev].const_array(iter);
+			auto const &stateInStar = state_U1.const_array(iter);
 			auto const &stateOut = state_new_[lev].array(iter);
 			auto fluxArrays = computeFluxes(stateInStar, indexRange, ncomp_);
 
-			amrex::IArrayBox redoFlag(indexRange, 1, amrex::The_Async_Arena());
-
-			// Stage 2 of RK2-SSP
 			LinearAdvectionSystem<problem_t>::AddFluxesRK2(
-			    stateOut, stateInOld, stateInStar,
-			    {AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
-					  fluxArrays[2].const_array())},
-			    dt_lev, geomLevel.CellSizeArray(), indexRange, ncomp_,
-				redoFlag.array());
+				stateOut, stateInOld, stateInStar,
+				{AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
+					fluxArrays[2].const_array())},
+				dt_lev, geomLevel.CellSizeArray(), indexRange, ncomp_);
 
 			if (do_reflux) {
-#ifdef USE_YAFLUXREGISTER
-				// increment flux registers
 				incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, fluxArrays,
-						       lev, fluxScaleFactor * dt_lev);
-#else
-				for (int i = 0; i < AMREX_SPACEDIM; i++) {
-					fluxes[i][iter].plus<amrex::RunOn::Gpu>(fluxArrays[i]);
-				}
-#endif // USE_YAFLUXREGISTER
+							lev, fluxScaleFactor[1] * dt_lev);
+			}
+		}
+	} else if (integratorOrder_ == 3) {
+		// RK3-SSP stage 2
+
+		for (amrex::MFIter iter(state_U2); iter.isValid(); ++iter) {
+			const amrex::Box &indexRange = iter.validbox();
+			auto const &stateInOld = state_old_[lev].const_array(iter);
+			auto const &stateInStar = state_U1.const_array(iter);
+			auto const &stateOut = state_U2.array(iter);
+			auto fluxArrays = computeFluxes(stateInStar, indexRange, ncomp_);
+
+			LinearAdvectionSystem<problem_t>::RK3_Stage2(
+				stateOut, stateInOld, stateInStar,
+				{AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
+					fluxArrays[2].const_array())},
+				dt_lev, geomLevel.CellSizeArray(), indexRange, ncomp_);
+
+			if (do_reflux) {
+				incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, fluxArrays,
+							lev, fluxScaleFactor[1] * dt_lev);
+			}
+		}
+
+		// RK3-SSP stage 3
+
+		// update ghost zones [w/ intermediate stage stored in state_U2]
+		fillBoundaryConditions(state_U2, state_U2, lev, time + 0.5 * dt_lev);
+
+		// check state validity
+		AMREX_ASSERT(!state_U2.contains_nan(0, state_U2.nComp()));
+		AMREX_ASSERT(!state_U2.contains_nan()); // check ghost cells
+
+		for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
+			const amrex::Box &indexRange = iter.validbox();
+			auto const &stateOld = state_old_[lev].const_array(iter);
+			auto const &stateInU1 = state_U1.const_array(iter);
+			auto const &stateInStar = state_U2.const_array(iter);
+			auto const &stateOut = state_new_[lev].array(iter);
+			auto fluxArrays = computeFluxes(stateInStar, indexRange, ncomp_);
+
+			LinearAdvectionSystem<problem_t>::RK3_Stage3(
+				stateOut, stateOld, stateInU1, stateInStar,
+				{AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
+					fluxArrays[2].const_array())},
+				dt_lev, geomLevel.CellSizeArray(), indexRange, ncomp_);
+
+			if (do_reflux) {
+				incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, fluxArrays,
+							lev, fluxScaleFactor[2] * dt_lev);
 			}
 		}
 	}
-
-#ifndef USE_YAFLUXREGISTER
-	if (do_reflux) {
-		// rescale by face area
-		auto dx = geomLevel.CellSizeArray();
-		amrex::Real const cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
-
-		for (int i = 0; i < AMREX_SPACEDIM; i++) {
-			amrex::Real const face_area = cell_vol / dx[i];
-			amrex::Real const rescaleFactor = fluxScaleFactor * dt_lev * face_area;
-			fluxes[i].mult(rescaleFactor);
-		}
-
-		if (current != nullptr) {
-			for (int i = 0; i < AMREX_SPACEDIM; i++) {
-				current->FineAdd(fluxes[i], i, 0, 0, ncomp_, 1.);
-			}
-		}
-
-		if (fine != nullptr) {
-			for (int i = 0; i < AMREX_SPACEDIM; i++) {
-				fine->CrseInit(fluxes[i], i, 0, 0, ncomp_, -1.);
-			}
-		}
-	}
-#endif
 }
 
 template <typename problem_t>
