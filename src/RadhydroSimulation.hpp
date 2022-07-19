@@ -191,8 +191,8 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 
 	void computeInternalEnergyUpdate(amrex::Array4<const amrex::Real> const &consVarOld,
 				amrex::Array4<amrex::Real> const &consVarNew, const amrex::Box &indexRange,
-				const int nvars, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-				amrex::Real const dt);
+				int nvars, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+				amrex::Real dt);
 
 	template <FluxDir DIR>
 	void fluxFunction(amrex::Array4<const amrex::Real> const &consState,
@@ -582,10 +582,6 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(
       }
     }
 
-    // add non-conservative term to internal energy
-    computeInternalEnergyUpdate(stateOld, stateNew, indexRange, ncompHydro_,
-                                geom[lev].CellSizeArray(), dt_lev);
-
     // prevent vacuum
     HydroSystem<problem_t>::EnforcePressureFloor(densityFloor_, pressureFloor_,
                                                  indexRange, stateNew);
@@ -661,11 +657,6 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(
         }
       }
 
-      // add non-conservative term to internal energy
-      computeInternalEnergyUpdate(stateInter, stateFinal, indexRange,
-                                  ncompHydro_, geom[lev].CellSizeArray(),
-                                  0.5 * dt_lev);
-
       // prevent vacuum
       HydroSystem<problem_t>::EnforcePressureFloor(
           densityFloor_, pressureFloor_, indexRange, stateFinal);
@@ -730,11 +721,6 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(
           }
         }
       }
-
-      // add non-conservative term to internal energy
-      computeInternalEnergyUpdate(stateInter, stateFinal, indexRange,
-                                  ncompHydro_, geom[lev].CellSizeArray(),
-                                  0.5 * dt_lev);
 
       // prevent vacuum
       HydroSystem<problem_t>::EnforcePressureFloor(
@@ -812,10 +798,6 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(
         }
       }
 
-      // add non-conservative term to internal energy
-      computeInternalEnergyUpdate(stateOld, stateFinal, indexRange, ncompHydro_,
-                                  geom[lev].CellSizeArray(), 0.5 * dt_lev);
-
       // prevent vacuum
       HydroSystem<problem_t>::EnforcePressureFloor(
           densityFloor_, pressureFloor_, indexRange, stateFinal);
@@ -827,6 +809,15 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(
                                lev, fluxScaleFactor[2] * dt_lev);
       }
     }
+  }
+
+  // internal energy update (forward Euler only)
+  for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
+      const amrex::Box &indexRange = iter.validbox();
+      auto const &stateOld = state_old_[lev].const_array(iter);
+      auto const &stateNew = state_new_[lev].array(iter);
+      computeInternalEnergyUpdate(stateOld, stateNew, indexRange,
+	  		ncompHydro_, geom[lev].CellSizeArray(), dt_lev);
   }
 }
 
