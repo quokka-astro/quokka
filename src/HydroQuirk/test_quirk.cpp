@@ -43,7 +43,7 @@ struct QuirkProblem {};
 template <> struct HydroSystem_Traits<QuirkProblem> {
   static constexpr double gamma = 5. / 3.;
   static constexpr bool reconstruct_eint = false;
-  static constexpr int nscalars = 0;       // number of passive scalars
+  static constexpr int nscalars = 0; // number of passive scalars
 };
 
 constexpr Real dl = 3.692;
@@ -117,12 +117,8 @@ void RadhydroSimulation<QuirkProblem>::setInitialConditionsAtLevel(int lev) {
       state(i, j, k, HydroSystem<QuirkProblem>::x3Momentum_index) = rho * vz;
       state(i, j, k, HydroSystem<QuirkProblem>::energy_index) =
           P / (gamma - 1.) + 0.5 * rho * v_sq;
-
-      // initialize radiation variables to zero
-      state(i, j, k, RadSystem<QuirkProblem>::radEnergy_index) = 0;
-      state(i, j, k, RadSystem<QuirkProblem>::x1RadFlux_index) = 0;
-      state(i, j, k, RadSystem<QuirkProblem>::x2RadFlux_index) = 0;
-      state(i, j, k, RadSystem<QuirkProblem>::x3RadFlux_index) = 0;
+      state(i, j, k, HydroSystem<QuirkProblem>::internalEnergy_index) =
+          P / (gamma - 1.);
     });
   }
 
@@ -238,6 +234,8 @@ AMRSimulation<QuirkProblem>::setCustomBoundaryConditions(
     // x1 left side boundary
     consVar(i, j, k, RadSystem<QuirkProblem>::gasEnergy_index) =
         pl / (gamma - 1.) + 0.5 * dl * ul * ul;
+    consVar(i, j, k, RadSystem<QuirkProblem>::gasInternalEnergy_index) =
+        pl / (gamma - 1.);
     consVar(i, j, k, RadSystem<QuirkProblem>::gasDensity_index) = dl;
     consVar(i, j, k, RadSystem<QuirkProblem>::x1GasMomentum_index) = dl * ul;
     consVar(i, j, k, RadSystem<QuirkProblem>::x2GasMomentum_index) = 0.;
@@ -246,17 +244,13 @@ AMRSimulation<QuirkProblem>::setCustomBoundaryConditions(
     // x1 right-side boundary
     consVar(i, j, k, RadSystem<QuirkProblem>::gasEnergy_index) =
         pr / (gamma - 1.) + 0.5 * dr * ur * ur;
+    consVar(i, j, k, RadSystem<QuirkProblem>::gasInternalEnergy_index) =
+        pr / (gamma - 1.);
     consVar(i, j, k, RadSystem<QuirkProblem>::gasDensity_index) = dr;
     consVar(i, j, k, RadSystem<QuirkProblem>::x1GasMomentum_index) = dr * ur;
     consVar(i, j, k, RadSystem<QuirkProblem>::x2GasMomentum_index) = 0.;
     consVar(i, j, k, RadSystem<QuirkProblem>::x3GasMomentum_index) = 0.;
   }
-
-  // initialize radiation variables to zero
-  consVar(i, j, k, RadSystem<QuirkProblem>::radEnergy_index) = 0;
-  consVar(i, j, k, RadSystem<QuirkProblem>::x1RadFlux_index) = 0;
-  consVar(i, j, k, RadSystem<QuirkProblem>::x2RadFlux_index) = 0;
-  consVar(i, j, k, RadSystem<QuirkProblem>::x3RadFlux_index) = 0;
 }
 
 auto problem_main() -> int {
