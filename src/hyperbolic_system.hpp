@@ -92,6 +92,17 @@ template <typename problem_t> class HyperbolicSystem
 				double dt_in, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,
 				amrex::Box const &indexRange, int nvars, F&& isStateValid,
 				 amrex::Array4<int> const &redoFlag);
+
+	static void RK3_Stage2(array_t &U2, arrayconst_t &U0, arrayconst_t &U1,
+			    std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray, double dt_in,
+			    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,
+			    amrex::Box const &indexRange, int nvars_in);
+
+	static void RK3_Stage3(array_t &U_new,
+				arrayconst_t &U0, arrayconst_t & /*U1*/, arrayconst_t &U2,
+    			std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray, double dt_in,
+    			amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,
+    			amrex::Box const &indexRange, int nvars_in);
 };
 
 template <typename problem_t>
@@ -422,6 +433,114 @@ void HyperbolicSystem<problem_t>::AddFluxesRK2(
 				redoFlag(i, j, k) = quokka::redoFlag::none;
 			}
 	    });
+}
+
+
+template <typename problem_t>
+void HyperbolicSystem<problem_t>::RK3_Stage2(
+    array_t &U2, arrayconst_t &U0, arrayconst_t &U1,
+    std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray, const double dt_in,
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,
+    amrex::Box const &indexRange, const int nvars_in) {
+  BL_PROFILE("HyperbolicSystem::RK3_Stage2()");
+
+  // By convention, the fluxes are defined on the left edge of each zone,
+  // i.e. flux_(i) is the flux *into* zone i through the interface on the
+  // left of zone i, and -1.0*flux(i+1) is the flux *into* zone i through
+  // the interface on the right of zone i.
+
+  int const nvars = nvars_in; // workaround nvcc bug
+
+  auto const dt = dt_in;
+  auto const dx = dx_in[0];
+  auto const x1Flux = fluxArray[0];
+#if (AMREX_SPACEDIM >= 2)
+  auto const dy = dx_in[1];
+  auto const x2Flux = fluxArray[1];
+#endif
+#if (AMREX_SPACEDIM == 3)
+  auto const dz = dx_in[2];
+  auto const x3Flux = fluxArray[2];
+#endif
+
+  amrex::ParallelFor(
+      indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+        for (int n = 0; n < nvars; ++n) {
+          // RK3-SSP integrator
+          const double U_0 = U0(i, j, k, n);
+          const double U_1 = U1(i, j, k, n);
+
+          const double Fx =
+              (dt / dx) * (x1Flux(i, j, k, n) - x1Flux(i + 1, j, k, n));
+#if (AMREX_SPACEDIM >= 2)
+          const double Fy =
+              (dt / dy) * (x2Flux(i, j, k, n) - x2Flux(i, j + 1, k, n));
+#endif
+#if (AMREX_SPACEDIM == 3)
+          const double Fz =
+              (dt / dz) * (x3Flux(i, j, k, n) - x3Flux(i, j, k + 1, n));
+#endif
+
+          // save results in U2
+          U2(i, j, k, n) =
+              (0.75 * U_0 + 0.25 * U_1) +
+              0.25 * (AMREX_D_TERM(Fx, +Fy, +Fz));
+        }
+      });
+}
+
+
+template <typename problem_t>
+void HyperbolicSystem<problem_t>::RK3_Stage3(
+    array_t &U_new, arrayconst_t &U0, arrayconst_t & /*U1*/, arrayconst_t &U2,
+    std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray, const double dt_in,
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,
+    amrex::Box const &indexRange, const int nvars_in) {
+  BL_PROFILE("HyperbolicSystem::RK3_Stage3()");
+
+  // By convention, the fluxes are defined on the left edge of each zone,
+  // i.e. flux_(i) is the flux *into* zone i through the interface on the
+  // left of zone i, and -1.0*flux(i+1) is the flux *into* zone i through
+  // the interface on the right of zone i.
+
+  int const nvars = nvars_in; // workaround nvcc bug
+
+  auto const dt = dt_in;
+  auto const dx = dx_in[0];
+  auto const x1Flux = fluxArray[0];
+#if (AMREX_SPACEDIM >= 2)
+  auto const dy = dx_in[1];
+  auto const x2Flux = fluxArray[1];
+#endif
+#if (AMREX_SPACEDIM == 3)
+  auto const dz = dx_in[2];
+  auto const x3Flux = fluxArray[2];
+#endif
+
+  amrex::ParallelFor(
+      indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+        for (int n = 0; n < nvars; ++n) {
+          // RK3-SSP integrator
+          const double U_0 = U0(i, j, k, n);
+          const double U_2 = U2(i, j, k, n);
+
+          const double Fx =
+              (dt / dx) * (x1Flux(i, j, k, n) - x1Flux(i + 1, j, k, n));
+#if (AMREX_SPACEDIM >= 2)
+          const double Fy =
+              (dt / dy) * (x2Flux(i, j, k, n) - x2Flux(i, j + 1, k, n));
+#endif
+#if (AMREX_SPACEDIM == 3)
+          const double Fz =
+              (dt / dz) * (x3Flux(i, j, k, n) - x3Flux(i, j, k + 1, n));
+#endif
+
+          // save results in U_new
+          U_new(i, j, k, n) =
+              ((1./3.) * U_0 + (2./3.) * U_2) +
+              (2./3.) * (AMREX_D_TERM(Fx, +Fy, +Fz));
+        }
+      });
 }
 
 #endif // HYPERBOLIC_SYSTEM_HPP_
