@@ -235,7 +235,8 @@ void RadhydroSimulation<SedovProblem>::computeAfterEvolve(
 
   bool kineticEnergyOK = false;
   if ((std::abs(rel_err_Ekin) > 0.01) || std::isnan(rel_err_Ekin)) {
-    amrex::Print() << "Kinetic energy production is incorrect by more than 1 percent!\n";
+    amrex::Print()
+        << "Kinetic energy production is incorrect by more than 1 percent!\n";
   } else {
     amrex::Print() << "Kinetic energy production is OK.\n";
     kineticEnergyOK = true;
@@ -296,13 +297,10 @@ auto problem_main() -> int {
   sim.evolve();
 
   // Cleanup and exit
-#if 0
   int status = 1;
   if (solutionValidates) {
     status = 0; // test passes
   }
   amrex::Print() << "Finished." << std::endl;
   return status;
-#endif
-  return 0;
 }
