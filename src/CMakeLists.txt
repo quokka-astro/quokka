@@ -42,6 +42,9 @@ endif(ENABLE_ASAN)
 
 if(DISABLE_FMAD)
   message(STATUS "Fused multiply-add (FMAD) is disabled for device code.")
+  add_compile_options($<$<COMPILE_LANGUAGE:C>:-ffp-contract=off>)
+  add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-ffp-contract=off>)
+
   set(AMReX_CUDA_FASTMATH OFF CACHE BOOL "" FORCE)
   if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA")
     add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:--fmad=false>)
