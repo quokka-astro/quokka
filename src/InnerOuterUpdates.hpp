@@ -17,7 +17,6 @@ inline auto innerUpdateRange(amrex::Box const &validBox, const int nghost)
   return amrex::grow(validBox, -nghost);
 }
 
-#if 0
 inline auto outerUpdateRanges(amrex::Box const &validBox, const int nghost)
     -> std::vector<amrex::Box> {
   // check that validBox is big enough
@@ -74,7 +73,6 @@ inline auto outerUpdateRanges(amrex::Box const &validBox, const int nghost)
 
   return boxes;
 }
-#endif
 
 } // namespace quokka
 
