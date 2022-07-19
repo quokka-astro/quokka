@@ -73,31 +73,33 @@ template <typename problem_t> class HyperbolicSystem
 					 amrex::Box const &cellRange,
 					 amrex::Box const &interfaceRange, int nvars);
 
-	template <typename F>
 #if defined(__x86_64__)
 	__attribute__ ((__target__ ("no-fma")))
 #endif
 	static void AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayconst_t &U1,
 				 std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray,
 				 double dt_in, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,
-				 amrex::Box const &indexRange, int nvars, F&& isStateValid,
-				 amrex::Array4<int> const &redoFlag);
+				 amrex::Box const &indexRange, int nvars);
 
-	template <typename F>
 #if defined(__x86_64__)
 	__attribute__ ((__target__ ("no-fma")))
 #endif
 	static void PredictStep(arrayconst_t &consVarOld, array_t &consVarNew,
 				std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray,
 				double dt_in, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,
-				amrex::Box const &indexRange, int nvars, F&& isStateValid,
-				 amrex::Array4<int> const &redoFlag);
+				amrex::Box const &indexRange, int nvars);
 
+#if defined(__x86_64__)
+	__attribute__ ((__target__ ("no-fma")))
+#endif
 	static void RK3_Stage2(array_t &U2, arrayconst_t &U0, arrayconst_t &U1,
 			    std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray, double dt_in,
 			    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,
 			    amrex::Box const &indexRange, int nvars_in);
 
+#if defined(__x86_64__)
+	__attribute__ ((__target__ ("no-fma")))
+#endif
 	static void RK3_Stage3(array_t &U_new,
 				arrayconst_t &U0, arrayconst_t & /*U1*/, arrayconst_t &U2,
     			std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray, double dt_in,
@@ -330,12 +332,11 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array
 }
 
 template <typename problem_t>
-template <typename F>
 void HyperbolicSystem<problem_t>::PredictStep(
     arrayconst_t &consVarOld, array_t &consVarNew,
     std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray, const double dt_in,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange,
-    const int nvars, F&& isStateValid, amrex::Array4<int> const &redoFlag)
+    const int nvars)
 {
 	BL_PROFILE("HyperbolicSystem::PredictStep()");
 
@@ -366,23 +367,15 @@ void HyperbolicSystem<problem_t>::PredictStep(
 							+ (dt / dz) * (x3Flux(i, j, k, n) - x3Flux(i, j, k + 1, n))
 							));
 			}
-
-			// check if state is valid -- flag for re-do if not
-			if (!isStateValid(consVarNew, i, j, k)) {
-				redoFlag(i, j, k) = quokka::redoFlag::redo;
-			} else {
-				redoFlag(i, j, k) = quokka::redoFlag::none;
-			}
 	    });
 }
 
 template <typename problem_t>
-template <typename F>
 void HyperbolicSystem<problem_t>::AddFluxesRK2(
     array_t &U_new, arrayconst_t &U0, arrayconst_t &U1,
     std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray, const double dt_in,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange,
-    const int nvars, F&& isStateValid, amrex::Array4<int> const &redoFlag)
+    const int nvars)
 {
 	BL_PROFILE("HyperbolicSystem::AddFluxesRK2()");
 
@@ -424,13 +417,6 @@ void HyperbolicSystem<problem_t>::AddFluxesRK2(
 								+ 0.5 * FyU_1 ,
 								+ 0.5 * FzU_1 )
 								);
-			}
-
-			// check if state is valid -- flag for re-do if not
-			if (!isStateValid(U_new, i, j, k)) {
-				redoFlag(i, j, k) = quokka::redoFlag::redo;
-			} else {
-				redoFlag(i, j, k) = quokka::redoFlag::none;
 			}
 	    });
 }
