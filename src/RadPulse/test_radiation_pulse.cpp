@@ -100,6 +100,7 @@ void RadhydroSimulation<PulseProblem>::setInitialConditionsAtLevel(int lev) {
       state(i, j, k, RadSystem<PulseProblem>::gasEnergy_index) =
           RadSystem<PulseProblem>::ComputeEgasFromTgas(rho0, Trad);
       state(i, j, k, RadSystem<PulseProblem>::gasDensity_index) = rho0;
+      state(i, j, k, RadSystem<PulseProblem>::gasInternalEnergy_index) = 0.;
       state(i, j, k, RadSystem<PulseProblem>::x1GasMomentum_index) = 0.;
       state(i, j, k, RadSystem<PulseProblem>::x2GasMomentum_index) = 0.;
       state(i, j, k, RadSystem<PulseProblem>::x3GasMomentum_index) = 0.;

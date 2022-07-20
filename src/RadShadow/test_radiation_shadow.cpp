@@ -106,6 +106,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<ShadowProblem>::setCustom
 		// extrapolated/outflow boundary for gas variables
 		consVar(i, j, k, RadSystem<ShadowProblem>::gasEnergy_index) = Egas;
 		consVar(i, j, k, RadSystem<ShadowProblem>::gasDensity_index) = rho;
+    consVar(i, j, k, RadSystem<ShadowProblem>::gasInternalEnergy_index) = 0.;
 		consVar(i, j, k, RadSystem<ShadowProblem>::x1GasMomentum_index) = px;
 		consVar(i, j, k, RadSystem<ShadowProblem>::x2GasMomentum_index) = py;
 		consVar(i, j, k, RadSystem<ShadowProblem>::x3GasMomentum_index) = pz;
@@ -145,6 +146,7 @@ template <> void RadhydroSimulation<ShadowProblem>::setInitialConditionsAtLevel(
 
 			state(i, j, k, RadSystem<ShadowProblem>::gasEnergy_index) = Egas;
 			state(i, j, k, RadSystem<ShadowProblem>::gasDensity_index) = rho;
+      state(i, j, k, RadSystem<ShadowProblem>::gasInternalEnergy_index) = 0.;
 			state(i, j, k, RadSystem<ShadowProblem>::x1GasMomentum_index) = 0.;
 			state(i, j, k, RadSystem<ShadowProblem>::x2GasMomentum_index) = 0.;
 			state(i, j, k, RadSystem<ShadowProblem>::x3GasMomentum_index) = 0.;

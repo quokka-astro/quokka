@@ -232,6 +232,10 @@ void RadhydroSimulation<ShellProblem>::setInitialConditionsAtLevel(int lev) {
       state(i, j, k, RadSystem<ShellProblem>::x1RadFlux_index) = Frad_xyz;
       state(i, j, k, RadSystem<ShellProblem>::x2RadFlux_index) = Frad_xyz;
       state(i, j, k, RadSystem<ShellProblem>::x3RadFlux_index) = Frad_xyz;
+
+      state(i, j, k, RadSystem<ShellProblem>::gasEnergy_index) = 0.;
+      state(i, j, k, RadSystem<ShellProblem>::gasDensity_index) = 0.;
+      state(i, j, k, RadSystem<ShellProblem>::gasInternalEnergy_index) = 0.;
     });
   }
 

@@ -71,7 +71,7 @@ template <> struct RadSystem_Traits<ShockProblem> {
 template <> struct HydroSystem_Traits<ShockProblem> {
 	static constexpr double gamma = gamma_gas;
 	static constexpr bool reconstruct_eint = true;
-  	static constexpr int nscalars = 0;       // number of passive scalars
+  static constexpr int nscalars = 0;       // number of passive scalars
 };
 
 template <>
@@ -136,6 +136,7 @@ AMRSimulation<ShockProblem>::setCustomBoundaryConditions(
 		consVar(i, j, k, RadSystem<ShockProblem>::gasEnergy_index) =
 		    Egas0 + 0.5 * rho0 * (v0 * v0);
 		consVar(i, j, k, RadSystem<ShockProblem>::gasDensity_index) = rho0;
+    consVar(i, j, k, RadSystem<ShockProblem>::gasInternalEnergy_index) = 0.;
 		consVar(i, j, k, RadSystem<ShockProblem>::x1GasMomentum_index) =
 		    (xmom_L < (rho0 * v0)) ? xmom_L : (rho0 * v0); // xmom_L;
 
@@ -154,6 +155,7 @@ AMRSimulation<ShockProblem>::setCustomBoundaryConditions(
 		consVar(i, j, k, RadSystem<ShockProblem>::gasEnergy_index) =
 		    Egas1 + 0.5 * rho1 * (v1 * v1);
 		consVar(i, j, k, RadSystem<ShockProblem>::gasDensity_index) = rho1;
+    consVar(i, j, k, RadSystem<ShockProblem>::gasInternalEnergy_index) = 0.;
 		consVar(i, j, k, RadSystem<ShockProblem>::x1GasMomentum_index) =
 		    (xmom_R > (rho1 * v1)) ? xmom_R : (rho1 * v1); // xmom_R;
 		consVar(i, j, k, RadSystem<ShockProblem>::x2GasMomentum_index) = 0.;
@@ -197,9 +199,10 @@ template <> void RadhydroSimulation<ShockProblem>::setInitialConditionsAtLevel(i
 			state(i, j, k, RadSystem<ShockProblem>::x1RadFlux_index) = x1RadFlux;
 			state(i, j, k, RadSystem<ShockProblem>::x2RadFlux_index) = 0;
 			state(i, j, k, RadSystem<ShockProblem>::x3RadFlux_index) = 0;
-
+      
 			state(i, j, k, RadSystem<ShockProblem>::gasEnergy_index) = energy;
 			state(i, j, k, RadSystem<ShockProblem>::gasDensity_index) = density;
+      state(i, j, k, RadSystem<ShockProblem>::gasInternalEnergy_index) = 0.;
 			state(i, j, k, RadSystem<ShockProblem>::x1GasMomentum_index) = x1Momentum;
 			state(i, j, k, RadSystem<ShockProblem>::x2GasMomentum_index) = 0;
 			state(i, j, k, RadSystem<ShockProblem>::x3GasMomentum_index) = 0;
