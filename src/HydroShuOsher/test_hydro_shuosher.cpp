@@ -28,6 +28,14 @@ template <> struct HydroSystem_Traits<ShocktubeProblem> {
   static constexpr int nscalars = 0;       // number of passive scalars
 };
 
+template <> struct Physics_Traits<ShocktubeProblem> {
+  static constexpr bool is_hydro_enabled = true;
+  static constexpr bool is_radiation_enabled = false;
+  static constexpr bool is_mhd_enabled = false;
+  static constexpr bool is_primordial_chem_enabled = false;
+  static constexpr bool is_metalicity_enabled = false;
+};
+
 template <>
 void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsAtLevel(
     int lev) {
@@ -292,8 +300,7 @@ auto problem_main() -> int {
   }
 
   RadhydroSimulation<ShocktubeProblem> sim(boundaryConditions, false);
-  sim.is_hydro_enabled_ = true;
-  sim.is_radiation_enabled_ = false;
+  
   sim.cflNumber_ = CFL_number;
   sim.constantDt_ = fixed_dt;
   sim.stopTime_ = max_time;

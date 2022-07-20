@@ -48,6 +48,14 @@ template <> struct RadSystem_Traits<TubeProblem> {
   static constexpr bool compute_v_over_c_terms = true;
 };
 
+template <> struct Physics_Traits<TubeProblem> {
+  static constexpr bool is_hydro_enabled = true;
+  static constexpr bool is_radiation_enabled = true;
+  static constexpr bool is_mhd_enabled = false;
+  static constexpr bool is_primordial_chem_enabled = false;
+  static constexpr bool is_metalicity_enabled = false;
+};
+
 template <>
 AMREX_GPU_HOST_DEVICE auto
 RadSystem<TubeProblem>::ComputePlanckOpacity(const double /*rho*/,
@@ -226,8 +234,7 @@ auto problem_main() -> int {
 
   // Problem initialization
   RadhydroSimulation<TubeProblem> sim(boundaryConditions);
-  sim.is_hydro_enabled_ = true;
-  sim.is_radiation_enabled_ = true;
+  
   sim.radiationReconstructionOrder_ = 2; // PLM
   sim.reconstructionOrder_ = 2; // PLM
   sim.stopTime_ = tmax;

@@ -147,6 +147,7 @@ auto problem_main() -> int {
 
   // Problem initialization
   AdvectionSimulation<SquareProblem> sim(boundaryConditions);
+  
   sim.stopTime_ = max_time;
   sim.cflNumber_ = CFL_number;
   sim.maxTimesteps_ = max_timesteps;

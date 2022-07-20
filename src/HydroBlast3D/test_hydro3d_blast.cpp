@@ -35,6 +35,14 @@ template <> struct HydroSystem_Traits<SedovProblem> {
   static constexpr int nscalars = 0;       // number of passive scalars
 };
 
+template <> struct Physics_Traits<SedovProblem> {
+  static constexpr bool is_hydro_enabled = true;
+  static constexpr bool is_radiation_enabled = false;
+  static constexpr bool is_mhd_enabled = false;
+  static constexpr bool is_primordial_chem_enabled = false;
+  static constexpr bool is_metalicity_enabled = false;
+};
+
 template <>
 void RadhydroSimulation<SedovProblem>::setInitialConditionsAtLevel(int lev) {
   // initialize a Sedov test problem using parameters due to
@@ -273,8 +281,7 @@ auto problem_main() -> int {
 
   // Problem initialization
   RadhydroSimulation<SedovProblem> sim(boundaryConditions, false);
-  sim.is_hydro_enabled_ = true;
-  sim.is_radiation_enabled_ = false;
+  
   sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
   sim.stopTime_ = 1.0;          // seconds
   sim.cflNumber_ = 0.3;         // *must* be less than 1/3 in 3D!

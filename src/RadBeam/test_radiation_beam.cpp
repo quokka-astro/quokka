@@ -43,6 +43,14 @@ template <> struct RadSystem_Traits<BeamProblem> {
   static constexpr bool compute_v_over_c_terms = true;
 };
 
+template <> struct Physics_Traits<BeamProblem> {
+  static constexpr bool is_hydro_enabled = false;
+  static constexpr bool is_radiation_enabled = true;
+  static constexpr bool is_mhd_enabled = false;
+  static constexpr bool is_primordial_chem_enabled = false;
+  static constexpr bool is_metalicity_enabled = false;
+};
+
 template <>
 AMREX_GPU_HOST_DEVICE auto
 RadSystem<BeamProblem>::ComputePlanckOpacity(const double /*rho*/,
@@ -323,13 +331,13 @@ auto problem_main() -> int {
 
   // Problem initialization
   RadhydroSimulation<BeamProblem> sim(boundaryConditions);
+
   sim.stopTime_ = max_time;
   sim.radiationCflNumber_ = CFL_number;
   sim.radiationReconstructionOrder_ = 2; // PLM
   sim.maxTimesteps_ = max_timesteps;
   sim.plotfileInterval_ = 20; // for debugging
-  sim.is_hydro_enabled_ = false;
-  sim.is_radiation_enabled_ = true;
+  
 
   // initialize
   sim.setInitialConditions();

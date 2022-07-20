@@ -51,6 +51,14 @@ template <> struct RadSystem_Traits<MarshakProblem> {
  	static constexpr bool compute_v_over_c_terms = false;
 };
 
+template <> struct Physics_Traits<MarshakProblem> {
+  static constexpr bool is_hydro_enabled = false;
+  static constexpr bool is_radiation_enabled = true;
+  static constexpr bool is_mhd_enabled = false;
+  static constexpr bool is_primordial_chem_enabled = false;
+  static constexpr bool is_metalicity_enabled = false;
+};
+
 template <>
 AMREX_GPU_HOST_DEVICE auto
 RadSystem<MarshakProblem>::ComputePlanckOpacity(const double rho,
@@ -204,8 +212,7 @@ auto problem_main() -> int {
   }
 
   RadhydroSimulation<MarshakProblem> sim(boundaryConditions);
- 	sim.is_hydro_enabled_ = false;
-	sim.is_radiation_enabled_ = true;
+ 	
 	sim.cflNumber_ = CFL_number;
 	sim.radiationCflNumber_ = CFL_number;
   sim.stopTime_ = max_time;

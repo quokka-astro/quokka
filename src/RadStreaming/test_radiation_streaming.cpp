@@ -32,6 +32,14 @@ template <> struct RadSystem_Traits<StreamingProblem> {
   static constexpr bool compute_v_over_c_terms = false;
 };
 
+template <> struct Physics_Traits<StreamingProblem> {
+  static constexpr bool is_hydro_enabled = false;
+  static constexpr bool is_radiation_enabled = true;
+  static constexpr bool is_mhd_enabled = false;
+  static constexpr bool is_primordial_chem_enabled = false;
+  static constexpr bool is_metalicity_enabled = false;
+};
+
 template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputePlanckOpacity(
     const double /*rho*/, const double /*Tgas*/) -> double {
@@ -149,8 +157,7 @@ auto problem_main() -> int {
 
   // Problem initialization
   RadhydroSimulation<StreamingProblem> sim(boundaryConditions);
-  sim.is_hydro_enabled_ = false;
-  sim.is_radiation_enabled_ = true;
+  
   sim.radiationReconstructionOrder_ = 3; // PPM
   sim.stopTime_ = tmax;
   sim.radiationCflNumber_ = CFL_number;

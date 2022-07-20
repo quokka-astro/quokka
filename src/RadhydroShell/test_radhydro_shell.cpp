@@ -62,6 +62,14 @@ template <> struct HydroSystem_Traits<ShellProblem> {
   static constexpr int nscalars = 0;       // number of passive scalars
 };
 
+template <> struct Physics_Traits<ShellProblem> {
+  static constexpr bool is_hydro_enabled = true;
+  static constexpr bool is_radiation_enabled = true;
+  static constexpr bool is_mhd_enabled = false;
+  static constexpr bool is_primordial_chem_enabled = false;
+  static constexpr bool is_metalicity_enabled = false;
+};
+
 constexpr amrex::Real Msun = 2.0e33;           // g
 constexpr amrex::Real parsec_in_cm = 3.086e18; // cm
 
@@ -411,8 +419,7 @@ auto problem_main() -> int {
 
   // Problem initialization
   RadhydroSimulation<ShellProblem> sim(boundaryConditions);
-  sim.is_hydro_enabled_ = true;
-  sim.is_radiation_enabled_ = true;
+  
   sim.cflNumber_ = 0.3;
   sim.densityFloor_ = 1.0e-8 * rho_0;
   sim.pressureFloor_ = 1.0e-8 * P_0;

@@ -89,8 +89,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 
 	amrex::Real radiationCflNumber_ = 0.3;
 	int maxSubsteps_ = 10; // maximum number of radiation subcycles per hydro step
-	bool is_hydro_enabled_ = false;
-	bool is_radiation_enabled_ = true;
+	
 	bool computeReferenceSolution_ = false;
 	amrex::Real errorNorm_ = NAN;
 	amrex::Real densityFloor_ = 0.;
@@ -269,15 +268,15 @@ void RadhydroSimulation<problem_t>::computeMaxSignalLocal(int const level)
 		auto const &stateNew = state_new_[level].const_array(iter);
 		auto const &maxSignal = max_signal_speed_[level].array(iter);
 
-		if (is_hydro_enabled_ && !(is_radiation_enabled_)) {
+		if constexpr (Physics_Traits<problem_t>::is_hydro_enabled && !(Physics_Traits<problem_t>::is_radiation_enabled)) {
 			// hydro only
 			HydroSystem<problem_t>::ComputeMaxSignalSpeed(stateNew, maxSignal,
 								      indexRange);
-		} else if (is_radiation_enabled_) {
+		} else if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
 			// radiation hydro, or radiation only
 			RadSystem<problem_t>::ComputeMaxSignalSpeed(stateNew, maxSignal,
 								    indexRange);
-			if (is_hydro_enabled_) {
+			if constexpr (Physics_Traits<problem_t>::is_hydro_enabled) {
 				auto maxSignalHydroFAB = amrex::FArrayBox(indexRange);
 				auto const &maxSignalHydro = maxSignalHydroFAB.array();
 				HydroSystem<problem_t>::ComputeMaxSignalSpeed(stateNew, maxSignalHydro, indexRange);
@@ -372,7 +371,7 @@ void RadhydroSimulation<problem_t>::computeAfterEvolve(amrex::Vector<amrex::Real
 
 	amrex::Real Etot0 = NAN;
 	amrex::Real Etot = NAN;
-	if (is_radiation_enabled_) {
+	if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
 		amrex::Real const Erad0 = initSumCons[RadSystem<problem_t>::radEnergy_index];
 		Etot0 = Egas0 + (RadSystem<problem_t>::c_light_ / RadSystem<problem_t>::c_hat_) * Erad0;
 		amrex::Real const Erad = state_new_[0].sum(RadSystem<problem_t>::radEnergy_index) * vol;
@@ -451,7 +450,7 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 	CHECK_HYDRO_STATES(state_old_[lev]);
 
 	// advance hydro
-	if (is_hydro_enabled_) {
+	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled) {
 		advanceHydroAtLevel(lev, time, dt_lev, fr_as_crse, fr_as_fine);
 	} else {
 		// copy hydro vars from state_old_ to state_new_
@@ -463,7 +462,7 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 	CHECK_HYDRO_STATES(state_new_[lev]);
 	
 	// subcycle radiation
-	if (is_radiation_enabled_) {
+	if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
 		subcycleRadiationAtLevel(lev, time, dt_lev, fr_as_crse, fr_as_fine);
 	}
 
@@ -927,7 +926,7 @@ void RadhydroSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Rea
 	int nsubSteps = 0;
 	amrex::Real dt_radiation = NAN;
 
-	if (is_hydro_enabled_ && !(constantDt_ > 0.)) {
+	if (Physics_Traits<problem_t>::is_hydro_enabled && !(constantDt_ > 0.)) {
 		// adjust to get integer number of substeps
 		nsubSteps = computeNumberOfRadiationSubsteps(lev, dt_lev_hydro);
 		dt_radiation = dt_lev_hydro / static_cast<double>(nsubSteps);
