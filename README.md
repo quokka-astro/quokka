@@ -5,7 +5,7 @@
 [![AMReX](https://amrex-codes.github.io/badges/powered%20by-AMReX-red.svg)](https://amrex-codes.github.io)
 [![yt-project](https://img.shields.io/static/v1?label="works%20with"&message="yt"&color="blueviolet")](https://yt-project.org)
 
-# Quokka
+# QUOKKA
 *Quadrilateral, Umbra-producing, Orthogonal, Kangaroo-conserving Kode for Astrophysics!*
 
 **The Quokka methods paper is now available: https://arxiv.org/abs/2110.01792**
