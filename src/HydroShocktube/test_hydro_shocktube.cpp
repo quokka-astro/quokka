@@ -28,7 +28,6 @@ struct ShocktubeProblem {};
 template <> struct HydroSystem_Traits<ShocktubeProblem> {
   static constexpr double gamma = 1.4;
   static constexpr bool reconstruct_eint = true;
-  static constexpr int nscalars = 0;       // number of passive scalars
 };
 
 template <> struct Physics_Traits<ShocktubeProblem> {
@@ -37,6 +36,8 @@ template <> struct Physics_Traits<ShocktubeProblem> {
   static constexpr bool is_mhd_enabled = false;
   static constexpr bool is_primordial_chem_enabled = false;
   static constexpr bool is_metalicity_enabled = false;
+  
+  static constexpr int numPassiveScalars = 0; // number of passive scalars
 };
 
 // left- and right- side shock states
@@ -376,7 +377,7 @@ auto problem_main() -> int {
     }
   }
 
-  RadhydroSimulation<ShocktubeProblem> sim(boundaryConditions, false);
+  RadhydroSimulation<ShocktubeProblem> sim(boundaryConditions);
   
   // sim.cflNumber_ = CFL_number;
   // sim.maxDt_ = max_dt;

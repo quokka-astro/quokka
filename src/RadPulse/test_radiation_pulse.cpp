@@ -44,6 +44,8 @@ template <> struct Physics_Traits<PulseProblem> {
   static constexpr bool is_mhd_enabled = false;
   static constexpr bool is_primordial_chem_enabled = false;
   static constexpr bool is_metalicity_enabled = false;
+
+  static constexpr int numPassiveScalars = 0; // number of passive scalars
 };
 
 AMREX_GPU_HOST_DEVICE

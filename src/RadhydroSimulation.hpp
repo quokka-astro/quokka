@@ -104,25 +104,15 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 
 	// member functions
 
-	explicit RadhydroSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions,
-		bool allocateRadVars = true)
-	    : AMRSimulation<problem_t>(boundaryConditions, getNumVars(allocateRadVars))
-	{
-		std::vector<std::string> hydroNames = {"gasDensity", "x-GasMomentum", "y-GasMomentum",
-				   							   "z-GasMomentum", "gasEnergy", "gasInternalEnergy"};
-		std::vector<std::string> radNames = {"radEnergy", "x-RadFlux", "y-RadFlux", "z-RadFlux"};
+	explicit RadhydroSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions)
+	    : AMRSimulation<problem_t>(boundaryConditions)
+  {
 		std::vector<std::string> scalarNames = getScalarVariableNames();
-
-		componentNames_.insert(componentNames_.end(), hydroNames.begin(), hydroNames.end());
 		componentNames_.insert(componentNames_.end(), scalarNames.begin(), scalarNames.end());
-		
-		if (allocateRadVars) {
-			componentNames_.insert(componentNames_.end(), radNames.begin(), radNames.end());
-		}
+    ncomp_ += scalarNames.size();
 	}
 
 	[[nodiscard]] static auto getScalarVariableNames() -> std::vector<std::string>;
-	[[nodiscard]] static auto getNumVars(bool allocateRadVars) -> int;
 
 	void checkHydroStates(amrex::MultiFab &mf, char const *file, int line);
 	void computeMaxSignalLocal(int level) override;
@@ -229,20 +219,6 @@ auto RadhydroSimulation<problem_t>::getScalarVariableNames() -> std::vector<std:
 		names.push_back(fmt::format("scalar_{}", n));
 	}
 	return names;
-}
-
-template <typename problem_t>
-auto RadhydroSimulation<problem_t>::getNumVars(bool allocateRadVars) -> int {
-	// return the number of cell-centered variables to be allocated
-	// in the state_new_ and state_old_ multifabs
-
-	int nvars = 0;
-	if (allocateRadVars) {
-		nvars = RadSystem<problem_t>::nvar_; // includes hydro vars
-	} else {
-		nvars = HydroSystem<problem_t>::nvar_; // includes hydro + scalars only
-	}
-	return nvars;
 }
 
 template <typename problem_t>

@@ -23,7 +23,6 @@ struct ContactProblem {};
 template <> struct HydroSystem_Traits<ContactProblem> {
   static constexpr double gamma = 1.4;
   static constexpr bool reconstruct_eint = true;
-  static constexpr int nscalars = 2;       // number of passive scalars
 };
 
 template <> struct Physics_Traits<ContactProblem> {
@@ -32,6 +31,8 @@ template <> struct Physics_Traits<ContactProblem> {
   static constexpr bool is_mhd_enabled = false;
   static constexpr bool is_primordial_chem_enabled = false;
   static constexpr bool is_metalicity_enabled = false;
+  
+  static constexpr int numPassiveScalars = 2; // number of passive scalars
 };
 
 constexpr double v_contact = 0.0; // contact wave velocity
@@ -209,7 +210,7 @@ auto problem_main() -> int {
   }
 
   // Problem initialization
-  RadhydroSimulation<ContactProblem> sim(boundaryConditions, false);
+  RadhydroSimulation<ContactProblem> sim(boundaryConditions);
   
   sim.stopTime_ = 2.0;
   sim.cflNumber_ = 0.8;

@@ -100,9 +100,22 @@ public:
   int checkpointInterval_ = -1;    // -1 == no output
 
   // constructor
-  AMRSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions,
-                const int ncomp)
-      : ncomp_(ncomp) {
+  explicit AMRSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions) {
+    if constexpr (Physics_Traits<problem_t>::is_hydro_enabled ||
+                  Physics_Traits<problem_t>::is_radiation_enabled) {
+      std::vector<std::string> hydroNames = {"gasDensity", "x-GasMomentum", "y-GasMomentum", "z-GasMomentum", "gasEnergy", "gasInternalEnergy"};
+      componentNames_.insert(componentNames_.end(), hydroNames.begin(), hydroNames.end());
+      ncomp_ += hydroNames.size();
+    }
+    if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
+      std::vector<std::string> radNames = {"radEnergy", "x-RadFlux", "y-RadFlux", "z-RadFlux"};
+      componentNames_.insert(componentNames_.end(), radNames.begin(), radNames.end());
+      ncomp_ += radNames.size();
+    }
+    if (ncomp_ == 0) {
+      componentNames_.push_back({"density"});
+      ncomp_ = 1;
+    }
     initialize(boundaryConditions);
   }
 
@@ -943,9 +956,6 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(
 
   // set state_new_[lev] to desired initial condition
   setInitialConditionsAtLevel(level);
-
-  amrex::IntVect iv(AMREX_D_DECL(19, 0, 5));
-  print_state(state_new_[level], iv);
 
   // check that state_new_[lev] is properly filled
   AMREX_ALWAYS_ASSERT(!state_new_[level].contains_nan(0, ncomp));

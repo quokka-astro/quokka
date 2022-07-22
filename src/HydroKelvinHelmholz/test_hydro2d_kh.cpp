@@ -24,7 +24,6 @@ struct KelvinHelmholzProblem {};
 template <> struct HydroSystem_Traits<KelvinHelmholzProblem> {
   static constexpr double gamma = 1.4;
   static constexpr bool reconstruct_eint = false;
-  static constexpr int nscalars = 0;       // number of passive scalars
 };
 
 template <> struct Physics_Traits<KelvinHelmholzProblem> {
@@ -33,6 +32,8 @@ template <> struct Physics_Traits<KelvinHelmholzProblem> {
   static constexpr bool is_mhd_enabled = false;
   static constexpr bool is_primordial_chem_enabled = false;
   static constexpr bool is_metalicity_enabled = false;
+  
+  static constexpr int numPassiveScalars = 0; // number of passive scalars
 };
 
 template <>
@@ -142,7 +143,7 @@ auto problem_main() -> int {
   }
 
   // Problem initialization
-  RadhydroSimulation<KelvinHelmholzProblem> sim(boundaryConditions, false);
+  RadhydroSimulation<KelvinHelmholzProblem> sim(boundaryConditions);
   
   sim.stopTime_ = 1.5;
   sim.cflNumber_ = 0.4;

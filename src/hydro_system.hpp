@@ -30,7 +30,6 @@
 template <typename problem_t> struct HydroSystem_Traits {
   static constexpr double gamma = 5. / 3.;     // default value
   static constexpr double cs_isothermal = NAN; // only used when gamma = 1
-  static constexpr int nscalars = 0;           // number of passive scalars
   // if true, reconstruct e_int instead of pressure
   static constexpr bool reconstruct_eint = true;
 };
@@ -60,7 +59,7 @@ public:
         6 // first passive scalar (only present if nscalars > 0!)
   };
 
-  static constexpr int nscalars_ = HydroSystem_Traits<problem_t>::nscalars;
+  static constexpr int nscalars_ = Physics_Traits<problem_t>::numPassiveScalars;
   static constexpr int nvar_ = 6 + nscalars_;
 
   static void ConservedToPrimitive(amrex::Array4<const amrex::Real> const &cons,

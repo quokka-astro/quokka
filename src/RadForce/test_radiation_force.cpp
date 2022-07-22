@@ -59,7 +59,6 @@ template <> struct HydroSystem_Traits<TubeProblem> {
   static constexpr double gamma = gamma_gas;
   static constexpr double cs_isothermal = a0; // only used when gamma = 1
   static constexpr bool reconstruct_eint = false; // unused if isothermal
-  static constexpr int nscalars = 0;       // number of passive scalars
 };
 
 template <> struct Physics_Traits<TubeProblem> {
@@ -68,6 +67,8 @@ template <> struct Physics_Traits<TubeProblem> {
   static constexpr bool is_mhd_enabled = false;
   static constexpr bool is_primordial_chem_enabled = false;
   static constexpr bool is_metalicity_enabled = false;
+  
+  static constexpr int numPassiveScalars = 0; // number of passive scalars
 };
 
 template <>

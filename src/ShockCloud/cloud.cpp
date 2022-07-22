@@ -43,7 +43,6 @@ template <> struct HydroSystem_Traits<ShockCloud> {
   static constexpr double gamma = 5. / 3.; // default value
   // if true, reconstruct e_int instead of pressure
   static constexpr bool reconstruct_eint = true;
-  static constexpr int nscalars = 0;       // number of passive scalars
 };
 
 template <> struct Physics_Traits<ShockCloud> {
@@ -52,6 +51,8 @@ template <> struct Physics_Traits<ShockCloud> {
   static constexpr bool is_mhd_enabled = false;
   static constexpr bool is_primordial_chem_enabled = false;
   static constexpr bool is_metalicity_enabled = false;
+  
+  static constexpr int numPassiveScalars = 0; // number of passive scalars
 };
 
 constexpr Real Tgas0 = 1.0e7;            // K
@@ -476,7 +477,7 @@ auto problem_main() -> int {
     boundaryConditions[n].setHi(2, amrex::BCType::int_dir);
   }
 
-  RadhydroSimulation<ShockCloud> sim(boundaryConditions, false);
+  RadhydroSimulation<ShockCloud> sim(boundaryConditions);
 
   // Standard PPM gives unphysically enormous temperatures when used for
   // this problem (e.g., ~1e14 K or higher), but can be fixed by
