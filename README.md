@@ -26,7 +26,7 @@ Quokka also features advanced Adaptive Quokka Refinement:tm: technology:
 
 To run Quokka, download this repository to your local machine:
 ```
-git clone --recursive git@github.com:BenWibking/quokka.git
+git clone --recursive https://github.com/BenWibking/quokka.git
 ```
 Quokka uses CMake as its build system. If you don't have CMake installed, the easiest way to install it is to run:
 ```
