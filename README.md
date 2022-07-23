@@ -60,8 +60,18 @@ Have fun!
 ## CMake
 Quokka uses CMake for its build system. If you don't have CMake installed already, you can simply `pip install cmake` or use another [installation method](https://cliutils.gitlab.io/modern-cmake/chapters/intro/installing.html). If you are unfamiliar with CMake, [this tutorial](https://hsf-training.github.io/hsf-training-cmake-webpage/) may be useful.
 
-## Python header file not found error
-If you get an error saying that a NumPy header file is not found, you can work around this problem by disabling Python support. Python and NumPy are only used to plot the results of some test problems, so this does not otherwise affect Quokka's functionality. Add the option
+## Could NOT find Python error
+If CMake prints an error saying that Python could not be found, e.g.:
+```
+-- Could NOT find Python (missing: Python_EXECUTABLE Python_INCLUDE_DIRS Python_LIBRARIES Python_NumPy_INCLUDE_DIRS Interpreter Development NumPy Development.Module Development.Embed)
+```
+you should be able to fix this by installing NumPy (and matplotlib) by running
+```
+python3 -m pip install numpy matplotlib --user
+```
+This should enable CMake to find the NumPy header files that are needed to successfully compile.
+
+Alternatively, you can work around this problem by disabling Python support. Python and NumPy are only used to plot the results of some test problems, so this does not otherwise affect Quokka's functionality. Add the option
 ```
 -DQUOKKA_PYTHON=OFF
 ```
