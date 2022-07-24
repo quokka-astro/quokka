@@ -36,6 +36,7 @@
 #include "AMReX_IntVect.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_MultiFabUtil.H"
+#include "AMReX_ParmParse.H"
 #include "AMReX_PhysBCFunct.H"
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
@@ -109,6 +110,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 		bool allocateRadVars = true)
 	    : AMRSimulation<problem_t>(boundaryConditions, getNumVars(allocateRadVars))
 	{
+		// set component names used in the state multifabs
 		std::vector<std::string> hydroNames = {"gasDensity", "x-GasMomentum", "y-GasMomentum",
 				   							   "z-GasMomentum", "gasEnergy", "gasInternalEnergy"};
 		std::vector<std::string> radNames = {"radEnergy", "x-RadFlux", "y-RadFlux", "z-RadFlux"};
@@ -120,10 +122,14 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 		if (allocateRadVars) {
 			componentNames_.insert(componentNames_.end(), radNames.begin(), radNames.end());
 		}
+
+		// read in runtime parameters
+		readParmParse();
 	}
 
 	[[nodiscard]] static auto getScalarVariableNames() -> std::vector<std::string>;
 	[[nodiscard]] static auto getNumVars(bool allocateRadVars) -> int;
+	void readParmParse();
 
 	void checkHydroStates(amrex::MultiFab &mf, char const *file, int line);
 	void computeMaxSignalLocal(int level) override;
@@ -244,6 +250,22 @@ auto RadhydroSimulation<problem_t>::getNumVars(bool allocateRadVars) -> int {
 		nvars = HydroSystem<problem_t>::nvar_; // includes hydro + scalars only
 	}
 	return nvars;
+}
+
+template <typename problem_t>
+void RadhydroSimulation<problem_t>::readParmParse() {
+	// set hydro runtime parameters
+	{
+		amrex::ParmParse hpp("hydro");
+		hpp.query("reconstruction_order", reconstructionOrder_);
+	}
+
+	// set radiation runtime parameters
+	{
+		amrex::ParmParse rpp("radiation");
+		rpp.query("reconstruction_order", radiationReconstructionOrder_);
+		rpp.query("cfl", radiationCflNumber_);
+	}
 }
 
 template <typename problem_t>
