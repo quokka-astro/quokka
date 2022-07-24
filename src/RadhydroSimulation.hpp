@@ -101,6 +101,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	int integratorOrder_ = 2; // 1 == forward Euler; 2 == RK2-SSP (default)
 	int reconstructionOrder_ = 3; // 1 == donor cell; 2 == PLM; 3 == PPM (default)
 	int radiationReconstructionOrder_ = 3; // 1 == donor cell; 2 == PLM; 3 == PPM (default)
+	int useDualEnergy_ = 1; // 0 == disabled; 1 == use auxiliary internal energy equation (default)
 
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
 
@@ -258,6 +259,7 @@ void RadhydroSimulation<problem_t>::readParmParse() {
 	{
 		amrex::ParmParse hpp("hydro");
 		hpp.query("reconstruction_order", reconstructionOrder_);
+		hpp.query("use_dual_energy", useDualEnergy_);
 	}
 
 	// set radiation runtime parameters
@@ -594,9 +596,11 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 			}
 		}
 
-		// add non-conservative term to internal energy
-		computeInternalEnergyUpdate(stateOld, stateNew, indexRange, ncompHydro_,
-									geom[lev].CellSizeArray(), dt_lev);
+		if (useDualEnergy_ == 1) {
+			// add non-conservative term to internal energy
+			computeInternalEnergyUpdate(stateOld, stateNew, indexRange, 
+				ncompHydro_, geom[lev].CellSizeArray(), dt_lev);
+		}
 
 		// prevent vacuum
 		HydroSystem<problem_t>::EnforcePressureFloor(densityFloor_, pressureFloor_, indexRange, stateNew);
@@ -670,9 +674,11 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 				}
 			}
 
-			// add non-conservative term to internal energy
-			computeInternalEnergyUpdate(stateInter, stateFinal, indexRange, ncompHydro_,
-										geom[lev].CellSizeArray(), 0.5 * dt_lev);
+			if (useDualEnergy_ == 1) {
+				// add non-conservative term to internal energy
+				computeInternalEnergyUpdate(stateInter, stateFinal, indexRange,
+					ncompHydro_, geom[lev].CellSizeArray(), 0.5 * dt_lev);
+			}
 
 			// prevent vacuum
 			HydroSystem<problem_t>::EnforcePressureFloor(densityFloor_, pressureFloor_, indexRange, stateFinal);
