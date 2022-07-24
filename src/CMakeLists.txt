@@ -5,7 +5,7 @@ else()
   message(STATUS "Building Quokka *without* Python support")
 endif()
 
-if(PythonLibs_FOUND)
+if(Python_FOUND)
     add_compile_definitions(HAVE_PYTHON)
     include_directories(${Python_INCLUDE_DIRS} ${Python_NumPy_INCLUDE_DIRS})
     link_libraries(${Python_LIBRARIES})
