@@ -104,6 +104,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	int integratorOrder_ = 2; // 1 == forward Euler; 2 == RK2-SSP (default)
 	int reconstructionOrder_ = 3; // 1 == donor cell; 2 == PLM; 3 == PPM (default)
 	int radiationReconstructionOrder_ = 3; // 1 == donor cell; 2 == PLM; 3 == PPM (default)
+	int useDualEnergy_ = 1; // 0 == disabled; 1 == use auxiliary internal energy equation (default)
 
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
 
@@ -250,6 +251,23 @@ auto RadhydroSimulation<problem_t>::getNumVars(bool allocateRadVars) const -> in
 		nvars = HydroSystem<problem_t>::nvar_; // includes hydro + scalars only
 	}
 	return nvars;
+}
+
+template <typename problem_t>
+void RadhydroSimulation<problem_t>::readParmParse() {
+	// set hydro runtime parameters
+	{
+		amrex::ParmParse hpp("hydro");
+		hpp.query("reconstruction_order", reconstructionOrder_);
+		hpp.query("use_dual_energy", useDualEnergy_);
+	}
+
+	// set radiation runtime parameters
+	{
+		amrex::ParmParse rpp("radiation");
+		rpp.query("reconstruction_order", radiationReconstructionOrder_);
+		rpp.query("cfl", radiationCflNumber_);
+	}
 }
 
 template <typename problem_t>
