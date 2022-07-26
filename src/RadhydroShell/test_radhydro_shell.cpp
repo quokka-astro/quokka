@@ -235,7 +235,7 @@ void RadhydroSimulation<ShellProblem>::setInitialConditionsAtLevel(int lev) {
 
       state(i, j, k, RadSystem<ShellProblem>::gasEnergy_index) = 0.;
       state(i, j, k, RadSystem<ShellProblem>::gasDensity_index) = 0.;
-      state(i, j, k, RadSystem<ShellProblem>::gasInternalEnergy_index) = 0.;
+      state(i, j, k, RadSystem<ShellProblem>::gasInternalEnergy_index) = 0;
     });
   }
 
