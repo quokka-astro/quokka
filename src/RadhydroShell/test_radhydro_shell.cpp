@@ -228,14 +228,11 @@ void RadhydroSimulation<ShellProblem>::setInitialConditionsAtLevel(int lev) {
       state(i, j, k, HydroSystem<ShellProblem>::energy_index) = Eint;
 
       const double Frad_xyz = Frad / std::sqrt(3.0);
+      state(i, j, k, RadSystem<ShellProblem>::gasInternalEnergy_index) = Eint;
       state(i, j, k, RadSystem<ShellProblem>::radEnergy_index) = Erad;
       state(i, j, k, RadSystem<ShellProblem>::x1RadFlux_index) = Frad_xyz;
       state(i, j, k, RadSystem<ShellProblem>::x2RadFlux_index) = Frad_xyz;
       state(i, j, k, RadSystem<ShellProblem>::x3RadFlux_index) = Frad_xyz;
-
-      state(i, j, k, RadSystem<ShellProblem>::gasEnergy_index) = 0.;
-      state(i, j, k, RadSystem<ShellProblem>::gasDensity_index) = 0.;
-      state(i, j, k, RadSystem<ShellProblem>::gasInternalEnergy_index) = 0;
     });
   }
 

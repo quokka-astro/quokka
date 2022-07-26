@@ -13,6 +13,7 @@
 #include "AMReX_ParallelDescriptor.H"
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
+#include "hydro_system.hpp"
 #include "test_radhydro_shock.hpp"
 
 struct ShockProblem {
@@ -121,46 +122,48 @@ AMRSimulation<ShockProblem>::setCustomBoundaryConditions(
   amrex::GpuArray<int, 3> lo = box.loVect3d();
   amrex::GpuArray<int, 3> hi = box.hiVect3d();
 
-  if (i < lo[0]) {
-    // x1 left side boundary -- constant
-    consVar(i, j, k, RadSystem<ShockProblem>::radEnergy_index) = Erad0;
-    consVar(i, j, k, RadSystem<ShockProblem>::x1RadFlux_index) = 0;
-    consVar(i, j, k, RadSystem<ShockProblem>::x2RadFlux_index) = 0;
-    consVar(i, j, k, RadSystem<ShockProblem>::x3RadFlux_index) = 0;
+  for (int scalar_index = 0; scalar_index < HydroSystem<ShockProblem>::nscalars_; scalar_index++) {
+    consVar(i, j, k, HydroSystem<ShockProblem>::scalar0_index + scalar_index) = 0;
+  }
 
+  if (i < lo[0]) {
     const double xmom_L =
         consVar(lo[0], j, k, RadSystem<ShockProblem>::x1GasMomentum_index);
     const double Egas_L = Egas0 + 0.5 * rho0 * (v0 * v0);
     const double px_L = (xmom_L < (rho0 * v0)) ? xmom_L : (rho0 * v0);
 
-    consVar(i, j, k, RadSystem<ShockProblem>::gasEnergy_index) = Egas_L;
+    // x1 left side boundary -- constant
     consVar(i, j, k, RadSystem<ShockProblem>::gasDensity_index) = rho0;
-    consVar(i, j, k, RadSystem<ShockProblem>::gasInternalEnergy_index) =
-        Egas_L - (px_L * px_L) / (2 * rho0);
     consVar(i, j, k, RadSystem<ShockProblem>::x1GasMomentum_index) =
         px_L; // xmom_L;
     consVar(i, j, k, RadSystem<ShockProblem>::x2GasMomentum_index) = 0.;
     consVar(i, j, k, RadSystem<ShockProblem>::x3GasMomentum_index) = 0.;
-  } else if (i >= hi[0]) {
-    // x1 right-side boundary -- constant
-    consVar(i, j, k, RadSystem<ShockProblem>::radEnergy_index) = Erad1;
+    consVar(i, j, k, RadSystem<ShockProblem>::gasEnergy_index) = Egas_L;
+    consVar(i, j, k, RadSystem<ShockProblem>::gasInternalEnergy_index) =
+        Egas_L - (px_L * px_L) / (2 * rho0);
+    consVar(i, j, k, RadSystem<ShockProblem>::radEnergy_index) = Erad0;
     consVar(i, j, k, RadSystem<ShockProblem>::x1RadFlux_index) = 0;
     consVar(i, j, k, RadSystem<ShockProblem>::x2RadFlux_index) = 0;
     consVar(i, j, k, RadSystem<ShockProblem>::x3RadFlux_index) = 0;
-
+  } else if (i >= hi[0]) {
     const double xmom_R =
         consVar(hi[0], j, k, RadSystem<ShockProblem>::x1GasMomentum_index);
     const double Egas_R = Egas1 + 0.5 * rho1 * (v1 * v1);
     const double px_R = (xmom_R > (rho1 * v1)) ? xmom_R : (rho1 * v1);
 
-    consVar(i, j, k, RadSystem<ShockProblem>::gasEnergy_index) = Egas_R;
+    // x1 right-side boundary -- constant
     consVar(i, j, k, RadSystem<ShockProblem>::gasDensity_index) = rho1;
-    consVar(i, j, k, RadSystem<ShockProblem>::gasInternalEnergy_index) =
-        Egas_R - (px_R * px_R) / (2 * rho1);
     consVar(i, j, k, RadSystem<ShockProblem>::x1GasMomentum_index) =
         px_R; // xmom_R;
     consVar(i, j, k, RadSystem<ShockProblem>::x2GasMomentum_index) = 0.;
     consVar(i, j, k, RadSystem<ShockProblem>::x3GasMomentum_index) = 0.;
+    consVar(i, j, k, RadSystem<ShockProblem>::gasEnergy_index) = Egas_R;
+    consVar(i, j, k, RadSystem<ShockProblem>::gasInternalEnergy_index) =
+        Egas_R - (px_R * px_R) / (2 * rho1);
+    consVar(i, j, k, RadSystem<ShockProblem>::radEnergy_index) = Erad1;
+    consVar(i, j, k, RadSystem<ShockProblem>::x1RadFlux_index) = 0;
+    consVar(i, j, k, RadSystem<ShockProblem>::x2RadFlux_index) = 0;
+    consVar(i, j, k, RadSystem<ShockProblem>::x3RadFlux_index) = 0;
   }
 }
 
@@ -197,18 +200,24 @@ void RadhydroSimulation<ShockProblem>::setInitialConditionsAtLevel(int lev) {
         x1Momentum = rho1 * v1;
       }
 
+      // hydro variables
+      state(i, j, k, RadSystem<ShockProblem>::gasDensity_index) = density;
+      state(i, j, k, RadSystem<ShockProblem>::x1GasMomentum_index) = x1Momentum;
+      state(i, j, k, RadSystem<ShockProblem>::x2GasMomentum_index) = 0;
+      state(i, j, k, RadSystem<ShockProblem>::x3GasMomentum_index) = 0;
+      state(i, j, k, RadSystem<ShockProblem>::gasEnergy_index) = energy;
+      state(i, j, k, RadSystem<ShockProblem>::gasInternalEnergy_index) =
+          energy - (x1Momentum * x1Momentum) / (2 * density);
+      // passive scalars
+      for (int scalar_index = 0; scalar_index < HydroSystem<ShockProblem>::nscalars_; scalar_index++) {
+        state(i, j, k, HydroSystem<ShockProblem>::scalar0_index + scalar_index) = 0;
+      }
+      // radiation variables
       state(i, j, k, RadSystem<ShockProblem>::radEnergy_index) = radEnergy;
       state(i, j, k, RadSystem<ShockProblem>::x1RadFlux_index) = x1RadFlux;
       state(i, j, k, RadSystem<ShockProblem>::x2RadFlux_index) = 0;
       state(i, j, k, RadSystem<ShockProblem>::x3RadFlux_index) = 0;
 
-      state(i, j, k, RadSystem<ShockProblem>::gasEnergy_index) = energy;
-      state(i, j, k, RadSystem<ShockProblem>::gasDensity_index) = density;
-      state(i, j, k, RadSystem<ShockProblem>::gasInternalEnergy_index) =
-          energy - (x1Momentum * x1Momentum) / (2 * density);
-      state(i, j, k, RadSystem<ShockProblem>::x1GasMomentum_index) = x1Momentum;
-      state(i, j, k, RadSystem<ShockProblem>::x2GasMomentum_index) = 0;
-      state(i, j, k, RadSystem<ShockProblem>::x3GasMomentum_index) = 0;
     });
   }
 

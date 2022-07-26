@@ -138,8 +138,7 @@ public:
   // C++ does not allow constexpr to be uninitialized, even in a templated
   // class!
   static constexpr double gamma_ = HydroSystem_Traits<problem_t>::gamma;
-  static constexpr double cs_iso_ =
-      HydroSystem_Traits<problem_t>::cs_isothermal;
+  static constexpr double cs_iso_ = HydroSystem_Traits<problem_t>::cs_isothermal;
   static constexpr bool reconstruct_eint =
       HydroSystem_Traits<problem_t>::reconstruct_eint;
 
@@ -659,9 +658,8 @@ void HydroSystem<problem_t>::AddInternalEnergyPressureTerm(
     amrex::Real const Eint_cons = Etot - Ekin;
 
     // eta value used in Li et al. is 1e-2; eta value used in FLASH is 1e-4
-    // the optimal value is problem-dependent, but probably lies within these
-    // limits (note that smaller eta values may require smaller CFL numbers for
-    // stability)
+    // the optimal value is problem-dependent, but probably lies within these limits
+    // (note that smaller eta values may require smaller CFL numbers for stability)
     const amrex::Real eta = 1.0e-3; // dual energy parameter 'eta'
 
     // Li et al. sync method
