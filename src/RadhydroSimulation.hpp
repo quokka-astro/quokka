@@ -105,8 +105,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	// member functions
 
 	explicit RadhydroSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions)
-	    : AMRSimulation<problem_t>(boundaryConditions)
-  {
+	    : AMRSimulation<problem_t>(boundaryConditions) {
     // add hydro state variables
     if constexpr (Physics_Traits<problem_t>::is_hydro_enabled ||
                   Physics_Traits<problem_t>::is_radiation_enabled) {
@@ -115,9 +114,11 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
       ncomp_ += hydroNames.size();
     }
     // add passive scalar variables
-		std::vector<std::string> scalarNames = getScalarVariableNames();
-		componentNames_.insert(componentNames_.end(), scalarNames.begin(), scalarNames.end());
-    ncomp_ += scalarNames.size();
+    if constexpr (Physics_Traits<problem_t>::numPassiveScalars > 0){
+      std::vector<std::string> scalarNames = getScalarVariableNames();
+      componentNames_.insert(componentNames_.end(), scalarNames.begin(), scalarNames.end());
+      ncomp_ += scalarNames.size();
+    }
     // add radiation state variables
     if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
       std::vector<std::string> radNames = {"radEnergy", "x-RadFlux", "y-RadFlux", "z-RadFlux"};
