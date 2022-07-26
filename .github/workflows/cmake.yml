@@ -73,8 +73,9 @@ jobs:
     #- name: Run code coverage
     #  working-directory: ${{runner.workspace}}/build
     #  run: cmake --build . --config $BUILD_TYPE --target coverage
-
+    
     - name: SonarCloud Scan
+      if: github.repository == 'BenWibking/quokka' # analysis fails on external PRs
       working-directory: ${{github.workspace}}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
