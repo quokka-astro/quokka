@@ -62,27 +62,26 @@ template <> struct RadSystem_Traits<ShockProblem> {
   static constexpr double boltzmann_constant = k_B;
   static constexpr double gamma = gamma_gas;
   static constexpr double Erad_floor = 0.;
-	static constexpr bool compute_v_over_c_terms = true;
+  static constexpr bool compute_v_over_c_terms = true;
 };
 
 template <> struct HydroSystem_Traits<ShockProblem> {
   static constexpr double gamma = gamma_gas;
   static constexpr bool reconstruct_eint = true;
-  static constexpr int nscalars = 0;       // number of passive scalars
+  static constexpr int nscalars = 1; // number of passive scalars
 };
 
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 RadSystem<ShockProblem>::ComputePlanckOpacity(const double rho,
-                                                   const double /*Tgas*/)
-    -> double {
+                                              const double /*Tgas*/) -> double {
   return (kappa / rho);
 }
 
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 RadSystem<ShockProblem>::ComputeRosselandOpacity(const double rho,
-                                                      const double /*Tgas*/)
+                                                 const double /*Tgas*/)
     -> double {
   return (kappa / rho);
 }
@@ -136,8 +135,10 @@ AMRSimulation<ShockProblem>::setCustomBoundaryConditions(
 
     consVar(i, j, k, RadSystem<ShockProblem>::gasEnergy_index) = Egas_L;
     consVar(i, j, k, RadSystem<ShockProblem>::gasDensity_index) = rho0;
-    consVar(i, j, k, RadSystem<ShockProblem>::gasInternalEnergy_index) = Egas_L - (px_L*px_L)/(2*rho0);
-    consVar(i, j, k, RadSystem<ShockProblem>::x1GasMomentum_index) = px_L; // xmom_L;
+    consVar(i, j, k, RadSystem<ShockProblem>::gasInternalEnergy_index) =
+        Egas_L - (px_L * px_L) / (2 * rho0);
+    consVar(i, j, k, RadSystem<ShockProblem>::x1GasMomentum_index) =
+        px_L; // xmom_L;
     consVar(i, j, k, RadSystem<ShockProblem>::x2GasMomentum_index) = 0.;
     consVar(i, j, k, RadSystem<ShockProblem>::x3GasMomentum_index) = 0.;
   } else if (i >= hi[0]) {
@@ -154,8 +155,10 @@ AMRSimulation<ShockProblem>::setCustomBoundaryConditions(
 
     consVar(i, j, k, RadSystem<ShockProblem>::gasEnergy_index) = Egas_R;
     consVar(i, j, k, RadSystem<ShockProblem>::gasDensity_index) = rho1;
-    consVar(i, j, k, RadSystem<ShockProblem>::gasInternalEnergy_index) = Egas_R - (px_R*px_R)/(2*rho1);
-    consVar(i, j, k, RadSystem<ShockProblem>::x1GasMomentum_index) = px_R; // xmom_R;
+    consVar(i, j, k, RadSystem<ShockProblem>::gasInternalEnergy_index) =
+        Egas_R - (px_R * px_R) / (2 * rho1);
+    consVar(i, j, k, RadSystem<ShockProblem>::x1GasMomentum_index) =
+        px_R; // xmom_R;
     consVar(i, j, k, RadSystem<ShockProblem>::x2GasMomentum_index) = 0.;
     consVar(i, j, k, RadSystem<ShockProblem>::x3GasMomentum_index) = 0.;
   }
@@ -198,10 +201,11 @@ void RadhydroSimulation<ShockProblem>::setInitialConditionsAtLevel(int lev) {
       state(i, j, k, RadSystem<ShockProblem>::x1RadFlux_index) = x1RadFlux;
       state(i, j, k, RadSystem<ShockProblem>::x2RadFlux_index) = 0;
       state(i, j, k, RadSystem<ShockProblem>::x3RadFlux_index) = 0;
-      
+
       state(i, j, k, RadSystem<ShockProblem>::gasEnergy_index) = energy;
       state(i, j, k, RadSystem<ShockProblem>::gasDensity_index) = density;
-      state(i, j, k, RadSystem<ShockProblem>::gasInternalEnergy_index) = energy - (x1Momentum*x1Momentum)/(2*density);
+      state(i, j, k, RadSystem<ShockProblem>::gasInternalEnergy_index) =
+          energy - (x1Momentum * x1Momentum) / (2 * density);
       state(i, j, k, RadSystem<ShockProblem>::x1GasMomentum_index) = x1Momentum;
       state(i, j, k, RadSystem<ShockProblem>::x2GasMomentum_index) = 0;
       state(i, j, k, RadSystem<ShockProblem>::x3GasMomentum_index) = 0;
@@ -411,7 +415,6 @@ auto problem_main() -> int {
     matplotlibcpp::legend();
     matplotlibcpp::save("./radshock_gasdensity.pdf");
 #endif
-
   }
 
   return status;
