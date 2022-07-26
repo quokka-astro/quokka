@@ -22,3 +22,4 @@ do_subcycle = 1
 
 plotfile_interval = 1000
 cfl = 0.6
+hydro.reconstruction_order = 3
