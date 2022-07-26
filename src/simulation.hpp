@@ -101,21 +101,6 @@ public:
 
   // constructor
   explicit AMRSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions) {
-    if constexpr (Physics_Traits<problem_t>::is_hydro_enabled ||
-                  Physics_Traits<problem_t>::is_radiation_enabled) {
-      std::vector<std::string> hydroNames = {"gasDensity", "x-GasMomentum", "y-GasMomentum", "z-GasMomentum", "gasEnergy", "gasInternalEnergy"};
-      componentNames_.insert(componentNames_.end(), hydroNames.begin(), hydroNames.end());
-      ncomp_ += hydroNames.size();
-    }
-    if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
-      std::vector<std::string> radNames = {"radEnergy", "x-RadFlux", "y-RadFlux", "z-RadFlux"};
-      componentNames_.insert(componentNames_.end(), radNames.begin(), radNames.end());
-      ncomp_ += radNames.size();
-    }
-    if (ncomp_ == 0) {
-      componentNames_.push_back({"density"});
-      ncomp_ = 1;
-    }
     initialize(boundaryConditions);
   }
 
