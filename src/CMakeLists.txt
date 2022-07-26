@@ -1,14 +1,14 @@
 if(QUOKKA_PYTHON) 
   message(STATUS "Building Quokka with Python support (to disable, add '-DQUOKKA_PYTHON=OFF' to the CMake command-line options)")
-  find_package(PythonLibs)
+  find_package(Python COMPONENTS Interpreter Development NumPy)
 else()
   message(STATUS "Building Quokka *without* Python support")
 endif()
 
-if(PythonLibs_FOUND)
+if(Python_FOUND)
     add_compile_definitions(HAVE_PYTHON)
-    include_directories(${PYTHON_INCLUDE_DIRS})
-    link_libraries(${PYTHON_LIBRARY})
+    include_directories(${Python_INCLUDE_DIRS} ${Python_NumPy_INCLUDE_DIRS})
+    link_libraries(${Python_LIBRARIES})
 endif()
 
 # HDF5
