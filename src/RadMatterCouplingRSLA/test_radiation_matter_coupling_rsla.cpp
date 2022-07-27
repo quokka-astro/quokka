@@ -40,7 +40,6 @@ template <> struct RadSystem_Traits<CouplingProblem> {
 template <> struct Physics_Traits<CouplingProblem> {
   static constexpr bool is_hydro_enabled = false;
   static constexpr bool is_radiation_enabled = true;
-  static constexpr bool is_mhd_enabled = false;
   static constexpr bool is_primordial_chem_enabled = false;
   static constexpr bool is_metalicity_enabled = false;
 

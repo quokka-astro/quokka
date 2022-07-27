@@ -5,7 +5,6 @@ template <typename problem_t> struct Physics_Traits {
   static constexpr bool is_hydro_enabled = false;
   static constexpr bool is_radiation_enabled = false;
   static constexpr bool is_pscalars_enabled = false;
-  static constexpr bool is_mhd_enabled = false;
 
   static constexpr int numPassiveScalars = 0;
 };
@@ -16,7 +15,4 @@ template <typename problem_t> struct Physics_Indices {
   static const int hydroFirstIndex = 0;
   static const int pscalarFirstIndex = Physics_NumVars<problem_t>::numHydroVars;
   static const int radFirstIndex = pscalarFirstIndex + Physics_Traits<problem_t>::numPassiveScalars;
-
-  // face-centered quantities
-  static const int mhdCompStarts = 0;
 };

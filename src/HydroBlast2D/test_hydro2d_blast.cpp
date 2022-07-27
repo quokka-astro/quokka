@@ -33,7 +33,6 @@ template <> struct HydroSystem_Traits<BlastProblem> {
 template <> struct Physics_Traits<BlastProblem> {
   static constexpr bool is_hydro_enabled = true;
   static constexpr bool is_radiation_enabled = false;
-  static constexpr bool is_mhd_enabled = false;
   static constexpr bool is_primordial_chem_enabled = false;
   static constexpr bool is_metalicity_enabled = false;
   
