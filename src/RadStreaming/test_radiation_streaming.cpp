@@ -62,7 +62,7 @@ void RadhydroSimulation<StreamingProblem>::setInitialConditionsAtLevel(
 
       state(i, j, k, RadSystem<StreamingProblem>::gasEnergy_index) = Egas0;
       state(i, j, k, RadSystem<StreamingProblem>::gasDensity_index) = rho;
-      state(i, j, k, RadSystem<StreamingProblem>::gasInternalEnergy_index) = 0.;
+      state(i, j, k, RadSystem<StreamingProblem>::gasInternalEnergy_index) = Egas0;
       state(i, j, k, RadSystem<StreamingProblem>::x1GasMomentum_index) = 0.;
       state(i, j, k, RadSystem<StreamingProblem>::x2GasMomentum_index) = 0.;
       state(i, j, k, RadSystem<StreamingProblem>::x3GasMomentum_index) = 0.;
@@ -120,7 +120,7 @@ AMRSimulation<StreamingProblem>::setCustomBoundaryConditions(
   const double Egas = initial_Egas;
   consVar(i, j, k, RadSystem<StreamingProblem>::gasEnergy_index) = Egas;
   consVar(i, j, k, RadSystem<StreamingProblem>::gasDensity_index) = rho;
-  consVar(i, j, k, RadSystem<StreamingProblem>::gasInternalEnergy_index) = 0.;
+  consVar(i, j, k, RadSystem<StreamingProblem>::gasInternalEnergy_index) = Egas;
   consVar(i, j, k, RadSystem<StreamingProblem>::x1GasMomentum_index) = 0.;
   consVar(i, j, k, RadSystem<StreamingProblem>::x2GasMomentum_index) = 0.;
   consVar(i, j, k, RadSystem<StreamingProblem>::x3GasMomentum_index) = 0.;
