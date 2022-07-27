@@ -14,10 +14,8 @@ template <typename problem_t> struct Physics_Traits {
 template <typename problem_t> struct Physics_Indices {
   // cell-centered quantities
   static const int hydroFirstIndex = 0;
-  static const int radFirstIndex = 0;
-  static const int pscalarFirstIndex =
-      ((int)Physics_Traits<problem_t>::is_hydro_enabled * Physics_NumVars<problem_t>::numHydroVars) +
-      ((int)Physics_Traits<problem_t>::is_radiation_enabled * Physics_NumVars<problem_t>::numRadVars);
+  static const int pscalarFirstIndex = Physics_NumVars<problem_t>::numHydroVars;
+  static const int radFirstIndex = pscalarFirstIndex + Physics_Traits<problem_t>::numPassiveScalars;
 
   // face-centered quantities
   static const int mhdCompStarts = 0;

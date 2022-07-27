@@ -39,28 +39,28 @@ template <typename problem_t> struct HydroSystem_Traits {
 template <typename problem_t>
 class HydroSystem : public HyperbolicSystem<problem_t> {
 public:
+  static constexpr int nscalars_ = Physics_Traits<problem_t>::numPassiveScalars;
+  static constexpr int nvar_ = Physics_NumVars<problem_t>::numHydroVars + nscalars_;
+
   enum consVarIndex {
-    density_index = 0,
-    x1Momentum_index = 1,
-    x2Momentum_index = 2,
-    x3Momentum_index = 3,
-    energy_index = 4,
-    internalEnergy_index = 5, // auxiliary internal energy (rho * e)
-    scalar0_index = 6 // first passive scalar (only present if nscalars > 0!)
-  };
-  enum primVarIndex {
-    primDensity_index = 0,
-    x1Velocity_index = 1,
-    x2Velocity_index = 2,
-    x3Velocity_index = 3,
-    pressure_index = 4,
-    primEint_index = 5, // auxiliary internal energy (rho * e)
-    primScalar0_index =
-        6 // first passive scalar (only present if nscalars > 0!)
+    density_index = Physics_Indices<problem_t>::hydroFirstIndex,
+    x1Momentum_index,
+    x2Momentum_index,
+    x3Momentum_index,
+    energy_index,
+    internalEnergy_index, // auxiliary internal energy (rho * e)
+    scalar0_index // first passive scalar (only present if nscalars > 0!)
   };
 
-  static constexpr int nscalars_ = Physics_Traits<problem_t>::numPassiveScalars;
-  static constexpr int nvar_ = 6 + nscalars_;
+  enum primVarIndex {
+    primDensity_index = 0,
+    x1Velocity_index,
+    x2Velocity_index,
+    x3Velocity_index,
+    pressure_index,
+    primEint_index, // auxiliary internal energy (rho * e)
+    primScalar0_index // first passive scalar (only present if nscalars > 0!)
+  };
 
   static void ConservedToPrimitive(amrex::Array4<const amrex::Real> const &cons,
                                    array_t &primVar,
