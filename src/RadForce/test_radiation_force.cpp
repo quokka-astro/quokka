@@ -139,15 +139,15 @@ void RadhydroSimulation<TubeProblem>::setInitialConditionsAtLevel(int lev) {
       state(i, j, k, RadSystem<TubeProblem>::radEnergy_index) =
           Frad0 / c_light_cgs_;
       state(i, j, k, RadSystem<TubeProblem>::x1RadFlux_index) = Frad0;
-      state(i, j, k, RadSystem<TubeProblem>::x2RadFlux_index) = 0;
-      state(i, j, k, RadSystem<TubeProblem>::x3RadFlux_index) = 0;
+      state(i, j, k, RadSystem<TubeProblem>::x2RadFlux_index) = 0.;
+      state(i, j, k, RadSystem<TubeProblem>::x3RadFlux_index) = 0.;
 
       state(i, j, k, RadSystem<TubeProblem>::x1GasMomentum_index) = rho * vel;
-      state(i, j, k, RadSystem<TubeProblem>::x2GasMomentum_index) = 0;
-      state(i, j, k, RadSystem<TubeProblem>::x3GasMomentum_index) = 0;
+      state(i, j, k, RadSystem<TubeProblem>::x2GasMomentum_index) = 0.;
+      state(i, j, k, RadSystem<TubeProblem>::x3GasMomentum_index) = 0.;
       state(i, j, k, RadSystem<TubeProblem>::gasDensity_index) = rho;
-      state(i, j, k, RadSystem<TubeProblem>::gasEnergy_index) = 0;
-      state(i, j, k, RadSystem<TubeProblem>::gasInternalEnergy_index) = 0;
+      state(i, j, k, RadSystem<TubeProblem>::gasEnergy_index) = 0.;
+      state(i, j, k, RadSystem<TubeProblem>::gasInternalEnergy_index) = 0.;
     });
   }
 
@@ -198,15 +198,15 @@ AMRSimulation<TubeProblem>::setCustomBoundaryConditions(
     // Dirichlet
     consVar(i, j, k, RadSystem<TubeProblem>::radEnergy_index) = Erad;
     consVar(i, j, k, RadSystem<TubeProblem>::x1RadFlux_index) = Frad;
-    consVar(i, j, k, RadSystem<TubeProblem>::x2RadFlux_index) = 0;
-    consVar(i, j, k, RadSystem<TubeProblem>::x3RadFlux_index) = 0;
+    consVar(i, j, k, RadSystem<TubeProblem>::x2RadFlux_index) = 0.;
+    consVar(i, j, k, RadSystem<TubeProblem>::x3RadFlux_index) = 0.;
 
     consVar(i, j, k, RadSystem<TubeProblem>::gasDensity_index) = rho;
-    consVar(i, j, k, RadSystem<TubeProblem>::gasEnergy_index) = 0;
-    consVar(i, j, k, RadSystem<TubeProblem>::gasInternalEnergy_index) = 0;
+    consVar(i, j, k, RadSystem<TubeProblem>::gasEnergy_index) = 0.;
+    consVar(i, j, k, RadSystem<TubeProblem>::gasInternalEnergy_index) = 0.;
     consVar(i, j, k, RadSystem<TubeProblem>::x1GasMomentum_index) = rho * vel;
-    consVar(i, j, k, RadSystem<TubeProblem>::x2GasMomentum_index) = 0;
-    consVar(i, j, k, RadSystem<TubeProblem>::x3GasMomentum_index) = 0;
+    consVar(i, j, k, RadSystem<TubeProblem>::x2GasMomentum_index) = 0.;
+    consVar(i, j, k, RadSystem<TubeProblem>::x3GasMomentum_index) = 0.;
   }
 }
 

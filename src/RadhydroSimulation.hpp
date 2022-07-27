@@ -105,7 +105,6 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
 
 	// member functions
-
 	explicit RadhydroSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions)
 	    : AMRSimulation<problem_t>(boundaryConditions) {
     // add hydro state variables
