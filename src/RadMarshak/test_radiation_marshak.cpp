@@ -151,7 +151,7 @@ AMRSimulation<SuOlsonProblem>::setCustomBoundaryConditions(
 	const double Egas = RadSystem<SuOlsonProblem>::ComputeEgasFromTgas(rho0, T_initial);
 	consVar(i, j, k, RadSystem<SuOlsonProblem>::gasEnergy_index) = Egas;
 	consVar(i, j, k, RadSystem<SuOlsonProblem>::gasDensity_index) = rho0;
-  consVar(i, j, k, RadSystem<SuOlsonProblem>::gasInternalEnergy_index) = 0.;
+  consVar(i, j, k, RadSystem<SuOlsonProblem>::gasInternalEnergy_index) = Egas;
 	consVar(i, j, k, RadSystem<SuOlsonProblem>::x1GasMomentum_index) = 0.;
 	consVar(i, j, k, RadSystem<SuOlsonProblem>::x2GasMomentum_index) = 0.;
 	consVar(i, j, k, RadSystem<SuOlsonProblem>::x3GasMomentum_index) = 0.;
@@ -175,7 +175,7 @@ template <> void RadhydroSimulation<SuOlsonProblem>::setInitialConditionsAtLevel
 
 			state(i, j, k, RadSystem<SuOlsonProblem>::gasDensity_index) = rho0;
 			state(i, j, k, RadSystem<SuOlsonProblem>::gasEnergy_index) = Egas;
-      state(i, j, k, RadSystem<SuOlsonProblem>::gasInternalEnergy_index) = 0.;
+      state(i, j, k, RadSystem<SuOlsonProblem>::gasInternalEnergy_index) = Egas;
 			state(i, j, k, RadSystem<SuOlsonProblem>::x1GasMomentum_index) = 0.;
 			state(i, j, k, RadSystem<SuOlsonProblem>::x2GasMomentum_index) = 0.;
 			state(i, j, k, RadSystem<SuOlsonProblem>::x3GasMomentum_index) = 0.;
