@@ -131,6 +131,7 @@ AMRSimulation<BeamProblem>::setCustomBoundaryConditions(
     // extrapolated/outflow boundary for gas variables
     consVar(i, j, k, RadSystem<BeamProblem>::gasEnergy_index) = Egas;
     consVar(i, j, k, RadSystem<BeamProblem>::gasDensity_index) = rho;
+    consVar(i, j, k, RadSystem<BeamProblem>::gasInternalEnergy_index) = Egas - (px*px + py*py + pz*pz)/(2*rho);
     consVar(i, j, k, RadSystem<BeamProblem>::x1GasMomentum_index) = px;
     consVar(i, j, k, RadSystem<BeamProblem>::x2GasMomentum_index) = py;
     consVar(i, j, k, RadSystem<BeamProblem>::x3GasMomentum_index) = pz;
@@ -186,6 +187,7 @@ AMRSimulation<BeamProblem>::setCustomBoundaryConditions(
     // extrapolated/outflow boundary for gas variables
     consVar(i, j, k, RadSystem<BeamProblem>::gasEnergy_index) = Egas;
     consVar(i, j, k, RadSystem<BeamProblem>::gasDensity_index) = rho;
+    consVar(i, j, k, RadSystem<BeamProblem>::gasInternalEnergy_index) = Egas - (px*px + py*py + pz*pz)/(2*rho);
     consVar(i, j, k, RadSystem<BeamProblem>::x1GasMomentum_index) = px;
     consVar(i, j, k, RadSystem<BeamProblem>::x2GasMomentum_index) = py;
     consVar(i, j, k, RadSystem<BeamProblem>::x3GasMomentum_index) = pz;
@@ -217,6 +219,7 @@ AMRSimulation<BeamProblem>::setCustomBoundaryConditions(
     // extrapolated/outflow boundary for gas variables
     consVar(i, j, k, RadSystem<BeamProblem>::gasEnergy_index) = Egas;
     consVar(i, j, k, RadSystem<BeamProblem>::gasDensity_index) = rho;
+    consVar(i, j, k, RadSystem<BeamProblem>::gasInternalEnergy_index) = Egas - (px*px + py*py + pz*pz)/(2*rho);
     consVar(i, j, k, RadSystem<BeamProblem>::x1GasMomentum_index) = px;
     consVar(i, j, k, RadSystem<BeamProblem>::x2GasMomentum_index) = py;
     consVar(i, j, k, RadSystem<BeamProblem>::x3GasMomentum_index) = pz;
@@ -242,6 +245,7 @@ void RadhydroSimulation<BeamProblem>::setInitialConditionsAtLevel(int lev) {
 
       state(i, j, k, RadSystem<BeamProblem>::gasEnergy_index) = Egas;
       state(i, j, k, RadSystem<BeamProblem>::gasDensity_index) = rho;
+      state(i, j, k, RadSystem<BeamProblem>::gasInternalEnergy_index) = Egas;
       state(i, j, k, RadSystem<BeamProblem>::x1GasMomentum_index) = 0.;
       state(i, j, k, RadSystem<BeamProblem>::x2GasMomentum_index) = 0.;
       state(i, j, k, RadSystem<BeamProblem>::x3GasMomentum_index) = 0.;

@@ -140,6 +140,7 @@ AMRSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(
       RadSystem<SuOlsonProblemCgs>::ComputeEgasFromTgas(rho0, T_initial);
   consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::gasEnergy_index) = Egas;
   consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::gasDensity_index) = rho0;
+  consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::gasInternalEnergy_index) = Egas;
   consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x1GasMomentum_index) = 0.;
   consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x2GasMomentum_index) = 0.;
   consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x3GasMomentum_index) = 0.;
@@ -163,10 +164,11 @@ void RadhydroSimulation<SuOlsonProblemCgs>::setInitialConditionsAtLevel(
       state(i, j, k, RadSystem<SuOlsonProblemCgs>::x3RadFlux_index) = 0;
 
       state(i, j, k, RadSystem<SuOlsonProblemCgs>::gasDensity_index) = rho0;
+      state(i, j, k, RadSystem<SuOlsonProblemCgs>::gasEnergy_index) = Egas;
+      state(i, j, k, RadSystem<SuOlsonProblemCgs>::gasInternalEnergy_index) = Egas;
       state(i, j, k, RadSystem<SuOlsonProblemCgs>::x1GasMomentum_index) = 0.;
       state(i, j, k, RadSystem<SuOlsonProblemCgs>::x2GasMomentum_index) = 0.;
       state(i, j, k, RadSystem<SuOlsonProblemCgs>::x3GasMomentum_index) = 0.;
-      state(i, j, k, RadSystem<SuOlsonProblemCgs>::gasEnergy_index) = Egas;
     });
   }
 

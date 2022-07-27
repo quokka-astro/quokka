@@ -188,6 +188,7 @@ AMRSimulation<TophatProblem>::setCustomBoundaryConditions(
 		// extrapolated/outflow boundary for gas variables
 		consVar(i, j, k, RadSystem<TophatProblem>::gasEnergy_index) = Egas;
 		consVar(i, j, k, RadSystem<TophatProblem>::gasDensity_index) = rho;
+    consVar(i, j, k, RadSystem<TophatProblem>::gasInternalEnergy_index) = Egas - (px*px + py*py + pz*pz)/(2*rho);
 		consVar(i, j, k, RadSystem<TophatProblem>::x1GasMomentum_index) = px;
 		consVar(i, j, k, RadSystem<TophatProblem>::x2GasMomentum_index) = py;
 		consVar(i, j, k, RadSystem<TophatProblem>::x3GasMomentum_index) = pz;
@@ -233,6 +234,7 @@ template <> void RadhydroSimulation<TophatProblem>::setInitialConditionsAtLevel(
 
 			state(i, j, k, RadSystem<TophatProblem>::gasEnergy_index) = Egas;
 			state(i, j, k, RadSystem<TophatProblem>::gasDensity_index) = rho;
+      state(i, j, k, RadSystem<TophatProblem>::gasInternalEnergy_index) = Egas;
 			state(i, j, k, RadSystem<TophatProblem>::x1GasMomentum_index) = 0.;
 			state(i, j, k, RadSystem<TophatProblem>::x2GasMomentum_index) = 0.;
 			state(i, j, k, RadSystem<TophatProblem>::x3GasMomentum_index) = 0.;
