@@ -131,7 +131,7 @@ void RadhydroSimulation<TubeProblem>::setInitialConditionsAtLevel(int lev) {
       state(i, j, k, RadSystem<TubeProblem>::gasEnergy_index) =
           Pgas / (gamma_gas - 1.0);
       state(i, j, k, RadSystem<TubeProblem>::gasDensity_index) = rho;
-      state(i, j, k, RadSystem<TubeProblem>::gasInternalEnergy_index) = 0.;
+      state(i, j, k, RadSystem<TubeProblem>::gasInternalEnergy_index) = Pgas / (gamma_gas - 1.0);
       state(i, j, k, RadSystem<TubeProblem>::x1GasMomentum_index) = 0.;
       state(i, j, k, RadSystem<TubeProblem>::x2GasMomentum_index) = 0.;
       state(i, j, k, RadSystem<TubeProblem>::x3GasMomentum_index) = 0.;
@@ -184,7 +184,7 @@ AMRSimulation<TubeProblem>::setCustomBoundaryConditions(
     const double Ekin = 0.5 * (x1Mom * x1Mom) / rho0;
     consVar(i, j, k, RadSystem<TubeProblem>::gasEnergy_index) = Egas + Ekin;
     consVar(i, j, k, RadSystem<TubeProblem>::gasDensity_index) = rho0;
-    consVar(i, j, k, RadSystem<TubeProblem>::gasInternalEnergy_index) = 0.;
+    consVar(i, j, k, RadSystem<TubeProblem>::gasInternalEnergy_index) = Egas;
     consVar(i, j, k, RadSystem<TubeProblem>::x1GasMomentum_index) = x1Mom;
     consVar(i, j, k, RadSystem<TubeProblem>::x2GasMomentum_index) = 0.;
     consVar(i, j, k, RadSystem<TubeProblem>::x3GasMomentum_index) = 0.;
@@ -207,7 +207,7 @@ AMRSimulation<TubeProblem>::setCustomBoundaryConditions(
     const double Ekin = 0.5 * (x1Mom * x1Mom) / rho1;
     consVar(i, j, k, RadSystem<TubeProblem>::gasEnergy_index) = Egas + Ekin;
     consVar(i, j, k, RadSystem<TubeProblem>::gasDensity_index) = rho1;
-    consVar(i, j, k, RadSystem<TubeProblem>::gasInternalEnergy_index) = 0.;
+    consVar(i, j, k, RadSystem<TubeProblem>::gasInternalEnergy_index) = Egas;
     consVar(i, j, k, RadSystem<TubeProblem>::x1GasMomentum_index) = x1Mom;
     consVar(i, j, k, RadSystem<TubeProblem>::x2GasMomentum_index) = 0.;
     consVar(i, j, k, RadSystem<TubeProblem>::x3GasMomentum_index) = 0.;

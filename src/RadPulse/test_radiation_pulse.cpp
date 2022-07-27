@@ -101,16 +101,16 @@ void RadhydroSimulation<PulseProblem>::setInitialConditionsAtLevel(int lev) {
     amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
       amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
       const double Trad = compute_exact_Trad(x - x0, initial_time);
+      const double Egas = RadSystem<PulseProblem>::ComputeEgasFromTgas(rho0, Trad);
 
       state(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = erad_floor;
       state(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index) = 0;
       state(i, j, k, RadSystem<PulseProblem>::x2RadFlux_index) = 0;
       state(i, j, k, RadSystem<PulseProblem>::x3RadFlux_index) = 0;
 
-      state(i, j, k, RadSystem<PulseProblem>::gasEnergy_index) =
-          RadSystem<PulseProblem>::ComputeEgasFromTgas(rho0, Trad);
+      state(i, j, k, RadSystem<PulseProblem>::gasEnergy_index) = Egas;
       state(i, j, k, RadSystem<PulseProblem>::gasDensity_index) = rho0;
-      state(i, j, k, RadSystem<PulseProblem>::gasInternalEnergy_index) = 0.;
+      state(i, j, k, RadSystem<PulseProblem>::gasInternalEnergy_index) = Egas;
       state(i, j, k, RadSystem<PulseProblem>::x1GasMomentum_index) = 0.;
       state(i, j, k, RadSystem<PulseProblem>::x2GasMomentum_index) = 0.;
       state(i, j, k, RadSystem<PulseProblem>::x3GasMomentum_index) = 0.;

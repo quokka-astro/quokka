@@ -36,6 +36,7 @@
 #include "AMReX_IntVect.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_MultiFabUtil.H"
+#include "AMReX_ParmParse.H"
 #include "AMReX_PhysBCFunct.H"
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
@@ -99,11 +100,11 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	int integratorOrder_ = 2; // 1 == forward Euler; 2 == RK2-SSP (default)
 	int reconstructionOrder_ = 3; // 1 == donor cell; 2 == PLM; 3 == PPM (default)
 	int radiationReconstructionOrder_ = 3; // 1 == donor cell; 2 == PLM; 3 == PPM (default)
+	int useDualEnergy_ = 1; // 0 == disabled; 1 == use auxiliary internal energy equation (default)
 
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
 
 	// member functions
-
 	explicit RadhydroSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions)
 	    : AMRSimulation<problem_t>(boundaryConditions) {
     // add hydro state variables
@@ -125,9 +126,12 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
       componentNames_.insert(componentNames_.end(), radNames.begin(), radNames.end());
       ncomp_ += radNames.size();
     }
+		// read in runtime parameters
+		readParmParse();
 	}
 
 	[[nodiscard]] static auto getScalarVariableNames() -> std::vector<std::string>;
+	void readParmParse();
 
 	void checkHydroStates(amrex::MultiFab &mf, char const *file, int line);
 	void computeMaxSignalLocal(int level) override;
@@ -234,6 +238,23 @@ auto RadhydroSimulation<problem_t>::getScalarVariableNames() -> std::vector<std:
 		names.push_back(fmt::format("scalar_{}", n));
 	}
 	return names;
+}
+
+template <typename problem_t>
+void RadhydroSimulation<problem_t>::readParmParse() {
+	// set hydro runtime parameters
+	{
+		amrex::ParmParse hpp("hydro");
+		hpp.query("reconstruction_order", reconstructionOrder_);
+		hpp.query("use_dual_energy", useDualEnergy_);
+	}
+
+	// set radiation runtime parameters
+	{
+		amrex::ParmParse rpp("radiation");
+		rpp.query("reconstruction_order", radiationReconstructionOrder_);
+		rpp.query("cfl", radiationCflNumber_);
+	}
 }
 
 template <typename problem_t>
@@ -562,9 +583,11 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 			}
 		}
 
-		// add non-conservative term to internal energy
-		computeInternalEnergyUpdate(stateOld, stateNew, indexRange, ncompHydro_,
-									geom[lev].CellSizeArray(), dt_lev);
+		if (useDualEnergy_ == 1) {
+			// add non-conservative term to internal energy
+			computeInternalEnergyUpdate(stateOld, stateNew, indexRange, 
+				ncompHydro_, geom[lev].CellSizeArray(), dt_lev);
+		}
 
 		// prevent vacuum
 		HydroSystem<problem_t>::EnforcePressureFloor(densityFloor_, pressureFloor_, indexRange, stateNew);
@@ -638,9 +661,11 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 				}
 			}
 
-			// add non-conservative term to internal energy
-			computeInternalEnergyUpdate(stateInter, stateFinal, indexRange, ncompHydro_,
-										geom[lev].CellSizeArray(), 0.5 * dt_lev);
+			if (useDualEnergy_ == 1) {
+				// add non-conservative term to internal energy
+				computeInternalEnergyUpdate(stateInter, stateFinal, indexRange,
+					ncompHydro_, geom[lev].CellSizeArray(), 0.5 * dt_lev);
+			}
 
 			// prevent vacuum
 			HydroSystem<problem_t>::EnforcePressureFloor(densityFloor_, pressureFloor_, indexRange, stateFinal);
