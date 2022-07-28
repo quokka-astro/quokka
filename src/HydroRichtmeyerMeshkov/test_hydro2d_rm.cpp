@@ -29,7 +29,7 @@ template <> struct HydroSystem_Traits<RichtmeyerMeshkovProblem> {
 template <> struct Physics_Traits<RichtmeyerMeshkovProblem> {
   static constexpr bool is_hydro_enabled = true;
   static constexpr bool is_radiation_enabled = false;
-  static constexpr bool is_primordial_chem_enabled = false;
+  static constexpr bool is_chemistry_enabled = false;
   static constexpr bool is_metalicity_enabled = false;
 	
   static constexpr int numPassiveScalars = 0; // number of passive scalars

@@ -40,7 +40,7 @@ template <> struct RadSystem_Traits<SuOlsonProblemCgs> {
 template <> struct Physics_Traits<SuOlsonProblemCgs> {
   static constexpr bool is_hydro_enabled = false;
   static constexpr bool is_radiation_enabled = true;
-  static constexpr bool is_primordial_chem_enabled = false;
+  static constexpr bool is_chemistry_enabled = false;
   static constexpr bool is_metalicity_enabled = false;
 
   static constexpr int numPassiveScalars = 0;
