@@ -69,7 +69,14 @@ template <> struct RadSystem_Traits<ShockProblem> {
 template <> struct HydroSystem_Traits<ShockProblem> {
   static constexpr double gamma = gamma_gas;
   static constexpr bool reconstruct_eint = true;
-  static constexpr int nscalars = 1; // number of passive scalars
+};
+
+template <> struct Physics_Traits<ShockProblem> {
+  static constexpr bool is_hydro_enabled = true;
+  static constexpr bool is_radiation_enabled = true;
+  static constexpr bool is_chemistry_enabled = false;
+  
+  static constexpr int numPassiveScalars = 0; // number of passive scalars
 };
 
 template <>
@@ -134,6 +141,7 @@ AMRSimulation<ShockProblem>::setCustomBoundaryConditions(
 
     // x1 left side boundary -- constant
     consVar(i, j, k, RadSystem<ShockProblem>::gasDensity_index) = rho0;
+    consVar(i, j, k, RadSystem<ShockProblem>::gasInternalEnergy_index) = 0.;
     consVar(i, j, k, RadSystem<ShockProblem>::x1GasMomentum_index) =
         px_L; // xmom_L;
     consVar(i, j, k, RadSystem<ShockProblem>::x2GasMomentum_index) = 0.;
@@ -153,6 +161,7 @@ AMRSimulation<ShockProblem>::setCustomBoundaryConditions(
 
     // x1 right-side boundary -- constant
     consVar(i, j, k, RadSystem<ShockProblem>::gasDensity_index) = rho1;
+    consVar(i, j, k, RadSystem<ShockProblem>::gasInternalEnergy_index) = 0.;
     consVar(i, j, k, RadSystem<ShockProblem>::x1GasMomentum_index) =
         px_R; // xmom_R;
     consVar(i, j, k, RadSystem<ShockProblem>::x2GasMomentum_index) = 0.;
@@ -217,7 +226,6 @@ void RadhydroSimulation<ShockProblem>::setInitialConditionsAtLevel(int lev) {
       state(i, j, k, RadSystem<ShockProblem>::x1RadFlux_index) = x1RadFlux;
       state(i, j, k, RadSystem<ShockProblem>::x2RadFlux_index) = 0;
       state(i, j, k, RadSystem<ShockProblem>::x3RadFlux_index) = 0;
-
     });
   }
 
@@ -256,8 +264,7 @@ auto problem_main() -> int {
 
   // Problem initialization
   RadhydroSimulation<ShockProblem> sim(boundaryConditions);
-  sim.is_hydro_enabled_ = true;
-  sim.is_radiation_enabled_ = true;
+  
   sim.cflNumber_ = CFL_number;
   sim.radiationCflNumber_ = CFL_number;
   sim.maxTimesteps_ = max_timesteps;

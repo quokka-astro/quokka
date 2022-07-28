@@ -65,6 +65,7 @@
 // internal headers
 #include "CheckNaN.hpp"
 #include "math_impl.hpp"
+#include "physics_info.hpp"
 
 #define USE_YAFLUXREGISTER
 
@@ -99,9 +100,7 @@ public:
   int checkpointInterval_ = -1;    // -1 == no output
 
   // constructor
-  AMRSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions,
-                const int ncomp)
-      : ncomp_(ncomp) {
+  explicit AMRSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions) {
     initialize(boundaryConditions);
   }
 

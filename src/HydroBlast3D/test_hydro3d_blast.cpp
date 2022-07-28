@@ -32,7 +32,14 @@ constexpr bool simulate_full_box = false;
 template <> struct HydroSystem_Traits<SedovProblem> {
   static constexpr double gamma = 1.4;
   static constexpr bool reconstruct_eint = false;
-  static constexpr int nscalars = 0;       // number of passive scalars
+};
+
+template <> struct Physics_Traits<SedovProblem> {
+  static constexpr bool is_hydro_enabled = true;
+  static constexpr bool is_radiation_enabled = false;
+  static constexpr bool is_chemistry_enabled = false;
+  
+  static constexpr int numPassiveScalars = 0; // number of passive scalars
 };
 
 template <>
@@ -272,9 +279,8 @@ auto problem_main() -> int {
   }
 
   // Problem initialization
-  RadhydroSimulation<SedovProblem> sim(boundaryConditions, false);
-  sim.is_hydro_enabled_ = true;
-  sim.is_radiation_enabled_ = false;
+  RadhydroSimulation<SedovProblem> sim(boundaryConditions);
+  
   sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
   sim.stopTime_ = 1.0;          // seconds
   sim.cflNumber_ = 0.3;         // *must* be less than 1/3 in 3D!
