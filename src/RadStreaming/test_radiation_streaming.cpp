@@ -36,7 +36,6 @@ template <> struct Physics_Traits<StreamingProblem> {
   static constexpr bool is_hydro_enabled = false;
   static constexpr bool is_radiation_enabled = true;
   static constexpr bool is_chemistry_enabled = false;
-  static constexpr bool is_metalicity_enabled = false;
 
   static constexpr int numPassiveScalars = 0; // number of passive scalars
 };

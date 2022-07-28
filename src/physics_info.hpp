@@ -4,7 +4,7 @@
 template <typename problem_t> struct Physics_Traits {
   static constexpr bool is_hydro_enabled = false;
   static constexpr bool is_radiation_enabled = false;
-  static constexpr bool is_pscalars_enabled = false;
+  static constexpr bool is_chemistry_enabled = false;
 
   static constexpr int numPassiveScalars = 0;
 };

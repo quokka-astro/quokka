@@ -107,6 +107,9 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	// member functions
 	explicit RadhydroSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions)
 	    : AMRSimulation<problem_t>(boundaryConditions) {
+    // check modules cannot be enabled if they are not been implemented yet
+    static_assert(!Physics_Traits<problem_t>::is_chemistry_enabled, "Chemistry is not supported, yet.");
+    
     // add hydro state variables
     if constexpr (Physics_Traits<problem_t>::is_hydro_enabled ||
                   Physics_Traits<problem_t>::is_radiation_enabled) {
