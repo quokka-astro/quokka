@@ -100,12 +100,8 @@ public:
                            amrex::Box const &indexRange, int nvars,
                            amrex::Array4<int> const &redoFlag);
 
-  static void AddInternalEnergyPressureTerm(
-      amrex::Array4<amrex::Real> const &consVar,
-      amrex::Array4<const amrex::Real> const &primVar,
-      amrex::Box const &indexRange,
-      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-      amrex::Real const dt_in);
+  static void SyncDualEnergy(amrex::Array4<amrex::Real> const &consVar,
+                           amrex::Box const &indexRange);
 
   template <FluxDir DIR>
   static void
@@ -364,7 +360,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::isStateValid(
 template <typename problem_t>
 void HydroSystem<problem_t>::PredictStep(
     arrayconst_t &consVarOld, array_t &consVarNew,
-    std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray, const double dt_in,
+    std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray,
+    const double dt_in,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,
     amrex::Box const &indexRange, const int nvars_in,
     amrex::Array4<int> const &redoFlag) {
@@ -412,7 +409,8 @@ void HydroSystem<problem_t>::PredictStep(
 template <typename problem_t>
 void HydroSystem<problem_t>::AddFluxesRK2(
     array_t &U_new, arrayconst_t &U0, arrayconst_t &U1,
-    std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray, const double dt_in,
+    std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray,
+    const double dt_in,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,
     amrex::Box const &indexRange, const int nvars_in,
     amrex::Array4<int> const &redoFlag) {
@@ -609,51 +607,20 @@ void HydroSystem<problem_t>::FlattenShocks(
 }
 
 template <typename problem_t>
-void HydroSystem<problem_t>::AddInternalEnergyPressureTerm(
-    amrex::Array4<amrex::Real> const &consVar,
-    amrex::Array4<const amrex::Real> const &primVar,
-    amrex::Box const &indexRange,
-    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-    amrex::Real const dt_in) {
-  // first-order pressure term is added separately to the internal energy
-  // [See Li et al. (2007) and Schneider & Robertson (2017).]
-
-  amrex::Real const dt = dt_in; // workaround nvcc bug
+void HydroSystem<problem_t>::SyncDualEnergy(amrex::Array4<amrex::Real> const &consVar,
+    amrex::Box const &indexRange) {
+  // sync internal energy and total energy
+  // this step must be done as an operator-split step after *each* RK stage
 
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-    // compute cell-centered pressure from primitive vars
-    double P = primVar(i, j, k, pressure_index);
-    if constexpr (reconstruct_eint) {
-      P *= primVar(i, j, k, primDensity_index) * (gamma_ - 1.0);
-    }
-
-    // compute velocity divergence
-    const double v_xplus = primVar(i + 1, j, k, x1Velocity_index);
-    const double v_xminus = primVar(i - 1, j, k, x1Velocity_index);
-#if AMREX_SPACEDIM >= 2
-    const double v_yplus = primVar(i, j + 1, k, x2Velocity_index);
-    const double v_yminus = primVar(i, j - 1, k, x2Velocity_index);
-#endif
-#if AMREX_SPACEDIM == 3
-    const double v_zplus = primVar(i, j, k + 1, x3Velocity_index);
-    const double v_zminus = primVar(i, j, k - 1, x3Velocity_index);
-#endif
-    amrex::Real const div_v =
-        AMREX_D_TERM((v_xminus - v_xplus) / (2.0 * dx[0]),
-                     +(v_yminus - v_yplus) / (2.0 * dx[1]),
-                     +(v_zminus - v_zplus) / (2.0 * dx[2]));
-
-    // add pressure term
-    amrex::Real const Eint_aux =
-        consVar(i, j, k, internalEnergy_index) + dt * (P * div_v);
-
-    // replace Eint with Eint_cons == (Etot - Ekin) if (Eint_cons / E) > eta
     amrex::Real const rho = consVar(i, j, k, density_index);
     amrex::Real const px = consVar(i, j, k, x1Momentum_index);
     amrex::Real const py = consVar(i, j, k, x2Momentum_index);
     amrex::Real const pz = consVar(i, j, k, x3Momentum_index);
-    amrex::Real const Ekin = 0.5 * (px * px + py * py + pz * pz) / rho;
     amrex::Real const Etot = consVar(i, j, k, energy_index);
+    amrex::Real const Eint_aux = consVar(i, j, k, internalEnergy_index);
+
+    amrex::Real const Ekin = (px * px + py * py + pz * pz) / (2.0 * rho);
     amrex::Real const Eint_cons = Etot - Ekin;
 
     // eta value used in Li et al. is 1e-2; eta value used in FLASH is 1e-4
@@ -662,6 +629,7 @@ void HydroSystem<problem_t>::AddInternalEnergyPressureTerm(
     const amrex::Real eta = 1.0e-3; // dual energy parameter 'eta'
 
     // Li et al. sync method
+    // replace Eint with Eint_cons == (Etot - Ekin) if (Eint_cons / E) > eta
     if (Eint_cons > eta * Etot) {
       consVar(i, j, k, internalEnergy_index) = Eint_cons;
     } else { // non-conservative sync
@@ -934,6 +902,16 @@ void HydroSystem<problem_t>::ComputeFluxes(
     if constexpr (is_eos_isothermal()) {
       F[energy_index] = 0;
       F[internalEnergy_index] = 0;
+    }
+
+    if constexpr (!is_eos_isothermal()) {
+      // compute 'velocity divergence'
+      const double div_v_norm = (F[density_index] >= 0) ? (F[density_index] / rho_R)
+                                                   : (F[density_index] / rho_L);
+      // compute average pressure at interface
+      const double P_avg = 0.5 * (P_L + P_R);
+      // add P dV term for this coordinate direction
+      F[internalEnergy_index] += -P_avg * div_v_norm;
     }
 
     // copy all flux components to the flux array

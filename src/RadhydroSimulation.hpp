@@ -202,11 +202,6 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 				const amrex::Box &indexRange, int nvars)
     	-> std::array<amrex::FArrayBox, AMREX_SPACEDIM>;
 
-	void computeInternalEnergyUpdate(amrex::Array4<const amrex::Real> const &consVarOld,
-				amrex::Array4<amrex::Real> const &consVarNew, const amrex::Box &indexRange,
-				const int nvars, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-				amrex::Real const dt);
-
 	template <FluxDir DIR>
 	void fluxFunction(amrex::Array4<const amrex::Real> const &consState,
 			  amrex::FArrayBox &x1Flux, amrex::FArrayBox &x1FluxDiffusive,
@@ -608,9 +603,8 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 		}
 
 		if (useDualEnergy_ == 1) {
-			// add non-conservative term to internal energy
-			computeInternalEnergyUpdate(stateOld, stateNew, indexRange, 
-				ncompHydro_, geom[lev].CellSizeArray(), dt_lev);
+			// sync internal energy
+			HydroSystem<problem_t>::SyncDualEnergy(stateNew, indexRange);
 		}
 
 		// prevent vacuum
@@ -686,9 +680,8 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 			}
 
 			if (useDualEnergy_ == 1) {
-				// add non-conservative term to internal energy
-				computeInternalEnergyUpdate(stateInter, stateFinal, indexRange,
-					ncompHydro_, geom[lev].CellSizeArray(), 0.5 * dt_lev);
+				// sync internal energy
+				HydroSystem<problem_t>::SyncDualEnergy(stateFinal, indexRange);
 			}
 
 			// prevent vacuum
@@ -769,19 +762,6 @@ auto RadhydroSimulation<problem_t>::expandFluxArrays(
 		return newFlux;
 	};
 	return {AMREX_D_DECL(copyFlux(fluxes[0]), copyFlux(fluxes[1]), copyFlux(fluxes[2]))};
-}
-
-template <typename problem_t>
-void RadhydroSimulation<problem_t>::computeInternalEnergyUpdate(amrex::Array4<const amrex::Real> const &consVarOld, amrex::Array4<amrex::Real> const &consVarNew, const amrex::Box &indexRange, const int nvars, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::Real const dt)
-{
-	BL_PROFILE("RadhydroSimulation::computeInternalEnergyUpdate()");
-
-	// convert conserved to primitive variables
-	amrex::Box const &ghostRange = amrex::grow(indexRange, nghost_);
-	amrex::FArrayBox primVarOld(ghostRange, nvars, amrex::The_Async_Arena());
-	HydroSystem<problem_t>::ConservedToPrimitive(consVarOld, primVarOld.array(), ghostRange);
-	HydroSystem<problem_t>::AddInternalEnergyPressureTerm(consVarNew, primVarOld.const_array(),
-														  indexRange, dx, dt);
 }
 
 template <typename problem_t>
