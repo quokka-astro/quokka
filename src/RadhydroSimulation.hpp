@@ -64,6 +64,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	using AMRSimulation<problem_t>::componentNames_;
 	using AMRSimulation<problem_t>::fillBoundaryConditions;
 	using AMRSimulation<problem_t>::geom;
+	using AMRSimulation<problem_t>::grids;
 	using AMRSimulation<problem_t>::dmap;
 	using AMRSimulation<problem_t>::flux_reg_;
 	using AMRSimulation<problem_t>::incrementFluxRegisters;
@@ -542,7 +543,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 	}
 
 	// create temporary multifab for Strang-split sources, copy old state
-	amrex::MultiFab state_old_tmp(geom[lev], dmap[lev], ncomp_, nghost_);
+	amrex::MultiFab state_old_tmp(grids[lev], dmap[lev], ncomp_, nghost_);
 	amrex::Copy(state_old_tmp, state_old_[lev], 0, 0, ncomp_, nghost_);
 
 	// do Strang split source terms (first half-step)
