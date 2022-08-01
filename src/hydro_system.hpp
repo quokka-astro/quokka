@@ -165,9 +165,19 @@ void HydroSystem<problem_t>::ConservedToPrimitive(
     const auto kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
     const auto thermal_energy_cons = E - kinetic_energy;
 
-    const auto P = thermal_energy_cons * (HydroSystem<problem_t>::gamma_ - 1.0);
-    const auto eint_cons =
-        thermal_energy_cons / rho; // specific internal energy
+    amrex::Real P = NAN; // pressure
+    amrex::Real eint_cons = NAN; // specific internal energy (SIE)
+
+    const amrex::Real eta_1 = 0.01; // dual energy parameter eta_1
+
+    // if (thermal_energy_cons / E) > eta_1, use thermal_energy_cons
+    if (thermal_energy_cons > eta_1 * E) {
+      P = thermal_energy_cons * (HydroSystem<problem_t>::gamma_ - 1.0);
+      eint_cons = thermal_energy_cons / rho;
+    } else { // use auxiliary internal energy
+      P = Eint_aux * (HydroSystem<problem_t>::gamma_ - 1.0);
+      eint_cons = Eint_aux / rho;
+    }
 
     AMREX_ASSERT(rho > 0.);
     if constexpr (!is_eos_isothermal()) {
