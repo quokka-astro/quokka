@@ -64,6 +64,8 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	using AMRSimulation<problem_t>::componentNames_;
 	using AMRSimulation<problem_t>::fillBoundaryConditions;
 	using AMRSimulation<problem_t>::geom;
+	using AMRSimulation<problem_t>::grids;
+	using AMRSimulation<problem_t>::dmap;
 	using AMRSimulation<problem_t>::flux_reg_;
 	using AMRSimulation<problem_t>::incrementFluxRegisters;
 	using AMRSimulation<problem_t>::finest_level;
@@ -155,6 +157,9 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	void advanceHydroAtLevel(int lev, amrex::Real time, amrex::Real dt_lev,
 				 amrex::YAFluxRegister *fr_as_crse,
 				 amrex::YAFluxRegister *fr_as_fine);
+
+	void addStrangSplitSources(amrex::MultiFab &state, int lev, amrex::Real time,
+				 amrex::Real dt_lev);
 
 	// radiation subcycle
 	void swapRadiationState(amrex::MultiFab &stateOld, amrex::MultiFab const &stateNew);
@@ -338,6 +343,14 @@ void RadhydroSimulation<problem_t>::computeAfterLevelAdvance(int lev, amrex::Rea
 								 amrex::Real dt_lev, int ncycle)
 {
 	// user should implement if desired
+}
+
+template <typename problem_t>
+void RadhydroSimulation<problem_t>::addStrangSplitSources(amrex::MultiFab &state,
+								 int lev, amrex::Real time, amrex::Real dt)
+{
+	// user should implement
+	// (when Strang splitting is enabled, dt is actually 0.5*dt_lev)
 }
 
 template <typename problem_t>
@@ -526,17 +539,17 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 	addStrangSplitSources(state_old_tmp, lev, time, 0.5*dt_lev);
 
 	// update ghost zones [old timestep]
-	fillBoundaryConditions(state_old_[lev], state_old_[lev], lev, time);
+	fillBoundaryConditions(state_old_tmp, state_old_tmp, lev, time);
 
 	// check state validity
-	AMREX_ASSERT(!state_old_[lev].contains_nan(0, state_old_[lev].nComp()));
-	AMREX_ASSERT(!state_old_[lev].contains_nan()); // check ghost cells
+	AMREX_ASSERT(!state_old_tmp.contains_nan(0, state_old_tmp.nComp()));
+	AMREX_ASSERT(!state_old_tmp.contains_nan()); // check ghost cells
 
 	// advance all grids on local processor (Stage 1 of integrator)
 	for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
 
 		const amrex::Box &indexRange = iter.validbox(); // 'validbox' == exclude ghost zones
-		auto const &stateOld = state_old_[lev].const_array(iter);
+		auto const &stateOld = state_old_tmp.const_array(iter);
 		auto const &stateNew = state_new_[lev].array(iter);
 		auto [fluxArrays, faceVel] = computeHydroFluxes(stateOld, indexRange, ncompHydro_);
 
@@ -613,7 +626,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 		for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
 
 			const amrex::Box &indexRange = iter.validbox(); // 'validbox' == exclude ghost zones
-			auto const &stateOld = state_old_[lev].const_array(iter);
+			auto const &stateOld = state_old_tmp.const_array(iter);
 			auto const &stateInter = state_new_[lev].const_array(iter);
 			auto [fluxArrays, faceVel] = computeHydroFluxes(stateInter, indexRange, ncompHydro_);
 
@@ -688,6 +701,9 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 			}
 		}
 	}
+
+	// do Strang split source terms (second half-step)
+	addStrangSplitSources(state_new_[lev], lev, time + dt_lev, 0.5*dt_lev);
 }
 
 template <typename problem_t>
