@@ -541,6 +541,8 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 		fluxScaleFactor = 1.0;
 	}
 
+	auto dx = geom[lev].CellSizeArray();
+
 	// create temporary multifab for Strang-split sources, copy old state
 	amrex::MultiFab state_old_tmp(grids[lev], dmap[lev], ncomp_, nghost_);
 	amrex::Copy(state_old_tmp, state_old_[lev], 0, 0, ncomp_, nghost_);
@@ -563,16 +565,17 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 		auto const &stateNew = state_new_[lev].array(iter);
 		auto [fluxArrays, faceVel] = computeHydroFluxes(stateOld, indexRange, ncompHydro_);
 
-		// temporary FAB for RK stage
+		// temporary FABs for RK stage
 		amrex::IArrayBox redoFlag(indexRange, 1, amrex::The_Async_Arena());
+		amrex::FArrayBox rhs(indexRange, ncompHydro_, amrex::The_Async_Arena());
+		HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs.array(),
+			{AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(), fluxArrays[2].const_array())}, dx, indexRange, ncompHydro_);
+		HydroSystem<problem_t>::AddInternalEnergyPdV(rhs.array(), stateOld, indexRange,
+			{AMREX_D_DECL(faceVel[0].const_array(), faceVel[1].const_array(), faceVel[2].const_array())});
 
 		// Stage 1 of RK2-SSP
-		HydroSystem<problem_t>::PredictStep(
-		    stateOld, stateNew,
-		    {AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
-				  fluxArrays[2].const_array())},
-		    dt_lev, geom[lev].CellSizeArray(), indexRange, ncompHydro_,
-			redoFlag.array());
+		HydroSystem<problem_t>::PredictStep(stateOld, stateNew, rhs.const_array(),
+		    dt_lev, indexRange, ncompHydro_, redoFlag.array());
 
 		// first-order flux correction (FOFC)
 		if (redoFlag.max<amrex::RunOn::Device>() != quokka::redoFlag::none) {
@@ -590,15 +593,16 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 
 				// replace fluxes in fluxArrays with first-order fluxes at faces of flagged cells
 				replaceFluxes(fluxArrays, FOFluxArrays, redoFlag, indexRange, ncompHydro_);
+				HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs.array(),
+					{AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
+					fluxArrays[2].const_array())}, dx, indexRange, ncompHydro_);
+				HydroSystem<problem_t>::AddInternalEnergyPdV(rhs.array(), stateOld, indexRange,
+					{AMREX_D_DECL(faceVel[0].const_array(), faceVel[1].const_array(), faceVel[2].const_array())});
 
 				// re-do RK stage update for *all* cells
 				// (since neighbors of problem cells will have modified states as well)
-				HydroSystem<problem_t>::PredictStep(
-					stateOld, stateNew,
-					{AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
-						fluxArrays[2].const_array())},
-					dt_lev, geom[lev].CellSizeArray(), indexRange, ncompHydro_,
-					redoFlag.array());
+				HydroSystem<problem_t>::PredictStep(stateOld, stateNew, rhs.const_array(),
+					dt_lev, indexRange, ncompHydro_,	redoFlag.array());
 
 				if(redoFlag.max<amrex::RunOn::Device>() == quokka::redoFlag::none) {
 					break;
@@ -641,15 +645,19 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 			amrex::FArrayBox stateFinalFAB = amrex::FArrayBox(indexRange, ncompHydro_,
 															amrex::The_Async_Arena());
 			auto const &stateFinal = stateFinalFAB.array();
+
+			// temporary FABs for RK stage
 			amrex::IArrayBox redoFlag(indexRange, 1, amrex::The_Async_Arena());
+			amrex::FArrayBox rhs(indexRange, ncompHydro_, amrex::The_Async_Arena());
+			HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs.array(),
+				{AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
+					fluxArrays[2].const_array())}, dx, indexRange, ncompHydro_);
+			HydroSystem<problem_t>::AddInternalEnergyPdV(rhs.array(), stateInter, indexRange,
+				{AMREX_D_DECL(faceVel[0].const_array(), faceVel[1].const_array(), faceVel[2].const_array())});
 
 			// Stage 2 of RK2-SSP
-			HydroSystem<problem_t>::AddFluxesRK2(
-				stateFinal, stateOld, stateInter,
-				{AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
-					fluxArrays[2].const_array())},
-				dt_lev, geom[lev].CellSizeArray(), indexRange, ncompHydro_,
-				redoFlag.array());
+			HydroSystem<problem_t>::AddFluxesRK2(stateFinal, stateOld, stateInter, rhs.const_array(),
+				dt_lev, indexRange, ncompHydro_,	redoFlag.array());
 
 			// first-order flux correction (FOFC)
 			if (redoFlag.max<amrex::RunOn::Device>() != quokka::redoFlag::none) {
@@ -667,15 +675,16 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 					
 					// replace fluxes in fluxArrays with first-order fluxes at faces of flagged cells
 					replaceFluxes(fluxArrays, FOFluxArrays, redoFlag, indexRange, ncompHydro_);
+					HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs.array(),
+						{AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
+						fluxArrays[2].const_array())}, dx, indexRange, ncompHydro_);
+					HydroSystem<problem_t>::AddInternalEnergyPdV(rhs.array(), stateInter, indexRange,
+						{AMREX_D_DECL(faceVel[0].const_array(), faceVel[1].const_array(), faceVel[2].const_array())});
 
 					// re-do RK stage update for *all* cells
 					// (since neighbors of problem cells will have modified states as well)
-					HydroSystem<problem_t>::AddFluxesRK2(
-						stateFinal, stateOld, stateInter,
-						{AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
-							fluxArrays[2].const_array())},
-						dt_lev, geom[lev].CellSizeArray(), indexRange, ncompHydro_,
-						redoFlag.array());
+					HydroSystem<problem_t>::AddFluxesRK2(stateFinal, stateOld, stateInter, rhs.const_array(),
+						dt_lev, indexRange, ncompHydro_, redoFlag.array());
 
 					if(redoFlag.max<amrex::RunOn::Device>() == quokka::redoFlag::none) {
 						break;
