@@ -53,15 +53,17 @@ template <typename problem_t> struct RadSystem_Traits {
 template <typename problem_t>
 class RadSystem : public HyperbolicSystem<problem_t> {
 public:
-  static constexpr int nstartHyperbolic_ = HydroSystem<problem_t>::nvar_;
+  static constexpr int nvarHyperbolic_ = Physics_NumVars<problem_t>::numRadVars; // number of radiation variables
+  static constexpr int nstartHyperbolic_ = Physics_Indices<problem_t>::radFirstIndex;
+  static constexpr int nvar_ = nstartHyperbolic_ + nvarHyperbolic_;
 
   enum gasVarIndex {
-    gasDensity_index = 0,
-    x1GasMomentum_index = 1,
-    x2GasMomentum_index = 2,
-    x3GasMomentum_index = 3,
-    gasEnergy_index = 4,
-    gasInternalEnergy_index = 5
+    gasDensity_index = Physics_Indices<problem_t>::hydroFirstIndex,
+    x1GasMomentum_index,
+    x2GasMomentum_index,
+    x3GasMomentum_index,
+    gasEnergy_index,
+    gasInternalEnergy_index
   };
 
   enum radVarIndex {
@@ -71,14 +73,11 @@ public:
     x3RadFlux_index
   };
 
-  static constexpr int nvarHyperbolic_ = 4; // number of radiation variables
-  static constexpr int nvar_ = nstartHyperbolic_ + nvarHyperbolic_;
-
   enum primVarIndex {
     primRadEnergy_index = 0,
-    x1ReducedFlux_index = 1,
-    x2ReducedFlux_index = 2,
-    x3ReducedFlux_index = 3,
+    x1ReducedFlux_index,
+    x2ReducedFlux_index,
+    x3ReducedFlux_index,
   };
 
   // C++ standard does not allow constexpr to be uninitialized, even in a

@@ -59,7 +59,14 @@ template <> struct HydroSystem_Traits<TubeProblem> {
   static constexpr double gamma = gamma_gas;
   static constexpr double cs_isothermal = a0; // only used when gamma = 1
   static constexpr bool reconstruct_eint = false; // unused if isothermal
-  static constexpr int nscalars = 0;       // number of passive scalars
+};
+
+template <> struct Physics_Traits<TubeProblem> {
+  static constexpr bool is_hydro_enabled = true;
+  static constexpr bool is_radiation_enabled = true;
+  static constexpr bool is_chemistry_enabled = false;
+  
+  static constexpr int numPassiveScalars = 0; // number of passive scalars
 };
 
 template <>
@@ -130,15 +137,15 @@ void RadhydroSimulation<TubeProblem>::setInitialConditionsAtLevel(int lev) {
       state(i, j, k, RadSystem<TubeProblem>::radEnergy_index) =
           Frad0 / c_light_cgs_;
       state(i, j, k, RadSystem<TubeProblem>::x1RadFlux_index) = Frad0;
-      state(i, j, k, RadSystem<TubeProblem>::x2RadFlux_index) = 0;
-      state(i, j, k, RadSystem<TubeProblem>::x3RadFlux_index) = 0;
+      state(i, j, k, RadSystem<TubeProblem>::x2RadFlux_index) = 0.;
+      state(i, j, k, RadSystem<TubeProblem>::x3RadFlux_index) = 0.;
 
       state(i, j, k, RadSystem<TubeProblem>::x1GasMomentum_index) = rho * vel;
-      state(i, j, k, RadSystem<TubeProblem>::x2GasMomentum_index) = 0;
-      state(i, j, k, RadSystem<TubeProblem>::x3GasMomentum_index) = 0;
+      state(i, j, k, RadSystem<TubeProblem>::x2GasMomentum_index) = 0.;
+      state(i, j, k, RadSystem<TubeProblem>::x3GasMomentum_index) = 0.;
       state(i, j, k, RadSystem<TubeProblem>::gasDensity_index) = rho;
-      state(i, j, k, RadSystem<TubeProblem>::gasEnergy_index) = 0;
-      state(i, j, k, RadSystem<TubeProblem>::gasInternalEnergy_index) = 0;
+      state(i, j, k, RadSystem<TubeProblem>::gasEnergy_index) = 0.;
+      state(i, j, k, RadSystem<TubeProblem>::gasInternalEnergy_index) = 0.;
     });
   }
 
@@ -189,15 +196,15 @@ AMRSimulation<TubeProblem>::setCustomBoundaryConditions(
     // Dirichlet
     consVar(i, j, k, RadSystem<TubeProblem>::radEnergy_index) = Erad;
     consVar(i, j, k, RadSystem<TubeProblem>::x1RadFlux_index) = Frad;
-    consVar(i, j, k, RadSystem<TubeProblem>::x2RadFlux_index) = 0;
-    consVar(i, j, k, RadSystem<TubeProblem>::x3RadFlux_index) = 0;
+    consVar(i, j, k, RadSystem<TubeProblem>::x2RadFlux_index) = 0.;
+    consVar(i, j, k, RadSystem<TubeProblem>::x3RadFlux_index) = 0.;
 
     consVar(i, j, k, RadSystem<TubeProblem>::gasDensity_index) = rho;
-    consVar(i, j, k, RadSystem<TubeProblem>::gasEnergy_index) = 0;
-    consVar(i, j, k, RadSystem<TubeProblem>::gasInternalEnergy_index) = 0;
+    consVar(i, j, k, RadSystem<TubeProblem>::gasEnergy_index) = 0.;
+    consVar(i, j, k, RadSystem<TubeProblem>::gasInternalEnergy_index) = 0.;
     consVar(i, j, k, RadSystem<TubeProblem>::x1GasMomentum_index) = rho * vel;
-    consVar(i, j, k, RadSystem<TubeProblem>::x2GasMomentum_index) = 0;
-    consVar(i, j, k, RadSystem<TubeProblem>::x3GasMomentum_index) = 0;
+    consVar(i, j, k, RadSystem<TubeProblem>::x2GasMomentum_index) = 0.;
+    consVar(i, j, k, RadSystem<TubeProblem>::x3GasMomentum_index) = 0.;
   }
 }
 
@@ -225,8 +232,7 @@ auto problem_main() -> int {
 
   // Problem initialization
   RadhydroSimulation<TubeProblem> sim(boundaryConditions);
-  sim.is_hydro_enabled_ = true;
-  sim.is_radiation_enabled_ = true;
+  
   sim.radiationReconstructionOrder_ = 3; // PPM
   sim.reconstructionOrder_ = 3;          // PPM
   sim.stopTime_ = tmax;
