@@ -20,6 +20,7 @@
 
 // internal headers
 #include "ArrayView.hpp"
+#include "ArrayView_3d.hpp"
 #include "hyperbolic_system.hpp"
 #include "radiation_system.hpp"
 #include "valarray.hpp"
@@ -106,6 +107,7 @@ public:
   template <FluxDir DIR>
   static void
   ComputeFluxes(array_t &x1Flux_in,
+                array_t &x1FaceVel_in,
                 amrex::Array4<const amrex::Real> const &x1LeftState_in,
                 amrex::Array4<const amrex::Real> const &x1RightState_in,
                 amrex::Array4<const amrex::Real> const &primVar_in,
@@ -651,15 +653,15 @@ void HydroSystem<problem_t>::SyncDualEnergy(amrex::Array4<amrex::Real> const &co
 
 template <typename problem_t>
 template <FluxDir DIR>
-void HydroSystem<problem_t>::ComputeFluxes(
-    array_t &x1Flux_in, amrex::Array4<const amrex::Real> const &x1LeftState_in,
+void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FaceVel_in,
+    amrex::Array4<const amrex::Real> const &x1LeftState_in,
     amrex::Array4<const amrex::Real> const &x1RightState_in,
-    amrex::Array4<const amrex::Real> const &primVar_in,
-    amrex::Box const &indexRange) {
+    amrex::Array4<const amrex::Real> const &primVar_in, amrex::Box const &indexRange) {
 
   quokka::Array4View<const amrex::Real, DIR> x1LeftState(x1LeftState_in);
   quokka::Array4View<const amrex::Real, DIR> x1RightState(x1RightState_in);
   quokka::Array4View<amrex::Real, DIR> x1Flux(x1Flux_in);
+  quokka::Array4View<amrex::Real, DIR> x1FaceVel(x1FaceVel_in);
   quokka::Array4View<const amrex::Real, DIR> q(primVar_in);
 
   // By convention, the interfaces are defined on the left edge of each
@@ -914,14 +916,16 @@ void HydroSystem<problem_t>::ComputeFluxes(
       F[internalEnergy_index] = 0;
     }
 
-    if constexpr (!is_eos_isothermal()) {
-      // compute 'velocity divergence'
-      const double div_v_norm = (F[density_index] >= 0) ? (F[density_index] / rho_R)
+    // compute face-centered normal velocity
+    const double v_norm = (F[density_index] >= 0.) ? (F[density_index] / rho_R)
                                                    : (F[density_index] / rho_L);
+    x1FaceVel(i, j, k) = v_norm;
+
+    if constexpr (!is_eos_isothermal()) {
       // compute average pressure at interface
       const double P_avg = 0.5 * (P_L + P_R);
       // add P dV term for this coordinate direction
-      F[internalEnergy_index] += -P_avg * div_v_norm;
+      F[internalEnergy_index] += -P_avg * v_norm;
     }
 
     // copy all flux components to the flux array
