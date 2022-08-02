@@ -43,6 +43,14 @@ template <> struct RadSystem_Traits<SuOlsonProblemCgs> {
 	static constexpr bool compute_v_over_c_terms = true;
 };
 
+template <> struct Physics_Traits<SuOlsonProblemCgs> {
+  static constexpr bool is_hydro_enabled = false;
+  static constexpr bool is_radiation_enabled = true;
+  static constexpr bool is_chemistry_enabled = false;
+
+  static constexpr int numPassiveScalars = 0; // number of passive scalars
+};
+
 template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblemCgs>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/)
     -> double
@@ -221,8 +229,7 @@ auto problem_main() -> int
 
 	// Problem initialization
 	RadhydroSimulation<SuOlsonProblemCgs> sim(boundaryConditions);
-	sim.is_hydro_enabled_ = false;
-	sim.is_radiation_enabled_ = true;
+	
 	sim.stopTime_ = max_time;
 	sim.radiationCflNumber_ = CFL_number;
 	sim.maxTimesteps_ = max_timesteps;

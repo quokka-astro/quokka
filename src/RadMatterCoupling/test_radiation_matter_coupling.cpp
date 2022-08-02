@@ -35,6 +35,14 @@ template <> struct RadSystem_Traits<CouplingProblem> {
 	static constexpr bool compute_v_over_c_terms = true;
 };
 
+template <> struct Physics_Traits<CouplingProblem> {
+  static constexpr bool is_hydro_enabled = false;
+  static constexpr bool is_radiation_enabled = true;
+  static constexpr bool is_chemistry_enabled = false;
+
+  static constexpr int numPassiveScalars = 0; // number of passive scalars
+};
+
 template <>
 AMREX_GPU_HOST_DEVICE auto
 RadSystem<CouplingProblem>::ComputePlanckOpacity(const double /*rho*/,
@@ -157,8 +165,7 @@ auto problem_main() -> int {
   }
 
   RadhydroSimulation<CouplingProblem> sim(boundaryConditions);
-  sim.is_hydro_enabled_ = false;
-  sim.is_radiation_enabled_ = true;
+  
   sim.cflNumber_ = CFL_number;
   sim.radiationCflNumber_ = CFL_number;
   sim.constantDt_ = constant_dt;

@@ -28,7 +28,14 @@ struct BlastProblem {
 template <> struct HydroSystem_Traits<BlastProblem> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr bool reconstruct_eint = false;
-  	static constexpr int nscalars = 0;       // number of passive scalars
+};
+
+template <> struct Physics_Traits<BlastProblem> {
+  static constexpr bool is_hydro_enabled = true;
+  static constexpr bool is_radiation_enabled = false;
+  static constexpr bool is_chemistry_enabled = false;
+  
+  static constexpr int numPassiveScalars = 0; // number of passive scalars
 };
 
 template <> void RadhydroSimulation<BlastProblem>::setInitialConditionsAtLevel(int lev)
@@ -169,9 +176,8 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	RadhydroSimulation<BlastProblem> sim(boundaryConditions, false);
-	sim.is_hydro_enabled_ = true;
-	sim.is_radiation_enabled_ = false;
+	RadhydroSimulation<BlastProblem> sim(boundaryConditions);
+
 	sim.stopTime_ = 0.1; //1.5;
 	sim.cflNumber_ = 0.3;
 	sim.maxTimesteps_ = 20000;

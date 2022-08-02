@@ -43,7 +43,14 @@ struct QuirkProblem {};
 template <> struct HydroSystem_Traits<QuirkProblem> {
   static constexpr double gamma = 5. / 3.;
   static constexpr bool reconstruct_eint = false;
-  static constexpr int nscalars = 0; // number of passive scalars
+};
+
+template <> struct Physics_Traits<QuirkProblem> {
+  static constexpr bool is_hydro_enabled = true;
+  static constexpr bool is_radiation_enabled = false;
+  static constexpr bool is_chemistry_enabled = false;
+  
+  static constexpr int numPassiveScalars = 0; // number of passive scalars
 };
 
 constexpr Real dl = 3.692;
@@ -269,9 +276,8 @@ auto problem_main() -> int {
   }
 
   // Problem initialization
-  RadhydroSimulation<QuirkProblem> sim(boundaryConditions, false);
-  sim.is_hydro_enabled_ = true;
-  sim.is_radiation_enabled_ = false;
+  RadhydroSimulation<QuirkProblem> sim(boundaryConditions);
+  
   sim.reconstructionOrder_ = 2; // PLM
   sim.stopTime_ = 0.4;
   sim.cflNumber_ = 0.4;
