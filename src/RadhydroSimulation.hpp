@@ -129,6 +129,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 
 	[[nodiscard]] auto getScalarVariableNames() const -> std::vector<std::string>;
 	[[nodiscard]] auto getNumVars(bool allocateRadVars) const -> int;
+	void readParmParse();
 
 	void checkHydroStates(amrex::MultiFab &mf, char const *file, int line);
 	void computeMaxSignalLocal(int level) override;
@@ -213,10 +214,9 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 
 	template <FluxDir DIR>
 	void hydroFOFluxFunction(amrex::Array4<const amrex::Real> const &primVar,
-				amrex::Array4<const amrex::Real> const &consVar,
-				amrex::FArrayBox &x1Flux,
-				amrex::FArrayBox &x1FaceVel,
-				const amrex::Box &indexRange, int nvars);
+			  amrex::FArrayBox &x1Flux,
+			  amrex::FArrayBox &x1FaceVel,
+			  const amrex::Box &indexRange, const int nvars);
 	
 	void replaceFluxes(std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxes,
 			  std::array<amrex::FArrayBox, AMREX_SPACEDIM> &FOfluxes,
@@ -921,9 +921,9 @@ auto RadhydroSimulation<problem_t>::computeFOHydroFluxes(
 #endif
 
 	// compute flux functions
-	AMREX_D_TERM(hydroFOFluxFunction<FluxDir::X1>(primVar.const_array(), consVar, x1Flux, x1FaceVel, indexRange, nvars);
-		       , hydroFOFluxFunction<FluxDir::X2>(primVar.const_array(), consVar, x2Flux, x2FaceVel, indexRange, nvars);
-		       , hydroFOFluxFunction<FluxDir::X3>(primVar.const_array(), consVar, x3Flux, x3FaceVel, indexRange, nvars); )
+	AMREX_D_TERM(hydroFOFluxFunction<FluxDir::X1>(primVar.const_array(), x1Flux, x1FaceVel, indexRange, nvars);
+		       , hydroFOFluxFunction<FluxDir::X2>(primVar.const_array(), x2Flux, x2FaceVel, indexRange, nvars);
+		       , hydroFOFluxFunction<FluxDir::X3>(primVar.const_array(), x3Flux, x3FaceVel, indexRange, nvars); )
 
 	return std::make_pair<std::array<amrex::FArrayBox, AMREX_SPACEDIM>, std::array<amrex::FArrayBox, AMREX_SPACEDIM>>({AMREX_D_DECL(std::move(x1Flux), std::move(x2Flux), std::move(x3Flux))},
 			{AMREX_D_DECL(std::move(x1FaceVel), std::move(x2FaceVel), std::move(x3FaceVel))});
