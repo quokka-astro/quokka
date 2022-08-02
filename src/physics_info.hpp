@@ -1,6 +1,7 @@
 #ifndef PHYSICS_INFO_HPP_ // NOLINT
 #define PHYSICS_INFO_HPP_
 
+
 #include "physics_numVars.hpp"
 
 // this struct is specialized by the user application code.
