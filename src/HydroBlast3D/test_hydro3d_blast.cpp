@@ -29,10 +29,19 @@ struct SedovProblem {};
 // if false, use octant symmetry instead
 constexpr bool simulate_full_box = false;
 
+bool test_passes = false; // if one of the energy checks fails, set to false
+
 template <> struct HydroSystem_Traits<SedovProblem> {
   static constexpr double gamma = 1.4;
   static constexpr bool reconstruct_eint = false;
-  static constexpr int nscalars = 0;       // number of passive scalars
+};
+
+template <> struct Physics_Traits<SedovProblem> {
+  static constexpr bool is_hydro_enabled = true;
+  static constexpr bool is_radiation_enabled = false;
+  static constexpr bool is_chemistry_enabled = false;
+  
+  static constexpr int numPassiveScalars = 0; // number of passive scalars
 };
 
 template <>
@@ -222,17 +231,33 @@ void RadhydroSimulation<SedovProblem>::computeAfterEvolve(
   amrex::Print() << "\trelative K.E. error = " << rel_err_Ekin << std::endl;
   amrex::Print() << std::endl;
 
+  bool E_test_passes = false;  // does total energy test pass?
+  bool KE_test_passes = false; // does kinetic energy test pass?
+
   if ((std::abs(rel_err) > 2.0e-15) || std::isnan(rel_err)) {
-    amrex::Abort("Energy not conserved to machine precision!");
+    // note that this tolerance is appropriate for a 256^3 grid
+    // it may need to be modified for coarser resolutions
+    amrex::Print() << "Energy not conserved to machine precision!\n";
+    E_test_passes = false;
   } else {
     amrex::Print() << "Energy conservation is OK.\n";
+    E_test_passes = true;
   }
 
   if ((std::abs(rel_err_Ekin) > 0.01) || std::isnan(rel_err_Ekin)) {
-    amrex::Abort(
-        "Kinetic energy production is incorrect by more than 1 percent!");
+    amrex::Print() <<
+      "Kinetic energy production is incorrect by more than 1 percent!\n";
+    KE_test_passes = false;
   } else {
     amrex::Print() << "Kinetic energy production is OK.\n";
+    KE_test_passes = true;
+  }
+
+  // if both tests pass, then overall pass
+  if (E_test_passes && KE_test_passes) {
+    test_passes = true;
+  } else {
+    test_passes = false;
   }
 
   amrex::Print() << "\n";
@@ -272,14 +297,11 @@ auto problem_main() -> int {
   }
 
   // Problem initialization
-  RadhydroSimulation<SedovProblem> sim(boundaryConditions, false);
-  sim.is_hydro_enabled_ = true;
-  sim.is_radiation_enabled_ = false;
+  RadhydroSimulation<SedovProblem> sim(boundaryConditions);
+  
   sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
   sim.stopTime_ = 1.0;          // seconds
   sim.cflNumber_ = 0.3;         // *must* be less than 1/3 in 3D!
-  sim.maxTimesteps_ = 20000;
-  sim.plotfileInterval_ = -1;
 
   // initialize
   sim.setInitialConditions();
@@ -288,6 +310,12 @@ auto problem_main() -> int {
   sim.evolve();
 
   // Cleanup and exit
-  amrex::Print() << "Finished." << std::endl;
-  return 0;
+  int status = 1;
+  if(test_passes) {
+    status = 0;
+  } else {
+    status = 1;
+  }
+  
+  return status;
 }
