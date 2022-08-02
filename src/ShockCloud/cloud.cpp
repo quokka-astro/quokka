@@ -325,13 +325,11 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
 }
 
 template <>
-void RadhydroSimulation<ShockCloud>::computeAfterLevelAdvance(int lev,
-                                                              Real /*time*/,
-                                                              Real dt_lev,
-                                                              int /*ncycle*/) {
+void RadhydroSimulation<ShockCloud>::addStrangSplitSources(amrex::MultiFab &state, int const lev,
+    amrex::Real time, amrex::Real const dt) {
   // compute operator split physics
   if (::enable_cooling) {
-    computeCooling(state_new_[lev], dt_lev, cloudyTables);
+    computeCooling(state, dt, cloudyTables);
   }
 }
 
