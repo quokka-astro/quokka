@@ -90,8 +90,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 
 	amrex::Real radiationCflNumber_ = 0.3;
 	int maxSubsteps_ = 10; // maximum number of radiation subcycles per hydro step
-	bool is_hydro_enabled_ = false;
-	bool is_radiation_enabled_ = true;
+	
 	bool computeReferenceSolution_ = false;
 	amrex::Real errorNorm_ = NAN;
 	amrex::Real densityFloor_ = 0.;
@@ -106,30 +105,36 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
 
 	// member functions
+	explicit RadhydroSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions)
+	    : AMRSimulation<problem_t>(boundaryConditions) {
+    // check modules cannot be enabled if they are not been implemented yet
+    static_assert(!Physics_Traits<problem_t>::is_chemistry_enabled, "Chemistry is not supported, yet.");
+    
+    // add hydro state variables
+    if constexpr (Physics_Traits<problem_t>::is_hydro_enabled ||
+                  Physics_Traits<problem_t>::is_radiation_enabled) {
+      std::vector<std::string> hydroNames = {"gasDensity", "x-GasMomentum", "y-GasMomentum", "z-GasMomentum", "gasEnergy", "gasInternalEnergy"};
+      componentNames_.insert(componentNames_.end(), hydroNames.begin(), hydroNames.end());
+      ncomp_ += hydroNames.size();
+    }
+    // add passive scalar variables
+    if constexpr (Physics_Traits<problem_t>::numPassiveScalars > 0){
+      std::vector<std::string> scalarNames = getScalarVariableNames();
+      componentNames_.insert(componentNames_.end(), scalarNames.begin(), scalarNames.end());
+      ncomp_ += scalarNames.size();
+    }
+    // add radiation state variables
+    if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
+      std::vector<std::string> radNames = {"radEnergy", "x-RadFlux", "y-RadFlux", "z-RadFlux"};
+      componentNames_.insert(componentNames_.end(), radNames.begin(), radNames.end());
+      ncomp_ += radNames.size();
+    }
 
-	explicit RadhydroSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions,
-		bool allocateRadVars = true)
-	    : AMRSimulation<problem_t>(boundaryConditions, getNumVars(allocateRadVars))
-	{
-		// set component names used in the state multifabs
-		std::vector<std::string> hydroNames = {"gasDensity", "x-GasMomentum", "y-GasMomentum",
-				   							   "z-GasMomentum", "gasEnergy", "gasInternalEnergy"};
-		std::vector<std::string> radNames = {"radEnergy", "x-RadFlux", "y-RadFlux", "z-RadFlux"};
-		std::vector<std::string> scalarNames = getScalarVariableNames();
-
-		componentNames_.insert(componentNames_.end(), hydroNames.begin(), hydroNames.end());
-		componentNames_.insert(componentNames_.end(), scalarNames.begin(), scalarNames.end());
-		
-		if (allocateRadVars) {
-			componentNames_.insert(componentNames_.end(), radNames.begin(), radNames.end());
-		}
-
-		// read in runtime parameters
+    // read in runtime parameters
 		readParmParse();
 	}
 
 	[[nodiscard]] static auto getScalarVariableNames() -> std::vector<std::string>;
-	[[nodiscard]] static auto getNumVars(bool allocateRadVars) -> int;
 	void readParmParse();
 
 	void checkHydroStates(amrex::MultiFab &mf, char const *file, int line);
@@ -240,20 +245,6 @@ auto RadhydroSimulation<problem_t>::getScalarVariableNames() -> std::vector<std:
 }
 
 template <typename problem_t>
-auto RadhydroSimulation<problem_t>::getNumVars(bool allocateRadVars) -> int {
-	// return the number of cell-centered variables to be allocated
-	// in the state_new_ and state_old_ multifabs
-
-	int nvars = 0;
-	if (allocateRadVars) {
-		nvars = RadSystem<problem_t>::nvar_; // includes hydro vars
-	} else {
-		nvars = HydroSystem<problem_t>::nvar_; // includes hydro + scalars only
-	}
-	return nvars;
-}
-
-template <typename problem_t>
 void RadhydroSimulation<problem_t>::readParmParse() {
 	// set hydro runtime parameters
 	{
@@ -293,15 +284,15 @@ void RadhydroSimulation<problem_t>::computeMaxSignalLocal(int const level)
 		auto const &stateNew = state_new_[level].const_array(iter);
 		auto const &maxSignal = max_signal_speed_[level].array(iter);
 
-		if (is_hydro_enabled_ && !(is_radiation_enabled_)) {
+		if constexpr (Physics_Traits<problem_t>::is_hydro_enabled && !(Physics_Traits<problem_t>::is_radiation_enabled)) {
 			// hydro only
 			HydroSystem<problem_t>::ComputeMaxSignalSpeed(stateNew, maxSignal,
 								      indexRange);
-		} else if (is_radiation_enabled_) {
+		} else if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
 			// radiation hydro, or radiation only
 			RadSystem<problem_t>::ComputeMaxSignalSpeed(stateNew, maxSignal,
 								    indexRange);
-			if (is_hydro_enabled_) {
+			if constexpr (Physics_Traits<problem_t>::is_hydro_enabled) {
 				auto maxSignalHydroFAB = amrex::FArrayBox(indexRange);
 				auto const &maxSignalHydro = maxSignalHydroFAB.array();
 				HydroSystem<problem_t>::ComputeMaxSignalSpeed(stateNew, maxSignalHydro, indexRange);
@@ -396,7 +387,7 @@ void RadhydroSimulation<problem_t>::computeAfterEvolve(amrex::Vector<amrex::Real
 
 	amrex::Real Etot0 = NAN;
 	amrex::Real Etot = NAN;
-	if (is_radiation_enabled_) {
+	if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
 		amrex::Real const Erad0 = initSumCons[RadSystem<problem_t>::radEnergy_index];
 		Etot0 = Egas0 + (RadSystem<problem_t>::c_light_ / RadSystem<problem_t>::c_hat_) * Erad0;
 		amrex::Real const Erad = state_new_[0].sum(RadSystem<problem_t>::radEnergy_index) * vol;
@@ -475,7 +466,7 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 	CHECK_HYDRO_STATES(state_old_[lev]);
 
 	// advance hydro
-	if (is_hydro_enabled_) {
+	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled) {
 		advanceHydroAtLevel(lev, time, dt_lev, fr_as_crse, fr_as_fine);
 	} else {
 		// copy hydro vars from state_old_ to state_new_
@@ -487,7 +478,7 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 	CHECK_HYDRO_STATES(state_new_[lev]);
 	
 	// subcycle radiation
-	if (is_radiation_enabled_) {
+	if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
 		subcycleRadiationAtLevel(lev, time, dt_lev, fr_as_crse, fr_as_fine);
 	}
 
@@ -955,7 +946,7 @@ void RadhydroSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Rea
 	int nsubSteps = 0;
 	amrex::Real dt_radiation = NAN;
 
-	if (is_hydro_enabled_ && !(constantDt_ > 0.)) {
+	if (Physics_Traits<problem_t>::is_hydro_enabled && !(constantDt_ > 0.)) {
 		// adjust to get integer number of substeps
 		nsubSteps = computeNumberOfRadiationSubsteps(lev, dt_lev_hydro);
 		dt_radiation = dt_lev_hydro / static_cast<double>(nsubSteps);

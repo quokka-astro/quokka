@@ -39,7 +39,14 @@ template <> struct HydroSystem_Traits<CoolingTest> {
   static constexpr double gamma = 5. / 3.; // default value
   // if true, reconstruct e_int instead of pressure
   static constexpr bool reconstruct_eint = true;
-  static constexpr int nscalars = 0;       // number of passive scalars
+};
+
+template <> struct Physics_Traits<CoolingTest> {
+  static constexpr bool is_hydro_enabled = true;
+  static constexpr bool is_radiation_enabled = false;
+  static constexpr bool is_chemistry_enabled = false;
+  
+  static constexpr int numPassiveScalars = 0; // number of passive scalars
 };
 
 constexpr double Tgas0 = 6000.;       // K
@@ -355,9 +362,7 @@ auto problem_main() -> int {
 #endif
   }
 
-  RadhydroSimulation<CoolingTest> sim(boundaryConditions, false);
-  sim.is_hydro_enabled_ = true;
-  sim.is_radiation_enabled_ = false;
+  RadhydroSimulation<CoolingTest> sim(boundaryConditions);
 
   // Standard PPM gives unphysically enormous temperatures when used for
   // this problem (e.g., ~1e14 K or higher), but can be fixed by

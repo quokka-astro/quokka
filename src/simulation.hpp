@@ -65,6 +65,7 @@
 // internal headers
 #include "CheckNaN.hpp"
 #include "math_impl.hpp"
+#include "physics_info.hpp"
 
 #define USE_YAFLUXREGISTER
 
@@ -99,9 +100,7 @@ public:
   int checkpointInterval_ = -1;    // -1 == no output
 
   // constructor
-  AMRSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions,
-                const int ncomp)
-      : ncomp_(ncomp) {
+  explicit AMRSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions) {
     initialize(boundaryConditions);
   }
 
@@ -942,9 +941,6 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(
 
   // set state_new_[lev] to desired initial condition
   setInitialConditionsAtLevel(level);
-
-  amrex::IntVect iv(AMREX_D_DECL(19, 0, 5));
-  print_state(state_new_[level], iv);
 
   // check that state_new_[lev] is properly filled
   AMREX_ALWAYS_ASSERT(!state_new_[level].contains_nan(0, ncomp));
