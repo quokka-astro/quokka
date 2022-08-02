@@ -16,8 +16,13 @@
          details on how this process works.
 
          In general we squash commits upon merge to have a clean history.
-         *Please ensure that your PR title and first post are descriptive,
-         since these will be used for a squashed commit message.*
+         
+         * **Please ensure that your PR title and first post are descriptive,
+         since these will be used for a squashed commit message.**
+         
+         * **Don't group together unrelated changes in a single PR.
+         Instead, create separate PRs for each logically-related set of
+         changes to the code.**
 
          Please note the following:
             If you choose to make contributions to the code
