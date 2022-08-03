@@ -170,10 +170,11 @@ void HydroSystem<problem_t>::ConservedToPrimitive(
     const auto vy = py / rho;
     const auto vz = pz / rho;
     const auto kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
-    const auto thermal_energy_cons = E - kinetic_energy;
+    const auto Eint_cons = E - kinetic_energy;
 
-    const amrex::Real P = thermal_energy_cons * (HydroSystem<problem_t>::gamma_ - 1.0);
-    const amrex::Real eint_cons = thermal_energy_cons / rho;
+    const amrex::Real Pgas = Eint_cons * (HydroSystem<problem_t>::gamma_ - 1.0);
+    const amrex::Real eint_cons = Eint_cons / rho;
+    const amrex::Real eint_aux = Eint_aux / rho;
 
     AMREX_ASSERT(rho > 0.);
     if constexpr (!is_eos_isothermal()) {
@@ -184,15 +185,18 @@ void HydroSystem<problem_t>::ConservedToPrimitive(
     primVar(i, j, k, x1Velocity_index) = vx;
     primVar(i, j, k, x2Velocity_index) = vy;
     primVar(i, j, k, x3Velocity_index) = vz;
+
     if constexpr (reconstruct_eint) {
-      // save eint_cons
+      // save specific internal energy (SIE) == (Etot - KE) / rho
       primVar(i, j, k, pressure_index) = eint_cons;
+      // save auxiliary specific internal energy (SIE) == Eint_aux / rho
+      primVar(i, j, k, primEint_index) = eint_aux;
     } else {
       // save pressure
-      primVar(i, j, k, pressure_index) = P;
+      primVar(i, j, k, pressure_index) = Pgas;
+      // save auxiliary internal energy (rho * e)
+      primVar(i, j, k, primEint_index) = Eint_aux;
     }
-    // save auxiliary internal energy (rho * e)
-    primVar(i, j, k, primEint_index) = Eint_aux;
 
     // copy any passive scalars
     for (int nc = 0; nc < nscalars_; ++nc) {
@@ -683,8 +687,8 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FaceVe
 
     // auxiliary Eint (rho * e)
     // this is evolved as a passive scalar by the Riemann solver
-    const double Eint_L = x1LeftState(i, j, k, primEint_index);
-    const double Eint_R = x1RightState(i, j, k, primEint_index);
+    double Eint_L = NAN;
+    double Eint_R = NAN;
 
     double P_L = NAN;
     double P_R = NAN;
@@ -702,16 +706,25 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FaceVe
       cs_L = cs_iso_;
       cs_R = cs_iso_;
     } else {
-      if constexpr (reconstruct_eint) { // pressure_index is actually eint
+      if constexpr (reconstruct_eint) {
         // compute pressure from specific internal energy
+        // (pressure_index is actually eint)
         const double eint_L = x1LeftState(i, j, k, pressure_index);
         const double eint_R = x1RightState(i, j, k, pressure_index);
-
         P_L = rho_L * eint_L * (gamma_ - 1.0);
         P_R = rho_R * eint_R * (gamma_ - 1.0);
-      } else { // pressure_index is actually pressure
+
+        // auxiliary Eint is actually (auxiliary) specific internal energy
+        Eint_L = rho_L * x1LeftState(i, j, k, primEint_index);
+        Eint_R = rho_R * x1RightState(i, j, k, primEint_index);
+      } else {
+        // pressure_index is actually pressure
         P_L = x1LeftState(i, j, k, pressure_index);
         P_R = x1RightState(i, j, k, pressure_index);
+
+        // primEint_index is actually (rho * e)
+        Eint_L = x1LeftState(i, j, k, primEint_index);
+        Eint_R = x1RightState(i, j, k, primEint_index);
       }
 
       cs_L = std::sqrt(gamma_ * P_L / rho_L);
