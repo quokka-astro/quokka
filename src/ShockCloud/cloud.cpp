@@ -473,18 +473,6 @@ void HydroSystem<ShockCloud>::EnforcePressureFloor(
       rho_new = rho_floor;
       state(i, j, k, density_index) = rho_new;
     }
-
-    Real const P_floor = (rho_new / m_H) * boltzmann_constant_cgs_ * T_floor;
-
-    // recompute gas energy (to prevent P < 0)
-    Real const Eint_star = Etot - 0.5 * rho_new * vsq;
-    Real const P_star = Eint_star * (gamma_ - 1.);
-    Real P_new = P_star;
-    if (P_star < P_floor) {
-      P_new = P_floor;
-      Real const Etot_new = P_new / (gamma_ - 1.) + 0.5 * rho_new * vsq;
-      state(i, j, k, energy_index) = Etot_new;
-    }
   });
 }
 
