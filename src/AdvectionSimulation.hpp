@@ -77,7 +77,8 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	    : AMRSimulation<problem_t>(boundaryConditions) { }
 
 	void computeMaxSignalLocal(int level) override;
-	void setInitialConditionsAtLevel(int level) override;
+	void preCalculateInitialConditions() override;
+  void setInitialConditionsOnGrid(std::vector<grid> &grid_vec) override;
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev,
 					  				  int /*ncycle*/) override;
 	void computeAfterTimestep() override;
@@ -130,9 +131,16 @@ void AdvectionSimulation<problem_t>::computeMaxSignalLocal(int const level)
 }
 
 template <typename problem_t>
-void AdvectionSimulation<problem_t>::setInitialConditionsAtLevel(int level)
-{
-	// do nothing -- user should implement using problem-specific template specialization
+void AdvectionSimulation<problem_t>::preCalculateInitialConditions() {
+  // default empty implementation
+  // user should implement using problem-specific template specialization
+}
+
+template <typename problem_t>
+void AdvectionSimulation<problem_t>::setInitialConditionsOnGrid(
+    std::vector<grid> &grid_vec) {
+  // default empty implementation
+  // user should implement using problem-specific template specialization
 }
 
 template <typename problem_t> void AdvectionSimulation<problem_t>::computeAfterTimestep()
