@@ -63,6 +63,7 @@
 #endif
 
 // internal headers
+#include "grid.hpp"
 #include "CheckNaN.hpp"
 #include "math_impl.hpp"
 #include "physics_info.hpp"
@@ -108,14 +109,16 @@ public:
   void PerformanceHints();
   void readParameters();
   void setInitialConditions();
+  void setInitialConditionsAtLevel(int level);
   void evolve();
   void computeTimestep();
   auto computeTimestepAtLevel(int lev) -> amrex::Real;
 
   virtual void computeMaxSignalLocal(int level) = 0;
-  virtual void setInitialConditionsAtLevel(int level) = 0;
   virtual void advanceSingleTimestepAtLevel(int lev, amrex::Real time,
                                             amrex::Real dt_lev, int ncycle) = 0;
+  virtual void preCalculateInitialConditions() = 0;
+  virtual void setInitialConditionsOnGrid(std::vector<grid> &grid_vec) = 0;
   virtual void computeAfterTimestep() = 0;
   virtual void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) = 0;
 
@@ -308,6 +311,30 @@ void AMRSimulation<problem_t>::initialize(
       MPI_Comm_c2f(amrex::ParallelContext::CommunicatorSub());
   ascent_.open(ascent_options);
 #endif
+}
+
+template <typename problem_t>
+void AMRSimulation<problem_t>::setInitialConditionsAtLevel(int level) {
+  // initialise grid-struct, which the user will opperate on
+  std::vector<grid> grid_vec;
+
+  // perform precalculation step defined by the user
+  preCalculateInitialConditions();
+
+  // itterate over the domain
+  for (amrex::MFIter iter(state_new_[level]); iter.isValid(); ++iter) {
+    // cell-centred states
+    grid_vec.emplace_back(state_new_[level].array(iter), iter.validbox(),
+                          geom[level].CellSizeArray(), geom[level].ProbLoArray(),
+                          geom[level].ProbHiArray(), centering::cc,
+                          direction::na);
+
+    // set initial conditions defined by the user
+    setInitialConditionsOnGrid(grid_vec);
+  }
+
+  // set flag
+  areInitialConditionsDefined_ = true;
 }
 
 template <typename problem_t>
