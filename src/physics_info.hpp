@@ -1,3 +1,6 @@
+#ifndef PHYSICS_INFO_HPP_ // NOLINT
+#define PHYSICS_INFO_HPP_
+
 #include "physics_numVars.hpp"
 
 // this struct is specialized by the user application code.
@@ -16,3 +19,5 @@ template <typename problem_t> struct Physics_Indices {
   static const int pscalarFirstIndex = Physics_NumVars<problem_t>::numHydroVars;
   static const int radFirstIndex = pscalarFirstIndex + Physics_Traits<problem_t>::numPassiveScalars;
 };
+
+#endif // PHYSICS_INFO_HPP_

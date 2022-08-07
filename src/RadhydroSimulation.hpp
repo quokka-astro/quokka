@@ -196,17 +196,14 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 
 	auto computeHydroFluxes(amrex::Array4<const amrex::Real> const &consVar,
 				const amrex::Box &indexRange, int nvars)
-	    -> std::array<amrex::FArrayBox, AMREX_SPACEDIM>;
+	    -> std::pair<std::array<amrex::FArrayBox, AMREX_SPACEDIM>,
+					 std::array<amrex::FArrayBox, AMREX_SPACEDIM>>;
 
 	auto computeFOHydroFluxes(amrex::Array4<const amrex::Real> const &consVar,
 				const amrex::Box &indexRange, int nvars)
-    	-> std::array<amrex::FArrayBox, AMREX_SPACEDIM>;
-
-	void computeInternalEnergyUpdate(amrex::Array4<const amrex::Real> const &consVarOld,
-				amrex::Array4<amrex::Real> const &consVarNew, const amrex::Box &indexRange,
-				const int nvars, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-				amrex::Real const dt);
-
+    	-> std::pair<std::array<amrex::FArrayBox, AMREX_SPACEDIM>,
+					 std::array<amrex::FArrayBox, AMREX_SPACEDIM>>;
+	
 	template <FluxDir DIR>
 	void fluxFunction(amrex::Array4<const amrex::Real> const &consState,
 			  amrex::FArrayBox &x1Flux, amrex::FArrayBox &x1FluxDiffusive,
@@ -217,6 +214,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	void hydroFluxFunction(amrex::Array4<const amrex::Real> const &primVar,
 			  amrex::Array4<const amrex::Real> const &consVar,
 			  amrex::FArrayBox &x1Flux,
+			  amrex::FArrayBox &x1FaceVel,
 			  amrex::Array4<const amrex::Real> const &x1Flat,
 			  amrex::Array4<const amrex::Real> const &x2Flat,
 			  amrex::Array4<const amrex::Real> const &x3Flat,
@@ -226,6 +224,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	void hydroFOFluxFunction(amrex::Array4<const amrex::Real> const &primVar,
 				amrex::Array4<const amrex::Real> const &consVar,
 				amrex::FArrayBox &x1Flux,
+				amrex::FArrayBox &x1FaceVel,
 				const amrex::Box &indexRange, int nvars);
 	
 	void replaceFluxes(std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxes,
@@ -542,6 +541,8 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 		fluxScaleFactor = 1.0;
 	}
 
+	auto dx = geom[lev].CellSizeArray();
+
 	// create temporary multifab for Strang-split sources, copy old state
 	amrex::MultiFab state_old_tmp(grids[lev], dmap[lev], ncomp_, nghost_);
 	amrex::Copy(state_old_tmp, state_old_[lev], 0, 0, ncomp_, nghost_);
@@ -562,23 +563,24 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 		const amrex::Box &indexRange = iter.validbox(); // 'validbox' == exclude ghost zones
 		auto const &stateOld = state_old_tmp.const_array(iter);
 		auto const &stateNew = state_new_[lev].array(iter);
-		auto fluxArrays = computeHydroFluxes(stateOld, indexRange, ncompHydro_);
+		auto [fluxArrays, faceVel] = computeHydroFluxes(stateOld, indexRange, ncompHydro_);
 
-		// temporary FAB for RK stage
+		// temporary FABs for RK stage
 		amrex::IArrayBox redoFlag(indexRange, 1, amrex::The_Async_Arena());
+		amrex::FArrayBox rhs(indexRange, ncompHydro_, amrex::The_Async_Arena());
+		HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs.array(),
+			{AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(), fluxArrays[2].const_array())}, dx, indexRange, ncompHydro_);
+		HydroSystem<problem_t>::AddInternalEnergyPdV(rhs.array(), stateOld, indexRange,
+			{AMREX_D_DECL(faceVel[0].const_array(), faceVel[1].const_array(), faceVel[2].const_array())});
 
 		// Stage 1 of RK2-SSP
-		HydroSystem<problem_t>::PredictStep(
-		    stateOld, stateNew,
-		    {AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
-				  fluxArrays[2].const_array())},
-		    dt_lev, geom[lev].CellSizeArray(), indexRange, ncompHydro_,
-			redoFlag.array());
+		HydroSystem<problem_t>::PredictStep(stateOld, stateNew, rhs.const_array(),
+		    dt_lev, indexRange, ncompHydro_, redoFlag.array());
 
 		// first-order flux correction (FOFC)
 		if (redoFlag.max<amrex::RunOn::Device>() != quokka::redoFlag::none) {
 			// compute first-order fluxes (on the whole FAB)
-			auto FOFluxArrays = computeFOHydroFluxes(stateOld, indexRange, ncompHydro_);
+			auto [FOFluxArrays, FOFaceVel] = computeFOHydroFluxes(stateOld, indexRange, ncompHydro_);
 
 			for(int i = 0; i < fofcMaxIterations_; ++i) {
 				if (Verbose()) {
@@ -591,15 +593,16 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 
 				// replace fluxes in fluxArrays with first-order fluxes at faces of flagged cells
 				replaceFluxes(fluxArrays, FOFluxArrays, redoFlag, indexRange, ncompHydro_);
+				HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs.array(),
+					{AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
+					fluxArrays[2].const_array())}, dx, indexRange, ncompHydro_);
+				HydroSystem<problem_t>::AddInternalEnergyPdV(rhs.array(), stateOld, indexRange,
+					{AMREX_D_DECL(faceVel[0].const_array(), faceVel[1].const_array(), faceVel[2].const_array())});
 
 				// re-do RK stage update for *all* cells
 				// (since neighbors of problem cells will have modified states as well)
-				HydroSystem<problem_t>::PredictStep(
-					stateOld, stateNew,
-					{AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
-						fluxArrays[2].const_array())},
-					dt_lev, geom[lev].CellSizeArray(), indexRange, ncompHydro_,
-					redoFlag.array());
+				HydroSystem<problem_t>::PredictStep(stateOld, stateNew, rhs.const_array(),
+					dt_lev, indexRange, ncompHydro_,	redoFlag.array());
 
 				if(redoFlag.max<amrex::RunOn::Device>() == quokka::redoFlag::none) {
 					break;
@@ -608,9 +611,8 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 		}
 
 		if (useDualEnergy_ == 1) {
-			// add non-conservative term to internal energy
-			computeInternalEnergyUpdate(stateOld, stateNew, indexRange, 
-				ncompHydro_, geom[lev].CellSizeArray(), dt_lev);
+			// sync internal energy
+			HydroSystem<problem_t>::SyncDualEnergy(stateNew, indexRange);
 		}
 
 		// prevent vacuum
@@ -638,25 +640,29 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 			const amrex::Box &indexRange = iter.validbox(); // 'validbox' == exclude ghost zones
 			auto const &stateOld = state_old_tmp.const_array(iter);
 			auto const &stateInter = state_new_[lev].const_array(iter);
-			auto fluxArrays = computeHydroFluxes(stateInter, indexRange, ncompHydro_);
+			auto [fluxArrays, faceVel] = computeHydroFluxes(stateInter, indexRange, ncompHydro_);
 
 			amrex::FArrayBox stateFinalFAB = amrex::FArrayBox(indexRange, ncompHydro_,
 															amrex::The_Async_Arena());
 			auto const &stateFinal = stateFinalFAB.array();
+
+			// temporary FABs for RK stage
 			amrex::IArrayBox redoFlag(indexRange, 1, amrex::The_Async_Arena());
+			amrex::FArrayBox rhs(indexRange, ncompHydro_, amrex::The_Async_Arena());
+			HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs.array(),
+				{AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
+					fluxArrays[2].const_array())}, dx, indexRange, ncompHydro_);
+			HydroSystem<problem_t>::AddInternalEnergyPdV(rhs.array(), stateInter, indexRange,
+				{AMREX_D_DECL(faceVel[0].const_array(), faceVel[1].const_array(), faceVel[2].const_array())});
 
 			// Stage 2 of RK2-SSP
-			HydroSystem<problem_t>::AddFluxesRK2(
-				stateFinal, stateOld, stateInter,
-				{AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
-					fluxArrays[2].const_array())},
-				dt_lev, geom[lev].CellSizeArray(), indexRange, ncompHydro_,
-				redoFlag.array());
+			HydroSystem<problem_t>::AddFluxesRK2(stateFinal, stateOld, stateInter, rhs.const_array(),
+				dt_lev, indexRange, ncompHydro_,	redoFlag.array());
 
 			// first-order flux correction (FOFC)
 			if (redoFlag.max<amrex::RunOn::Device>() != quokka::redoFlag::none) {
 				// compute first-order fluxes (on the whole FAB)
-				auto FOFluxArrays = computeFOHydroFluxes(stateInter, indexRange, ncompHydro_);
+				auto [FOFluxArrays, FOFaceVel] = computeFOHydroFluxes(stateInter, indexRange, ncompHydro_);
 
 				for(int i = 0; i < fofcMaxIterations_; ++i) {
 					if (Verbose()) {
@@ -669,15 +675,16 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 					
 					// replace fluxes in fluxArrays with first-order fluxes at faces of flagged cells
 					replaceFluxes(fluxArrays, FOFluxArrays, redoFlag, indexRange, ncompHydro_);
+					HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs.array(),
+						{AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
+						fluxArrays[2].const_array())}, dx, indexRange, ncompHydro_);
+					HydroSystem<problem_t>::AddInternalEnergyPdV(rhs.array(), stateInter, indexRange,
+						{AMREX_D_DECL(faceVel[0].const_array(), faceVel[1].const_array(), faceVel[2].const_array())});
 
 					// re-do RK stage update for *all* cells
 					// (since neighbors of problem cells will have modified states as well)
-					HydroSystem<problem_t>::AddFluxesRK2(
-						stateFinal, stateOld, stateInter,
-						{AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
-							fluxArrays[2].const_array())},
-						dt_lev, geom[lev].CellSizeArray(), indexRange, ncompHydro_,
-						redoFlag.array());
+					HydroSystem<problem_t>::AddFluxesRK2(stateFinal, stateOld, stateInter, rhs.const_array(),
+						dt_lev, indexRange, ncompHydro_, redoFlag.array());
 
 					if(redoFlag.max<amrex::RunOn::Device>() == quokka::redoFlag::none) {
 						break;
@@ -686,9 +693,8 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 			}
 
 			if (useDualEnergy_ == 1) {
-				// add non-conservative term to internal energy
-				computeInternalEnergyUpdate(stateInter, stateFinal, indexRange,
-					ncompHydro_, geom[lev].CellSizeArray(), 0.5 * dt_lev);
+				// sync internal energy
+				HydroSystem<problem_t>::SyncDualEnergy(stateFinal, indexRange);
 			}
 
 			// prevent vacuum
@@ -772,22 +778,9 @@ auto RadhydroSimulation<problem_t>::expandFluxArrays(
 }
 
 template <typename problem_t>
-void RadhydroSimulation<problem_t>::computeInternalEnergyUpdate(amrex::Array4<const amrex::Real> const &consVarOld, amrex::Array4<amrex::Real> const &consVarNew, const amrex::Box &indexRange, const int nvars, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::Real const dt)
-{
-	BL_PROFILE("RadhydroSimulation::computeInternalEnergyUpdate()");
-
-	// convert conserved to primitive variables
-	amrex::Box const &ghostRange = amrex::grow(indexRange, nghost_);
-	amrex::FArrayBox primVarOld(ghostRange, nvars, amrex::The_Async_Arena());
-	HydroSystem<problem_t>::ConservedToPrimitive(consVarOld, primVarOld.array(), ghostRange);
-	HydroSystem<problem_t>::AddInternalEnergyPressureTerm(consVarNew, primVarOld.const_array(),
-														  indexRange, dx, dt);
-}
-
-template <typename problem_t>
 auto RadhydroSimulation<problem_t>::computeHydroFluxes(
     amrex::Array4<const amrex::Real> const &consVar, const amrex::Box &indexRange, const int nvars)
-    -> std::array<amrex::FArrayBox, AMREX_SPACEDIM>
+    -> std::pair<std::array<amrex::FArrayBox, AMREX_SPACEDIM>, std::array<amrex::FArrayBox, AMREX_SPACEDIM>>
 {
 	BL_PROFILE("RadhydroSimulation::computeHydroFluxes()");
 
@@ -808,25 +801,31 @@ auto RadhydroSimulation<problem_t>::computeHydroFluxes(
 		, HydroSystem<problem_t>::template ComputeFlatteningCoefficients<FluxDir::X3>(
 			primVar.array(), x3Flat.array(), flatteningRange); )
 
-	// compute flux functions
-	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, 0);
-	amrex::FArrayBox x1Flux(x1FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in x
+	// allocate flux arrays
+	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, 0); // x-faces
+	amrex::FArrayBox x1Flux(x1FluxRange, nvars, amrex::The_Async_Arena());
+	amrex::FArrayBox x1FaceVel(x1FluxRange, 1, amrex::The_Async_Arena());
 #if (AMREX_SPACEDIM >= 2)
-	amrex::Box const &x2FluxRange = amrex::surroundingNodes(indexRange, 1);
-	amrex::FArrayBox x2Flux(x2FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in y
+	amrex::Box const &x2FluxRange = amrex::surroundingNodes(indexRange, 1); // y-faces
+	amrex::FArrayBox x2Flux(x2FluxRange, nvars, amrex::The_Async_Arena());
+	amrex::FArrayBox x2FaceVel(x2FluxRange, 1, amrex::The_Async_Arena());
 #endif
 #if (AMREX_SPACEDIM == 3)
-	amrex::Box const &x3FluxRange = amrex::surroundingNodes(indexRange, 2);
-	amrex::FArrayBox x3Flux(x3FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in z
+	amrex::Box const &x3FluxRange = amrex::surroundingNodes(indexRange, 2); // z-faces
+	amrex::FArrayBox x3Flux(x3FluxRange, nvars, amrex::The_Async_Arena());
+	amrex::FArrayBox x3FaceVel(x3FluxRange, 1, amrex::The_Async_Arena());
 #endif
-	AMREX_D_TERM(hydroFluxFunction<FluxDir::X1>(primVar.const_array(), consVar, x1Flux,
+
+	// compute flux functions
+	AMREX_D_TERM(hydroFluxFunction<FluxDir::X1>(primVar.const_array(), consVar, x1Flux, x1FaceVel,
 					x1Flat.array(), x2Flat.array(), x3Flat.array(), indexRange, nvars);
-		     , hydroFluxFunction<FluxDir::X2>(primVar.const_array(), consVar, x2Flux,
+		     , hydroFluxFunction<FluxDir::X2>(primVar.const_array(), consVar, x2Flux, x2FaceVel,
 					x1Flat.array(), x2Flat.array(), x3Flat.array(), indexRange, nvars);
-		     , hydroFluxFunction<FluxDir::X3>(primVar.const_array(), consVar, x3Flux,
+		     , hydroFluxFunction<FluxDir::X3>(primVar.const_array(), consVar, x3Flux, x3FaceVel,
 					x1Flat.array(), x2Flat.array(), x3Flat.array(), indexRange, nvars); )
 
-	return {AMREX_D_DECL(std::move(x1Flux), std::move(x2Flux), std::move(x3Flux))};
+	return std::make_pair<std::array<amrex::FArrayBox, AMREX_SPACEDIM>, std::array<amrex::FArrayBox, AMREX_SPACEDIM>>({AMREX_D_DECL(std::move(x1Flux), std::move(x2Flux), std::move(x3Flux))},
+			{AMREX_D_DECL(std::move(x1FaceVel), std::move(x2FaceVel), std::move(x3FaceVel))});
 }
 
 template <typename problem_t>
@@ -835,6 +834,7 @@ void RadhydroSimulation<problem_t>::hydroFluxFunction(
     amrex::Array4<const amrex::Real> const &primVar,
 	amrex::Array4<const amrex::Real> const &consVar,
 	amrex::FArrayBox &x1Flux,
+	amrex::FArrayBox &x1FaceVel,
 	amrex::Array4<const amrex::Real> const &x1Flat,
 	amrex::Array4<const amrex::Real> const &x2Flat,
 	amrex::Array4<const amrex::Real> const &x3Flat,
@@ -883,14 +883,14 @@ void RadhydroSimulation<problem_t>::hydroFluxFunction(
 
 	// interface-centered kernel
 	HydroSystem<problem_t>::template ComputeFluxes<DIR>(
-	    x1Flux.array(), x1LeftState.array(), x1RightState.array(),
+	    x1Flux.array(), x1FaceVel.array(), x1LeftState.array(), x1RightState.array(),
 		primVar, x1FluxRange);
 }
 
 template <typename problem_t>
 auto RadhydroSimulation<problem_t>::computeFOHydroFluxes(
     amrex::Array4<const amrex::Real> const &consVar, const amrex::Box &indexRange, const int nvars)
-    -> std::array<amrex::FArrayBox, AMREX_SPACEDIM>
+    -> std::pair<std::array<amrex::FArrayBox, AMREX_SPACEDIM>, std::array<amrex::FArrayBox, AMREX_SPACEDIM>>
 {
 	BL_PROFILE("RadhydroSimulation::computeFOHydroFluxes()");
 
@@ -899,22 +899,28 @@ auto RadhydroSimulation<problem_t>::computeFOHydroFluxes(
 	amrex::FArrayBox primVar(ghostRange, nvars, amrex::The_Async_Arena());
 	HydroSystem<problem_t>::ConservedToPrimitive(consVar, primVar.array(), ghostRange);
 
-	// compute flux functions
-	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, 0);
-	amrex::FArrayBox x1Flux(x1FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in x
+	// allocate flux arrays
+	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, 0); // x-faces
+	amrex::FArrayBox x1Flux(x1FluxRange, nvars, amrex::The_Async_Arena());
+	amrex::FArrayBox x1FaceVel(x1FluxRange, 1, amrex::The_Async_Arena());
 #if (AMREX_SPACEDIM >= 2)
-	amrex::Box const &x2FluxRange = amrex::surroundingNodes(indexRange, 1);
-	amrex::FArrayBox x2Flux(x2FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in y
+	amrex::Box const &x2FluxRange = amrex::surroundingNodes(indexRange, 1); // y-faces
+	amrex::FArrayBox x2Flux(x2FluxRange, nvars, amrex::The_Async_Arena());
+	amrex::FArrayBox x2FaceVel(x2FluxRange, 1, amrex::The_Async_Arena());
 #endif
 #if (AMREX_SPACEDIM == 3)
-	amrex::Box const &x3FluxRange = amrex::surroundingNodes(indexRange, 2);
-	amrex::FArrayBox x3Flux(x3FluxRange, nvars, amrex::The_Async_Arena()); // node-centered in z
+	amrex::Box const &x3FluxRange = amrex::surroundingNodes(indexRange, 2); // z-faces
+	amrex::FArrayBox x3Flux(x3FluxRange, nvars, amrex::The_Async_Arena());
+	amrex::FArrayBox x3FaceVel(x3FluxRange, 1, amrex::The_Async_Arena());
 #endif
-	AMREX_D_TERM(hydroFOFluxFunction<FluxDir::X1>(primVar.const_array(), consVar, x1Flux, indexRange, nvars);
-		       , hydroFOFluxFunction<FluxDir::X2>(primVar.const_array(), consVar, x2Flux, indexRange, nvars);
-		       , hydroFOFluxFunction<FluxDir::X3>(primVar.const_array(), consVar, x3Flux, indexRange, nvars); )
 
-	return {AMREX_D_DECL(std::move(x1Flux), std::move(x2Flux), std::move(x3Flux))};
+	// compute flux functions
+	AMREX_D_TERM(hydroFOFluxFunction<FluxDir::X1>(primVar.const_array(), consVar, x1Flux, x1FaceVel, indexRange, nvars);
+		       , hydroFOFluxFunction<FluxDir::X2>(primVar.const_array(), consVar, x2Flux, x2FaceVel, indexRange, nvars);
+		       , hydroFOFluxFunction<FluxDir::X3>(primVar.const_array(), consVar, x3Flux, x3FaceVel, indexRange, nvars); )
+
+	return std::make_pair<std::array<amrex::FArrayBox, AMREX_SPACEDIM>, std::array<amrex::FArrayBox, AMREX_SPACEDIM>>({AMREX_D_DECL(std::move(x1Flux), std::move(x2Flux), std::move(x3Flux))},
+			{AMREX_D_DECL(std::move(x1FaceVel), std::move(x2FaceVel), std::move(x3FaceVel))});
 }
 
 template <typename problem_t>
@@ -923,6 +929,7 @@ void RadhydroSimulation<problem_t>::hydroFOFluxFunction(
     amrex::Array4<const amrex::Real> const &primVar,
     amrex::Array4<const amrex::Real> const &consVar,
 	amrex::FArrayBox &x1Flux,
+	amrex::FArrayBox &x1FaceVel,
     const amrex::Box &indexRange, const int nvars)
 {
 	int dir = 0;
@@ -948,7 +955,8 @@ void RadhydroSimulation<problem_t>::hydroFOFluxFunction(
 
 	// interface-centered kernel
 	HydroSystem<problem_t>::template ComputeFluxes<DIR>(
-	    x1Flux.array(), x1LeftState.array(), x1RightState.array(),
+	    x1Flux.array(), x1FaceVel.array(),
+		x1LeftState.array(), x1RightState.array(),
 		primVar, x1FluxRange);
 }
 
