@@ -38,62 +38,57 @@ template <> struct Physics_Traits<BlastProblem> {
   static constexpr int numPassiveScalars = 0; // number of passive scalars
 };
 
-template <> void RadhydroSimulation<BlastProblem>::setInitialConditionsAtLevel(int lev)
-{
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = geom[lev].ProbHiArray();
+template <>
+void RadhydroSimulation<BlastProblem>::setInitialConditionsOnGrid(
+    std::vector<grid> &grid_vec) {
+  // extract variables required from the geom object
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_vec[0].dx;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_vec[0].prob_hi;
+  const amrex::Box &indexRange = grid_vec[0].indexRange;
 
-	amrex::Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
-	amrex::Real const y0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
+  amrex::Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
+  amrex::Real const y0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
+  // loop over the grid and set the initial condition
+  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+    amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+    amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
+    amrex::Real const R = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2));
 
-	for (amrex::MFIter iter(state_old_[lev]); iter.isValid(); ++iter) {
-		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
-		auto const &state = state_new_[lev].array(iter);
+    double vx = 0.;
+    double vy = 0.;
+    double vz = 0.;
+    double rho = 1.0;
+    double P = NAN;
 
-		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-			amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
-			amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
-			amrex::Real const R = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2));
+    if (R < 0.1) { // inside circle
+      P = 10.;
+    } else {
+      P = 0.1;
+    }
 
-			double vx = 0.;
-			double vy = 0.;
-			double vz = 0.;
-			double rho = 1.0;
-			double P = NAN;
+    AMREX_ASSERT(!std::isnan(vx));
+    AMREX_ASSERT(!std::isnan(vy));
+    AMREX_ASSERT(!std::isnan(vz));
+    AMREX_ASSERT(!std::isnan(rho));
+    AMREX_ASSERT(!std::isnan(P));
 
-			if (R < 0.1) { // inside circle
-				P = 10.;
-			} else {
-				P = 0.1;
-			}
+    const auto v_sq = vx * vx + vy * vy + vz * vz;
+    const auto gamma = HydroSystem<BlastProblem>::gamma_;
 
-			AMREX_ASSERT(!std::isnan(vx));
-			AMREX_ASSERT(!std::isnan(vy));
-			AMREX_ASSERT(!std::isnan(vz));
-			AMREX_ASSERT(!std::isnan(rho));
-			AMREX_ASSERT(!std::isnan(P));
+    grid_vec[0].array(i, j, k, HydroSystem<BlastProblem>::density_index) = rho;
+    grid_vec[0].array(i, j, k, HydroSystem<BlastProblem>::x1Momentum_index) = rho * vx;
+    grid_vec[0].array(i, j, k, HydroSystem<BlastProblem>::x2Momentum_index) = rho * vy;
+    grid_vec[0].array(i, j, k, HydroSystem<BlastProblem>::x3Momentum_index) = rho * vz;
+    grid_vec[0].array(i, j, k, HydroSystem<BlastProblem>::energy_index) =
+        P / (gamma - 1.) + 0.5 * rho * v_sq;
 
-			const auto v_sq = vx * vx + vy * vy + vz * vz;
-			const auto gamma = HydroSystem<BlastProblem>::gamma_;
-
-			state(i, j, k, HydroSystem<BlastProblem>::density_index) = rho;
-			state(i, j, k, HydroSystem<BlastProblem>::x1Momentum_index) = rho * vx;
-			state(i, j, k, HydroSystem<BlastProblem>::x2Momentum_index) = rho * vy;
-			state(i, j, k, HydroSystem<BlastProblem>::x3Momentum_index) = rho * vz;
-			state(i, j, k, HydroSystem<BlastProblem>::energy_index) =
-			    P / (gamma - 1.) + 0.5 * rho * v_sq;
-
-			// initialize radiation variables to zero
-			state(i, j, k, RadSystem<BlastProblem>::radEnergy_index) = 0;
-			state(i, j, k, RadSystem<BlastProblem>::x1RadFlux_index) = 0;
-			state(i, j, k, RadSystem<BlastProblem>::x2RadFlux_index) = 0;
-			state(i, j, k, RadSystem<BlastProblem>::x3RadFlux_index) = 0;
-		});
-	}
-
-	// set flag
-	areInitialConditionsDefined_ = true;
+    // initialize radiation variables to zero
+    grid_vec[0].array(i, j, k, RadSystem<BlastProblem>::radEnergy_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<BlastProblem>::x1RadFlux_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<BlastProblem>::x2RadFlux_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<BlastProblem>::x3RadFlux_index) = 0;
+  });
 }
 
 template <>

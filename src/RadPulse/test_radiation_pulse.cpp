@@ -83,40 +83,32 @@ RadSystem<PulseProblem>::ComputePlanckOpacityTempDerivative(const double rho,
 }
 
 template <>
-void RadhydroSimulation<PulseProblem>::setInitialConditionsAtLevel(int lev) {
-  // compute initial conditions
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo =
-      geom[lev].ProbLoArray();
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi =
-      geom[lev].ProbHiArray();
+void RadhydroSimulation<PulseProblem>::setInitialConditionsOnGrid(
+    std::vector<grid> &grid_vec) {
+  // extract variables required from the geom object
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_vec[0].dx;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_vec[0].prob_hi;
+  const amrex::Box &indexRange = grid_vec[0].indexRange;
+  
   amrex::Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
+  // loop over the grid and set the initial condition
+  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+    amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+    const double Trad = compute_exact_Trad(x - x0, initial_time);
+    const double Egas = RadSystem<PulseProblem>::ComputeEgasFromTgas(rho0, Trad);
 
-  for (amrex::MFIter iter(state_old_[lev]); iter.isValid(); ++iter) {
-    const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
-    auto const &state = state_new_[lev].array(iter);
-
-    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-      amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
-      const double Trad = compute_exact_Trad(x - x0, initial_time);
-      const double Egas = RadSystem<PulseProblem>::ComputeEgasFromTgas(rho0, Trad);
-
-      state(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = erad_floor;
-      state(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index) = 0;
-      state(i, j, k, RadSystem<PulseProblem>::x2RadFlux_index) = 0;
-      state(i, j, k, RadSystem<PulseProblem>::x3RadFlux_index) = 0;
-
-      state(i, j, k, RadSystem<PulseProblem>::gasEnergy_index) = Egas;
-      state(i, j, k, RadSystem<PulseProblem>::gasDensity_index) = rho0;
-      state(i, j, k, RadSystem<PulseProblem>::gasInternalEnergy_index) = Egas;
-      state(i, j, k, RadSystem<PulseProblem>::x1GasMomentum_index) = 0.;
-      state(i, j, k, RadSystem<PulseProblem>::x2GasMomentum_index) = 0.;
-      state(i, j, k, RadSystem<PulseProblem>::x3GasMomentum_index) = 0.;
-    });
-  }
-
-  // set flag
-  areInitialConditionsDefined_ = true;
+    grid_vec[0].array(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = erad_floor;
+    grid_vec[0].array(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<PulseProblem>::x2RadFlux_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<PulseProblem>::x3RadFlux_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<PulseProblem>::gasEnergy_index) = Egas;
+    grid_vec[0].array(i, j, k, RadSystem<PulseProblem>::gasDensity_index) = rho0;
+    grid_vec[0].array(i, j, k, RadSystem<PulseProblem>::gasInternalEnergy_index) = Egas;
+    grid_vec[0].array(i, j, k, RadSystem<PulseProblem>::x1GasMomentum_index) = 0.;
+    grid_vec[0].array(i, j, k, RadSystem<PulseProblem>::x2GasMomentum_index) = 0.;
+    grid_vec[0].array(i, j, k, RadSystem<PulseProblem>::x3GasMomentum_index) = 0.;
+  });
 }
 
 auto problem_main() -> int {

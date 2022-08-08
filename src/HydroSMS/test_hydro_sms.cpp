@@ -34,50 +34,44 @@ template <> struct Physics_Traits<ShocktubeProblem> {
 };
 
 template <>
-void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsAtLevel(
-    int lev) {
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo =
-      geom[lev].ProbLoArray();
+void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsOnGrid(
+    std::vector<grid> &grid_vec) {
+  // extract variables required from the geom object
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_vec[0].dx;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
+  const amrex::Box &indexRange = grid_vec[0].indexRange;
+  
   const int ncomp = ncomp_;
+  // loop over the grid and set the initial condition
+  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+    amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+    double m = NAN;
+    double rho = NAN;
+    double E = NAN;
 
-  for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
-    const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
-    auto const &state = state_new_[lev].array(iter);
+    if (x < 0.5) {
+      rho = 3.86;
+      m = -3.1266;
+      E = 27.0913;
+    } else {
+      rho = 1.0;
+      m = -3.44;
+      E = 8.4168;
+    }
 
-    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-      amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
-      double m = NAN;
-      double rho = NAN;
-      double E = NAN;
+    double Eint = E - 0.5 * (m * m) / rho;
 
-      if (x < 0.5) {
-        rho = 3.86;
-        m = -3.1266;
-        E = 27.0913;
-      } else {
-        rho = 1.0;
-        m = -3.44;
-        E = 8.4168;
-      }
-
-      double Eint = E - 0.5 * (m * m) / rho;
-
-      for (int n = 0; n < ncomp; ++n) {
-        state(i, j, k, n) = 0.;
-      }
-      state(i, j, k, HydroSystem<ShocktubeProblem>::density_index) = rho;
-      state(i, j, k, HydroSystem<ShocktubeProblem>::x1Momentum_index) = m;
-      state(i, j, k, HydroSystem<ShocktubeProblem>::x2Momentum_index) = 0.;
-      state(i, j, k, HydroSystem<ShocktubeProblem>::x3Momentum_index) = 0.;
-      state(i, j, k, HydroSystem<ShocktubeProblem>::energy_index) = E;
-      state(i, j, k, HydroSystem<ShocktubeProblem>::internalEnergy_index) =
+    for (int n = 0; n < ncomp; ++n) {
+      grid_vec[0].array(i, j, k, n) = 0.;
+    }
+    grid_vec[0].array(i, j, k, HydroSystem<ShocktubeProblem>::density_index) = rho;
+    grid_vec[0].array(i, j, k, HydroSystem<ShocktubeProblem>::x1Momentum_index) = m;
+    grid_vec[0].array(i, j, k, HydroSystem<ShocktubeProblem>::x2Momentum_index) = 0.;
+    grid_vec[0].array(i, j, k, HydroSystem<ShocktubeProblem>::x3Momentum_index) = 0.;
+    grid_vec[0].array(i, j, k, HydroSystem<ShocktubeProblem>::energy_index) = E;
+    grid_vec[0].array(i, j, k, HydroSystem<ShocktubeProblem>::internalEnergy_index) =
           Eint;
-    });
-  }
-
-  // set flag
-  areInitialConditionsDefined_ = true;
+  });
 }
 
 template <>

@@ -113,48 +113,43 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<ShadowProblem>::setCustom
 	}
 }
 
-template <> void RadhydroSimulation<ShadowProblem>::setInitialConditionsAtLevel(int lev)
-{
-	auto prob_lo = geom[lev].ProbLoArray();
-	auto dx = geom[lev].CellSizeArray();
+template <>
+void RadhydroSimulation<ShadowProblem>::setInitialConditionsOnGrid(
+    std::vector<grid> &grid_vec) {
+  // extract variables required from the geom object
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_vec[0].dx;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
+  const amrex::Box &indexRange = grid_vec[0].indexRange;
 
-	for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
-		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
-		auto const &state = state_new_[lev].array(iter);
+  // loop over the grid and set the initial condition
+  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+    amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+    amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
+    amrex::Real const xc = 0.5;
+    amrex::Real const yc = 0.0;
+    amrex::Real const x0 = 0.1;
+    amrex::Real const y0 = 0.06;
 
-		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-			amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
-			amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
-			amrex::Real const xc = 0.5;
-			amrex::Real const yc = 0.0;
-			amrex::Real const x0 = 0.1;
-			amrex::Real const y0 = 0.06;
+    amrex::Real const Delta =
+        10. * (std::pow((x - xc) / x0, 2) + std::pow((y - yc) / y0, 2) - 1.0);
+    amrex::Real const rho =
+        rho_bg + (rho_clump - rho_bg) / (1.0 + std::exp(Delta));
 
-			amrex::Real const Delta =
-			    10. * (std::pow((x - xc) / x0, 2) + std::pow((y - yc) / y0, 2) - 1.0);
-			amrex::Real const rho =
-			    rho_bg + (rho_clump - rho_bg) / (1.0 + std::exp(Delta));
+    amrex::Real const Erad = a_rad * std::pow(T_initial, 4);
+    amrex::Real const Egas =
+        RadSystem<ShadowProblem>::ComputeEgasFromTgas(rho, T_initial);
 
-			amrex::Real const Erad = a_rad * std::pow(T_initial, 4);
-			amrex::Real const Egas =
-			    RadSystem<ShadowProblem>::ComputeEgasFromTgas(rho, T_initial);
-
-			state(i, j, k, RadSystem<ShadowProblem>::radEnergy_index) = Erad;
-			state(i, j, k, RadSystem<ShadowProblem>::x1RadFlux_index) = 0;
-			state(i, j, k, RadSystem<ShadowProblem>::x2RadFlux_index) = 0;
-			state(i, j, k, RadSystem<ShadowProblem>::x3RadFlux_index) = 0;
-
-			state(i, j, k, RadSystem<ShadowProblem>::gasEnergy_index) = Egas;
-			state(i, j, k, RadSystem<ShadowProblem>::gasDensity_index) = rho;
-      state(i, j, k, RadSystem<ShadowProblem>::gasInternalEnergy_index) = Egas;
-			state(i, j, k, RadSystem<ShadowProblem>::x1GasMomentum_index) = 0.;
-			state(i, j, k, RadSystem<ShadowProblem>::x2GasMomentum_index) = 0.;
-			state(i, j, k, RadSystem<ShadowProblem>::x3GasMomentum_index) = 0.;
-		});
-	}
-
-	// set flag
-	areInitialConditionsDefined_ = true;
+    grid_vec[0].array(i, j, k, RadSystem<ShadowProblem>::radEnergy_index) = Erad;
+    grid_vec[0].array(i, j, k, RadSystem<ShadowProblem>::x1RadFlux_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<ShadowProblem>::x2RadFlux_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<ShadowProblem>::x3RadFlux_index) = 0;
+    grid_vec[0].array(i, j, k, RadSystem<ShadowProblem>::gasEnergy_index) = Egas;
+    grid_vec[0].array(i, j, k, RadSystem<ShadowProblem>::gasDensity_index) = rho;
+    grid_vec[0].array(i, j, k, RadSystem<ShadowProblem>::gasInternalEnergy_index) = Egas;
+    grid_vec[0].array(i, j, k, RadSystem<ShadowProblem>::x1GasMomentum_index) = 0.;
+    grid_vec[0].array(i, j, k, RadSystem<ShadowProblem>::x2GasMomentum_index) = 0.;
+    grid_vec[0].array(i, j, k, RadSystem<ShadowProblem>::x3GasMomentum_index) = 0.;
+  });
 }
 
 template <>

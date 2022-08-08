@@ -41,45 +41,40 @@ template <> struct Physics_Traits<HighMachProblem> {
 };
 
 template <>
-void RadhydroSimulation<HighMachProblem>::setInitialConditionsAtLevel(int lev) {
-  int ncomp = ncomp_;
-  amrex::GpuArray<Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
-  amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
+void RadhydroSimulation<HighMachProblem>::setInitialConditionsOnGrid(
+  std::vector<grid> &grid_vec) {
+  // extract variables required from the geom object
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_vec[0].dx;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
+  const amrex::Box &indexRange = grid_vec[0].indexRange;
+  
+  // loop over the grid and set the initial condition
+  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+    Real const x = prob_lo[0] + (i + Real(0.5)) * dx[0];
 
-  for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
-    const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
-    auto const &state = state_new_[lev].array(iter);
+    double norm = 1. / (2.0 * M_PI);
+    double vx = norm * std::sin(2.0 * M_PI * x);
+    double rho = 1.0;
+    double P = 1.0e-10;
 
-    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-      Real const x = prob_lo[0] + (i + Real(0.5)) * dx[0];
+    AMREX_ASSERT(!std::isnan(vx));
+    AMREX_ASSERT(!std::isnan(rho));
+    AMREX_ASSERT(!std::isnan(P));
 
-      double norm = 1. / (2.0 * M_PI);
-      double vx = norm * std::sin(2.0 * M_PI * x);
-      double rho = 1.0;
-      double P = 1.0e-10;
+    const auto gamma = HydroSystem<HighMachProblem>::gamma_;
+    for (int n = 0; n < (grid_vec[0].array).nComp(); ++n) {
+      grid_vec[0].array(i, j, k, n) = 0.;
+    }
 
-      AMREX_ASSERT(!std::isnan(vx));
-      AMREX_ASSERT(!std::isnan(rho));
-      AMREX_ASSERT(!std::isnan(P));
-
-      const auto gamma = HydroSystem<HighMachProblem>::gamma_;
-      for (int n = 0; n < ncomp; ++n) {
-        state(i, j, k, n) = 0.;
-      }
-
-      state(i, j, k, HydroSystem<HighMachProblem>::density_index) = rho;
-      state(i, j, k, HydroSystem<HighMachProblem>::x1Momentum_index) = rho * vx;
-      state(i, j, k, HydroSystem<HighMachProblem>::x2Momentum_index) = 0.;
-      state(i, j, k, HydroSystem<HighMachProblem>::x3Momentum_index) = 0.;
-      state(i, j, k, HydroSystem<HighMachProblem>::energy_index) =
-          P / (gamma - 1.) + 0.5 * rho * (vx * vx);
-      state(i, j, k, HydroSystem<HighMachProblem>::internalEnergy_index) =
-          P / (gamma - 1.);
-    });
-  }
-
-  // set flag
-  areInitialConditionsDefined_ = true;
+    grid_vec[0].array(i, j, k, HydroSystem<HighMachProblem>::density_index) = rho;
+    grid_vec[0].array(i, j, k, HydroSystem<HighMachProblem>::x1Momentum_index) = rho * vx;
+    grid_vec[0].array(i, j, k, HydroSystem<HighMachProblem>::x2Momentum_index) = 0.;
+    grid_vec[0].array(i, j, k, HydroSystem<HighMachProblem>::x3Momentum_index) = 0.;
+    grid_vec[0].array(i, j, k, HydroSystem<HighMachProblem>::energy_index) =
+        P / (gamma - 1.) + 0.5 * rho * (vx * vx);
+    grid_vec[0].array(i, j, k, HydroSystem<HighMachProblem>::internalEnergy_index) =
+        P / (gamma - 1.);
+  });
 }
 
 template <>
