@@ -296,7 +296,7 @@ void RadhydroSimulation<CoolingTest>::computeAfterLevelAdvance(
 }
 
 template <>
-void HydroSystem<CoolingTest>::EnforcePressureFloor(
+void HydroSystem<CoolingTest>::EnforceDensityFloor(
     amrex::Real const densityFloor, amrex::Real const /*pressureFloor*/,
     amrex::Box const &indexRange, amrex::Array4<amrex::Real> const &state) {
   // prevent vacuum creation

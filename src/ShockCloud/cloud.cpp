@@ -453,30 +453,6 @@ void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(
 }
 
 template <>
-void HydroSystem<ShockCloud>::EnforcePressureFloor(
-    Real const densityFloor, Real const /*pressureFloor*/,
-    amrex::Box const &indexRange, amrex::Array4<Real> const &state) {
-  // prevent vacuum creation
-  Real const rho_floor = densityFloor; // workaround nvcc bug
-
-  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j,
-                                                      int k) noexcept {
-    Real const rho = state(i, j, k, density_index);
-    Real const vx1 = state(i, j, k, x1Momentum_index) / rho;
-    Real const vx2 = state(i, j, k, x2Momentum_index) / rho;
-    Real const vx3 = state(i, j, k, x3Momentum_index) / rho;
-    Real const vsq = (vx1 * vx1 + vx2 * vx2 + vx3 * vx3);
-    Real const Etot = state(i, j, k, energy_index);
-
-    Real rho_new = rho;
-    if (rho < rho_floor) {
-      rho_new = rho_floor;
-      state(i, j, k, density_index) = rho_new;
-    }
-  });
-}
-
-template <>
 void RadhydroSimulation<ShockCloud>::ErrorEst(int lev, amrex::TagBoxArray &tags,
                                               Real /*time*/, int /*ngrow*/) {
   // tag cells for refinement
