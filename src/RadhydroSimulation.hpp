@@ -521,8 +521,12 @@ void RadhydroSimulation<problem_t>::FixupState(int lev)
 		auto const &stateOld = state_old_[lev].array(iter);
 
 		// fix hydro state
-		HydroSystem<problem_t>::EnforcePressureFloor(densityFloor_, pressureFloor_, indexRange, stateNew);
-		HydroSystem<problem_t>::EnforcePressureFloor(densityFloor_, pressureFloor_, indexRange, stateOld);
+		//HydroSystem<problem_t>::EnforceDensityFloor(densityFloor_, indexRange, stateNew);
+		//HydroSystem<problem_t>::EnforceDensityFloor(densityFloor_, indexRange, stateOld);
+
+		// sync internal energy and total energy
+		HydroSystem<problem_t>::SyncDualEnergy(stateNew, indexRange);
+		HydroSystem<problem_t>::SyncDualEnergy(stateOld, indexRange);
 	}
 }
 
@@ -548,6 +552,9 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 	amrex::Copy(state_old_tmp, state_old_[lev], 0, 0, ncomp_, nghost_);
 
 	// do Strang split source terms (first half-step)
+	if (Verbose()) {
+		amrex::Print() << "\tComputing first-half source terms on level " << lev << ".\n";
+	}
 	addStrangSplitSources(state_old_tmp, lev, time, 0.5*dt_lev);
 
 	// update ghost zones [old timestep]
@@ -567,10 +574,12 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 
 		// temporary FABs for RK stage
 		amrex::IArrayBox redoFlag(indexRange, 1, amrex::The_Async_Arena());
+		redoFlag.setVal<amrex::RunOn::Device>(quokka::redoFlag::none);
 		amrex::FArrayBox rhs(indexRange, ncompHydro_, amrex::The_Async_Arena());
 		HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs.array(),
 			{AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(), fluxArrays[2].const_array())}, dx, indexRange, ncompHydro_);
-		HydroSystem<problem_t>::AddInternalEnergyPdV(rhs.array(), stateOld, indexRange,
+		HydroSystem<problem_t>::AddInternalEnergyPdV(rhs.array(), stateOld,
+			indexRange, dx, redoFlag.const_array(),
 			{AMREX_D_DECL(faceVel[0].const_array(), faceVel[1].const_array(), faceVel[2].const_array())});
 
 		// Stage 1 of RK2-SSP
@@ -593,16 +602,19 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 
 				// replace fluxes in fluxArrays with first-order fluxes at faces of flagged cells
 				replaceFluxes(fluxArrays, FOFluxArrays, redoFlag, indexRange, ncompHydro_);
+				// replace velocities, recompute P dV source
+				//replaceFluxes(faceVel, FOFaceVel, redoFlag, indexRange, 1);
 				HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs.array(),
 					{AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
 					fluxArrays[2].const_array())}, dx, indexRange, ncompHydro_);
-				HydroSystem<problem_t>::AddInternalEnergyPdV(rhs.array(), stateOld, indexRange,
+				HydroSystem<problem_t>::AddInternalEnergyPdV(rhs.array(), stateOld,
+					indexRange, dx, redoFlag.const_array(),
 					{AMREX_D_DECL(faceVel[0].const_array(), faceVel[1].const_array(), faceVel[2].const_array())});
 
 				// re-do RK stage update for *all* cells
 				// (since neighbors of problem cells will have modified states as well)
 				HydroSystem<problem_t>::PredictStep(stateOld, stateNew, rhs.const_array(),
-					dt_lev, indexRange, ncompHydro_,	redoFlag.array());
+					dt_lev, indexRange, ncompHydro_, redoFlag.array());
 
 				if(redoFlag.max<amrex::RunOn::Device>() == quokka::redoFlag::none) {
 					break;
@@ -610,13 +622,13 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 			}
 		}
 
+		// prevent vacuum
+		HydroSystem<problem_t>::EnforceDensityFloor(densityFloor_, indexRange, stateNew);
+
 		if (useDualEnergy_ == 1) {
-			// sync internal energy
+			// sync internal energy (requires positive density)
 			HydroSystem<problem_t>::SyncDualEnergy(stateNew, indexRange);
 		}
-
-		// prevent vacuum
-		HydroSystem<problem_t>::EnforcePressureFloor(densityFloor_, pressureFloor_, indexRange, stateNew);
 
 		if (do_reflux) {
 			// increment flux registers
@@ -648,11 +660,13 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 
 			// temporary FABs for RK stage
 			amrex::IArrayBox redoFlag(indexRange, 1, amrex::The_Async_Arena());
+			redoFlag.setVal<amrex::RunOn::Device>(quokka::redoFlag::none);
 			amrex::FArrayBox rhs(indexRange, ncompHydro_, amrex::The_Async_Arena());
 			HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs.array(),
 				{AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
 					fluxArrays[2].const_array())}, dx, indexRange, ncompHydro_);
-			HydroSystem<problem_t>::AddInternalEnergyPdV(rhs.array(), stateInter, indexRange,
+			HydroSystem<problem_t>::AddInternalEnergyPdV(rhs.array(), stateInter,
+				indexRange, dx, redoFlag.const_array(),
 				{AMREX_D_DECL(faceVel[0].const_array(), faceVel[1].const_array(), faceVel[2].const_array())});
 
 			// Stage 2 of RK2-SSP
@@ -675,10 +689,13 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 					
 					// replace fluxes in fluxArrays with first-order fluxes at faces of flagged cells
 					replaceFluxes(fluxArrays, FOFluxArrays, redoFlag, indexRange, ncompHydro_);
+					// replace velocities, recompute P dV source
+					//replaceFluxes(faceVel, FOFaceVel, redoFlag, indexRange, 1);
 					HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs.array(),
 						{AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
 						fluxArrays[2].const_array())}, dx, indexRange, ncompHydro_);
-					HydroSystem<problem_t>::AddInternalEnergyPdV(rhs.array(), stateInter, indexRange,
+					HydroSystem<problem_t>::AddInternalEnergyPdV(rhs.array(), stateInter,
+						indexRange, dx, redoFlag.const_array(),
 						{AMREX_D_DECL(faceVel[0].const_array(), faceVel[1].const_array(), faceVel[2].const_array())});
 
 					// re-do RK stage update for *all* cells
@@ -692,13 +709,13 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 				}
 			}
 
+			// prevent vacuum
+			HydroSystem<problem_t>::EnforceDensityFloor(densityFloor_, indexRange, stateFinal);
+
 			if (useDualEnergy_ == 1) {
-				// sync internal energy
+				// sync internal energy (requires positive density)
 				HydroSystem<problem_t>::SyncDualEnergy(stateFinal, indexRange);
 			}
-
-			// prevent vacuum
-			HydroSystem<problem_t>::EnforcePressureFloor(densityFloor_, pressureFloor_, indexRange, stateFinal);
 
 			// copy stateNew to state_new_[lev]
 			auto const &stateNew = state_new_[lev].array(iter);
@@ -715,6 +732,9 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 	}
 
 	// do Strang split source terms (second half-step)
+	if (Verbose()) {
+		amrex::Print() << "\tComputing second-half source terms on level " << lev << ".\n";
+	}
 	addStrangSplitSources(state_new_[lev], lev, time + dt_lev, 0.5*dt_lev);
 }
 
