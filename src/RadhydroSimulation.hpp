@@ -552,9 +552,6 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 	amrex::Copy(state_old_tmp, state_old_[lev], 0, 0, ncomp_, nghost_);
 
 	// do Strang split source terms (first half-step)
-	if (Verbose()) {
-		amrex::Print() << "\tComputing first-half source terms on level " << lev << ".\n";
-	}
 	addStrangSplitSources(state_old_tmp, lev, time, 0.5*dt_lev);
 
 	// update ghost zones [old timestep]
@@ -732,9 +729,6 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 	}
 
 	// do Strang split source terms (second half-step)
-	if (Verbose()) {
-		amrex::Print() << "\tComputing second-half source terms on level " << lev << ".\n";
-	}
 	addStrangSplitSources(state_new_[lev], lev, time + dt_lev, 0.5*dt_lev);
 }
 
