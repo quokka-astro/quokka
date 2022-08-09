@@ -118,7 +118,7 @@ public:
   virtual void advanceSingleTimestepAtLevel(int lev, amrex::Real time,
                                             amrex::Real dt_lev, int ncycle) = 0;
   virtual void preCalculateInitialConditions() = 0;
-  virtual void setInitialConditionsOnGrid(std::vector<grid> &grid_vec) = 0;
+  virtual void setInitialConditionsOnGrid(std::vector<quokka::grid> &grid_vec) = 0;
   virtual void computeAfterTimestep() = 0;
   virtual void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) = 0;
 
