@@ -316,7 +316,7 @@ void AMRSimulation<problem_t>::initialize(
 template <typename problem_t>
 void AMRSimulation<problem_t>::setInitialConditionsAtLevel(int level) {
   // initialise grid-struct, which the user will opperate on
-  std::vector<grid> grid_vec;
+  std::vector<quokka::grid> grid_vec;
 
   // perform precalculation step defined by the user
   preCalculateInitialConditions();
@@ -326,8 +326,8 @@ void AMRSimulation<problem_t>::setInitialConditionsAtLevel(int level) {
     // cell-centred states
     grid_vec.emplace_back(state_new_[level].array(iter), iter.validbox(),
                           geom[level].CellSizeArray(), geom[level].ProbLoArray(),
-                          geom[level].ProbHiArray(), centering::cc,
-                          direction::na);
+                          geom[level].ProbHiArray(), quokka::centering::cc,
+                          quokka::direction::na);
 
     // set initial conditions defined by the user
     setInitialConditionsOnGrid(grid_vec);
