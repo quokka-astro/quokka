@@ -302,46 +302,6 @@ void RadhydroSimulation<CoolingTest>::computeAfterLevelAdvance(
   computeCooling(state_new_[lev], dt_lev, cloudyTables);
 }
 
-template <>
-void HydroSystem<CoolingTest>::EnforcePressureFloor(
-    amrex::Real const densityFloor, amrex::Real const /*pressureFloor*/,
-    amrex::Box const &indexRange, amrex::Array4<amrex::Real> const &state) {
-  // prevent vacuum creation
-  amrex::Real const rho_floor = densityFloor; // workaround nvcc bug
-
-  amrex::ParallelFor(
-      indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-        amrex::Real const rho = state(i, j, k, density_index);
-        amrex::Real const vx1 = state(i, j, k, x1Momentum_index) / rho;
-        amrex::Real const vx2 = state(i, j, k, x2Momentum_index) / rho;
-        amrex::Real const vx3 = state(i, j, k, x3Momentum_index) / rho;
-        amrex::Real const vsq = (vx1 * vx1 + vx2 * vx2 + vx3 * vx3);
-        amrex::Real const Etot = state(i, j, k, energy_index);
-
-        amrex::Real rho_new = rho;
-        if (rho < rho_floor) {
-          rho_new = rho_floor;
-          state(i, j, k, density_index) = rho_new;
-        }
-
-        amrex::Real const P_floor =
-            (rho_new / m_H) * boltzmann_constant_cgs_ * T_floor;
-
-        if constexpr (!is_eos_isothermal()) {
-          // recompute gas energy (to prevent P < 0)
-          amrex::Real const Eint_star = Etot - 0.5 * rho_new * vsq;
-          amrex::Real const P_star = Eint_star * (gamma_ - 1.);
-          amrex::Real P_new = P_star;
-          if (P_star < P_floor) {
-            P_new = P_floor;
-            amrex::Real const Etot_new =
-                P_new / (gamma_ - 1.) + 0.5 * rho_new * vsq;
-            state(i, j, k, energy_index) = Etot_new;
-          }
-        }
-      });
-}
-
 auto problem_main() -> int {
   // Problem parameters
   const double CFL_number = 0.25;
