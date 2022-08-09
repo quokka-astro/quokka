@@ -38,7 +38,7 @@ AMREX_GPU_DEVICE void ComputeExactSolution(
 
 template <>
 void AdvectionSimulation<SemiellipseProblem>::setInitialConditionsOnGrid(
-    std::vector<grid> &grid_vec) {
+    std::vector<quokka::grid> &grid_vec) {
   // extract variables required from the geom object
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_vec[0].dx;
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;

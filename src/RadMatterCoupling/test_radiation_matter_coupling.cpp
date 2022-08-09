@@ -93,7 +93,7 @@ constexpr double rho0 = 1.0e-7;  // g cm^-3
 
 template <>
 void RadhydroSimulation<CouplingProblem>::setInitialConditionsOnGrid(
-    std::vector<grid> &grid_vec) {
+    std::vector<quokka::grid> &grid_vec) {
   const amrex::Box &indexRange = grid_vec[0].indexRange;
   // loop over the grid and set the initial condition
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {

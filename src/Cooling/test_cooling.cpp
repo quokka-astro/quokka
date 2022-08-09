@@ -108,7 +108,7 @@ void RadhydroSimulation<CoolingTest>::preCalculateInitialConditions() {
 
 template <>
 void RadhydroSimulation<CoolingTest>::setInitialConditionsOnGrid(
-    std::vector<grid> &grid_vec) {
+    std::vector<quokka::grid> &grid_vec) {
   // dereference phase table pointer
   const amrex::TableData<Real, AMREX_SPACEDIM>::const_table_type &phase_ref =
       *phase_ptr;
