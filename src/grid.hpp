@@ -1,3 +1,6 @@
+#ifndef GRID_HPP_ // NOLINT
+#define GRID_HPP_
+
 #include <AMReX.H>
 #include <AMReX_Array.H>
 #include <AMReX_Array4.H>
@@ -23,3 +26,5 @@ struct grid {
       : array(array), indexRange(indexRange), dx(dx), prob_lo(prob_lo),
         prob_hi(prob_hi), cen(cen), dir(dir) {}
 };
+
+#endif // GRID_HPP_
