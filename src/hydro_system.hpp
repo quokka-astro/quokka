@@ -178,7 +178,7 @@ void HydroSystem<problem_t>::ConservedToPrimitive(
 
     AMREX_ASSERT(rho > 0.);
     if constexpr (!is_eos_isothermal()) {
-      AMREX_ASSERT(P > 0.);
+      AMREX_ASSERT(Pgas > 0.);
     }
 
     primVar(i, j, k, primDensity_index) = rho;
