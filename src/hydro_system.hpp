@@ -312,22 +312,6 @@ void HydroSystem<problem_t>::EnforceDensityFloor(amrex::Real const densityFloor,
         // reset density if less than densityFloor
         if (rho < densityFloor) {
           state(i, j, k, density_index) = densityFloor;
-
-          if (rho <= 0.) {
-            rho = densityFloor;
-            amrex::Real const px = state(i,j,k, x1Momentum_index);
-            amrex::Real const py = state(i,j,k, x2Momentum_index);
-            amrex::Real const pz = state(i,j,k, x3Momentum_index);
-            amrex::Real const Etot = state(i,j,k, energy_index);
-            amrex::Real const Ekin = (px*px + py*py + pz*pz) / (2.0*rho);
-            amrex::Real const Eint_cons = Etot - Ekin;
-            amrex::Real const Eint_aux = state(i,j,k, internalEnergy_index);
-
-            printf("cell (%d, %d, %d) density is non-positive!\n", i, j, k);
-            printf("\trho = %g\n", rho);
-            printf("\tEint_cons = %g\n", Eint_cons);
-            printf("\tEint_aux = %g\n", Eint_aux);
-          }
         }
       });
 }
