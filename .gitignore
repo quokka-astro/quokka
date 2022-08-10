@@ -6,6 +6,8 @@ build/
 docs/doxygen/
 tests/plt*
 tests/chk*
+tests/*.csv
+sims/
 .clangd
 __pycache__
 *.code-workspace
