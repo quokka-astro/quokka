@@ -210,6 +210,7 @@ void RadhydroSimulation<TophatProblem>::setInitialConditionsOnGrid(
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_vec[0].dx;
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
   const amrex::Box &indexRange = grid_vec[0].indexRange;
+  const amrex::Array4<double>& state_cc = grid_vec[0].array;
 
   // loop over the grid and set the initial condition
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -235,16 +236,16 @@ void RadhydroSimulation<TophatProblem>::setInitialConditionsOnGrid(
     const double Egas =
         RadSystem<TophatProblem>::ComputeEgasFromTgas(rho, T_initial);
 
-    grid_vec[0].array(i, j, k, RadSystem<TophatProblem>::radEnergy_index) = Erad;
-    grid_vec[0].array(i, j, k, RadSystem<TophatProblem>::x1RadFlux_index) = 0;
-    grid_vec[0].array(i, j, k, RadSystem<TophatProblem>::x2RadFlux_index) = 0;
-    grid_vec[0].array(i, j, k, RadSystem<TophatProblem>::x3RadFlux_index) = 0;
-    grid_vec[0].array(i, j, k, RadSystem<TophatProblem>::gasEnergy_index) = Egas;
-    grid_vec[0].array(i, j, k, RadSystem<TophatProblem>::gasDensity_index) = rho;
-    grid_vec[0].array(i, j, k, RadSystem<TophatProblem>::gasInternalEnergy_index) = Egas;
-    grid_vec[0].array(i, j, k, RadSystem<TophatProblem>::x1GasMomentum_index) = 0.;
-    grid_vec[0].array(i, j, k, RadSystem<TophatProblem>::x2GasMomentum_index) = 0.;
-    grid_vec[0].array(i, j, k, RadSystem<TophatProblem>::x3GasMomentum_index) = 0.;
+    state_cc(i, j, k, RadSystem<TophatProblem>::radEnergy_index) = Erad;
+    state_cc(i, j, k, RadSystem<TophatProblem>::x1RadFlux_index) = 0;
+    state_cc(i, j, k, RadSystem<TophatProblem>::x2RadFlux_index) = 0;
+    state_cc(i, j, k, RadSystem<TophatProblem>::x3RadFlux_index) = 0;
+    state_cc(i, j, k, RadSystem<TophatProblem>::gasEnergy_index) = Egas;
+    state_cc(i, j, k, RadSystem<TophatProblem>::gasDensity_index) = rho;
+    state_cc(i, j, k, RadSystem<TophatProblem>::gasInternalEnergy_index) = Egas;
+    state_cc(i, j, k, RadSystem<TophatProblem>::x1GasMomentum_index) = 0.;
+    state_cc(i, j, k, RadSystem<TophatProblem>::x2GasMomentum_index) = 0.;
+    state_cc(i, j, k, RadSystem<TophatProblem>::x3GasMomentum_index) = 0.;
   });
 }
 

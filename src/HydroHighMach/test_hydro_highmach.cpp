@@ -47,6 +47,7 @@ void RadhydroSimulation<HighMachProblem>::setInitialConditionsOnGrid(
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_vec[0].dx;
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
   const amrex::Box &indexRange = grid_vec[0].indexRange;
+  const amrex::Array4<double>& state_cc = grid_vec[0].array;
   
   // loop over the grid and set the initial condition
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -62,17 +63,17 @@ void RadhydroSimulation<HighMachProblem>::setInitialConditionsOnGrid(
     AMREX_ASSERT(!std::isnan(P));
 
     const auto gamma = HydroSystem<HighMachProblem>::gamma_;
-    for (int n = 0; n < (grid_vec[0].array).nComp(); ++n) {
-      grid_vec[0].array(i, j, k, n) = 0.;
+    for (int n = 0; n < state_cc.nComp(); ++n) {
+      state_cc(i, j, k, n) = 0.;
     }
 
-    grid_vec[0].array(i, j, k, HydroSystem<HighMachProblem>::density_index) = rho;
-    grid_vec[0].array(i, j, k, HydroSystem<HighMachProblem>::x1Momentum_index) = rho * vx;
-    grid_vec[0].array(i, j, k, HydroSystem<HighMachProblem>::x2Momentum_index) = 0.;
-    grid_vec[0].array(i, j, k, HydroSystem<HighMachProblem>::x3Momentum_index) = 0.;
-    grid_vec[0].array(i, j, k, HydroSystem<HighMachProblem>::energy_index) =
+    state_cc(i, j, k, HydroSystem<HighMachProblem>::density_index) = rho;
+    state_cc(i, j, k, HydroSystem<HighMachProblem>::x1Momentum_index) = rho * vx;
+    state_cc(i, j, k, HydroSystem<HighMachProblem>::x2Momentum_index) = 0.;
+    state_cc(i, j, k, HydroSystem<HighMachProblem>::x3Momentum_index) = 0.;
+    state_cc(i, j, k, HydroSystem<HighMachProblem>::energy_index) =
         P / (gamma - 1.) + 0.5 * rho * (vx * vx);
-    grid_vec[0].array(i, j, k, HydroSystem<HighMachProblem>::internalEnergy_index) =
+    state_cc(i, j, k, HydroSystem<HighMachProblem>::internalEnergy_index) =
         P / (gamma - 1.);
   });
 }

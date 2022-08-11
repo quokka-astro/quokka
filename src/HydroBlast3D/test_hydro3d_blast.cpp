@@ -69,6 +69,7 @@ void RadhydroSimulation<SedovProblem>::setInitialConditionsOnGrid(
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_vec[0].prob_hi;
   const amrex::Box &indexRange = grid_vec[0].indexRange;
+  const amrex::Array4<double>& state_cc = grid_vec[0].array;
   const Real cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
   amrex::Real x0 = NAN;
@@ -111,16 +112,16 @@ void RadhydroSimulation<SedovProblem>::setInitialConditionsOnGrid(
     AMREX_ASSERT(!std::isnan(rho));
     AMREX_ASSERT(!std::isnan(rho_e));
 
-    for (int n = 0; n < (grid_vec[0].array).nComp(); ++n) {
-      grid_vec[0].array(i, j, k, n) = 0.; // zero fill all components
+    for (int n = 0; n < state_cc.nComp(); ++n) {
+      state_cc(i, j, k, n) = 0.; // zero fill all components
     }
     const auto gamma = HydroSystem<SedovProblem>::gamma_;
 
-    grid_vec[0].array(i, j, k, HydroSystem<SedovProblem>::density_index) = rho;
-    grid_vec[0].array(i, j, k, HydroSystem<SedovProblem>::x1Momentum_index) = 0;
-    grid_vec[0].array(i, j, k, HydroSystem<SedovProblem>::x2Momentum_index) = 0;
-    grid_vec[0].array(i, j, k, HydroSystem<SedovProblem>::x3Momentum_index) = 0;
-    grid_vec[0].array(i, j, k, HydroSystem<SedovProblem>::energy_index) = rho_e;
+    state_cc(i, j, k, HydroSystem<SedovProblem>::density_index) = rho;
+    state_cc(i, j, k, HydroSystem<SedovProblem>::x1Momentum_index) = 0;
+    state_cc(i, j, k, HydroSystem<SedovProblem>::x2Momentum_index) = 0;
+    state_cc(i, j, k, HydroSystem<SedovProblem>::x3Momentum_index) = 0;
+    state_cc(i, j, k, HydroSystem<SedovProblem>::energy_index) = rho_e;
   });
 }
 

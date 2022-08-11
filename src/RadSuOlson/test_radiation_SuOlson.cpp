@@ -138,20 +138,23 @@ template <>
 void RadhydroSimulation<MarshakProblem>::setInitialConditionsOnGrid(
     std::vector<quokka::grid> &grid_vec) {
   const amrex::Box &indexRange = grid_vec[0].indexRange;
+  const amrex::Array4<double>& state_cc = grid_vec[0].array;
+
   const auto Erad0 = initial_Erad;
   const auto Egas0 = initial_Egas;
+  
   // loop over the grid and set the initial condition
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-    grid_vec[0].array(i, j, k, RadSystem<MarshakProblem>::radEnergy_index) = Erad0;
-    grid_vec[0].array(i, j, k, RadSystem<MarshakProblem>::x1RadFlux_index) = 0;
-    grid_vec[0].array(i, j, k, RadSystem<MarshakProblem>::x2RadFlux_index) = 0;
-    grid_vec[0].array(i, j, k, RadSystem<MarshakProblem>::x3RadFlux_index) = 0;
-    grid_vec[0].array(i, j, k, RadSystem<MarshakProblem>::gasEnergy_index) = Egas0;
-    grid_vec[0].array(i, j, k, RadSystem<MarshakProblem>::gasDensity_index) = rho0;
-    grid_vec[0].array(i, j, k, RadSystem<MarshakProblem>::gasInternalEnergy_index) = Egas0;
-    grid_vec[0].array(i, j, k, RadSystem<MarshakProblem>::x1GasMomentum_index) = 0.;
-    grid_vec[0].array(i, j, k, RadSystem<MarshakProblem>::x2GasMomentum_index) = 0.;
-    grid_vec[0].array(i, j, k, RadSystem<MarshakProblem>::x3GasMomentum_index) = 0.;
+    state_cc(i, j, k, RadSystem<MarshakProblem>::radEnergy_index) = Erad0;
+    state_cc(i, j, k, RadSystem<MarshakProblem>::x1RadFlux_index) = 0;
+    state_cc(i, j, k, RadSystem<MarshakProblem>::x2RadFlux_index) = 0;
+    state_cc(i, j, k, RadSystem<MarshakProblem>::x3RadFlux_index) = 0;
+    state_cc(i, j, k, RadSystem<MarshakProblem>::gasEnergy_index) = Egas0;
+    state_cc(i, j, k, RadSystem<MarshakProblem>::gasDensity_index) = rho0;
+    state_cc(i, j, k, RadSystem<MarshakProblem>::gasInternalEnergy_index) = Egas0;
+    state_cc(i, j, k, RadSystem<MarshakProblem>::x1GasMomentum_index) = 0.;
+    state_cc(i, j, k, RadSystem<MarshakProblem>::x2GasMomentum_index) = 0.;
+    state_cc(i, j, k, RadSystem<MarshakProblem>::x3GasMomentum_index) = 0.;
   });
 }
 

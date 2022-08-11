@@ -90,24 +90,26 @@ void RadhydroSimulation<PulseProblem>::setInitialConditionsOnGrid(
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_vec[0].prob_hi;
   const amrex::Box &indexRange = grid_vec[0].indexRange;
+  const amrex::Array4<double>& state_cc = grid_vec[0].array;
   
   amrex::Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
+
   // loop over the grid and set the initial condition
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
     amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
     const double Trad = compute_exact_Trad(x - x0, initial_time);
     const double Egas = RadSystem<PulseProblem>::ComputeEgasFromTgas(rho0, Trad);
 
-    grid_vec[0].array(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = erad_floor;
-    grid_vec[0].array(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index) = 0;
-    grid_vec[0].array(i, j, k, RadSystem<PulseProblem>::x2RadFlux_index) = 0;
-    grid_vec[0].array(i, j, k, RadSystem<PulseProblem>::x3RadFlux_index) = 0;
-    grid_vec[0].array(i, j, k, RadSystem<PulseProblem>::gasEnergy_index) = Egas;
-    grid_vec[0].array(i, j, k, RadSystem<PulseProblem>::gasDensity_index) = rho0;
-    grid_vec[0].array(i, j, k, RadSystem<PulseProblem>::gasInternalEnergy_index) = Egas;
-    grid_vec[0].array(i, j, k, RadSystem<PulseProblem>::x1GasMomentum_index) = 0.;
-    grid_vec[0].array(i, j, k, RadSystem<PulseProblem>::x2GasMomentum_index) = 0.;
-    grid_vec[0].array(i, j, k, RadSystem<PulseProblem>::x3GasMomentum_index) = 0.;
+    state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = erad_floor;
+    state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index) = 0;
+    state_cc(i, j, k, RadSystem<PulseProblem>::x2RadFlux_index) = 0;
+    state_cc(i, j, k, RadSystem<PulseProblem>::x3RadFlux_index) = 0;
+    state_cc(i, j, k, RadSystem<PulseProblem>::gasEnergy_index) = Egas;
+    state_cc(i, j, k, RadSystem<PulseProblem>::gasDensity_index) = rho0;
+    state_cc(i, j, k, RadSystem<PulseProblem>::gasInternalEnergy_index) = Egas;
+    state_cc(i, j, k, RadSystem<PulseProblem>::x1GasMomentum_index) = 0.;
+    state_cc(i, j, k, RadSystem<PulseProblem>::x2GasMomentum_index) = 0.;
+    state_cc(i, j, k, RadSystem<PulseProblem>::x3GasMomentum_index) = 0.;
   });
 }
 

@@ -40,6 +40,7 @@ void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsOnGrid(
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_vec[0].dx;
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
   const amrex::Box &indexRange = grid_vec[0].indexRange;
+  const amrex::Array4<double>& state_cc = grid_vec[0].array;
   
   const int ncomp = ncomp_;
   // loop over the grid and set the initial condition
@@ -62,14 +63,14 @@ void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsOnGrid(
     double Eint = E - 0.5 * (m * m) / rho;
 
     for (int n = 0; n < ncomp; ++n) {
-      grid_vec[0].array(i, j, k, n) = 0.;
+      state_cc(i, j, k, n) = 0.;
     }
-    grid_vec[0].array(i, j, k, HydroSystem<ShocktubeProblem>::density_index) = rho;
-    grid_vec[0].array(i, j, k, HydroSystem<ShocktubeProblem>::x1Momentum_index) = m;
-    grid_vec[0].array(i, j, k, HydroSystem<ShocktubeProblem>::x2Momentum_index) = 0.;
-    grid_vec[0].array(i, j, k, HydroSystem<ShocktubeProblem>::x3Momentum_index) = 0.;
-    grid_vec[0].array(i, j, k, HydroSystem<ShocktubeProblem>::energy_index) = E;
-    grid_vec[0].array(i, j, k, HydroSystem<ShocktubeProblem>::internalEnergy_index) =
+    state_cc(i, j, k, HydroSystem<ShocktubeProblem>::density_index) = rho;
+    state_cc(i, j, k, HydroSystem<ShocktubeProblem>::x1Momentum_index) = m;
+    state_cc(i, j, k, HydroSystem<ShocktubeProblem>::x2Momentum_index) = 0.;
+    state_cc(i, j, k, HydroSystem<ShocktubeProblem>::x3Momentum_index) = 0.;
+    state_cc(i, j, k, HydroSystem<ShocktubeProblem>::energy_index) = E;
+    state_cc(i, j, k, HydroSystem<ShocktubeProblem>::internalEnergy_index) =
           Eint;
   });
 }

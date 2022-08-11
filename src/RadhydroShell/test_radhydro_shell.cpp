@@ -182,6 +182,7 @@ void RadhydroSimulation<ShellProblem>::setInitialConditionsOnGrid(
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_vec[0].prob_hi;
   const amrex::Box &indexRange = grid_vec[0].indexRange;
+  const amrex::Array4<double>& state_cc = grid_vec[0].array;
 
   amrex::Real x0 = NAN;
   amrex::Real y0 = NAN;
@@ -227,18 +228,18 @@ void RadhydroSimulation<ShellProblem>::setInitialConditionsOnGrid(
     AMREX_ASSERT(!std::isnan(Erad));
     AMREX_ASSERT(!std::isnan(Frad));
 
-    grid_vec[0].array(i, j, k, HydroSystem<ShellProblem>::density_index) = rho;
-    grid_vec[0].array(i, j, k, HydroSystem<ShellProblem>::x1Momentum_index) = 0;
-    grid_vec[0].array(i, j, k, HydroSystem<ShellProblem>::x2Momentum_index) = 0;
-    grid_vec[0].array(i, j, k, HydroSystem<ShellProblem>::x3Momentum_index) = 0;
-    grid_vec[0].array(i, j, k, HydroSystem<ShellProblem>::energy_index) = Eint;
+    state_cc(i, j, k, HydroSystem<ShellProblem>::density_index) = rho;
+    state_cc(i, j, k, HydroSystem<ShellProblem>::x1Momentum_index) = 0;
+    state_cc(i, j, k, HydroSystem<ShellProblem>::x2Momentum_index) = 0;
+    state_cc(i, j, k, HydroSystem<ShellProblem>::x3Momentum_index) = 0;
+    state_cc(i, j, k, HydroSystem<ShellProblem>::energy_index) = Eint;
 
     const double Frad_xyz = Frad / std::sqrt(3.0);
-    grid_vec[0].array(i, j, k, RadSystem<ShellProblem>::gasInternalEnergy_index) = Eint;
-    grid_vec[0].array(i, j, k, RadSystem<ShellProblem>::radEnergy_index) = Erad;
-    grid_vec[0].array(i, j, k, RadSystem<ShellProblem>::x1RadFlux_index) = Frad_xyz;
-    grid_vec[0].array(i, j, k, RadSystem<ShellProblem>::x2RadFlux_index) = Frad_xyz;
-    grid_vec[0].array(i, j, k, RadSystem<ShellProblem>::x3RadFlux_index) = Frad_xyz;
+    state_cc(i, j, k, RadSystem<ShellProblem>::gasInternalEnergy_index) = Eint;
+    state_cc(i, j, k, RadSystem<ShellProblem>::radEnergy_index) = Erad;
+    state_cc(i, j, k, RadSystem<ShellProblem>::x1RadFlux_index) = Frad_xyz;
+    state_cc(i, j, k, RadSystem<ShellProblem>::x2RadFlux_index) = Frad_xyz;
+    state_cc(i, j, k, RadSystem<ShellProblem>::x3RadFlux_index) = Frad_xyz;
   });
 }
 

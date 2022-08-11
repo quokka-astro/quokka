@@ -42,6 +42,7 @@ void RadhydroSimulation<ContactProblem>::setInitialConditionsOnGrid(
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_vec[0].dx;
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
   const amrex::Box &indexRange = grid_vec[0].indexRange;
+  const amrex::Array4<double>& state_cc = grid_vec[0].array;
 
   int ncomp = ncomp_;
   // loop over the grid and set the initial condition
@@ -67,15 +68,15 @@ void RadhydroSimulation<ContactProblem>::setInitialConditionsOnGrid(
 
     const auto gamma = HydroSystem<ContactProblem>::gamma_;
     for (int n = 0; n < ncomp; ++n) {
-      grid_vec[0].array(i, j, k, n) = 0.;
+      state_cc(i, j, k, n) = 0.;
     }
-    grid_vec[0].array(i, j, k, HydroSystem<ContactProblem>::density_index) = rho;
-    grid_vec[0].array(i, j, k, HydroSystem<ContactProblem>::x1Momentum_index) = rho * vx;
-    grid_vec[0].array(i, j, k, HydroSystem<ContactProblem>::x2Momentum_index) = 0.;
-    grid_vec[0].array(i, j, k, HydroSystem<ContactProblem>::x3Momentum_index) = 0.;
-    grid_vec[0].array(i, j, k, HydroSystem<ContactProblem>::energy_index) =
+    state_cc(i, j, k, HydroSystem<ContactProblem>::density_index) = rho;
+    state_cc(i, j, k, HydroSystem<ContactProblem>::x1Momentum_index) = rho * vx;
+    state_cc(i, j, k, HydroSystem<ContactProblem>::x2Momentum_index) = 0.;
+    state_cc(i, j, k, HydroSystem<ContactProblem>::x3Momentum_index) = 0.;
+    state_cc(i, j, k, HydroSystem<ContactProblem>::energy_index) =
         P / (gamma - 1.) + 0.5 * rho * (vx * vx);
-    grid_vec[0].array(i, j, k, HydroSystem<ContactProblem>::internalEnergy_index) =
+    state_cc(i, j, k, HydroSystem<ContactProblem>::internalEnergy_index) =
         P / (gamma - 1.);
   });
 }

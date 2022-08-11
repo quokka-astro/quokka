@@ -55,10 +55,11 @@ void AdvectionSimulation<SquareProblem>::setInitialConditionsOnGrid(
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_vec[0].prob_hi;
   const amrex::Box &indexRange = grid_vec[0].indexRange;
+  const amrex::Array4<double>& state_cc = grid_vec[0].array;
   // loop over the grid and set the initial condition
   amrex::ParallelFor(
       indexRange, ncomp_, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
-        grid_vec[0].array(i, j, k, n) = exactSolutionAtIndex(i, j, prob_lo, prob_hi, dx);
+        state_cc(i, j, k, n) = exactSolutionAtIndex(i, j, prob_lo, prob_hi, dx);
       });
 }
 

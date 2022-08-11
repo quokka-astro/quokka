@@ -119,6 +119,8 @@ void RadhydroSimulation<TubeProblem>::setInitialConditionsOnGrid(
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_vec[0].dx;
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
   const amrex::Box &indexRange = grid_vec[0].indexRange;
+  const amrex::Array4<double>& state_cc = grid_vec[0].array;
+  
   // loop over the grid and set the initial condition
   amrex::LoopConcurrentOnCpu(indexRange, [=](int i, int j, int k) noexcept {
     amrex::Real const x = (prob_lo[0] + (i + amrex::Real(0.5)) * dx[0]) / Lx;
@@ -133,18 +135,18 @@ void RadhydroSimulation<TubeProblem>::setInitialConditionsOnGrid(
     amrex::Real const rho = D * rho0;
     amrex::Real const vel = Mach * a0;
 
-    grid_vec[0].array(i, j, k, RadSystem<TubeProblem>::radEnergy_index) =
+    state_cc(i, j, k, RadSystem<TubeProblem>::radEnergy_index) =
         Frad0 / c_light_cgs_;
-    grid_vec[0].array(i, j, k, RadSystem<TubeProblem>::x1RadFlux_index) = Frad0;
-    grid_vec[0].array(i, j, k, RadSystem<TubeProblem>::x2RadFlux_index) = 0;
-    grid_vec[0].array(i, j, k, RadSystem<TubeProblem>::x3RadFlux_index) = 0;
+    state_cc(i, j, k, RadSystem<TubeProblem>::x1RadFlux_index) = Frad0;
+    state_cc(i, j, k, RadSystem<TubeProblem>::x2RadFlux_index) = 0;
+    state_cc(i, j, k, RadSystem<TubeProblem>::x3RadFlux_index) = 0;
 
-    grid_vec[0].array(i, j, k, RadSystem<TubeProblem>::gasDensity_index) = rho;
-    grid_vec[0].array(i, j, k, RadSystem<TubeProblem>::x1GasMomentum_index) = rho * vel;
-    grid_vec[0].array(i, j, k, RadSystem<TubeProblem>::x2GasMomentum_index) = 0;
-    grid_vec[0].array(i, j, k, RadSystem<TubeProblem>::x3GasMomentum_index) = 0;
-    grid_vec[0].array(i, j, k, RadSystem<TubeProblem>::gasEnergy_index) = 0;
-    grid_vec[0].array(i, j, k, RadSystem<TubeProblem>::gasInternalEnergy_index) = 0.;
+    state_cc(i, j, k, RadSystem<TubeProblem>::gasDensity_index) = rho;
+    state_cc(i, j, k, RadSystem<TubeProblem>::x1GasMomentum_index) = rho * vel;
+    state_cc(i, j, k, RadSystem<TubeProblem>::x2GasMomentum_index) = 0;
+    state_cc(i, j, k, RadSystem<TubeProblem>::x3GasMomentum_index) = 0;
+    state_cc(i, j, k, RadSystem<TubeProblem>::gasEnergy_index) = 0;
+    state_cc(i, j, k, RadSystem<TubeProblem>::gasInternalEnergy_index) = 0.;
   });
 }
 

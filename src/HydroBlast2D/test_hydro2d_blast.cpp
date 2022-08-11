@@ -46,6 +46,7 @@ void RadhydroSimulation<BlastProblem>::setInitialConditionsOnGrid(
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_vec[0].prob_hi;
   const amrex::Box &indexRange = grid_vec[0].indexRange;
+  const amrex::Array4<double>& state_cc = grid_vec[0].array;
 
   amrex::Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
   amrex::Real const y0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
@@ -76,18 +77,18 @@ void RadhydroSimulation<BlastProblem>::setInitialConditionsOnGrid(
     const auto v_sq = vx * vx + vy * vy + vz * vz;
     const auto gamma = HydroSystem<BlastProblem>::gamma_;
 
-    grid_vec[0].array(i, j, k, HydroSystem<BlastProblem>::density_index) = rho;
-    grid_vec[0].array(i, j, k, HydroSystem<BlastProblem>::x1Momentum_index) = rho * vx;
-    grid_vec[0].array(i, j, k, HydroSystem<BlastProblem>::x2Momentum_index) = rho * vy;
-    grid_vec[0].array(i, j, k, HydroSystem<BlastProblem>::x3Momentum_index) = rho * vz;
-    grid_vec[0].array(i, j, k, HydroSystem<BlastProblem>::energy_index) =
+    state_cc(i, j, k, HydroSystem<BlastProblem>::density_index) = rho;
+    state_cc(i, j, k, HydroSystem<BlastProblem>::x1Momentum_index) = rho * vx;
+    state_cc(i, j, k, HydroSystem<BlastProblem>::x2Momentum_index) = rho * vy;
+    state_cc(i, j, k, HydroSystem<BlastProblem>::x3Momentum_index) = rho * vz;
+    state_cc(i, j, k, HydroSystem<BlastProblem>::energy_index) =
         P / (gamma - 1.) + 0.5 * rho * v_sq;
 
     // initialize radiation variables to zero
-    grid_vec[0].array(i, j, k, RadSystem<BlastProblem>::radEnergy_index) = 0;
-    grid_vec[0].array(i, j, k, RadSystem<BlastProblem>::x1RadFlux_index) = 0;
-    grid_vec[0].array(i, j, k, RadSystem<BlastProblem>::x2RadFlux_index) = 0;
-    grid_vec[0].array(i, j, k, RadSystem<BlastProblem>::x3RadFlux_index) = 0;
+    state_cc(i, j, k, RadSystem<BlastProblem>::radEnergy_index) = 0;
+    state_cc(i, j, k, RadSystem<BlastProblem>::x1RadFlux_index) = 0;
+    state_cc(i, j, k, RadSystem<BlastProblem>::x2RadFlux_index) = 0;
+    state_cc(i, j, k, RadSystem<BlastProblem>::x3RadFlux_index) = 0;
   });
 }
 

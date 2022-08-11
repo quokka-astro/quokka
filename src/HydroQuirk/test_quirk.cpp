@@ -68,6 +68,7 @@ void RadhydroSimulation<QuirkProblem>::setInitialConditionsOnGrid(
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_vec[0].dx;
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
   const amrex::Box &indexRange = grid_vec[0].indexRange;
+  const amrex::Array4<double>& state_cc = grid_vec[0].array;
 
   Real xshock = 0.4;
   int ishock = 0;
@@ -113,13 +114,13 @@ void RadhydroSimulation<QuirkProblem>::setInitialConditionsOnGrid(
     const auto v_sq = vx * vx + vy * vy + vz * vz;
     const auto gamma = HydroSystem<QuirkProblem>::gamma_;
 
-    grid_vec[0].array(i, j, k, HydroSystem<QuirkProblem>::density_index) = rho;
-    grid_vec[0].array(i, j, k, HydroSystem<QuirkProblem>::x1Momentum_index) = rho * vx;
-    grid_vec[0].array(i, j, k, HydroSystem<QuirkProblem>::x2Momentum_index) = rho * vy;
-    grid_vec[0].array(i, j, k, HydroSystem<QuirkProblem>::x3Momentum_index) = rho * vz;
-    grid_vec[0].array(i, j, k, HydroSystem<QuirkProblem>::energy_index) =
+    state_cc(i, j, k, HydroSystem<QuirkProblem>::density_index) = rho;
+    state_cc(i, j, k, HydroSystem<QuirkProblem>::x1Momentum_index) = rho * vx;
+    state_cc(i, j, k, HydroSystem<QuirkProblem>::x2Momentum_index) = rho * vy;
+    state_cc(i, j, k, HydroSystem<QuirkProblem>::x3Momentum_index) = rho * vz;
+    state_cc(i, j, k, HydroSystem<QuirkProblem>::energy_index) =
         P / (gamma - 1.) + 0.5 * rho * v_sq;
-    grid_vec[0].array(i, j, k, HydroSystem<QuirkProblem>::internalEnergy_index) =
+    state_cc(i, j, k, HydroSystem<QuirkProblem>::internalEnergy_index) =
         P / (gamma - 1.);
   });
 }

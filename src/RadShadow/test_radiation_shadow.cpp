@@ -120,6 +120,7 @@ void RadhydroSimulation<ShadowProblem>::setInitialConditionsOnGrid(
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_vec[0].dx;
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
   const amrex::Box &indexRange = grid_vec[0].indexRange;
+  const amrex::Array4<double>& state_cc = grid_vec[0].array;
 
   // loop over the grid and set the initial condition
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -139,16 +140,16 @@ void RadhydroSimulation<ShadowProblem>::setInitialConditionsOnGrid(
     amrex::Real const Egas =
         RadSystem<ShadowProblem>::ComputeEgasFromTgas(rho, T_initial);
 
-    grid_vec[0].array(i, j, k, RadSystem<ShadowProblem>::radEnergy_index) = Erad;
-    grid_vec[0].array(i, j, k, RadSystem<ShadowProblem>::x1RadFlux_index) = 0;
-    grid_vec[0].array(i, j, k, RadSystem<ShadowProblem>::x2RadFlux_index) = 0;
-    grid_vec[0].array(i, j, k, RadSystem<ShadowProblem>::x3RadFlux_index) = 0;
-    grid_vec[0].array(i, j, k, RadSystem<ShadowProblem>::gasEnergy_index) = Egas;
-    grid_vec[0].array(i, j, k, RadSystem<ShadowProblem>::gasDensity_index) = rho;
-    grid_vec[0].array(i, j, k, RadSystem<ShadowProblem>::gasInternalEnergy_index) = Egas;
-    grid_vec[0].array(i, j, k, RadSystem<ShadowProblem>::x1GasMomentum_index) = 0.;
-    grid_vec[0].array(i, j, k, RadSystem<ShadowProblem>::x2GasMomentum_index) = 0.;
-    grid_vec[0].array(i, j, k, RadSystem<ShadowProblem>::x3GasMomentum_index) = 0.;
+    state_cc(i, j, k, RadSystem<ShadowProblem>::radEnergy_index) = Erad;
+    state_cc(i, j, k, RadSystem<ShadowProblem>::x1RadFlux_index) = 0;
+    state_cc(i, j, k, RadSystem<ShadowProblem>::x2RadFlux_index) = 0;
+    state_cc(i, j, k, RadSystem<ShadowProblem>::x3RadFlux_index) = 0;
+    state_cc(i, j, k, RadSystem<ShadowProblem>::gasEnergy_index) = Egas;
+    state_cc(i, j, k, RadSystem<ShadowProblem>::gasDensity_index) = rho;
+    state_cc(i, j, k, RadSystem<ShadowProblem>::gasInternalEnergy_index) = Egas;
+    state_cc(i, j, k, RadSystem<ShadowProblem>::x1GasMomentum_index) = 0.;
+    state_cc(i, j, k, RadSystem<ShadowProblem>::x2GasMomentum_index) = 0.;
+    state_cc(i, j, k, RadSystem<ShadowProblem>::x3GasMomentum_index) = 0.;
   });
 }
 

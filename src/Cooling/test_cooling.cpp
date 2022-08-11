@@ -117,6 +117,7 @@ void RadhydroSimulation<CoolingTest>::setInitialConditionsOnGrid(
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_vec[0].prob_hi;
   const amrex::Box &indexRange = grid_vec[0].indexRange;
+  const amrex::Array4<double>& state_cc = grid_vec[0].array;
 
   Real const Lx = (prob_hi[0] - prob_lo[0]);
   Real const Ly = (prob_hi[1] - prob_lo[1]);
@@ -130,10 +131,10 @@ void RadhydroSimulation<CoolingTest>::setInitialConditionsOnGrid(
     Real const y = prob_lo[1] + (j + Real(0.5)) * dx[1];
     Real const z = prob_lo[2] + (k + Real(0.5)) * dx[2];
 
-    grid_vec[0].array(i, j, k, RadSystem<CoolingTest>::radEnergy_index) = 0;
-    grid_vec[0].array(i, j, k, RadSystem<CoolingTest>::x1RadFlux_index) = 0;
-    grid_vec[0].array(i, j, k, RadSystem<CoolingTest>::x2RadFlux_index) = 0;
-    grid_vec[0].array(i, j, k, RadSystem<CoolingTest>::x3RadFlux_index) = 0;
+    state_cc(i, j, k, RadSystem<CoolingTest>::radEnergy_index) = 0;
+    state_cc(i, j, k, RadSystem<CoolingTest>::x1RadFlux_index) = 0;
+    state_cc(i, j, k, RadSystem<CoolingTest>::x2RadFlux_index) = 0;
+    state_cc(i, j, k, RadSystem<CoolingTest>::x3RadFlux_index) = 0;
 
     // compute perturbations
     Real delta_rho = 0;
@@ -177,12 +178,12 @@ void RadhydroSimulation<CoolingTest>::setInitialConditionsOnGrid(
     Real const Egas = RadSystem<CoolingTest>::ComputeEgasFromEint(
         rho, xmom, ymom, zmom, Eint);
 
-    grid_vec[0].array(i, j, k, RadSystem<CoolingTest>::gasEnergy_index) = Egas;
-    grid_vec[0].array(i, j, k, RadSystem<CoolingTest>::gasInternalEnergy_index) = Eint;
-    grid_vec[0].array(i, j, k, RadSystem<CoolingTest>::gasDensity_index) = rho;
-    grid_vec[0].array(i, j, k, RadSystem<CoolingTest>::x1GasMomentum_index) = xmom;
-    grid_vec[0].array(i, j, k, RadSystem<CoolingTest>::x2GasMomentum_index) = ymom;
-    grid_vec[0].array(i, j, k, RadSystem<CoolingTest>::x3GasMomentum_index) = zmom;
+    state_cc(i, j, k, RadSystem<CoolingTest>::gasEnergy_index) = Egas;
+    state_cc(i, j, k, RadSystem<CoolingTest>::gasInternalEnergy_index) = Eint;
+    state_cc(i, j, k, RadSystem<CoolingTest>::gasDensity_index) = rho;
+    state_cc(i, j, k, RadSystem<CoolingTest>::x1GasMomentum_index) = xmom;
+    state_cc(i, j, k, RadSystem<CoolingTest>::x2GasMomentum_index) = ymom;
+    state_cc(i, j, k, RadSystem<CoolingTest>::x3GasMomentum_index) = zmom;
   });
 }
 
