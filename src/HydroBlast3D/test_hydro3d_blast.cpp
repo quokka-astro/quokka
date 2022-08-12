@@ -71,6 +71,9 @@ void RadhydroSimulation<SedovProblem>::setInitialConditionsOnGrid(
   const amrex::Box &indexRange = grid_vec[0].indexRange;
   const amrex::Array4<double>& state_cc = grid_vec[0].array;
   const Real cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
+  double rho_copy = rho;
+  double E_blast_copy = E_blast;
+  double R0_copy = R0;
 
   amrex::Real x0 = NAN;
   amrex::Real y0 = NAN;
@@ -95,7 +98,7 @@ void RadhydroSimulation<SedovProblem>::setInitialConditionsOnGrid(
     amrex::Real const r = std::sqrt(
         std::pow(x - x0, 2) + std::pow(y - y0, 2) + std::pow(z - z0, 2));
 
-    if (r < R0) {
+    if (r < R0_copy) {
       rho_e = 1.0;
     } else {
       rho_e = 1.0e-10;
@@ -104,12 +107,12 @@ void RadhydroSimulation<SedovProblem>::setInitialConditionsOnGrid(
     static_assert(!simulate_full_box, "single-cell initialization is only "
                                       "implemented for octant symmetry!");
     if ((i == 0) && (j == 0) && (k == 0)) {
-      rho_e = E_blast / cell_vol;
+      rho_e = E_blast_copy / cell_vol;
     } else {
-      rho_e = 1.0e-10 * (E_blast / cell_vol);
+      rho_e = 1.0e-10 * (E_blast_copy / cell_vol);
     }
 
-    AMREX_ASSERT(!std::isnan(rho));
+    AMREX_ASSERT(!std::isnan(rho_copy));
     AMREX_ASSERT(!std::isnan(rho_e));
 
     for (int n = 0; n < state_cc.nComp(); ++n) {
@@ -117,7 +120,7 @@ void RadhydroSimulation<SedovProblem>::setInitialConditionsOnGrid(
     }
     const auto gamma = HydroSystem<SedovProblem>::gamma_;
 
-    state_cc(i, j, k, HydroSystem<SedovProblem>::density_index) = rho;
+    state_cc(i, j, k, HydroSystem<SedovProblem>::density_index) = rho_copy;
     state_cc(i, j, k, HydroSystem<SedovProblem>::x1Momentum_index) = 0;
     state_cc(i, j, k, HydroSystem<SedovProblem>::x2Momentum_index) = 0;
     state_cc(i, j, k, HydroSystem<SedovProblem>::x3Momentum_index) = 0;
