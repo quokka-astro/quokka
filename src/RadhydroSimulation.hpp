@@ -141,7 +141,8 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 
 	void checkHydroStates(amrex::MultiFab &mf, char const *file, int line);
 	void computeMaxSignalLocal(int level) override;
-	void setInitialConditionsAtLevel(int level) override;
+	void preCalculateInitialConditions() override;
+  void setInitialConditionsOnGrid(std::vector<quokka::grid> &grid_vec) override;
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev,
 									  int ncycle) override;
 	void computeAfterTimestep() override;
@@ -340,9 +341,16 @@ void RadhydroSimulation<problem_t>::checkHydroStates(amrex::MultiFab &mf, char c
 }
 
 template <typename problem_t>
-void RadhydroSimulation<problem_t>::setInitialConditionsAtLevel(int level)
-{
-	// do nothing -- user should implement using problem-specific template specialization
+void RadhydroSimulation<problem_t>::preCalculateInitialConditions() {
+  // default empty implementation
+  // user should implement using problem-specific template specialization
+}
+
+template <typename problem_t>
+void RadhydroSimulation<problem_t>::setInitialConditionsOnGrid(
+    std::vector<quokka::grid> &grid_vec) {
+  // default empty implementation
+  // user should implement using problem-specific template specialization
 }
 
 template <typename problem_t> void RadhydroSimulation<problem_t>::computeAfterTimestep()

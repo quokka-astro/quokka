@@ -53,23 +53,16 @@ constexpr double Tgas0 = 6000.;       // K
 constexpr amrex::Real T_floor = 10.0; // K
 constexpr double rho0 = 0.6 * m_H;    // g cm^-3
 
+// perturbation parameters
+const int kmin = 0;
+const int kmax = 16;
+Real const A = 0.05 / kmax;
+
+// phase table pointer
+const amrex::TableData<Real, AMREX_SPACEDIM>::const_table_type *phase_ptr = nullptr;
+
 template <>
-void RadhydroSimulation<CoolingTest>::setInitialConditionsAtLevel(int lev) {
-  amrex::GpuArray<Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
-  amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
-  amrex::GpuArray<Real, AMREX_SPACEDIM> prob_hi = geom[lev].ProbHiArray();
-  Real const Lx = (prob_hi[0] - prob_lo[0]);
-  Real const Ly = (prob_hi[1] - prob_lo[1]);
-#if AMREX_SPACEDIM == 3
-  Real const Lz = (prob_hi[2] - prob_lo[2]);
-#endif
-  Real const y0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
-
-  // perturbation parameters
-  const int kmin = 0;
-  const int kmax = 16;
-  Real const A = 0.05 / kmax;
-
+void RadhydroSimulation<CoolingTest>::preCalculateInitialConditions() {
   // generate random phases
   amrex::Array<int, AMREX_SPACEDIM> tlo{
       AMREX_D_DECL(kmin, kmin, kmin)}; // lower bounds
@@ -108,39 +101,58 @@ void RadhydroSimulation<CoolingTest>::setInitialConditionsAtLevel(int lev) {
   table_data.copy(h_table_data);
   amrex::Gpu::streamSynchronize();
 #endif
-  auto const &phase = table_data.const_table(); // const makes it read only
+  auto static const &phase =
+      table_data.const_table(); // const makes it read only
+  phase_ptr = &phase;
+}
 
-  for (amrex::MFIter iter(state_old_[lev]); iter.isValid(); ++iter) {
-    const amrex::Box &indexRange = iter.validbox();
-    auto const &state = state_new_[lev].array(iter);
+template <>
+void RadhydroSimulation<CoolingTest>::setInitialConditionsOnGrid(
+    std::vector<quokka::grid> &grid_vec) {
+  // dereference phase table pointer
+  const amrex::TableData<Real, AMREX_SPACEDIM>::const_table_type &phase_ref =
+      *phase_ptr;
+  // extract variables required from the geom object
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_vec[0].dx;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_vec[0].prob_hi;
+  const amrex::Box &indexRange = grid_vec[0].indexRange;
+  const amrex::Array4<double>& state_cc = grid_vec[0].array;
 
-    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-      Real const x = prob_lo[0] + (i + Real(0.5)) * dx[0];
-      Real const y = prob_lo[1] + (j + Real(0.5)) * dx[1];
-      Real const z = prob_lo[2] + (k + Real(0.5)) * dx[2];
-
-      state(i, j, k, RadSystem<CoolingTest>::radEnergy_index) = 0;
-      state(i, j, k, RadSystem<CoolingTest>::x1RadFlux_index) = 0;
-      state(i, j, k, RadSystem<CoolingTest>::x2RadFlux_index) = 0;
-      state(i, j, k, RadSystem<CoolingTest>::x3RadFlux_index) = 0;
-
-      // compute perturbations
-      Real delta_rho = 0;
+  Real const Lx = (prob_hi[0] - prob_lo[0]);
+  Real const Ly = (prob_hi[1] - prob_lo[1]);
 #if AMREX_SPACEDIM == 3
-      for (int ki = kmin; ki < kmax; ++ki) {
-        for (int kj = kmin; kj < kmax; ++kj) {
-          for (int kk = kmin; kk < kmax; ++kk) {
-            if ((ki == 0) && (kj == 0) && (kk == 0)) {
-              continue;
-            }
-            Real const kx = 2.0 * M_PI * Real(ki) / Lx;
-            Real const ky = 2.0 * M_PI * Real(kj) / Lx;
-            Real const kz = 2.0 * M_PI * Real(kk) / Lx;
-            delta_rho +=
-                A * std::sin(x * kx + y * ky + z * kz + phase(ki, kj, kk));
+  Real const Lz = (prob_hi[2] - prob_lo[2]);
+#endif
+  Real const y0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
+  // loop over the grid and set the initial condition
+  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+    Real const x = prob_lo[0] + (i + Real(0.5)) * dx[0];
+    Real const y = prob_lo[1] + (j + Real(0.5)) * dx[1];
+    Real const z = prob_lo[2] + (k + Real(0.5)) * dx[2];
+
+    state_cc(i, j, k, RadSystem<CoolingTest>::radEnergy_index) = 0;
+    state_cc(i, j, k, RadSystem<CoolingTest>::x1RadFlux_index) = 0;
+    state_cc(i, j, k, RadSystem<CoolingTest>::x2RadFlux_index) = 0;
+    state_cc(i, j, k, RadSystem<CoolingTest>::x3RadFlux_index) = 0;
+
+    // compute perturbations
+    Real delta_rho = 0;
+#if AMREX_SPACEDIM == 3
+    for (int ki = kmin; ki < kmax; ++ki) {
+      for (int kj = kmin; kj < kmax; ++kj) {
+        for (int kk = kmin; kk < kmax; ++kk) {
+          if ((ki == 0) && (kj == 0) && (kk == 0)) {
+            continue;
           }
+          Real const kx = 2.0 * M_PI * Real(ki) / Lx;
+          Real const ky = 2.0 * M_PI * Real(kj) / Lx;
+          Real const kz = 2.0 * M_PI * Real(kk) / Lx;
+          delta_rho +=
+              A * std::sin(x * kx + y * ky + z * kz + phase_ref(ki, kj, kk));
         }
       }
+    }
 #else
       for (int ki = kmin; ki < kmax; ++ki) {
         for (int kj = kmin; kj < kmax; ++kj) {
@@ -149,34 +161,30 @@ void RadhydroSimulation<CoolingTest>::setInitialConditionsAtLevel(int lev) {
           }
           Real const kx = 2.0 * M_PI * Real(ki) / Lx;
           Real const ky = 2.0 * M_PI * Real(kj) / Lx;
-          delta_rho += A * std::sin(x * kx + y * ky + phase(ki, kj));
+          delta_rho += A * std::sin(x * kx + y * ky + phase_ref(ki, kj));
         }
       }
 #endif
-      AMREX_ALWAYS_ASSERT(delta_rho > -1.0);
+    AMREX_ALWAYS_ASSERT(delta_rho > -1.0);
 
-      Real rho = 0.12 * m_H * (1.0 + delta_rho); // g cm^-3
-      Real xmom = 0;
-      Real ymom = 0;
-      Real zmom = 0;
-      Real const P = 4.0e4 * boltzmann_constant_cgs_; // erg cm^-3
-      Real Eint = (HydroSystem<CoolingTest>::gamma_ - 1.) * P;
-      // Real Eint = RadSystem<CoolingTest>::ComputeEgasFromTgas(rho, 1.0e4);
+    Real rho = 0.12 * m_H * (1.0 + delta_rho); // g cm^-3
+    Real xmom = 0;
+    Real ymom = 0;
+    Real zmom = 0;
+    Real const P = 4.0e4 * boltzmann_constant_cgs_; // erg cm^-3
+    Real Eint = (HydroSystem<CoolingTest>::gamma_ - 1.) * P;
+    // Real Eint = RadSystem<CoolingTest>::ComputeEgasFromTgas(rho, 1.0e4);
 
-      Real const Egas = RadSystem<CoolingTest>::ComputeEgasFromEint(
-          rho, xmom, ymom, zmom, Eint);
+    Real const Egas = RadSystem<CoolingTest>::ComputeEgasFromEint(
+        rho, xmom, ymom, zmom, Eint);
 
-      state(i, j, k, RadSystem<CoolingTest>::gasEnergy_index) = Egas;
-      state(i, j, k, RadSystem<CoolingTest>::gasInternalEnergy_index) = Eint;
-      state(i, j, k, RadSystem<CoolingTest>::gasDensity_index) = rho;
-      state(i, j, k, RadSystem<CoolingTest>::x1GasMomentum_index) = xmom;
-      state(i, j, k, RadSystem<CoolingTest>::x2GasMomentum_index) = ymom;
-      state(i, j, k, RadSystem<CoolingTest>::x3GasMomentum_index) = zmom;
-    });
-  }
-
-  // set flag
-  areInitialConditionsDefined_ = true;
+    state_cc(i, j, k, RadSystem<CoolingTest>::gasEnergy_index) = Egas;
+    state_cc(i, j, k, RadSystem<CoolingTest>::gasInternalEnergy_index) = Eint;
+    state_cc(i, j, k, RadSystem<CoolingTest>::gasDensity_index) = rho;
+    state_cc(i, j, k, RadSystem<CoolingTest>::x1GasMomentum_index) = xmom;
+    state_cc(i, j, k, RadSystem<CoolingTest>::x2GasMomentum_index) = ymom;
+    state_cc(i, j, k, RadSystem<CoolingTest>::x3GasMomentum_index) = zmom;
+  });
 }
 
 template <>

@@ -109,57 +109,54 @@ template <> void RadhydroSimulation<RichtmeyerMeshkovProblem>::computeAfterTimes
 #endif
 }
 
-template <> void RadhydroSimulation<RichtmeyerMeshkovProblem>::setInitialConditionsAtLevel(int lev)
-{
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = geom[lev].ProbHiArray();
+template <>
+void RadhydroSimulation<RichtmeyerMeshkovProblem>::setInitialConditionsOnGrid(
+    std::vector<quokka::grid> &grid_vec) {
+  // extract variables required from the geom object
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_vec[0].dx;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_vec[0].prob_hi;
+  const amrex::Box &indexRange = grid_vec[0].indexRange;
+  const amrex::Array4<double>& state_cc = grid_vec[0].array;
 
-	for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
-		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
-		auto const &state = state_new_[lev].array(iter);
+  // loop over the grid and set the initial condition
+  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+    amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+    amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
 
-		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-			amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
-			amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
+    double vx = 0.;
+    double vy = 0.;
+    double vz = 0.;
+    double rho = NAN;
+    double P = NAN;
 
-			double vx = 0.;
-			double vy = 0.;
-			double vz = 0.;
-			double rho = NAN;
-			double P = NAN;
+    if ((x + y) > 0.15) {
+      P = 1.0;
+      rho = 1.0;
+    } else {
+      P = 0.14;
+      rho = 0.125;
+    }
 
-			if ((x + y) > 0.15) {
-				P = 1.0;
-				rho = 1.0;
-			} else {
-				P = 0.14;
-				rho = 0.125;
-			}
+    AMREX_ASSERT(!std::isnan(vx));
+    AMREX_ASSERT(!std::isnan(vy));
+    AMREX_ASSERT(!std::isnan(vz));
+    AMREX_ASSERT(!std::isnan(rho));
+    AMREX_ASSERT(!std::isnan(P));
 
-			AMREX_ASSERT(!std::isnan(vx));
-			AMREX_ASSERT(!std::isnan(vy));
-			AMREX_ASSERT(!std::isnan(vz));
-			AMREX_ASSERT(!std::isnan(rho));
-			AMREX_ASSERT(!std::isnan(P));
+    const auto v_sq = vx * vx + vy * vy + vz * vz;
+    const auto gamma = HydroSystem<RichtmeyerMeshkovProblem>::gamma_;
 
-			const auto v_sq = vx * vx + vy * vy + vz * vz;
-			const auto gamma = HydroSystem<RichtmeyerMeshkovProblem>::gamma_;
-
-			state(i, j, k, HydroSystem<RichtmeyerMeshkovProblem>::density_index) = rho;
-			state(i, j, k, HydroSystem<RichtmeyerMeshkovProblem>::x1Momentum_index) =
-			    rho * vx;
-			state(i, j, k, HydroSystem<RichtmeyerMeshkovProblem>::x2Momentum_index) =
-			    rho * vy;
-			state(i, j, k, HydroSystem<RichtmeyerMeshkovProblem>::x3Momentum_index) =
-			    rho * vz;
-			state(i, j, k, HydroSystem<RichtmeyerMeshkovProblem>::energy_index) =
-			    P / (gamma - 1.) + 0.5 * rho * v_sq;
-		});
-	}
-
-	// set flag
-	areInitialConditionsDefined_ = true;
+    state_cc(i, j, k, HydroSystem<RichtmeyerMeshkovProblem>::density_index) = rho;
+    state_cc(i, j, k, HydroSystem<RichtmeyerMeshkovProblem>::x1Momentum_index) =
+        rho * vx;
+    state_cc(i, j, k, HydroSystem<RichtmeyerMeshkovProblem>::x2Momentum_index) =
+        rho * vy;
+    state_cc(i, j, k, HydroSystem<RichtmeyerMeshkovProblem>::x3Momentum_index) =
+        rho * vz;
+    state_cc(i, j, k, HydroSystem<RichtmeyerMeshkovProblem>::energy_index) =
+        P / (gamma - 1.) + 0.5 * rho * v_sq;
+  });
 }
 
 auto problem_main() -> int

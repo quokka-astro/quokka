@@ -155,33 +155,29 @@ AMRSimulation<SuOlsonProblem>::setCustomBoundaryConditions(
 	consVar(i, j, k, RadSystem<SuOlsonProblem>::x3GasMomentum_index) = 0.;
 }
 
-template <> void RadhydroSimulation<SuOlsonProblem>::setInitialConditionsAtLevel(int lev)
-{
-	for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
-		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
-		auto const &state = state_new_[lev].array(iter);
+template <>
+void RadhydroSimulation<SuOlsonProblem>::setInitialConditionsOnGrid(
+    std::vector<quokka::grid> &grid_vec) {
+  const amrex::Box &indexRange = grid_vec[0].indexRange;
+  const amrex::Array4<double>& state_cc = grid_vec[0].array;
+  
+  // loop over the grid and set the initial condition
+  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+    const double Egas =
+        RadSystem<SuOlsonProblem>::ComputeEgasFromTgas(rho0, T_initial);
+    const double Erad = a_rad * std::pow(T_initial, 4);
 
-		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-			const double Egas =
-			    RadSystem<SuOlsonProblem>::ComputeEgasFromTgas(rho0, T_initial);
-			const double Erad = a_rad * std::pow(T_initial, 4);
-
-			state(i, j, k, RadSystem<SuOlsonProblem>::radEnergy_index) = Erad;
-			state(i, j, k, RadSystem<SuOlsonProblem>::x1RadFlux_index) = 0;
-			state(i, j, k, RadSystem<SuOlsonProblem>::x2RadFlux_index) = 0;
-			state(i, j, k, RadSystem<SuOlsonProblem>::x3RadFlux_index) = 0;
-
-			state(i, j, k, RadSystem<SuOlsonProblem>::gasDensity_index) = rho0;
-			state(i, j, k, RadSystem<SuOlsonProblem>::gasEnergy_index) = Egas;
-      state(i, j, k, RadSystem<SuOlsonProblem>::gasInternalEnergy_index) = Egas;
-			state(i, j, k, RadSystem<SuOlsonProblem>::x1GasMomentum_index) = 0.;
-			state(i, j, k, RadSystem<SuOlsonProblem>::x2GasMomentum_index) = 0.;
-			state(i, j, k, RadSystem<SuOlsonProblem>::x3GasMomentum_index) = 0.;
-		});
-	}
-
-	// set flag
-	areInitialConditionsDefined_ = true;
+    state_cc(i, j, k, RadSystem<SuOlsonProblem>::radEnergy_index) = Erad;
+    state_cc(i, j, k, RadSystem<SuOlsonProblem>::x1RadFlux_index) = 0;
+    state_cc(i, j, k, RadSystem<SuOlsonProblem>::x2RadFlux_index) = 0;
+    state_cc(i, j, k, RadSystem<SuOlsonProblem>::x3RadFlux_index) = 0;
+    state_cc(i, j, k, RadSystem<SuOlsonProblem>::gasDensity_index) = rho0;
+    state_cc(i, j, k, RadSystem<SuOlsonProblem>::gasEnergy_index) = Egas;
+    state_cc(i, j, k, RadSystem<SuOlsonProblem>::gasInternalEnergy_index) = Egas;
+    state_cc(i, j, k, RadSystem<SuOlsonProblem>::x1GasMomentum_index) = 0.;
+    state_cc(i, j, k, RadSystem<SuOlsonProblem>::x2GasMomentum_index) = 0.;
+    state_cc(i, j, k, RadSystem<SuOlsonProblem>::x3GasMomentum_index) = 0.;
+  });
 }
 
 auto problem_main() -> int

@@ -62,75 +62,67 @@ constexpr Real pr = 0.6;
 int ishock_g = 0;
 
 template <>
-void RadhydroSimulation<QuirkProblem>::setInitialConditionsAtLevel(int lev) {
-  // Initial conditions from:
-  // T. Hanawa et al. / Journal of Computational Physics 227 (2008) 7952–7976
-  // and based on Athena++'s quirk.cpp.
-
-  amrex::GpuArray<Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
-  amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
+void RadhydroSimulation<QuirkProblem>::setInitialConditionsOnGrid(
+    std::vector<quokka::grid> &grid_vec) {
+  // extract variables required from the geom object
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_vec[0].dx;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
+  const amrex::Box &indexRange = grid_vec[0].indexRange;
+  const amrex::Array4<double>& state_cc = grid_vec[0].array;
 
   Real xshock = 0.4;
-  for (ishock_g = 0; (prob_lo[0] + dx[0] * (ishock_g + Real(0.5))) < xshock;
-       ++ishock_g) {
+  int ishock = 0;
+  for (ishock = 0; (prob_lo[0] + dx[0] * (ishock + Real(0.5))) < xshock;
+       ++ishock) {
   }
-  ishock_g--;
-  amrex::Print() << "ishock = " << ishock_g << "\n";
+  ishock--;
+  amrex::Print() << "ishock = " << ishock << "\n";
 
   Real dd = dl - 0.135;
   Real ud = ul + 0.219;
   Real pd = pl - 1.31;
+  // loop over the grid and set the initial condition
+  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+    double vx = NAN;
+    double vy = 0.;
+    double vz = 0.;
+    double rho = NAN;
+    double P = NAN;
 
-  for (amrex::MFIter iter(state_old_[lev]); iter.isValid(); ++iter) {
-    const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
-    auto const &state = state_new_[lev].array(iter);
-    int ishock = ishock_g; // globals cannot be lambda-captured
+    if (i <= ishock) {
+      rho = dl;
+      vx = ul;
+      P = pl;
+    } else {
+      rho = dr;
+      vx = ur;
+      P = pr;
+    }
 
-    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-      double vx = NAN;
-      double vy = 0.;
-      double vz = 0.;
-      double rho = NAN;
-      double P = NAN;
+    if ((i == ishock) && (j % 2 == 0)) {
+      rho = dd;
+      vx = ud;
+      P = pd;
+    }
 
-      if (i <= ishock) {
-        rho = dl;
-        vx = ul;
-        P = pl;
-      } else {
-        rho = dr;
-        vx = ur;
-        P = pr;
-      }
+    AMREX_ASSERT(!std::isnan(vx));
+    AMREX_ASSERT(!std::isnan(vy));
+    AMREX_ASSERT(!std::isnan(vz));
+    AMREX_ASSERT(!std::isnan(rho));
+    AMREX_ASSERT(!std::isnan(P));
 
-      if ((i == ishock) && (j % 2 == 0)) {
-        rho = dd;
-        vx = ud;
-        P = pd;
-      }
+    const auto v_sq = vx * vx + vy * vy + vz * vz;
+    const auto gamma = HydroSystem<QuirkProblem>::gamma_;
 
-      AMREX_ASSERT(!std::isnan(vx));
-      AMREX_ASSERT(!std::isnan(vy));
-      AMREX_ASSERT(!std::isnan(vz));
-      AMREX_ASSERT(!std::isnan(rho));
-      AMREX_ASSERT(!std::isnan(P));
-
-      const auto v_sq = vx * vx + vy * vy + vz * vz;
-      const auto gamma = HydroSystem<QuirkProblem>::gamma_;
-
-      state(i, j, k, HydroSystem<QuirkProblem>::density_index) = rho;
-      state(i, j, k, HydroSystem<QuirkProblem>::x1Momentum_index) = rho * vx;
-      state(i, j, k, HydroSystem<QuirkProblem>::x2Momentum_index) = rho * vy;
-      state(i, j, k, HydroSystem<QuirkProblem>::x3Momentum_index) = rho * vz;
-      state(i, j, k, HydroSystem<QuirkProblem>::energy_index) =
-          P / (gamma - 1.) + 0.5 * rho * v_sq;
-      state(i, j, k, HydroSystem<QuirkProblem>::internalEnergy_index) =
-          P / (gamma - 1.);
-    });
-  }
-
-  // set flag
-  areInitialConditionsDefined_ = true;
+    state_cc(i, j, k, HydroSystem<QuirkProblem>::density_index) = rho;
+    state_cc(i, j, k, HydroSystem<QuirkProblem>::x1Momentum_index) = rho * vx;
+    state_cc(i, j, k, HydroSystem<QuirkProblem>::x2Momentum_index) = rho * vy;
+    state_cc(i, j, k, HydroSystem<QuirkProblem>::x3Momentum_index) = rho * vz;
+    state_cc(i, j, k, HydroSystem<QuirkProblem>::energy_index) =
+        P / (gamma - 1.) + 0.5 * rho * v_sq;
+    state_cc(i, j, k, HydroSystem<QuirkProblem>::internalEnergy_index) =
+        P / (gamma - 1.);
+  });
 }
 
 auto getDeltaEntropyVector() -> std::vector<Real> & {
