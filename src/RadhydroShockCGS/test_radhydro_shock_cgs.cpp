@@ -173,55 +173,66 @@ AMRSimulation<ShockProblem>::setCustomBoundaryConditions(
 	}
 }
 
-template <> void RadhydroSimulation<ShockProblem>::setInitialConditionsAtLevel(int lev)
-{
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
+template <>
+void RadhydroSimulation<ShockProblem>::setInitialConditionsOnGrid(
+    std::vector<quokka::grid> &grid_vec) {
+  // extract variables required from the geom object
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_vec[0].dx;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
+  const amrex::Box &indexRange = grid_vec[0].indexRange;
+  const amrex::Array4<double>& state_cc = grid_vec[0].array;
 
-	for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
-		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
-		auto const &state = state_new_[lev].array(iter);
+  // loop over the cell-centered quantities and set the initial condition
+  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+    amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
 
-		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-			amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+    amrex::Real radEnergy = NAN;
+    amrex::Real x1RadFlux = NAN;
+    amrex::Real energy = NAN;
+    amrex::Real density = NAN;
+    amrex::Real x1Momentum = NAN;
 
-			amrex::Real radEnergy = NAN;
-			amrex::Real x1RadFlux = NAN;
-			amrex::Real energy = NAN;
-			amrex::Real density = NAN;
-			amrex::Real x1Momentum = NAN;
+    if (x < shock_position) {
+      radEnergy = Erad0;
+      x1RadFlux = 0.0;
+      energy = Egas0 + 0.5 * rho0 * (v0 * v0);
+      density = rho0;
+      x1Momentum = rho0 * v0;
+    } else {
+      radEnergy = Erad1;
+      x1RadFlux = 0.0;
+      energy = Egas1 + 0.5 * rho1 * (v1 * v1);
+      density = rho1;
+      x1Momentum = rho1 * v1;
+    }
 
-			if (x < shock_position) {
-				radEnergy = Erad0;
-				x1RadFlux = 0.0;
-				energy = Egas0 + 0.5 * rho0 * (v0 * v0);
-				density = rho0;
-				x1Momentum = rho0 * v0;
-			} else {
-				radEnergy = Erad1;
-				x1RadFlux = 0.0;
-				energy = Egas1 + 0.5 * rho1 * (v1 * v1);
-				density = rho1;
-				x1Momentum = rho1 * v1;
-			}
-
-			state(i, j, k, RadSystem<ShockProblem>::gasDensity_index) = density;
-      state(i, j, k, RadSystem<ShockProblem>::gasInternalEnergy_index) = 0.;
-			state(i, j, k, RadSystem<ShockProblem>::x1GasMomentum_index) = x1Momentum;
-			state(i, j, k, RadSystem<ShockProblem>::x2GasMomentum_index) = 0;
-			state(i, j, k, RadSystem<ShockProblem>::x3GasMomentum_index) = 0;
-			state(i, j, k, RadSystem<ShockProblem>::gasEnergy_index) = energy;
-      state(i, j, k, RadSystem<ShockProblem>::gasInternalEnergy_index) =
+    state_cc(i, j, k, RadSystem<ShockProblem>::gasDensity_index) = density;
+    state_cc(i, j, k, RadSystem<ShockProblem>::gasInternalEnergy_index) = 0.;
+		state_cc(i, j, k, RadSystem<ShockProblem>::x1GasMomentum_index) = x1Momentum;
+		state_cc(i, j, k, RadSystem<ShockProblem>::x2GasMomentum_index) = 0;
+		state_cc(i, j, k, RadSystem<ShockProblem>::x3GasMomentum_index) = 0;
+		state_cc(i, j, k, RadSystem<ShockProblem>::gasEnergy_index) = energy;
+    state_cc(i, j, k, RadSystem<ShockProblem>::gasInternalEnergy_index) =
           energy - (x1Momentum*x1Momentum)/(2*density);
-			state(i, j, k, RadSystem<ShockProblem>::radEnergy_index) = radEnergy;
-			state(i, j, k, RadSystem<ShockProblem>::x1RadFlux_index) = x1RadFlux;
-			state(i, j, k, RadSystem<ShockProblem>::x2RadFlux_index) = 0;
-			state(i, j, k, RadSystem<ShockProblem>::x3RadFlux_index) = 0;
-		});
-	}
+		state_cc(i, j, k, RadSystem<ShockProblem>::radEnergy_index) = radEnergy;
+		state_cc(i, j, k, RadSystem<ShockProblem>::x1RadFlux_index) = x1RadFlux;
+		state_cc(i, j, k, RadSystem<ShockProblem>::x2RadFlux_index) = 0;
+		state_cc(i, j, k, RadSystem<ShockProblem>::x3RadFlux_index) = 0;
+  });
+  // // loop over the face-centered quantities and set the initial condition
+  // amrex::ParallelFor
+  //   (AMREX_D_DECL(indexRange, indexRange, indexRange),
+  //   AMREX_D_DECL(
+  //     [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 
-	// set flag
-	areInitialConditionsDefined_ = true;
+  //     },
+  //     [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+
+  //     },
+  //     [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+
+  //     }
+  // ));
 }
 
 auto problem_main() -> int

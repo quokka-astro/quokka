@@ -94,28 +94,24 @@ constexpr double Egas0 = 1.0e2;  // erg cm^-3
 constexpr double rho0 = 1.0e-7;  // g cm^-3
 
 template <>
-void RadhydroSimulation<CouplingProblem>::setInitialConditionsAtLevel(int lev) {
-  for (amrex::MFIter iter(state_old_[lev]); iter.isValid(); ++iter) {
-    const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
-    auto const &state = state_new_[lev].array(iter);
-
-    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-      state(i, j, k, RadSystem<CouplingProblem>::radEnergy_index) = Erad0;
-      state(i, j, k, RadSystem<CouplingProblem>::x1RadFlux_index) = 0;
-      state(i, j, k, RadSystem<CouplingProblem>::x2RadFlux_index) = 0;
-      state(i, j, k, RadSystem<CouplingProblem>::x3RadFlux_index) = 0;
-
-      state(i, j, k, RadSystem<CouplingProblem>::gasEnergy_index) = Egas0;
-      state(i, j, k, RadSystem<CouplingProblem>::gasInternalEnergy_index) = Egas0;
-      state(i, j, k, RadSystem<CouplingProblem>::gasDensity_index) = rho0;
-      state(i, j, k, RadSystem<CouplingProblem>::x1GasMomentum_index) = 0.;
-      state(i, j, k, RadSystem<CouplingProblem>::x2GasMomentum_index) = 0.;
-      state(i, j, k, RadSystem<CouplingProblem>::x3GasMomentum_index) = 0.;
-    });
-  }
-
-  // set flag
-  areInitialConditionsDefined_ = true;
+void RadhydroSimulation<CouplingProblem>::setInitialConditionsOnGrid(
+    std::vector<quokka::grid> &grid_vec) {
+  const amrex::Box &indexRange = grid_vec[0].indexRange;
+  const amrex::Array4<double>& state_cc = grid_vec[0].array;
+  
+  // loop over the grid and set the initial condition
+  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+    state_cc(i, j, k, RadSystem<CouplingProblem>::radEnergy_index) = Erad0;
+    state_cc(i, j, k, RadSystem<CouplingProblem>::x1RadFlux_index) = 0;
+    state_cc(i, j, k, RadSystem<CouplingProblem>::x2RadFlux_index) = 0;
+    state_cc(i, j, k, RadSystem<CouplingProblem>::x3RadFlux_index) = 0;
+    state_cc(i, j, k, RadSystem<CouplingProblem>::gasEnergy_index) = Egas0;
+    state_cc(i, j, k, RadSystem<CouplingProblem>::gasInternalEnergy_index) = Egas0;
+    state_cc(i, j, k, RadSystem<CouplingProblem>::gasDensity_index) = rho0;
+    state_cc(i, j, k, RadSystem<CouplingProblem>::x1GasMomentum_index) = 0.;
+    state_cc(i, j, k, RadSystem<CouplingProblem>::x2GasMomentum_index) = 0.;
+    state_cc(i, j, k, RadSystem<CouplingProblem>::x3GasMomentum_index) = 0.;
+  });
 }
 
 template <> void RadhydroSimulation<CouplingProblem>::computeAfterTimestep() {
