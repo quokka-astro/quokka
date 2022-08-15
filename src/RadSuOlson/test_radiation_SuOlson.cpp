@@ -135,31 +135,27 @@ void RadSystem<MarshakProblem>::SetRadEnergySource(
 }
 
 template <>
-void RadhydroSimulation<MarshakProblem>::setInitialConditionsAtLevel(int lev) {
+void RadhydroSimulation<MarshakProblem>::setInitialConditionsOnGrid(
+    std::vector<quokka::grid> &grid_vec) {
+  const amrex::Box &indexRange = grid_vec[0].indexRange;
+  const amrex::Array4<double>& state_cc = grid_vec[0].array;
+
   const auto Erad0 = initial_Erad;
   const auto Egas0 = initial_Egas;
-
-  for (amrex::MFIter iter(state_old_[lev]); iter.isValid(); ++iter) {
-    const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
-    auto const &state = state_new_[lev].array(iter);
-
-    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-      state(i, j, k, RadSystem<MarshakProblem>::radEnergy_index) = Erad0;
-      state(i, j, k, RadSystem<MarshakProblem>::x1RadFlux_index) = 0;
-      state(i, j, k, RadSystem<MarshakProblem>::x2RadFlux_index) = 0;
-      state(i, j, k, RadSystem<MarshakProblem>::x3RadFlux_index) = 0;
-
-      state(i, j, k, RadSystem<MarshakProblem>::gasEnergy_index) = Egas0;
-      state(i, j, k, RadSystem<MarshakProblem>::gasDensity_index) = rho0;
-      state(i, j, k, RadSystem<MarshakProblem>::gasInternalEnergy_index) = Egas0;
-      state(i, j, k, RadSystem<MarshakProblem>::x1GasMomentum_index) = 0.;
-      state(i, j, k, RadSystem<MarshakProblem>::x2GasMomentum_index) = 0.;
-      state(i, j, k, RadSystem<MarshakProblem>::x3GasMomentum_index) = 0.;
-    });
-  }
-
-  // set flag
-  areInitialConditionsDefined_ = true;
+  
+  // loop over the grid and set the initial condition
+  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+    state_cc(i, j, k, RadSystem<MarshakProblem>::radEnergy_index) = Erad0;
+    state_cc(i, j, k, RadSystem<MarshakProblem>::x1RadFlux_index) = 0;
+    state_cc(i, j, k, RadSystem<MarshakProblem>::x2RadFlux_index) = 0;
+    state_cc(i, j, k, RadSystem<MarshakProblem>::x3RadFlux_index) = 0;
+    state_cc(i, j, k, RadSystem<MarshakProblem>::gasEnergy_index) = Egas0;
+    state_cc(i, j, k, RadSystem<MarshakProblem>::gasDensity_index) = rho0;
+    state_cc(i, j, k, RadSystem<MarshakProblem>::gasInternalEnergy_index) = Egas0;
+    state_cc(i, j, k, RadSystem<MarshakProblem>::x1GasMomentum_index) = 0.;
+    state_cc(i, j, k, RadSystem<MarshakProblem>::x2GasMomentum_index) = 0.;
+    state_cc(i, j, k, RadSystem<MarshakProblem>::x3GasMomentum_index) = 0.;
+  });
 }
 
 auto problem_main() -> int {

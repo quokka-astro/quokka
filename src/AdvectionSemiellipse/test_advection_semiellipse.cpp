@@ -37,23 +37,18 @@ AMREX_GPU_DEVICE void ComputeExactSolution(
 }
 
 template <>
-void AdvectionSimulation<SemiellipseProblem>::setInitialConditionsAtLevel(
-    int level) {
-  auto const &prob_lo = geom[level].ProbLoArray();
-  auto const &dx = geom[level].CellSizeArray();
-
-  for (amrex::MFIter iter(state_old_[level]); iter.isValid(); ++iter) {
-    const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
-    auto const &state = state_new_[level].array(iter);
-
-    amrex::ParallelFor(indexRange, ncomp_,
-                       [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
-                         ComputeExactSolution(i, j, k, n, state, dx, prob_lo);
-                       });
-  }
-
-  // set flag
-  areInitialConditionsDefined_ = true;
+void AdvectionSimulation<SemiellipseProblem>::setInitialConditionsOnGrid(
+    std::vector<quokka::grid> &grid_vec) {
+  // extract variables required from the geom object
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_vec[0].dx;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
+  const amrex::Box &indexRange = grid_vec[0].indexRange;
+  const amrex::Array4<double>& state_cc = grid_vec[0].array;
+  // loop over the grid and set the initial condition
+  amrex::ParallelFor(indexRange, ncomp_,
+                     [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
+                       ComputeExactSolution(i, j, k, n, state_cc, dx, prob_lo);
+                     });
 }
 
 template <>
