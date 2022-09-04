@@ -20,7 +20,7 @@ Here is a [a Kelvin-Helmholz instability simulated with Quokka](https://vimeo.co
 
 This is [a 3D Rayleigh-Taylor instability](https://vimeo.com/746363534) simulated on a $256^3$ grid:
 
-![Image of 3D RT instability](extern/rt3d_visit0040.png)
+![Image of 3D RT instability](extern/rt3d_visit.png)
 
 Quokka also features advanced Adaptive Quokka Refinement:tm: technology:
 
