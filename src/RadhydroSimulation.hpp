@@ -591,9 +591,9 @@ void RadhydroSimulation<problem_t>::PreInterpState(amrex::FArrayBox &fab, amrex:
 		const auto Etot = cons(i, j, k, HydroSystem<problem_t>::energy_index);
 		const auto kinetic_energy = (px*px + py*py + pz*pz) / (2.0*rho);
 
-		// replace hydro total energy with internal energy
-		const auto Eint = Etot - kinetic_energy;
-		cons(i, j, k, HydroSystem<problem_t>::energy_index) = Eint;
+		// replace hydro total energy with specific internal energy (SIE)
+		const auto e = (Etot - kinetic_energy) / rho;
+		cons(i, j, k, HydroSystem<problem_t>::energy_index) = e;
 	});
 }
 
@@ -609,10 +609,11 @@ void RadhydroSimulation<problem_t>::PostInterpState(amrex::FArrayBox &fab, amrex
 		const auto px = cons(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
 		const auto py = cons(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
 		const auto pz = cons(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
-		const auto Eint = cons(i, j, k, HydroSystem<problem_t>::energy_index);
+		const auto e = cons(i, j, k, HydroSystem<problem_t>::energy_index);
+		const auto Eint = rho * e;
 		const auto kinetic_energy = (px*px + py*py + pz*pz) / (2.0*rho);
 
-		// recompute hydro total energy
+		// recompute hydro total energy from Eint + KE
 		const auto Etot = Eint + kinetic_energy;
 		cons(i, j, k, HydroSystem<problem_t>::energy_index) = Etot;
 	});
