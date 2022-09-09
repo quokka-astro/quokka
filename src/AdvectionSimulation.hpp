@@ -64,6 +64,7 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	using AMRSimulation<problem_t>::tNew_;
 	using AMRSimulation<problem_t>::boxArray;
 	using AMRSimulation<problem_t>::DistributionMap;
+	using AMRSimulation<problem_t>::InterpHookNone;
 
 	explicit AdvectionSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions)
       : AMRSimulation<problem_t>(boundaryConditions) {
@@ -270,7 +271,7 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 
 	// update ghost zones [w/ old timestep]
 	// (N.B. the input and output multifabs are allowed to be the same, as done here)
-	fillBoundaryConditions(state_old_[lev], state_old_[lev], lev, time);
+	fillBoundaryConditions(state_old_[lev], state_old_[lev], lev, time, InterpHookNone, InterpHookNone);
 
 	amrex::Real fluxScaleFactor = NAN;
 	if constexpr (integratorOrder_ == 2) {
@@ -311,7 +312,8 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 
 	if constexpr (integratorOrder_ == 2) {
 		// update ghost zones [w/ intermediate stage stored in state_new_]
-		fillBoundaryConditions(state_new_[lev], state_new_[lev], lev, time + dt_lev);
+		fillBoundaryConditions(state_new_[lev], state_new_[lev], lev, time + dt_lev,
+				InterpHookNone, InterpHookNone);
 
 		// advance all grids on local processor (Stage 2 of integrator)
 		for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {

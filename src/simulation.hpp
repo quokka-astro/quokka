@@ -170,7 +170,7 @@ public:
 
   static void InterpHookNone(amrex::FArrayBox &fab, amrex::Box const &box, int scomp, int ncomp);
   virtual void FillPatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp,
-                 int ncomp) = 0;
+                 int ncomp);
   void FillCoarsePatch(int lev, amrex::Real time, amrex::MultiFab &mf,
                        int icomp, int ncomp);
   void GetData(int lev, amrex::Real time,
@@ -954,6 +954,35 @@ void AMRSimulation<problem_t>::InterpHookNone(
     amrex::FArrayBox &fab, amrex::Box const &box, int scomp, int ncomp)
 {
   // do nothing
+}
+
+// Compute a new multifab 'mf' by copying in state from valid region and filling
+// ghost cells
+// NOTE: This implementation is only used by AdvectionSimulation.
+//  RadhydroSimulation provides its own implementation.
+template <typename problem_t>
+void AMRSimulation<problem_t>::FillPatch(int lev, amrex::Real time,
+                                         amrex::MultiFab &mf, int icomp,
+                                         int ncomp) {
+  BL_PROFILE("AMRSimulation::FillPatch()");
+
+  amrex::Vector<amrex::MultiFab *> cmf;
+  amrex::Vector<amrex::MultiFab *> fmf;
+  amrex::Vector<amrex::Real> ctime;
+  amrex::Vector<amrex::Real> ftime;
+
+  if (lev == 0) {
+    // in this case, should return either state_new_[lev] or state_old_[lev]
+    GetData(lev, time, fmf, ftime);
+  } else {
+    // in this case, should return either state_new_[lev] or state_old_[lev]
+    GetData(lev, time, fmf, ftime);
+    // returns old state, new state, or both depending on 'time'
+    GetData(lev - 1, time, cmf, ctime);
+  }
+
+  FillPatchWithData(lev, time, mf, cmf, ctime, fmf, ftime, icomp, ncomp,
+		InterpHookNone, InterpHookNone);
 }
 
 // Make a new level from scratch using provided BoxArray and

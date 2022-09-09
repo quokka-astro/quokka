@@ -1153,7 +1153,8 @@ void RadhydroSimulation<problem_t>::advanceRadiationSubstepAtLevel(
 	// and another to store the intermediate stage (which is reused for the final stage).
 
 	// update ghost zones [old timestep]
-	fillBoundaryConditions(state_old_[lev], state_old_[lev], lev, time);
+	fillBoundaryConditions(state_old_[lev], state_old_[lev], lev, time,
+			PreInterpState, PostInterpState);
 
 	// advance all grids on local processor (Stage 1 of integrator)
 	for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
@@ -1184,7 +1185,8 @@ void RadhydroSimulation<problem_t>::advanceRadiationSubstepAtLevel(
 	}
 
 	// update ghost zones [intermediate stage stored in state_new_]
-	fillBoundaryConditions(state_new_[lev], state_new_[lev], lev, time + dt_radiation);
+	fillBoundaryConditions(state_new_[lev], state_new_[lev], lev, time + dt_radiation,
+			PreInterpState, PostInterpState);
 
 	// advance all grids on local processor (Stage 2 of integrator)
 	for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
