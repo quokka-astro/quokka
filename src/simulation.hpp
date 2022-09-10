@@ -153,15 +153,23 @@ public:
                                const amrex::DistributionMapping &dm) override;
 
   // AMR utility functions
+  template <typename PreInterpHook, typename PostInterpHook>
   void fillBoundaryConditions(amrex::MultiFab &S_filled, amrex::MultiFab &state,
-                              int lev, amrex::Real time);
+                              int lev, amrex::Real time,
+                              PreInterpHook const &pre_interp,
+                              PostInterpHook const&post_interp);
+
+  template <typename PreInterpHook, typename PostInterpHook>
   void FillPatchWithData(int lev, amrex::Real time, amrex::MultiFab &mf,
                          amrex::Vector<amrex::MultiFab *> &coarseData,
                          amrex::Vector<amrex::Real> &coarseTime,
                          amrex::Vector<amrex::MultiFab *> &fineData,
                          amrex::Vector<amrex::Real> &fineTime, int icomp,
-                         int ncomp);
-  void FillPatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp,
+                         int ncomp, PreInterpHook const &pre_interp,
+                         PostInterpHook const &post_interp);
+
+  static void InterpHookNone(amrex::FArrayBox &fab, amrex::Box const &box, int scomp, int ncomp);
+  virtual void FillPatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp,
                  int ncomp);
   void FillCoarsePatch(int lev, amrex::Real time, amrex::MultiFab &mf,
                        int icomp, int ncomp);
@@ -941,6 +949,42 @@ void AMRSimulation<problem_t>::ClearLevel(int level) {
   flux_reg_[level].reset(nullptr);
 }
 
+template <typename problem_t>
+void AMRSimulation<problem_t>::InterpHookNone(
+    amrex::FArrayBox &fab, amrex::Box const &box, int scomp, int ncomp)
+{
+  // do nothing
+}
+
+// Compute a new multifab 'mf' by copying in state from valid region and filling
+// ghost cells
+// NOTE: This implementation is only used by AdvectionSimulation.
+//  RadhydroSimulation provides its own implementation.
+template <typename problem_t>
+void AMRSimulation<problem_t>::FillPatch(int lev, amrex::Real time,
+                                         amrex::MultiFab &mf, int icomp,
+                                         int ncomp) {
+  BL_PROFILE("AMRSimulation::FillPatch()");
+
+  amrex::Vector<amrex::MultiFab *> cmf;
+  amrex::Vector<amrex::MultiFab *> fmf;
+  amrex::Vector<amrex::Real> ctime;
+  amrex::Vector<amrex::Real> ftime;
+
+  if (lev == 0) {
+    // in this case, should return either state_new_[lev] or state_old_[lev]
+    GetData(lev, time, fmf, ftime);
+  } else {
+    // in this case, should return either state_new_[lev] or state_old_[lev]
+    GetData(lev, time, fmf, ftime);
+    // returns old state, new state, or both depending on 'time'
+    GetData(lev - 1, time, cmf, ctime);
+  }
+
+  FillPatchWithData(lev, time, mf, cmf, ctime, fmf, ftime, icomp, ncomp,
+		InterpHookNone, InterpHookNone);
+}
+
 // Make a new level from scratch using provided BoxArray and
 // DistributionMapping. Only used during initialization. Overrides the pure
 // virtual function in AmrCore
@@ -973,7 +1017,8 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(
   AMREX_ALWAYS_ASSERT(!state_new_[level].contains_nan(0, ncomp));
 
   // fill ghost zones
-  fillBoundaryConditions(state_new_[level], state_new_[level], level, time);
+  fillBoundaryConditions(state_new_[level], state_new_[level], level, time,
+                         InterpHookNone, InterpHookNone);
 
   // copy to state_old_ (including ghost zones)
   state_old_[level].ParallelCopy(state_new_[level], 0, 0, ncomp, nghost,
@@ -1005,10 +1050,13 @@ AMRSimulation<problem_t>::setCustomBoundaryConditions(
 }
 
 template <typename problem_t>
+template <typename PreInterpHook, typename PostInterpHook>
 void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
                                                       amrex::MultiFab &state,
                                                       int const lev,
-                                                      amrex::Real const time) {
+                                                      amrex::Real const time,
+                                                      PreInterpHook const &pre_interp,
+                                                      PostInterpHook const &post_interp) {
   BL_PROFILE("AMRSimulation::fillBoundaryConditions()");
 
   // On a single level, any periodic boundaries are filled first
@@ -1037,7 +1085,7 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
     }
 
     FillPatchWithData(lev, time, S_filled, coarseData, coarseTime, fineData,
-                      fineTime, 0, S_filled.nComp());
+                      fineTime, 0, S_filled.nComp(), pre_interp, post_interp);
   } else { // level 0
     // fill internal and periodic boundaries, ignoring corners (cross=true)
     // (there is no performance benefit for this in practice)
@@ -1069,12 +1117,14 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 // Compute a new multifab 'mf' by copying in state from given data and filling
 // ghost cells
 template <typename problem_t>
+template <typename PreInterpHook, typename PostInterpHook>
 void AMRSimulation<problem_t>::FillPatchWithData(
     int lev, amrex::Real time, amrex::MultiFab &mf,
     amrex::Vector<amrex::MultiFab *> &coarseData,
     amrex::Vector<amrex::Real> &coarseTime,
     amrex::Vector<amrex::MultiFab *> &fineData,
-    amrex::Vector<amrex::Real> &fineTime, int icomp, int ncomp) {
+    amrex::Vector<amrex::Real> &fineTime, int icomp, int ncomp,
+    PreInterpHook const &pre_interp, PostInterpHook const &post_interp) {
   BL_PROFILE("AMRSimulation::FillPatchWithData()");
 
   // create functor to fill ghost zones at domain boundaries
@@ -1105,34 +1155,9 @@ void AMRSimulation<problem_t>::FillPatchWithData(
                               fineTime, 0, icomp, ncomp, geom[lev - 1],
                               geom[lev], coarsePhysicalBoundaryFunctor, 0,
                               finePhysicalBoundaryFunctor, 0, refRatio(lev - 1),
-                              mapper, boundaryConditions_, 0);
+                              mapper, boundaryConditions_, 0,
+                              pre_interp, post_interp);
   }
-}
-
-// Compute a new multifab 'mf' by copying in state from valid region and filling
-// ghost cells
-template <typename problem_t>
-void AMRSimulation<problem_t>::FillPatch(int lev, amrex::Real time,
-                                         amrex::MultiFab &mf, int icomp,
-                                         int ncomp) {
-  BL_PROFILE("AMRSimulation::FillPatch()");
-
-  amrex::Vector<amrex::MultiFab *> cmf;
-  amrex::Vector<amrex::MultiFab *> fmf;
-  amrex::Vector<amrex::Real> ctime;
-  amrex::Vector<amrex::Real> ftime;
-
-  if (lev == 0) {
-    // in this case, should return either state_new_[lev] or state_old_[lev]
-    GetData(lev, time, fmf, ftime);
-  } else {
-    // in this case, should return either state_new_[lev] or state_old_[lev]
-    GetData(lev, time, fmf, ftime);
-    // returns old state, new state, or both depending on 'time'
-    GetData(lev - 1, time, cmf, ctime);
-  }
-
-  FillPatchWithData(lev, time, mf, cmf, ctime, fmf, ftime, icomp, ncomp);
 }
 
 // Fill an entire multifab by interpolating from the coarser level
