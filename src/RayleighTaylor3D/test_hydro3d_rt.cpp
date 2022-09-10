@@ -171,6 +171,28 @@ void RadhydroSimulation<RTProblem>::ErrorEst(
   }
 }
 
+template <>
+void RadhydroSimulation<RTProblem>::computeAfterTimestep() {
+  // compute 1D mixing profile, save to text file
+  int axis = 2; // z-axis
+  auto profile = computeAxisAlignedProfile(axis,
+    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const & state) {
+      return state(i, j, k, HydroSystem<RTProblem>::scalar0_index);
+  });
+
+  // save profile to text file
+  if (amrex::ParallelDescriptor::IOProcessor()) {
+    std::ofstream file;
+    file.open("profile.txt");
+    file.precision(17);
+    
+    for(int i = 0; i < profile.size(); ++i) {
+      file << profile[i] << "\n";
+    }
+    file.close();
+  }
+}
+
 auto problem_main() -> int {
   // Set boundary conditions
   	auto isNormalComp = [=](int n, int dim) {
