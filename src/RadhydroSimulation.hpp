@@ -79,6 +79,8 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	using AMRSimulation<problem_t>::CountCells;
 	using AMRSimulation<problem_t>::WriteCheckpointFile;
 	using AMRSimulation<problem_t>::simulationMetadata_;
+	using AMRSimulation<problem_t>::GetData;
+	using AMRSimulation<problem_t>::FillPatchWithData;
 
 	std::vector<double> t_vec_;
 	std::vector<double> Trad_vec_;
@@ -149,6 +151,13 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 
 	// fix-up states
 	void FixupState(int level) override;
+
+	// implement FillPatch function
+	void FillPatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp) override;
+
+	// functions to operate on state vector before/after interpolating between levels
+	static void PreInterpState(amrex::FArrayBox &fab, amrex::Box const &box, int scomp, int ncomp);
+	static void PostInterpState(amrex::FArrayBox &fab, amrex::Box const &box, int scomp, int ncomp);
 
 	// tag cells for refinement
 	void ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override;
@@ -536,6 +545,78 @@ void RadhydroSimulation<problem_t>::FixupState(int lev)
 	}
 }
 
+// Compute a new multifab 'mf' by copying in state from valid region and filling
+// ghost cells
+// NOTE: This has to be implemented here because PreInterpState and PostInterpState
+// are implemented in this class (and must be *static* functions).
+template <typename problem_t>
+void RadhydroSimulation<problem_t>::FillPatch(int lev, amrex::Real time,
+                                         amrex::MultiFab &mf, int icomp,
+                                         int ncomp) {
+  BL_PROFILE("AMRSimulation::FillPatch()");
+
+  amrex::Vector<amrex::MultiFab *> cmf;
+  amrex::Vector<amrex::MultiFab *> fmf;
+  amrex::Vector<amrex::Real> ctime;
+  amrex::Vector<amrex::Real> ftime;
+
+  if (lev == 0) {
+    // in this case, should return either state_new_[lev] or state_old_[lev]
+    GetData(lev, time, fmf, ftime);
+  } else {
+    // in this case, should return either state_new_[lev] or state_old_[lev]
+    GetData(lev, time, fmf, ftime);
+    // returns old state, new state, or both depending on 'time'
+    GetData(lev - 1, time, cmf, ctime);
+  }
+
+  FillPatchWithData(lev, time, mf, cmf, ctime, fmf, ftime, icomp, ncomp,
+		PreInterpState, PostInterpState);
+}
+
+template <typename problem_t>
+void RadhydroSimulation<problem_t>::PreInterpState(amrex::FArrayBox &fab, amrex::Box const &box,
+	int scomp, int ncomp)
+{
+	BL_PROFILE("RadhydroSimulation::PreInterpState()");
+
+	auto const &cons = fab.array();
+	amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		const auto rho = cons(i, j, k, HydroSystem<problem_t>::density_index);
+		const auto px = cons(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
+		const auto py = cons(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
+		const auto pz = cons(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
+		const auto Etot = cons(i, j, k, HydroSystem<problem_t>::energy_index);
+		const auto kinetic_energy = (px*px + py*py + pz*pz) / (2.0*rho);
+
+		// replace hydro total energy with specific internal energy (SIE)
+		const auto e = (Etot - kinetic_energy) / rho;
+		cons(i, j, k, HydroSystem<problem_t>::energy_index) = e;
+	});
+}
+
+template <typename problem_t>
+void RadhydroSimulation<problem_t>::PostInterpState(amrex::FArrayBox &fab, amrex::Box const &box,
+	int scomp, int ncomp)
+{
+	BL_PROFILE("RadhydroSimulation::PostInterpState()");
+
+	auto const &cons = fab.array();
+	amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		const auto rho = cons(i, j, k, HydroSystem<problem_t>::density_index);
+		const auto px = cons(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
+		const auto py = cons(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
+		const auto pz = cons(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
+		const auto e = cons(i, j, k, HydroSystem<problem_t>::energy_index);
+		const auto Eint = rho * e;
+		const auto kinetic_energy = (px*px + py*py + pz*pz) / (2.0*rho);
+
+		// recompute hydro total energy from Eint + KE
+		const auto Etot = Eint + kinetic_energy;
+		cons(i, j, k, HydroSystem<problem_t>::energy_index) = Etot;
+	});
+}
+
 template <typename problem_t>
 void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real time,
 							amrex::Real dt_lev,
@@ -564,7 +645,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 	addStrangSplitSources(state_old_tmp, lev, time, 0.5*dt_lev);
 
 	// update ghost zones [old timestep]
-	fillBoundaryConditions(state_old_tmp, state_old_tmp, lev, time);
+	fillBoundaryConditions(state_old_tmp, state_old_tmp, lev, time, PreInterpState, PostInterpState);
 
 	// check state validity
 	AMREX_ASSERT(!state_old_tmp.contains_nan(0, state_old_tmp.nComp()));
@@ -646,7 +727,8 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 
 	if (integratorOrder_ == 2) {
 		// update ghost zones [intermediate stage stored in state_new_]
-		fillBoundaryConditions(state_new_[lev], state_new_[lev], lev, time + dt_lev);
+		fillBoundaryConditions(state_new_[lev], state_new_[lev], lev, time + dt_lev,
+			PreInterpState, PostInterpState);
 
 		// check intermediate state validity
 		AMREX_ASSERT(!state_new_[lev].contains_nan(0, state_new_[lev].nComp()));
@@ -1071,7 +1153,8 @@ void RadhydroSimulation<problem_t>::advanceRadiationSubstepAtLevel(
 	// and another to store the intermediate stage (which is reused for the final stage).
 
 	// update ghost zones [old timestep]
-	fillBoundaryConditions(state_old_[lev], state_old_[lev], lev, time);
+	fillBoundaryConditions(state_old_[lev], state_old_[lev], lev, time,
+			PreInterpState, PostInterpState);
 
 	// advance all grids on local processor (Stage 1 of integrator)
 	for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
@@ -1102,7 +1185,8 @@ void RadhydroSimulation<problem_t>::advanceRadiationSubstepAtLevel(
 	}
 
 	// update ghost zones [intermediate stage stored in state_new_]
-	fillBoundaryConditions(state_new_[lev], state_new_[lev], lev, time + dt_radiation);
+	fillBoundaryConditions(state_new_[lev], state_new_[lev], lev, time + dt_radiation,
+			PreInterpState, PostInterpState);
 
 	// advance all grids on local processor (Stage 2 of integrator)
 	for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
