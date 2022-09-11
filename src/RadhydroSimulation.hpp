@@ -75,6 +75,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	using AMRSimulation<problem_t>::constantDt_;
 	using AMRSimulation<problem_t>::boxArray;
 	using AMRSimulation<problem_t>::DistributionMap;
+	using AMRSimulation<problem_t>::refRatio;
 	using AMRSimulation<problem_t>::cellUpdates_;
 	using AMRSimulation<problem_t>::CountCells;
 	using AMRSimulation<problem_t>::WriteCheckpointFile;
@@ -167,6 +168,10 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	// functions to operate on state vector before/after interpolating between levels
 	static void PreInterpState(amrex::FArrayBox &fab, amrex::Box const &box, int scomp, int ncomp);
 	static void PostInterpState(amrex::FArrayBox &fab, amrex::Box const &box, int scomp, int ncomp);
+
+	// compute axis-aligned 1D profile of user_f(x, y, z)
+	template <typename F>
+	auto computeAxisAlignedProfile(int axis, F const &user_f) -> amrex::Gpu::HostVector<amrex::Real>;
 
 	// tag cells for refinement
 	void ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override;
@@ -617,6 +622,52 @@ void RadhydroSimulation<problem_t>::PostInterpState(amrex::FArrayBox &fab, amrex
 		const auto Etot = Eint + kinetic_energy;
 		cons(i, j, k, HydroSystem<problem_t>::energy_index) = Etot;
 	});
+}
+
+template <typename problem_t>
+template <typename F>
+auto RadhydroSimulation<problem_t>::computeAxisAlignedProfile(const int axis, F const &user_f)
+	-> amrex::Gpu::HostVector<amrex::Real>
+{
+	// compute a 1D profile of user_f(i, j, k, state) along the given axis.
+	BL_PROFILE("RadhydroSimulation::computeAxisAlignedProfile()");
+
+	// allocate temporary multifabs
+	amrex::Vector<amrex::MultiFab> q;
+	q.resize(finest_level+1);
+	for(int lev = 0; lev <= finest_level; ++lev) {
+		q[lev].define(boxArray(lev), DistributionMap(lev), 1, 0);
+	}
+
+	// evaluate user_f on all levels
+	for(int lev = 0; lev <= finest_level; ++lev) {
+		for(amrex::MFIter iter(q[lev]); iter.isValid(); ++iter) {
+			auto const &box = iter.validbox();
+			auto const &state = state_new_[lev].const_array(iter);
+			auto const &result = q[lev].array(iter);
+			amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+				result(i, j, k) = user_f(i, j, k, state);
+			});
+		}
+	}
+
+	// average down
+	for (int crse_lev = finest_level - 1; crse_lev >= 0; --crse_lev) {
+  		amrex::average_down(q[crse_lev + 1], q[crse_lev],
+			geom[crse_lev + 1], geom[crse_lev], 0, q[crse_lev].nComp(), refRatio(crse_lev));
+  	}
+
+	// compute 1D profile from level 0 multifab
+	amrex::Box domain = geom[0].Domain();
+	auto profile = amrex::sumToLine(q[0], 0, q[0].nComp(), domain, axis);
+
+	// normalize profile
+	amrex::Long numCells = domain.numPts() / domain.length(axis);
+	for (int i = 0; i < profile.size(); ++i) {
+		profile[i] /= static_cast<amrex::Real>(numCells);
+	}
+
+	return profile;
 }
 
 template <typename problem_t>
