@@ -1,0 +1,20 @@
+#!/bin/bash --login
+#SBATCH --job-name="quokka_hip_test"
+#SBATCH --partition=gpuMI100x8
+#SBATCH --account=cvz-delta-gpu
+#SBATCH --mem=512G
+#SBATCH --time=01:00:00
+#SBATCH --constraint="projects,scratch"
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=128
+#SBATCH --gpus-per-task=1
+#SBATCH --gpu-bind=closest,1
+#SBATCH --exclusive
+
+# run
+srun ./build-hip/src/HydroBlast3D/test_hydro3d_blast tests/blast_unigrid_256.in
+
+
+
+
