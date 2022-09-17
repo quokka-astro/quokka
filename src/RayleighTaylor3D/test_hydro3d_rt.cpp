@@ -103,17 +103,14 @@ template <>
 void RadhydroSimulation<RTProblem>::addStrangSplitSources(amrex::MultiFab &state_mf,
     const int lev, const amrex::Real time, const amrex::Real dt) {
   // add gravitational source terms
+  const auto state = state_mf.arrays();
 
-  for (amrex::MFIter mfi(state_mf); mfi.isValid(); ++mfi) {
-    const amrex::Box &box = mfi.validbox();
-    const auto state = state_mf.array(mfi);
-
-    amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+  amrex::ParallelFor(state_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
       // save initial KE
-      amrex::Real const rho = state(i, j, k, HydroSystem<RTProblem>::density_index);
-      amrex::Real px = state(i, j, k, HydroSystem<RTProblem>::x1Momentum_index);
-      amrex::Real py = state(i, j, k, HydroSystem<RTProblem>::x2Momentum_index);
-      amrex::Real pz = state(i, j, k, HydroSystem<RTProblem>::x3Momentum_index);
+      amrex::Real const rho = state[bx](i, j, k, HydroSystem<RTProblem>::density_index);
+      amrex::Real px = state[bx](i, j, k, HydroSystem<RTProblem>::x1Momentum_index);
+      amrex::Real py = state[bx](i, j, k, HydroSystem<RTProblem>::x2Momentum_index);
+      amrex::Real pz = state[bx](i, j, k, HydroSystem<RTProblem>::x3Momentum_index);
       amrex::Real const KE_init = (px*px + py*py + pz*pz) / (2.0 * rho);
 
       // add body forces
@@ -126,12 +123,11 @@ void RadhydroSimulation<RTProblem>::addStrangSplitSources(amrex::MultiFab &state
       amrex::Real const dKE = KE_final - KE_init;
 
       // update variables
-      state(i, j, k, HydroSystem<RTProblem>::x1Momentum_index) = px;
-      state(i, j, k, HydroSystem<RTProblem>::x2Momentum_index) = py;
-      state(i, j, k, HydroSystem<RTProblem>::x3Momentum_index) = pz;
-      state(i, j, k, HydroSystem<RTProblem>::energy_index) += dKE;
-    });
-  }
+      state[bx](i, j, k, HydroSystem<RTProblem>::x1Momentum_index) = px;
+      state[bx](i, j, k, HydroSystem<RTProblem>::x2Momentum_index) = py;
+      state[bx](i, j, k, HydroSystem<RTProblem>::x3Momentum_index) = pz;
+      state[bx](i, j, k, HydroSystem<RTProblem>::energy_index) += dKE;
+  });
 }
 
 template <>
@@ -142,20 +138,19 @@ void RadhydroSimulation<RTProblem>::ErrorEst(
   const amrex::Real eta_threshold = 0.2; // gradient refinement threshold
   const amrex::Real rho_min = 0.1;       // minimum density for refinement
 
-  for (amrex::MFIter mfi(state_new_[lev]); mfi.isValid(); ++mfi) {
-    const amrex::Box &box = mfi.validbox();
-    const auto state = state_new_[lev].const_array(mfi);
-    const auto tag = tags.array(mfi);
+  const auto state = state_new_[lev].const_arrays();
+  const auto tag = tags.arrays();
 
-    amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+  amrex::ParallelFor(state_new_[lev],
+    [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
       const int n = HydroSystem<RTProblem>::density_index;
-      amrex::Real const rho = state(i, j, k, n);
-      amrex::Real const rho_xplus = state(i + 1, j, k, n);
-      amrex::Real const rho_xminus = state(i - 1, j, k, n);
-      amrex::Real const rho_yplus = state(i, j + 1, k, n);
-      amrex::Real const rho_yminus = state(i, j - 1, k, n);
-      amrex::Real const rho_zplus = state(i, j, k + 1, n);
-      amrex::Real const rho_zminus = state(i, j, k - 1, n);
+      amrex::Real const rho = state[bx](i, j, k, n);
+      amrex::Real const rho_xplus = state[bx](i + 1, j, k, n);
+      amrex::Real const rho_xminus = state[bx](i - 1, j, k, n);
+      amrex::Real const rho_yplus = state[bx](i, j + 1, k, n);
+      amrex::Real const rho_yminus = state[bx](i, j - 1, k, n);
+      amrex::Real const rho_zplus = state[bx](i, j, k + 1, n);
+      amrex::Real const rho_zminus = state[bx](i, j, k - 1, n);
 
       amrex::Real const del_x = 0.5 * (rho_xplus - rho_xminus);
       amrex::Real const del_y = 0.5 * (rho_yplus - rho_yminus);
@@ -165,32 +160,37 @@ void RadhydroSimulation<RTProblem>::ErrorEst(
           std::sqrt(del_x*del_x + del_y*del_y + del_z*del_z) / rho;
 
       if ((gradient_indicator > eta_threshold) && (rho > rho_min)) {
-        tag(i, j, k) = amrex::TagBox::SET;
+        tag[bx](i, j, k) = amrex::TagBox::SET;
       }
-    });
-  }
+  });
 }
 
 template <>
 void RadhydroSimulation<RTProblem>::computeAfterTimestep() {
   // compute 1D mixing profile, save to text file
-  int axis = 2; // z-axis
-  auto profile = computeAxisAlignedProfile(axis,
-    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const & state) {
-      return state(i, j, k, HydroSystem<RTProblem>::scalar0_index);
-  });
+  static amrex::Long cycle = 0;
 
-  // save profile to text file
-  if (amrex::ParallelDescriptor::IOProcessor()) {
-    std::ofstream file;
-    file.open("profile.txt");
-    file.precision(17);
-    
-    for(int i = 0; i < profile.size(); ++i) {
-      file << profile[i] << "\n";
+  if ((cycle % 10) == 0) {
+    int axis = 2; // z-axis
+    auto profile = computeAxisAlignedProfile(axis,
+      [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const & state) {
+        return state(i, j, k, HydroSystem<RTProblem>::scalar0_index);
+    });
+
+    // save profile to text file
+    if (amrex::ParallelDescriptor::IOProcessor()) {
+      std::ofstream file;
+      file.open("profile.txt");
+      file.precision(17);
+      
+      for(int i = 0; i < profile.size(); ++i) {
+        file << profile[i] << "\n";
+      }
+      file.close();
     }
-    file.close();
   }
+  
+  cycle++;
 }
 
 auto problem_main() -> int {
