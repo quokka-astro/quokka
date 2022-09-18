@@ -128,6 +128,7 @@ void RadhydroSimulation<RTProblem>::addStrangSplitSources(amrex::MultiFab &state
       state[bx](i, j, k, HydroSystem<RTProblem>::x3Momentum_index) = pz;
       state[bx](i, j, k, HydroSystem<RTProblem>::energy_index) += dKE;
   });
+  amrex::Gpu::streamSynchronize();  
 }
 
 template <>
@@ -160,6 +161,7 @@ void RadhydroSimulation<RTProblem>::ErrorEst(
         tag[bx](i, j, k) = amrex::TagBox::SET;
       }
   });
+  amrex::Gpu::streamSynchronize();
 }
 
 auto problem_main() -> int {
