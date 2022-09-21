@@ -255,26 +255,18 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
   const Real rtol = 1.0e-4; // not recommended to change this
 
   auto tables = cloudyTables.const_tables();
+  auto const &state = mf.arrays();
 
-  const auto &ba = mf.boxArray();
-  const auto &dmap = mf.DistributionMap();
-  amrex::iMultiFab nsubstepsMF(ba, dmap, 1, 0);
-
-  for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
-    const amrex::Box &indexRange = iter.validbox();
-    auto const &state = mf.array(iter);
-    auto const &nsubsteps = nsubstepsMF.array(iter);
-
-    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j,
+  amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j,
                                                         int k) noexcept {
-      const Real rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
+      const Real rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
       const Real x1Mom =
-          state(i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
+          state[bx](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
       const Real x2Mom =
-          state(i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
+          state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
       const Real x3Mom =
-          state(i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
-      const Real Egas = state(i, j, k, HydroSystem<ShockCloud>::energy_index);
+          state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
+      const Real Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
 
       const Real Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(
           rho, x1Mom, x2Mom, x3Mom, Egas);
@@ -290,7 +282,6 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
       int nsteps = 0;
       rk_adaptive_integrate(user_rhs, 0, y, dt, &user_data, rtol, abstol,
                             nsteps);
-      nsubsteps(i, j, k) = nsteps;
 
       // check if integration failed
       if (nsteps >= maxStepsODEIntegrate) {
@@ -302,26 +293,15 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
             "max substeps exceeded! rho = %.17e, Eint = %.17e, T = %g, cooling "
             "time = %g, dt = %.17e\n",
             rho, Eint, T, t_cool, dt);
+        amrex::Abort("Max steps exceeded in cooling solve!");
       }
       const Real Eint_new = y[0];
       const Real dEint = Eint_new - Eint;
 
-      state(i, j, k, HydroSystem<ShockCloud>::energy_index) += dEint;
-      state(i, j, k, HydroSystem<ShockCloud>::internalEnergy_index) += dEint;
-    });
-  }
-
-  int nmin = nsubstepsMF.min(0);
-  int nmax = nsubstepsMF.max(0);
-  Real navg = static_cast<Real>(nsubstepsMF.sum(0)) /
-              static_cast<Real>(nsubstepsMF.boxArray().numPts());
-
-  if (nmax >= maxStepsODEIntegrate) {
-    amrex::Print() << fmt::format(
-        "\tcooling substeps (per cell): min {}, avg {}, max {}\n", nmin, navg,
-        nmax);
-    amrex::Abort("Max steps exceeded in cooling solve!");
-  }
+      state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index) += dEint;
+      state[bx](i, j, k, HydroSystem<ShockCloud>::internalEnergy_index) += dEint;
+  });
+  amrex::Gpu::streamSynchronize();
 }
 
 template <>
