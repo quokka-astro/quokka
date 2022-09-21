@@ -27,7 +27,7 @@
 
 static const bool grackle_verbose = true;
 
-void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name,
+void initialize_cloudy_data(cloudy_data &my_cloudy,
                             std::string &grackle_data_file,
                             code_units &my_units) {
   // Initialize vectors
@@ -38,8 +38,7 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name,
   }
 
   if (grackle_verbose) {
-    amrex::Print() << fmt::format("Initializing Cloudy cooling: {}.\n",
-                                  group_name);
+    amrex::Print() << "Initializing Cloudy cooling.\n";
     amrex::Print() << fmt::format("cloudy_table_file: {}.\n",
                                   grackle_data_file);
   }
@@ -74,8 +73,7 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name,
       "Old-style Grackle data tables are not supported!");
 
   // Open cooling dataset and get grid dimensions
-  std::string parameter_name;
-  parameter_name = fmt::format("/CoolingRates/{}/Cooling", group_name);
+  std::string parameter_name = "/Cooling";
 
   dset_id = H5Dopen2(file_id, parameter_name.c_str(),
                      H5P_DEFAULT); // new API in HDF5 1.8.0+
@@ -112,16 +110,18 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name,
   for (int64_t q = 0; q < my_cloudy.grid_rank; q++) {
 
     if (q < my_cloudy.grid_rank - 1) {
-      parameter_name = fmt::format("Parameter{}", q + 1);
+      parameter_name = fmt::format("/Parameter{}", q + 1);
     } else {
-      parameter_name = "Temperature";
+      parameter_name = "/Temperature";
     }
 
     double *temp_data = new double[my_cloudy.grid_dimension[q]];
 
-    attr_id = H5Aopen_name(dset_id, parameter_name.c_str());
+    //attr_id = H5Aopen_name(dset_id, parameter_name.c_str());
+    //status = H5Aread(attr_id, HDF5_R8, temp_data);
 
-    status = H5Aread(attr_id, HDF5_R8, temp_data);
+    dset_id = H5Dopen2(file_id, parameter_name.c_str(), H5P_DEFAULT);
+    status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, temp_data);
 
     my_cloudy.grid_parameters[q] = amrex::Table1D<double>(
         temp_data, 0, static_cast<int>(my_cloudy.grid_dimension[q]));
@@ -143,7 +143,8 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name,
           my_cloudy.grid_dimension[q]);
     }
 
-    status = H5Aclose(attr_id);
+    //status = H5Aclose(attr_id);
+    status = H5Dclose(dset_id);
   }
 
   my_cloudy.data_size = 1;
@@ -156,20 +157,21 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name,
     // Read Cooling data
     double *temp_data = new double[my_cloudy.data_size];
 
-    status =
-        H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, temp_data);
+    std::string parameter_name = "/Cooling";
+    dset_id = H5Dopen2(file_id, parameter_name.c_str(),
+                      H5P_DEFAULT); // new API in HDF5 1.8.0+
+    status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, temp_data);
 
     AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error,
                                      "Failed to read Cooling dataset!");
 
-    amrex::GpuArray<int, 3> lo{0, 0, 0};
-    amrex::GpuArray<int, 3> hi{static_cast<int>(my_cloudy.grid_dimension[2]),
-                               static_cast<int>(my_cloudy.grid_dimension[1]),
+    amrex::GpuArray<int, 2> lo{0, 0};
+    amrex::GpuArray<int, 2> hi{static_cast<int>(my_cloudy.grid_dimension[1]),
                                static_cast<int>(my_cloudy.grid_dimension[0])};
 
-    // N.B.: Table3D uses column-major (Fortran-order) indexing, but Grackle
+    // N.B.: Table2D uses column-major (Fortran-order) indexing, but Grackle
     // tables use row-major (C-order) indexing!
-    my_cloudy.cooling_data = amrex::Table3D<double>(temp_data, lo, hi);
+    my_cloudy.cooling_data = amrex::Table2D<double>(temp_data, lo, hi);
 
     for (int64_t q = 0; q < my_cloudy.data_size; q++) {
       // Convert to code units
@@ -185,7 +187,7 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name,
     // Read Heating data
     double *temp_data = new double[my_cloudy.data_size];
 
-    parameter_name = fmt::format("/CoolingRates/{}/Heating", group_name);
+    parameter_name = "/Heating";
 
     dset_id = H5Dopen2(file_id, parameter_name.c_str(),
                        H5P_DEFAULT); // new API in HDF5 1.8.0+
@@ -196,14 +198,13 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name,
     AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error,
                                      "Failed to read Heating dataset!");
 
-    amrex::GpuArray<int, 3> lo{0, 0, 0};
-    amrex::GpuArray<int, 3> hi{static_cast<int>(my_cloudy.grid_dimension[2]),
-                               static_cast<int>(my_cloudy.grid_dimension[1]),
+    amrex::GpuArray<int, 2> lo{0, 0};
+    amrex::GpuArray<int, 2> hi{static_cast<int>(my_cloudy.grid_dimension[1]),
                                static_cast<int>(my_cloudy.grid_dimension[0])};
 
-    // N.B.: Table3D uses column-major (Fortran-order) indexing, but Grackle
+    // N.B.: Table2D uses column-major (Fortran-order) indexing, but Grackle
     // tables use row-major (C-order) indexing!
-    my_cloudy.heating_data = amrex::Table3D<double>(temp_data, lo, hi);
+    my_cloudy.heating_data = amrex::Table2D<double>(temp_data, lo, hi);
 
     for (int64_t q = 0; q < my_cloudy.data_size; q++) {
       // Convert to code units
@@ -215,20 +216,19 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name,
     status = H5Dclose(dset_id);
   }
 
-  if (std::string(group_name) == "Primordial") {
+  {
     // Read mean molecular weight table
     double *temp_data = new double[my_cloudy.data_size];
 
-    amrex::GpuArray<int, 3> lo{0, 0, 0};
-    amrex::GpuArray<int, 3> hi{static_cast<int>(my_cloudy.grid_dimension[2]),
-                               static_cast<int>(my_cloudy.grid_dimension[1]),
+    amrex::GpuArray<int, 2> lo{0, 0};
+    amrex::GpuArray<int, 2> hi{static_cast<int>(my_cloudy.grid_dimension[1]),
                                static_cast<int>(my_cloudy.grid_dimension[0])};
 
-    // N.B.: Table3D uses column-major (Fortran-order) indexing, but Grackle
+    // N.B.: Table2D uses column-major (Fortran-order) indexing, but Grackle
     // tables use row-major (C-order) indexing!
-    my_cloudy.mmw_data = amrex::Table3D<double>(temp_data, lo, hi);
+    my_cloudy.mmw_data = amrex::Table2D<double>(temp_data, lo, hi);
 
-    parameter_name = fmt::format("/CoolingRates/{}/MMW", group_name);
+    parameter_name = "/MMW";
 
     dset_id = H5Dopen2(file_id, parameter_name.c_str(),
                        H5P_DEFAULT); // new API in HDF5 1.8.0+
@@ -250,18 +250,18 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name,
       "CLOUDY_MAX_DIMENSION");
 }
 
-auto extract_2d_table(amrex::Table3D<double> const &table3D, int redshift_index)
+auto extract_2d_table(amrex::Table2D<double> const &table2D)
     -> amrex::TableData<double, 2> {
-  // table3d dimensions (F-ordering) are: temperature, redshift, density
-  // (but the table3d data is stored with C-ordering)
-  auto lo = table3D.begin;
-  auto hi = table3D.end;
+  // Table2D dimensions (F-ordering) are: temperature, redshift, density
+  // (but the Table2D data is stored with C-ordering)
+  auto lo = table2D.begin;
+  auto hi = table2D.end;
 
-  // N.B.: Table3D uses column-major (Fortran-order) indexing, but
+  // N.B.: Table2D uses column-major (Fortran-order) indexing, but
   // Grackle tables use row-major (C-order) indexing, so we reverse the indices
   // here
-  amrex::Array<int, 2> newlo{lo[2], lo[0]};
-  amrex::Array<int, 2> newhi{hi[2] - 1, hi[0] - 1};
+  amrex::Array<int, 2> newlo{lo[1], lo[0]};
+  amrex::Array<int, 2> newhi{hi[1] - 1, hi[0] - 1};
   amrex::TableData<double, 2> tableData(newlo, newhi,
                                         amrex::The_Managed_Arena());
   auto table = tableData.table();
@@ -269,7 +269,7 @@ auto extract_2d_table(amrex::Table3D<double> const &table3D, int redshift_index)
   for (int i = newlo[0]; i <= newhi[0]; ++i) {
     for (int j = newlo[1]; j <= newhi[1]; ++j) {
       // swap index ordering so we can use Table2D's F-ordering accessor ()
-      table(i, j) = table3D(j, redshift_index, i);
+      table(i, j) = table2D(j, i);
     }
   }
   // N.B.: table should now be F-ordered: density, temperature

@@ -28,7 +28,7 @@
 using Real = amrex::Real;
 
 #define SMALL_LOG_VALUE -99.0
-#define CLOUDY_MAX_DIMENSION 3 // we are using amrex::Table3D
+#define CLOUDY_MAX_DIMENSION 2 // we are using amrex::Table2D
 
 /* HDF5 definitions */
 
@@ -57,13 +57,13 @@ using cloudy_data = struct cloudy_data {
   std::vector<amrex::Table1D<double>> grid_parameters;
 
   // Heating values
-  amrex::Table3D<double> heating_data;
+  amrex::Table2D<double> heating_data;
 
   // Cooling values
-  amrex::Table3D<double> cooling_data;
+  amrex::Table2D<double> cooling_data;
 
   // Mean Molecular Weight values
-  amrex::Table3D<double> mmw_data;
+  amrex::Table2D<double> mmw_data;
 
   // Length of 1D flattened data
   int64_t data_size = 0;
@@ -76,11 +76,11 @@ using code_units = struct code_units {
   double velocity_units = 1;
 };
 
-void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name,
+void initialize_cloudy_data(cloudy_data &my_cloudy,
                             std::string &grackle_data_file,
                             code_units &my_units);
 
-auto extract_2d_table(amrex::Table3D<double> const &table3D, int redshift_index)
+auto extract_2d_table(amrex::Table2D<double> const &table3D)
     -> amrex::TableData<double, 2>;
 
 auto copy_1d_table(amrex::Table1D<double> const &table1D)
