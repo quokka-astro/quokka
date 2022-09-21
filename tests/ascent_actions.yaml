@@ -18,6 +18,35 @@
             x: 0.0
             y: 0.0
             z: 1.0
+    pl2:
+      f3:
+        type: "slice"
+        params: 
+          point: 
+            x: 0.5
+            y: 0.5
+            z: 0.5
+          normal: 
+            x: 0.0
+            y: 0.0
+            z: 1.0
+    pl3: 
+      f1: 
+        type: "log10"
+        params: 
+          field: "temperature"
+          output_name: "log_T"
+      f2:
+        type: "slice"
+        params: 
+          point: 
+            x: 0.5
+            y: 0.5
+            z: 0.5
+          normal: 
+            x: 0.0
+            y: 0.0
+            z: 1.0
 - 
   action: "add_scenes"
   scenes: 
@@ -30,4 +59,24 @@
       renders:
         r1:
           image_prefix: "log_density%05d"
-          annotations: "false"
+          annotations: "true"
+    s2: 
+      plots: 
+        p1: 
+          type: "pseudocolor"
+          field: "temperature"
+          pipeline: "pl2"
+      renders:
+        r1:
+          image_prefix: "temperature%05d"
+          annotations: "true"
+    s3: 
+      plots: 
+        p1: 
+          type: "pseudocolor"
+          field: "log_T"
+          pipeline: "pl3"
+      renders:
+        r1:
+          image_prefix: "log_temp%05d"
+          annotations: "true"
