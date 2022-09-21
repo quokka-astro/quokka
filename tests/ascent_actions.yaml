@@ -3,8 +3,7 @@
   pipelines: 
     pl1: 
       f1: 
-        type: "log"
-        # Note that this is the natural log, not log10!
+        type: "log10"
         params: 
           field: "gasDensity"
           output_name: "log_gasDensity"
@@ -32,16 +31,3 @@
         r1:
           image_prefix: "log_density%05d"
           annotations: "false"
-- 
-  action: "add_extracts"
-  extracts: 
-    e1: 
-      type: "volume"
-      params: 
-        field: "gasDensity"
-        filename: "volume%05d"
-    e2: 
-      type: "volume"
-      params: 
-        field: "temperature"
-        filename: "temperature_volume%05d"
