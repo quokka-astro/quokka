@@ -143,7 +143,7 @@ rk_adaptive_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0, Real t1,
   rhs(t0, y0, ydot0, user_data);
   const Real dt_guess = 0.1 * min(abs(y0 / ydot0));
 
-  AMREX_ALWAYS_ASSERT(dt_guess > 0.);
+  AMREX_ASSERT(dt_guess > 0.);
 
   // adaptive timestep controller
   const int maxRetries = 7;
@@ -176,7 +176,7 @@ rk_adaptive_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0, Real t1,
     bool step_success = false;
     for (int k = 0; k < maxRetries; ++k) {
       // check that timestep is not infinitesimal
-      AMREX_ALWAYS_ASSERT(dt > (hmin * (t1 - t0)));
+      AMREX_ASSERT(dt > (hmin * (t1 - t0)));
 
       // compute single step of chosen RK method
       int ierr = rk12_single_step(rhs, time, y, dt, ynew, yerr, user_data);
