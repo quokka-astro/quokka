@@ -1,0 +1,24 @@
+#!/bin/bash --login
+#SBATCH --job-name="quokka_hip_test"
+#SBATCH --partition=gpuMI100x8
+#SBATCH --account=cvz-delta-gpu
+#SBATCH --mem=512G
+#SBATCH --time=01:00:00
+#SBATCH --constraint="projects,scratch"
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=8
+#SBATCH --cpus-per-task=16
+#SBATCH --gpus-per-task=1
+#SBATCH --gpu-bind=closest,1
+#SBATCH --exclusive
+
+# run
+srun ./build-hip/src/RayleighTaylor3D/test_hydro3d_rt tests/RT3D.in max_timesteps=1000 plotfile_interval=-1 checkpoint_interval=-1 amrex.use_gpu_aware_mpi=1
+
+#srun ./build-hip/src/RayleighTaylor3D/test_hydro3d_rt tests/RT3D.in max_timesteps=1000 plotfile_interval=-1 checkpoint_interval=-1 amrex.use_gpu_aware_mpi=1 # do NOT use GPU-aware on OpenMPI!
+
+
+
+
+
+
