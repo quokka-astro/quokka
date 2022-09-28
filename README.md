@@ -84,10 +84,16 @@ to the CMake command-line options (or change the `QUOKKA_PYTHON` option to `OFF`
 ## Running on GPUs
 By default, Quokka compiles itself to run only on CPUs. (If you want to run on NVIDIA GPUs, re-build Quokka as shown below. **(Warning: CUDA 11.6 generates invalid device code; see issue [21](https://github.com/BenWibking/quokka/issues/21). Use CUDA <= 11.5 instead.)**
 ```
-cmake .. -DCMAKE_BUILD_TYPE=Release -DAMReX_GPU_BACKEND=CUDA
+cmake .. -DCMAKE_BUILD_TYPE=Release -DAMReX_GPU_BACKEND=CUDA -DAMREX_GPUS_PER_NODE=N
 make -j6
 ```
-The compiled test problems are in the test problem subdirectories in `build/src/`. Example scripts for running Quokka on compute clusters are in the `scripts/` subdirectory. Please note that you must configure your compute cluster to run with 1 MPI rank per GPU in order for Quokka to work correctly. Quokka is only supported on Volta-class (V100) GPUs or newer.
+where $N$ is the number of GPUs available per compute node.
+
+It is necessary to use -DAMREX_GPUS_PER_NODE to specify the number of GPUs per compute node. Without this, performance will be very poor. All GPUs on a node must be visible from each MPI rank on the node for efficient GPU-aware MPI communication to take place via CUDA IPC. With SLURM, this means that `--gpu-bind` should be set to `none`.
+
+The compiled test problems are in the test problem subdirectories in `build/src/`. Example scripts for running Quokka on compute clusters are in the `scripts/` subdirectory.
+
+Note that Quokka is only supported on Volta-class (V100) GPUs or newer.
 
 Note that 1D problems can run very slowly on GPUs due to a lack of sufficient parallelism. To run the test suite in a reasonable amount of time, you may wish to exclude the matter-energy exchange tests, e.g.:
 ```
