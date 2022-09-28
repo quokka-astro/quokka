@@ -37,6 +37,21 @@ auto main(int argc, char **argv) -> int {
     if (!pp.contains("abort_on_out_of_gpu_memory")) {
       pp.add("abort_on_out_of_gpu_memory", 1);
     }
+    
+    // disables managed memory
+    //  for single-GPU runs, the overhead is completely negligible.
+    //  HOWEVER, for multi-GPU runs, using managed memory disables the cuda_ipc
+    //  transport and leads to *extremely poor* GPU-aware MPI performance.
+    if (!pp.contains("the_arena_is_managed")) {
+      pp.add("the_arena_is_managed", 0);
+    }
+
+    // use GPU-aware MPI
+    //   if managed memory is disabled and NVLink/Infinity Fabric is available,
+    //   GPU-aware MPI performance is, in fact, excellent.
+    if (!pp.contains("use_gpu_aware_mpi")) {
+      pp.add("use_gpu_aware_mpi", 1);
+    }
   });
 
   amrex::Real start_time = amrex::ParallelDescriptor::second();
