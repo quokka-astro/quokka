@@ -89,7 +89,7 @@ make -j6
 ```
 where $N$ is the number of GPUs available per compute node.
 
-It is necessary to use -DAMREX_GPUS_PER_NODE to specify the number of GPUs per compute node. Without this, performance will be very poor. All GPUs on a node must be visible from each MPI rank on the node for efficient GPU-aware MPI communication to take place via CUDA IPC. With SLURM, this means that `--gpu-bind` should be set to `none`.
+It is necessary to use `-DAMREX_GPUS_PER_NODE` to specify the number of GPUs per compute node. Without this, performance will be very poor. All GPUs on a node must be visible from each MPI rank on the node for efficient GPU-aware MPI communication to take place via CUDA IPC. (When using the SLURM job scheduler, this means that `--gpu-bind` should be set to `none`.)
 
 The compiled test problems are in the test problem subdirectories in `build/src/`. Example scripts for running Quokka on compute clusters are in the `scripts/` subdirectory.
 
