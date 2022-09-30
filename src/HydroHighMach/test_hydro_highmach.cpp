@@ -124,22 +124,32 @@ void RadhydroSimulation<HighMachProblem>::computeReferenceSolution(
   }
 
   // interpolate density onto mesh
-  std::vector<double> d_interp(x.size());
+  amrex::Gpu::HostVector<double> d_interp(x.size());
   interpolate_arrays(x.data(), d_interp.data(), static_cast<int>(x.size()),
                      x_exact.data(), d_exact.data(),
                      static_cast<int>(x_exact.size()));
 
   // interpolate velocity onto mesh
-  std::vector<double> vx_interp(x.size());
+  amrex::Gpu::HostVector<double> vx_interp(x.size());
   interpolate_arrays(x.data(), vx_interp.data(), static_cast<int>(x.size()),
                      x_exact.data(), vx_exact.data(),
                      static_cast<int>(x_exact.size()));
 
   // interpolate pressure onto mesh
-  std::vector<double> P_interp(x.size());
+  amrex::Gpu::HostVector<double> P_interp(x.size());
   interpolate_arrays(x.data(), P_interp.data(), static_cast<int>(x.size()),
                      x_exact.data(), P_exact.data(),
                      static_cast<int>(x_exact.size()));
+
+  amrex::Gpu::DeviceVector<double> rho_g(d_interp.size());
+  amrex::Gpu::DeviceVector<double> vx_g(vx_interp.size());
+  amrex::Gpu::DeviceVector<double> P_g(P_interp.size());
+
+  // copy exact solution to device
+  amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, d_interp.begin(), d_interp.end(), rho_g.begin());
+  amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, vx_interp.begin(), vx_interp.end(), vx_g.begin());
+  amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, P_interp.begin(), P_interp.end(), P_g.begin());
+  amrex::Gpu::streamSynchronizeAll();
 
   // save reference solution
   const Real gamma = HydroSystem<HighMachProblem>::gamma_;
@@ -148,14 +158,14 @@ void RadhydroSimulation<HighMachProblem>::computeReferenceSolution(
     auto const &state = ref.array(iter);
     auto const ncomp = ref.nComp();
 
-    amrex::LoopConcurrentOnCpu(indexRange, [=](int i, int j, int k) noexcept {
+    amrex::ParallelFor(indexRange, [=](int i, int j, int k) noexcept {
       for (int n = 0; n < ncomp; ++n) {
         state(i, j, k, n) = 0.;
       }
 
-      Real rho = d_interp[i];
-      Real vx = vx_interp[i];
-      Real Pgas = P_interp[i];
+      Real rho = rho_g[i];
+      Real vx = vx_g[i];
+      Real Pgas = P_g[i];
       Real Eint = Pgas / (gamma - 1.);
       Real Etot = Eint + 0.5 * rho * (vx * vx);
 

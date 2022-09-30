@@ -25,9 +25,7 @@
 #include "AMReX_REAL.H"
 #include "AMReX_Vector.H"
 
-extern "C" {
-#include "interpolate.h"
-}
+#include "interpolate.hpp"
 #include "RadhydroSimulation.hpp"
 #include "hydro_system.hpp"
 #include "radiation_system.hpp"

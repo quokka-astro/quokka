@@ -17,9 +17,7 @@
 #include "radiation_system.hpp"
 #include "fextract.hpp"
 #include "ArrayUtil.hpp"
-extern "C" {
-#include "interpolate.h"
-}
+#include "interpolate.hpp"
 #ifdef HAVE_PYTHON
 #include "matplotlibcpp.h"
 #endif

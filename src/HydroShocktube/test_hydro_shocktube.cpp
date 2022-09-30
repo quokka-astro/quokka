@@ -235,20 +235,30 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
                      static_cast<int>(xs.size()), xs_exact.data(),
                      pressure_exact.data(), static_cast<int>(xs_exact.size()));
 
+  amrex::Gpu::DeviceVector<double> rho_g(density_exact_interp.size());
+  amrex::Gpu::DeviceVector<double> vx_g(velocity_exact_interp.size());
+  amrex::Gpu::DeviceVector<double> P_g(pressure_exact_interp.size());
+
+  // copy exact solution to device
+  amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, density_exact_interp.begin(), density_exact_interp.end(), rho_g.begin());
+  amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, velocity_exact_interp.begin(), velocity_exact_interp.end(), vx_g.begin());
+  amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, pressure_exact_interp.begin(), pressure_exact_interp.end(), P_g.begin());
+  amrex::Gpu::streamSynchronizeAll();
+
   // fill reference solution multifab
   for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
     const amrex::Box &indexRange = iter.validbox();
     auto const &stateExact = ref.array(iter);
     auto const ncomp = ref.nComp();
 
-    amrex::LoopConcurrentOnCpu(indexRange, [=](int i, int j, int k) noexcept {
+    amrex::ParallelFor(indexRange, [=](int i, int j, int k) noexcept {
       for (int n = 0; n < ncomp; ++n) {
         stateExact(i, j, k, n) = 0.;
       }
 
-      amrex::Real rho = density_exact_interp[i];
-      amrex::Real vx = velocity_exact_interp[i];
-      amrex::Real P = pressure_exact_interp[i];
+      amrex::Real rho = rho_g[i];
+      amrex::Real vx = vx_g[i];
+      amrex::Real P = P_g[i];
 
       const auto gamma = HydroSystem<ShocktubeProblem>::gamma_;
       stateExact(i, j, k, HydroSystem<ShocktubeProblem>::density_index) = rho;

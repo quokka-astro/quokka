@@ -20,9 +20,7 @@
 #include "radiation_system.hpp"
 #include "test_radiation_force.hpp"
 #include "ArrayUtil.hpp"
-extern "C" {
-#include "interpolate.h"
-}
+#include "interpolate.hpp"
 #ifdef HAVE_PYTHON
 #include "matplotlibcpp.h"
 #endif
@@ -84,9 +82,13 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputeRosselandOpacity(
 
 // declare global variables
 // initial conditions read from file
-amrex::Vector<double> x_arr;
-amrex::Vector<double> rho_arr;
-amrex::Vector<double> Mach_arr;
+amrex::Gpu::HostVector<double> x_arr;
+amrex::Gpu::HostVector<double> rho_arr;
+amrex::Gpu::HostVector<double> Mach_arr;
+
+amrex::Gpu::DeviceVector<double> x_arr_g;
+amrex::Gpu::DeviceVector<double> rho_arr_g;
+amrex::Gpu::DeviceVector<double> Mach_arr_g;
 
 template <>
 void RadhydroSimulation<TubeProblem>::preCalculateInitialConditions() {
@@ -110,6 +112,16 @@ void RadhydroSimulation<TubeProblem>::preCalculateInitialConditions() {
     rho_arr.push_back(rho);
     Mach_arr.push_back(Mach);
   }
+
+  // copy to device
+  x_arr_g.resize(x_arr.size());
+  rho_arr_g.resize(rho_arr.size());
+  Mach_arr_g.resize(Mach_arr.size());
+
+  amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, x_arr.begin(), x_arr.end(), x_arr_g.begin());
+  amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, rho_arr.begin(), rho_arr.end(), rho_arr_g.begin());
+  amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, Mach_arr.begin(), Mach_arr.end(), Mach_arr_g.begin());
+  amrex::Gpu::streamSynchronizeAll();
 }
 
 template <>
@@ -122,14 +134,14 @@ void RadhydroSimulation<TubeProblem>::setInitialConditionsOnGrid(
   const amrex::Array4<double>& state_cc = grid_vec[0].array;
   
   // loop over the grid and set the initial condition
-  amrex::LoopConcurrentOnCpu(indexRange, [=](int i, int j, int k) noexcept {
+  amrex::ParallelFor(indexRange, [=](int i, int j, int k) noexcept {
     amrex::Real const x = (prob_lo[0] + (i + amrex::Real(0.5)) * dx[0]) / Lx;
     amrex::Real const D = interpolate_value(
-        x, x_arr.dataPtr(), rho_arr.dataPtr(), static_cast<int>(x_arr.size()));
+        x, x_arr_g.dataPtr(), rho_arr_g.dataPtr(), static_cast<int>(x_arr_g.size()));
     AMREX_ALWAYS_ASSERT(D > 0.);
 
     amrex::Real const Mach = interpolate_value(
-        x, x_arr.dataPtr(), Mach_arr.dataPtr(), static_cast<int>(x_arr.size()));
+        x, x_arr_g.dataPtr(), Mach_arr_g.dataPtr(), static_cast<int>(x_arr_g.size()));
     AMREX_ALWAYS_ASSERT(!std::isnan(Mach));
 
     amrex::Real const rho = D * rho0;
