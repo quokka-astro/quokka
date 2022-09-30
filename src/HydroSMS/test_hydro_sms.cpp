@@ -150,7 +150,7 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
     double rho = NAN;
     double P = NAN;
     const double vshock = 0.1096;
-    amrex::Real x = xs.at(i);
+    amrex::Real x = xs[i];
 
     if (x < (0.5 + vshock * tNew_[0])) {
       rho = 3.86;
@@ -176,9 +176,9 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
       for (int n = 0; n < ncomp; ++n) {
         stateExact(i, j, k, n) = 0.;
       }
-      amrex::Real rho = density_exact.at(i);
-      amrex::Real vx = velocity_exact.at(i);
-      amrex::Real P = pressure_exact.at(i);
+      amrex::Real rho = density_exact[i];
+      amrex::Real vx = velocity_exact[i];
+      amrex::Real P = pressure_exact[i];
 
       const auto gamma = HydroSystem<ShocktubeProblem>::gamma_;
       stateExact(i, j, k, HydroSystem<ShocktubeProblem>::density_index) = rho;
@@ -205,11 +205,11 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
 
     for (int i = 0; i < nx; ++i) {
       amrex::Real rho =
-          values.at(HydroSystem<ShocktubeProblem>::density_index).at(i);
+          values.at(HydroSystem<ShocktubeProblem>::density_index)[i];
       amrex::Real xmom =
-          values.at(HydroSystem<ShocktubeProblem>::x1Momentum_index).at(i);
+          values.at(HydroSystem<ShocktubeProblem>::x1Momentum_index)[i];
       amrex::Real Egas =
-          values.at(HydroSystem<ShocktubeProblem>::energy_index).at(i);
+          values.at(HydroSystem<ShocktubeProblem>::energy_index)[i];
 
       amrex::Real xvel = xmom / rho;
       amrex::Real Eint = Egas - xmom * xmom / (2.0 * rho);

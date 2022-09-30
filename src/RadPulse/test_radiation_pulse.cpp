@@ -180,14 +180,14 @@ auto problem_main() -> int {
   std::vector<double> Erad_exact;
 
   for (int i = 0; i < nx; ++i) {
-    amrex::Real const x = position.at(i);
+    amrex::Real const x = position[i];
     xs.at(i) = x;
     const auto Erad_t =
-        values.at(RadSystem<PulseProblem>::radEnergy_index).at(i);
+        values.at(RadSystem<PulseProblem>::radEnergy_index)[i];
     const auto Trad_t = std::pow(Erad_t / a_rad, 1. / 4.);
     Erad.at(i) = Erad_t;
     Trad.at(i) = Trad_t;
-    Egas.at(i) = values.at(RadSystem<PulseProblem>::gasEnergy_index).at(i);
+    Egas.at(i) = values.at(RadSystem<PulseProblem>::gasEnergy_index)[i];
     Tgas.at(i) = RadSystem<PulseProblem>::ComputeTgasFromEgas(rho0, Egas.at(i));
 
     auto Trad_val = compute_exact_Trad(x - x0, initial_time + sim.tNew_[0]);

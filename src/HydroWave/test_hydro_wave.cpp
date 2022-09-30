@@ -137,8 +137,8 @@ auto problem_main() -> int {
     amrex::Real dU_k = 0.;
     for (int i = 0; i < nx; ++i) {
       // Δ Uk = ∑i |Uk,in - Uk,i0| / Nx
-      const amrex::Real U_k0 = val_exact.at(n).at(i);
-      const amrex::Real U_k1 = values.at(n).at(i);
+      const amrex::Real U_k0 = val_exact.at(n)[i];
+      const amrex::Real U_k1 = values.at(n)[i];
       dU_k += std::abs(U_k1 - U_k0) / static_cast<double>(nx);
     }
     // ε = || Δ U || = [&sum_k (Δ Uk)2]^{1/2}
@@ -157,11 +157,11 @@ auto problem_main() -> int {
 
     for (int i = 0; i < nx; ++i) {
       amrex::Real rho =
-          values.at(HydroSystem<WaveProblem>::density_index).at(i);
+          values.at(HydroSystem<WaveProblem>::density_index)[i];
       amrex::Real xmom =
-          values.at(HydroSystem<WaveProblem>::x1Momentum_index).at(i);
+          values.at(HydroSystem<WaveProblem>::x1Momentum_index)[i];
       amrex::Real Egas =
-          values.at(HydroSystem<WaveProblem>::energy_index).at(i);
+          values.at(HydroSystem<WaveProblem>::energy_index)[i];
 
       amrex::Real xvel = xmom / rho;
       amrex::Real Eint = Egas - xmom * xmom / (2.0 * rho);
@@ -178,11 +178,11 @@ auto problem_main() -> int {
 
     for (int i = 0; i < nx; ++i) {
       amrex::Real rho =
-          val_exact.at(HydroSystem<WaveProblem>::density_index).at(i);
+          val_exact.at(HydroSystem<WaveProblem>::density_index)[i];
       amrex::Real xmom =
-          val_exact.at(HydroSystem<WaveProblem>::x1Momentum_index).at(i);
+          val_exact.at(HydroSystem<WaveProblem>::x1Momentum_index)[i];
       amrex::Real Egas =
-          val_exact.at(HydroSystem<WaveProblem>::energy_index).at(i);
+          val_exact.at(HydroSystem<WaveProblem>::energy_index)[i];
 
       amrex::Real xvel = xmom / rho;
       amrex::Real Eint = Egas - xmom * xmom / (2.0 * rho);

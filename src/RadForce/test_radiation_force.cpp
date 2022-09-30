@@ -259,15 +259,15 @@ auto problem_main() -> int {
   std::vector<double> Frad_err(nx);
 
   for (int i = 0; i < nx; ++i) {
-    xs.at(i) = position.at(i);
+    xs.at(i) = position[i];
     double rho_exact =
-        values0.at(RadSystem<TubeProblem>::gasDensity_index).at(i);
+        values0.at(RadSystem<TubeProblem>::gasDensity_index)[i];
     double x1GasMom_exact =
-        values0.at(RadSystem<TubeProblem>::x1GasMomentum_index).at(i);
-    double rho = values.at(RadSystem<TubeProblem>::gasDensity_index).at(i);
-    double Frad = values.at(RadSystem<TubeProblem>::x1RadFlux_index).at(i);
+        values0.at(RadSystem<TubeProblem>::x1GasMomentum_index)[i];
+    double rho = values.at(RadSystem<TubeProblem>::gasDensity_index)[i];
+    double Frad = values.at(RadSystem<TubeProblem>::x1RadFlux_index)[i];
     double x1GasMom =
-        values.at(RadSystem<TubeProblem>::x1GasMomentum_index).at(i);
+        values.at(RadSystem<TubeProblem>::x1GasMomentum_index)[i];
     double vx = x1GasMom / rho;
     double vx_exact = x1GasMom_exact / rho_exact;
 

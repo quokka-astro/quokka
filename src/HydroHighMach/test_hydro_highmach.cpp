@@ -89,7 +89,7 @@ void RadhydroSimulation<HighMachProblem>::computeReferenceSolution(
   std::vector<double> x;
 
   for (int i = 0; i < nx; ++i) {
-    Real const this_x = position.at(i);
+    Real const this_x = position[i];
     x.push_back(this_x);
   }
 
@@ -153,9 +153,9 @@ void RadhydroSimulation<HighMachProblem>::computeReferenceSolution(
         state(i, j, k, n) = 0.;
       }
 
-      Real rho = d_interp.at(i);
-      Real vx = vx_interp.at(i);
-      Real Pgas = P_interp.at(i);
+      Real rho = d_interp[i];
+      Real vx = vx_interp[i];
+      Real Pgas = P_interp[i];
       Real Eint = Pgas / (gamma - 1.);
       Real Etot = Eint + 0.5 * rho * (vx * vx);
 
@@ -176,11 +176,11 @@ void RadhydroSimulation<HighMachProblem>::computeReferenceSolution(
 
     for (int i = 0; i < nx; ++i) {
       const auto frho =
-          values.at(HydroSystem<HighMachProblem>::density_index).at(i);
+          values.at(HydroSystem<HighMachProblem>::density_index)[i];
       const auto fxmom =
-          values.at(HydroSystem<HighMachProblem>::x1Momentum_index).at(i);
+          values.at(HydroSystem<HighMachProblem>::x1Momentum_index)[i];
       const auto fE =
-          values.at(HydroSystem<HighMachProblem>::energy_index).at(i);
+          values.at(HydroSystem<HighMachProblem>::energy_index)[i];
       const auto fvx = fxmom / frho;
       const auto fEint = fE - 0.5 * frho * (fvx * fvx);
       const auto fP = (HydroSystem<HighMachProblem>::gamma_ - 1.) * fEint;

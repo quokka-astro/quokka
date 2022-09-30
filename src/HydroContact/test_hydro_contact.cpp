@@ -141,16 +141,16 @@ void RadhydroSimulation<ContactProblem>::computeReferenceSolution(
     std::vector<double> P_exact(nx);
 
     for (int i = 0; i < nx; ++i) {
-      amrex::Real const this_x = position.at(i);
+      amrex::Real const this_x = position[i];
       x.push_back(this_x);
 
       {
         const auto rho =
-            val_exact.at(HydroSystem<ContactProblem>::density_index).at(i);
+            val_exact.at(HydroSystem<ContactProblem>::density_index)[i];
         const auto xmom =
-            val_exact.at(HydroSystem<ContactProblem>::x1Momentum_index).at(i);
+            val_exact.at(HydroSystem<ContactProblem>::x1Momentum_index)[i];
         const auto E =
-            val_exact.at(HydroSystem<ContactProblem>::energy_index).at(i);
+            val_exact.at(HydroSystem<ContactProblem>::energy_index)[i];
         const auto vx = xmom / rho;
         const auto Eint = E - 0.5 * rho * (vx * vx);
         const auto P = (HydroSystem<ContactProblem>::gamma_ - 1.) * Eint;
@@ -161,11 +161,11 @@ void RadhydroSimulation<ContactProblem>::computeReferenceSolution(
 
       {
         const auto frho =
-            values.at(HydroSystem<ContactProblem>::density_index).at(i);
+            values.at(HydroSystem<ContactProblem>::density_index)[i];
         const auto fxmom =
-            values.at(HydroSystem<ContactProblem>::x1Momentum_index).at(i);
+            values.at(HydroSystem<ContactProblem>::x1Momentum_index)[i];
         const auto fE =
-            values.at(HydroSystem<ContactProblem>::energy_index).at(i);
+            values.at(HydroSystem<ContactProblem>::energy_index)[i];
         const auto fvx = fxmom / frho;
         const auto fEint = fE - 0.5 * frho * (fvx * fvx);
         const auto fP = (HydroSystem<ContactProblem>::gamma_ - 1.) * fEint;

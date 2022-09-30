@@ -262,41 +262,41 @@ auto problem_main() -> int {
   std::vector<double> xs(nx);
 
   for (int i = 0; i < nx; ++i) {
-    xs.at(i) = position.at(i);
+    xs[i] = position[i];
 
     double rho_exact =
-        values0.at(RadSystem<TubeProblem>::gasDensity_index).at(i);
-    double rho = values.at(RadSystem<TubeProblem>::gasDensity_index).at(i);
-    rho_err.at(i) = (rho - rho_exact) / rho_exact;
+        values0.at(RadSystem<TubeProblem>::gasDensity_index)[i];
+    double rho = values.at(RadSystem<TubeProblem>::gasDensity_index)[i];
+    rho_err[i] = (rho - rho_exact) / rho_exact;
 
     double Trad_exact =
-        std::pow(values0.at(RadSystem<TubeProblem>::radEnergy_index).at(i) /
+        std::pow(values0.at(RadSystem<TubeProblem>::radEnergy_index)[i] /
                      radiation_constant_cgs_,
                  1. / 4.);
     double Trad =
-        std::pow(values.at(RadSystem<TubeProblem>::radEnergy_index).at(i) /
+        std::pow(values.at(RadSystem<TubeProblem>::radEnergy_index)[i] /
                      radiation_constant_cgs_,
                  1. / 4.);
-    Trad_arr.at(i) = Trad;
-    Trad_exact_arr.at(i) = Trad_exact;
-    Trad_err.at(i) = (Trad - Trad_exact) / Trad_exact;
+    Trad_arr[i] = Trad;
+    Trad_exact_arr[i] = Trad_exact;
+    Trad_err[i] = (Trad - Trad_exact) / Trad_exact;
 
     double Egas_exact =
-        values0.at(RadSystem<TubeProblem>::gasEnergy_index).at(i);
+        values0.at(RadSystem<TubeProblem>::gasEnergy_index)[i];
     double x1GasMom_exact =
-        values0.at(RadSystem<TubeProblem>::x1GasMomentum_index).at(i);
+        values0.at(RadSystem<TubeProblem>::x1GasMomentum_index)[i];
     double x2GasMom_exact =
-        values0.at(RadSystem<TubeProblem>::x2GasMomentum_index).at(i);
+        values0.at(RadSystem<TubeProblem>::x2GasMomentum_index)[i];
     double x3GasMom_exact =
-        values0.at(RadSystem<TubeProblem>::x3GasMomentum_index).at(i);
+        values0.at(RadSystem<TubeProblem>::x3GasMomentum_index)[i];
 
-    double Egas = values.at(RadSystem<TubeProblem>::gasEnergy_index).at(i);
+    double Egas = values.at(RadSystem<TubeProblem>::gasEnergy_index)[i];
     double x1GasMom =
-        values.at(RadSystem<TubeProblem>::x1GasMomentum_index).at(i);
+        values.at(RadSystem<TubeProblem>::x1GasMomentum_index)[i];
     double x2GasMom =
-        values.at(RadSystem<TubeProblem>::x2GasMomentum_index).at(i);
+        values.at(RadSystem<TubeProblem>::x2GasMomentum_index)[i];
     double x3GasMom =
-        values.at(RadSystem<TubeProblem>::x3GasMomentum_index).at(i);
+        values.at(RadSystem<TubeProblem>::x3GasMomentum_index)[i];
 
     double Eint_exact = RadSystem<TubeProblem>::ComputeEintFromEgas(
         rho_exact, x1GasMom_exact, x2GasMom_exact, x3GasMom_exact, Egas_exact);
@@ -307,8 +307,8 @@ auto problem_main() -> int {
         rho, x1GasMom, x2GasMom, x3GasMom, Egas);
     double Tgas = RadSystem<TubeProblem>::ComputeTgasFromEgas(rho, Eint);
 
-    Tgas_arr.at(i) = Tgas;
-    Tgas_err.at(i) = (Tgas - Tgas_exact) / Tgas_exact;
+    Tgas_arr[i] = Tgas;
+    Tgas_err[i] = (Tgas - Tgas_exact) / Tgas_exact;
   }
 
   double err_norm = 0.;
