@@ -69,10 +69,15 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputeRosselandOpacity(
 
 // declare global variables
 // initial conditions read from file
-amrex::Vector<double> x_arr;
-amrex::Vector<double> rho_arr;
-amrex::Vector<double> Pgas_arr;
-amrex::Vector<double> Erad_arr;
+amrex::Gpu::HostVector<double> x_arr;
+amrex::Gpu::HostVector<double> rho_arr;
+amrex::Gpu::HostVector<double> Pgas_arr;
+amrex::Gpu::HostVector<double> Erad_arr;
+
+amrex::Gpu::DeviceVector<double> x_arr_g;
+amrex::Gpu::DeviceVector<double> rho_arr_g;
+amrex::Gpu::DeviceVector<double> Pgas_arr_g;
+amrex::Gpu::DeviceVector<double> Erad_arr_g;
 
 template <> void RadhydroSimulation<TubeProblem>::preCalculateInitialConditions() {
   // map initial conditions to the global variables
@@ -98,6 +103,18 @@ template <> void RadhydroSimulation<TubeProblem>::preCalculateInitialConditions(
     Pgas_arr.push_back(Pgas);
     Erad_arr.push_back(Erad);
   }
+
+  x_arr_g.resize(x_arr.size());
+  rho_arr_g.resize(rho_arr.size());
+  Pgas_arr_g.resize(Pgas_arr.size());
+  Erad_arr_g.resize(Erad_arr.size());
+
+  // copy to device
+  amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, x_arr.begin(), x_arr.end(), x_arr_g.begin());
+  amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, rho_arr.begin(), rho_arr.end(), rho_arr_g.begin());
+  amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, Pgas_arr.begin(), Pgas_arr.end(), Pgas_arr_g.begin());
+  amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, Erad_arr.begin(), Erad_arr.end(), Erad_arr_g.begin());
+  amrex::Gpu::streamSynchronizeAll();
 }
 
 template <>
@@ -110,15 +127,15 @@ void RadhydroSimulation<TubeProblem>::setInitialConditionsOnGrid(
   const amrex::Array4<double>& state_cc = grid_vec[0].array;
 
   // loop over the grid and set the initial condition
-  amrex::LoopConcurrentOnCpu(indexRange, [=](int i, int j, int k) noexcept {
+  amrex::LoopConcurrentOnCpu(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
     amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
 
     amrex::Real const rho = interpolate_value(
-        x, x_arr.dataPtr(), rho_arr.dataPtr(), static_cast<int>(x_arr.size()));
+        x, x_arr_g.dataPtr(), rho_arr_g.dataPtr(), static_cast<int>(x_arr_g.size()));
     amrex::Real const Pgas = interpolate_value(
-        x, x_arr.dataPtr(), Pgas_arr.dataPtr(), static_cast<int>(x_arr.size()));
+        x, x_arr_g.dataPtr(), Pgas_arr_g.dataPtr(), static_cast<int>(x_arr_g.size()));
     amrex::Real const Erad = interpolate_value(
-        x, x_arr.dataPtr(), Erad_arr.dataPtr(), static_cast<int>(x_arr.size()));
+        x, x_arr_g.dataPtr(), Erad_arr_g.dataPtr(), static_cast<int>(x_arr_g.size()));
 
 
     state_cc(i, j, k, RadSystem<TubeProblem>::radEnergy_index) = Erad;

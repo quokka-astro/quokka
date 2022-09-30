@@ -144,9 +144,13 @@ RadSystem<ShellProblem>::ComputeRosselandOpacity(const double /*rho*/,
 
 // declare global variables
 // initial conditions read from file
-amrex::Vector<double> r_arr;
-amrex::Vector<double> Erad_arr;
-amrex::Vector<double> Frad_arr;
+amrex::Gpu::HostVector<double> r_arr;
+amrex::Gpu::HostVector<double> Erad_arr;
+amrex::Gpu::HostVector<double> Frad_arr;
+
+amrex::Gpu::DeviceVector<double> r_arr_g;
+amrex::Gpu::DeviceVector<double> Erad_arr_g;
+amrex::Gpu::DeviceVector<double> Frad_arr_g;
 
 template <>
 void RadhydroSimulation<ShellProblem>::preCalculateInitialConditions() {
@@ -170,6 +174,16 @@ void RadhydroSimulation<ShellProblem>::preCalculateInitialConditions() {
     Erad_arr.push_back(Erad);
     Frad_arr.push_back(Frad);
   }
+
+  // copy to device
+  r_arr_g.resize(r_arr.size());
+  Erad_arr_g.resize(Erad_arr.size());
+  Frad_arr_g.resize(Frad_arr.size());
+
+  amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, r_arr.begin(), r_arr.end(), r_arr_g.begin());
+  amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, Erad_arr.begin(), Erad_arr.end(), Erad_arr_g.begin());
+  amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, Frad_arr.begin(), Frad_arr.end(), Frad_arr_g.begin());
+  amrex::Gpu::streamSynchronizeAll();
 }
 
 template <>
@@ -195,8 +209,7 @@ void RadhydroSimulation<ShellProblem>::setInitialConditionsOnGrid(
     z0 = 0.;
   }
   // loop over the grid and set the initial condition
-  // this must run on host so it can access amrex::Vectors!!
-  amrex::LoopConcurrentOnCpu(indexRange, [=](int i, int j, int k) noexcept {
+  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
     amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
     amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
     amrex::Real const z = prob_lo[2] + (k + amrex::Real(0.5)) * dx[2];
@@ -212,11 +225,11 @@ void RadhydroSimulation<ShellProblem>::setInitialConditionsOnGrid(
 
     // interpolate Frad from table
     const double Frad = interpolate_value(
-        r, r_arr.dataPtr(), Frad_arr.dataPtr(), static_cast<int>(r_arr.size()));
+        r, r_arr_g.dataPtr(), Frad_arr_g.dataPtr(), static_cast<int>(r_arr_g.size()));
 
     // interpolate Erad from table
     const double Erad = interpolate_value(
-        r, r_arr.dataPtr(), Erad_arr.dataPtr(), static_cast<int>(r_arr.size()));
+        r, r_arr_g.dataPtr(), Erad_arr_g.dataPtr(), static_cast<int>(r_arr_g.size()));
 
     const double Trad = std::pow(Erad / a_rad, 1. / 4.);
     const double Tgas = Trad;
