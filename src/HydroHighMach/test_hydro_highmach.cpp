@@ -157,15 +157,18 @@ void RadhydroSimulation<HighMachProblem>::computeReferenceSolution(
     const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
     auto const &state = ref.array(iter);
     auto const ncomp = ref.nComp();
+    auto const &rho_arr = rho_g.data();
+    auto const &vx_arr = vx_g.data();
+    auto const &P_arr = P_g.data();
 
     amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
       for (int n = 0; n < ncomp; ++n) {
         state(i, j, k, n) = 0.;
       }
 
-      Real rho = rho_g[i];
-      Real vx = vx_g[i];
-      Real Pgas = P_g[i];
+      Real rho = rho_arr[i];
+      Real vx = vx_arr[i];
+      Real Pgas = P_arr[i];
       Real Eint = Pgas / (gamma - 1.);
       Real Etot = Eint + 0.5 * rho * (vx * vx);
 

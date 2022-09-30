@@ -208,6 +208,12 @@ void RadhydroSimulation<ShellProblem>::setInitialConditionsOnGrid(
     y0 = 0.;
     z0 = 0.;
   }
+
+  auto const &r_ptr = r_arr_g.dataPtr();
+  auto const &Erad_ptr = Erad_arr_g.dataPtr();
+  auto const &Frad_ptr = Frad_arr_g.dataPtr();
+  int r_size = static_cast<int>(r_arr_g.size());
+
   // loop over the grid and set the initial condition
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
     amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
@@ -224,12 +230,10 @@ void RadhydroSimulation<ShellProblem>::setInitialConditionsOnGrid(
     double rho = std::max(rho_shell, 1.0e-8 * rho_0);
 
     // interpolate Frad from table
-    const double Frad = interpolate_value(
-        r, r_arr_g.dataPtr(), Frad_arr_g.dataPtr(), static_cast<int>(r_arr_g.size()));
+    const double Frad = interpolate_value(r, r_ptr, Frad_ptr, r_size);
 
     // interpolate Erad from table
-    const double Erad = interpolate_value(
-        r, r_arr_g.dataPtr(), Erad_arr_g.dataPtr(), static_cast<int>(r_arr_g.size()));
+    const double Erad = interpolate_value(r, r_ptr, Erad_ptr, r_size);
 
     const double Trad = std::pow(Erad / a_rad, 1. / 4.);
     const double Tgas = Trad;

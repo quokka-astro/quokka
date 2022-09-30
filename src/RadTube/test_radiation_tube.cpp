@@ -126,17 +126,19 @@ void RadhydroSimulation<TubeProblem>::setInitialConditionsOnGrid(
   const amrex::Box &indexRange = grid_vec[0].indexRange;
   const amrex::Array4<double>& state_cc = grid_vec[0].array;
 
+  auto const &x_ptr = x_arr_g.dataPtr();
+  auto const &rho_ptr = rho_arr_g.dataPtr();
+  auto const &Pgas_ptr = Pgas_arr_g.dataPtr();
+  auto const &Erad_ptr = Erad_arr_g.dataPtr();
+  int x_size = static_cast<int>(x_arr_g.size());
+
   // loop over the grid and set the initial condition
   amrex::LoopConcurrentOnCpu(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
     amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
 
-    amrex::Real const rho = interpolate_value(
-        x, x_arr_g.dataPtr(), rho_arr_g.dataPtr(), static_cast<int>(x_arr_g.size()));
-    amrex::Real const Pgas = interpolate_value(
-        x, x_arr_g.dataPtr(), Pgas_arr_g.dataPtr(), static_cast<int>(x_arr_g.size()));
-    amrex::Real const Erad = interpolate_value(
-        x, x_arr_g.dataPtr(), Erad_arr_g.dataPtr(), static_cast<int>(x_arr_g.size()));
-
+    amrex::Real const rho = interpolate_value(x, x_ptr, rho_ptr, x_size);
+    amrex::Real const Pgas = interpolate_value(x, x_ptr, Pgas_ptr, x_size);
+    amrex::Real const Erad = interpolate_value(x, x_ptr, Erad_ptr, x_size);
 
     state_cc(i, j, k, RadSystem<TubeProblem>::radEnergy_index) = Erad;
     state_cc(i, j, k, RadSystem<TubeProblem>::x1RadFlux_index) = 0;

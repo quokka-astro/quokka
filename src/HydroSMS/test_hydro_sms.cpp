@@ -182,14 +182,17 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
     const amrex::Box &indexRange = iter.validbox();
     auto const &stateExact = ref.array(iter);
     auto const ncomp = ref.nComp();
+    auto const &rho_arr = rho_g.data();
+    auto const &vx_arr = vx_g.data();
+    auto const &P_arr = P_g.data();
 
     amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
       for (int n = 0; n < ncomp; ++n) {
         stateExact(i, j, k, n) = 0.;
       }
-      amrex::Real rho = rho_g[i];
-      amrex::Real vx = vx_g[i];
-      amrex::Real P = P_g[i];
+      amrex::Real rho = rho_arr[i];
+      amrex::Real vx = vx_arr[i];
+      amrex::Real P = P_arr[i];
 
       const auto gamma = HydroSystem<ShocktubeProblem>::gamma_;
       stateExact(i, j, k, HydroSystem<ShocktubeProblem>::density_index) = rho;
