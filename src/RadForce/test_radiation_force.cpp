@@ -134,7 +134,7 @@ void RadhydroSimulation<TubeProblem>::setInitialConditionsOnGrid(
   const amrex::Array4<double>& state_cc = grid_vec[0].array;
   
   // loop over the grid and set the initial condition
-  amrex::ParallelFor(indexRange, [=](int i, int j, int k) noexcept {
+  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
     amrex::Real const x = (prob_lo[0] + (i + amrex::Real(0.5)) * dx[0]) / Lx;
     amrex::Real const D = interpolate_value(
         x, x_arr_g.dataPtr(), rho_arr_g.dataPtr(), static_cast<int>(x_arr_g.size()));
