@@ -112,7 +112,7 @@ auto fextract(MultiFab &mf, Geometry &geom, const int idir,
 
   for (int ivar = 0; ivar < mf.nComp(); ++ivar) {
     // allocate HostVector storage
-    data[ivar].reserve(pos.size());
+    data[ivar].resize(pos.size());
     const auto &dataptr = data[ivar].data();
     for (MFIter mfi(mf); mfi.isValid(); ++mfi) {
       const Box &bx = mfi.validbox() & slice_box;
