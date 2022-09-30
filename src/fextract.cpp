@@ -118,7 +118,7 @@ auto fextract(MultiFab &mf, Geometry &geom, const int idir,
       const Box &bx = mfi.validbox() & slice_box;
       if (bx.ok()) {
         const auto &fab = mf.array(mfi);
-        ParallelFor(bx, [=] (int i, int j, int k) {
+        ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
           IntVect idx_vec({i - lo0.x, j - lo0.y, k - lo0.z});
           int idx = idx_vec[idir];
           dataptr[idx] = fab(i, j, k, ivar);
