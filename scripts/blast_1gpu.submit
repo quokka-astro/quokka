@@ -1,0 +1,28 @@
+#!/bin/bash --login
+#SBATCH --job-name="hydro3dblast"
+#SBATCH --partition=gpuA100x4
+#SBATCH --account=cvz-delta-gpu
+#SBATCH --mem=0
+#SBATCH --exclusive
+#SBATCH --time=0:10:00
+#SBATCH --constraint="scratch"
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=16
+#SBATCH --gpus-per-task=1
+#SBATCH --gpu-bind=none
+
+export OMPI_MCA_btl_smcuda_use_cuda_ipc=1 # enable cuda_ipc
+export OMPI_MCA_btl_smcuda_cuda_ipc_verbose=100 # debugging
+
+module purge
+module load gcc/11.2.0
+module load cuda/11.7.0
+module load openmpi/4.1.4
+
+# run
+srun ./build/src/HydroBlast3D/test_hydro3d_blast tests/blast_unigrid_256.in
+
+
+
+

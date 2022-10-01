@@ -1,4 +1,4 @@
-add_executable(test_radhydro_shock ../main.cpp test_radhydro_shock.cpp ../fextract.cpp ../interpolate.c)
+add_executable(test_radhydro_shock ../main.cpp test_radhydro_shock.cpp ../fextract.cpp ../interpolate.cpp)
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
     setup_target_for_cuda_compilation(test_radhydro_shock)

@@ -14,6 +14,6 @@ using namespace amrex;
 
 auto fextract(MultiFab &mf, Geometry &geom, int idir,
               Real slice_coord, bool center = false)
-    -> std::tuple<Vector<Real>, Vector<Vector<Real>>>;
+    -> std::tuple<Vector<Real>, Vector<Gpu::HostVector<Real>>>;
 
 #endif // FEXTRACT_HPP_

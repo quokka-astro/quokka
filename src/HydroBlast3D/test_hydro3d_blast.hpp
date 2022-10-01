@@ -14,9 +14,7 @@
 
 // internal headers
 #include "hydro_system.hpp"
-extern "C" {
-    #include "interpolate.h"
-}
+#include "interpolate.hpp"
 
 // function definitions
 auto testproblem_hydro_sedov() -> int;
