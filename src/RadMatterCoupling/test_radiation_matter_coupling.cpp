@@ -115,20 +115,20 @@ template <> void RadhydroSimulation<CouplingProblem>::computeAfterTimestep(const
     t_vec_.push_back(tNew_[0]);
 
     const amrex::Real Etot_i =
-        values.at(RadSystem<CouplingProblem>::gasEnergy_index).at(0);
+        values.at(RadSystem<CouplingProblem>::gasEnergy_index)[0];
     const amrex::Real x1GasMom =
-        values.at(RadSystem<CouplingProblem>::x1GasMomentum_index).at(0);
+        values.at(RadSystem<CouplingProblem>::x1GasMomentum_index)[0];
     const amrex::Real x2GasMom =
-        values.at(RadSystem<CouplingProblem>::x2GasMomentum_index).at(0);
+        values.at(RadSystem<CouplingProblem>::x2GasMomentum_index)[0];
     const amrex::Real x3GasMom =
-        values.at(RadSystem<CouplingProblem>::x3GasMomentum_index).at(0);
+        values.at(RadSystem<CouplingProblem>::x3GasMomentum_index)[0];
     const amrex::Real rho =
-        values.at(RadSystem<CouplingProblem>::gasDensity_index).at(0);
+        values.at(RadSystem<CouplingProblem>::gasDensity_index)[0];
     const amrex::Real Egas_i = RadSystem<CouplingProblem>::ComputeEintFromEgas(
         rho, x1GasMom, x2GasMom, x3GasMom, Etot_i);
 
     const amrex::Real Erad_i =
-        values.at(RadSystem<CouplingProblem>::radEnergy_index).at(0);
+        values.at(RadSystem<CouplingProblem>::radEnergy_index)[0];
 
     Trad_vec_.push_back(std::pow(Erad_i / a_rad, 1. / 4.));
     Tgas_vec_.push_back(

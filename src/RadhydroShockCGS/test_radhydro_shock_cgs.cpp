@@ -266,15 +266,15 @@ auto problem_main() -> int
 			xs.at(i) = x; // cm
 
 			const double Erad_t =
-			    values.at(RadSystem<ShockProblem>::radEnergy_index).at(i);
+			    values.at(RadSystem<ShockProblem>::radEnergy_index)[i];
 			Erad.at(i) = Erad_t / a_rad;			     // scaled
 			Trad.at(i) = std::pow(Erad_t / a_rad, 1. / 4.) / T0; // dimensionless
 
 			const double Etot_t =
-			    values.at(RadSystem<ShockProblem>::gasEnergy_index).at(i);
+			    values.at(RadSystem<ShockProblem>::gasEnergy_index)[i];
 			const double rho =
-			    values.at(RadSystem<ShockProblem>::gasDensity_index).at(i);
-			const double x1GasMom = values.at(RadSystem<ShockProblem>::x1GasMomentum_index).at(i);
+			    values.at(RadSystem<ShockProblem>::gasDensity_index)[i];
+			const double x1GasMom = values.at(RadSystem<ShockProblem>::x1GasMomentum_index)[i];
 			const double Ekin = (x1GasMom * x1GasMom) / (2.0 * rho);
 
 			const double Egas_t = (Etot_t - Ekin);

@@ -25,9 +25,7 @@
 #include "AMReX_REAL.H"
 #include "AMReX_Vector.H"
 
-extern "C" {
-#include "interpolate.h"
-}
+#include "interpolate.hpp"
 #include "RadhydroSimulation.hpp"
 #include "hydro_system.hpp"
 #include "radiation_system.hpp"
@@ -137,6 +135,16 @@ RadSystem<ShellProblem>::ComputeRosselandOpacity(const double /*rho*/,
   return kappa0;
 }
 
+// declare global variables
+// initial conditions read from file
+amrex::Gpu::HostVector<double> r_arr;
+amrex::Gpu::HostVector<double> Erad_arr;
+amrex::Gpu::HostVector<double> Frad_arr;
+
+amrex::Gpu::DeviceVector<double> r_arr_g;
+amrex::Gpu::DeviceVector<double> Erad_arr_g;
+amrex::Gpu::DeviceVector<double> Frad_arr_g;
+
 template <>
 void RadhydroSimulation<ShellProblem>::setInitialConditionsAtLevel(int lev) {
   // read initial conditions from file
@@ -165,6 +173,17 @@ void RadhydroSimulation<ShellProblem>::setInitialConditionsAtLevel(int lev) {
     Frad_arr.push_back(Frad);
   }
 
+  // copy to device
+  r_arr_g.resize(r_arr.size());
+  Erad_arr_g.resize(Erad_arr.size());
+  Frad_arr_g.resize(Frad_arr.size());
+
+  amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, r_arr.begin(), r_arr.end(), r_arr_g.begin());
+  amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, Erad_arr.begin(), Erad_arr.end(), Erad_arr_g.begin());
+  amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, Frad_arr.begin(), Frad_arr.end(), Frad_arr_g.begin());
+  amrex::Gpu::streamSynchronizeAll();
+}
+
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo =
       geom[lev].ProbLoArray();
@@ -184,24 +203,28 @@ void RadhydroSimulation<ShellProblem>::setInitialConditionsAtLevel(int lev) {
     z0 = 0.;
   }
 
+  auto const &r_ptr = r_arr_g.dataPtr();
+  auto const &Erad_ptr = Erad_arr_g.dataPtr();
+  auto const &Frad_ptr = Frad_arr_g.dataPtr();
+  int r_size = static_cast<int>(r_arr_g.size());
+
+  // loop over the grid and set the initial condition
+  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+    amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+    amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
+    amrex::Real const z = prob_lo[2] + (k + amrex::Real(0.5)) * dx[2];
+    amrex::Real const r = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2) +
+                                    std::pow(z - z0, 2));
+
   for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
     const amrex::Box &indexRange = iter.validbox();
     auto const &state = state_new_[lev].array(iter);
 
-    // this must run on host so it can access amrex::Vectors!!
-    amrex::LoopConcurrentOnCpu(indexRange, [=](int i, int j, int k) noexcept {
-      amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
-      amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
-      amrex::Real const z = prob_lo[2] + (k + amrex::Real(0.5)) * dx[2];
-      amrex::Real const r = std::sqrt(
-          std::pow(x - x0, 2) + std::pow(y - y0, 2) + std::pow(z - z0, 2));
+    // interpolate Frad from table
+    const double Frad = interpolate_value(r, r_ptr, Frad_ptr, r_size);
 
-      double sigma_sh = H_shell / (2.0 * std::sqrt(2.0 * std::log(2.0)));
-      double rho_norm = M_shell / (4.0 * M_PI * r * r *
-                                   std::sqrt(2.0 * M_PI * sigma_sh * sigma_sh));
-      double rho_shell = rho_norm * std::exp(-std::pow(r - r_0, 2) /
-                                             (2.0 * sigma_sh * sigma_sh));
-      double rho = std::max(rho_shell, 1.0e-8 * rho_0);
+    // interpolate Erad from table
+    const double Erad = interpolate_value(r, r_ptr, Erad_ptr, r_size);
 
       // interpolate Frad from table
       const double Frad =

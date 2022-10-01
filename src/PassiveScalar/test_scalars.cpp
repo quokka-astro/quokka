@@ -142,18 +142,18 @@ void RadhydroSimulation<ScalarProblem>::computeReferenceSolution(
     std::vector<double> s_exact;
 
     for (int i = 0; i < nx; ++i) {
-      Real const this_x = position.at(i);
+      Real const this_x = position[i];
       x.push_back(this_x);
 
       {
         const auto rho =
-            val_exact.at(HydroSystem<ScalarProblem>::density_index).at(i);
+            val_exact.at(HydroSystem<ScalarProblem>::density_index)[i];
         const auto xmom =
-            val_exact.at(HydroSystem<ScalarProblem>::x1Momentum_index).at(i);
+            val_exact.at(HydroSystem<ScalarProblem>::x1Momentum_index)[i];
         const auto E =
-            val_exact.at(HydroSystem<ScalarProblem>::energy_index).at(i);
+            val_exact.at(HydroSystem<ScalarProblem>::energy_index)[i];
         const auto s =
-            val_exact.at(HydroSystem<ScalarProblem>::scalar0_index).at(i);
+            val_exact.at(HydroSystem<ScalarProblem>::scalar0_index)[i];
         const auto vx = xmom / rho;
         const auto Eint = E - 0.5 * rho * (vx * vx);
         const auto P = (HydroSystem<ScalarProblem>::gamma_ - 1.) * Eint;
@@ -165,13 +165,13 @@ void RadhydroSimulation<ScalarProblem>::computeReferenceSolution(
 
       {
         const auto frho =
-            values.at(HydroSystem<ScalarProblem>::density_index).at(i);
+            values.at(HydroSystem<ScalarProblem>::density_index)[i];
         const auto fxmom =
-            values.at(HydroSystem<ScalarProblem>::x1Momentum_index).at(i);
+            values.at(HydroSystem<ScalarProblem>::x1Momentum_index)[i];
         const auto fE =
-            values.at(HydroSystem<ScalarProblem>::energy_index).at(i);
+            values.at(HydroSystem<ScalarProblem>::energy_index)[i];
         const auto fs =
-            values.at(HydroSystem<ScalarProblem>::scalar0_index).at(i);
+            values.at(HydroSystem<ScalarProblem>::scalar0_index)[i];
         const auto fvx = fxmom / frho;
         const auto fEint = fE - 0.5 * frho * (fvx * fvx);
         const auto fP = (HydroSystem<ScalarProblem>::gamma_ - 1.) * fEint;

@@ -87,7 +87,7 @@ void RadhydroSimulation<HighMachProblem>::computeReferenceSolution(
   std::vector<double> x;
 
   for (int i = 0; i < nx; ++i) {
-    Real const this_x = position.at(i);
+    Real const this_x = position[i];
     x.push_back(this_x);
   }
 
@@ -122,22 +122,32 @@ void RadhydroSimulation<HighMachProblem>::computeReferenceSolution(
   }
 
   // interpolate density onto mesh
-  std::vector<double> d_interp(x.size());
+  amrex::Gpu::HostVector<double> d_interp(x.size());
   interpolate_arrays(x.data(), d_interp.data(), static_cast<int>(x.size()),
                      x_exact.data(), d_exact.data(),
                      static_cast<int>(x_exact.size()));
 
   // interpolate velocity onto mesh
-  std::vector<double> vx_interp(x.size());
+  amrex::Gpu::HostVector<double> vx_interp(x.size());
   interpolate_arrays(x.data(), vx_interp.data(), static_cast<int>(x.size()),
                      x_exact.data(), vx_exact.data(),
                      static_cast<int>(x_exact.size()));
 
   // interpolate pressure onto mesh
-  std::vector<double> P_interp(x.size());
+  amrex::Gpu::HostVector<double> P_interp(x.size());
   interpolate_arrays(x.data(), P_interp.data(), static_cast<int>(x.size()),
                      x_exact.data(), P_exact.data(),
                      static_cast<int>(x_exact.size()));
+
+  amrex::Gpu::DeviceVector<double> rho_g(d_interp.size());
+  amrex::Gpu::DeviceVector<double> vx_g(vx_interp.size());
+  amrex::Gpu::DeviceVector<double> P_g(P_interp.size());
+
+  // copy exact solution to device
+  amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, d_interp.begin(), d_interp.end(), rho_g.begin());
+  amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, vx_interp.begin(), vx_interp.end(), vx_g.begin());
+  amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, P_interp.begin(), P_interp.end(), P_g.begin());
+  amrex::Gpu::streamSynchronizeAll();
 
   // save reference solution
   const Real gamma = HydroSystem<HighMachProblem>::gamma_;
@@ -145,15 +155,18 @@ void RadhydroSimulation<HighMachProblem>::computeReferenceSolution(
     const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
     auto const &state = ref.array(iter);
     auto const ncomp = ref.nComp();
+    auto const &rho_arr = rho_g.data();
+    auto const &vx_arr = vx_g.data();
+    auto const &P_arr = P_g.data();
 
-    amrex::LoopConcurrentOnCpu(indexRange, [=](int i, int j, int k) noexcept {
+    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
       for (int n = 0; n < ncomp; ++n) {
         state(i, j, k, n) = 0.;
       }
 
-      Real rho = d_interp.at(i);
-      Real vx = vx_interp.at(i);
-      Real Pgas = P_interp.at(i);
+      Real rho = rho_arr[i];
+      Real vx = vx_arr[i];
+      Real Pgas = P_arr[i];
       Real Eint = Pgas / (gamma - 1.);
       Real Etot = Eint + 0.5 * rho * (vx * vx);
 
@@ -174,11 +187,11 @@ void RadhydroSimulation<HighMachProblem>::computeReferenceSolution(
 
     for (int i = 0; i < nx; ++i) {
       const auto frho =
-          values.at(HydroSystem<HighMachProblem>::density_index).at(i);
+          values.at(HydroSystem<HighMachProblem>::density_index)[i];
       const auto fxmom =
-          values.at(HydroSystem<HighMachProblem>::x1Momentum_index).at(i);
+          values.at(HydroSystem<HighMachProblem>::x1Momentum_index)[i];
       const auto fE =
-          values.at(HydroSystem<HighMachProblem>::energy_index).at(i);
+          values.at(HydroSystem<HighMachProblem>::energy_index)[i];
       const auto fvx = fxmom / frho;
       const auto fEint = fE - 0.5 * frho * (fvx * fvx);
       const auto fP = (HydroSystem<HighMachProblem>::gamma_ - 1.) * fEint;

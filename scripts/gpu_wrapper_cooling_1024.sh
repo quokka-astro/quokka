@@ -1,6 +1,4 @@
 #!/bin/bash
 
-export CUDA_VISIBLE_DEVICES=$(($OMPI_COMM_WORLD_LOCAL_RANK % 4))
-./build/src/Cooling/test_cooling tests/Cooling_1024.in amrex.async_out=1 amrex.abort_on_out_of_gpu_memory=1
-
+./build/src/Cooling/test_cooling tests/Cooling_1024.in
 
