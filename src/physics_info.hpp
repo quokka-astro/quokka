@@ -19,7 +19,7 @@ template <typename problem_t> struct Physics_Indices {
         + Physics_Traits<problem_t>::numPassiveScalars
         + static_cast<int>(Physics_Traits<problem_t>::is_radiation_enabled) * Physics_NumVars::numRadVars;
   static const int hydroFirstIndex = 0;
-  static const int pscalarFirstIndex = Physics_NumVars<problem_t>::numHydroVars;
+  static const int pscalarFirstIndex = Physics_NumVars::numHydroVars;
   static const int radFirstIndex = pscalarFirstIndex + Physics_Traits<problem_t>::numPassiveScalars;
 };
 

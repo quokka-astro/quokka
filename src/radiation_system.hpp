@@ -53,7 +53,7 @@ template <typename problem_t> struct RadSystem_Traits {
 template <typename problem_t>
 class RadSystem : public HyperbolicSystem<problem_t> {
 public:
-  static constexpr int nvarHyperbolic_ = Physics_NumVars<problem_t>::numRadVars; // number of radiation variables
+  static constexpr int nvarHyperbolic_ = Physics_NumVars::numRadVars; // number of radiation variables
   static constexpr int nstartHyperbolic_ = Physics_Indices<problem_t>::radFirstIndex;
   static constexpr int nvar_ = nstartHyperbolic_ + nvarHyperbolic_;
 
