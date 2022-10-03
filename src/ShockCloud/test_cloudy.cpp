@@ -100,13 +100,8 @@ auto problem_main() -> int {
                                     tables.log_Tgas, tables.meanMolWeight);
   const Real relerr = std::abs((C * mu - T) / T);
 
-  const Real n_e = (rho / hydrogen_mass_cgs_) *
-                     (1.0 - mu * (X + Y / 4. + Z / mean_metals_A)) /
-                     (mu - (electron_mass_cgs / hydrogen_mass_cgs_));
-
   printf("\nrho = %.17e, Eint = %.17e, mu = %f, Tgas = %e, relerr = %e\n", rho,
          Eint, mu, T, relerr);
-  printf("n_e = %e, n_e/n_H = %e\n", n_e, n_e/nH);
 
   const Real reltol_floor = 0.01;
   const Real rtol = 1.0e-4;       // not recommended to change this
