@@ -210,8 +210,11 @@ public:
 #endif
 protected:
   amrex::Vector<amrex::BCRec> BCs_cc_; // on level 0
+  amrex::Vector<amrex::BCRec> BCs_fc_; // on level 0
   amrex::Vector<amrex::MultiFab> state_old_cc_;
   amrex::Vector<amrex::MultiFab> state_new_cc_;
+  amrex::Vector< amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> > state_old_fc_;
+  amrex::Vector< amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> > state_new_fc_;
   amrex::Vector<amrex::MultiFab>
       max_signal_speed_; // needed to compute CFL timestep
 
@@ -226,7 +229,9 @@ protected:
   // Nghost = number of ghost cells for each array
   int nghost_ = 4; // PPM needs nghost >= 3, PPM+flattening needs nghost >= 4
   int ncomp_cc_ = 0; // = number of components (conserved variables) for each array
+  int ncomp_fc_ = 0; // face-centred components
   amrex::Vector<std::string> componentNames_cc_;
+  amrex::Vector<std::string> componentNames_fc_;
   amrex::Vector<std::string> derivedNames_;
   bool areInitialConditionsDefined_ = false;
 
