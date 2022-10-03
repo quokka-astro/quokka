@@ -47,6 +47,7 @@ struct ShockCloud {
 
 constexpr static bool enableRadiation = false;
 
+constexpr double parsec_in_cm = 3.086e18; // cm == 1 pc
 constexpr double m_H = hydrogen_mass_cgs_; // mass of hydrogen atom
 // [Habing FUV field, see Eq. 12.6 of Draine, Physics of the ISM/IGM.]
 constexpr static Real G_0 = 5.29e-14; // erg cm^-3
@@ -350,7 +351,7 @@ void RadhydroSimulation<ShockCloud>::computeAfterTimestep(
   simulationMetadata_["delta_vx"] = delta_vx;
   ::delta_vx = delta_vx;
 
-  amrex::Print() << "\tDelta x = " << (delta_x / 3.086e18) << " pc,"
+  amrex::Print() << "\tDelta x = " << (delta_x / parsec_in_cm) << " pc,"
                  << " Delta vx = " << (delta_vx / 1.0e5) << " km/s\n";
 
   // subtract center-of-mass y-velocity on each level
@@ -384,89 +385,94 @@ void RadhydroSimulation<ShockCloud>::computeAfterTimestep(
 
 template <>
 void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(
-    int lev, std::string const &dname, amrex::MultiFab &mf,
-    const int ncomp_in) const {
+    int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_in) const {
   // compute derived variables and save in 'mf'
+
   if (dname == "temperature") {
     const int ncomp = ncomp_in;
     auto tables = cloudyTables.const_tables();
+    auto const &output = mf.arrays();
+    auto const &state = state_new_[lev].const_arrays();
 
-    for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
-      const amrex::Box &indexRange =
-          iter.fabbox(); // *include* ghost cells (if they're in the FAB)
-      auto const &output = mf.array(iter);
-      auto const &state = state_new_[lev].const_array(iter);
-
-      amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j,
+    amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j,
                                                           int k) noexcept {
-        Real rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
-        Real x1Mom = state(i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
-        Real x2Mom = state(i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
-        Real x3Mom = state(i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
-        Real Egas = state(i, j, k, HydroSystem<ShockCloud>::energy_index);
-        Real Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(
-            rho, x1Mom, x2Mom, x3Mom, Egas);
-        Real Tgas = ComputeTgasFromEgas(
-            rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
+      Real rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
+      Real x1Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
+      Real x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
+      Real x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
+      Real Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
+      Real Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(
+          rho, x1Mom, x2Mom, x3Mom, Egas);
+      Real Tgas = ComputeTgasFromEgas(
+          rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
+      output[bx](i, j, k, ncomp) = Tgas;
+    });
 
-        output(i, j, k, ncomp) = Tgas;
-      });
-    }
   } else if (dname == "mass") {
     const int ncomp = ncomp_in;
     auto const &dx = geom[lev].CellSizeArray();
     const Real cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
+    auto const &output = mf.arrays();
+    auto const &state = state_new_[lev].const_arrays();
 
-    for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
-      const amrex::Box &indexRange = iter.validbox();
-      auto const &output = mf.array(iter);
-      auto const &state = state_new_[lev].const_array(iter);
+    amrex::ParallelFor(
+      mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+        Real rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
+        Real mass = rho * cell_vol;
+        output[bx](i, j, k, ncomp) = mass;
+    });
 
-      amrex::ParallelFor(
-          indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-            Real rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
-            Real mass = rho * cell_vol;
-            output(i, j, k, ncomp) = mass;
-          });
-    }
+  } else if (dname == "cooling_length") {
+    const int ncomp = ncomp_in;
+    auto tables = cloudyTables.const_tables();
+    auto const &output = mf.arrays();
+    auto const &state = state_new_[lev].const_arrays();
+
+    amrex::ParallelFor(
+      mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+        // compute cooling length in parsec
+        Real const rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
+        Real const x1Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
+        Real const x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
+        Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
+        Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
+        Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(
+          rho, x1Mom, x2Mom, x3Mom, Egas);
+        Real const l_cool = ComputeCoolingLength(rho, Eint, HydroSystem<ShockCloud>::gamma_,
+          tables);
+        output[bx](i, j, k, ncomp) = l_cool / parsec_in_cm;
+    });
   }
+  amrex::Gpu::streamSynchronize();
 }
 
 template <>
 void RadhydroSimulation<ShockCloud>::ErrorEst(int lev, amrex::TagBoxArray &tags,
                                               Real /*time*/, int /*ngrow*/) {
   // tag cells for refinement
-  const Real eta_threshold = 0.1; // gradient refinement threshold
-  const Real C_min = 1.0e-5;      // minimum concentration for refinement
+  amrex::GpuArray<Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
+  const Real min_dx = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
+  auto tables = cloudyTables.const_tables();
 
-  for (amrex::MFIter mfi(state_new_[lev]); mfi.isValid(); ++mfi) {
-    const amrex::Box &box = mfi.validbox();
-    const auto state = state_new_[lev].const_array(mfi);
-    const auto tag = tags.array(mfi);
-    const int nidx = HydroSystem<ShockCloud>::density_index;
+  const auto state = state_new_[lev].const_arrays();
+  const auto tag = tags.arrays();
 
-    amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-      Real const q = state(i, j, k, nidx);
-      Real const q_xplus = state(i + 1, j, k, nidx);
-      Real const q_xminus = state(i - 1, j, k, nidx);
-      Real const q_yplus = state(i, j + 1, k, nidx);
-      Real const q_yminus = state(i, j - 1, k, nidx);
-      Real const q_zplus = state(i, j, k + 1, nidx);
-      Real const q_zminus = state(i, j, k - 1, nidx);
-
-      Real const del_x = 0.5 * (q_xplus - q_xminus);
-      Real const del_y = 0.5 * (q_yplus - q_yminus);
-      Real const del_z = 0.5 * (q_zplus - q_zminus);
-
-      Real const eta =
-          std::sqrt(del_x * del_x + del_y * del_y + del_z * del_z) / q;
-      Real const C = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index);
-
-      if ((eta > eta_threshold) && (C > C_min)) {
-        tag(i, j, k) = amrex::TagBox::SET;
+  amrex::ParallelFor(state_new_[lev], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+      Real const rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
+      Real const x1Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
+      Real const x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
+      Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
+      Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
+      Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(
+        rho, x1Mom, x2Mom, x3Mom, Egas);
+      Real const l_cool = ComputeCoolingLength(rho, Eint, HydroSystem<ShockCloud>::gamma_,
+        tables);
+      
+      if (l_cool < min_dx) {
+        tag[bx](i, j, k) = amrex::TagBox::SET;
       }
     });
-  }
+    amrex::Gpu::streamSynchronize();
 }
 
 template <>
@@ -630,7 +636,7 @@ auto problem_main() -> int {
 
   // cloud radius
   pp.query("R_cloud_pc", ::R_cloud); // pc
-  ::R_cloud *= 3.086e18;             // convert to cm
+  ::R_cloud *= parsec_in_cm;             // convert to cm
 
   // (pre-shock) Mach number
   // (N.B. *not* the same as Mach_wind!)

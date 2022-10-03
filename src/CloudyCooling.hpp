@@ -159,6 +159,37 @@ ComputeTgasFromEgas(double rho, double Egas, double gamma,
   return T_sol;
 }
 
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
+ComputeCoolingLength(double rho, double Egas, double gamma,
+                    cloudyGpuConstTables const &tables) -> Real {
+  // convert (rho, Egas) to cooling length
+
+  // 1. convert Egas (internal gas energy) to temperature
+  const Real Tgas = ComputeTgasFromEgas(rho, Egas, gamma, tables);
+
+  // 2. compute cooling time
+  // interpolate cooling rates from Cloudy tables
+  const Real rhoH = rho * cloudy_H_mass_fraction; // mass density of H species
+  const Real nH = rhoH / hydrogen_mass_cgs_;
+  const Real log_nH = std::log10(nH);
+  const Real log_T = std::log10(Tgas);
+  const double logCool = interpolate2d(log_nH, log_T, tables.log_nH,
+                                       tables.log_Tgas, tables.cool);
+  const double LambdaCool = FastMath::pow10(logCool);
+  const double Edot = (rhoH * rhoH) * LambdaCool;
+  // compute cooling time
+  const Real t_cool = Egas / Edot;
+
+  // 3. compute cooling length c_s t_cool
+  // compute mu from mu(T) table
+  const Real mu = interpolate2d(log_nH, log_T, tables.log_nH,
+                                tables.log_Tgas, tables.meanMolWeight);
+  const Real c_s = std::sqrt(gamma * boltzmann_constant_cgs_ * Tgas / (mu * hydrogen_mass_cgs_));
+
+  // cooling length
+  return c_s * t_cool;
+}
+
 void readCloudyData(cloudy_tables &cloudyTables);
 
 #endif // CLOUDYCOOLING_HPP_

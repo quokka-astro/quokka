@@ -36,6 +36,25 @@
         params: 
           field: "temperature"
           output_name: "log_T"
+          clamp_min_value: 10.
+      f2:
+        type: "slice"
+        params: 
+          point: 
+            x: 0.5
+            y: 0.5
+            z: 0.5
+          normal: 
+            x: 0.0
+            y: 0.0
+            z: 1.0
+    pl4:
+      f1: 
+        type: "log10"
+        params: 
+          field: "cooling_length"
+          output_name: "log_cooling_length"
+          clamp_min_value: 1e-5
       f2:
         type: "slice"
         params: 
@@ -79,4 +98,24 @@
       renders:
         r1:
           image_prefix: "log_temp%05d"
+          annotations: "true"
+    s4:
+      plots: 
+        p1: 
+          type: "pseudocolor"
+          field: "cooling_length"
+          pipeline: "pl2"
+      renders:
+        r1:
+          image_prefix: "lcool%05d"
+          annotations: "true"
+    s5:
+      plots: 
+        p1: 
+          type: "pseudocolor"
+          field: "log_cooling_length"
+          pipeline: "pl4"
+      renders:
+        r1:
+          image_prefix: "log_lcool%05d"
           annotations: "true"
