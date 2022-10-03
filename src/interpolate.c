@@ -1,4 +1,4 @@
-#include "interpolate.hpp"
+#include "interpolate.h"
 
 #define LIKELY_IN_CACHE_SIZE 8
 
@@ -21,7 +21,6 @@
  * @param guess initial guess of index
  * @return index
  */
-AMREX_GPU_HOST_DEVICE
 int64_t binary_search_with_guess(const double key, const double *arr,
 					int64_t len, int64_t guess)
 {
@@ -102,7 +101,6 @@ int64_t binary_search_with_guess(const double key, const double *arr,
 
 #undef LIKELY_IN_CACHE_SIZE
 
-AMREX_GPU_HOST_DEVICE
 void interpolate_arrays(double *x, double *y, int len,
 					double *arr_x, double *arr_y, int arr_len)
 {
@@ -129,7 +127,6 @@ void interpolate_arrays(double *x, double *y, int len,
 	}
 }
 
-AMREX_GPU_HOST_DEVICE
 double interpolate_value(double x, double const *arr_x, double const *arr_y, int arr_len)
 {
 	/* Note: arr_x must be sorted in ascending order,

@@ -17,7 +17,9 @@
 #include "radiation_system.hpp"
 #include "fextract.hpp"
 #include "ArrayUtil.hpp"
-#include "interpolate.hpp"
+extern "C" {
+#include "interpolate.h"
+}
 #ifdef HAVE_PYTHON
 #include "matplotlibcpp.h"
 #endif
@@ -59,17 +61,13 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputeRosselandOpacity(
   return kappa0;
 }
 
-// declare global variables
-// initial conditions read from file
-amrex::Gpu::HostVector<double> x_arr;
-amrex::Gpu::HostVector<double> rho_arr;
-amrex::Gpu::HostVector<double> Pgas_arr;
-amrex::Gpu::HostVector<double> Erad_arr;
-
-amrex::Gpu::DeviceVector<double> x_arr_g;
-amrex::Gpu::DeviceVector<double> rho_arr_g;
-amrex::Gpu::DeviceVector<double> Pgas_arr_g;
-amrex::Gpu::DeviceVector<double> Erad_arr_g;
+template <>
+void RadhydroSimulation<TubeProblem>::setInitialConditionsAtLevel(int lev) {
+  // read initial conditions from file
+  amrex::Vector<double> x_arr;
+  amrex::Vector<double> rho_arr;
+  amrex::Vector<double> Pgas_arr;
+  amrex::Vector<double> Erad_arr;
 
   std::string filename = "../extern/pressure_tube/initial_conditions.txt";
   std::ifstream fstream(filename, std::ios::in);
@@ -94,36 +92,26 @@ amrex::Gpu::DeviceVector<double> Erad_arr_g;
     Erad_arr.push_back(Erad);
   }
 
-  x_arr_g.resize(x_arr.size());
-  rho_arr_g.resize(rho_arr.size());
-  Pgas_arr_g.resize(Pgas_arr.size());
-  Erad_arr_g.resize(Erad_arr.size());
-
-  // copy to device
-  amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, x_arr.begin(), x_arr.end(), x_arr_g.begin());
-  amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, rho_arr.begin(), rho_arr.end(), rho_arr_g.begin());
-  amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, Pgas_arr.begin(), Pgas_arr.end(), Pgas_arr_g.begin());
-  amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, Erad_arr.begin(), Erad_arr.end(), Erad_arr_g.begin());
-  amrex::Gpu::streamSynchronizeAll();
-}
-
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo =
       geom[lev].ProbLoArray();
 
-  auto const &x_ptr = x_arr_g.dataPtr();
-  auto const &rho_ptr = rho_arr_g.dataPtr();
-  auto const &Pgas_ptr = Pgas_arr_g.dataPtr();
-  auto const &Erad_ptr = Erad_arr_g.dataPtr();
-  int x_size = static_cast<int>(x_arr_g.size());
+  for (amrex::MFIter iter(state_old_[lev]); iter.isValid(); ++iter) {
+    const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
+    auto const &state = state_new_[lev].array(iter);
 
-  // loop over the grid and set the initial condition
-  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-    amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+    amrex::LoopConcurrentOnCpu(indexRange, [=](int i, int j, int k) noexcept {
+      amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
 
-    amrex::Real const rho = interpolate_value(x, x_ptr, rho_ptr, x_size);
-    amrex::Real const Pgas = interpolate_value(x, x_ptr, Pgas_ptr, x_size);
-    amrex::Real const Erad = interpolate_value(x, x_ptr, Erad_ptr, x_size);
+      amrex::Real const rho =
+          interpolate_value(x, x_arr.dataPtr(), rho_arr.dataPtr(),
+                            static_cast<int>(x_arr.size()));
+      amrex::Real const Pgas =
+          interpolate_value(x, x_arr.dataPtr(), Pgas_arr.dataPtr(),
+                            static_cast<int>(x_arr.size()));
+      amrex::Real const Erad =
+          interpolate_value(x, x_arr.dataPtr(), Erad_arr.dataPtr(),
+                            static_cast<int>(x_arr.size()));
 
       state(i, j, k, RadSystem<TubeProblem>::radEnergy_index) = Erad;
       state(i, j, k, RadSystem<TubeProblem>::x1RadFlux_index) = 0;
@@ -266,41 +254,41 @@ auto problem_main() -> int {
   std::vector<double> xs(nx);
 
   for (int i = 0; i < nx; ++i) {
-    xs[i] = position[i];
+    xs.at(i) = position.at(i);
 
     double rho_exact =
-        values0.at(RadSystem<TubeProblem>::gasDensity_index)[i];
-    double rho = values.at(RadSystem<TubeProblem>::gasDensity_index)[i];
-    rho_err[i] = (rho - rho_exact) / rho_exact;
+        values0.at(RadSystem<TubeProblem>::gasDensity_index).at(i);
+    double rho = values.at(RadSystem<TubeProblem>::gasDensity_index).at(i);
+    rho_err.at(i) = (rho - rho_exact) / rho_exact;
 
     double Trad_exact =
-        std::pow(values0.at(RadSystem<TubeProblem>::radEnergy_index)[i] /
+        std::pow(values0.at(RadSystem<TubeProblem>::radEnergy_index).at(i) /
                      radiation_constant_cgs_,
                  1. / 4.);
     double Trad =
-        std::pow(values.at(RadSystem<TubeProblem>::radEnergy_index)[i] /
+        std::pow(values.at(RadSystem<TubeProblem>::radEnergy_index).at(i) /
                      radiation_constant_cgs_,
                  1. / 4.);
-    Trad_arr[i] = Trad;
-    Trad_exact_arr[i] = Trad_exact;
-    Trad_err[i] = (Trad - Trad_exact) / Trad_exact;
+    Trad_arr.at(i) = Trad;
+    Trad_exact_arr.at(i) = Trad_exact;
+    Trad_err.at(i) = (Trad - Trad_exact) / Trad_exact;
 
     double Egas_exact =
-        values0.at(RadSystem<TubeProblem>::gasEnergy_index)[i];
+        values0.at(RadSystem<TubeProblem>::gasEnergy_index).at(i);
     double x1GasMom_exact =
-        values0.at(RadSystem<TubeProblem>::x1GasMomentum_index)[i];
+        values0.at(RadSystem<TubeProblem>::x1GasMomentum_index).at(i);
     double x2GasMom_exact =
-        values0.at(RadSystem<TubeProblem>::x2GasMomentum_index)[i];
+        values0.at(RadSystem<TubeProblem>::x2GasMomentum_index).at(i);
     double x3GasMom_exact =
-        values0.at(RadSystem<TubeProblem>::x3GasMomentum_index)[i];
+        values0.at(RadSystem<TubeProblem>::x3GasMomentum_index).at(i);
 
-    double Egas = values.at(RadSystem<TubeProblem>::gasEnergy_index)[i];
+    double Egas = values.at(RadSystem<TubeProblem>::gasEnergy_index).at(i);
     double x1GasMom =
-        values.at(RadSystem<TubeProblem>::x1GasMomentum_index)[i];
+        values.at(RadSystem<TubeProblem>::x1GasMomentum_index).at(i);
     double x2GasMom =
-        values.at(RadSystem<TubeProblem>::x2GasMomentum_index)[i];
+        values.at(RadSystem<TubeProblem>::x2GasMomentum_index).at(i);
     double x3GasMom =
-        values.at(RadSystem<TubeProblem>::x3GasMomentum_index)[i];
+        values.at(RadSystem<TubeProblem>::x3GasMomentum_index).at(i);
 
     double Eint_exact = RadSystem<TubeProblem>::ComputeEintFromEgas(
         rho_exact, x1GasMom_exact, x2GasMom_exact, x3GasMom_exact, Egas_exact);
@@ -311,8 +299,8 @@ auto problem_main() -> int {
         rho, x1GasMom, x2GasMom, x3GasMom, Egas);
     double Tgas = RadSystem<TubeProblem>::ComputeTgasFromEgas(rho, Eint);
 
-    Tgas_arr[i] = Tgas;
-    Tgas_err[i] = (Tgas - Tgas_exact) / Tgas_exact;
+    Tgas_arr.at(i) = Tgas;
+    Tgas_err.at(i) = (Tgas - Tgas_exact) / Tgas_exact;
   }
 
   double err_norm = 0.;

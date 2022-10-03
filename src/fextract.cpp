@@ -17,7 +17,7 @@ using namespace amrex; // NOLINT
 
 auto fextract(MultiFab &mf, Geometry &geom, const int idir,
               const Real slice_coord, const bool center = false)
-    -> std::tuple<Vector<Real>, Vector<Gpu::HostVector<Real>>> {
+    -> std::tuple<Vector<Real>, Vector<Vector<Real>>> {
   AMREX_D_TERM( Real xcoord = slice_coord;,
 		Real ycoord = slice_coord;,
 		Real zcoord = slice_coord; )
@@ -86,7 +86,7 @@ auto fextract(MultiFab &mf, Geometry &geom, const int idir,
   const IntVect ivloc{AMREX_D_DECL(iloc, jloc, kloc)};
 
   Vector<Real> pos;
-  Vector<Gpu::HostVector<Real>> data(mf.nComp());
+  Vector<Vector<Real>> data(mf.nComp());
 
   IntVect rr{1};
   Box slice_box(ivloc * rr, ivloc * rr);
@@ -95,33 +95,27 @@ auto fextract(MultiFab &mf, Geometry &geom, const int idir,
 
   GpuArray<Real, AMREX_SPACEDIM> dx = dx0;
 
-  // compute position coordinates
-  for (MFIter mfi(mf); mfi.isValid(); ++mfi) {
-    const Box &bx = mfi.validbox() & slice_box;
-    if (bx.ok()) {
-      amrex::LoopOnCpu(bx, [problo, dx, idir, &pos] (int i, int j, int k) {
-        Array<Real, AMREX_SPACEDIM> p = {AMREX_D_DECL(
-                    problo[0] + static_cast<Real>(i + 0.5) * dx[0],
-                    problo[1] + static_cast<Real>(j + 0.5) * dx[1],
-                    problo[2] + static_cast<Real>(k + 0.5) * dx[2])};
-        pos.push_back(p[idir]);
-      });
-    }
-  }
-
   for (int ivar = 0; ivar < mf.nComp(); ++ivar) {
-    // allocate HostVector storage
-    data[ivar].resize(pos.size());
-    const auto &dataptr = data[ivar].data();
     for (MFIter mfi(mf); mfi.isValid(); ++mfi) {
       const Box &bx = mfi.validbox() & slice_box;
       if (bx.ok()) {
         const auto &fab = mf.array(mfi);
-        ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-          GpuArray<int, 3> idx_vec({i - lo0.x, j - lo0.y, k - lo0.z});
-          int idx = idx_vec[idir];
-          dataptr[idx] = fab(i, j, k, ivar);
-        });
+        const auto lo = amrex::lbound(bx);
+        const auto hi = amrex::ubound(bx);
+        for (int k = lo.z; k <= hi.z; ++k) {
+          for (int j = lo.y; j <= hi.y; ++j) {
+            for (int i = lo.x; i <= hi.x; ++i) {
+              if (pos.size() == data[ivar].size()) {
+                Array<Real, AMREX_SPACEDIM> p = {AMREX_D_DECL(
+                    problo[0] + static_cast<Real>(i + 0.5) * dx[0],
+                    problo[1] + static_cast<Real>(j + 0.5) * dx[1],
+                    problo[2] + static_cast<Real>(k + 0.5) * dx[2])};
+                pos.push_back(p[idir]);
+              }
+              data[ivar].push_back(fab(i, j, k, ivar));
+            }
+          }
+        }
       }
     }
   }
@@ -134,7 +128,7 @@ auto fextract(MultiFab &mf, Geometry &geom, const int idir,
     Vector<int> recvcnt;
     Vector<int> disp;
     Vector<Real> allpos;
-    Vector<Gpu::HostVector<Real>> alldata(data.size());
+    Vector<Vector<Real>> alldata(data.size());
     if (ParallelDescriptor::IOProcessor()) {
       recvcnt.resize(numpts_vec.size());
       disp.resize(numpts_vec.size());

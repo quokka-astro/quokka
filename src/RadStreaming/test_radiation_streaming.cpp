@@ -171,10 +171,10 @@ auto problem_main() -> int {
   std::vector<double> erad_exact(nx);
   std::vector<double> xs(nx);
   for (int i = 0; i < nx; ++i) {
-    amrex::Real const x = position[i];
+    amrex::Real const x = position.at(i);
     xs.at(i) = x;
     erad_exact.at(i) = (x <= chat * tmax) ? 1.0 : 0.0;
-    erad.at(i) = values.at(RadSystem<StreamingProblem>::radEnergy_index)[i];
+    erad.at(i) = values.at(RadSystem<StreamingProblem>::radEnergy_index).at(i);
   }
 
   double err_norm = 0.;

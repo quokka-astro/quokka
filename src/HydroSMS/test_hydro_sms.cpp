@@ -148,7 +148,7 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
     double rho = NAN;
     double P = NAN;
     const double vshock = 0.1096;
-    amrex::Real x = xs[i];
+    amrex::Real x = xs.at(i);
 
     if (x < (0.5 + vshock * tNew_[0])) {
       rho = 3.86;
@@ -164,33 +164,19 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
     velocity_exact.push_back(vx);
   }
 
-  amrex::Gpu::DeviceVector<double> rho_g(density_exact.size());
-  amrex::Gpu::DeviceVector<double> vx_g(velocity_exact.size());
-  amrex::Gpu::DeviceVector<double> P_g(pressure_exact.size());
-
-  // copy exact solution to device
-  amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, density_exact.begin(), density_exact.end(), rho_g.begin());
-  amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, velocity_exact.begin(), velocity_exact.end(), vx_g.begin());
-  amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, pressure_exact.begin(), pressure_exact.end(), P_g.begin());
-  amrex::Gpu::streamSynchronizeAll();
-
-
   // fill reference solution multifab
   for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
     const amrex::Box &indexRange = iter.validbox();
     auto const &stateExact = ref.array(iter);
     auto const ncomp = ref.nComp();
-    auto const &rho_arr = rho_g.data();
-    auto const &vx_arr = vx_g.data();
-    auto const &P_arr = P_g.data();
 
-    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+    amrex::LoopConcurrentOnCpu(indexRange, [=](int i, int j, int k) noexcept {
       for (int n = 0; n < ncomp; ++n) {
         stateExact(i, j, k, n) = 0.;
       }
-      amrex::Real rho = rho_arr[i];
-      amrex::Real vx = vx_arr[i];
-      amrex::Real P = P_arr[i];
+      amrex::Real rho = density_exact.at(i);
+      amrex::Real vx = velocity_exact.at(i);
+      amrex::Real P = pressure_exact.at(i);
 
       const auto gamma = HydroSystem<ShocktubeProblem>::gamma_;
       stateExact(i, j, k, HydroSystem<ShocktubeProblem>::density_index) = rho;
@@ -217,11 +203,11 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
 
     for (int i = 0; i < nx; ++i) {
       amrex::Real rho =
-          values.at(HydroSystem<ShocktubeProblem>::density_index)[i];
+          values.at(HydroSystem<ShocktubeProblem>::density_index).at(i);
       amrex::Real xmom =
-          values.at(HydroSystem<ShocktubeProblem>::x1Momentum_index)[i];
+          values.at(HydroSystem<ShocktubeProblem>::x1Momentum_index).at(i);
       amrex::Real Egas =
-          values.at(HydroSystem<ShocktubeProblem>::energy_index)[i];
+          values.at(HydroSystem<ShocktubeProblem>::energy_index).at(i);
 
       amrex::Real xvel = xmom / rho;
       amrex::Real Eint = Egas - xmom * xmom / (2.0 * rho);

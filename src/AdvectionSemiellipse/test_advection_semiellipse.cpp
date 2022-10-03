@@ -91,8 +91,8 @@ void AdvectionSimulation<SemiellipseProblem>::computeReferenceSolution(
     std::vector<double> d(nx);
     std::vector<double> d_exact(nx);
     for (int i = 0; i < nx; ++i) {
-      amrex::Real rho = values.at(0)[i];
-      amrex::Real rho_exact = val_exact.at(0)[i];
+      amrex::Real rho = values.at(0).at(i);
+      amrex::Real rho_exact = val_exact.at(0).at(i);
       d.at(i) = rho;
       d_exact.at(i) = rho_exact;
     }

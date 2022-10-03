@@ -18,7 +18,9 @@
 
 // internal headers
 
-#include "interpolate.hpp"
+extern "C" {
+    #include "interpolate.h"
+}
 
 // function definitions
 

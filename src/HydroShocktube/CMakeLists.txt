@@ -1,4 +1,4 @@
-add_executable(test_hydro_shocktube ../main.cpp test_hydro_shocktube.cpp ../fextract.cpp ../interpolate.cpp)
+add_executable(test_hydro_shocktube ../main.cpp test_hydro_shocktube.cpp ../fextract.cpp ../interpolate.c)
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
     setup_target_for_cuda_compilation(test_hydro_shocktube)

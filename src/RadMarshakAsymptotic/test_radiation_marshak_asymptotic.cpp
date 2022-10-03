@@ -261,17 +261,17 @@ auto problem_main() -> int {
   std::vector<double> Tgas_keV(nx);
 
   for (int i = 0; i < nx; ++i) {
-    amrex::Real const x = position[i];
+    amrex::Real const x = position.at(i);
     xs.at(i) = x;
 
     const double Erad_t =
-        values.at(RadSystem<SuOlsonProblemCgs>::radEnergy_index)[i];
+        values.at(RadSystem<SuOlsonProblemCgs>::radEnergy_index).at(i);
     const double Etot_t =
-        values.at(RadSystem<SuOlsonProblemCgs>::gasEnergy_index)[i];
+        values.at(RadSystem<SuOlsonProblemCgs>::gasEnergy_index).at(i);
     const double rho =
-        values.at(RadSystem<SuOlsonProblemCgs>::gasDensity_index)[i];
+        values.at(RadSystem<SuOlsonProblemCgs>::gasDensity_index).at(i);
     const double x1GasMom =
-        values.at(RadSystem<SuOlsonProblemCgs>::x1GasMomentum_index)[i];
+        values.at(RadSystem<SuOlsonProblemCgs>::x1GasMomentum_index).at(i);
 
     const double Ekin = (x1GasMom * x1GasMom) / (2.0 * rho);
     const double Egas_t = (Etot_t - Ekin);
