@@ -44,11 +44,11 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 
 	using AMRSimulation<problem_t>::cflNumber_;
 	using AMRSimulation<problem_t>::dt_;
-	using AMRSimulation<problem_t>::ncomp_;
+	using AMRSimulation<problem_t>::ncomp_cc_;
 	using AMRSimulation<problem_t>::nghost_;
 	using AMRSimulation<problem_t>::cycleCount_;
 	using AMRSimulation<problem_t>::areInitialConditionsDefined_;
-	using AMRSimulation<problem_t>::componentNames_;
+	using AMRSimulation<problem_t>::componentNames_cc_;
 
 	using AMRSimulation<problem_t>::fillBoundaryConditions;
 	using AMRSimulation<problem_t>::geom;
@@ -68,8 +68,8 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 
 	explicit AdvectionSimulation(amrex::Vector<amrex::BCRec> &BCs_cc)
       : AMRSimulation<problem_t>(BCs_cc) {
-    componentNames_.push_back({"density"});
-    ncomp_ = 1;
+    componentNames_cc_.push_back({"density"});
+    ncomp_cc_ = 1;
   }
 
 	AdvectionSimulation(amrex::IntVect & /*gridDims*/,
@@ -257,7 +257,7 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 		for (int j = 0; j < AMREX_SPACEDIM; j++) {
 			amrex::BoxArray ba = state_new_cc_[lev].boxArray();
 			ba.surroundingNodes(j);
-			fluxes[j].define(ba, dmap[lev], ncomp_, 0);
+			fluxes[j].define(ba, dmap[lev], ncomp_cc_, 0);
 			fluxes[j].setVal(0.);
 		}
 	}
@@ -283,7 +283,7 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &stateOld = state_old_cc_[lev].const_array(iter);
 		auto const &stateNew = state_new_cc_[lev].array(iter);
-		auto fluxArrays = computeFluxes(stateOld, indexRange, ncomp_);
+		auto fluxArrays = computeFluxes(stateOld, indexRange, ncomp_cc_);
 
 		amrex::IArrayBox redoFlag(indexRange, 1, amrex::The_Async_Arena());
 
@@ -292,7 +292,7 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 		    stateOld, stateNew,
 		    {AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
 				  fluxArrays[2].const_array())},
-		    dt_lev, geomLevel.CellSizeArray(), indexRange, ncomp_,
+		    dt_lev, geomLevel.CellSizeArray(), indexRange, ncomp_cc_,
 			redoFlag.array());
 
 		if (do_reflux) {
@@ -319,7 +319,7 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 			auto const &stateInOld = state_old_cc_[lev].const_array(iter);
 			auto const &stateInStar = state_new_cc_[lev].const_array(iter);
 			auto const &stateOut = state_new_cc_[lev].array(iter);
-			auto fluxArrays = computeFluxes(stateInStar, indexRange, ncomp_);
+			auto fluxArrays = computeFluxes(stateInStar, indexRange, ncomp_cc_);
 
 			amrex::IArrayBox redoFlag(indexRange, 1, amrex::The_Async_Arena());
 
@@ -328,7 +328,7 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 			    stateOut, stateInOld, stateInStar,
 			    {AMREX_D_DECL(fluxArrays[0].const_array(), fluxArrays[1].const_array(),
 					  fluxArrays[2].const_array())},
-			    dt_lev, geomLevel.CellSizeArray(), indexRange, ncomp_,
+			    dt_lev, geomLevel.CellSizeArray(), indexRange, ncomp_cc_,
 				redoFlag.array());
 
 			if (do_reflux) {
@@ -359,13 +359,13 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 
 		if (current != nullptr) {
 			for (int i = 0; i < AMREX_SPACEDIM; i++) {
-				current->FineAdd(fluxes[i], i, 0, 0, ncomp_, 1.);
+				current->FineAdd(fluxes[i], i, 0, 0, ncomp_cc_, 1.);
 			}
 		}
 
 		if (fine != nullptr) {
 			for (int i = 0; i < AMREX_SPACEDIM; i++) {
-				fine->CrseInit(fluxes[i], i, 0, 0, ncomp_, -1.);
+				fine->CrseInit(fluxes[i], i, 0, 0, ncomp_cc_, -1.);
 			}
 		}
 	}

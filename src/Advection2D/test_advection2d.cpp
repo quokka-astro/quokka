@@ -58,7 +58,7 @@ void AdvectionSimulation<SquareProblem>::setInitialConditionsOnGrid(
   const amrex::Array4<double>& state_cc = grid_elem.array;
   // loop over the grid and set the initial condition
   amrex::ParallelFor(
-      indexRange, ncomp_, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
+      indexRange, ncomp_cc_, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
         state_cc(i, j, k, n) = exactSolutionAtIndex(i, j, prob_lo, prob_hi, dx);
       });
 }
@@ -76,7 +76,7 @@ void AdvectionSimulation<SquareProblem>::computeReferenceSolution(
     auto const &state = ref.array(iter);
 
     amrex::ParallelFor(
-        indexRange, ncomp_, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
+        indexRange, ncomp_cc_, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
           state(i, j, k, n) = exactSolutionAtIndex(i, j, prob_lo, prob_hi, dx);
         });
   }

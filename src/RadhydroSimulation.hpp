@@ -57,11 +57,11 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	using AMRSimulation<problem_t>::state_new_cc_;
 	using AMRSimulation<problem_t>::max_signal_speed_;
 
-	using AMRSimulation<problem_t>::ncomp_;
+	using AMRSimulation<problem_t>::ncomp_cc_;
 	using AMRSimulation<problem_t>::nghost_;
 	using AMRSimulation<problem_t>::areInitialConditionsDefined_;
 	using AMRSimulation<problem_t>::BCs_cc_;
-	using AMRSimulation<problem_t>::componentNames_;
+	using AMRSimulation<problem_t>::componentNames_cc_;
 	using AMRSimulation<problem_t>::fillBoundaryConditions;
 	using AMRSimulation<problem_t>::geom;
 	using AMRSimulation<problem_t>::grids;
@@ -119,20 +119,20 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
     if constexpr (Physics_Traits<problem_t>::is_hydro_enabled ||
                   Physics_Traits<problem_t>::is_radiation_enabled) {
       std::vector<std::string> hydroNames = {"gasDensity", "x-GasMomentum", "y-GasMomentum", "z-GasMomentum", "gasEnergy", "gasInternalEnergy"};
-      componentNames_.insert(componentNames_.end(), hydroNames.begin(), hydroNames.end());
-      ncomp_ += hydroNames.size();
+      componentNames_cc_.insert(componentNames_cc_.end(), hydroNames.begin(), hydroNames.end());
+      ncomp_cc_ += hydroNames.size();
     }
     // add passive scalar variables
     if constexpr (Physics_Traits<problem_t>::numPassiveScalars > 0){
       std::vector<std::string> scalarNames = getScalarVariableNames();
-      componentNames_.insert(componentNames_.end(), scalarNames.begin(), scalarNames.end());
-      ncomp_ += scalarNames.size();
+      componentNames_cc_.insert(componentNames_cc_.end(), scalarNames.begin(), scalarNames.end());
+      ncomp_cc_ += scalarNames.size();
     }
     // add radiation state variables
     if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
       std::vector<std::string> radNames = {"radEnergy", "x-RadFlux", "y-RadFlux", "z-RadFlux"};
-      componentNames_.insert(componentNames_.end(), radNames.begin(), radNames.end());
-      ncomp_ += radNames.size();
+      componentNames_cc_.insert(componentNames_cc_.end(), radNames.begin(), radNames.end());
+      ncomp_cc_ += radNames.size();
     }
 
     // read in runtime parameters
@@ -685,8 +685,8 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 	auto dx = geom[lev].CellSizeArray();
 
 	// create temporary multifab for Strang-split sources, copy old state
-	amrex::MultiFab state_old_tmp(grids[lev], dmap[lev], ncomp_, nghost_);
-	amrex::Copy(state_old_tmp, state_old_cc_[lev], 0, 0, ncomp_, nghost_);
+	amrex::MultiFab state_old_tmp(grids[lev], dmap[lev], ncomp_cc_, nghost_);
+	amrex::Copy(state_old_tmp, state_old_cc_[lev], 0, 0, ncomp_cc_, nghost_);
 
 	// do Strang split source terms (first half-step)
 	addStrangSplitSources(state_old_tmp, lev, time, 0.5*dt_lev);

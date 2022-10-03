@@ -78,7 +78,7 @@ void RadhydroSimulation<WaveProblem>::setInitialConditionsOnGrid(
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo;
   const amrex::Box &indexRange = grid_elem.indexRange;
   const amrex::Array4<double>& state_cc = grid_elem.array;
-  const int ncomp = ncomp_;
+  const int ncomp = ncomp_cc_;
   // loop over the grid and set the initial condition
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
     for (int n = 0; n < ncomp; ++n) {

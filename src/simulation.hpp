@@ -225,8 +225,8 @@ protected:
 
   // Nghost = number of ghost cells for each array
   int nghost_ = 4; // PPM needs nghost >= 3, PPM+flattening needs nghost >= 4
-  int ncomp_ = 0; // = number of components (conserved variables) for each array
-  amrex::Vector<std::string> componentNames_;
+  int ncomp_cc_ = 0; // = number of components (conserved variables) for each array
+  amrex::Vector<std::string> componentNames_cc_;
   amrex::Vector<std::string> derivedNames_;
   bool areInitialConditionsDefined_ = false;
 
@@ -552,8 +552,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve() {
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 =
       geom[0].CellSizeArray();
   amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
-  amrex::Vector<amrex::Real> init_sum_cons(ncomp_);
-  for (int n = 0; n < ncomp_; ++n) {
+  amrex::Vector<amrex::Real> init_sum_cons(ncomp_cc_);
+  for (int n = 0; n < ncomp_cc_; ++n) {
     const int lev = 0;
     init_sum_cons[n] = state_new_cc_[lev].sum(n) * vol;
   }
@@ -621,10 +621,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve() {
   computeAfterEvolve(init_sum_cons);
 
   // compute conservation error
-  for (int n = 0; n < ncomp_; ++n) {
+  for (int n = 0; n < ncomp_cc_; ++n) {
     amrex::Real const final_sum = state_new_cc_[0].sum(n) * vol;
     amrex::Real const abs_err = (final_sum - init_sum_cons[n]);
-    amrex::Print() << "Initial " << componentNames_[n] << " = "
+    amrex::Print() << "Initial " << componentNames_cc_[n] << " = "
                    << init_sum_cons[n] << std::endl;
     amrex::Print() << "\tabsolute conservation error = " << abs_err
                    << std::endl;
@@ -969,7 +969,7 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(
     const amrex::DistributionMapping &dm) {
   BL_PROFILE("AMRSimulation::MakeNewLevelFromScratch()");
 
-  const int ncomp = ncomp_;
+  const int ncomp = ncomp_cc_;
   const int nghost = nghost_;
 
   state_new_cc_[level].define(ba, dm, ncomp, nghost);
@@ -1318,8 +1318,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::RenderAscent() {
   amrex::Vector<amrex::MultiFab> mf = PlotFileMF();
   amrex::Vector<const amrex::MultiFab *> mf_ptr = amrex::GetVecOfConstPtrs(mf);
   amrex::Vector<std::string> varnames;
-  varnames.insert(varnames.end(), componentNames_.begin(),
-                  componentNames_.end());
+  varnames.insert(varnames.end(), componentNames_cc_.begin(),
+                  componentNames_cc_.end());
   varnames.insert(varnames.end(), derivedNames_.begin(), derivedNames_.end());
 
   // rescale geometry
@@ -1365,8 +1365,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile() con
   amrex::Vector<amrex::MultiFab> mf = PlotFileMF();
   amrex::Vector<const amrex::MultiFab *> mf_ptr = amrex::GetVecOfConstPtrs(mf);
   amrex::Vector<std::string> varnames;
-  varnames.insert(varnames.end(), componentNames_.begin(),
-                  componentNames_.end());
+  varnames.insert(varnames.end(), componentNames_cc_.begin(),
+                  componentNames_cc_.end());
   varnames.insert(varnames.end(), derivedNames_.begin(), derivedNames_.end());
 
   // write plotfile
@@ -1562,7 +1562,7 @@ void AMRSimulation<problem_t>::ReadCheckpointFile() {
     SetDistributionMap(lev, dm);
 
     // build MultiFab and FluxRegister data
-    int ncomp = ncomp_;
+    int ncomp = ncomp_cc_;
     int nghost = nghost_;
     state_old_cc_[lev].define(grids[lev], dmap[lev], ncomp, nghost);
     state_new_cc_[lev].define(grids[lev], dmap[lev], ncomp, nghost);

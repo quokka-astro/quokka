@@ -43,7 +43,7 @@ template <> void RadhydroSimulation<RichtmeyerMeshkovProblem>::computeAfterTimes
 	// copy all FABs to a local FAB across the entire domain
 	amrex::BoxArray localBoxes(domain_);
 	amrex::DistributionMapping localDistribution(localBoxes, 1);
-	amrex::MultiFab state_mf(localBoxes, localDistribution, ncomp_, 0);
+	amrex::MultiFab state_mf(localBoxes, localDistribution, ncomp_cc_, 0);
 	state_mf.ParallelCopy(state_new_cc_);
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
@@ -55,7 +55,7 @@ template <> void RadhydroSimulation<RichtmeyerMeshkovProblem>::computeAfterTimes
 		auto nx = nx_;
 		auto ny = ny_;
 		auto nz = nz_;
-		auto ncomp = ncomp_;
+		auto ncomp = ncomp_cc_;
 		for (int i = 0; i < nx; ++i) {
 			for (int j = 0; j < ny; ++j) {
 				for (int k = 0; k < nz; ++k) {

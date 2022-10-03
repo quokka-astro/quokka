@@ -50,7 +50,7 @@ void AdvectionSimulation<SawtoothProblem>::setInitialConditionsOnGrid(
   const amrex::Array4<double>& state_cc = grid_elem.array;
   // loop over the grid and set the initial condition
   amrex::ParallelFor(
-        indexRange, ncomp_, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
+        indexRange, ncomp_cc_, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
           ComputeExactSolution(i, j, k, n, state_cc, dx, prob_lo, prob_hi);
         });
 }
