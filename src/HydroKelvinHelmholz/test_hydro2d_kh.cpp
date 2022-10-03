@@ -125,16 +125,16 @@ void RadhydroSimulation<KelvinHelmholzProblem>::ErrorEst(
 auto problem_main() -> int {
   // Problem parameters
   const int nvars = RadhydroSimulation<KelvinHelmholzProblem>::nvarTotal_cc_;
-  amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
+  amrex::Vector<amrex::BCRec> BCs_cc(nvars);
   for (int n = 0; n < nvars; ++n) {
     for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-      boundaryConditions[n].setLo(i, amrex::BCType::int_dir); // periodic
-      boundaryConditions[n].setHi(i, amrex::BCType::int_dir); // periodic
+      BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
+      BCs_cc[n].setHi(i, amrex::BCType::int_dir); // periodic
     }
   }
 
   // Problem initialization
-  RadhydroSimulation<KelvinHelmholzProblem> sim(boundaryConditions);
+  RadhydroSimulation<KelvinHelmholzProblem> sim(BCs_cc);
   
   sim.stopTime_ = 1.5;
   sim.cflNumber_ = 0.4;

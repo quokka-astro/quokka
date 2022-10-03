@@ -60,7 +60,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	using AMRSimulation<problem_t>::ncomp_;
 	using AMRSimulation<problem_t>::nghost_;
 	using AMRSimulation<problem_t>::areInitialConditionsDefined_;
-	using AMRSimulation<problem_t>::boundaryConditions_;
+	using AMRSimulation<problem_t>::BCs_cc_;
 	using AMRSimulation<problem_t>::componentNames_;
 	using AMRSimulation<problem_t>::fillBoundaryConditions;
 	using AMRSimulation<problem_t>::geom;
@@ -110,8 +110,8 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
 
 	// member functions
-	explicit RadhydroSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions)
-	    : AMRSimulation<problem_t>(boundaryConditions) {
+	explicit RadhydroSimulation(amrex::Vector<amrex::BCRec> &BCs_cc)
+	    : AMRSimulation<problem_t>(BCs_cc) {
     // check modules cannot be enabled if they are not been implemented yet
     static_assert(!Physics_Traits<problem_t>::is_chemistry_enabled, "Chemistry is not supported, yet.");
     

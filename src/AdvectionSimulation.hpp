@@ -66,16 +66,16 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	using AMRSimulation<problem_t>::DistributionMap;
 	using AMRSimulation<problem_t>::InterpHookNone;
 
-	explicit AdvectionSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions)
-      : AMRSimulation<problem_t>(boundaryConditions) {
+	explicit AdvectionSimulation(amrex::Vector<amrex::BCRec> &BCs_cc)
+      : AMRSimulation<problem_t>(BCs_cc) {
     componentNames_.push_back({"density"});
     ncomp_ = 1;
   }
 
 	AdvectionSimulation(amrex::IntVect & /*gridDims*/,
                       amrex::RealBox & /*boxSize*/,
-			                amrex::Vector<amrex::BCRec> &boundaryConditions)
-	    : AMRSimulation<problem_t>(boundaryConditions) { }
+			                amrex::Vector<amrex::BCRec> &BCs_cc)
+	    : AMRSimulation<problem_t>(BCs_cc) { }
 
 	void computeMaxSignalLocal(int level) override;
 	void preCalculateInitialConditions() override;

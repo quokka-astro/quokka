@@ -121,16 +121,16 @@ auto problem_main() -> int {
   const int max_timesteps = 1e4;
 
   const int nvars = 1; // only density
-  amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
+  amrex::Vector<amrex::BCRec> BCs_cc(nvars);
   for (int n = 0; n < nvars; ++n) {
     for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-      boundaryConditions[n].setLo(i, amrex::BCType::int_dir); // periodic
-      boundaryConditions[n].setHi(i, amrex::BCType::int_dir);
+      BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
+      BCs_cc[n].setHi(i, amrex::BCType::int_dir);
     }
   }
 
   // Problem initialization
-  AdvectionSimulation<SemiellipseProblem> sim(boundaryConditions);
+  AdvectionSimulation<SemiellipseProblem> sim(BCs_cc);
   sim.maxDt_ = max_dt;
   sim.advectionVx_ = advection_velocity;
   sim.advectionVy_ = 0.;

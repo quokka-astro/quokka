@@ -101,11 +101,11 @@ public:
   int checkpointInterval_ = -1;    // -1 == no output
 
   // constructor
-  explicit AMRSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions) {
-    initialize(boundaryConditions);
+  explicit AMRSimulation(amrex::Vector<amrex::BCRec> &BCs_cc) {
+    initialize(BCs_cc);
   }
 
-  void initialize(amrex::Vector<amrex::BCRec> &boundaryConditions);
+  void initialize(amrex::Vector<amrex::BCRec> &BCs_cc);
   void PerformanceHints();
   void readParameters();
   void setInitialConditions();
@@ -209,7 +209,7 @@ public:
   void RenderAscent();
 #endif
 protected:
-  amrex::Vector<amrex::BCRec> boundaryConditions_; // on level 0
+  amrex::Vector<amrex::BCRec> BCs_cc_; // on level 0
   amrex::Vector<amrex::MultiFab> state_old_cc_;
   amrex::Vector<amrex::MultiFab> state_new_cc_;
   amrex::Vector<amrex::MultiFab>
@@ -255,7 +255,7 @@ protected:
 
 template <typename problem_t>
 void AMRSimulation<problem_t>::initialize(
-    amrex::Vector<amrex::BCRec> &boundaryConditions) {
+    amrex::Vector<amrex::BCRec> &BCs_cc) {
   BL_PROFILE("AMRSimulation::initialize()");
 
   readParameters();
@@ -288,7 +288,7 @@ void AMRSimulation<problem_t>::initialize(
   flux_reg_.resize(nlevs_max + 1);
   cellUpdatesEachLevel_.resize(nlevs_max, 0);
 
-  boundaryConditions_ = boundaryConditions;
+  BCs_cc_ = BCs_cc;
 
   // check that grids will be properly nested on each level
   // (this is necessary since FillPatch only fills from non-ghost cells on
@@ -1085,7 +1085,7 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
       amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>> boundaryFunctor(
           setBoundaryFunctor<problem_t>{});
       amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>>
-          physicalBoundaryFunctor(geom[lev], boundaryConditions_,
+          physicalBoundaryFunctor(geom[lev], BCs_cc_,
                                   boundaryFunctor);
       // fill physical boundaries
       physicalBoundaryFunctor(state, 0, state.nComp(), state.nGrowVect(), time,
@@ -1121,7 +1121,7 @@ void AMRSimulation<problem_t>::FillPatchWithData(
   amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>> boundaryFunctor(
       setBoundaryFunctor<problem_t>{});
   amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>>
-      finePhysicalBoundaryFunctor(geom[lev], boundaryConditions_,
+      finePhysicalBoundaryFunctor(geom[lev], BCs_cc_,
                                   boundaryFunctor);
 
   if (lev == 0) { // NOTE: used by RemakeLevel
@@ -1130,7 +1130,7 @@ void AMRSimulation<problem_t>::FillPatchWithData(
                                 geom[lev], finePhysicalBoundaryFunctor, 0);
   } else {
     amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>>
-        coarsePhysicalBoundaryFunctor(geom[lev - 1], boundaryConditions_,
+        coarsePhysicalBoundaryFunctor(geom[lev - 1], BCs_cc_,
                                       boundaryFunctor);
 
     // use CellConservativeLinear interpolation onto fine grid
@@ -1144,7 +1144,7 @@ void AMRSimulation<problem_t>::FillPatchWithData(
                               fineTime, 0, icomp, ncomp, geom[lev - 1],
                               geom[lev], coarsePhysicalBoundaryFunctor, 0,
                               finePhysicalBoundaryFunctor, 0, refRatio(lev - 1),
-                              mapper, boundaryConditions_, 0,
+                              mapper, BCs_cc_, 0,
                               pre_interp, post_interp);
   }
 }
@@ -1170,10 +1170,10 @@ void AMRSimulation<problem_t>::FillCoarsePatch(int lev, amrex::Real time,
   amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>> boundaryFunctor(
       setBoundaryFunctor<problem_t>{});
   amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>>
-      finePhysicalBoundaryFunctor(geom[lev], boundaryConditions_,
+      finePhysicalBoundaryFunctor(geom[lev], BCs_cc_,
                                   boundaryFunctor);
   amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>>
-      coarsePhysicalBoundaryFunctor(geom[lev - 1], boundaryConditions_,
+      coarsePhysicalBoundaryFunctor(geom[lev - 1], BCs_cc_,
                                     boundaryFunctor);
 
   // use CellConservativeLinear interpolation onto fine grid
@@ -1183,7 +1183,7 @@ void AMRSimulation<problem_t>::FillCoarsePatch(int lev, amrex::Real time,
   amrex::InterpFromCoarseLevel(
       mf, time, *cmf[0], 0, icomp, ncomp, geom[lev - 1], geom[lev],
       coarsePhysicalBoundaryFunctor, 0, finePhysicalBoundaryFunctor, 0,
-      refRatio(lev - 1), mapper, boundaryConditions_, 0);
+      refRatio(lev - 1), mapper, BCs_cc_, 0);
 }
 
 // utility to copy in data from state_old_cc_ and/or state_new_cc_ into another

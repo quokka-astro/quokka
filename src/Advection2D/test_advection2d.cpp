@@ -132,16 +132,16 @@ auto problem_main() -> int {
   const int max_timesteps = 1e4;
   const int nvars = 1;
 
-  amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
+  amrex::Vector<amrex::BCRec> BCs_cc(nvars);
   for (int n = 0; n < nvars; ++n) {
     for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-      boundaryConditions[n].setLo(i, amrex::BCType::int_dir); // periodic
-      boundaryConditions[n].setHi(i, amrex::BCType::int_dir);
+      BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
+      BCs_cc[n].setHi(i, amrex::BCType::int_dir);
     }
   }
 
   // Problem initialization
-  AdvectionSimulation<SquareProblem> sim(boundaryConditions);
+  AdvectionSimulation<SquareProblem> sim(BCs_cc);
   
   sim.stopTime_ = max_time;
   sim.cflNumber_ = CFL_number;

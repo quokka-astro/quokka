@@ -363,17 +363,17 @@ auto problem_main() -> int {
 
   // Problem initialization
   const int nvars = RadhydroSimulation<ShocktubeProblem>::nvarTotal_cc_;
-  amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
+  amrex::Vector<amrex::BCRec> BCs_cc(nvars);
   for (int n = 0; n < nvars; ++n) {
-    boundaryConditions[0].setLo(0, amrex::BCType::foextrap); // Dirichlet
-    boundaryConditions[0].setHi(0, amrex::BCType::foextrap);
+    BCs_cc[0].setLo(0, amrex::BCType::foextrap); // Dirichlet
+    BCs_cc[0].setHi(0, amrex::BCType::foextrap);
     for (int i = 1; i < AMREX_SPACEDIM; ++i) {
-      boundaryConditions[n].setLo(i, amrex::BCType::int_dir); // periodic
-      boundaryConditions[n].setHi(i, amrex::BCType::int_dir);
+      BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
+      BCs_cc[n].setHi(i, amrex::BCType::int_dir);
     }
   }
 
-  RadhydroSimulation<ShocktubeProblem> sim(boundaryConditions);
+  RadhydroSimulation<ShocktubeProblem> sim(BCs_cc);
   
   sim.cflNumber_ = CFL_number;
   sim.maxDt_ = max_dt;
