@@ -71,7 +71,7 @@ void AdvectionSimulation<SquareProblem>::computeReferenceSolution(
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi) {
   // compute exact solution
 
-  for (amrex::MFIter iter(state_old_[0]); iter.isValid(); ++iter) {
+  for (amrex::MFIter iter(state_old_cc_[0]); iter.isValid(); ++iter) {
     const amrex::Box &indexRange = iter.validbox();
     auto const &state = ref.array(iter);
 
@@ -93,9 +93,9 @@ void AdvectionSimulation<SquareProblem>::ErrorEst(int lev,
   const Real rho_min = 0.1;       // minimum rho for refinement
   auto const &dx = geom[lev].CellSizeArray();
 
-  for (amrex::MFIter mfi(state_new_[lev]); mfi.isValid(); ++mfi) {
+  for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
     const amrex::Box &box = mfi.validbox();
-    const auto state = state_new_[lev].const_array(mfi);
+    const auto state = state_new_cc_[lev].const_array(mfi);
     const auto tag = tags.array(mfi);
 
     amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {

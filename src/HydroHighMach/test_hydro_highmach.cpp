@@ -84,7 +84,7 @@ void RadhydroSimulation<HighMachProblem>::computeReferenceSolution(
     amrex::GpuArray<Real, AMREX_SPACEDIM> const &prob_lo) {
 
   // extract solution
-  auto [position, values] = fextract(state_new_[0], geom[0], 0, 0.5);
+  auto [position, values] = fextract(state_new_cc_[0], geom[0], 0, 0.5);
   auto const nx = position.size();
   std::vector<double> x;
 

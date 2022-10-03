@@ -38,8 +38,8 @@
 template <typename problem_t> class AdvectionSimulation : public AMRSimulation<problem_t>
 {
       public:
-	using AMRSimulation<problem_t>::state_old_;
-	using AMRSimulation<problem_t>::state_new_;
+	using AMRSimulation<problem_t>::state_old_cc_;
+	using AMRSimulation<problem_t>::state_new_cc_;
 	using AMRSimulation<problem_t>::max_signal_speed_;
 
 	using AMRSimulation<problem_t>::cflNumber_;
@@ -122,9 +122,9 @@ template <typename problem_t>
 void AdvectionSimulation<problem_t>::computeMaxSignalLocal(int const level)
 {
 	// loop over local grids, compute CFL timestep
-	for (amrex::MFIter iter(state_new_[level]); iter.isValid(); ++iter) {
+	for (amrex::MFIter iter(state_new_cc_[level]); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
-		auto const &stateOld = state_old_[level].const_array(iter);
+		auto const &stateOld = state_old_cc_[level].const_array(iter);
 		auto const &maxSignal = max_signal_speed_[level].array(iter);
 		LinearAdvectionSystem<problem_t>::ComputeMaxSignalSpeed(
 		    stateOld, maxSignal, advectionVx_, advectionVy_, advectionVz_, indexRange);
@@ -182,8 +182,8 @@ template <typename problem_t>
 void AdvectionSimulation<problem_t>::computeAfterEvolve(amrex::Vector<amrex::Real> & /*initSumCons*/)
 {
 	// compute reference solution
-	const int ncomp = state_new_[0].nComp();
-	const int nghost = state_new_[0].nGrow();
+	const int ncomp = state_new_cc_[0].nComp();
+	const int nghost = state_new_cc_[0].nGrow();
 	amrex::MultiFab state_ref_level0(boxArray(0), DistributionMap(0), ncomp, nghost);
 	computeReferenceSolution(state_ref_level0, geom[0].CellSizeArray(),
 							 geom[0].ProbLoArray(), geom[0].ProbHiArray());
@@ -191,7 +191,7 @@ void AdvectionSimulation<problem_t>::computeAfterEvolve(amrex::Vector<amrex::Rea
 	// compute error norm
 	amrex::MultiFab residual(boxArray(0), DistributionMap(0), ncomp, nghost);
 	amrex::MultiFab::Copy(residual, state_ref_level0, 0, 0, ncomp, nghost);
-	amrex::MultiFab::Saxpy(residual, -1., state_new_[0], 0, 0, ncomp, nghost);
+	amrex::MultiFab::Saxpy(residual, -1., state_new_cc_[0], 0, 0, ncomp, nghost);
 
 	amrex::Real sol_norm = 0.;
 	amrex::Real err_norm = 0.;
@@ -216,11 +216,11 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 
 	// since we are starting a new timestep, need to swap old and new states on this
 	// level
-	std::swap(state_old_[lev], state_new_[lev]);
+	std::swap(state_old_cc_[lev], state_new_cc_[lev]);
 
 	// check state validity
-	AMREX_ASSERT(!state_old_[lev].contains_nan(0, state_old_[lev].nComp()));
-	AMREX_ASSERT(!state_old_[lev].contains_nan()); // check ghost cells
+	AMREX_ASSERT(!state_old_cc_[lev].contains_nan(0, state_old_cc_[lev].nComp()));
+	AMREX_ASSERT(!state_old_cc_[lev].contains_nan()); // check ghost cells
 
 	// get geometry (used only for cell sizes)
 	auto const &geomLevel = geom[lev];
@@ -257,7 +257,7 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 
 	if (do_reflux) {
 		for (int j = 0; j < AMREX_SPACEDIM; j++) {
-			amrex::BoxArray ba = state_new_[lev].boxArray();
+			amrex::BoxArray ba = state_new_cc_[lev].boxArray();
 			ba.surroundingNodes(j);
 			fluxes[j].define(ba, dmap[lev], ncomp_, 0);
 			fluxes[j].setVal(0.);
@@ -271,7 +271,7 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 
 	// update ghost zones [w/ old timestep]
 	// (N.B. the input and output multifabs are allowed to be the same, as done here)
-	fillBoundaryConditions(state_old_[lev], state_old_[lev], lev, time, InterpHookNone, InterpHookNone);
+	fillBoundaryConditions(state_old_cc_[lev], state_old_cc_[lev], lev, time, InterpHookNone, InterpHookNone);
 
 	amrex::Real fluxScaleFactor = NAN;
 	if constexpr (integratorOrder_ == 2) {
@@ -281,10 +281,10 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 	}
 
 	// advance all grids on local processor (Stage 1 of integrator)
-	for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
+	for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
-		auto const &stateOld = state_old_[lev].const_array(iter);
-		auto const &stateNew = state_new_[lev].array(iter);
+		auto const &stateOld = state_old_cc_[lev].const_array(iter);
+		auto const &stateNew = state_new_cc_[lev].array(iter);
 		auto fluxArrays = computeFluxes(stateOld, indexRange, ncomp_);
 
 		amrex::IArrayBox redoFlag(indexRange, 1, amrex::The_Async_Arena());
@@ -311,16 +311,16 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 	}
 
 	if constexpr (integratorOrder_ == 2) {
-		// update ghost zones [w/ intermediate stage stored in state_new_]
-		fillBoundaryConditions(state_new_[lev], state_new_[lev], lev, time + dt_lev,
+		// update ghost zones [w/ intermediate stage stored in state_new_cc_]
+		fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, time + dt_lev,
 				InterpHookNone, InterpHookNone);
 
 		// advance all grids on local processor (Stage 2 of integrator)
-		for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
+		for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
 			const amrex::Box &indexRange = iter.validbox();
-			auto const &stateInOld = state_old_[lev].const_array(iter);
-			auto const &stateInStar = state_new_[lev].const_array(iter);
-			auto const &stateOut = state_new_[lev].array(iter);
+			auto const &stateInOld = state_old_cc_[lev].const_array(iter);
+			auto const &stateInStar = state_new_cc_[lev].const_array(iter);
+			auto const &stateOut = state_new_cc_[lev].array(iter);
 			auto fluxArrays = computeFluxes(stateInStar, indexRange, ncomp_);
 
 			amrex::IArrayBox redoFlag(indexRange, 1, amrex::The_Async_Arena());
