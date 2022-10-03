@@ -211,7 +211,7 @@ void RadhydroSimulation<ScalarProblem>::computeReferenceSolution(
 
 auto problem_main() -> int {
   // Problem parameters
-  const int nvars = RadhydroSimulation<ScalarProblem>::nvarTotal_;
+  const int nvars = RadhydroSimulation<ScalarProblem>::nvarTotal_cc_;
   amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
   for (int n = 0; n < nvars; ++n) {
     boundaryConditions[0].setLo(0, amrex::BCType::int_dir); // periodic

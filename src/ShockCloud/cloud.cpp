@@ -422,7 +422,7 @@ auto problem_main() -> int {
   const int max_timesteps = 1e5;
 
   // Problem initialization
-  constexpr int nvars = RadhydroSimulation<ShockCloud>::nvarTotal_;
+  constexpr int nvars = RadhydroSimulation<ShockCloud>::nvarTotal_cc_;
   amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
   for (int n = 0; n < nvars; ++n) {
     boundaryConditions[n].setLo(0, amrex::BCType::int_dir); // periodic

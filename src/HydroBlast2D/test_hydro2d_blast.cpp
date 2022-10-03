@@ -151,7 +151,7 @@ auto problem_main() -> int
 		return false;
 	};
 
-	const int nvars = RadhydroSimulation<BlastProblem>::nvarTotal_;
+	const int nvars = RadhydroSimulation<BlastProblem>::nvarTotal_cc_;
 	amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
 	for (int n = 0; n < nvars; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {

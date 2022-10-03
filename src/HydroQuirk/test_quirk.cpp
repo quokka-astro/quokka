@@ -254,7 +254,7 @@ AMRSimulation<QuirkProblem>::setCustomBoundaryConditions(
 
 auto problem_main() -> int {
   // Boundary conditions
-  const int nvars = RadhydroSimulation<QuirkProblem>::nvarTotal_;
+  const int nvars = RadhydroSimulation<QuirkProblem>::nvarTotal_cc_;
   amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
   for (int n = 0; n < nvars; ++n) {
     // outflow
