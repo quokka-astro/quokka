@@ -1002,6 +1002,9 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(
   // check that state_new_cc_[lev] is properly filled
   AMREX_ALWAYS_ASSERT(!state_new_cc_[level].contains_nan(0, ncomp));
 
+  // set flag
+  areInitialConditionsDefined_ = true;
+
   // fill ghost zones
   fillBoundaryConditions(state_new_cc_[level], state_new_cc_[level], level, time,
                          InterpHookNone, InterpHookNone);
