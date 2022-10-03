@@ -145,16 +145,14 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	void checkHydroStates(amrex::MultiFab &mf, char const *file, int line);
 	void computeMaxSignalLocal(int level) override;
 	void preCalculateInitialConditions() override;
-  	void setInitialConditionsOnGrid(std::vector<quokka::grid> &grid_vec) override;
-	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev,
-									  int ncycle) override;
+  void setInitialConditionsOnGrid(quokka::grid grid_elem) override;
+	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle) override;
 	void computeAfterTimestep() override;
-	void computeAfterLevelAdvance(int lev, amrex::Real time,
-								 amrex::Real dt_lev, int /*ncycle*/);
+	void computeAfterLevelAdvance(int lev, amrex::Real time, amrex::Real dt_lev, int /*ncycle*/);
 	void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) override;
 	void computeReferenceSolution(amrex::MultiFab &ref,
 		amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-    	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo);
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo);
 
 	// compute derived variables
 	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const override;
@@ -361,8 +359,7 @@ void RadhydroSimulation<problem_t>::preCalculateInitialConditions() {
 }
 
 template <typename problem_t>
-void RadhydroSimulation<problem_t>::setInitialConditionsOnGrid(
-    std::vector<quokka::grid> &grid_vec) {
+void RadhydroSimulation<problem_t>::setInitialConditionsOnGrid(quokka::grid grid_elem) {
   // default empty implementation
   // user should implement using problem-specific template specialization
 }

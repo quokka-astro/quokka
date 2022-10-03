@@ -109,7 +109,6 @@ public:
   void PerformanceHints();
   void readParameters();
   void setInitialConditions();
-  void setInitialConditionsAtLevel(int level);
   void evolve();
   void computeTimestep();
   auto computeTimestepAtLevel(int lev) -> amrex::Real;
@@ -118,7 +117,7 @@ public:
   virtual void advanceSingleTimestepAtLevel(int lev, amrex::Real time,
                                             amrex::Real dt_lev, int ncycle) = 0;
   virtual void preCalculateInitialConditions() = 0;
-  virtual void setInitialConditionsOnGrid(std::vector<quokka::grid> &grid_vec) = 0;
+  virtual void setInitialConditionsOnGrid(quokka::grid grid_elem) = 0;
   virtual void computeAfterTimestep() = 0;
   virtual void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) = 0;
 
@@ -319,30 +318,6 @@ void AMRSimulation<problem_t>::initialize(
       MPI_Comm_c2f(amrex::ParallelContext::CommunicatorSub());
   ascent_.open(ascent_options);
 #endif
-}
-
-template <typename problem_t>
-void AMRSimulation<problem_t>::setInitialConditionsAtLevel(int level) {
-  // initialise grid-struct, which the user will opperate on
-  std::vector<quokka::grid> grid_vec;
-
-  // perform precalculation step defined by the user
-  preCalculateInitialConditions();
-
-  // itterate over the domain
-  for (amrex::MFIter iter(state_new_cc_[level]); iter.isValid(); ++iter) {
-    // cell-centred states
-    grid_vec.emplace_back(state_new_cc_[level].array(iter), iter.validbox(),
-                          geom[level].CellSizeArray(), geom[level].ProbLoArray(),
-                          geom[level].ProbHiArray(), quokka::centering::cc,
-                          quokka::direction::na);
-
-    // set initial conditions defined by the user
-    setInitialConditionsOnGrid(grid_vec);
-  }
-
-  // set flag
-  areInitialConditionsDefined_ = true;
 }
 
 template <typename problem_t>
@@ -1010,8 +985,19 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(
         Geom(level - 1), refRatio(level - 1), level, ncomp);
   }
 
-  // set state_new_cc_[lev] to desired initial condition
-  setInitialConditionsAtLevel(level);
+  // precalculate any required data (e.g., data table; as implimented by the user) before initialising state variables
+  preCalculateInitialConditions();
+
+  // cell-centred quantities
+  // itterate over the domain
+  for (amrex::MFIter iter(state_new_cc_[level]); iter.isValid(); ++iter) {
+    quokka::grid grid_elem(state_new_cc_[level].array(iter), iter.validbox(),
+                            geom[level].CellSizeArray(), geom[level].ProbLoArray(),
+                            geom[level].ProbHiArray(), quokka::centering::cc,
+                            quokka::direction::na);
+    // set initial conditions defined by the user
+    setInitialConditionsOnGrid(grid_elem);
+  }
 
   // check that state_new_cc_[lev] is properly filled
   AMREX_ALWAYS_ASSERT(!state_new_cc_[level].contains_nan(0, ncomp));
