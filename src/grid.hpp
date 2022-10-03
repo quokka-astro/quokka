@@ -13,13 +13,13 @@ namespace quokka {
 
   struct grid {
     const amrex::Array4<double>& array;
-    const amrex::Box& indexRange;
+    const amrex::Box indexRange;
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx;
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo;
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi;
     enum centering cen;
     enum direction dir;
-    grid(const amrex::Array4<double>& array, const amrex::Box& indexRange,
+    grid(const amrex::Array4<double>& array, const amrex::Box indexRange,
         amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
         amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo,
         amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi,
