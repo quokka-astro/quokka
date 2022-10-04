@@ -64,6 +64,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	using AMRSimulation<problem_t>::componentNames_;
 	using AMRSimulation<problem_t>::fillBoundaryConditions;
 	using AMRSimulation<problem_t>::geom;
+	using AMRSimulation<problem_t>::ref_ratio;
 	using AMRSimulation<problem_t>::grids;
 	using AMRSimulation<problem_t>::dmap;
 	using AMRSimulation<problem_t>::flux_reg_;
@@ -151,6 +152,10 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 
 	// compute statistics
 	auto ComputeStatistics() -> std::unordered_map<std::string, Real>;
+
+	// compute volume integrals
+	template <typename F>
+	auto computeVolumeIntegral(F const &user_f) -> amrex::Real;
 
 	// fix-up states
 	void FixupState(int level) override;
@@ -411,6 +416,37 @@ void RadhydroSimulation<problem_t>::computeReferenceSolution(amrex::MultiFab &re
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
 	// user should implement
+}
+
+template <typename problem_t>
+template <typename F>
+auto RadhydroSimulation<problem_t>::computeVolumeIntegral(F const &user_f)
+	-> amrex::Real
+{
+	// compute integral of user_f(i, j, k, state) along the given axis.
+	BL_PROFILE("RadhydroSimulation::computeVolumeIntegral()");
+
+	// allocate temporary multifabs
+	amrex::Vector<amrex::MultiFab> q;
+	q.resize(finest_level+1);
+	for(int lev = 0; lev <= finest_level; ++lev) {
+		q[lev].define(boxArray(lev), DistributionMap(lev), 1, 0);
+	}
+
+	// evaluate user_f on all levels
+	// (note: it is not necessary to average down)
+	for(int lev = 0; lev <= finest_level; ++lev) {
+		auto const &state = state_new_[lev].const_arrays();
+		auto const &result = q[lev].arrays();
+		amrex::ParallelFor(q[lev], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
+			result[bx](i, j, k) = user_f(i, j, k, state[bx]);
+		});
+	}
+	amrex::Gpu::streamSynchronize();
+
+	// call amrex::volumeWeightedSum
+  	const amrex::Real result = amrex::volumeWeightedSum(amrex::GetVecOfConstPtrs(q), 0, geom, ref_ratio);
+	return result;
 }
 
 template <typename problem_t>
