@@ -46,11 +46,13 @@ template <> struct HydroSystem_Traits<QuirkProblem> {
 };
 
 template <> struct Physics_Traits<QuirkProblem> {
+  // cell-centred
   static constexpr bool is_hydro_enabled = true;
-  static constexpr bool is_radiation_enabled = false;
   static constexpr bool is_chemistry_enabled = false;
-  
   static constexpr int numPassiveScalars = 0; // number of passive scalars
+  static constexpr bool is_radiation_enabled = false;
+  // face-centred
+  static constexpr bool is_mhd_enabled = false;
 };
 
 constexpr Real dl = 3.692;

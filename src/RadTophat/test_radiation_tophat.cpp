@@ -49,11 +49,13 @@ template <> struct RadSystem_Traits<TophatProblem> {
 };
 
 template <> struct Physics_Traits<TophatProblem> {
+  // cell-centred
   static constexpr bool is_hydro_enabled = false;
-  static constexpr bool is_radiation_enabled = true;
   static constexpr bool is_chemistry_enabled = false;
-
   static constexpr int numPassiveScalars = 0; // number of passive scalars
+  static constexpr bool is_radiation_enabled = true;
+  // face-centred
+  static constexpr bool is_mhd_enabled = false;
 };
 
 template <>

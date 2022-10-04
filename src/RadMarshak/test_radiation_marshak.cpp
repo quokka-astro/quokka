@@ -42,11 +42,13 @@ template <> struct RadSystem_Traits<SuOlsonProblem> {
 };
 
 template <> struct Physics_Traits<SuOlsonProblem> {
+  // cell-centred
   static constexpr bool is_hydro_enabled = false;
-  static constexpr bool is_radiation_enabled = true;
   static constexpr bool is_chemistry_enabled = false;
-
   static constexpr int numPassiveScalars = 0;
+  static constexpr bool is_radiation_enabled = true;
+  // face-centred
+  static constexpr bool is_mhd_enabled = false;
 };
 
 template <>

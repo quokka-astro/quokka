@@ -37,11 +37,13 @@ template <> struct HydroSystem_Traits<SedovProblem> {
 };
 
 template <> struct Physics_Traits<SedovProblem> {
+  // cell-centred
   static constexpr bool is_hydro_enabled = true;
-  static constexpr bool is_radiation_enabled = false;
   static constexpr bool is_chemistry_enabled = false;
-  
   static constexpr int numPassiveScalars = 0; // number of passive scalars
+  static constexpr bool is_radiation_enabled = false;
+  // face-centred
+  static constexpr bool is_mhd_enabled = false;
 };
 
 // declare global variables
