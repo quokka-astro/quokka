@@ -155,6 +155,7 @@ public:
   template <typename PreInterpHook, typename PostInterpHook>
   void fillBoundaryConditions(amrex::MultiFab &S_filled, amrex::MultiFab &state,
                               int lev, amrex::Real time,
+                              amrex::Vector<amrex::BCRec> &BCs,
                               PreInterpHook const &pre_interp,
                               PostInterpHook const&post_interp);
 
@@ -289,6 +290,8 @@ void AMRSimulation<problem_t>::initialize(
   reductionFactor_.resize(nlevs_max, 1);
   state_new_cc_.resize(nlevs_max);
   state_old_cc_.resize(nlevs_max);
+  state_new_fc_.resize(nlevs_max);
+  state_old_fc_.resize(nlevs_max);
   max_signal_speed_.resize(nlevs_max);
   flux_reg_.resize(nlevs_max + 1);
   cellUpdatesEachLevel_.resize(nlevs_max, 0);
@@ -865,12 +868,24 @@ void AMRSimulation<problem_t>::MakeNewLevelFromCoarse(
     const amrex::DistributionMapping &dm) {
   BL_PROFILE("AMRSimulation::MakeNewLevelFromCoarse()");
 
-  const int ncomp = state_new_cc_[level - 1].nComp();
-  const int nghost = state_new_cc_[level - 1].nGrow();
+  const int ncomp_cc = ncomp_cc_; // state_new_cc_[level - 1].nComp();
+  const int ncomp_fc = ncomp_fc_;
+  const int nghost = nghost_; // state_new_cc_[level - 1].nGrow();
 
-  state_new_cc_[level].define(ba, dm, ncomp, nghost);
-  state_old_cc_[level].define(ba, dm, ncomp, nghost);
+  state_new_cc_[level].define(ba, dm, ncomp_cc, nghost);
+  state_old_cc_[level].define(ba, dm, ncomp_cc, nghost);
   max_signal_speed_[level].define(ba, dm, 1, nghost);
+
+  if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
+    for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+      state_new_fc_[level][idim] = amrex::MultiFab(
+          amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim)), dm,
+          ncomp_fc, nghost);
+      state_old_fc_[level][idim] = amrex::MultiFab(
+          amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim)), dm,
+          ncomp_fc, nghost);
+    }
+  }
 
   tNew_[level] = time;
   tOld_[level] = time - 1.e200;
@@ -878,11 +893,13 @@ void AMRSimulation<problem_t>::MakeNewLevelFromCoarse(
   if (level > 0 && (do_reflux != 0)) {
     flux_reg_[level] = std::make_unique<amrex::YAFluxRegister>(
         ba, boxArray(level - 1), dm, DistributionMap(level - 1), Geom(level),
-        Geom(level - 1), refRatio(level - 1), level, ncomp);
+        Geom(level - 1), refRatio(level - 1), level, ncomp_cc);
   }
 
-  FillCoarsePatch(level, time, state_new_cc_[level], 0, ncomp);
-  FillCoarsePatch(level, time, state_old_cc_[level], 0, ncomp); // also necessary
+  FillCoarsePatch(level, time, state_new_cc_[level], 0, ncomp_cc);
+  FillCoarsePatch(level, time, state_old_cc_[level], 0, ncomp_cc); // also necessary
+
+  // TODO(neco): fill fc variables
 }
 
 // Remake an existing level using provided BoxArray and DistributionMapping and
@@ -894,19 +911,39 @@ void AMRSimulation<problem_t>::RemakeLevel(
     const amrex::DistributionMapping &dm) {
   BL_PROFILE("AMRSimulation::RemakeLevel()");
 
-  const int ncomp = state_new_cc_[level].nComp();
-  const int nghost = state_new_cc_[level].nGrow();
+  const int ncomp_cc = ncomp_cc_; // state_new_cc_[level].nComp();
+  const int ncomp_fc = ncomp_fc_;
+  const int nghost = nghost_; // state_new_cc_[level].nGrow();
 
-  amrex::MultiFab new_state(ba, dm, ncomp, nghost);
-  amrex::MultiFab old_state(ba, dm, ncomp, nghost);
-  amrex::MultiFab max_signal_speed(ba, dm, 1, nghost);
-
-  FillPatch(level, time, new_state, 0, ncomp);
-  FillPatch(level, time, old_state, 0, ncomp); // also necessary
-
+  amrex::MultiFab new_state(ba, dm, ncomp_cc, nghost);
+  amrex::MultiFab old_state(ba, dm, ncomp_cc, nghost);
+  FillPatch(level, time, new_state, 0, ncomp_cc);
+  FillPatch(level, time, old_state, 0, ncomp_cc); // also necessary
   std::swap(new_state, state_new_cc_[level]);
   std::swap(old_state, state_old_cc_[level]);
+
+  amrex::MultiFab max_signal_speed(ba, dm, 1, nghost);
   std::swap(max_signal_speed, max_signal_speed_[level]);
+
+  amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> tmp_state_old_fc;
+  amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> tmp_state_new_fc;
+  if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
+    // define
+    for (int idim=0; idim < AMREX_SPACEDIM; ++idim) {
+      tmp_state_new_fc[idim] = amrex::MultiFab(
+          amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim)), dm,
+          ncomp_fc, nghost);
+      tmp_state_old_fc[idim] = amrex::MultiFab(
+          amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim)), dm,
+          ncomp_fc, nghost);
+    }
+    // TODO(neco): fill
+    // swap
+    for (int idim=0; idim < AMREX_SPACEDIM; ++idim) { 
+      std::swap(tmp_state_new_fc[idim], state_new_fc_[level][idim]);
+      std::swap(tmp_state_old_fc[idim], state_old_fc_[level][idim]);
+    }
+  }
 
   tNew_[level] = time;
   tOld_[level] = time - 1.e200;
@@ -914,7 +951,7 @@ void AMRSimulation<problem_t>::RemakeLevel(
   if (level > 0 && (do_reflux != 0)) {
     flux_reg_[level] = std::make_unique<amrex::YAFluxRegister>(
         ba, boxArray(level - 1), dm, DistributionMap(level - 1), Geom(level),
-        Geom(level - 1), refRatio(level - 1), level, ncomp);
+        Geom(level - 1), refRatio(level - 1), level, ncomp_cc);
   }
 }
 
@@ -926,6 +963,14 @@ void AMRSimulation<problem_t>::ClearLevel(int level) {
   state_new_cc_[level].clear();
   state_old_cc_[level].clear();
   max_signal_speed_[level].clear();
+
+  if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
+    for (int idim=0; idim < AMREX_SPACEDIM; ++idim) {
+      state_new_fc_[level][idim].clear();
+      state_old_fc_[level][idim].clear();
+    }
+  }
+
   flux_reg_[level].reset(nullptr);
 }
 
@@ -974,12 +1019,24 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(
     const amrex::DistributionMapping &dm) {
   BL_PROFILE("AMRSimulation::MakeNewLevelFromScratch()");
 
-  const int ncomp = ncomp_cc_;
+  const int ncomp_cc = ncomp_cc_;
+  const int ncomp_fc = ncomp_fc_;
   const int nghost = nghost_;
 
-  state_new_cc_[level].define(ba, dm, ncomp, nghost);
-  state_old_cc_[level].define(ba, dm, ncomp, nghost);
+  state_new_cc_[level].define(ba, dm, ncomp_cc, nghost);
+  state_old_cc_[level].define(ba, dm, ncomp_cc, nghost);
   max_signal_speed_[level].define(ba, dm, 1, nghost);
+
+  if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
+    for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+      state_new_fc_[level][idim] = amrex::MultiFab(
+          amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim)), dm,
+          ncomp_fc, nghost);
+      state_old_fc_[level][idim] = amrex::MultiFab(
+          amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim)), dm,
+          ncomp_fc, nghost);
+    }
+  }
 
   tNew_[level] = time;
   tOld_[level] = time - 1.e200;
@@ -987,36 +1044,59 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(
   if (level > 0 && (do_reflux != 0)) {
     flux_reg_[level] = std::make_unique<amrex::YAFluxRegister>(
         ba, boxArray(level - 1), dm, DistributionMap(level - 1), Geom(level),
-        Geom(level - 1), refRatio(level - 1), level, ncomp);
+        Geom(level - 1), refRatio(level - 1), level, ncomp_cc);
   }
 
-  // precalculate any required data (e.g., data table; as implimented by the user) before initialising state variables
+  // precalculate any required data (e.g., data table; as implimented by the
+  // user) before initialising state variables
   preCalculateInitialConditions();
 
   // cell-centred quantities
   // itterate over the domain
   for (amrex::MFIter iter(state_new_cc_[level]); iter.isValid(); ++iter) {
     quokka::grid grid_elem(state_new_cc_[level].array(iter), iter.validbox(),
-                            geom[level].CellSizeArray(), geom[level].ProbLoArray(),
-                            geom[level].ProbHiArray(), quokka::centering::cc,
-                            quokka::direction::na);
+                           geom[level].CellSizeArray(),
+                           geom[level].ProbLoArray(), geom[level].ProbHiArray(),
+                           quokka::centering::cc, quokka::direction::na);
     // set initial conditions defined by the user
     setInitialConditionsOnGrid(grid_elem);
   }
+  // check that state_new_cc_[level] is properly filled
+  AMREX_ALWAYS_ASSERT(!state_new_cc_[level].contains_nan(0, ncomp_cc));
+  // fill cell-centred ghost zones
+  fillBoundaryConditions(state_new_cc_[level], state_new_cc_[level], level,
+                         time, BCs_cc_, InterpHookNone, InterpHookNone);
+  // copy to state_old_cc_ (including ghost zones)
+  state_old_cc_[level].ParallelCopy(state_new_cc_[level], 0, 0, ncomp_cc,
+                                    nghost, nghost);
 
-  // check that state_new_cc_[lev] is properly filled
-  AMREX_ALWAYS_ASSERT(!state_new_cc_[level].contains_nan(0, ncomp));
+  // face-centred quantities
+  if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
+    // for each face-centering (number of dimensions)
+    for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+      // itterate over the domain
+      for (amrex::MFIter iter(state_new_fc_[level][idim]); iter.isValid(); ++iter) {
+        quokka::grid grid_elem(state_new_fc_[level][idim].array(iter),
+                               iter.validbox(), geom[level].CellSizeArray(),
+                               geom[level].ProbLoArray(),
+                               geom[level].ProbHiArray(), quokka::centering::fc,
+                               quokka::direction(idim));
+        // set initial conditions defined by the user
+        setInitialConditionsOnGrid(grid_elem);
+      }
+      // check that state_new_fc_[level][idim] is filled properly
+      AMREX_ALWAYS_ASSERT(!state_new_fc_[level][idim].contains_nan(0, ncomp_fc));
+      // fill face-centred ghost zones
+      fillBoundaryConditions(state_new_fc_[level][idim],
+                             state_new_fc_[level][idim], level, time, BCs_fc_,
+                             InterpHookNone, InterpHookNone);
+      state_old_fc_[level][idim].ParallelCopy(state_new_fc_[level][idim], 0, 0,
+                                              ncomp_fc, nghost, nghost);
+    }
+  }
 
   // set flag
   areInitialConditionsDefined_ = true;
-
-  // fill ghost zones
-  fillBoundaryConditions(state_new_cc_[level], state_new_cc_[level], level, time,
-                         InterpHookNone, InterpHookNone);
-
-  // copy to state_old_cc_ (including ghost zones)
-  state_old_cc_[level].ParallelCopy(state_new_cc_[level], 0, 0, ncomp, nghost,
-                                 nghost);
 }
 
 template <typename problem_t> struct setBoundaryFunctor {
@@ -1049,6 +1129,7 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
                                                       amrex::MultiFab &state,
                                                       int const lev,
                                                       amrex::Real const time,
+                                                      amrex::Vector<amrex::BCRec> &BCs,
                                                       PreInterpHook const &pre_interp,
                                                       PostInterpHook const &post_interp) {
   BL_PROFILE("AMRSimulation::fillBoundaryConditions()");
@@ -1061,7 +1142,7 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
   // [NOTE: If user-defined and periodic boundaries are both used
   //  (for different coordinate dimensions), the edge/corner cells *will* be
   //  filled by amrex::FilccCell(). Remember to fill *all* variables in the
-  //  MultiFab, both hydro and radiation).
+  //  MultiFab, e.g., both hydro and radiation).
 
   if (lev > 0) { // refined level
     amrex::Vector<amrex::MultiFab *> fineData{&state};
@@ -1090,11 +1171,9 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
       amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>> boundaryFunctor(
           setBoundaryFunctor<problem_t>{});
       amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>>
-          physicalBoundaryFunctor(geom[lev], BCs_cc_,
-                                  boundaryFunctor);
+          physicalBoundaryFunctor(geom[lev], BCs, boundaryFunctor);
       // fill physical boundaries
-      physicalBoundaryFunctor(state, 0, state.nComp(), state.nGrowVect(), time,
-                              0);
+      physicalBoundaryFunctor(state, 0, state.nComp(), state.nGrowVect(), time, 0);
     }
   }
 
