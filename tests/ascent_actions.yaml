@@ -1,12 +1,13 @@
 - 
   action: "add_pipelines"
-  pipelines: 
-    pl1: 
+  pipelines:
+    pl1:
       f1: 
         type: "log10"
         params: 
-          field: "gasDensity"
-          output_name: "log_gasDensity"
+          field: "nH"
+          output_name: "log_nH"
+          clamp_min_value: 1e-5
       f2:
         type: "slice"
         params: 
@@ -54,7 +55,7 @@
         params: 
           field: "cooling_length"
           output_name: "log_cooling_length"
-          clamp_min_value: 1e-5
+          clamp_min_value: 1e-3
       f2:
         type: "slice"
         params: 
@@ -73,49 +74,55 @@
       plots: 
         p1: 
           type: "pseudocolor"
-          field: "log_gasDensity"
+          field: "log_nH"
+          min_value: -3.0
+          max_value: 3.0
           pipeline: "pl1"
       renders:
         r1:
-          image_prefix: "log_density%05d"
+          image_prefix: "log_nH%05d"
           annotations: "true"
+          image_width: 2048
+          image_height: 2048
     s2: 
       plots: 
         p1: 
           type: "pseudocolor"
           field: "temperature"
+          min_value: 0.0
+          max_value: 5.0e7
           pipeline: "pl2"
       renders:
         r1:
           image_prefix: "temperature%05d"
           annotations: "true"
+          image_width: 2048
+          image_height: 2048
     s3: 
       plots: 
         p1: 
           type: "pseudocolor"
           field: "log_T"
+          min_value: 2.0
+          max_value: 8.0
           pipeline: "pl3"
       renders:
         r1:
           image_prefix: "log_temp%05d"
           annotations: "true"
-    s4:
-      plots: 
-        p1: 
-          type: "pseudocolor"
-          field: "cooling_length"
-          pipeline: "pl2"
-      renders:
-        r1:
-          image_prefix: "lcool%05d"
-          annotations: "true"
+          image_width: 2048
+          image_height: 2048
     s5:
       plots: 
         p1: 
           type: "pseudocolor"
           field: "log_cooling_length"
+          min_value: -3.0
+          max_value: 2.0
           pipeline: "pl4"
       renders:
         r1:
           image_prefix: "log_lcool%05d"
           annotations: "true"
+          image_width: 2048
+          image_height: 2048
