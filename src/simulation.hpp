@@ -163,7 +163,7 @@ public:
                                  amrex::MultiFab &mf, int ncomp) const = 0;
 
   // compute statistics
-  virtual auto ComputeStatistics() const -> std::unordered_map<std::string, amrex::Real> = 0;
+  virtual auto ComputeStatistics() -> std::unordered_map<std::string, amrex::Real> = 0;
 
   // fix-up any unphysical states created by AMR operations
   // (e.g., caused by the flux register or from interpolation)
@@ -239,7 +239,7 @@ public:
   [[nodiscard]] auto PlotFileMFAtLevel(int lev) const -> amrex::MultiFab;
   void WriteMetadataFile(std::string const &plotfilename) const;
   void ReadMetadataFile(std::string const &chkfilename);
-  void WriteStatisticsFile() const;
+  void WriteStatisticsFile();
   void WritePlotFile() const;
   void WriteCheckpointFile() const;
   void SetLastCheckpointSymlink(std::string const &checkpointname) const;
@@ -1385,7 +1385,7 @@ void AMRSimulation<problem_t>::ReadMetadataFile(
 }
 
 template <typename problem_t>
-void AMRSimulation<problem_t>::WriteStatisticsFile() const {
+void AMRSimulation<problem_t>::WriteStatisticsFile() {
   // append to statistics file
   static bool isHeaderWritten = false;
 
