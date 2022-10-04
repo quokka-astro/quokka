@@ -58,10 +58,12 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	using AMRSimulation<problem_t>::max_signal_speed_;
 
 	using AMRSimulation<problem_t>::ncomp_cc_;
+  using AMRSimulation<problem_t>::ncomp_fc_;
 	using AMRSimulation<problem_t>::nghost_;
 	using AMRSimulation<problem_t>::areInitialConditionsDefined_;
 	using AMRSimulation<problem_t>::BCs_cc_;
 	using AMRSimulation<problem_t>::componentNames_cc_;
+  using AMRSimulation<problem_t>::componentNames_fc_;
 	using AMRSimulation<problem_t>::fillBoundaryConditions;
 	using AMRSimulation<problem_t>::geom;
 	using AMRSimulation<problem_t>::grids;
@@ -114,7 +116,8 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	    : AMRSimulation<problem_t>(BCs_cc) {
     // check modules cannot be enabled if they are not been implemented yet
     static_assert(!Physics_Traits<problem_t>::is_chemistry_enabled, "Chemistry is not supported, yet.");
-    
+
+    // cell-centred
     // add hydro state variables
     if constexpr (Physics_Traits<problem_t>::is_hydro_enabled ||
                   Physics_Traits<problem_t>::is_radiation_enabled) {
@@ -133,6 +136,13 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
       std::vector<std::string> radNames = {"radEnergy", "x-RadFlux", "y-RadFlux", "z-RadFlux"};
       componentNames_cc_.insert(componentNames_cc_.end(), radNames.begin(), radNames.end());
       ncomp_cc_ += radNames.size();
+    }
+
+    // face-centred
+    // add mhd state variables
+    if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+      componentNames_fc_.push_back({"MagEnergy"});
+      ncomp_fc_++;
     }
 
     // read in runtime parameters
@@ -303,12 +313,10 @@ void RadhydroSimulation<problem_t>::computeMaxSignalLocal(int const level)
 
 		if constexpr (Physics_Traits<problem_t>::is_hydro_enabled && !(Physics_Traits<problem_t>::is_radiation_enabled)) {
 			// hydro only
-			HydroSystem<problem_t>::ComputeMaxSignalSpeed(stateNew, maxSignal,
-								      indexRange);
+			HydroSystem<problem_t>::ComputeMaxSignalSpeed(stateNew, maxSignal, indexRange);
 		} else if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
 			// radiation hydro, or radiation only
-			RadSystem<problem_t>::ComputeMaxSignalSpeed(stateNew, maxSignal,
-								    indexRange);
+			RadSystem<problem_t>::ComputeMaxSignalSpeed(stateNew, maxSignal, indexRange);
 			if constexpr (Physics_Traits<problem_t>::is_hydro_enabled) {
 				auto maxSignalHydroFAB = amrex::FArrayBox(indexRange);
 				auto const &maxSignalHydro = maxSignalHydroFAB.array();
