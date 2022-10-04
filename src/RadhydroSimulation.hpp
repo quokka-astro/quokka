@@ -692,7 +692,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 	addStrangSplitSources(state_old_tmp, lev, time, 0.5*dt_lev);
 
 	// update ghost zones [old timestep]
-	fillBoundaryConditions(state_old_tmp, state_old_tmp, lev, time, PreInterpState, PostInterpState);
+	fillBoundaryConditions(state_old_tmp, state_old_tmp, lev, time, BCs_cc_, PreInterpState, PostInterpState);
 
 	// check state validity
 	AMREX_ASSERT(!state_old_tmp.contains_nan(0, state_old_tmp.nComp()));
@@ -774,7 +774,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 
 	if (integratorOrder_ == 2) {
 		// update ghost zones [intermediate stage stored in state_new_cc_]
-		fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, time + dt_lev,
+		fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, (time + dt_lev), BCs_cc_,
 			PreInterpState, PostInterpState);
 
 		// check intermediate state validity
@@ -1202,7 +1202,7 @@ void RadhydroSimulation<problem_t>::advanceRadiationSubstepAtLevel(
 	// and another to store the intermediate stage (which is reused for the final stage).
 
 	// update ghost zones [old timestep]
-	fillBoundaryConditions(state_old_cc_[lev], state_old_cc_[lev], lev, time,
+	fillBoundaryConditions(state_old_cc_[lev], state_old_cc_[lev], lev, time, BCs_cc_,
 			PreInterpState, PostInterpState);
 
 	// advance all grids on local processor (Stage 1 of integrator)
@@ -1234,7 +1234,7 @@ void RadhydroSimulation<problem_t>::advanceRadiationSubstepAtLevel(
 	}
 
 	// update ghost zones [intermediate stage stored in state_new_cc_]
-	fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, time + dt_radiation,
+	fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, (time + dt_radiation), BCs_cc_,
 			PreInterpState, PostInterpState);
 
 	// advance all grids on local processor (Stage 2 of integrator)
