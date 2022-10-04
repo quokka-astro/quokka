@@ -48,7 +48,9 @@ struct ShockCloud {
 constexpr static bool enableRadiation = false;
 
 constexpr double parsec_in_cm = 3.086e18; // cm == 1 pc
+constexpr double solarmass_in_g = 1.99e33; // g == 1 Msun
 constexpr double m_H = hydrogen_mass_cgs_; // mass of hydrogen atom
+
 // [Habing FUV field, see Eq. 12.6 of Draine, Physics of the ISM/IGM.]
 constexpr static Real G_0 = 5.29e-14; // erg cm^-3
 
@@ -459,7 +461,17 @@ auto RadhydroSimulation<ShockCloud>::ComputeStatistics()
   stats["delta_x"] = dx_cgs / parsec_in_cm; // pc
   stats["delta_vx"] = dvx_cgs / 1.0e5; // km/s
 
-  // TODO: compute cloud mass for various definitions
+  // save total simulation mass
+  const Real sim_mass = amrex::volumeWeightedSum(amrex::GetVecOfConstPtrs(state_new_),
+    HydroSystem<ShockCloud>::density_index, geom, ref_ratio);
+
+  stats["sim_mass"] = sim_mass / solarmass_in_g;
+
+  // compute cloud mass for various definitions
+  int nc = 1; // number of components in temporary MF
+  int ng = 0; // number of ghost cells in temporary MF
+  amrex::MultiFab temp_mf(boxArray(0), DistributionMap(0), nc, ng);
+  
 
 	return stats;
 }
