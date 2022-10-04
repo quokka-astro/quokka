@@ -447,6 +447,24 @@ void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(
 }
 
 template <>
+auto RadhydroSimulation<ShockCloud>::ComputeStatistics()
+	-> std::unordered_map<std::string, amrex::Real> {
+	// compute scalar statistics
+	std::unordered_map<std::string, amrex::Real> stats;
+
+  // save cloud position, velocity
+  const Real dx_cgs = std::get<Real>(simulationMetadata_["delta_x"]);
+  const Real dvx_cgs = std::get<Real>(simulationMetadata_["delta_vx"]);
+
+  stats["delta_x"] = dx_cgs / parsec_in_cm; // pc
+  stats["delta_vx"] = dvx_cgs / 1.0e5; // km/s
+
+  // TODO: compute cloud mass for various definitions
+
+	return stats;
+}
+
+template <>
 void RadhydroSimulation<ShockCloud>::ErrorEst(int lev, amrex::TagBoxArray &tags,
                                               Real /*time*/, int /*ngrow*/) {
   // tag cells for refinement
