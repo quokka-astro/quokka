@@ -131,6 +131,7 @@ public:
   amrex::Long maxTimesteps_ = 1e4; // default
   amrex::Long maxWalltime_ = 0;    // default: no limit
   int ascentInterval_ = -1;        // -1 == no in-situ renders with Ascent
+  int statisticsInterval_ = -1;    // -1 == no output
   int plotfileInterval_ = -1;      // -1 == no output
   int checkpointInterval_ = -1;    // -1 == no output
   std::unordered_map<std::string, variant_t> simulationMetadata_;
@@ -160,6 +161,9 @@ public:
   // compute derived variables
   virtual void ComputeDerivedVar(int lev, std::string const &dname,
                                  amrex::MultiFab &mf, int ncomp) const = 0;
+
+  // compute statistics
+  virtual auto ComputeStatistics() const -> std::unordered_map<std::string, amrex::Real> = 0;
 
   // fix-up any unphysical states created by AMR operations
   // (e.g., caused by the flux register or from interpolation)
@@ -235,6 +239,7 @@ public:
   [[nodiscard]] auto PlotFileMFAtLevel(int lev) const -> amrex::MultiFab;
   void WriteMetadataFile(std::string const &plotfilename) const;
   void ReadMetadataFile(std::string const &chkfilename);
+  void WriteStatisticsFile() const;
   void WritePlotFile() const;
   void WriteCheckpointFile() const;
   void SetLastCheckpointSymlink(std::string const &checkpointname) const;
@@ -269,6 +274,7 @@ protected:
   /// output parameters
   std::string plot_file{"plt"}; // plotfile prefix
   std::string chk_file{"chk"};  // checkpoint prefix
+  std::string stats_file{"statistics.txt"}; // statistics filename
   /// input parameters (if >= 0 we restart from a checkpoint)
   std::string restart_chkfile;
 
@@ -428,6 +434,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters() {
   // Default ascent render interval
   pp.query("ascent_interval", ascentInterval_);
 
+  // Default statistics interval
+  pp.query("statistics_interval", statisticsInterval_);
+
   // Default output interval
   pp.query("plotfile_interval", plotfileInterval_);
 
@@ -503,6 +512,10 @@ void AMRSimulation<problem_t>::setInitialConditions() {
     RenderAscent();
   }
 #endif
+
+  if (statisticsInterval_ > 0) {
+    WriteStatisticsFile();
+  }
 
   if (plotfileInterval_ > 0) {
     WritePlotFile();
@@ -582,6 +595,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve() {
 #ifdef AMREX_USE_ASCENT
   int last_ascent_step = 0;
 #endif
+  int last_statistics_step = 0;
   int last_plot_file_step = 0;
   int last_chk_file_step = 0;
 
@@ -629,6 +643,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve() {
       RenderAscent();
     }
 #endif
+
+    if (statisticsInterval_ > 0 && (step + 1) % statisticsInterval_ == 0) {
+      last_statistics_step = step + 1;
+      WriteStatisticsFile();
+    }
 
     if (plotfileInterval_ > 0 && (step + 1) % plotfileInterval_ == 0) {
       last_plot_file_step = step + 1;
@@ -1362,6 +1381,46 @@ void AMRSimulation<problem_t>::ReadMetadataFile(
       amrex::Print() << fmt::format(
           "\t{} has unknown type! skipping this entry.\n", key);
     }
+  }
+}
+
+template <typename problem_t>
+void AMRSimulation<problem_t>::WriteStatisticsFile() const {
+  // append to statistics file
+  static bool isHeaderWritten = false;
+
+  // compute statistics
+  std::unordered_map<std::string, amrex::Real> statistics = ComputeStatistics();
+
+  // write to file
+  if (amrex::ParallelDescriptor::IOProcessor()) {
+    amrex::VisMF::IO_Buffer io_buffer(amrex::VisMF::IO_Buffer_Size);
+    std::ofstream StatisticsFile;
+    StatisticsFile.rdbuf()->pubsetbuf(io_buffer.dataPtr(), io_buffer.size());
+    StatisticsFile.open(stats_file.c_str(), std::ofstream::out |
+                                            std::ofstream::app);
+    if (!StatisticsFile.good()) {
+      amrex::FileOpenFailed(stats_file);
+    }
+
+    // write header
+    if (!isHeaderWritten) {
+      StatisticsFile << "time\t";
+      for (auto const &[key, value] : statistics) {
+        StatisticsFile << key << "\t";
+      }
+      StatisticsFile << "\n";
+      isHeaderWritten = true;
+    }
+
+    // save statistics to file
+    StatisticsFile << tNew_[0] << "\t";
+    for (auto const &[key, value] : statistics) {
+      StatisticsFile << value << "\t";
+    }
+    StatisticsFile << "\n";
+
+    // file closed automatically by destructor
   }
 }
 

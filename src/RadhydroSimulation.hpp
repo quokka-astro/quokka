@@ -149,6 +149,9 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	// compute derived variables
 	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const override;
 
+	// compute statistics
+	auto ComputeStatistics() const -> std::unordered_map<std::string, Real>;
+
 	// fix-up states
 	void FixupState(int level) override;
 
@@ -385,6 +388,14 @@ void RadhydroSimulation<problem_t>::ComputeDerivedVar(int lev, std::string const
 								amrex::MultiFab &mf, const int ncomp) const
 {
 	// compute derived variables and save in 'mf' -- user should implement
+}
+
+template <typename problem_t>
+auto RadhydroSimulation<problem_t>::ComputeStatistics() const
+	-> std::unordered_map<std::string, amrex::Real> {
+	// compute scalar statistics -- user should implement (optional)
+	std::unordered_map<std::string, amrex::Real> stats;
+	return stats;
 }
 
 template <typename problem_t>
