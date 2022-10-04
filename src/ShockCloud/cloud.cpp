@@ -410,18 +410,16 @@ void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(
       output[bx](i, j, k, ncomp) = Tgas;
     });
 
-  } else if (dname == "mass") {
+  } else if (dname == "nH") {
     const int ncomp = ncomp_in;
-    auto const &dx = geom[lev].CellSizeArray();
-    const Real cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
     auto const &output = mf.arrays();
     auto const &state = state_new_[lev].const_arrays();
 
     amrex::ParallelFor(
       mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
         Real rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
-        Real mass = rho * cell_vol;
-        output[bx](i, j, k, ncomp) = mass;
+        Real nH = (cloudy_H_mass_fraction * rho) / m_H;
+        output[bx](i, j, k, ncomp) = nH;
     });
 
   } else if (dname == "cooling_length") {
