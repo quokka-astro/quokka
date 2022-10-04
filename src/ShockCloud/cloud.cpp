@@ -487,7 +487,7 @@ auto RadhydroSimulation<ShockCloud>::ComputeStatistics()
 
   stats["sim_mass"] = sim_mass / solarmass_in_g;
 
-  // compute cloud mass for various definitions
+  // compute cloud mass according to temperature threshold
   auto tables = cloudyTables.const_tables();
 
   const Real M_cl_1e4 = computeVolumeIntegral(
@@ -523,6 +523,33 @@ auto RadhydroSimulation<ShockCloud>::ComputeStatistics()
   stats["cloud_mass_6000"] = M_cl_6000 / solarmass_in_g;
   stats["cloud_mass_3000"] = M_cl_3000 / solarmass_in_g;
   stats["cloud_mass_300"] = M_cl_300 / solarmass_in_g;
+
+  // compute cloud mass according to passive scalar threshold
+  const Real M_cl_scalar = computeVolumeIntegral(
+    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const& state) noexcept {
+      Real const C = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index);
+      Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
+      Real const result = (C > 1.0e-5) ? rho : 0.0;
+      return result;
+    });
+  const Real M_cl_scalar_01 = computeVolumeIntegral(
+    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const& state) noexcept {
+      Real const C = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index);
+      Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
+      Real const result = (C > 0.1) ? rho : 0.0;
+      return result;
+    });
+  const Real M_cl_scalar_01_09 = computeVolumeIntegral(
+    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const& state) noexcept {
+      Real const C = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index);
+      Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
+      Real const result = ((C > 0.1) && (C < 0.9)) ? rho : 0.0;
+      return result;
+    });
+
+  stats["cloud_mass_scalar"] = M_cl_scalar / solarmass_in_g;
+  stats["cloud_mass_scalar_01"] = M_cl_scalar_01 / solarmass_in_g;
+  stats["cloud_mass_scalar_01_09"] = M_cl_scalar_01_09 / solarmass_in_g;
 
 	return stats;
 }
