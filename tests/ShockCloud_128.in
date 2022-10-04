@@ -31,6 +31,7 @@ max_timesteps = 100000
 plotfile_interval = 100
 checkpoint_interval = 100
 ascent_interval = 100
+statistics_interval = 10
 T_floor = 10.0  # K
 
 nH_bg    = 1.006921e-03 # cm^-3
