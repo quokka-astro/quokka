@@ -83,7 +83,9 @@
           image_prefix: "log_nH%05d"
           annotations: "true"
           image_width: 2048
-          image_height: 2048
+          image_height: 1024
+          camera:
+            zoom: 2.0
     s2: 
       plots: 
         p1: 
@@ -97,7 +99,9 @@
           image_prefix: "temperature%05d"
           annotations: "true"
           image_width: 2048
-          image_height: 2048
+          image_height: 1024
+          camera:
+            zoom: 2.0
     s3: 
       plots: 
         p1: 
@@ -111,7 +115,9 @@
           image_prefix: "log_temp%05d"
           annotations: "true"
           image_width: 2048
-          image_height: 2048
+          image_height: 1024
+          camera:
+            zoom: 2.0
     s5:
       plots: 
         p1: 
@@ -125,4 +131,6 @@
           image_prefix: "log_lcool%05d"
           annotations: "true"
           image_width: 2048
-          image_height: 2048
+          image_height: 1024
+          camera:
+            zoom: 2.0
