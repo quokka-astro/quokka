@@ -169,10 +169,8 @@ public:
                          PostInterpHook const &post_interp);
 
   static void InterpHookNone(amrex::FArrayBox &fab, amrex::Box const &box, int scomp, int ncomp);
-  virtual void FillPatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp,
-                 int ncomp);
-  void FillCoarsePatch(int lev, amrex::Real time, amrex::MultiFab &mf,
-                       int icomp, int ncomp);
+  virtual void FillPatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp);
+  void FillCoarsePatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp);
   void GetData(int lev, amrex::Real time,
                amrex::Vector<amrex::MultiFab *> &data,
                amrex::Vector<amrex::Real> &datatime);
@@ -301,8 +299,7 @@ void AMRSimulation<problem_t>::initialize(
   BCs_cc_ = BCs_cc;
 
   // check that grids will be properly nested on each level
-  // (this is necessary since FillPatch only fills from non-ghost cells on
-  // lev-1)
+  // (this is necessary since FillPatch only fills from non-ghost cells on lev-1)
   auto checkIsProperlyNested = [=](int const lev,
                                    amrex::IntVect const &blockingFactor) {
     return amrex::ProperlyNested(refRatio(lev - 1), blockingFactor, nghost_,
@@ -1053,7 +1050,7 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(
   // user) before initialising state variables
   preCalculateInitialConditions();
 
-  // cell-centred quantities
+  // cell-centred
   // itterate over the domain
   for (amrex::MFIter iter(state_new_cc_[level]); iter.isValid(); ++iter) {
     quokka::grid grid_elem(state_new_cc_[level].array(iter), iter.validbox(),
@@ -1072,7 +1069,7 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(
   state_old_cc_[level].ParallelCopy(state_new_cc_[level], 0, 0, ncomp_cc,
                                     nghost, nghost);
 
-  // face-centred quantities
+  // face-centred
   if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
     // for each face-centering (number of dimensions)
     for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -1207,8 +1204,7 @@ void AMRSimulation<problem_t>::FillPatchWithData(
   amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>> boundaryFunctor(
       setBoundaryFunctor<problem_t>{});
   amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>>
-      finePhysicalBoundaryFunctor(geom[lev], BCs_cc_,
-                                  boundaryFunctor);
+      finePhysicalBoundaryFunctor(geom[lev], BCs_cc_, boundaryFunctor);
 
   if (lev == 0) { // NOTE: used by RemakeLevel
     // copies interior zones, fills ghost zones
@@ -1216,8 +1212,7 @@ void AMRSimulation<problem_t>::FillPatchWithData(
                                 geom[lev], finePhysicalBoundaryFunctor, 0);
   } else {
     amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>>
-        coarsePhysicalBoundaryFunctor(geom[lev - 1], BCs_cc_,
-                                      boundaryFunctor);
+        coarsePhysicalBoundaryFunctor(geom[lev - 1], BCs_cc_, boundaryFunctor);
 
     // use CellConservativeLinear interpolation onto fine grid
     amrex::Interpolater *mapper = &amrex::cell_cons_interp;
@@ -1256,11 +1251,9 @@ void AMRSimulation<problem_t>::FillCoarsePatch(int lev, amrex::Real time,
   amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>> boundaryFunctor(
       setBoundaryFunctor<problem_t>{});
   amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>>
-      finePhysicalBoundaryFunctor(geom[lev], BCs_cc_,
-                                  boundaryFunctor);
+      finePhysicalBoundaryFunctor(geom[lev], BCs_cc_, boundaryFunctor);
   amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>>
-      coarsePhysicalBoundaryFunctor(geom[lev - 1], BCs_cc_,
-                                    boundaryFunctor);
+      coarsePhysicalBoundaryFunctor(geom[lev - 1], BCs_cc_, boundaryFunctor);
 
   // use CellConservativeLinear interpolation onto fine grid
   amrex::MFInterpolater *mapper = &amrex::mf_cell_cons_interp;
@@ -1317,9 +1310,20 @@ template <typename problem_t>
 void AMRSimulation<problem_t>::AverageDownTo(int crse_lev) {
   BL_PROFILE("AMRSimulation::AverageDownTo()");
 
+  // cell-centred
   amrex::average_down(state_new_cc_[crse_lev + 1], state_new_cc_[crse_lev],
                       geom[crse_lev + 1], geom[crse_lev], 0,
                       state_new_cc_[crse_lev].nComp(), refRatio(crse_lev));
+
+  // face-centred
+  if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
+    // for each face-centering (number of dimensions)
+    for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+      amrex::average_down(state_new_fc_[crse_lev + 1][idim], state_new_fc_[crse_lev][idim],
+                      geom[crse_lev + 1], geom[crse_lev], 0,
+                      state_new_fc_[crse_lev][idim].nComp(), refRatio(crse_lev));
+    }
+  }
 }
 
 // get plotfile name
