@@ -170,7 +170,8 @@ public:
 
   static void InterpHookNone(amrex::FArrayBox &fab, amrex::Box const &box, int scomp, int ncomp);
   virtual void FillPatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp);
-  void FillCoarsePatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp);
+  void FillCoarsePatch(int lev, amrex::Real time, amrex::MultiFab &mf,
+                       int icomp, int ncomp, amrex::Vector<amrex::BCRec> &BCs);
   void GetData(int lev, amrex::Real time,
                amrex::Vector<amrex::MultiFab *> &data,
                amrex::Vector<amrex::Real> &datatime);
@@ -895,8 +896,8 @@ void AMRSimulation<problem_t>::MakeNewLevelFromCoarse(
         Geom(level - 1), refRatio(level - 1), level, ncomp_cc);
   }
 
-  FillCoarsePatch(level, time, state_new_cc_[level], 0, ncomp_cc);
-  FillCoarsePatch(level, time, state_old_cc_[level], 0, ncomp_cc); // also necessary
+  FillCoarsePatch(level, time, state_new_cc_[level], 0, ncomp_cc, BCs_cc_);
+  FillCoarsePatch(level, time, state_old_cc_[level], 0, ncomp_cc, BCs_cc_); // also necessary
 
   // TODO(neco): fill fc variables
 }
@@ -1235,7 +1236,7 @@ void AMRSimulation<problem_t>::FillPatchWithData(
 template <typename problem_t>
 void AMRSimulation<problem_t>::FillCoarsePatch(int lev, amrex::Real time,
                                                amrex::MultiFab &mf, int icomp,
-                                               int ncomp) {
+                                               int ncomp, amrex::Vector<amrex::BCRec> &BCs) {
   BL_PROFILE("AMRSimulation::FillCoarsePatch()");
 
   AMREX_ASSERT(lev > 0);
@@ -1251,9 +1252,9 @@ void AMRSimulation<problem_t>::FillCoarsePatch(int lev, amrex::Real time,
   amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>> boundaryFunctor(
       setBoundaryFunctor<problem_t>{});
   amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>>
-      finePhysicalBoundaryFunctor(geom[lev], BCs_cc_, boundaryFunctor);
+      finePhysicalBoundaryFunctor(geom[lev], BCs, boundaryFunctor);
   amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>>
-      coarsePhysicalBoundaryFunctor(geom[lev - 1], BCs_cc_, boundaryFunctor);
+      coarsePhysicalBoundaryFunctor(geom[lev - 1], BCs, boundaryFunctor);
 
   // use CellConservativeLinear interpolation onto fine grid
   amrex::MFInterpolater *mapper = &amrex::mf_cell_cons_interp;
@@ -1262,7 +1263,7 @@ void AMRSimulation<problem_t>::FillCoarsePatch(int lev, amrex::Real time,
   amrex::InterpFromCoarseLevel(
       mf, time, *cmf[0], 0, icomp, ncomp, geom[lev - 1], geom[lev],
       coarsePhysicalBoundaryFunctor, 0, finePhysicalBoundaryFunctor, 0,
-      refRatio(lev - 1), mapper, BCs_cc_, 0);
+      refRatio(lev - 1), mapper, BCs, 0);
 }
 
 // utility to copy in data from state_old_cc_ and/or state_new_cc_ into another
