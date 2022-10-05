@@ -14,6 +14,7 @@
 
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
+#include "grid.hpp"
 #include "test_mhd_prelim.hpp"
 
 struct WaveProblem {};
@@ -73,19 +74,39 @@ AMREX_GPU_DEVICE void computeWaveSolution(
 template <>
 void RadhydroSimulation<WaveProblem>::setInitialConditionsOnGrid(
     quokka::grid grid_elem) {
-  // extract variables required from the geom object
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx;
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo;
+  // extract grid information
+  const amrex::Array4<double>& state = grid_elem.array;
   const amrex::Box &indexRange = grid_elem.indexRange;
-  const amrex::Array4<double>& state_cc = grid_elem.array;
-  const int ncomp = ncomp_cc_;
-  // loop over the grid and set the initial condition
-  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-    for (int n = 0; n < ncomp; ++n) {
-      state_cc(i, j, k, n) = 0; // fill unused components with zeros
+  const quokka::centering cen = grid_elem.cen;
+  const quokka::direction dir = grid_elem.dir;
+
+  if (cen == quokka::centering::cc) {
+    // extract variables required from the geom object
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx;
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo;
+    const int ncomp = ncomp_cc_;
+    // loop over the grid and set the initial condition
+    amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+      for (int n = 0; n < ncomp; ++n) {
+        state(i, j, k, n) = 0; // fill unused components with zeros
+      }
+      computeWaveSolution(i, j, k, state, dx, prob_lo);
+    });
+  } else if (cen == quokka::centering::fc) {
+    if (dir == quokka::direction::x) {
+      amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+        state(i, j, k, MHDSystem<WaveProblem>::energy_index) = 1.0;
+      });
+    } else if (dir == quokka::direction::y) {
+      amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+        state(i, j, k, MHDSystem<WaveProblem>::energy_index) = 2.0;
+      });
+    } else if (dir == quokka::direction::z) {
+      amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+        state(i, j, k, MHDSystem<WaveProblem>::energy_index) = 3.0;
+      });
     }
-    computeWaveSolution(i, j, k, state_cc, dx, prob_lo);
-  });
+  }
 }
 
 auto problem_main() -> int {
@@ -118,8 +139,6 @@ auto problem_main() -> int {
 
   // set initial conditions
   sim.setInitialConditions();
-  auto [pos_exact, val_exact] =
-      fextract(sim.state_new_cc_[0], sim.geom[0], 0, 0.5);
 
   // Main time loop
   sim.evolve();
