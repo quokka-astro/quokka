@@ -86,6 +86,22 @@
           image_height: 1024
           camera:
             zoom: 2.0
+    s1zoom:
+      plots: 
+        p1: 
+          type: "pseudocolor"
+          field: "log_nH"
+          min_value: -3.0
+          max_value: 3.0
+          pipeline: "pl1"
+      renders:
+        r1:
+          image_prefix: "zoom_log_nH%05d"
+          annotations: "true"
+          image_width: 2048
+          image_height: 1024
+          camera:
+            zoom: 5.0
     s2: 
       plots: 
         p1: 
@@ -118,6 +134,22 @@
           image_height: 1024
           camera:
             zoom: 2.0
+    s3zoom:
+      plots: 
+        p1: 
+          type: "pseudocolor"
+          field: "log_T"
+          min_value: 2.0
+          max_value: 8.0
+          pipeline: "pl3"
+      renders:
+        r1:
+          image_prefix: "zoom_log_temp%05d"
+          annotations: "true"
+          image_width: 2048
+          image_height: 1024
+          camera:
+            zoom: 5.0
     s5:
       plots: 
         p1: 
