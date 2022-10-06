@@ -73,11 +73,6 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
     ncomp_cc_ = 1;
   }
 
-	AdvectionSimulation(amrex::IntVect & /*gridDims*/,
-                      amrex::RealBox & /*boxSize*/,
-			                amrex::Vector<amrex::BCRec> &BCs_cc)
-	    : AMRSimulation<problem_t>(BCs_cc) { }
-
 	void computeMaxSignalLocal(int level) override;
 	void preCalculateInitialConditions() override;
   void setInitialConditionsOnGrid(quokka::grid grid_elem) override;
