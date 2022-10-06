@@ -151,7 +151,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const override;
 
 	// compute statistics
-	auto ComputeStatistics() -> std::unordered_map<std::string, Real>;
+	auto ComputeStatistics() -> std::unordered_map<std::string, Real> override;
 
 	// compute volume integrals
 	template <typename F>
