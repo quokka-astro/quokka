@@ -62,6 +62,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	using AMRSimulation<problem_t>::nghost_;
 	using AMRSimulation<problem_t>::areInitialConditionsDefined_;
 	using AMRSimulation<problem_t>::BCs_cc_;
+  using AMRSimulation<problem_t>::BCs_fc_;
 	using AMRSimulation<problem_t>::componentNames_cc_;
   using AMRSimulation<problem_t>::componentNames_fc_;
 	using AMRSimulation<problem_t>::fillBoundaryConditions;
@@ -81,7 +82,8 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	using AMRSimulation<problem_t>::cellUpdates_;
 	using AMRSimulation<problem_t>::CountCells;
 	using AMRSimulation<problem_t>::WriteCheckpointFile;
-	using AMRSimulation<problem_t>::GetData;
+	using AMRSimulation<problem_t>::GetCCData;
+  using AMRSimulation<problem_t>::GetFCData;
 	using AMRSimulation<problem_t>::FillPatchWithData;
 
 	std::vector<double> t_vec_;
@@ -171,7 +173,9 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	void FixupState(int level) override;
 
 	// implement FillPatch function
-	void FillPatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp) override;
+	void FillPatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp,
+                 int ncomp, quokka::centering cen,
+                 quokka::direction dir) override;
 
 	// functions to operate on state vector before/after interpolating between levels
 	static void PreInterpState(amrex::FArrayBox &fab, amrex::Box const &box, int scomp, int ncomp);
@@ -563,8 +567,9 @@ void RadhydroSimulation<problem_t>::FixupState(int lev)
 // are implemented in this class (and must be *static* functions).
 template <typename problem_t>
 void RadhydroSimulation<problem_t>::FillPatch(int lev, amrex::Real time,
-                                         amrex::MultiFab &mf, int icomp,
-                                         int ncomp) {
+                                              amrex::MultiFab &mf, int icomp,
+                                              int ncomp, quokka::centering cen,
+                                              quokka::direction dir) {
   BL_PROFILE("AMRSimulation::FillPatch()");
 
   amrex::Vector<amrex::MultiFab *> cmf;
@@ -573,17 +578,31 @@ void RadhydroSimulation<problem_t>::FillPatch(int lev, amrex::Real time,
   amrex::Vector<amrex::Real> ftime;
 
   if (lev == 0) {
-    // in this case, should return either state_new_cc_[lev] or state_old_cc_[lev]
-    GetData(lev, time, fmf, ftime);
+    // in this case, should return either state_new_[lev] or state_old_[lev]
+    if (cen == quokka::centering::cc) {
+      GetCCData(lev, time, fmf, ftime);
+    } else if (cen == quokka::centering::fc) {
+      GetFCData(lev, time, fmf, ftime, dir);
+    }
   } else {
-    // in this case, should return either state_new_cc_[lev] or state_old_cc_[lev]
-    GetData(lev, time, fmf, ftime);
+    // in this case, should return either state_new_[lev] or state_old_[lev]
     // returns old state, new state, or both depending on 'time'
-    GetData(lev - 1, time, cmf, ctime);
+    if (cen == quokka::centering::cc) {
+      GetCCData(lev, time, fmf, ftime);
+      GetCCData(lev - 1, time, cmf, ctime);
+    } else if (cen == quokka::centering::fc) {
+      GetFCData(lev, time, fmf, ftime, dir);
+      GetFCData(lev - 1, time, cmf, ctime, dir);
+    }
   }
 
-  FillPatchWithData(lev, time, mf, cmf, ctime, fmf, ftime, icomp, ncomp,
-		PreInterpState, PostInterpState);
+  if (cen == quokka::centering::cc) {
+    FillPatchWithData(lev, time, mf, cmf, ctime, fmf, ftime, icomp, ncomp,
+                      BCs_cc_, PreInterpState, PostInterpState);
+  } else if (cen == quokka::centering::fc) {
+    FillPatchWithData(lev, time, mf, cmf, ctime, fmf, ftime, icomp, ncomp,
+                      BCs_fc_, PreInterpState, PostInterpState);
+  }
 }
 
 template <typename problem_t>
@@ -700,7 +719,8 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 	addStrangSplitSources(state_old_tmp, lev, time, 0.5*dt_lev);
 
 	// update ghost zones [old timestep]
-	fillBoundaryConditions(state_old_tmp, state_old_tmp, lev, time, BCs_cc_, PreInterpState, PostInterpState);
+	fillBoundaryConditions(state_old_tmp, state_old_tmp, lev, time, BCs_cc_, quokka::centering::cc,
+                         quokka::direction::na, PreInterpState, PostInterpState);
 
 	// check state validity
 	AMREX_ASSERT(!state_old_tmp.contains_nan(0, state_old_tmp.nComp()));
@@ -783,7 +803,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 	if (integratorOrder_ == 2) {
 		// update ghost zones [intermediate stage stored in state_new_cc_]
 		fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, (time + dt_lev), BCs_cc_,
-			PreInterpState, PostInterpState);
+			quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState);
 
 		// check intermediate state validity
 		AMREX_ASSERT(!state_new_cc_[lev].contains_nan(0, state_new_cc_[lev].nComp()));
@@ -1211,7 +1231,7 @@ void RadhydroSimulation<problem_t>::advanceRadiationSubstepAtLevel(
 
 	// update ghost zones [old timestep]
 	fillBoundaryConditions(state_old_cc_[lev], state_old_cc_[lev], lev, time, BCs_cc_,
-			PreInterpState, PostInterpState);
+			quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState);
 
 	// advance all grids on local processor (Stage 1 of integrator)
 	for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
@@ -1243,7 +1263,7 @@ void RadhydroSimulation<problem_t>::advanceRadiationSubstepAtLevel(
 
 	// update ghost zones [intermediate stage stored in state_new_cc_]
 	fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, (time + dt_radiation), BCs_cc_,
-			PreInterpState, PostInterpState);
+			quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState);
 
 	// advance all grids on local processor (Stage 2 of integrator)
 	for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {

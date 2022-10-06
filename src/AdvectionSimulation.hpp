@@ -270,7 +270,9 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 
 	// update ghost zones [w/ old timestep]
 	// (N.B. the input and output multifabs are allowed to be the same, as done here)
-	fillBoundaryConditions(state_old_cc_[lev], state_old_cc_[lev], lev, time, BCs_cc_, InterpHookNone, InterpHookNone);
+	fillBoundaryConditions(state_old_cc_[lev], state_old_cc_[lev], lev, time,
+                         BCs_cc_, quokka::centering::cc, quokka::direction::na,
+                         InterpHookNone, InterpHookNone);
 
 	amrex::Real fluxScaleFactor = NAN;
 	if constexpr (integratorOrder_ == 2) {
@@ -312,7 +314,7 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 	if constexpr (integratorOrder_ == 2) {
 		// update ghost zones [w/ intermediate stage stored in state_new_cc_]
 		fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, (time + dt_lev), BCs_cc_,
-				InterpHookNone, InterpHookNone);
+				quokka::centering::cc, quokka::direction::na, InterpHookNone, InterpHookNone);
 
 		// advance all grids on local processor (Stage 2 of integrator)
 		for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
