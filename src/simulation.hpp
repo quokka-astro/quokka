@@ -101,11 +101,18 @@ public:
   int checkpointInterval_ = -1;    // -1 == no output
 
   // constructor
-  explicit AMRSimulation(amrex::Vector<amrex::BCRec> &BCs_cc) {
-    initialize(BCs_cc);
+  explicit AMRSimulation(amrex::Vector<amrex::BCRec> &BCs_cc,
+                         amrex::Vector<amrex::BCRec> &BCs_fc)
+      : BCs_cc_(BCs_cc), BCs_fc_(BCs_fc) {
+    initialize();
   }
 
-  void initialize(amrex::Vector<amrex::BCRec> &BCs_cc);
+  explicit AMRSimulation(amrex::Vector<amrex::BCRec> &BCs_cc)
+      : BCs_cc_(BCs_cc) {
+    initialize();
+  }
+
+  void initialize();
   void PerformanceHints();
   void readParameters();
   void setInitialConditions();
@@ -269,7 +276,7 @@ protected:
 };
 
 template <typename problem_t>
-void AMRSimulation<problem_t>::initialize(amrex::Vector<amrex::BCRec> &BCs_cc) {
+void AMRSimulation<problem_t>::initialize() {
   BL_PROFILE("AMRSimulation::initialize()");
 
   readParameters();
@@ -305,8 +312,6 @@ void AMRSimulation<problem_t>::initialize(amrex::Vector<amrex::BCRec> &BCs_cc) {
   max_signal_speed_.resize(nlevs_max);
   flux_reg_.resize(nlevs_max + 1);
   cellUpdatesEachLevel_.resize(nlevs_max, 0);
-
-  BCs_cc_ = BCs_cc;
 
   // check that grids will be properly nested on each level
   // (this is necessary since FillPatch only fills from non-ghost cells on
