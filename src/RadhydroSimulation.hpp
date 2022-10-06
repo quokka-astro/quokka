@@ -114,44 +114,23 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
 
 	// member functions
-	explicit RadhydroSimulation(amrex::Vector<amrex::BCRec> &BCs_cc)
+	explicit RadhydroSimulation(amrex::Vector<amrex::BCRec> &BCs_cc,
+                              amrex::Vector<amrex::BCRec> &BCs_fc)
+	    : AMRSimulation<problem_t>(BCs_cc, BCs_fc) {
+    defineComponentNames();
+    // read in runtime parameters
+		readParmParse();
+	}
+
+  explicit RadhydroSimulation(amrex::Vector<amrex::BCRec> &BCs_cc)
 	    : AMRSimulation<problem_t>(BCs_cc) {
-    // check modules cannot be enabled if they are not been implemented yet
-    static_assert(!Physics_Traits<problem_t>::is_chemistry_enabled, "Chemistry is not supported, yet.");
-
-    // cell-centred
-    // add hydro state variables
-    if constexpr (Physics_Traits<problem_t>::is_hydro_enabled ||
-                  Physics_Traits<problem_t>::is_radiation_enabled) {
-      std::vector<std::string> hydroNames = {"gasDensity", "x-GasMomentum", "y-GasMomentum", "z-GasMomentum", "gasEnergy", "gasInternalEnergy"};
-      componentNames_cc_.insert(componentNames_cc_.end(), hydroNames.begin(), hydroNames.end());
-      ncomp_cc_ += hydroNames.size();
-    }
-    // add passive scalar variables
-    if constexpr (Physics_Traits<problem_t>::numPassiveScalars > 0){
-      std::vector<std::string> scalarNames = getScalarVariableNames();
-      componentNames_cc_.insert(componentNames_cc_.end(), scalarNames.begin(), scalarNames.end());
-      ncomp_cc_ += scalarNames.size();
-    }
-    // add radiation state variables
-    if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
-      std::vector<std::string> radNames = {"radEnergy", "x-RadFlux", "y-RadFlux", "z-RadFlux"};
-      componentNames_cc_.insert(componentNames_cc_.end(), radNames.begin(), radNames.end());
-      ncomp_cc_ += radNames.size();
-    }
-
-    // face-centred
-    // add mhd state variables
-    if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-      componentNames_fc_.push_back({"MagEnergy"});
-      ncomp_fc_++;
-    }
-
+    defineComponentNames();
     // read in runtime parameters
 		readParmParse();
 	}
 
 	[[nodiscard]] static auto getScalarVariableNames() -> std::vector<std::string>;
+  void defineComponentNames();
 	void readParmParse();
 
 	void checkHydroStates(amrex::MultiFab &mf, char const *file, int line);
@@ -258,6 +237,40 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 			  std::array<amrex::FArrayBox, AMREX_SPACEDIM> &FOfluxes,
 			  amrex::IArrayBox &redoFlag, amrex::Box const &validBox, int ncomp);
 };
+
+template <typename problem_t>
+void RadhydroSimulation<problem_t>::defineComponentNames() {
+  // check modules cannot be enabled if they are not been implemented yet
+  static_assert(!Physics_Traits<problem_t>::is_chemistry_enabled, "Chemistry is not supported, yet.");
+
+  // cell-centred
+  // add hydro state variables
+  if constexpr (Physics_Traits<problem_t>::is_hydro_enabled ||
+                Physics_Traits<problem_t>::is_radiation_enabled) {
+    std::vector<std::string> hydroNames = {"gasDensity", "x-GasMomentum", "y-GasMomentum", "z-GasMomentum", "gasEnergy", "gasInternalEnergy"};
+    componentNames_cc_.insert(componentNames_cc_.end(), hydroNames.begin(), hydroNames.end());
+    ncomp_cc_ += hydroNames.size();
+  }
+  // add passive scalar variables
+  if constexpr (Physics_Traits<problem_t>::numPassiveScalars > 0){
+    std::vector<std::string> scalarNames = getScalarVariableNames();
+    componentNames_cc_.insert(componentNames_cc_.end(), scalarNames.begin(), scalarNames.end());
+    ncomp_cc_ += scalarNames.size();
+  }
+  // add radiation state variables
+  if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
+    std::vector<std::string> radNames = {"radEnergy", "x-RadFlux", "y-RadFlux", "z-RadFlux"};
+    componentNames_cc_.insert(componentNames_cc_.end(), radNames.begin(), radNames.end());
+    ncomp_cc_ += radNames.size();
+  }
+
+  // face-centred
+  // add mhd state variables
+  if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+    componentNames_fc_.push_back({"MagEnergy"});
+    ncomp_fc_++;
+  }
+}
 
 template <typename problem_t>
 auto RadhydroSimulation<problem_t>::getScalarVariableNames() -> std::vector<std::string> {
