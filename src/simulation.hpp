@@ -1476,7 +1476,6 @@ auto AMRSimulation<problem_t>::PlotFileMFAtLevel(int lev) const
   if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
     for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
       AverageFCToCC(plotMF, state_new_fc_[lev][idim], comp, 0, nCompState_fc);
-      // amrex::MultiFab::Copy(plotMF, tmp_mf_fc2cc, icomp, comp, 1, nGrow);
       comp += nCompState_fc;
     }
   }
