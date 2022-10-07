@@ -120,6 +120,9 @@ public:
   void computeTimestep();
   auto computeTimestepAtLevel(int lev) -> amrex::Real;
 
+  void AverageFCToCC(amrex::MultiFab &mf_cc, const amrex::MultiFab &mf_fc,
+                     int dstcomp_start, int srccomp_start, int srccomp_total) const;
+
   virtual void computeMaxSignalLocal(int level) = 0;
   virtual void advanceSingleTimestepAtLevel(int lev, amrex::Real time,
                                             amrex::Real dt_lev, int ncycle) = 0;
@@ -1423,23 +1426,62 @@ auto AMRSimulation<problem_t>::PlotFileName(int lev) const -> std::string {
 }
 
 template <typename problem_t>
+void AMRSimulation<problem_t>::AverageFCToCC(
+    amrex::MultiFab &mf_cc, const amrex::MultiFab &mf_fc, int dstcomp_start,
+    int srccomp_start, int srccomp_total) const {
+  // itterate over the domain
+  auto const &state_cc = mf_cc.arrays();
+  auto const &state_fc = mf_fc.const_arrays();
+  amrex::ParallelFor(mf_cc, [=] AMREX_GPU_DEVICE(int boxidx, int i, int j, int k) {
+    for (int icomp = 0; icomp < srccomp_total; ++icomp) {
+          state_cc[boxidx](i, j, k, dstcomp_start + icomp) =
+              0.5 * (state_fc[boxidx](i, j, k, srccomp_start + icomp) +
+                     state_fc[boxidx](i + 1, j, k, srccomp_start + icomp));
+          if constexpr (AMREX_SPACEDIM > 1) {
+            state_cc[boxidx](i, j, k, dstcomp_start + icomp) =
+                0.5 * (state_fc[boxidx](i, j, k, srccomp_start + icomp) +
+                       state_fc[boxidx](i, j + 1, k, srccomp_start + icomp));
+          }
+          if constexpr (AMREX_SPACEDIM > 2) {
+            state_cc[boxidx](i, j, k, dstcomp_start + icomp) =
+                0.5 * (state_fc[boxidx](i, j, k, srccomp_start + icomp) +
+                       state_fc[boxidx](i, j, k + 1, srccomp_start + icomp));
+          }
+        }
+  });
+}
+
+template <typename problem_t>
 auto AMRSimulation<problem_t>::PlotFileMFAtLevel(int lev) const
     -> amrex::MultiFab {
   // Combine state_new_cc_[lev] and derived variables in a new MF
   int comp = 0;
   const int nGrow = state_new_cc_[lev].nGrow(); // workaround Ascent bug
-  const int nCompState = state_new_cc_[lev].nComp();
+  const int nCompState_cc = ncomp_cc_; // state_new_cc_[lev].nComp();
+  const int nCompState_fc = ncomp_fc_;
   const int nCompDeriv = derivedNames_.size();
-  const int nCompPlotMF = nCompState + nCompDeriv;
+  const int nCompPlotMF = nCompState_cc + (AMREX_SPACEDIM * nCompState_fc) + nCompDeriv;
   amrex::MultiFab plotMF(grids[lev], dmap[lev], nCompPlotMF, nGrow);
 
-  // Copy data from state variables
-  for (int i = 0; i < nCompState; i++) {
+  // copy data from cell-centred state variables
+  for (int i = 0; i < nCompState_cc; i++) {
     amrex::MultiFab::Copy(plotMF, state_new_cc_[lev], i, comp, 1, nGrow);
     comp++;
   }
 
-  // Compute derived vars
+  // // create temporary multifab to store a single face-centred state-array averaged to cell-centred
+  // amrex::MultiFab tmp_mf_fc2cc(state_new_cc_[lev].boxArray(), state_new_cc_[lev].DistributionMap(), 1, nGrow);
+  
+  // compute cell-centre averaged face-centred data
+  if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
+    for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+      AverageFCToCC(plotMF, state_new_fc_[lev][idim], comp, 0, nCompState_fc);
+      // amrex::MultiFab::Copy(plotMF, tmp_mf_fc2cc, icomp, comp, 1, nGrow);
+      comp += nCompState_fc;
+    }
+  }
+
+  // compute derived vars
   for (auto const &dname : derivedNames_) {
     ComputeDerivedVar(lev, dname, plotMF, comp);
     comp++;
@@ -1499,8 +1541,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::RenderAscent() {
   amrex::Vector<amrex::MultiFab> mf = PlotFileMF();
   amrex::Vector<const amrex::MultiFab *> mf_ptr = amrex::GetVecOfConstPtrs(mf);
   amrex::Vector<std::string> varnames;
-  varnames.insert(varnames.end(), componentNames_cc_.begin(),
-                  componentNames_cc_.end());
+  varnames.insert(varnames.end(), componentNames_cc_.begin(), componentNames_cc_.end());
   varnames.insert(varnames.end(), derivedNames_.begin(), derivedNames_.end());
 
   // rescale geometry
@@ -1547,8 +1588,14 @@ void AMRSimulation<problem_t>::WritePlotFile() const {
   amrex::Vector<amrex::MultiFab> mf = PlotFileMF();
   amrex::Vector<const amrex::MultiFab *> mf_ptr = amrex::GetVecOfConstPtrs(mf);
   amrex::Vector<std::string> varnames;
-  varnames.insert(varnames.end(), componentNames_cc_.begin(),
-                  componentNames_cc_.end());
+  varnames.insert(varnames.end(), componentNames_cc_.begin(), componentNames_cc_.end());
+  if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
+    for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+      for (int icomp = 0; icomp < ncomp_fc_; ++icomp) {
+        varnames.push_back(quokka::face_dir_name[idim] + std::string("-") + componentNames_fc_[icomp]);
+      }
+    }
+  }
   varnames.insert(varnames.end(), derivedNames_.begin(), derivedNames_.end());
 
   // write plotfile
@@ -1656,11 +1703,23 @@ void AMRSimulation<problem_t>::WriteCheckpointFile() const {
     }
   }
 
-  // write the MultiFab data to, e.g., chk00010/Level_0/
+  // write the cell-centred MultiFab data to, e.g., chk00010/Level_0/
   for (int lev = 0; lev <= finest_level; ++lev) {
     amrex::VisMF::Write(
         state_new_cc_[lev],
         amrex::MultiFabFileFullPrefix(lev, checkpointname, "Level_", "Cell"));
+  }
+
+  // write the face-centred MultiFab data to, e.g., chk00010/Level_0/
+  if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
+    for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+      for (int lev = 0; lev <= finest_level; ++lev) {
+        amrex::VisMF::Write(
+            state_new_fc_[lev][idim],
+            amrex::MultiFabFileFullPrefix(lev, checkpointname, "Level_",
+                                          std::string("Face_") + quokka::face_dir_name[idim]));
+      }
+    }
   }
 
   // create symlink and point it at this checkpoint dir
@@ -1744,24 +1803,44 @@ void AMRSimulation<problem_t>::ReadCheckpointFile() {
     SetDistributionMap(lev, dm);
 
     // build MultiFab and FluxRegister data
-    int ncomp = ncomp_cc_;
+    int ncomp_cc = ncomp_cc_;
+    int ncomp_fc = ncomp_fc_;
     int nghost = nghost_;
-    state_old_cc_[lev].define(grids[lev], dmap[lev], ncomp, nghost);
-    state_new_cc_[lev].define(grids[lev], dmap[lev], ncomp, nghost);
+    state_old_cc_[lev].define(grids[lev], dmap[lev], ncomp_cc, nghost);
+    state_new_cc_[lev].define(grids[lev], dmap[lev], ncomp_cc, nghost);
     max_signal_speed_[lev].define(ba, dm, 1, nghost);
+
+    if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
+      for (int idim=0; idim < AMREX_SPACEDIM; ++idim){
+        state_new_fc_[lev][idim] = amrex::MultiFab(
+          amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim)), dm, ncomp_fc, nghost);
+        state_old_fc_[lev][idim] = amrex::MultiFab(
+          amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim)), dm, ncomp_fc, nghost);
+      }
+    }
 
     if (lev > 0 && (do_reflux != 0)) {
       flux_reg_[lev] = std::make_unique<amrex::YAFluxRegister>(
           ba, boxArray(lev - 1), dm, DistributionMap(lev - 1), Geom(lev),
-          Geom(lev - 1), refRatio(lev - 1), lev, ncomp);
+          Geom(lev - 1), refRatio(lev - 1), lev, ncomp_cc);
     }
   }
 
   // read in the MultiFab data
   for (int lev = 0; lev <= finest_level; ++lev) {
+    // cell-centred
     amrex::VisMF::Read(
         state_new_cc_[lev],
         amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", "Cell"));
+    // face-centred
+    if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
+      for (int idim=0; idim < AMREX_SPACEDIM; ++idim){
+        amrex::VisMF::Read(
+            state_new_fc_[lev][idim],
+            amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_",
+                                          std::string("Face_") + quokka::face_dir_name[idim]));
+      }
+    }
   }
   areInitialConditionsDefined_ = true;
 }
