@@ -583,8 +583,8 @@ void RadhydroSimulation<problem_t>::FixupState(int lev)
 		auto const &stateOld = state_old_[lev].array(iter);
 
 		// fix hydro state
-		//HydroSystem<problem_t>::EnforceDensityFloor(densityFloor_, indexRange, stateNew);
-		//HydroSystem<problem_t>::EnforceDensityFloor(densityFloor_, indexRange, stateOld);
+		HydroSystem<problem_t>::EnforceDensityFloor(densityFloor_, indexRange, stateNew);
+		HydroSystem<problem_t>::EnforceDensityFloor(densityFloor_, indexRange, stateOld);
 
 		// sync internal energy and total energy
 		HydroSystem<problem_t>::SyncDualEnergy(stateNew, indexRange);
