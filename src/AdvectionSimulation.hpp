@@ -68,7 +68,7 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 
 	explicit AdvectionSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions)
       : AMRSimulation<problem_t>(boundaryConditions) {
-    componentNames_.push_back({"density"});
+    componentNames_cc_.push_back({"density"});
     ncomp_cc_ = 1;
   }
 
