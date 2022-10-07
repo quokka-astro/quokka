@@ -274,7 +274,7 @@ auto problem_main() -> int {
   sim.evolve();
 
   // read output variables
-  auto [position, values] = fextract(sim.state_new_[0], sim.Geom(0), 0, 0.0);
+  auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
   int nx = static_cast<int>(position.size());
   int status = 0;
 

@@ -341,22 +341,22 @@ template <>
 void RadhydroSimulation<ShockCloud>::computeAfterLevelAdvance(
     int lev, Real /*time*/, Real dt_lev, int /*ncycle*/) {
   // compute operator split physics
-  computeCooling(state_new_[lev], dt_lev, cloudyTables);
+  computeCooling(state_new_cc_[lev], dt_lev, cloudyTables);
 }
 
 template <>
 void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(
     int lev, std::string const &dname, amrex::MultiFab &mf,
-    const int ncomp_in) const {
+    const int ncomp_cc_in) const {
   // compute derived variables and save in 'mf'
   if (dname == "temperature") {
-    const int ncomp = ncomp_in;
+    const int ncomp = ncomp_cc_in;
     auto tables = cloudyTables.const_tables();
 
     for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
       const amrex::Box &indexRange = iter.validbox();
       auto const &output = mf.array(iter);
-      auto const &state = state_new_[lev].const_array(iter);
+      auto const &state = state_new_cc_[lev].const_array(iter);
 
       amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j,
                                                           int k) noexcept {
@@ -383,9 +383,9 @@ void RadhydroSimulation<ShockCloud>::ErrorEst(int lev, amrex::TagBoxArray &tags,
   const Real eta_threshold = 0.1;            // gradient refinement threshold
   const Real q_min = std::sqrt(rho0 * rho1); // minimum density for refinement
 
-  for (amrex::MFIter mfi(state_new_[lev]); mfi.isValid(); ++mfi) {
+  for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
     const amrex::Box &box = mfi.validbox();
-    const auto state = state_new_[lev].const_array(mfi);
+    const auto state = state_new_cc_[lev].const_array(mfi);
     const auto tag = tags.array(mfi);
     const int nidx = HydroSystem<ShockCloud>::density_index;
 
