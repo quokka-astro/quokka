@@ -578,7 +578,7 @@ void RadhydroSimulation<problem_t>::FixupState(int lev)
 	BL_PROFILE("RadhydroSimulation::FixupState()");
 
 	for (amrex::MFIter iter(state_new_[lev]); iter.isValid(); ++iter) {
-		const amrex::Box &indexRange = iter.fabbox(); // include ghost zones!
+		const amrex::Box &indexRange = iter.validbox();
 		auto const &stateNew = state_new_[lev].array(iter);
 		auto const &stateOld = state_old_[lev].array(iter);
 
