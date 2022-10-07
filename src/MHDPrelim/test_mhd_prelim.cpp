@@ -95,7 +95,7 @@ void RadhydroSimulation<WaveProblem>::setInitialConditionsOnGrid(
   } else if (cen == quokka::centering::fc) {
     if (dir == quokka::direction::x) {
       amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-        state(i, j, k, MHDSystem<WaveProblem>::energy_index) = 1.0;
+        state(i, j, k, MHDSystem<WaveProblem>::energy_index) = (i % 2);
       });
     } else if (dir == quokka::direction::y) {
       amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
@@ -135,7 +135,6 @@ auto problem_main() -> int {
   sim.cflNumber_ = CFL_number;
   sim.stopTime_ = max_time;
   sim.maxTimesteps_ = max_timesteps;
-  sim.plotfileInterval_ = -1;
 
   // set initial conditions
   sim.setInitialConditions();
