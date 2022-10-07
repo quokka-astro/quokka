@@ -136,7 +136,7 @@ template <> void RadhydroSimulation<QuirkProblem>::computeAfterTimestep() {
     // (no AMR should be used for this problem, and the odd-even decoupling will
     // manifest in every row along the shock, if it happens)
 
-    amrex::MultiFab &mf_state = state_new_[0];
+    amrex::MultiFab &mf_state = state_new_cc_[0];
     int box_no = -1;
     int ilo = ishock_g;
     int jlo = 0;
