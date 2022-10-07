@@ -752,7 +752,11 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 
 				if(redoFlag.max<amrex::RunOn::Device>() == quokka::redoFlag::none) {
 					break;
-				}
+				} else {
+					if (i == (fofcMaxIterations_ - 1)) {
+						amrex::Abort("FOFC failed! Aborting...");
+					}
+				}				
 			}
 		}
 
@@ -840,6 +844,10 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 
 					if(redoFlag.max<amrex::RunOn::Device>() == quokka::redoFlag::none) {
 						break;
+					} else {
+						if (i == (fofcMaxIterations_ - 1)) {
+							amrex::Abort("FOFC failed! Aborting...");
+						}
 					}
 				}
 			}
