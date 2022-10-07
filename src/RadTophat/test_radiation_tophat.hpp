@@ -20,10 +20,7 @@
 
 #include "radiation_system.hpp"
 #include "RadhydroSimulation.hpp"
-
-extern "C" {
-#include "interpolate.h"
-}
+#include "interpolate.hpp"
 
 // function definitions
 

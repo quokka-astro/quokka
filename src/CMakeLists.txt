@@ -101,6 +101,8 @@ add_subdirectory(HydroVacuum)
 add_subdirectory(HydroWave)
 add_subdirectory(HydroQuirk)
 add_subdirectory(HydroHighMach)
+add_subdirectory(RayleighTaylor2D)
+add_subdirectory(RayleighTaylor3D)
 
 add_subdirectory(RadBeam)
 add_subdirectory(RadForce)

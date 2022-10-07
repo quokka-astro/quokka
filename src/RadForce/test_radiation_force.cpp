@@ -20,9 +20,7 @@
 #include "radiation_system.hpp"
 #include "test_radiation_force.hpp"
 #include "ArrayUtil.hpp"
-extern "C" {
-#include "interpolate.h"
-}
+#include "interpolate.hpp"
 #ifdef HAVE_PYTHON
 #include "matplotlibcpp.h"
 #endif
@@ -84,9 +82,13 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputeRosselandOpacity(
 
 // declare global variables
 // initial conditions read from file
-amrex::Vector<double> x_arr;
-amrex::Vector<double> rho_arr;
-amrex::Vector<double> Mach_arr;
+amrex::Gpu::HostVector<double> x_arr;
+amrex::Gpu::HostVector<double> rho_arr;
+amrex::Gpu::HostVector<double> Mach_arr;
+
+amrex::Gpu::DeviceVector<double> x_arr_g;
+amrex::Gpu::DeviceVector<double> rho_arr_g;
+amrex::Gpu::DeviceVector<double> Mach_arr_g;
 
 template <>
 void RadhydroSimulation<TubeProblem>::preCalculateInitialConditions() {
@@ -110,6 +112,16 @@ void RadhydroSimulation<TubeProblem>::preCalculateInitialConditions() {
     rho_arr.push_back(rho);
     Mach_arr.push_back(Mach);
   }
+
+  // copy to device
+  x_arr_g.resize(x_arr.size());
+  rho_arr_g.resize(rho_arr.size());
+  Mach_arr_g.resize(Mach_arr.size());
+
+  amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, x_arr.begin(), x_arr.end(), x_arr_g.begin());
+  amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, rho_arr.begin(), rho_arr.end(), rho_arr_g.begin());
+  amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, Mach_arr.begin(), Mach_arr.end(), Mach_arr_g.begin());
+  amrex::Gpu::streamSynchronizeAll();
 }
 
 template <>
@@ -121,16 +133,16 @@ void RadhydroSimulation<TubeProblem>::setInitialConditionsOnGrid(
   const amrex::Box &indexRange = grid_vec[0].indexRange;
   const amrex::Array4<double>& state_cc = grid_vec[0].array;
   
-  // loop over the grid and set the initial condition
-  amrex::LoopConcurrentOnCpu(indexRange, [=](int i, int j, int k) noexcept {
-    amrex::Real const x = (prob_lo[0] + (i + amrex::Real(0.5)) * dx[0]) / Lx;
-    amrex::Real const D = interpolate_value(
-        x, x_arr.dataPtr(), rho_arr.dataPtr(), static_cast<int>(x_arr.size()));
-    AMREX_ALWAYS_ASSERT(D > 0.);
+  auto const &x_ptr = x_arr_g.dataPtr();
+  auto const &rho_ptr = rho_arr_g.dataPtr();
+  auto const &Mach_ptr = Mach_arr_g.dataPtr();
+  int x_size = static_cast<int>(x_arr_g.size());
 
-    amrex::Real const Mach = interpolate_value(
-        x, x_arr.dataPtr(), Mach_arr.dataPtr(), static_cast<int>(x_arr.size()));
-    AMREX_ALWAYS_ASSERT(!std::isnan(Mach));
+  // loop over the grid and set the initial condition
+  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+    amrex::Real const x = (prob_lo[0] + (i + amrex::Real(0.5)) * dx[0]) / Lx;
+    amrex::Real const D = interpolate_value(x, x_ptr, rho_ptr, x_size);
+    amrex::Real const Mach = interpolate_value(x, x_ptr, Mach_ptr, x_size);
 
     amrex::Real const rho = D * rho0;
     amrex::Real const vel = Mach * a0;
@@ -259,15 +271,15 @@ auto problem_main() -> int {
   std::vector<double> Frad_err(nx);
 
   for (int i = 0; i < nx; ++i) {
-    xs.at(i) = position.at(i);
+    xs.at(i) = position[i];
     double rho_exact =
-        values0.at(RadSystem<TubeProblem>::gasDensity_index).at(i);
+        values0.at(RadSystem<TubeProblem>::gasDensity_index)[i];
     double x1GasMom_exact =
-        values0.at(RadSystem<TubeProblem>::x1GasMomentum_index).at(i);
-    double rho = values.at(RadSystem<TubeProblem>::gasDensity_index).at(i);
-    double Frad = values.at(RadSystem<TubeProblem>::x1RadFlux_index).at(i);
+        values0.at(RadSystem<TubeProblem>::x1GasMomentum_index)[i];
+    double rho = values.at(RadSystem<TubeProblem>::gasDensity_index)[i];
+    double Frad = values.at(RadSystem<TubeProblem>::x1RadFlux_index)[i];
     double x1GasMom =
-        values.at(RadSystem<TubeProblem>::x1GasMomentum_index).at(i);
+        values.at(RadSystem<TubeProblem>::x1GasMomentum_index)[i];
     double vx = x1GasMom / rho;
     double vx_exact = x1GasMom_exact / rho_exact;
 

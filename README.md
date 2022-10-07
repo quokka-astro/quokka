@@ -18,6 +18,10 @@ Here is a [a Kelvin-Helmholz instability simulated with Quokka](https://vimeo.co
 
 ![Animated GIF of KH Instability](https://videoapi-muybridge.vimeocdn.com/animated-thumbnails/image/1f468be6-6d7b-4d53-a02c-4dd8f3ad5154.gif?ClientID=vimeo-core-prod&Date=1653705774&Signature=9bea89d5c9657180391a9538a10fd4f8f7099025)
 
+This is [a 3D Rayleigh-Taylor instability](https://vimeo.com/746363534) simulated on a $256^3$ grid:
+
+![Image of 3D RT instability](extern/rt3d_visit.png)
+
 Quokka also features advanced Adaptive Quokka Refinement:tm: technology:
 
 ![Image of Quokka with Baby in Pouch](extern/quokka2.png)
@@ -80,10 +84,16 @@ to the CMake command-line options (or change the `QUOKKA_PYTHON` option to `OFF`
 ## Running on GPUs
 By default, Quokka compiles itself to run only on CPUs. (If you want to run on NVIDIA GPUs, re-build Quokka as shown below. **(Warning: CUDA 11.6 generates invalid device code; see issue [21](https://github.com/BenWibking/quokka/issues/21). Use CUDA <= 11.5 instead.)**
 ```
-cmake .. -DCMAKE_BUILD_TYPE=Release -DAMReX_GPU_BACKEND=CUDA
+cmake .. -DCMAKE_BUILD_TYPE=Release -DAMReX_GPU_BACKEND=CUDA -DAMREX_GPUS_PER_NODE=N
 make -j6
 ```
-The compiled test problems are in the test problem subdirectories in `build/src/`. Example scripts for running Quokka on compute clusters are in the `scripts/` subdirectory. Please note that you must configure your compute cluster to run with 1 MPI rank per GPU in order for Quokka to work correctly. Quokka is only supported on Volta-class (V100) GPUs or newer.
+where $N$ is the number of GPUs available per compute node.
+
+It is necessary to use `-DAMREX_GPUS_PER_NODE` to specify the number of GPUs per compute node. Without this, performance will be very poor. All GPUs on a node must be visible from each MPI rank on the node for efficient GPU-aware MPI communication to take place via CUDA IPC. (When using the SLURM job scheduler, this means that `--gpu-bind` should be set to `none`.)
+
+The compiled test problems are in the test problem subdirectories in `build/src/`. Example scripts for running Quokka on compute clusters are in the `scripts/` subdirectory.
+
+Note that Quokka is only supported on Volta-class (V100) GPUs or newer.
 
 Note that 1D problems can run very slowly on GPUs due to a lack of sufficient parallelism. To run the test suite in a reasonable amount of time, you may wish to exclude the matter-energy exchange tests, e.g.:
 ```

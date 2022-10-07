@@ -168,15 +168,12 @@ void RadhydroSimulation<ShockCloud>::setInitialConditionsOnGrid(
     Real const Egas =
         RadSystem<ShockCloud>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
 
-    state_cc(i, j, k, RadSystem<ShockCloud>::gasEnergy_index) = Egas;
-    state_cc(i, j, k, RadSystem<ShockCloud>::gasDensity_index) = rho;
-    state_cc(i, j, k, RadSystem<ShockCloud>::x1GasMomentum_index) = xmom;
-    state_cc(i, j, k, RadSystem<ShockCloud>::x2GasMomentum_index) = ymom;
-    state_cc(i, j, k, RadSystem<ShockCloud>::x3GasMomentum_index) = zmom;
-    state_cc(i, j, k, RadSystem<ShockCloud>::radEnergy_index) = 0;
-    state_cc(i, j, k, RadSystem<ShockCloud>::x1RadFlux_index) = 0;
-    state_cc(i, j, k, RadSystem<ShockCloud>::x2RadFlux_index) = 0;
-    state_cc(i, j, k, RadSystem<ShockCloud>::x3RadFlux_index) = 0;
+    state_cc(i, j, k, HydroSystem<ShockCloud>::density_index) = rho;
+    state_cc(i, j, k, HydroSystem<ShockCloud>::x1Momentum_index) = xmom;
+    state_cc(i, j, k, HydroSystem<ShockCloud>::x2Momentum_index) = ymom;
+    state_cc(i, j, k, HydroSystem<ShockCloud>::x3Momentum_index) = zmom;
+    state_cc(i, j, k, HydroSystem<ShockCloud>::energy_index) = Egas;
+    state_cc(i, j, k, HydroSystem<ShockCloud>::internalEnergy_index) = Eint;
   });
 }
 
@@ -211,16 +208,12 @@ AMRSimulation<ShockCloud>::setCustomBoundaryConditions(
     Real const Egas =
         RadSystem<ShockCloud>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
 
-    consVar(i, j, k, RadSystem<ShockCloud>::gasDensity_index) = rho;
-    consVar(i, j, k, RadSystem<ShockCloud>::x1GasMomentum_index) = xmom;
-    consVar(i, j, k, RadSystem<ShockCloud>::x2GasMomentum_index) = ymom;
-    consVar(i, j, k, RadSystem<ShockCloud>::x3GasMomentum_index) = zmom;
-    consVar(i, j, k, RadSystem<ShockCloud>::gasEnergy_index) = Egas;
-
-    consVar(i, j, k, RadSystem<ShockCloud>::radEnergy_index) = 0;
-    consVar(i, j, k, RadSystem<ShockCloud>::x1RadFlux_index) = 0;
-    consVar(i, j, k, RadSystem<ShockCloud>::x2RadFlux_index) = 0;
-    consVar(i, j, k, RadSystem<ShockCloud>::x3RadFlux_index) = 0;
+    consVar(i, j, k, HydroSystem<ShockCloud>::density_index) = rho;
+    consVar(i, j, k, HydroSystem<ShockCloud>::x1Momentum_index) = xmom;
+    consVar(i, j, k, HydroSystem<ShockCloud>::x2Momentum_index) = ymom;
+    consVar(i, j, k, HydroSystem<ShockCloud>::x3Momentum_index) = zmom;
+    consVar(i, j, k, HydroSystem<ShockCloud>::energy_index) = Egas;
+    consVar(i, j, k, HydroSystem<ShockCloud>::internalEnergy_index) = Eint;
   }
 }
 
