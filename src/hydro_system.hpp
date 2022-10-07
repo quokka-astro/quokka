@@ -314,6 +314,7 @@ void HydroSystem<problem_t>::EnforceDensityFloor(amrex::Real const densityFloor,
         if (rho < densityFloor) {
           state(i, j, k, density_index) = densityFloor;
 
+#if 0
           if (rho <= 0.) {
             rho = densityFloor;
             amrex::Real const px = state(i,j,k, x1Momentum_index);
@@ -329,6 +330,7 @@ void HydroSystem<problem_t>::EnforceDensityFloor(amrex::Real const densityFloor,
             printf("\tEint_cons = %g\n", Eint_cons);
             printf("\tEint_aux = %g\n", Eint_aux);
           }
+#endif
         }
       });
 }
