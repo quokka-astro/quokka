@@ -308,7 +308,7 @@ void HydroSystem<problem_t>::EnforceDensityFloor(amrex::Real const densityFloor,
 
   amrex::ParallelFor(
       indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-        amrex::Real rho = state(i, j, k, density_index);
+        amrex::Real const rho = state(i, j, k, density_index);
 
         // reset density if less than densityFloor
         if (rho < densityFloor) {
@@ -316,7 +316,6 @@ void HydroSystem<problem_t>::EnforceDensityFloor(amrex::Real const densityFloor,
 
 #if 0
           if (rho <= 0.) {
-            rho = densityFloor;
             amrex::Real const px = state(i,j,k, x1Momentum_index);
             amrex::Real const py = state(i,j,k, x2Momentum_index);
             amrex::Real const pz = state(i,j,k, x3Momentum_index);
