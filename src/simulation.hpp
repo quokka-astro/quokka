@@ -127,6 +127,7 @@ public:
   amrex::Real stopTime_ = 1.0;  // default
   amrex::Real cflNumber_ = 0.3; // default
   amrex::Real dtToleranceFactor_ = 1.1; // default
+  amrex::Long maxSubcyclingFactor_ = 16; // default
   amrex::Long cycleCount_ = 0;
   amrex::Long maxTimesteps_ = 1e4; // default
   amrex::Long maxWalltime_ = 0;    // default: no limit
@@ -792,6 +793,15 @@ auto AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time,
       while (dtCur > dtToleranceFactor_ * dtCFL) {
         factor *= 2;
         dtCur *= 0.5;
+      }
+
+      // check if we have reduced the timestep by too large of a factor
+      if (factor > maxSubcyclingFactor_) {
+        amrex::Print() << "The CFL timestep on level " << i << "is: " << dtCFL << "\n";
+        amrex::Print() << "The timestep for this level has been reduced by a factor of "
+                       << factor << "\n";
+        amrex::Print() << "This exceeds maxSubcyclingFactor. Probably something has gone wrong!\n";
+        amrex::Abort("The CFL-limited timestep has become too small! Aborting...");
       }
 
       if (factor > maxFactorSublevels) {
