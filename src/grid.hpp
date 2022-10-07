@@ -1,6 +1,8 @@
 #ifndef GRID_HPP_ // NOLINT
 #define GRID_HPP_
 
+#include "AMReX_MFParallelFor.H"
+#include "AMReX_MultiFab.H"
 #include <AMReX.H>
 #include <AMReX_Array.H>
 #include <AMReX_Array4.H>
@@ -10,6 +12,7 @@
 namespace quokka {
   enum class centering { cc=0, fc, ec };
   enum class direction { na=-1, x, y, z };
+  const std::array<const char, 4> face_dir_name{"xyz"};
 
   struct grid {
     const amrex::Array4<double>& array;
