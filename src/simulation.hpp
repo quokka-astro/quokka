@@ -121,7 +121,7 @@ public:
   auto computeTimestepAtLevel(int lev) -> amrex::Real;
 
   void AverageFCToCC(amrex::MultiFab &mf_cc, const amrex::MultiFab &mf_fc,
-                     int dstcomp_start, int srccomp_start, int srccomp_total) const;
+                     int dstcomp_start, int srccomp_start, int srccomp_total, int nGrow) const;
 
   virtual void computeMaxSignalLocal(int level) = 0;
   virtual void advanceSingleTimestepAtLevel(int lev, amrex::Real time,
@@ -1428,12 +1428,14 @@ auto AMRSimulation<problem_t>::PlotFileName(int lev) const -> std::string {
 template <typename problem_t>
 void AMRSimulation<problem_t>::AverageFCToCC(
     amrex::MultiFab &mf_cc, const amrex::MultiFab &mf_fc, int dstcomp_start,
-    int srccomp_start, int srccomp_total) const {
+    int srccomp_start, int srccomp_total, int nGrow) const {
   // itterate over the domain
   auto const &state_cc = mf_cc.arrays();
   auto const &state_fc = mf_fc.const_arrays();
-  amrex::ParallelFor(mf_cc, [=] AMREX_GPU_DEVICE(int boxidx, int i, int j, int k) {
-    for (int icomp = 0; icomp < srccomp_total; ++icomp) {
+  amrex::ParallelFor(
+      mf_cc, amrex::IntVect(AMREX_D_DECL(nGrow, nGrow, nGrow)),
+      [=] AMREX_GPU_DEVICE(int boxidx, int i, int j, int k) {
+        for (int icomp = 0; icomp < srccomp_total; ++icomp) {
           state_cc[boxidx](i, j, k, dstcomp_start + icomp) =
               0.5 * (state_fc[boxidx](i, j, k, srccomp_start + icomp) +
                      state_fc[boxidx](i + 1, j, k, srccomp_start + icomp));
@@ -1448,7 +1450,7 @@ void AMRSimulation<problem_t>::AverageFCToCC(
                        state_fc[boxidx](i, j, k + 1, srccomp_start + icomp));
           }
         }
-  });
+      });
 }
 
 template <typename problem_t>
@@ -1469,13 +1471,10 @@ auto AMRSimulation<problem_t>::PlotFileMFAtLevel(int lev) const
     comp++;
   }
 
-  // // create temporary multifab to store a single face-centred state-array averaged to cell-centred
-  // amrex::MultiFab tmp_mf_fc2cc(state_new_cc_[lev].boxArray(), state_new_cc_[lev].DistributionMap(), 1, nGrow);
-  
   // compute cell-centre averaged face-centred data
   if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
     for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-      AverageFCToCC(plotMF, state_new_fc_[lev][idim], comp, 0, nCompState_fc);
+      AverageFCToCC(plotMF, state_new_fc_[lev][idim], comp, 0, nCompState_fc, nGrow);
       comp += nCompState_fc;
     }
   }
