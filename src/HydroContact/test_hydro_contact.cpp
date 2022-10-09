@@ -44,7 +44,7 @@ void RadhydroSimulation<ContactProblem>::setInitialConditionsOnGrid(
   const amrex::Box &indexRange = grid_vec[0].indexRange;
   const amrex::Array4<double>& state_cc = grid_vec[0].array;
 
-  int ncomp = ncomp_;
+  int ncomp = ncomp_cc_;
   // loop over the grid and set the initial condition
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
     amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
@@ -127,7 +127,7 @@ void RadhydroSimulation<ContactProblem>::computeReferenceSolution(
 
 #ifdef HAVE_PYTHON
   // Plot results
-  auto [position, values] = fextract(state_new_[0], geom[0], 0, 0.5);
+  auto [position, values] = fextract(state_new_cc_[0], geom[0], 0, 0.5);
   auto [pos_exact, val_exact] = fextract(ref, geom[0], 0, 0.5);
   auto const nx = position.size();
 

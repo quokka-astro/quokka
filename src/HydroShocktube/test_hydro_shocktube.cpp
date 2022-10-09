@@ -53,7 +53,7 @@ void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsOnGrid(
   const amrex::Box &indexRange = grid_vec[0].indexRange;
   const amrex::Array4<double>& state_cc = grid_vec[0].array;
 
-  const int ncomp = ncomp_;
+  const int ncomp = ncomp_cc_;
   // loop over the grid and set the initial condition
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
     amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
@@ -157,9 +157,9 @@ void RadhydroSimulation<ShocktubeProblem>::ErrorEst(int lev,
   const Real rho_min = 0.01;      // minimum rho for refinement
   auto const &dx = geom[lev].CellSizeArray();
 
-  for (amrex::MFIter mfi(state_new_[lev]); mfi.isValid(); ++mfi) {
+  for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
     const amrex::Box &box = mfi.validbox();
-    const auto state = state_new_[lev].const_array(mfi);
+    const auto state = state_new_cc_[lev].const_array(mfi);
     const auto tag = tags.array(mfi);
 
     amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
@@ -279,7 +279,7 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
 #ifdef HAVE_PYTHON
 
   // Plot results
-  auto [position, values] = fextract(state_new_[0], geom[0], 0, 0.5);
+  auto [position, values] = fextract(state_new_cc_[0], geom[0], 0, 0.5);
   auto [pos_exact, val_exact] = fextract(ref, geom[0], 0, 0.5);
 
   if (amrex::ParallelDescriptor::IOProcessor()) {

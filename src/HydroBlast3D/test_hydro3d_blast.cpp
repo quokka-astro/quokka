@@ -138,9 +138,9 @@ void RadhydroSimulation<SedovProblem>::ErrorEst(int lev,
   const amrex::Real eta_threshold = 0.1; // gradient refinement threshold
   const amrex::Real P_min = 1.0e-3;      // minimum pressure for refinement
 
-  for (amrex::MFIter mfi(state_new_[lev]); mfi.isValid(); ++mfi) {
+  for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
     const amrex::Box &box = mfi.validbox();
-    const auto state = state_new_[lev].const_array(mfi);
+    const auto state = state_new_cc_[lev].const_array(mfi);
     const auto tag = tags.array(mfi);
 
     amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
@@ -188,13 +188,13 @@ void RadhydroSimulation<SedovProblem>::computeAfterEvolve(
   amrex::Real const Egas0 =
       initSumCons[RadSystem<SedovProblem>::gasEnergy_index];
   amrex::Real const Egas =
-      state_new_[0].sum(RadSystem<SedovProblem>::gasEnergy_index) * vol;
+      state_new_cc_[0].sum(RadSystem<SedovProblem>::gasEnergy_index) * vol;
 
   // compute kinetic energy
   amrex::MultiFab Ekin_mf(boxArray(0), DistributionMap(0), 1, 0);
-  for (amrex::MFIter iter(state_new_[0]); iter.isValid(); ++iter) {
+  for (amrex::MFIter iter(state_new_cc_[0]); iter.isValid(); ++iter) {
     const amrex::Box &indexRange = iter.validbox();
-    auto const &state = state_new_[0].const_array(iter);
+    auto const &state = state_new_cc_[0].const_array(iter);
     auto const &ekin = Ekin_mf.array(iter);
     amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
       // compute kinetic energy

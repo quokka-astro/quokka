@@ -113,7 +113,7 @@ void RadhydroSimulation<CouplingProblem>::setInitialConditionsOnGrid(
 }
 
 template <> void RadhydroSimulation<CouplingProblem>::computeAfterTimestep() {
-  auto [position, values] = fextract(state_new_[0], Geom(0), 0, 0.5);
+  auto [position, values] = fextract(state_new_cc_[0], Geom(0), 0, 0.5);
 
   if (amrex::ParallelDescriptor::IOProcessor()) {
     t_vec_.push_back(tNew_[0]);

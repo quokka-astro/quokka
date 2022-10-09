@@ -139,10 +139,10 @@ void RadhydroSimulation<RTProblem>::ErrorEst(
   const amrex::Real eta_threshold = 0.2; // gradient refinement threshold
   const amrex::Real rho_min = 0.1;       // minimum density for refinement
 
-  const auto state = state_new_[lev].const_arrays();
+  const auto state = state_new_cc_[lev].const_arrays();
   const auto tag = tags.arrays();
 
-  amrex::ParallelFor(state_new_[lev],
+  amrex::ParallelFor(state_new_cc_[lev],
     [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
       const int n = HydroSystem<RTProblem>::density_index;
       amrex::Real const rho = state[bx](i, j, k, n);

@@ -58,7 +58,7 @@ void AdvectionSimulation<SquareProblem>::setInitialConditionsOnGrid(
   const amrex::Array4<double>& state_cc = grid_vec[0].array;
   // loop over the grid and set the initial condition
   amrex::ParallelFor(
-      indexRange, ncomp_, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
+      indexRange, ncomp_cc_, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
         state_cc(i, j, k, n) = exactSolutionAtIndex(i, j, prob_lo, prob_hi, dx);
       });
 }
@@ -71,12 +71,12 @@ void AdvectionSimulation<SquareProblem>::computeReferenceSolution(
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi) {
   // compute exact solution
 
-  for (amrex::MFIter iter(state_old_[0]); iter.isValid(); ++iter) {
+  for (amrex::MFIter iter(state_old_cc_[0]); iter.isValid(); ++iter) {
     const amrex::Box &indexRange = iter.validbox();
     auto const &state = ref.array(iter);
 
     amrex::ParallelFor(
-        indexRange, ncomp_, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
+        indexRange, ncomp_cc_, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
           state(i, j, k, n) = exactSolutionAtIndex(i, j, prob_lo, prob_hi, dx);
         });
   }
@@ -93,9 +93,9 @@ void AdvectionSimulation<SquareProblem>::ErrorEst(int lev,
   const Real rho_min = 0.1;       // minimum rho for refinement
   auto const &dx = geom[lev].CellSizeArray();
 
-  for (amrex::MFIter mfi(state_new_[lev]); mfi.isValid(); ++mfi) {
+  for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
     const amrex::Box &box = mfi.validbox();
-    const auto state = state_new_[lev].const_array(mfi);
+    const auto state = state_new_cc_[lev].const_array(mfi);
     const auto tag = tags.array(mfi);
 
     amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
