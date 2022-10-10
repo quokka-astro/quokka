@@ -349,10 +349,10 @@ void RadhydroSimulation<ShockCloud>::computeAfterLevelAdvance(
 template <>
 void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(
     int lev, std::string const &dname, amrex::MultiFab &mf,
-    const int ncomp_in) const {
+    const int ncomp_cc_in) const {
   // compute derived variables and save in 'mf'
   if (dname == "temperature") {
-    const int ncomp = ncomp_in;
+    const int ncomp = ncomp_cc_in;
     auto tables = cloudyTables.const_tables();
 
     for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {

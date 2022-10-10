@@ -85,8 +85,8 @@ public:
   amrex::Real constantDt_ = 0.0;
   amrex::Vector<int> istep;         // which step?
   amrex::Vector<int> nsubsteps;     // how many substeps on each level?
-  amrex::Vector<amrex::Real> tNew_; // for state_new_
-  amrex::Vector<amrex::Real> tOld_; // for state_old_
+  amrex::Vector<amrex::Real> tNew_; // for state_new_cc_
+  amrex::Vector<amrex::Real> tOld_; // for state_old_cc_
   amrex::Vector<amrex::Real> dt_;   // timestep for each level
   amrex::Vector<int>
       reductionFactor_;         // timestep reduction factor for each level
