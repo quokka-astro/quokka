@@ -323,9 +323,6 @@ void AMRSimulation<problem_t>::initialize(
 
 template <typename problem_t>
 void AMRSimulation<problem_t>::setInitialConditionsAtLevel(int level) {
-  // initialise grid-struct, which the user will opperate on
-  std::vector<quokka::grid> grid_vec;
-
   // perform precalculation step defined by the user
   preCalculateInitialConditions();
 
