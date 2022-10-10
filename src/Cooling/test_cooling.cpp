@@ -113,11 +113,11 @@ void RadhydroSimulation<CoolingTest>::setInitialConditionsOnGrid(
   const amrex::TableData<Real, AMREX_SPACEDIM>::const_table_type &phase_ref =
       *phase_ptr;
   // extract variables required from the geom object
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_vec[0].dx;
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_vec[0].prob_hi;
-  const amrex::Box &indexRange = grid_vec[0].indexRange;
-  const amrex::Array4<double>& state_cc = grid_vec[0].array;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_elem.prob_hi;
+  const amrex::Box &indexRange = grid_elem.indexRange;
+  const amrex::Array4<double>& state_cc = grid_elem.array;
 
   Real const Lx = (prob_hi[0] - prob_lo[0]);
   Real const Ly = (prob_hi[1] - prob_lo[1]);

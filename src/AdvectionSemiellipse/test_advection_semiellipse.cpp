@@ -40,10 +40,10 @@ template <>
 void AdvectionSimulation<SemiellipseProblem>::setInitialConditionsOnGrid(
     quokka::grid grid_elem) {
   // extract variables required from the geom object
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_vec[0].dx;
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
-  const amrex::Box &indexRange = grid_vec[0].indexRange;
-  const amrex::Array4<double>& state_cc = grid_vec[0].array;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo;
+  const amrex::Box &indexRange = grid_elem.indexRange;
+  const amrex::Array4<double>& state_cc = grid_elem.array;
   // loop over the grid and set the initial condition
   amrex::ParallelFor(indexRange, ncomp_cc_,
                      [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {

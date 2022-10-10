@@ -55,8 +55,8 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputeRosselandOpacity(
 template <>
 void RadhydroSimulation<StreamingProblem>::setInitialConditionsOnGrid(
     quokka::grid grid_elem) {
-  const amrex::Box &indexRange = grid_vec[0].indexRange;
-  const amrex::Array4<double>& state_cc = grid_vec[0].array;
+  const amrex::Box &indexRange = grid_elem.indexRange;
+  const amrex::Array4<double>& state_cc = grid_elem.array;
   
   const auto Erad0 = initial_Erad;
   const auto Egas0 = initial_Egas;

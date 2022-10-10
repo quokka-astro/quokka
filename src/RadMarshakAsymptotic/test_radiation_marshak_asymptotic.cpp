@@ -157,8 +157,8 @@ AMRSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(
 template <>
 void RadhydroSimulation<SuOlsonProblemCgs>::setInitialConditionsOnGrid(
     quokka::grid grid_elem) {
-  const amrex::Box &indexRange = grid_vec[0].indexRange;
-  const amrex::Array4<double>& state_cc = grid_vec[0].array;
+  const amrex::Box &indexRange = grid_elem.indexRange;
+  const amrex::Array4<double>& state_cc = grid_elem.array;
   
   // loop over the grid and set the initial condition
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
