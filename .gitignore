@@ -4,7 +4,6 @@ compile_commands.json
 codeql-db/
 build/
 docs/doxygen/
-tests/plt*
 tests/chk*
 tests/*.csv
 sims/
