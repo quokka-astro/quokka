@@ -40,7 +40,7 @@ amrex::Real constexpr g_z = -0.1;
 
 template <>
 void RadhydroSimulation<RTProblem>::setInitialConditionsOnGrid(
-    std::vector<quokka::grid> &grid_vec) {
+    quokka::grid grid_elem) {
   // extract variables required from the geom object
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_vec[0].dx;
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;

@@ -58,7 +58,7 @@ void RadhydroSimulation<SedovProblem>::preCalculateInitialConditions() {
 
 template <>
 void RadhydroSimulation<SedovProblem>::setInitialConditionsOnGrid(
-    std::vector<quokka::grid> &grid_vec) {
+    quokka::grid grid_elem) {
   // initialize a Sedov test problem using parameters from
   // Richard Klein and J. Bolstad
   // [Reference: J.R. Kamm and F.X. Timmes, On Efficient Generation of

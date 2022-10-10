@@ -118,7 +118,7 @@ public:
   virtual void advanceSingleTimestepAtLevel(int lev, amrex::Real time,
                                             amrex::Real dt_lev, int ncycle) = 0;
   virtual void preCalculateInitialConditions() = 0;
-  virtual void setInitialConditionsOnGrid(std::vector<quokka::grid> &grid_vec) = 0;
+  virtual void setInitialConditionsOnGrid(quokka::grid grid_elem) = 0;
   virtual void computeAfterTimestep() = 0;
   virtual void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) = 0;
 
@@ -332,13 +332,12 @@ void AMRSimulation<problem_t>::setInitialConditionsAtLevel(int level) {
   // itterate over the domain
   for (amrex::MFIter iter(state_new_cc_[level]); iter.isValid(); ++iter) {
     // cell-centred states
-    grid_vec.emplace_back(state_new_cc_[level].array(iter), iter.validbox(),
-                          geom[level].CellSizeArray(), geom[level].ProbLoArray(),
-                          geom[level].ProbHiArray(), quokka::centering::cc,
-                          quokka::direction::na);
-
+    quokka::grid grid_elem(state_new_cc_[level].array(iter), iter.validbox(),
+                           geom[level].CellSizeArray(),
+                           geom[level].ProbLoArray(), geom[level].ProbHiArray(),
+                           quokka::centering::cc, quokka::direction::na);
     // set initial conditions defined by the user
-    setInitialConditionsOnGrid(grid_vec);
+    setInitialConditionsOnGrid(grid_elem);
   }
 
   // set flag

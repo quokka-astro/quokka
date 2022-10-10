@@ -39,7 +39,7 @@ constexpr double v_contact = 2.0; // contact wave velocity
 
 template <>
 void RadhydroSimulation<ScalarProblem>::setInitialConditionsOnGrid(
-    std::vector<quokka::grid> &grid_vec) {
+    quokka::grid grid_elem) {
 
   // extract variables required from the geom object
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_vec[0].dx;

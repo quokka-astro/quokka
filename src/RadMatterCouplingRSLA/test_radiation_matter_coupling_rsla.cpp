@@ -95,7 +95,7 @@ constexpr double rho0 = 1.0e-7;  // g cm^-3
 
 template <>
 void RadhydroSimulation<CouplingProblem>::setInitialConditionsOnGrid(
-    std::vector<quokka::grid> &grid_vec) {
+    quokka::grid grid_elem) {
   const amrex::Box &indexRange = grid_vec[0].indexRange;
   const amrex::Array4<double>& state_cc = grid_vec[0].array;
   

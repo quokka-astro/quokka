@@ -113,7 +113,7 @@ void RadhydroSimulation<ShockCloud>::preCalculateInitialConditions() {
 
 template <>
 void RadhydroSimulation<ShockCloud>::setInitialConditionsOnGrid(
-    std::vector<quokka::grid> &grid_vec) {
+    quokka::grid grid_elem) {
   // dereference phase table pointer
   const amrex::TableData<Real, AMREX_SPACEDIM>::const_table_type &phase_ref =
       *phase_ptr;

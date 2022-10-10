@@ -170,7 +170,7 @@ AMRSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(
 
 template <>
 void RadhydroSimulation<SuOlsonProblemCgs>::setInitialConditionsOnGrid(
-    std::vector<quokka::grid> &grid_vec) {
+    quokka::grid grid_elem) {
   const amrex::Box &indexRange = grid_vec[0].indexRange;
   const amrex::Array4<double>& state_cc = grid_vec[0].array;
 
