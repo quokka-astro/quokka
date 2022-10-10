@@ -117,8 +117,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	explicit RadhydroSimulation(amrex::Vector<amrex::BCRec> &BCs_cc,
                               amrex::Vector<amrex::BCRec> &BCs_fc)
 	    : AMRSimulation<problem_t>(BCs_cc, BCs_fc) {
-    
-    ();
+    defineComponentNames();
     // read in runtime parameters
 		readParmParse();
 	}
@@ -730,15 +729,15 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 	amrex::Copy(state_old_tmp, state_old_cc_[lev], 0, 0, ncomp_cc_, nghost_);
 
 	// do Strang split source terms (first half-step)
-	addStrangSplitSources(state_old_cc_tmp, lev, time, 0.5*dt_lev);
+	addStrangSplitSources(state_old_tmp, lev, time, 0.5*dt_lev);
 
 	// update ghost zones [old timestep]
 	fillBoundaryConditions(state_old_tmp, state_old_tmp, lev, time, BCs_cc_, quokka::centering::cc,
                          quokka::direction::na, PreInterpState, PostInterpState);
 
 	// check state validity
-	AMREX_ASSERT(!state_old_cc_tmp.contains_nan(0, state_old_cc_tmp.nComp()));
-	AMREX_ASSERT(!state_old_cc_tmp.contains_nan()); // check ghost cells
+	AMREX_ASSERT(!state_old_tmp.contains_nan(0, state_old_tmp.nComp()));
+	AMREX_ASSERT(!state_old_tmp.contains_nan()); // check ghost cells
 
 	// advance all grids on local processor (Stage 1 of integrator)
 	for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
