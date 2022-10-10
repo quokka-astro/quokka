@@ -161,7 +161,7 @@ auto problem_main() -> int {
   sim.evolve();
 
   // read output variables
-  auto [position, values] = fextract(sim.state_new_[0], sim.Geom(0), 0, 0.0);
+  auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
   const int nx = static_cast<int>(position.size());
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo =
       sim.geom[0].ProbLoArray();
