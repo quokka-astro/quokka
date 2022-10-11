@@ -396,7 +396,7 @@ void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(
     int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_in) const {
   // compute derived variables and save in 'mf'
 
-  if (dname == "temperature") {
+  if (dname == "log_temperature") {
     const int ncomp = ncomp_in;
     auto tables = cloudyTables.const_tables();
     auto const &output = mf.arrays();
@@ -413,10 +413,10 @@ void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(
           rho, x1Mom, x2Mom, x3Mom, Egas);
       Real Tgas = ComputeTgasFromEgas(
           rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
-      output[bx](i, j, k, ncomp) = Tgas;
+      output[bx](i, j, k, ncomp) = std::log10(Tgas);
     });
 
-  } else if (dname == "nH") {
+  } else if (dname == "log_nH") {
     const int ncomp = ncomp_in;
     auto const &output = mf.arrays();
     auto const &state = state_new_[lev].const_arrays();
@@ -425,10 +425,10 @@ void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(
       mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
         Real rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
         Real nH = (cloudy_H_mass_fraction * rho) / m_H;
-        output[bx](i, j, k, ncomp) = nH;
+        output[bx](i, j, k, ncomp) = std::log10(nH);
     });
 
-  } else if (dname == "cooling_length") {
+  } else if (dname == "log_cooling_length") {
     const int ncomp = ncomp_in;
     auto tables = cloudyTables.const_tables();
     auto const &output = mf.arrays();
@@ -446,7 +446,7 @@ void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(
           rho, x1Mom, x2Mom, x3Mom, Egas);
         Real const l_cool = ComputeCoolingLength(rho, Eint, HydroSystem<ShockCloud>::gamma_,
           tables);
-        output[bx](i, j, k, ncomp) = l_cool / parsec_in_cm;
+        output[bx](i, j, k, ncomp) = std::log10(l_cool / parsec_in_cm);
     });
   }
   amrex::Gpu::streamSynchronize();
