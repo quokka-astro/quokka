@@ -274,13 +274,19 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
       const Real Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(
           rho, x1Mom, x2Mom, x3Mom, Egas);
 
+      if (!(Eint > 0.)) {
+	printf("rho = %.17e, Eint = %.17e, dt = %.17e\n",
+	       rho, Eint, dt);
+	amrex::Abort("non-positive internal energy!!");
+      }
+      
       ODEUserData user_data{rho, tables};
       quokka::valarray<Real, 1> y = {Eint};
       quokka::valarray<Real, 1> abstol = {
           reltol_floor * ComputeEgasFromTgas(rho, T_floor,
                                              HydroSystem<ShockCloud>::gamma_,
                                              tables)};
-
+      
       // do integration with RK2 (Heun's method)
       int nsteps = 0;
       rk_adaptive_integrate(user_rhs, 0, y, dt, &user_data, rtol, abstol,
