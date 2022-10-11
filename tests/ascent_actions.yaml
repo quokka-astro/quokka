@@ -2,60 +2,6 @@
   action: "add_pipelines"
   pipelines:
     pl1:
-      f1: 
-        type: "log10"
-        params: 
-          field: "nH"
-          output_name: "log_nH"
-          clamp_min_value: 1e-5
-      f2:
-        type: "slice"
-        params: 
-          point: 
-            x: 0.5
-            y: 0.125
-            z: 0.125
-          normal: 
-            x: 0.0
-            y: 0.0
-            z: 1.0
-    pl2:
-      f3:
-        type: "slice"
-        params: 
-          point: 
-            x: 0.5
-            y: 0.125
-            z: 0.125
-          normal: 
-            x: 0.0
-            y: 0.0
-            z: 1.0
-    pl3: 
-      f1: 
-        type: "log10"
-        params: 
-          field: "temperature"
-          output_name: "log_T"
-          clamp_min_value: 10.
-      f2:
-        type: "slice"
-        params: 
-          point: 
-            x: 0.5
-            y: 0.125
-            z: 0.125
-          normal: 
-            x: 0.0
-            y: 0.0
-            z: 1.0
-    pl4:
-      f1: 
-        type: "log10"
-        params: 
-          field: "cooling_length"
-          output_name: "log_cooling_length"
-          clamp_min_value: 1e-3
       f2:
         type: "slice"
         params: 
@@ -102,30 +48,14 @@
           image_height: 1024
           camera:
             zoom: 5.0
-    s2: 
-      plots: 
-        p1: 
-          type: "pseudocolor"
-          field: "temperature"
-          min_value: 0.0
-          max_value: 5.0e7
-          pipeline: "pl2"
-      renders:
-        r1:
-          image_prefix: "temperature%05d"
-          annotations: "true"
-          image_width: 2048
-          image_height: 1024
-          camera:
-            zoom: 2.0
     s3: 
       plots: 
         p1: 
           type: "pseudocolor"
-          field: "log_T"
+          field: "log_temperature"
           min_value: 2.0
           max_value: 8.0
-          pipeline: "pl3"
+          pipeline: "pl1"
       renders:
         r1:
           image_prefix: "log_temp%05d"
@@ -138,10 +68,10 @@
       plots: 
         p1: 
           type: "pseudocolor"
-          field: "log_T"
+          field: "log_temperature"
           min_value: 2.0
           max_value: 8.0
-          pipeline: "pl3"
+          pipeline: "pl1"
       renders:
         r1:
           image_prefix: "zoom_log_temp%05d"
@@ -150,19 +80,4 @@
           image_height: 1024
           camera:
             zoom: 5.0
-    s5:
-      plots: 
-        p1: 
-          type: "pseudocolor"
-          field: "log_cooling_length"
-          min_value: -3.0
-          max_value: 2.0
-          pipeline: "pl4"
-      renders:
-        r1:
-          image_prefix: "log_lcool%05d"
-          annotations: "true"
-          image_width: 2048
-          image_height: 1024
-          camera:
-            zoom: 2.0
+
