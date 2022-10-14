@@ -243,6 +243,9 @@ template <> auto RadhydroSimulation<ShockCloud>::computeExtraPhysicsTimestep(int
   amrex::Gpu::streamSynchronizeAll();
 
   amrex::Real min_tcool = tcool_mf.min(0);
+  if (verbose) {
+    amrex::Print() << "\tMinimum cooling time on level " << lev << ": " << min_tcool << "\n";
+  }
   return tcool_safety_fac * min_tcool;
 }
 
