@@ -538,17 +538,13 @@ void RadhydroSimulation<problem_t>::FixupState(int lev)
 	BL_PROFILE("RadhydroSimulation::FixupState()");
 
 	for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
-		const amrex::Box &indexRange = iter.fabbox(); // include ghost zones!
+		const amrex::Box &indexRange = iter.validbox();
 		auto const &stateNew = state_new_cc_[lev].array(iter);
-		auto const &stateOld = state_old_cc_[lev].array(iter);
-
+		
 		// fix hydro state
-		//HydroSystem<problem_t>::EnforceDensityFloor(densityFloor_, indexRange, stateNew);
-		//HydroSystem<problem_t>::EnforceDensityFloor(densityFloor_, indexRange, stateOld);
-
+		HydroSystem<problem_t>::EnforceDensityFloor(densityFloor_, indexRange, stateNew);
 		// sync internal energy and total energy
 		HydroSystem<problem_t>::SyncDualEnergy(stateNew, indexRange);
-		HydroSystem<problem_t>::SyncDualEnergy(stateOld, indexRange);
 	}
 }
 
