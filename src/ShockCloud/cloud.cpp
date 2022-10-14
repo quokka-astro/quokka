@@ -211,7 +211,7 @@ template <> auto RadhydroSimulation<ShockCloud>::computeExtraPhysicsTimestep(int
 	// return minimum cooling time on level 'lev'
   amrex::Real tcool_safety_fac = 0.1;
 
-  auto const &mf = state_new_cc_[lev];
+  auto const &mf = state_new_[lev];
 	auto const &state = mf.const_arrays();
   amrex::MultiFab tcool_mf(mf.boxArray(), mf.DistributionMap(), 1, 0);
   auto const &tcool = tcool_mf.arrays();
