@@ -163,11 +163,11 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	void FixupState(int level) override;
 
 	// implement FillPatch function
-	void FillPatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp) override;
+	void FillPatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp, FillPatchType fptype) override;
 
 	// functions to operate on state vector before/after interpolating between levels
-	static void PreInterpState(amrex::FArrayBox &fab, amrex::Box const &box, int scomp, int ncomp);
-	static void PostInterpState(amrex::FArrayBox &fab, amrex::Box const &box, int scomp, int ncomp);
+	static void PreInterpState(amrex::MultiFab &mf, int scomp, int ncomp);
+	static void PostInterpState(amrex::MultiFab &mf, int scomp, int ncomp);
 
 	// compute axis-aligned 1D profile of user_f(x, y, z)
 	template <typename F>
@@ -555,7 +555,7 @@ void RadhydroSimulation<problem_t>::FixupState(int lev)
 template <typename problem_t>
 void RadhydroSimulation<problem_t>::FillPatch(int lev, amrex::Real time,
                                          amrex::MultiFab &mf, int icomp,
-                                         int ncomp) {
+                                         int ncomp, FillPatchType fptype) {
   BL_PROFILE("AMRSimulation::FillPatch()");
 
   amrex::Vector<amrex::MultiFab *> cmf;
@@ -573,50 +573,48 @@ void RadhydroSimulation<problem_t>::FillPatch(int lev, amrex::Real time,
     GetData(lev - 1, time, cmf, ctime);
   }
 
-  FillPatchWithData(lev, time, mf, cmf, ctime, fmf, ftime, icomp, ncomp,
+  FillPatchWithData(lev, time, mf, cmf, ctime, fmf, ftime, icomp, ncomp, fptype,
 		PreInterpState, PostInterpState);
 }
 
 template <typename problem_t>
-void RadhydroSimulation<problem_t>::PreInterpState(amrex::FArrayBox &fab, amrex::Box const &box,
-	int scomp, int ncomp)
+void RadhydroSimulation<problem_t>::PreInterpState(amrex::MultiFab &mf, int scomp, int ncomp)
 {
 	BL_PROFILE("RadhydroSimulation::PreInterpState()");
 
-	auto const &cons = fab.array();
-	amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		const auto rho = cons(i, j, k, HydroSystem<problem_t>::density_index);
-		const auto px = cons(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
-		const auto py = cons(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
-		const auto pz = cons(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
-		const auto Etot = cons(i, j, k, HydroSystem<problem_t>::energy_index);
+	auto const &cons = mf.arrays();
+	amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
+		const auto rho = cons[bx](i, j, k, HydroSystem<problem_t>::density_index);
+		const auto px = cons[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index);
+		const auto py = cons[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index);
+		const auto pz = cons[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index);
+		const auto Etot = cons[bx](i, j, k, HydroSystem<problem_t>::energy_index);
 		const auto kinetic_energy = (px*px + py*py + pz*pz) / (2.0*rho);
 
 		// replace hydro total energy with specific internal energy (SIE)
 		const auto e = (Etot - kinetic_energy) / rho;
-		cons(i, j, k, HydroSystem<problem_t>::energy_index) = e;
+		cons[bx](i, j, k, HydroSystem<problem_t>::energy_index) = e;
 	});
 }
 
 template <typename problem_t>
-void RadhydroSimulation<problem_t>::PostInterpState(amrex::FArrayBox &fab, amrex::Box const &box,
-	int scomp, int ncomp)
+void RadhydroSimulation<problem_t>::PostInterpState(amrex::MultiFab &mf, int scomp, int ncomp)
 {
 	BL_PROFILE("RadhydroSimulation::PostInterpState()");
 
-	auto const &cons = fab.array();
-	amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		const auto rho = cons(i, j, k, HydroSystem<problem_t>::density_index);
-		const auto px = cons(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
-		const auto py = cons(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
-		const auto pz = cons(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
-		const auto e = cons(i, j, k, HydroSystem<problem_t>::energy_index);
+	auto const &cons = mf.arrays();
+	amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
+		const auto rho = cons[bx](i, j, k, HydroSystem<problem_t>::density_index);
+		const auto px = cons[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index);
+		const auto py = cons[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index);
+		const auto pz = cons[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index);
+		const auto e = cons[bx](i, j, k, HydroSystem<problem_t>::energy_index);
 		const auto Eint = rho * e;
 		const auto kinetic_energy = (px*px + py*py + pz*pz) / (2.0*rho);
 
 		// recompute hydro total energy from Eint + KE
 		const auto Etot = Eint + kinetic_energy;
-		cons(i, j, k, HydroSystem<problem_t>::energy_index) = Etot;
+		cons[bx](i, j, k, HydroSystem<problem_t>::energy_index) = Etot;
 	});
 }
 
