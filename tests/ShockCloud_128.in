@@ -24,13 +24,13 @@ amr.max_grid_size   = 64
 do_reflux = 1
 do_subcycle = 1
 grackle_data_file = "../extern/cooling_tables/isrf_1000Go_grains.h5"
-derived_vars = nH temperature cooling_length
+derived_vars = log_nH log_temperature log_cooling_length
 
 cfl = 0.2
 max_timesteps = 100000
 plotfile_interval = 100
 checkpoint_interval = 100
-ascent_interval = 100
+ascent_interval = 10
 statistics_interval = 100
 T_floor = 10.0  # K
 
