@@ -81,6 +81,7 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 
 	void computeMaxSignalLocal(int level) override;
 	void setInitialConditionsAtLevel(int level) override;
+	auto computeExtraPhysicsTimestep(int level) -> amrex::Real override;
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev,
 					  int /*ncycle*/) override;
 	void computeAfterTimestep(amrex::Real dt) override;
@@ -139,6 +140,12 @@ template <typename problem_t>
 void AdvectionSimulation<problem_t>::setInitialConditionsAtLevel(int level)
 {
 	// do nothing -- user should implement using problem-specific template specialization
+}
+
+auto AdvectionSimulation<problem_t>::computeExtraPhysicsTimestep(int const level) -> amrex::Real
+{
+	// user can override this
+	return std::numeric_limits<amrex::Real>::max();
 }
 
 template <typename problem_t> void

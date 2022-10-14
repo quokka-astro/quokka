@@ -206,6 +206,38 @@ AMRSimulation<ShockCloud>::setCustomBoundaryConditions(
   }
 }
 
+template <> auto RadhydroSimulation<ShockCloud>::computeExtraPhysicsTimestep(int const lev) -> amrex::Real
+{
+	// return minimum cooling time on level 'lev'
+  amrex::Real tcool_safety_fac = 0.1;
+
+  auto const &mf = state_new_cc_[lev];
+	auto const &state = mf.const_arrays();
+  amrex::MultiFab tcool_mf(mf.boxArray(), mf.DistributionMap(), 1, 0);
+  auto const &tcool = tcool_mf.arrays();
+  auto tables = cloudyTables.const_tables();
+
+	amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		const Real rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
+		const Real x1Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
+		const Real x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
+		const Real x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
+		const Real Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
+		const Real Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+
+		Real T = ComputeTgasFromEgas(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
+		Real Edot = cloudy_cooling_function(rho, T, tables);
+		tcool[bx](i, j, k) = std::abs(Eint / Edot);
+	});
+  amrex::Gpu::streamSynchronizeAll();
+
+  amrex::Real min_tcool = tcool_mf.min(0);
+  if (verbose) {
+    amrex::Print() << "\tMinimum cooling time on level " << lev << ": " << min_tcool << "\n";
+  }
+  return tcool_safety_fac * min_tcool;
+}
+
 struct ODEUserData {
   Real rho;
   cloudyGpuConstTables tables;
