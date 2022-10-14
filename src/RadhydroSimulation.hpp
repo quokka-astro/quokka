@@ -144,6 +144,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 
 	void checkHydroStates(amrex::MultiFab &mf, char const *file, int line);
 	void computeMaxSignalLocal(int level) override;
+	auto computeExtraPhysicsTimestep(int lev) -> amrex::Real override;
 	void preCalculateInitialConditions() override;
   	void setInitialConditionsOnGrid(std::vector<quokka::grid> &grid_vec) override;
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev,
@@ -328,6 +329,14 @@ void RadhydroSimulation<problem_t>::computeMaxSignalLocal(int const level)
 				     "compute a time step.");
 		}
 	}
+}
+
+template <typename problem_t>
+auto RadhydroSimulation<problem_t>::computeExtraPhysicsTimestep(int const level) -> amrex::Real
+{
+	BL_PROFILE("RadhydroSimulation::computeExtraPhysicsTimestep()");
+	// users can override this to enforce additional timestep constraints
+	return std::numeric_limits<amrex::Real>::max();
 }
 
 #if !defined(NDEBUG)
