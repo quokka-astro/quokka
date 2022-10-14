@@ -942,7 +942,6 @@ void AMRSimulation<problem_t>::MakeNewLevelFromCoarse(
   }
 
   FillCoarsePatch(level, time, state_new_[level], 0, ncomp);
-  FillCoarsePatch(level, time, state_old_[level], 0, ncomp); // also necessary
 }
 
 // Remake an existing level using provided BoxArray and DistributionMapping and
@@ -962,7 +961,6 @@ void AMRSimulation<problem_t>::RemakeLevel(
   amrex::MultiFab max_signal_speed(ba, dm, 1, nghost);
 
   FillPatch(level, time, new_state, 0, ncomp);
-  FillPatch(level, time, old_state, 0, ncomp); // also necessary
 
   std::swap(new_state, state_new_[level]);
   std::swap(old_state, state_old_[level]);
