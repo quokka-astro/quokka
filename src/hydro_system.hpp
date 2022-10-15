@@ -680,15 +680,15 @@ void HydroSystem<problem_t>::SyncDualEnergy(amrex::Array4<amrex::Real> const &co
       amrex::Abort("density is negative in SyncDualEnergy! abort!!");
     }
 
-    // abort if Eint_aux is negative
-    if (Eint_aux <= 0.) {
-      printf("[SyncDualEnergy] rho = %.17e, Eint_aux = %.17e\n", rho, Eint_aux);
-      //amrex::Abort("Eint_aux is negative in SyncDualEnergy!");
-    }
-    
     amrex::Real const Ekin = (px * px + py * py + pz * pz) / (2.0 * rho);
     amrex::Real const Eint_cons = Etot - Ekin;
 
+    // abort if Eint_aux is negative
+    if (Eint_aux <= 0.) {
+      printf("[SyncDualEnergy] rho = %.17e, Eint_aux = %.17e, Eint_cons = %.17e\n", rho, Eint_aux, Eint_cons);
+      amrex::Abort("Eint_aux is negative in SyncDualEnergy!");
+    }
+    
     // Li et al. sync method
     // replace Eint with Eint_cons == (Etot - Ekin) if (Eint_cons / E) > eta
     if (Eint_cons > eta * Etot) {
