@@ -91,6 +91,8 @@ AMREX_GPU_MANAGED static Real v_wind = 0;
 AMREX_GPU_MANAGED static Real P_wind = 0;
 AMREX_GPU_MANAGED static Real delta_vx = 0;
 
+cloudy_tables cloudyTables;
+
 static bool enable_cooling = true;
 
 template <>
@@ -236,6 +238,27 @@ template <> auto RadhydroSimulation<ShockCloud>::computeExtraPhysicsTimestep(int
     amrex::Print() << "\tMinimum cooling time on level " << lev << ": " << min_tcool << "\n";
   }
   return tcool_safety_fac * min_tcool;
+}
+
+template <>
+void HydroSystem<ShockCloud>::EnforceInternalEnergyFloor(amrex::Real const internalEnergyFloor,
+							 amrex::Box const &indexRange,
+							 amrex::Array4<amrex::Real> const &state)
+{
+	// prevent negative internal energy
+	const Real gamma = HydroSystem<ShockCloud>::gamma_;
+	auto tables = cloudyTables.const_tables();
+
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+    const amrex::Real rho = state(i, j, k, density_index);
+		const amrex::Real Eint = state(i, j, k, internalEnergy_index);
+		const amrex::Real Eint_min = ComputeEgasFromTgas(rho, T_floor, gamma, tables);
+
+		// reset Eint if less than internalEnergyFloor
+		if (Eint < Eint_min) {
+			state(i, j, k, internalEnergy_index) = Eint_min;
+		}
+	});
 }
 
 struct ODEUserData {
@@ -756,7 +779,7 @@ auto problem_main() -> int {
   RadhydroSimulation<ShockCloud> sim(boundaryConditions, ::enableRadiation);
 
   // Read Cloudy tables
-  readCloudyData(sim.cloudyTables);
+  readCloudyData(cloudyTables);
   amrex::Print() << std::endl;
 
   // Read problem parameters
@@ -819,7 +842,7 @@ auto problem_main() -> int {
 
   // check temperature of cloud, background
   constexpr Real gamma = HydroSystem<ShockCloud>::gamma_;
-  auto tables = sim.cloudyTables.const_tables();
+  auto tables = cloudyTables.const_tables();
   const Real Eint_bg = ::P0 / (gamma - 1.);
   const Real Eint_cl = ::P0 / (gamma - 1.);
   const Real T_bg = ComputeTgasFromEgas(rho0, Eint_bg, gamma, tables);

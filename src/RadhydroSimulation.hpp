@@ -87,8 +87,6 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	std::vector<double> Trad_vec_;
 	std::vector<double> Tgas_vec_;
 
-	cloudy_tables cloudyTables{};
-
 	static constexpr int nvarTotal_ = RadSystem<problem_t>::nvar_;
 	static constexpr int ncompHydro_ = HydroSystem<problem_t>::nvar_; // hydro
 	static constexpr int ncompHyperbolic_ = RadSystem<problem_t>::nvarHyperbolic_;
@@ -101,7 +99,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	bool computeReferenceSolution_ = false;
 	amrex::Real errorNorm_ = NAN;
 	amrex::Real densityFloor_ = 0.;
-	amrex::Real pressureFloor_ = 0.;
+	amrex::Real internalEnergyFloor_ = 0.;
 	int fofcMaxIterations_ = 3; // maximum number of flux correction iterations -- only 1 is needed in almost all cases, but in rare cases a second iteration is needed
 
 	int integratorOrder_ = 2; // 1 == forward Euler; 2 == RK2-SSP (default)
@@ -590,8 +588,10 @@ void RadhydroSimulation<problem_t>::FixupState(int lev)
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &stateNew = state_new_[lev].array(iter);
 		
-		// fix hydro state
+		// fix density
 		HydroSystem<problem_t>::EnforceDensityFloor(densityFloor_, indexRange, stateNew);
+		// fix temperature (can go bad due to reflux)
+		HydroSystem<problem_t>::EnforceInternalEnergyFloor(internalEnergyFloor_, indexRange, stateNew);
 		// sync internal energy and total energy
 		HydroSystem<problem_t>::SyncDualEnergy(stateNew, indexRange);
 	}

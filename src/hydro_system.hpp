@@ -77,6 +77,9 @@ public:
   static void EnforceDensityFloor(amrex::Real densityFloor,
                                    amrex::Box const &indexRange,
                                    amrex::Array4<amrex::Real> const &state);
+  static void EnforceInternalEnergyFloor(amrex::Real internalEnergyFloor,
+                                   amrex::Box const &indexRange,
+                                   amrex::Array4<amrex::Real> const &state);
 
   AMREX_GPU_DEVICE static auto
   ComputePressure(amrex::Array4<const amrex::Real> const &cons, int i, int j,
@@ -119,9 +122,6 @@ public:
                           std::array<arrayconst_t, AMREX_SPACEDIM> const &faceVelArray);
 
   static void SyncDualEnergy(amrex::Array4<amrex::Real> const &consVar,
-                           amrex::Box const &indexRange);
-
-  static void OverrideInternalEnergy(amrex::Array4<amrex::Real> const &consVar,
                            amrex::Box const &indexRange);
 
   template <FluxDir DIR>
@@ -313,23 +313,22 @@ void HydroSystem<problem_t>::EnforceDensityFloor(amrex::Real const densityFloor,
         // reset density if less than densityFloor
         if (rho < densityFloor) {
           state(i, j, k, density_index) = densityFloor;
+        }
+      });
+}
 
-#if 0
-          if (rho <= 0.) {
-            amrex::Real const px = state(i,j,k, x1Momentum_index);
-            amrex::Real const py = state(i,j,k, x2Momentum_index);
-            amrex::Real const pz = state(i,j,k, x3Momentum_index);
-            amrex::Real const Etot = state(i,j,k, energy_index);
-            amrex::Real const Ekin = (px*px + py*py + pz*pz) / (2.0*rho);
-            amrex::Real const Eint_cons = Etot - Ekin;
-            amrex::Real const Eint_aux = state(i,j,k, internalEnergy_index);
+template <typename problem_t>
+void HydroSystem<problem_t>::EnforceInternalEnergyFloor(amrex::Real const internalEnergyFloor, 
+    amrex::Box const &indexRange, amrex::Array4<amrex::Real> const &state) {
+  // prevent negative internal energy
 
-            printf("cell (%d, %d, %d) density is non-positive!\n", i, j, k);
-            printf("\trho = %g\n", rho);
-            printf("\tEint_cons = %g\n", Eint_cons);
-            printf("\tEint_aux = %g\n", Eint_aux);
-          }
-#endif
+  amrex::ParallelFor(
+      indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+        amrex::Real const Eint_aux = state(i, j, k, internalEnergy_index);
+
+        // reset Eint if less than internalEnergyFloor
+        if (Eint_aux < internalEnergyFloor) {
+          state(i, j, k, internalEnergy_index) = internalEnergyFloor;
         }
       });
 }
@@ -697,33 +696,6 @@ void HydroSystem<problem_t>::SyncDualEnergy(amrex::Array4<amrex::Real> const &co
       consVar(i, j, k, internalEnergy_index) = Eint_aux;
       consVar(i, j, k, energy_index) = Eint_aux + Ekin;
     }
-  });
-}
-
-
-template <typename problem_t>
-void HydroSystem<problem_t>::OverrideInternalEnergy(amrex::Array4<amrex::Real> const &consVar,
-    amrex::Box const &indexRange) {
-  // break energy conservation, change the total gas energy so that
-  // the internal energy is given by the value stored in the auxiliary
-  // internal energy component
-
-  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-    amrex::Real const rho = consVar(i, j, k, density_index);
-    amrex::Real const px = consVar(i, j, k, x1Momentum_index);
-    amrex::Real const py = consVar(i, j, k, x2Momentum_index);
-    amrex::Real const pz = consVar(i, j, k, x3Momentum_index);
-    amrex::Real const Etot = consVar(i, j, k, energy_index);
-    amrex::Real const Eint_aux = consVar(i, j, k, internalEnergy_index);
-
-    // abort if density is negative (can't compute kinetic energy)
-    if (rho <= 0.) {
-      amrex::Abort("density is negative in OverrideInternalEnergy! abort!!");
-    }
-
-    amrex::Real const Ekin = (px * px + py * py + pz * pz) / (2.0 * rho);
-    amrex::Real const Eint_cons = Etot - Ekin;
-    consVar(i, j, k, energy_index) = Eint_aux + Ekin;
   });
 }
 
