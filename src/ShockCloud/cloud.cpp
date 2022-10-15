@@ -292,8 +292,7 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
   auto tables = cloudyTables.const_tables();
   auto const &state = mf.arrays();
 
-  amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j,
-                                                        int k) noexcept {
+  amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k)  noexcept {
       const Real rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
       const Real x1Mom =
           state[bx](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
@@ -302,13 +301,15 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
       const Real x3Mom =
           state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
       const Real Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
-
+      const Real Eint_aux =
+	  state[bx](i, j, k, HydroSystem<ShockCloud>::internalEnergy_index);
+      
       const Real Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(
           rho, x1Mom, x2Mom, x3Mom, Egas);
 
       if (!(Eint > 0.)) {
-	printf("rho = %.17e, Eint = %.17e, dt = %.17e\n",
-	       rho, Eint, dt);
+	printf("[cooling] rho = %.17e, Eint = %.17e, Eint_aux = %.17e, dt = %.17e\n",
+	       rho, Eint, Eint_aux, dt);
 	amrex::Abort("non-positive internal energy!!");
       }
       
@@ -331,7 +332,7 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
         Real Edot = cloudy_cooling_function(rho, T, tables);
         Real t_cool = Eint / Edot;
         printf(
-            "max substeps exceeded! rho = %.17e, Eint = %.17e, T = %g, cooling "
+            "[cooling] max substeps exceeded! rho = %.17e, Eint = %.17e, T = %g, cooling "
             "time = %g, dt = %.17e\n",
             rho, Eint, T, t_cool, dt);
         amrex::Abort("Max steps exceeded in cooling solve!");
@@ -339,6 +340,12 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
       const Real Eint_new = y[0];
       const Real dEint = Eint_new - Eint;
 
+      const Real Eint_aux_new = Eint_aux + dEint;
+      if (!(Eint_aux_new > 0.)) {
+        printf("[cooling] updated Eint_aux is non-positive = %.17e\n", Eint_aux_new);
+	amrex::Abort("Cooling produced a negative Eint_aux!");
+      }
+	
       state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index) += dEint;
       state[bx](i, j, k, HydroSystem<ShockCloud>::internalEnergy_index) += dEint;
   });
