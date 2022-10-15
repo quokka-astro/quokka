@@ -592,8 +592,11 @@ void RadhydroSimulation<problem_t>::FixupState(int lev)
 		HydroSystem<problem_t>::EnforceDensityFloor(densityFloor_, indexRange, stateNew);
 		// fix temperature (can go bad due to reflux)
 		HydroSystem<problem_t>::EnforceInternalEnergyFloor(internalEnergyFloor_, indexRange, stateNew);
-		// sync internal energy and total energy
-		HydroSystem<problem_t>::SyncDualEnergy(stateNew, indexRange);
+		
+		if (useDualEnergy_ == 1) {
+			// sync internal energy and total energy
+			HydroSystem<problem_t>::SyncDualEnergy(stateNew, indexRange);
+		}
 	}
 }
 
@@ -767,6 +770,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 
 		// prevent vacuum
 		HydroSystem<problem_t>::EnforceDensityFloor(densityFloor_, indexRange, stateNew);
+		HydroSystem<problem_t>::EnforceInternalEnergyFloor(internalEnergyFloor_, indexRange, stateNew);
 
 		if (useDualEnergy_ == 1) {
 			// sync internal energy (requires positive density)
@@ -859,6 +863,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 
 			// prevent vacuum
 			HydroSystem<problem_t>::EnforceDensityFloor(densityFloor_, indexRange, stateFinal);
+			HydroSystem<problem_t>::EnforceInternalEnergyFloor(internalEnergyFloor_, indexRange, stateNew);
 
 			if (useDualEnergy_ == 1) {
 				// sync internal energy (requires positive density)
