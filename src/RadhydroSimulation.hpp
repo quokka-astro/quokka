@@ -714,6 +714,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 			incrementFluxRegisters(fr_as_crse, fr_as_fine, fluxArrays, lev, fluxScaleFactor * dt_lev);
 		}
 	}
+	amrex::Gpu::streamSynchronizeAll();
 
 	// Stage 2 of RK2-SSP
 	{
@@ -749,6 +750,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 			incrementFluxRegisters(fr_as_crse, fr_as_fine, fluxArrays, lev, fluxScaleFactor * dt_lev);
 		}
 	}
+	amrex::Gpu::streamSynchronizeAll();
 
 	// do Strang split source terms (second half-step)
 	addStrangSplitSources(state_new_cc_[lev], lev, time + dt_lev, 0.5*dt_lev);
