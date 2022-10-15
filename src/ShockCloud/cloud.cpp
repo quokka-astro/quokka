@@ -276,7 +276,7 @@ user_rhs(Real /*t*/, quokka::valarray<Real, 1> &y_data,
   cloudyGpuConstTables &tables = udata->tables;
 
   // check whether temperature is out-of-bounds
-  const Real Tmin = 10.;
+  const Real Tmin = std::max(10., T_floor);
   const Real Tmax = 1.0e9;
   const Real Eint_min = ComputeEgasFromTgas(rho, Tmin, gamma, tables);
   const Real Eint_max = ComputeEgasFromTgas(rho, Tmax, gamma, tables);
@@ -285,8 +285,8 @@ user_rhs(Real /*t*/, quokka::valarray<Real, 1> &y_data,
   const Real Eint = y_data[0];
 
   if (Eint <= Eint_min) {
-    // set cooling to value at Tmin
-    y_rhs[0] = cloudy_cooling_function(rho, Tmin, tables);
+    // set cooling to zero
+    y_rhs[0] = 0.;
   } else if (Eint >= Eint_max) {
     // set cooling to value at Tmax
     y_rhs[0] = cloudy_cooling_function(rho, Tmax, tables);
