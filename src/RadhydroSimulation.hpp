@@ -144,6 +144,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 
 	void checkHydroStates(amrex::MultiFab &mf, char const *file, int line);
 	void computeMaxSignalLocal(int level) override;
+	auto computeExtraPhysicsTimestep(int lev) -> amrex::Real override;
 	void preCalculateInitialConditions() override;
   	void setInitialConditionsOnGrid(quokka::grid grid_elem) override;
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev,
@@ -328,6 +329,14 @@ void RadhydroSimulation<problem_t>::computeMaxSignalLocal(int const level)
 				     "compute a time step.");
 		}
 	}
+}
+
+template <typename problem_t>
+auto RadhydroSimulation<problem_t>::computeExtraPhysicsTimestep(int const level) -> amrex::Real
+{
+	BL_PROFILE("RadhydroSimulation::computeExtraPhysicsTimestep()");
+	// users can override this to enforce additional timestep constraints
+	return std::numeric_limits<amrex::Real>::max();
 }
 
 #if !defined(NDEBUG)
@@ -538,17 +547,13 @@ void RadhydroSimulation<problem_t>::FixupState(int lev)
 	BL_PROFILE("RadhydroSimulation::FixupState()");
 
 	for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
-		const amrex::Box &indexRange = iter.fabbox(); // include ghost zones!
+		const amrex::Box &indexRange = iter.validbox();
 		auto const &stateNew = state_new_cc_[lev].array(iter);
-		auto const &stateOld = state_old_cc_[lev].array(iter);
-
+		
 		// fix hydro state
-		//HydroSystem<problem_t>::EnforceDensityFloor(densityFloor_, indexRange, stateNew);
-		//HydroSystem<problem_t>::EnforceDensityFloor(densityFloor_, indexRange, stateOld);
-
+		HydroSystem<problem_t>::EnforceDensityFloor(densityFloor_, indexRange, stateNew);
 		// sync internal energy and total energy
 		HydroSystem<problem_t>::SyncDualEnergy(stateNew, indexRange);
-		HydroSystem<problem_t>::SyncDualEnergy(stateOld, indexRange);
 	}
 }
 

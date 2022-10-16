@@ -78,6 +78,7 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	    : AMRSimulation<problem_t>(boundaryConditions) { }
 
 	void computeMaxSignalLocal(int level) override;
+	auto computeExtraPhysicsTimestep(int level) -> amrex::Real override;
 	void preCalculateInitialConditions() override;
   void setInitialConditionsOnGrid(quokka::grid grid_elem) override;
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev,
@@ -129,6 +130,13 @@ void AdvectionSimulation<problem_t>::computeMaxSignalLocal(int const level)
 		LinearAdvectionSystem<problem_t>::ComputeMaxSignalSpeed(
 		    stateOld, maxSignal, advectionVx_, advectionVy_, advectionVz_, indexRange);
 	}
+}
+
+template <typename problem_t>
+auto AdvectionSimulation<problem_t>::computeExtraPhysicsTimestep(int const level) -> amrex::Real
+{
+	// user can override this
+	return std::numeric_limits<amrex::Real>::max();
 }
 
 template <typename problem_t>

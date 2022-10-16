@@ -115,6 +115,7 @@ public:
   auto computeTimestepAtLevel(int lev) -> amrex::Real;
 
   virtual void computeMaxSignalLocal(int level) = 0;
+  virtual auto computeExtraPhysicsTimestep(int lev) -> amrex::Real = 0;
   virtual void advanceSingleTimestepAtLevel(int lev, amrex::Real time,
                                             amrex::Real dt_lev, int ncycle) = 0;
   virtual void preCalculateInitialConditions() = 0;
@@ -502,13 +503,19 @@ auto AMRSimulation<problem_t>::computeTimestepAtLevel(int lev) -> amrex::Real {
   // compute CFL timestep on level 'lev'
   BL_PROFILE("AMRSimulation::computeTimestepAtLevel()");
 
+  // compute hydro timestep on level 'lev'
   computeMaxSignalLocal(lev);
-  amrex::Real domain_signal_max = max_signal_speed_[lev].norminf();
+  const amrex::Real domain_signal_max = max_signal_speed_[lev].norminf();
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx =
       geom[lev].CellSizeArray();
-  amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
+  const amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
+  const amrex::Real hydro_dt = cflNumber_ * (dx_min / domain_signal_max);
 
-  return cflNumber_ * (dx_min / domain_signal_max);
+  // compute timestep due to extra physics on level 'lev'
+  const amrex::Real extra_physics_dt = computeExtraPhysicsTimestep(lev);
+
+  // return minimum timestep
+  return std::min(hydro_dt, extra_physics_dt);
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep() {
@@ -898,7 +905,6 @@ void AMRSimulation<problem_t>::MakeNewLevelFromCoarse(
   }
 
   FillCoarsePatch(level, time, state_new_cc_[level], 0, ncomp);
-  FillCoarsePatch(level, time, state_old_cc_[level], 0, ncomp); // also necessary
 }
 
 // Remake an existing level using provided BoxArray and DistributionMapping and
@@ -918,7 +924,6 @@ void AMRSimulation<problem_t>::RemakeLevel(
   amrex::MultiFab max_signal_speed(ba, dm, 1, nghost);
 
   FillPatch(level, time, new_state, 0, ncomp);
-  FillPatch(level, time, old_state, 0, ncomp); // also necessary
 
   std::swap(new_state, state_new_cc_[level]);
   std::swap(old_state, state_old_cc_[level]);
