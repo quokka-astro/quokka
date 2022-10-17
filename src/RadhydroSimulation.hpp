@@ -633,7 +633,7 @@ template <typename problem_t>
 void RadhydroSimulation<problem_t>::PreInterpState(amrex::MultiFab &mf, int scomp, int ncomp)
 {
 	BL_PROFILE("RadhydroSimulation::PreInterpState()");
-
+#if 0
 	auto const &cons = mf.arrays();
 	amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
 		const auto rho = cons[bx](i, j, k, HydroSystem<problem_t>::density_index);
@@ -647,13 +647,14 @@ void RadhydroSimulation<problem_t>::PreInterpState(amrex::MultiFab &mf, int scom
 		const auto e = (Etot - kinetic_energy) / rho;
 		cons[bx](i, j, k, HydroSystem<problem_t>::energy_index) = e;
 	});
+#endif
 }
 
 template <typename problem_t>
 void RadhydroSimulation<problem_t>::PostInterpState(amrex::MultiFab &mf, int scomp, int ncomp)
 {
 	BL_PROFILE("RadhydroSimulation::PostInterpState()");
-
+#if 0
 	auto const &cons = mf.arrays();
 	amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
 		const auto rho = cons[bx](i, j, k, HydroSystem<problem_t>::density_index);
@@ -668,6 +669,7 @@ void RadhydroSimulation<problem_t>::PostInterpState(amrex::MultiFab &mf, int sco
 		const auto Etot = Eint + kinetic_energy;
 		cons[bx](i, j, k, HydroSystem<problem_t>::energy_index) = Etot;
 	});
+#endif
 }
 
 template <typename problem_t>
