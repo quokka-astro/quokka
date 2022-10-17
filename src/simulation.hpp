@@ -1098,11 +1098,11 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(
   AMREX_ALWAYS_ASSERT(!state_new_[level].contains_nan(0, ncomp));
 
   // fill ghost zones (needed for some refinement criteria)
-  fillBoundaryConditions(state_new_cc_[level], state_new_cc_[level], level, time,
+  fillBoundaryConditions(state_new_[level], state_new_[level], level, time,
                          InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
 
-  // copy to state_old_cc_ (including ghost zones)
-  state_old_cc_[level].ParallelCopy(state_new_cc_[level], 0, 0, ncomp, nghost, nghost);
+  // copy to state_old_ (including ghost zones)
+  state_old_[level].ParallelCopy(state_new_[level], 0, 0, ncomp, nghost, nghost);
 }
 
 template <typename problem_t>
@@ -1220,11 +1220,11 @@ void AMRSimulation<problem_t>::FillPatchWithData(
 	    fillpatcher_[lev]->fill(mf, mf.nGrowVect(), time,
            coarseData, coarseTime, fineData, fineTime, 0, icomp, ncomp,
            coarsePhysicalBoundaryFunctor, 0, finePhysicalBoundaryFunctor, 0,
-           BCs_cc_, 0, pre_interp, post_interp);
+           boundaryConditions_, 0, pre_interp, post_interp);
     } else {
 	    amrex::FillPatchTwoLevels(mf, time, coarseData, coarseTime, fineData, fineTime, 0, icomp, ncomp,
 				      geom[lev - 1], geom[lev], coarsePhysicalBoundaryFunctor, 0,
-				      finePhysicalBoundaryFunctor, 0, refRatio(lev - 1), mapper, BCs_cc_, 0, pre_interp,
+				      finePhysicalBoundaryFunctor, 0, refRatio(lev - 1), mapper, boundaryConditions_, 0, pre_interp,
 				      post_interp);
     }
   }
@@ -1278,11 +1278,17 @@ void AMRSimulation<problem_t>::GetData(int lev, amrex::Real time,
   data.clear();
   datatime.clear();
 
-  if (amrex::almostEqual(time, tNew_[lev], 5)) { // if time == tNew_[lev] within roundoff
-    data.push_back(&state_new_cc_[lev]);
+  const amrex::Real teps =
+      (tNew_[lev] - tOld_[lev]) * 1.e-3; // generous roundoff error threshold
+
+  if (time > tNew_[lev] - teps &&
+      time < tNew_[lev] + teps) { // if time == tNew_[lev] within roundoff
+    data.push_back(&state_new_[lev]);
     datatime.push_back(tNew_[lev]);
-  } else if (amrex::almostEqual(time, tOld_[lev], 5)) { // if time == tOld_[lev] within roundoff
-    data.push_back(&state_old_cc_[lev]);
+  } else if (time > tOld_[lev] - teps &&
+             time <
+                 tOld_[lev] + teps) { // if time == tOld_[lev] within roundoff
+    data.push_back(&state_old_[lev]);
     datatime.push_back(tOld_[lev]);
   } else { // otherwise return both old and new states for interpolation
     data.push_back(&state_old_[lev]);
