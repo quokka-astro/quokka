@@ -201,7 +201,8 @@ public:
   void fillBoundaryConditions(amrex::MultiFab &S_filled, amrex::MultiFab &state,
                               int lev, amrex::Real time,
                               PreInterpHook const &pre_interp,
-                              PostInterpHook const&post_interp);
+                              PostInterpHook const&post_interp,
+                              FillPatchType fptype = FillPatchType::fillpatch_class);
 
   template <typename PreInterpHook, typename PostInterpHook>
   void FillPatchWithData(int lev, amrex::Real time, amrex::MultiFab &mf,
@@ -1011,6 +1012,31 @@ void AMRSimulation<problem_t>::InterpHookNone(amrex::MultiFab &mf, int scomp, in
   // do nothing
 }
 
+
+template <typename problem_t> struct setBoundaryFunctor {
+  AMREX_GPU_DEVICE void
+  operator()(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest,
+             const int &dcomp, const int &numcomp,
+             amrex::GeometryData const &geom, const amrex::Real &time,
+             const amrex::BCRec *bcr, int bcomp, const int &orig_comp) const {
+    AMRSimulation<problem_t>::setCustomBoundaryConditions(
+        iv, dest, dcomp, numcomp, geom, time, bcr, bcomp, orig_comp);
+  }
+};
+
+template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+AMRSimulation<problem_t>::setCustomBoundaryConditions(
+    const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, int dcomp,
+    int numcomp, amrex::GeometryData const &geom, const amrex::Real time,
+    const amrex::BCRec *bcr, int bcomp, int orig_comp) {
+  // user should implement if needed using template specialization
+  // (This is only called when amrex::BCType::ext_dir is set for a given
+  // boundary.)
+
+  // set boundary condition for cell 'iv'
+}
+
 // Compute a new multifab 'mf' by copying in state from valid region and filling
 // ghost cells
 // NOTE: This implementation is only used by AdvectionSimulation.
@@ -1071,37 +1097,12 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(
   // check that state_new_[lev] is properly filled
   AMREX_ALWAYS_ASSERT(!state_new_[level].contains_nan(0, ncomp));
 
-  // fill ghost zones
-  fillBoundaryConditions(state_new_[level], state_new_[level], level, time,
-                         InterpHookNone, InterpHookNone);
+  // fill ghost zones (needed for some refinement criteria)
+  fillBoundaryConditions(state_new_cc_[level], state_new_cc_[level], level, time,
+                         InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
 
-  // copy to state_old_ (including ghost zones)
-  state_old_[level].ParallelCopy(state_new_[level], 0, 0, ncomp, nghost,
-                                 nghost);
-}
-
-template <typename problem_t> struct setBoundaryFunctor {
-  AMREX_GPU_DEVICE void
-  operator()(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest,
-             const int &dcomp, const int &numcomp,
-             amrex::GeometryData const &geom, const amrex::Real &time,
-             const amrex::BCRec *bcr, int bcomp, const int &orig_comp) const {
-    AMRSimulation<problem_t>::setCustomBoundaryConditions(
-        iv, dest, dcomp, numcomp, geom, time, bcr, bcomp, orig_comp);
-  }
-};
-
-template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<problem_t>::setCustomBoundaryConditions(
-    const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, int dcomp,
-    int numcomp, amrex::GeometryData const &geom, const amrex::Real time,
-    const amrex::BCRec *bcr, int bcomp, int orig_comp) {
-  // user should implement if needed using template specialization
-  // (This is only called when amrex::BCType::ext_dir is set for a given
-  // boundary.)
-
-  // set boundary condition for cell 'iv'
+  // copy to state_old_cc_ (including ghost zones)
+  state_old_cc_[level].ParallelCopy(state_new_cc_[level], 0, 0, ncomp, nghost, nghost);
 }
 
 template <typename problem_t>
@@ -1111,7 +1112,8 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
                                                       int const lev,
                                                       amrex::Real const time,
                                                       PreInterpHook const &pre_interp,
-                                                      PostInterpHook const &post_interp) {
+                                                      PostInterpHook const &post_interp,
+                                                      FillPatchType fptype) {
   BL_PROFILE("AMRSimulation::fillBoundaryConditions()");
 
   // On a single level, any periodic boundaries are filled first
@@ -1140,7 +1142,7 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
     }
 
     FillPatchWithData(lev, time, S_filled, coarseData, coarseTime, fineData,
-                      fineTime, 0, S_filled.nComp(), FillPatchType::fillpatch_class,
+                      fineTime, 0, S_filled.nComp(), fptype,
                       pre_interp, post_interp);
   } else { // level 0
     // fill internal and periodic boundaries, ignoring corners (cross=true)
@@ -1190,8 +1192,8 @@ void AMRSimulation<problem_t>::FillPatchWithData(
   if (fptype == FillPatchType::fillpatch_class) {
 	  if (fillpatcher_[lev] == nullptr) {
 		  fillpatcher_[lev] = std::make_unique<amrex::FillPatcher<amrex::MultiFab>>(
-		      boxArray(lev), DistributionMap(lev), Geom(lev), boxArray(lev - 1), DistributionMap(lev - 1),
-		      Geom(lev - 1), mf.nGrowVect(), mf.nComp(), mapper);
+		      grids[lev], dmap[lev], geom[lev], grids[lev - 1], dmap[lev - 1], geom[lev - 1],
+          mf.nGrowVect(), mf.nComp(), mapper);
 	  }
   }
 
@@ -1215,9 +1217,10 @@ void AMRSimulation<problem_t>::FillPatchWithData(
     // copies interior zones, fills ghost zones with space-time interpolated
     // data
     if (fptype == FillPatchType::fillpatch_class) {
-	    fillpatcher_[lev]->fill(mf, mf.nGrowVect(), time, coarseData, coarseTime, fineData, fineTime, 0, icomp,
-				   ncomp, coarsePhysicalBoundaryFunctor, 0, finePhysicalBoundaryFunctor, 0, BCs_cc_, 0,
-				   pre_interp, post_interp);
+	    fillpatcher_[lev]->fill(mf, mf.nGrowVect(), time,
+           coarseData, coarseTime, fineData, fineTime, 0, icomp, ncomp,
+           coarsePhysicalBoundaryFunctor, 0, finePhysicalBoundaryFunctor, 0,
+           BCs_cc_, 0, pre_interp, post_interp);
     } else {
 	    amrex::FillPatchTwoLevels(mf, time, coarseData, coarseTime, fineData, fineTime, 0, icomp, ncomp,
 				      geom[lev - 1], geom[lev], coarsePhysicalBoundaryFunctor, 0,
