@@ -214,13 +214,14 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 
 	template <FluxDir DIR>
 	void hydroFluxFunction(amrex::MultiFab const &primVar,
-			  amrex::MultiFab const &consVar,
+			  amrex::MultiFab &leftState,
+			  amrex::MultiFab &rightState,
 			  amrex::MultiFab &x1Flux,
 			  amrex::MultiFab &x1FaceVel,
 			  amrex::MultiFab const &x1Flat,
 			  amrex::MultiFab const &x2Flat,
 			  amrex::MultiFab const &x3Flat,
-    		  int nvars);
+			  int ng_reconstruct, int nvars);
 
 	void replaceFluxes(std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxes,
 			  std::array<amrex::FArrayBox, AMREX_SPACEDIM> &FOfluxes,
@@ -713,7 +714,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 		if (do_reflux) {
 			// increment flux registers
 			//auto expandedFluxes = expandFluxArrays(fluxArrays, 0, state_new_cc_[lev].nComp());
-			incrementFluxRegisters(fr_as_crse, fr_as_fine, fluxArrays, lev, fluxScaleFactor * dt_lev);
+			//incrementFluxRegisters(fr_as_crse, fr_as_fine, fluxArrays, lev, fluxScaleFactor * dt_lev);
 		}
 	}
 	amrex::Gpu::streamSynchronizeAll();
@@ -750,7 +751,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 		if (do_reflux) {
 			// increment flux registers
 			// auto expandedFluxes = expandFluxArrays(fluxArrays, 0, state_new_cc_[lev].nComp());
-			incrementFluxRegisters(fr_as_crse, fr_as_fine, fluxArrays, lev, fluxScaleFactor * dt_lev);
+			//incrementFluxRegisters(fr_as_crse, fr_as_fine, fluxArrays, lev, fluxScaleFactor * dt_lev);
 		}
 	}
 	amrex::Gpu::streamSynchronizeAll();
@@ -846,7 +847,7 @@ auto RadhydroSimulation<problem_t>::computeHydroFluxes(
 	}
 
 	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-		auto ba_face = amrex::convert(ba, amrex::IntVect::TheDimensionVector(dir));
+		auto ba_face = amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim));
 		leftState[idim] = amrex::MultiFab(ba_face, dm, nvars, reconstructRange);
 		rightState[idim] = amrex::MultiFab(ba_face, dm, nvars, reconstructRange);
 		flux[idim] = amrex::MultiFab(ba_face, dm, nvars, 0);
@@ -865,29 +866,32 @@ auto RadhydroSimulation<problem_t>::computeHydroFluxes(
 			primVar, flatCoefs[2], flatteningGhost); )
 
 	// compute flux functions
-	AMREX_D_TERM(hydroFluxFunction<FluxDir::X1>(primVar, consVar, flux[0], facevel[0],
-					flatCoefs[0], flatCoefs[1], flatCoefs[2], nvars);
-		     , hydroFluxFunction<FluxDir::X2>(primVar, consVar, flux[1], facevel[1],
-					flatCoefs[0], flatCoefs[1], flatCoefs[2], nvars);
-		     , hydroFluxFunction<FluxDir::X3>(primVar, consVar, flux[2], facevel[2],
-					flatCoefs[0], flatCoefs[1], flatCoefs[2], nvars); )
+	AMREX_D_TERM(hydroFluxFunction<FluxDir::X1>(primVar, leftState[0], rightState[0], flux[0], facevel[0],
+					flatCoefs[0], flatCoefs[1], flatCoefs[2], reconstructRange, nvars);
+		     , hydroFluxFunction<FluxDir::X2>(primVar, leftState[1], rightState[1], flux[1], facevel[1],
+					flatCoefs[0], flatCoefs[1], flatCoefs[2], reconstructRange, nvars);
+		     , hydroFluxFunction<FluxDir::X3>(primVar, leftState[2], rightState[2], flux[2], facevel[2],
+					flatCoefs[0], flatCoefs[1], flatCoefs[2], reconstructRange, nvars); )
 
 	// synchronization point to prevent MultiFabs from going out of scope
 	amrex::Gpu::streamSynchronizeAll();
 
 	// return flux and face-centered velocities
-	return std::make_pair(flux, facevel);
+	return std::make_pair(std::move(flux), std::move(facevel));
 }
 
 template <typename problem_t>
 template <FluxDir DIR>
 void RadhydroSimulation<problem_t>::hydroFluxFunction(
     amrex::MultiFab const &primVar,
+	amrex::MultiFab &leftState,
+	amrex::MultiFab &rightState,
 	amrex::MultiFab &flux,
 	amrex::MultiFab &faceVel,
 	amrex::MultiFab const &x1Flat,
 	amrex::MultiFab const &x2Flat,
 	amrex::MultiFab const &x3Flat,
+	const int ng_reconstruct,
 	const int nvars)
 {
 	int dir = 0;
@@ -900,22 +904,22 @@ void RadhydroSimulation<problem_t>::hydroFluxFunction(
 	}
 
 	// interface-centered kernel
+	HydroSystem<problem_t>::template ReconstructStatesPPM<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
+
+#if 0
 	if (reconstructionOrder_ == 3) {
-		HydroSystem<problem_t>::template ReconstructStatesPPM<DIR>(primVar, leftState, rightState,
-									   reconstructRange, x1ReconstructRange, nvars);
+		HydroSystem<problem_t>::template ReconstructStatesPPM<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
 	} else if (reconstructionOrder_ == 2) {
-		HydroSystem<problem_t>::template ReconstructStatesPLM<DIR>(primVar, leftState, rightState,
-									   reconstructRange, nvars);
+		HydroSystem<problem_t>::template ReconstructStatesPLM<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
 	} else if (reconstructionOrder_ == 1) {
-		HydroSystem<problem_t>::template ReconstructStatesConstant<DIR>(primVar, leftState, rightState,
-										reconstructRange, nvars);
+		HydroSystem<problem_t>::template ReconstructStatesConstant<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
 	} else {
 		amrex::Abort("Invalid reconstruction order specified!");
 	}
+#endif
 
 	// cell-centered kernel
-	HydroSystem<problem_t>::template FlattenShocks<DIR>(primVar, x1Flat, x2Flat, x3Flat, leftState, rightState,
-							    reconstructRange, nvars);
+	HydroSystem<problem_t>::template FlattenShocks<DIR>(primVar, x1Flat, x2Flat, x3Flat, leftState, rightState, ng_reconstruct, nvars);
 
 	// interface-centered kernel
 	HydroSystem<problem_t>::template ComputeFluxes<DIR>(flux, faceVel, leftState, rightState, primVar);
