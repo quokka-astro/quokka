@@ -613,8 +613,12 @@ void HydroSystem<problem_t>::AddInternalEnergyPdV(
   // using the face-centered velocities in faceVelArray and the pressure
 
   auto vel_x = faceVelArray[0];
+#if AMREX_SPACEDIM >= 2
   auto vel_y = faceVelArray[1];
+#endif
+#if AMREX_SPACEDIM == 3
   auto vel_z = faceVelArray[2];
+#endif
 
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
     // get cell-centered pressure
