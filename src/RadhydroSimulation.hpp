@@ -757,14 +757,15 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 				// (since neighbors of problem cells will have modified states as well)
 				HydroSystem<problem_t>::PredictStep(stateOld, stateNew, rhs.const_array(),
 					dt_lev, indexRange, ncompHydro_, redoFlag.array());
-
+#if 0
 				if(redoFlag.max<amrex::RunOn::Device>() == quokka::redoFlag::none) {
 					break;
 				} else {
 					if (i == (fofcMaxIterations_ - 1)) {
 						amrex::Abort("FOFC failed! Aborting...");
 					}
-				}				
+				}			
+#endif	
 			}
 		}
 
@@ -850,7 +851,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 					// (since neighbors of problem cells will have modified states as well)
 					HydroSystem<problem_t>::AddFluxesRK2(stateFinal, stateOld, stateInter, rhs.const_array(),
 						dt_lev, indexRange, ncompHydro_, redoFlag.array());
-
+#if 0
 					if(redoFlag.max<amrex::RunOn::Device>() == quokka::redoFlag::none) {
 						break;
 					} else {
@@ -858,6 +859,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 							amrex::Abort("FOFC failed! Aborting...");
 						}
 					}
+#endif
 				}
 			}
 
