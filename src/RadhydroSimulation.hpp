@@ -888,16 +888,7 @@ void RadhydroSimulation<problem_t>::hydroFluxFunction(
 	const int ng_reconstruct,
 	const int nvars)
 {
-	int dir = 0;
-	if constexpr (DIR == FluxDir::X1) {
-		dir = 0;
-	} else if constexpr (DIR == FluxDir::X2) {
-		dir = 1;
-	} else if constexpr (DIR == FluxDir::X3) {
-		dir = 2;
-	}
-
-	// interface-centered kernel
+	// cell-centered kernel
 	HydroSystem<problem_t>::template ReconstructStatesPPM<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
 
 #if 0
