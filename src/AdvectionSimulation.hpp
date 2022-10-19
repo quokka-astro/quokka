@@ -305,7 +305,7 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 		if (do_reflux) {
 #ifdef USE_YAFLUXREGISTER
 			// increment flux registers
-			//incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, fluxArrays, lev, fluxScaleFactor * dt_lev);
+			incrementFluxRegisters(fr_as_crse, fr_as_fine, fluxArrays, lev, fluxScaleFactor * dt_lev);
 #else
 			for (int i = 0; i < AMREX_SPACEDIM; i++) {
 				fluxes[i][iter].plus<amrex::RunOn::Gpu>(fluxArrays[i]);
@@ -334,7 +334,7 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 			if (do_reflux) {
 #ifdef USE_YAFLUXREGISTER
 				// increment flux registers
-				//incrementFluxRegisters(iter, fr_as_crse, fr_as_fine, fluxArrays, lev, fluxScaleFactor * dt_lev);
+				incrementFluxRegisters(fr_as_crse, fr_as_fine, fluxArrays, lev, fluxScaleFactor * dt_lev);
 #else
 				for (int i = 0; i < AMREX_SPACEDIM; i++) {
 					fluxes[i][iter].plus<amrex::RunOn::Gpu>(fluxArrays[i]);

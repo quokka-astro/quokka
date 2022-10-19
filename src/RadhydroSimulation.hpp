@@ -169,6 +169,9 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	// tag cells for refinement
 	void ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override;
 
+	auto expandFluxArrays(std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxes, int nstartNew,
+			      int ncompNew) -> std::array<amrex::MultiFab, AMREX_SPACEDIM>;
+
 	auto expandFluxArrays(std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxes, int nstartNew,
 			      int ncompNew) -> std::array<amrex::FArrayBox, AMREX_SPACEDIM>;
 
@@ -713,8 +716,8 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 
 		if (do_reflux) {
 			// increment flux registers
-			//auto expandedFluxes = expandFluxArrays(fluxArrays, 0, state_new_cc_[lev].nComp());
-			//incrementFluxRegisters(fr_as_crse, fr_as_fine, fluxArrays, lev, fluxScaleFactor * dt_lev);
+			auto expandedFluxes = expandFluxArrays(fluxArrays, 0, state_new_cc_[lev].nComp());
+			incrementFluxRegisters(fr_as_crse, fr_as_fine, fluxArrays, lev, fluxScaleFactor * dt_lev);
 		}
 	}
 	amrex::Gpu::streamSynchronizeAll();
@@ -750,8 +753,8 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 
 		if (do_reflux) {
 			// increment flux registers
-			// auto expandedFluxes = expandFluxArrays(fluxArrays, 0, state_new_cc_[lev].nComp());
-			//incrementFluxRegisters(fr_as_crse, fr_as_fine, fluxArrays, lev, fluxScaleFactor * dt_lev);
+			auto expandedFluxes = expandFluxArrays(fluxArrays, 0, state_new_cc_[lev].nComp());
+			incrementFluxRegisters(fr_as_crse, fr_as_fine, fluxArrays, lev, fluxScaleFactor * dt_lev);
 		}
 	}
 	amrex::Gpu::streamSynchronizeAll();
@@ -800,6 +803,28 @@ void RadhydroSimulation<problem_t>::replaceFluxes(
 		});
 	}
 }
+
+template <typename problem_t>
+auto RadhydroSimulation<problem_t>::expandFluxArrays(
+    std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxes, const int nstartNew, const int ncompNew)
+    -> std::array<amrex::MultiFab, AMREX_SPACEDIM>
+{
+	BL_PROFILE("RadhydroSimulation::expandFluxArrays()");
+
+	// This is needed because reflux arrays must have the same number of components as
+	// state_new_cc_[lev]
+
+	auto copyFlux = [nstartNew, ncompNew](amrex::MultiFab const &oldFlux) {
+		amrex::MultiFab newFlux(oldFlux.boxArray(), oldFlux.DistributionMap(), ncompNew, 0);
+		newFlux.setVal(0.);
+		// copy oldFlux (starting at 0) to newFlux (starting at nstart)
+		AMREX_ASSERT(ncompNew >= oldFlux.nComp());
+		newFlux.ParallelCopy(oldFlux, 0, 0, oldFlux.nComp());
+		return newFlux;
+	};
+	return {AMREX_D_DECL(copyFlux(fluxes[0]), copyFlux(fluxes[1]), copyFlux(fluxes[2]))};
+}
+
 
 template <typename problem_t>
 auto RadhydroSimulation<problem_t>::expandFluxArrays(
