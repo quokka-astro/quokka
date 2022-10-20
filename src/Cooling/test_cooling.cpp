@@ -110,11 +110,6 @@ void RadhydroSimulation<CoolingTest>::setInitialConditionsOnGrid(
     Real const y = prob_lo[1] + (j + Real(0.5)) * dx[1];
     Real const z = prob_lo[2] + (k + Real(0.5)) * dx[2];
 
-    state_cc(i, j, k, RadSystem<CoolingTest>::radEnergy_index) = 0;
-    state_cc(i, j, k, RadSystem<CoolingTest>::x1RadFlux_index) = 0;
-    state_cc(i, j, k, RadSystem<CoolingTest>::x2RadFlux_index) = 0;
-    state_cc(i, j, k, RadSystem<CoolingTest>::x3RadFlux_index) = 0;
-
     // compute perturbations
     Real delta_rho = 0;
     for (int ki = kmin; ki < kmax; ++ki) {
