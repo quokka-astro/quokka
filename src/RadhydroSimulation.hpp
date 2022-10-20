@@ -585,6 +585,8 @@ void RadhydroSimulation<problem_t>::FixupState(int lev)
 		// sync internal energy and total energy
 		HydroSystem<problem_t>::SyncDualEnergy(state_new_[lev]);
 	}
+	
+	amrex::Gpu::streamSynchronizeAll();
 }
 
 // Compute a new multifab 'mf' by copying in state from valid region and filling
