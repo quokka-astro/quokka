@@ -404,8 +404,12 @@ void HydroSystem<problem_t>::ComputeRhsFromFluxes(
   // the interface on the right of zone i.
 
   auto const x1Flux = fluxArray[0];
+#if AMREX_SPACEDIM >= 2
   auto const x2Flux = fluxArray[1];
+#endif
+#if AMREX_SPACEDIM == 3
   auto const x3Flux = fluxArray[2];
+#endif
 
   amrex::ParallelFor(indexRange, nvars,
     [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {

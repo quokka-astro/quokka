@@ -12,14 +12,15 @@ namespace quokka {
   enum class direction { na=-1, x, y, z };
 
   struct grid {
-    const amrex::Array4<double>& array;
-    const amrex::Box& indexRange;
+    amrex::Array4<double> array;
+    amrex::Box indexRange;
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx;
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo;
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi;
     enum centering cen;
     enum direction dir;
-    grid(const amrex::Array4<double>& array, const amrex::Box& indexRange,
+    
+    grid(amrex::Array4<double> const& array, amrex::Box const& indexRange,
         amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
         amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo,
         amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi,

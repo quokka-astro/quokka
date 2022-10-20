@@ -333,14 +333,12 @@ void AMRSimulation<problem_t>::initialize(
 
 template <typename problem_t>
 void AMRSimulation<problem_t>::setInitialConditionsAtLevel(int level) {
-  // initialise grid-struct, which the user will opperate on
-  std::vector<quokka::grid> grid_vec;
-
   // perform precalculation step defined by the user
   preCalculateInitialConditions();
 
-  // itterate over the domain
+  // iterate over the domain
   for (amrex::MFIter iter(state_new_cc_[level]); iter.isValid(); ++iter) {
+    std::vector<quokka::grid> grid_vec;
     // cell-centred states
     grid_vec.emplace_back(state_new_cc_[level].array(iter), iter.validbox(),
                           geom[level].CellSizeArray(), geom[level].ProbLoArray(),
