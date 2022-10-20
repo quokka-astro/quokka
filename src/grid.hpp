@@ -19,7 +19,8 @@ namespace quokka {
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi;
     enum centering cen;
     enum direction dir;
-    grid(amrex::Array4<double> const &array, amrex::Box const& indexRange,
+    
+    grid(amrex::Array4<double> const& array, amrex::Box const& indexRange,
         amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
         amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo,
         amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi,

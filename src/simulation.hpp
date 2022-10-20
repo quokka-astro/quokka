@@ -336,6 +336,8 @@ void AMRSimulation<problem_t>::setInitialConditionsAtLevel(int level) {
   // iterate over the domain
   for (amrex::MFIter iter(state_new_cc_[level]); iter.isValid(); ++iter) {
     std::vector<quokka::grid> grid_vec;
+
+    // cell-centred states
     grid_vec.emplace_back(state_new_cc_[level].array(iter), iter.validbox(),
                         geom[level].CellSizeArray(), geom[level].ProbLoArray(),
                         geom[level].ProbHiArray(), quokka::centering::cc,
