@@ -188,13 +188,13 @@ void RadhydroSimulation<ShellProblem>::preCalculateInitialConditions() {
 
 template <>
 void RadhydroSimulation<ShellProblem>::setInitialConditionsOnGrid(
-    std::vector<quokka::grid> &grid_vec) {
+    quokka::grid grid_elem) {
   // extract variables required from the geom object
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_vec[0].dx;
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_vec[0].prob_hi;
-  const amrex::Box &indexRange = grid_vec[0].indexRange;
-  const amrex::Array4<double>& state_cc = grid_vec[0].array;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_elem.prob_hi;
+  const amrex::Box &indexRange = grid_elem.indexRange;
+  const amrex::Array4<double>& state_cc = grid_elem.array;
 
   amrex::Real x0 = NAN;
   amrex::Real y0 = NAN;

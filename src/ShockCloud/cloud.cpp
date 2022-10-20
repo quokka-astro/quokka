@@ -101,13 +101,13 @@ void RadhydroSimulation<ShockCloud>::preCalculateInitialConditions() {
 
 template <>
 void RadhydroSimulation<ShockCloud>::setInitialConditionsOnGrid(
-    std::vector<quokka::grid> &grid_vec) {
-  // set initial conditions of cloud problem
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_vec[0].dx;
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_vec[0].prob_lo;
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_vec[0].prob_hi;
-  const amrex::Box &indexRange = grid_vec[0].indexRange;
-  const amrex::Array4<double>& state_cc = grid_vec[0].array;
+    quokka::grid grid_elem) {
+  // set initial conditions
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_elem.prob_hi;
+  const amrex::Box &indexRange = grid_elem.indexRange;
+  const amrex::Array4<double>& state_cc = grid_elem.array;
   auto const &phase_table = table_data->const_table();
 
   Real const Lx = (prob_hi[0] - prob_lo[0]);
