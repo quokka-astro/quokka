@@ -294,8 +294,8 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 
 	// advance all grids on local processor (Stage 1 of integrator)
 	{
-		auto const &stateOld = state_old_cc_[lev];
-		auto &stateNew = state_new_cc_[lev];
+		auto const &stateOld = state_old_[lev];
+		auto &stateNew = state_new_[lev];
 		auto fluxArrays = computeFluxes(stateOld, ncomp_cc_, lev);
 
 		// Stage 1 of RK2-SSP
@@ -321,9 +321,9 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 
 		// advance all grids on local processor (Stage 2 of integrator)
 		{
-			auto const &stateInOld = state_old_cc_[lev];
-			auto const &stateInStar = state_new_cc_[lev];
-			auto &stateOut = state_new_cc_[lev];
+			auto const &stateInOld = state_old_[lev];
+			auto const &stateInStar = state_new_[lev];
+			auto &stateOut = state_new_[lev];
 			auto fluxArrays = computeFluxes(stateInStar, ncomp_cc_, lev);
 
 			// Stage 2 of RK2-SSP

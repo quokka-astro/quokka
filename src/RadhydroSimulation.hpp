@@ -577,13 +577,13 @@ void RadhydroSimulation<problem_t>::FixupState(int lev)
 	BL_PROFILE("RadhydroSimulation::FixupState()");
 
 	// fix hydro state
-	HydroSystem<problem_t>::EnforceDensityFloor(densityFloor_, state_new_cc_[lev]);
+	HydroSystem<problem_t>::EnforceDensityFloor(densityFloor_, state_new_[lev]);
 	// fix temperature (can go bad due to reflux)
-	HydroSystem<problem_t>::EnforceInternalEnergyFloor(internalEnergyFloor_, state_new_cc_[lev]);
+	HydroSystem<problem_t>::EnforceInternalEnergyFloor(internalEnergyFloor_, state_new_[lev]);
 		
 	if (useDualEnergy_ == 1) {
 		// sync internal energy and total energy
-		HydroSystem<problem_t>::SyncDualEnergy(state_new_cc_[lev]);
+		HydroSystem<problem_t>::SyncDualEnergy(state_new_[lev]);
 	}
 }
 
@@ -689,15 +689,15 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 	// Stage 1 of RK2-SSP
 	{
 		// update ghost zones [old timestep]
-		fillBoundaryConditions(state_old_cc_tmp, state_old_cc_tmp, lev, time, PreInterpState, PostInterpState);
+		fillBoundaryConditions(state_old_tmp, state_old_tmp, lev, time, PreInterpState, PostInterpState);
 
 		// check state validity
-		AMREX_ASSERT(!state_old_cc_tmp.contains_nan(0, state_old_cc_tmp.nComp()));
-		AMREX_ASSERT(!state_old_cc_tmp.contains_nan()); // check ghost cells
+		AMREX_ASSERT(!state_old_tmp.contains_nan(0, state_old_tmp.nComp()));
+		AMREX_ASSERT(!state_old_tmp.contains_nan()); // check ghost cells
 
 		// advance all grids on local processor (Stage 1 of integrator)
-		auto const &stateOld = state_old_cc_tmp;
-		auto &stateNew = state_new_cc_[lev];
+		auto const &stateOld = state_old_tmp;
+		auto &stateNew = state_new_[lev];
 		auto [fluxArrays, faceVel] = computeHydroFluxes(stateOld, ncompHydro_, lev);
 
 		amrex::MultiFab rhs(grids[lev], dmap[lev], ncompHydro_, nghost_);
@@ -716,7 +716,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 
 		if (do_reflux) {
 			// increment flux registers
-			auto expandedFluxes = expandFluxArrays(fluxArrays, 0, state_new_cc_[lev].nComp());
+			auto expandedFluxes = expandFluxArrays(fluxArrays, 0, state_new_[lev].nComp());
 			incrementFluxRegisters(fr_as_crse, fr_as_fine, fluxArrays, lev, fluxScaleFactor * dt_lev);
 		}
 	}
@@ -724,17 +724,17 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 
 	// Stage 2 of RK2-SSP
 	{
-		// update ghost zones [intermediate stage stored in state_new_cc_]
-		fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, time + dt_lev, PreInterpState,
+		// update ghost zones [intermediate stage stored in state_new_]
+		fillBoundaryConditions(state_new_[lev], state_new_[lev], lev, time + dt_lev, PreInterpState,
 				       PostInterpState);
 
 		// check intermediate state validity
 		AMREX_ASSERT(!state_new_[lev].contains_nan(0, state_new_[lev].nComp()));
 		AMREX_ASSERT(!state_new_[lev].contains_nan()); // check ghost zones
 
-		auto const &stateOld = state_old_cc_tmp;
-		auto const &stateInter = state_new_cc_[lev];
-		auto &stateFinal = state_new_cc_[lev];
+		auto const &stateOld = state_old_tmp;
+		auto const &stateInter = state_new_[lev];
+		auto &stateFinal = state_new_[lev];
 		auto [fluxArrays, faceVel] = computeHydroFluxes(stateInter, ncompHydro_, lev);
 
 		amrex::MultiFab rhs(grids[lev], dmap[lev], ncompHydro_, nghost_);
@@ -753,7 +753,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 
 		if (do_reflux) {
 			// increment flux registers
-			auto expandedFluxes = expandFluxArrays(fluxArrays, 0, state_new_cc_[lev].nComp());
+			auto expandedFluxes = expandFluxArrays(fluxArrays, 0, state_new_[lev].nComp());
 			incrementFluxRegisters(fr_as_crse, fr_as_fine, fluxArrays, lev, fluxScaleFactor * dt_lev);
 		}
 	}
@@ -812,7 +812,7 @@ auto RadhydroSimulation<problem_t>::expandFluxArrays(
 	BL_PROFILE("RadhydroSimulation::expandFluxArrays()");
 
 	// This is needed because reflux arrays must have the same number of components as
-	// state_new_cc_[lev]
+	// state_new_[lev]
 
 	auto copyFlux = [nstartNew, ncompNew](amrex::MultiFab const &oldFlux) {
 		amrex::MultiFab newFlux(oldFlux.boxArray(), oldFlux.DistributionMap(), ncompNew, 0);

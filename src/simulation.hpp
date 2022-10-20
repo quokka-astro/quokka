@@ -948,7 +948,7 @@ void AMRSimulation<problem_t>::incrementFluxRegisters(
     amrex::Real const dt_lev) {
   BL_PROFILE("AMRSimulation::incrementFluxRegisters()");
 
-  for(amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
+  for(amrex::MFIter mfi(state_new_[lev]); mfi.isValid(); ++mfi) {
     if (fr_as_crse != nullptr) {
       AMREX_ASSERT(lev < finestLevel());
       AMREX_ASSERT(fr_as_crse == flux_reg_[lev + 1].get());

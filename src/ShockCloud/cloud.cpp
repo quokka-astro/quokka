@@ -242,21 +242,21 @@ template <> auto RadhydroSimulation<ShockCloud>::computeExtraPhysicsTimestep(int
 
 template <>
 void HydroSystem<ShockCloud>::EnforceInternalEnergyFloor(amrex::Real const internalEnergyFloor,
-							 amrex::Box const &indexRange,
-							 amrex::Array4<amrex::Real> const &state)
+							 amrex::MultiFab &state_mf)
 {
 	// prevent negative internal energy
 	const Real gamma = HydroSystem<ShockCloud>::gamma_;
 	auto tables = cloudyTables.const_tables();
+	auto const &state = state_mf.arrays();
 
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-    const amrex::Real rho = state(i, j, k, density_index);
-		const amrex::Real Eint = state(i, j, k, internalEnergy_index);
+	amrex::ParallelFor(state_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		const amrex::Real rho = state[bx](i, j, k, density_index);
+		const amrex::Real Eint = state[bx](i, j, k, internalEnergy_index);
 		const amrex::Real Eint_min = ComputeEgasFromTgas(rho, T_floor, gamma, tables);
 
 		// reset Eint if less than internalEnergyFloor
 		if (Eint < Eint_min) {
-			state(i, j, k, internalEnergy_index) = Eint_min;
+			state[bx](i, j, k, internalEnergy_index) = Eint_min;
 		}
 	});
 }
