@@ -233,12 +233,6 @@ public:
       std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxArrays, int lev,
       amrex::Real dt_lev);
 
-  void incrementFluxRegisters(
-      amrex::YAFluxRegister *fr_as_crse,
-      amrex::YAFluxRegister *fr_as_fine,
-      std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxArrays, int lev,
-      amrex::Real dt_lev);
-
   // boundary condition
   AMREX_GPU_DEVICE static void setCustomBoundaryConditions(
       const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest,
@@ -937,37 +931,6 @@ void AMRSimulation<problem_t>::incrementFluxRegisters(
     fr_as_fine->FineAdd(
         mfi, {AMREX_D_DECL(&fluxArrays[0], &fluxArrays[1], &fluxArrays[2])},
         geom[lev].CellSize(), dt_lev, amrex::RunOn::Gpu);
-  }
-}
-
-template <typename problem_t>
-void AMRSimulation<problem_t>::incrementFluxRegisters(
-    amrex::YAFluxRegister *fr_as_crse,
-    amrex::YAFluxRegister *fr_as_fine,
-    std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxArrays, int const lev,
-    amrex::Real const dt_lev) {
-  BL_PROFILE("AMRSimulation::incrementFluxRegisters()");
-
-  for(amrex::MFIter mfi(state_new_[lev]); mfi.isValid(); ++mfi) {
-    if (fr_as_crse != nullptr) {
-      AMREX_ASSERT(lev < finestLevel());
-      AMREX_ASSERT(fr_as_crse == flux_reg_[lev + 1].get());
-      fr_as_crse->CrseAdd(mfi,
-          {AMREX_D_DECL(fluxArrays[0].fabPtr(mfi),
-                        fluxArrays[1].fabPtr(mfi),
-                        fluxArrays[2].fabPtr(mfi))},
-          geom[lev].CellSize(), dt_lev, amrex::RunOn::Gpu);
-    }
-
-    if (fr_as_fine != nullptr) {
-      AMREX_ASSERT(lev > 0);
-      AMREX_ASSERT(fr_as_fine == flux_reg_[lev].get());
-      fr_as_fine->FineAdd(mfi,
-          {AMREX_D_DECL(fluxArrays[0].fabPtr(mfi),
-                        fluxArrays[1].fabPtr(mfi),
-                        fluxArrays[2].fabPtr(mfi))},          
-          geom[lev].CellSize(), dt_lev, amrex::RunOn::Gpu);
-    }
   }
 }
 

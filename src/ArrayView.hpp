@@ -43,7 +43,7 @@ template <class T, FluxDir N, class Enable = void> struct Array4View {
 	amrex::Array4<T> arr_;
 	constexpr static FluxDir indexOrder = N;
 
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE explicit Array4View(amrex::Array4<T> arr) : arr_(arr) {}
+	explicit Array4View(amrex::Array4<T> arr) : arr_(arr) {}
 };
 
 // X1-flux
@@ -53,7 +53,7 @@ template <class T> struct Array4View<T, FluxDir::X1, std::enable_if_t<!std::is_c
 	amrex::Array4<T> arr_;
 	constexpr static FluxDir indexOrder = FluxDir::X1;
 
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE explicit Array4View(amrex::Array4<T> arr) : arr_(arr) {}
+	explicit Array4View(amrex::Array4<T> arr) : arr_(arr) {}
 
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(int i, int j, int k,
 								 int n) const noexcept -> T &
@@ -73,7 +73,7 @@ template <class T> struct Array4View<T, FluxDir::X1, std::enable_if_t<std::is_co
 	amrex::Array4<T> arr_;
 	constexpr static FluxDir indexOrder = FluxDir::X1;
 
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE explicit Array4View(amrex::Array4<T> arr) : arr_(arr) {}
+	explicit Array4View(amrex::Array4<T> arr) : arr_(arr) {}
 
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(int i, int j, int k,
 								 int n) const noexcept -> T
@@ -95,7 +95,7 @@ template <class T> struct Array4View<T, FluxDir::X2, std::enable_if_t<!std::is_c
 	amrex::Array4<T> arr_;
 	constexpr static FluxDir indexOrder = FluxDir::X2;
 
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE explicit Array4View(amrex::Array4<T> arr) : arr_(arr) {}
+	explicit Array4View(amrex::Array4<T> arr) : arr_(arr) {}
 
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(int i, int j, int k,
 								 int n) const noexcept -> T &
@@ -115,7 +115,7 @@ template <class T> struct Array4View<T, FluxDir::X2, std::enable_if_t<std::is_co
 	amrex::Array4<T> arr_;
 	constexpr static FluxDir indexOrder = FluxDir::X2;
 
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE explicit Array4View(amrex::Array4<T> arr) : arr_(arr) {}
+	explicit Array4View(amrex::Array4<T> arr) : arr_(arr) {}
 
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(int i, int j, int k,
 								 int n) const noexcept -> T
@@ -137,7 +137,7 @@ template <class T> struct Array4View<T, FluxDir::X3, std::enable_if_t<!std::is_c
 	amrex::Array4<T> arr_;
 	constexpr static FluxDir indexOrder = FluxDir::X3;
 
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE explicit Array4View(amrex::Array4<T> arr) : arr_(arr) {}
+	explicit Array4View(amrex::Array4<T> arr) : arr_(arr) {}
 
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(int i, int j, int k,
 								 int n) const noexcept -> T &
@@ -157,7 +157,7 @@ template <class T> struct Array4View<T, FluxDir::X3, std::enable_if_t<std::is_co
 	amrex::Array4<T> arr_;
 	constexpr static FluxDir indexOrder = FluxDir::X3;
 
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE explicit Array4View(amrex::Array4<T> arr) : arr_(arr) {}
+	explicit Array4View(amrex::Array4<T> arr) : arr_(arr) {}
 
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator()(int i, int j, int k,
 								 int n) const noexcept -> T

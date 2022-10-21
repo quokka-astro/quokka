@@ -69,9 +69,9 @@ template <typename problem_t> class HyperbolicSystem
 					 amrex::Box const &indexRange, int nvars);
 
 	template <FluxDir DIR>
-	static void ReconstructStatesPPM(amrex::MultiFab const &q_in,
-							   amrex::MultiFab &leftState_in, amrex::MultiFab &rightState_in,
-						       const int nghost, const int nvars);
+	static void ReconstructStatesPPM(arrayconst_t &q, array_t &leftState, array_t &rightState,
+					 amrex::Box const &cellRange,
+					 amrex::Box const &interfaceRange, int nvars);
 
 	template <typename F>
 #if defined(__x86_64__)
@@ -208,30 +208,29 @@ auto HyperbolicSystem<problem_t>::GetMinmaxSurroundingCell(arrayconst_t &q,
 
 template <typename problem_t>
 template <FluxDir DIR>
-void HyperbolicSystem<problem_t>::ReconstructStatesPPM(amrex::MultiFab const &q_mf,
-							   amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf,
-						       const int nghost, const int nvars)
+void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array_t &leftState_in,
+						       array_t &rightState_in,
+						       amrex::Box const &cellRange,
+						       amrex::Box const &interfaceRange,
+						       const int nvars)
 {
 	BL_PROFILE("HyperbolicSystem::ReconstructStatesPPM()");
+
+	// construct ArrayViews for permuted indices
+	quokka::Array4View<amrex::Real const, DIR> q(q_in);
+	quokka::Array4View<amrex::Real, DIR> leftState(leftState_in);
+	quokka::Array4View<amrex::Real, DIR> rightState(rightState_in);
 
 	// By convention, the interfaces are defined on the left edge of each
 	// zone, i.e. xleft_(i) is the "left"-side of the interface at the left
 	// edge of zone i, and xright_(i) is the "right"-side of the interface
 	// at the *left* edge of zone i.
 
-	auto const &q_in = q_mf.const_arrays();
-	auto leftState_in = leftState_mf.arrays();
-	auto rightState_in = rightState_mf.arrays();
-	amrex::IntVect ng{AMREX_D_DECL(nghost,nghost,nghost)};
+	// Indexing note: There are (nx + 1) interfaces for nx zones.
 
-	// cell-centered kernel
-	amrex::ParallelFor(q_mf, ng, nvars, 
-		[=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in, int n) noexcept {
-			// construct ArrayViews for permuted indices
-			quokka::Array4View<amrex::Real const, DIR> q(q_in[bx]);
-			quokka::Array4View<amrex::Real, DIR> leftState(leftState_in[bx]);
-			quokka::Array4View<amrex::Real, DIR> rightState(rightState_in[bx]);
-
+	amrex::ParallelFor(
+		cellRange, nvars, // cell-centered kernel
+		[=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
 		    // permute array indices according to dir
 		    auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
 
