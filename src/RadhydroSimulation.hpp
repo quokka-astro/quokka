@@ -728,6 +728,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 		HydroSystem<problem_t>::PredictStep(stateOld, stateNew, rhs.const_array(),
 		    dt_lev, indexRange, ncompHydro_, redoFlag.array());
 
+#ifdef ENABLE_FOFC
 		// first-order flux correction (FOFC)
 		if (redoFlag.max<amrex::RunOn::Device>() != quokka::redoFlag::none) {
 			// compute first-order fluxes (on the whole FAB)
@@ -768,6 +769,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 #endif	
 			}
 		}
+#endif // ENABLE_FOFC
 
 		// prevent vacuum
 		HydroSystem<problem_t>::EnforceDensityFloor(densityFloor_, indexRange, stateNew);
@@ -822,6 +824,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 			HydroSystem<problem_t>::AddFluxesRK2(stateFinal, stateOld, stateInter, rhs.const_array(),
 				dt_lev, indexRange, ncompHydro_,	redoFlag.array());
 
+#ifdef ENABLE_FOFC
 			// first-order flux correction (FOFC)
 			if (redoFlag.max<amrex::RunOn::Device>() != quokka::redoFlag::none) {
 				// compute first-order fluxes (on the whole FAB)
@@ -862,6 +865,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 #endif
 				}
 			}
+#endif // ENABLE_FOFC
 
 			// prevent vacuum
 			HydroSystem<problem_t>::EnforceDensityFloor(densityFloor_, indexRange, stateFinal);
