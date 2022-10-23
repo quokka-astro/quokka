@@ -590,6 +590,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep() {
 
   if (work_nonsubcycling <= work_subcycling) {
     // use global timestep on this coarse step
+    if (verbose) {
+      const amrex::Real ratio = work_nonsubcycling / work_subcycling;
+      amrex::Print() << "\t>> Using global timestep on this coarse step (estimated work ratio: " << ratio << ").\n";
+    }
     for (int lev = 1; lev <= max_level; ++lev) {
       nsubsteps[lev] = 1;
     }
