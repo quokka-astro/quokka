@@ -591,7 +591,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep() {
   if (work_nonsubcycling <= work_subcycling) {
     // use global timestep on this coarse step
     for (int lev = 1; lev <= max_level; ++lev) {
-      nsubsteps[level] = 1;
+      nsubsteps[lev] = 1;
     }
   }
 
