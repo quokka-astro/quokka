@@ -913,10 +913,6 @@ void RadhydroSimulation<problem_t>::hydroFluxFunction(
 	const int ng_reconstruct,
 	const int nvars)
 {
-	// cell-centered kernel
-	HydroSystem<problem_t>::template ReconstructStatesPPM<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
-
-#if 0
 	if (reconstructionOrder_ == 3) {
 		HydroSystem<problem_t>::template ReconstructStatesPPM<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
 	} else if (reconstructionOrder_ == 2) {
@@ -926,7 +922,6 @@ void RadhydroSimulation<problem_t>::hydroFluxFunction(
 	} else {
 		amrex::Abort("Invalid reconstruction order specified!");
 	}
-#endif
 
 	// cell-centered kernel
 	HydroSystem<problem_t>::template FlattenShocks<DIR>(primVar, x1Flat, x2Flat, x3Flat, leftState, rightState, ng_reconstruct, nvars);
