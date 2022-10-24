@@ -99,10 +99,10 @@ public:
 				   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, const int nvars);
 
   static void PredictStep(amrex::MultiFab const &consVarOld, amrex::MultiFab &consVarNew, amrex::MultiFab const &rhs,
-			  const double dt, const int nvars, amrex::MultiFab &redoFlag_mf);
+			  const double dt, const int nvars, amrex::iMultiFab &redoFlag_mf);
 
   static void AddFluxesRK2(amrex::MultiFab &Unew_mf, amrex::MultiFab const &U0_mf, amrex::MultiFab const &U1_mf,
-			   amrex::MultiFab const &rhs_mf, const double dt, const int nvars, amrex::MultiFab &redoFlag_mf);
+			   amrex::MultiFab const &rhs_mf, const double dt, const int nvars, amrex::iMultiFab &redoFlag_mf);
 
   static void AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex::MultiFab const &consVar_mf,
 				   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx,
@@ -402,7 +402,7 @@ void HydroSystem<problem_t>::ComputeRhsFromFluxes(
 template <typename problem_t>
 void HydroSystem<problem_t>::PredictStep(
     amrex::MultiFab const &consVarOld_mf, amrex::MultiFab &consVarNew_mf, amrex::MultiFab const &rhs_mf,
-    const double dt, const int nvars, amrex::MultiFab &redoFlag_mf) {
+    const double dt, const int nvars, amrex::iMultiFab &redoFlag_mf) {
   BL_PROFILE("HydroSystem::PredictStep()");
 
   auto const &consVarOld = consVarOld_mf.const_arrays();
@@ -427,7 +427,7 @@ void HydroSystem<problem_t>::PredictStep(
 template <typename problem_t>
 void HydroSystem<problem_t>::AddFluxesRK2(
     amrex::MultiFab &Unew_mf, amrex::MultiFab const &U0_mf, amrex::MultiFab const &U1_mf, amrex::MultiFab const &rhs_mf,
-    const double dt, const int nvars, amrex::MultiFab &redoFlag_mf) {
+    const double dt, const int nvars, amrex::iMultiFab &redoFlag_mf) {
   BL_PROFILE("HyperbolicSystem::AddFluxesRK2()");
 
   auto const &U0 = U0_mf.const_arrays();

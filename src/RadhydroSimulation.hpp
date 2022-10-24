@@ -247,7 +247,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 
 	void replaceFluxes(
 			std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxes,
-			std::array<amrex::MultiFab, AMREX_SPACEDIM> &FOfluxes,	amrex::MultiFab &redoFlag,
+			std::array<amrex::MultiFab, AMREX_SPACEDIM> &FOfluxes,	amrex::iMultiFab &redoFlag,
 			const int ncomp);
 };
 
@@ -712,7 +712,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 		auto [fluxArrays, faceVel] = computeHydroFluxes(stateOld, ncompHydro_, lev);
 
 		amrex::MultiFab rhs(grids[lev], dmap[lev], ncompHydro_, 0);
-		amrex::MultiFab redoFlag(grids[lev], dmap[lev], 1, 0);
+		amrex::iMultiFab redoFlag(grids[lev], dmap[lev], 1, 0);
 		HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, fluxArrays, dx, ncompHydro_);
 		HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld, dx, faceVel);
 		HydroSystem<problem_t>::PredictStep(stateOld, stateNew, rhs, dt_lev, ncompHydro_, redoFlag);
@@ -775,7 +775,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 		auto [fluxArrays, faceVel] = computeHydroFluxes(stateInter, ncompHydro_, lev);
 
 		amrex::MultiFab rhs(grids[lev], dmap[lev], ncompHydro_, 0);
-		amrex::MultiFab redoFlag(grids[lev], dmap[lev], 1, 0);
+		amrex::iMultiFab redoFlag(grids[lev], dmap[lev], 1, 0);
 		HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, fluxArrays, dx, ncompHydro_);
 		HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateInter, dx, faceVel);
 		HydroSystem<problem_t>::AddFluxesRK2(stateFinal, stateOld, stateInter, rhs, dt_lev, ncompHydro_, redoFlag);
@@ -829,7 +829,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 template <typename problem_t>
 void RadhydroSimulation<problem_t>::replaceFluxes(
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxes,
-    std::array<amrex::MultiFab, AMREX_SPACEDIM> &FOfluxes,	amrex::MultiFab &redoFlag,
+    std::array<amrex::MultiFab, AMREX_SPACEDIM> &FOfluxes,	amrex::iMultiFab &redoFlag,
 	const int ncomp)
 {
 	BL_PROFILE("RadhydroSimulation::replaceFluxes()");
