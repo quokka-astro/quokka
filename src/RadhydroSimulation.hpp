@@ -844,7 +844,7 @@ void RadhydroSimulation<problem_t>::replaceFluxes(
 		// left of zone i, and -1.0*flux(i+1) is the flux *into* zone i through
 		// the interface on the right of zone i.
 
-		amrex::IntVect ng{0,0,0};
+		amrex::IntVect ng{AMREX_D_DECL(0,0,0)};
 
 		amrex::ParallelFor(fluxes[idim], ng, ncomp,
 			[=] AMREX_GPU_DEVICE(int bx, int i, int j, int k, int n) noexcept {
