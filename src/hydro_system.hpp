@@ -99,10 +99,10 @@ public:
 				   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, const int nvars);
 
   static void PredictStep(amrex::MultiFab const &consVarOld, amrex::MultiFab &consVarNew, amrex::MultiFab const &rhs,
-			  const double dt, const int nvars);
+			  const double dt, const int nvars, amrex::MultiFab &redoFlag_mf);
 
   static void AddFluxesRK2(amrex::MultiFab &Unew_mf, amrex::MultiFab const &U0_mf, amrex::MultiFab const &U1_mf,
-			   amrex::MultiFab const &rhs_mf, const double dt, const int nvars);
+			   amrex::MultiFab const &rhs_mf, const double dt, const int nvars, amrex::MultiFab &redoFlag_mf);
 
   static void AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex::MultiFab const &consVar_mf,
 				   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx,
@@ -402,39 +402,39 @@ void HydroSystem<problem_t>::ComputeRhsFromFluxes(
 template <typename problem_t>
 void HydroSystem<problem_t>::PredictStep(
     amrex::MultiFab const &consVarOld_mf, amrex::MultiFab &consVarNew_mf, amrex::MultiFab const &rhs_mf,
-    const double dt, const int nvars) {
+    const double dt, const int nvars, amrex::MultiFab &redoFlag_mf) {
   BL_PROFILE("HydroSystem::PredictStep()");
 
   auto const &consVarOld = consVarOld_mf.const_arrays();
   auto const &rhs = rhs_mf.const_arrays();
   auto consVarNew = consVarNew_mf.arrays();
+  auto redoFlag = redoFlag_mf.arrays();
 
   amrex::ParallelFor(
       consVarNew_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
         for (int n = 0; n < nvars; ++n) {
           consVarNew[bx](i, j, k, n) = consVarOld[bx](i, j, k, n) + dt * rhs[bx](i, j, k, n);
         }
-#if 0
         // check if state is valid -- flag for re-do if not
-        if (!isStateValid(consVarNew, i, j, k)) {
-          redoFlag(i, j, k) = quokka::redoFlag::redo;
+        if (!isStateValid(consVarNew[bx], i, j, k)) {
+          redoFlag[bx](i, j, k) = quokka::redoFlag::redo;
         } else {
-          redoFlag(i, j, k) = quokka::redoFlag::none;
+          redoFlag[bx](i, j, k) = quokka::redoFlag::none;
         }
-#endif
       });
 }
 
 template <typename problem_t>
 void HydroSystem<problem_t>::AddFluxesRK2(
     amrex::MultiFab &Unew_mf, amrex::MultiFab const &U0_mf, amrex::MultiFab const &U1_mf, amrex::MultiFab const &rhs_mf,
-    const double dt, const int nvars) {
+    const double dt, const int nvars, amrex::MultiFab &redoFlag_mf) {
   BL_PROFILE("HyperbolicSystem::AddFluxesRK2()");
 
   auto const &U0 = U0_mf.const_arrays();
   auto const &U1 = U1_mf.const_arrays();
   auto const &rhs = rhs_mf.const_arrays();
   auto U_new = Unew_mf.arrays();
+  auto redoFlag = redoFlag_mf.arrays();
 
   amrex::ParallelFor(
       Unew_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
@@ -447,14 +447,13 @@ void HydroSystem<problem_t>::AddFluxesRK2(
           // save results in U_new
           U_new[bx](i, j, k, n) = (0.5 * U_0 + 0.5 * U_1) + 0.5 * FU;
         }
-#if 0
+
         // check if state is valid -- flag for re-do if not
-        if (!isStateValid(U_new, i, j, k)) {
-          redoFlag(i, j, k) = quokka::redoFlag::redo;
+        if (!isStateValid(U_new[bx], i, j, k)) {
+          redoFlag[bx](i, j, k) = quokka::redoFlag::redo;
         } else {
-          redoFlag(i, j, k) = quokka::redoFlag::none;
+          redoFlag[bx](i, j, k) = quokka::redoFlag::none;
         }
-#endif
       });
 }
 

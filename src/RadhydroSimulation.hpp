@@ -217,6 +217,9 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	    -> std::pair<std::array<amrex::MultiFab, AMREX_SPACEDIM>,
 					 std::array<amrex::MultiFab, AMREX_SPACEDIM>>;
 
+	auto computeFOHydroFluxes(amrex::MultiFab const &consVar, const int nvars, const int lev)
+    	-> std::pair<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>>;
+
 	template <FluxDir DIR>
 	void fluxFunction(amrex::Array4<const amrex::Real> const &consState,
 			  amrex::FArrayBox &x1Flux, amrex::FArrayBox &x1FluxDiffusive,
@@ -234,9 +237,18 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 			  amrex::MultiFab const &x3Flat,
 			  int ng_reconstruct, int nvars);
 
-	void replaceFluxes(std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxes,
-			  std::array<amrex::FArrayBox, AMREX_SPACEDIM> &FOfluxes,
-			  amrex::IArrayBox &redoFlag, amrex::Box const &validBox, int ncomp);
+	template <FluxDir DIR>
+	void hydroFOFluxFunction(amrex::MultiFab const &primVar,
+			  amrex::MultiFab &leftState,
+			  amrex::MultiFab &rightState,
+			  amrex::MultiFab &x1Flux,
+			  amrex::MultiFab &x1FaceVel,
+			  int ng_reconstruct, int nvars);
+
+	void replaceFluxes(
+			std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxes,
+			std::array<amrex::MultiFab, AMREX_SPACEDIM> &FOfluxes,	amrex::MultiFab &redoFlag,
+			const int ncomp);
 };
 
 template <typename problem_t>
@@ -699,10 +711,37 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 		auto &stateNew = state_new_cc_[lev];
 		auto [fluxArrays, faceVel] = computeHydroFluxes(stateOld, ncompHydro_, lev);
 
-		amrex::MultiFab rhs(grids[lev], dmap[lev], ncompHydro_, nghost_);
+		amrex::MultiFab rhs(grids[lev], dmap[lev], ncompHydro_, 0);
+		amrex::MultiFab redoFlag(grids[lev], dmap[lev], 1, 0);
 		HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, fluxArrays, dx, ncompHydro_);
 		HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld, dx, faceVel);
-		HydroSystem<problem_t>::PredictStep(stateOld, stateNew, rhs, dt_lev, ncompHydro_);
+		HydroSystem<problem_t>::PredictStep(stateOld, stateNew, rhs, dt_lev, ncompHydro_, redoFlag);
+
+		// do first-order flux correction (FOFC)
+		amrex::Gpu::streamSynchronizeAll(); // just in case
+		int ncells_bad = redoFlag.sum(0);
+		if (ncells_bad > 0) {
+			if (Verbose()) {
+				amrex::Print() << "[FOFC-1] flux correcting " << ncells_bad << " cells on level " << lev << "\n";
+			}
+
+			// replace fluxes around troubled cells with Godunov fluxes
+			auto [FOfluxArrays, FOfaceVel] = computeFOHydroFluxes(stateOld, ncompHydro_, lev);
+			replaceFluxes(fluxArrays, FOfluxArrays, redoFlag, ncompHydro_);
+			replaceFluxes(faceVel, FOfaceVel, redoFlag, ncompHydro_); // needed for dual energy
+			redoFlag.setVal(quokka::redoFlag::none); // reset redoFlag
+
+			// re-do RK update
+			HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, fluxArrays, dx, ncompHydro_);
+			HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld, dx, faceVel);
+			HydroSystem<problem_t>::PredictStep(stateOld, stateNew, rhs, dt_lev, ncompHydro_, redoFlag);
+		
+			amrex::Gpu::streamSynchronizeAll(); // just in case
+			if (redoFlag.max(0) == quokka::redoFlag::redo) {
+				// FOFC failed
+				amrex::Abort("First-order flux correction failed! Enable timestep retries or run with a lower CFL.");
+			}
+		}
 
 		// prevent vacuum
 		HydroSystem<problem_t>::EnforceDensityFloor(densityFloor_, stateNew);
@@ -735,10 +774,37 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 		auto &stateFinal = state_new_cc_[lev];
 		auto [fluxArrays, faceVel] = computeHydroFluxes(stateInter, ncompHydro_, lev);
 
-		amrex::MultiFab rhs(grids[lev], dmap[lev], ncompHydro_, nghost_);
+		amrex::MultiFab rhs(grids[lev], dmap[lev], ncompHydro_, 0);
+		amrex::MultiFab redoFlag(grids[lev], dmap[lev], 1, 0);
 		HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, fluxArrays, dx, ncompHydro_);
 		HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateInter, dx, faceVel);
-		HydroSystem<problem_t>::AddFluxesRK2(stateFinal, stateOld, stateInter, rhs, dt_lev, ncompHydro_);
+		HydroSystem<problem_t>::AddFluxesRK2(stateFinal, stateOld, stateInter, rhs, dt_lev, ncompHydro_, redoFlag);
+
+		// do first-order flux correction (FOFC)
+		amrex::Gpu::streamSynchronizeAll(); // just in case
+		int ncells_bad = redoFlag.sum(0);
+		if (ncells_bad > 0) {
+			if (Verbose()) {
+				amrex::Print() << "[FOFC-2] flux correcting " << ncells_bad << " cells on level " << lev << "\n";
+			}
+
+			// replace fluxes around troubled cells with Godunov fluxes
+			auto [FOfluxArrays, FOfaceVel] = computeFOHydroFluxes(stateOld, ncompHydro_, lev);
+			replaceFluxes(fluxArrays, FOfluxArrays, redoFlag, ncompHydro_);
+			replaceFluxes(faceVel, FOfaceVel, redoFlag, ncompHydro_); // needed for dual energy
+			redoFlag.setVal(quokka::redoFlag::none); // reset redoFlag
+
+			// re-do RK update
+			HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, fluxArrays, dx, ncompHydro_);
+			HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateInter, dx, faceVel);
+			HydroSystem<problem_t>::AddFluxesRK2(stateFinal, stateOld, stateInter, rhs, dt_lev, ncompHydro_, redoFlag);
+
+			amrex::Gpu::streamSynchronizeAll(); // just in case
+			if (redoFlag.max(0) == quokka::redoFlag::redo) {
+				// FOFC failed
+				amrex::Abort("First-order flux correction failed! Enable timestep retries or run with a lower CFL.");
+			}
+		}
 
 		// prevent vacuum
 		HydroSystem<problem_t>::EnforceDensityFloor(densityFloor_, stateFinal);
@@ -762,36 +828,36 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 
 template <typename problem_t>
 void RadhydroSimulation<problem_t>::replaceFluxes(
-	std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxes,
-    std::array<amrex::FArrayBox, AMREX_SPACEDIM> &FOfluxes,	amrex::IArrayBox &redoFlag,
-	amrex::Box const &validBox, const int ncomp)
+	std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxes,
+    std::array<amrex::MultiFab, AMREX_SPACEDIM> &FOfluxes,	amrex::MultiFab &redoFlag,
+	const int ncomp)
 {
 	BL_PROFILE("RadhydroSimulation::replaceFluxes()");
 
-	for(int d = 0; d < fluxes.size(); ++d) { // loop over dimension
-		auto &fluxFAB = fluxes.at(d);
-		auto &FOfluxFAB = FOfluxes.at(d);
-		array_t &flux_arr = fluxFAB.array();
-		arrayconst_t &FOflux_arr = FOfluxFAB.const_array();
-		amrex::Array4<const int> const &redoFlag_arr = redoFlag.const_array();
+	for(int idim = 0; idim < AMREX_SPACEDIM; ++idim) { // loop over dimension
+		auto const &FOflux_arrs = FOfluxes[idim].const_arrays();
+		auto const &redoFlag_arrs = redoFlag.const_arrays();
+		auto flux_arrs = fluxes[idim].arrays();
 
 		// By convention, the fluxes are defined on the left edge of each zone,
 		// i.e. flux_(i) is the flux *into* zone i through the interface on the
 		// left of zone i, and -1.0*flux(i+1) is the flux *into* zone i through
 		// the interface on the right of zone i.
 
-		amrex::ParallelFor(validBox, ncomp,
-			[=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
-			if (redoFlag_arr(i, j, k) == quokka::redoFlag::redo) {
-				// replace fluxes with first-order ones at faces of cell (i,j,k)
-				flux_arr(i, j, k, n) = FOflux_arr(i, j, k, n);
+		amrex::IntVect ng{0,0,0};
 
-				if (d == 0) { // x-dir fluxes
-					flux_arr(i + 1, j, k, n) = FOflux_arr(i + 1, j, k, n);
-				} else if (d == 1) { // y-dir fluxes
-					flux_arr(i, j + 1, k, n) = FOflux_arr(i, j + 1, k, n);
-				} else if (d == 2) { // z-dir fluxes
-					flux_arr(i, j, k + 1, n) = FOflux_arr(i, j, k + 1, n);
+		amrex::ParallelFor(fluxes[idim], ng, ncomp,
+			[=] AMREX_GPU_DEVICE(int bx, int i, int j, int k, int n) noexcept {
+			if (redoFlag_arrs[bx](i, j, k) == quokka::redoFlag::redo) {
+				// replace fluxes with first-order ones at faces of cell (i,j,k)
+				flux_arrs[bx](i, j, k, n) = FOflux_arrs[bx](i, j, k, n);
+
+				if (idim == 0) { // x-dir fluxes
+					flux_arrs[bx](i + 1, j, k, n) = FOflux_arrs[bx](i + 1, j, k, n);
+				} else if (idim == 1) { // y-dir fluxes
+					flux_arrs[bx](i, j + 1, k, n) = FOflux_arrs[bx](i, j + 1, k, n);
+				} else if (idim == 2) { // z-dir fluxes
+					flux_arrs[bx](i, j, k + 1, n) = FOflux_arrs[bx](i, j, k + 1, n);
 				}
 			}
 		});
@@ -925,6 +991,70 @@ void RadhydroSimulation<problem_t>::hydroFluxFunction(
 
 	// cell-centered kernel
 	HydroSystem<problem_t>::template FlattenShocks<DIR>(primVar, x1Flat, x2Flat, x3Flat, leftState, rightState, ng_reconstruct, nvars);
+
+	// interface-centered kernel
+	HydroSystem<problem_t>::template ComputeFluxes<DIR>(flux, faceVel, leftState, rightState, primVar);
+}
+
+
+template <typename problem_t>
+auto RadhydroSimulation<problem_t>::computeFOHydroFluxes(
+    amrex::MultiFab const &consVar, const int nvars, const int lev)
+    -> std::pair<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>>
+{
+	BL_PROFILE("RadhydroSimulation::computeFOHydroFluxes()");
+
+	auto ba = grids[lev];
+	auto dm = dmap[lev];
+	const int flatteningGhost = 2;
+	const int reconstructRange = 1;
+
+	// allocate temporary MultiFabs
+	amrex::MultiFab primVar(ba, dm, nvars, nghost_);
+	std::array<amrex::MultiFab, AMREX_SPACEDIM> flux;
+	std::array<amrex::MultiFab, AMREX_SPACEDIM> facevel;
+	std::array<amrex::MultiFab, AMREX_SPACEDIM> leftState;
+	std::array<amrex::MultiFab, AMREX_SPACEDIM> rightState;
+
+	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+		auto ba_face = amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim));
+		leftState[idim] = amrex::MultiFab(ba_face, dm, nvars, reconstructRange);
+		rightState[idim] = amrex::MultiFab(ba_face, dm, nvars, reconstructRange);
+		flux[idim] = amrex::MultiFab(ba_face, dm, nvars, 0);
+		facevel[idim] = amrex::MultiFab(ba_face, dm, 1, 0);
+	}
+
+	// conserved to primitive variables
+	HydroSystem<problem_t>::ConservedToPrimitive(consVar, primVar, nghost_);
+
+	// compute flux functions
+	AMREX_D_TERM(hydroFOFluxFunction<FluxDir::X1>(primVar, leftState[0], rightState[0], flux[0], facevel[0],
+					reconstructRange, nvars);
+		     , hydroFOFluxFunction<FluxDir::X2>(primVar, leftState[1], rightState[1], flux[1], facevel[1],
+					reconstructRange, nvars);
+		     , hydroFOFluxFunction<FluxDir::X3>(primVar, leftState[2], rightState[2], flux[2], facevel[2],
+					reconstructRange, nvars); )
+
+	// synchronization point to prevent MultiFabs from going out of scope
+	amrex::Gpu::streamSynchronizeAll();
+
+	// return flux and face-centered velocities
+	return std::make_pair(std::move(flux), std::move(facevel));
+}
+
+template <typename problem_t>
+template <FluxDir DIR>
+void RadhydroSimulation<problem_t>::hydroFOFluxFunction(
+    amrex::MultiFab const &primVar,
+	amrex::MultiFab &leftState,
+	amrex::MultiFab &rightState,
+	amrex::MultiFab &flux,
+	amrex::MultiFab &faceVel,
+	const int ng_reconstruct,
+	const int nvars)
+{
+	// donor-cell reconstruction
+	HydroSystem<problem_t>::template ReconstructStatesConstant<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
 
 	// interface-centered kernel
 	HydroSystem<problem_t>::template ComputeFluxes<DIR>(flux, faceVel, leftState, rightState, primVar);
