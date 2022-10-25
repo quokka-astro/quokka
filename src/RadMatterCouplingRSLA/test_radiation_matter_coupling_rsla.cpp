@@ -153,7 +153,7 @@ auto problem_main() -> int {
   const double constant_dt = 1.0e-8; // s
 
   // Problem initialization
-  constexpr int nvars = RadhydroSimulation<CouplingProblem>::nvarTotal_;
+  constexpr int nvars = RadhydroSimulation<CouplingProblem>::nvarTotal_cc_;
   amrex::Vector<amrex::BCRec> BCs_cc(nvars);
   for (int n = 0; n < nvars; ++n) {
     for (int i = 0; i < AMREX_SPACEDIM; ++i) {

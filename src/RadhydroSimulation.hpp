@@ -88,7 +88,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 
 	cloudy_tables cloudyTables{};
 
-	static constexpr int nvarTotal_ = RadSystem<problem_t>::nvar_;
+	static constexpr int nvarTotal_cc_ = RadSystem<problem_t>::nvar_;
 	static constexpr int ncompHydro_ = HydroSystem<problem_t>::nvar_; // hydro
 	static constexpr int ncompHyperbolic_ = RadSystem<problem_t>::nvarHyperbolic_;
 	static constexpr int nstartHyperbolic_ = RadSystem<problem_t>::nstartHyperbolic_;

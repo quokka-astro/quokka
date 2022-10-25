@@ -179,7 +179,7 @@ auto problem_main() -> int {
 		return false;
 	};
 
-  const int nvars = RadhydroSimulation<RTProblem>::nvarTotal_;
+  const int nvars = RadhydroSimulation<RTProblem>::nvarTotal_cc_;
   amrex::Vector<amrex::BCRec> BCs_cc(nvars);
   for (int n = 0; n < nvars; ++n) {
     // periodic in x-direction

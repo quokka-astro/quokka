@@ -283,7 +283,7 @@ auto problem_main() -> int
 	};
 
 	// boundary conditions
-	constexpr int nvars = RadhydroSimulation<TophatProblem>::nvarTotal_;
+	constexpr int nvars = RadhydroSimulation<TophatProblem>::nvarTotal_cc_;
 	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
 	for (int n = 0; n < nvars; ++n) {
 		BCs_cc[n].setLo(0, amrex::BCType::ext_dir);	 // left x1 -- Marshak
