@@ -248,18 +248,18 @@ auto problem_main() -> int {
   const double max_time = max_tau / c_s0;
 
   constexpr int nvars = RadSystem<ShockProblem>::nvar_;
-  amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
+  amrex::Vector<amrex::BCRec> BCs_cc(nvars);
   for (int n = 0; n < nvars; ++n) {
-    boundaryConditions[n].setLo(0, amrex::BCType::ext_dir); // custom x1
-    boundaryConditions[n].setHi(0, amrex::BCType::ext_dir); // custom x1
+    BCs_cc[n].setLo(0, amrex::BCType::ext_dir); // custom x1
+    BCs_cc[n].setHi(0, amrex::BCType::ext_dir); // custom x1
     for (int i = 1; i < AMREX_SPACEDIM; ++i) { // x2- and x3- directions
-      boundaryConditions[n].setLo(i, amrex::BCType::int_dir); // periodic
-      boundaryConditions[n].setHi(i, amrex::BCType::int_dir);
+      BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
+      BCs_cc[n].setHi(i, amrex::BCType::int_dir);
     }
   }
 
   // Problem initialization
-  RadhydroSimulation<ShockProblem> sim(boundaryConditions);
+  RadhydroSimulation<ShockProblem> sim(BCs_cc);
   
   sim.cflNumber_ = CFL_number;
   sim.radiationCflNumber_ = CFL_number;

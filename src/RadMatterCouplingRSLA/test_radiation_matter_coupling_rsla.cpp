@@ -154,15 +154,15 @@ auto problem_main() -> int {
 
   // Problem initialization
   constexpr int nvars = RadhydroSimulation<CouplingProblem>::nvarTotal_;
-  amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
+  amrex::Vector<amrex::BCRec> BCs_cc(nvars);
   for (int n = 0; n < nvars; ++n) {
     for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-      boundaryConditions[n].setLo(i, amrex::BCType::foextrap); // extrapolate
-      boundaryConditions[n].setHi(i, amrex::BCType::foextrap);
+      BCs_cc[n].setLo(i, amrex::BCType::foextrap); // extrapolate
+      BCs_cc[n].setHi(i, amrex::BCType::foextrap);
     }
   }
 
-  RadhydroSimulation<CouplingProblem> sim(boundaryConditions);
+  RadhydroSimulation<CouplingProblem> sim(BCs_cc);
   
   sim.cflNumber_ = CFL_number;
   sim.radiationCflNumber_ = CFL_number;

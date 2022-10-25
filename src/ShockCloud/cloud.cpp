@@ -441,19 +441,19 @@ auto problem_main() -> int {
 
   // Problem initialization
   constexpr int nvars = RadhydroSimulation<ShockCloud>::nvarTotal_;
-  amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
+  amrex::Vector<amrex::BCRec> BCs_cc(nvars);
   for (int n = 0; n < nvars; ++n) {
-    boundaryConditions[n].setLo(0, amrex::BCType::int_dir); // periodic
-    boundaryConditions[n].setHi(0, amrex::BCType::int_dir);
+    BCs_cc[n].setLo(0, amrex::BCType::int_dir); // periodic
+    BCs_cc[n].setHi(0, amrex::BCType::int_dir);
 
-    boundaryConditions[n].setLo(1, amrex::BCType::foextrap); // extrapolate
-    boundaryConditions[n].setHi(1, amrex::BCType::ext_dir);  // Dirichlet
+    BCs_cc[n].setLo(1, amrex::BCType::foextrap); // extrapolate
+    BCs_cc[n].setHi(1, amrex::BCType::ext_dir);  // Dirichlet
 
-    boundaryConditions[n].setLo(2, amrex::BCType::int_dir);
-    boundaryConditions[n].setHi(2, amrex::BCType::int_dir);
+    BCs_cc[n].setLo(2, amrex::BCType::int_dir);
+    BCs_cc[n].setHi(2, amrex::BCType::int_dir);
   }
 
-  RadhydroSimulation<ShockCloud> sim(boundaryConditions);
+  RadhydroSimulation<ShockCloud> sim(BCs_cc);
 
   // Standard PPM gives unphysically enormous temperatures when used for
   // this problem (e.g., ~1e14 K or higher), but can be fixed by

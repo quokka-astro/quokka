@@ -404,28 +404,28 @@ auto problem_main() -> int {
   };
 
   const int nvars = RadhydroSimulation<ShellProblem>::nvarTotal_;
-  amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
+  amrex::Vector<amrex::BCRec> BCs_cc(nvars);
   for (int n = 0; n < nvars; ++n) {
     for (int i = 0; i < AMREX_SPACEDIM; ++i) {
       if constexpr (simulate_full_box) {
         // periodic boundaries
-        boundaryConditions[n].setLo(i, amrex::BCType::int_dir);
-        boundaryConditions[n].setHi(i, amrex::BCType::int_dir);
+        BCs_cc[n].setLo(i, amrex::BCType::int_dir);
+        BCs_cc[n].setHi(i, amrex::BCType::int_dir);
       } else {
         // reflecting boundaries, outflow boundaries
         if (isNormalComp(n, i)) {
-          boundaryConditions[n].setLo(i, amrex::BCType::reflect_odd);
-          boundaryConditions[n].setHi(i, amrex::BCType::foextrap); // outflow
+          BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);
+          BCs_cc[n].setHi(i, amrex::BCType::foextrap); // outflow
         } else {
-          boundaryConditions[n].setLo(i, amrex::BCType::reflect_even);
-          boundaryConditions[n].setHi(i, amrex::BCType::foextrap); // outflow
+          BCs_cc[n].setLo(i, amrex::BCType::reflect_even);
+          BCs_cc[n].setHi(i, amrex::BCType::foextrap); // outflow
         }
       }
     }
   }
 
   // Problem initialization
-  RadhydroSimulation<ShellProblem> sim(boundaryConditions);
+  RadhydroSimulation<ShellProblem> sim(BCs_cc);
   
   sim.cflNumber_ = 0.3;
   sim.densityFloor_ = 1.0e-8 * rho_0;

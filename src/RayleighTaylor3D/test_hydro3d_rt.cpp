@@ -211,27 +211,27 @@ auto problem_main() -> int {
 	};
 
   const int nvars = RadhydroSimulation<RTProblem>::nvarTotal_;
-  amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
+  amrex::Vector<amrex::BCRec> BCs_cc(nvars);
   for (int n = 0; n < nvars; ++n) {
     // periodic in x- and y-directions
     for (int i = 0; i < (AMREX_SPACEDIM-1); ++i) {
-      boundaryConditions[n].setLo(i, amrex::BCType::int_dir);
-      boundaryConditions[n].setHi(i, amrex::BCType::int_dir);
+      BCs_cc[n].setLo(i, amrex::BCType::int_dir);
+      BCs_cc[n].setHi(i, amrex::BCType::int_dir);
     }
 
     // reflecting in z- direction
     int i = AMREX_SPACEDIM - 1;
 		if (isNormalComp(n, i)) {
-			boundaryConditions[n].setLo(i, amrex::BCType::reflect_odd);
-			boundaryConditions[n].setHi(i, amrex::BCType::reflect_odd);
+			BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);
+			BCs_cc[n].setHi(i, amrex::BCType::reflect_odd);
 		} else {
-			boundaryConditions[n].setLo(i, amrex::BCType::reflect_even);
-			boundaryConditions[n].setHi(i, amrex::BCType::reflect_even);
+			BCs_cc[n].setLo(i, amrex::BCType::reflect_even);
+			BCs_cc[n].setHi(i, amrex::BCType::reflect_even);
 		}
   }
 
   // Problem initialization
-  RadhydroSimulation<RTProblem> sim(boundaryConditions);
+  RadhydroSimulation<RTProblem> sim(BCs_cc);
   
   // initialize
   sim.setInitialConditions();

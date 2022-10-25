@@ -193,18 +193,18 @@ void RadhydroSimulation<ContactProblem>::computeReferenceSolution(
 auto problem_main() -> int {
   // Problem parameters
   const int nvars = RadhydroSimulation<ContactProblem>::nvarTotal_;
-  amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
+  amrex::Vector<amrex::BCRec> BCs_cc(nvars);
   for (int n = 0; n < nvars; ++n) {
-    boundaryConditions[0].setLo(0, amrex::BCType::int_dir); // periodic
-    boundaryConditions[0].setHi(0, amrex::BCType::int_dir);
+    BCs_cc[0].setLo(0, amrex::BCType::int_dir); // periodic
+    BCs_cc[0].setHi(0, amrex::BCType::int_dir);
     for (int i = 1; i < AMREX_SPACEDIM; ++i) {
-      boundaryConditions[n].setLo(i, amrex::BCType::int_dir); // periodic
-      boundaryConditions[n].setHi(i, amrex::BCType::int_dir);
+      BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
+      BCs_cc[n].setHi(i, amrex::BCType::int_dir);
     }
   }
 
   // Problem initialization
-  RadhydroSimulation<ContactProblem> sim(boundaryConditions);
+  RadhydroSimulation<ContactProblem> sim(BCs_cc);
   
   sim.stopTime_ = 2.0;
   sim.cflNumber_ = 0.8;
