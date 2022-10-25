@@ -7,6 +7,7 @@ docs/doxygen/
 tests/plt*
 tests/chk*
 tests/*.csv
+tests/plt*
 sims/
 .clangd
 __pycache__
