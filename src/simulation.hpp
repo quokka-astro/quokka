@@ -1026,8 +1026,6 @@ void AMRSimulation<problem_t>::MakeNewLevelFromCoarse(
         ba, boxArray(level - 1), dm, DistributionMap(level - 1), Geom(level),
         Geom(level - 1), refRatio(level - 1), level, ncomp_cc);
   }
-
-  FillCoarsePatch(level, time, state_new_cc_[level], 0, ncomp);
 }
 
 // Remake an existing level using provided BoxArray and DistributionMapping and
