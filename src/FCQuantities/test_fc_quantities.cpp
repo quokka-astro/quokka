@@ -126,12 +126,11 @@ auto problem_main() -> int {
   sim_write.setInitialConditions();
   sim_write.evolve();
 
-  // RadhydroSimulation<FCQuantities> sim_read(BCs_cc);
-  // sim_read.cflNumber_ = 0.1;
-  // sim_read.stopTime_ = 1.0;
-  // sim_read.maxTimesteps_ = 2e4;
-  // sim_read.setInitialConditions();
-  // sim_read.evolve();
+  RadhydroSimulation<FCQuantities> sim_read(BCs_cc);
+  sim_read.cflNumber_ = 0.1;
+  sim_read.stopTime_ = 1.0;
+  sim_read.maxTimesteps_ = 2e4;
+  sim_read.setInitialConditions();
 
   return 0;
 }
