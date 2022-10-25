@@ -127,4 +127,4 @@ add_subdirectory(Cooling)
 add_subdirectory(ShockCloud)
 add_subdirectory(PassiveScalar)
 
-add_subdirectory(MHDPrelim)
+add_subdirectory(FCQuantities)
