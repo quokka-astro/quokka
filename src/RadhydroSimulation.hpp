@@ -48,6 +48,7 @@
 #include "hydro_system.hpp"
 #include "radiation_system.hpp"
 #include "simulation.hpp"
+#include "SimulationData.hpp"
 
 // Simulation class should be initialized only once per program (i.e., is a singleton)
 template <typename problem_t> class RadhydroSimulation : public AMRSimulation<problem_t>
@@ -86,6 +87,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	std::vector<double> t_vec_;
 	std::vector<double> Trad_vec_;
 	std::vector<double> Tgas_vec_;
+	SimulationData<problem_t> userData_;
 
 	cloudy_tables cloudyTables{};
 

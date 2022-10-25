@@ -71,15 +71,27 @@ const int kmin = 0;
 const int kmax = 16;
 Real const A = 0.05 / kmax;
 
-// phase table
-std::unique_ptr<amrex::TableData<Real, 3>> table_data;
+// cloud-tracking variables needed for Dirichlet boundary condition
+AMREX_GPU_MANAGED static Real rho_wind = 0;
+AMREX_GPU_MANAGED static Real v_wind = 0;
+AMREX_GPU_MANAGED static Real P_wind = 0;
+AMREX_GPU_MANAGED static Real delta_vx = 0;
+
+static bool enable_cooling = true;
+
+template<>
+struct SimulationData<ShockCloud>
+{
+  cloudy_tables cloudyTables;
+  std::unique_ptr<amrex::TableData<Real, 3>> table_data;
+};
 
 template <>
 void RadhydroSimulation<ShockCloud>::preCalculateInitialConditions() {
   // generate random phases
   amrex::Array<int, 3> tlo{kmin, kmin, kmin};
   amrex::Array<int, 3> thi{kmax, kmax, kmax};
-  table_data = std::make_unique<amrex::TableData<Real, 3>>(tlo, thi);
+  userData_.table_data = std::make_unique<amrex::TableData<Real, 3>>(tlo, thi);
 
   amrex::TableData<Real, 3> h_table_data(tlo, thi, amrex::The_Pinned_Arena());
   auto const &h_table = h_table_data.table();
@@ -97,7 +109,7 @@ void RadhydroSimulation<ShockCloud>::preCalculateInitialConditions() {
   }
 
   // Copy data to GPU memory
-  table_data->copy(h_table_data);
+  userData_.table_data->copy(h_table_data);
   amrex::Gpu::streamSynchronize();
 }
 
@@ -105,12 +117,12 @@ template <>
 void RadhydroSimulation<ShockCloud>::setInitialConditionsOnGrid(
     quokka::grid grid_elem) {
   // set initial conditions
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_elem.prob_hi_;
   const amrex::Box &indexRange = grid_elem.indexRange_;
   const amrex::Array4<double>& state_cc = grid_elem.array_;
-  auto const &phase_table = table_data->const_table();
+  auto const &phase_table = userData_.table_data->const_table();
 
   Real const Lx = (prob_hi[0] - prob_lo[0]);
   Real const Ly = (prob_hi[1] - prob_lo[1]);
@@ -121,9 +133,9 @@ void RadhydroSimulation<ShockCloud>::setInitialConditionsOnGrid(
   Real const z0 = prob_lo[2] + 0.5 * (prob_hi[2] - prob_lo[2]);
 
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-    Real const x = prob_lo[0] + (i + Real(0.5)) * dx[0];
-    Real const y = prob_lo[1] + (j + Real(0.5)) * dx[1];
-    Real const z = prob_lo[2] + (k + Real(0.5)) * dx[2];
+    Real const x = prob_lo[0] + (i + static_cast<Real>(0.5)) * dx[0];
+    Real const y = prob_lo[1] + (j + static_cast<Real>(0.5)) * dx[1];
+    Real const z = prob_lo[2] + (k + static_cast<Real>(0.5)) * dx[2];
     Real const R = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2) +
                              std::pow(z - z0, 2));
 
@@ -135,9 +147,9 @@ void RadhydroSimulation<ShockCloud>::setInitialConditionsOnGrid(
           if ((ki == 0) && (kj == 0) && (kk == 0)) {
             continue;
           }
-          Real const kx = 2.0 * M_PI * Real(ki) / Lx;
-          Real const ky = 2.0 * M_PI * Real(kj) / Lx;
-          Real const kz = 2.0 * M_PI * Real(kk) / Lx;
+          Real const kx = 2.0 * M_PI * static_cast<Real>(ki) / Lx;
+          Real const ky = 2.0 * M_PI * static_cast<Real>(kj) / Lx;
+          Real const kz = 2.0 * M_PI * static_cast<Real>(kk) / Lx;
           delta_rho +=
               A * std::sin(x * kx + y * ky + z * kz + phase_table(ki, kj, kk));
         }
@@ -171,11 +183,11 @@ AMRSimulation<ShockCloud>::setCustomBoundaryConditions(
     const amrex::IntVect &iv, amrex::Array4<Real> const &consVar, int /*dcomp*/,
     int /*numcomp*/, amrex::GeometryData const &geom, const Real /*time*/,
     const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/) {
-  auto [i, j, k] = iv.toArray();
+  auto [i, j, k] = iv.dim3();
 
   amrex::Box const &box = geom.Domain();
-  const auto &domain_lo = box.loVect();
-  const auto &domain_hi = box.hiVect();
+  const auto &domain_lo = box.loVect3d();
+  const auto &domain_hi = box.hiVect3d();
   const int jhi = domain_hi[1];
 
   if (j >= jhi) {
@@ -208,13 +220,13 @@ AMRSimulation<ShockCloud>::setCustomBoundaryConditions(
 template <> auto RadhydroSimulation<ShockCloud>::computeExtraPhysicsTimestep(int const lev) -> amrex::Real
 {
 	// return minimum cooling time on level 'lev'
-  amrex::Real tcool_safety_fac = 0.1;
+  amrex::Real const tcool_safety_fac = 0.1;
 
   auto const &mf = state_new_cc_[lev];
 	auto const &state = mf.const_arrays();
   amrex::MultiFab tcool_mf(mf.boxArray(), mf.DistributionMap(), 1, 0);
   auto const &tcool = tcool_mf.arrays();
-  auto tables = cloudyTables.const_tables();
+  auto tables = userData_.cloudyTables.const_tables();
 
 	amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		const Real rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
@@ -224,21 +236,21 @@ template <> auto RadhydroSimulation<ShockCloud>::computeExtraPhysicsTimestep(int
 		const Real Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
 		const Real Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
 
-		Real T = ComputeTgasFromEgas(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
-		Real Edot = cloudy_cooling_function(rho, T, tables);
+		Real const T = ComputeTgasFromEgas(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
+		Real const Edot = cloudy_cooling_function(rho, T, tables);
 		tcool[bx](i, j, k) = std::abs(Eint / Edot);
 	});
   amrex::Gpu::streamSynchronizeAll();
 
-  amrex::Real min_tcool = tcool_mf.min(0);
-  if (verbose) {
+  amrex::Real const min_tcool = tcool_mf.min(0);
+  if (verbose != 0) {
     amrex::Print() << "\tMinimum cooling time on level " << lev << ": " << min_tcool << "\n";
   }
   return tcool_safety_fac * min_tcool;
 }
 
 struct ODEUserData {
-  Real rho;
+  Real rho{};
   cloudyGpuConstTables tables;
 };
 
@@ -249,7 +261,7 @@ user_rhs(Real /*t*/, quokka::valarray<Real, 1> &y_data,
   auto *udata = static_cast<ODEUserData *>(user_data);
   const Real rho = udata->rho;
   const Real gamma = HydroSystem<ShockCloud>::gamma_;
-  cloudyGpuConstTables &tables = udata->tables;
+  cloudyGpuConstTables const &tables = udata->tables;
 
   // check whether temperature is out-of-bounds
   const Real Tmin = 10.;
@@ -315,7 +327,7 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
 
       ODEUserData user_data{rho, tables};
       quokka::valarray<Real, 1> y = {Eint};
-      quokka::valarray<Real, 1> abstol = {
+      quokka::valarray<Real, 1> const abstol = {
           reltol_floor * ComputeEgasFromTgas(rho, T_floor,
                                              HydroSystem<ShockCloud>::gamma_,
                                              tables)};
@@ -328,10 +340,10 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in,
 
       // check if integration failed
       if (nsteps >= maxStepsODEIntegrate) {
-        Real T = ComputeTgasFromEgas(rho, Eint, HydroSystem<ShockCloud>::gamma_,
+        Real const T = ComputeTgasFromEgas(rho, Eint, HydroSystem<ShockCloud>::gamma_,
                                      tables);
-        Real Edot = cloudy_cooling_function(rho, T, tables);
-        Real t_cool = Eint / Edot;
+        Real const Edot = cloudy_cooling_function(rho, T, tables);
+        Real const t_cool = Eint / Edot;
         printf("max substeps exceeded! rho = %.17e, Eint = %.17e, T = %g, cooling "
                "time = %g, dt = %.17e\n",
                rho, Eint, T, t_cool, dt);
@@ -380,14 +392,14 @@ void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(
 
       amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j,
                                                           int k) noexcept {
-        Real rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
-        Real x1Mom = state(i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
-        Real x2Mom = state(i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
-        Real x3Mom = state(i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
-        Real Egas = state(i, j, k, HydroSystem<ShockCloud>::energy_index);
-        Real Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(
+        Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
+        Real const x1Mom = state(i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
+        Real const x2Mom = state(i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
+        Real const x3Mom = state(i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
+        Real const Egas = state(i, j, k, HydroSystem<ShockCloud>::energy_index);
+        Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(
             rho, x1Mom, x2Mom, x3Mom, Egas);
-        Real Tgas = ComputeTgasFromEgas(
+        Real const Tgas = ComputeTgasFromEgas(
             rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
 
         output(i, j, k, ncomp) = Tgas;
@@ -470,7 +482,7 @@ auto problem_main() -> int {
   sim.checkpointInterval_ = 2000;
 
   // Read Cloudy tables
-  readCloudyData(sim.cloudyTables);
+  readCloudyData(sim.userData_.cloudyTables);
 
   // Set initial conditions
   sim.setInitialConditions();
@@ -479,6 +491,6 @@ auto problem_main() -> int {
   sim.evolve();
 
   // Cleanup and exit
-  int status = 0;
+  int const status = 0;
   return status;
 }
