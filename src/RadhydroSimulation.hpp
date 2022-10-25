@@ -730,16 +730,17 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 	auto dx = geom[lev].CellSizeArray();
 
 	// create temporary multifab for Strang-split sources, copy old state
-	amrex::MultiFab state_old_tmp(grids[lev], dmap[lev], ncomp_cc_, nghost_);
-	amrex::Copy(state_old_tmp, state_old_cc_[lev], 0, 0, ncomp_cc_, nghost_);
+	amrex::MultiFab state_old_cc_tmp(grids[lev], dmap[lev], ncomp_cc_, nghost_);
+	amrex::Copy(state_old_cc_tmp, state_old_cc_[lev], 0, 0, ncomp_cc_, nghost_);
 
 	// do Strang split source terms (first half-step)
-	addStrangSplitSources(state_old_tmp, lev, time, 0.5*dt_lev);
+	addStrangSplitSources(state_old_cc_tmp, lev, time, 0.5*dt_lev);
 
 	// Stage 1 of RK2-SSP
 	{
 		// update ghost zones [old timestep]
-		fillBoundaryConditions(state_old_cc_tmp, state_old_cc_tmp, lev, time, PreInterpState, PostInterpState);
+		fillBoundaryConditions(state_old_cc_tmp, state_old_cc_tmp, lev, time, BCs_cc_,
+			quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState);
 
 		// check state validity
 		AMREX_ASSERT(!state_old_cc_tmp.contains_nan(0, state_old_cc_tmp.nComp()));
