@@ -193,6 +193,12 @@ public:
       std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxArrays, int lev,
       amrex::Real dt_lev);
 
+  void incrementFluxRegisters(
+      amrex::YAFluxRegister *fr_as_crse,
+      amrex::YAFluxRegister *fr_as_fine,
+      std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxArrays, int lev,
+      amrex::Real dt_lev);
+
   // boundary condition
   AMREX_GPU_DEVICE static void setCustomBoundaryConditions(
       const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest,
@@ -343,6 +349,7 @@ void AMRSimulation<problem_t>::setInitialConditionsAtLevel(int level) {
                            geom[level].CellSizeArray(),
                            geom[level].ProbLoArray(), geom[level].ProbHiArray(),
                            quokka::centering::cc, quokka::direction::na);
+                           
     // set initial conditions defined by the user
     setInitialConditionsOnGrid(grid_elem);
   }
@@ -530,25 +537,81 @@ auto AMRSimulation<problem_t>::computeTimestepAtLevel(int lev) -> amrex::Real {
 template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep() {
   BL_PROFILE("AMRSimulation::computeTimestep()");
 
+  // compute candidate timestep dt_tmp on each level
   amrex::Vector<amrex::Real> dt_tmp(finest_level + 1);
   for (int level = 0; level <= finest_level; ++level) {
     dt_tmp[level] = computeTimestepAtLevel(level);
   }
 
+  // limit change in timestep on each level
   constexpr amrex::Real change_max = 1.1;
-  amrex::Real dt_0 = dt_tmp[0];
-  int n_factor = 1;
 
   for (int level = 0; level <= finest_level; ++level) {
     dt_tmp[level] = std::min(dt_tmp[level], change_max * dt_[level]);
+  }
+
+  // set default subcycling pattern
+  if (do_subcycle == 1) {
+    for (int lev = 1; lev <= max_level; ++lev) {
+      nsubsteps[lev] = MaxRefRatio(lev - 1);
+    }
+  }
+
+  // compute root level timestep given nsubsteps
+  amrex::Real dt_0 = dt_tmp[0];
+  amrex::Long n_factor = 1;
+
+  for (int level = 0; level <= finest_level; ++level) {
     n_factor *= nsubsteps[level];
     dt_0 = std::min(dt_0, n_factor * dt_tmp[level]);
     dt_0 = std::min(dt_0, maxDt_); // limit to maxDt_
+
     if (tNew_[level] == 0.0) {     // first timestep
       dt_0 = std::min(dt_0, initDt_);
     }
     if (constantDt_ > 0.0) { // use constant timestep if set
       dt_0 = constantDt_;
+    }
+  }
+
+  // compute global timestep assuming no subcycling
+  amrex::Real dt_global = dt_tmp[0];
+
+  for (int level = 0; level <= finest_level; ++level) {
+    dt_global = std::min(dt_global, dt_tmp[level]);
+    dt_global = std::min(dt_global, maxDt_); // limit to maxDt_
+
+    if (tNew_[level] == 0.0) {  // special case: first timestep
+      dt_global = std::min(dt_global, initDt_);
+    }
+    if (constantDt_ > 0.0) {  // special case: constant timestep
+      dt_global = constantDt_;
+    }
+  }  
+
+  // compute work estimate for subcycling
+  amrex::Long n_factor_work = 1;
+  amrex::Long work_subcycling = 0;
+  for (int level = 0; level <= finest_level; ++level) {
+    n_factor_work *= nsubsteps[level];
+    work_subcycling += n_factor_work * CountCells(level);
+  }
+
+  // compute work estimate for non-subcycling
+  amrex::Long total_cells = 0;
+  for (int level = 0; level <= finest_level; ++level) {
+    total_cells += CountCells(level);
+  }
+  const amrex::Real work_nonsubcycling = static_cast<amrex::Real>(total_cells) * (dt_0 / dt_global);
+
+  if (work_nonsubcycling <= work_subcycling) {
+    // use global timestep on this coarse step
+    if (verbose) {
+      const amrex::Real ratio = work_nonsubcycling / work_subcycling;
+      amrex::Print() << "\t>> Using global timestep on this coarse step (estimated work ratio: " << ratio << ").\n";
+    }
+    for (int lev = 1; lev <= max_level; ++lev) {
+      nsubsteps[lev] = 1;
     }
   }
 
@@ -559,6 +622,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep() {
     dt_0 = stopTime_ - tNew_[0];
   }
 
+  // assign timesteps on each level
   dt_[0] = dt_0;
 
   for (int level = 1; level <= finest_level; ++level) {
@@ -887,6 +951,37 @@ void AMRSimulation<problem_t>::incrementFluxRegisters(
     fr_as_fine->FineAdd(
         mfi, {AMREX_D_DECL(&fluxArrays[0], &fluxArrays[1], &fluxArrays[2])},
         geom[lev].CellSize(), dt_lev, amrex::RunOn::Gpu);
+  }
+}
+
+template <typename problem_t>
+void AMRSimulation<problem_t>::incrementFluxRegisters(
+    amrex::YAFluxRegister *fr_as_crse,
+    amrex::YAFluxRegister *fr_as_fine,
+    std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxArrays, int const lev,
+    amrex::Real const dt_lev) {
+  BL_PROFILE("AMRSimulation::incrementFluxRegisters()");
+
+  for(amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
+    if (fr_as_crse != nullptr) {
+      AMREX_ASSERT(lev < finestLevel());
+      AMREX_ASSERT(fr_as_crse == flux_reg_[lev + 1].get());
+      fr_as_crse->CrseAdd(mfi,
+          {AMREX_D_DECL(fluxArrays[0].fabPtr(mfi),
+                        fluxArrays[1].fabPtr(mfi),
+                        fluxArrays[2].fabPtr(mfi))},
+          geom[lev].CellSize(), dt_lev, amrex::RunOn::Gpu);
+    }
+
+    if (fr_as_fine != nullptr) {
+      AMREX_ASSERT(lev > 0);
+      AMREX_ASSERT(fr_as_fine == flux_reg_[lev].get());
+      fr_as_fine->FineAdd(mfi,
+          {AMREX_D_DECL(fluxArrays[0].fabPtr(mfi),
+                        fluxArrays[1].fabPtr(mfi),
+                        fluxArrays[2].fabPtr(mfi))},          
+          geom[lev].CellSize(), dt_lev, amrex::RunOn::Gpu);
+    }
   }
 }
 

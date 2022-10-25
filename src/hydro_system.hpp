@@ -63,9 +63,7 @@ public:
     primScalar0_index // first passive scalar (only present if nscalars > 0!)
   };
 
-  static void ConservedToPrimitive(amrex::Array4<const amrex::Real> const &cons,
-                                   array_t &primVar,
-                                   amrex::Box const &indexRange);
+  static void ConservedToPrimitive(amrex::MultiFab const &cons_mf, amrex::MultiFab &primVar_mf, const int nghost);
 
   static void
   ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real> const &cons,
@@ -74,9 +72,7 @@ public:
   static auto CheckStatesValid(amrex::Box const &indexRange,
                                amrex::Array4<const amrex::Real> const &cons)
       -> bool;
-  static void EnforceDensityFloor(amrex::Real densityFloor,
-                                   amrex::Box const &indexRange,
-                                   amrex::Array4<amrex::Real> const &state);
+  static void EnforceDensityFloor(amrex::Real const densityFloor, amrex::MultiFab &state_mf);
 
   AMREX_GPU_DEVICE static auto
   ComputePressure(amrex::Array4<const amrex::Real> const &cons, int i, int j,
@@ -98,40 +94,26 @@ public:
   isStateValid(amrex::Array4<const amrex::Real> const &cons, int i, int j,
                int k) -> bool;
 
-  static void ComputeRhsFromFluxes(amrex::Array4<amrex::Real> const &rhs,
-                          std::array<arrayconst_t, AMREX_SPACEDIM> const &fluxArray,
-                          amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
-                          amrex::Box const &indexRange, int nvars);
+  static void ComputeRhsFromFluxes(amrex::MultiFab &rhs_mf,
+				   std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fluxArray,
+				   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, const int nvars);
 
-  static void PredictStep(arrayconst_t &consVarOld, array_t &consVarNew, arrayconst_t &rhs,
-                          double dt, amrex::Box const &indexRange, int nvars,
-                          amrex::Array4<int> const &redoFlag);
+  static void PredictStep(amrex::MultiFab const &consVarOld, amrex::MultiFab &consVarNew, amrex::MultiFab const &rhs,
+			  const double dt, const int nvars, amrex::iMultiFab &redoFlag_mf);
 
-  static void AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayconst_t &U1, arrayconst_t &rhs,
-                          double dt, amrex::Box const &indexRange, int nvars,
-                          amrex::Array4<int> const &redoFlag);
+  static void AddFluxesRK2(amrex::MultiFab &Unew_mf, amrex::MultiFab const &U0_mf, amrex::MultiFab const &U1_mf,
+			   amrex::MultiFab const &rhs_mf, const double dt, const int nvars, amrex::iMultiFab &redoFlag_mf);
 
-  static void AddInternalEnergyPdV(amrex::Array4<amrex::Real> const &rhs,
-                          amrex::Array4<amrex::Real const> const &consVar,
-                          amrex::Box const &indexRange,
-                          amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx,
-                          amrex::Array4<const int> const &redoFlag,
-                          std::array<arrayconst_t, AMREX_SPACEDIM> const &faceVelArray);
+  static void AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex::MultiFab const &consVar_mf,
+				   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx,
+				   std::array<amrex::MultiFab, AMREX_SPACEDIM> const &faceVelArray);
 
-  static void SyncDualEnergy(amrex::Array4<amrex::Real> const &consVar,
-                           amrex::Box const &indexRange);
-
-  static void OverrideInternalEnergy(amrex::Array4<amrex::Real> const &consVar,
-                           amrex::Box const &indexRange);
+  static void SyncDualEnergy(amrex::MultiFab &consVar_mf);
 
   template <FluxDir DIR>
   static void
-  ComputeFluxes(array_t &x1Flux_in,
-                array_t &x1FaceVel_in,
-                amrex::Array4<const amrex::Real> const &x1LeftState_in,
-                amrex::Array4<const amrex::Real> const &x1RightState_in,
-                amrex::Array4<const amrex::Real> const &primVar_in,
-                amrex::Box const &indexRange);
+  ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab &x1FaceVel_mf, amrex::MultiFab const &x1LeftState_mf,
+			          amrex::MultiFab const &x1RightState_mf, amrex::MultiFab const &primVar_mf);
 
   template <FluxDir DIR>
   static void
@@ -141,16 +123,11 @@ public:
 
   template <FluxDir DIR>
   static void
-  ComputeFlatteningCoefficients(amrex::Array4<const amrex::Real> const &primVar,
-                                array_t &x1Chi, amrex::Box const &indexRange);
+  ComputeFlatteningCoefficients(amrex::MultiFab const &primVar_mf, amrex::MultiFab &x1Chi_mf, const int nghost);
 
   template <FluxDir DIR>
-  static void FlattenShocks(amrex::Array4<const amrex::Real> const &q_in,
-                            amrex::Array4<const amrex::Real> const &x1Chi_in,
-                            amrex::Array4<const amrex::Real> const &x2Chi_in,
-                            amrex::Array4<const amrex::Real> const &x3Chi_in,
-                            array_t &x1LeftState_in, array_t &x1RightState_in,
-                            amrex::Box const &indexRange, int nvars);
+  static void FlattenShocks(amrex::MultiFab const &q_mf, amrex::MultiFab const &x1Chi_mf, amrex::MultiFab const &x2Chi_mf, amrex::MultiFab const &x3Chi_mf,
+			    amrex::MultiFab &x1LeftState_mf, amrex::MultiFab &x1RightState_mf, const int nghost, const int nvars);
 
   // C++ does not allow constexpr to be uninitialized, even in a templated
   // class!
@@ -164,16 +141,19 @@ public:
 
 template <typename problem_t>
 void HydroSystem<problem_t>::ConservedToPrimitive(
-    amrex::Array4<const amrex::Real> const &cons, array_t &primVar,
-    amrex::Box const &indexRange) {
-  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-    const auto rho = cons(i, j, k, density_index);
-    const auto px = cons(i, j, k, x1Momentum_index);
-    const auto py = cons(i, j, k, x2Momentum_index);
-    const auto pz = cons(i, j, k, x3Momentum_index);
-    const auto E =
-        cons(i, j, k, energy_index); // *total* gas energy per unit volume
-    const auto Eint_aux = cons(i, j, k, internalEnergy_index);
+    amrex::MultiFab const &cons_mf, amrex::MultiFab &primVar_mf, const int nghost) {
+  // convert conserved to primitive variables
+  auto const &cons = cons_mf.const_arrays();
+  auto const &primVar = primVar_mf.arrays();
+  amrex::IntVect ng{AMREX_D_DECL(nghost,nghost,nghost)};
+
+  amrex::ParallelFor(cons_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
+    const auto rho = cons[bx](i, j, k, density_index);
+    const auto px = cons[bx](i, j, k, x1Momentum_index);
+    const auto py = cons[bx](i, j, k, x2Momentum_index);
+    const auto pz = cons[bx](i, j, k, x3Momentum_index);
+    const auto E = cons[bx](i, j, k, energy_index); // *total* gas energy per unit volume
+    const auto Eint_aux = cons[bx](i, j, k, internalEnergy_index);
 
     AMREX_ASSERT(!std::isnan(rho));
     AMREX_ASSERT(!std::isnan(px));
@@ -196,27 +176,26 @@ void HydroSystem<problem_t>::ConservedToPrimitive(
       AMREX_ASSERT(Pgas > 0.);
     }
 
-    primVar(i, j, k, primDensity_index) = rho;
-    primVar(i, j, k, x1Velocity_index) = vx;
-    primVar(i, j, k, x2Velocity_index) = vy;
-    primVar(i, j, k, x3Velocity_index) = vz;
+    primVar[bx](i, j, k, primDensity_index) = rho;
+    primVar[bx](i, j, k, x1Velocity_index) = vx;
+    primVar[bx](i, j, k, x2Velocity_index) = vy;
+    primVar[bx](i, j, k, x3Velocity_index) = vz;
 
     if constexpr (reconstruct_eint) {
       // save specific internal energy (SIE) == (Etot - KE) / rho
-      primVar(i, j, k, pressure_index) = eint_cons;
+      primVar[bx](i, j, k, pressure_index) = eint_cons;
       // save auxiliary specific internal energy (SIE) == Eint_aux / rho
-      primVar(i, j, k, primEint_index) = eint_aux;
+      primVar[bx](i, j, k, primEint_index) = eint_aux;
     } else {
       // save pressure
-      primVar(i, j, k, pressure_index) = Pgas;
+      primVar[bx](i, j, k, pressure_index) = Pgas;
       // save auxiliary internal energy (rho * e)
-      primVar(i, j, k, primEint_index) = Eint_aux;
+      primVar[bx](i, j, k, primEint_index) = Eint_aux;
     }
 
     // copy any passive scalars
     for (int nc = 0; nc < nscalars_; ++nc) {
-      primVar(i, j, k, primScalar0_index + nc) =
-          cons(i, j, k, scalar0_index + nc);
+      primVar[bx](i, j, k, primScalar0_index + nc) = cons[bx](i, j, k, scalar0_index + nc);
     }
   });
 }
@@ -301,16 +280,17 @@ auto HydroSystem<problem_t>::CheckStatesValid(
 
 template <typename problem_t>
 void HydroSystem<problem_t>::EnforceDensityFloor(amrex::Real const densityFloor, 
-    amrex::Box const &indexRange, amrex::Array4<amrex::Real> const &state) {
+    amrex::MultiFab &state_mf) {
   // prevent negative densities
+  auto state = state_mf.arrays();
 
   amrex::ParallelFor(
-      indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-        amrex::Real rho = state(i, j, k, density_index);
+      state_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+        amrex::Real rho = state[bx](i, j, k, density_index);
 
         // reset density if less than densityFloor
         if (rho < densityFloor) {
-          state(i, j, k, density_index) = densityFloor;
+          state[bx](i, j, k, density_index) = densityFloor;
         }
       });
 }
@@ -391,10 +371,10 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::isStateValid(
 
 template <typename problem_t>
 void HydroSystem<problem_t>::ComputeRhsFromFluxes(
-    amrex::Array4<amrex::Real> const &rhs,
-    std::array<arrayconst_t, AMREX_SPACEDIM> const &fluxArray,
+    amrex::MultiFab &rhs_mf,
+    std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fluxArray,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
-    amrex::Box const &indexRange, const int nvars)
+    const int nvars)
 {
   // compute the total right-hand-side for the MOL integration
 
@@ -403,68 +383,76 @@ void HydroSystem<problem_t>::ComputeRhsFromFluxes(
   // left of zone i, and -1.0*flux(i+1) is the flux *into* zone i through
   // the interface on the right of zone i.
 
-  auto const x1Flux = fluxArray[0];
+  auto const x1Flux = fluxArray[0].const_arrays();
 #if AMREX_SPACEDIM >= 2
-  auto const x2Flux = fluxArray[1];
+  auto const x2Flux = fluxArray[1].const_arrays();
 #endif
 #if AMREX_SPACEDIM == 3
-  auto const x3Flux = fluxArray[2];
+  auto const x3Flux = fluxArray[2].const_arrays();
 #endif
+  auto rhs = rhs_mf.arrays();
 
-  amrex::ParallelFor(indexRange, nvars,
-    [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
-      rhs(i,j,k,n) = AMREX_D_TERM( (1.0/dx[0]) * (x1Flux(i, j, k, n) - x1Flux(i + 1, j, k, n)),
-                                 + (1.0/dx[1]) * (x2Flux(i, j, k, n) - x2Flux(i, j + 1, k, n)),
-                                 + (1.0/dx[2]) * (x3Flux(i, j, k, n) - x3Flux(i, j, k + 1, n)));
+  amrex::ParallelFor(rhs_mf, amrex::IntVect{0}, nvars, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k, int n) noexcept {
+	  rhs[bx](i, j, k, n) = AMREX_D_TERM((1.0 / dx[0]) * (x1Flux[bx](i, j, k, n) - x1Flux[bx](i + 1, j, k, n)),
+					     +(1.0 / dx[1]) * (x2Flux[bx](i, j, k, n) - x2Flux[bx](i, j + 1, k, n)),
+					     +(1.0 / dx[2]) * (x3Flux[bx](i, j, k, n) - x3Flux[bx](i, j, k + 1, n)));
   });
 }
 
 template <typename problem_t>
 void HydroSystem<problem_t>::PredictStep(
-    arrayconst_t &consVarOld, array_t &consVarNew, arrayconst_t &rhs,
-    const double dt, amrex::Box const &indexRange, const int nvars,
-    amrex::Array4<int> const &redoFlag) {
+    amrex::MultiFab const &consVarOld_mf, amrex::MultiFab &consVarNew_mf, amrex::MultiFab const &rhs_mf,
+    const double dt, const int nvars, amrex::iMultiFab &redoFlag_mf) {
   BL_PROFILE("HydroSystem::PredictStep()");
 
-  amrex::ParallelFor(
-      indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-        for (int n = 0; n < nvars; ++n) {
-          consVarNew(i, j, k, n) = consVarOld(i, j, k, n) + dt * rhs(i, j, k, n);
-        }
+  auto const &consVarOld = consVarOld_mf.const_arrays();
+  auto const &rhs = rhs_mf.const_arrays();
+  auto consVarNew = consVarNew_mf.arrays();
+  auto redoFlag = redoFlag_mf.arrays();
 
+  amrex::ParallelFor(
+      consVarNew_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+        for (int n = 0; n < nvars; ++n) {
+          consVarNew[bx](i, j, k, n) = consVarOld[bx](i, j, k, n) + dt * rhs[bx](i, j, k, n);
+        }
         // check if state is valid -- flag for re-do if not
-        if (!isStateValid(consVarNew, i, j, k)) {
-          redoFlag(i, j, k) = quokka::redoFlag::redo;
+        if (!isStateValid(consVarNew[bx], i, j, k)) {
+          redoFlag[bx](i, j, k) = quokka::redoFlag::redo;
         } else {
-          redoFlag(i, j, k) = quokka::redoFlag::none;
+          redoFlag[bx](i, j, k) = quokka::redoFlag::none;
         }
       });
 }
 
 template <typename problem_t>
 void HydroSystem<problem_t>::AddFluxesRK2(
-    array_t &U_new, arrayconst_t &U0, arrayconst_t &U1, arrayconst_t &rhs,
-    const double dt, amrex::Box const &indexRange, const int nvars,
-    amrex::Array4<int> const &redoFlag) {
+    amrex::MultiFab &Unew_mf, amrex::MultiFab const &U0_mf, amrex::MultiFab const &U1_mf, amrex::MultiFab const &rhs_mf,
+    const double dt, const int nvars, amrex::iMultiFab &redoFlag_mf) {
   BL_PROFILE("HyperbolicSystem::AddFluxesRK2()");
 
+  auto const &U0 = U0_mf.const_arrays();
+  auto const &U1 = U1_mf.const_arrays();
+  auto const &rhs = rhs_mf.const_arrays();
+  auto U_new = Unew_mf.arrays();
+  auto redoFlag = redoFlag_mf.arrays();
+
   amrex::ParallelFor(
-      indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+      Unew_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
         for (int n = 0; n < nvars; ++n) {
           // RK-SSP2 integrator
-          const double U_0 = U0(i, j, k, n);
-          const double U_1 = U1(i, j, k, n);
-          const double FU = dt * rhs(i, j, k, n);
+          const double U_0 = U0[bx](i, j, k, n);
+          const double U_1 = U1[bx](i, j, k, n);
+          const double FU = dt * rhs[bx](i, j, k, n);
 
           // save results in U_new
-          U_new(i, j, k, n) = (0.5 * U_0 + 0.5 * U_1) + 0.5 * FU;
+          U_new[bx](i, j, k, n) = (0.5 * U_0 + 0.5 * U_1) + 0.5 * FU;
         }
 
         // check if state is valid -- flag for re-do if not
-        if (!isStateValid(U_new, i, j, k)) {
-          redoFlag(i, j, k) = quokka::redoFlag::redo;
+        if (!isStateValid(U_new[bx], i, j, k)) {
+          redoFlag[bx](i, j, k) = quokka::redoFlag::redo;
         } else {
-          redoFlag(i, j, k) = quokka::redoFlag::none;
+          redoFlag[bx](i, j, k) = quokka::redoFlag::none;
         }
       });
 }
@@ -472,11 +460,7 @@ void HydroSystem<problem_t>::AddFluxesRK2(
 template <typename problem_t>
 template <FluxDir DIR>
 void HydroSystem<problem_t>::ComputeFlatteningCoefficients(
-    amrex::Array4<const amrex::Real> const &primVar_in, array_t &x1Chi_in,
-    amrex::Box const &indexRange) {
-  quokka::Array4View<const amrex::Real, DIR> primVar(primVar_in);
-  quokka::Array4View<amrex::Real, DIR> x1Chi(x1Chi_in);
-
+    amrex::MultiFab const &primVar_mf, amrex::MultiFab &x1Chi_mf, const int nghost) {
   // compute the PPM shock flattening coefficient following
   //   Appendix B1 of Mignone+ 2005 [this description has typos].
   // Method originally from Miller & Colella,
@@ -487,105 +471,114 @@ void HydroSystem<problem_t>::ComputeFlatteningCoefficients(
   constexpr double Zmax = 0.75;
   constexpr double Zmin = 0.25;
 
+  auto const &primVar_in = primVar_mf.const_arrays();
+  auto x1Chi_in = x1Chi_mf.arrays();
+  amrex::IntVect ng{AMREX_D_DECL(nghost,nghost,nghost)};
+
   // cell-centered kernel
-  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i_in, int j_in,
-                                                      int k_in) {
-    auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
+  amrex::ParallelFor(primVar_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in) {
+	  quokka::Array4View<const amrex::Real, DIR> primVar(primVar_in[bx]);
+	  quokka::Array4View<amrex::Real, DIR> x1Chi(x1Chi_in[bx]);
+	  auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
 
-    amrex::Real Pplus2 = primVar(i + 2, j, k, pressure_index);
-    amrex::Real Pplus1 = primVar(i + 1, j, k, pressure_index);
-    amrex::Real P = primVar(i, j, k, pressure_index);
-    amrex::Real Pminus1 = primVar(i - 1, j, k, pressure_index);
-    amrex::Real Pminus2 = primVar(i - 2, j, k, pressure_index);
+	  amrex::Real Pplus2 = primVar(i + 2, j, k, pressure_index);
+	  amrex::Real Pplus1 = primVar(i + 1, j, k, pressure_index);
+	  amrex::Real P = primVar(i, j, k, pressure_index);
+	  amrex::Real Pminus1 = primVar(i - 1, j, k, pressure_index);
+	  amrex::Real Pminus2 = primVar(i - 2, j, k, pressure_index);
 
-    if constexpr (reconstruct_eint) {
-      // compute (rho e) (gamma - 1)
-      Pplus2 *= primVar(i + 2, j, k, primDensity_index) * (gamma_ - 1.0);
-      Pplus1 *= primVar(i + 1, j, k, primDensity_index) * (gamma_ - 1.0);
-      P *= primVar(i, j, k, primDensity_index) * (gamma_ - 1.0);
-      Pminus1 *= primVar(i - 1, j, k, primDensity_index) * (gamma_ - 1.0);
-      Pminus2 *= primVar(i - 2, j, k, primDensity_index) * (gamma_ - 1.0);
-    }
+	  if constexpr (reconstruct_eint) {
+		  // compute (rho e) (gamma - 1)
+		  Pplus2 *= primVar(i + 2, j, k, primDensity_index) * (gamma_ - 1.0);
+		  Pplus1 *= primVar(i + 1, j, k, primDensity_index) * (gamma_ - 1.0);
+		  P *= primVar(i, j, k, primDensity_index) * (gamma_ - 1.0);
+		  Pminus1 *= primVar(i - 1, j, k, primDensity_index) * (gamma_ - 1.0);
+		  Pminus2 *= primVar(i - 2, j, k, primDensity_index) * (gamma_ - 1.0);
+	  }
 
-    if constexpr (is_eos_isothermal()) {
-      const amrex::Real cs_sq = cs_iso_ * cs_iso_;
-      Pplus2 = primVar(i + 2, j, k, primDensity_index) * cs_sq;
-      Pplus1 = primVar(i + 1, j, k, primDensity_index) * cs_sq;
-      P = primVar(i, j, k, primDensity_index) * cs_sq;
-      Pminus1 = primVar(i - 1, j, k, primDensity_index) * cs_sq;
-      Pminus2 = primVar(i - 2, j, k, primDensity_index) * cs_sq;
-    }
+	  if constexpr (is_eos_isothermal()) {
+		  const amrex::Real cs_sq = cs_iso_ * cs_iso_;
+		  Pplus2 = primVar(i + 2, j, k, primDensity_index) * cs_sq;
+		  Pplus1 = primVar(i + 1, j, k, primDensity_index) * cs_sq;
+		  P = primVar(i, j, k, primDensity_index) * cs_sq;
+		  Pminus1 = primVar(i - 1, j, k, primDensity_index) * cs_sq;
+		  Pminus2 = primVar(i - 2, j, k, primDensity_index) * cs_sq;
+	  }
 
-    // beta is a measure of shock resolution (Eq. 74 of Miller & Colella 2002)
-    // Miller & Collela note: "If beta is 1/2, then pressure is linear across
-    //   four computational cells. If beta is small enough, then we assume that
-    //   any discontinuity is already sufficiently well resolved that additional
-    //   dissipation (flattening) is not required."
-    const double beta_denom = std::abs(Pplus2 - Pminus2);
-    // avoid division by zero (in this case, chi = 1 anyway)
-    const double beta =
-        (beta_denom != 0) ? (std::abs(Pplus1 - Pminus1) / beta_denom) : 0;
+	  // beta is a measure of shock resolution (Eq. 74 of Miller & Colella 2002)
+	  // Miller & Collela note: "If beta is 1/2, then pressure is linear across
+	  //   four computational cells. If beta is small enough, then we assume that
+	  //   any discontinuity is already sufficiently well resolved that additional
+	  //   dissipation (flattening) is not required."
+	  const double beta_denom = std::abs(Pplus2 - Pminus2);
+	  // avoid division by zero (in this case, chi = 1 anyway)
+	  const double beta = (beta_denom != 0) ? (std::abs(Pplus1 - Pminus1) / beta_denom) : 0;
 
-    // Eq. 75 of Miller & Colella 2002
-    const double chi_min =
-        std::max(0., std::min(1., (beta_max - beta) / (beta_max - beta_min)));
+	  // Eq. 75 of Miller & Colella 2002
+	  const double chi_min = std::max(0., std::min(1., (beta_max - beta) / (beta_max - beta_min)));
 
-    // Z is a measure of shock strength (Eq. 76 of Miller & Colella 2002)
-    const double K_S = gamma_ * P; // equal to \rho c_s^2
-    const double Z = std::abs(Pplus1 - Pminus1) / K_S;
+	  // Z is a measure of shock strength (Eq. 76 of Miller & Colella 2002)
+	  const double K_S = gamma_ * P; // equal to \rho c_s^2
+	  const double Z = std::abs(Pplus1 - Pminus1) / K_S;
 
-    // check for converging flow along the normal direction DIR (Eq. 77)
-    int velocity_index = 0;
-    if constexpr (DIR == FluxDir::X1) {
-      velocity_index = x1Velocity_index;
-    } else if constexpr (DIR == FluxDir::X2) {
-      velocity_index = x2Velocity_index;
-    } else if constexpr (DIR == FluxDir::X3) {
-      velocity_index = x3Velocity_index;
-    }
-    double chi = 1.0;
-    if (primVar(i + 1, j, k, velocity_index) <
-        primVar(i - 1, j, k, velocity_index)) {
-      chi = std::max(chi_min, std::min(1., (Zmax - Z) / (Zmax - Zmin)));
-    }
+	  // check for converging flow along the normal direction DIR (Eq. 77)
+	  int velocity_index = 0;
+	  if constexpr (DIR == FluxDir::X1) {
+		  velocity_index = x1Velocity_index;
+	  } else if constexpr (DIR == FluxDir::X2) {
+		  velocity_index = x2Velocity_index;
+	  } else if constexpr (DIR == FluxDir::X3) {
+		  velocity_index = x3Velocity_index;
+	  }
+	  double chi = 1.0;
+	  if (primVar(i + 1, j, k, velocity_index) < primVar(i - 1, j, k, velocity_index)) {
+		  chi = std::max(chi_min, std::min(1., (Zmax - Z) / (Zmax - Zmin)));
+	  }
 
-    x1Chi(i, j, k) = chi;
+	  x1Chi(i, j, k) = chi;
   });
 }
 
 template <typename problem_t>
 template <FluxDir DIR>
 void HydroSystem<problem_t>::FlattenShocks(
-    amrex::Array4<const amrex::Real> const &q_in,
-    amrex::Array4<const amrex::Real> const &x1Chi_in,
-    amrex::Array4<const amrex::Real> const &x2Chi_in,
-    amrex::Array4<const amrex::Real> const &x3Chi_in, array_t &x1LeftState_in,
-    array_t &x1RightState_in, amrex::Box const &indexRange, const int nvars) {
-  quokka::Array4View<const amrex::Real, DIR> q(q_in);
-  quokka::Array4View<amrex::Real, DIR> x1LeftState(x1LeftState_in);
-  quokka::Array4View<amrex::Real, DIR> x1RightState(x1RightState_in);
-
+    amrex::MultiFab const &q_mf,
+    amrex::MultiFab const &x1Chi_mf,
+    amrex::MultiFab const &x2Chi_mf,
+    amrex::MultiFab const &x3Chi_mf, amrex::MultiFab &x1LeftState_mf,
+    amrex::MultiFab &x1RightState_mf, const int nghost, const int nvars) {
   // Apply shock flattening based on Miller & Colella (2002)
   // [This is necessary to get a reasonable solution to the slow-moving
   // shock problem, and reduces post-shock oscillations in other cases.]
 
+  auto const &q_in = q_mf.const_arrays();
+  auto const &x1Chi_in = x1Chi_mf.const_arrays();
+  auto const &x2Chi_in = x2Chi_mf.const_arrays();
+  auto const &x3Chi_in = x3Chi_mf.const_arrays();
+  auto x1LeftState_in = x1LeftState_mf.arrays();
+  auto x1RightState_in = x1RightState_mf.arrays();
+  amrex::IntVect ng{AMREX_D_DECL(nghost,nghost,nghost)};
+
   // cell-centered kernel
-  amrex::ParallelFor(
-      indexRange, nvars,
-      [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) {
+  amrex::ParallelFor(q_mf, ng, nvars,
+      [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in, int n) {
+        quokka::Array4View<const amrex::Real, DIR> q(q_in[bx]);
+        quokka::Array4View<amrex::Real, DIR> x1LeftState(x1LeftState_in[bx]);
+        quokka::Array4View<amrex::Real, DIR> x1RightState(x1RightState_in[bx]);
+
         // compute coefficient as the minimum from adjacent cells along *each
         // axis*
         //  (Eq. 86 of Miller & Colella 2001; Eq. 78 of Miller & Colella 2002)
         double chi_ijk = std::min({
-          x1Chi_in(i_in - 1, j_in, k_in), x1Chi_in(i_in, j_in, k_in),
-              x1Chi_in(i_in + 1, j_in, k_in),
+          x1Chi_in[bx](i_in - 1, j_in, k_in), x1Chi_in[bx](i_in, j_in, k_in),
+              x1Chi_in[bx](i_in + 1, j_in, k_in),
 #if (AMREX_SPACEDIM >= 2)
-              x2Chi_in(i_in, j_in - 1, k_in), x2Chi_in(i_in, j_in, k_in),
-              x2Chi_in(i_in, j_in + 1, k_in),
+              x2Chi_in[bx](i_in, j_in - 1, k_in), x2Chi_in[bx](i_in, j_in, k_in),
+              x2Chi_in[bx](i_in, j_in + 1, k_in),
 #endif
 #if (AMREX_SPACEDIM == 3)
-              x3Chi_in(i_in, j_in, k_in - 1), x3Chi_in(i_in, j_in, k_in),
-              x3Chi_in(i_in, j_in, k_in + 1),
+              x3Chi_in[bx](i_in, j_in, k_in - 1), x3Chi_in[bx](i_in, j_in, k_in),
+              x3Chi_in[bx](i_in, j_in, k_in + 1),
 #endif
         });
 
@@ -609,28 +602,33 @@ void HydroSystem<problem_t>::FlattenShocks(
 
 template <typename problem_t>
 void HydroSystem<problem_t>::AddInternalEnergyPdV(
-    amrex::Array4<amrex::Real> const &rhs, amrex::Array4<amrex::Real const> const &consVar,
-    amrex::Box const &indexRange, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx,
-    amrex::Array4<const int> const &redoFlag,
-    std::array<arrayconst_t, AMREX_SPACEDIM> const &faceVelArray) {
+    amrex::MultiFab &rhs_mf, amrex::MultiFab const &consVar_mf,
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx,
+    std::array<amrex::MultiFab, AMREX_SPACEDIM> const &faceVelArray) {
   // compute P dV source term for the internal energy equation,
   // using the face-centered velocities in faceVelArray and the pressure
 
-  auto vel_x = faceVelArray[0];
+  auto vel_x = faceVelArray[0].const_arrays();
 #if AMREX_SPACEDIM >= 2
-  auto vel_y = faceVelArray[1];
+  auto vel_y = faceVelArray[1].const_arrays();
 #endif
 #if AMREX_SPACEDIM == 3
-  auto vel_z = faceVelArray[2];
+  auto vel_z = faceVelArray[2].const_arrays();
 #endif
 
-  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+  auto const &consVar = consVar_mf.const_arrays();
+  auto rhs = rhs_mf.arrays();
+
+  amrex::ParallelFor(rhs_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
     // get cell-centered pressure
-    const amrex::Real Pgas = ComputePressure(consVar, i, j, k);
+    const amrex::Real Pgas = ComputePressure(consVar[bx], i, j, k);
 
     // compute div v from face-centered velocities
-    amrex::Real div_v = NAN;
+    amrex::Real div_v = AMREX_D_TERM(  ( vel_x[bx](i+1, j  , k  ) - vel_x[bx](i, j, k) ) / dx[0],
+                                     + ( vel_y[bx](i  , j+1, k  ) - vel_y[bx](i, j, k) ) / dx[1],
+                                     + ( vel_z[bx](i  , j  , k+1) - vel_z[bx](i, j, k) ) / dx[2]  );
 
+#if 0                
     if (redoFlag(i,j,k) == quokka::redoFlag::none) {
       div_v = AMREX_D_TERM(  ( vel_x(i+1, j  , k  ) - vel_x(i, j, k) ) / dx[0],
                            + ( vel_y(i  , j+1, k  ) - vel_y(i, j, k) ) / dx[1],
@@ -642,27 +640,29 @@ void HydroSystem<problem_t>::AddInternalEnergyPdV(
               + ( ComputeVelocityX3(consVar, i, j, k+1) - ComputeVelocityX3(consVar, i, j, k-1) ) / dx[2]
               ) );
     }
+#endif
 
     // add P dV term to rhs array
-    rhs(i, j, k, internalEnergy_index) += -Pgas * div_v;
+    rhs[bx](i, j, k, internalEnergy_index) += -Pgas * div_v;
   });
 }
 
 template <typename problem_t>
-void HydroSystem<problem_t>::SyncDualEnergy(amrex::Array4<amrex::Real> const &consVar,
-    amrex::Box const &indexRange) {
+void HydroSystem<problem_t>::SyncDualEnergy(amrex::MultiFab &consVar_mf) {
   // sync internal energy and total energy
   // this step must be done as an operator-split step after *each* RK stage
 
   const amrex::Real eta = 1.0e-3; // dual energy parameter 'eta'
 
-  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-    amrex::Real const rho = consVar(i, j, k, density_index);
-    amrex::Real const px = consVar(i, j, k, x1Momentum_index);
-    amrex::Real const py = consVar(i, j, k, x2Momentum_index);
-    amrex::Real const pz = consVar(i, j, k, x3Momentum_index);
-    amrex::Real const Etot = consVar(i, j, k, energy_index);
-    amrex::Real const Eint_aux = consVar(i, j, k, internalEnergy_index);
+  auto consVar = consVar_mf.arrays();
+
+  amrex::ParallelFor(consVar_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
+    amrex::Real const rho = consVar[bx](i, j, k, density_index);
+    amrex::Real const px = consVar[bx](i, j, k, x1Momentum_index);
+    amrex::Real const py = consVar[bx](i, j, k, x2Momentum_index);
+    amrex::Real const pz = consVar[bx](i, j, k, x3Momentum_index);
+    amrex::Real const Etot = consVar[bx](i, j, k, energy_index);
+    amrex::Real const Eint_aux = consVar[bx](i, j, k, internalEnergy_index);
 
     // abort if density is negative (can't compute kinetic energy)
     if (rho <= 0.) {
@@ -675,26 +675,19 @@ void HydroSystem<problem_t>::SyncDualEnergy(amrex::Array4<amrex::Real> const &co
     // Li et al. sync method
     // replace Eint with Eint_cons == (Etot - Ekin) if (Eint_cons / E) > eta
     if (Eint_cons > eta * Etot) {
-      consVar(i, j, k, internalEnergy_index) = Eint_cons;
+      consVar[bx](i, j, k, internalEnergy_index) = Eint_cons;
     } else { // non-conservative sync
-      consVar(i, j, k, internalEnergy_index) = Eint_aux;
-      consVar(i, j, k, energy_index) = Eint_aux + Ekin;
+      consVar[bx](i, j, k, internalEnergy_index) = Eint_aux;
+      consVar[bx](i, j, k, energy_index) = Eint_aux + Ekin;
     }
   });
 }
 
 template <typename problem_t>
 template <FluxDir DIR>
-void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FaceVel_in,
-    amrex::Array4<const amrex::Real> const &x1LeftState_in,
-    amrex::Array4<const amrex::Real> const &x1RightState_in,
-    amrex::Array4<const amrex::Real> const &primVar_in, amrex::Box const &indexRange) {
-
-  quokka::Array4View<const amrex::Real, DIR> x1LeftState(x1LeftState_in);
-  quokka::Array4View<const amrex::Real, DIR> x1RightState(x1RightState_in);
-  quokka::Array4View<amrex::Real, DIR> x1Flux(x1Flux_in);
-  quokka::Array4View<amrex::Real, DIR> x1FaceVel(x1FaceVel_in);
-  quokka::Array4View<const amrex::Real, DIR> q(primVar_in);
+void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab &x1FaceVel_mf,
+    amrex::MultiFab const &x1LeftState_mf, amrex::MultiFab const &x1RightState_mf,
+    amrex::MultiFab const &primVar_mf) {
 
   // By convention, the interfaces are defined on the left edge of each
   // zone, i.e. xinterface_(i) is the solution to the Riemann problem at
@@ -702,8 +695,19 @@ void HydroSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FaceVe
 
   // Indexing note: There are (nx + 1) interfaces for nx zones.
 
-  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i_in, int j_in,
-                                                      int k_in) {
+  auto const &x1LeftState_in = x1LeftState_mf.const_arrays();
+  auto const &x1RightState_in = x1RightState_mf.const_arrays();
+  auto const &primVar_in = primVar_mf.const_arrays();
+  auto x1Flux_in = x1Flux_mf.arrays();
+  auto x1FaceVel_in = x1FaceVel_mf.arrays();
+
+  amrex::ParallelFor(x1Flux_mf, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in) {
+    quokka::Array4View<const amrex::Real, DIR> x1LeftState(x1LeftState_in[bx]);
+    quokka::Array4View<const amrex::Real, DIR> x1RightState(x1RightState_in[bx]);
+    quokka::Array4View<amrex::Real, DIR> x1Flux(x1Flux_in[bx]);
+    quokka::Array4View<amrex::Real, DIR> x1FaceVel(x1FaceVel_in[bx]);
+    quokka::Array4View<const amrex::Real, DIR> q(primVar_in[bx]);
+
     auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
 
     // HLLC solver following Toro (1998) and Balsara (2017).
