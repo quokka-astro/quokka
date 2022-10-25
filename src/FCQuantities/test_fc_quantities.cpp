@@ -44,14 +44,11 @@ void RadhydroSimulation<FCQuantities>::setInitialConditionsOnGrid(
   const quokka::direction dir = grid_elem.dir;
 
   if (cen == quokka::centering::cc) {
-    // extract variables required from the geom object
-    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx;
-    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo;
     const int ncomp_cc = ncomp_cc_;
     // loop over the grid and set the initial condition
     amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
       for (int n = 0; n < ncomp_cc; ++n) {
-        state(i, j, k, n) = 0;
+        state(i, j, k, n) = n;
       }
     });
   } else if (cen == quokka::centering::fc) {
