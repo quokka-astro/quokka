@@ -34,10 +34,49 @@ template <> struct Physics_Traits<FCQuantities> {
   static constexpr bool is_mhd_enabled = true;
 };
 
+constexpr double rho0 = 1.0; // background density
+constexpr double P0 =
+    1.0 / HydroSystem<FCQuantities>::gamma_; // background pressure
+constexpr double v0 = 0.;                   // background velocity
+constexpr double amp = 1.0e-6;              // perturbation amplitude
+
+AMREX_GPU_DEVICE void computeWaveSolution(
+    int i, int j, int k, amrex::Array4<amrex::Real> const &state,
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo) {
+  const amrex::Real x_L = prob_lo[0] + (i + amrex::Real(0.0)) * dx[0];
+  const amrex::Real x_R = prob_lo[0] + (i + amrex::Real(1.0)) * dx[0];
+  const amrex::Real A = amp;
+
+  const quokka::valarray<double, 3> R = {
+      1.0, -1.0, 1.5}; // right eigenvector of sound wave
+  const quokka::valarray<double, 3> U_0 = {
+      rho0, rho0 * v0,
+      P0 / (HydroSystem<FCQuantities>::gamma_ - 1.0) +
+          0.5 * rho0 * std::pow(v0, 2)};
+  const quokka::valarray<double, 3> dU =
+      (A * R / (2.0 * M_PI * dx[0])) *
+      (std::cos(2.0 * M_PI * x_L) - std::cos(2.0 * M_PI * x_R));
+
+  double rho = U_0[0] + dU[0];
+  double xmom = U_0[1] + dU[1];
+  double Etot = U_0[2] + dU[2];
+  double Eint = Etot - 0.5 * (xmom * xmom) / rho;
+
+  state(i, j, k, HydroSystem<FCQuantities>::density_index) = rho;
+  state(i, j, k, HydroSystem<FCQuantities>::x1Momentum_index) = xmom;
+  state(i, j, k, HydroSystem<FCQuantities>::x2Momentum_index) = 0;
+  state(i, j, k, HydroSystem<FCQuantities>::x3Momentum_index) = 0;
+  state(i, j, k, HydroSystem<FCQuantities>::energy_index) = Etot;
+  state(i, j, k, HydroSystem<FCQuantities>::internalEnergy_index) = Eint;
+}
+
 template <>
 void RadhydroSimulation<FCQuantities>::setInitialConditionsOnGrid(
     quokka::grid grid_elem) {
   // extract grid information
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo;
   const amrex::Array4<double>& state = grid_elem.array;
   const amrex::Box &indexRange = grid_elem.indexRange;
   const quokka::centering cen = grid_elem.cen;
@@ -48,8 +87,9 @@ void RadhydroSimulation<FCQuantities>::setInitialConditionsOnGrid(
     // loop over the grid and set the initial condition
     amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
       for (int n = 0; n < ncomp_cc; ++n) {
-        state(i, j, k, n) = n;
+        state(i, j, k, n) = 0; // fill unused quantities with zeros
       }
+      computeWaveSolution(i, j, k, state, dx, prob_lo);
     });
   } else if (cen == quokka::centering::fc) {
     if (dir == quokka::direction::x) {
@@ -69,16 +109,6 @@ void RadhydroSimulation<FCQuantities>::setInitialConditionsOnGrid(
 }
 
 auto problem_main() -> int {
-  // Based on the ATHENA test page:
-  // https://www.astro.princeton.edu/~jstone/Athena/tests/linear-waves/linear-waves.html
-
-  // Problem parameters
-  // const int nx = 100;
-  // const double Lx = 1.0;
-  const double CFL_number = 0.1;
-  const double max_time = 1.0;
-  const int max_timesteps = 2e4;
-
   // Problem initialization
   const int nvars = RadhydroSimulation<FCQuantities>::nvarTotal_cc_;
   amrex::Vector<amrex::BCRec> BCs_cc(nvars);
@@ -89,17 +119,19 @@ auto problem_main() -> int {
     }
   }
 
-  RadhydroSimulation<FCQuantities> sim(BCs_cc);
-  
-  sim.cflNumber_ = CFL_number;
-  sim.stopTime_ = max_time;
-  sim.maxTimesteps_ = max_timesteps;
+  RadhydroSimulation<FCQuantities> sim_write(BCs_cc);
+  sim_write.cflNumber_ = 0.1;
+  sim_write.stopTime_ = 1.0;
+  sim_write.maxTimesteps_ = 2e4;
+  sim_write.setInitialConditions();
+  sim_write.evolve();
 
-  // set initial conditions
-  sim.setInitialConditions();
-
-  // Main time loop
-  sim.evolve();
+  // RadhydroSimulation<FCQuantities> sim_read(BCs_cc);
+  // sim_read.cflNumber_ = 0.1;
+  // sim_read.stopTime_ = 1.0;
+  // sim_read.maxTimesteps_ = 2e4;
+  // sim_read.setInitialConditions();
+  // sim_read.evolve();
 
   return 0;
 }
