@@ -70,30 +70,24 @@ constexpr Real rho1 = nH1 * m_H;
 const int kmin = 0;
 const int kmax = 16;
 Real const A = 0.05 / kmax;
-// initialise pointer to phase table
-const amrex::TableData<Real, AMREX_SPACEDIM>::const_table_type *phase_ptr =
-    nullptr;
+
+// phase table
+std::unique_ptr<amrex::TableData<Real, 3>> table_data;
 
 template <>
 void RadhydroSimulation<ShockCloud>::preCalculateInitialConditions() {
   // generate random phases
-  amrex::Array<int, AMREX_SPACEDIM> tlo{AMREX_D_DECL(kmin, kmin, kmin)};
-  amrex::Array<int, AMREX_SPACEDIM> thi{AMREX_D_DECL(kmax, kmax, kmax)};
-  amrex::TableData<Real, AMREX_SPACEDIM> table_data(tlo, thi);
+  amrex::Array<int, 3> tlo{kmin, kmin, kmin};
+  amrex::Array<int, 3> thi{kmax, kmax, kmax};
+  table_data = std::make_unique<amrex::TableData<Real, 3>>(tlo, thi);
 
-#ifdef AMREX_USE_GPU
-  amrex::TableData<Real, AMREX_SPACEDIM> h_table_data(
-      tlo, thi, amrex::The_Pinned_Arena());
+  amrex::TableData<Real, 3> h_table_data(tlo, thi, amrex::The_Pinned_Arena());
   auto const &h_table = h_table_data.table();
-#else
-  auto const &h_table = table_data.table();
-#endif
 
-  // Initialize data on the host
+  // Initialize data on the hostcd
   // 64-bit Mersenne Twister (do not use 32-bit version for sampling doubles!)
   std::mt19937_64 rng(1); // NOLINT
   std::uniform_real_distribution<double> sample_phase(0., 2.0 * M_PI);
-
   for (int j = tlo[0]; j <= thi[0]; ++j) {
     for (int i = tlo[1]; i <= thi[1]; ++i) {
       for (int k = tlo[2]; k <= thi[2]; ++k) {
@@ -102,29 +96,21 @@ void RadhydroSimulation<ShockCloud>::preCalculateInitialConditions() {
     }
   }
 
-#ifdef AMREX_USE_GPU
   // Copy data to GPU memory
-  table_data.copy(h_table_data);
+  table_data->copy(h_table_data);
   amrex::Gpu::streamSynchronize();
-#endif
-
-  // const makes it read only
-  auto const &phase = table_data.const_table();
-  phase_ptr = &phase;
 }
 
 template <>
 void RadhydroSimulation<ShockCloud>::setInitialConditionsOnGrid(
     quokka::grid grid_elem) {
-  // dereference phase table pointer
-  const amrex::TableData<Real, AMREX_SPACEDIM>::const_table_type &phase_ref =
-      *phase_ptr;
-  // extract variables required from the geom object
+  // set initial conditions
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx;
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo;
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_elem.prob_hi;
   const amrex::Box &indexRange = grid_elem.indexRange;
   const amrex::Array4<double>& state_cc = grid_elem.array;
+  auto const &phase_table = table_data->const_table();
 
   Real const Lx = (prob_hi[0] - prob_lo[0]);
   Real const Ly = (prob_hi[1] - prob_lo[1]);
@@ -133,7 +119,7 @@ void RadhydroSimulation<ShockCloud>::setInitialConditionsOnGrid(
   Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
   Real const y0 = prob_lo[1] + 0.8 * (prob_hi[1] - prob_lo[1]);
   Real const z0 = prob_lo[2] + 0.5 * (prob_hi[2] - prob_lo[2]);
-  // loop over the grid and set the initial condition
+
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
     Real const x = prob_lo[0] + (i + Real(0.5)) * dx[0];
     Real const y = prob_lo[1] + (j + Real(0.5)) * dx[1];
@@ -153,7 +139,7 @@ void RadhydroSimulation<ShockCloud>::setInitialConditionsOnGrid(
           Real const ky = 2.0 * M_PI * Real(kj) / Lx;
           Real const kz = 2.0 * M_PI * Real(kk) / Lx;
           delta_rho +=
-              A * std::sin(x * kx + y * ky + z * kz + phase_ref(ki, kj, kk));
+              A * std::sin(x * kx + y * ky + z * kz + phase_table(ki, kj, kk));
         }
       }
     }
@@ -217,6 +203,38 @@ AMRSimulation<ShockCloud>::setCustomBoundaryConditions(
     consVar(i, j, k, HydroSystem<ShockCloud>::energy_index) = Egas;
     consVar(i, j, k, HydroSystem<ShockCloud>::internalEnergy_index) = Eint;
   }
+}
+
+template <> auto RadhydroSimulation<ShockCloud>::computeExtraPhysicsTimestep(int const lev) -> amrex::Real
+{
+	// return minimum cooling time on level 'lev'
+  amrex::Real tcool_safety_fac = 0.1;
+
+  auto const &mf = state_new_cc_[lev];
+	auto const &state = mf.const_arrays();
+  amrex::MultiFab tcool_mf(mf.boxArray(), mf.DistributionMap(), 1, 0);
+  auto const &tcool = tcool_mf.arrays();
+  auto tables = cloudyTables.const_tables();
+
+	amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		const Real rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
+		const Real x1Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
+		const Real x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
+		const Real x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
+		const Real Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
+		const Real Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+
+		Real T = ComputeTgasFromEgas(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
+		Real Edot = cloudy_cooling_function(rho, T, tables);
+		tcool[bx](i, j, k) = std::abs(Eint / Edot);
+	});
+  amrex::Gpu::streamSynchronizeAll();
+
+  amrex::Real min_tcool = tcool_mf.min(0);
+  if (verbose) {
+    amrex::Print() << "\tMinimum cooling time on level " << lev << ": " << min_tcool << "\n";
+  }
+  return tcool_safety_fac * min_tcool;
 }
 
 struct ODEUserData {

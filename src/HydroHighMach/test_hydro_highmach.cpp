@@ -44,7 +44,7 @@ template <> struct Physics_Traits<HighMachProblem> {
 
 template <>
 void RadhydroSimulation<HighMachProblem>::setInitialConditionsOnGrid(
-    quokka::grid grid_elem) {
+  quokka::grid grid_elem) {
   // extract variables required from the geom object
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx;
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo;
