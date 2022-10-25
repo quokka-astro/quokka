@@ -48,6 +48,7 @@
 #include "hydro_system.hpp"
 #include "radiation_system.hpp"
 #include "simulation.hpp"
+#include "SimulationData.hpp"
 
 // Simulation class should be initialized only once per program (i.e., is a singleton)
 template <typename problem_t> class RadhydroSimulation : public AMRSimulation<problem_t>
@@ -86,6 +87,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	std::vector<double> t_vec_;
 	std::vector<double> Trad_vec_;
 	std::vector<double> Tgas_vec_;
+	SimulationData<problem_t> userData_;
 
 	static constexpr int nvarTotal_ = RadSystem<problem_t>::nvar_;
 	static constexpr int ncompHydro_ = HydroSystem<problem_t>::nvar_; // hydro
@@ -591,7 +593,7 @@ void RadhydroSimulation<problem_t>::FixupState(int lev)
 	// fix hydro state
 	HydroSystem<problem_t>::EnforceDensityFloor(densityFloor_, state_new_[lev]);
 	// fix temperature (can go bad due to reflux)
-	HydroSystem<problem_t>::EnforceInternalEnergyFloor(internalEnergyFloor_, state_new_[lev]);
+	HydroSystem<problem_t>::EnforceInternalEnergyFloor(internalEnergyFloor_, state_new_[lev], userData_);
 		
 	if (useDualEnergy_ == 1) {
 		// sync internal energy and total energy
@@ -748,7 +750,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 
 		// prevent vacuum
 		HydroSystem<problem_t>::EnforceDensityFloor(densityFloor_, stateNew);
-		HydroSystem<problem_t>::EnforceInternalEnergyFloor(internalEnergyFloor_, stateNew);
+		HydroSystem<problem_t>::EnforceInternalEnergyFloor(internalEnergyFloor_, stateNew, userData_);
 
 		if (useDualEnergy_ == 1) {
 			// sync internal energy (requires positive density)
@@ -812,7 +814,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 
 		// prevent vacuum
 		HydroSystem<problem_t>::EnforceDensityFloor(densityFloor_, stateFinal);
-		HydroSystem<problem_t>::EnforceInternalEnergyFloor(internalEnergyFloor_, stateFinal);
+		HydroSystem<problem_t>::EnforceInternalEnergyFloor(internalEnergyFloor_, stateFinal, userData_);
 
 		if (useDualEnergy_ == 1) {
 			// sync internal energy (requires positive density)

@@ -10,6 +10,7 @@
 ///
 
 // c++ headers
+#include <cmath>
 
 // library headers
 #include "AMReX_Arena.H"
@@ -22,8 +23,8 @@
 // internal headers
 #include "ArrayView.hpp"
 #include "hyperbolic_system.hpp"
+#include "SimulationData.hpp"
 #include "valarray.hpp"
-#include <math.h>
 
 // this struct is specialized by the user application code
 //
@@ -73,7 +74,8 @@ public:
                                amrex::Array4<const amrex::Real> const &cons)
       -> bool;
   static void EnforceDensityFloor(amrex::Real const densityFloor, amrex::MultiFab &state_mf);
-  static void EnforceInternalEnergyFloor(amrex::Real internalEnergyFloor, amrex::MultiFab &state_mf);
+  static void EnforceInternalEnergyFloor(amrex::Real internalEnergyFloor, amrex::MultiFab &state_mf,
+      SimulationData<problem_t> const& userData);
 
   AMREX_GPU_DEVICE static auto
   ComputePressure(amrex::Array4<const amrex::Real> const &cons, int i, int j,
@@ -300,7 +302,7 @@ void HydroSystem<problem_t>::EnforceDensityFloor(amrex::Real const densityFloor,
 
 template <typename problem_t>
 void HydroSystem<problem_t>::EnforceInternalEnergyFloor(amrex::Real const internalEnergyFloor, 
-    amrex::MultiFab &state_mf) {
+    amrex::MultiFab &state_mf, SimulationData<problem_t> const& userData) {
   // prevent negative internal energy
   auto state = state_mf.arrays();
 

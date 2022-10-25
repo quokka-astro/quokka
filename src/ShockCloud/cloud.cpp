@@ -91,7 +91,11 @@ AMREX_GPU_MANAGED static Real v_wind = 0;
 AMREX_GPU_MANAGED static Real P_wind = 0;
 AMREX_GPU_MANAGED static Real delta_vx = 0;
 
-cloudy_tables cloudyTables;
+template<>
+struct SimulationData<ShockCloud>
+{
+  cloudy_tables cloudyTables;
+};
 
 static bool enable_cooling = true;
 
@@ -106,7 +110,7 @@ void RadhydroSimulation<ShockCloud>::setInitialConditionsAtLevel(int lev) {
   Real const z0 = prob_lo[2] + 0.5 * (prob_hi[2] - prob_lo[2]);
 
   // cooling tables
-  auto tables = cloudyTables.const_tables();
+  auto tables = userData_.cloudyTables.const_tables();
 
   for (amrex::MFIter iter(state_old_[lev]); iter.isValid(); ++iter) {
     const amrex::Box &indexRange = iter.validbox();
@@ -217,7 +221,7 @@ template <> auto RadhydroSimulation<ShockCloud>::computeExtraPhysicsTimestep(int
 	auto const &state = mf.const_arrays();
   amrex::MultiFab tcool_mf(mf.boxArray(), mf.DistributionMap(), 1, 0);
   auto const &tcool = tcool_mf.arrays();
-  auto tables = cloudyTables.const_tables();
+  auto tables = userData_.cloudyTables.const_tables();
 
 	amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		const Real rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
@@ -242,11 +246,11 @@ template <> auto RadhydroSimulation<ShockCloud>::computeExtraPhysicsTimestep(int
 
 template <>
 void HydroSystem<ShockCloud>::EnforceInternalEnergyFloor(amrex::Real const internalEnergyFloor,
-							 amrex::MultiFab &state_mf)
+							 amrex::MultiFab &state_mf, SimulationData<ShockCloud> const &userData)
 {
 	// prevent negative internal energy
 	const Real gamma = HydroSystem<ShockCloud>::gamma_;
-	auto tables = cloudyTables.const_tables();
+	auto tables = userData.cloudyTables.const_tables();
 	auto const &state = state_mf.arrays();
 
 	amrex::ParallelFor(state_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
@@ -380,7 +384,7 @@ void RadhydroSimulation<ShockCloud>::addStrangSplitSources(amrex::MultiFab &stat
     amrex::Real time, amrex::Real const dt) {
   // compute operator split physics
   if (::enable_cooling) {
-    computeCooling(state, dt, cloudyTables);
+    computeCooling(state, dt, userData_.cloudyTables);
   }
 }
 
@@ -460,7 +464,7 @@ void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(
 
   if (dname == "log_temperature") {
     const int ncomp = ncomp_in;
-    auto tables = cloudyTables.const_tables();
+    auto tables = userData_.cloudyTables.const_tables();
     auto const &output = mf.arrays();
     auto const &state = state_new_[lev].const_arrays();
 
@@ -492,7 +496,7 @@ void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(
 
   } else if (dname == "log_cooling_length") {
     const int ncomp = ncomp_in;
-    auto tables = cloudyTables.const_tables();
+    auto tables = userData_.cloudyTables.const_tables();
     auto const &output = mf.arrays();
     auto const &state = state_new_[lev].const_arrays();
 
@@ -554,7 +558,7 @@ auto RadhydroSimulation<ShockCloud>::ComputeStatistics()
   stats["sim_mass"] = sim_mass / solarmass_in_g;
 
   // compute cloud mass according to temperature threshold
-  auto tables = cloudyTables.const_tables();
+  auto tables = userData_.cloudyTables.const_tables();
 
   const Real M_cl_1e4 = computeVolumeIntegral(
     [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const& state) noexcept {
@@ -626,7 +630,7 @@ void RadhydroSimulation<ShockCloud>::ErrorEst(int lev, amrex::TagBoxArray &tags,
   // tag cells for refinement
   amrex::GpuArray<Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
   const Real min_dx = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
-  auto tables = cloudyTables.const_tables();
+  auto tables = userData_.cloudyTables.const_tables();
 
   const auto state = state_new_[lev].const_arrays();
   const auto tag = tags.arrays();
@@ -779,7 +783,7 @@ auto problem_main() -> int {
   RadhydroSimulation<ShockCloud> sim(boundaryConditions, ::enableRadiation);
 
   // Read Cloudy tables
-  readCloudyData(cloudyTables);
+  readCloudyData(sim.userData_.cloudyTables);
   amrex::Print() << std::endl;
 
   // Read problem parameters
@@ -842,7 +846,7 @@ auto problem_main() -> int {
 
   // check temperature of cloud, background
   constexpr Real gamma = HydroSystem<ShockCloud>::gamma_;
-  auto tables = cloudyTables.const_tables();
+  auto tables = sim.userData_.cloudyTables.const_tables();
   const Real Eint_bg = ::P0 / (gamma - 1.);
   const Real Eint_cl = ::P0 / (gamma - 1.);
   const Real T_bg = ComputeTgasFromEgas(rho0, Eint_bg, gamma, tables);
