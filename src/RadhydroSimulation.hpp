@@ -543,7 +543,6 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 
 	// check state validity
 	AMREX_ASSERT(!state_new_cc_[lev].contains_nan(0, state_new_cc_[lev].nComp()));
-	AMREX_ASSERT(!state_new_cc_[lev].contains_nan()); // check ghost zones
 }
 
 // fix-up any unphysical states created by AMR operations
@@ -741,6 +740,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 
 	// create temporary multifab for intermediate state
 	amrex::MultiFab state_inter_cc_(grids[lev], dmap[lev], ncomp_cc_, nghost_);
+	state_inter_cc_.setVal(0); // prevent assert in fillBoundaryConditions when radiation is enabled
 
 	// Stage 1 of RK2-SSP
 	{
