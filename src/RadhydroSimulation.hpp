@@ -183,9 +183,13 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	auto expandFluxArrays(std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxes, int nstartNew,
 			      int ncompNew) -> std::array<amrex::FArrayBox, AMREX_SPACEDIM>;
 
-	void advanceHydroAtLevel(int lev, amrex::Real time, amrex::Real dt_lev,
+	void advanceHydroAtLevelWithRetries(int lev, amrex::Real time, amrex::Real dt_lev,
 				 amrex::YAFluxRegister *fr_as_crse,
 				 amrex::YAFluxRegister *fr_as_fine);
+
+	auto advanceHydroAtLevel(int lev, amrex::Real time, amrex::Real dt_lev,
+				 amrex::YAFluxRegister *fr_as_crse,
+				 amrex::YAFluxRegister *fr_as_fine) -> bool;
 
 	void addStrangSplitSources(amrex::MultiFab &state, int lev, amrex::Real time,
 				 amrex::Real dt_lev);
@@ -513,7 +517,7 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 
 	// advance hydro
 	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled) {
-		advanceHydroAtLevel(lev, time, dt_lev, fr_as_crse, fr_as_fine);
+		advanceHydroAtLevelWithRetries(lev, time, dt_lev, fr_as_crse, fr_as_fine);
 	} else {
 		// copy hydro vars from state_old_cc_ to state_new_cc_
 		// (otherwise radiation update will be wrong!)
@@ -539,7 +543,6 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 
 	// check state validity
 	AMREX_ASSERT(!state_new_cc_[lev].contains_nan(0, state_new_cc_[lev].nComp()));
-	AMREX_ASSERT(!state_new_cc_[lev].contains_nan()); // check ghost zones
 }
 
 // fix-up any unphysical states created by AMR operations
@@ -672,10 +675,48 @@ auto RadhydroSimulation<problem_t>::computeAxisAlignedProfile(const int axis, F 
 }
 
 template <typename problem_t>
-void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real time,
+void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex::Real time,
 							amrex::Real dt_lev,
 							amrex::YAFluxRegister *fr_as_crse,
 							amrex::YAFluxRegister *fr_as_fine)
+{
+	// timestep retries
+	const int max_retries = 4;
+	bool success = false;
+
+	for (int retry_count = 0; retry_count < max_retries; ++retry_count) {
+		// reduce timestep by a factor of 2^retry_count
+		const int nsubsteps = std::pow(2, retry_count);
+		const amrex::Real dt_step = dt_lev / nsubsteps;
+		if (retry_count > 0 && Verbose()) {
+			amrex::Print() << "\t>> Re-trying hydro advance at level " << lev
+						   << " with timestep reduced by factor " << nsubsteps << "\n";
+		}
+
+		// subcycle advanceHydroAtLevel, checking return value
+		for (int substep = 0; substep < nsubsteps; ++substep) {
+			success = advanceHydroAtLevel(lev, time, dt_step, fr_as_crse, fr_as_fine);
+			if (!success) {
+				if (Verbose()) {
+					amrex::Print() << "Warning: Hydro advance failed on level " << lev << "\n";
+				}
+				break;
+			}
+		}
+
+		if (success) {
+			// we are done, do not attempt more retries
+			break;
+		}
+	}
+	AMREX_ALWAYS_ASSERT(success); // crash if we exceeded max_retries
+}
+
+template <typename problem_t>
+auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real time,
+							amrex::Real dt_lev,
+							amrex::YAFluxRegister *fr_as_crse,
+							amrex::YAFluxRegister *fr_as_fine) -> bool
 {
 	BL_PROFILE("RadhydroSimulation::advanceHydroAtLevel()");
 
@@ -695,6 +736,10 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 	// do Strang split source terms (first half-step)
 	addStrangSplitSources(state_old_cc_tmp, lev, time, 0.5*dt_lev);
 
+	// create temporary multifab for intermediate state
+	amrex::MultiFab state_inter_cc_(grids[lev], dmap[lev], ncomp_cc_, nghost_);
+	state_inter_cc_.setVal(0); // prevent assert in fillBoundaryConditions when radiation is enabled
+
 	// Stage 1 of RK2-SSP
 	{
 		// update ghost zones [old timestep]
@@ -706,7 +751,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 
 		// advance all grids on local processor (Stage 1 of integrator)
 		auto const &stateOld = state_old_cc_tmp;
-		auto &stateNew = state_new_cc_[lev];
+		auto &stateNew = state_inter_cc_;
 		auto [fluxArrays, faceVel] = computeHydroFluxes(stateOld, ncompHydro_, lev);
 
 		amrex::MultiFab rhs(grids[lev], dmap[lev], ncompHydro_, 0);
@@ -737,7 +782,8 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 			amrex::Gpu::streamSynchronizeAll(); // just in case
 			if (redoFlag.max(0) == quokka::redoFlag::redo) {
 				// FOFC failed
-				amrex::Abort("First-order flux correction failed! Enable timestep retries or run with a lower CFL.");
+				return false;
+				//amrex::Abort("First-order flux correction failed! Enable timestep retries or run with a lower CFL.");
 			}
 		}
 
@@ -759,16 +805,16 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 
 	// Stage 2 of RK2-SSP
 	{
-		// update ghost zones [intermediate stage stored in state_new_cc_]
-		fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, time + dt_lev, PreInterpState,
-				       PostInterpState);
+		// update ghost zones [intermediate stage stored in state_inter_cc_]
+		fillBoundaryConditions(state_inter_cc_, state_inter_cc_, lev, time + dt_lev, PreInterpState,
+					PostInterpState);
 
 		// check intermediate state validity
-		AMREX_ASSERT(!state_new_cc_[lev].contains_nan(0, state_new_cc_[lev].nComp()));
-		AMREX_ASSERT(!state_new_cc_[lev].contains_nan()); // check ghost zones
+		AMREX_ASSERT(!state_inter_cc_.contains_nan(0, state_inter_cc_.nComp()));
+		AMREX_ASSERT(!state_inter_cc_.contains_nan()); // check ghost zones
 
 		auto const &stateOld = state_old_cc_tmp;
-		auto const &stateInter = state_new_cc_[lev];
+		auto const &stateInter = state_inter_cc_;
 		auto &stateFinal = state_new_cc_[lev];
 		auto [fluxArrays, faceVel] = computeHydroFluxes(stateInter, ncompHydro_, lev);
 
@@ -787,7 +833,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 			}
 
 			// replace fluxes around troubled cells with Godunov fluxes
-			auto [FOfluxArrays, FOfaceVel] = computeFOHydroFluxes(stateOld, ncompHydro_, lev);
+			auto [FOfluxArrays, FOfaceVel] = computeFOHydroFluxes(stateInter, ncompHydro_, lev);
 			replaceFluxes(fluxArrays, FOfluxArrays, redoFlag, ncompHydro_);
 			replaceFluxes(faceVel, FOfaceVel, redoFlag, ncompHydro_); // needed for dual energy
 			redoFlag.setVal(quokka::redoFlag::none); // reset redoFlag
@@ -800,7 +846,8 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 			amrex::Gpu::streamSynchronizeAll(); // just in case
 			if (redoFlag.max(0) == quokka::redoFlag::redo) {
 				// FOFC failed
-				amrex::Abort("First-order flux correction failed! Enable timestep retries or run with a lower CFL.");
+				return false;
+				//amrex::Abort("First-order flux correction failed! Enable timestep retries or run with a lower CFL.");
 			}
 		}
 
@@ -822,6 +869,9 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 
 	// do Strang split source terms (second half-step)
 	addStrangSplitSources(state_new_cc_[lev], lev, time + dt_lev, 0.5*dt_lev);
+
+	// we have successfully advanced by dt_lev
+	return true;
 }
 
 template <typename problem_t>
