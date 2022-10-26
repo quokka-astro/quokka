@@ -43,11 +43,11 @@ template <>
 void AdvectionSimulation<SawtoothProblem>::setInitialConditionsOnGrid(
     quokka::grid grid_elem) {
   // extract variables required from the geom object
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx;
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo;
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_elem.prob_hi;
-  const amrex::Box &indexRange = grid_elem.indexRange;
-  const amrex::Array4<double>& state_cc = grid_elem.array;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_elem.prob_hi_;
+  const amrex::Box &indexRange = grid_elem.indexRange_;
+  const amrex::Array4<double>& state_cc = grid_elem.array_;
   // loop over the grid and set the initial condition
   amrex::ParallelFor(
         indexRange, ncomp_cc_, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
@@ -125,16 +125,16 @@ auto problem_main() -> int
 	const int max_timesteps = 1e4;
 	const int nvars = 1; // only density
 
-	amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
+	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
 	for (int n = 0; n < nvars; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			boundaryConditions[n].setLo(i, amrex::BCType::int_dir); // periodic
-			boundaryConditions[n].setHi(i, amrex::BCType::int_dir);
+			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
+			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
 		}
 	}
 
 	// Problem initialization
-	AdvectionSimulation<SawtoothProblem> sim(boundaryConditions);
+	AdvectionSimulation<SawtoothProblem> sim(BCs_cc);
 	sim.maxDt_ = max_dt;
 	sim.stopTime_ = max_time;
 	sim.cflNumber_ = CFL_number;
