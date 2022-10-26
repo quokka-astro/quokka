@@ -12,21 +12,21 @@ namespace quokka {
   enum class direction { na=-1, x, y, z };
 
   struct grid {
-    amrex::Array4<double> array;
-    amrex::Box indexRange;
-    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx;
-    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo;
-    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi;
-    enum centering cen;
-    enum direction dir;
+    amrex::Array4<double> array_;
+    amrex::Box indexRange_;
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_;
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo_;
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi_;
+    enum centering cen_;
+    enum direction dir_;
     
     grid(amrex::Array4<double> const& array, amrex::Box const& indexRange,
         amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
         amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo,
         amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi,
         centering cen, direction dir)
-        : array(array), indexRange(indexRange), dx(dx), prob_lo(prob_lo),
-          prob_hi(prob_hi), cen(cen), dir(dir) {}
+        : array_(array), indexRange_(indexRange), dx_(dx), prob_lo_(prob_lo),
+          prob_hi_(prob_hi), cen_(cen), dir_(dir) {}
   };
 }
 
