@@ -137,8 +137,8 @@ void RadSystem<MarshakProblem>::SetRadEnergySource(
 template <>
 void RadhydroSimulation<MarshakProblem>::setInitialConditionsOnGrid(
     quokka::grid grid_elem) {
-  const amrex::Box &indexRange = grid_elem.indexRange;
-  const amrex::Array4<double>& state_cc = grid_elem.array;
+  const amrex::Box &indexRange = grid_elem.indexRange_;
+  const amrex::Array4<double>& state_cc = grid_elem.array_;
 
   const auto Erad0 = initial_Erad;
   const auto Egas0 = initial_Egas;
