@@ -238,10 +238,10 @@ template <>
 void RadhydroSimulation<BeamProblem>::setInitialConditionsOnGrid(
     quokka::grid grid_elem) {
   // extract variables required from the geom object
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx;
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo;
-  const amrex::Box &indexRange = grid_elem.indexRange;
-  const amrex::Array4<double>& state_cc = grid_elem.array;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
+  const amrex::Box &indexRange = grid_elem.indexRange_;
+  const amrex::Array4<double>& state_cc = grid_elem.array_;
   
   // loop over the grid and set the initial condition
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -314,22 +314,22 @@ auto problem_main() -> int {
   const double max_time = 2.0 * (Lx / c); // s
 
   constexpr int nvars = RadSystem<BeamProblem>::nvar_;
-  amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
+  amrex::Vector<amrex::BCRec> BCs_cc(nvars);
   for (int n = 0; n < nvars; ++n) {
-    boundaryConditions[n].setLo(0, amrex::BCType::ext_dir); // left x1 -- inflow
-    boundaryConditions[n].setHi(
+    BCs_cc[n].setLo(0, amrex::BCType::ext_dir); // left x1 -- inflow
+    BCs_cc[n].setHi(
         0, amrex::BCType::foextrap); // right x1 -- extrapolate
-    boundaryConditions[n].setLo(1, amrex::BCType::ext_dir); // left x2 -- inflow
-    boundaryConditions[n].setHi(
+    BCs_cc[n].setLo(1, amrex::BCType::ext_dir); // left x2 -- inflow
+    BCs_cc[n].setHi(
         1, amrex::BCType::foextrap); // right x2 -- extrapolate
     if (AMREX_SPACEDIM == 3) {
-      boundaryConditions[n].setLo(2, amrex::BCType::int_dir); // periodic
-      boundaryConditions[n].setHi(2, amrex::BCType::int_dir);
+      BCs_cc[n].setLo(2, amrex::BCType::int_dir); // periodic
+      BCs_cc[n].setHi(2, amrex::BCType::int_dir);
     }
   }
 
   // Problem initialization
-  RadhydroSimulation<BeamProblem> sim(boundaryConditions);
+  RadhydroSimulation<BeamProblem> sim(BCs_cc);
 
   sim.stopTime_ = max_time;
   sim.radiationCflNumber_ = CFL_number;

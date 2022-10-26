@@ -128,10 +128,10 @@ template <>
 void RadhydroSimulation<TubeProblem>::setInitialConditionsOnGrid(
     quokka::grid grid_elem) {
   // extract variables required from the geom object
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx;
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo;
-  const amrex::Box &indexRange = grid_elem.indexRange;
-  const amrex::Array4<double>& state_cc = grid_elem.array;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
+  const amrex::Box &indexRange = grid_elem.indexRange_;
+  const amrex::Array4<double>& state_cc = grid_elem.array_;
   
   auto const &x_ptr = x_arr_g.dataPtr();
   auto const &rho_ptr = rho_arr_g.dataPtr();
@@ -226,21 +226,21 @@ auto problem_main() -> int {
 
   // Boundary conditions
   constexpr int nvars = RadSystem<TubeProblem>::nvar_;
-  amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
+  amrex::Vector<amrex::BCRec> BCs_cc(nvars);
   for (int n = 0; n < nvars; ++n) {
     // for x-axis:
-    boundaryConditions[n].setLo(0, amrex::BCType::ext_dir);
-    boundaryConditions[n].setHi(0, amrex::BCType::ext_dir);
+    BCs_cc[n].setLo(0, amrex::BCType::ext_dir);
+    BCs_cc[n].setHi(0, amrex::BCType::ext_dir);
     // for y-, z- axes:
     for (int i = 1; i < AMREX_SPACEDIM; ++i) {
       // periodic
-      boundaryConditions[n].setLo(i, amrex::BCType::int_dir);
-      boundaryConditions[n].setHi(i, amrex::BCType::int_dir);
+      BCs_cc[n].setLo(i, amrex::BCType::int_dir);
+      BCs_cc[n].setHi(i, amrex::BCType::int_dir);
     }
   }
 
   // Problem initialization
-  RadhydroSimulation<TubeProblem> sim(boundaryConditions);
+  RadhydroSimulation<TubeProblem> sim(BCs_cc);
   
   sim.radiationReconstructionOrder_ = 3; // PPM
   sim.reconstructionOrder_ = 3;          // PPM

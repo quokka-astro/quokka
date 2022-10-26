@@ -74,10 +74,10 @@ template <>
 void RadhydroSimulation<WaveProblem>::setInitialConditionsOnGrid(
     quokka::grid grid_elem) {
   // extract variables required from the geom object
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx;
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo;
-  const amrex::Box &indexRange = grid_elem.indexRange;
-  const amrex::Array4<double>& state_cc = grid_elem.array;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
+  const amrex::Box &indexRange = grid_elem.indexRange_;
+  const amrex::Array4<double>& state_cc = grid_elem.array_;
   const int ncomp = ncomp_cc_;
   // loop over the grid and set the initial condition
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -100,16 +100,16 @@ auto problem_main() -> int {
   const int max_timesteps = 2e4;
 
   // Problem initialization
-  const int nvars = RadhydroSimulation<WaveProblem>::nvarTotal_;
-  amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
+  const int nvars = RadhydroSimulation<WaveProblem>::nvarTotal_cc_;
+  amrex::Vector<amrex::BCRec> BCs_cc(nvars);
   for (int n = 0; n < nvars; ++n) {
     for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-      boundaryConditions[n].setLo(i, amrex::BCType::int_dir); // periodic
-      boundaryConditions[n].setHi(i, amrex::BCType::int_dir);
+      BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
+      BCs_cc[n].setHi(i, amrex::BCType::int_dir);
     }
   }
 
-  RadhydroSimulation<WaveProblem> sim(boundaryConditions);
+  RadhydroSimulation<WaveProblem> sim(BCs_cc);
   
   sim.cflNumber_ = CFL_number;
   sim.stopTime_ = max_time;

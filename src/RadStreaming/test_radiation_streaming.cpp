@@ -55,8 +55,8 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputeRosselandOpacity(
 template <>
 void RadhydroSimulation<StreamingProblem>::setInitialConditionsOnGrid(
     quokka::grid grid_elem) {
-  const amrex::Box &indexRange = grid_elem.indexRange;
-  const amrex::Array4<double>& state_cc = grid_elem.array;
+  const amrex::Box &indexRange = grid_elem.indexRange_;
+  const amrex::Array4<double>& state_cc = grid_elem.array_;
   
   const auto Erad0 = initial_Erad;
   const auto Egas0 = initial_Egas;
@@ -140,18 +140,18 @@ auto problem_main() -> int {
 
   // Boundary conditions
   constexpr int nvars = RadSystem<StreamingProblem>::nvar_;
-  amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
+  amrex::Vector<amrex::BCRec> BCs_cc(nvars);
   for (int n = 0; n < nvars; ++n) {
-    boundaryConditions[n].setLo(0, amrex::BCType::ext_dir);  // Dirichlet x1
-    boundaryConditions[n].setHi(0, amrex::BCType::foextrap); // extrapolate x1
+    BCs_cc[n].setLo(0, amrex::BCType::ext_dir);  // Dirichlet x1
+    BCs_cc[n].setHi(0, amrex::BCType::foextrap); // extrapolate x1
     for (int i = 1; i < AMREX_SPACEDIM; ++i) {
-      boundaryConditions[n].setLo(i, amrex::BCType::int_dir); // periodic
-      boundaryConditions[n].setHi(i, amrex::BCType::int_dir);
+      BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
+      BCs_cc[n].setHi(i, amrex::BCType::int_dir);
     }
   }
 
   // Problem initialization
-  RadhydroSimulation<StreamingProblem> sim(boundaryConditions);
+  RadhydroSimulation<StreamingProblem> sim(BCs_cc);
   
   sim.radiationReconstructionOrder_ = 3; // PPM
   sim.stopTime_ = tmax;
