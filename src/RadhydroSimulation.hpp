@@ -745,7 +745,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 	addStrangSplitSources(state_old_tmp, lev, time, 0.5*dt_lev);
 
 	// create temporary multifab for intermediate state
-	amrex::MultiFab state_inter_(grids[lev], dmap[lev], ncomp_cc_, nghost_);
+	amrex::MultiFab state_inter_(grids[lev], dmap[lev], ncomp_, nghost_);
 
 	// Stage 1 of RK2-SSP
 	{
