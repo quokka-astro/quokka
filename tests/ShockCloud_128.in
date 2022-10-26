@@ -27,6 +27,7 @@ grackle_data_file = "../extern/cooling_tables/isrf_1000Go_grains.h5"
 derived_vars = log_nH log_temperature log_cooling_length
 
 cfl = 0.2
+limit_timestep_by_cooling_time = 0
 max_timesteps = 100000
 plotfile_interval = 100
 checkpoint_interval = 100
