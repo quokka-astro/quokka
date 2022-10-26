@@ -228,18 +228,18 @@ auto problem_main() -> int
 	};
 
 	constexpr int nvars = 9;
-	amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
+	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
 	for (int n = 0; n < nvars; ++n) {
-		boundaryConditions[n].setLo(0, amrex::BCType::ext_dir);	 // left x1 -- streaming
-		boundaryConditions[n].setHi(0, amrex::BCType::foextrap); // right x1 -- extrapolate
+		BCs_cc[n].setLo(0, amrex::BCType::ext_dir);	 // left x1 -- streaming
+		BCs_cc[n].setHi(0, amrex::BCType::foextrap); // right x1 -- extrapolate
 		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
 			if (isNormalComp(n, i)) { // reflect lower
-				boundaryConditions[n].setLo(i, amrex::BCType::reflect_odd);
+				BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);
 			} else {
-				boundaryConditions[n].setLo(i, amrex::BCType::reflect_even);
+				BCs_cc[n].setLo(i, amrex::BCType::reflect_even);
 			}
 			// extrapolate upper
-			boundaryConditions[n].setHi(i, amrex::BCType::foextrap);
+			BCs_cc[n].setHi(i, amrex::BCType::foextrap);
 		}
 	}
 
@@ -257,7 +257,7 @@ auto problem_main() -> int
     //const double resid_tol = 1.0e-15;
 
 	// Problem initialization
-	RadhydroSimulation<ShadowProblem> sim(boundaryConditions);
+	RadhydroSimulation<ShadowProblem> sim(BCs_cc);
 	sim.stopTime_ = max_time;
 	sim.radiationCflNumber_ = CFL_number;
 	sim.maxTimesteps_ = max_timesteps;

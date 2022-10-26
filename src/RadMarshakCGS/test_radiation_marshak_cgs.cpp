@@ -214,18 +214,18 @@ auto problem_main() -> int
 	// const double initial_dt = initial_dtau / (eps_SuOlson * c * chi); // s
 
 	constexpr int nvars = RadSystem<SuOlsonProblemCgs>::nvar_;
-	amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
+	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
 	for (int n = 0; n < nvars; ++n) {
-		boundaryConditions[n].setLo(0, amrex::BCType::ext_dir);	// custom (Marshak) x1
-		boundaryConditions[n].setHi(0, amrex::BCType::foextrap); // extrapolate x1
+		BCs_cc[n].setLo(0, amrex::BCType::ext_dir);	// custom (Marshak) x1
+		BCs_cc[n].setHi(0, amrex::BCType::foextrap); // extrapolate x1
 		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
-			boundaryConditions[n].setLo(i, amrex::BCType::int_dir); // periodic
-			boundaryConditions[n].setHi(i, amrex::BCType::int_dir);
+			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
+			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
 		}
 	}
 
 	// Problem initialization
-	RadhydroSimulation<SuOlsonProblemCgs> sim(boundaryConditions);
+	RadhydroSimulation<SuOlsonProblemCgs> sim(BCs_cc);
 	
 	sim.stopTime_ = max_time;
 	sim.radiationCflNumber_ = CFL_number;

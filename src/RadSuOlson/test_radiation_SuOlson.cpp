@@ -194,20 +194,20 @@ auto problem_main() -> int {
   };
 
   constexpr int nvars = RadSystem<MarshakProblem>::nvar_;
-  amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
+  amrex::Vector<amrex::BCRec> BCs_cc(nvars);
   for (int n = 0; n < nvars; ++n) {
     for (int i = 0; i < AMREX_SPACEDIM; ++i) {
       if (isNormalComp(n, i)) {
-        boundaryConditions[n].setLo(i, amrex::BCType::reflect_odd);
-        boundaryConditions[n].setHi(i, amrex::BCType::reflect_odd);
+        BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);
+        BCs_cc[n].setHi(i, amrex::BCType::reflect_odd);
       } else {
-        boundaryConditions[n].setLo(i, amrex::BCType::reflect_even);
-        boundaryConditions[n].setHi(i, amrex::BCType::reflect_even);
+        BCs_cc[n].setLo(i, amrex::BCType::reflect_even);
+        BCs_cc[n].setHi(i, amrex::BCType::reflect_even);
       }
     }
   }
 
-  RadhydroSimulation<MarshakProblem> sim(boundaryConditions);
+  RadhydroSimulation<MarshakProblem> sim(BCs_cc);
  	
 	sim.cflNumber_ = CFL_number;
 	sim.radiationCflNumber_ = CFL_number;
