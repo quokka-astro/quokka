@@ -628,10 +628,13 @@ template <>
 void RadhydroSimulation<ShockCloud>::ErrorEst(int lev, amrex::TagBoxArray &tags,
                                               Real /*time*/, int /*ngrow*/) {
   // tag cells for refinement
+  const int Ncells_per_lcool = 10;
+
   amrex::GpuArray<Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
   const Real min_dx = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
-  auto tables = userData_.cloudyTables.const_tables();
+  const Real resolved_length = static_cast<Real>(Ncells_per_lcool) * min_dx;
 
+  auto tables = userData_.cloudyTables.const_tables();
   const auto state = state_new_[lev].const_arrays();
   const auto tag = tags.arrays();
 
@@ -646,7 +649,7 @@ void RadhydroSimulation<ShockCloud>::ErrorEst(int lev, amrex::TagBoxArray &tags,
       Real const l_cool = ComputeCoolingLength(rho, Eint, HydroSystem<ShockCloud>::gamma_,
         tables);
       
-      if (l_cool < min_dx) {
+      if (l_cool < resolved_length) {
         tag[bx](i, j, k) = amrex::TagBox::SET;
       }
     });
