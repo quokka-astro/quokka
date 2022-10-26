@@ -34,6 +34,7 @@
 #include "AMReX_Extension.H"
 #include "AMReX_FArrayBox.H"
 #include "AMReX_FillPatchUtil.H"
+#include "AMReX_FillPatcher.H"
 #include "AMReX_FluxRegister.H"
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_INT.H"
@@ -74,6 +75,8 @@
 using namespace conduit;
 using namespace ascent;
 #endif
+
+enum class FillPatchType { fillpatch_class, fillpatch_function };
 
 // Main simulation class; solvers should inherit from this
 template <typename problem_t> class AMRSimulation : public amrex::AmrCore {
@@ -158,7 +161,8 @@ public:
   void fillBoundaryConditions(amrex::MultiFab &S_filled, amrex::MultiFab &state,
                               int lev, amrex::Real time,
                               PreInterpHook const &pre_interp,
-                              PostInterpHook const&post_interp);
+                              PostInterpHook const&post_interp,
+                              FillPatchType fptype = FillPatchType::fillpatch_class);
 
   template <typename PreInterpHook, typename PostInterpHook>
   void FillPatchWithData(int lev, amrex::Real time, amrex::MultiFab &mf,
@@ -166,12 +170,13 @@ public:
                          amrex::Vector<amrex::Real> &coarseTime,
                          amrex::Vector<amrex::MultiFab *> &fineData,
                          amrex::Vector<amrex::Real> &fineTime, int icomp,
-                         int ncomp, PreInterpHook const &pre_interp,
+                         int ncomp, FillPatchType fptype,
+                         PreInterpHook const &pre_interp,
                          PostInterpHook const &post_interp);
 
-  static void InterpHookNone(amrex::FArrayBox &fab, amrex::Box const &box, int scomp, int ncomp);
+  static void InterpHookNone(amrex::MultiFab &mf, int scomp, int ncomp);
   virtual void FillPatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp,
-                 int ncomp);
+                 int ncomp, FillPatchType fptype);
   void FillCoarsePatch(int lev, amrex::Real time, amrex::MultiFab &mf,
                        int icomp, int ncomp);
   void GetData(int lev, amrex::Real time,
@@ -230,6 +235,9 @@ protected:
   // therefore flux_reg[0] and flux_reg[nlevs_max] are never actually used in
   // the reflux operation
   amrex::Vector<std::unique_ptr<amrex::YAFluxRegister>> flux_reg_;
+
+  // This is for fillpatch during timestepping, but not for regridding.
+  amrex::Vector<std::unique_ptr<amrex::FillPatcher<amrex::MultiFab>>> fillpatcher_;
 
   // Nghost = number of ghost cells for each array
   int nghost_ = 4; // PPM needs nghost >= 3, PPM+flattening needs nghost >= 4
@@ -294,6 +302,7 @@ void AMRSimulation<problem_t>::initialize(
   state_old_cc_.resize(nlevs_max);
   max_signal_speed_.resize(nlevs_max);
   flux_reg_.resize(nlevs_max + 1);
+  fillpatcher_.resize(nlevs_max + 1);
   cellUpdatesEachLevel_.resize(nlevs_max, 0);
 
   BCs_cc_ = boundaryConditions;
@@ -913,6 +922,8 @@ auto AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time,
 
     AverageDownTo(lev); // average lev+1 down to lev
     FixupState(lev); // fix any unphysical states created by reflux or averaging
+
+    fillpatcher_[lev+1].reset(); // because the data on lev have changed.
   }
 
   return stepsLeft;
@@ -1018,7 +1029,7 @@ void AMRSimulation<problem_t>::RemakeLevel(
   amrex::MultiFab old_state(ba, dm, ncomp, nghost);
   amrex::MultiFab max_signal_speed(ba, dm, 1, nghost);
 
-  FillPatch(level, time, new_state, 0, ncomp);
+  FillPatch(level, time, new_state, 0, ncomp, FillPatchType::fillpatch_function);
 
   std::swap(new_state, state_new_cc_[level]);
   std::swap(old_state, state_old_cc_[level]);
@@ -1043,13 +1054,38 @@ void AMRSimulation<problem_t>::ClearLevel(int level) {
   state_old_cc_[level].clear();
   max_signal_speed_[level].clear();
   flux_reg_[level].reset(nullptr);
+  fillpatcher_[level].reset(nullptr);
 }
 
 template <typename problem_t>
-void AMRSimulation<problem_t>::InterpHookNone(
-    amrex::FArrayBox &fab, amrex::Box const &box, int scomp, int ncomp)
+void AMRSimulation<problem_t>::InterpHookNone(amrex::MultiFab &mf, int scomp, int ncomp)
 {
   // do nothing
+}
+
+
+template <typename problem_t> struct setBoundaryFunctor {
+  AMREX_GPU_DEVICE void
+  operator()(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest,
+             const int &dcomp, const int &numcomp,
+             amrex::GeometryData const &geom, const amrex::Real &time,
+             const amrex::BCRec *bcr, int bcomp, const int &orig_comp) const {
+    AMRSimulation<problem_t>::setCustomBoundaryConditions(
+        iv, dest, dcomp, numcomp, geom, time, bcr, bcomp, orig_comp);
+  }
+};
+
+template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+AMRSimulation<problem_t>::setCustomBoundaryConditions(
+    const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, int dcomp,
+    int numcomp, amrex::GeometryData const &geom, const amrex::Real time,
+    const amrex::BCRec *bcr, int bcomp, int orig_comp) {
+  // user should implement if needed using template specialization
+  // (This is only called when amrex::BCType::ext_dir is set for a given
+  // boundary.)
+
+  // set boundary condition for cell 'iv'
 }
 
 // Compute a new multifab 'mf' by copying in state from valid region and filling
@@ -1059,7 +1095,7 @@ void AMRSimulation<problem_t>::InterpHookNone(
 template <typename problem_t>
 void AMRSimulation<problem_t>::FillPatch(int lev, amrex::Real time,
                                          amrex::MultiFab &mf, int icomp,
-                                         int ncomp) {
+                                         int ncomp, FillPatchType fptype) {
   BL_PROFILE("AMRSimulation::FillPatch()");
 
   amrex::Vector<amrex::MultiFab *> cmf;
@@ -1077,7 +1113,7 @@ void AMRSimulation<problem_t>::FillPatch(int lev, amrex::Real time,
     GetData(lev - 1, time, cmf, ctime);
   }
 
-  FillPatchWithData(lev, time, mf, cmf, ctime, fmf, ftime, icomp, ncomp,
+  FillPatchWithData(lev, time, mf, cmf, ctime, fmf, ftime, icomp, ncomp, fptype,
 		InterpHookNone, InterpHookNone);
 }
 
@@ -1112,37 +1148,12 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(
   // check that state_new_cc_[lev] is properly filled
   AMREX_ALWAYS_ASSERT(!state_new_cc_[level].contains_nan(0, ncomp));
 
-  // fill ghost zones
+  // fill ghost zones (needed for some refinement criteria)
   fillBoundaryConditions(state_new_cc_[level], state_new_cc_[level], level, time,
-                         InterpHookNone, InterpHookNone);
+                         InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
 
   // copy to state_old_cc_ (including ghost zones)
-  state_old_cc_[level].ParallelCopy(state_new_cc_[level], 0, 0, ncomp, nghost,
-                                 nghost);
-}
-
-template <typename problem_t> struct setBoundaryFunctor {
-  AMREX_GPU_DEVICE void
-  operator()(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest,
-             const int &dcomp, const int &numcomp,
-             amrex::GeometryData const &geom, const amrex::Real &time,
-             const amrex::BCRec *bcr, int bcomp, const int &orig_comp) const {
-    AMRSimulation<problem_t>::setCustomBoundaryConditions(
-        iv, dest, dcomp, numcomp, geom, time, bcr, bcomp, orig_comp);
-  }
-};
-
-template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<problem_t>::setCustomBoundaryConditions(
-    const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, int dcomp,
-    int numcomp, amrex::GeometryData const &geom, const amrex::Real time,
-    const amrex::BCRec *bcr, int bcomp, int orig_comp) {
-  // user should implement if needed using template specialization
-  // (This is only called when amrex::BCType::ext_dir is set for a given
-  // boundary.)
-
-  // set boundary condition for cell 'iv'
+  state_old_cc_[level].ParallelCopy(state_new_cc_[level], 0, 0, ncomp, nghost, nghost);
 }
 
 template <typename problem_t>
@@ -1152,7 +1163,8 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
                                                       int const lev,
                                                       amrex::Real const time,
                                                       PreInterpHook const &pre_interp,
-                                                      PostInterpHook const &post_interp) {
+                                                      PostInterpHook const &post_interp,
+                                                      FillPatchType fptype) {
   BL_PROFILE("AMRSimulation::fillBoundaryConditions()");
 
   // On a single level, any periodic boundaries are filled first
@@ -1181,7 +1193,8 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
     }
 
     FillPatchWithData(lev, time, S_filled, coarseData, coarseTime, fineData,
-                      fineTime, 0, S_filled.nComp(), pre_interp, post_interp);
+                      fineTime, 0, S_filled.nComp(), fptype,
+                      pre_interp, post_interp);
   } else { // level 0
     // fill internal and periodic boundaries, ignoring corners (cross=true)
     // (there is no performance benefit for this in practice)
@@ -1220,8 +1233,20 @@ void AMRSimulation<problem_t>::FillPatchWithData(
     amrex::Vector<amrex::Real> &coarseTime,
     amrex::Vector<amrex::MultiFab *> &fineData,
     amrex::Vector<amrex::Real> &fineTime, int icomp, int ncomp,
+    FillPatchType fptype,
     PreInterpHook const &pre_interp, PostInterpHook const &post_interp) {
   BL_PROFILE("AMRSimulation::FillPatchWithData()");
+
+  // use CellConservativeLinear interpolation onto fine grid
+  amrex::Interpolater *mapper = &amrex::cell_cons_interp;
+
+  if (fptype == FillPatchType::fillpatch_class) {
+	  if (fillpatcher_[lev] == nullptr) {
+		  fillpatcher_[lev] = std::make_unique<amrex::FillPatcher<amrex::MultiFab>>(
+		      grids[lev], dmap[lev], geom[lev], grids[lev - 1], dmap[lev - 1], geom[lev - 1],
+          mf.nGrowVect(), mf.nComp(), mapper);
+	  }
+  }
 
   // create functor to fill ghost zones at domain boundaries
   // (note that domain boundaries may be present at any refinement level)
@@ -1240,19 +1265,19 @@ void AMRSimulation<problem_t>::FillPatchWithData(
         coarsePhysicalBoundaryFunctor(geom[lev - 1], BCs_cc_,
                                       boundaryFunctor);
 
-    // use CellConservativeLinear interpolation onto fine grid
-    amrex::Interpolater *mapper = &amrex::cell_cons_interp;
-    // amrex::MFInterpolater *mapper = &amrex::mf_cell_cons_interp;
-    // amrex::MFInterpolater *mapper = &amrex::mf_pc_interp;
-
     // copies interior zones, fills ghost zones with space-time interpolated
     // data
-    amrex::FillPatchTwoLevels(mf, time, coarseData, coarseTime, fineData,
-                              fineTime, 0, icomp, ncomp, geom[lev - 1],
-                              geom[lev], coarsePhysicalBoundaryFunctor, 0,
-                              finePhysicalBoundaryFunctor, 0, refRatio(lev - 1),
-                              mapper, BCs_cc_, 0,
-                              pre_interp, post_interp);
+    if (fptype == FillPatchType::fillpatch_class) {
+	    fillpatcher_[lev]->fill(mf, mf.nGrowVect(), time,
+           coarseData, coarseTime, fineData, fineTime, 0, icomp, ncomp,
+           coarsePhysicalBoundaryFunctor, 0, finePhysicalBoundaryFunctor, 0,
+           BCs_cc_, 0, pre_interp, post_interp);
+    } else {
+	    amrex::FillPatchTwoLevels(mf, time, coarseData, coarseTime, fineData, fineTime, 0, icomp, ncomp,
+				      geom[lev - 1], geom[lev], coarsePhysicalBoundaryFunctor, 0,
+				      finePhysicalBoundaryFunctor, 0, refRatio(lev - 1), mapper, BCs_cc_, 0, pre_interp,
+				      post_interp);
+    }
   }
 }
 
@@ -1304,16 +1329,10 @@ void AMRSimulation<problem_t>::GetData(int lev, amrex::Real time,
   data.clear();
   datatime.clear();
 
-  const amrex::Real teps =
-      (tNew_[lev] - tOld_[lev]) * 1.e-3; // generous roundoff error threshold
-
-  if (time > tNew_[lev] - teps &&
-      time < tNew_[lev] + teps) { // if time == tNew_[lev] within roundoff
+  if (amrex::almostEqual(time, tNew_[lev], 5)) { // if time == tNew_[lev] within roundoff
     data.push_back(&state_new_cc_[lev]);
     datatime.push_back(tNew_[lev]);
-  } else if (time > tOld_[lev] - teps &&
-             time <
-                 tOld_[lev] + teps) { // if time == tOld_[lev] within roundoff
+  } else if (amrex::almostEqual(time, tOld_[lev], 5)) { // if time == tOld_[lev] within roundoff
     data.push_back(&state_old_cc_[lev]);
     datatime.push_back(tOld_[lev]);
   } else { // otherwise return both old and new states for interpolation
