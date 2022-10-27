@@ -172,9 +172,8 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	// tag cells for refinement
 	void ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override;
 
-	void addFluxArrays(std::array<amrex::MultiFab, AMREX_SPACEDIM> &dstfluxes,
-    			   std::array<amrex::MultiFab, AMREX_SPACEDIM> &srcfluxes,
-				   const int srccomp, const int dstcomp);
+	auto expandFluxArrays(std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxes, int nstartNew,
+			      int ncompNew) -> std::array<amrex::MultiFab, AMREX_SPACEDIM>;
 
 	auto expandFluxArrays(std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxes, int nstartNew,
 			      int ncompNew) -> std::array<amrex::FArrayBox, AMREX_SPACEDIM>;
@@ -790,16 +789,6 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	}
 	addStrangSplitSources(state_old_tmp, lev, time, 0.5*dt_lev);
 
-	// create flux multifab (used for flux registers)
-	std::array<amrex::MultiFab, AMREX_SPACEDIM> flux;
-	if (do_reflux) {
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			auto ba_face = amrex::convert(grids[lev], amrex::IntVect::TheDimensionVector(idim));
-			flux[idim] = amrex::MultiFab(ba_face, dmap[lev], ncomp_, 0);
-			flux[idim].setVal(0);
-		}
-	}
-
 	// create temporary multifab for intermediate state
 	amrex::MultiFab state_inter_(grids[lev], dmap[lev], ncomp_, nghost_);
 
@@ -865,7 +854,8 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 
 		if (do_reflux) {
 			// increment flux registers
-			addFluxArrays(flux, fluxArrays, 0, 0);
+			auto expandedFluxes = expandFluxArrays(fluxArrays, 0, state_new_[lev].nComp());
+			incrementFluxRegisters(fr_as_crse, fr_as_fine, fluxArrays, lev, fluxScaleFactor * dt_lev);
 		}
 	}
 	amrex::Gpu::streamSynchronizeAll();
@@ -933,7 +923,8 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 
 		if (do_reflux) {
 			// increment flux registers
-			addFluxArrays(flux, fluxArrays, 0, 0);
+			auto expandedFluxes = expandFluxArrays(fluxArrays, 0, state_new_[lev].nComp());
+			incrementFluxRegisters(fr_as_crse, fr_as_fine, fluxArrays, lev, fluxScaleFactor * dt_lev);
 		}
 	}
 	amrex::Gpu::streamSynchronizeAll();
@@ -944,13 +935,8 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	}
 	addStrangSplitSources(state_new_[lev], lev, time + dt_lev, 0.5*dt_lev);
 
-	// check if we have violated the CFL timestep
-	bool success = !isCflViolated(lev, time, dt_lev);
-	if (success && do_reflux) {
-		// increment flux registers
-		incrementFluxRegisters(fr_as_crse, fr_as_fine, flux, lev, fluxScaleFactor * dt_lev);
-	}
-	return success;
+	// return success if we have not violated the CFL timestep
+	return (!isCflViolated(lev, time, dt_lev));
 }
 
 template <typename problem_t>
@@ -992,16 +978,24 @@ void RadhydroSimulation<problem_t>::replaceFluxes(
 }
 
 template <typename problem_t>
-void RadhydroSimulation<problem_t>::addFluxArrays(std::array<amrex::MultiFab, AMREX_SPACEDIM> &dstfluxes,
-    std::array<amrex::MultiFab, AMREX_SPACEDIM> &srcfluxes, const int srccomp, const int dstcomp)
+auto RadhydroSimulation<problem_t>::expandFluxArrays(
+    std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxes, const int nstartNew, const int ncompNew)
+    -> std::array<amrex::MultiFab, AMREX_SPACEDIM>
 {
-	BL_PROFILE("RadhydroSimulation::addFluxArrays()");
+	BL_PROFILE("RadhydroSimulation::expandFluxArrays()");
 
-	for(int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-		auto const &srcflux = srcfluxes[idim];
-		auto &dstflux = dstfluxes[idim];
-		amrex::Add(dstflux, srcflux, srccomp, dstcomp, srcflux.nComp(), 0);
-	}
+	// This is needed because reflux arrays must have the same number of components as
+	// state_new_[lev]
+
+	auto copyFlux = [nstartNew, ncompNew](amrex::MultiFab const &oldFlux) {
+		amrex::MultiFab newFlux(oldFlux.boxArray(), oldFlux.DistributionMap(), ncompNew, 0);
+		newFlux.setVal(0.);
+		// copy oldFlux (starting at 0) to newFlux (starting at nstart)
+		AMREX_ASSERT(ncompNew >= oldFlux.nComp());
+		newFlux.ParallelCopy(oldFlux, 0, 0, oldFlux.nComp());
+		return newFlux;
+	};
+	return {AMREX_D_DECL(copyFlux(fluxes[0]), copyFlux(fluxes[1]), copyFlux(fluxes[2]))};
 }
 
 
