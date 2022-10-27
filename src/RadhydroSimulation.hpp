@@ -745,7 +745,8 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 					fluxScaleFactor = 1.0;
 				}
 				// increment flux registers
-				incrementFluxRegisters(fr_as_crse, fr_as_fine, flux, lev, fluxScaleFactor * dt_lev);
+				//   note: this *must* be scaled by dt_step, NOT dt_lev !
+				incrementFluxRegisters(fr_as_crse, fr_as_fine, flux, lev, fluxScaleFactor * dt_step);
 			}
 			// we are done, do not attempt more retries
 			break;
