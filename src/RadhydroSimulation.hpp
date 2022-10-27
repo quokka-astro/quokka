@@ -707,18 +707,18 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 		}
 
 		// create temporary multifab for old state
-		amrex::MultiFab state_old_cc_tmp(grids[lev], dmap[lev], ncomp_cc_, nghost_);
-		amrex::Copy(state_old_cc_tmp, state_old_cc_[lev], 0, 0, ncomp_cc_, nghost_);
+		amrex::MultiFab state_old_tmp(grids[lev], dmap[lev], ncomp_, nghost_);
+		amrex::Copy(state_old_tmp, state_old_[lev], 0, 0, ncomp_, nghost_);
 
 		// subcycle advanceHydroAtLevel, checking return value
 		for (int substep = 0; substep < nsubsteps; ++substep) {
 			if (substep > 0) {
 				// since we are starting a new substep, we need to copy hydro state from
 				//  the new state vector to old state vector
-				amrex::Copy(state_old_cc_tmp, state_new_cc_[lev], 0, 0, ncompHydro_, nghost_);
+				amrex::Copy(state_old_tmp, state_new_[lev], 0, 0, ncompHydro_, nghost_);
 			}
 
-			success = advanceHydroAtLevel(state_old_cc_tmp, lev, time, dt_step, fr_as_crse, fr_as_fine);
+			success = advanceHydroAtLevel(state_old_tmp, lev, time, dt_step, fr_as_crse, fr_as_fine);
 			cur_time += dt_step;
 
 			if (!success) {
@@ -745,7 +745,7 @@ auto RadhydroSimulation<problem_t>::isCflViolated(int lev, amrex::Real time,
 	// check wheter dt_actual would violate CFL condition using the post-update hydro state
 
 	// compute max signal speed
-	amrex::Real max_signal = HydroSystem<problem_t>::maxSignalSpeedLocal(state_new_cc_[lev]);
+	amrex::Real max_signal = HydroSystem<problem_t>::maxSignalSpeedLocal(state_new_[lev]);
 	amrex::ParallelDescriptor::ReduceRealMax(max_signal);
 
 	// compute dt_cfl
@@ -766,7 +766,7 @@ auto RadhydroSimulation<problem_t>::isCflViolated(int lev, amrex::Real time,
 }
 
 template <typename problem_t>
-auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old_cc_tmp,
+auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old_tmp,
 							int lev, amrex::Real time,
 							amrex::Real dt_lev,
 							amrex::YAFluxRegister *fr_as_crse,
