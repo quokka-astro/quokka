@@ -183,10 +183,12 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 				 amrex::YAFluxRegister *fr_as_crse,
 				 amrex::YAFluxRegister *fr_as_fine);
 
-	auto advanceHydroAtLevel(amrex::MultiFab &state_old_tmp, 
-				 int lev, amrex::Real time, amrex::Real dt_lev,
-				 amrex::YAFluxRegister *fr_as_crse,
-				 amrex::YAFluxRegister *fr_as_fine) -> bool;
+	auto advanceHydroAtLevel(amrex::MultiFab &state_old_tmp,
+							std::array<amrex::MultiFab, AMREX_SPACEDIM> &flux,
+							int lev, amrex::Real time,
+							amrex::Real dt_lev,
+							amrex::YAFluxRegister *fr_as_crse,
+							amrex::YAFluxRegister *fr_as_fine) -> bool;
 
 	void addStrangSplitSources(amrex::MultiFab &state, int lev, amrex::Real time,
 				 amrex::Real dt_lev);
@@ -711,6 +713,16 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 		amrex::MultiFab state_old_tmp(grids[lev], dmap[lev], ncomp_, nghost_);
 		amrex::Copy(state_old_tmp, state_old_[lev], 0, 0, ncomp_, nghost_);
 
+		// create flux multifab (needed for flux registers)
+		std::array<amrex::MultiFab, AMREX_SPACEDIM> flux;
+		if (do_reflux) {
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				auto ba_face = amrex::convert(grids[lev], amrex::IntVect::TheDimensionVector(idim));
+				flux[idim] = amrex::MultiFab(ba_face, dmap[lev], ncomp_, 0);
+				flux[idim].setVal(0);
+			}
+		}
+
 		// subcycle advanceHydroAtLevel, checking return value
 		for (int substep = 0; substep < nsubsteps; ++substep) {
 			if (substep > 0) {
@@ -719,7 +731,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 				amrex::Copy(state_old_tmp, state_new_[lev], 0, 0, ncompHydro_, nghost_);
 			}
 
-			success = advanceHydroAtLevel(state_old_tmp, lev, time, dt_step, fr_as_crse, fr_as_fine);
+			success = advanceHydroAtLevel(state_old_tmp, flux, lev, time, dt_step, fr_as_crse, fr_as_fine);
 			cur_time += dt_step;
 
 			if (!success) {
@@ -731,11 +743,20 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 		}
 
 		if (success) {
+			if (do_reflux) {
+				amrex::Real fluxScaleFactor = NAN;
+				if (integratorOrder_ == 2) {
+					fluxScaleFactor = 0.5;
+				} else if (integratorOrder_ == 1) {
+					fluxScaleFactor = 1.0;
+				}
+				// increment flux registers
+				incrementFluxRegisters(fr_as_crse, fr_as_fine, flux, lev, fluxScaleFactor * dt_lev);
+			}
 			// we are done, do not attempt more retries
 			break;
 		}
 	}
-	AMREX_ALWAYS_ASSERT(amrex::almostEqual(cur_time, time + dt_lev, 5));
 	AMREX_ALWAYS_ASSERT(success); // crash if we exceeded max_retries
 }
 
@@ -768,19 +789,13 @@ auto RadhydroSimulation<problem_t>::isCflViolated(int lev, amrex::Real time,
 
 template <typename problem_t>
 auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old_tmp,
+							std::array<amrex::MultiFab, AMREX_SPACEDIM> &flux,
 							int lev, amrex::Real time,
 							amrex::Real dt_lev,
 							amrex::YAFluxRegister *fr_as_crse,
 							amrex::YAFluxRegister *fr_as_fine) -> bool
 {
 	BL_PROFILE("RadhydroSimulation::advanceHydroAtLevel()");
-
-	amrex::Real fluxScaleFactor = NAN;
-	if (integratorOrder_ == 2) {
-		fluxScaleFactor = 0.5;
-	} else if (integratorOrder_ == 1) {
-		fluxScaleFactor = 1.0;
-	}
 
 	auto dx = geom[lev].CellSizeArray();
 
@@ -789,16 +804,6 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		amrex::Print() << "\tComputing first-half source terms on level " << lev << ".\n";
 	}
 	addStrangSplitSources(state_old_tmp, lev, time, 0.5*dt_lev);
-
-	// create flux multifab (used for flux registers)
-	std::array<amrex::MultiFab, AMREX_SPACEDIM> flux;
-	if (do_reflux) {
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			auto ba_face = amrex::convert(grids[lev], amrex::IntVect::TheDimensionVector(idim));
-			flux[idim] = amrex::MultiFab(ba_face, dmap[lev], ncomp_, 0);
-			flux[idim].setVal(0);
-		}
-	}
 
 	// create temporary multifab for intermediate state
 	amrex::MultiFab state_inter_(grids[lev], dmap[lev], ncomp_, nghost_);
@@ -945,12 +950,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	addStrangSplitSources(state_new_[lev], lev, time + dt_lev, 0.5*dt_lev);
 
 	// check if we have violated the CFL timestep
-	bool success = !isCflViolated(lev, time, dt_lev);
-	if (success && do_reflux) {
-		// increment flux registers
-		incrementFluxRegisters(fr_as_crse, fr_as_fine, flux, lev, fluxScaleFactor * dt_lev);
-	}
-	return success;
+	return !isCflViolated(lev, time, dt_lev);
 }
 
 template <typename problem_t>
