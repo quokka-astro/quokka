@@ -752,7 +752,8 @@ auto RadhydroSimulation<problem_t>::isCflViolated(int lev, amrex::Real time,
 	if ((dt_actual > dt_cfl) && Verbose()) {
 		amrex::Print() << "\t>> CFL violation detected on level " << lev
 					   << " with dt_lev = " << dt_actual
-					   << " and dt_cfl = " << dt_cfl << "\n";
+					   << " and dt_cfl = " << dt_cfl << "\n"
+					   << "\t   max_signal = " << max_signal << "\n";
 	}
 	return (dt_actual > dt_cfl);
 }
