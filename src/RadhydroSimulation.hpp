@@ -186,9 +186,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	auto advanceHydroAtLevel(amrex::MultiFab &state_old_tmp,
 							std::array<amrex::MultiFab, AMREX_SPACEDIM> &flux,
 							int lev, amrex::Real time,
-							amrex::Real dt_lev,
-							amrex::YAFluxRegister *fr_as_crse,
-							amrex::YAFluxRegister *fr_as_fine) -> bool;
+							amrex::Real dt_lev) -> bool;
 
 	void addStrangSplitSources(amrex::MultiFab &state, int lev, amrex::Real time,
 				 amrex::Real dt_lev);
@@ -731,7 +729,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 				amrex::Copy(state_old_tmp, state_new_[lev], 0, 0, ncompHydro_, nghost_);
 			}
 
-			success = advanceHydroAtLevel(state_old_tmp, flux, lev, time, dt_step, fr_as_crse, fr_as_fine);
+			success = advanceHydroAtLevel(state_old_tmp, flux, lev, time, dt_step);
 			cur_time += dt_step;
 
 			if (!success) {
@@ -792,9 +790,7 @@ template <typename problem_t>
 auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old_tmp,
 							std::array<amrex::MultiFab, AMREX_SPACEDIM> &flux,
 							int lev, amrex::Real time,
-							amrex::Real dt_lev,
-							amrex::YAFluxRegister *fr_as_crse,
-							amrex::YAFluxRegister *fr_as_fine) -> bool
+							amrex::Real dt_lev) -> bool
 {
 	BL_PROFILE("RadhydroSimulation::advanceHydroAtLevel()");
 
