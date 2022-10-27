@@ -694,7 +694,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 	bool success = false;
 	amrex::Real cur_time;
 
-	for (int retry_count = 0; retry_count < max_retries; ++retry_count) {
+	for (int retry_count = 0; retry_count <= max_retries; ++retry_count) {
 		// reduce timestep by a factor of 2^retry_count
 		const int nsubsteps = std::pow(2, retry_count);
 		const amrex::Real dt_step = dt_lev / nsubsteps;
@@ -832,10 +832,14 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 			HydroSystem<problem_t>::PredictStep(stateOld, stateNew, rhs, dt_lev, ncompHydro_, redoFlag);
 		
 			amrex::Gpu::streamSynchronizeAll(); // just in case
-			if (redoFlag.max(0) == quokka::redoFlag::redo) {
+			int ncells_bad = redoFlag.sum(0);
+			if (ncells_bad > 0) {
 				// FOFC failed
+				if (Verbose()) {
+					amrex::Print() << "[FOFC-1] failed for " << ncells_bad
+								   << " cells on level " << lev << "\n";
+				}
 				return false;
-				//amrex::Abort("First-order flux correction failed! Enable timestep retries or run with a lower CFL.");
 			}
 		}
 
@@ -897,10 +901,14 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 			HydroSystem<problem_t>::AddFluxesRK2(stateFinal, stateOld, stateInter, rhs, dt_lev, ncompHydro_, redoFlag);
 
 			amrex::Gpu::streamSynchronizeAll(); // just in case
-			if (redoFlag.max(0) == quokka::redoFlag::redo) {
+			int ncells_bad = redoFlag.sum(0);
+			if (ncells_bad > 0) {
 				// FOFC failed
+				if (Verbose()) {
+					amrex::Print() << "[FOFC-2] failed for " << ncells_bad
+								   << " cells on level " << lev << "\n";
+				}
 				return false;
-				//amrex::Abort("First-order flux correction failed! Enable timestep retries or run with a lower CFL.");
 			}
 		}
 
