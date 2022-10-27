@@ -65,6 +65,8 @@ public:
 
   static void ConservedToPrimitive(amrex::MultiFab const &cons_mf, amrex::MultiFab &primVar_mf, const int nghost);
 
+  static auto maxSignalSpeedLocal(amrex::MultiFab const &cons) -> amrex::Real;
+
   static void
   ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real> const &cons,
                         array_t &maxSignal, amrex::Box const &indexRange);
@@ -198,6 +200,36 @@ void HydroSystem<problem_t>::ConservedToPrimitive(
       primVar[bx](i, j, k, primScalar0_index + nc) = cons[bx](i, j, k, scalar0_index + nc);
     }
   });
+}
+
+template <typename problem_t>
+auto HydroSystem<problem_t>::maxSignalSpeedLocal(amrex::MultiFab const &cons_mf) -> amrex::Real {
+  // return maximum signal speed on local grids
+  
+  auto const &cons = cons_mf.const_arrays();
+  return amrex::ParReduce(amrex::TypeList<amrex::ReduceOpMax>{}, amrex::TypeList<amrex::Real>{},
+                          cons_mf, amrex::IntVect(0), // no ghost cells
+      [=] AMREX_GPU_DEVICE (int bx, int i, int j, int k)
+          noexcept -> amrex::GpuTuple<amrex::Real>
+      {
+        const auto rho = cons[bx](i, j, k, HydroSystem<problem_t>::density_index);
+        const auto px  = cons[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index);
+        const auto py  = cons[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index);
+        const auto pz  = cons[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index);
+        const auto kinetic_energy = (px*px + py*py + pz*pz) / (2.0*rho);
+        const double abs_vel = std::sqrt(2.0 * kinetic_energy / rho);
+        double cs = NAN;
+
+        if constexpr (is_eos_isothermal()) {
+          cs = cs_iso_;
+        } else {
+          const auto Etot = cons[bx](i, j, k, HydroSystem<problem_t>::energy_index);
+          const auto Eint = Etot - kinetic_energy;
+          const auto P = Eint * (HydroSystem<problem_t>::gamma_ - 1.0);
+          cs = std::sqrt(HydroSystem<problem_t>::gamma_ * P / rho);
+        }
+        return { cs + abs_vel };
+      });
 }
 
 template <typename problem_t>

@@ -62,6 +62,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	using AMRSimulation<problem_t>::areInitialConditionsDefined_;
 	using AMRSimulation<problem_t>::BCs_cc_;
 	using AMRSimulation<problem_t>::componentNames_cc_;
+	using AMRSimulation<problem_t>::cflNumber_;
 	using AMRSimulation<problem_t>::fillBoundaryConditions;
 	using AMRSimulation<problem_t>::geom;
 	using AMRSimulation<problem_t>::grids;
@@ -187,12 +188,15 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 				 amrex::YAFluxRegister *fr_as_crse,
 				 amrex::YAFluxRegister *fr_as_fine);
 
-	auto advanceHydroAtLevel(int lev, amrex::Real time, amrex::Real dt_lev,
+	auto advanceHydroAtLevel(amrex::MultiFab &state_old_tmp, 
+				 int lev, amrex::Real time, amrex::Real dt_lev,
 				 amrex::YAFluxRegister *fr_as_crse,
 				 amrex::YAFluxRegister *fr_as_fine) -> bool;
 
 	void addStrangSplitSources(amrex::MultiFab &state, int lev, amrex::Real time,
 				 amrex::Real dt_lev);
+
+	auto isCflViolated(int lev, amrex::Real time, amrex::Real dt_actual) -> bool;			 
 
 	// radiation subcycle
 	void swapRadiationState(amrex::MultiFab &stateOld, amrex::MultiFab const &stateNew);
@@ -683,22 +687,38 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 	// timestep retries
 	const int max_retries = 4;
 	bool success = false;
+	amrex::Real cur_time;
 
 	for (int retry_count = 0; retry_count < max_retries; ++retry_count) {
 		// reduce timestep by a factor of 2^retry_count
 		const int nsubsteps = std::pow(2, retry_count);
 		const amrex::Real dt_step = dt_lev / nsubsteps;
+		cur_time = time;
+
 		if (retry_count > 0 && Verbose()) {
 			amrex::Print() << "\t>> Re-trying hydro advance at level " << lev
-						   << " with timestep reduced by factor " << nsubsteps << "\n";
+						   << " with reduced timestep (nsubsteps = " << nsubsteps
+						   << ", dt_new = " << dt_step << ")\n";
 		}
+
+		// create temporary multifab for old state
+		amrex::MultiFab state_old_cc_tmp(grids[lev], dmap[lev], ncomp_cc_, nghost_);
+		amrex::Copy(state_old_cc_tmp, state_old_cc_[lev], 0, 0, ncomp_cc_, nghost_);
 
 		// subcycle advanceHydroAtLevel, checking return value
 		for (int substep = 0; substep < nsubsteps; ++substep) {
-			success = advanceHydroAtLevel(lev, time, dt_step, fr_as_crse, fr_as_fine);
+			if (substep > 0) {
+				// since we are starting a new substep, we need to copy hydro state from
+				//  the new state vector to old state vector
+				amrex::Copy(state_old_cc_tmp, state_new_cc_[lev], 0, 0, ncompHydro_, nghost_);
+			}
+
+			success = advanceHydroAtLevel(state_old_cc_tmp, lev, time, dt_step, fr_as_crse, fr_as_fine);
+			cur_time += dt_step;
+
 			if (!success) {
 				if (Verbose()) {
-					amrex::Print() << "Warning: Hydro advance failed on level " << lev << "\n";
+					amrex::Print() << "\t>> WARNING: Hydro advance failed on level " << lev << "\n";
 				}
 				break;
 			}
@@ -709,11 +729,40 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 			break;
 		}
 	}
+	AMREX_ALWAYS_ASSERT(amrex::almostEqual(cur_time, time + dt_lev, 5));
 	AMREX_ALWAYS_ASSERT(success); // crash if we exceeded max_retries
 }
 
 template <typename problem_t>
-auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real time,
+auto RadhydroSimulation<problem_t>::isCflViolated(int lev, amrex::Real time,
+							amrex::Real dt_actual) -> bool
+{
+	// check wheter dt_actual would violate CFL condition using the post-update hydro state
+
+	// compute max signal speed
+	amrex::Real max_signal = HydroSystem<problem_t>::maxSignalSpeedLocal(state_new_cc_[lev]);
+	amrex::ParallelDescriptor::ReduceRealMax(max_signal);
+
+	// compute dt_cfl
+	auto dx = geom[lev].CellSizeArray();
+	const amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
+	const amrex::Real dt_cfl = cflNumber_ * (dx_min / max_signal);
+
+	// check whether dt_actual > dt_cfl (CFL violation)
+	const amrex::Real max_factor = 1.1;
+	const bool cflViolation = dt_actual > (max_factor * dt_cfl);
+	if (cflViolation && Verbose()) {
+		amrex::Print() << "\t>> CFL violation detected on level " << lev
+					   << " with dt_lev = " << dt_actual
+					   << " and dt_cfl = " << dt_cfl << "\n"
+					   << "\t   max_signal = " << max_signal << "\n";
+	}
+	return cflViolation;
+}
+
+template <typename problem_t>
+auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old_cc_tmp,
+							int lev, amrex::Real time,
 							amrex::Real dt_lev,
 							amrex::YAFluxRegister *fr_as_crse,
 							amrex::YAFluxRegister *fr_as_fine) -> bool
@@ -728,10 +777,6 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 	}
 
 	auto dx = geom[lev].CellSizeArray();
-
-	// create temporary multifab for Strang-split sources, copy old state
-	amrex::MultiFab state_old_cc_tmp(grids[lev], dmap[lev], ncomp_cc_, nghost_);
-	amrex::Copy(state_old_cc_tmp, state_old_cc_[lev], 0, 0, ncomp_cc_, nghost_);
 
 	// do Strang split source terms (first half-step)
 	addStrangSplitSources(state_old_cc_tmp, lev, time, 0.5*dt_lev);
@@ -870,8 +915,8 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(int lev, amrex::Real tim
 	// do Strang split source terms (second half-step)
 	addStrangSplitSources(state_new_cc_[lev], lev, time + dt_lev, 0.5*dt_lev);
 
-	// we have successfully advanced by dt_lev
-	return true;
+	// return success if we have not violated the CFL timestep
+	return (!isCflViolated(lev, time, dt_lev));
 }
 
 template <typename problem_t>
