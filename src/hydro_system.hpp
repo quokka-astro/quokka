@@ -207,7 +207,7 @@ auto HydroSystem<problem_t>::maxSignalSpeedLocal(amrex::MultiFab const &cons_mf)
   // return maximum signal speed on local grids
   
   auto const &cons = cons_mf.const_arrays();
-  return amrex::ParReduce(amrex::TypeList<amrex::ReduceOpMin>{}, amrex::TypeList<amrex::Real>{},
+  return amrex::ParReduce(amrex::TypeList<amrex::ReduceOpMax>{}, amrex::TypeList<amrex::Real>{},
                           cons_mf, amrex::IntVect(0), // no ghost cells
       [=] AMREX_GPU_DEVICE (int bx, int i, int j, int k)
           noexcept -> amrex::GpuTuple<amrex::Real>
