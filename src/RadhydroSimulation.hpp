@@ -711,7 +711,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 		if (do_reflux) {
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 				auto ba_face = amrex::convert(grids[lev], amrex::IntVect::TheDimensionVector(idim));
-				flux[idim] = amrex::MultiFab(ba_face, dmap[lev], ncomp_, 0);
+				flux[idim] = amrex::MultiFab(ba_face, dmap[lev], ncomp_cc_, 0);
 				flux[idim].setVal(0);
 			}
 		}
