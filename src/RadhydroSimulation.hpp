@@ -109,6 +109,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	int reconstructionOrder_ = 3; // 1 == donor cell; 2 == PLM; 3 == PPM (default)
 	int radiationReconstructionOrder_ = 3; // 1 == donor cell; 2 == PLM; 3 == PPM (default)
 	int useDualEnergy_ = 1; // 0 == disabled; 1 == use auxiliary internal energy equation (default)
+	int abortOnFofcFailure_ = 1; // 0 == keep going, 1 == abort hydro advance if FOFC fails
 
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
 
@@ -291,6 +292,7 @@ void RadhydroSimulation<problem_t>::readParmParse() {
 		amrex::ParmParse hpp("hydro");
 		hpp.query("reconstruction_order", reconstructionOrder_);
 		hpp.query("use_dual_energy", useDualEnergy_);
+		hpp.query("abort_on_fofc_failure", abortOnFofcFailure_);
 	}
 
 	// set radiation runtime parameters
@@ -853,7 +855,9 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 					amrex::Print() << "[FOFC-1] failed for " << ncells_bad
 								   << " cells on level " << lev << "\n";
 				}
-				return false;
+				if (abortOnFofcFailure_) {
+					return false;
+				}
 			}
 		}
 
@@ -922,7 +926,9 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 					amrex::Print() << "[FOFC-2] failed for " << ncells_bad
 								   << " cells on level " << lev << "\n";
 				}
-				return false;
+				if (abortOnFofcFailure_) {
+					return false;
+				}
 			}
 		}
 
