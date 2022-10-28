@@ -690,7 +690,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 	bool success = false;
 	amrex::Real cur_time;
 
-	for (int retry_count = 0; retry_count < max_retries; ++retry_count) {
+	for (int retry_count = 0; retry_count <= max_retries; ++retry_count) {
 		// reduce timestep by a factor of 2^retry_count
 		const int nsubsteps = std::pow(2, retry_count);
 		const amrex::Real dt_step = dt_lev / nsubsteps;
@@ -794,16 +794,6 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	// do Strang split source terms (first half-step)
 	addStrangSplitSources(state_old_cc_tmp, lev, time, 0.5*dt_lev);
 
-	// create flux multifab (used for flux registers)
-	std::array<amrex::MultiFab, AMREX_SPACEDIM> flux;
-	if (do_reflux) {
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			auto ba_face = amrex::convert(grids[lev], amrex::IntVect::TheDimensionVector(idim));
-			flux[idim] = amrex::MultiFab(ba_face, dmap[lev], ncomp_, 0);
-			flux[idim].setVal(0);
-		}
-	}
-
 	// create temporary multifab for intermediate state
 	amrex::MultiFab state_inter_cc_(grids[lev], dmap[lev], ncomp_cc_, nghost_);
 	state_inter_cc_.setVal(0); // prevent assert in fillBoundaryConditions when radiation is enabled
@@ -851,7 +841,6 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 			if (redoFlag.max(0) == quokka::redoFlag::redo) {
 				// FOFC failed
 				return false;
-				//amrex::Abort("First-order flux correction failed! Enable timestep retries or run with a lower CFL.");
 			}
 		}
 
@@ -914,7 +903,6 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 			if (redoFlag.max(0) == quokka::redoFlag::redo) {
 				// FOFC failed
 				return false;
-				//amrex::Abort("First-order flux correction failed! Enable timestep retries or run with a lower CFL.");
 			}
 		}
 
@@ -937,12 +925,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	addStrangSplitSources(state_new_cc_[lev], lev, time + dt_lev, 0.5*dt_lev);
 
 	// check if we have violated the CFL timestep
-	bool success = !isCflViolated(lev, time, dt_lev);
-	if (success && do_reflux) {
-		// increment flux registers
-		incrementFluxRegisters(fr_as_crse, fr_as_fine, flux, lev, fluxScaleFactor * dt_lev);
-	}
-	return success;
+	return !isCflViolated(lev, time, dt_lev);
 }
 
 template <typename problem_t>
