@@ -366,11 +366,11 @@ auto RadhydroSimulation<problem_t>::computeExtraPhysicsTimestep(int const level)
 	return std::numeric_limits<amrex::Real>::max();
 }
 
-#if !defined(NDEBUG)
-#define CHECK_HYDRO_STATES(mf) checkHydroStates(mf, __FILE__, __LINE__)
-#else
-#define CHECK_HYDRO_STATES(mf) 
-#endif
+// #if !defined(NDEBUG)
+// #define CHECK_HYDRO_STATES(mf) checkHydroStates(mf, __FILE__, __LINE__)
+// #else
+#define CHECK_HYDRO_STATES(mf)
+// #endif
 
 template <typename problem_t>
 void RadhydroSimulation<problem_t>::checkHydroStates(amrex::MultiFab &mf, char const *file, int line)
