@@ -903,14 +903,14 @@ auto AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time,
       for (int i = lev; i <= finest_level; i++) {
         const int divisor = maxFactorSublevels / reductionFactor_[i];
         dt_[i] /= static_cast<amrex::Real>(divisor);
-
-        if (verbose) {
-          amrex::Print() << "\t\tLevel " << i << ": factor: " << divisor << " ("
-                         << reductionFactor_[i] << "), "
-                         << "dt: " << dt_[i] << std::endl;
-        }
-
         reductionFactor_[i] = maxFactorSublevels;
+        // TODO(ben): do we need to adjust nsubsteps here??
+        if (verbose) {
+          amrex::Print() << "\t>> Reducing timestep on level " << i
+                         << " by a factor of " << divisor
+                         << " (current reduction factor: " << reductionFactor_[i]
+                         << ", current dt: " << dt_[i] << ")\n";
+        }
       }
     }
   }
