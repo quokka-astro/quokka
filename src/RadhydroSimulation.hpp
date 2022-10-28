@@ -178,8 +178,9 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	// tag cells for refinement
 	void ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override;
 
-	auto expandFluxArrays(std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxes, int nstartNew,
-			      int ncompNew) -> std::array<amrex::MultiFab, AMREX_SPACEDIM>;
+	void addFluxArrays(std::array<amrex::MultiFab, AMREX_SPACEDIM> &dstfluxes,
+    			   std::array<amrex::MultiFab, AMREX_SPACEDIM> &srcfluxes,
+				   const int srccomp, const int dstcomp);
 
 	auto expandFluxArrays(std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxes, int nstartNew,
 			      int ncompNew) -> std::array<amrex::FArrayBox, AMREX_SPACEDIM>;
@@ -188,10 +189,10 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 				 amrex::YAFluxRegister *fr_as_crse,
 				 amrex::YAFluxRegister *fr_as_fine);
 
-	auto advanceHydroAtLevel(amrex::MultiFab &state_old_tmp, 
-				 int lev, amrex::Real time, amrex::Real dt_lev,
-				 amrex::YAFluxRegister *fr_as_crse,
-				 amrex::YAFluxRegister *fr_as_fine) -> bool;
+	auto advanceHydroAtLevel(amrex::MultiFab &state_old_tmp,
+							std::array<amrex::MultiFab, AMREX_SPACEDIM> &flux,
+							int lev, amrex::Real time,
+							amrex::Real dt_lev) -> bool;
 
 	void addStrangSplitSources(amrex::MultiFab &state, int lev, amrex::Real time,
 				 amrex::Real dt_lev);
@@ -689,7 +690,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 	bool success = false;
 	amrex::Real cur_time;
 
-	for (int retry_count = 0; retry_count < max_retries; ++retry_count) {
+	for (int retry_count = 0; retry_count <= max_retries; ++retry_count) {
 		// reduce timestep by a factor of 2^retry_count
 		const int nsubsteps = std::pow(2, retry_count);
 		const amrex::Real dt_step = dt_lev / nsubsteps;
@@ -705,6 +706,16 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 		amrex::MultiFab state_old_cc_tmp(grids[lev], dmap[lev], ncomp_cc_, nghost_);
 		amrex::Copy(state_old_cc_tmp, state_old_cc_[lev], 0, 0, ncomp_cc_, nghost_);
 
+		// create flux multifab (needed for flux registers)
+		std::array<amrex::MultiFab, AMREX_SPACEDIM> flux;
+		if (do_reflux) {
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				auto ba_face = amrex::convert(grids[lev], amrex::IntVect::TheDimensionVector(idim));
+				flux[idim] = amrex::MultiFab(ba_face, dmap[lev], ncomp_cc_, 0);
+				flux[idim].setVal(0);
+			}
+		}
+
 		// subcycle advanceHydroAtLevel, checking return value
 		for (int substep = 0; substep < nsubsteps; ++substep) {
 			if (substep > 0) {
@@ -713,7 +724,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 				amrex::Copy(state_old_cc_tmp, state_new_cc_[lev], 0, 0, ncompHydro_, nghost_);
 			}
 
-			success = advanceHydroAtLevel(state_old_cc_tmp, lev, time, dt_step, fr_as_crse, fr_as_fine);
+			success = advanceHydroAtLevel(state_old_cc_tmp, flux, lev, time, dt_step);
 			cur_time += dt_step;
 
 			if (!success) {
@@ -725,11 +736,21 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 		}
 
 		if (success) {
+			if (do_reflux) {
+				amrex::Real fluxScaleFactor = NAN;
+				if (integratorOrder_ == 2) {
+					fluxScaleFactor = 0.5;
+				} else if (integratorOrder_ == 1) {
+					fluxScaleFactor = 1.0;
+				}
+				// increment flux registers
+				//   note: this *must* be scaled by dt_step, NOT dt_lev !
+				incrementFluxRegisters(fr_as_crse, fr_as_fine, flux, lev, fluxScaleFactor * dt_step);
+			}
 			// we are done, do not attempt more retries
 			break;
 		}
 	}
-	AMREX_ALWAYS_ASSERT(amrex::almostEqual(cur_time, time + dt_lev, 5));
 	AMREX_ALWAYS_ASSERT(success); // crash if we exceeded max_retries
 }
 
@@ -762,19 +783,11 @@ auto RadhydroSimulation<problem_t>::isCflViolated(int lev, amrex::Real time,
 
 template <typename problem_t>
 auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old_cc_tmp,
+							std::array<amrex::MultiFab, AMREX_SPACEDIM> &flux,
 							int lev, amrex::Real time,
-							amrex::Real dt_lev,
-							amrex::YAFluxRegister *fr_as_crse,
-							amrex::YAFluxRegister *fr_as_fine) -> bool
+							amrex::Real dt_lev) -> bool
 {
 	BL_PROFILE("RadhydroSimulation::advanceHydroAtLevel()");
-
-	amrex::Real fluxScaleFactor = NAN;
-	if (integratorOrder_ == 2) {
-		fluxScaleFactor = 0.5;
-	} else if (integratorOrder_ == 1) {
-		fluxScaleFactor = 1.0;
-	}
 
 	auto dx = geom[lev].CellSizeArray();
 
@@ -828,7 +841,6 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 			if (redoFlag.max(0) == quokka::redoFlag::redo) {
 				// FOFC failed
 				return false;
-				//amrex::Abort("First-order flux correction failed! Enable timestep retries or run with a lower CFL.");
 			}
 		}
 
@@ -842,8 +854,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 
 		if (do_reflux) {
 			// increment flux registers
-			auto expandedFluxes = expandFluxArrays(fluxArrays, 0, state_new_cc_[lev].nComp());
-			incrementFluxRegisters(fr_as_crse, fr_as_fine, fluxArrays, lev, fluxScaleFactor * dt_lev);
+			addFluxArrays(flux, fluxArrays, 0, 0);
 		}
 	}
 	amrex::Gpu::streamSynchronizeAll();
@@ -892,7 +903,6 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 			if (redoFlag.max(0) == quokka::redoFlag::redo) {
 				// FOFC failed
 				return false;
-				//amrex::Abort("First-order flux correction failed! Enable timestep retries or run with a lower CFL.");
 			}
 		}
 
@@ -906,8 +916,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 
 		if (do_reflux) {
 			// increment flux registers
-			auto expandedFluxes = expandFluxArrays(fluxArrays, 0, state_new_cc_[lev].nComp());
-			incrementFluxRegisters(fr_as_crse, fr_as_fine, fluxArrays, lev, fluxScaleFactor * dt_lev);
+			addFluxArrays(flux, fluxArrays, 0, 0);
 		}
 	}
 	amrex::Gpu::streamSynchronizeAll();
@@ -915,8 +924,8 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	// do Strang split source terms (second half-step)
 	addStrangSplitSources(state_new_cc_[lev], lev, time + dt_lev, 0.5*dt_lev);
 
-	// return success if we have not violated the CFL timestep
-	return (!isCflViolated(lev, time, dt_lev));
+	// check if we have violated the CFL timestep
+	return !isCflViolated(lev, time, dt_lev);
 }
 
 template <typename problem_t>
@@ -958,24 +967,16 @@ void RadhydroSimulation<problem_t>::replaceFluxes(
 }
 
 template <typename problem_t>
-auto RadhydroSimulation<problem_t>::expandFluxArrays(
-    std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxes, const int nstartNew, const int ncompNew)
-    -> std::array<amrex::MultiFab, AMREX_SPACEDIM>
+void RadhydroSimulation<problem_t>::addFluxArrays(std::array<amrex::MultiFab, AMREX_SPACEDIM> &dstfluxes,
+    std::array<amrex::MultiFab, AMREX_SPACEDIM> &srcfluxes, const int srccomp, const int dstcomp)
 {
-	BL_PROFILE("RadhydroSimulation::expandFluxArrays()");
+	BL_PROFILE("RadhydroSimulation::addFluxArrays()");
 
-	// This is needed because reflux arrays must have the same number of components as
-	// state_new_cc_[lev]
-
-	auto copyFlux = [nstartNew, ncompNew](amrex::MultiFab const &oldFlux) {
-		amrex::MultiFab newFlux(oldFlux.boxArray(), oldFlux.DistributionMap(), ncompNew, 0);
-		newFlux.setVal(0.);
-		// copy oldFlux (starting at 0) to newFlux (starting at nstart)
-		AMREX_ASSERT(ncompNew >= oldFlux.nComp());
-		newFlux.ParallelCopy(oldFlux, 0, 0, oldFlux.nComp());
-		return newFlux;
-	};
-	return {AMREX_D_DECL(copyFlux(fluxes[0]), copyFlux(fluxes[1]), copyFlux(fluxes[2]))};
+	for(int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+		auto const &srcflux = srcfluxes[idim];
+		auto &dstflux = dstfluxes[idim];
+		amrex::Add(dstflux, srcflux, srccomp, dstcomp, srcflux.nComp(), 0);
+	}
 }
 
 
