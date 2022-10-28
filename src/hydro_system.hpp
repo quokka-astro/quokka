@@ -112,7 +112,7 @@ public:
   static void AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex::MultiFab const &consVar_mf,
 				   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx,
 				   std::array<amrex::MultiFab, AMREX_SPACEDIM> const &faceVelArray,
-           amrex::MultiFab const &redoFlag_mf);
+           amrex::iMultiFab const &redoFlag_mf);
 
   static void SyncDualEnergy(amrex::MultiFab &consVar_mf);
 
@@ -660,7 +660,7 @@ void HydroSystem<problem_t>::AddInternalEnergyPdV(
     amrex::MultiFab &rhs_mf, amrex::MultiFab const &consVar_mf,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx,
     std::array<amrex::MultiFab, AMREX_SPACEDIM> const &faceVelArray,
-    amrex::MultiFab const &redoFlag_mf) {
+    amrex::iMultiFab const &redoFlag_mf) {
   // compute P dV source term for the internal energy equation,
   // using the face-centered velocities in faceVelArray and the pressure
 
