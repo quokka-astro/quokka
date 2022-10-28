@@ -51,7 +51,7 @@ void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsOnGrid(
   const amrex::Box &indexRange = grid_elem.indexRange;
   const amrex::Array4<double>& state_cc = grid_elem.array;
 
-  const int ncomp = ncomp_cc_;
+  const int ncomp = Physics_Indices<ShocktubeProblem>::nvarTotal_cc;
   // loop over the grid and set the initial condition
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
     amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
