@@ -554,6 +554,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep() {
   if (do_subcycle == 1) {
     for (int lev = 1; lev <= max_level; ++lev) {
       nsubsteps[lev] = MaxRefRatio(lev - 1);
+      reductionFactor_[lev] = 1; // reset additional subcycling factors
     }
   }
 
