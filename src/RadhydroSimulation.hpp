@@ -693,7 +693,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 							amrex::YAFluxRegister *fr_as_fine)
 {
 	// timestep retries
-	const int max_retries = 4;
+        const int max_retries = 6;
 	bool success = false;
 	amrex::Real cur_time;
 
@@ -855,9 +855,11 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 					amrex::Print() << "[FOFC-1] failed for " << ncells_bad
 								   << " cells on level " << lev << "\n";
 				}
+#if 0
 				if (abortOnFofcFailure_) {
 					return false;
 				}
+#endif
 			}
 		}
 
@@ -926,9 +928,11 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 					amrex::Print() << "[FOFC-2] failed for " << ncells_bad
 								   << " cells on level " << lev << "\n";
 				}
+#if 0
 				if (abortOnFofcFailure_) {
 					return false;
 				}
+#endif
 			}
 		}
 
