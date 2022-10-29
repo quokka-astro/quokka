@@ -684,7 +684,7 @@ void HydroSystem<problem_t>::SyncDualEnergy(amrex::MultiFab &consVar_mf) {
   // sync internal energy and total energy
   // this step must be done as an operator-split step after *each* RK stage
 
-  const amrex::Real eta = 1.0e-3; // dual energy parameter 'eta'
+  const amrex::Real eta = 1.0e-2; // dual energy parameter 'eta'
 
   auto consVar = consVar_mf.arrays();
 
