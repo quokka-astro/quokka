@@ -750,15 +750,16 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 
 		if (success) {
 			if (do_reflux) {
-#if 0
 				amrex::Real fluxScaleFactor = NAN;
 				if (integratorOrder_ == 2) {
-					fluxScaleFactor = 0.5;
+					if (integratorType_ == "rk2") {
+						fluxScaleFactor = 0.5; // two RK2 stages
+					} else if (integratorType_ == "vl2") {
+						fluxScaleFactor = 1.0; // VL2 (single-step)
+					}
 				} else if (integratorOrder_ == 1) {
 					fluxScaleFactor = 1.0;
 				}
-#endif
-				const amrex::Real fluxScaleFactor = 1.0; // VL2
 				// increment flux registers
 				//   note: this *must* be scaled by dt_step, NOT dt_lev !
 				incrementFluxRegisters(fr_as_crse, fr_as_fine, flux, lev, fluxScaleFactor * dt_step);
