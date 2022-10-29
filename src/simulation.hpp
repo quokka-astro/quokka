@@ -554,6 +554,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep() {
   if (do_subcycle == 1) {
     for (int lev = 1; lev <= max_level; ++lev) {
       nsubsteps[lev] = MaxRefRatio(lev - 1);
+      reductionFactor_[lev] = 1; // reset additional subcycling
     }
   }
 
@@ -685,6 +686,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve() {
 
     // sync up time (to avoid roundoff error)
     for (lev = 0; lev <= finest_level; ++lev) {
+      AMREX_ALWAYS_ASSERT(std::abs((tNew_[lev] - cur_time)/cur_time) < 1e-10);
       tNew_[lev] = cur_time;
     }
 
