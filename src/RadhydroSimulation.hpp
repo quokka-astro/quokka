@@ -107,6 +107,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	int reconstructionOrder_ = 3; // 1 == donor cell; 2 == PLM; 3 == PPM (default)
 	int radiationReconstructionOrder_ = 3; // 1 == donor cell; 2 == PLM; 3 == PPM (default)
 	int useDualEnergy_ = 1; // 0 == disabled; 1 == use auxiliary internal energy equation (default)
+	std::string integratorType_ = "rk2"; // "rk2" or "vl2"
 
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
 
@@ -288,6 +289,7 @@ void RadhydroSimulation<problem_t>::readParmParse() {
 		amrex::ParmParse hpp("hydro");
 		hpp.query("reconstruction_order", reconstructionOrder_);
 		hpp.query("use_dual_energy", useDualEnergy_);
+		hpp.query("integrator_type", integratorType_);
 	}
 
 	// set radiation runtime parameters
@@ -729,7 +731,13 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 				amrex::Copy(state_old_cc_tmp, state_new_cc_[lev], 0, 0, ncompHydro_, nghost_);
 			}
 
-			success = advanceHydroAtLevelVL2(state_old_cc_tmp, flux, lev, time, dt_step);
+			if (integratorType_ == "rk2") {
+				success = advanceHydroAtLevelRK2(state_old_cc_tmp, flux, lev, time, dt_step);
+			} else if (integratorType_ == "vl2") {
+				success = advanceHydroAtLevelVL2(state_old_cc_tmp, flux, lev, time, dt_step);
+			} else {
+				amrex::Abort("Unknown integrator type! aborting.");
+			}
 			cur_time += dt_step;
 
 			if (!success) {
