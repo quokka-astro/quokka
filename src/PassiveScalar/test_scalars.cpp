@@ -129,6 +129,18 @@ void RadhydroSimulation<ScalarProblem>::computeReferenceSolution(
     });
   }
 
+  // check conservation of passive scalar
+  const amrex::Real scalar_ref = ref.sum(HydroSystem<ScalarProblem>::scalar0_index);
+  const amrex::Real scalar_sol = state_new_cc_[0].sum(HydroSystem<ScalarProblem>::scalar0_index);
+  const amrex::Real reldiff = std::abs((scalar_sol - scalar_ref) / scalar_ref);
+  const amrex::Real reltol = 1.0e-14;
+  if (reldiff < reltol) {
+    amrex::Print() << "Passive scalar is conserved to a relative difference of " << reldiff << "\n";
+  } else {
+    amrex::Print() << "Passive scalar differs by a factor of " << reldiff << "\n";
+    amrex::Abort("Passive scalar is not conserved!");
+  }
+
 #ifdef HAVE_PYTHON
   // Plot results
   auto [position, values] = fextract(state_new_cc_[0], geom[0], 0, 0.5);
