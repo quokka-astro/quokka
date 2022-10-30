@@ -210,6 +210,34 @@ void RadhydroSimulation<ScalarProblem>::computeReferenceSolution(
 #endif
 }
 
+template <>
+void RadhydroSimulation<ScalarProblem>::ErrorEst(
+    int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/) {
+  // tag cells for refinement
+
+  const amrex::Real eta_threshold = 0.05; // gradient refinement threshold
+
+  for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
+    const amrex::Box &box = mfi.validbox();
+    const auto state = state_new_cc_[lev].const_array(mfi);
+    const auto tag = tags.array(mfi);
+
+    amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+      const int n = HydroSystem<ScalarProblem>::density_index;
+      amrex::Real const rho = state(i, j, k, n);
+      amrex::Real const rho_xplus = state(i + 1, j, k, n);
+      amrex::Real const rho_xminus = state(i - 1, j, k, n);
+
+      amrex::Real const del_x = (rho_xplus - rho_xminus) / 2.0;
+      amrex::Real const gradient_indicator = std::abs(del_x / rho);
+
+      if (gradient_indicator > eta_threshold) {
+        tag(i, j, k) = amrex::TagBox::SET;
+      }
+    });
+  }
+}
+
 auto problem_main() -> int {
   // Problem parameters
   const int nvars = RadhydroSimulation<ScalarProblem>::nvarTotal_cc_;
