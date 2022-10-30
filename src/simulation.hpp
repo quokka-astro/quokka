@@ -41,7 +41,6 @@
 #include "AMReX_IndexType.H"
 #include "AMReX_IntVect.H"
 #include "AMReX_LayoutData.H"
-#include "AMReX_MFInterpolater.H"
 #include "AMReX_MultiFabUtil.H"
 #include "AMReX_ParallelContext.H"
 #include "AMReX_ParallelDescriptor.H"
@@ -1241,8 +1240,13 @@ void AMRSimulation<problem_t>::FillPatchWithData(
     PreInterpHook const &pre_interp, PostInterpHook const &post_interp) {
   BL_PROFILE("AMRSimulation::FillPatchWithData()");
 
-  // use CellConservativeLinear interpolation onto fine grid
-  amrex::Interpolater *mapper = &amrex::cell_cons_interp;
+  // use CellConservativeProtected interpolation if possible
+  amrex::Interpolater *mapper = nullptr;
+  if constexpr (AMREX_SPACEDIM > 1) {
+    mapper = &amrex::cell_cons_interp;
+  } else if constexpr (AMREX_SPACEDIM >= 2) {
+    mapper = &amrex::protected_interp; // extrema preserving, but only works in 2D/3D
+  }
 
   if (fptype == FillPatchType::fillpatch_class) {
 	  if (fillpatcher_[lev] == nullptr) {
@@ -1312,9 +1316,13 @@ void AMRSimulation<problem_t>::FillCoarsePatch(int lev, amrex::Real time,
       coarsePhysicalBoundaryFunctor(geom[lev - 1], BCs_cc_,
                                     boundaryFunctor);
 
-  // use CellConservativeLinear interpolation onto fine grid
-  amrex::MFInterpolater *mapper = &amrex::mf_cell_cons_interp;
-  // amrex::MFInterpolater *mapper = &amrex::mf_pc_interp;
+  // use CellConservativeProtected interpolation if possible
+  amrex::Interpolater *mapper = nullptr;
+  if constexpr (AMREX_SPACEDIM > 1) {
+    mapper = &amrex::cell_cons_interp;
+  } else if constexpr (AMREX_SPACEDIM >= 2) {
+    mapper = &amrex::protected_interp; // extrema preserving, but only works in 2D/3D
+  }
 
   amrex::InterpFromCoarseLevel(
       mf, time, *cmf[0], 0, icomp, ncomp, geom[lev - 1], geom[lev],
