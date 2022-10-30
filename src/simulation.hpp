@@ -859,6 +859,7 @@ auto AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time,
   /// "additional AMR subcycling" code borrowed from Chombo:
   stepsLeft--;
 
+#if 0
   // If this wasn't just done by the next coarser level, check to see if
   // it is necessary to do additional subcycling in time.
   if ((!coarseTimeBoundary) && (constantDt_ <= 0)) {
@@ -923,6 +924,7 @@ auto AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time,
       }
     }
   }
+#endif
 
   if (Verbose()) {
     amrex::Print() << "[Level " << lev << " step " << istep[lev] + 1 << "] ";
