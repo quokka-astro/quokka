@@ -715,7 +715,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve() {
 
     // sync up time (to avoid roundoff error)
     for (lev = 0; lev <= finest_level; ++lev) {
-      AMREX_ALWAYS_ASSERT(std::abs((tNew_[lev] - cur_time) / cur_time) < 1e-10);
+      amrex::Real timestepDiffFactor = std::abs((tNew_[lev] - cur_time) / dt_[0]);
+      bool areTimestepsInSync = timestepDiffFactor < 1e-6;
+      if (!areTimestepsInSync) {
+        amrex::Print() << "\nERROR: Timesteps are not in sync on level " << lev
+                       << "! tNew_[lev] differs from cur_time by a factor of "
+                       << timestepDiffFactor << "\n";
+      }
+      AMREX_ALWAYS_ASSERT(areTimestepsInSync);
       tNew_[lev] = cur_time;
     }
 
