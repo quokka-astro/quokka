@@ -804,6 +804,13 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	}
 	addStrangSplitSources(state_old_tmp, lev, time, 0.5*dt_lev);
 
+	HydroSystem<problem_t>::EnforceDensityFloor(densityFloor_, state_old_tmp);
+	HydroSystem<problem_t>::EnforceInternalEnergyFloor(internalEnergyFloor_, state_old_tmp, userData_);
+	if (useDualEnergy_ == 1) {
+		// sync internal energy (requires positive density)
+		HydroSystem<problem_t>::SyncDualEnergy(state_old_tmp);
+	}
+
 	// create temporary multifab for intermediate state
 	amrex::MultiFab state_inter_(grids[lev], dmap[lev], ncomp_, nghost_);
 
@@ -957,6 +964,13 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		amrex::Print() << "\tComputing second-half source terms on level " << lev << ".\n";
 	}
 	addStrangSplitSources(state_new_[lev], lev, time + dt_lev, 0.5*dt_lev);
+
+	HydroSystem<problem_t>::EnforceDensityFloor(densityFloor_, state_new_[lev]);
+	HydroSystem<problem_t>::EnforceInternalEnergyFloor(internalEnergyFloor_, state_new_[lev], userData_);
+	if (useDualEnergy_ == 1) {
+		// sync internal energy (requires positive density)
+		HydroSystem<problem_t>::SyncDualEnergy(state_new_[lev]);
+	}
 
 	// check if we have violated the CFL timestep
 	return !isCflViolated(lev, time, dt_lev);
