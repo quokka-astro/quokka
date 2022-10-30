@@ -1242,7 +1242,7 @@ void AMRSimulation<problem_t>::FillPatchWithData(
 
   // use CellConservativeProtected interpolation if possible
   amrex::Interpolater *mapper = nullptr;
-  if constexpr (AMREX_SPACEDIM > 1) {
+  if constexpr (AMREX_SPACEDIM == 1) {
     mapper = &amrex::cell_cons_interp;
   } else if constexpr (AMREX_SPACEDIM >= 2) {
     mapper = &amrex::protected_interp; // extrema preserving, but only works in 2D/3D
@@ -1318,7 +1318,7 @@ void AMRSimulation<problem_t>::FillCoarsePatch(int lev, amrex::Real time,
 
   // use CellConservativeProtected interpolation if possible
   amrex::Interpolater *mapper = nullptr;
-  if constexpr (AMREX_SPACEDIM > 1) {
+  if constexpr (AMREX_SPACEDIM == 1) {
     mapper = &amrex::cell_cons_interp;
   } else if constexpr (AMREX_SPACEDIM >= 2) {
     mapper = &amrex::protected_interp; // extrema preserving, but only works in 2D/3D
