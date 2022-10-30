@@ -129,6 +129,18 @@ void RadhydroSimulation<ScalarProblem>::computeReferenceSolution(
     });
   }
 
+  // check conservation of passive scalar
+  const amrex::Real scalar_ref = ref.sum(HydroSystem<ScalarProblem>::scalar0_index);
+  const amrex::Real scalar_sol = state_new_cc_[0].sum(HydroSystem<ScalarProblem>::scalar0_index);
+  const amrex::Real reldiff = std::abs((scalar_sol - scalar_ref) / scalar_ref);
+  const amrex::Real reltol = 1.0e-14;
+  if (reldiff < reltol) {
+    amrex::Print() << "Passive scalar is conserved to a relative difference of " << reldiff << "\n";
+  } else {
+    amrex::Print() << "Passive scalar differs by a factor of " << reldiff << "\n";
+    amrex::Abort("Passive scalar is not conserved!");
+  }
+
 #ifdef HAVE_PYTHON
   // Plot results
   auto [position, values] = fextract(state_new_cc_[0], geom[0], 0, 0.5);
@@ -208,6 +220,34 @@ void RadhydroSimulation<ScalarProblem>::computeReferenceSolution(
     matplotlibcpp::save("./passive_scalar.pdf");
   }
 #endif
+}
+
+template <>
+void RadhydroSimulation<ScalarProblem>::ErrorEst(
+    int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/) {
+  // tag cells for refinement
+
+  const amrex::Real eta_threshold = 0.05; // gradient refinement threshold
+
+  for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
+    const amrex::Box &box = mfi.validbox();
+    const auto state = state_new_cc_[lev].const_array(mfi);
+    const auto tag = tags.array(mfi);
+
+    amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+      const int n = HydroSystem<ScalarProblem>::density_index;
+      amrex::Real const rho = state(i, j, k, n);
+      amrex::Real const rho_xplus = state(i + 1, j, k, n);
+      amrex::Real const rho_xminus = state(i - 1, j, k, n);
+
+      amrex::Real const del_x = (rho_xplus - rho_xminus) / 2.0;
+      amrex::Real const gradient_indicator = std::abs(del_x / rho);
+
+      if (gradient_indicator > eta_threshold) {
+        tag(i, j, k) = amrex::TagBox::SET;
+      }
+    });
+  }
 }
 
 auto problem_main() -> int {
