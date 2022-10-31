@@ -1291,12 +1291,14 @@ void AMRSimulation<problem_t>::FillPatchWithData(
   BL_PROFILE("AMRSimulation::FillPatchWithData()");
 
   // use CellConservativeProtected interpolation if possible
-  amrex::Interpolater *mapper = nullptr;
+  amrex::Interpolater *mapper = &amrex::pc_interp;
+#if 0
   if constexpr (AMREX_SPACEDIM == 1) {
     mapper = &amrex::cell_cons_interp;
   } else if constexpr (AMREX_SPACEDIM >= 2) {
     mapper = &amrex::protected_interp; // extrema preserving, but only works in 2D/3D
   }
+#endif
 
   if (fptype == FillPatchType::fillpatch_class) {
 	  if (fillpatcher_[lev] == nullptr) {
@@ -1367,12 +1369,14 @@ void AMRSimulation<problem_t>::FillCoarsePatch(int lev, amrex::Real time,
                                     boundaryFunctor);
 
   // use CellConservativeProtected interpolation if possible
-  amrex::Interpolater *mapper = nullptr;
+  amrex::Interpolater *mapper = &amrex::pc_interp;
+#if 0
   if constexpr (AMREX_SPACEDIM == 1) {
     mapper = &amrex::cell_cons_interp;
   } else if constexpr (AMREX_SPACEDIM >= 2) {
     mapper = &amrex::protected_interp; // extrema preserving, but only works in 2D/3D
   }
+#endif
 
   amrex::InterpFromCoarseLevel(
       mf, time, *cmf[0], 0, icomp, ncomp, geom[lev - 1], geom[lev],
