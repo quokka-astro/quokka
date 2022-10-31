@@ -1290,8 +1290,8 @@ void AMRSimulation<problem_t>::FillPatchWithData(
     PreInterpHook const &pre_interp, PostInterpHook const &post_interp) {
   BL_PROFILE("AMRSimulation::FillPatchWithData()");
 
-  // use CellConservativeProtected interpolation if possible
-  amrex::Interpolater *mapper = &amrex::pc_interp;
+  // use CellConservativeLinear(1) interpolation
+  amrex::Interpolater *mapper = &amrex::lincc_interp;
 #if 0
   if constexpr (AMREX_SPACEDIM == 1) {
     mapper = &amrex::cell_cons_interp;
@@ -1368,8 +1368,8 @@ void AMRSimulation<problem_t>::FillCoarsePatch(int lev, amrex::Real time,
       coarsePhysicalBoundaryFunctor(geom[lev - 1], boundaryConditions_,
                                     boundaryFunctor);
 
-  // use CellConservativeProtected interpolation if possible
-  amrex::Interpolater *mapper = &amrex::pc_interp;
+  // use CellConservativeLinear(1) interpolation
+  amrex::Interpolater *mapper = &amrex::lincc_interp;
 #if 0
   if constexpr (AMREX_SPACEDIM == 1) {
     mapper = &amrex::cell_cons_interp;
