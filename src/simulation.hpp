@@ -201,7 +201,7 @@ public:
                               int lev, amrex::Real time,
                               PreInterpHook const &pre_interp,
                               PostInterpHook const&post_interp,
-                              FillPatchType fptype = FillPatchType::fillpatch_function);
+                              FillPatchType fptype = FillPatchType::fillpatch_class);
 
   template <typename PreInterpHook, typename PostInterpHook>
   void FillPatchWithData(int lev, amrex::Real time, amrex::MultiFab &mf,
