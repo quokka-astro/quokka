@@ -998,10 +998,19 @@ auto AMRSimulation<problem_t>::getAmrInterpolater() -> amrex::Interpolater*
 {
   amrex::Interpolater *mapper = nullptr;
 
-  if (amrInterpMethod_ == 0) {
+  if (amrInterpMethod_ == 0) { // piecewise-constant interpolation
     mapper = &amrex::pc_interp;
-  } else if (amrInterpMethod_ == 1) {
-    mapper = &amrex::lincc_interp;
+  } else if (amrInterpMethod_ == 1) { // slope-limited linear interpolation
+    // amrex::cell_cons_interp is an alias for amrex::CellConservativeLinear(0).
+    //  It has the following important properties:
+    // 1. should NOT produce new extrema
+    // 2. should be conservative
+    //    (*except* for partial densities, which all require the same slope to be conservative,
+    //     in the sense that the partial densities should sum to the total density)
+    // 3. does NOT preserve linear combinations of variables
+    //    (amrex::lincc_interp does that instead, but violates property 1 above.)
+    //
+    mapper = &amrex::cell_cons_interp;
   } else {
     amrex::Abort("Invalid AMR interpolation method specified!");
   }
