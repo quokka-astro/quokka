@@ -1004,6 +1004,7 @@ auto AMRSimulation<problem_t>::getAmrInterpolater() -> amrex::Interpolater*
     // amrex::lincc_interp is an alias for amrex::CellConservativeLinear(1).
     //  It has the following important properties:
     // 1. should NOT produce new extrema
+    //    (will revert to piecewise constant if any component has a local min/max)
     // 2. should be conservative
     // 3. preserves linear combinations of variables in each cell
     mapper = &amrex::lincc_interp;
