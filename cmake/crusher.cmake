@@ -12,4 +12,8 @@ set(CMAKE_CXX_COMPILER "CC" CACHE PATH "")
 set(AMReX_GPU_BACKEND HIP CACHE STRING "")
 set(AMReX_AMD_ARCH gfx90a CACHE STRING "") # MI250X
 set(AMREX_GPUS_PER_NODE 8 CACHE STRING "")
+set(ENV{Ascent_DIR} "/ccs/home/wibking/ascent/ascent-v0.9.0-pre/install")
+set(ENV{Kokkos_DIR} "/ccs/home/wibking/ascent/kokkos-3.6.01/install/lib64/cmake/Kokkos")
+set(AMReX_CONDUIT ON BOOL STRING "")
+set(AMReX_ASCENT ON BOOL STRING "")
 option(QUOKKA_PYTHON OFF)
