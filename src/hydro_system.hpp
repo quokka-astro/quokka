@@ -973,9 +973,14 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
     const quokka::valarray<double, fluxdim> F_starR =
         (S_star * (S_R * U_R - F_R) + S_R * P_LR * D_star) / (S_R - S_star);
 
+    // only used in HLL flux
+    const quokka::valarray<double, fluxdim> F_star =
+        (S_R * F_L - S_L * F_R + S_R * S_L * (U_R - U_L)) / (S_R - S_L);
+
     // open the Riemann fan
     quokka::valarray<double, fluxdim> F{};
 
+#if 0
     // HLLC flux
     if (S_L > 0.0) {
       F = F_L;
@@ -983,6 +988,16 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
       F = F_starL;
     } else if ((S_star <= 0.0) && (S_R >= 0.0)) {
       F = F_starR;
+    } else { // S_R < 0.0
+      F = F_R;
+    }
+#endif
+
+    // HLL flux
+    if (S_L > 0.0) {
+      F = F_L;
+    } else if ((S_R >= 0.0) && (S_L <= 0.0)) {
+      F = F_star;
     } else { // S_R < 0.0
       F = F_R;
     }
