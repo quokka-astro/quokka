@@ -123,6 +123,7 @@ public:
                                             amrex::Real dt_lev, int ncycle) = 0;
   virtual void preCalculateInitialConditions() = 0;
   virtual void setInitialConditionsOnGrid(quokka::grid grid_elem) = 0;
+  virtual void computeBeforeTimestep() = 0;
   virtual void computeAfterTimestep() = 0;
   virtual void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) = 0;
 
@@ -431,6 +432,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters() {
   // Default stopping time
   pp.query("stop_time", stopTime_);
 
+  // Default initial timestep limit (no limit)
+  pp.query("dt_initial", initDt_);
+
   // Default ascent render interval
   pp.query("ascent_interval", ascentInterval_);
 
@@ -678,6 +682,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve() {
 
     amrex::ParallelDescriptor::Barrier(); // synchronize all MPI ranks
     computeTimestep();
+
+    computeBeforeTimestep();
 
     int lev = 0;       // coarsest level
     int stepsLeft = 1; // coarsest level is advanced one step

@@ -150,6 +150,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
   	void setInitialConditionsOnGrid(quokka::grid grid_elem) override;
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev,
 									  int ncycle) override;
+	void computeBeforeTimestep() override;
 	void computeAfterTimestep() override;
 	void computeAfterLevelAdvance(int lev, amrex::Real time,
 								 amrex::Real dt_lev, int /*ncycle*/);
@@ -386,6 +387,11 @@ void RadhydroSimulation<problem_t>::setInitialConditionsOnGrid(
     quokka::grid grid_elem) {
   // default empty implementation
   // user should implement using problem-specific template specialization
+}
+
+template <typename problem_t> void RadhydroSimulation<problem_t>::computeBeforeTimestep()
+{
+	// do nothing -- user should implement if desired
 }
 
 template <typename problem_t> void RadhydroSimulation<problem_t>::computeAfterTimestep()
