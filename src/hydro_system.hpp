@@ -975,7 +975,7 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 
     // only used in HLL flux
     const quokka::valarray<double, fluxdim> F_star =
-        (S_R * F_L - S_L * F_R + S_R * S_L * (U_R - U_L)) / (S_R - S_L);
+        (S_R * U_R - S_L * U_L - (F_R - F_L)) / (S_R - S_L);
 
     // open the Riemann fan
     quokka::valarray<double, fluxdim> F{};
