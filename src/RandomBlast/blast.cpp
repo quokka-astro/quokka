@@ -355,7 +355,7 @@ auto problem_main() -> int {
   }
 
   RadhydroSimulation<RandomBlast> sim(BCs_cc);
-  sim.reconstructionOrder_ = 2; // PLM
+  //sim.reconstructionOrder_ = 2; // PLM
   sim.densityFloor_ = 1.0e-5 * rho0; // density floor (to prevent vacuum)
 
   // Read Cloudy tables
