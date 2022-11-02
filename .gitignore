@@ -1,3 +1,6 @@
+plt*
+chk*
+last_chk
 *.log
 compile_commands.json
 .vscode/
