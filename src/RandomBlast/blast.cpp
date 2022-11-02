@@ -203,6 +203,8 @@ void injectEnergy(amrex::MultiFab &mf,
     const int np = ::nblast;
 
     // iterate over particles and deposit them onto 'state'
+    // TODO(ben): this should do cloud-in-cell deposition, or possibly higher-order
+    //    smoothing kernels
     amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE (int n) noexcept {
       amrex::Real lx = (px[n] - prob_lo[0]) / dx[0];
       amrex::Real ly = (py[n] - prob_lo[1]) / dx[1];
