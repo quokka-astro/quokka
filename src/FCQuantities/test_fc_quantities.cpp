@@ -75,12 +75,12 @@ template <>
 void RadhydroSimulation<FCQuantities>::setInitialConditionsOnGrid(
     quokka::grid grid_elem) {
   // extract grid information
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx;
-  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo;
-  const amrex::Array4<double>& state = grid_elem.array;
-  const amrex::Box &indexRange = grid_elem.indexRange;
-  const quokka::centering cen = grid_elem.cen;
-  const quokka::direction dir = grid_elem.dir;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
+  const amrex::Array4<double>& state = grid_elem.array_;
+  const amrex::Box &indexRange = grid_elem.indexRange_;
+  const quokka::centering cen = grid_elem.cen_;
+  const quokka::direction dir = grid_elem.dir_;
 
   if (cen == quokka::centering::cc) {
     const int ncomp_cc = ncomp_cc_;
