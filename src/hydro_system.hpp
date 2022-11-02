@@ -980,26 +980,31 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
     // open the Riemann fan
     quokka::valarray<double, fluxdim> F{};
 
-#if 0
-    // HLLC flux
-    if (S_L > 0.0) {
-      F = F_L;
-    } else if ((S_star > 0.0) && (S_L <= 0.0)) {
-      F = F_starL;
-    } else if ((S_star <= 0.0) && (S_R >= 0.0)) {
-      F = F_starR;
-    } else { // S_R < 0.0
-      F = F_R;
-    }
-#endif
+    // compute shock detector (Eq. 6 of Quirk 1994)
+    //const double alpha = std::abs(P_R - P_L) / std::min(P_L, P_R);
+    //constexpr double alpha_crit = 0.25;
 
-    // HLL flux
-    if (S_L > 0.0) {
-      F = F_L;
-    } else if ((S_R >= 0.0) && (S_L <= 0.0)) {
-      F = F_star;
-    } else { // S_R < 0.0
-      F = F_R;
+    constexpr double theta_crit = 0.5;
+    if (theta < theta_crit) { // similar to Quirk (1994)
+      // HLL flux
+      if (S_L > 0.0) {
+        F = F_L;
+      } else if ((S_R >= 0.0) && (S_L <= 0.0)) {
+        F = F_star;
+      } else { // S_R < 0.0
+        F = F_R;
+      }
+    } else {
+      // HLLC flux
+      if (S_L > 0.0) {
+        F = F_L;
+      } else if ((S_star > 0.0) && (S_L <= 0.0)) {
+        F = F_starL;
+      } else if ((S_star <= 0.0) && (S_R >= 0.0)) {
+        F = F_starR;
+      } else { // S_R < 0.0
+        F = F_R;
+      }
     }
 
     // set energy fluxes to zero if EOS is isothermal
