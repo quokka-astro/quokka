@@ -308,7 +308,7 @@ void RadhydroSimulation<RandomBlast>::ErrorEst(int lev, amrex::TagBoxArray &tags
     const amrex::Box &box = mfi.validbox();
     const auto state = state_new_cc_[lev].const_array(mfi);
     const auto tag = tags.array(mfi);
-    const int nidx = HydroSystem<RandomBlast>::density_index;
+    const int nidx = HydroSystem<RandomBlast>::scalar0_index;
 
     amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
       Real const q = state(i, j, k, nidx);
