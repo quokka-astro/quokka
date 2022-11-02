@@ -297,8 +297,8 @@ template <>
 void RadhydroSimulation<RandomBlast>::ErrorEst(int lev, amrex::TagBoxArray &tags,
                                               Real /*time*/, int /*ngrow*/) {
   // tag cells for refinement
-  const Real eta_threshold = 0.1;   // gradient refinement threshold
-  const Real q_min = 1e-3 * rho0;   // minimum density for refinement
+  const Real eta_threshold = 1.0;   // gradient refinement threshold
+  const Real q_min = 1e-5 * rho0;   // minimum density for refinement
 
   for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
     const amrex::Box &box = mfi.validbox();
@@ -347,7 +347,7 @@ auto problem_main() -> int {
 
   RadhydroSimulation<RandomBlast> sim(BCs_cc);
   sim.reconstructionOrder_ = 2; // PLM
-  sim.densityFloor_ = 1.0e-10 * rho0; // density floor (to prevent vacuum)
+  sim.densityFloor_ = 1.0e-5 * rho0; // density floor (to prevent vacuum)
 
   // Read Cloudy tables
   readCloudyData(sim.cloudyTables);

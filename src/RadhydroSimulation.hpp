@@ -107,6 +107,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	int reconstructionOrder_ = 3; // 1 == donor cell; 2 == PLM; 3 == PPM (default)
 	int radiationReconstructionOrder_ = 3; // 1 == donor cell; 2 == PLM; 3 == PPM (default)
 	int useDualEnergy_ = 1; // 0 == disabled; 1 == use auxiliary internal energy equation (default)
+	int abortOnFOFCFailure_ = 1; // 1 == crash if FOFC fails; 0 == keep going
 
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
 
@@ -283,6 +284,7 @@ void RadhydroSimulation<problem_t>::readParmParse() {
 		amrex::ParmParse hpp("hydro");
 		hpp.query("reconstruction_order", reconstructionOrder_);
 		hpp.query("use_dual_energy", useDualEnergy_);
+		hpp.query("abort_on_fofc_failure", abortOnFOFCFailure_);
 	}
 
 	// set radiation runtime parameters
@@ -691,7 +693,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 							amrex::YAFluxRegister *fr_as_fine)
 {
 	// timestep retries
-	const int max_retries = 4;
+	const int max_retries = 6;
 	bool success = false;
 	amrex::Real cur_time;
 
@@ -845,7 +847,9 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 			amrex::Gpu::streamSynchronizeAll(); // just in case
 			if (redoFlag.max(0) == quokka::redoFlag::redo) {
 				// FOFC failed
-				return false;
+				if (abortOnFOFCFailure_) {
+					return false;
+				}
 			}
 		}
 
@@ -907,8 +911,9 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 			amrex::Gpu::streamSynchronizeAll(); // just in case
 			if (redoFlag.max(0) == quokka::redoFlag::redo) {
 				// FOFC failed
-				return false;
-			}
+				if (abortOnFOFCFailure_) {
+					return false;
+				}			}
 		}
 
 		// prevent vacuum
