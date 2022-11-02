@@ -50,17 +50,22 @@ template <> struct Physics_Traits<RandomBlast> {
   static constexpr int numPassiveScalars = 1; // number of passive scalars
 };
 
-static Real SN_rate_per_vol = NAN; // rate per unit time per unit volume
-
 constexpr Real Tgas0 = 1.0e4; // K
 constexpr Real nH0 = 0.1;  // cm^-3
 constexpr Real T_floor = 100.0;
 constexpr Real rho0 = nH0 * (m_H / cloudy_H_mass_fraction);  // g cm^-3
 
-  static amrex::Gpu::HostVector<Real> blast_x;
+static Real SN_rate_per_vol = NAN; // rate per unit time per unit volume
+static amrex::Real E_blast = 1.0e51; // ergs
+static amrex::Real M_ejecta = 10.0 * Msun; // g
+
+static amrex::Gpu::HostVector<Real> blast_x;
 static amrex::Gpu::HostVector<Real> blast_y;
 static amrex::Gpu::HostVector<Real> blast_z;
 static int nblast = 0;
+static int SN_counter_cumulative = 0;
+
+static Real refine_threshold = 1.0;   // gradient refinement threshold
 
 template <>
 void RadhydroSimulation<RandomBlast>::setInitialConditionsOnGrid(quokka::grid grid_elem) {
@@ -186,8 +191,6 @@ void injectEnergy(amrex::MultiFab &mf,
   BL_PROFILE("RadhydroSimulation::injectEnergy()")
 
   const amrex::Real cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]); // cm^3
-  const amrex::Real E_blast = 1.0e51; // ergs
-  const amrex::Real M_ejecta = 10.0 * Msun; // g
   const amrex::Real rho_eint_blast = E_blast / cell_vol; // ergs cm^-3
   const amrex::Real rho_ejecta = M_ejecta / cell_vol; // g cm^-3
 
@@ -239,6 +242,7 @@ void RadhydroSimulation<RandomBlast>::computeBeforeTimestep()
   blast_y.resize(count);
   blast_z.resize(count);
   ::nblast = count;
+  ::SN_counter_cumulative += count;
 
   // for each, sample location at random
   for(int i = 0; i < count; ++i) {
@@ -297,8 +301,8 @@ template <>
 void RadhydroSimulation<RandomBlast>::ErrorEst(int lev, amrex::TagBoxArray &tags,
                                               Real /*time*/, int /*ngrow*/) {
   // tag cells for refinement
-  const Real eta_threshold = 1.0;   // gradient refinement threshold
   const Real q_min = 1e-5 * rho0;   // minimum density for refinement
+  const Real eta_threshold = ::refine_threshold;
 
   for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
     const amrex::Box &box = mfi.validbox();
@@ -330,10 +334,15 @@ void RadhydroSimulation<RandomBlast>::ErrorEst(int lev, amrex::TagBoxArray &tags
 auto problem_main() -> int {
   // read parameters
   amrex::ParmParse pp;
-  pp.query("SN_rate_per_volume", SN_rate_per_vol); // yr^-1 kpc^-3
-  SN_rate_per_vol /= seconds_in_year;
-  SN_rate_per_vol /= std::pow(1.0e3 * parsec_in_cm, 3);
-  AMREX_ALWAYS_ASSERT(!std::isnan(SN_rate_per_vol));
+
+  // read in SN rate
+  pp.query("SN_rate_per_volume", ::SN_rate_per_vol); // yr^-1 kpc^-3
+  ::SN_rate_per_vol /= seconds_in_year;
+  ::SN_rate_per_vol /= std::pow(1.0e3 * parsec_in_cm, 3);
+  AMREX_ALWAYS_ASSERT(!std::isnan(::SN_rate_per_vol));
+
+  // read in refinement threshold (relative gradient in density)
+  pp.query("refine_threshold", ::refine_threshold); // dimensionless
 
   // Problem initialization
   constexpr int nvars = RadhydroSimulation<RandomBlast>::nvarTotal_cc_;
@@ -361,6 +370,12 @@ auto problem_main() -> int {
 
   // run simulation
   sim.evolve();
+
+  // print injected energy, injected mass
+  const amrex::Real E_in_cumulative = static_cast<Real>(SN_counter_cumulative) * E_blast;
+  const amrex::Real M_in_cumulative = static_cast<Real>(SN_counter_cumulative) * M_ejecta;
+  amrex::Print() << "Cumulative injected energy = " << E_in_cumulative << "\n";
+  amrex::Print() << "Cumulative injected mass = " << M_in_cumulative << "\n";
 
   // Cleanup and exit
   int status = 0;

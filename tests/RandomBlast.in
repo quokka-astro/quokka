@@ -18,14 +18,19 @@ amr.max_level       = 1     # number of levels = max_level + 1
 amr.blocking_factor = 8     # grid size must be divisible by this
 amr.max_grid_size   = 64
 
+refine_threshold = 0.5
 do_reflux = 1
-do_subcycle = 1
+do_subcycle = 0
 cfl = 0.2
 amr_interpolation_method = 0
 hydro.abort_on_fofc_failure = 0
 derived_vars = temperature
+
 ascent_interval = 10
-max_timesteps = 500
+plotfile_interval = 200
+checkpoint_interval = 1000
+max_timesteps = 5000
+
 dt_initial = 3.154e10       # 1000 yr
 stop_time = 3.154e13       # 1e6 yr
 
