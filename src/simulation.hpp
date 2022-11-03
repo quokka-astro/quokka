@@ -67,6 +67,7 @@
 #include "CheckNaN.hpp"
 #include "math_impl.hpp"
 #include "physics_info.hpp"
+#include "MFInterpolater.H"
 
 #define USE_YAFLUXREGISTER
 
@@ -996,8 +997,9 @@ void AMRSimulation<problem_t>::incrementFluxRegisters(
 template <typename problem_t>
 auto AMRSimulation<problem_t>::getAmrInterpolater() -> amrex::MFInterpolater*
 {
-  amrex::MFInterpolater *mapper = nullptr;
+  amrex::MFInterpolater *mapper = &amrex::mf_linear_slope_minmax_interp;
 
+#if 0
   if (amrInterpMethod_ == 0) { // piecewise-constant interpolation
     mapper = &amrex::mf_pc_interp;
   } else if (amrInterpMethod_ == 1) { // slope-limited linear interpolation
@@ -1011,6 +1013,7 @@ auto AMRSimulation<problem_t>::getAmrInterpolater() -> amrex::MFInterpolater*
   } else {
     amrex::Abort("Invalid AMR interpolation method specified!");
   }
+#endif
 
   return mapper; // global object, so this is ok
 }
