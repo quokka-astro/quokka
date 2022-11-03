@@ -55,7 +55,7 @@ MFQuokkaInterp::interp (MultiFab const& crsemf, int ccomp, MultiFab& finemf, int
         [=] AMREX_GPU_DEVICE (int box_no, int i, int j, int k) noexcept
         {
             mf_quokka_interp_llslope(i,j,k, tmp[box_no], crse[box_no], ccomp, nc,
-                                            cdomain, pbc);
+                                     cdomain, ratio, pbc);
         });
 
         ParallelFor(finemf, ng, nc,
@@ -93,7 +93,7 @@ MFQuokkaInterp::interp (MultiFab const& crsemf, int ccomp, MultiFab& finemf, int
                 [&] (int i, int j, int k) noexcept
                 {
                     mf_quokka_interp_llslope(i,j,k, tmp, crse, ccomp, nc,
-                                                    cdomain, pbc);
+                                             cdomain, ratio, pbc);
                 });
 
                 amrex::LoopConcurrentOnCpu(fbox, nc,
