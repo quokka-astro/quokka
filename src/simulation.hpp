@@ -997,23 +997,20 @@ void AMRSimulation<problem_t>::incrementFluxRegisters(
 template <typename problem_t>
 auto AMRSimulation<problem_t>::getAmrInterpolater() -> amrex::MFInterpolater*
 {
-  amrex::MFInterpolater *mapper = &amrex::mf_linear_slope_minmax_interp;
+  amrex::MFInterpolater *mapper = nullptr;
 
-#if 0
   if (amrInterpMethod_ == 0) { // piecewise-constant interpolation
     mapper = &amrex::mf_pc_interp;
   } else if (amrInterpMethod_ == 1) { // slope-limited linear interpolation
-    // amrex::lincc_interp is an alias for amrex::CellConservativeLinear(1).
     //  It has the following important properties:
     // 1. should NOT produce new extrema
     //    (will revert to piecewise constant if any component has a local min/max)
     // 2. should be conservative
     // 3. preserves linear combinations of variables in each cell
-    mapper = &amrex::mf_lincc_interp;
+    mapper = &amrex::mf_linear_slope_minmax_interp;
   } else {
     amrex::Abort("Invalid AMR interpolation method specified!");
   }
-#endif
 
   return mapper; // global object, so this is ok
 }
