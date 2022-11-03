@@ -4,6 +4,8 @@
 namespace amrex {
 
 // limits the slopes of all components in a given cell the same way
+//  *and* prevents new minima or maxima from appearing in the fine grid
+
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 void mf_quokka_interp_llslope (int i, int j, int k, Array4<Real> const& slope,
                                       Array4<Real const> const& u, int scomp, int ncomp,
