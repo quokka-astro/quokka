@@ -1,9 +1,17 @@
 #ifndef MF_INTERPOLATER_H_
 #define MF_INTERPOLATER_H_
 #include <AMReX_Config.H>
-
 #include <AMReX_Extension.H>
 #include <AMReX_InterpBase.H>
+#include <AMReX_MFInterp_C.H>
+
+#if (AMREX_SPACEDIM == 1)
+#include "MFInterp_1D_C.H"
+#elif (AMREX_SPACEDIM == 2)
+#include "MFInterp_2D_C.H"
+#else
+#include "MFInterp_3D_C.H"
+#endif
 
 namespace amrex {
 

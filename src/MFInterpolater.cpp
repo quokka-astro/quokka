@@ -5,7 +5,6 @@
 #include <AMReX_MultiFab.H>
 
 #include "MFInterpolater.H"
-#include "MFInterp_3D_C.H"
 
 namespace amrex {
 
