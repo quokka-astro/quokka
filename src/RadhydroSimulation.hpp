@@ -361,16 +361,15 @@ void RadhydroSimulation<problem_t>::checkHydroStates(amrex::MultiFab &mf, char c
 {
 	BL_PROFILE("RadhydroSimulation::checkHydroStates()");
 
-	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
-		const amrex::Box &indexRange = iter.validbox();
-		auto const &state = mf.const_array(iter);
-		if(!HydroSystem<problem_t>::CheckStatesValid(indexRange, state)) {
-			amrex::Print() << "Hydro states invalid (" + std::string(file) + ":" + std::to_string(line) + ")\n";
-			amrex::Print() << "Writing checkpoint for debugging...\n";
-			amrex::MFIter::allowMultipleMFIters(true);
-			WriteCheckpointFile();
-			amrex::Abort("Hydro states invalid (" + std::string(file) + ":" + std::to_string(line) + ")");
-		}
+	bool validStates = HydroSystem<problem_t>::CheckStatesValid(mf);
+	amrex::ParallelDescriptor::ReduceBoolAnd(validStates);
+
+	if(!validStates) {
+		amrex::Print() << "Hydro states invalid (" + std::string(file) + ":" + std::to_string(line) + ")\n";
+		amrex::Print() << "Writing checkpoint for debugging...\n";
+		amrex::MFIter::allowMultipleMFIters(true);
+		WriteCheckpointFile();
+		amrex::Abort("Hydro states invalid (" + std::string(file) + ":" + std::to_string(line) + ")");
 	}
 }
 
