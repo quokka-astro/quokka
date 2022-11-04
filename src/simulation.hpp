@@ -67,6 +67,7 @@
 #include "CheckNaN.hpp"
 #include "math_impl.hpp"
 #include "physics_info.hpp"
+#include "MFInterpolater.H"
 
 #define USE_YAFLUXREGISTER
 
@@ -177,7 +178,7 @@ public:
   static void InterpHookNone(amrex::MultiFab &mf, int scomp, int ncomp);
   virtual void FillPatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp,
                  int ncomp, FillPatchType fptype);
-  auto getAmrInterpolater() -> amrex::Interpolater*;
+  auto getAmrInterpolater() -> amrex::MFInterpolater*;
   void FillCoarsePatch(int lev, amrex::Real time, amrex::MultiFab &mf,
                        int icomp, int ncomp);
   void GetData(int lev, amrex::Real time,
@@ -994,20 +995,19 @@ void AMRSimulation<problem_t>::incrementFluxRegisters(
 }
 
 template <typename problem_t>
-auto AMRSimulation<problem_t>::getAmrInterpolater() -> amrex::Interpolater*
+auto AMRSimulation<problem_t>::getAmrInterpolater() -> amrex::MFInterpolater*
 {
-  amrex::Interpolater *mapper = nullptr;
+  amrex::MFInterpolater *mapper = nullptr;
 
   if (amrInterpMethod_ == 0) { // piecewise-constant interpolation
-    mapper = &amrex::pc_interp;
+    mapper = &amrex::mf_pc_interp;
   } else if (amrInterpMethod_ == 1) { // slope-limited linear interpolation
-    // amrex::lincc_interp is an alias for amrex::CellConservativeLinear(1).
     //  It has the following important properties:
     // 1. should NOT produce new extrema
     //    (will revert to piecewise constant if any component has a local min/max)
     // 2. should be conservative
     // 3. preserves linear combinations of variables in each cell
-    mapper = &amrex::lincc_interp;
+    mapper = &amrex::mf_linear_slope_minmax_interp;
   } else {
     amrex::Abort("Invalid AMR interpolation method specified!");
   }
@@ -1266,7 +1266,7 @@ void AMRSimulation<problem_t>::FillPatchWithData(
     PreInterpHook const &pre_interp, PostInterpHook const &post_interp) {
   BL_PROFILE("AMRSimulation::FillPatchWithData()");
 
-  amrex::Interpolater *mapper = getAmrInterpolater();
+  amrex::MFInterpolater *mapper = getAmrInterpolater();
 
   if (fptype == FillPatchType::fillpatch_class) {
 	  if (fillpatcher_[lev] == nullptr) {
@@ -1336,7 +1336,7 @@ void AMRSimulation<problem_t>::FillCoarsePatch(int lev, amrex::Real time,
       coarsePhysicalBoundaryFunctor(geom[lev - 1], BCs_cc_,
                                     boundaryFunctor);
 
-  amrex::Interpolater *mapper = getAmrInterpolater();
+  amrex::MFInterpolater *mapper = getAmrInterpolater();
 
   amrex::InterpFromCoarseLevel(
       mf, time, *cmf[0], 0, icomp, ncomp, geom[lev - 1], geom[lev],
