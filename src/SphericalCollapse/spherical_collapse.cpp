@@ -38,7 +38,7 @@ template <> struct Physics_Traits<CollapseProblem> {
   static constexpr int numPassiveScalars = 0; // number of passive scalars
 };
 
-constexpr double R_sphere = 1.0;
+constexpr double R_sphere = 0.5;
 
 template <>
 void RadhydroSimulation<CollapseProblem>::setInitialConditionsOnGrid(
