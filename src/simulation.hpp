@@ -801,8 +801,10 @@ void AMRSimulation<problem_t>::ellipticSolveAllLevels(const amrex::Real dt)
 
     // set up elliptic solve object
     amrex::OpenBCSolver poissonSolver(geom, grids, dmap);
-    poissonSolver.setVerbose(true);
-    poissonSolver.setBottomVerbose(true);
+    if (verbose) {
+      poissonSolver.setVerbose(true);
+      poissonSolver.setBottomVerbose(true);
+    }
 
     // solve Poisson equation with open b.c. using the method of James (1977)
     amrex::Vector<amrex::MultiFab> phi(finest_level + 1);
