@@ -90,8 +90,8 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
     	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
     	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
 		amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi);
-	void fillPoissonRhsAtLevel(int lev) override;
-	void applyPoissonGravityAtLevel(int lev, amrex::Real dt) override;
+	void fillPoissonRhsAtLevel(amrex::MultiFab &rhs, int lev) override;
+	void applyPoissonGravityAtLevel(amrex::MultiFab const &phi, int lev, amrex::Real dt) override;
 
 	// compute derived variables
 	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const override;
@@ -135,13 +135,13 @@ void AdvectionSimulation<problem_t>::computeMaxSignalLocal(int const level)
 }
 
 template <typename problem_t>
-void AdvectionSimulation<problem_t>::fillPoissonRhsAtLevel(int lev)
+void AdvectionSimulation<problem_t>::fillPoissonRhsAtLevel(amrex::MultiFab &rhs, int lev)
 {
 	// deliberately empty
 }
 
 template <typename problem_t>
-void AdvectionSimulation<problem_t>::applyPoissonGravityAtLevel(int lev, amrex::Real dt)
+void AdvectionSimulation<problem_t>::applyPoissonGravityAtLevel(amrex::MultiFab const &phi, int lev, amrex::Real dt)
 {
 	// deliberately empty
 }
