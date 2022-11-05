@@ -38,8 +38,6 @@ template <> struct Physics_Traits<CollapseProblem> {
   static constexpr int numPassiveScalars = 0; // number of passive scalars
 };
 
-constexpr double R_sphere = 0.5;
-
 template <>
 void RadhydroSimulation<CollapseProblem>::setInitialConditionsOnGrid(
     quokka::grid grid_elem) {
@@ -61,13 +59,12 @@ void RadhydroSimulation<CollapseProblem>::setInitialConditionsOnGrid(
     amrex::Real const r = std::sqrt(
         std::pow(x - x0, 2) + std::pow(y - y0, 2) + std::pow(z - z0, 2));
 
-    double rho = NAN;
+    double rho_min = 1.0e-5;
+    double rho_max = 10.0;
+    double R_sphere = 0.5;
+    double R_smooth = 0.025;
+    double rho = std::max(rho_min, rho_max * ((std::tanh((R_sphere - r) / R_smooth) + 1.0) / 2.0));
     double P = 1.0e-5;
-    if (r < R_sphere) {
-      rho = 10.0;
-    } else {
-      rho = 1.0e-5;
-    }
 
     AMREX_ASSERT(!std::isnan(rho));
     AMREX_ASSERT(!std::isnan(P));
