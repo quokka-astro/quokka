@@ -106,6 +106,7 @@ public:
   int amrInterpMethod_ = 1;   // 0 == piecewise constant, 1 == lincc_interp
   amrex::Real reltolPoisson_ = 1.0e-10; // default
   amrex::Real abstolPoisson_ = 1.0e-10; // default
+  int doPoissonSolve_ = 0; // 1 == self-gravity enabled, 0 == disabled
 
   // constructor
   explicit AMRSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions) {
@@ -129,8 +130,8 @@ public:
   virtual void setInitialConditionsOnGrid(quokka::grid grid_elem) = 0;
   virtual void computeAfterTimestep() = 0;
   virtual void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) = 0;
-  virtual void fillPoissonRhsAtLevel(int lev) = 0;
-  virtual void applyPoissonGravityAtLevel(int lev, amrex::Real dt) = 0;
+  virtual void fillPoissonRhsAtLevel(amrex::MultiFab &rhs, int lev) = 0;
+  virtual void applyPoissonGravityAtLevel(amrex::MultiFab const &phi, int lev, amrex::Real dt) = 0;
 
   // compute derived variables
   virtual void ComputeDerivedVar(int lev, std::string const &dname,
@@ -235,8 +236,6 @@ protected:
   amrex::Vector<amrex::MultiFab> state_new_cc_;
   amrex::Vector<amrex::MultiFab>
       max_signal_speed_; // needed to compute CFL timestep
-  amrex::Vector<amrex::MultiFab> rhsPoisson_; // for Poisson gravity
-  amrex::Vector<amrex::MultiFab> phiPoisson_; // for Poisson gravity
 
   // flux registers: store fluxes at coarse-fine interface for synchronization
   // this will be sized "nlevs_max+1"
@@ -268,7 +267,6 @@ protected:
   int do_subcycle = 1; // 1 == subcycle, 0 == no subcyle
   int suppress_output =
       0; // 1 == show timestepping, 0 == do not output each timestep
-  int do_poisson_solve = 0; // 1 == self-gravity enabled, 0 == disabled
 
   // performance metrics
   amrex::Long cellUpdates_ = 0;
@@ -312,8 +310,6 @@ void AMRSimulation<problem_t>::initialize(
   state_new_cc_.resize(nlevs_max);
   state_old_cc_.resize(nlevs_max);
   max_signal_speed_.resize(nlevs_max);
-  rhsPoisson_.resize(nlevs_max);
-  phiPoisson_.resize(nlevs_max);
   flux_reg_.resize(nlevs_max + 1);
   fillpatcher_.resize(nlevs_max + 1);
   cellUpdatesEachLevel_.resize(nlevs_max, 0);
@@ -795,7 +791,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve() {
 template <typename problem_t>
 void AMRSimulation<problem_t>::ellipticSolveAllLevels(const amrex::Real dt)
 {
-  if (do_poisson_solve) {
+  if (doPoissonSolve_) {
     if (do_subcycle == 1) { // not supported
       amrex::Abort("Poisson solve is not support when AMR subcycling is enabled! You must set do_subcycle = 0.");
     }
@@ -809,15 +805,23 @@ void AMRSimulation<problem_t>::ellipticSolveAllLevels(const amrex::Real dt)
     poissonSolver.setBottomVerbose(true);
 
     // solve Poisson equation with open b.c. using the method of James (1977)
+    amrex::Vector<amrex::MultiFab> phi(finest_level + 1);
+    amrex::Vector<amrex::MultiFab> rhs(finest_level + 1);
+    const int nghost = 1;
+    const int ncomp = 1;
     for (int lev = 0; lev <= finest_level; ++lev) {
-      fillPoissonRhsAtLevel(lev);
+      phi[lev].define(grids[lev], dmap[lev], ncomp, nghost);
+      rhs[lev].define(grids[lev], dmap[lev], ncomp, nghost);
+      phi[lev].setVal(0); // set initial guess to zero
+      rhs[lev].setVal(0);
+      fillPoissonRhsAtLevel(rhs[lev], lev);
     }
-	  poissonSolver.solve(amrex::GetVecOfPtrs(phiPoisson_), amrex::GetVecOfConstPtrs(rhsPoisson_),
-                          reltolPoisson_, abstolPoisson_);
+	  poissonSolver.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs),
+                        reltolPoisson_, abstolPoisson_);
 
     // add gravitational acceleration to hydro state (using operator splitting)
     for (int lev = 0; lev <= finest_level; ++lev) {
-      applyPoissonGravityAtLevel(lev, dt);
+      applyPoissonGravityAtLevel(phi[lev], lev, dt);
     }
   }
 }
@@ -1080,8 +1084,6 @@ void AMRSimulation<problem_t>::MakeNewLevelFromCoarse(
   state_new_cc_[level].define(ba, dm, ncomp, nghost);
   state_old_cc_[level].define(ba, dm, ncomp, nghost);
   max_signal_speed_[level].define(ba, dm, 1, nghost);
-  phiPoisson_[level].define(ba, dm, 1, nghost);
-  rhsPoisson_[level].define(ba, dm, 1, nghost);
 
   tNew_[level] = time;
   tOld_[level] = time - 1.e200;
@@ -1118,8 +1120,6 @@ void AMRSimulation<problem_t>::RemakeLevel(
   std::swap(new_state, state_new_cc_[level]);
   std::swap(old_state, state_old_cc_[level]);
   std::swap(max_signal_speed, max_signal_speed_[level]);
-  std::swap(phi_poisson, phiPoisson_[level]);
-  std::swap(rhs_poisson, rhsPoisson_[level]);
 
   tNew_[level] = time;
   tOld_[level] = time - 1.e200;
@@ -1139,8 +1139,6 @@ void AMRSimulation<problem_t>::ClearLevel(int level) {
   state_new_cc_[level].clear();
   state_old_cc_[level].clear();
   max_signal_speed_[level].clear();
-  phiPoisson_[level].clear();
-  rhsPoisson_[level].clear();
   flux_reg_[level].reset(nullptr);
   fillpatcher_[level].reset(nullptr);
 }
@@ -1219,8 +1217,6 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(
   state_new_cc_[level].define(ba, dm, ncomp, nghost);
   state_old_cc_[level].define(ba, dm, ncomp, nghost);
   max_signal_speed_[level].define(ba, dm, 1, nghost);
-  phiPoisson_[level].define(ba, dm, 1, nghost);
-  rhsPoisson_[level].define(ba, dm, 1, nghost);
 
   tNew_[level] = time;
   tOld_[level] = time - 1.e200;
@@ -1779,8 +1775,6 @@ void AMRSimulation<problem_t>::ReadCheckpointFile() {
     state_old_cc_[lev].define(grids[lev], dmap[lev], ncomp, nghost);
     state_new_cc_[lev].define(grids[lev], dmap[lev], ncomp, nghost);
     max_signal_speed_[lev].define(ba, dm, 1, nghost);
-    phiPoisson_[lev].define(ba, dm, 1, nghost);
-    rhsPoisson_[lev].define(ba, dm, 1, nghost);
 
     if (lev > 0 && (do_reflux != 0)) {
       flux_reg_[lev] = std::make_unique<amrex::YAFluxRegister>(

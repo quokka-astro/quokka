@@ -82,8 +82,6 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	using AMRSimulation<problem_t>::WriteCheckpointFile;
 	using AMRSimulation<problem_t>::GetData;
 	using AMRSimulation<problem_t>::FillPatchWithData;
-	using AMRSimulation<problem_t>::rhsPoisson_;
-	using AMRSimulation<problem_t>::phiPoisson_;
 
 	std::vector<double> t_vec_;
 	std::vector<double> Trad_vec_;
@@ -181,10 +179,10 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	void ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override;
 
 	// fill rhs for Poisson solve
-	void fillPoissonRhsAtLevel(int lev) override;
+	void fillPoissonRhsAtLevel(amrex::MultiFab &rhs, int lev) override;
 
 	// add gravitational acceleration to hydro state
-	void applyPoissonGravityAtLevel(int lev, amrex::Real dt) override;
+	void applyPoissonGravityAtLevel(amrex::MultiFab const &phi, int lev, amrex::Real dt) override;
 
 	void addFluxArrays(std::array<amrex::MultiFab, AMREX_SPACEDIM> &dstfluxes,
     			   std::array<amrex::MultiFab, AMREX_SPACEDIM> &srcfluxes,
@@ -557,28 +555,29 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 }
 
 template <typename problem_t>
-void RadhydroSimulation<problem_t>::fillPoissonRhsAtLevel(const int lev)
+void RadhydroSimulation<problem_t>::fillPoissonRhsAtLevel(amrex::MultiFab &rhs_mf, const int lev)
 {
 	// add hydro density to Poisson rhs
 	// NOTE: in the future, this should also deposit particle mass
 	auto const &state = state_new_cc_[lev].const_arrays();
-	auto rhs = rhsPoisson_[lev].arrays();
+	auto rhs = rhs_mf.arrays();
 
-	amrex::ParallelFor(rhsPoisson_[lev], AMREX_GPU_DEVICE [=](int bx, int i, int j, int k) noexcept {
-		// copy density to rhsPoisson_[lev]
+	amrex::ParallelFor(rhs_mf, AMREX_GPU_DEVICE [=](int bx, int i, int j, int k) noexcept {
+		// copy density to rhs_mf
 		rhs[bx](i, j, k) = 4.0 * M_PI * state[bx](i, j, k, HydroSystem<problem_t>::density_index);
 	});
 }
 
 template <typename problem_t>
-void RadhydroSimulation<problem_t>::applyPoissonGravityAtLevel(const int lev, const amrex::Real dt)
+void RadhydroSimulation<problem_t>::applyPoissonGravityAtLevel(amrex::MultiFab const &phi_mf,
+	const int lev, const amrex::Real dt)
 {
 	// apply Poisson gravity operator on level 'lev'
 	auto const &dx = geom[lev].CellSizeArray();
-	auto const &phi = phiPoisson_[lev].const_arrays();
+	auto const &phi = phi_mf.const_arrays();
 	auto state = state_new_cc_[lev].arrays();
 
-	amrex::ParallelFor(phiPoisson_[lev], AMREX_GPU_DEVICE [=](int bx, int i, int j, int k) noexcept {
+	amrex::ParallelFor(phi_mf, AMREX_GPU_DEVICE [=](int bx, int i, int j, int k) noexcept {
 		// add operator-split gravitational acceleration
 		const amrex::Real rho = state[bx](i, j, k, HydroSystem<problem_t>::density_index);
 		amrex::Real px = state[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index);
