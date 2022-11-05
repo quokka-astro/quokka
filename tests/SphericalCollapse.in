@@ -20,10 +20,13 @@ amr.max_grid_size   = 64    # at least 128 for GPUs
 amr.n_error_buf     = 3     # minimum 3 cell buffer around tagged cells
 amr.grid_eff        = 0.7   # default
 
+cfl = 0.2
+max_timesteps = 5000
+stop_time = 0.1
+
 do_reflux = 1
 do_subcycle = 0
 
-ascent_interval = 100
-plotfile_interval = 1000
-checkpoint_interval = 5000
-max_timesteps = 10000
+ascent_interval = 10
+plotfile_interval = 100
+checkpoint_interval = 1000

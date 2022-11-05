@@ -585,9 +585,10 @@ void RadhydroSimulation<problem_t>::applyPoissonGravityAtLevel(amrex::MultiFab c
 		amrex::Real pz = state[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index);
 		const amrex::Real KE_old = 0.5 * (px*px + py*py + pz*pz) / rho;
 
-		amrex::Real gx = 0.5 * (phi[bx](i + 1, j, k) - phi[bx](i - 1, j, k)) / dx[0];
-		amrex::Real gy = 0.5 * (phi[bx](i, j + 1, k) - phi[bx](i, j - 1, k)) / dx[1];
-		amrex::Real gz = 0.5 * (phi[bx](i, j, k + 1) - phi[bx](i, j, k - 1)) / dx[2];
+		// g = -grad \phi
+		amrex::Real gx = -0.5 * (phi[bx](i + 1, j, k) - phi[bx](i - 1, j, k)) / dx[0];
+		amrex::Real gy = -0.5 * (phi[bx](i, j + 1, k) - phi[bx](i, j - 1, k)) / dx[1];
+		amrex::Real gz = -0.5 * (phi[bx](i, j, k + 1) - phi[bx](i, j, k - 1)) / dx[2];
 
 		px += dt * rho * gx;
 		py += dt * rho * gy;

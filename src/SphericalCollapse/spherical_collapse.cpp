@@ -62,11 +62,11 @@ void RadhydroSimulation<CollapseProblem>::setInitialConditionsOnGrid(
         std::pow(x - x0, 2) + std::pow(y - y0, 2) + std::pow(z - z0, 2));
 
     double rho = NAN;
-    double P = 1.0e-2;
+    double P = 1.0e-5;
     if (r < R_sphere) {
-      rho = 1.0;
+      rho = 10.0;
     } else {
-      rho = 1.0e-10;
+      rho = 1.0e-5;
     }
 
     AMREX_ASSERT(!std::isnan(rho));
@@ -149,9 +149,7 @@ auto problem_main() -> int {
   // Problem initialization
   RadhydroSimulation<CollapseProblem> sim(BCs_cc);
   
-  sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
-  sim.stopTime_ = 1.0;          // seconds
-  sim.cflNumber_ = 0.2;
+  sim.reconstructionOrder_ = 2; // 2=PLM, 3=PPM
   sim.doPoissonSolve_ = 1;      // enable self-gravity
 
   // initialize
