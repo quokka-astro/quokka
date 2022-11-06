@@ -562,7 +562,7 @@ void RadhydroSimulation<problem_t>::fillPoissonRhsAtLevel(amrex::MultiFab &rhs_m
 	auto const &state = state_new_cc_[lev].const_arrays();
 	auto rhs = rhs_mf.arrays();
 
-	amrex::ParallelFor(rhs_mf, AMREX_GPU_DEVICE [=](int bx, int i, int j, int k) noexcept {
+	amrex::ParallelFor(rhs_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		// copy density to rhs_mf
 		rhs[bx](i, j, k) = 4.0 * M_PI * state[bx](i, j, k, HydroSystem<problem_t>::density_index);
 	});
@@ -577,7 +577,7 @@ void RadhydroSimulation<problem_t>::applyPoissonGravityAtLevel(amrex::MultiFab c
 	auto const &phi = phi_mf.const_arrays();
 	auto state = state_new_cc_[lev].arrays();
 
-	amrex::ParallelFor(phi_mf, AMREX_GPU_DEVICE [=](int bx, int i, int j, int k) noexcept {
+	amrex::ParallelFor(phi_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		// add operator-split gravitational acceleration
 		const amrex::Real rho = state[bx](i, j, k, HydroSystem<problem_t>::density_index);
 		amrex::Real px = state[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index);
