@@ -42,7 +42,6 @@
 #include "AMReX_IntVect.H"
 #include "AMReX_LayoutData.H"
 #include "AMReX_MultiFabUtil.H"
-#include "AMReX_OpenBC.H"
 #include "AMReX_ParallelContext.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_REAL.H"
@@ -57,6 +56,10 @@
 #include <AMReX_Print.H>
 #include <AMReX_Utility.H>
 #include <fmt/core.h>
+
+#if AMREX_SPACEDIM == 3
+#include "AMReX_OpenBC.H"
+#endif
 
 #ifdef AMREX_USE_ASCENT
 #include <AMReX_Conduit_Blueprint.H>
@@ -791,12 +794,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve() {
 template <typename problem_t>
 void AMRSimulation<problem_t>::ellipticSolveAllLevels(const amrex::Real dt)
 {
+#if AMREX_SPACEDIM == 3
   if (doPoissonSolve_) {
     if (do_subcycle == 1) { // not supported
       amrex::Abort("Poisson solve is not support when AMR subcycling is enabled! You must set do_subcycle = 0.");
-    }
-    if (AMREX_SPACEDIM != 3) { // not supported
-      amrex::Abort("Poisson is only supported in 3D!");
     }
 
     // set up elliptic solve object
@@ -826,6 +827,7 @@ void AMRSimulation<problem_t>::ellipticSolveAllLevels(const amrex::Real dt)
       applyPoissonGravityAtLevel(phi[lev], lev, dt);
     }
   }
+#endif
 }
 
 // N.B.: This function actually works for subcycled or not subcycled, as long as
