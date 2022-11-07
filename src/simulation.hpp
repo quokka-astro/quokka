@@ -67,6 +67,7 @@
 #include "CheckNaN.hpp"
 #include "math_impl.hpp"
 #include "physics_info.hpp"
+#include "MFInterpolater.H"
 
 #define USE_YAFLUXREGISTER
 
@@ -101,6 +102,7 @@ public:
   int ascentInterval_ = -1;        // -1 == no in-situ renders with Ascent
   int plotfileInterval_ = -1;      // -1 == no output
   int checkpointInterval_ = -1;    // -1 == no output
+  int amrInterpMethod_ = 1;   // 0 == piecewise constant, 1 == lincc_interp
 
   // constructor
   explicit AMRSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions) {
@@ -176,6 +178,7 @@ public:
   static void InterpHookNone(amrex::MultiFab &mf, int scomp, int ncomp);
   virtual void FillPatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp,
                  int ncomp, FillPatchType fptype);
+  auto getAmrInterpolater() -> amrex::MFInterpolater*;
   void FillCoarsePatch(int lev, amrex::Real time, amrex::MultiFab &mf,
                        int icomp, int ncomp);
   void GetData(int lev, amrex::Real time,
@@ -422,6 +425,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters() {
 
   // Default CFL number == 0.3, set to whatever is in the file
   pp.query("cfl", cflNumber_);
+
+  // Default AMR interpolation method == lincc_interp
+  pp.query("amr_interpolation_method", amrInterpMethod_);
 
   // Default stopping time
   pp.query("stop_time", stopTime_);
@@ -988,6 +994,27 @@ void AMRSimulation<problem_t>::incrementFluxRegisters(
   }
 }
 
+template <typename problem_t>
+auto AMRSimulation<problem_t>::getAmrInterpolater() -> amrex::MFInterpolater*
+{
+  amrex::MFInterpolater *mapper = nullptr;
+
+  if (amrInterpMethod_ == 0) { // piecewise-constant interpolation
+    mapper = &amrex::mf_pc_interp;
+  } else if (amrInterpMethod_ == 1) { // slope-limited linear interpolation
+    //  It has the following important properties:
+    // 1. should NOT produce new extrema
+    //    (will revert to piecewise constant if any component has a local min/max)
+    // 2. should be conservative
+    // 3. preserves linear combinations of variables in each cell
+    mapper = &amrex::mf_linear_slope_minmax_interp;
+  } else {
+    amrex::Abort("Invalid AMR interpolation method specified!");
+  }
+
+  return mapper; // global object, so this is ok
+}
+
 // Make a new level using provided BoxArray and DistributionMapping and fill
 // with interpolated coarse level data. Overrides the pure virtual function in
 // AmrCore
@@ -1065,7 +1092,6 @@ void AMRSimulation<problem_t>::InterpHookNone(amrex::MultiFab &mf, int scomp, in
 {
   // do nothing
 }
-
 
 template <typename problem_t> struct setBoundaryFunctor {
   AMREX_GPU_DEVICE void
@@ -1240,13 +1266,7 @@ void AMRSimulation<problem_t>::FillPatchWithData(
     PreInterpHook const &pre_interp, PostInterpHook const &post_interp) {
   BL_PROFILE("AMRSimulation::FillPatchWithData()");
 
-  // use CellConservativeProtected interpolation if possible
-  amrex::Interpolater *mapper = nullptr;
-  if constexpr (AMREX_SPACEDIM == 1) {
-    mapper = &amrex::cell_cons_interp;
-  } else if constexpr (AMREX_SPACEDIM >= 2) {
-    mapper = &amrex::protected_interp; // extrema preserving, but only works in 2D/3D
-  }
+  amrex::MFInterpolater *mapper = getAmrInterpolater();
 
   if (fptype == FillPatchType::fillpatch_class) {
 	  if (fillpatcher_[lev] == nullptr) {
@@ -1316,13 +1336,7 @@ void AMRSimulation<problem_t>::FillCoarsePatch(int lev, amrex::Real time,
       coarsePhysicalBoundaryFunctor(geom[lev - 1], BCs_cc_,
                                     boundaryFunctor);
 
-  // use CellConservativeProtected interpolation if possible
-  amrex::Interpolater *mapper = nullptr;
-  if constexpr (AMREX_SPACEDIM == 1) {
-    mapper = &amrex::cell_cons_interp;
-  } else if constexpr (AMREX_SPACEDIM >= 2) {
-    mapper = &amrex::protected_interp; // extrema preserving, but only works in 2D/3D
-  }
+  amrex::MFInterpolater *mapper = getAmrInterpolater();
 
   amrex::InterpFromCoarseLevel(
       mf, time, *cmf[0], 0, icomp, ncomp, geom[lev - 1], geom[lev],

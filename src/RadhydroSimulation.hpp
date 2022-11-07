@@ -262,8 +262,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 
 	void replaceFluxes(
 			std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxes,
-			std::array<amrex::MultiFab, AMREX_SPACEDIM> &FOfluxes,	amrex::iMultiFab &redoFlag,
-			const int ncomp);
+			std::array<amrex::MultiFab, AMREX_SPACEDIM> &FOfluxes,	amrex::iMultiFab &redoFlag);
 };
 
 template <typename problem_t>
@@ -369,16 +368,15 @@ void RadhydroSimulation<problem_t>::checkHydroStates(amrex::MultiFab &mf, char c
 {
 	BL_PROFILE("RadhydroSimulation::checkHydroStates()");
 
-	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
-		const amrex::Box &indexRange = iter.validbox();
-		auto const &state = mf.const_array(iter);
-		if(!HydroSystem<problem_t>::CheckStatesValid(indexRange, state)) {
-			amrex::Print() << "Hydro states invalid (" + std::string(file) + ":" + std::to_string(line) + ")\n";
-			amrex::Print() << "Writing checkpoint for debugging...\n";
-			amrex::MFIter::allowMultipleMFIters(true);
-			WriteCheckpointFile();
-			amrex::Abort("Hydro states invalid (" + std::string(file) + ":" + std::to_string(line) + ")");
-		}
+	bool validStates = HydroSystem<problem_t>::CheckStatesValid(mf);
+	amrex::ParallelDescriptor::ReduceBoolAnd(validStates);
+
+	if(!validStates) {
+		amrex::Print() << "Hydro states invalid (" + std::string(file) + ":" + std::to_string(line) + ")\n";
+		amrex::Print() << "Writing checkpoint for debugging...\n";
+		amrex::MFIter::allowMultipleMFIters(true);
+		WriteCheckpointFile();
+		amrex::Abort("Hydro states invalid (" + std::string(file) + ":" + std::to_string(line) + ")");
 	}
 }
 
@@ -845,8 +843,8 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevelRK2(amrex::MultiFab &stat
 
 			// replace fluxes around troubled cells with Godunov fluxes
 			auto [FOfluxArrays, FOfaceVel] = computeFOHydroFluxes(stateOld, ncompHydro_, lev);
-			replaceFluxes(fluxArrays, FOfluxArrays, redoFlag, ncompHydro_);
-			replaceFluxes(faceVel, FOfaceVel, redoFlag, ncompHydro_); // needed for dual energy
+			replaceFluxes(fluxArrays, FOfluxArrays, redoFlag);
+			replaceFluxes(faceVel, FOfaceVel, redoFlag); // needed for dual energy
 			redoFlag.setVal(quokka::redoFlag::none); // reset redoFlag
 
 			// re-do RK update
@@ -907,8 +905,8 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevelRK2(amrex::MultiFab &stat
 
 			// replace fluxes around troubled cells with Godunov fluxes
 			auto [FOfluxArrays, FOfaceVel] = computeFOHydroFluxes(stateInter, ncompHydro_, lev);
-			replaceFluxes(fluxArrays, FOfluxArrays, redoFlag, ncompHydro_);
-			replaceFluxes(faceVel, FOfaceVel, redoFlag, ncompHydro_); // needed for dual energy
+			replaceFluxes(fluxArrays, FOfluxArrays, redoFlag);
+			replaceFluxes(faceVel, FOfaceVel, redoFlag); // needed for dual energy
 			redoFlag.setVal(quokka::redoFlag::none); // reset redoFlag
 
 			// re-do RK update
@@ -1068,12 +1066,15 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevelVL2(amrex::MultiFab &stat
 template <typename problem_t>
 void RadhydroSimulation<problem_t>::replaceFluxes(
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxes,
-    std::array<amrex::MultiFab, AMREX_SPACEDIM> &FOfluxes,	amrex::iMultiFab &redoFlag,
-	const int ncomp)
+    std::array<amrex::MultiFab, AMREX_SPACEDIM> &FOfluxes,	amrex::iMultiFab &redoFlag)
 {
 	BL_PROFILE("RadhydroSimulation::replaceFluxes()");
 
 	for(int idim = 0; idim < AMREX_SPACEDIM; ++idim) { // loop over dimension
+		// ensure that flux arrays have the same number of components
+		AMREX_ASSERT(fluxes[idim].nComp() == FOfluxes[idim].nComp());
+		int ncomp = fluxes[idim].nComp();
+
 		auto const &FOflux_arrs = FOfluxes[idim].const_arrays();
 		auto const &redoFlag_arrs = redoFlag.const_arrays();
 		auto flux_arrs = fluxes[idim].arrays();
@@ -1085,7 +1086,7 @@ void RadhydroSimulation<problem_t>::replaceFluxes(
 
 		amrex::IntVect ng{AMREX_D_DECL(0,0,0)};
 
-		amrex::ParallelFor(fluxes[idim], ng, ncomp,
+		amrex::ParallelFor(redoFlag, ng, ncomp,
 			[=] AMREX_GPU_DEVICE(int bx, int i, int j, int k, int n) noexcept {
 			if (redoFlag_arrs[bx](i, j, k) == quokka::redoFlag::redo) {
 				// replace fluxes with first-order ones at faces of cell (i,j,k)
