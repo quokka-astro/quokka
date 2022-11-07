@@ -53,9 +53,9 @@ void RadhydroSimulation<CollapseProblem>::setInitialConditionsOnGrid(
   amrex::Real z0 = prob_lo[2] + 0.5 * (prob_hi[2] - prob_lo[2]);
 
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-    amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
-    amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
-    amrex::Real const z = prob_lo[2] + (k + amrex::Real(0.5)) * dx[2];
+    amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
+    amrex::Real const y = prob_lo[1] + (j + static_cast<amrex::Real>(0.5)) * dx[1];
+    amrex::Real const z = prob_lo[2] + (k + static_cast<amrex::Real>(0.5)) * dx[2];
     amrex::Real const r = std::sqrt(
         std::pow(x - x0, 2) + std::pow(y - y0, 2) + std::pow(z - z0, 2));
 
