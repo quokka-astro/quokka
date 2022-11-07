@@ -1312,28 +1312,6 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(
   areInitialConditionsDefined_ = true;
 }
 
-template <typename problem_t> struct setBoundaryFunctor {
-  AMREX_GPU_DEVICE void
-  operator()(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest,
-             const int &dcomp, const int &numcomp,
-             amrex::GeometryData const &geom, const amrex::Real &time,
-             const amrex::BCRec *bcr, int bcomp, const int &orig_comp) const {
-    AMRSimulation<problem_t>::setCustomBoundaryConditions(
-        iv, dest, dcomp, numcomp, geom, time, bcr, bcomp, orig_comp);
-  }
-};
-
-template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<problem_t>::setCustomBoundaryConditions(
-    const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, int dcomp,
-    int numcomp, amrex::GeometryData const &geom, const amrex::Real time,
-    const amrex::BCRec *bcr, int bcomp, int orig_comp) {
-  // user should implement if needed using template specialization
-  // (This is only called when amrex::BCType::ext_dir is set for a given
-  // boundary.)
-}
-
 template <typename problem_t>
 template <typename PreInterpHook, typename PostInterpHook>
 void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
