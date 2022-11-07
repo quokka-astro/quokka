@@ -1,9 +1,9 @@
-name: Post clang-tidy review comments
+name: Post clang-tidy-review comments
 
 on:
   workflow_run:
     # The name field of the lint action
-    workflows: ["clang-tidy-review"]
+    workflows: [clang-tidy-review]
     types:
       - completed
 
