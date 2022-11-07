@@ -846,7 +846,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 			amrex::Gpu::streamSynchronizeAll(); // just in case
 			if (redoFlag.max(0) == quokka::redoFlag::redo) {
 				// FOFC failed
-				if (abortOnFOFCFailure_) {
+				if (abortOnFOFCFailure_ != 0) {
 					return false;
 				}
 			}
@@ -910,7 +910,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 			amrex::Gpu::streamSynchronizeAll(); // just in case
 			if (redoFlag.max(0) == quokka::redoFlag::redo) {
 				// FOFC failed
-				if (abortOnFOFCFailure_) {
+				if (abortOnFOFCFailure_ != 0) {
 					return false;
 				}			}
 		}

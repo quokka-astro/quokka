@@ -21,10 +21,10 @@
 #include "AMReX_TableData.H"
 #include "AMReX_iMultiFab.H"
 
-#include "blast.hpp"
 #include "CloudyCooling.hpp"
 #include "ODEIntegrate.hpp"
 #include "RadhydroSimulation.hpp"
+#include "blast.hpp"
 #include "hydro_system.hpp"
 
 using amrex::Real;
