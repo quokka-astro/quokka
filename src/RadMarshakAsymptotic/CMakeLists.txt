@@ -1,4 +1,4 @@
-add_executable(test_radiation_marshak_asymptotic ../main.cpp test_radiation_marshak_asymptotic.cpp ../fextract.cpp ../interpolate.cpp)
+add_executable(test_radiation_marshak_asymptotic ../main.cpp ../MFInterpolater.cpp test_radiation_marshak_asymptotic.cpp ../fextract.cpp ../interpolate.cpp)
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
     setup_target_for_cuda_compilation(test_radiation_marshak_asymptotic)

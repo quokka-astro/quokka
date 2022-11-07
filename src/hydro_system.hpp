@@ -70,10 +70,9 @@ public:
   static void
   ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real> const &cons,
                         array_t &maxSignal, amrex::Box const &indexRange);
-  // requires GPU reductions
-  static auto CheckStatesValid(amrex::Box const &indexRange,
-                               amrex::Array4<const amrex::Real> const &cons)
-      -> bool;
+
+  static auto CheckStatesValid(amrex::MultiFab const &cons_mf) -> bool;
+
   static void EnforceDensityFloor(amrex::Real const densityFloor, amrex::MultiFab &state_mf);
 
   AMREX_GPU_DEVICE static auto
@@ -271,43 +270,43 @@ void HydroSystem<problem_t>::ComputeMaxSignalSpeed(
 }
 
 template <typename problem_t>
-auto HydroSystem<problem_t>::CheckStatesValid(
-    amrex::Box const &indexRange, amrex::Array4<const amrex::Real> const &cons)
-    -> bool {
-  bool areValid = true;
-  AMREX_LOOP_3D(indexRange, i, j, k, {
-    const auto rho = cons(i, j, k, density_index);
-    const auto px = cons(i, j, k, x1Momentum_index);
-    const auto py = cons(i, j, k, x2Momentum_index);
-    const auto pz = cons(i, j, k, x3Momentum_index);
-    const auto E =
-        cons(i, j, k, energy_index); // *total* gas energy per unit volume
-    const auto vx = px / rho;
-    const auto vy = py / rho;
-    const auto vz = pz / rho;
-    const auto kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
-    const auto thermal_energy = E - kinetic_energy;
-    const auto P = thermal_energy * (HydroSystem<problem_t>::gamma_ - 1.0);
+auto HydroSystem<problem_t>::CheckStatesValid(amrex::MultiFab const &cons_mf) -> bool
+{
+  // check whether density or pressure are negative
+  auto const &cons = cons_mf.const_arrays();
 
-    bool negativeDensity = (rho <= 0.);
-    bool negativePressure = (P <= 0.);
+  return amrex::ParReduce(amrex::TypeList<amrex::ReduceOpLogicalAnd>{},
+    amrex::TypeList<bool>{}, cons_mf, amrex::IntVect(0), // no ghost cells
+			  [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept -> amrex::GpuTuple<bool> {
+				  const auto rho = cons[bx](i, j, k, density_index);
+				  const auto px = cons[bx](i, j, k, x1Momentum_index);
+				  const auto py = cons[bx](i, j, k, x2Momentum_index);
+				  const auto pz = cons[bx](i, j, k, x3Momentum_index);
+				  const auto E = cons[bx](i, j, k, energy_index);
+				  const auto vx = px / rho;
+				  const auto vy = py / rho;
+				  const auto vz = pz / rho;
+				  const auto kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
+				  const auto thermal_energy = E - kinetic_energy;
+				  const auto P = thermal_energy * (HydroSystem<problem_t>::gamma_ - 1.0);
 
-    if constexpr (is_eos_isothermal()) {
-      if (negativeDensity) {
-        areValid = false;
-        printf("invalid state at (%d, %d, %d): rho %g\n", i, j, k, rho);
-      }
-    } else {
-      if (negativeDensity || negativePressure) {
-        areValid = false;
-        printf("invalid state at (%d, %d, %d): "
-               "rho %g, Etot %g, Eint %g, P %g\n",
-               i, j, k, rho, E, thermal_energy, P);
-      }
-    }
-  })
+				  bool negativeDensity = (rho <= 0.);
+				  bool negativePressure = (P <= 0.);
 
-  return areValid;
+				  if constexpr (is_eos_isothermal()) {
+					  if (negativeDensity) {
+						  printf("invalid state at (%d, %d, %d): rho %g\n", i, j, k, rho);
+						  return {false};
+					  }
+				  } else {
+					  if (negativeDensity || negativePressure) {
+						  printf("invalid state at (%d, %d, %d): rho %g, Etot %g, Eint %g, P %g\n",
+							 i, j, k, rho, E, thermal_energy, P);
+						  return {false};
+					  }
+				  }
+				  return {true};
+			  });
 }
 
 template <typename problem_t>
