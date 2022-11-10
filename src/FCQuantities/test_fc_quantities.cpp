@@ -94,15 +94,15 @@ void RadhydroSimulation<FCQuantities>::setInitialConditionsOnGrid(
   } else if (cen == quokka::centering::fc) {
     if (dir == quokka::direction::x) {
       amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-        state(i, j, k, MHDSystem<FCQuantities>::energy_index) = 1.0 + (i % 2);
+        state(i, j, k, MHDSystem<FCQuantities>::bfield_index) = 1.0 + (i % 2);
       });
     } else if (dir == quokka::direction::y) {
       amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-        state(i, j, k, MHDSystem<FCQuantities>::energy_index) = 2.0 + (i % 2);
+        state(i, j, k, MHDSystem<FCQuantities>::bfield_index) = 2.0 + (i % 2);
       });
     } else if (dir == quokka::direction::z) {
       amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-        state(i, j, k, MHDSystem<FCQuantities>::energy_index) = 3.0 + (i % 2);
+        state(i, j, k, MHDSystem<FCQuantities>::bfield_index) = 3.0 + (i % 2);
       });
     }
   }

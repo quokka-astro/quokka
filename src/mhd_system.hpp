@@ -31,7 +31,7 @@ public:
   static constexpr int nvar_ = Physics_NumVars::numMHDVars; // number of quantities per face-centering
 
   enum varIndex {
-    energy_index = Physics_Indices<problem_t>::mhdFirstIndex,
+    bfield_index = Physics_Indices<problem_t>::mhdFirstIndex,
   };
 };
 
