@@ -1051,7 +1051,7 @@ void AMRSimulation<problem_t>::MakeNewLevelFromCoarse(
           amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim)), dm,
           ncomp_fc, nghost);
       FillCoarsePatch(level, time, state_new_fc_[level][idim], 0, ncomp_fc,
-                      BCs_fc_, quokka::centering::fc, quokka::direction(idim));
+                      BCs_fc_, quokka::centering::fc, static_cast<quokka::direction>(idim));
       FillCoarsePatch(level, time, state_old_fc_[level][idim], 0, ncomp_fc,
                       BCs_fc_, quokka::centering::fc,
                       quokka::direction(idim)); // also necessary
