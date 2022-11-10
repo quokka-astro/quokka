@@ -1,5 +1,5 @@
-#ifndef TEST_MHD_PRELIM_HPP_ // NOLINT
-#define TEST_MHD_PRELIM_HPP_
+#ifndef TEST_FC_QUANTITIES_HPP_ // NOLINT
+#define TEST_FC_QUANTITIES_HPP_
 //==============================================================================
 // Copyright 2022 Neco Kriel.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
@@ -17,4 +17,4 @@
 
 // function definitions
 
-#endif // TEST_MHD_PRELIM_HPP_
+#endif // TEST_FC_QUANTITIES_HPP_
