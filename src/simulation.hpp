@@ -1054,7 +1054,7 @@ void AMRSimulation<problem_t>::MakeNewLevelFromCoarse(
                       BCs_fc_, quokka::centering::fc, static_cast<quokka::direction>(idim));
       FillCoarsePatch(level, time, state_old_fc_[level][idim], 0, ncomp_fc,
                       BCs_fc_, quokka::centering::fc,
-                      quokka::direction(idim)); // also necessary
+                      static_cast<quokka::direction>(idim)); // also necessary
     }
   }
 
@@ -1291,7 +1291,7 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(
                                iter.validbox(), geom[level].CellSizeArray(),
                                geom[level].ProbLoArray(),
                                geom[level].ProbHiArray(), quokka::centering::fc,
-                               quokka::direction(idim));
+                               static_cast<quokka::direction>(idim));
         // set initial conditions defined by the user
         setInitialConditionsOnGrid(grid_elem);
       }
@@ -1301,7 +1301,7 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(
       // fill face-centred ghost zones
       fillBoundaryConditions(state_new_fc_[level][idim],
                              state_new_fc_[level][idim], level, time, BCs_fc_,
-                             quokka::centering::fc, quokka::direction(idim),
+                             quokka::centering::fc, static_cast<quokka::direction>(idim),
                              InterpHookNone, InterpHookNone);
       state_old_fc_[level][idim].ParallelCopy(state_new_fc_[level][idim], 0, 0,
                                               ncomp_fc, nghost, nghost);
