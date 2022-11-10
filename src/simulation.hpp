@@ -1028,13 +1028,14 @@ void AMRSimulation<problem_t>::MakeNewLevelFromCoarse(
     const amrex::DistributionMapping &dm) {
   BL_PROFILE("AMRSimulation::MakeNewLevelFromCoarse()");
 
-  const int ncomp_cc = ncomp_cc_; // state_new_cc_[level - 1].nComp();
-  const int ncomp_fc = ncomp_fc_;
-  const int nghost = nghost_; // state_new_cc_[level - 1].nGrow();
+  const int ncomp_cc = state_new_cc_[level - 1].nComp();
+  const int ncomp_fc = state_new_fc_[level - 1].nComp();
+  const int nghost_cc = state_new_cc_[level - 1].nGrow();
+  const int nghost_fc = state_new_fc_[level - 1].nGrow();
 
   // cell-centred
-  state_new_cc_[level].define(ba, dm, ncomp_cc, nghost);
-  state_old_cc_[level].define(ba, dm, ncomp_cc, nghost);
+  state_new_cc_[level].define(ba, dm, ncomp_cc, nghost_cc);
+  state_old_cc_[level].define(ba, dm, ncomp_cc, nghost_cc);
   FillCoarsePatch(level, time, state_new_cc_[level], 0, ncomp_cc, BCs_cc_,
                   quokka::centering::cc, quokka::direction::na);
   FillCoarsePatch(level, time, state_old_cc_[level], 0, ncomp_cc, BCs_cc_,
@@ -1046,10 +1047,10 @@ void AMRSimulation<problem_t>::MakeNewLevelFromCoarse(
     for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
       state_new_fc_[level][idim] = amrex::MultiFab(
           amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim)), dm,
-          ncomp_fc, nghost);
+          ncomp_fc, nghost_fc);
       state_old_fc_[level][idim] = amrex::MultiFab(
           amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim)), dm,
-          ncomp_fc, nghost);
+          ncomp_fc, nghost_fc);
       FillCoarsePatch(level, time, state_new_fc_[level][idim], 0, ncomp_fc,
                       BCs_fc_, quokka::centering::fc, static_cast<quokka::direction>(idim));
       FillCoarsePatch(level, time, state_old_fc_[level][idim], 0, ncomp_fc,
@@ -1058,7 +1059,7 @@ void AMRSimulation<problem_t>::MakeNewLevelFromCoarse(
     }
   }
 
-  max_signal_speed_[level].define(ba, dm, 1, nghost);
+  max_signal_speed_[level].define(ba, dm, 1, nghost_cc);
   tNew_[level] = time;
   tOld_[level] = time - 1.e200;
 
@@ -1078,12 +1079,13 @@ void AMRSimulation<problem_t>::RemakeLevel(
     const amrex::DistributionMapping &dm) {
   BL_PROFILE("AMRSimulation::RemakeLevel()");
 
-  const int ncomp_cc = ncomp_cc_; // state_new_cc_[level].nComp();
-  const int ncomp_fc = ncomp_fc_;
-  const int nghost = nghost_; // state_new_cc_[level].nGrow();
+  const int ncomp_cc = state_new_cc_[level].nComp();
+  const int ncomp_fc = state_new_fc_[level].nComp();
+  const int nghost_cc = state_new_cc_[level].nGrow();
+  const int nghost_fc = state_new_fc_[level].nGrow();
 
-  amrex::MultiFab new_state(ba, dm, ncomp_cc, nghost);
-  amrex::MultiFab old_state(ba, dm, ncomp_cc, nghost);
+  amrex::MultiFab new_state(ba, dm, ncomp_cc, nghost_cc);
+  amrex::MultiFab old_state(ba, dm, ncomp_cc, nghost_cc);
   FillPatch(level, time, new_state, 0, ncomp_cc, quokka::centering::cc,
             quokka::direction::na, FillPatchType::fillpatch_function);
   FillPatch(level, time, old_state, 0, ncomp_cc, quokka::centering::cc,
@@ -1091,7 +1093,7 @@ void AMRSimulation<problem_t>::RemakeLevel(
   std::swap(new_state, state_new_cc_[level]);
   std::swap(old_state, state_old_cc_[level]);
 
-  amrex::MultiFab max_signal_speed(ba, dm, 1, nghost);
+  amrex::MultiFab max_signal_speed(ba, dm, 1, nghost_cc);
   std::swap(max_signal_speed, max_signal_speed_[level]);
 
   amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> tmp_state_old_fc;
@@ -1101,10 +1103,10 @@ void AMRSimulation<problem_t>::RemakeLevel(
     for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
       tmp_state_new_fc[idim] = amrex::MultiFab(
           amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim)), dm,
-          ncomp_fc, nghost);
+          ncomp_fc, nghost_fc);
       tmp_state_old_fc[idim] = amrex::MultiFab(
           amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim)), dm,
-          ncomp_fc, nghost);
+          ncomp_fc, nghost_fc);
     }
     // TODO(neco): fill
     // swap
@@ -1610,8 +1612,8 @@ auto AMRSimulation<problem_t>::PlotFileMFAtLevel(int lev) const
   // Combine state_new_cc_[lev] and derived variables in a new MF
   int comp = 0;
   const int nGrow = state_new_cc_[lev].nGrow(); // workaround Ascent bug
-  const int nCompState_cc = ncomp_cc_; // state_new_cc_[lev].nComp();
-  const int nCompState_fc = ncomp_fc_;
+  const int nCompState_cc = state_new_cc_[lev].nComp();
+  const int nCompState_fc = state_new_fc_[lev].nComp();
   const int nCompDeriv = derivedNames_.size();
   const int nCompPlotMF = nCompState_cc + (AMREX_SPACEDIM * nCompState_fc) + nCompDeriv;
   amrex::MultiFab plotMF(grids[lev], dmap[lev], nCompPlotMF, nGrow);
