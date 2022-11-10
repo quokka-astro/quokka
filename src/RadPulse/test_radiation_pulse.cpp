@@ -98,7 +98,7 @@ void RadhydroSimulation<PulseProblem>::setInitialConditionsOnGrid(
 
   // loop over the grid and set the initial condition
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-    amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+    amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
     const double Trad = compute_exact_Trad(x - x0, initial_time);
     const double Egas = RadSystem<PulseProblem>::ComputeEgasFromTgas(rho0, Trad);
 

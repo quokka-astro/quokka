@@ -34,7 +34,7 @@ AMREX_GPU_DEVICE void ComputeExactSolution(
 {
 	// compute exact solution
 	amrex::Real const x_length = prob_hi[0] - prob_lo[0];
-	amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+	amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
 	auto value = std::fmod(x + 0.5*x_length, x_length);
 	exact_arr(i, j, k, n) = value;
 }
@@ -84,7 +84,7 @@ void AdvectionSimulation<SawtoothProblem>::computeReferenceSolution(
   int nx = static_cast<int>(position.size());
   std::vector<double> xs(nx);
   for (int i = 0; i < nx; ++i) {
-    xs.at(i) = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+    xs.at(i) = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
   }
 
   if (amrex::ParallelDescriptor::IOProcessor()) {

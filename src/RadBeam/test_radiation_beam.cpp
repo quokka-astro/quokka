@@ -86,8 +86,8 @@ AMRSimulation<BeamProblem>::setCustomBoundaryConditions(
   amrex::Box const &box = geom.Domain();
   amrex::GpuArray<int, 3> lo = box.loVect3d();
 
-  amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
-  amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
+  amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
+  amrex::Real const y = prob_lo[1] + (j + static_cast<amrex::Real>(0.5)) * dx[1];
 
   if ((i < lo[0]) && !(j < lo[1])) {
     // streaming boundary condition

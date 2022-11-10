@@ -62,9 +62,9 @@ template <> void RadhydroSimulation<RichtmeyerMeshkovProblem>::computeAfterTimes
 			for (int j = 0; j < ny; ++j) {
 				for (int k = 0; k < nz; ++k) {
 					amrex::Real const x =
-					    prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+					    prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
 					amrex::Real const y =
-					    prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
+					    prob_lo[1] + (j + static_cast<amrex::Real>(0.5)) * dx[1];
 					for (int n = 0; n < ncomp; ++n) {
 						const amrex::Real comp_upper = state(i, j, k, n);
 
@@ -123,8 +123,8 @@ void RadhydroSimulation<RichtmeyerMeshkovProblem>::setInitialConditionsOnGrid(
 
   // loop over the grid and set the initial condition
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-    amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
-    amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
+    amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
+    amrex::Real const y = prob_lo[1] + (j + static_cast<amrex::Real>(0.5)) * dx[1];
 
     double vx = 0.;
     double vy = 0.;
@@ -166,8 +166,8 @@ auto problem_main() -> int
 	// Problem parameters
 	//amrex::IntVect gridDims{AMREX_D_DECL(1024, 1024, 4)};
 	//amrex::RealBox boxSize{
-	//    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.0), amrex::Real(0.0))},
-	//    {AMREX_D_DECL(amrex::Real(0.3), amrex::Real(0.3), amrex::Real(1.0))}};
+	//    {AMREX_D_DECL(static_cast<amrex::Real>(0.0), static_cast<amrex::Real>(0.0), static_cast<amrex::Real>(0.0))},
+	//    {AMREX_D_DECL(static_cast<amrex::Real>(0.3), static_cast<amrex::Real>(0.3), static_cast<amrex::Real>(1.0))}};
 
 	auto isNormalComp = [=](int n, int dim) {
 		if ((n == HydroSystem<RichtmeyerMeshkovProblem>::x1Momentum_index) && (dim == 0)) {

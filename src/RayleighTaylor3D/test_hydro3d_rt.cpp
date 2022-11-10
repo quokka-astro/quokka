@@ -55,9 +55,9 @@ void RadhydroSimulation<RTProblem>::setInitialConditionsOnGrid(
   // loop over the grid and set the initial condition
   amrex::ParallelForRNG(
       indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::RandomEngine const &rng) noexcept {
-        amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
-        amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
-        amrex::Real const z = prob_lo[2] + (k + amrex::Real(0.5)) * dx[2];
+        amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
+        amrex::Real const y = prob_lo[1] + (j + static_cast<amrex::Real>(0.5)) * dx[1];
+        amrex::Real const z = prob_lo[2] + (k + static_cast<amrex::Real>(0.5)) * dx[2];
 
         double rho = NAN;
         double scalar = NAN;

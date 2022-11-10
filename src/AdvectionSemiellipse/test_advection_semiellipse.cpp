@@ -28,7 +28,7 @@ AMREX_GPU_DEVICE void ComputeExactSolution(
     int i, int j, int k, int n, amrex::Array4<amrex::Real> const &exact_arr,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo) {
-  amrex::Real x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+  amrex::Real x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
   double dens = 0.0;
   if (std::abs(x - 0.2) <= 0.15) {
     dens = std::sqrt(1.0 - std::pow((x - 0.2) / 0.15, 2));
@@ -78,7 +78,7 @@ void AdvectionSimulation<SemiellipseProblem>::computeReferenceSolution(
   int nx = static_cast<int>(position.size());
   std::vector<double> xs(nx);
   for (int i = 0; i < nx; ++i) {
-    xs.at(i) = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+    xs.at(i) = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
   }
 
   if (amrex::ParallelDescriptor::IOProcessor()) {

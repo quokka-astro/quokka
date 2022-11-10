@@ -53,8 +53,8 @@ void RadhydroSimulation<KelvinHelmholzProblem>::setInitialConditionsOnGrid(
   // loop over the grid and set the initial condition
   amrex::ParallelFor(
       indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-        amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
-        amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
+        amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
+        amrex::Real const y = prob_lo[1] + (j + static_cast<amrex::Real>(0.5)) * dx[1];
 
         double const L = 0.01;    // shearing layer thickness
         double const sigma = 0.2; // perturbation thickness
