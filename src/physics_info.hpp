@@ -5,11 +5,13 @@
 
 // this struct is specialized by the user application code.
 template <typename problem_t> struct Physics_Traits {
+  // cell-centred
   static constexpr bool is_hydro_enabled = false;
-  static constexpr bool is_radiation_enabled = false;
   static constexpr bool is_chemistry_enabled = false;
-
   static constexpr int numPassiveScalars = 0;
+  static constexpr bool is_radiation_enabled = false;
+  // face-centred
+  static constexpr bool is_mhd_enabled = false;
 };
 
 // this struct stores the indices at which quantities start
