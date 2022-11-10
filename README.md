@@ -82,7 +82,7 @@ Alternatively, you can work around this problem by disabling Python support. Pyt
 to the CMake command-line options (or change the `QUOKKA_PYTHON` option to `OFF` in CMakeLists.txt).
 
 ## Running on GPUs
-By default, Quokka compiles itself to run only on CPUs. (If you want to run on NVIDIA GPUs, re-build Quokka as shown below. **(Warning: CUDA 11.6 generates invalid device code; see issue [21](https://github.com/BenWibking/quokka/issues/21). Use CUDA <= 11.5 instead.)**
+By default, Quokka compiles itself to run only on CPUs. (If you want to run on NVIDIA GPUs, re-build Quokka as shown below. **(Warning: CUDA 11.6 generates invalid device code; see issue [21](https://github.com/BenWibking/quokka/issues/21). Use CUDA >= 11.7 instead.)**
 ```
 cmake .. -DCMAKE_BUILD_TYPE=Release -DAMReX_GPU_BACKEND=CUDA -DAMREX_GPUS_PER_NODE=N
 make -j6
