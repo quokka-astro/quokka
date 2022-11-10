@@ -20,8 +20,8 @@
 #include "AMReX_TagBox.H"
 
 // internal headers
-#include <math.h>
 #include "ArrayView.hpp"
+#include "simulation.hpp"
 #include "valarray.hpp"
 #include "simulation.hpp"
 
