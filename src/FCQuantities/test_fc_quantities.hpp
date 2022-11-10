@@ -4,7 +4,7 @@
 // Copyright 2022 Neco Kriel.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file test_mhd_prelim.hpp
+/// \file test_fc_quantities.hpp
 /// \brief Defines a test problem to make sure face-centred quantities are created correctly.
 ///
 
