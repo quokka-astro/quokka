@@ -280,7 +280,7 @@ void RadhydroSimulation<problem_t>::defineComponentNames() {
   // face-centred
   // add mhd state variables
   if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-    componentNames_fc_.push_back({"MagEnergy"});
+    componentNames_fc_.push_back({"magField"});
     ncomp_fc_++;
   }
 }
