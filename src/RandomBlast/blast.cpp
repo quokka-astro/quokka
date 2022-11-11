@@ -59,9 +59,9 @@ static Real SN_rate_per_vol = NAN; // rate per unit time per unit volume
 static amrex::Real E_blast = 1.0e51; // ergs
 static amrex::Real M_ejecta = 10.0 * Msun; // g
 
-static amrex::Gpu::HostVector<Real> blast_x;
-static amrex::Gpu::HostVector<Real> blast_y;
-static amrex::Gpu::HostVector<Real> blast_z;
+static amrex::TableData<Real,1> blast_x({0}, {0}, amrex::The_Pinned_Arena());
+static amrex::TableData<Real,1> blast_y({0}, {0}, amrex::The_Pinned_Arena());
+static amrex::TableData<Real,1> blast_z({0}, {0}, amrex::The_Pinned_Arena());
 static int nblast = 0;
 static int SN_counter_cumulative = 0;
 
@@ -94,7 +94,7 @@ void RadhydroSimulation<RandomBlast>::setInitialConditionsOnGrid(quokka::grid gr
 }
 
 struct ODEUserData {
-  Real rho;
+  Real rho{};
   cloudyGpuConstTables tables;
 };
 
@@ -197,23 +197,23 @@ void injectEnergy(amrex::MultiFab &mf,
   for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
     const amrex::Box &box = iter.validbox();
     auto const &state = mf.array(iter);
-    auto const &px = blast_x.dataPtr();
-    auto const &py = blast_y.dataPtr();
-    auto const &pz = blast_z.dataPtr();
+    auto const &px = blast_x.table();
+    auto const &py = blast_y.table();
+    auto const &pz = blast_z.table();
     const int np = ::nblast;
 
     // iterate over particles and deposit them onto 'state'
     // TODO(ben): this should do cloud-in-cell deposition, or possibly higher-order
     //    smoothing kernels
     amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE (int n) noexcept {
-      amrex::Real lx = (px[n] - prob_lo[0]) / dx[0];
-      amrex::Real ly = (py[n] - prob_lo[1]) / dx[1];
-      amrex::Real lz = (pz[n] - prob_lo[2]) / dx[2];
+      amrex::Real lx = (px(n) - prob_lo[0]) / dx[0];
+      amrex::Real ly = (py(n) - prob_lo[1]) / dx[1];
+      amrex::Real lz = (pz(n) - prob_lo[2]) / dx[2];
 
       int i = static_cast<int>(amrex::Math::floor(lx));
       int j = static_cast<int>(amrex::Math::floor(ly));
       int k = static_cast<int>(amrex::Math::floor(lz));
-      amrex::IntVect loc = {i,j,k};
+      amrex::IntVect loc = {AMREX_D_DECL(i,j,k)};
 
       if (box.contains(loc)) {
         amrex::Gpu::Atomic::AddNoRet(&state(i, j, k, HydroSystem<RandomBlast>::density_index), rho_ejecta);
@@ -234,23 +234,26 @@ void RadhydroSimulation<RandomBlast>::computeBeforeTimestep()
   amrex::Real domain_vol = geom[0].ProbSize();
   const amrex::Real expectation_value = SN_rate_per_vol * domain_vol * dt_coarse;
 
-  const int count = amrex::RandomPoisson(expectation_value);
+  const int count = static_cast<int>(amrex::RandomPoisson(expectation_value));
   if (count > 0) {
     amrex::Print() << "\t" << count << " SNe to be exploded.\n";
   }
   
   // resize particle arrays
-  blast_x.resize(count);
-  blast_y.resize(count);
-  blast_z.resize(count);
+  blast_x.resize({0}, {count}, amrex::The_Pinned_Arena());
+  blast_y.resize({0}, {count}, amrex::The_Pinned_Arena());
+  blast_z.resize({0}, {count}, amrex::The_Pinned_Arena());
   ::nblast = count;
   ::SN_counter_cumulative += count;
 
   // for each, sample location at random
+  auto const &px = blast_x.table();
+  auto const &py = blast_y.table();
+  auto const &pz = blast_z.table();
   for(int i = 0; i < count; ++i) {
-    blast_x[i] = geom[0].ProbLength(0) * amrex::Random();
-    blast_y[i] = geom[0].ProbLength(1) * amrex::Random();
-    blast_z[i] = geom[0].ProbLength(2) * amrex::Random();
+    px(i) = geom[0].ProbLength(0) * amrex::Random();
+    py(i) = geom[0].ProbLength(1) * amrex::Random();
+    pz(i) = geom[0].ProbLength(2) * amrex::Random();
 #if 0    
     amrex::Print() << "x = " << blast_x[i] << "\n";
     amrex::Print() << "y = " << blast_y[i] << "\n";
