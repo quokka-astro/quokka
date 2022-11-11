@@ -1,10 +1,13 @@
 #ifndef QUADRATURE_HPP_
 #define QUADRATURE_HPP_
 
+// system headers
 #include <cmath>
 
+// library headers
 #include <AMReX.H>
-#include <boost/math/quadrature/gauss.hpp>
+
+#include "gauss.hpp"
 
 AMREX_FORCE_INLINE AMREX_GPU_DEVICE
 auto kernel_wendland_c2(const amrex::Real r) -> amrex::Real
@@ -46,7 +49,7 @@ auto quad_1d(F &&f, amrex::Real x0, amrex::Real x1) -> amrex::Real
 {
 	// integrate F over the rectangular domain [x0] -> [x1].
     // use 7-point Gauss-Legendre quadrature
-    return boost::math::quadrature::gauss<double, 7>::integrate(f, x0, x1);
+    return quokka::math::quadrature::gauss<double, 7>::integrate(f, x0, x1);
 }
 
 #endif // QUADRATURE_HPP_
