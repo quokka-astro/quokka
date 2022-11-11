@@ -1034,8 +1034,6 @@ public:
    }
 };
 
-} // namespace quadrature
-} // namespace math
 } // namespace quokka
 
 #endif // GAUSS_HPP
