@@ -10,7 +10,7 @@
 #include <cmath>
 #include <array>
 
-namespace quokka { namespace math{ namespace quadrature{ namespace detail{
+namespace quokka::math::quadrature{ namespace detail{
 
 template <class T>
 struct gauss_constant_category
