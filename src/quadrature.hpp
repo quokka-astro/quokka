@@ -6,6 +6,7 @@
 
 // library headers
 #include <AMReX.H>
+#include <AMReX_REAL.H>
 
 #include "gauss.hpp"
 
