@@ -213,7 +213,7 @@ void injectEnergy(amrex::MultiFab &mf,
       int i = static_cast<int>(amrex::Math::floor(lx));
       int j = static_cast<int>(amrex::Math::floor(ly));
       int k = static_cast<int>(amrex::Math::floor(lz));
-      amrex::IntVect loc = {AMREX_D_DECL(i,j,k)};
+      amrex::IntVect loc{AMREX_D_DECL(i,j,k)};
 
       if (box.contains(loc)) {
         amrex::Gpu::Atomic::AddNoRet(&state(i, j, k, HydroSystem<RandomBlast>::density_index), rho_ejecta);
