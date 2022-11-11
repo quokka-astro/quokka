@@ -7,6 +7,8 @@
 #define GAUSS_HPP
 
 #include <limits>
+#include <cmath>
+#include <array>
 
 namespace quokka { namespace math{ namespace quadrature{ namespace detail{
 
