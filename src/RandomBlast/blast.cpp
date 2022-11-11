@@ -199,7 +199,7 @@ void injectEnergy(amrex::MultiFab &mf, amrex::GpuArray<amrex::Real, AMREX_SPACED
 		const int np = ::nblast;
 
 		const amrex::Real r_scale = 4.0 * dx[0];
-    const amrex::Real normfac = 1.0 / std::pow(r_scale, 3);
+		const amrex::Real normfac = 1.0 / std::pow(r_scale, 3);
 
 		auto kern = [=] AMREX_GPU_DEVICE(const amrex::Real x, const amrex::Real y, const amrex::Real z) {
 			const amrex::Real r = std::sqrt(x * x + y * y + z * z);
