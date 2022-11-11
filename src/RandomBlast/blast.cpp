@@ -181,7 +181,7 @@ void computeCooling(amrex::MultiFab &mf, const Real dt, cloudy_tables &cloudyTab
 	amrex::Gpu::streamSynchronizeAll();
 }
 
-void injectEnergy(amrex::MultiFab &mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, const Real dt)
+void injectEnergy(amrex::MultiFab &mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, const Real  /*dt*/)
 {
 	// inject energy into cells with stochastic sampling
 	BL_PROFILE("RadhydroSimulation::injectEnergy()")
@@ -207,9 +207,9 @@ void injectEnergy(amrex::MultiFab &mf, amrex::GpuArray<amrex::Real, AMREX_SPACED
 		};
 
 		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			const amrex::Real xc = prob_lo[0] + amrex::Real(i) * dx[0];
-			const amrex::Real yc = prob_lo[1] + amrex::Real(j) * dx[1];
-			const amrex::Real zc = prob_lo[2] + amrex::Real(k) * dx[2];
+			const amrex::Real xc = prob_lo[0] + static_cast<amrex::Real>(i) * dx[0];
+			const amrex::Real yc = prob_lo[1] + static_cast<amrex::Real>(j) * dx[1];
+			const amrex::Real zc = prob_lo[2] + static_cast<amrex::Real>(k) * dx[2];
 
 			for (int n = 0; n < np; ++n) {
 				// integrate each particle kernel over the cell
