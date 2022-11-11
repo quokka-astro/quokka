@@ -10,6 +10,8 @@
 #include <cmath>
 #include <limits>
 
+#include "AMReX.H"
+
 namespace quokka::math::quadrature{ namespace detail{
 
 template <class T>
@@ -36,7 +38,7 @@ template <class T>
 class gauss_detail<T, 7, 0>
 {
 public:
-   static auto abscissa() -> std::array<T, 4> const &
+   AMREX_GPU_DEVICE static auto abscissa() -> std::array<T, 4> const &
    {
       static constexpr std::array<T, 4> data = {
          0.000000000e+00F,
@@ -46,7 +48,7 @@ public:
       };
       return data;
    }
-   static auto weights() -> std::array<T, 4> const &
+   AMREX_GPU_DEVICE static auto weights() -> std::array<T, 4> const &
    {
       static constexpr std::array<T, 4> data = {
          4.179591837e-01F,
@@ -62,7 +64,7 @@ template <class T>
 class gauss_detail<T, 7, 1>
 {
 public:
-   static auto abscissa() -> std::array<T, 4> const &
+   AMREX_GPU_DEVICE static auto abscissa() -> std::array<T, 4> const &
    {
       static constexpr std::array<T, 4> data = {
          0.00000000000000000e+00,
@@ -72,7 +74,7 @@ public:
       };
       return data;
    }
-   static auto weights() -> std::array<T, 4> const &
+   AMREX_GPU_DEVICE static auto weights() -> std::array<T, 4> const &
    {
       static constexpr std::array<T, 4> data = {
          4.17959183673469388e-01,
@@ -88,7 +90,7 @@ template <class T>
 class gauss_detail<T, 7, 2>
 {
 public:
-   static auto abscissa() -> std::array<T, 4> const &
+   AMREX_GPU_DEVICE static auto abscissa() -> std::array<T, 4> const &
    {
       static constexpr std::array<T, 4> data = {
          0.00000000000000000000000000000000000e+00L,
@@ -98,7 +100,7 @@ public:
       };
       return data;
    }
-   static auto weights() -> std::array<T, 4> const &
+   AMREX_GPU_DEVICE static auto weights() -> std::array<T, 4> const &
    {
       static constexpr std::array<T, 4> data = {
          4.17959183673469387755102040816326531e-01L,
@@ -141,7 +143,7 @@ template <class T>
 class gauss_detail<T, 10, 0>
 {
 public:
-   static auto abscissa() -> std::array<T, 5> const &
+   AMREX_GPU_DEVICE static auto abscissa() -> std::array<T, 5> const &
    {
       static constexpr std::array<T, 5> data = {
          1.488743390e-01F,
@@ -152,7 +154,7 @@ public:
       };
       return data;
    }
-   static auto weights() -> std::array<T, 5> const &
+   AMREX_GPU_DEVICE static auto weights() -> std::array<T, 5> const &
    {
       static constexpr std::array<T, 5> data = {
          2.955242247e-01F,
@@ -169,7 +171,7 @@ template <class T>
 class gauss_detail<T, 10, 1>
 {
 public:
-   static auto abscissa() -> std::array<T, 5> const &
+   AMREX_GPU_DEVICE static auto abscissa() -> std::array<T, 5> const &
    {
       static constexpr std::array<T, 5> data = {
          1.48874338981631211e-01,
@@ -180,7 +182,7 @@ public:
       };
       return data;
    }
-   static auto weights() -> std::array<T, 5> const &
+   AMREX_GPU_DEVICE static auto weights() -> std::array<T, 5> const &
    {
       static constexpr std::array<T, 5> data = {
          2.95524224714752870e-01,
@@ -197,7 +199,7 @@ template <class T>
 class gauss_detail<T, 10, 2>
 {
 public:
-   static auto abscissa() -> std::array<T, 5> const &
+   AMREX_GPU_DEVICE static auto abscissa() -> std::array<T, 5> const &
    {
       static constexpr std::array<T, 5> data = {
          1.48874338981631210884826001129719985e-01L,
@@ -208,7 +210,7 @@ public:
       };
       return data;
    }
-   static auto weights() -> std::array<T, 5> const &
+   AMREX_GPU_DEVICE static auto weights() -> std::array<T, 5> const &
    {
       static constexpr std::array<T, 5> data = {
          2.95524224714752870173892994651338329e-01L,
@@ -254,7 +256,7 @@ template <class T>
 class gauss_detail<T, 15, 0>
 {
 public:
-   static auto abscissa() -> std::array<T, 8> const &
+   AMREX_GPU_DEVICE static auto abscissa() -> std::array<T, 8> const &
    {
       static constexpr std::array<T, 8> data = {
          0.000000000e+00F,
@@ -268,7 +270,7 @@ public:
       };
       return data;
    }
-   static auto weights() -> std::array<T, 8> const &
+   AMREX_GPU_DEVICE static auto weights() -> std::array<T, 8> const &
    {
       static constexpr std::array<T, 8> data = {
          2.025782419e-01F,
@@ -288,7 +290,7 @@ template <class T>
 class gauss_detail<T, 15, 1>
 {
 public:
-   static auto abscissa() -> std::array<T, 8> const &
+   AMREX_GPU_DEVICE static auto abscissa() -> std::array<T, 8> const &
    {
       static constexpr std::array<T, 8> data = {
          0.00000000000000000e+00,
@@ -302,7 +304,7 @@ public:
       };
       return data;
    }
-   static auto weights() -> std::array<T, 8> const &
+   AMREX_GPU_DEVICE static auto weights() -> std::array<T, 8> const &
    {
       static constexpr std::array<T, 8> data = {
          2.02578241925561273e-01,
@@ -322,7 +324,7 @@ template <class T>
 class gauss_detail<T, 15, 2>
 {
 public:
-   static auto abscissa() -> std::array<T, 8> const &
+   AMREX_GPU_DEVICE static auto abscissa() -> std::array<T, 8> const &
    {
       static constexpr std::array<T, 8> data = {
          0.00000000000000000000000000000000000e+00L,
@@ -336,7 +338,7 @@ public:
       };
       return data;
    }
-   static auto weights() -> std::array<T, 8> const &
+   AMREX_GPU_DEVICE static auto weights() -> std::array<T, 8> const &
    {
       static constexpr std::array<T, 8> data = {
          2.02578241925561272880620199967519315e-01L,
@@ -391,7 +393,7 @@ template <class T>
 class gauss_detail<T, 20, 0>
 {
 public:
-   static auto abscissa() -> std::array<T, 10> const &
+   AMREX_GPU_DEVICE static auto abscissa() -> std::array<T, 10> const &
    {
       static constexpr std::array<T, 10> data = {
          7.652652113e-02F,
@@ -407,7 +409,7 @@ public:
       };
       return data;
    }
-   static auto weights() -> std::array<T, 10> const &
+   AMREX_GPU_DEVICE static auto weights() -> std::array<T, 10> const &
    {
       static constexpr std::array<T, 10> data = {
          1.527533871e-01F,
@@ -429,7 +431,7 @@ template <class T>
 class gauss_detail<T, 20, 1>
 {
 public:
-   static auto abscissa() -> std::array<T, 10> const &
+   AMREX_GPU_DEVICE static auto abscissa() -> std::array<T, 10> const &
    {
       static constexpr std::array<T, 10> data = {
          7.65265211334973338e-02,
@@ -445,7 +447,7 @@ public:
       };
       return data;
    }
-   static auto weights() -> std::array<T, 10> const &
+   AMREX_GPU_DEVICE static auto weights() -> std::array<T, 10> const &
    {
       static constexpr std::array<T, 10> data = {
          1.52753387130725851e-01,
@@ -467,7 +469,7 @@ template <class T>
 class gauss_detail<T, 20, 2>
 {
 public:
-   static auto abscissa() -> std::array<T, 10> const &
+   AMREX_GPU_DEVICE static auto abscissa() -> std::array<T, 10> const &
    {
       static constexpr std::array<T, 10> data = {
          7.65265211334973337546404093988382110e-02L,
@@ -483,7 +485,7 @@ public:
       };
       return data;
    }
-   static auto weights() -> std::array<T, 10> const &
+   AMREX_GPU_DEVICE static auto weights() -> std::array<T, 10> const &
    {
       static constexpr std::array<T, 10> data = {
          1.52753387130725850698084331955097593e-01L,
@@ -544,7 +546,7 @@ template <class T>
 class gauss_detail<T, 25, 0>
 {
 public:
-   static auto abscissa() -> std::array<T, 13> const &
+   AMREX_GPU_DEVICE static auto abscissa() -> std::array<T, 13> const &
    {
       static constexpr std::array<T, 13> data = {
          0.000000000e+00F,
@@ -563,7 +565,7 @@ public:
       };
       return data;
    }
-   static auto weights() -> std::array<T, 13> const &
+   AMREX_GPU_DEVICE static auto weights() -> std::array<T, 13> const &
    {
       static constexpr std::array<T, 13> data = {
          1.231760537e-01F,
@@ -588,7 +590,7 @@ template <class T>
 class gauss_detail<T, 25, 1>
 {
 public:
-   static auto abscissa() -> std::array<T, 13> const &
+   AMREX_GPU_DEVICE static auto abscissa() -> std::array<T, 13> const &
    {
       static constexpr std::array<T, 13> data = {
          0.00000000000000000e+00,
@@ -607,7 +609,7 @@ public:
       };
       return data;
    }
-   static auto weights() -> std::array<T, 13> const &
+   AMREX_GPU_DEVICE static auto weights() -> std::array<T, 13> const &
    {
       static constexpr std::array<T, 13> data = {
          1.23176053726715451e-01,
@@ -632,7 +634,7 @@ template <class T>
 class gauss_detail<T, 25, 2>
 {
 public:
-   static auto abscissa() -> std::array<T, 13> const &
+   AMREX_GPU_DEVICE static auto abscissa() -> std::array<T, 13> const &
    {
       static constexpr std::array<T, 13> data = {
          0.00000000000000000000000000000000000e+00L,
@@ -651,7 +653,7 @@ public:
       };
       return data;
    }
-   static auto weights() -> std::array<T, 13> const &
+   AMREX_GPU_DEVICE static auto weights() -> std::array<T, 13> const &
    {
       static constexpr std::array<T, 13> data = {
          1.23176053726715451203902873079050142e-01L,
@@ -721,7 +723,7 @@ template <class T>
 class gauss_detail<T, 30, 0>
 {
 public:
-   static auto abscissa() -> std::array<T, 15> const &
+   AMREX_GPU_DEVICE static auto abscissa() -> std::array<T, 15> const &
    {
       static constexpr std::array<T, 15> data = {
          5.147184256e-02F,
@@ -742,7 +744,7 @@ public:
       };
       return data;
    }
-   static auto weights() -> std::array<T, 15> const &
+   AMREX_GPU_DEVICE static auto weights() -> std::array<T, 15> const &
    {
       static constexpr std::array<T, 15> data = {
          1.028526529e-01F,
@@ -769,7 +771,7 @@ template <class T>
 class gauss_detail<T, 30, 1>
 {
 public:
-   static auto abscissa() -> std::array<T, 15> const &
+   AMREX_GPU_DEVICE static auto abscissa() -> std::array<T, 15> const &
    {
       static constexpr std::array<T, 15> data = {
          5.14718425553176958e-02,
@@ -790,7 +792,7 @@ public:
       };
       return data;
    }
-   static auto weights() -> std::array<T, 15> const &
+   AMREX_GPU_DEVICE static auto weights() -> std::array<T, 15> const &
    {
       static constexpr std::array<T, 15> data = {
          1.02852652893558840e-01,
@@ -817,7 +819,7 @@ template <class T>
 class gauss_detail<T, 30, 2>
 {
 public:
-   static auto abscissa() -> std::array<T, 15> const &
+   AMREX_GPU_DEVICE static auto abscissa() -> std::array<T, 15> const &
    {
       static constexpr std::array<T, 15> data = {
          5.14718425553176958330252131667225737e-02L,
@@ -838,7 +840,7 @@ public:
       };
       return data;
    }
-   static auto weights() -> std::array<T, 15> const &
+   AMREX_GPU_DEVICE static auto weights() -> std::array<T, 15> const &
    {
       static constexpr std::array<T, 15> data = {
          1.02852652893558840341285636705415044e-01L,
@@ -919,7 +921,7 @@ class gauss : public detail::gauss_detail<Real, N, detail::gauss_constant_catego
 public:
 
    template <class F>
-   static auto integrate(F f, Real* pL1 = nullptr)->decltype(std::declval<F>()(std::declval<Real>()))
+   AMREX_GPU_DEVICE static auto integrate(F f, Real* pL1 = nullptr)->decltype(std::declval<F>()(std::declval<Real>()))
    {
      // In many math texts, K represents the field of real or complex numbers.
      // Too bad we can't put blackboard bold into C++ source!
@@ -949,8 +951,9 @@ public:
       }
       return result;
    }
+   
    template <class F>
-   static auto integrate(F f, Real a, Real b, Real* pL1 = nullptr)->decltype(std::declval<F>()(std::declval<Real>()))
+   AMREX_GPU_DEVICE static auto integrate(F f, Real a, Real b, Real* pL1 = nullptr)->decltype(std::declval<F>()(std::declval<Real>()))
    {
       typedef decltype(f(a)) K;
       static const char* function = "boost::math::quadrature::gauss<%1%>::integrate(f, %1%, %1%)";
