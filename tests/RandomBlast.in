@@ -18,7 +18,7 @@ amr.max_level       = 1     # number of levels = max_level + 1
 amr.blocking_factor = 16     # grid size must be divisible by this
 amr.max_grid_size   = 64
 
-refine_threshold = 0.5
+refine_threshold = 0.1
 do_reflux = 1
 do_subcycle = 0
 cfl = 0.2
