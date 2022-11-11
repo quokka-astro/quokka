@@ -1122,7 +1122,7 @@ public:
 
 }
 
-template <class Real, unsigned N, class Policy = boost::math::policies::policy<> >
+template <class Real, unsigned N>
 class gauss : public detail::gauss_detail<Real, N, detail::gauss_constant_category<Real>::value>
 {
    typedef detail::gauss_detail<Real, N, detail::gauss_constant_category<Real>::value> base;
@@ -1240,7 +1240,7 @@ public:
             return Q;
          }
       }
-      return static_cast<K>(policies::raise_domain_error(function, "The domain of integration is not sensible; please check the bounds.", a, Policy()));
+      return std::numeric_limits<K>::signaling_NaN();
    }
 };
 
