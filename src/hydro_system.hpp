@@ -981,7 +981,7 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 
     // compute shock detector (Eq. 6 of Quirk 1994)
     const double alpha = std::abs(P_R - P_L) / std::min(P_L, P_R);
-    constexpr double alpha_crit = 0.25;
+    constexpr double alpha_crit = 0.1;
 
     if (alpha > alpha_crit) { // similar to Quirk (1994)
       // HLL flux
