@@ -6,9 +6,9 @@
 #ifndef GAUSS_HPP
 #define GAUSS_HPP
 
-#include <limits>
-#include <cmath>
 #include <array>
+#include <cmath>
+#include <limits>
 
 namespace quokka::math::quadrature{ namespace detail{
 
@@ -36,23 +36,23 @@ template <class T>
 class gauss_detail<T, 7, 0>
 {
 public:
-   static std::array<T, 4> const & abscissa()
+   static auto abscissa() -> std::array<T, 4> const &
    {
       static constexpr std::array<T, 4> data = {
-         0.000000000e+00f,
-         4.058451514e-01f,
-         7.415311856e-01f,
-         9.491079123e-01f,
+         0.000000000e+00F,
+         4.058451514e-01F,
+         7.415311856e-01F,
+         9.491079123e-01F,
       };
       return data;
    }
-   static std::array<T, 4> const & weights()
+   static auto weights() -> std::array<T, 4> const &
    {
       static constexpr std::array<T, 4> data = {
-         4.179591837e-01f,
-         3.818300505e-01f,
-         2.797053915e-01f,
-         1.294849662e-01f,
+         4.179591837e-01F,
+         3.818300505e-01F,
+         2.797053915e-01F,
+         1.294849662e-01F,
       };
       return data;
    }
@@ -62,7 +62,7 @@ template <class T>
 class gauss_detail<T, 7, 1>
 {
 public:
-   static std::array<T, 4> const & abscissa()
+   static auto abscissa() -> std::array<T, 4> const &
    {
       static constexpr std::array<T, 4> data = {
          0.00000000000000000e+00,
@@ -72,7 +72,7 @@ public:
       };
       return data;
    }
-   static std::array<T, 4> const & weights()
+   static auto weights() -> std::array<T, 4> const &
    {
       static constexpr std::array<T, 4> data = {
          4.17959183673469388e-01,
@@ -88,7 +88,7 @@ template <class T>
 class gauss_detail<T, 7, 2>
 {
 public:
-   static std::array<T, 4> const & abscissa()
+   static auto abscissa() -> std::array<T, 4> const &
    {
       static constexpr std::array<T, 4> data = {
          0.00000000000000000000000000000000000e+00L,
@@ -98,7 +98,7 @@ public:
       };
       return data;
    }
-   static std::array<T, 4> const & weights()
+   static auto weights() -> std::array<T, 4> const &
    {
       static constexpr std::array<T, 4> data = {
          4.17959183673469387755102040816326531e-01L,
@@ -141,25 +141,25 @@ template <class T>
 class gauss_detail<T, 10, 0>
 {
 public:
-   static std::array<T, 5> const & abscissa()
+   static auto abscissa() -> std::array<T, 5> const &
    {
       static constexpr std::array<T, 5> data = {
-         1.488743390e-01f,
-         4.333953941e-01f,
-         6.794095683e-01f,
-         8.650633667e-01f,
-         9.739065285e-01f,
+         1.488743390e-01F,
+         4.333953941e-01F,
+         6.794095683e-01F,
+         8.650633667e-01F,
+         9.739065285e-01F,
       };
       return data;
    }
-   static std::array<T, 5> const & weights()
+   static auto weights() -> std::array<T, 5> const &
    {
       static constexpr std::array<T, 5> data = {
-         2.955242247e-01f,
-         2.692667193e-01f,
-         2.190863625e-01f,
-         1.494513492e-01f,
-         6.667134431e-02f,
+         2.955242247e-01F,
+         2.692667193e-01F,
+         2.190863625e-01F,
+         1.494513492e-01F,
+         6.667134431e-02F,
       };
       return data;
    }
@@ -169,7 +169,7 @@ template <class T>
 class gauss_detail<T, 10, 1>
 {
 public:
-   static std::array<T, 5> const & abscissa()
+   static auto abscissa() -> std::array<T, 5> const &
    {
       static constexpr std::array<T, 5> data = {
          1.48874338981631211e-01,
@@ -180,7 +180,7 @@ public:
       };
       return data;
    }
-   static std::array<T, 5> const & weights()
+   static auto weights() -> std::array<T, 5> const &
    {
       static constexpr std::array<T, 5> data = {
          2.95524224714752870e-01,
@@ -197,7 +197,7 @@ template <class T>
 class gauss_detail<T, 10, 2>
 {
 public:
-   static std::array<T, 5> const & abscissa()
+   static auto abscissa() -> std::array<T, 5> const &
    {
       static constexpr std::array<T, 5> data = {
          1.48874338981631210884826001129719985e-01L,
@@ -208,7 +208,7 @@ public:
       };
       return data;
    }
-   static std::array<T, 5> const & weights()
+   static auto weights() -> std::array<T, 5> const &
    {
       static constexpr std::array<T, 5> data = {
          2.95524224714752870173892994651338329e-01L,
@@ -254,31 +254,31 @@ template <class T>
 class gauss_detail<T, 15, 0>
 {
 public:
-   static std::array<T, 8> const & abscissa()
+   static auto abscissa() -> std::array<T, 8> const &
    {
       static constexpr std::array<T, 8> data = {
-         0.000000000e+00f,
-         2.011940940e-01f,
-         3.941513471e-01f,
-         5.709721726e-01f,
-         7.244177314e-01f,
-         8.482065834e-01f,
-         9.372733924e-01f,
-         9.879925180e-01f,
+         0.000000000e+00F,
+         2.011940940e-01F,
+         3.941513471e-01F,
+         5.709721726e-01F,
+         7.244177314e-01F,
+         8.482065834e-01F,
+         9.372733924e-01F,
+         9.879925180e-01F,
       };
       return data;
    }
-   static std::array<T, 8> const & weights()
+   static auto weights() -> std::array<T, 8> const &
    {
       static constexpr std::array<T, 8> data = {
-         2.025782419e-01f,
-         1.984314853e-01f,
-         1.861610000e-01f,
-         1.662692058e-01f,
-         1.395706779e-01f,
-         1.071592205e-01f,
-         7.036604749e-02f,
-         3.075324200e-02f,
+         2.025782419e-01F,
+         1.984314853e-01F,
+         1.861610000e-01F,
+         1.662692058e-01F,
+         1.395706779e-01F,
+         1.071592205e-01F,
+         7.036604749e-02F,
+         3.075324200e-02F,
       };
       return data;
    }
@@ -288,7 +288,7 @@ template <class T>
 class gauss_detail<T, 15, 1>
 {
 public:
-   static std::array<T, 8> const & abscissa()
+   static auto abscissa() -> std::array<T, 8> const &
    {
       static constexpr std::array<T, 8> data = {
          0.00000000000000000e+00,
@@ -302,7 +302,7 @@ public:
       };
       return data;
    }
-   static std::array<T, 8> const & weights()
+   static auto weights() -> std::array<T, 8> const &
    {
       static constexpr std::array<T, 8> data = {
          2.02578241925561273e-01,
@@ -322,7 +322,7 @@ template <class T>
 class gauss_detail<T, 15, 2>
 {
 public:
-   static std::array<T, 8> const & abscissa()
+   static auto abscissa() -> std::array<T, 8> const &
    {
       static constexpr std::array<T, 8> data = {
          0.00000000000000000000000000000000000e+00L,
@@ -336,7 +336,7 @@ public:
       };
       return data;
    }
-   static std::array<T, 8> const & weights()
+   static auto weights() -> std::array<T, 8> const &
    {
       static constexpr std::array<T, 8> data = {
          2.02578241925561272880620199967519315e-01L,
@@ -391,35 +391,35 @@ template <class T>
 class gauss_detail<T, 20, 0>
 {
 public:
-   static std::array<T, 10> const & abscissa()
+   static auto abscissa() -> std::array<T, 10> const &
    {
       static constexpr std::array<T, 10> data = {
-         7.652652113e-02f,
-         2.277858511e-01f,
-         3.737060887e-01f,
-         5.108670020e-01f,
-         6.360536807e-01f,
-         7.463319065e-01f,
-         8.391169718e-01f,
-         9.122344283e-01f,
-         9.639719273e-01f,
-         9.931285992e-01f,
+         7.652652113e-02F,
+         2.277858511e-01F,
+         3.737060887e-01F,
+         5.108670020e-01F,
+         6.360536807e-01F,
+         7.463319065e-01F,
+         8.391169718e-01F,
+         9.122344283e-01F,
+         9.639719273e-01F,
+         9.931285992e-01F,
       };
       return data;
    }
-   static std::array<T, 10> const & weights()
+   static auto weights() -> std::array<T, 10> const &
    {
       static constexpr std::array<T, 10> data = {
-         1.527533871e-01f,
-         1.491729865e-01f,
-         1.420961093e-01f,
-         1.316886384e-01f,
-         1.181945320e-01f,
-         1.019301198e-01f,
-         8.327674158e-02f,
-         6.267204833e-02f,
-         4.060142980e-02f,
-         1.761400714e-02f,
+         1.527533871e-01F,
+         1.491729865e-01F,
+         1.420961093e-01F,
+         1.316886384e-01F,
+         1.181945320e-01F,
+         1.019301198e-01F,
+         8.327674158e-02F,
+         6.267204833e-02F,
+         4.060142980e-02F,
+         1.761400714e-02F,
       };
       return data;
    }
@@ -429,7 +429,7 @@ template <class T>
 class gauss_detail<T, 20, 1>
 {
 public:
-   static std::array<T, 10> const & abscissa()
+   static auto abscissa() -> std::array<T, 10> const &
    {
       static constexpr std::array<T, 10> data = {
          7.65265211334973338e-02,
@@ -445,7 +445,7 @@ public:
       };
       return data;
    }
-   static std::array<T, 10> const & weights()
+   static auto weights() -> std::array<T, 10> const &
    {
       static constexpr std::array<T, 10> data = {
          1.52753387130725851e-01,
@@ -467,7 +467,7 @@ template <class T>
 class gauss_detail<T, 20, 2>
 {
 public:
-   static std::array<T, 10> const & abscissa()
+   static auto abscissa() -> std::array<T, 10> const &
    {
       static constexpr std::array<T, 10> data = {
          7.65265211334973337546404093988382110e-02L,
@@ -483,7 +483,7 @@ public:
       };
       return data;
    }
-   static std::array<T, 10> const & weights()
+   static auto weights() -> std::array<T, 10> const &
    {
       static constexpr std::array<T, 10> data = {
          1.52753387130725850698084331955097593e-01L,
@@ -544,41 +544,41 @@ template <class T>
 class gauss_detail<T, 25, 0>
 {
 public:
-   static std::array<T, 13> const & abscissa()
+   static auto abscissa() -> std::array<T, 13> const &
    {
       static constexpr std::array<T, 13> data = {
-         0.000000000e+00f,
-         1.228646926e-01f,
-         2.438668837e-01f,
-         3.611723058e-01f,
-         4.730027314e-01f,
-         5.776629302e-01f,
-         6.735663685e-01f,
-         7.592592630e-01f,
-         8.334426288e-01f,
-         8.949919979e-01f,
-         9.429745712e-01f,
-         9.766639215e-01f,
-         9.955569698e-01f,
+         0.000000000e+00F,
+         1.228646926e-01F,
+         2.438668837e-01F,
+         3.611723058e-01F,
+         4.730027314e-01F,
+         5.776629302e-01F,
+         6.735663685e-01F,
+         7.592592630e-01F,
+         8.334426288e-01F,
+         8.949919979e-01F,
+         9.429745712e-01F,
+         9.766639215e-01F,
+         9.955569698e-01F,
       };
       return data;
    }
-   static std::array<T, 13> const & weights()
+   static auto weights() -> std::array<T, 13> const &
    {
       static constexpr std::array<T, 13> data = {
-         1.231760537e-01f,
-         1.222424430e-01f,
-         1.194557635e-01f,
-         1.148582591e-01f,
-         1.085196245e-01f,
-         1.005359491e-01f,
-         9.102826198e-02f,
-         8.014070034e-02f,
-         6.803833381e-02f,
-         5.490469598e-02f,
-         4.093915670e-02f,
-         2.635498662e-02f,
-         1.139379850e-02f,
+         1.231760537e-01F,
+         1.222424430e-01F,
+         1.194557635e-01F,
+         1.148582591e-01F,
+         1.085196245e-01F,
+         1.005359491e-01F,
+         9.102826198e-02F,
+         8.014070034e-02F,
+         6.803833381e-02F,
+         5.490469598e-02F,
+         4.093915670e-02F,
+         2.635498662e-02F,
+         1.139379850e-02F,
       };
       return data;
    }
@@ -588,7 +588,7 @@ template <class T>
 class gauss_detail<T, 25, 1>
 {
 public:
-   static std::array<T, 13> const & abscissa()
+   static auto abscissa() -> std::array<T, 13> const &
    {
       static constexpr std::array<T, 13> data = {
          0.00000000000000000e+00,
@@ -607,7 +607,7 @@ public:
       };
       return data;
    }
-   static std::array<T, 13> const & weights()
+   static auto weights() -> std::array<T, 13> const &
    {
       static constexpr std::array<T, 13> data = {
          1.23176053726715451e-01,
@@ -632,7 +632,7 @@ template <class T>
 class gauss_detail<T, 25, 2>
 {
 public:
-   static std::array<T, 13> const & abscissa()
+   static auto abscissa() -> std::array<T, 13> const &
    {
       static constexpr std::array<T, 13> data = {
          0.00000000000000000000000000000000000e+00L,
@@ -651,7 +651,7 @@ public:
       };
       return data;
    }
-   static std::array<T, 13> const & weights()
+   static auto weights() -> std::array<T, 13> const &
    {
       static constexpr std::array<T, 13> data = {
          1.23176053726715451203902873079050142e-01L,
@@ -721,45 +721,45 @@ template <class T>
 class gauss_detail<T, 30, 0>
 {
 public:
-   static std::array<T, 15> const & abscissa()
+   static auto abscissa() -> std::array<T, 15> const &
    {
       static constexpr std::array<T, 15> data = {
-         5.147184256e-02f,
-         1.538699136e-01f,
-         2.546369262e-01f,
-         3.527047255e-01f,
-         4.470337695e-01f,
-         5.366241481e-01f,
-         6.205261830e-01f,
-         6.978504948e-01f,
-         7.677774321e-01f,
-         8.295657624e-01f,
-         8.825605358e-01f,
-         9.262000474e-01f,
-         9.600218650e-01f,
-         9.836681233e-01f,
-         9.968934841e-01f,
+         5.147184256e-02F,
+         1.538699136e-01F,
+         2.546369262e-01F,
+         3.527047255e-01F,
+         4.470337695e-01F,
+         5.366241481e-01F,
+         6.205261830e-01F,
+         6.978504948e-01F,
+         7.677774321e-01F,
+         8.295657624e-01F,
+         8.825605358e-01F,
+         9.262000474e-01F,
+         9.600218650e-01F,
+         9.836681233e-01F,
+         9.968934841e-01F,
       };
       return data;
    }
-   static std::array<T, 15> const & weights()
+   static auto weights() -> std::array<T, 15> const &
    {
       static constexpr std::array<T, 15> data = {
-         1.028526529e-01f,
-         1.017623897e-01f,
-         9.959342059e-02f,
-         9.636873717e-02f,
-         9.212252224e-02f,
-         8.689978720e-02f,
-         8.075589523e-02f,
-         7.375597474e-02f,
-         6.597422988e-02f,
-         5.749315622e-02f,
-         4.840267283e-02f,
-         3.879919257e-02f,
-         2.878470788e-02f,
-         1.846646831e-02f,
-         7.968192496e-03f,
+         1.028526529e-01F,
+         1.017623897e-01F,
+         9.959342059e-02F,
+         9.636873717e-02F,
+         9.212252224e-02F,
+         8.689978720e-02F,
+         8.075589523e-02F,
+         7.375597474e-02F,
+         6.597422988e-02F,
+         5.749315622e-02F,
+         4.840267283e-02F,
+         3.879919257e-02F,
+         2.878470788e-02F,
+         1.846646831e-02F,
+         7.968192496e-03F,
       };
       return data;
    }
@@ -769,7 +769,7 @@ template <class T>
 class gauss_detail<T, 30, 1>
 {
 public:
-   static std::array<T, 15> const & abscissa()
+   static auto abscissa() -> std::array<T, 15> const &
    {
       static constexpr std::array<T, 15> data = {
          5.14718425553176958e-02,
@@ -790,7 +790,7 @@ public:
       };
       return data;
    }
-   static std::array<T, 15> const & weights()
+   static auto weights() -> std::array<T, 15> const &
    {
       static constexpr std::array<T, 15> data = {
          1.02852652893558840e-01,
@@ -817,7 +817,7 @@ template <class T>
 class gauss_detail<T, 30, 2>
 {
 public:
-   static std::array<T, 15> const & abscissa()
+   static auto abscissa() -> std::array<T, 15> const &
    {
       static constexpr std::array<T, 15> data = {
          5.14718425553176958330252131667225737e-02L,
@@ -838,7 +838,7 @@ public:
       };
       return data;
    }
-   static std::array<T, 15> const & weights()
+   static auto weights() -> std::array<T, 15> const &
    {
       static constexpr std::array<T, 15> data = {
          1.02852652893558840341285636705415044e-01L,
@@ -910,12 +910,12 @@ public:
 };
 #endif
 
-}
+} // namespace detail
 
 template <class Real, unsigned N>
 class gauss : public detail::gauss_detail<Real, N, detail::gauss_constant_category<Real>::value>
 {
-   typedef detail::gauss_detail<Real, N, detail::gauss_constant_category<Real>::value> base;
+   using base = detail::gauss_detail<Real, N, detail::gauss_constant_category<Real>::value>;
 public:
 
    template <class F>
@@ -944,8 +944,9 @@ public:
          result += (fp + fm) * base::weights()[i];
          L1 += (abs(fp) + abs(fm)) *  base::weights()[i];
       }
-      if (pL1)
+      if (pL1) {
          *pL1 = L1;
+      }
       return result;
    }
    template <class F>
@@ -1034,6 +1035,6 @@ public:
    }
 };
 
-} // namespace quokka
+} // namespace quokka::math::quadrature
 
 #endif // GAUSS_HPP
