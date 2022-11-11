@@ -22,12 +22,12 @@ refine_threshold = 0.5
 do_reflux = 1
 do_subcycle = 0
 cfl = 0.2
-amr_interpolation_method = 0
+amr_interpolation_method = 1
 hydro.reconstruction_order = 2
 hydro.abort_on_fofc_failure = 0
 derived_vars = temperature
 
-ascent_interval = 10
+ascent_interval = 20
 plotfile_interval = 200
 checkpoint_interval = 1000
 max_timesteps = 5000
