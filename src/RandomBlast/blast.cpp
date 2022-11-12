@@ -181,7 +181,8 @@ void computeCooling(amrex::MultiFab &mf, const Real dt, cloudy_tables &cloudyTab
 	amrex::Gpu::streamSynchronizeAll();
 }
 
-void injectEnergy(amrex::MultiFab &mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, const Real  /*dt*/)
+void injectEnergy(amrex::MultiFab &mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi,
+		  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, const Real /*dt*/)
 {
 	// inject energy into cells with stochastic sampling
 	BL_PROFILE("RadhydroSimulation::injectEnergy()")
@@ -189,6 +190,10 @@ void injectEnergy(amrex::MultiFab &mf, amrex::GpuArray<amrex::Real, AMREX_SPACED
 	const amrex::Real cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]); // cm^3
 	const amrex::Real rho_eint_blast = E_blast / cell_vol;		  // ergs cm^-3
 	const amrex::Real rho_ejecta = M_ejecta / cell_vol;		  // g cm^-3
+
+	const amrex::Real Lx = prob_hi[0] - prob_lo[0];
+	const amrex::Real Ly = prob_hi[1] - prob_lo[1];
+	const amrex::Real Lz = prob_hi[2] - prob_lo[2];
 
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 		const amrex::Box &box = iter.validbox();
@@ -198,7 +203,7 @@ void injectEnergy(amrex::MultiFab &mf, amrex::GpuArray<amrex::Real, AMREX_SPACED
 		auto const &pz = blast_z.table();
 		const int np = ::nblast;
 
-		const amrex::Real r_scale = 4.0 * dx[0];
+		const amrex::Real r_scale = 8.0 * dx[0]; // TODO(ben): cannot be based on local dx when using AMR!
 		const amrex::Real normfac = 1.0 / std::pow(r_scale, 3);
 
 		auto kern = [=] AMREX_GPU_DEVICE(const amrex::Real x, const amrex::Real y, const amrex::Real z) {
@@ -212,10 +217,12 @@ void injectEnergy(amrex::MultiFab &mf, amrex::GpuArray<amrex::Real, AMREX_SPACED
 			const amrex::Real zc = prob_lo[2] + static_cast<amrex::Real>(k) * dx[2];
 
 			for (int n = 0; n < np; ++n) {
+				// compute distance to nearest periodic image
+				const amrex::Real x0 = std::remainder(xc - px(n), Lx);
+				const amrex::Real y0 = std::remainder(yc - py(n), Ly);
+				const amrex::Real z0 = std::remainder(zc - pz(n), Lz);
+
 				// integrate each particle kernel over the cell
-				amrex::Real x0 = xc - px(n);
-				amrex::Real y0 = yc - py(n);
-				amrex::Real z0 = zc - pz(n);
 				const amrex::Real weight = normfac * quad_3d(kern, x0, x0 + dx[0], y0, y0 + dx[1], z0, z0 + dx[2]);
 
 				state(i, j, k, HydroSystem<RandomBlast>::density_index) += weight * rho_ejecta;
@@ -256,13 +263,15 @@ template <> void RadhydroSimulation<RandomBlast>::computeBeforeTimestep()
 		py(i) = geom[0].ProbLength(1) * amrex::Random();
 		pz(i) = geom[0].ProbLength(2) * amrex::Random();
 	}
+	
+	// TODO(ben): need to force refinement to highest level for cells near particles
 }
 
 template <> void RadhydroSimulation<RandomBlast>::computeAfterLevelAdvance(int lev, Real /*time*/, Real dt_lev, int /*ncycle*/)
 {
 	// compute operator split physics
 	computeCooling(state_new_cc_[lev], dt_lev, cloudyTables);
-	injectEnergy(state_new_cc_[lev], geom[lev].ProbLoArray(), geom[lev].CellSizeArray(), dt_lev);
+	injectEnergy(state_new_cc_[lev], geom[lev].ProbLoArray(), geom[lev].ProbHiArray(), geom[lev].CellSizeArray(), dt_lev);
 }
 
 template <> void RadhydroSimulation<RandomBlast>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in) const
