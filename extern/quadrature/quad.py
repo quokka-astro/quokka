@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.integrate import tplquad, quadrature
+from scipy.integrate import tplquad
 import matplotlib.pyplot as plt
 
 def kernel(r):
