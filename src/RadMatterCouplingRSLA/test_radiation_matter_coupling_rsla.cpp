@@ -26,6 +26,12 @@ constexpr double eps_SuOlson = 1.0;
 constexpr double a_rad = 7.5646e-15; // cgs
 constexpr double alpha_SuOlson = 4.0 * a_rad / eps_SuOlson;
 
+template <> struct SimulationData<CouplingProblem> {
+  std::vector<double> t_vec_;
+	std::vector<double> Trad_vec_;
+	std::vector<double> Tgas_vec_;
+};
+
 template <> struct RadSystem_Traits<CouplingProblem> {
   static constexpr double c_light = c_light_cgs_;
   static constexpr double c_hat = c_rsla;
@@ -120,7 +126,7 @@ template <> void RadhydroSimulation<CouplingProblem>::computeAfterTimestep() {
   auto [position, values] = fextract(state_new_cc_[0], Geom(0), 0, 0.5);
 
   if (amrex::ParallelDescriptor::IOProcessor()) {
-    t_vec_.push_back(tNew_[0]);
+    userData_.t_vec_.push_back(tNew_[0]);
 
     const amrex::Real Etot_i =
         values.at(RadSystem<CouplingProblem>::gasEnergy_index)[0];
@@ -138,8 +144,8 @@ template <> void RadhydroSimulation<CouplingProblem>::computeAfterTimestep() {
     const amrex::Real Erad_i =
         values.at(RadSystem<CouplingProblem>::radEnergy_index)[0];
 
-    Trad_vec_.push_back(std::pow(Erad_i / a_rad, 1. / 4.));
-    Tgas_vec_.push_back(
+    userData_.Trad_vec_.push_back(std::pow(Erad_i / a_rad, 1. / 4.));
+    userData_.Tgas_vec_.push_back(
         RadSystem<CouplingProblem>::ComputeTgasFromEgas(rho, Egas_i));
   }
 }
@@ -184,7 +190,7 @@ auto problem_main() -> int {
 
   if (amrex::ParallelDescriptor::IOProcessor()) {
     // Solve for temperature as a function of time
-    const int nmax = static_cast<int>(sim.t_vec_.size());
+    const int nmax = static_cast<int>(sim.userData_.t_vec_.size());
     std::vector<double> t_exact(nmax);
     std::vector<double> Tgas_exact(nmax);
     std::vector<double> Tgas_rsla_exact(nmax);
@@ -195,7 +201,7 @@ auto problem_main() -> int {
         RadSystem<CouplingProblem>::ComputePlanckOpacity(rho0, initial_Tgas);
 
     for (int n = 0; n < nmax; ++n) {
-      const double time_t = sim.t_vec_.at(n);
+      const double time_t = sim.userData_.t_vec_.at(n);
       const double arad = RadSystem<CouplingProblem>::radiation_constant_;
       const double c = RadSystem<CouplingProblem>::c_light_;
       const double E0 = (Erad0 + Egas0) / (arad + alpha_SuOlson / 4.0);
@@ -226,8 +232,8 @@ auto problem_main() -> int {
       t_exact.at(n) = time_t;
     }
 
-    std::vector<double> &Tgas = sim.Tgas_vec_;
-    std::vector<double> &t = sim.t_vec_;
+    std::vector<double> &Tgas = sim.userData_.Tgas_vec_;
+    std::vector<double> &t = sim.userData_.t_vec_;
 
     // compute L1 error norm
     double err_norm = 0.;
@@ -244,7 +250,7 @@ auto problem_main() -> int {
     }
 
 #ifdef HAVE_PYTHON
-    std::vector<double> &Trad = sim.Trad_vec_;
+    std::vector<double> &Trad = sim.userData_.Trad_vec_;
 
     // Plot results
     matplotlibcpp::clf();
