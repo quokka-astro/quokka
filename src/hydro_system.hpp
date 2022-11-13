@@ -10,6 +10,7 @@
 ///
 
 // c++ headers
+#include <cmath>
 
 // library headers
 #include "AMReX_Arena.H"
@@ -24,7 +25,6 @@
 #include "hyperbolic_system.hpp"
 #include "radiation_system.hpp"
 #include "valarray.hpp"
-#include <math.h>
 
 // this struct is specialized by the user application code
 //
