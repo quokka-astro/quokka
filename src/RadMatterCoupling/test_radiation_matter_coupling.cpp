@@ -188,7 +188,7 @@ auto problem_main() -> int {
 
   if (amrex::ParallelDescriptor::IOProcessor()) {
     // Solve for asymptotically-exact solution (Gonzalez et al. 2007)
-    const int nmax = sim.userData_.t_vec_.size();
+    const int nmax = static_cast<int>(sim.userData_.t_vec_.size());
     std::vector<double> t_exact(nmax);
     std::vector<double> Tgas_exact(nmax);
     const double initial_Tgas =
@@ -217,8 +217,9 @@ auto problem_main() -> int {
     // interpolate exact solution onto output timesteps
     std::vector<double> Tgas_exact_interp(sim.userData_.t_vec_.size());
     interpolate_arrays(sim.userData_.t_vec_.data(), Tgas_exact_interp.data(),
-                       sim.userData_.t_vec_.size(), t_exact.data(), Tgas_exact.data(),
-                       t_exact.size());
+                       static_cast<int>(sim.userData_.t_vec_.size()),
+                       t_exact.data(), Tgas_exact.data(),
+                       static_cast<int>(t_exact.size()));
 
     // compute L2 error norm
     double err_norm = 0.;
