@@ -60,15 +60,19 @@ const int kmin = 0;
 const int kmax = 16;
 Real const A = 0.05 / kmax;
 
-// phase table
-std::unique_ptr<amrex::TableData<Real, 3>> table_data;
+template<>
+struct SimulationData<CoolingTest>
+{
+  cloudy_tables cloudyTables;
+  std::unique_ptr<amrex::TableData<Real, 3>> table_data;
+};
 
 template <>
 void RadhydroSimulation<CoolingTest>::preCalculateInitialConditions() {
   // generate random phases
   amrex::Array<int, 3> tlo{kmin, kmin, kmin}; // lower bounds
   amrex::Array<int, 3> thi{kmax, kmax, kmax}; // upper bounds
-  table_data = std::make_unique<amrex::TableData<Real, 3>>(tlo, thi);
+  userData_.table_data = std::make_unique<amrex::TableData<Real, 3>>(tlo, thi);
 
   amrex::TableData<Real, 3> h_table_data(tlo, thi, amrex::The_Pinned_Arena());
   auto const &h_table = h_table_data.table();
@@ -87,7 +91,7 @@ void RadhydroSimulation<CoolingTest>::preCalculateInitialConditions() {
   }
 
   // Copy data to GPU memory
-  table_data->copy(h_table_data);
+  userData_.table_data->copy(h_table_data);
   amrex::Gpu::streamSynchronize();
 }
 
@@ -100,7 +104,7 @@ void RadhydroSimulation<CoolingTest>::setInitialConditionsOnGrid(
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_elem.prob_hi_;
   const amrex::Box &indexRange = grid_elem.indexRange_;
   const amrex::Array4<double>& state_cc = grid_elem.array_;
-  const auto &phase_table = table_data->const_table();
+  const auto &phase_table = userData_.table_data->const_table();
 
   Real const Lx = (prob_hi[0] - prob_lo[0]);
   Real const Ly = (prob_hi[1] - prob_lo[1]);
@@ -269,7 +273,7 @@ template <>
 void RadhydroSimulation<CoolingTest>::computeAfterLevelAdvance(
     int lev, amrex::Real /*time*/, amrex::Real dt_lev, int /*ncycle*/) {
   // compute operator split physics
-  computeCooling(state_new_cc_[lev], dt_lev, cloudyTables);
+  computeCooling(state_new_cc_[lev], dt_lev, userData_.cloudyTables);
 }
 
 auto problem_main() -> int {
@@ -306,7 +310,7 @@ auto problem_main() -> int {
   sim.checkpointInterval_ = -1;
 
   // Read Cloudy tables
-  readCloudyData(sim.cloudyTables);
+  readCloudyData(sim.userData_.cloudyTables);
 
   // Set initial conditions
   sim.setInitialConditions();
