@@ -20,14 +20,14 @@ amr.max_grid_size   = 64    # at least 128 for GPUs
 amr.n_error_buf     = 3     # minimum 3 cell buffer around tagged cells
 amr.grid_eff        = 0.7   # default
 
-hydro.reconstruction_order = 3  # PLM
-cfl = 0.2
+hydro.reconstruction_order = 3  # PPM
+cfl = 0.25
 max_timesteps = 5000
 stop_time = 0.15
 
 do_reflux = 1
 do_subcycle = 0
 
-ascent_interval = 10
-plotfile_interval = 100
+ascent_interval = 50
+plotfile_interval = 200
 checkpoint_interval = 1000

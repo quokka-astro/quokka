@@ -85,8 +85,7 @@ void RadhydroSimulation<CollapseProblem>::ErrorEst(int lev,
                                                 amrex::Real /*time*/,
                                                 int /*ngrow*/) {
   // tag cells for refinement
-  const Real eta_threshold = 0.1;   // gradient refinement threshold
-  const Real q_min = 1e-3;          // minimum density for refinement
+  const Real q_min = 5.0;  // minimum density for refinement
 
   for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
     const amrex::Box &box = mfi.validbox();
@@ -96,19 +95,7 @@ void RadhydroSimulation<CollapseProblem>::ErrorEst(int lev,
 
     amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
       Real const q = state(i, j, k, nidx);
-      Real const q_xplus = state(i + 1, j, k, nidx);
-      Real const q_xminus = state(i - 1, j, k, nidx);
-      Real const q_yplus = state(i, j + 1, k, nidx);
-      Real const q_yminus = state(i, j - 1, k, nidx);
-      Real const q_zplus = state(i, j, k + 1, nidx);
-      Real const q_zminus = state(i, j, k - 1, nidx);
-
-      Real const del_x = 0.5 * (q_xplus - q_xminus);
-      Real const del_y = 0.5 * (q_yplus - q_yminus);
-      Real const del_z = 0.5 * (q_zplus - q_zminus);
-      Real const gradient_indicator = std::sqrt(del_x*del_x + del_y*del_y + del_z*del_z) / q;
-
-      if ((gradient_indicator > eta_threshold) && (q > q_min)) {
+      if (q > q_min) {
         tag(i, j, k) = amrex::TagBox::SET;
       }
     });

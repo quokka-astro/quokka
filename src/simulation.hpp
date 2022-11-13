@@ -804,7 +804,8 @@ void AMRSimulation<problem_t>::ellipticSolveAllLevels(const amrex::Real dt)
     amrex::OpenBCSolver poissonSolver(geom, grids, dmap);
     if (verbose) {
       poissonSolver.setVerbose(true);
-      poissonSolver.setBottomVerbose(true);
+      poissonSolver.setBottomVerbose(false);
+      amrex::Print() << "Doing Poisson solve...\n\n";
     }
 
     // solve Poisson equation with open b.c. using the method of James (1977)
@@ -819,8 +820,12 @@ void AMRSimulation<problem_t>::ellipticSolveAllLevels(const amrex::Real dt)
       rhs[lev].setVal(0);
       fillPoissonRhsAtLevel(rhs[lev], lev);
     }
+
 	  poissonSolver.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs),
                         reltolPoisson_, abstolPoisson_);
+    if (verbose) {
+      amrex::Print() << "\n";
+    }
 
     // add gravitational acceleration to hydro state (using operator splitting)
     for (int lev = 0; lev <= finest_level; ++lev) {
