@@ -373,7 +373,7 @@ template <>
 void RadhydroSimulation<ShockCloud>::computeAfterLevelAdvance(
     int lev, Real /*time*/, Real dt_lev, int /*ncycle*/) {
   // compute operator split physics
-  computeCooling(state_new_cc_[lev], dt_lev, cloudyTables);
+  computeCooling(state_new_cc_[lev], dt_lev, userData_.cloudyTables);
 }
 
 template <>
@@ -383,7 +383,7 @@ void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(
   // compute derived variables and save in 'mf'
   if (dname == "temperature") {
     const int ncomp = ncomp_cc_in;
-    auto tables = cloudyTables.const_tables();
+    auto tables = userData_.cloudyTables.const_tables();
 
     for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
       const amrex::Box &indexRange = iter.validbox();
