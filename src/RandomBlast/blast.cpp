@@ -56,9 +56,9 @@ constexpr Real nH0 = 0.1;     // cm^-3
 constexpr Real T_floor = 100.0;
 constexpr Real rho0 = nH0 * (m_H / cloudy_H_mass_fraction); // g cm^-3
 
-static Real SN_rate_per_vol = NAN;	   // rate per unit time per unit volume
-static amrex::Real E_blast = 1.0e51;	   // ergs
-static amrex::Real M_ejecta = 10.0 * Msun; // g
+static Real SN_rate_per_vol = NAN;   // rate per unit time per unit volume
+static amrex::Real E_blast = 1.0e51; // ergs
+static amrex::Real M_ejecta = 0;     // 10.0 * Msun; // g
 
 static amrex::TableData<Real, 1> blast_x({0}, {0}, amrex::The_Pinned_Arena());
 static amrex::TableData<Real, 1> blast_y({0}, {0}, amrex::The_Pinned_Arena());
@@ -67,6 +67,7 @@ static int nblast = 0;
 static int SN_counter_cumulative = 0;
 
 static Real refine_threshold = 1.0; // gradient refinement threshold
+static int use_periodic_bc = 1; // default is periodic
 
 template <> void RadhydroSimulation<RandomBlast>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
@@ -202,6 +203,7 @@ void injectEnergy(amrex::MultiFab &mf, amrex::GpuArray<amrex::Real, AMREX_SPACED
 		auto const &py = blast_y.table();
 		auto const &pz = blast_z.table();
 		const int np = ::nblast;
+		const int use_periodic_bc = ::use_periodic_bc;
 
 		const amrex::Real r_scale = 8.0 * dx[0]; // TODO(ben): cannot be based on local dx when using AMR!
 		const amrex::Real normfac = 1.0 / std::pow(r_scale, 3);
@@ -217,10 +219,19 @@ void injectEnergy(amrex::MultiFab &mf, amrex::GpuArray<amrex::Real, AMREX_SPACED
 			const amrex::Real zc = prob_lo[2] + static_cast<amrex::Real>(k) * dx[2];
 
 			for (int n = 0; n < np; ++n) {
-				// compute distance to nearest periodic image
-				const amrex::Real x0 = std::remainder(xc - px(n), Lx);
-				const amrex::Real y0 = std::remainder(yc - py(n), Ly);
-				const amrex::Real z0 = std::remainder(zc - pz(n), Lz);
+				amrex::Real x0 = NAN;
+				amrex::Real y0 = NAN;
+				amrex::Real z0 = NAN;
+				if (use_periodic_bc == 1) {
+					// compute distance to nearest periodic image
+					x0 = std::remainder(xc - px(n), Lx);
+					y0 = std::remainder(yc - py(n), Ly);
+					z0 = std::remainder(zc - pz(n), Lz);
+				} else {
+					x0 = (xc - px(n));
+					y0 = (yc - py(n));
+					z0 = (zc - pz(n));
+				}
 
 				// integrate each particle kernel over the cell
 				const amrex::Real weight = normfac * quad_3d(kern, x0, x0 + dx[0], y0, y0 + dx[1], z0, z0 + dx[2]);
@@ -263,7 +274,7 @@ template <> void RadhydroSimulation<RandomBlast>::computeBeforeTimestep()
 		py(i) = geom[0].ProbLength(1) * amrex::Random();
 		pz(i) = geom[0].ProbLength(2) * amrex::Random();
 	}
-	
+
 	// TODO(ben): need to force refinement to highest level for cells near particles
 }
 
@@ -348,13 +359,39 @@ auto problem_main() -> int
 	// read in refinement threshold (relative gradient in density)
 	pp.query("refine_threshold", ::refine_threshold); // dimensionless
 
+	// use periodic boundary conditions or not
+	pp.query("use_periodic_bc", ::use_periodic_bc);
+
 	// Problem initialization
-	constexpr int nvars = RadhydroSimulation<RandomBlast>::nvarTotal_cc_;
+	auto isNormalComp = [=](int n, int dim) {
+		if ((n == HydroSystem<RandomBlast>::x1Momentum_index) && (dim == 0)) {
+			return true;
+		}
+		if ((n == HydroSystem<RandomBlast>::x2Momentum_index) && (dim == 1)) {
+			return true;
+		}
+		if ((n == HydroSystem<RandomBlast>::x3Momentum_index) && (dim == 2)) {
+			return true;
+		}
+		return false;
+	};
+
+	const int nvars = HydroSystem<RandomBlast>::nvar_;
 	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
 	for (int n = 0; n < nvars; ++n) {
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			BCs_cc[n].setLo(0, amrex::BCType::int_dir); // periodic
-			BCs_cc[n].setHi(0, amrex::BCType::int_dir);
+			if (::use_periodic_bc == 1) { // periodic boundaries
+				BCs_cc[n].setLo(idim, amrex::BCType::int_dir);
+				BCs_cc[n].setHi(idim, amrex::BCType::int_dir);
+			} else { // reflecting boundaries
+				if (isNormalComp(n, idim)) {
+					BCs_cc[n].setLo(idim, amrex::BCType::reflect_odd);
+					BCs_cc[n].setHi(idim, amrex::BCType::reflect_odd);
+				} else {
+					BCs_cc[n].setLo(idim, amrex::BCType::reflect_even);
+					BCs_cc[n].setHi(idim, amrex::BCType::reflect_even);
+				}
+			}
 		}
 	}
 
