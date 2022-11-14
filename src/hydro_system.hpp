@@ -972,46 +972,31 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
     const quokka::valarray<double, fluxdim> F_starR =
         (S_star * (S_R * U_R - F_R) + S_R * P_LR * D_star) / (S_R - S_star);
 
-    // only used in HLL flux
-    const quokka::valarray<double, fluxdim> F_star =
-        (S_R * F_L - S_L * F_R + S_R * S_L * (U_R - U_L)) / (S_R - S_L);
 
     // open the Riemann fan
     quokka::valarray<double, fluxdim> F{};
 
 #if 0
-    // compute shock detector (Eq. 6 of Quirk 1994)
-    const double alpha = std::abs(P_R - P_L) / std::min(P_L, P_R);
-    constexpr double alpha_crit = 0.1;
-
-    if (alpha > alpha_crit) { // similar to Quirk (1994)
-      // HLL flux
-      if (S_L > 0.0) {
-        F = F_L;
-      } else if ((S_R >= 0.0) && (S_L <= 0.0)) {
-        F = F_star;
-      } else { // S_R < 0.0
-        F = F_R;
-      }
-    } else {
-      // HLLC flux
-      if (S_L > 0.0) {
-        F = F_L;
-      } else if ((S_star > 0.0) && (S_L <= 0.0)) {
-        F = F_starL;
-      } else if ((S_star <= 0.0) && (S_R >= 0.0)) {
-        F = F_starR;
-      } else { // S_R < 0.0
-        F = F_R;
-      }
-    }
-#endif
-
     // HLL flux
+    const quokka::valarray<double, fluxdim> F_star =
+        (S_R * F_L - S_L * F_R + S_R * S_L * (U_R - U_L)) / (S_R - S_L);
+
     if (S_L > 0.0) {
       F = F_L;
     } else if ((S_R >= 0.0) && (S_L <= 0.0)) {
       F = F_star;
+    } else { // S_R < 0.0
+      F = F_R;
+    }
+#endif
+
+    // HLLC flux
+    if (S_L > 0.0) {
+      F = F_L;
+    } else if ((S_star > 0.0) && (S_L <= 0.0)) {
+      F = F_starL;
+    } else if ((S_star <= 0.0) && (S_R >= 0.0)) {
+      F = F_starR;
     } else { // S_R < 0.0
       F = F_R;
     }

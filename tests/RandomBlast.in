@@ -24,7 +24,7 @@ do_reflux = 1
 do_subcycle = 0
 cfl = 0.2
 amr_interpolation_method = 1
-hydro.reconstruction_order = 3
+hydro.reconstruction_order = 2
 hydro.abort_on_fofc_failure = 1
 derived_vars = temperature
 
