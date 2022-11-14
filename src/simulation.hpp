@@ -67,7 +67,6 @@
 #include "CheckNaN.hpp"
 #include "math_impl.hpp"
 #include "physics_info.hpp"
-#include "MFInterpolater.H"
 
 #define USE_YAFLUXREGISTER
 
