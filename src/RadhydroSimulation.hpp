@@ -685,6 +685,14 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 	bool success = false;
 	amrex::Real cur_time;
 
+	// save the pre-advance fine flux register state in originalFineData
+	amrex::MultiFab originalFineData;
+	if (fr_as_fine != nullptr) {
+		amrex::MultiFab const &fineData = fr_as_fine->getFineData();
+		originalFineData.define(fineData.boxArray(), fineData.DistributionMap(), fineData.nComp(), 0);
+		amrex::Copy(originalFineData, fineData, 0, 0, fineData.nComp(), 0);
+	}
+
 	for (int retry_count = 0; retry_count <= max_retries; ++retry_count) {
 		// reduce timestep by a factor of 2^retry_count
 		const int nsubsteps = std::pow(2, retry_count);
@@ -697,14 +705,19 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 						   << ", dt_new = " << dt_step << ")\n";
 		}
 
+		if (retry_count > 0) {
+			// reset the flux registers to their pre-advance state
+			if (fr_as_crse != nullptr) {
+				fr_as_crse->reset();
+			}
+			if (fr_as_fine != nullptr) {
+				amrex::Copy(fr_as_fine->getFineData(), originalFineData, 0, 0, originalFineData.nComp(), 0);
+			}
+		}
+
 		// create temporary multifab for old state
 		amrex::MultiFab state_old_cc_tmp(grids[lev], dmap[lev], ncomp_cc_, nghost_);
 		amrex::Copy(state_old_cc_tmp, state_old_cc_[lev], 0, 0, ncomp_cc_, nghost_);
-
-		// copy flux register state into temporaries
-		// ...
-		amrex::MultiFab &fluxRegFineData = fr_as_fine->getFineData();
-		amrex::MultiFab &fluxRegCrseData = fr_as_crse->getCrseData();
 
 		// subcycle advanceHydroAtLevel, checking return value
 		for (int substep = 0; substep < nsubsteps; ++substep) {
@@ -712,9 +725,6 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 				// since we are starting a new substep, we need to copy hydro state from
 				//  the new state vector to old state vector
 				amrex::Copy(state_old_cc_tmp, state_new_cc_[lev], 0, 0, ncompHydro_, nghost_);
-
-				// TODO(ben): reset the flux registers
-				// ...
 			}
 
 			success = advanceHydroAtLevel(state_old_cc_tmp, fr_as_crse, fr_as_fine, lev, time, dt_step);
@@ -729,7 +739,6 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 		}
 
 		if (success) {
-
 			// we are done, do not attempt more retries
 			break;
 		}
