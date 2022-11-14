@@ -1,4 +1,4 @@
-add_executable(test_radiation_matter_coupling_rsla ../main.cpp ../MFInterpolater.cpp test_radiation_matter_coupling_rsla.cpp ../fextract.cpp ../interpolate.cpp)
+add_executable(test_radiation_matter_coupling_rsla ../main.cpp test_radiation_matter_coupling_rsla.cpp ../fextract.cpp ../interpolate.cpp)
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
     setup_target_for_cuda_compilation(test_radiation_matter_coupling_rsla)

@@ -1,4 +1,4 @@
-add_executable(test_hydro_contact test_hydro_contact.cpp ../main.cpp ../MFInterpolater.cpp ../fextract.cpp)
+add_executable(test_hydro_contact test_hydro_contact.cpp ../main.cpp ../fextract.cpp)
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
     setup_target_for_cuda_compilation(test_hydro_contact)
