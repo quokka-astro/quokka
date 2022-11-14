@@ -187,7 +187,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 				 amrex::YAFluxRegister *fr_as_fine);
 
 	auto advanceHydroAtLevel(amrex::MultiFab &state_old_tmp,
-							std::array<amrex::MultiFab, AMREX_SPACEDIM> &flux,
+							amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine,
 							int lev, amrex::Real time,
 							amrex::Real dt_lev) -> bool;
 
@@ -701,15 +701,10 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 		amrex::MultiFab state_old_cc_tmp(grids[lev], dmap[lev], ncomp_cc_, nghost_);
 		amrex::Copy(state_old_cc_tmp, state_old_cc_[lev], 0, 0, ncomp_cc_, nghost_);
 
-		// create flux multifab (needed for flux registers)
-		std::array<amrex::MultiFab, AMREX_SPACEDIM> flux;
-		if (do_reflux) {
-			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-				auto ba_face = amrex::convert(grids[lev], amrex::IntVect::TheDimensionVector(idim));
-				flux[idim] = amrex::MultiFab(ba_face, dmap[lev], ncomp_cc_, 0);
-				flux[idim].setVal(0);
-			}
-		}
+		// copy flux register state into temporaries
+		// ...
+		amrex::MultiFab &fluxRegFineData = fr_as_fine->getFineData();
+		amrex::MultiFab &fluxRegCrseData = fr_as_crse->getCrseData();
 
 		// subcycle advanceHydroAtLevel, checking return value
 		for (int substep = 0; substep < nsubsteps; ++substep) {
@@ -717,9 +712,12 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 				// since we are starting a new substep, we need to copy hydro state from
 				//  the new state vector to old state vector
 				amrex::Copy(state_old_cc_tmp, state_new_cc_[lev], 0, 0, ncompHydro_, nghost_);
+
+				// TODO(ben): reset the flux registers
+				// ...
 			}
 
-			success = advanceHydroAtLevel(state_old_cc_tmp, flux, lev, time, dt_step);
+			success = advanceHydroAtLevel(state_old_cc_tmp, fr_as_crse, fr_as_fine, lev, time, dt_step);
 			cur_time += dt_step;
 
 			if (!success) {
@@ -731,17 +729,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 		}
 
 		if (success) {
-			if (do_reflux) {
-				amrex::Real fluxScaleFactor = NAN;
-				if (integratorOrder_ == 2) {
-					fluxScaleFactor = 0.5;
-				} else if (integratorOrder_ == 1) {
-					fluxScaleFactor = 1.0;
-				}
-				// increment flux registers
-				//   note: this *must* be scaled by dt_step, NOT dt_lev !
-				incrementFluxRegisters(fr_as_crse, fr_as_fine, flux, lev, fluxScaleFactor * dt_step);
-			}
+
 			// we are done, do not attempt more retries
 			break;
 		}
@@ -778,11 +766,18 @@ auto RadhydroSimulation<problem_t>::isCflViolated(int lev, amrex::Real time,
 
 template <typename problem_t>
 auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old_cc_tmp,
-							std::array<amrex::MultiFab, AMREX_SPACEDIM> &flux,
+							amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine,
 							int lev, amrex::Real time,
 							amrex::Real dt_lev) -> bool
 {
 	BL_PROFILE("RadhydroSimulation::advanceHydroAtLevel()");
+
+	amrex::Real fluxScaleFactor = NAN;
+	if (integratorOrder_ == 2) {
+		fluxScaleFactor = 0.5;
+	} else if (integratorOrder_ == 1) {
+		fluxScaleFactor = 1.0;
+	}
 
 	auto dx = geom[lev].CellSizeArray();
 
@@ -847,9 +842,9 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 			HydroSystem<problem_t>::SyncDualEnergy(stateNew);
 		}
 
-		if (do_reflux) {
+		if (do_reflux == 1) {
 			// increment flux registers
-			addFluxArrays(flux, fluxArrays, 0, 0);
+			incrementFluxRegisters(fr_as_crse, fr_as_fine, fluxArrays, lev, fluxScaleFactor * dt_lev);
 		}
 	}
 	amrex::Gpu::streamSynchronizeAll();
@@ -909,9 +904,9 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 			HydroSystem<problem_t>::SyncDualEnergy(stateFinal);
 		}
 
-		if (do_reflux) {
+		if (do_reflux == 1) {
 			// increment flux registers
-			addFluxArrays(flux, fluxArrays, 0, 0);
+			incrementFluxRegisters(fr_as_crse, fr_as_fine, fluxArrays, lev, fluxScaleFactor * dt_lev);
 		}
 	}
 	amrex::Gpu::streamSynchronizeAll();
