@@ -69,7 +69,6 @@
 // internal headers
 #include "CheckNaN.hpp"
 #include "math_impl.hpp"
-#include "MFInterpolater.H"
 
 #define USE_YAFLUXREGISTER
 
