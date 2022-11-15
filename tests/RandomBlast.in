@@ -17,7 +17,7 @@ amr.v               = 1     # verbosity in Amr
 amr.n_cell          = 64 64 64
 amr.max_level       = 0     # number of levels = max_level + 1
 amr.blocking_factor = 16     # grid size must be divisible by this
-amr.max_grid_size   = 32
+amr.max_grid_size   = 64
 
 refine_threshold = 0.1
 do_reflux = 1
@@ -30,7 +30,7 @@ derived_vars = temperature
 
 ascent_interval = 100
 plotfile_interval = 1000
-checkpoint_interval = 1000
+checkpoint_interval = 5000
 max_timesteps = 10000
 
 dt_initial = 3.154e10       # 1000 yr
