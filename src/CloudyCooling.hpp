@@ -102,10 +102,11 @@ cloudy_cooling_function(Real const rho, Real const T,
 
   // compute electron density
   // N.B. it is absolutely critical to include the metal contribution here!
-  const double n_e = (rho / hydrogen_mass_cgs_) *
+  double n_e = (rho / hydrogen_mass_cgs_) *
                      (1.0 - mu * (X + Y / 4. + Z / mean_metals_A)) /
                      (mu - (electron_mass_cgs / hydrogen_mass_cgs_));
-  AMREX_ASSERT(n_e > 0.);
+  // the approximation for the metals contribution to e- fails at high densities (~1e3 or higher)
+  n_e = std::max(n_e, 1.0e-4 * nH);
 
   // photoelectric heating term
   const double Tsqrt = std::sqrt(T);
@@ -126,6 +127,7 @@ cloudy_cooling_function(Real const rho, Real const T,
   const double compton_CMB = -C_n * (T - T_cmb) * n_e;
   Edot += compton_CMB;
 
+  AMREX_ASSERT(!std::isnan(Edot));
   return Edot;
 }
 
