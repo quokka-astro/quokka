@@ -853,9 +853,45 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 
     const double rho_bar = 0.5 * (rho_L + rho_R);
     const double cs_bar = 0.5 * (cs_L + cs_R);
-    const double P_PVRS =
-        0.5 * (P_L + P_R) - 0.5 * (u_R - u_L) * (rho_bar * cs_bar);
-    const double P_star = std::max(P_PVRS, 0.0);
+    const double P_PVRS = 0.5 * (P_L + P_R) - 0.5 * (u_R - u_L) * (rho_bar * cs_bar);
+
+    // choose P_star adaptively (Fig. 9.4 of Toro)
+
+    const double P_min = std::min(P_L, P_R);
+    const double P_max = std::max(P_L, P_R);
+    const double Q = P_max / P_min;
+    constexpr double Q_crit = 2.;
+    double P_star = NAN;
+
+    if constexpr (is_eos_isothermal()) {
+      P_star = std::max(P_PVRS, 0.0);  // only estimate compatible with gamma = 1
+      } else { // gamma > 1
+      if ((Q < Q_crit) && (P_min < P_PVRS) && (P_PVRS < P_max)) {
+        // use PVRS estimate
+        P_star = P_PVRS;
+      } else if (P_PVRS < P_min) {
+        // compute two-rarefaction TRRS states (Toro 10.5.2, eq. 10.63)
+        const double z = (gamma_ - 1.) / (2. * gamma_);
+        const double P_TRRS = std::pow( (cs_L + cs_R - 0.5 * (gamma_ - 1.) * (u_R - u_L) ) /
+                                ( cs_L / std::pow(P_L, z) + cs_R / std::pow(P_R, z) ),
+                                (1. / z));
+        P_star = P_TRRS;
+      } else {
+        // compute two-shock TSRS states (Toro 10.5.2, eq. 10.65)
+        const double A_L = 2. / ( (gamma_ + 1.) * rho_L );
+        const double A_R = 2. / ( (gamma_ + 1.) * rho_R );
+        const double B_L = ((gamma_ - 1.) / (gamma_ + 1.)) * P_L;
+        const double B_R = ((gamma_ - 1.) / (gamma_ + 1.)) * P_R;
+        const double P_0 = std::max(P_PVRS, 0.0);
+        const double G_L = std::sqrt( A_L / ( P_0 + B_L ) );
+        const double G_R = std::sqrt( A_R / ( P_0 + B_R ) );
+        const double delta_u = u_R - u_L;
+        const double P_TSRS = ( G_L * P_L + G_R * P_R - delta_u ) / ( G_L + G_R );
+        P_star = P_TSRS;
+      }
+    }
+
+    // compute wave speeds
 
     const double q_L = (P_star <= P_L)
                            ? 1.0
@@ -866,8 +902,6 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
                            ? 1.0
                            : std::sqrt(1.0 + ((gamma_ + 1.0) / (2.0 * gamma_)) *
                                                  ((P_star / P_R) - 1.0));
-
-    // compute wave speeds
 
     double S_L = u_L - q_L * cs_L;
     double S_R = u_R + q_R * cs_R;
