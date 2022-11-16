@@ -83,6 +83,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	using AMRSimulation<problem_t>::WriteCheckpointFile;
 	using AMRSimulation<problem_t>::GetData;
 	using AMRSimulation<problem_t>::FillPatchWithData;
+	using AMRSimulation<problem_t>::istep;
 
 	SimulationData<problem_t> userData_;
 
@@ -814,6 +815,9 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		AMREX_ASSERT(!state_old_cc_tmp.contains_nan(0, state_old_cc_tmp.nComp()));
 		AMREX_ASSERT(!state_old_cc_tmp.contains_nan()); // check ghost cells
 
+		// write out FABs with ghost zones
+		//amrex::writeFabs(state_old_cc_tmp, "state_old_cc_tmp_" + std::to_string(istep[lev]));
+
 		// advance all grids on local processor (Stage 1 of integrator)
 		auto const &stateOld = state_old_cc_tmp;
 		auto &stateNew = state_inter_cc_;
@@ -877,6 +881,9 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		// check intermediate state validity
 		AMREX_ASSERT(!state_inter_cc_.contains_nan(0, state_inter_cc_.nComp()));
 		AMREX_ASSERT(!state_inter_cc_.contains_nan()); // check ghost zones
+
+		// write out FABs with ghost zones
+		//amrex::writeFabs(state_inter_cc_, "state_inter_cc_" + std::to_string(istep[lev]));
 
 		auto const &stateOld = state_old_cc_tmp;
 		auto const &stateInter = state_inter_cc_;

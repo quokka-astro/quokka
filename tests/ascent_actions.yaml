@@ -40,15 +40,3 @@
           annotations: "true"
           camera:
             zoom: 1.5
-    s3:
-      plots: 
-        p1: 
-          type: "pseudocolor"
-          field: "scalar_0"
-          pipeline: "pl1"
-      renders:
-        r1:
-          image_prefix: "scalar%05d"
-          annotations: "true"
-          camera:
-            zoom: 1.5

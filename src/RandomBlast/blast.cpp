@@ -292,6 +292,28 @@ template <> void RadhydroSimulation<RandomBlast>::computeAfterLevelAdvance(int l
 	injectEnergy(state_new_cc_[lev], geom[lev].ProbLoArray(), geom[lev].ProbHiArray(), geom[lev].CellSizeArray(), userData_);
 }
 
+template <> void RadhydroSimulation<RandomBlast>::computeAfterTimestep()
+{
+	// check conservation of mass
+	static auto const &dx = geom[0].CellSizeArray();
+	static Real const cvol = AMREX_D_TERM(dx[0], +dx[1], +dx[2]);
+	static Real const initial_mass = cvol * state_new_cc_[0].sum(HydroSystem<RandomBlast>::density_index);
+
+	const Real mass = cvol * state_new_cc_[0].sum(HydroSystem<RandomBlast>::density_index);
+	const Real cons_err = (mass - initial_mass) / initial_mass;
+
+	amrex::Print() << "Initial mass = " << initial_mass << "\n"
+		       << "Final mass = " << mass << "\n"
+		       << "Relative error = " << cons_err << "\n";
+
+	if (std::abs(cons_err) > 1.0e-10) {
+		// write out FABs with ghost zones
+		//amrex::writeFabs(state_new_cc_[0], "state_new_" + std::to_string(istep[0]));
+		// abort
+		amrex::Abort("mass nonconservation detected!");
+	}
+}
+
 template <> void RadhydroSimulation<RandomBlast>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in) const
 {
 	// compute derived variables and save in 'mf'
