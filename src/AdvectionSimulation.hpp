@@ -83,6 +83,7 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
   void setInitialConditionsOnGrid(quokka::grid grid_elem) override;
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev,
 					  				  int /*ncycle*/) override;
+	void computeBeforeTimestep() override;
 	void computeAfterTimestep() override;
 	void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) override;
 	void computeReferenceSolution(
@@ -150,6 +151,11 @@ void AdvectionSimulation<problem_t>::setInitialConditionsOnGrid(
     quokka::grid grid_elem) {
   // default empty implementation
   // user should implement using problem-specific template specialization
+}
+
+template <typename problem_t> void AdvectionSimulation<problem_t>::computeBeforeTimestep()
+{
+	// do nothing -- user should implement using problem-specific template specialization
 }
 
 template <typename problem_t> void AdvectionSimulation<problem_t>::computeAfterTimestep()

@@ -127,6 +127,7 @@ cloudy_cooling_function(Real const rho, Real const T,
   const double compton_CMB = -C_n * (T - T_cmb) * n_e;
   Edot += compton_CMB;
 
+  AMREX_ASSERT(!std::isnan(Edot));
   return Edot;
 }
 

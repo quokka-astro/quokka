@@ -83,6 +83,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	using AMRSimulation<problem_t>::WriteCheckpointFile;
 	using AMRSimulation<problem_t>::GetData;
 	using AMRSimulation<problem_t>::FillPatchWithData;
+	using AMRSimulation<problem_t>::istep;
 
 	SimulationData<problem_t> userData_;
 
@@ -104,6 +105,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	int reconstructionOrder_ = 3; // 1 == donor cell; 2 == PLM; 3 == PPM (default)
 	int radiationReconstructionOrder_ = 3; // 1 == donor cell; 2 == PLM; 3 == PPM (default)
 	int useDualEnergy_ = 1; // 0 == disabled; 1 == use auxiliary internal energy equation (default)
+	int abortOnFOFCFailure_ = 1; // 1 == crash if FOFC fails; 0 == keep going
 
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
 
@@ -147,6 +149,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
   	void setInitialConditionsOnGrid(quokka::grid grid_elem) override;
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev,
 									  int ncycle) override;
+	void computeBeforeTimestep() override;
 	void computeAfterTimestep() override;
 	void computeAfterLevelAdvance(int lev, amrex::Real time,
 								 amrex::Real dt_lev, int /*ncycle*/);
@@ -279,6 +282,7 @@ void RadhydroSimulation<problem_t>::readParmParse() {
 		amrex::ParmParse hpp("hydro");
 		hpp.query("reconstruction_order", reconstructionOrder_);
 		hpp.query("use_dual_energy", useDualEnergy_);
+		hpp.query("abort_on_fofc_failure", abortOnFOFCFailure_);
 	}
 
 	// set radiation runtime parameters
@@ -381,6 +385,11 @@ void RadhydroSimulation<problem_t>::setInitialConditionsOnGrid(
     quokka::grid grid_elem) {
   // default empty implementation
   // user should implement using problem-specific template specialization
+}
+
+template <typename problem_t> void RadhydroSimulation<problem_t>::computeBeforeTimestep()
+{
+	// do nothing -- user should implement if desired
 }
 
 template <typename problem_t> void RadhydroSimulation<problem_t>::computeAfterTimestep()
@@ -681,7 +690,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 							amrex::YAFluxRegister *fr_as_fine)
 {
 	// timestep retries
-	const int max_retries = 4;
+	const int max_retries = 6;
 	bool success = false;
 	amrex::Real cur_time;
 
@@ -806,6 +815,9 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		AMREX_ASSERT(!state_old_cc_tmp.contains_nan(0, state_old_cc_tmp.nComp()));
 		AMREX_ASSERT(!state_old_cc_tmp.contains_nan()); // check ghost cells
 
+		// write out FABs with ghost zones
+		//amrex::writeFabs(state_old_cc_tmp, "state_old_cc_tmp_" + std::to_string(istep[lev]));
+
 		// advance all grids on local processor (Stage 1 of integrator)
 		auto const &stateOld = state_old_cc_tmp;
 		auto &stateNew = state_inter_cc_;
@@ -839,7 +851,9 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 			amrex::Gpu::streamSynchronizeAll(); // just in case
 			if (redoFlag.max(0) == quokka::redoFlag::redo) {
 				// FOFC failed
-				return false;
+				if (abortOnFOFCFailure_ != 0) {
+					return false;
+				}
 			}
 		}
 
@@ -867,6 +881,9 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		// check intermediate state validity
 		AMREX_ASSERT(!state_inter_cc_.contains_nan(0, state_inter_cc_.nComp()));
 		AMREX_ASSERT(!state_inter_cc_.contains_nan()); // check ghost zones
+
+		// write out FABs with ghost zones
+		//amrex::writeFabs(state_inter_cc_, "state_inter_cc_" + std::to_string(istep[lev]));
 
 		auto const &stateOld = state_old_cc_tmp;
 		auto const &stateInter = state_inter_cc_;
@@ -901,8 +918,9 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 			amrex::Gpu::streamSynchronizeAll(); // just in case
 			if (redoFlag.max(0) == quokka::redoFlag::redo) {
 				// FOFC failed
-				return false;
-			}
+				if (abortOnFOFCFailure_ != 0) {
+					return false;
+				}			}
 		}
 
 		// prevent vacuum
