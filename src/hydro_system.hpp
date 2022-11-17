@@ -22,6 +22,7 @@
 
 // internal headers
 #include "ArrayView.hpp"
+#include "ExactRiemann.hpp"
 #include "HLLC.hpp"
 #include "hyperbolic_system.hpp"
 #include "radiation_system.hpp"
@@ -846,7 +847,7 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		dw = std::min(std::min(dwl, dwr), dw);
 #endif
 
-		quokka::valarray<double, nvar_> F = quokka::Riemann::HLLC<DIR, nscalars_, nvar_>(sL, sR, gamma_, du, dw);
+		quokka::valarray<double, nvar_> F = quokka::Riemann::Exact<DIR, nscalars_, nvar_>(sL, sR, gamma_, du, dw);
 
 		// set energy fluxes to zero if EOS is isothermal
 		if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
