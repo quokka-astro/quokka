@@ -827,10 +827,25 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			sR.scalar[n] = x1RightState(i, j, k, scalar0_index + n);
 		}
 
-		const amrex::Dim3 cell_idx{i, j, k};
-		constexpr int fluxdim = nvar_; // including passive scalar components
-		quokka::valarray<double, fluxdim> F =
-		    quokka::Riemann::HLLC<DIR, nscalars_, fluxdim>(sL, sR, gamma_, q, cell_idx, AMREX_D_DECL(velN_index, velV_index, velW_index));
+		// difference in normal velocity along normal axis
+		const double du = q(i, j, k, velN_index) - q(i - 1, j, k, velN_index);
+
+		// difference in transverse velocity
+#if AMREX_SPACEDIM == 1
+		const double dw = 0.;
+#else
+	  amrex::Real dvl = std::min(q(i - 1, j + 1, k, velV_index) - q(i - 1, j, k, velV_index), q(i - 1, j, k, velV_index) - q(i - 1, j - 1, k, velV_index));
+	  amrex::Real dvr = std::min(q(i, j + 1, k, velV_index) - q(i, j, k, velV_index), q(i, j, k, velV_index) - q(i, j - 1, k, velV_index));
+	  double dw = std::min(dvl, dvr);
+#endif
+#if AMREX_SPACEDIM == 3
+		amrex::Real dwl =
+		    std::min(q(i - 1, j, k + 1, velW_index) - q(i - 1, j, k, velW_index), q(i - 1, j, k, velW_index) - q(i - 1, j, k - 1, velW_index));
+		amrex::Real dwr = std::min(q(i, j, k + 1, velW_index) - q(i, j, k, velW_index), q(i, j, k, velW_index) - q(i, j, k - 1, velW_index));
+		dw = std::min(std::min(dwl, dwr), dw);
+#endif
+
+		quokka::valarray<double, nvar_> F = quokka::Riemann::HLLC<DIR, nscalars_, nvar_>(sL, sR, gamma_, du, dw);
 
 		// set energy fluxes to zero if EOS is isothermal
 		if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
@@ -843,7 +858,7 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		x1FaceVel(i, j, k) = v_norm;
 
 		// copy all flux components to the flux array
-		for (int nc = 0; nc < fluxdim; ++nc) {
+		for (int nc = 0; nc < nvar_; ++nc) {
 			AMREX_ASSERT(!std::isnan(F[nc])); // check flux is valid
 			x1Flux(i, j, k, nc) = F[nc];
 		}

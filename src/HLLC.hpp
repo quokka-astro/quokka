@@ -19,9 +19,7 @@ namespace quokka::Riemann
 //
 template <FluxDir DIR, int N_scalars, int fluxdim>
 AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars> const &sL, quokka::HydroState<N_scalars> const &sR, const double gamma,
-					      quokka::Array4View<const amrex::Real, DIR> const &q, amrex::Dim3 const &cell_idx,
-					      AMREX_D_DECL(const int velN_index, const int velV_index, const int velW_index))
-    -> quokka::valarray<double, fluxdim>
+					      const double du, const double dw) -> quokka::valarray<double, fluxdim>
 {
 	// compute PVRS states (Toro 10.5.2)
 
@@ -73,25 +71,7 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars> cons
 	double S_R = sR.u + q_R * sR.cs;
 
 	// carbuncle correction [Eq. 10 of Minoshima & Miyoshi (2021)]
-	auto [i, j, k] = cell_idx;
-
-	// difference in normal velocity along normal axis
-	const double du = q(i, j, k, velN_index) - q(i - 1, j, k, velN_index);
-
-	// difference in transverse velocity
-#if AMREX_SPACEDIM == 1
-	const double dw = 0.;
-#else
-	amrex::Real dvl = std::min(q(i - 1, j + 1, k, velV_index) - q(i - 1, j, k, velV_index), q(i - 1, j, k, velV_index) - q(i - 1, j - 1, k, velV_index));
-	amrex::Real dvr = std::min(q(i, j + 1, k, velV_index) - q(i, j, k, velV_index), q(i, j, k, velV_index) - q(i, j - 1, k, velV_index));
-	double dw = std::min(dvl, dvr);
-#endif
-#if AMREX_SPACEDIM == 3
-	amrex::Real dwl = std::min(q(i - 1, j, k + 1, velW_index) - q(i - 1, j, k, velW_index), q(i - 1, j, k, velW_index) - q(i - 1, j, k - 1, velW_index));
-	amrex::Real dwr = std::min(q(i, j, k + 1, velW_index) - q(i, j, k, velW_index), q(i, j, k, velW_index) - q(i, j, k - 1, velW_index));
-	dw = std::min(std::min(dwl, dwr), dw);
-#endif
-
+	
 	const double cs_max = std::max(sL.cs, sR.cs);
 	const double tp = std::min(1., (cs_max - std::min(du, 0.)) / (cs_max - std::min(dw, 0.)));
 	const double theta = tp * tp * tp * tp;
@@ -136,8 +116,6 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars> cons
 
 	const std::initializer_list<double> state_L = {sL.rho, sL.rho * sL.vx, sL.rho * sL.vy, sL.rho * sL.vz, sL.E, sL.Eint};
 	const std::initializer_list<double> state_R = {sR.rho, sR.rho * sR.vx, sR.rho * sR.vy, sR.rho * sR.vz, sR.E, sR.Eint};
-
-	AMREX_ASSERT(state_L.size() == state_R.size());
 
 	// N.B.: quokka::valarray is written to allow assigning <= fluxdim
 	// components, so this works even if there are more components than
