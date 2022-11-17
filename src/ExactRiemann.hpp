@@ -120,7 +120,7 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto ComputePstar(quokka::HydroState<N_scala
 //
 template <FluxDir DIR, int N_scalars, int fluxdim>
 AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto Exact(quokka::HydroState<N_scalars> const &sL, quokka::HydroState<N_scalars> const &sR, const double gamma,
-					       const double du, const double dw) -> quokka::valarray<double, fluxdim>
+					       const double /*du*/, const double /*dw*/) -> quokka::valarray<double, fluxdim>
 {
 	// compute pressure in the star region
 
@@ -134,87 +134,29 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto Exact(quokka::HydroState<N_scalars> con
 	double S_L = sL.u - q_L * sL.cs;
 	double S_R = sR.u + q_R * sR.cs;
 
-	// carbuncle correction [Eq. 10 of Minoshima & Miyoshi (2021)]
-
-	const double cs_max = std::max(sL.cs, sR.cs);
-	const double tp = std::min(1., (cs_max - std::min(du, 0.)) / (cs_max - std::min(dw, 0.)));
-	const double theta = tp * tp * tp * tp;
-
-	// compute speed of the 'star' state
-
-	const double S_star =
-	    (theta * (sR.P - sL.P) + (sL.rho * sL.u * (S_L - sL.u) - sR.rho * sR.u * (S_R - sR.u))) / (sL.rho * (S_L - sL.u) - sR.rho * (S_R - sR.u));
-
-	// Low-dissipation pressure correction 'phi' [Eq. 23 of Minoshima & Miyoshi]
-
-	const double vmag_L = std::sqrt(sL.vx * sL.vx + sL.vy * sL.vy + sL.vz * sL.vz);
-	const double vmag_R = std::sqrt(sR.vx * sR.vx + sR.vy * sR.vy + sR.vz * sR.vz);
-	const double chi = std::min(1., std::max(vmag_L, vmag_R) / cs_max);
-	const double phi = chi * (2. - chi);
-
-	const double P_LR = 0.5 * (sL.P + sR.P) + 0.5 * phi * (sL.rho * (S_L - sL.u) * (S_star - sL.u) + sR.rho * (S_R - sR.u) * (S_star - sR.u));
+	/// sample RP solution at x = 0
 
 	/// compute fluxes
 
-	quokka::valarray<double, fluxdim> D_L{};
-	quokka::valarray<double, fluxdim> D_R{};
-	quokka::valarray<double, fluxdim> D_star{};
+	const std::initializer_list<double> state_mid = {sL.rho, sL.rho * sL.vx, sL.rho * sL.vy, sL.rho * sL.vz, sL.E, sL.Eint};
 
 	// N.B.: quokka::valarray is written to allow assigning <= fluxdim
 	// components, so this works even if there are more components than
 	// enumerated in the initializer list. The remaining components are
 	// assigned a default value of zero.
-	if constexpr (DIR == FluxDir::X1) {
-		D_L = {0., 1., 0., 0., sL.u, 0.};
-		D_R = {0., 1., 0., 0., sR.u, 0.};
-		D_star = {0., 1., 0., 0., S_star, 0.};
-	} else if constexpr (DIR == FluxDir::X2) {
-		D_L = {0., 0., 1., 0., sL.u, 0.};
-		D_R = {0., 0., 1., 0., sR.u, 0.};
-		D_star = {0., 0., 1., 0., S_star, 0.};
-	} else if constexpr (DIR == FluxDir::X3) {
-		D_L = {0., 0., 0., 1., sL.u, 0.};
-		D_R = {0., 0., 0., 1., sR.u, 0.};
-		D_star = {0., 0., 0., 1., S_star, 0.};
-	}
-
-	const std::initializer_list<double> state_L = {sL.rho, sL.rho * sL.vx, sL.rho * sL.vy, sL.rho * sL.vz, sL.E, sL.Eint};
-	const std::initializer_list<double> state_R = {sR.rho, sR.rho * sR.vx, sR.rho * sR.vy, sR.rho * sR.vz, sR.E, sR.Eint};
-
-	// N.B.: quokka::valarray is written to allow assigning <= fluxdim
-	// components, so this works even if there are more components than
-	// enumerated in the initializer list. The remaining components are
-	// assigned a default value of zero.
-	quokka::valarray<double, fluxdim> U_L = state_L;
-	quokka::valarray<double, fluxdim> U_R = state_R;
+	quokka::valarray<double, fluxdim> U_m = state_mid;
 
 	// The remaining components are passive scalars, so just copy them from
 	// x1LeftState and x1RightState into the (left, right) state vectors U_L and
 	// U_R
 	for (int n = 0; n < N_scalars; ++n) {
-		const int nstart = static_cast<int>(state_L.size());
+		const int nstart = static_cast<int>(state_mid.size());
 		U_L[nstart + n] = sL.scalar[n];
 		U_R[nstart + n] = sR.scalar[n];
 	}
 
-	const quokka::valarray<double, fluxdim> F_L = sL.u * U_L + sL.P * D_L;
-	const quokka::valarray<double, fluxdim> F_R = sR.u * U_R + sR.P * D_R;
-
-	const quokka::valarray<double, fluxdim> F_starL = (S_star * (S_L * U_L - F_L) + S_L * P_LR * D_star) / (S_L - S_star);
-	const quokka::valarray<double, fluxdim> F_starR = (S_star * (S_R * U_R - F_R) + S_R * P_LR * D_star) / (S_R - S_star);
-
-	// open the Riemann fan
+	// compute F(U_m)
 	quokka::valarray<double, fluxdim> F{};
-
-	if (S_L > 0.0) {
-		F = F_L;
-	} else if ((S_star > 0.0) && (S_L <= 0.0)) {
-		F = F_starL;
-	} else if ((S_star <= 0.0) && (S_R >= 0.0)) {
-		F = F_starR;
-	} else { // S_R < 0.0
-		F = F_R;
-	}
 
 	return F;
 }
