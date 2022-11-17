@@ -812,7 +812,7 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		quokka::HydroState<nscalars_> sR{};
 		sR.rho = rho_R;
 		sR.vx = vx_R;
-		sR.vy = vy_L;
+		sR.vy = vy_R;
 		sR.vz = vz_R;
 		sR.P = P_R;
 		sR.u = u_R;

@@ -71,7 +71,7 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars> cons
 	double S_R = sR.u + q_R * sR.cs;
 
 	// carbuncle correction [Eq. 10 of Minoshima & Miyoshi (2021)]
-	
+
 	const double cs_max = std::max(sL.cs, sR.cs);
 	const double tp = std::min(1., (cs_max - std::min(du, 0.)) / (cs_max - std::min(dw, 0.)));
 	const double theta = tp * tp * tp * tp;
@@ -157,4 +157,4 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars> cons
 }
 } // namespace quokka::Riemann
 
-#endif // HYDROSTATE_HPP_
+#endif // HLLC_HPP_
