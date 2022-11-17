@@ -64,7 +64,7 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 		primScalar0_index // first passive scalar (only present if nscalars > 0!)
 	};
 
-	static void ConservedToPrimitive(amrex::MultiFab const &cons_mf, amrex::MultiFab &primVar_mf, const int nghost);
+	static void ConservedToPrimitive(amrex::MultiFab const &cons_mf, amrex::MultiFab &primVar_mf, int nghost);
 
 	static auto maxSignalSpeedLocal(amrex::MultiFab const &cons) -> amrex::Real;
 
@@ -72,7 +72,7 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	static auto CheckStatesValid(amrex::MultiFab const &cons_mf) -> bool;
 
-	static void EnforceDensityFloor(amrex::Real const densityFloor, amrex::MultiFab &state_mf);
+	static void EnforceDensityFloor(amrex::Real densityFloor, amrex::MultiFab &state_mf);
 
 	AMREX_GPU_DEVICE static auto ComputePressure(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> amrex::Real;
 
@@ -85,15 +85,15 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	AMREX_GPU_DEVICE static auto isStateValid(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> bool;
 
 	static void ComputeRhsFromFluxes(amrex::MultiFab &rhs_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fluxArray,
-					 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, const int nvars);
+					 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, int nvars);
 
-	static void PredictStep(amrex::MultiFab const &consVarOld, amrex::MultiFab &consVarNew, amrex::MultiFab const &rhs, const double dt, const int nvars,
+	static void PredictStep(amrex::MultiFab const &consVarOld, amrex::MultiFab &consVarNew, amrex::MultiFab const &rhs, double dt, int nvars,
 				amrex::iMultiFab &redoFlag_mf);
 
 	static void AddFluxesRK2(amrex::MultiFab &Unew_mf, amrex::MultiFab const &U0_mf, amrex::MultiFab const &U1_mf, amrex::MultiFab const &rhs_mf,
-				 const double dt, const int nvars, amrex::iMultiFab &redoFlag_mf);
+				  double dt, int nvars, amrex::iMultiFab &redoFlag_mf);
 
-	static void AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex::MultiFab const &consVar_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx,
+	static void AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex::MultiFab const &consVar_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
 					 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &faceVelArray);
 
 	static void SyncDualEnergy(amrex::MultiFab &consVar_mf);
@@ -105,12 +105,12 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	template <FluxDir DIR>
 	static void ComputeFirstOrderFluxes(amrex::Array4<const amrex::Real> const &consVar, array_t &x1FluxDiffusive, amrex::Box const &indexRange);
 
-	template <FluxDir DIR> static void ComputeFlatteningCoefficients(amrex::MultiFab const &primVar_mf, amrex::MultiFab &x1Chi_mf, const int nghost);
+	template <FluxDir DIR> static void ComputeFlatteningCoefficients(amrex::MultiFab const &primVar_mf, amrex::MultiFab &x1Chi_mf, int nghost);
 
 	template <FluxDir DIR>
 	static void FlattenShocks(amrex::MultiFab const &q_mf, amrex::MultiFab const &x1Chi_mf, amrex::MultiFab const &x2Chi_mf,
-				  amrex::MultiFab const &x3Chi_mf, amrex::MultiFab &x1LeftState_mf, amrex::MultiFab &x1RightState_mf, const int nghost,
-				  const int nvars);
+				  amrex::MultiFab const &x3Chi_mf, amrex::MultiFab &x1LeftState_mf, amrex::MultiFab &x1RightState_mf, int nghost,
+				  int nvars);
 
 	// C++ does not allow constexpr to be uninitialized, even in a templated
 	// class!
