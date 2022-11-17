@@ -802,6 +802,7 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		sL.rho = rho_L;
 		sL.vx = vx_L;
 		sL.vy = vy_L;
+    sL.vz = vz_L;
 		sL.P = P_L;
 		sL.u = u_L;
 		sL.cs = cs_L;
