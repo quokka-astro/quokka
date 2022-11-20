@@ -1,6 +1,7 @@
 #ifndef EXACTRIEMANN_HPP_ // NOLINT
 #define EXACTRIEMANN_HPP_
 
+#include "AMReX_BLassert.H"
 #include "AMReX_Extension.H"
 #include "AMReX_GpuQualifiers.H"
 #include <AMReX.H>
@@ -101,16 +102,30 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto ComputePstar(quokka::HydroState<N_scala
 	const int max_iter = 20;
 	const double reltol = 1.0e-6;
 	bool riemann_success = false;
+	double P_prev = NAN;
+	double rel_diff = NAN;
 	for (int n = 0; n < max_iter; ++n) {
-		const double P_prev = P_star;
-		P_star += -f(P_prev) / fprime(P_prev);
-		const double rel_diff = std::abs(P_star - P_prev) / (0.5 * (P_star + P_prev));
+		P_prev = P_star;
+		const double fp = f(P_prev);
+		const double fp_prime = fprime(P_prev);
+		double P_new = P_prev - fp / fp_prime;
+		if (P_new <= 0) {
+			// use damping factor to avoid negative pressures
+			double damping = 0.5 * P_prev * (fp_prime / fp);
+			P_new = P_prev - damping * (fp / fp_prime);
+		}
+		P_star = P_new;
+		rel_diff = std::abs(P_star - P_prev) / (0.5 * (P_star + P_prev));
 		if (rel_diff < reltol) {
 			riemann_success = true;
 			break;
 		}
 	}
-	AMREX_ALWAYS_ASSERT(riemann_success);
+
+	if (!riemann_success) {
+		fprintf(stderr, "[ExactRiemann] pressure iteration failed to converge! P_guess = %g P_prev = %g rel_diff = %g\n", P_star, P_prev, rel_diff);
+		amrex::Abort("pressure iteration failed to converge in exact Riemann solver!");
+	}
 
 	return P_star;
 }
@@ -122,41 +137,131 @@ template <FluxDir DIR, int N_scalars, int fluxdim>
 AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto Exact(quokka::HydroState<N_scalars> const &sL, quokka::HydroState<N_scalars> const &sR, const double gamma,
 					       const double /*du*/, const double /*dw*/) -> quokka::valarray<double, fluxdim>
 {
-	// compute pressure in the star region
+	// check if vacuum is created
+	const double du_crit = 2.0 * (sL.cs + sR.cs) / (gamma - 1.);
+	const double du = sR.u - sL.u;
+	AMREX_ALWAYS_ASSERT(du_crit > du); // pressure positivity condition
 
+	// compute pressure in the star region
 	const double P_star = detail::ComputePstar(sL, sR, gamma);
 
-	// compute wave speeds
+	// compute particle velocity in the star region
+	const double u_star = 0.5 * (sL.u + sR.u) + 0.5 * (detail::f_p(P_star, sR, gamma) - detail::f_p(P_star, sL, gamma));
 
-	const double q_L = (P_star <= sL.P) ? 1.0 : std::sqrt(1.0 + ((gamma + 1.0) / (2.0 * gamma)) * ((P_star / sL.P) - 1.0));
-	const double q_R = (P_star <= sR.P) ? 1.0 : std::sqrt(1.0 + ((gamma + 1.0) / (2.0 * gamma)) * ((P_star / sR.P) - 1.0));
+	/// sample RP solution at S = x/t = 0, save into HydroState s.
 
-	double S_L = sL.u - q_L * sL.cs;
-	double S_R = sR.u + q_R * sR.cs;
+	quokka::HydroState<N_scalars> s{}; // sampled exact state
 
-	/// sample RP solution at x = 0
+	// left side of contact: u_star > 0
+	if (u_star > 0.) {
+		s = sL; // copy Eint, transvere velocities, passive scalars
+
+		if (P_star > sL.P) { // left shock wave
+			const double S_L = sL.u - sL.cs * std::sqrt((gamma + 1.) / (2. * gamma) * (P_star / sL.P) + (gamma - 1.) / (2. * gamma));
+			if (S_L > 0.) { // left input state
+				s = sL;
+			} else { // left star state
+				const double rho_star =
+				    sL.rho * (P_star / sL.P + (gamma - 1.) / (gamma + 1.)) / ((gamma - 1.) / (gamma + 1.) * (P_star / sL.P) + 1.);
+				s.rho = rho_star;
+				s.u = u_star;
+				s.P = P_star;
+			}
+
+		} else { // left rarefaction wave
+			const double cs_star = sL.cs * std::pow(P_star / sL.P, (gamma - 1.) / (2. * gamma));
+			const double S_H = sL.u - sL.cs;
+			const double S_T = u_star - cs_star;
+			if (S_H > 0.) { // left input state
+				s = sL;
+			} else if ((S_H <= 0.) && (S_T > 0)) { // rarefaction fan state
+				const double rho_fan = sL.rho * std::pow(2. / (gamma + 1.) + sL.u * (gamma - 1.) / ((gamma + 1.) * sL.cs), 2. / (gamma - 1.));
+				const double u_fan = 2. / (gamma + 1.) * (sL.cs + 0.5 * (gamma - 1.) * sL.u);
+				const double P_fan =
+				    sL.P * std::pow(2. / (gamma + 1.) + sL.u * (gamma - 1.) / ((gamma + 1.) * sL.cs), 2. * gamma / (gamma - 1.));
+				s.rho = rho_fan;
+				s.u = u_fan;
+				s.P = P_fan;
+			} else { // left star state
+				const double rho_starFan = sL.rho * std::pow(P_star / sL.P, 1. / gamma);
+				s.rho = rho_starFan;
+				s.u = u_star;
+				s.P = P_star;
+			}
+		}
+		// right side of contact: u_star <= 0
+	} else {
+		s = sR; // copy Eint, transverse velocities, passive scalars
+
+		if (P_star > sR.P) { // right shock wave
+			const double S_R = sR.u + sR.cs * std::sqrt((gamma + 1.) / (2. * gamma) * (P_star / sR.P) + (gamma - 1.) / (2. * gamma));
+			if (S_R > 0.) { // right star state
+				const double rho_star =
+				    sR.rho * (P_star / sR.P + (gamma - 1.) / (gamma + 1.)) / ((gamma - 1.) / (gamma + 1.) * (P_star / sR.P) + 1.);
+				s.rho = rho_star;
+				s.u = u_star;
+				s.P = P_star;
+			} else { // right input state
+				s = sR;
+			}
+
+		} else { // right rarefaction wave
+			const double cs_star = sR.cs * std::pow(P_star / sR.P, (gamma - 1.) / (2. * gamma));
+			const double S_H = sR.u + sR.cs;
+			const double S_T = u_star + cs_star;
+			if (S_T > 0.) { // right star state
+				const double rho_starFan = sR.rho * std::pow(P_star / sR.P, 1. / gamma);
+				s.rho = rho_starFan;
+				s.u = u_star;
+				s.P = P_star;
+			} else if ((S_T <= 0.) && (S_H > 0.)) { // rarefaction fan state
+				const double rho_fan = sR.rho * std::pow(2. / (gamma + 1.) - sR.u * (gamma - 1.) / ((gamma + 1.) * sR.cs), 2. / (gamma - 1.));
+				const double u_fan = 2. / (gamma + 1.) * (-sR.cs + 0.5 * (gamma - 1.) * sR.u);
+				const double P_fan =
+				    sR.P * std::pow(2. / (gamma + 1.) - sR.u * (gamma - 1.) / ((gamma + 1.) * sR.cs), 2. * gamma / (gamma - 1.));
+				s.rho = rho_fan;
+				s.u = u_fan;
+				s.P = P_fan;
+			} else { // right input state
+				s = sR;
+			}
+		}
+	}
 
 	/// compute fluxes
 
-	const std::initializer_list<double> state_mid = {sL.rho, sL.rho * sL.vx, sL.rho * sL.vy, sL.rho * sL.vz, sL.E, sL.Eint};
+	quokka::valarray<double, fluxdim> D_m{};
 
 	// N.B.: quokka::valarray is written to allow assigning <= fluxdim
 	// components, so this works even if there are more components than
 	// enumerated in the initializer list. The remaining components are
 	// assigned a default value of zero.
+	if constexpr (DIR == FluxDir::X1) {
+		D_m = {0., 1., 0., 0., s.u, 0.};
+		s.vx = s.u;
+	} else if constexpr (DIR == FluxDir::X2) {
+		D_m = {0., 0., 1., 0., s.u, 0.};
+		s.vy = s.u;
+	} else if constexpr (DIR == FluxDir::X3) {
+		D_m = {0., 0., 0., 1., s.u, 0.};
+		s.vz = s.u;
+	}
+
+	// recompute the total energy
+	s.E = s.P / (gamma - 1.) + 0.5 * s.rho * (s.vx * s.vx + s.vy * s.vy + s.vz + s.vz);
+
+	const std::initializer_list<double> state_mid = {s.rho, s.rho * s.vx, s.rho * s.vy, s.rho * s.vz, s.E, s.Eint};
 	quokka::valarray<double, fluxdim> U_m = state_mid;
 
 	// The remaining components are passive scalars, so just copy them from
-	// x1LeftState and x1RightState into the (left, right) state vectors U_L and
-	// U_R
+	// x1LeftState and x1RightState into the state vector U_m
 	for (int n = 0; n < N_scalars; ++n) {
 		const int nstart = static_cast<int>(state_mid.size());
-		U_L[nstart + n] = sL.scalar[n];
-		U_R[nstart + n] = sR.scalar[n];
+		U_m[nstart + n] = s.scalar[n];
 	}
 
 	// compute F(U_m)
-	quokka::valarray<double, fluxdim> F{};
+	const quokka::valarray<double, fluxdim> F = s.u * U_m + s.P * D_m;
 
 	return F;
 }

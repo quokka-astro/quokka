@@ -317,10 +317,10 @@ auto problem_main() -> int {
   // Problem parameters
   // const int nx = 100;
   // const double Lx = 1.0;
-  const double CFL_number = 0.8;
-  const double max_time = 0.15;
-  const double max_dt = 1e-3;
-  const int max_timesteps = 5000;
+  //const double CFL_number = 0.8;
+  //const double max_time = 0.15;
+  //const double max_dt = 1e-3;
+  //const int max_timesteps = 5000;
 
   // Problem initialization
   const int nvars = RadhydroSimulation<ShocktubeProblem>::nvarTotal_cc_;
@@ -336,10 +336,10 @@ auto problem_main() -> int {
 
   RadhydroSimulation<ShocktubeProblem> sim(BCs_cc);
   
-  sim.cflNumber_ = CFL_number;
-  sim.maxDt_ = max_dt;
-  sim.stopTime_ = max_time;
-  sim.maxTimesteps_ = max_timesteps;
+  //sim.cflNumber_ = CFL_number;
+  //sim.maxDt_ = max_dt;
+  //sim.stopTime_ = max_time;
+  //sim.maxTimesteps_ = max_timesteps;
   sim.computeReferenceSolution_ = true;
   sim.plotfileInterval_ = -1;
 

@@ -13,9 +13,14 @@ amr.v              = 0       # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 100 4 4
+amr.n_cell          = 200 8 8
 amr.max_level       = 0     # number of levels = max_level + 1
-amr.blocking_factor = 4     # grid size must be divisible by this
+amr.blocking_factor = 8     # grid size must be divisible by this
 
 do_reflux = 0
 do_subcycle = 0
+
+hydro.reconstruction_order = 3
+max_timesteps = 10000
+cfl = 0.4
+stop_time = 0.15
