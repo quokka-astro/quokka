@@ -123,7 +123,7 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto ComputePstar(quokka::HydroState<N_scala
 	}
 
 	if (!riemann_success) {
-		fprintf(stderr, "[ExactRiemann] pressure iteration failed to converge! P_guess = %g P_prev = %g rel_diff = %g\n", P_star, P_prev, rel_diff);
+		printf("[ExactRiemann] pressure iteration failed to converge! P_guess = %g P_prev = %g rel_diff = %g\n", P_star, P_prev, rel_diff);
 		amrex::Abort("pressure iteration failed to converge in exact Riemann solver!");
 	}
 
