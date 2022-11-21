@@ -46,7 +46,7 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	using AMRSimulation<problem_t>::dt_;
 	using AMRSimulation<problem_t>::ncomp_cc_;
   using AMRSimulation<problem_t>::BCs_cc_;
-	using AMRSimulation<problem_t>::nghost_;
+	using AMRSimulation<problem_t>::nghost_cc_;
 	using AMRSimulation<problem_t>::cycleCount_;
 	using AMRSimulation<problem_t>::areInitialConditionsDefined_;
 	using AMRSimulation<problem_t>::componentNames_cc_;
@@ -374,7 +374,7 @@ auto AdvectionSimulation<problem_t>::computeFluxes(amrex::MultiFab const &consVa
 	const int reconstructRange = 1;
 
 	// allocate temporary MultiFabs
-	amrex::MultiFab primVar(ba, dm, nvars, nghost_);
+	amrex::MultiFab primVar(ba, dm, nvars, nghost_cc_);
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> flux;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> leftState;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> rightState;
@@ -415,7 +415,7 @@ void AdvectionSimulation<problem_t>::fluxFunction(amrex::MultiFab const &consSta
 	//amrex::Box const &x1ReconstructRange = amrex::surroundingNodes(reconstructRange, dim);
 
 	LinearAdvectionSystem<problem_t>::ConservedToPrimitive(consState, primVar,
-		nghost_, nvars);
+		nghost_cc_, nvars);
 
 	LinearAdvectionSystem<problem_t>::template ReconstructStatesPPM<DIR>(
 		primVar, x1LeftState, x1RightState, ng_reconstruct, nvars);
