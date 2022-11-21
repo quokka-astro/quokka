@@ -25,7 +25,7 @@ template <typename problem_t> struct Physics_Indices {
   static const int radFirstIndex = pscalarFirstIndex + Physics_Traits<problem_t>::numPassiveScalars;
   // face-centered
   static const int nvarTotal_fc =
-        static_cast<int>(Physics_Traits<problem_t>::is_mhd_enabled) * Physics_NumVars::numMHDVars; // total number of quantities for each face-centering
+        static_cast<int>(Physics_Traits<problem_t>::is_mhd_enabled) * Physics_NumVars::numMHDVars;
   static const int mhdFirstIndex = 0;
 };
 
