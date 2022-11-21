@@ -59,7 +59,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 
 	using AMRSimulation<problem_t>::ncomp_cc_;
   using AMRSimulation<problem_t>::ncomp_fc_;
-	using AMRSimulation<problem_t>::nghost_;
+	using AMRSimulation<problem_t>::nghost_cc_;
 	using AMRSimulation<problem_t>::areInitialConditionsDefined_;
 	using AMRSimulation<problem_t>::BCs_cc_;
   using AMRSimulation<problem_t>::BCs_fc_;
@@ -83,8 +83,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	using AMRSimulation<problem_t>::cellUpdates_;
 	using AMRSimulation<problem_t>::CountCells;
 	using AMRSimulation<problem_t>::WriteCheckpointFile;
-	using AMRSimulation<problem_t>::GetCCData;
-  using AMRSimulation<problem_t>::GetFCData;
+	using AMRSimulation<problem_t>::GetData;
 	using AMRSimulation<problem_t>::FillPatchWithData;
 
 	std::vector<double> t_vec_;
@@ -280,8 +279,10 @@ void RadhydroSimulation<problem_t>::defineComponentNames() {
   // face-centred
   // add mhd state variables
   if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-    componentNames_fc_.push_back({"magField"});
-    ncomp_fc_++;
+    for (int idim = 0; idim < AMREX_SPACEDIM; idim++) {
+      componentNames_fc_.push_back({quokka::face_dir_str[idim] + "-magField"});
+      ncomp_fc_++;
+    }
   }
 }
 
@@ -604,21 +605,12 @@ void RadhydroSimulation<problem_t>::FillPatch(int lev, amrex::Real time,
 
   if (lev == 0) {
     // in this case, should return either state_new_[lev] or state_old_[lev]
-    if (cen == quokka::centering::cc) {
-      GetCCData(lev, time, fmf, ftime);
-    } else if (cen == quokka::centering::fc) {
-      GetFCData(lev, time, fmf, ftime, dir);
-    }
+    GetData(lev, time, fmf, ftime, cen, dir);
   } else {
     // in this case, should return either state_new_[lev] or state_old_[lev]
     // returns old state, new state, or both depending on 'time'
-    if (cen == quokka::centering::cc) {
-      GetCCData(lev, time, fmf, ftime);
-      GetCCData(lev - 1, time, cmf, ctime);
-    } else if (cen == quokka::centering::fc) {
-      GetFCData(lev, time, fmf, ftime, dir);
-      GetFCData(lev - 1, time, cmf, ctime, dir);
-    }
+    GetData(lev, time, fmf, ftime, cen, dir);
+    GetData(lev - 1, time, cmf, ctime, cen, dir);
   }
 
   if (cen == quokka::centering::cc) {
@@ -741,8 +733,8 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 		}
 
 		// create temporary multifab for old state
-		amrex::MultiFab state_old_cc_tmp(grids[lev], dmap[lev], ncomp_cc_, nghost_);
-		amrex::Copy(state_old_cc_tmp, state_old_cc_[lev], 0, 0, ncomp_cc_, nghost_);
+		amrex::MultiFab state_old_cc_tmp(grids[lev], dmap[lev], ncomp_cc_, nghost_cc_);
+		amrex::Copy(state_old_cc_tmp, state_old_cc_[lev], 0, 0, ncomp_cc_, nghost_cc_);
 
 		// create flux multifab (needed for flux registers)
 		std::array<amrex::MultiFab, AMREX_SPACEDIM> flux;
@@ -759,7 +751,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 			if (substep > 0) {
 				// since we are starting a new substep, we need to copy hydro state from
 				//  the new state vector to old state vector
-				amrex::Copy(state_old_cc_tmp, state_new_cc_[lev], 0, 0, ncompHydro_, nghost_);
+				amrex::Copy(state_old_cc_tmp, state_new_cc_[lev], 0, 0, ncompHydro_, nghost_cc_);
 			}
 
 			success = advanceHydroAtLevel(state_old_cc_tmp, flux, lev, time, dt_step);
@@ -833,7 +825,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	addStrangSplitSources(state_old_cc_tmp, lev, time, 0.5*dt_lev);
 
 	// create temporary multifab for intermediate state
-	amrex::MultiFab state_inter_cc_(grids[lev], dmap[lev], ncomp_cc_, nghost_);
+	amrex::MultiFab state_inter_cc_(grids[lev], dmap[lev], ncomp_cc_, nghost_cc_);
 	state_inter_cc_.setVal(0); // prevent assert in fillBoundaryConditions when radiation is enabled
 
 	// Stage 1 of RK2-SSP
@@ -1056,7 +1048,7 @@ auto RadhydroSimulation<problem_t>::computeHydroFluxes(
 	const int reconstructRange = 1;
 
 	// allocate temporary MultiFabs
-	amrex::MultiFab primVar(ba, dm, nvars, nghost_);
+	amrex::MultiFab primVar(ba, dm, nvars, nghost_cc_);
 	std::array<amrex::MultiFab, 3> flatCoefs;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> flux;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> facevel;
@@ -1076,7 +1068,7 @@ auto RadhydroSimulation<problem_t>::computeHydroFluxes(
 	}
 
 	// conserved to primitive variables
-	HydroSystem<problem_t>::ConservedToPrimitive(consVar, primVar, nghost_);
+	HydroSystem<problem_t>::ConservedToPrimitive(consVar, primVar, nghost_cc_);
 
 	// compute flattening coefficients
 	AMREX_D_TERM(HydroSystem<problem_t>::template ComputeFlatteningCoefficients<FluxDir::X1>(
@@ -1146,7 +1138,7 @@ auto RadhydroSimulation<problem_t>::computeFOHydroFluxes(
 	const int reconstructRange = 1;
 
 	// allocate temporary MultiFabs
-	amrex::MultiFab primVar(ba, dm, nvars, nghost_);
+	amrex::MultiFab primVar(ba, dm, nvars, nghost_cc_);
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> flux;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> facevel;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> leftState;
@@ -1161,7 +1153,7 @@ auto RadhydroSimulation<problem_t>::computeFOHydroFluxes(
 	}
 
 	// conserved to primitive variables
-	HydroSystem<problem_t>::ConservedToPrimitive(consVar, primVar, nghost_);
+	HydroSystem<problem_t>::ConservedToPrimitive(consVar, primVar, nghost_cc_);
 
 	// compute flux functions
 	AMREX_D_TERM(hydroFOFluxFunction<FluxDir::X1>(primVar, leftState[0], rightState[0], flux[0], facevel[0],
@@ -1428,7 +1420,7 @@ void RadhydroSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real
 	}
 
 	// extend box to include ghost zones
-	amrex::Box const &ghostRange = amrex::grow(indexRange, nghost_);
+	amrex::Box const &ghostRange = amrex::grow(indexRange, nghost_cc_);
 	// N.B.: A one-zone layer around the cells must be fully reconstructed in order for PPM to
 	// work.
 	amrex::Box const &reconstructRange = amrex::grow(indexRange, 1);
