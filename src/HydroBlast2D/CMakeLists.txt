@@ -1,5 +1,5 @@
 if (AMReX_SPACEDIM GREATER_EQUAL 2)
-    add_executable(test_hydro2d_blast ../main.cpp ../MFInterpolater.cpp test_hydro2d_blast.cpp)
+    add_executable(test_hydro2d_blast ../main.cpp test_hydro2d_blast.cpp)
     if(AMReX_GPU_BACKEND MATCHES "CUDA")
         setup_target_for_cuda_compilation(test_hydro2d_blast)
     endif()
