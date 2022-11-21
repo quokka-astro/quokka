@@ -277,7 +277,7 @@ void RadhydroSimulation<problem_t>::defineComponentNames() {
   // add mhd state variables
   if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
     for (int idim = 0; idim < AMREX_SPACEDIM; idim++) {
-      componentNames_fc_.push_back({quokka::face_dir_str[idim] + "-magField"});
+      componentNames_fc_.push_back({quokka::face_dir_str[idim] + "-BField"});
       ncomp_fc_++;
     }
   }
