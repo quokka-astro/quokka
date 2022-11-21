@@ -57,6 +57,10 @@
 #include <AMReX_Utility.H>
 #include <fmt/core.h>
 
+#if AMREX_SPACEDIM == 3
+#include "AMReX_OpenBC.H"
+#endif
+
 #ifdef AMREX_USE_ASCENT
 #include <AMReX_Conduit_Blueprint.H>
 #include <ascent.hpp>
@@ -102,6 +106,9 @@ public:
   int plotfileInterval_ = -1;      // -1 == no output
   int checkpointInterval_ = -1;    // -1 == no output
   int amrInterpMethod_ = 1;   // 0 == piecewise constant, 1 == lincc_interp
+  amrex::Real reltolPoisson_ = 1.0e-10; // default
+  amrex::Real abstolPoisson_ = 1.0e-10; // default
+  int doPoissonSolve_ = 0; // 1 == self-gravity enabled, 0 == disabled
 
   // constructor
   explicit AMRSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions) {
@@ -125,6 +132,8 @@ public:
   virtual void setInitialConditionsOnGrid(quokka::grid grid_elem) = 0;
   virtual void computeAfterTimestep() = 0;
   virtual void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) = 0;
+  virtual void fillPoissonRhsAtLevel(amrex::MultiFab &rhs, int lev) = 0;
+  virtual void applyPoissonGravityAtLevel(amrex::MultiFab const &phi, int lev, amrex::Real dt) = 0;
 
   // compute derived variables
   virtual void ComputeDerivedVar(int lev, std::string const &dname,
@@ -187,6 +196,7 @@ public:
   void AverageDownTo(int crse_lev);
   auto timeStepWithSubcycling(int lev, amrex::Real time,
                               bool coarseTimeBoundary, int stepsLeft) -> int;
+  void ellipticSolveAllLevels(amrex::Real dt);
 
   void incrementFluxRegisters(
       amrex::MFIter &mfi, amrex::YAFluxRegister *fr_as_crse,
@@ -679,10 +689,17 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve() {
     amrex::ParallelDescriptor::Barrier(); // synchronize all MPI ranks
     computeTimestep();
 
+    // elliptic solve over entire AMR grid (pre-timestep)
+    ellipticSolveAllLevels(0.5 * dt_[0]);
+
+    // hyperbolic advance over all levels
     int lev = 0;       // coarsest level
     int stepsLeft = 1; // coarsest level is advanced one step
     bool coarseTimeBoundary = true;
     timeStepWithSubcycling(lev, cur_time, coarseTimeBoundary, stepsLeft);
+
+    // elliptic solve over entire AMR grid (post-timestep)
+    ellipticSolveAllLevels(0.5 * dt_[0]);
 
     cur_time += dt_[0];
     ++cycleCount_;
@@ -770,6 +787,50 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve() {
 #ifdef AMREX_USE_ASCENT
   // close Ascent
   ascent_.close();
+#endif
+}
+
+template <typename problem_t>
+void AMRSimulation<problem_t>::ellipticSolveAllLevels(const amrex::Real dt)
+{
+#if AMREX_SPACEDIM == 3
+  if (doPoissonSolve_) {
+    if (do_subcycle == 1) { // not supported
+      amrex::Abort("Poisson solve is not support when AMR subcycling is enabled! You must set do_subcycle = 0.");
+    }
+
+    // set up elliptic solve object
+    amrex::OpenBCSolver poissonSolver(geom, grids, dmap);
+    if (verbose) {
+      poissonSolver.setVerbose(true);
+      poissonSolver.setBottomVerbose(false);
+      amrex::Print() << "Doing Poisson solve...\n\n";
+    }
+
+    // solve Poisson equation with open b.c. using the method of James (1977)
+    amrex::Vector<amrex::MultiFab> phi(finest_level + 1);
+    amrex::Vector<amrex::MultiFab> rhs(finest_level + 1);
+    const int nghost = 1;
+    const int ncomp = 1;
+    for (int lev = 0; lev <= finest_level; ++lev) {
+      phi[lev].define(grids[lev], dmap[lev], ncomp, nghost);
+      rhs[lev].define(grids[lev], dmap[lev], ncomp, nghost);
+      phi[lev].setVal(0); // set initial guess to zero
+      rhs[lev].setVal(0);
+      fillPoissonRhsAtLevel(rhs[lev], lev);
+    }
+
+	  poissonSolver.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs),
+                        reltolPoisson_, abstolPoisson_);
+    if (verbose) {
+      amrex::Print() << "\n";
+    }
+
+    // add gravitational acceleration to hydro state (using operator splitting)
+    for (int lev = 0; lev <= finest_level; ++lev) {
+      applyPoissonGravityAtLevel(phi[lev], lev, dt);
+    }
+  }
 #endif
 }
 
@@ -890,7 +951,9 @@ auto AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time,
   tOld_[lev] = tNew_[lev];
   tNew_[lev] += dt_[lev]; // critical that this is done *before* advanceAtLevel
 
+  // do hyperbolic advance over all levels
   advanceSingleTimestepAtLevel(lev, time, dt_[lev], nsubsteps[lev]);
+
   ++istep[lev];
   cellUpdates_ += CountCells(lev); // keep track of total number of cell updates
   cellUpdatesEachLevel_[lev] += CountCells(lev);
@@ -1057,6 +1120,8 @@ void AMRSimulation<problem_t>::RemakeLevel(
   amrex::MultiFab new_state(ba, dm, ncomp, nghost);
   amrex::MultiFab old_state(ba, dm, ncomp, nghost);
   amrex::MultiFab max_signal_speed(ba, dm, 1, nghost);
+  amrex::MultiFab phi_poisson(ba, dm, 1, nghost);
+  amrex::MultiFab rhs_poisson(ba, dm, 1, nghost);
 
   FillPatch(level, time, new_state, 0, ncomp, FillPatchType::fillpatch_function);
 

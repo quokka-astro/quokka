@@ -175,6 +175,12 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	// tag cells for refinement
 	void ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override;
 
+	// fill rhs for Poisson solve
+	void fillPoissonRhsAtLevel(amrex::MultiFab &rhs, int lev) override;
+
+	// add gravitational acceleration to hydro state
+	void applyPoissonGravityAtLevel(amrex::MultiFab const &phi, int lev, amrex::Real dt) override;
+
 	void addFluxArrays(std::array<amrex::MultiFab, AMREX_SPACEDIM> &dstfluxes,
     			   std::array<amrex::MultiFab, AMREX_SPACEDIM> &srcfluxes,
 				   const int srccomp, const int dstcomp);
@@ -543,6 +549,55 @@ void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex:
 
 	// check state validity
 	AMREX_ASSERT(!state_new_cc_[lev].contains_nan(0, state_new_cc_[lev].nComp()));
+}
+
+template <typename problem_t>
+void RadhydroSimulation<problem_t>::fillPoissonRhsAtLevel(amrex::MultiFab &rhs_mf, const int lev)
+{
+	// add hydro density to Poisson rhs
+	// NOTE: in the future, this should also deposit particle mass
+	auto const &state = state_new_cc_[lev].const_arrays();
+	auto rhs = rhs_mf.arrays();
+
+	amrex::ParallelFor(rhs_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		// copy density to rhs_mf
+		rhs[bx](i, j, k) = 4.0 * M_PI * state[bx](i, j, k, HydroSystem<problem_t>::density_index);
+	});
+}
+
+template <typename problem_t>
+void RadhydroSimulation<problem_t>::applyPoissonGravityAtLevel(amrex::MultiFab const &phi_mf,
+	const int lev, const amrex::Real dt)
+{
+	// apply Poisson gravity operator on level 'lev'
+	auto const &dx = geom[lev].CellSizeArray();
+	auto const &phi = phi_mf.const_arrays();
+	auto state = state_new_cc_[lev].arrays();
+
+	amrex::ParallelFor(phi_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		// add operator-split gravitational acceleration
+		const amrex::Real rho = state[bx](i, j, k, HydroSystem<problem_t>::density_index);
+		amrex::Real px = state[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index);
+		amrex::Real py = state[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index);
+		amrex::Real pz = state[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index);
+		const amrex::Real KE_old = 0.5 * (px*px + py*py + pz*pz) / rho;
+
+		// g = -grad \phi
+		amrex::Real gx = -0.5 * (phi[bx](i + 1, j, k) - phi[bx](i - 1, j, k)) / dx[0];
+		amrex::Real gy = -0.5 * (phi[bx](i, j + 1, k) - phi[bx](i, j - 1, k)) / dx[1];
+		amrex::Real gz = -0.5 * (phi[bx](i, j, k + 1) - phi[bx](i, j, k - 1)) / dx[2];
+
+		px += dt * rho * gx;
+		py += dt * rho * gy;
+		pz += dt * rho * gz;
+		const amrex::Real KE_new = 0.5 * (px*px + py*py + pz*pz) / rho;
+		const amrex::Real dKE = KE_new - KE_old;
+
+		state[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index) = px;
+		state[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index) = py;
+		state[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index) = pz;
+		state[bx](i, j, k, HydroSystem<problem_t>::energy_index) += dKE;
+	});
 }
 
 // fix-up any unphysical states created by AMR operations
