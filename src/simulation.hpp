@@ -1120,8 +1120,6 @@ void AMRSimulation<problem_t>::RemakeLevel(
   amrex::MultiFab new_state(ba, dm, ncomp, nghost);
   amrex::MultiFab old_state(ba, dm, ncomp, nghost);
   amrex::MultiFab max_signal_speed(ba, dm, 1, nghost);
-  amrex::MultiFab phi_poisson(ba, dm, 1, nghost);
-  amrex::MultiFab rhs_poisson(ba, dm, 1, nghost);
 
   FillPatch(level, time, new_state, 0, ncomp, FillPatchType::fillpatch_function);
 
