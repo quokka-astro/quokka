@@ -1,4 +1,4 @@
-add_executable(test_fc_quantities ../main.cpp ../MFInterpolater.cpp test_fc_quantities.cpp)
+add_executable(test_fc_quantities ../main.cpp test_fc_quantities.cpp ../interpolate.cpp)
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
     setup_target_for_cuda_compilation(test_fc_quantities)
