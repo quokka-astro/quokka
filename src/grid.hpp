@@ -12,7 +12,7 @@
 namespace quokka {
   enum class centering { cc=0, fc, ec };
   enum class direction { na=-1, x, y, z };
-  const std::string face_dir_name = "xyz";
+  const std::array<const std::string, 3> face_dir_str = {"x", "y", "z"}; // NOLINT
 
   struct grid {
     amrex::Array4<double> array_;
