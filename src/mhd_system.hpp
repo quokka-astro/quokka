@@ -21,7 +21,6 @@
 
 // internal headers
 #include "ArrayView.hpp"
-#include "simulation.hpp"
 #include "valarray.hpp"
 #include "simulation.hpp"
 
