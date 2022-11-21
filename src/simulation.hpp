@@ -66,7 +66,6 @@
 
 // internal headers
 #include "CheckNaN.hpp"
-#include "MFInterpolater.H"
 #include "grid.hpp"
 #include "math_impl.hpp"
 #include "physics_info.hpp"
