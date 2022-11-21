@@ -1581,9 +1581,12 @@ auto AMRSimulation<problem_t>::PlotFileMFAtLevel(int lev) const
   int comp = 0;
   const int nGrow = state_new_cc_[lev].nGrow(); // workaround Ascent bug
   const int nCompState_cc = state_new_cc_[lev].nComp();
-  const int nCompState_fc = state_new_fc_[lev][0].nComp();
+  int nCompState_fc = 0;
+  if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
+    nCompState_fc = state_new_fc_[lev][0].nComp();
+  } 
   const int nCompDeriv = derivedNames_.size();
-  const int nCompPlotMF = nCompState_cc + (AMREX_SPACEDIM * nCompState_fc) + nCompDeriv;
+  const int nCompPlotMF = nCompState_cc + nCompState_fc + nCompDeriv;
   amrex::MultiFab plotMF(grids[lev], dmap[lev], nCompPlotMF, nGrow);
 
   // copy data from cell-centred state variables
@@ -1709,10 +1712,8 @@ void AMRSimulation<problem_t>::WritePlotFile() const {
   amrex::Vector<std::string> varnames;
   varnames.insert(varnames.end(), componentNames_cc_.begin(), componentNames_cc_.end());
   if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
-    for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-      for (int icomp = 0; icomp < ncomp_fc_; ++icomp) {
-        varnames.push_back(quokka::face_dir_str[idim] + std::string("-") + componentNames_fc_[icomp]);
-      }
+    for (int icomp = 0; icomp < ncomp_fc_; ++icomp) {
+      varnames.push_back(componentNames_fc_[icomp]);
     }
   }
   varnames.insert(varnames.end(), derivedNames_.begin(), derivedNames_.end());
