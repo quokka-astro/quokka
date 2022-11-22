@@ -51,6 +51,7 @@
 #include "AMReX_Vector.H"
 #include "AMReX_VisMF.H"
 #include "AMReX_YAFluxRegister.H"
+#include "physics_numVars.hpp"
 #include <AMReX_Geometry.H>
 #include <AMReX_MultiFab.H>
 #include <AMReX_ParmParse.H>
@@ -265,7 +266,6 @@ protected:
   int nghost_cc_ = 4; // PPM needs nghost >= 3, PPM+flattening needs nghost >= 4
   int nghost_fc_ = 4;
   int ncomp_cc_ = 0; // = number of components (conserved variables) for each array
-  int ncomp_fc_ = 0; // face-centred components
   amrex::Vector<std::string> componentNames_cc_;
   amrex::Vector<std::string> componentNames_fc_;
   amrex::Vector<std::string> derivedNames_;
@@ -1035,8 +1035,7 @@ void AMRSimulation<problem_t>::MakeNewLevelFromCoarse(
   FillCoarsePatch(level, time, state_new_cc_[level], 0, ncomp_cc, BCs_cc_,
                   quokka::centering::cc, quokka::direction::na);
   FillCoarsePatch(level, time, state_old_cc_[level], 0, ncomp_cc, BCs_cc_,
-                  quokka::centering::cc,
-                  quokka::direction::na); // also necessary
+                  quokka::centering::cc, quokka::direction::na); // also necessary
 
   max_signal_speed_[level].define(ba, dm, 1, nghost_cc);
   tNew_[level] = time;
@@ -1050,18 +1049,19 @@ void AMRSimulation<problem_t>::MakeNewLevelFromCoarse(
 
   // face-centred
   if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
-    const int ncomp_fc = state_new_fc_[level - 1][0].nComp();
+    const int ncomp_per_dim_fc = state_new_fc_[level - 1][0].nComp();
     const int nghost_fc = state_new_fc_[level - 1][0].nGrow();
     for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
       state_new_fc_[level][idim] = amrex::MultiFab(
           amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim)),
-          dm, ncomp_fc, nghost_fc);
+          dm, ncomp_per_dim_fc, nghost_fc);
       state_old_fc_[level][idim] = amrex::MultiFab(
           amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim)),
-          dm, ncomp_fc, nghost_fc);
-      FillCoarsePatch(level, time, state_new_fc_[level][idim], 0, ncomp_fc,
-                      BCs_fc_, quokka::centering::fc, static_cast<quokka::direction>(idim));
-      FillCoarsePatch(level, time, state_old_fc_[level][idim], 0, ncomp_fc,
+          dm, ncomp_per_dim_fc, nghost_fc);
+      FillCoarsePatch(level, time, state_new_fc_[level][idim], 0, ncomp_per_dim_fc,
+                      BCs_fc_, quokka::centering::fc,
+                      static_cast<quokka::direction>(idim));
+      FillCoarsePatch(level, time, state_old_fc_[level][idim], 0, ncomp_per_dim_fc,
                       BCs_fc_, quokka::centering::fc,
                       static_cast<quokka::direction>(idim)); // also necessary
     }
@@ -1092,29 +1092,6 @@ void AMRSimulation<problem_t>::RemakeLevel(
   amrex::MultiFab max_signal_speed(ba, dm, 1, nghost_cc);
   std::swap(max_signal_speed, max_signal_speed_[level]);
 
-  // face-centred
-  if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
-    const int ncomp_fc = state_new_fc_[level][0].nComp();
-    const int nghost_fc = state_new_fc_[level][0].nGrow();
-    amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> int_state_new_fc;
-    amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> int_state_old_fc;
-    // define
-    for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-      int_state_new_fc[idim] = amrex::MultiFab(
-          amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim)),
-          dm, ncomp_fc, nghost_fc);
-      int_state_old_fc[idim] = amrex::MultiFab(
-          amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim)),
-          dm, ncomp_fc, nghost_fc);
-    }
-    // TODO(neco): fillPatchFC
-    // swap
-    for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-      std::swap(int_state_new_fc[idim], state_new_fc_[level][idim]);
-      std::swap(int_state_old_fc[idim], state_old_fc_[level][idim]);
-    }
-  }
-
   tNew_[level] = time;
   tOld_[level] = time - 1.e200;
 
@@ -1122,6 +1099,29 @@ void AMRSimulation<problem_t>::RemakeLevel(
     flux_reg_[level] = std::make_unique<amrex::YAFluxRegister>(
         ba, boxArray(level - 1), dm, DistributionMap(level - 1), Geom(level),
         Geom(level - 1), refRatio(level - 1), level, ncomp_cc);
+  }
+
+  // face-centred
+  if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
+    const int ncomp_per_dim_fc = state_new_fc_[level][0].nComp();
+    const int nghost_fc = state_new_fc_[level][0].nGrow();
+    amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> int_state_new_fc;
+    amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> int_state_old_fc;
+    // define
+    for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+      int_state_new_fc[idim] = amrex::MultiFab(
+          amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim)),
+          dm, ncomp_per_dim_fc, nghost_fc);
+      int_state_old_fc[idim] = amrex::MultiFab(
+          amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim)),
+          dm, ncomp_per_dim_fc, nghost_fc);
+    }
+    // TODO(neco): fillPatchFC
+    // swap
+    for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+      std::swap(int_state_new_fc[idim], state_new_fc_[level][idim]);
+      std::swap(int_state_old_fc[idim], state_old_fc_[level][idim]);
+    }
   }
 }
 
@@ -1134,15 +1134,15 @@ void AMRSimulation<problem_t>::ClearLevel(int level) {
   state_old_cc_[level].clear();
   max_signal_speed_[level].clear();
 
+  flux_reg_[level].reset(nullptr);
+  fillpatcher_[level].reset(nullptr);
+
   if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
     for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
       state_new_fc_[level][idim].clear();
       state_old_fc_[level][idim].clear();
     }
   }
-
-  flux_reg_[level].reset(nullptr);
-  fillpatcher_[level].reset(nullptr);
 }
 
 template <typename problem_t>
@@ -1235,15 +1235,15 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(
   }
 
   if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
-    const int ncomp_fc = ncomp_fc_;
+    const int ncomp_per_dim_fc = Physics_Indices<problem_t>::nvarPerDim_fc;
     const int nghost_fc = nghost_fc_;
     for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
       state_new_fc_[level][idim] = amrex::MultiFab(
           amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim)),
-          dm, ncomp_fc, nghost_fc);
+          dm, ncomp_per_dim_fc, nghost_fc);
       state_old_fc_[level][idim] = amrex::MultiFab(
           amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim)),
-          dm, ncomp_fc, nghost_fc);
+          dm, ncomp_per_dim_fc, nghost_fc);
     }
   }
 
@@ -1274,7 +1274,7 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(
 
   // face-centred
   if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
-    const int ncomp_fc = ncomp_fc_;
+    const int ncomp_per_dim_fc = Physics_Indices<problem_t>::nvarPerDim_fc;
     const int nghost_fc = nghost_fc_;
     // for each face-centering (number of dimensions)
     for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -1282,22 +1282,21 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(
       for (amrex::MFIter iter(state_new_fc_[level][idim]); iter.isValid(); ++iter) {
         quokka::grid grid_elem(state_new_fc_[level][idim].array(iter),
                                iter.validbox(), geom[level].CellSizeArray(),
-                               geom[level].ProbLoArray(),
-                               geom[level].ProbHiArray(), quokka::centering::fc,
-                               static_cast<quokka::direction>(idim));
+                               geom[level].ProbLoArray(), geom[level].ProbHiArray(),
+                               quokka::centering::fc, static_cast<quokka::direction>(idim));
         // set initial conditions defined by the user
         setInitialConditionsOnGrid(grid_elem);
       }
       // check that state_new_fc_[level][idim] is filled properly
       AMREX_ALWAYS_ASSERT(
-          !state_new_fc_[level][idim].contains_nan(0, ncomp_fc));
+          !state_new_fc_[level][idim].contains_nan(0, ncomp_per_dim_fc));
       // fill face-centred ghost zones
       fillBoundaryConditions(state_new_fc_[level][idim],
                              state_new_fc_[level][idim], level, time, BCs_fc_,
                              quokka::centering::fc, static_cast<quokka::direction>(idim),
                              InterpHookNone, InterpHookNone);
       state_old_fc_[level][idim].ParallelCopy(state_new_fc_[level][idim], 0, 0,
-                                              ncomp_fc, nghost_fc, nghost_fc);
+                                              ncomp_per_dim_fc, nghost_fc, nghost_fc);
     }
   }
 
@@ -1438,7 +1437,7 @@ void AMRSimulation<problem_t>::FillCoarsePatch(int lev, amrex::Real time,
                                                int ncomp,
                                                amrex::Vector<amrex::BCRec> &BCs,
                                                quokka::centering cen,
-                                               quokka::direction dir) {
+                                               quokka::direction dir) { // here neco
   BL_PROFILE("AMRSimulation::FillCoarsePatch()");
 
   AMREX_ASSERT(lev > 0);
@@ -1572,6 +1571,7 @@ void AMRSimulation<problem_t>::AverageFCToCC(
       }
     }
   );
+  amrex::Gpu::streamSynchronize();
 }
 
 template <typename problem_t>
@@ -1579,27 +1579,31 @@ auto AMRSimulation<problem_t>::PlotFileMFAtLevel(int lev) const
     -> amrex::MultiFab {
   // Combine state_new_cc_[lev] and derived variables in a new MF
   int comp = 0;
-  const int nGrow = state_new_cc_[lev].nGrow(); // workaround Ascent bug
-  const int nCompState_cc = state_new_cc_[lev].nComp();
-  int nCompState_fc = 0;
+  const int nghost_cc = state_new_cc_[lev].nGrow(); // workaround Ascent bug
+  const int ncomp_cc = state_new_cc_[lev].nComp();
+  int ncomp_per_dim_fc = 0;
+  int ncomp_tot_fc = 0;
+  int nghost_fc = 0;
   if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
-    nCompState_fc = state_new_fc_[lev][0].nComp();
+    ncomp_per_dim_fc = state_new_fc_[lev][0].nComp();
+    ncomp_tot_fc = Physics_Indices<problem_t>::nvarTotal_fc;
+    nghost_fc = state_new_fc_[lev][0].nGrow();
   } 
-  const int nCompDeriv = derivedNames_.size();
-  const int nCompPlotMF = nCompState_cc + nCompState_fc + nCompDeriv;
-  amrex::MultiFab plotMF(grids[lev], dmap[lev], nCompPlotMF, nGrow);
+  const int ncomp_deriv = derivedNames_.size();
+  const int ncomp_plotMF = ncomp_cc + ncomp_tot_fc + ncomp_deriv;
+  amrex::MultiFab plotMF(grids[lev], dmap[lev], ncomp_plotMF, nghost_fc);
 
   // copy data from cell-centred state variables
-  for (int i = 0; i < nCompState_cc; i++) {
-    amrex::MultiFab::Copy(plotMF, state_new_cc_[lev], i, comp, 1, nGrow);
+  for (int i = 0; i < ncomp_cc; i++) {
+    amrex::MultiFab::Copy(plotMF, state_new_cc_[lev], i, comp, 1, nghost_cc);
     comp++;
   }
 
   // compute cell-centre averaged face-centred data
   if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
     for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-      AverageFCToCC(plotMF, state_new_fc_[lev][idim], idim, comp, 0, nCompState_fc, nGrow);
-      comp += nCompState_fc;
+      AverageFCToCC(plotMF, state_new_fc_[lev][idim], idim, comp, 0, ncomp_per_dim_fc, nghost_fc);
+      comp += ncomp_per_dim_fc;
     }
   }
 
@@ -1712,7 +1716,7 @@ void AMRSimulation<problem_t>::WritePlotFile() const {
   amrex::Vector<std::string> varnames;
   varnames.insert(varnames.end(), componentNames_cc_.begin(), componentNames_cc_.end());
   if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
-    for (int icomp = 0; icomp < ncomp_fc_; ++icomp) {
+    for (int icomp = 0; icomp < Physics_Indices<problem_t>::nvarTotal_fc; ++icomp) {
       varnames.push_back(componentNames_fc_[icomp]);
     }
   }
@@ -1934,16 +1938,16 @@ void AMRSimulation<problem_t>::ReadCheckpointFile() {
           Geom(lev - 1), refRatio(lev - 1), lev, ncomp_cc);
     }
 
-    int ncomp_fc = ncomp_fc_;
+    int ncomp_per_dim_fc = Physics_Indices<problem_t>::nvarPerDim_fc;
     int nghost_fc = nghost_fc_;
     if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
       for (int idim=0; idim < AMREX_SPACEDIM; ++idim){
         state_new_fc_[lev][idim] = amrex::MultiFab(
           amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim)),
-          dm, ncomp_fc, nghost_fc);
+          dm, ncomp_per_dim_fc, nghost_fc);
         state_old_fc_[lev][idim] = amrex::MultiFab(
           amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim)),
-          dm, ncomp_fc, nghost_fc);
+          dm, ncomp_per_dim_fc, nghost_fc);
       }
     }
   }
