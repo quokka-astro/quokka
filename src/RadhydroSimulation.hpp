@@ -59,7 +59,6 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	using AMRSimulation<problem_t>::max_signal_speed_;
 
 	using AMRSimulation<problem_t>::ncomp_cc_;
-  using AMRSimulation<problem_t>::ncomp_fc_;
 	using AMRSimulation<problem_t>::nghost_cc_;
 	using AMRSimulation<problem_t>::areInitialConditionsDefined_;
 	using AMRSimulation<problem_t>::BCs_cc_;
@@ -278,7 +277,6 @@ void RadhydroSimulation<problem_t>::defineComponentNames() {
   if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
     for (int idim = 0; idim < AMREX_SPACEDIM; idim++) {
       componentNames_fc_.push_back({quokka::face_dir_str[idim] + "-BField"});
-      ncomp_fc_++;
     }
   }
 }
