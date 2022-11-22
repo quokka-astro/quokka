@@ -24,8 +24,10 @@ template <typename problem_t> struct Physics_Indices {
   static const int pscalarFirstIndex = Physics_NumVars::numHydroVars;
   static const int radFirstIndex = pscalarFirstIndex + Physics_Traits<problem_t>::numPassiveScalars;
   // face-centered
+  static const int nvarPerDim_fc =
+        static_cast<int>(Physics_Traits<problem_t>::is_mhd_enabled) * Physics_NumVars::numMHDVars_per_dim;
   static const int nvarTotal_fc =
-        static_cast<int>(Physics_Traits<problem_t>::is_mhd_enabled) * Physics_NumVars::numMHDVars;
+        static_cast<int>(Physics_Traits<problem_t>::is_mhd_enabled) * Physics_NumVars::numMHDVars_tot;
   static const int mhdFirstIndex = 0;
 };
 
