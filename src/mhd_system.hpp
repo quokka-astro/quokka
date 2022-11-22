@@ -27,9 +27,10 @@
 /// Class for a MHD system of conservation laws
 template <typename problem_t> class MHDSystem {
 public:
-  static constexpr int nvar_ = Physics_NumVars::numMHDVars; // number of quantities per face-centering
+  static constexpr int nvar_per_dim_ = Physics_NumVars::numMHDVars_per_dim;
+  static constexpr int nvar_tot_ = Physics_NumVars::numMHDVars_tot;
 
-  enum varIndex {
+  enum varIndex_perDim {
     bfield_index = Physics_Indices<problem_t>::mhdFirstIndex,
   };
 };
