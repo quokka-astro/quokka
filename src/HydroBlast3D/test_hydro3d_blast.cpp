@@ -94,9 +94,9 @@ void RadhydroSimulation<SedovProblem>::setInitialConditionsOnGrid(
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
     double rho_e = NAN;
 #if 0
-    amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
-    amrex::Real const y = prob_lo[1] + (j + static_cast<amrex::Real>(0.5)) * dx[1];
-    amrex::Real const z = prob_lo[2] + (k + static_cast<amrex::Real>(0.5)) * dx[2];
+    amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+    amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
+    amrex::Real const z = prob_lo[2] + (k + amrex::Real(0.5)) * dx[2];
     amrex::Real const r = std::sqrt(
         std::pow(x - x0, 2) + std::pow(y - y0, 2) + std::pow(z - z0, 2));
 

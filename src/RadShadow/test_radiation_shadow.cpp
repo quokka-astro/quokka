@@ -124,8 +124,8 @@ void RadhydroSimulation<ShadowProblem>::setInitialConditionsOnGrid(
 
   // loop over the grid and set the initial condition
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-    amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
-    amrex::Real const y = prob_lo[1] + (j + static_cast<amrex::Real>(0.5)) * dx[1];
+    amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+    amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
     amrex::Real const xc = 0.5;
     amrex::Real const yc = 0.0;
     amrex::Real const x0 = 0.1;

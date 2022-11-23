@@ -54,8 +54,8 @@ void RadhydroSimulation<BlastProblem>::setInitialConditionsOnGrid(
   amrex::Real const y0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
   // loop over the grid and set the initial condition
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-    amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
-    amrex::Real const y = prob_lo[1] + (j + static_cast<amrex::Real>(0.5)) * dx[1];
+    amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+    amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
     amrex::Real const R = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2));
 
     double vx = 0.;

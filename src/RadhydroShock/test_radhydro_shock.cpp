@@ -189,7 +189,7 @@ void RadhydroSimulation<ShockProblem>::setInitialConditionsOnGrid(
 
   // loop over the grid and set the initial condition
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-    amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
+    amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
 
     amrex::Real radEnergy = NAN;
     amrex::Real x1RadFlux = NAN;

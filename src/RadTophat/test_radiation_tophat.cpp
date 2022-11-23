@@ -149,7 +149,7 @@ AMRSimulation<TophatProblem>::setCustomBoundaryConditions(
 	amrex::GpuArray<int, 3> lo = box.loVect3d();
 
 	amrex::Real const y0 = 0.;
-	amrex::Real const y = prob_lo[1] + (j + static_cast<amrex::Real>(0.5)) * dx[1];
+	amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
 
 	if (i < lo[0]) {
 		// Marshak boundary condition
@@ -219,8 +219,8 @@ void RadhydroSimulation<TophatProblem>::setInitialConditionsOnGrid(
     const double Erad = a_rad * std::pow(T_initial, 4);
     double rho = rho_wall;
 
-    amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
-    amrex::Real const y = prob_lo[1] + (j + static_cast<amrex::Real>(0.5)) * dx[1];
+    amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+    amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
 
     bool inside_region1 =
         ((((x > 0.) && (x <= 2.5)) || ((x > 4.5) && (x < 7.0))) &&

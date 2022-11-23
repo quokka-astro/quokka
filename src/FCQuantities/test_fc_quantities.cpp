@@ -44,8 +44,8 @@ AMREX_GPU_DEVICE void computeWaveSolution(
     int i, int j, int k, amrex::Array4<amrex::Real> const &state,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo) {
-  const amrex::Real x_L = prob_lo[0] + (i + static_cast<amrex::Real>(0.0)) * dx[0];
-  const amrex::Real x_R = prob_lo[0] + (i + static_cast<amrex::Real>(1.0)) * dx[0];
+  const amrex::Real x_L = prob_lo[0] + (i + amrex::Real(0.0)) * dx[0];
+  const amrex::Real x_R = prob_lo[0] + (i + amrex::Real(1.0)) * dx[0];
   const amrex::Real A = amp;
 
   const quokka::valarray<double, 3> R = {

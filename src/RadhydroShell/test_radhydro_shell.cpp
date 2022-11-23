@@ -117,9 +117,9 @@ void RadSystem<ShellProblem>::SetRadEnergySource(
 
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j,
                                                       int k) noexcept {
-    amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
-    amrex::Real const y = prob_lo[1] + (j + static_cast<amrex::Real>(0.5)) * dx[1];
-    amrex::Real const z = prob_lo[2] + (k + static_cast<amrex::Real>(0.5)) * dx[2];
+    amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+    amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
+    amrex::Real const z = prob_lo[2] + (k + amrex::Real(0.5)) * dx[2];
     amrex::Real const r = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2) +
                                     std::pow(z - z0, 2));
 
@@ -218,9 +218,9 @@ void RadhydroSimulation<ShellProblem>::setInitialConditionsOnGrid(
 
   // loop over the grid and set the initial condition
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-    amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
-    amrex::Real const y = prob_lo[1] + (j + static_cast<amrex::Real>(0.5)) * dx[1];
-    amrex::Real const z = prob_lo[2] + (k + static_cast<amrex::Real>(0.5)) * dx[2];
+    amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+    amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
+    amrex::Real const z = prob_lo[2] + (k + amrex::Real(0.5)) * dx[2];
     amrex::Real const r = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2) +
                                     std::pow(z - z0, 2));
 
@@ -264,9 +264,9 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto
 vec_dot_r(amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> vec, int i, int j, int k)
     -> amrex::Real {
   // compute dot product of vec into rhat
-  amrex::Real xhat = (i + static_cast<amrex::Real>(0.5));
-  amrex::Real yhat = (j + static_cast<amrex::Real>(0.5));
-  amrex::Real zhat = (k + static_cast<amrex::Real>(0.5));
+  amrex::Real xhat = (i + amrex::Real(0.5));
+  amrex::Real yhat = (j + amrex::Real(0.5));
+  amrex::Real zhat = (k + amrex::Real(0.5));
   amrex::Real const norminv =
       1.0 / std::sqrt(xhat * xhat + yhat * yhat + zhat * zhat);
 

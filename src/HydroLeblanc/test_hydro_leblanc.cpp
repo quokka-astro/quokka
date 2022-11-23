@@ -54,7 +54,7 @@ void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsOnGrid(
   const int ncomp = Physics_Indices<ShocktubeProblem>::nvarTotal_cc;
   // loop over the grid and set the initial condition
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-    amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
+    amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
 
     const double vx = 0.0;
     double rho = NAN;
@@ -186,7 +186,7 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(
   int nx = (box.hiVect3d()[0] - box.loVect3d()[0]) + 1;
   std::vector<double> xs(nx);
   for (int i = 0; i < nx; ++i) {
-    xs.at(i) = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
+    xs.at(i) = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
   }
 
   std::vector<double> density_exact_interp(xs.size());
