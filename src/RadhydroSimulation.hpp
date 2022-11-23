@@ -885,7 +885,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	// Stage 1 of RK2-SSP
 	{
 		// update ghost zones [old timestep]
-		fillBoundaryConditions(state_old_cc_tmp, state_old_cc_tmp, lev, time, BCs_cc_,
+		fillBoundaryConditions(state_old_cc_tmp, state_old_cc_tmp, lev, time,
 			quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState);
 
 		// check state validity
@@ -947,7 +947,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	// Stage 2 of RK2-SSP
 	{
 		// update ghost zones [intermediate stage stored in state_inter_cc_]
-		fillBoundaryConditions(state_inter_cc_, state_inter_cc_, lev, time + dt_lev, BCs_cc_,
+		fillBoundaryConditions(state_inter_cc_, state_inter_cc_, lev, time + dt_lev,
 			quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState);
 
 		// check intermediate state validity
@@ -1332,7 +1332,7 @@ void RadhydroSimulation<problem_t>::advanceRadiationSubstepAtLevel(
 	// and another to store the intermediate stage (which is reused for the final stage).
 
 	// update ghost zones [old timestep]
-	fillBoundaryConditions(state_old_cc_[lev], state_old_cc_[lev], lev, time, BCs_cc_,
+	fillBoundaryConditions(state_old_cc_[lev], state_old_cc_[lev], lev, time,
 			quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState);
 
 	// advance all grids on local processor (Stage 1 of integrator)
@@ -1364,7 +1364,7 @@ void RadhydroSimulation<problem_t>::advanceRadiationSubstepAtLevel(
 	}
 
 	// update ghost zones [intermediate stage stored in state_new_cc_]
-	fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, (time + dt_radiation), BCs_cc_,
+	fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, (time + dt_radiation),
 			quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState);
 
 	// advance all grids on local processor (Stage 2 of integrator)

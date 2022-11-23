@@ -184,7 +184,6 @@ public:
   template <typename PreInterpHook, typename PostInterpHook>
   void fillBoundaryConditions(amrex::MultiFab &S_filled, amrex::MultiFab &state,
                               int lev, amrex::Real time,
-                              amrex::Vector<amrex::BCRec> &BCs,
                               quokka::centering cen, quokka::direction dir,
                               PreInterpHook const &pre_interp,
                               PostInterpHook const&post_interp,
@@ -1291,8 +1290,8 @@ void AMRSimulation<problem_t>::setInitialConditionsAtLevel_cc(int level, amrex::
   AMREX_ALWAYS_ASSERT(!state_new_cc_[level].contains_nan(0, ncomp_cc));
   // fill ghost zones
   fillBoundaryConditions(state_new_cc_[level], state_new_cc_[level], level,
-                         time, BCs_cc_, quokka::centering::cc,
-                         quokka::direction::na, InterpHookNone, InterpHookNone,
+                         time, quokka::centering::cc, quokka::direction::na,
+                         InterpHookNone, InterpHookNone,
                          FillPatchType::fillpatch_function);
   // copy to state_old_cc_ (including ghost zones)
   state_old_cc_[level].ParallelCopy(state_new_cc_[level], 0, 0, ncomp_cc,
@@ -1317,8 +1316,7 @@ void AMRSimulation<problem_t>::setInitialConditionsAtLevel_fc(int level, amrex::
     // check that the valid state_new_fc_[level][idim] data is filled properly
     AMREX_ALWAYS_ASSERT(!state_new_fc_[level][idim].contains_nan(0, ncomp_per_dim_fc));
     // fill ghost zones
-    fillBoundaryConditions(state_new_fc_[level][idim],
-                           state_new_fc_[level][idim], level, time, BCs_fc_,
+    fillBoundaryConditions(state_new_fc_[level][idim], state_new_fc_[level][idim], level, time,
                            quokka::centering::fc, static_cast<quokka::direction>(idim),
                            InterpHookNone, InterpHookNone);
     state_old_fc_[level][idim].ParallelCopy(state_new_fc_[level][idim], 0, 0,
@@ -1387,7 +1385,6 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
                                                       amrex::MultiFab &state,
                                                       int const lev,
                                                       amrex::Real const time,
-                                                      amrex::Vector<amrex::BCRec> &BCs,
                                                       quokka::centering cen,
                                                       quokka::direction dir,
                                                       PreInterpHook const &pre_interp,
@@ -1404,6 +1401,15 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
   //  (for different coordinate dimensions), the edge/corner cells *will* be
   //  filled by amrex::FilccCell(). Remember to fill *all* variables in the
   //  MultiFab, e.g., both hydro and radiation).
+
+  if ((cen != quokka::centering::cc) && (cen != quokka::centering::fc)) {
+    amrex::Print() << "Centering passed to fillBoundaryConditions(): " << static_cast<int>(cen) << "\n";
+    throw std::runtime_error("Only cell-centred (cc) and face-centred (fc) variables are supported, thus far.");
+  }
+
+  amrex::Vector<amrex::BCRec> BCs;
+  if      (cen == quokka::centering::cc) { BCs = BCs_cc_; }
+  else if (cen == quokka::centering::fc) { BCs = BCs_fc_; }
 
   if (lev > 0) { // refined level
     amrex::Vector<amrex::MultiFab *> fineData{&state};
