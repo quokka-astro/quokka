@@ -21,8 +21,8 @@
 
 // internal headers
 #include "ArrayView.hpp"
-#include "valarray.hpp"
 #include "simulation.hpp"
+#include "valarray.hpp"
 
 /// Class for a MHD system of conservation laws
 template <typename problem_t> class MHDSystem {
