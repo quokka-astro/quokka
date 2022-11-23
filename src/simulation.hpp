@@ -16,6 +16,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
+#include <iostream>
 #include <limits>
 #include <memory>
 #include <ostream>
@@ -122,6 +123,8 @@ public:
   void PerformanceHints();
   void readParameters();
   void setInitialConditions();
+  void setInitialConditionsAtLevel_cc(int level, amrex::Real time);
+  void setInitialConditionsAtLevel_fc(int level, amrex::Real time);
   void evolve();
   void computeTimestep();
   auto computeTimestepAtLevel(int lev) -> amrex::Real;
@@ -1210,6 +1213,58 @@ void AMRSimulation<problem_t>::FillPatch(int lev, amrex::Real time,
   }
 }
 
+template <typename problem_t>
+void AMRSimulation<problem_t>::setInitialConditionsAtLevel_cc(int level, amrex::Real time) {
+  const int ncomp_cc = ncomp_cc_;
+  const int nghost_cc = nghost_cc_;
+  // itterate over the domain
+  for (amrex::MFIter iter(state_new_cc_[level]); iter.isValid(); ++iter) {
+    quokka::grid grid_elem(state_new_cc_[level].array(iter), iter.validbox(),
+                           geom[level].CellSizeArray(),
+                           geom[level].ProbLoArray(), geom[level].ProbHiArray(),
+                           quokka::centering::cc, quokka::direction::na);
+    // set initial conditions defined by the user
+    setInitialConditionsOnGrid(grid_elem);
+  }
+  // check that the valid state_new_cc_[level] is properly filled
+  AMREX_ALWAYS_ASSERT(!state_new_cc_[level].contains_nan(0, ncomp_cc));
+  // fill ghost zones
+  fillBoundaryConditions(state_new_cc_[level], state_new_cc_[level], level,
+                         time, BCs_cc_, quokka::centering::cc,
+                         quokka::direction::na, InterpHookNone, InterpHookNone,
+                         FillPatchType::fillpatch_function);
+  // copy to state_old_cc_ (including ghost zones)
+  state_old_cc_[level].ParallelCopy(state_new_cc_[level], 0, 0, ncomp_cc,
+                                    nghost_cc, nghost_cc);
+}
+
+template <typename problem_t>
+void AMRSimulation<problem_t>::setInitialConditionsAtLevel_fc(int level, amrex::Real time) {
+  const int ncomp_per_dim_fc = Physics_Indices<problem_t>::nvarPerDim_fc;
+  const int nghost_fc = nghost_fc_;
+  // for each face-centering
+  for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+    // itterate over the domain and initialise data
+    for (amrex::MFIter iter(state_new_fc_[level][idim]); iter.isValid(); ++iter) {
+      quokka::grid grid_elem(state_new_fc_[level][idim].array(iter),
+                              iter.validbox(), geom[level].CellSizeArray(),
+                              geom[level].ProbLoArray(), geom[level].ProbHiArray(),
+                              quokka::centering::fc, static_cast<quokka::direction>(idim));
+      // set initial conditions defined by the user
+      setInitialConditionsOnGrid(grid_elem);
+    }
+    // check that the valid state_new_fc_[level][idim] data is filled properly
+    AMREX_ALWAYS_ASSERT(!state_new_fc_[level][idim].contains_nan(0, ncomp_per_dim_fc));
+    // fill ghost zones
+    fillBoundaryConditions(state_new_fc_[level][idim],
+                           state_new_fc_[level][idim], level, time, BCs_fc_,
+                           quokka::centering::fc, static_cast<quokka::direction>(idim),
+                           InterpHookNone, InterpHookNone);
+    state_old_fc_[level][idim].ParallelCopy(state_new_fc_[level][idim], 0, 0,
+                                            ncomp_per_dim_fc, nghost_fc, nghost_fc);
+  }
+}
+
 // Make a new level from scratch using provided BoxArray and
 // DistributionMapping. Only used during initialization. Overrides the pure
 // virtual function in AmrCore
@@ -1219,6 +1274,9 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(
     const amrex::DistributionMapping &dm) {
   BL_PROFILE("AMRSimulation::MakeNewLevelFromScratch()");
 
+  // define empty MultiFab containers with the right number of components and ghost-zones
+
+  // cell-centred
   const int ncomp_cc = ncomp_cc_;
   const int nghost_cc = nghost_cc_;
   state_new_cc_[level].define(ba, dm, ncomp_cc, nghost_cc);
@@ -1234,6 +1292,7 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(
         Geom(level - 1), refRatio(level - 1), level, ncomp_cc);
   }
 
+  // face-centred
   if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
     const int ncomp_per_dim_fc = Physics_Indices<problem_t>::nvarPerDim_fc;
     const int nghost_fc = nghost_fc_;
@@ -1251,53 +1310,10 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(
   // user) before initialising state variables
   preCalculateInitialConditions();
 
-  // cell-centred
-  // itterate over the domain
-  for (amrex::MFIter iter(state_new_cc_[level]); iter.isValid(); ++iter) {
-    quokka::grid grid_elem(state_new_cc_[level].array(iter), iter.validbox(),
-                           geom[level].CellSizeArray(),
-                           geom[level].ProbLoArray(), geom[level].ProbHiArray(),
-                           quokka::centering::cc, quokka::direction::na);
-    // set initial conditions defined by the user
-    setInitialConditionsOnGrid(grid_elem);
-  }
-  // check that state_new_cc_[level] is properly filled
-  AMREX_ALWAYS_ASSERT(!state_new_cc_[level].contains_nan(0, ncomp_cc));
-  // fill cell-centred ghost zones
-  fillBoundaryConditions(state_new_cc_[level], state_new_cc_[level], level,
-                         time, BCs_cc_, quokka::centering::cc,
-                         quokka::direction::na, InterpHookNone, InterpHookNone,
-                         FillPatchType::fillpatch_function);
-  // copy to state_old_cc_ (including ghost zones)
-  state_old_cc_[level].ParallelCopy(state_new_cc_[level], 0, 0, ncomp_cc,
-                                    nghost_cc, nghost_cc);
-
-  // face-centred
+  // initial state variables
+  setInitialConditionsAtLevel_cc(level, time);
   if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
-    const int ncomp_per_dim_fc = Physics_Indices<problem_t>::nvarPerDim_fc;
-    const int nghost_fc = nghost_fc_;
-    // for each face-centering (number of dimensions)
-    for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-      // itterate over the domain
-      for (amrex::MFIter iter(state_new_fc_[level][idim]); iter.isValid(); ++iter) {
-        quokka::grid grid_elem(state_new_fc_[level][idim].array(iter),
-                               iter.validbox(), geom[level].CellSizeArray(),
-                               geom[level].ProbLoArray(), geom[level].ProbHiArray(),
-                               quokka::centering::fc, static_cast<quokka::direction>(idim));
-        // set initial conditions defined by the user
-        setInitialConditionsOnGrid(grid_elem);
-      }
-      // check that state_new_fc_[level][idim] is filled properly
-      AMREX_ALWAYS_ASSERT(
-          !state_new_fc_[level][idim].contains_nan(0, ncomp_per_dim_fc));
-      // fill face-centred ghost zones
-      fillBoundaryConditions(state_new_fc_[level][idim],
-                             state_new_fc_[level][idim], level, time, BCs_fc_,
-                             quokka::centering::fc, static_cast<quokka::direction>(idim),
-                             InterpHookNone, InterpHookNone);
-      state_old_fc_[level][idim].ParallelCopy(state_new_fc_[level][idim], 0, 0,
-                                              ncomp_per_dim_fc, nghost_fc, nghost_fc);
-    }
+    setInitialConditionsAtLevel_fc(level, time);
   }
 
   // set flag
@@ -1579,19 +1595,23 @@ auto AMRSimulation<problem_t>::PlotFileMFAtLevel(int lev) const
     -> amrex::MultiFab {
   // Combine state_new_cc_[lev] and derived variables in a new MF
   int comp = 0;
-  const int nghost_cc = state_new_cc_[lev].nGrow(); // workaround Ascent bug
   const int ncomp_cc = state_new_cc_[lev].nComp();
+  const int nghost_cc = state_new_cc_[lev].nGrow(); // workaround Ascent bug
   int ncomp_per_dim_fc = 0;
   int ncomp_tot_fc = 0;
   int nghost_fc = 0;
   if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
-    ncomp_per_dim_fc = state_new_fc_[lev][0].nComp();
+    ncomp_per_dim_fc = Physics_Indices<problem_t>::nvarPerDim_fc;
     ncomp_tot_fc = Physics_Indices<problem_t>::nvarTotal_fc;
     nghost_fc = state_new_fc_[lev][0].nGrow();
-  } 
+  }
   const int ncomp_deriv = derivedNames_.size();
   const int ncomp_plotMF = ncomp_cc + ncomp_tot_fc + ncomp_deriv;
-  amrex::MultiFab plotMF(grids[lev], dmap[lev], ncomp_plotMF, nghost_fc);
+  const int nghost_plotMF = nghost_cc;
+  amrex::MultiFab plotMF(grids[lev], dmap[lev], ncomp_plotMF, nghost_plotMF);
+
+  // initialise all the valid- and ghost-cells to zero, for all the components
+  plotMF.setVal(0.0);
 
   // copy data from cell-centred state variables
   for (int i = 0; i < ncomp_cc; i++) {
@@ -1599,7 +1619,7 @@ auto AMRSimulation<problem_t>::PlotFileMFAtLevel(int lev) const
     comp++;
   }
 
-  // compute cell-centre averaged face-centred data
+  // compute cell-center averaged face-centred data
   if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
     for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
       AverageFCToCC(plotMF, state_new_fc_[lev][idim], idim, comp, 0, ncomp_per_dim_fc, nghost_fc);
