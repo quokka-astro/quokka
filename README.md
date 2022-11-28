@@ -110,7 +110,7 @@ Total Test time (real) = 353.77 sec
 **Intel GPUs:** Not tested.
 
 ## Building a specific test problem
-By default, all available test problems will be compiled. If you only want to build a specific problem, you list all of the available CMake targets:
+By default, all available test problems will be compiled. If you only want to build a specific problem, you can list all of the available CMake targets:
 ```
 cmake --build . --target help
 ```
