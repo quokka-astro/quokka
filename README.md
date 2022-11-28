@@ -109,12 +109,11 @@ which should end with output similar to the following:
 
 Total Test time (real) = 353.77 sec
 ```
-
 ### AMD GPUs
 Compile with `-DAMReX_GPU_BACKEND=HIP`. Requires ROCm 5.2.0 or newer. Quokka has been tested on MI100 and MI250X GPUs.
 
 ### Intel GPUs
-Not tested. Please start a Discussion if you encounter issues on Intel GPUs.
+Not tested. You can attempt this by compiling with `-DAMReX_GPU_BACKEND=SYCL`. Please start a Discussion if you encounter issues on Intel GPUs.
 
 ## Building a specific test problem
 By default, all available test problems will be compiled. If you only want to build a specific problem, you can list all of the available CMake targets:
