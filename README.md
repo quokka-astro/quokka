@@ -79,6 +79,7 @@ If you are unable to install Ninja, you can instead use CMake with the Makefile 
 ```
 cmake .. -DCMAKE_BUILD_TYPE=Release -G "Unix Makefiles"
 make -j6
+make test
 ```
 
 ## Could NOT find Python error
