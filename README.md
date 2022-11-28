@@ -10,7 +10,7 @@
 
 **The Quokka methods paper is now available: https://arxiv.org/abs/2110.01792**
 
-**NOTE: Documentation is still a work in progress. Please see the sections "Quickstart" and "Running on GPUs" below. You can start a [Discussion](https://github.com/BenWibking/quokka/discussions) for technical support, or open an [Issue](https://github.com/BenWibking/quokka/issues) for any bug reports.**
+**Please see the sections "Quickstart" and "Running on GPUs" below. You can start a [Discussion](https://github.com/BenWibking/quokka/discussions) for technical support, or open an [Issue](https://github.com/BenWibking/quokka/issues) for any bug reports.**
 
 Quokka is a two-moment radiation hydrodynamics code that uses the piecewise-parabolic method, with AMR and subcycling in time. Runs on CPUs (MPI+vectorized) or NVIDIA GPUs (MPI+CUDA) with a single-source codebase. Written in C++17. (100% Fortran-free.)
 
@@ -85,7 +85,10 @@ Alternatively, you can work around this problem by disabling Python support. Pyt
 to the CMake command-line options (or change the `QUOKKA_PYTHON` option to `OFF` in CMakeLists.txt).
 
 ## Running on GPUs
-By default, Quokka compiles itself to run only on CPUs. If you want to run on NVIDIA GPUs, re-build Quokka as shown below. (*CUDA >= 11.7 is required. Quokka is only supported on Volta V100 GPUs or newer models.*)
+By default, Quokka compiles itself to run only on CPUs. Quokka can run on either NVIDIA, AMD, or Intel GPUs. Consult the sub-sections below for the build instructions for a given GPU vendor.
+
+### NVIDIA GPUs
+If you want to run on NVIDIA GPUs, re-build Quokka as shown below. (*CUDA >= 11.7 is required. Quokka is only supported on Volta V100 GPUs or newer models.*)
 ```
 cmake .. -DCMAKE_BUILD_TYPE=Release -DAMReX_GPU_BACKEND=CUDA -DAMREX_GPUS_PER_NODE=N -G Ninja
 ninja -j6
@@ -107,9 +110,11 @@ which should end with output similar to the following:
 Total Test time (real) = 353.77 sec
 ```
 
-**AMD GPUs:** Compile with `-DAMReX_GPU_BACKEND=HIP`. Requires ROCm 5.2.0 or newer. Quokka has been tested on MI100 and MI250X GPUs.
+### AMD GPUs
+Compile with `-DAMReX_GPU_BACKEND=HIP`. Requires ROCm 5.2.0 or newer. Quokka has been tested on MI100 and MI250X GPUs.
 
-**Intel GPUs:** Not tested.
+### Intel GPUs
+Not tested. Please start a Discussion if you encounter issues on Intel GPUs.
 
 ## Building a specific test problem
 By default, all available test problems will be compiled. If you only want to build a specific problem, you can list all of the available CMake targets:
