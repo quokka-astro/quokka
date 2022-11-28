@@ -74,15 +74,12 @@ to compile Quokka for 3D problems.
 
 Have fun!
 
-## Building with CMake+`make`
-If you do not want to use Ninja to build, you can instead CMake with `make` as follows:
+## Building with CMake + `make`
+If you are unable to install Ninja, you can instead use CMake with the Makefile generator, which should produce identical results but is slower:
 ```
 cmake .. -DCMAKE_BUILD_TYPE=Release -G "Unix Makefiles"
 make -j6
 ```
-
-## CMake
-Quokka uses CMake for its build system. If you don't have CMake installed already, you can simply run `python3 -m pip install cmake ninja --user` or use another [installation method](https://cliutils.gitlab.io/modern-cmake/chapters/intro/installing.html). If you are unfamiliar with CMake, [this tutorial](https://hsf-training.github.io/hsf-training-cmake-webpage/) may be useful.
 
 ## Could NOT find Python error
 If CMake prints an error saying that Python could not be found, e.g.:
