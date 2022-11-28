@@ -36,7 +36,7 @@ Quokka uses CMake (and optionally, Ninja) as its build system. If you don't have
 ```
 python3 -m pip install cmake ninja --user
 ```
-Now that CMake is installed, create a build/ subdirectory and compile Quokka, as shown below.
+Now that CMake is installed, create a `build/` subdirectory and compile Quokka, as shown below.
 ```
 cd quokka
 mkdir build; cd build
@@ -83,18 +83,16 @@ Alternatively, you can work around this problem by disabling Python support. Pyt
 to the CMake command-line options (or change the `QUOKKA_PYTHON` option to `OFF` in CMakeLists.txt).
 
 ## Running on GPUs
-By default, Quokka compiles itself to run only on CPUs. If you want to run on NVIDIA GPUs, re-build Quokka as shown below. (CUDA >= 11.7 is required.)
+By default, Quokka compiles itself to run only on CPUs. If you want to run on NVIDIA GPUs, re-build Quokka as shown below. (*CUDA >= 11.7 is required. Quokka is only supported on Volta V100 GPUs or newer models.*)
 ```
 cmake .. -DCMAKE_BUILD_TYPE=Release -DAMReX_GPU_BACKEND=CUDA -DAMREX_GPUS_PER_NODE=N -G Ninja
 ninja -j6
 ```
 where $N$ is the number of GPUs available per compute node.
 
-It is necessary to use `-DAMREX_GPUS_PER_NODE` to specify the number of GPUs per compute node. Without this, performance will be very poor. All GPUs on a node must be visible from each MPI rank on the node for efficient GPU-aware MPI communication to take place via CUDA IPC. (When using the SLURM job scheduler, this means that `--gpu-bind` should be set to `none`.)
+**It is necessary to use `-DAMREX_GPUS_PER_NODE` to specify the number of GPUs per compute node. Without this, performance will be very poor. All GPUs on a node must be visible from each MPI rank on the node for efficient GPU-aware MPI communication to take place via CUDA IPC.** When using the SLURM job scheduler, this means that `--gpu-bind` should be set to `none`.
 
 The compiled test problems are in the test problem subdirectories in `build/src/`. Example scripts for running Quokka on compute clusters are in the `scripts/` subdirectory.
-
-Quokka is only supported on Volta-class (V100) GPUs or newer.
 
 Note that 1D problems can run very slowly on GPUs due to a lack of sufficient parallelism. To run the test suite in a reasonable amount of time, you may wish to exclude the matter-energy exchange tests, e.g.:
 ```
@@ -109,7 +107,7 @@ Total Test time (real) = 353.77 sec
 
 **AMD GPUs:** Compile with `-DAMReX_GPU_BACKEND=HIP`. Requires ROCm 5.2.0 or newer. Quokka has been tested on MI100 and MI250X GPUs.
 
-**Intel GPUs:** (not tested).
+**Intel GPUs:** Not tested.
 
 ## Building a specific test problem
 By default, all available test problems will be compiled. If you only want to build a specific problem, you list all of the available CMake targets:
