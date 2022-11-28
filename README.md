@@ -26,6 +26,16 @@ Quokka also features advanced Adaptive Quokka Refinement:tm: technology:
 
 ![Image of Quokka with Baby in Pouch](extern/quokka2.png)
 
+## Dependencies
+* C++ compiler (with C++17 support)
+* CMake 3.16+
+* MPI library (OpenMPI, MPICH, or Cray MPI)
+* HDF5 1.10+ (serial version)
+* CUDA 11.7+ (optional, for NVIDIA GPUs)
+* ROCm 5.2.0+ (optional, for AMD GPUs)
+* Ninja (optional, for faster builds)
+* Python 3.7+ (optional)
+
 ## Quickstart
 
 To run Quokka, download this repository to your local machine:
@@ -63,6 +73,13 @@ to compile Quokka for 3D problems.
 **By default, Quokka compiles itself *only* for CPUs. If you want to run Quokka on GPUs, see the section "Running on GPUs" below.**
 
 Have fun!
+
+## Building with CMake+`make`
+If you do not want to use Ninja to build, you can instead CMake with `make` as follows:
+```
+cmake .. -DCMAKE_BUILD_TYPE=Release -G "Unix Makefiles"
+make -j6
+```
 
 ## CMake
 Quokka uses CMake for its build system. If you don't have CMake installed already, you can simply run `python3 -m pip install cmake ninja --user` or use another [installation method](https://cliutils.gitlab.io/modern-cmake/chapters/intro/installing.html). If you are unfamiliar with CMake, [this tutorial](https://hsf-training.github.io/hsf-training-cmake-webpage/) may be useful.
