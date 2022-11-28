@@ -10,7 +10,7 @@
 
 **The Quokka methods paper is now available: https://arxiv.org/abs/2110.01792**
 
-**NOTE: The code documentation is still a work in progress. Please see the Installation Notes below. You can start a [Discussion](https://github.com/BenWibking/quokka/discussions) for technical support, or open an [Issue](https://github.com/BenWibking/quokka/issues) for any bug reports.**
+**NOTE: Documentation is still a work in progress. Please see the sections "Quickstart" and "Running on GPUs" below. You can start a [Discussion](https://github.com/BenWibking/quokka/discussions) for technical support, or open an [Issue](https://github.com/BenWibking/quokka/issues) for any bug reports.**
 
 Quokka is a two-moment radiation hydrodynamics code that uses the piecewise-parabolic method, with AMR and subcycling in time. Runs on CPUs (MPI+vectorized) or NVIDIA GPUs (MPI+CUDA) with a single-source codebase. Written in C++17. (100% Fortran-free.)
 
@@ -26,7 +26,7 @@ Quokka also features advanced Adaptive Quokka Refinement:tm: technology:
 
 ![Image of Quokka with Baby in Pouch](extern/quokka2.png)
 
-## Installation Notes
+## Quickstart
 
 To run Quokka, download this repository to your local machine:
 ```
@@ -59,6 +59,8 @@ cmake .. -DCMAKE_BUILD_TYPE=Release -DAMReX_SPACEDIM=3 -G Ninja
 ninja -j6
 ```
 to compile Quokka for 3D problems.
+
+**By default, Quokka compiles itself *only* for CPUs. If you want to run Quokka on GPUs, see the section "Running on GPUs" below.**
 
 Have fun!
 
