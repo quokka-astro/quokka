@@ -12,8 +12,12 @@
 
 namespace quokka::Riemann
 {
-#define SQUARE(x) ((x) * (x))
-#define DELTA 1.0e-4 // vs constexpr ?
+#define DELTA 1.0e-4
+
+template <class T>
+constexpr auto SQUARE(const T x) -> T {
+  return x * x;
+}
 
 template <int N_scalars>
 auto FastMagnetosonicSpeed(double gamma, quokka::HydroState<N_scalars> const state, const double bx) -> double {
@@ -38,7 +42,6 @@ struct Cons1D {
 };
 
 // HLLD solver following Miyoshi and Kusano (2005), hereafter MK5.
-//
 template <FluxDir DIR, int N_scalars, int fluxdim>
 AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(
             quokka::HydroState<N_scalars> const &s_L,
@@ -51,7 +54,7 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(
   Cons1D u_L{};
   Cons1D u_R{};
   // initialise temporary variable to store fluxes
-  Cons1D f_x{}; // ?
+  Cons1D f_x{};
   // initialse fluxes at left and right side of the interface
   Cons1D f_L{};
   Cons1D f_R{};
@@ -340,7 +343,6 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(
     f_x.bz  = f_R.bz  + u_star_R.bz;
   }
 
-  
   // flx(IDN,k,j,i) = flxi[IDN];
   // flx(ivx,k,j,i) = flxi[IVX];
   // flx(ivy,k,j,i) = flxi[IVY];
