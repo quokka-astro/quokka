@@ -98,11 +98,11 @@ void RadhydroSimulation<FCQuantities>::setInitialConditionsOnGrid(
       });
     } else if (dir == quokka::direction::y) {
       amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-        state(i, j, k, MHDSystem<FCQuantities>::bfield_index) = 2.0 + (i % 2);
+        state(i, j, k, MHDSystem<FCQuantities>::bfield_index) = 2.0 + (j % 2);
       });
     } else if (dir == quokka::direction::z) {
       amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-        state(i, j, k, MHDSystem<FCQuantities>::bfield_index) = 3.0 + (i % 2);
+        state(i, j, k, MHDSystem<FCQuantities>::bfield_index) = 3.0 + (k % 2);
       });
     }
   }
