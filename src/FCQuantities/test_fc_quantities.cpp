@@ -6,6 +6,9 @@
 /// \brief Defines a test problem to make sure face-centred quantities are created correctly.
 ///
 
+#include <cassert>
+#include <ostream>
+#include <stdexcept>
 #include <valarray>
 
 #include "AMReX_Array.H"
@@ -15,6 +18,7 @@
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
 #include "grid.hpp"
+#include "physics_info.hpp"
 #include "test_fc_quantities.hpp"
 
 struct FCQuantities {};
@@ -108,6 +112,38 @@ void RadhydroSimulation<FCQuantities>::setInitialConditionsOnGrid(
   }
 }
 
+void checkMFs(
+    amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const& state1,
+    amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const& state2) {
+  double err = 0.0;
+  for (int level = 0; level < state1.size(); ++level) {
+    for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+      // initialise MF
+      const BoxArray& ba = state1[level][idim].boxArray();
+      const DistributionMapping& dm = state1[level][idim].DistributionMap();
+      int ncomp = state1[level][idim].nComp();
+      int ngrow = state1[level][idim].nGrow();
+      MultiFab mf_diff(ba, dm, ncomp, ngrow);
+      // compute difference between two MFs (at level)
+      MultiFab::Copy(
+        mf_diff,
+        state1[level][idim],
+        0, 0, ncomp, ngrow);
+      MultiFab::Subtract(
+        mf_diff,
+        state2[level][idim],
+        0, 0, ncomp, ngrow);
+      // compute error (summed over each component)
+      for (int icomp = 0; icomp < Physics_Indices<FCQuantities>::nvarPerDim_fc; ++icomp) {
+        err += mf_diff.norm1(icomp);
+      }
+    }
+  }
+  amrex::Print() << "Accumilated error in MFs read from chk-file: " << err << "\n";
+  amrex::Print() << "\n";
+  AMREX_ALWAYS_ASSERT(std::abs(err) == 0.0);
+}
+
 auto problem_main() -> int {
   // Problem initialization
   const int nvars = RadhydroSimulation<FCQuantities>::nvarTotal_cc_;
@@ -124,13 +160,23 @@ auto problem_main() -> int {
   sim_write.stopTime_ = 1.0;
   sim_write.maxTimesteps_ = 2e4;
   sim_write.setInitialConditions();
-  sim_write.evolve();
+  amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const& state_old_fc_write = sim_write.getOldMF_fc();
+  amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const& state_new_fc_write = sim_write.getNewMF_fc();
 
-  RadhydroSimulation<FCQuantities> sim_read(BCs_cc);
-  sim_read.cflNumber_ = 0.1;
-  sim_read.stopTime_ = 1.0;
-  sim_read.maxTimesteps_ = 2e4;
-  sim_read.setInitialConditions();
+  RadhydroSimulation<FCQuantities> sim_restart(BCs_cc);
+  sim_restart.cflNumber_ = 0.1;
+  sim_restart.stopTime_ = 1.0;
+  sim_restart.maxTimesteps_ = 2e4;
+  sim_restart.setInitialConditions();
+  amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const& state_old_fc_restart = sim_restart.getOldMF_fc();
+  amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const& state_new_fc_restart = sim_restart.getNewMF_fc();
+  amrex::Print() << "\n";
+
+  amrex::Print() << "Checking old FC MFs...\n";
+  checkMFs(state_old_fc_write, state_old_fc_restart);
+  
+  amrex::Print() << "Checking new FC MFs...\n";
+  checkMFs(state_new_fc_write, state_new_fc_restart);
 
   return 0;
 }

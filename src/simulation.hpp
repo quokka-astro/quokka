@@ -249,6 +249,8 @@ public:
   void SetLastCheckpointSymlink(std::string const &checkpointname) const;
   void ReadCheckpointFile();
   auto getWalltime() -> amrex::Real;
+  [[nodiscard]] auto getOldMF_fc() const -> amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const&;
+  [[nodiscard]] auto getNewMF_fc() const -> amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const&;
 #ifdef AMREX_USE_ASCENT
   void AscentCustomActions(conduit::Node const &blueprintMesh);
   void RenderAscent();
@@ -260,8 +262,7 @@ protected:
   amrex::Vector<amrex::MultiFab> state_new_cc_;
   amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> state_old_fc_;
   amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> state_new_fc_;
-  amrex::Vector<amrex::MultiFab>
-      max_signal_speed_; // needed to compute CFL timestep
+  amrex::Vector<amrex::MultiFab> max_signal_speed_; // needed to compute CFL timestep
 
   // flux registers: store fluxes at coarse-fine interface for synchronization
   // this will be sized "nlevs_max+1"
@@ -305,6 +306,18 @@ protected:
   Ascent ascent_;
 #endif
 };
+
+template <typename problem_t>
+auto AMRSimulation<problem_t>::getOldMF_fc() const
+    -> const amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> & {
+  return state_old_fc_;
+}
+
+template <typename problem_t>
+auto AMRSimulation<problem_t>::getNewMF_fc() const
+    -> const amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> & {
+  return state_new_fc_;
+}
 
 template <typename problem_t>
 void AMRSimulation<problem_t>::initialize() {
