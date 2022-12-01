@@ -59,10 +59,12 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	using AMRSimulation<problem_t>::max_signal_speed_;
 
 	using AMRSimulation<problem_t>::ncomp_cc_;
-	using AMRSimulation<problem_t>::nghost_;
+	using AMRSimulation<problem_t>::nghost_cc_;
 	using AMRSimulation<problem_t>::areInitialConditionsDefined_;
 	using AMRSimulation<problem_t>::BCs_cc_;
+  using AMRSimulation<problem_t>::BCs_fc_;
 	using AMRSimulation<problem_t>::componentNames_cc_;
+  using AMRSimulation<problem_t>::componentNames_fc_;
 	using AMRSimulation<problem_t>::cflNumber_;
 	using AMRSimulation<problem_t>::fillBoundaryConditions;
 	using AMRSimulation<problem_t>::geom;
@@ -86,7 +88,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 
 	SimulationData<problem_t> userData_;
 
-	static constexpr int nvarTotal_cc_ = RadSystem<problem_t>::nvar_;
+	static constexpr int nvarTotal_cc_ = Physics_Indices<problem_t>::nvarTotal_cc;
 	static constexpr int ncompHydro_ = HydroSystem<problem_t>::nvar_; // hydro
 	static constexpr int ncompHyperbolic_ = RadSystem<problem_t>::nvarHyperbolic_;
 	static constexpr int nstartHyperbolic_ = RadSystem<problem_t>::nstartHyperbolic_;
@@ -108,52 +110,38 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
 
 	// member functions
-	explicit RadhydroSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions)
-	    : AMRSimulation<problem_t>(boundaryConditions) {
-    // check modules cannot be enabled if they are not been implemented yet
-    static_assert(!Physics_Traits<problem_t>::is_chemistry_enabled, "Chemistry is not supported, yet.");
-    
-    // add hydro state variables
-    if constexpr (Physics_Traits<problem_t>::is_hydro_enabled ||
-                  Physics_Traits<problem_t>::is_radiation_enabled) {
-      std::vector<std::string> hydroNames = {"gasDensity", "x-GasMomentum", "y-GasMomentum", "z-GasMomentum", "gasEnergy", "gasInternalEnergy"};
-      componentNames_cc_.insert(componentNames_cc_.end(), hydroNames.begin(), hydroNames.end());
-      ncomp_cc_ += hydroNames.size();
-    }
-    // add passive scalar variables
-    if constexpr (Physics_Traits<problem_t>::numPassiveScalars > 0){
-      std::vector<std::string> scalarNames = getScalarVariableNames();
-      componentNames_cc_.insert(componentNames_cc_.end(), scalarNames.begin(), scalarNames.end());
-      ncomp_cc_ += scalarNames.size();
-    }
-    // add radiation state variables
-    if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
-      std::vector<std::string> radNames = {"radEnergy", "x-RadFlux", "y-RadFlux", "z-RadFlux"};
-      componentNames_cc_.insert(componentNames_cc_.end(), radNames.begin(), radNames.end());
-      ncomp_cc_ += radNames.size();
-    }
+	explicit RadhydroSimulation(amrex::Vector<amrex::BCRec> &BCs_cc,
+                              amrex::Vector<amrex::BCRec> &BCs_fc)
+	    : AMRSimulation<problem_t>(BCs_cc, BCs_fc) {
+    defineComponentNames();
+    // read in runtime parameters
+		readParmParse();
+	}
 
+  explicit RadhydroSimulation(amrex::Vector<amrex::BCRec> &BCs_cc)
+	    : AMRSimulation<problem_t>(BCs_cc) {
+    defineComponentNames();
     // read in runtime parameters
 		readParmParse();
 	}
 
 	[[nodiscard]] static auto getScalarVariableNames() -> std::vector<std::string>;
+  void defineComponentNames();
 	void readParmParse();
 
 	void checkHydroStates(amrex::MultiFab &mf, char const *file, int line);
 	void computeMaxSignalLocal(int level) override;
 	auto computeExtraPhysicsTimestep(int lev) -> amrex::Real override;
 	void preCalculateInitialConditions() override;
-  	void setInitialConditionsOnGrid(quokka::grid grid_elem) override;
+  void setInitialConditionsOnGrid(quokka::grid grid_elem) override;
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev,
 									  int ncycle) override;
 	void computeAfterTimestep() override;
-	void computeAfterLevelAdvance(int lev, amrex::Real time,
-								 amrex::Real dt_lev, int /*ncycle*/);
+	void computeAfterLevelAdvance(int lev, amrex::Real time, amrex::Real dt_lev, int /*ncycle*/);
 	void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) override;
 	void computeReferenceSolution(amrex::MultiFab &ref,
 		amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-    	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo);
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo);
 
 	// compute derived variables
 	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const override;
@@ -162,7 +150,9 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	void FixupState(int level) override;
 
 	// implement FillPatch function
-	void FillPatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp, FillPatchType fptype) override;
+	void FillPatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp,
+                 int ncomp, quokka::centering cen, quokka::direction dir,
+                 FillPatchType fptype) override;
 
 	// functions to operate on state vector before/after interpolating between levels
 	static void PreInterpState(amrex::MultiFab &mf, int scomp, int ncomp);
@@ -263,6 +253,41 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 };
 
 template <typename problem_t>
+void RadhydroSimulation<problem_t>::defineComponentNames() {
+  // check modules cannot be enabled if they are not been implemented yet
+  static_assert(!Physics_Traits<problem_t>::is_chemistry_enabled, "Chemistry is not supported, yet.");
+
+  // cell-centred
+  // add hydro state variables
+  if constexpr (Physics_Traits<problem_t>::is_hydro_enabled ||
+                Physics_Traits<problem_t>::is_radiation_enabled) {
+    std::vector<std::string> hydroNames = {"gasDensity", "x-GasMomentum", "y-GasMomentum", "z-GasMomentum", "gasEnergy", "gasInternalEnergy"};
+    componentNames_cc_.insert(componentNames_cc_.end(), hydroNames.begin(), hydroNames.end());
+    ncomp_cc_ += hydroNames.size();
+  }
+  // add passive scalar variables
+  if constexpr (Physics_Traits<problem_t>::numPassiveScalars > 0){
+    std::vector<std::string> scalarNames = getScalarVariableNames();
+    componentNames_cc_.insert(componentNames_cc_.end(), scalarNames.begin(), scalarNames.end());
+    ncomp_cc_ += scalarNames.size();
+  }
+  // add radiation state variables
+  if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
+    std::vector<std::string> radNames = {"radEnergy", "x-RadFlux", "y-RadFlux", "z-RadFlux"};
+    componentNames_cc_.insert(componentNames_cc_.end(), radNames.begin(), radNames.end());
+    ncomp_cc_ += radNames.size();
+  }
+
+  // face-centred
+  // add mhd state variables
+  if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+    for (int idim = 0; idim < AMREX_SPACEDIM; idim++) {
+      componentNames_fc_.push_back({quokka::face_dir_str[idim] + "-BField"});
+    }
+  }
+}
+
+template <typename problem_t>
 auto RadhydroSimulation<problem_t>::getScalarVariableNames() -> std::vector<std::string> {
 	// return vector of names for the passive scalars
 	// this can be specialized by the user to provide more descriptive names
@@ -320,12 +345,10 @@ void RadhydroSimulation<problem_t>::computeMaxSignalLocal(int const level)
 
 		if constexpr (Physics_Traits<problem_t>::is_hydro_enabled && !(Physics_Traits<problem_t>::is_radiation_enabled)) {
 			// hydro only
-			HydroSystem<problem_t>::ComputeMaxSignalSpeed(stateNew, maxSignal,
-								      indexRange);
+			HydroSystem<problem_t>::ComputeMaxSignalSpeed(stateNew, maxSignal, indexRange);
 		} else if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
 			// radiation hydro, or radiation only
-			RadSystem<problem_t>::ComputeMaxSignalSpeed(stateNew, maxSignal,
-								    indexRange);
+			RadSystem<problem_t>::ComputeMaxSignalSpeed(stateNew, maxSignal, indexRange);
 			if constexpr (Physics_Traits<problem_t>::is_hydro_enabled) {
 				auto maxSignalHydroFAB = amrex::FArrayBox(indexRange);
 				auto const &maxSignalHydro = maxSignalHydroFAB.array();
@@ -356,7 +379,7 @@ auto RadhydroSimulation<problem_t>::computeExtraPhysicsTimestep(int const level)
 #if !defined(NDEBUG)
 #define CHECK_HYDRO_STATES(mf) checkHydroStates(mf, __FILE__, __LINE__)
 #else
-#define CHECK_HYDRO_STATES(mf) 
+#define CHECK_HYDRO_STATES(mf)
 #endif
 
 template <typename problem_t>
@@ -619,8 +642,10 @@ void RadhydroSimulation<problem_t>::FixupState(int lev)
 // are implemented in this class (and must be *static* functions).
 template <typename problem_t>
 void RadhydroSimulation<problem_t>::FillPatch(int lev, amrex::Real time,
-                                         amrex::MultiFab &mf, int icomp,
-                                         int ncomp, FillPatchType fptype) {
+                                              amrex::MultiFab &mf, int icomp,
+                                              int ncomp, quokka::centering cen,
+                                              quokka::direction dir,
+                                              FillPatchType fptype) {
   BL_PROFILE("AMRSimulation::FillPatch()");
 
   amrex::Vector<amrex::MultiFab *> cmf;
@@ -629,17 +654,22 @@ void RadhydroSimulation<problem_t>::FillPatch(int lev, amrex::Real time,
   amrex::Vector<amrex::Real> ftime;
 
   if (lev == 0) {
-    // in this case, should return either state_new_cc_[lev] or state_old_cc_[lev]
-    GetData(lev, time, fmf, ftime);
+    // in this case, should return either state_new_[lev] or state_old_[lev]
+    GetData(lev, time, fmf, ftime, cen, dir);
   } else {
-    // in this case, should return either state_new_cc_[lev] or state_old_cc_[lev]
-    GetData(lev, time, fmf, ftime);
+    // in this case, should return either state_new_[lev] or state_old_[lev]
     // returns old state, new state, or both depending on 'time'
-    GetData(lev - 1, time, cmf, ctime);
+    GetData(lev, time, fmf, ftime, cen, dir);
+    GetData(lev - 1, time, cmf, ctime, cen, dir);
   }
 
-  FillPatchWithData(lev, time, mf, cmf, ctime, fmf, ftime, icomp, ncomp, fptype,
-		PreInterpState, PostInterpState);
+  if (cen == quokka::centering::cc) {
+    FillPatchWithData(lev, time, mf, cmf, ctime, fmf, ftime, icomp, ncomp,
+                      BCs_cc_, fptype, PreInterpState, PostInterpState);
+  } else if (cen == quokka::centering::fc) {
+    FillPatchWithData(lev, time, mf, cmf, ctime, fmf, ftime, icomp, ncomp,
+                      BCs_fc_, fptype, PreInterpState, PostInterpState);
+  }
 }
 
 template <typename problem_t>
@@ -771,15 +801,15 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 		}
 
 		// create temporary multifab for old state
-		amrex::MultiFab state_old_cc_tmp(grids[lev], dmap[lev], ncomp_cc_, nghost_);
-		amrex::Copy(state_old_cc_tmp, state_old_cc_[lev], 0, 0, ncomp_cc_, nghost_);
+		amrex::MultiFab state_old_cc_tmp(grids[lev], dmap[lev], ncomp_cc_, nghost_cc_);
+		amrex::Copy(state_old_cc_tmp, state_old_cc_[lev], 0, 0, ncomp_cc_, nghost_cc_);
 
 		// subcycle advanceHydroAtLevel, checking return value
 		for (int substep = 0; substep < nsubsteps; ++substep) {
 			if (substep > 0) {
 				// since we are starting a new substep, we need to copy hydro state from
 				//  the new state vector to old state vector
-				amrex::Copy(state_old_cc_tmp, state_new_cc_[lev], 0, 0, ncompHydro_, nghost_);
+				amrex::Copy(state_old_cc_tmp, state_new_cc_[lev], 0, 0, ncompHydro_, nghost_cc_);
 			}
 
 			success = advanceHydroAtLevel(state_old_cc_tmp, fr_as_crse, fr_as_fine, lev, time, dt_step);
@@ -849,13 +879,14 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	addStrangSplitSources(state_old_cc_tmp, lev, time, 0.5*dt_lev);
 
 	// create temporary multifab for intermediate state
-	amrex::MultiFab state_inter_cc_(grids[lev], dmap[lev], ncomp_cc_, nghost_);
+	amrex::MultiFab state_inter_cc_(grids[lev], dmap[lev], ncomp_cc_, nghost_cc_);
 	state_inter_cc_.setVal(0); // prevent assert in fillBoundaryConditions when radiation is enabled
 
 	// Stage 1 of RK2-SSP
 	{
 		// update ghost zones [old timestep]
-		fillBoundaryConditions(state_old_cc_tmp, state_old_cc_tmp, lev, time, PreInterpState, PostInterpState);
+		fillBoundaryConditions(state_old_cc_tmp, state_old_cc_tmp, lev, time,
+			quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState);
 
 		// check state validity
 		AMREX_ASSERT(!state_old_cc_tmp.contains_nan(0, state_old_cc_tmp.nComp()));
@@ -916,8 +947,8 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	// Stage 2 of RK2-SSP
 	{
 		// update ghost zones [intermediate stage stored in state_inter_cc_]
-		fillBoundaryConditions(state_inter_cc_, state_inter_cc_, lev, time + dt_lev, PreInterpState,
-					PostInterpState);
+		fillBoundaryConditions(state_inter_cc_, state_inter_cc_, lev, time + dt_lev,
+			quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState);
 
 		// check intermediate state validity
 		AMREX_ASSERT(!state_inter_cc_.contains_nan(0, state_inter_cc_.nComp()));
@@ -1071,7 +1102,7 @@ auto RadhydroSimulation<problem_t>::computeHydroFluxes(
 	const int reconstructRange = 1;
 
 	// allocate temporary MultiFabs
-	amrex::MultiFab primVar(ba, dm, nvars, nghost_);
+	amrex::MultiFab primVar(ba, dm, nvars, nghost_cc_);
 	std::array<amrex::MultiFab, 3> flatCoefs;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> flux;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> facevel;
@@ -1091,7 +1122,7 @@ auto RadhydroSimulation<problem_t>::computeHydroFluxes(
 	}
 
 	// conserved to primitive variables
-	HydroSystem<problem_t>::ConservedToPrimitive(consVar, primVar, nghost_);
+	HydroSystem<problem_t>::ConservedToPrimitive(consVar, primVar, nghost_cc_);
 
 	// compute flattening coefficients
 	AMREX_D_TERM(HydroSystem<problem_t>::template ComputeFlatteningCoefficients<FluxDir::X1>(
@@ -1161,7 +1192,7 @@ auto RadhydroSimulation<problem_t>::computeFOHydroFluxes(
 	const int reconstructRange = 1;
 
 	// allocate temporary MultiFabs
-	amrex::MultiFab primVar(ba, dm, nvars, nghost_);
+	amrex::MultiFab primVar(ba, dm, nvars, nghost_cc_);
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> flux;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> facevel;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> leftState;
@@ -1176,7 +1207,7 @@ auto RadhydroSimulation<problem_t>::computeFOHydroFluxes(
 	}
 
 	// conserved to primitive variables
-	HydroSystem<problem_t>::ConservedToPrimitive(consVar, primVar, nghost_);
+	HydroSystem<problem_t>::ConservedToPrimitive(consVar, primVar, nghost_cc_);
 
 	// compute flux functions
 	AMREX_D_TERM(hydroFOFluxFunction<FluxDir::X1>(primVar, leftState[0], rightState[0], flux[0], facevel[0],
@@ -1302,7 +1333,7 @@ void RadhydroSimulation<problem_t>::advanceRadiationSubstepAtLevel(
 
 	// update ghost zones [old timestep]
 	fillBoundaryConditions(state_old_cc_[lev], state_old_cc_[lev], lev, time,
-			PreInterpState, PostInterpState);
+			quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState);
 
 	// advance all grids on local processor (Stage 1 of integrator)
 	for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
@@ -1333,8 +1364,8 @@ void RadhydroSimulation<problem_t>::advanceRadiationSubstepAtLevel(
 	}
 
 	// update ghost zones [intermediate stage stored in state_new_cc_]
-	fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, time + dt_radiation,
-			PreInterpState, PostInterpState);
+	fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, (time + dt_radiation),
+			quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState);
 
 	// advance all grids on local processor (Stage 2 of integrator)
 	for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
@@ -1443,7 +1474,7 @@ void RadhydroSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real
 	}
 
 	// extend box to include ghost zones
-	amrex::Box const &ghostRange = amrex::grow(indexRange, nghost_);
+	amrex::Box const &ghostRange = amrex::grow(indexRange, nghost_cc_);
 	// N.B.: A one-zone layer around the cells must be fully reconstructed in order for PPM to
 	// work.
 	amrex::Box const &reconstructRange = amrex::grow(indexRange, 1);

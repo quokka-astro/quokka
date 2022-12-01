@@ -16,10 +16,19 @@ template <typename problem_t> struct Physics_Traits {
 
 // this struct stores the indices at which quantities start
 template <typename problem_t> struct Physics_Indices {
-  // cell-centered quantities
+  // cell-centered
+  static const int nvarTotal_cc = Physics_NumVars::numHydroVars
+        + Physics_Traits<problem_t>::numPassiveScalars
+        + static_cast<int>(Physics_Traits<problem_t>::is_radiation_enabled) * Physics_NumVars::numRadVars;
   static const int hydroFirstIndex = 0;
-  static const int pscalarFirstIndex = Physics_NumVars<problem_t>::numHydroVars;
+  static const int pscalarFirstIndex = Physics_NumVars::numHydroVars;
   static const int radFirstIndex = pscalarFirstIndex + Physics_Traits<problem_t>::numPassiveScalars;
+  // face-centered
+  static const int nvarPerDim_fc =
+        static_cast<int>(Physics_Traits<problem_t>::is_mhd_enabled) * Physics_NumVars::numMHDVars_per_dim;
+  static const int nvarTotal_fc =
+        static_cast<int>(Physics_Traits<problem_t>::is_mhd_enabled) * Physics_NumVars::numMHDVars_tot;
+  static const int mhdFirstIndex = 0;
 };
 
 #endif // PHYSICS_INFO_HPP_

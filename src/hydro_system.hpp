@@ -40,9 +40,9 @@ template <typename problem_t> struct HydroSystem_Traits {
 ///
 template <typename problem_t> class HydroSystem : public HyperbolicSystem<problem_t>
 {
-      public:
+public:
 	static constexpr int nscalars_ = Physics_Traits<problem_t>::numPassiveScalars;
-	static constexpr int nvar_ = Physics_NumVars<problem_t>::numHydroVars + nscalars_;
+	static constexpr int nvar_ = Physics_NumVars::numHydroVars + nscalars_;
 
 	enum consVarIndex {
 		density_index = Physics_Indices<problem_t>::hydroFirstIndex,
