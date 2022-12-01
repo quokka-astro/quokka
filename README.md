@@ -29,7 +29,7 @@ Quokka also features advanced Adaptive Quokka Refinement:tm: technology:
 ## Dependencies
 * C++ compiler (with C++17 support)
 * CMake 3.16+
-* MPI library (OpenMPI, MPICH, or Cray MPI)
+* MPI library with GPU-aware support (OpenMPI, MPICH, or Cray MPI)
 * HDF5 1.10+ (serial version)
 * CUDA 11.7+ (optional, for NVIDIA GPUs)
 * ROCm 5.2.0+ (optional, for AMD GPUs)
@@ -103,7 +103,7 @@ to the CMake command-line options (or change the `QUOKKA_PYTHON` option to `OFF`
 By default, Quokka compiles itself to run only on CPUs. Quokka can run on either NVIDIA, AMD, or Intel GPUs. Consult the sub-sections below for the build instructions for a given GPU vendor.
 
 ### NVIDIA GPUs
-If you want to run on NVIDIA GPUs, re-build Quokka as shown below. (*CUDA >= 11.7 is required. Quokka is only supported on Volta V100 GPUs or newer models.*)
+If you want to run on NVIDIA GPUs, re-build Quokka as shown below. (*CUDA >= 11.7 is required. Quokka is only supported on Volta V100 GPUs or newer models. Your MPI library **must** support CUDA-aware MPI.*)
 ```
 cmake .. -DCMAKE_BUILD_TYPE=Release -DAMReX_GPU_BACKEND=CUDA -DAMREX_GPUS_PER_NODE=N -G Ninja
 ninja -j6
@@ -125,10 +125,10 @@ which should end with output similar to the following:
 Total Test time (real) = 353.77 sec
 ```
 ### AMD GPUs
-Compile with `-DAMReX_GPU_BACKEND=HIP`. Requires ROCm 5.2.0 or newer. Quokka has been tested on MI100 and MI250X GPUs.
+Compile with `-DAMReX_GPU_BACKEND=HIP`. Requires ROCm 5.2.0 or newer. Your MPI library **must** support GPU-aware MPI for AMD GPUs. Quokka has been tested on MI100 and MI250X GPUs.
 
 ### Intel GPUs
-Not tested. You can attempt this by compiling with `-DAMReX_GPU_BACKEND=SYCL`. Please start a Discussion if you encounter issues on Intel GPUs.
+Not tested. You can attempt this by compiling with `-DAMReX_GPU_BACKEND=SYCL`. Please start a Discussion if you encounter issues on Intel GPUs. Your MPI library **must** support GPU-aware MPI for Intel GPUs.
 
 ## Building a specific test problem
 By default, all available test problems will be compiled. If you only want to build a specific problem, you can list all of the available CMake targets:
