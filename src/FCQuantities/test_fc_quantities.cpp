@@ -13,6 +13,7 @@
 
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
+#include "AMReX_Print.H"
 #include "AMReX_REAL.H"
 
 #include "RadhydroSimulation.hpp"
@@ -144,36 +145,49 @@ void checkMFs(
   AMREX_ALWAYS_ASSERT(std::abs(err) == 0.0);
 }
 
+void printState(amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const& states) {
+  for (int level = 0; level < states.size(); ++level) {
+    for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+      for (amrex::MFIter iter(states[level][idim]); iter.isValid(); ++iter) {
+        amrex::Array4<const double> const& state = states[level][idim].array(iter);
+        amrex::ParallelFor(iter.validbox(), [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+          amrex::Print() << state(i, j, k, 0) << ", ";
+        });
+      }
+    }
+  }
+}
+
 auto problem_main() -> int {
   // Problem initialization
-  const int nvars = RadhydroSimulation<FCQuantities>::nvarTotal_cc_;
-  amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-  for (int n = 0; n < nvars; ++n) {
+  const int nvars_cc = Physics_Indices<FCQuantities>::nvarTotal_cc;
+  amrex::Vector<amrex::BCRec> BCs_cc(nvars_cc);
+  for (int n = 0; n < nvars_cc; ++n) {
     for (int i = 0; i < AMREX_SPACEDIM; ++i) {
       BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
       BCs_cc[n].setHi(i, amrex::BCType::int_dir);
     }
   }
 
-  RadhydroSimulation<FCQuantities> sim_write(BCs_cc);
-  sim_write.cflNumber_ = 0.1;
-  sim_write.stopTime_ = 1.0;
-  sim_write.maxTimesteps_ = 2e4;
-  sim_write.setInitialConditions();
-  amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const& state_old_fc_write = sim_write.getOldMF_fc();
-  amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const& state_new_fc_write = sim_write.getNewMF_fc();
+  const int nvars_fc = Physics_Indices<FCQuantities>::nvarTotal_fc;
+  amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
+  for (int n = 0; n < nvars_fc; ++n) {
+    for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+      BCs_fc[n].setLo(i, amrex::BCType::int_dir); // periodic
+      BCs_fc[n].setHi(i, amrex::BCType::int_dir);
+    }
+  }
 
-  RadhydroSimulation<FCQuantities> sim_restart(BCs_cc);
-  sim_restart.cflNumber_ = 0.1;
-  sim_restart.stopTime_ = 1.0;
-  sim_restart.maxTimesteps_ = 2e4;
-  sim_restart.setInitialConditions();
-  amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const& state_old_fc_restart = sim_restart.getOldMF_fc();
-  amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const& state_new_fc_restart = sim_restart.getNewMF_fc();
+  RadhydroSimulation<FCQuantities> sim_write(BCs_cc, BCs_fc);
+  sim_write.setInitialConditions();
+  amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const& state_new_fc_write = sim_write.getNewMF_fc();
   amrex::Print() << "\n";
 
-  amrex::Print() << "Checking old FC MFs...\n";
-  checkMFs(state_old_fc_write, state_old_fc_restart);
+  RadhydroSimulation<FCQuantities> sim_restart(BCs_cc);
+  sim_restart.setChkFile("chk00000");
+  sim_restart.setInitialConditions();
+  amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const& state_new_fc_restart = sim_restart.getNewMF_fc();
+  amrex::Print() << "\n";
   
   amrex::Print() << "Checking new FC MFs...\n";
   checkMFs(state_new_fc_write, state_new_fc_restart);

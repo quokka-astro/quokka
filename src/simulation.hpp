@@ -249,6 +249,7 @@ public:
   void SetLastCheckpointSymlink(std::string const &checkpointname) const;
   void ReadCheckpointFile();
   auto getWalltime() -> amrex::Real;
+  void setChkFile(std::string const& chkfile_number);
   [[nodiscard]] auto getOldMF_fc() const -> amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const&;
   [[nodiscard]] auto getNewMF_fc() const -> amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const&;
 #ifdef AMREX_USE_ASCENT
@@ -306,6 +307,11 @@ protected:
   Ascent ascent_;
 #endif
 };
+
+template <typename problem_t>
+void AMRSimulation<problem_t>::setChkFile(std::string const& chkfile_number) {
+  restart_chkfile = chkfile_number;
+}
 
 template <typename problem_t>
 auto AMRSimulation<problem_t>::getOldMF_fc() const
