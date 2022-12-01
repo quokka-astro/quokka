@@ -45,7 +45,8 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	using AMRSimulation<problem_t>::cflNumber_;
 	using AMRSimulation<problem_t>::dt_;
 	using AMRSimulation<problem_t>::ncomp_cc_;
-	using AMRSimulation<problem_t>::nghost_;
+  using AMRSimulation<problem_t>::BCs_cc_;
+	using AMRSimulation<problem_t>::nghost_cc_;
 	using AMRSimulation<problem_t>::cycleCount_;
 	using AMRSimulation<problem_t>::areInitialConditionsDefined_;
 	using AMRSimulation<problem_t>::componentNames_cc_;
@@ -66,16 +67,11 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	using AMRSimulation<problem_t>::DistributionMap;
 	using AMRSimulation<problem_t>::InterpHookNone;
 
-	explicit AdvectionSimulation(amrex::Vector<amrex::BCRec> &boundaryConditions)
-      : AMRSimulation<problem_t>(boundaryConditions) {
+	explicit AdvectionSimulation(amrex::Vector<amrex::BCRec> &BCs_cc)
+      : AMRSimulation<problem_t>(BCs_cc) {
     componentNames_cc_.push_back({"density"});
     ncomp_cc_ = 1;
   }
-
-	AdvectionSimulation(amrex::IntVect & /*gridDims*/,
-                      amrex::RealBox & /*boxSize*/,
-			                amrex::Vector<amrex::BCRec> &boundaryConditions)
-	    : AMRSimulation<problem_t>(boundaryConditions) { }
 
 	void computeMaxSignalLocal(int level) override;
 	auto computeExtraPhysicsTimestep(int level) -> amrex::Real override;
@@ -86,9 +82,9 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	void computeAfterTimestep() override;
 	void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) override;
 	void computeReferenceSolution(
-	    amrex::MultiFab &ref,
-    	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-    	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+    amrex::MultiFab &ref,
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
 		amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi);
 	void fillPoissonRhsAtLevel(amrex::MultiFab &rhs, int lev) override;
 	void applyPoissonGravityAtLevel(amrex::MultiFab const &phi, int lev, amrex::Real dt) override;
@@ -293,7 +289,9 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 
 	// update ghost zones [w/ old timestep]
 	// (N.B. the input and output multifabs are allowed to be the same, as done here)
-	fillBoundaryConditions(state_old_cc_[lev], state_old_cc_[lev], lev, time, InterpHookNone, InterpHookNone);
+	fillBoundaryConditions(state_old_cc_[lev], state_old_cc_[lev], lev, time,
+                         quokka::centering::cc, quokka::direction::na,
+                         InterpHookNone, InterpHookNone);
 
 	amrex::Real fluxScaleFactor = NAN;
 	if constexpr (integratorOrder_ == 2) {
@@ -326,8 +324,8 @@ void AdvectionSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex
 
 	if constexpr (integratorOrder_ == 2) {
 		// update ghost zones [w/ intermediate stage stored in state_new_cc_]
-		fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, time + dt_lev,
-				InterpHookNone, InterpHookNone);
+		fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, (time + dt_lev),
+				quokka::centering::cc, quokka::direction::na, InterpHookNone, InterpHookNone);
 
 		// advance all grids on local processor (Stage 2 of integrator)
 		{
@@ -390,7 +388,7 @@ auto AdvectionSimulation<problem_t>::computeFluxes(amrex::MultiFab const &consVa
 	const int reconstructRange = 1;
 
 	// allocate temporary MultiFabs
-	amrex::MultiFab primVar(ba, dm, nvars, nghost_);
+	amrex::MultiFab primVar(ba, dm, nvars, nghost_cc_);
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> flux;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> leftState;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> rightState;
@@ -431,7 +429,7 @@ void AdvectionSimulation<problem_t>::fluxFunction(amrex::MultiFab const &consSta
 	//amrex::Box const &x1ReconstructRange = amrex::surroundingNodes(reconstructRange, dim);
 
 	LinearAdvectionSystem<problem_t>::ConservedToPrimitive(consState, primVar,
-		nghost_, nvars);
+		nghost_cc_, nvars);
 
 	LinearAdvectionSystem<problem_t>::template ReconstructStatesPPM<DIR>(
 		primVar, x1LeftState, x1RightState, ng_reconstruct, nvars);

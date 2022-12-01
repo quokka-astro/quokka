@@ -61,7 +61,7 @@ public:
 				std::min(2.0 * std::abs(a), 2.0 * std::abs(b)));
 	}
   
-  static constexpr int nvarHyperbolic_ = Physics_NumVars<problem_t>::numRadVars; // number of radiation variables
+  static constexpr int nvarHyperbolic_ = Physics_NumVars::numRadVars; // number of radiation variables
   static constexpr int nstartHyperbolic_ = Physics_Indices<problem_t>::radFirstIndex;
   static constexpr int nvar_ = nstartHyperbolic_ + nvarHyperbolic_;
 
