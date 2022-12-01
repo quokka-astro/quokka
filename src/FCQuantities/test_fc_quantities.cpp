@@ -145,19 +145,6 @@ void checkMFs(
   AMREX_ALWAYS_ASSERT(std::abs(err) == 0.0);
 }
 
-void printState(amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const& states) {
-  for (int level = 0; level < states.size(); ++level) {
-    for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-      for (amrex::MFIter iter(states[level][idim]); iter.isValid(); ++iter) {
-        amrex::Array4<const double> const& state = states[level][idim].array(iter);
-        amrex::ParallelFor(iter.validbox(), [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-          amrex::Print() << state(i, j, k, 0) << ", ";
-        });
-      }
-    }
-  }
-}
-
 auto problem_main() -> int {
   // Problem initialization
   const int nvars_cc = Physics_Indices<FCQuantities>::nvarTotal_cc;
