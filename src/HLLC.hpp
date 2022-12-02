@@ -17,7 +17,7 @@ namespace quokka::Riemann
 //  Minoshima & Miyoshi, "A low-dissipation HLLD approximate Riemann solver
 //  	for a very wide range of Mach numbers," JCP (2021).]
 //
-template <FluxDir DIR, int N_scalars, int fluxdim>
+template <int N_scalars, int fluxdim>
 AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars> const &sL, quokka::HydroState<N_scalars> const &sR, const double gamma,
 					      const double du, const double dw) -> quokka::valarray<double, fluxdim>
 {
@@ -83,8 +83,8 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars> cons
 
 	// Low-dissipation pressure correction 'phi' [Eq. 23 of Minoshima & Miyoshi]
 
-	const double vmag_L = std::sqrt(sL.vx * sL.vx + sL.vy * sL.vy + sL.vz * sL.vz);
-	const double vmag_R = std::sqrt(sR.vx * sR.vx + sR.vy * sR.vy + sR.vz * sR.vz);
+	const double vmag_L = std::sqrt(sL.u * sL.u + sL.v * sL.v + sL.w * sL.w);
+	const double vmag_R = std::sqrt(sR.u * sR.u + sR.v * sR.v + sR.w * sR.w);
 	const double chi = std::min(1., std::max(vmag_L, vmag_R) / cs_max);
 	const double phi = chi * (2. - chi);
 
@@ -92,43 +92,23 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars> cons
 
 	/// compute fluxes
 
-	quokka::valarray<double, fluxdim> D_L{};
-	quokka::valarray<double, fluxdim> D_R{};
-	quokka::valarray<double, fluxdim> D_star{};
-
 	// N.B.: quokka::valarray is written to allow assigning <= fluxdim
 	// components, so this works even if there are more components than
 	// enumerated in the initializer list. The remaining components are
 	// assigned a default value of zero.
-	if constexpr (DIR == FluxDir::X1) {
-		D_L = {0., 1., 0., 0., sL.u, 0.};
-		D_R = {0., 1., 0., 0., sR.u, 0.};
-		D_star = {0., 1., 0., 0., S_star, 0.};
-	} else if constexpr (DIR == FluxDir::X2) {
-		D_L = {0., 0., 1., 0., sL.u, 0.};
-		D_R = {0., 0., 1., 0., sR.u, 0.};
-		D_star = {0., 0., 1., 0., S_star, 0.};
-	} else if constexpr (DIR == FluxDir::X3) {
-		D_L = {0., 0., 0., 1., sL.u, 0.};
-		D_R = {0., 0., 0., 1., sR.u, 0.};
-		D_star = {0., 0., 0., 1., S_star, 0.};
-	}
 
-	const std::initializer_list<double> state_L = {sL.rho, sL.rho * sL.vx, sL.rho * sL.vy, sL.rho * sL.vz, sL.E, sL.Eint};
-	const std::initializer_list<double> state_R = {sR.rho, sR.rho * sR.vx, sR.rho * sR.vy, sR.rho * sR.vz, sR.E, sR.Eint};
+	const quokka::valarray<double, fluxdim> D_L = {0., 1., 0., 0., sL.u, 0.};
+	const quokka::valarray<double, fluxdim> D_R = {0., 1., 0., 0., sR.u, 0.};
+	const quokka::valarray<double, fluxdim> D_star = {0., 1., 0., 0., S_star, 0.};
 
-	// N.B.: quokka::valarray is written to allow assigning <= fluxdim
-	// components, so this works even if there are more components than
-	// enumerated in the initializer list. The remaining components are
-	// assigned a default value of zero.
-	quokka::valarray<double, fluxdim> U_L = state_L;
-	quokka::valarray<double, fluxdim> U_R = state_R;
+	quokka::valarray<double, fluxdim> U_L = {sL.rho, sL.rho * sL.u, sL.rho * sL.v, sL.rho * sL.w, sL.E, sL.Eint};
+	quokka::valarray<double, fluxdim> U_R = {sR.rho, sR.rho * sR.u, sR.rho * sR.v, sR.rho * sR.w, sR.E, sR.Eint};
 
 	// The remaining components are passive scalars, so just copy them from
 	// x1LeftState and x1RightState into the (left, right) state vectors U_L and
 	// U_R
 	for (int n = 0; n < N_scalars; ++n) {
-		const int nstart = static_cast<int>(state_L.size());
+		const int nstart = fluxdim - N_scalars;
 		U_L[nstart + n] = sL.scalar[n];
 		U_R[nstart + n] = sR.scalar[n];
 	}

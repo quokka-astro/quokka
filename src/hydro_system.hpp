@@ -766,21 +766,15 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 
 		// assign normal component of velocity according to DIR
 
-		double u_L = NAN;
-		double u_R = NAN;
 		int velN_index = x1Velocity_index;
 		int velV_index = x2Velocity_index;
 		int velW_index = x3Velocity_index;
 
 		if constexpr (DIR == FluxDir::X1) {
-			u_L = vx_L;
-			u_R = vx_R;
 			velN_index = x1Velocity_index;
 			velV_index = x2Velocity_index;
 			velW_index = x3Velocity_index;
 		} else if constexpr (DIR == FluxDir::X2) {
-			u_L = vy_L;
-			u_R = vy_R;
 			if constexpr (AMREX_SPACEDIM == 2) {
 				velN_index = x2Velocity_index;
 				velV_index = x1Velocity_index;
@@ -791,8 +785,6 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 				velW_index = x1Velocity_index;
 			}
 		} else if constexpr (DIR == FluxDir::X3) {
-			u_L = vz_L;
-			u_R = vz_R;
 			velN_index = x3Velocity_index;
 			velV_index = x1Velocity_index;
 			velW_index = x2Velocity_index;
@@ -800,22 +792,20 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 
 		quokka::HydroState<nscalars_> sL{};
 		sL.rho = rho_L;
-		sL.vx = vx_L;
-		sL.vy = vy_L;
-    sL.vz = vz_L;
+		sL.u = x1LeftState(i, j, k, velN_index);
+		sL.v = x1LeftState(i, j, k, velV_index);
+    	sL.w = x1LeftState(i, j, k, velW_index);
 		sL.P = P_L;
-		sL.u = u_L;
 		sL.cs = cs_L;
 		sL.E = E_L;
 		sL.Eint = Eint_L;
 
 		quokka::HydroState<nscalars_> sR{};
 		sR.rho = rho_R;
-		sR.vx = vx_R;
-		sR.vy = vy_R;
-		sR.vz = vz_R;
+		sR.u = x1RightState(i, j, k, velN_index);
+		sR.v = x1RightState(i, j, k, velV_index);
+		sR.w = x1RightState(i, j, k, velW_index);
 		sR.P = P_R;
-		sR.u = u_R;
 		sR.cs = cs_R;
 		sR.E = E_R;
 		sR.Eint = Eint_R;
@@ -846,7 +836,14 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		dw = std::min(std::min(dwl, dwr), dw);
 #endif
 
-		quokka::valarray<double, nvar_> F = quokka::Riemann::HLLC<DIR, nscalars_, nvar_>(sL, sR, gamma_, du, dw);
+		// solve the Riemann problem in canonical form
+		quokka::valarray<double, nvar_> F_canonical = quokka::Riemann::HLLC<nscalars_, nvar_>(sL, sR, gamma_, du, dw);
+		quokka::valarray<double, nvar_> F = F_canonical;
+
+		// permute momentum components according to flux direction DIR
+		F[velN_index] = F_canonical[x1Momentum_index];
+		F[velV_index] = F_canonical[x2Momentum_index];
+		F[velW_index] = F_canonical[x3Momentum_index];
 
 		// set energy fluxes to zero if EOS is isothermal
 		if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
