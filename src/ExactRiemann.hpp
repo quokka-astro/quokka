@@ -133,7 +133,7 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto ComputePstar(quokka::HydroState<N_scala
 
 // Exact Riemann solver following Chapter 4 of Toro (1998).
 //
-template <FluxDir DIR, int N_scalars, int fluxdim>
+template <int N_scalars, int fluxdim>
 AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto Exact(quokka::HydroState<N_scalars> const &sL, quokka::HydroState<N_scalars> const &sR, const double gamma,
 					       const double /*du*/, const double /*dw*/) -> quokka::valarray<double, fluxdim>
 {
@@ -230,33 +230,22 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto Exact(quokka::HydroState<N_scalars> con
 
 	/// compute fluxes
 
-	quokka::valarray<double, fluxdim> D_m{};
-
 	// N.B.: quokka::valarray is written to allow assigning <= fluxdim
 	// components, so this works even if there are more components than
 	// enumerated in the initializer list. The remaining components are
 	// assigned a default value of zero.
-	if constexpr (DIR == FluxDir::X1) {
-		D_m = {0., 1., 0., 0., s.u, 0.};
-		s.vx = s.u;
-	} else if constexpr (DIR == FluxDir::X2) {
-		D_m = {0., 0., 1., 0., s.u, 0.};
-		s.vy = s.u;
-	} else if constexpr (DIR == FluxDir::X3) {
-		D_m = {0., 0., 0., 1., s.u, 0.};
-		s.vz = s.u;
-	}
+	quokka::valarray<double, fluxdim> D_m = {0., 1., 0., 0., s.u, 0.};
 
 	// recompute the total energy
-	s.E = s.P / (gamma - 1.) + 0.5 * s.rho * (s.vx * s.vx + s.vy * s.vy + s.vz + s.vz);
+	s.E = s.P / (gamma - 1.) + 0.5 * s.rho * (s.u * s.u + s.v * s.v + s.w + s.w);
 
-	const std::initializer_list<double> state_mid = {s.rho, s.rho * s.vx, s.rho * s.vy, s.rho * s.vz, s.E, s.Eint};
-	quokka::valarray<double, fluxdim> U_m = state_mid;
+	// compute exact state at interface
+	quokka::valarray<double, fluxdim> U_m = {s.rho, s.rho * s.u, s.rho * s.v, s.rho * s.w, s.E, s.Eint};
 
 	// The remaining components are passive scalars, so just copy them from
 	// x1LeftState and x1RightState into the state vector U_m
 	for (int n = 0; n < N_scalars; ++n) {
-		const int nstart = static_cast<int>(state_mid.size());
+		const int nstart = fluxdim - N_scalars;
 		U_m[nstart + n] = s.scalar[n];
 	}
 
