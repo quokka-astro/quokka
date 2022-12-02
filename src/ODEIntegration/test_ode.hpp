@@ -22,21 +22,20 @@
 
 // internal headers
 #include "CloudyCooling.hpp"
+#include "ODEIntegrate.hpp"
 #include "hydro_system.hpp"
 #include "radiation_system.hpp"
-#include "ODEIntegrate.hpp"
 #include "valarray.hpp"
 
 // types
 
-struct ODETest {};
+struct ODETest {
+};
 
 constexpr double seconds_in_year = 3.154e7;
 
 // function definitions
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
-user_rhs(Real t, quokka::valarray<Real, 1> &y_data,
-         quokka::valarray<Real, 1> &y_rhs, void *user_data) -> int;
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto user_rhs(Real t, quokka::valarray<Real, 1> &y_data, quokka::valarray<Real, 1> &y_rhs, void *user_data) -> int;
 
 #endif // TEST_ODE_HPP_
