@@ -794,7 +794,7 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		sL.rho = rho_L;
 		sL.u = x1LeftState(i, j, k, velN_index);
 		sL.v = x1LeftState(i, j, k, velV_index);
-    	sL.w = x1LeftState(i, j, k, velW_index);
+		sL.w = x1LeftState(i, j, k, velW_index);
 		sL.P = P_L;
 		sL.cs = cs_L;
 		sL.E = E_L;
@@ -825,9 +825,9 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 #if AMREX_SPACEDIM == 1
 		const double dw = 0.;
 #else
-	  amrex::Real dvl = std::min(q(i - 1, j + 1, k, velV_index) - q(i - 1, j, k, velV_index), q(i - 1, j, k, velV_index) - q(i - 1, j - 1, k, velV_index));
-	  amrex::Real dvr = std::min(q(i, j + 1, k, velV_index) - q(i, j, k, velV_index), q(i, j, k, velV_index) - q(i, j - 1, k, velV_index));
-	  double dw = std::min(dvl, dvr);
+	  	amrex::Real dvl = std::min(q(i - 1, j + 1, k, velV_index) - q(i - 1, j, k, velV_index), q(i - 1, j, k, velV_index) - q(i - 1, j - 1, k, velV_index));
+	  	amrex::Real dvr = std::min(q(i, j + 1, k, velV_index) - q(i, j, k, velV_index), q(i, j, k, velV_index) - q(i, j - 1, k, velV_index));
+	  	double dw = std::min(dvl, dvr);
 #endif
 #if AMREX_SPACEDIM == 3
 		amrex::Real dwl =
