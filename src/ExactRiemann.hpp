@@ -140,7 +140,7 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto Exact(quokka::HydroState<N_scalars> con
 	// check if vacuum is created
 	const double du_crit = 2.0 * (sL.cs + sR.cs) / (gamma - 1.);
 	const double du = sR.u - sL.u;
-	AMREX_ALWAYS_ASSERT(du_crit > du); // pressure positivity condition
+	// AMREX_ALWAYS_ASSERT(du_crit > du); // pressure positivity condition
 
 	// compute pressure in the star region
 	const double P_star = detail::ComputePstar(sL, sR, gamma);
@@ -228,16 +228,16 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto Exact(quokka::HydroState<N_scalars> con
 		}
 	}
 
+	// recompute the total energy
+	s.E = s.P / (gamma - 1.) + 0.5 * s.rho * (s.u * s.u + s.v * s.v + s.w + s.w);
+
 	/// compute fluxes
 
 	// N.B.: quokka::valarray is written to allow assigning <= fluxdim
 	// components, so this works even if there are more components than
 	// enumerated in the initializer list. The remaining components are
 	// assigned a default value of zero.
-	quokka::valarray<double, fluxdim> D_m = {0., 1., 0., 0., s.u, 0.};
-
-	// recompute the total energy
-	s.E = s.P / (gamma - 1.) + 0.5 * s.rho * (s.u * s.u + s.v * s.v + s.w + s.w);
+	const quokka::valarray<double, fluxdim> D_m = {0., 1., 0., 0., s.u, 0.};
 
 	// compute exact state at interface
 	quokka::valarray<double, fluxdim> U_m = {s.rho, s.rho * s.u, s.rho * s.v, s.rho * s.w, s.E, s.Eint};
@@ -251,7 +251,6 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto Exact(quokka::HydroState<N_scalars> con
 
 	// compute F(U_m)
 	const quokka::valarray<double, fluxdim> F = s.u * U_m + s.P * D_m;
-
 	return F;
 }
 } // namespace quokka::Riemann
