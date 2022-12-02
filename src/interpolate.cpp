@@ -22,8 +22,7 @@
  * @return index
  */
 AMREX_GPU_HOST_DEVICE
-int64_t binary_search_with_guess(const double key, const double *arr,
-					int64_t len, int64_t guess)
+int64_t binary_search_with_guess(const double key, const double *arr, int64_t len, int64_t guess)
 {
 	int64_t imin = 0;
 	int64_t imax = len;
@@ -59,8 +58,7 @@ int64_t binary_search_with_guess(const double key, const double *arr,
 		if (key < arr[guess - 1]) {
 			imax = guess - 1;
 			/* last attempt to restrict search to items in cache */
-			if (guess > LIKELY_IN_CACHE_SIZE &&
-			    key >= arr[guess - LIKELY_IN_CACHE_SIZE]) {
+			if (guess > LIKELY_IN_CACHE_SIZE && key >= arr[guess - LIKELY_IN_CACHE_SIZE]) {
 				imin = guess - LIKELY_IN_CACHE_SIZE;
 			}
 		} else {
@@ -80,8 +78,7 @@ int64_t binary_search_with_guess(const double key, const double *arr,
 				imin = guess + 2;
 				/* last attempt to restrict search to items in
 				 * cache */
-				if (guess < len - LIKELY_IN_CACHE_SIZE - 1 &&
-				    key < arr[guess + LIKELY_IN_CACHE_SIZE]) {
+				if (guess < len - LIKELY_IN_CACHE_SIZE - 1 && key < arr[guess + LIKELY_IN_CACHE_SIZE]) {
 					imax = guess + LIKELY_IN_CACHE_SIZE;
 				}
 			}
@@ -103,14 +100,13 @@ int64_t binary_search_with_guess(const double key, const double *arr,
 #undef LIKELY_IN_CACHE_SIZE
 
 AMREX_GPU_HOST_DEVICE
-void interpolate_arrays(double *x, double *y, int len,
-					double *arr_x, double *arr_y, int arr_len)
+void interpolate_arrays(double *x, double *y, int len, double *arr_x, double *arr_y, int arr_len)
 {
 	/* Note: arr_x must be sorted in ascending order,
 		and arr_len must be >= 3. */
 
 	int64_t j = 0;
-	for(int i = 0; i < len; i++) {
+	for (int i = 0; i < len; i++) {
 		j = binary_search_with_guess(x[i], arr_x, arr_len, j);
 
 		if (j == -1) {
@@ -122,10 +118,10 @@ void interpolate_arrays(double *x, double *y, int len,
 		} else if (x[i] == arr_x[j]) { // avoid roundoff error
 			y[i] = arr_y[j];
 		} else {
-			const double slope = (arr_y[j+1] - arr_y[j]) / (arr_x[j+1] - arr_x[j]);
-			y[i] = slope*(x[i] - arr_x[j]) + arr_y[j];
+			const double slope = (arr_y[j + 1] - arr_y[j]) / (arr_x[j + 1] - arr_x[j]);
+			y[i] = slope * (x[i] - arr_x[j]) + arr_y[j];
 		}
-		assert( !isnan(y[i]) );
+		assert(!isnan(y[i]));
 	}
 }
 
@@ -148,9 +144,9 @@ double interpolate_value(double x, double const *arr_x, double const *arr_y, int
 	} else if (x == arr_x[j]) { // avoid roundoff error
 		y = arr_y[j];
 	} else {
-		const double slope = (arr_y[j+1] - arr_y[j]) / (arr_x[j+1] - arr_x[j]);
-		y = slope*(x - arr_x[j]) + arr_y[j];
+		const double slope = (arr_y[j + 1] - arr_y[j]) / (arr_x[j + 1] - arr_x[j]);
+		y = slope * (x - arr_x[j]) + arr_y[j];
 	}
-	assert( !isnan(y) );
+	assert(!isnan(y));
 	return y;
 }

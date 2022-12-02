@@ -31,39 +31,31 @@ template <typename problem_t> class LinearAdvectionSystem : public HyperbolicSys
 
 	// static member functions
 
-	static void ConservedToPrimitive(amrex::MultiFab const &cons_mf,
-						amrex::MultiFab &primVar_mf,
-						const int nghost, const int nvars);
+	static void ConservedToPrimitive(amrex::MultiFab const &cons_mf, amrex::MultiFab &primVar_mf, const int nghost, const int nvars);
 
-	static void ComputeMaxSignalSpeed(amrex::Array4<amrex::Real const> const & /*cons*/,
-					  amrex::Array4<amrex::Real> const &maxSignal,
-					  double advectionVx, double advectionVy,
-					  double advectionVz, amrex::Box const &indexRange);
+	static void ComputeMaxSignalSpeed(amrex::Array4<amrex::Real const> const & /*cons*/, amrex::Array4<amrex::Real> const &maxSignal, double advectionVx,
+					  double advectionVy, double advectionVz, amrex::Box const &indexRange);
 
 	AMREX_GPU_DEVICE
-	static auto isStateValid(amrex::Array4<const amrex::Real> const &cons,
-					  int i, int j, int k) -> bool;
-	
+	static auto isStateValid(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> bool;
+
 	static void PredictStep(amrex::MultiFab const &consVarOld_mf, amrex::MultiFab &consVarNew_mf,
-    				  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fluxArray, const double dt,
-    				  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, const int nvars);
+				std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fluxArray, const double dt,
+				amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, const int nvars);
 
 	static void AddFluxesRK2(amrex::MultiFab &U_new_mf, amrex::MultiFab const &U0_mf, amrex::MultiFab const &U1_mf,
-    				  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fluxArray, const double dt,
-   					  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, const int nvars);
+				 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fluxArray, const double dt,
+				 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, const int nvars);
 
 	template <FluxDir DIR>
-	static void ComputeFluxes(amrex::MultiFab &x1Flux_mf,
-						     amrex::MultiFab const &x1LeftState_mf,
-						     amrex::MultiFab const &x1RightState_mf,
-						     const double advectionVx, const int nvars);
+	static void ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab const &x1LeftState_mf, amrex::MultiFab const &x1RightState_mf,
+				  const double advectionVx, const int nvars);
 };
 
 template <typename problem_t>
-void LinearAdvectionSystem<problem_t>::ComputeMaxSignalSpeed(
-    amrex::Array4<amrex::Real const> const & /*cons*/, amrex::Array4<amrex::Real> const &maxSignal,
-    const double advectionVx, const double advectionVy, const double advectionVz,
-    amrex::Box const &indexRange)
+void LinearAdvectionSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<amrex::Real const> const & /*cons*/, amrex::Array4<amrex::Real> const &maxSignal,
+							     const double advectionVx, const double advectionVy, const double advectionVz,
+							     amrex::Box const &indexRange)
 {
 	const auto vx = advectionVx;
 	const auto vy = advectionVy;
@@ -75,22 +67,19 @@ void LinearAdvectionSystem<problem_t>::ComputeMaxSignalSpeed(
 }
 
 template <typename problem_t>
-void LinearAdvectionSystem<problem_t>::ConservedToPrimitive(amrex::MultiFab const &cons_mf,
-								amrex::MultiFab &primVar_mf,
-							    const int nghost, const int nvars)
+void LinearAdvectionSystem<problem_t>::ConservedToPrimitive(amrex::MultiFab const &cons_mf, amrex::MultiFab &primVar_mf, const int nghost, const int nvars)
 {
 	auto const &cons = cons_mf.const_arrays();
 	auto primVar = primVar_mf.arrays();
-	amrex::IntVect ng{AMREX_D_DECL(nghost,nghost,nghost)};
+	amrex::IntVect ng{AMREX_D_DECL(nghost, nghost, nghost)};
 
-	amrex::ParallelFor(primVar_mf, ng, nvars, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k, int n) {
-		primVar[bx](i, j, k, n) = cons[bx](i, j, k, n);
-	});
+	amrex::ParallelFor(primVar_mf, ng, nvars, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k, int n) { primVar[bx](i, j, k, n) = cons[bx](i, j, k, n); });
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto LinearAdvectionSystem<problem_t>::isStateValid(
-		amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> bool {
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto LinearAdvectionSystem<problem_t>::isStateValid(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k)
+    -> bool
+{
 	// check if cons(i, j, k) is a valid state
 	const auto rho = cons(i, j, k, density_index);
 	bool isDensityPositive = (rho > 0.);
@@ -98,10 +87,9 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto LinearAdvectionSystem<problem_t>::isSta
 }
 
 template <typename problem_t>
-void LinearAdvectionSystem<problem_t>::PredictStep(
-    amrex::MultiFab const &consVarOld_mf, amrex::MultiFab &consVarNew_mf,
-    std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fluxArray, const double dt,
-    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, const int nvars)
+void LinearAdvectionSystem<problem_t>::PredictStep(amrex::MultiFab const &consVarOld_mf, amrex::MultiFab &consVarNew_mf,
+						   std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fluxArray, const double dt,
+						   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, const int nvars)
 {
 	BL_PROFILE("LinearAdvectionSystem::PredictStep()");
 
@@ -123,16 +111,13 @@ void LinearAdvectionSystem<problem_t>::PredictStep(
 	auto const &consVarOld = consVarOld_mf.const_arrays();
 	auto consVarNew = consVarNew_mf.arrays();
 
-	amrex::ParallelFor(
-	    consVarNew_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			for (int n = 0; n < nvars; ++n) {
-				consVarNew[bx](i, j, k, n) =
-				consVarOld[bx](i, j, k, n) +
-				(AMREX_D_TERM( (dt / dx) * (x1Flux[bx](i, j, k, n) - x1Flux[bx](i + 1, j, k, n)),
-							+ (dt / dy) * (x2Flux[bx](i, j, k, n) - x2Flux[bx](i, j + 1, k, n)),
-							+ (dt / dz) * (x3Flux[bx](i, j, k, n) - x3Flux[bx](i, j, k + 1, n))
-							));
-			}
+	amrex::ParallelFor(consVarNew_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		for (int n = 0; n < nvars; ++n) {
+			consVarNew[bx](i, j, k, n) =
+			    consVarOld[bx](i, j, k, n) + (AMREX_D_TERM((dt / dx) * (x1Flux[bx](i, j, k, n) - x1Flux[bx](i + 1, j, k, n)),
+								       +(dt / dy) * (x2Flux[bx](i, j, k, n) - x2Flux[bx](i, j + 1, k, n)),
+								       +(dt / dz) * (x3Flux[bx](i, j, k, n) - x3Flux[bx](i, j, k + 1, n))));
+		}
 #if 0
 			// check if state is valid -- flag for re-do if not
 			if (!isStateValid(consVarNew, i, j, k)) {
@@ -141,14 +126,13 @@ void LinearAdvectionSystem<problem_t>::PredictStep(
 				redoFlag(i, j, k) = quokka::redoFlag::none;
 			}
 #endif
-	    });
+	});
 }
 
 template <typename problem_t>
-void LinearAdvectionSystem<problem_t>::AddFluxesRK2(
-    amrex::MultiFab &U_new_mf, amrex::MultiFab const &U0_mf, amrex::MultiFab const &U1_mf,
-    std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fluxArray, const double dt,
-    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, const int nvars)
+void LinearAdvectionSystem<problem_t>::AddFluxesRK2(amrex::MultiFab &U_new_mf, amrex::MultiFab const &U0_mf, amrex::MultiFab const &U1_mf,
+						    std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fluxArray, const double dt,
+						    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, const int nvars)
 {
 	BL_PROFILE("LinearAdvectionSystem::AddFluxesRK2()");
 
@@ -171,28 +155,23 @@ void LinearAdvectionSystem<problem_t>::AddFluxesRK2(
 	auto const &U1 = U1_mf.const_arrays();
 	auto U_new = U_new_mf.arrays();
 
-	amrex::ParallelFor(
-	    U_new_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			for (int n = 0; n < nvars; ++n) {
-				// RK-SSP2 integrator
-				const double U_0 = U0[bx](i, j, k, n);
-				const double U_1 = U1[bx](i, j, k, n);
+	amrex::ParallelFor(U_new_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		for (int n = 0; n < nvars; ++n) {
+			// RK-SSP2 integrator
+			const double U_0 = U0[bx](i, j, k, n);
+			const double U_1 = U1[bx](i, j, k, n);
 
-				const double FxU_1 = (dt / dx) * (x1Flux[bx](i, j, k, n) - x1Flux[bx](i + 1, j, k, n));
-	#if (AMREX_SPACEDIM >= 2)
-				const double FyU_1 = (dt / dy) * (x2Flux[bx](i, j, k, n) - x2Flux[bx](i, j + 1, k, n));
-	#endif
-	#if (AMREX_SPACEDIM == 3)
-				const double FzU_1 = (dt / dz) * (x3Flux[bx](i, j, k, n) - x3Flux[bx](i, j, k + 1, n));
-	#endif
+			const double FxU_1 = (dt / dx) * (x1Flux[bx](i, j, k, n) - x1Flux[bx](i + 1, j, k, n));
+#if (AMREX_SPACEDIM >= 2)
+			const double FyU_1 = (dt / dy) * (x2Flux[bx](i, j, k, n) - x2Flux[bx](i, j + 1, k, n));
+#endif
+#if (AMREX_SPACEDIM == 3)
+			const double FzU_1 = (dt / dz) * (x3Flux[bx](i, j, k, n) - x3Flux[bx](i, j, k + 1, n));
+#endif
 
-				// save results in U_new
-				U_new[bx](i, j, k, n) = (0.5 * U_0 + 0.5 * U_1) + (
-					AMREX_D_TERM( 0.5 * FxU_1 ,
-								+ 0.5 * FyU_1 ,
-								+ 0.5 * FzU_1 )
-								);
-			}
+			// save results in U_new
+			U_new[bx](i, j, k, n) = (0.5 * U_0 + 0.5 * U_1) + (AMREX_D_TERM(0.5 * FxU_1, +0.5 * FyU_1, +0.5 * FzU_1));
+		}
 
 #if 0
 			// check if state is valid -- flag for re-do if not
@@ -202,14 +181,12 @@ void LinearAdvectionSystem<problem_t>::AddFluxesRK2(
 				redoFlag(i, j, k) = quokka::redoFlag::none;
 			}
 #endif
-	    });
+	});
 }
 
 template <typename problem_t>
 template <FluxDir DIR>
-void LinearAdvectionSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf,
-						     amrex::MultiFab const &x1LeftState_mf,
-						     amrex::MultiFab const &x1RightState_mf,
+void LinearAdvectionSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab const &x1LeftState_mf, amrex::MultiFab const &x1RightState_mf,
 						     const double vx, const int nvars)
 {
 	// By convention, the interfaces are defined on the left edge of each zone, i.e.
@@ -219,28 +196,27 @@ void LinearAdvectionSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf,
 	auto const &x1LeftState_in = x1LeftState_mf.const_arrays();
 	auto const &x1RightState_in = x1RightState_mf.const_arrays();
 	auto x1Flux_in = x1Flux_mf.arrays();
-	amrex::IntVect ng{AMREX_D_DECL(0,0,0)};
+	amrex::IntVect ng{AMREX_D_DECL(0, 0, 0)};
 
-	amrex::ParallelFor(
-	    x1Flux_mf, ng, nvars, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in, int n) noexcept {
-			// construct ArrayViews for permuted indices
-			quokka::Array4View<amrex::Real const, DIR> x1LeftState(x1LeftState_in[bx]);
-			quokka::Array4View<amrex::Real const, DIR> x1RightState(x1RightState_in[bx]);
-			quokka::Array4View<amrex::Real, DIR> x1Flux(x1Flux_in[bx]);
+	amrex::ParallelFor(x1Flux_mf, ng, nvars, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in, int n) noexcept {
+		// construct ArrayViews for permuted indices
+		quokka::Array4View<amrex::Real const, DIR> x1LeftState(x1LeftState_in[bx]);
+		quokka::Array4View<amrex::Real const, DIR> x1RightState(x1RightState_in[bx]);
+		quokka::Array4View<amrex::Real, DIR> x1Flux(x1Flux_in[bx]);
 
-		    // permute array indices according to dir
-		    auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
+		// permute array indices according to dir
+		auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
 
-		    // For advection, simply choose upwind side of the interface.
-		    if (vx < 0.0) { // upwind switch
-			    // upwind direction is the right-side of the interface
-			    x1Flux(i, j, k, n) = vx * x1RightState(i, j, k, n);
+		// For advection, simply choose upwind side of the interface.
+		if (vx < 0.0) { // upwind switch
+			// upwind direction is the right-side of the interface
+			x1Flux(i, j, k, n) = vx * x1RightState(i, j, k, n);
 
-		    } else {
-			    // upwind direction is the left-side of the interface
-			    x1Flux(i, j, k, n) = vx * x1LeftState(i, j, k, n);
-		    }
-	    });
+		} else {
+			// upwind direction is the left-side of the interface
+			x1Flux(i, j, k, n) = vx * x1LeftState(i, j, k, n);
+		}
+	});
 }
 
 #endif // LINEAR_ADVECTION_HPP_
