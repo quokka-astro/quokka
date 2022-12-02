@@ -13,7 +13,7 @@ template <int N> struct HydroState {
 	double P;		      // pressure
 	double cs;		      // adiabatic sound speed
 	double E;		      // total energy density
-	double Eint;		  // internal energy density
+	double Eint;		      // internal energy density
 	std::array<double, N> scalar; // passive scalars
 };
 

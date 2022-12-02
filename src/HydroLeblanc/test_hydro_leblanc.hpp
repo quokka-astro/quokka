@@ -21,7 +21,6 @@
 #include "hydro_system.hpp"
 #include "interpolate.hpp"
 
-
 // function definitions
 
 #endif // TEST_HYDRO_LEBLANC_HPP_

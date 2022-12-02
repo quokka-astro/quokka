@@ -8,8 +8,7 @@
 /// \file SimulationData.hpp
 /// \brief Defines a template class for user-specified simulation data
 
-template <typename problem_t> struct SimulationData
-{
+template <typename problem_t> struct SimulationData {
 	// none
 };
 
