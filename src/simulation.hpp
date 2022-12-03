@@ -276,26 +276,21 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 #endif
 };
 
-template <typename problem_t> auto AMRSimulation<problem_t>::nghost() -> int { return nghost_; }
+template <typename problem_t> auto AMRSimulation<problem_t>::nghost() -> int { return nghost_cc_; }
 
 template <typename problem_t> auto AMRSimulation<problem_t>::getStateNew(int lev) -> amrex::MultiFab *
 {
 	AMREX_ASSERT(lev < state_new_.size());
-	return &state_new_[lev];
+	return &state_new_cc_[lev];
 }
 
 template <typename problem_t> auto AMRSimulation<problem_t>::getStateOld(int lev) -> amrex::MultiFab *
 {
 	AMREX_ASSERT(lev < state_old_.size());
-	return &state_old_[lev];
+	return &state_old_cc_[lev];
 }
 
-template <typename problem_t>
-void AMRSimulation<problem_t>::initialize(amrex::Vector<amrex::BCRec> &boundaryConditions) template <typename problem_t>
-void AMRSimulation<problem_t>::setChkFile(std::string const &chkfile_number)
-{
-	restart_chkfile = chkfile_number;
-}
+template <typename problem_t> void AMRSimulation<problem_t>::setChkFile(std::string const &chkfile_number) { restart_chkfile = chkfile_number; }
 
 template <typename problem_t> auto AMRSimulation<problem_t>::getOldMF_fc() const -> const amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> &
 {
@@ -1454,15 +1449,6 @@ void AMRSimulation<problem_t>::FillCoarsePatch(int lev, amrex::Real time, amrex:
 template <typename problem_t>
 void AMRSimulation<problem_t>::GetData(int lev, amrex::Real time, amrex::Vector<amrex::MultiFab *> &data, amrex::Vector<amrex::Real> &datatime,
 				       quokka::centering cen, quokka::direction dir)
-{
-	GetData(time, data, datatime, state_old_[lev], state_new_[lev], tOld_[lev], tNew_[lev]);
-}
-
-// utility to copy in data from state_old_ and/or state_new_ into another
-// multifab
-template <typename problem_t>
-void AMRSimulation<problem_t>::GetData(amrex::Real time, amrex::Vector<amrex::MultiFab *> &data, amrex::Vector<amrex::Real> &datatime,
-				       amrex::MultiFab &oldState, amrex::MultiFab &newState, amrex::Real oldTime, amrex::Real newTime)
 {
 	BL_PROFILE("AMRSimulation::GetData()");
 
