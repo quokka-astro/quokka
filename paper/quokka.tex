@@ -92,7 +92,7 @@ $^{2}$ARC Centre of Excellence for Astronomy in Three Dimensions (ASTRO-3D), Can
 }
 
 % These dates will be filled out by the publisher
-\date{Accepted XXX. Received YYY; in original form ZZZ}
+\date{Accepted 2022 February 14. Received 2022 January 30; in original form 2021 October 04}
 
 % Enter the current year, for the copyright statements etc.
 \pubyear{2021}
@@ -105,13 +105,13 @@ $^{2}$ARC Centre of Excellence for Astronomy in Three Dimensions (ASTRO-3D), Can
 
 % Abstract of the paper
 \begin{abstract}
-    We present \quokka, a new subcycling-in-time, block-structured adaptive mesh refinement (AMR) radiation hydrodynamics code optimised for graphics processing units (GPUs). \quokka~solves the equations of hydrodynamics with the piecewise parabolic method (PPM) in a method-of-lines formulation, and handles radiative transfer via the variable Eddington tensor (VET) radiation moment equations with a local closure. We use the AMReX library to handle the adaptive mesh management. In order to maximise GPU performance, we combine explicit-in-time evolution of the radiation moment equations with the reduced speed-of-light approximation. We show results for a wide range of test problems for hydrodynamics, radiation, and coupled radiation hydrodynamics. On uniform grids in 3D, we achieve a peak of 93 million hydrodynamic updates per second per GPU, and 22 million radiation hydrodynamic updates per second per GPU. For radiation hydrodynamics problems on uniform grids in 3D, our code also scales from 4 GPUs to 256 GPUs with an efficiency of 80 per cent. The code is publicly released under an open-source license on \faGithub\href{https://github.com/BenWibking/quokka-code}{GitHub}.
+    We present \quokka, a new subcycling-in-time, block-structured adaptive mesh refinement (AMR) radiation hydrodynamics code optimised for graphics processing units (GPUs). \quokka~solves the equations of hydrodynamics with the piecewise parabolic method (PPM) in a method-of-lines formulation, and handles radiative transfer via the variable Eddington tensor (VET) radiation moment equations with a local closure. We use the AMReX library to handle the adaptive mesh management. In order to maximise GPU performance, we combine explicit-in-time evolution of the radiation moment equations with the reduced speed-of-light approximation. We show results for a wide range of test problems for hydrodynamics, radiation, and coupled radiation hydrodynamics. On uniform grids in 3D on a single GPU, our code achieves  $>250$ million hydrodynamic updates per second and almost $40$ million radiation hydrodynamic updates per second. For radiation hydrodynamics problems on uniform grids in 3D, our code scales from 4 GPUs to 256 GPUs with an efficiency of 76 per cent. The code is publicly released under an open-source license on \faGithub\href{https://github.com/BenWibking/quokka-code}{GitHub}.
 \end{abstract}
 
 % Select between one and six entries from the list of approved keywords.
 % Don't make up new ones.
 \begin{keywords}
-radiation hydrodynamics -- numerical methods
+    radiation hydrodynamics -- numerical methods
 \end{keywords}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -126,14 +126,14 @@ radiation hydrodynamics -- numerical methods
 
 In many astrophysical systems, the radiation field carries a substantial portion of the total momentum and energy budget, and therefore must be included in any numerical simulation. However, simulating such systems, particularly at high resolution, presents a fundamental challenge in both physics and numerics. Part of this challenge is dimensionality: in full generality the radiation field is governed by the time-dependent equation of radiative transfer,
 \begin{equation}
-\frac{1}{c} \frac{\partial}{\partial t} I_\nu + \hatn\cdot\nabla I_\nu = \eta_\nu - \kappa^{\rm (tot)}_\nu \rho I_\nu + \frac{1}{4\pi} \int \kappa^{\rm (sca)}_\nu \rho I_\nu \, d\Omega,
-\label{eq:transfer}
+    \frac{1}{c} \frac{\partial}{\partial t} I_\nu + \hatn\cdot\nabla I_\nu = \eta_\nu - \kappa^{\rm (tot)}_\nu \rho I_\nu + \frac{1}{4\pi} \int \kappa^{\rm (sca)}_\nu \rho I_\nu \, d\Omega,
+    \label{eq:transfer}
 \end{equation}
-where $I_\nu$ is the radiation intensity at frequency $\nu$ travelling in the direction specified by the unit vector $\hatn$, $\eta_\nu$ is the matter emissivity, $\rho$ is the matter density, and $\kappa_\nu^{\rm (tot)}$ and $\kappa_\nu^{\rm (sca)}$ are the total and scatting specific opacities, respectively. This is a time-dependent integro-differential equation with six dimensions: three positions, two angles (parameterised by $\hatn$), and the frequency. Full numerical solution of a problem of this dimensionality, at least if it must be done millions of times to run in tandem with a hydrodynamic (HD) or magnetohydrodynamic (MHD) simulation, remains out of reach for most applications. 
+where $I_\nu$ is the radiation intensity at frequency $\nu$ travelling in the direction specified by the unit vector $\hatn$, $\eta_\nu$ is the matter emissivity, $\rho$ is the matter density, and $\kappa_\nu^{\rm (tot)}$ and $\kappa_\nu^{\rm (sca)}$ are the total and scatting specific opacities, respectively. This is a time-dependent integro-differential equation with six dimensions: three positions, two angles (parameterised by $\hatn$), and the frequency. Full numerical solution of a problem of this dimensionality, at least if it must be done millions of times to run in tandem with a hydrodynamic (HD) or magnetohydrodynamic (MHD) simulation, remains out of reach for most applications.
 
-Within the astrophysics community, there are two general approaches to numerical radiation hydrodynamics (RHD). One is characteristic methods, which solve \autoref{eq:transfer} (or its time-independent form), but only along rays pointing back to particular sources \citep[e.g.,][]{Abel02a, Rijkhorst06a, Krumholz07f} or rays randomly assigned by Monte Carlo \citep[e.g.,][]{Fleck71a, Tsang15a}. A second approach, which we will pursue here, is moment methods \citep[e.g.,][]{Mihalas_1984,Castor_2004}, whereby one takes moments of the transfer equation, thereby eliminating the angular dimensions of the problem.\footnote{Fully eliminating the angular dependence requires some care, since in general for a moving medium the emissivity and opacity depend on direction, even if the medium itself interacts with light isotropically in its own rest frame. While one might guess velocity-dependent beaming effects are unimportant in non-relativistic problems, it turns out that one cannot formulate a consistent, energy-conserving theory of non-relativistic radiation-hydrodynamics without including them, at least to leading order \citep{Mihalas82a, Lowrie99a, Krumholz_2007}. Systems of moment equations where the radiation moments are written in the lab frame but the emissivity and absorption are written in the comoving frame, where they can be assumed to be isotropic, are known as mixed-frame formulations. This is the most common approach in modern RHD codes.} This results in a series of moment equations that one can solve in lieu of solving the equation of radiative transfer directly, but at the price of introducing the need for a closure relation to approximate the higher moments that appear in the equations being solved. Some authors also combine moment and characteristic methods \citep[e.g.,][]{Rosen17a}.\footnote{While characteristic and moment methods are the only ones widely used in astrophysics, in terrestrial applications (for example neutron transport calculations for nuclear reactor design) there are two other widely-used approaches to handle the angular dependence of the transfer equation. One is to discretise the unit sphere using weighted quadratures (the discrete ordinates, or $S_n$, method; e.g., \citealt{Lathrop_1964,Adams97a}). The other is to expand the angular integration in spherical harmonics (the $P_n$ method; e.g., \citealt{Modest89a}).}
+Within the astrophysics community, there are two general approaches to numerical radiation hydrodynamics (RHD). One is characteristic methods, which solve \autoref{eq:transfer} (or its time-independent form), but only along rays pointing back to particular sources \citep[e.g.,][]{Abel02a, Rijkhorst06a, Krumholz07f} or rays randomly assigned by Monte Carlo \citep[e.g.,][]{Fleck71a, Tsang15a}. A second approach, which we will pursue here, is moment methods \citep[e.g.,][]{Mihalas_1984,Castor_2004}, whereby one takes moments of the transfer equation, thereby eliminating the angular dimensions of the problem. Fully eliminating the angular dependence requires some care, since in general for a moving medium the emissivity and opacity depend on direction, even if the medium itself interacts with light isotropically in its own rest frame. While one might guess velocity-dependent beaming effects are unimportant in non-relativistic problems, it turns out that one cannot formulate a consistent, energy-conserving theory of non-relativistic radiation-hydrodynamics without including them, at least to leading order \citep{Mihalas82a, Lowrie99a, Krumholz_2007}. Systems of moment equations where the radiation moments are written in the lab frame but the emissivity and absorption are written in the comoving frame, where they can be assumed to be isotropic, are known as mixed-frame formulations. This is the most common approach in modern RHD codes (although the comoving frame is increasingly popular; e.g., \citealt{Skinner_2019}). This results in a series of moment equations that one can solve in lieu of solving the equation of radiative transfer directly, but at the price of introducing the need for a closure relation to approximate the higher moments that appear in the equations being solved. Some authors also combine moment and characteristic methods \citep[e.g.,][]{Rosen17a}. While characteristic and moment methods are the only ones widely used in astrophysics, in terrestrial applications (for example neutron transport calculations for nuclear reactor design) there are two other widely-used approaches to handle the angular dependence of the transfer equation. One is to discretise the unit sphere using weighted quadratures (the discrete ordinates, or $S_n$, method; e.g., \citealt{Lathrop_1964,Adams97a}). The other is to expand the angular integration in spherical harmonics (the $P_n$ method; e.g., \citealt{Modest89a}). These methods can be much more computationally expensive than moment methods, possibly by several orders of magnitude.
 
-One of the simplest closures is the flux-limited diffusion (FLD) approximation \citep{Alme_1973}, which retains only the first moment equation, for the radiation energy density, and closes the system by assuming both that the time derivative of the radiation flux is zero and that the Eddington tensor, defined as the ratio of the radiation pressure tensor to the radiation energy density, has a fixed value. However, a long-understood deficiency of flux-limited diffusion is that it cannot cast shadows (e.g., \citealt{Hayes_2003}), a property that can make a critical difference in the dynamics of some semitransparent problems (e.g., \citealt{Davis_2014}). A more accurate approximation is to evolve both the radiation energy density and the radiation flux, while still invoking a closure relation for the Eddington tensor; this is called a two-moment approach, since one solves for the first two moments of the radiation field. When the Eddington tensor is computed via a formal solution of the angle-dependent radiative transfer equation, we obtain the quasidiffusion or variable Eddington tensor (VET) method \citep{Goldin_1964}. When retaining a local closure for the radiation pressure tensor in terms of the radiation energy density $E$ and the flux $F$, we obtain a local VET method, commonly referred to as the M1 (`moment-one`) method \citep{Minerbo_1978,Levermore_1984,Dubroca_1999,Gonzalez_2007}. There are a number of moment-based astrophysical RHD codes, implementing a wide variety of closures, in wide use, including \textsc{Zeus} \citep{Turner_2001}, \textsc{FLASH} \citep{Fryxell_2000}, \textsc{Orion} \citep{Krumholz_2007, Shestakov08a, Li21a}, \textsc{Ramses} \citep{Commercon11a, Rosdahl_2013}, \textsc{Athena} \citep{Davis_2012, Jiang12a}, \textsc{Enzo} \citep{Reynolds_2009,Bryan_2014}, \textsc{Castro} \citep{Zhang_2011,Zhang_2013,Almgren_2020}, and \textsc{Fornax} \citep{Skinner_2019}, to give a partial list.
+One of the simplest closures is the flux-limited diffusion (FLD) approximation \citep{LeBlanc_1970,Alme_1973}, which retains only the first moment equation, for the radiation energy density, and closes the system by assuming both that the time derivative of the radiation flux is zero and that the Eddington tensor, defined as the ratio of the radiation pressure tensor to the radiation energy density, has a fixed value. However, a long-understood deficiency of flux-limited diffusion is that it cannot cast shadows (e.g., \citealt{Hayes_2003}), a property that can make a critical difference in the dynamics of some semitransparent problems (e.g., \citealt{Davis_2014}). A more accurate approximation is to evolve both the radiation energy density and the radiation flux, while still invoking a closure relation for the Eddington tensor; this is called a two-moment approach, since one solves for the first two moments of the radiation field. When the Eddington tensor is computed via a formal solution of the angle-dependent radiative transfer equation, we obtain the quasidiffusion or variable Eddington tensor (VET) method \citep{Goldin_1964}. When retaining a local closure for the radiation pressure tensor in terms of the radiation energy density $E$ and the flux $F$, we obtain a local VET method, commonly referred to as the M1 (`moment-one`) method \citep{Minerbo_1978,Levermore_1984,Dubroca_1999,Gonzalez_2007}. There are a number of moment-based astrophysical RHD codes, implementing a wide variety of closures, in wide use, including \textsc{Zeus} \citep{Turner_2001}, \textsc{FLASH} \citep{Fryxell_2000}, \textsc{Orion} \citep{Krumholz_2007, Shestakov08a, Li21a}, \textsc{Ramses} \citep{Commercon11a, Rosdahl_2013}, \textsc{Athena} \citep{Davis_2012, Jiang12a}, \textsc{Enzo} \citep{Reynolds_2009,Bryan_2014}, \textsc{Castro} \citep{Zhang_2011,Zhang_2013,Almgren_2020}, and \textsc{Fornax} \citep{Skinner_2019}, to give a partial list.
 
 While the use of moment methods removes the dimensionality problem, it leaves a second problem, which is the strong mismatch in signal speeds between radiation and sound (or MHD) waves, which in a non-relativistic system travel at far less than the speed of light. This mismatch renders simple explicit methods, as are commonly used for HD and MHD, impractically slow for radiative transfer, due to the tiny time steps that would be imposed by the Courant-Friedrichs-Lewy (CFL) condition. For this reason, numerical methods for RHD either use an implicit method for the radiation part of the problem (e.g., \textsc{Zeus}, \textsc{Orion}, some versions of \textsc{Ramses} and \textsc{Athena}) or adopt the reduced speed of light approximation (\citealt{Gnedin_2001, Skinner_2013}; \textsc{Fornax}, other versions of \textsc{Ramses} and \textsc{Athena}). The reduced speed of light approximation (RSLA) consists of replacing the speed of light $c$ that defines the signal speed in the radiation moment equations with a lower speed $\hat{c}$, while keeping the terms that describe the rate of momentum and energy exchange between gas and radiation unchanged. The lower speed $\hat{c}$, while still substantially larger than the HD or MHD signal speeds, is close enough to those speeds to allow radiation time steps large enough to render explicit methods computationally feasible.
 
@@ -143,32 +143,32 @@ In this paper we describe \quokka\footnote{Quadrilateral, Umbra-producing, Ortho
 
 The unique feature of \quokka~is that it has been designed from the ground up to run efficiently on graphics processing units (GPUs). This design goal motivated our choice of both algorithms and low-level implementation details. While \quokka~is not the first GPU hydrodynamics code in astrophysics (others include \textsc{Gamer}, \citealt{Schive10a, Schive18a}, \textsc{Cholla}, \citealt{Schneider15a}, \textsc{Castro}, \citealt{Almgren_2020}, and \textsc{ARK-RT}, \citealt{Bloch_2021}), nor even the first AMR GPU code, it is the first to feature two-moment AMR RHD on GPUs.
 
-Bringing RHD to GPUs creates some unique challenges. Contemporary compute nodes are often limited by data bandwidth, both in terms of moving data between main memory and the CPU or GPU, and in terms of moving data between CPUs or GPUs. For this reason, implicit methods generally have poor scalability, due to the need for global communications during an implicit solve (see, e.g., Appendix E of \citealt{Skinner_2019}). This imbalance between computation and communication is magnified on GPUs. Likewise, robust implicit methods require iterative sparse matrix solvers, which achieve lower peak efficiency on GPUs compared to CPUs due to their heavy use of indirect addressing and highly branching control flow. These considerations motivate our choice of an explicit RSLA method. They also motivate our choice of time integration strategy, which as we detail below has been designed to maximize computation (and therefore minimize the relative amount of communication) on each hydrodynamic timestep. We show that, with this strategy, we are able to achieve update computation rates of $>90$ million zone updates per second per GPU for pure HD, and $>20$ million for RHD. We also achieve $\ge 80\%$ parallel efficiency out to 256 GPUs. This combination of performance and scaling makes \quokka~substantially faster than any other public RHD code.
+Bringing RHD to GPUs creates some unique challenges. Contemporary compute nodes are often limited by data bandwidth, both in terms of moving data between main memory and the CPU or GPU, and in terms of moving data between CPUs or GPUs. For this reason, implicit methods generally have poor scalability, due to the need for global communications during an implicit solve (see, e.g., Appendix E of \citealt{Skinner_2019}). This imbalance between computation and communication is magnified on GPUs. Likewise, robust implicit methods require iterative sparse matrix solvers, which achieve lower peak efficiency on GPUs compared to CPUs due to their heavy use of indirect addressing and highly branching control flow. These considerations motivate our choice of an explicit RSLA method. They also motivate our choice of time integration strategy, which as we detail below has been designed to maximize computation (and therefore minimize the relative amount of communication) on each hydrodynamic timestep. We show that, with this strategy, we are able to achieve update computation rates of $>250$ million zone updates per second per GPU for pure HD, and nearly $40$ million for RHD. We also achieve $\ge 75\%$ parallel efficiency (compared to single-node performance) out to 256 GPUs. This combination of performance and scaling makes \quokka~substantially faster than any other public RHD code.
 
-The remainder of this paper is organized as follows. In \autoref{section:methods} we introduce the set of equations that \quokka~solves, and detail our numerical methods for solving them. In \autoref{section:tests}, we present a wide range of tests that demonstrate the accuracy and capabilities of the code. \autoref{section:performance} covers our tests of code performance and scalability. In \autoref{section:discussion}, we discuss the range of applicability of our methods, and our plans for application and future code expansions. Finally, the code itself, including all test problems, is freely available on \faGithub\href{https://github.com/BenWibking/quokka-code}{GitHub} under an open-source license. 
+The remainder of this paper is organized as follows. In \autoref{section:methods} we introduce the set of equations that \quokka~solves, and detail our numerical methods for solving them. In \autoref{section:tests}, we present a wide range of tests that demonstrate the accuracy and capabilities of the code. \autoref{section:performance} covers our tests of code performance and scalability. In \autoref{section:discussion}, we discuss the range of applicability of our methods, and our plans for application and future code expansions. Finally, the code itself, including all test problems, is freely available on \faGithub\href{https://github.com/BenWibking/quokka-code}{GitHub} under an open-source license.
 
 \section{Methods}
 \label{section:methods}
 \subsection{Equations}
 We solve the equations of radiation hydrodynamics \citep{Pomraning_1973,Mihalas_1984,Castor_2004} for an inviscid, nonrelativistic fluid in local thermodynamic equilibrium in the mixed-frame formulation, where the radiation variables are defined in an inertial frame (i.e., Eulerian simulation coordinates) and the radiation-matter interaction terms are written in the frame comoving with the fluid, with the transformations between the frames accounted for via the addition of radiation-matter exchange terms that depend explicitly on the ratio of fluid velocity to the speed of light, $\beta=v/c$. In this first version of \quokka~we omit scattering, so that matter-radiation interaction is purely by emission and absorption. We write the equations as follows:
 \begin{align}
-    \frac{\partial \rho}{\partial t} + \nabla \cdot (\rho \vc{v}) &= 0 \, , \\
-    \frac{\partial (\rho \vc{v})}{\partial t} + \nabla \cdot (\rho \vc{v} \vc{v} + \mathsf{P}) &= \vc{G} \, , \\
-    \frac{\partial E}{\partial t} + \nabla \cdot \left[(E + \mathsf{P})\vc{v}\right] &= c G^0 \, , \\
-    \frac{\partial E_r}{\partial t} + \nabla \cdot {\vc{F}_r} &= -c G^0 \, , \\\
-    \frac{1}{c^2}\frac{\partial \vc{F}_r}{\partial t} + \nabla \cdot \mathsf{P}_r &= -\vc{G} \, ,
+    \frac{\partial \rho}{\partial t} + \nabla \cdot (\rho \vc{v})                              & = 0 \, ,       \\
+    \frac{\partial (\rho \vc{v})}{\partial t} + \nabla \cdot (\rho \vc{v} \vc{v} + \mathsf{P}) & = \vc{G} \, ,  \\
+    \frac{\partial E}{\partial t} + \nabla \cdot \left[(E + \mathsf{P})\vc{v}\right]           & = c G^0 \, ,   \\
+    \frac{\partial E_r}{\partial t} + \nabla \cdot {\vc{F}_r}                                  & = -c G^0 \, ,  \\\
+    \frac{1}{c^2}\frac{\partial \vc{F}_r}{\partial t} + \nabla \cdot \mathsf{P}_r              & = -\vc{G} \, ,
 \end{align}
 where $\rho$ is the gas density, $\vc{v}$ is the gas velocity, $E$ is the total energy density of the gas, $\mathsf{P} = \delta_{ij} P$ is the gas pressure tensor, $E_r$ is the radiation energy density, $F_r$ is the radiation flux, $\mathsf{P}_r$ is the radiation pressure tensor, $\nabla \cdot \rho \vc{v} \vc{v}$ denotes the sum $(\rho v_i v^j)_{,j}\,$, and $G^i$ is the radiation four-force, with $G^0$ the time-like component and $\vc{G}$ consisting of the space-like components. In the mixed-frame formulation, the radiation four-force to order $\beta$ is
 \begin{align}
--c G^0 = \rho (\kappa_P 4 \pi B - \kappa_E c E_r) + \rho \kappa_F \left( \frac{\vc{v}}{c} \cdot \vc{F}_r \right) \, , \\
--\vc{G} = -\rho \kappa_F \frac{\vc{F}_r}{c} + \rho \kappa_P \left(\frac{4 \pi B}{c}\right) \frac{\vc{v}}{c} + \rho \kappa_F \frac{\vc{v}\mathsf{P}_r}{c} \, ,
+    -c G^0 = \rho (\kappa_P 4 \pi B - \kappa_E c E_r) + \rho \kappa_F \left( \frac{\vc{v}}{c} \cdot \vc{F}_r \right) \, , \\
+    -\vc{G} = -\rho \kappa_F \frac{\vc{F}_r}{c} + \rho \kappa_P \left(\frac{4 \pi B}{c}\right) \frac{\vc{v}}{c} + \rho \kappa_F \frac{\vc{v}\mathsf{P}_r}{c} \, ,
 \end{align}
 where
 $\kappa_F$, $\kappa_E$, and $\kappa_P$ are the flux-mean, energy-mean, and Planck-mean specific opacities evaluated in the comoving frame,
 $B$ is the Planck function evaluated at the gas temperature,
-and $\vc{v} \mathsf{P}_r$ is the tensor contraction $v_j \mathsf{P}_r^{ij}$ \citep{Mihalas_1984}. The latter two terms in the expression for $\vc{G}$ correspond to the relativistic work term of \cite{Krumholz_2007} and are only important in the regime $\beta \tau \gtrsim 1$ (where $\tau$ is a characteristic optical depth), 
+and $\vc{v} \mathsf{P}_r$ is the tensor contraction $v_j \mathsf{P}_r^{ij}$ \citep{Mihalas_1984}. The latter two terms in the expression for $\vc{G}$ correspond to the relativistic work term of \cite{Krumholz_2007} and are only important in the regime $\beta \tau \gtrsim 1$ (where $\tau$ is a characteristic optical depth),
 to which we cannot apply the RSLA (as discussed below),
-so we neglect them. However, the term of order $\beta$ in the expression for $cG^0$ corresponds to the work done by the radiation force on the gas and can be the dominant term for problems of interest. 
+so we neglect them. However, the term of order $\beta$ in the expression for $cG^0$ corresponds to the work done by the radiation force on the gas and can be the dominant term for problems of interest.
 
 To apply the RSLA to these equations, we first rewrite the radiation moment equations so that they have a factor of exactly $1/c$ next to each of the time derivatives:
 \begin{align}
@@ -180,21 +180,21 @@ then we replace this $1/c$ factor with a factor of $1/\hat c$, where $\hat c$ is
     \frac{\partial E_r}{\partial t} + \nabla \cdot \left( \frac{\hat c}{c} \vc{F}_r \right) = -\hat c G^0 \, , \\\
     \frac{\partial \vc{F_r}}{\partial t} + \nabla \cdot (c \hat c \, \mathsf{P}_r) = -c \hat c \, \vc{G} \, .
 \end{align}
-The maximum wave speed of this system of equations is bounded by $\hat c$ (as long as the flux satisfies causality, i.e. $F_r \leq cE_r$). As emphasised by \cite{Skinner_2013}, all other factors of $c$ remain unchanged, and, since the factors of $c$ are unchanged on the right-hand side of the hydrodynamic equations, the reduced speed of light radiation hydrodynamic system does not conserve total energy or momentum for $\hat{c} \neq c$. 
+The maximum wave speed of this system of equations is bounded by $\hat c$ (as long as the flux satisfies causality, i.e. $F_r \leq cE_r$). As emphasised by \cite{Skinner_2013}, all other factors of $c$ remain unchanged, and, since the factors of $c$ are unchanged on the right-hand side of the hydrodynamic equations, the reduced speed of light radiation hydrodynamic system does not conserve total energy or momentum for $\hat{c} \neq c$.
 When the left-hand side flux divergence terms are negligible, this nonconservation implies that the equilibrium temperature of the reduced speed of light system is slightly modified with respect to the correct equilibrium temperature, implying that we cannot apply the RSLA to problems in the equilibrium diffusion limit in general (see section \ref{section:equilibrium}).
 
 Writing out the right-hand side terms explicitly, we obtain
 \begin{align}
     \label{eq:hydro_continuity}
-    \frac{\partial \rho}{\partial t} + \nabla \cdot (\rho \vc{v}) &= 0 \, , \\
+    \frac{\partial \rho}{\partial t} + \nabla \cdot (\rho \vc{v})                              & = 0 \, ,                                                                                                                                         \\
     \label{eq:hydro_momentum}
-    \frac{\partial (\rho \vc{v})}{\partial t} + \nabla \cdot (\rho \vc{v} \vc{v} + \mathsf{P}) &= \rho \kappa_F {\vc{F}_r / c} \, , \\
+    \frac{\partial (\rho \vc{v})}{\partial t} + \nabla \cdot (\rho \vc{v} \vc{v} + \mathsf{P}) & = \rho \kappa_F {\vc{F}_r / c} \, ,                                                                                                              \\
     \label{eq:hydro_energy}
-    \frac{\partial E}{\partial t} + \nabla \cdot \left[(E + \mathsf{P})\vc{v}\right] &= -c \rho (\kappa_P a_r T^4 - \kappa_E E_r) - \rho \kappa_F \left( \frac{\vc{v}}{c} \cdot \vc{F}_r \right) \, , \\
+    \frac{\partial E}{\partial t} + \nabla \cdot \left[(E + \mathsf{P})\vc{v}\right]           & = -c \rho (\kappa_P a_r T^4 - \kappa_E E_r) - \rho \kappa_F \left( \frac{\vc{v}}{c} \cdot \vc{F}_r \right) \, ,                                  \\
     \label{eq:rad_energy}
-    \frac{\partial E_r}{\partial t} + \nabla \cdot \left( \frac{\hat c}{c} \vc{F}_r \right) &= \hat c \rho \left(\kappa_P a_r T^4 - \kappa_E E_r \right) + \rho \kappa_F \left( \frac{\hat c}{c} \frac{\vc{v}}{c} \cdot \vc{F}_r \right) \, , \\\
+    \frac{\partial E_r}{\partial t} + \nabla \cdot \left( \frac{\hat c}{c} \vc{F}_r \right)    & = \hat c \rho \left(\kappa_P a_r T^4 - \kappa_E E_r \right) + \rho \kappa_F \left( \frac{\hat c}{c} \frac{\vc{v}}{c} \cdot \vc{F}_r \right) \, , \\\
     \label{eq:rad_flux}
-    \frac{\partial \vc{F}_r}{\partial t} + \nabla \cdot (c \hat c \, \mathsf{P}_r) &= -\hat c \rho \kappa_F \vc{F}_r \, .
+    \frac{\partial \vc{F}_r}{\partial t} + \nabla \cdot (c \hat c \, \mathsf{P}_r)             & = -\hat c \rho \kappa_F \vc{F}_r \, .
 \end{align}
 These equations make no approximations about the frequency dependence of the radiation field. However, for computational tractability, in what follows we will approximate $\kappa_F$ with the Rosseland mean opacity $\kappa_R$, which yields the correct radiation force in the diffusion limit, and approximate $\kappa_E$ with the Planck mean opacity $\kappa_P$, which yields the correct energy absorption and emission in the optically-thin limit for fluids at rest \citep{Mihalas_1984}. However, we emphasise that the choice to set $\kappa_F \approx \kappa_R$ and $\kappa_E \approx \kappa_P$ is an additional approximation, and that others might be preferable depending on the physical system being simulated.  In future work, we plan to address the limitations of these approximate grey opacities via an extension of our method to the multigroup solution of the radiation moment equations.  Our present set of equations is sufficient for grey nonrelativistic radiation hydrodynamics in the semi-transparent regime, where we can neglect the `relativistic work term' that is important only in the dynamic diffusion ($\beta \tau \gtrsim 1$) regime, as described earlier.
 
@@ -202,7 +202,7 @@ These equations make no approximations about the frequency dependence of the rad
 
 We solve the system formed by \autoref{eq:hydro_continuity}--\autoref{eq:rad_flux} using an operator split approach, whereby we first advance the hydrodynamic transport subsystem (\autoref{sssec:hydro}), then the radiation transport subsystem (\autoref{sssec:radiation}), and finally update the local coupling terms (\autoref{sssec:coupling}). The first subsystem uses a single explicit update step, the second a set of subcycled explicit updates, and the third a purely local implicit update. We describe each of these steps below.
 
-This update cycle operates within a \citet{Berger:1984} / \citet{Berger:1989} adaptive mesh refinement (AMR) framework, whereby each spatial variable is represented by a volume average in each cell, on a rectangular, Cartesian grid. We cover the entire computational domain with a coarse grid with cell spacings $\Delta x_0$, $\Delta y_0$, $\Delta z_0$ in the $x$, $y$, and $z$ directions; the grid spacings need not be the same, but for most applications we choose them to be the same. We denote this coarse grid level 0. We then dynamically add (or remove) additional, finer grids over parts of the domain in response to user-specified refinement criteria. We denote these additional levels 1, 2, $\ldots$, with each grid on level $l$ having cells a factor of $2$ smaller than those on level $l-1$, so that the cell spacing on level $l$ is $\Delta x_0/2^l$ in the $x$ direction, and similarly for $y$ and $z$. We use only factor of 2 refinements in order to minimize numerical glitches arising from the discontinuous change in resolution, which can arise especially in problems where shocks cross the coarse-fine mesh interface at an oblique angle (e.g., \citealt{Fryxell_2000}). When adding finer grids we conservatively interpolate the underlying coarse data, and when removing finer grids we conservatively average down the fine data. Time steps on different AMR levels are sub-cycled, such that the time step on level $l$ is $\Delta t_l = \Delta t_0/2^l$. At the end of every two time steps on level $l > 0$, we perform a synchronization step to ensure that we maintain machine-precision conservation for all conserved quantities (\autoref{sssec:sync}).
+This update cycle operates within a \citet{Berger:1984} / \citet{Berger:1989} adaptive mesh refinement (AMR) framework, whereby each spatial variable is represented by a volume average in each cell, on a rectangular, Cartesian grid. We cover the entire computational domain with a coarse grid with cell spacings $\Delta x_0$, $\Delta y_0$, $\Delta z_0$ in the $x$, $y$, and $z$ directions; the grid spacings need not be the same, but for most applications we choose them to be the same. We denote this coarse grid level 0. We then dynamically add (or remove) additional, finer grids over parts of the domain in response to user-specified refinement criteria. We denote these additional levels 1, 2, $\ldots$, with each grid on level $l$ having cells a factor of $2$ smaller than those on level $l-1$, so that the cell spacing on level $l$ is $\Delta x_0/2^l$ in the $x$ direction, and similarly for $y$ and $z$. We use only factor of 2 refinements in order to minimize numerical glitches arising from the discontinuous change in resolution, which can arise especially in problems where shocks cross the coarse-fine mesh interface at an oblique angle (e.g., \citealt{Fryxell_2000}). When adding finer grids we conservatively interpolate the underlying coarse data (using linear interpolation for robustness, regardless of the spatial reconstruction used to compute the fluxes), and when removing finer grids we conservatively average down the fine data. Time steps on different AMR levels are sub-cycled, such that the time step on level $l$ is $\Delta t_l = \Delta t_0/2^l$. At the end of every two time steps on level $l > 0$, we perform a synchronization step to ensure that we maintain machine-precision conservation for all conserved quantities (\autoref{sssec:sync}).
 
 Our implementation of AMR in \quokka~uses the lower-level \texttt{AMRCore} interface provided by the \textsc{AMReX} library \citep{AMReX_JOSS, the_amrex_development_team_2021_5363443} for adaptive mesh grid generation and coarse/fine grid interpolation, domain decomposition, and parallel communication. In addition to solving the radiation hydrodynamics equations, \textsc{Quokka} itself handles the timestepping and mesh refinement criteria.
 
@@ -210,43 +210,43 @@ Our implementation of AMR in \quokka~uses the lower-level \texttt{AMRCore} inter
 \label{sssec:hydro}
 For the solution of the hydrodynamic subsystem (\autoref{eq:hydro_continuity}--\autoref{eq:hydro_energy}, omitting the matter-radiation coupling terms on the right hand sides), we adopt a method-of-lines (or semi-discrete) approach, discretizing the spatial variables while initially keeping the time variable continuous, thereby transforming the partial differential equations into a large set of ordinary differential equations that can be integrated in time using a standard ordinary differential equation (ODE) integrator \citep{Hyman_1979,Jameson_1981}. For the latter, we use the second-order strong stability preserving Runge-Kutta method (RK2-SSP; \citealt{Shu_1988}). Such an approach has been successfully employed in several recent astrophysical hydrodynamics codes \citep{Skinner_2019,Stone_2020}.
 
-We write the timestep $\Delta t$ used for the RK2-SSP integration as
+We schematically write the timestep $\Delta t$ used for the RK2-SSP integration as
 \begin{align}
-\Delta t = C_0 \, \frac{\Delta x}{|\lambda|} \, ,
+    \Delta t = C_0 \, \frac{\Delta x}{|\lambda|} \, ,
 \end{align}
-where $\Delta x$ is the minimum grid spacing, $|\lambda|$ is the maximum signal speed, and $C_0$ is the stability coefficient.
-Analysis of the stability polynomial of a Runge-Kutta integrator applied to the linearized hydrodynamics equations \citep{Colella_2011,McCorquodale_2011} yields a value for the maximum signal speed $|\lambda|$ of
+where $\Delta x$ is the minimum grid spacing, $|\lambda|$ is a maximum signal speed, and $C_0$ is a stability coefficient.
+Analysis of the stability polynomial of a Runge-Kutta integrator applied to the linearized hydrodynamics equations \citep{Colella_2011,McCorquodale_2011} yields a value for $|\lambda|$ of
 \begin{align}
-|\lambda| = \max \sum_{d=1}^{D} [(\vc{v} \cdot \vc{\hat{e}_d}) + c_s] \, ,
-\label{eq:colella_stability}
+    |\lambda| = \max \sum_{d=1}^{D} [(\vc{v} \cdot \vc{\hat{e}_d}) + c_s] \, ,
+    \label{eq:colella_stability}
 \end{align}
-where $\vc{v}$ is the fluid velocity, $\vc{\hat{e}}$ is the unit vector in coordinate direction $d$, $c_s$ is the adiabatic sound speed, and the maximum is taken over all cells. However, even in the linear case, such an eigenvalue analysis produces only a necessary condition rather than a sufficient condition for stability \citep{Reddy_1992}. For this reason, we more conservatively estimate the value of $|\lambda|$ as 
+where $\vc{v}$ is the fluid velocity, $\vc{\hat{e}}$ is the unit vector in coordinate direction $d$, $c_s$ is the adiabatic sound speed, and the maximum is taken over all cells. However, even in the linear case, such an eigenvalue analysis gives, in general, only a necessary condition for stability and not a sufficient condition \citep{Reddy_1992}. For this reason, we more conservatively estimate the value of $|\lambda|$ as
 \begin{align}
-|\lambda| = D \max (|\vc{v}| + c_s) \, ,
-\label{eq:signal}
+    |\lambda| = D \max (|\vc{v}| + c_s) \, ,
+    \label{eq:signal}
 \end{align}
 and compute the timestep $\Delta t$ on each AMR level as
 \begin{align}
-\Delta t = \frac{C_0}{D} \frac{\Delta x}{\max (|\vc{v}| + c_s)} \, ,
+    \Delta t = \frac{C_0}{D} \frac{\Delta x}{\max (|\vc{v}| + c_s)} \, ,
 \end{align}
-where we define the dimensionless factor $C_0 / D$ to be the CFL number so as to be consistent with its standard definition in one spatial dimension.\footnote{This is the same timestep criterion used in the \textsc{Fornax} code, with $D=3$ and $\Delta x = \Delta r / \sqrt{2}$; see Eq. 37 of \citealt{Skinner_2019}.} For both forward Euler and RK2-SSP, the maximum stable coefficient $C_0$ for a system of constant-coefficient, linear equations is $C_0 = 1$. The maximum stable CFL number in 3D for the RK2-SSP integrator is therefore $1/3$.
+where we define the dimensionless factor $C_0 / D$ to be the CFL number so as to be consistent with its standard definition in one spatial dimension.\footnote{This is the same timestep criterion used in the \textsc{Fornax} code, with $D=3$ and $\Delta x = \Delta r / \sqrt{2}$; see Eq. 37 of \citealt{Skinner_2019}.} When written in this form, for both forward Euler and RK2-SSP, the maximum stable coefficient $C_0$ for a system of constant-coefficient, linear equations is $C_0 = 1$. The maximum stable CFL number in 3D for the RK2-SSP integrator is therefore $1/3$.
 We note that it is not sufficient to estimate $|\lambda|$ as $\max (|\vc{v}| + c_s)$, since the component-wise sum of the velocities may exceed the vector magnitude $|\vc{v}|$ and therefore violate the lower bound given by \autoref{eq:colella_stability}.\footnote{As an example, consider the velocity vector with unit magnitude $|\vc{v}|$ and equal components $v_x = v_y = v_z$. Then each component $v_i = \sqrt{3}/3$ and the sum of components $\sum_{d=1}^{3} \vc{v} \cdot \vc{\hat{e}_d} = \sqrt{3} \approx 1.732$.}
 
-Somewhat surprisingly, we find that such a method-of-lines scheme is not stable when combining higher-order spatial reconstruction with forward Euler time integration. However, we find it is stable for timesteps satisfying the above timestep criterion when used with higher-order (second-order or higher) Runge-Kutta methods. We note that this stability problem with forward Euler is also found by \cite{Stone_2020} in the method-of-lines implementation of \textsc{Athena++}.
+We find that such a method-of-lines scheme is not stable when combining higher-order spatial reconstruction with forward Euler time integration. However, we find it is stable for timesteps satisfying the above timestep criterion when used with higher-order (second-order or higher) Runge-Kutta methods. We note that this stability problem with forward Euler is also found by \cite{Stone_2020} in the method-of-lines implementation of \textsc{Athena++}, but does not appear for single-step integrators that average in time the reconstructed profiles of characteristic waves over the cell interfaces, as done in the original version of PPM \citep{Colella_1984}.
 
 As \cite{Skinner_2019} notes, in contrast to fully-discrete unsplit hydrodynamic methods such as the corner transport upwind (CTU) method \citep{Colella_1990}, the coupling across corners of each cell is achieved via the use of a multi-stage time integrator, rather than via direct computation of fluxes from diagonal neighbors of each cell. While we are formally limited to a smaller timestep compared to the CTU method (due to the factor of $1/D$), our method may be more robust in practice, as the CTU integrator has been found to be unstable in supersonic turbulence with strong radiative cooling unless very small ($\lesssim 0.1$) CFL numbers are employed \citep{Schneider_2017}.
 
 We reconstruct the hydrodynamic variables on each face of each cell from the cell-average variables of the neighbouring cells. We perform this reconstruction using the piecewise parabolic method \citep[PPM;][hereafter \citetalias{Colella_1984}]{Colella_1984} using the primitive hydrodynamic variables (density, velocity, and pressure). As is standard, the conversion from conserved (density, momentum, and energy) to primitive variables is carried out assuming that the volume average and cell centered states are equivalent, which is an approximation accurate to $\mathcal{O}(\Delta x^2)$. As noted by several authors, the PPM algorithm is therefore formally second-order accurate in spatial resolution.\footnote{ We note that there exist fully fourth-order versions of PPM \citep{Felker_2018}, but because fourth-order accuracy does not permit local source terms to be evaluated independently for each cell, we choose to implement a second-order method.} After the primitive variables have been defined, for the reconstruction step proper, we use the standard interface-centered PPM stencil:
 \begin{align}
-q_{j+1/2} = \frac{7}{12} (q_j + q_{j+1}) - \frac{1}{12} (q_{j+2} + q_{j-1}).
+    q_{j+1/2} = \frac{7}{12} (q_j + q_{j+1}) - \frac{1}{12} (q_{j+2} + q_{j-1}).
 \end{align}
 We follow the implementation of \cite{Stone_2020} in re-grouping the above terms symmetrically with respect to the interface ${i+{1/2}}$ so as to preserve exact symmetry in floating point arithmetic.
 
-We do not perform the slope-limiting and contact steepening steps of \citetalias{Colella_1984}. We instead prevent new extrema in the reconstructed states by limiting the interface states at the faces of each cell to the minimum and maximum of the cell-average values of all 27 cells surrounding the cell under consideration (9 cells in 2D), following \cite{Mignone_2005}. This is followed by the extrema detection and overshoot correction step within each cell as described by \citetalias{Colella_1984}. In this step, the parabola assumed to exist across each cell along each coordinate dimension is examined. If an `overshoot' (as defined by \citetalias{Colella_1984}) of the parabola is detected, we follow the original \citetalias{Colella_1984} prescription of performing linear reconstruction on the side of the cell affected by the overshoot. If an extremum is instead detected, rather than forcing the reconstruction to a constant value across the cell as done by \citetalias{Colella_1984}, we revert to performing a linear reconstruction within the affected cell, following \cite{Balsara_2017}. Either of these steps may make the interface states discontinuous, with distinct states associated with each of the two cells adjacent to an interface.
+We do not perform the slope-limiting and contact steepening steps of \citetalias{Colella_1984}. We instead prevent new extrema in the reconstructed states by limiting the interface states at the faces of a given cell to the minimum and maximum of the cell-average values of cell under consideration and its two neighbouring cells along the axis of reconstruction, similar to the monotonicity constraint introduced by \cite{Mignone_2005}. This is followed by the extrema detection and overshoot correction step within each cell as described by \citetalias{Colella_1984}. In this step, the parabola assumed to exist across each cell is examined. If an `overshoot' (as defined by \citetalias{Colella_1984}) of the parabola is detected, we follow the original \citetalias{Colella_1984} prescription of performing linear reconstruction on the side of the cell affected by the overshoot. If an extremum is instead detected, rather than forcing the reconstruction to a constant value across the cell as done by \citetalias{Colella_1984}, we revert to performing a linear reconstruction within the affected cell, following \cite{Balsara_2017}. We note that these latter two steps only examine the interface values, and do not guarantee that the interface states lie within neighbouring cell-average values, and therefore the cell-average limiting carried out in the first step is not redundant. Any of these limiting steps may make the interface states discontinuous, with distinct states associated with each of the two cells adjacent to an interface.
 
 We also implement reconstruction based on a piecewise-linear method (PLM) using the monotonized-central (MC) slope limiter \citep{VanLeer_1977}. We use PPM reconstruction by default, but allow PLM reconstruction via a compile-time option.
 
-In some cases, especially in underresolved strong shocks, the previous steps do not provide sufficient dissipation to avoid oscillations. This problem was recognized by \citetalias{Colella_1984}, who proposed a shock flattening procedure in combination with a small amount of artificial viscosity. We find that this shock flattening procedure is not sufficient in multidimensional problems. Instead, we follow \cite{Miller_2001,Miller_2002}, who generalize the \citetalias{Colella_1984} procedure for multidimensional hydrodynamics. Using this latter method, we find that no artificial viscosity is needed and we do not include any in our implementation.
+In some cases, especially in underresolved strong shocks, the previous steps do not provide sufficient dissipation to avoid oscillations. This problem was recognized by \citetalias{Colella_1984}, who proposed a shock flattening procedure in combination with a small amount of artificial viscosity. We find that this shock flattening procedure is not sufficient in multidimensional problems. Instead, we follow \cite{Miller_2002}, who generalize the \citetalias{Colella_1984} shock-flattening procedure for multidimensional hydrodynamics. Using this latter method, we find that no artificial viscosity is needed and we do not include any in our implementation.
 
 Finally, in order to compute the flux of mass, momentum and energy between cells, we use the HLLC Riemann solver with the `primitive variable Riemann solver' wavespeeds and intermediate states \citep{Toro_2013}. We make the standard approximation that the face-average flux is the same as the face-centered flux, and therefore this step is also second-order accurate in spatial resolution. For each cell, the fluxes across each face are then added together to produce an unsplit spatial divergence term used by each stage of the Runge-Kutta integrator to advance the cell in time.
 
@@ -267,13 +267,13 @@ For computing the flux of radiation quantities between cells, we use an HLL Riem
 
 Our default closure relation for the Eddington tensor is the \cite{Levermore_1984} closure, which is derived by assuming that the radiation field is isotropic in some (unknown) reference frame and then computing a Lorentz transform from this reference frame to one in which the reduced flux $\mathbf{f}$ matches the value in the cell under consideration. This procedure leads to a radiation pressure tensor (e.g., \citealt{Gonzalez_2007,Rosdahl_2013,Skinner_2013})
 \begin{align}
-\label{eq:M1_closure}
-\mathsf{P}_r = \left( \frac{1 - \chi}{2} \mathsf{I} + \frac{3\chi - 1}{2} \mathbf{\hat n} \mathbf{\hat n} \right) E_r
+    \label{eq:M1_closure}
+    \mathsf{P}_r = \left( \frac{1 - \chi}{2} \mathsf{I} + \frac{3\chi - 1}{2} \mathbf{\hat n} \mathbf{\hat n} \right) E_r
 \end{align}
 where $\mathsf{I}$ is the identity tensor, and the Eddington factor $\chi$ and the flux direction cosine $\mathbf{\hat n}$ are
 \begin{align}
-\chi = \frac{3 + 4f^2}{5 + 2 \sqrt{4 - 3 f^2}} \, , \\
-\mathbf{\hat n} = \frac{\mathbf{F}_r}{|\mathbf{F}_r|} \, .
+    \chi = \frac{3 + 4f^2}{5 + 2 \sqrt{4 - 3 f^2}} \, , \\
+    \mathbf{\hat n} = \frac{\mathbf{F}_r}{|\mathbf{F}_r|} \, .
 \end{align}
 When the radiation flux is exactly zero, we drop the direction-dependent term in \autoref{eq:M1_closure}. By considering a coordinate system where the radiation flux is aligned with a coordinate axis, we see that $\chi$ is the component of the Eddington tensor in the direction of the radiation flux.
 
@@ -286,58 +286,58 @@ Following the computation of the hyperbolic part of the radiation subsystem, we 
 
 The radiation-matter coupling update occurs in three steps. The first is to handle the energy source terms $c\rho (\kappa_P a_r T^4 - \kappa_E E_r)$ that appear in \autoref{eq:hydro_energy} and \autoref{eq:rad_energy}. In the regime of problems to which we can apply the RSLA this term is often the stiffest, and we therefore update it using the backward-Euler implicit method of \cite{Howell_2003}, specialized to the case of a single material and extended to include a reduced speed of light. Let $E_g = E - \rho v^2/2$ be the gas internal energy, and let $E_g^{(t)}$ and $E_r^{(t)}$ be the gas internal energy and radiation energy at the end of the hyperbolic update, where the superscript $(t)$ indicates quantities evaluated at this point in the update cycle. We compute the new gas internal energy $E_g^{(t+1)}$ and radiation energy $E_r^{(t+1)}$, where $(t+1)$ indicates the state after accounting for the exchange term, by solving the implicit system
 \begin{eqnarray}
-0 = F_G &\equiv &\left(E_g^{(t+1)} - E_g^{(t)}\right) + \left( \frac{c}{\hat c} \right) R^{(t+1)} \\
-0 = F_R &\equiv & \left(E_{r}^{(t+1)} - E_{r}^{(t)}\right) - \left( R + S \right)^{(t+1)},
+    0 = F_G &\equiv &\left(E_g^{(t+1)} - E_g^{(t)}\right) + \left( \frac{c}{\hat c} \right) R^{(t+1)} \\
+    0 = F_R &\equiv & \left(E_{r}^{(t+1)} - E_{r}^{(t)}\right) - \left( R + S \right)^{(t+1)},
 \end{eqnarray}
-where 
+where
 \begin{equation}
-R \equiv \Delta t \rho \kappa_P (4 \pi B - \hat c E_r),
+    R \equiv \Delta t \rho \kappa_P (4 \pi B - \hat c E_r),
 \end{equation}
 $\Delta t$ is the radiation substep timestep, and $S$ is an optional source term that we include to allow, for example, addition of radiation by stellar sources. The quantities $F_G$ and $F_R$ are the residual errors in the gas energy and radiation energy, respectively.
 
 To solve this system via Newton-Raphson iteration, we require the Jacobian matrix, the elements of which are
 \begin{align}
-\frac{\partial F_G}{\partial E_g} &= 1 + \left( \frac{c}{\hat c} \right) \frac{\partial R}{\partial E_g} \, , \\
-\frac{\partial F_G}{\partial E_r} &= -c \Delta t \rho \kappa_P \, , \\
-\frac{\partial F_R}{\partial E_g} &= -\frac{\partial R}{\partial E_g} \, , \\
-\frac{\partial F_R}{\partial E_r} &= 1 + \hat c \Delta t \rho \kappa_P \, ,
+    \frac{\partial F_G}{\partial E_g} & = 1 + \left( \frac{c}{\hat c} \right) \frac{\partial R}{\partial E_g} \, , \\
+    \frac{\partial F_G}{\partial E_r} & = -c \Delta t \rho \kappa_P \, ,                                           \\
+    \frac{\partial F_R}{\partial E_g} & = -\frac{\partial R}{\partial E_g} \, ,                                    \\
+    \frac{\partial F_R}{\partial E_r} & = 1 + \hat c \Delta t \rho \kappa_P \, ,
 \end{align}
 where
 \begin{align}
-\frac{\partial R}{\partial E_g} &= \frac{\rho \Delta t}{C_v} \left[ \kappa_P \frac{\partial B}{\partial T} + \frac{\partial \kappa_P}{\partial T} \left( 4\pi B - \hat c E_r^{t+1} \right) \right] \, ,
+    \frac{\partial R}{\partial E_g} & = \frac{\rho \Delta t}{C_v} \left[ \kappa_P \frac{\partial B}{\partial T} + \frac{\partial \kappa_P}{\partial T} \left( 4\pi B - \hat c E_r^{t+1} \right) \right] \, ,
 \end{align}
 and $C_v$ is the gas total heat capacity at constant volume. From the Jacobian, we can write the change in radiation and gas temperature for each iterative update as
 \begin{align}
-\label{eq:delta_er}
-\Delta E_r &= -\frac{F_R + \eta F_G}{ \frac{\partial F_R}{\partial E_r} + \eta \frac{\partial F_G}{\partial E_r} } \, , \\ 
-\label{eq:delta_eg}
-\Delta E_g &= -\frac{F_G + \Delta E_r \frac{\partial F_G}{\partial E_r}}{ \frac{\partial F_G}{\partial E_g} } \, .
+    \label{eq:delta_er}
+    \Delta E_r & = -\frac{F_R + \eta F_G}{ \frac{\partial F_R}{\partial E_r} + \eta \frac{\partial F_G}{\partial E_r} } \, , \\
+    \label{eq:delta_eg}
+    \Delta E_g & = -\frac{F_G + \Delta E_r \frac{\partial F_G}{\partial E_r}}{ \frac{\partial F_G}{\partial E_g} } \, .
 \end{align}
 where $\eta \equiv - (\partial F_R/\partial E_g) ( \partial F_G/\partial E_g )^{-1}$. We repeatedly apply \autoref{eq:delta_er} and \autoref{eq:delta_eg} to the radiation and gas energies until the system converges. \citet{Howell_2003} leave unspecified the convergence criteria they use for their solver. After experimenting with several possibilities, we decide to stop the Newton-Raphson iterations when the residuals $F_R$ and $F_G$ satisfy
 \begin{align}
-\left| \frac{F_G}{E_{\text{tot}}} \right| &< \epsilon \, \, \text{and} \\
-\left| \frac{c}{\hat c} \frac{F_R}{E_{\text{tot}}} \right| &< \epsilon \, ,
+    \left| \frac{F_G}{E_{\text{tot}}} \right|                  & < \epsilon \, \, \text{and} \\
+    \left| \frac{c}{\hat c} \frac{F_R}{E_{\text{tot}}} \right| & < \epsilon \, ,
 \end{align}
 where
 \begin{align}
-E_{\text{tot}} &\equiv E_g^{(t)} + \frac{c}{\hat c} \left( E_r^{(t)} + S \right) \, .
+    E_{\text{tot}} & \equiv E_g^{(t)} + \frac{c}{\hat c} \left( E_r^{(t)} + S \right) \, .
 \end{align}
 When $\hat c = c$, $E_{\text{tot}}$ is the total (internal gas plus radiation) energy at the end of the timestep. By default, the relative tolerance $\epsilon$ is set to $10^{-10}$. We find that larger tolerances produce unacceptably inaccurate solutions for many problems. In especially stiff problems, it may be necessary to reduce the tolerance to the order of machine precision for double-precision floating point arithmetic ($\sim 10^{-15}$). If the solver exceeds a specified maximum number of iterations (400 by default) without converging, the code prints an error message and exits. Convergence failure usually occurs only when the intial timestep has not been sufficently reduced compared to the CFL timestep at the start of a simulation.
 
 Once the Newton-Raphson iterations have converged, we have obtained the updated gas internal energy and radiation energy, and we proceed to the next two steps of updating the coupling terms. We first update the radiation and gas momenta, accounting for the coupling term $\rho \kappa_F \mathbf{F}_r/c$. To do so, we compute the flux mean opacity $\kappa_F$ using the updated gas temperature. Then, following \cite{Skinner_2019}, we use a backward-Euler discretization of the radiation flux source term (modified to include a reduced speed of light):
 \begin{align}
-\vc{F}_r^{(t+1)} = \frac{\vc{F}_r^{(t)}}{1 + \rho \kappa_F \hat c \Delta t} \, .
+    \vc{F}_r^{(t+1)} = \frac{\vc{F}_r^{(t)}}{1 + \rho \kappa_F \hat c \Delta t} \, .
 \end{align}
 In order to ensure momentum conservation when $\hat c = c$, we apply the difference in radiation flux in an equal and opposite manner to the gas momenta (as advocated by \citealt{Skinner_2019}):
 \begin{align}
-\Delta \vc{F}_r &\equiv \vc{F}_r^{(t+1)} - \vc{F}_r^{(t)} \, , \\
-{(\rho \vc{v})}^{(t+1)} &= {(\rho \vc{v})}^{(t)} - \frac{\Delta \vc{F}_r}{\hat c c} \, .
+    \Delta \vc{F}_r         & \equiv \vc{F}_r^{(t+1)} - \vc{F}_r^{(t)} \, ,                   \\
+    {(\rho \vc{v})}^{(t+1)} & = {(\rho \vc{v})}^{(t)} - \frac{\Delta \vc{F}_r}{\hat c c} \, .
 \end{align}
 
 The final step is to compute the work done by the radiation force on the gas. Since we are evolving the conserved variables, this term cannot be computed explicitly as written in \autoref{eq:rad_energy} without causing a significant error in the gas internal energy when the radiation force is stiff. We instead compute this term as the difference in gas kinetic energy over the timestep $\Delta E_{\text{kin}}$, then add this quantity to the total gas energy and subtract this quantity from the radiation energy:
 \begin{align}
-E^{(t+1)} &\leftarrow E_g^{(t+1)} + \left( E_{\text{kin}}^{(t)} + \Delta E_{\text{kin}} \right) \, , \\
-E_r^{(t+1)} &\leftarrow E_r^{(t+1)} - \left( \frac{\hat c}{c} \right) \Delta E_{\text{kin}} \, ,
+    E^{(t+1)}   & \leftarrow E_g^{(t+1)} + \left( E_{\text{kin}}^{(t)} + \Delta E_{\text{kin}} \right) \, , \\
+    E_r^{(t+1)} & \leftarrow E_r^{(t+1)} - \left( \frac{\hat c}{c} \right) \Delta E_{\text{kin}} \, ,
 \end{align}
 where $E^{(t+1)}$ denotes the total gas energy at the end of the timestep. This completes the update for all radiation-matter coupling terms.
 
@@ -364,12 +364,12 @@ For all our hydrodynamics tests, we disable the radiation portion of the code. T
 \subsubsection{Sound wave}
 We compute the propagation of a sound wave in one dimension in order to measure the convergence of our numerical method to the exact solution as a function of spatial resolution, following the test described by \cite{Stone_2008}. With $\vc{U}$ denoting the vector of conserved variables $(\rho, \rho v_x, \rho v_y, \rho v_z, E)$, we initialize the simulations with the initial state $\vc{U}_0 + \delta \vc{U}$, where
 \begin{align}
-\delta \vc{U} = A \vc{R} \sin(2\pi x)
+    \delta \vc{U} = A \vc{R} \sin(2\pi x)
 \end{align}
 where $\vc{R} = (1,-1,1,1,1.5)$ is the right eigenvector of the linearized hydrodynamic system, and $\vc{U}_0$ is the background state with density $\rho = 1$, velocity $\vc{v} = 0$, and pressure $P = 1/\gamma$. We set the adiabatic index $\gamma = 5/3$ and the wave amplitude $A = 10^{-6}$. We simulate a periodic domain $x= 0$ to 1 and evolve the system for one wave period, allowing us to compute the error of the solution by direct comparison of the initial conditions and the final state of the simulation. We define the error vector
 \begin{align}
-(\Delta \vc{U})_{k} = \frac{1}{N_x} \sum_{i} \left| U_{i,k} - U_{i,k}^{0} \right|
-\label{eq:convergence_error}
+    (\Delta \vc{U})_{k} = \frac{1}{N_x} \sum_{i} \left| U_{i,k} - U_{i,k}^{0} \right|
+    \label{eq:convergence_error}
 \end{align}
 where $k$ denotes a component of each state vector, $\vc{U_i}$ is the vector of conserved variables in cell $i$ at the final timestep, and $\vc{U_i}^{0}$ is the vector of conserved variables in cell $i$ in the initial conditions. Each component $|\Delta U|_k$ is therefore the $L_1$ norm of the error of a component of the solution state.  We assess the accuracy of the solution based on the root-mean-square (rms) of the components of this error vector, denoted $||\Delta \vc{U}||$.
 
@@ -387,7 +387,7 @@ The HLLC Riemann solver has the property that it can resolve an isolated station
 \label{section:shocktube}
 Our next test is a stationary shock tube, which we set up using the parameters suggested on the website of F.X. Timmes\footnote{\url{http://cococubed.asu.edu/code_pages/exact_riemann.shtml}}. This shock tube problem is substantially more difficult to solve than the standard \cite{Sod_1978} shock tube test due to the larger jump in pressure and density at the discontinuity. We initialize left and right states with a discontinuity at $x_0 = 2$, with the left state $\rho_L = 10$, and $p_L = 100$, and the right state $\rho_R = 1$ and $p_R = 1$. The initial velocity is zero. We evolve the solution using a CFL number of 0.1 until $t = 0.4$ on a grid of 1000 cells on the domain $[0, 5]$. We use a small CFL number since the wave structure at the discontinuity creates waves that propagate faster than the linearized Roe eigenvalues would predict.
 
-We show \quokka's results for this test in \autoref{fig:shocktube}. As for the sound wave test, we compute the $L_1$ error norm for each of the conserved variables, and then compute the root-mean-square of those error norms. The rms $L_1$ error norm divided by the rms norm of the exact solution is $1.12 \times 10^{-3}$. Inspecting the solution in \autoref{fig:shocktube}, we see that the agreement between the exact solution and the numerical solution is very good. The only noticeable differences are small oscillations near discontinuities in the derivative of the solution at $x \approx 2.4$ and near the density discontinuity at $x \approx 3.6$. We find that the shock flattening method of \cite{Miller_2001,Miller_2002} is essential to produce a reasonable solution to this problem. Without it, we find unacceptably large post-shock oscillations (not shown).
+We show \quokka's results for this test in \autoref{fig:shocktube}. As for the sound wave test, we compute the $L_1$ error norm for each of the conserved variables, and then compute the root-mean-square of those error norms. The rms $L_1$ error norm divided by the rms norm of the exact solution is $1.12 \times 10^{-3}$. Inspecting the solution in \autoref{fig:shocktube}, we see that the agreement between the exact solution and the numerical solution is very good. The only noticeable differences are small oscillations near discontinuities in the derivative of the solution at $x \approx 2.4$ and near the density discontinuity at $x \approx 3.6$. We find that the shock flattening method of \cite{Miller_2002} is essential to produce a reasonable solution to this problem. Without it, we find unacceptably large post-shock oscillations (not shown).
 \begin{figure}
     \includegraphics[width=\columnwidth]{hydro_shocktube_0.4000.pdf}
     \caption{Density, velocity, and pressure profiles for the stationary shock tube test (\autoref{section:shocktube}). Lines show the \quokka~simulation result. For comparison, we show the exact solutions for density, velocity, and pressure as circles of the same color.}
@@ -408,15 +408,15 @@ We next carry out the `LeBlanc' shock tube test, originally published by \cite{B
 \label{section:shu-osher}
 We show the Shu-Osher test in \autoref{fig:shu_osher}. Following the description of \cite{Shu_1989}, the initial conditions are, on the left side,
 \begin{align}
-\rho_L(x) &= 3.857143 \, , \\
-v_L(x) &= 2.629369 \, , \\
-P_L(x) &= 10.33333 \, ,
+    \rho_L(x) & = 3.857143 \, , \\
+    v_L(x)    & = 2.629369 \, , \\
+    P_L(x)    & = 10.33333 \, ,
 \end{align}
 and the right-hand state is
 \begin{align}
-\rho_R(x) &= 1 + 0.2 \sin(5x) \, , \\
-v_R(x) &= 0 \, , \\
-P_R(x) &= 1 \, .
+    \rho_R(x) & = 1 + 0.2 \sin(5x) \, , \\
+    v_R(x)    & = 0 \, ,                \\
+    P_R(x)    & = 1 \, .
 \end{align}
 We compute a reference solution using \textsc{Athena++} \citep{Stone_2020} with the VL2 integrator, PPM reconstruction in the characteristic variables, and the HLLC Riemann solver on a grid of 1600 cells. Our solution is computed using PPM reconstruction (in the primitive variables), the RK2-SSP integrator, and the HLLC Riemann solver on a grid of 400 cells. The agreement is very good, with comparable resolution of the high-frequency features to the third-order essentially-non-oscillatory (ENO) scheme of \cite{Shu_1989}. When PLM reconstruction is used instead for the same number of grid cells, the high-frequency features are aliased (not shown; see also Figure 14 of \citealt{Shu_1989}), indicating a significantly higher effective resolution for PPM-based methods even in the presence of shocks.
 \begin{figure}
@@ -447,17 +447,17 @@ We next test the performance of our code on the 1-2-3 problem of \cite{Einfeldt_
 \subsubsection{Kelvin-Helmholtz instability}
 To show the performance of \textsc{Quokka} in two dimensions, we simulate the Kelvin-Helmholtz instability created by counter-propagating gas flows with a shear layer between them. The purpose of this test is to illustrate the ability of the code to maintain the contact discontinuity between the flows as Kelvin-Helmholz rolls develop, even as we add deep AMR nesting. Following \cite{Stone_2020}, we use a two-dimensional periodic box on the domain $[0, 1]$ along each axis with density and velocity given by:
 \begin{align}
-\rho &=  1.5 - 0.5 \tanh(\tilde y / L) \, , \\
-v_x &= 0.5 \tanh(\tilde y / L) \, , \\
-v_y &= A \cos(4\pi (x - x_0)) \, \exp(-{\tilde y}^2 / \sigma^2) \, ,
+    \rho & =  1.5 - 0.5 \tanh(\tilde y / L) \, ,                           \\
+    v_x  & = 0.5 \tanh(\tilde y / L) \, ,                                  \\
+    v_y  & = A \cos(4\pi (x - x_0)) \, \exp(-{\tilde y}^2 / \sigma^2) \, ,
 \end{align}
 where $x_0 = 0.5$, $y_0 = 0.5$, $\tilde y = |y - y_0| - 0.25$, the shearing layer thickness $L = 0.01$, $\sigma = 0.2$, and perturbation amplitude $A = 0.01$. The initial pressure is uniform with $P = 2.5$ and we adopt an adiabatic index $\gamma = 1.4$. We enable AMR, with cells tagged for refinement if the relative density gradient on either side of the cell in either direction exceeds $0.2$, and we allow up to four levels of refinement on top of a base grid size of $2048^2$. Thus the peak resolution of the calculation is $32,768^2$. Each local AMR grid has a uniform size of $128^2$. We evolve the system to $t = 1.5$ with a CFL number of $0.4$, and show the resulting numerical solution in \autoref{fig:kh_zoom}. We are able to carry out this calculation on a single GPU in $\sim 4.5$ hours of wallclock time. While there appears to be no converged solution to this problem without explicit dissipation, we find that our hydrodynamic solver is able to resolve the Kelvin-Helmholz rolls with very little dissipation and with significant small-scale structure caused by secondary instabilities, as expected for inviscid simulations \citep{Lecoanet_2016}. There are no visible artifacts at resolution boundaries.
 
 \begin{figure}
     \begin{center}
-    \includegraphics[width=0.85\columnwidth]{quokka_full.pdf}
-    \includegraphics[width=0.85\columnwidth]{quokka_zoom.pdf}
-    \includegraphics[width=0.85\columnwidth]{quokka_zoom2.pdf}
+        \includegraphics[width=0.85\columnwidth]{quokka_full.pdf}
+        \includegraphics[width=0.85\columnwidth]{quokka_zoom.pdf}
+        \includegraphics[width=0.85\columnwidth]{quokka_zoom2.pdf}
     \end{center}
     \caption{A simulation of the Kelvin-Helmholz instability with 4 levels of refinement. The top panel shows the full simulation domain, and the lower two panels show-successive zoom-ins on parts of the domain. Grid boundaries are shown for levels $l \geq 2$. Color shows density.}
     \label{fig:kh_zoom}
@@ -467,9 +467,9 @@ where $x_0 = 0.5$, $y_0 = 0.5$, $\tilde y = |y - y_0| - 0.25$, the shearing laye
 We next present our results for the so-called Liska-Wendroff implosion test \citep{Hui_1999,Liska_2003}. This problem consists of the square domain $[0, 0.3]^2$, with an inner region $x+y \leq 0.15$ and an exterior region where $x + y > 0.15$ for an ideal gas with adiabatic index $\gamma = 1.4$. The inner region has initial density $\rho = 0.125$ and pressure $P = 0.14$ and the outer region begins with density $\rho = 1$ and pressure $P = 1$. We simulate the subsequent evolution to $t=2.5$ on a uniform grid of $1024^2$ cells with reflecting boundary conditions with a CFL number of $0.4$. These initial conditions lead to a shock directed toward the origin, which is then reflected many times by the upper and right walls before finally converging in a jet traveling away from the origin along the diagonal $x=y$, as shown in \autoref{fig:implosion}. \cite{Liska_2003} note that only codes that discretely preserve symmetry between x- and y-directions successfully produce the jet. In order to recover the jet in \quokka, we found it necessary to code the RK2-SSP integrator so that the fluxes in the x- and y-direction are added in an exactly symmetrical manner for each stage of the update. Additionally, when running the problem on NVIDIA GPUs, we preserve this symmetry only if we disable fused multiply-add (FMA) operations via the \texttt{nvcc} compiler option \texttt{fmad=false}, since the compiler otherwise breaks the symmetry expressed in the source code between the x- and y-direction fluxes. With this compiler option, \quokka~exactly preserves symmetry along the diagonal and successfully recovers the jet.
 
 \begin{figure}
-\includegraphics[width=\columnwidth]{implosion.png}
-\caption{The two-dimensional implosion test \citep{Liska_2003} on a $1024^2$ grid at $t = 2.5$. The density is shown with 16 equally-spaced contours between 0.4 and 1.1, with the colormap showing the density over the same range. A  thin jet shoots along the $x$-$y$ diagonal. The solution is exactly symmetric.}
-\label{fig:implosion}
+    \includegraphics[width=\columnwidth]{implosion.png}
+    \caption{The two-dimensional implosion test \citep{Liska_2003} on a $1024^2$ grid at $t = 2.5$. The density is shown with 16 equally-spaced contours between 0.4 and 1.1, with the colormap showing the density over the same range. A  thin jet shoots along the $x$-$y$ diagonal. The solution is exactly symmetric.}
+    \label{fig:implosion}
 \end{figure}
 
 \subsection{Radiation}
@@ -481,10 +481,10 @@ For our radiation tests we disable the hydrodynamic part of the code and only us
 \label{ssec:marshak}
 We next compute a Marshak wave \citep{Marshak_1958}. The problem consists of a uniform gas with a constant density $\rho = 10 \gm \cm^{-3}$ and constant opacities $\kappa_P = \kappa_R = 577 \cm^{2} \gm^{-1}$. The gas has a uniform initial temperature of $10^4 \Kelvin$, but at $t=0$ we impose on the left-hand side of the domain a boundary condition consisting of a half-isotropic flux with a radiation temperature of $3.481334 \times 10^6 \Kelvin$. The radiation drives a wave of heat into the gas. Following \cite{Su_1996}, we set the gas heat capacity at constant volume $C_v$ so a functional form that makes it possible to linearize the matter-radiation coupling terms, and thus obtain a semi-analytic solution:
 \begin{align}
-C_v &\equiv \frac{\partial E_{\text{int}}}{\partial T} = \alpha T^3 \, ,
-\label{eq:heat_capacity}
+    C_v & \equiv \frac{\partial E_{\text{int}}}{\partial T} = \alpha T^3 \, ,
+    \label{eq:heat_capacity}
 \end{align}
-where $E_{\text{int}} = (\alpha / 4) \, T^4$, $\alpha = 4 a_r / \epsilon$ and $\epsilon = 1$. With this heat capacity, \cite{Su_1996} obtain a semi-analytic quadrature solution of the radiation diffusion equation for this problem as a function of $\epsilon$. We evolve the solution until time $t = \tau / (\epsilon c \rho \kappa)$ where $\tau = 10$, using a simulation domain on the interval $[0 \cm, 3.466205 \times 10^{-3}\cm]$ resolved by grid of $N_x = 400$ cells. We do not use a reduced speed of light for this test.
+where $E_{\text{int}} = (\alpha / 4) \, T^4$, $\alpha = 4 a_r / \epsilon$ and $\epsilon = 1$. With this heat capacity, \cite{Su_1996} obtain a semi-analytic quadrature solution of the radiation diffusion equation for this problem as a function of $\epsilon$. We evolve the solution until time $t = \tau / (\epsilon c \rho \kappa)$ where $\tau = 10$, using a simulation domain on the interval $[0 \cm, 3.466205 \times 10^{-3}\cm]$ resolved by grid of $N_x = 400$ cells. We note that this implies an optical depth per cell of $\tau_{\text{cell}} \approx 0.05$, so this problem does not test the accuracy of our code in the asymptotic diffusion limit (where $\tau_{\text{cell}} \gg 1$; the accuracy in this limit is instead tested via the radiation pressure tube problem in \autoref{section:radtube}). We do not use a reduced speed of light for this test.
 
 Since we solve the moment equations, rather than just the diffusion equation, we do not expect our numerical solution to agree with the \citeauthor{Su_1996} solution at the leading edge of the wave, where our code respects causality and restricts the propagation speed of the wave to $c$; this constraint is violated in the diffusion approximation that \citeauthor{Su_1996} adopt. However, we can still compare to their solution in the region where $F_r \ll cE_r$ and diffusion is a good approximation. In this region, we obtain excellent agreement with the semi-analytic solution, as shown in \autoref{fig:marshak}. Note that the difference between our numerical solution and the ``exact'' solution at $x \gtrsim 3\times 10^{-3}$ cm is not an error in our solution. Rather, it is a result of our code properly capturing the finite speed of light, while the semi-analytic solution does not.
 \begin{figure}
@@ -497,11 +497,11 @@ Since we solve the moment equations, rather than just the diffusion equation, we
 \label{ssec:suolson}
 We next compute a problem involving radiation penetrating a cold medium but with an internal radiation source rather than a radiation source at the boundary. This problem is defined in dimensionless units where $a_r = c = 1$, with opacities $\kappa_P = \kappa_R = 1$, a constant density $\rho = 1$, and a radiation source
 \begin{align}
-S(x,t) =
-\begin{cases}
-    Q \, a_r T_H^4 & 0 \leq x < x_0 \, \text{and} \, t < t_0 \, , \\
-    0 & x \geq x_0 \, \text{or} \, t \geq t_0 \, ,
-\end{cases}
+    S(x,t) =
+    \begin{cases}
+        Q \, a_r T_H^4 & 0 \leq x < x_0 \, \text{and} \, t < t_0 \, , \\
+        0              & x \geq x_0 \, \text{or} \, t \geq t_0 \, ,
+    \end{cases}
 \end{align}
 where we have a normalisation factor $Q = (2 x_0)^{-1}$, radiation source temperature $T_H = 1$, and spatial extent of the source $x_0 = 0.5$ and temporal extent $t_0 = 10$. The initial radiation and gas energies are zero in the idealized problem, but we set them to $10^{-10}$ in our simulation since the radiation solver requires nonzero gas and radiation energies. The gas velocity is zero. We adopt reflecting boundary conditions on the domain $[0, 30]$ on a grid of $N_x = 1500$ cells. We do not reduce the speed of light for this test.
 
@@ -516,12 +516,12 @@ When using the heat capacity given by \autoref{eq:heat_capacity}, a semi-analyti
 \label{section:equilibrium}
 We next isolate the implicit matter-radiation energy exchange solver by solving a problem with no transport. Following \citet{Turner_2001}, we set up a uniform domain with periodic boundary conditions, where the gas and radiation are initially out of thermal equilibrium. The initial radiation energy density is $E_r = 10^{12} \, \text{erg} \, \text{cm}^{-3}$ and, the initial gas energy density $E_g = 10^2 \, \text{erg} \, \text{cm}^{-3}$. The density $\rho = 10^{-7} \, \text{g} \, \text{cm}^{-3}$ and the specific opacity $\kappa_P = 1.0 \, \cm^{2} \gm^{-1}$. Rather than using a constant heat capacity (as \citealt{Turner_2001} do) we use the heat capacity given by \autoref{eq:heat_capacity}, which allows us to obtain an algebraic solution for the matter temperature $T$ as a function of time $t$:
 \begin{align}
-T^4 &= \left( T_{0}^4 - \frac{\hat c}{c} \tilde E_0 \right) \, \exp \left[ -\frac{4}{\alpha} \left( a_r + \frac{\hat c}{c} \frac{\alpha}{4} \right) \kappa \rho c t \right] \, + \, \frac{\hat c}{c} \tilde E_0 \, .
-\label{eq:rsla_temperature}
+    T^4 & = \left( T_{0}^4 - \frac{\hat c}{c} \tilde E_0 \right) \, \exp \left[ -\frac{4}{\alpha} \left( a_r + \frac{\hat c}{c} \frac{\alpha}{4} \right) \kappa \rho c t \right] \, + \, \frac{\hat c}{c} \tilde E_0 \, .
+    \label{eq:rsla_temperature}
 \end{align}
 where $E_0 = E_{g} + (c/\hat c) \, E_{r}$ and $\tilde E_0 = E_0 \left[ a_r + (\hat c / c) (\alpha / 4) \right]^{-1}$ are constant as a function of time. Taking the limit $t \rightarrow \infty$, we immediately see that the equilibrium temperature $T_{\text{eq}}$ is modified whenever $\hat c \neq c$, contrary to previous claims in the literature:
 \begin{align}
-T_{\text{eq}}^4 &= \frac{\hat c}{c} \tilde E_0 = \frac{\hat c}{c} E_0 \left[ a_r + \left(\frac{\hat c}{c} \right) \frac{\alpha}{4} \right]^{-1} \, .
+    T_{\text{eq}}^4 & = \frac{\hat c}{c} \tilde E_0 = \frac{\hat c}{c} E_0 \left[ a_r + \left(\frac{\hat c}{c} \right) \frac{\alpha}{4} \right]^{-1} \, .
 \end{align}
 Fundamentally, this occurs whenever RSLA is employed (and $\hat c \neq c$) because the quantity $E_0 = E_g + (c / \hat c) \, E_r$ is conserved in this problem, \emph{not} the total energy $E_{\text{tot}} = E_g + E_r$. This is a generic failing of the RSLA, which does not conserve total energy. However, in practice when the boundary conditions are such that the quantity $E_0$ is \emph{not} conserved, the physically correct steady-state solution may still be obtained -- this is the situation for all the radiation-hydrodynamics test problems we present in \autoref{ssec:radhydro_tests}, and is also the situation for most applications of interest.
 
@@ -534,7 +534,7 @@ To test \quokka's ability to recover the analytic solution, we simulate the prob
 
 \subsubsection{Shadow test}
 \label{section:shadow_test}
-We next illustrate the performance of our radiation solver in two dimensions with a shadowing test based on that of \cite{Hayes_2003}; our test differs from theirs only in that we use planar $x-y$ geometry instead of cylindrical $r-z$ coordinates. The goal of this test is evaluate how well an RHD scheme casts sharp shadows, recovering the geometric optics limit that should prevail when the optical depth is low. This problem consists of a rectangular domain of $1.0 \cm$ by $0.12 \cm$ with a streaming radiation source incident from the left boundary and an outflow boundary condition on the right. The lower boundary is reflecting, and the upper boundary allows outflow. In the middle lies an optically-thick cylinder. The initial gas and radiation temperatures are $290 \K$ and the incident flux has a radiation temperature of $1740 \K$. The background has a density of $\rho_{\text{bg}} = 10^{-3} \gm \cm^{-3}$, and the cylinder has a density of $\rho_{\text{cl}} = 1.0 \gm \cm^{-3}$. The gas has an opacity $\rho \kappa = (\rho/\rho_{\text{bg}})^2 \, 0.1 \cm^{-1}$, a mean molecular weight $\mu = 10 \, m_{\rm H}$, and an adiabatic index $\gamma = 5/3$. We allow two levels of mesh refinement on top of a base grid of $280 \times 80$ cells, tagging cells for refinement when the relative gradient in radiation energy density exceeds $0.1$. The problem is evolved until $t = 5 \times 10^{-11} \s$ with a CFL number of $0.4$. We do not reduce the speed of light for this test. For this problem, we find it necessary to reduce the relative tolerance of the implicit matter-radiation coupling solver to $10^{-15}$. Otherwise, there are unphysical radiation shocks reflected from the cylinder. 
+We next illustrate the performance of our radiation solver in two dimensions with a shadowing test based on that of \cite{Hayes_2003}; our test differs from theirs only in that we use planar $x-y$ geometry instead of cylindrical $r-z$ coordinates. The goal of this test is evaluate how well an RHD scheme casts sharp shadows, recovering the geometric optics limit that should prevail when the optical depth is low. This problem consists of a rectangular domain of $1.0 \cm$ by $0.12 \cm$ with a streaming radiation source incident from the left boundary and an outflow boundary condition on the right. The lower boundary is reflecting, and the upper boundary allows outflow. In the middle lies an optically-thick cylinder. The initial gas and radiation temperatures are $290 \K$ and the incident flux has a radiation temperature of $1740 \K$. The background has a density of $\rho_{\text{bg}} = 10^{-3} \gm \cm^{-3}$, and the cylinder has a density of $\rho_{\text{cl}} = 1.0 \gm \cm^{-3}$. The gas has an opacity $\rho \kappa = (\rho/\rho_{\text{bg}})^2 \, 0.1 \cm^{-1}$, a mean molecular weight $\mu = 10 \, m_{\rm H}$, and an adiabatic index $\gamma = 5/3$. We allow two levels of mesh refinement on top of a base grid of $280 \times 80$ cells, tagging cells for refinement when the relative gradient in radiation energy density exceeds $0.1$. The problem is evolved until $t = 5 \times 10^{-11} \s$ with a CFL number of $0.4$. We do not reduce the speed of light for this test. For this problem, we find it necessary to reduce the relative tolerance of the implicit matter-radiation coupling solver to $10^{-15}$. Otherwise, there are unphysical radiation shocks reflected from the cylinder.
 
 We show the radiation temperature at the end of the simulation in \autoref{fig:shadow}. After the beam of light has crossed the domain, we find a sharp shadow cast behind the cylinder, as one would expect physically. However, there are some residual artefacts from a transient beam of light that initially curved around the cylinder and reflected against the lower boundary, as seen in the low-temperature shock-like features within the shadow near the right edge of the domain. This appears to be an unavoidable artefact of using a local VET closure. (This does not occur when using the Eddington tensor obtained from the geometric optics limit, i.e. $f_{xx} = 1$.) Overall, this test shows that \quokka~produces qualitatively correct results for semitransparent problems.
 \begin{figure*}
@@ -561,12 +561,12 @@ Our final suite of tests use the full suite of physics in \quokka, and involve c
 \label{section:radtube}
 Our first radiation-hydrodynamic test is the the radiation pressure tube problem of \cite{Krumholz_2007}. This problem is designed to show that the radiation pressure gradient can stably balance the gas pressure gradient both in the regime where radiation pressure dominates and the in the regime where gas pressure dominates for a problem where the optical depth is sufficiently large that the radiation is in the equilibrium diffusion regime. We adopt the opacities $\kappa_P = \kappa_R = 100 \cm^2 \gm^{-1}$, mean molecular weight $\mu = 2.33 \, m_H$, and adiabatic index $\gamma = 5/3$. The exact steady-state solution in the diffusion approximation is given by the solution to the differential equations
 \begin{align}
-\frac{d \rho}{dx} &= -\frac{\mu}{k_B T} \left( \frac{k_B}{\mu} \rho + \frac{4}{3} a_r T^3 \right) \frac{dT}{dx} \, , \\
-\frac{d^2 T}{dx^2} &= -\frac{3}{T} \left(\frac{dT}{dx}\right)^2 + \frac{1}{\rho} \frac{d\rho}{dx} \frac{dT}{dx} \, ,
+    \frac{d \rho}{dx}  & = -\frac{\mu}{k_B T} \left( \frac{k_B}{\mu} \rho + \frac{4}{3} a_r T^3 \right) \frac{dT}{dx} \, , \\
+    \frac{d^2 T}{dx^2} & = -\frac{3}{T} \left(\frac{dT}{dx}\right)^2 + \frac{1}{\rho} \frac{d\rho}{dx} \frac{dT}{dx} \, ,
 \end{align}
 where the left-side temperature, density, and density gradient are $T_0 = 2.75 \times 10^7 \K$, $\rho_0 = 1.0 \gm \cm^{-3}$, and ${d\rho_0}/{dx} = 0.005 \gm \cm^{-4}$. We solve this equation on the domain $[0 \cm, 128 \cm]$ in order to obtain the initial conditions for this problem. The left and right side initial conditions are adopted as Dirichlet boundary conditions for our simulation. The reduced speed of light $\hat c$ is set to $10 \, c_{s,0} \approx 4.03 \times 10^8 \cm \s^{-1}$, where $c_{s,0}$ is the sound speed at the left boundary.
 
-After evolving for a sound crossing time $t = L_x / c_{s,0} \approx 3.177 \times 10^{-6} \s$ with a CFL number of $0.4$ on a grid of 128 cells, we obtain the numerical solution shown in \autoref{fig:radiation_pressure_tube}. Our numerical solution agrees with the initial conditions (obtained from the exact diffusion solution) to better than $0.2$ per cent. Since the boundary conditions do not require conservation of the quantity $E_0$ (see \autoref{section:equilibrium}), we find that we are able to obtain the physically correct solution even when $\hat c \neq c$.
+After evolving for a sound crossing time $t = L_x / c_{s,0} \approx 3.177 \times 10^{-6} \s$ with a CFL number of $0.4$ on a grid of 128 cells, we obtain the numerical solution shown in \autoref{fig:radiation_pressure_tube}. We note that these parameters imply an optical depth per cell of $\tau_{\text{cell}} \sim 10^2$, so this problem tests the accuracy of our numerical methods in the asymptotic diffusion regime where $\tau_{\text{cell}} \gg 1$. Our numerical solution agrees with the initial conditions (obtained from the exact diffusion solution) to better than $0.2$ per cent. Since the boundary conditions do not require conservation of the quantity $E_0$ (see \autoref{section:equilibrium}), we find that we are able to obtain the physically correct solution even when $\hat c \neq c$.
 
 \begin{figure}
     \includegraphics[width=\columnwidth]{radiation_pressure_tube.pdf}
@@ -578,8 +578,8 @@ After evolving for a sound crossing time $t = L_x / c_{s,0} \approx 3.177 \times
 \label{section:thinwind}
 In order to test the radiation-gas momentum coupling in the optically-thin limit, we next simulate a radiation-driven wind in the limit of very low optical depth. We consider an isothermal gas with sound speed $c_T = 0.2 \km \s^{-1}$, with constant opacities $\kappa_P = 0$ and $\kappa_R = 5 \cm^2 \gm^{-1}$. A flux of radiation $F_{r,0}$ enters the computational domain from the left side at $x=0$, inducing an acceleration $a_0 = \kappa_R F_{r,0}/c$ in the gas; we choose the density of the gas low enough that the optical depth is negligible, so the flux and acceleration are constant across the domain. Consider a fluid parcel moving at Mach number $\mathcal{M}_0$ at $x = 0$, where the radiation flux enters the domain. Integrating the gas momentum equation with respect to position $x$ yields a Bernoulli equation for the Mach number $\mathcal{M}$ as a function of position
 \begin{align}
-\frac{1}{2} \mathcal{M}_0^2 = \frac{1}{2} \mathcal{M}^2 + \log \left({\frac{\mathcal{M}_0}{\mathcal{M}}}\right) - \left( \frac{x}{L} \right) \, ,
-\label{eq:wind}
+    \frac{1}{2} \mathcal{M}_0^2 = \frac{1}{2} \mathcal{M}^2 + \log \left({\frac{\mathcal{M}_0}{\mathcal{M}}}\right) - \left( \frac{x}{L} \right) \, ,
+    \label{eq:wind}
 \end{align}
 where $L = c_T^2/a_0$ is the characteristic acceleration length of the problem. If the density at $x = 0$ is $\rho_0$, then from conservation of mass, in steady state the density as a function of position is $\rho = (\mathcal{M}_0/\mathcal{M}) \rho_0$.\footnote{We neglect gravitational forces in this problem, but we note that our solution is formally equivalent to the Eddington ratio $\eta_{\text{Edd}} = 2$ case of the plane-parallel radiation-inhibited Bondi accretion problem of \cite{Skinner_2013}.} For our test we choose $\mathcal{M}_0 = 1.1$, and we set $\rho_0 = 3.897212 \times 10^{-19} \gm \cm^{-3}$; for our chosen value of $\kappa_R$, this yields an optical depth $\tau = 10^{-6}$ from $x=0$ to $x=L$.
 
@@ -603,24 +603,24 @@ We next simulate a subcritical radiative shock, following the set-up used by \ci
 \label{section:shell}
 As a final example, we consider a non-steady-state radiation hydrodynamics problem: the radiation-driven dust shell problem from \citet[hereafter \citetalias{Skinner_2013}]{Skinner_2013}, consisting of an initial shell of dusty gas placed at radius $r_0$ with the radial density profile:
 \begin{align}
-\rho(r) = \frac{M_\text{sh}}{4\pi r^2 \sqrt{2\pi \sigma_{\text{sh}}^2}} \exp \left( -\frac{(r - r_0)^2}{2\sigma_{\text{sh}}^2} \right) \, ,
-\label{eq:shell_density}
+    \rho(r) = \frac{M_\text{sh}}{4\pi r^2 \sqrt{2\pi \sigma_{\text{sh}}^2}} \exp \left( -\frac{(r - r_0)^2}{2\sigma_{\text{sh}}^2} \right) \, ,
+    \label{eq:shell_density}
 \end{align}
 where $M_{\text{sh}}$ is the mass of the shell and $\sigma_{\text{sh}}$ is the thickness of the shell. We place a point-like source of radiation, representing a central star, at $r = 0$. The radiation source is smoothed so that it can be resolved on the computational grid, using a Gaussian profile of the form
 \begin{align}
-j(r) = \frac{L_{\star}}{(2\pi \sigma_{\star}^2)^{3/2}} \exp \left( -\frac{r^2}{2 \sigma_{\star}^2} \right)
+    j(r) = \frac{L_{\star}}{(2\pi \sigma_{\star}^2)^{3/2}} \exp \left( -\frac{r^2}{2 \sigma_{\star}^2} \right)
 \end{align}
 where $L_{\star}$ is the luminosity of the source and $\sigma_{\star}$ is a smoothing parameter defining the spatial extent of the source. Under the thin-shell approximation and neglecting gas pressure forces, \citetalias{Skinner_2013} obtain an equation of motion for the shell. Starting from rest, the resulting shell velocity, written in terms of the shell Mach number $\mathcal{M}_{\text{sh}}$, is
 \begin{align}
-\mathcal{M}_{\text{sh}} \equiv \frac{dR}{dT} = \sqrt{2} \mathcal{M}_0 \sqrt{1 - \frac{1}{R}} \, .
+    \mathcal{M}_{\text{sh}} \equiv \frac{dR}{dT} = \sqrt{2} \mathcal{M}_0 \sqrt{1 - \frac{1}{R}} \, .
 \end{align}
 with dimensionless radius $R \equiv r/r_0$, dimensionless time $T \equiv t/t_0$, characteristic time $t_0 = r_0/c_T$, reference sound speed $c_s$, and reference Mach number $\mathcal{M}_0$:
 \begin{align}
-\mathcal{M}_0 = c_s^{-1} \sqrt{\frac{L_{\star} \kappa_R}{4\pi r_0 c}} \, .
+    \mathcal{M}_0 = c_s^{-1} \sqrt{\frac{L_{\star} \kappa_R}{4\pi r_0 c}} \, .
 \end{align}
 Following the parameters used by \citetalias{Skinner_2013}, we set $\kappa_P = \kappa_R = 20 \cm^2 \gm^{-1}$, $c_s = 2 \km \s^{-1}$, $r_0 = 5 \pc$, $M_{\text{sh}} = 5 \times 10^5$ \Msun, and $L_{\star} = 2 \times 10^{42} \erg \s^{-1}$. We note that $c_s$ is only a reference sound speed and does not change the thin-shell solution since pressure forces are assumed to be negligible. We adopt values of $\sigma_{\star} = 0.3 r_0$ and $\sigma_{\text{sh}} = 0.3 r_0/(2\sqrt{2 \log 2})$.
 
-We initialize our simulation of this problem using the density profile (\autoref{eq:shell_density}) and the quasi-static radiation energy and flux derived by \citetalias{Skinner_2013}. We initialize the gas temperature in equilibrium with the radiation temperature. A density floor is set at $\rho_{\text{floor}} = 10^{-8} \rho_0$, where $\rho_0 = M_{\text{sh}} / (4 \pi r_0^3 / 3)$. A pressure floor is likewise set at $P_{\text{floor}} = 10^{-8} P_0$, where $P_0 = \gamma \rho_0 c_s^2$. We use an adiabatic equation of state with $\gamma = 5/3$ and a mean molecular weight $\mu = 2.33 m_H$, where $m_H$ is the mass of the hydrogen atom. We use a uniform grid of $128^3$ and PLM reconstruction for both hydrodynamic and radiation variables. Following \citetalias{Skinner_2013}, we reduce the speed of light to $\hat c = 860 \, c_s$. The simulation is evolved until $t = 0.125 \, t_0$ using a CFL number of $0.3$. The shell velocity as a function of time is shown in \autoref{fig:radshell}. Our simulation has values slightly lower than expected from the thin-shell solution, whereas \citetalias{Skinner_2013} find simulated shell velocities slightly higher than the thin shell solution. Exact agreement cannot be expected since \citetalias{Skinner_2013} do not specify their values for the parameters $\sigma_{\star}$ and $\sigma_{\text{sh}}$ and differences in implementation details of our radiation hydrodynamic solvers. Overall, we find very good agreement between the simulation (shown as crosses) and the thin-shell solution (solid line). 
+We initialize our simulation of this problem using the density profile (\autoref{eq:shell_density}) and the quasi-static radiation energy and flux derived by \citetalias{Skinner_2013}. We initialize the gas temperature in equilibrium with the radiation temperature. A density floor is set at $\rho_{\text{floor}} = 10^{-8} \rho_0$, where $\rho_0 = M_{\text{sh}} / (4 \pi r_0^3 / 3)$. A pressure floor is likewise set at $P_{\text{floor}} = 10^{-8} P_0$, where $P_0 = \gamma \rho_0 c_s^2$. We use an adiabatic equation of state with $\gamma = 5/3$ and a mean molecular weight $\mu = 2.33 m_H$, where $m_H$ is the mass of the hydrogen atom. We use a uniform grid of $128^3$ and PLM reconstruction for both hydrodynamic and radiation variables. Following \citetalias{Skinner_2013}, we reduce the speed of light to $\hat c = 860 \, c_s$. The simulation is evolved until $t = 0.125 \, t_0$ using a CFL number of $0.3$. The shell velocity as a function of time is shown in \autoref{fig:radshell}. Our simulation has values slightly lower than expected from the thin-shell solution, whereas \citetalias{Skinner_2013} find simulated shell velocities slightly higher than the thin shell solution. Exact agreement cannot be expected since \citetalias{Skinner_2013} do not specify their values for the parameters $\sigma_{\star}$ and $\sigma_{\text{sh}}$ and differences in implementation details of our radiation hydrodynamic solvers. Overall, we find very good agreement between the simulation (shown as crosses) and the thin-shell solution (solid line).
 
 \begin{figure}
     \includegraphics[width=\columnwidth]{shell_velocity.pdf}
@@ -637,63 +637,78 @@ We first demonstrate that \textsc{Quokka} has excellent parallel scaling efficie
 
 We run with a varying number of GPUs with two $256^3$ grids per GPU, increasing the resolution of our simulation as we extend to greater numbers of GPUs. However, a power-of-two resolution increase does not easily map onto a jump from one GPU to four GPUs, so the single-GPU simulation only uses a grid size of $256^3$. The grid size of the simulations therefore ranges from $256^3$ (for 1 GPU) to $2048^3$ (for 256 GPUs). We set the \textsc{AMReX} domain decomposition parameters \texttt{blocking\_factor} and \texttt{max\_grid\_size} to a value of $128$, leading the computational grid to be decomposed into arrays of size $128^3$. (We also tested local grid sizes of $256^3$ but found only a few per cent performance improvement on this problem.) We use one MPI rank per GPU for all simulations. The CFL number is $0.25$ and we evolve for $100$ timesteps for each simulation. We assess performance by counting the total number of cell-updates and dividing by the number of GPUs in order to obtain the performance figure-of-merit in the units of 1 million cells (or zones) per timestep per GPU per second (Mzones/GPU/s).  We report the results in \autoref{table:weak_hydro_scaling}.
 
-We find a $\approx 30\%$ drop in performance per GPU when going from 1 GPU to 4 GPUs, corresponding to using all 4 GPUs on a single node of the compute cluster. We hypothesize that this is due to the limited communication bandwidth between GPUs on a node. For intra-node scaling on CPUs, \citet{Stone_2020} report a similar decrease in performance when going from one CPU to all the CPUs on a node for \textsc{Athena++}, which they attribute to limitations of memory bandwidth. However, significantly different scaling behavior is observed when running the \textsc{K-Athena} hydrodynamics code on GPUs \citep{Grete_2019} on the Summit supercomputer\footnote{\url{https://www.olcf.ornl.gov/olcf-resources/compute-systems/summit/}}, finding a $99$ per cent weak scaling efficiency going from 1 GPU to 6 GPUs on a single node, so there may be some inefficiency in our current GPU-to-GPU communication method. We observe very little further degradation in performance per GPU when going from 1 node (4 GPUs) to 64 nodes (256 GPUs), yielding a parallel efficiency of 88 per cent on 64 nodes when compared to running on 1 node.  We could not run on larger numbers of GPU nodes due to job size limitations, but we expect scaling to continue to thousands of GPUs based on the parallel scaling observed for other GPU hydrodynamics codes based on \textsc{AMReX}, such as \textsc{Castro} \citep{Almgren_2020}.
+We find a $\approx 40\%$ drop in performance per GPU when going from 1 GPU to 4 GPUs, corresponding to using all 4 GPUs on a single node of the compute cluster. We hypothesize that this is due to the limited communication bandwidth between GPUs on a node. For intra-node scaling on CPUs, \citet{Stone_2020} report a similar decrease in performance when going from one CPU to all the CPUs on a node for \textsc{Athena++}, which they attribute to limitations of memory bandwidth. However, significantly different scaling behavior is observed when running the \textsc{K-Athena} hydrodynamics code on GPUs \citep{Grete_2019} on the Summit supercomputer\footnote{\url{https://www.olcf.ornl.gov/olcf-resources/compute-systems/summit/}}, finding a $99$ per cent weak scaling efficiency going from 1 GPU to 6 GPUs on a single node, so there may be some inefficiency in our current GPU-to-GPU communication method. We find that using CUDA-aware MPI does not improve performance for our code. However, we observe only a modest drop in performance per GPU when going from 1 node (4 GPUs) to 64 nodes (256 GPUs), yielding a parallel efficiency of 83 per cent on 64 nodes when compared to running on 1 node.  We could not run on larger numbers of GPU nodes due to job size limitations, but we expect scaling to continue to thousands of GPUs based on the parallel scaling observed for other GPU hydrodynamics codes based on \textsc{AMReX}, such as \textsc{Castro} \citep{Almgren_2020}.
+
+In \autoref{table:weak_hydro_scaling_plm}, we show the same performance numbers as in \autoref{table:weak_hydro_scaling}, but using PLM reconstruction for each simulation instead of PPM reconstruction. We find that the performance improves significantly on a single GPU, going from $113$ million zone-updates per second to $158$ million zone-updates per second. However, communication overheads limit the relative performance improvement when using large numbers of nodes, as the $64$-node case goes from $59$ million zone-updates per GPU per second using PPM to only $65$ million zone-updates per GPU per second using PLM. Since the computations on each local grid are less expensive with PLM but the communication costs remain the same, the scaling efficiency decreases slightly as well, from $83$ per cent to $76$ per cent.
 
 \begin{table}
-    \begin{tabular}{l|r|r|r|r|r|r|r}\hline
-    Nodes & GPUs & Mzones/GPU/s & Scaling efficiency & Grid size\\\hline
-    \csvreader
-        {weak_scaling_hydro.csv}{1=\nodes,2=\gpus,3=\mzones,4=\mzonespergpu,5=\gpufill,6=\scaling,7=\scalingnode,8=\size}
-        {\nodes & \gpus & \mzonespergpu & \scalingnode & $\size$ \\}
+    \begin{tabular}{l|r|r|r|r}\hline
+        Nodes   & GPUs  & Mzones/GPU/s  & Scaling efficiency (\%) & Grid size                         \\\hline
+        \csvreader
+        {weak_scaling_hydro.csv}{1=\nodes,2=\gpus,3=\mzones,4=\mzonespergpu,5=\mzonespergpuideal,6=\gpufill,7=\scaling,8=\scalingnode,9=\size}
+        {\nodes & \gpus & \mzonespergpu & \scalingnode       & $\size$ \\}
     \end{tabular}
     \caption{Weak scaling efficiency for hydrodynamics with PPM reconstruction as a function of the number of GPUs for a Sedov blast wave with periodic boundary conditions.}
     \label{table:weak_hydro_scaling}
 \end{table}
 
 \begin{table}
-    \begin{tabular}{l|r|r|r|r|r|r|r}\hline
-    Nodes & GPUs & Mzones/GPU/s & Scaling efficiency & Grid size\\\hline
-    \csvreader
-        {weak_scaling_hydro_plm.csv}{1=\nodes,2=\gpus,3=\mzones,4=\mzonespergpu,5=\gpufill,6=\scaling,7=\scalingnode,8=\size}
-        {\nodes & \gpus & \mzonespergpu & \scalingnode & $\size$ \\}
+    \begin{tabular}{l|r|r|r|r}\hline
+        Nodes   & GPUs  & Mzones/GPU/s  & Scaling efficiency (\%) & Grid size                         \\\hline
+        \csvreader
+        {weak_scaling_hydro_plm.csv}{1=\nodes,2=\gpus,3=\mzones,4=\mzonespergpu,5=\scaling,6=\scalingnode,7=\size}
+        {\nodes & \gpus & \mzonespergpu & \scalingnode       & $\size$ \\}
     \end{tabular}
     \caption{Weak scaling efficiency for hydrodynamics with PLM reconstruction as a function of the number of GPUs for a Sedov blast wave with periodic boundary conditions.}
     \label{table:weak_hydro_scaling_plm}
 \end{table}
 
-We next test the scaling behaviour for full radiation hydrodynamics solver on uniform grids. \autoref{table:weak_radhydro_scaling} lists the performance per GPU and parallel efficiency measured with respect to single-node performance for the radiation-driven shell test problem run for $50$ timesteps. Since we have many radiation substeps per hydrodynamic step (set here to 10; see \autoref{sssec:sync}), the performance metric in units of Mzones/GPU/s is lower by a factor comparable to but somewhat smaller than the number of radiation substeps per hydro step; a single radiation update is slightly less costly than a single hydrodynamic update. In this case, we observe a steeper drop in performance when going from 1 GPU to 4 GPUs (approximately a factor of 2). The lower parallel efficiency is not surprising, since \emph{each} radiation substep requires communicating boundary conditions between grids, so the amount of inter-GPU communication per hydro timestep increases significantly for radiation hydrodynamics. Nonetheless, as is the case for hydrodynamics, there is little additional performance penalty when scaling from 1 node to 64 nodes. We measure a parallel efficiency in this case of $80$ per cent.
+We next test the scaling behaviour for full radiation hydrodynamics solver on uniform grids. \autoref{table:weak_radhydro_scaling} lists the performance per GPU and parallel efficiency measured with respect to single-node performance for the radiation-driven shell test problem run for $50$ timesteps. Since we have many radiation substeps per hydrodynamic step (set here to 10; see \autoref{sssec:sync}), the performance metric in units of Mzones/GPU/s is lower by a factor comparable to but somewhat smaller than the number of radiation substeps per hydro step; a single radiation update is slightly less costly than a single hydrodynamic update. In this case, we observe a steeper drop in performance when going from 1 GPU to 4 GPUs (approximately a factor of 2). The lower parallel efficiency is not surprising, since \emph{each} radiation substep requires communicating boundary conditions between grids, so the amount of inter-GPU communication per hydro timestep increases significantly for radiation hydrodynamics. Nonetheless, as is the case for hydrodynamics, there is little additional performance penalty when scaling from 1 node to 64 nodes. We measure a parallel efficiency in this case of $76$ per cent.
+
+in \autoref{table:scaling_a100}, we list the performance metrics of the code on both the Sedov problem and the radiation-driven shell problem running on a compute node with newer NVIDIA A100 GPUs. Since we only have access to a limited number of these GPUs, we only show performance data for a single GPU and a single compute node (4 GPUs). The single GPU case achieves $254$ million hydrodynamic zone-updates per second using PPM, making Quokka, as far as we are aware, the fastest PPM hydrodynamics code that currently exists. On the radiation-driven shell problem, the code achieves $39$ million radiation hydrodynamic zone-updates per second. In both cases, the performance per GPU drops by a factor of approximately 2 when using all 4 GPUs on the node. This is almost entirely due to the time spent communicating boundary conditions, as shown in the table (`B.C. fill time', which denotes the percentage of total wall time spent filling ghost cells for each local grid). If communication of boundary data and computation over the local grids could be perfectly overlapped, the parallel efficiency going from 1 GPU to 4 GPUs would be $> 99$ per cent for hydrodynamics and $> 96$ for radiation hydrodynamics.
 
 Finally, we point out that absolute speed of \quokka~is excellent. Comparison between CPU and GPU codes is non-trivial, since it obviously depends on the CPU-to-GPU ratio on a particular compute platform. However, it is worth pointing out that \quokka's update rate per core (normalised by the number of CPU cores per compute node) for \textit{radiation}-hydrodynamics on GPU is comparable to or better than \textsc{Athena++}'s for \textit{hydrodynamics} on CPU.
 
 \begin{table}
-\begin{tabular}{l|r|r|r|r|r|r}\hline
-Nodes & GPUs & Mzones/GPU/s & Scaling efficiency & Grid size\\\hline
-\csvreader
-    {weak_scaling_radhydro.csv}{1=\nodes,2=\gpus,3=\mzones,4=\mzonespergpu,5=\gpufill,6=\scaling,7=\scalingnode,8=\size}
-    {\nodes & \gpus & \mzonespergpu & \scalingnode & $\size$ \\}
-\end{tabular}
-\caption{Weak scaling efficiency for radiation hydrodynamics as a function of the number of GPUs for the radiation-driven shell test (\autoref{section:shell}) with periodic boundary conditions.}
-\label{table:weak_radhydro_scaling}
+    \begin{tabular}{l|r|r|r|r|r|r}\hline
+        Nodes   & GPUs  & Mzones/GPU/s  & Scaling efficiency (\%) & Grid size                         \\\hline
+        \csvreader
+        {weak_scaling_radhydro.csv}{1=\nodes,2=\gpus,3=\mzones,4=\mzonespergpu,5=\mzonespergpuideal,6=\gpufill,7=\scaling,8=\scalingnode,9=\size}
+        {\nodes & \gpus & \mzonespergpu & \scalingnode       & $\size$ \\}
+    \end{tabular}
+    \caption{Weak scaling efficiency for radiation hydrodynamics as a function of the number of GPUs for the radiation-driven shell test (\autoref{section:shell}) with periodic boundary conditions.}
+    \label{table:weak_radhydro_scaling}
+\end{table}
+
+\begin{table}
+    \begin{tabular}{r|r|r|c|c}\hline
+        GPUs  & Mzones/GPU/s  & B.C. fill time (\%) & Grid size & Problem                         \\\hline
+        \csvreader
+        {performance_a100.csv}{1=\nodes,2=\gpus,3=\mzones,4=\mzonespergpu,5=\mzonespergpuideal,6=\gpufill,7=\scaling,8=\scalingnode,9=\size,10=\problemtype}
+        {\gpus & \mzonespergpu & \gpufill & $\size$       & \problemtype \\}
+    \end{tabular}
+    \caption{Performance for both Sedov and radiating shell tests as a function of the number of GPUs for a single node with 4 NVIDIA A100 GPUs.}
+    \label{table:scaling_a100}
 \end{table}
 
 \subsection{Strong scaling with AMR}
-Many applications of interest will seek to minimize either the total runtime of the simulation or the total node-hours used for a simulation for a problem of a fixed size. Additionally, most applications we are interested in will benefit from or require the use of AMR.  We therefore test the ability of \textsc{Quokka} to scale an AMR radiation hydrodynamic simulation of fixed size to larger numbers of GPUs in order to either minimize total runtime or total node-hours (referred to as \emph{strong scaling}). For this test, we initialize the radiation-driven shell problem (\autoref{section:shell}) on a base grid of $256^3$ cells with two levels of mesh refinement based on the relative gradient in the gas density. We run each simulation for 50 timesteps, with a CFL number of $0.3$ and PLM reconstruction for both hydrodynamics and radiation. We set the \textsc{AMReX} domain decomposition parameters \texttt{blocking\_factor} set to 32 and \texttt{max\_grid\_size} set to a value of $128$, so that all grids are between $32^3$ and $128^3$ in size, with possible non-cubic grids at intermediate sizes. The number of GPUs used for each simulation is varied, scaling from 1 node (4 GPUs) to 8 nodes (32 GPUs). This is a particularly stringest test, since the level-by-level AMR timestepping requires that each level be computed separately, limiting the amount of parallelism that can be distributed across GPUs. There is also additional communication overhead when AMR is enabled compared to a single-level uniform grid simulation. We show the scaling results in \autoref{table:strong_scaling}. Comparing \autoref{table:weak_radhydro_scaling} and \autoref{table:strong_scaling}, the performance per GPU for a single node is lower than that of a uniform grid simulation by $\approx 50$ per cent. (A similar, although somewhat smaller, overhead when enabling AMR is also observed with CPU codes, e.g., \textsc{Athena++}; \citealt{Stone_2020}). The scaling efficiency is reasonable for 2 and 4 nodes (67 per cent for 4 nodes), but drops significantly at 8 nodes to 54 per cent parallel efficiency. We hypothesize that this is due to the small number of cell-updates per GPU once 32 GPUs are in use for this problem (approximately $211^3 \approx 9.4 \times 10^6$ cells/GPU). We find that performance on a single GPU is significantly diminished for uniform-grid problems smaller than $256^3$, so this performance drop may be largely due to the inability to use all GPU hardware threads when the amount of work per GPU is small. Similar GPU performance behavior is observed when running \textsc{K-Athena} on GPUs for varying problem sizes per GPU \citep{Grete_2019}. This effect is also magnified by the sequential nature of the level-by-level timestepping. For level $l=1$, the number of cells per GPU drops below $256^3$ for 8 GPUs, and for level $l=2$, it drops below $256^3$ for 16 GPUs. High scaling efficiency is obtained before reaching these thresholds, so it appears that reasonable performance on GPUs may be obtained with AMR when all refinement levels have at least $256^3$ cells per GPU on average. In general, obtaining the best possible GPU performance may require an adjustment to the mesh refinement parameters usually used when running on CPUs. For self-gravitating problems, scaling may be aided by the self-similar nature of gravitational collapse, leading to an approximately equal number of cells on each refinement level for appropriate refinement criteria (see discussion in \citealt{Stone_2020}).
+Many applications of interest will seek to minimize either the total runtime of the simulation or the total node-hours used for a simulation for a problem of a fixed size. Additionally, most applications we are interested in will benefit from or require the use of AMR.  We therefore test the ability of \textsc{Quokka} to scale an AMR radiation hydrodynamic simulation of fixed size to larger numbers of GPUs in order to either minimize total runtime or total node-hours (referred to as \emph{strong scaling}). For this test, we initialize the radiation-driven shell problem (\autoref{section:shell}) on a base grid of $256^3$ cells with two levels of mesh refinement based on the relative gradient in the gas density. We run each simulation for 50 timesteps, with a CFL number of $0.3$ and PLM reconstruction for both hydrodynamics and radiation. We set the \textsc{AMReX} domain decomposition parameters \texttt{blocking\_factor} set to 32 and \texttt{max\_grid\_size} set to a value of $128$, so that all grids are between $32^3$ and $128^3$ in size, with possible non-cubic grids at intermediate sizes. The number of GPUs used for each simulation is varied, scaling from 1 node (4 GPUs) to 8 nodes (32 GPUs). This is a particularly stringest test, since the level-by-level AMR timestepping requires that each level be computed separately, limiting the amount of parallelism that can be distributed across GPUs. There is also additional communication overhead when AMR is enabled compared to a single-level uniform grid simulation. We show the scaling results in \autoref{table:strong_scaling}. Comparing \autoref{table:weak_radhydro_scaling} and \autoref{table:strong_scaling}, the performance per GPU for a single node is lower than that of a uniform grid simulation by $\approx 50$ per cent. (A similar, although somewhat smaller, overhead when enabling AMR is also observed with CPU codes, e.g., \textsc{Athena++}; \citealt{Stone_2020}). The scaling efficiency is reasonable for 2 and 4 nodes (66 per cent for 4 nodes), but drops significantly at 8 nodes to 53 per cent parallel efficiency. We hypothesize that this is due to the small number of cell-updates per GPU once 32 GPUs are in use for this problem (approximately $211^3 \approx 9.4 \times 10^6$ cells/GPU). We find that performance on a single GPU is significantly diminished for uniform-grid problems smaller than $256^3$, so this performance drop may be largely due to the inability to use all GPU hardware threads when the amount of work per GPU is small. Similar GPU performance behavior is observed when running \textsc{K-Athena} on GPUs for varying problem sizes per GPU \citep{Grete_2019}. This effect is also magnified by the sequential nature of the level-by-level timestepping. For level $l=1$, the number of cells per GPU drops below $256^3$ for 8 GPUs, and for level $l=2$, it drops below $256^3$ for 16 GPUs. High scaling efficiency is obtained before reaching these thresholds, so it appears that reasonable performance on GPUs may be obtained with AMR when all refinement levels have at least $256^3$ cells per GPU on average. In general, obtaining the best possible GPU performance may require an adjustment to the mesh refinement parameters usually used when running on CPUs. For self-gravitating problems, scaling may be aided by the self-similar nature of gravitational collapse, leading to an approximately equal number of cells on each refinement level for appropriate refinement criteria (see discussion in \citealt{Stone_2020}).
 
 \begin{table}
-\begin{tabular}{l|r|c|r|r|r|r}\hline
-Nodes & GPUs & Mzones/GPU/s & $\left<\frac{\text{Cells}}{\text{GPU}}\right>$ & \begin{tabular}{@{}r@{}}Scaling \\ efficiency\end{tabular} & Speedup\\\hline
-\csvreader
-    {strong_scaling.csv}{1=\nodes,2=\gpus,3=\mzones,4=\mzonespergpu,5=\gpufill,6=\scaling,7=\cellspergpu,8=\speedup}
-    {\nodes & \gpus & \mzonespergpu & ${\cellspergpu}^3$ & \scaling & {\speedup}x \\}
-\end{tabular}
-\begin{tabular}{l|r|r|r|r}\hline
-    Nodes & GPUs & $\left<\frac{\text{Cells}}{\text{GPU}}\right>_{l=0}$ & $\left<\frac{\text{Cells}}{\text{GPU}}\right>_{l=1}$ & $\left<\frac{\text{Cells}}{\text{GPU}}\right>_{l=2}$ \\\hline
-    \csvreader
-        {strong_scaling.csv}{1=\nodes,2=\gpus,3=\mzones,4=\mzonespergpu,5=\gpufill,6=\scaling,7=\cellspergpu,8=\speedup,9=\cellszero,10=\cellsone,11=\cellstwo}
-        {\nodes & \gpus & ${\cellszero}^3$ & ${\cellsone}^3$ & ${\cellstwo}^3$ \\}
+    \begin{tabular}{l|r|c|r|r|r|r}\hline
+        Nodes   & GPUs  & Mzones/GPU/s  & $\left<\frac{\text{Cells}}{\text{GPU}}\right>$ & \begin{tabular}{@{}r@{}}Scaling \\ efficiency\end{tabular} & Speedup                               \\\hline
+        \csvreader
+        {strong_scaling.csv}{1=\nodes,2=\gpus,3=\mzones,4=\mzonespergpu,5=\mzonespergpuideal,6=\gpufill,7=\scaling,8=\cellspergpu,9=\speedup,10=\cellszero,11=\cellsone,12=\cellstwo}
+        {\nodes & \gpus & \mzonespergpu & ${\cellspergpu}^3$                             & \scaling                   & {\speedup}x \\}
     \end{tabular}
-\caption{Strong scaling efficiency for radiation hydrodynamics as a function of the number of GPUs for the radiation-driven shell test (\autoref{section:shell}) with periodic boundary conditions on a base grid of $256^3$ cells and 2 levels of refinement. The number of cells per GPU is computed as an average over all timesteps.}
-\label{table:strong_scaling}
+    \begin{tabular}{l|r|r|r|r}\hline
+        Nodes   & GPUs  & $\left<\frac{\text{Cells}}{\text{GPU}}\right>_{l=0}$ & $\left<\frac{\text{Cells}}{\text{GPU}}\right>_{l=1}$ & $\left<\frac{\text{Cells}}{\text{GPU}}\right>_{l=2}$ \\\hline
+        \csvreader
+        {strong_scaling.csv}{1=\nodes,2=\gpus,3=\mzones,4=\mzonespergpu,5=\mzonespergpuideal,6=\gpufill,7=\scaling,8=\cellspergpu,9=\speedup,10=\cellszero,11=\cellsone,12=\cellstwo}
+        {\nodes & \gpus & ${\cellszero}^3$                                     & ${\cellsone}^3$                                      & ${\cellstwo}^3$ \\}
+    \end{tabular}
+    \caption{Strong scaling efficiency for radiation hydrodynamics as a function of the number of GPUs for the radiation-driven shell test (\autoref{section:shell}) with periodic boundary conditions on a base grid of $256^3$ cells and 2 levels of refinement. The number of cells per GPU is computed as an average over all timesteps.}
+    \label{table:strong_scaling}
 \end{table}
 
 \section{Discussion and Conclusions}

@@ -1,0 +1,12 @@
+Fortran code from: https://cococubed.com/research_pages/sedov.shtml
+
+compile, with say
+
+% ifort -o sedov3_qp.exe sedov3_qp.f90
+
+run the executable 
+
+% ./sedov3_qp.exe
+ standard
+ xgeom =  3.000000E+00  gamma=  1.400000E+00 omega =  0.000000E+00 alpha =  8.510719E-01 j1    =  2.962690E-02 j2    =  2.116508E-02 
+ r2    =  1.000000E+00 rho2  =  6.000000E+00 u2    =  3.333333E-01 e2    =  5.555556E-02 p2    =  1.333333E-01 cs2   =  1.763834E-01 

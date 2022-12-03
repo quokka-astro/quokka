@@ -17,11 +17,8 @@
 
 // internal headers
 
+#include "interpolate.hpp"
 #include "radiation_system.hpp"
-
-extern "C" {
-#include "interpolate.h"
-}
 
 // function definitions
 

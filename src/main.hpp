@@ -9,7 +9,8 @@
 ///
 
 #if defined(__INTEL_COMPILER)
-#error "Quokka cannot be compiled with Intel Compiler Classic! Use the newer LLVM-based Intel compilers (icx/icpx) instead by adding the following CMake command-line options: -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx"
+#error                                                                                                                                                         \
+    "Quokka cannot be compiled with Intel Compiler Classic! Use the newer LLVM-based Intel compilers (icx/icpx) instead by adding the following CMake command-line options: -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx"
 #endif // __INTEL_COMPILER
 
 // function declarations

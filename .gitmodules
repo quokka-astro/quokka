@@ -4,3 +4,6 @@
 [submodule "extern/amrex"]
 	path = extern/amrex
 	url = https://github.com/AMReX-Codes/amrex.git
+[submodule "extern/grackle_data_files"]
+	path = extern/grackle_data_files
+	url = https://github.com/grackle-project/grackle_data_files.git

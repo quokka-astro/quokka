@@ -14,8 +14,10 @@ include(CTest)
 
 set(AMReX_SPACEDIM 3 CACHE STRING "" FORCE)
 set(AMReX_MPI ON CACHE BOOL "" FORCE)
-set(AMReX_HDF5 OFF CACHE BOOL "" FORCE)
-#set(AMReX_HDF5_ASYNC ON CACHE BOOL "" FORCE)
+set(AMReX_HDF5 OFF CACHE BOOL "" FORCE) # do not use
+set(AMReX_LINEAR_SOLVERS ON CACHE BOOL "" FORCE)
+set(AMReX_CONDUIT OFF CACHE BOOL "") # optional
+set(AMReX_ASCENT OFF CACHE BOOL "") # optional
 set(AMReX_AMRLEVEL OFF CACHE BOOL "" FORCE)
 set(AMReX_PROBINIT OFF CACHE BOOL "" FORCE)
 set(AMReX_LINEAR_SOLVERS ON CACHE BOOL "" FORCE)
@@ -23,14 +25,22 @@ set(AMReX_ASSERTIONS OFF CACHE BOOL "" FORCE)
 set(AMReX_FPE OFF CACHE BOOL "" FORCE)
 set(AMReX_TINY_PROFILE OFF CACHE BOOL "" FORCE)
 
+## a Python installation can be specified with Python_ROOT_DIR
+##   see: https://cmake.org/cmake/help/latest/module/FindPython.html#hints
+## NumPy and Matplotlib can be installed with `python3 -m pip install numpy matplotlib --user`
 option(QUOKKA_PYTHON "Compile with Python support (on/off)" ON)
+option(DISABLE_FMAD "Disable fused multiply-add instructions on GPU (on/off)" ON)
+option(ENABLE_ASAN "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
   enable_language(CUDA)
-  set(CMAKE_CUDA_ARCHITECTURES 70 CACHE STRING "" FORCE)
-  set(AMReX_CUDA_FASTMATH OFF CACHE BOOL "" FORCE)
-  # fused MAD causes directional asymmetry
-  set(CMAKE_CUDA_FLAGS "--fmad=false" CACHE STRING "" FORCE)
+  
+  if(CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 11.7)
+    message(FATAL_ERROR "You must use CUDA version 11.7 or newer to compile Quokka. All previous CUDA versions have compiler bugs that cause Quokka to crash.")
+  endif()
+
+  set(CMAKE_CUDA_ARCHITECTURES 70 80 CACHE STRING "")
+  
   if(CMAKE_VERSION VERSION_LESS 3.20)
     include(AMReX_SetupCUDA)
   endif(CMAKE_VERSION VERSION_LESS 3.20)
@@ -40,6 +50,11 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "Intel")
   # abort! Intel Compiler Classic cannot compile Quokka!
   message(FATAL_ERROR "You have configured CMake to use the 'classic' Intel compilers (icc/icpc), which are the old Intel compilers. They cannot compile Quokka correctly! You must use the new LLVM-based Intel compilers (icx/icpx) instead by adding the following CMake command-line options: -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx")
 endif(CMAKE_CXX_COMPILER_ID STREQUAL "Intel")
+
+# this is necessary to prevent GCC from warning about ARM64 ABI changes in GCC 10.1
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  add_compile_options(-Wno-psabi)
+endif()
 
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/amrex ${QuokkaCode_BINARY_DIR}/amrex)
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/fmt ${QuokkaCode_BINARY_DIR}/fmt)

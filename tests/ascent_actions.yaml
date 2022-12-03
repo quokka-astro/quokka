@@ -1,0 +1,30 @@
+- 
+  action: "add_pipelines"
+  pipelines: 
+    pl1:
+      f2:
+        type: "slice"
+        params: 
+          point: 
+            x: 0.5
+            y: 0.5
+            z: 0.5
+          normal: 
+            x: 0.0
+            y: 0.0
+            z: 1.0
+- 
+  action: "add_scenes"
+  scenes: 
+    s1: 
+      plots: 
+        p1: 
+          type: "pseudocolor"
+          field: "gasDensity"
+          pipeline: "pl1"
+      renders:
+        r1:
+          image_prefix: "dens%05d"
+          annotations: "true"
+          camera:
+            zoom: 1.5

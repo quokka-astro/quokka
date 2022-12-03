@@ -1,0 +1,30 @@
+name: clang-tidy-review
+
+# You can be more specific, but it currently only works on pull requests
+on: [pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: true
+        fetch-depth: 0
+
+    - uses: ZedThree/clang-tidy-review@v0.10.1
+      id: review
+      with:
+        config_file: src/.clang-tidy
+        build_dir: build
+        apt_packages: libopenmpi-dev,libhdf5-mpi-dev
+        cmake_command: cmake . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DQUOKKA_PYTHON=OFF
+        split_workflow: true
+
+    - uses: actions/upload-artifact@v3
+      with:
+        name: clang-tidy-review
+        path: |
+          clang-tidy-review-output.json
+          clang-tidy-review-metadata.json

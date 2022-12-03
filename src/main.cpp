@@ -30,13 +30,36 @@ auto main(int argc, char **argv) -> int
 		if (!pp.contains("signal_handling")) {
 			pp.add("signal_handling", 0);
 		}
+
+		// Set GPU memory handling defaults:
+		// since performance is terrible if we have to swap pages between device and
+		// host memory due to exceeding the size of device memory, we crash the code
+		// if this happens, allowing the user to restart with more nodes.
+		if (!pp.contains("abort_on_out_of_gpu_memory")) {
+			pp.add("abort_on_out_of_gpu_memory", 1);
+		}
+
+		// disables managed memory
+		//  for single-GPU runs, the overhead is completely negligible.
+		//  HOWEVER, for multi-GPU runs, using managed memory disables the cuda_ipc
+		//  transport and leads to *extremely poor* GPU-aware MPI performance.
+		if (!pp.contains("the_arena_is_managed")) {
+			pp.add("the_arena_is_managed", 0);
+		}
+
+		// use GPU-aware MPI
+		//   if managed memory is disabled and NVLink/Infinity Fabric is available,
+		//   GPU-aware MPI performance is, in fact, excellent.
+		if (!pp.contains("use_gpu_aware_mpi")) {
+			pp.add("use_gpu_aware_mpi", 1);
+		}
 	});
 
 	amrex::Real start_time = amrex::ParallelDescriptor::second();
 
 	int result = 0;
 	{ // objects must be destroyed before amrex::finalize, so enter new
-	  // scope here to do that automatically
+		// scope here to do that automatically
 
 		result = problem_main();
 
@@ -48,11 +71,6 @@ auto main(int argc, char **argv) -> int
 	amrex::ParallelDescriptor::ReduceRealMax(elapsed_sec, IOProc);
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-		//const double zone_cycles = cycleCount_ * (nx_[0] * nx_[1] * nx_[2]);
-		//const double microseconds_per_update = 1.0e6 * elapsed_sec / zone_cycles;
-		//const double megaupdates_per_second = 1.0 / microseconds_per_update;
-		//amrex::Print() << "Performance figure-of-merit: " << microseconds_per_update
-		//	       << " μs/zone-update [" << megaupdates_per_second << " Mupdates/s]\n";
 		amrex::Print() << "elapsed time: " << elapsed_sec << " seconds.\n";
 	}
 

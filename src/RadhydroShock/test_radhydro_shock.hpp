@@ -19,11 +19,8 @@
 // internal headers
 
 #include "hydro_system.hpp"
+#include "interpolate.hpp"
 #include "radiation_system.hpp"
-
-extern "C" {
-#include "interpolate.h"
-}
 
 // function definitions
 

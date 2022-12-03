@@ -2,8 +2,8 @@
 # Problem size and geometry
 # *****************************************************************
 geometry.prob_lo     =  0.0  0.0  0.0 
-geometry.prob_hi     =  2.0  2.0  2.0
-geometry.is_periodic =  1    1    1
+geometry.prob_hi     =  1.2  1.2  1.2
+geometry.is_periodic =  0    0    0
 
 # *****************************************************************
 # VERBOSITY
@@ -22,3 +22,5 @@ amr.grid_eff        = 0.7   # default
 
 do_reflux = 0
 do_subcycle = 0
+
+max_timesteps = 1000
