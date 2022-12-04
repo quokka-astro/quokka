@@ -15,31 +15,23 @@
 namespace quokka
 {
 template <typename T>
-AMREX_GPU_HOST_DEVICE auto CheckSymmetryArray(amrex::Array4<const amrex::Real> const & /*arr*/,
-					      amrex::Box const & /*indexRange*/,
-					      const int /*ncomp*/,
-					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> /*dx*/)
+AMREX_GPU_HOST_DEVICE auto CheckSymmetryArray(amrex::Array4<const amrex::Real> const & /*arr*/, amrex::Box const & /*indexRange*/, const int /*ncomp*/,
+					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> /*dx*/) -> bool
+{
+	return true; // problem-specific implementation for test problems
+}
+
+template <typename T>
+AMREX_GPU_HOST_DEVICE auto CheckSymmetryFluxes(amrex::Array4<const amrex::Real> const & /*arr1*/, amrex::Array4<const amrex::Real> const & /*arr2*/,
+					       amrex::Box const & /*indexRange*/, const int /*ncomp*/, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> /*dx*/)
     -> bool
 {
 	return true; // problem-specific implementation for test problems
 }
 
 template <typename T>
-AMREX_GPU_HOST_DEVICE auto CheckSymmetryFluxes(amrex::Array4<const amrex::Real> const & /*arr1*/,
-					       amrex::Array4<const amrex::Real> const & /*arr2*/,
-					       amrex::Box const & /*indexRange*/,
-					       const int /*ncomp*/,
-					       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> /*dx*/)
-    -> bool
-{
-	return true; // problem-specific implementation for test problems
-}
-
-template <typename T>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void
-CheckNaN(amrex::FArrayBox const &arr, amrex::Box const & /*symmetryRange*/,
-	 amrex::Box const &nanRange, const int ncomp,
-	 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> /*dx*/)
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void CheckNaN(amrex::FArrayBox const &arr, amrex::Box const & /*symmetryRange*/, amrex::Box const &nanRange,
+						       const int ncomp, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> /*dx*/)
 {
 	AMREX_ASSERT(!arr.template contains_nan<amrex::RunOn::Gpu>(nanRange, 0, ncomp));
 }
