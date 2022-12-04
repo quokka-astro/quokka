@@ -114,6 +114,11 @@ public:
   amrex::Real abstolPoisson_ = 1.0e-10; // default
   int doPoissonSolve_ = 0; // 1 == self-gravity enabled, 0 == disabled
 
+  amrex::Real densityFloor_ = 1.67e-40;  //in g cm-3, default
+  amrex::Real tempCeiling_  = 1.e30 ;    //default in K
+  amrex::Real tempFloor_    = 0.0;       //default in K
+  amrex::Real speedCeiling_ = 1.e10;     //default in cm/s
+
   // constructor
   explicit AMRSimulation(amrex::Vector<amrex::BCRec> &BCs_cc,
                          amrex::Vector<amrex::BCRec> &BCs_fc)
@@ -493,6 +498,18 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters() {
 
   // re-grid interval
   pp.query("regrid_interval", regrid_int);
+
+    //read density floor in g cm^-3
+  pp.query("density_floor", densityFloor_);
+
+  //read temperature floor in K
+  pp.query("temperature_floor", tempFloor_);
+
+  //read temperature ceiling in K
+  pp.query("temperature_ceiling", tempCeiling_);
+
+  //read speed ceiling in cm s^-1
+  pp.query("speed_ceiling", speedCeiling_);
 
   // specify maximum walltime in HH:MM:SS format
   std::string maxWalltimeInput;
