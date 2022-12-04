@@ -186,8 +186,6 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 				 amrex::YAFluxRegister *fr_as_crse,
 				 amrex::YAFluxRegister *fr_as_fine);
 
-    AMREX_GPU_DEVICE static auto GetGradFixedPotential(amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> posvec) -> amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>;
-
 	auto advanceHydroAtLevel(amrex::MultiFab &state_old_tmp,
 							amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine,
 							int lev, amrex::Real time,
