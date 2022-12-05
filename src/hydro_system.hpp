@@ -72,10 +72,6 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	static auto CheckStatesValid(amrex::MultiFab const &cons_mf) -> bool;
 
-	static void EnforceDensityFloor(amrex::Real densityFloor, amrex::MultiFab &state_mf);
-	static void EnforceLimits(amrex::Real const densityFloor, amrex::Real const pressureFloor, amrex::Real const speedCeiling,
-				  amrex::Real const tempCeiling, amrex::Real const tempFloor, amrex::MultiFab &state_mf);
-
 	AMREX_GPU_DEVICE static auto ComputePressure(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> amrex::Real;
 
 	AMREX_GPU_DEVICE static auto ComputeVelocityX1(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> amrex::Real;
@@ -281,21 +277,6 @@ template <typename problem_t> auto HydroSystem<problem_t>::CheckStatesValid(amre
 					}
 					return {true};
 				});
-}
-
-template <typename problem_t> void HydroSystem<problem_t>::EnforceDensityFloor(amrex::Real const densityFloor, amrex::MultiFab &state_mf)
-{
-	// prevent negative densities
-	auto state = state_mf.arrays();
-
-	amrex::ParallelFor(state_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-		amrex::Real rho = state[bx](i, j, k, density_index);
-
-		// reset density if less than densityFloor
-		if (rho < densityFloor) {
-			state[bx](i, j, k, density_index) = densityFloor;
-		}
-	});
 }
 
 template <typename problem_t>
