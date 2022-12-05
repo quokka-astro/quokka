@@ -582,9 +582,11 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::applyPoissonGr
 	});
 }
 
+//to ensure that physical quantities are within reasonable 
+//floors and ceilings which can be set in the param file
 template <typename problem_t> void RadhydroSimulation<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex::Real const pressureFloor, 
                        amrex::Real const speedCeiling, amrex::Real const tempCeiling, amrex::Real const tempFloor,amrex::MultiFab &state_mf) {
-  // prevent vacuum creation
+  
   amrex::Real const rho_floor = densityFloor; // workaround nvcc bug
   amrex::Real const P_floor = pressureFloor;
   amrex::Real  Const_mH = 1.67e-24;
@@ -609,8 +611,6 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::EnforceLimits(
         amrex::Real const Eint = state[bx](i, j, k, eint_index);
         amrex::Real const Temp = (HydroSystem<problem_t>::gamma_ - 1.) * Eint /
                  (kb * (rho / Const_mH /0.6)); //Assuming all gas in ionized.
-
-        amrex::Real inj_scalar = state[bx](i, j, k, Physics_Indices<problem_t>::pscalarFirstIndex+2) ;
 
        amrex::Real rho_new = rho;
         if (rho < rho_floor) {
@@ -646,14 +646,9 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::EnforceLimits(
         if(Temp<tempFloor){
           amrex::Real dummy = Etot - state[bx](i, j, k, eint_index);
           state[bx](i, j, k, eint_index) = tempFloor * 
-                                                 (kb * (state[bx](i, j, k, dindex)  / Const_mH/ 0.6)) / (HydroSystem<problem_t>::gamma_-1.0);
+                                                 (kb * (state[bx](i, j, k, dindex)  / Const_mH/ 1.6)) / (HydroSystem<problem_t>::gamma_-1.0);
           state[bx](i, j, k, eindex) = dummy + state[bx](i, j, k, eint_index);
         }
-
-        /*if(inj_scalar<0.0) {
-          state(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+2) = 0.0;
-        }*/
-
 
         if (!HydroSystem<problem_t>::is_eos_isothermal()) {
           // recompute gas energy (to prevent P < 0)
