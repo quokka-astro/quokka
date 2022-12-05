@@ -8,4 +8,3 @@
 ///
 
 #include "linear_advection.hpp"
-
