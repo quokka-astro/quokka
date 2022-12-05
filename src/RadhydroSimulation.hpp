@@ -86,6 +86,11 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	using AMRSimulation<problem_t>::GetData;
 	using AMRSimulation<problem_t>::FillPatchWithData;
 
+	using AMRSimulation<problem_t>::densityFloor_;
+	using AMRSimulation<problem_t>::tempFloor_;
+	using AMRSimulation<problem_t>::tempCeiling_;
+	using AMRSimulation<problem_t>::speedCeiling_;
+
 	SimulationData<problem_t> userData_;
 
 	static constexpr int nvarTotal_cc_ = Physics_Indices<problem_t>::nvarTotal_cc;
@@ -98,7 +103,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	
 	bool computeReferenceSolution_ = false;
 	amrex::Real errorNorm_ = NAN;
-	amrex::Real densityFloor_ = 0.;
+	// amrex::Real densityFloor_ = 0.;
 	amrex::Real pressureFloor_ = 0.;
 	int fofcMaxIterations_ = 3; // maximum number of flux correction iterations -- only 1 is needed in almost all cases, but in rare cases a second iteration is needed
 
@@ -222,6 +227,8 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	auto computeFOHydroFluxes(amrex::MultiFab const &consVar, const int nvars, const int lev)
     	-> std::pair<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>>;
 
+	AMREX_GPU_DEVICE static auto GetGradFixedPotential(amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> posvec) -> amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>;
+	
 	template <FluxDir DIR>
 	void fluxFunction(amrex::Array4<const amrex::Real> const &consState,
 			  amrex::FArrayBox &x1Flux, amrex::FArrayBox &x1FluxDiffusive,
@@ -631,7 +638,9 @@ void RadhydroSimulation<problem_t>::FixupState(int lev)
 	BL_PROFILE("RadhydroSimulation::FixupState()");
 
 	// fix hydro state
-	HydroSystem<problem_t>::EnforceDensityFloor(densityFloor_, state_new_cc_[lev]);
+	// HydroSystem<problem_t>::EnforceDensityFloor(densityFloor_, state_new_cc_[lev]);
+	HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, state_new_cc_[lev]);
+	HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, state_old_cc_[lev]);
 	// sync internal energy and total energy
 	HydroSystem<problem_t>::SyncDualEnergy(state_new_cc_[lev]);
 }
@@ -930,7 +939,8 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		}
 
 		// prevent vacuum
-		HydroSystem<problem_t>::EnforceDensityFloor(densityFloor_, stateNew);
+		// HydroSystem<problem_t>::EnforceDensityFloor(densityFloor_, stateNew);
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, stateNew);
 
 		if (useDualEnergy_ == 1) {
 			// sync internal energy (requires positive density)
@@ -992,12 +1002,15 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		}
 
 		// prevent vacuum
-		HydroSystem<problem_t>::EnforceDensityFloor(densityFloor_, stateFinal);
+		// HydroSystem<problem_t>::EnforceDensityFloor(densityFloor_, stateFinal);
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, stateFinal);
 
 		if (useDualEnergy_ == 1) {
 			// sync internal energy (requires positive density)
 			HydroSystem<problem_t>::SyncDualEnergy(stateFinal);
 		}
+
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, stateFinal);
 
 		if (do_reflux == 1) {
 			// increment flux registers

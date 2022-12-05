@@ -74,6 +74,11 @@ public:
 
 	static void EnforceDensityFloor(amrex::Real densityFloor, amrex::MultiFab &state_mf);
 
+	static void EnforceLimits(amrex::Real const densityFloor, amrex::Real const pressureFloor, amrex::Real const speedCeiling, amrex::Real const  tempCeiling,
+                            amrex::Real const tempFloor,
+                            amrex::MultiFab &state_mf);
+
+
 	AMREX_GPU_DEVICE static auto ComputePressure(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> amrex::Real;
 
 	AMREX_GPU_DEVICE static auto ComputeVelocityX1(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> amrex::Real;
