@@ -57,17 +57,14 @@ template <> struct RadSystem_Traits<ShockProblem> {
 	static constexpr double c_light = c;
 	static constexpr double c_hat = chat;
 	static constexpr double radiation_constant = a_rad;
-	static constexpr double mean_molecular_mass = mu;
-	static constexpr double boltzmann_constant = k_B;
-	static constexpr double gamma = gamma_gas;
 	static constexpr double Erad_floor = 0.;
 	static constexpr bool compute_v_over_c_terms = true;
 };
 
 template <> struct quokka::EOS_Traits<ShockProblem> {
+	static constexpr double mean_molecular_weight = mu;
+	static constexpr double boltzmann_constant = k_B;
 	static constexpr double gamma = gamma_gas;
-	static constexpr double mean_molecular_weight = quokka::hydrogen_mass_cgs;
-	static constexpr double boltzmann_constant = quokka::boltzmann_constant_cgs;
 };
 
 template <> struct Physics_Traits<ShockProblem> {

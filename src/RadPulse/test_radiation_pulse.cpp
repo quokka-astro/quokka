@@ -26,13 +26,16 @@ constexpr double erad_floor = a_rad * (1.0e-8);
 // constexpr double Lx = 1.0; // dimensionless length
 constexpr double initial_time = 1.0e-8;
 
+template <> struct quokka::EOS_Traits<PulseProblem> {
+	static constexpr double mean_molecular_weight = 1.0;
+	static constexpr double boltzmann_constant = (2. / 3.);
+	static constexpr double gamma = 5. / 3.;
+};
+
 template <> struct RadSystem_Traits<PulseProblem> {
 	static constexpr double c_light = c;
 	static constexpr double c_hat = chat;
 	static constexpr double radiation_constant = a_rad;
-	static constexpr double mean_molecular_mass = 1.0;
-	static constexpr double boltzmann_constant = (2. / 3.);
-	static constexpr double gamma = 5. / 3.;
 	static constexpr double Erad_floor = erad_floor;
 	static constexpr bool compute_v_over_c_terms = false;
 };
