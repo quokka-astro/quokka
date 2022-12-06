@@ -22,8 +22,11 @@
 struct RTProblem {
 };
 
-template <> struct EOS_Traits<RTProblem> {
+template <> struct quokka::EOS_Traits<RTProblem> {
 	static constexpr double gamma = 1.4;
+};
+
+template <> struct HydroSystem_Traits<RTProblem> {
 	static constexpr bool reconstruct_eint = false;
 };
 

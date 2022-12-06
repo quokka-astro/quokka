@@ -25,9 +25,8 @@
 struct BlastProblem {
 };
 
-template <> struct EOS_Traits<BlastProblem> {
+template <> struct quokka::EOS_Traits<BlastProblem> {
 	static constexpr double gamma = 5. / 3.;
-	static constexpr bool reconstruct_eint = false;
 };
 
 template <> struct Physics_Traits<BlastProblem> {

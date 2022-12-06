@@ -32,13 +32,16 @@ constexpr double T_initial = 300.;   // K
 constexpr double a_rad = 7.5646e-15; // erg cm^-3 K^-4
 constexpr double c = 2.99792458e10;  // cm s^-1
 
+template <> struct quokka::EOS_Traits<BeamProblem> {
+	static constexpr double mean_molecular_weight = quokka::hydrogen_mass_cgs;
+	static constexpr double boltzmann_constant = quokka::boltzmann_constant_cgs;
+	static constexpr double gamma = 5. / 3.;
+};
+
 template <> struct RadSystem_Traits<BeamProblem> {
 	static constexpr double c_light = c_light_cgs_;
 	static constexpr double c_hat = c_light_cgs_;
 	static constexpr double radiation_constant = radiation_constant_cgs_;
-	static constexpr double mean_molecular_mass = hydrogen_mass_cgs_;
-	static constexpr double boltzmann_constant = boltzmann_constant_cgs_;
-	static constexpr double gamma = 5. / 3.;
 	static constexpr double Erad_floor = 0.;
 	static constexpr bool compute_v_over_c_terms = true;
 };

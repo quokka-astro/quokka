@@ -22,8 +22,11 @@
 struct KelvinHelmholzProblem {
 };
 
-template <> struct EOS_Traits<KelvinHelmholzProblem> {
+template <> struct quokka::EOS_Traits<KelvinHelmholzProblem> {
 	static constexpr double gamma = 1.4;
+};
+
+template <> struct HydroSystem_Traits<KelvinHelmholzProblem> {
 	static constexpr bool reconstruct_eint = false;
 };
 

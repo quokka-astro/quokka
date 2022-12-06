@@ -33,13 +33,16 @@ constexpr double T_initial = 290.;   // K
 constexpr double a_rad = 7.5646e-15; // erg cm^-3 K^-4
 constexpr double c = 2.99792458e10;  // cm s^-1
 
+template <> struct quokka::EOS_Traits<ShadowProblem> {
+	static constexpr double mean_molecular_weight = 10. * quokka::hydrogen_mass_cgs;
+	static constexpr double boltzmann_constant = quokka::boltzmann_constant_cgs;
+	static constexpr double gamma = 5. / 3.;
+};
+
 template <> struct RadSystem_Traits<ShadowProblem> {
 	static constexpr double c_light = c;
 	static constexpr double c_hat = c;
 	static constexpr double radiation_constant = a_rad;
-	static constexpr double mean_molecular_mass = 10. * hydrogen_mass_cgs_;
-	static constexpr double boltzmann_constant = boltzmann_constant_cgs_;
-	static constexpr double gamma = 5. / 3.;
 	static constexpr double Erad_floor = 0.;
 	static constexpr bool compute_v_over_c_terms = true;
 };
@@ -224,8 +227,8 @@ auto problem_main() -> int
 	// Print radiation epsilon ("stiffness parameter" from Su & Olson).
 	// (if epsilon is smaller than tolerance, there can be unphysical radiation shocks.)
 	const auto dt_CFL = CFL_number * std::min(Lx / nx, Ly / ny) / c;
-	const auto c_v = RadSystem_Traits<ShadowProblem>::boltzmann_constant /
-			 (RadSystem_Traits<ShadowProblem>::mean_molecular_mass * (RadSystem_Traits<ShadowProblem>::gamma - 1.0));
+	const auto c_v = quokka::EOS_Traits<ShadowProblem>::boltzmann_constant /
+			 (quokka::EOS_Traits<ShadowProblem>::mean_molecular_weight * (quokka::EOS_Traits<ShadowProblem>::gamma - 1.0));
 	const auto epsilon = 4.0 * a_rad * (T_initial * T_initial * T_initial) * sigma0 * (c * dt_CFL) / c_v;
 	amrex::Print() << "radiation epsilon (stiffness parameter) = " << epsilon << "\n";
 

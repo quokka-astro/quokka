@@ -32,17 +32,14 @@ using amrex::Real;
 struct CoolingTest {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-constexpr double m_H = hydrogen_mass_cgs_;
+constexpr double m_H = quokka::hydrogen_mass_cgs;
 constexpr double seconds_in_year = 3.154e7;
 
-template <> struct EOS_Traits<CoolingTest> {
+template <> struct quokka::EOS_Traits<CoolingTest> {
 	static constexpr double gamma = 5. / 3.; // default value
-	// if true, reconstruct e_int instead of pressure
 	static constexpr double mean_molecular_weight = quokka::hydrogen_mass_cgs;
 	static constexpr double boltzmann_constant = quokka::boltzmann_constant_cgs;
 };
-}
-;
 
 template <> struct Physics_Traits<CoolingTest> {
 	// cell-centred
@@ -137,7 +134,7 @@ template <> void RadhydroSimulation<CoolingTest>::setInitialConditionsOnGrid(quo
 		Real xmom = 0;
 		Real ymom = 0;
 		Real zmom = 0;
-		Real const P = 4.0e4 * boltzmann_constant_cgs_; // erg cm^-3
+		Real const P = 4.0e4 * quokka::boltzmann_constant_cgs; // erg cm^-3
 		Real Eint = (quokka::EOS_Traits<CoolingTest>::gamma - 1.) * P;
 
 		Real const Egas = RadSystem<CoolingTest>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
