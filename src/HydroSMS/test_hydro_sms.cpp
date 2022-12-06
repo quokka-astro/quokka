@@ -192,7 +192,7 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(amrex::Multi
 			amrex::Real vx = vx_arr[i];
 			amrex::Real P = P_arr[i];
 
-			const auto gamma = HydroSystem<ShocktubeProblem>::gamma_;
+			const auto gamma = quokka::EOS_Traits<ShocktubeProblem>::gamma;
 			stateExact(i, j, k, HydroSystem<ShocktubeProblem>::density_index) = rho;
 			stateExact(i, j, k, HydroSystem<ShocktubeProblem>::x1Momentum_index) = rho * vx;
 			stateExact(i, j, k, HydroSystem<ShocktubeProblem>::x2Momentum_index) = 0.;

@@ -28,11 +28,11 @@
 struct TubeProblem {
 };
 
-constexpr double kappa0 = 5.0;			 // cm^2 g^-1
-constexpr double mu = 2.33 * hydrogen_mass_cgs_; // g
-constexpr double gamma_gas = 1.0;		 // isothermal gas EOS
-constexpr double a0 = 0.2e5;			 // cm s^-1
-constexpr double tau = 1.0e-6;			 // optical depth (dimensionless)
+constexpr double kappa0 = 5.0;				// cm^2 g^-1
+constexpr double mu = 2.33 * quokka::hydrogen_mass_cgs; // g
+constexpr double gamma_gas = 1.0;			// isothermal gas EOS
+constexpr double a0 = 0.2e5;				// cm s^-1
+constexpr double tau = 1.0e-6;				// optical depth (dimensionless)
 
 constexpr double rho0 = 1.0e5 * mu; // g cm^-3
 constexpr double Mach0 = 1.1;	    // Mach number at wind base
@@ -43,20 +43,23 @@ constexpr double Frad0 = rho0 * a0 * c_light_cgs_ / tau; // erg cm^-2 s^-1
 constexpr double g0 = kappa0 * Frad0 / c_light_cgs_;	 // cm s^{-2}
 constexpr double Lx = (a0 * a0) / g0;			 // cm
 
+template <> struct quokka::EOS_Traits<TubeProblem> {
+	static constexpr double mean_molecular_mass = mu;
+	static constexpr double boltzmann_constant = quokka::boltzmann_constant_cgs;
+	static constexpr double gamma = gamma_gas;
+	static constexpr double cs_isothermal = a0; // only used when gamma = 1
+};
+
 template <> struct RadSystem_Traits<TubeProblem> {
 	static constexpr double c_light = c_light_cgs_;
 	static constexpr double c_hat = 10. * (Mach1 * a0);
 	static constexpr double radiation_constant = radiation_constant_cgs_;
-	static constexpr double mean_molecular_mass = mu;
-	static constexpr double boltzmann_constant = boltzmann_constant_cgs_;
-	static constexpr double gamma = gamma_gas;
 	static constexpr double Erad_floor = 0.;
 	static constexpr bool compute_v_over_c_terms = true;
 };
 
 template <> struct HydroSystem_Traits<TubeProblem> {
 	static constexpr double gamma = gamma_gas;
-	static constexpr double cs_isothermal = a0;	// only used when gamma = 1
 	static constexpr bool reconstruct_eint = false; // unused if isothermal
 };
 

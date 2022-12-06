@@ -64,7 +64,7 @@ template <> void RadhydroSimulation<HighMachProblem>::setInitialConditionsOnGrid
 		AMREX_ASSERT(!std::isnan(rho));
 		AMREX_ASSERT(!std::isnan(P));
 
-		const auto gamma = HydroSystem<HighMachProblem>::gamma_;
+		const auto gamma = quokka::EOS_Traits<HighMachProblem>::gamma;
 		for (int n = 0; n < state_cc.nComp(); ++n) {
 			state_cc(i, j, k, n) = 0.;
 		}
@@ -146,7 +146,7 @@ void RadhydroSimulation<HighMachProblem>::computeReferenceSolution(amrex::MultiF
 	amrex::Gpu::streamSynchronizeAll();
 
 	// save reference solution
-	const Real gamma = HydroSystem<HighMachProblem>::gamma_;
+	const Real gamma = quokka::EOS_Traits<HighMachProblem>::gamma;
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
 		auto const &state = ref.array(iter);

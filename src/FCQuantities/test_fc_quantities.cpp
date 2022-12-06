@@ -40,10 +40,10 @@ template <> struct Physics_Traits<FCQuantities> {
 	static constexpr bool is_mhd_enabled = true;
 };
 
-constexpr double rho0 = 1.0;				       // background density
-constexpr double P0 = 1.0 / HydroSystem<FCQuantities>::gamma_; // background pressure
-constexpr double v0 = 0.;				       // background velocity
-constexpr double amp = 1.0e-6;				       // perturbation amplitude
+constexpr double rho0 = 1.0;					     // background density
+constexpr double P0 = 1.0 / quokka::EOS_Traits<FCQuantities>::gamma; // background pressure
+constexpr double v0 = 0.;					     // background velocity
+constexpr double amp = 1.0e-6;					     // perturbation amplitude
 
 AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 					  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)

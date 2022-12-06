@@ -68,7 +68,7 @@ template <> void RadhydroSimulation<ContactProblem>::setInitialConditionsOnGrid(
 		AMREX_ASSERT(!std::isnan(rho));
 		AMREX_ASSERT(!std::isnan(P));
 
-		const auto gamma = HydroSystem<ContactProblem>::gamma_;
+		const auto gamma = quokka::EOS_Traits<ContactProblem>::gamma;
 		for (int n = 0; n < ncomp; ++n) {
 			state_cc(i, j, k, n) = 0.;
 		}
@@ -110,7 +110,7 @@ void RadhydroSimulation<ContactProblem>::computeReferenceSolution(amrex::MultiFa
 				stateExact(i, j, k, n) = 0.;
 			}
 
-			const auto gamma = HydroSystem<ContactProblem>::gamma_;
+			const auto gamma = quokka::EOS_Traits<ContactProblem>::gamma;
 			stateExact(i, j, k, HydroSystem<ContactProblem>::density_index) = rho;
 			stateExact(i, j, k, HydroSystem<ContactProblem>::x1Momentum_index) = rho * vx;
 			stateExact(i, j, k, HydroSystem<ContactProblem>::x2Momentum_index) = 0.;

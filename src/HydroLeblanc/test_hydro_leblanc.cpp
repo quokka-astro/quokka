@@ -76,7 +76,7 @@ template <> void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsOnGri
 			state_cc(i, j, k, n) = 0.;
 		}
 
-		const auto gamma = HydroSystem<ShocktubeProblem>::gamma_;
+		const auto gamma = quokka::EOS_Traits<ShocktubeProblem>::gamma;
 		state_cc(i, j, k, HydroSystem<ShocktubeProblem>::density_index) = rho;
 		state_cc(i, j, k, HydroSystem<ShocktubeProblem>::x1Momentum_index) = rho * vx;
 		state_cc(i, j, k, HydroSystem<ShocktubeProblem>::x2Momentum_index) = 0.;
@@ -225,7 +225,7 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(amrex::Multi
 			amrex::Real vx = vx_arr[i];
 			amrex::Real P = P_arr[i];
 
-			const auto gamma = HydroSystem<ShocktubeProblem>::gamma_;
+			const auto gamma = quokka::EOS_Traits<ShocktubeProblem>::gamma;
 			stateExact(i, j, k, HydroSystem<ShocktubeProblem>::density_index) = rho;
 			stateExact(i, j, k, HydroSystem<ShocktubeProblem>::x1Momentum_index) = rho * vx;
 			stateExact(i, j, k, HydroSystem<ShocktubeProblem>::x2Momentum_index) = 0.;

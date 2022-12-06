@@ -120,7 +120,7 @@ template <> void RadhydroSimulation<SedovProblem>::setInitialConditionsOnGrid(qu
 		for (int n = 0; n < state_cc.nComp(); ++n) {
 			state_cc(i, j, k, n) = 0.; // zero fill all components
 		}
-		const auto gamma = HydroSystem<SedovProblem>::gamma_;
+		const auto gamma = quokka::EOS_Traits<SedovProblem>::gamma;
 
 		state_cc(i, j, k, HydroSystem<SedovProblem>::density_index) = rho_copy;
 		state_cc(i, j, k, HydroSystem<SedovProblem>::x1Momentum_index) = 0;

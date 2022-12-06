@@ -41,7 +41,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto user_rhs(Real /*t*/, quokka::valar
 	// unpack user_data
 	auto *udata = static_cast<ODEUserData *>(user_data);
 	const Real rho = udata->rho;
-	const Real gamma = HydroSystem<ShockCloud>::gamma_;
+	const Real gamma = quokka::EOS_Traits<ShockCloud>::gamma;
 	cloudyGpuConstTables &tables = udata->tables;
 
 	// check whether temperature is out-of-bounds

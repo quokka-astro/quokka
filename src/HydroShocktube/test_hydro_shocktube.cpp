@@ -26,9 +26,8 @@
 struct ShocktubeProblem {
 };
 
-template <> struct HydroSystem_Traits<ShocktubeProblem> {
+template <> struct quokka::EOS_Traits<ShocktubeProblem> {
 	static constexpr double gamma = 1.4;
-	static constexpr bool reconstruct_eint = true;
 };
 
 template <> struct Physics_Traits<ShocktubeProblem> {
@@ -76,7 +75,7 @@ template <> void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsOnGri
 		AMREX_ASSERT(!std::isnan(rho));
 		AMREX_ASSERT(!std::isnan(P));
 
-		const auto gamma = HydroSystem<ShocktubeProblem>::gamma_;
+		const auto gamma = quokka::EOS_Traits<ShocktubeProblem>::gamma;
 		for (int n = 0; n < ncomp; ++n) {
 			state_cc(i, j, k, n) = 0.;
 		}
@@ -111,7 +110,7 @@ AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(const amrex::IntVec
 	amrex::Box const &box = geom.Domain();
 	amrex::GpuArray<int, 3> lo = box.loVect3d();
 	amrex::GpuArray<int, 3> hi = box.hiVect3d();
-	const auto gamma = HydroSystem<ShocktubeProblem>::gamma_;
+	const auto gamma = quokka::EOS_Traits<ShocktubeProblem>::gamma;
 
 	if (i < lo[0]) {
 		// x1 left side boundary -- constant
@@ -250,7 +249,7 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(amrex::Multi
 			amrex::Real vx = vx_arr[i];
 			amrex::Real P = P_arr[i];
 
-			const auto gamma = HydroSystem<ShocktubeProblem>::gamma_;
+			const auto gamma = quokka::EOS_Traits<ShocktubeProblem>::gamma;
 			stateExact(i, j, k, HydroSystem<ShocktubeProblem>::density_index) = rho;
 			stateExact(i, j, k, HydroSystem<ShocktubeProblem>::x1Momentum_index) = rho * vx;
 			stateExact(i, j, k, HydroSystem<ShocktubeProblem>::x2Momentum_index) = 0.;
@@ -278,7 +277,7 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(amrex::Multi
 			amrex::Real Egas = values.at(HydroSystem<ShocktubeProblem>::energy_index)[i];
 
 			amrex::Real Eint = Egas - (xmom * xmom) / (2.0 * rho);
-			amrex::Real const gamma = HydroSystem<ShocktubeProblem>::gamma_;
+			amrex::Real const gamma = quokka::EOS_Traits<ShocktubeProblem>::gamma;
 			d.at(i) = rho;
 			vx.at(i) = xmom / rho;
 			P.at(i) = ((gamma - 1.0) * Eint) / 10.;

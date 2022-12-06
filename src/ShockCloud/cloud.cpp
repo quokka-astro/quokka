@@ -188,7 +188,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<ShockCloud>::setCustomBou
 	if (j >= jhi) {
 		// x2 upper boundary -- constant
 		// compute downstream shock conditions from rho0, P0, and M0
-		constexpr Real gamma = HydroSystem<ShockCloud>::gamma_;
+		constexpr Real gamma = quokka::EOS_Traits<ShockCloud>::gamma;
 		constexpr Real rho2 = rho0 * (gamma + 1.) * M0 * M0 / ((gamma - 1.) * M0 * M0 + 2.);
 		constexpr Real P2 = P0 * (2. * gamma * M0 * M0 - (gamma - 1.)) / (gamma + 1.);
 		Real const v2 = -M0 * std::sqrt(gamma * P2 / rho2);
@@ -251,7 +251,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto user_rhs(Real /*t*/, quokka::valar
 	// unpack user_data
 	auto *udata = static_cast<ODEUserData *>(user_data);
 	const Real rho = udata->rho;
-	const Real gamma = HydroSystem<ShockCloud>::gamma_;
+	const Real gamma = quokka::EOS_Traits<ShockCloud>::gamma;
 	cloudyGpuConstTables const &tables = udata->tables;
 
 	// check whether temperature is out-of-bounds
