@@ -29,9 +29,9 @@ template <typename problem_t> struct EOS_Traits {
 template <typename problem_t> class EOS
 {
       public:
-	[[nodiscard]] static auto ComputeTgasFromEint(amrex::Real rho, amrex::Real Eint) -> amrex::Real;
-	[[nodiscard]] static auto ComputeEintFromTgas(amrex::Real rho, amrex::Real Tgas) -> amrex::Real;
-	[[nodiscard]] static auto ComputeEintTempDerivative(amrex::Real rho, amrex::Real Tgas) -> amrex::Real;
+	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto ComputeTgasFromEint(amrex::Real rho, amrex::Real Eint) -> amrex::Real;
+	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto ComputeEintFromTgas(amrex::Real rho, amrex::Real Tgas) -> amrex::Real;
+	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto ComputeEintTempDerivative(amrex::Real rho, amrex::Real Tgas) -> amrex::Real;
 
       private:
 	static constexpr amrex::Real gamma_ = EOS_Traits<problem_t>::gamma;
