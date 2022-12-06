@@ -611,8 +611,6 @@ void RadhydroSimulation<problem_t>::EnforceLimits(amrex::Real const densityFloor
 		amrex::Real const Eint = state[bx](i, j, k, eint_index);
 		amrex::Real const Temp = (HydroSystem<problem_t>::gamma_ - 1.) * Eint / (kb * (rho / Const_mH / 0.6)); // Assuming all gas in ionized.
 
-		amrex::Real inj_scalar = state[bx](i, j, k, Physics_Indices<problem_t>::pscalarFirstIndex + 2);
-
 		amrex::Real rho_new = rho;
 		if (rho < rho_floor) {
 			rho_new = rho_floor;
