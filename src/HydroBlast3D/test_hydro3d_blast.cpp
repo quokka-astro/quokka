@@ -32,8 +32,11 @@ constexpr bool simulate_full_box = false;
 
 bool test_passes = false; // if one of the energy checks fails, set to false
 
-template <> struct EOS_Traits<SedovProblem> {
+template <> struct quokka::EOS_Traits<SedovProblem> {
 	static constexpr double gamma = 1.4;
+};
+
+template <> struct HydroSystem_Traits<SedovProblem> {
 	static constexpr bool reconstruct_eint = false;
 };
 

@@ -25,7 +25,7 @@ using amrex::Real;
 struct ShockCloud {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-template <> struct EOS_Traits<ShockCloud> {
+template <> struct quokka::EOS_Traits<ShockCloud> {
 	static constexpr double gamma = 5. / 3.; // default value
 };
 
@@ -87,14 +87,15 @@ auto problem_main() -> int
 	const Real T = ComputeTgasFromEgas(rho, Eint, quokka::EOS_Traits<ShockCloud>::gamma, tables);
 
 	const Real rhoH = rho * cloudy_H_mass_fraction;
-	const Real nH = rhoH / hydrogen_mass_cgs_;
+	const Real nH = rhoH / quokka::hydrogen_mass_cgs;
 	const Real log_nH = std::log10(nH);
 
-	const Real C = (quokka::EOS_Traits<ShockCloud>::gamma - 1.) * Eint / (boltzmann_constant_cgs_ * (rho / hydrogen_mass_cgs_));
+	const Real C = (quokka::EOS_Traits<ShockCloud>::gamma - 1.) * Eint / (quokka::boltzmann_constant_cgs * (rho / quokka::hydrogen_mass_cgs));
 	const Real mu = interpolate2d(log_nH, std::log10(T), tables.log_nH, tables.log_Tgas, tables.meanMolWeight);
 	const Real relerr = std::abs((C * mu - T) / T);
 
-	const Real n_e = (rho / hydrogen_mass_cgs_) * (1.0 - mu * (X + Y / 4. + Z / mean_metals_A)) / (mu - (electron_mass_cgs / hydrogen_mass_cgs_));
+	const Real n_e =
+	    (rho / quokka::hydrogen_mass_cgs) * (1.0 - mu * (X + Y / 4. + Z / mean_metals_A)) / (mu - (electron_mass_cgs / quokka::hydrogen_mass_cgs));
 
 	printf("\nrho = %.17e, Eint = %.17e, mu = %f, Tgas = %e, relerr = %e\n", rho, Eint, mu, T, relerr);
 	printf("n_e = %e, n_e/n_H = %e\n", n_e, n_e / nH);

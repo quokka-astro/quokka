@@ -44,19 +44,21 @@ constexpr double k_B = 1.380658e-16;  // erg K^-1
 constexpr double m_H = 1.6726231e-24; // mass of hydrogen atom [g]
 constexpr double gamma_gas = 5. / 3.;
 
+template <> struct quokka::EOS_Traits<ShellProblem> {
+	static constexpr double mean_molecular_weight = 2.2 * m_H;
+	static constexpr double boltzmann_constant = k_B;
+	static constexpr double gamma = gamma_gas;
+};
+
 template <> struct RadSystem_Traits<ShellProblem> {
 	static constexpr double c_light = c;
 	static constexpr double c_hat = chat;
 	static constexpr double radiation_constant = a_rad;
-	static constexpr double mean_molecular_mass = 2.2 * m_H;
-	static constexpr double boltzmann_constant = k_B;
-	static constexpr double gamma = gamma_gas;
 	static constexpr double Erad_floor = 0.;
 	static constexpr bool compute_v_over_c_terms = true;
 };
 
-template <> struct EOS_Traits<ShellProblem> {
-	static constexpr double gamma = gamma_gas;
+template <> struct HydroSystem_Traits<ShellProblem> {
 	static constexpr bool reconstruct_eint = false;
 };
 

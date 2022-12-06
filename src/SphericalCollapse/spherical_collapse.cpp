@@ -26,8 +26,11 @@
 struct CollapseProblem {
 };
 
-template <> struct EOS_Traits<CollapseProblem> {
+template <> struct quokka::EOS_Traits<CollapseProblem> {
 	static constexpr double gamma = 5. / 3.;
+};
+
+template <> struct HydroSystem_Traits<CollapseProblem> {
 	static constexpr bool reconstruct_eint = false;
 };
 

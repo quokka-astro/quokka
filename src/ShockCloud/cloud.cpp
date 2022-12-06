@@ -37,10 +37,10 @@ using amrex::Real;
 struct ShockCloud {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-constexpr double m_H = hydrogen_mass_cgs_;
+constexpr double m_H = quokka::hydrogen_mass_cgs;
 constexpr double seconds_in_year = 3.154e7;
 
-template <> struct EOS_Traits<ShockCloud> {
+template <> struct quokka::EOS_Traits<ShockCloud> {
 	static constexpr double gamma = 5. / 3.; // default value
 };
 
@@ -60,9 +60,9 @@ constexpr Real nH1 = 1.0e-1;		 // cm^-3
 constexpr Real R_cloud = 5.0 * 3.086e18; // cm [5 pc]
 constexpr Real M0 = 2.0;		 // Mach number of shock
 
-constexpr Real T_floor = 100.0;				   // K
-constexpr Real P0 = nH0 * Tgas0 * boltzmann_constant_cgs_; // erg cm^-3
-constexpr Real rho0 = nH0 * m_H;			   // g cm^-3
+constexpr Real T_floor = 100.0;					  // K
+constexpr Real P0 = nH0 * Tgas0 * quokka::boltzmann_constant_cgs; // erg cm^-3
+constexpr Real rho0 = nH0 * m_H;				  // g cm^-3
 constexpr Real rho1 = nH1 * m_H;
 
 // perturbation parameters
