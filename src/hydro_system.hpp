@@ -42,7 +42,7 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 {
       public:
 	static constexpr int nscalars_ = Physics_Traits<problem_t>::numPassiveScalars;
-	static constexpr int nvar_ = Physics_NumVars<problem_t>::numHydroVars + nscalars_;
+	static constexpr int nvar_ = Physics_NumVars::numHydroVars + nscalars_;
 
 	enum consVarIndex {
 		density_index = Physics_Indices<problem_t>::hydroFirstIndex,
@@ -90,8 +90,8 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	static void PredictStep(amrex::MultiFab const &consVarOld, amrex::MultiFab &consVarNew, amrex::MultiFab const &rhs, double dt, int nvars,
 				amrex::iMultiFab &redoFlag_mf);
 
-	static void AddFluxesRK2(amrex::MultiFab &Unew_mf, amrex::MultiFab const &U0_mf, amrex::MultiFab const &U1_mf, amrex::MultiFab const &rhs_mf,
-				  double dt, int nvars, amrex::iMultiFab &redoFlag_mf);
+	static void AddFluxesRK2(amrex::MultiFab &Unew_mf, amrex::MultiFab const &U0_mf, amrex::MultiFab const &U1_mf, amrex::MultiFab const &rhs_mf, double dt,
+				 int nvars, amrex::iMultiFab &redoFlag_mf);
 
 	static void AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex::MultiFab const &consVar_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
 					 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &faceVelArray);
@@ -109,8 +109,7 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	template <FluxDir DIR>
 	static void FlattenShocks(amrex::MultiFab const &q_mf, amrex::MultiFab const &x1Chi_mf, amrex::MultiFab const &x2Chi_mf,
-				  amrex::MultiFab const &x3Chi_mf, amrex::MultiFab &x1LeftState_mf, amrex::MultiFab &x1RightState_mf, int nghost,
-				  int nvars);
+				  amrex::MultiFab const &x3Chi_mf, amrex::MultiFab &x1LeftState_mf, amrex::MultiFab &x1RightState_mf, int nghost, int nvars);
 
 	// C++ does not allow constexpr to be uninitialized, even in a templated
 	// class!
@@ -766,21 +765,15 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 
 		// assign normal component of velocity according to DIR
 
-		double u_L = NAN;
-		double u_R = NAN;
 		int velN_index = x1Velocity_index;
 		int velV_index = x2Velocity_index;
 		int velW_index = x3Velocity_index;
 
 		if constexpr (DIR == FluxDir::X1) {
-			u_L = vx_L;
-			u_R = vx_R;
 			velN_index = x1Velocity_index;
 			velV_index = x2Velocity_index;
 			velW_index = x3Velocity_index;
 		} else if constexpr (DIR == FluxDir::X2) {
-			u_L = vy_L;
-			u_R = vy_R;
 			if constexpr (AMREX_SPACEDIM == 2) {
 				velN_index = x2Velocity_index;
 				velV_index = x1Velocity_index;
@@ -791,8 +784,6 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 				velW_index = x1Velocity_index;
 			}
 		} else if constexpr (DIR == FluxDir::X3) {
-			u_L = vz_L;
-			u_R = vz_R;
 			velN_index = x3Velocity_index;
 			velV_index = x1Velocity_index;
 			velW_index = x2Velocity_index;
@@ -800,22 +791,20 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 
 		quokka::HydroState<nscalars_> sL{};
 		sL.rho = rho_L;
-		sL.vx = vx_L;
-		sL.vy = vy_L;
-    sL.vz = vz_L;
+		sL.u = x1LeftState(i, j, k, velN_index);
+		sL.v = x1LeftState(i, j, k, velV_index);
+		sL.w = x1LeftState(i, j, k, velW_index);
 		sL.P = P_L;
-		sL.u = u_L;
 		sL.cs = cs_L;
 		sL.E = E_L;
 		sL.Eint = Eint_L;
 
 		quokka::HydroState<nscalars_> sR{};
 		sR.rho = rho_R;
-		sR.vx = vx_R;
-		sR.vy = vy_R;
-		sR.vz = vz_R;
+		sR.u = x1RightState(i, j, k, velN_index);
+		sR.v = x1RightState(i, j, k, velV_index);
+		sR.w = x1RightState(i, j, k, velW_index);
 		sR.P = P_R;
-		sR.u = u_R;
 		sR.cs = cs_R;
 		sR.E = E_R;
 		sR.Eint = Eint_R;
@@ -835,9 +824,9 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 #if AMREX_SPACEDIM == 1
 		const double dw = 0.;
 #else
-	  amrex::Real dvl = std::min(q(i - 1, j + 1, k, velV_index) - q(i - 1, j, k, velV_index), q(i - 1, j, k, velV_index) - q(i - 1, j - 1, k, velV_index));
-	  amrex::Real dvr = std::min(q(i, j + 1, k, velV_index) - q(i, j, k, velV_index), q(i, j, k, velV_index) - q(i, j - 1, k, velV_index));
-	  double dw = std::min(dvl, dvr);
+	  	amrex::Real dvl = std::min(q(i - 1, j + 1, k, velV_index) - q(i - 1, j, k, velV_index), q(i - 1, j, k, velV_index) - q(i - 1, j - 1, k, velV_index));
+	  	amrex::Real dvr = std::min(q(i, j + 1, k, velV_index) - q(i, j, k, velV_index), q(i, j, k, velV_index) - q(i, j - 1, k, velV_index));
+	  	double dw = std::min(dvl, dvr);
 #endif
 #if AMREX_SPACEDIM == 3
 		amrex::Real dwl =
@@ -846,7 +835,14 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		dw = std::min(std::min(dwl, dwr), dw);
 #endif
 
-		quokka::valarray<double, nvar_> F = quokka::Riemann::HLLC<DIR, nscalars_, nvar_>(sL, sR, gamma_, du, dw);
+		// solve the Riemann problem in canonical form
+		quokka::valarray<double, nvar_> F_canonical = quokka::Riemann::HLLC<nscalars_, nvar_>(sL, sR, gamma_, du, dw);
+		quokka::valarray<double, nvar_> F = F_canonical;
+
+		// permute momentum components according to flux direction DIR
+		F[velN_index] = F_canonical[x1Momentum_index];
+		F[velV_index] = F_canonical[x2Momentum_index];
+		F[velW_index] = F_canonical[x3Momentum_index];
 
 		// set energy fluxes to zero if EOS is isothermal
 		if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
