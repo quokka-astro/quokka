@@ -41,11 +41,12 @@ template <> void RadhydroSimulation<RichtmeyerMeshkovProblem>::computeAfterTimes
 {
 #ifdef DEBUG_SYMMETRY
 	// this code does not actually work with Nranks > 1 ...
+  const int ncomp_cc = Physics_Indices<RichtmeyerMeshkovProblem>::nvarTotal_cc;
 
 	// copy all FABs to a local FAB across the entire domain
 	amrex::BoxArray localBoxes(domain_);
 	amrex::DistributionMapping localDistribution(localBoxes, 1);
-	amrex::MultiFab state_mf(localBoxes, localDistribution, ncomp_cc_, 0);
+	amrex::MultiFab state_mf(localBoxes, localDistribution, ncomp_cc, 0);
 	state_mf.ParallelCopy(state_new_cc_);
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
@@ -57,7 +58,7 @@ template <> void RadhydroSimulation<RichtmeyerMeshkovProblem>::computeAfterTimes
 		auto nx = nx_;
 		auto ny = ny_;
 		auto nz = nz_;
-		auto ncomp = ncomp_cc_;
+		auto ncomp = ncomp_cc;
 		for (int i = 0; i < nx; ++i) {
 			for (int j = 0; j < ny; ++j) {
 				for (int k = 0; k < nz; ++k) {
@@ -162,9 +163,9 @@ auto problem_main() -> int
 		return false;
 	};
 
-	const int nvars = RadhydroSimulation<RichtmeyerMeshkovProblem>::nvarTotal_cc_;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
+	const int ncomp_cc = Physics_Indices<RichtmeyerMeshkovProblem>::nvarTotal_cc;
+	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
+	for (int n = 0; n < ncomp_cc; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
 			if (isNormalComp(n, i)) {
 				BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);

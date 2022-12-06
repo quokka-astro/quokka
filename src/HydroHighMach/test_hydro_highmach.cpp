@@ -244,9 +244,9 @@ void RadhydroSimulation<HighMachProblem>::computeReferenceSolution(amrex::MultiF
 auto problem_main() -> int
 {
 	// Problem parameters
-	const int nvars = RadhydroSimulation<HighMachProblem>::nvarTotal_cc_;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
+	const int ncomp_cc = Physics_Indices<HighMachProblem>::nvarTotal_cc;
+	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
+	for (int n = 0; n < ncomp_cc; ++n) {
 		BCs_cc[0].setLo(0, amrex::BCType::int_dir); // periodic
 		BCs_cc[0].setHi(0, amrex::BCType::int_dir);
 		for (int i = 1; i < AMREX_SPACEDIM; ++i) {

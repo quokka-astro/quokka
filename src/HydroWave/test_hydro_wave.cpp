@@ -72,10 +72,10 @@ template <> void RadhydroSimulation<WaveProblem>::setInitialConditionsOnGrid(quo
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
-	const int ncomp = ncomp_cc_;
+	const int ncomp_cc = Physics_Indices<WaveProblem>::nvarTotal_cc;
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		for (int n = 0; n < ncomp; ++n) {
+		for (int n = 0; n < ncomp_cc; ++n) {
 			state_cc(i, j, k, n) = 0; // fill unused components with zeros
 		}
 		computeWaveSolution(i, j, k, state_cc, dx, prob_lo);
@@ -95,9 +95,9 @@ auto problem_main() -> int
 	const int max_timesteps = 2e4;
 
 	// Problem initialization
-	const int nvars = RadhydroSimulation<WaveProblem>::nvarTotal_cc_;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
+	const int ncomp_cc = Physics_Indices<WaveProblem>::nvarTotal_cc;
+	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
+	for (int n = 0; n < ncomp_cc; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
 			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
 			BCs_cc[n].setHi(i, amrex::BCType::int_dir);

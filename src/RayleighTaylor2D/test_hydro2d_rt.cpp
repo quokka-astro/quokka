@@ -172,9 +172,9 @@ auto problem_main() -> int
 		return false;
 	};
 
-	const int nvars = RadhydroSimulation<RTProblem>::nvarTotal_cc_;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
+	const int ncomp_cc = Physics_Indices<RTProblem>::nvarTotal_cc;
+	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
+	for (int n = 0; n < ncomp_cc; ++n) {
 		// periodic in x-direction
 		BCs_cc[n].setLo(0, amrex::BCType::int_dir);
 		BCs_cc[n].setHi(0, amrex::BCType::int_dir);
