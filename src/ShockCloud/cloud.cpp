@@ -40,10 +40,8 @@ struct ShockCloud {
 constexpr double m_H = hydrogen_mass_cgs_;
 constexpr double seconds_in_year = 3.154e7;
 
-template <> struct HydroSystem_Traits<ShockCloud> {
+template <> struct EOS_Traits<ShockCloud> {
 	static constexpr double gamma = 5. / 3.; // default value
-	// if true, reconstruct e_int instead of pressure
-	static constexpr bool reconstruct_eint = true;
 };
 
 template <> struct Physics_Traits<ShockCloud> {
@@ -160,7 +158,7 @@ template <> void RadhydroSimulation<ShockCloud>::setInitialConditionsOnGrid(quok
 		Real const xmom = 0;
 		Real const ymom = 0;
 		Real const zmom = 0;
-		Real const Eint = (HydroSystem<ShockCloud>::gamma_ - 1.) * P0;
+		Real const Eint = (quokka::EOS_Traits<ShockCloud>::gamma - 1.) * P0;
 		Real const Egas = RadSystem<ShockCloud>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
 
 		state_cc(i, j, k, HydroSystem<ShockCloud>::density_index) = rho;
@@ -228,7 +226,7 @@ template <> auto RadhydroSimulation<ShockCloud>::computeExtraPhysicsTimestep(int
 		const Real Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
 		const Real Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
 
-		Real const T = ComputeTgasFromEgas(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
+		Real const T = ComputeTgasFromEgas(rho, Eint, quokka::EOS_Traits<ShockCloud>::gamma, tables);
 		Real const Edot = cloudy_cooling_function(rho, T, tables);
 		tcool[bx](i, j, k) = std::abs(Eint / Edot);
 	});
@@ -313,7 +311,8 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in, cloudy_tables &cloudy
 
 			ODEUserData user_data{rho, tables};
 			quokka::valarray<Real, 1> y = {Eint};
-			quokka::valarray<Real, 1> const abstol = {reltol_floor * ComputeEgasFromTgas(rho, T_floor, HydroSystem<ShockCloud>::gamma_, tables)};
+			quokka::valarray<Real, 1> const abstol = {reltol_floor *
+								  ComputeEgasFromTgas(rho, T_floor, quokka::EOS_Traits<ShockCloud>::gamma, tables)};
 
 			// do integration with RK2 (Heun's method)
 			int nsteps = 0;
@@ -322,7 +321,7 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in, cloudy_tables &cloudy
 
 			// check if integration failed
 			if (nsteps >= maxStepsODEIntegrate) {
-				Real const T = ComputeTgasFromEgas(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
+				Real const T = ComputeTgasFromEgas(rho, Eint, quokka::EOS_Traits<ShockCloud>::gamma, tables);
 				Real const Edot = cloudy_cooling_function(rho, T, tables);
 				Real const t_cool = Eint / Edot;
 				printf("max substeps exceeded! rho = %.17e, Eint = %.17e, T = %g, cooling "
@@ -372,7 +371,7 @@ template <> void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(int lev, std:
 				Real const x3Mom = state(i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
 				Real const Egas = state(i, j, k, HydroSystem<ShockCloud>::energy_index);
 				Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-				Real const Tgas = ComputeTgasFromEgas(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
+				Real const Tgas = ComputeTgasFromEgas(rho, Eint, quokka::EOS_Traits<ShockCloud>::gamma, tables);
 
 				output(i, j, k, ncomp) = Tgas;
 			});

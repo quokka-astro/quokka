@@ -21,9 +21,10 @@
 struct ContactProblem {
 };
 
-template <> struct HydroSystem_Traits<ContactProblem> {
+template <> struct quokka::EOS_Traits<ContactProblem> {
 	static constexpr double gamma = 1.4;
-	static constexpr bool reconstruct_eint = true;
+	static constexpr double mean_molecular_weight = quokka::hydrogen_mass_cgs;
+	static constexpr double boltzmann_constant = quokka::boltzmann_constant_cgs;
 };
 
 template <> struct Physics_Traits<ContactProblem> {
@@ -145,7 +146,7 @@ void RadhydroSimulation<ContactProblem>::computeReferenceSolution(amrex::MultiFa
 				const auto E = val_exact.at(HydroSystem<ContactProblem>::energy_index)[i];
 				const auto vx = xmom / rho;
 				const auto Eint = E - 0.5 * rho * (vx * vx);
-				const auto P = (HydroSystem<ContactProblem>::gamma_ - 1.) * Eint;
+				const auto P = (quokka::EOS_Traits<ContactProblem>::gamma - 1.) * Eint;
 				d_exact.push_back(rho);
 				vx_exact.push_back(vx);
 				P_exact.push_back(P);
@@ -157,7 +158,7 @@ void RadhydroSimulation<ContactProblem>::computeReferenceSolution(amrex::MultiFa
 				const auto fE = values.at(HydroSystem<ContactProblem>::energy_index)[i];
 				const auto fvx = fxmom / frho;
 				const auto fEint = fE - 0.5 * frho * (fvx * fvx);
-				const auto fP = (HydroSystem<ContactProblem>::gamma_ - 1.) * fEint;
+				const auto fP = (quokka::EOS_Traits<ContactProblem>::gamma - 1.) * fEint;
 				d_final.push_back(frho);
 				vx_final.push_back(fvx);
 				P_final.push_back(fP);

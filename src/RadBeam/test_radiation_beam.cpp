@@ -215,7 +215,7 @@ template <> void RadhydroSimulation<BeamProblem>::setInitialConditionsOnGrid(quo
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const double Erad = a_rad * std::pow(T_initial, 4);
 		const double rho = rho0;
-		const double Egas = RadSystem<BeamProblem>::ComputeEgasFromTgas(rho, T_initial);
+		const double Egas = quokka::EOS<BeamProblem>::ComputeEintFromTgas(rho, T_initial);
 
 		state_cc(i, j, k, RadSystem<BeamProblem>::radEnergy_index) = Erad;
 		state_cc(i, j, k, RadSystem<BeamProblem>::x1RadFlux_index) = 0;

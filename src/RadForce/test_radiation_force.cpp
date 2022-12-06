@@ -58,11 +58,6 @@ template <> struct RadSystem_Traits<TubeProblem> {
 	static constexpr bool compute_v_over_c_terms = true;
 };
 
-template <> struct HydroSystem_Traits<TubeProblem> {
-	static constexpr double gamma = gamma_gas;
-	static constexpr bool reconstruct_eint = false; // unused if isothermal
-};
-
 template <> struct Physics_Traits<TubeProblem> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;

@@ -25,9 +25,10 @@
 struct FCQuantities {
 };
 
-template <> struct HydroSystem_Traits<FCQuantities> {
+template <> struct quokka::EOS_Traits<FCQuantities> {
 	static constexpr double gamma = 5. / 3.;
-	static constexpr bool reconstruct_eint = true;
+	static constexpr double mean_molecular_weight = quokka::hydrogen_mass_cgs;
+	static constexpr double boltzmann_constant = quokka::boltzmann_constant_cgs;
 };
 
 template <> struct Physics_Traits<FCQuantities> {
@@ -53,7 +54,7 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 	const amrex::Real A = amp;
 
 	const quokka::valarray<double, 3> R = {1.0, -1.0, 1.5}; // right eigenvector of sound wave
-	const quokka::valarray<double, 3> U_0 = {rho0, rho0 * v0, P0 / (HydroSystem<FCQuantities>::gamma_ - 1.0) + 0.5 * rho0 * std::pow(v0, 2)};
+	const quokka::valarray<double, 3> U_0 = {rho0, rho0 * v0, P0 / (quokka::EOS_Traits<FCQuantities>::gamma - 1.0) + 0.5 * rho0 * std::pow(v0, 2)};
 	const quokka::valarray<double, 3> dU = (A * R / (2.0 * M_PI * dx[0])) * (std::cos(2.0 * M_PI * x_L) - std::cos(2.0 * M_PI * x_R));
 
 	double rho = U_0[0] + dU[0];

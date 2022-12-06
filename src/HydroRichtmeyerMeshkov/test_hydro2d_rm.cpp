@@ -21,7 +21,7 @@
 struct RichtmeyerMeshkovProblem {
 };
 
-template <> struct HydroSystem_Traits<RichtmeyerMeshkovProblem> {
+template <> struct EOS_Traits<RichtmeyerMeshkovProblem> {
 	static constexpr double gamma = 1.4;
 	static constexpr bool reconstruct_eint = false;
 };

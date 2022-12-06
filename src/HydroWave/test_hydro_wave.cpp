@@ -21,9 +21,10 @@
 struct WaveProblem {
 };
 
-template <> struct HydroSystem_Traits<WaveProblem> {
+template <> struct quokka::EOS_Traits<WaveProblem> {
 	static constexpr double gamma = 5. / 3.;
-	static constexpr bool reconstruct_eint = true;
+	static constexpr double mean_molecular_weight = quokka::hydrogen_mass_cgs;
+	static constexpr double boltzmann_constant = quokka::boltzmann_constant_cgs;
 };
 
 template <> struct Physics_Traits<WaveProblem> {
@@ -49,7 +50,7 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 	const amrex::Real A = amp;
 
 	const quokka::valarray<double, 3> R = {1.0, -1.0, 1.5}; // right eigenvector of sound wave
-	const quokka::valarray<double, 3> U_0 = {rho0, rho0 * v0, P0 / (HydroSystem<WaveProblem>::gamma_ - 1.0) + 0.5 * rho0 * std::pow(v0, 2)};
+	const quokka::valarray<double, 3> U_0 = {rho0, rho0 * v0, P0 / (quokka::EOS_Traits<WaveProblem>::gamma - 1.0) + 0.5 * rho0 * std::pow(v0, 2)};
 	const quokka::valarray<double, 3> dU = (A * R / (2.0 * M_PI * dx[0])) * (std::cos(2.0 * M_PI * x_L) - std::cos(2.0 * M_PI * x_R));
 
 	double rho = U_0[0] + dU[0];
@@ -156,7 +157,7 @@ auto problem_main() -> int
 
 			amrex::Real xvel = xmom / rho;
 			amrex::Real Eint = Egas - xmom * xmom / (2.0 * rho);
-			amrex::Real pressure = Eint * (HydroSystem<WaveProblem>::gamma_ - 1.);
+			amrex::Real pressure = Eint * (quokka::EOS_Traits<WaveProblem>::gamma - 1.);
 
 			d.at(i) = (rho - rho0) / amp;
 			vx.at(i) = (xvel - v0) / amp;
@@ -174,7 +175,7 @@ auto problem_main() -> int
 
 			amrex::Real xvel = xmom / rho;
 			amrex::Real Eint = Egas - xmom * xmom / (2.0 * rho);
-			amrex::Real pressure = Eint * (HydroSystem<WaveProblem>::gamma_ - 1.);
+			amrex::Real pressure = Eint * (quokka::EOS_Traits<WaveProblem>::gamma - 1.);
 
 			density_exact.at(i) = (rho - rho0) / amp;
 			velocity_exact.at(i) = (xvel - v0) / amp;

@@ -84,12 +84,15 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeRosselan
 	return kappa;
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeTgasFromEgas(const double rho, const double Egas) -> double
+template <> AMREX_GPU_HOST_DEVICE auto quokka::EOS<TophatProblem>::ComputeTgasFromEint(const double rho, const double Egas) -> double
 {
 	return Egas / (rho * c_v);
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeEgasFromTgas(const double rho, const double Tgas) -> double { return rho * c_v * Tgas; }
+template <> AMREX_GPU_HOST_DEVICE auto quokka::EOS<TophatProblem>::ComputeEintFromTgas(const double rho, const double Tgas) -> double
+{
+	return rho * c_v * Tgas;
+}
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeEgasTempDerivative(const double rho, const double /*Tgas*/) -> double
 {
@@ -206,7 +209,7 @@ template <> void RadhydroSimulation<TophatProblem>::setInitialConditionsOnGrid(q
 			rho = rho_pipe;
 		}
 
-		const double Egas = RadSystem<TophatProblem>::ComputeEgasFromTgas(rho, T_initial);
+		const double Egas = quokka::EOS<TophatProblem>::ComputeEintFromTgas(rho, T_initial);
 
 		state_cc(i, j, k, RadSystem<TophatProblem>::radEnergy_index) = Erad;
 		state_cc(i, j, k, RadSystem<TophatProblem>::x1RadFlux_index) = 0;

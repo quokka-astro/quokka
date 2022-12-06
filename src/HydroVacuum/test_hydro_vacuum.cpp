@@ -165,7 +165,7 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(amrex::Multi
 		auto density = values.at(1);
 		auto velocity = values.at(2);
 		auto pressure = values.at(3);
-		auto eint = pressure / ((HydroSystem<ShocktubeProblem>::gamma_ - 1.0) * density);
+		auto eint = pressure / ((quokka::EOS_Traits<ShocktubeProblem>::gamma - 1.0) * density);
 
 		xs_exact.push_back(x);
 		density_exact.push_back(density);

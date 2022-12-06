@@ -25,10 +25,8 @@ using amrex::Real;
 struct ShockCloud {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-template <> struct HydroSystem_Traits<ShockCloud> {
+template <> struct EOS_Traits<ShockCloud> {
 	static constexpr double gamma = 5. / 3.; // default value
-	// if true, reconstruct e_int instead of pressure
-	static constexpr bool reconstruct_eint = true;
 };
 
 struct ODEUserData {
@@ -86,13 +84,13 @@ auto problem_main() -> int
 	readCloudyData(cloudyTables);
 	auto tables = cloudyTables.const_tables();
 
-	const Real T = ComputeTgasFromEgas(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
+	const Real T = ComputeTgasFromEgas(rho, Eint, quokka::EOS_Traits<ShockCloud>::gamma, tables);
 
 	const Real rhoH = rho * cloudy_H_mass_fraction;
 	const Real nH = rhoH / hydrogen_mass_cgs_;
 	const Real log_nH = std::log10(nH);
 
-	const Real C = (HydroSystem<ShockCloud>::gamma_ - 1.) * Eint / (boltzmann_constant_cgs_ * (rho / hydrogen_mass_cgs_));
+	const Real C = (quokka::EOS_Traits<ShockCloud>::gamma - 1.) * Eint / (boltzmann_constant_cgs_ * (rho / hydrogen_mass_cgs_));
 	const Real mu = interpolate2d(log_nH, std::log10(T), tables.log_nH, tables.log_Tgas, tables.meanMolWeight);
 	const Real relerr = std::abs((C * mu - T) / T);
 
@@ -107,7 +105,7 @@ auto problem_main() -> int
 
 	ODEUserData user_data{rho, tables};
 	quokka::valarray<Real, 1> y = {Eint};
-	quokka::valarray<Real, 1> abstol = {reltol_floor * ComputeEgasFromTgas(rho, T_floor, HydroSystem<ShockCloud>::gamma_, tables)};
+	quokka::valarray<Real, 1> abstol = {reltol_floor * ComputeEgasFromTgas(rho, T_floor, quokka::EOS_Traits<ShockCloud>::gamma, tables)};
 
 	// do integration with RK2 (Heun's method)
 	int nsteps = 0;
@@ -115,14 +113,14 @@ auto problem_main() -> int
 
 	// check if integration failed
 	if (nsteps >= maxStepsODEIntegrate) {
-		Real T = ComputeTgasFromEgas(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
+		Real T = ComputeTgasFromEgas(rho, Eint, quokka::EOS_Traits<ShockCloud>::gamma, tables);
 		Real Edot = cloudy_cooling_function(rho, T, tables);
 		Real t_cool = Eint / Edot;
 		printf("max substeps exceeded! rho = %g, Eint = %g, T = %g, cooling "
 		       "time = %g\n",
 		       rho, Eint, T, t_cool);
 	} else {
-		Real T = ComputeTgasFromEgas(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
+		Real T = ComputeTgasFromEgas(rho, Eint, quokka::EOS_Traits<ShockCloud>::gamma, tables);
 		Real Edot = cloudy_cooling_function(rho, T, tables);
 		Real t_cool = Eint / Edot;
 		printf("success! rho = %g, Eint = %g, T = %g, cooling time = %g\n", rho, Eint, T, t_cool);

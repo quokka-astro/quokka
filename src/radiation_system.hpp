@@ -967,7 +967,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				}
 
 				// compute Jacobian elements
-				const double c_v = quokka::EOS<problem_t>::ComputeEgasTempDerivative(rho, T_gas);
+				const double c_v = quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas);
 
 				drhs_dEgas = (rho * dt / c_v) * (kappa * dB_dTgas + dkappa_dTgas * (fourPiB - chat * Erad_guess));
 

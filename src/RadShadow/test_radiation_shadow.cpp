@@ -126,7 +126,7 @@ template <> void RadhydroSimulation<ShadowProblem>::setInitialConditionsOnGrid(q
 		amrex::Real const rho = rho_bg + (rho_clump - rho_bg) / (1.0 + std::exp(Delta));
 
 		amrex::Real const Erad = a_rad * std::pow(T_initial, 4);
-		amrex::Real const Egas = RadSystem<ShadowProblem>::ComputeEgasFromTgas(rho, T_initial);
+		amrex::Real const Egas = quokka::EOS<ShadowProblem>::ComputeEintFromTgas(rho, T_initial);
 
 		state_cc(i, j, k, RadSystem<ShadowProblem>::radEnergy_index) = Erad;
 		state_cc(i, j, k, RadSystem<ShadowProblem>::x1RadFlux_index) = 0;

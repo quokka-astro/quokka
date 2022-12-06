@@ -35,11 +35,14 @@ struct CoolingTest {
 constexpr double m_H = hydrogen_mass_cgs_;
 constexpr double seconds_in_year = 3.154e7;
 
-template <> struct HydroSystem_Traits<CoolingTest> {
+template <> struct EOS_Traits<CoolingTest> {
 	static constexpr double gamma = 5. / 3.; // default value
 	// if true, reconstruct e_int instead of pressure
-	static constexpr bool reconstruct_eint = true;
+	static constexpr double mean_molecular_weight = quokka::hydrogen_mass_cgs;
+	static constexpr double boltzmann_constant = quokka::boltzmann_constant_cgs;
 };
+}
+;
 
 template <> struct Physics_Traits<CoolingTest> {
 	// cell-centred
@@ -135,7 +138,7 @@ template <> void RadhydroSimulation<CoolingTest>::setInitialConditionsOnGrid(quo
 		Real ymom = 0;
 		Real zmom = 0;
 		Real const P = 4.0e4 * boltzmann_constant_cgs_; // erg cm^-3
-		Real Eint = (HydroSystem<CoolingTest>::gamma_ - 1.) * P;
+		Real Eint = (quokka::EOS_Traits<CoolingTest>::gamma - 1.) * P;
 
 		Real const Egas = RadSystem<CoolingTest>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
 
@@ -177,7 +180,7 @@ AMRSimulation<CoolingTest>::setCustomBoundaryConditions(const amrex::IntVect &iv
 		Real xmom = 0;
 		Real ymom = rho * (-26.0e5); // [-26 km/s]
 		Real zmom = 0;
-		Real Eint = RadSystem<CoolingTest>::ComputeEgasFromTgas(rho, Tgas0);
+		Real Eint = quokka::EOS<CoolingTest>::ComputeEintFromTgas(rho, Tgas0);
 		Real const Egas = RadSystem<CoolingTest>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
 
 		consVar(i, j, k, RadSystem<CoolingTest>::gasDensity_index) = rho;
@@ -203,7 +206,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto user_rhs(Real /*t*/, quokka::valar
 
 	// compute temperature (implicit solve, depends on composition)
 	Real Eint = y_data[0];
-	Real T = ComputeTgasFromEgas(rho, Eint, HydroSystem<CoolingTest>::gamma_, tables);
+	Real T = ComputeTgasFromEgas(rho, Eint, quokka::EOS_Traits<CoolingTest>::gamma, tables);
 
 	// compute cooling function
 	y_rhs[0] = cloudy_cooling_function(rho, T, tables);
@@ -236,7 +239,7 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in, cloudy_tables &cloudy
 
 			ODEUserData user_data{rho, tables};
 			quokka::valarray<Real, 1> y = {Eint};
-			quokka::valarray<Real, 1> abstol = {reltol_floor * ComputeEgasFromTgas(rho, T_floor, HydroSystem<CoolingTest>::gamma_, tables)};
+			quokka::valarray<Real, 1> abstol = {reltol_floor * ComputeEgasFromTgas(rho, T_floor, quokka::EOS_Traits<CoolingTest>::gamma, tables)};
 
 			// do integration with RK2 (Heun's method)
 			int steps_taken = 0;

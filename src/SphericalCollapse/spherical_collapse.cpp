@@ -26,7 +26,7 @@
 struct CollapseProblem {
 };
 
-template <> struct HydroSystem_Traits<CollapseProblem> {
+template <> struct EOS_Traits<CollapseProblem> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr bool reconstruct_eint = false;
 };
