@@ -30,8 +30,14 @@ auto FastMagnetosonicSpeed(double gamma, quokka::HydroState<N_scalars> const sta
   return std::sqrt(0.5 * (bgp_p + std::sqrt(bgp_m*bgp_m + 4.0*gp*byz_sq)) / state.rho);
 }
 
+inline auto GetWeightForCT(double dflx, double rho_L, double rho_R, double dx, double dt) -> double {
+  double v_over_c = (1024.0) * dt * dflx / (dx * (rho_L + rho_R));
+  double tmp_min = std::min(static_cast<double>(0.5), v_over_c);
+  return 0.5 + std::max(static_cast<double>(-0.5), tmp_min);
+}
+
 // density, momentum, total energy, tranverse magnetic field
-struct Cons1D {
+struct ConsHydro1D {
   double rho; // density
   double mx;  // x-momentum
   double my;  // y-momentum
@@ -46,25 +52,31 @@ template <FluxDir DIR, int N_scalars, int fluxdim>
 AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(
             quokka::HydroState<N_scalars> const &s_L,
             quokka::HydroState<N_scalars> const &s_R,
-            const double gamma, const double bx) -> quokka::valarray<double, fluxdim>
+	          quokka::valarray<double, fluxdim> &F_hydro,
+            double & Efield_y,
+            double & Efield_z,
+            const double gamma,
+            const double bx,
+            const double dx,
+            const double dt)
 {
   //--- Step 1. Compute L/R states
 
   // initialse left and right conserved states
-  Cons1D u_L{};
-  Cons1D u_R{};
-  // initialise temporary variable to store fluxes
-  Cons1D f_x{};
+  ConsHydro1D u_L{};
+  ConsHydro1D u_R{};
+  // initialise temporary container to store flux across interface
+  ConsHydro1D f_x{};
   // initialse fluxes at left and right side of the interface
-  Cons1D f_L{};
-  Cons1D f_R{};
+  ConsHydro1D f_L{};
+  ConsHydro1D f_R{};
   // initialise signal speeds (left to right)
   std::array<double, 5> spds{};
   // initialise four intermediate conserved states
-  Cons1D u_star_L{};
-  Cons1D u_dstar_L{};
-  Cons1D u_dstar_R{};
-  Cons1D u_star_R{};
+  ConsHydro1D u_star_L{};
+  ConsHydro1D u_dstar_L{};
+  ConsHydro1D u_dstar_R{};
+  ConsHydro1D u_star_R{};
 
   // Compute L/R states for selected conserved variables
   // (group transverse vector components for floating-point associativity symmetry)
@@ -285,10 +297,8 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(
   u_star_R.by  = spds[4] * (u_star_R.by  - u_R.by);
   u_star_R.bz  = spds[4] * (u_star_R.bz  - u_R.bz);
 
-  // open the Riemann fan
-	quokka::valarray<double, fluxdim> F{};
   if (spds[0] >= 0.0) {
-    // return Fl if flow is supersonic
+    // return u_L if flow is supersonic
     f_x.rho = f_L.rho;
     f_x.mx  = f_L.mx;
     f_x.my  = f_L.my;
@@ -297,7 +307,7 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(
     f_x.by  = f_L.by;
     f_x.bz  = f_L.bz;
   } else if (spds[4] <= 0.0) {
-    // return Fr if flow is supersonic
+    // return u_R if flow is supersonic
     f_x.rho = f_R.rho;
     f_x.mx  = f_R.mx;
     f_x.my  = f_R.my;
@@ -306,7 +316,7 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(
     f_x.by  = f_R.by;
     f_x.bz  = f_R.bz;
   } else if (spds[1] >= 0.0) {
-    // return Fl*
+    // return u_star_L
     f_x.rho = f_L.rho + u_star_L.rho;
     f_x.mx  = f_L.mx  + u_star_L.mx;
     f_x.my  = f_L.my  + u_star_L.my;
@@ -315,7 +325,7 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(
     f_x.by  = f_L.by  + u_star_L.by;
     f_x.bz  = f_L.bz  + u_star_L.bz;
   } else if (spds[2] >= 0.0) {
-    // return Fl**
+    // return u_dstar_L
     f_x.rho = f_L.rho + u_star_L.rho + u_dstar_L.rho;
     f_x.mx  = f_L.mx  + u_star_L.mx  + u_dstar_L.mx;
     f_x.my  = f_L.my  + u_star_L.my  + u_dstar_L.my;
@@ -324,7 +334,7 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(
     f_x.by  = f_L.by  + u_star_L.by  + u_dstar_L.by;
     f_x.bz  = f_L.bz  + u_star_L.bz  + u_dstar_L.bz;
   } else if (spds[3] > 0.0) {
-    // return Fr**
+    // return u_dstar_R
     f_x.rho = f_R.rho + u_star_R.rho + u_dstar_R.rho;
     f_x.mx  = f_R.mx  + u_star_R.mx  + u_dstar_R.mx;
     f_x.my  = f_R.my  + u_star_R.my  + u_dstar_R.my;
@@ -333,7 +343,7 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(
     f_x.by  = f_R.by  + u_star_R.by  + u_dstar_R.by;
     f_x.bz  = f_R.bz  + u_star_R.bz  + u_dstar_R.bz;
   } else {
-    // return Fr*
+    // return u_star_R
     f_x.rho = f_R.rho + u_star_R.rho;
     f_x.mx  = f_R.mx  + u_star_R.mx;
     f_x.my  = f_R.my  + u_star_R.my;
@@ -343,14 +353,11 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(
     f_x.bz  = f_R.bz  + u_star_R.bz;
   }
 
-  // flx(IDN,k,j,i) = flxi[IDN];
-  // flx(ivx,k,j,i) = flxi[IVX];
-  // flx(ivy,k,j,i) = flxi[IVY];
-  // flx(ivz,k,j,i) = flxi[IVZ];
-  // flx(IEN,k,j,i) = flxi[IEN];
-  // ey(k,j,i)      = -flxi[IBY];
-  // ez(k,j,i)      =  flxi[IBZ];
+  F_hydro  = {f_x.rho, f_x.mx, f_x.my, f_x.mz, f_x.E, 0}; // Eint=0 for now
+  Efield_y = -f_x.by;
+  Efield_z =  f_x.bz;
 
+  GetWeightForCT(f_x.rho, s_L.rho, s_R.rho, dx, dt);
 }
 } // namespace quokka::Riemann
 
