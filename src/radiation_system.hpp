@@ -24,16 +24,15 @@
 
 // internal headers
 #include "ArrayView.hpp"
+#include "EOS.hpp"
 #include "hydro_system.hpp"
 #include "hyperbolic_system.hpp"
 #include "simulation.hpp"
 #include "valarray.hpp"
 
 // physical constants in CGS units
-static constexpr double c_light_cgs_ = 2.99792458e10;		// cgs
-static constexpr double radiation_constant_cgs_ = 7.5646e-15;	// cgs
-static constexpr double hydrogen_mass_cgs_ = 1.6726231e-24;	// cgs
-static constexpr double boltzmann_constant_cgs_ = 1.380658e-16; // cgs
+static constexpr double c_light_cgs_ = 2.99792458e10;	      // cgs
+static constexpr double radiation_constant_cgs_ = 7.5646e-15; // cgs
 
 // this struct is specialized by the user application code
 //
@@ -41,9 +40,6 @@ template <typename problem_t> struct RadSystem_Traits {
 	static constexpr double c_light = c_light_cgs_;
 	static constexpr double c_hat = c_light_cgs_;
 	static constexpr double radiation_constant = radiation_constant_cgs_;
-	static constexpr double mean_molecular_mass = hydrogen_mass_cgs_;
-	static constexpr double boltzmann_constant = boltzmann_constant_cgs_;
-	static constexpr double gamma = 5. / 3.;
 	static constexpr double Erad_floor = 0.;
 	static constexpr bool compute_v_over_c_terms = true;
 };
@@ -85,12 +81,13 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static constexpr double c_light_ = RadSystem_Traits<problem_t>::c_light;
 	static constexpr double c_hat_ = RadSystem_Traits<problem_t>::c_hat;
 	static constexpr double radiation_constant_ = RadSystem_Traits<problem_t>::radiation_constant;
-	static constexpr double mean_molecular_mass_ = RadSystem_Traits<problem_t>::mean_molecular_mass;
-	static constexpr double boltzmann_constant_ = RadSystem_Traits<problem_t>::boltzmann_constant;
-	static constexpr double gamma_ = RadSystem_Traits<problem_t>::gamma;
 
 	static constexpr double Erad_floor_ = RadSystem_Traits<problem_t>::Erad_floor;
 	static constexpr bool compute_v_over_c_terms_ = RadSystem_Traits<problem_t>::compute_v_over_c_terms;
+
+	static constexpr double mean_molecular_mass_ = quokka::EOS_Traits<problem_t>::mean_molecular_mass;
+	static constexpr double boltzmann_constant_ = quokka::EOS_Traits<problem_t>::boltzmann_constant;
+	static constexpr double gamma_ = quokka::EOS_Traits<problem_t>::gamma;
 
 	// static functions
 
@@ -133,9 +130,6 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	AMREX_GPU_HOST_DEVICE static auto ComputePlanckOpacity(double rho, double Tgas) -> double;
 	AMREX_GPU_HOST_DEVICE static auto ComputePlanckOpacityTempDerivative(double rho, double Tgas) -> double;
 	AMREX_GPU_HOST_DEVICE static auto ComputeRosselandOpacity(double rho, double Tgas) -> double;
-	AMREX_GPU_HOST_DEVICE static auto ComputeTgasFromEgas(double rho, double Egas) -> double;
-	AMREX_GPU_HOST_DEVICE static auto ComputeEgasFromTgas(double rho, double Tgas) -> double;
-	AMREX_GPU_HOST_DEVICE static auto ComputeEgasTempDerivative(double rho, double Tgas) -> double;
 	AMREX_GPU_HOST_DEVICE static auto ComputeEintFromEgas(double density, double X1GasMom, double X2GasMom, double X3GasMom, double Etot) -> double;
 	AMREX_GPU_HOST_DEVICE static auto ComputeEgasFromEint(double density, double X1GasMom, double X2GasMom, double X3GasMom, double Eint) -> double;
 
@@ -553,8 +547,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeCellOpticalDepth(const quokka
 	if constexpr (gamma_ != 1.0) {
 		Eint_L = RadSystem<problem_t>::ComputeEintFromEgas(rho_L, x1GasMom_L, x2GasMom_L, x3GasMom_L, Egas_L);
 		Eint_R = RadSystem<problem_t>::ComputeEintFromEgas(rho_R, x1GasMom_R, x2GasMom_R, x3GasMom_R, Egas_R);
-		Tgas_L = RadSystem<problem_t>::ComputeTgasFromEgas(rho_L, Eint_L);
-		Tgas_R = RadSystem<problem_t>::ComputeTgasFromEgas(rho_R, Eint_R);
+		Tgas_L = quokka::EOS<problem_t>::ComputeTgasFromEint(rho_L, Eint_L);
+		Tgas_R = quokka::EOS<problem_t>::ComputeTgasFromEint(rho_R, Eint_R);
 	}
 
 	double dl = NAN;
@@ -857,37 +851,6 @@ template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::C
 	return NAN;
 }
 
-template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeTgasFromEgas(const double rho, const double Egas) -> double
-{
-	if constexpr (gamma_ != 1.0) {
-		constexpr double c_v = boltzmann_constant_ / (mean_molecular_mass_ * (gamma_ - 1.0));
-		return (Egas / (rho * c_v));
-	} else {
-		return NAN;
-	}
-#pragma nv_diag_suppress implicit_return_from_non_void_function
-}
-
-template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeEgasFromTgas(const double rho, const double Tgas) -> double
-{
-	if constexpr (gamma_ != 1.0) {
-		constexpr double c_v = boltzmann_constant_ / (mean_molecular_mass_ * (gamma_ - 1.0));
-		return (rho * c_v * Tgas);
-	} else {
-		return NAN;
-	}
-}
-
-template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeEgasTempDerivative(const double rho, const double /*Tgas*/) -> double
-{
-	if constexpr (gamma_ != 1.0) {
-		constexpr double c_v = boltzmann_constant_ / (mean_molecular_mass_ * (gamma_ - 1.0));
-		return (rho * c_v);
-	} else {
-		return NAN;
-	}
-}
-
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeEintFromEgas(const double density, const double X1GasMom, const double X2GasMom, const double X3GasMom,
 								     const double Etot) -> double
@@ -981,7 +944,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			for (n = 0; n < maxIter; ++n) {
 
 				// compute material temperature
-				T_gas = RadSystem<problem_t>::ComputeTgasFromEgas(rho, Egas_guess);
+				T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess);
 				AMREX_ASSERT(T_gas >= 0.);
 
 				// compute opacity, emissivity
@@ -1004,7 +967,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				}
 
 				// compute Jacobian elements
-				const double c_v = RadSystem<problem_t>::ComputeEgasTempDerivative(rho, T_gas);
+				const double c_v = quokka::EOS<problem_t>::ComputeEgasTempDerivative(rho, T_gas);
 
 				drhs_dEgas = (rho * dt / c_v) * (kappa * dB_dTgas + dkappa_dTgas * (fourPiB - chat * Erad_guess));
 
@@ -1138,7 +1101,7 @@ void RadSystem<problem_t>::ComputeSourceTermsExplicit(arrayconst_t &consPrev, ar
 		const auto Frad0_x = consPrev(i, j, k, x1RadFlux_index);
 
 		// compute material temperature
-		const auto T_gas = RadSystem<problem_t>::ComputeTgasFromEgas(rho, Egas0);
+		const auto T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas0);
 
 		// compute opacity, emissivity
 		const auto kappa = RadSystem<problem_t>::ComputeOpacity(rho, T_gas);
