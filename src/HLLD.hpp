@@ -28,9 +28,7 @@ struct ConsHydro1D {
 };
 
 template <int N_scalars>
-AMREX_FORCE_INLINE
-AMREX_GPU_DEVICE
-auto FastMagnetosonicSpeed(double gamma, quokka::HydroState<N_scalars> const state, const double bx) -> double
+AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto FastMagnetosonicSpeed(double gamma, quokka::HydroState<N_scalars> const state, const double bx) -> double
 {
 	double gp = gamma * state.P;
 	double bx_sq = bx * bx;
@@ -52,9 +50,7 @@ auto GetWeightForCT(double dflx, double rho_L, double rho_R, double dx, double d
 
 // HLLD solver following Miyoshi and Kusano (2005), hereafter MK5.
 template <FluxDir DIR, int N_scalars, int fluxdim>
-AMREX_FORCE_INLINE
-AMREX_GPU_DEVICE
-auto HLLD(quokka::HydroState<N_scalars> const &s_L, quokka::HydroState<N_scalars> const &s_R,
+AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars> const &s_L, quokka::HydroState<N_scalars> const &s_R,
 					      quokka::valarray<double, fluxdim> &F_hydro, double &Efield_y, double &Efield_z, const double gamma,
 					      const double bx, const double dx, const double dt)
 {
