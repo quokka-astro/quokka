@@ -348,8 +348,8 @@ auto problem_main() -> int
 
 	// Problem initialization
 	const int ncomp_cc = Physics_Indices<ShocktubeProblem>::nvarTotal_cc;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
+	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
+	for (int n = 0; n < ncomp_cc; ++n) {
 		BCs_cc[0].setLo(0, amrex::BCType::ext_dir); // Dirichlet
 		BCs_cc[0].setHi(0, amrex::BCType::ext_dir);
 		for (int i = 1; i < AMREX_SPACEDIM; ++i) {

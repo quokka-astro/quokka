@@ -68,7 +68,7 @@ template <> void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsOnGri
 		AMREX_ASSERT(!std::isnan(rho));
 		AMREX_ASSERT(!std::isnan(P));
 
-		for (int n = 0; n < ncomp; ++n) {
+		for (int n = 0; n < ncomp_cc; ++n) {
 			state_cc(i, j, k, n) = 0.;
 		}
 
