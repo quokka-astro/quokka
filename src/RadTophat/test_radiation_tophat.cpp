@@ -61,7 +61,7 @@ template <> struct Physics_Traits<TophatProblem> {
 	static constexpr bool is_mhd_enabled = false;
 };
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputePlanckOpacity(const double rho, const double /*Tgas*/) -> double
+template <> AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputePlanckOpacity(const double rho, const double /*Tgas*/) -> double
 {
 	amrex::Real kappa = 0.;
 	if (rho == rho_pipe) {
@@ -74,7 +74,7 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputePlanckOp
 	return kappa;
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeRosselandOpacity(const double rho, const double /*Tgas*/) -> double
+template <> AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeRosselandOpacity(const double rho, const double /*Tgas*/) -> double
 {
 	amrex::Real kappa = 0.;
 	if (rho == rho_pipe) {
@@ -87,17 +87,18 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeRosselan
 	return kappa;
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto quokka::EOS<TophatProblem>::ComputeTgasFromEint(const double rho, const double Egas) -> double
+template <> AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto quokka::EOS<TophatProblem>::ComputeTgasFromEint(const double rho, const double Egas) -> double
 {
 	return Egas / (rho * c_v);
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto quokka::EOS<TophatProblem>::ComputeEintFromTgas(const double rho, const double Tgas) -> double
+template <> AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto quokka::EOS<TophatProblem>::ComputeEintFromTgas(const double rho, const double Tgas) -> double
 {
 	return rho * c_v * Tgas;
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto quokka::EOS<TophatProblem>::ComputeEintTempDerivative(const double rho, const double /*Tgas*/) -> double
+template <>
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto quokka::EOS<TophatProblem>::ComputeEintTempDerivative(const double rho, const double /*Tgas*/) -> double
 {
 	// This is also known as the heat capacity, i.e.
 	// 		\del E_g / \del T = \rho c_v,
@@ -106,7 +107,7 @@ template <> AMREX_GPU_HOST_DEVICE auto quokka::EOS<TophatProblem>::ComputeEintTe
 	return rho * c_v;
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeEddingtonFactor(const double f_in) -> double
+template <> AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeEddingtonFactor(const double f_in) -> double
 {
 	// compute Minerbo (1978) closure [piecewise approximation]
 	// (For unknown reasons, this closure tends to work better
