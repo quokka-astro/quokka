@@ -26,6 +26,16 @@
 struct SawtoothProblem {
 };
 
+template <> struct Physics_Traits<SawtoothProblem> {
+	// cell-centred
+	static constexpr bool is_hydro_enabled = false;
+	static constexpr bool is_chemistry_enabled = false;
+	static constexpr int numPassiveScalars = 0; // number of passive scalars
+	static constexpr bool is_radiation_enabled = false;
+	// face-centred
+	static constexpr bool is_mhd_enabled = false;
+};
+
 AMREX_GPU_DEVICE void ComputeExactSolution(int i, int j, int k, int n, amrex::Array4<amrex::Real> const &exact_arr,
 					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
 					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi)
