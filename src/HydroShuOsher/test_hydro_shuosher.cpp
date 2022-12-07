@@ -46,7 +46,7 @@ template <> void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsOnGri
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	const int ncomp = ncomp_cc_;
+	const int ncomp_cc = Physics_Indices<ShocktubeProblem>::nvarTotal_cc;
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
@@ -68,7 +68,7 @@ template <> void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsOnGri
 		AMREX_ASSERT(!std::isnan(rho));
 		AMREX_ASSERT(!std::isnan(P));
 
-		for (int n = 0; n < ncomp; ++n) {
+		for (int n = 0; n < ncomp_cc; ++n) {
 			state_cc(i, j, k, n) = 0.;
 		}
 
@@ -281,9 +281,9 @@ auto problem_main() -> int
 	const int max_timesteps = 20000;
 
 	// Problem initialization
-	const int nvars = RadhydroSimulation<ShocktubeProblem>::nvarTotal_cc_;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
+	const int ncomp_cc = Physics_Indices<ShocktubeProblem>::nvarTotal_cc;
+	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
+	for (int n = 0; n < ncomp_cc; ++n) {
 		BCs_cc[0].setLo(0, amrex::BCType::foextrap); // Dirichlet
 		BCs_cc[0].setHi(0, amrex::BCType::ext_dir);
 		for (int i = 1; i < AMREX_SPACEDIM; ++i) {

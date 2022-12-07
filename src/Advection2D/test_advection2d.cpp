@@ -31,6 +31,16 @@ using amrex::Real;
 struct SquareProblem {
 };
 
+template <> struct Physics_Traits<SquareProblem> {
+	// cell-centred
+	static constexpr bool is_hydro_enabled = false;
+	static constexpr bool is_chemistry_enabled = false;
+	static constexpr int numPassiveScalars = 0; // number of passive scalars
+	static constexpr bool is_radiation_enabled = false;
+	// face-centred
+	static constexpr bool is_mhd_enabled = false;
+};
+
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto exactSolutionAtIndex(int i, int j, amrex::GpuArray<Real, AMREX_SPACEDIM> const &prob_lo,
 							      amrex::GpuArray<Real, AMREX_SPACEDIM> const &prob_hi,
 							      amrex::GpuArray<Real, AMREX_SPACEDIM> const &dx) -> Real
@@ -56,7 +66,7 @@ template <> void AdvectionSimulation<SquareProblem>::setInitialConditionsOnGrid(
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 	// loop over the grid and set the initial condition
-	amrex::ParallelFor(indexRange, ncomp_cc_,
+	amrex::ParallelFor(indexRange, Physics_Indices<SquareProblem>::nvarTotal_cc,
 			   [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) { state_cc(i, j, k, n) = exactSolutionAtIndex(i, j, prob_lo, prob_hi, dx); });
 }
 
@@ -70,8 +80,9 @@ void AdvectionSimulation<SquareProblem>::computeReferenceSolution(amrex::MultiFa
 	for (amrex::MFIter iter(state_old_cc_[0]); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &state = ref.array(iter);
+		const int ncomp_cc = Physics_Indices<SquareProblem>::nvarTotal_cc;
 
-		amrex::ParallelFor(indexRange, ncomp_cc_,
+		amrex::ParallelFor(indexRange, ncomp_cc,
 				   [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) { state(i, j, k, n) = exactSolutionAtIndex(i, j, prob_lo, prob_hi, dx); });
 	}
 }
