@@ -15,6 +15,12 @@ using amrex::Real;
 constexpr double Tgas0 = 6000.;				  // K
 constexpr double rho0 = 0.01 * quokka::hydrogen_mass_cgs; // g cm^-3
 
+template <> struct quokka::EOS_Traits<ODETest> {
+	static constexpr double mean_molecular_weight = quokka::hydrogen_mass_cgs;
+	static constexpr double boltzmann_constant = quokka::boltzmann_constant_cgs;
+	static constexpr double gamma = 5. / 3.;
+};
+
 struct ODEUserData {
 	amrex::Real rho;
 };
