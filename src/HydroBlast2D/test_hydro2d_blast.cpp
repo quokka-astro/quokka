@@ -140,9 +140,9 @@ auto problem_main() -> int
 		return false;
 	};
 
-	const int nvars = RadhydroSimulation<BlastProblem>::nvarTotal_cc_;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
+	const int ncomp_cc = RadhydroSimulation<BlastProblem>::nvarTotal_cc_;
+	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
+	for (int n = 0; n < ncomp_cc; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
 			if (reflecting_boundary) {
 				if (isNormalComp(n, i)) {

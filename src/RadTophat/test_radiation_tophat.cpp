@@ -262,9 +262,9 @@ auto problem_main() -> int
 	};
 
 	// boundary conditions
-	constexpr int nvars = RadhydroSimulation<TophatProblem>::nvarTotal_cc_;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
+	constexpr int ncomp_cc = Physics_Indices<TophatProblem>::nvarTotal_cc;
+	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
+	for (int n = 0; n < ncomp_cc; ++n) {
 		BCs_cc[n].setLo(0, amrex::BCType::ext_dir);  // left x1 -- Marshak
 		BCs_cc[n].setHi(0, amrex::BCType::foextrap); // right x1 -- extrapolate
 		for (int i = 1; i < AMREX_SPACEDIM; ++i) {

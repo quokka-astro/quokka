@@ -265,9 +265,9 @@ auto problem_main() -> int
 	const int max_timesteps = 2e4;
 
 	// Problem initialization
-	constexpr int nvars = RadhydroSimulation<CoolingTest>::nvarTotal_cc_;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
+	constexpr int ncomp_cc = Physics_Indices<CoolingTest>::nvarTotal_cc;
+	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
+	for (int n = 0; n < ncomp_cc; ++n) {
 		BCs_cc[n].setLo(0, amrex::BCType::int_dir); // periodic
 		BCs_cc[n].setHi(0, amrex::BCType::int_dir);
 		BCs_cc[n].setLo(1, amrex::BCType::foextrap); // extrapolate
