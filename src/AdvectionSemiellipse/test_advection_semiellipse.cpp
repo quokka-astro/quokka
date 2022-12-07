@@ -25,6 +25,16 @@
 struct SemiellipseProblem {
 };
 
+template <> struct Physics_Traits<SemiellipseProblem> {
+	// cell-centred
+	static constexpr bool is_hydro_enabled = false;
+	static constexpr bool is_chemistry_enabled = false;
+	static constexpr int numPassiveScalars = 0; // number of passive scalars
+	static constexpr bool is_radiation_enabled = false;
+	// face-centred
+	static constexpr bool is_mhd_enabled = false;
+};
+
 AMREX_GPU_DEVICE void ComputeExactSolution(int i, int j, int k, int n, amrex::Array4<amrex::Real> const &exact_arr,
 					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
@@ -43,9 +53,9 @@ template <> void AdvectionSimulation<SemiellipseProblem>::setInitialConditionsOn
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
+	const int ncomp_cc = Physics_Indices<SemiellipseProblem>::nvarTotal_cc;
 	// loop over the grid and set the initial condition
-	amrex::ParallelFor(indexRange, ncomp_cc_,
-			   [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) { ComputeExactSolution(i, j, k, n, state_cc, dx, prob_lo); });
+	amrex::ParallelFor(indexRange, ncomp_cc, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) { ComputeExactSolution(i, j, k, n, state_cc, dx, prob_lo); });
 }
 
 template <>

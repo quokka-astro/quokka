@@ -80,7 +80,7 @@ template <> void RadhydroSimulation<FCQuantities>::setInitialConditionsOnGrid(qu
 	const quokka::direction dir = grid_elem.dir_;
 
 	if (cen == quokka::centering::cc) {
-		const int ncomp_cc = ncomp_cc_;
+		const int ncomp_cc = Physics_Indices<FCQuantities>::nvarTotal_cc;
 		// loop over the grid and set the initial condition
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 			for (int n = 0; n < ncomp_cc; ++n) {
@@ -134,9 +134,9 @@ void checkMFs(amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const
 auto problem_main() -> int
 {
 	// Problem initialization
-	const int nvars_cc = Physics_Indices<FCQuantities>::nvarTotal_cc;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars_cc);
-	for (int n = 0; n < nvars_cc; ++n) {
+	const int ncomp_cc = Physics_Indices<FCQuantities>::nvarTotal_cc;
+	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
+	for (int n = 0; n < ncomp_cc; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
 			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
 			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
