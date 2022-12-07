@@ -53,10 +53,9 @@ template <> void AdvectionSimulation<SemiellipseProblem>::setInitialConditionsOn
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
-  const int ncomp_cc = Physics_Indices<SemiellipseProblem>::nvarTotal_cc;
+	const int ncomp_cc = Physics_Indices<SemiellipseProblem>::nvarTotal_cc;
 	// loop over the grid and set the initial condition
-	amrex::ParallelFor(indexRange, ncomp_cc,
-			   [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) { ComputeExactSolution(i, j, k, n, state_cc, dx, prob_lo); });
+	amrex::ParallelFor(indexRange, ncomp_cc, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) { ComputeExactSolution(i, j, k, n, state_cc, dx, prob_lo); });
 }
 
 template <>

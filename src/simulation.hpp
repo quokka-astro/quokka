@@ -628,7 +628,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 #endif
 	int last_plot_file_step = 0;
 	int last_chk_file_step = 0;
-  const int ncomp_cc = Physics_Indices<problem_t>::nvarTotal_cc;
+	const int ncomp_cc = Physics_Indices<problem_t>::nvarTotal_cc;
 
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = geom[0].CellSizeArray();
 	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);

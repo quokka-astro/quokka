@@ -41,7 +41,7 @@ template <> void RadhydroSimulation<RichtmeyerMeshkovProblem>::computeAfterTimes
 {
 #ifdef DEBUG_SYMMETRY
 	// this code does not actually work with Nranks > 1 ...
-  const int ncomp_cc = Physics_Indices<RichtmeyerMeshkovProblem>::nvarTotal_cc;
+	const int ncomp_cc = Physics_Indices<RichtmeyerMeshkovProblem>::nvarTotal_cc;
 
 	// copy all FABs to a local FAB across the entire domain
 	amrex::BoxArray localBoxes(domain_);

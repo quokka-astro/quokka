@@ -66,10 +66,7 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	using AMRSimulation<problem_t>::DistributionMap;
 	using AMRSimulation<problem_t>::InterpHookNone;
 
-	explicit AdvectionSimulation(amrex::Vector<amrex::BCRec> &BCs_cc) : AMRSimulation<problem_t>(BCs_cc)
-	{
-		componentNames_cc_.push_back({"density"});
-	}
+	explicit AdvectionSimulation(amrex::Vector<amrex::BCRec> &BCs_cc) : AMRSimulation<problem_t>(BCs_cc) { componentNames_cc_.push_back({"density"}); }
 
 	void computeMaxSignalLocal(int level) override;
 	auto computeExtraPhysicsTimestep(int level) -> amrex::Real override;
@@ -279,7 +276,8 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::advanceSingle
 		auto fluxArrays = computeFluxes(stateOld, Physics_Indices<problem_t>::nvarTotal_cc, lev);
 
 		// Stage 1 of RK2-SSP
-		LinearAdvectionSystem<problem_t>::PredictStep(stateOld, stateNew, fluxArrays, dt_lev, geomLevel.CellSizeArray(), Physics_Indices<problem_t>::nvarTotal_cc);
+		LinearAdvectionSystem<problem_t>::PredictStep(stateOld, stateNew, fluxArrays, dt_lev, geomLevel.CellSizeArray(),
+							      Physics_Indices<problem_t>::nvarTotal_cc);
 
 		if (do_reflux) {
 #ifdef USE_YAFLUXREGISTER
