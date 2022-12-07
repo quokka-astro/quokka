@@ -44,7 +44,6 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 
 	using AMRSimulation<problem_t>::cflNumber_;
 	using AMRSimulation<problem_t>::dt_;
-	using AMRSimulation<problem_t>::ncomp_cc_;
 	using AMRSimulation<problem_t>::BCs_cc_;
 	using AMRSimulation<problem_t>::nghost_cc_;
 	using AMRSimulation<problem_t>::cycleCount_;
@@ -70,7 +69,6 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	explicit AdvectionSimulation(amrex::Vector<amrex::BCRec> &BCs_cc) : AMRSimulation<problem_t>(BCs_cc)
 	{
 		componentNames_cc_.push_back({"density"});
-		ncomp_cc_ = 1;
 	}
 
 	void computeMaxSignalLocal(int level) override;
@@ -253,7 +251,7 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::advanceSingle
 		for (int j = 0; j < AMREX_SPACEDIM; j++) {
 			amrex::BoxArray ba = state_new_cc_[lev].boxArray();
 			ba.surroundingNodes(j);
-			fluxes[j].define(ba, dmap[lev], ncomp_cc_, 0);
+			fluxes[j].define(ba, dmap[lev], Physics_Indices<problem_t>::nvarTotal_cc, 0);
 			fluxes[j].setVal(0.);
 		}
 	}
@@ -278,10 +276,10 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::advanceSingle
 	{
 		auto const &stateOld = state_old_cc_[lev];
 		auto &stateNew = state_new_cc_[lev];
-		auto fluxArrays = computeFluxes(stateOld, ncomp_cc_, lev);
+		auto fluxArrays = computeFluxes(stateOld, Physics_Indices<problem_t>::nvarTotal_cc, lev);
 
 		// Stage 1 of RK2-SSP
-		LinearAdvectionSystem<problem_t>::PredictStep(stateOld, stateNew, fluxArrays, dt_lev, geomLevel.CellSizeArray(), ncomp_cc_);
+		LinearAdvectionSystem<problem_t>::PredictStep(stateOld, stateNew, fluxArrays, dt_lev, geomLevel.CellSizeArray(), Physics_Indices<problem_t>::nvarTotal_cc);
 
 		if (do_reflux) {
 #ifdef USE_YAFLUXREGISTER
@@ -305,11 +303,11 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::advanceSingle
 			auto const &stateInOld = state_old_cc_[lev];
 			auto const &stateInStar = state_new_cc_[lev];
 			auto &stateOut = state_new_cc_[lev];
-			auto fluxArrays = computeFluxes(stateInStar, ncomp_cc_, lev);
+			auto fluxArrays = computeFluxes(stateInStar, Physics_Indices<problem_t>::nvarTotal_cc, lev);
 
 			// Stage 2 of RK2-SSP
 			LinearAdvectionSystem<problem_t>::AddFluxesRK2(stateOut, stateInOld, stateInStar, fluxArrays, dt_lev, geomLevel.CellSizeArray(),
-								       ncomp_cc_);
+								       Physics_Indices<problem_t>::nvarTotal_cc);
 
 			if (do_reflux) {
 #ifdef USE_YAFLUXREGISTER
@@ -338,13 +336,13 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::advanceSingle
 
 		if (current != nullptr) {
 			for (int i = 0; i < AMREX_SPACEDIM; i++) {
-				current->FineAdd(fluxes[i], i, 0, 0, ncomp_cc_, 1.);
+				current->FineAdd(fluxes[i], i, 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, 1.);
 			}
 		}
 
 		if (fine != nullptr) {
 			for (int i = 0; i < AMREX_SPACEDIM; i++) {
-				fine->CrseInit(fluxes[i], i, 0, 0, ncomp_cc_, -1.);
+				fine->CrseInit(fluxes[i], i, 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, -1.);
 			}
 		}
 	}
