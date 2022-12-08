@@ -25,9 +25,8 @@
 struct ShocktubeProblem {
 };
 
-template <> struct HydroSystem_Traits<ShocktubeProblem> {
+template <> struct quokka::EOS_Traits<ShocktubeProblem> {
 	static constexpr double gamma = 1.4;
-	static constexpr bool reconstruct_eint = true;
 };
 
 template <> struct Physics_Traits<ShocktubeProblem> {
@@ -69,7 +68,7 @@ template <> void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsOnGri
 			state_cc(i, j, k, n) = 0.;
 		}
 
-		auto const gamma = HydroSystem<ShocktubeProblem>::gamma_;
+		auto const gamma = quokka::EOS_Traits<ShocktubeProblem>::gamma;
 		state_cc(i, j, k, HydroSystem<ShocktubeProblem>::density_index) = rho;
 		state_cc(i, j, k, HydroSystem<ShocktubeProblem>::x1Momentum_index) = rho * vx;
 		state_cc(i, j, k, HydroSystem<ShocktubeProblem>::x2Momentum_index) = 0.;
@@ -116,7 +115,7 @@ AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(const amrex::IntVec
 		P = 0.4;
 	}
 
-	const double gamma = HydroSystem<ShocktubeProblem>::gamma_;
+	const double gamma = quokka::EOS_Traits<ShocktubeProblem>::gamma;
 	const double E = P / (gamma - 1.) + 0.5 * rho * (vx * vx);
 
 	// zero-fill unused components
@@ -166,7 +165,7 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(amrex::Multi
 		auto density = values.at(1);
 		auto velocity = values.at(2);
 		auto pressure = values.at(3);
-		auto eint = pressure / ((HydroSystem<ShocktubeProblem>::gamma_ - 1.0) * density);
+		auto eint = pressure / ((quokka::EOS_Traits<ShocktubeProblem>::gamma - 1.0) * density);
 
 		xs_exact.push_back(x);
 		density_exact.push_back(density);
@@ -214,7 +213,7 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(amrex::Multi
 			amrex::Real vx = vx_arr[i];
 			amrex::Real P = P_arr[i];
 
-			const auto gamma = HydroSystem<ShocktubeProblem>::gamma_;
+			const auto gamma = quokka::EOS_Traits<ShocktubeProblem>::gamma;
 			stateExact(i, j, k, HydroSystem<ShocktubeProblem>::density_index) = rho;
 			stateExact(i, j, k, HydroSystem<ShocktubeProblem>::x1Momentum_index) = rho * vx;
 			stateExact(i, j, k, HydroSystem<ShocktubeProblem>::x2Momentum_index) = 0.;

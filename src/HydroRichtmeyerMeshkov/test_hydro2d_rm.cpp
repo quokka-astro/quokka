@@ -21,8 +21,11 @@
 struct RichtmeyerMeshkovProblem {
 };
 
-template <> struct HydroSystem_Traits<RichtmeyerMeshkovProblem> {
+template <> struct quokka::EOS_Traits<RichtmeyerMeshkovProblem> {
 	static constexpr double gamma = 1.4;
+};
+
+template <> struct HydroSystem_Traits<RichtmeyerMeshkovProblem> {
 	static constexpr bool reconstruct_eint = false;
 };
 
@@ -132,7 +135,7 @@ template <> void RadhydroSimulation<RichtmeyerMeshkovProblem>::setInitialConditi
 		AMREX_ASSERT(!std::isnan(P));
 
 		const auto v_sq = vx * vx + vy * vy + vz * vz;
-		const auto gamma = HydroSystem<RichtmeyerMeshkovProblem>::gamma_;
+		const auto gamma = quokka::EOS_Traits<RichtmeyerMeshkovProblem>::gamma;
 
 		state_cc(i, j, k, HydroSystem<RichtmeyerMeshkovProblem>::density_index) = rho;
 		state_cc(i, j, k, HydroSystem<RichtmeyerMeshkovProblem>::x1Momentum_index) = rho * vx;

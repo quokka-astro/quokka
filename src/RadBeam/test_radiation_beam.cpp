@@ -32,13 +32,16 @@ constexpr double T_initial = 300.;   // K
 constexpr double a_rad = 7.5646e-15; // erg cm^-3 K^-4
 constexpr double c = 2.99792458e10;  // cm s^-1
 
+template <> struct quokka::EOS_Traits<BeamProblem> {
+	static constexpr double mean_molecular_weight = quokka::hydrogen_mass_cgs;
+	static constexpr double boltzmann_constant = quokka::boltzmann_constant_cgs;
+	static constexpr double gamma = 5. / 3.;
+};
+
 template <> struct RadSystem_Traits<BeamProblem> {
 	static constexpr double c_light = c_light_cgs_;
 	static constexpr double c_hat = c_light_cgs_;
 	static constexpr double radiation_constant = radiation_constant_cgs_;
-	static constexpr double mean_molecular_mass = hydrogen_mass_cgs_;
-	static constexpr double boltzmann_constant = boltzmann_constant_cgs_;
-	static constexpr double gamma = 5. / 3.;
 	static constexpr double Erad_floor = 0.;
 	static constexpr bool compute_v_over_c_terms = true;
 };
@@ -215,7 +218,7 @@ template <> void RadhydroSimulation<BeamProblem>::setInitialConditionsOnGrid(quo
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const double Erad = a_rad * std::pow(T_initial, 4);
 		const double rho = rho0;
-		const double Egas = RadSystem<BeamProblem>::ComputeEgasFromTgas(rho, T_initial);
+		const double Egas = quokka::EOS<BeamProblem>::ComputeEintFromTgas(rho, T_initial);
 
 		state_cc(i, j, k, RadSystem<BeamProblem>::radEnergy_index) = Erad;
 		state_cc(i, j, k, RadSystem<BeamProblem>::x1RadFlux_index) = 0;

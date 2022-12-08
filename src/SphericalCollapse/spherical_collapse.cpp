@@ -26,8 +26,11 @@
 struct CollapseProblem {
 };
 
-template <> struct HydroSystem_Traits<CollapseProblem> {
+template <> struct quokka::EOS_Traits<CollapseProblem> {
 	static constexpr double gamma = 5. / 3.;
+};
+
+template <> struct HydroSystem_Traits<CollapseProblem> {
 	static constexpr bool reconstruct_eint = false;
 };
 
@@ -70,7 +73,7 @@ template <> void RadhydroSimulation<CollapseProblem>::setInitialConditionsOnGrid
 		AMREX_ASSERT(!std::isnan(rho));
 		AMREX_ASSERT(!std::isnan(P));
 
-		const amrex::Real gamma = HydroSystem<CollapseProblem>::gamma_;
+		const amrex::Real gamma = quokka::EOS_Traits<CollapseProblem>::gamma;
 		state_cc(i, j, k, HydroSystem<CollapseProblem>::density_index) = rho;
 		state_cc(i, j, k, HydroSystem<CollapseProblem>::x1Momentum_index) = 0;
 		state_cc(i, j, k, HydroSystem<CollapseProblem>::x2Momentum_index) = 0;

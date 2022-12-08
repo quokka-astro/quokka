@@ -30,13 +30,16 @@ template <> struct SimulationData<CouplingProblem> {
 	std::vector<double> Tgas_vec_;
 };
 
+template <> struct quokka::EOS_Traits<CouplingProblem> {
+	static constexpr double mean_molecular_mass = quokka::hydrogen_mass_cgs;
+	static constexpr double boltzmann_constant = quokka::boltzmann_constant_cgs;
+	static constexpr double gamma = 5. / 3.;
+};
+
 template <> struct RadSystem_Traits<CouplingProblem> {
 	static constexpr double c_light = c_light_cgs_;
 	static constexpr double c_hat = c_light_cgs_;
 	static constexpr double radiation_constant = radiation_constant_cgs_;
-	static constexpr double mean_molecular_mass = hydrogen_mass_cgs_;
-	static constexpr double boltzmann_constant = boltzmann_constant_cgs_;
-	static constexpr double gamma = 5. / 3.;
 	static constexpr double Erad_floor = 0.;
 	static constexpr bool compute_v_over_c_terms = true;
 };
@@ -58,17 +61,17 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<CouplingProblem>::ComputeRossel
 	return 1.0;
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<CouplingProblem>::ComputeTgasFromEgas(const double /*rho*/, const double Egas) -> double
+template <> AMREX_GPU_HOST_DEVICE auto quokka::EOS<CouplingProblem>::ComputeTgasFromEint(const double /*rho*/, const double Egas) -> double
 {
 	return std::pow(4.0 * Egas / alpha_SuOlson, 1. / 4.);
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<CouplingProblem>::ComputeEgasFromTgas(const double /*rho*/, const double Tgas) -> double
+template <> AMREX_GPU_HOST_DEVICE auto quokka::EOS<CouplingProblem>::ComputeEintFromTgas(const double /*rho*/, const double Tgas) -> double
 {
 	return (alpha_SuOlson / 4.0) * std::pow(Tgas, 4);
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<CouplingProblem>::ComputeEgasTempDerivative(const double /*rho*/, const double Tgas) -> double
+template <> AMREX_GPU_HOST_DEVICE auto quokka::EOS<CouplingProblem>::ComputeEintTempDerivative(const double /*rho*/, const double Tgas) -> double
 {
 	// This is also known as the heat capacity, i.e.
 	// 		\del E_g / \del T = \rho c_v,
@@ -122,7 +125,7 @@ template <> void RadhydroSimulation<CouplingProblem>::computeAfterTimestep()
 		const amrex::Real Erad_i = values.at(RadSystem<CouplingProblem>::radEnergy_index)[0];
 
 		userData_.Trad_vec_.push_back(std::pow(Erad_i / a_rad, 1. / 4.));
-		userData_.Tgas_vec_.push_back(RadSystem<CouplingProblem>::ComputeTgasFromEgas(rho, Egas_i));
+		userData_.Tgas_vec_.push_back(quokka::EOS<CouplingProblem>::ComputeTgasFromEint(rho, Egas_i));
 	}
 }
 
@@ -170,7 +173,7 @@ auto problem_main() -> int
 		const int nmax = static_cast<int>(sim.userData_.t_vec_.size());
 		std::vector<double> t_exact(nmax);
 		std::vector<double> Tgas_exact(nmax);
-		const double initial_Tgas = RadSystem<CouplingProblem>::ComputeTgasFromEgas(rho0, Egas0);
+		const double initial_Tgas = quokka::EOS<CouplingProblem>::ComputeTgasFromEint(rho0, Egas0);
 		const auto kappa = RadSystem<CouplingProblem>::ComputePlanckOpacity(rho0, initial_Tgas);
 
 		for (int n = 0; n < nmax; ++n) {
