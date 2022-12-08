@@ -41,8 +41,11 @@ using Real = amrex::Real;
 struct QuirkProblem {
 };
 
-template <> struct HydroSystem_Traits<QuirkProblem> {
+template <> struct quokka::EOS_Traits<QuirkProblem> {
 	static constexpr double gamma = 5. / 3.;
+};
+
+template <> struct HydroSystem_Traits<QuirkProblem> {
 	static constexpr bool reconstruct_eint = false;
 };
 
@@ -113,7 +116,7 @@ template <> void RadhydroSimulation<QuirkProblem>::setInitialConditionsOnGrid(qu
 		AMREX_ASSERT(!std::isnan(P));
 
 		const auto v_sq = vx * vx + vy * vy + vz * vz;
-		const auto gamma = HydroSystem<QuirkProblem>::gamma_;
+		const auto gamma = quokka::EOS_Traits<QuirkProblem>::gamma;
 
 		state_cc(i, j, k, HydroSystem<QuirkProblem>::density_index) = rho;
 		state_cc(i, j, k, HydroSystem<QuirkProblem>::x1Momentum_index) = rho * vx;
@@ -172,7 +175,7 @@ template <> void RadhydroSimulation<QuirkProblem>::computeAfterTimestep()
 			Real peven = HydroSystem<QuirkProblem>::ComputePressure(state, i, j, k);
 
 			// the 'entropy function' s == P / rho^gamma
-			const Real gamma = HydroSystem<QuirkProblem>::gamma_;
+			const Real gamma = quokka::EOS_Traits<QuirkProblem>::gamma;
 			Real sodd = podd / std::pow(dodd, gamma);
 			Real seven = peven / std::pow(deven, gamma);
 			s[0] = std::abs(sodd - seven);
@@ -222,7 +225,7 @@ AMRSimulation<QuirkProblem>::setCustomBoundaryConditions(const amrex::IntVect &i
 	amrex::Box const &box = geom.Domain();
 	amrex::GpuArray<int, 3> lo = box.loVect3d();
 	amrex::GpuArray<int, 3> hi = box.hiVect3d();
-	const auto gamma = HydroSystem<QuirkProblem>::gamma_;
+	const auto gamma = quokka::EOS_Traits<QuirkProblem>::gamma;
 
 	if (i < lo[0]) {
 		// x1 left side boundary

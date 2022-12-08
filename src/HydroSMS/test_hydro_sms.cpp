@@ -21,9 +21,10 @@
 struct ShocktubeProblem {
 };
 
-template <> struct HydroSystem_Traits<ShocktubeProblem> {
+template <> struct quokka::EOS_Traits<ShocktubeProblem> {
 	static constexpr double gamma = 1.4;
-	static constexpr bool reconstruct_eint = true;
+	static constexpr double mean_molecular_weight = quokka::hydrogen_mass_cgs;
+	static constexpr double boltzmann_constant = quokka::boltzmann_constant_cgs;
 };
 
 template <> struct Physics_Traits<ShocktubeProblem> {
@@ -192,7 +193,7 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(amrex::Multi
 			amrex::Real vx = vx_arr[i];
 			amrex::Real P = P_arr[i];
 
-			const auto gamma = HydroSystem<ShocktubeProblem>::gamma_;
+			const auto gamma = quokka::EOS_Traits<ShocktubeProblem>::gamma;
 			stateExact(i, j, k, HydroSystem<ShocktubeProblem>::density_index) = rho;
 			stateExact(i, j, k, HydroSystem<ShocktubeProblem>::x1Momentum_index) = rho * vx;
 			stateExact(i, j, k, HydroSystem<ShocktubeProblem>::x2Momentum_index) = 0.;
@@ -219,7 +220,7 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(amrex::Multi
 
 			amrex::Real xvel = xmom / rho;
 			amrex::Real Eint = Egas - xmom * xmom / (2.0 * rho);
-			amrex::Real pressure = (HydroSystem<ShocktubeProblem>::gamma_ - 1.) * Eint;
+			amrex::Real pressure = (quokka::EOS_Traits<ShocktubeProblem>::gamma - 1.) * Eint;
 
 			d.at(i) = rho;
 			vx.at(i) = xvel;

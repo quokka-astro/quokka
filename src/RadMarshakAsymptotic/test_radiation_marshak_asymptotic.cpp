@@ -23,15 +23,18 @@ constexpr double T_initial = 300.;	      // K
 
 // constexpr double kelvin_to_eV = 8.617385e-5;
 constexpr double a_rad = radiation_constant_cgs_;
-constexpr double c_v = (boltzmann_constant_cgs_ / hydrogen_mass_cgs_) / (5. / 3. - 1.);
+constexpr double c_v = (quokka::boltzmann_constant_cgs / quokka::hydrogen_mass_cgs) / (5. / 3. - 1.);
+
+template <> struct quokka::EOS_Traits<SuOlsonProblemCgs> {
+	static constexpr double mean_molecular_weight = quokka::hydrogen_mass_cgs;
+	static constexpr double boltzmann_constant = quokka::boltzmann_constant_cgs;
+	static constexpr double gamma = 5. / 3.;
+};
 
 template <> struct RadSystem_Traits<SuOlsonProblemCgs> {
 	static constexpr double c_light = c_light_cgs_;
 	static constexpr double c_hat = c_light_cgs_;
 	static constexpr double radiation_constant = radiation_constant_cgs_;
-	static constexpr double mean_molecular_mass = hydrogen_mass_cgs_;
-	static constexpr double boltzmann_constant = boltzmann_constant_cgs_;
-	static constexpr double gamma = 5. / 3.;
 	static constexpr double Erad_floor = 0.;
 	static constexpr bool compute_v_over_c_terms = true;
 };
@@ -134,7 +137,7 @@ AMRSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(const amrex::IntVe
 	}
 
 	// gas boundary conditions are the same on both sides
-	const double Egas = RadSystem<SuOlsonProblemCgs>::ComputeEgasFromTgas(rho0, T_initial);
+	const double Egas = quokka::EOS<SuOlsonProblemCgs>::ComputeEintFromTgas(rho0, T_initial);
 	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::gasEnergy_index) = Egas;
 	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::gasDensity_index) = rho0;
 	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::gasInternalEnergy_index) = Egas;
@@ -150,7 +153,7 @@ template <> void RadhydroSimulation<SuOlsonProblemCgs>::setInitialConditionsOnGr
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		const double Egas = RadSystem<SuOlsonProblemCgs>::ComputeEgasFromTgas(rho0, T_initial);
+		const double Egas = quokka::EOS<SuOlsonProblemCgs>::ComputeEintFromTgas(rho0, T_initial);
 		const double Erad = a_rad * std::pow(T_initial, 4);
 
 		state_cc(i, j, k, RadSystem<SuOlsonProblemCgs>::radEnergy_index) = Erad;
@@ -262,7 +265,7 @@ auto problem_main() -> int
 		const double Ekin = (x1GasMom * x1GasMom) / (2.0 * rho);
 		const double Egas_t = (Etot_t - Ekin);
 
-		Tgas_keV.at(i) = RadSystem<SuOlsonProblemCgs>::ComputeTgasFromEgas(rho, Egas_t) / T_hohlraum;
+		Tgas_keV.at(i) = quokka::EOS<SuOlsonProblemCgs>::ComputeTgasFromEint(rho, Egas_t) / T_hohlraum;
 		Trad_keV.at(i) = std::pow(Erad_t / a_rad, 1. / 4.) / T_hohlraum;
 	}
 

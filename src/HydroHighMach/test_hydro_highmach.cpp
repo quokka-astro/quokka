@@ -28,9 +28,8 @@ using amrex::Real;
 struct HighMachProblem {
 };
 
-template <> struct HydroSystem_Traits<HighMachProblem> {
+template <> struct quokka::EOS_Traits<HighMachProblem> {
 	static constexpr double gamma = 5. / 3.;
-	static constexpr bool reconstruct_eint = false;
 };
 
 template <> struct Physics_Traits<HighMachProblem> {
@@ -64,7 +63,7 @@ template <> void RadhydroSimulation<HighMachProblem>::setInitialConditionsOnGrid
 		AMREX_ASSERT(!std::isnan(rho));
 		AMREX_ASSERT(!std::isnan(P));
 
-		const auto gamma = HydroSystem<HighMachProblem>::gamma_;
+		const auto gamma = quokka::EOS_Traits<HighMachProblem>::gamma;
 		for (int n = 0; n < state_cc.nComp(); ++n) {
 			state_cc(i, j, k, n) = 0.;
 		}
@@ -146,7 +145,7 @@ void RadhydroSimulation<HighMachProblem>::computeReferenceSolution(amrex::MultiF
 	amrex::Gpu::streamSynchronizeAll();
 
 	// save reference solution
-	const Real gamma = HydroSystem<HighMachProblem>::gamma_;
+	const Real gamma = quokka::EOS_Traits<HighMachProblem>::gamma;
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
 		auto const &state = ref.array(iter);
@@ -187,7 +186,7 @@ void RadhydroSimulation<HighMachProblem>::computeReferenceSolution(amrex::MultiF
 			const auto fE = values.at(HydroSystem<HighMachProblem>::energy_index)[i];
 			const auto fvx = fxmom / frho;
 			const auto fEint = fE - 0.5 * frho * (fvx * fvx);
-			const auto fP = (HydroSystem<HighMachProblem>::gamma_ - 1.) * fEint;
+			const auto fP = (quokka::EOS_Traits<HighMachProblem>::gamma - 1.) * fEint;
 
 			d_final.push_back(frho);
 			vx_final.push_back(fvx);

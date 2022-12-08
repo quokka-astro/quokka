@@ -25,9 +25,8 @@
 struct BlastProblem {
 };
 
-template <> struct HydroSystem_Traits<BlastProblem> {
+template <> struct quokka::EOS_Traits<BlastProblem> {
 	static constexpr double gamma = 5. / 3.;
-	static constexpr bool reconstruct_eint = false;
 };
 
 template <> struct Physics_Traits<BlastProblem> {
@@ -76,7 +75,7 @@ template <> void RadhydroSimulation<BlastProblem>::setInitialConditionsOnGrid(qu
 		AMREX_ASSERT(!std::isnan(P));
 
 		const auto v_sq = vx * vx + vy * vy + vz * vz;
-		const auto gamma = HydroSystem<BlastProblem>::gamma_;
+		const auto gamma = quokka::EOS_Traits<BlastProblem>::gamma;
 
 		state_cc(i, j, k, HydroSystem<BlastProblem>::density_index) = rho;
 		state_cc(i, j, k, HydroSystem<BlastProblem>::x1Momentum_index) = rho * vx;

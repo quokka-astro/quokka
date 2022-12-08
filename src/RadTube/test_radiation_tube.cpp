@@ -25,8 +25,8 @@
 struct TubeProblem {
 };
 
-constexpr double kappa0 = 100.;			 // cm^2 g^-1
-constexpr double mu = 2.33 * hydrogen_mass_cgs_; // g
+constexpr double kappa0 = 100.;				// cm^2 g^-1
+constexpr double mu = 2.33 * quokka::hydrogen_mass_cgs; // g
 constexpr double gamma_gas = 5. / 3.;
 
 constexpr double rho0 = 1.0;		    // g cm^-3
@@ -36,13 +36,16 @@ constexpr double T1 = 2.2609633884436745e7; // K
 
 constexpr double a0 = 4.0295519855200705e7; // cm s^-1
 
+template <> struct quokka::EOS_Traits<TubeProblem> {
+	static constexpr double mean_molecular_weight = mu;
+	static constexpr double boltzmann_constant = quokka::boltzmann_constant_cgs;
+	static constexpr double gamma = gamma_gas;
+};
+
 template <> struct RadSystem_Traits<TubeProblem> {
 	static constexpr double c_light = c_light_cgs_;
 	static constexpr double c_hat = 10.0 * a0;
 	static constexpr double radiation_constant = radiation_constant_cgs_;
-	static constexpr double mean_molecular_mass = mu;
-	static constexpr double boltzmann_constant = boltzmann_constant_cgs_;
-	static constexpr double gamma = gamma_gas;
 	static constexpr double Erad_floor = 0.;
 	static constexpr bool compute_v_over_c_terms = true;
 };
@@ -179,7 +182,7 @@ AMRSimulation<TubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv
 		consVar(i, j, k, RadSystem<TubeProblem>::x2RadFlux_index) = 0.;
 		consVar(i, j, k, RadSystem<TubeProblem>::x3RadFlux_index) = 0.;
 
-		const double Egas = (boltzmann_constant_cgs_ / mu) * rho0 * T0 / (gamma_gas - 1.0);
+		const double Egas = (quokka::boltzmann_constant_cgs / mu) * rho0 * T0 / (gamma_gas - 1.0);
 		const double x1Mom = consVar(lo[0], j, k, RadSystem<TubeProblem>::x1GasMomentum_index);
 		const double Ekin = 0.5 * (x1Mom * x1Mom) / rho0;
 		consVar(i, j, k, RadSystem<TubeProblem>::gasEnergy_index) = Egas + Ekin;
@@ -198,7 +201,7 @@ AMRSimulation<TubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv
 		consVar(i, j, k, RadSystem<TubeProblem>::x2RadFlux_index) = 0;
 		consVar(i, j, k, RadSystem<TubeProblem>::x3RadFlux_index) = 0;
 
-		const double Egas = (boltzmann_constant_cgs_ / mu) * rho1 * T1 / (gamma_gas - 1.0);
+		const double Egas = (quokka::boltzmann_constant_cgs / mu) * rho1 * T1 / (gamma_gas - 1.0);
 		const double x1Mom = consVar(hi[0], j, k, RadSystem<TubeProblem>::x1GasMomentum_index);
 		const double Ekin = 0.5 * (x1Mom * x1Mom) / rho1;
 		consVar(i, j, k, RadSystem<TubeProblem>::gasEnergy_index) = Egas + Ekin;
@@ -286,10 +289,10 @@ auto problem_main() -> int
 		double x3GasMom = values.at(RadSystem<TubeProblem>::x3GasMomentum_index)[i];
 
 		double Eint_exact = RadSystem<TubeProblem>::ComputeEintFromEgas(rho_exact, x1GasMom_exact, x2GasMom_exact, x3GasMom_exact, Egas_exact);
-		double Tgas_exact = RadSystem<TubeProblem>::ComputeTgasFromEgas(rho_exact, Eint_exact);
+		double Tgas_exact = quokka::EOS<TubeProblem>::ComputeTgasFromEint(rho_exact, Eint_exact);
 
 		double Eint = RadSystem<TubeProblem>::ComputeEintFromEgas(rho, x1GasMom, x2GasMom, x3GasMom, Egas);
-		double Tgas = RadSystem<TubeProblem>::ComputeTgasFromEgas(rho, Eint);
+		double Tgas = quokka::EOS<TubeProblem>::ComputeTgasFromEint(rho, Eint);
 
 		Tgas_arr[i] = Tgas;
 		Tgas_err[i] = (Tgas - Tgas_exact) / Tgas_exact;

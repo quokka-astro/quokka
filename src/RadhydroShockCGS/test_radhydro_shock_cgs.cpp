@@ -60,16 +60,14 @@ template <> struct RadSystem_Traits<ShockProblem> {
 	static constexpr double c_light = c;
 	static constexpr double c_hat = chat;
 	static constexpr double radiation_constant = a_rad;
-	static constexpr double mean_molecular_mass = m_H;
-	static constexpr double boltzmann_constant = k_B;
-	static constexpr double gamma = gamma_gas;
 	static constexpr double Erad_floor = 0.;
 	static constexpr bool compute_v_over_c_terms = true;
 };
 
-template <> struct HydroSystem_Traits<ShockProblem> {
+template <> struct quokka::EOS_Traits<ShockProblem> {
+	static constexpr double mean_molecular_weight = m_H;
+	static constexpr double boltzmann_constant = k_B;
 	static constexpr double gamma = gamma_gas;
-	static constexpr bool reconstruct_eint = true;
 };
 
 template <> struct Physics_Traits<ShockProblem> {
@@ -285,7 +283,7 @@ auto problem_main() -> int
 
 			const double Egas_t = (Etot_t - Ekin);
 			Egas.at(i) = Egas_t;
-			Tgas.at(i) = RadSystem<ShockProblem>::ComputeTgasFromEgas(rho, Egas_t) / T0; // dimensionless
+			Tgas.at(i) = quokka::EOS<ShockProblem>::ComputeTgasFromEint(rho, Egas_t) / T0; // dimensionless
 		}
 
 		// read in exact solution

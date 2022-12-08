@@ -22,13 +22,16 @@ constexpr double chat = 0.2;	   // reduced speed of light
 constexpr double kappa0 = 1.0e-10; // opacity
 constexpr double rho = 1.0;
 
+template <> struct quokka::EOS_Traits<StreamingProblem> {
+	static constexpr double mean_molecular_weight = 1.0;
+	static constexpr double boltzmann_constant = 1.0;
+	static constexpr double gamma = 5. / 3.;
+};
+
 template <> struct RadSystem_Traits<StreamingProblem> {
 	static constexpr double c_light = c;
 	static constexpr double c_hat = chat;
 	static constexpr double radiation_constant = 1.0;
-	static constexpr double mean_molecular_mass = 1.0;
-	static constexpr double boltzmann_constant = 1.0;
-	static constexpr double gamma = 5. / 3.;
 	static constexpr double Erad_floor = initial_Erad;
 	static constexpr bool compute_v_over_c_terms = false;
 };
