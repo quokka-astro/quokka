@@ -23,9 +23,10 @@ using amrex::Real;
 struct ScalarProblem {
 };
 
-template <> struct HydroSystem_Traits<ScalarProblem> {
+template <> struct quokka::EOS_Traits<ScalarProblem> {
 	static constexpr double gamma = 1.4;
-	static constexpr bool reconstruct_eint = true;
+	static constexpr double mean_molecular_weight = quokka::hydrogen_mass_cgs;
+	static constexpr double boltzmann_constant = quokka::boltzmann_constant_cgs;
 };
 
 template <> struct Physics_Traits<ScalarProblem> {
@@ -68,7 +69,7 @@ template <> void RadhydroSimulation<ScalarProblem>::setInitialConditionsOnGrid(q
 			scalar = 0.0;
 		}
 
-		const auto gamma = HydroSystem<ScalarProblem>::gamma_;
+		const auto gamma = quokka::EOS_Traits<ScalarProblem>::gamma;
 		for (int n = 0; n < state_cc.nComp(); ++n) {
 			state_cc(i, j, k, n) = 0.;
 		}
@@ -110,7 +111,7 @@ void RadhydroSimulation<ScalarProblem>::computeReferenceSolution(amrex::MultiFab
 				scalar = 0.0;
 			}
 
-			const auto gamma = HydroSystem<ScalarProblem>::gamma_;
+			const auto gamma = quokka::EOS_Traits<ScalarProblem>::gamma;
 			for (int n = 0; n < ncomp; ++n) {
 				stateExact(i, j, k, n) = 0.;
 			}
@@ -164,7 +165,7 @@ void RadhydroSimulation<ScalarProblem>::computeReferenceSolution(amrex::MultiFab
 				const auto s = val_exact.at(HydroSystem<ScalarProblem>::scalar0_index)[i];
 				const auto vx = xmom / rho;
 				const auto Eint = E - 0.5 * rho * (vx * vx);
-				const auto P = (HydroSystem<ScalarProblem>::gamma_ - 1.) * Eint;
+				const auto P = (quokka::EOS_Traits<ScalarProblem>::gamma - 1.) * Eint;
 				d_exact.push_back(rho);
 				vx_exact.push_back(vx);
 				P_exact.push_back(P);
@@ -178,7 +179,7 @@ void RadhydroSimulation<ScalarProblem>::computeReferenceSolution(amrex::MultiFab
 				const auto fs = values.at(HydroSystem<ScalarProblem>::scalar0_index)[i];
 				const auto fvx = fxmom / frho;
 				const auto fEint = fE - 0.5 * frho * (fvx * fvx);
-				const auto fP = (HydroSystem<ScalarProblem>::gamma_ - 1.) * fEint;
+				const auto fP = (quokka::EOS_Traits<ScalarProblem>::gamma - 1.) * fEint;
 				d_final.push_back(frho);
 				vx_final.push_back(fvx);
 				P_final.push_back(fP);
@@ -239,9 +240,9 @@ template <> void RadhydroSimulation<ScalarProblem>::ErrorEst(int lev, amrex::Tag
 auto problem_main() -> int
 {
 	// Problem parameters
-	const int nvars = RadhydroSimulation<ScalarProblem>::nvarTotal_cc_;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
+	const int ncomp_cc = Physics_Indices<ScalarProblem>::nvarTotal_cc;
+	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
+	for (int n = 0; n < ncomp_cc; ++n) {
 		BCs_cc[0].setLo(0, amrex::BCType::int_dir); // periodic
 		BCs_cc[0].setHi(0, amrex::BCType::int_dir);
 		for (int i = 1; i < AMREX_SPACEDIM; ++i) {

@@ -246,7 +246,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// Nghost = number of ghost cells for each array
 	int nghost_cc_ = 4; // PPM needs nghost >= 3, PPM+flattening needs nghost >= 4
 	int nghost_fc_ = 4;
-	int ncomp_cc_ = 0; // = number of components (conserved variables) for each array
 	amrex::Vector<std::string> componentNames_cc_;
 	amrex::Vector<std::string> componentNames_fc_;
 	amrex::Vector<std::string> derivedNames_;
@@ -647,11 +646,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 #endif
 	int last_plot_file_step = 0;
 	int last_chk_file_step = 0;
+	const int ncomp_cc = Physics_Indices<problem_t>::nvarTotal_cc;
 
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = geom[0].CellSizeArray();
 	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
-	amrex::Vector<amrex::Real> init_sum_cons(ncomp_cc_);
-	for (int n = 0; n < ncomp_cc_; ++n) {
+	amrex::Vector<amrex::Real> init_sum_cons(ncomp_cc);
+	for (int n = 0; n < ncomp_cc; ++n) {
 		const int lev = 0;
 		init_sum_cons[n] = state_new_cc_[lev].sum(n) * vol;
 	}
@@ -725,7 +725,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	computeAfterEvolve(init_sum_cons);
 
 	// compute conservation error
-	for (int n = 0; n < ncomp_cc_; ++n) {
+	for (int n = 0; n < ncomp_cc; ++n) {
 		amrex::Real const final_sum = state_new_cc_[0].sum(n) * vol;
 		amrex::Real const abs_err = (final_sum - init_sum_cons[n]);
 		amrex::Print() << "Initial " << componentNames_cc_[n] << " = " << init_sum_cons[n] << std::endl;
@@ -1199,7 +1199,7 @@ void AMRSimulation<problem_t>::FillPatch(int lev, amrex::Real time, amrex::Multi
 
 template <typename problem_t> void AMRSimulation<problem_t>::setInitialConditionsAtLevel_cc(int level, amrex::Real time)
 {
-	const int ncomp_cc = ncomp_cc_;
+	const int ncomp_cc = Physics_Indices<problem_t>::nvarTotal_cc;
 	const int nghost_cc = nghost_cc_;
 	// itterate over the domain
 	for (amrex::MFIter iter(state_new_cc_[level]); iter.isValid(); ++iter) {
@@ -1250,7 +1250,7 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(int level, amrex::Real ti
 	// define empty MultiFab containers with the right number of components and ghost-zones
 
 	// cell-centred
-	const int ncomp_cc = ncomp_cc_;
+	const int ncomp_cc = Physics_Indices<problem_t>::nvarTotal_cc;
 	const int nghost_cc = nghost_cc_;
 	state_new_cc_[level].define(ba, dm, ncomp_cc, nghost_cc);
 	state_old_cc_[level].define(ba, dm, ncomp_cc, nghost_cc);
@@ -1879,8 +1879,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 		SetDistributionMap(lev, dm);
 
 		// build MultiFab and FluxRegister data
-		int ncomp_cc = ncomp_cc_;
-		int nghost_cc = nghost_cc_;
+		const int ncomp_cc = Physics_Indices<problem_t>::nvarTotal_cc;
+		const int nghost_cc = nghost_cc_;
 		state_old_cc_[lev].define(grids[lev], dmap[lev], ncomp_cc, nghost_cc);
 		state_new_cc_[lev].define(grids[lev], dmap[lev], ncomp_cc, nghost_cc);
 		max_signal_speed_[lev].define(ba, dm, 1, nghost_cc);
@@ -1890,8 +1890,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 										 refRatio(lev - 1), lev, ncomp_cc);
 		}
 
-		int ncomp_per_dim_fc = Physics_Indices<problem_t>::nvarPerDim_fc;
-		int nghost_fc = nghost_fc_;
+		const int ncomp_per_dim_fc = Physics_Indices<problem_t>::nvarPerDim_fc;
+		const int nghost_fc = nghost_fc_;
 		if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 				state_new_fc_[lev][idim] =

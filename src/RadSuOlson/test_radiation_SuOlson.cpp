@@ -71,17 +71,17 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputeRossela
 	return (kappa / rho);
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputeTgasFromEgas(const double /*rho*/, const double Egas) -> double
+template <> AMREX_GPU_HOST_DEVICE auto quokka::EOS<MarshakProblem>::ComputeTgasFromEint(const double /*rho*/, const double Egas) -> double
 {
 	return std::pow(4.0 * Egas / alpha_SuOlson, 1. / 4.);
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputeEgasFromTgas(const double /*rho*/, const double Tgas) -> double
+template <> AMREX_GPU_HOST_DEVICE auto quokka::EOS<MarshakProblem>::ComputeEintFromTgas(const double /*rho*/, const double Tgas) -> double
 {
 	return (alpha_SuOlson / 4.0) * (Tgas * Tgas * Tgas * Tgas);
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputeEgasTempDerivative(const double /*rho*/, const double Tgas) -> double
+template <> AMREX_GPU_HOST_DEVICE auto quokka::EOS<MarshakProblem>::ComputeEintTempDerivative(const double /*rho*/, const double Tgas) -> double
 {
 	// This is also known as the heat capacity, i.e.
 	// 		\del E_g / \del T = \rho c_v,
@@ -94,7 +94,7 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputeEgasTem
 	return alpha_SuOlson * std::pow(Tgas, 3);
 }
 
-const auto initial_Egas = 1e-10 * RadSystem<MarshakProblem>::ComputeEgasFromTgas(rho0, T_hohlraum);
+const auto initial_Egas = 1e-10 * quokka::EOS<MarshakProblem>::ComputeEintFromTgas(rho0, T_hohlraum);
 const auto initial_Erad = 1e-10 * (a_rad * (T_hohlraum * T_hohlraum * T_hohlraum * T_hohlraum));
 
 template <>
@@ -237,7 +237,7 @@ auto problem_main() -> int
 			const auto Ekin = (x1GasMom * x1GasMom) / (2.0 * rho);
 			const auto Egas_t = Etot_t - Ekin;
 			Egas.at(i) = Egas_t;
-			Tgas.at(i) = RadSystem<MarshakProblem>::ComputeTgasFromEgas(rho, Egas_t);
+			Tgas.at(i) = quokka::EOS<MarshakProblem>::ComputeTgasFromEint(rho, Egas_t);
 		}
 
 		std::vector<double> xs_exact = {0.01, 0.1, 0.17783, 0.31623, 0.45, 0.5, 0.56234, 0.75, 1.0, 1.33352, 1.77828, 3.16228, 5.62341};
@@ -277,8 +277,8 @@ auto problem_main() -> int
 			Trad_exact_10.at(i) = std::pow(Erad_transport_exact_10p0.at(i) / a_rad, 1. / 4.);
 			Trad_exact_1.at(i) = std::pow(Erad_transport_exact_1p0.at(i) / a_rad, 1. / 4.);
 
-			Tgas_exact_10.at(i) = RadSystem<MarshakProblem>::ComputeTgasFromEgas(rho0, Egas_transport_exact_10p0.at(i));
-			Tgas_exact_1.at(i) = RadSystem<MarshakProblem>::ComputeTgasFromEgas(rho0, Egas_transport_exact_1p0.at(i));
+			Tgas_exact_10.at(i) = quokka::EOS<MarshakProblem>::ComputeTgasFromEint(rho0, Egas_transport_exact_10p0.at(i));
+			Tgas_exact_1.at(i) = quokka::EOS<MarshakProblem>::ComputeTgasFromEint(rho0, Egas_transport_exact_1p0.at(i));
 		}
 
 		// interpolate numerical solution onto exact solution tabulated points

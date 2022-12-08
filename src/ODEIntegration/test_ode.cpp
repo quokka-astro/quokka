@@ -12,8 +12,14 @@
 
 using amrex::Real;
 
-constexpr double Tgas0 = 6000.;			   // K
-constexpr double rho0 = 0.01 * hydrogen_mass_cgs_; // g cm^-3
+constexpr double Tgas0 = 6000.;				  // K
+constexpr double rho0 = 0.01 * quokka::hydrogen_mass_cgs; // g cm^-3
+
+template <> struct quokka::EOS_Traits<ODETest> {
+	static constexpr double mean_molecular_weight = quokka::hydrogen_mass_cgs;
+	static constexpr double boltzmann_constant = quokka::boltzmann_constant_cgs;
+	static constexpr double gamma = 5. / 3.;
+};
 
 struct ODEUserData {
 	amrex::Real rho;
@@ -24,7 +30,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto cooling_function(Real const rho, R
 	// use fitting function from Koyama & Inutsuka (2002)
 	Real gamma_heat = 2.0e-26;
 	Real lambda_cool = gamma_heat * (1.0e7 * std::exp(-114800. / (T + 1000.)) + 14. * std::sqrt(T) * std::exp(-92. / T));
-	Real rho_over_mh = rho / hydrogen_mass_cgs_;
+	Real rho_over_mh = rho / quokka::hydrogen_mass_cgs;
 	Real cooling_source_term = rho_over_mh * gamma_heat - (rho_over_mh * rho_over_mh) * lambda_cool;
 	return cooling_source_term;
 }
@@ -37,7 +43,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto user_rhs(Real /*t*/, quokka::valar
 
 	// compute temperature
 	Real Eint = y_data[0];
-	Real T = RadSystem<ODETest>::ComputeTgasFromEgas(rho, Eint);
+	Real T = quokka::EOS<ODETest>::ComputeTgasFromEint(rho, Eint);
 
 	// compute cooling function
 	y_rhs[0] = cooling_function(rho, T);
@@ -47,7 +53,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto user_rhs(Real /*t*/, quokka::valar
 auto problem_main() -> int
 {
 	// set up initial conditions
-	const Real Eint0 = RadSystem<ODETest>::ComputeEgasFromTgas(rho0, Tgas0);
+	const Real Eint0 = quokka::EOS<ODETest>::ComputeEintFromTgas(rho0, Tgas0);
 	const Real Edot0 = cooling_function(rho0, Tgas0);
 	const Real tcool = std::abs(Eint0 / Edot0);
 	const Real max_time = 10.0 * tcool;
@@ -64,7 +70,7 @@ auto problem_main() -> int
 	int steps_taken = 0;
 	rk_adaptive_integrate(user_rhs, 0, y, max_time, &user_data, rtol, abstol, steps_taken);
 
-	const Real Tgas = RadSystem<ODETest>::ComputeTgasFromEgas(rho0, y[0]);
+	const Real Tgas = quokka::EOS<ODETest>::ComputeTgasFromEint(rho0, y[0]);
 	// for n_H = 0.01 cm^{-3} (for IK cooling function)
 	const Real Teq = 160.52611612610758;
 	const Real Terr_rel = std::abs(Tgas - Teq) / Teq;

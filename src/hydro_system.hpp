@@ -30,8 +30,6 @@
 // this struct is specialized by the user application code
 //
 template <typename problem_t> struct HydroSystem_Traits {
-	static constexpr double gamma = 5. / 3.;     // default value
-	static constexpr double cs_isothermal = NAN; // only used when gamma = 1
 	// if true, reconstruct e_int instead of pressure
 	static constexpr bool reconstruct_eint = true;
 };
@@ -111,11 +109,11 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	// C++ does not allow constexpr to be uninitialized, even in a templated
 	// class!
-	static constexpr double gamma_ = HydroSystem_Traits<problem_t>::gamma;
-	static constexpr double cs_iso_ = HydroSystem_Traits<problem_t>::cs_isothermal;
-	static constexpr bool reconstruct_eint = HydroSystem_Traits<problem_t>::reconstruct_eint;
-
+	static constexpr double gamma_ = quokka::EOS_Traits<problem_t>::gamma;
+	static constexpr double cs_iso_ = quokka::EOS_Traits<problem_t>::cs_isothermal;
 	static constexpr auto is_eos_isothermal() -> bool { return (gamma_ == 1.0); }
+
+	static constexpr bool reconstruct_eint = HydroSystem_Traits<problem_t>::reconstruct_eint;
 };
 
 template <typename problem_t> void HydroSystem<problem_t>::ConservedToPrimitive(amrex::MultiFab const &cons_mf, amrex::MultiFab &primVar_mf, const int nghost)

@@ -21,9 +21,10 @@
 struct WaveProblem {
 };
 
-template <> struct HydroSystem_Traits<WaveProblem> {
+template <> struct quokka::EOS_Traits<WaveProblem> {
 	static constexpr double gamma = 5. / 3.;
-	static constexpr bool reconstruct_eint = true;
+	static constexpr double mean_molecular_weight = quokka::hydrogen_mass_cgs;
+	static constexpr double boltzmann_constant = quokka::boltzmann_constant_cgs;
 };
 
 template <> struct Physics_Traits<WaveProblem> {
@@ -36,10 +37,10 @@ template <> struct Physics_Traits<WaveProblem> {
 	static constexpr bool is_mhd_enabled = false;
 };
 
-constexpr double rho0 = 1.0;				      // background density
-constexpr double P0 = 1.0 / HydroSystem<WaveProblem>::gamma_; // background pressure
-constexpr double v0 = 0.;				      // background velocity
-constexpr double amp = 1.0e-6;				      // perturbation amplitude
+constexpr double rho0 = 1.0;					    // background density
+constexpr double P0 = 1.0 / quokka::EOS_Traits<WaveProblem>::gamma; // background pressure
+constexpr double v0 = 0.;					    // background velocity
+constexpr double amp = 1.0e-6;					    // perturbation amplitude
 
 AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 					  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
@@ -49,7 +50,7 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 	const amrex::Real A = amp;
 
 	const quokka::valarray<double, 3> R = {1.0, -1.0, 1.5}; // right eigenvector of sound wave
-	const quokka::valarray<double, 3> U_0 = {rho0, rho0 * v0, P0 / (HydroSystem<WaveProblem>::gamma_ - 1.0) + 0.5 * rho0 * std::pow(v0, 2)};
+	const quokka::valarray<double, 3> U_0 = {rho0, rho0 * v0, P0 / (quokka::EOS_Traits<WaveProblem>::gamma - 1.0) + 0.5 * rho0 * std::pow(v0, 2)};
 	const quokka::valarray<double, 3> dU = (A * R / (2.0 * M_PI * dx[0])) * (std::cos(2.0 * M_PI * x_L) - std::cos(2.0 * M_PI * x_R));
 
 	double rho = U_0[0] + dU[0];
@@ -72,10 +73,10 @@ template <> void RadhydroSimulation<WaveProblem>::setInitialConditionsOnGrid(quo
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
-	const int ncomp = ncomp_cc_;
+	const int ncomp_cc = Physics_Indices<WaveProblem>::nvarTotal_cc;
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		for (int n = 0; n < ncomp; ++n) {
+		for (int n = 0; n < ncomp_cc; ++n) {
 			state_cc(i, j, k, n) = 0; // fill unused components with zeros
 		}
 		computeWaveSolution(i, j, k, state_cc, dx, prob_lo);
@@ -95,9 +96,9 @@ auto problem_main() -> int
 	const int max_timesteps = 2e4;
 
 	// Problem initialization
-	const int nvars = RadhydroSimulation<WaveProblem>::nvarTotal_cc_;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
+	const int ncomp_cc = Physics_Indices<WaveProblem>::nvarTotal_cc;
+	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
+	for (int n = 0; n < ncomp_cc; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
 			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
 			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
@@ -156,7 +157,7 @@ auto problem_main() -> int
 
 			amrex::Real xvel = xmom / rho;
 			amrex::Real Eint = Egas - xmom * xmom / (2.0 * rho);
-			amrex::Real pressure = Eint * (HydroSystem<WaveProblem>::gamma_ - 1.);
+			amrex::Real pressure = Eint * (quokka::EOS_Traits<WaveProblem>::gamma - 1.);
 
 			d.at(i) = (rho - rho0) / amp;
 			vx.at(i) = (xvel - v0) / amp;
@@ -174,7 +175,7 @@ auto problem_main() -> int
 
 			amrex::Real xvel = xmom / rho;
 			amrex::Real Eint = Egas - xmom * xmom / (2.0 * rho);
-			amrex::Real pressure = Eint * (HydroSystem<WaveProblem>::gamma_ - 1.);
+			amrex::Real pressure = Eint * (quokka::EOS_Traits<WaveProblem>::gamma - 1.);
 
 			density_exact.at(i) = (rho - rho0) / amp;
 			velocity_exact.at(i) = (xvel - v0) / amp;

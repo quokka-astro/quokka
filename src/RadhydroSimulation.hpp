@@ -47,6 +47,7 @@
 #include "SimulationData.hpp"
 #include "hydro_system.hpp"
 #include "hyperbolic_system.hpp"
+#include "physics_info.hpp"
 #include "radiation_system.hpp"
 #include "simulation.hpp"
 
@@ -58,7 +59,6 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	using AMRSimulation<problem_t>::state_new_cc_;
 	using AMRSimulation<problem_t>::max_signal_speed_;
 
-	using AMRSimulation<problem_t>::ncomp_cc_;
 	using AMRSimulation<problem_t>::nghost_cc_;
 	using AMRSimulation<problem_t>::areInitialConditionsDefined_;
 	using AMRSimulation<problem_t>::BCs_cc_;
@@ -240,19 +240,16 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::defineComponen
 	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) {
 		std::vector<std::string> hydroNames = {"gasDensity", "x-GasMomentum", "y-GasMomentum", "z-GasMomentum", "gasEnergy", "gasInternalEnergy"};
 		componentNames_cc_.insert(componentNames_cc_.end(), hydroNames.begin(), hydroNames.end());
-		ncomp_cc_ += hydroNames.size();
 	}
 	// add passive scalar variables
 	if constexpr (Physics_Traits<problem_t>::numPassiveScalars > 0) {
 		std::vector<std::string> scalarNames = getScalarVariableNames();
 		componentNames_cc_.insert(componentNames_cc_.end(), scalarNames.begin(), scalarNames.end());
-		ncomp_cc_ += scalarNames.size();
 	}
 	// add radiation state variables
 	if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
 		std::vector<std::string> radNames = {"radEnergy", "x-RadFlux", "y-RadFlux", "z-RadFlux"};
 		componentNames_cc_.insert(componentNames_cc_.end(), radNames.begin(), radNames.end());
-		ncomp_cc_ += radNames.size();
 	}
 
 	// face-centred
@@ -833,8 +830,8 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 		}
 
 		// create temporary multifab for old state
-		amrex::MultiFab state_old_cc_tmp(grids[lev], dmap[lev], ncomp_cc_, nghost_cc_);
-		amrex::Copy(state_old_cc_tmp, state_old_cc_[lev], 0, 0, ncomp_cc_, nghost_cc_);
+		amrex::MultiFab state_old_cc_tmp(grids[lev], dmap[lev], Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
+		amrex::Copy(state_old_cc_tmp, state_old_cc_[lev], 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
 
 		// subcycle advanceHydroAtLevel, checking return value
 		for (int substep = 0; substep < nsubsteps; ++substep) {
@@ -905,7 +902,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	addStrangSplitSources(state_old_cc_tmp, lev, time, 0.5 * dt_lev);
 
 	// create temporary multifab for intermediate state
-	amrex::MultiFab state_inter_cc_(grids[lev], dmap[lev], ncomp_cc_, nghost_cc_);
+	amrex::MultiFab state_inter_cc_(grids[lev], dmap[lev], Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
 	state_inter_cc_.setVal(0); // prevent assert in fillBoundaryConditions when radiation is enabled
 
 	// Stage 1 of RK2-SSP

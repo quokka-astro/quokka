@@ -26,13 +26,16 @@ constexpr double erad_floor = a_rad * (1.0e-8);
 // constexpr double Lx = 1.0; // dimensionless length
 constexpr double initial_time = 1.0e-8;
 
+template <> struct quokka::EOS_Traits<PulseProblem> {
+	static constexpr double mean_molecular_weight = 1.0;
+	static constexpr double boltzmann_constant = (2. / 3.);
+	static constexpr double gamma = 5. / 3.;
+};
+
 template <> struct RadSystem_Traits<PulseProblem> {
 	static constexpr double c_light = c;
 	static constexpr double c_hat = chat;
 	static constexpr double radiation_constant = a_rad;
-	static constexpr double mean_molecular_mass = 1.0;
-	static constexpr double boltzmann_constant = (2. / 3.);
-	static constexpr double gamma = 5. / 3.;
 	static constexpr double Erad_floor = erad_floor;
 	static constexpr bool compute_v_over_c_terms = false;
 };
@@ -92,7 +95,7 @@ template <> void RadhydroSimulation<PulseProblem>::setInitialConditionsOnGrid(qu
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
 		const double Trad = compute_exact_Trad(x - x0, initial_time);
-		const double Egas = RadSystem<PulseProblem>::ComputeEgasFromTgas(rho0, Trad);
+		const double Egas = quokka::EOS<PulseProblem>::ComputeEintFromTgas(rho0, Trad);
 
 		state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = erad_floor;
 		state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index) = 0;
@@ -180,7 +183,7 @@ auto problem_main() -> int
 		Erad.at(i) = Erad_t;
 		Trad.at(i) = Trad_t;
 		Egas.at(i) = values.at(RadSystem<PulseProblem>::gasEnergy_index)[i];
-		Tgas.at(i) = RadSystem<PulseProblem>::ComputeTgasFromEgas(rho0, Egas.at(i));
+		Tgas.at(i) = quokka::EOS<PulseProblem>::ComputeTgasFromEint(rho0, Egas.at(i));
 
 		auto Trad_val = compute_exact_Trad(x - x0, initial_time + sim.tNew_[0]);
 		auto Erad_val = a_rad * std::pow(Trad_val, 4);
