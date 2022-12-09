@@ -26,8 +26,11 @@
 struct CollapseProblem {
 };
 
-template <> struct HydroSystem_Traits<CollapseProblem> {
+template <> struct quokka::EOS_Traits<CollapseProblem> {
 	static constexpr double gamma = 5. / 3.;
+};
+
+template <> struct HydroSystem_Traits<CollapseProblem> {
 	static constexpr bool reconstruct_eint = false;
 };
 
@@ -70,7 +73,7 @@ template <> void RadhydroSimulation<CollapseProblem>::setInitialConditionsOnGrid
 		AMREX_ASSERT(!std::isnan(rho));
 		AMREX_ASSERT(!std::isnan(P));
 
-		const amrex::Real gamma = HydroSystem<CollapseProblem>::gamma_;
+		const amrex::Real gamma = quokka::EOS_Traits<CollapseProblem>::gamma;
 		state_cc(i, j, k, HydroSystem<CollapseProblem>::density_index) = rho;
 		state_cc(i, j, k, HydroSystem<CollapseProblem>::x1Momentum_index) = 0;
 		state_cc(i, j, k, HydroSystem<CollapseProblem>::x2Momentum_index) = 0;
@@ -115,9 +118,9 @@ auto problem_main() -> int
 		return false;
 	};
 
-	const int nvars = RadhydroSimulation<CollapseProblem>::nvarTotal_cc_;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
+	const int ncomp_cc = Physics_Indices<CollapseProblem>::nvarTotal_cc;
+	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
+	for (int n = 0; n < ncomp_cc; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
 			if (isNormalComp(n, i)) {
 				BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);

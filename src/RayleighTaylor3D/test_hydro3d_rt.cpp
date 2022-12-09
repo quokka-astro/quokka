@@ -22,8 +22,11 @@
 struct RTProblem {
 };
 
-template <> struct HydroSystem_Traits<RTProblem> {
+template <> struct quokka::EOS_Traits<RTProblem> {
 	static constexpr double gamma = 1.4;
+};
+
+template <> struct HydroSystem_Traits<RTProblem> {
 	static constexpr bool reconstruct_eint = false;
 };
 
@@ -83,7 +86,7 @@ template <> void RadhydroSimulation<RTProblem>::setInitialConditionsOnGrid(quokk
 		AMREX_ASSERT(!std::isnan(P));
 
 		const auto v_sq = vx * vx + vy * vy + vz * vz;
-		const auto gamma = HydroSystem<RTProblem>::gamma_;
+		const auto gamma = quokka::EOS_Traits<RTProblem>::gamma;
 
 		state_cc(i, j, k, HydroSystem<RTProblem>::density_index) = rho;
 		state_cc(i, j, k, HydroSystem<RTProblem>::x1Momentum_index) = rho * vx;
@@ -202,9 +205,9 @@ auto problem_main() -> int
 		return false;
 	};
 
-	const int nvars = RadhydroSimulation<RTProblem>::nvarTotal_cc_;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
+	const int ncomp_cc = Physics_Indices<RTProblem>::nvarTotal_cc;
+	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
+	for (int n = 0; n < ncomp_cc; ++n) {
 		// periodic in x- and y-directions
 		for (int i = 0; i < (AMREX_SPACEDIM - 1); ++i) {
 			BCs_cc[n].setLo(i, amrex::BCType::int_dir);

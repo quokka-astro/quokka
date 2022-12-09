@@ -28,9 +28,10 @@
 struct ShocktubeProblem {
 };
 
-template <> struct HydroSystem_Traits<ShocktubeProblem> {
+template <> struct quokka::EOS_Traits<ShocktubeProblem> {
 	static constexpr double gamma = (5. / 3.);
-	static constexpr bool reconstruct_eint = true;
+	static constexpr double mean_molecular_weight = quokka::hydrogen_mass_cgs;
+	static constexpr double boltzmann_constant = quokka::boltzmann_constant_cgs;
 };
 
 template <> struct Physics_Traits<ShocktubeProblem> {
@@ -51,7 +52,7 @@ template <> void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsOnGri
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	const int ncomp = Physics_Indices<ShocktubeProblem>::nvarTotal_cc;
+	const int ncomp_cc = Physics_Indices<ShocktubeProblem>::nvarTotal_cc;
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
@@ -72,11 +73,11 @@ template <> void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsOnGri
 		AMREX_ASSERT(!std::isnan(rho));
 		AMREX_ASSERT(!std::isnan(P));
 
-		for (int n = 0; n < ncomp; ++n) {
+		for (int n = 0; n < ncomp_cc; ++n) {
 			state_cc(i, j, k, n) = 0.;
 		}
 
-		const auto gamma = HydroSystem<ShocktubeProblem>::gamma_;
+		const auto gamma = quokka::EOS_Traits<ShocktubeProblem>::gamma;
 		state_cc(i, j, k, HydroSystem<ShocktubeProblem>::density_index) = rho;
 		state_cc(i, j, k, HydroSystem<ShocktubeProblem>::x1Momentum_index) = rho * vx;
 		state_cc(i, j, k, HydroSystem<ShocktubeProblem>::x2Momentum_index) = 0.;
@@ -121,7 +122,7 @@ AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(const amrex::IntVec
 		P = (2. / 3.) * 1.0e-10;
 	}
 
-	double Eint = P / (HydroSystem<ShocktubeProblem>::gamma_ - 1.);
+	double Eint = P / (quokka::EOS_Traits<ShocktubeProblem>::gamma - 1.);
 	double E = Eint + 0.5 * rho * (vx * vx);
 
 	for (int n = 0; n < numcomp; ++n) {
@@ -167,7 +168,7 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(amrex::Multi
 		auto density = values.at(2);
 		auto pressure = values.at(3);
 		auto velocity = values.at(4);
-		auto eint = pressure / ((HydroSystem<ShocktubeProblem>::gamma_ - 1.0) * density);
+		auto eint = pressure / ((quokka::EOS_Traits<ShocktubeProblem>::gamma - 1.0) * density);
 
 		xs_exact.push_back(x);
 		density_exact.push_back(density);
@@ -225,7 +226,7 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(amrex::Multi
 			amrex::Real vx = vx_arr[i];
 			amrex::Real P = P_arr[i];
 
-			const auto gamma = HydroSystem<ShocktubeProblem>::gamma_;
+			const auto gamma = quokka::EOS_Traits<ShocktubeProblem>::gamma;
 			stateExact(i, j, k, HydroSystem<ShocktubeProblem>::density_index) = rho;
 			stateExact(i, j, k, HydroSystem<ShocktubeProblem>::x1Momentum_index) = rho * vx;
 			stateExact(i, j, k, HydroSystem<ShocktubeProblem>::x2Momentum_index) = 0.;
@@ -256,7 +257,7 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(amrex::Multi
 			amrex::Real xvel = xmom / rho;
 			amrex::Real Eint = Egas - xmom * xmom / (2.0 * rho);
 			amrex::Real specific_Eint = Eint / rho;
-			amrex::Real pressure = (HydroSystem<ShocktubeProblem>::gamma_ - 1.) * Eint;
+			amrex::Real pressure = (quokka::EOS_Traits<ShocktubeProblem>::gamma - 1.) * Eint;
 
 			d.at(i) = rho;
 			vx.at(i) = xvel;
@@ -340,9 +341,9 @@ auto problem_main() -> int
 	const int max_timesteps = 50000;
 
 	// Problem initialization
-	const int nvars = RadhydroSimulation<ShocktubeProblem>::nvarTotal_cc_;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
+	const int ncomp_cc = Physics_Indices<ShocktubeProblem>::nvarTotal_cc;
+	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
+	for (int n = 0; n < ncomp_cc; ++n) {
 		BCs_cc[0].setLo(0, amrex::BCType::foextrap); // Dirichlet
 		BCs_cc[0].setHi(0, amrex::BCType::foextrap);
 		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
