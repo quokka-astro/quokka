@@ -42,7 +42,8 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto FastMagnetosonicSpeed(double gamma, quo
 // HLLD solver following Miyoshi and Kusano (2005), hereafter MK5.
 template <FluxDir DIR, int N_scalars, int fluxdim>
 AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars> const &s_L, quokka::HydroState<N_scalars> const &s_R,
-					      quokka::valarray<double, fluxdim> &F_hydro, double &Efield_y, double &Efield_z, const double gamma, const double bx)
+					      quokka::valarray<double, fluxdim> &F_hydro, double &Efield_y, double &Efield_z, const double gamma,
+					      const double bx)
 {
 	//--- Step 1. Compute L/R states
 
