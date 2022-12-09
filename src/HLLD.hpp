@@ -39,20 +39,10 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto FastMagnetosonicSpeed(double gamma, quo
 	return std::sqrt(0.5 * (bgp_p + std::sqrt(bgp_m * bgp_m + 4.0 * gp * byz_sq)) / state.rho);
 }
 
-AMREX_FORCE_INLINE
-AMREX_GPU_DEVICE
-auto GetWeightForCT(double dflx, double rho_L, double rho_R, double dx, double dt) -> double
-{
-	double v_over_c = (1024.0) * dt * dflx / (dx * (rho_L + rho_R));
-	double tmp_min = std::min(static_cast<double>(0.5), v_over_c);
-	return 0.5 + std::max(static_cast<double>(-0.5), tmp_min);
-}
-
 // HLLD solver following Miyoshi and Kusano (2005), hereafter MK5.
 template <FluxDir DIR, int N_scalars, int fluxdim>
 AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars> const &s_L, quokka::HydroState<N_scalars> const &s_R,
-					      quokka::valarray<double, fluxdim> &F_hydro, double &Efield_y, double &Efield_z, const double gamma,
-					      const double bx, const double dx, const double dt)
+					      quokka::valarray<double, fluxdim> &F_hydro, double &Efield_y, double &Efield_z, const double gamma, const double bx)
 {
 	//--- Step 1. Compute L/R states
 
@@ -338,8 +328,6 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars> cons
 	F_hydro = {f_x.rho, f_x.mx, f_x.my, f_x.mz, f_x.E, 0}; // TODO(neco): Eint=0 for now. Also need to add pscalars.
 	Efield_y = -f_x.by;
 	Efield_z = f_x.bz;
-
-	GetWeightForCT(f_x.rho, s_L.rho, s_R.rho, dx, dt);
 }
 } // namespace quokka::Riemann
 
