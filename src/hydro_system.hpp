@@ -93,6 +93,10 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	static void AddFluxesRK2(amrex::MultiFab &Unew_mf, amrex::MultiFab const &U0_mf, amrex::MultiFab const &U1_mf, amrex::MultiFab const &rhs_mf, double dt,
 				 int nvars, amrex::iMultiFab &redoFlag_mf);
 
+	AMREX_GPU_DEVICE static auto 
+    GetGradFixedPotential(amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> posvec)
+                                  -> amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>;
+
 	static void AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex::MultiFab const &consVar_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
 					 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &faceVelArray);
 

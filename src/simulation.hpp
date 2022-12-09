@@ -112,6 +112,12 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real abstolPoisson_ = 1.0e-10; // default
 	int doPoissonSolve_ = 0;	      // 1 == self-gravity enabled, 0 == disabled
 
+  amrex::Real densityFloor_ = 1.67e-40;  //in g cm-3, default
+  amrex::Real tempCeiling_  = 1.e30 ;    //default in K
+  amrex::Real tempFloor_    = 0.0;       //default in K
+  amrex::Real speedCeiling_ = 1.e10;     //default in cm/s
+
+
 	// constructor
 	explicit AMRSimulation(amrex::Vector<amrex::BCRec> &BCs_cc, amrex::Vector<amrex::BCRec> &BCs_fc) : BCs_cc_(BCs_cc), BCs_fc_(BCs_fc) { initialize(); }
 
@@ -133,6 +139,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	virtual void computeMaxSignalLocal(int level) = 0;
 	virtual auto computeExtraPhysicsTimestep(int lev) -> amrex::Real = 0;
 	virtual void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle) = 0;
+  virtual void computeBeforeTimestep() = 0;
 	virtual void preCalculateInitialConditions() = 0;
 	virtual void setInitialConditionsOnGrid(quokka::grid grid_elem) = 0;
 	virtual void computeAfterTimestep() = 0;
@@ -651,6 +658,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		amrex::ParallelDescriptor::Barrier(); // synchronize all MPI ranks
 		computeTimestep();
 
+    computeBeforeTimestep(); 
 		// elliptic solve over entire AMR grid (pre-timestep)
 		ellipticSolveAllLevels(0.5 * dt_[0]);
 
