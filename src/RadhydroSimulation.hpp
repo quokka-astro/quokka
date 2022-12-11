@@ -587,8 +587,8 @@ void RadhydroSimulation<problem_t>::EnforceLimits(amrex::Real const densityFloor
 
 	amrex::Real const rho_floor = densityFloor; // workaround nvcc bug
 	amrex::Real const P_floor = pressureFloor;
-	amrex::Real Const_mH = 1.67e-24;
-	amrex::Real kb = 1.3807e-16;
+	amrex::Real Const_mH = quokka::hydrogen_mass_cgs;
+	amrex::Real kb = quokka::boltzmann_constant_cgs;
 	auto state = state_mf.arrays();
 
 	amrex::ParallelFor(state_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
@@ -612,6 +612,7 @@ void RadhydroSimulation<problem_t>::EnforceLimits(amrex::Real const densityFloor
 		if (rho < rho_floor) {
 			rho_new = rho_floor;
 			state[bx](i, j, k, dindex) = rho_new;
+			
 		}
 
 		if (std::abs(vx1) > speedCeiling) {
