@@ -612,7 +612,6 @@ void RadhydroSimulation<problem_t>::EnforceLimits(amrex::Real const densityFloor
 		if (rho < rho_floor) {
 			rho_new = rho_floor;
 			state[bx](i, j, k, dindex) = rho_new;
-			
 		}
 
 		if (std::abs(vx1) > speedCeiling) {
