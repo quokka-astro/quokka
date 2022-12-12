@@ -62,8 +62,8 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars> cons
 	ConsHydro1D u_dstar_R{};
 	ConsHydro1D u_star_R{};
 
-  // frequently used term
-  double const bx_sq = SQUARE(bx);
+	// frequently used term
+	double const bx_sq = SQUARE(bx);
 
 	// compute L/R states for select conserved variables
 	// (group transverse vector components for floating-point associativity symmetry)
@@ -173,7 +173,8 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars> cons
 	// group transverse momenta-components for floating-point associativity
 	double vb_star_L = (u_star_L.mx * bx + (u_star_L.my * u_star_L.by + u_star_L.mz * u_star_L.bz)) * u_star_rho_inv_L;
 	// MK5: eqn (48)
-	u_star_L.E = (siui_L * u_L.E - ptot_L * s_L.vx + ptot_star * spds[2] + bx * (s_L.vx * bx + (s_L.vy * s_L.by + s_L.vz * s_L.bz) - vb_star_L)) * sism_inv_L;
+	u_star_L.E =
+	    (siui_L * u_L.E - ptot_L * s_L.vx + ptot_star * spds[2] + bx * (s_L.vx * bx + (s_L.vy * s_L.by + s_L.vz * s_L.bz) - vb_star_L)) * sism_inv_L;
 
 	// MK5: u_R^(star, dstar) from, eqn (39)
 	u_star_R.mx = u_star_R.rho * spds[2];
@@ -197,7 +198,8 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars> cons
 	// group transverse momenta-components for floating-point associativity
 	double vb_star_R = (u_star_R.mx * bx + (u_star_R.my * u_star_R.by + u_star_R.mz * u_star_R.bz)) * u_star_rho_inv_R;
 	// MK5: eqn (48)
-	u_star_R.E = (siui_R * u_R.E - ptot_R * s_R.vx + ptot_star * spds[2] + bx * (s_R.vx * bx + (s_R.vy * s_R.by + s_R.vz * s_R.bz) - vb_star_R)) * sism_inv_R;
+	u_star_R.E =
+	    (siui_R * u_R.E - ptot_R * s_R.vx + ptot_star * spds[2] + bx * (s_R.vx * bx + (s_R.vy * s_R.by + s_R.vz * s_R.bz) - vb_star_R)) * sism_inv_R;
 
 	// if Bx is near zero, then u_i^dstar = u_i^star
 	if (0.5 * bx_sq < (DELTA)*ptot_star) {
