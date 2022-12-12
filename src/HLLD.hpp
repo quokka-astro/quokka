@@ -41,8 +41,8 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto FastMagnetoSonicSpeed(double gamma, quo
 
 // HLLD solver following Miyoshi and Kusano (2005), hereafter MK5.
 template <FluxDir DIR, int N_scalars, int fluxdim>
-AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars> const &s_L, quokka::HydroState<N_scalars> const &s_R,
-					      const double gamma, const double bx) -> quokka::valarray<double, fluxdim>
+AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars> const &s_L, quokka::HydroState<N_scalars> const &s_R, const double gamma,
+					      const double bx) -> quokka::valarray<double, fluxdim>
 {
 	//--- Step 1. Compute L/R states
 
@@ -327,9 +327,9 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars> cons
 		f_x.bz = f_R.bz + u_star_R.bz;
 	}
 
-  // TODO(neco): Eint=0 for now; pscalars will also be needed in the future.
-  quokka::valarray<double, fluxdim> F_hydro = {f_x.rho, f_x.mx, f_x.my, f_x.mz, f_x.E, 0};
-  return F_hydro;
+	// TODO(neco): Eint=0 for now; pscalars will also be needed in the future.
+	quokka::valarray<double, fluxdim> F_hydro = {f_x.rho, f_x.mx, f_x.my, f_x.mz, f_x.E, 0};
+	return F_hydro;
 }
 } // namespace quokka::Riemann
 
