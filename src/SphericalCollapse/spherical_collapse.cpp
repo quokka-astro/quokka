@@ -28,6 +28,8 @@ struct CollapseProblem {
 
 template <> struct quokka::EOS_Traits<CollapseProblem> {
 	static constexpr double gamma = 5. / 3.;
+	static constexpr double mean_molecular_weight = quokka::hydrogen_mass_cgs;
+	static constexpr double boltzmann_constant = quokka::boltzmann_constant_cgs;
 };
 
 template <> struct HydroSystem_Traits<CollapseProblem> {
