@@ -88,6 +88,13 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	static void AddFluxesRK2(amrex::MultiFab &Unew_mf, amrex::MultiFab const &U0_mf, amrex::MultiFab const &U1_mf, amrex::MultiFab const &rhs_mf, double dt,
 				 int nvars, amrex::iMultiFab &redoFlag_mf);
+				 
+	AMREX_GPU_DEVICE static auto GetGradFixedPotential(amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> posvec)
+                                  -> amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>;
+
+	static void EnforceLimits(amrex::Real const densityFloor, amrex::Real const pressureFloor, amrex::Real const speedCeiling,
+				  amrex::Real const tempCeiling, amrex::Real const tempFloor, amrex::MultiFab &state_mf);
+
 
 	static void AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex::MultiFab const &consVar_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
 					 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &faceVelArray);
@@ -565,6 +572,94 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::MultiFab const &q_mf, amrex::M
 		x1LeftState(i + 1, j, k, n) = new_a_plus;
 	});
 }
+
+// to ensure that physical quantities are within reasonable
+// floors and ceilings which can be set in the param file
+template <typename problem_t>
+void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex::Real const pressureFloor, amrex::Real const speedCeiling,
+						  amrex::Real const tempCeiling, amrex::Real const tempFloor, amrex::MultiFab &state_mf)
+{
+
+	amrex::Real const rho_floor = densityFloor; // workaround nvcc bug
+	amrex::Real const P_floor = pressureFloor;
+	auto state = state_mf.arrays();
+
+	amrex::ParallelFor(state_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		int dindex = HydroSystem<problem_t>::density_index;
+		int p1index = HydroSystem<problem_t>::x1Momentum_index;
+		int p2index = HydroSystem<problem_t>::x2Momentum_index;
+		int p3index = HydroSystem<problem_t>::x3Momentum_index;
+		int eindex = HydroSystem<problem_t>::energy_index;
+		int eint_index = HydroSystem<problem_t>::internalEnergy_index;
+
+		amrex::Real const rho = state[bx](i, j, k, dindex);
+		amrex::Real const vx1 = state[bx](i, j, k, p1index) / rho;
+		amrex::Real const vx2 = state[bx](i, j, k, p2index) / rho;
+		amrex::Real const vx3 = state[bx](i, j, k, p3index) / rho;
+		amrex::Real const vsq = (vx1 * vx1 + vx2 * vx2 + vx3 * vx3);
+		amrex::Real const Etot = state[bx](i, j, k, eindex);
+		amrex::Real const Eint = state[bx](i, j, k, eint_index);
+		amrex::Real const Temp = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint) ;
+
+		amrex::Real rho_new = rho;
+		if (rho < rho_floor) {
+			rho_new = rho_floor;
+			state[bx](i, j, k, dindex) = rho_new;
+			state[bx](i, j, k, eint_index) = Eint * rho_new/rho;
+			state[bx](i, j, k, eindex) = rho_new * vsq + state[bx](i, j, k, eint_index);
+			if(nscalars_>0){
+				for (int n = 0; n < nscalars_; ++n) {
+					state[bx](i, j, k, scalar0_index + n) *= rho /rho_new;
+				}
+			}
+		}
+
+		if (std::abs(vx1) > speedCeiling) {
+			amrex::Real dummy = Etot - state[bx](i, j, k, dindex) * vx1 * vx1 / 2.;
+			state[bx](i, j, k, p1index) = (std::abs(vx1) / vx1) * speedCeiling * state[bx](i, j, k, dindex);
+			state[bx](i, j, k, eindex) = dummy + std::pow(state[bx](i, j, k, p1index), 2.) / state[bx](i, j, k, dindex) / 2.;
+		}
+
+		if (std::abs(vx2) > speedCeiling) {
+			amrex::Real dummy = Etot - state[bx](i, j, k, dindex) * vx2 * vx2 / 2.;
+			state[bx](i, j, k, p2index) = (std::abs(vx2) / vx2) * speedCeiling * state[bx](i, j, k, dindex);
+			state[bx](i, j, k, eindex) = dummy + std::pow(state[bx](i, j, k, p2index), 2.) / state[bx](i, j, k, dindex) / 2.;
+		}
+
+		if (std::abs(vx3) > speedCeiling) {
+			amrex::Real dummy = Etot - state[bx](i, j, k, dindex) * vx3 * vx3 / 2.;
+			state[bx](i, j, k, p3index) = (std::abs(vx3) / vx3) * speedCeiling * state[bx](i, j, k, dindex);
+			state[bx](i, j, k, eindex) = dummy + std::pow(state[bx](i, j, k, p3index), 2.) / state[bx](i, j, k, dindex) / 2.;
+		}
+
+		if (Temp > tempCeiling) {
+			amrex::Real dummy = Etot - state[bx](i, j, k, eint_index);
+			state[bx](i, j, k, eint_index) =quokka::EOS<problem_t>::ComputeEintFromTgas(state[bx](i, j, k, dindex), tempCeiling);
+			state[bx](i, j, k, eindex) = dummy + state[bx](i, j, k, eint_index);
+		}
+
+		if (Temp < tempFloor) {
+			amrex::Real dummy = Etot - state[bx](i, j, k, eint_index);
+			state[bx](i, j, k, eint_index) =quokka::EOS<problem_t>::ComputeEintFromTgas(state[bx](i, j, k, dindex), tempFloor);
+			state[bx](i, j, k, eindex) = dummy + state[bx](i, j, k, eint_index);
+		}
+
+		if (!HydroSystem<problem_t>::is_eos_isothermal()) {
+			// recompute gas energy (to prevent P < 0)
+			amrex::Real const Eint_star = Etot - 0.5 * rho_new * vsq;
+			amrex::Real const P_star = Eint_star * (HydroSystem<problem_t>::gamma_ - 1.);
+			amrex::Real P_new = P_star;
+			if (P_star < P_floor) {
+				P_new = P_floor;
+#pragma nv_diag_suppress divide_by_zero
+				amrex::Real const Etot_new = P_new / (HydroSystem<problem_t>::gamma_ - 1.) + 0.5 * rho_new * vsq;
+				state[bx](i, j, k, HydroSystem<problem_t>::energy_index) = Etot_new;
+			}
+		}
+	});
+}
+
+
 
 template <typename problem_t>
 void HydroSystem<problem_t>::AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex::MultiFab const &consVar_mf,
