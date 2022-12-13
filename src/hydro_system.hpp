@@ -595,16 +595,16 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 		amrex::Real const vx2 = state[bx](i, j, k, p2index) / rho;
 		amrex::Real const vx3 = state[bx](i, j, k, p3index) / rho;
 		amrex::Real const vsq = (vx1 * vx1 + vx2 * vx2 + vx3 * vx3);
-		amrex::Real const Etot = state[bx](i, j, k, eindex);
-		amrex::Real const Eint = state[bx](i, j, k, eint_index);
-		amrex::Real const Temp = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint);
-
+		amrex::Real Etot = state[bx](i, j, k, eindex);
+		amrex::Real Eint = state[bx](i, j, k, eint_index);
+		amrex::Real Ekin = rho * vsq/2.;
 		amrex::Real rho_new = rho;
+
 		if (rho < rho_floor) {
 			rho_new = rho_floor;
-			state[bx](i, j, k, dindex) = rho_new;
+			state[bx](i, j, k, dindex)     = rho_new;
 			state[bx](i, j, k, eint_index) = Eint * rho_new / rho;
-			state[bx](i, j, k, eindex) = rho_new * vsq + state[bx](i, j, k, eint_index);
+			state[bx](i, j, k, eindex)     = rho_new * vsq/2. + (Etot - Ekin);
 			if (nscalars_ > 0) {
 				for (int n = 0; n < nscalars_; ++n) {
 					state[bx](i, j, k, scalar0_index + n) *= rho / rho_new;
@@ -630,17 +630,38 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 			state[bx](i, j, k, eindex) = dummy + std::pow(state[bx](i, j, k, p3index), 2.) / state[bx](i, j, k, dindex) / 2.;
 		}
 
-		if (Temp > tempCeiling) {
-			amrex::Real dummy = Etot - state[bx](i, j, k, eint_index);
-			state[bx](i, j, k, eint_index) = quokka::EOS<problem_t>::ComputeEintFromTgas(state[bx](i, j, k, dindex), tempCeiling);
-			state[bx](i, j, k, eindex) = dummy + state[bx](i, j, k, eint_index);
+        /******Enforcing Limits on temperature estimated from Etot and Ekin******/
+		/*re-obtain Ekin and Etot for putting limits on Temperature*/
+		Ekin = std::pow(state[bx](i, j, k, p1index), 2.) / state[bx](i, j, k, dindex) / 2. ;
+		Ekin+= std::pow(state[bx](i, j, k, p2index), 2.) / state[bx](i, j, k, dindex) / 2. ;
+		Ekin+= std::pow(state[bx](i, j, k, p3index), 2.) / state[bx](i, j, k, dindex) / 2. ;
+		Etot = state[bx](i, j, k, eindex);
+        amrex::Real primTemp = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, (Etot-Ekin) );
+
+		if (primTemp > tempCeiling) {
+			amrex::Real prim_eint = quokka::EOS<problem_t>::ComputeEintFromTgas(state[bx](i, j, k, dindex), tempCeiling);
+			state[bx](i, j, k, eindex) = Ekin + prim_eint;
 		}
 
-		if (Temp < tempFloor) {
-			amrex::Real dummy = Etot - state[bx](i, j, k, eint_index);
-			state[bx](i, j, k, eint_index) = quokka::EOS<problem_t>::ComputeEintFromTgas(state[bx](i, j, k, dindex), tempFloor);
-			state[bx](i, j, k, eindex) = dummy + state[bx](i, j, k, eint_index);
+		if (primTemp < tempFloor) {
+			amrex::Real prim_eint = quokka::EOS<problem_t>::ComputeEintFromTgas(state[bx](i, j, k, dindex), tempFloor);
+			state[bx](i, j, k, eindex) = Ekin + prim_eint;
 		}
+
+        /******Enforcing Limits on Auxiliary temperature estimated from Eint******/
+		Eint = state[bx](i, j, k, eint_index);
+        amrex::Real auxTemp = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint );
+
+		if (auxTemp > tempCeiling) {
+			state[bx](i, j, k, eint_index) = quokka::EOS<problem_t>::ComputeEintFromTgas(state[bx](i, j, k, dindex), tempCeiling);
+			state[bx](i, j, k, eindex) = Ekin + state[bx](i, j, k, eint_index);
+		}
+
+		if (auxTemp < tempFloor) {
+			state[bx](i, j, k, eint_index) = quokka::EOS<problem_t>::ComputeEintFromTgas(state[bx](i, j, k, dindex), tempFloor);
+			state[bx](i, j, k, eindex) = Ekin + state[bx](i, j, k, eint_index);
+		}
+
 
 		if (!HydroSystem<problem_t>::is_eos_isothermal()) {
 			// recompute gas energy (to prevent P < 0)
