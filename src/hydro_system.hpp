@@ -91,8 +91,8 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	AMREX_GPU_DEVICE static auto GetGradFixedPotential(amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> posvec) -> amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>;
 
-	static void EnforceLimits(amrex::Real densityFloor, amrex::Real const pressureFloor, amrex::Real const speedCeiling,
-				  amrex::Real const tempCeiling, amrex::Real const tempFloor, amrex::MultiFab &state_mf);
+	static void EnforceLimits(amrex::Real densityFloor, amrex::Real const pressureFloor, amrex::Real const speedCeiling, amrex::Real const tempCeiling,
+				  amrex::Real const tempFloor, amrex::MultiFab &state_mf);
 
 	static void AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex::MultiFab const &consVar_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
 					 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &faceVelArray);
