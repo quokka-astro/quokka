@@ -64,7 +64,6 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	using AMRSimulation<problem_t>::tNew_;
 	using AMRSimulation<problem_t>::boxArray;
 	using AMRSimulation<problem_t>::DistributionMap;
-	using AMRSimulation<problem_t>::InterpHookNone;
 
 	explicit AdvectionSimulation(amrex::Vector<amrex::BCRec> &BCs_cc) : AMRSimulation<problem_t>(BCs_cc) { componentNames_cc_.push_back({"density"}); }
 
@@ -260,7 +259,8 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::advanceSingle
 
 	// update ghost zones [w/ old timestep]
 	// (N.B. the input and output multifabs are allowed to be the same, as done here)
-	fillBoundaryConditions(state_old_cc_[lev], state_old_cc_[lev], lev, time, quokka::centering::cc, quokka::direction::na, InterpHookNone, InterpHookNone);
+	fillBoundaryConditions(state_old_cc_[lev], state_old_cc_[lev], lev, time, quokka::centering::cc, quokka::direction::na,
+			       AMRSimulation<problem_t>::InterpHookNone, AMRSimulation<problem_t>::InterpHookNone);
 
 	amrex::Real fluxScaleFactor = NAN;
 	if constexpr (integratorOrder_ == 2) {
@@ -294,7 +294,7 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::advanceSingle
 	if constexpr (integratorOrder_ == 2) {
 		// update ghost zones [w/ intermediate stage stored in state_new_cc_]
 		fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, (time + dt_lev), quokka::centering::cc, quokka::direction::na,
-				       InterpHookNone, InterpHookNone);
+				       AMRSimulation<problem_t>::InterpHookNone, AMRSimulation<problem_t>::InterpHookNone);
 
 		// advance all grids on local processor (Stage 2 of integrator)
 		{
