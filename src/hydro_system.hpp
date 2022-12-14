@@ -93,7 +93,7 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	static void EnforceLimits(amrex::Real densityFloor, amrex::Real pressureFloor, amrex::Real const speedCeiling, amrex::Real const tempCeiling,
 				  amrex::Real tempCeiling, amrex::Real const tempFloor, amrex::MultiFab &state_mf);
-
+				  amrex::Real tempCeiling, amrex::Real const tempFloor, amrex::MultiFab &state_mf);
 	static void AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex::MultiFab const &consVar_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
 					 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &faceVelArray);
 
