@@ -91,8 +91,8 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	AMREX_GPU_DEVICE static auto GetGradFixedPotential(amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> posvec) -> amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>;
 
-	static void EnforceLimits(amrex::Real const densityFloor, amrex::Real const pressureFloor, amrex::Real const speedCeiling,
-				  amrex::Real const tempCeiling, amrex::Real const tempFloor, amrex::MultiFab &state_mf);
+	static void EnforceLimits(amrex::Real densityFloor,amrex::Real pressureFloor, amrex::Real speedCeiling,
+				              amrex::Real tempCeiling, amrex::Real  tempFloor,    amrex::MultiFab &state_mf);
 
 	static void AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex::MultiFab const &consVar_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
 					 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &faceVelArray);
@@ -583,83 +583,66 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 	auto state = state_mf.arrays();
 
 	amrex::ParallelFor(state_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-		int dindex = HydroSystem<problem_t>::density_index;
-		int p1index = HydroSystem<problem_t>::x1Momentum_index;
-		int p2index = HydroSystem<problem_t>::x2Momentum_index;
-		int p3index = HydroSystem<problem_t>::x3Momentum_index;
-		int eindex = HydroSystem<problem_t>::energy_index;
-		int eint_index = HydroSystem<problem_t>::internalEnergy_index;
-
-		amrex::Real const rho = state[bx](i, j, k, dindex);
-		amrex::Real const vx1 = state[bx](i, j, k, p1index) / rho;
-		amrex::Real const vx2 = state[bx](i, j, k, p2index) / rho;
-		amrex::Real const vx3 = state[bx](i, j, k, p3index) / rho;
-		amrex::Real const vsq = (vx1 * vx1 + vx2 * vx2 + vx3 * vx3);
-		amrex::Real Etot = state[bx](i, j, k, eindex);
-		amrex::Real Eint = state[bx](i, j, k, eint_index);
+		
+		amrex::Real const rho   = state[bx](i, j, k, density_index);
+		amrex::Real const vx1   = state[bx](i, j, k, x1Momentum_index) / rho;
+		amrex::Real const vx2   = state[bx](i, j, k, x2Momentum_index) / rho;
+		amrex::Real const vx3   = state[bx](i, j, k, x3Momentum_index) / rho;
+		amrex::Real const vsq   = (vx1*vx1 + vx2*vx2 + vx3*vx3);
+		amrex::Real const v_abs = std::sqrt(vx1 * vx1 + vx2 * vx2 + vx3 * vx3);
+		amrex::Real Etot = state[bx](i, j, k, energy_index);
+		amrex::Real Eint = state[bx](i, j, k, internalEnergy_index);
 		amrex::Real Ekin = rho * vsq/2.;
 		amrex::Real rho_new = rho;
 
 		if (rho < rho_floor) {
 			rho_new = rho_floor;
-			state[bx](i, j, k, dindex)     = rho_new;
-			state[bx](i, j, k, eint_index) = Eint * rho_new / rho;
-			state[bx](i, j, k, eindex)     = rho_new * vsq/2. + (Etot - Ekin);
+			state[bx](i, j, k, density_index)     = rho_new;
+			state[bx](i, j, k, internalEnergy_index) = Eint * rho_new / rho;
+			state[bx](i, j, k, energy_index)     = rho_new * vsq/2. + (Etot - Ekin);
 			if (nscalars_ > 0) {
 				for (int n = 0; n < nscalars_; ++n) {
 					state[bx](i, j, k, scalar0_index + n) *= rho / rho_new;
-				}
-			}
+				}}
 		}
 
-		if (std::abs(vx1) > speedCeiling) {
-			amrex::Real dummy = Etot - state[bx](i, j, k, dindex) * vx1 * vx1 / 2.;
-			state[bx](i, j, k, p1index) = (std::abs(vx1) / vx1) * speedCeiling * state[bx](i, j, k, dindex);
-			state[bx](i, j, k, eindex) = dummy + std::pow(state[bx](i, j, k, p1index), 2.) / state[bx](i, j, k, dindex) / 2.;
+		if(v_abs > speedCeiling){
+			amrex::Real rescale_factor = speedCeiling / v_abs;
+			state[bx](i, j, k, x1Momentum_index) *=rescale_factor;
+			state[bx](i, j, k, x2Momentum_index) *=rescale_factor;
+			state[bx](i, j, k, x3Momentum_index) *=rescale_factor;
 		}
 
-		if (std::abs(vx2) > speedCeiling) {
-			amrex::Real dummy = Etot - state[bx](i, j, k, dindex) * vx2 * vx2 / 2.;
-			state[bx](i, j, k, p2index) = (std::abs(vx2) / vx2) * speedCeiling * state[bx](i, j, k, dindex);
-			state[bx](i, j, k, eindex) = dummy + std::pow(state[bx](i, j, k, p2index), 2.) / state[bx](i, j, k, dindex) / 2.;
-		}
-
-		if (std::abs(vx3) > speedCeiling) {
-			amrex::Real dummy = Etot - state[bx](i, j, k, dindex) * vx3 * vx3 / 2.;
-			state[bx](i, j, k, p3index) = (std::abs(vx3) / vx3) * speedCeiling * state[bx](i, j, k, dindex);
-			state[bx](i, j, k, eindex) = dummy + std::pow(state[bx](i, j, k, p3index), 2.) / state[bx](i, j, k, dindex) / 2.;
-		}
-
-        /******Enforcing Limits on temperature estimated from Etot and Ekin******/
-		/*re-obtain Ekin and Etot for putting limits on Temperature*/
-		Ekin = std::pow(state[bx](i, j, k, p1index), 2.) / state[bx](i, j, k, dindex) / 2. ;
-		Ekin+= std::pow(state[bx](i, j, k, p2index), 2.) / state[bx](i, j, k, dindex) / 2. ;
-		Ekin+= std::pow(state[bx](i, j, k, p3index), 2.) / state[bx](i, j, k, dindex) / 2. ;
-		Etot = state[bx](i, j, k, eindex);
+        //Enforcing Limits on temperature estimated from Etot and Ekin
+		//re-obtain Ekin and Etot for putting limits on Temperature
+		Ekin = std::pow(state[bx](i, j, k, x1Momentum_index), 2.) / state[bx](i, j, k, density_index) / 2. ;
+		Ekin+= std::pow(state[bx](i, j, k, x2Momentum_index), 2.) / state[bx](i, j, k, density_index) / 2. ;
+		Ekin+= std::pow(state[bx](i, j, k, x3Momentum_index), 2.) / state[bx](i, j, k, density_index) / 2. ;
+		Etot = state[bx](i, j, k, energy_index);
         amrex::Real primTemp = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, (Etot-Ekin) );
 
 		if (primTemp > tempCeiling) {
-			amrex::Real prim_eint = quokka::EOS<problem_t>::ComputeEintFromTgas(state[bx](i, j, k, dindex), tempCeiling);
-			state[bx](i, j, k, eindex) = Ekin + prim_eint;
+			amrex::Real prim_eint = quokka::EOS<problem_t>::ComputeEintFromTgas(state[bx](i, j, k, density_index), tempCeiling);
+			state[bx](i, j, k, energy_index) = Ekin + prim_eint;
 		}
 
 		if (primTemp < tempFloor) {
-			amrex::Real prim_eint = quokka::EOS<problem_t>::ComputeEintFromTgas(state[bx](i, j, k, dindex), tempFloor);
-			state[bx](i, j, k, eindex) = Ekin + prim_eint;
+			amrex::Real prim_eint = quokka::EOS<problem_t>::ComputeEintFromTgas(state[bx](i, j, k, density_index), tempFloor);
+			state[bx](i, j, k, energy_index) = Ekin + prim_eint;
 		}
 
-        /******Enforcing Limits on Auxiliary temperature estimated from Eint******/
-		Eint = state[bx](i, j, k, eint_index);
+        //Enforcing Limits on Auxiliary temperature estimated from Eint
+		Eint = state[bx](i, j, k, internalEnergy_index);
         amrex::Real auxTemp = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint );
 
 		if (auxTemp > tempCeiling) {
-			state[bx](i, j, k, eint_index) = quokka::EOS<problem_t>::ComputeEintFromTgas(state[bx](i, j, k, dindex), tempCeiling);
-			state[bx](i, j, k, eindex) = Ekin + state[bx](i, j, k, eint_index);
+			state[bx](i, j, k, internalEnergy_index) = quokka::EOS<problem_t>::ComputeEintFromTgas(state[bx](i, j, k, density_index), tempCeiling);
+			state[bx](i, j, k, energy_index) = Ekin + state[bx](i, j, k, internalEnergy_index);
 		}
 
 		if (auxTemp < tempFloor) {
-			state[bx](i, j, k, eint_index) = quokka::EOS<problem_t>::ComputeEintFromTgas(state[bx](i, j, k, dindex), tempFloor);
-			state[bx](i, j, k, eindex) = Ekin + state[bx](i, j, k, eint_index);
+			state[bx](i, j, k, internalEnergy_index) = quokka::EOS<problem_t>::ComputeEintFromTgas(state[bx](i, j, k, density_index), tempFloor);
+			state[bx](i, j, k, energy_index) = Ekin + state[bx](i, j, k, internalEnergy_index);
 		}
 
 
