@@ -42,7 +42,7 @@ constexpr double seconds_in_year = 3.154e7;
 
 template <> struct quokka::EOS_Traits<ShockCloud> {
 	static constexpr double gamma = 5. / 3.; // default value
-	static constexpr double mean_molecular_weight = quokka::hydrogen_mass_cgs;
+	static constexpr double mean_molecular_weight = NAN;
 	static constexpr double boltzmann_constant = quokka::boltzmann_constant_cgs;
 };
 
