@@ -603,11 +603,14 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 			state[bx](i, j, k, energy_index) = rho_new * vsq / 2. + (Etot - Ekin);
 			if (nscalars_ > 0) {
 				for (int n = 0; n < nscalars_; ++n) {
-					if(!rho_new){
-					state[bx](i, j, k, scalar0_index + n) *= 0.0;
-					}else{
+					if (!rho_new) {
+						state[bx](i, j, k, scalar0_index + n) *= 0.0;
+					} else {
 						state[bx](i, j, k, scalar0_index + n) *= rho / rho_new;
-					}}}}
+					}
+				}
+			}
+		}
 
 		if (v_abs > speedCeiling) {
 			amrex::Real rescale_factor = speedCeiling / v_abs;
@@ -630,14 +633,13 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 			}
 		}
 		// re-obtain Ekin and Etot for putting limits on Temperature
-		if(!rho_new){
+		if (!rho_new) {
 			Ekin = Etot = 0.0;
-		}
-		else{
-		Ekin = std::pow(state[bx](i, j, k, x1Momentum_index), 2.) / state[bx](i, j, k, density_index) / 2.;
-		Ekin += std::pow(state[bx](i, j, k, x2Momentum_index), 2.) / state[bx](i, j, k, density_index) / 2.;
-		Ekin += std::pow(state[bx](i, j, k, x3Momentum_index), 2.) / state[bx](i, j, k, density_index) / 2.;
-		Etot = state[bx](i, j, k, energy_index);
+		} else {
+			Ekin = std::pow(state[bx](i, j, k, x1Momentum_index), 2.) / state[bx](i, j, k, density_index) / 2.;
+			Ekin += std::pow(state[bx](i, j, k, x2Momentum_index), 2.) / state[bx](i, j, k, density_index) / 2.;
+			Ekin += std::pow(state[bx](i, j, k, x3Momentum_index), 2.) / state[bx](i, j, k, density_index) / 2.;
+			Etot = state[bx](i, j, k, energy_index);
 		}
 		amrex::Real primTemp = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, (Etot - Ekin));
 
@@ -664,7 +666,6 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 			state[bx](i, j, k, internalEnergy_index) = quokka::EOS<problem_t>::ComputeEintFromTgas(state[bx](i, j, k, density_index), tempFloor);
 			state[bx](i, j, k, energy_index) = Ekin + state[bx](i, j, k, internalEnergy_index);
 		}
-
 	});
 }
 
