@@ -603,10 +603,11 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 			state[bx](i, j, k, energy_index) = rho_new * vsq / 2. + (Etot - Ekin);
 			if (nscalars_ > 0) {
 				for (int n = 0; n < nscalars_; ++n) {
-					state[bx](i, j, k, scalar0_index + n) *= rho / rho_new;
-				}
-			}
-		}
+					if(!rho_new){
+					state[bx](i, j, k, scalar0_index + n) *= 0.0;
+					}else{
+						state[bx](i, j, k, scalar0_index + n) *= rho / rho_new;
+					}}}}
 
 		if (v_abs > speedCeiling) {
 			amrex::Real rescale_factor = speedCeiling / v_abs;
@@ -616,11 +617,28 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 		}
 
 		// Enforcing Limits on temperature estimated from Etot and Ekin
+		if (!HydroSystem<problem_t>::is_eos_isothermal()) {
+			// recompute gas energy (to prevent P < 0)
+			amrex::Real const Eint_star = Etot - 0.5 * rho_new * vsq;
+			amrex::Real const P_star = Eint_star * (HydroSystem<problem_t>::gamma_ - 1.);
+			amrex::Real P_new = P_star;
+			if (P_star < P_floor) {
+				P_new = P_floor;
+#pragma nv_diag_suppress divide_by_zero
+				amrex::Real const Etot_new = P_new / (HydroSystem<problem_t>::gamma_ - 1.) + 0.5 * rho_new * vsq;
+				state[bx](i, j, k, HydroSystem<problem_t>::energy_index) = Etot_new;
+			}
+		}
 		// re-obtain Ekin and Etot for putting limits on Temperature
+		if(!rho_new){
+			Ekin = Etot = 0.0;
+		}
+		else{
 		Ekin = std::pow(state[bx](i, j, k, x1Momentum_index), 2.) / state[bx](i, j, k, density_index) / 2.;
 		Ekin += std::pow(state[bx](i, j, k, x2Momentum_index), 2.) / state[bx](i, j, k, density_index) / 2.;
 		Ekin += std::pow(state[bx](i, j, k, x3Momentum_index), 2.) / state[bx](i, j, k, density_index) / 2.;
 		Etot = state[bx](i, j, k, energy_index);
+		}
 		amrex::Real primTemp = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, (Etot - Ekin));
 
 		if (primTemp > tempCeiling) {
@@ -647,18 +665,6 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 			state[bx](i, j, k, energy_index) = Ekin + state[bx](i, j, k, internalEnergy_index);
 		}
 
-		if (!HydroSystem<problem_t>::is_eos_isothermal()) {
-			// recompute gas energy (to prevent P < 0)
-			amrex::Real const Eint_star = Etot - 0.5 * rho_new * vsq;
-			amrex::Real const P_star = Eint_star * (HydroSystem<problem_t>::gamma_ - 1.);
-			amrex::Real P_new = P_star;
-			if (P_star < P_floor) {
-				P_new = P_floor;
-#pragma nv_diag_suppress divide_by_zero
-				amrex::Real const Etot_new = P_new / (HydroSystem<problem_t>::gamma_ - 1.) + 0.5 * rho_new * vsq;
-				state[bx](i, j, k, HydroSystem<problem_t>::energy_index) = Etot_new;
-			}
-		}
 	});
 }
 
