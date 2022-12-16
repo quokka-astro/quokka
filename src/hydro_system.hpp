@@ -594,16 +594,16 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 		amrex::Real Ekin = rho * vsq / 2.;
 		amrex::Real rho_new = rho;
 
-		if (rho <  densityFloor) {
+		if (rho < densityFloor) {
 			rho_new = densityFloor;
 			state[bx](i, j, k, density_index) = rho_new;
 			state[bx](i, j, k, internalEnergy_index) = Eint * rho_new / rho;
 			state[bx](i, j, k, energy_index) = rho_new * vsq / 2. + (Etot - Ekin);
 			if (nscalars_ > 0) {
 				for (int n = 0; n < nscalars_; ++n) {
-					if(!rho_new){
-					    state[bx](i, j, k, scalar0_index + n) = 0.0;
-					}else{
+					if (!rho_new) {
+						state[bx](i, j, k, scalar0_index + n) = 0.0;
+					} else {
 						state[bx](i, j, k, scalar0_index + n) *= rho / rho_new;
 					}
 				}
