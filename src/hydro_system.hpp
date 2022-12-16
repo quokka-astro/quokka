@@ -580,8 +580,6 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 					   amrex::Real const tempCeiling, amrex::Real const tempFloor, amrex::MultiFab &state_mf)
 {
 
-	amrex::Real const rho_floor = densityFloor; // workaround nvcc bug
-	amrex::Real const P_floor = pressureFloor;
 	auto state = state_mf.arrays();
 
 	amrex::ParallelFor(state_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
@@ -596,15 +594,15 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 		amrex::Real Ekin = rho * vsq / 2.;
 		amrex::Real rho_new = rho;
 
-		if (rho < rho_floor) {
-			rho_new = rho_floor;
+		if (rho <  densityFloor) {
+			rho_new = densityFloor;
 			state[bx](i, j, k, density_index) = rho_new;
 			state[bx](i, j, k, internalEnergy_index) = Eint * rho_new / rho;
 			state[bx](i, j, k, energy_index) = rho_new * vsq / 2. + (Etot - Ekin);
 			if (nscalars_ > 0) {
 				for (int n = 0; n < nscalars_; ++n) {
 					if(!rho_new){
-					state[bx](i, j, k, scalar0_index + n) *= 0.0;
+					    state[bx](i, j, k, scalar0_index + n) = 0.0;
 					}else{
 						state[bx](i, j, k, scalar0_index + n) *= rho / rho_new;
 					}}}}
@@ -622,8 +620,8 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 			amrex::Real const Eint_star = Etot - 0.5 * rho_new * vsq;
 			amrex::Real const P_star = Eint_star * (HydroSystem<problem_t>::gamma_ - 1.);
 			amrex::Real P_new = P_star;
-			if (P_star < P_floor) {
-				P_new = P_floor;
+			if (P_star < pressureFloor) {
+				P_new = pressureFloor;
 #pragma nv_diag_suppress divide_by_zero
 				amrex::Real const Etot_new = P_new / (HydroSystem<problem_t>::gamma_ - 1.) + 0.5 * rho_new * vsq;
 				state[bx](i, j, k, HydroSystem<problem_t>::energy_index) = Etot_new;
