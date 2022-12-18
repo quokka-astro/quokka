@@ -19,7 +19,7 @@ jobs:
         run: |
           .github/workflows/dependencies/documentation.sh
           python3 -m pip install --upgrade pip
-          python3 -m pip install sphinx==5.0.0 sphinx_rtd_theme
+          python3 -m pip install sphinx==5.3.0 sphinx_rtd_theme sphinxcontrib_bibtex
 
       - name: Install and Build
         run: |
@@ -33,6 +33,5 @@ jobs:
           ACCESS_TOKEN: ${{ secrets.DEPLOY_DOCS }}
           REPOSITORY_NAME: quokka-astro/quokka-astro.github.io
           BRANCH: main # The branch the action should deploy to.
-          FOLDER: build # The folder the action should deploy.
-          TARGET_FOLDER: . # The folder the action should deploy to.
+          FOLDER: docs/_build/html # The folder the action should deploy.
           CLEAN: false # Do not remove existing files from the deploy target.
