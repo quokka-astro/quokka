@@ -112,6 +112,11 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real abstolPoisson_ = 1.0e-10; // default
 	int doPoissonSolve_ = 0;	      // 1 == self-gravity enabled, 0 == disabled
 
+	amrex::Real densityFloor_ = 0.0;				     // in g cm-3, default
+	amrex::Real tempCeiling_ = std::numeric_limits<double>::infinity();  // default in K
+	amrex::Real tempFloor_ = 0.0;					     // default in K
+	amrex::Real speedCeiling_ = std::numeric_limits<double>::infinity(); // default in cm/s
+
 	// constructor
 	explicit AMRSimulation(amrex::Vector<amrex::BCRec> &BCs_cc, amrex::Vector<amrex::BCRec> &BCs_fc) : BCs_cc_(BCs_cc), BCs_fc_(BCs_fc) { initialize(); }
 
@@ -213,6 +218,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void setChkFile(std::string const &chkfile_number);
 	[[nodiscard]] auto getOldMF_fc() const -> amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const &;
 	[[nodiscard]] auto getNewMF_fc() const -> amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const &;
+
 #ifdef AMREX_USE_ASCENT
 	void AscentCustomActions(conduit::Node const &blueprintMesh);
 	void RenderAscent();
@@ -436,6 +442,18 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 	// re-grid interval
 	pp.query("regrid_interval", regrid_int);
+
+	// read density floor in g cm^-3
+	pp.query("density_floor", densityFloor_);
+
+	// read temperature floor in K
+	pp.query("temperature_floor", tempFloor_);
+
+	// read temperature ceiling in K
+	pp.query("temperature_ceiling", tempCeiling_);
+
+	// read speed ceiling in cm s^-1
+	pp.query("speed_ceiling", speedCeiling_);
 
 	// specify maximum walltime in HH:MM:SS format
 	std::string maxWalltimeInput;
