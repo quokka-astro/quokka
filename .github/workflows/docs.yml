@@ -69,5 +69,6 @@ jobs:
     needs: build
     steps:
       - name: Deploy to GitHub Pages
+        if: github.event_name == 'push' && github.repository == 'quokka-astro/quokka' && github.ref == 'refs/heads/development'
         id: deployment
         uses: actions/deploy-pages@v1
