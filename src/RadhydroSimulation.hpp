@@ -279,6 +279,7 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::readParmParse(
 		amrex::ParmParse hpp("hydro");
 		hpp.query("reconstruction_order", reconstructionOrder_);
 		hpp.query("use_dual_energy", useDualEnergy_);
+		hpp.query("abort_on_fofc_failure", abortOnFofcFailure_);
 	}
 
 	// set radiation runtime parameters
