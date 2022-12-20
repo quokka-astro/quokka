@@ -2,7 +2,7 @@ name: Build and Deploy Docs
 
 on:
   push:
-    branches: [$default-branch]
+    branches: [development]
     
   pull_request:
 
