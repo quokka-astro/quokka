@@ -9,6 +9,8 @@ on:
 
 jobs:
   build:
+    # avoid trying to post comments on a merged PR
+    if: github.event.pull_request.merged == false
     runs-on: ubuntu-latest
 
     steps:
