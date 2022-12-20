@@ -62,6 +62,7 @@ jobs:
           retention-days: 1
 
   deploy:
+    if: github.event_name == 'push' && github.repository == 'quokka-astro/quokka' && github.ref == 'refs/heads/development'
     environment:
       name: github-pages
       url: quokka-astro.github.io
@@ -69,6 +70,5 @@ jobs:
     needs: build
     steps:
       - name: Deploy to GitHub Pages
-        if: github.event_name == 'push' && github.repository == 'quokka-astro/quokka' && github.ref == 'refs/heads/development'
         id: deployment
         uses: actions/deploy-pages@v1
