@@ -856,9 +856,15 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 			HydroSystem<problem_t>::PredictStep(stateOld, stateNew, rhs, dt_lev, ncompHydro_, redoFlag);
 
 			amrex::Gpu::streamSynchronizeAll(); // just in case
-			if (redoFlag.max(0) == quokka::redoFlag::redo) {
+			int ncells_bad = redoFlag.sum(0);
+			if (ncells_bad > 0) {
 				// FOFC failed
-				return false;
+				if (Verbose()) {
+					amrex::Print() << "[FOFC-1] failed for " << ncells_bad << " cells on level " << lev << "\n";
+				}
+				if (abortOnFofcFailure_) {
+					return false;
+				}
 			}
 		}
 
@@ -919,9 +925,15 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 			HydroSystem<problem_t>::AddFluxesRK2(stateFinal, stateOld, stateInter, rhs, dt_lev, ncompHydro_, redoFlag);
 
 			amrex::Gpu::streamSynchronizeAll(); // just in case
-			if (redoFlag.max(0) == quokka::redoFlag::redo) {
+			int ncells_bad = redoFlag.sum(0);
+			if (ncells_bad > 0) {
 				// FOFC failed
-				return false;
+				if (Verbose()) {
+					amrex::Print() << "[FOFC-1] failed for " << ncells_bad << " cells on level " << lev << "\n";
+				}
+				if (abortOnFofcFailure_) {
+					return false;
+				}
 			}
 		}
 
