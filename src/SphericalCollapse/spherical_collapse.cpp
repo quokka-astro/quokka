@@ -70,7 +70,7 @@ template <> void RadhydroSimulation<CollapseProblem>::setInitialConditionsOnGrid
 		double R_sphere = 0.5;
 		double R_smooth = 0.025;
 		double rho = std::max(rho_min, rho_max * ((std::tanh((R_sphere - r) / R_smooth) + 1.0) / 2.0));
-		double P = 1.0e-3;
+		double P = 1.0e-1;
 
 		AMREX_ASSERT(!std::isnan(rho));
 		AMREX_ASSERT(!std::isnan(P));
