@@ -7,3 +7,6 @@
 [submodule "extern/grackle_data_files"]
 	path = extern/grackle_data_files
 	url = https://github.com/grackle-project/grackle_data_files.git
+[submodule "extern/Microphysics"]
+	path = extern/Microphysics
+	url = https://github.com/AMReX-Astro/Microphysics
