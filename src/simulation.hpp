@@ -112,10 +112,10 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real abstolPoisson_ = 1.0e-10; // default
 	int doPoissonSolve_ = 0;	      // 1 == self-gravity enabled, 0 == disabled
 
-	amrex::Real densityFloor_ = 0.0;				     // in g cm-3, default
-	amrex::Real tempCeiling_ = std::numeric_limits<double>::infinity();  // default in K
-	amrex::Real tempFloor_ = 0.0;					     // default in K
-	amrex::Real speedCeiling_ = std::numeric_limits<double>::infinity(); // default in cm/s
+	amrex::Real densityFloor_ = 0.0;				// default
+	amrex::Real tempCeiling_ = std::numeric_limits<double>::max();	// default
+	amrex::Real tempFloor_ = 0.0;					// default
+	amrex::Real speedCeiling_ = std::numeric_limits<double>::max(); // default
 
 	// constructor
 	explicit AMRSimulation(amrex::Vector<amrex::BCRec> &BCs_cc, amrex::Vector<amrex::BCRec> &BCs_fc) : BCs_cc_(BCs_cc), BCs_fc_(BCs_fc) { initialize(); }

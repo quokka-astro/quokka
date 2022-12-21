@@ -17,6 +17,7 @@ run with high performance on either CPUs or GPUs.
    about
    installation
    equations
+   flowchart
    tests/index
    api
    bibliography
