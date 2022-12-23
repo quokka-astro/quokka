@@ -99,9 +99,9 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	static void SyncDualEnergy(amrex::MultiFab &consVar_mf);
 
-	template <FluxDir DIR>
+	template <FluxDir DIR, typename F>
 	static void ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab &x1FaceVel_mf, amrex::MultiFab const &x1LeftState_mf,
-				  amrex::MultiFab const &x1RightState_mf, amrex::MultiFab const &primVar_mf);
+				  amrex::MultiFab const &x1RightState_mf, amrex::MultiFab const &primVar_mf, F &&RiemannSolver);
 
 	template <FluxDir DIR>
 	static void ComputeFirstOrderFluxes(amrex::Array4<const amrex::Real> const &consVar, array_t &x1FluxDiffusive, amrex::Box const &indexRange);
@@ -750,9 +750,9 @@ template <typename problem_t> void HydroSystem<problem_t>::SyncDualEnergy(amrex:
 }
 
 template <typename problem_t>
-template <FluxDir DIR>
+template <FluxDir DIR, typename RiemannSolver>
 void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab &x1FaceVel_mf, amrex::MultiFab const &x1LeftState_mf,
-					   amrex::MultiFab const &x1RightState_mf, amrex::MultiFab const &primVar_mf)
+					   amrex::MultiFab const &x1RightState_mf, amrex::MultiFab const &primVar_mf, RiemannSolver &&rsolver)
 {
 
 	// By convention, the interfaces are defined on the left edge of each
@@ -918,7 +918,7 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 #endif
 
 		// solve the Riemann problem in canonical form
-		quokka::valarray<double, nvar_> F_canonical = quokka::Riemann::HLLC<nscalars_, nvar_>(sL, sR, gamma_, du, dw);
+		quokka::valarray<double, nvar_> F_canonical = rsolver(sL, sR, gamma_, du, dw);
 		quokka::valarray<double, nvar_> F = F_canonical;
 
 		// permute momentum components according to flux direction DIR

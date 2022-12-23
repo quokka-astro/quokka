@@ -44,6 +44,8 @@
 #include "AMReX_YAFluxRegister.H"
 
 #include "CloudyCooling.hpp"
+#include "LLF.hpp"
+#include "HLLC.hpp"
 #include "SimulationData.hpp"
 #include "hydro_system.hpp"
 #include "hyperbolic_system.hpp"
@@ -919,6 +921,9 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 			amrex::Gpu::streamSynchronizeAll(); // just in case
 			if (redoFlag.max(0) == quokka::redoFlag::redo) {
 				// FOFC failed
+				if (Verbose()) {
+					amrex::Print() << "[FOFC-2] flux correction failed!\n";
+				}
 				return false;
 			}
 		}
@@ -1091,7 +1096,8 @@ void RadhydroSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab const &pri
 	HydroSystem<problem_t>::template FlattenShocks<DIR>(primVar, x1Flat, x2Flat, x3Flat, leftState, rightState, ng_reconstruct, nvars);
 
 	// interface-centered kernel
-	HydroSystem<problem_t>::template ComputeFluxes<DIR>(flux, faceVel, leftState, rightState, primVar);
+	HydroSystem<problem_t>::template ComputeFluxes<DIR>(flux, faceVel, leftState, rightState, primVar,
+							    quokka::Riemann::HLLC<HydroSystem<problem_t>::nscalars_, HydroSystem<problem_t>::nvar_>);
 }
 
 template <typename problem_t>
@@ -1102,7 +1108,6 @@ auto RadhydroSimulation<problem_t>::computeFOHydroFluxes(amrex::MultiFab const &
 
 	auto ba = grids[lev];
 	auto dm = dmap[lev];
-	const int flatteningGhost = 2;
 	const int reconstructRange = 1;
 
 	// allocate temporary MultiFabs
@@ -1144,7 +1149,8 @@ void RadhydroSimulation<problem_t>::hydroFOFluxFunction(amrex::MultiFab const &p
 	HydroSystem<problem_t>::template ReconstructStatesConstant<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
 
 	// interface-centered kernel
-	HydroSystem<problem_t>::template ComputeFluxes<DIR>(flux, faceVel, leftState, rightState, primVar);
+	HydroSystem<problem_t>::template ComputeFluxes<DIR>(flux, faceVel, leftState, rightState, primVar,
+							    quokka::Riemann::LLF<HydroSystem<problem_t>::nscalars_, HydroSystem<problem_t>::nvar_>);
 }
 
 template <typename problem_t> void RadhydroSimulation<problem_t>::swapRadiationState(amrex::MultiFab &stateOld, amrex::MultiFab const &stateNew)
