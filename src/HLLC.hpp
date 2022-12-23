@@ -22,19 +22,21 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars> cons
 					      const double du, const double dw) -> quokka::valarray<double, fluxdim>
 {
 	// compute Roe averages
-	double wl = std::sqrt(sL.rho);
-	double wr = std::sqrt(sR.rho);
-	double norm = 1. / (wl + wr);
-	double u_tilde = (wl * sL.u + wr * sR.u) * norm;
-	double v_tilde = (wl * sL.v + wr * sR.v) * norm;
-	double w_tilde = (wl * sL.w + wr * sR.w) * norm;
-	double vsq_tilde = u_tilde * u_tilde + v_tilde * v_tilde + w_tilde * w_tilde;
-	double H_L = (sL.E + sL.P) / sL.rho; // sL specific enthalpy
-	double H_R = (sR.E + sR.P) / sR.rho; // sR specific enthalpy
-	double H_tilde = (wl * H_L + wr * H_R) * norm;
+	
+	const double wl = std::sqrt(sL.rho);
+	const double wr = std::sqrt(sR.rho);
+	const double norm = 1. / (wl + wr);
+	const double u_tilde = (wl * sL.u + wr * sR.u) * norm;
+	const double v_tilde = (wl * sL.v + wr * sR.v) * norm;
+	const double w_tilde = (wl * sL.w + wr * sR.w) * norm;
+	const double vsq_tilde = u_tilde * u_tilde + v_tilde * v_tilde + w_tilde * w_tilde;
+	const double H_L = (sL.E + sL.P) / sL.rho; // sL specific enthalpy
+	const double H_R = (sR.E + sR.P) / sR.rho; // sR specific enthalpy
+	const double H_tilde = (wl * H_L + wr * H_R) * norm;
 	double cs_tilde = NAN;
 	if (gamma != 1.0) {
-		cs_tilde = (gamma - 1.) * (H_tilde - 0.5 * vsq_tilde);
+		// TODO(ben): implement Roe average for general EOS
+		cs_tilde = std::sqrt((gamma - 1.) * (H_tilde - 0.5 * vsq_tilde));
 	} else {
 		cs_tilde = 0.5 * (sL.cs + sR.cs);
 	}
