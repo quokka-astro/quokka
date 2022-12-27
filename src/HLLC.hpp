@@ -22,7 +22,7 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars> cons
 					      const double du, const double dw) -> quokka::valarray<double, fluxdim>
 {
 	// compute Roe averages
-	
+
 	const double wl = std::sqrt(sL.rho);
 	const double wr = std::sqrt(sR.rho);
 	const double norm = 1. / (wl + wr);
