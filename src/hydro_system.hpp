@@ -918,7 +918,7 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 #endif
 
 		// solve the Riemann problem in canonical form
-		quokka::valarray<double, nvar_> F_canonical = quokka::Riemann::HLLC(sL, sR, gamma_, du, dw);
+		quokka::valarray<double, nvar_> F_canonical = quokka::Riemann::HLLC<nscalars_, nvar_>(sL, sR, gamma_, du, dw);
 		quokka::valarray<double, nvar_> F = F_canonical;
 
 		// permute momentum components according to flux direction DIR
