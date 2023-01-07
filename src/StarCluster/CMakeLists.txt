@@ -1,0 +1,6 @@
+if (AMReX_SPACEDIM EQUAL 3)
+    add_executable(star_cluster ../main.cpp star_cluster.cpp)
+    if(AMReX_GPU_BACKEND MATCHES "CUDA")
+        setup_target_for_cuda_compilation(star_cluster)
+    endif()
+endif()
