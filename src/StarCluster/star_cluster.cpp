@@ -276,6 +276,8 @@ template <> void RadhydroSimulation<StarCluster>::setInitialConditionsOnGrid(quo
 		state_cc(i, j, k, HydroSystem<StarCluster>::x1Momentum_index) = rho * vx;
 		state_cc(i, j, k, HydroSystem<StarCluster>::x2Momentum_index) = rho * vy;
 		state_cc(i, j, k, HydroSystem<StarCluster>::x3Momentum_index) = rho * vz;
+		state_cc(i, j, k, HydroSystem<StarCluster>::energy_index) = 0;
+		state_cc(i, j, k, HydroSystem<StarCluster>::internalEnergy_index) = 0;
 	});
 }
 
