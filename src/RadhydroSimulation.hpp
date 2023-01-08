@@ -113,6 +113,8 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
 
+	amrex::Real Gconst_ = 1.0; // gravitational constant G (code units)
+
 	// member functions
 	explicit RadhydroSimulation(amrex::Vector<amrex::BCRec> &BCs_cc, amrex::Vector<amrex::BCRec> &BCs_fc) : AMRSimulation<problem_t>(BCs_cc, BCs_fc)
 	{
@@ -537,7 +539,7 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::fillPoissonRhs
 
 	amrex::ParallelFor(rhs_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		// copy density to rhs_mf
-		rhs[bx](i, j, k) = 4.0 * M_PI * state[bx](i, j, k, HydroSystem<problem_t>::density_index);
+		rhs[bx](i, j, k) = 4.0 * M_PI * Gconst_ * state[bx](i, j, k, HydroSystem<problem_t>::density_index);
 	});
 }
 

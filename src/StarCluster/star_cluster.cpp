@@ -281,24 +281,22 @@ template <> void RadhydroSimulation<StarCluster>::setInitialConditionsOnGrid(quo
 
 template <> void RadhydroSimulation<StarCluster>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
-	// tag cells for refinement
-	// TODO(ben): refine on Jeans length
+	// refine on Jeans length
+	const int N_cells = 4; // inverse of the 'Jeans number' [Truelove et al. (1997)]
+	const amrex::Real cs = quokka::EOS_Traits<StarCluster>::cs_isothermal;
+	const amrex::Real dx = geom[lev].CellSizeArray()[0];
 
-	const Real q_min = 5.0; // minimum density for refinement
+	auto const &state = state_new_cc_[lev].const_arrays();
+	auto tag = tags.arrays();
 
-	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
-		const amrex::Box &box = mfi.validbox();
-		const auto state = state_new_cc_[lev].const_array(mfi);
-		const auto tag = tags.array(mfi);
-		const int nidx = HydroSystem<StarCluster>::density_index;
+	amrex::ParallelFor(tags, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		Real const rho = state[bx](i, j, k, HydroSystem<StarCluster>::density_index);
+		const amrex::Real l_Jeans = cs * std::sqrt(M_PI / (Gconst_ * rho));
 
-		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			Real const q = state(i, j, k, nidx);
-			if (q > q_min) {
-				tag(i, j, k) = amrex::TagBox::SET;
-			}
-		});
-	}
+		if (l_Jeans < (N_cells * dx)) {
+			tag[bx](i, j, k) = amrex::TagBox::SET;
+		}
+	});
 }
 
 auto problem_main() -> int
@@ -333,6 +331,7 @@ auto problem_main() -> int
 	// Problem initialization
 	RadhydroSimulation<StarCluster> sim(BCs_cc);
 	sim.doPoissonSolve_ = 1; // enable self-gravity
+	sim.Gconst_ = 1.0;	 // units where G = 1
 
 	// initialize
 	sim.setInitialConditions();
