@@ -108,7 +108,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	int plotfileInterval_ = -1;	     // -1 == no output
 	int checkpointInterval_ = -1;	     // -1 == no output
 	int amrInterpMethod_ = 1;	     // 0 == piecewise constant, 1 == lincc_interp
-	amrex::Real reltolPoisson_ = 1.0e-8; // default
+	amrex::Real reltolPoisson_ = 1.0e-5; // default
 	amrex::Real abstolPoisson_ = 1.0e-5; // default (scaled by minimum RHS value)
 	int doPoissonSolve_ = 0;	     // 1 == self-gravity enabled, 0 == disabled
 
