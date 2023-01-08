@@ -61,7 +61,7 @@ template <> struct SimulationData<StarCluster> {
 };
 
 constexpr int kmin = 0;
-constexpr int kmax = 16;
+constexpr int kmax = 4;
 
 auto generateRandomModes(const int alpha_PL, const int seed) -> amrex::TableData<Real, 4>
 {

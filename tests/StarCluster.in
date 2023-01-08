@@ -33,3 +33,6 @@ plotfile_interval = 100
 checkpoint_interval = 100
 
 perturb.power_law = 2
+
+amrex.throw_exception = 0
+amrex.signal_handling = 1
