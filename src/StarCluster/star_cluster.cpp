@@ -308,13 +308,14 @@ template <> void RadhydroSimulation<StarCluster>::ErrorEst(int lev, amrex::TagBo
 	const int N_cells = 4; // inverse of the 'Jeans number' [Truelove et al. (1997)]
 	const amrex::Real cs = quokka::EOS_Traits<StarCluster>::cs_isothermal;
 	const amrex::Real dx = geom[lev].CellSizeArray()[0];
+	const amrex::Real G = Gconst_;
 
 	auto const &state = state_new_cc_[lev].const_arrays();
 	auto tag = tags.arrays();
 
 	amrex::ParallelFor(tags, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		Real const rho = state[bx](i, j, k, HydroSystem<StarCluster>::density_index);
-		const amrex::Real l_Jeans = cs * std::sqrt(M_PI / (Gconst_ * rho));
+		const amrex::Real l_Jeans = cs * std::sqrt(M_PI / (G * rho));
 
 		if (l_Jeans < (N_cells * dx)) {
 			tag[bx](i, j, k) = amrex::TagBox::SET;
