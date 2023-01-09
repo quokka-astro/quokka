@@ -770,7 +770,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ellipticSolveAllLev
 		}
 
 		// set up elliptic solve object
-		amrex::OpenBCSolver poissonSolver(geom, grids, dmap);
+		amrex::OpenBCSolver poissonSolver(Geom(0, finest_level), boxArray(0, finest_level), DistributionMap(0, finest_level));
 		if (verbose) {
 			poissonSolver.setVerbose(true);
 			poissonSolver.setBottomVerbose(false);
