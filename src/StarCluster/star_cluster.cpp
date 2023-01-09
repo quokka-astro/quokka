@@ -235,6 +235,9 @@ template <> void RadhydroSimulation<StarCluster>::setInitialConditionsOnGrid(quo
 	auto const &dvy_modes = userData_.dvy_modes->const_table();
 	auto const &dvz_modes = userData_.dvz_modes->const_table();
 
+	const int kmin = ::kmin;
+	const int kmax = ::kmax;
+
 	amrex::Real Lx = prob_hi[0] - prob_lo[0];
 	amrex::Real Ly = prob_hi[1] - prob_lo[1];
 	amrex::Real Lz = prob_hi[2] - prob_lo[2];

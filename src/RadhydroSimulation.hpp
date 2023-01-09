@@ -536,10 +536,11 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::fillPoissonRhs
 	// NOTE: in the future, this should also deposit particle mass
 	auto const &state = state_new_cc_[lev].const_arrays();
 	auto rhs = rhs_mf.arrays();
+	const Real G = Gconst_;
 
 	amrex::ParallelFor(rhs_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		// copy density to rhs_mf
-		rhs[bx](i, j, k) = 4.0 * M_PI * Gconst_ * state[bx](i, j, k, HydroSystem<problem_t>::density_index);
+		rhs[bx](i, j, k) = 4.0 * M_PI * G * state[bx](i, j, k, HydroSystem<problem_t>::density_index);
 	});
 }
 
