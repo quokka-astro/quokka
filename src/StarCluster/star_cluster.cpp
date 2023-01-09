@@ -319,6 +319,21 @@ template <> void RadhydroSimulation<StarCluster>::ErrorEst(int lev, amrex::TagBo
 	});
 }
 
+template <> void RadhydroSimulation<StarCluster>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in) const
+{
+	// compute derived variables and save in 'mf'
+	if (dname == "log_density") {
+		const int ncomp = ncomp_cc_in;
+		auto const &state = state_new_cc_[lev].const_arrays();
+		auto output = mf.arrays();
+
+		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			Real const rho = state[bx](i, j, k, HydroSystem<StarCluster>::density_index);
+			output[bx](i, j, k, ncomp) = std::log10(rho);
+		});
+	}
+}
+
 auto problem_main() -> int
 {
 	// read problem parameters

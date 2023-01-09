@@ -39,5 +39,7 @@ perturb.cloud_radius = 5.0
 perturb.cloud_density = 1.0
 perturb.virial_parameter = 2.0
 
+derived_vars = log_density
+
 amrex.throw_exception = 0
 amrex.signal_handling = 1
