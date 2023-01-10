@@ -74,7 +74,7 @@ void initialize_turbdata(turb_data &data, std::string &data_file)
 auto get_tabledata(amrex::Table3D<double> &in_t) -> amrex::TableData<double, 3>
 {
 	amrex::Array<int, 3> tlo{in_t.begin[0], in_t.begin[1], in_t.begin[2]};
-	amrex::Array<int, 3> thi{in_t.end[0], in_t.end[1], in_t.end[2]};
+	amrex::Array<int, 3> thi{in_t.end[0] - 1, in_t.end[1] - 1, in_t.end[2] - 1};
 	amrex::TableData<double, 3> tableData(tlo, thi, amrex::The_Pinned_Arena());
 	auto h_table = tableData.table();
 
@@ -103,9 +103,9 @@ auto computeRms(amrex::TableData<amrex::Real, 3> &dvx, amrex::TableData<amrex::R
 	// compute rms power
 	amrex::Real rms_sq = 0;
 	amrex::Long N = 0;
-	for (int i = tlo[0]; i < thi[0]; ++i) {
-		for (int j = tlo[1]; j < thi[1]; ++j) {
-			for (int k = tlo[2]; k < thi[2]; ++k) {
+	for (int i = tlo[0]; i <= thi[0]; ++i) {
+		for (int j = tlo[1]; j <= thi[1]; ++j) {
+			for (int k = tlo[2]; k <= thi[2]; ++k) {
 				amrex::Real vx = dvx_table(i, j, k);
 				amrex::Real vy = dvy_table(i, j, k);
 				amrex::Real vz = dvz_table(i, j, k);
