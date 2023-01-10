@@ -13,7 +13,7 @@ amr.v              = 1       # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 64 64 64
+amr.n_cell          = 128 128 128
 amr.max_level       = 0     # number of levels = max_level + 1
 amr.blocking_factor = 16    # grid size must be divisible by this
 amr.max_grid_size   = 64    # at least 128 for GPUs
@@ -32,12 +32,12 @@ ascent_interval = 10
 plotfile_interval = 20
 checkpoint_interval = 100
 
-perturb.kmin = 2
-perturb.kmax = 64
-perturb.power_law = 2
 perturb.cloud_radius = 5.0
 perturb.cloud_density = 1.0
 perturb.virial_parameter = 2.0
+
+# generate with 'python3 perturbation.py --kmin=2 --kmax=64 --size=128 --alpha=2 --f_solenoidal=1.0'
+perturb.filename = "zdrv.hdf5"
 
 derived_vars = log_density
 

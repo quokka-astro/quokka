@@ -25,7 +25,7 @@
 
 #include "EOS.hpp"
 #include "RadhydroSimulation.hpp"
-#include "generate_modes.hpp"
+#include "TurbDataReader.hpp"
 #include "hydro_system.hpp"
 #include "star_cluster.hpp"
 
@@ -56,10 +56,10 @@ template <> struct Physics_Traits<StarCluster> {
 };
 
 template <> struct SimulationData<StarCluster> {
-	// perturbation parameters
-	std::unique_ptr<amrex::TableData<Real, 4>> dvx_modes;
-	std::unique_ptr<amrex::TableData<Real, 4>> dvy_modes;
-	std::unique_ptr<amrex::TableData<Real, 4>> dvz_modes;
+	// real-space perturbation fields
+	amrex::TableData<Real, 3> dvx;
+	amrex::TableData<Real, 3> dvy;
+	amrex::TableData<Real, 3> dvz;
 	Real dv_rms_generated{};
 	Real dv_rms_target{};
 	Real rescale_factor{};
@@ -68,52 +68,47 @@ template <> struct SimulationData<StarCluster> {
 	Real R_sphere{};
 	Real rho_sphere{};
 	Real alpha_vir{};
-	int alpha_PL{};
 };
-
-// range of modes to perturb
-int kmin{2};
-int kmax{64};
 
 template <> void RadhydroSimulation<StarCluster>::preCalculateInitialConditions()
 {
 	static bool isSamplingDone = false;
 	if (!isSamplingDone) {
-		amrex::Print() << "Generating velocity perturbations...\n";
-		int alpha_PL = userData_.alpha_PL;
-		amrex::TableData<Real, 4> dvx = generateRandomModes(kmin, kmax, alpha_PL, 42);
-		amrex::TableData<Real, 4> dvy = generateRandomModes(kmin, kmax, alpha_PL, 107);
-		amrex::TableData<Real, 4> dvz = generateRandomModes(kmin, kmax, alpha_PL, 56);
+		// read perturbations from file
+		turb_data turbData;
+		amrex::ParmParse pp("perturb");
+		std::string turbdata_filename;
+		pp.query("filename", turbdata_filename);
+		initialize_turbdata(turbData, turbdata_filename);
 
-		// keep solonoidal modes only
-		projectModes(kmin, kmax, dvx, dvy, dvz);
+		// copy to pinned memory
+		auto pinned_dvx = get_tabledata(turbData.dvx);
+		auto pinned_dvy = get_tabledata(turbData.dvy);
+		auto pinned_dvz = get_tabledata(turbData.dvz);
 
 		// compute normalisation
-		userData_.dv_rms_generated = computeRms(kmin, kmax, dvx, dvy, dvz);
+		userData_.dv_rms_generated = computeRms(pinned_dvx, pinned_dvy, pinned_dvz);
 		amrex::Print() << "rms dv = " << userData_.dv_rms_generated << "\n";
 
-		// calculate rms velocity for a marginally-bound star cluster
 		const Real R_sphere = userData_.R_sphere;
 		const Real rho_sph = userData_.rho_sphere;
 		const Real alpha_vir = userData_.alpha_vir;
 		const Real M_sphere = (4. / 3.) * M_PI * std::pow(R_sphere, 3) * rho_sph;
 		const Real rms_dv_target = std::sqrt(alpha_vir * (3. / 5.) * Gconst_ * M_sphere / R_sphere);
 		const Real rms_Mach_target = rms_dv_target / quokka::EOS_Traits<StarCluster>::cs_isothermal;
+		const Real rms_dv_actual = userData_.dv_rms_generated;
+		userData_.rescale_factor = rms_dv_target / rms_dv_actual;
 		amrex::Print() << "rms Mach target = " << rms_Mach_target << "\n";
 
-		double rms_dv_actual = userData_.dv_rms_generated;
-		userData_.rescale_factor = rms_dv_target / rms_dv_actual;
+		// copy to GPU
+		userData_.dvx.resize(pinned_dvx.lo(), pinned_dvx.hi());
+		userData_.dvx.copy(pinned_dvx);
 
-		// copy data to GPU memory
-		amrex::Array<int, 4> tlo{kmin, kmin, kmin, 0};
-		amrex::Array<int, 4> thi{kmax, kmax, kmax, 1};
-		userData_.dvx_modes = std::make_unique<amrex::TableData<Real, 4>>(tlo, thi);
-		userData_.dvy_modes = std::make_unique<amrex::TableData<Real, 4>>(tlo, thi);
-		userData_.dvz_modes = std::make_unique<amrex::TableData<Real, 4>>(tlo, thi);
-		userData_.dvx_modes->copy(dvx);
-		userData_.dvy_modes->copy(dvy);
-		userData_.dvz_modes->copy(dvz);
-		amrex::Gpu::streamSynchronize();
+		userData_.dvy.resize(pinned_dvy.lo(), pinned_dvy.hi());
+		userData_.dvy.copy(pinned_dvy);
+
+		userData_.dvz.resize(pinned_dvz.lo(), pinned_dvz.hi());
+		userData_.dvz.copy(pinned_dvz);
 
 		isSamplingDone = true;
 	}
@@ -127,13 +122,6 @@ template <> void RadhydroSimulation<StarCluster>::setInitialConditionsOnGrid(quo
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_elem.prob_hi_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
-
-	auto const &dvx_modes = userData_.dvx_modes->const_table();
-	auto const &dvy_modes = userData_.dvy_modes->const_table();
-	auto const &dvz_modes = userData_.dvz_modes->const_table();
-
-	const int kmin = ::kmin;
-	const int kmax = ::kmax;
 
 	amrex::Real Lx = prob_hi[0] - prob_lo[0];
 	amrex::Real Ly = prob_hi[1] - prob_lo[1];
@@ -150,6 +138,10 @@ template <> void RadhydroSimulation<StarCluster>::setInitialConditionsOnGrid(quo
 	const double R_smooth = 0.05 * R_sphere;
 	const double renorm_amp = userData_.rescale_factor;
 
+	auto const &dvx = userData_.dvx.const_table();
+	auto const &dvy = userData_.dvy.const_table();
+	auto const &dvz = userData_.dvz.const_table();
+
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
 		amrex::Real const y = prob_lo[1] + (j + static_cast<amrex::Real>(0.5)) * dx[1];
@@ -159,32 +151,9 @@ template <> void RadhydroSimulation<StarCluster>::setInitialConditionsOnGrid(quo
 		double rho = std::max(rho_min, rho_max * ((std::tanh((R_sphere - r) / R_smooth) + 1.0) / 2.0));
 		AMREX_ASSERT(!std::isnan(rho));
 
-		double vx = 0;
-		double vy = 0;
-		double vz = 0;
-
-		for (int kx = kmin; kx < kmax; ++kx) {
-			for (int ky = kmin; ky < kmax; ++ky) {
-				for (int kz = kmin; kz < kmax; ++kz) {
-					const Real theta = (2.0 * M_PI) * (kx * (x / Lx) + ky * (y / Ly) + kz * (z / Lz));
-
-					// x-velocity
-					Real amp = dvx_modes(kx, ky, kz, 0);
-					Real phase = dvx_modes(kx, ky, kz, 1);
-					vx += amp * std::cos(theta + phase);
-
-					// y-velocity
-					amp = dvy_modes(kx, ky, kz, 0);
-					phase = dvy_modes(kx, ky, kz, 1);
-					vy += amp * std::cos(theta + phase);
-
-					// x-velocity
-					amp = dvz_modes(kx, ky, kz, 0);
-					phase = dvz_modes(kx, ky, kz, 1);
-					vz += amp * std::cos(theta + phase);
-				}
-			}
-		}
+		double vx = dvx(i, j, k);
+		double vy = dvy(i, j, k);
+		double vz = dvz(i, j, k);
 
 		vx *= renorm_amp * (rho / rho_max);
 		vy *= renorm_amp * (rho / rho_max);
@@ -240,16 +209,6 @@ auto problem_main() -> int
 	// read problem parameters
 	amrex::ParmParse pp("perturb");
 
-	// minimum wavenumber
-	pp.query("kmin", ::kmin);
-
-	// maximum wavenumber
-	pp.query("kmax", ::kmax);
-
-	// negative power-law exponent for power spectrum
-	int alpha_PL{};
-	pp.query("power_law", alpha_PL);
-
 	// cloud radius
 	Real R_sphere{};
 	pp.query("cloud_radius", R_sphere);
@@ -281,7 +240,6 @@ auto problem_main() -> int
 	sim.userData_.R_sphere = R_sphere;
 	sim.userData_.rho_sphere = rho_sphere;
 	sim.userData_.alpha_vir = alpha_vir;
-	sim.userData_.alpha_PL = alpha_PL;
 
 	// initialize
 	sim.setInitialConditions();
