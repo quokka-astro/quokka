@@ -104,13 +104,12 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	bool computeReferenceSolution_ = false;
 	amrex::Real errorNorm_ = NAN;
 	amrex::Real pressureFloor_ = 0.;
-	int fofcMaxIterations_ =
-	    3; // maximum number of flux correction iterations -- only 1 is needed in almost all cases, but in rare cases a second iteration is needed
 
 	int integratorOrder_ = 2;	       // 1 == forward Euler; 2 == RK2-SSP (default)
 	int reconstructionOrder_ = 3;	       // 1 == donor cell; 2 == PLM; 3 == PPM (default)
 	int radiationReconstructionOrder_ = 3; // 1 == donor cell; 2 == PLM; 3 == PPM (default)
 	int useDualEnergy_ = 1;		       // 0 == disabled; 1 == use auxiliary internal energy equation (default)
+	int abortOnFofcFailure_ = 0;	       // 0 == keep going, 1 == abort hydro advance if FOFC fails
 
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
 
@@ -281,6 +280,7 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::readParmParse(
 		amrex::ParmParse hpp("hydro");
 		hpp.query("reconstruction_order", reconstructionOrder_);
 		hpp.query("use_dual_energy", useDualEnergy_);
+		hpp.query("abort_on_fofc_failure", abortOnFofcFailure_);
 	}
 
 	// set radiation runtime parameters
@@ -832,8 +832,10 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 
 		amrex::MultiFab rhs(grids[lev], dmap[lev], ncompHydro_, 0);
 		amrex::iMultiFab redoFlag(grids[lev], dmap[lev], 1, 0);
+		redoFlag.setVal(quokka::redoFlag::none);
+
 		HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, fluxArrays, dx, ncompHydro_);
-		HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld, dx, faceVel);
+		HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld, dx, faceVel, redoFlag);
 		HydroSystem<problem_t>::PredictStep(stateOld, stateNew, rhs, dt_lev, ncompHydro_, redoFlag);
 
 		// do first-order flux correction (FOFC)
@@ -848,17 +850,22 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 			auto [FOfluxArrays, FOfaceVel] = computeFOHydroFluxes(stateOld, ncompHydro_, lev);
 			replaceFluxes(fluxArrays, FOfluxArrays, redoFlag);
 			replaceFluxes(faceVel, FOfaceVel, redoFlag); // needed for dual energy
-			redoFlag.setVal(quokka::redoFlag::none);     // reset redoFlag
 
 			// re-do RK update
 			HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, fluxArrays, dx, ncompHydro_);
-			HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld, dx, faceVel);
+			HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld, dx, faceVel, redoFlag);
 			HydroSystem<problem_t>::PredictStep(stateOld, stateNew, rhs, dt_lev, ncompHydro_, redoFlag);
 
 			amrex::Gpu::streamSynchronizeAll(); // just in case
-			if (redoFlag.max(0) == quokka::redoFlag::redo) {
+			amrex::Long ncells_bad = redoFlag.sum(0);
+			if (ncells_bad > 0) {
 				// FOFC failed
-				return false;
+				if (Verbose()) {
+					amrex::Print() << "[FOFC-1] failed for " << ncells_bad << " cells on level " << lev << "\n";
+				}
+				if (abortOnFofcFailure_ != 0) {
+					return false;
+				}
 			}
 		}
 
@@ -894,8 +901,10 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 
 		amrex::MultiFab rhs(grids[lev], dmap[lev], ncompHydro_, 0);
 		amrex::iMultiFab redoFlag(grids[lev], dmap[lev], 1, 0);
+		redoFlag.setVal(quokka::redoFlag::none);
+
 		HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, fluxArrays, dx, ncompHydro_);
-		HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateInter, dx, faceVel);
+		HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateInter, dx, faceVel, redoFlag);
 		HydroSystem<problem_t>::AddFluxesRK2(stateFinal, stateOld, stateInter, rhs, dt_lev, ncompHydro_, redoFlag);
 
 		// do first-order flux correction (FOFC)
@@ -910,17 +919,22 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 			auto [FOfluxArrays, FOfaceVel] = computeFOHydroFluxes(stateInter, ncompHydro_, lev);
 			replaceFluxes(fluxArrays, FOfluxArrays, redoFlag);
 			replaceFluxes(faceVel, FOfaceVel, redoFlag); // needed for dual energy
-			redoFlag.setVal(quokka::redoFlag::none);     // reset redoFlag
 
 			// re-do RK update
 			HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, fluxArrays, dx, ncompHydro_);
-			HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateInter, dx, faceVel);
+			HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateInter, dx, faceVel, redoFlag);
 			HydroSystem<problem_t>::AddFluxesRK2(stateFinal, stateOld, stateInter, rhs, dt_lev, ncompHydro_, redoFlag);
 
 			amrex::Gpu::streamSynchronizeAll(); // just in case
-			if (redoFlag.max(0) == quokka::redoFlag::redo) {
+			amrex::Long ncells_bad = redoFlag.sum(0);
+			if (ncells_bad > 0) {
 				// FOFC failed
-				return false;
+				if (Verbose()) {
+					amrex::Print() << "[FOFC-2] failed for " << ncells_bad << " cells on level " << lev << "\n";
+				}
+				if (abortOnFofcFailure_ != 0) {
+					return false;
+				}
 			}
 		}
 
@@ -931,7 +945,6 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 			// sync internal energy (requires positive density)
 			HydroSystem<problem_t>::SyncDualEnergy(stateFinal);
 		}
-        HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, stateFinal);
 
 		if (do_reflux == 1) {
 			// increment flux registers
