@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "AMReX.H"
+#include "AMReX_ParmParse.H"
 #include "CloudyCooling.hpp"
 #include "EOS.hpp"
 #include "ODEIntegrate.hpp"
@@ -40,7 +41,10 @@ auto problem_main() -> int
 
 	// Read Cloudy tables
 	cloudy_tables cloudyTables;
-	readCloudyData(cloudyTables);
+	std::string filename;
+	amrex::ParmParse pp("cooling");
+	pp.query("grackle_data_file", filename);
+	readCloudyData(filename, cloudyTables);
 	auto tables = cloudyTables.const_tables();
 
 	const Real T = ComputeTgasFromEgas(rho, Eint, quokka::EOS_Traits<ShockCloud>::gamma, tables);
