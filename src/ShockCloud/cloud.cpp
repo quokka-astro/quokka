@@ -56,7 +56,6 @@ template <> struct Physics_Traits<ShockCloud> {
 };
 
 template <> struct SimulationData<ShockCloud> {
-	quokka::cooling::cloudy_tables cloudyTables;
 	std::unique_ptr<amrex::TableData<Real, 3>> table_data;
 };
 
@@ -81,8 +80,6 @@ AMREX_GPU_MANAGED static Real rho_wind = 0;
 AMREX_GPU_MANAGED static Real v_wind = 0;
 AMREX_GPU_MANAGED static Real P_wind = 0;
 AMREX_GPU_MANAGED static Real delta_vx = 0;
-
-static bool enable_cooling = true;
 
 template <> void RadhydroSimulation<ShockCloud>::preCalculateInitialConditions()
 {
@@ -208,18 +205,12 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<ShockCloud>::setCustomBou
 	}
 }
 
-template <> void RadhydroSimulation<ShockCloud>::addStrangSplitSources(amrex::MultiFab &state, int /*lev*/, amrex::Real /*time*/, amrex::Real dt_lev)
-{
-	// compute operator split physics
-	quokka::cooling::computeCooling<ShockCloud>(state, dt_lev, userData_.cloudyTables, ::T_floor);
-}
-
 template <> void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in) const
 {
 	// compute derived variables and save in 'mf'
 	if (dname == "temperature") {
 		const int ncomp = ncomp_cc_in;
-		auto tables = userData_.cloudyTables.const_tables();
+		auto tables = cloudyTables_.const_tables();
 
 		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 			const amrex::Box &indexRange = iter.validbox();
@@ -233,7 +224,7 @@ template <> void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(int lev, std:
 				Real const x3Mom = state(i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
 				Real const Egas = state(i, j, k, HydroSystem<ShockCloud>::energy_index);
 				Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-				Real const Tgas = ComputeTgasFromEgas(rho, Eint, quokka::EOS_Traits<ShockCloud>::gamma, tables);
+				Real const Tgas = quokka::cooling::ComputeTgasFromEgas(rho, Eint, quokka::EOS_Traits<ShockCloud>::gamma, tables);
 
 				output(i, j, k, ncomp) = Tgas;
 			});
@@ -310,9 +301,6 @@ auto problem_main() -> int
 	sim.stopTime_ = max_time;
 	sim.plotfileInterval_ = 100;
 	sim.checkpointInterval_ = 2000;
-
-	// Read Cloudy tables
-	quokka::cooling::readCloudyData(sim.userData_.cloudyTables);
 
 	// Set initial conditions
 	sim.setInitialConditions();

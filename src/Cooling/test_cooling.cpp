@@ -20,8 +20,6 @@
 #include "AMReX_SPACE.H"
 #include "AMReX_TableData.H"
 
-#include "CloudyCooling.hpp"
-#include "ODEIntegrate.hpp"
 #include "RadhydroSimulation.hpp"
 #include "hydro_system.hpp"
 #include "radiation_system.hpp"
@@ -52,7 +50,6 @@ template <> struct Physics_Traits<CoolingTest> {
 };
 
 template <> struct SimulationData<CoolingTest> {
-	quokka::cooling::cloudy_tables cloudyTables;
 	std::unique_ptr<amrex::TableData<Real, 3>> table_data;
 };
 
@@ -189,12 +186,6 @@ AMRSimulation<CoolingTest>::setCustomBoundaryConditions(const amrex::IntVect &iv
 	}
 }
 
-template <> void RadhydroSimulation<CoolingTest>::addStrangSplitSources(amrex::MultiFab &state, int /*lev*/, amrex::Real /*time*/, amrex::Real dt_lev)
-{
-	// compute operator split physics
-	quokka::cooling::computeCooling<CoolingTest>(state, dt_lev, userData_.cloudyTables, T_floor);
-}
-
 auto problem_main() -> int
 {
 	// Problem parameters
@@ -228,9 +219,6 @@ auto problem_main() -> int
 	sim.stopTime_ = max_time;
 	sim.plotfileInterval_ = 100;
 	sim.checkpointInterval_ = -1;
-
-	// Read Cloudy tables
-	quokka::cooling::readCloudyData(sim.userData_.cloudyTables);
 
 	// Set initial conditions
 	sim.setInitialConditions();

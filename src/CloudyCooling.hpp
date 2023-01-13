@@ -302,7 +302,7 @@ template <typename problem_t> void computeCooling(amrex::MultiFab &mf, const Rea
 	}
 }
 
-void readCloudyData(cloudy_tables &cloudyTables);
+void readCloudyData(std::string &grackle_hdf5_file, cloudy_tables &cloudyTables);
 
 } // namespace quokka::cooling
 
