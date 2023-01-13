@@ -53,9 +53,8 @@ template <> struct SimulationData<CoolingTest> {
 	std::unique_ptr<amrex::TableData<Real, 3>> table_data;
 };
 
-constexpr double Tgas0 = 6000.;	      // K
-constexpr amrex::Real T_floor = 10.0; // K
-constexpr double rho0 = 0.6 * m_H;    // g cm^-3
+constexpr double Tgas0 = 6000.;	   // K
+constexpr double rho0 = 0.6 * m_H; // g cm^-3
 
 // perturbation parameters
 const int kmin = 0;

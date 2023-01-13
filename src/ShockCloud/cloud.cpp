@@ -25,7 +25,6 @@
 #include "AMReX_TableData.H"
 #include "AMReX_iMultiFab.H"
 
-#include "CloudyCooling.hpp"
 #include "RadhydroSimulation.hpp"
 #include "cloud.hpp"
 #include "hydro_system.hpp"
@@ -64,7 +63,6 @@ constexpr Real nH0 = 1.0e-4;		 // cm^-3
 constexpr Real nH1 = 1.0e-1;		 // cm^-3
 constexpr Real R_cloud = 5.0 * 3.086e18; // cm [5 pc]
 constexpr Real M0 = 2.0;		 // Mach number of shock
-constexpr Real T_floor = 100.0;		 // K
 
 constexpr Real P0 = nH0 * Tgas0 * quokka::boltzmann_constant_cgs; // erg cm^-3
 constexpr Real rho0 = nH0 * m_H;				  // g cm^-3
