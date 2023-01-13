@@ -9,6 +9,10 @@
 ///
 
 #include "CloudyCooling.hpp"
+#include "ODEIntegrate.hpp"
+
+namespace quokka::cooling
+{
 
 void readCloudyData(cloudy_tables &cloudyTables)
 {
@@ -45,3 +49,4 @@ auto cloudy_tables::const_tables() const -> cloudyGpuConstTables
 				    metalCooling->const_table(), metalHeating->const_table(), mean_mol_weight->const_table()};
 	return tables;
 }
+} // namespace quokka::cooling

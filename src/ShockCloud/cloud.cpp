@@ -23,10 +23,9 @@
 #include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
 #include "AMReX_TableData.H"
-
 #include "AMReX_iMultiFab.H"
+
 #include "CloudyCooling.hpp"
-#include "ODEIntegrate.hpp"
 #include "RadhydroSimulation.hpp"
 #include "cloud.hpp"
 #include "hydro_system.hpp"
@@ -56,13 +55,18 @@ template <> struct Physics_Traits<ShockCloud> {
 	static constexpr bool is_mhd_enabled = false;
 };
 
+template <> struct SimulationData<ShockCloud> {
+	quokka::cooling::cloudy_tables cloudyTables;
+	std::unique_ptr<amrex::TableData<Real, 3>> table_data;
+};
+
 constexpr Real Tgas0 = 1.0e7;		 // K
 constexpr Real nH0 = 1.0e-4;		 // cm^-3
 constexpr Real nH1 = 1.0e-1;		 // cm^-3
 constexpr Real R_cloud = 5.0 * 3.086e18; // cm [5 pc]
 constexpr Real M0 = 2.0;		 // Mach number of shock
+constexpr Real T_floor = 100.0;		 // K
 
-constexpr Real T_floor = 100.0;					  // K
 constexpr Real P0 = nH0 * Tgas0 * quokka::boltzmann_constant_cgs; // erg cm^-3
 constexpr Real rho0 = nH0 * m_H;				  // g cm^-3
 constexpr Real rho1 = nH1 * m_H;
@@ -79,11 +83,6 @@ AMREX_GPU_MANAGED static Real P_wind = 0;
 AMREX_GPU_MANAGED static Real delta_vx = 0;
 
 static bool enable_cooling = true;
-
-template <> struct SimulationData<ShockCloud> {
-	cloudy_tables cloudyTables;
-	std::unique_ptr<amrex::TableData<Real, 3>> table_data;
-};
 
 template <> void RadhydroSimulation<ShockCloud>::preCalculateInitialConditions()
 {
@@ -209,149 +208,10 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<ShockCloud>::setCustomBou
 	}
 }
 
-template <> auto RadhydroSimulation<ShockCloud>::computeExtraPhysicsTimestep(int const lev) -> amrex::Real
-{
-	// return minimum cooling time on level 'lev'
-	amrex::Real const tcool_safety_fac = 0.1;
-
-	auto const &mf = state_new_cc_[lev];
-	auto const &state = mf.const_arrays();
-	amrex::MultiFab tcool_mf(mf.boxArray(), mf.DistributionMap(), 1, 0);
-	auto const &tcool = tcool_mf.arrays();
-	auto tables = userData_.cloudyTables.const_tables();
-
-	amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-		const Real rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
-		const Real x1Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
-		const Real x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
-		const Real x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
-		const Real Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
-		const Real Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-
-		Real const T = ComputeTgasFromEgas(rho, Eint, quokka::EOS_Traits<ShockCloud>::gamma, tables);
-		Real const Edot = cloudy_cooling_function(rho, T, tables);
-		tcool[bx](i, j, k) = std::abs(Eint / Edot);
-	});
-	amrex::Gpu::streamSynchronizeAll();
-
-	amrex::Real const min_tcool = tcool_mf.min(0);
-	if (verbose != 0) {
-		amrex::Print() << "\tMinimum cooling time on level " << lev << ": " << min_tcool << "\n";
-	}
-	return tcool_safety_fac * min_tcool;
-}
-
-struct ODEUserData {
-	Real rho{};
-	cloudyGpuConstTables tables;
-};
-
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto user_rhs(Real /*t*/, quokka::valarray<Real, 1> &y_data, quokka::valarray<Real, 1> &y_rhs, void *user_data) -> int
-{
-	// unpack user_data
-	auto *udata = static_cast<ODEUserData *>(user_data);
-	const Real rho = udata->rho;
-	const Real gamma = quokka::EOS_Traits<ShockCloud>::gamma;
-	cloudyGpuConstTables const &tables = udata->tables;
-
-	// check whether temperature is out-of-bounds
-	const Real Tmin = 10.;
-	const Real Tmax = 1.0e9;
-	const Real Eint_min = ComputeEgasFromTgas(rho, Tmin, gamma, tables);
-	const Real Eint_max = ComputeEgasFromTgas(rho, Tmax, gamma, tables);
-
-	// compute temperature and cooling rate
-	const Real Eint = y_data[0];
-
-	if (Eint <= Eint_min) {
-		// set cooling to value at Tmin
-		y_rhs[0] = cloudy_cooling_function(rho, Tmin, tables);
-	} else if (Eint >= Eint_max) {
-		// set cooling to value at Tmax
-		y_rhs[0] = cloudy_cooling_function(rho, Tmax, tables);
-	} else {
-		// ok, within tabulated cooling limits
-		const Real T = ComputeTgasFromEgas(rho, Eint, gamma, tables);
-		if (!std::isnan(T)) { // temp iteration succeeded
-			y_rhs[0] = cloudy_cooling_function(rho, T, tables);
-		} else { // temp iteration failed
-			y_rhs[0] = NAN;
-			return 1; // failed
-		}
-	}
-
-	return 0; // success
-}
-
-void computeCooling(amrex::MultiFab &mf, const Real dt_in, cloudy_tables &cloudyTables)
-{
-	BL_PROFILE("RadhydroSimulation::computeCooling()")
-
-	const Real dt = dt_in;
-	const Real reltol_floor = 0.01;
-	const Real rtol = 1.0e-4; // not recommended to change this
-
-	auto tables = cloudyTables.const_tables();
-
-	const auto &ba = mf.boxArray();
-	const auto &dmap = mf.DistributionMap();
-	amrex::iMultiFab nsubstepsMF(ba, dmap, 1, 0);
-
-	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
-		const amrex::Box &indexRange = iter.validbox();
-		auto const &state = mf.array(iter);
-		auto const &nsubsteps = nsubstepsMF.array(iter);
-
-		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			const Real rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
-			const Real x1Mom = state(i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
-			const Real x2Mom = state(i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
-			const Real x3Mom = state(i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
-			const Real Egas = state(i, j, k, HydroSystem<ShockCloud>::energy_index);
-
-			const Real Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-
-			ODEUserData user_data{rho, tables};
-			quokka::valarray<Real, 1> y = {Eint};
-			quokka::valarray<Real, 1> const abstol = {reltol_floor *
-								  ComputeEgasFromTgas(rho, T_floor, quokka::EOS_Traits<ShockCloud>::gamma, tables)};
-
-			// do integration with RK2 (Heun's method)
-			int nsteps = 0;
-			rk_adaptive_integrate(user_rhs, 0, y, dt, &user_data, rtol, abstol, nsteps);
-			nsubsteps(i, j, k) = nsteps;
-
-			// check if integration failed
-			if (nsteps >= maxStepsODEIntegrate) {
-				Real const T = ComputeTgasFromEgas(rho, Eint, quokka::EOS_Traits<ShockCloud>::gamma, tables);
-				Real const Edot = cloudy_cooling_function(rho, T, tables);
-				Real const t_cool = Eint / Edot;
-				printf("max substeps exceeded! rho = %.17e, Eint = %.17e, T = %g, cooling "
-				       "time = %g, dt = %.17e\n",
-				       rho, Eint, T, t_cool, dt);
-			}
-			const Real Eint_new = y[0];
-			const Real dEint = Eint_new - Eint;
-
-			state(i, j, k, HydroSystem<ShockCloud>::energy_index) += dEint;
-			state(i, j, k, HydroSystem<ShockCloud>::internalEnergy_index) += dEint;
-		});
-	}
-
-	int nmin = nsubstepsMF.min(0);
-	int nmax = nsubstepsMF.max(0);
-	Real navg = static_cast<Real>(nsubstepsMF.sum(0)) / static_cast<Real>(nsubstepsMF.boxArray().numPts());
-	amrex::Print() << fmt::format("\tcooling substeps (per cell): min {}, avg {}, max {}\n", nmin, navg, nmax);
-
-	if (nmax >= maxStepsODEIntegrate) {
-		amrex::Abort("Max steps exceeded in cooling solve!");
-	}
-}
-
-template <> void RadhydroSimulation<ShockCloud>::computeAfterLevelAdvance(int lev, Real /*time*/, Real dt_lev, int /*ncycle*/)
+template <> void RadhydroSimulation<ShockCloud>::addStrangSplitSources(amrex::MultiFab &state, int /*lev*/, amrex::Real /*time*/, amrex::Real dt_lev)
 {
 	// compute operator split physics
-	computeCooling(state_new_cc_[lev], dt_lev, userData_.cloudyTables);
+	quokka::cooling::computeCooling<ShockCloud>(state, dt_lev, userData_.cloudyTables, ::T_floor);
 }
 
 template <> void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in) const
@@ -452,7 +312,7 @@ auto problem_main() -> int
 	sim.checkpointInterval_ = 2000;
 
 	// Read Cloudy tables
-	readCloudyData(sim.userData_.cloudyTables);
+	quokka::cooling::readCloudyData(sim.userData_.cloudyTables);
 
 	// Set initial conditions
 	sim.setInitialConditions();
