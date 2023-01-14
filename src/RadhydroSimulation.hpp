@@ -708,7 +708,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 								   amrex::YAFluxRegister *fr_as_fine)
 {
 	// timestep retries
-	const int max_retries = 4;
+	const int max_retries = 6;
 	bool success = false;
 	amrex::Real cur_time;
 
