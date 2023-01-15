@@ -102,10 +102,10 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real cflNumber_ = 0.3;	      // default
 	amrex::Real dtToleranceFactor_ = 1.1; // default
 	amrex::Long cycleCount_ = 0;
-	amrex::Long maxTimesteps_ = 1e4;      // default
-	amrex::Long maxWalltime_ = 0;	      // default: no limit
-	int ascentInterval_ = -1;	      // -1 == no in-situ renders with Ascent
-	int plotfileInterval_ = -1;	      // -1 == no output
+	amrex::Long maxTimesteps_ = 1e4; // default
+	amrex::Long maxWalltime_ = 0;	 // default: no limit
+	int ascentInterval_ = -1;	 // -1 == no in-situ renders with Ascent
+	int plotfileInterval_ = -1;	 // -1 == no output
 	amrex::Real plotTimeInterval_ = -1.0;
 	int checkpointInterval_ = -1;	      // -1 == no output
 	int amrInterpMethod_ = 1;	      // 0 == piecewise constant, 1 == lincc_interp
@@ -423,7 +423,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Default output interval
 	pp.query("plotfile_interval", plotfileInterval_);
 
-    //Default Time interval
+	// Default Time interval
 	pp.query("plottime_interval", plotTimeInterval_);
 
 	// Default checkpoint interval
@@ -674,7 +674,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 		amrex::ParallelDescriptor::Barrier(); // synchronize all MPI ranks
 		computeTimestep();
-		computeBeforeTimestep(); 
+		computeBeforeTimestep();
 
 		// elliptic solve over entire AMR grid (pre-timestep)
 		ellipticSolveAllLevels(0.5 * dt_[0]);
@@ -710,9 +710,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 			WritePlotFile();
 		}
 
-        //Writing Plot files at time intervals
-		double next_plot_file_time = next_plot_file_num * plotTimeInterval_ ;
-		if (plotTimeInterval_ > 0 && ((next_plot_file_time>cur_time ) && (next_plot_file_time<(cur_time+dt_[0])))){
+		// Writing Plot files at time intervals
+		double next_plot_file_time = next_plot_file_num * plotTimeInterval_;
+		if (plotTimeInterval_ > 0 && ((next_plot_file_time > cur_time) && (next_plot_file_time < (cur_time + dt_[0])))) {
 			next_plot_file_num += 1;
 			WritePlotFile();
 			WriteCheckpointFile();
