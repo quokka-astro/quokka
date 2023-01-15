@@ -104,8 +104,6 @@ add_subdirectory(HydroHighMach)
 add_subdirectory(RayleighTaylor2D)
 add_subdirectory(RayleighTaylor3D)
 
-add_subdirectory(MetalAdvectionProblem)
-
 add_subdirectory(RadBeam)
 add_subdirectory(RadForce)
 add_subdirectory(RadMarshak)

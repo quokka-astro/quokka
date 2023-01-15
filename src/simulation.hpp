@@ -139,7 +139,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	virtual void computeMaxSignalLocal(int level) = 0;
 	virtual auto computeExtraPhysicsTimestep(int lev) -> amrex::Real = 0;
 	virtual void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle) = 0;
-	virtual void computeBeforeTimestep() = 0;
 	virtual void preCalculateInitialConditions() = 0;
 	virtual void setInitialConditionsOnGrid(quokka::grid grid_elem) = 0;
 	virtual void computeAfterTimestep() = 0;
@@ -674,7 +673,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 		amrex::ParallelDescriptor::Barrier(); // synchronize all MPI ranks
 		computeTimestep();
-		computeBeforeTimestep();
 
 		// elliptic solve over entire AMR grid (pre-timestep)
 		ellipticSolveAllLevels(0.5 * dt_[0]);
