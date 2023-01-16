@@ -102,17 +102,17 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real cflNumber_ = 0.3;	      // default
 	amrex::Real dtToleranceFactor_ = 1.1; // default
 	amrex::Long cycleCount_ = 0;
-	amrex::Long maxTimesteps_ = 1e4; // default
-	amrex::Long maxWalltime_ = 0;	 // default: no limit
-	int ascentInterval_ = -1;	 // -1 == no in-situ renders with Ascent
-	int plotfileInterval_ = -1;	 // -1 == no output
-	amrex::Real plotTimeInterval_ = -1.0; //time interval for plt file
-	amrex::Real checkpointTimeInterval_ = -1.0; //time interval for checkpoints
-	int checkpointInterval_ = -1;	      // -1 == no output
-	int amrInterpMethod_ = 1;	      // 0 == piecewise constant, 1 == lincc_interp
-	amrex::Real reltolPoisson_ = 1.0e-10; // default
-	amrex::Real abstolPoisson_ = 1.0e-10; // default
-	int doPoissonSolve_ = 0;	      // 1 == self-gravity enabled, 0 == disabled
+	amrex::Long maxTimesteps_ = 1e4;	    // default
+	amrex::Long maxWalltime_ = 0;		    // default: no limit
+	int ascentInterval_ = -1;		    // -1 == no in-situ renders with Ascent
+	int plotfileInterval_ = -1;		    // -1 == no output
+	amrex::Real plotTimeInterval_ = -1.0;	    // time interval for plt file
+	amrex::Real checkpointTimeInterval_ = -1.0; // time interval for checkpoints
+	int checkpointInterval_ = -1;		    // -1 == no output
+	int amrInterpMethod_ = 1;		    // 0 == piecewise constant, 1 == lincc_interp
+	amrex::Real reltolPoisson_ = 1.0e-10;	    // default
+	amrex::Real abstolPoisson_ = 1.0e-10;	    // default
+	int doPoissonSolve_ = 0;		    // 1 == self-gravity enabled, 0 == disabled
 
 	amrex::Real densityFloor_ = 0.0;				// default
 	amrex::Real tempCeiling_ = std::numeric_limits<double>::max();	// default
@@ -654,7 +654,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 #endif
 	int last_plot_file_step = 0;
 	double next_plot_file_time = plotTimeInterval_;
-	double next_chk_file_time  = checkpointTimeInterval_;
+	double next_chk_file_time = checkpointTimeInterval_;
 	int last_chk_file_step = 0;
 	const int ncomp_cc = Physics_Indices<problem_t>::nvarTotal_cc;
 
@@ -723,7 +723,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 			next_chk_file_time += checkpointTimeInterval_;
 			WriteCheckpointFile();
 		}
-
 
 		if (checkpointInterval_ > 0 && (step + 1) % checkpointInterval_ == 0) {
 			last_chk_file_step = step + 1;
