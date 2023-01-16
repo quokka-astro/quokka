@@ -106,7 +106,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Long maxWalltime_ = 0;	 // default: no limit
 	int ascentInterval_ = -1;	 // -1 == no in-situ renders with Ascent
 	int plotfileInterval_ = -1;	 // -1 == no output
-	amrex::Real plotTimeInterval_ = -1.0;
+	amrex::Real plotTimeInterval_ = -1.0; //time interval for plt file
+	amrex::Real checkpointTimeInterval_ = -1.0; //time interval for checkpoints
 	int checkpointInterval_ = -1;	      // -1 == no output
 	int amrInterpMethod_ = 1;	      // 0 == piecewise constant, 1 == lincc_interp
 	amrex::Real reltolPoisson_ = 1.0e-10; // default
@@ -425,6 +426,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Default Time interval
 	pp.query("plottime_interval", plotTimeInterval_);
 
+	// Default Time interval
+	pp.query("checkpointtime_interval", checkpointTimeInterval_);
+
 	// Default checkpoint interval
 	pp.query("checkpoint_interval", checkpointInterval_);
 
@@ -649,7 +653,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	int last_ascent_step = 0;
 #endif
 	int last_plot_file_step = 0;
-	int next_plot_file_num = 1;
+	double next_plot_file_time = plotTimeInterval_;
+	double next_chk_file_time  = checkpointTimeInterval_;
 	int last_chk_file_step = 0;
 	const int ncomp_cc = Physics_Indices<problem_t>::nvarTotal_cc;
 
@@ -709,12 +714,16 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		}
 
 		// Writing Plot files at time intervals
-		double next_plot_file_time = next_plot_file_num * plotTimeInterval_;
 		if (plotTimeInterval_ > 0 && ((next_plot_file_time > cur_time) && (next_plot_file_time < (cur_time + dt_[0])))) {
-			next_plot_file_num += 1;
+			next_plot_file_time += plotTimeInterval_;
 			WritePlotFile();
+		}
+
+		if (checkpointTimeInterval_ > 0 && ((next_chk_file_time > cur_time) && (next_chk_file_time < (cur_time + dt_[0])))) {
+			next_chk_file_time += checkpointTimeInterval_;
 			WriteCheckpointFile();
 		}
+
 
 		if (checkpointInterval_ > 0 && (step + 1) % checkpointInterval_ == 0) {
 			last_chk_file_step = step + 1;
