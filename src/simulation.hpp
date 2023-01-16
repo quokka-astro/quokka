@@ -714,12 +714,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		}
 
 		// Writing Plot files at time intervals
-		if (plotTimeInterval_ > 0 && ((next_plot_file_time > cur_time) && (next_plot_file_time < (cur_time + dt_[0])))) {
+		if (plotTimeInterval_ > 0 && next_plot_file_time <= cur_time) {
 			next_plot_file_time += plotTimeInterval_;
 			WritePlotFile();
 		}
 
-		if (checkpointTimeInterval_ > 0 && ((next_chk_file_time > cur_time) && (next_chk_file_time < (cur_time + dt_[0])))) {
+		if (checkpointTimeInterval_ > 0 && next_chk_file_time <= cur_time) {
 			next_chk_file_time += checkpointTimeInterval_;
 			WriteCheckpointFile();
 		}
