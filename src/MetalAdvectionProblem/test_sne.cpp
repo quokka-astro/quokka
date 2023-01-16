@@ -188,7 +188,6 @@ void RadhydroSimulation<NewProblem>::ErrorEst(int lev,
 
       // if ((gradient_indicator > eta_threshold)) {
         tag(i, j, k) = amrex::TagBox::SET;
-        // printf("Reached here=%d, %d, %d, %.2e\n", i, j, k, gradient_indicator);
       // }
     });
   }
