@@ -617,24 +617,6 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 			state[bx](i, j, k, x3Momentum_index) *= rescale_factor;
 		}
 
-		/*if (std::abs(vx1) > speedCeiling) {
-			amrex::Real dummy = Etot - state[bx](i, j, k, density_index) * vx1 * vx1 / 2.;
-			state[bx](i, j, k, x1Momentum_index) = (std::abs(vx1) / vx1) * speedCeiling * state[bx](i, j, k, density_index);
-			state[bx](i, j, k, energy_index) = dummy + std::pow(state[bx](i, j, k, x1Momentum_index), 2.) / state[bx](i, j, k, density_index) / 2.;
-		}
-
-		if (std::abs(vx2) > speedCeiling) {
-			amrex::Real dummy = Etot - state[bx](i, j, k, density_index) * vx2 * vx2 / 2.;
-			state[bx](i, j, k, x2Momentum_index) = (std::abs(vx2) / vx2) * speedCeiling * state[bx](i, j, k, density_index);
-			state[bx](i, j, k, energy_index) = dummy + std::pow(state[bx](i, j, k, x2Momentum_index), 2.) / state[bx](i, j, k, density_index) / 2.;
-		}
-
-		if (std::abs(vx3) > speedCeiling) {
-			amrex::Real dummy = Etot - state[bx](i, j, k, density_index) * vx3 * vx3 / 2.;
-			state[bx](i, j, k, x3Momentum_index) = (std::abs(vx3) / vx3) * speedCeiling * state[bx](i, j, k, density_index);
-			state[bx](i, j, k, energy_index) = dummy + std::pow(state[bx](i, j, k, x3Momentum_index), 2.) / state[bx](i, j, k, density_index) / 2.;
-		}*/
-
 		// Enforcing Limits on temperature estimated from Etot and Ekin
 		if (!HydroSystem<problem_t>::is_eos_isothermal()) {
 			// recompute gas energy (to prevent P < 0)
