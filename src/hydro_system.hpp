@@ -684,6 +684,7 @@ void HydroSystem<problem_t>::AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex
 #endif
 
 	auto const &consVar = consVar_mf.const_arrays();
+	auto const &redoFlag = redoFlag_mf.const_arrays();
 	auto rhs = rhs_mf.arrays();
 
 	amrex::ParallelFor(rhs_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
@@ -691,22 +692,16 @@ void HydroSystem<problem_t>::AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex
 		const amrex::Real Pgas = ComputePressure(consVar[bx], i, j, k);
 
 		// compute div v from face-centered velocities
-		amrex::Real div_v = AMREX_D_TERM((vel_x[bx](i + 1, j, k) - vel_x[bx](i, j, k)) / dx[0], +(vel_y[bx](i, j + 1, k) - vel_y[bx](i, j, k)) / dx[1],
-						 +(vel_z[bx](i, j, k + 1) - vel_z[bx](i, j, k)) / dx[2]);
+		amrex::Real div_v = NAN;
 
-#if 0                
-    if (redoFlag(i,j,k) == quokka::redoFlag::none) {
-      div_v = AMREX_D_TERM(  ( vel_x(i+1, j  , k  ) - vel_x(i, j, k) ) / dx[0],
-                           + ( vel_y(i  , j+1, k  ) - vel_y(i, j, k) ) / dx[1],
-                           + ( vel_z(i  , j  , k+1) - vel_z(i, j, k) ) / dx[2]  );
-    } else {
-      div_v = 0.5 * ( AMREX_D_TERM(
-                ( ComputeVelocityX1(consVar, i+1, j, k) - ComputeVelocityX1(consVar, i-1, j, k) ) / dx[0],
-              + ( ComputeVelocityX2(consVar, i, j+1, k) - ComputeVelocityX2(consVar, i, j-1, k) ) / dx[1],
-              + ( ComputeVelocityX3(consVar, i, j, k+1) - ComputeVelocityX3(consVar, i, j, k-1) ) / dx[2]
-              ) );
-    }
-#endif
+		if (redoFlag[bx](i, j, k) == quokka::redoFlag::none) {
+			div_v = AMREX_D_TERM((vel_x[bx](i + 1, j, k) - vel_x[bx](i, j, k)) / dx[0], +(vel_y[bx](i, j + 1, k) - vel_y[bx](i, j, k)) / dx[1],
+					     +(vel_z[bx](i, j, k + 1) - vel_z[bx](i, j, k)) / dx[2]);
+		} else {
+			div_v = 0.5 * (AMREX_D_TERM((ComputeVelocityX1(consVar[bx], i + 1, j, k) - ComputeVelocityX1(consVar[bx], i - 1, j, k)) / dx[0],
+						    +(ComputeVelocityX2(consVar[bx], i, j + 1, k) - ComputeVelocityX2(consVar[bx], i, j - 1, k)) / dx[1],
+						    +(ComputeVelocityX3(consVar[bx], i, j, k + 1) - ComputeVelocityX3(consVar[bx], i, j, k - 1)) / dx[2]));
+		}
 
 		// add P dV term to rhs array
 		rhs[bx](i, j, k, internalEnergy_index) += -Pgas * div_v;
