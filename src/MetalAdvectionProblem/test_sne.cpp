@@ -164,56 +164,19 @@ void RadhydroSimulation<NewProblem>::ErrorEst(int lev,
     const amrex::Box &box = mfi.validbox();
     const auto state = state_new_cc_[lev].const_array(mfi);
     const auto tag = tags.array(mfi);
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo   = geom[lev].ProbLoArray();
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx = geom[lev].CellSizeArray();
    
     amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-
-
-      /*amrex::Real scal_xyz    = state(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+2) ;
-
-      amrex::Real scal_xplus  = state(i+1, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+2) ;
-      amrex::Real scal_xminus = state(i-1, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+2) ;
-      amrex::Real del_scalx   = std::max(std::abs(scal_xplus - scal_xyz), std::abs(scal_xminus - scal_xyz));
-
-      amrex::Real scal_yplus  = state(i, j+1, k, Physics_Indices<NewProblem>::pscalarFirstIndex+2) ;
-      amrex::Real scal_yminus = state(i, j-1, k, Physics_Indices<NewProblem>::pscalarFirstIndex+2) ;
-      amrex::Real del_scaly   = std::max(std::abs(scal_yplus - scal_xyz), std::abs(scal_yminus - scal_xyz));
-      
-      amrex::Real scal_zplus  = state(i, j, k+1, Physics_Indices<NewProblem>::pscalarFirstIndex+2) ;
-      amrex::Real scal_zminus = state(i, j, k-1, Physics_Indices<NewProblem>::pscalarFirstIndex+2) ;
-      amrex::Real del_scalz   = std::max(std::abs(scal_zplus - scal_xyz), std::abs(scal_zminus - scal_xyz));
-      
-                              
-      amrex::Real const gradient_indicator =
-          std::max({del_scalx, del_scaly, del_scalz}) / scal_xyz;*/
-
-      // if ((gradient_indicator > eta_threshold)) {
-        tag(i, j, k) = amrex::TagBox::SET;
-      // }
+        double zpos = prob_lo[2] + (k+0.5)*dx[2];
+        double modz = std::sqrt(zpos*zpos);
+        if(std::abs(zpos)<Lrefine){
+             tag(i, j, k) = amrex::TagBox::SET;
+        }
+     
     });
   }
 }
-
-// template <>
-// void RadhydroSimulation<NewProblem>::ErrorEst(int lev,
-//                                                 amrex::TagBoxArray &tags,
-//                                                 amrex::Real /*time*/ ,
-//                                                int /*ngrow*/) {
-//   // tag cells for refinement
-//   // /*amrex::Print() << "tagging cells for refinement...\n";
-  
-//   for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
-//     const amrex::Box &box = mfi.validbox();
-//     const auto state = state_new_cc_[lev].const_array(mfi);
-//     const auto tag = tags.array(mfi);
-//     const int nidx = HydroSystem<NewProblem>::density_index;
-
-//     amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-//       Real const q = state(i, j, k, nidx);
-//       if(q>1.e2*Const_mH){
-//       tag(i, j, k) = amrex::TagBox::SET; }
-//     });
-//   }
-// }
 
 
 /*****Adding Cooling Terms*****/
