@@ -109,7 +109,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	int reconstructionOrder_ = 3;	       // 1 == donor cell; 2 == PLM; 3 == PPM (default)
 	int radiationReconstructionOrder_ = 3; // 1 == donor cell; 2 == PLM; 3 == PPM (default)
 	int useDualEnergy_ = 1;		       // 0 == disabled; 1 == use auxiliary internal energy equation (default)
-	int abortOnFofcFailure_ = 1;	       // 0 == keep going, 1 == abort hydro advance if FOFC fails
+	int abortOnFofcFailure_ = 0;	       // 0 == keep going, 1 == abort hydro advance if FOFC fails
 
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
 
