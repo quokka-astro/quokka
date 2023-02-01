@@ -14,13 +14,16 @@
 #include <vector>
 
 #include "AMReX.H"
+#include "AMReX_ParmParse.H"
 #include "CloudyCooling.hpp"
+#include "EOS.hpp"
 #include "ODEIntegrate.hpp"
 #include "cloud.hpp"
 #include "hydro_system.hpp"
 #include "radiation_system.hpp"
 
 using amrex::Real;
+using namespace quokka::cooling;
 
 struct ShockCloud {
 }; // dummy type to allow compile-type polymorphism via template specialization
@@ -28,49 +31,6 @@ struct ShockCloud {
 template <> struct quokka::EOS_Traits<ShockCloud> {
 	static constexpr double gamma = 5. / 3.; // default value
 };
-
-struct ODEUserData {
-	Real rho;
-	cloudyGpuConstTables tables;
-};
-
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto user_rhs(Real /*t*/, quokka::valarray<Real, 1> &y_data, quokka::valarray<Real, 1> &y_rhs, void *user_data) -> int
-{
-	// unpack user_data
-	auto *udata = static_cast<ODEUserData *>(user_data);
-	const Real rho = udata->rho;
-	const Real gamma = quokka::EOS_Traits<ShockCloud>::gamma;
-	cloudyGpuConstTables &tables = udata->tables;
-
-	// check whether temperature is out-of-bounds
-	const Real Tmin = 10.;
-	const Real Tmax = 1.0e9;
-	const Real Eint_min = ComputeEgasFromTgas(rho, Tmin, gamma, tables);
-	const Real Eint_max = ComputeEgasFromTgas(rho, Tmax, gamma, tables);
-
-	// compute temperature and cooling rate
-	const Real Eint = y_data[0];
-
-	if (Eint <= Eint_min) {
-		// set cooling to value at Tmin
-		y_rhs[0] = cloudy_cooling_function(rho, Tmin, tables);
-	} else if (Eint >= Eint_max) {
-		// set cooling to value at Tmax
-		y_rhs[0] = cloudy_cooling_function(rho, Tmax, tables);
-	} else {
-		// ok, within tabulated cooling limits
-		const Real T = ComputeTgasFromEgas(rho, Eint, gamma, tables);
-		if (!std::isnan(T)) { // temp iteration succeeded
-			y_rhs[0] = cloudy_cooling_function(rho, T, tables);
-			AMREX_ASSERT(!std::isnan(y_rhs[0]));
-		} else { // temp iteration failed
-			y_rhs[0] = NAN;
-			return 1; // failed
-		}
-	}
-
-	return 0; // success
-}
 
 auto problem_main() -> int
 {
@@ -81,7 +41,10 @@ auto problem_main() -> int
 
 	// Read Cloudy tables
 	cloudy_tables cloudyTables;
-	readCloudyData(cloudyTables);
+	std::string filename;
+	amrex::ParmParse pp("cooling");
+	pp.query("grackle_data_file", filename);
+	readCloudyData(filename, cloudyTables);
 	auto tables = cloudyTables.const_tables();
 
 	const Real T = ComputeTgasFromEgas(rho, Eint, quokka::EOS_Traits<ShockCloud>::gamma, tables);
@@ -103,10 +66,11 @@ auto problem_main() -> int
 	const Real reltol_floor = 0.01;
 	const Real rtol = 1.0e-4;	// not recommended to change this
 	constexpr Real T_floor = 100.0; // K
+	const Real gamma = quokka::EOS_Traits<ShockCloud>::gamma;
 
-	ODEUserData user_data{rho, tables};
+	ODEUserData user_data{rho, gamma, tables};
 	quokka::valarray<Real, 1> y = {Eint};
-	quokka::valarray<Real, 1> abstol = {reltol_floor * ComputeEgasFromTgas(rho, T_floor, quokka::EOS_Traits<ShockCloud>::gamma, tables)};
+	quokka::valarray<Real, 1> abstol = {reltol_floor * ComputeEgasFromTgas(rho, T_floor, gamma, tables)};
 
 	// do integration with RK2 (Heun's method)
 	int nsteps = 0;

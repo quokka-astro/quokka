@@ -93,6 +93,10 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 
 	SimulationData<problem_t> userData_;
 
+	int enableCooling_ = 0;
+	quokka::cooling::cloudy_tables cloudyTables_;
+	std::string coolingTableFilename_{};
+
 	static constexpr int nvarTotal_cc_ = Physics_Indices<problem_t>::nvarTotal_cc;
 	static constexpr int ncompHydro_ = HydroSystem<problem_t>::nvar_; // hydro
 	static constexpr int ncompHyperbolic_ = RadSystem<problem_t>::nvarHyperbolic_;
@@ -184,6 +188,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 				 amrex::Real time, amrex::Real dt_lev) -> bool;
 
 	void addStrangSplitSources(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev);
+	void addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev);
 
 	auto isCflViolated(int lev, amrex::Real time, amrex::Real dt_actual) -> bool;
 
@@ -282,6 +287,18 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::readParmParse(
 		hpp.query("use_dual_energy", useDualEnergy_);
 		hpp.query("abort_on_fofc_failure", abortOnFofcFailure_);
 		hpp.query("artificial_viscosity_coefficient", artificialViscosityK_);
+	}
+
+	// set cooling runtime parameters
+	{
+		amrex::ParmParse hpp("cooling");
+		hpp.query("enabled", enableCooling_);
+		hpp.query("grackle_data_file", coolingTableFilename_);
+
+		if (enableCooling_ == 1) {
+			// read Cloudy tables
+			quokka::cooling::readCloudyData(coolingTableFilename_, cloudyTables_);
+		}
 	}
 
 	// set radiation runtime parameters
@@ -393,6 +410,18 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::addStrangSplit
 {
 	// user should implement
 	// (when Strang splitting is enabled, dt is actually 0.5*dt_lev)
+}
+
+template <typename problem_t>
+void RadhydroSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt)
+{
+	if (enableCooling_ == 1) {
+		// compute cooling
+		quokka::cooling::computeCooling<problem_t>(state, dt, cloudyTables_, tempFloor_);
+	}
+
+	// compute user-specified sources
+	addStrangSplitSources(state, lev, time, dt);
 }
 
 template <typename problem_t>
@@ -810,7 +839,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	auto dx = geom[lev].CellSizeArray();
 
 	// do Strang split source terms (first half-step)
-	addStrangSplitSources(state_old_cc_tmp, lev, time, 0.5 * dt_lev);
+	addStrangSplitSourcesWithBuiltin(state_old_cc_tmp, lev, time, 0.5 * dt_lev);
 
 	// create temporary multifab for intermediate state
 	amrex::MultiFab state_inter_cc_(grids[lev], dmap[lev], Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
@@ -955,7 +984,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	amrex::Gpu::streamSynchronizeAll();
 
 	// do Strang split source terms (second half-step)
-	addStrangSplitSources(state_new_cc_[lev], lev, time + dt_lev, 0.5 * dt_lev);
+	addStrangSplitSourcesWithBuiltin(state_new_cc_[lev], lev, time + dt_lev, 0.5 * dt_lev);
 
 	// check if we have violated the CFL timestep
 	return !isCflViolated(lev, time, dt_lev);
