@@ -109,11 +109,12 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	amrex::Real errorNorm_ = NAN;
 	amrex::Real pressureFloor_ = 0.;
 
-	int integratorOrder_ = 2;	       // 1 == forward Euler; 2 == RK2-SSP (default)
-	int reconstructionOrder_ = 3;	       // 1 == donor cell; 2 == PLM; 3 == PPM (default)
-	int radiationReconstructionOrder_ = 3; // 1 == donor cell; 2 == PLM; 3 == PPM (default)
-	int useDualEnergy_ = 1;		       // 0 == disabled; 1 == use auxiliary internal energy equation (default)
-	int abortOnFofcFailure_ = 1;	       // 0 == keep going, 1 == abort hydro advance if FOFC fails
+	int integratorOrder_ = 2;		// 1 == forward Euler; 2 == RK2-SSP (default)
+	int reconstructionOrder_ = 3;		// 1 == donor cell; 2 == PLM; 3 == PPM (default)
+	int radiationReconstructionOrder_ = 3;	// 1 == donor cell; 2 == PLM; 3 == PPM (default)
+	int useDualEnergy_ = 1;			// 0 == disabled; 1 == use auxiliary internal energy equation (default)
+	int abortOnFofcFailure_ = 1;		// 0 == keep going, 1 == abort hydro advance if FOFC fails
+	amrex::Real artificialViscosityK_ = 0.; // artificial viscosity coefficient (default == None)
 
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
 
@@ -285,6 +286,7 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::readParmParse(
 		hpp.query("reconstruction_order", reconstructionOrder_);
 		hpp.query("use_dual_energy", useDualEnergy_);
 		hpp.query("abort_on_fofc_failure", abortOnFofcFailure_);
+		hpp.query("artificial_viscosity_coefficient", artificialViscosityK_);
 	}
 
 	// set cooling runtime parameters
@@ -1134,7 +1136,7 @@ void RadhydroSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab const &pri
 	HydroSystem<problem_t>::template FlattenShocks<DIR>(primVar, x1Flat, x2Flat, x3Flat, leftState, rightState, ng_reconstruct, nvars);
 
 	// interface-centered kernel
-	HydroSystem<problem_t>::template ComputeFluxes<DIR>(flux, faceVel, leftState, rightState, primVar);
+	HydroSystem<problem_t>::template ComputeFluxes<DIR>(flux, faceVel, leftState, rightState, primVar, artificialViscosityK_);
 }
 
 template <typename problem_t>
@@ -1187,7 +1189,7 @@ void RadhydroSimulation<problem_t>::hydroFOFluxFunction(amrex::MultiFab const &p
 	HydroSystem<problem_t>::template ReconstructStatesConstant<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
 
 	// interface-centered kernel
-	HydroSystem<problem_t>::template ComputeFluxes<DIR>(flux, faceVel, leftState, rightState, primVar);
+	HydroSystem<problem_t>::template ComputeFluxes<DIR>(flux, faceVel, leftState, rightState, primVar, artificialViscosityK_);
 }
 
 template <typename problem_t> void RadhydroSimulation<problem_t>::swapRadiationState(amrex::MultiFab &stateOld, amrex::MultiFab const &stateNew)
