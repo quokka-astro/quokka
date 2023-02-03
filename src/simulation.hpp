@@ -110,8 +110,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real checkpointTimeInterval_ = -1.0; // time interval for checkpoints
 	int checkpointInterval_ = -1;		    // -1 == no output
 	int amrInterpMethod_ = 1;		    // 0 == piecewise constant, 1 == lincc_interp
-	amrex::Real reltolPoisson_ = 1.0e-5; // default
-	amrex::Real abstolPoisson_ = 1.0e-5; // default (scaled by minimum RHS value)
+	amrex::Real reltolPoisson_ = 1.0e-5;	    // default
+	amrex::Real abstolPoisson_ = 1.0e-5;	    // default (scaled by minimum RHS value)
 	int doPoissonSolve_ = 0;		    // 1 == self-gravity enabled, 0 == disabled
 
 	amrex::Real densityFloor_ = 0.0;				// default
