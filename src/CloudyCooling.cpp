@@ -9,8 +9,12 @@
 ///
 
 #include "CloudyCooling.hpp"
+#include "ODEIntegrate.hpp"
 
-void readCloudyData(cloudy_tables &cloudyTables)
+namespace quokka::cooling
+{
+
+void readCloudyData(std::string &grackle_hdf5_file, cloudy_tables &cloudyTables)
 {
 	cloudy_data cloudy_primordial;
 	cloudy_data cloudy_metals;
@@ -19,10 +23,7 @@ void readCloudyData(cloudy_tables &cloudyTables)
 	my_units.length_units = 1.0;
 	my_units.time_units = 1.0;
 	my_units.velocity_units = 1.0;
-	amrex::ParmParse pp;
-	std::string grackle_hdf5_file;
 
-	pp.query("grackle_data_file", grackle_hdf5_file);
 	initialize_cloudy_data(cloudy_primordial, "Primordial", grackle_hdf5_file, my_units);
 	initialize_cloudy_data(cloudy_metals, "Metals", grackle_hdf5_file, my_units);
 
@@ -45,3 +46,5 @@ auto cloudy_tables::const_tables() const -> cloudyGpuConstTables
 				    metalCooling->const_table(), metalHeating->const_table(), mean_mol_weight->const_table()};
 	return tables;
 }
+
+} // namespace quokka::cooling
