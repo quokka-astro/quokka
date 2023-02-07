@@ -124,16 +124,13 @@ void RadhydroSimulation<ShockCloud>::setInitialConditionsAtLevel(int lev) {
       Real const R = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2) +
                                std::pow(z - z0, 2));
 
-      // compute perturbations
-      Real delta_rho = 0;
-
       // compute cloud properties
-      Real rho = rho0 * (1.0 + delta_rho); // background density
-      Real C = 0.0; // concentration is zero on the background
-      if (R < R_cloud) {
-        rho = rho1 * (1.0 + delta_rho); // cloud density
-        C = 1.0; // concentration is unity inside the cloud
-      }
+      const Real h_smooth = R_cloud / 20.;
+      const Real ramp = 0.5 * (1. - std::tanh((R - R_cloud) / h_smooth));
+      const Real rho = ramp * (rho1 - rho0) + rho0;
+      const Real C = ramp * 1.0; // concentration is unity inside the cloud
+      AMREX_ALWAYS_ASSERT(rho > 0.);
+      AMREX_ALWAYS_ASSERT(C >= 0.);
 
       Real const xmom = 0;
       Real const ymom = 0;
@@ -781,11 +778,11 @@ auto problem_main() -> int {
     boundaryConditions[n].setLo(0, amrex::BCType::ext_dir);  // Dirichlet
     boundaryConditions[n].setHi(0, amrex::BCType::foextrap); // extrapolate
 
-    boundaryConditions[n].setLo(1, amrex::BCType::foextrap); // extrapolate
-    boundaryConditions[n].setHi(1, amrex::BCType::foextrap);
+    boundaryConditions[n].setLo(1, amrex::BCType::int_dir); // periodic
+    boundaryConditions[n].setHi(1, amrex::BCType::int_dir);
 
-    boundaryConditions[n].setLo(2, amrex::BCType::foextrap);
-    boundaryConditions[n].setHi(2, amrex::BCType::foextrap);
+    boundaryConditions[n].setLo(2, amrex::BCType::int_dir);
+    boundaryConditions[n].setHi(2, amrex::BCType::int_dir);
   }
 
   RadhydroSimulation<ShockCloud> sim(boundaryConditions, ::enableRadiation);
@@ -805,20 +802,12 @@ auto problem_main() -> int {
   
   // enable cooling?
   pp.query("enable_cooling", enable_cooling);
-  if (enable_cooling == 1) {
-    ::enable_cooling = true;
-  } else {
-    ::enable_cooling = false;
-  }
+  ::enable_cooling = enable_cooling == 1;
 
   // limit timestep based on cooling time?
   int limit_timestep_by_cooling_time = 1;
   pp.query("limit_timestep_by_cooling_time", limit_timestep_by_cooling_time);
-  if (limit_timestep_by_cooling_time == 1) {
-    ::limitDtByCooling = true;
-  } else {
-    ::limitDtByCooling = false;
-  }
+  ::limitDtByCooling = limit_timestep_by_cooling_time == 1;
 
   // background gas H number density
   pp.query("nH_bg", nH_bg); // cm^-3
