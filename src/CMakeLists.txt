@@ -1,14 +1,14 @@
 if(QUOKKA_PYTHON) 
   message(STATUS "Building Quokka with Python support (to disable, add '-DQUOKKA_PYTHON=OFF' to the CMake command-line options)")
-  find_package(PythonLibs)
+  find_package(Python COMPONENTS Interpreter Development NumPy)
 else()
   message(STATUS "Building Quokka *without* Python support")
 endif()
 
-if(PythonLibs_FOUND)
+if(Python_FOUND)
     add_compile_definitions(HAVE_PYTHON)
-    include_directories(${PYTHON_INCLUDE_DIRS})
-    link_libraries(${PYTHON_LIBRARY})
+    include_directories(${Python_INCLUDE_DIRS} ${Python_NumPy_INCLUDE_DIRS})
+    link_libraries(${Python_LIBRARIES})
 endif()
 
 # HDF5
@@ -18,7 +18,9 @@ find_package(HDF5 REQUIRED)
 find_package(yaml-cpp REQUIRED)
 
 # std::filesystem (required for GCC < 9)
-link_libraries(stdc++fs)
+if (NOT CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
+    link_libraries(stdc++fs)
+endif()
 
 if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
     # only works with gcc!
@@ -53,7 +55,9 @@ if(DISABLE_FMAD)
   endif()
   if(CMAKE_CUDA_COMPILER_ID STREQUAL "Clang")
     add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:-ffp-contract=off>)
-  endif()
+    add_compile_options($<$<COMPILE_LANGUAGE:C>:-ffp-contract=off>)
+    add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-ffp-contract=off>)
+    endif()
 else()
   # fused MAD causes directional asymmetry -- enabled by default by nvcc and clang
   message(STATUS "Fused multiply-add (FMAD) is *enabled* for device code. Exact direction symmetry will NOT be preserved.")
