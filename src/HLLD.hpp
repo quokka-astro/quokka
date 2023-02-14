@@ -39,9 +39,9 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto FastMagnetoSonicSpeed(double gamma, quo
 }
 
 // HLLD solver following Miyoshi and Kusano (2005), hereafter MK5.
-template <int fluxdim> // FluxDir DIR, 
-AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::MHDState const &s_L, quokka::MHDState const &s_R, const double gamma,
-					      const double bx) -> quokka::valarray<double, fluxdim>
+template <int fluxdim> // FluxDir DIR,
+AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::MHDState const &s_L, quokka::MHDState const &s_R, const double gamma, const double bx)
+    -> quokka::valarray<double, fluxdim>
 {
 	//--- Step 1. Compute L/R states
 
@@ -209,8 +209,8 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::MHDState const &s_L, quokk
 		double bx_sign = (bx > 0.0 ? 1.0 : -1.0);
 		u_dstar_L.rho = u_star_L.rho;
 		u_dstar_R.rho = u_star_R.rho;
-    u_dstar_L.mx = u_star_L.mx;
-    u_dstar_R.mx = u_star_R.mx;
+		u_dstar_L.mx = u_star_L.mx;
+		u_dstar_R.mx = u_star_R.mx;
 		// MK5: eqn (59)
 		double tmp = rho_sum_inv * (rho_sqrt_L * (u_star_L.my * u_star_rho_inv_L) + rho_sqrt_R * (u_star_R.my * u_star_rho_inv_R) +
 					    bx_sign * (u_star_R.by - u_star_L.by));
