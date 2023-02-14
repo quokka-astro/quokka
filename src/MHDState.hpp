@@ -12,8 +12,8 @@ struct MHDState {
 	double vz;  // 2nd transverse velocity component
 	double P;   // pressure
 	double E;   // total energy density
-  double by;  // transverse bfield component
-  double bz;  // 2nd transverse bfield density
+	double by;  // transverse bfield component
+	double bz;  // 2nd transverse bfield density
 };
 
 } // namespace quokka
