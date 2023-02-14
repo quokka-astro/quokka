@@ -110,8 +110,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real checkpointTimeInterval_ = -1.0; // time interval for checkpoints
 	int checkpointInterval_ = -1;		    // -1 == no output
 	int amrInterpMethod_ = 1;		    // 0 == piecewise constant, 1 == lincc_interp
-	amrex::Real reltolPoisson_ = 1.0e-10;	    // default
-	amrex::Real abstolPoisson_ = 1.0e-10;	    // default
+	amrex::Real reltolPoisson_ = 1.0e-5;	    // default
+	amrex::Real abstolPoisson_ = 1.0e-5;	    // default (scaled by minimum RHS value)
 	int doPoissonSolve_ = 0;		    // 1 == self-gravity enabled, 0 == disabled
 
 	amrex::Real densityFloor_ = 0.0;				// default
@@ -679,9 +679,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		amrex::ParallelDescriptor::Barrier(); // synchronize all MPI ranks
 		computeTimestep();
 
-		// elliptic solve over entire AMR grid (pre-timestep)
-		ellipticSolveAllLevels(0.5 * dt_[0]);
-
 		// hyperbolic advance over all levels
 		int lev = 0;	   // coarsest level
 		int stepsLeft = 1; // coarsest level is advanced one step
@@ -689,7 +686,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		timeStepWithSubcycling(lev, cur_time, coarseTimeBoundary, stepsLeft);
 
 		// elliptic solve over entire AMR grid (post-timestep)
-		ellipticSolveAllLevels(0.5 * dt_[0]);
+		ellipticSolveAllLevels(dt_[0]);
 
 		cur_time += dt_[0];
 		++cycleCount_;
@@ -806,15 +803,18 @@ template <typename problem_t> void AMRSimulation<problem_t>::ellipticSolveAllLev
 		amrex::Vector<amrex::MultiFab> rhs(finest_level + 1);
 		const int nghost = 1;
 		const int ncomp = 1;
+		amrex::Real rhs_min = std::numeric_limits<amrex::Real>::max();
 		for (int lev = 0; lev <= finest_level; ++lev) {
 			phi[lev].define(grids[lev], dmap[lev], ncomp, nghost);
 			rhs[lev].define(grids[lev], dmap[lev], ncomp, nghost);
 			phi[lev].setVal(0); // set initial guess to zero
 			rhs[lev].setVal(0);
 			fillPoissonRhsAtLevel(rhs[lev], lev);
+			rhs_min = std::min(rhs_min, rhs[lev].min(0));
 		}
 
-		poissonSolver.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs), reltolPoisson_, abstolPoisson_);
+		amrex::Real abstol = abstolPoisson_ * rhs_min;
+		poissonSolver.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs), reltolPoisson_, abstol);
 		if (verbose) {
 			amrex::Print() << "\n";
 		}

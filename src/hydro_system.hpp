@@ -101,7 +101,7 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	template <FluxDir DIR>
 	static void ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab &x1FaceVel_mf, amrex::MultiFab const &x1LeftState_mf,
-				  amrex::MultiFab const &x1RightState_mf, amrex::MultiFab const &primVar_mf);
+				  amrex::MultiFab const &x1RightState_mf, amrex::MultiFab const &primVar_mf, amrex::Real K_visc);
 
 	template <FluxDir DIR>
 	static void ComputeFirstOrderFluxes(amrex::Array4<const amrex::Real> const &consVar, array_t &x1FluxDiffusive, amrex::Box const &indexRange);
@@ -747,7 +747,7 @@ template <typename problem_t> void HydroSystem<problem_t>::SyncDualEnergy(amrex:
 template <typename problem_t>
 template <FluxDir DIR>
 void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab &x1FaceVel_mf, amrex::MultiFab const &x1LeftState_mf,
-					   amrex::MultiFab const &x1RightState_mf, amrex::MultiFab const &primVar_mf)
+					   amrex::MultiFab const &x1RightState_mf, amrex::MultiFab const &primVar_mf, const amrex::Real K_visc)
 {
 
 	// By convention, the interfaces are defined on the left edge of each
@@ -915,6 +915,20 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		// solve the Riemann problem in canonical form
 		quokka::valarray<double, nvar_> F_canonical = quokka::Riemann::HLLC<nscalars_, nvar_>(sL, sR, gamma_, du, dw);
 		quokka::valarray<double, nvar_> F = F_canonical;
+
+		// add artificial viscosity
+		// following Colella & Woodward (1984), eq. (4.2)
+		const double div_v = AMREX_D_TERM(du, +0.5 * (dvl + dvr), +0.5 * (dwl + dwr));
+		const double viscosity = K_visc * std::max(-div_v, 0.);
+
+		quokka::valarray<double, nvar_> U_L = {sL.rho, sL.rho * sL.u, sL.rho * sL.v, sL.rho * sL.w, sL.E, sL.Eint};
+		quokka::valarray<double, nvar_> U_R = {sR.rho, sR.rho * sR.u, sR.rho * sR.v, sR.rho * sR.w, sR.E, sR.Eint};
+		for (int n = 0; n < nscalars_; ++n) {
+			const int nstart = nvar_ - nscalars_;
+			U_L[nstart + n] = sL.scalar[n];
+			U_R[nstart + n] = sR.scalar[n];
+		}
+		F = F + viscosity * (U_L - U_R);
 
 		// permute momentum components according to flux direction DIR
 		F[velN_index] = F_canonical[x1Momentum_index];
