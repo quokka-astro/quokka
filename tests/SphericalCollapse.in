@@ -28,6 +28,6 @@ stop_time = 0.15
 do_reflux = 1
 do_subcycle = 0
 
-ascent_interval = 50
+ascent_interval = 100
 plotfile_interval = 200
 checkpoint_interval = 1000
