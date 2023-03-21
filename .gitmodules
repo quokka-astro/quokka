@@ -9,4 +9,4 @@
 	url = https://github.com/grackle-project/grackle_data_files.git
 [submodule "extern/Microphysics"]
 	path = extern/Microphysics
-	url = https://github.com/AMReX-Astro/Microphysics
+	url = https://github.com/psharda/Microphysics
