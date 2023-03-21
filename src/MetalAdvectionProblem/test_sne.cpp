@@ -295,6 +295,7 @@ void AddSupernova(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> pro
 				Real x0 = NAN;
 				Real y0 = NAN;
 				Real z0 = NAN;
+        Real Rpds = 0.0;
         
         x0 = std::abs(xc -px(n));
         y0 = std::abs(yc -py(n));
@@ -308,6 +309,8 @@ void AddSupernova(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> pro
         printf("The location of SN=%d,%d,%d\n",i, j, k);
         printf("SN added at level=%d\n", level);
         printf("The total number of SN gone off=%d\n", cum_sn);
+        Rpds = 14. * std::pow(state(i, j, k, HydroSystem<NewProblem>::density_index)/Const_mH, -3./7.);
+        printf("Rpds = %.2e pc\n", Rpds);
         }
 			}
 		});
@@ -500,7 +503,7 @@ auto problem_main() -> int {
   // Problem initialization
   RadhydroSimulation<NewProblem> sim(boundaryConditions);
   sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
-  sim.cflNumber_ = 0.2;         // *must* be less than 1/3 in 3D!
+  sim.cflNumber_ = 0.35;         // *must* be less than 1/3 in 3D!
   
 
   readCloudyData(sim.userData_.cloudyTables);
