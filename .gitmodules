@@ -9,5 +9,5 @@
 	url = https://github.com/grackle-project/grackle_data_files.git
 [submodule "extern/Microphysics"]
 	path = extern/Microphysics
-	url = https://github.com/psharda/Microphysics
-	branch = networks-changes-dev
+	url = https://github.com/AMReX-Astro/Microphysics
+	branch = development
