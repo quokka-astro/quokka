@@ -21,54 +21,30 @@ template <int N_scalars, int fluxdim>
 AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars> const &sL, quokka::HydroState<N_scalars> const &sR, const double gamma,
 					      const double du, const double dw) -> quokka::valarray<double, fluxdim>
 {
-	// compute PVRS states (Toro 10.5.2)
+	// compute Roe averages
 
-	const double rho_bar = 0.5 * (sL.rho + sR.rho);
-	const double cs_bar = 0.5 * (sL.cs + sR.cs);
-	const double P_PVRS = 0.5 * (sL.P + sR.P) - 0.5 * (sR.u - sL.u) * (rho_bar * cs_bar);
-
-	// choose P_star adaptively (Fig. 9.4 of Toro)
-
-	const double P_min = std::min(sL.P, sR.P);
-	const double P_max = std::max(sL.P, sR.P);
-	const double Q = P_max / P_min;
-	constexpr double Q_crit = 2.;
-	double P_star = NAN;
-
-	if (gamma == 1.0) {
-		P_star = std::max(P_PVRS, 0.0); // only estimate compatible with gamma = 1
-	} else {				// gamma > 1
-		if ((Q < Q_crit) && (P_min < P_PVRS) && (P_PVRS < P_max)) {
-			// use PVRS estimate
-			P_star = P_PVRS;
-		} else if (P_PVRS < P_min) {
-			// compute two-rarefaction TRRS states (Toro 10.5.2, eq. 10.63)
-			const double z = (gamma - 1.) / (2. * gamma);
-			const double P_TRRS =
-			    std::pow((sL.cs + sR.cs - 0.5 * (gamma - 1.) * (sR.u - sL.u)) / (sL.cs / std::pow(sL.P, z) + sR.cs / std::pow(sR.P, z)), (1. / z));
-			P_star = P_TRRS;
-		} else {
-			// compute two-shock TSRS states (Toro 10.5.2, eq. 10.65)
-			const double A_L = 2. / ((gamma + 1.) * sL.rho);
-			const double A_R = 2. / ((gamma + 1.) * sR.rho);
-			const double B_L = ((gamma - 1.) / (gamma + 1.)) * sL.P;
-			const double B_R = ((gamma - 1.) / (gamma + 1.)) * sR.P;
-			const double P_0 = std::max(P_PVRS, 0.0);
-			const double G_L = std::sqrt(A_L / (P_0 + B_L));
-			const double G_R = std::sqrt(A_R / (P_0 + B_R));
-			const double delta_u = sR.u - sL.u;
-			const double P_TSRS = (G_L * sL.P + G_R * sR.P - delta_u) / (G_L + G_R);
-			P_star = P_TSRS;
-		}
+	const double wl = std::sqrt(sL.rho);
+	const double wr = std::sqrt(sR.rho);
+	const double norm = 1. / (wl + wr);
+	const double u_tilde = (wl * sL.u + wr * sR.u) * norm;
+	const double v_tilde = (wl * sL.v + wr * sR.v) * norm;
+	const double w_tilde = (wl * sL.w + wr * sR.w) * norm;
+	const double vsq_tilde = u_tilde * u_tilde + v_tilde * v_tilde + w_tilde * w_tilde;
+	const double H_L = (sL.E + sL.P) / sL.rho; // sL specific enthalpy
+	const double H_R = (sR.E + sR.P) / sR.rho; // sR specific enthalpy
+	const double H_tilde = (wl * H_L + wr * H_R) * norm;
+	double cs_tilde = NAN;
+	if (gamma != 1.0) {
+		// TODO(ben): implement Roe average for general EOS
+		cs_tilde = std::sqrt((gamma - 1.) * (H_tilde - 0.5 * vsq_tilde));
+	} else {
+		cs_tilde = 0.5 * (sL.cs + sR.cs);
 	}
 
-	// compute wave speeds
+	// compute wave speeds following Batten et al. (1997)
 
-	const double q_L = (P_star <= sL.P) ? 1.0 : std::sqrt(1.0 + ((gamma + 1.0) / (2.0 * gamma)) * ((P_star / sL.P) - 1.0));
-	const double q_R = (P_star <= sR.P) ? 1.0 : std::sqrt(1.0 + ((gamma + 1.0) / (2.0 * gamma)) * ((P_star / sR.P) - 1.0));
-
-	double S_L = sL.u - q_L * sL.cs;
-	double S_R = sR.u + q_R * sR.cs;
+	const double S_L = std::min(sL.u - sL.cs, u_tilde - cs_tilde);
+	const double S_R = std::max(sR.u + sR.cs, u_tilde + cs_tilde);
 
 	// carbuncle correction [Eq. 10 of Minoshima & Miyoshi (2021)]
 

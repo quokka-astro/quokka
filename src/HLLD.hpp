@@ -7,7 +7,7 @@
 #include <AMReX_REAL.H>
 
 #include "ArrayView.hpp"
-#include "HydroState.hpp"
+#include "MHDState.hpp"
 #include "valarray.hpp"
 
 namespace quokka::Riemann
@@ -27,8 +27,7 @@ struct ConsHydro1D {
 	double bz;  // z-magnetic field
 };
 
-template <int N_scalars>
-AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto FastMagnetoSonicSpeed(double gamma, quokka::HydroState<N_scalars> const state, const double bx) -> double
+AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto FastMagnetoSonicSpeed(double gamma, quokka::MHDState const state, const double bx) -> double
 {
 	double gp = gamma * state.P;
 	double bx_sq = bx * bx;
@@ -40,9 +39,9 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto FastMagnetoSonicSpeed(double gamma, quo
 }
 
 // HLLD solver following Miyoshi and Kusano (2005), hereafter MK5.
-template <FluxDir DIR, int N_scalars, int fluxdim>
-AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars> const &s_L, quokka::HydroState<N_scalars> const &s_R, const double gamma,
-					      const double bx) -> quokka::valarray<double, fluxdim>
+template <int fluxdim> // FluxDir DIR,
+AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::MHDState const &s_L, quokka::MHDState const &s_R, const double gamma, const double bx)
+    -> quokka::valarray<double, fluxdim>
 {
 	//--- Step 1. Compute L/R states
 
@@ -75,17 +74,17 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars> cons
 	double const ke_R = 0.5 * s_R.rho * (SQUARE(s_R.vx) + (SQUARE(s_R.vy) + SQUARE(s_R.vz)));
 	// set left conserved states
 	u_L.rho = s_L.rho;
-	u_L.mx = s_L.vx * s_L.rho;
-	u_L.my = s_L.vy * s_L.rho;
-	u_L.mz = s_L.vz * s_L.rho;
+	u_L.mx = s_L.vx * u_L.rho;
+	u_L.my = s_L.vy * u_L.rho;
+	u_L.mz = s_L.vz * u_L.rho;
 	u_L.E = ke_L + pb_L + s_L.P / (gamma - 1.0); // TODO(neco): generalise EOS
 	u_L.by = s_L.by;
 	u_L.bz = s_L.bz;
 	// set right conserved states
 	u_R.rho = s_R.rho;
-	u_R.mx = s_R.vx * s_R.rho;
-	u_R.my = s_R.vy * s_R.rho;
-	u_R.mz = s_R.vz * s_R.rho;
+	u_R.mx = s_R.vx * u_R.rho;
+	u_R.my = s_R.vy * u_R.rho;
+	u_R.mz = s_R.vz * u_R.rho;
 	u_R.E = ke_R + pb_R + s_R.P / (gamma - 1.0);
 	u_R.by = s_R.by;
 	u_R.bz = s_R.bz;
@@ -101,21 +100,21 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars> cons
 
 	// total pressure
 	double ptot_L = s_L.P + pb_L;
-	double ptot_R = s_R.P + pb_L;
+	double ptot_R = s_R.P + pb_R;
 	// fluxes on the left side of the interface
-	f_L.rho = u_L.rho;
+	f_L.rho = u_L.mx;
 	f_L.mx = u_L.mx * s_L.vx + ptot_L - bx_sq;
-	f_L.my = u_L.my * s_L.vy + bx * u_L.by;
-	f_L.mz = u_L.mz * s_L.vz + bx * u_L.bz;
-	f_L.E = s_L.vx * (u_L.E + ptot_L - bx_sq) - bx * (s_L.vy * s_L.by + s_L.vz * s_L.bz);
+	f_L.my = u_L.my * s_L.vx + bx * u_L.by;
+	f_L.mz = u_L.mz * s_L.vx + bx * u_L.bz;
+	f_L.E = s_L.vx * (u_L.E + ptot_L - bx_sq) - bx * (s_L.vy * u_L.by + s_L.vz * u_L.bz);
 	f_L.by = u_L.by * s_L.vx - bx * s_L.vy;
 	f_L.bz = u_L.bz * s_L.vx - bx * s_L.vz;
 	// fluxes on the right side of the interface
-	f_R.rho = u_R.rho;
+	f_R.rho = u_R.mx;
 	f_R.mx = u_R.mx * s_R.vx + ptot_R - bx_sq;
-	f_R.my = u_R.my * s_R.vy + bx * u_R.by;
-	f_R.mz = u_R.mz * s_R.vz + bx * u_R.bz;
-	f_R.E = s_R.vx * (u_R.E + ptot_R - bx_sq) - bx * (s_R.vy * s_R.by + s_R.vz * s_R.bz);
+	f_R.my = u_R.my * s_R.vx + bx * u_R.by;
+	f_R.mz = u_R.mz * s_R.vx + bx * u_R.bz;
+	f_R.E = s_R.vx * (u_R.E + ptot_R - bx_sq) - bx * (s_R.vy * u_R.by + s_R.vz * u_R.bz);
 	f_R.by = u_R.by * s_R.vx - bx * s_R.vy;
 	f_R.bz = u_R.bz * s_R.vx - bx * s_R.vz;
 
@@ -147,8 +146,8 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars> cons
 
 	// compute total pressure
 	// MK5: eqn (41) can be calculated (more explicitly) via eqn (23)
-	double ptot_star_L = ptot_L - s_L.rho * siui_L * (spds[2] - s_L.vx);
-	double ptot_star_R = ptot_R - s_R.rho * siui_R * (spds[2] - s_R.vx);
+	double ptot_star_L = ptot_L - u_L.rho * siui_L * (spds[2] - s_L.vx);
+	double ptot_star_R = ptot_R - u_R.rho * siui_R * (spds[2] - s_R.vx);
 	double ptot_star = 0.5 * (ptot_star_L + ptot_star_R);
 
 	// MK5: u_L^(star, dstar) from, eqn (39)
@@ -174,7 +173,7 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars> cons
 	double vb_star_L = (u_star_L.mx * bx + (u_star_L.my * u_star_L.by + u_star_L.mz * u_star_L.bz)) * u_star_rho_inv_L;
 	// MK5: eqn (48)
 	u_star_L.E =
-	    (siui_L * u_L.E - ptot_L * s_L.vx + ptot_star * spds[2] + bx * (s_L.vx * bx + (s_L.vy * s_L.by + s_L.vz * s_L.bz) - vb_star_L)) * sism_inv_L;
+	    (siui_L * u_L.E - ptot_L * s_L.vx + ptot_star * spds[2] + bx * (s_L.vx * bx + (s_L.vy * u_L.by + s_L.vz * u_L.bz) - vb_star_L)) * sism_inv_L;
 
 	// MK5: u_R^(star, dstar) from, eqn (39)
 	u_star_R.mx = u_star_R.rho * spds[2];
@@ -199,7 +198,7 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars> cons
 	double vb_star_R = (u_star_R.mx * bx + (u_star_R.my * u_star_R.by + u_star_R.mz * u_star_R.bz)) * u_star_rho_inv_R;
 	// MK5: eqn (48)
 	u_star_R.E =
-	    (siui_R * u_R.E - ptot_R * s_R.vx + ptot_star * spds[2] + bx * (s_R.vx * bx + (s_R.vy * s_R.by + s_R.vz * s_R.bz) - vb_star_R)) * sism_inv_R;
+	    (siui_R * u_R.E - ptot_R * s_R.vx + ptot_star * spds[2] + bx * (s_R.vx * bx + (s_R.vy * u_R.by + s_R.vz * u_R.bz) - vb_star_R)) * sism_inv_R;
 
 	// if Bx is near zero, then u_i^dstar = u_i^star
 	if (0.5 * bx_sq < (DELTA)*ptot_star) {
@@ -210,6 +209,8 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars> cons
 		double bx_sign = (bx > 0.0 ? 1.0 : -1.0);
 		u_dstar_L.rho = u_star_L.rho;
 		u_dstar_R.rho = u_star_R.rho;
+		u_dstar_L.mx = u_star_L.mx;
+		u_dstar_R.mx = u_star_R.mx;
 		// MK5: eqn (59)
 		double tmp = rho_sum_inv * (rho_sqrt_L * (u_star_L.my * u_star_rho_inv_L) + rho_sqrt_R * (u_star_R.my * u_star_rho_inv_R) +
 					    bx_sign * (u_star_R.by - u_star_L.by));
@@ -223,7 +224,6 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars> cons
 		// MK5: eqn (61)
 		tmp = rho_sum_inv * (rho_sqrt_L * u_star_R.by + rho_sqrt_R * u_star_L.by +
 				     bx_sign * rho_sqrt_L * rho_sqrt_R * ((u_star_R.my * u_star_rho_inv_R) - (u_star_L.my * u_star_rho_inv_L)));
-		// any benefit in a = b = bla ?
 		u_dstar_L.by = tmp;
 		u_dstar_R.by = tmp;
 		// MK5: eqn (62)
@@ -233,8 +233,8 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars> cons
 		u_dstar_R.bz = tmp;
 		// MK5: eqn (63)
 		tmp = spds[2] * bx + (u_dstar_L.my * u_dstar_L.by + u_dstar_L.mz * u_dstar_L.bz) / u_dstar_L.rho;
-		u_dstar_L.E = u_dstar_L.E - rho_sqrt_L * bx_sign * (vb_star_L - tmp);
-		u_dstar_R.E = u_dstar_R.E + rho_sqrt_R * bx_sign * (vb_star_R - tmp);
+		u_dstar_L.E = u_star_L.E - rho_sqrt_L * bx_sign * (vb_star_L - tmp);
+		u_dstar_R.E = u_star_R.E + rho_sqrt_R * bx_sign * (vb_star_R - tmp);
 	}
 
 	//--- Step 6. Compute fluxes
@@ -328,7 +328,7 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars> cons
 	}
 
 	// TODO(neco): Eint=0 for now; pscalars will also be needed in the future.
-	quokka::valarray<double, fluxdim> F_hydro = {f_x.rho, f_x.mx, f_x.my, f_x.mz, f_x.E, 0};
+	quokka::valarray<double, fluxdim> F_hydro = {f_x.rho, f_x.mx, f_x.my, f_x.mz, f_x.E, 0.0};
 	return F_hydro;
 }
 } // namespace quokka::Riemann

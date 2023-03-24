@@ -9,6 +9,8 @@
 /// \brief Defines methods for interpolating cooling rates from Cloudy tables.
 ///
 
+#include <limits>
+
 #include "AMReX.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_Extension.H"
@@ -17,10 +19,12 @@
 #include "FastMath.hpp"
 #include "GrackleDataReader.hpp"
 #include "Interpolate2D.hpp"
+#include "ODEIntegrate.hpp"
 #include "radiation_system.hpp"
 #include "root_finding.hpp"
-#include <limits>
 
+namespace quokka::cooling
+{
 // From Grackle source code (initialize_chemistry_data.c, line 114):
 //   In fully tabulated mode, set H mass fraction according to
 //   the abundances in Cloudy, which assumes n_He / n_H = 0.1.
@@ -66,6 +70,12 @@ class cloudy_tables
 	[[nodiscard]] auto const_tables() const -> cloudyGpuConstTables;
 };
 
+struct ODEUserData {
+	Real rho{};
+	Real gamma{};
+	cloudyGpuConstTables tables;
+};
+
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto cloudy_cooling_function(Real const rho, Real const T, cloudyGpuConstTables const &tables) -> Real
 {
 	// interpolate cooling rates from Cloudy tables
@@ -75,11 +85,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto cloudy_cooling_function(Real const
 	const Real log_T = std::log10(T);
 
 	const double logPrimCool = interpolate2d(log_nH, log_T, tables.log_nH, tables.log_Tgas, tables.primCool);
-
 	const double logPrimHeat = interpolate2d(log_nH, log_T, tables.log_nH, tables.log_Tgas, tables.primHeat);
-
 	const double logMetalCool = interpolate2d(log_nH, log_T, tables.log_nH, tables.log_Tgas, tables.metalCool);
-
 	const double logMetalHeat = interpolate2d(log_nH, log_T, tables.log_nH, tables.log_Tgas, tables.metalHeat);
 
 	const double netLambda_prim = FastMath::pow10(logPrimHeat) - FastMath::pow10(logPrimCool);
@@ -194,6 +201,109 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(double rho, do
 	return T_sol;
 }
 
-void readCloudyData(cloudy_tables &cloudyTables);
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto user_rhs(Real /*t*/, quokka::valarray<Real, 1> &y_data, quokka::valarray<Real, 1> &y_rhs, void *user_data) -> int
+{
+	// unpack user_data
+	auto *udata = static_cast<ODEUserData *>(user_data);
+	const Real rho = udata->rho;
+	const Real gamma = udata->gamma;
+	cloudyGpuConstTables const &tables = udata->tables;
+
+	// check whether temperature is out-of-bounds
+	const Real Tmin = 10.;
+	const Real Tmax = 1.0e9;
+	const Real Eint_min = ComputeEgasFromTgas(rho, Tmin, gamma, tables);
+	const Real Eint_max = ComputeEgasFromTgas(rho, Tmax, gamma, tables);
+
+	// compute temperature and cooling rate
+	const Real Eint = y_data[0];
+
+	if (Eint <= Eint_min) {
+		// set cooling to value at Tmin
+		y_rhs[0] = cloudy_cooling_function(rho, Tmin, tables);
+	} else if (Eint >= Eint_max) {
+		// set cooling to value at Tmax
+		y_rhs[0] = cloudy_cooling_function(rho, Tmax, tables);
+	} else {
+		// ok, within tabulated cooling limits
+		const Real T = ComputeTgasFromEgas(rho, Eint, gamma, tables);
+		if (!std::isnan(T)) { // temp iteration succeeded
+			y_rhs[0] = cloudy_cooling_function(rho, T, tables);
+		} else { // temp iteration failed
+			y_rhs[0] = NAN;
+			return 1; // failed
+		}
+	}
+
+	return 0; // success
+}
+
+template <typename problem_t> void computeCooling(amrex::MultiFab &mf, const Real dt_in, cloudy_tables &cloudyTables, const Real T_floor)
+{
+	BL_PROFILE("computeCooling()")
+
+	const Real dt = dt_in;
+	const Real reltol_floor = 0.01;
+	const Real rtol = 1.0e-4; // not recommended to change this
+
+	auto tables = cloudyTables.const_tables();
+
+	const auto &ba = mf.boxArray();
+	const auto &dmap = mf.DistributionMap();
+	amrex::iMultiFab nsubstepsMF(ba, dmap, 1, 0);
+
+	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
+		const amrex::Box &indexRange = iter.validbox();
+		auto const &state = mf.array(iter);
+		auto const &nsubsteps = nsubstepsMF.array(iter);
+
+		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			const Real rho = state(i, j, k, HydroSystem<problem_t>::density_index);
+			const Real x1Mom = state(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
+			const Real x2Mom = state(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
+			const Real x3Mom = state(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
+			const Real Egas = state(i, j, k, HydroSystem<problem_t>::energy_index);
+
+			const Real Eint = RadSystem<problem_t>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+			const Real gamma = quokka::EOS_Traits<problem_t>::gamma;
+			ODEUserData user_data{rho, gamma, tables};
+			quokka::valarray<Real, 1> y = {Eint};
+			quokka::valarray<Real, 1> const abstol = {reltol_floor * ComputeEgasFromTgas(rho, T_floor, gamma, tables)};
+
+			// do integration with RK2 (Heun's method)
+			int nsteps = 0;
+			rk_adaptive_integrate(user_rhs, 0, y, dt, &user_data, rtol, abstol, nsteps);
+			nsubsteps(i, j, k) = nsteps;
+
+			// check if integration failed
+			if (nsteps >= maxStepsODEIntegrate) {
+				Real const T = ComputeTgasFromEgas(rho, Eint, quokka::EOS_Traits<problem_t>::gamma, tables);
+				Real const Edot = cloudy_cooling_function(rho, T, tables);
+				Real const t_cool = Eint / Edot;
+				printf("max substeps exceeded! rho = %.17e, Eint = %.17e, T = %g, cooling "
+				       "time = %g, dt = %.17e\n",
+				       rho, Eint, T, t_cool, dt);
+			}
+			const Real Eint_new = y[0];
+			const Real dEint = Eint_new - Eint;
+
+			state(i, j, k, HydroSystem<problem_t>::energy_index) += dEint;
+			state(i, j, k, HydroSystem<problem_t>::internalEnergy_index) += dEint;
+		});
+	}
+
+	int nmin = nsubstepsMF.min(0);
+	int nmax = nsubstepsMF.max(0);
+	Real navg = static_cast<Real>(nsubstepsMF.sum(0)) / static_cast<Real>(nsubstepsMF.boxArray().numPts());
+	amrex::Print() << fmt::format("\tcooling substeps (per cell): min {}, avg {}, max {}\n", nmin, navg, nmax);
+
+	if (nmax >= maxStepsODEIntegrate) {
+		amrex::Abort("Max steps exceeded in cooling solve!");
+	}
+}
+
+void readCloudyData(std::string &grackle_hdf5_file, cloudy_tables &cloudyTables);
+
+} // namespace quokka::cooling
 
 #endif // CLOUDYCOOLING_HPP_
