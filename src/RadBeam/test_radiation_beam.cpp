@@ -22,7 +22,7 @@
 #include "test_radiation_beam.hpp"
 
 struct BeamProblem {
-}; // dummy type to allow compile-type polymorphism via template specialization
+};				     // dummy type to allow compile-type polymorphism via template specialization
 
 constexpr double kappa0 = 0.0;	     // cm^2 g^-1 (specific opacity)
 constexpr double rho0 = 1.0;	     // g cm^-3 (matter density)
@@ -276,10 +276,10 @@ auto problem_main() -> int
 	constexpr int nvars = RadSystem<BeamProblem>::nvar_;
 	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
 	for (int n = 0; n < nvars; ++n) {
-		BCs_cc[n].setLo(0, amrex::BCType::ext_dir);  // left x1 -- inflow
-		BCs_cc[n].setHi(0, amrex::BCType::foextrap); // right x1 -- extrapolate
-		BCs_cc[n].setLo(1, amrex::BCType::ext_dir);  // left x2 -- inflow
-		BCs_cc[n].setHi(1, amrex::BCType::foextrap); // right x2 -- extrapolate
+		BCs_cc[n].setLo(0, amrex::BCType::ext_dir);	    // left x1 -- inflow
+		BCs_cc[n].setHi(0, amrex::BCType::foextrap);	    // right x1 -- extrapolate
+		BCs_cc[n].setLo(1, amrex::BCType::ext_dir);	    // left x2 -- inflow
+		BCs_cc[n].setHi(1, amrex::BCType::foextrap);	    // right x2 -- extrapolate
 		if (AMREX_SPACEDIM == 3) {
 			BCs_cc[n].setLo(2, amrex::BCType::int_dir); // periodic
 			BCs_cc[n].setHi(2, amrex::BCType::int_dir);
@@ -293,7 +293,7 @@ auto problem_main() -> int
 	sim.radiationCflNumber_ = CFL_number;
 	sim.radiationReconstructionOrder_ = 2; // PLM
 	sim.maxTimesteps_ = max_timesteps;
-	sim.plotfileInterval_ = 20; // for debugging
+	sim.plotfileInterval_ = 20;	       // for debugging
 
 	// initialize
 	sim.setInitialConditions();

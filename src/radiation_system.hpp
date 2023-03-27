@@ -338,7 +338,7 @@ void RadSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array_t &lef
 
 				   const double qa = dq_plus * dq_minus; // interface extrema
 
-				   if (qa <= 0.0) { // local extremum
+				   if (qa <= 0.0) {			 // local extremum
 
 					   // Causes subtle, but very weird, oscillations in the Shu-Osher test
 					   // problem. However, it is necessary to get a reasonable solution
