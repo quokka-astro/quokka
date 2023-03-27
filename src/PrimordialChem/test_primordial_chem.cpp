@@ -3,8 +3,8 @@
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file test_cooling.cpp
-/// \brief Defines a test problem for SUNDIALS cooling.
+/// \file test_primordial_chem.cpp
+/// \brief Defines a test problem for primordial chemistry (microphysics).
 ///
 #include <random>
 #include <vector>
@@ -20,36 +20,37 @@
 #include "AMReX_SPACE.H"
 #include "AMReX_TableData.H"
 
-#include "RadhydroSimulation.hpp"
+//#include "RadhydroSimulation.hpp"
 #include "hydro_system.hpp"
-#include "radiation_system.hpp"
-#include "test_cooling.hpp"
+//#include "radiation_system.hpp"
+#include "test_primordial_chem.hpp"
 
 using amrex::Real;
 
-struct CoolingTest {
+struct PrimordialChemTest {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
 constexpr double m_H = quokka::hydrogen_mass_cgs;
 constexpr double seconds_in_year = 3.154e7;
 
-template <> struct quokka::EOS_Traits<CoolingTest> {
-	static constexpr double gamma = 5. / 3.; // default value
-	static constexpr double mean_molecular_weight = quokka::hydrogen_mass_cgs;
-	static constexpr double boltzmann_constant = quokka::boltzmann_constant_cgs;
-};
+// PS - we don't need the EOS_traits stuff for primordial chem right?
+//template <> struct quokka::EOS_Traits<CoolingTest> {
+//	static constexpr double gamma = 5. / 3.; // default value
+//	static constexpr double mean_molecular_weight = quokka::hydrogen_mass_cgs;
+//	static constexpr double boltzmann_constant = quokka::boltzmann_constant_cgs;
+//};
 
-template <> struct Physics_Traits<CoolingTest> {
+template <> struct Physics_Traits<PrimordialChemTest> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_chemistry_enabled = false;
-	static constexpr int numPassiveScalars = 0; // number of passive scalars
+	static constexpr int numPassiveScalars = 14; // number of passive scalars
 	static constexpr bool is_radiation_enabled = false;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
 };
 
-template <> struct SimulationData<CoolingTest> {
+template <> struct SimulationData<PrimordialChemTest> {
 	std::unique_ptr<amrex::TableData<Real, 3>> table_data;
 };
 
@@ -57,23 +58,23 @@ constexpr double Tgas0 = 6000.;	   // K
 constexpr double rho0 = 0.6 * m_H; // g cm^-3
 
 // perturbation parameters
-const int kmin = 0;
-const int kmax = 16;
-Real const A = 0.05 / kmax;
+//const int kmin = 0;
+//const int kmax = 16;
+//Real const A = 0.05 / kmax;
 
-template <> void RadhydroSimulation<CoolingTest>::preCalculateInitialConditions()
+template <> void RadhydroSimulation<PrimordialChemTest>::preCalculateInitialConditions()
 {
 	// generate random phases
-	amrex::Array<int, 3> tlo{kmin, kmin, kmin}; // lower bounds
-	amrex::Array<int, 3> thi{kmax, kmax, kmax}; // upper bounds
-	userData_.table_data = std::make_unique<amrex::TableData<Real, 3>>(tlo, thi);
+	//amrex::Array<int, 3> tlo{kmin, kmin, kmin}; // lower bounds
+	//amrex::Array<int, 3> thi{kmax, kmax, kmax}; // upper bounds
+	//userData_.table_data = std::make_unique<amrex::TableData<Real, 3>>(tlo, thi);
 
-	amrex::TableData<Real, 3> h_table_data(tlo, thi, amrex::The_Pinned_Arena());
-	auto const &h_table = h_table_data.table();
+	//amrex::TableData<Real, 3> h_table_data(tlo, thi, amrex::The_Pinned_Arena());
+	//auto const &h_table = h_table_data.table();
 
 	// 64-bit Mersenne Twister (do not use 32-bit version for sampling doubles!)
-	std::mt19937_64 rng(1); // NOLINT
-	std::uniform_real_distribution<double> sample_phase(0., 2.0 * M_PI);
+	//std::mt19937_64 rng(1); // NOLINT
+	//std::uniform_real_distribution<double> sample_phase(0., 2.0 * M_PI);
 
 	// Initialize data on the host
 	for (int j = tlo[0]; j <= thi[0]; ++j) {
@@ -131,22 +132,22 @@ template <> void RadhydroSimulation<CoolingTest>::setInitialConditionsOnGrid(quo
 		Real ymom = 0;
 		Real zmom = 0;
 		Real const P = 4.0e4 * quokka::boltzmann_constant_cgs; // erg cm^-3
-		Real Eint = (quokka::EOS_Traits<CoolingTest>::gamma - 1.) * P;
+		Real Eint = (quokka::EOS_Traits<PrimordialChemTest>::gamma - 1.) * P;
 
-		Real const Egas = RadSystem<CoolingTest>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
+		//Real const Egas = RadSystem<CoolingTest>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
 
-		state_cc(i, j, k, RadSystem<CoolingTest>::gasEnergy_index) = Egas;
-		state_cc(i, j, k, RadSystem<CoolingTest>::gasInternalEnergy_index) = Eint;
-		state_cc(i, j, k, RadSystem<CoolingTest>::gasDensity_index) = rho;
-		state_cc(i, j, k, RadSystem<CoolingTest>::x1GasMomentum_index) = xmom;
-		state_cc(i, j, k, RadSystem<CoolingTest>::x2GasMomentum_index) = ymom;
-		state_cc(i, j, k, RadSystem<CoolingTest>::x3GasMomentum_index) = zmom;
+		//state_cc(i, j, k, RadSystem<CoolingTest>::gasEnergy_index) = Egas;
+		state_cc(i, j, k, RadSystem<PrimordialChemTest>::gasInternalEnergy_index) = Eint;
+		state_cc(i, j, k, RadSystem<PrimordialChemTest>::gasDensity_index) = rho;
+		state_cc(i, j, k, RadSystem<PrimordialChemTest>::x1GasMomentum_index) = xmom;
+		state_cc(i, j, k, RadSystem<PrimordialChemTest>::x2GasMomentum_index) = ymom;
+		state_cc(i, j, k, RadSystem<PrimordialChemTest>::x3GasMomentum_index) = zmom;
 	});
 }
 
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<CoolingTest>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
+AMRSimulation<PrimordialChemTest>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
 							amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/,
 							int /*bcomp*/, int /*orig_comp*/)
 {
@@ -171,17 +172,17 @@ AMRSimulation<CoolingTest>::setCustomBoundaryConditions(const amrex::IntVect &iv
 		// x2 upper boundary -- constant
 		Real rho = rho0;
 		Real xmom = 0;
-		Real ymom = rho * (-26.0e5); // [-26 km/s]
+		Real ymom = 0;
 		Real zmom = 0;
-		Real Eint = quokka::EOS<CoolingTest>::ComputeEintFromTgas(rho, Tgas0);
-		Real const Egas = RadSystem<CoolingTest>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
+		Real Eint = quokka::EOS<PrimordialChemTest>::ComputeEintFromTgas(rho, Tgas0);
+		Real const Egas = RadSystem<PrimordialChemTest>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
 
-		consVar(i, j, k, RadSystem<CoolingTest>::gasDensity_index) = rho;
-		consVar(i, j, k, RadSystem<CoolingTest>::x1GasMomentum_index) = xmom;
-		consVar(i, j, k, RadSystem<CoolingTest>::x2GasMomentum_index) = ymom;
-		consVar(i, j, k, RadSystem<CoolingTest>::x3GasMomentum_index) = zmom;
-		consVar(i, j, k, RadSystem<CoolingTest>::gasEnergy_index) = Egas;
-		consVar(i, j, k, RadSystem<CoolingTest>::gasInternalEnergy_index) = Eint;
+		consVar(i, j, k, RadSystem<PrimordialChemTest>::gasDensity_index) = rho;
+		consVar(i, j, k, RadSystem<PrimordialChemTest>::x1GasMomentum_index) = xmom;
+		consVar(i, j, k, RadSystem<PrimordialChemTest>::x2GasMomentum_index) = ymom;
+		consVar(i, j, k, RadSystem<PrimordialChemTest>::x3GasMomentum_index) = zmom;
+		consVar(i, j, k, RadSystem<PrimordialChemTest>::gasEnergy_index) = Egas;
+		consVar(i, j, k, RadSystem<PrimordialChemTest>::gasInternalEnergy_index) = Eint;
 	}
 }
 
@@ -189,11 +190,11 @@ auto problem_main() -> int
 {
 	// Problem parameters
 	const double CFL_number = 0.25;
-	const double max_time = 7.5e4 * seconds_in_year; // 75 kyr
+	const double max_time = 1e6 * seconds_in_year; // 1 Myr
 	const int max_timesteps = 2e4;
 
 	// Problem initialization
-	constexpr int ncomp_cc = Physics_Indices<CoolingTest>::nvarTotal_cc;
+	constexpr int ncomp_cc = Physics_Indices<PrimordialChemTest>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 	for (int n = 0; n < ncomp_cc; ++n) {
 		BCs_cc[n].setLo(0, amrex::BCType::int_dir); // periodic
@@ -206,7 +207,7 @@ auto problem_main() -> int
 #endif
 	}
 
-	RadhydroSimulation<CoolingTest> sim(BCs_cc);
+	RadhydroSimulation<PrimordialChemTest> sim(BCs_cc);
 
 	// Standard PPM gives unphysically enormous temperatures when used for
 	// this problem (e.g., ~1e14 K or higher), but can be fixed by
