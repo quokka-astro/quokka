@@ -82,7 +82,6 @@ include_directories(${Boost_INCLUDE_DIRS_RET})
 include_directories(${CMAKE_SOURCE_DIR}/src)
 
 link_libraries(AMReX::amrex)
-link_libraries(Microphysics::Microphysics)
 link_libraries(fmt::fmt)
 link_libraries(hdf5::hdf5)
 
