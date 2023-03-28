@@ -22,7 +22,7 @@
 #include "test_radiation_shadow.hpp"
 
 struct ShadowProblem {
-}; // dummy type to allow compile-type polymorphism via template specialization
+};				     // dummy type to allow compile-type polymorphism via template specialization
 
 constexpr double sigma0 = 0.1;	     // cm^-1 (opacity)
 constexpr double rho_bg = 1.0e-3;    // g cm^-3 (matter density)
@@ -214,7 +214,7 @@ auto problem_main() -> int
 		BCs_cc[n].setLo(0, amrex::BCType::ext_dir);  // left x1 -- streaming
 		BCs_cc[n].setHi(0, amrex::BCType::foextrap); // right x1 -- extrapolate
 		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
-			if (isNormalComp(n, i)) { // reflect lower
+			if (isNormalComp(n, i)) {	     // reflect lower
 				BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);
 			} else {
 				BCs_cc[n].setLo(i, amrex::BCType::reflect_even);

@@ -187,9 +187,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rk_adaptive_integrate(F &&rhs, Rea
 				// https://sundials.readthedocs.io/en/latest/arkode/Mathematics_link.html#i-controller
 				eta = std::pow(epsilon, -1.0 / static_cast<Real>(p));
 
-				if (epsilon < 1.0) { // error passed
+				if (epsilon < 1.0) {			      // error passed
 					y = ynew;
-					time += dt; // increment time
+					time += dt;			      // increment time
 					if (k == 0) {
 						eta = std::min(eta, eta_max); // limit timestep increase
 					} else {

@@ -72,23 +72,23 @@ template <> struct Physics_Traits<ShellProblem> {
 	static constexpr bool is_mhd_enabled = false;
 };
 
-constexpr amrex::Real Msun = 2.0e33;	       // g
-constexpr amrex::Real parsec_in_cm = 3.086e18; // cm
+constexpr amrex::Real Msun = 2.0e33;					      // g
+constexpr amrex::Real parsec_in_cm = 3.086e18;				      // cm
 
-constexpr amrex::Real specific_luminosity = 2000.;			   // erg s^-1 g^-1
-constexpr amrex::Real GMC_mass = 1.0e6 * Msun;				   // g
-constexpr amrex::Real epsilon = 0.5;					   // dimensionless
-constexpr amrex::Real M_shell = (1 - epsilon) * GMC_mass;		   // g
-constexpr amrex::Real L_star = (epsilon * GMC_mass) * specific_luminosity; // erg s^-1
+constexpr amrex::Real specific_luminosity = 2000.;			      // erg s^-1 g^-1
+constexpr amrex::Real GMC_mass = 1.0e6 * Msun;				      // g
+constexpr amrex::Real epsilon = 0.5;					      // dimensionless
+constexpr amrex::Real M_shell = (1 - epsilon) * GMC_mass;		      // g
+constexpr amrex::Real L_star = (epsilon * GMC_mass) * specific_luminosity;    // erg s^-1
 
-constexpr amrex::Real r_0 = 5.0 * parsec_in_cm; // cm
-constexpr amrex::Real sigma_star = 0.3 * r_0;	// cm
-constexpr amrex::Real H_shell = 0.3 * r_0;	// cm
-constexpr amrex::Real kappa0 = 20.0;		// specific opacity [cm^2 g^-1]
+constexpr amrex::Real r_0 = 5.0 * parsec_in_cm;				      // cm
+constexpr amrex::Real sigma_star = 0.3 * r_0;				      // cm
+constexpr amrex::Real H_shell = 0.3 * r_0;				      // cm
+constexpr amrex::Real kappa0 = 20.0;					      // specific opacity [cm^2 g^-1]
 
 constexpr amrex::Real rho_0 = M_shell / ((4. / 3.) * M_PI * r_0 * r_0 * r_0); // g cm^-3
 
-constexpr amrex::Real P_0 = gamma_gas * rho_0 * (a0 * a0); // erg cm^-3
+constexpr amrex::Real P_0 = gamma_gas * rho_0 * (a0 * a0);		      // erg cm^-3
 constexpr double c_v = k_B / ((2.2 * m_H) * (gamma_gas - 1.0));
 
 template <>
@@ -414,7 +414,7 @@ auto problem_main() -> int
 	// for this problem)
 	sim.reconstructionOrder_ = 2;
 	sim.radiationReconstructionOrder_ = 2;
-	sim.integratorOrder_ = 2; // RK2
+	sim.integratorOrder_ = 2;		   // RK2
 
 	constexpr amrex::Real t0_hydro = r_0 / a0; // seconds
 	sim.stopTime_ = 0.125 * t0_hydro;	   // 0.124 * t0_hydro;

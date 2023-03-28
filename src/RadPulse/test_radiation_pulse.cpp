@@ -13,7 +13,7 @@
 #include "fextract.hpp"
 
 struct PulseProblem {
-}; // dummy type to allow compile-type polymorphism via template specialization
+};				  // dummy type to allow compile-type polymorphism via template specialization
 
 constexpr double kappa0 = 1.0e5;  // cm^-1 (opacity at temperature T0)
 constexpr double T0 = 1.0;	  // K (temperature)

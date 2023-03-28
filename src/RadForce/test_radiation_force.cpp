@@ -34,8 +34,8 @@ constexpr double gamma_gas = 1.0;			// isothermal gas EOS
 constexpr double a0 = 0.2e5;				// cm s^-1
 constexpr double tau = 1.0e-6;				// optical depth (dimensionless)
 
-constexpr double rho0 = 1.0e5 * mu; // g cm^-3
-constexpr double Mach0 = 1.1;	    // Mach number at wind base
+constexpr double rho0 = 1.0e5 * mu;			// g cm^-3
+constexpr double Mach0 = 1.1;				// Mach number at wind base
 constexpr double Mach1 = 2.128410288469465339;
 constexpr double rho1 = (Mach0 / Mach1) * rho0;
 
