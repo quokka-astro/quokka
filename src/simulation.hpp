@@ -1867,6 +1867,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 		}
 	}
 
+	amrex::Vector<amrex::MultiFab>  tmp;
+
 	for (int lev = 0; lev <= finest_level; ++lev) {
 		// read in level 'lev' BoxArray from Header
 		amrex::BoxArray ba;
@@ -1884,6 +1886,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 		const int ncomp_cc = Physics_Indices<problem_t>::nvarTotal_cc;
 		const int nghost_cc = nghost_cc_;
 		state_old_cc_[lev].define(grids[lev], dmap[lev], ncomp_cc, nghost_cc);
+		// tmp[lev].define(grids[lev], dmap[lev], ncomp_cc, nghost_cc);
 		state_new_cc_[lev].define(grids[lev], dmap[lev], ncomp_cc, nghost_cc);
 		max_signal_speed_[lev].define(ba, dm, 1, nghost_cc);
 
