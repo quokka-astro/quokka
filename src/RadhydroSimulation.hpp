@@ -1408,7 +1408,8 @@ void RadhydroSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real
 
 	if (radiationReconstructionOrder_ == 3) {
 		// mixed interface/cell-centered kernel
-		RadSystem<problem_t>::template ReconstructStatesPPM<DIR>(primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange, x1ReconstructRange, nvars);
+		RadSystem<problem_t>::template ReconstructStatesPPM<DIR>(primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange,
+									 x1ReconstructRange, nvars);
 	} else if (radiationReconstructionOrder_ == 2) {
 		// PLM and donor cell are interface-centered kernels
 		RadSystem<problem_t>::template ReconstructStatesPLM<DIR>(primVar.array(), x1LeftState.array(), x1RightState.array(), x1ReconstructRange, nvars);
