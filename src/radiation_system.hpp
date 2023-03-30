@@ -123,7 +123,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static void ReconstructStatesPLM(arrayconst_t &q, array_t &leftState, array_t &rightState, amrex::Box const &indexRange, int nvars);
 
 	template <FluxDir DIR>
-	static void ReconstructStatesPPM(arrayconst_t &q, array_t &leftState, array_t &rightState, amrex::Box const &cellRange, const int iReadFrom, const int iWriteFrom, amrex::Box const &interfaceRange, int nvars);
+	static void ReconstructStatesPPM(arrayconst_t &q, array_t &leftState, array_t &rightState, amrex::Box const &cellRange, const int iReadFrom,
+					 const int iWriteFrom, amrex::Box const &interfaceRange, int nvars);
 
 	AMREX_GPU_HOST_DEVICE static auto ComputeEddingtonFactor(double f) -> double;
 	AMREX_GPU_HOST_DEVICE static auto ComputePlanckOpacity(double rho, double Tgas) -> double;
@@ -266,7 +267,8 @@ void RadSystem<problem_t>::ReconstructStatesPLM(arrayconst_t &q_in, array_t &lef
 
 template <typename problem_t>
 template <FluxDir DIR>
-void RadSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in, amrex::Box const &cellRange, const int iReadFrom, const int iWriteFrom, amrex::Box const &interfaceRange, const int nvars)
+void RadSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in, amrex::Box const &cellRange,
+						const int iReadFrom, const int iWriteFrom, amrex::Box const &interfaceRange, const int nvars)
 {
 	BL_PROFILE("HyperbolicSystem::ReconstructStatesPPM()");
 
@@ -316,10 +318,10 @@ void RadSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array_t &lef
 				   // symmetry in floating-point arithmetic, following Athena++.
 				   const double coef_1 = (7. / 12.);
 				   const double coef_2 = (-1. / 12.);
-				   const double a_minus =
-				       (coef_1 * q(i, j, k, iReadFrom+n) + coef_2 * q(i + 1, j, k, iReadFrom+n)) + (coef_1 * q(i - 1, j, k, iReadFrom+n) + coef_2 * q(i - 2, j, k, iReadFrom+n));
-				   const double a_plus =
-				       (coef_1 * q(i + 1, j, k, iReadFrom+n) + coef_2 * q(i + 2, j, k, iReadFrom+n)) + (coef_1 * q(i, j, k, iReadFrom+n) + coef_2 * q(i - 1, j, k, iReadFrom+n));
+				   const double a_minus = (coef_1 * q(i, j, k, iReadFrom + n) + coef_2 * q(i + 1, j, k, iReadFrom + n)) +
+							  (coef_1 * q(i - 1, j, k, iReadFrom + n) + coef_2 * q(i - 2, j, k, iReadFrom + n));
+				   const double a_plus = (coef_1 * q(i + 1, j, k, iReadFrom + n) + coef_2 * q(i + 2, j, k, iReadFrom + n)) +
+							 (coef_1 * q(i, j, k, iReadFrom + n) + coef_2 * q(i - 1, j, k, iReadFrom + n));
 
 				   // left side of zone i
 				   double new_a_minus = clamp(a_minus, bounds.first, bounds.second);
@@ -330,7 +332,7 @@ void RadSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array_t &lef
 				   // (3.) Monotonicity correction, using Eq. (1.10) in PPM paper. Equivalent
 				   // to step 4b in Athena++ [ppm_simple.cpp].
 
-				   const double a = q(i, j, k, iReadFrom+n); // a_i in C&W
+				   const double a = q(i, j, k, iReadFrom + n); // a_i in C&W
 				   const double dq_minus = (a - new_a_minus);
 				   const double dq_plus = (new_a_plus - a);
 
@@ -341,7 +343,8 @@ void RadSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array_t &lef
 					   // Causes subtle, but very weird, oscillations in the Shu-Osher test
 					   // problem. However, it is necessary to get a reasonable solution
 					   // for the sawtooth advection problem.
-					   const double dq0 = MC(q(i + 1, j, k, iReadFrom+n) - q(i, j, k, iReadFrom+n), q(i, j, k, iReadFrom+n) - q(i - 1, j, k, iReadFrom+n));
+					   const double dq0 = MC(q(i + 1, j, k, iReadFrom + n) - q(i, j, k, iReadFrom + n),
+								 q(i, j, k, iReadFrom + n) - q(i - 1, j, k, iReadFrom + n));
 
 					   // use linear reconstruction, following Balsara (2017) [Living Rev
 					   // Comput Astrophys (2017) 3:2]
@@ -365,8 +368,8 @@ void RadSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array_t &lef
 					   }
 				   }
 
-				   rightState(i, j, k, iWriteFrom+n) = new_a_minus;
-				   leftState(i + 1, j, k, iWriteFrom+n) = new_a_plus;
+				   rightState(i, j, k, iWriteFrom + n) = new_a_minus;
+				   leftState(i + 1, j, k, iWriteFrom + n) = new_a_plus;
 			   });
 }
 
