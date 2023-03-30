@@ -266,7 +266,7 @@ void RadSystem<problem_t>::ReconstructStatesPLM(arrayconst_t &q_in, array_t &lef
 
 template <typename problem_t>
 template <FluxDir DIR>
-void RadSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in, amrex::Box const &cellRange, amrex::Box const &interfaceRange, const int nvars, const int iReadFrom, const int iWriteFrom)
+void RadSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in, amrex::Box const &cellRange, amrex::Box const & /*interfaceRange*/, const int nvars, const int iReadFrom, const int iWriteFrom)
 {
 	BL_PROFILE("HyperbolicSystem::ReconstructStatesPPM()");
 
