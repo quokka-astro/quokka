@@ -63,8 +63,7 @@ template <typename problem_t> class HyperbolicSystem
 	static void ReconstructStatesPLM(amrex::MultiFab const &q, amrex::MultiFab &leftState, amrex::MultiFab &rightState, int nghost, int nvars);
 
 	template <FluxDir DIR>
-	static void ReconstructStatesPPM(amrex::MultiFab const &q_in, amrex::MultiFab &leftState_in, amrex::MultiFab &rightState_in, const int nghost,
-					 const int nvars);
+	static void ReconstructStatesPPM(amrex::MultiFab const &q_in, amrex::MultiFab &leftState_in, amrex::MultiFab &rightState_in, const int iReadFrom, const int iWriteFrom, const int nghost, const int nvars);
 
 	template <typename F>
 #if defined(__x86_64__)
@@ -207,8 +206,7 @@ AMREX_GPU_DEVICE auto HyperbolicSystem<problem_t>::GetMinmaxSurroundingCell(arra
 
 template <typename problem_t>
 template <FluxDir DIR>
-void HyperbolicSystem<problem_t>::ReconstructStatesPPM(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf,
-						       const int nghost, const int nvars)
+void HyperbolicSystem<problem_t>::ReconstructStatesPPM(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf, const int iReadFrom, const int iWriteFrom, const int nghost, const int nvars)
 {
 	BL_PROFILE("HyperbolicSystem::ReconstructStatesPPM()");
 
