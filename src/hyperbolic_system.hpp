@@ -63,7 +63,8 @@ template <typename problem_t> class HyperbolicSystem
 	static void ReconstructStatesPLM(amrex::MultiFab const &q, amrex::MultiFab &leftState, amrex::MultiFab &rightState, int nghost, int nvars);
 
 	template <FluxDir DIR>
-	static void ReconstructStatesPPM(amrex::MultiFab const &q_in, amrex::MultiFab &leftState_in, amrex::MultiFab &rightState_in, const int nghost, const int nvars, const int iReadFrom=0, const int iWriteFrom=0);
+	static void ReconstructStatesPPM(amrex::MultiFab const &q_in, amrex::MultiFab &leftState_in, amrex::MultiFab &rightState_in, const int nghost, const int nvars, const int iReadFrom=0,
+					 const int iWriteFrom=0);
 
 	template <typename F>
 #if defined(__x86_64__)
