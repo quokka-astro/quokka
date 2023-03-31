@@ -110,14 +110,14 @@ template <> void RadhydroSimulation<PrimordialChemTest>::setInitialConditionsOnG
 		Real const P = 4.0e4 * quokka::boltzmann_constant_cgs; // erg cm^-3
 		Real Eint = (quokka::EOS_Traits<PrimordialChemTest>::gamma - 1.) * P;
 
-		Real const Egas = RadSystem<PrimordialChemTest>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
+		Real const Egas = HydroSystem<PrimordialChemTest>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
 
-		state_cc(i, j, k, RadSystem<PrimordialChemTest>::gasEnergy_index) = Egas;
-		state_cc(i, j, k, RadSystem<PrimordialChemTest>::gasInternalEnergy_index) = Eint;
-		state_cc(i, j, k, RadSystem<PrimordialChemTest>::gasDensity_index) = rho;
-		state_cc(i, j, k, RadSystem<PrimordialChemTest>::x1GasMomentum_index) = xmom;
-		state_cc(i, j, k, RadSystem<PrimordialChemTest>::x2GasMomentum_index) = ymom;
-		state_cc(i, j, k, RadSystem<PrimordialChemTest>::x3GasMomentum_index) = zmom;
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::gasEnergy_index) = Egas;
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::gasInternalEnergy_index) = Eint;
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::gasDensity_index) = rho;
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::x1GasMomentum_index) = xmom;
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::x2GasMomentum_index) = ymom;
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::x3GasMomentum_index) = zmom;
 
 		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index) = elec;
 		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 1) = hp;
