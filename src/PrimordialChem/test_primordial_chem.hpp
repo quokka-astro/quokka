@@ -17,8 +17,6 @@
 
 // internal headers
 
-#include "linear_advection.hpp"
-
 // function definitions
 
 #endif // TEST_PRIMORDIAL_CHEM_HPP_
