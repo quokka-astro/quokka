@@ -3,8 +3,8 @@
 # Problem size and geometry
 # *****************************************************************
 geometry.prob_lo     =  0.0  0.0  0.0 
-geometry.prob_hi     =  1.11096e18  4.44384e18  1.11096e18
-geometry.is_periodic =  1    0    1
+geometry.prob_hi     =  1  1  1
+geometry.is_periodic =  0    0    0
 
 # *****************************************************************
 # VERBOSITY
@@ -14,10 +14,10 @@ amr.v               = 0     # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 128 512 128
+amr.n_cell          = 1 1 1
 amr.max_level       = 0     # number of levels = max_level + 1
-amr.blocking_factor = 128   # grid size must be divisible by this
-amr.max_grid_size   = 128
+amr.blocking_factor = 1   # grid size must be divisible by this
+amr.max_grid_size   = 1
 
 do_reflux = 0
 do_subcycle = 0

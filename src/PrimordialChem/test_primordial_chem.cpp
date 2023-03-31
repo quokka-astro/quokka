@@ -17,6 +17,7 @@
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParallelContext.H"
 #include "AMReX_ParallelDescriptor.H"
+#include "AMReX_ParmParse.H"
 #include "AMReX_SPACE.H"
 #include "AMReX_TableData.H"
 
@@ -32,7 +33,7 @@ struct PrimordialChemTest {
 
 
 // Currently, microphysics uses its own EOS, and this one below is used by hydro. Need to only have one EOS at some point.
-template <> struct quokka::EOS_Traits<CoolingTest> {
+template <> struct quokka::EOS_Traits<PrimordialChemTest> {
 	static constexpr double gamma = 5. / 3.; // default value
 	static constexpr double mean_molecular_weight = quokka::hydrogen_mass_cgs;
 	static constexpr double boltzmann_constant = quokka::boltzmann_constant_cgs;
@@ -60,7 +61,6 @@ template <> void RadhydroSimulation<PrimordialChemTest>::setInitialConditionsOnG
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_elem.prob_hi_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
-	const auto &phase_table = userData_.table_data->const_table();
 
 	Real const Lx = (prob_hi[0] - prob_lo[0]);
 	Real const Ly = (prob_hi[1] - prob_lo[1]);
@@ -87,6 +87,21 @@ template <> void RadhydroSimulation<PrimordialChemTest>::setInitialConditionsOnG
 		state_cc(i, j, k, RadSystem<PrimordialChemTest>::x1GasMomentum_index) = xmom;
 		state_cc(i, j, k, RadSystem<PrimordialChemTest>::x2GasMomentum_index) = ymom;
 		state_cc(i, j, k, RadSystem<PrimordialChemTest>::x3GasMomentum_index) = zmom;
+
+                state_cc(i, j, k, RadSystem<PrimordialChemTest>::scalar0_index) = scalar;
+                state_cc(i, j, k, RadSystem<PrimordialChemTest>::scalar0_index + 1) = scalar;
+                state_cc(i, j, k, RadSystem<PrimordialChemTest>::scalar0_index + 2) = scalar;
+                state_cc(i, j, k, RadSystem<PrimordialChemTest>::scalar0_index + 3) = scalar;
+                state_cc(i, j, k, RadSystem<PrimordialChemTest>::scalar0_index + 4) = scalar;
+                state_cc(i, j, k, RadSystem<PrimordialChemTest>::scalar0_index + 5) = scalar;
+                state_cc(i, j, k, RadSystem<PrimordialChemTest>::scalar0_index + 6) = scalar;
+                state_cc(i, j, k, RadSystem<PrimordialChemTest>::scalar0_index + 7) = scalar;
+                state_cc(i, j, k, RadSystem<PrimordialChemTest>::scalar0_index + 8) = scalar;
+                state_cc(i, j, k, RadSystem<PrimordialChemTest>::scalar0_index + 9) = scalar;
+                state_cc(i, j, k, RadSystem<PrimordialChemTest>::scalar0_index + 10) = scalar;
+                state_cc(i, j, k, RadSystem<PrimordialChemTest>::scalar0_index + 11) = scalar;
+                state_cc(i, j, k, RadSystem<PrimordialChemTest>::scalar0_index + 12) = scalar;
+                state_cc(i, j, k, RadSystem<PrimordialChemTest>::scalar0_index + 13) = scalar;
 	});
 }
 
