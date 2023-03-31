@@ -31,7 +31,6 @@ using amrex::Real;
 struct PrimordialChemTest {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-
 // Currently, microphysics uses its own EOS, and this one below is used by hydro. Need to only have one EOS at some point.
 template <> struct quokka::EOS_Traits<PrimordialChemTest> {
 	static constexpr double gamma = 5. / 3.; // default value
@@ -42,16 +41,15 @@ template <> struct quokka::EOS_Traits<PrimordialChemTest> {
 template <> struct Physics_Traits<PrimordialChemTest> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr bool is_chemistry_enabled = false; //in the future, this could point to microphysics, and set to true
-	static constexpr int numPassiveScalars = 14; // number of chemical species
+	static constexpr bool is_chemistry_enabled = false; // in the future, this could point to microphysics, and set to true
+	static constexpr int numPassiveScalars = 14;	    // number of chemical species
 	static constexpr bool is_radiation_enabled = false;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
 };
 
-
-//constexpr double Tgas0 = 6000.;	   // K
-//constexpr double rho0 = 0.6 * m_H; // g cm^-3
+// constexpr double Tgas0 = 6000.;	   // K
+// constexpr double rho0 = 0.6 * m_H; // g cm^-3
 
 template <> void RadhydroSimulation<PrimordialChemTest>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
@@ -116,7 +114,7 @@ auto problem_main() -> int
 	constexpr int ncomp_cc = Physics_Indices<PrimordialChemTest>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 	for (int n = 0; n < ncomp_cc; ++n) {
-		BCs_cc[n].setLo(1, amrex::BCType::foextrap);  // extrapolate
+		BCs_cc[n].setLo(1, amrex::BCType::foextrap); // extrapolate
 		BCs_cc[n].setHi(1, amrex::BCType::foextrap);
 		BCs_cc[n].setLo(1, amrex::BCType::foextrap);
 		BCs_cc[n].setHi(1, amrex::BCType::foextrap);
