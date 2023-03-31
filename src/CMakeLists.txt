@@ -75,7 +75,8 @@ endif(DISABLE_FMAD)
 
 
 include_directories(${amrex_INCLUDE_DIRS_RET})
-include_directories(${Microphysics_INCLUDE_DIRS_RET})
+#following, for microphysics:
+include_directories(${primordial_chem_dirs})
 include_directories(${fmt_INCLUDE_DIRS_RET})
 include_directories(${HDF5_INCLUDE_DIRS_RET})
 include_directories(${Boost_INCLUDE_DIRS_RET})
