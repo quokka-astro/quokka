@@ -70,6 +70,7 @@ template <> void RadhydroSimulation<PrimordialChemTest>::setInitialConditionsOnG
 		Real const y = prob_lo[1] + (j + Real(0.5)) * dx[1];
 		Real const z = prob_lo[2] + (k + Real(0.5)) * dx[2];
 
+
 		Real rho = 0.12 * m_H * (1.0 + delta_rho); // g cm^-3
 		Real xmom = 0;
 		Real ymom = 0;
@@ -77,29 +78,29 @@ template <> void RadhydroSimulation<PrimordialChemTest>::setInitialConditionsOnG
 		Real const P = 4.0e4 * quokka::boltzmann_constant_cgs; // erg cm^-3
 		Real Eint = (quokka::EOS_Traits<PrimordialChemTest>::gamma - 1.) * P;
 
-		Real const Egas = RadSystem<CoolingTest>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
+		Real const Egas = HydroSystem<PrimordialChemTest>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
 
-		state_cc(i, j, k, RadSystem<CoolingTest>::gasEnergy_index) = Egas;
-		state_cc(i, j, k, RadSystem<PrimordialChemTest>::gasInternalEnergy_index) = Eint;
-		state_cc(i, j, k, RadSystem<PrimordialChemTest>::gasDensity_index) = rho;
-		state_cc(i, j, k, RadSystem<PrimordialChemTest>::x1GasMomentum_index) = xmom;
-		state_cc(i, j, k, RadSystem<PrimordialChemTest>::x2GasMomentum_index) = ymom;
-		state_cc(i, j, k, RadSystem<PrimordialChemTest>::x3GasMomentum_index) = zmom;
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::gasEnergy_index) = Egas;
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::gasInternalEnergy_index) = Eint;
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::gasDensity_index) = rho;
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::x1GasMomentum_index) = xmom;
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::x2GasMomentum_index) = ymom;
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::x3GasMomentum_index) = zmom;
 
-                state_cc(i, j, k, RadSystem<PrimordialChemTest>::scalar0_index) = scalar;
-                state_cc(i, j, k, RadSystem<PrimordialChemTest>::scalar0_index + 1) = scalar;
-                state_cc(i, j, k, RadSystem<PrimordialChemTest>::scalar0_index + 2) = scalar;
-                state_cc(i, j, k, RadSystem<PrimordialChemTest>::scalar0_index + 3) = scalar;
-                state_cc(i, j, k, RadSystem<PrimordialChemTest>::scalar0_index + 4) = scalar;
-                state_cc(i, j, k, RadSystem<PrimordialChemTest>::scalar0_index + 5) = scalar;
-                state_cc(i, j, k, RadSystem<PrimordialChemTest>::scalar0_index + 6) = scalar;
-                state_cc(i, j, k, RadSystem<PrimordialChemTest>::scalar0_index + 7) = scalar;
-                state_cc(i, j, k, RadSystem<PrimordialChemTest>::scalar0_index + 8) = scalar;
-                state_cc(i, j, k, RadSystem<PrimordialChemTest>::scalar0_index + 9) = scalar;
-                state_cc(i, j, k, RadSystem<PrimordialChemTest>::scalar0_index + 10) = scalar;
-                state_cc(i, j, k, RadSystem<PrimordialChemTest>::scalar0_index + 11) = scalar;
-                state_cc(i, j, k, RadSystem<PrimordialChemTest>::scalar0_index + 12) = scalar;
-                state_cc(i, j, k, RadSystem<PrimordialChemTest>::scalar0_index + 13) = scalar;
+                state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index) = scalar;
+                state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 1) = scalar;
+                state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 2) = scalar;
+                state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 3) = scalar;
+                state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 4) = scalar;
+                state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 5) = scalar;
+                state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 6) = scalar;
+                state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 7) = scalar;
+                state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 8) = scalar;
+                state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 9) = scalar;
+                state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 10) = scalar;
+                state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 11) = scalar;
+                state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 12) = scalar;
+                state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 13) = scalar;
 	});
 }
 
