@@ -31,7 +31,7 @@ struct PrimordialChemTest {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
 // Currently, microphysics uses its own EOS, and this one below is used by hydro. Need to only have one EOS at some point.
-template <> struct quokka::EOS_Traits<CoolingTest> {
+template <> struct quokka::EOS_Traits<PrimordialChemTest> {
 	static constexpr double gamma = 5. / 3.; // default value
 	static constexpr double mean_molecular_weight = quokka::hydrogen_mass_cgs;
 	static constexpr double boltzmann_constant = quokka::boltzmann_constant_cgs;
@@ -58,7 +58,6 @@ template <> void RadhydroSimulation<PrimordialChemTest>::setInitialConditionsOnG
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_elem.prob_hi_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
-	const auto &phase_table = userData_.table_data->const_table();
 
 	Real const Lx = (prob_hi[0] - prob_lo[0]);
 	Real const Ly = (prob_hi[1] - prob_lo[1]);
@@ -77,9 +76,9 @@ template <> void RadhydroSimulation<PrimordialChemTest>::setInitialConditionsOnG
 		Real const P = 4.0e4 * quokka::boltzmann_constant_cgs; // erg cm^-3
 		Real Eint = (quokka::EOS_Traits<PrimordialChemTest>::gamma - 1.) * P;
 
-		Real const Egas = RadSystem<CoolingTest>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
+		Real const Egas = RadSystem<PrimordialChemTest>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
 
-		state_cc(i, j, k, RadSystem<CoolingTest>::gasEnergy_index) = Egas;
+		state_cc(i, j, k, RadSystem<PrimordialChemTest>::gasEnergy_index) = Egas;
 		state_cc(i, j, k, RadSystem<PrimordialChemTest>::gasInternalEnergy_index) = Eint;
 		state_cc(i, j, k, RadSystem<PrimordialChemTest>::gasDensity_index) = rho;
 		state_cc(i, j, k, RadSystem<PrimordialChemTest>::x1GasMomentum_index) = xmom;
