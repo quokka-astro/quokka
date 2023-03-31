@@ -84,6 +84,9 @@ template <> void RadhydroSimulation<PrimordialChemTest>::setInitialConditionsOnG
 		state_cc(i, j, k, RadSystem<PrimordialChemTest>::x1GasMomentum_index) = xmom;
 		state_cc(i, j, k, RadSystem<PrimordialChemTest>::x2GasMomentum_index) = ymom;
 		state_cc(i, j, k, RadSystem<PrimordialChemTest>::x3GasMomentum_index) = zmom;
+
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index) = zmom;
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 1) = zmom;
 	});
 }
 
