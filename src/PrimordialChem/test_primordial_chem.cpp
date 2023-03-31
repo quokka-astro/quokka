@@ -69,10 +69,41 @@ template <> void RadhydroSimulation<PrimordialChemTest>::setInitialConditionsOnG
 		Real const y = prob_lo[1] + (j + Real(0.5)) * dx[1];
 		Real const z = prob_lo[2] + (k + Real(0.5)) * dx[2];
 
+		Real temp = 0;
+		Real elec = 0;
+		Real hp = 0;
+		Real h = 0;
+		Real hm = 0;
+		Real dp = 0;
+		Real d = 0;
+		Real h2p = 0;
+		Real dm = 0;
+		Real h2 = 0;
+		Real hdp = 0;
+		Real hd = 0;
+		Real hepp = 0;
+		Real hep = 0;
+		Real he = 0;
+
 		amrex::ParmParse pp("primordialchem");
 		pp.query("temp", temp);
+		pp.query("elec", elec);
+		pp.query("hp", hp);
+		pp.query("h", h);
+		pp.query("hm", hm);
+		pp.query("dp", dp);
+		pp.query("d", d);
+		pp.query("h2p", h2p);
+		pp.query("dm", dm);
+		pp.query("h2", h2);
+		pp.query("hdp", hdp);
+		pp.query("hd", hd);
+		pp.query("hepp", hepp);
+		pp.query("hep", hep);
+		pp.query("he", he);
 
-		Real rho = 0.12 * m_H * (1.0 + delta_rho); // g cm^-3
+		Real rho = 0; // g cm^-3
+
 		Real xmom = 0;
 		Real ymom = 0;
 		Real zmom = 0;
@@ -88,8 +119,8 @@ template <> void RadhydroSimulation<PrimordialChemTest>::setInitialConditionsOnG
 		state_cc(i, j, k, RadSystem<PrimordialChemTest>::x2GasMomentum_index) = ymom;
 		state_cc(i, j, k, RadSystem<PrimordialChemTest>::x3GasMomentum_index) = zmom;
 
-		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index) = zmom;
-		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 1) = zmom;
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index) = elec;
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 1) = hp;
 	});
 }
 
