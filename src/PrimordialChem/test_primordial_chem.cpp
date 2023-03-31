@@ -69,6 +69,9 @@ template <> void RadhydroSimulation<PrimordialChemTest>::setInitialConditionsOnG
 		Real const y = prob_lo[1] + (j + Real(0.5)) * dx[1];
 		Real const z = prob_lo[2] + (k + Real(0.5)) * dx[2];
 
+		amrex::ParmParse pp("primordialchem");
+		pp.query("temp", temp);
+
 		Real rho = 0.12 * m_H * (1.0 + delta_rho); // g cm^-3
 		Real xmom = 0;
 		Real ymom = 0;
@@ -94,7 +97,7 @@ auto problem_main() -> int
 {
 	// Problem parameters
 	const double CFL_number = 0.25;
-	const double max_time = 1e6 * seconds_in_year; // 1 Myr
+	const double max_time = 5e16; // > 1 Gyr
 	const int max_timesteps = 2e4;
 
 	// Problem initialization

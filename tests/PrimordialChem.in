@@ -23,21 +23,19 @@ do_reflux = 0
 do_subcycle = 0
 
 primordialchem.temp = 1e2
-primordialchem.H = 1e-4
-primordialchem.H = 1e-4
-primordialchem.H = 1e-4
-primordialchem.H = 1e-4
-primordialchem.H = 1e-4
-primordialchem.H = 1e-4
-primordialchem.H = 1e-4
-primordialchem.H = 1e-4
-primordialchem.H = 1e-4
-primordialchem.H = 1e-4
-primordialchem.H = 1e-4
-primordialchem.H = 1e-4
-primordialchem.H = 1e-4
 
+primordialchem.elec = 1e-4
+primordialchem.hp = 1e-4
+primordialchem.h = 1e0
+primordialchem.hm = 1e-40
+primordialchem.dp = 1e-40
+primordialchem.d = 1e-40
+primordialchem.h2p = 1e-40
+primordialchem.dm = 1e-40
+primordialchem.h2 = 1e-6
+primordialchem.hdp = 1e-40
+primordialchem.hd = 1e-40
+primordialchem.hepp = 1e-40
+primordialchem.hep = 1e-40
+primordialchem.he = 0.0775e0
 
-cooling.enabled = 1
-cooling.grackle_data_file = "../extern/grackle_data_files/input/CloudyData_UVB=HM2012.h5"
-temperature_floor = 10  # K
