@@ -63,8 +63,8 @@ template <typename problem_t> class HyperbolicSystem
 	static void ReconstructStatesPLM(amrex::MultiFab const &q, amrex::MultiFab &leftState, amrex::MultiFab &rightState, int nghost, int nvars);
 
 	template <FluxDir DIR>
-	static void ReconstructStatesPPM(amrex::MultiFab const &q_in, amrex::MultiFab &leftState_in, amrex::MultiFab &rightState_in, const int nghost,
-					 const int nvars);
+	static void ReconstructStatesPPM(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf, int nghost, int nvars,
+					 int iReadFrom = 0, int iWriteFrom = 0);
 
 	template <typename F>
 #if defined(__x86_64__)
@@ -208,7 +208,7 @@ AMREX_GPU_DEVICE auto HyperbolicSystem<problem_t>::GetMinmaxSurroundingCell(arra
 template <typename problem_t>
 template <FluxDir DIR>
 void HyperbolicSystem<problem_t>::ReconstructStatesPPM(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf,
-						       const int nghost, const int nvars)
+						       const int nghost, const int nvars, const int iReadFrom, const int iWriteFrom)
 {
 	BL_PROFILE("HyperbolicSystem::ReconstructStatesPPM()");
 
@@ -240,11 +240,11 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(amrex::MultiFab const &q_
 		// N.B.: Checking all 27 nearest neighbors is *very* expensive on GPU
 		// (presumably due to lots of cache misses), so it is hard-coded disabled.
 		// Fortunately, almost all problems run stably without enabling this.
-		auto bounds = GetMinmaxSurroundingCell(q_in, i_in, j_in, k_in, n);
+		auto bounds = GetMinmaxSurroundingCell(q_in, i_in, j_in, k_in, iReadFrom + n);
 #else
 			// compute bounds from neighboring cell-averaged values along axis
 			const std::pair<double, double> bounds =
-				std::minmax({q(i, j, k, n), q(i - 1, j, k, n), q(i + 1, j, k, n)});
+				std::minmax({q(i, j, k, iReadFrom+n), q(i - 1, j, k, iReadFrom+n), q(i + 1, j, k, iReadFrom+n)});
 #endif
 
 		// get interfaces
@@ -261,8 +261,10 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(amrex::MultiFab const &q_
 		// symmetry in floating-point arithmetic, following Athena++.
 		const double coef_1 = (7. / 12.);
 		const double coef_2 = (-1. / 12.);
-		const double a_minus = (coef_1 * q(i, j, k, n) + coef_2 * q(i + 1, j, k, n)) + (coef_1 * q(i - 1, j, k, n) + coef_2 * q(i - 2, j, k, n));
-		const double a_plus = (coef_1 * q(i + 1, j, k, n) + coef_2 * q(i + 2, j, k, n)) + (coef_1 * q(i, j, k, n) + coef_2 * q(i - 1, j, k, n));
+		const double a_minus = (coef_1 * q(i, j, k, iReadFrom + n) + coef_2 * q(i + 1, j, k, iReadFrom + n)) +
+				       (coef_1 * q(i - 1, j, k, iReadFrom + n) + coef_2 * q(i - 2, j, k, iReadFrom + n));
+		const double a_plus = (coef_1 * q(i + 1, j, k, iReadFrom + n) + coef_2 * q(i + 2, j, k, iReadFrom + n)) +
+				      (coef_1 * q(i, j, k, iReadFrom + n) + coef_2 * q(i - 1, j, k, iReadFrom + n));
 
 		// left side of zone i
 		double new_a_minus = clamp(a_minus, bounds.first, bounds.second);
@@ -273,7 +275,7 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(amrex::MultiFab const &q_
 		// (3.) Monotonicity correction, using Eq. (1.10) in PPM paper. Equivalent
 		// to step 4b in Athena++ [ppm_simple.cpp].
 
-		const double a = q(i, j, k, n); // a_i in C&W
+		const double a = q(i, j, k, iReadFrom + n); // a_i in C&W
 		const double dq_minus = (a - new_a_minus);
 		const double dq_plus = (new_a_plus - a);
 
@@ -284,7 +286,8 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(amrex::MultiFab const &q_
 			// Causes subtle, but very weird, oscillations in the Shu-Osher test
 			// problem. However, it is necessary to get a reasonable solution
 			// for the sawtooth advection problem.
-			const double dq0 = MC(q(i + 1, j, k, n) - q(i, j, k, n), q(i, j, k, n) - q(i - 1, j, k, n));
+			const double dq0 =
+			    MC(q(i + 1, j, k, iReadFrom + n) - q(i, j, k, iReadFrom + n), q(i, j, k, iReadFrom + n) - q(i - 1, j, k, iReadFrom + n));
 
 			// use linear reconstruction, following Balsara (2017) [Living Rev
 			// Comput Astrophys (2017) 3:2]
@@ -308,8 +311,8 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(amrex::MultiFab const &q_
 			}
 		}
 
-		rightState(i, j, k, n) = new_a_minus;
-		leftState(i + 1, j, k, n) = new_a_plus;
+		rightState(i, j, k, iWriteFrom + n) = new_a_minus;
+		leftState(i + 1, j, k, iWriteFrom + n) = new_a_plus;
 	});
 }
 
