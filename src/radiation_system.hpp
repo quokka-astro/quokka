@@ -123,7 +123,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static void ReconstructStatesPLM(arrayconst_t &q, array_t &leftState, array_t &rightState, amrex::Box const &indexRange, int nvars);
 
 	template <FluxDir DIR>
-	static void ReconstructStatesPPM(arrayconst_t &q, array_t &leftState, array_t &rightState, amrex::Box const &cellRange, amrex::Box const &interfaceRange, int nvars, int iReadFrom=0, int iWriteFrom=0);
+	static void ReconstructStatesPPM(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in, amrex::Box const &cellRange, amrex::Box const & interfaceRange, int nvars, int iReadFrom=0, int iWriteFrom=0);
 
 	AMREX_GPU_HOST_DEVICE static auto ComputeEddingtonFactor(double f) -> double;
 	AMREX_GPU_HOST_DEVICE static auto ComputePlanckOpacity(double rho, double Tgas) -> double;
