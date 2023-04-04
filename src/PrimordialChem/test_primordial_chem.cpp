@@ -42,7 +42,7 @@ template <> struct Physics_Traits<PrimordialChemTest> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_chemistry_enabled = false; // in the future, this could point to microphysics, and set to true
-	static constexpr int numPassiveScalars = 0;	    // number of chemical species
+	static constexpr int numPassiveScalars = 14;	    // number of chemical species
 	static constexpr bool is_radiation_enabled = false;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
@@ -102,7 +102,7 @@ template <> void RadhydroSimulation<PrimordialChemTest>::setInitialConditionsOnG
 		pp.query("hepp", hepp);
 		pp.query("hep", hep);
 		pp.query("he", he);
-		printf("read all chems", he);
+		std::cout << "read all chems" << he << std::endl;
 
 		Real rho = 1; // g cm^-3
 
@@ -121,8 +121,20 @@ template <> void RadhydroSimulation<PrimordialChemTest>::setInitialConditionsOnG
 		state_cc(i, j, k, RadSystem<PrimordialChemTest>::x2GasMomentum_index) = ymom;
 		state_cc(i, j, k, RadSystem<PrimordialChemTest>::x3GasMomentum_index) = zmom;
 
-		// state_cc(i, j, k, RadSystem<PrimordialChemTest>::scalar_1) = elec;
-		// state_cc(i, j, k, RadSystem<PrimordialChemTest>::scalar_2) = hp;
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index) = elec;
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 1) = hp;
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 2) = h;
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 3) = hm;
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 4) = dp;
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 5) = d;
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 6) = h2p;
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 7) = dm;
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 8) = h2;
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 9) = hdp;
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 10) = hd;
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 11) = hepp;
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 12) = hep;
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 13) = he;
 	});
 }
 
