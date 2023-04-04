@@ -42,7 +42,7 @@ template <> struct Physics_Traits<PrimordialChemTest> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_chemistry_enabled = false; // in the future, this could point to microphysics, and set to true
-	static constexpr int numPassiveScalars = 14;	    // number of chemical species
+	static constexpr int numPassiveScalars = 0;	    // number of chemical species
 	static constexpr bool is_radiation_enabled = false;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
@@ -102,8 +102,9 @@ template <> void RadhydroSimulation<PrimordialChemTest>::setInitialConditionsOnG
 		pp.query("hepp", hepp);
 		pp.query("hep", hep);
 		pp.query("he", he);
+		printf("read all chems",he);
 
-		Real rho = 0; // g cm^-3
+		Real rho = 1; // g cm^-3
 
 		Real xmom = 0;
 		Real ymom = 0;
@@ -120,8 +121,8 @@ template <> void RadhydroSimulation<PrimordialChemTest>::setInitialConditionsOnG
 		state_cc(i, j, k, RadSystem<PrimordialChemTest>::x2GasMomentum_index) = ymom;
 		state_cc(i, j, k, RadSystem<PrimordialChemTest>::x3GasMomentum_index) = zmom;
 
-		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index) = elec;
-		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 1) = hp;
+		//state_cc(i, j, k, RadSystem<PrimordialChemTest>::scalar_1) = elec;
+		//state_cc(i, j, k, RadSystem<PrimordialChemTest>::scalar_2) = hp;
 	});
 }
 
