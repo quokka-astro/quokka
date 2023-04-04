@@ -136,13 +136,13 @@ auto problem_main() -> int
 	constexpr int ncomp_cc = Physics_Indices<PrimordialChemTest>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 	for (int n = 0; n < ncomp_cc; ++n) {
-		BCs_cc[n].setLo(1, amrex::BCType::foextrap); // extrapolate
-		BCs_cc[n].setHi(1, amrex::BCType::foextrap);
+		BCs_cc[n].setLo(0, amrex::BCType::foextrap); // extrapolate
+		BCs_cc[n].setHi(0, amrex::BCType::foextrap);
 		BCs_cc[n].setLo(1, amrex::BCType::foextrap);
 		BCs_cc[n].setHi(1, amrex::BCType::foextrap);
 #if AMREX_SPACEDIM == 3
-		BCs_cc[n].setLo(1, amrex::BCType::foextrap);
-		BCs_cc[n].setHi(1, amrex::BCType::foextrap);
+		BCs_cc[n].setLo(2, amrex::BCType::foextrap);
+		BCs_cc[n].setHi(2, amrex::BCType::foextrap);
 #endif
 	}
 
