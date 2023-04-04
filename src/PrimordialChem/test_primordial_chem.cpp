@@ -102,7 +102,7 @@ template <> void RadhydroSimulation<PrimordialChemTest>::setInitialConditionsOnG
 		pp.query("hepp", hepp);
 		pp.query("hep", hep);
 		pp.query("he", he);
-		printf("read all chems",he);
+		printf("read all chems", he);
 
 		Real rho = 1; // g cm^-3
 
@@ -121,8 +121,8 @@ template <> void RadhydroSimulation<PrimordialChemTest>::setInitialConditionsOnG
 		state_cc(i, j, k, RadSystem<PrimordialChemTest>::x2GasMomentum_index) = ymom;
 		state_cc(i, j, k, RadSystem<PrimordialChemTest>::x3GasMomentum_index) = zmom;
 
-		//state_cc(i, j, k, RadSystem<PrimordialChemTest>::scalar_1) = elec;
-		//state_cc(i, j, k, RadSystem<PrimordialChemTest>::scalar_2) = hp;
+		// state_cc(i, j, k, RadSystem<PrimordialChemTest>::scalar_1) = elec;
+		// state_cc(i, j, k, RadSystem<PrimordialChemTest>::scalar_2) = hp;
 	});
 }
 
