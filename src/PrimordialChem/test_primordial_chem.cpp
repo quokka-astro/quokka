@@ -26,7 +26,7 @@
 #include "radiation_system.hpp"
 #include "test_primordial_chem.hpp"
 
-#include "burner.H"
+#include "burn_type.H"
 #include "extern_parameters.H"
 
 using amrex::Real;
