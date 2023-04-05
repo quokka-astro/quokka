@@ -26,6 +26,9 @@
 #include "radiation_system.hpp"
 #include "test_primordial_chem.hpp"
 
+#include "extern_parameters.H"
+#include "burner.H"
+
 using amrex::Real;
 
 struct PrimordialChemTest {
@@ -64,77 +67,128 @@ template <> void RadhydroSimulation<PrimordialChemTest>::setInitialConditionsOnG
 	Real const Ly = (prob_hi[1] - prob_lo[1]);
 	Real const Lz = (prob_hi[2] - prob_lo[2]);
 
+	init_extern_parameters();
+
+	burn_t state;
+
+	Real numdens[NumSpec] = {-1.0};
+
+	for (int n = 1; n <= NumSpec; ++n) {
+		switch (n) {
+
+		case 1:
+			numdens[n-1] = primary_species_1;
+			break;
+		case 2:
+			numdens[n-1] = primary_species_2;
+			break;
+		case 3:
+			numdens[n-1] = primary_species_3;
+			break;
+		case 4:
+			numdens[n-1] = primary_species_4;
+			break;
+		case 5:
+			numdens[n-1] = primary_species_5;
+			break;
+		case 6:
+			numdens[n-1] = primary_species_6;
+			break;
+		case 7:
+			numdens[n-1] = primary_species_7;
+			break;
+		case 8:
+			numdens[n-1] = primary_species_8;
+			break;
+		case 9:
+			numdens[n-1] = primary_species_9;
+			break;
+		case 10:
+			numdens[n-1] = primary_species_10;
+			break;
+		case 11:
+			numdens[n-1] = primary_species_11;
+			break;
+		case 12:
+			numdens[n-1] = primary_species_12;
+			break;
+		case 13:
+			numdens[n-1] = primary_species_13;
+			break;
+		case 14:
+			numdens[n-1] = primary_species_14;
+			break;
+
+		}
+
+	}
+
+	state.T = temperature;
+
+	//find the density in g/cm^3
+	Real rhotot = 0.0_rt;
+	for (int n = 0; n < NumSpec; ++n) {
+		state.xn[n] = numdens[n];
+		rhotot += state.xn[n]*spmasses[n];  //spmasses contains the masses of all species, defined in EOS
+	}
+
+	state.rho = rhotot;
+
+
+	// normalize -- just in case
+
+	Real mfracs[NumSpec] = {-1.0};
+	Real msum = 0.0_rt;
+	for (int n = 0; n < NumSpec; ++n) {
+		mfracs[n] = state.xn[n]*spmasses[n]/rhotot;
+		msum += mfracs[n];
+	}
+
+	for (int n = 0; n < NumSpec; ++n) {
+		mfracs[n] /= msum;
+		//use the normalized mass fractions to obtain the corresponding number densities
+		state.xn[n] = mfracs[n]*rhotot/spmasses[n];
+	}
+
+	// call the EOS to set initial internal energy e
+	eos(eos_input_rt, state);
+
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		Real const x = prob_lo[0] + (i + Real(0.5)) * dx[0];
 		Real const y = prob_lo[1] + (j + Real(0.5)) * dx[1];
 		Real const z = prob_lo[2] + (k + Real(0.5)) * dx[2];
 
-		Real temp = 0;
-		Real elec = 0;
-		Real hp = 0;
-		Real h = 0;
-		Real hm = 0;
-		Real dp = 0;
-		Real d = 0;
-		Real h2p = 0;
-		Real dm = 0;
-		Real h2 = 0;
-		Real hdp = 0;
-		Real hd = 0;
-		Real hepp = 0;
-		Real hep = 0;
-		Real he = 0;
-
-		amrex::ParmParse pp("primordialchem");
-		pp.query("temp", temp);
-		pp.query("elec", elec);
-		pp.query("hp", hp);
-		pp.query("h", h);
-		pp.query("hm", hm);
-		pp.query("dp", dp);
-		pp.query("d", d);
-		pp.query("h2p", h2p);
-		pp.query("dm", dm);
-		pp.query("h2", h2);
-		pp.query("hdp", hdp);
-		pp.query("hd", hd);
-		pp.query("hepp", hepp);
-		pp.query("hep", hep);
-		pp.query("he", he);
-		std::cout << "read all chems" << he << std::endl;
-
-		Real rho = 1; // g cm^-3
+		Real rho = state.rho; // g cm^-3
 
 		Real xmom = 0;
 		Real ymom = 0;
 		Real zmom = 0;
-		Real const P = 4.0e4 * quokka::boltzmann_constant_cgs; // erg cm^-3
-		Real Eint = (quokka::EOS_Traits<PrimordialChemTest>::gamma - 1.) * P;
+		Real Eint = state.e;
 
 		Real const Egas = RadSystem<PrimordialChemTest>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
 
-		state_cc(i, j, k, RadSystem<PrimordialChemTest>::gasEnergy_index) = Egas;
-		state_cc(i, j, k, RadSystem<PrimordialChemTest>::gasInternalEnergy_index) = Eint;
-		state_cc(i, j, k, RadSystem<PrimordialChemTest>::gasDensity_index) = rho;
-		state_cc(i, j, k, RadSystem<PrimordialChemTest>::x1GasMomentum_index) = xmom;
-		state_cc(i, j, k, RadSystem<PrimordialChemTest>::x2GasMomentum_index) = ymom;
-		state_cc(i, j, k, RadSystem<PrimordialChemTest>::x3GasMomentum_index) = zmom;
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::energy_index) = Egas;
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::internalEnergy_index) = Eint;
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::density_index) = rho;
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::x1Momentum_index) = xmom;
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::x2Momentum_index) = ymom;
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::x3Momentum_index) = zmom;
 
-		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index) = elec;
-		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 1) = hp;
-		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 2) = h;
-		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 3) = hm;
-		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 4) = dp;
-		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 5) = d;
-		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 6) = h2p;
-		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 7) = dm;
-		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 8) = h2;
-		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 9) = hdp;
-		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 10) = hd;
-		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 11) = hepp;
-		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 12) = hep;
-		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 13) = he;
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index) = mfracs[0];
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 1) = mfracs[1];
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 2) = mfracs[2];
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 3) = mfracs[3];
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 4) = mfracs[4];
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 5) = mfracs[5];
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 6) = mfracs[6];
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 7) = mfracs[7];
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 8) = mfracs[8];
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 9) = mfracs[9];
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 10) = mfracs[10];
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 11) = mfracs[11];
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 12) = mfracs[12];
+		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 13) = mfracs[13];
 	});
 }
 

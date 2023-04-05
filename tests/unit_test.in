@@ -22,20 +22,20 @@ amr.max_grid_size   = 1
 do_reflux = 0
 do_subcycle = 0
 
-primordialchem.temp = 1e2
+unit_test.temperature = 1e2
 
-primordialchem.elec = 1e-4
-primordialchem.hp = 1e-4
-primordialchem.h = 1e0
-primordialchem.hm = 1e-40
-primordialchem.dp = 1e-40
-primordialchem.d = 1e-40
-primordialchem.h2p = 1e-40
-primordialchem.dm = 1e-40
-primordialchem.h2 = 1e-6
-primordialchem.hdp = 1e-40
-primordialchem.hd = 1e-40
-primordialchem.hepp = 1e-40
-primordialchem.hep = 1e-40
-primordialchem.he = 0.0775e0
+unit_test.primary_species_1 = 1e-4
+unit_test.primary_species_2 = 1e-4
+unit_test.primary_species_3 = 1e0
+unit_test.primary_species_4 = 1e-40
+unit_test.primary_species_5 = 1e-40
+unit_test.primary_species_6 = 1e-40
+unit_test.primary_species_7 = 1e-40
+unit_test.primary_species_8 = 1e-40
+unit_test.primary_species_9 = 1e-6
+unit_test.primary_species_10 = 1e-40
+unit_test.primary_species_11 = 1e-40
+unit_test.primary_species_12 = 1e-40
+unit_test.primary_species_13 = 1e-40
+unit_test.primary_species_14 = 0.0775e0
 
