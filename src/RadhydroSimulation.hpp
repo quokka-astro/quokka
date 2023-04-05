@@ -707,7 +707,8 @@ template <typename problem_t>
 void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex::Real time, amrex::Real dt_lev, amrex::YAFluxRegister *fr_as_crse,
 								   amrex::YAFluxRegister *fr_as_fine)
 {
-	// timestep retries
+  BL_PROFILE_REGION("HydroSolver");
+  // timestep retries
 	const int max_retries = 6;
 	bool success = false;
 	amrex::Real cur_time;
