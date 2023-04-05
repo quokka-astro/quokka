@@ -146,9 +146,16 @@ struct _interpreter {
 #else
 		char name[] = "plotting";
 #endif
+#if PY_VERSION_HEX < 0x03080000
 		Py_SetProgramName(name);
 		Py_Initialize();
-
+#else
+		PyConfig config;
+		PyConfig_InitPythonConfig(&config);
+		PyConfig_SetString(&config, &config.program_name, name);
+		Py_InitializeFromConfig(&config);
+		PyConfig_Clear(&config);
+#endif
 #ifndef WITHOUT_NUMPY
 		import_numpy(); // initialize numpy C-API
 #endif
