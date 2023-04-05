@@ -26,8 +26,8 @@
 #include "radiation_system.hpp"
 #include "test_primordial_chem.hpp"
 
-#include "extern_parameters.H"
 #include "burner.H"
+#include "extern_parameters.H"
 
 using amrex::Real;
 
@@ -76,78 +76,75 @@ template <> void RadhydroSimulation<PrimordialChemTest>::setInitialConditionsOnG
 	for (int n = 1; n <= NumSpec; ++n) {
 		switch (n) {
 
-		case 1:
-			numdens[n-1] = primary_species_1;
-			break;
-		case 2:
-			numdens[n-1] = primary_species_2;
-			break;
-		case 3:
-			numdens[n-1] = primary_species_3;
-			break;
-		case 4:
-			numdens[n-1] = primary_species_4;
-			break;
-		case 5:
-			numdens[n-1] = primary_species_5;
-			break;
-		case 6:
-			numdens[n-1] = primary_species_6;
-			break;
-		case 7:
-			numdens[n-1] = primary_species_7;
-			break;
-		case 8:
-			numdens[n-1] = primary_species_8;
-			break;
-		case 9:
-			numdens[n-1] = primary_species_9;
-			break;
-		case 10:
-			numdens[n-1] = primary_species_10;
-			break;
-		case 11:
-			numdens[n-1] = primary_species_11;
-			break;
-		case 12:
-			numdens[n-1] = primary_species_12;
-			break;
-		case 13:
-			numdens[n-1] = primary_species_13;
-			break;
-		case 14:
-			numdens[n-1] = primary_species_14;
-			break;
-
+			case 1:
+				numdens[n - 1] = primary_species_1;
+				break;
+			case 2:
+				numdens[n - 1] = primary_species_2;
+				break;
+			case 3:
+				numdens[n - 1] = primary_species_3;
+				break;
+			case 4:
+				numdens[n - 1] = primary_species_4;
+				break;
+			case 5:
+				numdens[n - 1] = primary_species_5;
+				break;
+			case 6:
+				numdens[n - 1] = primary_species_6;
+				break;
+			case 7:
+				numdens[n - 1] = primary_species_7;
+				break;
+			case 8:
+				numdens[n - 1] = primary_species_8;
+				break;
+			case 9:
+				numdens[n - 1] = primary_species_9;
+				break;
+			case 10:
+				numdens[n - 1] = primary_species_10;
+				break;
+			case 11:
+				numdens[n - 1] = primary_species_11;
+				break;
+			case 12:
+				numdens[n - 1] = primary_species_12;
+				break;
+			case 13:
+				numdens[n - 1] = primary_species_13;
+				break;
+			case 14:
+				numdens[n - 1] = primary_species_14;
+				break;
 		}
-
 	}
 
 	state.T = temperature;
 
-	//find the density in g/cm^3
+	// find the density in g/cm^3
 	Real rhotot = 0.0_rt;
 	for (int n = 0; n < NumSpec; ++n) {
 		state.xn[n] = numdens[n];
-		rhotot += state.xn[n]*spmasses[n];  //spmasses contains the masses of all species, defined in EOS
+		rhotot += state.xn[n] * spmasses[n]; // spmasses contains the masses of all species, defined in EOS
 	}
 
 	state.rho = rhotot;
-
 
 	// normalize -- just in case
 
 	Real mfracs[NumSpec] = {-1.0};
 	Real msum = 0.0_rt;
 	for (int n = 0; n < NumSpec; ++n) {
-		mfracs[n] = state.xn[n]*spmasses[n]/rhotot;
+		mfracs[n] = state.xn[n] * spmasses[n] / rhotot;
 		msum += mfracs[n];
 	}
 
 	for (int n = 0; n < NumSpec; ++n) {
 		mfracs[n] /= msum;
-		//use the normalized mass fractions to obtain the corresponding number densities
-		state.xn[n] = mfracs[n]*rhotot/spmasses[n];
+		// use the normalized mass fractions to obtain the corresponding number densities
+		state.xn[n] = mfracs[n] * rhotot / spmasses[n];
 	}
 
 	// call the EOS to set initial internal energy e
