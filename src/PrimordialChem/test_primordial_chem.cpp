@@ -27,8 +27,8 @@
 #include "test_primordial_chem.hpp"
 
 #include "burn_type.H"
-#include "extern_parameters.H"
 #include "eos.H"
+#include "extern_parameters.H"
 
 using amrex::Real;
 
