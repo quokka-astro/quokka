@@ -28,6 +28,7 @@
 
 #include "burn_type.H"
 #include "extern_parameters.H"
+#include "eos.H"
 
 using amrex::Real;
 

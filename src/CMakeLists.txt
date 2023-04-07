@@ -75,8 +75,6 @@ endif(DISABLE_FMAD)
 
 
 include_directories(${amrex_INCLUDE_DIRS_RET})
-#following, for microphysics:
-include_directories(${primordial_chem_dirs})
 include_directories(${fmt_INCLUDE_DIRS_RET})
 include_directories(${HDF5_INCLUDE_DIRS_RET})
 include_directories(${Boost_INCLUDE_DIRS_RET})
@@ -87,6 +85,8 @@ link_libraries(fmt::fmt)
 link_libraries(hdf5::hdf5)
 
 include(CTest)
+
+add_subdirectory(PrimordialChem)
 
 add_subdirectory(Advection)
 add_subdirectory(Advection2D)
@@ -133,4 +133,3 @@ add_subdirectory(PassiveScalar)
 add_subdirectory(FCQuantities)
 add_subdirectory(SphericalCollapse)
 
-add_subdirectory(PrimordialChem)
