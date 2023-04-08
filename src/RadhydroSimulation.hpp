@@ -312,7 +312,6 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::readParmParse(
 		}
 	}
 
-
 	// set radiation runtime parameters
 	{
 		amrex::ParmParse rpp("radiation");
