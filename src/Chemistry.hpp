@@ -34,7 +34,6 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 	const Real grav_constant = 6.674e-8;
 	const Real dt = dt_in;
 
-	Real chem[NumSpec] = {-1.0};
 
 	const auto &ba = mf.boxArray();
 	const auto &dmap = mf.DistributionMap();
@@ -49,6 +48,7 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 			const Real rho = state(i, j, k, HydroSystem<problem_t>::density_index);
 			const Real Eint = state(i, j, k, HydroSystem<problem_t>::internalEnergy_index);
 
+			Real chem[NumSpec] = {-1.0};
 			Real inmfracs[NumSpec] = {-1.0};
 
 			for (int nn = 0; nn < NumSpec; ++nn) {
