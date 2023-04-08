@@ -307,7 +307,6 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::readParmParse(
 	{
 		amrex::ParmParse hpp("unit_test");
 		hpp.query("enabled", enableChemistry_);
-
 	}
 
 	// set radiation runtime parameters
