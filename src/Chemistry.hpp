@@ -59,13 +59,13 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 			int nsteps = 1000;
 			// replace below with call to microphysics
 
-			burn_t state;
+			burn_t chemstate;
 
 			for (int n = 0; n < nsteps; n++) {
 
 				for (int nn = 0; nn < NumSpec; ++nn) {
 					inmfracs[nn] = chem[nn] * rho / spmasses[nn];
-					state.xn[nn] = inmfracs[nn];
+					chemstate.xn[nn] = inmfracs[nn];
 				}
 
 				// stop the test if dt is very small
@@ -79,52 +79,51 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 				}
 
 				// input the scaled density in burn state
-				state.rho = rho;
-				state.e = Eint;
+				chemstate.rho = rho;
+				chemstate.e = Eint;
 
 				// call the EOS to set initial internal energy e
-				eos(eos_input_re, state);
+				eos(eos_input_re, chemstate);
 
 				// do the actual integration
-				burner(state, dt);
+				burner(chemstate, dt);
 
 				// ensure positivity and normalize
 				Real inmfracs[NumSpec] = {-1.0};
 				Real insum = 0.0_rt;
 				for (int nn = 0; nn < NumSpec; ++nn) {
-					state.xn[nn] = amrex::max(state.xn[nn], small_x);
-					inmfracs[nn] = spmasses[nn] * state.xn[nn] / state.rho;
+					chemstate.xn[nn] = amrex::max(chemstate.xn[nn], small_x);
+					inmfracs[nn] = spmasses[nn] * chemstate.xn[nn] / chemstate.rho;
 					insum += inmfracs[nn];
 				}
 
 				for (int nn = 0; nn < NumSpec; ++nn) {
 					inmfracs[nn] /= insum;
 					// update the number densities with conserved mass fractions
-					state.xn[nn] = inmfracs[nn] * state.rho / spmasses[nn];
+					chemstate.xn[nn] = inmfracs[nn] * chemstate.rho / spmasses[nn];
 				}
 
 				// update the number density of electrons due to charge conservation
-				state.xn[0] =
-				    -state.xn[3] - state.xn[7] + state.xn[1] + state.xn[12] + state.xn[6] + state.xn[4] + state.xn[9] + 2.0 * state.xn[11];
+				chemstate.xn[0] = -chemstate.xn[3] - chemstate.xn[7] + chemstate.xn[1] + chemstate.xn[12] + chemstate.xn[6] + chemstate.xn[4] + chemstate.xn[9] + 2.0 * chemstate.xn[11];
 
 				// reconserve mass fractions post charge conservation
 				insum = 0;
 				for (int nn = 0; nn < NumSpec; ++nn) {
-					state.xn[nn] = amrex::max(state.xn[nn], small_x);
-					inmfracs[nn] = spmasses[nn] * state.xn[nn] / state.rho;
+					chemstate.xn[nn] = amrex::max(chemstate.xn[nn], small_x);
+					inmfracs[nn] = spmasses[nn] * chemstate.xn[nn] / chemstate.rho;
 					insum += inmfracs[nn];
 				}
 
 				for (int nn = 0; nn < NumSpec; ++nn) {
 					inmfracs[nn] /= insum;
 					// update the number densities with conserved mass fractions
-					state.xn[nn] = inmfracs[nn] * state.rho / spmasses[nn];
+					chemstate.xn[nn] = inmfracs[nn] * chemstate.rho / spmasses[nn];
 				}
 
 				// get the updated T
-				eos(eos_input_re, state);
+				eos(eos_input_re, chemstate);
 
-				state(i, j, k, HydroSystem<problem_t>::internalEnergy_index) = state.e;
+				state(i, j, k, HydroSystem<problem_t>::internalEnergy_index) = chemstate.e;
 
 				for (int nn = 0; nn < NumSpec; ++n) {
 					state(i, j, k, HydroSystem<problem_t>::scalar0_index + nn) = inmfracs[nn];
