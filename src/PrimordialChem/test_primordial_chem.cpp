@@ -173,7 +173,7 @@ template <> void RadhydroSimulation<PrimordialChemTest>::setInitialConditionsOnG
 		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::x2Momentum_index) = ymom;
 		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::x3Momentum_index) = zmom;
 
-		for (int nn = 0; nn < NumSpec; ++nn){
+		for (int nn = 0; nn < NumSpec; ++nn) {
 			state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + nn) = mfracs[nn];
 		}
 	});
