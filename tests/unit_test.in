@@ -22,6 +22,7 @@ amr.max_grid_size   = 1
 do_reflux = 0
 do_subcycle = 0
 
+unit_test.enabled = 1
 unit_test.temperature = 1e2
 
 unit_test.primary_species_1 = 1e-4
