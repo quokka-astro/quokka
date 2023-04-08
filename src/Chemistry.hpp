@@ -27,9 +27,8 @@
 
 namespace quokka::chemistry
 {
-    template <typename problem_t>
-    void computeChemistry(amrex::MultiFab &mf, const Real dt_in, const Real T_floor)
-	{
+template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const Real dt_in, const Real T_floor)
+{
 	BL_PROFILE("computeChemistry()")
 
 	const Real grav_constant = 6.674e-8;
@@ -142,10 +141,9 @@ namespace quokka::chemistry
 			if (nmax >= maxStepsODEIntegrate) {
 				amrex::Abort("Max steps exceeded in chemistry solve!");
 			}
-		}
-	);
+		});
 	}
-	}		// namespace quokka::chemistry
+} // namespace quokka::chemistry
 
-}
+} // namespace quokka::chemistry
 #endif // CHEMISTRY_HPP_

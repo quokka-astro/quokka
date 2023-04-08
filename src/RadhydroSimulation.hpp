@@ -43,8 +43,8 @@
 #include "AMReX_Utility.H"
 #include "AMReX_YAFluxRegister.H"
 
-#include "CloudyCooling.hpp"
 #include "Chemistry.hpp"
+#include "CloudyCooling.hpp"
 #include "SimulationData.hpp"
 #include "hydro_system.hpp"
 #include "hyperbolic_system.hpp"
