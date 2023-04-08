@@ -27,14 +27,12 @@
 
 namespace quokka::chemistry
 {
-template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const Real dt_in, const Real T_floor)
+template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const Real dt_in)
 {
 	BL_PROFILE("computeChemistry()")
 
 	const Real grav_constant = 6.674e-8;
 	const Real dt = dt_in;
-	const Real reltol_floor = 0.01;
-	const Real rtol = 1.0e-4; // not recommended to change this
 
 	Real chem[NumSpec] = {-1.0};
 
@@ -138,9 +136,6 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 			Real navg = static_cast<Real>(nsubstepsMF.sum(0)) / static_cast<Real>(nsubstepsMF.boxArray().numPts());
 			amrex::Print() << fmt::format("\tChemistry substeps (per cell): min {}, avg {}, max {}\n", nmin, navg, nmax);
 
-			if (nmax >= maxStepsODEIntegrate) {
-				amrex::Abort("Max steps exceeded in chemistry solve!");
-			}
 		});
 	}
 } // namespace quokka::chemistry
