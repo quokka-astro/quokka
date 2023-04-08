@@ -94,6 +94,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	SimulationData<problem_t> userData_;
 
 	int enableCooling_ = 0;
+	int enableChemistry_ = 0;
 	quokka::cooling::cloudy_tables cloudyTables_;
 	std::string coolingTableFilename_{};
 
@@ -300,6 +301,17 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::readParmParse(
 			quokka::cooling::readCloudyData(coolingTableFilename_, cloudyTables_);
 		}
 	}
+
+	// set chemistry runtime parameters
+	{
+		amrex::ParmParse hpp("unit_test");
+		hpp.query("enabled", enableChemistry_);
+
+		if (enableChemistry_ == 1) {
+			quokka::chemistry::computeChemistry();
+		}
+	}
+
 
 	// set radiation runtime parameters
 	{
