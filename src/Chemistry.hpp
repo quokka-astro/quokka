@@ -130,7 +130,7 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 				}
 			}
 		});
-	}	
+	}
 
 	int nmin = nsubstepsMF.min(0);
 	int nmax = nsubstepsMF.max(0);
