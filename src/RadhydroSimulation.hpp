@@ -308,9 +308,6 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::readParmParse(
 		amrex::ParmParse hpp("unit_test");
 		hpp.query("enabled", enableChemistry_);
 
-		if (enableChemistry_ == 1) {
-			quokka::chemistry::computeChemistry();
-		}
 	}
 
 	// set radiation runtime parameters
@@ -430,6 +427,11 @@ void RadhydroSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::Mult
 	if (enableCooling_ == 1) {
 		// compute cooling
 		quokka::cooling::computeCooling<problem_t>(state, dt, cloudyTables_, tempFloor_);
+	}
+
+	if (enableChemistry_ == 1) {
+		// compute chemistry
+		quokka::chemistry::computeChemistry<problem_t>(state, dt);
 	}
 
 	// compute user-specified sources
