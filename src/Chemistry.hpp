@@ -135,7 +135,6 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 			int nmax = nsubstepsMF.max(0);
 			Real navg = static_cast<Real>(nsubstepsMF.sum(0)) / static_cast<Real>(nsubstepsMF.boxArray().numPts());
 			amrex::Print() << fmt::format("\tChemistry substeps (per cell): min {}, avg {}, max {}\n", nmin, navg, nmax);
-
 		});
 	}
 } // namespace quokka::chemistry
