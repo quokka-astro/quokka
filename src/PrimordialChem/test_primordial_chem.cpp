@@ -173,20 +173,9 @@ template <> void RadhydroSimulation<PrimordialChemTest>::setInitialConditionsOnG
 		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::x2Momentum_index) = ymom;
 		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::x3Momentum_index) = zmom;
 
-		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index) = mfracs[0];
-		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 1) = mfracs[1];
-		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 2) = mfracs[2];
-		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 3) = mfracs[3];
-		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 4) = mfracs[4];
-		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 5) = mfracs[5];
-		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 6) = mfracs[6];
-		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 7) = mfracs[7];
-		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 8) = mfracs[8];
-		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 9) = mfracs[9];
-		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 10) = mfracs[10];
-		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 11) = mfracs[11];
-		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 12) = mfracs[12];
-		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + 13) = mfracs[13];
+		for (int nn = 0; nn < NumSpec; ++nn){
+			state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + nn) = mfracs[nn];
+		}
 	});
 }
 
@@ -195,7 +184,7 @@ auto problem_main() -> int
 	// Problem parameters
 	const double CFL_number = 0.25;
 	const double max_time = 5e16; // > 1 Gyr
-	const int max_timesteps = 2e4;
+	const int max_timesteps = 5;
 
 	// Problem initialization
 	constexpr int ncomp_cc = Physics_Indices<PrimordialChemTest>::nvarTotal_cc;
