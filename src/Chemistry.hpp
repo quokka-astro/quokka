@@ -21,14 +21,15 @@
 #include "radiation_system.hpp"
 
 #include "burn_type.H"
+#include "burner.H"
 #include "eos.H"
 #include "extern_parameters.H"
 
 namespace quokka::chemistry
-
+{
     template <typename problem_t>
     void computeChemistry(amrex::MultiFab &mf, const Real dt_in, const Real T_floor)
-{
+	{
 	BL_PROFILE("computeChemistry()")
 
 	const Real grav_constant = 6.674e-8;
@@ -36,7 +37,7 @@ namespace quokka::chemistry
 	const Real reltol_floor = 0.01;
 	const Real rtol = 1.0e-4; // not recommended to change this
 
-	const Real chem[NumSpec] = {-1.0};
+	Real chem[NumSpec] = {-1.0};
 
 	const auto &ba = mf.boxArray();
 	const auto &dmap = mf.DistributionMap();
@@ -51,6 +52,8 @@ namespace quokka::chemistry
 			const Real rho = state(i, j, k, HydroSystem<problem_t>::density_index);
 			const Real Eint = state(i, j, k, HydroSystem<problem_t>::internalEnergy_index);
 
+			Real inmfracs[NumSpec] = {-1.0};
+
 			for (int nn = 0; nn < NumSpec; ++nn) {
 				chem[nn] = state(i, j, k, HydroSystem<problem_t>::scalar0_index + nn);
 			}
@@ -64,8 +67,8 @@ namespace quokka::chemistry
 			for (int n = 0; n < nsteps; n++) {
 
 				for (int nn = 0; nn < NumSpec; ++nn) {
-					chem[nn] = chem[nn] * rho / spmasses[nn];
-					state.xn[nn] = chem[nn];
+					inmfracs[nn] = chem[nn] * rho / spmasses[nn];
+					state.xn[nn] = inmfracs[nn];
 				}
 
 				// stop the test if dt is very small
@@ -139,7 +142,10 @@ namespace quokka::chemistry
 			if (nmax >= maxStepsODEIntegrate) {
 				amrex::Abort("Max steps exceeded in chemistry solve!");
 			}
+		}
+	);
+	}
+	}		// namespace quokka::chemistry
 
-			// namespace quokka::chemistry
-
+}
 #endif // CHEMISTRY_HPP_
