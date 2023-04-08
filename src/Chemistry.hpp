@@ -34,7 +34,6 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 	const Real grav_constant = 6.674e-8;
 	const Real dt = dt_in;
 
-
 	const auto &ba = mf.boxArray();
 	const auto &dmap = mf.DistributionMap();
 	amrex::iMultiFab nsubstepsMF(ba, dmap, 1, 0);
