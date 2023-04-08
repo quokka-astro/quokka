@@ -104,7 +104,8 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 				}
 
 				// update the number density of electrons due to charge conservation
-				chemstate.xn[0] = -chemstate.xn[3] - chemstate.xn[7] + chemstate.xn[1] + chemstate.xn[12] + chemstate.xn[6] + chemstate.xn[4] + chemstate.xn[9] + 2.0 * chemstate.xn[11];
+				chemstate.xn[0] = -chemstate.xn[3] - chemstate.xn[7] + chemstate.xn[1] + chemstate.xn[12] + chemstate.xn[6] + chemstate.xn[4] +
+						  chemstate.xn[9] + 2.0 * chemstate.xn[11];
 
 				// reconserve mass fractions post charge conservation
 				insum = 0;
