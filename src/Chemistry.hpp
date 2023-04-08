@@ -120,8 +120,8 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 					chemstate.xn[nn] = inmfracs[nn] * chemstate.rho / spmasses[nn];
 				}
 
-				// get the updated T
-				eos(eos_input_re, chemstate);
+				// get the updated Eint
+				eos(eos_input_rt, chemstate);
 
 				state(i, j, k, HydroSystem<problem_t>::internalEnergy_index) = chemstate.e;
 
@@ -129,13 +129,14 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 					state(i, j, k, HydroSystem<problem_t>::scalar0_index + nn) = inmfracs[nn];
 				}
 			}
-
-			int nmin = nsubstepsMF.min(0);
-			int nmax = nsubstepsMF.max(0);
-			Real navg = static_cast<Real>(nsubstepsMF.sum(0)) / static_cast<Real>(nsubstepsMF.boxArray().numPts());
-			amrex::Print() << fmt::format("\tChemistry substeps (per cell): min {}, avg {}, max {}\n", nmin, navg, nmax);
 		});
-	}
+	}	
+
+	int nmin = nsubstepsMF.min(0);
+	int nmax = nsubstepsMF.max(0);
+	Real navg = static_cast<Real>(nsubstepsMF.sum(0)) / static_cast<Real>(nsubstepsMF.boxArray().numPts());
+	amrex::Print() << fmt::format("\tChemistry substeps (per cell): min {}, avg {}, max {}\n", nmin, navg, nmax);
+
 } // namespace quokka::chemistry
 
 } // namespace quokka::chemistry
