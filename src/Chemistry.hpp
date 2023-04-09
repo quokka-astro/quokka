@@ -16,7 +16,6 @@
 #include "AMReX_Extension.H"
 #include "AMReX_GpuQualifiers.H"
 
-#include "RadhydroSimulation.hpp"
 #include "hydro_system.hpp"
 #include "radiation_system.hpp"
 
