@@ -1,4 +1,4 @@
-add_executable(test_radiation_pulse ../main.cpp ../CloudyCooling.cpp ../GrackleDataReader.cpp test_radiation_pulse.cpp ../fextract.cpp)
+add_executable(test_radiation_pulse ../main.cpp ../CloudyCooling.cpp ../GrackleDataReader.cpp test_radiation_pulse.cpp ../fextract.cpp ${primordial_chem_sources})
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
     setup_target_for_cuda_compilation(test_radiation_pulse)
