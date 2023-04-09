@@ -70,7 +70,7 @@ template <> void RadhydroSimulation<PrimordialChemTest>::setInitialConditionsOnG
 	Real const Lz = (prob_hi[2] - prob_lo[2]);
 
 	init_extern_parameters();
-	
+
 	eos_init(small_temp, small_dens);
 	network_init();
 
