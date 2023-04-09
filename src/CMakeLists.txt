@@ -79,6 +79,7 @@ include_directories(${fmt_INCLUDE_DIRS_RET})
 include_directories(${HDF5_INCLUDE_DIRS_RET})
 include_directories(${Boost_INCLUDE_DIRS_RET})
 include_directories(${CMAKE_SOURCE_DIR}/src)
+include_directories(${primordial_chem_dirs} ${CMAKE_BINARY_DIR} "includes/extern_parameters.H" "includes/network_properties.H")
 
 link_libraries(AMReX::amrex)
 link_libraries(fmt::fmt)
