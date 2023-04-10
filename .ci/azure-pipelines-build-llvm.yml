@@ -13,7 +13,7 @@ steps:
 - task: CMake@1
   displayName: 'Build Quokka'
   inputs:
-    cmakeArgs: '--build .'
+    cmakeArgs: '--build . --parallel 1'
 
 - task: CMake@1
   displayName: 'Run CTest'
