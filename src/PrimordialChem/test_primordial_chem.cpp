@@ -47,7 +47,7 @@ template <> struct Physics_Traits<PrimordialChemTest> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_chemistry_enabled = false; // in the future, this could point to microphysics, and set to true
-	static constexpr int numPassiveScalars = NumSpec;	    // number of chemical species
+	static constexpr int numPassiveScalars = NumSpec;   // number of chemical species
 	static constexpr bool is_radiation_enabled = false;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
@@ -66,10 +66,10 @@ template <> void RadhydroSimulation<PrimordialChemTest>::setInitialConditionsOnG
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
 	Real const Lx = (prob_hi[0] - prob_lo[0]);
-	if constexpr(AMREX_SPACEDIM >= 2) {
+	if constexpr (AMREX_SPACEDIM >= 2) {
 		Real const Ly = (prob_hi[1] - prob_lo[1]);
 	}
-	if constexpr(AMREX_SPACEDIM == 3) {
+	if constexpr (AMREX_SPACEDIM == 3) {
 		Real const Lz = (prob_hi[2] - prob_lo[2]);
 	}
 
@@ -200,7 +200,7 @@ auto problem_main() -> int
 	for (int n = 0; n < ncomp_cc; ++n) {
 		BCs_cc[n].setLo(0, amrex::BCType::foextrap); // extrapolate
 		BCs_cc[n].setHi(0, amrex::BCType::foextrap);
-#if AMREX_SPACEDIM >= 2		
+#if AMREX_SPACEDIM >= 2
 		BCs_cc[n].setLo(1, amrex::BCType::foextrap);
 		BCs_cc[n].setHi(1, amrex::BCType::foextrap);
 #endif
