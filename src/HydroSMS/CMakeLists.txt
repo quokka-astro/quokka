@@ -1,4 +1,4 @@
-add_executable(test_hydro_sms ../main.cpp ../CloudyCooling.cpp ../GrackleDataReader.cpp test_hydro_sms.cpp ../fextract.cpp $<TARGET_OBJECTS:primordialchem>)
+add_executable(test_hydro_sms ../main.cpp ../CloudyCooling.cpp ../GrackleDataReader.cpp test_hydro_sms.cpp ../fextract.cpp)
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
     setup_target_for_cuda_compilation(test_hydro_sms)
