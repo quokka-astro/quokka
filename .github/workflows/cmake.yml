@@ -42,7 +42,8 @@ jobs:
       working-directory: ${{runner.workspace}}/build
       shell: bash
       # Execute the build.  You can specify a specific target with "--target <NAME>"
-      run: cmake --build . --config $BUILD_TYPE
+      # Restrict to 1 build processes at a time to avoid OOM kills.
+      run: cmake --build . --config $BUILD_TYPE --parallel 1
 
     - name: Create test output directory
       run: cmake -E make_directory $GITHUB_WORKSPACE/tests
