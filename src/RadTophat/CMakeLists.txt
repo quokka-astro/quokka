@@ -1,5 +1,5 @@
 if (AMReX_SPACEDIM GREATER_EQUAL 2)
-    add_executable(test_radiation_tophat ../main.cpp ../CloudyCooling.cpp ../GrackleDataReader.cpp test_radiation_tophat.cpp ${primordial_chem_sources})
+    add_executable(test_radiation_tophat ../main.cpp ../CloudyCooling.cpp ../GrackleDataReader.cpp test_radiation_tophat.cpp $<TARGET_OBJECTS:primordialchem>)
     if(AMReX_GPU_BACKEND MATCHES "CUDA")
         setup_target_for_cuda_compilation(test_radiation_tophat)
     endif()

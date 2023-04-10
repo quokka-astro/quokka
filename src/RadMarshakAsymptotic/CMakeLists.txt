@@ -1,4 +1,4 @@
-add_executable(test_radiation_marshak_asymptotic ../main.cpp ../CloudyCooling.cpp ../GrackleDataReader.cpp test_radiation_marshak_asymptotic.cpp ../fextract.cpp ../interpolate.cpp ${primordial_chem_sources})
+add_executable(test_radiation_marshak_asymptotic ../main.cpp ../CloudyCooling.cpp ../GrackleDataReader.cpp test_radiation_marshak_asymptotic.cpp ../fextract.cpp ../interpolate.cpp $<TARGET_OBJECTS:primordialchem>)
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
     setup_target_for_cuda_compilation(test_radiation_marshak_asymptotic)
