@@ -92,8 +92,8 @@ link_libraries(hdf5::hdf5)
 
 #add primordial chem sources as an object library
 #so you don't have to compile them separately for every test
-add_library(primordialchem OBJECT ${primordial_chem_sources})
-link_libraries($<TARGET_OBJECTS:primordialchem>)
+add_library(primordialchemObj OBJECT ${primordial_chem_sources})
+link_libraries($<TARGET_OBJECTS:primordialchemObj>)
 
 include(CTest)
 
