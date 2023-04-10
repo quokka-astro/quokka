@@ -85,6 +85,8 @@ link_libraries(AMReX::amrex)
 link_libraries(fmt::fmt)
 link_libraries(hdf5::hdf5)
 
+add_library(primordialchem OBJECT ${primordial_chem_sources})
+
 include(CTest)
 
 add_subdirectory(PrimordialChem)
