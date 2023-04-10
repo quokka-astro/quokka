@@ -1,4 +1,5 @@
-add_executable(test_primordial_chem test_primordial_chem.cpp ../main.cpp ../CloudyCooling.cpp ../GrackleDataReader.cpp ../Chemistry.cpp $<TARGET_OBJECTS:primordialchem>)
+set(PRIMORDIAL_CHEM true)
+add_executable(test_primordial_chem test_primordial_chem.cpp ../main.cpp ../CloudyCooling.cpp ../GrackleDataReader.cpp ../Chemistry.cpp)
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
     setup_target_for_cuda_compilation(test_primordial_chem)
