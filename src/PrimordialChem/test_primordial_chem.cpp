@@ -162,8 +162,12 @@ template <> void RadhydroSimulation<PrimordialChemTest>::setInitialConditionsOnG
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		Real const x = prob_lo[0] + (i + Real(0.5)) * dx[0];
-		Real const y = prob_lo[1] + (j + Real(0.5)) * dx[1];
-		Real const z = prob_lo[2] + (k + Real(0.5)) * dx[2];
+		if constexpr (AMREX_SPACEDIM >= 2) {
+			Real const y = prob_lo[1] + (j + Real(0.5)) * dx[1];
+		}
+		if constexpr (AMREX_SPACEDIM == 3) {
+			Real const z = prob_lo[2] + (k + Real(0.5)) * dx[2];
+		}
 
 		Real rho = state.rho; // g cm^-3
 
