@@ -303,11 +303,13 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::readParmParse(
 		}
 	}
 
+#ifdef PRIMORDIAL_CHEM
 	// set chemistry runtime parameters
 	{
 		amrex::ParmParse hpp("unit_test");
 		hpp.query("enabled", enableChemistry_);
 	}
+#endif
 
 	// set radiation runtime parameters
 	{
@@ -428,10 +430,12 @@ void RadhydroSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::Mult
 		quokka::cooling::computeCooling<problem_t>(state, dt, cloudyTables_, tempFloor_);
 	}
 
+#ifdef PRIMORDIAL_CHEM
 	if (enableChemistry_ == 1) {
 		// compute chemistry
 		quokka::chemistry::computeChemistry<problem_t>(state, dt);
 	}
+#endif
 
 	// compute user-specified sources
 	addStrangSplitSources(state, lev, time, dt);
