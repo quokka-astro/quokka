@@ -24,6 +24,12 @@ set(AMReX_ASSERTIONS OFF CACHE BOOL "" FORCE)
 set(AMReX_FPE OFF CACHE BOOL "" FORCE)
 set(AMReX_TINY_PROFILE ON CACHE BOOL "" FORCE)
 
+#define a boolean for primordial chem
+#this is necessary to ensure quokka compiles in a reasonable time
+#because the RHS file for primordial chem is quite big and compilation stalls otherwise
+set(PRIMORDIAL_CHEM false CACHE BOOL "Do you want to build primordial chem? WARNING! Compilation will be very slow")
+
+
 ## a Python installation can be specified with Python_ROOT_DIR
 ##   see: https://cmake.org/cmake/help/latest/module/FindPython.html#hints
 ## NumPy and Matplotlib can be installed with `python3 -m pip install numpy matplotlib --user`
