@@ -1892,7 +1892,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 			// unless the domain has odd number of cells in that direction.
 			ChopGrids(0, ba_lev0, amrex::ParallelDescriptor::NProcs());
 			ba == ba_lev0;
-
+			amrex::Print() << "fac=" << fac << "\n";
 		}
 
 		// create a distribution mapping
