@@ -93,6 +93,10 @@ link_libraries(hdf5::hdf5)
 #add primordial chem sources as an object library
 #so you don't have to compile them separately for every test
 add_library(primordialchemObj OBJECT ${primordial_chem_sources})
+if(AMReX_GPU_BACKEND MATCHES "CUDA")
+    setup_target_for_cuda_compilation(primordialchemObj)
+endif(AMReX_GPU_BACKEND MATCHES "CUDA")
+
 link_libraries($<TARGET_OBJECTS:primordialchemObj>)
 
 include(CTest)
