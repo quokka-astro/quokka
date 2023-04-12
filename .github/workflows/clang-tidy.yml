@@ -22,6 +22,13 @@ jobs:
         cmake_command: cmake . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DQUOKKA_PYTHON=ON
         split_workflow: true
 
+    - uses: actions/upload-artifact@v3
+      with:
+        name: clang-tidy-review
+        path: |
+          clang-tidy-review-output.json
+          clang-tidy-review-metadata.json
+
     # Uploads an artefact containing clang_fixes.json
     - uses: ZedThree/clang-tidy-review/upload@v0.12.2
 
