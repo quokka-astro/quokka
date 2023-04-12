@@ -17,8 +17,6 @@ on:
   pull_request:
     # The branches below must be a subset of the branches above
     branches: [ development ]
-  schedule:
-    - cron: '34 20 * * 5'
 
 jobs:
   analyze:
@@ -64,10 +62,11 @@ jobs:
     #    uses a compiled language
 
     - name: Build
+      # Restrict to 1 build process at a time to avoid OOM kills.
       run: |
         mkdir build; cd build
         cmake .. -DCMAKE_BUILD_TYPE=Release
-        cmake --build .
+        cmake --build . --parallel 1
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v1
