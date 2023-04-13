@@ -1891,7 +1891,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 			// Boxes in ba have even number of cells in each direction
 			// unless the domain has odd number of cells in that direction.
 			ChopGrids(0, ba_lev0, amrex::ParallelDescriptor::NProcs());
-			ba == ba_lev0;
+			amrex::Print() <<"1. Box array size="<< ba.size() <<"\n";
+			ba = ba_lev0;
+			amrex::Print() <<"2.Box array size="<< ba_lev0.size() <<"\n";
+			amrex::Print() <<"3.Box array size="<< ba_lev0.size() <<"\n";
 			amrex::Print() << "fac=" << fac << "\n";
 		}
 
@@ -1925,7 +1928,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 			}
 		}
 	}
-
+	
 	// read in the MultiFab data
 	for (int lev = 0; lev <= finest_level; ++lev) {
 		// cell-centred
