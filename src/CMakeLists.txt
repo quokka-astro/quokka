@@ -90,14 +90,32 @@ link_libraries(AMReX::amrex)
 link_libraries(fmt::fmt)
 link_libraries(hdf5::hdf5)
 
+
+#function (mysetup_target_for_cuda_compilation _target)
+#   set_target_properties( ${_target}
+#      PROPERTIES
+#      CUDA_SEPARABLE_COMPILATION ON      # This adds -dc
+#      CUDA_RESOLVE_DEVICE_SYMBOLS ON
+#   )
+#   set_cpp_sources_to_cuda_language(${_target})
+#   #target_compile_options(${_target} --generate-line-info --use_fast_math --relocatable-device-code=true)
+#   target_link_libraries(${_target} ${CUDA_LIBRARIES})
+#   if (CMAKE_VERSION VERSION_GREATER_EQUAL 3.20)
+#      set_target_properties( ${_target}
+#         PROPERTIES
+#         CUDA_ARCHITECTURES "${AMREX_CUDA_ARCHS}"
+#         )
+#   endif ()
+#endfunction ()
+
 #add primordial chem sources as an object library
 #so you don't have to compile them separately for every test
-add_library(primordialchemObj OBJECT ${primordial_chem_sources})
-if(AMReX_GPU_BACKEND MATCHES "CUDA")
-    setup_target_for_cuda_compilation(primordialchemObj)
-endif(AMReX_GPU_BACKEND MATCHES "CUDA")
-
-link_libraries($<TARGET_OBJECTS:primordialchemObj>)
+#add_library(primordialchemObj OBJECT ${primordial_chem_sources})
+#if(AMReX_GPU_BACKEND MATCHES "CUDA")
+    #mysetup_target_for_cuda_compilation(primordialchemObj)
+#   CUDA_WRAP_SRCS(primordialchemObj OBJECT ${primordial_chem_sources})
+#endif(AMReX_GPU_BACKEND MATCHES "CUDA")
+#link_libraries($<TARGET_OBJECTS:primordialchemObj>)
 
 include(CTest)
 
@@ -106,6 +124,7 @@ add_subdirectory(PrimordialChem)
 add_subdirectory(Advection)
 add_subdirectory(Advection2D)
 add_subdirectory(AdvectionSemiellipse)
+
 
 add_subdirectory(HydroBlast2D)
 add_subdirectory(HydroBlast3D)
@@ -122,7 +141,6 @@ add_subdirectory(HydroQuirk)
 add_subdirectory(HydroHighMach)
 add_subdirectory(RayleighTaylor2D)
 add_subdirectory(RayleighTaylor3D)
-
 add_subdirectory(RadBeam)
 add_subdirectory(RadForce)
 add_subdirectory(RadMarshak)
