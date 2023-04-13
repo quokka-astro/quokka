@@ -28,9 +28,6 @@ namespace quokka::chemistry
 {
 template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const Real dt_in)
 {
-	BL_PROFILE("computeChemistry()")
-
-	const Real grav_constant = 6.674e-8;
 	const Real dt = dt_in;
 
 	const auto &ba = mf.boxArray();
@@ -64,11 +61,6 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 				for (int nn = 0; nn < NumSpec; ++nn) {
 					inmfracs[nn] = chem[nn] * rho / spmasses[nn];
 					chemstate.xn[nn] = inmfracs[nn];
-				}
-
-				// stop the test if dt is very small
-				if (dt < 10) {
-					break;
 				}
 
 				// stop the test if we have reached very high densities
@@ -131,10 +123,6 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 		});
 	}
 
-	int nmin = nsubstepsMF.min(0);
-	int nmax = nsubstepsMF.max(0);
-	Real navg = static_cast<Real>(nsubstepsMF.sum(0)) / static_cast<Real>(nsubstepsMF.boxArray().numPts());
-	amrex::Print() << fmt::format("\tChemistry substeps (per cell): min {}, avg {}, max {}\n", nmin, navg, nmax);
 }
 
 } // namespace quokka::chemistry
