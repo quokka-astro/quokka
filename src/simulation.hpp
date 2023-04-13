@@ -89,28 +89,30 @@ enum class FillPatchType { fillpatch_class, fillpatch_function };
 template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 {
       public:
-	amrex::Real maxDt_ = std::numeric_limits<double>::max();  // no limit by default
-	amrex::Real initDt_ = std::numeric_limits<double>::max(); // no limit by default
+	amrex::Real maxDt_ = std::numeric_limits<double>::max();	// no limit by default
+	amrex::Real initDt_ = std::numeric_limits<double>::max();	// no limit by default
 	amrex::Real constantDt_ = 0.0;
-	amrex::Vector<int> istep;	      // which step?
-	amrex::Vector<int> nsubsteps;	      // how many substeps on each level?
-	amrex::Vector<amrex::Real> tNew_;     // for state_new_cc_
-	amrex::Vector<amrex::Real> tOld_;     // for state_old_cc_
-	amrex::Vector<amrex::Real> dt_;	      // timestep for each level
-	amrex::Vector<int> reductionFactor_;  // timestep reduction factor for each level
-	amrex::Real stopTime_ = 1.0;	      // default
-	amrex::Real cflNumber_ = 0.3;	      // default
-	amrex::Real dtToleranceFactor_ = 1.1; // default
+	amrex::Vector<int> istep;					// which step?
+	amrex::Vector<int> nsubsteps;					// how many substeps on each level?
+	amrex::Vector<amrex::Real> tNew_;				// for state_new_cc_
+	amrex::Vector<amrex::Real> tOld_;				// for state_old_cc_
+	amrex::Vector<amrex::Real> dt_;					// timestep for each level
+	amrex::Vector<int> reductionFactor_;				// timestep reduction factor for each level
+	amrex::Real stopTime_ = 1.0;					// default
+	amrex::Real cflNumber_ = 0.3;					// default
+	amrex::Real dtToleranceFactor_ = 1.1;				// default
 	amrex::Long cycleCount_ = 0;
-	amrex::Long maxTimesteps_ = 1e4;      // default
-	amrex::Long maxWalltime_ = 0;	      // default: no limit
-	int ascentInterval_ = -1;	      // -1 == no in-situ renders with Ascent
-	int plotfileInterval_ = -1;	      // -1 == no output
-	int checkpointInterval_ = -1;	      // -1 == no output
-	int amrInterpMethod_ = 1;	      // 0 == piecewise constant, 1 == lincc_interp
-	amrex::Real reltolPoisson_ = 1.0e-10; // default
-	amrex::Real abstolPoisson_ = 1.0e-10; // default
-	int doPoissonSolve_ = 0;	      // 1 == self-gravity enabled, 0 == disabled
+	amrex::Long maxTimesteps_ = 1e4;				// default
+	amrex::Long maxWalltime_ = 0;					// default: no limit
+	int ascentInterval_ = -1;					// -1 == no in-situ renders with Ascent
+	int plotfileInterval_ = -1;					// -1 == no output
+	amrex::Real plotTimeInterval_ = -1.0;				// time interval for plt file
+	amrex::Real checkpointTimeInterval_ = -1.0;			// time interval for checkpoints
+	int checkpointInterval_ = -1;					// -1 == no output
+	int amrInterpMethod_ = 1;					// 0 == piecewise constant, 1 == lincc_interp
+	amrex::Real reltolPoisson_ = 1.0e-5;				// default
+	amrex::Real abstolPoisson_ = 1.0e-5;				// default (scaled by minimum RHS value)
+	int doPoissonSolve_ = 0;					// 1 == self-gravity enabled, 0 == disabled
 
 	amrex::Real densityFloor_ = 0.0;				// default
 	amrex::Real tempCeiling_ = std::numeric_limits<double>::max();	// default
@@ -422,6 +424,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Default output interval
 	pp.query("plotfile_interval", plotfileInterval_);
 
+	// Default Time interval
+	pp.query("plottime_interval", plotTimeInterval_);
+
+	// Default Time interval
+	pp.query("checkpointtime_interval", checkpointTimeInterval_);
+
 	// Default checkpoint interval
 	pp.query("checkpoint_interval", checkpointInterval_);
 
@@ -564,7 +572,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 		dt_0 = std::min(dt_0, n_factor * dt_tmp[level]);
 		dt_0 = std::min(dt_0, maxDt_); // limit to maxDt_
 
-		if (tNew_[level] == 0.0) { // first timestep
+		if (tNew_[level] == 0.0) {     // first timestep
 			dt_0 = std::min(dt_0, initDt_);
 		}
 		if (constantDt_ > 0.0) { // use constant timestep if set
@@ -579,7 +587,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 		dt_global = std::min(dt_global, dt_tmp[level]);
 		dt_global = std::min(dt_global, maxDt_); // limit to maxDt_
 
-		if (tNew_[level] == 0.0) { // special case: first timestep
+		if (tNew_[level] == 0.0) {		 // special case: first timestep
 			dt_global = std::min(dt_global, initDt_);
 		}
 		if (constantDt_ > 0.0) { // special case: constant timestep
@@ -646,6 +654,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	int last_ascent_step = 0;
 #endif
 	int last_plot_file_step = 0;
+	double next_plot_file_time = plotTimeInterval_;
+	double next_chk_file_time = checkpointTimeInterval_;
 	int last_chk_file_step = 0;
 	const int ncomp_cc = Physics_Indices<problem_t>::nvarTotal_cc;
 
@@ -671,9 +681,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		computeTimestep();
 		computeBeforeTimestep(); 
 
-		// elliptic solve over entire AMR grid (pre-timestep)
-		ellipticSolveAllLevels(0.5 * dt_[0]);
-
 		// hyperbolic advance over all levels
 		int lev = 0;	   // coarsest level
 		int stepsLeft = 1; // coarsest level is advanced one step
@@ -681,7 +688,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		timeStepWithSubcycling(lev, cur_time, coarseTimeBoundary, stepsLeft);
 
 		// elliptic solve over entire AMR grid (post-timestep)
-		ellipticSolveAllLevels(0.5 * dt_[0]);
+		ellipticSolveAllLevels(dt_[0]);
 
 		cur_time += dt_[0];
 		++cycleCount_;
@@ -703,6 +710,17 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		if (plotfileInterval_ > 0 && (step + 1) % plotfileInterval_ == 0) {
 			last_plot_file_step = step + 1;
 			WritePlotFile();
+		}
+
+		// Writing Plot files at time intervals
+		if (plotTimeInterval_ > 0 && next_plot_file_time <= cur_time) {
+			next_plot_file_time += plotTimeInterval_;
+			WritePlotFile();
+		}
+
+		if (checkpointTimeInterval_ > 0 && next_chk_file_time <= cur_time) {
+			next_chk_file_time += checkpointTimeInterval_;
+			WriteCheckpointFile();
 		}
 
 		if (checkpointInterval_ > 0 && (step + 1) % checkpointInterval_ == 0) {
@@ -787,15 +805,18 @@ template <typename problem_t> void AMRSimulation<problem_t>::ellipticSolveAllLev
 		amrex::Vector<amrex::MultiFab> rhs(finest_level + 1);
 		const int nghost = 1;
 		const int ncomp = 1;
+		amrex::Real rhs_min = std::numeric_limits<amrex::Real>::max();
 		for (int lev = 0; lev <= finest_level; ++lev) {
 			phi[lev].define(grids[lev], dmap[lev], ncomp, nghost);
 			rhs[lev].define(grids[lev], dmap[lev], ncomp, nghost);
 			phi[lev].setVal(0); // set initial guess to zero
 			rhs[lev].setVal(0);
 			fillPoissonRhsAtLevel(rhs[lev], lev);
+			rhs_min = std::min(rhs_min, rhs[lev].min(0));
 		}
 
-		poissonSolver.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs), reltolPoisson_, abstolPoisson_);
+		amrex::Real abstol = abstolPoisson_ * rhs_min;
+		poissonSolver.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs), reltolPoisson_, abstol);
 		if (verbose) {
 			amrex::Print() << "\n";
 		}
@@ -959,8 +980,8 @@ template <typename problem_t> auto AMRSimulation<problem_t>::timeStepWithSubcycl
 			flux_reg_[lev + 1]->Reflux(state_new_cc_[lev]);
 		}
 
-		AverageDownTo(lev); // average lev+1 down to lev
-		FixupState(lev);    // fix any unphysical states created by reflux or averaging
+		AverageDownTo(lev);	       // average lev+1 down to lev
+		FixupState(lev);	       // fix any unphysical states created by reflux or averaging
 
 		fillpatcher_[lev + 1].reset(); // because the data on lev have changed.
 	}
@@ -1014,7 +1035,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::getAmrInterpolater(
 {
 	amrex::MFInterpolater *mapper = nullptr;
 
-	if (amrInterpMethod_ == 0) { // piecewise-constant interpolation
+	if (amrInterpMethod_ == 0) {	    // piecewise-constant interpolation
 		mapper = &amrex::mf_pc_interp;
 	} else if (amrInterpMethod_ == 1) { // slope-limited linear interpolation
 		//  It has the following important properties:

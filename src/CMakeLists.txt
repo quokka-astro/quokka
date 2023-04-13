@@ -15,7 +15,9 @@ endif()
 find_package(HDF5 REQUIRED)
 
 # std::filesystem (required for GCC < 9)
-link_libraries(stdc++fs)
+if (NOT CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
+    link_libraries(stdc++fs)
+endif()
 
 if (CMAKE_BUILD_TYPE STREQUAL "Coverage")
     # only works with gcc!

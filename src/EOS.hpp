@@ -45,7 +45,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEin
 	// return temperature for an ideal gas
 	amrex::Real Tgas = NAN;
 	if constexpr (gamma_ != 1.0) {
-		constexpr amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
+		const amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
 		Tgas = Eint / (rho * c_v);
 	}
 	return Tgas;
@@ -57,7 +57,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromTga
 	// return internal energy density for a gamma-law ideal gas
 	amrex::Real Eint = NAN;
 	if constexpr (gamma_ != 1.0) {
-		constexpr amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
+		const amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
 		Eint = rho * c_v * Tgas;
 	}
 	return Eint;
@@ -69,7 +69,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintTempDer
 	// compute derivative of internal energy w/r/t temperature
 	amrex::Real dEint_dT = NAN;
 	if constexpr (gamma_ != 1.0) {
-		constexpr amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
+		const amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
 		dEint_dT = rho * c_v;
 	}
 	return dEint_dT;

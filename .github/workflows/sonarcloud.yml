@@ -1,6 +1,8 @@
 name: Sonarcloud
 
-on: [push]
+on:
+  push:
+    branches: [ development ]
 
 env:
   # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
@@ -41,7 +43,8 @@ jobs:
     - name: Build
       working-directory: ${{runner.workspace}}/build
       shell: bash
-      run: ${{runner.workspace}}/build-wrapper-linux-x86/build-wrapper-linux-x86-64 --out-dir bw-output cmake --build . --config $BUILD_TYPE
+      # Restrict to 1 build process at a time to avoid OOM kills.
+      run: ${{runner.workspace}}/build-wrapper-linux-x86/build-wrapper-linux-x86-64 --out-dir bw-output cmake --build . --config $BUILD_TYPE --parallel 1
 
     #- name: Run code coverage
     #  working-directory: ${{runner.workspace}}/build
