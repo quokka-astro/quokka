@@ -17,18 +17,18 @@
 #include "test_radhydro_shock.hpp"
 
 struct ShockProblem {
-}; // dummy type to allow compile-type polymorphism via template specialization
+};				  // dummy type to allow compile-type polymorphism via template specialization
 
 constexpr double a_rad = 1.0e-4;  // equal to P_0 in dimensionless units
 constexpr double sigma_a = 1.0e6; // absorption cross section
 constexpr double Mach0 = 3.0;
 
-constexpr double c_s0 = 1.0;		 // adiabatic sound speed
-constexpr double c = 1732.0508075688772; // std::sqrt(3.0*sigma_a) * c_s0; //
-					 // dimensionless speed of light
-constexpr double k_B = (c_s0 * c_s0);	 // required to make temperature and sound speed consistent
+constexpr double c_s0 = 1.0;			       // adiabatic sound speed
+constexpr double c = 1732.0508075688772;	       // std::sqrt(3.0*sigma_a) * c_s0; //
+						       // dimensionless speed of light
+constexpr double k_B = (c_s0 * c_s0);		       // required to make temperature and sound speed consistent
 
-const double kappa = sigma_a * (c_s0 / c); // opacity [cm^-1]
+const double kappa = sigma_a * (c_s0 / c);	       // opacity [cm^-1]
 constexpr double gamma_gas = (5. / 3.);
 constexpr double mu = gamma_gas;		       // mean molecular weight (required s.t. c_s0 == 1)
 constexpr double c_v = k_B / (mu * (gamma_gas - 1.0)); // specific heat
