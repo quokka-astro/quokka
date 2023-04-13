@@ -45,14 +45,13 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 
 			Real chem[NumSpec] = {-1.0};
 			Real inmfracs[NumSpec] = {-1.0};
+			Real insum = 0.0_rt;
 
 			for (int nn = 0; nn < NumSpec; ++nn) {
 				chem[nn] = state(i, j, k, HydroSystem<problem_t>::scalar0_index + nn);
 			}
 
 			// do chemistry using microphysics
-			int nsteps = 1000;
-			// replace below with call to microphysics
 
 			burn_t chemstate;
 
@@ -77,8 +76,6 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 			burner(chemstate, dt);
 
 			// ensure positivity and normalize
-			Real inmfracs[NumSpec] = {-1.0};
-			Real insum = 0.0_rt;
 			for (int nn = 0; nn < NumSpec; ++nn) {
 				chemstate.xn[nn] = amrex::max(chemstate.xn[nn], small_x);
 				inmfracs[nn] = spmasses[nn] * chemstate.xn[nn] / chemstate.rho;
@@ -114,7 +111,7 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 
 			state(i, j, k, HydroSystem<problem_t>::internalEnergy_index) = chemstate.e;
 
-			for (int nn = 0; nn < NumSpec; ++n) {
+			for (int nn = 0; nn < NumSpec; ++nn) {
 				state(i, j, k, HydroSystem<problem_t>::scalar0_index + nn) = inmfracs[nn];
 			}
 		});
