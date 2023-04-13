@@ -122,7 +122,6 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 			}
 		});
 	}
-
 }
 
 } // namespace quokka::chemistry
