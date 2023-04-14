@@ -27,6 +27,7 @@ unit_test.temperature = 1e2
 
 unit_test.small_temp = 1.e1
 unit_test.small_dens = 1.e-60
+uni_test.max_dens_primordialchem = 3e-6
 
 unit_test.primary_species_1 = 1e-4
 unit_test.primary_species_2 = 1e-4
