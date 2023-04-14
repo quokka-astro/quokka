@@ -74,11 +74,11 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 
 			// do the actual integration
 			burner(chemstate, dt);
-#ifdef AMREX_USE_GPU
+
 			if (!chemstate.success) {
 				amrex::Abort("VODE integration was unsuccessful!");
 			}
-#endif
+
 			// ensure positivity and normalize
 			for (int nn = 0; nn < NumSpec; ++nn) {
 				chemstate.xn[nn] = amrex::max(chemstate.xn[nn], small_x);
