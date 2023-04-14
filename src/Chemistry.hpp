@@ -36,7 +36,6 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &state = mf.array(iter);
-		auto const &nsubsteps = nsubstepsMF.array(iter);
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			const Real rho = state(i, j, k, HydroSystem<problem_t>::density_index);
