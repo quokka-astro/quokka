@@ -57,5 +57,4 @@ endif()
 
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/amrex ${QuokkaCode_BINARY_DIR}/amrex)
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/fmt ${QuokkaCode_BINARY_DIR}/fmt)
-add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/Microphysics ${QuokkaCode_BINARY_DIR}/Microphysics)
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/src ${QuokkaCode_BINARY_DIR}/src)
