@@ -53,9 +53,6 @@ template <> struct Physics_Traits<PrimordialChemTest> {
 	static constexpr bool is_mhd_enabled = false;
 };
 
-// constexpr double Tgas0 = 6000.;	   // K
-// constexpr double rho0 = 0.6 * m_H; // g cm^-3
-
 template <> void RadhydroSimulation<PrimordialChemTest>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
 	// set initial conditions
