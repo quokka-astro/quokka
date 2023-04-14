@@ -1,5 +1,5 @@
 if (AMReX_SPACEDIM GREATER_EQUAL 2)
-    add_executable(test_hydro2d_rt ../main.cpp ../CloudyCooling.cpp ../GrackleDataReader.cpp test_hydro2d_rt.cpp ${primordial_chem_sources})
+    add_executable(test_hydro2d_rt ../main.cpp ../CloudyCooling.cpp ../GrackleDataReader.cpp test_hydro2d_rt.cpp)
     if(AMReX_GPU_BACKEND MATCHES "CUDA")
         setup_target_for_cuda_compilation(test_hydro2d_rt)
     endif()

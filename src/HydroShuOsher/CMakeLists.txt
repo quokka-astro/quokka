@@ -1,4 +1,4 @@
-add_executable(test_hydro_shuosher ../main.cpp ../CloudyCooling.cpp ../GrackleDataReader.cpp test_hydro_shuosher.cpp ../fextract.cpp ../interpolate.cpp ${primordial_chem_sources})
+add_executable(test_hydro_shuosher ../main.cpp ../CloudyCooling.cpp ../GrackleDataReader.cpp test_hydro_shuosher.cpp ../fextract.cpp ../interpolate.cpp)
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
     setup_target_for_cuda_compilation(test_hydro_shuosher)
