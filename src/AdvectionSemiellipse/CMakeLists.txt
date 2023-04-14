@@ -5,4 +5,3 @@ if(AMReX_GPU_BACKEND MATCHES "CUDA")
 endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 
 add_test(NAME ScalarAdvectionSemiEllipse COMMAND test_advection_se advection_semiellipse.in WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
-
