@@ -30,9 +30,6 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 {
 	const Real dt = dt_in;
 
-	const auto &ba = mf.boxArray();
-	const auto &dmap = mf.DistributionMap();
-
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &state = mf.array(iter);
@@ -60,7 +57,7 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 
 			// stop the test if we have reached very high densities
 			if (rho > max_dens_primordialchem) {
-				amrex::Abort("Density exceeded 3e-6 g/cm^3!");
+				amrex::Abort("Density exceeded max_dens_primordialchem!");
 			}
 
 			// input the scaled density in burn state
