@@ -62,7 +62,7 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 
 			// stop the test if we have reached very high densities
 			if (rho > 3e-6) {
-				amrex::Abort('Density exceeded 3e-6 g/cm^3!! Abort!');
+				amrex::Abort("Density exceeded 3e-6 g/cm^3!");
 			}
 
 			// input the scaled density in burn state
