@@ -53,6 +53,14 @@ template <> struct Physics_Traits<PrimordialChemTest> {
 	static constexpr bool is_mhd_enabled = false;
 };
 
+template <> void RadhydroSimulation<PrimordialChemTest>::preCalculateInitialConditions()
+{
+	// initialize microphysics routines
+	init_extern_parameters();
+	eos_init(small_temp, small_dens);
+	network_init();
+}
+
 template <> void RadhydroSimulation<PrimordialChemTest>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
 	// set initial conditions
@@ -69,11 +77,6 @@ template <> void RadhydroSimulation<PrimordialChemTest>::setInitialConditionsOnG
 	if constexpr (AMREX_SPACEDIM == 3) {
 		Real const Lz = (prob_hi[2] - prob_lo[2]);
 	}
-
-	init_extern_parameters();
-
-	eos_init(small_temp, small_dens);
-	network_init();
 
 	burn_t state;
 
