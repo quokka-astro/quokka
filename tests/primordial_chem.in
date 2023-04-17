@@ -22,27 +22,28 @@ amr.max_grid_size   = 1
 do_reflux = 0
 do_subcycle = 0
 
-unit_test.enabled = 1
-unit_test.temperature = 1e2
+primordial_chem.enabled = 1
+primordial_chem.temperature = 1e2
 
-unit_test.small_temp = 1.e1
-unit_test.small_dens = 1.e-60
-uni_test.max_dens_primordialchem = 3e-6
+primordial_chem.small_temp = 1.e1
+primordial_chem.small_dens = 1.e-60
+primordial_chem.max_density_allowed = 3e-6
 
-unit_test.primary_species_1 = 1e-4
-unit_test.primary_species_2 = 1e-4
-unit_test.primary_species_3 = 1e0
-unit_test.primary_species_4 = 1e-40
-unit_test.primary_species_5 = 1e-40
-unit_test.primary_species_6 = 1e-40
-unit_test.primary_species_7 = 1e-40
-unit_test.primary_species_8 = 1e-40
-unit_test.primary_species_9 = 1e-6
-unit_test.primary_species_10 = 1e-40
-unit_test.primary_species_11 = 1e-40
-unit_test.primary_species_12 = 1e-40
-unit_test.primary_species_13 = 1e-40
-unit_test.primary_species_14 = 0.0775e0
+primordial_chem.primary_species_1 = 1e-4
+primordial_chem.primary_species_2 = 1e-4
+primordial_chem.primary_species_3 = 1e0
+primordial_chem.primary_species_4 = 1e-40
+primordial_chem.primary_species_5 = 1e-40
+primordial_chem.primary_species_6 = 1e-40
+primordial_chem.primary_species_7 = 1e-40
+primordial_chem.primary_species_8 = 1e-40
+primordial_chem.primary_species_9 = 1e-6
+primordial_chem.primary_species_10 = 1e-40
+primordial_chem.primary_species_11 = 1e-40
+primordial_chem.primary_species_12 = 1e-40
+primordial_chem.primary_species_13 = 1e-40
+primordial_chem.primary_species_14 = 0.0775e0
+
 
 # integrator runtime parameters
 # are we using primordial chemistry? then we use number densities
