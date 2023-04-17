@@ -26,7 +26,7 @@
 
 namespace quokka::chemistry
 {
-template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const Real dt_in)
+template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const Real dt_in, const Real max_density_allowed)
 {
 	const Real dt = dt_in;
 
@@ -56,8 +56,8 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 			}
 
 			// stop the test if we have reached very high densities
-			if (rho > max_dens_primordialchem) {
-				amrex::Abort("Density exceeded max_dens_primordialchem!");
+			if (rho > max_density_allowed) {
+				amrex::Abort("Density exceeded max_density_allowed!");
 			}
 
 			// input the scaled density in burn state
