@@ -1892,7 +1892,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 		amrex::BoxArray ba;
 		ba.readFrom(is);
 		GotoNextLine(is);
-
+        /*Create New BoxArray at Level 0 for optimum load distribution*/
 		if(lev==0){
 			amrex::IntVect fac(2);
 			amrex::IntVect domlo{AMREX_D_DECL(0, 0, 0)};
