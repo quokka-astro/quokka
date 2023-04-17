@@ -611,12 +611,12 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 		}
 
 		if (nscalars_ > 0) {
-				for (int n = 0; n < nscalars_; ++n) {
-					if(state[bx](i, j, k, scalar0_index + n) < 0.0){
-						state[bx](i, j, k, scalar0_index + n) = 0.0;
-					}
+			for (int n = 0; n < nscalars_; ++n) {
+				if (state[bx](i, j, k, scalar0_index + n) < 0.0) {
+					state[bx](i, j, k, scalar0_index + n) = 0.0;
 				}
 			}
+		}
 
 		if (v_abs > speedCeiling) {
 			amrex::Real rescale_factor = speedCeiling / v_abs;
