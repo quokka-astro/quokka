@@ -140,7 +140,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	virtual void computeMaxSignalLocal(int level) = 0;
 	virtual auto computeExtraPhysicsTimestep(int lev) -> amrex::Real = 0;
 	virtual void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle) = 0;
-	virtual void computeBeforeTimestep() = 0;
 	virtual void preCalculateInitialConditions() = 0;
 	virtual void setInitialConditionsOnGrid(quokka::grid grid_elem) = 0;
 	virtual void computeAfterTimestep() = 0;
@@ -679,7 +678,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 		amrex::ParallelDescriptor::Barrier(); // synchronize all MPI ranks
 		computeTimestep();
-		computeBeforeTimestep(); 
 
 		// hyperbolic advance over all levels
 		int lev = 0;	   // coarsest level
@@ -1897,8 +1895,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 
 		if(lev==0){
 			amrex::IntVect fac(2);
-			amrex::IntVect domlo(0,0,0);
-			amrex::IntVect domhi(ba[ba.size()-1].bigEnd(0), ba[ba.size()-1].bigEnd(1), ba[ba.size()-1].bigEnd(2));
+			amrex::IntVect domlo{AMREX_D_DECL(0, 0, 0)};
+			amrex::IntVect domhi{AMREX_D_DECL(ba[ba.size()-1].bigEnd(0), ba[ba.size()-1].bigEnd(1), ba[ba.size()-1].bigEnd(2))};
 			amrex::Box dom(domlo, domhi);
 			amrex::Box dom2 = amrex::refine(amrex::coarsen(dom,2),2);
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -1912,11 +1910,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 			// Boxes in ba have even number of cells in each direction
 			// unless the domain has odd number of cells in that direction.
 			ChopGrids(0, ba_lev0, amrex::ParallelDescriptor::NProcs());
-			amrex::Print() <<"1. Box array size="<< ba.size() <<"\n";
 			ba = ba_lev0;
-			amrex::Print() <<"2.Box array size="<< ba_lev0.size() <<"\n";
-			amrex::Print() <<"3.Box array size="<< ba_lev0.size() <<"\n";
-			amrex::Print() << "fac=" << fac << "\n";
 		}
 
 		// create a distribution mapping
