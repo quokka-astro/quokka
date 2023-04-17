@@ -18,10 +18,12 @@
 #include "AMReX_ParallelContext.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
+#include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
 #include "AMReX_TableData.H"
 
 #include "RadhydroSimulation.hpp"
+#include "SimulationData.hpp"
 #include "hydro_system.hpp"
 #include "radiation_system.hpp"
 #include "test_primordial_chem.hpp"
@@ -53,12 +55,75 @@ template <> struct Physics_Traits<PrimordialChemTest> {
 	static constexpr bool is_mhd_enabled = false;
 };
 
+
+template <> struct SimulationData<PrimordialChemTest> {
+	AMREX_GPU_MANAGED amrex::Real small_temp;
+	AMREX_GPU_MANAGED amrex::Real small_dens;
+	AMREX_GPU_MANAGED amrex::Real temperature;
+	AMREX_GPU_MANAGED amrex::Real primary_species_1;
+	AMREX_GPU_MANAGED amrex::Real primary_species_2;
+	AMREX_GPU_MANAGED amrex::Real primary_species_3;
+	AMREX_GPU_MANAGED amrex::Real primary_species_4;
+	AMREX_GPU_MANAGED amrex::Real primary_species_5;
+	AMREX_GPU_MANAGED amrex::Real primary_species_6;
+	AMREX_GPU_MANAGED amrex::Real primary_species_7;
+	AMREX_GPU_MANAGED amrex::Real primary_species_8;
+	AMREX_GPU_MANAGED amrex::Real primary_species_9;
+	AMREX_GPU_MANAGED amrex::Real primary_species_10;
+	AMREX_GPU_MANAGED amrex::Real primary_species_11;
+	AMREX_GPU_MANAGED amrex::Real primary_species_12;
+	AMREX_GPU_MANAGED amrex::Real primary_species_13;
+	AMREX_GPU_MANAGED amrex::Real primary_species_14;
+};
+
+
 template <> void RadhydroSimulation<PrimordialChemTest>::preCalculateInitialConditions()
 {
 	// initialize microphysics routines
 	init_extern_parameters();
-	eos_init(small_temp, small_dens);
+
+	// parmparse species and temperature
+	amrex::ParmParse pp("primordial_chem");
+	userData_.small_temp = 1e1;
+	pp.query("small_temp", userData_.small_temp);
+
+	userData_.small_dens = 1e-60;
+	pp.query("small_dens", userData_.small_dens);
+
+
+	userData_.primary_species_1 = 1.0e0_rt;
+	userData_.primary_species_2 = 0.0e0_rt;
+	userData_.primary_species_3 = 0.0e0_rt;
+	userData_.primary_species_4 = 0.0e0_rt;
+	userData_.primary_species_5 = 0.0e0_rt;
+	userData_.primary_species_6 = 0.0e0_rt;
+	userData_.primary_species_7 = 0.0e0_rt;
+	userData_.primary_species_8 = 0.0e0_rt;
+	userData_.primary_species_9 = 0.0e0_rt;
+	userData_.primary_species_10 = 0.0e0_rt;
+	userData_.primary_species_11 = 0.0e0_rt;
+	userData_.primary_species_12 = 0.0e0_rt;
+	userData_.primary_species_13 = 0.0e0_rt;
+	userData_.primary_species_14 = 0.0e0_rt;
+
+	pp.query("primary_species_1", userData_.primary_species_1);
+	pp.query("primary_species_2", userData_.primary_species_2);
+	pp.query("primary_species_3", userData_.primary_species_3);
+	pp.query("primary_species_4", userData_.primary_species_4);
+	pp.query("primary_species_5", userData_.primary_species_5);
+	pp.query("primary_species_6", userData_.primary_species_6);
+	pp.query("primary_species_7", userData_.primary_species_7);
+	pp.query("primary_species_8", userData_.primary_species_8);
+	pp.query("primary_species_9", userData_.primary_species_9);
+	pp.query("primary_species_10", userData_.primary_species_10);
+	pp.query("primary_species_11", userData_.primary_species_11);
+	pp.query("primary_species_12", userData_.primary_species_12);
+	pp.query("primary_species_13", userData_.primary_species_13);
+	pp.query("primary_species_14", userData_.primary_species_14);
+
+	eos_init(userData_.small_temp, userData_.small_dens);
 	network_init();
+
 }
 
 template <> void RadhydroSimulation<PrimordialChemTest>::setInitialConditionsOnGrid(quokka::grid grid_elem)
@@ -86,51 +151,51 @@ template <> void RadhydroSimulation<PrimordialChemTest>::setInitialConditionsOnG
 		switch (n) {
 
 			case 1:
-				numdens[n - 1] = primary_species_1;
+				numdens[n - 1] = userData_.primary_species_1;
 				break;
 			case 2:
-				numdens[n - 1] = primary_species_2;
+				numdens[n - 1] = userData_.primary_species_2;
 				break;
 			case 3:
-				numdens[n - 1] = primary_species_3;
+				numdens[n - 1] = userData_.primary_species_3;
 				break;
 			case 4:
-				numdens[n - 1] = primary_species_4;
+				numdens[n - 1] = userData_.primary_species_4;
 				break;
 			case 5:
-				numdens[n - 1] = primary_species_5;
+				numdens[n - 1] = userData_.primary_species_5;
 				break;
 			case 6:
-				numdens[n - 1] = primary_species_6;
+				numdens[n - 1] = userData_.primary_species_6;
 				break;
 			case 7:
-				numdens[n - 1] = primary_species_7;
+				numdens[n - 1] = userData_.primary_species_7;
 				break;
 			case 8:
-				numdens[n - 1] = primary_species_8;
+				numdens[n - 1] = userData_.primary_species_8;
 				break;
 			case 9:
-				numdens[n - 1] = primary_species_9;
+				numdens[n - 1] = userData_.primary_species_9;
 				break;
 			case 10:
-				numdens[n - 1] = primary_species_10;
+				numdens[n - 1] = userData_.primary_species_10;
 				break;
 			case 11:
-				numdens[n - 1] = primary_species_11;
+				numdens[n - 1] = userData_.primary_species_11;
 				break;
 			case 12:
-				numdens[n - 1] = primary_species_12;
+				numdens[n - 1] = userData_.primary_species_12;
 				break;
 			case 13:
-				numdens[n - 1] = primary_species_13;
+				numdens[n - 1] = userData_.primary_species_13;
 				break;
 			case 14:
-				numdens[n - 1] = primary_species_14;
+				numdens[n - 1] = userData_.primary_species_14;
 				break;
 		}
 	}
 
-	state.T = temperature;
+	state.T = userData_.temperature;
 
 	// find the density in g/cm^3
 	Real rhotot = 0.0_rt;
