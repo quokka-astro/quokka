@@ -55,7 +55,6 @@ template <> struct Physics_Traits<PrimordialChemTest> {
 	static constexpr bool is_mhd_enabled = false;
 };
 
-
 template <> struct SimulationData<PrimordialChemTest> {
 	AMREX_GPU_MANAGED amrex::Real small_temp;
 	AMREX_GPU_MANAGED amrex::Real small_dens;
@@ -76,7 +75,6 @@ template <> struct SimulationData<PrimordialChemTest> {
 	AMREX_GPU_MANAGED amrex::Real primary_species_14;
 };
 
-
 template <> void RadhydroSimulation<PrimordialChemTest>::preCalculateInitialConditions()
 {
 	// initialize microphysics routines
@@ -89,7 +87,6 @@ template <> void RadhydroSimulation<PrimordialChemTest>::preCalculateInitialCond
 
 	userData_.small_dens = 1e-60;
 	pp.query("small_dens", userData_.small_dens);
-
 
 	userData_.primary_species_1 = 1.0e0_rt;
 	userData_.primary_species_2 = 0.0e0_rt;
@@ -123,7 +120,6 @@ template <> void RadhydroSimulation<PrimordialChemTest>::preCalculateInitialCond
 
 	eos_init(userData_.small_temp, userData_.small_dens);
 	network_init();
-
 }
 
 template <> void RadhydroSimulation<PrimordialChemTest>::setInitialConditionsOnGrid(quokka::grid grid_elem)
