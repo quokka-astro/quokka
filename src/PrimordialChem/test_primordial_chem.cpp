@@ -89,6 +89,9 @@ template <> void RadhydroSimulation<PrimordialChemTest>::preCalculateInitialCond
 	userData_.small_dens = 1e-60;
 	pp.query("small_dens", userData_.small_dens);
 
+	userData_.temperature = 1e1;
+	pp.query("temperature", userData_.temperature);
+
 	userData_.primary_species_1 = 1.0e0_rt;
 	userData_.primary_species_2 = 0.0e0_rt;
 	userData_.primary_species_3 = 0.0e0_rt;
