@@ -10,6 +10,7 @@
 ///
 
 #include <limits>
+#include <array>
 
 #include "AMReX.H"
 #include "AMReX_BLassert.H"
@@ -37,8 +38,8 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 			const Real rho = state(i, j, k, HydroSystem<problem_t>::density_index);
 			const Real Eint = state(i, j, k, HydroSystem<problem_t>::internalEnergy_index);
 
-			Real chem[NumSpec] = {-1.0};
-			Real inmfracs[NumSpec] = {-1.0};
+			std::array<Real, NumSpec>chem = {-1.0};
+			std::array<Real, NumSpec>inmfracs = {-1.0};
 			Real insum = 0.0_rt;
 
 			for (int nn = 0; nn < NumSpec; ++nn) {
