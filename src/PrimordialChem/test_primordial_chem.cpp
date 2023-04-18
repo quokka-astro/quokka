@@ -6,9 +6,9 @@
 /// \file test_primordial_chem.cpp
 /// \brief Defines a test problem for primordial chemistry (microphysics).
 ///
+#include <array>
 #include <random>
 #include <vector>
-#include <array>
 
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLProfiler.H"
@@ -134,7 +134,7 @@ template <> void RadhydroSimulation<PrimordialChemTest>::setInitialConditionsOnG
 
 	burn_t state;
 
-	std::array<Real, NumSpec>numdens = {-1.0};
+	std::array<Real, NumSpec> numdens = {-1.0};
 
 	for (int n = 1; n <= NumSpec; ++n) {
 		switch (n) {
@@ -197,7 +197,7 @@ template <> void RadhydroSimulation<PrimordialChemTest>::setInitialConditionsOnG
 
 	// normalize -- just in case
 
-	std::array<Real, NumSpec>mfracs = {-1.0};
+	std::array<Real, NumSpec> mfracs = {-1.0};
 	Real msum = 0.0_rt;
 	for (int n = 0; n < NumSpec; ++n) {
 		mfracs[n] = state.xn[n] * spmasses[n] / rhotot;
