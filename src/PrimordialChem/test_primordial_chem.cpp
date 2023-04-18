@@ -181,7 +181,7 @@ template <> void RadhydroSimulation<PrimordialChemTest>::setInitialConditionsOnG
 				numdens[n - 1] = userData_.primary_species_14;
 				break;
 			case default:
-				amrex::Abort("Landed in default label while filling in mass fractions")
+				amrex::Abort("Landed in default label while filling in mass fractions");
 				break;
 		}
 	}
