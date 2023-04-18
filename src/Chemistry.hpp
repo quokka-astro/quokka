@@ -63,7 +63,7 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 			// input density and eint in burn state
 			// Microphysics needs specific eint
 			chemstate.rho = rho;
-			chemstate.e = Eint/rho;
+			chemstate.e = Eint / rho;
 
 			// call the EOS to set initial internal energy e
 			eos(eos_input_re, chemstate);
@@ -112,7 +112,7 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 
 			// get dEint
 			// Quokka uses rho*eint
-			const Real dEint = (chemstate.e*chemstate.rho) - Eint;
+			const Real dEint = (chemstate.e * chemstate.rho) - Eint;
 			state(i, j, k, HydroSystem<problem_t>::internalEnergy_index) += dEint;
 			state(i, j, k, HydroSystem<problem_t>::energy_index) += dEint;
 
