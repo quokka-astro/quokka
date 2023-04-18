@@ -131,14 +131,6 @@ template <> void RadhydroSimulation<PrimordialChemTest>::setInitialConditionsOnG
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	Real const Lx = (prob_hi[0] - prob_lo[0]);
-	if constexpr (AMREX_SPACEDIM >= 2) {
-		Real const Ly = (prob_hi[1] - prob_lo[1]);
-	}
-	if constexpr (AMREX_SPACEDIM == 3) {
-		Real const Lz = (prob_hi[2] - prob_lo[2]);
-	}
-
 	burn_t state;
 
 	Real numdens[NumSpec] = {-1.0};
