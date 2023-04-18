@@ -214,7 +214,6 @@ template <> void RadhydroSimulation<PrimordialChemTest>::setInitialConditionsOnG
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-
 		Real rho = state.rho; // g cm^-3
 
 		Real xmom = 0;
