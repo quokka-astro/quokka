@@ -16,11 +16,13 @@ steps:
     cmakeArgs: '.. -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DAMReX_SPACEDIM=3 -DAMReX_GPU_BACKEND=CUDA -DQUOKKA_PYTHON=OFF -G Ninja'
 
 - task: CMake@1
+  timeoutInMinutes: 120 # how long to run the job before automatically cancelling
   displayName: 'Build Quokka'
   inputs:
     cmakeArgs: '--build . --parallel 3'
 
 - task: CMake@1
+  timeoutInMinutes: 120 # how long to run the job before automatically cancelling
   displayName: 'Run CTest'
   inputs:
     cmakeArgs: '-E chdir . ctest -E "MatterEnergyExchange*" -T Test --output-on-failure'
