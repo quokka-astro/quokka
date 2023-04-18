@@ -109,7 +109,10 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 			// get the updated Eint
 			eos(eos_input_rt, chemstate);
 
-			state(i, j, k, HydroSystem<problem_t>::internalEnergy_index) = chemstate.e;
+			// get dEint
+			const Real dEint = chemstate.e - Eint;
+			state(i, j, k, HydroSystem<problem_t>::internalEnergy_index) += dEint;
+			state(i, j, k, HydroSystem<problem_t>::energy_index) += dEint;
 
 			for (int nn = 0; nn < NumSpec; ++nn) {
 				state(i, j, k, HydroSystem<problem_t>::scalar0_index + nn) = inmfracs[nn];
