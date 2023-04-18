@@ -224,7 +224,8 @@ template <> void RadhydroSimulation<PrimordialChemTest>::setInitialConditionsOnG
 		Real xmom = 0;
 		Real ymom = 0;
 		Real zmom = 0;
-		Real Eint = state.e;
+		// Microphysics calculates specific internal energy so multiply it by rho for Quokka
+		Real Eint = rho*state.e;
 
 		Real const Egas = RadSystem<PrimordialChemTest>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
 

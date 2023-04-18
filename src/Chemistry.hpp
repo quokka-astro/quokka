@@ -60,9 +60,10 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 				amrex::Abort("Density exceeded max_density_allowed!");
 			}
 
-			// input the scaled density in burn state
+			// input density and eint in burn state
+			// Microphysics needs specific eint
 			chemstate.rho = rho;
-			chemstate.e = Eint;
+			chemstate.e = Eint/rho;
 
 			// call the EOS to set initial internal energy e
 			eos(eos_input_re, chemstate);
@@ -106,11 +107,12 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 				chemstate.xn[nn] = inmfracs[nn] * chemstate.rho / spmasses[nn];
 			}
 
-			// get the updated Eint
+			// get the updated specific eint
 			eos(eos_input_rt, chemstate);
 
 			// get dEint
-			const Real dEint = chemstate.e - Eint;
+			// Quokka uses rho*eint
+			const Real dEint = (chemstate.e*chemstate.rho) - Eint;
 			state(i, j, k, HydroSystem<problem_t>::internalEnergy_index) += dEint;
 			state(i, j, k, HydroSystem<problem_t>::energy_index) += dEint;
 
