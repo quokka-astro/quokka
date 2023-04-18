@@ -19,7 +19,7 @@ steps:
   timeoutInMinutes: 120 # how long to run the job before automatically cancelling
   displayName: 'Build Quokka'
   inputs:
-    cmakeArgs: '--build . --parallel 3'
+    cmakeArgs: '--build . --parallel 2'
 
 - task: CMake@1
   timeoutInMinutes: 120 # how long to run the job before automatically cancelling
