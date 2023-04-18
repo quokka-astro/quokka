@@ -36,7 +36,11 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			const Real rho = state(i, j, k, HydroSystem<problem_t>::density_index);
-			const Real Eint = state(i, j, k, HydroSystem<problem_t>::internalEnergy_index);
+			const Real xmom = state(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
+			const Real ymom = state(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
+			const Real zmom = state(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
+			const Real Ener = state(i, j, k, HydroSystem<problem_t>::energy_index);
+			const Real Eint = RadSystem<problem_t>::ComputeEintFromEgas(rho, xmom, ymom, zmom, Ener);
 
 			std::array<Real, NumSpec> chem = {-1.0};
 			std::array<Real, NumSpec> inmfracs = {-1.0};
