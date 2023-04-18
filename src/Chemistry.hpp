@@ -5,8 +5,8 @@
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file CloudyCooling.hpp
-/// \brief Defines methods for interpolating cooling rates from Cloudy tables.
+/// \file Chemistry.hpp
+/// \brief Defines methods for integrating primordial chemical network using Microphysics
 ///
 
 #include <limits>
@@ -26,9 +26,8 @@
 
 namespace quokka::chemistry
 {
-template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const Real dt_in, const Real max_density_allowed)
+template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const Real dt, const Real max_density_allowed)
 {
-	const Real dt = dt_in;
 
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();

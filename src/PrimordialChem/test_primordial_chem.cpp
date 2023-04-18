@@ -56,23 +56,23 @@ template <> struct Physics_Traits<PrimordialChemTest> {
 };
 
 template <> struct SimulationData<PrimordialChemTest> {
-	AMREX_GPU_MANAGED amrex::Real small_temp;
-	AMREX_GPU_MANAGED amrex::Real small_dens;
-	AMREX_GPU_MANAGED amrex::Real temperature;
-	AMREX_GPU_MANAGED amrex::Real primary_species_1;
-	AMREX_GPU_MANAGED amrex::Real primary_species_2;
-	AMREX_GPU_MANAGED amrex::Real primary_species_3;
-	AMREX_GPU_MANAGED amrex::Real primary_species_4;
-	AMREX_GPU_MANAGED amrex::Real primary_species_5;
-	AMREX_GPU_MANAGED amrex::Real primary_species_6;
-	AMREX_GPU_MANAGED amrex::Real primary_species_7;
-	AMREX_GPU_MANAGED amrex::Real primary_species_8;
-	AMREX_GPU_MANAGED amrex::Real primary_species_9;
-	AMREX_GPU_MANAGED amrex::Real primary_species_10;
-	AMREX_GPU_MANAGED amrex::Real primary_species_11;
-	AMREX_GPU_MANAGED amrex::Real primary_species_12;
-	AMREX_GPU_MANAGED amrex::Real primary_species_13;
-	AMREX_GPU_MANAGED amrex::Real primary_species_14;
+	amrex::Real small_temp;
+	amrex::Real small_dens;
+	amrex::Real temperature;
+	amrex::Real primary_species_1;
+	amrex::Real primary_species_2;
+	amrex::Real primary_species_3;
+	amrex::Real primary_species_4;
+	amrex::Real primary_species_5;
+	amrex::Real primary_species_6;
+	amrex::Real primary_species_7;
+	amrex::Real primary_species_8;
+	amrex::Real primary_species_9;
+	amrex::Real primary_species_10;
+	amrex::Real primary_species_11;
+	amrex::Real primary_species_12;
+	amrex::Real primary_species_13;
+	amrex::Real primary_species_14;
 };
 
 template <> void RadhydroSimulation<PrimordialChemTest>::preCalculateInitialConditions()
@@ -214,13 +214,6 @@ template <> void RadhydroSimulation<PrimordialChemTest>::setInitialConditionsOnG
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		Real const x = prob_lo[0] + (i + static_cast<Real>(0.5)) * dx[0];
-		if constexpr (AMREX_SPACEDIM >= 2) {
-			Real const y = prob_lo[1] + (j + static_cast<Real>(0.5)) * dx[1];
-		}
-		if constexpr (AMREX_SPACEDIM == 3) {
-			Real const z = prob_lo[2] + (k + static_cast<Real>(0.5)) * dx[2];
-		}
 
 		Real rho = state.rho; // g cm^-3
 
