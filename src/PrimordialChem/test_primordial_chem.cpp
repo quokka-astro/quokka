@@ -181,6 +181,10 @@ template <> void RadhydroSimulation<PrimordialChemTest>::setInitialConditionsOnG
 			case 14:
 				numdens[n - 1] = userData_.primary_species_14;
 				break;
+
+			default:
+				amrex::Abort("Cannot initialize number density for chem specie");
+				break;
 		}
 	}
 
