@@ -8,7 +8,7 @@ trigger:
 
 jobs:
 - job: BuildAndTest
-  timeoutInMinutes: 120 # how long to run the job before automatically cancelling
+  timeoutInMinutes: 180 # how long to run the job before automatically cancelling
   pool: oracle-cloud
   steps:
   - task: CMake@1
