@@ -68,6 +68,4 @@ add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/fmt ${QuokkaCode_BINARY_DIR}/fm
 #they do not carry forward from Microphysics
 add_definitions(-DNAUX_NET -DSTRANG)
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/Microphysics ${QuokkaCode_BINARY_DIR}/Microphysics)
-include_directories(${primordial_chem_dirs})
-
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/src ${QuokkaCode_BINARY_DIR}/src)
