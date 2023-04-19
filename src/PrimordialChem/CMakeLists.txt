@@ -1,4 +1,3 @@
-set(PRIMORDIAL_CHEM true)
 add_executable(test_primordial_chem test_primordial_chem.cpp ../main.cpp ../CloudyCooling.cpp ../GrackleDataReader.cpp ../Chemistry.cpp ${primordial_chem_sources})
 target_compile_definitions(test_primordial_chem PUBLIC PRIMORDIAL_CHEM) #this will add #define PRIMORDIAL_CHEM
 
