@@ -21,7 +21,6 @@
 #include "radiation_system.hpp"
 
 #include "burn_type.H"
-#include "burner.H"
 #include "eos.H"
 #include "extern_parameters.H"
 
@@ -73,7 +72,9 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 			eos(eos_input_re, chemstate);
 
 			// do the actual integration
-			burner(chemstate, dt);
+			// do it in .cpp so that it is not built at compile time for all tests
+			// which would otherwise slow down compilation due to the large RHS file
+			void chemburner(burn_t chemstate, const Real dt);
 
 			if (!chemstate.success) {
 				amrex::Abort("VODE integration was unsuccessful!");

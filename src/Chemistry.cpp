@@ -8,8 +8,16 @@
 ///
 
 #include "Chemistry.hpp"
+#include "burner.H"
+#include "burn_type.H"
 
 namespace quokka::chemistry
 {
+
+void chemburner(burn_t chemstate, const Real dt)
+{
+
+	return burner(chemstate, dt);
+}
 
 } // namespace quokka::chemistry
