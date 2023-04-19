@@ -11,11 +11,6 @@ if(Python_FOUND)
     link_libraries(${Python_LIBRARIES})
 endif()
 
-#see if primordial_chem needs to be compiled
-if(PRIMORDIAL_CHEM)
-    add_compile_definitions(PRIMORDIAL_CHEM)
-endif()
-
 # HDF5
 find_package(HDF5 REQUIRED)
 
