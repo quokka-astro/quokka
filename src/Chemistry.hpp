@@ -74,7 +74,7 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 			// do the actual integration
 			// do it in .cpp so that it is not built at compile time for all tests
 			// which would otherwise slow down compilation due to the large RHS file
-			void chemburner(burn_t chemstate, Real dt);
+			void chemburner(burn_t chemstate, const Real dt);
 
 			if (!chemstate.success) {
 				amrex::Abort("VODE integration was unsuccessful!");
