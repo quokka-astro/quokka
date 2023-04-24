@@ -116,7 +116,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	int abortOnFofcFailure_ = 1;		// 0 == keep going, 1 == abort hydro advance if FOFC fails
 	amrex::Real artificialViscosityK_ = 0.; // artificial viscosity coefficient (default == None)
 
-	amrex::Long radiationCellUpdates_ = 0;	// total number of radiation cell-updates
+	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
 
 	// member functions
 	explicit RadhydroSimulation(amrex::Vector<amrex::BCRec> &BCs_cc, amrex::Vector<amrex::BCRec> &BCs_fc) : AMRSimulation<problem_t>(BCs_cc, BCs_fc)
@@ -1017,7 +1017,7 @@ void RadhydroSimulation<problem_t>::replaceFluxes(std::array<amrex::MultiFab, AM
 				// replace fluxes with first-order ones at faces of cell (i,j,k)
 				flux_arrs[bx](i, j, k, n) = FOflux_arrs[bx](i, j, k, n);
 
-				if (idim == 0) {	// x-dir fluxes
+				if (idim == 0) { // x-dir fluxes
 					flux_arrs[bx](i + 1, j, k, n) = FOflux_arrs[bx](i + 1, j, k, n);
 				} else if (idim == 1) { // y-dir fluxes
 					flux_arrs[bx](i, j + 1, k, n) = FOflux_arrs[bx](i, j + 1, k, n);
