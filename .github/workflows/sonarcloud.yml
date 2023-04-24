@@ -17,7 +17,8 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
+          submodules: true
+          fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of sonarcloud analysis
           
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install python3-dev python3-numpy python3-matplotlib libopenmpi-dev libhdf5-mpi-dev
