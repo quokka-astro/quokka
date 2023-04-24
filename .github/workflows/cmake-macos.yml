@@ -13,7 +13,7 @@ env:
 
 jobs:
   build:
-    runs-on: macos-13-xl
+    runs-on: macos-13
 
     steps:
     - uses: actions/checkout@v3
