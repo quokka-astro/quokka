@@ -17,4 +17,4 @@
 auto main(int argc, char **argv) -> int;
 auto problem_main() -> int; // defined in problem generator
 
-#endif			    // MAIN_HPP_
+#endif // MAIN_HPP_

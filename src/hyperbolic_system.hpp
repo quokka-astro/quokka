@@ -281,7 +281,7 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(amrex::MultiFab const &q_
 
 		const double qa = dq_plus * dq_minus; // interface extrema
 
-		if (qa <= 0.0) {		      // local extremum
+		if (qa <= 0.0) { // local extremum
 
 			// Causes subtle, but very weird, oscillations in the Shu-Osher test
 			// problem. However, it is necessary to get a reasonable solution
