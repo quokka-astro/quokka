@@ -26,6 +26,9 @@
 
 namespace quokka::chemistry
 {
+
+void chemburner(burn_t &chemstate, const Real dt);
+
 template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const Real dt, const Real max_density_allowed)
 {
 
