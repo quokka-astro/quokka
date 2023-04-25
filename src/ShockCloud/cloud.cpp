@@ -58,11 +58,11 @@ template <> struct SimulationData<ShockCloud> {
 	std::unique_ptr<amrex::TableData<Real, 3>> table_data;
 };
 
-constexpr Real Tgas0 = 1.0e7;					  // K
-constexpr Real nH0 = 1.0e-4;					  // cm^-3
-constexpr Real nH1 = 1.0e-1;					  // cm^-3
-constexpr Real R_cloud = 5.0 * 3.086e18;			  // cm [5 pc]
-constexpr Real M0 = 2.0;					  // Mach number of shock
+constexpr Real Tgas0 = 1.0e7;		 // K
+constexpr Real nH0 = 1.0e-4;		 // cm^-3
+constexpr Real nH1 = 1.0e-1;		 // cm^-3
+constexpr Real R_cloud = 5.0 * 3.086e18; // cm [5 pc]
+constexpr Real M0 = 2.0;		 // Mach number of shock
 
 constexpr Real P0 = nH0 * Tgas0 * quokka::boltzmann_constant_cgs; // erg cm^-3
 constexpr Real rho0 = nH0 * m_H;				  // g cm^-3
@@ -147,7 +147,7 @@ template <> void RadhydroSimulation<ShockCloud>::setInitialConditionsOnGrid(quok
 		}
 		AMREX_ALWAYS_ASSERT(delta_rho > -1.0);
 
-		Real rho = rho0 * (1.0 + delta_rho);	// background density
+		Real rho = rho0 * (1.0 + delta_rho); // background density
 		if (R < R_cloud) {
 			rho = rho1 * (1.0 + delta_rho); // cloud density
 		}
