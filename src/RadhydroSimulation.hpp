@@ -96,7 +96,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 
 	int enableCooling_ = 0;
 	int enableChemistry_ = 0;
-	Real max_density_allowed = NAN;
+	Real max_density_allowed = std::numeric_limits<amrex::Real>::max();
 	quokka::cooling::cloudy_tables cloudyTables_;
 	std::string coolingTableFilename_{};
 
