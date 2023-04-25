@@ -34,9 +34,9 @@ namespace quokka::cooling
 
 constexpr double cloudy_H_mass_fraction = 1. / (1. + 0.1 * 3.971);
 constexpr double X = cloudy_H_mass_fraction;
-constexpr double Z = 0.02;			    // metal fraction by mass
+constexpr double Z = 0.02; // metal fraction by mass
 constexpr double Y = 1. - X - Z;
-constexpr double mean_metals_A = 16.;		    // mean atomic weight of metals
+constexpr double mean_metals_A = 16.; // mean atomic weight of metals
 
 constexpr double sigma_T = 6.6524e-25;		    // Thomson cross section (cm^2)
 constexpr double electron_mass_cgs = 9.1093897e-28; // electron mass (g)
@@ -229,9 +229,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto user_rhs(Real /*t*/, quokka::valar
 		const Real T = ComputeTgasFromEgas(rho, Eint, gamma, tables);
 		if (!std::isnan(T)) { // temp iteration succeeded
 			y_rhs[0] = cloudy_cooling_function(rho, T, tables);
-		} else {	      // temp iteration failed
+		} else { // temp iteration failed
 			y_rhs[0] = NAN;
-			return 1;     // failed
+			return 1; // failed
 		}
 	}
 
