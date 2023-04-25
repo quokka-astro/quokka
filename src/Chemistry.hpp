@@ -27,7 +27,7 @@
 namespace quokka::chemistry
 {
 
-void chemburner(burn_t &chemstate, const Real dt);
+AMREX_GPU_DEVICE void chemburner(burn_t &chemstate, const Real dt);
 
 template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const Real dt, const Real max_density_allowed)
 {
@@ -77,7 +77,7 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 			// do the actual integration
 			// do it in .cpp so that it is not built at compile time for all tests
 			// which would otherwise slow down compilation due to the large RHS file
-			chemburner(chemstate, dt);
+			AMREX_GPU_DEVICE chemburner(chemstate, dt);
 
 			if (!chemstate.success) {
 				amrex::Abort("VODE integration was unsuccessful!");
