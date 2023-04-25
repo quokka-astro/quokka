@@ -30,31 +30,31 @@ constexpr double m_H = 1.6726231e-24; // mass of hydrogen atom [g]
 // constexpr double P0 = 1.0e-4;	// equal to P_0 in dimensionless units
 // constexpr double sigma_a = 1.0e6;	// absorption cross section
 // constexpr double Mach0 = 3.0;
-constexpr double c_s0 = 1.73e7;			       // adiabatic sound speed [cm s^-1]
+constexpr double c_s0 = 1.73e7; // adiabatic sound speed [cm s^-1]
 
-constexpr double kappa = 577.0;			       // "opacity" == rho*kappa [cm^-1] (!!)
+constexpr double kappa = 577.0; // "opacity" == rho*kappa [cm^-1] (!!)
 constexpr double gamma_gas = (5. / 3.);
 constexpr double mu = m_H;			       // mean molecular weight [grams]
 constexpr double c_v = k_B / (mu * (gamma_gas - 1.0)); // specific heat [erg g^-1 K^-1]
 
-constexpr double T0 = 2.18e6;			       // K
-constexpr double rho0 = 5.69;			       // g cm^-3
-constexpr double v0 = 5.19e7;			       // cm s^-1
+constexpr double T0 = 2.18e6; // K
+constexpr double rho0 = 5.69; // g cm^-3
+constexpr double v0 = 5.19e7; // cm s^-1
 
-constexpr double T1 = 7.98e6;			       // K [7.98297e6]
-constexpr double rho1 = 17.1;			       // g cm^-3 [17.08233]
-constexpr double v1 = 1.73e7;			       // cm s^-1 [1.72875e7]
+constexpr double T1 = 7.98e6; // K [7.98297e6]
+constexpr double rho1 = 17.1; // g cm^-3 [17.08233]
+constexpr double v1 = 1.73e7; // cm s^-1 [1.72875e7]
 
-constexpr double chat = 10.0 * (v0 + c_s0);	       // reduced speed of light
+constexpr double chat = 10.0 * (v0 + c_s0); // reduced speed of light
 
-constexpr double Erad0 = a_rad * (T0 * T0 * T0 * T0);  // erg cm^-3
-constexpr double Egas0 = rho0 * c_v * T0;	       // erg cm^-3
-constexpr double Erad1 = a_rad * (T1 * T1 * T1 * T1);  // erg cm^-3
-constexpr double Egas1 = rho1 * c_v * T1;	       // erg cm^-3
+constexpr double Erad0 = a_rad * (T0 * T0 * T0 * T0); // erg cm^-3
+constexpr double Egas0 = rho0 * c_v * T0;	      // erg cm^-3
+constexpr double Erad1 = a_rad * (T1 * T1 * T1 * T1); // erg cm^-3
+constexpr double Egas1 = rho1 * c_v * T1;	      // erg cm^-3
 
-constexpr double shock_position = 0.0130;	       // 0.0132; // cm (shock position drifts to the right slightly during the simulation, so
-						       // we initialize slightly to the left...)
-constexpr double Lx = 0.01575;			       // cm
+constexpr double shock_position = 0.0130; // 0.0132; // cm (shock position drifts to the right slightly during the simulation, so
+					  // we initialize slightly to the left...)
+constexpr double Lx = 0.01575;		  // cm
 
 template <> struct RadSystem_Traits<ShockProblem> {
 	static constexpr double c_light = c;
