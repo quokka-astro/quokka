@@ -130,8 +130,8 @@ template <> void RadhydroSimulation<PrimordialChemTest>::setInitialConditionsOnG
 {
 	// set initial conditions
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_elem.prob_hi_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_lo = grid_elem.prob_lo_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_hi = grid_elem.prob_hi_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
@@ -222,13 +222,13 @@ template <> void RadhydroSimulation<PrimordialChemTest>::setInitialConditionsOnG
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		Real rho = state.rho; // g cm^-3
+		Real const rho = state.rho; // g cm^-3
 
-		Real xmom = 0;
-		Real ymom = 0;
-		Real zmom = 0;
+		Real const xmom = 0;
+		Real const ymom = 0;
+		Real const zmom = 0;
 		// Microphysics calculates specific internal energy so multiply it by rho for Quokka
-		Real Eint = rho * state.e;
+		Real const Eint = rho * state.e;
 
 		Real const Egas = RadSystem<PrimordialChemTest>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
 
