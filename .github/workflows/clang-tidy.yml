@@ -3,6 +3,10 @@ name: clang-tidy-review
 # You can be more specific, but it currently only works on pull requests
 on: [pull_request]
 
+concurrency:
+  group: ${{ github.ref }}-${{ github.head_ref }}-clang-tidy
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -13,7 +17,7 @@ jobs:
         submodules: true
         fetch-depth: 0
 
-    - uses: ZedThree/clang-tidy-review@v0.12.2
+    - uses: ZedThree/clang-tidy-review@v0.13.0
       id: review
       with:
         config_file: src/.clang-tidy
@@ -23,7 +27,7 @@ jobs:
         split_workflow: true
 
     # Uploads an artefact containing clang_fixes.json
-    - uses: ZedThree/clang-tidy-review/upload@v0.12.2
+    - uses: ZedThree/clang-tidy-review/upload@v0.13.0
 
     # If there are any comments, fail the check
     - if: steps.review.outputs.total_comments > 0

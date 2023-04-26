@@ -34,8 +34,8 @@ constexpr double T_hohlraum = 500. / kelvin_to_eV;	 // K [== 500 eV]
 constexpr double T_initial = 50. / kelvin_to_eV;	 // K [== 50 eV]
 constexpr double c_v = (1.0e15 * 1.0e-6 * kelvin_to_eV); // erg g^-1 K^-1
 
-constexpr double a_rad = 7.5646e-15;			 // erg cm^-3 K^-4
-constexpr double c = 2.99792458e10;			 // cm s^-1
+constexpr double a_rad = 7.5646e-15; // erg cm^-3 K^-4
+constexpr double c = 2.99792458e10;  // cm s^-1
 
 template <> struct quokka::EOS_Traits<TophatProblem> {
 	static constexpr double mean_molecular_weight = quokka::hydrogen_mass_cgs;
@@ -268,7 +268,7 @@ auto problem_main() -> int
 		BCs_cc[n].setLo(0, amrex::BCType::ext_dir);  // left x1 -- Marshak
 		BCs_cc[n].setHi(0, amrex::BCType::foextrap); // right x1 -- extrapolate
 		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
-			if (isNormalComp(n, i)) {	     // reflect lower
+			if (isNormalComp(n, i)) { // reflect lower
 				BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);
 			} else {
 				BCs_cc[n].setLo(i, amrex::BCType::reflect_even);

@@ -7,13 +7,17 @@ on:
     # The branches below must be a subset of the branches above
     branches: [ development ]
 
+concurrency:
+  group: ${{ github.ref }}-${{ github.head_ref }}-cmake-macos
+  cancel-in-progress: true
+
 env:
   # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
   BUILD_TYPE: Release
 
 jobs:
   build:
-    runs-on: macos-12
+    runs-on: macos-13
 
     steps:
     - uses: actions/checkout@v3
@@ -58,7 +62,7 @@ jobs:
 
     - name: Upload test output
       if: always()
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         name: test-results
         path: ${{github.workspace}}/tests
