@@ -1130,6 +1130,21 @@ auto RadhydroSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &co
 
 	// ensure flux of chemical species is conserved
 	if (enableChemistry_ == 1) {
+		int nscalars = HydroSystem<problem_t>::nscalars_;
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			Real leftSum = 0;
+			Real rightSum = 0;
+			for (int n = 0; n < nscalars; ++n) {
+				leftSum += leftState[idim].scalar[n];
+				rightSum += rightState[idim].scalar[n];
+			}
+
+			for (int n = 0; n < nscalars; ++n) {
+				leftState[idim].scalar[n] /= leftSum;
+				rightState[idim].scalar[n] /= rightSum;
+			}
+
+		}
 	}
 
 	// synchronization point to prevent MultiFabs from going out of scope
@@ -1198,6 +1213,20 @@ auto RadhydroSimulation<problem_t>::computeFOHydroFluxes(amrex::MultiFab const &
 
 	// ensure flux of chemical species is conserved
 	if (enableChemistry_ == 1) {
+		int nscalars = HydroSystem<problem_t>::nscalars_;
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			Real leftSum = 0;
+			Real rightSum = 0;
+			for (int n = 0; n < nscalars; ++n) {
+				leftSum += leftState[idim].scalar[n];
+				rightSum += rightState[idim].scalar[n];
+			}
+
+			for (int n = 0; n < nscalars; ++n) {
+				leftState[idim].scalar[n] /= leftSum;
+				rightState[idim].scalar[n] /= rightSum;
+			}
+		}
 	}
 
 	// synchronization point to prevent MultiFabs from going out of scope
