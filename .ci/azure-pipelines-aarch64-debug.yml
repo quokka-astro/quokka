@@ -6,6 +6,12 @@
 trigger:
 - development
 
+pr:
+  autoCancel: true
+  branches:
+    include:
+    - development
+
 jobs:
 - job: BuildAndTest
   timeoutInMinutes: 180 # how long to run the job before automatically cancelling
