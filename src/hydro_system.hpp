@@ -924,14 +924,18 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		quokka::valarray<double, nvar_> U_L = {sL.rho, sL.rho * sL.u, sL.rho * sL.v, sL.rho * sL.w, sL.E, sL.Eint};
 		quokka::valarray<double, nvar_> U_R = {sR.rho, sR.rho * sR.u, sR.rho * sR.v, sR.rho * sR.w, sR.E, sR.Eint};
 
+#ifdef PRIMORDIAL_CHEM
 		amrex::Real fluxSum_U_L = 0;
 		amrex::Real fluxSum_U_R = 0;
+#endif
 		for (int n = 0; n < nscalars_; ++n) {
 			const int nstart = nvar_ - nscalars_;
 			U_L[nstart + n] = sL.scalar[n];
 			U_R[nstart + n] = sR.scalar[n];
+#ifdef PRIMORDIAL_CHEM
 			fluxSum_U_L += U_L[nstart + n];
 			fluxSum_U_R += U_R[nstart + n];
+#endif
 		}
 		F = F + viscosity * (U_L - U_R);
 
@@ -950,6 +954,7 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		const double v_norm = (F[density_index] >= 0.) ? (F[density_index] / rho_R) : (F[density_index] / rho_L);
 		x1FaceVel(i, j, k) = v_norm;
 
+#ifdef PRIMORDIAL_CHEM
 		// use the same logic aas above to scale and conserve specie fluxes
 		if (F[density_index] >= 0.) {
 			for (int n = 0; n < nscalars_; ++n) {
@@ -963,6 +968,7 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 				F[nstart + n] = U_L[nstart + n]/fluxSum_U_L;
 			}
 		}
+#endif
 
 		// copy all flux components to the flux array
 		for (int nc = 0; nc < nvar_; ++nc) {
