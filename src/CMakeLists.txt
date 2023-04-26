@@ -79,6 +79,7 @@ include_directories(${fmt_INCLUDE_DIRS_RET})
 include_directories(${HDF5_INCLUDE_DIRS_RET})
 include_directories(${Boost_INCLUDE_DIRS_RET})
 include_directories(${CMAKE_SOURCE_DIR}/src)
+include_directories(${primordial_chem_dirs} ${CMAKE_BINARY_DIR} "includes/extern_parameters.H" "includes/network_properties.H")
 
 link_libraries(AMReX::amrex)
 link_libraries(fmt::fmt)
@@ -86,9 +87,12 @@ link_libraries(hdf5::hdf5)
 
 include(CTest)
 
+add_subdirectory(PrimordialChem)
+
 add_subdirectory(Advection)
 add_subdirectory(Advection2D)
 add_subdirectory(AdvectionSemiellipse)
+
 
 add_subdirectory(HydroBlast2D)
 add_subdirectory(HydroBlast3D)
@@ -105,7 +109,6 @@ add_subdirectory(HydroQuirk)
 add_subdirectory(HydroHighMach)
 add_subdirectory(RayleighTaylor2D)
 add_subdirectory(RayleighTaylor3D)
-
 add_subdirectory(RadBeam)
 add_subdirectory(RadForce)
 add_subdirectory(RadMarshak)
@@ -130,3 +133,4 @@ add_subdirectory(ShockCloud)
 add_subdirectory(PassiveScalar)
 add_subdirectory(FCQuantities)
 add_subdirectory(SphericalCollapse)
+
