@@ -1128,24 +1128,6 @@ auto RadhydroSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &co
 		     , hydroFluxFunction<FluxDir::X3>(primVar, leftState[2], rightState[2], flux[2], facevel[2], flatCoefs[0], flatCoefs[1], flatCoefs[2],
 						      reconstructRange, nvars);)
 
-	// ensure flux of chemical species is conserved
-	if (enableChemistry_ == 1) {
-		int nscalars = HydroSystem<problem_t>::nscalars_;
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			Real leftSum = 0;
-			Real rightSum = 0;
-			for (int n = 0; n < nscalars; ++n) {
-				leftSum += leftState[idim].scalar[n];
-				rightSum += rightState[idim].scalar[n];
-			}
-
-			for (int n = 0; n < nscalars; ++n) {
-				leftState[idim].scalar[n] /= leftSum;
-				rightState[idim].scalar[n] /= rightSum;
-			}
-		}
-	}
-
 	// synchronization point to prevent MultiFabs from going out of scope
 	amrex::Gpu::streamSynchronizeAll();
 
@@ -1209,24 +1191,6 @@ auto RadhydroSimulation<problem_t>::computeFOHydroFluxes(amrex::MultiFab const &
 	AMREX_D_TERM(hydroFOFluxFunction<FluxDir::X1>(primVar, leftState[0], rightState[0], flux[0], facevel[0], reconstructRange, nvars);
 		     , hydroFOFluxFunction<FluxDir::X2>(primVar, leftState[1], rightState[1], flux[1], facevel[1], reconstructRange, nvars);
 		     , hydroFOFluxFunction<FluxDir::X3>(primVar, leftState[2], rightState[2], flux[2], facevel[2], reconstructRange, nvars);)
-
-	// ensure flux of chemical species is conserved
-	if (enableChemistry_ == 1) {
-		int nscalars = HydroSystem<problem_t>::nscalars_;
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			Real leftSum = 0;
-			Real rightSum = 0;
-			for (int n = 0; n < nscalars; ++n) {
-				leftSum += leftState[idim].scalar[n];
-				rightSum += rightState[idim].scalar[n];
-			}
-
-			for (int n = 0; n < nscalars; ++n) {
-				leftState[idim].scalar[n] /= leftSum;
-				rightState[idim].scalar[n] /= rightSum;
-			}
-		}
-	}
 
 	// synchronization point to prevent MultiFabs from going out of scope
 	amrex::Gpu::streamSynchronizeAll();
