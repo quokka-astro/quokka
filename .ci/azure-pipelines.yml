@@ -6,6 +6,12 @@
 trigger:
 - development
 
+pr:
+  autoCancel: true
+  branches:
+    include:
+    - development
+
 pool: avatar
 
 steps:
