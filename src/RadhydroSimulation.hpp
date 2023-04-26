@@ -1143,7 +1143,6 @@ auto RadhydroSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &co
 				leftState[idim].scalar[n] /= leftSum;
 				rightState[idim].scalar[n] /= rightSum;
 			}
-
 		}
 	}
 
