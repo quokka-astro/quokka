@@ -1897,8 +1897,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 			const amrex::IntVect fac(2);
 			const amrex::IntVect domlo{AMREX_D_DECL(0, 0, 0)};
 			const amrex::IntVect domhi{AMREX_D_DECL(ba[ba.size() - 1].bigEnd(0), ba[ba.size() - 1].bigEnd(1), ba[ba.size() - 1].bigEnd(2))};
-			amrex::Box dom(domlo, domhi);
-			amrex::Box dom2 = amrex::refine(amrex::coarsen(dom, 2), 2);
+			const amrex::Box dom(domlo, domhi);
+			const amrex::Box dom2 = amrex::refine(amrex::coarsen(dom, 2), 2);
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 				if (dom.length(idim) != dom2.length(idim)) {
 					fac[idim] = 1;
