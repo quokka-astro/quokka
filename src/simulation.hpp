@@ -1894,9 +1894,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 
 		/*Create New BoxArray at Level 0 for optimum load distribution*/
 		if (lev == 0) {
-			amrex::IntVect fac(2);
-			amrex::IntVect domlo{AMREX_D_DECL(0, 0, 0)};
-			amrex::IntVect domhi{AMREX_D_DECL(ba[ba.size() - 1].bigEnd(0), ba[ba.size() - 1].bigEnd(1), ba[ba.size() - 1].bigEnd(2))};
+			const amrex::IntVect fac(2);
+			const amrex::IntVect domlo{AMREX_D_DECL(0, 0, 0)};
+			const amrex::IntVect domhi{AMREX_D_DECL(ba[ba.size() - 1].bigEnd(0), ba[ba.size() - 1].bigEnd(1), ba[ba.size() - 1].bigEnd(2))};
 			amrex::Box dom(domlo, domhi);
 			amrex::Box dom2 = amrex::refine(amrex::coarsen(dom, 2), 2);
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
