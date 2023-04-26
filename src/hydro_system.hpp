@@ -959,13 +959,12 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		if (F[density_index] >= 0.) {
 			for (int n = 0; n < nscalars_; ++n) {
 				const int nstart = nvar_ - nscalars_;
-				F[nstart + n] = U_R[nstart + n]/fluxSum_U_R;
+				F[nstart + n] = U_R[nstart + n] / fluxSum_U_R;
 			}
-		}
-		else {
+		} else {
 			for (int n = 0; n < nscalars_; ++n) {
 				const int nstart = nvar_ - nscalars_;
-				F[nstart + n] = U_L[nstart + n]/fluxSum_U_L;
+				F[nstart + n] = U_L[nstart + n] / fluxSum_U_L;
 			}
 		}
 #endif
