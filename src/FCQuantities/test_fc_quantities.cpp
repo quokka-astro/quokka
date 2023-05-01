@@ -127,7 +127,7 @@ void checkMFs(amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const
 			}
 		}
 	}
-	amrex::Print() << "Accumilated error in MFs read from chk-file: " << err << "\n";
+	amrex::Print() << "Accumulated error in MFs read from chk-file: " << err << "\n";
 	amrex::Print() << "\n";
 	AMREX_ALWAYS_ASSERT(std::abs(err) == 0.0);
 }

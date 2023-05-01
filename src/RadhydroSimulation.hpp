@@ -821,7 +821,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 
 template <typename problem_t> auto RadhydroSimulation<problem_t>::isCflViolated(int lev, amrex::Real time, amrex::Real dt_actual) -> bool
 {
-	// check wheter dt_actual would violate CFL condition using the post-update hydro state
+	// check whether dt_actual would violate CFL condition using the post-update hydro state
 
 	// compute max signal speed
 	amrex::Real max_signal = HydroSystem<problem_t>::maxSignalSpeedLocal(state_new_cc_[lev]);
