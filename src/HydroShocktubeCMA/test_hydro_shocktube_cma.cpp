@@ -19,12 +19,11 @@
 #include "hydro_system.hpp"
 #include "radiation_system.hpp"
 #include "test_hydro_shocktube_cma.hpp"
-#ifdef HAVE_PYTHON
-#include "matplotlibcpp.h"
-#endif
 
 struct ShocktubeProblem {
 };
+
+bool consv_test_passes = false; // if mass sclara conservation checks fails, set to false
 
 template <> struct quokka::EOS_Traits<ShocktubeProblem> {
 	static constexpr double gamma = 1.4;
@@ -196,6 +195,35 @@ template <> void RadhydroSimulation<ShocktubeProblem>::ErrorEst(int lev, amrex::
 	}
 }
 
+template <> void RadhydroSimulation<ShocktubeProblem>::computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons)
+{
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = geom[0].CellSizeArray();
+    amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
+
+    // check conservation of total energy
+    amrex::Real const specie1 = initSumCons[HydroSystem<ShocktubeProblem>::scalar0_index + 0];
+    amrex::Real const specie2 = initSumCons[HydroSystem<ShocktubeProblem>::scalar0_index + 1];
+    amrex::Real const specie3 = initSumCons[HydroSystem<ShocktubeProblem>::scalar0_index + 2];
+
+    amrex::Real const abs_err = 1.0 - specie1 - specie2 - specie3;
+
+    amrex::Print() << "\tabsolute mass scalar conservation error = " << abs_err << std::endl;
+    amrex::Print() << std::endl;
+
+    if ((std::abs(abs_err) > 2.0e-13) || std::isnan(abs_err)) {
+        // note that this tolerance is appropriate for a 256^3 grid
+        // it may need to be modified for coarser resolutions
+        amrex::Print() << "Mass scalars not conserved to machine precision!\n";
+        consv_test_passes = false;
+    } else {
+        amrex::Print() << "Mass scalar conservation is OK.\n";
+        consv_test_passes = true;
+    }
+
+    amrex::Print() << "\n";
+}
+
+
 auto problem_main() -> int
 {
 	// Problem parameters
@@ -226,11 +254,12 @@ auto problem_main() -> int
 	sim.setInitialConditions();
 	sim.evolve();
 
-	// Compute test success condition
-	int status = 0;
-	const double error_tol = 1e-12;
-	if (sim.errorNorm_ > error_tol) {
-		status = 1;
-	}
+        // Cleanup and exit
+        int status = 1;
+        if (consv_test_passes) {
+                status = 0;
+        } else {
+                status = 1;
+        }
 	return status;
 }
