@@ -216,7 +216,7 @@ template <> void RadhydroSimulation<ShocktubeProblem>::computeAfterEvolve(amrex:
 		amrex::Print() << "Mass scalars not conserved to machine precision!\n";
 		consv_test_passes = false;
 	} else {
-		amrex::Print() << "Mass scalar conservation is OK.\n";
+		amrex::Print() << "Mass scalar conservation is OK: Delta_eps = " << abs_err << "\n";
 		consv_test_passes = true;
 	}
 
