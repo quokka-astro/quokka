@@ -926,6 +926,7 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		quokka::valarray<double, nvar_> U_R = {sR.rho, sR.rho * sR.u, sR.rho * sR.v, sR.rho * sR.w, sR.E, sR.Eint};
 
 		// conserve flux of mass scalars
+		// based on Plewa and Muller 1999, A&A, 342, 179 (equations 8 and 12)
 		amrex::Real fluxSum_U_L = 0;
 		amrex::Real fluxSum_U_R = 0;
 
