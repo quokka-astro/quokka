@@ -36,7 +36,7 @@ template <> struct Physics_Traits<ShocktubeProblem> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_chemistry_enabled = false;
-	static constexpr int numMassScalars = 3;    // number of mass scalars
+	static constexpr int numMassScalars = 3;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = false;
 	// face-centred
@@ -85,9 +85,8 @@ template <> void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsOnGri
 			specie[0] = 0.1;
 		}
 
-		specie[1] = 0.3 * pow(sin(20*3.14*x),2);
+		specie[1] = 0.3 * pow(sin(20 * 3.14 * x), 2);
 		specie[2] = 1 - specie[0] - specie[1];
-
 
 		AMREX_ASSERT(!std::isnan(vx));
 		AMREX_ASSERT(!std::isnan(rho));
@@ -107,7 +106,6 @@ template <> void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsOnGri
 		for (int nn = 0; nn < 3; ++nn) {
 			state_cc(i, j, k, HydroSystem<ShocktubeProblem>::scalar0_index + nn) = specie[nn];
 		}
-
 	});
 }
 
