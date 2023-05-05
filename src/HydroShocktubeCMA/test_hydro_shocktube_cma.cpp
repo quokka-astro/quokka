@@ -200,7 +200,7 @@ auto problem_main() -> int
 {
 	// Problem parameters
 	const double max_time = 0.4;
-	const int max_timesteps = 1;
+	const int max_timesteps = 8000;
 
 	// Problem initialization
 	const int ncomp_cc = Physics_Indices<ShocktubeProblem>::nvarTotal_cc;
@@ -228,7 +228,7 @@ auto problem_main() -> int
 
 	// Compute test success condition
 	int status = 0;
-	const double error_tol = 0.002;
+	const double error_tol = 1e-12;
 	if (sim.errorNorm_ > error_tol) {
 		status = 1;
 	}
