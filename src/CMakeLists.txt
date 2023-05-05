@@ -87,6 +87,7 @@ link_libraries(hdf5::hdf5)
 
 include(CTest)
 
+add_subdirectory(HydroShocktubeCMA)
 add_subdirectory(PrimordialChem)
 
 add_subdirectory(Advection)
