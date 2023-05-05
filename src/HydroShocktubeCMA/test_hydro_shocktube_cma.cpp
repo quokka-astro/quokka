@@ -164,10 +164,9 @@ AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(const amrex::IntVec
 		consVar(i, j, k, RadSystem<ShocktubeProblem>::x2GasMomentum_index) = 0.;
 		consVar(i, j, k, RadSystem<ShocktubeProblem>::x3GasMomentum_index) = 0.;
 
-                consVar(i, j, k, HydroSystem<ShocktubeProblem>::scalar0_index + 0) = 0.1;
-                consVar(i, j, k, HydroSystem<ShocktubeProblem>::scalar0_index + 1) = 0.3 * pow(sin(20 * 3.14 * 1), 2);
-                consVar(i, j, k, HydroSystem<ShocktubeProblem>::scalar0_index + 2) = 1 - 0.1 - 0.3 * pow(sin(20 * 3.14 * 1), 2);
-
+		consVar(i, j, k, HydroSystem<ShocktubeProblem>::scalar0_index + 0) = 0.1;
+		consVar(i, j, k, HydroSystem<ShocktubeProblem>::scalar0_index + 1) = 0.3 * pow(sin(20 * 3.14 * 1), 2);
+		consVar(i, j, k, HydroSystem<ShocktubeProblem>::scalar0_index + 2) = 1 - 0.1 - 0.3 * pow(sin(20 * 3.14 * 1), 2);
 	}
 }
 
@@ -196,7 +195,6 @@ template <> void RadhydroSimulation<ShocktubeProblem>::ErrorEst(int lev, amrex::
 		});
 	}
 }
-
 
 auto problem_main() -> int
 {
