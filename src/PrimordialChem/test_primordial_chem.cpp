@@ -49,8 +49,9 @@ template <> struct quokka::EOS_Traits<PrimordialChemTest> {
 template <> struct Physics_Traits<PrimordialChemTest> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr bool is_chemistry_enabled = false; // in the future, this could point to microphysics, and set to true
-	static constexpr int numPassiveScalars = NumSpec;   // number of chemical species
+	static constexpr bool is_chemistry_enabled = false;	     // in the future, this could point to microphysics, and set to true
+	static constexpr int numMassScalars = NumSpec;		     // number of chemical species
+	static constexpr int numPassiveScalars = numMassScalars + 0; // we only have mass scalars
 	static constexpr bool is_radiation_enabled = false;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
