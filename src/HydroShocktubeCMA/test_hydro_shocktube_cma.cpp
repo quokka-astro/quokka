@@ -197,36 +197,35 @@ template <> void RadhydroSimulation<ShocktubeProblem>::ErrorEst(int lev, amrex::
 
 template <> void RadhydroSimulation<ShocktubeProblem>::computeAfterTimestep()
 {
-    auto [position, values] = fextract(state_new_cc_[0], Geom(0), 0, 0.5);
-    const int nmscalars = Physics_Traits<ShocktubeProblem>::numMassScalars;
+	auto [position, values] = fextract(state_new_cc_[0], Geom(0), 0, 0.5);
+	const int nmscalars = Physics_Traits<ShocktubeProblem>::numMassScalars;
 
-    if (amrex::ParallelDescriptor::IOProcessor()) {
-        // userData_.t_vec_.push_back(tNew_[0]);
-        amrex::Real specieSum = 0.0;
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		// userData_.t_vec_.push_back(tNew_[0]);
+		amrex::Real specieSum = 0.0;
 
-        for (int n = 0; n < nmscalars; ++n) {
-            specieSum += values.at(HydroSystem<ShocktubeProblem>::scalar0_index + n)[0];
-        }
+		for (int n = 0; n < nmscalars; ++n) {
+			specieSum += values.at(HydroSystem<ShocktubeProblem>::scalar0_index + n)[0];
+		}
 
-        const amrex::Real Delta_eps_t = 1 - specieSum;
-        amrex::Print() << "Mass scalar conservation: Delta_eps_t = " << Delta_eps_t << "\n";
-        // userData_.Trad_vec_.push_back(std::pow(Erad_i / a_rad, 1. / 4.));
-        // userData_.Tgas_vec_.push_back(quokka::EOS<CouplingProblem>::ComputeTgasFromEint(rho, Egas_i));
-    }
+		const amrex::Real Delta_eps_t = 1 - specieSum;
+		amrex::Print() << "Mass scalar conservation: Delta_eps_t = " << Delta_eps_t << "\n";
+		// userData_.Trad_vec_.push_back(std::pow(Erad_i / a_rad, 1. / 4.));
+		// userData_.Tgas_vec_.push_back(quokka::EOS<CouplingProblem>::ComputeTgasFromEint(rho, Egas_i));
+	}
 }
-
 
 template <> void RadhydroSimulation<ShocktubeProblem>::computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons)
 {
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = geom[0].CellSizeArray();
 
 	// check conservation of mass scalars
-        const int nmscalars = Physics_Traits<ShocktubeProblem>::numMassScalars;
+	const int nmscalars = Physics_Traits<ShocktubeProblem>::numMassScalars;
 	amrex::Real specieSum = 0.0;
 
-        for (int n = 0; n < nmscalars; ++n) {
-            specieSum += values.at(HydroSystem<ShocktubeProblem>::scalar0_index + n)[0];
-        }
+	for (int n = 0; n < nmscalars; ++n) {
+		specieSum += values.at(HydroSystem<ShocktubeProblem>::scalar0_index + n)[0];
+	}
 
 	amrex::Real const abs_err = 1.0 - specieSum;
 
