@@ -25,6 +25,10 @@ struct ShocktubeProblem {
 
 bool consv_test_passes = false; // if mass sclara conservation checks fails, set to false
 
+template <> struct SimulationData<ShocktubeProblem> {
+	std::vector<double> scalarSum_vec_;
+};
+
 template <> struct quokka::EOS_Traits<ShocktubeProblem> {
 	static constexpr double gamma = 1.4;
 	static constexpr double mean_molecular_weight = NAN;
@@ -201,17 +205,15 @@ template <> void RadhydroSimulation<ShocktubeProblem>::computeAfterTimestep()
 	const int nmscalars = Physics_Traits<ShocktubeProblem>::numMassScalars;
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-		// userData_.t_vec_.push_back(tNew_[0]);
 		amrex::Real specieSum = 0.0;
 
 		for (int n = 0; n < nmscalars; ++n) {
 			specieSum += values.at(HydroSystem<ShocktubeProblem>::scalar0_index + n)[0];
 		}
 
-		const amrex::Real Delta_eps_t = 1 - specieSum;
+		const amrex::Real Delta_eps_t = 1e0 - specieSum;
 		amrex::Print() << "Mass scalar conservation: Delta_eps_t = " << Delta_eps_t << "\n";
-		// userData_.Trad_vec_.push_back(std::pow(Erad_i / a_rad, 1. / 4.));
-		// userData_.Tgas_vec_.push_back(quokka::EOS<CouplingProblem>::ComputeTgasFromEint(rho, Egas_i));
+		userData_.scalarSum_vec_.push_back(Delta_eps_t);
 	}
 }
 
@@ -224,10 +226,10 @@ template <> void RadhydroSimulation<ShocktubeProblem>::computeAfterEvolve(amrex:
 	amrex::Real specieSum = 0.0;
 
 	for (int n = 0; n < nmscalars; ++n) {
-		specieSum += values.at(HydroSystem<ShocktubeProblem>::scalar0_index + n)[0];
+		specieSum += initSumCons[HydroSystem<ShocktubeProblem>::scalar0_index + n];
 	}
 
-	amrex::Real const abs_err = 1.0 - specieSum;
+	amrex::Real const abs_err = 1e0 - specieSum;
 
 	if ((std::abs(abs_err) > 2.0e-13) || std::isnan(abs_err)) {
 		// note that this tolerance is appropriate for a 256^3 grid
