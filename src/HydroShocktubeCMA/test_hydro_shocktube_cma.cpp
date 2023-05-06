@@ -195,20 +195,40 @@ template <> void RadhydroSimulation<ShocktubeProblem>::ErrorEst(int lev, amrex::
 	}
 }
 
+template <> void RadhydroSimulation<ShocktubeProblem>::computeAfterTimestep()
+{
+    auto [position, values] = fextract(state_new_cc_[0], Geom(0), 0, 0.5);
+    const int nmscalars = Physics_Traits<ShocktubeProblem>::numMassScalars;
+
+    if (amrex::ParallelDescriptor::IOProcessor()) {
+        // userData_.t_vec_.push_back(tNew_[0]);
+        amrex::Real specieSum = 0.0;
+
+        for (int n = 0; n < nmscalars; ++n) {
+            specieSum += values.at(HydroSystem<ShocktubeProblem>::scalar0_index + n)[0];
+        }
+
+        const amrex::Real Delta_eps_t = 1 - specieSum;
+        amrex::Print() << "Mass scalar conservation: Delta_eps_t = " << Delta_eps_t << "\n";
+        // userData_.Trad_vec_.push_back(std::pow(Erad_i / a_rad, 1. / 4.));
+        // userData_.Tgas_vec_.push_back(quokka::EOS<CouplingProblem>::ComputeTgasFromEint(rho, Egas_i));
+    }
+}
+
+
 template <> void RadhydroSimulation<ShocktubeProblem>::computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons)
 {
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = geom[0].CellSizeArray();
-	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
 
-	// check conservation of total energy
-	amrex::Real const specie1 = initSumCons[HydroSystem<ShocktubeProblem>::scalar0_index + 0];
-	amrex::Real const specie2 = initSumCons[HydroSystem<ShocktubeProblem>::scalar0_index + 1];
-	amrex::Real const specie3 = initSumCons[HydroSystem<ShocktubeProblem>::scalar0_index + 2];
+	// check conservation of mass scalars
+        const int nmscalars = Physics_Traits<ShocktubeProblem>::numMassScalars;
+	amrex::Real specieSum = 0.0;
 
-	amrex::Real const abs_err = 1.0 - specie1 - specie2 - specie3;
+        for (int n = 0; n < nmscalars; ++n) {
+            specieSum += values.at(HydroSystem<ShocktubeProblem>::scalar0_index + n)[0];
+        }
 
-	amrex::Print() << "\tabsolute mass scalar conservation error = " << abs_err << std::endl;
-	amrex::Print() << std::endl;
+	amrex::Real const abs_err = 1.0 - specieSum;
 
 	if ((std::abs(abs_err) > 2.0e-13) || std::isnan(abs_err)) {
 		// note that this tolerance is appropriate for a 256^3 grid
@@ -226,8 +246,8 @@ template <> void RadhydroSimulation<ShocktubeProblem>::computeAfterEvolve(amrex:
 auto problem_main() -> int
 {
 	// Problem parameters
-	const double max_time = 0.4;
-	const int max_timesteps = 8000;
+	const double max_time = 1.0;
+	const int max_timesteps = 80000;
 
 	// Problem initialization
 	const int ncomp_cc = Physics_Indices<ShocktubeProblem>::nvarTotal_cc;
