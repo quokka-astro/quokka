@@ -241,7 +241,8 @@ template <> void RadhydroSimulation<PrimordialChemTest>::setInitialConditionsOnG
 		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::x3Momentum_index) = zmom;
 
 		for (int nn = 0; nn < NumSpec; ++nn) {
-			state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + nn) = mfracs[nn] * rho; // we use partial densities and not mass fractions
+			state_cc(i, j, k, HydroSystem<PrimordialChemTest>::scalar0_index + nn) =
+			    mfracs[nn] * rho; // we use partial densities and not mass fractions
 		}
 	});
 }
