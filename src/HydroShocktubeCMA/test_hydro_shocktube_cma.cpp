@@ -27,7 +27,7 @@ struct ShocktubeProblem {
 bool consv_test_passes = false; // if mass scalar conservation check passes, set to true
 
 template <> struct SimulationData<ShocktubeProblem> {
-	std::vector<double> t_vec_; // stores the time array
+	std::vector<double> t_vec_;	      // stores the time array
 	std::vector<double> delta_eps_t_vec_; // stores sum of mass fractions at each time
 };
 
@@ -110,7 +110,8 @@ template <> void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsOnGri
 		state_cc(i, j, k, HydroSystem<ShocktubeProblem>::internalEnergy_index) = P / (gamma - 1.);
 
 		for (int nn = 0; nn < nmscalars; ++nn) {
-			state_cc(i, j, k, HydroSystem<ShocktubeProblem>::scalar0_index + nn) = specie[nn] * rho; // we actually store partial densities and not mass fractions
+			state_cc(i, j, k, HydroSystem<ShocktubeProblem>::scalar0_index + nn) =
+			    specie[nn] * rho; // we actually store partial densities and not mass fractions
 		}
 	});
 }
@@ -221,8 +222,8 @@ template <> void RadhydroSimulation<ShocktubeProblem>::computeAfterTimestep()
 				specieSum += values.at(HydroSystem<ShocktubeProblem>::scalar0_index + n)[nn];
 <<<<<<< HEAD
 			}
-			
-			Delta_eps_t = 1e0 - specieSum/rho; // normalize by density to convert partial density to mass fraction
+
+			Delta_eps_t = 1e0 - specieSum / rho; // normalize by density to convert partial density to mass fraction
 
 			if ((std::abs(Delta_eps_t) > 1.0e-13) || std::isnan(Delta_eps_t)) {
 				amrex::Print() << "Mass scalars not conserved to machine precision!\n";
@@ -250,28 +251,26 @@ template <> void RadhydroSimulation<ShocktubeProblem>::computeAfterEvolve(amrex:
 >>>>>>> 980f2feacd4c7937bcfbb336f66f99f7630a4753
 
 			sum_Delta_eps_t += std::abs(Delta_eps_t);
-
 		}
 
-		userData_.delta_eps_t_vec_.push_back(sum_Delta_eps_t/nx); // store the average of the absolute errors in all cells at time 't_vec'
+		userData_.delta_eps_t_vec_.push_back(sum_Delta_eps_t / nx); // store the average of the absolute errors in all cells at time 't_vec'
 
 <<<<<<< HEAD
 =======
-	if ((std::abs(abs_err) > 2.0e-13) || std::isnan(abs_err)) {
-		// note that this tolerance is appropriate for a 256^3 grid
-		// it may need to be modified for coarser resolutions
-		amrex::Print() << "Mass scalars not conserved to machine precision!\n";
-		consv_test_passes = false;
-	} else {
-		amrex::Print() << "Mass scalar conservation is OK: Delta_eps = " << abs_err
-			       << " sp1 = " << initSumCons[HydroSystem<ShocktubeProblem>::scalar0_index + 0]
-			       << " sp2 = " << initSumCons[HydroSystem<ShocktubeProblem>::scalar0_index + 1]
-			       << " sp3 = " << initSumCons[HydroSystem<ShocktubeProblem>::scalar0_index + 2] << "\n";
-		consv_test_passes = true;
+if ((std::abs(abs_err) > 2.0e-13) || std::isnan(abs_err)) {
+	// note that this tolerance is appropriate for a 256^3 grid
+	// it may need to be modified for coarser resolutions
+	amrex::Print() << "Mass scalars not conserved to machine precision!\n";
+	consv_test_passes = false;
+} else {
+	amrex::Print() << "Mass scalar conservation is OK: Delta_eps = " << abs_err
+		       << " sp1 = " << initSumCons[HydroSystem<ShocktubeProblem>::scalar0_index + 0]
+		       << " sp2 = " << initSumCons[HydroSystem<ShocktubeProblem>::scalar0_index + 1]
+		       << " sp3 = " << initSumCons[HydroSystem<ShocktubeProblem>::scalar0_index + 2] << "\n";
+	consv_test_passes = true;
 >>>>>>> 980f2feacd4c7937bcfbb336f66f99f7630a4753
 	}
 }
-
 
 auto problem_main() -> int
 {
@@ -312,24 +311,23 @@ auto problem_main() -> int
 	}
 
 #ifdef HAVE_PYTHON
-		// Plot results
-		std::vector<double> &delta_eps = sim.userData_.delta_eps_t_vec_;
-		std::vector<double> &t = sim.userData_.t_vec_;
+	// Plot results
+	std::vector<double> &delta_eps = sim.userData_.delta_eps_t_vec_;
+	std::vector<double> &t = sim.userData_.t_vec_;
 
-		matplotlibcpp::clf();
+	matplotlibcpp::clf();
 
-		std::map<std::string, std::string> delta_eps_args;
-		matplotlibcpp::plot(t, delta_eps);
+	std::map<std::string, std::string> delta_eps_args;
+	matplotlibcpp::plot(t, delta_eps);
 
-		matplotlibcpp::legend();
-		matplotlibcpp::xlabel("time t (s)");
-		matplotlibcpp::ylabel("<|delta eps|>");
-		matplotlibcpp::save(fmt::format("./shocktubeCMA.pdf"));
+	matplotlibcpp::legend();
+	matplotlibcpp::xlabel("time t (s)");
+	matplotlibcpp::ylabel("<|delta eps|>");
+	matplotlibcpp::save(fmt::format("./shocktubeCMA.pdf"));
 
-		matplotlibcpp::clf();
+	matplotlibcpp::clf();
 
 #endif
-
 
 	return status;
 }
