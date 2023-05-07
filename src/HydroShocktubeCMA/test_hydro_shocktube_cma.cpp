@@ -220,7 +220,6 @@ template <> void RadhydroSimulation<ShocktubeProblem>::computeAfterTimestep()
 
 			for (int n = 0; n < nmscalars; ++n) {
 				specieSum += values.at(HydroSystem<ShocktubeProblem>::scalar0_index + n)[nn];
-<<<<<<< HEAD
 			}
 
 			Delta_eps_t = 1e0 - specieSum / rho; // normalize by density to convert partial density to mass fraction
@@ -231,46 +230,14 @@ template <> void RadhydroSimulation<ShocktubeProblem>::computeAfterTimestep()
 			} else {
 				consv_test_passes = true;
 			}
-=======
-				amrex::Print() << "nn = " << nn << " n = " << n << " val = " << values.at(HydroSystem<ShocktubeProblem>::scalar0_index + n)[nn]
-					       << " \n";
-			}
-			amrex::Print() << "delta = " << 1e0 - specieSum << "\n";
-		}
-
-		// const amrex::Real Delta_eps_t = 1e0 - specieSum;
-		// amrex::Print() << "Mass scalar conservation: Delta_eps_t = " << Delta_eps_t << " sp1 = " <<
-		// values.at(HydroSystem<ShocktubeProblem>::scalar0_index + 0)[0] << " sp2 = " << values.at(HydroSystem<ShocktubeProblem>::scalar0_index + 1)[0]
-		// << " sp3 = " << values.at(HydroSystem<ShocktubeProblem>::scalar0_index + 2)[0] << "\n"; userData_.scalarSum_vec_.push_back(Delta_eps_t);
-	}
-}
-
-template <> void RadhydroSimulation<ShocktubeProblem>::computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons)
-{
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = geom[0].CellSizeArray();
->>>>>>> 980f2feacd4c7937bcfbb336f66f99f7630a4753
 
 			sum_Delta_eps_t += std::abs(Delta_eps_t);
 		}
 
-		userData_.delta_eps_t_vec_.push_back(sum_Delta_eps_t / nx); // store the average of the absolute errors in all cells at time 't_vec'
-
-<<<<<<< HEAD
-=======
-if ((std::abs(abs_err) > 2.0e-13) || std::isnan(abs_err)) {
-	// note that this tolerance is appropriate for a 256^3 grid
-	// it may need to be modified for coarser resolutions
-	amrex::Print() << "Mass scalars not conserved to machine precision!\n";
-	consv_test_passes = false;
-} else {
-	amrex::Print() << "Mass scalar conservation is OK: Delta_eps = " << abs_err
-		       << " sp1 = " << initSumCons[HydroSystem<ShocktubeProblem>::scalar0_index + 0]
-		       << " sp2 = " << initSumCons[HydroSystem<ShocktubeProblem>::scalar0_index + 1]
-		       << " sp3 = " << initSumCons[HydroSystem<ShocktubeProblem>::scalar0_index + 2] << "\n";
-	consv_test_passes = true;
->>>>>>> 980f2feacd4c7937bcfbb336f66f99f7630a4753
+		userData_.delta_eps_t_vec_.push_back(sum_Delta_eps_t/nx);
 	}
 }
+
 
 auto problem_main() -> int
 {
