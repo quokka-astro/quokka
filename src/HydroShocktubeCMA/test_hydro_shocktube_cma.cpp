@@ -234,10 +234,9 @@ template <> void RadhydroSimulation<ShocktubeProblem>::computeAfterTimestep()
 			sum_Delta_eps_t += std::abs(Delta_eps_t);
 		}
 
-		userData_.delta_eps_t_vec_.push_back(sum_Delta_eps_t/nx);
+		userData_.delta_eps_t_vec_.push_back(sum_Delta_eps_t / nx);
 	}
 }
-
 
 auto problem_main() -> int
 {
