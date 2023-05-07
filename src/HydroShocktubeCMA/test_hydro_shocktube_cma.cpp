@@ -202,18 +202,23 @@ template <> void RadhydroSimulation<ShocktubeProblem>::ErrorEst(int lev, amrex::
 template <> void RadhydroSimulation<ShocktubeProblem>::computeAfterTimestep()
 {
 	auto [position, values] = fextract(state_new_cc_[0], Geom(0), 0, 0.5);
+	const int nx = static_cast<int>(position.size());
 	const int nmscalars = Physics_Traits<ShocktubeProblem>::numMassScalars;
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-		amrex::Real specieSum = 0.0;
 
-		for (int n = 0; n < nmscalars; ++n) {
-			specieSum += values.at(HydroSystem<ShocktubeProblem>::scalar0_index + n)[0];
+		for (int nn = 0; nn < nx; ++nn) {
+			amrex::Real specieSum = 0.0;
+			for (int n = 0; n < nmscalars; ++n) {
+				specieSum += values.at(HydroSystem<ShocktubeProblem>::scalar0_index + n)[nn];
+				amrex::Print() << "nn = " << nn << " n = " << n << " val = " << values.at(HydroSystem<ShocktubeProblem>::scalar0_index + n)[nn] << " \n";
+			}
+			amrex::Print() << "delta = " << 1e0 - specieSum << "\n";
 		}
 
-		const amrex::Real Delta_eps_t = 1e0 - specieSum;
-		amrex::Print() << "Mass scalar conservation: Delta_eps_t = " << Delta_eps_t << "\n";
-		userData_.scalarSum_vec_.push_back(Delta_eps_t);
+		//const amrex::Real Delta_eps_t = 1e0 - specieSum;
+		//amrex::Print() << "Mass scalar conservation: Delta_eps_t = " << Delta_eps_t << " sp1 = " << values.at(HydroSystem<ShocktubeProblem>::scalar0_index + 0)[0] << " sp2 = " << values.at(HydroSystem<ShocktubeProblem>::scalar0_index + 1)[0] << " sp3 = " << values.at(HydroSystem<ShocktubeProblem>::scalar0_index + 2)[0] << "\n";
+		//userData_.scalarSum_vec_.push_back(Delta_eps_t);
 	}
 }
 
@@ -237,7 +242,7 @@ template <> void RadhydroSimulation<ShocktubeProblem>::computeAfterEvolve(amrex:
 		amrex::Print() << "Mass scalars not conserved to machine precision!\n";
 		consv_test_passes = false;
 	} else {
-		amrex::Print() << "Mass scalar conservation is OK: Delta_eps = " << abs_err << "\n";
+		amrex::Print() << "Mass scalar conservation is OK: Delta_eps = " << abs_err << " sp1 = " << initSumCons[HydroSystem<ShocktubeProblem>::scalar0_index + 0] << " sp2 = " << initSumCons[HydroSystem<ShocktubeProblem>::scalar0_index + 1] << " sp3 = " << initSumCons[HydroSystem<ShocktubeProblem>::scalar0_index + 2] << "\n";
 		consv_test_passes = true;
 	}
 
