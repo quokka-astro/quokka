@@ -278,12 +278,11 @@ auto problem_main() -> int
 
 #ifdef HAVE_PYTHON
 	// Plot results
-	std::vector<double> &delta_eps = sim.userData_.delta_eps_t_vec_;
-	std::vector<double> &t = sim.userData_.t_vec_;
+	std::vector<double> const &delta_eps = sim.userData_.delta_eps_t_vec_;
+	std::vector<double> const &t = sim.userData_.t_vec_;
 
 	matplotlibcpp::clf();
 
-	std::map<std::string, std::string> delta_eps_args;
 	matplotlibcpp::plot(t, delta_eps);
 
 	matplotlibcpp::legend();
