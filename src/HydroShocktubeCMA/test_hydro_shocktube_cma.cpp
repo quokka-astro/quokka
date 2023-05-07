@@ -4,7 +4,8 @@
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 /// \file test_hydro_shocktube_CMA.cpp
-/// \brief Defines a test problem for a shock tube with passive scalars using consistent molecular advection (CMA).
+/// \brief Defines a test problem for a shock tube with passive scalars using consistent multi-fluid advection (CMA).
+/// Implementing shock tube proglem from Plewa and Muller 1999, A&A 342, 179
 ///
 
 #include <cmath>
@@ -23,10 +24,11 @@
 struct ShocktubeProblem {
 };
 
-bool consv_test_passes = false; // if mass sclara conservation checks fails, set to false
+bool consv_test_passes = false; // if mass scalar conservation check passes, set to true
 
 template <> struct SimulationData<ShocktubeProblem> {
-	std::vector<double> scalarSum_vec_;
+	std::vector<double> t_vec_; // stores the time array
+	std::vector<double> delta_eps_t_vec_; // stores sum of mass fractions at each time
 };
 
 template <> struct quokka::EOS_Traits<ShocktubeProblem> {
@@ -69,7 +71,7 @@ template <> void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsOnGri
 		const double vx = 0.0;
 		double rho = NAN;
 		double P = NAN;
-		std::array<Real, nmscalars> specie = {-1.0}; // why can't this loop read in numPassiveScalars
+		std::array<Real, nmscalars> specie = {-1.0};
 
 		// from Plewa and Muller 1999
 		if (x <= 0.5) {
@@ -89,7 +91,7 @@ template <> void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsOnGri
 			specie[0] = 0.1;
 		}
 
-		specie[1] = 0.3 * pow(sin(20 * 3.14 * x), 2);
+		specie[1] = 0.15 * pow(sin(20 * 3.14 * x), 2);
 		specie[2] = 1 - specie[0] - specie[1];
 
 		AMREX_ASSERT(!std::isnan(vx));
@@ -108,7 +110,7 @@ template <> void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsOnGri
 		state_cc(i, j, k, HydroSystem<ShocktubeProblem>::internalEnergy_index) = P / (gamma - 1.);
 
 		for (int nn = 0; nn < nmscalars; ++nn) {
-			state_cc(i, j, k, HydroSystem<ShocktubeProblem>::scalar0_index + nn) = specie[nn];
+			state_cc(i, j, k, HydroSystem<ShocktubeProblem>::scalar0_index + nn) = specie[nn] * rho; // we actually store partial densities and not mass fractions
 		}
 	});
 }
@@ -150,9 +152,9 @@ AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(const amrex::IntVec
 		consVar(i, j, k, RadSystem<ShocktubeProblem>::x2GasMomentum_index) = 0.;
 		consVar(i, j, k, RadSystem<ShocktubeProblem>::x3GasMomentum_index) = 0.;
 
-		consVar(i, j, k, HydroSystem<ShocktubeProblem>::scalar0_index + 0) = 0.8;
-		consVar(i, j, k, HydroSystem<ShocktubeProblem>::scalar0_index + 1) = 0.3 * pow(sin(20 * 3.14 * 0), 2);
-		consVar(i, j, k, HydroSystem<ShocktubeProblem>::scalar0_index + 2) = 1 - 0.8 - 0.3 * pow(sin(20 * 3.14 * 0), 2);
+		consVar(i, j, k, HydroSystem<ShocktubeProblem>::scalar0_index + 0) = 0.8 * rho_L;
+		consVar(i, j, k, HydroSystem<ShocktubeProblem>::scalar0_index + 1) = 0.3 * pow(sin(20 * 3.14 * 0), 2) * rho_L;
+		consVar(i, j, k, HydroSystem<ShocktubeProblem>::scalar0_index + 2) = 1 - 0.8 - 0.3 * pow(sin(20 * 3.14 * 0), 2) * rho_L;
 
 	} else if (i >= hi[0]) {
 		// x1 right-side boundary -- constant
@@ -167,9 +169,9 @@ AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(const amrex::IntVec
 		consVar(i, j, k, RadSystem<ShocktubeProblem>::x2GasMomentum_index) = 0.;
 		consVar(i, j, k, RadSystem<ShocktubeProblem>::x3GasMomentum_index) = 0.;
 
-		consVar(i, j, k, HydroSystem<ShocktubeProblem>::scalar0_index + 0) = 0.1;
-		consVar(i, j, k, HydroSystem<ShocktubeProblem>::scalar0_index + 1) = 0.3 * pow(sin(20 * 3.14 * 1), 2);
-		consVar(i, j, k, HydroSystem<ShocktubeProblem>::scalar0_index + 2) = 1 - 0.1 - 0.3 * pow(sin(20 * 3.14 * 1), 2);
+		consVar(i, j, k, HydroSystem<ShocktubeProblem>::scalar0_index + 0) = 0.1 * rho_R;
+		consVar(i, j, k, HydroSystem<ShocktubeProblem>::scalar0_index + 1) = 0.3 * pow(sin(20 * 3.14 * 1), 2) * rho_R;
+		consVar(i, j, k, HydroSystem<ShocktubeProblem>::scalar0_index + 2) = 1 - 0.1 - 0.3 * pow(sin(20 * 3.14 * 1), 2) * rho_R;
 	}
 }
 
@@ -202,52 +204,41 @@ template <> void RadhydroSimulation<ShocktubeProblem>::ErrorEst(int lev, amrex::
 template <> void RadhydroSimulation<ShocktubeProblem>::computeAfterTimestep()
 {
 	auto [position, values] = fextract(state_new_cc_[0], Geom(0), 0, 0.5);
-	const int nx = static_cast<int>(position.size());
+	const int nx = static_cast<int>(position.size()); // number of cells along the x direction
 	const int nmscalars = Physics_Traits<ShocktubeProblem>::numMassScalars;
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
+		userData_.t_vec_.push_back(tNew_[0]);
+		amrex::Real sum_Delta_eps_t = 0.0; // so we can plot the average error as a function of time
 
 		for (int nn = 0; nn < nx; ++nn) {
 			amrex::Real specieSum = 0.0;
+			amrex::Real Delta_eps_t = 1e100;
+
+			const amrex::Real rho = values.at(RadSystem<ShocktubeProblem>::gasDensity_index)[nn];
+
 			for (int n = 0; n < nmscalars; ++n) {
 				specieSum += values.at(HydroSystem<ShocktubeProblem>::scalar0_index + n)[nn];
-				amrex::Print() << "nn = " << nn << " n = " << n << " val = " << values.at(HydroSystem<ShocktubeProblem>::scalar0_index + n)[nn] << " \n";
 			}
-			amrex::Print() << "delta = " << 1e0 - specieSum << "\n";
+			
+			Delta_eps_t = 1e0 - specieSum/rho; // normalize by density to convert partial density to mass fraction
+
+			if ((std::abs(Delta_eps_t) > 1.0e-13) || std::isnan(Delta_eps_t)) {
+				amrex::Print() << "Mass scalars not conserved to machine precision!\n";
+				consv_test_passes = false;
+			} else {
+				consv_test_passes = true;
+			}
+
+			sum_Delta_eps_t += std::abs(Delta_eps_t);
+
 		}
 
-		//const amrex::Real Delta_eps_t = 1e0 - specieSum;
-		//amrex::Print() << "Mass scalar conservation: Delta_eps_t = " << Delta_eps_t << " sp1 = " << values.at(HydroSystem<ShocktubeProblem>::scalar0_index + 0)[0] << " sp2 = " << values.at(HydroSystem<ShocktubeProblem>::scalar0_index + 1)[0] << " sp3 = " << values.at(HydroSystem<ShocktubeProblem>::scalar0_index + 2)[0] << "\n";
-		//userData_.scalarSum_vec_.push_back(Delta_eps_t);
+		userData_.delta_eps_t_vec_.push_back(sum_Delta_eps_t/nx); // store the average of the absolute errors in all cells at time 't_vec'
+
 	}
 }
 
-template <> void RadhydroSimulation<ShocktubeProblem>::computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons)
-{
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = geom[0].CellSizeArray();
-
-	// check conservation of mass scalars
-	const int nmscalars = Physics_Traits<ShocktubeProblem>::numMassScalars;
-	amrex::Real specieSum = 0.0;
-
-	for (int n = 0; n < nmscalars; ++n) {
-		specieSum += initSumCons[HydroSystem<ShocktubeProblem>::scalar0_index + n];
-	}
-
-	amrex::Real const abs_err = 1e0 - specieSum;
-
-	if ((std::abs(abs_err) > 2.0e-13) || std::isnan(abs_err)) {
-		// note that this tolerance is appropriate for a 256^3 grid
-		// it may need to be modified for coarser resolutions
-		amrex::Print() << "Mass scalars not conserved to machine precision!\n";
-		consv_test_passes = false;
-	} else {
-		amrex::Print() << "Mass scalar conservation is OK: Delta_eps = " << abs_err << " sp1 = " << initSumCons[HydroSystem<ShocktubeProblem>::scalar0_index + 0] << " sp2 = " << initSumCons[HydroSystem<ShocktubeProblem>::scalar0_index + 1] << " sp3 = " << initSumCons[HydroSystem<ShocktubeProblem>::scalar0_index + 2] << "\n";
-		consv_test_passes = true;
-	}
-
-	amrex::Print() << "\n";
-}
 
 auto problem_main() -> int
 {
@@ -286,5 +277,26 @@ auto problem_main() -> int
 	} else {
 		status = 1;
 	}
+
+#ifdef HAVE_PYTHON
+		// Plot results
+		std::vector<double> &delta_eps = sim.userData_.delta_eps_t_vec_;
+		std::vector<double> &t = sim.userData_.t_vec_;
+
+		matplotlibcpp::clf();
+
+		std::map<std::string, std::string> delta_eps_args;
+		matplotlibcpp::plot(t, delta_eps);
+
+		matplotlibcpp::legend();
+		matplotlibcpp::xlabel("time t (s)");
+		matplotlibcpp::ylabel("<|delta eps|>");
+		matplotlibcpp::save(fmt::format("./shocktubeCMA.pdf"));
+
+		matplotlibcpp::clf();
+
+#endif
+
+
 	return status;
 }
