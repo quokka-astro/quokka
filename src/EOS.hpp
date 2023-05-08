@@ -47,17 +47,20 @@ template <typename problem_t>
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEint(amrex::Real rho, amrex::Real Eint) -> amrex::Real
 {
 	// return temperature for an ideal gas
+
+#ifdef PRIMORDIAL_CHEM
+	burn_t chemstate;
+	chemstate.rho = rho;
+	chemstate.e = Eint / rho;
+	eos(eos_input_re, chemstate);
+	amrex::Real Tgas = chemstate.T;
+#else
 	amrex::Real Tgas = NAN;
 	if constexpr (gamma_ != 1.0) {
 		const amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
 		Tgas = Eint / (rho * c_v);
 	}
 
-#ifdef PRIMORDIAL_CHEM
-	burn_t chemstate;
-	chemstate.rho = rho;
-	chemstate.e = Eint / rho;
-	eos(eos_input_re, chemstate) Tgas = chemstate.T;
 #endif
 
 	return Tgas;
@@ -67,37 +70,42 @@ template <typename problem_t>
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromTgas(amrex::Real rho, amrex::Real Tgas) -> amrex::Real
 {
 	// return internal energy density for a gamma-law ideal gas
+
+#ifdef PRIMORDIAL_CHEM
+	burn_t chemstate;
+	chemstate.rho = rho;
+	chemstate.T = Tgas;
+	eos(eos_input_rt, chemstate);
+	amrex::Real Eint = chemstate.e * chemstate.rho;
+#else
 	amrex::Real Eint = NAN;
 	if constexpr (gamma_ != 1.0) {
 		const amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
 		Eint = rho * c_v * Tgas;
 	}
 
-#ifdef PRIMORDIAL_CHEM
-	burn_t chemstate;
-	chemstate.rho = rho;
-	chemstate.T = Tgas;
-	eos(eos_input_rt, chemstate) Eint = chemstate.e * chemstate.rho;
 #endif
 
 	return Eint;
 }
 
 template <typename problem_t>
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintTempDerivative(const amrex::Real rho, const amrex::Real /*Tgas*/) -> amrex::Real
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintTempDerivative(const amrex::Real rho, const amrex::Real Tgas) -> amrex::Real
 {
 	// compute derivative of internal energy w/r/t temperature
+#ifdef PRIMORDIAL_CHEM
+	burn_t chemstate;
+	chemstate.rho = rho;
+	chemstate.T = Tgas;
+	eos(eos_input_rt, chemstate);
+	amrex::Real dEint_dT = chemstate.dedT * chemstate.rho;
+#else
 	amrex::Real dEint_dT = NAN;
 	if constexpr (gamma_ != 1.0) {
 		const amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
 		dEint_dT = rho * c_v;
 	}
 
-#ifdef PRIMORDIAL_CHEM
-	burn_t chemstate;
-	chemstate.rho = rho;
-	chemstate.T = Tgas;
-	eos(eos_input_rt, chemstate) dEint_dT = chemstate.dedT * chemstate.rho;
 #endif
 
 	return dEint_dT;
