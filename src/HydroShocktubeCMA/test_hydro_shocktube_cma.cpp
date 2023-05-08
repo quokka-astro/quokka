@@ -221,7 +221,7 @@ template <> void RadhydroSimulation<ShocktubeProblem>::computeAfterTimestep()
 				specieSum += values.at(HydroSystem<ShocktubeProblem>::scalar0_index + n)[nn];
 			}
 
-			amrex::Real Delta_eps_t = 1e0 - specieSum / rho; // normalize by density to convert partial density to mass fraction
+			amrex::Real const Delta_eps_t = 1e0 - specieSum / rho; // normalize by density to convert partial density to mass fraction
 
 			if ((std::abs(Delta_eps_t) > 1.0e-13) || std::isnan(Delta_eps_t)) {
 				amrex::Print() << "Mass scalars not conserved to machine precision!\n";
