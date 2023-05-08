@@ -24,7 +24,7 @@
 struct ShocktubeProblem {
 };
 
-bool consv_test_passes = false; // if mass scalar conservation check passes, set to true
+bool consv_test_passes = true; // if mass scalar conservation check fails, set to false
 
 template <> struct SimulationData<ShocktubeProblem> {
 	std::vector<double> t_vec_;	      // stores the time array
@@ -214,7 +214,6 @@ template <> void RadhydroSimulation<ShocktubeProblem>::computeAfterTimestep()
 
 		for (int nn = 0; nn < nx; ++nn) {
 			amrex::Real specieSum = 0.0;
-			amrex::Real Delta_eps_t = 1e100;
 
 			const amrex::Real rho = values.at(RadSystem<ShocktubeProblem>::gasDensity_index)[nn];
 
@@ -222,13 +221,11 @@ template <> void RadhydroSimulation<ShocktubeProblem>::computeAfterTimestep()
 				specieSum += values.at(HydroSystem<ShocktubeProblem>::scalar0_index + n)[nn];
 			}
 
-			Delta_eps_t = 1e0 - specieSum / rho; // normalize by density to convert partial density to mass fraction
+			amrex::Real Delta_eps_t = 1e0 - specieSum / rho; // normalize by density to convert partial density to mass fraction
 
 			if ((std::abs(Delta_eps_t) > 1.0e-13) || std::isnan(Delta_eps_t)) {
 				amrex::Print() << "Mass scalars not conserved to machine precision!\n";
 				consv_test_passes = false;
-			} else {
-				consv_test_passes = true;
 			}
 
 			sum_Delta_eps_t += std::abs(Delta_eps_t);
@@ -258,9 +255,6 @@ auto problem_main() -> int
 
 	RadhydroSimulation<ShocktubeProblem> sim(BCs_cc);
 
-	// sim.cflNumber_ = CFL_number;
-	// sim.maxDt_ = max_dt;
-	// sim.initDt_ = initial_dt;
 	sim.stopTime_ = max_time;
 	sim.maxTimesteps_ = max_timesteps;
 
