@@ -49,7 +49,8 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 			Real insum = 0.0_rt;
 
 			for (int nn = 0; nn < NumSpec; ++nn) {
-				chem[nn] = state(i, j, k, HydroSystem<problem_t>::scalar0_index + nn);
+				chem[nn] = state(i, j, k, HydroSystem<problem_t>::scalar0_index + nn) /
+					   rho; // state has partial densities, so divide by rho to get mass fractions
 			}
 
 			// do chemistry using microphysics
@@ -125,7 +126,7 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 			state(i, j, k, HydroSystem<problem_t>::energy_index) += dEint;
 
 			for (int nn = 0; nn < NumSpec; ++nn) {
-				state(i, j, k, HydroSystem<problem_t>::scalar0_index + nn) = inmfracs[nn];
+				state(i, j, k, HydroSystem<problem_t>::scalar0_index + nn) = inmfracs[nn] * rho; // scale by rho to return partial densities
 			}
 		});
 	}

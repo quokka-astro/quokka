@@ -39,6 +39,7 @@ template <typename problem_t> struct HydroSystem_Traits {
 template <typename problem_t> class HydroSystem : public HyperbolicSystem<problem_t>
 {
       public:
+	static constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
 	static constexpr int nscalars_ = Physics_Traits<problem_t>::numPassiveScalars;
 	static constexpr int nvar_ = Physics_NumVars::numHydroVars + nscalars_;
 
@@ -923,11 +924,23 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 
 		quokka::valarray<double, nvar_> U_L = {sL.rho, sL.rho * sL.u, sL.rho * sL.v, sL.rho * sL.w, sL.E, sL.Eint};
 		quokka::valarray<double, nvar_> U_R = {sR.rho, sR.rho * sR.u, sR.rho * sR.v, sR.rho * sR.w, sR.E, sR.Eint};
+
+		// conserve flux of mass scalars
+		// based on Plewa and Muller 1999, A&A, 342, 179 (equations 8 and 12)
+		amrex::Real fluxSum_U_L = 0;
+		amrex::Real fluxSum_U_R = 0;
+
 		for (int n = 0; n < nscalars_; ++n) {
 			const int nstart = nvar_ - nscalars_;
 			U_L[nstart + n] = sL.scalar[n];
 			U_R[nstart + n] = sR.scalar[n];
+
+			if (n < nmscalars_) {
+				fluxSum_U_L += U_L[nstart + n];
+				fluxSum_U_R += U_R[nstart + n];
+			}
 		}
+
 		F = F + viscosity * (U_L - U_R);
 
 		// permute momentum components according to flux direction DIR
@@ -944,6 +957,19 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		// compute face-centered normal velocity
 		const double v_norm = (F[density_index] >= 0.) ? (F[density_index] / rho_R) : (F[density_index] / rho_L);
 		x1FaceVel(i, j, k) = v_norm;
+
+		// use the same logic as above to scale and conserve specie fluxes
+		if (F[density_index] >= 0.) {
+			for (int n = 0; n < nmscalars_; ++n) {
+				const int nstart = nvar_ - nscalars_;
+				F[nstart + n] = F[density_index] * U_L[nstart + n] / fluxSum_U_L;
+			}
+		} else {
+			for (int n = 0; n < nmscalars_; ++n) {
+				const int nstart = nvar_ - nscalars_;
+				F[nstart + n] = F[density_index] * U_R[nstart + n] / fluxSum_U_R;
+			}
+		}
 
 		// copy all flux components to the flux array
 		for (int nc = 0; nc < nvar_; ++nc) {
