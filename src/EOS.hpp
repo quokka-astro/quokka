@@ -57,8 +57,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEin
 	burn_t chemstate;
 	chemstate.rho = rho;
 	chemstate.e = Eint / rho;
-	eos(eos_input_re, chemstate)
-	Tgas = chemstate.T;
+	eos(eos_input_re, chemstate) Tgas = chemstate.T;
 #endif
 
 	return Tgas;
@@ -78,8 +77,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromTga
 	burn_t chemstate;
 	chemstate.rho = rho;
 	chemstate.T = Tgas;
-	eos(eos_input_rt, chemstate)
-	Eint = chemstate.e * chemstate.rho;
+	eos(eos_input_rt, chemstate) Eint = chemstate.e * chemstate.rho;
 #endif
 
 	return Eint;
@@ -99,8 +97,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintTempDer
 	burn_t chemstate;
 	chemstate.rho = rho;
 	chemstate.T = Tgas;
-	eos(eos_input_rt, chemstate)
-	dEint_dT = chemstate.dedT * chemstate.rho;
+	eos(eos_input_rt, chemstate) dEint_dT = chemstate.dedT * chemstate.rho;
 #endif
 
 	return dEint_dT;
