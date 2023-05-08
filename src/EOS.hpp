@@ -11,6 +11,10 @@
 
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
+#ifdef PRIMORDIAL_CHEM
+#include "burn_type.H"
+#include "eos.H"
+#endif
 
 namespace quokka
 {
@@ -48,6 +52,15 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEin
 		const amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
 		Tgas = Eint / (rho * c_v);
 	}
+
+#ifdef PRIMORDIAL_CHEM
+	burn_t chemstate;
+	chemstate.rho = rho;
+	chemstate.e = Eint / rho;
+	eos(eos_input_re, chemstate)
+	Tgas = chemstate.T;
+#endif
+
 	return Tgas;
 }
 
@@ -60,6 +73,15 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromTga
 		const amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
 		Eint = rho * c_v * Tgas;
 	}
+
+#ifdef PRIMORDIAL_CHEM
+	burn_t chemstate;
+	chemstate.rho = rho;
+	chemstate.T = Tgas;
+	eos(eos_input_rt, chemstate)
+	Eint = chemstate.e * chemstate.rho;
+#endif
+
 	return Eint;
 }
 
@@ -72,6 +94,15 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintTempDer
 		const amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
 		dEint_dT = rho * c_v;
 	}
+
+#ifdef PRIMORDIAL_CHEM
+	burn_t chemstate;
+	chemstate.rho = rho;
+	chemstate.T = Tgas;
+	eos(eos_input_rt, chemstate)
+	dEint_dT = chemstate.dedT * chemstate.rho;
+#endif
+
 	return dEint_dT;
 }
 
