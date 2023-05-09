@@ -43,6 +43,7 @@
 #include "AMReX_Utility.H"
 #include "AMReX_YAFluxRegister.H"
 
+#include "Chemistry.hpp"
 #include "CloudyCooling.hpp"
 #include "SimulationData.hpp"
 #include "hydro_system.hpp"
@@ -94,6 +95,8 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	SimulationData<problem_t> userData_;
 
 	int enableCooling_ = 0;
+	int enableChemistry_ = 0;
+	Real max_density_allowed = std::numeric_limits<amrex::Real>::max();
 	quokka::cooling::cloudy_tables cloudyTables_;
 	std::string coolingTableFilename_{};
 
@@ -301,6 +304,15 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::readParmParse(
 		}
 	}
 
+#ifdef PRIMORDIAL_CHEM
+	// set chemistry runtime parameters
+	{
+		amrex::ParmParse hpp("primordial_chem");
+		hpp.query("enabled", enableChemistry_);
+		hpp.query("max_density_allowed", max_density_allowed);
+	}
+#endif
+
 	// set radiation runtime parameters
 	{
 		amrex::ParmParse rpp("radiation");
@@ -419,6 +431,13 @@ void RadhydroSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::Mult
 		// compute cooling
 		quokka::cooling::computeCooling<problem_t>(state, dt, cloudyTables_, tempFloor_);
 	}
+
+#ifdef PRIMORDIAL_CHEM
+	if (enableChemistry_ == 1) {
+		// compute chemistry
+		quokka::chemistry::computeChemistry<problem_t>(state, dt, max_density_allowed);
+	}
+#endif
 
 	// compute user-specified sources
 	addStrangSplitSources(state, lev, time, dt);
@@ -802,7 +821,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 
 template <typename problem_t> auto RadhydroSimulation<problem_t>::isCflViolated(int lev, amrex::Real time, amrex::Real dt_actual) -> bool
 {
-	// check wheter dt_actual would violate CFL condition using the post-update hydro state
+	// check whether dt_actual would violate CFL condition using the post-update hydro state
 
 	// compute max signal speed
 	amrex::Real max_signal = HydroSystem<problem_t>::maxSignalSpeedLocal(state_new_cc_[lev]);

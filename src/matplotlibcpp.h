@@ -165,7 +165,7 @@ struct _interpreter {
 		PyObject *cmname = PyString_FromString("matplotlib.cm");
 		PyObject *pylabname = PyString_FromString("pylab");
 		if (!pyplotname || !pylabname || !matplotlibname || !cmname) {
-			throw std::runtime_error("couldnt create string");
+			throw std::runtime_error("couldn't create string");
 		}
 
 		PyObject *matplotlib = PyImport_Import(matplotlibname);
@@ -346,7 +346,7 @@ template <typename Numeric> PyObject *get_2darray(const std::vector<::std::vecto
 
 	for (const ::std::vector<Numeric> &v_row : v) {
 		if (v_row.size() != static_cast<size_t>(vsize[1]))
-			throw std::runtime_error("Missmatched array size");
+			throw std::runtime_error("Mismatched array size");
 		std::copy(v_row.begin(), v_row.end(), vd_begin);
 		vd_begin += vsize[1];
 	}
@@ -414,7 +414,7 @@ void plot_surface(const std::vector<::std::vector<Numeric>> &x, const std::vecto
 		PyObject *mpl_toolkits = PyString_FromString("mpl_toolkits");
 		PyObject *axis3d = PyString_FromString("mpl_toolkits.mplot3d");
 		if (!mpl_toolkits || !axis3d) {
-			throw std::runtime_error("couldnt create string");
+			throw std::runtime_error("couldn't create string");
 		}
 
 		mpl_toolkitsmod = PyImport_Import(mpl_toolkits);

@@ -16,7 +16,7 @@ constexpr double DELTA = 1.0e-4;
 
 template <class T> constexpr auto SQUARE(const T x) -> T { return x * x; }
 
-// density, momentum, total energy, tranverse magnetic field
+// density, momentum, total energy, transverse magnetic field
 struct ConsHydro1D {
 	double rho; // density
 	double mx;  // x-momentum
@@ -45,12 +45,12 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::MHDState const &s_L, quokk
 {
 	//--- Step 1. Compute L/R states
 
-	// initialse left and right conserved states
+	// initialize left and right conserved states
 	ConsHydro1D u_L{};
 	ConsHydro1D u_R{};
-	// initialise temporary container to store flux across interface
+	// initialize temporary container to store flux across interface
 	ConsHydro1D f_x{};
-	// initialse fluxes at left and right side of the interface
+	// initialize fluxes at left and right side of the interface
 	ConsHydro1D f_L{};
 	ConsHydro1D f_R{};
 	// initialise signal speeds (left to right)
