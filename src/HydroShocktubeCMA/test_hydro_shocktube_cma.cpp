@@ -13,6 +13,7 @@
 #include <unordered_map>
 
 #include "AMReX_BC_TYPES.H"
+#include "AMReX_ParmParse.H"
 
 #include "ArrayUtil.hpp"
 #include "RadhydroSimulation.hpp"
@@ -36,11 +37,19 @@ template <> struct SimulationData<ShocktubeProblem> {
 	std::vector<double> delta_eps_t_vec_; // stores sum of mass fractions at each time
 };
 
-template <> struct quokka::EOS_Traits<ShocktubeProblem> {
-	static constexpr double gamma = 1.4;
-	static constexpr double mean_molecular_weight = NAN;
-	static constexpr double boltzmann_constant = quokka::boltzmann_constant_cgs;
-};
+//template <> void RadhydroSimulation<ShocktubeProblem>::preCalculateInitialConditions()
+//{
+//
+//	// parmparse species and temperature
+//	amrex::ParmParse pp("shocktube_cma");
+//	pp.query("eos_gamma", eos_gamma);
+//}
+//template <> struct quokka::EOS_Traits<ShocktubeProblem> {
+//	static constexpr double gamma = 1.4;
+//	static constexpr double mean_molecular_weight = NAN;
+//	static constexpr double boltzmann_constant = quokka::boltzmann_constant_cgs;
+//};
+
 
 template <> struct Physics_Traits<ShocktubeProblem> {
 	// cell-centred
@@ -53,13 +62,13 @@ template <> struct Physics_Traits<ShocktubeProblem> {
 	static constexpr bool is_mhd_enabled = false;
 };
 
-template <> void RadhydroSimulation<ShocktubeProblem>::preCalculateInitialConditions()
-{
-	// initialize microphysics routines
-	init_extern_parameters();
-	eos_init();
-	network_init();
-}
+//template <> void RadhydroSimulation<ShocktubeProblem>::preCalculateInitialConditions()
+//{
+//	// initialize microphysics routines
+//	init_extern_parameters();
+//	eos_init();
+//	network_init();
+//}
 
 // left- and right- side shock states
 constexpr amrex::Real rho_L = 1.0;
@@ -74,6 +83,10 @@ template <> void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsOnGri
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_lo = grid_elem.prob_lo_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
+
+	// parmparse species and temperature
+	amrex::ParmParse hpp("shocktube_cma");
+	hpp.query("eos_gamma", eos_gamma);
 
 	const int ncomp_cc = Physics_Indices<ShocktubeProblem>::nvarTotal_cc;
 	const int nmscalars = Physics_Traits<ShocktubeProblem>::numMassScalars;
@@ -111,7 +124,7 @@ template <> void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsOnGri
 		AMREX_ASSERT(!std::isnan(rho));
 		AMREX_ASSERT(!std::isnan(P));
 
-		const auto gamma = quokka::EOS_Traits<ShocktubeProblem>::gamma;
+		const auto gamma = eos_gamma; //quokka::EOS_Traits<ShocktubeProblem>::gamma;
 		for (int n = 0; n < ncomp_cc; ++n) {
 			state_cc(i, j, k, n) = 0.;
 		}
@@ -151,7 +164,7 @@ AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(const amrex::IntVec
 	amrex::Box const &box = geom.Domain();
 	amrex::GpuArray<int, 3> lo = box.loVect3d();
 	amrex::GpuArray<int, 3> hi = box.hiVect3d();
-	const auto gamma = quokka::EOS_Traits<ShocktubeProblem>::gamma;
+	const auto gamma = eos_gamma; //quokka::EOS_Traits<ShocktubeProblem>::gamma;
 
 	if (i < lo[0]) {
 		// x1 left side boundary -- constant
