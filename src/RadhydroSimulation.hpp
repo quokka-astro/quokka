@@ -44,13 +44,22 @@
 #include "AMReX_YAFluxRegister.H"
 
 #include "Chemistry.hpp"
+
+#ifndef CHEM
 #include "CloudyCooling.hpp"
+#endif
+
 #include "SimulationData.hpp"
 #include "hydro_system.hpp"
 #include "hyperbolic_system.hpp"
 #include "physics_info.hpp"
 #include "radiation_system.hpp"
 #include "simulation.hpp"
+
+#include "eos.H"
+#include "extern_parameters.H"
+#include "network.H"
+
 
 // Simulation class should be initialized only once per program (i.e., is a singleton)
 template <typename problem_t> class RadhydroSimulation : public AMRSimulation<problem_t>
@@ -97,7 +106,9 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	int enableCooling_ = 0;
 	int enableChemistry_ = 0;
 	Real max_density_allowed = std::numeric_limits<amrex::Real>::max();
+	#ifndef CHEM
 	quokka::cooling::cloudy_tables cloudyTables_;
+	#endif
 	std::string coolingTableFilename_{};
 
 	static constexpr int nvarTotal_cc_ = Physics_Indices<problem_t>::nvarTotal_cc;
@@ -292,6 +303,17 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::readParmParse(
 		hpp.query("artificial_viscosity_coefficient", artificialViscosityK_);
 	}
 
+#ifdef CHEM
+	// set chemistry runtime parameters
+	{
+		// currently we only have primordial chem
+		amrex::ParmParse hpp("primordial_chem");
+		hpp.query("enabled", enableChemistry_);
+		hpp.query("max_density_allowed", max_density_allowed);
+	}
+
+#else
+
 	// set cooling runtime parameters
 	{
 		amrex::ParmParse hpp("cooling");
@@ -304,14 +326,6 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::readParmParse(
 		}
 	}
 
-#ifdef CHEM
-	// set chemistry runtime parameters
-	{
-		// currently we only have primordial chem
-		amrex::ParmParse hpp("primordial_chem");
-		hpp.query("enabled", enableChemistry_);
-		hpp.query("max_density_allowed", max_density_allowed);
-	}
 #endif
 
 	// set radiation runtime parameters
@@ -401,6 +415,12 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::preCalculateIn
 {
 	// default empty implementation
 	// user should implement using problem-specific template specialization
+
+	// initialize microphysics routines
+	init_extern_parameters();
+	eos_init();
+	network_init();
+
 }
 
 template <typename problem_t> void RadhydroSimulation<problem_t>::setInitialConditionsOnGrid(quokka::grid grid_elem)
@@ -428,16 +448,20 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::addStrangSplit
 template <typename problem_t>
 void RadhydroSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt)
 {
-	if (enableCooling_ == 1) {
-		// compute cooling
-		quokka::cooling::computeCooling<problem_t>(state, dt, cloudyTables_, tempFloor_);
-	}
 
 #ifdef CHEM
 	if (enableChemistry_ == 1) {
 		// compute chemistry
 		quokka::chemistry::computeChemistry<problem_t>(state, dt, max_density_allowed);
 	}
+
+#else
+
+	if (enableCooling_ == 1) {
+		// compute cooling
+		quokka::cooling::computeCooling<problem_t>(state, dt, cloudyTables_, tempFloor_);
+	}
+
 #endif
 
 	// compute user-specified sources

@@ -20,15 +20,17 @@ namespace quokka
 {
 static constexpr double boltzmann_constant_cgs = 1.380658e-16; // cgs
 static constexpr double hydrogen_mass_cgs = 1.6726231e-24;     // cgs
+static constexpr double cs_isothermal = NAN; // only used when gamma = 1
+static constexpr double mean_molecular_weight = NAN;
 
 // specify default values for ideal gamma-law EOS
 //
-template <typename problem_t> struct EOS_Traits {
-	static constexpr double gamma = 5.0 / 3.0;   // default value
-	static constexpr double cs_isothermal = NAN; // only used when gamma = 1
-	static constexpr double mean_molecular_weight = NAN;
-	static constexpr double boltzmann_constant = boltzmann_constant_cgs;
-};
+//template <typename problem_t> struct EOS_Traits {
+//	static constexpr double gamma = 5.0 / 3.0;   // default value
+//	static constexpr double cs_isothermal = NAN; // only used when gamma = 1
+//	static constexpr double mean_molecular_weight = NAN;
+//	static constexpr double boltzmann_constant = boltzmann_constant_cgs;
+//};
 
 template <typename problem_t> class EOS
 {
@@ -37,10 +39,10 @@ template <typename problem_t> class EOS
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto ComputeEintFromTgas(amrex::Real rho, amrex::Real Tgas) -> amrex::Real;
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto ComputeEintTempDerivative(amrex::Real rho, amrex::Real Tgas) -> amrex::Real;
 
-      private:
-	static constexpr amrex::Real gamma_ = EOS_Traits<problem_t>::gamma;
-	static constexpr amrex::Real boltzmann_constant_ = EOS_Traits<problem_t>::boltzmann_constant;
-	static constexpr amrex::Real mean_molecular_weight_ = EOS_Traits<problem_t>::mean_molecular_weight;
+    //  private:
+	//static constexpr amrex::Real gamma_ = EOS_Traits<problem_t>::gamma;
+	//static constexpr amrex::Real boltzmann_constant_ = EOS_Traits<problem_t>::boltzmann_constant;
+	//static constexpr amrex::Real mean_molecular_weight_ = EOS_Traits<problem_t>::mean_molecular_weight;
 };
 
 template <typename problem_t>

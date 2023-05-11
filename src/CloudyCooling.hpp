@@ -23,6 +23,9 @@
 #include "radiation_system.hpp"
 #include "root_finding.hpp"
 
+#include "eos.H"
+#include "extern_parameters.H"
+
 namespace quokka::cooling
 {
 // From Grackle source code (initialize_chemistry_data.c, line 114):
@@ -265,7 +268,7 @@ template <typename problem_t> void computeCooling(amrex::MultiFab &mf, const Rea
 			const Real Egas = state(i, j, k, HydroSystem<problem_t>::energy_index);
 
 			const Real Eint = RadSystem<problem_t>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-			const Real gamma = quokka::EOS_Traits<problem_t>::gamma;
+			const Real gamma = eos_gamma; //quokka::EOS_Traits<problem_t>::gamma;
 			ODEUserData user_data{rho, gamma, tables};
 			quokka::valarray<Real, 1> y = {Eint};
 			quokka::valarray<Real, 1> const abstol = {reltol_floor * ComputeEgasFromTgas(rho, T_floor, gamma, tables)};
@@ -277,7 +280,8 @@ template <typename problem_t> void computeCooling(amrex::MultiFab &mf, const Rea
 
 			// check if integration failed
 			if (nsteps >= maxStepsODEIntegrate) {
-				Real const T = ComputeTgasFromEgas(rho, Eint, quokka::EOS_Traits<problem_t>::gamma, tables);
+				//Real const T = ComputeTgasFromEgas(rho, Eint, quokka::EOS_Traits<problem_t>::gamma, tables);
+				Real const T = ComputeTgasFromEgas(rho, Eint, eos_gamma, tables);
 				Real const Edot = cloudy_cooling_function(rho, T, tables);
 				Real const t_cool = Eint / Edot;
 				printf("max substeps exceeded! rho = %.17e, Eint = %.17e, T = %g, cooling "
