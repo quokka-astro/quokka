@@ -21,6 +21,11 @@
 #include "radiation_system.hpp"
 #include "test_hydro_shocktube_cma.hpp"
 
+#include "burn_type.H"
+#include "eos.H"
+#include "extern_parameters.H"
+#include "network.H"
+
 struct ShocktubeProblem {
 };
 
@@ -47,6 +52,15 @@ template <> struct Physics_Traits<ShocktubeProblem> {
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
 };
+
+
+template <> void RadhydroSimulation<ShocktubeProblem>::preCalculateInitialConditions()
+{
+	// initialize microphysics routines
+	init_extern_parameters();
+	eos_init();
+	network_init();
+}
 
 // left- and right- side shock states
 constexpr amrex::Real rho_L = 1.0;
