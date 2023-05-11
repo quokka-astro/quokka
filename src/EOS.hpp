@@ -8,13 +8,13 @@
 /// \brief A class for equation of state calculations.
 
 #include <cmath>
+#include <string>
 
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
-#ifdef PRIMORDIAL_CHEM
 #include "burn_type.H"
 #include "eos.H"
-#endif
+#include "extern_parameters.H"
 
 namespace quokka
 {
@@ -24,7 +24,7 @@ static constexpr double hydrogen_mass_cgs = 1.6726231e-24;     // cgs
 // specify default values for ideal gamma-law EOS
 //
 template <typename problem_t> struct EOS_Traits {
-	static constexpr double gamma = 5. / 3.;     // default value
+	static constexpr double gamma = 5.0/3.0;     // default value
 	static constexpr double cs_isothermal = NAN; // only used when gamma = 1
 	static constexpr double mean_molecular_weight = NAN;
 	static constexpr double boltzmann_constant = boltzmann_constant_cgs;
@@ -48,20 +48,11 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEin
 {
 	// return temperature for an ideal gas
 
-#ifdef PRIMORDIAL_CHEM
 	burn_t chemstate;
 	chemstate.rho = rho;
 	chemstate.e = Eint / rho;
 	eos(eos_input_re, chemstate);
 	amrex::Real Tgas = chemstate.T;
-#else
-	amrex::Real Tgas = NAN;
-	if constexpr (gamma_ != 1.0) {
-		const amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
-		Tgas = Eint / (rho * c_v);
-	}
-
-#endif
 
 	return Tgas;
 }
@@ -71,20 +62,11 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromTga
 {
 	// return internal energy density for a gamma-law ideal gas
 
-#ifdef PRIMORDIAL_CHEM
 	burn_t chemstate;
 	chemstate.rho = rho;
 	chemstate.T = Tgas;
 	eos(eos_input_rt, chemstate);
 	amrex::Real Eint = chemstate.e * chemstate.rho;
-#else
-	amrex::Real Eint = NAN;
-	if constexpr (gamma_ != 1.0) {
-		const amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
-		Eint = rho * c_v * Tgas;
-	}
-
-#endif
 
 	return Eint;
 }
@@ -93,20 +75,20 @@ template <typename problem_t>
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintTempDerivative(const amrex::Real rho, const amrex::Real Tgas) -> amrex::Real
 {
 	// compute derivative of internal energy w/r/t temperature
-#ifdef PRIMORDIAL_CHEM
+//#ifdef CHEM
 	burn_t chemstate;
 	chemstate.rho = rho;
 	chemstate.T = Tgas;
 	eos(eos_input_rt, chemstate);
 	amrex::Real dEint_dT = chemstate.dedT * chemstate.rho;
-#else
-	amrex::Real dEint_dT = NAN;
-	if constexpr (gamma_ != 1.0) {
-		const amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
-		dEint_dT = rho * c_v;
-	}
+//#else
+//	amrex::Real dEint_dT = NAN;
+//	if constexpr (gamma_ != 1.0) {
+//		const amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
+//		dEint_dT = rho * c_v;
+//	}
 
-#endif
+//#endif
 
 	return dEint_dT;
 }
