@@ -53,7 +53,6 @@ template <> struct Physics_Traits<ShocktubeProblem> {
 	static constexpr bool is_mhd_enabled = false;
 };
 
-
 template <> void RadhydroSimulation<ShocktubeProblem>::preCalculateInitialConditions()
 {
 	// initialize microphysics routines
