@@ -115,8 +115,8 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	// C++ does not allow constexpr to be uninitialized, even in a templated
 	// class!
-	static constexpr double gamma_ = 5.0/3.0; //eos_gamma; //quokka::EOS_Traits<problem_t>::gamma;
-	static constexpr double cs_iso_ = quokka::cs_isothermal; //quokka::EOS_Traits<problem_t>::cs_isothermal;
+	static constexpr double gamma_ = 5.0 / 3.0;		 // eos_gamma; //quokka::EOS_Traits<problem_t>::gamma;
+	static constexpr double cs_iso_ = quokka::cs_isothermal; // quokka::EOS_Traits<problem_t>::cs_isothermal;
 	static constexpr auto is_eos_isothermal() -> bool { return (gamma_ == 1.0); }
 
 	static constexpr bool reconstruct_eint = HydroSystem_Traits<problem_t>::reconstruct_eint;

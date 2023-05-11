@@ -60,7 +60,6 @@
 #include "extern_parameters.H"
 #include "network.H"
 
-
 // Simulation class should be initialized only once per program (i.e., is a singleton)
 template <typename problem_t> class RadhydroSimulation : public AMRSimulation<problem_t>
 {
@@ -106,9 +105,9 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	int enableCooling_ = 0;
 	int enableChemistry_ = 0;
 	Real max_density_allowed = std::numeric_limits<amrex::Real>::max();
-	#ifndef CHEM
+#ifndef CHEM
 	quokka::cooling::cloudy_tables cloudyTables_;
-	#endif
+#endif
 	std::string coolingTableFilename_{};
 
 	static constexpr int nvarTotal_cc_ = Physics_Indices<problem_t>::nvarTotal_cc;
@@ -420,7 +419,6 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::preCalculateIn
 	init_extern_parameters();
 	eos_init();
 	network_init();
-
 }
 
 template <typename problem_t> void RadhydroSimulation<problem_t>::setInitialConditionsOnGrid(quokka::grid grid_elem)

@@ -37,19 +37,18 @@ template <> struct SimulationData<ShocktubeProblem> {
 	std::vector<double> delta_eps_t_vec_; // stores sum of mass fractions at each time
 };
 
-//template <> void RadhydroSimulation<ShocktubeProblem>::preCalculateInitialConditions()
+// template <> void RadhydroSimulation<ShocktubeProblem>::preCalculateInitialConditions()
 //{
 //
 //	// parmparse species and temperature
 //	amrex::ParmParse pp("shocktube_cma");
 //	pp.query("eos_gamma", eos_gamma);
-//}
-//template <> struct quokka::EOS_Traits<ShocktubeProblem> {
+// }
+// template <> struct quokka::EOS_Traits<ShocktubeProblem> {
 //	static constexpr double gamma = 1.4;
 //	static constexpr double mean_molecular_weight = NAN;
 //	static constexpr double boltzmann_constant = quokka::boltzmann_constant_cgs;
-//};
-
+// };
 
 template <> struct Physics_Traits<ShocktubeProblem> {
 	// cell-centred
@@ -62,13 +61,13 @@ template <> struct Physics_Traits<ShocktubeProblem> {
 	static constexpr bool is_mhd_enabled = false;
 };
 
-//template <> void RadhydroSimulation<ShocktubeProblem>::preCalculateInitialConditions()
+// template <> void RadhydroSimulation<ShocktubeProblem>::preCalculateInitialConditions()
 //{
 //	// initialize microphysics routines
 //	init_extern_parameters();
 //	eos_init();
 //	network_init();
-//}
+// }
 
 // left- and right- side shock states
 constexpr amrex::Real rho_L = 1.0;
@@ -124,7 +123,7 @@ template <> void RadhydroSimulation<ShocktubeProblem>::setInitialConditionsOnGri
 		AMREX_ASSERT(!std::isnan(rho));
 		AMREX_ASSERT(!std::isnan(P));
 
-		const auto gamma = eos_gamma; //quokka::EOS_Traits<ShocktubeProblem>::gamma;
+		const auto gamma = eos_gamma; // quokka::EOS_Traits<ShocktubeProblem>::gamma;
 		for (int n = 0; n < ncomp_cc; ++n) {
 			state_cc(i, j, k, n) = 0.;
 		}
@@ -164,7 +163,7 @@ AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(const amrex::IntVec
 	amrex::Box const &box = geom.Domain();
 	amrex::GpuArray<int, 3> lo = box.loVect3d();
 	amrex::GpuArray<int, 3> hi = box.hiVect3d();
-	const auto gamma = eos_gamma; //quokka::EOS_Traits<ShocktubeProblem>::gamma;
+	const auto gamma = eos_gamma; // quokka::EOS_Traits<ShocktubeProblem>::gamma;
 
 	if (i < lo[0]) {
 		// x1 left side boundary -- constant
