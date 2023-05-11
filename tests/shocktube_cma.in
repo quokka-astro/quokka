@@ -24,3 +24,4 @@ plotfile_interval = -1
 cfl = 0.6
 hydro.reconstruction_order = 3
 hydro.artificial_viscosity_coefficient = 0.1
+shocktube_cma.eos_gamma = 1.4
