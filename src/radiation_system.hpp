@@ -25,7 +25,6 @@
 // internal headers
 #include "ArrayView.hpp"
 #include "EOS.hpp"
-#include "fundamental_constants.H"
 #include "hydro_system.hpp"
 #include "hyperbolic_system.hpp"
 #include "simulation.hpp"
