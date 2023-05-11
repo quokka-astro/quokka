@@ -304,9 +304,10 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::readParmParse(
 		}
 	}
 
-#ifdef PRIMORDIAL_CHEM
+#ifdef CHEM
 	// set chemistry runtime parameters
 	{
+		// currently we only have primordial chem
 		amrex::ParmParse hpp("primordial_chem");
 		hpp.query("enabled", enableChemistry_);
 		hpp.query("max_density_allowed", max_density_allowed);
@@ -432,7 +433,7 @@ void RadhydroSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::Mult
 		quokka::cooling::computeCooling<problem_t>(state, dt, cloudyTables_, tempFloor_);
 	}
 
-#ifdef PRIMORDIAL_CHEM
+#ifdef CHEM
 	if (enableChemistry_ == 1) {
 		// compute chemistry
 		quokka::chemistry::computeChemistry<problem_t>(state, dt, max_density_allowed);
