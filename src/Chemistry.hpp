@@ -6,8 +6,10 @@
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 /// \file Chemistry.hpp
-/// \brief Defines methods for integrating primordial chemical network using Microphysics
+/// \brief Defines methods for integrating chemical networks using Microphysics
 ///
+
+#ifdef CHEM
 
 #include <array>
 #include <limits>
@@ -133,4 +135,6 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 }
 
 } // namespace quokka::chemistry
+
+#endif
 #endif // CHEMISTRY_HPP_
