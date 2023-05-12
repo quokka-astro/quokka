@@ -287,7 +287,7 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(amrex::Multi
 		}
 
 		std::vector<double> Pexact(xs_exact.size());
-		for (int i = 0; i < xs_exact.size(); ++i) {
+		for (size_t i = 0; i < xs_exact.size(); ++i) {
 			Pexact.at(i) = pressure_exact.at(i) / 10.;
 		}
 

@@ -61,7 +61,7 @@ else()
 endif(DISABLE_FMAD)
 
 # emit error if warnings are produced
-add_compile_options(-Werror -Wall -Wextra -Wno-unused-parameter -Wno-unknown-pragmas)
+add_compile_options(-Werror -Wall -Wextra -Wno-unused-parameter -Wno-unknown-pragmas -Wno-strict-aliasing)
 
 # emit register usage per thread from CUDA assembler
 # if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA")
