@@ -151,7 +151,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rk_adaptive_integrate(F &&rhs, Rea
 	// integration loop
 	Real time = t0;
 	Real dt = std::isnan(dt_guess) ? (t1 - t0) : dt_guess;
-	const Real hmin = 1.0e-4;
 	quokka::valarray<Real, N> &y = y0;
 	quokka::valarray<Real, N> yerr{};
 	quokka::valarray<Real, N> ynew{};

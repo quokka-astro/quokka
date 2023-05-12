@@ -1166,7 +1166,6 @@ auto RadhydroSimulation<problem_t>::computeFOHydroFluxes(amrex::MultiFab const &
 
 	auto ba = grids[lev];
 	auto dm = dmap[lev];
-	const int flatteningGhost = 2;
 	const int reconstructRange = 1;
 
 	// allocate temporary MultiFabs
