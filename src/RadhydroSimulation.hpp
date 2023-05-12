@@ -743,8 +743,8 @@ auto RadhydroSimulation<problem_t>::computeAxisAlignedProfile(const int axis, F 
 
 	// normalize profile
 	amrex::Long numCells = domain.numPts() / domain.length(axis);
-	for (size_t i = 0; i < profile.size(); ++i) {
-		profile[i] /= static_cast<amrex::Real>(numCells);
+	for (double & bin : profile) {
+		bin /= static_cast<amrex::Real>(numCells);
 	}
 
 	return profile;
