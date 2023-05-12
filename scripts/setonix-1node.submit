@@ -1,15 +1,20 @@
 #!/bin/bash
 
 #SBATCH -A pawsey0807-gpu
-#SBATCH -J quokka_code
+#SBATCH -J quokka_benchmark
 #SBATCH -o 1node_%x-%j.out
 #SBATCH -t 00:10:00
-#SBATCH -p gpu
+#SBATCH -p gpu-dev
+#SBATCH --exclusive
 #SBATCH --ntasks-per-node=8
-#SBATCH --cpus-per-task=7
+#SBATCH --cpus-per-task=8
 #SBATCH --gpus-per-task=1
 #SBATCH --gpu-bind=closest
 #SBATCH -N 1
+
+# load modules
+module load craype-accel-amd-gfx90a
+module load rocm/5.0.2
 
 # this environment setting is currently needed to work-around a
 # known issue with Libfabric
