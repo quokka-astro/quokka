@@ -53,7 +53,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEin
 	burn_t chemstate;
 	chemstate.rho = rho;
 	chemstate.e = Eint / rho;
-	eos(eos_input_re, chemstate);
+	eos(eos_input_re, chemstate); // this might cause an error when primordial chem is run with hydro, because we may also need to provide values of the mass scalars here
 	amrex::Real const Tgas = chemstate.T;
 
 	return Tgas;
@@ -67,7 +67,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromTga
 	burn_t chemstate;
 	chemstate.rho = rho;
 	chemstate.T = Tgas;
-	eos(eos_input_rt, chemstate);
+	eos(eos_input_rt, chemstate); // this might cause an error when primordial chem is run with hydro, because we may also need to provide values of the mass scalars here
 	amrex::Real const Eint = chemstate.e * chemstate.rho;
 
 	return Eint;
@@ -81,7 +81,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintTempDer
 	burn_t chemstate;
 	chemstate.rho = rho;
 	chemstate.T = Tgas;
-	eos(eos_input_rt, chemstate);
+	eos(eos_input_rt, chemstate); // this might cause an error when primordial chem is run with hydro, because we may also need to provide values of the mass scalars here
 	amrex::Real const dEint_dT = chemstate.dedT * chemstate.rho;
 	// #else
 	//	amrex::Real dEint_dT = NAN;
