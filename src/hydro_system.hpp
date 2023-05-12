@@ -573,7 +573,7 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::MultiFab const &q_mf, amrex::M
 		x1RightState(i, j, k, n) = new_a_minus;
 		x1LeftState(i + 1, j, k, n) = new_a_plus;
 	});
-	
+
 	if constexpr (AMREX_SPACEDIM < 2) {
 		amrex::ignore_unused(x2Chi_in);
 	}
