@@ -85,9 +85,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static constexpr double Erad_floor_ = RadSystem_Traits<problem_t>::Erad_floor;
 	static constexpr bool compute_v_over_c_terms_ = RadSystem_Traits<problem_t>::compute_v_over_c_terms;
 
-	static constexpr double mean_molecular_mass_ = quokka::mean_molecular_weight; // quokka::EOS_Traits<problem_t>::mean_molecular_mass;
-	static constexpr double boltzmann_constant_ = quokka::boltzmann_constant_cgs; // quokka::EOS_Traits<problem_t>::boltzmann_constant;
-	static constexpr double gamma_ = 5.0 / 3.0;				      // eos_gamma; //quokka::EOS_Traits<problem_t>::gamma;
+	static constexpr double mean_molecular_mass_ = quokka::EOS_Traits<problem_t>::mean_molecular_mass;
+	static constexpr double gamma_ = quokka::EOS_Traits<problem_t>::gamma;
 
 	// static functions
 

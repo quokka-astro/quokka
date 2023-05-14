@@ -25,6 +25,7 @@
 
 #include "eos.H"
 #include "extern_parameters.H"
+#include <fundamental_constants.H>
 
 namespace quokka::cooling
 {
@@ -120,7 +121,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto cloudy_cooling_function(Real const
 	// Compton term (CMB photons)
 	// [e.g., Hirata 2018: doi:10.1093/mnras/stx2854]
 	constexpr double Gamma_C = (8. * sigma_T * E_cmb) / (3. * electron_mass_cgs * c_light_cgs_);
-	constexpr double C_n = Gamma_C * quokka::boltzmann_constant_cgs / (5. / 3. - 1.0);
+	//constexpr double C_n = Gamma_C * quokka::boltzmann_constant_cgs / (5. / 3. - 1.0);
+	constexpr double C_n = Gamma_C * C::k_B / (5. / 3. - 1.0);
 	const double compton_CMB = -C_n * (T - T_cmb) * n_e;
 	Edot += compton_CMB;
 
@@ -137,7 +139,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeEgasFromTgas(double rho, do
 	const Real mu = interpolate2d(std::log10(nH), std::log10(Tgas), tables.log_nH, tables.log_Tgas, tables.meanMolWeight);
 
 	// compute thermal gas energy
-	const Real Egas = (rho / (quokka::hydrogen_mass_cgs * mu)) * quokka::boltzmann_constant_cgs * Tgas / (gamma - 1.);
+	// const Real Egas = (rho / (quokka::hydrogen_mass_cgs * mu)) * quokka::boltzmann_constant_cgs * Tgas / (gamma - 1.);
+	const Real Egas = (rho / (quokka::hydrogen_mass_cgs * mu)) * C::k_B * Tgas / (gamma - 1.);
 	return Egas;
 }
 
@@ -164,7 +167,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(double rho, do
 
 	// mean molecular weight (in Grackle tables) is defined w/r/t
 	// hydrogen_mass_cgs_
-	const Real C = (gamma - 1.) * Egas / (quokka::boltzmann_constant_cgs * (rho / quokka::hydrogen_mass_cgs));
+	// const Real C = (gamma - 1.) * Egas / (quokka::boltzmann_constant_cgs * (rho / quokka::hydrogen_mass_cgs));
+	const Real C = (gamma - 1.) * Egas / (C::k_B * (rho / quokka::hydrogen_mass_cgs));
 
 	// solve for mu(T)*C == T.
 	// (Grackle does this with a fixed-point iteration. We use a more robust
@@ -268,7 +272,7 @@ template <typename problem_t> void computeCooling(amrex::MultiFab &mf, const Rea
 			const Real Egas = state(i, j, k, HydroSystem<problem_t>::energy_index);
 
 			const Real Eint = RadSystem<problem_t>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-			const Real gamma = eos_gamma; // quokka::EOS_Traits<problem_t>::gamma;
+			const Real gamma = quokka::EOS_Traits<problem_t>::gamma;
 			ODEUserData user_data{rho, gamma, tables};
 			quokka::valarray<Real, 1> y = {Eint};
 			quokka::valarray<Real, 1> const abstol = {reltol_floor * ComputeEgasFromTgas(rho, T_floor, gamma, tables)};
@@ -280,8 +284,7 @@ template <typename problem_t> void computeCooling(amrex::MultiFab &mf, const Rea
 
 			// check if integration failed
 			if (nsteps >= maxStepsODEIntegrate) {
-				// Real const T = ComputeTgasFromEgas(rho, Eint, quokka::EOS_Traits<problem_t>::gamma, tables);
-				Real const T = ComputeTgasFromEgas(rho, Eint, eos_gamma, tables);
+				Real const T = ComputeTgasFromEgas(rho, Eint, quokka::EOS_Traits<problem_t>::gamma, tables);
 				Real const Edot = cloudy_cooling_function(rho, T, tables);
 				Real const t_cool = Eint / Edot;
 				printf("max substeps exceeded! rho = %.17e, Eint = %.17e, T = %g, cooling "
