@@ -4,21 +4,21 @@
 #SBATCH -J quokka_benchmark
 #SBATCH -o 1node_%x-%j.out
 #SBATCH -t 00:10:00
-#SBATCH -p gpu-dev
+#SBATCH -p gpu
 #SBATCH --exclusive
 #SBATCH --ntasks-per-node=8
 #SBATCH --cpus-per-task=8
 #SBATCH --sockets-per-node=8
 #SBATCH --gpus-per-node=8
-#SBATCH -N 1
+#SBATCH -N 1  # number of nodes
 
 # load modules
 module load craype-accel-amd-gfx90a
 module load rocm/5.0.2
 
-# this environment setting is currently needed to work-around a
-# known issue with Libfabric
-export FI_MR_CACHE_MAX_COUNT=0  # libfabric disable caching
+## workaround libfabric bug
+## (if you don't do this, it *will* hang after printing "AMReX (23.04-41-gcf6b46bd95a3) initialized"...)
+export FI_MR_CACHE_MAX_COUNT=0 # disable libfabric memcache
 
 # always run with GPU-aware MPI
 export MPICH_GPU_SUPPORT_ENABLED=1
