@@ -23,7 +23,7 @@ static constexpr double hydrogen_mass_cgs = C::m_p + C::m_e; // cgs
 
 // specify default values for ideal gamma-law EOS
 //
- template <typename problem_t> struct EOS_Traits {
+template <typename problem_t> struct EOS_Traits {
 	static constexpr double gamma = 5.0 / 3.0;   // default value
 	static constexpr double cs_isothermal = NAN; // only used when gamma = 1
 	static constexpr double mean_molecular_weight = NAN;
@@ -36,9 +36,9 @@ template <typename problem_t> class EOS
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto ComputeEintFromTgas(amrex::Real rho, amrex::Real Tgas) -> amrex::Real;
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto ComputeEintTempDerivative(amrex::Real rho, amrex::Real Tgas) -> amrex::Real;
 
-	  private:
-	 static constexpr amrex::Real gamma_ = EOS_Traits<problem_t>::gamma;
-	 static constexpr amrex::Real mean_molecular_weight_ = EOS_Traits<problem_t>::mean_molecular_weight;
+      private:
+	static constexpr amrex::Real gamma_ = EOS_Traits<problem_t>::gamma;
+	static constexpr amrex::Real mean_molecular_weight_ = EOS_Traits<problem_t>::mean_molecular_weight;
 };
 
 template <typename problem_t>
@@ -51,7 +51,8 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEin
 	chemstate.e = Eint / rho;
 	chemstate.mu = mean_molecular_weight_;
 	eos(eos_input_re,
-	    chemstate); // this will cause an error when primordial chem is run with hydro, because we also need to input values of the mass scalars in chemstate.xn
+	    chemstate); // this will cause an error when primordial chem is run with hydro, because we also need to input values of the mass scalars in
+			// chemstate.xn
 	amrex::Real Tgas = chemstate.T;
 
 	return Tgas;
@@ -67,7 +68,8 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromTga
 	chemstate.T = Tgas;
 	chemstate.mu = mean_molecular_weight_;
 	eos(eos_input_rt,
-	    chemstate); // this will cause an error when primordial chem is run with hydro, because we also need to input values of the mass scalars in chemstate.xn
+	    chemstate); // this will cause an error when primordial chem is run with hydro, because we also need to input values of the mass scalars in
+			// chemstate.xn
 	amrex::Real const Eint = chemstate.e * chemstate.rho;
 
 	return Eint;
@@ -83,7 +85,8 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintTempDer
 	chemstate.T = Tgas;
 	chemstate.mu = mean_molecular_weight_;
 	eos(eos_input_rt,
-	    chemstate); // this will cause an error when primordial chem is run with hydro, because we also need to input values of the mass scalars in chemstate.xn
+	    chemstate); // this will cause an error when primordial chem is run with hydro, because we also need to input values of the mass scalars in
+			// chemstate.xn
 	amrex::Real const dEint_dT = chemstate.dedT * chemstate.rho;
 
 	return dEint_dT;

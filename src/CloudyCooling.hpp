@@ -121,7 +121,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto cloudy_cooling_function(Real const
 	// Compton term (CMB photons)
 	// [e.g., Hirata 2018: doi:10.1093/mnras/stx2854]
 	constexpr double Gamma_C = (8. * sigma_T * E_cmb) / (3. * electron_mass_cgs * c_light_cgs_);
-	//constexpr double C_n = Gamma_C * quokka::boltzmann_constant_cgs / (5. / 3. - 1.0);
+	// constexpr double C_n = Gamma_C * quokka::boltzmann_constant_cgs / (5. / 3. - 1.0);
 	constexpr double C_n = Gamma_C * C::k_B / (5. / 3. - 1.0);
 	const double compton_CMB = -C_n * (T - T_cmb) * n_e;
 	Edot += compton_CMB;

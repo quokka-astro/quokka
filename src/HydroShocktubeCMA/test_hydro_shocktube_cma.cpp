@@ -44,10 +44,10 @@ template <> struct SimulationData<ShocktubeProblem> {
 //	amrex::ParmParse pp("shocktube_cma");
 //	pp.query("eos_gamma", eos_gamma);
 // }
- template <> struct quokka::EOS_Traits<ShocktubeProblem> {
+template <> struct quokka::EOS_Traits<ShocktubeProblem> {
 	static constexpr double gamma = 1.4;
 	static constexpr double mean_molecular_weight = NAN;
- };
+};
 
 template <> struct Physics_Traits<ShocktubeProblem> {
 	// cell-centred
