@@ -7,24 +7,21 @@
 /// \brief Defines a test problem for a linear radiation-hydro wave.
 ///
 
+#include <complex>
 #include <valarray>
 
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
 #include "AMReX_REAL.H"
 
+#include "EOS.hpp"
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
 #include "hydro_system.hpp"
+#include "radiation_system.hpp"
 #include "test_radhydro_wave.hpp"
 
 struct WaveProblem {
-};
-
-template <> struct quokka::EOS_Traits<WaveProblem> {
-	static constexpr double gamma = 5. / 3.;
-	static constexpr double mean_molecular_weight = quokka::hydrogen_mass_cgs;
-	static constexpr double boltzmann_constant = quokka::boltzmann_constant_cgs;
 };
 
 template <> struct Physics_Traits<WaveProblem> {
@@ -38,10 +35,22 @@ template <> struct Physics_Traits<WaveProblem> {
 	static constexpr bool is_mhd_enabled = false;
 };
 
-constexpr double rho0 = 1.0;					    // background density
-constexpr double P0 = 1.0 / quokka::EOS_Traits<WaveProblem>::gamma; // background pressure
-constexpr double v0 = 0.;					    // background velocity
-constexpr double amp = 1.0e-6;					    // perturbation amplitude
+template <> struct quokka::EOS_Traits<WaveProblem> {
+	static constexpr double gamma = 5. / 3.;
+	static constexpr double mean_molecular_weight = 1.0; // dimensionless
+	static constexpr double boltzmann_constant = 1.0;    // dimensionless
+};
+
+constexpr double rho0 = 1.0;   // background density
+constexpr double v0 = 0.;      // background velocity
+constexpr double T0 = 1.0;     // background pressure
+constexpr double Erad0 = 1.0;  // background radiation energy density
+constexpr double Frad0 = 0.;   // background radiation flux
+constexpr double amp = 1.0e-6; // perturbation amplitude
+
+// set the dimensionless speed of light
+
+// set the ratio of radiation pressure to thermal pressure
 
 AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 					  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
@@ -50,21 +59,31 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 	const amrex::Real x_R = prob_lo[0] + (i + static_cast<amrex::Real>(1.0)) * dx[0];
 	const amrex::Real A = amp;
 
-	const quokka::valarray<double, 3> R = {1.0, -1.0, 1.5}; // right eigenvector of sound wave
-	const quokka::valarray<double, 3> U_0 = {rho0, rho0 * v0, P0 / (quokka::EOS_Traits<WaveProblem>::gamma - 1.0) + 0.5 * rho0 * std::pow(v0, 2)};
-	const quokka::valarray<double, 3> dU = (A * R / (2.0 * M_PI * dx[0])) * (std::cos(2.0 * M_PI * x_L) - std::cos(2.0 * M_PI * x_R));
+	// right eigenvector of radiation wave
+	const quokka::valarray<std::complex<double>, 5> R = {-6.04108e-10 + 4.60307e-9 * 1j, 9.43323e-7 + 0.0000261512 * 1j, 0.0290768 + 0.093306 * 1j,
+							     0.853528, 0.511764 - 0.00603545 * 1j};
+	const quokka::valarray<std::complex<double>, 5> P_0 = {rho0, v0, T0, Erad0, Frad0};
+	const quokka::valarray<std::complex<double>, 5> dU = (A * R / (2.0 * M_PI * dx[0])) * (std::cos(2.0 * M_PI * x_L) - std::cos(2.0 * M_PI * x_R));
 
-	double rho = U_0[0] + dU[0];
-	double xmom = U_0[1] + dU[1];
-	double Etot = U_0[2] + dU[2];
-	double Eint = Etot - 0.5 * (xmom * xmom) / rho;
+	double rho = P_0[0] + dU[0];
+	double vx = P_0[1] + dU[1];
+	double Tgas = P_0[2] + dU[2];
 
+	double Eint = quokka::EOS<WaveProblem>::ComputeEintFromTgas(rho, Tgas);
+
+	// gas vars
 	state(i, j, k, HydroSystem<WaveProblem>::density_index) = rho;
-	state(i, j, k, HydroSystem<WaveProblem>::x1Momentum_index) = xmom;
+	state(i, j, k, HydroSystem<WaveProblem>::x1Momentum_index) = rho * vx;
 	state(i, j, k, HydroSystem<WaveProblem>::x2Momentum_index) = 0;
 	state(i, j, k, HydroSystem<WaveProblem>::x3Momentum_index) = 0;
-	state(i, j, k, HydroSystem<WaveProblem>::energy_index) = Etot;
+	state(i, j, k, HydroSystem<WaveProblem>::energy_index) = Eint + 0.5 * rho * vx;
 	state(i, j, k, HydroSystem<WaveProblem>::internalEnergy_index) = Eint;
+	
+	// rad vars
+	state(i, j, k, RadSystem<WaveProblem>::radEnergy_index) = NAN;
+	state(i, j, k, RadSystem<WaveProblem>::x1RadFlux_index) = NAN;
+	state(i, j, k, RadSystem<WaveProblem>::x2RadFlux_index) = 0;
+	state(i, j, k, RadSystem<WaveProblem>::x3RadFlux_index) = 0;
 }
 
 template <> void RadhydroSimulation<WaveProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
@@ -133,7 +152,7 @@ auto problem_main() -> int
 		// extract values
 		std::vector<double> d(nx);
 		std::vector<double> vx(nx);
-		std::vector<double> P(nx);
+		std::vector<double> T(nx);
 
 		for (int i = 0; i < nx; ++i) {
 			amrex::Real rho = values.at(HydroSystem<WaveProblem>::density_index)[i];
@@ -142,16 +161,16 @@ auto problem_main() -> int
 
 			amrex::Real xvel = xmom / rho;
 			amrex::Real Eint = Egas - xmom * xmom / (2.0 * rho);
-			amrex::Real pressure = Eint * (quokka::EOS_Traits<WaveProblem>::gamma - 1.);
+			amrex::Real Tgas = quokka::EOS<WaveProblem>::ComputeTgasFromEint(rho, Eint);
 
 			d.at(i) = (rho - rho0) / amp;
 			vx.at(i) = (xvel - v0) / amp;
-			P.at(i) = (pressure - P0) / amp;
+			T.at(i) = (Tgas - T0) / amp;
 		}
 
 		std::vector<double> density_exact(nx);
 		std::vector<double> velocity_exact(nx);
-		std::vector<double> pressure_exact(nx);
+		std::vector<double> temperature_exact(nx);
 
 		for (int i = 0; i < nx; ++i) {
 			amrex::Real rho = val_exact.at(HydroSystem<WaveProblem>::density_index)[i];
@@ -160,11 +179,11 @@ auto problem_main() -> int
 
 			amrex::Real xvel = xmom / rho;
 			amrex::Real Eint = Egas - xmom * xmom / (2.0 * rho);
-			amrex::Real pressure = Eint * (quokka::EOS_Traits<WaveProblem>::gamma - 1.);
+			amrex::Real Tgas = quokka::EOS<WaveProblem>::ComputeTgasFromEint(rho, Eint);
 
 			density_exact.at(i) = (rho - rho0) / amp;
 			velocity_exact.at(i) = (xvel - v0) / amp;
-			pressure_exact.at(i) = (pressure - P0) / amp;
+			temperature_exact.at(i) = (Tgas - T0) / amp;
 		}
 
 		// Plot results
@@ -183,18 +202,18 @@ auto problem_main() -> int
 		matplotlibcpp::title(fmt::format("t = {:.4f}", t));
 		matplotlibcpp::save(fmt::format("./radhydro_density_{:.4f}.pdf", t));
 
-		std::map<std::string, std::string> P_args;
-		std::map<std::string, std::string> Pinit_args;
-		std::map<std::string, std::string> Pexact_args;
-		P_args["label"] = "pressure";
-		Pinit_args["label"] = "pressure (initial)";
+		std::map<std::string, std::string> T_args;
+		std::map<std::string, std::string> Tinit_args;
+		std::map<std::string, std::string> Texact_args;
+		T_args["label"] = "temperature";
+		Tinit_args["label"] = "temperature (initial)";
 
 		matplotlibcpp::clf();
-		matplotlibcpp::plot(xs, P, P_args);
-		matplotlibcpp::plot(xs, pressure_exact, Pinit_args);
+		matplotlibcpp::plot(xs, T, T_args);
+		matplotlibcpp::plot(xs, temperature_exact, Tinit_args);
 		matplotlibcpp::legend();
 		matplotlibcpp::title(fmt::format("t = {:.4f}", t));
-		matplotlibcpp::save(fmt::format("./radhydro_pressure_{:.4f}.pdf", t));
+		matplotlibcpp::save(fmt::format("./radhydro_temperature_{:.4f}.pdf", t));
 
 		std::map<std::string, std::string> v_args;
 		std::map<std::string, std::string> vinit_args;
