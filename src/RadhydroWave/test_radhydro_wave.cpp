@@ -86,16 +86,6 @@ template <> void RadhydroSimulation<WaveProblem>::setInitialConditionsOnGrid(quo
 
 auto problem_main() -> int
 {
-	// Based on the ATHENA test page:
-	// https://www.astro.princeton.edu/~jstone/Athena/tests/linear-waves/linear-waves.html
-
-	// Problem parameters
-	// const int nx = 100;
-	// const double Lx = 1.0;
-	const double CFL_number = 0.1;
-	const double max_time = 1.0;
-	const int max_timesteps = 2e4;
-
 	// Problem initialization
 	const int ncomp_cc = Physics_Indices<WaveProblem>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
@@ -105,13 +95,7 @@ auto problem_main() -> int
 			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
 		}
 	}
-
 	RadhydroSimulation<WaveProblem> sim(BCs_cc);
-
-	sim.cflNumber_ = CFL_number;
-	sim.stopTime_ = max_time;
-	sim.maxTimesteps_ = max_timesteps;
-	sim.plotfileInterval_ = -1;
 
 	// set initial conditions
 	sim.setInitialConditions();
