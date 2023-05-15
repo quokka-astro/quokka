@@ -14,7 +14,7 @@ pr:
 
 jobs:
 - job: BuildAndTest
-  timeoutInMinutes: 120 # how long to run the job before automatically cancelling
+  timeoutInMinutes: 180 # how long to run the job before automatically cancelling
   pool: oracle-cloud
   steps:
   - task: CMake@1
@@ -25,7 +25,7 @@ jobs:
   - task: CMake@1
     displayName: 'Build Quokka'
     inputs:
-      cmakeArgs: '--build . --parallel 1'
+      cmakeArgs: '--build .'
 
   - task: CMake@1
     displayName: 'Run CTest'

@@ -441,7 +441,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Default suppress_output = 0
 	pp.query("suppress_output", suppress_output);
 
-	// specify this on the commmand-line in order to restart from a checkpoint
+	// specify this on the command-line in order to restart from a checkpoint
 	// file
 	pp.query("restartfile", restart_chkfile);
 
@@ -1222,7 +1222,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 {
 	const int ncomp_cc = Physics_Indices<problem_t>::nvarTotal_cc;
 	const int nghost_cc = nghost_cc_;
-	// itterate over the domain
+	// iterate over the domain
 	for (amrex::MFIter iter(state_new_cc_[level]); iter.isValid(); ++iter) {
 		quokka::grid grid_elem(state_new_cc_[level].array(iter), iter.validbox(), geom[level].CellSizeArray(), geom[level].ProbLoArray(),
 				       geom[level].ProbHiArray(), quokka::centering::cc, quokka::direction::na);
@@ -1244,7 +1244,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 	const int nghost_fc = nghost_fc_;
 	// for each face-centering
 	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-		// itterate over the domain and initialise data
+		// iterate over the domain and initialise data
 		for (amrex::MFIter iter(state_new_fc_[level][idim]); iter.isValid(); ++iter) {
 			quokka::grid grid_elem(state_new_fc_[level][idim].array(iter), iter.validbox(), geom[level].CellSizeArray(), geom[level].ProbLoArray(),
 					       geom[level].ProbHiArray(), quokka::centering::fc, static_cast<quokka::direction>(idim));
@@ -1297,7 +1297,7 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(int level, amrex::Real ti
 		}
 	}
 
-	// precalculate any required data (e.g., data table; as implimented by the
+	// precalculate any required data (e.g., data table; as implemented by the
 	// user) before initialising state variables
 	preCalculateInitialConditions();
 
@@ -1544,7 +1544,7 @@ void AMRSimulation<problem_t>::AverageFCToCC(amrex::MultiFab &mf_cc, const amrex
 	} else if (idim == 2) {
 		dk = 1;
 	}
-	// itterate over the domain
+	// iterate over the domain
 	auto const &state_cc = mf_cc.arrays();
 	auto const &state_fc = mf_fc.const_arrays();
 	amrex::ParallelFor(mf_cc, amrex::IntVect(AMREX_D_DECL(nGrow, nGrow, nGrow)), [=] AMREX_GPU_DEVICE(int boxidx, int i, int j, int k) {
