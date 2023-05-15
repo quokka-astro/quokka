@@ -331,7 +331,7 @@ auto problem_main() -> int
 
 		double err_norm = 0.;
 		double sol_norm = 0.;
-		for (int i = 0; i < xs_exact.size(); ++i) {
+		for (size_t i = 0; i < xs_exact.size(); ++i) {
 			err_norm += std::abs(Trad_interp[i] - Trad_exact[i]);
 			sol_norm += std::abs(Trad_exact[i]);
 		}
