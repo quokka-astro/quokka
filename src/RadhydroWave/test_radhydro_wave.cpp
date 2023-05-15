@@ -3,8 +3,8 @@
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file test_hydro_wave.cpp
-/// \brief Defines a test problem for a linear hydro wave.
+/// \file test_radhydro_wave.cpp
+/// \brief Defines a test problem for a linear radiation-hydro wave.
 ///
 
 #include <valarray>
@@ -46,8 +46,8 @@ constexpr double amp = 1.0e-6;					    // perturbation amplitude
 AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 					  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
-	const amrex::Real x_L = prob_lo[0] + (i + amrex::Real(0.0)) * dx[0];
-	const amrex::Real x_R = prob_lo[0] + (i + amrex::Real(1.0)) * dx[0];
+	const amrex::Real x_L = prob_lo[0] + (i + static_cast<amrex::Real>(0.0)) * dx[0];
+	const amrex::Real x_R = prob_lo[0] + (i + static_cast<amrex::Real>(1.0)) * dx[0];
 	const amrex::Real A = amp;
 
 	const quokka::valarray<double, 3> R = {1.0, -1.0, 1.5}; // right eigenvector of sound wave
@@ -181,7 +181,7 @@ auto problem_main() -> int
 		matplotlibcpp::plot(xs, density_exact, dinit_args);
 		matplotlibcpp::legend();
 		matplotlibcpp::title(fmt::format("t = {:.4f}", t));
-		matplotlibcpp::save(fmt::format("./density_{:.4f}.pdf", t));
+		matplotlibcpp::save(fmt::format("./radhydro_density_{:.4f}.pdf", t));
 
 		std::map<std::string, std::string> P_args;
 		std::map<std::string, std::string> Pinit_args;
@@ -194,7 +194,7 @@ auto problem_main() -> int
 		matplotlibcpp::plot(xs, pressure_exact, Pinit_args);
 		matplotlibcpp::legend();
 		matplotlibcpp::title(fmt::format("t = {:.4f}", t));
-		matplotlibcpp::save(fmt::format("./pressure_{:.4f}.pdf", t));
+		matplotlibcpp::save(fmt::format("./radhydro_pressure_{:.4f}.pdf", t));
 
 		std::map<std::string, std::string> v_args;
 		std::map<std::string, std::string> vinit_args;
@@ -207,7 +207,7 @@ auto problem_main() -> int
 		matplotlibcpp::plot(xs, velocity_exact, vinit_args);
 		matplotlibcpp::legend();
 		matplotlibcpp::title(fmt::format("t = {:.4f}", t));
-		matplotlibcpp::save(fmt::format("./velocity_{:.4f}.pdf", t));
+		matplotlibcpp::save(fmt::format("./radhydro_velocity_{:.4f}.pdf", t));
 	}
 #endif
 
