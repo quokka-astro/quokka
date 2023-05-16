@@ -1961,7 +1961,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 					amrex::MultiFab tmp;
 					amrex::VisMF::Read(tmp, amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_",
 											      std::string("Face_") + quokka::face_dir_str[idim]));
-					state_new_fc_[0][idim].ParallelCopy(tmp, 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_, nghost_cc_);
+					state_new_fc_[0][idim].ParallelCopy(tmp, 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_, nghost_fc_);
 				} else {
 					amrex::VisMF::Read(
 					    state_new_fc_[lev][idim],
