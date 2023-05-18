@@ -1892,27 +1892,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 		ba.readFrom(is);
 		GotoNextLine(is);
 
-		/*Create New BoxArray at Level 0 for optimum load distribution*/
-		if (lev == 0) {
-			amrex::IntVect fac(2);
-			const amrex::IntVect domlo{AMREX_D_DECL(0, 0, 0)};
-			const amrex::IntVect domhi{AMREX_D_DECL(ba[ba.size() - 1].bigEnd(0), ba[ba.size() - 1].bigEnd(1), ba[ba.size() - 1].bigEnd(2))};
-			const amrex::Box dom(domlo, domhi);
-			const amrex::Box dom2 = amrex::refine(amrex::coarsen(dom, 2), 2);
-			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-				if (dom.length(idim) != dom2.length(idim)) {
-					fac[idim] = 1;
-				}
-			}
-			amrex::BoxArray ba_lev0(amrex::coarsen(dom, fac));
-			ba_lev0.maxSize(max_grid_size[0] / fac);
-			ba_lev0.refine(fac);
-			// Boxes in ba have even number of cells in each direction
-			// unless the domain has odd number of cells in that direction.
-			ChopGrids(0, ba_lev0, amrex::ParallelDescriptor::NProcs());
-			ba = ba_lev0;
-		}
-
 		// create a distribution mapping
 		amrex::DistributionMapping dm{ba, amrex::ParallelDescriptor::NProcs()};
 
@@ -1947,26 +1926,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 	// read in the MultiFab data
 	for (int lev = 0; lev <= finest_level; ++lev) {
 		// cell-centred
-		if (lev == 0) {
-			amrex::MultiFab tmp;
-			amrex::VisMF::Read(tmp, amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", "Cell"));
-			state_new_cc_[0].ParallelCopy(tmp, 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_, nghost_cc_);
-		} else {
-			amrex::VisMF::Read(state_new_cc_[lev], amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", "Cell"));
-		}
+		amrex::VisMF::Read(state_new_cc_[lev], amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", "Cell"));
 		// face-centred
 		if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-				if (lev == 0) {
-					amrex::MultiFab tmp;
-					amrex::VisMF::Read(tmp, amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_",
-											      std::string("Face_") + quokka::face_dir_str[idim]));
-					state_new_fc_[0][idim].ParallelCopy(tmp, 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_, nghost_fc_);
-				} else {
-					amrex::VisMF::Read(
-					    state_new_fc_[lev][idim],
-					    amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", std::string("Face_") + quokka::face_dir_str[idim]));
-				}
+				amrex::VisMF::Read(state_new_fc_[lev][idim], amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_",
+													   std::string("Face_") + quokka::face_dir_str[idim]));
 			}
 		}
 	}

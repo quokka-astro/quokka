@@ -1,8 +1,7 @@
 #!/bin/bash
 
-source /opt/cray/pe/cpe/22.09/restore_lmod_system_defaults.sh
-
 module load cmake/3.21.4
+module load cpe/22.09
 module load craype-accel-amd-gfx90a
 module load rocm/5.0.2
 module load cray-mpich
@@ -22,4 +21,3 @@ export CXX=$(which CC)
 export FC=$(which ftn)
 export CFLAGS="-I${ROCM_PATH}/include"
 export CXXFLAGS="-I${ROCM_PATH}/include"
-
