@@ -10,9 +10,9 @@
 #include <cmath>
 #include <optional>
 
+#include "AMReX_Array.H"
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
-#include "AMReX_Array.H"
 #include "physics_info.hpp"
 
 namespace quokka
