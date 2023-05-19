@@ -25,7 +25,6 @@
 // internal headers
 #include "ArrayView.hpp"
 #include "EOS.hpp"
-#include "hydro_system.hpp"
 #include "hyperbolic_system.hpp"
 #include "simulation.hpp"
 #include "valarray.hpp"
@@ -1081,7 +1080,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 }
 
 template <typename problem_t>
-void RadSystem<problem_t>::ComputeSourceTermsExplicit(arrayconst_t &consPrev, arrayconst_t &radEnergySource, array_t &src, amrex::Box const &indexRange,
+void RadSystem<problem_t>::ComputeSourceTermsExplicit(arrayconst_t &consPrev, arrayconst_t & /*radEnergySource*/, array_t &src, amrex::Box const &indexRange,
 						      amrex::Real dt)
 {
 	const double chat = c_hat_;
@@ -1107,9 +1106,6 @@ void RadSystem<problem_t>::ComputeSourceTermsExplicit(arrayconst_t &consPrev, ar
 		// compute opacity, emissivity
 		const auto kappa = RadSystem<problem_t>::ComputeOpacity(rho, T_gas);
 		const auto fourPiB = chat * a_rad * std::pow(T_gas, 4);
-
-		// constant radiation energy source term
-		const auto Src = dt * (chat * radEnergySource(i, j, k));
 
 		// compute reaction term
 		const auto rhs = dt * (rho * kappa) * (fourPiB - chat * Erad0);

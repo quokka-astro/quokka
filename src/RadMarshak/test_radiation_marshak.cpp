@@ -286,7 +286,7 @@ auto problem_main() -> int
 		const double t = sim.tNew_[0];
 		const double xmax = c * t;
 		amrex::Print() << "diffusion length = " << xmax << std::endl;
-		for (int i = 0; i < xs.size(); ++i) {
+		for (size_t i = 0; i < xs.size(); ++i) {
 			if (xs[i] < xmax) {
 				err_norm += std::abs(Trad[i] - Trad_exact_interp[i]);
 				sol_norm += std::abs(Trad_exact_interp[i]);

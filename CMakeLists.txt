@@ -30,6 +30,7 @@ set(AMReX_TINY_PROFILE ON CACHE BOOL "" FORCE)
 option(QUOKKA_PYTHON "Compile with Python support (on/off)" ON)
 option(DISABLE_FMAD "Disable fused multiply-add instructions on GPU (on/off)" ON)
 option(ENABLE_ASAN "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
+option(WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
   enable_language(CUDA)

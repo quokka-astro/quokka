@@ -9,13 +9,15 @@
 /// \brief A container for a vector with addition, multiplication with expression templates
 /// (This is necessary because std::valarray is not defined in CUDA C++!)
 
-// library headers
-#include "AMReX_Extension.H"
-#include <AMReX_GpuQualifiers.H>
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <iterator>
 #include <limits>
+
+// library headers
+#include "AMReX_Extension.H"
+#include <AMReX_GpuQualifiers.H>
 
 namespace quokka
 {
@@ -28,7 +30,7 @@ template <typename T, int d> class valarray
 	// (although not cppcore-compliant)
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE valarray(std::initializer_list<T> list) // NOLINT
 	{
-		const int max_count = std::min(list.size(), static_cast<size_t>(d));
+		const size_t max_count = std::min(list.size(), static_cast<size_t>(d));
 
 		T const *input = std::data(list); // requires nvcc to be in C++17 mode! (if it fails, the
 						  // compiler flags are wrong, probably due to a CMake issue.)
