@@ -62,17 +62,27 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<CouplingProblem>::ComputeRossel
 	return 1.0;
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto quokka::EOS<CouplingProblem>::ComputeTgasFromEint(const double /*rho*/, const double Egas) -> double
+static constexpr int nmscalars_ = Physics_Traits<CouplingProblem>::numMassScalars;
+template <>
+AMREX_GPU_HOST_DEVICE auto quokka::EOS<CouplingProblem>::ComputeTgasFromEint(const double /*rho*/, const double Egas,
+									     std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massFractions*/)
+    -> double
 {
 	return std::pow(4.0 * Egas / alpha_SuOlson, 1. / 4.);
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto quokka::EOS<CouplingProblem>::ComputeEintFromTgas(const double /*rho*/, const double Tgas) -> double
+template <>
+AMREX_GPU_HOST_DEVICE auto quokka::EOS<CouplingProblem>::ComputeEintFromTgas(const double /*rho*/, const double Tgas,
+									     std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massFractions*/)
+    -> double
 {
 	return (alpha_SuOlson / 4.0) * std::pow(Tgas, 4);
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto quokka::EOS<CouplingProblem>::ComputeEintTempDerivative(const double /*rho*/, const double Tgas) -> double
+template <>
+AMREX_GPU_HOST_DEVICE auto quokka::EOS<CouplingProblem>::ComputeEintTempDerivative(const double /*rho*/, const double Tgas,
+										   std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massFractions*/)
+    -> double
 {
 	// This is also known as the heat capacity, i.e.
 	// 		\del E_g / \del T = \rho c_v,
@@ -200,7 +210,7 @@ auto problem_main() -> int
 		// compute L2 error norm
 		double err_norm = 0.;
 		double sol_norm = 0.;
-		for (size_t i = 0; i < sim.userData_.t_vec_.size(); ++i) {
+		for (int i = 0; i < sim.userData_.t_vec_.size(); ++i) {
 			err_norm += std::abs(sim.userData_.Tgas_vec_[i] - Tgas_exact_interp[i]);
 			sol_norm += std::abs(Tgas_exact_interp[i]);
 		}
@@ -247,7 +257,7 @@ auto problem_main() -> int
 		matplotlibcpp::clf();
 
 		std::vector<double> frac_err(t.size());
-		for (size_t i = 0; i < t.size(); ++i) {
+		for (int i = 0; i < t.size(); ++i) {
 			frac_err.at(i) = Tgas_exact_interp.at(i) / Tgas.at(i) - 1.0;
 		}
 		matplotlibcpp::plot(t, frac_err);

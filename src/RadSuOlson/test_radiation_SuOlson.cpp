@@ -72,17 +72,25 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputeRossela
 	return (kappa / rho);
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto quokka::EOS<MarshakProblem>::ComputeTgasFromEint(const double /*rho*/, const double Egas) -> double
+static constexpr int nmscalars_ = Physics_Traits<MarshakProblem>::numMassScalars;
+template <>
+AMREX_GPU_HOST_DEVICE auto quokka::EOS<MarshakProblem>::ComputeTgasFromEint(const double /*rho*/, const double Egas,
+									    std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massFractions*/) -> double
 {
 	return std::pow(4.0 * Egas / alpha_SuOlson, 1. / 4.);
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto quokka::EOS<MarshakProblem>::ComputeEintFromTgas(const double /*rho*/, const double Tgas) -> double
+template <>
+AMREX_GPU_HOST_DEVICE auto quokka::EOS<MarshakProblem>::ComputeEintFromTgas(const double /*rho*/, const double Tgas,
+									    std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massFractions*/) -> double
 {
 	return (alpha_SuOlson / 4.0) * (Tgas * Tgas * Tgas * Tgas);
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto quokka::EOS<MarshakProblem>::ComputeEintTempDerivative(const double /*rho*/, const double Tgas) -> double
+template <>
+AMREX_GPU_HOST_DEVICE auto quokka::EOS<MarshakProblem>::ComputeEintTempDerivative(const double /*rho*/, const double Tgas,
+										  std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massFractions*/)
+    -> double
 {
 	// This is also known as the heat capacity, i.e.
 	// 		\del E_g / \del T = \rho c_v,
@@ -274,7 +282,7 @@ auto problem_main() -> int
 		std::vector<double> Tgas_exact_10(Egas_transport_exact_10p0);
 		std::vector<double> Tgas_exact_1(Egas_transport_exact_10p0);
 
-		for (size_t i = 0; i < xs_exact.size(); ++i) {
+		for (int i = 0; i < xs_exact.size(); ++i) {
 			Trad_exact_10.at(i) = std::pow(Erad_transport_exact_10p0.at(i) / a_rad, 1. / 4.);
 			Trad_exact_1.at(i) = std::pow(Erad_transport_exact_1p0.at(i) / a_rad, 1. / 4.);
 
@@ -291,7 +299,7 @@ auto problem_main() -> int
 		// compute L1 error norm
 		double err_norm = 0.;
 		double sol_norm = 0.;
-		for (size_t i = 0; i < xs_exact.size(); ++i) {
+		for (int i = 0; i < xs_exact.size(); ++i) {
 			err_norm += std::abs(Tgas_numerical_interp[i] - Tgas_exact_10[i]);
 			sol_norm += std::abs(Tgas_exact_10[i]);
 		}
