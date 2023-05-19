@@ -282,7 +282,7 @@ auto problem_main() -> int
 		std::vector<double> Tgas_exact_10(Egas_transport_exact_10p0);
 		std::vector<double> Tgas_exact_1(Egas_transport_exact_10p0);
 
-		for (int i = 0; i < xs_exact.size(); ++i) {
+		for (size_t i = 0; i < xs_exact.size(); ++i) {
 			Trad_exact_10.at(i) = std::pow(Erad_transport_exact_10p0.at(i) / a_rad, 1. / 4.);
 			Trad_exact_1.at(i) = std::pow(Erad_transport_exact_1p0.at(i) / a_rad, 1. / 4.);
 
@@ -299,7 +299,7 @@ auto problem_main() -> int
 		// compute L1 error norm
 		double err_norm = 0.;
 		double sol_norm = 0.;
-		for (int i = 0; i < xs_exact.size(); ++i) {
+		for (size_t i = 0; i < xs_exact.size(); ++i) {
 			err_norm += std::abs(Tgas_numerical_interp[i] - Tgas_exact_10[i]);
 			sol_norm += std::abs(Tgas_exact_10[i]);
 		}
