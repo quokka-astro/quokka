@@ -212,7 +212,7 @@ auto problem_main() -> int
 		// compute L1 error norm
 		double err_norm = 0.;
 		double sol_norm = 0.;
-		for (int i = 0; i < t.size(); ++i) {
+		for (size_t i = 0; i < t.size(); ++i) {
 			err_norm += std::abs(Tgas[i] - Tgas_rsla_exact[i]);
 			sol_norm += std::abs(Tgas_rsla_exact[i]);
 		}
@@ -259,7 +259,7 @@ auto problem_main() -> int
 		matplotlibcpp::clf();
 
 		std::vector<double> frac_err(t.size());
-		for (int i = 0; i < t.size(); ++i) {
+		for (size_t i = 0; i < t.size(); ++i) {
 			frac_err.at(i) = Tgas_rsla_exact.at(i) / Tgas.at(i) - 1.0;
 		}
 		matplotlibcpp::plot(t, frac_err);

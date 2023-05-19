@@ -60,8 +60,10 @@ else()
   message(STATUS "Fused multiply-add (FMAD) is *enabled* for device code. Exact direction symmetry will NOT be preserved.")
 endif(DISABLE_FMAD)
 
-# this is necessary to prevent the host compiler from complaining about nv_pragmas
-#add_compile_options(-Wno-unknown-pragmas)
+# emit error if warnings are produced
+if(WARNINGS_AS_ERRORS)
+  add_compile_options(-Werror -Wall -Wextra -Wno-unused-parameter -Wno-unknown-pragmas -Wno-strict-aliasing)
+endif(WARNINGS_AS_ERRORS)
 
 # emit register usage per thread from CUDA assembler
 # if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA")

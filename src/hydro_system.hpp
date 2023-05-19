@@ -13,6 +13,7 @@
 #include <cmath>
 
 // library headers
+#include "AMReX.H"
 #include "AMReX_Arena.H"
 #include "AMReX_Array4.H"
 #include "AMReX_BLassert.H"
@@ -572,6 +573,13 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::MultiFab const &q_mf, amrex::M
 		x1RightState(i, j, k, n) = new_a_minus;
 		x1LeftState(i + 1, j, k, n) = new_a_plus;
 	});
+
+	if constexpr (AMREX_SPACEDIM < 2) {
+		amrex::ignore_unused(x2Chi_in);
+	}
+	if constexpr (AMREX_SPACEDIM < 3) {
+		amrex::ignore_unused(x3Chi_in);
+	}
 }
 
 // to ensure that physical quantities are within reasonable
