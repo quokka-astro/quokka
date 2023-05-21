@@ -9,7 +9,6 @@
 
 #include <cmath>
 
-#include "AMReX.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_ParallelDescriptor.H"
 
@@ -64,7 +63,6 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblem>::ComputeRossela
 }
 
 static constexpr int nmscalars_ = Physics_Traits<SuOlsonProblem>::numMassScalars;
-amrex::ignore_unused(nmscalars_);
 template <>
 AMREX_GPU_HOST_DEVICE auto quokka::EOS<SuOlsonProblem>::ComputeTgasFromEint(const double /*rho*/, const double Egas,
 									    std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massFractions*/) -> double
