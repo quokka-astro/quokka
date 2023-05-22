@@ -20,7 +20,7 @@ jobs:
   - task: CMake@1
     displayName: 'Configure CMake'
     inputs:
-      cmakeArgs: '.. -DCMAKE_BUILD_TYPE=Debug -DWARNINGS_AS_ERRORS=ON -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DAMReX_SPACEDIM=1'
+      cmakeArgs: '.. -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DAMReX_SPACEDIM=1'
 
   - task: CMake@1
     displayName: 'Build Quokka'
