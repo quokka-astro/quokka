@@ -106,7 +106,9 @@ quokka::EOS<TophatProblem>::ComputeEintFromTgas(const double rho, const double T
 }
 
 template <>
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto quokka::EOS<TophatProblem>::ComputeEintTempDerivative(const double rho, const double /*Tgas*/, std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massFractions*/) -> double
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto
+quokka::EOS<TophatProblem>::ComputeEintTempDerivative(const double rho, const double /*Tgas*/,
+						      std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massFractions*/) -> double
 {
 	// This is also known as the heat capacity, i.e.
 	// 		\del E_g / \del T = \rho c_v,
