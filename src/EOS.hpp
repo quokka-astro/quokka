@@ -94,8 +94,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromTga
 		chemstate.xn[nn] = massScalars[nn] / spmasses[nn]; // massScalars are partial densities (massFractions * rho)
 	}
 
-	eos(eos_input_rt, chemstate); // this will cause an error when primordial chem is run with hydro, because we also need to input values of the mass
-				      // scalars in chemstate.xn
+	eos(eos_input_rt, chemstate);
 	amrex::Real const Eint = chemstate.e * chemstate.rho;
 #else
 	amrex::Real Eint = NAN;
@@ -121,8 +120,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintTempDer
 		chemstate.xn[nn] = massScalars[nn] / spmasses[nn]; // massScalars are partial densities (massFractions * rho)
 	}
 
-	eos(eos_input_rt, chemstate); // this will cause an error when primordial chem is run with hydro, because we also need to input values of the mass
-				      // scalars in chemstate.xn
+	eos(eos_input_rt, chemstate);
 	amrex::Real const dEint_dT = chemstate.dedT * chemstate.rho;
 #else
 	amrex::Real dEint_dT = NAN;
