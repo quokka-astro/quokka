@@ -62,11 +62,11 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEin
 
 #ifdef PRIMORDIAL_CHEM
 	burn_t chemstate;
-        chemstate.rho = rho;
-        chemstate.e = Eint / rho;
-        eos(eos_input_re, chemstate); // this will cause an error when primordial chem is run with hydro, because we also need to input values of the mass scalars in
-            // chemstate.xn
-        amrex::Real Tgas = chemstate.T;
+	chemstate.rho = rho;
+	chemstate.e = Eint / rho;
+	eos(eos_input_re, chemstate); // this will cause an error when primordial chem is run with hydro, because we also need to input values of the mass
+				      // scalars in chemstate.xn
+	amrex::Real Tgas = chemstate.T;
 
 #else
 	amrex::Real Tgas = NAN;
@@ -87,11 +87,11 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromTga
 #ifdef PRIMORDIAL_CHEM
 
 	burn_t chemstate;
-        chemstate.rho = rho;
-        chemstate.T = Tgas;
-        eos(eos_input_rt, chemstate); // this will cause an error when primordial chem is run with hydro, because we also need to input values of the mass scalars in
-            // chemstate.xn
-        amrex::Real const Eint = chemstate.e * chemstate.rho;
+	chemstate.rho = rho;
+	chemstate.T = Tgas;
+	eos(eos_input_rt, chemstate); // this will cause an error when primordial chem is run with hydro, because we also need to input values of the mass
+				      // scalars in chemstate.xn
+	amrex::Real const Eint = chemstate.e * chemstate.rho;
 
 #else
 	amrex::Real Eint = NAN;
@@ -112,11 +112,11 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintTempDer
 #ifdef PRIMORDIAL_CHEM
 
 	burn_t chemstate;
-        chemstate.rho = rho;
-        chemstate.T = Tgas;
-        eos(eos_input_rt, chemstate); // this will cause an error when primordial chem is run with hydro, because we also need to input values of the mass scalars in
-            // chemstate.xn
-        amrex::Real const dEint_dT = chemstate.dedT * chemstate.rho;
+	chemstate.rho = rho;
+	chemstate.T = Tgas;
+	eos(eos_input_rt, chemstate); // this will cause an error when primordial chem is run with hydro, because we also need to input values of the mass
+				      // scalars in chemstate.xn
+	amrex::Real const dEint_dT = chemstate.dedT * chemstate.rho;
 
 #else
 	amrex::Real dEint_dT = NAN;
