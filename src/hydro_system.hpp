@@ -74,6 +74,8 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	AMREX_GPU_DEVICE static auto ComputePressure(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> amrex::Real;
 
+	AMREX_GPU_DEVICE static auto ComputeMassScalars(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> amrex::GpuArray<amrex::Real, nmscalars_>;
+
 	AMREX_GPU_DEVICE static auto ComputeVelocityX1(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> amrex::Real;
 
 	AMREX_GPU_DEVICE static auto ComputeVelocityX2(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> amrex::Real;
@@ -302,6 +304,17 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePressure
 	const auto thermal_energy = E - kinetic_energy;
 	const auto P = thermal_energy * (HydroSystem<problem_t>::gamma_ - 1.0);
 	return P;
+}
+
+template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeMassScalars(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k)
+    -> amrex::GpuArray<amrex::Real, nmscalars_>
+{
+    amrex::GpuArray<amrex::Real, nmscalars_> massScalars;
+    for (int n = 0; n < nmscalars_; ++n) {
+        massScalars[n] = cons(i, j, k, scalar0_index + n);
+    }
+    return massScalars;
 }
 
 template <typename problem_t>
