@@ -8,9 +8,12 @@
 /// \brief A class for equation of state calculations.
 
 #include <cmath>
+#include <optional>
 
+#include "AMReX_Array.H"
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
+#include "physics_info.hpp"
 
 namespace quokka
 {
@@ -28,10 +31,15 @@ template <typename problem_t> struct EOS_Traits {
 
 template <typename problem_t> class EOS
 {
+
       public:
-	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto ComputeTgasFromEint(amrex::Real rho, amrex::Real Eint) -> amrex::Real;
-	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto ComputeEintFromTgas(amrex::Real rho, amrex::Real Tgas) -> amrex::Real;
-	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto ComputeEintTempDerivative(amrex::Real rho, amrex::Real Tgas) -> amrex::Real;
+	static constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
+	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
+	ComputeTgasFromEint(amrex::Real rho, amrex::Real Eint, std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massFractions = {}) -> amrex::Real;
+	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
+	ComputeEintFromTgas(amrex::Real rho, amrex::Real Tgas, std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massFractions = {}) -> amrex::Real;
+	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
+	ComputeEintTempDerivative(amrex::Real rho, amrex::Real Tgas, std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massFractions = {}) -> amrex::Real;
 
       private:
 	static constexpr amrex::Real gamma_ = EOS_Traits<problem_t>::gamma;
@@ -40,7 +48,9 @@ template <typename problem_t> class EOS
 };
 
 template <typename problem_t>
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEint(amrex::Real rho, amrex::Real Eint) -> amrex::Real
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEint(amrex::Real rho, amrex::Real Eint,
+										  std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massFractions)
+    -> amrex::Real
 {
 	// return temperature for an ideal gas
 	amrex::Real Tgas = NAN;
@@ -52,7 +62,9 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEin
 }
 
 template <typename problem_t>
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromTgas(amrex::Real rho, amrex::Real Tgas) -> amrex::Real
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromTgas(amrex::Real rho, amrex::Real Tgas,
+										  std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massFractions)
+    -> amrex::Real
 {
 	// return internal energy density for a gamma-law ideal gas
 	amrex::Real Eint = NAN;
@@ -64,7 +76,9 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromTga
 }
 
 template <typename problem_t>
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintTempDerivative(const amrex::Real rho, const amrex::Real /*Tgas*/) -> amrex::Real
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintTempDerivative(const amrex::Real rho, const amrex::Real /*Tgas*/,
+											std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massFractions)
+    -> amrex::Real
 {
 	// compute derivative of internal energy w/r/t temperature
 	amrex::Real dEint_dT = NAN;
