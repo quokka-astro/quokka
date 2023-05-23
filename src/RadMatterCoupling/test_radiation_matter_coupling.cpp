@@ -65,16 +65,14 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<CouplingProblem>::ComputeRossel
 static constexpr int nmscalars_ = Physics_Traits<CouplingProblem>::numMassScalars;
 template <>
 AMREX_GPU_HOST_DEVICE auto quokka::EOS<CouplingProblem>::ComputeTgasFromEint(const double /*rho*/, const double Egas,
-									     std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massScalars*/)
-    -> double
+									     std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massScalars*/) -> double
 {
 	return std::pow(4.0 * Egas / alpha_SuOlson, 1. / 4.);
 }
 
 template <>
 AMREX_GPU_HOST_DEVICE auto quokka::EOS<CouplingProblem>::ComputeEintFromTgas(const double /*rho*/, const double Tgas,
-									     std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massScalars*/)
-    -> double
+									     std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massScalars*/) -> double
 {
 	return (alpha_SuOlson / 4.0) * std::pow(Tgas, 4);
 }

@@ -65,9 +65,9 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEin
 	chemstate.rho = rho;
 	chemstate.e = Eint / rho;
 
-        for (int nn = 0; nn < nmscalars_; ++nn) {
-        	chemstate.xn[nn] = massScalars[nn] / spmasses[nn]; // massScalars are partial densities (massFractions * rho)
-        }
+	for (int nn = 0; nn < nmscalars_; ++nn) {
+		chemstate.xn[nn] = massScalars[nn] / spmasses[nn]; // massScalars are partial densities (massFractions * rho)
+	}
 	eos(eos_input_re, chemstate);
 	amrex::Real Tgas = chemstate.T;
 
