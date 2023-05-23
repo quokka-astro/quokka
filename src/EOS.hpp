@@ -55,7 +55,7 @@ template <typename problem_t> class EOS
 
 template <typename problem_t>
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEint(amrex::Real rho, amrex::Real Eint,
-										  std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massFractions)
+										  std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars)
     -> amrex::Real
 {
 	// return temperature for an ideal gas
@@ -64,8 +64,11 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEin
 	burn_t chemstate;
 	chemstate.rho = rho;
 	chemstate.e = Eint / rho;
-	eos(eos_input_re, chemstate); // this will cause an error when primordial chem is run with hydro, because we also need to input values of the mass
-				      // scalars in chemstate.xn
+
+        for (int nn = 0; nn < nmscalars_; ++nn) {
+        	chemstate.xn[nn] = massScalars[nn] / spmasses[nn]; // massScalars are partial densities (massFractions * rho)
+        }
+	eos(eos_input_re, chemstate);
 	amrex::Real Tgas = chemstate.T;
 
 #else
@@ -80,7 +83,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEin
 
 template <typename problem_t>
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromTgas(amrex::Real rho, amrex::Real Tgas,
-										  std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massFractions)
+										  std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars)
     -> amrex::Real
 {
 	// return internal energy density for a gamma-law ideal gas
@@ -105,7 +108,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromTga
 
 template <typename problem_t>
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintTempDerivative(const amrex::Real rho, const amrex::Real /*Tgas*/,
-											std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massFractions)
+											std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars)
     -> amrex::Real
 {
 	// compute derivative of internal energy w/r/t temperature
