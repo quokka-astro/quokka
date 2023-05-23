@@ -64,13 +64,12 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEin
 	burn_t chemstate;
 	chemstate.rho = rho;
 	chemstate.e = Eint / rho;
-
 	for (int nn = 0; nn < nmscalars_; ++nn) {
 		chemstate.xn[nn] = massScalars[nn] / spmasses[nn]; // massScalars are partial densities (massFractions * rho)
 	}
+
 	eos(eos_input_re, chemstate);
 	amrex::Real Tgas = chemstate.T;
-
 #else
 	amrex::Real Tgas = NAN;
 	if constexpr (gamma_ != 1.0) {
@@ -88,14 +87,16 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromTga
 {
 	// return internal energy density for a gamma-law ideal gas
 #ifdef PRIMORDIAL_CHEM
-
 	burn_t chemstate;
 	chemstate.rho = rho;
 	chemstate.T = Tgas;
+        for (int nn = 0; nn < nmscalars_; ++nn) {
+        	chemstate.xn[nn] = massScalars[nn] / spmasses[nn]; // massScalars are partial densities (massFractions * rho)
+        }
+
 	eos(eos_input_rt, chemstate); // this will cause an error when primordial chem is run with hydro, because we also need to input values of the mass
 				      // scalars in chemstate.xn
 	amrex::Real const Eint = chemstate.e * chemstate.rho;
-
 #else
 	amrex::Real Eint = NAN;
 	if constexpr (gamma_ != 1.0) {
@@ -113,14 +114,16 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintTempDer
 {
 	// compute derivative of internal energy w/r/t temperature
 #ifdef PRIMORDIAL_CHEM
-
 	burn_t chemstate;
 	chemstate.rho = rho;
 	chemstate.T = Tgas;
+        for (int nn = 0; nn < nmscalars_; ++nn) {
+        	chemstate.xn[nn] = massScalars[nn] / spmasses[nn]; // massScalars are partial densities (massFractions * rho)
+        }
+
 	eos(eos_input_rt, chemstate); // this will cause an error when primordial chem is run with hydro, because we also need to input values of the mass
 				      // scalars in chemstate.xn
 	amrex::Real const dEint_dT = chemstate.dedT * chemstate.rho;
-
 #else
 	amrex::Real dEint_dT = NAN;
 	if constexpr (gamma_ != 1.0) {
