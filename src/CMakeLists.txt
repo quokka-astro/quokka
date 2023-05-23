@@ -75,7 +75,6 @@ endif(WARNINGS_AS_ERRORS)
 #   add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:-Wno-unused-command-line-argument>)
 # endif()
 
-
 include_directories(${amrex_INCLUDE_DIRS_RET})
 include_directories(${fmt_INCLUDE_DIRS_RET})
 include_directories(${HDF5_INCLUDE_DIRS_RET})
@@ -88,6 +87,15 @@ link_libraries(fmt::fmt)
 link_libraries(hdf5::hdf5)
 
 include(CTest)
+
+set (QuokkaObjSources "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/CloudyCooling.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/GrackleDataReader.cpp")
+add_library(QuokkaObj OBJECT ${QuokkaObjSources})
+
+if(AMReX_GPU_BACKEND MATCHES "CUDA")
+    setup_target_for_cuda_compilation(QuokkaObj)
+endif()
+
+link_libraries(QuokkaObj)
 
 add_subdirectory(HydroShocktubeCMA)
 add_subdirectory(PrimordialChem)
