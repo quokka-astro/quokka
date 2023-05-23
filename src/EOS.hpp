@@ -15,6 +15,12 @@
 #include "AMReX_REAL.H"
 #include "physics_info.hpp"
 
+#ifdef PRIMORDIAL_CHEM
+#include "burn_type.H"
+#include "eos.H"
+#include "extern_parameters.H"
+#endif
+
 namespace quokka
 {
 static constexpr double boltzmann_constant_cgs = 1.380658e-16; // cgs
@@ -53,11 +59,22 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEin
     -> amrex::Real
 {
 	// return temperature for an ideal gas
+
+#ifdef PRIMORDIAL_CHEM
+	burn_t chemstate;
+        chemstate.rho = rho;
+        chemstate.e = Eint / rho;
+        eos(eos_input_re, chemstate); // this will cause an error when primordial chem is run with hydro, because we also need to input values of the mass scalars in
+            // chemstate.xn
+        amrex::Real Tgas = chemstate.T;
+
+#else
 	amrex::Real Tgas = NAN;
 	if constexpr (gamma_ != 1.0) {
 		const amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
 		Tgas = Eint / (rho * c_v);
 	}
+#endif
 	return Tgas;
 }
 
@@ -67,11 +84,22 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromTga
     -> amrex::Real
 {
 	// return internal energy density for a gamma-law ideal gas
+#ifdef PRIMORDIAL_CHEM
+
+	burn_t chemstate;
+        chemstate.rho = rho;
+        chemstate.T = Tgas;
+        eos(eos_input_rt, chemstate); // this will cause an error when primordial chem is run with hydro, because we also need to input values of the mass scalars in
+            // chemstate.xn
+        amrex::Real const Eint = chemstate.e * chemstate.rho;
+
+#else
 	amrex::Real Eint = NAN;
 	if constexpr (gamma_ != 1.0) {
 		const amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
 		Eint = rho * c_v * Tgas;
 	}
+#endif
 	return Eint;
 }
 
@@ -81,11 +109,22 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintTempDer
     -> amrex::Real
 {
 	// compute derivative of internal energy w/r/t temperature
+#ifdef PRIMORDIAL_CHEM
+
+	burn_t chemstate;
+        chemstate.rho = rho;
+        chemstate.T = Tgas;
+        eos(eos_input_rt, chemstate); // this will cause an error when primordial chem is run with hydro, because we also need to input values of the mass scalars in
+            // chemstate.xn
+        amrex::Real const dEint_dT = chemstate.dedT * chemstate.rho;
+
+#else
 	amrex::Real dEint_dT = NAN;
 	if constexpr (gamma_ != 1.0) {
 		const amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
 		dEint_dT = rho * c_v;
 	}
+#endif
 	return dEint_dT;
 }
 
