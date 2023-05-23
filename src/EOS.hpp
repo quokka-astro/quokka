@@ -90,9 +90,9 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromTga
 	burn_t chemstate;
 	chemstate.rho = rho;
 	chemstate.T = Tgas;
-        for (int nn = 0; nn < nmscalars_; ++nn) {
-        	chemstate.xn[nn] = massScalars[nn] / spmasses[nn]; // massScalars are partial densities (massFractions * rho)
-        }
+	for (int nn = 0; nn < nmscalars_; ++nn) {
+		chemstate.xn[nn] = massScalars[nn] / spmasses[nn]; // massScalars are partial densities (massFractions * rho)
+	}
 
 	eos(eos_input_rt, chemstate); // this will cause an error when primordial chem is run with hydro, because we also need to input values of the mass
 				      // scalars in chemstate.xn
@@ -117,9 +117,9 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintTempDer
 	burn_t chemstate;
 	chemstate.rho = rho;
 	chemstate.T = Tgas;
-        for (int nn = 0; nn < nmscalars_; ++nn) {
-        	chemstate.xn[nn] = massScalars[nn] / spmasses[nn]; // massScalars are partial densities (massFractions * rho)
-        }
+	for (int nn = 0; nn < nmscalars_; ++nn) {
+		chemstate.xn[nn] = massScalars[nn] / spmasses[nn]; // massScalars are partial densities (massFractions * rho)
+	}
 
 	eos(eos_input_rt, chemstate); // this will cause an error when primordial chem is run with hydro, because we also need to input values of the mass
 				      // scalars in chemstate.xn
