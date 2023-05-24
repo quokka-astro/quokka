@@ -66,7 +66,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEin
 	chemstate.e = Eint / rho;
 
 	if (massScalars.has_value()) {
-		const auto& massArray = massScalars.value();
+		const auto &massArray = massScalars.value();
 		for (int nn = 0; nn < nmscalars_; ++nn) {
 			chemstate.xn[nn] = massArray[nn] / spmasses[nn]; // massScalars are partial densities (massFractions * rho)
 		}
@@ -96,7 +96,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromTga
 	chemstate.T = Tgas;
 
 	if (massScalars.has_value()) {
-		const auto& massArray = massScalars.value();
+		const auto &massArray = massScalars.value();
 		for (int nn = 0; nn < nmscalars_; ++nn) {
 			chemstate.xn[nn] = massArray[nn] / spmasses[nn]; // massScalars are partial densities (massFractions * rho)
 		}
@@ -126,7 +126,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintTempDer
 	chemstate.T = Tgas;
 
 	if (massScalars.has_value()) {
-		const auto& massArray = massScalars.value();
+		const auto &massArray = massScalars.value();
 		for (int nn = 0; nn < nmscalars_; ++nn) {
 			chemstate.xn[nn] = massArray[nn] / spmasses[nn]; // massScalars are partial densities (massFractions * rho)
 		}
