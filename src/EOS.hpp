@@ -104,7 +104,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromTga
 		burn_t chemstate;
 		chemstate.rho = rho;
 		// Define and initialize Tgas here
-		amrex::Real Tgas_value = Tgas;
+		amrex::Real const Tgas_value = Tgas;
 		chemstate.T = Tgas_value;
 		// initialize array of number densities
 		for (int ii = 0; ii < NumSpec; ++ii) {
