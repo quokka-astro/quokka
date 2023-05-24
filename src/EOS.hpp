@@ -93,7 +93,9 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromTga
 #ifdef PRIMORDIAL_CHEM
 	burn_t chemstate;
 	chemstate.rho = rho;
-	chemstate.T = Tgas;
+        // Define and initialize Tgas here
+        amrex::Real Tgas_value = Tgas;
+	chemstate.T = Tgas_value;
 
 	if (massScalars.has_value()) {
 		const auto &massArray = massScalars.value();
@@ -123,7 +125,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintTempDer
 #ifdef PRIMORDIAL_CHEM
 	burn_t chemstate;
 	chemstate.rho = rho;
-	chemstate.T = Tgas;
+        // we don't need Tgas to find chemstate.dedT
 
 	if (massScalars.has_value()) {
 		const auto &massArray = massScalars.value();
