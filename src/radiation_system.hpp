@@ -519,13 +519,12 @@ template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto RadSystem<problem_t>::ComputeMassScalars(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k)
     -> amrex::GpuArray<Real, nmscalars_>
 {
-    amrex::GpuArray<Real, nmscalars_> massScalars;
-    for (int n = 0; n < nmscalars_; ++n) {
-        massScalars[n] = cons(i, j, k, scalar0_index + n);
-    }
-    return massScalars;
+	amrex::GpuArray<Real, nmscalars_> massScalars;
+	for (int n = 0; n < nmscalars_; ++n) {
+		massScalars[n] = cons(i, j, k, scalar0_index + n);
+	}
+	return massScalars;
 }
-
 
 template <typename problem_t>
 template <FluxDir DIR>
