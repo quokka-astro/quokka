@@ -16,10 +16,10 @@
 #include "physics_info.hpp"
 
 if constexpr (PRIMORDIAL_CHEM) {
-	#include "burn_type.H"
-	#include "eos.H"
-	#include "extern_parameters.H"
-	}
+#include "burn_type.H"
+#include "eos.H"
+#include "extern_parameters.H"
+}
 
 namespace quokka
 {
@@ -60,31 +60,31 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEin
 {
 	// return temperature for an ideal gas
 
-if constexpr (PRIMORDIAL_CHEM) {
-	burn_t chemstate;
-	chemstate.rho = rho;
-	chemstate.e = Eint / rho;
-	// initialize array of number densities
-	for (int ii = 0; ii < NumSpec; ++ii) {
-		chemstate.xn[ii] = -1.0;
-	}
+	if constexpr (PRIMORDIAL_CHEM) {
+		burn_t chemstate;
+		chemstate.rho = rho;
+		chemstate.e = Eint / rho;
+		// initialize array of number densities
+		for (int ii = 0; ii < NumSpec; ++ii) {
+			chemstate.xn[ii] = -1.0;
+		}
 
-	if (massScalars.has_value()) {
-		const auto &massArray = massScalars.value();
-		for (int nn = 0; nn < nmscalars_; ++nn) {
-			chemstate.xn[nn] = massArray[nn] / spmasses[nn]; // massScalars are partial densities (massFractions * rho)
+		if (massScalars.has_value()) {
+			const auto &massArray = massScalars.value();
+			for (int nn = 0; nn < nmscalars_; ++nn) {
+				chemstate.xn[nn] = massArray[nn] / spmasses[nn]; // massScalars are partial densities (massFractions * rho)
+			}
+		}
+
+		eos(eos_input_re, chemstate);
+		amrex::Real Tgas = chemstate.T;
+	} else {
+		amrex::Real Tgas = NAN;
+		if constexpr (gamma_ != 1.0) {
+			const amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
+			Tgas = Eint / (rho * c_v);
 		}
 	}
-
-	eos(eos_input_re, chemstate);
-	amrex::Real Tgas = chemstate.T;
-} else {
-	amrex::Real Tgas = NAN;
-	if constexpr (gamma_ != 1.0) {
-		const amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
-		Tgas = Eint / (rho * c_v);
-	}
-}
 	return Tgas;
 }
 
@@ -94,33 +94,33 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromTga
     -> amrex::Real
 {
 	// return internal energy density for a gamma-law ideal gas
-if constexpr (PRIMORDIAL_CHEM) {
-	burn_t chemstate;
-	chemstate.rho = rho;
-	// Define and initialize Tgas here
-	amrex::Real Tgas_value = Tgas;
-	chemstate.T = Tgas_value;
-	// initialize array of number densities
-	for (int ii = 0; ii < NumSpec; ++ii) {
-		chemstate.xn[ii] = -1.0;
-	}
+	if constexpr (PRIMORDIAL_CHEM) {
+		burn_t chemstate;
+		chemstate.rho = rho;
+		// Define and initialize Tgas here
+		amrex::Real Tgas_value = Tgas;
+		chemstate.T = Tgas_value;
+		// initialize array of number densities
+		for (int ii = 0; ii < NumSpec; ++ii) {
+			chemstate.xn[ii] = -1.0;
+		}
 
-	if (massScalars.has_value()) {
-		const auto &massArray = massScalars.value();
-		for (int nn = 0; nn < nmscalars_; ++nn) {
-			chemstate.xn[nn] = massArray[nn] / spmasses[nn]; // massScalars are partial densities (massFractions * rho)
+		if (massScalars.has_value()) {
+			const auto &massArray = massScalars.value();
+			for (int nn = 0; nn < nmscalars_; ++nn) {
+				chemstate.xn[nn] = massArray[nn] / spmasses[nn]; // massScalars are partial densities (massFractions * rho)
+			}
+		}
+
+		eos(eos_input_rt, chemstate);
+		amrex::Real const Eint = chemstate.e * chemstate.rho;
+	} else {
+		amrex::Real Eint = NAN;
+		if constexpr (gamma_ != 1.0) {
+			const amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
+			Eint = rho * c_v * Tgas;
 		}
 	}
-
-	eos(eos_input_rt, chemstate);
-	amrex::Real const Eint = chemstate.e * chemstate.rho;
-} else {
-	amrex::Real Eint = NAN;
-	if constexpr (gamma_ != 1.0) {
-		const amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
-		Eint = rho * c_v * Tgas;
-	}
-}
 	return Eint;
 }
 
@@ -130,32 +130,32 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintTempDer
     -> amrex::Real
 {
 	// compute derivative of internal energy w/r/t temperature
-if constexpr (PRIMORDIAL_CHEM) {
-	burn_t chemstate;
-	chemstate.rho = rho;
-	// we don't need Tgas to find chemstate.dedT, but we still need to initialize chemstate.T because we are using the 'rt' EOS mode
-	chemstate.T = NAN;
-	// initialize array of number densities
-	for (int ii = 0; ii < NumSpec; ++ii) {
-		chemstate.xn[ii] = -1.0;
-	}
+	if constexpr (PRIMORDIAL_CHEM) {
+		burn_t chemstate;
+		chemstate.rho = rho;
+		// we don't need Tgas to find chemstate.dedT, but we still need to initialize chemstate.T because we are using the 'rt' EOS mode
+		chemstate.T = NAN;
+		// initialize array of number densities
+		for (int ii = 0; ii < NumSpec; ++ii) {
+			chemstate.xn[ii] = -1.0;
+		}
 
-	if (massScalars.has_value()) {
-		const auto &massArray = massScalars.value();
-		for (int nn = 0; nn < nmscalars_; ++nn) {
-			chemstate.xn[nn] = massArray[nn] / spmasses[nn]; // massScalars are partial densities (massFractions * rho)
+		if (massScalars.has_value()) {
+			const auto &massArray = massScalars.value();
+			for (int nn = 0; nn < nmscalars_; ++nn) {
+				chemstate.xn[nn] = massArray[nn] / spmasses[nn]; // massScalars are partial densities (massFractions * rho)
+			}
+		}
+
+		eos(eos_input_rt, chemstate);
+		amrex::Real const dEint_dT = chemstate.dedT * chemstate.rho;
+	} else {
+		amrex::Real dEint_dT = NAN;
+		if constexpr (gamma_ != 1.0) {
+			const amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
+			dEint_dT = rho * c_v;
 		}
 	}
-
-	eos(eos_input_rt, chemstate);
-	amrex::Real const dEint_dT = chemstate.dedT * chemstate.rho;
-} else {
-	amrex::Real dEint_dT = NAN;
-	if constexpr (gamma_ != 1.0) {
-		const amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
-		dEint_dT = rho * c_v;
-	}
-}
 	return dEint_dT;
 }
 
