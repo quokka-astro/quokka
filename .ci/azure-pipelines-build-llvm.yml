@@ -1,5 +1,4 @@
-trigger:
-- development
+trigger: none
 
 pr:
   autoCancel: true
