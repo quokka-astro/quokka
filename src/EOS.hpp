@@ -64,6 +64,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEin
 	burn_t chemstate;
 	chemstate.rho = rho;
 	chemstate.e = Eint / rho;
+	chemstate.xn[NumSpec] = {-1.0}; // initialize array of number densities
 
 	if (massScalars.has_value()) {
 		const auto &massArray = massScalars.value();
@@ -96,6 +97,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromTga
 	// Define and initialize Tgas here
 	amrex::Real Tgas_value = Tgas;
 	chemstate.T = Tgas_value;
+	chemstate.xn[NumSpec] = {-1.0}; // initialize array of number densities
 
 	if (massScalars.has_value()) {
 		const auto &massArray = massScalars.value();
@@ -127,6 +129,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintTempDer
 	chemstate.rho = rho;
 	// we don't need Tgas to find chemstate.dedT, but we still need to initialize chemstate.T because we are using the 'rt' EOS mode
 	chemstate.T = NAN;
+	chemstate.xn[NumSpec] = {-1.0}; // initialize array of number densities
 
 	if (massScalars.has_value()) {
 		const auto &massArray = massScalars.value();
