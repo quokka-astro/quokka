@@ -63,7 +63,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEin
     -> amrex::Real
 {
 	// return temperature for an ideal gas
-	amrex::Real Tgas;
+	amrex::Real Tgas = NAN;
 
 	if constexpr (PRIMORDIAL_CHEM_ENABLED) {
 		burn_t chemstate;
@@ -99,7 +99,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromTga
     -> amrex::Real
 {
 	// return internal energy density for a gamma-law ideal gas
-	amrex::Real Eint;
+	amrex::Real Eint = NAN;
 
 	if constexpr (PRIMORDIAL_CHEM_ENABLED) {
 		burn_t chemstate;
@@ -137,7 +137,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintTempDer
     -> amrex::Real
 {
 	// compute derivative of internal energy w/r/t temperature
-	amrex::Real dEint_dT;
+	amrex::Real dEint_dT = NAN;
 
 	if constexpr (PRIMORDIAL_CHEM_ENABLED) {
 		burn_t chemstate;
