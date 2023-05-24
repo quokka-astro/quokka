@@ -20,9 +20,9 @@
 #include "extern_parameters.H"
 
 #ifdef PRIMORDIAL_CHEM
-constexpr bool PRIMORDIAL_CHEM = true;
+constexpr bool PRIMORDIAL_CHEM_ENABLED = true;
 #else
-constexpr bool PRIMORDIAL_CHEM = false;
+constexpr bool PRIMORDIAL_CHEM_ENABLED = false;
 #endif
 
 namespace quokka
@@ -63,8 +63,9 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEin
     -> amrex::Real
 {
 	// return temperature for an ideal gas
+	amrex::Real Tgas;
 
-	if constexpr (PRIMORDIAL_CHEM) {
+	if constexpr (PRIMORDIAL_CHEM_ENABLED) {
 		burn_t chemstate;
 		chemstate.rho = rho;
 		chemstate.e = Eint / rho;
@@ -98,7 +99,9 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromTga
     -> amrex::Real
 {
 	// return internal energy density for a gamma-law ideal gas
-	if constexpr (PRIMORDIAL_CHEM) {
+	amrex::Real Eint;
+
+	if constexpr (PRIMORDIAL_CHEM_ENABLED) {
 		burn_t chemstate;
 		chemstate.rho = rho;
 		// Define and initialize Tgas here
@@ -134,7 +137,9 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintTempDer
     -> amrex::Real
 {
 	// compute derivative of internal energy w/r/t temperature
-	if constexpr (PRIMORDIAL_CHEM) {
+	amrex::Real dEint_dT;
+
+	if constexpr (PRIMORDIAL_CHEM_ENABLED) {
 		burn_t chemstate;
 		chemstate.rho = rho;
 		// we don't need Tgas to find chemstate.dedT, but we still need to initialize chemstate.T because we are using the 'rt' EOS mode
