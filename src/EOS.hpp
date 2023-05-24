@@ -15,11 +15,11 @@
 #include "AMReX_REAL.H"
 #include "physics_info.hpp"
 
-#ifdef PRIMORDIAL_CHEM
-#include "burn_type.H"
-#include "eos.H"
-#include "extern_parameters.H"
-#endif
+if constexpr (PRIMORDIAL_CHEM) {
+	#include "burn_type.H"
+	#include "eos.H"
+	#include "extern_parameters.H"
+	}
 
 namespace quokka
 {
@@ -60,7 +60,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEin
 {
 	// return temperature for an ideal gas
 
-#ifdef PRIMORDIAL_CHEM
+if constexpr (PRIMORDIAL_CHEM) {
 	burn_t chemstate;
 	chemstate.rho = rho;
 	chemstate.e = Eint / rho;
@@ -78,13 +78,13 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEin
 
 	eos(eos_input_re, chemstate);
 	amrex::Real Tgas = chemstate.T;
-#else
+} else {
 	amrex::Real Tgas = NAN;
 	if constexpr (gamma_ != 1.0) {
 		const amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
 		Tgas = Eint / (rho * c_v);
 	}
-#endif
+}
 	return Tgas;
 }
 
@@ -94,7 +94,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromTga
     -> amrex::Real
 {
 	// return internal energy density for a gamma-law ideal gas
-#ifdef PRIMORDIAL_CHEM
+if constexpr (PRIMORDIAL_CHEM) {
 	burn_t chemstate;
 	chemstate.rho = rho;
 	// Define and initialize Tgas here
@@ -114,13 +114,13 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromTga
 
 	eos(eos_input_rt, chemstate);
 	amrex::Real const Eint = chemstate.e * chemstate.rho;
-#else
+} else {
 	amrex::Real Eint = NAN;
 	if constexpr (gamma_ != 1.0) {
 		const amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
 		Eint = rho * c_v * Tgas;
 	}
-#endif
+}
 	return Eint;
 }
 
@@ -130,7 +130,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintTempDer
     -> amrex::Real
 {
 	// compute derivative of internal energy w/r/t temperature
-#ifdef PRIMORDIAL_CHEM
+if constexpr (PRIMORDIAL_CHEM) {
 	burn_t chemstate;
 	chemstate.rho = rho;
 	// we don't need Tgas to find chemstate.dedT, but we still need to initialize chemstate.T because we are using the 'rt' EOS mode
@@ -149,13 +149,13 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintTempDer
 
 	eos(eos_input_rt, chemstate);
 	amrex::Real const dEint_dT = chemstate.dedT * chemstate.rho;
-#else
+} else {
 	amrex::Real dEint_dT = NAN;
 	if constexpr (gamma_ != 1.0) {
 		const amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
 		dEint_dT = rho * c_v;
 	}
-#endif
+}
 	return dEint_dT;
 }
 
