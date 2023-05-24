@@ -539,8 +539,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeCellOpticalDepth(const quokka
 	const double Egas_L = consVar(i - 1, j, k, gasEnergy_index);
 	const double Egas_R = consVar(i, j, k, gasEnergy_index);
 
-	auto massScalars_L = ComputeMassScalars(consVar, i - 1, j, k);
-	auto massScalars_R = ComputeMassScalars(consVar, i, j, k);
+	auto massScalars_L = HydroSystem<problem_t>::ComputeMassScalars(consVar, i - 1, j, k);
+	auto massScalars_R = HydroSystem<problem_t>::ComputeMassScalars(consVar, i, j, k);
 
 	double Eint_L = NAN;
 	double Eint_R = NAN;
@@ -898,7 +898,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		const double x2GasMom0 = consPrev(i, j, k, x2GasMomentum_index);
 		const double x3GasMom0 = consPrev(i, j, k, x3GasMomentum_index);
 		const double Egastot0 = consPrev(i, j, k, gasEnergy_index);
-		auto massScalars = consPrev(i, j, k);
+		auto massScalars = HydroSystem<problem_t>::ComputeMassScalars(consPrev, i, j, k);
 
 		// load radiation energy
 		const double Erad0 = consPrev(i, j, k, radEnergy_index);
@@ -1099,7 +1099,7 @@ void RadSystem<problem_t>::ComputeSourceTermsExplicit(arrayconst_t &consPrev, ar
 		const double x2GasMom0 = consPrev(i, j, k, x2GasMomentum_index);
 		const double x3GasMom0 = consPrev(i, j, k, x3GasMomentum_index);
 		const auto Egas0 = ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0);
-		auto massScalars = consPrev(i, j, k);
+		auto massScalars = HydroSystem<problem_t>::ComputeMassScalars(consPrev, i, j, k);
 
 		// load radiation energy, momentum
 		const auto Erad0 = consPrev(i, j, k, radEnergy_index);
