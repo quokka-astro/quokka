@@ -53,6 +53,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 		return 0.5 * (sgn(a) + sgn(b)) * std::min(0.5 * std::abs(a + b), std::min(2.0 * std::abs(a), 2.0 * std::abs(b)));
 	}
 
+	static constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
 	static constexpr int nvarHyperbolic_ = Physics_NumVars::numRadVars; // number of radiation variables
 	static constexpr int nstartHyperbolic_ = Physics_Indices<problem_t>::radFirstIndex;
 	static constexpr int nvar_ = nstartHyperbolic_ + nvarHyperbolic_;
@@ -63,7 +64,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 		x2GasMomentum_index,
 		x3GasMomentum_index,
 		gasEnergy_index,
-		gasInternalEnergy_index
+		gasInternalEnergy_index,
+		scalar0_index
 	};
 
 	enum radVarIndex { radEnergy_index = nstartHyperbolic_, x1RadFlux_index, x2RadFlux_index, x3RadFlux_index };
@@ -114,6 +116,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 				   amrex::Real dt);
 	static void ComputeSourceTermsExplicit(arrayconst_t &consPrev, arrayconst_t &radEnergySource, array_t &src, amrex::Box const &indexRange,
 					       amrex::Real dt);
+
+	AMREX_GPU_DEVICE static auto ComputeMassScalars(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> amrex::GpuArray<Real, nmscalars_>;
 
 	template <FluxDir DIR>
 	static void ReconstructStatesConstant(arrayconst_t &q, array_t &leftState, array_t &rightState, amrex::Box const &indexRange, int nvars);
@@ -512,6 +516,18 @@ template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::C
 }
 
 template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto RadSystem<problem_t>::ComputeMassScalars(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k)
+    -> amrex::GpuArray<Real, nmscalars_>
+{
+    amrex::GpuArray<Real, nmscalars_> massScalars;
+    for (int n = 0; n < nmscalars_; ++n) {
+        massScalars[n] = cons(i, j, k, scalar0_index + n);
+    }
+    return massScalars;
+}
+
+
+template <typename problem_t>
 template <FluxDir DIR>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeCellOpticalDepth(const quokka::Array4View<const amrex::Real, DIR> &consVar,
 								    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, int i, int j, int k) -> double
@@ -539,8 +555,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeCellOpticalDepth(const quokka
 	const double Egas_L = consVar(i - 1, j, k, gasEnergy_index);
 	const double Egas_R = consVar(i, j, k, gasEnergy_index);
 
-	auto massScalars_L = HydroSystem<problem_t>::ComputeMassScalars(consVar, i - 1, j, k);
-	auto massScalars_R = HydroSystem<problem_t>::ComputeMassScalars(consVar, i, j, k);
+	auto massScalars_L = ComputeMassScalars(consVar, i - 1, j, k);
+	auto massScalars_R = ComputeMassScalars(consVar, i, j, k);
 
 	double Eint_L = NAN;
 	double Eint_R = NAN;
@@ -898,7 +914,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		const double x2GasMom0 = consPrev(i, j, k, x2GasMomentum_index);
 		const double x3GasMom0 = consPrev(i, j, k, x3GasMomentum_index);
 		const double Egastot0 = consPrev(i, j, k, gasEnergy_index);
-		auto massScalars = HydroSystem<problem_t>::ComputeMassScalars(consPrev, i, j, k);
+		auto massScalars = ComputeMassScalars(consPrev, i, j, k);
 
 		// load radiation energy
 		const double Erad0 = consPrev(i, j, k, radEnergy_index);
@@ -1099,7 +1115,7 @@ void RadSystem<problem_t>::ComputeSourceTermsExplicit(arrayconst_t &consPrev, ar
 		const double x2GasMom0 = consPrev(i, j, k, x2GasMomentum_index);
 		const double x3GasMom0 = consPrev(i, j, k, x3GasMomentum_index);
 		const auto Egas0 = ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0);
-		auto massScalars = HydroSystem<problem_t>::ComputeMassScalars(consPrev, i, j, k);
+		auto massScalars = ComputeMassScalars(consPrev, i, j, k);
 
 		// load radiation energy, momentum
 		const auto Erad0 = consPrev(i, j, k, radEnergy_index);
