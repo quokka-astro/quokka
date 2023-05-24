@@ -101,9 +101,9 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromTga
 	amrex::Real Tgas_value = Tgas;
 	chemstate.T = Tgas_value;
 	// initialize array of number densities
-        for (int nn = 0; nn < NumSpec; ++nn) {
-        	chemstate.xn[nn] = -1.0;
-        }
+	for (int nn = 0; nn < NumSpec; ++nn) {
+		chemstate.xn[nn] = -1.0;
+	}
 
 	if (massScalars.has_value()) {
 		const auto &massArray = massScalars.value();
@@ -136,9 +136,9 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintTempDer
 	// we don't need Tgas to find chemstate.dedT, but we still need to initialize chemstate.T because we are using the 'rt' EOS mode
 	chemstate.T = NAN;
 	// initialize array of number densities
-           for (int nn = 0; nn < NumSpec; ++nn) {
-                   chemstate.xn[nn] = -1.0;
-           }
+	for (int nn = 0; nn < NumSpec; ++nn) {
+		chemstate.xn[nn] = -1.0;
+	}
 
 	if (massScalars.has_value()) {
 		const auto &massArray = massScalars.value();
