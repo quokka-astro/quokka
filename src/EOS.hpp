@@ -15,11 +15,14 @@
 #include "AMReX_REAL.H"
 #include "physics_info.hpp"
 
-if constexpr (PRIMORDIAL_CHEM) {
+#ifdef PRIMORDIAL_CHEM
 #include "burn_type.H"
 #include "eos.H"
 #include "extern_parameters.H"
-}
+constexpr bool PRIMORDIAL_CHEM = true;
+#else
+constexpr bool PRIMORDIAL_CHEM = false;
+#endif
 
 namespace quokka
 {
