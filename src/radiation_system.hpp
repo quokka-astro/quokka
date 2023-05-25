@@ -117,7 +117,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static void ComputeSourceTermsExplicit(arrayconst_t &consPrev, arrayconst_t &radEnergySource, array_t &src, amrex::Box const &indexRange,
 					       amrex::Real dt);
 
-	AMREX_GPU_DEVICE static auto ComputeMassScalars(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> amrex::GpuArray<Real, nmscalars_>;
+	template <ArrayType>
+	AMREX_GPU_DEVICE static auto ComputeMassScalars(ArrayType const &arr, int i, int j, int k) -> amrex::GpuArray<Real, nmscalars_>;
 
 	template <FluxDir DIR>
 	static void ReconstructStatesConstant(arrayconst_t &q, array_t &leftState, array_t &rightState, amrex::Box const &indexRange, int nvars);
@@ -516,7 +517,8 @@ template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::C
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto RadSystem<problem_t>::ComputeMassScalars(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k)
+template <typename ArrayType>
+AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeMassScalars(ArrayType const &arr, int i, int j, int k)
     -> amrex::GpuArray<Real, nmscalars_>
 {
 	amrex::GpuArray<Real, nmscalars_> massScalars;
@@ -554,8 +556,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeCellOpticalDepth(const quokka
 	const double Egas_L = consVar(i - 1, j, k, gasEnergy_index);
 	const double Egas_R = consVar(i, j, k, gasEnergy_index);
 
-	auto massScalars_L = ComputeMassScalars(consVar, i - 1, j, k);
-	auto massScalars_R = ComputeMassScalars(consVar, i, j, k);
+	auto massScalars_L = RadSystem<problem_t>::ComputeMassScalars(ArrayType consVar, i - 1, j, k);
+	auto massScalars_R = RadSystem<problem_t>::ComputeMassScalars(ArrayType consVar, i, j, k);
 
 	double Eint_L = NAN;
 	double Eint_R = NAN;
@@ -913,7 +915,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		const double x2GasMom0 = consPrev(i, j, k, x2GasMomentum_index);
 		const double x3GasMom0 = consPrev(i, j, k, x3GasMomentum_index);
 		const double Egastot0 = consPrev(i, j, k, gasEnergy_index);
-		auto massScalars = ComputeMassScalars(consPrev, i, j, k);
+		auto massScalars = RadSystem<problem_t>::ComputeMassScalars(ArrayType consPrev, i, j, k);
 
 		// load radiation energy
 		const double Erad0 = consPrev(i, j, k, radEnergy_index);
@@ -1114,7 +1116,7 @@ void RadSystem<problem_t>::ComputeSourceTermsExplicit(arrayconst_t &consPrev, ar
 		const double x2GasMom0 = consPrev(i, j, k, x2GasMomentum_index);
 		const double x3GasMom0 = consPrev(i, j, k, x3GasMomentum_index);
 		const auto Egas0 = ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0);
-		auto massScalars = ComputeMassScalars(consPrev, i, j, k);
+		auto massScalars = RadSystem<problem_t>::ComputeMassScalars(ArrayType consPrev, i, j, k);
 
 		// load radiation energy, momentum
 		const auto Erad0 = consPrev(i, j, k, radEnergy_index);
