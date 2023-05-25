@@ -74,9 +74,6 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	AMREX_GPU_DEVICE static auto ComputePressure(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> amrex::Real;
 
-	AMREX_GPU_DEVICE static auto ComputeMassScalars(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k)
-	    -> amrex::GpuArray<amrex::Real, nmscalars_>;
-
 	AMREX_GPU_DEVICE static auto ComputeVelocityX1(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> amrex::Real;
 
 	AMREX_GPU_DEVICE static auto ComputeVelocityX2(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> amrex::Real;
@@ -305,17 +302,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePressure
 	const auto thermal_energy = E - kinetic_energy;
 	const auto P = thermal_energy * (HydroSystem<problem_t>::gamma_ - 1.0);
 	return P;
-}
-
-template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeMassScalars(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k)
-    -> amrex::GpuArray<amrex::Real, nmscalars_>
-{
-	amrex::GpuArray<amrex::Real, nmscalars_> massScalars;
-	for (int n = 0; n < nmscalars_; ++n) {
-		massScalars[n] = cons(i, j, k, scalar0_index + n);
-	}
-	return massScalars;
 }
 
 template <typename problem_t>
@@ -662,29 +648,32 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 			Ekin += std::pow(state[bx](i, j, k, x3Momentum_index), 2.) / state[bx](i, j, k, density_index) / 2.;
 			Etot = state[bx](i, j, k, energy_index);
 		}
-		amrex::Real primTemp = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, (Etot - Ekin));
+		amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(state[bx], i, j, k);
+		amrex::Real primTemp = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, (Etot - Ekin), massScalars);
 
 		if (primTemp > tempCeiling) {
-			amrex::Real prim_eint = quokka::EOS<problem_t>::ComputeEintFromTgas(state[bx](i, j, k, density_index), tempCeiling);
+			amrex::Real prim_eint = quokka::EOS<problem_t>::ComputeEintFromTgas(state[bx](i, j, k, density_index), tempCeiling, massScalars);
 			state[bx](i, j, k, energy_index) = Ekin + prim_eint;
 		}
 
 		if (primTemp < tempFloor) {
-			amrex::Real prim_eint = quokka::EOS<problem_t>::ComputeEintFromTgas(state[bx](i, j, k, density_index), tempFloor);
+			amrex::Real prim_eint = quokka::EOS<problem_t>::ComputeEintFromTgas(state[bx](i, j, k, density_index), tempFloor, massScalars);
 			state[bx](i, j, k, energy_index) = Ekin + prim_eint;
 		}
 
 		// Enforcing Limits on Auxiliary temperature estimated from Eint
 		Eint = state[bx](i, j, k, internalEnergy_index);
-		amrex::Real auxTemp = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint);
+		amrex::Real auxTemp = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint, massScalars);
 
 		if (auxTemp > tempCeiling) {
-			state[bx](i, j, k, internalEnergy_index) = quokka::EOS<problem_t>::ComputeEintFromTgas(state[bx](i, j, k, density_index), tempCeiling);
+			state[bx](i, j, k, internalEnergy_index) =
+			    quokka::EOS<problem_t>::ComputeEintFromTgas(state[bx](i, j, k, density_index), tempCeiling, massScalars);
 			state[bx](i, j, k, energy_index) = Ekin + state[bx](i, j, k, internalEnergy_index);
 		}
 
 		if (auxTemp < tempFloor) {
-			state[bx](i, j, k, internalEnergy_index) = quokka::EOS<problem_t>::ComputeEintFromTgas(state[bx](i, j, k, density_index), tempFloor);
+			state[bx](i, j, k, internalEnergy_index) =
+			    quokka::EOS<problem_t>::ComputeEintFromTgas(state[bx](i, j, k, density_index), tempFloor, massScalars);
 			state[bx](i, j, k, energy_index) = Ekin + state[bx](i, j, k, internalEnergy_index);
 		}
 	});
