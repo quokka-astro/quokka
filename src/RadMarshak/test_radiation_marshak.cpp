@@ -67,7 +67,7 @@ template <>
 AMREX_GPU_HOST_DEVICE auto quokka::EOS<SuOlsonProblem>::ComputeTgasFromEint(const double /*rho*/, const double Egas,
 									    std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massScalars*/) -> double
 {
-	constexpr int nmscalars = nmscalars_; // Use the nmscalars_ variable
+	constexpr int nmscalars = nmscalars_;  // Use the nmscalars_ variable
 	return std::pow(4.0 * Egas / alpha_SuOlson, 1. / 4.);
 }
 
@@ -75,7 +75,7 @@ template <>
 AMREX_GPU_HOST_DEVICE auto quokka::EOS<SuOlsonProblem>::ComputeEintFromTgas(const double /*rho*/, const double Tgas,
 									    std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massScalars*/) -> double
 {
-	constexpr int nmscalars = nmscalars_; // Use the nmscalars_ variable
+	constexpr int nmscalars = nmscalars_;  // Use the nmscalars_ variable
 	return (alpha_SuOlson / 4.0) * std::pow(Tgas, 4);
 }
 
@@ -93,7 +93,7 @@ AMREX_GPU_HOST_DEVICE auto quokka::EOS<SuOlsonProblem>::ComputeEintTempDerivativ
 	// The input parameters are the density and *temperature*, not Egas
 	// itself.
 
-	constexpr int nmscalars = nmscalars_; // Use the nmscalars_ variable
+	constexpr int nmscalars = nmscalars_;  // Use the nmscalars_ variable
 
 	return alpha_SuOlson * std::pow(Tgas, 3);
 }
