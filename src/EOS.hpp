@@ -15,15 +15,9 @@
 #include "AMReX_REAL.H"
 #include "physics_info.hpp"
 
-#include "burn_type.H"
-#include "eos.H"
-#include "extern_parameters.H"
-
-#ifdef PRIMORDIAL_CHEM
-constexpr bool PRIMORDIAL_CHEM_ENABLED = true;
-#else
-constexpr bool PRIMORDIAL_CHEM_ENABLED = false;
-#endif
+#include <burn_type.H>
+#include <eos.H>
+#include <extern_parameters.H>
 
 namespace quokka
 {
@@ -45,11 +39,11 @@ template <typename problem_t> class EOS
       public:
 	static constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
-	ComputeTgasFromEint(amrex::Real rho, amrex::Real Eint, std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = {}) -> amrex::Real;
+	ComputeTgasFromEint(amrex::Real rho, amrex::Real Eint, const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = {}) -> amrex::Real;
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
-	ComputeEintFromTgas(amrex::Real rho, amrex::Real Tgas, std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = {}) -> amrex::Real;
+	ComputeEintFromTgas(amrex::Real rho, amrex::Real Tgas, const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = {}) -> amrex::Real;
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
-	ComputeEintTempDerivative(amrex::Real rho, amrex::Real Tgas, std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = {}) -> amrex::Real;
+	ComputeEintTempDerivative(amrex::Real rho, amrex::Real Tgas, const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = {}) -> amrex::Real;
 
       private:
 	static constexpr amrex::Real gamma_ = EOS_Traits<problem_t>::gamma;
@@ -59,109 +53,109 @@ template <typename problem_t> class EOS
 
 template <typename problem_t>
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEint(amrex::Real rho, amrex::Real Eint,
-										  std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars)
+										  const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars)
     -> amrex::Real
 {
 	// return temperature for an ideal gas
 	amrex::Real Tgas = NAN;
 
-	if constexpr (PRIMORDIAL_CHEM_ENABLED) {
-		burn_t chemstate;
-		chemstate.rho = rho;
-		chemstate.e = Eint / rho;
-		// initialize array of number densities
-		for (int ii = 0; ii < NumSpec; ++ii) {
-			chemstate.xn[ii] = -1.0;
-		}
+#ifdef PRIMORDIAL_CHEM
+	burn_t chemstate;
+	chemstate.rho = rho;
+	chemstate.e = Eint / rho;
+	// initialize array of number densities
+	for (int ii = 0; ii < NumSpec; ++ii) {
+		chemstate.xn[ii] = -1.0;
+	}
 
-		if (massScalars.has_value()) {
-			const auto &massArray = massScalars.value();
-			for (int nn = 0; nn < nmscalars_; ++nn) {
-				chemstate.xn[nn] = massArray[nn] / spmasses[nn]; // massScalars are partial densities (massFractions * rho)
-			}
-		}
-
-		eos(eos_input_re, chemstate);
-		Tgas = chemstate.T;
-	} else {
-		if constexpr (gamma_ != 1.0) {
-			const amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
-			Tgas = Eint / (rho * c_v);
+	if (massScalars) {
+		const auto& massArray = *massScalars;
+		for (int nn = 0; nn < nmscalars_; ++nn) {
+			chemstate.xn[nn] = massArray[nn] / spmasses[nn]; // massScalars are partial densities (massFractions * rho)
 		}
 	}
+
+	eos(eos_input_re, chemstate);
+	Tgas = chemstate.T;
+#else
+	if constexpr (gamma_ != 1.0) {
+		const amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
+		Tgas = Eint / (rho * c_v);
+	}
+#endif
 	return Tgas;
 }
 
 template <typename problem_t>
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromTgas(amrex::Real rho, amrex::Real Tgas,
-										  std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars)
+										  const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars)
     -> amrex::Real
 {
 	// return internal energy density for a gamma-law ideal gas
 	amrex::Real Eint = NAN;
 
-	if constexpr (PRIMORDIAL_CHEM_ENABLED) {
-		burn_t chemstate;
-		chemstate.rho = rho;
-		// Define and initialize Tgas here
-		amrex::Real const Tgas_value = Tgas;
-		chemstate.T = Tgas_value;
-		// initialize array of number densities
-		for (int ii = 0; ii < NumSpec; ++ii) {
-			chemstate.xn[ii] = -1.0;
-		}
+#ifdef PRIMORDIAL_CHEM
+	burn_t chemstate;
+	chemstate.rho = rho;
+	// Define and initialize Tgas here
+	amrex::Real const Tgas_value = Tgas;
+	chemstate.T = Tgas_value;
+	// initialize array of number densities
+	for (int ii = 0; ii < NumSpec; ++ii) {
+		chemstate.xn[ii] = -1.0;
+	}
 
-		if (massScalars.has_value()) {
-			const auto &massArray = massScalars.value();
-			for (int nn = 0; nn < nmscalars_; ++nn) {
-				chemstate.xn[nn] = massArray[nn] / spmasses[nn]; // massScalars are partial densities (massFractions * rho)
-			}
-		}
-
-		eos(eos_input_rt, chemstate);
-		Eint = chemstate.e * chemstate.rho;
-	} else {
-		if constexpr (gamma_ != 1.0) {
-			const amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
-			Eint = rho * c_v * Tgas;
+	if (massScalars) {
+		const auto& massArray = *massScalars;
+		for (int nn = 0; nn < nmscalars_; ++nn) {
+			chemstate.xn[nn] = massArray[nn] / spmasses[nn]; // massScalars are partial densities (massFractions * rho)
 		}
 	}
+
+	eos(eos_input_rt, chemstate);
+	Eint = chemstate.e * chemstate.rho;
+#else
+	if constexpr (gamma_ != 1.0) {
+		const amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
+		Eint = rho * c_v * Tgas;
+	}
+#endif
 	return Eint;
 }
 
 template <typename problem_t>
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintTempDerivative(const amrex::Real rho, const amrex::Real /*Tgas*/,
-											std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars)
+											const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars)
     -> amrex::Real
 {
 	// compute derivative of internal energy w/r/t temperature
 	amrex::Real dEint_dT = NAN;
 
-	if constexpr (PRIMORDIAL_CHEM_ENABLED) {
-		burn_t chemstate;
-		chemstate.rho = rho;
-		// we don't need Tgas to find chemstate.dedT, but we still need to initialize chemstate.T because we are using the 'rt' EOS mode
-		chemstate.T = NAN;
-		// initialize array of number densities
-		for (int ii = 0; ii < NumSpec; ++ii) {
-			chemstate.xn[ii] = -1.0;
-		}
+#ifdef PRIMORDIAL_CHEM
+	burn_t chemstate;
+	chemstate.rho = rho;
+	// we don't need Tgas to find chemstate.dedT, but we still need to initialize chemstate.T because we are using the 'rt' EOS mode
+	chemstate.T = NAN;
+	// initialize array of number densities
+	for (int ii = 0; ii < NumSpec; ++ii) {
+		chemstate.xn[ii] = -1.0;
+	}
 
-		if (massScalars.has_value()) {
-			const auto &massArray = massScalars.value();
-			for (int nn = 0; nn < nmscalars_; ++nn) {
-				chemstate.xn[nn] = massArray[nn] / spmasses[nn]; // massScalars are partial densities (massFractions * rho)
-			}
-		}
-
-		eos(eos_input_rt, chemstate);
-		dEint_dT = chemstate.dedT * chemstate.rho;
-	} else {
-		if constexpr (gamma_ != 1.0) {
-			const amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
-			dEint_dT = rho * c_v;
+	if (massScalars) {
+		const auto& massArray = *massScalars;
+		for (int nn = 0; nn < nmscalars_; ++nn) {
+			chemstate.xn[nn] = massArray[nn] / spmasses[nn]; // massScalars are partial densities (massFractions * rho)
 		}
 	}
+
+	eos(eos_input_rt, chemstate);
+	dEint_dT = chemstate.dedT * chemstate.rho;
+#else
+	if constexpr (gamma_ != 1.0) {
+		const amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
+		dEint_dT = rho * c_v;
+	}
+#endif
 	return dEint_dT;
 }
 
