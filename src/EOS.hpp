@@ -45,11 +45,12 @@ template <typename problem_t> class EOS
       public:
 	static constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
-	ComputeTgasFromEint(amrex::Real rho, amrex::Real Eint, std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = {}) -> amrex::Real;
+	ComputeTgasFromEint(amrex::Real rho, amrex::Real Eint, const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = {}) -> amrex::Real;
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
-	ComputeEintFromTgas(amrex::Real rho, amrex::Real Tgas, std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = {}) -> amrex::Real;
+	ComputeEintFromTgas(amrex::Real rho, amrex::Real Tgas, const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = {}) -> amrex::Real;
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
-	ComputeEintTempDerivative(amrex::Real rho, amrex::Real Tgas, std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = {}) -> amrex::Real;
+	ComputeEintTempDerivative(amrex::Real rho, amrex::Real Tgas, const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = {})
+	    -> amrex::Real;
 
       private:
 	static constexpr amrex::Real gamma_ = EOS_Traits<problem_t>::gamma;
@@ -59,7 +60,7 @@ template <typename problem_t> class EOS
 
 template <typename problem_t>
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEint(amrex::Real rho, amrex::Real Eint,
-										  std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars)
+										  const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars)
     -> amrex::Real
 {
 	// return temperature for an ideal gas
@@ -74,8 +75,8 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEin
 			chemstate.xn[ii] = -1.0;
 		}
 
-		if (massScalars.has_value()) {
-			const auto &massArray = massScalars.value();
+		if (massScalars) {
+			const auto &massArray = *massScalars;
 			for (int nn = 0; nn < nmscalars_; ++nn) {
 				chemstate.xn[nn] = massArray[nn] / spmasses[nn]; // massScalars are partial densities (massFractions * rho)
 			}
@@ -94,7 +95,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEin
 
 template <typename problem_t>
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromTgas(amrex::Real rho, amrex::Real Tgas,
-										  std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars)
+										  const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars)
     -> amrex::Real
 {
 	// return internal energy density for a gamma-law ideal gas
@@ -111,8 +112,8 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromTga
 			chemstate.xn[ii] = -1.0;
 		}
 
-		if (massScalars.has_value()) {
-			const auto &massArray = massScalars.value();
+		if (massScalars) {
+			const auto &massArray = *massScalars;
 			for (int nn = 0; nn < nmscalars_; ++nn) {
 				chemstate.xn[nn] = massArray[nn] / spmasses[nn]; // massScalars are partial densities (massFractions * rho)
 			}
@@ -130,9 +131,9 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromTga
 }
 
 template <typename problem_t>
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintTempDerivative(const amrex::Real rho, const amrex::Real /*Tgas*/,
-											std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars)
-    -> amrex::Real
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto
+EOS<problem_t>::ComputeEintTempDerivative(const amrex::Real rho, const amrex::Real /*Tgas*/,
+					  const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars) -> amrex::Real
 {
 	// compute derivative of internal energy w/r/t temperature
 	amrex::Real dEint_dT = NAN;
@@ -147,8 +148,8 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintTempDer
 			chemstate.xn[ii] = -1.0;
 		}
 
-		if (massScalars.has_value()) {
-			const auto &massArray = massScalars.value();
+		if (massScalars) {
+			const auto &massArray = *massScalars;
 			for (int nn = 0; nn < nmscalars_; ++nn) {
 				chemstate.xn[nn] = massArray[nn] / spmasses[nn]; // massScalars are partial densities (massFractions * rho)
 			}
