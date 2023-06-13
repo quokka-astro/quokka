@@ -20,9 +20,11 @@
 #include "hydro_system.hpp"
 #include "radiation_system.hpp"
 
-#include "burn_type.H"
+#ifdef PRIMORDIAL_CHEM
+#include "actual_eos_data.H"
 #include "eos.H"
 #include "extern_parameters.H"
+#include "burn_type.H"
 
 namespace quokka::chemistry
 {
@@ -133,4 +135,5 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 }
 
 } // namespace quokka::chemistry
+#endif
 #endif // CHEMISTRY_HPP_
