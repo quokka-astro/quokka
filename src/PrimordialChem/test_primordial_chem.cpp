@@ -33,6 +33,7 @@
 #include "eos.H"
 #include "extern_parameters.H"
 #include "network.H"
+#include "actual_eos_data.H"
 
 using amrex::Real;
 
