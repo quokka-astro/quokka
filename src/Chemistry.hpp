@@ -22,9 +22,9 @@
 
 #ifdef PRIMORDIAL_CHEM
 #include "actual_eos_data.H"
+#include "burn_type.H"
 #include "eos.H"
 #include "extern_parameters.H"
-#include "burn_type.H"
 
 namespace quokka::chemistry
 {

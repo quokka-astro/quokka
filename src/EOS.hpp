@@ -23,7 +23,6 @@
 #include "actual_eos_data.H"
 #endif
 
-
 namespace quokka
 {
 static constexpr double boltzmann_constant_cgs = 1.380658e-16; // cgs
