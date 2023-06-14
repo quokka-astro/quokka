@@ -90,7 +90,7 @@ include(CTest)
 
 #create an object library for files that should be compiled with all test problems
 set (QuokkaObjSources "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/CloudyCooling.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/GrackleDataReader.cpp")
-add_library(QuokkaObj OBJECT ${QuokkaObjSources})
+add_library(QuokkaObj STATIC ${QuokkaObjSources})
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
     setup_target_for_cuda_compilation(QuokkaObj)
