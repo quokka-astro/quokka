@@ -1,4 +1,4 @@
-add_executable(test_primordial_chem test_primordial_chem.cpp ../Chemistry.cpp ${primordial_chem_sources})
+add_executable(test_primordial_chem test_primordial_chem.cpp ../Chemistry.cpp ${primordial_chem_sources} ${QuokkaObjSources})
 target_compile_definitions(test_primordial_chem PUBLIC PRIMORDIAL_CHEM) #this will add #define PRIMORDIAL_CHEM
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
