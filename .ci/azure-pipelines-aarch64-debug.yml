@@ -22,10 +22,8 @@ jobs:
     inputs:
       cmakeArgs: '.. -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DAMReX_SPACEDIM=1'
 
-  - task: CMake@1
+  - script: cmake --build .
     displayName: 'Build Quokka'
-    inputs:
-      cmakeArgs: '--build .'
 
   - script: ctest -j 2 -T Test --output-on-failure
     displayName: 'Run CTest'
