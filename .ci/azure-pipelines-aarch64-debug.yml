@@ -30,7 +30,7 @@ jobs:
   - task: CMake@1
     displayName: 'Run CTest'
     inputs:
-      cmakeArgs: '-E chdir . ctest -T Test --output-on-failure'
+      cmakeArgs: '-E chdir . ctest -j 2 -T Test --output-on-failure'
 
   - task: PublishTestResults@2
     inputs:
