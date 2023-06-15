@@ -25,7 +25,7 @@ jobs:
   - script: cmake --build .
     displayName: 'Build Quokka'
 
-  - script: ctest -j 2 -T Test --output-on-failure
+  - script: ctest -j 2 -I 1,1 -T Test --output-on-failure
     displayName: 'Run CTest'
 
   - task: PublishTestResults@2
