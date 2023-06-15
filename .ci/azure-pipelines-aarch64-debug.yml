@@ -27,10 +27,8 @@ jobs:
     inputs:
       cmakeArgs: '--build .'
 
-  - task: CMake@1
+  - script: ctest -j 2 -T Test --output-on-failure
     displayName: 'Run CTest'
-    inputs:
-      cmakeArgs: '-E chdir . ctest -j 2 -T Test --output-on-failure'
 
   - task: PublishTestResults@2
     inputs:
