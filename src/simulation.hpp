@@ -13,7 +13,15 @@
 #include <cassert>
 #include <csignal>
 #include <cstdio>
+#if __has_include(<filesystem>)
 #include <filesystem>
+#elif __has_include(<experimental/filesystem>)
+#include <experimental/filesystem>
+namespace std
+{
+namespace filesystem = experimental::filesystem;
+}
+#endif
 #include <fstream>
 #include <iomanip>
 #include <iostream>
