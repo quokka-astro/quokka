@@ -10,9 +10,9 @@ target_compile_definitions(test_primordial_chem PUBLIC PRIMORDIAL_CHEM) #this wi
 
 #de-link QuokkaObj from this target to avoid multiple definitions of same variables
 #this is also why we build main.cpp CloudyCooling.cpp GrackleDataReader.cpp again for this target
-get_target_property(tlink_libs test_primordial_chem LINK_LIBRARIES)
-list(REMOVE_ITEM tlink_libs QuokkaObj)
-set_property(TARGET test_primordial_chem PROPERTY LINK_LIBRARIES ${tlink_libs})
+#get_target_property(tlink_libs test_primordial_chem LINK_LIBRARIES)
+#list(REMOVE_ITEM tlink_libs QuokkaObj)
+#set_property(TARGET test_primordial_chem PROPERTY LINK_LIBRARIES ${tlink_libs})
 
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
