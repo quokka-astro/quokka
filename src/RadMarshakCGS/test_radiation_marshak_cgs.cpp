@@ -67,17 +67,27 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblemCgs>::ComputeRoss
 	return kappa;
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto quokka::EOS<SuOlsonProblemCgs>::ComputeTgasFromEint(const double /*rho*/, const double Egas) -> double
+static constexpr int nmscalars_ = Physics_Traits<SuOlsonProblemCgs>::numMassScalars;
+template <>
+AMREX_GPU_HOST_DEVICE auto quokka::EOS<SuOlsonProblemCgs>::ComputeTgasFromEint(const double /*rho*/, const double Egas,
+									       std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massScalars*/)
+    -> double
 {
 	return std::pow(4.0 * Egas / alpha_SuOlson, 1. / 4.);
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto quokka::EOS<SuOlsonProblemCgs>::ComputeEintFromTgas(const double /*rho*/, const double Tgas) -> double
+template <>
+AMREX_GPU_HOST_DEVICE auto quokka::EOS<SuOlsonProblemCgs>::ComputeEintFromTgas(const double /*rho*/, const double Tgas,
+									       std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massScalars*/)
+    -> double
 {
 	return (alpha_SuOlson / 4.0) * std::pow(Tgas, 4);
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto quokka::EOS<SuOlsonProblemCgs>::ComputeEintTempDerivative(const double /*rho*/, const double Tgas) -> double
+template <>
+AMREX_GPU_HOST_DEVICE auto quokka::EOS<SuOlsonProblemCgs>::ComputeEintTempDerivative(const double /*rho*/, const double Tgas,
+										     std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massScalars*/)
+    -> double
 {
 	// This is also known as the heat capacity, i.e.
 	// 		\del E_g / \del T = \rho c_v,
@@ -301,7 +311,7 @@ auto problem_main() -> int
 		const double t = sim.tNew_[0];
 		const double xmax = c_light_cgs_ * t;
 		amrex::Print() << "diffusion length = " << xmax << std::endl;
-		for (int i = 0; i < xs_exact.size(); ++i) {
+		for (size_t i = 0; i < xs_exact.size(); ++i) {
 			if (xs_exact[i] < xmax) {
 				err_norm += std::abs(Trad_interp[i] - Trad_exact[i]);
 				sol_norm += std::abs(Trad_exact[i]);

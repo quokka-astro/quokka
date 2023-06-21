@@ -60,8 +60,10 @@ else()
   message(STATUS "Fused multiply-add (FMAD) is *enabled* for device code. Exact direction symmetry will NOT be preserved.")
 endif(DISABLE_FMAD)
 
-# this is necessary to prevent the host compiler from complaining about nv_pragmas
-#add_compile_options(-Wno-unknown-pragmas)
+# emit error if warnings are produced
+if(WARNINGS_AS_ERRORS)
+  add_compile_options(-Werror -Wall -Wextra -Wno-unused-parameter -Wno-unknown-pragmas -Wno-strict-aliasing)
+endif(WARNINGS_AS_ERRORS)
 
 # emit register usage per thread from CUDA assembler
 # if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA")
@@ -72,7 +74,6 @@ endif(DISABLE_FMAD)
 #   add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:-v>)
 #   add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:-Wno-unused-command-line-argument>)
 # endif()
-
 
 include_directories(${amrex_INCLUDE_DIRS_RET})
 include_directories(${fmt_INCLUDE_DIRS_RET})
@@ -86,6 +87,16 @@ link_libraries(fmt::fmt)
 link_libraries(hdf5::hdf5)
 
 include(CTest)
+
+#create an object library for files that should be compiled with all test problems
+set (QuokkaObjSources "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/CloudyCooling.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/GrackleDataReader.cpp")
+add_library(QuokkaObj OBJECT ${QuokkaObjSources})
+
+if(AMReX_GPU_BACKEND MATCHES "CUDA")
+    setup_target_for_cuda_compilation(QuokkaObj)
+endif()
+
+link_libraries(QuokkaObj)
 
 add_subdirectory(HydroShocktubeCMA)
 add_subdirectory(PrimordialChem)

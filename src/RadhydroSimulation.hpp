@@ -593,35 +593,37 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::fillPoissonRhs
 
 template <typename problem_t> void RadhydroSimulation<problem_t>::applyPoissonGravityAtLevel(amrex::MultiFab const &phi_mf, const int lev, const amrex::Real dt)
 {
-	// apply Poisson gravity operator on level 'lev'
-	auto const &dx = geom[lev].CellSizeArray();
-	auto const &phi = phi_mf.const_arrays();
-	auto state = state_new_cc_[lev].arrays();
+	if constexpr (AMREX_SPACEDIM == 3) {
+		// apply Poisson gravity operator on level 'lev'
+		auto const &dx = geom[lev].CellSizeArray();
+		auto const &phi = phi_mf.const_arrays();
+		auto state = state_new_cc_[lev].arrays();
 
-	amrex::ParallelFor(phi_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-		// add operator-split gravitational acceleration
-		const amrex::Real rho = state[bx](i, j, k, HydroSystem<problem_t>::density_index);
-		amrex::Real px = state[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index);
-		amrex::Real py = state[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index);
-		amrex::Real pz = state[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index);
-		const amrex::Real KE_old = 0.5 * (px * px + py * py + pz * pz) / rho;
+		amrex::ParallelFor(phi_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			// add operator-split gravitational acceleration
+			const amrex::Real rho = state[bx](i, j, k, HydroSystem<problem_t>::density_index);
+			amrex::Real px = state[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index);
+			amrex::Real py = state[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index);
+			amrex::Real pz = state[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index);
+			const amrex::Real KE_old = 0.5 * (px * px + py * py + pz * pz) / rho;
 
-		// g = -grad \phi
-		amrex::Real gx = -0.5 * (phi[bx](i + 1, j, k) - phi[bx](i - 1, j, k)) / dx[0];
-		amrex::Real gy = -0.5 * (phi[bx](i, j + 1, k) - phi[bx](i, j - 1, k)) / dx[1];
-		amrex::Real gz = -0.5 * (phi[bx](i, j, k + 1) - phi[bx](i, j, k - 1)) / dx[2];
+			// g = -grad \phi
+			amrex::Real gx = -0.5 * (phi[bx](i + 1, j, k) - phi[bx](i - 1, j, k)) / dx[0];
+			amrex::Real gy = -0.5 * (phi[bx](i, j + 1, k) - phi[bx](i, j - 1, k)) / dx[1];
+			amrex::Real gz = -0.5 * (phi[bx](i, j, k + 1) - phi[bx](i, j, k - 1)) / dx[2];
 
-		px += dt * rho * gx;
-		py += dt * rho * gy;
-		pz += dt * rho * gz;
-		const amrex::Real KE_new = 0.5 * (px * px + py * py + pz * pz) / rho;
-		const amrex::Real dKE = KE_new - KE_old;
+			px += dt * rho * gx;
+			py += dt * rho * gy;
+			pz += dt * rho * gz;
+			const amrex::Real KE_new = 0.5 * (px * px + py * py + pz * pz) / rho;
+			const amrex::Real dKE = KE_new - KE_old;
 
-		state[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index) = px;
-		state[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index) = py;
-		state[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index) = pz;
-		state[bx](i, j, k, HydroSystem<problem_t>::energy_index) += dKE;
-	});
+			state[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index) = px;
+			state[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index) = py;
+			state[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index) = pz;
+			state[bx](i, j, k, HydroSystem<problem_t>::energy_index) += dKE;
+		});
+	}
 }
 
 // fix-up any unphysical states created by AMR operations
@@ -743,8 +745,8 @@ auto RadhydroSimulation<problem_t>::computeAxisAlignedProfile(const int axis, F 
 
 	// normalize profile
 	amrex::Long numCells = domain.numPts() / domain.length(axis);
-	for (int i = 0; i < profile.size(); ++i) {
-		profile[i] /= static_cast<amrex::Real>(numCells);
+	for (double &bin : profile) {
+		bin /= static_cast<amrex::Real>(numCells);
 	}
 
 	return profile;
@@ -757,7 +759,6 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 	// timestep retries
 	const int max_retries = 4;
 	bool success = false;
-	amrex::Real cur_time;
 
 	// save the pre-advance fine flux register state in originalFineData
 	amrex::MultiFab originalFineData;
@@ -771,7 +772,6 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 		// reduce timestep by a factor of 2^retry_count
 		const int nsubsteps = std::pow(2, retry_count);
 		const amrex::Real dt_step = dt_lev / nsubsteps;
-		cur_time = time;
 
 		if (retry_count > 0 && Verbose()) {
 			amrex::Print() << "\t>> Re-trying hydro advance at level " << lev << " with reduced timestep (nsubsteps = " << nsubsteps
@@ -801,7 +801,6 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 			}
 
 			success = advanceHydroAtLevel(state_old_cc_tmp, fr_as_crse, fr_as_fine, lev, time, dt_step);
-			cur_time += dt_step;
 
 			if (!success) {
 				if (Verbose()) {
@@ -1166,7 +1165,6 @@ auto RadhydroSimulation<problem_t>::computeFOHydroFluxes(amrex::MultiFab const &
 
 	auto ba = grids[lev];
 	auto dm = dmap[lev];
-	const int flatteningGhost = 2;
 	const int reconstructRange = 1;
 
 	// allocate temporary MultiFabs
