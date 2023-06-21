@@ -17,14 +17,18 @@ set -eu -o pipefail
 #   failed files the given number of times.
 echo 'Acquire::Retries "3";' | sudo tee /etc/apt/apt.conf.d/80-retries
 
-# Ref.: https://rocmdocs.amd.com/en/latest/Installation_Guide/Installation-Guide.html#ubuntu
-curl -O https://repo.radeon.com/rocm/rocm.gpg.key
-sudo apt-key add rocm.gpg.key
-echo 'deb [arch=amd64] https://repo.radeon.com/rocm/apt/debian/ ubuntu main' \
-  | sudo tee /etc/apt/sources.list.d/rocm.list
+# Ref.: https://rocmdocs.amd.com/en/latest/deploy/linux/os-native/install.html
+sudo mkdir --parents --mode=0755 /etc/apt/keyrings
+wget https://repo.radeon.com/rocm/rocm.gpg.key -O - | \
+    gpg --dearmor | sudo tee /etc/apt/keyrings/rocm.gpg > /dev/null
+
+for ver in 5.3.3 5.4.3 5.5.1; do
+echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/rocm/apt/$ver focal main" \
+    | sudo tee --append /etc/apt/sources.list.d/rocm.list
+done
+
 echo 'export PATH=/opt/rocm/llvm/bin:/opt/rocm/bin:/opt/rocm/profiler/bin:/opt/rocm/opencl/bin:$PATH' \
   | sudo tee -a /etc/profile.d/rocm.sh
-
 # we should not need to export HIP_PATH=/opt/rocm/hip with those installs
 
 sudo apt-get update
@@ -39,11 +43,11 @@ sudo apt-get install -y --no-install-recommends \
     libnuma-dev     \
     libopenmpi-dev  \
     openmpi-bin     \
-    rocm-dev        \
-    roctracer-dev   \
-    rocprofiler-dev \
-    rocrand-dev     \
-    rocprim-dev
+    rocm-dev5.4.3        \
+    roctracer-dev5.4.3   \
+    rocprofiler-dev5.4.3 \
+    rocrand-dev5.4.3     \
+    rocprim-dev5.4.3
 
 # activate
 #
