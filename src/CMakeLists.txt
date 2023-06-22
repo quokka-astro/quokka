@@ -80,7 +80,13 @@ include_directories(${fmt_INCLUDE_DIRS_RET})
 include_directories(${HDF5_INCLUDE_DIRS_RET})
 include_directories(${Boost_INCLUDE_DIRS_RET})
 include_directories(${CMAKE_SOURCE_DIR}/src)
-include_directories(${primordial_chem_dirs} ${CMAKE_BINARY_DIR} "includes/extern_parameters.H" "includes/network_properties.H")
+
+# default network_name (for Microphysics EOS) for all tests:
+set(microphysics_network_name "gamma_law")
+# default output_dir (for Microphysics EOS) for all tests:
+set(microphysics_output_dir "${CMAKE_CURRENT_BINARY_DIR}/")
+setup_target_for_microphysics_compilation(${microphysics_network_name} "${CMAKE_CURRENT_BINARY_DIR}/")
+include_directories(${gamma_law_dirs} ${CMAKE_CURRENT_BINARY_DIR} "includes/extern_parameters.H" "includes/network_properties.H")
 
 link_libraries(AMReX::amrex)
 link_libraries(fmt::fmt)
@@ -90,13 +96,12 @@ include(CTest)
 
 #create an object library for files that should be compiled with all test problems
 set (QuokkaObjSources "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/CloudyCooling.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/GrackleDataReader.cpp")
-add_library(QuokkaObj OBJECT ${QuokkaObjSources})
-
-if(AMReX_GPU_BACKEND MATCHES "CUDA")
-    setup_target_for_cuda_compilation(QuokkaObj)
-endif()
-
-link_libraries(QuokkaObj)
+#we don't use it anymore because it gives issues on Cray systems
+#add_library(QuokkaObj OBJECT ${QuokkaObjSources} ${gamma_law_sources})
+#if(AMReX_GPU_BACKEND MATCHES "CUDA")
+#    setup_target_for_cuda_compilation(QuokkaObj)
+#endif()
+#link_libraries(QuokkaObj)
 
 add_subdirectory(HydroShocktubeCMA)
 add_subdirectory(PrimordialChem)
