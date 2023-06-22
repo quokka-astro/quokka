@@ -88,7 +88,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEin
 		// Tgas = Eint / (rho * c_v);
 		burn_t chemstate;
 		chemstate.rho = rho;
-		chemstate.e = Eint/rho;
+		chemstate.e = Eint / rho;
 		chemstate.mu = mean_molecular_weight_;
 		eos(eos_input_re, chemstate);
 		Tgas = chemstate.T;
