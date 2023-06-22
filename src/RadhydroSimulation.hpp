@@ -52,6 +52,8 @@
 #include "radiation_system.hpp"
 #include "simulation.hpp"
 
+#include "eos.H"
+
 // Simulation class should be initialized only once per program (i.e., is a singleton)
 template <typename problem_t> class RadhydroSimulation : public AMRSimulation<problem_t>
 {
@@ -127,6 +129,10 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 		defineComponentNames();
 		// read in runtime parameters
 		readParmParse();
+		// initialize Microphysics EOS
+		amrex::Real small_temp = 1e-10;
+		amrex::Real small_dens = 1e-100;
+		eos_init(small_dens, small_temp);
 	}
 
 	explicit RadhydroSimulation(amrex::Vector<amrex::BCRec> &BCs_cc) : AMRSimulation<problem_t>(BCs_cc)
@@ -134,6 +140,10 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 		defineComponentNames();
 		// read in runtime parameters
 		readParmParse();
+		// initialize Microphysics EOS
+		amrex::Real small_temp = 1e-10;
+		amrex::Real small_dens = 1e-100;
+		eos_init(small_dens, small_temp);
 	}
 
 	[[nodiscard]] static auto getScalarVariableNames() -> std::vector<std::string>;
