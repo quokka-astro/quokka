@@ -129,10 +129,12 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 		defineComponentNames();
 		// read in runtime parameters
 		readParmParse();
+		// initialize Microphysics params
+		init_extern_parameters();
 		// initialize Microphysics EOS
 		amrex::Real small_temp = 1e-10;
 		amrex::Real small_dens = 1e-100;
-		eos_init(small_dens, small_temp);
+		eos_init(small_temp, small_dens);
 	}
 
 	explicit RadhydroSimulation(amrex::Vector<amrex::BCRec> &BCs_cc) : AMRSimulation<problem_t>(BCs_cc)
@@ -140,10 +142,12 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 		defineComponentNames();
 		// read in runtime parameters
 		readParmParse();
+		// initialize Microphysics params
+		init_extern_parameters();
 		// initialize Microphysics EOS
 		amrex::Real small_temp = 1e-10;
 		amrex::Real small_dens = 1e-100;
-		eos_init(small_dens, small_temp);
+		eos_init(small_temp, small_dens);
 	}
 
 	[[nodiscard]] static auto getScalarVariableNames() -> std::vector<std::string>;
