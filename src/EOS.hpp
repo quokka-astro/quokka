@@ -12,6 +12,7 @@
 
 #include "AMReX_Array.H"
 #include "AMReX_GpuQualifiers.H"
+#include <AMReX_Print.H>
 #include "AMReX_REAL.H"
 #include "physics_info.hpp"
 
@@ -86,11 +87,13 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEin
 	if constexpr (gamma_ != 1.0) {
 		// const amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
 		// Tgas = Eint / (rho * c_v);
-		burn_t chemstate;
+		chem_eos_t chemstate;
 		chemstate.rho = rho;
 		chemstate.e = Eint / rho;
 		chemstate.mu = mean_molecular_weight_;
+		//amrex::Print() << "Tgas before " << chemstate.rho << " " << chemstate.e << " "<< chemstate.mu << " " << std::endl;
 		eos(eos_input_re, chemstate);
+		//amrex::Print() << "Tgas after "<< chemstate << std::endl;
 		Tgas = chemstate.T;
 	}
 #endif
