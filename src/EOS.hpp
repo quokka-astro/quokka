@@ -84,8 +84,14 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEin
 	Tgas = chemstate.T;
 #else
 	if constexpr (gamma_ != 1.0) {
-		const amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
-		Tgas = Eint / (rho * c_v);
+		// const amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
+		// Tgas = Eint / (rho * c_v);
+		burn_t chemstate;
+		chemstate.rho = rho;
+		chemstate.e = Eint/rho;
+		chemstate.mu = mean_molecular_weight_;
+		eos(eos_input_re, chemstate);
+		Tgas = chemstate.T;
 	}
 #endif
 	return Tgas;
