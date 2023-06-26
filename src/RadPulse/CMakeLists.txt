@@ -1,4 +1,4 @@
-add_executable(test_radiation_pulse test_radiation_pulse.cpp ../fextract.cpp)
+add_executable(test_radiation_pulse test_radiation_pulse.cpp ../fextract.cpp ${QuokkaObjSources})
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
     setup_target_for_cuda_compilation(test_radiation_pulse)

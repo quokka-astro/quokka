@@ -29,6 +29,7 @@
 #include "radiation_system.hpp"
 #include "test_primordial_chem.hpp"
 
+#include "actual_eos_data.H"
 #include "burn_type.H"
 #include "eos.H"
 #include "extern_parameters.H"
