@@ -26,8 +26,8 @@
 
 namespace quokka
 {
-static constexpr double boltzmann_constant_cgs = C::k_B; // cgs
-static constexpr double hydrogen_mass_cgs = 1.6726231e-24;     // cgs
+static constexpr double boltzmann_constant_cgs = C::k_B;   // cgs
+static constexpr double hydrogen_mass_cgs = 1.6726231e-24; // cgs
 
 // specify default values for ideal gamma-law EOS
 //
@@ -87,8 +87,8 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEin
 	Tgas = chemstate.T;
 #else
 	if constexpr (gamma_ != 1.0) {
-		//const amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
-		//Tgas = Eint / (rho * c_v);
+		// const amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
+		// Tgas = Eint / (rho * c_v);
 		chem_eos_t estate;
 		estate.rho = rho;
 		estate.e = Eint / rho;

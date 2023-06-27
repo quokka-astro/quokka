@@ -22,9 +22,9 @@ struct ShockProblem {
 // parameters taken from Section 9.5 of Skinner et al. (2019)
 // [The Astrophysical Journal Supplement Series, 241:7 (27pp), 2019 March]
 
-constexpr double a_rad = 7.5646e-15;  // erg cm^-3 K^-4
-constexpr double c = 2.99792458e10;   // cm s^-1
-constexpr double k_B = C::k_B;  // erg K^-1
+constexpr double a_rad = 7.5646e-15;		  // erg cm^-3 K^-4
+constexpr double c = 2.99792458e10;		  // cm s^-1
+constexpr double k_B = C::k_B;			  // erg K^-1
 constexpr double m_H = quokka::hydrogen_mass_cgs; // mass of hydrogen atom [g]
 
 // constexpr double P0 = 1.0e-4;	// equal to P_0 in dimensionless units
