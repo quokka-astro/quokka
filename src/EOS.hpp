@@ -36,6 +36,7 @@ template <typename problem_t> struct EOS_Traits {
 	static constexpr double cs_isothermal = NAN; // only used when gamma = 1
 	static constexpr double mean_molecular_weight = NAN;
 	static constexpr double boltzmann_constant = boltzmann_constant_cgs;
+	static constexpr double hydrogen_mass_code_units = hydrogen_mass_cgs;
 };
 
 template <typename problem_t> class EOS
@@ -90,7 +91,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEin
 		chem_eos_t chemstate;
 		chemstate.rho = rho;
 		chemstate.e = Eint / rho;
-		chemstate.mu = mean_molecular_weight_;
+		chemstate.mu = mean_molecular_weight_ / hydrogen_mass_code_units;
 		// amrex::Print() << "Tgas before " << chemstate.rho << " " << chemstate.e << " "<< chemstate.mu << " " << std::endl;
 		eos(eos_input_re, chemstate);
 		// amrex::Print() << "Tgas after "<< chemstate << std::endl;
