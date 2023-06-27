@@ -24,8 +24,8 @@ struct ShockProblem {
 
 constexpr double a_rad = 7.5646e-15;  // erg cm^-3 K^-4
 constexpr double c = 2.99792458e10;   // cm s^-1
-constexpr double k_B = 1.380658e-16;  // erg K^-1
-constexpr double m_H = 1.6726231e-24; // mass of hydrogen atom [g]
+constexpr double k_B = C::k_B;  // erg K^-1
+constexpr double m_H = quokka::hydrogen_mass_cgs; // mass of hydrogen atom [g]
 
 // constexpr double P0 = 1.0e-4;	// equal to P_0 in dimensionless units
 // constexpr double sigma_a = 1.0e6;	// absorption cross section
