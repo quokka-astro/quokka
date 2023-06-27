@@ -26,7 +26,7 @@
 
 namespace quokka
 {
-static constexpr double boltzmann_constant_cgs = 1.380658e-16; // cgs
+static constexpr double boltzmann_constant_cgs = C::k_B; // cgs
 static constexpr double hydrogen_mass_cgs = 1.6726231e-24;     // cgs
 
 // specify default values for ideal gamma-law EOS
@@ -87,16 +87,15 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEin
 	Tgas = chemstate.T;
 #else
 	if constexpr (gamma_ != 1.0) {
-		// const amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
-		// Tgas = Eint / (rho * c_v);
-		chem_eos_t chemstate;
-		chemstate.rho = rho;
-		chemstate.e = Eint / rho;
-		chemstate.mu = mean_molecular_weight_ / hydrogen_mass_code_units_;
-		// amrex::Print() << "Tgas before " << chemstate.rho << " " << chemstate.e << " "<< chemstate.mu << " " << std::endl;
-		eos(eos_input_re, chemstate);
-		// amrex::Print() << "Tgas after "<< chemstate << std::endl;
-		Tgas = chemstate.T;
+		//const amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
+		//Tgas = Eint / (rho * c_v);
+		chem_eos_t estate;
+		estate.rho = rho;
+		estate.e = Eint / rho;
+		estate.mu = mean_molecular_weight_ / hydrogen_mass_code_units_;
+		eos(eos_input_re, estate);
+		// scale returned temperature in case boltzmann constant is dimensionless
+		Tgas = estate.T * C::k_B / boltzmann_constant_;
 	}
 #endif
 	return Tgas;
