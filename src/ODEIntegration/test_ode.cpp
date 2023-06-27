@@ -9,6 +9,8 @@
 
 #include "test_ode.hpp"
 #include "radiation_system.hpp"
+#include "eos.H"
+#include "extern_parameters.H"
 
 using amrex::Real;
 
@@ -53,6 +55,12 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto user_rhs(Real /*t*/, quokka::valar
 
 auto problem_main() -> int
 {
+	// initialize EOS
+	init_extern_parameters();
+	Real small_temp = 1e-10;
+	Real small_dens = 1e-100;
+	eos_init(small_temp, small_dens);
+
 	// set up initial conditions
 	const Real Eint0 = quokka::EOS<ODETest>::ComputeEintFromTgas(rho0, Tgas0);
 	const Real Edot0 = cooling_function(rho0, Tgas0);
