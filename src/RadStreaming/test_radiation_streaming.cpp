@@ -26,7 +26,7 @@ template <> struct quokka::EOS_Traits<StreamingProblem> {
 	static constexpr double mean_molecular_weight = 1.0;
 	static constexpr double boltzmann_constant = 1.0;
 	static constexpr double gamma = 5. / 3.;
-	static constexpr double hydrogen_mass_code_units = 1.0/C::n_A;
+	static constexpr double hydrogen_mass_code_units = 1.0 / C::n_A;
 };
 
 template <> struct RadSystem_Traits<StreamingProblem> {
