@@ -40,7 +40,6 @@ using amrex::Real;
 struct PrimordialChemTest {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-
 template <> struct Physics_Traits<PrimordialChemTest> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
