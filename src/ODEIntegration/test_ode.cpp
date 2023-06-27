@@ -8,9 +8,9 @@
 ///
 
 #include "test_ode.hpp"
-#include "radiation_system.hpp"
 #include "eos.H"
 #include "extern_parameters.H"
+#include "radiation_system.hpp"
 
 using amrex::Real;
 
