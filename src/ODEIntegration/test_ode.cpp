@@ -19,6 +19,7 @@ template <> struct quokka::EOS_Traits<ODETest> {
 	static constexpr double mean_molecular_weight = quokka::hydrogen_mass_cgs;
 	static constexpr double boltzmann_constant = quokka::boltzmann_constant_cgs;
 	static constexpr double gamma = 5. / 3.;
+	static constexpr double hydrogen_mass_code_units = quokka::hydrogen_mass_cgs;
 };
 
 struct ODEUserData {

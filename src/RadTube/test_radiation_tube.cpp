@@ -40,6 +40,7 @@ template <> struct quokka::EOS_Traits<TubeProblem> {
 	static constexpr double mean_molecular_weight = mu;
 	static constexpr double boltzmann_constant = quokka::boltzmann_constant_cgs;
 	static constexpr double gamma = gamma_gas;
+	static constexpr double hydrogen_mass_code_units = quokka::hydrogen_mass_cgs;
 };
 
 template <> struct RadSystem_Traits<TubeProblem> {

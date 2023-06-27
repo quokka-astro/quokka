@@ -29,6 +29,7 @@ template <> struct quokka::EOS_Traits<ShocktubeProblem> {
 	static constexpr double gamma = 1.4;
 	static constexpr double mean_molecular_weight = NAN;
 	static constexpr double boltzmann_constant = quokka::boltzmann_constant_cgs;
+	static constexpr double hydrogen_mass_code_units = quokka::hydrogen_mass_cgs;
 };
 
 template <> struct Physics_Traits<ShocktubeProblem> {

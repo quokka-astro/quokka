@@ -37,6 +37,7 @@ template <> struct quokka::EOS_Traits<CoolingTest> {
 	static constexpr double gamma = 5. / 3.; // default value
 	static constexpr double mean_molecular_weight = quokka::hydrogen_mass_cgs;
 	static constexpr double boltzmann_constant = quokka::boltzmann_constant_cgs;
+	static constexpr double hydrogen_mass_code_units = quokka::hydrogen_mass_cgs;
 };
 
 template <> struct Physics_Traits<CoolingTest> {
