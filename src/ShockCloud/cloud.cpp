@@ -470,7 +470,7 @@ void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(
     auto const &output = mf.arrays();
     auto const &state = state_new_[lev].const_arrays();
 
-    amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j,
+    amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j,
                                                           int k) noexcept {
       Real rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
       Real x1Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
@@ -490,7 +490,7 @@ void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(
     auto const &state = state_new_[lev].const_arrays();
 
     amrex::ParallelFor(
-      mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+      mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
         Real rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
         Real nH = (cloudy_H_mass_fraction * rho) / m_H;
         output[bx](i, j, k, ncomp) = std::log10(nH);
@@ -503,7 +503,7 @@ void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(
     auto const &state = state_new_[lev].const_arrays();
 
     amrex::ParallelFor(
-      mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+      mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
         // compute cooling length in parsec
         Real const rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
         Real const x1Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
