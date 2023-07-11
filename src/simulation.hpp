@@ -1683,7 +1683,7 @@ void AMRSimulation<problem_t>::WriteProjectionPlotfile() const {
       const std::string filename = amrex::Concatenate(basename, istep[0], 5);
       
       amrex::FArrayBox fab(baseFab.box(), baseFab.nComp(), amrex::The_Pinned_Arena());
-      fab.copy<amrex::RunOn::Host>(baseFab);
+      fab.copy<amrex::RunOn::Device>(baseFab);
       std::ofstream ofs(filename);
       fab.writeOn(ofs);
     }
