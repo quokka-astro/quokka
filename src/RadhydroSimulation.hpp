@@ -15,6 +15,7 @@
 #include <limits>
 #include <string>
 #include <tuple>
+#include <unordered_map>
 #include <utility>
 
 #include "AMReX_FabArray.H"
@@ -155,6 +156,9 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 
 	// compute statistics
 	auto ComputeStatistics() -> std::unordered_map<std::string, Real> override;
+
+	// compute projections
+	auto ComputeProjections(int dir) -> std::unordered_map<std::string, amrex::MultiFab> override;
 
 	// compute volume integrals
 	template <typename F>
@@ -425,6 +429,16 @@ auto RadhydroSimulation<problem_t>::ComputeStatistics()
 	std::unordered_map<std::string, amrex::Real> stats;
 	return stats;
 }
+
+
+template <typename problem_t>
+auto RadhydroSimulation<problem_t>::ComputeProjections(const int dir) -> std::unordered_map<std::string, amrex::MultiFab>
+{
+	// user should implement
+	std::unordered_map<std::string, amrex::MultiFab> projections;
+	return projections;
+}
+
 
 template <typename problem_t>
 void RadhydroSimulation<problem_t>::ErrorEst(int lev, amrex::TagBoxArray &tags,

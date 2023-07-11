@@ -19,6 +19,7 @@
 #include <memory>
 #include <optional>
 #include <ostream>
+#include <string>
 #include <tuple>
 #include <unordered_map>
 #include <variant>
@@ -170,6 +171,9 @@ public:
   // compute statistics
   virtual auto ComputeStatistics() -> std::unordered_map<std::string, amrex::Real> = 0;
 
+  // compute projected vars
+  virtual auto ComputeProjections(int dir) -> std::unordered_map<std::string, amrex::MultiFab> = 0;
+
   // fix-up any unphysical states created by AMR operations
   // (e.g., caused by the flux register or from interpolation)
   virtual void FixupState(int level) = 0;
@@ -254,6 +258,8 @@ public:
   void WriteMetadataFile(std::string const &plotfilename) const;
   void ReadMetadataFile(std::string const &chkfilename);
   void WriteStatisticsFile();
+  template <typename ReduceOp, typename F> auto computePlaneProjection(F const &user_f, int dir) -> amrex::MultiFab;
+  void WriteProjectionPlotfile() const;
   void WritePlotFile() const;
   void WriteCheckpointFile() const;
   void SetLastCheckpointSymlink(std::string const &checkpointname) const;
@@ -1587,6 +1593,72 @@ void AMRSimulation<problem_t>::WriteStatisticsFile() {
     StatisticsFile << "\n";
 
     // file closed automatically by destructor
+  }
+}
+
+template <typename problem_t>
+template <typename ReduceOp, typename F>
+auto AMRSimulation<problem_t>::computePlaneProjection(F const &user_f, const int dir) -> amrex::MultiFab
+{
+	// compute plane-parallel projection of user_f(i, j, k, state) along the given axis.
+	BL_PROFILE("AMRSimulation::computePlaneProjection()");
+
+	// allocate temporary multifabs
+	amrex::Vector<amrex::MultiFab> q;
+	q.resize(finest_level + 1);
+	for (int lev = 0; lev <= finest_level; ++lev) {
+		q[lev].define(boxArray(lev), DistributionMap(lev), 1, 0);
+	}
+
+	// evaluate user_f on all levels
+	for (int lev = 0; lev <= finest_level; ++lev) {
+		auto const &state = state_new_[lev].const_arrays();
+		auto const &result = q[lev].arrays();
+		amrex::ParallelFor(q[lev], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
+			result[bx](i, j, k) = user_f(i, j, k, state[bx]);
+		});
+	}
+	amrex::Gpu::streamSynchronize();
+
+	// average down
+	for (int lev = finest_level; lev < 0; --lev) {
+		amrex::average_down(q[lev], q[lev - 1], geom[lev], geom[lev - 1], 0, 1, ref_ratio);
+	}
+
+	auto const &domain_box = geom[0].Domain();
+	auto const &arr = q[0].const_arrays();
+	auto proj = amrex::ReduceToPlane<ReduceOp, amrex::Real>(
+	    dir, domain_box, q[0], [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) -> Real {
+		    return arr[box_no](i, j, k); // data at (i,j,k) of Box box_no
+	    });
+
+	if constexpr (std::is_same<ReduceOp, amrex::ReduceOpSum>::value) {
+		amrex::ParallelReduce::Sum(proj.dataPtr(), proj.size(), amrex::ParallelDescriptor::ioProcessor,
+					   amrex::ParallelDescriptor::Communicator());
+	} else if constexpr (std::is_same<ReduceOp, amrex::ReduceOpMin>::value) {
+		amrex::ParallelReduce::Min(proj.dataPtr(), proj.size(), amrex::ParallelDescriptor::ioProcessor,
+					   amrex::ParallelDescriptor::Communicator());
+	} else {
+		amrex::Abort("invalid reduce op!");
+	}
+
+	// ioProcessor has the result
+	return proj;
+}
+
+template <typename problem_t>
+void AMRSimulation<problem_t>::WriteProjectionPlotfile() const {
+	for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+    // compute projections along axis 'dir'
+    std::unordered_map<std::string, amrex::MultiFab> proj = ComputeProjections(dir);
+
+    // write 2D plotfiles
+    for (auto const &[varname, projMF] : proj) {
+      const std::string basename = "proj" + std::to_string(dir) + "_" + varname;
+      const std::string filename = amrex::Concatenate(basename, istep[0], 5);
+      amrex::Vector<std::string> varnames{varname};
+      amrex::WriteSingleLevelPlotfile(filename, projMF, varnames, geom[0], tNew_[0], istep);
+    }
   }
 }
 
