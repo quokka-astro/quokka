@@ -27,6 +27,7 @@
 // library headers
 #include "AMReX.H"
 #include "AMReX_AmrCore.H"
+#include "AMReX_Arena.H"
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
 #include "AMReX_AsyncOut.H"
@@ -1657,8 +1658,8 @@ void AMRSimulation<problem_t>::WriteProjectionPlotfile() const {
       const std::string basename = "proj" + std::to_string(dir) + "_" + varname;
       const std::string filename = amrex::Concatenate(basename, istep[0], 5);
       
-      amrex::FArrayBox fab(baseFab.box(), baseFab.nComp());
-      fab.copy(baseFab);
+      amrex::FArrayBox fab(baseFab.box(), baseFab.nComp(), amrex::The_Pinned_Arena());
+      fab.copy<amrex::RunOn::Host>(baseFab);
       std::ofstream ofs(filename);
       fab.writeOn(ofs);
     }
