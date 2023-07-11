@@ -172,7 +172,7 @@ public:
   virtual auto ComputeStatistics() -> std::unordered_map<std::string, amrex::Real> = 0;
 
   // compute projected vars
-  virtual auto ComputeProjections(int dir) -> std::unordered_map<std::string, amrex::MultiFab> = 0;
+  virtual auto ComputeProjections(int dir) -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> = 0;
 
   // fix-up any unphysical states created by AMR operations
   // (e.g., caused by the flux register or from interpolation)
@@ -258,7 +258,7 @@ public:
   void WriteMetadataFile(std::string const &plotfilename) const;
   void ReadMetadataFile(std::string const &chkfilename);
   void WriteStatisticsFile();
-  template <typename ReduceOp, typename F> auto computePlaneProjection(F const &user_f, int dir) -> amrex::MultiFab;
+  template <typename ReduceOp, typename F> auto computePlaneProjection(F const &user_f, int dir) -> amrex::BaseFab<amrex::Real>;
   void WriteProjectionPlotfile() const;
   void WritePlotFile() const;
   void WriteCheckpointFile() const;
@@ -1598,7 +1598,7 @@ void AMRSimulation<problem_t>::WriteStatisticsFile() {
 
 template <typename problem_t>
 template <typename ReduceOp, typename F>
-auto AMRSimulation<problem_t>::computePlaneProjection(F const &user_f, const int dir) -> amrex::MultiFab
+auto AMRSimulation<problem_t>::computePlaneProjection(F const &user_f, const int dir) -> amrex::BaseFab<amrex::Real>
 {
 	// compute plane-parallel projection of user_f(i, j, k, state) along the given axis.
 	BL_PROFILE("AMRSimulation::computePlaneProjection()");
@@ -1622,12 +1622,12 @@ auto AMRSimulation<problem_t>::computePlaneProjection(F const &user_f, const int
 
 	// average down
 	for (int lev = finest_level; lev < 0; --lev) {
-		amrex::average_down(q[lev], q[lev - 1], geom[lev], geom[lev - 1], 0, 1, ref_ratio);
+		amrex::average_down(q[lev], q[lev - 1], geom[lev], geom[lev - 1], 0, 1, ref_ratio[lev - 1]);
 	}
 
 	auto const &domain_box = geom[0].Domain();
 	auto const &arr = q[0].const_arrays();
-	auto proj = amrex::ReduceToPlane<ReduceOp, amrex::Real>(
+	amrex::BaseFab<amrex::Real> proj = amrex::ReduceToPlane<ReduceOp, amrex::Real>(
 	    dir, domain_box, q[0], [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) -> Real {
 		    return arr[box_no](i, j, k); // data at (i,j,k) of Box box_no
 	    });
@@ -1650,7 +1650,7 @@ template <typename problem_t>
 void AMRSimulation<problem_t>::WriteProjectionPlotfile() const {
 	for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
     // compute projections along axis 'dir'
-    std::unordered_map<std::string, amrex::MultiFab> proj = ComputeProjections(dir);
+    std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj = ComputeProjections(dir);
 
     // write 2D plotfiles
     for (auto const &[varname, projMF] : proj) {
