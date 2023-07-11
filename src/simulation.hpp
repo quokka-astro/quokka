@@ -1653,11 +1653,14 @@ void AMRSimulation<problem_t>::WriteProjectionPlotfile() const {
     std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj = ComputeProjections(dir);
 
     // write 2D plotfiles
-    for (auto const &[varname, projMF] : proj) {
+    for (auto const &[varname, baseFab] : proj) {
       const std::string basename = "proj" + std::to_string(dir) + "_" + varname;
       const std::string filename = amrex::Concatenate(basename, istep[0], 5);
-      amrex::Vector<std::string> varnames{varname};
-      amrex::WriteSingleLevelPlotfile(filename, projMF, varnames, geom[0], tNew_[0], istep[0]);
+      
+      amrex::FArrayBox fab(baseFab.box(), baseFab.nComp());
+      fab.copy(baseFab);
+      std::ofstream ofs(filename);
+      fab.writeOn(ofs);
     }
   }
 }
