@@ -174,7 +174,7 @@ public:
   virtual auto ComputeStatistics() -> std::unordered_map<std::string, amrex::Real> = 0;
 
   // compute projected vars
-  virtual auto ComputeProjections(int dir) -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> = 0;
+  [[nodiscard]] virtual auto ComputeProjections(int dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> = 0;
 
   // fix-up any unphysical states created by AMR operations
   // (e.g., caused by the flux register or from interpolation)
@@ -260,7 +260,7 @@ public:
   void WriteMetadataFile(std::string const &plotfilename) const;
   void ReadMetadataFile(std::string const &chkfilename);
   void WriteStatisticsFile();
-  template <typename ReduceOp, typename F> auto computePlaneProjection(F const &user_f, int dir) -> amrex::BaseFab<amrex::Real>;
+  template <typename ReduceOp, typename F> auto computePlaneProjection(F const &user_f, int dir) const -> amrex::BaseFab<amrex::Real>;
   void WriteProjectionPlotfile() const;
   void WritePlotFile() const;
   void WriteCheckpointFile() const;
@@ -1623,7 +1623,7 @@ void AMRSimulation<problem_t>::WriteStatisticsFile() {
 
 template <typename problem_t>
 template <typename ReduceOp, typename F>
-auto AMRSimulation<problem_t>::computePlaneProjection(F const &user_f, const int dir) -> amrex::BaseFab<amrex::Real>
+auto AMRSimulation<problem_t>::computePlaneProjection(F const &user_f, const int dir) const -> amrex::BaseFab<amrex::Real>
 {
 	// compute plane-parallel projection of user_f(i, j, k, state) along the given axis.
 	BL_PROFILE("AMRSimulation::computePlaneProjection()");

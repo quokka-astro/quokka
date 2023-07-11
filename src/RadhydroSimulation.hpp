@@ -158,7 +158,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	auto ComputeStatistics() -> std::unordered_map<std::string, Real> override;
 
 	// compute projections
-	auto ComputeProjections(int dir) -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> override;
+	[[nodiscard]] auto ComputeProjections(int dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> override;
 
 	// compute volume integrals
 	template <typename F>
@@ -432,7 +432,7 @@ auto RadhydroSimulation<problem_t>::ComputeStatistics()
 
 
 template <typename problem_t>
-auto RadhydroSimulation<problem_t>::ComputeProjections(const int /*dir*/) -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>
+auto RadhydroSimulation<problem_t>::ComputeProjections(const int /*dir*/) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>
 {
 	// user should implement
 	std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> projections;

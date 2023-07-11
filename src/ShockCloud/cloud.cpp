@@ -601,7 +601,7 @@ template <> auto RadhydroSimulation<ShockCloud>::ComputeStatistics() -> std::uno
 }
 
 template <>
-auto RadhydroSimulation<ShockCloud>::ComputeProjections(const int dir)
+auto RadhydroSimulation<ShockCloud>::ComputeProjections(const int dir) const
     -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>
 {
 	std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj;
