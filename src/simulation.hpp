@@ -137,6 +137,7 @@ public:
   amrex::Long maxWalltime_ = 0;    // default: no limit
   int ascentInterval_ = -1;        // -1 == no in-situ renders with Ascent
   int statisticsInterval_ = -1;    // -1 == no output
+  int projectionInterval_ = -1;    // -1 == no output
   int plotfileInterval_ = -1;      // -1 == no output
   int checkpointInterval_ = -1;    // -1 == no output
   int amrInterpMethod_ = 1;   // 0 == piecewise constant, 1 == lincc_interp
@@ -465,6 +466,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters() {
   // Default statistics interval
   pp.query("statistics_interval", statisticsInterval_);
 
+  // Default projection interval
+  pp.query("projection_interval", projectionInterval_);
+
   // Default output interval
   pp.query("plotfile_interval", plotfileInterval_);
 
@@ -543,6 +547,10 @@ void AMRSimulation<problem_t>::setInitialConditions() {
 
   if (statisticsInterval_ > 0) {
     WriteStatisticsFile();
+  }
+
+  if (projectionInterval_ > 0) {
+    WriteProjectionPlotfile();
   }
 
   if (plotfileInterval_ > 0) {
@@ -688,6 +696,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve() {
   int last_ascent_step = 0;
 #endif
   int last_statistics_step = 0;
+  int last_projection_step = 0;
   int last_plot_file_step = 0;
   int last_chk_file_step = 0;
 
@@ -747,6 +756,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve() {
     if (statisticsInterval_ > 0 && (step + 1) % statisticsInterval_ == 0) {
       last_statistics_step = step + 1;
       WriteStatisticsFile();
+    }
+
+    if (projectionInterval_ > 0 && (step + 1) % projectionInterval_ == 0) {
+      last_projection_step = step + 1;
+      WriteProjectionPlotfile();
     }
 
     if (plotfileInterval_ > 0 && (step + 1) % plotfileInterval_ == 0) {
@@ -813,6 +827,16 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve() {
   // write final plotfile
   if (plotfileInterval_ > 0 && istep[0] > last_plot_file_step) {
     WritePlotFile();
+  }
+
+  // write final projection
+  if (projectionInterval_ > 0 && istep[0] > last_projection_step) {
+    WriteProjectionPlotfile();
+  }
+
+  // write final statistics
+  if (statisticsInterval_ > 0 && istep[0] > last_statistics_step) {
+    WriteStatisticsFile();
   }
 
 #ifdef AMREX_USE_ASCENT
