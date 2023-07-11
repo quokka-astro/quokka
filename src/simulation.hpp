@@ -1654,7 +1654,7 @@ auto AMRSimulation<problem_t>::computePlaneProjection(F const &user_f, const int
 	auto const &domain_box = geom[0].Domain();
 	auto const &arr = q[0].const_arrays();
 	amrex::BaseFab<amrex::Real> proj = amrex::ReduceToPlane<ReduceOp, amrex::Real>(
-	    dir, domain_box, q[0], [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) -> Real {
+	    dir, domain_box, q[0], [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) -> amrex::Real {
 		    return arr[box_no](i, j, k); // data at (i,j,k) of Box box_no
 	    });
 
@@ -1677,18 +1677,32 @@ void AMRSimulation<problem_t>::WriteProjectionPlotfile() const {
 	for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
     // compute projections along axis 'dir'
     std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj = ComputeProjections(dir);
+    
+    auto dir_to_string = [=](const int dir) {
+      if (dir == 0) {
+        return std::string{"x"};
+      } else if (dir == 1) {
+        return std::string{"y"};
+      } else if (dir == 2) {
+        return std::string{"z"};
+      }
+    };
 
     // write 2D plotfiles
     for (auto const &[varname, baseFab] : proj) {
-      const std::string basename = "proj" + std::to_string(dir) + "_" + varname;
+
+      const std::string basename = "proj" + dir_to_string(dir) + "_" + varname;
       const std::string filename = amrex::Concatenate(basename, istep[0], 5);
-      
+      amrex::Print() << "Writing projection " << filename << "\n";
+
       // create MultiFab
       amrex::BoxArray ba(baseFab.box());
       amrex::DistributionMapping dm(ba, 1);
       amrex::MultiFab mf(ba, dm, 1, 0);
-      amrex::FArrayBox fab(mf.arrays()[0]);
-      fab.copy<amrex::RunOn::Device>(baseFab);
+      if (amrex::ParallelDescriptor::IOProcessor()) {
+        amrex::FArrayBox fab(mf.arrays()[0]);
+        fab.copy<amrex::RunOn::Device>(baseFab);
+      }
 
       // write MultiFab to disk
       amrex::Vector<std::string> varnames{varname};
