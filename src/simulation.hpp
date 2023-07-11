@@ -1657,7 +1657,7 @@ void AMRSimulation<problem_t>::WriteProjectionPlotfile() const {
       const std::string basename = "proj" + std::to_string(dir) + "_" + varname;
       const std::string filename = amrex::Concatenate(basename, istep[0], 5);
       amrex::Vector<std::string> varnames{varname};
-      amrex::WriteSingleLevelPlotfile(filename, projMF, varnames, geom[0], tNew_[0], istep);
+      amrex::WriteSingleLevelPlotfile(filename, projMF, varnames, geom[0], tNew_[0], istep[0]);
     }
   }
 }
