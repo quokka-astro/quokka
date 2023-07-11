@@ -180,9 +180,6 @@ void HydroSystem<problem_t>::ConservedToPrimitive(
     const amrex::Real eint_aux = Eint_aux / rho;
 
     AMREX_ASSERT(rho > 0.);
-    if constexpr (!is_eos_isothermal()) {
-      AMREX_ASSERT(P > 0.);
-    }
 
     primVar[bx](i, j, k, primDensity_index) = rho;
     primVar[bx](i, j, k, x1Velocity_index) = vx;

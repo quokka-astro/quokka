@@ -34,6 +34,7 @@
 #include "AMReX_BCRec.H"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
+#include "AMReX_BoxArray.H"
 #include "AMReX_Config.H"
 #include "AMReX_DistributionMapping.H"
 #include "AMReX_Extension.H"
@@ -1682,10 +1683,16 @@ void AMRSimulation<problem_t>::WriteProjectionPlotfile() const {
       const std::string basename = "proj" + std::to_string(dir) + "_" + varname;
       const std::string filename = amrex::Concatenate(basename, istep[0], 5);
       
-      amrex::FArrayBox fab(baseFab.box(), baseFab.nComp(), amrex::The_Pinned_Arena());
+      // create MultiFab
+      amrex::BoxArray ba(baseFab.box());
+      amrex::DistributionMapping dm(ba, 1);
+      amrex::MultiFab mf(ba, dm, 1, 0);
+      amrex::FArrayBox fab(mf.arrays()[0]);
       fab.copy<amrex::RunOn::Device>(baseFab);
-      std::ofstream ofs(filename);
-      fab.writeOn(ofs);
+
+      // write MultiFab to disk
+      amrex::Vector<std::string> varnames{varname};
+      amrex::WriteSingleLevelPlotfile(filename, mf, varnames, geom[0], tNew_[0], istep[0]);
     }
   }
 }
