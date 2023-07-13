@@ -1685,6 +1685,9 @@ void AMRSimulation<problem_t>::WriteProjectionPlotfile() const {
         return std::string{"y"};
       } else if (dir == 2) {
         return std::string{"z"};
+      } else {
+        amrex::Abort("invalid direction");
+        return std::string("");
       }
     };
 
