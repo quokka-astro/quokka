@@ -1711,7 +1711,8 @@ void AMRSimulation<problem_t>::WriteProjectionPlotfile() const {
 
       // copy BaseFab to MultiFab
       if (amrex::ParallelDescriptor::IOProcessor()) {
-        amrex::FArrayBox fab(mf.arrays()[0]);
+        auto arr = mf.arrays()[0];
+        amrex::FArrayBox fab(arr);
         fab.copy<amrex::RunOn::Host>(baseFab);
       }
 
