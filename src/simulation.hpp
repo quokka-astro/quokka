@@ -1698,27 +1698,17 @@ void AMRSimulation<problem_t>::WriteProjectionPlotfile() const {
 
     // write 2D plotfiles
     for (auto const &[varname, baseFab] : proj) {
-
       const std::string basename = "proj" + dir_to_string(dir) + "_" + varname;
       const std::string filename = amrex::Concatenate(basename, istep[0], 5);
       amrex::Print() << "Writing projection " << filename << "\n";
 
-      // create MultiFab in pinned memory
       amrex::BoxArray ba(baseFab.box());
-      amrex::DistributionMapping dm(ba, 1);
-      amrex::MultiFab mf(amrex::The_Pinned_Arena());
-      mf.define(ba, dm, 1, 0);
-
-      // copy BaseFab to MultiFab
+      amrex::DistributionMapping dm(amrex::Vector<int>{0});
+      amrex::MultiFab mf(ba,dm,1,0,amrex::MFInfo().SetAlloc(false));
       if (amrex::ParallelDescriptor::IOProcessor()) {
-        auto arr = mf.arrays()[0];
-        amrex::FArrayBox fab(arr);
-        fab.copy<amrex::RunOn::Host>(baseFab);
+          mf.setFab(0,amrex::FArrayBox(baseFab.array()));
       }
-
-      // write MultiFab to disk
-      amrex::Vector<std::string> varnames{varname};
-      amrex::WriteSingleLevelPlotfile(filename, mf, varnames, geom[0], tNew_[0], istep[0]);
+      amrex::WriteMLMF(filename, {&mf}, {geom});
     }
   }
 }
