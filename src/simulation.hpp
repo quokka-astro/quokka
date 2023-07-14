@@ -39,6 +39,7 @@
 #include "AMReX_DistributionMapping.H"
 #include "AMReX_Extension.H"
 #include "AMReX_FArrayBox.H"
+#include "AMReX_FabArray.H"
 #include "AMReX_FillPatchUtil.H"
 #include "AMReX_FillPatcher.H"
 #include "AMReX_FluxRegister.H"
@@ -1658,18 +1659,22 @@ auto AMRSimulation<problem_t>::computePlaneProjection(F const &user_f, const int
 		    return arr[box_no](i, j, k); // data at (i,j,k) of Box box_no
 	    });
 
+  // copy to host pinned memory to work around AMReX bug
+  amrex::BaseFab<amrex::Real> proj_host(domain_box, 1, amrex::The_Pinned_Arena());
+  proj_host.copy<amrex::RunOn::Device>(proj);
+
 	if constexpr (std::is_same<ReduceOp, amrex::ReduceOpSum>::value) {
-		amrex::ParallelReduce::Sum(proj.dataPtr(), proj.size(), amrex::ParallelDescriptor::ioProcessor,
-					   amrex::ParallelDescriptor::Communicator());
+		amrex::ParallelReduce::Sum(proj_host.dataPtr(), static_cast<int>(proj_host.size()),
+            amrex::ParallelDescriptor::ioProcessor, amrex::ParallelDescriptor::Communicator());
 	} else if constexpr (std::is_same<ReduceOp, amrex::ReduceOpMin>::value) {
-		amrex::ParallelReduce::Min(proj.dataPtr(), proj.size(), amrex::ParallelDescriptor::ioProcessor,
-					   amrex::ParallelDescriptor::Communicator());
+		amrex::ParallelReduce::Min(proj_host.dataPtr(), static_cast<int>(proj_host.size()),
+            amrex::ParallelDescriptor::ioProcessor, amrex::ParallelDescriptor::Communicator());
 	} else {
 		amrex::Abort("invalid reduce op!");
 	}
 
-	// ioProcessor has the result
-	return proj;
+	// return BaseFab in host memory
+	return proj_host;
 }
 
 template <typename problem_t>
@@ -1698,13 +1703,16 @@ void AMRSimulation<problem_t>::WriteProjectionPlotfile() const {
       const std::string filename = amrex::Concatenate(basename, istep[0], 5);
       amrex::Print() << "Writing projection " << filename << "\n";
 
-      // create MultiFab
+      // create MultiFab in pinned memory
       amrex::BoxArray ba(baseFab.box());
       amrex::DistributionMapping dm(ba, 1);
-      amrex::MultiFab mf(ba, dm, 1, 0);
+      amrex::MultiFab mf(amrex::The_Pinned_Arena());
+      mf.define(ba, dm, 1, 0);
+
+      // copy BaseFab to MultiFab
       if (amrex::ParallelDescriptor::IOProcessor()) {
         amrex::FArrayBox fab(mf.arrays()[0]);
-        fab.copy<amrex::RunOn::Device>(baseFab);
+        fab.copy<amrex::RunOn::Host>(baseFab);
       }
 
       // write MultiFab to disk
