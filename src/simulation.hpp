@@ -1660,7 +1660,7 @@ auto AMRSimulation<problem_t>::computePlaneProjection(F const &user_f, const int
 	    });
 
   // copy to host pinned memory to work around AMReX bug
-  amrex::BaseFab<amrex::Real> proj_host(domain_box, 1, amrex::The_Pinned_Arena());
+  amrex::BaseFab<amrex::Real> proj_host(proj.box(), 1, amrex::The_Pinned_Arena());
   proj_host.copy<amrex::RunOn::Device>(proj);
 
 	if constexpr (std::is_same<ReduceOp, amrex::ReduceOpSum>::value) {
