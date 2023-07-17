@@ -1708,7 +1708,8 @@ void AMRSimulation<problem_t>::WriteProjectionPlotfile() const {
       if (amrex::ParallelDescriptor::IOProcessor()) {
           mf.setFab(0,amrex::FArrayBox(baseFab.array()));
       }
-      amrex::WriteMLMF(filename, {&mf}, {geom});
+      amrex::Geometry geomProjection(baseFab.box());
+      amrex::WriteMLMF(filename, {&mf}, {geomProjection});
     }
   }
 }
