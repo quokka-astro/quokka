@@ -43,6 +43,7 @@
 #include "AMReX_FillPatchUtil.H"
 #include "AMReX_FillPatcher.H"
 #include "AMReX_FluxRegister.H"
+#include "AMReX_GpuDevice.H"
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_INT.H"
 #include "AMReX_IndexType.H"
@@ -1658,10 +1659,12 @@ auto AMRSimulation<problem_t>::computePlaneProjection(F const &user_f, const int
 	    dir, domain_box, q[0], [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) -> amrex::Real {
 		    return arr[box_no](i, j, k); // data at (i,j,k) of Box box_no
 	    });
+  amrex::Gpu::streamSynchronize();
 
   // copy to host pinned memory to work around AMReX bug
   amrex::BaseFab<amrex::Real> proj_host(proj.box(), 1, amrex::The_Pinned_Arena());
   proj_host.copy<amrex::RunOn::Device>(proj);
+  amrex::Gpu::streamSynchronize();
 
 	if constexpr (std::is_same<ReduceOp, amrex::ReduceOpSum>::value) {
 		amrex::ParallelReduce::Sum(proj_host.dataPtr(), static_cast<int>(proj_host.size()),
@@ -1709,7 +1712,7 @@ void AMRSimulation<problem_t>::WriteProjectionPlotfile() const {
           mf.setFab(0,amrex::FArrayBox(baseFab.array()));
       }
       amrex::Geometry geomProjection(baseFab.box());
-      amrex::WriteMLMF(filename, {&mf}, {geomProjection});
+      amrex::WriteSingleLevelPlotfile(filename, mf, {varname}, geomProjection, tNew_[0], istep[0]);
     }
   }
 }
