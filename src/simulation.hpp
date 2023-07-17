@@ -1654,10 +1654,11 @@ auto AMRSimulation<problem_t>::computePlaneProjection(F const &user_f, const int
 	}
 
 	auto const &domain_box = geom[0].Domain();
+  auto const &dx = geom[0].CellSizeArray();
 	auto const &arr = q[0].const_arrays();
 	amrex::BaseFab<amrex::Real> proj = amrex::ReduceToPlane<ReduceOp, amrex::Real>(
 	    dir, domain_box, q[0], [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) -> amrex::Real {
-		    return arr[box_no](i, j, k); // data at (i,j,k) of Box box_no
+		    return dx[dir] * arr[box_no](i, j, k); // data at (i,j,k) of Box box_no
 	    });
   amrex::Gpu::streamSynchronize();
 
