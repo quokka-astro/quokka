@@ -10,8 +10,10 @@
 /// timestepping, solving, and I/O of a simulation.
 
 // c++ headers
+#include <chrono>
 #include <csignal>
 #include <cstdio>
+#include <ctime>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -1605,7 +1607,9 @@ void AMRSimulation<problem_t>::WriteStatisticsFile() {
 
     // write header
     if (!isHeaderWritten) {
-      StatisticsFile << "time\t";
+      std::time_t now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+      StatisticsFile << "## Simulation restarted at: " << std::ctime(&now) << "\n";
+      StatisticsFile << "# cycle\ttime\t";
       for (auto const &[key, value] : statistics) {
         StatisticsFile << key << "\t";
       }
@@ -1614,7 +1618,8 @@ void AMRSimulation<problem_t>::WriteStatisticsFile() {
     }
 
     // save statistics to file
-    StatisticsFile << tNew_[0] << "\t";
+    StatisticsFile << istep[0] << "\t"; // cycle
+    StatisticsFile << tNew_[0] << "\t"; // time
     for (auto const &[key, value] : statistics) {
       StatisticsFile << value << "\t";
     }
