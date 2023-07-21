@@ -98,6 +98,7 @@ template <> struct SimulationData<ShockCloud> {
 
 static bool enable_cooling = true;
 static bool limitDtByCooling = true;
+static bool sharp_cloud_edge = false;
 
 template <> void RadhydroSimulation<ShockCloud>::setInitialConditionsAtLevel(int lev)
 {
@@ -122,11 +123,24 @@ template <> void RadhydroSimulation<ShockCloud>::setInitialConditionsAtLevel(int
 			Real const z = prob_lo[2] + (k + Real(0.5)) * dx[2];
 			Real const R = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2) + std::pow(z - z0, 2));
 
-			// compute cloud properties
-			const Real h_smooth = R_cloud / 20.;
-			const Real ramp = 0.5 * (1. - std::tanh((R - R_cloud) / h_smooth));
-			const Real rho = ramp * (rho1 - rho0) + rho0;
-			const Real C = ramp * 1.0; // concentration is unity inside the cloud
+			Real rho = NAN;
+			Real C = NAN;
+
+			if (::sharp_cloud_edge) {
+				if (R < R_cloud) {
+					rho = rho1; // cloud density
+					C = 1.0; // concentration is unity inside the cloud
+				} else {
+					rho = rho0; // background density
+					C = 0.0; // concentration is zero outside the cloud
+				}
+			} else {
+				const Real h_smooth = R_cloud / 20.;
+				const Real ramp = 0.5 * (1. - std::tanh((R - R_cloud) / h_smooth));
+				rho = ramp * (rho1 - rho0) + rho0;
+				C = ramp * 1.0; // concentration is unity inside the cloud
+			}
+
 			AMREX_ALWAYS_ASSERT(rho > 0.);
 			AMREX_ALWAYS_ASSERT(C >= 0.);
 
@@ -796,6 +810,11 @@ auto problem_main() -> int
 	int limit_timestep_by_cooling_time = 1;
 	pp.query("limit_timestep_by_cooling_time", limit_timestep_by_cooling_time);
 	::limitDtByCooling = limit_timestep_by_cooling_time == 1;
+
+	// use a sharp cloud edge?
+	int sharp_cloud_edge = 0;
+	pp.query("sharp_cloud_edge", sharp_cloud_edge);
+	::sharp_cloud_edge = sharp_cloud_edge == 1;
 
 	// background gas H number density
 	pp.query("nH_bg", nH_bg); // cm^-3
