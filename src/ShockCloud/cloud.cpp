@@ -113,6 +113,9 @@ template <> void RadhydroSimulation<ShockCloud>::setInitialConditionsAtLevel(int
 	// cooling tables
 	auto tables = userData_.cloudyTables.const_tables();
 
+	// cloud properties
+	const bool sharp_cloud_edge = ::sharp_cloud_edge;
+
 	for (amrex::MFIter iter(state_old_[lev]); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &state = state_new_[lev].array(iter);
@@ -126,7 +129,7 @@ template <> void RadhydroSimulation<ShockCloud>::setInitialConditionsAtLevel(int
 			Real rho = NAN;
 			Real C = NAN;
 
-			if (::sharp_cloud_edge) {
+			if (sharp_cloud_edge) {
 				if (R < R_cloud) {
 					rho = rho1; // cloud density
 					C = 1.0; // concentration is unity inside the cloud
