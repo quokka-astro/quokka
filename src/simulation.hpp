@@ -1610,19 +1610,19 @@ void AMRSimulation<problem_t>::WriteStatisticsFile() {
       std::time_t t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
       std::tm now = *std::localtime(&t);
       StatisticsFile << "## Simulation restarted at: " << std::put_time(&now, "%c %Z") << "\n";
-      StatisticsFile << "# cycle\ttime\t";
+      StatisticsFile << "# cycle time ";
       for (auto const &[key, value] : statistics) {
-        StatisticsFile << key << "\t";
+        StatisticsFile << key << " ";
       }
       StatisticsFile << "\n";
       isHeaderWritten = true;
     }
 
     // save statistics to file
-    StatisticsFile << istep[0] << "\t"; // cycle
-    StatisticsFile << tNew_[0] << "\t"; // time
+    StatisticsFile << istep[0] << " "; // cycle
+    StatisticsFile << tNew_[0] << " "; // time
     for (auto const &[key, value] : statistics) {
-      StatisticsFile << value << "\t";
+      StatisticsFile << value << " ";
     }
     StatisticsFile << "\n";
 
