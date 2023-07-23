@@ -26,7 +26,7 @@
 
 namespace quokka
 {
-static constexpr double boltzmann_constant_cgs = C::k_B;   // cgs
+static constexpr double boltzmann_constant_cgs = C::k_B;     // cgs
 static constexpr double hydrogen_mass_cgs = C::m_p + C::m_e; // cgs
 
 // specify default values for ideal gamma-law EOS
