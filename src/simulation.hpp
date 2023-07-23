@@ -1608,7 +1608,7 @@ void AMRSimulation<problem_t>::WriteStatisticsFile() {
     // write header
     if (!isHeaderWritten) {
       std::time_t now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-      StatisticsFile << "## Simulation restarted at: " << std::ctime(&now) << "\n";
+      StatisticsFile << "## Simulation restarted at: " << std::put_time(&now, "%c %Z") << "\n";
       StatisticsFile << "# cycle\ttime\t";
       for (auto const &[key, value] : statistics) {
         StatisticsFile << key << "\t";
