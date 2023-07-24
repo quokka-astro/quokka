@@ -1705,28 +1705,41 @@ void AMRSimulation<problem_t>::WriteProjectionPlotfile() const {
 		}
     return -1;
 	};
-  
-	for (auto &dir_str : dirs) {
-    // compute projections along axis 'dir'
-    int dir = dir_from_string(dir_str);
-    std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj = ComputeProjections(dir);
 
-    // write 2D plotfiles
-    for (auto const &[varname, baseFab] : proj) {
-      const std::string basename = "proj" + dir_str + "_" + varname;
-      const std::string filename = amrex::Concatenate(basename, istep[0], 5);
-      amrex::Print() << "Writing projection " << filename << "\n";
+	for (auto &dir_str : dirs) {
+		// compute projections along axis 'dir'
+		int dir = dir_from_string(dir_str);
+		std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj = ComputeProjections(dir);
+
+		auto const &firstFab = proj.begin()->second;
+		amrex::BoxArray ba(firstFab.box());
+		amrex::DistributionMapping dm(amrex::Vector<int>{0});
+		amrex::MultiFab mf_all(ba, dm, proj.size(), 0);
+		amrex::Vector<std::string> varnames;
+
+		// write 2D plotfiles
+		auto iter = proj.begin();
+		for (int icomp = 0; icomp < proj.size(); ++icomp) {
+      const std::string &varname = iter->first;
+      const amrex::BaseFab<amrex::Real> &baseFab = iter->second;
 
       amrex::BoxArray ba(baseFab.box());
       amrex::DistributionMapping dm(amrex::Vector<int>{0});
-      amrex::MultiFab mf(ba,dm,1,0,amrex::MFInfo().SetAlloc(false));
+      amrex::MultiFab mf(ba, dm, 1, 0, amrex::MFInfo().SetAlloc(false));
       if (amrex::ParallelDescriptor::IOProcessor()) {
-          mf.setFab(0,amrex::FArrayBox(baseFab.array()));
+        mf.setFab(0, amrex::FArrayBox(baseFab.array()));
       }
-      amrex::Geometry geomProjection(baseFab.box());
-      amrex::WriteSingleLevelPlotfile(filename, mf, {varname}, geomProjection, tNew_[0], istep[0]);
-    }
-  }
+      amrex::MultiFab::Copy(mf_all, mf, 0, icomp, 1, 0);
+      varnames.push_back(varname);
+      ++iter;
+		}
+
+		const std::string basename = "proj" + dir_str;
+		const std::string filename = amrex::Concatenate(basename, istep[0], 5);
+		amrex::Print() << "Writing projection " << filename << "\n";
+		amrex::Geometry mygeom(firstFab.box());
+		amrex::WriteSingleLevelPlotfile(filename, mf_all, varnames, mygeom, tNew_[0], istep[0]);
+	}
 }
 
 // write plotfile to disk
