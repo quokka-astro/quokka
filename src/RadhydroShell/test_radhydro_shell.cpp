@@ -36,12 +36,12 @@ struct ShellProblem {
 // if false, use octant symmetry
 constexpr bool simulate_full_box = true;
 
-constexpr double a_rad = 7.5646e-15;  // erg cm^-3 K^-4
-constexpr double c = 2.99792458e10;   // cm s^-1
-constexpr double a0 = 2.0e5;	      // ('reference' sound speed) [cm s^-1]
-constexpr double chat = 860. * a0;    // cm s^-1
-constexpr double k_B = C::k_B;  // erg K^-1
-constexpr double m_H = C::m_u; // atomic mass unit
+constexpr double a_rad = 7.5646e-15; // erg cm^-3 K^-4
+constexpr double c = 2.99792458e10;  // cm s^-1
+constexpr double a0 = 2.0e5;	     // ('reference' sound speed) [cm s^-1]
+constexpr double chat = 860. * a0;   // cm s^-1
+constexpr double k_B = C::k_B;	     // erg K^-1
+constexpr double m_H = C::m_u;	     // atomic mass unit
 constexpr double gamma_gas = 5. / 3.;
 
 template <> struct quokka::EOS_Traits<ShellProblem> {

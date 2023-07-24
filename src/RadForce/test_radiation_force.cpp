@@ -28,11 +28,11 @@
 struct TubeProblem {
 };
 
-constexpr double kappa0 = 5.0;				// cm^2 g^-1
+constexpr double kappa0 = 5.0;	     // cm^2 g^-1
 constexpr double mu = 2.33 * C::m_u; // g
-constexpr double gamma_gas = 1.0;			// isothermal gas EOS
-constexpr double a0 = 0.2e5;				// cm s^-1
-constexpr double tau = 1.0e-6;				// optical depth (dimensionless)
+constexpr double gamma_gas = 1.0;    // isothermal gas EOS
+constexpr double a0 = 0.2e5;	     // cm s^-1
+constexpr double tau = 1.0e-6;	     // optical depth (dimensionless)
 
 constexpr double rho0 = 1.0e5 * mu; // g cm^-3
 constexpr double Mach0 = 1.1;	    // Mach number at wind base

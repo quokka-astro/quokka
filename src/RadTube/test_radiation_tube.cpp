@@ -25,7 +25,7 @@
 struct TubeProblem {
 };
 
-constexpr double kappa0 = 100.;				// cm^2 g^-1
+constexpr double kappa0 = 100.;	     // cm^2 g^-1
 constexpr double mu = 2.33 * C::m_u; // g
 constexpr double gamma_gas = 5. / 3.;
 

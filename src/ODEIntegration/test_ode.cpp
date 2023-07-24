@@ -14,7 +14,7 @@
 
 using amrex::Real;
 
-constexpr double Tgas0 = 6000.;				  // K
+constexpr double Tgas0 = 6000.;	       // K
 constexpr double rho0 = 0.01 * C::m_u; // g cm^-3
 
 template <> struct quokka::EOS_Traits<ODETest> {
