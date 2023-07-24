@@ -37,6 +37,7 @@ statistics_interval = 10
 projection_interval = 10
 T_floor = 10.0  # K
 
+sharp_cloud_edge = 1
 nH_bg    = 1.006921e-03 # cm^-3
 nH_cloud = 1.006921e+00 # cm^-3
 P_over_k = 1.304005e+04 # K cm^-3

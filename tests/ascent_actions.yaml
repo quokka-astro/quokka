@@ -1,28 +1,67 @@
 - 
   action: "add_pipelines"
-  pipelines: 
-    pl1: 
+  pipelines:
+    z_slice_pl:
       f1:
         type: "slice"
         params: 
           point: 
             x: 0.5
-            y: 0.5
-            z: 0.5
+            y: 0.125
+            z: 0.125
           normal: 
             x: 0.0
             y: 0.0
             z: 1.0
-- 
+    contour_pl:
+      f1: 
+        type: "contour"
+        params: 
+          field: "cloud_fraction"
+          iso_values: 0.9
+-
   action: "add_extracts"
-  extracts: 
-    e1: 
-      type: "volume"
-      params: 
-        field: "gasDensity"
-        filename: "volume%05d"
-    e3:
+  extracts:
+    zslice_extract:
       type: "relay"
+      pipeline: "z_slice_pl"
       params:
-        path: "./blueprint"
+        path: "slices/zslice"
         protocol: "blueprint/mesh/hdf5"
+        num_files: 2
+    contour_extract:
+      type: "relay"
+      pipeline: "contour_pl"
+      params:
+        path: "slices/cloud_contour"
+        protocol: "blueprint/mesh/hdf5"
+        num_files: 2
+- 
+  action: "add_queries"
+  queries: 
+    q1: 
+      params: 
+        expression: "max(field('temperature'))"
+        name: "max_temperature"
+    q2:
+      params: 
+        expression: "max(field('nH'))"
+        name: "max_nH"
+    q3:
+      params: 
+        expression: "max(field('cooling_length'))"
+        name: "max_cooling_length"
+    q4:
+      params: 
+        expression: "min(field('temperature'))"
+        name: "min_temperature"
+    q5:
+      params: 
+        expression: "min(field('nH'))"
+        name: "min_nH"
+    q6:
+      params: 
+        expression: "min(field('cooling_length'))"
+        name: "min_cooling_length"
+- 
+  action: "save_session"
