@@ -65,8 +65,8 @@ constexpr Real nH1 = 1.0e-1;		 // cm^-3
 constexpr Real R_cloud = 5.0 * 3.086e18; // cm [5 pc]
 constexpr Real M0 = 2.0;		 // Mach number of shock
 
-constexpr Real P0 = nH0 * Tgas0 * C::k_B; // erg cm^-3
-constexpr Real rho0 = nH0 * (C::m_p + C::m_e);				  // g cm^-3
+constexpr Real P0 = nH0 * Tgas0 * C::k_B;      // erg cm^-3
+constexpr Real rho0 = nH0 * (C::m_p + C::m_e); // g cm^-3
 constexpr Real rho1 = nH1 * (C::m_p + C::m_e);
 
 // perturbation parameters
