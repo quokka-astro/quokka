@@ -15,7 +15,7 @@
 using amrex::Real;
 
 constexpr double Tgas0 = 6000.;	       // K
-constexpr double rho0 = 0.01 * C::m_u; // g cm^-3
+constexpr double rho0 = 0.01 * (C::m_p + C::m_e); // g cm^-3
 
 template <> struct quokka::EOS_Traits<ODETest> {
 	static constexpr double mean_molecular_weight = C::m_u;
@@ -33,7 +33,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto cooling_function(Real const rho, R
 	// use fitting function from Koyama & Inutsuka (2002)
 	Real gamma_heat = 2.0e-26;
 	Real lambda_cool = gamma_heat * (1.0e7 * std::exp(-114800. / (T + 1000.)) + 14. * std::sqrt(T) * std::exp(-92. / T));
-	Real rho_over_mh = rho / C::m_u;
+	Real rho_over_mh = rho / (C::m_p + C::m_e);
 	Real cooling_source_term = rho_over_mh * gamma_heat - (rho_over_mh * rho_over_mh) * lambda_cool;
 	return cooling_source_term;
 }

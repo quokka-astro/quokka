@@ -81,7 +81,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto cloudy_cooling_function(Real const
 {
 	// interpolate cooling rates from Cloudy tables
 	const Real rhoH = rho * cloudy_H_mass_fraction; // mass density of H species
-	const Real nH = rhoH / C::m_u;
+	const Real nH = rhoH / (C::m_p + C::m_e);
 	const Real log_nH = std::log10(nH);
 	const Real log_T = std::log10(T);
 
@@ -102,7 +102,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto cloudy_cooling_function(Real const
 
 	// compute electron density
 	// N.B. it is absolutely critical to include the metal contribution here!
-	double n_e = (rho / C::m_u) * (1.0 - mu * (X + Y / 4. + Z / mean_metals_A)) / (mu - (electron_mass_cgs / C::m_u));
+	double n_e = (rho / (C::m_p + C::m_e)) * (1.0 - mu * (X + Y / 4. + Z / mean_metals_A)) / (mu - (electron_mass_cgs / (C::m_p + C::m_e)));
 	// the approximation for the metals contribution to e- fails at high densities (~1e3 or higher)
 	n_e = std::max(n_e, 1.0e-4 * nH);
 
@@ -129,7 +129,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeEgasFromTgas(double rho, do
 {
 	// convert Egas (internal gas energy) to temperature
 	const Real rhoH = rho * cloudy_H_mass_fraction;
-	const Real nH = rhoH / C::m_u;
+	const Real nH = rhoH / (C::m_p + C::m_e);
 
 	// compute mu from mu(T) table
 	const Real mu = interpolate2d(std::log10(nH), std::log10(Tgas), tables.log_nH, tables.log_Tgas, tables.meanMolWeight);
@@ -157,7 +157,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(double rho, do
 
 	// solve for temperature given Eint (with fixed adiabatic index gamma)
 	const Real rhoH = rho * cloudy_H_mass_fraction;
-	const Real nH = rhoH / C::m_u;
+	const Real nH = rhoH / (C::m_p + C::m_e);
 	const Real log_nH = std::log10(nH);
 
 	// mean molecular weight (in Grackle tables) is defined w/r/t
