@@ -65,7 +65,7 @@ template <> struct quokka::EOS_Traits<ShockProblem> {
 	static constexpr double mean_molecular_weight = mu;
 	static constexpr double boltzmann_constant = k_B;
 	static constexpr double gamma = gamma_gas;
-	static constexpr double hydrogen_mass_code_units = 1.0 / C::n_A;
+	static constexpr double mass_code_units = C::m_u;
 };
 
 template <> struct Physics_Traits<ShockProblem> {

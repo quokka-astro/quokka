@@ -40,15 +40,15 @@ constexpr double a_rad = 7.5646e-15;  // erg cm^-3 K^-4
 constexpr double c = 2.99792458e10;   // cm s^-1
 constexpr double a0 = 2.0e5;	      // ('reference' sound speed) [cm s^-1]
 constexpr double chat = 860. * a0;    // cm s^-1
-constexpr double k_B = 1.380658e-16;  // erg K^-1
-constexpr double m_H = 1.6726231e-24; // mass of hydrogen atom [g]
+constexpr double k_B = C::k_B;  // erg K^-1
+constexpr double m_H = C::m_u; // atomic mass unit
 constexpr double gamma_gas = 5. / 3.;
 
 template <> struct quokka::EOS_Traits<ShellProblem> {
 	static constexpr double mean_molecular_weight = 2.2 * m_H;
 	static constexpr double boltzmann_constant = k_B;
 	static constexpr double gamma = gamma_gas;
-	static constexpr double hydrogen_mass_code_units = quokka::hydrogen_mass_cgs;
+	static constexpr double mass_code_units = C::m_u;
 };
 
 template <> struct RadSystem_Traits<ShellProblem> {

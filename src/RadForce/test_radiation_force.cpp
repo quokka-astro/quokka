@@ -29,7 +29,7 @@ struct TubeProblem {
 };
 
 constexpr double kappa0 = 5.0;				// cm^2 g^-1
-constexpr double mu = 2.33 * quokka::hydrogen_mass_cgs; // g
+constexpr double mu = 2.33 * C::m_u; // g
 constexpr double gamma_gas = 1.0;			// isothermal gas EOS
 constexpr double a0 = 0.2e5;				// cm s^-1
 constexpr double tau = 1.0e-6;				// optical depth (dimensionless)
@@ -45,10 +45,10 @@ constexpr double Lx = (a0 * a0) / g0;			 // cm
 
 template <> struct quokka::EOS_Traits<TubeProblem> {
 	static constexpr double mean_molecular_weight = mu;
-	static constexpr double boltzmann_constant = quokka::boltzmann_constant_cgs;
+	static constexpr double boltzmann_constant = C::k_B;
 	static constexpr double gamma = gamma_gas;
 	static constexpr double cs_isothermal = a0; // only used when gamma = 1
-	static constexpr double hydrogen_mass_code_units = quokka::hydrogen_mass_cgs;
+	static constexpr double mass_code_units = C::m_u;
 };
 
 template <> struct RadSystem_Traits<TubeProblem> {

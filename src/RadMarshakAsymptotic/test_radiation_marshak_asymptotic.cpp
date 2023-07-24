@@ -23,13 +23,13 @@ constexpr double T_initial = 300.;	      // K
 
 // constexpr double kelvin_to_eV = 8.617385e-5;
 constexpr double a_rad = radiation_constant_cgs_;
-constexpr double c_v = (quokka::boltzmann_constant_cgs / quokka::hydrogen_mass_cgs) / (5. / 3. - 1.);
+constexpr double c_v = (C::k_B / C::m_u) / (5. / 3. - 1.);
 
 template <> struct quokka::EOS_Traits<SuOlsonProblemCgs> {
-	static constexpr double mean_molecular_weight = quokka::hydrogen_mass_cgs;
-	static constexpr double boltzmann_constant = quokka::boltzmann_constant_cgs;
+	static constexpr double mean_molecular_weight = C::m_u;
+	static constexpr double boltzmann_constant = C::k_B;
 	static constexpr double gamma = 5. / 3.;
-	static constexpr double hydrogen_mass_code_units = quokka::hydrogen_mass_cgs;
+	static constexpr double mass_code_units = C::m_u;
 };
 
 template <> struct RadSystem_Traits<SuOlsonProblemCgs> {

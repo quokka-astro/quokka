@@ -26,8 +26,6 @@
 
 namespace quokka
 {
-static constexpr double boltzmann_constant_cgs = C::k_B;     // cgs
-static constexpr double hydrogen_mass_cgs = C::m_p + C::m_e; // cgs
 
 // specify default values for ideal gamma-law EOS
 //
@@ -35,8 +33,8 @@ template <typename problem_t> struct EOS_Traits {
 	static constexpr double gamma = 5. / 3.;     // default value
 	static constexpr double cs_isothermal = NAN; // only used when gamma = 1
 	static constexpr double mean_molecular_weight = NAN;
-	static constexpr double boltzmann_constant = boltzmann_constant_cgs;
-	static constexpr double hydrogen_mass_code_units = hydrogen_mass_cgs;
+	static constexpr double boltzmann_constant = C::k_B;
+	static constexpr double mass_code_units = C::m_u;
 };
 
 template <typename problem_t> class EOS
@@ -56,7 +54,7 @@ template <typename problem_t> class EOS
 	static constexpr amrex::Real gamma_ = EOS_Traits<problem_t>::gamma;
 	static constexpr amrex::Real boltzmann_constant_ = EOS_Traits<problem_t>::boltzmann_constant;
 	static constexpr amrex::Real mean_molecular_weight_ = EOS_Traits<problem_t>::mean_molecular_weight;
-	static constexpr amrex::Real hydrogen_mass_code_units_ = EOS_Traits<problem_t>::hydrogen_mass_code_units;
+	static constexpr amrex::Real mass_code_units_ = EOS_Traits<problem_t>::mass_code_units;
 };
 
 template <typename problem_t>
@@ -92,7 +90,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEin
 		chem_eos_t estate;
 		estate.rho = rho;
 		estate.e = Eint / rho;
-		estate.mu = mean_molecular_weight_ / hydrogen_mass_code_units_;
+		estate.mu = mean_molecular_weight_ / mass_code_units_;
 		eos(eos_input_re, estate);
 		// scale returned temperature in case boltzmann constant is dimensionless
 		Tgas = estate.T * C::k_B / boltzmann_constant_;

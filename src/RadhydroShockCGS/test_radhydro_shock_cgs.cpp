@@ -25,7 +25,7 @@ struct ShockProblem {
 constexpr double a_rad = 7.5646e-15;		  // erg cm^-3 K^-4
 constexpr double c = 2.99792458e10;		  // cm s^-1
 constexpr double k_B = C::k_B;			  // erg K^-1
-constexpr double m_H = quokka::hydrogen_mass_cgs; // mass of hydrogen atom [g]
+constexpr double m_H = C::m_u; // atomic mass unit
 
 // constexpr double P0 = 1.0e-4;	// equal to P_0 in dimensionless units
 // constexpr double sigma_a = 1.0e6;	// absorption cross section
@@ -68,7 +68,7 @@ template <> struct quokka::EOS_Traits<ShockProblem> {
 	static constexpr double mean_molecular_weight = m_H;
 	static constexpr double boltzmann_constant = k_B;
 	static constexpr double gamma = gamma_gas;
-	static constexpr double hydrogen_mass_code_units = 1.0 / C::n_A;
+	static constexpr double mass_code_units = C::m_u;
 };
 
 template <> struct Physics_Traits<ShockProblem> {
