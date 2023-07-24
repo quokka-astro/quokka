@@ -59,7 +59,7 @@ template <> struct HydroSystem_Traits<ShockCloud> {
 	static constexpr double gamma = 5. / 3.; // default value
 	// if true, reconstruct e_int instead of pressure
 	static constexpr bool reconstruct_eint = true;
-	static constexpr int nscalars = 1; // number of passive scalars
+	static constexpr int nscalars = 3; // number of passive scalars
 };
 
 template <> struct RadSystem_Traits<ShockCloud> {
@@ -132,10 +132,10 @@ template <> void RadhydroSimulation<ShockCloud>::setInitialConditionsAtLevel(int
 			if (sharp_cloud_edge) {
 				if (R < R_cloud) {
 					rho = rho1; // cloud density
-					C = 1.0; // concentration is unity inside the cloud
+					C = 1.0;    // concentration is unity inside the cloud
 				} else {
 					rho = rho0; // background density
-					C = 0.0; // concentration is zero outside the cloud
+					C = 0.0;    // concentration is zero outside the cloud
 				}
 			} else {
 				const Real h_smooth = R_cloud / 20.;
@@ -146,6 +146,7 @@ template <> void RadhydroSimulation<ShockCloud>::setInitialConditionsAtLevel(int
 
 			AMREX_ALWAYS_ASSERT(rho > 0.);
 			AMREX_ALWAYS_ASSERT(C >= 0.);
+			AMREX_ALWAYS_ASSERT(C <= 1.);
 
 			Real const xmom = 0;
 			Real const ymom = 0;
@@ -160,6 +161,9 @@ template <> void RadhydroSimulation<ShockCloud>::setInitialConditionsAtLevel(int
 			state(i, j, k, RadSystem<ShockCloud>::gasEnergy_index) = Egas;
 			state(i, j, k, RadSystem<ShockCloud>::gasInternalEnergy_index) = Eint;
 			state(i, j, k, RadSystem<ShockCloud>::scalar0_index) = C;
+			state(i, j, k, RadSystem<ShockCloud>::scalar0_index + 1) = C * rho; // cloud partial density
+			state(i, j, k, RadSystem<ShockCloud>::scalar0_index + 2) =
+			    (1.0 - C) * rho; // non-cloud partial density
 
 			if (::enableRadiation) {
 				state(i, j, k, RadSystem<ShockCloud>::radEnergy_index) = Erad0;
@@ -209,6 +213,8 @@ AMRSimulation<ShockCloud>::setCustomBoundaryConditions(const amrex::IntVect &iv,
 		consVar(i, j, k, RadSystem<ShockCloud>::gasEnergy_index) = Egas;
 		consVar(i, j, k, RadSystem<ShockCloud>::gasInternalEnergy_index) = Eint;
 		consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index) = 0;
+		consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index + 1) = 0;	  // cloud partial density
+		consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index + 2) = rho; // non-cloud partial density
 
 		// radiation boundary condition -- streaming
 		constexpr double c = c_light_cgs_;
@@ -493,6 +499,21 @@ void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::string cons
 			output[bx](i, j, k, ncomp) = nH;
 		});
 
+	} else if (dname == "cloud_fraction") {
+		const int ncomp = ncomp_in;
+		auto const &output = mf.arrays();
+		auto const &state = state_new_[lev].const_arrays();
+
+		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			// cloud partial density
+			Real rho_cloud = state[bx](i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
+			// non-cloud partial density
+			Real rho_bg = state[bx](i, j, k, HydroSystem<ShockCloud>::scalar0_index + 2);
+
+			// NOTE: rho_cloud + rho_bg only equals hydro rho up to truncation error!
+			output[bx](i, j, k, ncomp) = rho_cloud / (rho_cloud + rho_bg);
+		});
+
 	} else if (dname == "cooling_length") {
 		const int ncomp = ncomp_in;
 		auto tables = userData_.cloudyTables.const_tables();
@@ -527,10 +548,10 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto ComputeCellTemp(int i, int j, int k, am
 	return ComputeTgasFromEgas(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
 }
 
-template <> auto RadhydroSimulation<ShockCloud>::ComputeStatistics() -> std::unordered_map<std::string, amrex::Real>
+template <> auto RadhydroSimulation<ShockCloud>::ComputeStatistics() -> std::map<std::string, amrex::Real>
 {
 	// compute scalar statistics
-	std::unordered_map<std::string, amrex::Real> stats;
+	std::map<std::string, amrex::Real> stats;
 
 	// save time
 	const Real t_cc = std::get<Real>(simulationMetadata_["t_cc"]);
@@ -547,8 +568,14 @@ template <> auto RadhydroSimulation<ShockCloud>::ComputeStatistics() -> std::uno
 	// save total simulation mass
 	const Real sim_mass = amrex::volumeWeightedSum(amrex::GetVecOfConstPtrs(state_new_),
 						       HydroSystem<ShockCloud>::density_index, geom, ref_ratio);
+	const Real sim_partialcloud_mass = amrex::volumeWeightedSum(
+	    amrex::GetVecOfConstPtrs(state_new_), HydroSystem<ShockCloud>::scalar0_index + 1, geom, ref_ratio);
+	const Real sim_partialwind_mass = amrex::volumeWeightedSum(
+	    amrex::GetVecOfConstPtrs(state_new_), HydroSystem<ShockCloud>::scalar0_index + 2, geom, ref_ratio);
 
 	stats["sim_mass"] = sim_mass / solarmass_in_g;
+	stats["sim_partialcloud_mass"] = sim_partialcloud_mass / solarmass_in_g;
+	stats["sim_partialwind_mass"] = sim_partialwind_mass / solarmass_in_g;
 
 	// compute cloud mass according to temperature threshold
 	auto tables = userData_.cloudyTables.const_tables();
@@ -560,41 +587,84 @@ template <> auto RadhydroSimulation<ShockCloud>::ComputeStatistics() -> std::uno
 		    Real const result = (T < 1.0e4) ? rho : 0.0;
 		    return result;
 	    });
-	const Real M_cl_6000 = computeVolumeIntegral(
+	const Real M_cl_8000 = computeVolumeIntegral(
 	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
 		    Real const T = ComputeCellTemp(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
 		    Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
-		    Real const result = (T < 6000.) ? rho : 0.0;
+		    Real const result = (T < 8000.) ? rho : 0.0;
 		    return result;
 	    });
-	const Real M_cl_3000 = computeVolumeIntegral(
+	const Real M_cl_9000 = computeVolumeIntegral(
 	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
 		    Real const T = ComputeCellTemp(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
 		    Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
-		    Real const result = (T < 3000.) ? rho : 0.0;
+		    Real const result = (T < 9000.) ? rho : 0.0;
 		    return result;
 	    });
-	const Real M_cl_300 = computeVolumeIntegral(
+	const Real M_cl_11000 = computeVolumeIntegral(
 	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
 		    Real const T = ComputeCellTemp(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
 		    Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
-		    Real const result = (T < 300.) ? rho : 0.0;
+		    Real const result = (T < 1.1e4) ? rho : 0.0;
+		    return result;
+	    });
+	const Real M_cl_12000 = computeVolumeIntegral(
+	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+		    Real const T = ComputeCellTemp(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+		    Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
+		    Real const result = (T < 1.2e4) ? rho : 0.0;
 		    return result;
 	    });
 
 	stats["cloud_mass_1e4"] = M_cl_1e4 / solarmass_in_g;
-	stats["cloud_mass_6000"] = M_cl_6000 / solarmass_in_g;
-	stats["cloud_mass_3000"] = M_cl_3000 / solarmass_in_g;
-	stats["cloud_mass_300"] = M_cl_300 / solarmass_in_g;
+	stats["cloud_mass_8000"] = M_cl_8000 / solarmass_in_g;
+	stats["cloud_mass_9000"] = M_cl_9000 / solarmass_in_g;
+	stats["cloud_mass_11000"] = M_cl_11000 / solarmass_in_g;
+	stats["cloud_mass_12000"] = M_cl_12000 / solarmass_in_g;
 
-	// compute cloud mass according to passive scalar threshold
-	const Real M_cl_scalar = computeVolumeIntegral(
+	const Real origM_cl_1e4 = computeVolumeIntegral(
 	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-		    Real const C = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index);
-		    Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
-		    Real const result = (C > 1.0e-5) ? rho : 0.0;
+		    Real const T = ComputeCellTemp(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+		    Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
+		    Real const result = (T < 1.0e4) ? rho_cloud : 0.0;
 		    return result;
 	    });
+	const Real origM_cl_8000 = computeVolumeIntegral(
+	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+		    Real const T = ComputeCellTemp(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+		    Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
+		    Real const result = (T < 8000.) ? rho_cloud : 0.0;
+		    return result;
+	    });
+	const Real origM_cl_9000 = computeVolumeIntegral(
+	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+		    Real const T = ComputeCellTemp(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+		    Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
+		    Real const result = (T < 9000.) ? rho_cloud : 0.0;
+		    return result;
+	    });
+	const Real origM_cl_11000 = computeVolumeIntegral(
+	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+		    Real const T = ComputeCellTemp(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+		    Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
+		    Real const result = (T < 1.1e4) ? rho_cloud : 0.0;
+		    return result;
+	    });
+	const Real origM_cl_12000 = computeVolumeIntegral(
+	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+		    Real const T = ComputeCellTemp(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+		    Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
+		    Real const result = (T < 1.2e4) ? rho_cloud : 0.0;
+		    return result;
+	    });
+
+	stats["cloud_mass_1e4_original"] = origM_cl_1e4 / solarmass_in_g;
+	stats["cloud_mass_8000_original"] = origM_cl_8000 / solarmass_in_g;
+	stats["cloud_mass_9000_original"] = origM_cl_9000 / solarmass_in_g;
+	stats["cloud_mass_11000_original"] = origM_cl_11000 / solarmass_in_g;
+	stats["cloud_mass_12000_original"] = origM_cl_12000 / solarmass_in_g;
+
+	// compute cloud mass according to passive scalar threshold
 	const Real M_cl_scalar_01 = computeVolumeIntegral(
 	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
 		    Real const C = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index);
@@ -610,7 +680,6 @@ template <> auto RadhydroSimulation<ShockCloud>::ComputeStatistics() -> std::uno
 		    return result;
 	    });
 
-	stats["cloud_mass_scalar"] = M_cl_scalar / solarmass_in_g;
 	stats["cloud_mass_scalar_01"] = M_cl_scalar_01 / solarmass_in_g;
 	stats["cloud_mass_scalar_01_09"] = M_cl_scalar_01_09 / solarmass_in_g;
 
@@ -623,11 +692,29 @@ auto RadhydroSimulation<ShockCloud>::ComputeProjections(const int dir) const
 {
 	std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj;
 
-	// compute density (sum) projection
+	// compute (total) density projection
 	proj["nH"] = computePlaneProjection<amrex::ReduceOpSum>(
 	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
 		    Real rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
 		    return (cloudy_H_mass_fraction * rho) / m_H;
+	    },
+	    dir);
+
+	// compute cloud partial density projection
+	proj["nH_cloud"] = computePlaneProjection<amrex::ReduceOpSum>(
+	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+		    // partial cloud density
+		    Real rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
+		    return (cloudy_H_mass_fraction * rho_cloud) / m_H;
+	    },
+	    dir);
+
+	// compute non-cloud partial density projection
+	proj["nH_wind"] = computePlaneProjection<amrex::ReduceOpSum>(
+	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+		    // partial wind density
+		    Real rho_wind = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 2);
+		    return (cloudy_H_mass_fraction * rho_wind) / m_H;
 	    },
 	    dir);
 

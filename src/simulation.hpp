@@ -176,7 +176,7 @@ public:
                                  amrex::MultiFab &mf, int ncomp) const = 0;
 
   // compute statistics
-  virtual auto ComputeStatistics() -> std::unordered_map<std::string, amrex::Real> = 0;
+  virtual auto ComputeStatistics() -> std::map<std::string, amrex::Real> = 0;
 
   // compute projected vars
   [[nodiscard]] virtual auto ComputeProjections(int dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> = 0;
@@ -1592,7 +1592,7 @@ void AMRSimulation<problem_t>::WriteStatisticsFile() {
   static bool isHeaderWritten = false;
 
   // compute statistics
-  std::unordered_map<std::string, amrex::Real> statistics = ComputeStatistics();
+  std::map<std::string, amrex::Real> statistics = ComputeStatistics();
 
   // write to file
   if (amrex::ParallelDescriptor::IOProcessor()) {
