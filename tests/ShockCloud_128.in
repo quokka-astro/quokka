@@ -25,6 +25,7 @@ do_reflux = 1
 do_subcycle = 1
 grackle_data_file = "../extern/cooling_tables/isrf_1000Go_grains.h5"
 derived_vars = nH temperature cooling_length cloud_fraction
+projection.dirs = x z
 
 cfl = 0.2
 limit_timestep_by_cooling_time = 0
