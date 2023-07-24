@@ -1689,26 +1689,31 @@ auto AMRSimulation<problem_t>::computePlaneProjection(F const &user_f, const int
 
 template <typename problem_t>
 void AMRSimulation<problem_t>::WriteProjectionPlotfile() const {
-	for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+  std::vector<std::string> dirs{};
+  amrex::ParmParse pp;
+  pp.queryarr("projection.dirs", dirs);
+
+	auto dir_from_string = [=](const std::string &dir_str) {
+		if (dir_str == "x") {
+			return 0;
+		}
+		if (dir_str == "y") {
+			return 1;
+		}
+		if (dir_str == "z") {
+			return 2;
+		}
+    return -1;
+	};
+  
+	for (auto &dir_str : dirs) {
     // compute projections along axis 'dir'
+    int dir = dir_from_string(dir_str);
     std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj = ComputeProjections(dir);
-    
-    auto dir_to_string = [=](const int dir) {
-      if (dir == 0) {
-        return std::string{"x"};
-      } else if (dir == 1) {
-        return std::string{"y"};
-      } else if (dir == 2) {
-        return std::string{"z"};
-      } else {
-        amrex::Abort("invalid direction");
-        return std::string("");
-      }
-    };
 
     // write 2D plotfiles
     for (auto const &[varname, baseFab] : proj) {
-      const std::string basename = "proj" + dir_to_string(dir) + "_" + varname;
+      const std::string basename = "proj" + dir_str + "_" + varname;
       const std::string filename = amrex::Concatenate(basename, istep[0], 5);
       amrex::Print() << "Writing projection " << filename << "\n";
 
