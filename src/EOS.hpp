@@ -129,8 +129,14 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromTga
 	Eint = chemstate.e * chemstate.rho;
 #else
 	if constexpr (gamma_ != 1.0) {
-		const amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
-		Eint = rho * c_v * Tgas;
+		// const amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
+		// Eint = rho * c_v * Tgas;
+		chem_eos_t estate;
+		estate.rho = rho;
+		estate.T = Tgas;
+		estate.mu = mean_molecular_weight_ / mass_code_units_;
+		eos(eos_input_rt, estate);
+		Eint = estate.e * rho * boltzmann_constant_ / C::k_B;
 	}
 #endif
 	return Eint;
@@ -138,7 +144,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromTga
 
 template <typename problem_t>
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto
-EOS<problem_t>::ComputeEintTempDerivative(const amrex::Real rho, const amrex::Real /*Tgas*/,
+EOS<problem_t>::ComputeEintTempDerivative(const amrex::Real rho, const amrex::Real Tgas,
 					  const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars) -> amrex::Real
 {
 	// compute derivative of internal energy w/r/t temperature
@@ -165,8 +171,14 @@ EOS<problem_t>::ComputeEintTempDerivative(const amrex::Real rho, const amrex::Re
 	dEint_dT = chemstate.dedT * chemstate.rho;
 #else
 	if constexpr (gamma_ != 1.0) {
-		const amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
-		dEint_dT = rho * c_v;
+		// const amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
+		// dEint_dT = rho * c_v;
+		chem_eos_t estate;
+		estate.rho = rho;
+		estate.T = Tgas;
+		estate.mu = mean_molecular_weight_ / mass_code_units_;
+		eos(eos_input_rt, estate);
+		dEint_dT = estate.dedT * rho;
 	}
 #endif
 	return dEint_dT;
