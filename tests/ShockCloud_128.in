@@ -33,7 +33,7 @@ max_timesteps = 100000
 plotfile_interval = 100
 checkpoint_interval = 100
 ascent_interval = 10
-statistics_interval = 100
+statistics_interval = 10
 projection_interval = 10
 T_floor = 10.0  # K
 
