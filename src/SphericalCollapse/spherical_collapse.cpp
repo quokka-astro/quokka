@@ -30,7 +30,7 @@ template <> struct quokka::EOS_Traits<CollapseProblem> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = NAN;
 	static constexpr double boltzmann_constant = C::k_B;
-	static constexpr double hydrogen_mass_code_units = C::m_u;
+	static constexpr double mass_code_units = C::m_u;
 };
 
 template <> struct HydroSystem_Traits<CollapseProblem> {
