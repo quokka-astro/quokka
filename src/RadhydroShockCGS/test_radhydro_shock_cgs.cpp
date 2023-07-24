@@ -33,8 +33,7 @@ constexpr double c_s0 = 1.73e7; // adiabatic sound speed [cm s^-1]
 
 constexpr double kappa = 577.0; // "opacity" == rho*kappa [cm^-1] (!!)
 constexpr double gamma_gas = (5. / 3.);
-constexpr double mu = C::m_u;			       // mean molecular weight [grams]
-constexpr double c_v = k_B / (mu * (gamma_gas - 1.0)); // specific heat [erg g^-1 K^-1]
+constexpr double c_v = k_B / ((C::m_p + C::m_e) * (gamma_gas - 1.0)); // specific heat [erg g^-1 K^-1]
 
 constexpr double T0 = 2.18e6; // K
 constexpr double rho0 = 5.69; // g cm^-3
@@ -64,7 +63,7 @@ template <> struct RadSystem_Traits<ShockProblem> {
 };
 
 template <> struct quokka::EOS_Traits<ShockProblem> {
-	static constexpr double mean_molecular_weight = C::m_u;
+	static constexpr double mean_molecular_weight = C::m_p + C::m_e;
 	static constexpr double boltzmann_constant = k_B;
 	static constexpr double gamma = gamma_gas;
 	static constexpr double mass_code_units = C::m_u;
