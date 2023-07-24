@@ -135,7 +135,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeEgasFromTgas(double rho, do
 	const Real mu = interpolate2d(std::log10(nH), std::log10(Tgas), tables.log_nH, tables.log_Tgas, tables.meanMolWeight);
 
 	// compute thermal gas energy
-	const Real Egas = (rho / (C::m_u * mu)) * C::k_B * Tgas / (gamma - 1.);
+	const Real Egas = (rho / ((C::m_p + C::m_e) * mu)) * C::k_B * Tgas / (gamma - 1.);
 	return Egas;
 }
 
@@ -162,7 +162,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(double rho, do
 
 	// mean molecular weight (in Grackle tables) is defined w/r/t
 	// hydrogen_mass_cgs_
-	const Real C = (gamma - 1.) * Egas / (C::k_B * (rho / C::m_u));
+	const Real C = (gamma - 1.) * Egas / (C::k_B * (rho / (C::m_p + C::m_e)));
 
 	// solve for mu(T)*C == T.
 	// (Grackle does this with a fixed-point iteration. We use a more robust
