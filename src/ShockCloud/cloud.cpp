@@ -686,8 +686,8 @@ template <> auto RadhydroSimulation<ShockCloud>::ComputeStatistics() -> std::map
 	// compute cloud mass according to cloud fraction threshold
 	const Real M_cl_fraction_01 = computeVolumeIntegral(
 	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-			Real const rho_cloud = state[bx](i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
-			Real const rho_bg = state[bx](i, j, k, HydroSystem<ShockCloud>::scalar0_index + 2);
+			Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
+			Real const rho_bg = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 2);
 			Real const C_frac = rho_cloud / (rho_cloud + rho_bg);
 
 		    Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
@@ -696,8 +696,8 @@ template <> auto RadhydroSimulation<ShockCloud>::ComputeStatistics() -> std::map
 	    });
 	const Real M_cl_fraction_01_09 = computeVolumeIntegral(
 	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-			Real const rho_cloud = state[bx](i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
-			Real const rho_bg = state[bx](i, j, k, HydroSystem<ShockCloud>::scalar0_index + 2);
+			Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
+			Real const rho_bg = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 2);
 			Real const C_frac = rho_cloud / (rho_cloud + rho_bg);
 
 		    Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
