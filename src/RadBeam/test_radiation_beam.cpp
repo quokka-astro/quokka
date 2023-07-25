@@ -34,7 +34,7 @@ constexpr double c = 2.99792458e10;  // cm s^-1
 
 template <> struct quokka::EOS_Traits<BeamProblem> {
 	static constexpr double mean_molecular_weight = C::m_u;
-	static constexpr double boltzmann_constant = quokka::boltzmann_constant_cgs;
+	static constexpr double boltzmann_constant = C::k_B;
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mass_code_units = C::m_u;
 };
