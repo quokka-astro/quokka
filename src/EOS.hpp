@@ -85,8 +85,6 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEin
 	Tgas = chemstate.T;
 #else
 	if constexpr (gamma_ != 1.0) {
-		// const amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
-		// Tgas = Eint / (rho * c_v);
 		chem_eos_t estate;
 		estate.rho = rho;
 		estate.e = Eint / rho;
@@ -129,8 +127,6 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromTga
 	Eint = chemstate.e * chemstate.rho;
 #else
 	if constexpr (gamma_ != 1.0) {
-		// const amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
-		// Eint = rho * c_v * Tgas;
 		chem_eos_t estate;
 		estate.rho = rho;
 		estate.T = Tgas;
@@ -171,14 +167,12 @@ EOS<problem_t>::ComputeEintTempDerivative(const amrex::Real rho, const amrex::Re
 	dEint_dT = chemstate.dedT * chemstate.rho;
 #else
 	if constexpr (gamma_ != 1.0) {
-		// const amrex::Real c_v = boltzmann_constant_ / (mean_molecular_weight_ * (gamma_ - 1.0));
-		// dEint_dT = rho * c_v;
 		chem_eos_t estate;
 		estate.rho = rho;
 		estate.T = Tgas;
 		estate.mu = mean_molecular_weight_ / mass_code_units_;
 		eos(eos_input_rt, estate);
-		dEint_dT = estate.dedT * rho;
+		dEint_dT = estate.dedT * rho * boltzmann_constant_ / C::k_B;
 	}
 #endif
 	return dEint_dT;
