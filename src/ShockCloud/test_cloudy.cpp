@@ -57,8 +57,7 @@ auto problem_main() -> int
 	const Real mu = interpolate2d(log_nH, std::log10(T), tables.log_nH, tables.log_Tgas, tables.meanMolWeight);
 	const Real relerr = std::abs((C * mu - T) / T);
 
-	const Real n_e =
-	    (rho / (C::m_p + C::m_e)) * (1.0 - mu * (X + Y / 4. + Z / mean_metals_A)) / (mu - (electron_mass_cgs / (C::m_p + C::m_e)));
+	const Real n_e = (rho / (C::m_p + C::m_e)) * (1.0 - mu * (X + Y / 4. + Z / mean_metals_A)) / (mu - (electron_mass_cgs / (C::m_p + C::m_e)));
 
 	printf("\nrho = %.17e, Eint = %.17e, mu = %f, Tgas = %e, relerr = %e\n", rho, Eint, mu, T, relerr);
 	printf("n_e = %e, n_e/n_H = %e\n", n_e, n_e / nH);
