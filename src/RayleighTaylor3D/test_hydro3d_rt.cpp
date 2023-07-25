@@ -26,7 +26,6 @@ template <> struct quokka::EOS_Traits<RTProblem> {
 	static constexpr double gamma = 1.4;
 	static constexpr double mean_molecular_weight = C::m_u;
 	static constexpr double boltzmann_constant = C::k_B;
-	static constexpr double mass_code_units = C::m_u;
 };
 
 template <> struct HydroSystem_Traits<RTProblem> {

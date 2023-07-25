@@ -48,7 +48,6 @@ template <> struct quokka::EOS_Traits<ShellProblem> {
 	static constexpr double mean_molecular_weight = 2.2 * m_H;
 	static constexpr double boltzmann_constant = k_B;
 	static constexpr double gamma = gamma_gas;
-	static constexpr double mass_code_units = C::m_u;
 };
 
 template <> struct RadSystem_Traits<ShellProblem> {

@@ -34,7 +34,6 @@ template <typename problem_t> struct EOS_Traits {
 	static constexpr double cs_isothermal = NAN; // only used when gamma = 1
 	static constexpr double mean_molecular_weight = NAN;
 	static constexpr double boltzmann_constant = C::k_B;
-	static constexpr double mass_code_units = C::m_u;
 };
 
 template <typename problem_t> class EOS
@@ -54,7 +53,6 @@ template <typename problem_t> class EOS
 	static constexpr amrex::Real gamma_ = EOS_Traits<problem_t>::gamma;
 	static constexpr amrex::Real boltzmann_constant_ = EOS_Traits<problem_t>::boltzmann_constant;
 	static constexpr amrex::Real mean_molecular_weight_ = EOS_Traits<problem_t>::mean_molecular_weight;
-	static constexpr amrex::Real mass_code_units_ = EOS_Traits<problem_t>::mass_code_units;
 };
 
 template <typename problem_t>
@@ -88,7 +86,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEin
 		chem_eos_t estate;
 		estate.rho = rho;
 		estate.e = Eint / rho;
-		estate.mu = mean_molecular_weight_ / mass_code_units_;
+		estate.mu = mean_molecular_weight_ / C::m_u;
 		eos(eos_input_re, estate);
 		// scale returned temperature in case boltzmann constant is dimensionless
 		Tgas = estate.T * C::k_B / boltzmann_constant_;
@@ -130,7 +128,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromTga
 		chem_eos_t estate;
 		estate.rho = rho;
 		estate.T = Tgas;
-		estate.mu = mean_molecular_weight_ / mass_code_units_;
+		estate.mu = mean_molecular_weight_ / C::m_u;
 		eos(eos_input_rt, estate);
 		Eint = estate.e * rho * boltzmann_constant_ / C::k_B;
 	}
@@ -170,7 +168,7 @@ EOS<problem_t>::ComputeEintTempDerivative(const amrex::Real rho, const amrex::Re
 		chem_eos_t estate;
 		estate.rho = rho;
 		estate.T = Tgas;
-		estate.mu = mean_molecular_weight_ / mass_code_units_;
+		estate.mu = mean_molecular_weight_ / C::m_u;
 		eos(eos_input_rt, estate);
 		dEint_dT = estate.dedT * rho * boltzmann_constant_ / C::k_B;
 	}
