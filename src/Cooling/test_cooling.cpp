@@ -132,7 +132,7 @@ template <> void RadhydroSimulation<CoolingTest>::setInitialConditionsOnGrid(quo
 		Real xmom = 0;
 		Real ymom = 0;
 		Real zmom = 0;
-		Real const P = 4.0e4 * quokka::boltzmann_constant_cgs; // erg cm^-3
+		Real const P = 4.0e4 * C::k_B; // erg cm^-3
 		Real Eint = (quokka::EOS_Traits<CoolingTest>::gamma - 1.) * P;
 
 		Real const Egas = RadSystem<CoolingTest>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);

@@ -50,15 +50,15 @@ auto problem_main() -> int
 	const Real T = ComputeTgasFromEgas(rho, Eint, quokka::EOS_Traits<ShockCloud>::gamma, tables);
 
 	const Real rhoH = rho * cloudy_H_mass_fraction;
-	const Real nH = rhoH / quokka::hydrogen_mass_cgs;
+	const Real nH = rhoH / (C::m_p + C::m_e);
 	const Real log_nH = std::log10(nH);
 
-	const Real C = (quokka::EOS_Traits<ShockCloud>::gamma - 1.) * Eint / (quokka::boltzmann_constant_cgs * (rho / quokka::hydrogen_mass_cgs));
+	const Real C = (quokka::EOS_Traits<ShockCloud>::gamma - 1.) * Eint / (C::k_B * (rho / (C::m_p + C::m_e)));
 	const Real mu = interpolate2d(log_nH, std::log10(T), tables.log_nH, tables.log_Tgas, tables.meanMolWeight);
 	const Real relerr = std::abs((C * mu - T) / T);
 
 	const Real n_e =
-	    (rho / quokka::hydrogen_mass_cgs) * (1.0 - mu * (X + Y / 4. + Z / mean_metals_A)) / (mu - (electron_mass_cgs / quokka::hydrogen_mass_cgs));
+	    (rho / (C::m_p + C::m_e)) * (1.0 - mu * (X + Y / 4. + Z / mean_metals_A)) / (mu - (electron_mass_cgs / (C::m_p + C::m_e)));
 
 	printf("\nrho = %.17e, Eint = %.17e, mu = %f, Tgas = %e, relerr = %e\n", rho, Eint, mu, T, relerr);
 	printf("n_e = %e, n_e/n_H = %e\n", n_e, n_e / nH);
