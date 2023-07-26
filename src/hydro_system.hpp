@@ -203,7 +203,6 @@ template <typename problem_t> auto HydroSystem<problem_t>::maxSignalSpeedLocal(a
 						cs = cs_iso_;
 					} else {
 						const auto Etot = cons[bx](i, j, k, HydroSystem<problem_t>::energy_index);
-						const auto Eint = Etot - kinetic_energy;
 						const auto P = ComputePressure(cons[bx], i, j, k);
 						cs = std::sqrt(HydroSystem<problem_t>::gamma_ * P / rho);
 					}
