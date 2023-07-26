@@ -48,6 +48,8 @@ template <typename problem_t> class EOS
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
 	ComputeEintTempDerivative(amrex::Real rho, amrex::Real Tgas, const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = {})
 	    -> amrex::Real;
+	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
+	ComputePressure(amrex::Real rho, amrex::Real Eint, const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = {}) -> amrex::Real;
 
       private:
 	static constexpr amrex::Real gamma_ = EOS_Traits<problem_t>::gamma;
@@ -174,6 +176,44 @@ EOS<problem_t>::ComputeEintTempDerivative(const amrex::Real rho, const amrex::Re
 	}
 #endif
 	return dEint_dT;
+}
+
+template <typename problem_t>
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputePressure(amrex::Real rho, amrex::Real Eint,
+                                                                                  const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars)
+    -> amrex::Real
+{
+        // return pressure for an ideal gas
+        amrex::Real P = NAN;
+#ifdef PRIMORDIAL_CHEM
+        eos_t chemstate; // cannot use burn_t because it does not have pressure
+        chemstate.rho = rho;
+        chemstate.e = Eint / rho;
+        // initialize array of number densities
+        for (int ii = 0; ii < NumSpec; ++ii) {
+                chemstate.xn[ii] = -1.0;
+        }
+
+        if (massScalars) {
+                const auto &massArray = *massScalars;
+                for (int nn = 0; nn < nmscalars_; ++nn) {
+                        chemstate.xn[nn] = massArray[nn] / spmasses[nn]; // massScalars are partial densities (massFractions * rho)
+                }
+        }
+
+        eos(eos_input_re, chemstate);
+        P = chemstate.p;
+#else
+       if constexpr (gamma_ != 1.0) {
+                chem_eos_t estate;
+                estate.rho = rho;
+                estate.e = Eint / rho;
+                estate.mu = mean_molecular_weight_ / C::m_u;
+                eos(eos_input_re, estate);
+                P = estate.p;
+       }
+#endif
+          return P;
 }
 
 } // namespace quokka
