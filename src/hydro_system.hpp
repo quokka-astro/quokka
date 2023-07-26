@@ -213,8 +213,7 @@ template <typename problem_t> auto HydroSystem<problem_t>::maxSignalSpeedLocal(a
 					} else {
 						const auto Etot = cons[bx](i, j, k, HydroSystem<problem_t>::energy_index);
 						const auto Eint = Etot - kinetic_energy;
-						const auto P =
-						    ComputePressure(cons[bx], i, j, k); // const auto P =  Eint * (HydroSystem<problem_t>::gamma_ - 1.0);
+						const auto P = ComputePressure(cons[bx], i, j, k);
 						cs = std::sqrt(HydroSystem<problem_t>::gamma_ * P / rho);
 					}
 					return {cs + abs_vel};
@@ -247,7 +246,7 @@ void HydroSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Re
 			AMREX_ASSERT(!std::isnan(E));
 			const auto kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
 			const auto thermal_energy = E - kinetic_energy;
-			const auto P = thermal_energy * (HydroSystem<problem_t>::gamma_ - 1.0);
+			const auto P = ComputePressure(cons, i, j, k);
 			cs = std::sqrt(HydroSystem<problem_t>::gamma_ * P / rho);
 		}
 		AMREX_ASSERT(cs > 0.);
@@ -275,7 +274,7 @@ template <typename problem_t> auto HydroSystem<problem_t>::CheckStatesValid(amre
 					const auto vz = pz / rho;
 					const auto kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
 					const auto thermal_energy = E - kinetic_energy;
-					const auto P = thermal_energy * (HydroSystem<problem_t>::gamma_ - 1.0);
+					const auto P = ComputePressure(cons[bx], i, j, k);
 
 					bool negativeDensity = (rho <= 0.);
 					bool negativePressure = (P <= 0.);
@@ -310,7 +309,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePressure
 	const auto vz = pz / rho;
 	const auto kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
 	const auto thermal_energy = E - kinetic_energy;
-	// const auto P = thermal_energy * (HydroSystem<problem_t>::gamma_ - 1.0);
 
 	amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
 	amrex::Real P = quokka::EOS<problem_t>::ComputePressure(rho, thermal_energy, massScalars);
