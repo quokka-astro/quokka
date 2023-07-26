@@ -37,7 +37,6 @@
 #include "actual_eos_data.H"
 #endif
 
-
 // this struct is specialized by the user application code
 //
 template <typename problem_t> struct HydroSystem_Traits {
@@ -317,7 +316,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePressure
 
 		eos_t chemstate; // cannot use burn_t here; it does not contain pressure
 		chemstate.rho = rho;
-		chemstate.e  = thermal_energy / rho;
+		chemstate.e = thermal_energy / rho;
 		const auto &massArray = *massScalars;
 		for (int nn = 0; nn < nmscalars_; ++nn) {
 			chemstate.xn[nn] = massArray[nn] / spmasses[nn]; // massScalars are partial densities (massFractions * rho)
