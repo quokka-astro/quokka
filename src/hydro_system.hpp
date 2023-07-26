@@ -159,7 +159,7 @@ template <typename problem_t> void HydroSystem<problem_t>::ConservedToPrimitive(
 		const auto kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
 		const auto Eint_cons = E - kinetic_energy;
 
-		const amrex::Real Pgas = Eint_cons * (HydroSystem<problem_t>::gamma_ - 1.0);
+		const amrex::Real Pgas = ComputePressure(cons[bx], i, j, k);
 		const amrex::Real eint_cons = Eint_cons / rho;
 		const amrex::Real eint_aux = Eint_aux / rho;
 
@@ -213,7 +213,7 @@ template <typename problem_t> auto HydroSystem<problem_t>::maxSignalSpeedLocal(a
 					} else {
 						const auto Etot = cons[bx](i, j, k, HydroSystem<problem_t>::energy_index);
 						const auto Eint = Etot - kinetic_energy;
-						const auto P = Eint * (HydroSystem<problem_t>::gamma_ - 1.0);
+						const auto P = ComputePressure(cons[bx], i, j, k); // const auto P =  Eint * (HydroSystem<problem_t>::gamma_ - 1.0);
 						cs = std::sqrt(HydroSystem<problem_t>::gamma_ * P / rho);
 					}
 					return {cs + abs_vel};
