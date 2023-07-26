@@ -9,6 +9,7 @@
 
 #include "test_radiation_pulse.hpp"
 #include "AMReX_BC_TYPES.H"
+#include "AMReX_Print.H"
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
 
