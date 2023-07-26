@@ -28,6 +28,16 @@
 #include "radiation_system.hpp"
 #include "valarray.hpp"
 
+// Microphysics headers
+#include "burn_type.H"
+#include "eos.H"
+#include "extern_parameters.H"
+
+#ifdef PRIMORDIAL_CHEM
+#include "actual_eos_data.H"
+#endif
+
+
 // this struct is specialized by the user application code
 //
 template <typename problem_t> struct HydroSystem_Traits {
@@ -300,7 +310,31 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePressure
 	const auto vz = pz / rho;
 	const auto kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
 	const auto thermal_energy = E - kinetic_energy;
-	const auto P = thermal_energy * (HydroSystem<problem_t>::gamma_ - 1.0);
+
+#ifdef PRIMORDIAL_CHEM
+	auto massScalars = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
+	if (massScalars) {
+
+		eos_t chemstate; // cannot use burn_t here; it does not contain pressure
+		chemstate.rho = rho;
+		chemstate.e  = thermal_energy / rho;
+		const auto &massArray = *massScalars;
+		for (int nn = 0; nn < nmscalars_; ++nn) {
+			chemstate.xn[nn] = massArray[nn] / spmasses[nn]; // massScalars are partial densities (massFractions * rho)
+		}
+		eos(eos_input_re, chemstate);
+		const auto P = chemstate.p;
+	}
+#else
+	chem_eos_t estate;
+	estate.rho = rho;
+	estate.e = thermal_energy / rho;
+	estate.mu = quokka::EOS_Traits<problem_t>::mean_molecular_weight / C::m_u;
+	eos(eos_input_re, estate);
+	const auto P = estate.p;
+#endif
+
+	// const auto P = thermal_energy * (HydroSystem<problem_t>::gamma_ - 1.0);
 	return P;
 }
 
