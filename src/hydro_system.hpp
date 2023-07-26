@@ -231,10 +231,8 @@ void HydroSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Re
 		if constexpr (is_eos_isothermal()) {
 			cs = cs_iso_;
 		} else {
-			const auto E = cons(i, j, k, energy_index); // *total* gas energy per unit volume
-			AMREX_ASSERT(!std::isnan(E));
-			const auto kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
 			const auto P = ComputePressure(cons, i, j, k);
+			AMREX_ASSERT(!std::isnan(P));
 			cs = std::sqrt(HydroSystem<problem_t>::gamma_ * P / rho);
 		}
 		AMREX_ASSERT(cs > 0.);
