@@ -202,7 +202,6 @@ template <typename problem_t> auto HydroSystem<problem_t>::maxSignalSpeedLocal(a
 					if constexpr (is_eos_isothermal()) {
 						cs = cs_iso_;
 					} else {
-						const auto Etot = cons[bx](i, j, k, HydroSystem<problem_t>::energy_index);
 						const auto P = ComputePressure(cons[bx], i, j, k);
 						cs = std::sqrt(HydroSystem<problem_t>::gamma_ * P / rho);
 					}
@@ -235,7 +234,6 @@ void HydroSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Re
 			const auto E = cons(i, j, k, energy_index); // *total* gas energy per unit volume
 			AMREX_ASSERT(!std::isnan(E));
 			const auto kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
-			const auto thermal_energy = E - kinetic_energy;
 			const auto P = ComputePressure(cons, i, j, k);
 			cs = std::sqrt(HydroSystem<problem_t>::gamma_ * P / rho);
 		}
