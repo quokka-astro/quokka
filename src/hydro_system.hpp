@@ -28,15 +28,6 @@
 #include "radiation_system.hpp"
 #include "valarray.hpp"
 
-// Microphysics headers
-#include "burn_type.H"
-#include "eos.H"
-#include "extern_parameters.H"
-
-#ifdef PRIMORDIAL_CHEM
-#include "actual_eos_data.H"
-#endif
-
 // this struct is specialized by the user application code
 //
 template <typename problem_t> struct HydroSystem_Traits {
