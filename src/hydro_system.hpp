@@ -526,7 +526,8 @@ void HydroSystem<problem_t>::ComputeFlatteningCoefficients(amrex::MultiFab const
 		const double chi_min = std::max(0., std::min(1., (beta_max - beta) / (beta_max - beta_min)));
 
 		// Z is a measure of shock strength (Eq. 76 of Miller & Colella 2002)
-		const double K_S = BENBEN use computesoundspeed function here in place of gamma_ * P; // equal to \rho c_s^2
+		amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(primVar, i, j, k);
+		const double K_S = std::pow(quokka::EOS<problem_t>::ComputeSoundSpeed(primVar(i, j, k, primDensity_index), P, massScalars), 2) * primVar(i, j, k, primDensity_index);
 		const double Z = std::abs(Pplus1 - Pminus1) / K_S;
 
 		// check for converging flow along the normal direction DIR (Eq. 77)
