@@ -50,6 +50,8 @@ template <typename problem_t> class EOS
 	    -> amrex::Real;
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
 	ComputePressure(amrex::Real rho, amrex::Real Eint, const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = {}) -> amrex::Real;
+	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
+	ComputeSoundSpeed(amrex::Real rho, amrex::Real Pres, const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = {}) -> amrex::Real;
 
       private:
 	static constexpr amrex::Real gamma_ = EOS_Traits<problem_t>::gamma;
@@ -66,7 +68,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEin
 	amrex::Real Tgas = NAN;
 
 #ifdef PRIMORDIAL_CHEM
-	burn_t chemstate;
+	eos_t chemstate;
 	chemstate.rho = rho;
 	chemstate.e = Eint / rho;
 	// initialize array of number densities
@@ -106,7 +108,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromTga
 	amrex::Real Eint = NAN;
 
 #ifdef PRIMORDIAL_CHEM
-	burn_t chemstate;
+	eos_t chemstate;
 	chemstate.rho = rho;
 	// Define and initialize Tgas here
 	amrex::Real const Tgas_value = Tgas;
@@ -147,7 +149,7 @@ EOS<problem_t>::ComputeEintTempDerivative(const amrex::Real rho, const amrex::Re
 	amrex::Real dEint_dT = NAN;
 
 #ifdef PRIMORDIAL_CHEM
-	burn_t chemstate;
+	eos_t chemstate;
 	chemstate.rho = rho;
 	// we don't need Tgas to find chemstate.dedT, but we still need to initialize chemstate.T because we are using the 'rt' EOS mode
 	chemstate.T = NAN;
@@ -202,7 +204,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputePressure(am
 	}
 
 	eos(eos_input_re, chemstate);
-	P = chemstate.p * rho;
+	P = chemstate.p;
 #else
 	if constexpr (gamma_ != 1.0) {
 		chem_eos_t estate;
@@ -210,10 +212,50 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputePressure(am
 		estate.e = Eint / rho;
 		estate.mu = mean_molecular_weight_ / C::m_u;
 		eos(eos_input_re, estate);
-		P = estate.p * rho;
+		P = estate.p;
 	}
 #endif
 	return P;
+}
+
+
+template <typename problem_t>
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeSoundSpeed(amrex::Real rho, amrex::Real Pres,
+                                                                                  const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars)
+    -> amrex::Real
+{
+        // return sound speed for an ideal gas
+        amrex::Real cs = NAN;
+
+#ifdef PRIMORDIAL_CHEM
+        eos_t chemstate;
+        chemstate.rho = rho;
+        chemstate.p = Pres;
+        // initialize array of number densities
+        for (int ii = 0; ii < NumSpec; ++ii) {
+                chemstate.xn[ii] = -1.0;
+        }
+
+    if (massScalars) {
+                const auto &massArray = *massScalars;
+                for (int nn = 0; nn < nmscalars_; ++nn) {
+                        chemstate.xn[nn] = massArray[nn] / spmasses[nn]; // massScalars are partial densities (massFractions * rho)
+                }
+        }
+
+    eos(eos_input_rp, chemstate);
+        cs = chemstate.cs;
+#else
+         if constexpr (gamma_ != 1.0) {
+                chem_eos_t estate;
+                estate.rho = rho;
+                estate.p = Pres;
+                estate.mu = mean_molecular_weight_ / C::m_u;
+                eos(eos_input_rp, estate);
+                cs = estate.cs;
+        }
+#endif
+          return cs;
 }
 
 } // namespace quokka
