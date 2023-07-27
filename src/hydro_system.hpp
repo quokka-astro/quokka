@@ -74,6 +74,8 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	AMREX_GPU_DEVICE static auto ComputePressure(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> amrex::Real;
 
+	AMREX_GPU_DEVICE static auto ComputeSoundSpeed(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> amrex::Real;
+
 	AMREX_GPU_DEVICE static auto ComputeVelocityX1(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> amrex::Real;
 
 	AMREX_GPU_DEVICE static auto ComputeVelocityX2(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> amrex::Real;
@@ -203,7 +205,7 @@ template <typename problem_t> auto HydroSystem<problem_t>::maxSignalSpeedLocal(a
 						cs = cs_iso_;
 					} else {
 						const auto P = ComputePressure(cons[bx], i, j, k);
-						cs = std::sqrt(HydroSystem<problem_t>::gamma_ * P / rho);
+						cs = ComputeSoundSpeed(cons[bx], i, j, k);
 					}
 					return {cs + abs_vel};
 				});
@@ -233,7 +235,7 @@ void HydroSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Re
 		} else {
 			const auto P = ComputePressure(cons, i, j, k);
 			AMREX_ASSERT(!std::isnan(P));
-			cs = std::sqrt(HydroSystem<problem_t>::gamma_ * P / rho);
+			cs = ComputeSoundSpeed(cons, i, j, k);
 		}
 		AMREX_ASSERT(cs > 0.);
 
@@ -300,6 +302,28 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePressure
 	amrex::Real P = quokka::EOS<problem_t>::ComputePressure(rho, thermal_energy, massScalars);
 
 	return P;
+}
+
+template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeSoundSpeed(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k)
+    -> amrex::Real
+{
+        const auto rho = cons(i, j, k, density_index);
+        const auto px = cons(i, j, k, x1Momentum_index);
+        const auto py = cons(i, j, k, x2Momentum_index);
+        const auto pz = cons(i, j, k, x3Momentum_index);
+        const auto E = cons(i, j, k, energy_index); // *total* gas energy per unit volume
+        const auto vx = px / rho;
+        const auto vy = py / rho;
+        const auto vz = pz / rho;
+        const auto kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
+        const auto thermal_energy = E - kinetic_energy;
+
+        amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
+        amrex::Real P = quokka::EOS<problem_t>::ComputePressure(rho, thermal_energy, massScalars);
+	amrex::Real cs = quokka::EOS<problem_t>::ComputeSoundSpeed(rho, P, massScalars);
+
+        return cs;
 }
 
 template <typename problem_t>
@@ -468,11 +492,16 @@ void HydroSystem<problem_t>::ComputeFlatteningCoefficients(amrex::MultiFab const
 
 		if constexpr (reconstruct_eint) {
 			// compute (rho e) (gamma - 1)
-			Pplus2 *= primVar(i + 2, j, k, primDensity_index) * (gamma_ - 1.0);
-			Pplus1 *= primVar(i + 1, j, k, primDensity_index) * (gamma_ - 1.0);
-			P *= primVar(i, j, k, primDensity_index) * (gamma_ - 1.0);
-			Pminus1 *= primVar(i - 1, j, k, primDensity_index) * (gamma_ - 1.0);
-			Pminus2 *= primVar(i - 2, j, k, primDensity_index) * (gamma_ - 1.0);
+			amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(primVar, i + 2, j, k);
+			Pplus2 = quokka::EOS<problem_t>::ComputePressure(primVar(i + 2, j, k, primDensity_index), primVar(i + 2, j, k, primDensity_index)*Pplus2, massScalars));
+			amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(primVar, i + 1, j, k);
+			Pplus1 = quokka::EOS<problem_t>::ComputePressure(primVar(i + 1, j, k, primDensity_index), primVar(i + 1, j, k, primDensity_index)*Pplus1, massScalars));
+			amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(primVar, i, j, k);
+			P = quokka::EOS<problem_t>::ComputePressure(primVar(i, j, k, primDensity_index), primVar(i, j, k, primDensity_index)*P, massScalars));
+			amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(primVar, i - 1, j, k);
+			Pminus1 = quokka::EOS<problem_t>::ComputePressure(primVar(i - 1, j, k, primDensity_index), primVar(i - 1, j, k, primDensity_index)*Pminus1, massScalars));
+			amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(primVar, i - 2, j, k);
+			Pminus2 = quokka::EOS<problem_t>::ComputePressure(primVar(i - 2, j, k, primDensity_index), primVar(i - 2, j, k, primDensity_index)*Pminus2, massScalars));
 		}
 
 		if constexpr (is_eos_isothermal()) {
@@ -497,7 +526,7 @@ void HydroSystem<problem_t>::ComputeFlatteningCoefficients(amrex::MultiFab const
 		const double chi_min = std::max(0., std::min(1., (beta_max - beta) / (beta_max - beta_min)));
 
 		// Z is a measure of shock strength (Eq. 76 of Miller & Colella 2002)
-		const double K_S = gamma_ * P; // equal to \rho c_s^2
+		const double K_S = BENBEN use computesoundspeed function here in place of gamma_ * P; // equal to \rho c_s^2
 		const double Z = std::abs(Pplus1 - Pminus1) / K_S;
 
 		// check for converging flow along the normal direction DIR (Eq. 77)
@@ -628,12 +657,14 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 		if (!HydroSystem<problem_t>::is_eos_isothermal()) {
 			// recompute gas energy (to prevent P < 0)
 			amrex::Real const Eint_star = Etot - 0.5 * rho_new * vsq;
-			amrex::Real const P_star = Eint_star * (HydroSystem<problem_t>::gamma_ - 1.);
+
+                	amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(state[bx], i, j, k);
+                	amrex::Real const P_star = quokka::EOS<problem_t>::ComputePressure(rho_new, Eint_star, massScalars);
 			amrex::Real P_new = P_star;
 			if (P_star < pressureFloor) {
 				P_new = pressureFloor;
 #pragma nv_diag_suppress divide_by_zero
-				amrex::Real const Etot_new = P_new / (HydroSystem<problem_t>::gamma_ - 1.) + 0.5 * rho_new * vsq;
+				amrex::Real const Etot_new = quokka::EOS<problem_t>::ComputeEintFromPres(rho_new, P_new, massScalars) + 0.5 * rho_new * vsq;
 				state[bx](i, j, k, HydroSystem<problem_t>::energy_index) = Etot_new;
 			}
 		}
@@ -825,10 +856,9 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 				const double eint_L = x1LeftState(i, j, k, pressure_index);
 				const double eint_R = x1RightState(i, j, k, pressure_index);
 				amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(x1LeftState, i, j, k);
-				// P_L = rho_L * eint_L * (gamma_ - 1.0);
-				// P_R = rho_R * eint_R * (gamma_ - 1.0);
-				P_L = quokka::EOS<problem_t>::ComputePressure(rho_L, eint_L, massScalars);
-				P_R = quokka::EOS<problem_t>::ComputePressure(rho_R, eint_R, massScalars);
+				P_L = quokka::EOS<problem_t>::ComputePressure(rho_L, eint_L*rho_L, massScalars);
+				amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(x1RightState, i, j, k);
+				P_R = quokka::EOS<problem_t>::ComputePressure(rho_R, eint_R*rho_R, massScalars);
 
 				// auxiliary Eint is actually (auxiliary) specific internal energy
 				Eint_L = rho_L * x1LeftState(i, j, k, primEint_index);
@@ -843,11 +873,13 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 				Eint_R = x1RightState(i, j, k, primEint_index);
 			}
 
-			cs_L = std::sqrt(gamma_ * P_L / rho_L);
-			cs_R = std::sqrt(gamma_ * P_R / rho_R);
+			amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(x1LeftState, i, j, k);
+			cs_L = quokka::EOS<problem_t>::ComputeSoundSpeed(rho_L, P_L, massScalars);
+			E_L = quokka::EOS<problem_t>::ComputeEintFromPres(rho_L, P_L, massScalars) + ke_L;
 
-			E_L = P_L / (gamma_ - 1.0) + ke_L;
-			E_R = P_R / (gamma_ - 1.0) + ke_R;
+			amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(x1RightState, i, j, k);
+			cs_R = quokka::EOS<problem_t>::ComputeSoundSpeed(rho_R, P_R, massScalars);
+			E_R = quokka::EOS<problem_t>::ComputeEintFromPres(rho_R, P_R, massScalars) + ke_R;
 		}
 
 		AMREX_ASSERT(cs_L > 0.0);
