@@ -493,15 +493,19 @@ void HydroSystem<problem_t>::ComputeFlatteningCoefficients(amrex::MultiFab const
 		if constexpr (reconstruct_eint) {
 			// compute (rho e) (gamma - 1)
 			amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(primVar, i + 2, j, k);
-			Pplus2 = quokka::EOS<problem_t>::ComputePressure(primVar(i + 2, j, k, primDensity_index), primVar(i + 2, j, k, primDensity_index)*Pplus2, massScalars);
+			Pplus2 = quokka::EOS<problem_t>::ComputePressure(primVar(i + 2, j, k, primDensity_index),
+									 primVar(i + 2, j, k, primDensity_index) * Pplus2, massScalars);
 			massScalars = RadSystem<problem_t>::ComputeMassScalars(primVar, i + 1, j, k);
-			Pplus1 = quokka::EOS<problem_t>::ComputePressure(primVar(i + 1, j, k, primDensity_index), primVar(i + 1, j, k, primDensity_index)*Pplus1, massScalars);
+			Pplus1 = quokka::EOS<problem_t>::ComputePressure(primVar(i + 1, j, k, primDensity_index),
+									 primVar(i + 1, j, k, primDensity_index) * Pplus1, massScalars);
 			massScalars = RadSystem<problem_t>::ComputeMassScalars(primVar, i, j, k);
-			P = quokka::EOS<problem_t>::ComputePressure(primVar(i, j, k, primDensity_index), primVar(i, j, k, primDensity_index)*P, massScalars);
+			P = quokka::EOS<problem_t>::ComputePressure(primVar(i, j, k, primDensity_index), primVar(i, j, k, primDensity_index) * P, massScalars);
 			massScalars = RadSystem<problem_t>::ComputeMassScalars(primVar, i - 1, j, k);
-			Pminus1 = quokka::EOS<problem_t>::ComputePressure(primVar(i - 1, j, k, primDensity_index), primVar(i - 1, j, k, primDensity_index)*Pminus1, massScalars);
+			Pminus1 = quokka::EOS<problem_t>::ComputePressure(primVar(i - 1, j, k, primDensity_index),
+									  primVar(i - 1, j, k, primDensity_index) * Pminus1, massScalars);
 			massScalars = RadSystem<problem_t>::ComputeMassScalars(primVar, i - 2, j, k);
-			Pminus2 = quokka::EOS<problem_t>::ComputePressure(primVar(i - 2, j, k, primDensity_index), primVar(i - 2, j, k, primDensity_index)*Pminus2, massScalars);
+			Pminus2 = quokka::EOS<problem_t>::ComputePressure(primVar(i - 2, j, k, primDensity_index),
+									  primVar(i - 2, j, k, primDensity_index) * Pminus2, massScalars);
 		}
 
 		if constexpr (is_eos_isothermal()) {
