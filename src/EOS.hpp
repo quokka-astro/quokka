@@ -46,7 +46,8 @@ template <typename problem_t> class EOS
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
 	ComputeEintFromTgas(amrex::Real rho, amrex::Real Tgas, const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = {}) -> amrex::Real;
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
-	ComputeEintFromPres(amrex::Real rho, amrex::Real Pressure, const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = {}) -> amrex::Real;
+	ComputeEintFromPres(amrex::Real rho, amrex::Real Pressure, const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = {})
+	    -> amrex::Real;
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
 	ComputeEintTempDerivative(amrex::Real rho, amrex::Real Tgas, const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = {})
 	    -> amrex::Real;
@@ -142,46 +143,44 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromTga
 	return Eint;
 }
 
-
 template <typename problem_t>
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromPres(amrex::Real rho, amrex::Real Pressure,
-                                                                                  const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars)
+										  const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars)
     -> amrex::Real
 {
-        // return internal energy density given density and pressure
-        amrex::Real Eint = NAN;
+	// return internal energy density given density and pressure
+	amrex::Real Eint = NAN;
 
 #ifdef PRIMORDIAL_CHEM
-        eos_t chemstate;
-        chemstate.rho = rho;
-        chemstate.p = Pressure;
-        // initialize array of number densities
-        for (int ii = 0; ii < NumSpec; ++ii) {
-                chemstate.xn[ii] = -1.0;
-        }
+	eos_t chemstate;
+	chemstate.rho = rho;
+	chemstate.p = Pressure;
+	// initialize array of number densities
+	for (int ii = 0; ii < NumSpec; ++ii) {
+		chemstate.xn[ii] = -1.0;
+	}
 
-        if (massScalars) {
-                   const auto &massArray = *massScalars;
-                   for (int nn = 0; nn < nmscalars_; ++nn) {
-                           chemstate.xn[nn] = massArray[nn] / spmasses[nn]; // massScalars are partial densities (massFractions * rho)
-                }
-        }
+	if (massScalars) {
+		const auto &massArray = *massScalars;
+		for (int nn = 0; nn < nmscalars_; ++nn) {
+			chemstate.xn[nn] = massArray[nn] / spmasses[nn]; // massScalars are partial densities (massFractions * rho)
+		}
+	}
 
-        eos(eos_input_rp, chemstate);
-        Eint = chemstate.e * chemstate.rho;
+	eos(eos_input_rp, chemstate);
+	Eint = chemstate.e * chemstate.rho;
 #else
-           if constexpr (gamma_ != 1.0) {
-                   chem_eos_t estate;
-                   estate.rho = rho;
-		   estate.p = Pressure;
-                   estate.mu = mean_molecular_weight_ / C::m_u;
-                   eos(eos_input_rp, estate);
-                   Eint = estate.e * rho * boltzmann_constant_ / C::k_B;
-        }
+	if constexpr (gamma_ != 1.0) {
+		chem_eos_t estate;
+		estate.rho = rho;
+		estate.p = Pressure;
+		estate.mu = mean_molecular_weight_ / C::m_u;
+		eos(eos_input_rp, estate);
+		Eint = estate.e * rho * boltzmann_constant_ / C::k_B;
+	}
 #endif
-          return Eint;
+	return Eint;
 }
-
 
 template <typename problem_t>
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto
