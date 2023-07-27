@@ -204,7 +204,6 @@ template <typename problem_t> auto HydroSystem<problem_t>::maxSignalSpeedLocal(a
 					if constexpr (is_eos_isothermal()) {
 						cs = cs_iso_;
 					} else {
-						const auto P = ComputePressure(cons[bx], i, j, k);
 						cs = ComputeSoundSpeed(cons[bx], i, j, k);
 					}
 					return {cs + abs_vel};
