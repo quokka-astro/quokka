@@ -51,7 +51,7 @@ template <typename problem_t> class EOS
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
 	ComputePressure(amrex::Real rho, amrex::Real Eint, const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = {}) -> amrex::Real;
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
-	ComputeSoundSpeed(amrex::Real rho, amrex::Real Pres, const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = {}) -> amrex::Real;
+	ComputeSoundSpeed(amrex::Real rho, amrex::Real Pressure, const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = {}) -> amrex::Real;
 
       private:
 	static constexpr amrex::Real gamma_ = EOS_Traits<problem_t>::gamma;
@@ -188,7 +188,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputePressure(am
 	// return pressure for an ideal gas
 	amrex::Real P = NAN;
 #ifdef PRIMORDIAL_CHEM
-	eos_t chemstate; // cannot use burn_t because it does not have pressure
+	eos_t chemstate;
 	chemstate.rho = rho;
 	chemstate.e = Eint / rho;
 	// initialize array of number densities
@@ -219,7 +219,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputePressure(am
 }
 
 template <typename problem_t>
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeSoundSpeed(amrex::Real rho, amrex::Real Pres,
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeSoundSpeed(amrex::Real rho, amrex::Real Pressure,
 										const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars)
     -> amrex::Real
 {
@@ -229,7 +229,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeSoundSpeed(
 #ifdef PRIMORDIAL_CHEM
 	eos_t chemstate;
 	chemstate.rho = rho;
-	chemstate.p = Pres;
+	chemstate.p = Pressure;
 	// initialize array of number densities
 	for (int ii = 0; ii < NumSpec; ++ii) {
 		chemstate.xn[ii] = -1.0;
@@ -248,7 +248,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeSoundSpeed(
 	if constexpr (gamma_ != 1.0) {
 		chem_eos_t estate;
 		estate.rho = rho;
-		estate.p = Pres;
+		estate.p = Pressure;
 		estate.mu = mean_molecular_weight_ / C::m_u;
 		eos(eos_input_rp, estate);
 		cs = estate.cs;
