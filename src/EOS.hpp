@@ -218,44 +218,43 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputePressure(am
 	return P;
 }
 
-
 template <typename problem_t>
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeSoundSpeed(amrex::Real rho, amrex::Real Pres,
-                                                                                  const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars)
+										const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars)
     -> amrex::Real
 {
-        // return sound speed for an ideal gas
-        amrex::Real cs = NAN;
+	// return sound speed for an ideal gas
+	amrex::Real cs = NAN;
 
 #ifdef PRIMORDIAL_CHEM
-        eos_t chemstate;
-        chemstate.rho = rho;
-        chemstate.p = Pres;
-        // initialize array of number densities
-        for (int ii = 0; ii < NumSpec; ++ii) {
-                chemstate.xn[ii] = -1.0;
-        }
+	eos_t chemstate;
+	chemstate.rho = rho;
+	chemstate.p = Pres;
+	// initialize array of number densities
+	for (int ii = 0; ii < NumSpec; ++ii) {
+		chemstate.xn[ii] = -1.0;
+	}
 
-    if (massScalars) {
-                const auto &massArray = *massScalars;
-                for (int nn = 0; nn < nmscalars_; ++nn) {
-                        chemstate.xn[nn] = massArray[nn] / spmasses[nn]; // massScalars are partial densities (massFractions * rho)
-                }
-        }
+	if (massScalars) {
+		const auto &massArray = *massScalars;
+		for (int nn = 0; nn < nmscalars_; ++nn) {
+			chemstate.xn[nn] = massArray[nn] / spmasses[nn]; // massScalars are partial densities (massFractions * rho)
+		}
+	}
 
-    eos(eos_input_rp, chemstate);
-        cs = chemstate.cs;
+	eos(eos_input_rp, chemstate);
+	cs = chemstate.cs;
 #else
-         if constexpr (gamma_ != 1.0) {
-                chem_eos_t estate;
-                estate.rho = rho;
-                estate.p = Pres;
-                estate.mu = mean_molecular_weight_ / C::m_u;
-                eos(eos_input_rp, estate);
-                cs = estate.cs;
-        }
+	if constexpr (gamma_ != 1.0) {
+		chem_eos_t estate;
+		estate.rho = rho;
+		estate.p = Pres;
+		estate.mu = mean_molecular_weight_ / C::m_u;
+		eos(eos_input_rp, estate);
+		cs = estate.cs;
+	}
 #endif
-          return cs;
+	return cs;
 }
 
 } // namespace quokka
