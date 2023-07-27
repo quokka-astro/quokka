@@ -824,8 +824,11 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 				// (pressure_index is actually eint)
 				const double eint_L = x1LeftState(i, j, k, pressure_index);
 				const double eint_R = x1RightState(i, j, k, pressure_index);
-				P_L = rho_L * eint_L * (gamma_ - 1.0);
-				P_R = rho_R * eint_R * (gamma_ - 1.0);
+				amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(x1LeftState, i, j, k);
+				// P_L = rho_L * eint_L * (gamma_ - 1.0);
+				// P_R = rho_R * eint_R * (gamma_ - 1.0);
+				P_L = quokka::EOS<problem_t>::ComputePressure(rho_L, eint_L, massScalars);
+				P_R = quokka::EOS<problem_t>::ComputePressure(rho_R, eint_R, massScalars);
 
 				// auxiliary Eint is actually (auxiliary) specific internal energy
 				Eint_L = rho_L * x1LeftState(i, j, k, primEint_index);
