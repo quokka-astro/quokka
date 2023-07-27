@@ -78,8 +78,8 @@ template <> void RadhydroSimulation<ContactProblem>::setInitialConditionsOnGrid(
 		state_cc(i, j, k, HydroSystem<ContactProblem>::x1Momentum_index) = rho * vx;
 		state_cc(i, j, k, HydroSystem<ContactProblem>::x2Momentum_index) = 0.;
 		state_cc(i, j, k, HydroSystem<ContactProblem>::x3Momentum_index) = 0.;
-		state_cc(i, j, k, HydroSystem<ContactProblem>::energy_index) = P / (gamma - 1.) + 0.5 * rho * (vx * vx);
-		state_cc(i, j, k, HydroSystem<ContactProblem>::internalEnergy_index) = P / (gamma - 1.);
+		state_cc(i, j, k, HydroSystem<ContactProblem>::energy_index) = quokka::EOS<ContactProblem>::ComputeEintFromPres(rho, P) + 0.5 * rho * (vx * vx);
+		state_cc(i, j, k, HydroSystem<ContactProblem>::internalEnergy_index) = quokka::EOS<ContactProblem>::ComputeEintFromPres(rho, P);
 	});
 }
 
@@ -117,8 +117,8 @@ void RadhydroSimulation<ContactProblem>::computeReferenceSolution(amrex::MultiFa
 			stateExact(i, j, k, HydroSystem<ContactProblem>::x1Momentum_index) = rho * vx;
 			stateExact(i, j, k, HydroSystem<ContactProblem>::x2Momentum_index) = 0.;
 			stateExact(i, j, k, HydroSystem<ContactProblem>::x3Momentum_index) = 0.;
-			stateExact(i, j, k, HydroSystem<ContactProblem>::energy_index) = P / (gamma - 1.) + 0.5 * rho * (vx * vx);
-			stateExact(i, j, k, HydroSystem<ContactProblem>::internalEnergy_index) = P / (gamma - 1.);
+                        stateExact(i, j, k, HydroSystem<ContactProblem>::energy_index) = quokka::EOS<ContactProblem>::ComputeEintFromPres(rho, P) + 0.5 * rho * (vx * vx);
+                        stateExact(i, j, k, HydroSystem<ContactProblem>::internalEnergy_index) = quokka::EOS<ContactProblem>::ComputeEintFromPres(rho, P);
 		});
 	}
 
