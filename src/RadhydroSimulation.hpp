@@ -130,8 +130,8 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 		// read in runtime parameters
 		readParmParse();
 		// set gamma
-                amrex::ParmParse eos("eos");
-                eos.add("eos_gamma", quokka::EOS_Traits<problem_t>::gamma);
+		amrex::ParmParse eos("eos");
+		eos.add("eos_gamma", quokka::EOS_Traits<problem_t>::gamma);
 
 		// initialize Microphysics params
 		init_extern_parameters();
@@ -146,9 +146,9 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 		defineComponentNames();
 		// read in runtime parameters
 		readParmParse();
-                // set gamma
-                amrex::ParmParse eos("eos");
-                eos.add("eos_gamma", quokka::EOS_Traits<problem_t>::gamma);
+		// set gamma
+		amrex::ParmParse eos("eos");
+		eos.add("eos_gamma", quokka::EOS_Traits<problem_t>::gamma);
 
 		// initialize Microphysics params
 		init_extern_parameters();
