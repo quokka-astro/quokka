@@ -233,7 +233,6 @@ void HydroSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Re
 			cs = cs_iso_;
 		} else {
 			const auto P = ComputePressure(cons, i, j, k);
-			AMREX_ASSERT(!std::isnan(P));
 			cs = ComputeSoundSpeed(cons, i, j, k);
 		}
 		AMREX_ASSERT(cs > 0.);
