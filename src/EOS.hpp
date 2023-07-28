@@ -176,7 +176,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromPre
 		estate.p = Pressure;
 		estate.mu = mean_molecular_weight_ / C::m_u;
 		eos(eos_input_rp, estate);
-		Eint = estate.e * rho * boltzmann_constant_ / C::k_B;
+		Eint = estate.e * rho;
 	}
 #endif
 	return Eint;
