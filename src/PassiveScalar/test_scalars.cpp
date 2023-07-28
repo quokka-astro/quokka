@@ -70,7 +70,6 @@ template <> void RadhydroSimulation<ScalarProblem>::setInitialConditionsOnGrid(q
 			scalar = 0.0;
 		}
 
-		const auto gamma = quokka::EOS_Traits<ScalarProblem>::gamma;
 		for (int n = 0; n < state_cc.nComp(); ++n) {
 			state_cc(i, j, k, n) = 0.;
 		}
@@ -112,7 +111,6 @@ void RadhydroSimulation<ScalarProblem>::computeReferenceSolution(amrex::MultiFab
 				scalar = 0.0;
 			}
 
-			const auto gamma = quokka::EOS_Traits<ScalarProblem>::gamma;
 			for (int n = 0; n < ncomp; ++n) {
 				stateExact(i, j, k, n) = 0.;
 			}
