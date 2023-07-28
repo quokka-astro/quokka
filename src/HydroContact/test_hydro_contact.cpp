@@ -112,7 +112,6 @@ void RadhydroSimulation<ContactProblem>::computeReferenceSolution(amrex::MultiFa
 				stateExact(i, j, k, n) = 0.;
 			}
 
-			const auto gamma = quokka::EOS_Traits<ContactProblem>::gamma;
 			stateExact(i, j, k, HydroSystem<ContactProblem>::density_index) = rho;
 			stateExact(i, j, k, HydroSystem<ContactProblem>::x1Momentum_index) = rho * vx;
 			stateExact(i, j, k, HydroSystem<ContactProblem>::x2Momentum_index) = 0.;
