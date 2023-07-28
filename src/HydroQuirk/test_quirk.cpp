@@ -43,7 +43,7 @@ struct QuirkProblem {
 
 template <> struct quokka::EOS_Traits<QuirkProblem> {
 	static constexpr double gamma = 5. / 3.;
-	static constexpr double mean_molecular_weight = NAN;
+	static constexpr double mean_molecular_weight = 1.0;
 	static constexpr double boltzmann_constant = C::k_B;
 };
 
@@ -125,8 +125,8 @@ template <> void RadhydroSimulation<QuirkProblem>::setInitialConditionsOnGrid(qu
 		state_cc(i, j, k, HydroSystem<QuirkProblem>::x1Momentum_index) = rho * vx;
 		state_cc(i, j, k, HydroSystem<QuirkProblem>::x2Momentum_index) = rho * vy;
 		state_cc(i, j, k, HydroSystem<QuirkProblem>::x3Momentum_index) = rho * vz;
-		state_cc(i, j, k, HydroSystem<QuirkProblem>::energy_index) = P / (gamma - 1.) + 0.5 * rho * v_sq;
-		state_cc(i, j, k, HydroSystem<QuirkProblem>::internalEnergy_index) = P / (gamma - 1.);
+		state_cc(i, j, k, HydroSystem<QuirkProblem>::energy_index) = quokka::EOS<QuirkProblem>::ComputeEintFromPres(rho, P) + 0.5 * rho * v_sq;
+		state_cc(i, j, k, HydroSystem<QuirkProblem>::internalEnergy_index) = quokka::EOS<QuirkProblem>::ComputeEintFromPres(rho, P);
 	});
 }
 
