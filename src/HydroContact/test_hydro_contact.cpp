@@ -70,7 +70,6 @@ template <> void RadhydroSimulation<ContactProblem>::setInitialConditionsOnGrid(
 		AMREX_ASSERT(!std::isnan(rho));
 		AMREX_ASSERT(!std::isnan(P));
 
-		const auto gamma = quokka::EOS_Traits<ContactProblem>::gamma;
 		for (int n = 0; n < ncomp_cc; ++n) {
 			state_cc(i, j, k, n) = 0.;
 		}
