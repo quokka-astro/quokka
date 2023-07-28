@@ -120,7 +120,8 @@ void RadhydroSimulation<ScalarProblem>::computeReferenceSolution(amrex::MultiFab
 			stateExact(i, j, k, HydroSystem<ScalarProblem>::x1Momentum_index) = rho * vx;
 			stateExact(i, j, k, HydroSystem<ScalarProblem>::x2Momentum_index) = 0.;
 			stateExact(i, j, k, HydroSystem<ScalarProblem>::x3Momentum_index) = 0.;
-			stateExact(i, j, k, HydroSystem<ScalarProblem>::energy_index) = quokka::EOS<ScalarProblem>::ComputeEintFromPres(rho, P) + 0.5 * rho * (vx * vx);
+			stateExact(i, j, k, HydroSystem<ScalarProblem>::energy_index) =
+			    quokka::EOS<ScalarProblem>::ComputeEintFromPres(rho, P) + 0.5 * rho * (vx * vx);
 			stateExact(i, j, k, HydroSystem<ScalarProblem>::internalEnergy_index) = quokka::EOS<ScalarProblem>::ComputeEintFromPres(rho, P);
 			stateExact(i, j, k, HydroSystem<ScalarProblem>::scalar0_index) = scalar;
 		});
