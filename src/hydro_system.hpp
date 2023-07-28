@@ -294,10 +294,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePressure
 	const auto vz = pz / rho;
 	const auto kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
 	const auto thermal_energy = E - kinetic_energy;
-
 	amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
 	amrex::Real P = quokka::EOS<problem_t>::ComputePressure(rho, thermal_energy, massScalars);
-
 	return P;
 }
 
@@ -660,7 +658,6 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 		if (!HydroSystem<problem_t>::is_eos_isothermal()) {
 			// recompute gas energy (to prevent P < 0)
 			amrex::Real const Eint_star = Etot - 0.5 * rho_new * vsq;
-
 			amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(state[bx], i, j, k);
 			amrex::Real const P_star = quokka::EOS<problem_t>::ComputePressure(rho_new, Eint_star, massScalars);
 			amrex::Real P_new = P_star;
@@ -859,9 +856,9 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 				const double eint_L = x1LeftState(i, j, k, pressure_index);
 				const double eint_R = x1RightState(i, j, k, pressure_index);
 				amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(x1LeftState, i, j, k);
-				P_L = quokka::EOS<problem_t>::ComputePressure(rho_L, eint_L * rho_L, massScalars);
+				const double P_L = quokka::EOS<problem_t>::ComputePressure(rho_L, eint_L * rho_L, massScalars);
 				massScalars = RadSystem<problem_t>::ComputeMassScalars(x1RightState, i, j, k);
-				P_R = quokka::EOS<problem_t>::ComputePressure(rho_R, eint_R * rho_R, massScalars);
+				const double P_R = quokka::EOS<problem_t>::ComputePressure(rho_R, eint_R * rho_R, massScalars);
 
 				// auxiliary Eint is actually (auxiliary) specific internal energy
 				Eint_L = rho_L * x1LeftState(i, j, k, primEint_index);
