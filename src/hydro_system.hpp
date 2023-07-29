@@ -294,11 +294,13 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePressure
 	const auto vz = pz / rho;
 	const auto kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
 	const auto thermal_energy = E - kinetic_energy;
-	amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
+	amrex::Real P = NAN;
+
 	if constexpr (is_eos_isothermal()) {
-		amrex::Real P = rho * cs_iso_ * cs_iso_;
+		P = rho * cs_iso_ * cs_iso_;
 	} else {
-		amrex::Real P = quokka::EOS<problem_t>::ComputePressure(rho, thermal_energy, massScalars);
+		amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
+		P = quokka::EOS<problem_t>::ComputePressure(rho, thermal_energy, massScalars);
 	}
 	return P;
 }
