@@ -251,7 +251,12 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputePressure(am
 	if constexpr (gamma_ != 1.0) {
 		chem_eos_t estate;
 		estate.rho = rho;
-		estate.e = Eint / rho;
+		// if rho is 0, pass 0 to state.e
+		if (rho == 0.0) {
+			estate.e = 0;
+		} else {
+			estate.e = Eint / rho;
+		}
 		estate.mu = mean_molecular_weight_ / C::m_u;
 		eos(eos_input_re, estate);
 		P = estate.p;
