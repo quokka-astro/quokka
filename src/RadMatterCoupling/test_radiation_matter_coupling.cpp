@@ -31,8 +31,8 @@ template <> struct SimulationData<CouplingProblem> {
 };
 
 template <> struct quokka::EOS_Traits<CouplingProblem> {
-	static constexpr double mean_molecular_mass = quokka::hydrogen_mass_cgs;
-	static constexpr double boltzmann_constant = quokka::boltzmann_constant_cgs;
+	static constexpr double mean_molecular_mass = C::m_u;
+	static constexpr double boltzmann_constant = C::k_B;
 	static constexpr double gamma = 5. / 3.;
 };
 
