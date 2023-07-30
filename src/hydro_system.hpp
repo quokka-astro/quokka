@@ -493,20 +493,20 @@ void HydroSystem<problem_t>::ComputeFlatteningCoefficients(amrex::MultiFab const
 
 		if constexpr (reconstruct_eint) {
 			// compute (rho e) (gamma - 1)
-			amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(primVar, i + 2, j, k);
+			amrex::GpuArray<Real, nmscalars_> massScalars_plus2 = RadSystem<problem_t>::ComputeMassScalars(primVar, i + 2, j, k);
 			Pplus2 = quokka::EOS<problem_t>::ComputePressure(primVar(i + 2, j, k, primDensity_index),
-									 primVar(i + 2, j, k, primDensity_index) * Pplus2, massScalars);
-			massScalars = RadSystem<problem_t>::ComputeMassScalars(primVar, i + 1, j, k);
+									 primVar(i + 2, j, k, primDensity_index) * Pplus2, massScalars_plus2);
+			amrex::GpuArray<Real, nmscalars_> massScalars_plus1 = RadSystem<problem_t>::ComputeMassScalars(primVar, i + 1, j, k);
 			Pplus1 = quokka::EOS<problem_t>::ComputePressure(primVar(i + 1, j, k, primDensity_index),
-									 primVar(i + 1, j, k, primDensity_index) * Pplus1, massScalars);
-			massScalars = RadSystem<problem_t>::ComputeMassScalars(primVar, i, j, k);
+									 primVar(i + 1, j, k, primDensity_index) * Pplus1, massScalars_plus1);
+			amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(primVar, i, j, k);
 			P = quokka::EOS<problem_t>::ComputePressure(primVar(i, j, k, primDensity_index), primVar(i, j, k, primDensity_index) * P, massScalars);
-			massScalars = RadSystem<problem_t>::ComputeMassScalars(primVar, i - 1, j, k);
+			amrex::GpuArray<Real, nmscalars_> massScalars_minus1 = RadSystem<problem_t>::ComputeMassScalars(primVar, i - 1, j, k);
 			Pminus1 = quokka::EOS<problem_t>::ComputePressure(primVar(i - 1, j, k, primDensity_index),
-									  primVar(i - 1, j, k, primDensity_index) * Pminus1, massScalars);
-			massScalars = RadSystem<problem_t>::ComputeMassScalars(primVar, i - 2, j, k);
+									  primVar(i - 1, j, k, primDensity_index) * Pminus1, massScalars_minus1);
+			amrex::GpuArray<Real, nmscalars_> massScalars_minus2 = RadSystem<problem_t>::ComputeMassScalars(primVar, i - 2, j, k);
 			Pminus2 = quokka::EOS<problem_t>::ComputePressure(primVar(i - 2, j, k, primDensity_index),
-									  primVar(i - 2, j, k, primDensity_index) * Pminus2, massScalars);
+									  primVar(i - 2, j, k, primDensity_index) * Pminus2, massScalars_minus2);
 		}
 
 		if constexpr (is_eos_isothermal()) {
@@ -861,10 +861,10 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 				// (pressure_index is actually eint)
 				const double eint_L = x1LeftState(i, j, k, pressure_index);
 				const double eint_R = x1RightState(i, j, k, pressure_index);
-				amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(x1LeftState, i, j, k);
-				P_L = quokka::EOS<problem_t>::ComputePressure(rho_L, eint_L * rho_L, massScalars);
-				massScalars = RadSystem<problem_t>::ComputeMassScalars(x1RightState, i, j, k);
-				P_R = quokka::EOS<problem_t>::ComputePressure(rho_R, eint_R * rho_R, massScalars);
+				amrex::GpuArray<Real, nmscalars_> massScalars_L = RadSystem<problem_t>::ComputeMassScalars(x1LeftState, i, j, k);
+				P_L = quokka::EOS<problem_t>::ComputePressure(rho_L, eint_L * rho_L, massScalars_L);
+				amrex::GpuArray<Real, nmscalars_> massScalars_R = RadSystem<problem_t>::ComputeMassScalars(x1RightState, i, j, k);
+				P_R = quokka::EOS<problem_t>::ComputePressure(rho_R, eint_R * rho_R, massScalars_R);
 
 				// auxiliary Eint is actually (auxiliary) specific internal energy
 				Eint_L = rho_L * x1LeftState(i, j, k, primEint_index);
@@ -879,13 +879,13 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 				Eint_R = x1RightState(i, j, k, primEint_index);
 			}
 
-			amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(x1LeftState, i, j, k);
-			cs_L = quokka::EOS<problem_t>::ComputeSoundSpeed(rho_L, P_L, massScalars);
-			E_L = quokka::EOS<problem_t>::ComputeEintFromPres(rho_L, P_L, massScalars) + ke_L;
+			amrex::GpuArray<Real, nmscalars_> massScalars_L = RadSystem<problem_t>::ComputeMassScalars(x1LeftState, i, j, k);
+			cs_L = quokka::EOS<problem_t>::ComputeSoundSpeed(rho_L, P_L, massScalars_L);
+			E_L = quokka::EOS<problem_t>::ComputeEintFromPres(rho_L, P_L, massScalars_L) + ke_L;
 
-			massScalars = RadSystem<problem_t>::ComputeMassScalars(x1RightState, i, j, k);
-			cs_R = quokka::EOS<problem_t>::ComputeSoundSpeed(rho_R, P_R, massScalars);
-			E_R = quokka::EOS<problem_t>::ComputeEintFromPres(rho_R, P_R, massScalars) + ke_R;
+			amrex::GpuArray<Real, nmscalars_> massScalars_R = RadSystem<problem_t>::ComputeMassScalars(x1RightState, i, j, k);
+			cs_R = quokka::EOS<problem_t>::ComputeSoundSpeed(rho_R, P_R, massScalars_R);
+			E_R = quokka::EOS<problem_t>::ComputeEintFromPres(rho_R, P_R, massScalars_R) + ke_R;
 		}
 
 		AMREX_ASSERT(cs_L > 0.0);
