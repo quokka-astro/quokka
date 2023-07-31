@@ -499,6 +499,18 @@ void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::string cons
 			output[bx](i, j, k, ncomp) = nH;
 		});
 
+	} else if (dname == "mass") {
+		const int ncomp = ncomp_in;
+		auto const &output = mf.arrays();
+		auto const &state = state_new_[lev].const_arrays();
+		auto const dx = geom[lev].CellSizeArray();
+		const Real dvol = dx[0] * dx[1] * dx[2];
+
+		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			Real rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
+			output[bx](i, j, k, ncomp) = rho * dvol;
+		});
+
 	} else if (dname == "cloud_fraction") {
 		const int ncomp = ncomp_in;
 		auto const &output = mf.arrays();
@@ -530,6 +542,21 @@ void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::string cons
 			Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
 			Real const l_cool = ComputeCoolingLength(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
 			output[bx](i, j, k, ncomp) = l_cool / parsec_in_cm;
+		});
+	} else if (dname == "lab_velocity_x") {
+		const int ncomp = ncomp_in;
+		auto tables = userData_.cloudyTables.const_tables();
+		auto const &output = mf.arrays();
+		auto const &state = state_new_[lev].const_arrays();
+		const Real delta_vx = ::delta_vx;
+		
+		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			// compute observer velocity in km/s
+			Real const rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
+			Real const x1Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
+			Real const vx = x1Mom / rho;
+			Real const vx_lab = vx + delta_vx;
+			output[bx](i, j, k, ncomp) = vx_lab / 1.0e5; // km/s
 		});
 	}
 	amrex::Gpu::streamSynchronize();
