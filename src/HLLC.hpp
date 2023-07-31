@@ -7,9 +7,9 @@
 #include <AMReX_REAL.H>
 
 #include "ArrayView.hpp"
+#include "EOS.hpp"
 #include "HydroState.hpp"
 #include "valarray.hpp"
-#include "EOS.hpp"
 
 namespace quokka::Riemann
 {
@@ -44,8 +44,8 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars> cons
 
 		// equation A.5a of Kershaw+1998
 		// need specific internal energy here
-		const double C_tilde_rho = 0.5 * ((sL.Eint/sL.rho) + (sR.Eint/sR.rho) + sL.rho * dedr_L + sR.rho * dedr_R);
-		
+		const double C_tilde_rho = 0.5 * ((sL.Eint / sL.rho) + (sR.Eint / sR.rho) + sL.rho * dedr_L + sR.rho * dedr_R);
+
 		const double C_tilde_P = 1.0 / (gamma - 1.0);
 		// equation 4.12 of Kershaw+1998
 		cs_tilde = std::sqrt((1.0 / C_tilde_P) * (H_tilde - 0.5 * vsq_tilde - C_tilde_rho));
