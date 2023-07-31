@@ -194,13 +194,12 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(amrex::Multi
 			amrex::Real vx = vx_arr[i];
 			amrex::Real P = P_arr[i];
 
-			const auto gamma = quokka::EOS_Traits<ShocktubeProblem>::gamma;
 			stateExact(i, j, k, HydroSystem<ShocktubeProblem>::density_index) = rho;
 			stateExact(i, j, k, HydroSystem<ShocktubeProblem>::x1Momentum_index) = rho * vx;
 			stateExact(i, j, k, HydroSystem<ShocktubeProblem>::x2Momentum_index) = 0.;
 			stateExact(i, j, k, HydroSystem<ShocktubeProblem>::x3Momentum_index) = 0.;
-			stateExact(i, j, k, HydroSystem<ShocktubeProblem>::energy_index) = P / (gamma - 1.) + 0.5 * rho * (vx * vx);
-			stateExact(i, j, k, HydroSystem<ShocktubeProblem>::internalEnergy_index) = P / (gamma - 1.);
+			stateExact(i, j, k, HydroSystem<ShocktubeProblem>::energy_index) = quokka::EOS<ShocktubeProblem>::ComputeEintFromPres(rho, P) + 0.5 * rho * (vx * vx);
+			stateExact(i, j, k, HydroSystem<ShocktubeProblem>::internalEnergy_index) = quokka::EOS<ShocktubeProblem>::ComputeEintFromPres(rho, P);
 		});
 	}
 
@@ -221,7 +220,7 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(amrex::Multi
 
 			amrex::Real xvel = xmom / rho;
 			amrex::Real Eint = Egas - xmom * xmom / (2.0 * rho);
-			amrex::Real pressure = (quokka::EOS_Traits<ShocktubeProblem>::gamma - 1.) * Eint;
+			amrex::Real pressure = quokka::EOS<ContactProblem>::ComputePressure(rho, Eint);
 
 			d.at(i) = rho;
 			vx.at(i) = xvel;

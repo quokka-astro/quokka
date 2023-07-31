@@ -146,7 +146,7 @@ void RadhydroSimulation<ContactProblem>::computeReferenceSolution(amrex::MultiFa
 				const auto E = val_exact.at(HydroSystem<ContactProblem>::energy_index)[i];
 				const auto vx = xmom / rho;
 				const auto Eint = E - 0.5 * rho * (vx * vx);
-				const auto P = (quokka::EOS_Traits<ContactProblem>::gamma - 1.) * Eint;
+				const auto P = quokka::EOS<ContactProblem>::ComputePressure(rho, Eint);
 				d_exact.push_back(rho);
 				vx_exact.push_back(vx);
 				P_exact.push_back(P);
