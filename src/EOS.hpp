@@ -60,6 +60,14 @@ template <typename problem_t> class EOS
 	    -> amrex::Real;
 
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
+	ComputeeintPresDerivative(amrex::Real rho, amrex::Real P, const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = {})
+	    -> amrex::Real;
+
+	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
+	ComputeDensPresDerivative(amrex::Real rho, amrex::Real P, const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = {})
+	    -> amrex::Real;
+
+	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
 	ComputePressure(amrex::Real rho, amrex::Real Eint, const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = {}) -> amrex::Real;
 
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
@@ -268,6 +276,84 @@ EOS<problem_t>::ComputeeintDensDerivative(const amrex::Real rho, const amrex::Re
 	}
 #endif
 	return deint_dRho;
+}
+
+template <typename problem_t>
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto
+EOS<problem_t>::ComputeeintPresDerivative(const amrex::Real rho, const amrex::Real P, const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars)
+    -> amrex::Real
+{
+	// compute derivative of specific internal energy w/r/t density, given density and pressure
+	amrex::Real deint_dP = NAN;
+
+#ifdef PRIMORDIAL_CHEM
+	eos_t chemstate;
+	chemstate.rho = rho;
+	chemstate.p = P;
+	// initialize array of number densities
+	for (int ii = 0; ii < NumSpec; ++ii) {
+		chemstate.xn[ii] = -1.0;
+	}
+
+	if (massScalars) {
+		const auto &massArray = *massScalars;
+		for (int nn = 0; nn < nmscalars_; ++nn) {
+			chemstate.xn[nn] = massArray[nn] / spmasses[nn]; // massScalars are partial densities (massFractions * rho)
+		}
+	}
+
+	eos(eos_input_rp, chemstate);
+	deint_dP = 1.0 / chemstate.dpde;
+#else
+	if constexpr (gamma_ != 1.0) {
+		chem_eos_t estate;
+		estate.rho = rho;
+		estate.p = P;
+		estate.mu = mean_molecular_weight_ / C::m_u;
+		eos(eos_input_rp, estate);
+		deint_dP = 1.0 / estate.dpde;
+	}
+#endif
+	return deint_dP;
+}
+
+template <typename problem_t>
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto
+EOS<problem_t>::ComputeDensPresDerivative(const amrex::Real rho, const amrex::Real P, const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars)
+    -> amrex::Real
+{
+	// compute derivative of specific internal energy w/r/t density, given density and pressure
+	amrex::Real dRho_dP = NAN;
+
+#ifdef PRIMORDIAL_CHEM
+	eos_t chemstate;
+	chemstate.rho = rho;
+	chemstate.p = P;
+	// initialize array of number densities
+	for (int ii = 0; ii < NumSpec; ++ii) {
+		chemstate.xn[ii] = -1.0;
+	}
+
+	if (massScalars) {
+		const auto &massArray = *massScalars;
+		for (int nn = 0; nn < nmscalars_; ++nn) {
+			chemstate.xn[nn] = massArray[nn] / spmasses[nn]; // massScalars are partial densities (massFractions * rho)
+		}
+	}
+
+	eos(eos_input_rp, chemstate);
+	dRho_dP = 1.0 / (chemstate.dpdr * C::k_B / boltzmann_constant_);
+#else
+	if constexpr (gamma_ != 1.0) {
+		chem_eos_t estate;
+		estate.rho = rho;
+		estate.p = P;
+		estate.mu = mean_molecular_weight_ / C::m_u;
+		eos(eos_input_rp, estate);
+		dRho_dP = 1.0 / (estate.dpdr * C::k_B / boltzmann_constant_);
+	}
+#endif
+	return dRho_dP;
 }
 
 template <typename problem_t>
