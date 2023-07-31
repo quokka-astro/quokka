@@ -34,7 +34,7 @@ template <> struct SimulationData<ShocktubeProblem> {
 template <> struct quokka::EOS_Traits<ShocktubeProblem> {
 	static constexpr double gamma = 1.4;
 	static constexpr double mean_molecular_weight = NAN;
-	static constexpr double boltzmann_constant = quokka::boltzmann_constant_cgs;
+	static constexpr double boltzmann_constant = C::k_B;
 };
 
 template <> struct Physics_Traits<ShocktubeProblem> {

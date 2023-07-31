@@ -29,6 +29,7 @@
 #include "radiation_system.hpp"
 #include "test_primordial_chem.hpp"
 
+#include "actual_eos_data.H"
 #include "burn_type.H"
 #include "eos.H"
 #include "extern_parameters.H"
@@ -38,13 +39,6 @@ using amrex::Real;
 
 struct PrimordialChemTest {
 }; // dummy type to allow compile-type polymorphism via template specialization
-
-// Currently, microphysics uses its own EOS, and this one below is used by hydro. Need to only have one EOS at some point.
-template <> struct quokka::EOS_Traits<PrimordialChemTest> {
-	static constexpr double gamma = 5. / 3.; // default value
-	static constexpr double mean_molecular_weight = quokka::hydrogen_mass_cgs;
-	static constexpr double boltzmann_constant = quokka::boltzmann_constant_cgs;
-};
 
 template <> struct Physics_Traits<PrimordialChemTest> {
 	// cell-centred

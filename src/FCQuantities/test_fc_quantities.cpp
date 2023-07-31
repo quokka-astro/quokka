@@ -27,8 +27,8 @@ struct FCQuantities {
 
 template <> struct quokka::EOS_Traits<FCQuantities> {
 	static constexpr double gamma = 5. / 3.;
-	static constexpr double mean_molecular_weight = quokka::hydrogen_mass_cgs;
-	static constexpr double boltzmann_constant = quokka::boltzmann_constant_cgs;
+	static constexpr double mean_molecular_weight = C::m_u;
+	static constexpr double boltzmann_constant = C::k_B;
 };
 
 template <> struct Physics_Traits<FCQuantities> {

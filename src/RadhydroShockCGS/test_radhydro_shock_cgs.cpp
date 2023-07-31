@@ -22,10 +22,9 @@ struct ShockProblem {
 // parameters taken from Section 9.5 of Skinner et al. (2019)
 // [The Astrophysical Journal Supplement Series, 241:7 (27pp), 2019 March]
 
-constexpr double a_rad = 7.5646e-15;  // erg cm^-3 K^-4
-constexpr double c = 2.99792458e10;   // cm s^-1
-constexpr double k_B = 1.380658e-16;  // erg K^-1
-constexpr double m_H = 1.6726231e-24; // mass of hydrogen atom [g]
+constexpr double a_rad = 7.5646e-15; // erg cm^-3 K^-4
+constexpr double c = 2.99792458e10;  // cm s^-1
+constexpr double k_B = C::k_B;	     // erg K^-1
 
 // constexpr double P0 = 1.0e-4;	// equal to P_0 in dimensionless units
 // constexpr double sigma_a = 1.0e6;	// absorption cross section
@@ -34,8 +33,7 @@ constexpr double c_s0 = 1.73e7; // adiabatic sound speed [cm s^-1]
 
 constexpr double kappa = 577.0; // "opacity" == rho*kappa [cm^-1] (!!)
 constexpr double gamma_gas = (5. / 3.);
-constexpr double mu = m_H;			       // mean molecular weight [grams]
-constexpr double c_v = k_B / (mu * (gamma_gas - 1.0)); // specific heat [erg g^-1 K^-1]
+constexpr double c_v = k_B / ((C::m_p + C::m_e) * (gamma_gas - 1.0)); // specific heat [erg g^-1 K^-1]
 
 constexpr double T0 = 2.18e6; // K
 constexpr double rho0 = 5.69; // g cm^-3
@@ -65,7 +63,7 @@ template <> struct RadSystem_Traits<ShockProblem> {
 };
 
 template <> struct quokka::EOS_Traits<ShockProblem> {
-	static constexpr double mean_molecular_weight = m_H;
+	static constexpr double mean_molecular_weight = C::m_p + C::m_e;
 	static constexpr double boltzmann_constant = k_B;
 	static constexpr double gamma = gamma_gas;
 };
