@@ -50,9 +50,6 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars, N_ms
 
 		// equation 4.12 of Kershaw+1998
 		cs_tilde = std::sqrt((1.0 / C_tilde_P) * (H_tilde - 0.5 * vsq_tilde - C_tilde_rho));
-		amrex::Print() << "curr cs " << cs_tilde << "  " << C_tilde_rho << "  " << C_tilde_P << std::endl;
-		cs_tilde = std::sqrt((H_tilde - 0.5 * vsq_tilde - C_tilde_rho) / C_tilde_P);
-		amrex::Print() << "new cs " << cs_tilde << "  " << C_tilde_rho << "  " << C_tilde_P << std::endl;
 
 	} else {
 		cs_tilde = 0.5 * (sL.cs + sR.cs);
