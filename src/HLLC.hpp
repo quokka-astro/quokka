@@ -50,7 +50,6 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars, N_ms
 		// equation A.5a of Kershaw+1998
 		// need specific internal energy here
 		const double C_tilde_rho = 0.5 * ((sL.Eint / sL.rho) + (sR.Eint / sR.rho) + sL.rho * dedr_L + sR.rho * dedr_R);
-		amrex::Print() << "C_tilde_rho is " << C_tilde_rho << "  " << sL.Eint << "  " << sR.Eint << std::endl;
 
 		dedp_L = quokka::EOS<problem_t>::ComputeeintPresDerivative(sL.rho, sL.P, sL.massScalar);
 		dedp_R = quokka::EOS<problem_t>::ComputeeintPresDerivative(sR.rho, sR.P, sR.massScalar);
@@ -58,6 +57,7 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars, N_ms
 		drdp_L = quokka::EOS<problem_t>::ComputeDensPresDerivative(sL.rho, sL.P, sL.massScalar);
 		drdp_R = quokka::EOS<problem_t>::ComputeDensPresDerivative(sR.rho, sR.P, sR.massScalar);
 
+		// equation A.5b of Kershaw+1998
 		const double C_tilde_P = 0.5 * ((sL.Eint / sL.rho) * drdp_L + (sR.Eint / sR.rho) * drdp_R + sL.rho * dedp_L + sR.rho * dedp_R);
 
 		// equation 4.12 of Kershaw+1998
