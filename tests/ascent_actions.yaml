@@ -25,6 +25,12 @@
         params: 
           field: "temperature"
           iso_values: 1.0e4
+    mass_pl:
+      f1:
+        type: "expression"
+        params:
+          expression: "topo('mesh').cell.volume * field('gasDensity')"
+          name: "mass"
 -
   action: "add_extracts"
   extracts:
@@ -76,5 +82,15 @@
       params: 
         expression: "min(field('cooling_length'))"
         name: "min_cooling_length"
+    hist1: # TODO: explicitly specify bins
+      params:
+        expression: "binning('mass', 'sum', [axis('x-velocity', num_bins=32), axis('temperature', num_bins=32)])"
+        name: "hist_velocity_temp"
+      pipeline: x_velocity_pl
+    hist2: # TODO: explicitly specify bins
+      params:
+        expression: "binning('mass', 'sum', [axis('x-velocity', num_bins=32), axis('nH', num_bins=32)])"
+        name: "hist_velocity_nH"
+      pipeline: x_velocity_pl
 - 
   action: "save_session"
