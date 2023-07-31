@@ -36,7 +36,10 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars> cons
 	double cs_tilde = NAN;
 	if (gamma != 1.0) {
 		// TODO(ben): implement Roe average for general EOS
-		cs_tilde = std::sqrt((gamma - 1.) * (H_tilde - 0.5 * vsq_tilde));
+		const double C_star_P = 1.0 / (gamma -1.0);
+		const double C_star_rho = 0.0;
+		// equation 4.12 of Kershaw+1998
+		cs_tilde = std::sqrt((1.0/C_star_P) * (H_tilde - 0.5*vsq_tilde - C_star_rho));
 	} else {
 		cs_tilde = 0.5 * (sL.cs + sR.cs);
 	}
