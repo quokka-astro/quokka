@@ -5,7 +5,7 @@
 
 namespace quokka
 {
-template <int N> struct HydroState {
+template <int Nall, int Nmass> struct HydroState {
 	double rho;			       // density
 	double u;			       // normal velocity component
 	double v;			       // transverse velocity component
@@ -14,8 +14,8 @@ template <int N> struct HydroState {
 	double cs;			       // adiabatic sound speed
 	double E;			       // total energy density
 	double Eint;			       // internal energy density
-	std::array<double, N> scalar;	       // passive scalars
-	amrex::GpuArray<double, N> massScalar; // mass scalars
+	std::array<double, Nall> scalar;	       // passive scalars
+	amrex::GpuArray<double, Nmass> massScalar; // mass scalars
 };
 
 } // namespace quokka
