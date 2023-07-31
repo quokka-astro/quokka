@@ -44,18 +44,12 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars, N_ms
 
 	if (gamma != 1.0) {
 
-		dedr_L = quokka::EOS<problem_t>::ComputeeintDensDerivative(sL.rho, sL.P, sL.massScalar);
-		dedr_R = quokka::EOS<problem_t>::ComputeeintDensDerivative(sR.rho, sR.P, sR.massScalar);
+		auto [dedr_L, dedp_L, drdp_L] = quokka::EOS<problem_t>::ComputeOtherDerivatives(sL.rho, sL.P, sL.massScalar);
+		auto [dedr_R, dedp_R, drdp_R] = quokka::EOS<problem_t>::ComputeOtherDerivatives(sR.rho, sR.P, sR.massScalar);
 
 		// equation A.5a of Kershaw+1998
 		// need specific internal energy here
 		const double C_tilde_rho = 0.5 * ((sL.Eint / sL.rho) + (sR.Eint / sR.rho) + sL.rho * dedr_L + sR.rho * dedr_R);
-
-		dedp_L = quokka::EOS<problem_t>::ComputeeintPresDerivative(sL.rho, sL.P, sL.massScalar);
-		dedp_R = quokka::EOS<problem_t>::ComputeeintPresDerivative(sR.rho, sR.P, sR.massScalar);
-
-		drdp_L = quokka::EOS<problem_t>::ComputeDensPresDerivative(sL.rho, sL.P, sL.massScalar);
-		drdp_R = quokka::EOS<problem_t>::ComputeDensPresDerivative(sR.rho, sR.P, sR.massScalar);
 
 		// equation A.5b of Kershaw+1998
 		const double C_tilde_P = 0.5 * ((sL.Eint / sL.rho) * drdp_L + (sR.Eint / sR.rho) * drdp_R + sL.rho * dedp_L + sR.rho * dedp_R);
