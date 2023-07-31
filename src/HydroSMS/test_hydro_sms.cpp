@@ -198,7 +198,8 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(amrex::Multi
 			stateExact(i, j, k, HydroSystem<ShocktubeProblem>::x1Momentum_index) = rho * vx;
 			stateExact(i, j, k, HydroSystem<ShocktubeProblem>::x2Momentum_index) = 0.;
 			stateExact(i, j, k, HydroSystem<ShocktubeProblem>::x3Momentum_index) = 0.;
-			stateExact(i, j, k, HydroSystem<ShocktubeProblem>::energy_index) = quokka::EOS<ShocktubeProblem>::ComputeEintFromPres(rho, P) + 0.5 * rho * (vx * vx);
+			stateExact(i, j, k, HydroSystem<ShocktubeProblem>::energy_index) =
+			    quokka::EOS<ShocktubeProblem>::ComputeEintFromPres(rho, P) + 0.5 * rho * (vx * vx);
 			stateExact(i, j, k, HydroSystem<ShocktubeProblem>::internalEnergy_index) = quokka::EOS<ShocktubeProblem>::ComputeEintFromPres(rho, P);
 		});
 	}
