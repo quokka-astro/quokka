@@ -15,6 +15,7 @@ template <int N> struct HydroState {
 	double E;		      // total energy density
 	double Eint;		      // internal energy density
 	std::array<double, N> scalar; // passive scalars
+	std::array<double, N> massScalar; // mass scalars
 };
 
 } // namespace quokka

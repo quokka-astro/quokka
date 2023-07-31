@@ -937,12 +937,17 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		sR.E = E_R;
 		sR.Eint = Eint_R;
 
-		// The remaining components are passive scalars, so just copy them from
+		// The remaining components are mass scalars and passive scalars, so just copy them from
 		// x1LeftState and x1RightState into the (left, right) state vectors U_L and
 		// U_R
 		for (int n = 0; n < nscalars_; ++n) {
 			sL.scalar[n] = x1LeftState(i, j, k, scalar0_index + n);
 			sR.scalar[n] = x1RightState(i, j, k, scalar0_index + n);
+			// also store mass scalars separately
+			if (n < nmscalars_) {
+				sL.massScalar[n] = x1LeftState(i, j, k, scalar0_index + n);
+				sR.massScalar[n] = x1RightState(i, j, k, scalar0_index + n);
+			}
 		}
 
 		// difference in normal velocity along normal axis
