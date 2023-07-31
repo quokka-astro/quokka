@@ -221,7 +221,7 @@ void RadhydroSimulation<ShocktubeProblem>::computeReferenceSolution(amrex::Multi
 
 			amrex::Real xvel = xmom / rho;
 			amrex::Real Eint = Egas - xmom * xmom / (2.0 * rho);
-			amrex::Real pressure = quokka::EOS<ContactProblem>::ComputePressure(rho, Eint);
+			amrex::Real pressure = quokka::EOS<ShocktubeProblem>::ComputePressure(rho, Eint);
 
 			d.at(i) = rho;
 			vx.at(i) = xvel;
