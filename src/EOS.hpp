@@ -232,8 +232,8 @@ EOS<problem_t>::ComputeEintTempDerivative(const amrex::Real rho, const amrex::Re
 }
 
 template <typename problem_t>
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto
-EOS<problem_t>::ComputeOtherDerivatives(const amrex::Real rho, const amrex::Real P, const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars)
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeOtherDerivatives(const amrex::Real rho, const amrex::Real P,
+										      const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars)
 {
 	// compute derivative of specific internal energy w/r/t density, given density and pressure
 	amrex::Real deint_dRho = NAN;
@@ -277,7 +277,6 @@ EOS<problem_t>::ComputeOtherDerivatives(const amrex::Real rho, const amrex::Real
 #endif
 	return std::make_tuple(deint_dRho, deint_dP, dRho_dP);
 }
-
 
 template <typename problem_t>
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputePressure(amrex::Real rho, amrex::Real Eint,
