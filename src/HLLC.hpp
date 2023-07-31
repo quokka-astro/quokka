@@ -9,6 +9,7 @@
 #include "ArrayView.hpp"
 #include "HydroState.hpp"
 #include "valarray.hpp"
+#include "EOS.hpp"
 
 namespace quokka::Riemann
 {
@@ -17,7 +18,7 @@ namespace quokka::Riemann
 //  Minoshima & Miyoshi, "A low-dissipation HLLD approximate Riemann solver
 //  	for a very wide range of Mach numbers," JCP (2021).]
 //
-template <int N_scalars, int fluxdim>
+template <typename problem_t, int N_scalars, int fluxdim>
 AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars> const &sL, quokka::HydroState<N_scalars> const &sR, const double gamma,
 					      const double du, const double dw) -> quokka::valarray<double, fluxdim>
 {
@@ -34,10 +35,18 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars> cons
 	const double H_R = (sR.E + sR.P) / sR.rho; // sR specific enthalpy
 	const double H_tilde = (wl * H_L + wr * H_R) * norm;
 	double cs_tilde = NAN;
+	double dedr_L = NAN;
+	double dedr_R = NAN;
 	if (gamma != 1.0) {
-		// TODO(ben): implement Roe average for general EOS
+
+		dedr_L = quokka::EOS<problem_t>::ComputeeintDensDerivative(sL.rho, sL.P, sL.massScalar);
+		dedr_R = quokka::EOS<problem_t>::ComputeeintDensDerivative(sR.rho, sR.P, sR.massScalar);
+
+		// equation A.5a of Kershaw+1998
+		// need specific internal energy here
+		const double C_tilde_rho = 0.5 * ((sL.Eint/sL.rho) + (sR.Eint/sR.rho) + sL.rho * dedr_L + sR.rho * dedr_R);
+		
 		const double C_tilde_P = 1.0 / (gamma - 1.0);
-		const double C_tilde_rho = 0.0;
 		// equation 4.12 of Kershaw+1998
 		cs_tilde = std::sqrt((1.0 / C_tilde_P) * (H_tilde - 0.5 * vsq_tilde - C_tilde_rho));
 	} else {
