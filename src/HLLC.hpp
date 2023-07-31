@@ -58,7 +58,7 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars, N_ms
 		drdp_L = quokka::EOS<problem_t>::ComputeDensPresDerivative(sL.rho, sL.P, sL.massScalar);
 		drdp_R = quokka::EOS<problem_t>::ComputeDensPresDerivative(sR.rho, sR.P, sR.massScalar);
 
-		const double C_tilde_P = 0.5 * ((sL.Eint/sL.rho)*drdp_L + (sR.Eint/sR.rho)*drdp_R + sL.rho * dedp_L + sR.rho * dedp_R);
+		const double C_tilde_P = 0.5 * ((sL.Eint / sL.rho) * drdp_L + (sR.Eint / sR.rho) * drdp_R + sL.rho * dedp_L + sR.rho * dedp_R);
 
 		// equation 4.12 of Kershaw+1998
 		cs_tilde = std::sqrt((1.0 / C_tilde_P) * (H_tilde - 0.5 * vsq_tilde - C_tilde_rho));
