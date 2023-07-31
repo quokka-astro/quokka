@@ -35,12 +35,6 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars, N_ms
 	const double H_R = (sR.E + sR.P) / sR.rho; // sR specific enthalpy
 	const double H_tilde = (wl * H_L + wr * H_R) * norm;
 	double cs_tilde = NAN;
-	double dedr_L = NAN;
-	double dedr_R = NAN;
-	double dedp_L = NAN;
-	double dedp_R = NAN;
-	double drdp_L = NAN;
-	double drdp_R = NAN;
 
 	if (gamma != 1.0) {
 
@@ -56,6 +50,10 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars, N_ms
 
 		// equation 4.12 of Kershaw+1998
 		cs_tilde = std::sqrt((1.0 / C_tilde_P) * (H_tilde - 0.5 * vsq_tilde - C_tilde_rho));
+		amrex::Print() << "curr cs " << cs_tilde << "  " << C_tilde_rho << "  " << C_tilde_P << std::endl;
+		cs_tilde = std::sqrt((H_tilde - 0.5 * vsq_tilde - C_tilde_rho) / C_tilde_P);
+		amrex::Print() << "new cs " << cs_tilde << "  " << C_tilde_rho << "  " << C_tilde_P << std::endl;
+
 	} else {
 		cs_tilde = 0.5 * (sL.cs + sR.cs);
 	}
