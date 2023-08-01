@@ -242,7 +242,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeOtherDeriva
 	// compute derivative of density w/r/t pressure, given density and pressure
 	amrex::Real dRho_dP = NAN;
 	// compute derivative of pressure w/r/t density at constant entropy, given density and pressure (needed for the fundamental derivative G)
-	amrex:: Real dP_dRho_s = NAN;
+	amrex::Real dP_dRho_s = NAN;
 	amrex::Real G_gamma = NAN;
 	// compute second derivative of pressure w/r/t density at constant entropy, given density and pressure (needed for the fundamental derivative G)
 	amrex::Real d2P_dRho2_s = NAN;

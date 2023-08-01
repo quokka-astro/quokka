@@ -57,8 +57,10 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars, N_ms
 		// equation 4.12 of Kershaw+1998
 		cs_tilde = std::sqrt((1.0 / C_tilde_P) * (H_tilde - 0.5 * vsq_tilde - C_tilde_rho));
 
-		const double G_L = 0.5 * (G_gamma_L + 1.0 + (std::pow(sL.rho, 2)/(sL.P*G_gamma_L))*d2pdr2_s_L + (sL.rho/(sL.P*G_gamma_L))*dpdr_s_L - (std::pow(sL.rho/sL.P, 2)/G_gamma_L)*std::pow(dpdr_s_L, 2)); // 'fundamental derivative' for ideal gases
-		const double G_R = 0.5 * (G_gamma_R + 1.0 + (std::pow(sR.rho, 2)/(sR.P*G_gamma_R))*d2pdr2_s_R + (sR.rho/(sR.P*G_gamma_R))*dpdr_s_R - (std::pow(sR.rho/sR.P, 2)/G_gamma_R)*std::pow(dpdr_s_R, 2));
+		const double G_L = 0.5 * (G_gamma_L + 1.0 + (std::pow(sL.rho, 2) / (sL.P * G_gamma_L)) * d2pdr2_s_L + (sL.rho / (sL.P * G_gamma_L)) * dpdr_s_L -
+					  (std::pow(sL.rho / sL.P, 2) / G_gamma_L) * std::pow(dpdr_s_L, 2)); // 'fundamental derivative' for ideal gases
+		const double G_R = 0.5 * (G_gamma_R + 1.0 + (std::pow(sR.rho, 2) / (sR.P * G_gamma_R)) * d2pdr2_s_R + (sR.rho / (sR.P * G_gamma_R)) * dpdr_s_R -
+					  (std::pow(sR.rho / sR.P, 2) / G_gamma_R) * std::pow(dpdr_s_R, 2));
 
 		const double s_NL = 0.5 * G_L * std::max(dU, 0.); // second-order wavespeed correction
 		const double s_NR = 0.5 * G_R * std::max(dU, 0.);
