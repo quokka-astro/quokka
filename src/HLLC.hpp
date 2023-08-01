@@ -36,10 +36,16 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars, N_ms
 	const double H_tilde = (wl * H_L + wr * H_R) * norm;
 	double cs_tilde = NAN;
 
+        // compute nonlinear wavespeed correction [Rider, Computers & Fluids 28 (1999) 741-777]
+        // (Only applicable in compressions. Significantly reduces slow-moving shock oscillations.)
+
+        const double dU = sL.u - sR.u;
+	double S_L = NAN;
+	double S_R = NAN;
 	if (gamma != 1.0) {
 
-		auto [dedr_L, dedp_L, drdp_L] = quokka::EOS<problem_t>::ComputeOtherDerivatives(sL.rho, sL.P, sL.massScalar);
-		auto [dedr_R, dedp_R, drdp_R] = quokka::EOS<problem_t>::ComputeOtherDerivatives(sR.rho, sR.P, sR.massScalar);
+		auto [dedr_L, dedp_L, drdp_L, G_gamma_L] = quokka::EOS<problem_t>::ComputeOtherDerivatives(sL.rho, sL.P, sL.massScalar);
+		auto [dedr_R, dedp_R, drdp_R, G_gamma_R] = quokka::EOS<problem_t>::ComputeOtherDerivatives(sR.rho, sR.P, sR.massScalar);
 
 		// equation A.5a of Kershaw+1998
 		// need specific internal energy here
@@ -51,21 +57,45 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars, N_ms
 		// equation 4.12 of Kershaw+1998
 		cs_tilde = std::sqrt((1.0 / C_tilde_P) * (H_tilde - 0.5 * vsq_tilde - C_tilde_rho));
 
+		const double G_L = 0.5 * (G_gamma_L + 1.);              // 'fundamental derivative' for ideal gases
+		const double G_R = 0.5 * (G_gamma_R + 1.);              // 'fundamental derivative' for ideal gases
+
+		const double s_NL = 0.5 * G_L * std::max(dU, 0.); // second-order wavespeed correction
+		const double s_NR = 0.5 * G_R * std::max(dU, 0.);
+
+		// compute wave speeds following Batten et al. (1997)
+		S_L = std::min(sL.u - (sL.cs + s_NL), u_tilde - (cs_tilde + s_NL));
+		S_R = std::max(sR.u + (sR.cs + s_NR), u_tilde + (cs_tilde + s_NR));
+
 	} else {
 		cs_tilde = 0.5 * (sL.cs + sR.cs);
+		const double G_gamma_L = 1.0;
+		const double G_gamma_R = 1.0;
+
+		const double G_L = 0.5 * (G_gamma_L + 1.);
+		const double G_R = 0.5 * (G_gamma_R + 1.);
+
+		const double s_NL = 0.5 * G_L * std::max(dU, 0.);
+		const double s_NR = 0.5 * G_R * std::max(dU, 0.);
+
+		S_L = std::min(sL.u - (sL.cs + s_NL), u_tilde - (cs_tilde + s_NL));
+		S_R = std::max(sR.u + (sR.cs + s_NR), u_tilde + (cs_tilde + s_NR));
 	}
 
 	// compute nonlinear wavespeed correction [Rider, Computers & Fluids 28 (1999) 741-777]
 	// (Only applicable in compressions. Significantly reduces slow-moving shock oscillations.)
 
-	const double dU = sL.u - sR.u;
-	const double G = 0.5 * (gamma + 1.);		// 'fundamental derivative' for ideal gases
-	const double s_NL = 0.5 * G * std::max(dU, 0.); // second-order wavespeed correction
+	// const double dU = sL.u - sR.u;
+	// const double G_L = 0.5 * (G_gamma_L + 1.);		// 'fundamental derivative' for ideal gases
+	// const double G_R = 0.5 * (G_gamma_R + 1.);
+	// const double s_NL = 0.5 * G_L * std::max(dU, 0.); // second-order wavespeed correction
+	// const double s_NR = 0.5 * G_R * std::max(dU, 0.);
+	// amrex::Print() << "GL is " << G_L << "  " << G_R << "  " << s_NL << "  " << s_NR << std::endl;
 
 	// compute wave speeds following Batten et al. (1997)
 
-	const double S_L = std::min(sL.u - (sL.cs + s_NL), u_tilde - (cs_tilde + s_NL));
-	const double S_R = std::max(sR.u + (sR.cs + s_NL), u_tilde + (cs_tilde + s_NL));
+	// const double S_L = std::min(sL.u - (sL.cs + s_NL), u_tilde - (cs_tilde + s_NL));
+	// const double S_R = std::max(sR.u + (sR.cs + s_NL), u_tilde + (cs_tilde + s_NL));
 
 	// carbuncle correction [Eq. 10 of Minoshima & Miyoshi (2021)]
 
