@@ -241,8 +241,11 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeOtherDeriva
 	amrex::Real deint_dP = NAN;
 	// compute derivative of density w/r/t pressure, given density and pressure
 	amrex::Real dRho_dP = NAN;
-	// compute derivative of pressure w/r/t density, given density and pressure (needed for the fundamental derivative G)
+	// compute derivative of pressure w/r/t density at constant entropy, given density and pressure (needed for the fundamental derivative G)
+	amrex:: Real dP_dRho_s = NAN;
 	amrex::Real G_gamma = NAN;
+	// compute second derivative of pressure w/r/t density at constant entropy, given density and pressure (needed for the fundamental derivative G)
+	amrex::Real d2P_dRho2_s = NAN;
 
 #ifdef PRIMORDIAL_CHEM
 	eos_t chemstate;
@@ -264,7 +267,9 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeOtherDeriva
 	deint_dRho = chemstate.dedr;
 	deint_dP = 1.0 / chemstate.dpde;
 	dRho_dP = 1.0 / (chemstate.dpdr * C::k_B / boltzmann_constant_);
-	G_gamma = (chemstate.cs * chemstate.cs) * rho / P;
+	dP_dRho_s = chemstate.cs * chemstate.cs;
+	G_gamma = dP_dRho_s * rho / P;
+	d2P_dRho2_s = chemstate.d2pdr2_s;
 
 #else
 	if constexpr (gamma_ != 1.0) {
@@ -276,10 +281,12 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeOtherDeriva
 		deint_dRho = estate.dedr;
 		deint_dP = 1.0 / estate.dpde;
 		dRho_dP = 1.0 / (estate.dpdr * C::k_B / boltzmann_constant_);
-		G_gamma = (estate.cs * estate.cs) * rho / P;
+		dP_dRho_s = estate.cs * estate.cs;
+		G_gamma = dP_dRho_s * rho / P;
+		d2P_dRho2_s = estate.d2pdr2_s;
 	}
 #endif
-	return std::make_tuple(deint_dRho, deint_dP, dRho_dP, G_gamma);
+	return std::make_tuple(deint_dRho, deint_dP, dRho_dP, dP_dRho_s, G_gamma, d2P_dRho2_s);
 }
 
 template <typename problem_t>
