@@ -9,6 +9,7 @@
 
 #include <cmath>
 #include <optional>
+#include <tuple>
 
 #include "AMReX_Array.H"
 #include "AMReX_GpuQualifiers.H"
@@ -43,16 +44,24 @@ template <typename problem_t> class EOS
 	static constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
 	ComputeTgasFromEint(amrex::Real rho, amrex::Real Eint, const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = {}) -> amrex::Real;
+
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
 	ComputeEintFromTgas(amrex::Real rho, amrex::Real Tgas, const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = {}) -> amrex::Real;
+
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
 	ComputeEintFromPres(amrex::Real rho, amrex::Real Pressure, const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = {})
 	    -> amrex::Real;
+
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
 	ComputeEintTempDerivative(amrex::Real rho, amrex::Real Tgas, const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = {})
 	    -> amrex::Real;
+
+	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
+	ComputeOtherDerivatives(amrex::Real rho, amrex::Real P, const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = {});
+
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
 	ComputePressure(amrex::Real rho, amrex::Real Eint, const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = {}) -> amrex::Real;
+
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
 	ComputeSoundSpeed(amrex::Real rho, amrex::Real Pressure, const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = {}) -> amrex::Real;
 
@@ -187,7 +196,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto
 EOS<problem_t>::ComputeEintTempDerivative(const amrex::Real rho, const amrex::Real Tgas,
 					  const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars) -> amrex::Real
 {
-	// compute derivative of internal energy w/r/t temperature
+	// compute derivative of internal energy w/r/t temperature, given density and temperature
 	amrex::Real dEint_dT = NAN;
 
 #ifdef PRIMORDIAL_CHEM
@@ -220,6 +229,61 @@ EOS<problem_t>::ComputeEintTempDerivative(const amrex::Real rho, const amrex::Re
 	}
 #endif
 	return dEint_dT;
+}
+
+template <typename problem_t>
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeOtherDerivatives(const amrex::Real rho, const amrex::Real P,
+										      const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars)
+{
+	// compute derivative of specific internal energy w/r/t density, given density and pressure
+	amrex::Real deint_dRho = NAN;
+	// compute derivative of specific internal energy w/r/t density, given density and pressure
+	amrex::Real deint_dP = NAN;
+	// compute derivative of density w/r/t pressure, given density and pressure
+	amrex::Real dRho_dP = NAN;
+	// compute derivative of pressure w/r/t density at constant entropy, given density and pressure (needed for the fundamental derivative G)
+	amrex::Real dP_dRho_s = NAN;
+	// fundamental derivative
+	amrex::Real G = NAN;
+
+#ifdef PRIMORDIAL_CHEM
+	eos_t chemstate;
+	chemstate.rho = rho;
+	chemstate.p = P;
+	// initialize array of number densities
+	for (int ii = 0; ii < NumSpec; ++ii) {
+		chemstate.xn[ii] = -1.0;
+	}
+
+	if (massScalars) {
+		const auto &massArray = *massScalars;
+		for (int nn = 0; nn < nmscalars_; ++nn) {
+			chemstate.xn[nn] = massArray[nn] / spmasses[nn]; // massScalars are partial densities (massFractions * rho)
+		}
+	}
+
+	eos(eos_input_rp, chemstate);
+	deint_dRho = chemstate.dedr;
+	deint_dP = 1.0 / chemstate.dpde;
+	dRho_dP = 1.0 / (chemstate.dpdr * C::k_B / boltzmann_constant_);
+	dP_dRho_s = chemstate.cs * chemstate.cs;
+	G = chemstate.G;
+
+#else
+	if constexpr (gamma_ != 1.0) {
+		chem_eos_t estate;
+		estate.rho = rho;
+		estate.p = P;
+		estate.mu = mean_molecular_weight_ / C::m_u;
+		eos(eos_input_rp, estate);
+		deint_dRho = estate.dedr;
+		deint_dP = 1.0 / estate.dpde;
+		dRho_dP = 1.0 / (estate.dpdr * C::k_B / boltzmann_constant_);
+		dP_dRho_s = estate.cs * estate.cs;
+		G = estate.G;
+	}
+#endif
+	return std::make_tuple(deint_dRho, deint_dP, dRho_dP, dP_dRho_s, G);
 }
 
 template <typename problem_t>

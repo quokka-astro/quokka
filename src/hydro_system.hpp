@@ -917,7 +917,7 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			velW_index = x2Velocity_index;
 		}
 
-		quokka::HydroState<nscalars_> sL{};
+		quokka::HydroState<nscalars_, nmscalars_> sL{};
 		sL.rho = rho_L;
 		sL.u = x1LeftState(i, j, k, velN_index);
 		sL.v = x1LeftState(i, j, k, velV_index);
@@ -927,7 +927,7 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		sL.E = E_L;
 		sL.Eint = Eint_L;
 
-		quokka::HydroState<nscalars_> sR{};
+		quokka::HydroState<nscalars_, nmscalars_> sR{};
 		sR.rho = rho_R;
 		sR.u = x1RightState(i, j, k, velN_index);
 		sR.v = x1RightState(i, j, k, velV_index);
@@ -937,12 +937,17 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		sR.E = E_R;
 		sR.Eint = Eint_R;
 
-		// The remaining components are passive scalars, so just copy them from
+		// The remaining components are mass scalars and passive scalars, so just copy them from
 		// x1LeftState and x1RightState into the (left, right) state vectors U_L and
 		// U_R
 		for (int n = 0; n < nscalars_; ++n) {
 			sL.scalar[n] = x1LeftState(i, j, k, scalar0_index + n);
 			sR.scalar[n] = x1RightState(i, j, k, scalar0_index + n);
+			// also store mass scalars separately
+			if (n < nmscalars_) {
+				sL.massScalar[n] = x1LeftState(i, j, k, scalar0_index + n);
+				sR.massScalar[n] = x1RightState(i, j, k, scalar0_index + n);
+			}
 		}
 
 		// difference in normal velocity along normal axis
@@ -964,7 +969,7 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 #endif
 
 		// solve the Riemann problem in canonical form
-		quokka::valarray<double, nvar_> F_canonical = quokka::Riemann::HLLC<nscalars_, nvar_>(sL, sR, gamma_, du, dw);
+		quokka::valarray<double, nvar_> F_canonical = quokka::Riemann::HLLC<problem_t, nscalars_, nmscalars_, nvar_>(sL, sR, gamma_, du, dw);
 		quokka::valarray<double, nvar_> F = F_canonical;
 
 		// add artificial viscosity
