@@ -44,8 +44,8 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars, N_ms
 	double S_R = NAN;
 	if (gamma != 1.0) {
 
-		auto [dedr_L, dedp_L, drdp_L, dpdr_s_L, G_gamma_L, d2pdr2_s_L] = quokka::EOS<problem_t>::ComputeOtherDerivatives(sL.rho, sL.P, sL.massScalar);
-		auto [dedr_R, dedp_R, drdp_R, dpdr_s_R, G_gamma_R, d2pdr2_s_R] = quokka::EOS<problem_t>::ComputeOtherDerivatives(sR.rho, sR.P, sR.massScalar);
+		auto [dedr_L, dedp_L, drdp_L, dpdr_s_L, G_L] = quokka::EOS<problem_t>::ComputeOtherDerivatives(sL.rho, sL.P, sL.massScalar);
+		auto [dedr_R, dedp_R, drdp_R, dpdr_s_R, G_R] = quokka::EOS<problem_t>::ComputeOtherDerivatives(sR.rho, sR.P, sR.massScalar);
 
 		// equation A.5a of Kershaw+1998
 		// need specific internal energy here
@@ -56,9 +56,6 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars, N_ms
 
 		// equation 4.12 of Kershaw+1998
 		cs_tilde = std::sqrt((1.0 / C_tilde_P) * (H_tilde - 0.5 * vsq_tilde - C_tilde_rho));
-
-		const double G_L = 0.5 * (G_gamma_L + 1.0 + 1.0 + (sL.rho/dpdr_s_L)*d2pdr2_s_L - (sL.rho*dpdr_s_L)/sL.P); // 'fundamental derivative' for ideal gases
-		const double G_R = 0.5 * (G_gamma_R + 1.0 + 1.0 + (sR.rho/dpdr_s_R)*d2pdr2_s_R - (sR.rho*dpdr_s_R)/sR.P);
 
 		const double s_NL = 0.5 * G_L * std::max(dU, 0.); // second-order wavespeed correction
 		const double s_NR = 0.5 * G_R * std::max(dU, 0.);
