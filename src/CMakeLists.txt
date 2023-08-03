@@ -152,4 +152,4 @@ add_subdirectory(ShockCloud)
 add_subdirectory(PassiveScalar)
 add_subdirectory(FCQuantities)
 add_subdirectory(SphericalCollapse)
-
+add_subdirectory(StarCluster)

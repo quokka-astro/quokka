@@ -798,8 +798,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::ellipticSolveAllLev
 			amrex::Abort("Poisson solve is not support when AMR subcycling is enabled! You must set do_subcycle = 0.");
 		}
 
+		BL_PROFILE_REGION("GravitySolver");
+		
 		// set up elliptic solve object
-		amrex::OpenBCSolver poissonSolver(geom, grids, dmap);
+		amrex::OpenBCSolver poissonSolver(Geom(0, finest_level), boxArray(0, finest_level), DistributionMap(0, finest_level));
 		if (verbose) {
 			poissonSolver.setVerbose(true);
 			poissonSolver.setBottomVerbose(false);
