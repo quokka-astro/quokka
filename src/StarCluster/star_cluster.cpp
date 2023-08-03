@@ -4,7 +4,7 @@
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 /// \file star_cluster.cpp
-/// \brief Defines a test problem for pressureless spherical collapse.
+/// \brief Defines a test problem for pressureless spherical collapse of a star cluster.
 ///
 #include <limits>
 #include <memory>
@@ -37,8 +37,8 @@ struct StarCluster {
 template <> struct quokka::EOS_Traits<StarCluster> {
 	static constexpr double gamma = 1.0;
 	static constexpr double cs_isothermal = 1.0; // dimensionless
-	static constexpr double mean_molecular_weight = NAN;
-	static constexpr double boltzmann_constant = quokka::boltzmann_constant_cgs;
+	static constexpr double mean_molecular_weight = 1.0;
+	static constexpr double boltzmann_constant = C::k_B;
 };
 
 template <> struct HydroSystem_Traits<StarCluster> {
@@ -49,7 +49,8 @@ template <> struct Physics_Traits<StarCluster> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_chemistry_enabled = false;
-	static constexpr int numPassiveScalars = 0; // number of passive scalars
+	static constexpr int numMassScalars = 0;                     // number of mass scalars
+	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = false;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
@@ -123,13 +124,9 @@ template <> void RadhydroSimulation<StarCluster>::setInitialConditionsOnGrid(quo
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	amrex::Real Lx = prob_hi[0] - prob_lo[0];
-	amrex::Real Ly = prob_hi[1] - prob_lo[1];
-	amrex::Real Lz = prob_hi[2] - prob_lo[2];
-
-	amrex::Real x0 = prob_lo[0] + 0.5 * Lx;
-	amrex::Real y0 = prob_lo[1] + 0.5 * Ly;
-	amrex::Real z0 = prob_lo[2] + 0.5 * Lz;
+	amrex::Real x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
+	amrex::Real y0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
+	amrex::Real z0 = prob_lo[2] + 0.5 * (prob_hi[2] - prob_lo[2]);
 
 	// cloud parameters
 	const double rho_min = 0.01 * userData_.rho_sphere;
