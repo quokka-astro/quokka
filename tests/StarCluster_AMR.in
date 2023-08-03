@@ -32,6 +32,7 @@ ascent_interval = 100
 plotfile_interval = 500
 checkpoint_interval = 1000
 
+perturb.filename = "zdrv.hdf5"
 perturb.kmin = 2
 perturb.kmax = 128
 perturb.power_law = 2
