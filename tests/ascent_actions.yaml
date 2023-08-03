@@ -52,30 +52,46 @@
 - 
   action: "add_queries"
   queries: 
-    q1: 
+    max1: 
       params: 
         expression: "max(field('temperature'))"
         name: "max_temperature"
-    q2:
+    max2:
       params: 
         expression: "max(field('nH'))"
         name: "max_nH"
-    q3:
+    max3:
       params: 
         expression: "max(field('cooling_length'))"
         name: "max_cooling_length"
-    q4:
+    max4:
+      params: 
+        expression: "max(field('pressure'))"
+        name: "max_pressure"
+    max5:
+      params: 
+        expression: "max(field('entropy'))"
+        name: "max_entropy"
+    min1:
       params: 
         expression: "min(field('temperature'))"
         name: "min_temperature"
-    q5:
+    min2:
       params: 
         expression: "min(field('nH'))"
         name: "min_nH"
-    q6:
+    min3:
       params: 
         expression: "min(field('cooling_length'))"
         name: "min_cooling_length"
+    min4:
+      params: 
+        expression: "min(field('pressure'))"
+        name: "min_pressure"
+    min5:
+      params: 
+        expression: "min(field('entropy'))"
+        name: "min_entropy"
     hist1:
       params:
         expression: "binning('mass', 'sum', [axis('lab_velocity_x', num_bins=50, min_val=0, max_val=200, clamp=True), axis('temperature', [0., 1.0e4, 1.0e5, 1.0e6, 1.0e7, 1.0e10])])"

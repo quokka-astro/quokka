@@ -50,6 +50,7 @@ constexpr static bool enableRadiation = false;
 
 constexpr double parsec_in_cm = 3.086e18;  // cm == 1 pc
 constexpr double solarmass_in_g = 1.99e33; // g == 1 Msun
+constexpr double keV_in_ergs = 1.60218e-9; // ergs == 1 keV
 constexpr double m_H = hydrogen_mass_cgs_; // mass of hydrogen atom
 
 // [Habing FUV field, see Eq. 12.6 of Draine, Physics of the ISM/IGM.]
@@ -461,6 +462,43 @@ void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::string cons
 			output[bx](i, j, k, ncomp) = nH;
 		});
 
+	} else if (dname == "pressure") {
+		const int ncomp = ncomp_in;
+		auto tables = userData_.cloudyTables.const_tables();
+		auto const &output = mf.arrays();
+		auto const &state = state_new_[lev].const_arrays();
+
+		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			Real rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
+			Real x1Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
+			Real x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
+			Real x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
+			Real Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
+			Real Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+			Real Pgas = Eint * (HydroSystem<ShockCloud>::gamma_ - 1.);
+			output[bx](i, j, k, ncomp) = Pgas / boltzmann_constant_cgs_; // [K cm^-3]
+		});
+
+	} else if (dname == "entropy") {
+		const int ncomp = ncomp_in;
+		auto tables = userData_.cloudyTables.const_tables();
+		auto const &output = mf.arrays();
+		auto const &state = state_new_[lev].const_arrays();
+
+		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			Real rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
+			Real x1Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
+			Real x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
+			Real x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
+			Real Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
+			Real Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+			Real Pgas = Eint * (HydroSystem<ShockCloud>::gamma_ - 1.);
+			Real nH = (cloudy_H_mass_fraction * rho) / m_H;
+			Real K_cgs = Pgas / std::pow(nH, HydroSystem<ShockCloud>::gamma_); // erg cm^2
+			Real K_keV_cm2 = K_cgs /  keV_in_ergs; // convert to units of keV cm^2
+			output[bx](i, j, k, ncomp) = K_keV_cm2;
+		});
+
 	} else if (dname == "mass") {
 		const int ncomp = ncomp_in;
 		auto const &output = mf.arrays();
@@ -505,6 +543,7 @@ void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::string cons
 			Real const l_cool = ComputeCoolingLength(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
 			output[bx](i, j, k, ncomp) = l_cool / parsec_in_cm;
 		});
+
 	} else if (dname == "lab_velocity_x") {
 		const int ncomp = ncomp_in;
 		auto tables = userData_.cloudyTables.const_tables();
