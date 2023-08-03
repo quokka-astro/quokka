@@ -190,6 +190,24 @@ ComputeCoolingLength(double rho, double Egas, double gamma,
   return c_s * t_cool;
 }
 
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
+ComputeMMW(double rho, double Egas, double gamma,
+                    cloudyGpuConstTables const &tables) -> Real {
+  // convert (rho, Egas) to dimensionless mean molecular weight
+
+  // 1. convert Egas (internal gas energy) to temperature
+  const Real Tgas = ComputeTgasFromEgas(rho, Egas, gamma, tables);
+
+  // 2. compute mu from mu(T) table
+  const Real rhoH = rho * cloudy_H_mass_fraction; // mass density of H species
+  const Real nH = rhoH / hydrogen_mass_cgs_;
+  const Real log_nH = std::log10(nH);
+  const Real log_T = std::log10(Tgas);
+  const Real mu = interpolate2d(log_nH, log_T, tables.log_nH,
+                                tables.log_Tgas, tables.meanMolWeight);
+  return mu;
+}
+
 void readCloudyData(cloudy_tables &cloudyTables);
 
 #endif // CLOUDYCOOLING_HPP_

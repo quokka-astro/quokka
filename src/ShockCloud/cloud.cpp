@@ -475,8 +475,10 @@ void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::string cons
 			Real x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
 			Real Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
 			Real Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-			Real Pgas = Eint * (HydroSystem<ShockCloud>::gamma_ - 1.);
-			output[bx](i, j, k, ncomp) = Pgas / boltzmann_constant_cgs_; // [K cm^-3]
+			Real Tgas = ComputeTgasFromEgas(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
+			Real mu = ComputeMMW(rho, Egas, HydroSystem<ShockCloud>::gamma_, tables);
+			Real ndens = rho / (mu * m_H);
+			output[bx](i, j, k, ncomp) = ndens * Tgas; // [K cm^-3]
 		});
 
 	} else if (dname == "entropy") {
@@ -492,9 +494,10 @@ void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::string cons
 			Real x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
 			Real Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
 			Real Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-			Real Pgas = Eint * (HydroSystem<ShockCloud>::gamma_ - 1.);
-			Real nH = (cloudy_H_mass_fraction * rho) / m_H;
-			Real K_cgs = Pgas / std::pow(nH, HydroSystem<ShockCloud>::gamma_); // erg cm^2
+			Real Tgas = ComputeTgasFromEgas(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
+			Real mu = ComputeMMW(rho, Egas, HydroSystem<ShockCloud>::gamma_, tables);
+			Real ndens = rho / (mu * m_H);
+			Real K_cgs = boltzmann_constant_cgs_ * Tgas * std::pow(ndens, -2./3.); // ergs cm^2
 			Real K_keV_cm2 = K_cgs /  keV_in_ergs; // convert to units of keV cm^2
 			output[bx](i, j, k, ncomp) = K_keV_cm2;
 		});
