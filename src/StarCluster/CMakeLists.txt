@@ -4,7 +4,7 @@ if (AMReX_SPACEDIM EQUAL 3)
                     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/
     )
 
-    execute_process(COMMAND cp -p ${CMAKE_CURRENT_SOURCE_DIR}/zdrv.hdf5 ${CMAKE_SOURCE_DIR}/tests 
+    execute_process(COMMAND cp -p ${CMAKE_CURRENT_SOURCE_DIR}/zdrv.hdf5 ${CMAKE_BINARY_DIR}/
                     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
     message("zdrv.hdf5 created in ${CMAKE_SOURCE_DIR}/tests/")
