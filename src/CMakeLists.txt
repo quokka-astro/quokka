@@ -105,6 +105,7 @@ set (QuokkaObjSources "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp" "${CMAKE_CURRENT_SO
 #endif()
 #link_libraries(QuokkaObj)
 
+add_subdirectory(StarCluster)
 add_subdirectory(HydroShocktubeCMA)
 add_subdirectory(PrimordialChem)
 
@@ -152,4 +153,3 @@ add_subdirectory(ShockCloud)
 add_subdirectory(PassiveScalar)
 add_subdirectory(FCQuantities)
 add_subdirectory(SphericalCollapse)
-add_subdirectory(StarCluster)
