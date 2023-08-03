@@ -799,7 +799,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ellipticSolveAllLev
 		}
 
 		BL_PROFILE_REGION("GravitySolver");
-		
+
 		// set up elliptic solve object
 		amrex::OpenBCSolver poissonSolver(Geom(0, finest_level), boxArray(0, finest_level), DistributionMap(0, finest_level));
 		if (verbose) {
