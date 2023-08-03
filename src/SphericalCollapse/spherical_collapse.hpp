@@ -17,6 +17,6 @@
 #include "interpolate.hpp"
 
 // function definitions
-auto testproblem_hydro_sedov() -> int;
+auto problem_main() -> int;
 
 #endif // TEST_SPHERICAL_COLLAPSE_HPP_
