@@ -222,9 +222,9 @@ parser.add_option('--seed', dest='seed',
                   help='seed for random # generation.  default=0', 
                   default = 0)
 parser.add_option('--f_solenoidal', dest='f_solenoidal', 
-                  help='volume RMS fraction of solenoidal componet of the perturbations relative to the total.  ' + 
+                  help='volume RMS fraction of solenoidal component of the perturbations relative to the total.  ' + 
                        'If --f_solenoidal=None, the motions are purely random.  For low wave numbers ' +
-                       'the relative imporance of solenoidal to compressive may be sensitve to the ' +
+                       'the relative imporance of solenoidal to compressive may be sensitive to the ' +
                        'choice of radom seed.  It has been suggested (Federrath 2008) that ' +
                        'f_solenoidal=2/3 is the most natural driving mode and this is currently' + 
                        'the suggested best-practice.', 
@@ -267,7 +267,7 @@ if alpha==None:
     sys.exit(0)
 alpha = float(options.alpha)
 if alpha < 0.:
-    print("alpha is less than zero. Thats probably not what ou want.  See --help.")
+    print("alpha is less than zero. That's probably not what you want.  See --help.")
     sys.exit(0)
 seed = int(options.seed)
 # data precision
