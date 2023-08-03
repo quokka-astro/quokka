@@ -21,6 +21,12 @@ steps:
   inputs:
     cmakeArgs: '.. -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DAMReX_SPACEDIM=3 -DAMReX_GPU_BACKEND=CUDA -DQUOKKA_PYTHON=OFF -G Ninja'
 
+- script: python ../src/StarCluster/perturbation.py --kmin=2 --kmax=64 --size=128 --alpha=2 --f_solenoidal=1.0
+  displayName: 'Run perturbation.py to generate input file for StarCluster test'
+
+- script: mv ../src/StarCluster/zdrv.hdf5 ../tests/
+  displayName: 'Move file to tests'
+
 - task: CMake@1
   displayName: 'Build Quokka'
   inputs:
