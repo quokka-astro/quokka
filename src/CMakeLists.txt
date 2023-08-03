@@ -106,7 +106,6 @@ set (QuokkaObjSources "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp" "${CMAKE_CURRENT_SO
 #link_libraries(QuokkaObj)
 
 add_subdirectory(StarCluster)
-add_subdirectory(HydroShocktubeCMA)
 add_subdirectory(PrimordialChem)
 
 add_subdirectory(Advection)
@@ -121,6 +120,7 @@ add_subdirectory(HydroKelvinHelmholz)
 add_subdirectory(HydroLeblanc)
 add_subdirectory(HydroRichtmeyerMeshkov)
 add_subdirectory(HydroShocktube)
+add_subdirectory(HydroShocktubeCMA)
 add_subdirectory(HydroShuOsher)
 add_subdirectory(HydroSMS)
 add_subdirectory(HydroVacuum)
