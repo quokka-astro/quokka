@@ -783,7 +783,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 {
 	BL_PROFILE_REGION("HydroSolver");
 	// timestep retries
-	const int max_retries = 6;
+	const int max_retries = 4;
 	bool success = false;
 
 	// save the pre-advance fine flux register state in originalFineData
