@@ -231,7 +231,6 @@ auto problem_main() -> int
 	// Problem initialization
 	RadhydroSimulation<StarCluster> sim(BCs_cc);
 	sim.doPoissonSolve_ = 1; // enable self-gravity
-	sim.Gconst_ = 1.0;	 // units where G = 1
 	sim.densityFloor_ = 0.01;
 
 	sim.userData_.R_sphere = R_sphere;
