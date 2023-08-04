@@ -7,7 +7,10 @@ if (AMReX_SPACEDIM EQUAL 3)
     execute_process(COMMAND cp -p ${CMAKE_CURRENT_SOURCE_DIR}/zdrv.hdf5 ${CMAKE_BINARY_DIR}/
                     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
-    message("zdrv.hdf5 created in ${CMAKE_SOURCE_DIR}/tests/")
+    execute_process(COMMAND cp -p ${CMAKE_CURRENT_SOURCE_DIR}/zdrv.hdf5 ${CMAKE_SOURCE_DIR}/tests/
+                    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
+    message("zdrv.hdf5 created in ${CMAKE_SOURCE_DIR}/tests/ and ${CMAKE_BINARY_DIR}")
 
     # Create a custom target that depends on the Python script's output
     add_custom_target(RunPythonScript DEPENDS ${CMAKE_SOURCE_DIR}/tests/zdrv.hdf5)
