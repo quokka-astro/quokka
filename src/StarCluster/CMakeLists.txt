@@ -21,7 +21,8 @@ if (AMReX_SPACEDIM EQUAL 3)
     endif()
 
     add_test(NAME StarCluster COMMAND star_cluster StarCluster.in WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
-    add_test(NAME StarClusterAMR COMMAND star_cluster StarCluster_AMR.in WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+    # AMR test only works on Setonix because Gadi and avatar do not have enough memory per GPU
+    # add_test(NAME StarClusterAMR COMMAND star_cluster StarCluster_AMR.in WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 
     add_dependencies(star_cluster RunPythonScript)
 endif()
