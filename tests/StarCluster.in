@@ -25,6 +25,8 @@ cfl = 0.2
 max_timesteps = 300
 stop_time = 0.5             # t_ff = 0.55
 
+gravity.Gconst = 1.0    #gravitational constant
+
 do_reflux = 1
 do_subcycle = 0
 
