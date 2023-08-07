@@ -110,11 +110,11 @@
         name: "min_lab_velocity_x"
     hist1:
       params:
-        expression: "binning('mass', 'sum', [axis('lab_velocity_x', num_bins=50, min_val=0, max_val=200, clamp=True), axis('temperature', [0., 1.0e4, 1.0e5, 1.0e6, 1.0e7, 1.0e10])])"
+        expression: "binning('mass', 'sum', [axis('lab_velocity_x', num_bins=100, min_val=0, max_val=400, clamp=True), axis('temperature', [0., 1.0e4, 1.0e5, 1.0e6, 1.0e7, 1.0e10])])"
         name: "hist_velocity_temp"
     hist2:
       params:
-        expression: "binning('mass', 'sum', [axis('lab_velocity_x', num_bins=50, min_val=0, max_val=200, clamp=True), axis('nH', [0., 0.01, 0.1, 1.0, 10.0, 1e5])])"
+        expression: "binning('mass', 'sum', [axis('lab_velocity_x', num_bins=100, min_val=0, max_val=400, clamp=True), axis('nH', [0., 0.01, 0.1, 1.0, 10.0, 1e5])])"
         name: "hist_velocity_nH"
     hist3:
       params:
