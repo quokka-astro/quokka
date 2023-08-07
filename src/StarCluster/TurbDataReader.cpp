@@ -22,7 +22,7 @@ auto read_dataset(hid_t &file_id, char const *dataset_name) -> amrex::Table3D<do
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(dset_id != -1, "Can't open table!");
 
 	// get dimensions
-	hid_t dspace = H5Dget_space(dset_id);
+	hid_t const dspace = H5Dget_space(dset_id);
 	const int ndims = H5Sget_simple_extent_ndims(dspace);
 	std::vector<hsize_t> dims(ndims);
 	H5Sget_simple_extent_dims(dspace, dims.data(), nullptr);
@@ -33,7 +33,7 @@ auto read_dataset(hid_t &file_id, char const *dataset_name) -> amrex::Table3D<do
 	}
 
 	// allocate array for dataset storage
-	double *temp_data = new double[data_size];
+	auto *temp_data = new double[data_size];
 
 	// read dataset
 	herr_t status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, temp_data);
@@ -44,8 +44,8 @@ auto read_dataset(hid_t &file_id, char const *dataset_name) -> amrex::Table3D<do
 
 	// WARNING: Table3D uses column-major (Fortran-order) indexing, but HDF5
 	// tables use row-major (C-order) indexing!
-	amrex::GpuArray<int, 3> lo{0, 0, 0};
-	amrex::GpuArray<int, 3> hi{static_cast<int>(dims[0]), static_cast<int>(dims[1]), static_cast<int>(dims[2])};
+	amrex::GpuArray<int, 3> const lo{0, 0, 0};
+	amrex::GpuArray<int, 3> const hi{static_cast<int>(dims[0]), static_cast<int>(dims[1]), static_cast<int>(dims[2])};
 	auto table = amrex::Table3D<double>(temp_data, lo, hi);
 	return table;
 }
@@ -56,7 +56,7 @@ void initialize_turbdata(turb_data &data, std::string &data_file)
 	amrex::Print() << fmt::format("data_file: {}.\n", data_file);
 
 	herr_t status = 0;
-	herr_t h5_error = -1;
+	herr_t const h5_error = -1;
 
 	// open file
 	hid_t file_id = 0;
@@ -106,8 +106,8 @@ auto computeRms(amrex::TableData<amrex::Real, 3> &dvx, amrex::TableData<amrex::R
 	for (int i = tlo[0]; i <= thi[0]; ++i) {
 		for (int j = tlo[1]; j <= thi[1]; ++j) {
 			for (int k = tlo[2]; k <= thi[2]; ++k) {
-				amrex::Real vx = dvx_table(i, j, k);
-				amrex::Real vy = dvy_table(i, j, k);
+				amrex::Real const vx = dvx_table(i, j, k);
+				amrex::Real const vy = dvy_table(i, j, k);
 				amrex::Real vz = dvz_table(i, j, k);
 				rms_sq += vx * vx + vy * vy + vz * vz;
 				++N;
