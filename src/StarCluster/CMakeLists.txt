@@ -6,6 +6,12 @@ if (AMReX_SPACEDIM EQUAL 3)
         setup_target_for_cuda_compilation(star_cluster)
     endif()
 
+    execute_process(
+        COMMAND Python3::Interpreter -c "h5py"
+        RESULT_VARIABLE EXIT_CODE
+        OUTPUT_QUIET
+    )
+
     add_test(NAME ComputeStarClusterPerturbations COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/perturbation.py --kmin=2 --kmax=64 --size=128 --alpha=2 --f_solenoidal=1.0 WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
     add_test(NAME StarCluster COMMAND star_cluster StarCluster.in WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
     set_tests_properties(ComputeStarClusterPerturbations PROPERTIES FIXTURES_SETUP    StarCluster_fixture)
