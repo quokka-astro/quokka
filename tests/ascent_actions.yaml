@@ -18,13 +18,13 @@
         type: "contour"
         params: 
           field: "cloud_fraction"
-          iso_values: 0.9
+          iso_values: 0.5
     temp_contour_pl:
       f1: 
         type: "contour"
         params: 
           field: "temperature"
-          iso_values: 1.0e4
+          iso_values: 1.1e4
 -
   action: "add_extracts"
   extracts:
@@ -72,6 +72,14 @@
       params: 
         expression: "max(field('entropy'))"
         name: "max_entropy"
+    max6:
+      params: 
+        expression: "max(field('velocity_mag'))"
+        name: "max_velocity"
+    max7:
+      params: 
+        expression: "max(field('lab_velocity_x'))"
+        name: "max_lab_velocity_x"
     min1:
       params: 
         expression: "min(field('temperature'))"
@@ -92,6 +100,14 @@
       params: 
         expression: "min(field('entropy'))"
         name: "min_entropy"
+    min6:
+      params: 
+        expression: "min(field('velocity_mag'))"
+        name: "min_velocity"
+    min7:
+      params: 
+        expression: "min(field('lab_velocity_x'))"
+        name: "min_lab_velocity_x"
     hist1:
       params:
         expression: "binning('mass', 'sum', [axis('lab_velocity_x', num_bins=50, min_val=0, max_val=200, clamp=True), axis('temperature', [0., 1.0e4, 1.0e5, 1.0e6, 1.0e7, 1.0e10])])"

@@ -549,7 +549,6 @@ void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::string cons
 
 	} else if (dname == "lab_velocity_x") {
 		const int ncomp = ncomp_in;
-		auto tables = userData_.cloudyTables.const_tables();
 		auto const &output = mf.arrays();
 		auto const &state = state_new_[lev].const_arrays();
 		const Real delta_vx = ::delta_vx;
@@ -561,6 +560,23 @@ void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::string cons
 			Real const vx = x1Mom / rho;
 			Real const vx_lab = vx + delta_vx;
 			output[bx](i, j, k, ncomp) = vx_lab / 1.0e5; // km/s
+		});
+	
+	} else if (dname == "velocity_mag") {
+		const int ncomp = ncomp_in;
+		auto const &output = mf.arrays();
+		auto const &state = state_new_[lev].const_arrays();
+		
+		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			// compute simulation-frame |v| in km/s
+			Real const rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
+			Real const x1Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
+			Real const x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
+			Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
+			Real const v1 = x1Mom / rho;
+			Real const v2 = x2Mom / rho;
+			Real const v3 = x3Mom / rho;
+			output[bx](i, j, k, ncomp) = std::sqrt(v1*v1 + v2*v2 + v3*v3) / 1.0e5; // km/s
 		});
 	}
 	amrex::Gpu::streamSynchronize();
