@@ -13,18 +13,6 @@
             x: 0.0
             y: 0.0
             z: 1.0
-    cloudfrac_contour_pl:
-      f1: 
-        type: "contour"
-        params: 
-          field: "cloud_fraction"
-          iso_values: 0.5
-    temp_contour_pl:
-      f1: 
-        type: "contour"
-        params: 
-          field: "temperature"
-          iso_values: 1.1e4
 -
   action: "add_extracts"
   extracts:
@@ -33,20 +21,6 @@
       pipeline: "z_slice_pl"
       params:
         path: "slices/zslice"
-        protocol: "blueprint/mesh/hdf5"
-        num_files: 2
-    cloudfrac_contour_extract:
-      type: "relay"
-      pipeline: "cloudfrac_contour_pl"
-      params:
-        path: "slices/cloudfrac_contour"
-        protocol: "blueprint/mesh/hdf5"
-        num_files: 2
-    temp_contour_extract:
-      type: "relay"
-      pipeline: "temp_contour_pl"
-      params:
-        path: "slices/temp_contour"
         protocol: "blueprint/mesh/hdf5"
         num_files: 2
 - 
