@@ -125,7 +125,7 @@ template <> void RadhydroSimulation<StarCluster>::setInitialConditionsOnGrid(quo
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
 	amrex::Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
-	amrex::Real consty0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
+	amrex::Real const y0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
 	amrex::Real const z0 = prob_lo[2] + 0.5 * (prob_hi[2] - prob_lo[2]);
 
 	// cloud parameters
