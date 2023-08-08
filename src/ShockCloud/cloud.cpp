@@ -402,12 +402,13 @@ template <> void RadhydroSimulation<ShockCloud>::computeAfterTimestep(const amre
 	simulationMetadata_["delta_vx"] = delta_vx;
 	::delta_vx = delta_vx;
 
+	const Real v_wind = ::v_wind;
 	amrex::Print() << "\tDelta x = " << (delta_x / parsec_in_cm) << " pc,"
-		       << " Delta vx = " << (delta_vx / 1.0e5) << " km/s\n";
+		    	<< " Delta vx = " << (delta_vx / 1.0e5) << " km/s,"
+				<< " Inflow velocity = " << ((v_wind - delta_vx) / 1.0e5) << " km/s\n";
 
 	// If we are moving faster than the wind, we should abort the simulation.
 	// (otherwise, the boundary conditions become inconsistent.)
-	const Real v_wind = ::v_wind;
 	AMREX_ALWAYS_ASSERT(delta_vx < v_wind);
 
 	// subtract center-of-mass y-velocity on each level
@@ -430,7 +431,7 @@ template <> void RadhydroSimulation<ShockCloud>::computeAfterTimestep(const amre
 			state[box](i, j, k, HydroSystem<ShockCloud>::energy_index) = Eint + new_KE;
 		});
 	}
-	amrex::Gpu::streamSynchronize();
+	amrex::Gpu::streamSynchronizeAll();
 }
 
 template <>
