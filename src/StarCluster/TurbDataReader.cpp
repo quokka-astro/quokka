@@ -108,7 +108,7 @@ auto computeRms(amrex::TableData<amrex::Real, 3> &dvx, amrex::TableData<amrex::R
 			for (int k = tlo[2]; k <= thi[2]; ++k) {
 				amrex::Real const vx = dvx_table(i, j, k);
 				amrex::Real const vy = dvy_table(i, j, k);
-				amrex::Real vz = dvz_table(i, j, k);
+				amrex::Real const vz = dvz_table(i, j, k);
 				rms_sq += vx * vx + vy * vy + vz * vz;
 				++N;
 			}

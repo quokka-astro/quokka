@@ -118,15 +118,15 @@ template <> void RadhydroSimulation<StarCluster>::preCalculateInitialConditions(
 template <> void RadhydroSimulation<StarCluster>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
 	// set initial conditions
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_elem.prob_hi_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	amrex::Real x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
-	amrex::Real y0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
-	amrex::Real z0 = prob_lo[2] + 0.5 * (prob_hi[2] - prob_lo[2]);
+	amrex::Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
+	amrex::Real consty0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
+	amrex::Real const z0 = prob_lo[2] + 0.5 * (prob_hi[2] - prob_lo[2]);
 
 	// cloud parameters
 	const double rho_min = 0.01 * userData_.rho_sphere;
@@ -145,7 +145,7 @@ template <> void RadhydroSimulation<StarCluster>::setInitialConditionsOnGrid(quo
 		amrex::Real const z = prob_lo[2] + (k + static_cast<amrex::Real>(0.5)) * dx[2];
 		amrex::Real const r = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2) + std::pow(z - z0, 2));
 
-		double rho = std::max(rho_min, rho_max * ((std::tanh((R_sphere - r) / R_smooth) + 1.0) / 2.0));
+		double const rho = std::max(rho_min, rho_max * ((std::tanh((R_sphere - r) / R_smooth) + 1.0) / 2.0));
 		AMREX_ASSERT(!std::isnan(rho));
 
 		double vx = dvx(i, j, k);
@@ -204,7 +204,7 @@ template <> void RadhydroSimulation<StarCluster>::ComputeDerivedVar(int lev, std
 auto problem_main() -> int
 {
 	// read problem parameters
-	amrex::ParmParse pp("perturb");
+	amrex::ParmParse const pp("perturb");
 
 	// cloud radius
 	Real R_sphere{};
@@ -243,6 +243,6 @@ auto problem_main() -> int
 	// evolve
 	sim.evolve();
 
-	int status = 0;
+	int const status = 0;
 	return status;
 }
