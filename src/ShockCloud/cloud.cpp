@@ -614,9 +614,11 @@ template <> auto RadhydroSimulation<ShockCloud>::ComputeStatistics() -> std::map
 	// save cloud position, velocity
 	const Real dx_cgs = std::get<Real>(simulationMetadata_["delta_x"]);
 	const Real dvx_cgs = std::get<Real>(simulationMetadata_["delta_vx"]);
+	const Real v_wind = ::v_wind;
 
 	stats["delta_x"] = dx_cgs / parsec_in_cm; // pc
 	stats["delta_vx"] = dvx_cgs / 1.0e5;	  // km/s
+	stats["inflow_vx"] = (v_wind - dvx_cgs) / 1.0e5; // km/s
 
 	// save total simulation mass
 	const Real sim_mass = amrex::volumeWeightedSum(amrex::GetVecOfConstPtrs(state_new_),
