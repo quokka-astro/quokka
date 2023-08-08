@@ -260,14 +260,14 @@ public:
 
   // I/O functions
   [[nodiscard]] auto PlotFileName(int lev) const -> std::string;
-  [[nodiscard]] auto PlotFileMF() const -> amrex::Vector<amrex::MultiFab>;
-  [[nodiscard]] auto PlotFileMFAtLevel(int lev) const -> amrex::MultiFab;
+  [[nodiscard]] auto PlotFileMF() -> amrex::Vector<amrex::MultiFab>;
+  [[nodiscard]] auto PlotFileMFAtLevel(int lev) -> amrex::MultiFab;
   void WriteMetadataFile(std::string const &plotfilename) const;
   void ReadMetadataFile(std::string const &chkfilename);
   void WriteStatisticsFile();
   template <typename ReduceOp, typename F> auto computePlaneProjection(F const &user_f, int dir) const -> amrex::BaseFab<amrex::Real>;
   void WriteProjectionPlotfile() const;
-  void WritePlotFile() const;
+  void WritePlotFile();
   void WriteCheckpointFile() const;
   void SetLastCheckpointSymlink(std::string const &checkpointname) const;
   void ReadCheckpointFile();
@@ -1486,7 +1486,7 @@ auto AMRSimulation<problem_t>::PlotFileName(int lev) const -> std::string {
 }
 
 template <typename problem_t>
-auto AMRSimulation<problem_t>::PlotFileMFAtLevel(int lev) const
+auto AMRSimulation<problem_t>::PlotFileMFAtLevel(int lev)
     -> amrex::MultiFab {
   // Combine state_new_[lev] and derived variables in a new MF
   int comp = 0;
@@ -1495,6 +1495,10 @@ auto AMRSimulation<problem_t>::PlotFileMFAtLevel(int lev) const
   const int nCompDeriv = derivedNames_.size();
   const int nCompPlotMF = nCompState + nCompDeriv;
   amrex::MultiFab plotMF(grids[lev], dmap[lev], nCompPlotMF, nGrow);
+
+  // Fill ghost zones
+  fillBoundaryConditions(state_new_[lev], state_new_[lev], lev, tNew_[lev],
+                         InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
 
   // Copy data from state variables
   for (int i = 0; i < nCompState; i++) {
@@ -1513,7 +1517,7 @@ auto AMRSimulation<problem_t>::PlotFileMFAtLevel(int lev) const
 
 // put together an array of multifabs for writing
 template <typename problem_t>
-auto AMRSimulation<problem_t>::PlotFileMF() const
+auto AMRSimulation<problem_t>::PlotFileMF()
     -> amrex::Vector<amrex::MultiFab> {
   amrex::Vector<amrex::MultiFab> r;
   for (int i = 0; i <= finest_level; ++i) {
@@ -1818,7 +1822,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::RenderAscent() {
 #endif // AMREX_USE_ASCENT
 
 // write plotfile to disk
-template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile() const {
+template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile() {
   BL_PROFILE("AMRSimulation::WritePlotFile()");
 
 #ifndef AMREX_USE_HDF5
