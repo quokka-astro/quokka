@@ -4,7 +4,7 @@
 #SBATCH --account=cvz-delta-gpu
 #SBATCH --mem=0
 #SBATCH --exclusive
-#SBATCH --time=0:30:00
+#SBATCH --time=0:10:00
 #SBATCH --constraint="scratch"
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=4
@@ -12,17 +12,31 @@
 #SBATCH --gpus-per-task=1
 #SBATCH --gpu-bind=none
 
-export OMPI_MCA_btl_smcuda_use_cuda_ipc=1 # enable cuda_ipc
-export OMPI_MCA_btl_smcuda_cuda_ipc_verbose=100 # debugging
-
 module purge
 module load gcc/11.2.0
 module load cuda/11.7.0
 module load openmpi/4.1.4
 
-# run
-srun ./build/src/HydroBlast3D/test_hydro3d_blast tests/blast_unigrid_256.in
+EXE="./build/src/HydroBlast3D/test_hydro3d_blast"
+INPUTS="tests/blast_unigrid_256.in max_timesteps=1000"
+GPU_AWARE_MPI=""
 
+## check topo
+nvidia-smi topo -m
 
+## output on Delta A100 nodes
 
+# 	GPU0	GPU1	GPU2	GPU3	mlx5_0	CPU Affinity	NUMA Affinity
+# GPU0	 X 	NV4	NV4	NV4	SYS	48-63	3
+# GPU1	NV4	 X 	NV4	NV4	SYS	32-47	2
+# GPU2	NV4	NV4	 X 	NV4	SYS	16-31	1
+# GPU3	NV4	NV4	NV4	 X 	PHB	0-15	0
+# mlx5_0	SYS	SYS	SYS	PHB	 X
+
+## we observe the topology is backwards!!
+
+## run
+srun bash -c "
+    export CUDA_VISIBLE_DEVICES=\$((3-SLURM_LOCALID));
+    ${EXE} ${INPUTS} ${GPU_AWARE_MPI}"
 

@@ -44,6 +44,7 @@
 #include "AMReX_Utility.H"
 #include "AMReX_YAFluxRegister.H"
 
+#include "Chemistry.hpp"
 #include "CloudyCooling.hpp"
 #include "HLLC.hpp"
 #include "SimulationData.hpp"
@@ -52,6 +53,8 @@
 #include "physics_info.hpp"
 #include "radiation_system.hpp"
 #include "simulation.hpp"
+
+#include "eos.H"
 
 // Simulation class should be initialized only once per program (i.e., is a singleton)
 template <typename problem_t> class RadhydroSimulation : public AMRSimulation<problem_t>
@@ -96,6 +99,8 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	SimulationData<problem_t> userData_;
 
 	int enableCooling_ = 0;
+	int enableChemistry_ = 0;
+	Real max_density_allowed = std::numeric_limits<amrex::Real>::max();
 	quokka::cooling::cloudy_tables cloudyTables_;
 	std::string coolingTableFilename_{};
 
@@ -120,12 +125,24 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
 
+	amrex::Real Gconst_ = C::Gconst; // gravitational constant G
+
 	// member functions
 	explicit RadhydroSimulation(amrex::Vector<amrex::BCRec> &BCs_cc, amrex::Vector<amrex::BCRec> &BCs_fc) : AMRSimulation<problem_t>(BCs_cc, BCs_fc)
 	{
 		defineComponentNames();
 		// read in runtime parameters
 		readParmParse();
+		// set gamma
+		amrex::ParmParse eos("eos");
+		eos.add("eos_gamma", quokka::EOS_Traits<problem_t>::gamma);
+
+		// initialize Microphysics params
+		init_extern_parameters();
+		// initialize Microphysics EOS
+		amrex::Real small_temp = 1e-10;
+		amrex::Real small_dens = 1e-100;
+		eos_init(small_temp, small_dens);
 	}
 
 	explicit RadhydroSimulation(amrex::Vector<amrex::BCRec> &BCs_cc) : AMRSimulation<problem_t>(BCs_cc)
@@ -133,6 +150,16 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 		defineComponentNames();
 		// read in runtime parameters
 		readParmParse();
+		// set gamma
+		amrex::ParmParse eos("eos");
+		eos.add("eos_gamma", quokka::EOS_Traits<problem_t>::gamma);
+
+		// initialize Microphysics params
+		init_extern_parameters();
+		// initialize Microphysics EOS
+		amrex::Real small_temp = 1e-10;
+		amrex::Real small_dens = 1e-100;
+		eos_init(small_temp, small_dens);
 	}
 
 	[[nodiscard]] static auto getScalarVariableNames() -> std::vector<std::string>;
@@ -291,6 +318,12 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::readParmParse(
 		hpp.query("artificial_viscosity_coefficient", artificialViscosityK_);
 	}
 
+	// set gravity runtime parameter
+	{
+		amrex::ParmParse hpp("gravity");
+		hpp.query("Gconst", Gconst_);
+	}
+
 	// set cooling runtime parameters
 	{
 		amrex::ParmParse hpp("cooling");
@@ -302,6 +335,15 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::readParmParse(
 			quokka::cooling::readCloudyData(coolingTableFilename_, cloudyTables_);
 		}
 	}
+
+#ifdef PRIMORDIAL_CHEM
+	// set chemistry runtime parameters
+	{
+		amrex::ParmParse hpp("primordial_chem");
+		hpp.query("enabled", enableChemistry_);
+		hpp.query("max_density_allowed", max_density_allowed);
+	}
+#endif
 
 	// set radiation runtime parameters
 	{
@@ -421,6 +463,13 @@ void RadhydroSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::Mult
 		// compute cooling
 		quokka::cooling::computeCooling<problem_t>(state, dt, cloudyTables_, tempFloor_);
 	}
+
+#ifdef PRIMORDIAL_CHEM
+	if (enableChemistry_ == 1) {
+		// compute chemistry
+		quokka::chemistry::computeChemistry<problem_t>(state, dt, max_density_allowed);
+	}
+#endif
 
 	// compute user-specified sources
 	addStrangSplitSources(state, lev, time, dt);
@@ -567,44 +616,47 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::fillPoissonRhs
 	// NOTE: in the future, this should also deposit particle mass
 	auto const &state = state_new_cc_[lev].const_arrays();
 	auto rhs = rhs_mf.arrays();
+	const Real G = Gconst_;
 
 	amrex::ParallelFor(rhs_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		// copy density to rhs_mf
-		rhs[bx](i, j, k) = 4.0 * M_PI * state[bx](i, j, k, HydroSystem<problem_t>::density_index);
+		rhs[bx](i, j, k) = 4.0 * M_PI * G * state[bx](i, j, k, HydroSystem<problem_t>::density_index);
 	});
 }
 
 template <typename problem_t> void RadhydroSimulation<problem_t>::applyPoissonGravityAtLevel(amrex::MultiFab const &phi_mf, const int lev, const amrex::Real dt)
 {
-	// apply Poisson gravity operator on level 'lev'
-	auto const &dx = geom[lev].CellSizeArray();
-	auto const &phi = phi_mf.const_arrays();
-	auto state = state_new_cc_[lev].arrays();
+	if constexpr (AMREX_SPACEDIM == 3) {
+		// apply Poisson gravity operator on level 'lev'
+		auto const &dx = geom[lev].CellSizeArray();
+		auto const &phi = phi_mf.const_arrays();
+		auto state = state_new_cc_[lev].arrays();
 
-	amrex::ParallelFor(phi_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-		// add operator-split gravitational acceleration
-		const amrex::Real rho = state[bx](i, j, k, HydroSystem<problem_t>::density_index);
-		amrex::Real px = state[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index);
-		amrex::Real py = state[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index);
-		amrex::Real pz = state[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index);
-		const amrex::Real KE_old = 0.5 * (px * px + py * py + pz * pz) / rho;
+		amrex::ParallelFor(phi_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			// add operator-split gravitational acceleration
+			const amrex::Real rho = state[bx](i, j, k, HydroSystem<problem_t>::density_index);
+			amrex::Real px = state[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index);
+			amrex::Real py = state[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index);
+			amrex::Real pz = state[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index);
+			const amrex::Real KE_old = 0.5 * (px * px + py * py + pz * pz) / rho;
 
-		// g = -grad \phi
-		amrex::Real gx = -0.5 * (phi[bx](i + 1, j, k) - phi[bx](i - 1, j, k)) / dx[0];
-		amrex::Real gy = -0.5 * (phi[bx](i, j + 1, k) - phi[bx](i, j - 1, k)) / dx[1];
-		amrex::Real gz = -0.5 * (phi[bx](i, j, k + 1) - phi[bx](i, j, k - 1)) / dx[2];
+			// g = -grad \phi
+			amrex::Real gx = -0.5 * (phi[bx](i + 1, j, k) - phi[bx](i - 1, j, k)) / dx[0];
+			amrex::Real gy = -0.5 * (phi[bx](i, j + 1, k) - phi[bx](i, j - 1, k)) / dx[1];
+			amrex::Real gz = -0.5 * (phi[bx](i, j, k + 1) - phi[bx](i, j, k - 1)) / dx[2];
 
-		px += dt * rho * gx;
-		py += dt * rho * gy;
-		pz += dt * rho * gz;
-		const amrex::Real KE_new = 0.5 * (px * px + py * py + pz * pz) / rho;
-		const amrex::Real dKE = KE_new - KE_old;
+			px += dt * rho * gx;
+			py += dt * rho * gy;
+			pz += dt * rho * gz;
+			const amrex::Real KE_new = 0.5 * (px * px + py * py + pz * pz) / rho;
+			const amrex::Real dKE = KE_new - KE_old;
 
-		state[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index) = px;
-		state[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index) = py;
-		state[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index) = pz;
-		state[bx](i, j, k, HydroSystem<problem_t>::energy_index) += dKE;
-	});
+			state[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index) = px;
+			state[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index) = py;
+			state[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index) = pz;
+			state[bx](i, j, k, HydroSystem<problem_t>::energy_index) += dKE;
+		});
+	}
 }
 
 // fix-up any unphysical states created by AMR operations
@@ -726,8 +778,8 @@ auto RadhydroSimulation<problem_t>::computeAxisAlignedProfile(const int axis, F 
 
 	// normalize profile
 	amrex::Long numCells = domain.numPts() / domain.length(axis);
-	for (int i = 0; i < profile.size(); ++i) {
-		profile[i] /= static_cast<amrex::Real>(numCells);
+	for (double &bin : profile) {
+		bin /= static_cast<amrex::Real>(numCells);
 	}
 
 	return profile;
@@ -737,10 +789,10 @@ template <typename problem_t>
 void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex::Real time, amrex::Real dt_lev, amrex::YAFluxRegister *fr_as_crse,
 								   amrex::YAFluxRegister *fr_as_fine)
 {
+	BL_PROFILE_REGION("HydroSolver");
 	// timestep retries
 	const int max_retries = 4;
 	bool success = false;
-	amrex::Real cur_time;
 
 	// save the pre-advance fine flux register state in originalFineData
 	amrex::MultiFab originalFineData;
@@ -754,7 +806,6 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 		// reduce timestep by a factor of 2^retry_count
 		const int nsubsteps = std::pow(2, retry_count);
 		const amrex::Real dt_step = dt_lev / nsubsteps;
-		cur_time = time;
 
 		if (retry_count > 0 && Verbose()) {
 			amrex::Print() << "\t>> Re-trying hydro advance at level " << lev << " with reduced timestep (nsubsteps = " << nsubsteps
@@ -784,7 +835,6 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 			}
 
 			success = advanceHydroAtLevel(state_old_cc_tmp, fr_as_crse, fr_as_fine, lev, time, dt_step);
-			cur_time += dt_step;
 
 			if (!success) {
 				if (Verbose()) {
@@ -811,7 +861,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 
 template <typename problem_t> auto RadhydroSimulation<problem_t>::isCflViolated(int lev, amrex::Real time, amrex::Real dt_actual) -> bool
 {
-	// check wheter dt_actual would violate CFL condition using the post-update hydro state
+	// check whether dt_actual would violate CFL condition using the post-update hydro state
 
 	// compute max signal speed
 	amrex::Real max_signal = HydroSystem<problem_t>::maxSignalSpeedLocal(state_new_cc_[lev]);

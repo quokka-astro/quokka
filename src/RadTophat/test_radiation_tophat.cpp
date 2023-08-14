@@ -38,8 +38,8 @@ constexpr double a_rad = 7.5646e-15; // erg cm^-3 K^-4
 constexpr double c = 2.99792458e10;  // cm s^-1
 
 template <> struct quokka::EOS_Traits<TophatProblem> {
-	static constexpr double mean_molecular_weight = quokka::hydrogen_mass_cgs;
-	static constexpr double boltzmann_constant = quokka::boltzmann_constant_cgs;
+	static constexpr double mean_molecular_weight = C::m_u;
+	static constexpr double boltzmann_constant = C::k_B;
 	static constexpr double gamma = 5. / 3.;
 };
 
@@ -55,7 +55,8 @@ template <> struct Physics_Traits<TophatProblem> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = false;
 	static constexpr bool is_chemistry_enabled = false;
-	static constexpr int numPassiveScalars = 0; // number of passive scalars
+	static constexpr int numMassScalars = 0;		     // number of mass scalars
+	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = true;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
@@ -87,18 +88,27 @@ template <> AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProble
 	return kappa;
 }
 
-template <> AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto quokka::EOS<TophatProblem>::ComputeTgasFromEint(const double rho, const double Egas) -> double
+static constexpr int nmscalars_ = Physics_Traits<TophatProblem>::numMassScalars;
+template <>
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto
+quokka::EOS<TophatProblem>::ComputeTgasFromEint(const double rho, const double Egas, std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massScalars*/)
+    -> double
 {
 	return Egas / (rho * c_v);
 }
 
-template <> AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto quokka::EOS<TophatProblem>::ComputeEintFromTgas(const double rho, const double Tgas) -> double
+template <>
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto
+quokka::EOS<TophatProblem>::ComputeEintFromTgas(const double rho, const double Tgas, std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massScalars*/)
+    -> double
 {
 	return rho * c_v * Tgas;
 }
 
 template <>
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto quokka::EOS<TophatProblem>::ComputeEintTempDerivative(const double rho, const double /*Tgas*/) -> double
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto
+quokka::EOS<TophatProblem>::ComputeEintTempDerivative(const double rho, const double /*Tgas*/,
+						      std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massScalars*/) -> double
 {
 	// This is also known as the heat capacity, i.e.
 	// 		\del E_g / \del T = \rho c_v,

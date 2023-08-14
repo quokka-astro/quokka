@@ -13,7 +13,15 @@
 #include <cassert>
 #include <csignal>
 #include <cstdio>
+#if __has_include(<filesystem>)
 #include <filesystem>
+#elif __has_include(<experimental/filesystem>)
+#include <experimental/filesystem>
+namespace std
+{
+namespace filesystem = experimental::filesystem;
+}
+#endif
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -441,7 +449,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Default suppress_output = 0
 	pp.query("suppress_output", suppress_output);
 
-	// specify this on the commmand-line in order to restart from a checkpoint
+	// specify this on the command-line in order to restart from a checkpoint
 	// file
 	pp.query("restartfile", restart_chkfile);
 
@@ -790,8 +798,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::ellipticSolveAllLev
 			amrex::Abort("Poisson solve is not support when AMR subcycling is enabled! You must set do_subcycle = 0.");
 		}
 
+		BL_PROFILE_REGION("GravitySolver");
+
 		// set up elliptic solve object
-		amrex::OpenBCSolver poissonSolver(geom, grids, dmap);
+		amrex::OpenBCSolver poissonSolver(Geom(0, finest_level), boxArray(0, finest_level), DistributionMap(0, finest_level));
 		if (verbose) {
 			poissonSolver.setVerbose(true);
 			poissonSolver.setBottomVerbose(false);
@@ -1222,7 +1232,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 {
 	const int ncomp_cc = Physics_Indices<problem_t>::nvarTotal_cc;
 	const int nghost_cc = nghost_cc_;
-	// itterate over the domain
+	// iterate over the domain
 	for (amrex::MFIter iter(state_new_cc_[level]); iter.isValid(); ++iter) {
 		quokka::grid grid_elem(state_new_cc_[level].array(iter), iter.validbox(), geom[level].CellSizeArray(), geom[level].ProbLoArray(),
 				       geom[level].ProbHiArray(), quokka::centering::cc, quokka::direction::na);
@@ -1244,7 +1254,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 	const int nghost_fc = nghost_fc_;
 	// for each face-centering
 	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-		// itterate over the domain and initialise data
+		// iterate over the domain and initialise data
 		for (amrex::MFIter iter(state_new_fc_[level][idim]); iter.isValid(); ++iter) {
 			quokka::grid grid_elem(state_new_fc_[level][idim].array(iter), iter.validbox(), geom[level].CellSizeArray(), geom[level].ProbLoArray(),
 					       geom[level].ProbHiArray(), quokka::centering::fc, static_cast<quokka::direction>(idim));
@@ -1297,7 +1307,7 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(int level, amrex::Real ti
 		}
 	}
 
-	// precalculate any required data (e.g., data table; as implimented by the
+	// precalculate any required data (e.g., data table; as implemented by the
 	// user) before initialising state variables
 	preCalculateInitialConditions();
 
@@ -1544,7 +1554,7 @@ void AMRSimulation<problem_t>::AverageFCToCC(amrex::MultiFab &mf_cc, const amrex
 	} else if (idim == 2) {
 		dk = 1;
 	}
-	// itterate over the domain
+	// iterate over the domain
 	auto const &state_cc = mf_cc.arrays();
 	auto const &state_fc = mf_fc.const_arrays();
 	amrex::ParallelFor(mf_cc, amrex::IntVect(AMREX_D_DECL(nGrow, nGrow, nGrow)), [=] AMREX_GPU_DEVICE(int boxidx, int i, int j, int k) {
@@ -1892,6 +1902,27 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 		ba.readFrom(is);
 		GotoNextLine(is);
 
+		/*Create New BoxArray at Level 0 for optimum load distribution*/
+		if (lev == 0) {
+			amrex::IntVect fac(2);
+			const amrex::IntVect domlo{AMREX_D_DECL(0, 0, 0)};
+			const amrex::IntVect domhi{AMREX_D_DECL(ba[ba.size() - 1].bigEnd(0), ba[ba.size() - 1].bigEnd(1), ba[ba.size() - 1].bigEnd(2))};
+			const amrex::Box dom(domlo, domhi);
+			const amrex::Box dom2 = amrex::refine(amrex::coarsen(dom, 2), 2);
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				if (dom.length(idim) != dom2.length(idim)) {
+					fac[idim] = 1;
+				}
+			}
+			amrex::BoxArray ba_lev0(amrex::coarsen(dom, fac));
+			ba_lev0.maxSize(max_grid_size[0] / fac);
+			ba_lev0.refine(fac);
+			// Boxes in ba have even number of cells in each direction
+			// unless the domain has odd number of cells in that direction.
+			ChopGrids(0, ba_lev0, amrex::ParallelDescriptor::NProcs());
+			ba = ba_lev0;
+		}
+
 		// create a distribution mapping
 		amrex::DistributionMapping dm{ba, amrex::ParallelDescriptor::NProcs()};
 
@@ -1926,12 +1957,26 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 	// read in the MultiFab data
 	for (int lev = 0; lev <= finest_level; ++lev) {
 		// cell-centred
-		amrex::VisMF::Read(state_new_cc_[lev], amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", "Cell"));
+		if (lev == 0) {
+			amrex::MultiFab tmp;
+			amrex::VisMF::Read(tmp, amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", "Cell"));
+			state_new_cc_[0].ParallelCopy(tmp, 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_, nghost_cc_);
+		} else {
+			amrex::VisMF::Read(state_new_cc_[lev], amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", "Cell"));
+		}
 		// face-centred
 		if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-				amrex::VisMF::Read(state_new_fc_[lev][idim], amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_",
-													   std::string("Face_") + quokka::face_dir_str[idim]));
+				if (lev == 0) {
+					amrex::MultiFab tmp;
+					amrex::VisMF::Read(tmp, amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_",
+											      std::string("Face_") + quokka::face_dir_str[idim]));
+					state_new_fc_[0][idim].ParallelCopy(tmp, 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_, nghost_fc_);
+				} else {
+					amrex::VisMF::Read(
+					    state_new_fc_[lev][idim],
+					    amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", std::string("Face_") + quokka::face_dir_str[idim]));
+				}
 			}
 		}
 	}

@@ -20,6 +20,7 @@
 #include "GrackleDataReader.hpp"
 #include "Interpolate2D.hpp"
 #include "ODEIntegrate.hpp"
+#include "hydro_system.hpp"
 #include "radiation_system.hpp"
 #include "root_finding.hpp"
 
@@ -80,7 +81,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto cloudy_cooling_function(Real const
 {
 	// interpolate cooling rates from Cloudy tables
 	const Real rhoH = rho * cloudy_H_mass_fraction; // mass density of H species
-	const Real nH = rhoH / quokka::hydrogen_mass_cgs;
+	const Real nH = rhoH / (C::m_p + C::m_e);
 	const Real log_nH = std::log10(nH);
 	const Real log_T = std::log10(T);
 
@@ -101,7 +102,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto cloudy_cooling_function(Real const
 
 	// compute electron density
 	// N.B. it is absolutely critical to include the metal contribution here!
-	double n_e = (rho / quokka::hydrogen_mass_cgs) * (1.0 - mu * (X + Y / 4. + Z / mean_metals_A)) / (mu - (electron_mass_cgs / quokka::hydrogen_mass_cgs));
+	double n_e = (rho / (C::m_p + C::m_e)) * (1.0 - mu * (X + Y / 4. + Z / mean_metals_A)) / (mu - (electron_mass_cgs / (C::m_p + C::m_e)));
 	// the approximation for the metals contribution to e- fails at high densities (~1e3 or higher)
 	n_e = std::max(n_e, 1.0e-4 * nH);
 
@@ -117,7 +118,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto cloudy_cooling_function(Real const
 	// Compton term (CMB photons)
 	// [e.g., Hirata 2018: doi:10.1093/mnras/stx2854]
 	constexpr double Gamma_C = (8. * sigma_T * E_cmb) / (3. * electron_mass_cgs * c_light_cgs_);
-	constexpr double C_n = Gamma_C * quokka::boltzmann_constant_cgs / (5. / 3. - 1.0);
+	constexpr double C_n = Gamma_C * C::k_B / (5. / 3. - 1.0);
 	const double compton_CMB = -C_n * (T - T_cmb) * n_e;
 	Edot += compton_CMB;
 
@@ -128,13 +129,13 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeEgasFromTgas(double rho, do
 {
 	// convert Egas (internal gas energy) to temperature
 	const Real rhoH = rho * cloudy_H_mass_fraction;
-	const Real nH = rhoH / quokka::hydrogen_mass_cgs;
+	const Real nH = rhoH / (C::m_p + C::m_e);
 
 	// compute mu from mu(T) table
 	const Real mu = interpolate2d(std::log10(nH), std::log10(Tgas), tables.log_nH, tables.log_Tgas, tables.meanMolWeight);
 
 	// compute thermal gas energy
-	const Real Egas = (rho / (quokka::hydrogen_mass_cgs * mu)) * quokka::boltzmann_constant_cgs * Tgas / (gamma - 1.);
+	const Real Egas = (rho / ((C::m_p + C::m_e) * mu)) * C::k_B * Tgas / (gamma - 1.);
 	return Egas;
 }
 
@@ -156,12 +157,12 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(double rho, do
 
 	// solve for temperature given Eint (with fixed adiabatic index gamma)
 	const Real rhoH = rho * cloudy_H_mass_fraction;
-	const Real nH = rhoH / quokka::hydrogen_mass_cgs;
+	const Real nH = rhoH / (C::m_p + C::m_e);
 	const Real log_nH = std::log10(nH);
 
 	// mean molecular weight (in Grackle tables) is defined w/r/t
 	// hydrogen_mass_cgs_
-	const Real C = (gamma - 1.) * Egas / (quokka::boltzmann_constant_cgs * (rho / quokka::hydrogen_mass_cgs));
+	const Real C = (gamma - 1.) * Egas / (C::k_B * (rho / (C::m_p + C::m_e)));
 
 	// solve for mu(T)*C == T.
 	// (Grackle does this with a fixed-point iteration. We use a more robust

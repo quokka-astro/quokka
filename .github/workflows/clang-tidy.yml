@@ -3,6 +3,10 @@ name: clang-tidy-review
 # You can be more specific, but it currently only works on pull requests
 on: [pull_request]
 
+concurrency:
+  group: ${{ github.ref }}-${{ github.head_ref }}-clang-tidy
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -13,18 +17,18 @@ jobs:
         submodules: true
         fetch-depth: 0
 
-    - uses: ZedThree/clang-tidy-review@v0.10.1
+    - uses: ZedThree/clang-tidy-review@v0.13.3
       id: review
       with:
         config_file: src/.clang-tidy
         build_dir: build
-        apt_packages: libopenmpi-dev,libhdf5-mpi-dev
-        cmake_command: cmake . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DQUOKKA_PYTHON=OFF
+        apt_packages: libopenmpi-dev,libhdf5-mpi-dev,python3-dev,python3-numpy,python3-matplotlib
+        cmake_command: cmake . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DQUOKKA_PYTHON=ON
         split_workflow: true
 
-    - uses: actions/upload-artifact@v3
-      with:
-        name: clang-tidy-review
-        path: |
-          clang-tidy-review-output.json
-          clang-tidy-review-metadata.json
+    # Uploads an artefact containing clang_fixes.json
+    - uses: ZedThree/clang-tidy-review/upload@v0.13.3
+
+    # If there are any comments, fail the check
+    - if: steps.review.outputs.total_comments > 0
+      run: exit 1

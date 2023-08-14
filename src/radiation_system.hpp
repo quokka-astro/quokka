@@ -25,7 +25,6 @@
 // internal headers
 #include "ArrayView.hpp"
 #include "EOS.hpp"
-#include "hydro_system.hpp"
 #include "hyperbolic_system.hpp"
 #include "simulation.hpp"
 #include "valarray.hpp"
@@ -54,6 +53,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 		return 0.5 * (sgn(a) + sgn(b)) * std::min(0.5 * std::abs(a + b), std::min(2.0 * std::abs(a), 2.0 * std::abs(b)));
 	}
 
+	static constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
 	static constexpr int nvarHyperbolic_ = Physics_NumVars::numRadVars; // number of radiation variables
 	static constexpr int nstartHyperbolic_ = Physics_Indices<problem_t>::radFirstIndex;
 	static constexpr int nvar_ = nstartHyperbolic_ + nvarHyperbolic_;
@@ -64,7 +64,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 		x2GasMomentum_index,
 		x3GasMomentum_index,
 		gasEnergy_index,
-		gasInternalEnergy_index
+		gasInternalEnergy_index,
+		scalar0_index
 	};
 
 	enum radVarIndex { radEnergy_index = nstartHyperbolic_, x1RadFlux_index, x2RadFlux_index, x3RadFlux_index };
@@ -116,6 +117,10 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static void ComputeSourceTermsExplicit(arrayconst_t &consPrev, arrayconst_t &radEnergySource, array_t &src, amrex::Box const &indexRange,
 					       amrex::Real dt);
 
+	// Use an additionalr template for ComputeMassScalars as the Array type is not always the same
+	template <typename ArrayType>
+	AMREX_GPU_DEVICE static auto ComputeMassScalars(ArrayType const &arr, int i, int j, int k) -> amrex::GpuArray<Real, nmscalars_>;
+
 	template <FluxDir DIR>
 	static void ReconstructStatesConstant(arrayconst_t &q, array_t &leftState, array_t &rightState, amrex::Box const &indexRange, int nvars);
 
@@ -123,8 +128,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static void ReconstructStatesPLM(arrayconst_t &q, array_t &leftState, array_t &rightState, amrex::Box const &indexRange, int nvars);
 
 	template <FluxDir DIR>
-	static void ReconstructStatesPPM(arrayconst_t &q, array_t &leftState, array_t &rightState, amrex::Box const &cellRange,
-					 amrex::Box const &interfaceRange, int nvars);
+	static void ReconstructStatesPPM(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in, amrex::Box const &cellRange,
+					 amrex::Box const &interfaceRange, int nvars, int iReadFrom = 0, int iWriteFrom = 0);
 
 	AMREX_GPU_HOST_DEVICE static auto ComputeEddingtonFactor(double f) -> double;
 	AMREX_GPU_HOST_DEVICE static auto ComputePlanckOpacity(double rho, double Tgas) -> double;
@@ -268,7 +273,7 @@ void RadSystem<problem_t>::ReconstructStatesPLM(arrayconst_t &q_in, array_t &lef
 template <typename problem_t>
 template <FluxDir DIR>
 void RadSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in, amrex::Box const &cellRange,
-						amrex::Box const &interfaceRange, const int nvars)
+						amrex::Box const & /*interfaceRange*/, const int nvars, const int iReadFrom, const int iWriteFrom)
 {
 	BL_PROFILE("HyperbolicSystem::ReconstructStatesPPM()");
 
@@ -301,7 +306,7 @@ void RadSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array_t &lef
 #else
 			// compute bounds from neighboring cell-averaged values along axis
 			const std::pair<double, double> bounds =
-				std::minmax({q(i, j, k, n), q(i - 1, j, k, n), q(i + 1, j, k, n)});
+				std::minmax({q(i, j, k, iReadFrom+n), q(i - 1, j, k, iReadFrom+n), q(i + 1, j, k, iReadFrom+n)});
 #endif
 
 				   // get interfaces
@@ -318,10 +323,10 @@ void RadSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array_t &lef
 				   // symmetry in floating-point arithmetic, following Athena++.
 				   const double coef_1 = (7. / 12.);
 				   const double coef_2 = (-1. / 12.);
-				   const double a_minus =
-				       (coef_1 * q(i, j, k, n) + coef_2 * q(i + 1, j, k, n)) + (coef_1 * q(i - 1, j, k, n) + coef_2 * q(i - 2, j, k, n));
-				   const double a_plus =
-				       (coef_1 * q(i + 1, j, k, n) + coef_2 * q(i + 2, j, k, n)) + (coef_1 * q(i, j, k, n) + coef_2 * q(i - 1, j, k, n));
+				   const double a_minus = (coef_1 * q(i, j, k, iReadFrom + n) + coef_2 * q(i + 1, j, k, iReadFrom + n)) +
+							  (coef_1 * q(i - 1, j, k, iReadFrom + n) + coef_2 * q(i - 2, j, k, iReadFrom + n));
+				   const double a_plus = (coef_1 * q(i + 1, j, k, iReadFrom + n) + coef_2 * q(i + 2, j, k, iReadFrom + n)) +
+							 (coef_1 * q(i, j, k, iReadFrom + n) + coef_2 * q(i - 1, j, k, iReadFrom + n));
 
 				   // left side of zone i
 				   double new_a_minus = clamp(a_minus, bounds.first, bounds.second);
@@ -332,7 +337,7 @@ void RadSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array_t &lef
 				   // (3.) Monotonicity correction, using Eq. (1.10) in PPM paper. Equivalent
 				   // to step 4b in Athena++ [ppm_simple.cpp].
 
-				   const double a = q(i, j, k, n); // a_i in C&W
+				   const double a = q(i, j, k, iReadFrom + n); // a_i in C&W
 				   const double dq_minus = (a - new_a_minus);
 				   const double dq_plus = (new_a_plus - a);
 
@@ -343,7 +348,8 @@ void RadSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array_t &lef
 					   // Causes subtle, but very weird, oscillations in the Shu-Osher test
 					   // problem. However, it is necessary to get a reasonable solution
 					   // for the sawtooth advection problem.
-					   const double dq0 = MC(q(i + 1, j, k, n) - q(i, j, k, n), q(i, j, k, n) - q(i - 1, j, k, n));
+					   const double dq0 = MC(q(i + 1, j, k, iReadFrom + n) - q(i, j, k, iReadFrom + n),
+								 q(i, j, k, iReadFrom + n) - q(i - 1, j, k, iReadFrom + n));
 
 					   // use linear reconstruction, following Balsara (2017) [Living Rev
 					   // Comput Astrophys (2017) 3:2]
@@ -367,8 +373,8 @@ void RadSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array_t &lef
 					   }
 				   }
 
-				   rightState(i, j, k, n) = new_a_minus;
-				   leftState(i + 1, j, k, n) = new_a_plus;
+				   rightState(i, j, k, iWriteFrom + n) = new_a_minus;
+				   leftState(i + 1, j, k, iWriteFrom + n) = new_a_plus;
 			   });
 }
 
@@ -512,6 +518,17 @@ template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::C
 }
 
 template <typename problem_t>
+template <typename ArrayType>
+AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeMassScalars(ArrayType const &arr, int i, int j, int k) -> amrex::GpuArray<Real, nmscalars_>
+{
+	amrex::GpuArray<Real, nmscalars_> massScalars;
+	for (int n = 0; n < nmscalars_; ++n) {
+		massScalars[n] = arr(i, j, k, scalar0_index + n);
+	}
+	return massScalars;
+}
+
+template <typename problem_t>
 template <FluxDir DIR>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeCellOpticalDepth(const quokka::Array4View<const amrex::Real, DIR> &consVar,
 								    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, int i, int j, int k) -> double
@@ -539,6 +556,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeCellOpticalDepth(const quokka
 	const double Egas_L = consVar(i - 1, j, k, gasEnergy_index);
 	const double Egas_R = consVar(i, j, k, gasEnergy_index);
 
+	auto massScalars_L = RadSystem<problem_t>::ComputeMassScalars(consVar, i - 1, j, k);
+	auto massScalars_R = RadSystem<problem_t>::ComputeMassScalars(consVar, i, j, k);
+
 	double Eint_L = NAN;
 	double Eint_R = NAN;
 	double Tgas_L = NAN;
@@ -547,8 +567,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeCellOpticalDepth(const quokka
 	if constexpr (gamma_ != 1.0) {
 		Eint_L = RadSystem<problem_t>::ComputeEintFromEgas(rho_L, x1GasMom_L, x2GasMom_L, x3GasMom_L, Egas_L);
 		Eint_R = RadSystem<problem_t>::ComputeEintFromEgas(rho_R, x1GasMom_R, x2GasMom_R, x3GasMom_R, Egas_R);
-		Tgas_L = quokka::EOS<problem_t>::ComputeTgasFromEint(rho_L, Eint_L);
-		Tgas_R = quokka::EOS<problem_t>::ComputeTgasFromEint(rho_R, Eint_R);
+		Tgas_L = quokka::EOS<problem_t>::ComputeTgasFromEint(rho_L, Eint_L, massScalars_L);
+		Tgas_R = quokka::EOS<problem_t>::ComputeTgasFromEint(rho_R, Eint_R, massScalars_R);
 	}
 
 	double dl = NAN;
@@ -895,6 +915,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		const double x2GasMom0 = consPrev(i, j, k, x2GasMomentum_index);
 		const double x3GasMom0 = consPrev(i, j, k, x3GasMomentum_index);
 		const double Egastot0 = consPrev(i, j, k, gasEnergy_index);
+		auto massScalars = RadSystem<problem_t>::ComputeMassScalars(consPrev, i, j, k);
 
 		// load radiation energy
 		const double Erad0 = consPrev(i, j, k, radEnergy_index);
@@ -944,7 +965,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			for (n = 0; n < maxIter; ++n) {
 
 				// compute material temperature
-				T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess);
+				T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
 				AMREX_ASSERT(T_gas >= 0.);
 
 				// compute opacity, emissivity
@@ -967,7 +988,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				}
 
 				// compute Jacobian elements
-				const double c_v = quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas);
+				const double c_v = quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas, massScalars);
 
 				drhs_dEgas = (rho * dt / c_v) * (kappa * dB_dTgas + dkappa_dTgas * (fourPiB - chat * Erad_guess));
 
@@ -1080,7 +1101,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 }
 
 template <typename problem_t>
-void RadSystem<problem_t>::ComputeSourceTermsExplicit(arrayconst_t &consPrev, arrayconst_t &radEnergySource, array_t &src, amrex::Box const &indexRange,
+void RadSystem<problem_t>::ComputeSourceTermsExplicit(arrayconst_t &consPrev, arrayconst_t & /*radEnergySource*/, array_t &src, amrex::Box const &indexRange,
 						      amrex::Real dt)
 {
 	const double chat = c_hat_;
@@ -1095,20 +1116,18 @@ void RadSystem<problem_t>::ComputeSourceTermsExplicit(arrayconst_t &consPrev, ar
 		const double x2GasMom0 = consPrev(i, j, k, x2GasMomentum_index);
 		const double x3GasMom0 = consPrev(i, j, k, x3GasMomentum_index);
 		const auto Egas0 = ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0);
+		auto massScalars = RadSystem<problem_t>::ComputeMassScalars(consPrev, i, j, k);
 
 		// load radiation energy, momentum
 		const auto Erad0 = consPrev(i, j, k, radEnergy_index);
 		const auto Frad0_x = consPrev(i, j, k, x1RadFlux_index);
 
 		// compute material temperature
-		const auto T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas0);
+		const auto T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas0, massScalars);
 
 		// compute opacity, emissivity
 		const auto kappa = RadSystem<problem_t>::ComputeOpacity(rho, T_gas);
 		const auto fourPiB = chat * a_rad * std::pow(T_gas, 4);
-
-		// constant radiation energy source term
-		const auto Src = dt * (chat * radEnergySource(i, j, k));
 
 		// compute reaction term
 		const auto rhs = dt * (rho * kappa) * (fourPiB - chat * Erad0);

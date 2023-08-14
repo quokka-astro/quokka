@@ -71,7 +71,8 @@ template <> struct Physics_Traits<ShockProblem> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_chemistry_enabled = false;
-	static constexpr int numPassiveScalars = 0; // number of passive scalars
+	static constexpr int numMassScalars = 0;		     // number of mass scalars
+	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = true;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
@@ -330,7 +331,7 @@ auto problem_main() -> int
 
 		double err_norm = 0.;
 		double sol_norm = 0.;
-		for (int i = 0; i < xs_exact.size(); ++i) {
+		for (size_t i = 0; i < xs_exact.size(); ++i) {
 			err_norm += std::abs(Trad_interp[i] - Trad_exact[i]);
 			sol_norm += std::abs(Trad_exact[i]);
 		}

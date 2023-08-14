@@ -23,11 +23,11 @@ constexpr double T_initial = 300.;	      // K
 
 // constexpr double kelvin_to_eV = 8.617385e-5;
 constexpr double a_rad = radiation_constant_cgs_;
-constexpr double c_v = (quokka::boltzmann_constant_cgs / quokka::hydrogen_mass_cgs) / (5. / 3. - 1.);
+constexpr double c_v = (C::k_B / C::m_u) / (5. / 3. - 1.);
 
 template <> struct quokka::EOS_Traits<SuOlsonProblemCgs> {
-	static constexpr double mean_molecular_weight = quokka::hydrogen_mass_cgs;
-	static constexpr double boltzmann_constant = quokka::boltzmann_constant_cgs;
+	static constexpr double mean_molecular_weight = C::m_u;
+	static constexpr double boltzmann_constant = C::k_B;
 	static constexpr double gamma = 5. / 3.;
 };
 
@@ -43,7 +43,8 @@ template <> struct Physics_Traits<SuOlsonProblemCgs> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = false;
 	static constexpr bool is_chemistry_enabled = false;
-	static constexpr int numPassiveScalars = 0;
+	static constexpr int numMassScalars = 0;		     // number of mass scalars
+	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = true;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
@@ -303,7 +304,7 @@ auto problem_main() -> int
 
 	double err_norm = 0.;
 	double sol_norm = 0.;
-	for (int i = 0; i < xs_exact.size(); ++i) {
+	for (size_t i = 0; i < xs_exact.size(); ++i) {
 		err_norm += std::abs(Tmat_interp[i] - Tmat_exact[i]);
 		sol_norm += std::abs(Tmat_exact[i]);
 	}

@@ -60,8 +60,10 @@ else()
   message(STATUS "Fused multiply-add (FMAD) is *enabled* for device code. Exact direction symmetry will NOT be preserved.")
 endif(DISABLE_FMAD)
 
-# this is necessary to prevent the host compiler from complaining about nv_pragmas
-#add_compile_options(-Wno-unknown-pragmas)
+# emit error if warnings are produced
+if(WARNINGS_AS_ERRORS)
+  add_compile_options(-Werror -Wall -Wextra -Wno-unused-parameter -Wno-unknown-pragmas -Wno-strict-aliasing)
+endif(WARNINGS_AS_ERRORS)
 
 # emit register usage per thread from CUDA assembler
 # if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA")
@@ -73,12 +75,18 @@ endif(DISABLE_FMAD)
 #   add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:-Wno-unused-command-line-argument>)
 # endif()
 
-
 include_directories(${amrex_INCLUDE_DIRS_RET})
 include_directories(${fmt_INCLUDE_DIRS_RET})
 include_directories(${HDF5_INCLUDE_DIRS_RET})
 include_directories(${Boost_INCLUDE_DIRS_RET})
 include_directories(${CMAKE_SOURCE_DIR}/src)
+
+# default network_name (for Microphysics EOS) for all tests:
+set(microphysics_network_name "gamma_law")
+# default output_dir (for Microphysics EOS) for all tests:
+set(microphysics_output_dir "${CMAKE_CURRENT_BINARY_DIR}/")
+setup_target_for_microphysics_compilation(${microphysics_network_name} "${CMAKE_CURRENT_BINARY_DIR}/")
+include_directories(${gamma_law_dirs} ${CMAKE_CURRENT_BINARY_DIR} "includes/extern_parameters.H" "includes/network_properties.H")
 
 link_libraries(AMReX::amrex)
 link_libraries(fmt::fmt)
@@ -86,9 +94,24 @@ link_libraries(hdf5::hdf5)
 
 include(CTest)
 
+#create an object library for files that should be compiled with all test problems
+set (QuokkaObjSources "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/CloudyCooling.cpp" 
+                      "${CMAKE_CURRENT_SOURCE_DIR}/GrackleDataReader.cpp"
+                      "${gamma_law_sources}")
+#we don't use it anymore because it gives issues on Cray systems
+#add_library(QuokkaObj OBJECT ${QuokkaObjSources} ${gamma_law_sources})
+#if(AMReX_GPU_BACKEND MATCHES "CUDA")
+#    setup_target_for_cuda_compilation(QuokkaObj)
+#endif()
+#link_libraries(QuokkaObj)
+
+add_subdirectory(StarCluster)
+add_subdirectory(PrimordialChem)
+
 add_subdirectory(Advection)
 add_subdirectory(Advection2D)
 add_subdirectory(AdvectionSemiellipse)
+
 
 add_subdirectory(HydroBlast2D)
 add_subdirectory(HydroBlast3D)
@@ -97,6 +120,7 @@ add_subdirectory(HydroKelvinHelmholz)
 add_subdirectory(HydroLeblanc)
 add_subdirectory(HydroRichtmeyerMeshkov)
 add_subdirectory(HydroShocktube)
+add_subdirectory(HydroShocktubeCMA)
 add_subdirectory(HydroShuOsher)
 add_subdirectory(HydroSMS)
 add_subdirectory(HydroVacuum)
@@ -105,7 +129,6 @@ add_subdirectory(HydroQuirk)
 add_subdirectory(HydroHighMach)
 add_subdirectory(RayleighTaylor2D)
 add_subdirectory(RayleighTaylor3D)
-
 add_subdirectory(RadBeam)
 add_subdirectory(RadForce)
 add_subdirectory(RadMarshak)

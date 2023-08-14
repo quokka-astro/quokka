@@ -35,20 +35,20 @@ using amrex::Real;
 struct ShockCloud {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-constexpr double m_H = quokka::hydrogen_mass_cgs;
 constexpr double seconds_in_year = 3.154e7;
 
 template <> struct quokka::EOS_Traits<ShockCloud> {
 	static constexpr double gamma = 5. / 3.; // default value
-	static constexpr double mean_molecular_weight = NAN;
-	static constexpr double boltzmann_constant = quokka::boltzmann_constant_cgs;
+	static constexpr double mean_molecular_weight = 1.0;
+	static constexpr double boltzmann_constant = C::k_B;
 };
 
 template <> struct Physics_Traits<ShockCloud> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_chemistry_enabled = false;
-	static constexpr int numPassiveScalars = 0; // number of passive scalars
+	static constexpr int numMassScalars = 0;		     // number of mass scalars
+	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = false;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
@@ -64,9 +64,9 @@ constexpr Real nH1 = 1.0e-1;		 // cm^-3
 constexpr Real R_cloud = 5.0 * 3.086e18; // cm [5 pc]
 constexpr Real M0 = 2.0;		 // Mach number of shock
 
-constexpr Real P0 = nH0 * Tgas0 * quokka::boltzmann_constant_cgs; // erg cm^-3
-constexpr Real rho0 = nH0 * m_H;				  // g cm^-3
-constexpr Real rho1 = nH1 * m_H;
+constexpr Real P0 = nH0 * Tgas0 * C::k_B;      // erg cm^-3
+constexpr Real rho0 = nH0 * (C::m_p + C::m_e); // g cm^-3
+constexpr Real rho1 = nH1 * (C::m_p + C::m_e);
 
 // perturbation parameters
 const int kmin = 0;

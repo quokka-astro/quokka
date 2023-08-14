@@ -7,6 +7,7 @@
 #include <AMReX_REAL.H>
 
 #include "ArrayView.hpp"
+#include "EOS.hpp"
 #include "HydroState.hpp"
 #include "valarray.hpp"
 
@@ -17,9 +18,9 @@ namespace quokka::Riemann
 //  Minoshima & Miyoshi, "A low-dissipation HLLD approximate Riemann solver
 //  	for a very wide range of Mach numbers," JCP (2021).]
 //
-template <int N_scalars, int fluxdim>
-AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars> const &sL, quokka::HydroState<N_scalars> const &sR, const double gamma,
-					      const double du, const double dw) -> quokka::valarray<double, fluxdim>
+template <typename problem_t, int N_scalars, int N_mscalars, int fluxdim>
+AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars, N_mscalars> const &sL, quokka::HydroState<N_scalars, N_mscalars> const &sR,
+					      const double gamma, const double du, const double dw) -> quokka::valarray<double, fluxdim>
 {
 	// compute Roe averages
 
@@ -34,17 +35,49 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars> cons
 	const double H_R = (sR.E + sR.P) / sR.rho; // sR specific enthalpy
 	const double H_tilde = (wl * H_L + wr * H_R) * norm;
 	double cs_tilde = NAN;
+
+	// compute nonlinear wavespeed correction [Rider, Computers & Fluids 28 (1999) 741-777]
+	// (Only applicable in compressions. Significantly reduces slow-moving shock oscillations.)
+
+	const double dU = sL.u - sR.u;
+	double S_L = NAN;
+	double S_R = NAN;
 	if (gamma != 1.0) {
-		// TODO(ben): implement Roe average for general EOS
-		cs_tilde = std::sqrt((gamma - 1.) * (H_tilde - 0.5 * vsq_tilde));
+
+		auto [dedr_L, dedp_L, drdp_L, dpdr_s_L, G_L] = quokka::EOS<problem_t>::ComputeOtherDerivatives(sL.rho, sL.P, sL.massScalar);
+		auto [dedr_R, dedp_R, drdp_R, dpdr_s_R, G_R] = quokka::EOS<problem_t>::ComputeOtherDerivatives(sR.rho, sR.P, sR.massScalar);
+
+		// equation A.5a of Kershaw+1998
+		// need specific internal energy here
+		const double C_tilde_rho = 0.5 * ((sL.Eint / sL.rho) + (sR.Eint / sR.rho) + sL.rho * dedr_L + sR.rho * dedr_R);
+
+		// equation A.5b of Kershaw+1998
+		const double C_tilde_P = 0.5 * ((sL.Eint / sL.rho) * drdp_L + (sR.Eint / sR.rho) * drdp_R + sL.rho * dedp_L + sR.rho * dedp_R);
+
+		// equation 4.12 of Kershaw+1998
+		cs_tilde = std::sqrt((1.0 / C_tilde_P) * (H_tilde - 0.5 * vsq_tilde - C_tilde_rho));
+
+		const double s_NL = 0.5 * G_L * std::max(dU, 0.); // second-order wavespeed correction
+		const double s_NR = 0.5 * G_R * std::max(dU, 0.);
+
+		// compute wave speeds following Batten et al. (1997)
+		S_L = std::min(sL.u - (sL.cs + s_NL), u_tilde - (cs_tilde + s_NL));
+		S_R = std::max(sR.u + (sR.cs + s_NR), u_tilde + (cs_tilde + s_NR));
+
 	} else {
 		cs_tilde = 0.5 * (sL.cs + sR.cs);
+		const double G_gamma_L = 1.0;
+		const double G_gamma_R = 1.0;
+
+		const double G_L = 0.5 * (G_gamma_L + 1.);
+		const double G_R = 0.5 * (G_gamma_R + 1.);
+
+		const double s_NL = 0.5 * G_L * std::max(dU, 0.);
+		const double s_NR = 0.5 * G_R * std::max(dU, 0.);
+
+		S_L = std::min(sL.u - (sL.cs + s_NL), u_tilde - (cs_tilde + s_NL));
+		S_R = std::max(sR.u + (sR.cs + s_NR), u_tilde + (cs_tilde + s_NR));
 	}
-
-	// compute wave speeds following Batten et al. (1997)
-
-	const double S_L = std::min(sL.u - sL.cs, u_tilde - cs_tilde);
-	const double S_R = std::max(sR.u + sR.cs, u_tilde + cs_tilde);
 
 	// carbuncle correction [Eq. 10 of Minoshima & Miyoshi (2021)]
 

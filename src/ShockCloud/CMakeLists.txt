@@ -1,6 +1,6 @@
 if (AMReX_SPACEDIM GREATER_EQUAL 3)
-    add_executable(shock_cloud ../main.cpp ../CloudyCooling.cpp ../GrackleDataReader.cpp cloud.cpp)
-    add_executable(test_cloudy ../main.cpp ../CloudyCooling.cpp ../GrackleDataReader.cpp test_cloudy.cpp)
+    add_executable(shock_cloud cloud.cpp ${QuokkaObjSources})
+    add_executable(test_cloudy test_cloudy.cpp ${QuokkaObjSources})
 
     if(AMReX_GPU_BACKEND MATCHES "CUDA")
         setup_target_for_cuda_compilation(shock_cloud)

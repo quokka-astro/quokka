@@ -2,9 +2,11 @@ name: Build and Deploy Docs
 
 on:
   push:
-    branches: [development]
-    
+    branches: [ development ]
+  
   pull_request:
+    # The branches below must be a subset of the branches above
+    branches: [ development ]
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -71,4 +73,4 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v1
+        uses: actions/deploy-pages@v2

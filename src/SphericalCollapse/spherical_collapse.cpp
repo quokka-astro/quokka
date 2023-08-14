@@ -28,8 +28,8 @@ struct CollapseProblem {
 
 template <> struct quokka::EOS_Traits<CollapseProblem> {
 	static constexpr double gamma = 5. / 3.;
-	static constexpr double mean_molecular_weight = NAN;
-	static constexpr double boltzmann_constant = quokka::boltzmann_constant_cgs;
+	static constexpr double mean_molecular_weight = 1.0;
+	static constexpr double boltzmann_constant = C::k_B;
 };
 
 template <> struct HydroSystem_Traits<CollapseProblem> {
@@ -40,7 +40,8 @@ template <> struct Physics_Traits<CollapseProblem> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_chemistry_enabled = false;
-	static constexpr int numPassiveScalars = 0; // number of passive scalars
+	static constexpr int numMassScalars = 0;		     // number of mass scalars
+	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = false;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
@@ -75,13 +76,12 @@ template <> void RadhydroSimulation<CollapseProblem>::setInitialConditionsOnGrid
 		AMREX_ASSERT(!std::isnan(rho));
 		AMREX_ASSERT(!std::isnan(P));
 
-		const amrex::Real gamma = quokka::EOS_Traits<CollapseProblem>::gamma;
 		state_cc(i, j, k, HydroSystem<CollapseProblem>::density_index) = rho;
 		state_cc(i, j, k, HydroSystem<CollapseProblem>::x1Momentum_index) = 0;
 		state_cc(i, j, k, HydroSystem<CollapseProblem>::x2Momentum_index) = 0;
 		state_cc(i, j, k, HydroSystem<CollapseProblem>::x3Momentum_index) = 0;
-		state_cc(i, j, k, HydroSystem<CollapseProblem>::energy_index) = P / (gamma - 1.);
-		state_cc(i, j, k, HydroSystem<CollapseProblem>::internalEnergy_index) = P / (gamma - 1.);
+		state_cc(i, j, k, HydroSystem<CollapseProblem>::energy_index) = quokka::EOS<CollapseProblem>::ComputeEintFromPres(rho, P);
+		state_cc(i, j, k, HydroSystem<CollapseProblem>::internalEnergy_index) = quokka::EOS<CollapseProblem>::ComputeEintFromPres(rho, P);
 	});
 }
 

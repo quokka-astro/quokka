@@ -1,6 +1,17 @@
 name: CMake
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [ development ]
+  pull_request:
+    # The branches below must be a subset of the branches above
+    branches: [ development ]
+  merge_group:
+    branches: [ development ]
+
+concurrency:
+  group: ${{ github.ref }}-${{ github.head_ref }}-cmake-linux
+  cancel-in-progress: true
 
 env:
   # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
@@ -42,7 +53,8 @@ jobs:
       working-directory: ${{runner.workspace}}/build
       shell: bash
       # Execute the build.  You can specify a specific target with "--target <NAME>"
-      run: cmake --build . --config $BUILD_TYPE
+      # Restrict to 1 build process at a time to avoid OOM kills.
+      run: cmake --build . --config $BUILD_TYPE --parallel 1
 
     - name: Create test output directory
       run: cmake -E make_directory $GITHUB_WORKSPACE/tests
@@ -56,7 +68,7 @@ jobs:
 
     - name: Upload test output
       if: always()
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         name: test-results
         path: ${{github.workspace}}/tests

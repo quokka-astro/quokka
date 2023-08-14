@@ -1,0 +1,67 @@
+name: hip
+
+on:
+  push:
+    branches: [ development ]
+  pull_request:
+    # The branches below must be a subset of the branches above
+    branches: [ development ]
+  merge_group:
+    branches: [ development ]
+
+concurrency:
+  group: ${{ github.ref }}-${{ github.head_ref }}-hip
+  cancel-in-progress: true
+
+jobs:
+  tests-hip:
+    name: HIP ROCm C++17
+    runs-on: ubuntu-20.04
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: true
+    - name: AMReX Dependencies
+      run: |
+        .github/workflows/dependencies/dependencies_hip.sh
+        .github/workflows/dependencies/dependencies_ccache.sh
+    - name: Python and HDF5 dependencies
+      run: sudo apt-get update && sudo apt-get install python3-dev python3-numpy python3-matplotlib python3-pip libhdf5-mpi-dev
+    - name: Set Up Cache
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/ccache
+        key: ccache-${{ github.workflow }}-${{ github.job }}-git-${{ github.sha }}
+        restore-keys: |
+             ccache-${{ github.workflow }}-${{ github.job }}-git-
+    - name: Build & Install
+      run: |
+        export CCACHE_COMPRESS=1
+        export CCACHE_COMPRESSLEVEL=10
+        export CCACHE_MAXSIZE=45M
+        ccache -z
+
+        source /etc/profile.d/rocm.sh
+        hipcc --version
+        which clang
+        which clang++
+        which flang
+
+        # "mpic++ --showme" forgets open-pal in Ubuntu 20.04 + OpenMPI 4.0.3
+        #   https://bugs.launchpad.net/ubuntu/+source/openmpi/+bug/1941786
+        #   https://github.com/open-mpi/ompi/issues/9317
+        export LDFLAGS="-lopen-pal"
+
+        cmake -S . -B build                               \
+            -DCMAKE_VERBOSE_MAKEFILE=ON                   \
+            -DAMReX_GPU_BACKEND=HIP                       \
+            -DAMReX_AMD_ARCH=gfx908                       \
+            -DAMReX_ROCTX=ON                              \
+            -DCMAKE_C_COMPILER=$(which clang)             \
+            -DCMAKE_CXX_COMPILER=$(which clang++)         \
+            -DCMAKE_CXX_STANDARD=17                       \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+        cmake --build build -j 2
+
+        ccache -s
+        du -hs ~/.cache/ccache

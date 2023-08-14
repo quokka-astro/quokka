@@ -1,5 +1,5 @@
 if (AMReX_SPACEDIM GREATER_EQUAL 2)
-    add_executable(test_advection2d ../main.cpp ../CloudyCooling.cpp ../GrackleDataReader.cpp test_advection2d.cpp)
+    add_executable(test_advection2d test_advection2d.cpp ${QuokkaObjSources})
     if(AMReX_GPU_BACKEND MATCHES "CUDA")
         setup_target_for_cuda_compilation(test_advection2d)
     endif()
