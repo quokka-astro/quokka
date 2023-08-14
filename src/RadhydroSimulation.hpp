@@ -962,7 +962,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 			HydroSystem<problem_t>::PredictStep(stateOld, stateNew, rhs, dt_lev, ncompHydro_, redoFlag);
 
 			amrex::Gpu::streamSynchronizeAll(); // just in case
-			amrex::Long ncells_bad = static_cast<int>(redoFlag.sum(0));
+			amrex::Long const ncells_bad = static_cast<int>(redoFlag.sum(0));
 			if (ncells_bad > 0) {
 				// FOFC failed
 				if (Verbose()) {
