@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.20)
 project(QuokkaCode VERSION 1.0
   DESCRIPTION "Radiation hydrodynamics with structured AMR"
   LANGUAGES CXX C)
@@ -40,10 +40,6 @@ if(AMReX_GPU_BACKEND MATCHES "CUDA")
   endif()
 
   set(CMAKE_CUDA_ARCHITECTURES 70 80 CACHE STRING "")
-  
-  if(CMAKE_VERSION VERSION_LESS 3.20)
-    include(AMReX_SetupCUDA)
-  endif(CMAKE_VERSION VERSION_LESS 3.20)
 endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL "Intel")

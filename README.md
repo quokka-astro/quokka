@@ -27,7 +27,7 @@ Quokka also features advanced Adaptive Quokka Refinement:tm: technology:
 
 ## Dependencies
 * C++ compiler (with C++17 support)
-* CMake 3.16+
+* CMake 3.20+
 * MPI library with GPU-aware support (OpenMPI, MPICH, or Cray MPI)
 * HDF5 1.10+ (serial version)
 * CUDA 11.7+ (optional, for NVIDIA GPUs)
