@@ -1022,7 +1022,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 
 		// do first-order flux correction (FOFC)
 		amrex::Gpu::streamSynchronizeAll(); // just in case
-		int ncells_bad = static_cast<int>(redoFlag.sum(0));
+		int const ncells_bad = static_cast<int>(redoFlag.sum(0));
 		if (ncells_bad > 0) {
 			if (Verbose()) {
 				amrex::Print() << "[FOFC-2] flux correcting " << ncells_bad << " cells on level " << lev << "\n";
