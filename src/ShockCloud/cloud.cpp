@@ -99,6 +99,7 @@ template <> struct SimulationData<ShockCloud> {
 
 static bool enable_cooling = true;
 static bool sharp_cloud_edge = false;
+static bool do_frame_shift = true;
 
 template <> void RadhydroSimulation<ShockCloud>::setInitialConditionsAtLevel(int lev)
 {
@@ -373,65 +374,67 @@ void RadhydroSimulation<ShockCloud>::addStrangSplitSources(amrex::MultiFab &stat
 template <> void RadhydroSimulation<ShockCloud>::computeAfterTimestep(const amrex::Real dt_coarse)
 {
 	// perform Galilean transformation (velocity shift to center-of-mass frame)
+	if (::do_frame_shift) {
 
-	// N.B. must weight by passive scalar of cloud, since the background has
-	// non-negligible momentum!
-	int nc = 1; // number of components in temporary MF
-	int ng = 0; // number of ghost cells in temporary MF
-	amrex::MultiFab temp_mf(boxArray(0), DistributionMap(0), nc, ng);
+		// N.B. must weight by passive scalar of cloud, since the background has
+		// non-negligible momentum!
+		int nc = 1; // number of components in temporary MF
+		int ng = 0; // number of ghost cells in temporary MF
+		amrex::MultiFab temp_mf(boxArray(0), DistributionMap(0), nc, ng);
 
-	// compute x-momentum
-	amrex::MultiFab::Copy(temp_mf, state_new_[0], HydroSystem<ShockCloud>::x1Momentum_index, 0, nc, ng);
-	amrex::MultiFab::Multiply(temp_mf, state_new_[0], HydroSystem<ShockCloud>::scalar0_index, 0, nc, ng);
-	const Real xmom = temp_mf.sum(0);
+		// compute x-momentum
+		amrex::MultiFab::Copy(temp_mf, state_new_[0], HydroSystem<ShockCloud>::x1Momentum_index, 0, nc, ng);
+		amrex::MultiFab::Multiply(temp_mf, state_new_[0], HydroSystem<ShockCloud>::scalar0_index, 0, nc, ng);
+		const Real xmom = temp_mf.sum(0);
 
-	// compute cloud mass within simulation box
-	amrex::MultiFab::Copy(temp_mf, state_new_[0], HydroSystem<ShockCloud>::density_index, 0, nc, ng);
-	amrex::MultiFab::Multiply(temp_mf, state_new_[0], HydroSystem<ShockCloud>::scalar0_index, 0, nc, ng);
-	const Real cloud_mass = temp_mf.sum(0);
+		// compute cloud mass within simulation box
+		amrex::MultiFab::Copy(temp_mf, state_new_[0], HydroSystem<ShockCloud>::density_index, 0, nc, ng);
+		amrex::MultiFab::Multiply(temp_mf, state_new_[0], HydroSystem<ShockCloud>::scalar0_index, 0, nc, ng);
+		const Real cloud_mass = temp_mf.sum(0);
 
-	// compute center-of-mass velocity of the cloud
-	const Real vx_cm = xmom / cloud_mass;
+		// compute center-of-mass velocity of the cloud
+		const Real vx_cm = xmom / cloud_mass;
 
-	// save cumulative position, velocity offsets in simulationMetadata_
-	const Real delta_x_prev = std::get<Real>(simulationMetadata_["delta_x"]);
-	const Real delta_vx_prev = std::get<Real>(simulationMetadata_["delta_vx"]);
-	const Real delta_x = delta_x_prev + dt_coarse * delta_vx_prev;
-	const Real delta_vx = delta_vx_prev + vx_cm;
-	simulationMetadata_["delta_x"] = delta_x;
-	simulationMetadata_["delta_vx"] = delta_vx;
-	::delta_vx = delta_vx;
+		// save cumulative position, velocity offsets in simulationMetadata_
+		const Real delta_x_prev = std::get<Real>(simulationMetadata_["delta_x"]);
+		const Real delta_vx_prev = std::get<Real>(simulationMetadata_["delta_vx"]);
+		const Real delta_x = delta_x_prev + dt_coarse * delta_vx_prev;
+		const Real delta_vx = delta_vx_prev + vx_cm;
+		simulationMetadata_["delta_x"] = delta_x;
+		simulationMetadata_["delta_vx"] = delta_vx;
+		::delta_vx = delta_vx;
 
-	const Real v_wind = ::v_wind;
-	amrex::Print() << "\tDelta x = " << (delta_x / parsec_in_cm) << " pc,"
-		    	<< " Delta vx = " << (delta_vx / 1.0e5) << " km/s,"
-				<< " Inflow velocity = " << ((v_wind - delta_vx) / 1.0e5) << " km/s\n";
+		const Real v_wind = ::v_wind;
+		amrex::Print() << "[Cloud Tracking] Delta x = " << (delta_x / parsec_in_cm) << " pc,"
+			       << " Delta vx = " << (delta_vx / 1.0e5) << " km/s,"
+			       << " Inflow velocity = " << ((v_wind - delta_vx) / 1.0e5) << " km/s\n";
 
-	// If we are moving faster than the wind, we should abort the simulation.
-	// (otherwise, the boundary conditions become inconsistent.)
-	AMREX_ALWAYS_ASSERT(delta_vx < v_wind);
+		// If we are moving faster than the wind, we should abort the simulation.
+		// (otherwise, the boundary conditions become inconsistent.)
+		AMREX_ALWAYS_ASSERT(delta_vx < v_wind);
 
-	// subtract center-of-mass y-velocity on each level
-	// N.B. must update both y-momentum *and* energy!
-	for (int lev = 0; lev <= finest_level; ++lev) {
-		auto const &mf = state_new_[lev];
-		auto const &state = state_new_[lev].arrays();
-		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int box, int i, int j, int k) noexcept {
-			Real rho = state[box](i, j, k, HydroSystem<ShockCloud>::density_index);
-			Real xmom = state[box](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
-			Real ymom = state[box](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
-			Real zmom = state[box](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
-			Real E = state[box](i, j, k, HydroSystem<ShockCloud>::energy_index);
-			Real KE = 0.5 * (xmom * xmom + ymom * ymom + zmom * zmom) / rho;
-			Real Eint = E - KE;
-			Real new_xmom = xmom - rho * vx_cm;
-			Real new_KE = 0.5 * (new_xmom * new_xmom + ymom * ymom + zmom * zmom) / rho;
+		// subtract center-of-mass y-velocity on each level
+		// N.B. must update both y-momentum *and* energy!
+		for (int lev = 0; lev <= finest_level; ++lev) {
+			auto const &mf = state_new_[lev];
+			auto const &state = state_new_[lev].arrays();
+			amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int box, int i, int j, int k) noexcept {
+				Real rho = state[box](i, j, k, HydroSystem<ShockCloud>::density_index);
+				Real xmom = state[box](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
+				Real ymom = state[box](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
+				Real zmom = state[box](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
+				Real E = state[box](i, j, k, HydroSystem<ShockCloud>::energy_index);
+				Real KE = 0.5 * (xmom * xmom + ymom * ymom + zmom * zmom) / rho;
+				Real Eint = E - KE;
+				Real new_xmom = xmom - rho * vx_cm;
+				Real new_KE = 0.5 * (new_xmom * new_xmom + ymom * ymom + zmom * zmom) / rho;
 
-			state[box](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index) = new_xmom;
-			state[box](i, j, k, HydroSystem<ShockCloud>::energy_index) = Eint + new_KE;
-		});
+				state[box](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index) = new_xmom;
+				state[box](i, j, k, HydroSystem<ShockCloud>::energy_index) = Eint + new_KE;
+			});
+		}
+		amrex::Gpu::streamSynchronizeAll();
 	}
-	amrex::Gpu::streamSynchronizeAll();
 }
 
 template <>
@@ -503,8 +506,8 @@ void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::string cons
 			Real Tgas = ComputeTgasFromEgas(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
 			Real mu = ComputeMMW(rho, Egas, HydroSystem<ShockCloud>::gamma_, tables);
 			Real ndens = rho / (mu * m_H);
-			Real K_cgs = boltzmann_constant_cgs_ * Tgas * std::pow(ndens, -2./3.); // ergs cm^2
-			Real K_keV_cm2 = K_cgs /  keV_in_ergs; // convert to units of keV cm^2
+			Real K_cgs = boltzmann_constant_cgs_ * Tgas * std::pow(ndens, -2. / 3.); // ergs cm^2
+			Real K_keV_cm2 = K_cgs / keV_in_ergs; // convert to units of keV cm^2
 			output[bx](i, j, k, ncomp) = K_keV_cm2;
 		});
 
@@ -558,7 +561,7 @@ void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::string cons
 		auto const &output = mf.arrays();
 		auto const &state = state_new_[lev].const_arrays();
 		const Real delta_vx = ::delta_vx;
-		
+
 		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 			// compute observer velocity in km/s
 			Real const rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
@@ -567,12 +570,12 @@ void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::string cons
 			Real const vx_lab = vx + delta_vx;
 			output[bx](i, j, k, ncomp) = vx_lab / 1.0e5; // km/s
 		});
-	
+
 	} else if (dname == "velocity_mag") {
 		const int ncomp = ncomp_in;
 		auto const &output = mf.arrays();
 		auto const &state = state_new_[lev].const_arrays();
-		
+
 		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 			// compute simulation-frame |v| in km/s
 			Real const rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
@@ -582,7 +585,7 @@ void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::string cons
 			Real const v1 = x1Mom / rho;
 			Real const v2 = x2Mom / rho;
 			Real const v3 = x3Mom / rho;
-			output[bx](i, j, k, ncomp) = std::sqrt(v1*v1 + v2*v2 + v3*v3) / 1.0e5; // km/s
+			output[bx](i, j, k, ncomp) = std::sqrt(v1 * v1 + v2 * v2 + v3 * v3) / 1.0e5; // km/s
 		});
 	}
 	amrex::Gpu::streamSynchronize();
@@ -616,8 +619,8 @@ template <> auto RadhydroSimulation<ShockCloud>::ComputeStatistics() -> std::map
 	const Real dvx_cgs = std::get<Real>(simulationMetadata_["delta_vx"]);
 	const Real v_wind = ::v_wind;
 
-	stats["delta_x"] = dx_cgs / parsec_in_cm; // pc
-	stats["delta_vx"] = dvx_cgs / 1.0e5;	  // km/s
+	stats["delta_x"] = dx_cgs / parsec_in_cm;	 // pc
+	stats["delta_vx"] = dvx_cgs / 1.0e5;		 // km/s
 	stats["inflow_vx"] = (v_wind - dvx_cgs) / 1.0e5; // km/s
 
 	// save total simulation mass
@@ -741,9 +744,9 @@ template <> auto RadhydroSimulation<ShockCloud>::ComputeStatistics() -> std::map
 	// compute cloud mass according to cloud fraction threshold
 	const Real M_cl_fraction_01 = computeVolumeIntegral(
 	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-			Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
-			Real const rho_bg = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 2);
-			Real const C_frac = rho_cloud / (rho_cloud + rho_bg);
+		    Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
+		    Real const rho_bg = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 2);
+		    Real const C_frac = rho_cloud / (rho_cloud + rho_bg);
 
 		    Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
 		    Real const result = (C_frac > 0.1) ? rho : 0.0;
@@ -751,9 +754,9 @@ template <> auto RadhydroSimulation<ShockCloud>::ComputeStatistics() -> std::map
 	    });
 	const Real M_cl_fraction_01_09 = computeVolumeIntegral(
 	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-			Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
-			Real const rho_bg = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 2);
-			Real const C_frac = rho_cloud / (rho_cloud + rho_bg);
+		    Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
+		    Real const rho_bg = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 2);
+		    Real const C_frac = rho_cloud / (rho_cloud + rho_bg);
 
 		    Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
 		    Real const result = ((C_frac > 0.1) && (C_frac < 0.9)) ? rho : 0.0;
@@ -980,6 +983,11 @@ auto problem_main() -> int
 	int sharp_cloud_edge = 0;
 	pp.query("sharp_cloud_edge", sharp_cloud_edge);
 	::sharp_cloud_edge = sharp_cloud_edge == 1;
+
+	// do frame shifting to follow cloud center-of-mass?
+	int do_frame_shift = 1;
+	pp.query("do_frame_shift", do_frame_shift);
+	::do_frame_shift = do_frame_shift == 1;
 
 	// background gas H number density
 	pp.query("nH_bg", nH_bg); // cm^-3
