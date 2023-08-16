@@ -185,30 +185,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<ShockCloud>::setCustomBou
 	}
 }
 
-#if 0
-template <>
-void HydroSystem<ShockCloud>::EnforceInternalEnergyFloor(amrex::Real const internalEnergyFloor,
-							 amrex::MultiFab &state_mf,
-							 SimulationData<ShockCloud> const &userData)
-{
-	// prevent negative internal energy
-	const Real gamma = HydroSystem<ShockCloud>::gamma_;
-	auto tables = userData.cloudyTables.const_tables();
-	auto const &state = state_mf.arrays();
-
-	amrex::ParallelFor(state_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-		const amrex::Real rho = state[bx](i, j, k, density_index);
-		const amrex::Real Eint = state[bx](i, j, k, internalEnergy_index);
-		const amrex::Real Eint_min = ComputeEgasFromTgas(rho, T_floor, gamma, tables);
-
-		// reset Eint if less than internalEnergyFloor
-		if (Eint < Eint_min) {
-			state[bx](i, j, k, internalEnergy_index) = Eint_min;
-		}
-	});
-}
-#endif
-
 template <> void RadhydroSimulation<ShockCloud>::computeAfterTimestep()
 {
 	const amrex::Real dt_coarse = dt_[0];
@@ -725,7 +701,6 @@ auto problem_main() -> int
 	::R_cloud *= parsec_in_cm;	   // convert to cm
 
 	// (pre-shock) Mach number
-	// (N.B. *not* the same as Mach_wind!)
 	pp.query("Mach_shock", M0); // dimensionless
 
 	// compute background pressure
@@ -777,7 +752,6 @@ auto problem_main() -> int
 	const double max_time = 20.0 * t_cc;
 
 	// set simulation parameters
-
 	sim.reconstructionOrder_ = 3;	   // PPM for hydro
 	sim.densityFloor_ = 1.0e-3 * rho0; // density floor (to prevent vacuum)
 	sim.stopTime_ = max_time;
