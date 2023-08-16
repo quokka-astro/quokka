@@ -81,7 +81,6 @@ AMREX_GPU_MANAGED static Real P_wind = 0;
 AMREX_GPU_MANAGED static Real delta_vx = 0;
 static Real delta_x = 0;
 
-static bool enable_cooling = true;
 static bool sharp_cloud_edge = false;
 static bool do_frame_shift = true;
 
@@ -701,11 +700,6 @@ auto problem_main() -> int
 	Real nH_cloud = NAN;
 	Real P_over_k = NAN;
 	Real M0 = NAN;
-
-	// enable cooling?
-	int enable_cooling = 1; // default (0 = off, 1, = on)
-	pp.query("enable_cooling", enable_cooling);
-	::enable_cooling = enable_cooling == 1;
 
 	// use a sharp cloud edge?
 	int sharp_cloud_edge = 0;

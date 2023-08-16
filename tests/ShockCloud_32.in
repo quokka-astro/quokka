@@ -34,7 +34,8 @@ ascent_interval = 10
 derived_vars = pressure entropy nH temperature cooling_length \
 	       cloud_fraction lab_velocity_x mass velocity_mag
 
-cooling.enabled = 1
+cooling.enabled = 0
+cooling.read_tables_even_if_disabled = 1
 cooling.grackle_data_file = "../extern/grackle_data_files/input/CloudyData_UVB=HM2012.h5"
 temperature_floor = 100
 

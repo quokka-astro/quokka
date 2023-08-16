@@ -325,11 +325,14 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::readParmParse(
 	// set cooling runtime parameters
 	{
 		amrex::ParmParse hpp("cooling");
+		int alwaysReadTables = 0;
 		hpp.query("enabled", enableCooling_);
+		hpp.query("read_tables_even_if_disabled", alwaysReadTables);
 		hpp.query("grackle_data_file", coolingTableFilename_);
 
-		if (enableCooling_ == 1) {
+		if ((enableCooling_ == 1) || (alwaysReadTables == 1)) {
 			// read Cloudy tables
+			amrex::Print() << "Reading Cloudy tables...\n";
 			quokka::cooling::readCloudyData(coolingTableFilename_, cloudyTables_);
 		}
 	}
