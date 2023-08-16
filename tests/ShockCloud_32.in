@@ -23,29 +23,23 @@ amr.max_grid_size     = 64
 # *****************************************************************
 # Quokka options
 # *****************************************************************
+cfl = 0.3
 do_reflux = 1
 do_subcycle = 1
-
 max_walltime = 6:00:00
 max_timesteps = 5000
-
-plotfile_interval = 100
 checkpoint_interval = 5000
+plotfile_interval = 100
 ascent_interval = 10
-projection_interval = -1
-statistics_interval = 10
 derived_vars = pressure entropy nH temperature cooling_length \
 	       cloud_fraction lab_velocity_x mass velocity_mag
-projection.dirs = x z
-
-hydro.cfl = 0.3
-sharp_cloud_edge = 1
-do_frame_shift = 0
 
 cooling.enabled = 1
 cooling.grackle_data_file = "../extern/grackle_data_files/input/CloudyData_UVB=HM2012.h5"
 temperature_floor = 100
 
+sharp_cloud_edge = 1
+do_frame_shift = 0
 nH_bg    = 0.003356403333 # cm^-3
 nH_cloud = 0.003356403333 # cm^-3
 P_over_k = 1.304005e+04   # K cm^-3
