@@ -51,7 +51,7 @@ struct ShockCloud {
 constexpr double parsec_in_cm = 3.086e18;  // cm == 1 pc
 constexpr double solarmass_in_g = 1.99e33; // g == 1 Msun
 constexpr double keV_in_ergs = 1.60218e-9; // ergs == 1 keV
-constexpr double m_H = C::m_p + C::m_e;		   // mass of hydrogen atom
+constexpr double m_H = C::m_p + C::m_e;	   // mass of hydrogen atom
 
 template <> struct Physics_Traits<ShockCloud> {
 	static constexpr bool is_hydro_enabled = true;
@@ -63,7 +63,7 @@ template <> struct Physics_Traits<ShockCloud> {
 };
 
 template <> struct quokka::EOS_Traits<ShockCloud> {
-	static constexpr double gamma = 5./3.;
+	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = C::m_u;
 	static constexpr double boltzmann_constant = C::k_B;
 };
