@@ -7,7 +7,6 @@
 /// \brief Implements a shock-cloud problem with radiative cooling.
 ///
 
-#include <random>
 #include <variant>
 #include <vector>
 
@@ -34,7 +33,6 @@
 
 #include "CloudyCooling.hpp"
 #include "EOS.hpp"
-#include "ODEIntegrate.hpp"
 #include "RadhydroSimulation.hpp"
 #include "fundamental_constants.H"
 #include "hydro_system.hpp"
@@ -56,10 +54,10 @@ constexpr double m_H = C::m_p + C::m_e;	   // mass of hydrogen atom
 template <> struct Physics_Traits<ShockCloud> {
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_chemistry_enabled = false;
-	static constexpr int numMassScalars = 0;
-	static constexpr int numPassiveScalars = numMassScalars + 3;
 	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_mhd_enabled = false;
+	static constexpr int numMassScalars = 0;
+	static constexpr int numPassiveScalars = numMassScalars + 3;
 };
 
 template <> struct quokka::EOS_Traits<ShockCloud> {
@@ -666,11 +664,9 @@ auto problem_main() -> int
 		boundaryConditions[n].setLo(2, amrex::BCType::int_dir);
 		boundaryConditions[n].setHi(2, amrex::BCType::int_dir);
 	}
-
 	RadhydroSimulation<ShockCloud> sim(boundaryConditions);
 
 	// Read problem parameters
-	// set global variables (read-only after setting them here)
 	amrex::ParmParse pp;
 	Real nH_bg = NAN;
 	Real nH_cloud = NAN;
@@ -752,8 +748,7 @@ auto problem_main() -> int
 	const double max_time = 20.0 * t_cc;
 
 	// set simulation parameters
-	sim.reconstructionOrder_ = 3;	   // PPM for hydro
-	sim.densityFloor_ = 1.0e-3 * rho0; // density floor (to prevent vacuum)
+	sim.reconstructionOrder_ = 3; // PPM for hydro
 	sim.stopTime_ = max_time;
 
 #if 0
