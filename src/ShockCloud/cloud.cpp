@@ -41,7 +41,6 @@
 #include "cloud.hpp"
 
 using amrex::Real;
-using namespace amrex::literals;
 
 struct ShockCloud {
 }; // dummy type to allow compile-type polymorphism via template specialization
@@ -66,21 +65,26 @@ template <> struct quokka::EOS_Traits<ShockCloud> {
 	static constexpr double boltzmann_constant = C::k_B;
 };
 
+// global variables
+namespace
+{
+// Problem properties (set inside problem_main())
+bool sharp_cloud_edge = false; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+bool do_frame_shift = true;    // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+
 // Cloud parameters (set inside problem_main())
-AMREX_GPU_MANAGED static Real rho0 = NAN;
-AMREX_GPU_MANAGED static Real rho1 = NAN;
-AMREX_GPU_MANAGED static Real P0 = NAN;
-AMREX_GPU_MANAGED static Real R_cloud = NAN;
+AMREX_GPU_MANAGED Real rho0 = NAN;    // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real rho1 = NAN;    // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real P0 = NAN;      // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real R_cloud = NAN; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
 // cloud-tracking variables needed for Dirichlet boundary condition
-AMREX_GPU_MANAGED static Real rho_wind = 0;
-AMREX_GPU_MANAGED static Real v_wind = 0;
-AMREX_GPU_MANAGED static Real P_wind = 0;
-AMREX_GPU_MANAGED static Real delta_vx = 0;
-static Real delta_x = 0;
-
-static bool sharp_cloud_edge = false;
-static bool do_frame_shift = true;
+AMREX_GPU_MANAGED Real rho_wind = 0; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real v_wind = 0;   // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real P_wind = 0;   // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real delta_vx = 0; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+Real delta_x = 0;		     // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+} // namespace
 
 template <> void RadhydroSimulation<ShockCloud>::setInitialConditionsOnGrid(quokka::grid grid)
 {
@@ -99,9 +103,9 @@ template <> void RadhydroSimulation<ShockCloud>::setInitialConditionsOnGrid(quok
 	auto const &state = grid.array_;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		Real const x = prob_lo[0] + (i + Real(0.5)) * dx[0];
-		Real const y = prob_lo[1] + (j + Real(0.5)) * dx[1];
-		Real const z = prob_lo[2] + (k + Real(0.5)) * dx[2];
+		Real const x = prob_lo[0] + (i + static_cast<Real>(0.5)) * dx[0];
+		Real const y = prob_lo[1] + (j + static_cast<Real>(0.5)) * dx[1];
+		Real const z = prob_lo[2] + (k + static_cast<Real>(0.5)) * dx[2];
 		Real const R = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2) + std::pow(z - z0, 2));
 
 		Real rho = NAN;
@@ -154,7 +158,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<ShockCloud>::setCustomBou
 
 	amrex::Box const &box = geom.Domain();
 	const auto &domain_lo = box.loVect();
-	const int ilo = domain_lo[0];
+	const int ilo = domain_lo[0]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 
 	const Real delta_vx = ::delta_vx;
 	const Real v_wind = ::v_wind;
@@ -413,7 +417,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto ComputeCellTemp(int i, int j, int k, am
 	Real const x3Mom = state(i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
 	Real const Egas = state(i, j, k, HydroSystem<ShockCloud>::energy_index);
 	Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-	return ComputeTgasFromEgas(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
+	return ComputeTgasFromEgas(rho, Eint, gamma, tables);
 }
 
 #if 0
