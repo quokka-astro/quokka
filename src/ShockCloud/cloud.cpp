@@ -88,7 +88,7 @@ Real delta_x = 0;		     // NOLINT(cppcoreguidelines-avoid-non-const-global-varia
 
 template <> void RadhydroSimulation<ShockCloud>::setInitialConditionsOnGrid(quokka::grid grid)
 {
-	amrex::GpuArray<Real, AMREX_SPACEDIM> dx = grid.dx_;
+	amrex::GpuArray<Real, AMREX_SPACEDIM> const dx = grid.dx_;
 	amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo = grid.prob_lo_;
 	amrex::GpuArray<Real, AMREX_SPACEDIM> prob_hi = grid.prob_hi_;
 
@@ -196,8 +196,8 @@ template <> void RadhydroSimulation<ShockCloud>::computeAfterTimestep()
 
 		// N.B. must weight by passive scalar of cloud, since the background has
 		// non-negligible momentum!
-		int nc = 1; // number of components in temporary MF
-		int ng = 0; // number of ghost cells in temporary MF
+		int const nc = 1; // number of components in temporary MF
+		int const ng = 0; // number of ghost cells in temporary MF
 		amrex::MultiFab temp_mf(boxArray(0), DistributionMap(0), nc, ng);
 
 		// compute x-momentum
@@ -237,15 +237,15 @@ template <> void RadhydroSimulation<ShockCloud>::computeAfterTimestep()
 			auto const &mf = state_new_cc_[lev];
 			auto const &state = state_new_cc_[lev].arrays();
 			amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int box, int i, int j, int k) noexcept {
-				Real rho = state[box](i, j, k, HydroSystem<ShockCloud>::density_index);
-				Real xmom = state[box](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
-				Real ymom = state[box](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
-				Real zmom = state[box](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
-				Real E = state[box](i, j, k, HydroSystem<ShockCloud>::energy_index);
-				Real KE = 0.5 * (xmom * xmom + ymom * ymom + zmom * zmom) / rho;
-				Real Eint = E - KE;
-				Real new_xmom = xmom - rho * vx_cm;
-				Real new_KE = 0.5 * (new_xmom * new_xmom + ymom * ymom + zmom * zmom) / rho;
+				Real const rho = state[box](i, j, k, HydroSystem<ShockCloud>::density_index);
+				Real const xmom = state[box](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
+				Real const ymom = state[box](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
+				Real const zmom = state[box](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
+				Real const E = state[box](i, j, k, HydroSystem<ShockCloud>::energy_index);
+				Real const KE = 0.5 * (xmom * xmom + ymom * ymom + zmom * zmom) / rho;
+				Real const Eint = E - KE;
+				Real const new_xmom = xmom - rho * vx_cm;
+				Real const new_KE = 0.5 * (new_xmom * new_xmom + ymom * ymom + zmom * zmom) / rho;
 
 				state[box](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index) = new_xmom;
 				state[box](i, j, k, HydroSystem<ShockCloud>::energy_index) = Eint + new_KE;
@@ -266,13 +266,13 @@ template <> void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(int lev, std:
 		auto const &state = state_new_cc_[lev].const_arrays();
 
 		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			Real rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
-			Real x1Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
-			Real x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
-			Real x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
-			Real Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
-			Real Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-			Real Tgas = ComputeTgasFromEgas(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
+			Real const rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
+			Real const x1Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
+			Real const x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
+			Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
+			Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
+			Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+			Real const Tgas = ComputeTgasFromEgas(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
 			output[bx](i, j, k, ncomp) = Tgas;
 		});
 
@@ -282,8 +282,8 @@ template <> void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(int lev, std:
 		auto const &state = state_new_cc_[lev].const_arrays();
 
 		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			Real rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
-			Real nH = (quokka::cooling::cloudy_H_mass_fraction * rho) / m_H;
+			Real const rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
+			Real const nH = (quokka::cooling::cloudy_H_mass_fraction * rho) / m_H;
 			output[bx](i, j, k, ncomp) = nH;
 		});
 
@@ -294,15 +294,15 @@ template <> void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(int lev, std:
 		auto const &state = state_new_cc_[lev].const_arrays();
 
 		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			Real rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
-			Real x1Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
-			Real x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
-			Real x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
-			Real Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
-			Real Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-			Real Tgas = ComputeTgasFromEgas(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
-			Real mu = ComputeMMW(rho, Egas, HydroSystem<ShockCloud>::gamma_, tables);
-			Real ndens = rho / (mu * m_H);
+			Real const rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
+			Real const x1Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
+			Real const x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
+			Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
+			Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
+			Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+			Real const Tgas = ComputeTgasFromEgas(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
+			Real const mu = ComputeMMW(rho, Egas, HydroSystem<ShockCloud>::gamma_, tables);
+			Real const ndens = rho / (mu * m_H);
 			output[bx](i, j, k, ncomp) = ndens * Tgas; // [K cm^-3]
 		});
 
@@ -313,12 +313,12 @@ template <> void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(int lev, std:
 		auto const &state = state_new_cc_[lev].const_arrays();
 
 		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			Real rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
-			Real x1Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
-			Real x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
-			Real x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
-			Real Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
-			Real Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+			Real const rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
+			Real const x1Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
+			Real const x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
+			Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
+			Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
+			Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
 			Real Tgas = ComputeTgasFromEgas(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
 			Real mu = ComputeMMW(rho, Egas, HydroSystem<ShockCloud>::gamma_, tables);
 			Real ndens = rho / (mu * m_H);
