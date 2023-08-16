@@ -319,11 +319,11 @@ template <> void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(int lev, std:
 			Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
 			Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
 			Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-			Real Tgas = ComputeTgasFromEgas(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
-			Real mu = ComputeMMW(rho, Egas, HydroSystem<ShockCloud>::gamma_, tables);
-			Real ndens = rho / (mu * m_H);
-			Real K_cgs = C::k_B * Tgas * std::pow(ndens, -2. / 3.); // ergs cm^2
-			Real K_keV_cm2 = K_cgs / keV_in_ergs;			// convert to units of keV cm^2
+			Real const Tgas = ComputeTgasFromEgas(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
+			Real const mu = ComputeMMW(rho, Egas, HydroSystem<ShockCloud>::gamma_, tables);
+			Real const ndens = rho / (mu * m_H);
+			Real const K_cgs = C::k_B * Tgas * std::pow(ndens, -2. / 3.); // ergs cm^2
+			Real const K_keV_cm2 = K_cgs / keV_in_ergs;			// convert to units of keV cm^2
 			output[bx](i, j, k, ncomp) = K_keV_cm2;
 		});
 
@@ -335,7 +335,7 @@ template <> void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(int lev, std:
 		const Real dvol = dx[0] * dx[1] * dx[2];
 
 		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			Real rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
+			Real const rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
 			output[bx](i, j, k, ncomp) = rho * dvol;
 		});
 
@@ -346,9 +346,9 @@ template <> void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(int lev, std:
 
 		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 			// cloud partial density
-			Real rho_cloud = state[bx](i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
+			Real const rho_cloud = state[bx](i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
 			// non-cloud partial density
-			Real rho_bg = state[bx](i, j, k, HydroSystem<ShockCloud>::scalar0_index + 2);
+			Real const rho_bg = state[bx](i, j, k, HydroSystem<ShockCloud>::scalar0_index + 2);
 
 			// NOTE: rho_cloud + rho_bg only equals hydro rho up to truncation error!
 			output[bx](i, j, k, ncomp) = rho_cloud / (rho_cloud + rho_bg);
@@ -671,7 +671,7 @@ auto problem_main() -> int
 	RadhydroSimulation<ShockCloud> sim(boundaryConditions);
 
 	// Read problem parameters
-	amrex::ParmParse pp;
+	amrex::ParmParse const pp;
 	Real nH_bg = NAN;
 	Real nH_cloud = NAN;
 	Real P_over_k = NAN;
@@ -773,6 +773,6 @@ auto problem_main() -> int
 	sim.evolve();
 
 	// Cleanup and exit
-	int status = 0;
+	int const status = 0;
 	return status;
 }
