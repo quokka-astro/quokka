@@ -33,6 +33,7 @@
 #include "AMReX_iMultiFab.H"
 
 #include "CloudyCooling.hpp"
+#include "EOS.hpp"
 #include "ODEIntegrate.hpp"
 #include "RadhydroSimulation.hpp"
 #include "fundamental_constants.H"
@@ -50,17 +51,22 @@ struct ShockCloud {
 constexpr double parsec_in_cm = 3.086e18;  // cm == 1 pc
 constexpr double solarmass_in_g = 1.99e33; // g == 1 Msun
 constexpr double keV_in_ergs = 1.60218e-9; // ergs == 1 keV
-constexpr double m_H = C::m_p;		   // mass of hydrogen atom
+constexpr double m_H = C::m_p + C::m_e;		   // mass of hydrogen atom
 
-template <> struct HydroSystem_Traits<ShockCloud> {
-	static constexpr double gamma = 5. / 3.; // default value
-	// if true, reconstruct e_int instead of pressure
-	static constexpr bool reconstruct_eint = true;
-	static constexpr int nscalars = 3; // number of passive scalars
+template <> struct Physics_Traits<ShockCloud> {
+	static constexpr bool is_hydro_enabled = true;
+	static constexpr bool is_chemistry_enabled = false;
+	static constexpr int numMassScalars = 0;
+	static constexpr int numPassiveScalars = numMassScalars + 3;
+	static constexpr bool is_radiation_enabled = false;
+	static constexpr bool is_mhd_enabled = false;
 };
 
-// temperature floor
-AMREX_GPU_MANAGED static Real T_floor = NAN;
+template <> struct quokka::EOS_Traits<ShockCloud> {
+	static constexpr double gamma = 5./3.;
+	static constexpr double mean_molecular_weight = C::m_u;
+	static constexpr double boltzmann_constant = C::k_B;
+};
 
 // Cloud parameters (set inside problem_main())
 AMREX_GPU_MANAGED static Real rho0 = NAN;
@@ -126,7 +132,7 @@ template <> void RadhydroSimulation<ShockCloud>::setInitialConditionsOnGrid(quok
 		Real const xmom = 0;
 		Real const ymom = 0;
 		Real const zmom = 0;
-		Real const Eint = P0 / (HydroSystem<ShockCloud>::gamma_ - 1.);
+		Real const Eint = P0 / (quokka::EOS_Traits<ShockCloud>::gamma - 1.);
 		Real const Egas = RadSystem<ShockCloud>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
 
 		state(i, j, k, RadSystem<ShockCloud>::gasDensity_index) = rho;
@@ -695,9 +701,9 @@ auto problem_main() -> int
 	Real nH_cloud = NAN;
 	Real P_over_k = NAN;
 	Real M0 = NAN;
-	int enable_cooling = 1; // default (0 = off, 1, = on)
 
 	// enable cooling?
+	int enable_cooling = 1; // default (0 = off, 1, = on)
 	pp.query("enable_cooling", enable_cooling);
 	::enable_cooling = enable_cooling == 1;
 
@@ -727,9 +733,6 @@ auto problem_main() -> int
 	// (pre-shock) Mach number
 	// (N.B. *not* the same as Mach_wind!)
 	pp.query("Mach_shock", M0); // dimensionless
-
-	// gas temperature floor
-	pp.query("T_floor", ::T_floor); // K
 
 	// compute background pressure
 	// (pressure equilibrium should hold *before* the shock enters the box)
@@ -780,6 +783,7 @@ auto problem_main() -> int
 	const double max_time = 20.0 * t_cc;
 
 	// set simulation parameters
+
 	sim.reconstructionOrder_ = 3;	   // PPM for hydro
 	sim.densityFloor_ = 1.0e-3 * rho0; // density floor (to prevent vacuum)
 	sim.stopTime_ = max_time;

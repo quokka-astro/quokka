@@ -3,7 +3,7 @@
 # *****************************************************************
 geometry.prob_lo     =  0.0  0.0  0.0 
 geometry.prob_hi     =  2.4688e+21  6.172e+20  6.172e+20  # 800 x 200 x 200 pc
-geometry.is_periodic =  0    0    0
+geometry.is_periodic =  0    1    1
 
 # *****************************************************************
 # VERBOSITY
@@ -26,16 +26,6 @@ amr.max_grid_size     = 64
 do_reflux = 1
 do_subcycle = 1
 
-grackle_data_file = "../extern/cooling_tables/isrf_1000Go_grains.h5"
-derived_vars = pressure entropy nH temperature cooling_length
-	       cloud_fraction lab_velocity_x mass velocity_mag
-projection.dirs = x z
-
-cfl = 0.3
-sharp_cloud_edge = 1
-do_frame_shift = 0
-enable_cooling = 0
-
 max_walltime = 6:00:00
 max_timesteps = 5000
 
@@ -44,15 +34,20 @@ checkpoint_interval = 5000
 ascent_interval = 10
 projection_interval = -1
 statistics_interval = 10
+derived_vars = pressure entropy nH temperature cooling_length \
+	       cloud_fraction lab_velocity_x mass velocity_mag
+projection.dirs = x z
 
-T_floor = 100.0  # K
+hydro.cfl = 0.3
+sharp_cloud_edge = 1
+do_frame_shift = 0
+
+cooling.enabled = 1
+cooling.grackle_data_file = "../extern/grackle_data_files/input/CloudyData_UVB=HM2012.h5"
+temperature_floor = 100
 
 nH_bg    = 0.003356403333 # cm^-3
 nH_cloud = 0.003356403333 # cm^-3
 P_over_k = 1.304005e+04   # K cm^-3
-
 R_cloud_pc = 16.09084149928867 # pc
 Mach_shock = 1.05
-
-Erad_initial_Habing = 1        # G_0
-Erad_incident_Habing = 1000    # G_0
