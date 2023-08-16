@@ -307,7 +307,8 @@ void computeCooling(amrex::MultiFab &mf, const Real dt_in, cloudy_tables &cloudy
 	auto tables = cloudyTables.const_tables();
 	auto const &state = mf.arrays();
 
-	amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+	amrex::IntVect ng{0,0,0};
+	amrex::ParallelFor(mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {	
 		const Real rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
 		const Real x1Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
 		const Real x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
