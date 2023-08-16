@@ -323,7 +323,7 @@ template <> void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(int lev, std:
 			Real const mu = ComputeMMW(rho, Egas, HydroSystem<ShockCloud>::gamma_, tables);
 			Real const ndens = rho / (mu * m_H);
 			Real const K_cgs = C::k_B * Tgas * std::pow(ndens, -2. / 3.); // ergs cm^2
-			Real const K_keV_cm2 = K_cgs / keV_in_ergs;			// convert to units of keV cm^2
+			Real const K_keV_cm2 = K_cgs / keV_in_ergs;		      // convert to units of keV cm^2
 			output[bx](i, j, k, ncomp) = K_keV_cm2;
 		});
 
