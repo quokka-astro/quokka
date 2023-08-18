@@ -749,7 +749,7 @@ auto problem_main() -> int
 	amrex::Print() << std::endl;
 
 	// compute maximum simulation time
-	const double max_time = 20.0 * t_cc;
+	const double max_time = 100.0 * t_cc;
 
 	// set simulation parameters
 	sim.reconstructionOrder_ = 3; // PPM for hydro

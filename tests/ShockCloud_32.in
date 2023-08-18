@@ -27,12 +27,17 @@ cfl = 0.3
 do_reflux = 1
 do_subcycle = 1
 max_walltime = 6:00:00
-max_timesteps = 5000
+max_timesteps = 350
 checkpoint_interval = 5000
 plotfile_interval = 100
-ascent_interval = 10
+ascent_interval = 1
 derived_vars = pressure entropy nH temperature cooling_length \
 	       cloud_fraction lab_velocity_x mass velocity_mag
+
+hydro.rk_integrator_order = 1
+hydro.reconstruction_order = 1
+hydro.use_dual_energy = 0
+hydro.low_level_debugging_output = 1
 
 cooling.enabled = 0
 cooling.read_tables_even_if_disabled = 1
@@ -45,4 +50,4 @@ nH_bg    = 0.003356403333 # cm^-3
 nH_cloud = 0.003356403333 # cm^-3
 P_over_k = 1.304005e+04   # K cm^-3
 R_cloud_pc = 16.09084149928867 # pc
-Mach_shock = 1.05
+Mach_shock = 1.2
