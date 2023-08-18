@@ -122,7 +122,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	amrex::Real errorNorm_ = NAN;
 	amrex::Real pressureFloor_ = 0.;
 
-	int lowLevelDebuggingOutput_ = 0; // 0 == do nothing; 1 == output intermediate multifabs used in hydro each timestep (ONLY USE FOR DEBUGGING)
+	int lowLevelDebuggingOutput_ = 0;	// 0 == do nothing; 1 == output intermediate multifabs used in hydro each timestep (ONLY USE FOR DEBUGGING)
 	int integratorOrder_ = 2;		// 1 == forward Euler; 2 == RK2-SSP (default)
 	int reconstructionOrder_ = 3;		// 1 == donor cell; 2 == PLM; 3 == PPM (default)
 	int radiationReconstructionOrder_ = 3;	// 1 == donor cell; 2 == PLM; 3 == PPM (default)
@@ -919,11 +919,11 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		if (lowLevelDebuggingOutput_ == 1) {
 			// write Blueprint HDF5 files
 			conduit::Node mesh;
-			amrex::SingleLevelToBlueprint(state_old_cc_tmp, componentNames_cc_, geom[lev], time, istep[lev]+1, mesh);
-			amrex::WriteBlueprintFiles(mesh, "debug_stage1_filled_state_old", istep[lev]+1, "hdf5");
+			amrex::SingleLevelToBlueprint(state_old_cc_tmp, componentNames_cc_, geom[lev], time, istep[lev] + 1, mesh);
+			amrex::WriteBlueprintFiles(mesh, "debug_stage1_filled_state_old", istep[lev] + 1, "hdf5");
 
 			// write AMReX plotfile
-			//WriteSingleLevelPlotfile(CustomPlotFileName("debug_stage1_filled_state_old", istep[lev]+1),
+			// WriteSingleLevelPlotfile(CustomPlotFileName("debug_stage1_filled_state_old", istep[lev]+1),
 			//	state_old_cc_tmp, componentNames_cc_, geom[lev], time, istep[lev]+1);
 		}
 
@@ -947,15 +947,16 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		// LOW LEVEL DEBUGGING: output rhs
 		if (lowLevelDebuggingOutput_ == 1) {
 			// write rhs
-			std::string plotfile_name = CustomPlotFileName("debug_stage1_rhs_fluxes", istep[lev]+1);
-			WriteSingleLevelPlotfile(plotfile_name, rhs, componentNames_cc_, geom[lev], time, istep[lev]+1);
+			std::string plotfile_name = CustomPlotFileName("debug_stage1_rhs_fluxes", istep[lev] + 1);
+			WriteSingleLevelPlotfile(plotfile_name, rhs, componentNames_cc_, geom[lev], time, istep[lev] + 1);
 
 			// write fluxes
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 				if (amrex::ParallelDescriptor::IOProcessor()) {
 					std::filesystem::create_directories(plotfile_name + "/raw_fields/Level_" + std::to_string(lev));
 				}
-				std::string fullprefix = amrex::MultiFabFileFullPrefix(lev, plotfile_name,"raw_fields/Level_", std::string("Flux_") + quokka::face_dir_str[idim]);
+				std::string fullprefix =
+				    amrex::MultiFabFileFullPrefix(lev, plotfile_name, "raw_fields/Level_", std::string("Flux_") + quokka::face_dir_str[idim]);
 				amrex::VisMF::Write(fluxArrays[idim], fullprefix);
 			}
 			// write face velocities
@@ -963,7 +964,8 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 				if (amrex::ParallelDescriptor::IOProcessor()) {
 					std::filesystem::create_directories(plotfile_name + "/raw_fields/Level_" + std::to_string(lev));
 				}
-				std::string fullprefix = amrex::MultiFabFileFullPrefix(lev, plotfile_name,"raw_fields/Level_", std::string("FaceVel_") + quokka::face_dir_str[idim]);
+				std::string fullprefix = amrex::MultiFabFileFullPrefix(lev, plotfile_name, "raw_fields/Level_",
+										       std::string("FaceVel_") + quokka::face_dir_str[idim]);
 				amrex::VisMF::Write(faceVel[idim], fullprefix);
 			}
 		}
@@ -1216,35 +1218,37 @@ auto RadhydroSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &co
 
 	// LOW LEVEL DEBUGGING: output all of the temporary MultiFabs
 	if (lowLevelDebuggingOutput_ == 1) {
-			// write primitive cell-centered state
-			std::string plotfile_name = CustomPlotFileName("debug_reconstruction", istep[lev]+1);
-			WriteSingleLevelPlotfile(plotfile_name, primVar, componentNames_cc_, geom[lev], 0.0, istep[lev]+1);
+		// write primitive cell-centered state
+		std::string plotfile_name = CustomPlotFileName("debug_reconstruction", istep[lev] + 1);
+		WriteSingleLevelPlotfile(plotfile_name, primVar, componentNames_cc_, geom[lev], 0.0, istep[lev] + 1);
 
-			// write flattening coefficients
-			std::string flatx_filename = CustomPlotFileName("debug_flattening_x", istep[lev]+1);
-			std::string flaty_filename = CustomPlotFileName("debug_flattening_y", istep[lev]+1);
-			std::string flatz_filename = CustomPlotFileName("debug_flattening_z", istep[lev]+1);
-			amrex::Vector<std::string> flatCompNames{"chi"};
-			WriteSingleLevelPlotfile(flatx_filename, flatCoefs[0], flatCompNames, geom[lev], 0.0, istep[lev]+1);
-			WriteSingleLevelPlotfile(flaty_filename, flatCoefs[1], flatCompNames, geom[lev], 0.0, istep[lev]+1);
-			WriteSingleLevelPlotfile(flatz_filename, flatCoefs[2], flatCompNames, geom[lev], 0.0, istep[lev]+1);
+		// write flattening coefficients
+		std::string flatx_filename = CustomPlotFileName("debug_flattening_x", istep[lev] + 1);
+		std::string flaty_filename = CustomPlotFileName("debug_flattening_y", istep[lev] + 1);
+		std::string flatz_filename = CustomPlotFileName("debug_flattening_z", istep[lev] + 1);
+		amrex::Vector<std::string> flatCompNames{"chi"};
+		WriteSingleLevelPlotfile(flatx_filename, flatCoefs[0], flatCompNames, geom[lev], 0.0, istep[lev] + 1);
+		WriteSingleLevelPlotfile(flaty_filename, flatCoefs[1], flatCompNames, geom[lev], 0.0, istep[lev] + 1);
+		WriteSingleLevelPlotfile(flatz_filename, flatCoefs[2], flatCompNames, geom[lev], 0.0, istep[lev] + 1);
 
-			// write L interface states
-			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-				if (amrex::ParallelDescriptor::IOProcessor()) {
-					std::filesystem::create_directories(plotfile_name + "/raw_fields/Level_" + std::to_string(lev));
-				}
-				std::string fullprefix = amrex::MultiFabFileFullPrefix(lev, plotfile_name,"raw_fields/Level_", std::string("StateL_") + quokka::face_dir_str[idim]);
-				amrex::VisMF::Write(leftState[idim], fullprefix);
+		// write L interface states
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			if (amrex::ParallelDescriptor::IOProcessor()) {
+				std::filesystem::create_directories(plotfile_name + "/raw_fields/Level_" + std::to_string(lev));
 			}
-			// write R interface states
-			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-				if (amrex::ParallelDescriptor::IOProcessor()) {
-					std::filesystem::create_directories(plotfile_name + "/raw_fields/Level_" + std::to_string(lev));
-				}
-				std::string fullprefix = amrex::MultiFabFileFullPrefix(lev, plotfile_name,"raw_fields/Level_", std::string("StateR_") + quokka::face_dir_str[idim]);
-				amrex::VisMF::Write(rightState[idim], fullprefix);
+			std::string fullprefix =
+			    amrex::MultiFabFileFullPrefix(lev, plotfile_name, "raw_fields/Level_", std::string("StateL_") + quokka::face_dir_str[idim]);
+			amrex::VisMF::Write(leftState[idim], fullprefix);
+		}
+		// write R interface states
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			if (amrex::ParallelDescriptor::IOProcessor()) {
+				std::filesystem::create_directories(plotfile_name + "/raw_fields/Level_" + std::to_string(lev));
 			}
+			std::string fullprefix =
+			    amrex::MultiFabFileFullPrefix(lev, plotfile_name, "raw_fields/Level_", std::string("StateR_") + quokka::face_dir_str[idim]);
+			amrex::VisMF::Write(rightState[idim], fullprefix);
+		}
 	}
 
 	// return flux and face-centered velocities
