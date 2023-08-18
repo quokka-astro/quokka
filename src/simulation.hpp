@@ -1543,7 +1543,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::AverageDownTo(int c
 template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileName(int lev) const -> std::string { return amrex::Concatenate(plot_file, lev, 5); }
 
 // get plotfile name
-template <typename problem_t> auto AMRSimulation<problem_t>::CustomPlotFileName(const char *base, int lev) const -> std::string {
+template <typename problem_t> auto AMRSimulation<problem_t>::CustomPlotFileName(const char *base, int lev) const -> std::string
+{
 	std::string base_str(base);
 	return amrex::Concatenate(base_str, lev, 5);
 }
