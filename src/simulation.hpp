@@ -216,6 +216,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	// I/O functions
 	[[nodiscard]] auto PlotFileName(int lev) const -> std::string;
+	[[nodiscard]] auto CustomPlotFileName(const char *base, int lev) const -> std::string;
+	[[nodiscard]] auto GetPlotfileVarNames() const -> amrex::Vector<std::string>;
 	[[nodiscard]] auto PlotFileMF() const -> amrex::Vector<amrex::MultiFab>;
 	[[nodiscard]] auto PlotFileMFAtLevel(int lev) const -> amrex::MultiFab;
 	void WriteMetadataFile(std::string const &plotfilename) const;
@@ -1540,6 +1542,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::AverageDownTo(int c
 // get plotfile name
 template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileName(int lev) const -> std::string { return amrex::Concatenate(plot_file, lev, 5); }
 
+// get plotfile name
+template <typename problem_t> auto AMRSimulation<problem_t>::CustomPlotFileName(const char *base, int lev) const -> std::string {
+	std::string base_str(base);
+	return amrex::Concatenate(base_str, lev, 5);
+}
+
 template <typename problem_t>
 void AMRSimulation<problem_t>::AverageFCToCC(amrex::MultiFab &mf_cc, const amrex::MultiFab &mf_fc, int idim, int dstcomp_start, int srccomp_start,
 					     int srccomp_total, int nGrow) const
@@ -1690,6 +1698,19 @@ template <typename problem_t> void AMRSimulation<problem_t>::RenderAscent()
 }
 #endif // AMREX_USE_ASCENT
 
+template <typename problem_t> auto AMRSimulation<problem_t>::GetPlotfileVarNames() const -> amrex::Vector<std::string>
+{
+	amrex::Vector<std::string> varnames;
+	varnames.insert(varnames.end(), componentNames_cc_.begin(), componentNames_cc_.end());
+	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
+		for (int icomp = 0; icomp < Physics_Indices<problem_t>::nvarTotal_fc; ++icomp) {
+			varnames.push_back(componentNames_fc_[icomp]);
+		}
+	}
+	varnames.insert(varnames.end(), derivedNames_.begin(), derivedNames_.end());
+	return varnames;
+}
+
 // write plotfile to disk
 template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile() const
 {
@@ -1703,17 +1724,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile() con
 #endif
 
 	// now construct output and submit to async write queue
-	const std::string &plotfilename = PlotFileName(istep[0]);
 	amrex::Vector<amrex::MultiFab> mf = PlotFileMF();
 	amrex::Vector<const amrex::MultiFab *> mf_ptr = amrex::GetVecOfConstPtrs(mf);
-	amrex::Vector<std::string> varnames;
-	varnames.insert(varnames.end(), componentNames_cc_.begin(), componentNames_cc_.end());
-	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
-		for (int icomp = 0; icomp < Physics_Indices<problem_t>::nvarTotal_fc; ++icomp) {
-			varnames.push_back(componentNames_fc_[icomp]);
-		}
-	}
-	varnames.insert(varnames.end(), derivedNames_.begin(), derivedNames_.end());
+
+	const std::string &plotfilename = PlotFileName(istep[0]);
+	auto varnames = GetPlotfileVarNames();
 
 	// write plotfile
 	amrex::Print() << "Writing plotfile " << plotfilename << "\n";
