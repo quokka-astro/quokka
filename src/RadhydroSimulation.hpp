@@ -10,9 +10,7 @@
 /// timestepping, solving, and I/O of a simulation for radiation moments.
 
 #include <array>
-#include <ascent.hpp>
 #include <climits>
-#include <conduit_node.hpp>
 #include <filesystem>
 #include <limits>
 #include <string>
@@ -27,7 +25,6 @@
 #include "AMReX_BCRec.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_Box.H"
-#include "AMReX_Conduit_Blueprint.H"
 #include "AMReX_FArrayBox.H"
 #include "AMReX_FabArray.H"
 #include "AMReX_FabArrayUtility.H"
@@ -48,6 +45,12 @@
 #include "AMReX_REAL.H"
 #include "AMReX_Utility.H"
 #include "AMReX_YAFluxRegister.H"
+
+#ifdef AMREX_ASCENT
+#include <ascent.hpp>
+#include <conduit_node.hpp>
+#include "AMReX_Conduit_Blueprint.H"
+#endif
 
 #include "Chemistry.hpp"
 #include "CloudyCooling.hpp"
@@ -917,14 +920,16 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 
 		// LOW LEVEL DEBUGGING: output state_old_cc_tmp (with ghost cells)
 		if (lowLevelDebuggingOutput_ == 1) {
+#ifdef AMREX_ASCENT
 			// write Blueprint HDF5 files
 			conduit::Node mesh;
 			amrex::SingleLevelToBlueprint(state_old_cc_tmp, componentNames_cc_, geom[lev], time, istep[lev] + 1, mesh);
 			amrex::WriteBlueprintFiles(mesh, "debug_stage1_filled_state_old", istep[lev] + 1, "hdf5");
-
+#else
 			// write AMReX plotfile
 			// WriteSingleLevelPlotfile(CustomPlotFileName("debug_stage1_filled_state_old", istep[lev]+1),
 			//	state_old_cc_tmp, componentNames_cc_, geom[lev], time, istep[lev]+1);
+#endif
 		}
 
 		// check state validity
