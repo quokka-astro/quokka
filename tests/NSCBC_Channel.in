@@ -1,0 +1,39 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  0.0  0.0  0.0 
+geometry.prob_hi     =  1.0  1.0  1.0
+geometry.is_periodic =  0    1    1
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v               = 1     # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          = 64 16 16
+amr.max_level       = 0     # number of levels = max_level + 1
+amr.blocking_factor_x = 64
+amr.blocking_factor_y = 16
+amr.blocking_factor_z = 16  # grid size must be divisible by this
+amr.max_grid_size     = 64
+
+# *****************************************************************
+# Quokka options
+# *****************************************************************
+cfl = 0.3
+do_reflux = 1
+do_subcycle = 1
+max_timesteps = 1000
+stop_time = 1.0
+
+checkpoint_interval = 5000
+plotfile_interval = 100
+ascent_interval = 1
+
+hydro.rk_integrator_order = 1
+hydro.reconstruction_order = 1
+hydro.use_dual_energy = 0
+hydro.low_level_debugging_output = 0

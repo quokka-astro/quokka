@@ -38,7 +38,7 @@ struct Channel {
 
 template <> struct quokka::EOS_Traits<Channel> {
 	static constexpr double gamma = 5. / 3.; // default value
-	static constexpr double mean_molecular_weight = 1.0;
+	static constexpr double mean_molecular_weight = C::m_p + C::m_e;
 	static constexpr double boltzmann_constant = C::k_B;
 };
 
@@ -51,8 +51,8 @@ template <> struct Physics_Traits<Channel> {
 	static constexpr bool is_radiation_enabled = false;
 };
 
-constexpr Real Tgas0 = 1.0e7;		       // K
-constexpr Real nH0 = 1.0e-4;		       // cm^-3
+constexpr Real Tgas0 = 300;		       // K
+constexpr Real nH0 = 1.0;		       // cm^-3
 constexpr Real M0 = 2.0;		       // Mach number of shock
 constexpr Real P0 = nH0 * Tgas0 * C::k_B;      // erg cm^-3
 constexpr Real rho0 = nH0 * (C::m_p + C::m_e); // g cm^-3
@@ -74,14 +74,6 @@ template <> void RadhydroSimulation<Channel>::setInitialConditionsOnGrid(quokka:
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_elem.prob_hi_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
-
-	Real const Lx = (prob_hi[0] - prob_lo[0]);
-	Real const Ly = (prob_hi[1] - prob_lo[1]);
-	Real const Lz = (prob_hi[2] - prob_lo[2]);
-
-	Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
-	Real const y0 = prob_lo[1] + 0.8 * (prob_hi[1] - prob_lo[1]);
-	Real const z0 = prob_lo[2] + 0.5 * (prob_hi[2] - prob_lo[2]);
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		Real const rho = rho0;
@@ -139,10 +131,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<Channel>::setCustomBounda
 
 auto problem_main() -> int
 {
-	// Problem parameters
-	constexpr double seconds_in_year = 3.154e7;
-	const double max_time = 2.0e6 * seconds_in_year; // 2 Myr
-
 	// Problem initialization
 	constexpr int ncomp_cc = Physics_Indices<Channel>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
@@ -150,15 +138,16 @@ auto problem_main() -> int
 		BCs_cc[n].setLo(0, amrex::BCType::ext_dir);  // Dirichlet
 		BCs_cc[n].setHi(0, amrex::BCType::foextrap); // extrapolate
 
-		BCs_cc[n].setLo(1, amrex::BCType::int_dir); // periodic
-		BCs_cc[n].setHi(1, amrex::BCType::int_dir);
-
-		BCs_cc[n].setLo(2, amrex::BCType::int_dir);
-		BCs_cc[n].setHi(2, amrex::BCType::int_dir);
+		if constexpr (AMREX_SPACEDIM >= 2) {
+			BCs_cc[n].setLo(1, amrex::BCType::int_dir); // periodic
+			BCs_cc[n].setHi(1, amrex::BCType::int_dir);
+		} else if (AMREX_SPACEDIM == 3) {
+			BCs_cc[n].setLo(2, amrex::BCType::int_dir);
+			BCs_cc[n].setHi(2, amrex::BCType::int_dir);
+		}
 	}
 
 	RadhydroSimulation<Channel> sim(BCs_cc);
-	sim.stopTime_ = max_time;
 
 	// Set initial conditions
 	sim.setInitialConditions();
