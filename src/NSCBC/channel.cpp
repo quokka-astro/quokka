@@ -145,7 +145,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dQ_dx_inflow_x1_lower(quokka::valarray<
 	const Real c = quokka::EOS<Channel>::ComputeSoundSpeed(rho, P);
 	const Real M = std::sqrt(u * u + v * v + w * w) / c;
 
-	const Real eta_2 = −0.278;
+	const Real eta_2 = -0.278;
 	const Real eta_3 = 1.0;
 	const Real eta_4 = 1.0;
 	const Real eta_5 = 0.278;
