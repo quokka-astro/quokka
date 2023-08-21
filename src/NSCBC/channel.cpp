@@ -72,7 +72,6 @@ template <> void RadhydroSimulation<Channel>::setInitialConditionsOnGrid(quokka:
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_elem.prob_hi_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
-	auto const &phase_table = userData_.table_data->const_table();
 
 	Real const Lx = (prob_hi[0] - prob_lo[0]);
 	Real const Ly = (prob_hi[1] - prob_lo[1]);
