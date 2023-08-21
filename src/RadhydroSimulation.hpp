@@ -47,9 +47,9 @@
 #include "AMReX_YAFluxRegister.H"
 
 #ifdef AMREX_USE_ASCENT
+#include "AMReX_Conduit_Blueprint.H"
 #include <ascent.hpp>
 #include <conduit_node.hpp>
-#include "AMReX_Conduit_Blueprint.H"
 #endif
 
 #include "Chemistry.hpp"
