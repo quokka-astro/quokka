@@ -26,10 +26,14 @@
 #include "AMReX_TableData.H"
 #include "AMReX_iMultiFab.H"
 
+#include "EOS.hpp"
 #include "RadhydroSimulation.hpp"
 #include "channel.hpp"
 #include "hydro_system.hpp"
+#include "physics_info.hpp"
+#include "physics_numVars.hpp"
 #include "radiation_system.hpp"
+#include "valarray.hpp"
 
 using amrex::Real;
 
@@ -92,6 +96,36 @@ template <> void RadhydroSimulation<Channel>::setInitialConditionsOnGrid(quokka:
 	});
 }
 
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dQ_dx_outflow_x1_upper(quokka::valarray<Real, HydroSystem<Channel>::nvar_> const &Q, const Real p_t)
+    -> quokka::valarray<Real, HydroSystem<Channel>::nvar_>
+{
+	// return dQ/dx
+	const Real rho = Q[0];
+	const Real u = Q[1];
+	const Real v = Q[2];
+	const Real w = Q[3];
+	const Real p = Q[4];
+
+	const Real drho_dx = dQ_dx_data[0];
+	const Real du_dx = dQ_dx_data[1];
+	const Real dv_dx = dQ_dx_data[2];
+	const Real dp_dx = dQ_dx_data[4];
+
+	// compute sub-expressions
+	const Real c = quokka::EOS<Channel>::ComputeSoundSpeed(rho, p);
+	const Real M = std::sqrt(u * u + v * v + w * w) / c;
+	amrex::Real const K = 0.25 * c * (1 - M * M) / L_x;
+
+	quokka::valarray<Real, HydroSystem<Channel>::nvar_> dQ_dx{};
+	dQ_dx[0] = (1.0 / 2.0) * (-K * (p - p_t) + (c - u) * (2 * std::pow(c, 2) * drho_dx + c * du_dx * rho - dp_dx)) / (std::pow(c, 2) * (c - u));
+	dQ_dx[1] = (1.0 / 2.0) * (K * (p - p_t) + (c - u) * (c * du_dx * rho + dp_dx)) / (c * rho * (c - u));
+	dQ_dx[2] = dv_dx;
+	dQ_dx[3] = NAN;
+	dQ_dx[4] = 0.5 * (-K * (p - p_t) + (c - u) * (c * du_dx * rho + dp_dx)) / (c - u);
+
+	return dQ_dx;
+}
+
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<Channel>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<Real> const &consVar,
 											     int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
@@ -104,21 +138,32 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<Channel>::setCustomBounda
 	const auto &domain_lo = box.loVect3d();
 	const auto &domain_hi = box.hiVect3d();
 	const int ilo = domain_lo[0];
+	constexpr int nvar = HydroSystem<Channel>::nvar_;
+	constexpr Real gamma = quokka::EOS_Traits<Channel>::gamma;
 
 	if (i < ilo) {
-		// x1 lower boundary -- constant
-		// compute downstream shock conditions from rho0, P0, and M0
-		constexpr Real gamma = quokka::EOS_Traits<Channel>::gamma;
-		constexpr Real rho2 = rho0 * (gamma + 1.) * M0 * M0 / ((gamma - 1.) * M0 * M0 + 2.);
-		constexpr Real P2 = P0 * (2. * gamma * M0 * M0 - (gamma - 1.)) / (gamma + 1.);
-		Real const v2 = M0 * std::sqrt(gamma * P2 / rho2);
+		// x1 lower boundary -- subsonic inflow
+		const Real dx = geom.CellSize(0);
 
-		Real const rho = rho2;
-		Real const xmom = rho2 * v2;
-		Real const ymom = 0;
-		Real const zmom = 0;
-		Real const Eint = (gamma - 1.) * P2;
-		Real const Egas = RadSystem<Channel>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
+		// compute dQ/dx
+		quokka::valarray<amrex::Real, nvar> dQ_dx = Compute_dQ_dx(Q);
+
+		const Real rho_ip1 = consVar(ilo + 1, j, k, HydroSystem<Channel>::density_index);
+		const Real x1mom_ip1 = consVar(ilo + 1, j, k, HydroSystem<Channel>::x1Momentum_index);
+		const Real x2mom_ip1 = consVar(ilo + 1, j, k, HydroSystem<Channel>::x2Momentum_index);
+		const Real x3mom_ip1 = consVar(ilo + 1, j, k, HydroSystem<Channel>::x3Momentum_index);
+		const Real E_ip1 = consVar(ilo + 1, j, k, HydroSystem<Channel>::energy_index);
+		const Real Eint_ip1 = E_ip1 - 0.5 * (x1mom_ip1 * x1mom_ip1 + x2mom_ip1 * x2mom_ip1 + x3mom_ip1 * x3mom_ip1) / rho_ip1;
+
+		quokka::valarray<amrex::Real, nvar> Q_ip1{rho_ip1, x1mom_ip1 / rho_ip1, x2mom_ip1 / rho_ip1, x3mom_ip1 / rho_ip1, Eint_ip1 / (gamma - 1.)};
+		quokka::valarray<amrex::Real, nvar> Q_im1 = Q_ip1 - 2.0 * dx * dQ_dx;
+
+		Real const rho = Q_im1[0];
+		Real const xmom = rho * Q_im1[1];
+		Real const ymom = rho * Q_im1[2];
+		Real const zmom = rho * Q_im1[3];
+		Real const Eint = (gamma - 1.) * Q_im1[4];
+		Real const Egas = Eint + 0.5 * (xmom * xmom + ymom * ymom + zmom * zmom) / rho;
 
 		consVar(i, j, k, HydroSystem<Channel>::density_index) = rho;
 		consVar(i, j, k, HydroSystem<Channel>::x1Momentum_index) = xmom;
