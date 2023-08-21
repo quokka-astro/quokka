@@ -57,17 +57,16 @@ template <> struct Physics_Traits<Channel> {
 
 constexpr Real Tgas0 = 300;		       // K
 constexpr Real nH0 = 1.0;		       // cm^-3
-constexpr Real M0 = 2.0;		       // Mach number of shock
 constexpr Real P0 = nH0 * Tgas0 * C::k_B;      // erg cm^-3
 constexpr Real rho0 = nH0 * (C::m_p + C::m_e); // g cm^-3
 
-// cloud-tracking variables needed for Dirichlet boundary condition
+// global variables needed for Dirichlet boundary condition
 namespace
 {
-AMREX_GPU_MANAGED Real rho_wind = 0; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED Real v_wind = 0;   // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED Real P_wind = 0;   // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED Real delta_vx = 0; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real u_inflow = 0; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real v_inflow = 0; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real w_inflow = 0; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real P_inflow = 0; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 };				     // namespace
 
 template <> void RadhydroSimulation<Channel>::setInitialConditionsOnGrid(quokka::grid grid_elem)
@@ -96,32 +95,72 @@ template <> void RadhydroSimulation<Channel>::setInitialConditionsOnGrid(quokka:
 	});
 }
 
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dQ_dx_outflow_x1_upper(quokka::valarray<Real, HydroSystem<Channel>::nvar_> const &Q, const Real p_t)
-    -> quokka::valarray<Real, HydroSystem<Channel>::nvar_>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dQ_dx_outflow_x1_upper(quokka::valarray<Real, 5> const &Q, quokka::valarray<Real, 5> const &dQ_dx_data, const Real P_t,
+								const Real L_x) -> quokka::valarray<Real, 5>
 {
-	// return dQ/dx
+	// return dQ/dx corresponding to subsonic outflow on the x1 upper boundary
 	const Real rho = Q[0];
 	const Real u = Q[1];
 	const Real v = Q[2];
 	const Real w = Q[3];
-	const Real p = Q[4];
+	const Real P = Q[4];
 
 	const Real drho_dx = dQ_dx_data[0];
 	const Real du_dx = dQ_dx_data[1];
 	const Real dv_dx = dQ_dx_data[2];
-	const Real dp_dx = dQ_dx_data[4];
+	const Real dw_dx = dQ_dx_data[3];
+	const Real dP_dx = dQ_dx_data[4];
 
-	// compute sub-expressions
-	const Real c = quokka::EOS<Channel>::ComputeSoundSpeed(rho, p);
+	const Real c = quokka::EOS<Channel>::ComputeSoundSpeed(rho, P);
 	const Real M = std::sqrt(u * u + v * v + w * w) / c;
 	amrex::Real const K = 0.25 * c * (1 - M * M) / L_x;
 
-	quokka::valarray<Real, HydroSystem<Channel>::nvar_> dQ_dx{};
-	dQ_dx[0] = (1.0 / 2.0) * (-K * (p - p_t) + (c - u) * (2 * std::pow(c, 2) * drho_dx + c * du_dx * rho - dp_dx)) / (std::pow(c, 2) * (c - u));
-	dQ_dx[1] = (1.0 / 2.0) * (K * (p - p_t) + (c - u) * (c * du_dx * rho + dp_dx)) / (c * rho * (c - u));
+	// see SymPy notebook for derivation
+	quokka::valarray<Real, 5> dQ_dx{};
+	dQ_dx[0] = (1.0 / 2.0) * (-K * (P - P_t) + (c - u) * (2.0 * std::pow(c, 2) * drho_dx + c * du_dx * rho - 1.0 * dP_dx)) / (std::pow(c, 2) * (c - u));
+	dQ_dx[1] = (1.0 / 2.0) * (K * (P - P_t) + (c - u) * (c * du_dx * rho + dP_dx)) / (c * rho * (c - u));
 	dQ_dx[2] = dv_dx;
-	dQ_dx[3] = NAN;
-	dQ_dx[4] = 0.5 * (-K * (p - p_t) + (c - u) * (c * du_dx * rho + dp_dx)) / (c - u);
+	dQ_dx[3] = dw_dx;
+	dQ_dx[4] = 0.5 * (-K * (P - P_t) + (c - u) * (c * du_dx * rho + dP_dx)) / (c - u);
+
+	return dQ_dx;
+}
+
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dQ_dx_inflow_x1_lower(quokka::valarray<Real, 5> const &Q, quokka::valarray<Real, 5> const &dQ_dx_data, const Real P_t,
+							       const Real u_t, const Real v_t, const Real w_t, const Real L_x) -> quokka::valarray<Real, 5>
+{
+	// return dQ/dx corresponding to subsonic inflow on the x1 lower boundary
+	const Real rho = Q[0];
+	const Real u = Q[1];
+	const Real v = Q[2];
+	const Real w = Q[3];
+	const Real P = Q[4];
+
+	const Real drho_dx = dQ_dx_data[0];
+	const Real du_dx = dQ_dx_data[1];
+	const Real dv_dx = dQ_dx_data[2];
+	const Real dw_dx = dQ_dx_data[3];
+	const Real dP_dx = dQ_dx_data[4];
+
+	const Real c = quokka::EOS<Channel>::ComputeSoundSpeed(rho, P);
+	const Real M = std::sqrt(u * u + v * v + w * w) / c;
+
+	const Real eta_2 = −0.278;
+	const Real eta_3 = 1.0;
+	const Real eta_4 = 1.0;
+	const Real eta_5 = 0.278;
+
+	// see SymPy notebook for derivation
+	quokka::valarray<Real, 5> dQ_dx{};
+	dQ_dx[0] = (1.0 / 2.0) *
+		   (L_x * u * (c + u) * (-1.0 * c * du_dx * rho + dP_dx) - std::pow(c, 2) * eta_5 * rho * u * (std::pow(M, 2) - 1) * (u - u_t) +
+		    2 * c * eta_2 * (P - P_t) * (c + u)) /
+		   (L_x * std::pow(c, 2) * u * (c + u));
+	dQ_dx[1] = (1.0 / 2.0) * (L_x * (c + u) * (c * du_dx * rho - 1.0 * dP_dx) - std::pow(c, 2) * eta_5 * rho * (std::pow(M, 2) - 1) * (u - u_t)) /
+		   (L_x * c * rho * (c + u));
+	dQ_dx[2] = c * eta_3 * (v - v_t) / (L_x * u);
+	dQ_dx[3] = c * eta_4 * (w - w_t) / (L_x * u);
+	dQ_dx[4] = 0.5 * (L_x * (c + u) * (-c * du_dx * rho + dP_dx) - std::pow(c, 2) * eta_5 * rho * (std::pow(M, 2) - 1) * (u - u_t)) / (L_x * (c + u));
 
 	return dQ_dx;
 }
@@ -133,21 +172,23 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<Channel>::setCustomBounda
 											     int /*orig_comp*/)
 {
 	auto [i, j, k] = iv.dim3();
-
 	amrex::Box const &box = geom.Domain();
+	const Real Lx = box.length(0);
 	const auto &domain_lo = box.loVect3d();
 	const auto &domain_hi = box.hiVect3d();
 	const int ilo = domain_lo[0];
-	constexpr int nvar = HydroSystem<Channel>::nvar_;
+
 	constexpr Real gamma = quokka::EOS_Traits<Channel>::gamma;
+	const Real P_inflow = ::P_inflow;
+	const Real u_inflow = ::u_inflow;
+	const Real v_inflow = ::v_inflow;
+	const Real w_inflow = ::w_inflow;
 
 	if (i < ilo) {
 		// x1 lower boundary -- subsonic inflow
 		const Real dx = geom.CellSize(0);
 
-		// compute dQ/dx
-		quokka::valarray<amrex::Real, nvar> dQ_dx = Compute_dQ_dx(Q);
-
+		// read in primitive vars
 		const Real rho_ip1 = consVar(ilo + 1, j, k, HydroSystem<Channel>::density_index);
 		const Real x1mom_ip1 = consVar(ilo + 1, j, k, HydroSystem<Channel>::x1Momentum_index);
 		const Real x2mom_ip1 = consVar(ilo + 1, j, k, HydroSystem<Channel>::x2Momentum_index);
@@ -155,9 +196,19 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<Channel>::setCustomBounda
 		const Real E_ip1 = consVar(ilo + 1, j, k, HydroSystem<Channel>::energy_index);
 		const Real Eint_ip1 = E_ip1 - 0.5 * (x1mom_ip1 * x1mom_ip1 + x2mom_ip1 * x2mom_ip1 + x3mom_ip1 * x3mom_ip1) / rho_ip1;
 
-		quokka::valarray<amrex::Real, nvar> Q_ip1{rho_ip1, x1mom_ip1 / rho_ip1, x2mom_ip1 / rho_ip1, x3mom_ip1 / rho_ip1, Eint_ip1 / (gamma - 1.)};
-		quokka::valarray<amrex::Real, nvar> Q_im1 = Q_ip1 - 2.0 * dx * dQ_dx;
+		// compute one-sided dQ/dx from the data
+		quokka::valarray<amrex::Real, 5> Q_i{};
+		quokka::valarray<amrex::Real, 5> Q_ip1{rho_ip1, x1mom_ip1 / rho_ip1, x2mom_ip1 / rho_ip1, x3mom_ip1 / rho_ip1, Eint_ip1 / (gamma - 1.)};
+		quokka::valarray<amrex::Real, 5> Q_ip2{};
+		quokka::valarray<amrex::Real, 5> dQ_dx_data = -3. * Q_i + 4. * Q_ip1 - Q_ip2 / (2. * dx);
 
+		// compute dQ/dx with modified characteristics
+		quokka::valarray<amrex::Real, 5> dQ_dx = dQ_dx_inflow_x1_lower(Q_i, dQ_dx_data, P_inflow, u_inflow, v_inflow, w_inflow, Lx);
+
+		// compute centered ghost values
+		quokka::valarray<amrex::Real, 5> Q_im1 = Q_ip1 - 2.0 * dx * dQ_dx;
+
+		// convert to conserved vars
 		Real const rho = Q_im1[0];
 		Real const xmom = rho * Q_im1[1];
 		Real const ymom = rho * Q_im1[2];
