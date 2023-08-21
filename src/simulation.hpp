@@ -1545,7 +1545,8 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileName(int le
 // get plotfile name
 template <typename problem_t> auto AMRSimulation<problem_t>::CustomPlotFileName(const char *base, int lev) const -> std::string
 {
-	const return amrex::Concatenate(base_str, lev, 5);
+	const std::string base_str(base);
+	return amrex::Concatenate(base_str, lev, 5);
 }
 
 template <typename problem_t>
