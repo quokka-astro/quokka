@@ -54,15 +54,17 @@ template <> struct Physics_Traits<Channel> {
 constexpr Real Tgas0 = 1.0e7; // K
 constexpr Real nH0 = 1.0e-4;  // cm^-3
 constexpr Real M0 = 2.0;      // Mach number of shock
-
 constexpr Real P0 = nH0 * Tgas0 * C::k_B;      // erg cm^-3
 constexpr Real rho0 = nH0 * (C::m_p + C::m_e); // g cm^-3
 
 // cloud-tracking variables needed for Dirichlet boundary condition
-AMREX_GPU_MANAGED static Real rho_wind = 0;
-AMREX_GPU_MANAGED static Real v_wind = 0;
-AMREX_GPU_MANAGED static Real P_wind = 0;
-AMREX_GPU_MANAGED static Real delta_vx = 0;
+namespace
+{
+AMREX_GPU_MANAGED Real rho_wind = 0; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real v_wind = 0;   // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real P_wind = 0;   // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real delta_vx = 0; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+};				     // namespace
 
 template <> void RadhydroSimulation<Channel>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
