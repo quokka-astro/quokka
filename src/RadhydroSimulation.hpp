@@ -46,7 +46,7 @@
 #include "AMReX_Utility.H"
 #include "AMReX_YAFluxRegister.H"
 
-#ifdef AMREX_ASCENT
+#ifdef AMREX_USE_ASCENT
 #include <ascent.hpp>
 #include <conduit_node.hpp>
 #include "AMReX_Conduit_Blueprint.H"
@@ -920,7 +920,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 
 		// LOW LEVEL DEBUGGING: output state_old_cc_tmp (with ghost cells)
 		if (lowLevelDebuggingOutput_ == 1) {
-#ifdef AMREX_ASCENT
+#ifdef AMREX_USE_ASCENT
 			// write Blueprint HDF5 files
 			conduit::Node mesh;
 			amrex::SingleLevelToBlueprint(state_old_cc_tmp, componentNames_cc_, geom[lev], time, istep[lev] + 1, mesh);
