@@ -27,6 +27,7 @@
 #include "AMReX_iMultiFab.H"
 
 #include "EOS.hpp"
+#include "HydroState.hpp"
 #include "RadhydroSimulation.hpp"
 #include "channel.hpp"
 #include "hydro_system.hpp"
@@ -57,17 +58,16 @@ template <> struct Physics_Traits<Channel> {
 
 constexpr Real Tgas0 = 300;		       // K
 constexpr Real nH0 = 1.0;		       // cm^-3
-constexpr Real P0 = nH0 * Tgas0 * C::k_B;      // erg cm^-3
 constexpr Real rho0 = nH0 * (C::m_p + C::m_e); // g cm^-3
 
 // global variables needed for Dirichlet boundary condition
 namespace
 {
-AMREX_GPU_MANAGED Real u_inflow = 0; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED Real v_inflow = 0; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED Real w_inflow = 0; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED Real P_inflow = 0; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-};				     // namespace
+AMREX_GPU_MANAGED Real u_inflow = 1.0e4; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real v_inflow = 0;	 // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real w_inflow = 0;	 // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real P_inflow = NAN;	 // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+};					 // namespace
 
 template <> void RadhydroSimulation<Channel>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
@@ -77,13 +77,14 @@ template <> void RadhydroSimulation<Channel>::setInitialConditionsOnGrid(quokka:
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_elem.prob_hi_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
+	amrex::Real const u_inflow = ::u_inflow;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		Real const rho = rho0;
 		Real const xmom = 0;
 		Real const ymom = 0;
 		Real const zmom = 0;
-		Real const Eint = (quokka::EOS_Traits<Channel>::gamma - 1.) * P0;
+		Real const Eint = quokka::EOS<Channel>::ComputeEintFromTgas(rho0, Tgas0);
 		Real const Egas = RadSystem<Channel>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
 
 		state_cc(i, j, k, HydroSystem<Channel>::density_index) = rho;
@@ -152,14 +153,22 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dQ_dx_inflow_x1_lower(quokka::valarray<
 
 	// see SymPy notebook for derivation
 	quokka::valarray<Real, 5> dQ_dx{};
-	dQ_dx[0] =
-	    0.5 *
-	    (L_x * u * (c + u) * (-c * du_dx * rho + dP_dx) - (c * c) * eta_5 * rho * u * ((M * M) - 1) * (u - u_t) - 2 * c * eta_2 * (P - P_t) * (c + u)) /
-	    (L_x * (c * c) * u * (c + u));
-	dQ_dx[1] = 0.5 * (L_x * (c + u) * (c * du_dx * rho - dP_dx) - (c * c) * eta_5 * rho * ((M * M) - 1) * (u - u_t)) / (L_x * c * rho * (c + u));
-	dQ_dx[2] = c * eta_3 * (v - v_t) / (L_x * u);
-	dQ_dx[3] = c * eta_4 * (w - w_t) / (L_x * u);
-	dQ_dx[4] = 0.5 * (L_x * (c + u) * (-c * du_dx * rho + dP_dx) - (c * c) * eta_5 * rho * ((M * M) - 1) * (u - u_t)) / (L_x * (c + u));
+	if (u != 0.) {
+		dQ_dx[0] = 0.5 *
+			   (L_x * u * (c + u) * (-c * du_dx * rho + dP_dx) - (c * c) * eta_5 * rho * u * ((M * M) - 1) * (u - u_t) -
+			    2 * c * eta_2 * (P - P_t) * (c + u)) /
+			   (L_x * (c * c) * u * (c + u));
+		dQ_dx[1] = 0.5 * (L_x * (c + u) * (c * du_dx * rho - dP_dx) - (c * c) * eta_5 * rho * ((M * M) - 1) * (u - u_t)) / (L_x * c * rho * (c + u));
+		dQ_dx[2] = c * eta_3 * (v - v_t) / (L_x * u);
+		dQ_dx[3] = c * eta_4 * (w - w_t) / (L_x * u);
+		dQ_dx[4] = 0.5 * (L_x * (c + u) * (-c * du_dx * rho + dP_dx) - (c * c) * eta_5 * rho * ((M * M) - 1) * (u - u_t)) / (L_x * (c + u));
+	} else { // u == 0
+		dQ_dx[0] = 0.5 * (L_x * c * (-c * du_dx * rho + dP_dx) + (c * c) * eta_5 * rho * u_t * ((M * M) - 1)) / (L_x * std::pow(c, 3));
+		dQ_dx[1] = 0.5 * (L_x * c * (c * du_dx * rho - dP_dx) + (c * c) * eta_5 * rho * u_t * ((M * M) - 1)) / (L_x * (c * c) * rho);
+		dQ_dx[2] = 0;
+		dQ_dx[3] = 0;
+		dQ_dx[4] = 0.5 * (L_x * c * (-c * du_dx * rho + dP_dx) + (c * c) * eta_5 * rho * u_t * ((M * M) - 1)) / (L_x * c);
+	}
 
 	return dQ_dx;
 }
@@ -172,12 +181,13 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<Channel>::setCustomBounda
 {
 	auto [i, j, k] = iv.dim3();
 	amrex::Box const &box = geom.Domain();
-	const Real Lx = box.length(0);
+	const Real Lx = 1.0;
 	const auto &domain_lo = box.loVect3d();
 	const auto &domain_hi = box.hiVect3d();
 	const int ilo = domain_lo[0];
+	const int ihi = domain_hi[0];
+	const Real dx = geom.CellSize(0);
 
-	constexpr Real gamma = quokka::EOS_Traits<Channel>::gamma;
 	const Real P_inflow = ::P_inflow;
 	const Real u_inflow = ::u_inflow;
 	const Real v_inflow = ::v_inflow;
@@ -185,42 +195,73 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<Channel>::setCustomBounda
 
 	if (i < ilo) {
 		// x1 lower boundary -- subsonic inflow
-		const Real dx = geom.CellSize(0);
-
-		// read in primitive vars
-		const Real rho_ip1 = consVar(ilo + 1, j, k, HydroSystem<Channel>::density_index);
-		const Real x1mom_ip1 = consVar(ilo + 1, j, k, HydroSystem<Channel>::x1Momentum_index);
-		const Real x2mom_ip1 = consVar(ilo + 1, j, k, HydroSystem<Channel>::x2Momentum_index);
-		const Real x3mom_ip1 = consVar(ilo + 1, j, k, HydroSystem<Channel>::x3Momentum_index);
-		const Real E_ip1 = consVar(ilo + 1, j, k, HydroSystem<Channel>::energy_index);
-		const Real Eint_ip1 = E_ip1 - 0.5 * (x1mom_ip1 * x1mom_ip1 + x2mom_ip1 * x2mom_ip1 + x3mom_ip1 * x3mom_ip1) / rho_ip1;
 
 		// compute one-sided dQ/dx from the data
-		quokka::valarray<amrex::Real, 5> Q_i{};
-		quokka::valarray<amrex::Real, 5> Q_ip1{rho_ip1, x1mom_ip1 / rho_ip1, x2mom_ip1 / rho_ip1, x3mom_ip1 / rho_ip1, Eint_ip1 / (gamma - 1.)};
-		quokka::valarray<amrex::Real, 5> Q_ip2{};
-		quokka::valarray<amrex::Real, 5> dQ_dx_data = -3. * Q_i + 4. * Q_ip1 - Q_ip2 / (2. * dx);
+		quokka::valarray<amrex::Real, 5> const Q_i = HydroSystem<Channel>::ComputePrimVars(consVar, ilo, j, k);
+		quokka::valarray<amrex::Real, 5> const Q_ip1 = HydroSystem<Channel>::ComputePrimVars(consVar, ilo + 1, j, k);
+		quokka::valarray<amrex::Real, 5> const Q_ip2 = HydroSystem<Channel>::ComputePrimVars(consVar, ilo + 2, j, k);
+		quokka::valarray<amrex::Real, 5> const dQ_dx_data = (-3. * Q_i + 4. * Q_ip1 - Q_ip2) / (2. * dx);
 
 		// compute dQ/dx with modified characteristics
-		quokka::valarray<amrex::Real, 5> dQ_dx = dQ_dx_inflow_x1_lower(Q_i, dQ_dx_data, P_inflow, u_inflow, v_inflow, w_inflow, Lx);
+		quokka::valarray<amrex::Real, 5> const dQ_dx = dQ_dx_inflow_x1_lower(Q_i, dQ_dx_data, P_inflow, u_inflow, v_inflow, w_inflow, Lx);
 
 		// compute centered ghost values
-		quokka::valarray<amrex::Real, 5> Q_im1 = Q_ip1 - 2.0 * dx * dQ_dx;
+		quokka::valarray<amrex::Real, 5> const Q_im1 = Q_ip1 - 2.0 * dx * dQ_dx;
+		quokka::valarray<amrex::Real, 5> const Q_im2 = -2.0 * Q_ip1 - 3.0 * Q_i + 6.0 * Q_im1 + 6.0 * dx * dQ_dx;
+		quokka::valarray<amrex::Real, 5> const Q_im3 = 3.0 * Q_ip1 + 10.0 * Q_i - 18.0 * Q_im1 + 6.0 * Q_im2 - 12.0 * dx * dQ_dx;
+		quokka::valarray<amrex::Real, 5> const Q_im4 = -2.0 * Q_ip1 - 13.0 * Q_i + 24.0 * Q_im1 - 12.0 * Q_im2 + 4.0 * Q_im3 + 12.0 * dx * dQ_dx;
 
-		// convert to conserved vars
-		Real const rho = Q_im1[0];
-		Real const xmom = rho * Q_im1[1];
-		Real const ymom = rho * Q_im1[2];
-		Real const zmom = rho * Q_im1[3];
-		Real const Eint = (gamma - 1.) * Q_im1[4];
-		Real const Egas = Eint + 0.5 * (xmom * xmom + ymom * ymom + zmom * zmom) / rho;
+		// set cell values
+		quokka::valarray<amrex::Real, 5> consCell{};
+		if (i == ilo - 1) {
+			consCell = HydroSystem<Channel>::ComputeConsVars(Q_im1);
+		} else if (i == ilo - 2) {
+			consCell = HydroSystem<Channel>::ComputeConsVars(Q_im2);
+		} else if (i == ilo - 3) {
+			consCell = HydroSystem<Channel>::ComputeConsVars(Q_im3);
+		} else if (i == ilo - 4) {
+			consCell = HydroSystem<Channel>::ComputeConsVars(Q_im4);
+		}
+		consVar(i, j, k, HydroSystem<Channel>::density_index) = consCell[0];
+		consVar(i, j, k, HydroSystem<Channel>::x1Momentum_index) = consCell[1];
+		consVar(i, j, k, HydroSystem<Channel>::x2Momentum_index) = consCell[2];
+		consVar(i, j, k, HydroSystem<Channel>::x3Momentum_index) = consCell[3];
+		consVar(i, j, k, HydroSystem<Channel>::energy_index) = consCell[4];
 
-		consVar(i, j, k, HydroSystem<Channel>::density_index) = rho;
-		consVar(i, j, k, HydroSystem<Channel>::x1Momentum_index) = xmom;
-		consVar(i, j, k, HydroSystem<Channel>::x2Momentum_index) = ymom;
-		consVar(i, j, k, HydroSystem<Channel>::x3Momentum_index) = zmom;
-		consVar(i, j, k, HydroSystem<Channel>::energy_index) = Egas;
-		consVar(i, j, k, HydroSystem<Channel>::internalEnergy_index) = Eint;
+	} else if (i > ihi) {
+		// x1 upper boundary -- subsonic outflow
+
+		// compute one-sided dQ/dx from the data
+		quokka::valarray<amrex::Real, 5> const Q_i = HydroSystem<Channel>::ComputePrimVars(consVar, ihi, j, k);
+		quokka::valarray<amrex::Real, 5> const Q_im1 = HydroSystem<Channel>::ComputePrimVars(consVar, ihi - 1, j, k);
+		quokka::valarray<amrex::Real, 5> const Q_im2 = HydroSystem<Channel>::ComputePrimVars(consVar, ihi - 2, j, k);
+		quokka::valarray<amrex::Real, 5> const dQ_dx_data = (Q_im2 - 4.0 * Q_im1 + 3.0 * Q_i) / (2.0 * dx);
+
+		// compute dQ/dx with modified characteristics
+		quokka::valarray<amrex::Real, 5> const dQ_dx = dQ_dx_outflow_x1_upper(Q_i, dQ_dx_data, P_inflow, Lx);
+
+		// compute centered ghost values
+		quokka::valarray<amrex::Real, 5> const Q_ip1 = Q_im1 + 2.0 * dx * dQ_dx;
+		quokka::valarray<amrex::Real, 5> const Q_ip2 = -2.0 * Q_im1 - 3.0 * Q_i + 6.0 * Q_ip1 - 6.0 * dx * dQ_dx;
+		quokka::valarray<amrex::Real, 5> const Q_ip3 = 3.0 * Q_im1 + 10.0 * Q_i - 18.0 * Q_ip1 + 6.0 * Q_ip2 + 12.0 * dx * dQ_dx;
+		quokka::valarray<amrex::Real, 5> const Q_ip4 = -2.0 * Q_im1 - 13.0 * Q_i + 24.0 * Q_ip1 - 12.0 * Q_ip2 + 4.0 * Q_ip3 - 12.0 * dx * dQ_dx;
+
+		// set cell values
+		quokka::valarray<amrex::Real, 5> consCell{};
+		if (i == ihi + 1) {
+			consCell = HydroSystem<Channel>::ComputeConsVars(Q_ip1);
+		} else if (i == ihi + 2) {
+			consCell = HydroSystem<Channel>::ComputeConsVars(Q_ip2);
+		} else if (i == ihi + 3) {
+			consCell = HydroSystem<Channel>::ComputeConsVars(Q_ip3);
+		} else if (i == ihi + 4) {
+			consCell = HydroSystem<Channel>::ComputeConsVars(Q_ip4);
+		}
+		consVar(i, j, k, HydroSystem<Channel>::density_index) = consCell[0];
+		consVar(i, j, k, HydroSystem<Channel>::x1Momentum_index) = consCell[1];
+		consVar(i, j, k, HydroSystem<Channel>::x2Momentum_index) = consCell[2];
+		consVar(i, j, k, HydroSystem<Channel>::x3Momentum_index) = consCell[3];
+		consVar(i, j, k, HydroSystem<Channel>::energy_index) = consCell[4];
 	}
 }
 
@@ -230,8 +271,8 @@ auto problem_main() -> int
 	constexpr int ncomp_cc = Physics_Indices<Channel>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 	for (int n = 0; n < ncomp_cc; ++n) {
-		BCs_cc[n].setLo(0, amrex::BCType::ext_dir);  // Dirichlet
-		BCs_cc[n].setHi(0, amrex::BCType::foextrap); // extrapolate
+		BCs_cc[n].setLo(0, amrex::BCType::ext_dir); // NSCBC inflow
+		BCs_cc[n].setHi(0, amrex::BCType::ext_dir); // NSCBC outflow
 
 		if constexpr (AMREX_SPACEDIM >= 2) {
 			BCs_cc[n].setLo(1, amrex::BCType::int_dir); // periodic
@@ -243,6 +284,9 @@ auto problem_main() -> int
 	}
 
 	RadhydroSimulation<Channel> sim(BCs_cc);
+
+	const Real Eint0 = quokka::EOS<Channel>::ComputeEintFromTgas(rho0, Tgas0);
+	::P_inflow = quokka::EOS<Channel>::ComputePressure(rho0, Eint0);
 
 	// Set initial conditions
 	sim.setInitialConditions();
