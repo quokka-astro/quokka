@@ -285,7 +285,6 @@ template <typename problem_t> auto HydroSystem<problem_t>::CheckStatesValid(amre
 				});
 }
 
-
 template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePrimVars(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k)
     -> quokka::valarray<amrex::Real, 5>
@@ -325,8 +324,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeConsVars
 	Real const v3 = prim[3];
 	Real const P = prim[4];
 	Real const Eint = quokka::EOS<problem_t>::ComputeEintFromPres(rho, P);
-	Real const Egas = Eint + 0.5 * rho * (v1*v1 + v2*v2 + v3*v3);
-	quokka::valarray<amrex::Real, 5> consVars{rho, rho*v1, rho*v2, rho*v3, Egas};
+	Real const Egas = Eint + 0.5 * rho * (v1 * v1 + v2 * v2 + v3 * v3);
+	quokka::valarray<amrex::Real, 5> consVars{rho, rho * v1, rho * v2, rho * v3, Egas};
 	return consVars;
 }
 
