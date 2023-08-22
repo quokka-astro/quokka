@@ -117,8 +117,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dQ_dx_outflow_x1_upper(quokka::valarray
 
 	// see SymPy notebook for derivation
 	quokka::valarray<Real, 5> dQ_dx{};
-	dQ_dx[0] = (1.0 / 2.0) * (-K * (P - P_t) + (c - u) * (2.0 * std::pow(c, 2) * drho_dx + c * du_dx * rho - 1.0 * dP_dx)) / (std::pow(c, 2) * (c - u));
-	dQ_dx[1] = (1.0 / 2.0) * (K * (P - P_t) + (c - u) * (c * du_dx * rho + dP_dx)) / (c * rho * (c - u));
+	dQ_dx[0] = 0.5 * (-K * (P - P_t) + (c - u) * (2.0 * c * c * drho_dx + c * du_dx * rho - dP_dx)) / (c * c * (c - u));
+	dQ_dx[1] = 0.5 * (K * (P - P_t) + (c - u) * (c * du_dx * rho + dP_dx)) / (c * rho * (c - u));
 	dQ_dx[2] = dv_dx;
 	dQ_dx[3] = dw_dx;
 	dQ_dx[4] = 0.5 * (-K * (P - P_t) + (c - u) * (c * du_dx * rho + dP_dx)) / (c - u);
@@ -152,15 +152,14 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dQ_dx_inflow_x1_lower(quokka::valarray<
 
 	// see SymPy notebook for derivation
 	quokka::valarray<Real, 5> dQ_dx{};
-	dQ_dx[0] = (1.0 / 2.0) *
-		   (L_x * u * (c + u) * (-1.0 * c * du_dx * rho + dP_dx) - std::pow(c, 2) * eta_5 * rho * u * (std::pow(M, 2) - 1) * (u - u_t) +
-		    2 * c * eta_2 * (P - P_t) * (c + u)) /
-		   (L_x * std::pow(c, 2) * u * (c + u));
-	dQ_dx[1] = (1.0 / 2.0) * (L_x * (c + u) * (c * du_dx * rho - 1.0 * dP_dx) - std::pow(c, 2) * eta_5 * rho * (std::pow(M, 2) - 1) * (u - u_t)) /
-		   (L_x * c * rho * (c + u));
+	dQ_dx[0] =
+	    0.5 *
+	    (L_x * u * (c + u) * (-c * du_dx * rho + dP_dx) - (c * c) * eta_5 * rho * u * ((M * M) - 1) * (u - u_t) - 2 * c * eta_2 * (P - P_t) * (c + u)) /
+	    (L_x * (c * c) * u * (c + u));
+	dQ_dx[1] = 0.5 * (L_x * (c + u) * (c * du_dx * rho - dP_dx) - (c * c) * eta_5 * rho * ((M * M) - 1) * (u - u_t)) / (L_x * c * rho * (c + u));
 	dQ_dx[2] = c * eta_3 * (v - v_t) / (L_x * u);
 	dQ_dx[3] = c * eta_4 * (w - w_t) / (L_x * u);
-	dQ_dx[4] = 0.5 * (L_x * (c + u) * (-c * du_dx * rho + dP_dx) - std::pow(c, 2) * eta_5 * rho * (std::pow(M, 2) - 1) * (u - u_t)) / (L_x * (c + u));
+	dQ_dx[4] = 0.5 * (L_x * (c + u) * (-c * du_dx * rho + dP_dx) - (c * c) * eta_5 * rho * ((M * M) - 1) * (u - u_t)) / (L_x * (c + u));
 
 	return dQ_dx;
 }
