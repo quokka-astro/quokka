@@ -21,6 +21,7 @@
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParallelContext.H"
 #include "AMReX_ParallelDescriptor.H"
+#include "AMReX_ParmParse.H"
 #include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
 #include "AMReX_TableData.H"
@@ -30,6 +31,7 @@
 #include "HydroState.hpp"
 #include "RadhydroSimulation.hpp"
 #include "channel.hpp"
+#include "fundamental_constants.H"
 #include "hydro_system.hpp"
 #include "physics_info.hpp"
 #include "physics_numVars.hpp"
@@ -42,8 +44,8 @@ struct Channel {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
 template <> struct quokka::EOS_Traits<Channel> {
-	static constexpr double gamma = 5. / 3.; // default value
-	static constexpr double mean_molecular_weight = C::m_p + C::m_e;
+	static constexpr double gamma = 1.1;
+	static constexpr double mean_molecular_weight = 28.96 * C::m_u; // air
 	static constexpr double boltzmann_constant = C::k_B;
 };
 
@@ -56,18 +58,17 @@ template <> struct Physics_Traits<Channel> {
 	static constexpr bool is_radiation_enabled = false;
 };
 
-constexpr Real Tgas0 = 300;		       // K
-constexpr Real nH0 = 1.0;		       // cm^-3
-constexpr Real rho0 = nH0 * (C::m_p + C::m_e); // g cm^-3
-
-// global variables needed for Dirichlet boundary condition
+// global variables needed for Dirichlet boundary condition and initial conditions
 namespace
 {
-AMREX_GPU_MANAGED Real u_inflow = 1.0e4; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED Real v_inflow = 0;	 // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED Real w_inflow = 0;	 // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED Real P_inflow = NAN;	 // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-};					 // namespace
+Real rho0 = NAN;		       // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+Real Tgas0 = NAN;		       // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+Real u0 = NAN;			       // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real u_inflow = NAN; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real v_inflow = NAN; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real w_inflow = NAN; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real P_inflow = NAN; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+};				       // namespace
 
 template <> void RadhydroSimulation<Channel>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
@@ -77,11 +78,10 @@ template <> void RadhydroSimulation<Channel>::setInitialConditionsOnGrid(quokka:
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_elem.prob_hi_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
-	amrex::Real const u_inflow = ::u_inflow;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		Real const rho = rho0;
-		Real const xmom = 0;
+		Real const xmom = rho0 * u0;
 		Real const ymom = 0;
 		Real const zmom = 0;
 		Real const Eint = quokka::EOS<Channel>::ComputeEintFromTgas(rho0, Tgas0);
@@ -146,10 +146,10 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dQ_dx_inflow_x1_lower(quokka::valarray<
 	const Real c = quokka::EOS<Channel>::ComputeSoundSpeed(rho, P);
 	const Real M = std::sqrt(u * u + v * v + w * w) / c;
 
-	const Real eta_2 = -0.278;
-	const Real eta_3 = 1.0;
-	const Real eta_4 = 1.0;
-	const Real eta_5 = 0.278;
+	const Real eta_2 = 2.; //-0.278;
+	const Real eta_3 = 2.; //1.0;
+	const Real eta_4 = 2.; //1.0;
+	const Real eta_5 = 2.; //0.278;
 
 	// see SymPy notebook for derivation
 	quokka::valarray<Real, 5> dQ_dx{};
@@ -181,12 +181,12 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<Channel>::setCustomBounda
 {
 	auto [i, j, k] = iv.dim3();
 	amrex::Box const &box = geom.Domain();
-	const Real Lx = 1.0;
 	const auto &domain_lo = box.loVect3d();
 	const auto &domain_hi = box.hiVect3d();
 	const int ilo = domain_lo[0];
 	const int ihi = domain_hi[0];
 	const Real dx = geom.CellSize(0);
+	const Real Lx = geom.prob_domain.length(0);
 
 	const Real P_inflow = ::P_inflow;
 	const Real u_inflow = ::u_inflow;
@@ -285,8 +285,19 @@ auto problem_main() -> int
 
 	RadhydroSimulation<Channel> sim(BCs_cc);
 
+	amrex::ParmParse pp("channel");
+	// initial condition parameters
+	pp.query("rho0", ::rho0);   // initial density [g/cc]
+	pp.query("Tgas0", ::Tgas0); // initial temperature [K]
+	pp.query("u0", ::u0);	    // initial velocity [cm/s]
+	// boundary condition parameters
+	pp.query("u_inflow", ::u_inflow); // inflow velocity along x-axis [cm/s]
+	pp.query("v_inflow", ::v_inflow); // transverse inflow velocity (v_y) [cm/s]
+	pp.query("w_inflow", ::w_inflow); // transverse inflow velocity (v_z) [cm/s]
+	// compute derived parameters
 	const Real Eint0 = quokka::EOS<Channel>::ComputeEintFromTgas(rho0, Tgas0);
 	::P_inflow = quokka::EOS<Channel>::ComputePressure(rho0, Eint0);
+	amrex::Print() << "Derived inflow pressure is " << ::P_inflow << " erg/cc.\n";
 
 	// Set initial conditions
 	sim.setInitialConditions();
