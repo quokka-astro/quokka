@@ -27,8 +27,8 @@ do_subcycle = 1
 max_timesteps = 50000
 stop_time = 0.1
 
-checkpoint_interval = 5000
-plotfile_interval = 100
+checkpoint_interval = -1
+plotfile_interval = -1
 ascent_interval = -1
 
 hydro.rk_integrator_order = 2

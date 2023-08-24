@@ -8,6 +8,7 @@
 ///        Characteristic Boundary Conditions (NSCBC).
 ///
 #include <random>
+#include <tuple>
 #include <vector>
 
 #include "AMReX.H"
@@ -27,16 +28,21 @@
 #include "AMReX_TableData.H"
 #include "AMReX_iMultiFab.H"
 
+#include "ArrayUtil.hpp"
 #include "EOS.hpp"
 #include "HydroState.hpp"
 #include "RadhydroSimulation.hpp"
 #include "channel.hpp"
+#include "fextract.hpp"
 #include "fundamental_constants.H"
 #include "hydro_system.hpp"
 #include "physics_info.hpp"
 #include "physics_numVars.hpp"
 #include "radiation_system.hpp"
 #include "valarray.hpp"
+#ifdef HAVE_PYTHON
+#include "matplotlibcpp.h"
+#endif
 
 using amrex::Real;
 
@@ -232,6 +238,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<Channel>::setCustomBounda
 		} else if (i == ilo - 4) {
 			consCell = HydroSystem<Channel>::ComputeConsVars(Q_im4);
 		}
+
 		consVar(i, j, k, HydroSystem<Channel>::density_index) = consCell[0];
 		consVar(i, j, k, HydroSystem<Channel>::x1Momentum_index) = consCell[1];
 		consVar(i, j, k, HydroSystem<Channel>::x2Momentum_index) = consCell[2];
@@ -316,7 +323,116 @@ auto problem_main() -> int
 	// run simulation
 	sim.evolve();
 
-	// Cleanup and exit
-	int const status = 0;
+	// extract slice
+	auto [position, values] = fextract(sim.state_new_cc_[0], sim.geom[0], 0, 0., true);
+	int nx = static_cast<int>(position.size());
+	std::vector<double> xs = position;
+	std::vector<double> xs_exact = position;
+
+	// extract solution
+	std::vector<double> d(nx);
+	std::vector<double> vx(nx);
+	std::vector<double> P(nx);
+	std::vector<double> density_exact(nx);
+	std::vector<double> velocity_exact(nx);
+	std::vector<double> Pexact(nx);
+
+	for (int i = 0; i < nx; ++i) {
+		{
+			amrex::Real rho = values.at(HydroSystem<Channel>::density_index)[i];
+			amrex::Real xmom = values.at(HydroSystem<Channel>::x1Momentum_index)[i];
+			amrex::Real Egas = values.at(HydroSystem<Channel>::energy_index)[i];
+			amrex::Real Eint = Egas - (xmom * xmom) / (2.0 * rho);
+			amrex::Real const gamma = quokka::EOS_Traits<Channel>::gamma;
+			d.at(i) = rho;
+			vx.at(i) = xmom / rho;
+			P.at(i) = ((gamma - 1.0) * Eint);
+		}
+		{
+			density_exact.at(i) = rho0;
+			velocity_exact.at(i) = u_inflow;
+			Pexact.at(i) = P_outflow;
+		}
+	}
+	std::vector<std::vector<double>> const sol{d, vx, P};
+	std::vector<std::vector<double>> const sol_exact{density_exact, velocity_exact, Pexact};
+
+	// compute error norm
+	amrex::Real err_sq = 0.;
+	for (int n = 0; n < sol.size(); ++n) {
+		amrex::Real dU_k = 0.;
+		amrex::Real U_k = 0;
+		for (int i = 0; i < nx; ++i) {
+			// Δ Uk = ∑i |Uk,in - Uk,i0| / Nx
+			const amrex::Real U_k0 = sol_exact.at(n)[i];
+			const amrex::Real U_k1 = sol.at(n)[i];
+			dU_k += std::abs(U_k1 - U_k0) / static_cast<double>(nx);
+			U_k += std::abs(U_k0) / static_cast<double>(nx);
+		}
+		amrex::Print() << "dU_" << n << " = " << dU_k << " U_k = " << U_k << "\n";
+		// ε = || Δ U / U || = [&sum_k (ΔU_k/U_k)^2]^{1/2}
+		err_sq += std::pow(dU_k / U_k, 2);
+	}
+	const amrex::Real epsilon = std::sqrt(err_sq);
+	amrex::Print() << "rms of component-wise relative L1 error norms = " << epsilon << "\n\n";
+
+#ifdef HAVE_PYTHON
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		// Plot results
+		int skip = 4;	    // only plot every 8 elements of exact solution
+		double msize = 5.0; // marker size
+		using mpl_arg = std::map<std::string, std::string>;
+		using mpl_sarg = std::unordered_map<std::string, std::string>;
+
+		matplotlibcpp::clf();
+		mpl_arg d_args;
+		mpl_sarg dexact_args;
+		d_args["label"] = "density";
+		d_args["color"] = "C0";
+		dexact_args["marker"] = "o";
+		dexact_args["color"] = "C0";
+		matplotlibcpp::plot(xs, d, d_args);
+		matplotlibcpp::scatter(strided_vector_from(xs_exact, skip), strided_vector_from(density_exact, skip), msize, dexact_args);
+		matplotlibcpp::legend();
+		matplotlibcpp::xlabel("length x");
+		matplotlibcpp::tight_layout();
+		matplotlibcpp::save("./channel_flow_density.pdf");
+
+		matplotlibcpp::clf();
+		std::map<std::string, std::string> vx_args;
+		vx_args["label"] = "velocity";
+		vx_args["color"] = "C3";
+		matplotlibcpp::plot(xs, vx, vx_args);
+		mpl_sarg vexact_args;
+		vexact_args["marker"] = "o";
+		vexact_args["color"] = "C3";
+		matplotlibcpp::scatter(strided_vector_from(xs_exact, skip), strided_vector_from(velocity_exact, skip), msize, vexact_args);
+		matplotlibcpp::legend();
+		matplotlibcpp::xlabel("length x");
+		matplotlibcpp::tight_layout();
+		matplotlibcpp::save("./channel_flow_velocity.pdf");
+
+		matplotlibcpp::clf();
+		std::map<std::string, std::string> P_args;
+		P_args["label"] = "pressure";
+		P_args["color"] = "C4";
+		matplotlibcpp::plot(xs, P, P_args);
+		mpl_sarg Pexact_args;
+		Pexact_args["marker"] = "o";
+		Pexact_args["color"] = "C4";
+		matplotlibcpp::scatter(strided_vector_from(xs_exact, skip), strided_vector_from(Pexact, skip), msize, Pexact_args);
+		matplotlibcpp::legend();
+		matplotlibcpp::xlabel("length x");
+		matplotlibcpp::tight_layout();
+		matplotlibcpp::save("./channel_flow_pressure.pdf");
+	}
+#endif
+
+	// Compute test success condition
+	int status = 0;
+	const double error_tol = 3.0e-5;
+	if (epsilon > error_tol) {
+		status = 1;
+	}
 	return status;
 }
