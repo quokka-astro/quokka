@@ -334,7 +334,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeConsVars
 	Real const Egas = Eint + 0.5 * rho * (v1 * v1 + v2 * v2 + v3 * v3);
 
 	quokka::valarray<amrex::Real, nvar_> consVars{rho, rho * v1, rho * v2, rho * v3, Egas, Eint_aux};
-	
+
 	for (int i = 0; i < nscalars_; ++i) {
 		consVars[scalar0_index + i] = prim[primScalar0_index + i];
 	}
