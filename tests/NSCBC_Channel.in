@@ -33,13 +33,15 @@ ascent_interval = -1
 
 hydro.rk_integrator_order = 2
 hydro.reconstruction_order = 3
-hydro.use_dual_energy = 0
+hydro.use_dual_energy = 1
 hydro.low_level_debugging_output = 0
 
 channel.rho0 = 1.1e-3             # g/cc
 channel.Tgas0 = 320.8398927398333 # K
 channel.u0 = 2.0e3                # cm/s
+channel.s0 = 0                    # dimensionless
 
 channel.u_inflow = 4.0e3          # cm/s
 channel.v_inflow = 0.             # cm/s
 channel.w_inflow = 0.             # cm/s
+channel.s_inflow = 1.0            # dimensionless
