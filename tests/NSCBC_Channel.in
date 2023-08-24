@@ -21,11 +21,11 @@ amr.max_grid_size   = 128
 # *****************************************************************
 # Quokka options
 # *****************************************************************
-cfl = 0.2
+cfl = 0.3
 do_reflux = 1
 do_subcycle = 1
-max_timesteps = 25000
-stop_time = 0.05
+max_timesteps = 50000
+stop_time = 0.1
 
 checkpoint_interval = 5000
 plotfile_interval = 100

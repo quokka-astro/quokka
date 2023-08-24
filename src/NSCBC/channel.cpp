@@ -61,14 +61,14 @@ template <> struct Physics_Traits<Channel> {
 // global variables needed for Dirichlet boundary condition and initial conditions
 namespace
 {
-Real rho0 = NAN;		       // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-Real Tgas0 = NAN;		       // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-Real u0 = NAN;			       // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED Real u_inflow = NAN; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED Real v_inflow = NAN; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED Real w_inflow = NAN; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED Real P_inflow = NAN; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-};				       // namespace
+Real rho0 = NAN;			// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+Real u0 = NAN;				// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real Tgas0 = NAN;	// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real P_outflow = NAN; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real u_inflow = NAN;	// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real v_inflow = NAN;	// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real w_inflow = NAN;	// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+};					// namespace
 
 template <> void RadhydroSimulation<Channel>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
@@ -100,6 +100,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dQ_dx_outflow_x1_upper(quokka::valarray
 								const Real L_x) -> quokka::valarray<Real, 5>
 {
 	// return dQ/dx corresponding to subsonic outflow on the x1 upper boundary
+
 	const Real rho = Q[0];
 	const Real u = Q[1];
 	const Real v = Q[2];
@@ -114,7 +115,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dQ_dx_outflow_x1_upper(quokka::valarray
 
 	const Real c = quokka::EOS<Channel>::ComputeSoundSpeed(rho, P);
 	const Real M = std::sqrt(u * u + v * v + w * w) / c;
-	amrex::Real const K = 0.25 * c * (1 - M * M) / L_x;
+	amrex::Real const K = 0.25 * c * (1 - M * M) / L_x; // must be non-zero for well-posed Euler equations
 
 	// see SymPy notebook for derivation
 	quokka::valarray<Real, 5> dQ_dx{};
@@ -127,15 +128,20 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dQ_dx_outflow_x1_upper(quokka::valarray
 	return dQ_dx;
 }
 
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dQ_dx_inflow_x1_lower(quokka::valarray<Real, 5> const &Q, quokka::valarray<Real, 5> const &dQ_dx_data, const Real P_t,
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dQ_dx_inflow_x1_lower(quokka::valarray<Real, 5> const &Q, quokka::valarray<Real, 5> const &dQ_dx_data, const Real T_t,
 							       const Real u_t, const Real v_t, const Real w_t, const Real L_x) -> quokka::valarray<Real, 5>
 {
 	// return dQ/dx corresponding to subsonic inflow on the x1 lower boundary
+	// (This is only necessary for continuous inflows, i.e., where as shock or contact discontinuity is not desired.)
+	// NOTE: This boundary condition is only defined for an ideal gas (with constant k_B/mu).
+
 	const Real rho = Q[0];
 	const Real u = Q[1];
 	const Real v = Q[2];
 	const Real w = Q[3];
 	const Real P = Q[4];
+	const Real Eint = quokka::EOS<Channel>::ComputeEintFromPres(rho, P);
+	const Real T = quokka::EOS<Channel>::ComputeTgasFromEint(rho, Eint);
 
 	const Real drho_dx = dQ_dx_data[0];
 	const Real du_dx = dQ_dx_data[1];
@@ -146,17 +152,19 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dQ_dx_inflow_x1_lower(quokka::valarray<
 	const Real c = quokka::EOS<Channel>::ComputeSoundSpeed(rho, P);
 	const Real M = std::sqrt(u * u + v * v + w * w) / c;
 
-	const Real eta_2 = 2.; //-0.278;
-	const Real eta_3 = 2.; // 1.0;
-	const Real eta_4 = 2.; // 1.0;
-	const Real eta_5 = 2.; // 0.278;
+	const Real eta_2 = 2.;
+	const Real eta_3 = 2.;
+	const Real eta_4 = 2.;
+	const Real eta_5 = 2.;
+
+	const Real R = quokka::EOS_Traits<Channel>::boltzmann_constant / quokka::EOS_Traits<Channel>::mean_molecular_weight;
 
 	// see SymPy notebook for derivation
 	quokka::valarray<Real, 5> dQ_dx{};
 	if (u != 0.) {
 		dQ_dx[0] = 0.5 *
 			   (L_x * u * (c + u) * (-c * du_dx * rho + dP_dx) - (c * c) * eta_5 * rho * u * ((M * M) - 1) * (u - u_t) -
-			    2 * c * eta_2 * (P - P_t) * (c + u)) /
+			    2 * c * eta_2 * rho * R * (T - T_t) * (c + u)) /
 			   (L_x * (c * c) * u * (c + u));
 		dQ_dx[1] = 0.5 * (L_x * (c + u) * (c * du_dx * rho - dP_dx) - (c * c) * eta_5 * rho * ((M * M) - 1) * (u - u_t)) / (L_x * c * rho * (c + u));
 		dQ_dx[2] = c * eta_3 * (v - v_t) / (L_x * u);
@@ -188,10 +196,12 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<Channel>::setCustomBounda
 	const Real dx = geom.CellSize(0);
 	const Real Lx = geom.prob_domain.length(0);
 
-	const Real P_inflow = ::P_inflow;
+	const Real T_inflow = ::Tgas0;
 	const Real u_inflow = ::u_inflow;
 	const Real v_inflow = ::v_inflow;
 	const Real w_inflow = ::w_inflow;
+
+	const Real P_outflow = ::P_outflow;
 
 	if (i < ilo) {
 		// x1 lower boundary -- subsonic inflow
@@ -203,7 +213,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<Channel>::setCustomBounda
 		quokka::valarray<amrex::Real, 5> const dQ_dx_data = (-3. * Q_i + 4. * Q_ip1 - Q_ip2) / (2. * dx);
 
 		// compute dQ/dx with modified characteristics
-		quokka::valarray<amrex::Real, 5> const dQ_dx = dQ_dx_inflow_x1_lower(Q_i, dQ_dx_data, P_inflow, u_inflow, v_inflow, w_inflow, Lx);
+		quokka::valarray<amrex::Real, 5> const dQ_dx = dQ_dx_inflow_x1_lower(Q_i, dQ_dx_data, T_inflow, u_inflow, v_inflow, w_inflow, Lx);
 
 		// compute centered ghost values
 		quokka::valarray<amrex::Real, 5> const Q_im1 = Q_ip1 - 2.0 * dx * dQ_dx;
@@ -238,7 +248,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<Channel>::setCustomBounda
 		quokka::valarray<amrex::Real, 5> const dQ_dx_data = (Q_im2 - 4.0 * Q_im1 + 3.0 * Q_i) / (2.0 * dx);
 
 		// compute dQ/dx with modified characteristics
-		quokka::valarray<amrex::Real, 5> const dQ_dx = dQ_dx_outflow_x1_upper(Q_i, dQ_dx_data, P_inflow, Lx);
+		quokka::valarray<amrex::Real, 5> const dQ_dx = dQ_dx_outflow_x1_upper(Q_i, dQ_dx_data, P_outflow, Lx);
 
 		// compute centered ghost values
 		quokka::valarray<amrex::Real, 5> const Q_ip1 = Q_im1 + 2.0 * dx * dQ_dx;
@@ -294,10 +304,11 @@ auto problem_main() -> int
 	pp.query("u_inflow", ::u_inflow); // inflow velocity along x-axis [cm/s]
 	pp.query("v_inflow", ::v_inflow); // transverse inflow velocity (v_y) [cm/s]
 	pp.query("w_inflow", ::w_inflow); // transverse inflow velocity (v_z) [cm/s]
+
 	// compute derived parameters
 	const Real Eint0 = quokka::EOS<Channel>::ComputeEintFromTgas(rho0, Tgas0);
-	::P_inflow = quokka::EOS<Channel>::ComputePressure(rho0, Eint0);
-	amrex::Print() << "Derived inflow pressure is " << ::P_inflow << " erg/cc.\n";
+	::P_outflow = quokka::EOS<Channel>::ComputePressure(rho0, Eint0);
+	amrex::Print() << "Derived outflow pressure is " << ::P_outflow << " erg/cc.\n";
 
 	// Set initial conditions
 	sim.setInitialConditions();
