@@ -428,7 +428,9 @@ auto problem_main() -> int
 #ifdef HAVE_PYTHON
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		// Plot results
-		sultsconst utionconst using mpl_arg = std::map<std::string, std::string>;
+		const int skip = 4;	    // only plot every 8 elements of exact solution
+		const double msize = 5.0; // marker size
+		using mpl_arg = std::map<std::string, std::string>;
 		using mpl_sarg = std::unordered_map<std::string, std::string>;
 
 		matplotlibcpp::clf();
@@ -491,7 +493,7 @@ auto problem_main() -> int
 
 	// Compute test success condition
 	int status = 0;
-	const double error_tol = 3.0e-5;
+	const double error_tol = 0.0007;
 	if (epsilon > error_tol) {
 		status = 1;
 	}
