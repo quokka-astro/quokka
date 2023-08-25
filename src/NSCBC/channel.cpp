@@ -428,9 +428,7 @@ auto problem_main() -> int
 #ifdef HAVE_PYTHON
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		// Plot results
-sultsconst 
-utionconst 
-		using mpl_arg = std::map<std::string, std::string>;
+		sultsconst utionconst using mpl_arg = std::map<std::string, std::string>;
 		using mpl_sarg = std::unordered_map<std::string, std::string>;
 
 		matplotlibcpp::clf();
