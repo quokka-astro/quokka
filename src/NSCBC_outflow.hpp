@@ -23,6 +23,7 @@ namespace detail
 template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dQ_dx_outflow_x1_upper(quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> const &Q,
 								quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> const &dQ_dx_data,
+								quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> const &dQ_dy_data,
 								const amrex::Real P_t, const amrex::Real L_x)
     -> quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_>
 {
@@ -41,18 +42,31 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dQ_dx_outflow_x1_upper(quokka::valarray
 	const amrex::Real dP_dx = dQ_dx_data[4];
 	const amrex::Real dEint_aux_dx = dQ_dx_data[5];
 
+	const amrex::Real du_dy = dQ_dy_data[1];
+	const amrex::Real dv_dy = dQ_dy_data[2];
+	const amrex::Real dP_dy = dQ_dy_data[4];
+
 	const amrex::Real c = quokka::EOS<problem_t>::ComputeSoundSpeed(rho, P);
+	const amrex::Real gamma = quokka::EOS_Traits<problem_t>::gamma;
 	const amrex::Real M = std::sqrt(u * u + v * v + w * w) / c;
 	const amrex::Real K = 0.25 * c * (1 - M * M) / L_x; // must be non-zero for well-posed Euler equations
 
+	const amrex::Real beta = M; // TODO(bwibking): average over boundary
+
 	// see SymPy notebook for derivation
 	quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> dQ_dx{};
-	dQ_dx[0] = 0.5 * (-K * (P - P_t) + (c - u) * (2.0 * c * c * drho_dx + c * du_dx * rho - dP_dx)) / (c * c * (c - u));
-	dQ_dx[1] = 0.5 * (K * (P - P_t) + (c - u) * (c * du_dx * rho + dP_dx)) / (c * rho * (c - u));
+	dQ_dx[0] = (1.0 / 2.0) *
+		   (-K * (P - P_t) - (beta - 1) * (P * dv_dy * gamma - v * (c * du_dy * rho - dP_dy)) +
+		    (c - u) * (2 * std::pow(c, 2) * drho_dx + c * du_dx * rho - dP_dx)) /
+		   (std::pow(c, 2) * (c - u));
+	dQ_dx[1] = (1.0 / 2.0) * (K * (P - P_t) + (beta - 1) * (P * dv_dy * gamma - v * (c * du_dy * rho - dP_dy)) + (c - u) * (c * du_dx * rho + dP_dx)) /
+		   (c * rho * (c - u));
 	dQ_dx[2] = dv_dx;
 	dQ_dx[3] = dw_dx;
-	dQ_dx[4] = 0.5 * (-K * (P - P_t) + (c - u) * (c * du_dx * rho + dP_dx)) / (c - u);
+	dQ_dx[4] =
+	    (1.0 / 2.0) * (-K * (P - P_t) - (beta - 1) * (P * dv_dy * gamma - v * (c * du_dy * rho - dP_dy)) + (c - u) * (c * du_dx * rho + dP_dx)) / (c - u);
 	dQ_dx[5] = dEint_aux_dx;
+
 	for (int i = 0; i < HydroSystem<problem_t>::nscalars_; ++i) {
 		dQ_dx[6 + i] = dQ_dx_data[6 + i];
 	}
@@ -71,6 +85,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setOutflowX1Upper(const amrex::IntVect 
 	const auto &domain_hi = box.hiVect3d();
 	const int ihi = domain_hi[0];
 	const Real dx = geom.CellSize(0);
+	const Real dy = geom.CellSize(1);
 	const Real Lx = geom.prob_domain.length(0);
 	constexpr int N = HydroSystem<problem_t>::nvar_;
 
@@ -80,8 +95,13 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setOutflowX1Upper(const amrex::IntVect 
 	quokka::valarray<amrex::Real, N> const Q_im2 = HydroSystem<problem_t>::ComputePrimVars(consVar, ihi - 2, j, k);
 	quokka::valarray<amrex::Real, N> const dQ_dx_data = (Q_im2 - 4.0 * Q_im1 + 3.0 * Q_i) / (2.0 * dx);
 
+	// compute two-sided dQ/dy from the data
+	quokka::valarray<amrex::Real, N> const Q_jp1 = HydroSystem<problem_t>::ComputePrimVars(consVar, ihi, j + 1, k);
+	quokka::valarray<amrex::Real, N> const Q_jm1 = HydroSystem<problem_t>::ComputePrimVars(consVar, ihi, j - 1, k);
+	quokka::valarray<amrex::Real, N> const dQ_dy_data = (Q_jp1 - Q_jm1) / (2.0 * dy);
+
 	// compute dQ/dx with modified characteristics
-	quokka::valarray<amrex::Real, N> const dQ_dx = detail::dQ_dx_outflow_x1_upper<problem_t>(Q_i, dQ_dx_data, P_outflow, Lx);
+	quokka::valarray<amrex::Real, N> const dQ_dx = detail::dQ_dx_outflow_x1_upper<problem_t>(Q_i, dQ_dx_data, dQ_dy_data, P_outflow, Lx);
 
 	// compute centered ghost values
 	quokka::valarray<amrex::Real, N> const Q_ip1 = Q_im1 + 2.0 * dx * dQ_dx;
