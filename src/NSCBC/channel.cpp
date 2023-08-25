@@ -428,7 +428,7 @@ auto problem_main() -> int
 #ifdef HAVE_PYTHON
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		// Plot results
-		const int skip = 4;	    // only plot every 8 elements of exact solution
+		const int skip = 4;	  // only plot every 8 elements of exact solution
 		const double msize = 5.0; // marker size
 		using mpl_arg = std::map<std::string, std::string>;
 		using mpl_sarg = std::unordered_map<std::string, std::string>;
