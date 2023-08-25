@@ -82,8 +82,8 @@ template <> void RadhydroSimulation<Channel>::setInitialConditionsOnGrid(quokka:
 {
 	// set initial conditions
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_elem.prob_hi_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_lo = grid_elem.prob_lo_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_hi = grid_elem.prob_hi_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
@@ -344,7 +344,7 @@ auto problem_main() -> int
 
 	RadhydroSimulation<Channel> sim(BCs_cc);
 
-	amrex::ParmParse pp("channel");
+	amrex::ParmParse const pp("channel");
 	// initial condition parameters
 	pp.query("rho0", ::rho0);   // initial density [g/cc]
 	pp.query("Tgas0", ::Tgas0); // initial temperature [K]
@@ -369,8 +369,8 @@ auto problem_main() -> int
 
 	// extract slice
 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.geom[0], 0, 0., true);
-	int nx = static_cast<int>(position.size());
-	std::vector<double> xs = position;
+	int const nx = static_cast<int>(position.size());
+	std::vector<double> const xs = position;
 	std::vector<double> xs_exact = position;
 
 	// extract solution
@@ -385,11 +385,11 @@ auto problem_main() -> int
 
 	for (int i = 0; i < nx; ++i) {
 		{
-			amrex::Real rho = values.at(HydroSystem<Channel>::density_index)[i];
-			amrex::Real xmom = values.at(HydroSystem<Channel>::x1Momentum_index)[i];
-			amrex::Real Egas = values.at(HydroSystem<Channel>::energy_index)[i];
-			amrex::Real scalar = values.at(HydroSystem<Channel>::scalar0_index)[i];
-			amrex::Real Eint = Egas - (xmom * xmom) / (2.0 * rho);
+			amrex::Real const rho = values.at(HydroSystem<Channel>::density_index)[i];
+			amrex::Real const xmom = values.at(HydroSystem<Channel>::x1Momentum_index)[i];
+			amrex::Real const Egas = values.at(HydroSystem<Channel>::energy_index)[i];
+			amrex::Real const scalar = values.at(HydroSystem<Channel>::scalar0_index)[i];
+			amrex::Real const Eint = Egas - (xmom * xmom) / (2.0 * rho);
 			amrex::Real const gamma = quokka::EOS_Traits<Channel>::gamma;
 			d.at(i) = rho;
 			vx.at(i) = xmom / rho;
@@ -428,8 +428,8 @@ auto problem_main() -> int
 #ifdef HAVE_PYTHON
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		// Plot results
-		int skip = 4;	    // only plot every 8 elements of exact solution
-		double msize = 5.0; // marker size
+sultsconst 
+utionconst 
 		using mpl_arg = std::map<std::string, std::string>;
 		using mpl_sarg = std::unordered_map<std::string, std::string>;
 

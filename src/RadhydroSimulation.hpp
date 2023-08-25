@@ -1241,7 +1241,7 @@ auto RadhydroSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &co
 			if (amrex::ParallelDescriptor::IOProcessor()) {
 				std::filesystem::create_directories(plotfile_name + "/raw_fields/Level_" + std::to_string(lev));
 			}
-			std::string fullprefix =
+			std::string const fullprefix =
 			    amrex::MultiFabFileFullPrefix(lev, plotfile_name, "raw_fields/Level_", std::string("StateL_") + quokka::face_dir_str[idim]);
 			amrex::VisMF::Write(leftState[idim], fullprefix);
 		}
@@ -1250,7 +1250,7 @@ auto RadhydroSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &co
 			if (amrex::ParallelDescriptor::IOProcessor()) {
 				std::filesystem::create_directories(plotfile_name + "/raw_fields/Level_" + std::to_string(lev));
 			}
-			std::string fullprefix =
+			std::string const fullprefix =
 			    amrex::MultiFabFileFullPrefix(lev, plotfile_name, "raw_fields/Level_", std::string("StateR_") + quokka::face_dir_str[idim]);
 			amrex::VisMF::Write(rightState[idim], fullprefix);
 		}
