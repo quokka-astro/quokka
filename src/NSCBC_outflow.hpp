@@ -110,8 +110,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto transverse_xdir_dQ_data(const amrex::In
 	constexpr int N = HydroSystem<problem_t>::nvar_;
 	const auto &boundary_idx = (SIDE == BoundarySide::Lower) ? box.loVect3d() : box.hiVect3d();
 	const int ibr = boundary_idx[0];
-	const int im1 = (SIDE == BoundarySide::Lower) ? ibr + 1 : ibr - 1;
-	const int im2 = (SIDE == BoundarySide::Lower) ? ibr + 2 : ibr - 2;
 
 	quokka::valarray<amrex::Real, N> dQ_dy_data{};
 	quokka::valarray<amrex::Real, N> dQ_dz_data{};
@@ -142,8 +140,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto transverse_ydir_dQ_data(const amrex::In
 	constexpr int N = HydroSystem<problem_t>::nvar_;
 	const auto &boundary_idx = (SIDE == BoundarySide::Lower) ? box.loVect3d() : box.hiVect3d();
 	const int jbr = boundary_idx[1];
-	const int jm1 = (SIDE == BoundarySide::Lower) ? jbr + 1 : jbr - 1;
-	const int jm2 = (SIDE == BoundarySide::Lower) ? jbr + 2 : jbr - 2;
 
 	quokka::valarray<amrex::Real, N> dQ_dz_data{};
 	quokka::valarray<amrex::Real, N> dQ_dx_data{};
@@ -173,8 +169,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto transverse_zdir_dQ_data(const amrex::In
 	constexpr int N = HydroSystem<problem_t>::nvar_;
 	const auto &boundary_idx = (SIDE == BoundarySide::Lower) ? box.loVect3d() : box.hiVect3d();
 	const int kbr = boundary_idx[2];
-	const int km1 = (SIDE == BoundarySide::Lower) ? kbr + 1 : kbr - 1;
-	const int km2 = (SIDE == BoundarySide::Lower) ? kbr + 2 : kbr - 2;
 
 	quokka::valarray<amrex::Real, N> dQ_dx_data{};
 	quokka::valarray<amrex::Real, N> dQ_dy_data{};
