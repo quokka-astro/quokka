@@ -11,7 +11,7 @@
 
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
-#include "ArrayView_3d.hpp"
+#include "ArrayView.hpp"
 #include "EOS.hpp"
 #include "hydro_system.hpp"
 #include "physics_numVars.hpp"
@@ -61,28 +61,38 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dQ_dx_outflow(quokka::valarray<amrex::R
 	const amrex::Real K = 0.25 * c * (1 - M * M) / L_x; // must be non-zero for well-posedness
 
 	// see SymPy notebook for derivation of dQ_dx
+	quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> dQ_dx{};
 
-	amrex::Real x1{}; // depends on SIDE
-	if (SIDE == BoundarySide::Upper) {
-		x1 = c - u; // wavespeed of reflected wave going back into the box
-	} else if (SIDE == BoundarySide::Lower) {
-		x1 = c + u; // wavespeed of reflected wave going back into the box
-	}
 	const amrex::Real x0 = std::pow(c, 2);
 	const amrex::Real x2 = c * rho;
 	const amrex::Real x3 = du_dx * x2;
 	const amrex::Real x4 = rho * x0;
-	const amrex::Real x5 = K * (P - P_t) + (beta - 1) * (dP_dy * v + dP_dz * w - du_dy * v * x2 - du_dz * w * x2 + dv_dy * x4 + dw_dz * x4);
-	const amrex::Real x6 = (1.0 / 2.0) / x1;
-	const amrex::Real x7 = dP_dx + x3;
 
-	quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> dQ_dx{};
-	dQ_dx[0] = x6 * (x1 * (-dP_dx + 2 * drho_dx * x0 + x3) - x5) / x0;
-	dQ_dx[1] = x6 * (x1 * x7 + x5) / (c * rho);
+	if (SIDE == BoundarySide::Upper) {
+		const amrex::Real x1 = c - u;
+		const amrex::Real x5 = K * (P - P_t) + (beta - 1) * (dP_dy * v + dP_dz * w - du_dy * v * x2 - du_dz * w * x2 + dv_dy * x4 + dw_dz * x4);
+		const amrex::Real x6 = (1.0 / 2.0) / x1;
+		const amrex::Real x7 = dP_dx + x3;
+
+		dQ_dx[0] = x6 * (x1 * (-dP_dx + 2 * drho_dx * x0 + x3) - x5) / x0;
+		dQ_dx[1] = x6 * (x1 * x7 + x5) / (c * rho);
+		dQ_dx[4] = x6 * (x1 * x7 - x5);
+
+	} else if (SIDE == BoundarySide::Lower) {
+		const amrex::Real x1 = c + u;
+		const amrex::Real x5 = K * (P - P_t) + (beta - 1) * (dP_dy * v + dP_dz * w + du_dy * v * x2 + du_dz * w * x2 + dv_dy * x4 + dw_dz * x4);
+		const amrex::Real x6 = (1.0 / 2.0) / x1;
+		const amrex::Real x7 = -dP_dx + x3;
+
+		dQ_dx[0] = x6 * (x1 * (-dP_dx + 2 * drho_dx * x0 - x3) + x5) / x0;
+		dQ_dx[1] = x6 * (x1 * x7 + x5) / (c * rho);
+		dQ_dx[4] = x6 * (-x1 * x7 + x5);
+	}
+
 	dQ_dx[2] = dv_dx;
 	dQ_dx[3] = dw_dx;
-	dQ_dx[4] = x6 * (x1 * x7 - x5);
 	dQ_dx[5] = dEint_aux_dx;
+
 	for (int i = 0; i < HydroSystem<problem_t>::nscalars_; ++i) {
 		dQ_dx[6 + i] = dQ_dx_data[6 + i];
 	}
@@ -162,7 +172,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto transverse_zdir_dQ_data(const amrex::In
 	amrex::Box const &box = geom.Domain();
 	constexpr int N = HydroSystem<problem_t>::nvar_;
 	const auto &boundary_idx = (SIDE == BoundarySide::Lower) ? box.loVect3d() : box.hiVect3d();
-	const int kbr = boundary_idx[1];
+	const int kbr = boundary_idx[2];
 	const int km1 = (SIDE == BoundarySide::Lower) ? kbr + 1 : kbr - 1;
 	const int km2 = (SIDE == BoundarySide::Lower) ? kbr + 2 : kbr - 2;
 
@@ -280,11 +290,17 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setOutflowBoundary(const amrex::IntVect
 	quokka::valarray<amrex::Real, N> dQ_dt1_data{};
 	quokka::valarray<amrex::Real, N> dQ_dt2_data{};
 	if constexpr (DIR == FluxDir::X1) {
-		auto [dQ_dt1_data, dQ_dt2_data] = detail::transverse_xdir_dQ_data<problem_t, SIDE>(iv, consVar, geom);
+		auto [dQ_dt1, dQ_dt2] = detail::transverse_xdir_dQ_data<problem_t, SIDE>(iv, consVar, geom);
+		dQ_dt1_data = dQ_dt1;
+		dQ_dt2_data = dQ_dt2;
 	} else if constexpr (DIR == FluxDir::X2) {
-		auto [dQ_dt1_data, dQ_dt2_data] = detail::transverse_ydir_dQ_data<problem_t, SIDE>(iv, consVar, geom);
+		auto [dQ_dt1, dQ_dt2] = detail::transverse_ydir_dQ_data<problem_t, SIDE>(iv, consVar, geom);
+		dQ_dt1_data = dQ_dt1;
+		dQ_dt2_data = dQ_dt2;
 	} else if constexpr (DIR == FluxDir::X3) {
-		auto [dQ_dt1_data, dQ_dt2_data] = detail::transverse_zdir_dQ_data<problem_t, SIDE>(iv, consVar, geom);
+		auto [dQ_dt1, dQ_dt2] = detail::transverse_zdir_dQ_data<problem_t, SIDE>(iv, consVar, geom);
+		dQ_dt1_data = dQ_dt1;
+		dQ_dt2_data = dQ_dt2;
 	}
 
 	const Real Lbox = geom.prob_domain.length(static_cast<int>(DIR));
