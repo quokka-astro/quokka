@@ -63,14 +63,15 @@ template <> struct Physics_Traits<Vortex> {
 // global variables needed for Dirichlet boundary condition and initial conditions
 namespace
 {
-Real G_vortex = NAN;							     // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED Real T_ref = NAN;					     // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED Real P_ref = NAN;					     // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED Real u_inflow = NAN;					     // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED Real v_inflow = NAN;					     // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED Real w_inflow = NAN;					     // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED GpuArray<Real, HydroSystem<Vortex>::nscalars_> s_inflow{}; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-};									     // namespace
+const bool outflow_boundary_along_x_axis = true;
+Real G_vortex = NAN;						       // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real T_ref = NAN;				       // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real P_ref = NAN;				       // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real u0 = NAN;				       // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real v0 = NAN;				       // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real w0 = NAN;				       // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED GpuArray<Real, HydroSystem<Vortex>::nscalars_> s0{}; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+};								       // namespace
 
 template <> void RadhydroSimulation<Vortex>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
@@ -96,16 +97,16 @@ template <> void RadhydroSimulation<Vortex>::setInitialConditionsOnGrid(quokka::
 					   (std::pow(R_v, 2) * std::pow(c, 2));
 
 		Real const rho = P / (R * T_ref);
-		Real const u = u_inflow + -G * y * std::exp(-1.0 / 2.0 * (std::pow(x, 2) + std::pow(y, 2)) / std::pow(R_v, 2)) / std::pow(R_v, 2);
-		Real const v = v_inflow + G * x * std::exp(-1.0 / 2.0 * (std::pow(x, 2) + std::pow(y, 2)) / std::pow(R_v, 2)) / std::pow(R_v, 2);
-		Real const w = w_inflow;
+		Real const u = u0 + -G * y * std::exp(-1.0 / 2.0 * (std::pow(x, 2) + std::pow(y, 2)) / std::pow(R_v, 2)) / std::pow(R_v, 2);
+		Real const v = v0 + G * x * std::exp(-1.0 / 2.0 * (std::pow(x, 2) + std::pow(y, 2)) / std::pow(R_v, 2)) / std::pow(R_v, 2);
+		Real const w = w0;
 
 		Real const xmom = rho * u;
 		Real const ymom = rho * v;
 		Real const zmom = rho * w;
 		Real const Eint = quokka::EOS<Vortex>::ComputeEintFromPres(rho, P);
 		Real const Egas = RadSystem<Vortex>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
-		Real const scalar = ::s_inflow[0];
+		Real const scalar = ::s0[0];
 
 		state_cc(i, j, k, HydroSystem<Vortex>::density_index) = rho;
 		state_cc(i, j, k, HydroSystem<Vortex>::x1Momentum_index) = xmom;
@@ -127,13 +128,23 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<Vortex>::setCustomBoundar
 	amrex::Box const &box = geom.Domain();
 	const auto &domain_lo = box.loVect3d();
 	const auto &domain_hi = box.hiVect3d();
-	const int ilo = domain_lo[0];
-	const int ihi = domain_hi[0];
 
-	if (i < ilo) {
-		NSCBC::setInflowX1Lower<Vortex>(iv, consVar, geom, ::T_ref, ::u_inflow, ::v_inflow, ::w_inflow, ::s_inflow);
-	} else if (i > ihi) {
-		NSCBC::setOutflowBoundary<Vortex, FluxDir::X1, NSCBC::BoundarySide::Upper>(iv, consVar, geom, ::P_ref);
+	if constexpr (outflow_boundary_along_x_axis) {
+		const int ilo = domain_lo[0];
+		const int ihi = domain_hi[0];
+		if (i < ilo) {
+			NSCBC::setOutflowBoundary<Vortex, FluxDir::X1, NSCBC::BoundarySide::Lower>(iv, consVar, geom, ::P_ref);
+		} else if (i > ihi) {
+			NSCBC::setOutflowBoundary<Vortex, FluxDir::X1, NSCBC::BoundarySide::Upper>(iv, consVar, geom, ::P_ref);
+		}
+	} else { // outflow boundary is along the y-axis
+		const int jlo = domain_lo[1];
+		const int jhi = domain_hi[1];
+		if (j < jlo) {
+			NSCBC::setOutflowBoundary<Vortex, FluxDir::X2, NSCBC::BoundarySide::Lower>(iv, consVar, geom, ::P_ref);
+		} else if (j > jhi) {
+			NSCBC::setOutflowBoundary<Vortex, FluxDir::X2, NSCBC::BoundarySide::Upper>(iv, consVar, geom, ::P_ref);
+		}
 	}
 }
 
@@ -143,14 +154,19 @@ auto problem_main() -> int
 	constexpr int ncomp_cc = Physics_Indices<Vortex>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 	for (int n = 0; n < ncomp_cc; ++n) {
-		BCs_cc[n].setLo(0, amrex::BCType::ext_dir); // NSCBC inflow
-		BCs_cc[n].setHi(0, amrex::BCType::ext_dir); // NSCBC outflow
-
-		if constexpr (AMREX_SPACEDIM >= 2) {
-			BCs_cc[n].setLo(1, amrex::BCType::int_dir); // periodic
+		if constexpr (outflow_boundary_along_x_axis) {
+			BCs_cc[n].setLo(0, amrex::BCType::ext_dir); // x- NSCBC outflow
+			BCs_cc[n].setHi(0, amrex::BCType::ext_dir);
+			BCs_cc[n].setLo(1, amrex::BCType::int_dir); // y- periodic
 			BCs_cc[n].setHi(1, amrex::BCType::int_dir);
-		} else if (AMREX_SPACEDIM == 3) {
-			BCs_cc[n].setLo(2, amrex::BCType::int_dir);
+		} else {
+			BCs_cc[n].setLo(0, amrex::BCType::int_dir); // x- periodic
+			BCs_cc[n].setHi(0, amrex::BCType::int_dir);
+			BCs_cc[n].setLo(1, amrex::BCType::ext_dir); // y- NSCBC outflow
+			BCs_cc[n].setHi(1, amrex::BCType::ext_dir);
+		}
+		if (AMREX_SPACEDIM == 3) {
+			BCs_cc[n].setLo(2, amrex::BCType::int_dir); // z- periodic
 			BCs_cc[n].setHi(2, amrex::BCType::int_dir);
 		}
 	}
@@ -163,10 +179,10 @@ auto problem_main() -> int
 	pp.query("Tgas0", ::T_ref);	  // initial temperature [K]
 	pp.query("P0", ::P_ref);	  // initial pressure [erg cm^-3]
 	// boundary condition parameters
-	pp.query("u_inflow", ::u_inflow);    // inflow velocity along x-axis [cm/s]
-	pp.query("v_inflow", ::v_inflow);    // transverse inflow velocity (v_y) [cm/s]
-	pp.query("w_inflow", ::w_inflow);    // transverse inflow velocity (v_z) [cm/s]
-	pp.query("s_inflow", ::s_inflow[0]); // inflow passive scalar [dimensionless]
+	pp.query("u_inflow", ::u0);    // inflow velocity along x-axis [cm/s]
+	pp.query("v_inflow", ::v0);    // transverse inflow velocity (v_y) [cm/s]
+	pp.query("w_inflow", ::w0);    // transverse inflow velocity (v_z) [cm/s]
+	pp.query("s_inflow", ::s0[0]); // inflow passive scalar [dimensionless]
 
 	// Set initial conditions
 	sim.setInitialConditions();
