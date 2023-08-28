@@ -118,7 +118,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<Channel>::setCustomBounda
 	if (i < ilo) {
 		NSCBC::setInflowX1Lower<Channel>(iv, consVar, geom, ::Tgas0, ::u_inflow, ::v_inflow, ::w_inflow, ::s_inflow);
 	} else if (i > ihi) {
-		NSCBC::setOutflowX1Upper<Channel>(iv, consVar, geom, P_outflow);
+		NSCBC::setOutflowBoundary<Channel, FluxDir::X1, NSCBC::BoundarySide::Upper>(iv, consVar, geom, P_outflow);
 	}
 }
 

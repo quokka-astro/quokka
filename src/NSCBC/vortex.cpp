@@ -133,7 +133,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<Vortex>::setCustomBoundar
 	if (i < ilo) {
 		NSCBC::setInflowX1Lower<Vortex>(iv, consVar, geom, ::T_ref, ::u_inflow, ::v_inflow, ::w_inflow, ::s_inflow);
 	} else if (i > ihi) {
-		NSCBC::setOutflowX1Upper<Vortex>(iv, consVar, geom, ::P_ref);
+		NSCBC::setOutflowBoundary<Vortex, FluxDir::X1, NSCBC::BoundarySide::Upper>(iv, consVar, geom, ::P_ref);
 	}
 }
 
