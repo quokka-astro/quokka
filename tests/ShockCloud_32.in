@@ -1,0 +1,48 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  0.0  0.0  0.0 
+geometry.prob_hi     =  2.4688e+21  6.172e+20  6.172e+20  # 800 x 200 x 200 pc
+geometry.is_periodic =  0    1    1
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v               = 1     # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          = 64 16 16
+amr.max_level       = 0     # number of levels = max_level + 1
+amr.blocking_factor_x = 64
+amr.blocking_factor_y = 16
+amr.blocking_factor_z = 16  # grid size must be divisible by this
+amr.max_grid_size     = 64
+
+# *****************************************************************
+# Quokka options
+# *****************************************************************
+cfl = 0.3
+do_reflux = 1
+do_subcycle = 1
+max_walltime = 6:00:00
+max_timesteps = 5000
+checkpoint_interval = 5000
+plotfile_interval = 100
+ascent_interval = 10
+derived_vars = pressure entropy nH temperature cooling_length \
+	       cloud_fraction lab_velocity_x mass velocity_mag
+
+cooling.enabled = 0
+cooling.read_tables_even_if_disabled = 1
+cooling.grackle_data_file = "../extern/grackle_data_files/input/CloudyData_UVB=HM2012.h5"
+temperature_floor = 100
+
+sharp_cloud_edge = 1
+do_frame_shift = 0
+nH_bg    = 0.003356403333 # cm^-3
+nH_cloud = 0.003356403333 # cm^-3
+P_over_k = 1.304005e+04   # K cm^-3
+R_cloud_pc = 16.09084149928867 # pc
+Mach_shock = 1.05
