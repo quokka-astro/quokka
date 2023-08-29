@@ -332,8 +332,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setOutflowBoundary(const amrex::IntVect
 	consVar(i, j, k, HydroSystem<problem_t>::x3Momentum_index) = consCell[3];
 	consVar(i, j, k, HydroSystem<problem_t>::energy_index) = consCell[4];
 	consVar(i, j, k, HydroSystem<problem_t>::internalEnergy_index) = consCell[5];
-	for (int i = 0; i < HydroSystem<problem_t>::nscalars_; ++i) {
-		consVar(i, j, k, HydroSystem<problem_t>::scalar0_index + i) = consCell[6 + i];
+	for (int n = 0; n < HydroSystem<problem_t>::nscalars_; ++n) {
+		consVar(i, j, k, HydroSystem<problem_t>::scalar0_index + n) = consCell[6 + n];
 	}
 }
 } // namespace NSCBC

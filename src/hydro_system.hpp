@@ -312,8 +312,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePrimVars
 
 	quokka::valarray<amrex::Real, nvar_> primVars{rho, vx, vy, vz, P, Eint_aux};
 
-	for (int i = 0; i < nscalars_; ++i) {
-		primVars[primScalar0_index + i] = cons(i, j, k, scalar0_index + i);
+	for (int n = 0; n < nscalars_; ++n) {
+		primVars[primScalar0_index + n] = cons(i, j, k, scalar0_index + n);
 	}
 	return primVars;
 }
