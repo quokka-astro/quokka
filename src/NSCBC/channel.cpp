@@ -291,7 +291,7 @@ auto problem_main() -> int
 
 	// Compute test success condition
 	int status = 0;
-	const double error_tol = 0.0007;
+	const double error_tol = 3.0e-5;
 	if (epsilon > error_tol) {
 		status = 1;
 	}
