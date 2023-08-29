@@ -33,6 +33,7 @@
 
 #include "CloudyCooling.hpp"
 #include "EOS.hpp"
+#include "NSCBC_outflow.hpp"
 #include "RadhydroSimulation.hpp"
 #include "fundamental_constants.H"
 #include "hydro_system.hpp"
@@ -157,8 +158,10 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<ShockCloud>::setCustomBou
 	auto [i, j, k] = iv.toArray();
 
 	amrex::Box const &box = geom.Domain();
-	const auto &domain_lo = box.loVect();
-	const int ilo = domain_lo[0]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+	const auto &domain_lo = box.loVect3d();
+	const auto &domain_hi = box.hiVect3d();
+	const int ilo = domain_lo[0];
+	const int ihi = domain_hi[0];
 
 	const Real delta_vx = ::delta_vx;
 	const Real v_wind = ::v_wind;
@@ -184,6 +187,10 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<ShockCloud>::setCustomBou
 		consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index) = 0;
 		consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index + 1) = 0;	  // cloud partial density
 		consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index + 2) = rho; // non-cloud partial density
+
+	} else if (i > ihi) {
+		// x1 upper boundary -- NSCBC outflow
+		NSCBC::setOutflowBoundary<ShockCloud, FluxDir::X1, NSCBC::BoundarySide::Upper>(iv, consVar, geom, P_wind);
 	}
 }
 
@@ -659,8 +666,8 @@ auto problem_main() -> int
 	constexpr int nvars = RadhydroSimulation<ShockCloud>::nvarTotal_cc_;
 	amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
 	for (int n = 0; n < nvars; ++n) {
-		boundaryConditions[n].setLo(0, amrex::BCType::ext_dir);	 // Dirichlet
-		boundaryConditions[n].setHi(0, amrex::BCType::foextrap); // extrapolate
+		boundaryConditions[n].setLo(0, amrex::BCType::ext_dir); // Dirichlet
+		boundaryConditions[n].setHi(0, amrex::BCType::ext_dir); // NSCBC outflow
 
 		boundaryConditions[n].setLo(1, amrex::BCType::int_dir); // periodic
 		boundaryConditions[n].setHi(1, amrex::BCType::int_dir);
