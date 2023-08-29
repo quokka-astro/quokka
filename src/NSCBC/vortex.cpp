@@ -78,9 +78,9 @@ template <> void RadhydroSimulation<Vortex>::setInitialConditionsOnGrid(quokka::
 	// set initial conditions
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_elem.prob_hi_;
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_elem.prob_hi_;
 
 	constexpr Real gamma = quokka::EOS_Traits<Vortex>::gamma;
 	constexpr Real R = quokka::EOS_Traits<Vortex>::boltzmann_constant / quokka::EOS_Traits<Vortex>::mean_molecular_weight;
