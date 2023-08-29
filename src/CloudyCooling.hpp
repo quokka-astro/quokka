@@ -20,7 +20,6 @@
 #include "GrackleDataReader.hpp"
 #include "Interpolate2D.hpp"
 #include "ODEIntegrate.hpp"
-#include "fundamental_constants.H"
 #include "hydro_system.hpp"
 #include "radiation_system.hpp"
 #include "root_finding.hpp"
@@ -302,53 +301,6 @@ template <typename problem_t> void computeCooling(amrex::MultiFab &mf, const Rea
 	if (nmax >= maxStepsODEIntegrate) {
 		amrex::Abort("Max steps exceeded in cooling solve!");
 	}
-}
-
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeCoolingLength(double rho, double Egas, double gamma, cloudyGpuConstTables const &tables) -> Real
-{
-	// convert (rho, Egas) to cooling length
-
-	// 1. convert Egas (internal gas energy) to temperature
-	const Real Tgas = ComputeTgasFromEgas(rho, Egas, gamma, tables);
-
-	// 2. compute cooling time
-	// interpolate cooling rates from Cloudy tables
-	const Real rhoH = rho * cloudy_H_mass_fraction; // mass density of H species
-	const Real nH = rhoH / (C::m_p + C::m_e);
-	const Real log_nH = std::log10(nH);
-	const Real log_T = std::log10(Tgas);
-
-	const double logPrimCool = interpolate2d(log_nH, log_T, tables.log_nH, tables.log_Tgas, tables.primCool);
-	const double logMetalCool = interpolate2d(log_nH, log_T, tables.log_nH, tables.log_Tgas, tables.metalCool);
-	const double LambdaCool = FastMath::pow10(logPrimCool) + FastMath::pow10(logMetalCool);
-
-	const double Edot = (rhoH * rhoH) * LambdaCool;
-	// compute cooling time
-	const Real t_cool = Egas / Edot;
-
-	// 3. compute cooling length c_s t_cool
-	// compute mu from mu(T) table
-	const Real mu = interpolate2d(log_nH, log_T, tables.log_nH, tables.log_Tgas, tables.meanMolWeight);
-	const Real c_s = std::sqrt(gamma * C::k_B * Tgas / (mu * (C::m_p + C::m_e)));
-
-	// cooling length
-	return c_s * t_cool;
-}
-
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeMMW(double rho, double Egas, double gamma, cloudyGpuConstTables const &tables) -> Real
-{
-	// convert (rho, Egas) to dimensionless mean molecular weight
-
-	// 1. convert Egas (internal gas energy) to temperature
-	const Real Tgas = ComputeTgasFromEgas(rho, Egas, gamma, tables);
-
-	// 2. compute mu from mu(T) table
-	const Real rhoH = rho * cloudy_H_mass_fraction; // mass density of H species
-	const Real nH = rhoH / (C::m_p + C::m_e);
-	const Real log_nH = std::log10(nH);
-	const Real log_T = std::log10(Tgas);
-	const Real mu = interpolate2d(log_nH, log_T, tables.log_nH, tables.log_Tgas, tables.meanMolWeight);
-	return mu;
 }
 
 void readCloudyData(std::string &grackle_hdf5_file, cloudy_tables &cloudyTables);
