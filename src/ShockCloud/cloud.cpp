@@ -190,7 +190,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<ShockCloud>::setCustomBou
 
 	} else if (i > ihi) {
 		// x1 upper boundary -- NSCBC outflow
-		NSCBC::setOutflowBoundary<ShockCloud, FluxDir::X1, NSCBC::BoundarySide::Upper>(iv, consVar, geom, P_wind);
+		// TODO(bwibking): it is *critical* that after shock passage, P_outflow is updated to P_wind!!
+		NSCBC::setOutflowBoundary<ShockCloud, FluxDir::X1, NSCBC::BoundarySide::Upper>(iv, consVar, geom, ::P0);
 	}
 }
 
@@ -683,6 +684,7 @@ auto problem_main() -> int
 	Real nH_cloud = NAN;
 	Real P_over_k = NAN;
 	Real M0 = NAN;
+	Real max_t_cc = NAN;
 
 	// use a sharp cloud edge?
 	int sharp_cloud_edge = 0;
@@ -709,6 +711,9 @@ auto problem_main() -> int
 
 	// (pre-shock) Mach number
 	pp.query("Mach_shock", M0); // dimensionless
+
+	// simulation end time (in number of cloud-crushing times)
+	pp.query("max_t_cc", max_t_cc); // dimensionless
 
 	// compute background pressure
 	// (pressure equilibrium should hold *before* the shock enters the box)
@@ -756,7 +761,7 @@ auto problem_main() -> int
 	amrex::Print() << std::endl;
 
 	// compute maximum simulation time
-	const double max_time = 20.0 * t_cc;
+	const double max_time = max_t_cc * t_cc;
 
 	// set simulation parameters
 	sim.reconstructionOrder_ = 3; // PPM for hydro
