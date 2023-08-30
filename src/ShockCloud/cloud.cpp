@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "AMReX.H"
+#include "AMReX_Array.H"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLProfiler.H"
 #include "AMReX_BLassert.H"
@@ -33,10 +34,12 @@
 
 #include "CloudyCooling.hpp"
 #include "EOS.hpp"
+#include "NSCBC_inflow.hpp"
 #include "NSCBC_outflow.hpp"
 #include "RadhydroSimulation.hpp"
 #include "fundamental_constants.H"
 #include "hydro_system.hpp"
+#include "physics_info.hpp"
 #include "radiation_system.hpp"
 
 #include "cloud.hpp"
@@ -80,11 +83,12 @@ AMREX_GPU_MANAGED Real P0 = NAN;      // NOLINT(cppcoreguidelines-avoid-non-cons
 AMREX_GPU_MANAGED Real R_cloud = NAN; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
 // cloud-tracking variables needed for Dirichlet boundary condition
-AMREX_GPU_MANAGED Real rho_wind = 0; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED Real v_wind = 0;   // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED Real P_wind = 0;   // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED Real delta_vx = 0; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-Real delta_x = 0;		     // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real shock_crossing_time = 0; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real rho_wind = 0;		// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real v_wind = 0;		// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real P_wind = 0;		// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real delta_vx = 0;		// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+Real delta_x = 0;				// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 } // namespace
 
 template <> void RadhydroSimulation<ShockCloud>::setInitialConditionsOnGrid(quokka::grid grid)
@@ -152,8 +156,8 @@ template <> void RadhydroSimulation<ShockCloud>::setInitialConditionsOnGrid(quok
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<ShockCloud>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<Real> const &consVar,
 												int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
-												const Real /*time*/, const amrex::BCRec * /*bcr*/,
-												int /*bcomp*/, int /*orig_comp*/)
+												const Real time, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
+												int /*orig_comp*/)
 {
 	auto [i, j, k] = iv.toArray();
 
@@ -169,38 +173,51 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<ShockCloud>::setCustomBou
 	const Real P_wind = ::P_wind;
 
 	if (i < ilo) {
-		// x1 lower boundary -- constant
-		Real const vx = v_wind - delta_vx;
+		// x1 lower boundary
 		Real const rho = rho_wind;
-		Real const xmom = rho_wind * vx;
-		Real const ymom = 0;
-		Real const zmom = 0;
-		Real const Eint = P_wind / (HydroSystem<ShockCloud>::gamma_ - 1.);
-		Real const Egas = RadSystem<ShockCloud>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
+		Real const vx = v_wind - delta_vx;
+		Real const Eint = quokka::EOS<ShockCloud>::ComputeEintFromPres(rho, P_wind);
+		Real const T = quokka::EOS<ShockCloud>::ComputeTgasFromEint(rho, Eint);
+		GpuArray<amrex::Real, HydroSystem<ShockCloud>::nscalars_> scalars{0, 0, rho};
 
-		consVar(i, j, k, RadSystem<ShockCloud>::gasDensity_index) = rho;
-		consVar(i, j, k, RadSystem<ShockCloud>::x1GasMomentum_index) = xmom;
-		consVar(i, j, k, RadSystem<ShockCloud>::x2GasMomentum_index) = ymom;
-		consVar(i, j, k, RadSystem<ShockCloud>::x3GasMomentum_index) = zmom;
-		consVar(i, j, k, RadSystem<ShockCloud>::gasEnergy_index) = Egas;
-		consVar(i, j, k, RadSystem<ShockCloud>::gasInternalEnergy_index) = Eint;
-		consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index) = 0;
-		consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index + 1) = 0;	  // cloud partial density
-		consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index + 2) = rho; // non-cloud partial density
+		if (time < ::shock_crossing_time) {
+			// shock
+			Real const xmom = rho_wind * vx;
+			Real const ymom = 0;
+			Real const zmom = 0;
+			Real const Egas = RadSystem<ShockCloud>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
+
+			consVar(i, j, k, RadSystem<ShockCloud>::gasDensity_index) = rho;
+			consVar(i, j, k, RadSystem<ShockCloud>::x1GasMomentum_index) = xmom;
+			consVar(i, j, k, RadSystem<ShockCloud>::x2GasMomentum_index) = ymom;
+			consVar(i, j, k, RadSystem<ShockCloud>::x3GasMomentum_index) = zmom;
+			consVar(i, j, k, RadSystem<ShockCloud>::gasEnergy_index) = Egas;
+			consVar(i, j, k, RadSystem<ShockCloud>::gasInternalEnergy_index) = Eint;
+			consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index) = scalars[0];
+			consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index + 1) = scalars[1]; // cloud partial density
+			consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index + 2) = scalars[2]; // non-cloud partial density
+		} else {
+			// NSCBC inflow
+			NSCBC::setInflowX1Lower<ShockCloud>(iv, consVar, geom, T, vx, 0, 0, scalars);
+		}
 
 	} else if (i > ihi) {
 		// x1 upper boundary -- NSCBC outflow
-		// TODO(bwibking): it is *critical* that after shock passage, P_outflow is updated to P_wind!!
-		NSCBC::setOutflowBoundary<ShockCloud, FluxDir::X1, NSCBC::BoundarySide::Upper>(iv, consVar, geom, ::P0);
+		if (time < ::shock_crossing_time) {
+			NSCBC::setOutflowBoundary<ShockCloud, FluxDir::X1, NSCBC::BoundarySide::Upper>(iv, consVar, geom, ::P0);
+		} else { // shock has passed, so we use P_wind
+			NSCBC::setOutflowBoundary<ShockCloud, FluxDir::X1, NSCBC::BoundarySide::Upper>(iv, consVar, geom, P_wind);
+		}
 	}
 }
 
 template <> void RadhydroSimulation<ShockCloud>::computeAfterTimestep()
 {
 	const amrex::Real dt_coarse = dt_[0];
+	const amrex::Real time = tNew_[0];
 
 	// perform Galilean transformation (velocity shift to center-of-mass frame)
-	if (::do_frame_shift) {
+	if (::do_frame_shift && (time >= ::shock_crossing_time)) {
 
 		// N.B. must weight by passive scalar of cloud, since the background has
 		// non-negligible momentum!
@@ -282,6 +299,25 @@ template <> void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(int lev, std:
 			Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
 			Real const Tgas = ComputeTgasFromEgas(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
 			output[bx](i, j, k, ncomp) = Tgas;
+		});
+
+	} else if (dname == "c_s") {
+		const int ncomp = ncomp_in;
+		auto tables = cloudyTables_.const_tables();
+		auto const &output = mf.arrays();
+		auto const &state = state_new_cc_[lev].const_arrays();
+
+		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			Real const rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
+			Real const x1Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x1Momentum_index);
+			Real const x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
+			Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
+			Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
+			Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+			Real const Tgas = ComputeTgasFromEgas(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
+			Real const mu = quokka::cooling::ComputeMMW(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
+			Real const cs = std::sqrt(HydroSystem<ShockCloud>::gamma_ * C::k_B * Tgas / (mu * m_H));
+			output[bx](i, j, k, ncomp) = cs / 1.0e5; // km/s
 		});
 
 	} else if (dname == "nH") {
@@ -754,10 +790,14 @@ auto problem_main() -> int
 	::P_wind = P_post;
 	amrex::Print() << fmt::format("v_wind = {} km/s (v_pre = {}, v_post = {})\n", v_wind / 1.0e5, v_pre / 1.0e5, v_post / 1.0e5);
 
+	// compute shock-crossing time
+	::shock_crossing_time = sim.geom[0].ProbLength(0) / v_wind;
+	amrex::Print() << fmt::format("shock crossing time = {} Myr\n", ::shock_crossing_time / (1.0e6 * 3.15e7));
+
 	// compute cloud-crushing time
 	const Real chi = rho1 / rho0;
 	const Real t_cc = std::sqrt(chi) * R_cloud / v_wind;
-	amrex::Print() << fmt::format("t_cc = {} kyr\n", t_cc / (1.0e3 * 3.15e7));
+	amrex::Print() << fmt::format("t_cc = {} Myr\n", t_cc / (1.0e6 * 3.15e7));
 	amrex::Print() << std::endl;
 
 	// compute maximum simulation time
