@@ -166,7 +166,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<ShockCloud>::setCustomBou
 	const auto &domain_hi = box.hiVect3d();
 	const int ilo = domain_lo[0];
 	const int ihi = domain_hi[0];
-	
+
 	const Real delta_vx = ::delta_vx;
 	const Real v_wind = ::v_wind;
 	const Real rho_wind = ::rho_wind;

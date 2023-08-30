@@ -193,19 +193,20 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(double rho, do
 	if (T_min < T_max) {
 		auto bounds = quokka::math::toms748_solve(f, T_min, T_max, tol, maxIter);
 		T_sol = 0.5 * (bounds.first + bounds.second);
-		
+
 		if ((maxIter >= maxIterLimit) || std::isnan(T_sol)) {
 			printf("\nTgas iteration failed! rho = %.17g, Eint = %.17g, nH = %e, Tgas "
-				"= %e, "
-				"bounds.first = %e, bounds.second = %e, T_min = %e, T_max = %e, "
-				"maxIter = %d\n",
-				rho, Egas, nH, T_sol, bounds.first, bounds.second, T_min, T_max, maxIter);
+			       "= %e, "
+			       "bounds.first = %e, bounds.second = %e, T_min = %e, T_max = %e, "
+			       "maxIter = %d\n",
+			       rho, Egas, nH, T_sol, bounds.first, bounds.second, T_min, T_max, maxIter);
 			T_sol = NAN;
 		}
 	} else {
 		// something has gone wrong, e.g. T_min == T_max == 1e9.
 		printf("\nTgas min/max bounds are unphysical! rho = %.17g, Eint = %.17g, nH = %e, "
-				"T_min = %e, T_max = %e, ", rho, Egas, nH, T_min, T_max);
+		       "T_min = %e, T_max = %e, ",
+		       rho, Egas, nH, T_min, T_max);
 	}
 
 	return T_sol;
