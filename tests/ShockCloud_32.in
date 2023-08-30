@@ -41,9 +41,9 @@ temperature_floor = 100
 
 sharp_cloud_edge = 1
 do_frame_shift = 0
-nH_bg    = 0.003356403333 # cm^-3
-nH_cloud = 0.003356403333 # cm^-3
+nH_bg    = 3.356403e-03 # cm^-3
+nH_cloud = 1.006921e+00 # cm^-3
 P_over_k = 1.304005e+04   # K cm^-3
 R_cloud_pc = 16.09084149928867 # pc
-Mach_shock = 1.8
-max_t_cc = 200.
+Mach_shock = 1.888892847795999
+max_t_cc = 20.
