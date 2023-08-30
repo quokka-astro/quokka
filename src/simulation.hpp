@@ -1594,11 +1594,11 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel(i
 	const int nghost_plotMF = nghost_cc;
 	amrex::MultiFab plotMF(grids[lev], dmap[lev], ncomp_plotMF, nghost_plotMF);
 
-  // Fill ghost zones for state_new_cc_
-  // (N.B.: this means this function cannot be const)
-  fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, tNew_[lev],
-                         quokka::centering::cc, quokka::direction::na,
-                         InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
+  	// Fill ghost zones for state_new_cc_
+  	// (N.B.: this means this function cannot be const)
+  	fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, tNew_[lev],
+        quokka::centering::cc, quokka::direction::na, InterpHookNone, InterpHookNone,
+		FillPatchType::fillpatch_function);
 
 	// copy data from cell-centred state variables
 	for (int i = 0; i < ncomp_cc; i++) {
