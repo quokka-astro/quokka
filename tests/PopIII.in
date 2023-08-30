@@ -33,7 +33,7 @@ plotfile_interval = 20
 checkpoint_interval = 100
 
 perturb.cloud_radius = 3.086e18
-
+perturb.cloud_omega = 2.016008E-14
 # in quokka/src/StarCluster, generate with 'python3 perturbation.py --kmin=2 --kmax=64 --size=128 --alpha=2 --f_solenoidal=1.0'
 # and put it in quokka/tests/
 perturb.filename = "zdrv.hdf5"
@@ -44,7 +44,7 @@ amrex.throw_exception = 0
 amrex.signal_handling = 1
 
 primordial_chem.enabled = 1
-primordial_chem.temperature = 1e2
+primordial_chem.temperature = 265
 
 primordial_chem.small_temp = 1.e1
 primordial_chem.small_dens = 1.e-60

@@ -69,6 +69,7 @@ template <> struct SimulationData<PopIII> {
 	// cloud parameters
 	amrex::Real R_sphere{};
 	amrex::Real rho_sphere{};
+	amrex::Real omega_sphere{};
 
 	amrex::Real small_temp;
 	amrex::Real small_dens;
@@ -248,21 +249,17 @@ template <> void RadhydroSimulation<PopIII>::setInitialConditionsOnGrid(quokka::
 		}
 	}
 
-	state.T = userData_.temperature;
 
 	// find the density in g/cm^3
-	Real rhotot = 0.0_rt;
+	Real rhotot = 0.0;
 	for (int n = 0; n < NumSpec; ++n) {
 		state.xn[n] = numdens[n];
 		rhotot += state.xn[n] * spmasses[n]; // spmasses contains the masses of all species, defined in EOS
 	}
 
-	state.rho = rhotot;
-
 	// normalize -- just in case
-
 	std::array<Real, NumSpec> mfracs = {-1.0};
-	Real msum = 0.0_rt;
+	Real msum = 0.0;
 	for (int n = 0; n < NumSpec; ++n) {
 		mfracs[n] = state.xn[n] * spmasses[n] / rhotot;
 		msum += mfracs[n];
@@ -274,15 +271,13 @@ template <> void RadhydroSimulation<PopIII>::setInitialConditionsOnGrid(quokka::
 		state.xn[n] = mfracs[n] * rhotot / spmasses[n];
 	}
 
-	// call the EOS to set initial internal energy e
-	eos(eos_input_rt, state);
-
 	amrex::Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
 	amrex::Real const y0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
 	amrex::Real const z0 = prob_lo[2] + 0.5 * (prob_hi[2] - prob_lo[2]);
 
 	// cloud parameters
 	const double R_sphere = userData_.R_sphere;
+	const double omega_sphere = userData_.omega_sphere;
 
 	auto const &dvx = userData_.dvx.const_table();
 	auto const &dvy = userData_.dvy.const_table();
@@ -293,25 +288,42 @@ template <> void RadhydroSimulation<PopIII>::setInitialConditionsOnGrid(quokka::
 		amrex::Real const y = prob_lo[1] + (j + static_cast<amrex::Real>(0.5)) * dx[1];
 		amrex::Real const z = prob_lo[2] + (k + static_cast<amrex::Real>(0.5)) * dx[2];
 		amrex::Real const r = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2) + std::pow(z - z0, 2));
+		amrex::Real const distxy = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2));
 
-		amrex::Real rho = 0;
+		amrex::Real phi = 0.0;
 
-		if (r <= R_sphere) {
-			rho = rhotot;
-		} else {
-			rho = 0.01*rhotot;
+        if (x-x0 != 0.0) {
+            phi = atan((y-y0) / (x-x0));
+        } else {
+		    phi = M_PI / 2.0;
 		}
 
-		amrex::Real e = rho * state.e;
 
-		double vx = dvx(i, j, k);
-		double vy = dvy(i, j, k);
-		double vz = dvz(i, j, k);
+		double vx = 0;
+		double vy = 0;
+		double vz = 0;
 
-		state_cc(i, j, k, HydroSystem<PopIII>::density_index) = rho;
-		state_cc(i, j, k, HydroSystem<PopIII>::x1Momentum_index) = rho * vx;
-		state_cc(i, j, k, HydroSystem<PopIII>::x2Momentum_index) = rho * vy;
-		state_cc(i, j, k, HydroSystem<PopIII>::x3Momentum_index) = rho * vz;
+		if (r <= R_sphere) {
+			state.rho = 1e-20; // rhotot;
+			state.T = userData_.temperature;
+			vx = dvx(i, j, k) - distxy * omega_sphere * std::abs(std::sin(phi)) * std::copysign(1.0, y-y0);
+			vy = dvx(i, j, k) + distxy * omega_sphere * std::cos(phi) * std::copysign(1.0, x-x0);
+			vz = dvx(i, j, k);
+
+		} else {
+			state.rho = 0.01 * 1e-20; // rhotot;
+			state.T = 1e2 * userData_.temperature;
+		}
+
+		// call the EOS to set initial internal energy e
+		eos(eos_input_rt, state);
+		amrex::Real e = state.rho * state.e;
+
+
+		state_cc(i, j, k, HydroSystem<PopIII>::density_index) = state.rho;
+		state_cc(i, j, k, HydroSystem<PopIII>::x1Momentum_index) = state.rho * vx;
+		state_cc(i, j, k, HydroSystem<PopIII>::x2Momentum_index) = state.rho * vy;
+		state_cc(i, j, k, HydroSystem<PopIII>::x3Momentum_index) = state.rho * vz;
 		state_cc(i, j, k, HydroSystem<PopIII>::internalEnergy_index) = e;
 
 		Real const Egas = RadSystem<PopIII>::ComputeEgasFromEint(rho, rho*vx, rho*vy, rho*vz, e);
@@ -374,6 +386,10 @@ auto problem_main() -> int
 	Real rho_sphere{};
 	pp.query("cloud_density", rho_sphere);
 
+	// cloud angular velocity
+	Real omega_sphere{};
+	pp.query("cloud_omega", omega_sphere);
+
 
 	// boundary conditions
 	const int ncomp_cc = Physics_Indices<PopIII>::nvarTotal_cc;
@@ -392,6 +408,7 @@ auto problem_main() -> int
 
 	sim.userData_.R_sphere = R_sphere;
 	sim.userData_.rho_sphere = rho_sphere;
+	sim.userData_.omega_sphere = omega_sphere;
 
 	// initialize
 	sim.setInitialConditions();
