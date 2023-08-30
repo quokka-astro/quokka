@@ -203,6 +203,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<ShockCloud>::setCustomBou
 
 	} else if (i > ihi) {
 		// x1 upper boundary -- NSCBC outflow
+		// TODO(bwibking): should we specify the normal velocity at the boundary instead of the pressure??
 		if (time < ::shock_crossing_time) {
 			NSCBC::setOutflowBoundary<ShockCloud, FluxDir::X1, NSCBC::BoundarySide::Upper>(iv, consVar, geom, ::P0);
 		} else { // shock has passed, so we use P_wind
@@ -789,6 +790,7 @@ auto problem_main() -> int
 	::rho_wind = rho_post;
 	::P_wind = P_post;
 	amrex::Print() << fmt::format("v_wind = {} km/s (v_pre = {}, v_post = {})\n", v_wind / 1.0e5, v_pre / 1.0e5, v_post / 1.0e5);
+	amrex::Print() << fmt::format("P_wind = {} K cm^-3\n", P_post / C::k_B);
 
 	// compute shock-crossing time
 	::shock_crossing_time = sim.geom[0].ProbLength(0) / v_wind;
