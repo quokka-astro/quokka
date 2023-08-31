@@ -39,7 +39,7 @@ if(AMReX_GPU_BACKEND MATCHES "CUDA")
     message(FATAL_ERROR "You must use CUDA version 11.7 or newer to compile Quokka. All previous CUDA versions have compiler bugs that cause Quokka to crash.")
   endif()
 
-  set(CMAKE_CUDA_ARCHITECTURES 70 80 CACHE STRING "")
+  set(CMAKE_CUDA_ARCHITECTURES "70;80" CACHE STRING "")
 endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL "Intel")
