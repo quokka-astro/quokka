@@ -11,6 +11,7 @@
 
 #include <array>
 #include <climits>
+#include <filesystem>
 #include <limits>
 #include <string>
 #include <tuple>
@@ -36,12 +37,20 @@
 #include "AMReX_IntVect.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_MultiFabUtil.H"
+#include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_PhysBCFunct.H"
+#include "AMReX_PlotFileUtil.H"
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
 #include "AMReX_Utility.H"
 #include "AMReX_YAFluxRegister.H"
+
+#ifdef AMREX_USE_ASCENT
+#include "AMReX_Conduit_Blueprint.H"
+#include <ascent.hpp>
+#include <conduit_node.hpp>
+#endif
 
 #include "Chemistry.hpp"
 #include "CloudyCooling.hpp"
@@ -70,9 +79,11 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	using AMRSimulation<problem_t>::componentNames_fc_;
 	using AMRSimulation<problem_t>::cflNumber_;
 	using AMRSimulation<problem_t>::fillBoundaryConditions;
+	using AMRSimulation<problem_t>::CustomPlotFileName;
 	using AMRSimulation<problem_t>::geom;
 	using AMRSimulation<problem_t>::grids;
 	using AMRSimulation<problem_t>::dmap;
+	using AMRSimulation<problem_t>::istep;
 	using AMRSimulation<problem_t>::flux_reg_;
 	using AMRSimulation<problem_t>::incrementFluxRegisters;
 	using AMRSimulation<problem_t>::finest_level;
@@ -114,6 +125,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	amrex::Real errorNorm_ = NAN;
 	amrex::Real pressureFloor_ = 0.;
 
+	int lowLevelDebuggingOutput_ = 0;	// 0 == do nothing; 1 == output intermediate multifabs used in hydro each timestep (ONLY USE FOR DEBUGGING)
 	int integratorOrder_ = 2;		// 1 == forward Euler; 2 == RK2-SSP (default)
 	int reconstructionOrder_ = 3;		// 1 == donor cell; 2 == PLM; 3 == PPM (default)
 	int radiationReconstructionOrder_ = 3;	// 1 == donor cell; 2 == PLM; 3 == PPM (default)
@@ -310,6 +322,8 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::readParmParse(
 	// set hydro runtime parameters
 	{
 		amrex::ParmParse hpp("hydro");
+		hpp.query("low_level_debugging_output", lowLevelDebuggingOutput_);
+		hpp.query("rk_integrator_order", integratorOrder_);
 		hpp.query("reconstruction_order", reconstructionOrder_);
 		hpp.query("use_dual_energy", useDualEnergy_);
 		hpp.query("abort_on_fofc_failure", abortOnFofcFailure_);
@@ -325,11 +339,14 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::readParmParse(
 	// set cooling runtime parameters
 	{
 		amrex::ParmParse hpp("cooling");
+		int alwaysReadTables = 0;
 		hpp.query("enabled", enableCooling_);
+		hpp.query("read_tables_even_if_disabled", alwaysReadTables);
 		hpp.query("grackle_data_file", coolingTableFilename_);
 
-		if (enableCooling_ == 1) {
+		if ((enableCooling_ == 1) || (alwaysReadTables == 1)) {
 			// read Cloudy tables
+			amrex::Print() << "Reading Cloudy tables...\n";
 			quokka::cooling::readCloudyData(coolingTableFilename_, cloudyTables_);
 		}
 	}
@@ -901,6 +918,20 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		fillBoundaryConditions(state_old_cc_tmp, state_old_cc_tmp, lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState,
 				       PostInterpState);
 
+		// LOW LEVEL DEBUGGING: output state_old_cc_tmp (with ghost cells)
+		if (lowLevelDebuggingOutput_ == 1) {
+#ifdef AMREX_USE_ASCENT
+			// write Blueprint HDF5 files
+			conduit::Node mesh;
+			amrex::SingleLevelToBlueprint(state_old_cc_tmp, componentNames_cc_, geom[lev], time, istep[lev] + 1, mesh);
+			amrex::WriteBlueprintFiles(mesh, "debug_stage1_filled_state_old", istep[lev] + 1, "hdf5");
+#else
+			// write AMReX plotfile
+			// WriteSingleLevelPlotfile(CustomPlotFileName("debug_stage1_filled_state_old", istep[lev]+1),
+			//	state_old_cc_tmp, componentNames_cc_, geom[lev], time, istep[lev]+1);
+#endif
+		}
+
 		// check state validity
 		AMREX_ASSERT(!state_old_cc_tmp.contains_nan(0, state_old_cc_tmp.nComp()));
 		AMREX_ASSERT(!state_old_cc_tmp.contains_nan()); // check ghost cells
@@ -917,6 +948,32 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, fluxArrays, dx, ncompHydro_);
 		HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld, dx, faceVel, redoFlag);
 		HydroSystem<problem_t>::PredictStep(stateOld, stateNew, rhs, dt_lev, ncompHydro_, redoFlag);
+
+		// LOW LEVEL DEBUGGING: output rhs
+		if (lowLevelDebuggingOutput_ == 1) {
+			// write rhs
+			std::string plotfile_name = CustomPlotFileName("debug_stage1_rhs_fluxes", istep[lev] + 1);
+			WriteSingleLevelPlotfile(plotfile_name, rhs, componentNames_cc_, geom[lev], time, istep[lev] + 1);
+
+			// write fluxes
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				if (amrex::ParallelDescriptor::IOProcessor()) {
+					std::filesystem::create_directories(plotfile_name + "/raw_fields/Level_" + std::to_string(lev));
+				}
+				std::string fullprefix =
+				    amrex::MultiFabFileFullPrefix(lev, plotfile_name, "raw_fields/Level_", std::string("Flux_") + quokka::face_dir_str[idim]);
+				amrex::VisMF::Write(fluxArrays[idim], fullprefix);
+			}
+			// write face velocities
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				if (amrex::ParallelDescriptor::IOProcessor()) {
+					std::filesystem::create_directories(plotfile_name + "/raw_fields/Level_" + std::to_string(lev));
+				}
+				std::string fullprefix = amrex::MultiFabFileFullPrefix(lev, plotfile_name, "raw_fields/Level_",
+										       std::string("FaceVel_") + quokka::face_dir_str[idim]);
+				amrex::VisMF::Write(faceVel[idim], fullprefix);
+			}
+		}
 
 		// do first-order flux correction (FOFC)
 		amrex::Gpu::streamSynchronizeAll(); // just in case
@@ -965,7 +1022,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	amrex::Gpu::streamSynchronizeAll();
 
 	// Stage 2 of RK2-SSP
-	{
+	if (integratorOrder_ == 2) {
 		// update ghost zones [intermediate stage stored in state_inter_cc_]
 		fillBoundaryConditions(state_inter_cc_, state_inter_cc_, lev, time + dt_lev, quokka::centering::cc, quokka::direction::na, PreInterpState,
 				       PostInterpState);
@@ -1030,6 +1087,8 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 			// increment flux registers
 			incrementFluxRegisters(fr_as_crse, fr_as_fine, fluxArrays, lev, fluxScaleFactor * dt_lev);
 		}
+	} else { // we are only doing forward Euler
+		amrex::Copy(state_new_cc_[lev], state_inter_cc_, 0, 0, ncompHydro_, 0);
 	}
 	amrex::Gpu::streamSynchronizeAll();
 
@@ -1121,7 +1180,7 @@ auto RadhydroSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &co
 	auto ba = grids[lev];
 	auto dm = dmap[lev];
 	const int flatteningGhost = 2;
-	const int reconstructRange = 1;
+	const int reconstructGhost = 1;
 
 	// allocate temporary MultiFabs
 	amrex::MultiFab primVar(ba, dm, nvars, nghost_cc_);
@@ -1137,8 +1196,8 @@ auto RadhydroSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &co
 
 	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 		auto ba_face = amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim));
-		leftState[idim] = amrex::MultiFab(ba_face, dm, nvars, reconstructRange);
-		rightState[idim] = amrex::MultiFab(ba_face, dm, nvars, reconstructRange);
+		leftState[idim] = amrex::MultiFab(ba_face, dm, nvars, reconstructGhost);
+		rightState[idim] = amrex::MultiFab(ba_face, dm, nvars, reconstructGhost);
 		flux[idim] = amrex::MultiFab(ba_face, dm, nvars, 0);
 		facevel[idim] = amrex::MultiFab(ba_face, dm, 1, 0);
 	}
@@ -1153,14 +1212,49 @@ auto RadhydroSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &co
 
 	// compute flux functions
 	AMREX_D_TERM(hydroFluxFunction<FluxDir::X1>(primVar, leftState[0], rightState[0], flux[0], facevel[0], flatCoefs[0], flatCoefs[1], flatCoefs[2],
-						    reconstructRange, nvars);
+						    reconstructGhost, nvars);
 		     , hydroFluxFunction<FluxDir::X2>(primVar, leftState[1], rightState[1], flux[1], facevel[1], flatCoefs[0], flatCoefs[1], flatCoefs[2],
-						      reconstructRange, nvars);
+						      reconstructGhost, nvars);
 		     , hydroFluxFunction<FluxDir::X3>(primVar, leftState[2], rightState[2], flux[2], facevel[2], flatCoefs[0], flatCoefs[1], flatCoefs[2],
-						      reconstructRange, nvars);)
+						      reconstructGhost, nvars);)
 
 	// synchronization point to prevent MultiFabs from going out of scope
 	amrex::Gpu::streamSynchronizeAll();
+
+	// LOW LEVEL DEBUGGING: output all of the temporary MultiFabs
+	if (lowLevelDebuggingOutput_ == 1) {
+		// write primitive cell-centered state
+		std::string plotfile_name = CustomPlotFileName("debug_reconstruction", istep[lev] + 1);
+		WriteSingleLevelPlotfile(plotfile_name, primVar, componentNames_cc_, geom[lev], 0.0, istep[lev] + 1);
+
+		// write flattening coefficients
+		std::string flatx_filename = CustomPlotFileName("debug_flattening_x", istep[lev] + 1);
+		std::string flaty_filename = CustomPlotFileName("debug_flattening_y", istep[lev] + 1);
+		std::string flatz_filename = CustomPlotFileName("debug_flattening_z", istep[lev] + 1);
+		amrex::Vector<std::string> flatCompNames{"chi"};
+		WriteSingleLevelPlotfile(flatx_filename, flatCoefs[0], flatCompNames, geom[lev], 0.0, istep[lev] + 1);
+		WriteSingleLevelPlotfile(flaty_filename, flatCoefs[1], flatCompNames, geom[lev], 0.0, istep[lev] + 1);
+		WriteSingleLevelPlotfile(flatz_filename, flatCoefs[2], flatCompNames, geom[lev], 0.0, istep[lev] + 1);
+
+		// write L interface states
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			if (amrex::ParallelDescriptor::IOProcessor()) {
+				std::filesystem::create_directories(plotfile_name + "/raw_fields/Level_" + std::to_string(lev));
+			}
+			std::string const fullprefix =
+			    amrex::MultiFabFileFullPrefix(lev, plotfile_name, "raw_fields/Level_", std::string("StateL_") + quokka::face_dir_str[idim]);
+			amrex::VisMF::Write(leftState[idim], fullprefix);
+		}
+		// write R interface states
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			if (amrex::ParallelDescriptor::IOProcessor()) {
+				std::filesystem::create_directories(plotfile_name + "/raw_fields/Level_" + std::to_string(lev));
+			}
+			std::string const fullprefix =
+			    amrex::MultiFabFileFullPrefix(lev, plotfile_name, "raw_fields/Level_", std::string("StateR_") + quokka::face_dir_str[idim]);
+			amrex::VisMF::Write(rightState[idim], fullprefix);
+		}
+	}
 
 	// return flux and face-centered velocities
 	return std::make_pair(std::move(flux), std::move(facevel));
