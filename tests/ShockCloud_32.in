@@ -28,6 +28,8 @@ do_reflux = 1
 do_subcycle = 1
 max_walltime = 6:00:00
 max_timesteps = 5000
+max_t_cc = 20.0
+
 checkpoint_interval = 5000
 plotfile_interval = -1
 ascent_interval = 10
@@ -46,4 +48,3 @@ nH_cloud = 1.006921e+00 # cm^-3
 P_over_k = 1.304005e+04   # K cm^-3
 R_cloud_pc = 16.09084149928867 # pc
 Mach_shock = 1.888892847795999
-max_t_cc = 20.

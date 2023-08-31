@@ -49,6 +49,7 @@ using amrex::Real;
 struct ShockCloud {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
+constexpr double seconds_in_year = 3.1536e7; // s == 1 yr
 constexpr double parsec_in_cm = 3.086e18;  // cm == 1 pc
 constexpr double solarmass_in_g = 1.99e33; // g == 1 Msun
 constexpr double keV_in_ergs = 1.60218e-9; // ergs == 1 keV
@@ -794,12 +795,12 @@ auto problem_main() -> int
 
 	// compute shock-crossing time
 	::shock_crossing_time = sim.geom[0].ProbLength(0) / v_wind;
-	amrex::Print() << fmt::format("shock crossing time = {} Myr\n", ::shock_crossing_time / (1.0e6 * 3.15e7));
+	amrex::Print() << fmt::format("shock crossing time = {} Myr\n", ::shock_crossing_time / (1.0e6 * seconds_in_year));
 
 	// compute cloud-crushing time
 	const Real chi = rho1 / rho0;
 	const Real t_cc = std::sqrt(chi) * R_cloud / v_wind;
-	amrex::Print() << fmt::format("t_cc = {} Myr\n", t_cc / (1.0e6 * 3.15e7));
+	amrex::Print() << fmt::format("t_cc = {} Myr\n", t_cc / (1.0e6 * seconds_in_year));
 	amrex::Print() << std::endl;
 
 	// compute maximum simulation time
