@@ -252,7 +252,7 @@ template <> void RadhydroSimulation<PopIII>::setInitialConditionsOnGrid(quokka::
 	const double R_sphere = userData_.R_sphere;
 	const double omega_sphere = userData_.omega_sphere;
 	const double renorm_amp = userData_.rescale_factor;
-	const double numdens_init = userData_.numdens;
+	const double numdens_init = userData_.numdens_init;
 
 	auto const &dvx = userData_.dvx.const_table();
 	auto const &dvy = userData_.dvy.const_table();
