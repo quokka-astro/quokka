@@ -68,7 +68,7 @@ template <> struct SimulationData<PopIII> {
 
 	// cloud parameters
 	amrex::Real R_sphere{};
-	amrex::Real rho_sphere{};
+	amrex::Real numdens_init{};
 	amrex::Real omega_sphere{};
 
 	amrex::Real small_temp;
@@ -161,10 +161,7 @@ template <> void RadhydroSimulation<PopIII>::preCalculateInitialConditions()
 		userData_.dv_rms_generated = computeRms(pinned_dvx, pinned_dvy, pinned_dvz);
 		amrex::Print() << "rms dv = " << userData_.dv_rms_generated << "\n";
 
-		const Real R_sphere = userData_.R_sphere;
-		const Real rho_sph = userData_.rho_sphere;
-
-		const Real rms_dv_target = 1.8e5;
+		const Real rms_dv_target = 1.8050e5;
 		const Real rms_dv_actual = userData_.dv_rms_generated;
 		userData_.rescale_factor = rms_dv_target / rms_dv_actual;
 
@@ -255,6 +252,7 @@ template <> void RadhydroSimulation<PopIII>::setInitialConditionsOnGrid(quokka::
 	const double R_sphere = userData_.R_sphere;
 	const double omega_sphere = userData_.omega_sphere;
 	const double renorm_amp = userData_.rescale_factor;
+	const double numdens_init = userData_.numdens;
 
 	auto const &dvx = userData_.dvx.const_table();
 	auto const &dvy = userData_.dvy.const_table();
@@ -268,10 +266,10 @@ template <> void RadhydroSimulation<PopIII>::setInitialConditionsOnGrid(quokka::
 		amrex::Real const distxy = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2));
 
 		burn_t state;
-		// find the density in g/cm^3
-		Real rhotot = 0.0;
+		amrex::Real rhotot = 0.0;
+
 		for (int n = 0; n < NumSpec; ++n) {
-			state.xn[n] = numdens[n];
+			state.xn[n] = numdens[n] * numdens_init;
 			rhotot += state.xn[n] * spmasses[n]; // spmasses contains the masses of all species, defined in EOS
 		}
 
@@ -297,18 +295,18 @@ template <> void RadhydroSimulation<PopIII>::setInitialConditionsOnGrid(quokka::
 		double vz = 0;
 
 		if (r <= R_sphere) {
-			state.rho = 1e-20; // rhotot;
+			state.rho = rhotot; // rhotot;
 			state.T = userData_.temperature;
 			vx = renorm_amp * dvx(i, j, k);
 			vy = renorm_amp * dvy(i, j, k);
 			vz = renorm_amp * dvz(i, j, k);
 
 			// add rotation to vx and vy
-			vx += - distxy * omega_sphere * std::sin(phi);
+			vx += (-1.0) * distxy * omega_sphere * std::sin(phi);
 			vy += distxy * omega_sphere * std::cos(phi);
 
 		} else {
-			state.rho = 0.01 * 1e-20; // rhotot;
+			state.rho = 0.01 * rhotot; // rhotot;
 			state.T = 1e2 * userData_.temperature; // can use EOS.hpp function to solve for temp
 		}
 
@@ -389,8 +387,8 @@ auto problem_main() -> int
 	pp.query("cloud_radius", R_sphere);
 
 	// cloud density
-	Real rho_sphere{};
-	pp.query("cloud_density", rho_sphere);
+	Real numdens_init{};
+	pp.query("cloud_numdens", numdens_init);
 
 	// cloud angular velocity
 	Real omega_sphere{};
@@ -413,7 +411,7 @@ auto problem_main() -> int
 	sim.densityFloor_ = 0.01;
 
 	sim.userData_.R_sphere = R_sphere;
-	sim.userData_.rho_sphere = rho_sphere;
+	sim.userData_.numdens_init = numdens_init;
 	sim.userData_.omega_sphere = omega_sphere;
 
 	// initialize
