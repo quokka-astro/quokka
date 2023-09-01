@@ -99,6 +99,8 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	int enableCooling_ = 0;
 	int enableChemistry_ = 0;
 	Real max_density_allowed = std::numeric_limits<amrex::Real>::max();
+	Real min_density_allowed = std::numeric_limits<amrex::Real>::min();
+
 	quokka::cooling::cloudy_tables cloudyTables_;
 	std::string coolingTableFilename_{};
 
@@ -340,6 +342,7 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::readParmParse(
 		amrex::ParmParse hpp("primordial_chem");
 		hpp.query("enabled", enableChemistry_);
 		hpp.query("max_density_allowed", max_density_allowed);
+		hpp.query("min_density_allowed", min_density_allowed);
 	}
 #endif
 
@@ -465,7 +468,7 @@ void RadhydroSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::Mult
 #ifdef PRIMORDIAL_CHEM
 	if (enableChemistry_ == 1) {
 		// compute chemistry
-		quokka::chemistry::computeChemistry<problem_t>(state, dt, max_density_allowed);
+		quokka::chemistry::computeChemistry<problem_t>(state, dt, max_density_allowed, min_density_allowed);
 	}
 #endif
 

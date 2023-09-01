@@ -31,7 +31,7 @@ namespace quokka::chemistry
 
 AMREX_GPU_DEVICE void chemburner(burn_t &chemstate, const Real dt);
 
-template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const Real dt, const Real max_density_allowed)
+template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const Real dt, const Real max_density_allowed, const Real min_density_allowed)
 {
 
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
@@ -62,6 +62,11 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 			for (int nn = 0; nn < NumSpec; ++nn) {
 				inmfracs[nn] = chem[nn] * rho / spmasses[nn];
 				chemstate.xn[nn] = inmfracs[nn];
+			}
+
+			// dont do chemistry in cells with densities below the minimum density specified
+			if (rho < min_density_allowed) {
+				return;
 			}
 
 			// stop the test if we have reached very high densities
