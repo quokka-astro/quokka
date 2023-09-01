@@ -287,6 +287,7 @@ template <> void RadhydroSimulation<PopIII>::setInitialConditionsOnGrid(quokka::
 			state.xn[n] = mfracs[n] * rhotot / spmasses[n];
 		}
 
+		amrex::Print() << "cell " << i << j << k << " " << rhotot << " " << numdens_init << " " << numdens[0] << std::endl;
 
 		amrex::Real phi = atan2((y-y0), (x-x0));
 
@@ -314,7 +315,6 @@ template <> void RadhydroSimulation<PopIII>::setInitialConditionsOnGrid(quokka::
 		eos(eos_input_rt, state);
 		amrex::Real e = state.rho * state.e;
 
-		amrex::Print() << "cell " << i << j << k << " " << state.rho << " " << vx << " " << vy << " " << vz << " " << e << " " << state.T << std::endl;
 
 		state_cc(i, j, k, HydroSystem<PopIII>::density_index) = state.rho;
 		state_cc(i, j, k, HydroSystem<PopIII>::x1Momentum_index) = state.rho * vx;
