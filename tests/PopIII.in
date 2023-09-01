@@ -34,6 +34,8 @@ checkpoint_interval = 100
 
 perturb.cloud_radius = 3.086e18
 perturb.cloud_omega = 2.016008E-14
+perturb.numdens_init = 0.90861183E+004
+
 # in quokka/src/StarCluster, generate with 'python3 perturbation.py --kmin=2 --kmax=64 --size=128 --alpha=2 --f_solenoidal=1.0'
 # and put it in quokka/tests/
 perturb.filename = "zdrv.hdf5"
@@ -44,29 +46,28 @@ amrex.throw_exception = 0
 amrex.signal_handling = 1
 
 primordial_chem.enabled = 1
-primordial_chem.temperature = 265
+primordial_chem.temperature = 0.26415744E+003
 
 primordial_chem.small_temp = 1.e1
 primordial_chem.small_dens = 1.e-60
 primordial_chem.max_density_allowed = 3e-6
 primordial_chem.min_density_allowed = 1e-21
-
-
-#ntot Tgas  E H- D- H HE H2 HD D H+ HE+ H2+ D+ HD+ HE++
-primordial_chem.primary_species_1 = 1e-4
-primordial_chem.primary_species_2 = 1e-4
-primordial_chem.primary_species_3 = 1e0
-primordial_chem.primary_species_4 = 1e-40
-primordial_chem.primary_species_5 = 1e-40
-primordial_chem.primary_species_6 = 1e-40
-primordial_chem.primary_species_7 = 1e-40
-primordial_chem.primary_species_8 = 1e-40
-primordial_chem.primary_species_9 = 1e-6
-primordial_chem.primary_species_10 = 1e-40
-primordial_chem.primary_species_11 = 1e-40
-primordial_chem.primary_species_12 = 1e-40
-primordial_chem.primary_species_13 = 1e-40
-primordial_chem.primary_species_14 = 0.0775e0
+#format in krome fort22_wD.dat file: E H- D- H HE H2 HD D H+ HE+ H2+ D+ HD+ HE++
+#format in quokka: E H+ H H- D+ D H2+ D- H2 HD+ HD HE++ HE+ HE
+primordial_chem.primary_species_1 = 0.88499253E-006
+primordial_chem.primary_species_2 = 0.88498062E-006
+primordial_chem.primary_species_3 = 0.99932238E+000
+primordial_chem.primary_species_4 = 0.54719550E-013
+primordial_chem.primary_species_5 = 0.21957612E-010
+primordial_chem.primary_species_6 = 0.29920413E-004
+primordial_chem.primary_species_7 = 0.58304958E-015
+primordial_chem.primary_species_8 = 0.22122496E-017
+primordial_chem.primary_species_9 = 0.38932607E-003
+primordial_chem.primary_species_10 = 0.36774691E-019
+primordial_chem.primary_species_11 = 0.79574711E-007
+primordial_chem.primary_species_12 = 0.39651766E-050
+primordial_chem.primary_species_13 = 0.24136647E-043
+primordial_chem.primary_species_14 = 0.77500001E-001
 
 
 # integrator runtime parameters
