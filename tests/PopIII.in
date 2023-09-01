@@ -13,23 +13,23 @@ amr.v              = 1       # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 128 128 128
+amr.n_cell          = 512 512 512
 amr.max_level       = 0     # number of levels = max_level + 1
-amr.blocking_factor = 16    # grid size must be divisible by this
-amr.max_grid_size   = 64    # at least 128 for GPUs
+amr.blocking_factor = 32    # grid size must be divisible by this
+amr.max_grid_size   = 128    # at least 128 for GPUs
 amr.n_error_buf     = 3     # minimum 3 cell buffer around tagged cells
 amr.grid_eff        = 0.7   # default
 
 hydro.reconstruction_order = 3  # PPM
 cfl = 0.2
-max_timesteps = 300
+max_timesteps = 10
 stop_time = 1e16
 
 do_reflux = 1
 do_subcycle = 0
 
-ascent_interval = 10
-plotfile_interval = 20
+#ascent_interval = 10
+plotfile_interval = 20 #100
 checkpoint_interval = 100
 
 perturb.cloud_radius = 3.086e18
@@ -38,7 +38,7 @@ perturb.cloud_omega = 2.016008E-14
 # and put it in quokka/tests/
 perturb.filename = "zdrv.hdf5"
 
-derived_vars = log_density
+derived_vars = temperature
 
 amrex.throw_exception = 0
 amrex.signal_handling = 1
@@ -49,6 +49,8 @@ primordial_chem.temperature = 265
 primordial_chem.small_temp = 1.e1
 primordial_chem.small_dens = 1.e-60
 primordial_chem.max_density_allowed = 3e-6
+primordial_chem.min_density_allowed = 1e-21
+
 
 #ntot Tgas  E H- D- H HE H2 HD D H+ HE+ H2+ D+ HD+ HE++
 primordial_chem.primary_species_1 = 1e-4

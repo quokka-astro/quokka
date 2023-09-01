@@ -139,7 +139,7 @@ template <> void RadhydroSimulation<PopIII>::preCalculateInitialConditions()
 	pp.query("primary_species_13", userData_.primary_species_13);
 	pp.query("primary_species_14", userData_.primary_species_14);
 
-	eos_init(userData_.small_temp, userData_.small_dens);
+	//eos_init(userData_.small_temp, userData_.small_dens);
 	network_init();
 
 
@@ -165,10 +165,8 @@ template <> void RadhydroSimulation<PopIII>::preCalculateInitialConditions()
 		const Real rho_sph = userData_.rho_sphere;
 
 		const Real rms_dv_target = 1.8e5;
-		const Real rms_Mach_target = 1.0;
 		const Real rms_dv_actual = userData_.dv_rms_generated;
 		userData_.rescale_factor = rms_dv_target / rms_dv_actual;
-		amrex::Print() << "rms Mach target = " << rms_Mach_target << "\n";
 
 		// copy to GPU
 		userData_.dvx.resize(pinned_dvx.lo(), pinned_dvx.hi());
@@ -193,7 +191,6 @@ template <> void RadhydroSimulation<PopIII>::setInitialConditionsOnGrid(quokka::
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	burn_t state;
 
 	std::array<Real, NumSpec> numdens = {-1.0};
 
@@ -250,27 +247,6 @@ template <> void RadhydroSimulation<PopIII>::setInitialConditionsOnGrid(quokka::
 	}
 
 
-	// find the density in g/cm^3
-	Real rhotot = 0.0;
-	for (int n = 0; n < NumSpec; ++n) {
-		state.xn[n] = numdens[n];
-		rhotot += state.xn[n] * spmasses[n]; // spmasses contains the masses of all species, defined in EOS
-	}
-
-	// normalize -- just in case
-	std::array<Real, NumSpec> mfracs = {-1.0};
-	Real msum = 0.0;
-	for (int n = 0; n < NumSpec; ++n) {
-		mfracs[n] = state.xn[n] * spmasses[n] / rhotot;
-		msum += mfracs[n];
-	}
-
-	for (int n = 0; n < NumSpec; ++n) {
-		mfracs[n] /= msum;
-		// use the normalized mass fractions to obtain the corresponding number densities
-		state.xn[n] = mfracs[n] * rhotot / spmasses[n];
-	}
-
 	amrex::Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
 	amrex::Real const y0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
 	amrex::Real const z0 = prob_lo[2] + 0.5 * (prob_hi[2] - prob_lo[2]);
@@ -278,6 +254,7 @@ template <> void RadhydroSimulation<PopIII>::setInitialConditionsOnGrid(quokka::
 	// cloud parameters
 	const double R_sphere = userData_.R_sphere;
 	const double omega_sphere = userData_.omega_sphere;
+	const double renorm_amp = userData_.rescale_factor;
 
 	auto const &dvx = userData_.dvx.const_table();
 	auto const &dvy = userData_.dvy.const_table();
@@ -290,14 +267,30 @@ template <> void RadhydroSimulation<PopIII>::setInitialConditionsOnGrid(quokka::
 		amrex::Real const r = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2) + std::pow(z - z0, 2));
 		amrex::Real const distxy = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2));
 
-		amrex::Real phi = 0.0;
-
-        if (x-x0 != 0.0) {
-            phi = atan((y-y0) / (x-x0));
-        } else {
-		    phi = M_PI / 2.0;
+		burn_t state;
+		// find the density in g/cm^3
+		Real rhotot = 0.0;
+		for (int n = 0; n < NumSpec; ++n) {
+			state.xn[n] = numdens[n];
+			rhotot += state.xn[n] * spmasses[n]; // spmasses contains the masses of all species, defined in EOS
 		}
 
+		// normalize -- just in case
+		std::array<Real, NumSpec> mfracs = {-1.0};
+		Real msum = 0.0;
+		for (int n = 0; n < NumSpec; ++n) {
+			mfracs[n] = state.xn[n] * spmasses[n] / rhotot;
+			msum += mfracs[n];
+		}
+
+		for (int n = 0; n < NumSpec; ++n) {
+			mfracs[n] /= msum;
+			// use the normalized mass fractions to obtain the corresponding number densities
+			state.xn[n] = mfracs[n] * rhotot / spmasses[n];
+		}
+
+
+		amrex::Real phi = atan2((y-y0), (x-x0));
 
 		double vx = 0;
 		double vy = 0;
@@ -306,19 +299,22 @@ template <> void RadhydroSimulation<PopIII>::setInitialConditionsOnGrid(quokka::
 		if (r <= R_sphere) {
 			state.rho = 1e-20; // rhotot;
 			state.T = userData_.temperature;
-			vx = dvx(i, j, k) - distxy * omega_sphere * std::abs(std::sin(phi)) * std::copysign(1.0, y-y0);
-			vy = dvx(i, j, k) + distxy * omega_sphere * std::cos(phi) * std::copysign(1.0, x-x0);
-			vz = dvx(i, j, k);
+			vx = renorm_amp * dvx(i, j, k);
+			vy = renorm_amp * dvy(i, j, k);
+			vz = renorm_amp * dvz(i, j, k);
+
+			// add rotation to vx and vy
+			vx += - distxy * omega_sphere * std::sin(phi);
+			vy += distxy * omega_sphere * std::cos(phi);
 
 		} else {
 			state.rho = 0.01 * 1e-20; // rhotot;
-			state.T = 1e2 * userData_.temperature;
+			state.T = 1e2 * userData_.temperature; // can use EOS.hpp function to solve for temp
 		}
 
 		// call the EOS to set initial internal energy e
 		eos(eos_input_rt, state);
 		amrex::Real e = state.rho * state.e;
-
 
 		state_cc(i, j, k, HydroSystem<PopIII>::density_index) = state.rho;
 		state_cc(i, j, k, HydroSystem<PopIII>::x1Momentum_index) = state.rho * vx;
@@ -326,12 +322,12 @@ template <> void RadhydroSimulation<PopIII>::setInitialConditionsOnGrid(quokka::
 		state_cc(i, j, k, HydroSystem<PopIII>::x3Momentum_index) = state.rho * vz;
 		state_cc(i, j, k, HydroSystem<PopIII>::internalEnergy_index) = e;
 
-		Real const Egas = RadSystem<PopIII>::ComputeEgasFromEint(rho, rho*vx, rho*vy, rho*vz, e);
+		Real const Egas = RadSystem<PopIII>::ComputeEgasFromEint(state.rho, state.rho*vx, state.rho*vy, state.rho*vz, e);
 		state_cc(i, j, k, HydroSystem<PopIII>::energy_index) = Egas;
 
 		for (int nn = 0; nn < NumSpec; ++nn) {
 			state_cc(i, j, k, HydroSystem<PopIII>::scalar0_index + nn) =
-			    mfracs[nn] * rho; // we use partial densities and not mass fractions
+			    mfracs[nn] * state.rho; // we use partial densities and not mass fractions
 		}
 
 	});
@@ -341,7 +337,6 @@ template <> void RadhydroSimulation<PopIII>::ErrorEst(int lev, amrex::TagBoxArra
 {
 	// refine on Jeans length
 	const int N_cells = 32; // inverse of the 'Jeans number' [Truelove et al. (1997)]
-	const amrex::Real cs = quokka::EOS_Traits<PopIII>::cs_isothermal;
 	const amrex::Real dx = geom[lev].CellSizeArray()[0];
 	const amrex::Real G = Gconst_;
 
@@ -349,7 +344,13 @@ template <> void RadhydroSimulation<PopIII>::ErrorEst(int lev, amrex::TagBoxArra
 	auto tag = tags.arrays();
 
 	amrex::ParallelFor(tags, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+
 		Real const rho = state[bx](i, j, k, HydroSystem<PopIII>::density_index);
+		Real pressure = HydroSystem<PopIII>::ComputePressure(state[bx], i, j, k);
+		amrex::GpuArray<Real, Physics_Traits<PopIII>::numMassScalars> massScalars = RadSystem<PopIII>::ComputeMassScalars(state[bx], i, j, k);
+
+		amrex::Real cs = quokka::EOS<PopIII>::ComputeSoundSpeed(rho, pressure, massScalars);
+
 		const amrex::Real l_Jeans = cs * std::sqrt(M_PI / (G * rho));
 
 		if (l_Jeans < (N_cells * dx)) {
@@ -361,14 +362,19 @@ template <> void RadhydroSimulation<PopIII>::ErrorEst(int lev, amrex::TagBoxArra
 template <> void RadhydroSimulation<PopIII>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in) const
 {
 	// compute derived variables and save in 'mf'
-	if (dname == "log_density") {
+	if (dname == "temperature") {
 		const int ncomp = ncomp_cc_in;
 		auto const &state = state_new_cc_[lev].const_arrays();
 		auto output = mf.arrays();
 
 		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			
 			Real const rho = state[bx](i, j, k, HydroSystem<PopIII>::density_index);
-			output[bx](i, j, k, ncomp) = std::log10(rho);
+			amrex::Real Eint = state[bx](i, j, k, HydroSystem<PopIII>::internalEnergy_index);
+
+			amrex::GpuArray<Real, Physics_Traits<PopIII>::numMassScalars> massScalars = RadSystem<PopIII>::ComputeMassScalars(state[bx], i, j, k);
+
+			output[bx](i, j, k, ncomp) = quokka::EOS<PopIII>::ComputeTgasFromEint(rho, Eint, massScalars);
 		});
 	}
 }
