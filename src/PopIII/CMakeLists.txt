@@ -13,7 +13,7 @@ if (AMReX_SPACEDIM EQUAL 3)
     target_compile_definitions(popiii PUBLIC PRIMORDIAL_CHEM) #this will add #define PRIMORDIAL_CHEM
     
     if(AMReX_GPU_BACKEND MATCHES "CUDA")
-        setup_target_for_cuda_compilation(star_cluster)
+        setup_target_for_cuda_compilation(popiii)
     endif()
 
     execute_process(
@@ -23,9 +23,9 @@ if (AMReX_SPACEDIM EQUAL 3)
     )
 
     add_test(NAME ComputePerturbations COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/perturbation.py --kmin=2 --kmax=64 --size=128 --alpha=2 --f_solenoidal=1.0 WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
-    add_test(NAME PopIII COMMAND popiii popiii.in WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
-    set_tests_properties(ComputePerturbations PROPERTIES FIXTURES_SETUP    StarCluster_fixture)
-    set_tests_properties(PopIII PROPERTIES FIXTURES_REQUIRED StarCluster_fixture)
+    add_test(NAME PopIII COMMAND popiii PopIII.in WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+    set_tests_properties(ComputePerturbations PROPERTIES FIXTURES_SETUP PopIII_fixture)
+    set_tests_properties(PopIII PROPERTIES FIXTURES_REQUIRED PopIII_fixture)
 
     # AMR test only works on Setonix because Gadi and avatar do not have enough memory per GPU
     # add_test(NAME PopIIIAMR COMMAND popiii popiii_AMR.in WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
