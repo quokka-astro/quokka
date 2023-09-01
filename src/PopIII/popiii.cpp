@@ -139,7 +139,7 @@ template <> void RadhydroSimulation<PopIII>::preCalculateInitialConditions()
 	pp.query("primary_species_13", userData_.primary_species_13);
 	pp.query("primary_species_14", userData_.primary_species_14);
 
-	//eos_init(userData_.small_temp, userData_.small_dens);
+	eos_init(userData_.small_temp, userData_.small_dens);
 	network_init();
 
 
@@ -314,7 +314,7 @@ template <> void RadhydroSimulation<PopIII>::setInitialConditionsOnGrid(quokka::
 		eos(eos_input_rt, state);
 		amrex::Real e = state.rho * state.e;
 
-		amrex::Print() << "cell " << i << j << k << state.rho << vx << vy << vz << e << state.T <<std::endl;
+		amrex::Print() << "cell " << i << j << k << " " << state.rho << " " << vx << " " << vy << " " << vz << " " << e << " " << state.T << std::endl;
 
 		state_cc(i, j, k, HydroSystem<PopIII>::density_index) = state.rho;
 		state_cc(i, j, k, HydroSystem<PopIII>::x1Momentum_index) = state.rho * vx;
