@@ -23,6 +23,7 @@
 
 // internal headers
 #include "ArrayView.hpp"
+#include "EOS.hpp"
 #include "HLLC.hpp"
 #include "hyperbolic_system.hpp"
 #include "radiation_system.hpp"
@@ -71,6 +72,10 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	static void ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real> const &cons, array_t &maxSignal, amrex::Box const &indexRange);
 
 	static auto CheckStatesValid(amrex::MultiFab const &cons_mf) -> bool;
+
+	AMREX_GPU_DEVICE static auto ComputePrimVars(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> quokka::valarray<amrex::Real, nvar_>;
+
+	AMREX_GPU_DEVICE static auto ComputeConsVars(quokka::valarray<amrex::Real, nvar_> const &prim) -> quokka::valarray<amrex::Real, nvar_>;
 
 	AMREX_GPU_DEVICE static auto ComputePressure(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> amrex::Real;
 
@@ -278,6 +283,62 @@ template <typename problem_t> auto HydroSystem<problem_t>::CheckStatesValid(amre
 					}
 					return {true};
 				});
+}
+
+template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePrimVars(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k)
+    -> quokka::valarray<amrex::Real, nvar_>
+{
+	// convert to primitive vars
+	const auto rho = cons(i, j, k, density_index);
+	const auto px = cons(i, j, k, x1Momentum_index);
+	const auto py = cons(i, j, k, x2Momentum_index);
+	const auto pz = cons(i, j, k, x3Momentum_index);
+	const auto E = cons(i, j, k, energy_index); // *total* gas energy per unit volume
+	const auto Eint_aux = cons(i, j, k, internalEnergy_index);
+	const auto vx = px / rho;
+	const auto vy = py / rho;
+	const auto vz = pz / rho;
+	const auto kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
+	const auto thermal_energy = E - kinetic_energy;
+
+	amrex::Real P = NAN;
+	if constexpr (is_eos_isothermal()) {
+		P = rho * cs_iso_ * cs_iso_;
+	} else {
+		amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
+		P = quokka::EOS<problem_t>::ComputePressure(rho, thermal_energy, massScalars);
+	}
+
+	quokka::valarray<amrex::Real, nvar_> primVars{rho, vx, vy, vz, P, Eint_aux};
+
+	for (int n = 0; n < nscalars_; ++n) {
+		primVars[primScalar0_index + n] = cons(i, j, k, scalar0_index + n);
+	}
+	return primVars;
+}
+
+template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeConsVars(quokka::valarray<amrex::Real, nvar_> const &prim)
+    -> quokka::valarray<amrex::Real, nvar_>
+{
+	// convert to conserved vars
+	Real const rho = prim[0];
+	Real const v1 = prim[1];
+	Real const v2 = prim[2];
+	Real const v3 = prim[3];
+	Real const P = prim[4];
+	Real const Eint_aux = prim[5];
+
+	Real const Eint = quokka::EOS<problem_t>::ComputeEintFromPres(rho, P);
+	Real const Egas = Eint + 0.5 * rho * (v1 * v1 + v2 * v2 + v3 * v3);
+
+	quokka::valarray<amrex::Real, nvar_> consVars{rho, rho * v1, rho * v2, rho * v3, Egas, Eint_aux};
+
+	for (int i = 0; i < nscalars_; ++i) {
+		consVars[scalar0_index + i] = prim[primScalar0_index + i];
+	}
+	return consVars;
 }
 
 template <typename problem_t>
