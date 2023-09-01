@@ -287,7 +287,7 @@ template <> void RadhydroSimulation<PopIII>::setInitialConditionsOnGrid(quokka::
 			state.xn[n] = mfracs[n] * rhotot / spmasses[n];
 		}
 
-		amrex::Print() << "cell " << i << j << k << " " << rhotot << " " << numdens_init << " " << numdens[0] << std::endl;
+		//amrex::Print() << "cell " << i << j << k << " " << rhotot << " " << numdens_init << " " << numdens[0] << std::endl;
 
 		amrex::Real phi = atan2((y-y0), (x-x0));
 

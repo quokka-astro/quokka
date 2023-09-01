@@ -34,7 +34,7 @@ checkpoint_interval = 100
 
 perturb.cloud_radius = 3.086e18
 perturb.cloud_omega = 2.016008E-14
-perturb.numdens_init = 0.90861183E+004
+perturb.cloud_numdens = 0.90861183E+004
 
 # in quokka/src/StarCluster, generate with 'python3 perturbation.py --kmin=2 --kmax=64 --size=128 --alpha=2 --f_solenoidal=1.0'
 # and put it in quokka/tests/
