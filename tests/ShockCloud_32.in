@@ -15,10 +15,8 @@ amr.v               = 1     # verbosity in Amr
 # *****************************************************************
 amr.n_cell          = 128 32 32
 amr.max_level       = 0     # number of levels = max_level + 1
-amr.blocking_factor_x = 64
-amr.blocking_factor_y = 16
-amr.blocking_factor_z = 16  # grid size must be divisible by this
-amr.max_grid_size     = 64
+amr.blocking_factor = 16  	# grid size must be divisible by this
+amr.max_grid_size   = 64
 
 # *****************************************************************
 # Quokka options
@@ -44,7 +42,6 @@ temperature_floor = 100
 sharp_cloud_edge = 1
 do_frame_shift = 1
 nH_bg    = 3.356403e-03 # cm^-3
-#nH_cloud    = 3.356403e-03 # cm^-3
 nH_cloud = 1.006921e+00 # cm^-3
 P_over_k = 1.304005e+04   # K cm^-3
 R_cloud_pc = 16.09084149928867 # pc
