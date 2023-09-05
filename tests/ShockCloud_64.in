@@ -13,7 +13,7 @@ amr.v               = 1     # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 128 32 32
+amr.n_cell          = 256 64 64
 amr.max_level       = 0     # number of levels = max_level + 1
 amr.blocking_factor = 16  	# grid size must be divisible by this
 amr.max_grid_size   = 64
@@ -34,7 +34,7 @@ ascent_interval = 20
 derived_vars = pressure entropy nH temperature cooling_length \
 	       cloud_fraction lab_velocity_x mass velocity_mag c_s
 
-cooling.enabled = 0
+cooling.enabled = 1
 cooling.read_tables_even_if_disabled = 1
 cooling.grackle_data_file = "../extern/grackle_data_files/input/CloudyData_UVB=HM2012.h5"
 temperature_floor = 100
