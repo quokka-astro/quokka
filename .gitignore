@@ -1,3 +1,7 @@
+build_*/
+build.*/
+run/
+
 *.log
 compile_commands.json
 .vscode/
