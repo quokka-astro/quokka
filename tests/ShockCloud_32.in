@@ -13,7 +13,7 @@ amr.v               = 1     # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 64 16 16
+amr.n_cell          = 128 32 32
 amr.max_level       = 0     # number of levels = max_level + 1
 amr.blocking_factor_x = 64
 amr.blocking_factor_y = 16
@@ -30,9 +30,9 @@ max_walltime = 6:00:00
 max_timesteps = 5000
 max_t_cc = 20.0
 
-checkpoint_interval = 5000
+checkpoint_interval = -1
 plotfile_interval = -1
-ascent_interval = 10
+ascent_interval = 20
 derived_vars = pressure entropy nH temperature cooling_length \
 	       cloud_fraction lab_velocity_x mass velocity_mag c_s
 
@@ -42,8 +42,9 @@ cooling.grackle_data_file = "../extern/grackle_data_files/input/CloudyData_UVB=H
 temperature_floor = 100
 
 sharp_cloud_edge = 1
-do_frame_shift = 0
+do_frame_shift = 1
 nH_bg    = 3.356403e-03 # cm^-3
+#nH_cloud    = 3.356403e-03 # cm^-3
 nH_cloud = 1.006921e+00 # cm^-3
 P_over_k = 1.304005e+04   # K cm^-3
 R_cloud_pc = 16.09084149928867 # pc

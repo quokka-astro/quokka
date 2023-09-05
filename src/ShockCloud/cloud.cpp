@@ -50,10 +50,10 @@ struct ShockCloud {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
 constexpr double seconds_in_year = 3.1536e7; // s == 1 yr
-constexpr double parsec_in_cm = 3.086e18;  // cm == 1 pc
-constexpr double solarmass_in_g = 1.99e33; // g == 1 Msun
-constexpr double keV_in_ergs = 1.60218e-9; // ergs == 1 keV
-constexpr double m_H = C::m_p + C::m_e;	   // mass of hydrogen atom
+constexpr double parsec_in_cm = 3.086e18;    // cm == 1 pc
+constexpr double solarmass_in_g = 1.99e33;   // g == 1 Msun
+constexpr double keV_in_ergs = 1.60218e-9;   // ergs == 1 keV
+constexpr double m_H = C::m_p + C::m_e;	     // mass of hydrogen atom
 
 template <> struct Physics_Traits<ShockCloud> {
 	static constexpr bool is_hydro_enabled = true;
@@ -169,8 +169,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<ShockCloud>::setCustomBou
 	const int ihi = domain_hi[0];
 
 	const Real delta_vx = ::delta_vx;
-	const Real v_wind = ::v_wind;
 	const Real rho_wind = ::rho_wind;
+	const Real v_wind = ::v_wind;
 	const Real P_wind = ::P_wind;
 
 	if (i < ilo) {
@@ -204,7 +204,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<ShockCloud>::setCustomBou
 
 	} else if (i > ihi) {
 		// x1 upper boundary -- NSCBC outflow
-		// TODO(bwibking): should we specify the normal velocity at the boundary instead of the pressure??
 		if (time < ::shock_crossing_time) {
 			NSCBC::setOutflowBoundary<ShockCloud, FluxDir::X1, NSCBC::BoundarySide::Upper>(iv, consVar, geom, ::P0);
 		} else { // shock has passed, so we use P_wind
@@ -777,12 +776,16 @@ auto problem_main() -> int
 	amrex::Print() << fmt::format("T_cl = {} K\n", T_cl);
 
 	// compute shock jump conditions from rho0, P0, and M0
-	const Real v_pre = M0 * std::sqrt(gamma * P0 / rho0);
-	const Real rho_post = rho0 * (gamma + 1.) * M0 * M0 / ((gamma - 1.) * M0 * M0 + 2.);
-	const Real v_post = v_pre * (rho0 / rho_post);
-	const Real v_wind = v_pre - v_post;
+	const Real x0 = M0 * M0;
+	const Real x1 = gamma + 1;
+	const Real x2 = gamma * x0;
+	const Real x3 = 1.0 / x1;
+	const Real x4 = std::sqrt(gamma * ::P0 / ::rho0);
+	const Real rho_post = ::rho0 * x0 * x1 / (-x0 + x2 + 2);
+	const Real v_wind = 2 * x3 * x4 * (x0 - 1) / M0;
+	const Real P_post = ::P0 * x3 * (-gamma + 2 * x2 + 1);
+	const Real v_shock = M0 * x4;
 
-	const Real P_post = P0 * (2. * gamma * M0 * M0 - (gamma - 1.)) / (gamma + 1.);
 	const Real Eint_post = P_post / (gamma - 1.);
 	const Real T_post = ComputeTgasFromEgas(rho_post, Eint_post, gamma, tables);
 	amrex::Print() << fmt::format("T_wind = {} K\n", T_post);
@@ -790,16 +793,17 @@ auto problem_main() -> int
 	::v_wind = v_wind; // set global variables
 	::rho_wind = rho_post;
 	::P_wind = P_post;
-	amrex::Print() << fmt::format("v_wind = {} km/s (v_pre = {}, v_post = {})\n", v_wind / 1.0e5, v_pre / 1.0e5, v_post / 1.0e5);
+	amrex::Print() << fmt::format("v_wind = {} km/s\n", v_wind / 1.0e5);
 	amrex::Print() << fmt::format("P_wind = {} K cm^-3\n", P_post / C::k_B);
+	amrex::Print() << fmt::format("v_shock = {} km/s\n", v_shock / 1.0e5);
 
 	// compute shock-crossing time
-	::shock_crossing_time = sim.geom[0].ProbLength(0) / v_wind;
+	::shock_crossing_time = sim.geom[0].ProbLength(0) / v_shock;
 	amrex::Print() << fmt::format("shock crossing time = {} Myr\n", ::shock_crossing_time / (1.0e6 * seconds_in_year));
 
 	// compute cloud-crushing time
 	const Real chi = rho1 / rho0;
-	const Real t_cc = std::sqrt(chi) * R_cloud / v_wind;
+	const Real t_cc = std::sqrt(chi) * R_cloud / v_shock;
 	amrex::Print() << fmt::format("t_cc = {} Myr\n", t_cc / (1.0e6 * seconds_in_year));
 	amrex::Print() << std::endl;
 
