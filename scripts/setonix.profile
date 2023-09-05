@@ -1,12 +1,12 @@
 #!/bin/bash
 
-source /opt/cray/pe/cpe/22.09/restore_lmod_system_defaults.sh
+source /opt/cray/pe/cpe/23.03/restore_lmod_system_defaults.sh
 
-module load cmake/3.21.4
+#module load cmake/3.21.4
 module load craype-accel-amd-gfx90a
-module load rocm/5.0.2
+module load rocm/5.2.3
 module load cray-mpich
-module load cce/14.0.3
+module load cce/15.0.1
 module load cray-hdf5
 module load cray-python/3.9.13.1
 
