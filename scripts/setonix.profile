@@ -2,7 +2,9 @@
 
 source /opt/cray/pe/cpe/23.03/restore_lmod_system_defaults.sh
 
-#module load cmake/3.21.4
+# due to a Setonix configuration bug, this module is hidden
+module load .cmake/3.24.3-e5hipii
+
 module load craype-accel-amd-gfx90a
 module load rocm/5.2.3
 module load cray-mpich
@@ -15,6 +17,9 @@ export MPICH_GPU_SUPPORT_ENABLED=1
 
 # optimize ROCm/HIP compilation for MI250X
 export AMREX_AMD_ARCH=gfx90a
+
+# allow CMake to find Ascent
+export Ascent_DIR=/software/projects/pawsey0807/bwibking/ascent_06082023/install/ascent-develop/lib/cmake/ascent/
 
 # compiler environment hints
 export CC=$(which cc)
