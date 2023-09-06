@@ -41,6 +41,8 @@ template <typename problem_t> struct RadSystem_Traits {
 	static constexpr double radiation_constant = radiation_constant_cgs_;
 	static constexpr double Erad_floor = 0.;
 	static constexpr bool compute_v_over_c_terms = true;
+  static constexpr int nGroups = 1;
+  static constexpr std::array<double, nGroups - 1> radEdges {};  // microns, size = nGroups - 1
 };
 
 /// Class for the radiation moment equations
@@ -54,7 +56,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	}
 
 	static constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
-	static constexpr int nvarHyperbolic_ = Physics_NumVars::numRadVars; // number of radiation variables
+	static constexpr int numRadVars_ = Physics_NumVars::numRadVars; // CCH: number of radiation variables for each photon group
+	static constexpr int nvarHyperbolic_ = Physics_NumVars::numRadVars * RadSystem_Traits<problem_t>::nGroups; // CCH: total number of radiation variables
 	static constexpr int nstartHyperbolic_ = Physics_Indices<problem_t>::radFirstIndex;
 	static constexpr int nvar_ = nstartHyperbolic_ + nvarHyperbolic_;
 
@@ -86,6 +89,9 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static constexpr double Erad_floor_ = RadSystem_Traits<problem_t>::Erad_floor;
 	static constexpr bool compute_v_over_c_terms_ = RadSystem_Traits<problem_t>::compute_v_over_c_terms;
 
+  static constexpr int nGroups_ = RadSystem_Traits<problem_t>::nGroups;
+	static constexpr std::array<double, nGroups_> radEdges_ = RadSystem_Traits<problem_t>::radEdges;
+
 	static constexpr double mean_molecular_mass_ = quokka::EOS_Traits<problem_t>::mean_molecular_mass;
 	static constexpr double boltzmann_constant_ = quokka::EOS_Traits<problem_t>::boltzmann_constant;
 	static constexpr double gamma_ = quokka::EOS_Traits<problem_t>::gamma;
@@ -107,6 +113,9 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static void ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiffusive_in, amrex::Array4<const amrex::Real> const &x1LeftState_in,
 				  amrex::Array4<const amrex::Real> const &x1RightState_in, amrex::Box const &indexRange, arrayconst_t &consVar_in,
 				  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx);
+
+// CCH: compute radiation energy fractions for each bin, given nGroups, radEdges, and temperature
+	static void ComputeRadEnergyFractions(amrex::GpuArray<amrex::Real, nGroups_> &radEnergyFractions, amrex::Real temperature);
 
 	static void SetRadEnergySource(array_t &radEnergySource, amrex::Box const &indexRange, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 				       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi,
@@ -145,6 +154,23 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	AMREX_GPU_DEVICE static auto isStateValid(std::array<amrex::Real, nvarHyperbolic_> &cons) -> bool;
 };
 
+// CCH: compute radiation energy fractions for each bin, given the temperature. Note that nGroups and radEdges are defined at compile time. 
+template <typename problem_t>
+void RadSystem<problem_t>::ComputeRadEnergyFractions(amrex::GpuArray<amrex::Real, nGroups_> &radEnergyFractions, amrex::Real temperature)
+{
+	const double tiny = 1.0e-10;
+	for (int i = 0; i < nGroups_; ++i) {
+		// radEnergyFractions[i] = 1.0 / nGroups_; // TODO: compute from Planck function
+		if (i == 0) {
+			// radEnergyFractions[i] = (amrex::Real)1.0;
+			radEnergyFractions[i] = 1.0 - tiny;
+		} else {
+			// radEnergyFractions[i] = (amrex::Real)0.0;
+			radEnergyFractions[i] = tiny;
+		}
+	}
+}
+
 template <typename problem_t>
 void RadSystem<problem_t>::SetRadEnergySource(array_t &radEnergySource, amrex::Box const &indexRange, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
@@ -162,21 +188,38 @@ void RadSystem<problem_t>::ConservedToPrimitive(amrex::Array4<const amrex::Real>
 
 	// cell-centered kernel
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		const auto E_r = cons(i, j, k, radEnergy_index);
-		const auto Fx = cons(i, j, k, x1RadFlux_index);
-		const auto Fy = cons(i, j, k, x2RadFlux_index);
-		const auto Fz = cons(i, j, k, x3RadFlux_index);
-		const auto reducedFluxX1 = Fx / (c_light_ * E_r);
-		const auto reducedFluxX2 = Fy / (c_light_ * E_r);
-		const auto reducedFluxX3 = Fz / (c_light_ * E_r);
+		// const auto E_r = cons(i, j, k, radEnergy_index);
+		// const auto Fx = cons(i, j, k, x1RadFlux_index);
+		// const auto Fy = cons(i, j, k, x2RadFlux_index);
+		// const auto Fz = cons(i, j, k, x3RadFlux_index);
+		// const auto reducedFluxX1 = Fx / (c_light_ * E_r);
+		// const auto reducedFluxX2 = Fy / (c_light_ * E_r);
+		// const auto reducedFluxX3 = Fz / (c_light_ * E_r);
 
-		// check admissibility of states
-		AMREX_ASSERT(E_r > 0.0); // NOLINT
+		// // check admissibility of states
+		// AMREX_ASSERT(E_r > 0.0); // NOLINT
 
-		primVar(i, j, k, primRadEnergy_index) = E_r;
-		primVar(i, j, k, x1ReducedFlux_index) = reducedFluxX1;
-		primVar(i, j, k, x2ReducedFlux_index) = reducedFluxX2;
-		primVar(i, j, k, x3ReducedFlux_index) = reducedFluxX3;
+		// primVar(i, j, k, primRadEnergy_index) = E_r;
+		// primVar(i, j, k, x1ReducedFlux_index) = reducedFluxX1;
+		// primVar(i, j, k, x2ReducedFlux_index) = reducedFluxX2;
+		// primVar(i, j, k, x3ReducedFlux_index) = reducedFluxX3;
+
+		// CCH: add reduced fluxes for each radiation group
+		for (int g = 0; g < nGroups_; ++g) {
+      std::cout << "g = " << g << std::endl;
+			const auto E_r = cons(i, j, k, radEnergy_index + Physics_NumVars::numRadVars * g);
+			const auto Fx = cons(i, j, k, x1RadFlux_index + Physics_NumVars::numRadVars * g);
+			const auto Fy = cons(i, j, k, x2RadFlux_index + Physics_NumVars::numRadVars * g);
+			const auto Fz = cons(i, j, k, x3RadFlux_index + Physics_NumVars::numRadVars * g);
+
+			// check admissibility of states
+			AMREX_ASSERT(E_r > 0.0); // NOLINT
+
+			primVar(i, j, k, primRadEnergy_index + Physics_NumVars::numRadVars * g) = E_r;
+			primVar(i, j, k, x1ReducedFlux_index + Physics_NumVars::numRadVars * g) = Fx / (c_light_ * E_r);
+			primVar(i, j, k, x2ReducedFlux_index + Physics_NumVars::numRadVars * g) = Fy / (c_light_ * E_r);
+			primVar(i, j, k, x3ReducedFlux_index + Physics_NumVars::numRadVars * g) = Fz / (c_light_ * E_r);
+		}
 	});
 }
 
@@ -204,6 +247,8 @@ template <typename problem_t> AMREX_GPU_DEVICE auto RadSystem<problem_t>::isStat
 	bool isNonNegative = (E_r > 0.);
 	bool isFluxCausal = (f <= 1.);
 	return (isNonNegative && isFluxCausal);
+
+  // TODO: add multigroup support
 }
 
 template <typename problem_t>
@@ -581,6 +626,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeCellOpticalDepth(const quokka
 	}
 	const double tau_L = dl * rho_L * RadSystem<problem_t>::ComputeRosselandOpacity(rho_L, Tgas_L);
 	const double tau_R = dl * rho_R * RadSystem<problem_t>::ComputeRosselandOpacity(rho_R, Tgas_R);
+  // TODO: add multigroup support for the Opacity
 
 	return (2.0 * tau_L * tau_R) / (tau_L + tau_R); // harmonic mean
 							// return 0.5*(tau_L + tau_R); // arithmetic mean
@@ -612,246 +658,252 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 		// Radiation eigenvalues from Skinner & Ostriker (2013).
 
 		// gather left- and right- state variables
-		double erad_L = x1LeftState(i, j, k, primRadEnergy_index);
-		double erad_R = x1RightState(i, j, k, primRadEnergy_index);
+    // CCH: add reduced fluxes for each radiation group
+    for (int gg = 0; gg < nGroups_; ++gg) {
+      std::cout << "gg = " << gg << std::endl;
+      double erad_L = x1LeftState(i, j, k, primRadEnergy_index + Physics_NumVars::numRadVars * gg);
+      double erad_R = x1RightState(i, j, k, primRadEnergy_index + Physics_NumVars::numRadVars * gg);
 
-		double fx_L = x1LeftState(i, j, k, x1ReducedFlux_index);
-		double fx_R = x1RightState(i, j, k, x1ReducedFlux_index);
+      double fx_L = x1LeftState(i, j, k, x1ReducedFlux_index + Physics_NumVars::numRadVars * gg);
+      double fx_R = x1RightState(i, j, k, x1ReducedFlux_index + Physics_NumVars::numRadVars * gg);
 
-		double fy_L = x1LeftState(i, j, k, x2ReducedFlux_index);
-		double fy_R = x1RightState(i, j, k, x2ReducedFlux_index);
+      double fy_L = x1LeftState(i, j, k, x2ReducedFlux_index + Physics_NumVars::numRadVars * gg);
+      double fy_R = x1RightState(i, j, k, x2ReducedFlux_index + Physics_NumVars::numRadVars * gg);
 
-		double fz_L = x1LeftState(i, j, k, x3ReducedFlux_index);
-		double fz_R = x1RightState(i, j, k, x3ReducedFlux_index);
+      double fz_L = x1LeftState(i, j, k, x3ReducedFlux_index + Physics_NumVars::numRadVars * gg);
+      double fz_R = x1RightState(i, j, k, x3ReducedFlux_index + Physics_NumVars::numRadVars * gg);
 
-		// compute scalar reduced flux f
-		double f_L = std::sqrt(fx_L * fx_L + fy_L * fy_L + fz_L * fz_L);
-		double f_R = std::sqrt(fx_R * fx_R + fy_R * fy_R + fz_R * fz_R);
+      // compute scalar reduced flux f
+      double f_L = std::sqrt(fx_L * fx_L + fy_L * fy_L + fz_L * fz_L);
+      double f_R = std::sqrt(fx_R * fx_R + fy_R * fy_R + fz_R * fz_R);
 
-		// Compute "un-reduced" Fx, Fy, Fz
-		double Fx_L = fx_L * (c_light_ * erad_L);
-		double Fx_R = fx_R * (c_light_ * erad_R);
+      // Compute "un-reduced" Fx, Fy, Fz
+      double Fx_L = fx_L * (c_light_ * erad_L);
+      double Fx_R = fx_R * (c_light_ * erad_R);
 
-		double Fy_L = fy_L * (c_light_ * erad_L);
-		double Fy_R = fy_R * (c_light_ * erad_R);
+      double Fy_L = fy_L * (c_light_ * erad_L);
+      double Fy_R = fy_R * (c_light_ * erad_R);
 
-		double Fz_L = fz_L * (c_light_ * erad_L);
-		double Fz_R = fz_R * (c_light_ * erad_R);
+      double Fz_L = fz_L * (c_light_ * erad_L);
+      double Fz_R = fz_R * (c_light_ * erad_R);
 
-		// check that states are physically admissible; if not, use first-order
-		// reconstruction
-		if (!((erad_L > 0.) && (erad_R > 0.) && (f_L < 1.) && (f_R < 1.))) {
-			erad_L = consVar(i - 1, j, k, radEnergy_index);
-			erad_R = consVar(i, j, k, radEnergy_index);
+      // check that states are physically admissible; if not, use first-order
+      // reconstruction
+      if (!((erad_L > 0.) && (erad_R > 0.) && (f_L < 1.) && (f_R < 1.))) {
+        erad_L = consVar(i - 1, j, k, radEnergy_index + Physics_NumVars::numRadVars * gg);
+        erad_R = consVar(i, j, k, radEnergy_index + Physics_NumVars::numRadVars * gg);
 
-			Fx_L = consVar(i - 1, j, k, x1RadFlux_index);
-			Fx_R = consVar(i, j, k, x1RadFlux_index);
+        Fx_L = consVar(i - 1, j, k, x1RadFlux_index + Physics_NumVars::numRadVars * gg);
+        Fx_R = consVar(i, j, k, x1RadFlux_index + Physics_NumVars::numRadVars * gg);
 
-			Fy_L = consVar(i - 1, j, k, x2RadFlux_index);
-			Fy_R = consVar(i, j, k, x2RadFlux_index);
+        Fy_L = consVar(i - 1, j, k, x2RadFlux_index + Physics_NumVars::numRadVars * gg);
+        Fy_R = consVar(i, j, k, x2RadFlux_index + Physics_NumVars::numRadVars * gg);
 
-			Fz_L = consVar(i - 1, j, k, x3RadFlux_index);
-			Fz_R = consVar(i, j, k, x3RadFlux_index);
+        Fz_L = consVar(i - 1, j, k, x3RadFlux_index + Physics_NumVars::numRadVars * gg);
+        Fz_R = consVar(i, j, k, x3RadFlux_index + Physics_NumVars::numRadVars * gg);
 
-			// compute primitive variables
-			fx_L = Fx_L / (c_light_ * erad_L);
-			fx_R = Fx_R / (c_light_ * erad_R);
+        // compute primitive variables
+        fx_L = Fx_L / (c_light_ * erad_L);
+        fx_R = Fx_R / (c_light_ * erad_R);
 
-			fy_L = Fy_L / (c_light_ * erad_L);
-			fy_R = Fy_R / (c_light_ * erad_R);
+        fy_L = Fy_L / (c_light_ * erad_L);
+        fy_R = Fy_R / (c_light_ * erad_R);
 
-			fz_L = Fz_L / (c_light_ * erad_L);
-			fz_R = Fz_R / (c_light_ * erad_R);
+        fz_L = Fz_L / (c_light_ * erad_L);
+        fz_R = Fz_R / (c_light_ * erad_R);
 
-			f_L = std::sqrt(fx_L * fx_L + fy_L * fy_L + fz_L * fz_L);
-			f_R = std::sqrt(fx_R * fx_R + fy_R * fy_R + fz_R * fz_R);
-		}
+        f_L = std::sqrt(fx_L * fx_L + fy_L * fy_L + fz_L * fz_L);
+        f_R = std::sqrt(fx_R * fx_R + fy_R * fy_R + fz_R * fz_R);
+		  }
 
-		// check that states are physically admissible
-		AMREX_ASSERT(erad_L > 0.0);
-		AMREX_ASSERT(erad_R > 0.0);
-		// AMREX_ASSERT(f_L < 1.0); // there is sometimes a small (<1%) flux
-		// limiting violation when using P1 AMREX_ASSERT(f_R < 1.0);
+      // check that states are physically admissible
+      AMREX_ASSERT(erad_L > 0.0);
+      AMREX_ASSERT(erad_R > 0.0);
+      // AMREX_ASSERT(f_L < 1.0); // there is sometimes a small (<1%) flux
+      // limiting violation when using P1 AMREX_ASSERT(f_R < 1.0);
 
-		std::array<amrex::Real, 3> fvec_L = {fx_L, fy_L, fz_L};
-		std::array<amrex::Real, 3> fvec_R = {fx_R, fy_R, fz_R};
+      std::array<amrex::Real, 3> fvec_L = {fx_L, fy_L, fz_L};
+      std::array<amrex::Real, 3> fvec_R = {fx_R, fy_R, fz_R};
 
-		// angle between interface and radiation flux \hat{n}
-		// If direction is undefined, just drop direction-dependent
-		// terms.
-		std::array<amrex::Real, 3> n_L{};
-		std::array<amrex::Real, 3> n_R{};
+      // angle between interface and radiation flux \hat{n}
+      // If direction is undefined, just drop direction-dependent
+      // terms.
+      std::array<amrex::Real, 3> n_L{};
+      std::array<amrex::Real, 3> n_R{};
 
-		for (int i = 0; i < 3; ++i) {
-			n_L[i] = (f_L > 0.) ? (fvec_L[i] / f_L) : 0.;
-			n_R[i] = (f_R > 0.) ? (fvec_R[i] / f_R) : 0.;
-		}
+      for (int i = 0; i < 3; ++i) {
+        n_L[i] = (f_L > 0.) ? (fvec_L[i] / f_L) : 0.;
+        n_R[i] = (f_R > 0.) ? (fvec_R[i] / f_R) : 0.;
+      }
 
-		// compute radiation pressure tensors
-		const double chi_L = RadSystem<problem_t>::ComputeEddingtonFactor(f_L);
-		const double chi_R = RadSystem<problem_t>::ComputeEddingtonFactor(f_R);
+      // compute radiation pressure tensors
+      const double chi_L = RadSystem<problem_t>::ComputeEddingtonFactor(f_L);
+      const double chi_R = RadSystem<problem_t>::ComputeEddingtonFactor(f_R);
 
-		AMREX_ASSERT((chi_L >= 1. / 3.) && (chi_L <= 1.0)); // NOLINT
-		AMREX_ASSERT((chi_R >= 1. / 3.) && (chi_R <= 1.0)); // NOLINT
+      AMREX_ASSERT((chi_L >= 1. / 3.) && (chi_L <= 1.0)); // NOLINT
+      AMREX_ASSERT((chi_R >= 1. / 3.) && (chi_R <= 1.0)); // NOLINT
 
-		// diagonal term of Eddington tensor
-		const double Tdiag_L = (1.0 - chi_L) / 2.0;
-		const double Tdiag_R = (1.0 - chi_R) / 2.0;
+      // diagonal term of Eddington tensor
+      const double Tdiag_L = (1.0 - chi_L) / 2.0;
+      const double Tdiag_R = (1.0 - chi_R) / 2.0;
 
-		// anisotropic term of Eddington tensor (in the direction of the
-		// rad. flux)
-		const double Tf_L = (3.0 * chi_L - 1.0) / 2.0;
-		const double Tf_R = (3.0 * chi_R - 1.0) / 2.0;
+      // anisotropic term of Eddington tensor (in the direction of the
+      // rad. flux)
+      const double Tf_L = (3.0 * chi_L - 1.0) / 2.0;
+      const double Tf_R = (3.0 * chi_R - 1.0) / 2.0;
 
-		// assemble Eddington tensor
-		double T_L[3][3];
-		double T_R[3][3];
-		double P_L[3][3];
-		double P_R[3][3];
+      // assemble Eddington tensor
+      double T_L[3][3];
+      double T_R[3][3];
+      double P_L[3][3];
+      double P_R[3][3];
 
-		for (int i = 0; i < 3; ++i) {
-			for (int j = 0; j < 3; ++j) {
-				const double delta_ij = (i == j) ? 1 : 0;
-				T_L[i][j] = Tdiag_L * delta_ij + Tf_L * (n_L[i] * n_L[j]);
-				T_R[i][j] = Tdiag_R * delta_ij + Tf_R * (n_R[i] * n_R[j]);
-				// compute the elements of the total radiation pressure
-				// tensor
-				P_L[i][j] = T_L[i][j] * erad_L;
-				P_R[i][j] = T_R[i][j] * erad_R;
-			}
-		}
+      for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 3; ++j) {
+          const double delta_ij = (i == j) ? 1 : 0;
+          T_L[i][j] = Tdiag_L * delta_ij + Tf_L * (n_L[i] * n_L[j]);
+          T_R[i][j] = Tdiag_R * delta_ij + Tf_R * (n_R[i] * n_R[j]);
+          // compute the elements of the total radiation pressure
+          // tensor
+          P_L[i][j] = T_L[i][j] * erad_L;
+          P_R[i][j] = T_R[i][j] * erad_R;
+        }
+      }
 
-		// frozen Eddington tensor approximation, following Balsara
-		// (1999) [JQSRT Vol. 61, No. 5, pp. 617–627, 1999], Eq. 46.
-		double Tnormal_L = NAN;
-		double Tnormal_R = NAN;
-		if constexpr (DIR == FluxDir::X1) {
-			Tnormal_L = T_L[0][0];
-			Tnormal_R = T_R[0][0];
-		} else if constexpr (DIR == FluxDir::X2) {
-			Tnormal_L = T_L[1][1];
-			Tnormal_R = T_R[1][1];
-		} else if constexpr (DIR == FluxDir::X3) {
-			Tnormal_L = T_L[2][2];
-			Tnormal_R = T_R[2][2];
-		}
+      // frozen Eddington tensor approximation, following Balsara
+      // (1999) [JQSRT Vol. 61, No. 5, pp. 617–627, 1999], Eq. 46.
+      double Tnormal_L = NAN;
+      double Tnormal_R = NAN;
+      if constexpr (DIR == FluxDir::X1) {
+        Tnormal_L = T_L[0][0];
+        Tnormal_R = T_R[0][0];
+      } else if constexpr (DIR == FluxDir::X2) {
+        Tnormal_L = T_L[1][1];
+        Tnormal_R = T_R[1][1];
+      } else if constexpr (DIR == FluxDir::X3) {
+        Tnormal_L = T_L[2][2];
+        Tnormal_R = T_R[2][2];
+      }
 
-		// compute fluxes F_L, F_R
-		// P_nx, P_ny, P_nz indicate components where 'n' is the direction of the
-		// face normal F_n is the radiation flux component in the direction of the
-		// face normal
-		double Fn_L = NAN;
-		double Fn_R = NAN;
-		double Pnx_L = NAN;
-		double Pnx_R = NAN;
-		double Pny_L = NAN;
-		double Pny_R = NAN;
-		double Pnz_L = NAN;
-		double Pnz_R = NAN;
+      // compute fluxes F_L, F_R
+      // P_nx, P_ny, P_nz indicate components where 'n' is the direction of the
+      // face normal F_n is the radiation flux component in the direction of the
+      // face normal
+      double Fn_L = NAN;
+      double Fn_R = NAN;
+      double Pnx_L = NAN;
+      double Pnx_R = NAN;
+      double Pny_L = NAN;
+      double Pny_R = NAN;
+      double Pnz_L = NAN;
+      double Pnz_R = NAN;
 
-		if constexpr (DIR == FluxDir::X1) {
-			Fn_L = Fx_L;
-			Fn_R = Fx_R;
+      if constexpr (DIR == FluxDir::X1) {
+        Fn_L = Fx_L;
+        Fn_R = Fx_R;
 
-			Pnx_L = P_L[0][0];
-			Pny_L = P_L[0][1];
-			Pnz_L = P_L[0][2];
+        Pnx_L = P_L[0][0];
+        Pny_L = P_L[0][1];
+        Pnz_L = P_L[0][2];
 
-			Pnx_R = P_R[0][0];
-			Pny_R = P_R[0][1];
-			Pnz_R = P_R[0][2];
-		} else if constexpr (DIR == FluxDir::X2) {
-			Fn_L = Fy_L;
-			Fn_R = Fy_R;
+        Pnx_R = P_R[0][0];
+        Pny_R = P_R[0][1];
+        Pnz_R = P_R[0][2];
+      } else if constexpr (DIR == FluxDir::X2) {
+        Fn_L = Fy_L;
+        Fn_R = Fy_R;
 
-			Pnx_L = P_L[1][0];
-			Pny_L = P_L[1][1];
-			Pnz_L = P_L[1][2];
+        Pnx_L = P_L[1][0];
+        Pny_L = P_L[1][1];
+        Pnz_L = P_L[1][2];
 
-			Pnx_R = P_R[1][0];
-			Pny_R = P_R[1][1];
-			Pnz_R = P_R[1][2];
-		} else if constexpr (DIR == FluxDir::X3) {
-			Fn_L = Fz_L;
-			Fn_R = Fz_R;
+        Pnx_R = P_R[1][0];
+        Pny_R = P_R[1][1];
+        Pnz_R = P_R[1][2];
+      } else if constexpr (DIR == FluxDir::X3) {
+        Fn_L = Fz_L;
+        Fn_R = Fz_R;
 
-			Pnx_L = P_L[2][0];
-			Pny_L = P_L[2][1];
-			Pnz_L = P_L[2][2];
+        Pnx_L = P_L[2][0];
+        Pny_L = P_L[2][1];
+        Pnz_L = P_L[2][2];
 
-			Pnx_R = P_R[2][0];
-			Pny_R = P_R[2][1];
-			Pnz_R = P_R[2][2];
-		}
+        Pnx_R = P_R[2][0];
+        Pny_R = P_R[2][1];
+        Pnz_R = P_R[2][2];
+      }
 
-		AMREX_ASSERT(Fn_L != NAN);
-		AMREX_ASSERT(Fn_R != NAN);
-		AMREX_ASSERT(Pnx_L != NAN);
-		AMREX_ASSERT(Pnx_R != NAN);
-		AMREX_ASSERT(Pny_L != NAN);
-		AMREX_ASSERT(Pny_R != NAN);
-		AMREX_ASSERT(Pnz_L != NAN);
-		AMREX_ASSERT(Pnz_R != NAN);
+      AMREX_ASSERT(Fn_L != NAN);
+      AMREX_ASSERT(Fn_R != NAN);
+      AMREX_ASSERT(Pnx_L != NAN);
+      AMREX_ASSERT(Pnx_R != NAN);
+      AMREX_ASSERT(Pny_L != NAN);
+      AMREX_ASSERT(Pny_R != NAN);
+      AMREX_ASSERT(Pnz_L != NAN);
+      AMREX_ASSERT(Pnz_R != NAN);
 
-		const quokka::valarray<double, nvarHyperbolic_> F_L = {(c_hat_ / c_light_) * Fn_L, (c_hat_ * c_light_) * Pnx_L, (c_hat_ * c_light_) * Pny_L,
-								       (c_hat_ * c_light_) * Pnz_L};
+      // CCH: Here I'm not sure. I changed nvarHyperbolic_ to numRadVars_ (= 4)
+      const quokka::valarray<double, numRadVars_> F_L = {(c_hat_ / c_light_) * Fn_L, (c_hat_ * c_light_) * Pnx_L, (c_hat_ * c_light_) * Pny_L,
+                        (c_hat_ * c_light_) * Pnz_L};
 
-		const quokka::valarray<double, nvarHyperbolic_> F_R = {(c_hat_ / c_light_) * Fn_R, (c_hat_ * c_light_) * Pnx_R, (c_hat_ * c_light_) * Pny_R,
-								       (c_hat_ * c_light_) * Pnz_R};
+      const quokka::valarray<double, numRadVars_> F_R = {(c_hat_ / c_light_) * Fn_R, (c_hat_ * c_light_) * Pnx_R, (c_hat_ * c_light_) * Pny_R,
+                        (c_hat_ * c_light_) * Pnz_R};
 
-		const quokka::valarray<double, nvarHyperbolic_> U_L = {erad_L, Fx_L, Fy_L, Fz_L};
-		const quokka::valarray<double, nvarHyperbolic_> U_R = {erad_R, Fx_R, Fy_R, Fz_R};
+      const quokka::valarray<double, numRadVars_> U_L = {erad_L, Fx_L, Fy_L, Fz_L};
+      const quokka::valarray<double, numRadVars_> U_R = {erad_R, Fx_R, Fy_R, Fz_R};
 
-		// asymptotic-preserving flux correction
-		// [Similar to Skinner et al. (2019), but tau^-2 instead of tau^-1, which
-		// does not appear to be asymptotic-preserving with PLM+SDC2.]
-		const double tau_cell = ComputeCellOpticalDepth<DIR>(consVar, dx, i, j, k);
+      // asymptotic-preserving flux correction
+      // [Similar to Skinner et al. (2019), but tau^-2 instead of tau^-1, which
+      // does not appear to be asymptotic-preserving with PLM+SDC2.]
+      const double tau_cell = ComputeCellOpticalDepth<DIR>(consVar, dx, i, j, k);
 
-		// ensures that signal speed -> c \sqrt{f_xx} / tau_cell in the diffusion
-		// limit [see Appendix of Jiang et al. ApJ 767:148 (2013)]
-		// const double S_corr = std::sqrt(1.0 - std::exp(-tau_cell * tau_cell)) /
-		//		      tau_cell; // Jiang et al. (2013)
-		const double S_corr = std::min(1.0, 1.0 / tau_cell); // Skinner et al.
+      // ensures that signal speed -> c \sqrt{f_xx} / tau_cell in the diffusion
+      // limit [see Appendix of Jiang et al. ApJ 767:148 (2013)]
+      // const double S_corr = std::sqrt(1.0 - std::exp(-tau_cell * tau_cell)) /
+      //		      tau_cell; // Jiang et al. (2013)
+      const double S_corr = std::min(1.0, 1.0 / tau_cell); // Skinner et al.
 
-		// adjust the wavespeeds
-		// (this factor cancels out except for the last term in the HLL flux)
-		// const quokka::valarray<double, nvarHyperbolic_> epsilon = {
-		//    S_corr, 1.0, 1.0, 1.0}; // Skinner et al. (2019)
-		// const quokka::valarray<double, nvarHyperbolic_> epsilon = {S_corr,
-		// S_corr,
-		//    S_corr, S_corr}; // Jiang et al. (2013)
-		const quokka::valarray<double, nvarHyperbolic_> epsilon = {S_corr * S_corr, S_corr, S_corr, S_corr}; // this code
+      // adjust the wavespeeds
+      // (this factor cancels out except for the last term in the HLL flux)
+      // const quokka::valarray<double, nvarHyperbolic_> epsilon = {
+      //    S_corr, 1.0, 1.0, 1.0}; // Skinner et al. (2019)
+      // const quokka::valarray<double, nvarHyperbolic_> epsilon = {S_corr,
+      // S_corr,
+      //    S_corr, S_corr}; // Jiang et al. (2013)
+      const quokka::valarray<double, numRadVars_> epsilon = {S_corr * S_corr, S_corr, S_corr, S_corr}; // this code
 
-		// compute the norm of the wavespeed vector
-		const double S_L = std::min(-0.1 * c_hat_, -c_hat_ * std::sqrt(Tnormal_L));
-		const double S_R = std::max(0.1 * c_hat_, c_hat_ * std::sqrt(Tnormal_R));
+      // compute the norm of the wavespeed vector
+      const double S_L = std::min(-0.1 * c_hat_, -c_hat_ * std::sqrt(Tnormal_L));
+      const double S_R = std::max(0.1 * c_hat_, c_hat_ * std::sqrt(Tnormal_R));
 
-		AMREX_ASSERT(std::abs(S_L) <= c_hat_); // NOLINT
-		AMREX_ASSERT(std::abs(S_R) <= c_hat_); // NOLINT
+      AMREX_ASSERT(std::abs(S_L) <= c_hat_); // NOLINT
+      AMREX_ASSERT(std::abs(S_R) <= c_hat_); // NOLINT
 
-		// in the frozen Eddington tensor approximation, we are always
-		// in the star region, so F = F_star
-		const quokka::valarray<double, nvarHyperbolic_> F =
-		    (S_R / (S_R - S_L)) * F_L - (S_L / (S_R - S_L)) * F_R + epsilon * (S_R * S_L / (S_R - S_L)) * (U_R - U_L);
+      // in the frozen Eddington tensor approximation, we are always
+      // in the star region, so F = F_star
+      const quokka::valarray<double, numRadVars_> F =
+          (S_R / (S_R - S_L)) * F_L - (S_L / (S_R - S_L)) * F_R + epsilon * (S_R * S_L / (S_R - S_L)) * (U_R - U_L);
 
-		// check states are valid
-		AMREX_ASSERT(!std::isnan(F[0])); // NOLINT
-		AMREX_ASSERT(!std::isnan(F[1])); // NOLINT
-		AMREX_ASSERT(!std::isnan(F[2])); // NOLINT
-		AMREX_ASSERT(!std::isnan(F[3])); // NOLINT
+      // check states are valid
+      AMREX_ASSERT(!std::isnan(F[0])); // NOLINT
+      AMREX_ASSERT(!std::isnan(F[1])); // NOLINT
+      AMREX_ASSERT(!std::isnan(F[2])); // NOLINT
+      AMREX_ASSERT(!std::isnan(F[3])); // NOLINT
 
-		x1Flux(i, j, k, radEnergy_index - nstartHyperbolic_) = F[0];
-		x1Flux(i, j, k, x1RadFlux_index - nstartHyperbolic_) = F[1];
-		x1Flux(i, j, k, x2RadFlux_index - nstartHyperbolic_) = F[2];
-		x1Flux(i, j, k, x3RadFlux_index - nstartHyperbolic_) = F[3];
+      x1Flux(i, j, k, radEnergy_index + Physics_NumVars::numRadVars * gg - nstartHyperbolic_) = F[0];
+      x1Flux(i, j, k, x1RadFlux_index + Physics_NumVars::numRadVars * gg - nstartHyperbolic_) = F[1];
+      x1Flux(i, j, k, x2RadFlux_index + Physics_NumVars::numRadVars * gg - nstartHyperbolic_) = F[2];
+      x1Flux(i, j, k, x3RadFlux_index + Physics_NumVars::numRadVars * gg - nstartHyperbolic_) = F[3];
 
-		const quokka::valarray<double, nvarHyperbolic_> diffusiveF =
-		    (S_R / (S_R - S_L)) * F_L - (S_L / (S_R - S_L)) * F_R + (S_R * S_L / (S_R - S_L)) * (U_R - U_L);
+      const quokka::valarray<double, numRadVars_> diffusiveF =
+          (S_R / (S_R - S_L)) * F_L - (S_L / (S_R - S_L)) * F_R + (S_R * S_L / (S_R - S_L)) * (U_R - U_L);
 
-		x1FluxDiffusive(i, j, k, radEnergy_index - nstartHyperbolic_) = diffusiveF[0];
-		x1FluxDiffusive(i, j, k, x1RadFlux_index - nstartHyperbolic_) = diffusiveF[1];
-		x1FluxDiffusive(i, j, k, x2RadFlux_index - nstartHyperbolic_) = diffusiveF[2];
-		x1FluxDiffusive(i, j, k, x3RadFlux_index - nstartHyperbolic_) = diffusiveF[3];
+      x1FluxDiffusive(i, j, k, radEnergy_index + Physics_NumVars::numRadVars * gg - nstartHyperbolic_) = diffusiveF[0];
+      x1FluxDiffusive(i, j, k, x1RadFlux_index + Physics_NumVars::numRadVars * gg - nstartHyperbolic_) = diffusiveF[1];
+      x1FluxDiffusive(i, j, k, x2RadFlux_index + Physics_NumVars::numRadVars * gg - nstartHyperbolic_) = diffusiveF[2];
+      x1FluxDiffusive(i, j, k, x3RadFlux_index + Physics_NumVars::numRadVars * gg - nstartHyperbolic_) = diffusiveF[3];
+    }
+    // TODO: add multigroup support
 	});
 }
 
@@ -917,12 +969,34 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		const double Egastot0 = consPrev(i, j, k, gasEnergy_index);
 		auto massScalars = RadSystem<problem_t>::ComputeMassScalars(consPrev, i, j, k);
 
-		// load radiation energy
-		const double Erad0 = consPrev(i, j, k, radEnergy_index);
+		// // load radiation energy
+		// const double Erad0 = consPrev(i, j, k, radEnergy_index);
 
-		// load radiation energy source term
-		// plus advection source term (for well-balanced/SDC integrators)
-		const double Src = dt * ((chat * radEnergySource(i, j, k)) + advectionFluxes(i, j, k));
+		// // load radiation energy source term
+		// // plus advection source term (for well-balanced/SDC integrators)
+		// const double Src = dt * ((chat * radEnergySource(i, j, k)) + advectionFluxes(i, j, k));
+
+    // CCH: load multigroup radiation energy
+    double Erad0 = 0.0;
+	  // std::cout << "nGroups_ = " << nGroups_ << std::endl;
+	  // std::cout << "consPrev = " << consPrev(i, j, k, radEnergy_index + Physics_NumVars::numRadVars * 0) << std::endl;
+    for (int g = 0; g < nGroups_; ++g) {
+      Erad0 += consPrev(i, j, k, radEnergy_index + Physics_NumVars::numRadVars * g);
+    }
+    // CCH: add all groups of photons together
+    double radEnergySourceSum;
+    if (nGroups_ <= 1) {
+	    radEnergySourceSum = radEnergySource(i, j, k); // TODO: problem here!!!
+    } else {
+	    radEnergySourceSum = 0.0;
+	    for (int g = 0; g < nGroups_; ++g) {
+		    radEnergySourceSum += radEnergySource(i, j, k, g); // TODO: problem here!!!
+	    }
+    }
+	  std::cout << "radEnergySourceSum = " << radEnergySourceSum << std::endl;
+    const double Src = dt * ((chat * radEnergySourceSum) + advectionFluxes(i, j, k));
+	  std::cout << "Src = " << Src << std::endl;
+	  std::cout << "Erad0 = " << Erad0 << std::endl;
 
 		double Egas0 = NAN;
 		double Ekin0 = NAN;
@@ -934,9 +1008,12 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			Egas0 = ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0);
 			Ekin0 = Egastot0 - Egas0;
 
-			AMREX_ASSERT(Src >= 0.0);
-			AMREX_ASSERT(Egas0 > 0.0);
-			AMREX_ASSERT(Erad0 > 0.0);
+			// AMREX_ASSERT(Src >= 0.0);
+			// AMREX_ASSERT(Egas0 > 0.0);
+			// AMREX_ASSERT(Erad0 > 0.0);
+			AMREX_ALWAYS_ASSERT(Src >= 0.0);
+			AMREX_ALWAYS_ASSERT(Egas0 > 0.0);
+			AMREX_ALWAYS_ASSERT(Erad0 > 0.0);
 
 			const double Etot0 = Egas0 + (c / chat) * (Erad0 + Src);
 

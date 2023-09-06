@@ -23,7 +23,7 @@ template <typename problem_t> struct Physics_Indices {
 	static const int nvarTotal_cc_radhydro =
 	    Physics_Traits<problem_t>::numPassiveScalars +
 	    Physics_NumVars::numHydroVars * static_cast<int>(Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) +
-	    Physics_NumVars::numRadVars * static_cast<int>(Physics_Traits<problem_t>::is_radiation_enabled);
+	    Physics_NumVars::numRadVars * Physics_Traits<problem_t>::nGroups * static_cast<int>(Physics_Traits<problem_t>::is_radiation_enabled);
 	// cell-centered
 	static const int nvarTotal_cc = nvarTotal_cc_radhydro > 0 ? nvarTotal_cc_radhydro : nvarTotal_cc_adv;
 	static const int hydroFirstIndex = 0;

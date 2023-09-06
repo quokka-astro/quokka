@@ -49,6 +49,8 @@ template <> struct RadSystem_Traits<MarshakProblem> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double Erad_floor = 0.;
 	static constexpr bool compute_v_over_c_terms = false;
+  static constexpr int nGroups = 2;
+  static constexpr std::array<double, nGroups - 1> radEdges {0.1};  // microns, size = nGroups - 1
 };
 
 template <> struct Physics_Traits<MarshakProblem> {
@@ -60,6 +62,8 @@ template <> struct Physics_Traits<MarshakProblem> {
 	static constexpr bool is_radiation_enabled = true;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
+  // CCH: a hack to get nvarTotal_cc_radhydro right in physics_info.hpp
+  static constexpr int nGroups = RadSystem_Traits<MarshakProblem>::nGroups;
 };
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputePlanckOpacity(const double rho, const double /*Tgas*/) -> double
@@ -113,6 +117,9 @@ void RadSystem<MarshakProblem>::SetRadEnergySource(array_t &radEnergySource, amr
 						   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_hi*/, amrex::Real time)
 {
 
+  // CCH: calculate radEnergyFractions 
+	amrex::GpuArray<double, RadSystem_Traits<MarshakProblem>::nGroups> radEnergyFractions;
+
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		amrex::Real const xl = (i + amrex::Real(0.)) * dx[0];
 		amrex::Real const xr = (i + amrex::Real(1.)) * dx[0];
@@ -125,12 +132,25 @@ void RadSystem<MarshakProblem>::SetRadEnergySource(array_t &radEnergySource, amr
 			AMREX_ALWAYS_ASSERT(dx_frac > 0.0);
 		}
 
+		// amrex::Real const vol_frac = dx_frac;
+		// amrex::Real src = 0.;
+		// if (time < t0) {
+		// 	src = S * vol_frac;
+		// }
+		// radEnergySource(i, j, k) = src;
+
+		amrex::Real theT = T_hohlraum;
+		RadSystem<MarshakProblem>::ComputeRadEnergyFractions(radEnergyFractions, theT);
 		amrex::Real const vol_frac = dx_frac;
-		amrex::Real src = 0.;
-		if (time < t0) {
-			src = S * vol_frac;
-		}
-		radEnergySource(i, j, k) = src;
+		for (int n = 0; n < RadSystem<MarshakProblem>::nGroups_; ++n) {
+		  amrex::Real src = 0.;
+			if (time < t0) {
+				auto S_frac = radEnergyFractions[n];
+				src = S * S_frac * vol_frac;
+			}
+		  radEnergySource(i, j, k, n) = src;
+    }
+
 	});
 }
 
@@ -142,18 +162,25 @@ template <> void RadhydroSimulation<MarshakProblem>::setInitialConditionsOnGrid(
 	const auto Erad0 = initial_Erad;
 	const auto Egas0 = initial_Egas;
 
+  // CCH: calculate radEnergyFractions 
+	amrex::GpuArray<double, RadSystem_Traits<MarshakProblem>::nGroups> radEnergyFractions;
+  amrex::Real const temperature = 0.0;
+	RadSystem<MarshakProblem>::ComputeRadEnergyFractions(radEnergyFractions, temperature);
+
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		state_cc(i, j, k, RadSystem<MarshakProblem>::radEnergy_index) = Erad0;
-		state_cc(i, j, k, RadSystem<MarshakProblem>::x1RadFlux_index) = 0;
-		state_cc(i, j, k, RadSystem<MarshakProblem>::x2RadFlux_index) = 0;
-		state_cc(i, j, k, RadSystem<MarshakProblem>::x3RadFlux_index) = 0;
-		state_cc(i, j, k, RadSystem<MarshakProblem>::gasEnergy_index) = Egas0;
-		state_cc(i, j, k, RadSystem<MarshakProblem>::gasDensity_index) = rho0;
-		state_cc(i, j, k, RadSystem<MarshakProblem>::gasInternalEnergy_index) = Egas0;
-		state_cc(i, j, k, RadSystem<MarshakProblem>::x1GasMomentum_index) = 0.;
-		state_cc(i, j, k, RadSystem<MarshakProblem>::x2GasMomentum_index) = 0.;
-		state_cc(i, j, k, RadSystem<MarshakProblem>::x3GasMomentum_index) = 0.;
+    for (int g = 0; g < RadSystem_Traits<MarshakProblem>::nGroups; ++g) {
+      state_cc(i, j, k, RadSystem<MarshakProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad0 * radEnergyFractions[g];
+      state_cc(i, j, k, RadSystem<MarshakProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+      state_cc(i, j, k, RadSystem<MarshakProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+      state_cc(i, j, k, RadSystem<MarshakProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+    }
+    state_cc(i, j, k, RadSystem<MarshakProblem>::gasEnergy_index) = Egas0;
+    state_cc(i, j, k, RadSystem<MarshakProblem>::gasDensity_index) = rho0;
+    state_cc(i, j, k, RadSystem<MarshakProblem>::gasInternalEnergy_index) = Egas0;
+    state_cc(i, j, k, RadSystem<MarshakProblem>::x1GasMomentum_index) = 0.;
+    state_cc(i, j, k, RadSystem<MarshakProblem>::x2GasMomentum_index) = 0.;
+    state_cc(i, j, k, RadSystem<MarshakProblem>::x3GasMomentum_index) = 0.;
 	});
 }
 
