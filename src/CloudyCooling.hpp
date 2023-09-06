@@ -9,8 +9,6 @@
 /// \brief Defines methods for interpolating cooling rates from Cloudy tables.
 ///
 
-#include <limits>
-
 #include "AMReX.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_Extension.H"
@@ -20,40 +18,28 @@
 #include "GrackleDataReader.hpp"
 #include "Interpolate2D.hpp"
 #include "ODEIntegrate.hpp"
-#include "fundamental_constants.H"
 #include "hydro_system.hpp"
 #include "radiation_system.hpp"
 #include "root_finding.hpp"
+#include <limits>
 
 namespace quokka::cooling
 {
-// From Grackle source code (initialize_chemistry_data.c, line 114):
-//   In fully tabulated mode, set H mass fraction according to
-//   the abundances in Cloudy, which assumes n_He / n_H = 0.1.
-//   This gives a value of about 0.716. Using the default value
-//   of 0.76 will result in negative electron densities at low
-//   temperature. Below, we set X = 1 / (1 + hydrogen_mass_cgs_e * n_He / n_H).
+//   Set H mass fraction according to "abundances ism" in Cloudy,
+//   which assumes n_He / n_H = 0.098. This gives a value of about 0.72.
+//   Using the default value of 0.76 will result in negative electron
+//   densities at low temperature.
+//   Below, we set X = 1 / (1 + (C::m_p + C::m_e)e * n_He / n_H).
 
-constexpr double cloudy_H_mass_fraction = 1. / (1. + 0.1 * 3.971);
-constexpr double X = cloudy_H_mass_fraction;
-constexpr double Z = 0.02; // metal fraction by mass
-constexpr double Y = 1. - X - Z;
-constexpr double mean_metals_A = 16.; // mean atomic weight of metals
-
-constexpr double sigma_T = 6.6524e-25;		    // Thomson cross section (cm^2)
-constexpr double electron_mass_cgs = 9.1093897e-28; // electron mass (g)
-constexpr double T_cmb = 2.725;			    // * (1 + z); // K
-constexpr double E_cmb = radiation_constant_cgs_ * (T_cmb * T_cmb * T_cmb * T_cmb);
+constexpr double cloudy_H_mass_fraction = 1. / (1. + 0.098 * 3.971);
 
 struct cloudyGpuConstTables {
 	// these are non-owning, so can make a copy of the whole struct
 	amrex::Table1D<const Real> const log_nH;
 	amrex::Table1D<const Real> const log_Tgas;
 
-	amrex::Table2D<const Real> const primCool;
-	amrex::Table2D<const Real> const primHeat;
-	amrex::Table2D<const Real> const metalCool;
-	amrex::Table2D<const Real> const metalHeat;
+	amrex::Table2D<const Real> const cool;
+	amrex::Table2D<const Real> const heat;
 	amrex::Table2D<const Real> const meanMolWeight;
 };
 
@@ -63,10 +49,8 @@ class cloudy_tables
 	std::unique_ptr<amrex::TableData<double, 1>> log_nH;
 	std::unique_ptr<amrex::TableData<double, 1>> log_Tgas;
 
-	std::unique_ptr<amrex::TableData<double, 2>> primCooling;
-	std::unique_ptr<amrex::TableData<double, 2>> primHeating;
-	std::unique_ptr<amrex::TableData<double, 2>> metalCooling;
-	std::unique_ptr<amrex::TableData<double, 2>> metalHeating;
+	std::unique_ptr<amrex::TableData<double, 2>> cooling;
+	std::unique_ptr<amrex::TableData<double, 2>> heating;
 	std::unique_ptr<amrex::TableData<double, 2>> mean_mol_weight;
 
 	[[nodiscard]] auto const_tables() const -> cloudyGpuConstTables;
@@ -86,42 +70,14 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto cloudy_cooling_function(Real const
 	const Real log_nH = std::log10(nH);
 	const Real log_T = std::log10(T);
 
-	const double logPrimCool = interpolate2d(log_nH, log_T, tables.log_nH, tables.log_Tgas, tables.primCool);
-	const double logPrimHeat = interpolate2d(log_nH, log_T, tables.log_nH, tables.log_Tgas, tables.primHeat);
-	const double logMetalCool = interpolate2d(log_nH, log_T, tables.log_nH, tables.log_Tgas, tables.metalCool);
-	const double logMetalHeat = interpolate2d(log_nH, log_T, tables.log_nH, tables.log_Tgas, tables.metalHeat);
+	const double logCool = interpolate2d(log_nH, log_T, tables.log_nH, tables.log_Tgas, tables.cool);
 
-	const double netLambda_prim = FastMath::pow10(logPrimHeat) - FastMath::pow10(logPrimCool);
-	const double netLambda_metals = FastMath::pow10(logMetalHeat) - FastMath::pow10(logMetalCool);
-	const double netLambda = netLambda_prim + netLambda_metals;
+	const double logHeat = interpolate2d(log_nH, log_T, tables.log_nH, tables.log_Tgas, tables.heat);
+
+	const double netLambda = FastMath::pow10(logHeat) - FastMath::pow10(logCool);
 
 	// multiply by the square of H mass density (**NOT number density**)
-	double Edot = (rhoH * rhoH) * netLambda;
-
-	// compute dimensionless mean mol. weight mu from mu(T) table
-	const double mu = interpolate2d(log_nH, log_T, tables.log_nH, tables.log_Tgas, tables.meanMolWeight);
-
-	// compute electron density
-	// N.B. it is absolutely critical to include the metal contribution here!
-	double n_e = (rho / (C::m_p + C::m_e)) * (1.0 - mu * (X + Y / 4. + Z / mean_metals_A)) / (mu - (electron_mass_cgs / (C::m_p + C::m_e)));
-	// the approximation for the metals contribution to e- fails at high densities (~1e3 or higher)
-	n_e = std::max(n_e, 1.0e-4 * nH);
-
-	// photoelectric heating term
-	const double Tsqrt = std::sqrt(T);
-	constexpr double phi = 0.5; // phi_PAH from Wolfire et al. (2003)
-	constexpr double G_0 = 1.7; // ISRF from Wolfire et al. (2003)
-	const double epsilon = 4.9e-2 / (1. + 4.0e-3 * std::pow(G_0 * Tsqrt / (n_e * phi), 0.73)) +
-			       3.7e-2 * std::pow(T / 1.0e4, 0.7) / (1. + 2.0e-4 * (G_0 * Tsqrt / (n_e * phi)));
-	const double Gamma_pe = 1.3e-24 * nH * epsilon * G_0;
-	Edot += Gamma_pe;
-
-	// Compton term (CMB photons)
-	// [e.g., Hirata 2018: doi:10.1093/mnras/stx2854]
-	constexpr double Gamma_C = (8. * sigma_T * E_cmb) / (3. * electron_mass_cgs * c_light_cgs_);
-	constexpr double C_n = Gamma_C * C::k_B / (5. / 3. - 1.0);
-	const double compton_CMB = -C_n * (T - T_cmb) * n_e;
-	Edot += compton_CMB;
+	const double Edot = (rhoH * rhoH) * netLambda;
 
 	return Edot;
 }
@@ -136,7 +92,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeEgasFromTgas(double rho, do
 	const Real mu = interpolate2d(std::log10(nH), std::log10(Tgas), tables.log_nH, tables.log_Tgas, tables.meanMolWeight);
 
 	// compute thermal gas energy
-	const Real Egas = (rho / ((C::m_p + C::m_e) * mu)) * C::k_B * Tgas / (gamma - 1.);
+	const Real n = rho / ((C::m_p + C::m_e) * mu);
+	const Real Pgas = n * C::k_B * Tgas;
+	const Real Egas = Pgas / (gamma - 1.);
 	return Egas;
 }
 
@@ -162,7 +120,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(double rho, do
 	const Real log_nH = std::log10(nH);
 
 	// mean molecular weight (in Grackle tables) is defined w/r/t
-	// hydrogen_mass_cgs_
+	// (C::m_p + C::m_e)
 	const Real C = (gamma - 1.) * Egas / (C::k_B * (rho / (C::m_p + C::m_e)));
 
 	// solve for mu(T)*C == T.
@@ -207,6 +165,50 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(double rho, do
 	} // else: return NAN
 
 	return T_sol;
+}
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeCoolingLength(double rho, double Egas, double gamma, cloudyGpuConstTables const &tables) -> Real
+{
+	// convert (rho, Egas) to cooling length
+
+	// 1. convert Egas (internal gas energy) to temperature
+	const Real Tgas = ComputeTgasFromEgas(rho, Egas, gamma, tables);
+
+	// 2. compute cooling time
+	// interpolate cooling rates from Cloudy tables
+	const Real rhoH = rho * cloudy_H_mass_fraction; // mass density of H species
+	const Real nH = rhoH / (C::m_p + C::m_e);
+	const Real log_nH = std::log10(nH);
+	const Real log_T = std::log10(Tgas);
+	const double logCool = interpolate2d(log_nH, log_T, tables.log_nH, tables.log_Tgas, tables.cool);
+	const double LambdaCool = FastMath::pow10(logCool);
+	const double Edot = (rhoH * rhoH) * LambdaCool;
+	// compute cooling time
+	const Real t_cool = Egas / Edot;
+
+	// 3. compute cooling length c_s t_cool
+	// compute mu from mu(T) table
+	const Real mu = interpolate2d(log_nH, log_T, tables.log_nH, tables.log_Tgas, tables.meanMolWeight);
+	const Real c_s = std::sqrt(gamma * C::k_B * Tgas / (mu * (C::m_p + C::m_e)));
+
+	// cooling length
+	return c_s * t_cool;
+}
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeMMW(double rho, double Egas, double gamma, cloudyGpuConstTables const &tables) -> Real
+{
+	// convert (rho, Egas) to dimensionless mean molecular weight
+
+	// 1. convert Egas (internal gas energy) to temperature
+	const Real Tgas = ComputeTgasFromEgas(rho, Egas, gamma, tables);
+
+	// 2. compute mu from mu(T) table
+	const Real rhoH = rho * cloudy_H_mass_fraction; // mass density of H species
+	const Real nH = rhoH / (C::m_p + C::m_e);
+	const Real log_nH = std::log10(nH);
+	const Real log_T = std::log10(Tgas);
+	const Real mu = interpolate2d(log_nH, log_T, tables.log_nH, tables.log_Tgas, tables.meanMolWeight);
+	return mu;
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto user_rhs(Real /*t*/, quokka::valarray<Real, 1> &y_data, quokka::valarray<Real, 1> &y_rhs, void *user_data) -> int
@@ -308,53 +310,6 @@ template <typename problem_t> void computeCooling(amrex::MultiFab &mf, const Rea
 	if (nmax >= maxStepsODEIntegrate) {
 		amrex::Abort("Max steps exceeded in cooling solve!");
 	}
-}
-
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeCoolingLength(double rho, double Egas, double gamma, cloudyGpuConstTables const &tables) -> Real
-{
-	// convert (rho, Egas) to cooling length
-
-	// 1. convert Egas (internal gas energy) to temperature
-	const Real Tgas = ComputeTgasFromEgas(rho, Egas, gamma, tables);
-
-	// 2. compute cooling time
-	// interpolate cooling rates from Cloudy tables
-	const Real rhoH = rho * cloudy_H_mass_fraction; // mass density of H species
-	const Real nH = rhoH / (C::m_p + C::m_e);
-	const Real log_nH = std::log10(nH);
-	const Real log_T = std::log10(Tgas);
-
-	const double logPrimCool = interpolate2d(log_nH, log_T, tables.log_nH, tables.log_Tgas, tables.primCool);
-	const double logMetalCool = interpolate2d(log_nH, log_T, tables.log_nH, tables.log_Tgas, tables.metalCool);
-	const double LambdaCool = FastMath::pow10(logPrimCool) + FastMath::pow10(logMetalCool);
-
-	const double Edot = (rhoH * rhoH) * LambdaCool;
-	// compute cooling time
-	const Real t_cool = Egas / Edot;
-
-	// 3. compute cooling length c_s t_cool
-	// compute mu from mu(T) table
-	const Real mu = interpolate2d(log_nH, log_T, tables.log_nH, tables.log_Tgas, tables.meanMolWeight);
-	const Real c_s = std::sqrt(gamma * C::k_B * Tgas / (mu * (C::m_p + C::m_e)));
-
-	// cooling length
-	return c_s * t_cool;
-}
-
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeMMW(double rho, double Egas, double gamma, cloudyGpuConstTables const &tables) -> Real
-{
-	// convert (rho, Egas) to dimensionless mean molecular weight
-
-	// 1. convert Egas (internal gas energy) to temperature
-	const Real Tgas = ComputeTgasFromEgas(rho, Egas, gamma, tables);
-
-	// 2. compute mu from mu(T) table
-	const Real rhoH = rho * cloudy_H_mass_fraction; // mass density of H species
-	const Real nH = rhoH / (C::m_p + C::m_e);
-	const Real log_nH = std::log10(nH);
-	const Real log_T = std::log10(Tgas);
-	const Real mu = interpolate2d(log_nH, log_T, tables.log_nH, tables.log_Tgas, tables.meanMolWeight);
-	return mu;
 }
 
 void readCloudyData(std::string &grackle_hdf5_file, cloudy_tables &cloudyTables);
