@@ -140,7 +140,7 @@ void RadSystem<MarshakProblem>::SetRadEnergySource(array_t &radEnergySource, amr
 		// radEnergySource(i, j, k) = src;
 
 		amrex::Real theT = T_hohlraum;
-		RadSystem<MarshakProblem>::ComputeRadEnergyFractions(radEnergyFractions, theT);
+		ComputeRadEnergyFractions(radEnergyFractions, theT);
 		amrex::Real const vol_frac = dx_frac;
 		for (int n = 0; n < RadSystem<MarshakProblem>::nGroups_; ++n) {
 		  amrex::Real src = 0.;
@@ -165,7 +165,7 @@ template <> void RadhydroSimulation<MarshakProblem>::setInitialConditionsOnGrid(
   // CCH: calculate radEnergyFractions 
 	amrex::GpuArray<double, RadSystem_Traits<MarshakProblem>::nGroups> radEnergyFractions;
   amrex::Real const temperature = 0.0;
-	RadSystem<MarshakProblem>::ComputeRadEnergyFractions(radEnergyFractions, temperature);
+	ComputeRadEnergyFractions(radEnergyFractions, temperature);
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {

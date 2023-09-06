@@ -115,7 +115,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 				  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx);
 
 // CCH: compute radiation energy fractions for each bin, given nGroups, radEdges, and temperature
-	static void ComputeRadEnergyFractions(amrex::GpuArray<amrex::Real, nGroups_> &radEnergyFractions, amrex::Real temperature);
+	static void ComputeRadEnergyFractions(amrex::GpuArray<amrex::Real, nGroups_> &radEnergyFractions, amrex::Real const temperature);
 
 	static void SetRadEnergySource(array_t &radEnergySource, amrex::Box const &indexRange, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 				       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi,
@@ -158,7 +158,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 template <typename problem_t>
 void RadSystem<problem_t>::ComputeRadEnergyFractions(amrex::GpuArray<amrex::Real, nGroups_> &radEnergyFractions, amrex::Real temperature)
 {
-	const double tiny = 1.0e-10;
+	const double tiny = 1e-10;
 	for (int i = 0; i < nGroups_; ++i) {
 		// radEnergyFractions[i] = 1.0 / nGroups_; // TODO: compute from Planck function
 		if (i == 0) {
@@ -206,7 +206,6 @@ void RadSystem<problem_t>::ConservedToPrimitive(amrex::Array4<const amrex::Real>
 
 		// CCH: add reduced fluxes for each radiation group
 		for (int g = 0; g < nGroups_; ++g) {
-      std::cout << "g = " << g << std::endl;
 			const auto E_r = cons(i, j, k, radEnergy_index + Physics_NumVars::numRadVars * g);
 			const auto Fx = cons(i, j, k, x1RadFlux_index + Physics_NumVars::numRadVars * g);
 			const auto Fy = cons(i, j, k, x2RadFlux_index + Physics_NumVars::numRadVars * g);
@@ -660,7 +659,6 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 		// gather left- and right- state variables
     // CCH: add reduced fluxes for each radiation group
     for (int gg = 0; gg < nGroups_; ++gg) {
-      std::cout << "gg = " << gg << std::endl;
       double erad_L = x1LeftState(i, j, k, primRadEnergy_index + Physics_NumVars::numRadVars * gg);
       double erad_R = x1RightState(i, j, k, primRadEnergy_index + Physics_NumVars::numRadVars * gg);
 
