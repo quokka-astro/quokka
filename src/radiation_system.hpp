@@ -991,10 +991,10 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		    radEnergySourceSum += radEnergySource(i, j, k, g); // TODO: problem here!!!
 	    }
     }
-	  std::cout << "radEnergySourceSum = " << radEnergySourceSum << std::endl;
+	  // std::cout << "radEnergySourceSum = " << radEnergySourceSum << std::endl;
     const double Src = dt * ((chat * radEnergySourceSum) + advectionFluxes(i, j, k));
-	  std::cout << "Src = " << Src << std::endl;
-	  std::cout << "Erad0 = " << Erad0 << std::endl;
+	  // std::cout << "Src = " << Src << std::endl;
+	  // std::cout << "Erad0 = " << Erad0 << std::endl;
 
 		double Egas0 = NAN;
 		double Ekin0 = NAN;

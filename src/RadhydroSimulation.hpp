@@ -288,7 +288,14 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::defineComponen
 	}
 	// add radiation state variables
 	if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
-		std::vector<std::string> radNames = {"radEnergy", "x-RadFlux", "y-RadFlux", "z-RadFlux"};
+		// std::vector<std::string> radNames = {"radEnergy", "x-RadFlux", "y-RadFlux", "z-RadFlux"};
+		std::vector<std::string> radNames = {};
+		for (int i = 0; i < RadSystem_Traits<problem_t>::nGroups; ++i) {
+			radNames.push_back("radEnergyGroup_" + std::to_string(i));
+      radNames.push_back("x-RadFluxGroup_" + std::to_string(i));
+      radNames.push_back("y-RadFluxGroup_" + std::to_string(i));
+      radNames.push_back("z-RadFluxGroup_" + std::to_string(i));
+		}
 		componentNames_cc_.insert(componentNames_cc_.end(), radNames.begin(), radNames.end());
 	}
 

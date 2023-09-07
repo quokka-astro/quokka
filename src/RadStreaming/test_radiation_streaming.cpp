@@ -49,7 +49,7 @@ template <> struct Physics_Traits<StreamingProblem> {
 	static constexpr bool is_radiation_enabled = true;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
-// CCH: a hack to get nvarTotal_cc_radhydro right in physics_info.hpp
+  // CCH: a hack to get nvarTotal_cc_radhydro right in physics_info.hpp
   static constexpr int nGroups = RadSystem_Traits<StreamingProblem>::nGroups;
 };
 
@@ -125,6 +125,7 @@ AMRSimulation<StreamingProblem>::setCustomBoundaryConditions(const amrex::IntVec
 	amrex::GpuArray<double, RadSystem_Traits<StreamingProblem>::nGroups> radEnergyFractions;
   const double Erad = 1.0;
   amrex::Real const temperature = 0.0;
+  RadSystem<StreamingProblem>::ComputeRadEnergyFractions(radEnergyFractions, temperature);
   // amrex::Real const temperature = quokka::EOS<SuOlsonProblemCgs>::ComputeTgasFromEint(rho, Egas_t);
 
 	if (i < lo[0]) {
@@ -139,7 +140,7 @@ AMRSimulation<StreamingProblem>::setCustomBoundaryConditions(const amrex::IntVec
 		// consVar(i, j, k, RadSystem<StreamingProblem>::x3RadFlux_index) = 0.;
 
     // CCH: multigroup radiation
-    RadSystem<StreamingProblem>::ComputeRadEnergyFractions(radEnergyFractions, temperature);
+    // RadSystem<StreamingProblem>::ComputeRadEnergyFractions(radEnergyFractions, temperature);
 		for (int g = 0; g < RadSystem_Traits<StreamingProblem>::nGroups; ++g) {
       auto const Erad_g = Erad * radEnergyFractions[g];
       consVar(i, j, k, RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad_g;
