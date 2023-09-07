@@ -1701,7 +1701,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::RenderAscent()
 	bpMeshHost.set(blueprintMesh);
 
 	// pass Blueprint mesh to Ascent, run actions
-	AscentCustomActions(blueprintMesh);
+	AscentCustomActions(bpMeshHost);
 }
 #endif // AMREX_USE_ASCENT
 
