@@ -1853,7 +1853,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteProjectionPlot
 
 		// write 2D plotfiles
 		auto iter = proj.begin();
-		for (int icomp = 0; icomp < proj.size(); ++icomp) {
+		for (int icomp = 0; icomp < static_cast<int>(proj.size()); ++icomp) {
 			const std::string &varname = iter->first;
 			const amrex::BaseFab<amrex::Real> &baseFab = iter->second;
 
