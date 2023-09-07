@@ -2,9 +2,7 @@
 
 source /opt/cray/pe/cpe/23.03/restore_lmod_system_defaults.sh
 
-# due to a Setonix configuration bug, this module is hidden
-module load .cmake/3.24.3-e5hipii
-
+module load cmake/3.24.3
 module load craype-accel-amd-gfx90a
 module load rocm/5.2.3
 module load cray-mpich
