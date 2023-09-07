@@ -27,6 +27,7 @@ namespace filesystem = experimental::filesystem;
 #include <iostream>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <ostream>
 #include <stdexcept>
 #include <tuple>
