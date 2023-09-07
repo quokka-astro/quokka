@@ -163,7 +163,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real tempCeiling_ = std::numeric_limits<double>::max();	// default
 	amrex::Real tempFloor_ = 0.0;					// default
 	amrex::Real speedCeiling_ = std::numeric_limits<double>::max(); // default
-	
+
 	std::unordered_map<std::string, variant_t> simulationMetadata_;
 
 	// constructor
@@ -1782,68 +1782,61 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile() con
 #endif
 }
 
-template <typename problem_t>
-void AMRSimulation<problem_t>::WriteMetadataFile(
-    std::string const &MetadataFileName) const {
-  // write metadata file
-  // (this is written for both checkpoints and plotfiles)
+template <typename problem_t> void AMRSimulation<problem_t>::WriteMetadataFile(std::string const &MetadataFileName) const
+{
+	// write metadata file
+	// (this is written for both checkpoints and plotfiles)
 
-  if (amrex::ParallelDescriptor::IOProcessor()) {
-    amrex::VisMF::IO_Buffer io_buffer(amrex::VisMF::IO_Buffer_Size);
-    std::ofstream MetadataFile;
-    MetadataFile.rdbuf()->pubsetbuf(io_buffer.dataPtr(), io_buffer.size());
-    MetadataFile.open(MetadataFileName.c_str(), std::ofstream::out |
-                                                    std::ofstream::trunc |
-                                                    std::ofstream::binary);
-    if (!MetadataFile.good()) {
-      amrex::FileOpenFailed(MetadataFileName);
-    }
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		amrex::VisMF::IO_Buffer io_buffer(amrex::VisMF::IO_Buffer_Size);
+		std::ofstream MetadataFile;
+		MetadataFile.rdbuf()->pubsetbuf(io_buffer.dataPtr(), io_buffer.size());
+		MetadataFile.open(MetadataFileName.c_str(), std::ofstream::out | std::ofstream::trunc | std::ofstream::binary);
+		if (!MetadataFile.good()) {
+			amrex::FileOpenFailed(MetadataFileName);
+		}
 
-    // construct YAML from each (key, value) of simulationMetadata_
-    YAML::Emitter out;
-    out << YAML::BeginMap;
-    auto PrintVisitor = [&out](const auto &t) { out << YAML::Value << t; };
-    for (auto const &[key, value] : simulationMetadata_) {
-      out << YAML::Key << key;
-      std::visit(PrintVisitor, value);
-    }
-    out << YAML::EndMap;
+		// construct YAML from each (key, value) of simulationMetadata_
+		YAML::Emitter out;
+		out << YAML::BeginMap;
+		auto PrintVisitor = [&out](const auto &t) { out << YAML::Value << t; };
+		for (auto const &[key, value] : simulationMetadata_) {
+			out << YAML::Key << key;
+			std::visit(PrintVisitor, value);
+		}
+		out << YAML::EndMap;
 
-    // write YAML to MetadataFile
-    // (N.B. yaml-cpp is smart enough to emit sufficient digits for
-    //  floating-point types to represent their values to machine precision!)
-    MetadataFile << out.c_str() << '\n';
-  }
+		// write YAML to MetadataFile
+		// (N.B. yaml-cpp is smart enough to emit sufficient digits for
+		//  floating-point types to represent their values to machine precision!)
+		MetadataFile << out.c_str() << '\n';
+	}
 }
 
-template <typename problem_t>
-void AMRSimulation<problem_t>::ReadMetadataFile(
-    std::string const &chkfilename) {
-  // read metadata file in on all ranks (needed when restarting from checkpoint)
-  std::string MetadataFileName(chkfilename + "/metadata.yaml");
+template <typename problem_t> void AMRSimulation<problem_t>::ReadMetadataFile(std::string const &chkfilename)
+{
+	// read metadata file in on all ranks (needed when restarting from checkpoint)
+	std::string MetadataFileName(chkfilename + "/metadata.yaml");
 
-  // read YAML file into simulationMetadata_ std::map
-  YAML::Node metadata = YAML::LoadFile(MetadataFileName);
-  amrex::Print() << "Reading " << MetadataFileName << "...\n";
+	// read YAML file into simulationMetadata_ std::map
+	YAML::Node metadata = YAML::LoadFile(MetadataFileName);
+	amrex::Print() << "Reading " << MetadataFileName << "...\n";
 
-  for (YAML::const_iterator it = metadata.begin(); it != metadata.end(); ++it) {
-    std::string key = it->first.as<std::string>();
-    std::optional<amrex::Real> value_real =
-        YAML::as_if<amrex::Real, std::optional<amrex::Real>>(it->second)();
-    std::optional<std::string> value_string =
-        YAML::as_if<std::string, std::optional<std::string>>(it->second)();
+	for (YAML::const_iterator it = metadata.begin(); it != metadata.end(); ++it) {
+		std::string key = it->first.as<std::string>();
+		std::optional<amrex::Real> value_real = YAML::as_if<amrex::Real, std::optional<amrex::Real>>(it->second)();
+		std::optional<std::string> value_string = YAML::as_if<std::string, std::optional<std::string>>(it->second)();
 
-    if (value_real) {
-      simulationMetadata_[key] = value_real.value();
-      amrex::Print() << fmt::format("\t{} = {}\n", key, value_real.value());
-    } else if (value_string) {
-      simulationMetadata_[key] = value_string.value();
-      amrex::Print() << fmt::format("\t{} = {}\n", key, value_string.value());
-    } else {
-      amrex::Print() << fmt::format(
-          "\t{} has unknown type! skipping this entry.\n", key);
-    }
-  }
+		if (value_real) {
+			simulationMetadata_[key] = value_real.value();
+			amrex::Print() << fmt::format("\t{} = {}\n", key, value_real.value());
+		} else if (value_string) {
+			simulationMetadata_[key] = value_string.value();
+			amrex::Print() << fmt::format("\t{} = {}\n", key, value_string.value());
+		} else {
+			amrex::Print() << fmt::format("\t{} has unknown type! skipping this entry.\n", key);
+		}
+	}
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::SetLastCheckpointSymlink(std::string const &checkpointname) const
@@ -1936,7 +1929,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile
 	}
 
 	// write Metadata file
-  	WriteMetadataFile(checkpointname + "/metadata.yaml");
+	WriteMetadataFile(checkpointname + "/metadata.yaml");
 
 	// write the cell-centred MultiFab data to, e.g., chk00010/Level_0/
 	for (int lev = 0; lev <= finest_level; ++lev) {
