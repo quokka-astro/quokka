@@ -1816,14 +1816,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteMetadataFile(s
 template <typename problem_t> void AMRSimulation<problem_t>::ReadMetadataFile(std::string const &chkfilename)
 {
 	// read metadata file in on all ranks (needed when restarting from checkpoint)
-	std::string MetadataFileName(chkfilename + "/metadata.yaml");
+const 
 
 	// read YAML file into simulationMetadata_ std::map
 	YAML::Node metadata = YAML::LoadFile(MetadataFileName);
 	amrex::Print() << "Reading " << MetadataFileName << "...\n";
 
 	for (YAML::const_iterator it = metadata.begin(); it != metadata.end(); ++it) {
-		std::string key = it->first.as<std::string>();
+const 
 		std::optional<amrex::Real> value_real = YAML::as_if<amrex::Real, std::optional<amrex::Real>>(it->second)();
 		std::optional<std::string> value_string = YAML::as_if<std::string, std::optional<std::string>>(it->second)();
 
