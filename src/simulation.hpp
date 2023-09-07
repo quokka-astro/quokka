@@ -1824,7 +1824,7 @@ auto AMRSimulation<problem_t>::computePlaneProjection(F const &user_f, const int
 template <typename problem_t> void AMRSimulation<problem_t>::WriteProjectionPlotfile() const
 {
 	std::vector<std::string> dirs{};
-	amrex::ParmParse pp;
+	const amrex::ParmParse pp;
 	pp.queryarr("projection.dirs", dirs);
 
 	auto dir_from_string = [=](const std::string &dir_str) {
@@ -1846,9 +1846,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteProjectionPlot
 		std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj = ComputeProjections(dir);
 
 		auto const &firstFab = proj.begin()->second;
-		amrex::BoxArray ba(firstFab.box());
-		amrex::DistributionMapping dm(amrex::Vector<int>{0});
-		amrex::MultiFab mf_all(ba, dm, proj.size(), 0);
+		const amrex::BoxArray ba(firstFab.box());
+		const amrex::DistributionMapping dm(amrex::Vector<int>{0});
+		amrex::MultiFab mf_all(ba, dm, static_cast<int>(proj.size()), 0);
 		amrex::Vector<std::string> varnames;
 
 		// write 2D plotfiles
@@ -1857,8 +1857,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteProjectionPlot
 			const std::string &varname = iter->first;
 			const amrex::BaseFab<amrex::Real> &baseFab = iter->second;
 
-			amrex::BoxArray ba(baseFab.box());
-			amrex::DistributionMapping dm(amrex::Vector<int>{0});
+			const amrex::BoxArray ba(baseFab.box());
+			const amrex::DistributionMapping dm(amrex::Vector<int>{0});
 			amrex::MultiFab mf(ba, dm, 1, 0, amrex::MFInfo().SetAlloc(false));
 			if (amrex::ParallelDescriptor::IOProcessor()) {
 				mf.setFab(0, amrex::FArrayBox(baseFab.array()));
@@ -1871,7 +1871,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteProjectionPlot
 		const std::string basename = "proj" + dir_str;
 		const std::string filename = amrex::Concatenate(basename, istep[0], 5);
 		amrex::Print() << "Writing projection " << filename << "\n";
-		amrex::Geometry mygeom(firstFab.box());
+		const amrex::Geometry mygeom(firstFab.box());
 		amrex::WriteSingleLevelPlotfile(filename, mf_all, varnames, mygeom, tNew_[0], istep[0]);
 	}
 }
