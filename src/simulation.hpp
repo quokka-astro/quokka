@@ -1694,8 +1694,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::RenderAscent()
 	conduit::Node blueprintMesh;
 	amrex::MultiLevelToBlueprint(finest_level + 1, mf_ptr, varnames, rescaledGeom, tNew_[0], istep, refRatio(), blueprintMesh);
 
+	// copy to host mem (needed for DataBinning)
+	conduit::Node bpMeshHost;
+	bpMeshHost.set(blueprintMesh);
+
 	// pass Blueprint mesh to Ascent, run actions
-	AscentCustomActions(blueprintMesh);
+	AscentCustomActions(bpMeshHost);
 }
 #endif // AMREX_USE_ASCENT
 
