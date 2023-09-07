@@ -1599,9 +1599,11 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel(i
 			       InterpHookNone, FillPatchType::fillpatch_function);
 
 	// Fill ghost zones for state_new_fc_
-	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-		fillBoundaryConditions(state_new_fc_[lev][idim], state_new_fc_[lev][idim], lev, tNew_[lev], quokka::centering::fc,
-				       static_cast<quokka::direction>(idim), InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
+	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			fillBoundaryConditions(state_new_fc_[lev][idim], state_new_fc_[lev][idim], lev, tNew_[lev], quokka::centering::fc,
+					       static_cast<quokka::direction>(idim), InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
+		}
 	}
 
 	// copy data from cell-centred state variables
