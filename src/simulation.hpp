@@ -1786,8 +1786,8 @@ void AMRSimulation<problem_t>::WriteStatisticsFile() {
 
     // write header
     if (!isHeaderWritten) {
-      std::time_t t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-      std::tm now = *std::localtime(&t);
+      const std::time_t t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+      const std::tm now = *std::localtime(&t); // NOLINT(concurrency-mt-unsafe)
       StatisticsFile << "## Simulation restarted at: " << std::put_time(&now, "%c %Z") << "\n";
       StatisticsFile << "# cycle time ";
       for (auto const &[key, value] : statistics) {
