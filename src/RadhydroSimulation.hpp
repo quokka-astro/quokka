@@ -361,8 +361,8 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::readParmParse(
 	{
 		amrex::ParmParse hpp("primordial_chem");
 		hpp.query("enabled", enableChemistry_);
-		hpp.query("max_density_allowed", max_density_allowed);
-		hpp.query("min_density_allowed", min_density_allowed);
+		hpp.query("max_density_allowed", max_density_allowed); // chemistry is not accurate for densities > 3e-6
+		hpp.query("min_density_allowed", min_density_allowed); // don't do chemistry in cells with densities below the minimum density specified
 	}
 #endif
 
