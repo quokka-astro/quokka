@@ -146,15 +146,15 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, std::string &grackle_data_fi
 		// Read Cooling data
 		double *temp_data = new double[my_cloudy.data_size];
 
-		std::string parameter_name = "/Cooling";
+		std::string const parameter_name = "/Cooling";
 		dset_id = H5Dopen2(file_id, parameter_name.c_str(),
 				   H5P_DEFAULT); // new API in HDF5 1.8.0+
 		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, temp_data);
 
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read Cooling dataset!");
 
-		amrex::GpuArray<int, 2> lo{0, 0};
-		amrex::GpuArray<int, 2> hi{static_cast<int>(my_cloudy.grid_dimension[1]), static_cast<int>(my_cloudy.grid_dimension[0])};
+		amrex::GpuArray<int, 2> const lo{0, 0};
+		amrex::GpuArray<int, 2> const hi{static_cast<int>(my_cloudy.grid_dimension[1]), static_cast<int>(my_cloudy.grid_dimension[0])};
 
 		// N.B.: Table2D uses column-major (Fortran-order) indexing, but Grackle
 		// tables use row-major (C-order) indexing!
@@ -183,8 +183,8 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, std::string &grackle_data_fi
 
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read Heating dataset!");
 
-		amrex::GpuArray<int, 2> lo{0, 0};
-		amrex::GpuArray<int, 2> hi{static_cast<int>(my_cloudy.grid_dimension[1]), static_cast<int>(my_cloudy.grid_dimension[0])};
+		amrex::GpuArray<int, 2> const lo{0, 0};
+		amrex::GpuArray<int, 2> const hi{static_cast<int>(my_cloudy.grid_dimension[1]), static_cast<int>(my_cloudy.grid_dimension[0])};
 
 		// N.B.: Table2D uses column-major (Fortran-order) indexing, but Grackle
 		// tables use row-major (C-order) indexing!
@@ -204,8 +204,8 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, std::string &grackle_data_fi
 		// Read mean molecular weight table
 		double *temp_data = new double[my_cloudy.data_size];
 
-		amrex::GpuArray<int, 2> lo{0, 0};
-		amrex::GpuArray<int, 2> hi{static_cast<int>(my_cloudy.grid_dimension[1]), static_cast<int>(my_cloudy.grid_dimension[0])};
+		amrex::GpuArray<int, 2> const lo{0, 0};
+		amrex::GpuArray<int, 2> const hi{static_cast<int>(my_cloudy.grid_dimension[1]), static_cast<int>(my_cloudy.grid_dimension[0])};
 
 		// N.B.: Table2D uses column-major (Fortran-order) indexing, but Grackle
 		// tables use row-major (C-order) indexing!
