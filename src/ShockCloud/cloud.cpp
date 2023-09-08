@@ -465,7 +465,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto ComputeCellTemp(int i, int j, int k, am
 	return ComputeTgasFromEgas(rho, Eint, gamma, tables);
 }
 
-#if 0
 template <> auto RadhydroSimulation<ShockCloud>::ComputeStatistics() -> std::map<std::string, amrex::Real>
 {
 	// compute scalar statistics
@@ -630,7 +629,6 @@ template <> auto RadhydroSimulation<ShockCloud>::ComputeStatistics() -> std::map
 
 	return stats;
 }
-#endif
 
 template <>
 auto RadhydroSimulation<ShockCloud>::ComputeProjections(const int dir) const

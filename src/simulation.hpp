@@ -206,6 +206,9 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
   // compute statistics
   virtual auto ComputeStatistics() -> std::map<std::string, amrex::Real> = 0;
 
+	// compute volume integrals
+	template <typename F> auto computeVolumeIntegral(F const &user_f) -> amrex::Real;
+
 	// fix-up any unphysical states created by AMR operations
 	// (e.g., caused by the flux register or from interpolation)
 	virtual void FixupState(int level) = 0;
@@ -1626,6 +1629,32 @@ template <typename problem_t> void AMRSimulation<problem_t>::AverageDownTo(int c
 					    state_new_fc_[crse_lev][idim].nComp(), refRatio(crse_lev));
 		}
 	}
+}
+
+template <typename problem_t> template <typename F> auto AMRSimulation<problem_t>::computeVolumeIntegral(F const &user_f) -> amrex::Real
+{
+	// compute integral of user_f(i, j, k, state) along the given axis.
+	BL_PROFILE("AMRSimulation::computeVolumeIntegral()");
+
+	// allocate temporary multifabs
+	amrex::Vector<amrex::MultiFab> q;
+	q.resize(finest_level + 1);
+	for (int lev = 0; lev <= finest_level; ++lev) {
+		q[lev].define(boxArray(lev), DistributionMap(lev), 1, 0);
+	}
+
+	// evaluate user_f on all levels
+	// (note: it is not necessary to average down)
+	for (int lev = 0; lev <= finest_level; ++lev) {
+		auto const &state = state_new_cc_[lev].const_arrays();
+		auto const &result = q[lev].arrays();
+		amrex::ParallelFor(q[lev], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) { result[bx](i, j, k) = user_f(i, j, k, state[bx]); });
+	}
+	amrex::Gpu::streamSynchronize();
+
+	// call amrex::volumeWeightedSum
+	const amrex::Real result = amrex::volumeWeightedSum(amrex::GetVecOfConstPtrs(q), 0, geom, ref_ratio);
+	return result;
 }
 
 // get plotfile name

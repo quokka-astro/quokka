@@ -33,6 +33,7 @@ plotfile_interval = -1
 projection_interval = 20
 projection.dirs = x z
 ascent_interval = 20
+statistics_interval = 20
 derived_vars = pressure entropy nH temperature cooling_length \
 	       cloud_fraction lab_velocity_x mass velocity_mag c_s
 
