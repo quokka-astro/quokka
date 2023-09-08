@@ -11,18 +11,63 @@ if (AMReX_SPACEDIM EQUAL 3)
 
     add_executable(popiii popiii.cpp TurbDataReader.cpp ../main.cpp ../GrackleDataReader.cpp ../CloudyCooling.cpp ../Chemistry.cpp ${primordial_chem_sources})
     target_compile_definitions(popiii PUBLIC PRIMORDIAL_CHEM) #this will add #define PRIMORDIAL_CHEM
-    
+
     if(AMReX_GPU_BACKEND MATCHES "CUDA")
         setup_target_for_cuda_compilation(popiii)
     endif()
 
+    #need h5py to run perturbations.py file below
     execute_process(
         COMMAND Python3::Interpreter -c "h5py"
         RESULT_VARIABLE EXIT_CODE
         OUTPUT_QUIET
     )
 
-    add_test(NAME ComputePerturbations COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/perturbation.py --kmin=2 --kmax=64 --size=128 --alpha=2 --f_solenoidal=1.0 WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+    #re-run cmake if this file is changed
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/tests/PopIII.in)
+
+    # Read the 'PopIII.in' file line by line
+    file(READ ${CMAKE_SOURCE_DIR}/tests/PopIII.in pop_in_contents)
+
+    # Split the file contents into lines
+    string(REPLACE "\n" ";" pop_in_lines "${pop_in_contents}")
+
+    # Iterate through the lines and look for lines starting with 'amr.n_cell'
+    foreach(line IN LISTS pop_in_lines)
+        if (line MATCHES "^amr\\.n_cell.*")
+            set(match_line "${line}")
+            break()
+        endif()
+    endforeach()
+
+    if (match_line)
+        message(STATUS "picked line is ${match_line}")
+        # Use a regular expression to find consecutive digit
+        string(REGEX MATCHALL "[0-9]+" digits_list "${match_line}")
+        # Iterate through the matched digits and extract the first one
+        list(GET digits_list 0 first_digits)
+        # Check if matched digits were found
+        if (first_digits)
+           #first_digits give the box size, but you also want box size / 2 as kmax in the script below
+           math(EXPR int_first_digits "${first_digits}")
+           # Check if the conversion was successful
+           if (int_first_digits)
+               # Divide the integer by two
+               math(EXPR result "${int_first_digits} / 2")
+           else()
+               message(FATAL_ERROR "Conversion to integer failed, so cannot find kmax!")
+           endif()
+           message(STATUS "Will create initial perturbations of box size ${first_digits} and kmax ${result}")
+
+        else()
+           message(FATAL_ERROR "No box size found to create initial perturbations for!")
+        endif()
+    else()
+        message(FATAL_ERROR "No matching line found in ${CMAKE_SOURCE_DIR}/tests/PopIII.in!")
+    endif()
+
+
+    add_test(NAME ComputePerturbations COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/perturbation.py --kmin=2 --kmax=${result} --size=${first_digits} --alpha=2 --f_solenoidal=1.0 WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
     add_test(NAME PopIII COMMAND popiii PopIII.in WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
     set_tests_properties(ComputePerturbations PROPERTIES FIXTURES_SETUP PopIII_fixture)
     set_tests_properties(PopIII PROPERTIES FIXTURES_REQUIRED PopIII_fixture)
