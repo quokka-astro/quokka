@@ -253,6 +253,7 @@ template <> void RadhydroSimulation<PopIII>::setInitialConditionsOnGrid(quokka::
 	const double omega_sphere = userData_.omega_sphere;
 	const double renorm_amp = userData_.rescale_factor;
 	const double numdens_init = userData_.numdens_init;
+	const double core_temp = userData_.temperature;
 
 	auto const &dvx = userData_.dvx.const_table();
 	auto const &dvy = userData_.dvy.const_table();
@@ -296,8 +297,8 @@ template <> void RadhydroSimulation<PopIII>::setInitialConditionsOnGrid(quokka::
 		double vz = 0;
 
 		if (r <= R_sphere) {
-			state.rho = rhotot; // rhotot;
-			state.T = userData_.temperature;
+			state.rho = rhotot;
+			state.T = core_temp;
 			vx = renorm_amp * dvx(i, j, k);
 			vy = renorm_amp * dvy(i, j, k);
 			vz = renorm_amp * dvz(i, j, k);
@@ -307,8 +308,8 @@ template <> void RadhydroSimulation<PopIII>::setInitialConditionsOnGrid(quokka::
 			vy += distxy * omega_sphere * std::cos(phi);
 
 		} else {
-			state.rho = 0.01 * rhotot; // rhotot;
-			state.T = 1e2 * userData_.temperature; // can use EOS.hpp function to solve for temp
+			state.rho = 0.01 * rhotot;
+			state.T = 1e2 * core_temp; // can use EOS.hpp function to solve for temp
 		}
 
 		// call the EOS to set initial internal energy e
