@@ -193,6 +193,9 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	// compute derived variables
 	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const override;
 
+	// compute statistics
+  	auto ComputeStatistics() -> std::map<std::string, amrex::Real> override;
+
 	// fix-up states
 	void FixupState(int level) override;
 
@@ -497,6 +500,14 @@ template <typename problem_t>
 void RadhydroSimulation<problem_t>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp) const
 {
 	// compute derived variables and save in 'mf' -- user should implement
+}
+
+template <typename problem_t>
+auto RadhydroSimulation<problem_t>::ComputeStatistics() -> std::map<std::string, amrex::Real> 
+{
+	// compute statistics and return a std::map<std::string, amrex::Real> -- user should implement
+	// IMPORTANT: the user is responsible for performing any necessary MPI reductions before returning
+	return std::map<std::string, amrex::Real>{};
 }
 
 template <typename problem_t> void RadhydroSimulation<problem_t>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
