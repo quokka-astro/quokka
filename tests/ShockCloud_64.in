@@ -30,6 +30,8 @@ max_t_cc = 20.0
 
 checkpoint_interval = -1
 plotfile_interval = -1
+projection_interval = 20
+projection.dirs = x
 ascent_interval = 20
 derived_vars = pressure entropy nH temperature cooling_length \
 	       cloud_fraction lab_velocity_x mass velocity_mag c_s
