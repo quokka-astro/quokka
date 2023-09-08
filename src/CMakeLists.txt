@@ -116,7 +116,6 @@ add_subdirectory(Advection)
 add_subdirectory(Advection2D)
 add_subdirectory(AdvectionSemiellipse)
 
-
 add_subdirectory(HydroBlast2D)
 add_subdirectory(HydroBlast3D)
 add_subdirectory(HydroContact)
@@ -157,3 +156,4 @@ add_subdirectory(ShockCloud)
 add_subdirectory(PassiveScalar)
 add_subdirectory(FCQuantities)
 add_subdirectory(SphericalCollapse)
+add_subdirectory(NSCBC)
