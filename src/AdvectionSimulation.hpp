@@ -84,6 +84,9 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	// compute projected vars
   	[[nodiscard]] auto ComputeProjections(int dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> override;
 
+	// compute statistics
+  	auto ComputeStatistics() -> std::map<std::string, amrex::Real> override;
+
 	void FixupState(int lev) override;
 
 	// tag cells for refinement
@@ -159,6 +162,13 @@ auto AdvectionSimulation<problem_t>::ComputeProjections(int /*dir*/) const -> st
 {
 	// user should implement
 	return std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>{};
+}
+
+template <typename problem_t>
+auto AdvectionSimulation<problem_t>::ComputeStatistics() -> std::map<std::string, amrex::Real>
+{
+	// user should implement
+	return std::map<std::string, amrex::Real>{};
 }
 
 template <typename problem_t> void AdvectionSimulation<problem_t>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
