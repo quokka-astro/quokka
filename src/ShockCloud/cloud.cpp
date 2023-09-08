@@ -240,12 +240,12 @@ template <> void RadhydroSimulation<ShockCloud>::computeAfterTimestep()
 		const Real vx_cm = xmom / cloud_mass;
 
 		// save cumulative position, velocity offsets in simulationMetadata_
-		const Real delta_x_prev = ::delta_x;   // std::get<Real>(simulationMetadata_["delta_x"]);
-		const Real delta_vx_prev = ::delta_vx; // std::get<Real>(simulationMetadata_["delta_vx"]);
+		const Real delta_x_prev = std::get<Real>(simulationMetadata_["delta_x"]);
+		const Real delta_vx_prev = std::get<Real>(simulationMetadata_["delta_vx"]);
 		const Real delta_x = delta_x_prev + dt_coarse * delta_vx_prev;
 		const Real delta_vx = delta_vx_prev + vx_cm;
-		// simulationMetadata_["delta_x"] = delta_x;
-		// simulationMetadata_["delta_vx"] = delta_vx;
+		simulationMetadata_["delta_x"] = delta_x;
+		simulationMetadata_["delta_vx"] = delta_vx;
 		::delta_vx = delta_vx;
 
 		const Real v_wind = ::v_wind;
@@ -498,7 +498,7 @@ template <> auto RadhydroSimulation<ShockCloud>::ComputeStatistics() -> std::map
 	stats["sim_partialwind_mass"] = sim_partialwind_mass / solarmass_in_g;
 
 	// compute cloud mass according to temperature threshold
-	auto tables = userData_.cloudyTables.const_tables();
+	auto tables = cloudyTables_.const_tables();
 
 	const Real M_cl_1e4 = computeVolumeIntegral(
 	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
@@ -812,7 +812,6 @@ auto problem_main() -> int
 	sim.reconstructionOrder_ = 3; // PPM for hydro
 	sim.stopTime_ = max_time;
 
-#if 0
 	// set metadata
 	sim.simulationMetadata_["delta_x"] = 0._rt;
 	sim.simulationMetadata_["delta_vx"] = 0._rt;
@@ -821,7 +820,6 @@ auto problem_main() -> int
 	sim.simulationMetadata_["P_wind"] = P_wind;
 	sim.simulationMetadata_["M0"] = M0;
 	sim.simulationMetadata_["t_cc"] = t_cc;
-#endif
 
 	// Set initial conditions
 	sim.setInitialConditions();
