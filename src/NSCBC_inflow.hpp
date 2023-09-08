@@ -29,7 +29,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dQ_dx_inflow_x1_lower(quokka::valarray<
     -> quokka::valarray<Real, HydroSystem<problem_t>::nvar_>
 {
 	// return dQ/dx corresponding to subsonic inflow on the x1 lower boundary
-	// (This is only necessary for continuous inflows, i.e., where as shock or contact discontinuity is not desired.)
+	// (This is only necessary for continuous inflows, i.e., where a shock or contact discontinuity is not desired.)
 	// NOTE: This boundary condition is only defined for an ideal gas (with constant k_B/mu).
 
 	const Real rho = Q[0];
