@@ -29,7 +29,6 @@
 #include "TurbDataReader.hpp"
 #include "hydro_system.hpp"
 #include "popiii.hpp"
-#include "TurbDataReader.hpp"
 
 #include "actual_eos_data.H"
 #include "burn_type.H"
