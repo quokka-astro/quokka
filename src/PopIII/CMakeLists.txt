@@ -67,7 +67,7 @@ if (AMReX_SPACEDIM EQUAL 3)
     endif()
 
 
-    add_test(NAME ComputePerturbations COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/perturbation.py --kmin=2 --kmax=${result} --size=${first_digits} --alpha=2 --f_solenoidal=1.0 WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+    add_test(NAME ComputePerturbations COMMAND python3 ${CMAKE_SOURCE_DIR}/src/perturbation.py --kmin=2 --kmax=${result} --size=${first_digits} --alpha=2 --f_solenoidal=2./3. WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
     add_test(NAME PopIII COMMAND popiii PopIII.in WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
     set_tests_properties(ComputePerturbations PROPERTIES FIXTURES_SETUP PopIII_fixture)
     set_tests_properties(PopIII PROPERTIES FIXTURES_REQUIRED PopIII_fixture)
