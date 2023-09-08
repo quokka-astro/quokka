@@ -9,7 +9,7 @@ if (AMReX_SPACEDIM EQUAL 3)
     #this is critical to ensure the correct Microphysics files are linked to primordial chem target
     include_directories(BEFORE ${primordial_chem_dirs} "${CMAKE_CURRENT_BINARY_DIR}/" "includes/extern_parameters.H" "includes/network_properties.H")
 
-    add_executable(popiii popiii.cpp TurbDataReader.cpp ../main.cpp ../GrackleDataReader.cpp ../CloudyCooling.cpp ../Chemistry.cpp ${primordial_chem_sources})
+    add_executable(popiii popiii.cpp ../TurbDataReader.cpp ../main.cpp ../GrackleDataReader.cpp ../CloudyCooling.cpp ../Chemistry.cpp ${primordial_chem_sources})
     target_compile_definitions(popiii PUBLIC PRIMORDIAL_CHEM) #this will add #define PRIMORDIAL_CHEM
 
     if(AMReX_GPU_BACKEND MATCHES "CUDA")

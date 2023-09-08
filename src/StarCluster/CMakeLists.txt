@@ -1,7 +1,7 @@
 if (AMReX_SPACEDIM EQUAL 3)
     # Define a custom target that runs the Python script to produce the input perturbations file
 
-    add_executable(star_cluster star_cluster.cpp TurbDataReader.cpp ${QuokkaObjSources})
+    add_executable(star_cluster star_cluster.cpp ../TurbDataReader.cpp ${QuokkaObjSources})
     if(AMReX_GPU_BACKEND MATCHES "CUDA")
         setup_target_for_cuda_compilation(star_cluster)
     endif()
