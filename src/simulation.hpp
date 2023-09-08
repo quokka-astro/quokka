@@ -258,11 +258,11 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	[[nodiscard]] auto PlotFileName(int lev) const -> std::string;
 	[[nodiscard]] auto CustomPlotFileName(const char *base, int lev) const -> std::string;
 	[[nodiscard]] auto GetPlotfileVarNames() const -> amrex::Vector<std::string>;
-	[[nodiscard]] auto PlotFileMF() const -> amrex::Vector<amrex::MultiFab>;
-	[[nodiscard]] auto PlotFileMFAtLevel(int lev) const -> amrex::MultiFab;
-	void WriteMetadataFile(std::string const &MetadataFileName) const;
+	[[nodiscard]] auto PlotFileMF() -> amrex::Vector<amrex::MultiFab>;
+	[[nodiscard]] auto PlotFileMFAtLevel(int lev) -> amrex::MultiFab;
+	void WriteMetadataFile(std::string const &plotfilename) const;
 	void ReadMetadataFile(std::string const &chkfilename);
-	void WritePlotFile() const;
+	void WritePlotFile();
 	void WriteCheckpointFile() const;
 	void SetLastCheckpointSymlink(std::string const &checkpointname) const;
 	void ReadCheckpointFile();
@@ -1615,7 +1615,7 @@ void AMRSimulation<problem_t>::AverageFCToCC(amrex::MultiFab &mf_cc, const amrex
 	amrex::Gpu::streamSynchronize();
 }
 
-template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel(int lev) const -> amrex::MultiFab
+template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel(int lev) -> amrex::MultiFab
 {
 	// Combine state_new_cc_[lev] and derived variables in a new MF
 	int comp = 0;
@@ -1634,8 +1634,17 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel(i
 	const int nghost_plotMF = nghost_cc;
 	amrex::MultiFab plotMF(grids[lev], dmap[lev], ncomp_plotMF, nghost_plotMF);
 
-	// initialise all the valid- and ghost-cells to zero, for all the components
-	plotMF.setVal(0.0);
+	// Fill ghost zones for state_new_cc_
+	fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, tNew_[lev], quokka::centering::cc, quokka::direction::na, InterpHookNone,
+			       InterpHookNone, FillPatchType::fillpatch_function);
+
+	// Fill ghost zones for state_new_fc_
+	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			fillBoundaryConditions(state_new_fc_[lev][idim], state_new_fc_[lev][idim], lev, tNew_[lev], quokka::centering::fc,
+					       static_cast<quokka::direction>(idim), InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
+		}
+	}
 
 	// copy data from cell-centred state variables
 	for (int i = 0; i < ncomp_cc; i++) {
@@ -1661,7 +1670,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel(i
 }
 
 // put together an array of multifabs for writing
-template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMF() const -> amrex::Vector<amrex::MultiFab>
+template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMF() -> amrex::Vector<amrex::MultiFab>
 {
 	amrex::Vector<amrex::MultiFab> r;
 	for (int i = 0; i <= finest_level; ++i) {
@@ -1734,8 +1743,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::RenderAscent()
 	conduit::Node blueprintMesh;
 	amrex::MultiLevelToBlueprint(finest_level + 1, mf_ptr, varnames, rescaledGeom, tNew_[0], istep, refRatio(), blueprintMesh);
 
+	// copy to host mem (needed for DataBinning)
+	conduit::Node bpMeshHost;
+	bpMeshHost.set(blueprintMesh);
+
 	// pass Blueprint mesh to Ascent, run actions
-	AscentCustomActions(blueprintMesh);
+	AscentCustomActions(bpMeshHost);
 }
 #endif // AMREX_USE_ASCENT
 
@@ -1753,7 +1766,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::GetPlotfileVarNames
 }
 
 // write plotfile to disk
-template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile() const
+template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 {
 	BL_PROFILE("AMRSimulation::WritePlotFile()");
 
