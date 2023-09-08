@@ -152,6 +152,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Long maxWalltime_ = 0;		    // default: no limit
 	int ascentInterval_ = -1;		    // -1 == no in-situ renders with Ascent
 	int plotfileInterval_ = -1;		    // -1 == no output
+	int statisticsInterval_ = -1;    // -1 == no output
 	amrex::Real plotTimeInterval_ = -1.0;	    // time interval for plt file
 	amrex::Real checkpointTimeInterval_ = -1.0; // time interval for checkpoints
 	int checkpointInterval_ = -1;		    // -1 == no output
@@ -197,6 +198,9 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	// compute derived variables
 	virtual void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const = 0;
+
+	// compute statistics
+  	virtual auto ComputeStatistics() -> std::map<std::string, amrex::Real> = 0;
 
 	// fix-up any unphysical states created by AMR operations
 	// (e.g., caused by the flux register or from interpolation)
@@ -262,6 +266,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	[[nodiscard]] auto PlotFileMFAtLevel(int lev) -> amrex::MultiFab;
 	void WriteMetadataFile(std::string const &plotfilename) const;
 	void ReadMetadataFile(std::string const &chkfilename);
+	void WriteStatisticsFile();
 	void WritePlotFile();
 	void WriteCheckpointFile() const;
 	void SetLastCheckpointSymlink(std::string const &checkpointname) const;
@@ -306,6 +311,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	/// output parameters
 	std::string plot_file{"plt"}; // plotfile prefix
 	std::string chk_file{"chk"};  // checkpoint prefix
+	std::string stats_file{"history.txt"}; // statistics filename
 	/// input parameters (if >= 0 we restart from a checkpoint)
 	std::string restart_chkfile;
 
@@ -473,6 +479,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Default output interval
 	pp.query("plotfile_interval", plotfileInterval_);
 
+	// Default statistics interval
+  	pp.query("statistics_interval", statisticsInterval_);
+
 	// Default Time interval
 	pp.query("plottime_interval", plotTimeInterval_);
 
@@ -562,6 +571,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 
 	if (plotfileInterval_ > 0) {
 		WritePlotFile();
+	}
+
+	if (statisticsInterval_ > 0) {
+		WriteStatisticsFile();
 	}
 
 	// ensure that there are enough boxes per MPI rank
@@ -702,6 +715,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 #ifdef AMREX_USE_ASCENT
 	int last_ascent_step = 0;
 #endif
+	int last_statistics_step = 0;
 	int last_plot_file_step = 0;
 	double next_plot_file_time = plotTimeInterval_;
 	double next_chk_file_time = checkpointTimeInterval_;
@@ -754,6 +768,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 			RenderAscent();
 		}
 #endif
+
+		if (statisticsInterval_ > 0 && (step + 1) % statisticsInterval_ == 0) {
+			last_statistics_step = step + 1;
+			WriteStatisticsFile();
+		}
 
 		if (plotfileInterval_ > 0 && (step + 1) % plotfileInterval_ == 0) {
 			last_plot_file_step = step + 1;
@@ -824,6 +843,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	// write final plotfile
 	if (plotfileInterval_ > 0 && istep[0] > last_plot_file_step) {
 		WritePlotFile();
+	}
+
+	// write final statistics
+	if (statisticsInterval_ > 0 && istep[0] > last_statistics_step) {
+		WriteStatisticsFile();
 	}
 
 #ifdef AMREX_USE_ASCENT
@@ -1851,6 +1875,50 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadMetadataFile(st
 			amrex::Print() << fmt::format("\t{} has unknown type! skipping this entry.\n", key);
 		}
 	}
+
+template <typename problem_t>
+void AMRSimulation<problem_t>::WriteStatisticsFile() {
+  // append to statistics file
+  static bool isHeaderWritten = false;
+
+  // compute statistics
+  // IMPORTANT: the user is responsible for performing any necessary MPI reductions inside ComputeStatistics
+  std::map<std::string, amrex::Real> statistics = ComputeStatistics();
+
+  // write to file
+  if (amrex::ParallelDescriptor::IOProcessor()) {
+    amrex::VisMF::IO_Buffer io_buffer(amrex::VisMF::IO_Buffer_Size);
+    std::ofstream StatisticsFile;
+    StatisticsFile.rdbuf()->pubsetbuf(io_buffer.dataPtr(), io_buffer.size());
+    StatisticsFile.open(stats_file.c_str(), std::ofstream::out |
+                                            std::ofstream::app);
+    if (!StatisticsFile.good()) {
+      amrex::FileOpenFailed(stats_file);
+    }
+
+    // write header
+    if (!isHeaderWritten) {
+      const std::time_t t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+      const std::tm now = *std::localtime(&t); // NOLINT(concurrency-mt-unsafe)
+      StatisticsFile << "## Simulation restarted at: " << std::put_time(&now, "%c %Z") << "\n";
+      StatisticsFile << "# cycle time ";
+      for (auto const &[key, value] : statistics) {
+        StatisticsFile << key << " ";
+      }
+      StatisticsFile << "\n";
+      isHeaderWritten = true;
+    }
+
+    // save statistics to file
+    StatisticsFile << istep[0] << " "; // cycle
+    StatisticsFile << tNew_[0] << " "; // time
+    for (auto const &[key, value] : statistics) {
+      StatisticsFile << value << " ";
+    }
+    StatisticsFile << "\n";
+
+    // file closed automatically by destructor
+  }
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::SetLastCheckpointSymlink(std::string const &checkpointname) const

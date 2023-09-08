@@ -82,6 +82,9 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	// compute derived variables
 	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const override;
 
+	// compute statistics
+  	auto ComputeStatistics() -> std::map<std::string, amrex::Real> override;
+
 	void FixupState(int lev) override;
 
 	// tag cells for refinement
@@ -150,6 +153,13 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::computeAfterT
 template <typename problem_t> void AdvectionSimulation<problem_t>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const
 {
 	// user should implement
+}
+
+template <typename problem_t>
+auto AdvectionSimulation<problem_t>::ComputeStatistics() -> std::map<std::string, amrex::Real>
+{
+	// user should implement
+	return std::map<std::string, amrex::Real>{};
 }
 
 template <typename problem_t> void AdvectionSimulation<problem_t>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
