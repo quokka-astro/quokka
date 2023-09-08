@@ -7,6 +7,7 @@
 //==============================================================================
 /// \file star_cluster.hpp
 /// \brief Defines a test problem for Pop III star formation.
+/// Author: Piyush Sharda (Leiden University, 2023)
 ///
 
 // external headers

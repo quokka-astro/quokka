@@ -5,6 +5,7 @@
 //==============================================================================
 /// \file popiii.cpp
 /// \brief Defines a test problem for Pop III star formation.
+/// Author: Piyush Sharda (Leiden University, 2023)
 ///
 #include <limits>
 #include <memory>
