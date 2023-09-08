@@ -1771,6 +1771,7 @@ void AMRSimulation<problem_t>::WriteStatisticsFile() {
   static bool isHeaderWritten = false;
 
   // compute statistics
+  // IMPORTANT: the user is responsible for performing any necessary MPI reductions inside ComputeStatistics
   std::map<std::string, amrex::Real> statistics = ComputeStatistics();
 
   // write to file

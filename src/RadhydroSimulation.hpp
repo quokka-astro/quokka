@@ -503,6 +503,7 @@ template <typename problem_t>
 auto RadhydroSimulation<problem_t>::ComputeStatistics() -> std::map<std::string, amrex::Real> 
 {
 	// compute statistics and return a std::map<std::string, amrex::Real> -- user should implement
+	// IMPORTANT: the user is responsible for performing any necessary MPI reductions before returning
 	return std::map<std::string, amrex::Real>{};
 }
 
