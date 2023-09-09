@@ -335,33 +335,39 @@ template <> void RadhydroSimulation<PopIII>::setInitialConditionsOnGrid(quokka::
 	});
 }
 
+
 template <> void RadhydroSimulation<PopIII>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 	// refine on Jeans length
 	const int N_cells = 32; // inverse of the 'Jeans number' [Truelove et al. (1997)]
-	const amrex::Real dx = geom[lev].CellSizeArray()[0];
 	const amrex::Real G = Gconst_;
+	const amrex::Real dx = geom[lev].CellSizeArray()[0];
 
-	auto const &state = state_new_cc_[lev].const_arrays();
-	auto tag = tags.arrays();
-	amrex::Print() << "start error est " << std::endl;
-	amrex::ParallelFor(tags, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
+		const amrex::Box &box = mfi.validbox();
+		const auto state = state_new_cc_[lev].const_array(mfi);
+		const auto tag = tags.array(mfi);
+		const int nidx = HydroSystem<PopIII>::density_index;
 
-		Real const rho = state[bx](i, j, k, HydroSystem<PopIII>::density_index);
-		Real pressure = HydroSystem<PopIII>::ComputePressure(state[bx], i, j, k);
-		amrex::GpuArray<Real, Physics_Traits<PopIII>::numMassScalars> massScalars = RadSystem<PopIII>::ComputeMassScalars(state[bx], i, j, k);
+		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 
-		amrex::Real cs = quokka::EOS<PopIII>::ComputeSoundSpeed(rho, pressure, massScalars);
+			Real const rho = state(i, j, k, nidx);
+			Real pressure = HydroSystem<PopIII>::ComputePressure(state, i, j, k);
+			amrex::GpuArray<Real, Physics_Traits<PopIII>::numMassScalars> massScalars = RadSystem<PopIII>::ComputeMassScalars(state, i, j, k);
 
-		const amrex::Real l_Jeans = cs * std::sqrt(M_PI / (G * rho));
+			amrex::Real cs = quokka::EOS<PopIII>::ComputeSoundSpeed(rho, pressure, massScalars);
 
-		if (l_Jeans < (N_cells * dx)) {
-			tag[bx](i, j, k) = amrex::TagBox::SET;
-			printf("tagging cell for refinement \n");
-		}
-	});
-	amrex::Print() << "end error est " << std::endl;
+			const amrex::Real l_Jeans = cs * std::sqrt(M_PI / (G * rho));
+
+			if (l_Jeans < (N_cells * dx) && rho > 2e-20) {
+				tag(i, j, k) = amrex::TagBox::SET;
+
+			}
+		});
+	}
+
 }
+
 
 template <> void RadhydroSimulation<PopIII>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in) const
 {
