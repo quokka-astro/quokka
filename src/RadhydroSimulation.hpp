@@ -279,8 +279,6 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 
 template <typename problem_t> void RadhydroSimulation<problem_t>::defineComponentNames()
 {
-	// check modules cannot be enabled if they are not been implemented yet
-	static_assert(!Physics_Traits<problem_t>::is_chemistry_enabled, "Chemistry is not supported, yet.");
 
 	// cell-centred
 	// add hydro state variables

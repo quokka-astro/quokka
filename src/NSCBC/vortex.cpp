@@ -53,7 +53,6 @@ template <> struct quokka::EOS_Traits<Vortex> {
 
 template <> struct Physics_Traits<Vortex> {
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr bool is_chemistry_enabled = false;
 	static constexpr bool is_mhd_enabled = false;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 1; // number of passive scalars
