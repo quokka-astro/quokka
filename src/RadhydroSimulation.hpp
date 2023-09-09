@@ -15,6 +15,7 @@
 #include <limits>
 #include <string>
 #include <tuple>
+#include <unordered_map>
 #include <utility>
 
 #include "AMReX.H"
@@ -193,8 +194,11 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	// compute derived variables
 	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const override;
 
-	// compute statistics
-  	auto ComputeStatistics() -> std::map<std::string, amrex::Real> override;
+	// compute projected vars
+  [[nodiscard]] auto ComputeProjections(int dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> override;
+
+  // compute statistics
+  auto ComputeStatistics() -> std::map<std::string, amrex::Real> override;
 
 	// fix-up states
 	void FixupState(int level) override;
@@ -498,6 +502,13 @@ template <typename problem_t>
 void RadhydroSimulation<problem_t>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp) const
 {
 	// compute derived variables and save in 'mf' -- user should implement
+}
+
+template <typename problem_t>
+auto RadhydroSimulation<problem_t>::ComputeProjections(int /*dir*/) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>
+{
+	// compute projections and return as unordered_map -- user should implement
+	return std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>{};
 }
 
 template <typename problem_t>
