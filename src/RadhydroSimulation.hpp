@@ -1042,10 +1042,10 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 				}
 			}
 		}
-
+#if 0
 		// prevent vacuum
 		HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, stateNew);
-
+#endif
 		if (useDualEnergy_ == 1) {
 			// sync internal energy (requires positive density)
 			HydroSystem<problem_t>::SyncDualEnergy(stateNew);
@@ -1111,10 +1111,10 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 				}
 			}
 		}
-
+#if 0
 		// prevent vacuum
 		HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, stateFinal);
-
+#endif
 		if (useDualEnergy_ == 1) {
 			// sync internal energy (requires positive density)
 			HydroSystem<problem_t>::SyncDualEnergy(stateFinal);
