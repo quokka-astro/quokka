@@ -1129,11 +1129,25 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	}
 	amrex::Gpu::streamSynchronizeAll();
 
+	// abort early if hydro update is bad
+	if (isCflViolated(lev, time, dt_lev)) {
+		return false;
+	}
+
 	// do Strang split source terms (second half-step)
 	reactSuccess = addStrangSplitSourcesWithBuiltin(state_new_cc_[lev], lev, time + dt_lev, 0.5 * dt_lev);
 	if (!reactSuccess) {
 		return false;
 	}
+
+#if 0
+	// prevent vacuum
+	HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, state_new_cc_[lev]);
+	if (useDualEnergy_ == 1) {
+		// sync internal energy (requires positive density)
+		HydroSystem<problem_t>::SyncDualEnergy(state_new_cc_[lev]);
+	}
+#endif
 
 	// check if we have violated the CFL timestep
 	return !isCflViolated(lev, time, dt_lev);
