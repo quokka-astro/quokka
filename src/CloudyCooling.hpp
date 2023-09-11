@@ -286,7 +286,6 @@ template <typename problem_t> auto computeCooling(amrex::MultiFab &mf, const Rea
 			rk_adaptive_integrate(user_rhs, 0, y, dt, &user_data, rtol, abstol, nsteps);
 			nsubsteps(i, j, k) = nsteps;
 
-#if 0
 			if (nsteps >= maxStepsODEIntegrate) {
 				Real const T = ComputeTgasFromEgas(rho, Eint, quokka::EOS_Traits<problem_t>::gamma, tables);
 				Real const Edot = cloudy_cooling_function(rho, T, tables);
@@ -295,7 +294,7 @@ template <typename problem_t> auto computeCooling(amrex::MultiFab &mf, const Rea
 				       "time = %g, dt = %.17e\n",
 				       rho, Eint, T, t_cool, dt);
 			}
-#endif
+
 			const Real Eint_new = y[0];
 			const Real dEint = Eint_new - Eint;
 
@@ -310,7 +309,7 @@ template <typename problem_t> auto computeCooling(amrex::MultiFab &mf, const Rea
 	
 	// check if integration succeeded
 	if (nmax >= maxStepsODEIntegrate) {
-		amrex::Print() << "Max steps exceeded in cooling solve!\n";
+		amrex::Print() << "\t[CloudyCooling] Reaction ODE failure. Max steps exceeded in cooling solve!\n";
 		return false;
 		//amrex::ParallelDescriptor::Abort();
 	}

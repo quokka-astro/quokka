@@ -891,8 +891,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 		}
 	}
 
-	// perform MPI reduction on success
-	amrex::ParallelAllReduce::And(success, amrex::ParallelContext::CommunicatorAll());
+	// N.B.: success is identical on every MPI rank
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		if (!success) {
 			// we have exceeded max_retries, so we must crash
