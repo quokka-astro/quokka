@@ -290,9 +290,10 @@ template <typename problem_t> auto computeCooling(amrex::MultiFab &mf, const Rea
 				Real const T = ComputeTgasFromEgas(rho, Eint, quokka::EOS_Traits<problem_t>::gamma, tables);
 				Real const Edot = cloudy_cooling_function(rho, T, tables);
 				Real const t_cool = Eint / Edot;
+				Real const abs_vel = std::sqrt((x1Mom*x1Mom + x2Mom*x2Mom + x3Mom*x3Mom) / (rho*rho));
 				printf("max substeps exceeded! rho = %.17e, Eint = %.17e, T = %g, cooling "
-				       "time = %g, dt = %.17e\n",
-				       rho, Eint, T, t_cool, dt);
+				       "time = %g, abs_vel = %.17e, dt_operator = %.17e\n",
+				       rho, Eint, T, t_cool, abs_vel, dt);
 			}
 
 			const Real Eint_new = y[0];
