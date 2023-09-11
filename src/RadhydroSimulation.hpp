@@ -38,7 +38,9 @@
 #include "AMReX_IntVect.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_MultiFabUtil.H"
+#include "AMReX_ParallelContext.H"
 #include "AMReX_ParallelDescriptor.H"
+#include "AMReX_ParallelReduce.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_PhysBCFunct.H"
 #include "AMReX_PlotFileUtil.H"
@@ -888,11 +890,15 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 			break;
 		}
 	}
-	
-	// check for successful update
-	if (!success) {
-		amrex::Print() << "Exceeded max hydro retries, aborting simulation...\n";
-		amrex::ParallelDescriptor::Abort(); // crash if we exceeded max_retries
+
+	// perform MPI reduction on success
+	amrex::ParallelAllReduce::And(success, amrex::ParallelContext::CommunicatorAll());
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		if (!success) {
+			// we have exceeded max_retries, so we must crash
+			amrex::Print() << "Exceeded max hydro retries, aborting simulation...\n";
+			amrex::ParallelDescriptor::Abort();
+		}
 	}
 }
 
