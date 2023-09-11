@@ -234,7 +234,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 				 amrex::Real time, amrex::Real dt_lev) -> bool;
 
 	void addStrangSplitSources(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev);
-	void addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev);
+	auto addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev) -> bool;
 
 	auto isCflViolated(int lev, amrex::Real time, amrex::Real dt_actual) -> bool;
 
@@ -477,11 +477,14 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::addStrangSplit
 }
 
 template <typename problem_t>
-void RadhydroSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt)
+auto RadhydroSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt) -> bool
 {
 	if (enableCooling_ == 1) {
 		// compute cooling
-		quokka::cooling::computeCooling<problem_t>(state, dt, cloudyTables_, tempFloor_);
+		bool success = quokka::cooling::computeCooling<problem_t>(state, dt, cloudyTables_, tempFloor_);
+		if (!success) {
+			return success;
+		}
 	}
 
 #ifdef PRIMORDIAL_CHEM
@@ -493,6 +496,7 @@ void RadhydroSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::Mult
 
 	// compute user-specified sources
 	addStrangSplitSources(state, lev, time, dt);
+	return true;
 }
 
 template <typename problem_t>
@@ -926,7 +930,10 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	auto dx = geom[lev].CellSizeArray();
 
 	// do Strang split source terms (first half-step)
-	addStrangSplitSourcesWithBuiltin(state_old_cc_tmp, lev, time, 0.5 * dt_lev);
+	bool reactSuccess = addStrangSplitSourcesWithBuiltin(state_old_cc_tmp, lev, time, 0.5 * dt_lev);
+	if (!reactSuccess) {
+		return false;
+	}
 
 	// create temporary multifab for intermediate state
 	amrex::MultiFab state_inter_cc_(grids[lev], dmap[lev], Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
@@ -1113,7 +1120,10 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	amrex::Gpu::streamSynchronizeAll();
 
 	// do Strang split source terms (second half-step)
-	addStrangSplitSourcesWithBuiltin(state_new_cc_[lev], lev, time + dt_lev, 0.5 * dt_lev);
+	reactSuccess = addStrangSplitSourcesWithBuiltin(state_new_cc_[lev], lev, time + dt_lev, 0.5 * dt_lev);
+	if (!reactSuccess) {
+		return false;
+	}
 
 	// check if we have violated the CFL timestep
 	return !isCflViolated(lev, time, dt_lev);

@@ -14,6 +14,7 @@
 #include "AMReX_Extension.H"
 #include "AMReX_GpuQualifiers.H"
 
+#include "AMReX_ParallelDescriptor.H"
 #include "FastMath.hpp"
 #include "GrackleDataReader.hpp"
 #include "Interpolate2D.hpp"
@@ -248,7 +249,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto user_rhs(Real /*t*/, quokka::valar
 	return 0; // success
 }
 
-template <typename problem_t> void computeCooling(amrex::MultiFab &mf, const Real dt_in, cloudy_tables &cloudyTables, const Real T_floor)
+template <typename problem_t> auto computeCooling(amrex::MultiFab &mf, const Real dt_in, cloudy_tables &cloudyTables, const Real T_floor) -> bool
 {
 	BL_PROFILE("computeCooling()")
 
@@ -285,7 +286,7 @@ template <typename problem_t> void computeCooling(amrex::MultiFab &mf, const Rea
 			rk_adaptive_integrate(user_rhs, 0, y, dt, &user_data, rtol, abstol, nsteps);
 			nsubsteps(i, j, k) = nsteps;
 
-			// check if integration failed
+#if 0
 			if (nsteps >= maxStepsODEIntegrate) {
 				Real const T = ComputeTgasFromEgas(rho, Eint, quokka::EOS_Traits<problem_t>::gamma, tables);
 				Real const Edot = cloudy_cooling_function(rho, T, tables);
@@ -294,6 +295,7 @@ template <typename problem_t> void computeCooling(amrex::MultiFab &mf, const Rea
 				       "time = %g, dt = %.17e\n",
 				       rho, Eint, T, t_cool, dt);
 			}
+#endif
 			const Real Eint_new = y[0];
 			const Real dEint = Eint_new - Eint;
 
@@ -302,14 +304,17 @@ template <typename problem_t> void computeCooling(amrex::MultiFab &mf, const Rea
 		});
 	}
 
-	int nmin = nsubstepsMF.min(0);
 	int nmax = nsubstepsMF.max(0);
 	Real navg = static_cast<Real>(nsubstepsMF.sum(0)) / static_cast<Real>(nsubstepsMF.boxArray().numPts());
-	amrex::Print() << fmt::format("\tcooling substeps (per cell): min {}, avg {}, max {}\n", nmin, navg, nmax);
-
+	amrex::Print() << fmt::format("\tcooling substeps (per cell): avg {}, max {}\n", navg, nmax);
+	
+	// check if integration succeeded
 	if (nmax >= maxStepsODEIntegrate) {
-		amrex::Abort("Max steps exceeded in cooling solve!");
+		amrex::Print() << "Max steps exceeded in cooling solve!\n";
+		return false;
+		//amrex::ParallelDescriptor::Abort();
 	}
+	return true; // success
 }
 
 void readCloudyData(std::string &grackle_hdf5_file, cloudy_tables &cloudyTables);
