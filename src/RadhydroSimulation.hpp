@@ -888,7 +888,8 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 			break;
 		}
 	}
-	AMREX_ALWAYS_ASSERT(success); // crash if we exceeded max_retries
+	amrex::Print() << "Exceeded max hydro retries, aborting simulation...\n";
+	amrex::ParallelDescriptor::Abort(); // crash if we exceeded max_retries
 }
 
 template <typename problem_t> auto RadhydroSimulation<problem_t>::isCflViolated(int lev, amrex::Real time, amrex::Real dt_actual) -> bool
