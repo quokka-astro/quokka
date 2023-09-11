@@ -57,8 +57,6 @@ constexpr double m_H = C::m_p + C::m_e;	     // mass of hydrogen atom
 
 template <> struct Physics_Traits<ShockCloud> {
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_mhd_enabled = false;
 	static constexpr int numMassScalars = 0;
