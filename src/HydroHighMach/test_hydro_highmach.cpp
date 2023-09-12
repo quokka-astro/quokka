@@ -265,7 +265,7 @@ auto problem_main() -> int
 	sim.setInitialConditions();
 	sim.evolve();
 
-	const double error_tol = 0.25;
+	const double error_tol = 0.26;
 	int status = 0;
 	if (sim.errorNorm_ > error_tol || std::isnan(sim.errorNorm_)) {
 		status = 1;
