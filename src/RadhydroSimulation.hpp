@@ -986,7 +986,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		}
 
 		amrex::MultiFab rhs(grids[lev], dmap[lev], ncompHydro_, 0);
-		amrex::iMultiFab redoFlag(grids[lev], dmap[lev], 1, 0);
+		amrex::iMultiFab redoFlag(grids[lev], dmap[lev], 1, 1);
 		redoFlag.setVal(quokka::redoFlag::none);
 
 		HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, fluxArrays, dx, ncompHydro_);
@@ -1021,7 +1021,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 
 		// do first-order flux correction (FOFC)
 		amrex::Gpu::streamSynchronizeAll(); // just in case
-		int ncells_bad = redoFlag.sum(0);
+		amrex::Long const ncells_bad = redoFlag.sum(0);
 		if (ncells_bad > 0) {
 			if (Verbose()) {
 				amrex::Print() << "[FOFC-1] flux correcting " << ncells_bad << " cells on level " << lev << "\n";
@@ -1093,7 +1093,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		}
 
 		amrex::MultiFab rhs(grids[lev], dmap[lev], ncompHydro_, 0);
-		amrex::iMultiFab redoFlag(grids[lev], dmap[lev], 1, 0);
+		amrex::iMultiFab redoFlag(grids[lev], dmap[lev], 1, 1);
 		redoFlag.setVal(quokka::redoFlag::none);
 
 		HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, flux_rk2, dx, ncompHydro_);
@@ -1102,7 +1102,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 
 		// do first-order flux correction (FOFC)
 		amrex::Gpu::streamSynchronizeAll(); // just in case
-		int const ncells_bad = static_cast<int>(redoFlag.sum(0));
+		amrex::Long const ncells_bad = redoFlag.sum(0);
 		if (ncells_bad > 0) {
 			if (Verbose()) {
 				amrex::Print() << "[FOFC-2] flux correcting " << ncells_bad << " cells on level " << lev << "\n";
@@ -1183,19 +1183,26 @@ void RadhydroSimulation<problem_t>::replaceFluxes(std::array<amrex::MultiFab, AM
 		// left of zone i, and -1.0*flux(i+1) is the flux *into* zone i through
 		// the interface on the right of zone i.
 
-		amrex::IntVect ng{AMREX_D_DECL(0, 0, 0)}; // TODO(ben): must include 1 ghost zone
+		amrex::IntVect ng{AMREX_D_DECL(1, 1, 1)}; // must include 1 ghost zone
 
 		amrex::ParallelFor(redoFlag, ng, ncomp, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k, int n) noexcept {
 			if (redoFlag_arrs[bx](i, j, k) == quokka::redoFlag::redo) {
-				// replace fluxes with first-order ones at faces of cell (i,j,k)
-				flux_arrs[bx](i, j, k, n) = FOflux_arrs[bx](i, j, k, n);
-
+				// replace fluxes with first-order ones at the faces of cell (i,j,k)
+				if (flux_arrs[bx].contains(i, j, k)) {
+					flux_arrs[bx](i, j, k, n) = FOflux_arrs[bx](i, j, k, n);
+				}
 				if (idim == 0) { // x-dir fluxes
-					flux_arrs[bx](i + 1, j, k, n) = FOflux_arrs[bx](i + 1, j, k, n);
+					if (flux_arrs[bx].contains(i + 1, j, k)) {
+						flux_arrs[bx](i + 1, j, k, n) = FOflux_arrs[bx](i + 1, j, k, n);
+					}
 				} else if (idim == 1) { // y-dir fluxes
-					flux_arrs[bx](i, j + 1, k, n) = FOflux_arrs[bx](i, j + 1, k, n);
+					if (flux_arrs[bx].contains(i, j + 1, k)) {
+						flux_arrs[bx](i, j + 1, k, n) = FOflux_arrs[bx](i, j + 1, k, n);
+					}
 				} else if (idim == 2) { // z-dir fluxes
-					flux_arrs[bx](i, j, k + 1, n) = FOflux_arrs[bx](i, j, k + 1, n);
+					if (flux_arrs[bx].contains(i, j, k + 1)) {
+						flux_arrs[bx](i, j, k + 1, n) = FOflux_arrs[bx](i, j, k + 1, n);
+					}
 				}
 			}
 		});
