@@ -91,6 +91,7 @@ include_directories(${gamma_law_dirs} ${CMAKE_CURRENT_BINARY_DIR} "includes/exte
 link_libraries(AMReX::amrex)
 link_libraries(fmt::fmt)
 link_libraries(hdf5::hdf5)
+link_libraries(yaml-cpp::yaml-cpp)
 
 include(CTest)
 
@@ -153,3 +154,4 @@ add_subdirectory(ShockCloud)
 add_subdirectory(PassiveScalar)
 add_subdirectory(FCQuantities)
 add_subdirectory(SphericalCollapse)
+add_subdirectory(NSCBC)

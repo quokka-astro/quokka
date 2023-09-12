@@ -1,0 +1,46 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  -0.65   -0.65  -0.5
+geometry.prob_hi     =   0.65    0.65   0.5
+geometry.is_periodic =   0       1      1
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v               = 1     # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          = 128 128 32
+amr.max_level       = 0     # number of levels = max_level + 1
+amr.blocking_factor = 32
+amr.max_grid_size   = 128
+
+# *****************************************************************
+# Quokka options
+# *****************************************************************
+cfl = 0.3
+do_reflux = 1
+do_subcycle = 1
+max_timesteps = 2000
+stop_time = 1.0e-4
+
+checkpoint_interval = -1
+plotfile_interval = 20
+ascent_interval = -1
+
+hydro.rk_integrator_order = 2
+hydro.reconstruction_order = 3
+hydro.use_dual_energy = 1
+hydro.low_level_debugging_output = 0
+
+vortex.strength = 1.1e3     # cm^2/s
+vortex.Tgas0 = 300.0        # K
+vortex.P0 = 1.01325e6       # 1 atm [erg/cc]
+
+vortex.u_inflow = 1.0e4     # cm/s
+vortex.v_inflow = 0.        # cm/s
+vortex.w_inflow = 0.        # cm/s
+vortex.s_inflow = 1.0       # dimensionless
