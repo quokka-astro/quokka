@@ -1029,6 +1029,9 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 				amrex::print_state(stateNew, cell_idx);
 			}
 
+			// synchronize redoFlag across ranks
+			redoFlag.FillBoundary(geom[lev].periodicity());
+
 			// replace fluxes around troubled cells with Godunov fluxes
 			replaceFluxes(fluxArrays, FOfluxArrays, redoFlag);
 			replaceFluxes(faceVel, FOfaceVel, redoFlag); // needed for dual energy
@@ -1106,6 +1109,9 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 				const amrex::IntVect cell_idx = redoFlag.maxIndex(0);
 				amrex::print_state(stateFinal, cell_idx);
 			}
+
+			// synchronize redoFlag across ranks
+			redoFlag.FillBoundary(geom[lev].periodicity());
 
 			// replace fluxes around troubled cells with Godunov fluxes
 			replaceFluxes(flux_rk2, FOfluxArrays, redoFlag);
