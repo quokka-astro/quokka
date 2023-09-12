@@ -954,6 +954,20 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	// update ghost zones [old timestep]
 	fillBoundaryConditions(state_old_cc_tmp, state_old_cc_tmp, lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState);
 
+	// LOW LEVEL DEBUGGING: output state_old_cc_tmp (with ghost cells)
+	if (lowLevelDebuggingOutput_ == 1) {
+#ifdef AMREX_USE_ASCENT
+		// write Blueprint HDF5 files
+		conduit::Node mesh;
+		amrex::SingleLevelToBlueprint(state_old_cc_tmp, componentNames_cc_, geom[lev], time, istep[lev] + 1, mesh);
+		amrex::WriteBlueprintFiles(mesh, "debug_stage1_filled_state_old", istep[lev] + 1, "hdf5");
+#else
+		// write AMReX plotfile
+		// WriteSingleLevelPlotfile(CustomPlotFileName("debug_stage1_filled_state_old", istep[lev]+1),
+		//	state_old_cc_tmp, componentNames_cc_, geom[lev], time, istep[lev]+1);
+#endif
+	}
+
 	// check state validity
 	AMREX_ASSERT(!state_old_cc_tmp.contains_nan(0, state_old_cc_tmp.nComp()));
 	AMREX_ASSERT(!state_old_cc_tmp.contains_nan()); // check ghost cells
@@ -962,19 +976,6 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 
 	// Stage 1 of RK2-SSP
 	{
-		// LOW LEVEL DEBUGGING: output state_old_cc_tmp (with ghost cells)
-		if (lowLevelDebuggingOutput_ == 1) {
-#ifdef AMREX_USE_ASCENT
-			// write Blueprint HDF5 files
-			conduit::Node mesh;
-			amrex::SingleLevelToBlueprint(state_old_cc_tmp, componentNames_cc_, geom[lev], time, istep[lev] + 1, mesh);
-			amrex::WriteBlueprintFiles(mesh, "debug_stage1_filled_state_old", istep[lev] + 1, "hdf5");
-#else
-			// write AMReX plotfile
-			// WriteSingleLevelPlotfile(CustomPlotFileName("debug_stage1_filled_state_old", istep[lev]+1),
-			//	state_old_cc_tmp, componentNames_cc_, geom[lev], time, istep[lev]+1);
-#endif
-		}
 		// advance all grids on local processor (Stage 1 of integrator)
 		auto const &stateOld = state_old_cc_tmp;
 		auto &stateNew = state_inter_cc_;
