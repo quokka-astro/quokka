@@ -221,8 +221,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<ShockCloud>::isStateValid(a
 	const amrex::Real vx = cons(i, j, k, x1Momentum_index) / rho;
 	const amrex::Real vy = cons(i, j, k, x2Momentum_index) / rho;
 	const amrex::Real vz = cons(i, j, k, x3Momentum_index) / rho;
-	const amrex::Real v_sq = vx*vx + vy*vy + vz*vz;
-	const amrex::Real M = std::sqrt(v_sq) / cs;
+	const amrex::Real abs_vel = std::sqrt(vx*vx + vy*vy + vz*vz);
+	const amrex::Real M = abs_vel / cs;
 	bool isMachNumberReasonable = (M < 100.);
 
 	return (isDensityPositive && isMachNumberReasonable);
