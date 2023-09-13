@@ -895,14 +895,24 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 
 	// N.B.: success is identical on every MPI rank
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-    if (!success) {
-      // crash, we have exceeded max_retries
-      amrex::Print() << "\nQUOKKA FATAL ERROR\n"
-               << "Hydro update exceeded max_retries on level " << lev << ". Cannot continue, crashing...\n"
-               << std::endl;
-      amrex::ParallelDescriptor::Abort();
-    }
-  }
+		if (!success) {
+			// crash, we have exceeded max_retries
+			amrex::Print() << "\nQUOKKA FATAL ERROR\n"
+				       << "Hydro update exceeded max_retries on level " << lev << ". Cannot continue, crashing...\n"
+				       << std::endl;
+#ifdef AMREX_USE_ASCENT
+			// write Blueprint HDF5 files
+			conduit::Node mesh;
+			amrex::SingleLevelToBlueprint(state_new_cc_[lev], componentNames_cc_, geom[lev], time, istep[lev] + 1, mesh);
+			amrex::WriteBlueprintFiles(mesh, "debug_hydro_state_fatal", istep[lev] + 1, "hdf5");
+#else
+			// write AMReX plotfile
+			WriteSingleLevelPlotfile(CustomPlotFileName("debug_hydro_state_fatal", istep[lev]+1),
+				state_new_cc_[lev], componentNames_cc_, geom[lev], time, istep[lev]+1);
+#endif
+			amrex::ParallelDescriptor::Abort();
+		}
+	}
 }
 
 template <typename problem_t> auto RadhydroSimulation<problem_t>::isCflViolated(int lev, amrex::Real time, amrex::Real dt_actual) -> bool
