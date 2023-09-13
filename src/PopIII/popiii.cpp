@@ -419,11 +419,13 @@ auto problem_main() -> int
 	// Problem initialization
 	RadhydroSimulation<PopIII> sim(BCs_cc);
 	sim.doPoissonSolve_ = 1; // enable self-gravity
-	sim.densityFloor_ = 1e-60;
+	sim.densityFloor_ = 1e-25;
 
 	sim.userData_.R_sphere = R_sphere;
 	sim.userData_.numdens_init = numdens_init;
 	sim.userData_.omega_sphere = omega_sphere;
+
+	sim.initDt_ = 1e6;
 
 	// initialize
 	sim.setInitialConditions();
