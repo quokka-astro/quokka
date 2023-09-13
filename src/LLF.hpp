@@ -40,7 +40,7 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto LLF(quokka::HydroState<N_scalars, N_msc
 	const quokka::valarray<double, fluxdim> F_R = sR.u * U_R + sR.P * D_R;
 
 	// open the Riemann fan
-	quokka::valarray<double, fluxdim> F = 0.5 * (F_L + F_R) - 0.5 * Sp * (F_R - F_L);
+	quokka::valarray<double, fluxdim> F = 0.5 * (F_L + F_R) - 0.5 * Sp * (U_R - U_L);
 	return F;
 }
 } // namespace quokka::Riemann
