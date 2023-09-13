@@ -1037,8 +1037,8 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		if (ncells_bad > 0) {
 			if (Verbose()) {
 				amrex::Print() << "[FOFC-1] flux correcting " << ncells_bad << " cells on level " << lev << "\n";
-				const amrex::IntVect cell_idx = redoFlag.maxIndex(0);
-				amrex::print_state(stateNew, cell_idx);
+				//const amrex::IntVect cell_idx = redoFlag.maxIndex(0);
+				//amrex::print_state(stateNew, cell_idx);
 			}
 
 			// synchronize redoFlag across ranks
@@ -1058,10 +1058,8 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 			if (ncells_bad > 0) {
 				// FOFC failed
 				if (Verbose()) {
-					const amrex::IntVect cell_idx = redoFlag.maxIndex(0);
-					// print cell state
-					amrex::Print() << "[FOFC-1] Flux correction failed:\n";
-					amrex::print_state(stateNew, cell_idx);
+					//const amrex::IntVect cell_idx = redoFlag.maxIndex(0);
+					//amrex::print_state(stateNew, cell_idx);
 					amrex::Print() << "[FOFC-1] failed for " << ncells_bad << " cells on level " << lev << "\n";
 				}
 				if (abortOnFofcFailure_ != 0) {
@@ -1117,8 +1115,8 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		if (ncells_bad > 0) {
 			if (Verbose()) {
 				amrex::Print() << "[FOFC-2] flux correcting " << ncells_bad << " cells on level " << lev << "\n";
-				const amrex::IntVect cell_idx = redoFlag.maxIndex(0);
-				amrex::print_state(stateFinal, cell_idx);
+				//const amrex::IntVect cell_idx = redoFlag.maxIndex(0);
+				//amrex::print_state(stateFinal, cell_idx);
 			}
 
 			// synchronize redoFlag across ranks
@@ -1138,10 +1136,8 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 			if (ncells_bad > 0) {
 				// FOFC failed
 				if (Verbose()) {
-					const amrex::IntVect cell_idx = redoFlag.maxIndex(0);
-					// print cell state
-					amrex::Print() << "[FOFC-2] Flux correction failed:\n";
-					amrex::print_state(stateFinal, cell_idx);
+					//const amrex::IntVect cell_idx = redoFlag.maxIndex(0);
+					//amrex::print_state(stateFinal, cell_idx);
 					amrex::Print() << "[FOFC-2] failed for " << ncells_bad << " cells on level " << lev << "\n";
 				}
 				if (abortOnFofcFailure_ != 0) {
