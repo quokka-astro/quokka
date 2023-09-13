@@ -217,15 +217,13 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<ShockCloud>::isStateValid(a
 	const amrex::Real rho = cons(i, j, k, density_index);
 	const bool isDensityPositive = (rho > 0.);
 
-	const amrex::Real cs = ComputeSoundSpeed(cons, i, j, k);
 	const amrex::Real vx = cons(i, j, k, x1Momentum_index) / rho;
 	const amrex::Real vy = cons(i, j, k, x2Momentum_index) / rho;
 	const amrex::Real vz = cons(i, j, k, x3Momentum_index) / rho;
 	const amrex::Real abs_vel = std::sqrt(vx*vx + vy*vy + vz*vz);
-	const amrex::Real M = abs_vel / cs;
-	const bool isMachNumberReasonable = (M < 100.);
+	const bool isVelocityReasonable = (abs_vel < 1.0e10);
 
-	return (isDensityPositive && isMachNumberReasonable);
+	return (isDensityPositive && isVelocityReasonable);
 }
 
 template <> void RadhydroSimulation<ShockCloud>::computeAfterTimestep()
