@@ -1,0 +1,48 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  -10.  -10.  -10.
+geometry.prob_hi     =  10.  10.  10.
+geometry.is_periodic =  0    0    0
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v              = 1       # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          = 512 512 512
+amr.max_level       = 4     # number of levels = max_level + 1
+amr.blocking_factor = 32    # grid size must be divisible by this
+amr.max_grid_size   = 128   # at least 128 for GPUs
+amr.n_error_buf     = 3     # minimum 3 cell buffer around tagged cells
+amr.grid_eff        = 0.7   # default
+
+hydro.reconstruction_order = 3  # PPM
+cfl = 0.2
+max_timesteps = 10000
+stop_time = 0.5             # t_ff = 0.55
+
+gravity.Gconst = 1.0    #gravitational constant
+
+do_reflux = 1
+do_subcycle = 0
+
+ascent_interval = 100
+plotfile_interval = 500
+checkpoint_interval = 1000
+
+perturb.filename = "zdrv.hdf5"
+perturb.kmin = 2
+perturb.kmax = 128
+perturb.power_law = 2
+perturb.cloud_radius = 5.0
+perturb.cloud_density = 1.0
+perturb.virial_parameter = 2.0
+
+derived_vars = log_density
+
+amrex.throw_exception = 0
+amrex.signal_handling = 1

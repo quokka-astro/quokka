@@ -91,6 +91,7 @@ include_directories(${gamma_law_dirs} ${CMAKE_CURRENT_BINARY_DIR} "includes/exte
 link_libraries(AMReX::amrex)
 link_libraries(fmt::fmt)
 link_libraries(hdf5::hdf5)
+link_libraries(yaml-cpp::yaml-cpp)
 
 include(CTest)
 
@@ -105,7 +106,7 @@ set (QuokkaObjSources "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp" "${CMAKE_CURRENT_SO
 #endif()
 #link_libraries(QuokkaObj)
 
-add_subdirectory(HydroShocktubeCMA)
+add_subdirectory(StarCluster)
 add_subdirectory(PrimordialChem)
 
 add_subdirectory(Advection)
@@ -120,6 +121,7 @@ add_subdirectory(HydroKelvinHelmholz)
 add_subdirectory(HydroLeblanc)
 add_subdirectory(HydroRichtmeyerMeshkov)
 add_subdirectory(HydroShocktube)
+add_subdirectory(HydroShocktubeCMA)
 add_subdirectory(HydroShuOsher)
 add_subdirectory(HydroSMS)
 add_subdirectory(HydroVacuum)
@@ -152,4 +154,4 @@ add_subdirectory(ShockCloud)
 add_subdirectory(PassiveScalar)
 add_subdirectory(FCQuantities)
 add_subdirectory(SphericalCollapse)
-
+add_subdirectory(NSCBC)

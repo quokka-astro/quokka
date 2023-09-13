@@ -23,7 +23,7 @@ struct RichtmeyerMeshkovProblem {
 
 template <> struct quokka::EOS_Traits<RichtmeyerMeshkovProblem> {
 	static constexpr double gamma = 1.4;
-	static constexpr double mean_molecular_weight = NAN;
+	static constexpr double mean_molecular_weight = 1.0;
 	static constexpr double boltzmann_constant = C::k_B;
 };
 
@@ -34,7 +34,6 @@ template <> struct HydroSystem_Traits<RichtmeyerMeshkovProblem> {
 template <> struct Physics_Traits<RichtmeyerMeshkovProblem> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr bool is_chemistry_enabled = false;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = false;

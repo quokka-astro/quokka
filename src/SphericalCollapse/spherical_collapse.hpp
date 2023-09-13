@@ -1,12 +1,12 @@
-#ifndef TEST_HYDRO3D_BLAST_HPP_ // NOLINT
-#define TEST_HYDRO3D_BLAST_HPP_
+#ifndef TEST_SPHERICAL_COLLAPSE_HPP_ // NOLINT
+#define TEST_SPHERICAL_COLLAPSE_HPP_
 //==============================================================================
 // TwoMomentRad - a radiation transport library for patch-based AMR codes
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file test_hydro3d_blast.hpp
-/// \brief Defines a test problem for a 3D explosion.
+/// \file spherical_collapse.hpp
+/// \brief Defines a test problem for a pressureless spherical collapse
 ///
 
 // external headers
@@ -17,6 +17,6 @@
 #include "interpolate.hpp"
 
 // function definitions
-auto testproblem_hydro_sedov() -> int;
+auto problem_main() -> int;
 
-#endif // TEST_HYDRO3D_BLAST_HPP_
+#endif // TEST_SPHERICAL_COLLAPSE_HPP_

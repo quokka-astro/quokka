@@ -31,7 +31,7 @@ template <> struct SimulationData<CouplingProblem> {
 };
 
 template <> struct quokka::EOS_Traits<CouplingProblem> {
-	static constexpr double mean_molecular_mass = C::m_u;
+	static constexpr double mean_molecular_weight = C::m_u;
 	static constexpr double boltzmann_constant = C::k_B;
 	static constexpr double gamma = 5. / 3.;
 };
@@ -47,7 +47,6 @@ template <> struct RadSystem_Traits<CouplingProblem> {
 template <> struct Physics_Traits<CouplingProblem> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = false;
-	static constexpr bool is_chemistry_enabled = false;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = true;

@@ -31,7 +31,7 @@ constexpr double alpha_SuOlson = 4.0 * a_rad / eps_SuOlson;
 constexpr double T_initial = 1.0e-2;
 
 template <> struct quokka::EOS_Traits<SuOlsonProblem> {
-	static constexpr double mean_molecular_mass = 1.0;
+	static constexpr double mean_molecular_weight = 1.0;
 	static constexpr double boltzmann_constant = 1.0;
 	static constexpr double gamma = 5. / 3.;
 };
@@ -47,7 +47,6 @@ template <> struct RadSystem_Traits<SuOlsonProblem> {
 template <> struct Physics_Traits<SuOlsonProblem> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = false;
-	static constexpr bool is_chemistry_enabled = false;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = true;

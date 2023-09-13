@@ -32,7 +32,6 @@ template <> struct quokka::EOS_Traits<ScalarProblem> {
 template <> struct Physics_Traits<ScalarProblem> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr bool is_chemistry_enabled = false;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 1; // number of passive scalars
 	static constexpr bool is_radiation_enabled = false;
@@ -70,7 +69,6 @@ template <> void RadhydroSimulation<ScalarProblem>::setInitialConditionsOnGrid(q
 			scalar = 0.0;
 		}
 
-		const auto gamma = quokka::EOS_Traits<ScalarProblem>::gamma;
 		for (int n = 0; n < state_cc.nComp(); ++n) {
 			state_cc(i, j, k, n) = 0.;
 		}
@@ -78,8 +76,8 @@ template <> void RadhydroSimulation<ScalarProblem>::setInitialConditionsOnGrid(q
 		state_cc(i, j, k, HydroSystem<ScalarProblem>::x1Momentum_index) = rho * vx;
 		state_cc(i, j, k, HydroSystem<ScalarProblem>::x2Momentum_index) = 0.;
 		state_cc(i, j, k, HydroSystem<ScalarProblem>::x3Momentum_index) = 0.;
-		state_cc(i, j, k, HydroSystem<ScalarProblem>::energy_index) = P / (gamma - 1.) + 0.5 * rho * (vx * vx);
-		state_cc(i, j, k, HydroSystem<ScalarProblem>::internalEnergy_index) = P / (gamma - 1.);
+		state_cc(i, j, k, HydroSystem<ScalarProblem>::energy_index) = quokka::EOS<ScalarProblem>::ComputeEintFromPres(rho, P) + 0.5 * rho * (vx * vx);
+		state_cc(i, j, k, HydroSystem<ScalarProblem>::internalEnergy_index) = quokka::EOS<ScalarProblem>::ComputeEintFromPres(rho, P);
 		state_cc(i, j, k, HydroSystem<ScalarProblem>::scalar0_index) = scalar;
 	});
 }
@@ -112,7 +110,6 @@ void RadhydroSimulation<ScalarProblem>::computeReferenceSolution(amrex::MultiFab
 				scalar = 0.0;
 			}
 
-			const auto gamma = quokka::EOS_Traits<ScalarProblem>::gamma;
 			for (int n = 0; n < ncomp; ++n) {
 				stateExact(i, j, k, n) = 0.;
 			}
@@ -120,8 +117,9 @@ void RadhydroSimulation<ScalarProblem>::computeReferenceSolution(amrex::MultiFab
 			stateExact(i, j, k, HydroSystem<ScalarProblem>::x1Momentum_index) = rho * vx;
 			stateExact(i, j, k, HydroSystem<ScalarProblem>::x2Momentum_index) = 0.;
 			stateExact(i, j, k, HydroSystem<ScalarProblem>::x3Momentum_index) = 0.;
-			stateExact(i, j, k, HydroSystem<ScalarProblem>::energy_index) = P / (gamma - 1.) + 0.5 * rho * (vx * vx);
-			stateExact(i, j, k, HydroSystem<ScalarProblem>::internalEnergy_index) = P / (gamma - 1.);
+			stateExact(i, j, k, HydroSystem<ScalarProblem>::energy_index) =
+			    quokka::EOS<ScalarProblem>::ComputeEintFromPres(rho, P) + 0.5 * rho * (vx * vx);
+			stateExact(i, j, k, HydroSystem<ScalarProblem>::internalEnergy_index) = quokka::EOS<ScalarProblem>::ComputeEintFromPres(rho, P);
 			stateExact(i, j, k, HydroSystem<ScalarProblem>::scalar0_index) = scalar;
 		});
 	}
@@ -166,7 +164,7 @@ void RadhydroSimulation<ScalarProblem>::computeReferenceSolution(amrex::MultiFab
 				const auto s = val_exact.at(HydroSystem<ScalarProblem>::scalar0_index)[i];
 				const auto vx = xmom / rho;
 				const auto Eint = E - 0.5 * rho * (vx * vx);
-				const auto P = (quokka::EOS_Traits<ScalarProblem>::gamma - 1.) * Eint;
+				const auto P = quokka::EOS<ScalarProblem>::ComputePressure(rho, Eint);
 				d_exact.push_back(rho);
 				vx_exact.push_back(vx);
 				P_exact.push_back(P);
@@ -180,7 +178,7 @@ void RadhydroSimulation<ScalarProblem>::computeReferenceSolution(amrex::MultiFab
 				const auto fs = values.at(HydroSystem<ScalarProblem>::scalar0_index)[i];
 				const auto fvx = fxmom / frho;
 				const auto fEint = fE - 0.5 * frho * (fvx * fvx);
-				const auto fP = (quokka::EOS_Traits<ScalarProblem>::gamma - 1.) * fEint;
+				const auto fP = quokka::EOS<ScalarProblem>::ComputePressure(frho, fEint);
 				d_final.push_back(frho);
 				vx_final.push_back(fvx);
 				P_final.push_back(fP);
