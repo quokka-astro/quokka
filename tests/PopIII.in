@@ -14,7 +14,7 @@ amr.v              = 1       # verbosity in Amr
 # Resolution and refinement
 # *****************************************************************
 amr.n_cell          = 128 128 128
-amr.max_level       = 0     # number of levels = max_level + 1
+amr.max_level       = 10     # number of levels = max_level + 1
 amr.blocking_factor = 32    # grid size must be divisible by this
 amr.max_grid_size   = 128    # at least 128 for GPUs
 amr.n_error_buf     = 3     # minimum 3 cell buffer around tagged cells
@@ -22,14 +22,14 @@ amr.grid_eff        = 0.7   # default
 
 hydro.reconstruction_order = 3  # PPM
 cfl = 0.2
-max_timesteps = 10
+max_timesteps = 100000
 stop_time = 1e16
 
 do_reflux = 1
 do_subcycle = 0
 
 #ascent_interval = 10
-plotfile_interval = 20 #100
+plotfile_interval = 50 #100
 checkpoint_interval = 100
 
 perturb.cloud_radius = 3.086e18
