@@ -29,6 +29,9 @@
 #include "radiation_system.hpp"
 #include "valarray.hpp"
 
+// Microphysics headers
+#include "extern_parameters.H"
+
 // this struct is specialized by the user application code
 //
 template <typename problem_t> struct HydroSystem_Traits {
@@ -731,6 +734,17 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 			state[bx](i, j, k, x1Momentum_index) *= rescale_factor;
 			state[bx](i, j, k, x2Momentum_index) *= rescale_factor;
 			state[bx](i, j, k, x3Momentum_index) *= rescale_factor;
+		}
+
+		// Enforcing Limits on mass scalars
+		if (nmscalars_ > 0) {
+
+		    for (int idx = 0; idx < nmscalars_; ++idx) {
+		        if (state[bx](i, j, k, scalar0_index + idx) < 0.0) {
+		            state[bx](i, j, k, scalar0_index + idx) = small_x * rho;
+		        }
+		    }
+
 		}
 
 		// Enforcing Limits on temperature estimated from Etot and Ekin
