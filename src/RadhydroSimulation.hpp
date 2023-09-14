@@ -1026,6 +1026,11 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 			if (Verbose()) {
 				amrex::Print() << "[FOFC-1] flux correcting " << ncells_bad << " cells on level " << lev << "\n";
 				const amrex::IntVect cell_idx = redoFlag.maxIndex(0);
+				// Calculate the coordinates based on the cell index and cell size
+				amrex::Real x_coord = geom[lev].ProbLo(0) + (cell_idx[0] + 0.5) * geom[lev].CellSize(0);
+				amrex::Real y_coord = geom[lev].ProbLo(1) + (cell_idx[1] + 0.5) * geom[lev].CellSize(1);
+				amrex::Real z_coord = geom[lev].ProbLo(2) + (cell_idx[2] + 0.5) * geom[lev].CellSize(2);
+				amrex::Print() << x_coord << ", " << y_coord << ", " << z_coord << "): ";
 				amrex::print_state(stateNew, cell_idx);
 			}
 
@@ -1049,6 +1054,10 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 					const amrex::IntVect cell_idx = redoFlag.maxIndex(0);
 					// print cell state
 					amrex::Print() << "[FOFC-1] Flux correction failed:\n";
+					amrex::Real x_coord = geom[lev].ProbLo(0) + (cell_idx[0] + 0.5) * geom[lev].CellSize(0);
+					amrex::Real y_coord = geom[lev].ProbLo(1) + (cell_idx[1] + 0.5) * geom[lev].CellSize(1);
+					amrex::Real z_coord = geom[lev].ProbLo(2) + (cell_idx[2] + 0.5) * geom[lev].CellSize(2);
+					amrex::Print() << x_coord << ", " << y_coord << ", " << z_coord << "): ";
 					amrex::print_state(stateNew, cell_idx);
 					amrex::Print() << "[FOFC-1] failed for " << ncells_bad << " cells on level " << lev << "\n";
 				}
@@ -1107,6 +1116,10 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 			if (Verbose()) {
 				amrex::Print() << "[FOFC-2] flux correcting " << ncells_bad << " cells on level " << lev << "\n";
 				const amrex::IntVect cell_idx = redoFlag.maxIndex(0);
+				amrex::Real x_coord = geom[lev].ProbLo(0) + (cell_idx[0] + 0.5) * geom[lev].CellSize(0);
+				amrex::Real y_coord = geom[lev].ProbLo(1) + (cell_idx[1] + 0.5) * geom[lev].CellSize(1);
+				amrex::Real z_coord = geom[lev].ProbLo(2) + (cell_idx[2] + 0.5) * geom[lev].CellSize(2);
+				amrex::Print() << x_coord << ", " << y_coord << ", " << z_coord << "): ";
 				amrex::print_state(stateFinal, cell_idx);
 			}
 
@@ -1130,6 +1143,10 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 					const amrex::IntVect cell_idx = redoFlag.maxIndex(0);
 					// print cell state
 					amrex::Print() << "[FOFC-2] Flux correction failed:\n";
+					amrex::Real x_coord = geom[lev].ProbLo(0) + (cell_idx[0] + 0.5) * geom[lev].CellSize(0);
+					amrex::Real y_coord = geom[lev].ProbLo(1) + (cell_idx[1] + 0.5) * geom[lev].CellSize(1);
+					amrex::Real z_coord = geom[lev].ProbLo(2) + (cell_idx[2] + 0.5) * geom[lev].CellSize(2);
+					amrex::Print() << x_coord << ", " << y_coord << ", " << z_coord << "): ";
 					amrex::print_state(stateFinal, cell_idx);
 					amrex::Print() << "[FOFC-2] failed for " << ncells_bad << " cells on level " << lev << "\n";
 				}
