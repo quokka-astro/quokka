@@ -25,6 +25,7 @@
 #include "ArrayView.hpp"
 #include "EOS.hpp"
 #include "HLLC.hpp"
+#include "LLF.hpp"
 #include "hyperbolic_system.hpp"
 #include "radiation_system.hpp"
 #include "valarray.hpp"
@@ -37,6 +38,10 @@
 template <typename problem_t> struct HydroSystem_Traits {
 	// if true, reconstruct e_int instead of pressure
 	static constexpr bool reconstruct_eint = true;
+};
+
+enum class RiemannSolver {
+	HLLC, LLF
 };
 
 /// Class for the Euler equations of inviscid hydrodynamics
@@ -111,7 +116,7 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	static void SyncDualEnergy(amrex::MultiFab &consVar_mf);
 
-	template <FluxDir DIR>
+	template <RiemannSolver RIEMANN, FluxDir DIR>
 	static void ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab &x1FaceVel_mf, amrex::MultiFab const &x1LeftState_mf,
 				  amrex::MultiFab const &x1RightState_mf, amrex::MultiFab const &primVar_mf, amrex::Real K_visc);
 
@@ -879,7 +884,7 @@ template <typename problem_t> void HydroSystem<problem_t>::SyncDualEnergy(amrex:
 }
 
 template <typename problem_t>
-template <FluxDir DIR>
+template <RiemannSolver RIEMANN, FluxDir DIR>
 void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab &x1FaceVel_mf, amrex::MultiFab const &x1LeftState_mf,
 					   amrex::MultiFab const &x1RightState_mf, amrex::MultiFab const &primVar_mf, const amrex::Real K_visc)
 {
@@ -1055,8 +1060,15 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		dw = std::min(std::min(dwl, dwr), dw);
 #endif
 
-		// solve the Riemann problem in canonical form
-		quokka::valarray<double, nvar_> F_canonical = quokka::Riemann::HLLC<problem_t, nscalars_, nmscalars_, nvar_>(sL, sR, gamma_, du, dw);
+		// solve the Riemann problem in canonical form (i.e., where the x-dir is the normal direction)
+		quokka::valarray<double, nvar_> F_canonical{};
+
+		if constexpr (RIEMANN == RiemannSolver::HLLC) {
+			F_canonical = quokka::Riemann::HLLC<problem_t, nscalars_, nmscalars_, nvar_>(sL, sR, gamma_, du, dw);
+		} else if constexpr (RIEMANN == RiemannSolver::LLF) {
+			F_canonical = quokka::Riemann::LLF<problem_t, nscalars_, nmscalars_, nvar_>(sL, sR);
+		}
+
 		quokka::valarray<double, nvar_> F = F_canonical;
 
 		// add artificial viscosity
