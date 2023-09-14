@@ -1030,9 +1030,9 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 				amrex::Real x_coord = geom[lev].ProbLo(0) + (cell_idx[0] + 0.5) * geom[lev].CellSize(0);
 				amrex::Real y_coord = NAN;
 				amrex::Real z_coord = NAN;
-				if (AMReX_SPACEDIM > 1) {
+				if (AMREX_SPACEDIM > 1) {
 					y_coord = geom[lev].ProbLo(1) + (cell_idx[1] + 0.5) * geom[lev].CellSize(1);
-					if (AMReX_SPACEDIM > 2) {
+					if (AMREX_SPACEDIM > 2) {
 						z_coord = geom[lev].ProbLo(2) + (cell_idx[2] + 0.5) * geom[lev].CellSize(2);
 					}
 				}
@@ -1064,9 +1064,9 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 					amrex::Real x_coord = geom[lev].ProbLo(0) + (cell_idx[0] + 0.5) * geom[lev].CellSize(0);
 					amrex::Real y_coord = NAN;
 					amrex::Real z_coord = NAN;
-					if (AMReX_SPACEDIM > 1) {
+					if (AMREX_SPACEDIM > 1) {
 						y_coord = geom[lev].ProbLo(1) + (cell_idx[1] + 0.5) * geom[lev].CellSize(1);
-						if (AMReX_SPACEDIM > 2) {
+						if (AMREX_SPACEDIM > 2) {
 							z_coord = geom[lev].ProbLo(2) + (cell_idx[2] + 0.5) * geom[lev].CellSize(2);
 						}
 					}
@@ -1132,9 +1132,9 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 				amrex::Real x_coord = geom[lev].ProbLo(0) + (cell_idx[0] + 0.5) * geom[lev].CellSize(0);
 				amrex::Real y_coord = NAN;
 				amrex::Real z_coord = NAN;
-				if (AMReX_SPACEDIM > 1) {
+				if (AMREX_SPACEDIM > 1) {
 					y_coord = geom[lev].ProbLo(1) + (cell_idx[1] + 0.5) * geom[lev].CellSize(1);
-					if (AMReX_SPACEDIM > 2) {
+					if (AMREX_SPACEDIM > 2) {
 						z_coord = geom[lev].ProbLo(2) + (cell_idx[2] + 0.5) * geom[lev].CellSize(2);
 					}
 				}
@@ -1165,9 +1165,9 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 					amrex::Real x_coord = geom[lev].ProbLo(0) + (cell_idx[0] + 0.5) * geom[lev].CellSize(0);
 					amrex::Real y_coord = NAN;
 					amrex::Real z_coord = NAN;
-					if (AMReX_SPACEDIM > 1) {
+					if (AMREX_SPACEDIM > 1) {
 						y_coord = geom[lev].ProbLo(1) + (cell_idx[1] + 0.5) * geom[lev].CellSize(1);
-						if (AMReX_SPACEDIM > 2) {
+						if (AMREX_SPACEDIM > 2) {
 							z_coord = geom[lev].ProbLo(2) + (cell_idx[2] + 0.5) * geom[lev].CellSize(2);
 						}
 					}
