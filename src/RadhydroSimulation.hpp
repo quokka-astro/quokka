@@ -527,9 +527,17 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::computeAfterEv
 	amrex::Real Etot0 = NAN;
 	amrex::Real Etot = NAN;
 	if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
-		amrex::Real const Erad0 = initSumCons[RadSystem<problem_t>::radEnergy_index];
+		// amrex::Real const Erad0 = initSumCons[RadSystem<problem_t>::radEnergy_index];
+		amrex::Real Erad0 = 0.;
+    for (int g = 0; g < RadSystem_Traits<problem_t>::nGroups; ++g) {
+      Erad0 += initSumCons[RadSystem<problem_t>::radEnergy_index + Physics_NumVars::numRadVars * g];
+    }
 		Etot0 = Egas0 + (RadSystem<problem_t>::c_light_ / RadSystem<problem_t>::c_hat_) * Erad0;
-		amrex::Real const Erad = state_new_cc_[0].sum(RadSystem<problem_t>::radEnergy_index) * vol;
+		// amrex::Real const Erad = state_new_cc_[0].sum(RadSystem<problem_t>::radEnergy_index) * vol;
+    amrex::Real Erad = 0.;
+    for (int g = 0; g < RadSystem_Traits<problem_t>::nGroups; ++g) {
+      Erad += state_new_cc_[0].sum(RadSystem<problem_t>::radEnergy_index + Physics_NumVars::numRadVars * g) * vol;
+    }
 		Etot = Egas + (RadSystem<problem_t>::c_light_ / RadSystem<problem_t>::c_hat_) * Erad;
 	} else {
 		Etot0 = Egas0;
@@ -1426,6 +1434,8 @@ void RadhydroSimulation<problem_t>::advanceRadiationSubstepAtLevel(int lev, amre
 	// and another to store the intermediate stage (which is reused for the final stage).
 
 	// update ghost zones [old timestep]
+	AMREX_ASSERT(!state_old_cc_[lev].contains_nan(0, state_old_cc_[lev].nComp()));
+	AMREX_ASSERT(!state_new_cc_[lev].contains_nan(0, state_new_cc_[lev].nComp()));
 	fillBoundaryConditions(state_old_cc_[lev], state_old_cc_[lev], lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState,
 			       PostInterpState);
 	AMREX_ASSERT(!state_old_cc_[lev].contains_nan(0, state_old_cc_[lev].nComp()));
@@ -1488,9 +1498,10 @@ void RadhydroSimulation<problem_t>::operatorSplitSourceTerms(amrex::Array4<amrex
 							     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
 							     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi)
 {
-	amrex::FArrayBox radEnergySource(indexRange, RadSystem_Traits<problem_t>::nGroups,  // CCH: multigroup radiation, double check
+  // CCH: multigroup radiation
+	amrex::FArrayBox radEnergySource(indexRange, RadSystem_Traits<problem_t>::nGroups,
 					 amrex::The_Async_Arena()); // cell-centered scalar
-	amrex::FArrayBox advectionFluxes(indexRange, 3,
+	amrex::FArrayBox advectionFluxes(indexRange, 3 * RadSystem_Traits<problem_t>::nGroups,
 					 amrex::The_Async_Arena()); // cell-centered vector
 
 	radEnergySource.setVal<amrex::RunOn::Device>(0.);

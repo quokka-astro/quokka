@@ -11,6 +11,7 @@
 #include "AMReX.H"
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
+#include "valarray.hpp"
 
 struct StreamingProblem {
 };
@@ -35,6 +36,7 @@ template <> struct RadSystem_Traits<StreamingProblem> {
 	static constexpr double Erad_floor = initial_Erad;
 	static constexpr bool compute_v_over_c_terms = false;
   static constexpr int nGroups = 2;
+  static constexpr int pickGroupToPlot = 1;
   static constexpr std::array<double, nGroups - 1> radEdges {0.1};  // microns, size = nGroups - 1
   // static constexpr int nGroups = 1;
   // static constexpr std::array<double, nGroups - 1> radEdges {};  // microns, size = nGroups - 1
@@ -53,15 +55,45 @@ template <> struct Physics_Traits<StreamingProblem> {
   static constexpr int nGroups = RadSystem_Traits<StreamingProblem>::nGroups;
 };
 
+template <> AMREX_GPU_HOST_DEVICE void RadSystem<StreamingProblem>::ComputeRadEnergyFractions(quokka::valarray<double, RadSystem_Traits<StreamingProblem>::nGroups> &radEnergyFractions, amrex::Real const temperature)
+{
+  const double tiny = 1e-10;
+  // // fill in one bin
+  // fillin(radEnergyFractions, tiny);
+  // radEnergyFractions[1] = 1.0 - tiny;
+  // evenly distribute across all bins
+  fillin(radEnergyFractions, 1.0 / RadSystem_Traits<StreamingProblem>::nGroups);
+}
+
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> double
 {
 	return kappa0;
+}
+
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputeOpacityAtBins(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
+{
+	quokka::valarray<double, nGroups_> kappaVec;
+  for (int g = 0; g < nGroups_; ++g) {
+    kappaVec[g] = kappa0;
+  }
+	return kappaVec;
+}
+
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
+{
+	quokka::valarray<double, nGroups_> kappaVec;
+  for (int g = 0; g < nGroups_; ++g) {
+    kappaVec[g] = kappa0;
+  }
+	return kappaVec;
 }
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputeRosselandOpacity(const double /*rho*/, const double /*Tgas*/) -> double
 {
 	return kappa0;
 }
+
+// CCH: compute radiation energy fractions for each bin, given the temperature. Note that nGroups and radEdges are defined at compile time.
 
 template <> void RadhydroSimulation<StreamingProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
@@ -72,16 +104,13 @@ template <> void RadhydroSimulation<StreamingProblem>::setInitialConditionsOnGri
 	const auto Egas0 = initial_Egas;
 
   // CCH: calculate radEnergyFractions 
-	amrex::GpuArray<double, RadSystem_Traits<StreamingProblem>::nGroups> radEnergyFractions;
+	// amrex::GpuArray<double, RadSystem_Traits<StreamingProblem>::nGroups> radEnergyFractions;
+	quokka::valarray<double, RadSystem_Traits<StreamingProblem>::nGroups> radEnergyFractions;
   amrex::Real const temperature = 0.0;
 	RadSystem<StreamingProblem>::ComputeRadEnergyFractions(radEnergyFractions, temperature);
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		// state_cc(i, j, k, RadSystem<StreamingProblem>::radEnergy_index) = Erad0;
-		// state_cc(i, j, k, RadSystem<StreamingProblem>::x1RadFlux_index) = 0;
-		// state_cc(i, j, k, RadSystem<StreamingProblem>::x2RadFlux_index) = 0;
-		// state_cc(i, j, k, RadSystem<StreamingProblem>::x3RadFlux_index) = 0;
     // CCH: multigroup radiation
     for (int g = 0; g < RadSystem_Traits<StreamingProblem>::nGroups; ++g) {
       state_cc(i, j, k, RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad0 * radEnergyFractions[g];
@@ -122,7 +151,8 @@ AMRSimulation<StreamingProblem>::setCustomBoundaryConditions(const amrex::IntVec
 	amrex::GpuArray<int, 3> hi = box.hiVect3d();
 
   // CCH: calculate radEnergyFractions 
-	amrex::GpuArray<double, RadSystem_Traits<StreamingProblem>::nGroups> radEnergyFractions;
+	// amrex::GpuArray<double, RadSystem_Traits<StreamingProblem>::nGroups> radEnergyFractions;
+	quokka::valarray<double, RadSystem_Traits<StreamingProblem>::nGroups> radEnergyFractions;
   const double Erad = 1.0;
   amrex::Real const temperature = 0.0;
   RadSystem<StreamingProblem>::ComputeRadEnergyFractions(radEnergyFractions, temperature);
@@ -140,7 +170,6 @@ AMRSimulation<StreamingProblem>::setCustomBoundaryConditions(const amrex::IntVec
 		// consVar(i, j, k, RadSystem<StreamingProblem>::x3RadFlux_index) = 0.;
 
     // CCH: multigroup radiation
-    // RadSystem<StreamingProblem>::ComputeRadEnergyFractions(radEnergyFractions, temperature);
 		for (int g = 0; g < RadSystem_Traits<StreamingProblem>::nGroups; ++g) {
       auto const Erad_g = Erad * radEnergyFractions[g];
       consVar(i, j, k, RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad_g;
@@ -182,6 +211,7 @@ auto problem_main() -> int
 	const double CFL_number = 0.8;
 	const double dt_max = 1e-2;
 	const double tmax = 1.0;
+	// const double tmax = 0.03;
 	const int max_timesteps = 5000;
 
 	// Boundary conditions
@@ -224,7 +254,7 @@ auto problem_main() -> int
 		amrex::Real const x = position[i];
 		xs.at(i) = x;
 		erad_exact.at(i) = (x <= chat * tmax) ? 1.0 : 0.0;
-		erad.at(i) = values.at(RadSystem<StreamingProblem>::radEnergy_index)[i];
+		erad.at(i) = values.at(RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVars * RadSystem_Traits<StreamingProblem>::pickGroupToPlot)[i];
 	}
 
 	double err_norm = 0.;

@@ -78,7 +78,17 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputePlanckOpac
 	return 0.; // no heating/cooling
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputeRosselandOpacity(const double /*rho*/, const double /*Tgas*/) -> double { return kappa0; }
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputeOpacityAtBins(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
+{
+	quokka::valarray<double, nGroups_> kappaVec;
+	fillin(kappaVec, 0.);
+	return kappaVec;
+}
+
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputeRosselandOpacity(const double /*rho*/, const double /*Tgas*/) -> double 
+{ 
+  return kappa0; 
+}
 
 // declare global variables
 // initial conditions read from file
@@ -138,7 +148,8 @@ template <> void RadhydroSimulation<TubeProblem>::setInitialConditionsOnGrid(quo
 	int x_size = static_cast<int>(x_arr_g.size());
 
   // CCH: calculate radEnergyFractions 
-	amrex::GpuArray<double, RadSystem_Traits<TubeProblem>::nGroups> radEnergyFractions;
+	// amrex::GpuArray<double, RadSystem_Traits<TubeProblem>::nGroups> radEnergyFractions;
+	quokka::valarray<double, RadSystem_Traits<TubeProblem>::nGroups> radEnergyFractions;
   amrex::Real const temperature = 0.0;
 	RadSystem<TubeProblem>::ComputeRadEnergyFractions(radEnergyFractions, temperature);
 
@@ -202,7 +213,8 @@ AMRSimulation<TubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv
 
   // CCH: calculate radEnergyFractions 
   amrex::Real const temperature = 0.0;
-	amrex::GpuArray<double, RadSystem_Traits<TubeProblem>::nGroups> radEnergyFractions;
+	// amrex::GpuArray<double, RadSystem_Traits<TubeProblem>::nGroups> radEnergyFractions;
+	quokka::valarray<double, RadSystem_Traits<TubeProblem>::nGroups> radEnergyFractions;
   RadSystem<TubeProblem>::ComputeRadEnergyFractions(radEnergyFractions, temperature);
 
 	if (i < lo[0]) {

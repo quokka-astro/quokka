@@ -59,6 +59,7 @@ template <typename T, int d> class valarray
 };
 } // namespace quokka
 
+// array + array
 template <typename T, int d>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator+(quokka::valarray<T, d> const &a, quokka::valarray<T, d> const &b) -> quokka::valarray<T, d>
 {
@@ -69,6 +70,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator+(quokka::valarray<T, d> c
 	return sum;
 }
 
+// array - array
 template <typename T, int d>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator-(quokka::valarray<T, d> const &a, quokka::valarray<T, d> const &b) -> quokka::valarray<T, d>
 {
@@ -79,6 +81,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator-(quokka::valarray<T, d> c
 	return diff;
 }
 
+// array * array
 template <typename T, int d>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator*(quokka::valarray<T, d> const &a, quokka::valarray<T, d> const &b) -> quokka::valarray<T, d>
 {
@@ -89,6 +92,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator*(quokka::valarray<T, d> c
 	return prod;
 }
 
+// array / array
 template <typename T, int d>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator/(quokka::valarray<T, d> const &a, quokka::valarray<T, d> const &b) -> quokka::valarray<T, d>
 {
@@ -99,6 +103,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator/(quokka::valarray<T, d> c
 	return div;
 }
 
+// scalar * array
 template <typename T, int d> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator*(T const &scalar, quokka::valarray<T, d> const &v) -> quokka::valarray<T, d>
 {
 	quokka::valarray<T, d> scalarprod;
@@ -108,6 +113,7 @@ template <typename T, int d> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto opera
 	return scalarprod;
 }
 
+// array * scalar
 template <typename T, int d> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator*(quokka::valarray<T, d> const &v, T const &scalar) -> quokka::valarray<T, d>
 {
 	quokka::valarray<T, d> scalarprod;
@@ -117,6 +123,7 @@ template <typename T, int d> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto opera
 	return scalarprod;
 }
 
+// array *= scalar
 template <typename T, int d> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void operator*=(quokka::valarray<T, d> &v, T const &scalar)
 {
 	for (size_t i = 0; i < v.size(); ++i) {
@@ -124,6 +131,27 @@ template <typename T, int d> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void opera
 	}
 }
 
+// array += array
+template <typename T, int d>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void operator+=(quokka::valarray<T, d> &a, quokka::valarray<T, d> const &b)
+{
+  for (size_t i = 0; i < a.size(); ++i) {
+    a[i] += b[i];
+  }
+}
+
+// array + scalar
+template <typename T, int d> 
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator+(quokka::valarray<T, d> const &v, T const &scalar) -> quokka::valarray<T, d>
+{
+  quokka::valarray<T, d> scalarsum;
+  for (size_t i = 0; i < v.size(); ++i) {
+    scalarsum[i] = v[i] + scalar;
+  }
+  return scalarsum;
+}
+
+// array /= scalar
 template <typename T, int d> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator/(quokka::valarray<T, d> const &v, T const &scalar) -> quokka::valarray<T, d>
 {
 	quokka::valarray<T, d> scalardiv;
@@ -133,6 +161,7 @@ template <typename T, int d> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto opera
 	return scalardiv;
 }
 
+// abs(array)
 template <typename T, int d> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto abs(quokka::valarray<T, d> const &v) -> quokka::valarray<T, d>
 {
 	quokka::valarray<T, d> abs_v;
@@ -142,6 +171,7 @@ template <typename T, int d> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto abs(q
 	return abs_v;
 }
 
+// min(array)
 template <typename T, int d> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto min(quokka::valarray<T, d> const &v) -> T
 {
 	static_assert(d >= 1);
@@ -152,5 +182,92 @@ template <typename T, int d> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto min(q
 	}
 	return min_val;
 }
+
+// max(array)
+template <typename T, int d> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto max(quokka::valarray<T, d> const &v) -> T
+{
+  static_assert(d >= 1);
+  T max_val = v[0]; // v must have at least 1 element
+
+  for (size_t i = 0; i < v.size(); ++i) {
+    max_val = std::max(max_val, v[i]);
+  }
+  return max_val;
+}
+
+// sum(array)
+template <typename T, int d> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto sum(quokka::valarray<T, d> const &v) -> T
+{
+  T sum_val = 0;
+  for (size_t i = 0; i < v.size(); ++i) {
+    sum_val += v[i];
+  }
+  return sum_val;
+}
+
+// isnan(array)
+template <typename T, int d> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto isnan(quokka::valarray<T, d> const &v) -> bool
+{
+  for (size_t i = 0; i < v.size(); ++i) {
+    if (std::isnan(v[i])) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// array > array
+template <typename T, int d>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator>(quokka::valarray<T, d> const &a, quokka::valarray<T, d> const &b) -> quokka::valarray<bool, d>
+{
+  quokka::valarray<bool, d> comp;
+  for (size_t i = 0; i < a.size(); ++i) {
+    comp[i] = a[i] > b[i];
+  }
+  return comp;
+}
+
+// array > scalar
+template <typename T, int d>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator>(quokka::valarray<T, d> const &a, T const &scalar) -> quokka::valarray<bool, d>
+{
+  quokka::valarray<bool, d> comp;
+  for (size_t i = 0; i < a.size(); ++i) {
+    comp[i] = a[i] > scalar;
+  }
+  return comp;
+}
+
+// array < array
+template <typename T, int d>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator<(quokka::valarray<T, d> const &a, quokka::valarray<T, d> const &b) -> quokka::valarray<bool, d>
+{
+  quokka::valarray<bool, d> comp;
+  for (size_t i = 0; i < a.size(); ++i) {
+    comp[i] = a[i] < b[i];
+  }
+  return comp;
+}
+
+// array < scalar
+template <typename T, int d>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator<(quokka::valarray<T, d> const &a, T const &scalar) -> quokka::valarray<bool, d>
+{
+  quokka::valarray<bool, d> comp;
+  for (size_t i = 0; i < a.size(); ++i) {
+    comp[i] = a[i] < scalar;
+  }
+  return comp;
+}
+
+// define valarray.fillin() for quokka::valarray
+template <typename T, int d> 
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void fillin(quokka::valarray<T, d> &v, T const &scalar)
+{
+  for (size_t i = 0; i < v.size(); ++i) {
+    v[i] = scalar;
+  }
+}
+
 
 #endif // VALARRAY_HPP_
