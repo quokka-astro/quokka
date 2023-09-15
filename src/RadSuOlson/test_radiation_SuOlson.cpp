@@ -50,7 +50,7 @@ template <> struct RadSystem_Traits<MarshakProblem> {
 	static constexpr double Erad_floor = 0.;
 	static constexpr bool compute_v_over_c_terms = false;
   static constexpr int nGroups = 2;
-  static constexpr std::array<double, nGroups - 1> radEdges {0.1};  // microns, size = nGroups - 1
+  static constexpr int pickGroupToPlot = 0;
 };
 
 template <> struct Physics_Traits<MarshakProblem> {
@@ -68,10 +68,11 @@ template <> struct Physics_Traits<MarshakProblem> {
 
 template <> AMREX_GPU_HOST_DEVICE void RadSystem<MarshakProblem>::ComputeRadEnergyFractions(quokka::valarray<double, RadSystem_Traits<MarshakProblem>::nGroups> &radEnergyFractions, amrex::Real const temperature)
 {
+
   const double tiny = 1e-10;
-  // // fill in one bin
   fillin(radEnergyFractions, tiny);
   radEnergyFractions[0] = 1.0 - tiny;
+
   // evenly distribute across all bins
   // fillin(radEnergyFractions, 1.0 / RadSystem_Traits<MarshakProblem>::nGroups);
 }
@@ -81,17 +82,12 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputePlanckO
 	return (kappa / rho);
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputeOpacityAtBins(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputePlanckOpacityForGroup(const double rho, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, nGroups_> kappaVec;
-	fillin(kappaVec, kappa / rho0);
-	return kappaVec;
-}
-
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
-{
-	quokka::valarray<double, nGroups_> kappaVec;
-	fillin(kappaVec, kappa / rho0);
+	fillin(kappaVec, kappa / rho);
+  // kappaVec[0] *= 10.;
+  // kappaVec[1] /= 10.;
 	return kappaVec;
 }
 
@@ -288,7 +284,11 @@ auto problem_main() -> int
 
 		for (int i = 0; i < nx; ++i) {
 			xs.at(i) = position[i];
-			const auto Erad_t = values.at(RadSystem<MarshakProblem>::radEnergy_index)[i];
+			// const auto Erad_t = values.at(RadSystem<MarshakProblem>::radEnergy_index + Physics_NumVars::numRadVars * RadSystem_Traits<MarshakProblem>::pickGroupToPlot)[i];
+			double Erad_t = 0.0;
+      for (int g = 0; g < RadSystem_Traits<MarshakProblem>::nGroups; ++g) {
+        Erad_t += values.at(RadSystem<MarshakProblem>::radEnergy_index + Physics_NumVars::numRadVars * g)[i];
+      }
 			const auto Etot_t = values.at(RadSystem<MarshakProblem>::gasEnergy_index)[i];
 			const auto rho = values.at(RadSystem<MarshakProblem>::gasDensity_index)[i];
 			const auto x1GasMom = values.at(RadSystem<MarshakProblem>::x1GasMomentum_index)[i];
@@ -351,10 +351,19 @@ auto problem_main() -> int
 		interpolate_arrays(xs_exact.data(), Tgas_numerical_interp.data(), static_cast<int>(xs_exact.size()), xs.data(), Tgas.data(),
 				   static_cast<int>(xs.size()));
 
+    // Find the first non-nan element in Tgas_numerical_interp. The first element of Tgas_numerical_interp could be nan if amr.n_cell is small (so that xs[0] > xs_exact[0])
+    int first_non_nan = 0;
+    for (int kk = 0; kk < xs_exact.size(); ++kk) {
+      if (!std::isnan(Tgas_numerical_interp[kk])) {
+        first_non_nan = kk;
+        break;
+      }
+    }
+
 		// compute L1 error norm
 		double err_norm = 0.;
 		double sol_norm = 0.;
-		for (size_t i = 0; i < xs_exact.size(); ++i) {
+		for (size_t i = first_non_nan; i < xs_exact.size(); ++i) {
 			err_norm += std::abs(Tgas_numerical_interp[i] - Tgas_exact_10[i]);
 			sol_norm += std::abs(Tgas_exact_10[i]);
 		}

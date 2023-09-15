@@ -1355,6 +1355,8 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 		BCs = BCs_fc_;
 	}
 
+	AMREX_ASSERT(!state.contains_nan(0, state.nComp()));
+
 	if (lev > 0) { // refined level
 		amrex::Vector<amrex::MultiFab *> fineData{&state};
 		amrex::Vector<amrex::Real> fineTime = {time};
