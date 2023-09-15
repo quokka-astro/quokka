@@ -907,7 +907,9 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 #endif
 		amrex::ParallelDescriptor::Barrier();
 		
-		amrex::Abort();
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			amrex::ParallelDescriptor::Abort();
+		}
 	}
 }
 
