@@ -897,7 +897,24 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 		amrex::Print() << "\nQUOKKA FATAL ERROR\n"
 			       << "Hydro update exceeded max_retries on level " << lev << ". Cannot continue, crashing...\n"
 			       << std::endl;
-		amrex::Abort();
+
+		// write plotfile or Ascent Blueprint file
+		amrex::ParallelDescriptor::Barrier();
+#ifdef AMREX_USE_ASCENT
+		conduit::Node mesh;
+		amrex::SingleLevelToBlueprint(state_new_cc_[lev], componentNames_cc_, geom[lev], time, istep[lev] + 1, mesh);
+		conduit::Node bpMeshHost;
+		bpMeshHost.set(mesh); // copy to host mem (needed for Blueprint HDF5 output)
+		amrex::WriteBlueprintFiles(bpMeshHost, "debug_hydro_state_fatal", istep[lev] + 1, "hdf5");
+#else
+		WriteSingleLevelPlotfile(CustomPlotFileName("debug_hydro_state_fatal", istep[lev] + 1), state_new_cc_[lev], componentNames_cc_, geom[lev], time,
+			 istep[lev] + 1);
+#endif
+		amrex::ParallelDescriptor::Barrier();
+		
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			amrex::ParallelDescriptor::Abort();
+		}
 	}
 }
 
