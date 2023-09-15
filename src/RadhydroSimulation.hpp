@@ -1072,6 +1072,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 					// print cell state
 					amrex::Print() << "[FOFC-1] Flux correction failed:\n";
 					printCoordinates(lev, cell_idx);
+					amrex::print_state(stateNew, cell_idx);
 					amrex::Print() << "[FOFC-1] failed for " << ncells_bad << " cells on level " << lev << "\n";
 				}
 				if (abortOnFofcFailure_ != 0) {
