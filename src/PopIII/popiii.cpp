@@ -291,16 +291,13 @@ template <> void RadhydroSimulation<PopIII>::setInitialConditionsOnGrid(quokka::
 
 		amrex::Real phi = atan2((y-y0), (x-x0));
 
-		double vx = 0;
-		double vy = 0;
-		double vz = 0;
+		double vx = renorm_amp * dvx(i, j, k);
+		double vy = renorm_amp * dvy(i, j, k);
+		double vz = renorm_amp * dvz(i, j, k);
 
 		if (r <= R_sphere) {
 			state.rho = rhotot;
 			state.T = core_temp;
-			vx = renorm_amp * dvx(i, j, k);
-			vy = renorm_amp * dvy(i, j, k);
-			vz = renorm_amp * dvz(i, j, k);
 
 			// add rotation to vx and vy
 			vx += (-1.0) * distxy * omega_sphere * std::sin(phi);
