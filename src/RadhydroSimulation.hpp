@@ -927,8 +927,8 @@ template <typename problem_t> auto RadhydroSimulation<problem_t>::isCflViolated(
 template <typename problem_t> void RadhydroSimulation<problem_t>::printCoordinates(int lev, const amrex::IntVect& cell_idx) {
 
 	amrex::Real x_coord = geom[lev].ProbLo(0) + (cell_idx[0] + 0.5) * geom[lev].CellSize(0);
-	amrex::Real const y_coord = NAN;
-	amrex::Real const z_coord = NAN;
+	amrex::Real y_coord = NAN;
+	amrex::Real z_coord = NAN;
 
 	if (AMREX_SPACEDIM > 1) {
 		y_coord = geom[lev].ProbLo(1) + (cell_idx[1] + 0.5) * geom[lev].CellSize(1);
