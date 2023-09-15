@@ -900,17 +900,15 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 			       << "Hydro update exceeded max_retries on level " << lev << ". Cannot continue, crashing...\n"
 			       << std::endl;
 
-		// write multifab to disk
-#ifdef AMREX_USE_ASCENT
-		// write Blueprint HDF5 files
-		conduit::Node mesh;
-		amrex::SingleLevelToBlueprint(state_new_cc_[lev], componentNames_cc_, geom[lev], time, istep[lev] + 1, mesh);
-		amrex::WriteBlueprintFiles(mesh, "debug_hydro_state_fatal", istep[lev] + 1, "hdf5");
-#else
-		// write AMReX plotfile
+		// #ifdef AMREX_USE_ASCENT
+		//		conduit::Node mesh;
+		//		amrex::SingleLevelToBlueprint(state_new_cc_[lev], componentNames_cc_, geom[lev], time, istep[lev] + 1, mesh);
+		//		amrex::WriteBlueprintFiles(mesh, "debug_hydro_state_fatal", istep[lev] + 1, "hdf5");
+		// #else
+		//  write AMReX plotfile
 		WriteSingleLevelPlotfile(CustomPlotFileName("debug_hydro_state_fatal", istep[lev] + 1), state_new_cc_[lev], componentNames_cc_, geom[lev], time,
 					 istep[lev] + 1);
-#endif
+		// #endif
 
 		if (amrex::ParallelDescriptor::IOProcessor()) {
 			amrex::ParallelDescriptor::Abort();
