@@ -35,11 +35,12 @@ template <> struct RadSystem_Traits<StreamingProblem> {
 	static constexpr double radiation_constant = 1.0;
 	static constexpr double Erad_floor = initial_Erad;
 	static constexpr bool compute_v_over_c_terms = false;
-  static constexpr int nGroups = 2;
   static constexpr int pickGroupToPlot = 0;
-  // static constexpr std::array<double, nGroups - 1> radEdges {0.1};  // microns, size = nGroups - 1
-  // static constexpr int nGroups = 1;
-  // static constexpr std::array<double, nGroups - 1> radEdges {};  // microns, size = nGroups - 1
+	static constexpr double energy_unit = ev2erg / k_B;
+	static constexpr double lower_rad_energy_bound = 0.0;
+	static constexpr double upper_rad_energy_bound = std::numeric_limits<double>::max();
+  static constexpr int nGroups = 2;
+  static constexpr std::array<double, nGroups - 1> radBoundaries {13.6};  // eV, size = nGroups - 1
 };
 
 template <> struct Physics_Traits<StreamingProblem> {
@@ -55,16 +56,6 @@ template <> struct Physics_Traits<StreamingProblem> {
   static constexpr int nGroups = RadSystem_Traits<StreamingProblem>::nGroups;
 };
 
-template <> AMREX_GPU_HOST_DEVICE void RadSystem<StreamingProblem>::ComputeRadEnergyFractions(quokka::valarray<double, RadSystem_Traits<StreamingProblem>::nGroups> &radEnergyFractions, amrex::Real const temperature)
-{
-  // const double tiny = 1e-10;
-  // fillin(radEnergyFractions, tiny);
-  // radEnergyFractions[1] = 1.0 - tiny;
-
-  // evenly distribute across all bins
-  fillin(radEnergyFractions, 1.0 / RadSystem_Traits<StreamingProblem>::nGroups);
-}
-
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> double
 {
 	return kappa0;
@@ -77,12 +68,19 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputePlanc
 	return kappaVec;
 }
 
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputeFluxMeanOpacityForGroup(const double /*rho*/, const double Tgas) -> quokka::valarray<double, nGroups_>
+{
+	quokka::valarray<double, nGroups_> kappaVec;
+  fillin(kappaVec, kappa0);
+	return kappaVec;
+}
+
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputeRosselandOpacity(const double /*rho*/, const double /*Tgas*/) -> double
 {
 	return kappa0;
 }
 
-// CCH: compute radiation energy fractions for each bin, given the temperature. Note that nGroups and radEdges are defined at compile time.
+// CCH: compute radiation energy fractions for each bin, given the temperature. Note that nGroups and radBoundaries are defined at compile time.
 
 template <> void RadhydroSimulation<StreamingProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
@@ -93,10 +91,8 @@ template <> void RadhydroSimulation<StreamingProblem>::setInitialConditionsOnGri
 	const auto Egas0 = initial_Egas;
 
   // CCH: calculate radEnergyFractions 
-	// amrex::GpuArray<double, RadSystem_Traits<StreamingProblem>::nGroups> radEnergyFractions;
-	quokka::valarray<double, RadSystem_Traits<StreamingProblem>::nGroups> radEnergyFractions;
-  amrex::Real const temperature = 0.0;
-	RadSystem<StreamingProblem>::ComputeRadEnergyFractions(radEnergyFractions, temperature);
+	quokka::valarray<amrex::Real, RadSystem_Traits<StreamingProblem>::nGroups> radEnergyFractions;
+  fillin(radEnergyFractions, 1.0 / RadSystem_Traits<StreamingProblem>::nGroups);
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -140,11 +136,8 @@ AMRSimulation<StreamingProblem>::setCustomBoundaryConditions(const amrex::IntVec
 	amrex::GpuArray<int, 3> hi = box.hiVect3d();
 
   // CCH: calculate radEnergyFractions 
-	// amrex::GpuArray<double, RadSystem_Traits<StreamingProblem>::nGroups> radEnergyFractions;
-	quokka::valarray<double, RadSystem_Traits<StreamingProblem>::nGroups> radEnergyFractions;
-  amrex::Real const temperature = 0.0;
-  RadSystem<StreamingProblem>::ComputeRadEnergyFractions(radEnergyFractions, temperature);
-  // amrex::Real const temperature = quokka::EOS<SuOlsonProblemCgs>::ComputeTgasFromEint(rho, Egas_t);
+	quokka::valarray<amrex::Real, RadSystem_Traits<StreamingProblem>::nGroups> radEnergyFractions;
+  fillin(radEnergyFractions, 1.0 / RadSystem_Traits<StreamingProblem>::nGroups);
 
 	if (i < lo[0]) {
 		// streaming inflow boundary
