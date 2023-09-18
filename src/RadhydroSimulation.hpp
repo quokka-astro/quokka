@@ -544,6 +544,8 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::computeAfterEv
 	amrex::Real const Egas0 = initSumCons[RadSystem<problem_t>::gasEnergy_index];
 	amrex::Real const Egas = state_new_cc_[0].sum(RadSystem<problem_t>::gasEnergy_index) * vol;
 
+	amrex::Print() << "after evolve Egas " << Egas << " vol " << vol << std::endl;
+
 	amrex::Real Etot0 = NAN;
 	amrex::Real Etot = NAN;
 	if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {

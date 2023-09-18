@@ -219,6 +219,7 @@ template <typename problem_t> auto HydroSystem<problem_t>::maxSignalSpeedLocal(a
 					} else {
 						cs = ComputeSoundSpeed(cons[bx], i, j, k);
 					}
+
 					return {cs + abs_vel};
 				});
 }
@@ -417,7 +418,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeVelocity
 template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeVelocityX3(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k)
     -> amrex::Real
-{
+{	
 	amrex::Real const rho = cons(i, j, k, density_index);
 	amrex::Real const vel_z = cons(i, j, k, x3Momentum_index) / rho;
 	return vel_z;
@@ -428,7 +429,14 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::isStateValid(am
 {
 	// check if cons(i, j, k) is a valid state
 	const amrex::Real rho = cons(i, j, k, density_index);
+	const amrex::Real momx = cons(i, j, k, x1Momentum_index);
+	const amrex::Real momy = cons(i, j, k, x2Momentum_index);
+	const amrex::Real momz = cons(i, j, k, x3Momentum_index);
+	const amrex::Real vel = std::pow(std::pow(momx/rho, 2) + std::pow(momy/rho, 2) + std::pow(momz/rho, 2), 0.5);
+
 	bool isDensityPositive = (rho > 0.);
+
+	bool isVelocityLarge = (vel < 1e7);
 
 	bool isMassScalarPositive = true;
 	if constexpr (nmscalars_ > 0) {
@@ -456,7 +464,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::isStateValid(am
 #endif
 	// return (isDensityPositive && isPressurePositive);
 
-	return isDensityPositive && isMassScalarPositive;
+	return isDensityPositive && isMassScalarPositive && isVelocityLarge;
 }
 
 template <typename problem_t>
