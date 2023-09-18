@@ -52,10 +52,10 @@ template <> struct RadSystem_Traits<MarshakProblem> {
 	static constexpr double energy_unit = ev2erg / k_B;
 	static constexpr double lower_rad_energy_bound = 0.0;
 	static constexpr double upper_rad_energy_bound = std::numeric_limits<double>::max();
-  // static constexpr int nGroups = 2;
-  // static constexpr std::array<double, nGroups - 1> radBoundaries {13.6};  // eV, size = nGroups - 1
-  static constexpr int nGroups = 1;
-  static constexpr std::array<double, nGroups - 1> radBoundaries {};  // eV, size = nGroups - 1
+  static constexpr int nGroups = 2;
+  static constexpr std::array<double, nGroups - 1> radBoundaries {13.6};  // eV, size = nGroups - 1
+  // static constexpr int nGroups = 1;
+  // static constexpr std::array<double, nGroups - 1> radBoundaries {};  // eV, size = nGroups - 1
   static constexpr int pickGroupToPlot = 0;
 };
 

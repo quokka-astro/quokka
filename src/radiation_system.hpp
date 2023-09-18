@@ -175,17 +175,6 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
   AMREX_GPU_DEVICE static auto isStateValid(std::array<amrex::Real, nvarHyperbolic_> &cons) -> bool;
 };
 
-// // CCH: compute radiation energy fractions for each bin, given the temperature. Note that nGroups and radBoundaries are defined at compile time.
-// template <typename problem_t>
-// void RadSystem<problem_t>::ComputeRadEnergyFractions(quokka::valarray<double, nGroups_> &radEnergyFractions, amrex::Real const temperature)
-// {
-//   const double tiny = 1e-10;
-//   fillin(radEnergyFractions, tiny);
-//   radEnergyFractions[0] = 1.0 - tiny * (nGroups_ - 1);
-
-//   // fillin(radEnergyFractions, 1.0 / RadSystem_Traits<StreamingProblem>::nGroups);
-// }
-
 // CCH: compute radiation energy fractions for each bin of a Planck function, given the temperature.
 template <typename problem_t>
 void RadSystem<problem_t>::ComputePlanckEnergyFractions(quokka::valarray<amrex::Real, nGroups_> &radEnergyFractions, amrex::Real const temperature)
@@ -210,6 +199,7 @@ void RadSystem<problem_t>::ComputePlanckEnergyFractions(quokka::valarray<amrex::
   radEnergyFractions[nGroups_ - 1] = fracLast - previous;
   radEnergyFractions /= sum(radEnergyFractions);
   // A hack to avoid zeros in radEnergyFractions
+  // TODO: find a better way to do this
   for (int g = 0; g < nGroups_; ++g) {
     if (radEnergyFractions[g] < 1e-14) {
       radEnergyFractions[g] = 1e-14;
@@ -703,8 +693,9 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 		// HLL solver following Toro (1998) and Balsara (2017).
 		// Radiation eigenvalues from Skinner & Ostriker (2013).
 
+		// CCH: add reduced fluxes for each radiation group. Trivial: just do each group separately.
+
 		// gather left- and right- state variables
-		// CCH: add reduced fluxes for each radiation group
 		for (int g = 0; g < nGroups_; ++g) {
 			double erad_L = x1LeftState(i, j, k, primRadEnergy_index + Physics_NumVars::numRadVars * g);
 			double erad_R = x1RightState(i, j, k, primRadEnergy_index + Physics_NumVars::numRadVars * g);
@@ -976,6 +967,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckOpacityTempDerivat
 	return 0.0;
 }
 
+// Derivative of Planck/energy-mean opacity with respect to gas temperature. In the future, they should be defined separately.
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeOpacityTempDerivativeAtBins(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
 {
@@ -1038,10 +1030,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		const double Egastot0 = consPrev(i, j, k, gasEnergy_index);
 		auto massScalars = RadSystem<problem_t>::ComputeMassScalars(consPrev, i, j, k);
 
-
-
-
-
 		// ------  CCH: Multigroup ---------
 		// load radiation energy
 		quokka::valarray<double, nGroups_> Erad0Vec; // TODO: make this const
@@ -1062,23 +1050,11 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		double Ekin0 = NAN;
 		double Egas_guess = NAN;
 		double T_gas = NAN;
-		double Rtot;
-		double dFG_dEgas = NAN;
-		double deltaEgas = NAN;
-		double dRtot_dEgas;
 		quokka::valarray<double, nGroups_> EradVec_guess;
-		quokka::valarray<double, nGroups_> kappaPVec;
 		quokka::valarray<double, nGroups_> kappaFVec;
-		quokka::valarray<double, nGroups_> Rvec;
-		quokka::valarray<double, nGroups_> dRtot_dErad;
-		quokka::valarray<double, nGroups_> dRvec_dEgas;
-		quokka::valarray<double, nGroups_> dFG_dErad;
-		quokka::valarray<double, nGroups_> dFR_dEgas;
-		quokka::valarray<double, nGroups_> dFR_i_dErad_i;
-		quokka::valarray<double, nGroups_> deltaErad;
+
     for (int g = 0; g < nGroups_; ++g) {
 			EradVec_guess[g] = NAN;
-			deltaErad[g] = NAN;
     }
 
 		if constexpr (gamma_ != 1.0) {
@@ -1093,20 +1069,28 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			// BEGIN NEWTON-RAPHSON LOOP
 			Egas_guess = Egas0;
 			EradVec_guess = Erad0Vec;
-			double kappaP, fourPiB;
 
 			const double a_rad = radiation_constant_;
-			double F_G = NAN;
+			double F_G;
+			double kappaP;
+			double fourPiB;
+		  double dFG_dEgas = NAN;
+      double deltaEgas = NAN;
+      double Rtot;
+      double dRtot_dEgas;
+			quokka::valarray<double, nGroups_> kappaPVec;
+			quokka::valarray<double, nGroups_> Rvec;
+			quokka::valarray<double, nGroups_> dRtot_dErad;
+			quokka::valarray<double, nGroups_> dRvec_dEgas;
+			quokka::valarray<double, nGroups_> dFG_dErad;
+			quokka::valarray<double, nGroups_> dFR_dEgas;
+			quokka::valarray<double, nGroups_> dFR_i_dErad_i;
+			quokka::valarray<double, nGroups_> deltaErad;
 			quokka::valarray<double, nGroups_> F_R;
-      // fillin(F_R, NAN);
-      for (int g = 0; g < nGroups_; ++g) {
-        F_R[g] = NAN;
-      }
 
 			const double resid_tol = 1.0e-10; // 1.0e-15;
 			const int maxIter = 400;
       int n;
-
 			for (n = 0; n < maxIter; ++n) {
 				// compute material temperature
 				T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
@@ -1152,31 +1136,29 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				dRtot_dErad = -dt * rho * kappaFVec * chat;
         // TODO: fix this: dB_dTgas * radEnergyFractions is inaccurate
 				dRvec_dEgas = dt * rho / c_v * (4 * pi * kappaPVec * dB_dTgas * radEnergyFractions + dkappaVec_dTgas * fourPiB * radEnergyFractions - chat * dkappaVec_dTgas * EradVec_guess);
-        // force dRvec_dEgas to non-negative
-        // for (int g = 0; g < nGroups_; ++g) {
-        //   dRvec_dEgas[g] = dRvec_dEgas[g] > 0.0 ? dRvec_dEgas[g] : 0.0;
-        // }
+				// force dRvec_dEgas to non-negative. 
+        // TODO: Rethink here. What is the equivalent of eta in multigroup?
+        AMREX_ASSERT(min(dRvec_dEgas) >= 0.0);
+				// for (int g = 0; g < nGroups_; ++g) {
+        //   if (dRvec_dEgas[g] < 0.0) {
+        //     dRvec_dEgas[g] = 0.0;
+        //   }
+				// }
 
 				// compute Jacobian elements
 				dFG_dEgas = 1.0 + (c / chat) * dRtot_dEgas;
         dFG_dErad = dRtot_dErad * (c / chat);
         dFR_dEgas = -1.0 * dRvec_dEgas;
-        // // force dFR_dEgas to non-negative
-        // // dFR_dEgas[dFR_dEgas < 0.0] = 0.0;
-        // for (int g = 0; g < nGroups_; ++g) {
-        //   dFR_dEgas[g] = dFR_dEgas[g] > 0.0 ? dFR_dEgas[g] : 0.0;
-        // }
-        AMREX_ASSERT(max(dFR_dEgas) <= 0.0);
         dFR_i_dErad_i = -1.0 * dRtot_dErad + 1.0;
 				AMREX_ASSERT(!std::isnan(dFG_dEgas));
-				AMREX_ASSERT(!std::isnan(sum(dFG_dErad)));
-				AMREX_ASSERT(!isnan(dFR_dEgas));
-				AMREX_ASSERT(!std::isnan(sum(dFR_i_dErad_i)));
+				AMREX_ASSERT(!hasnan(dFG_dErad));
+				AMREX_ASSERT(!hasnan(dFR_dEgas));
+				AMREX_ASSERT(!hasnan(dFR_i_dErad_i));
 
         // update variables
         RadSystem<problem_t>::SolveLinearEqs(dFG_dEgas, dFG_dErad, dFR_dEgas, dFR_i_dErad_i, -F_G, -1. * F_R, deltaEgas, deltaErad);
 				AMREX_ASSERT(!std::isnan(deltaEgas));
-				AMREX_ASSERT(!std::isnan(sum(deltaErad)));
+				AMREX_ASSERT(!hasnan(deltaErad));
 				EradVec_guess += deltaErad;
 				Egas_guess += deltaEgas;
 				AMREX_ASSERT(min(EradVec_guess) >= 0.);
@@ -1191,155 +1173,8 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		// Erad_guess is the new radiation energy (excluding work term)
 		// Egas_guess is the new gas internal energy
 
-#if 0
-    amrex::Real Erad_guess = EradVec_guess[0];
-
-		// 2. Compute radiation flux update
-		amrex::GpuArray<amrex::Real, 3> Frad_t0{};
-		amrex::GpuArray<amrex::Real, 3> Frad_t1{};
-
-		Frad_t0[0] = consPrev(i, j, k, x1RadFlux_index);
-		Frad_t0[1] = consPrev(i, j, k, x2RadFlux_index);
-		Frad_t0[2] = consPrev(i, j, k, x3RadFlux_index);
-
-		amrex::Real const kappaRosseland = ComputeRosselandOpacity(rho, T_gas);
-
-		for (int n = 0; n < 3; ++n) {
-			// this should use the flux mean; in the gray approximation, we follow
-			// Mihalas & Mihalas (1984) and use the Rosseland mean
-			Frad_t1[n] = (Frad_t0[n] + (dt * advectionFluxes(i, j, k, n))) / (1.0 + (rho * kappaRosseland) * chat * dt);
-			// Frad_t1[n] = (Frad_t0[n] + (dt * advectionFluxes(i, j, k, n))) * std::exp(- (rho * kappaRosseland) * chat * dt);
-		}
-		consNew(i, j, k, x1RadFlux_index) = Frad_t1[0];
-		consNew(i, j, k, x2RadFlux_index) = Frad_t1[1];
-		consNew(i, j, k, x3RadFlux_index) = Frad_t1[2];
-
-		// 3. Compute conservative gas momentum update
-		amrex::GpuArray<amrex::Real, 3> dF{};
-		amrex::GpuArray<amrex::Real, 3> dMomentum{};
-
-		for (int n = 0; n < 3; ++n) {
-			dF[n] = Frad_t1[n] - Frad_t0[n];
-			dMomentum[n] = -dF[n] / (c * chat);
-		}
-
-		consNew(i, j, k, x1GasMomentum_index) += dMomentum[0];
-		consNew(i, j, k, x2GasMomentum_index) += dMomentum[1];
-		consNew(i, j, k, x3GasMomentum_index) += dMomentum[2];
-
-		if constexpr (gamma_ != 1.0) {
-			amrex::Real x1GasMom1 = consNew(i, j, k, x1GasMomentum_index);
-			amrex::Real x2GasMom1 = consNew(i, j, k, x2GasMomentum_index);
-			amrex::Real x3GasMom1 = consNew(i, j, k, x3GasMomentum_index);
-
-			// 4a. Compute radiation work terms
-			amrex::Real const Egastot1 = ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess);
-			amrex::Real dErad_work = NAN;
-
-			if constexpr (compute_v_over_c_terms_) {
-				// compute difference in gas kinetic energy before and after momentum
-				// update
-				amrex::Real const Ekin1 = Egastot1 - Egas_guess;
-				amrex::Real const dEkin_work = Ekin1 - Ekin0;
-				// compute loss of radiation energy to gas kinetic energy
-				dErad_work = -(c_hat_ / c_light_) * dEkin_work;
-			} else {
-				// do not subtract radiation work in new radiation energy
-				dErad_work = 0.;
-			}
-
-			// compute difference between new and old internal energy
-			amrex::Real const dEint = Egas_guess - Egas0;
-
-			// 4b. Store new radiation energy, gas energy
-			consNew(i, j, k, radEnergy_index) = Erad_guess + dErad_work;
-			consNew(i, j, k, gasEnergy_index) = Egastot1;
-			consNew(i, j, k, gasInternalEnergy_index) += dEint; // must compute difference
-		} else {
-			amrex::ignore_unused(Erad_guess);
-			amrex::ignore_unused(Egas_guess);
-		} // endif gamma != 1.0
-#endif
-
-#if 0
-    // CCH: multigroup
-		// 2. Compute radiation flux update
-		amrex::GpuArray<amrex::Real, 3 * nGroups_> Frad_t0{};
-		for (int g = 0; g < nGroups_; ++g) {
-      Frad_t0[0 + 3 * g] = consPrev(i, j, k, x1RadFlux_index + numRadVars_ * g);
-      Frad_t0[1 + 3 * g] = consPrev(i, j, k, x2RadFlux_index + numRadVars_ * g);
-      Frad_t0[2 + 3 * g] = consPrev(i, j, k, x3RadFlux_index + numRadVars_ * g);
-    }
-
-    // quokka::valarray<double, nGroups_> const kappaFluxMean = ComputeFluxMeanOpacityForGroup(rho, T_gas);
-    quokka::valarray<double, nGroups_> const kappaFluxMean = ComputePlanckOpacityForGroup(rho, T_gas);
-		amrex::GpuArray<amrex::Real, 3> dMomentum{0.0, 0.0, 0.0};
-    amrex::GpuArray<amrex::Real, 3> const consNewCopy{consNew(i, j, k, x1GasMomentum_index), consNew(i, j, k, x2GasMomentum_index), consNew(i, j, k, x3GasMomentum_index)};
-
-    amrex::Real x1GasMom1;
-    amrex::Real x2GasMom1;
-    amrex::Real x3GasMom1;
-
-    // Method 1: apportion energy of photon groups by updating gas momentum one group at a time
-		for (int g = 0; g < nGroups_; ++g) {
-      // update F_{r, i}
-      consNew(i, j, k, x1RadFlux_index + numRadVars_ * g) = (Frad_t0[0 + 3 * g] + (dt * advectionFluxes(i, j, k, 0))) / (1.0 + rho * kappaFluxMean[g] * chat * dt);
-      consNew(i, j, k, x2RadFlux_index + numRadVars_ * g) = (Frad_t0[1 + 3 * g] + (dt * advectionFluxes(i, j, k, 1))) / (1.0 + rho * kappaFluxMean[g] * chat * dt);
-      consNew(i, j, k, x3RadFlux_index + numRadVars_ * g) = (Frad_t0[2 + 3 * g] + (dt * advectionFluxes(i, j, k, 2))) / (1.0 + rho * kappaFluxMean[g] * chat * dt);
-
-		  // Compute conservative gas momentum update
-      dMomentum[0] = -(consNew(i, j, k, x1RadFlux_index + numRadVars_ * g) - Frad_t0[0 + 3 * g]) / (c * chat);
-      dMomentum[1] = -(consNew(i, j, k, x2RadFlux_index + numRadVars_ * g) - Frad_t0[1 + 3 * g]) / (c * chat);
-      dMomentum[2] = -(consNew(i, j, k, x3RadFlux_index + numRadVars_ * g) - Frad_t0[2 + 3 * g]) / (c * chat);
-
-      // update gas momentum from radiation momentum of the current group
-      // compute the new, imaginary gas momentum
-      x1GasMom1 = consNewCopy[0] + dMomentum[0];
-      x2GasMom1 = consNewCopy[1] + dMomentum[1];
-      x3GasMom1 = consNewCopy[2] + dMomentum[2];
-
-      // compute the new, real gas momentum after add the current group's momentum
-      consNew(i, j, k, x1GasMomentum_index) += dMomentum[0];
-      consNew(i, j, k, x2GasMomentum_index) += dMomentum[1];
-      consNew(i, j, k, x3GasMomentum_index) += dMomentum[2];
-
-      if constexpr (gamma_ != 1.0) {
-
-        // 4a. Compute radiation work terms
-        amrex::Real Egastot1 = ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess);
-        amrex::Real dErad_work = 0.;
-        if constexpr (compute_v_over_c_terms_) {
-          // compute difference in gas kinetic energy before and after momentum update
-          amrex::Real const Ekin1 = Egastot1 - Egas_guess;
-          amrex::Real const dEkin_work = Ekin1 - Ekin0;
-          // compute loss of radiation energy to gas kinetic energy
-          dErad_work = -(c_hat_ / c_light_) * dEkin_work;
-        } 
-        // else, do not subtract radiation work in new radiation energy
-
-        // 4b. Store new radiation energy, gas energy
-        consNew(i, j, k, radEnergy_index + numRadVars_ * g) = EradVec_guess[g] + dErad_work;
-      } else {
-        amrex::ignore_unused(EradVec_guess);
-        amrex::ignore_unused(Egas_guess);
-      } // endif gamma != 1.0
-    } // end for g
-
-    // Method 2: apportion energy of photon groups by the fractional work they do
-
-    // compute difference between new and old internal energy
-    amrex::Real const dEint = Egas_guess - Egas0;
-
-    // Store new gas energy
-    x1GasMom1 = consNew(i, j, k, x1GasMomentum_index);
-    x2GasMom1 = consNew(i, j, k, x2GasMomentum_index);
-    x3GasMom1 = consNew(i, j, k, x3GasMomentum_index);
-    consNew(i, j, k, gasEnergy_index) = ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess);
-    consNew(i, j, k, gasInternalEnergy_index) += dEint; // must compute difference
-#endif
-
-#if 0
-    // CCH: multigroup, apportion v_1 * F_1
+#if 1
+    // CCH: multigroup, apportion w.r.t. v_1 * F_1
 		// 2. Compute radiation flux update
 
     amrex::GpuArray<amrex::Real, 3> Frad_t0{};
@@ -1426,8 +1261,8 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
     } // endif gamma != 1.0
 #endif  // END multigroup, apportion v_1 * F_1
 
-#if 1
-    // CCH: multigroup, apportion v_0 * F_0
+#if 0
+    // CCH: multigroup, apportion w.r.t. v_0 * F_0
 		// 2. Compute radiation flux update
 
     amrex::GpuArray<amrex::Real, 3> Frad_t0{};
@@ -1507,15 +1342,92 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 #endif  // END multigroup apportion v_0 * F_0
 
 
+#if 0
+    // CCH: multigroup, apportion w.r.t the imaginary gas energy increase after adding each group's momentum
+		// 2. Compute radiation flux update
 
-#if 0 
+    // quokka::valarray<double, nGroups_> const kappaFluxMean = ComputeFluxMeanOpacityForGroup(rho, T_gas);
+    quokka::valarray<double, nGroups_> const kappaFluxMean = ComputePlanckOpacityForGroup(rho, T_gas);
+    amrex::GpuArray<amrex::Real, 3> const consNewCopy{consNew(i, j, k, x1GasMomentum_index), consNew(i, j, k, x2GasMomentum_index),
+						      consNew(i, j, k, x3GasMomentum_index)};
+    amrex::GpuArray<amrex::Real, 3> dMomentum;
+
+    amrex::Real x1GasMom1;
+    amrex::Real x2GasMom1;
+    amrex::Real x3GasMom1;
+
+    // Method 1: apportion energy of photon groups by updating gas momentum one group at a time
+		amrex::GpuArray<amrex::Real, 3> Frad_t0{};
+		for (int g = 0; g < nGroups_; ++g) {
+      for (int g = 0; g < nGroups_; ++g) {
+        Frad_t0[0] = consPrev(i, j, k, x1RadFlux_index + numRadVars_ * g);
+        Frad_t0[1] = consPrev(i, j, k, x2RadFlux_index + numRadVars_ * g);
+        Frad_t0[2] = consPrev(i, j, k, x3RadFlux_index + numRadVars_ * g);
+      }
+      // update F_{r, i}
+      consNew(i, j, k, x1RadFlux_index + numRadVars_ * g) = (Frad_t0[0] + (dt * advectionFluxes(i, j, k, 0))) / (1.0 + rho * kappaFluxMean[g] * chat * dt);
+      consNew(i, j, k, x2RadFlux_index + numRadVars_ * g) = (Frad_t0[1] + (dt * advectionFluxes(i, j, k, 1))) / (1.0 + rho * kappaFluxMean[g] * chat * dt);
+      consNew(i, j, k, x3RadFlux_index + numRadVars_ * g) = (Frad_t0[2] + (dt * advectionFluxes(i, j, k, 2))) / (1.0 + rho * kappaFluxMean[g] * chat * dt);
+
+		  // Compute conservative gas momentum update
+      dMomentum[0] = -(consNew(i, j, k, x1RadFlux_index + numRadVars_ * g) - Frad_t0[0]) / (c * chat);
+      dMomentum[1] = -(consNew(i, j, k, x2RadFlux_index + numRadVars_ * g) - Frad_t0[1]) / (c * chat);
+      dMomentum[2] = -(consNew(i, j, k, x3RadFlux_index + numRadVars_ * g) - Frad_t0[2]) / (c * chat);
+
+      // update gas momentum from radiation momentum of the current group
+      // compute the new, imaginary gas momentum
+      x1GasMom1 = consNewCopy[0] + dMomentum[0];
+      x2GasMom1 = consNewCopy[1] + dMomentum[1];
+      x3GasMom1 = consNewCopy[2] + dMomentum[2];
+
+      // compute the new, real gas momentum after add the current group's momentum
+      consNew(i, j, k, x1GasMomentum_index) += dMomentum[0];
+      consNew(i, j, k, x2GasMomentum_index) += dMomentum[1];
+      consNew(i, j, k, x3GasMomentum_index) += dMomentum[2];
+
+      if constexpr (gamma_ != 1.0) {
+
+        // 4a. Compute radiation work terms
+        amrex::Real Egastot1 = ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess);
+        amrex::Real dErad_work = 0.;
+        if constexpr (compute_v_over_c_terms_) {
+          // compute difference in gas kinetic energy before and after momentum update
+          amrex::Real const Ekin1 = Egastot1 - Egas_guess;
+          amrex::Real const dEkin_work = Ekin1 - Ekin0;
+          // compute loss of radiation energy to gas kinetic energy
+          dErad_work = -(c_hat_ / c_light_) * dEkin_work;
+        } 
+        // else, do not subtract radiation work in new radiation energy
+
+        // 4b. Store new radiation energy, gas energy
+        consNew(i, j, k, radEnergy_index + numRadVars_ * g) = EradVec_guess[g] + dErad_work;
+      } else {
+        amrex::ignore_unused(EradVec_guess);
+        amrex::ignore_unused(Egas_guess);
+      } // endif gamma != 1.0
+    } // end for g
+
+    // Method 2: apportion energy of photon groups by the fractional work they do
+
+    // compute difference between new and old internal energy
+    amrex::Real const dEint = Egas_guess - Egas0;
+
+    // Store new gas energy
+    x1GasMom1 = consNew(i, j, k, x1GasMomentum_index);
+    x2GasMom1 = consNew(i, j, k, x2GasMomentum_index);
+    x3GasMom1 = consNew(i, j, k, x3GasMomentum_index);
+    consNew(i, j, k, gasEnergy_index) = ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess);
+    consNew(i, j, k, gasInternalEnergy_index) += dEint; // must compute difference
+#endif
+
+#ifdef DEBUG
     // print all fields of consNew at i, j, k and make sure consPrev doesn't have nan terms
     for (int n = 0; n < consNew.nComp(); ++n) {
-      printf("consNew(%d,%d,%d,%d) = %f\n", i, j, k, n, consNew(i, j, k, n));
-      // if (std::isnan(consNew(i, j, k, n))) {
-      //   printf("consNew[%d, %d, %d, %d] is nan\n", i, j, k, n);
-      //   amrex::Abort();
-      // }
+      // printf("consNew(%d,%d,%d,%d) = %f\n", i, j, k, n, consNew(i, j, k, n));
+      if (std::isnan(consNew(i, j, k, n))) {
+        printf("consNew[%d, %d, %d, %d] is nan\n", i, j, k, n);
+        amrex::Abort();
+      }
     }
 #endif 
 
