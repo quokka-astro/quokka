@@ -289,6 +289,14 @@ template <typename problem_t> auto HydroSystem<problem_t>::CheckStatesValid(amre
 							       thermal_energy, P);
 							return {false};
 						}
+
+						if (rho != rho || P != P) {
+							printf("nan state at (%d, %d, %d): rho %g, Etot %g, Eint %g, P %g\n", i, j, k, rho, E,
+                                                               thermal_energy, P);
+							amrex::Abort("nan here so I abort");
+							return {false};
+						}
+
 					}
 					return {true};
 				});
@@ -716,6 +724,9 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 
 	amrex::ParallelFor(state_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		amrex::Real const rho = state[bx](i, j, k, density_index);
+		if (rho <= 0 || std::isnan(rho)) {
+			printf("rho is %f", rho);
+		}
 		amrex::Real const vx1 = state[bx](i, j, k, x1Momentum_index) / rho;
 		amrex::Real const vx2 = state[bx](i, j, k, x2Momentum_index) / rho;
 		amrex::Real const vx3 = state[bx](i, j, k, x3Momentum_index) / rho;
@@ -729,14 +740,14 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 		if (rho < densityFloor) {
 			rho_new = densityFloor;
 			state[bx](i, j, k, density_index) = rho_new;
-			state[bx](i, j, k, internalEnergy_index) = Eint * rho_new / rho;
+			state[bx](i, j, k, internalEnergy_index) = Eint * rho_new / std::abs(rho);
 			state[bx](i, j, k, energy_index) = rho_new * vsq / 2. + (Etot - Ekin);
 			if (nscalars_ > 0) {
 				for (int n = 0; n < nscalars_; ++n) {
 					if (rho_new == 0.0) {
 						state[bx](i, j, k, scalar0_index + n) = 0.0;
 					} else {
-						state[bx](i, j, k, scalar0_index + n) *= rho / rho_new;
+						state[bx](i, j, k, scalar0_index + n) *= std::abs(rho) / rho_new;
 					}
 				}
 			}
@@ -754,7 +765,7 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 
 		    for (int idx = 0; idx < nmscalars_; ++idx) {
 		        if (state[bx](i, j, k, scalar0_index + idx) < 0.0) {
-		            state[bx](i, j, k, scalar0_index + idx) = small_x * rho;
+		            state[bx](i, j, k, scalar0_index + idx) = small_x * std::abs(rho);
 		        }
 		    }
 
@@ -766,6 +777,10 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 			amrex::Real const Eint_star = Etot - 0.5 * rho_new * vsq;
 			amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(state[bx], i, j, k);
 			amrex::Real const P_star = quokka::EOS<problem_t>::ComputePressure(rho_new, Eint_star, massScalars);
+
+			if (std::isnan(P_star) || P_star < 0) {
+				printf("pres is %f", P_star);
+			}
 			amrex::Real P_new = P_star;
 			if (P_star < pressureFloor) {
 				P_new = pressureFloor;
@@ -811,6 +826,11 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 			    quokka::EOS<problem_t>::ComputeEintFromTgas(state[bx](i, j, k, density_index), tempFloor, massScalars);
 			state[bx](i, j, k, energy_index) = Ekin + state[bx](i, j, k, internalEnergy_index);
 		}
+
+		if (std::isnan(state[bx](i, j, k, density_index))) {
+			printf("rho is nan!!");
+		}
+
 	});
 }
 
