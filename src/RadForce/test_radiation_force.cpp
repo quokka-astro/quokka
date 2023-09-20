@@ -56,7 +56,7 @@ template <> struct RadSystem_Traits<TubeProblem> {
 	static constexpr double radiation_constant = radiation_constant_cgs_;
 	static constexpr double Erad_floor = 0.;
 	static constexpr bool compute_v_over_c_terms = true;
-	static constexpr double energy_unit = ev2erg / k_B;
+	static constexpr double energy_unit = C::ev2erg / C::k_B;
 	static constexpr double lower_rad_energy_bound = 0.0;
 	static constexpr double upper_rad_energy_bound = std::numeric_limits<double>::max();
   static constexpr int nGroups = 2;
@@ -83,14 +83,14 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputePlanckOpac
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputePlanckOpacityForGroup(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
-	quokka::valarray<double, nGroups_> kappaPVec;
+	quokka::valarray<double, nGroups_> kappaPVec{};
 	fillin(kappaPVec, 0.);
 	return kappaPVec;
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputeFluxMeanOpacityForGroup(const double /*rho*/, const double Tgas) -> quokka::valarray<double, nGroups_>
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputeFluxMeanOpacityForGroup(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
-	quokka::valarray<double, nGroups_> kappaFVec;
+	quokka::valarray<double, nGroups_> kappaFVec{};
   // fillin(kappaFVec, kappa0);
 	kappaFVec[0] = kappa0 * 1.5;
 	kappaFVec[1] = kappa0 * 0.5;
@@ -162,7 +162,7 @@ template <> void RadhydroSimulation<TubeProblem>::setInitialConditionsOnGrid(quo
   // CCH: calculate radEnergyFractions 
   // amrex::Real const temperature = 0.0;
 	// RadSystem<TubeProblem>::ComputeRadEnergyFractions(radEnergyFractions, temperature);
-	quokka::valarray<amrex::Real, RadSystem_Traits<TubeProblem>::nGroups> radEnergyFractions;
+	quokka::valarray<amrex::Real, RadSystem_Traits<TubeProblem>::nGroups> radEnergyFractions{};
   fillin(radEnergyFractions, 1.0 / RadSystem_Traits<TubeProblem>::nGroups);
 
 	// loop over the grid and set the initial condition
@@ -222,7 +222,7 @@ AMRSimulation<TubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv
   // CCH: calculate radEnergyFractions 
   // amrex::Real const temperature = 0.0;
   // RadSystem<TubeProblem>::ComputeRadEnergyFractions(radEnergyFractions, temperature);
-	quokka::valarray<amrex::Real, RadSystem_Traits<TubeProblem>::nGroups> radEnergyFractions;
+	quokka::valarray<amrex::Real, RadSystem_Traits<TubeProblem>::nGroups> radEnergyFractions{};
   fillin(radEnergyFractions, 1.0 / RadSystem_Traits<TubeProblem>::nGroups);
 
 	if (i < lo[0]) {

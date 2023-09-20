@@ -48,7 +48,7 @@ template <> struct RadSystem_Traits<TubeProblem> {
 	static constexpr double radiation_constant = radiation_constant_cgs_;
 	static constexpr double Erad_floor = 0.;
 	static constexpr bool compute_v_over_c_terms = true;
-	static constexpr double energy_unit = ev2erg / k_B;
+	static constexpr double energy_unit = C::ev2erg / C::k_B;
 	static constexpr double lower_rad_energy_bound = 0.0;
 	static constexpr double upper_rad_energy_bound = std::numeric_limits<double>::max();
   static constexpr int nGroups = 3;
@@ -146,7 +146,7 @@ template <> void RadhydroSimulation<TubeProblem>::preCalculateInitialConditions(
 	amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, Pgas_arr.begin(), Pgas_arr.end(), Pgas_arr_g.begin());
 	amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, Erad_arr.begin(), Erad_arr.end(), Erad_arr_g.begin());
 	amrex::Gpu::streamSynchronizeAll();
-  // TODO: add multi-group support
+  // TODO: add non-trivial multi-group support
 }
 
 template <> void RadhydroSimulation<TubeProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
