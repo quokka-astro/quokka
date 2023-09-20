@@ -713,9 +713,9 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::FixupState(int
 
 	// fix hydro state
 	amrex::Print() << "enforce limits state_new_cc " << std::endl;
-	HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, state_new_cc_[lev]);
+	HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, state_new_cc_[lev], "fixup_new");
 	amrex::Print() << "enforce limits state_old_cc " << std::endl;
-	HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, state_old_cc_[lev]);
+	HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, state_old_cc_[lev], "fixup_old");
 	// sync internal energy and total energy
 	HydroSystem<problem_t>::SyncDualEnergy(state_new_cc_[lev]);
 }
@@ -1132,7 +1132,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 
 		// prevent vacuum
 		amrex::Print() << "enforce limits fofc 1 " << std::endl;
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, stateNew);
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, stateNew, "RK2-stage-1");
 
 		if (useDualEnergy_ == 1) {
 			// sync internal energy (requires positive density)
@@ -1228,7 +1228,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 
 		// prevent vacuum
 		amrex::Print() << "enforce limits prevent vacuum stage 2 " << std::endl;
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, stateFinal);
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, stateFinal, "RK2-stage-2");
 
 		if (useDualEnergy_ == 1) {
 			// sync internal energy (requires positive density)

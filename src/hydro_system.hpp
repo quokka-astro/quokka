@@ -109,7 +109,7 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	AMREX_GPU_DEVICE static auto GetGradFixedPotential(amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> posvec) -> amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>;
 
 	static void EnforceLimits(amrex::Real densityFloor, amrex::Real pressureFloor, amrex::Real speedCeiling, amrex::Real tempCeiling,
-				  amrex::Real const tempFloor, amrex::MultiFab &state_mf);
+				  amrex::Real const tempFloor, amrex::MultiFab &state_mf, const char* inputString);
 
 	static void AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex::MultiFab const &consVar_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
 					 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &faceVelArray, amrex::iMultiFab const &redoFlag_mf);
@@ -721,7 +721,7 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::MultiFab const &q_mf, amrex::M
 // floors and ceilings which can be set in the param file
 template <typename problem_t>
 void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex::Real const pressureFloor, amrex::Real const speedCeiling,
-					   amrex::Real const tempCeiling, amrex::Real const tempFloor, amrex::MultiFab &state_mf)
+					   amrex::Real const tempCeiling, amrex::Real const tempFloor, amrex::MultiFab &state_mf, const char* inputString)
 {
 
 	auto state = state_mf.arrays();
@@ -847,9 +847,9 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 				printf("rho out is nan or zero even though rho in is not nan %e !! ", state[bx](i, j, k, density_index));
 			}
 		} else if (std::isnan(rho)) {
-			printf("rho in is nan howcome %e !", rho);
+			printf("rho in is nan howcome %e called by %s! \n", rho, inputString);
 		} else {
-			printf("rho in is zero woah %e !", rho);
+			printf("rho in is zero woah %e called by %s ! \n", rho, inputString);
 		}
 
 	});
