@@ -270,7 +270,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator<(quokka::valarray<T, d> c
 
 // define fillin(valarray) for quokka::valarray
 template <typename T, int d> 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void fillin(quokka::valarray<T, d> &v, T const &scalar)
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void valarray::fillin(quokka::valarray<T, d> &v, T const &scalar)
 {
   for (size_t i = 0; i < v.size(); ++i) {
     v[i] = scalar;
