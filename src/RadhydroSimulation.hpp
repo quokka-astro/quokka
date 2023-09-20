@@ -433,11 +433,11 @@ template <typename problem_t> auto RadhydroSimulation<problem_t>::computeExtraPh
 	return std::numeric_limits<amrex::Real>::max();
 }
 
-#if !defined(NDEBUG)
+//#if !defined(NDEBUG)
 #define CHECK_HYDRO_STATES(mf) checkHydroStates(mf, __FILE__, __LINE__)
-#else
-#define CHECK_HYDRO_STATES(mf)
-#endif
+//#else
+//#define CHECK_HYDRO_STATES(mf)
+//#endif
 
 template <typename problem_t> void RadhydroSimulation<problem_t>::checkHydroStates(amrex::MultiFab &mf, char const *file, int line)
 {
@@ -451,6 +451,7 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::checkHydroStat
 		amrex::Print() << "Writing checkpoint for debugging...\n";
 		amrex::MFIter::allowMultipleMFIters(true);
 		WriteCheckpointFile();
+		
 		amrex::Abort("Hydro states invalid (" + std::string(file) + ":" + std::to_string(line) + ")");
 	}
 }
@@ -999,6 +1000,16 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	// update ghost zones [old timestep]
 	fillBoundaryConditions(state_old_cc_tmp, state_old_cc_tmp, lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState);
 
+        bool validStates = HydroSystem<problem_t>::CheckStatesValid(state_old_cc_tmp);
+        if (!validStates) {
+                amrex::Print() << "Hydro states invalid after fillBC in RK  \n";
+                amrex::Print() << "Writing checkpoint for debugging...\n";
+                amrex::MFIter::allowMultipleMFIters(true);
+                WriteCheckpointFile();
+                amrex::Abort("Hydro states invalid after fillBC in RK ");
+        }
+
+
 	// LOW LEVEL DEBUGGING: output state_old_cc_tmp (with ghost cells)
 	if (lowLevelDebuggingOutput_ == 1) {
 #ifdef AMREX_USE_ASCENT
@@ -1018,6 +1029,16 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	AMREX_ASSERT(!state_old_cc_tmp.contains_nan()); // check ghost cells
 
 	auto [FOfluxArrays, FOfaceVel] = computeFOHydroFluxes(state_old_cc_tmp, ncompHydro_, lev);
+
+        validStates = HydroSystem<problem_t>::CheckStatesValid(state_old_cc_tmp);
+        if (!validStates) {
+                amrex::Print() << "Hydro states invalid before RK2 stage 1  \n";
+                amrex::Print() << "Writing checkpoint for debugging...\n";
+                amrex::MFIter::allowMultipleMFIters(true);
+                WriteCheckpointFile();
+                amrex::Abort("Hydro states invalid before RK2 stage 1 ");
+        }
+
 
 	// Stage 1 of RK2-SSP
 	{
@@ -1121,6 +1142,16 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		}
 	}
 	amrex::Gpu::streamSynchronizeAll();
+
+	validStates = HydroSystem<problem_t>::CheckStatesValid(state_inter_cc_);
+	if (!validStates) {
+		amrex::Print() << "Hydro states invalid after RK2 stage 1  \n";
+		amrex::Print() << "Writing checkpoint for debugging...\n";
+		amrex::MFIter::allowMultipleMFIters(true);
+		WriteCheckpointFile();
+		amrex::Abort("Hydro states invalid after RK2 stage ");
+	}
+
 
 	// Stage 2 of RK2-SSP
 	if (integratorOrder_ == 2) {
