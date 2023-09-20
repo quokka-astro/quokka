@@ -1001,6 +1001,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	fillBoundaryConditions(state_old_cc_tmp, state_old_cc_tmp, lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState);
 
 	bool validStates = HydroSystem<problem_t>::CheckStatesValid(state_old_cc_tmp);
+	amrex::ParallelDescriptor::ReduceBoolAnd(validStates);
 	if (!validStates) {
 		amrex::Print() << "Hydro states invalid after fillBC in RK  \n";
 		amrex::Print() << "Writing checkpoint for debugging...\n";
@@ -1031,6 +1032,8 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	auto [FOfluxArrays, FOfaceVel] = computeFOHydroFluxes(state_old_cc_tmp, ncompHydro_, lev);
 
 	validStates = HydroSystem<problem_t>::CheckStatesValid(state_old_cc_tmp);
+	amrex::ParallelDescriptor::ReduceBoolAnd(validStates);
+
 	if (!validStates) {
 		amrex::Print() << "Hydro states invalid before RK2 stage 1  \n";
 		amrex::Print() << "Writing checkpoint for debugging...\n";
@@ -1144,6 +1147,8 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	amrex::Gpu::streamSynchronizeAll();
 
 	validStates = HydroSystem<problem_t>::CheckStatesValid(state_inter_cc_);
+	amrex::ParallelDescriptor::ReduceBoolAnd(validStates);
+	
 	if (!validStates) {
 		amrex::Print() << "Hydro states invalid after RK2 stage 1  \n";
 		amrex::Print() << "Writing checkpoint for debugging...\n";
