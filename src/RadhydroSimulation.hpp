@@ -708,9 +708,12 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::applyPoissonGr
 template <typename problem_t> void RadhydroSimulation<problem_t>::FixupState(int lev)
 {
 	BL_PROFILE("RadhydroSimulation::FixupState()");
+	amrex::ParallelDescriptor::Barrier();
 
 	// fix hydro state
+	amrex::Print() << "enforce limits state_new_cc " << std::endl;
 	HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, state_new_cc_[lev]);
+	amrex::Print() << "enforce limits state_old_cc " << std::endl;
 	HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, state_old_cc_[lev]);
 	// sync internal energy and total energy
 	HydroSystem<problem_t>::SyncDualEnergy(state_new_cc_[lev]);
@@ -1104,6 +1107,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		}
 
 		// prevent vacuum
+		amrex::Print() << "enforce limits fofc 1 " << std::endl;
 		HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, stateNew);
 
 		if (useDualEnergy_ == 1) {
@@ -1187,6 +1191,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		}
 
 		// prevent vacuum
+		amrex::Print() << "enforce limits prevent vacuum stage 2 " << std::endl;
 		HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, stateFinal);
 
 		if (useDualEnergy_ == 1) {
