@@ -387,6 +387,34 @@ template <> void RadhydroSimulation<PopIII>::ComputeDerivedVar(int lev, std::str
 			output[bx](i, j, k, ncomp) = quokka::EOS<PopIII>::ComputeTgasFromEint(rho, Eint, massScalars);
 		});
 	}
+
+	if (dname == "pressure") {
+
+		const int ncomp = ncomp_cc_in;
+		auto const &state = state_new_cc_[lev].const_arrays();
+		auto output = mf.arrays();
+
+		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			amrex::Real Pgas = HydroSystem<PopIII>::ComputePressure(state[bx], i, j, k);
+			output[bx](i, j, k, ncomp) = Pgas;
+		});
+	}
+
+
+	if (dname == "velx") {
+
+		const int ncomp = ncomp_cc_in;
+		auto const &state = state_new_cc_[lev].const_arrays();
+		auto output = mf.arrays();
+
+		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+
+			Real const rho = state[bx](i, j, k, HydroSystem<PopIII>::density_index);
+			Real const xmom = state[bx](i, j, k, HydroSystem<PopIII>::x1Momentum_index);
+			output[bx](i, j, k, ncomp) = xmom / rho;
+		});
+	}
+
 }
 
 auto problem_main() -> int
