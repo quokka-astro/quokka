@@ -953,7 +953,7 @@ template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckOpacityTempDerivative(const double /* rho */, const double /* Tgas */) -> quokka::valarray<double, nGroups_>
 {
   quokka::valarray<double, nGroups_> kappa{};
-	fillin(kappa, 0.0);
+	valarray_fillin(kappa, 0.0);
 	return kappa;
 }
 

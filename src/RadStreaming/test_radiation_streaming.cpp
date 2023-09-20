@@ -56,14 +56,14 @@ template <> struct RadSystem_Traits<StreamingProblem> {
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, Physics_Traits<StreamingProblem>::nGroups> kappaPVec{};
-	fillin(kappaPVec, kappa0);
+	valarray_fillin(kappaPVec, kappa0);
 	return kappaPVec;
 }
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputeFluxMeanOpacity(const double /*rho*/, const double Tgas) -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, Physics_Traits<StreamingProblem>::nGroups> kappaFVec{};
-  fillin(kappaFVec, kappa0);
+  valarray_fillin(kappaFVec, kappa0);
 	return kappaFVec;
 }
 
@@ -82,7 +82,7 @@ template <> void RadhydroSimulation<StreamingProblem>::setInitialConditionsOnGri
 
   // CCH: calculate radEnergyFractions 
 	quokka::valarray<amrex::Real, Physics_Traits<StreamingProblem>::nGroups> radEnergyFractions;
-  fillin(radEnergyFractions, 1.0 / Physics_Traits<StreamingProblem>::nGroups);
+  valarray_fillin(radEnergyFractions, 1.0 / Physics_Traits<StreamingProblem>::nGroups);
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -127,7 +127,7 @@ AMRSimulation<StreamingProblem>::setCustomBoundaryConditions(const amrex::IntVec
 
   // CCH: calculate radEnergyFractions 
 	quokka::valarray<amrex::Real, Physics_Traits<StreamingProblem>::nGroups> radEnergyFractions;
-  fillin(radEnergyFractions, 1.0 / Physics_Traits<StreamingProblem>::nGroups);
+  valarray_fillin(radEnergyFractions, 1.0 / Physics_Traits<StreamingProblem>::nGroups);
 
 	if (i < lo[0]) {
 		// streaming inflow boundary
