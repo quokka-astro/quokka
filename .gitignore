@@ -3,6 +3,9 @@ compile_commands.json
 .vscode/
 codeql-db/
 build/
+build.*/
+build_*/
+run/
 docs/doxygen/
 tests/last_chk
 tests/plt*
