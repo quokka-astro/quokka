@@ -343,6 +343,14 @@ template <> void RadhydroSimulation<PopIII>::ErrorEst(int lev, amrex::TagBoxArra
 	const amrex::Real G = Gconst_;
 	const amrex::Real dx = geom[lev].CellSizeArray()[0];
 
+	auto const &prob_lo = geom[lev].ProbLoArray();
+	auto const &prob_hi = geom[lev].ProbHiArray();
+
+	amrex::Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
+	amrex::Real const y0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
+	amrex::Real const z0 = prob_lo[2] + 0.5 * (prob_hi[2] - prob_lo[2]);
+
+
 	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
 		const amrex::Box &box = mfi.validbox();
 		const auto state = state_new_cc_[lev].const_array(mfi);
@@ -350,6 +358,10 @@ template <> void RadhydroSimulation<PopIII>::ErrorEst(int lev, amrex::TagBoxArra
 		const int nidx = HydroSystem<PopIII>::density_index;
 
 		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+
+			amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx;
+			amrex::Real const y = prob_lo[1] + (j + static_cast<amrex::Real>(0.5)) * dx;
+			amrex::Real const z = prob_lo[2] + (k + static_cast<amrex::Real>(0.5)) * dx;
 
 			Real const rho = state(i, j, k, nidx);
 			Real pressure = HydroSystem<PopIII>::ComputePressure(state, i, j, k);
@@ -359,7 +371,7 @@ template <> void RadhydroSimulation<PopIII>::ErrorEst(int lev, amrex::TagBoxArra
 
 			const amrex::Real l_Jeans = cs * std::sqrt(M_PI / (G * rho));
 
-			if (l_Jeans < (N_cells * dx) && rho > 5e-20) {
+			if (l_Jeans < (N_cells * dx) && rho > 5e-20 && x > -6.172e17 && x < 1.543e18 && y > -6.172e17) {
 				tag(i, j, k) = amrex::TagBox::SET;
 
 			}
