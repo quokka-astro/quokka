@@ -13,6 +13,8 @@ template <typename problem_t> struct Physics_Traits {
 	static constexpr bool is_radiation_enabled = false;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
+  // number of radiation groups
+  static constexpr int nGroups = 1;
 };
 
 // this struct stores the indices at which quantities start

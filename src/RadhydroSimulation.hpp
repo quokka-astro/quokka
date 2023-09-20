@@ -290,7 +290,7 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::defineComponen
 	if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
 		// std::vector<std::string> radNames = {"radEnergy", "x-RadFlux", "y-RadFlux", "z-RadFlux"};
 		std::vector<std::string> radNames = {};
-		for (int i = 0; i < RadSystem_Traits<problem_t>::nGroups; ++i) {
+		for (int i = 0; i < Physics_Traits<problem_t>::nGroups; ++i) {
 			radNames.push_back("radEnergyGroup_" + std::to_string(i));
       radNames.push_back("x-RadFluxGroup_" + std::to_string(i));
       radNames.push_back("y-RadFluxGroup_" + std::to_string(i));
@@ -529,13 +529,13 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::computeAfterEv
 	if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
 		// amrex::Real const Erad0 = initSumCons[RadSystem<problem_t>::radEnergy_index];
 		amrex::Real Erad0 = 0.;
-    for (int g = 0; g < RadSystem_Traits<problem_t>::nGroups; ++g) {
+    for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
       Erad0 += initSumCons[RadSystem<problem_t>::radEnergy_index + Physics_NumVars::numRadVars * g];
     }
 		Etot0 = Egas0 + (RadSystem<problem_t>::c_light_ / RadSystem<problem_t>::c_hat_) * Erad0;
 		// amrex::Real const Erad = state_new_cc_[0].sum(RadSystem<problem_t>::radEnergy_index) * vol;
     amrex::Real Erad = 0.;
-    for (int g = 0; g < RadSystem_Traits<problem_t>::nGroups; ++g) {
+    for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
       Erad += state_new_cc_[0].sum(RadSystem<problem_t>::radEnergy_index + Physics_NumVars::numRadVars * g) * vol;
     }
 		Etot = Egas + (RadSystem<problem_t>::c_light_ / RadSystem<problem_t>::c_hat_) * Erad;
@@ -1499,9 +1499,9 @@ void RadhydroSimulation<problem_t>::operatorSplitSourceTerms(amrex::Array4<amrex
 							     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi)
 {
   // CCH: multigroup radiation
-	amrex::FArrayBox radEnergySource(indexRange, RadSystem_Traits<problem_t>::nGroups,
+	amrex::FArrayBox radEnergySource(indexRange, Physics_Traits<problem_t>::nGroups,
 					 amrex::The_Async_Arena()); // cell-centered scalar
-	amrex::FArrayBox advectionFluxes(indexRange, 3 * RadSystem_Traits<problem_t>::nGroups,
+	amrex::FArrayBox advectionFluxes(indexRange, 3 * Physics_Traits<problem_t>::nGroups,
 					 amrex::The_Async_Arena()); // cell-centered vector
 
 	radEnergySource.setVal<amrex::RunOn::Device>(0.);
