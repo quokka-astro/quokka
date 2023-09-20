@@ -265,7 +265,7 @@ template <> void RadhydroSimulation<PopIII>::setInitialConditionsOnGrid(quokka::
 		amrex::Real const r = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2) + std::pow(z - z0, 2));
 		amrex::Real const distxy = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2));
 
-		burn_t state;
+		eos_t state;
 		amrex::Real rhotot = 0.0;
 
 		for (int n = 0; n < NumSpec; ++n) {
@@ -295,9 +295,12 @@ template <> void RadhydroSimulation<PopIII>::setInitialConditionsOnGrid(quokka::
 		double vy = renorm_amp * dvy(i, j, k);
 		double vz = renorm_amp * dvz(i, j, k);
 
+		amrex::Real pres = 0.0;
+
 		if (r <= R_sphere) {
 			state.rho = rhotot;
 			state.T = core_temp;
+			eos(eos_input_rt, state);
 
 			// add rotation to vx and vy
 			vx += (-1.0) * distxy * omega_sphere * std::sin(phi);
@@ -305,11 +308,12 @@ template <> void RadhydroSimulation<PopIII>::setInitialConditionsOnGrid(quokka::
 
 		} else {
 			state.rho = 0.01 * rhotot;
-			state.T = 1e2 * core_temp; // can use EOS.hpp function to solve for temp
+			state.p = 3.595730e-10; //pressure equilibrium - this is the pressure within the core
+			eos(eos_input_rp, state);
+
 		}
 
 		// call the EOS to set initial internal energy e
-		eos(eos_input_rt, state);
 		amrex::Real e = state.rho * state.e;
 
 		//amrex::Print() << "cell " << i << j << k << " " << state.rho << " " << state.T << " " << e << std::endl;
@@ -355,7 +359,7 @@ template <> void RadhydroSimulation<PopIII>::ErrorEst(int lev, amrex::TagBoxArra
 
 			const amrex::Real l_Jeans = cs * std::sqrt(M_PI / (G * rho));
 
-			if (l_Jeans < (N_cells * dx) && rho > 2e-20) {
+			if (l_Jeans < (N_cells * dx) && rho > 5e-20) {
 				tag(i, j, k) = amrex::TagBox::SET;
 
 			}
