@@ -83,10 +83,18 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 			// call the EOS to set initial internal energy e
 			eos(eos_input_re, chemstate);
 
+			if (dt < 0) {
+				amrex::Abort("Cannot do chemistry with dt < 0!");
+			}
+
 			// do the actual integration
 			// do it in .cpp so that it is not built at compile time for all tests
 			// which would otherwise slow down compilation due to the large RHS file
 			chemburner(chemstate, dt);
+
+			if (std::isnan(chemstate.xn[0]) || std::isnan(chemstate.rho)) {
+				amrex::Abort("Burner returned NAN");
+			}
 
 			if (!chemstate.success) {
 				amrex::Abort("VODE integration was unsuccessful!");
