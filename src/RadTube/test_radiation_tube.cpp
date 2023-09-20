@@ -78,14 +78,14 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputePlanckOpac
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputePlanckOpacityForGroup(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, nGroups_> kappaPVec;
-	fillin(kappaPVec, kappa0);
+	valarray_fillin(kappaPVec, kappa0);
 	return kappaPVec;
 }
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputeFluxMeanOpacityForGroup(const double /*rho*/, const double Tgas) -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, nGroups_> kappaFVec;
-  fillin(kappaFVec, kappa0);
+  valarray_fillin(kappaFVec, kappa0);
 	// kappaFVec[0] = kappa0 * 1.5;
 	// kappaFVec[1] = kappa0 * 0.5;
 	return kappaFVec;

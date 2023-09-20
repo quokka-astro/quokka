@@ -270,22 +270,11 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator<(quokka::valarray<T, d> c
 
 // define fillin(valarray) for quokka::valarray
 template <typename T, int d> 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void fillin(quokka::valarray<T, d> &v, T const &scalar)
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void valarray_fillin(quokka::valarray<T, d> &v, T const &scalar)
 {
   for (size_t i = 0; i < v.size(); ++i) {
     v[i] = scalar;
   }
 }
-
-// // do slicing with valarray, e.g. array_positive_terms = array[array > 0.]
-// template <typename T, int d>
-// AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator[](quokka::valarray<T, d> const &v, quokka::valarray<bool, d> const &mask) -> quokka::valarray<T, d>
-// {
-//   quokka::valarray<T, d> sliced;
-//   for (size_t i = 0; i < v.size(); ++i) {
-//     sliced[i] = mask[i] ? v[i] : 0.;
-//   }
-//   return sliced;
-// }
 
 #endif // VALARRAY_HPP_
