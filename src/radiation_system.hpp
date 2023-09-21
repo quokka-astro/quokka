@@ -33,8 +33,10 @@
 #include "valarray.hpp"
 
 // physical constants in CGS units
-static constexpr double c_light_cgs_ = C::c_light;	      // cgs
-static constexpr double radiation_constant_cgs_ = C::a_rad; // cgs
+static constexpr double c_light_cgs_ = 2.99792458e10;	      // cgs
+static constexpr double radiation_constant_cgs_ = 7.5646e-15; // cgs
+// static constexpr double c_light_cgs_ = C::c_light;	      // cgs
+// static constexpr double radiation_constant_cgs_ = C::a_rad; // cgs
 static constexpr double pi = 3.14159265358979323846;
 static constexpr double inf = std::numeric_limits<double>::max();
 
@@ -948,7 +950,7 @@ template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::C
 	return kappaFVec;
 }
 
-// Derivative of Planck/energy-mean opacity with respect to gas temperature. In the future, they should be defined separately.
+// TODO(CCH): Derivative of Planck/energy-mean opacity with respect to gas temperature. In the future, they should be defined separately.
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckOpacityTempDerivative(const double /* rho */, const double /* Tgas */) -> quokka::valarray<double, nGroups_>
 {
@@ -956,11 +958,6 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckOpacityTempDerivat
 	valarray_fillin(kappa, 0.0);
 	return kappa;
 }
-
-// template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeRosselandOpacity(const double /*rho*/, const double /*Tgas*/) -> double
-// {
-// 	return NAN;
-// }
 
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeEintFromEgas(const double density, const double X1GasMom, const double X2GasMom, const double X3GasMom,
@@ -1129,14 +1126,14 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
         dFR_dEgas = -1.0 * dRvec_dEgas;
         dFR_i_dErad_i = -1.0 * dRtot_dErad + 1.0;
 				AMREX_ASSERT(!std::isnan(dFG_dEgas));
-				AMREX_ASSERT(!hasnan(dFG_dErad));
-				AMREX_ASSERT(!hasnan(dFR_dEgas));
-				AMREX_ASSERT(!hasnan(dFR_i_dErad_i));
+				AMREX_ASSERT(!dFG_dErad.hasnan());
+				AMREX_ASSERT(!dFR_dEgas.hasnan());
+				AMREX_ASSERT(!dFR_i_dErad_i.hasnan());
 
         // update variables
         RadSystem<problem_t>::SolveLinearEqs(dFG_dEgas, dFG_dErad, dFR_dEgas, dFR_i_dErad_i, -F_G, -1. * F_R, deltaEgas, deltaErad);
 				AMREX_ASSERT(!std::isnan(deltaEgas));
-				AMREX_ASSERT(!hasnan(deltaErad));
+				AMREX_ASSERT(!deltaErad.hasnan());
 				EradVec_guess += deltaErad;
 				Egas_guess += deltaEgas;
 				AMREX_ASSERT(min(EradVec_guess) >= 0.);

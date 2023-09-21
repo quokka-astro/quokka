@@ -53,10 +53,26 @@ template <typename T, int d> class valarray
 
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE constexpr auto size() const -> size_t { return d; }
 
+  AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void fillin(T const &scalar)
+  {
+    for (size_t i = 0; i < d; ++i) {
+      values[i] = scalar;
+    }
+  }
+
+  [[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto hasnan() const -> bool
+  {
+    for (size_t i = 0; i < d; ++i) {
+      if (std::isnan(values[i])) { return true; }
+    }
+    return false;
+  }
+
       private:
 	T values[d]; // NOLINT
 	static constexpr T default_value = 0;
 };
+
 } // namespace quokka
 
 // array + array
@@ -213,17 +229,6 @@ template <typename T, int d> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto sum(q
   return sum_val;
 }
 
-// hasnan(array)
-template <typename T, int d> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto hasnan(quokka::valarray<T, d> const &v) -> bool
-{
-  for (size_t i = 0; i < v.size(); ++i) {
-    if (std::isnan(v[i])) {
-      return true;
-    }
-  }
-  return false;
-}
-
 // array > array
 template <typename T, int d>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator>(quokka::valarray<T, d> const &a, quokka::valarray<T, d> const &b) -> quokka::valarray<bool, d>
@@ -266,15 +271,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator<(quokka::valarray<T, d> c
     comp[i] = a[i] < scalar;
   }
   return comp;
-}
-
-// define fillin(valarray) for quokka::valarray
-template <typename T, int d> 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void valarray_fillin(quokka::valarray<T, d> &v, T const &scalar)
-{
-  for (size_t i = 0; i < v.size(); ++i) {
-    v[i] = scalar;
-  }
 }
 
 #endif // VALARRAY_HPP_

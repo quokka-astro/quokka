@@ -42,21 +42,6 @@ template <> struct quokka::EOS_Traits<TubeProblem> {
 	static constexpr double gamma = gamma_gas;
 };
 
-template <> struct RadSystem_Traits<TubeProblem> {
-	static constexpr double c_light = c_light_cgs_;
-	static constexpr double c_hat = 10.0 * a0;
-	static constexpr double radiation_constant = radiation_constant_cgs_;
-	static constexpr double Erad_floor = 0.;
-	static constexpr bool compute_v_over_c_terms = true;
-	static constexpr double energy_unit = C::ev2erg / C::k_B;
-	static constexpr double lower_rad_energy_bound = 0.0;
-	static constexpr double upper_rad_energy_bound = std::numeric_limits<double>::max();
-  static constexpr int nGroups = 3;
-  static constexpr std::array<double, nGroups - 1> radBoundaries {2.4, 13.6};  // eV, size = nGroups - 1
-  // static constexpr int nGroups = 1;
-  // static constexpr std::array<double, nGroups - 1> radBoundaries {};  // eV, size = nGroups - 1
-};
-
 template <> struct Physics_Traits<TubeProblem> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
@@ -66,23 +51,28 @@ template <> struct Physics_Traits<TubeProblem> {
 	static constexpr bool is_radiation_enabled = true;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
-  // CCH: a hack to get nvarTotal_cc_radhydro right in physics_info.hpp
-  static constexpr int nGroups = RadSystem_Traits<TubeProblem>::nGroups;
+  // number of radiation groups
+  static constexpr int nGroups = 2;
 };
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> double 
-{ 
-  return kappa0; 
-}
+template <> struct RadSystem_Traits<TubeProblem> {
+	static constexpr double c_light = c_light_cgs_;
+	static constexpr double c_hat = 10.0 * a0;
+	static constexpr double radiation_constant = radiation_constant_cgs_;
+	static constexpr double Erad_floor = 0.;
+	static constexpr bool compute_v_over_c_terms = true;
+	static constexpr double energy_unit = C::ev2erg;
+  static constexpr std::array<double, Physics_Traits<TubeProblem>::nGroups + 1> radBoundaries {0., 2.4, inf};  // length = nGroups + 1
+};
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputePlanckOpacityForGroup(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, nGroups_> kappaPVec;
 	valarray_fillin(kappaPVec, kappa0);
 	return kappaPVec;
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputeFluxMeanOpacityForGroup(const double /*rho*/, const double Tgas) -> quokka::valarray<double, nGroups_>
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputeFluxMeanOpacity(const double /*rho*/, const double Tgas) -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, nGroups_> kappaFVec;
   valarray_fillin(kappaFVec, kappa0);
@@ -90,12 +80,6 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputeFluxMeanOp
 	// kappaFVec[1] = kappa0 * 0.5;
 	return kappaFVec;
 }
-
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputeRosselandOpacity(const double /*rho*/, const double /*Tgas*/) -> double 
-{ 
-  return kappa0; 
-}
-
 
 // declare global variables
 // initial conditions read from file
@@ -146,7 +130,6 @@ template <> void RadhydroSimulation<TubeProblem>::preCalculateInitialConditions(
 	amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, Pgas_arr.begin(), Pgas_arr.end(), Pgas_arr_g.begin());
 	amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, Erad_arr.begin(), Erad_arr.end(), Erad_arr_g.begin());
 	amrex::Gpu::streamSynchronizeAll();
-  // TODO: add non-trivial multi-group support
 }
 
 template <> void RadhydroSimulation<TubeProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
@@ -163,10 +146,6 @@ template <> void RadhydroSimulation<TubeProblem>::setInitialConditionsOnGrid(quo
 	auto const &Erad_ptr = Erad_arr_g.dataPtr();
 	int x_size = static_cast<int>(x_arr_g.size());
 
-  // CCH: calculate radEnergyFractions
-	// quokka::valarray<amrex::Real, RadSystem_Traits<TubeProblem>::nGroups> radEnergyFractions;
-  // fillin(radEnergyFractions, 1.0 / RadSystem_Traits<TubeProblem>::nGroups);
-
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 		amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
@@ -176,11 +155,12 @@ template <> void RadhydroSimulation<TubeProblem>::setInitialConditionsOnGrid(quo
 		amrex::Real const Erad = interpolate_value(x, x_ptr, Erad_ptr, x_size);
 		amrex::Real const Tgas = Pgas / C::k_B * mu / rho;
 
-	  quokka::valarray<amrex::Real, RadSystem_Traits<TubeProblem>::nGroups> radEnergyFractions;
+    // CCH: calculate radEnergyFractions based on the boundary conditions
+	  quokka::valarray<amrex::Real, Physics_Traits<TubeProblem>::nGroups> radEnergyFractions;
     RadSystem<TubeProblem>::ComputePlanckEnergyFractions(radEnergyFractions, Tgas);
 
 		// CCH: multigroup radiation
-		for (int g = 0; g < RadSystem_Traits<TubeProblem>::nGroups; ++g) {
+		for (int g = 0; g < Physics_Traits<TubeProblem>::nGroups; ++g) {
 			state_cc(i, j, k, RadSystem<TubeProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad * radEnergyFractions[g];
 			state_cc(i, j, k, RadSystem<TubeProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
 			state_cc(i, j, k, RadSystem<TubeProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
@@ -194,7 +174,6 @@ template <> void RadhydroSimulation<TubeProblem>::setInitialConditionsOnGrid(quo
 		state_cc(i, j, k, RadSystem<TubeProblem>::x1GasMomentum_index) = 0.;
 		state_cc(i, j, k, RadSystem<TubeProblem>::x2GasMomentum_index) = 0.;
 		state_cc(i, j, k, RadSystem<TubeProblem>::x3GasMomentum_index) = 0.;
-
 	});
 }
 
@@ -222,16 +201,15 @@ AMRSimulation<TubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv
 	amrex::GpuArray<int, 3> hi = box.hiVect3d();
 
   // CCH: calculate radEnergyFractions 
-	quokka::valarray<amrex::Real, RadSystem_Traits<TubeProblem>::nGroups> radEnergyFractionsT0;
-	quokka::valarray<amrex::Real, RadSystem_Traits<TubeProblem>::nGroups> radEnergyFractionsT1;
+	quokka::valarray<amrex::Real, Physics_Traits<TubeProblem>::nGroups> radEnergyFractionsT0;
+	quokka::valarray<amrex::Real, Physics_Traits<TubeProblem>::nGroups> radEnergyFractionsT1;
   RadSystem<TubeProblem>::ComputePlanckEnergyFractions(radEnergyFractionsT0, T0);
   RadSystem<TubeProblem>::ComputePlanckEnergyFractions(radEnergyFractionsT1, T1);
 
 	if (i < lo[0]) {
 		// left side boundary -- constant
 		const double Erad = RadSystem<TubeProblem>::radiation_constant_ * std::pow(T0, 4);
-    // CCH
-    for (int g = 0; g < RadSystem_Traits<TubeProblem>::nGroups; ++g) {
+    for (int g = 0; g < Physics_Traits<TubeProblem>::nGroups; ++g) {
 		  const double Frad = consVar(lo[0], j, k, RadSystem<TubeProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g);
       consVar(i, j, k, RadSystem<TubeProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad * radEnergyFractionsT0[g];
       consVar(i, j, k, RadSystem<TubeProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = Frad;
@@ -251,8 +229,7 @@ AMRSimulation<TubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv
 	} else if (i > hi[0]) {
 		// right-side boundary -- constant
 		const double Erad = RadSystem<TubeProblem>::radiation_constant_ * std::pow(T1, 4);
-    // CCH
-    for (int g = 0; g < RadSystem_Traits<TubeProblem>::nGroups; ++g) {
+    for (int g = 0; g < Physics_Traits<TubeProblem>::nGroups; ++g) {
 		  const double Frad = consVar(hi[0], j, k, RadSystem<TubeProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g);
       consVar(i, j, k, RadSystem<TubeProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad * radEnergyFractionsT1[g];
       consVar(i, j, k, RadSystem<TubeProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = Frad;
@@ -331,11 +308,13 @@ auto problem_main() -> int
 		double rho = values.at(RadSystem<TubeProblem>::gasDensity_index)[i];
 		rho_err[i] = (rho - rho_exact) / rho_exact;
 
-		double Trad_exact = std::pow(values0.at(RadSystem<TubeProblem>::radEnergy_index)[i] / radiation_constant_cgs_, 1. / 4.);
+		double Erad_0 = 0.0;
 		double Erad_t = 0.0;
-    for (int g = 0; g < RadSystem_Traits<TubeProblem>::nGroups; ++g) {
+    for (int g = 0; g < Physics_Traits<TubeProblem>::nGroups; ++g) {
+      Erad_0 += values0.at(RadSystem<TubeProblem>::radEnergy_index + Physics_NumVars::numRadVars * g)[i];
       Erad_t += values.at(RadSystem<TubeProblem>::radEnergy_index + Physics_NumVars::numRadVars * g)[i];
     }
+		double Trad_exact = std::pow(Erad_0 / radiation_constant_cgs_, 1. / 4.);
 		double Trad = std::pow(Erad_t / radiation_constant_cgs_, 1. / 4.);
 		Trad_arr[i] = Trad;
 		Trad_exact_arr[i] = Trad_exact;

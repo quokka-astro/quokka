@@ -50,7 +50,6 @@ template <> struct RadSystem_Traits<StreamingProblem> {
 	static constexpr bool compute_v_over_c_terms = false;
 	static constexpr double energy_unit = C::ev2erg;
   static constexpr std::array<double, Physics_Traits<StreamingProblem>::nGroups + 1> radBoundaries {0., 13.6, inf};
-  static constexpr int pickGroupToPlot = 0;
 };
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
@@ -66,11 +65,6 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputeFluxM
   valarray_fillin(kappaFVec, kappa0);
 	return kappaFVec;
 }
-
-// template <> AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputeRosselandOpacity(const double /*rho*/, const double /*Tgas*/) -> double
-// {
-// 	return kappa0;
-// }
 
 template <> void RadhydroSimulation<StreamingProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {

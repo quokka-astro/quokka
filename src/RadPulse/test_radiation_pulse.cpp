@@ -33,14 +33,6 @@ template <> struct quokka::EOS_Traits<PulseProblem> {
 	static constexpr double gamma = 5. / 3.;
 };
 
-template <> struct RadSystem_Traits<PulseProblem> {
-	static constexpr double c_light = c;
-	static constexpr double c_hat = chat;
-	static constexpr double radiation_constant = a_rad;
-	static constexpr double Erad_floor = erad_floor;
-	static constexpr bool compute_v_over_c_terms = false;
-};
-
 template <> struct Physics_Traits<PulseProblem> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = false;
@@ -50,6 +42,17 @@ template <> struct Physics_Traits<PulseProblem> {
 	static constexpr bool is_radiation_enabled = true;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
+  static constexpr int nGroups = 1;
+};
+
+template <> struct RadSystem_Traits<PulseProblem> {
+	static constexpr double c_light = c;
+	static constexpr double c_hat = chat;
+	static constexpr double radiation_constant = a_rad;
+	static constexpr double Erad_floor = erad_floor;
+	static constexpr bool compute_v_over_c_terms = false;
+	static constexpr double energy_unit = C::ev2erg;
+  static constexpr std::array<double, Physics_Traits<PulseProblem>::nGroups + 1> radBoundaries {0., inf};  // eV
 };
 
 AMREX_GPU_HOST_DEVICE
@@ -64,22 +67,31 @@ auto compute_exact_Trad(const double x, const double t) -> double
 	return 0.5 * normfac * std::exp(-(x * x) / (4.0 * width_sq));
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacity(const double rho, const double Tgas) -> double
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
 {
-	return (kappa0 / rho) * std::max(std::pow(Tgas / T0, 3), 1.0);
+	quokka::valarray<double, nGroups_> kappaPVec{};
+  auto kappa = (kappa0 / rho) * std::max(std::pow(Tgas / T0, 3), 1.0);
+	kappaPVec.fillin(kappa);
+	return kappaPVec
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputeRosselandOpacity(const double rho, const double Tgas) -> double
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputeRosselandOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
 {
-	return (kappa0 / rho) * std::max(std::pow(Tgas / T0, 3), 1.0);
+	quokka::valarray<double, nGroups_> kappaPVec{};
+  auto kappa = (kappa0 / rho) * std::max(std::pow(Tgas / T0, 3), 1.0);
+	kappaPVec.fillin(kappa);
+	return kappaPVec
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacityTempDerivative(const double rho, const double Tgas) -> double
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacityTempDerivative(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
 {
+  quokka::valarray<double, nGroups_> opacity_deriv{};
+  double opacity_deriv_scalar = 0.;
 	if (Tgas > 1.0) {
-		return (kappa0 / rho) * (3.0 / T0) * std::pow(Tgas / T0, 2);
+		opacity_deriv_scalar = (kappa0 / rho) * (3.0 / T0) * std::pow(Tgas / T0, 2);
 	}
-	return 0.;
+	opacity_deriv.fillin(opacity_deriv_scalar);
+	return opacity_deriv;
 }
 
 template <> void RadhydroSimulation<PulseProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
