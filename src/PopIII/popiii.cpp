@@ -370,10 +370,8 @@ template <> void RadhydroSimulation<PopIII>::ErrorEst(int lev, amrex::TagBoxArra
 			amrex::Real cs = quokka::EOS<PopIII>::ComputeSoundSpeed(rho, pressure, massScalars);
 
 			const amrex::Real l_Jeans = cs * std::sqrt(M_PI / (G * rho));
-
-			if (l_Jeans < (N_cells * dx) && rho > 5e-20 && x > -6.172e17 && x < 1.543e18 && y > -6.172e17) {
+			if (l_Jeans < (N_cells * dx) && rho > 2e-20) {
 				tag(i, j, k) = amrex::TagBox::SET;
-
 			}
 		});
 	}
