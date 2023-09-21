@@ -719,7 +719,12 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::FixupState(int
 		amrex::Print() << "enforce limits has rho = 0 fixup state_new_cc " << std::endl;
 		amrex::MFIter::allowMultipleMFIters(true);
 		WriteCheckpointFile();
-		amrex::Abort();
+		amrex::ParallelDescriptor::Barrier();
+		amrex::WriteSingleLevelPlotfile(CustomPlotFileName("debug_hydro_state_fatal", istep[lev] + 1), state_new_cc_[lev], componentNames_cc_, geom[lev], 0, istep[lev] + 1);
+		amrex::ParallelDescriptor::Barrier();
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			amrex::ParallelDescriptor::Abort();
+		}
 	}
 
 	amrex::Print() << "enforce limits state_old_cc " << std::endl;
@@ -729,7 +734,12 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::FixupState(int
                 amrex::Print() << "enforce limits has rho = 0 fixup state_old_cc " << std::endl;
                 amrex::MFIter::allowMultipleMFIters(true);
                 WriteCheckpointFile();
-                amrex::Abort();
+                amrex::ParallelDescriptor::Barrier();
+                amrex::WriteSingleLevelPlotfile(CustomPlotFileName("debug_hydro_state_fatal", istep[lev] + 1), state_old_cc_[lev], componentNames_cc_, geom[lev], 0, istep[lev] + 1);
+                amrex::ParallelDescriptor::Barrier();
+                if (amrex::ParallelDescriptor::IOProcessor()) {
+                        amrex::ParallelDescriptor::Abort();
+                }
         }
 
 
@@ -1155,7 +1165,12 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
         	        amrex::Print() << "enforce limits has rho = 0 fixup fofc 1 stage 1 rk2 " << std::endl;
         	        amrex::MFIter::allowMultipleMFIters(true);
         	        WriteCheckpointFile();
-        	        amrex::Abort();
+                	amrex::ParallelDescriptor::Barrier();
+                	amrex::WriteSingleLevelPlotfile(CustomPlotFileName("debug_hydro_state_fatal", istep[lev] + 1), stateNew, componentNames_cc_, geom[lev], 0, istep[lev] + 1);
+                	amrex::ParallelDescriptor::Barrier();
+                	if (amrex::ParallelDescriptor::IOProcessor()) {
+                        	amrex::ParallelDescriptor::Abort();
+                	}
         	}
 
 
@@ -1260,7 +1275,12 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
                         amrex::Print() << "enforce limits has rho = 0 fixup prevent vacuum stage 2 rk2 " << std::endl;
                         amrex::MFIter::allowMultipleMFIters(true);
                         WriteCheckpointFile();
-                        amrex::Abort();
+                	amrex::ParallelDescriptor::Barrier();
+                	amrex::WriteSingleLevelPlotfile(CustomPlotFileName("debug_hydro_state_fatal", istep[lev] + 1), stateFinal, componentNames_cc_, geom[lev], 0, istep[lev] + 1);
+                	amrex::ParallelDescriptor::Barrier();
+                	if (amrex::ParallelDescriptor::IOProcessor()) {
+                        	amrex::ParallelDescriptor::Abort();
+                	}
                 }
 
 
