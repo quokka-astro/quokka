@@ -10,10 +10,10 @@ if (AMReX_SPACEDIM EQUAL 3)
     include_directories(BEFORE ${primordial_chem_dirs} "${CMAKE_CURRENT_BINARY_DIR}/" "includes/extern_parameters.H" "includes/network_properties.H")
 
     add_executable(copiii copiii.cpp ../TurbDataReader.cpp ../main.cpp ../GrackleDataReader.cpp ../CloudyCooling.cpp ../Chemistry.cpp ${primordial_chem_sources})
-    target_compile_definitions(popiii PUBLIC PRIMORDIAL_CHEM) #this will add #define PRIMORDIAL_CHEM
+    target_compile_definitions(copiii PUBLIC PRIMORDIAL_CHEM) #this will add #define PRIMORDIAL_CHEM
 
     if(AMReX_GPU_BACKEND MATCHES "CUDA")
-        setup_target_for_cuda_compilation(popiii)
+        setup_target_for_cuda_compilation(copiii)
     endif()
 
     #need h5py to run perturbations.py file below
