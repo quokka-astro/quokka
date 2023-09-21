@@ -40,7 +40,7 @@ perturb.cloud_numdens = 0.90861183E+004
 # and put it in quokka/tests/
 perturb.filename = "zdrv.hdf5"
 
-derived_vars = temperature velx pressure
+derived_vars = temperature velx pressure sound_speed
 
 amrex.throw_exception = 0
 amrex.signal_handling = 1
