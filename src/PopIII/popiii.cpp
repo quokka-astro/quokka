@@ -425,6 +425,26 @@ template <> void RadhydroSimulation<PopIII>::ComputeDerivedVar(int lev, std::str
 		});
 	}
 
+
+	if (dname == "sound_speed") {
+
+		const int ncomp = ncomp_cc_in;
+		auto const &state = state_new_cc_[lev].const_arrays();
+		auto output = mf.arrays();
+
+		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+
+			Real const rho = state[bx](i, j, k, HydroSystem<PopIII>::density_index);
+			Real pressure = HydroSystem<PopIII>::ComputePressure(state[bx], i, j, k);
+			amrex::GpuArray<Real, Physics_Traits<PopIII>::numMassScalars> massScalars = RadSystem<PopIII>::ComputeMassScalars(state[bx], i, j, k);
+
+			amrex::Real cs = quokka::EOS<PopIII>::ComputeSoundSpeed(rho, pressure, massScalars);
+			output[bx](i, j, k, ncomp) = cs;
+		});
+
+	}
+
+
 }
 
 auto problem_main() -> int
