@@ -108,8 +108,8 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	AMREX_GPU_DEVICE static auto GetGradFixedPotential(amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> posvec) -> amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>;
 
-	static void EnforceLimits(amrex::Real densityFloor, amrex::Real pressureFloor, amrex::Real speedCeiling, amrex::Real tempCeiling,
-				  amrex::Real const tempFloor, amrex::MultiFab &state_mf, const char* inputString);
+	static auto EnforceLimits(amrex::Real densityFloor, amrex::Real pressureFloor, amrex::Real speedCeiling, amrex::Real tempCeiling,
+				  amrex::Real const tempFloor, amrex::MultiFab &state_mf, const char* inputString) -> bool;
 
 	static void AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex::MultiFab const &consVar_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
 					 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &faceVelArray, amrex::iMultiFab const &redoFlag_mf);
@@ -720,13 +720,14 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::MultiFab const &q_mf, amrex::M
 // to ensure that physical quantities are within reasonable
 // floors and ceilings which can be set in the param file
 template <typename problem_t>
-void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex::Real const pressureFloor, amrex::Real const speedCeiling,
-					   amrex::Real const tempCeiling, amrex::Real const tempFloor, amrex::MultiFab &state_mf, const char* inputString)
+auto HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex::Real const pressureFloor, amrex::Real const speedCeiling,
+					   amrex::Real const tempCeiling, amrex::Real const tempFloor, amrex::MultiFab &state_mf, const char* inputString) -> bool
 {
 
 	auto state = state_mf.arrays();
+	amrex::Real strcall = 0.0;
 
-	amrex::ParallelFor(state_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+	return amrex::ParReduce(amrex::TypeList<amrex::ReduceOpLogicalAnd>{}, amrex::TypeList<bool>{}, state_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept -> amrex::GpuTuple<bool> {
 		amrex::Real const rho = state[bx](i, j, k, density_index);
 
 		if (rho != 0.0 && !std::isnan(rho)) {
@@ -846,13 +847,22 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 			if (std::isnan(state[bx](i, j, k, density_index)) || state[bx](i, j, k, density_index) == 0.0) {
 				printf("rho out is nan or zero even though rho in is not nan %e !! ", state[bx](i, j, k, density_index));
 			}
+
+		return {true};
 		} else if (std::isnan(rho)) {
-			printf("rho in is nan howcome %e called by %s! \n", rho, inputString);
+			//printf("rho in is nan howcome %e! \n", rho);
+			//strcall = 1.0;
+			return {false};
 		} else {
-			printf("rho in is zero woah %e called by %s ! \n", rho, inputString);
+			//printf("rho in is zero woah %e! \n", rho);
+			//strcall = 1.0;
+			return {false};
 		}
 
 	});
+
+	amrex::Print() << "called by " << inputString << std::endl;
+
 }
 
 template <typename problem_t>
