@@ -4,7 +4,7 @@
 geometry.prob_lo     =  -3.703e18  -3.703e18  -3.703e18
 geometry.prob_hi     =  3.703e18   3.703e18   3.703e18
 geometry.is_periodic =  0    0    0
-
+#restartfile = "chk02050"
 # *****************************************************************
 # VERBOSITY
 # *****************************************************************
@@ -16,11 +16,11 @@ amr.v              = 1       # verbosity in Amr
 amr.n_cell          = 128 128 128
 amr.max_level       = 10     # number of levels = max_level + 1
 amr.blocking_factor = 32    # grid size must be divisible by this
-amr.max_grid_size   = 128    # at least 128 for GPUs
+amr.max_grid_size   = 1024    # at least 128 for GPUs
 amr.n_error_buf     = 3     # minimum 3 cell buffer around tagged cells
 amr.grid_eff        = 0.7   # default
 
-hydro.reconstruction_order = 3  # PPM
+hydro.reconstruction_order = 2  # PPM
 cfl = 0.2
 max_timesteps = 100000
 stop_time = 1e16
@@ -28,9 +28,9 @@ stop_time = 1e16
 do_reflux = 1
 do_subcycle = 0
 
-#ascent_interval = 10
+#ascent_interval = 50
 plotfile_interval = 50 #100
-checkpoint_interval = 100
+checkpoint_interval = 50
 
 perturb.cloud_radius = 3.086e18
 perturb.cloud_omega = 2.016008E-14
@@ -40,7 +40,7 @@ perturb.cloud_numdens = 0.90861183E+004
 # and put it in quokka/tests/
 perturb.filename = "zdrv.hdf5"
 
-derived_vars = temperature
+derived_vars = temperature velx pressure
 
 amrex.throw_exception = 0
 amrex.signal_handling = 1
