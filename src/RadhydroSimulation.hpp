@@ -713,9 +713,26 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::FixupState(int
 
 	// fix hydro state
 	amrex::Print() << "enforce limits state_new_cc " << std::endl;
-	HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, state_new_cc_[lev], "fixup_new");
+	bool enforchk = HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, state_new_cc_[lev], "fixup_new");
+	amrex::ParallelDescriptor::ReduceBoolAnd(enforchk);
+	if (!enforchk) {
+		amrex::Print() << "enforce limits has rho = 0 fixup state_new_cc " << std::endl;
+		amrex::MFIter::allowMultipleMFIters(true);
+		WriteCheckpointFile();
+		amrex::Abort();
+	}
+
 	amrex::Print() << "enforce limits state_old_cc " << std::endl;
-	HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, state_old_cc_[lev], "fixup_old");
+	enforchk = HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, state_old_cc_[lev], "fixup_old");
+        amrex::ParallelDescriptor::ReduceBoolAnd(enforchk);
+        if (!enforchk) {
+                amrex::Print() << "enforce limits has rho = 0 fixup state_old_cc " << std::endl;
+                amrex::MFIter::allowMultipleMFIters(true);
+                WriteCheckpointFile();
+                amrex::Abort();
+        }
+
+
 	// sync internal energy and total energy
 	HydroSystem<problem_t>::SyncDualEnergy(state_new_cc_[lev]);
 }
@@ -1132,7 +1149,16 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 
 		// prevent vacuum
 		amrex::Print() << "enforce limits fofc 1 " << std::endl;
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, stateNew, "RK2-stage-1");
+		bool enforchk = HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, stateNew, "RK2-stage-1");
+        	amrex::ParallelDescriptor::ReduceBoolAnd(enforchk);
+        	if (!enforchk) {
+        	        amrex::Print() << "enforce limits has rho = 0 fixup fofc 1 stage 1 rk2 " << std::endl;
+        	        amrex::MFIter::allowMultipleMFIters(true);
+        	        WriteCheckpointFile();
+        	        amrex::Abort();
+        	}
+
+
 
 		if (useDualEnergy_ == 1) {
 			// sync internal energy (requires positive density)
@@ -1228,7 +1254,15 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 
 		// prevent vacuum
 		amrex::Print() << "enforce limits prevent vacuum stage 2 " << std::endl;
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, stateFinal, "RK2-stage-2");
+		bool enforchk = HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, stateFinal, "RK2-stage-2");
+                amrex::ParallelDescriptor::ReduceBoolAnd(enforchk);
+                if (!enforchk) {
+                        amrex::Print() << "enforce limits has rho = 0 fixup prevent vacuum stage 2 rk2 " << std::endl;
+                        amrex::MFIter::allowMultipleMFIters(true);
+                        WriteCheckpointFile();
+                        amrex::Abort();
+                }
+
 
 		if (useDualEnergy_ == 1) {
 			// sync internal energy (requires positive density)
