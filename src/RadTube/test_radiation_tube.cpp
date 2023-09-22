@@ -16,6 +16,7 @@
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
 #include "interpolate.hpp"
+#include "physics_info.hpp"
 #include "radiation_system.hpp"
 #include "test_radiation_tube.hpp"
 #ifdef HAVE_PYTHON
@@ -52,7 +53,7 @@ template <> struct Physics_Traits<TubeProblem> {
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
   // number of radiation groups
-  static constexpr int nGroups = 2;
+  static constexpr int nGroups = 3;
 };
 
 template <> struct RadSystem_Traits<TubeProblem> {
@@ -61,23 +62,21 @@ template <> struct RadSystem_Traits<TubeProblem> {
 	static constexpr double radiation_constant = radiation_constant_cgs_;
 	static constexpr double Erad_floor = 0.;
 	static constexpr bool compute_v_over_c_terms = true;
-	static constexpr double energy_unit = C::ev2erg;
-  static constexpr std::array<double, Physics_Traits<TubeProblem>::nGroups + 1> radBoundaries {0., 2.4, inf};  // length = nGroups + 1
+	static constexpr double energy_unit = C::k_B;
+  static constexpr std::array<double, Physics_Traits<TubeProblem>::nGroups + 1> radBoundaries {0., T0, 3.3 * T0, inf};  // Kelvin
 };
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, nGroups_> kappaPVec;
-	valarray_fillin(kappaPVec, kappa0);
+	kappaPVec.fillin(kappa0);
 	return kappaPVec;
 }
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputeFluxMeanOpacity(const double /*rho*/, const double Tgas) -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, nGroups_> kappaFVec;
-  valarray_fillin(kappaFVec, kappa0);
-	// kappaFVec[0] = kappa0 * 1.5;
-	// kappaFVec[1] = kappa0 * 0.5;
+  kappaFVec.fillin(kappa0);
 	return kappaFVec;
 }
 
@@ -293,7 +292,10 @@ auto problem_main() -> int
 	const int nx = static_cast<int>(position0.size());
 
 	// compute error norm
+	std::vector<std::vector<double>> Erad_arr_at_group(Physics_Traits<TubeProblem>::nGroups, std::vector<double>(nx));
 	std::vector<double> Trad_arr(nx);
+	std::vector<double> Erad_arr(nx);
+	std::vector<double> Erad_exact_arr(nx);
 	std::vector<double> Trad_exact_arr(nx);
 	std::vector<double> Trad_err(nx);
 	std::vector<double> Tgas_arr(nx);
@@ -312,8 +314,11 @@ auto problem_main() -> int
 		double Erad_t = 0.0;
     for (int g = 0; g < Physics_Traits<TubeProblem>::nGroups; ++g) {
       Erad_0 += values0.at(RadSystem<TubeProblem>::radEnergy_index + Physics_NumVars::numRadVars * g)[i];
-      Erad_t += values.at(RadSystem<TubeProblem>::radEnergy_index + Physics_NumVars::numRadVars * g)[i];
+	    Erad_arr_at_group[g][i] = values.at(RadSystem<TubeProblem>::radEnergy_index + Physics_NumVars::numRadVars * g)[i];
+      Erad_t += Erad_arr_at_group[g][i];
     }
+    Erad_exact_arr[i] = Erad_0;
+    Erad_arr[i] = Erad_t;
 		double Trad_exact = std::pow(Erad_0 / radiation_constant_cgs_, 1. / 4.);
 		double Trad = std::pow(Erad_t / radiation_constant_cgs_, 1. / 4.);
 		Trad_arr[i] = Trad;
@@ -356,7 +361,7 @@ auto problem_main() -> int
 	amrex::Print() << "Relative L1 norm = " << rel_err_norm << std::endl;
 
 #ifdef HAVE_PYTHON
-	// Plot results
+	// Plot results: temperature
 	int s = 4; // stride
 	std::map<std::string, std::string> Trad_args;
 	std::map<std::string, std::string> Tgas_args;
@@ -379,6 +384,30 @@ auto problem_main() -> int
 	matplotlibcpp::ylabel("temperature (Kelvins)");
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./radiation_pressure_tube.pdf");
+
+	// Plot results: energy density
+	matplotlibcpp::clf();
+	matplotlibcpp::xlabel("length x (cm)");
+	matplotlibcpp::ylabel("energy density (erg/cm^3)");
+  for (int g = 0; g < Physics_Traits<TubeProblem>::nGroups; ++g) {
+    Trad_args["label"] = fmt::format("group {}", g);
+    Trad_args["color"] = fmt::format("C{}", g);
+    // matplotlibcpp::plot(xs, strided_vector_from(Erad_arr_at_group, s, g), Trad_args);
+    matplotlibcpp::plot(xs, Erad_arr_at_group[g], Trad_args);
+  }
+  Trad_args["label"] = fmt::format("total");
+  Trad_args["color"] = "k";
+  matplotlibcpp::plot(xs, Erad_arr, Trad_args);
+	Texact_args["label"] = "exact";
+	Texact_args["marker"] = "o";
+	Texact_args["color"] = "r";
+	matplotlibcpp::scatter(strided_vector_from(xs, s), strided_vector_from(Erad_exact_arr, s), 10.0, Texact_args);
+	matplotlibcpp::legend();
+	matplotlibcpp::tight_layout();
+	matplotlibcpp::save("./radiation_pressure_tube_energy_density.pdf");
+	matplotlibcpp::yscale("log");
+	matplotlibcpp::tight_layout();
+	matplotlibcpp::save("./radiation_pressure_tube_energy_density_log.pdf");
 #endif // HAVE_PYTHON
 
 	// Cleanup and exit

@@ -33,10 +33,8 @@
 #include "valarray.hpp"
 
 // physical constants in CGS units
-static constexpr double c_light_cgs_ = 2.99792458e10;	      // cgs
-static constexpr double radiation_constant_cgs_ = 7.5646e-15; // cgs
-// static constexpr double c_light_cgs_ = C::c_light;	      // cgs
-// static constexpr double radiation_constant_cgs_ = C::a_rad; // cgs
+static constexpr double c_light_cgs_ = C::c_light;	      // cgs
+static constexpr double radiation_constant_cgs_ = C::a_rad; // cgs
 static constexpr double pi = 3.14159265358979323846;
 static constexpr double inf = std::numeric_limits<double>::max();
 
@@ -98,8 +96,6 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static constexpr bool compute_v_over_c_terms_ = RadSystem_Traits<problem_t>::compute_v_over_c_terms;
 
 	static constexpr int nGroups_ = Physics_Traits<problem_t>::nGroups;
-  static constexpr double energy_unit_ = RadSystem_Traits<problem_t>::energy_unit;
-	static constexpr std::array<double, nGroups_ + 1> radBoundaries_ = RadSystem_Traits<problem_t>::radBoundaries;
 
 	static constexpr double mean_molecular_mass_ = quokka::EOS_Traits<problem_t>::mean_molecular_mass;
 	static constexpr double boltzmann_constant_ = quokka::EOS_Traits<problem_t>::boltzmann_constant;
@@ -177,25 +173,23 @@ void RadSystem<problem_t>::ComputePlanckEnergyFractions(quokka::valarray<amrex::
   if constexpr (nGroups_ == 1) {
     // CCH: for future reference, if we want to use a single group as a delta function, say at 13.6 eV, rethink this.
     radEnergyFractions[0] = 1.0;
-    return;
-  }
-  // x = h nu / (k_B T)
-  amrex::Real energy_unit_over_kT = energy_unit_ / (boltzmann_constant_ * temperature);
-  amrex::Real previous = integrate_planck_from_0_to_x(radBoundaries_[0] * energy_unit_over_kT);
-  for (int g = 0; g < nGroups_; ++g) {
-	  amrex::Real y = integrate_planck_from_0_to_x(radBoundaries_[g + 1] * energy_unit_over_kT);
-	  radEnergyFractions[g] = y - previous;
-	  previous = y;
-  }
-  radEnergyFractions /= sum(radEnergyFractions);
-  // A hack to avoid zeros in radEnergyFractions
-  // TODO(CCH): find a better way to do this
-  for (int g = 0; g < nGroups_; ++g) {
-    if (radEnergyFractions[g] < 1e-14) {
-      radEnergyFractions[g] = 1e-14;
+  } else {
+    amrex::Real const energy_unit_over_kT = RadSystem_Traits<problem_t>::energy_unit / (boltzmann_constant_ * temperature);
+    amrex::Real previous = integrate_planck_from_0_to_x(RadSystem_Traits<problem_t>::radBoundaries[0] * energy_unit_over_kT);
+    for (int g = 0; g < nGroups_; ++g) {
+      amrex::Real y = integrate_planck_from_0_to_x(RadSystem_Traits<problem_t>::radBoundaries[g + 1] * energy_unit_over_kT);
+      radEnergyFractions[g] = y - previous;
+      previous = y;
     }
+    // A hack to avoid zeros in radEnergyFractions
+    // TODO(CCH): find a better way to do this
+    for (int g = 0; g < nGroups_; ++g) {
+      if (radEnergyFractions[g] < 1e-14) {
+        radEnergyFractions[g] = 1e-14;
+      }
+    }
+    radEnergyFractions /= sum(radEnergyFractions);
   }
-  radEnergyFractions /= sum(radEnergyFractions);
 }
 
 // CCH: linear equation solver for matrix with non-zeros at the first row, first column, and diagonal only
@@ -955,7 +949,7 @@ template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckOpacityTempDerivative(const double /* rho */, const double /* Tgas */) -> quokka::valarray<double, nGroups_>
 {
   quokka::valarray<double, nGroups_> kappa{};
-	valarray_fillin(kappa, 0.0);
+	kappa.fillin(0.0);
 	return kappa;
 }
 
@@ -1069,7 +1063,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			for (; n < maxIter; ++n) {
 				// compute material temperature
 				T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
-        // TODO(CCH): problem, Egas_guess could be negative
 				AMREX_ASSERT(T_gas >= 0.);
 
 				// compute opacity, emissivity
@@ -1105,20 +1098,15 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				// prepare to compute Jacobian elements
 				const double c_v = quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas, massScalars);
 				dRtot_dErad = -dt * rho * kappaEVec * chat;
-        // TODO(CCH): fix this: dB_dTgas * radEnergyFractions is inaccurate
+        // TODO(CCH): fix this: dB_dTgas * radEnergyFractions is inaccurate. Define ComputePlanckEnergyFractionsTempDerivative
 				dRvec_dEgas = dt * rho / c_v * (4 * pi * kappaPVec * dB_dTgas * radEnergyFractions + dkappaP_dTgas * fourPiB * radEnergyFractions - chat * dkappaE_dTgas * EradVec_guess);
         dRtot_dEgas = sum(dRvec_dEgas);
 				// kappaP = RadSystem<problem_t>::ComputePlanckOpacity(rho, T_gas);
 				// dRtot_dEgas = dt * rho / c_v * (4 * pi * kappaP * dB_dTgas + dkappa_dTgas * fourPiB - chat * sum(dkappaVec_dTgas * EradVec_guess));
-        // TODO(CCH): Rethink here. What is the equivalent of eta in multigroup?
-        // AMREX_ASSERT(min(dRvec_dEgas) >= 0.0);
-        AMREX_ASSERT(dRtot_dEgas >= 0.0);
-				// force dRvec_dEgas to non-negative. 
-				// for (int g = 0; g < nGroups_; ++g) {
-        //   if (dRvec_dEgas[g] < 0.0) {
-        //     dRvec_dEgas[g] = 0.0;
-        //   }
-				// }
+        // TODO(CCH): Equivalent of eta = (eta > 0.0) ? eta : 0.0. Consider Ben's suggesting to use a global Newton method. Another possibility is to force each element of dRvec_dEgas to non-negative.
+        if (dRtot_dEgas < 0.0) {
+					dRtot_dEgas = 0.0;
+				}
 
 				// compute Jacobian elements
 				dFG_dEgas = 1.0 + (c / chat) * dRtot_dEgas;
@@ -1148,7 +1136,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		// Erad_guess is the new radiation energy (excluding work term)
 		// Egas_guess is the new gas internal energy
 
-#if 1
     // CCH: multigroup, apportion w.r.t. v_1 * F_1
 		// 2. Compute radiation flux update
 
@@ -1202,19 +1189,19 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 
         // compute energyLossFractions
         quokka::valarray<double, nGroups_> energyLossFractions{};
-        amrex::Real energyLossFractionsTot = 0.0;
         for (int g = 0; g < nGroups_; ++g) {
           Frad_t1[0] = consNew(i, j, k, x1RadFlux_index + numRadVars_ * g);
           Frad_t1[1] = consNew(i, j, k, x2RadFlux_index + numRadVars_ * g);
           Frad_t1[2] = consNew(i, j, k, x3RadFlux_index + numRadVars_ * g);
           energyLossFractions[g] = kappaFVec[g] * (x1GasMom1 * Frad_t1[0] + x2GasMom1 * Frad_t1[1] + x3GasMom1 * Frad_t1[2]);
-          energyLossFractionsTot += energyLossFractions[g];
         }
-        // energyLossFractionsTot = energyLossFractionsTot > 0.0 ? energyLossFractionsTot : 1.0;
-        for (int g = 0; g < nGroups_; ++g) {
-          energyLossFractions[g] /= energyLossFractionsTot;
+        // TODO(CCH): tricky here. Have to avoid negavie radiation energy. 
+        auto energyLossFractionsTot = sum(energyLossFractions);
+        if (energyLossFractionsTot != 0.0) {
+          energyLossFractions /= energyLossFractionsTot;
+        } else {
+          energyLossFractions.fillin(0.0);
         }
-        AMREX_ASSERT(std::abs(sum(energyLossFractions) - 1.0) < 1e-14);
 	      for (int g = 0; g < nGroups_; ++g) {
           auto radEnergyNew = EradVec_guess[g] + dErad_work * energyLossFractions[g];
 	        consNew(i, j, k, radEnergy_index + numRadVars_ * g) = radEnergyNew;
@@ -1233,18 +1220,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
       amrex::ignore_unused(EradVec_guess);
       amrex::ignore_unused(Egas_guess);
     } // endif gamma != 1.0
-#endif  // END multigroup, apportion v_1 * F_1
-
-#if 0
-    // print all fields of consNew at i, j, k and make sure consPrev doesn't have nan terms
-    for (int n = 0; n < consNew.nComp(); ++n) {
-      // printf("consNew(%d,%d,%d,%d) = %f\n", i, j, k, n, consNew(i, j, k, n));
-      if (std::isnan(consNew(i, j, k, n))) {
-        printf("consNew[%d, %d, %d, %d] is nan\n", i, j, k, n);
-        amrex::Abort();
-      }
-    }
-#endif 
 
 	});
 }

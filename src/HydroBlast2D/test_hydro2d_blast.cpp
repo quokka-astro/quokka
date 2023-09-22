@@ -40,6 +40,7 @@ template <> struct Physics_Traits<BlastProblem> {
 	static constexpr bool is_radiation_enabled = false;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
+	static constexpr int nGroups = 1;   // number of radiation groups
 };
 
 template <> void RadhydroSimulation<BlastProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)

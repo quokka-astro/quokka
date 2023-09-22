@@ -1378,7 +1378,6 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 		// (there is no performance benefit for this in practice)
 		// state.FillBoundary(geom[lev].periodicity(), true);
 		state.FillBoundary(geom[lev].periodicity());
-		AMREX_ASSERT(!state.contains_nan(0, state.nComp()));
 
 		if (!geom[lev].isAllPeriodic()) {
 			amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>> boundaryFunctor(setBoundaryFunctor<problem_t>{});

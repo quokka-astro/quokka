@@ -40,6 +40,7 @@ template <> struct Physics_Traits<FCQuantities> {
 	static constexpr bool is_radiation_enabled = false;
 	// face-centred
 	static constexpr bool is_mhd_enabled = true;
+	static constexpr int nGroups = 1; // number of radiation groups
 };
 
 constexpr double rho0 = 1.0;					     // background density

@@ -121,7 +121,7 @@ void interpolate_arrays(double *x, double *y, int len, double *arr_x, double *ar
 			const double slope = (arr_y[j + 1] - arr_y[j]) / (arr_x[j + 1] - arr_x[j]);
 			y[i] = slope * (x[i] - arr_x[j]) + arr_y[j];
 		}
-		// assert(!isnan(y[i]));
+		assert(!isnan(y[i]));
 	}
 }
 

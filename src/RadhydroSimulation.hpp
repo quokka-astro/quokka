@@ -291,10 +291,10 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::defineComponen
 		// std::vector<std::string> radNames = {"radEnergy", "x-RadFlux", "y-RadFlux", "z-RadFlux"};
 		std::vector<std::string> radNames = {};
 		for (int i = 0; i < Physics_Traits<problem_t>::nGroups; ++i) {
-			radNames.push_back("radEnergyGroup_" + std::to_string(i));
-      radNames.push_back("x-RadFluxGroup_" + std::to_string(i));
-      radNames.push_back("y-RadFluxGroup_" + std::to_string(i));
-      radNames.push_back("z-RadFluxGroup_" + std::to_string(i));
+			radNames.push_back("radEnergy-Group" + std::to_string(i));
+      radNames.push_back("x-RadFlux-Group" + std::to_string(i));
+      radNames.push_back("y-RadFlux-Group" + std::to_string(i));
+      radNames.push_back("z-RadFlux-Group" + std::to_string(i));
 		}
 		componentNames_cc_.insert(componentNames_cc_.end(), radNames.begin(), radNames.end());
 	}
@@ -1434,13 +1434,8 @@ void RadhydroSimulation<problem_t>::advanceRadiationSubstepAtLevel(int lev, amre
 	// and another to store the intermediate stage (which is reused for the final stage).
 
 	// update ghost zones [old timestep]
-	// AMREX_ASSERT(!state_old_cc_[lev].contains_nan(0, state_old_cc_[lev].nComp()));
-	// AMREX_ASSERT(!state_new_cc_[lev].contains_nan(0, state_new_cc_[lev].nComp()));
 	fillBoundaryConditions(state_old_cc_[lev], state_old_cc_[lev], lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState,
 			       PostInterpState);
-	// AMREX_ASSERT(!state_old_cc_[lev].contains_nan(0, state_old_cc_[lev].nComp()));
-	// AMREX_ASSERT(!state_new_cc_[lev].contains_nan(0, state_new_cc_[lev].nComp()));
-  // TODO: error occurs after here
 
 	// advance all grids on local processor (Stage 1 of integrator)
 	for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
@@ -1464,8 +1459,6 @@ void RadhydroSimulation<problem_t>::advanceRadiationSubstepAtLevel(int lev, amre
 	}
 
 	// update ghost zones [intermediate stage stored in state_new_cc_]
-  // TODO: error before here
-	// AMREX_ASSERT(!state_new_cc_[lev].contains_nan(0, state_new_cc_[lev].nComp()));
 	fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, (time + dt_radiation), quokka::centering::cc, quokka::direction::na, PreInterpState,
 			       PostInterpState);
 
@@ -1509,10 +1502,6 @@ void RadhydroSimulation<problem_t>::operatorSplitSourceTerms(amrex::Array4<amrex
 
 	// cell-centered radiation energy source
 	RadSystem<problem_t>::SetRadEnergySource(radEnergySource.array(), indexRange, dx, prob_lo, prob_hi, time + dt);
-
-	// std::cout << "size = " << radEnergySource.array().size() << std::endl;
-	// std::cout << "array[0, 0, 0] = " << radEnergySource.array()(0, 0, 0) << std::endl;
-	// std::cout << "array[0, 0, 0, 0] = " << radEnergySource.array()(0, 0, 0, 0) << std::endl;
 
 	// cell-centered source terms
 	RadSystem<problem_t>::AddSourceTerms(stateNew, radEnergySource.const_array(), advectionFluxes.const_array(), indexRange, dt);

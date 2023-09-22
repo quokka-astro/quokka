@@ -53,13 +53,21 @@ template <> struct Physics_Traits<SuOlsonProblem> {
 	static constexpr bool is_radiation_enabled = true;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
+	static constexpr int nGroups = 1; // number of radiation groups
 };
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> double { return kappa; }
-
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblem>::ComputeRosselandOpacity(const double /*rho*/, const double /*Tgas*/) -> double
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
-	return kappa;
+	quokka::valarray<double, nGroups_> kappaPVec;
+	kappaPVec.fillin(kappa);
+	return kappaPVec;
+}
+
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblem>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
+{
+	quokka::valarray<double, nGroups_> kappaFVec;
+  kappaFVec.fillin(kappa);
+	return kappaFVec;
 }
 
 static constexpr int nmscalars_ = Physics_Traits<SuOlsonProblem>::numMassScalars;

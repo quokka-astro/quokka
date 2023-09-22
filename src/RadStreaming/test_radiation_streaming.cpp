@@ -38,8 +38,7 @@ template <> struct Physics_Traits<StreamingProblem> {
 	static constexpr bool is_radiation_enabled = true;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
-  // number of radiation groups
-  static constexpr int nGroups = 2;
+  static constexpr int nGroups = 1; // number of radiation groups
 };
 
 template <> struct RadSystem_Traits<StreamingProblem> {
@@ -48,21 +47,19 @@ template <> struct RadSystem_Traits<StreamingProblem> {
 	static constexpr double radiation_constant = 1.0;
 	static constexpr double Erad_floor = initial_Erad;
 	static constexpr bool compute_v_over_c_terms = false;
-	static constexpr double energy_unit = C::ev2erg;
-  static constexpr std::array<double, Physics_Traits<StreamingProblem>::nGroups + 1> radBoundaries {0., 13.6, inf};
 };
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
-	quokka::valarray<double, Physics_Traits<StreamingProblem>::nGroups> kappaPVec{};
-	valarray_fillin(kappaPVec, kappa0);
+	quokka::valarray<double, nGroups_> kappaPVec{};
+	kappaPVec.fillin(kappa0);
 	return kappaPVec;
 }
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputeFluxMeanOpacity(const double /*rho*/, const double Tgas) -> quokka::valarray<double, nGroups_>
 {
-	quokka::valarray<double, Physics_Traits<StreamingProblem>::nGroups> kappaFVec{};
-  valarray_fillin(kappaFVec, kappa0);
+	quokka::valarray<double, nGroups_> kappaFVec{};
+  kappaFVec.fillin(kappa0);
 	return kappaFVec;
 }
 
@@ -76,7 +73,7 @@ template <> void RadhydroSimulation<StreamingProblem>::setInitialConditionsOnGri
 
   // CCH: calculate radEnergyFractions 
 	quokka::valarray<amrex::Real, Physics_Traits<StreamingProblem>::nGroups> radEnergyFractions;
-  valarray_fillin(radEnergyFractions, 1.0 / Physics_Traits<StreamingProblem>::nGroups);
+  radEnergyFractions.fillin(1.0 / Physics_Traits<StreamingProblem>::nGroups);
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -121,7 +118,7 @@ AMRSimulation<StreamingProblem>::setCustomBoundaryConditions(const amrex::IntVec
 
   // CCH: calculate radEnergyFractions 
 	quokka::valarray<amrex::Real, Physics_Traits<StreamingProblem>::nGroups> radEnergyFractions;
-  valarray_fillin(radEnergyFractions, 1.0 / Physics_Traits<StreamingProblem>::nGroups);
+  radEnergyFractions.fillin(1.0 / Physics_Traits<StreamingProblem>::nGroups);
 
 	if (i < lo[0]) {
 		// streaming inflow boundary
