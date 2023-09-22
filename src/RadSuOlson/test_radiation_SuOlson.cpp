@@ -76,7 +76,7 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputePlanckO
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
 {
-	quokka::valarray<double, nGroups_> kappaFVec;
+	quokka::valarray<double, nGroups_> kappaFVec{};
   kappaFVec.fillin(kappa/ rho);
 	// kappaFVec[0] = kappa0 * 1.5;
 	// kappaFVec[1] = kappa0 * 0.5;
@@ -125,7 +125,7 @@ void RadSystem<MarshakProblem>::SetRadEnergySource(array_t &radEnergySource, amr
 {
 
   // CCH: calculate radEnergyFractions 
-	quokka::valarray<amrex::Real, nGroups_> radEnergyFractions;
+	quokka::valarray<amrex::Real, nGroups_> radEnergyFractions{};
   RadSystem<MarshakProblem>::ComputePlanckEnergyFractions(radEnergyFractions, T_hohlraum);
 
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -168,7 +168,7 @@ template <> void RadhydroSimulation<MarshakProblem>::setInitialConditionsOnGrid(
 	const auto Egas0 = initial_Egas;
 
   // CCH: calculate radEnergyFractions 
-	quokka::valarray<amrex::Real, Physics_Traits<MarshakProblem>::nGroups> radEnergyFractions;
+	quokka::valarray<amrex::Real, Physics_Traits<MarshakProblem>::nGroups> radEnergyFractions{};
   radEnergyFractions.fillin(1.0 / Physics_Traits<MarshakProblem>::nGroups);
 
 	// loop over the grid and set the initial condition

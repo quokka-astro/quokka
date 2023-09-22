@@ -58,14 +58,14 @@ template <> struct Physics_Traits<SuOlsonProblem> {
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
-	quokka::valarray<double, nGroups_> kappaPVec;
+	quokka::valarray<double, nGroups_> kappaPVec{};
 	kappaPVec.fillin(kappa);
 	return kappaPVec;
 }
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblem>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
-	quokka::valarray<double, nGroups_> kappaFVec;
+	quokka::valarray<double, nGroups_> kappaFVec{};
   kappaFVec.fillin(kappa);
 	return kappaFVec;
 }

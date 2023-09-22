@@ -119,15 +119,6 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 				  amrex::Array4<const amrex::Real> const &x1RightState_in, amrex::Box const &indexRange, arrayconst_t &consVar_in,
 				  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx);
 
-	// CCH: compute radiation energy fractions for each bin, given nGroups, radBoundaries, and temperature
-	// static void ComputeRadEnergyFractions(quokka::valarray<double, nGroups_> &radEnergyFractions, amrex::Real const temperature);
-	static void ComputePlanckEnergyFractions(quokka::valarray<amrex::Real, nGroups_> &radEnergyFractions, amrex::Real temperature);
-
-	// CCH: linear equation solver for matrix with non-zeros at the first row, first column, and diagonal only
-	static void SolveLinearEqs( double a00, const quokka::valarray<double, nGroups_> &a0i, const quokka::valarray<double, nGroups_> &ai0,
-				   const quokka::valarray<double, nGroups_> &aii, const double &y0, const quokka::valarray<double, nGroups_> &yi, double &x0,
-				   quokka::valarray<double, nGroups_> &xi);
-
 	static void SetRadEnergySource(array_t &radEnergySource, amrex::Box const &indexRange, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 				       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi,
 				       amrex::Real time);
@@ -158,6 +149,15 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	AMREX_GPU_HOST_DEVICE static auto ComputeEintFromEgas(double density, double X1GasMom, double X2GasMom, double X3GasMom, double Etot) -> double;
 	AMREX_GPU_HOST_DEVICE static auto ComputeEgasFromEint(double density, double X1GasMom, double X2GasMom, double X3GasMom, double Eint) -> double;
 
+	// CCH: linear equation solver for matrix with non-zeros at the first row, first column, and diagonal only
+	AMREX_GPU_HOST_DEVICE static void SolveLinearEqs(double a00, const quokka::valarray<double, nGroups_> &a0i, const quokka::valarray<double, nGroups_> &ai0,
+				   const quokka::valarray<double, nGroups_> &aii, const double &y0, const quokka::valarray<double, nGroups_> &yi, double &x0,
+				   quokka::valarray<double, nGroups_> &xi);
+
+	// CCH: compute radiation energy fractions for each bin, given nGroups, radBoundaries, and temperature
+	// static void ComputeRadEnergyFractions(quokka::valarray<double, nGroups_> &radEnergyFractions, amrex::Real const temperature);
+	AMREX_GPU_HOST_DEVICE static void ComputePlanckEnergyFractions(quokka::valarray<amrex::Real, nGroups_> &radEnergyFractions, amrex::Real temperature);
+
   template <FluxDir DIR>
   AMREX_GPU_DEVICE static auto ComputeCellOpticalDepth(const quokka::Array4View<const amrex::Real, DIR> &consVar,
 						       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, int i, int j, int k) -> quokka::valarray<double, nGroups_>;
@@ -167,7 +167,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 // CCH: compute radiation energy fractions for each bin of a Planck function, given the temperature.
 template <typename problem_t>
-void RadSystem<problem_t>::ComputePlanckEnergyFractions(quokka::valarray<amrex::Real, nGroups_> &radEnergyFractions, amrex::Real const temperature)
+AMREX_GPU_HOST_DEVICE void RadSystem<problem_t>::ComputePlanckEnergyFractions(quokka::valarray<amrex::Real, nGroups_> &radEnergyFractions, amrex::Real const temperature)
 {
   if constexpr (nGroups_ == 1) {
     // CCH: for future reference, if we want to use a single group as a delta function, say at 13.6 eV, rethink this.
@@ -198,7 +198,7 @@ void RadSystem<problem_t>::ComputePlanckEnergyFractions(quokka::valarray<amrex::
 // for x0 and xi, where a0i = (a01, a02, a03, ...); ai0 = (a10, a20, a30, ...); aii = (a11, a22, a33, ...), xi = (x1, x2, x3, ...), yi = (y1, y2, y3, ...)
 // and x0 and xi are unknown
 template <typename problem_t>
-void RadSystem<problem_t>::SolveLinearEqs(const double a00, const quokka::valarray<double, nGroups_> &a0i, const quokka::valarray<double, nGroups_> &ai0, const quokka::valarray<double, nGroups_> &aii, const double &y0, const quokka::valarray<double, nGroups_> &yi, double &x0, quokka::valarray<double, nGroups_> &xi)
+AMREX_GPU_HOST_DEVICE void RadSystem<problem_t>::SolveLinearEqs(const double a00, const quokka::valarray<double, nGroups_> &a0i, const quokka::valarray<double, nGroups_> &ai0, const quokka::valarray<double, nGroups_> &aii, const double &y0, const quokka::valarray<double, nGroups_> &yi, double &x0, quokka::valarray<double, nGroups_> &xi)
 {
   auto ratios = a0i / aii;
   x0 = (- sum(ratios * yi) + y0) / (- sum(ratios * ai0) + a00);
@@ -1075,7 +1075,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				const double dB_dTgas = (4.0 * B) / T_gas;
 
 				// compute residuals
-				quokka::valarray<amrex::Real, nGroups_> radEnergyFractions;
+				quokka::valarray<amrex::Real, nGroups_> radEnergyFractions{};
         // RadSystem<problem_t>::ComputeRadEnergyFractions(radEnergyFractions, T_gas);
         ComputePlanckEnergyFractions(radEnergyFractions, T_gas);
         AMREX_ASSERT(min(radEnergyFractions) > 0.);

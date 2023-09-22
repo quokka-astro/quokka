@@ -82,14 +82,14 @@ template <> struct Physics_Traits<ShockProblem> {
 
 template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<ShockProblem>::ComputePlanckOpacity(const double rho, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
-	quokka::valarray<double, nGroups_> kappaPVec;
+	quokka::valarray<double, nGroups_> kappaPVec{};
 	kappaPVec.fillin(kappa / rho);
 	return kappaPVec;
 }
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<ShockProblem>::ComputeFluxMeanOpacity(const double rho, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
-	quokka::valarray<double, nGroups_> kappaFVec;
+	quokka::valarray<double, nGroups_> kappaFVec{};
   kappaFVec.fillin(kappa / rho);
 	return kappaFVec;
 }

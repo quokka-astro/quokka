@@ -68,14 +68,14 @@ template <> struct RadSystem_Traits<TubeProblem> {
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
-	quokka::valarray<double, nGroups_> kappaPVec;
+	quokka::valarray<double, nGroups_> kappaPVec{};
 	kappaPVec.fillin(kappa0);
 	return kappaPVec;
 }
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputeFluxMeanOpacity(const double /*rho*/, const double Tgas) -> quokka::valarray<double, nGroups_>
 {
-	quokka::valarray<double, nGroups_> kappaFVec;
+	quokka::valarray<double, nGroups_> kappaFVec{};
   kappaFVec.fillin(kappa0);
 	return kappaFVec;
 }
@@ -155,7 +155,7 @@ template <> void RadhydroSimulation<TubeProblem>::setInitialConditionsOnGrid(quo
 		amrex::Real const Tgas = Pgas / C::k_B * mu / rho;
 
     // CCH: calculate radEnergyFractions based on the boundary conditions
-	  quokka::valarray<amrex::Real, Physics_Traits<TubeProblem>::nGroups> radEnergyFractions;
+	  quokka::valarray<amrex::Real, Physics_Traits<TubeProblem>::nGroups> radEnergyFractions{};
     RadSystem<TubeProblem>::ComputePlanckEnergyFractions(radEnergyFractions, Tgas);
 
 		// CCH: multigroup radiation

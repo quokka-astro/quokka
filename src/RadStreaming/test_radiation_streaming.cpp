@@ -72,7 +72,7 @@ template <> void RadhydroSimulation<StreamingProblem>::setInitialConditionsOnGri
 	const auto Egas0 = initial_Egas;
 
   // CCH: calculate radEnergyFractions 
-	quokka::valarray<amrex::Real, Physics_Traits<StreamingProblem>::nGroups> radEnergyFractions;
+	quokka::valarray<amrex::Real, Physics_Traits<StreamingProblem>::nGroups> radEnergyFractions{};
   radEnergyFractions.fillin(1.0 / Physics_Traits<StreamingProblem>::nGroups);
 
 	// loop over the grid and set the initial condition
@@ -117,7 +117,7 @@ AMRSimulation<StreamingProblem>::setCustomBoundaryConditions(const amrex::IntVec
 	amrex::GpuArray<int, 3> hi = box.hiVect3d();
 
   // CCH: calculate radEnergyFractions 
-	quokka::valarray<amrex::Real, Physics_Traits<StreamingProblem>::nGroups> radEnergyFractions;
+	quokka::valarray<amrex::Real, Physics_Traits<StreamingProblem>::nGroups> radEnergyFractions{};
   radEnergyFractions.fillin(1.0 / Physics_Traits<StreamingProblem>::nGroups);
 
 	if (i < lo[0]) {
