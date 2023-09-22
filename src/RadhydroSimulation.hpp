@@ -737,9 +737,9 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::FixupState(int
                 amrex::ParallelDescriptor::Barrier();
                 amrex::WriteSingleLevelPlotfile(CustomPlotFileName("debug_hydro_state_fatal", istep[lev] + 1), state_old_cc_[lev], componentNames_cc_, geom[lev], 0, istep[lev] + 1);
                 amrex::ParallelDescriptor::Barrier();
-                if (amrex::ParallelDescriptor::IOProcessor()) {
-                        amrex::ParallelDescriptor::Abort();
-                }
+                //if (amrex::ParallelDescriptor::IOProcessor()) {
+                //        amrex::ParallelDescriptor::Abort();
+                //}
         }
 
 
