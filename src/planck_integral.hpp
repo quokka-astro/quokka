@@ -1,5 +1,13 @@
+#ifndef PLANCKINTEGRAL_HPP_ // NOLINT
+#define PLANCKINTEGRAL_HPP_
+//==============================================================================
+// TwoMomentRad - a radiation transport library for patch-based AMR codes
+// Copyright 2020
+// Released under the MIT license. See LICENSE file included in the GitHub repo.
+//==============================================================================
 /// \file planck_integral.hpp
 /// \brief Some functions for quickly integrating the Planck function.
+///
 
 #include <algorithm>
 #include <cmath>
@@ -11,9 +19,6 @@
 #include "AMReX_REAL.H"
 
 #include "valarray.hpp"
-// #include "interpolate.cpp"
-
-#define LIKELY_IN_CACHE_SIZE 8
 
 using Real = amrex::Real;
 
@@ -176,11 +181,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto planck_small_x(Real x) -> Real
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_planck_integral(Real logx)
 {
-	/* Note: arr_x must be sorted in ascending order,
-		and arr_len must be >= 3. */
-
 	const int arr_len = INTERP_SIZE;
-	const int j = (int) ((logx - LOG_X_MIN) / (LOG_X_MAX - LOG_X_MIN) * (arr_len - 1));
+	const int j = static_cast<int>((logx - LOG_X_MIN) / (LOG_X_MAX - LOG_X_MIN) * (arr_len - 1));
   const Real gap = (LOG_X_MAX - LOG_X_MIN) / (arr_len - 1);
 
 	Real y = NAN;
@@ -192,8 +194,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_planck_integral(Real l
 	}
 	return y;
 }
-
-// AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto integral_planck_from_0_to_x(quokka::valarray x, amrex::GpuArray <Real, N> const &X, amrex::GpuArray <Real, N> const &Y, const int X_length) -> Real
 
 // Integrate the Planck integral, x^3 / (exp(x) - 1), from 0 to x. Return its ratio to the integral from 0 to infinity (pi^4 / 15).
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto integrate_planck_from_0_to_x(const Real x) -> Real

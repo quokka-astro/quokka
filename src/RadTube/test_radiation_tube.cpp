@@ -200,8 +200,8 @@ AMRSimulation<TubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv
 	amrex::GpuArray<int, 3> hi = box.hiVect3d();
 
   // CCH: calculate radEnergyFractions 
-	quokka::valarray<amrex::Real, Physics_Traits<TubeProblem>::nGroups> radEnergyFractionsT0;
-	quokka::valarray<amrex::Real, Physics_Traits<TubeProblem>::nGroups> radEnergyFractionsT1;
+	quokka::valarray<amrex::Real, Physics_Traits<TubeProblem>::nGroups> radEnergyFractionsT0{};
+	quokka::valarray<amrex::Real, Physics_Traits<TubeProblem>::nGroups> radEnergyFractionsT1{};
   RadSystem<TubeProblem>::ComputePlanckEnergyFractions(radEnergyFractionsT0, T0);
   RadSystem<TubeProblem>::ComputePlanckEnergyFractions(radEnergyFractionsT1, T1);
 
@@ -319,8 +319,8 @@ auto problem_main() -> int
     }
     Erad_exact_arr[i] = Erad_0;
     Erad_arr[i] = Erad_t;
-		double Trad_exact = std::pow(Erad_0 / radiation_constant_cgs_, 1. / 4.);
-		double Trad = std::pow(Erad_t / radiation_constant_cgs_, 1. / 4.);
+		const double Trad_exact = std::pow(Erad_0 / radiation_constant_cgs_, 1. / 4.);
+		const double Trad = std::pow(Erad_t / radiation_constant_cgs_, 1. / 4.);
 		Trad_arr[i] = Trad;
 		Trad_exact_arr[i] = Trad_exact;
 		Trad_err[i] = (Trad - Trad_exact) / Trad_exact;
@@ -362,7 +362,7 @@ auto problem_main() -> int
 
 #ifdef HAVE_PYTHON
 	// Plot results: temperature
-	int s = 4; // stride
+	const int s = 4; // stride
 	std::map<std::string, std::string> Trad_args;
 	std::map<std::string, std::string> Tgas_args;
 	std::unordered_map<std::string, std::string> Texact_args;
