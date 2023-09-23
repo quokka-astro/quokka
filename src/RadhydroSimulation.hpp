@@ -229,6 +229,8 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	auto expandFluxArrays(std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxes, int nstartNew, int ncompNew)
 	    -> std::array<amrex::FArrayBox, AMREX_SPACEDIM>;
 
+	void printCoordinates(int lev, const amrex::IntVect& cell_idx);
+
 	void advanceHydroAtLevelWithRetries(int lev, amrex::Real time, amrex::Real dt_lev, amrex::YAFluxRegister *fr_as_crse,
 					    amrex::YAFluxRegister *fr_as_fine);
 
@@ -892,7 +894,24 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 		amrex::Print() << "\nQUOKKA FATAL ERROR\n"
 			       << "Hydro update exceeded max_retries on level " << lev << ". Cannot continue, crashing...\n"
 			       << std::endl;
-		amrex::Abort();
+
+		// write plotfile or Ascent Blueprint file
+		amrex::ParallelDescriptor::Barrier();
+#ifdef AMREX_USE_ASCENT
+		conduit::Node mesh;
+		amrex::SingleLevelToBlueprint(state_new_cc_[lev], componentNames_cc_, geom[lev], time, istep[lev] + 1, mesh);
+		conduit::Node bpMeshHost;
+		bpMeshHost.set(mesh); // copy to host mem (needed for Blueprint HDF5 output)
+		amrex::WriteBlueprintFiles(bpMeshHost, "debug_hydro_state_fatal", istep[lev] + 1, "hdf5");
+#else
+		WriteSingleLevelPlotfile(CustomPlotFileName("debug_hydro_state_fatal", istep[lev] + 1), state_new_cc_[lev], componentNames_cc_, geom[lev], time,
+			 istep[lev] + 1);
+#endif
+		amrex::ParallelDescriptor::Barrier();
+		
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			amrex::ParallelDescriptor::Abort();
+		}
 	}
 }
 
@@ -918,6 +937,24 @@ template <typename problem_t> auto RadhydroSimulation<problem_t>::isCflViolated(
 	}
 	return cflViolation;
 }
+
+template <typename problem_t> void RadhydroSimulation<problem_t>::printCoordinates(int lev, const amrex::IntVect& cell_idx) {
+
+	amrex::Real x_coord = geom[lev].ProbLo(0) + (cell_idx[0] + 0.5) * geom[lev].CellSize(0);
+	amrex::Real y_coord = NAN;
+	amrex::Real z_coord = NAN;
+
+	if (AMREX_SPACEDIM > 1) {
+		y_coord = geom[lev].ProbLo(1) + (cell_idx[1] + 0.5) * geom[lev].CellSize(1);
+
+		if (AMREX_SPACEDIM > 2) {
+			z_coord = geom[lev].ProbLo(2) + (cell_idx[2] + 0.5) * geom[lev].CellSize(2);
+		}
+	}
+
+	amrex::Print() << "Coordinates: (" << x_coord << ", " << y_coord << ", " << z_coord << "): ";
+}
+
 
 template <typename problem_t>
 auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old_cc_tmp, amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine,
@@ -1026,6 +1063,8 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 			if (Verbose()) {
 				amrex::Print() << "[FOFC-1] flux correcting " << ncells_bad << " cells on level " << lev << "\n";
 				const amrex::IntVect cell_idx = redoFlag.maxIndex(0);
+				// Calculate the coordinates based on the cell index and cell size
+				printCoordinates(lev, cell_idx);
 				amrex::print_state(stateNew, cell_idx);
 			}
 
@@ -1049,6 +1088,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 					const amrex::IntVect cell_idx = redoFlag.maxIndex(0);
 					// print cell state
 					amrex::Print() << "[FOFC-1] Flux correction failed:\n";
+					printCoordinates(lev, cell_idx);
 					amrex::print_state(stateNew, cell_idx);
 					amrex::Print() << "[FOFC-1] failed for " << ncells_bad << " cells on level " << lev << "\n";
 				}
@@ -1107,6 +1147,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 			if (Verbose()) {
 				amrex::Print() << "[FOFC-2] flux correcting " << ncells_bad << " cells on level " << lev << "\n";
 				const amrex::IntVect cell_idx = redoFlag.maxIndex(0);
+				printCoordinates(lev, cell_idx);
 				amrex::print_state(stateFinal, cell_idx);
 			}
 
@@ -1130,6 +1171,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 					const amrex::IntVect cell_idx = redoFlag.maxIndex(0);
 					// print cell state
 					amrex::Print() << "[FOFC-2] Flux correction failed:\n";
+					printCoordinates(lev, cell_idx);
 					amrex::print_state(stateFinal, cell_idx);
 					amrex::Print() << "[FOFC-2] failed for " << ncells_bad << " cells on level " << lev << "\n";
 				}
@@ -1351,7 +1393,7 @@ void RadhydroSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab const &pri
 	HydroSystem<problem_t>::template FlattenShocks<DIR>(primVar, x1Flat, x2Flat, x3Flat, leftState, rightState, ng_reconstruct, nvars);
 
 	// interface-centered kernel
-	HydroSystem<problem_t>::template ComputeFluxes<DIR>(flux, faceVel, leftState, rightState, primVar, artificialViscosityK_);
+	HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLC, DIR>(flux, faceVel, leftState, rightState, primVar, artificialViscosityK_);
 }
 
 template <typename problem_t>
@@ -1401,9 +1443,8 @@ void RadhydroSimulation<problem_t>::hydroFOFluxFunction(amrex::MultiFab const &p
 {
 	// donor-cell reconstruction
 	HydroSystem<problem_t>::template ReconstructStatesConstant<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
-
-	// interface-centered kernel
-	HydroSystem<problem_t>::template ComputeFluxes<DIR>(flux, faceVel, leftState, rightState, primVar, artificialViscosityK_);
+	// LLF solver
+	HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::LLF, DIR>(flux, faceVel, leftState, rightState, primVar, artificialViscosityK_);
 }
 
 template <typename problem_t> void RadhydroSimulation<problem_t>::swapRadiationState(amrex::MultiFab &stateOld, amrex::MultiFab const &stateNew)

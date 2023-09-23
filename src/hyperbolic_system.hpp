@@ -53,6 +53,11 @@ template <typename problem_t> class HyperbolicSystem
 		return 0.5 * (sgn(a) + sgn(b)) * std::min(0.5 * std::abs(a + b), std::min(2.0 * std::abs(a), 2.0 * std::abs(b)));
 	}
 
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto minmod(double a, double b) -> double
+	{
+		return 0.5 * (sgn(a) + sgn(b)) * std::min(std::abs(a), std::abs(b));
+	}
+
 	[[nodiscard]] AMREX_GPU_DEVICE AMREX_FORCE_INLINE static auto GetMinmaxSurroundingCell(arrayconst_t &q, int i, int j, int k, int n)
 	    -> std::pair<double, double>;
 
@@ -121,7 +126,7 @@ template <FluxDir DIR>
 void HyperbolicSystem<problem_t>::ReconstructStatesPLM(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf,
 						       const int nghost, const int nvars)
 {
-	// Unlike PPM, PLM with the MC limiter is TVD.
+	// Unlike PPM, PLM with MC or minmod limiters is TVD.
 	// (There are no spurious oscillations, *except* in the slow-moving shock problem,
 	// which can produce unphysical oscillations even when using upwind Godunov fluxes.)
 	// However, most tests fail when using PLM reconstruction because
@@ -151,8 +156,8 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPLM(amrex::MultiFab const &q_
 
 		// Use piecewise-linear reconstruction
 		// (This converges at second order in spatial resolution.)
-		const auto lslope = MC(q(i, j, k, n) - q(i - 1, j, k, n), q(i - 1, j, k, n) - q(i - 2, j, k, n));
-		const auto rslope = MC(q(i + 1, j, k, n) - q(i, j, k, n), q(i, j, k, n) - q(i - 1, j, k, n));
+		const auto lslope = minmod(q(i, j, k, n) - q(i - 1, j, k, n), q(i - 1, j, k, n) - q(i - 2, j, k, n));
+		const auto rslope = minmod(q(i + 1, j, k, n) - q(i, j, k, n), q(i, j, k, n) - q(i - 1, j, k, n));
 
 		leftState(i, j, k, n) = q(i - 1, j, k, n) + 0.25 * lslope; // NOLINT
 		rightState(i, j, k, n) = q(i, j, k, n) - 0.25 * rslope;	   // NOLINT
