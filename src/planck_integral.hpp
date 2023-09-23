@@ -1,5 +1,6 @@
 #ifndef PLANCKINTEGRAL_HPP_ // NOLINT
 #define PLANCKINTEGRAL_HPP_
+#endif
 //==============================================================================
 // TwoMomentRad - a radiation transport library for patch-based AMR codes
 // Copyright 2020
