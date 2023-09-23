@@ -339,7 +339,7 @@ template <> void RadhydroSimulation<PopIII>::setInitialConditionsOnGrid(quokka::
 template <> void RadhydroSimulation<PopIII>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 	// refine on Jeans length
-	const int N_cells = 32; // inverse of the 'Jeans number' [Truelove et al. (1997)]
+	const int N_cells = 64; // inverse of the 'Jeans number' [Truelove et al. (1997)]
 	const amrex::Real G = Gconst_;
 	const amrex::Real dx = geom[lev].CellSizeArray()[0];
 
