@@ -1131,20 +1131,6 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 
 		// prevent vacuum
 		bool enforchk = HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, stateNew, "RK2-stage-1");
-        	amrex::ParallelDescriptor::ReduceBoolAnd(enforchk);
-        	if (!enforchk) {
-        	        amrex::Print() << "enforce limits has rho = 0 fixup fofc 1 stage 1 rk2 " << std::endl;
-        	        amrex::MFIter::allowMultipleMFIters(true);
-        	        WriteCheckpointFile();
-                	amrex::ParallelDescriptor::Barrier();
-                	amrex::WriteSingleLevelPlotfile(CustomPlotFileName("debug_hydro_state_fatal", istep[lev] + 1), stateNew, componentNames_cc_, geom[lev], 0, istep[lev] + 1);
-                	amrex::ParallelDescriptor::Barrier();
-                	//if (amrex::ParallelDescriptor::IOProcessor()) {
-                        //	amrex::ParallelDescriptor::Abort();
-                	//}
-        	}
-
-
 
 		if (useDualEnergy_ == 1) {
 			// sync internal energy (requires positive density)
