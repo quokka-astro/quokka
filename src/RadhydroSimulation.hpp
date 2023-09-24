@@ -1042,18 +1042,6 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 
 	auto [FOfluxArrays, FOfaceVel] = computeFOHydroFluxes(state_old_cc_tmp, ncompHydro_, lev);
 
-	validStates = HydroSystem<problem_t>::CheckStatesValid(state_old_cc_tmp);
-	amrex::ParallelDescriptor::ReduceBoolAnd(validStates);
-
-	if (!validStates) {
-		amrex::Print() << "Hydro states invalid before RK2 stage 1  \n";
-		amrex::Print() << "Writing checkpoint for debugging...\n";
-		amrex::MFIter::allowMultipleMFIters(true);
-		WriteCheckpointFile();
-		amrex::Abort("Hydro states invalid before RK2 stage 1 ");
-	}
-
-
 	// Stage 1 of RK2-SSP
 	{
 		// advance all grids on local processor (Stage 1 of integrator)
@@ -1142,7 +1130,6 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		}
 
 		// prevent vacuum
-		amrex::Print() << "enforce limits fofc 1 " << std::endl;
 		bool enforchk = HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, stateNew, "RK2-stage-1");
         	amrex::ParallelDescriptor::ReduceBoolAnd(enforchk);
         	if (!enforchk) {
@@ -1152,9 +1139,9 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
                 	amrex::ParallelDescriptor::Barrier();
                 	amrex::WriteSingleLevelPlotfile(CustomPlotFileName("debug_hydro_state_fatal", istep[lev] + 1), stateNew, componentNames_cc_, geom[lev], 0, istep[lev] + 1);
                 	amrex::ParallelDescriptor::Barrier();
-                	if (amrex::ParallelDescriptor::IOProcessor()) {
-                        	amrex::ParallelDescriptor::Abort();
-                	}
+                	//if (amrex::ParallelDescriptor::IOProcessor()) {
+                        //	amrex::ParallelDescriptor::Abort();
+                	//}
         	}
 
 
@@ -1170,18 +1157,6 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		}
 	}
 	amrex::Gpu::streamSynchronizeAll();
-
-	validStates = HydroSystem<problem_t>::CheckStatesValid(state_inter_cc_);
-	amrex::ParallelDescriptor::ReduceBoolAnd(validStates);
-	
-	if (!validStates) {
-		amrex::Print() << "Hydro states invalid after RK2 stage 1  \n";
-		amrex::Print() << "Writing checkpoint for debugging...\n";
-		amrex::MFIter::allowMultipleMFIters(true);
-		WriteCheckpointFile();
-		amrex::Abort("Hydro states invalid after RK2 stage ");
-	}
-
 
 	// Stage 2 of RK2-SSP
 	if (integratorOrder_ == 2) {
@@ -1252,21 +1227,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		}
 
 		// prevent vacuum
-		amrex::Print() << "enforce limits prevent vacuum stage 2 " << std::endl;
 		bool enforchk = HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, stateFinal, "RK2-stage-2");
-                amrex::ParallelDescriptor::ReduceBoolAnd(enforchk);
-                if (!enforchk) {
-                        amrex::Print() << "enforce limits has rho = 0 fixup prevent vacuum stage 2 rk2 " << std::endl;
-                        amrex::MFIter::allowMultipleMFIters(true);
-                        WriteCheckpointFile();
-                		amrex::ParallelDescriptor::Barrier();
-                		amrex::WriteSingleLevelPlotfile(CustomPlotFileName("debug_hydro_state_fatal", istep[lev] + 1), stateFinal, componentNames_cc_, geom[lev], 0, istep[lev] + 1);
-                		amrex::ParallelDescriptor::Barrier();
-                		if (amrex::ParallelDescriptor::IOProcessor()) {
-                        	amrex::ParallelDescriptor::Abort();
-                		}
-                }
-
 
 		if (useDualEnergy_ == 1) {
 			// sync internal energy (requires positive density)
