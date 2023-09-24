@@ -20,12 +20,6 @@
 # Load here the needed modules
 
 # ---
-# OpenMP settings
-export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK   #To define the number of threads, in this case will be 32
-export OMP_PLACES=cores     #To bind threads to cores
-export OMP_PROC_BIND=close  #To bind (fix) threads (allocating them as close as possible). This option works together with the "places" indicated above, then: allocates threads in closest cores.
-
-# ---
 # Temporal workaround for avoiding Slingshot issues on shared nodes:
 export FI_CXI_DEFAULT_VNI=$(od -vAn -N4 -tu < /dev/urandom)
 # Run the desired code:

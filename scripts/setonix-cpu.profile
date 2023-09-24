@@ -11,9 +11,6 @@ module load cray-python/3.9.13.1
 # GPU-aware MPI
 export MPICH_GPU_SUPPORT_ENABLED=0
 
-# allow CMake to find Ascent
-export Ascent_DIR=/software/projects/pawsey0807/bwibking/ascent_06082023/install/ascent-develop/lib/cmake/ascent/
-
 # compiler environment hints
 export CC=$(which cc)
 export CXX=$(which CC)
