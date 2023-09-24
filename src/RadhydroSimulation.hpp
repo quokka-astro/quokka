@@ -433,11 +433,11 @@ template <typename problem_t> auto RadhydroSimulation<problem_t>::computeExtraPh
 	return std::numeric_limits<amrex::Real>::max();
 }
 
-//#if !defined(NDEBUG)
+#if !defined(NDEBUG)
 #define CHECK_HYDRO_STATES(mf) checkHydroStates(mf, __FILE__, __LINE__)
-//#else
-//#define CHECK_HYDRO_STATES(mf)
-//#endif
+#else
+#define CHECK_HYDRO_STATES(mf)
+#endif
 
 template <typename problem_t> void RadhydroSimulation<problem_t>::checkHydroStates(amrex::MultiFab &mf, char const *file, int line)
 {
@@ -451,7 +451,6 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::checkHydroStat
 		amrex::Print() << "Writing checkpoint for debugging...\n";
 		amrex::MFIter::allowMultipleMFIters(true);
 		WriteCheckpointFile();
-		
 		amrex::Abort("Hydro states invalid (" + std::string(file) + ":" + std::to_string(line) + ")");
 	}
 }
@@ -544,8 +543,6 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::computeAfterEv
 	// check conservation of total energy
 	amrex::Real const Egas0 = initSumCons[RadSystem<problem_t>::gasEnergy_index];
 	amrex::Real const Egas = state_new_cc_[0].sum(RadSystem<problem_t>::gasEnergy_index) * vol;
-
-	amrex::Print() << "after evolve Egas " << Egas << " vol " << vol << std::endl;
 
 	amrex::Real Etot0 = NAN;
 	amrex::Real Etot = NAN;
@@ -712,7 +709,6 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::FixupState(int
 	amrex::ParallelDescriptor::Barrier();
 
 	// fix hydro state
-	amrex::Print() << "enforce limits state_new_cc " << std::endl;
 	bool enforchk = HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, state_new_cc_[lev], "fixup_new");
 	amrex::ParallelDescriptor::ReduceBoolAnd(enforchk);
 	if (!enforchk) {
@@ -722,12 +718,11 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::FixupState(int
 		amrex::ParallelDescriptor::Barrier();
 		amrex::WriteSingleLevelPlotfile(CustomPlotFileName("debug_hydro_state_fatal", istep[lev] + 1), state_new_cc_[lev], componentNames_cc_, geom[lev], 0, istep[lev] + 1);
 		amrex::ParallelDescriptor::Barrier();
-		if (amrex::ParallelDescriptor::IOProcessor()) {
-			amrex::ParallelDescriptor::Abort();
-		}
+		//if (amrex::ParallelDescriptor::IOProcessor()) {
+		//	amrex::ParallelDescriptor::Abort();
+		//}
 	}
 
-	amrex::Print() << "enforce limits state_old_cc " << std::endl;
 	enforchk = HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, state_old_cc_[lev], "fixup_old");
         amrex::ParallelDescriptor::ReduceBoolAnd(enforchk);
         if (!enforchk) {
@@ -1026,17 +1021,6 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 
 	// update ghost zones [old timestep]
 	fillBoundaryConditions(state_old_cc_tmp, state_old_cc_tmp, lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState);
-
-	bool validStates = HydroSystem<problem_t>::CheckStatesValid(state_old_cc_tmp);
-	amrex::ParallelDescriptor::ReduceBoolAnd(validStates);
-	if (!validStates) {
-		amrex::Print() << "Hydro states invalid after fillBC in RK  \n";
-		amrex::Print() << "Writing checkpoint for debugging...\n";
-		amrex::MFIter::allowMultipleMFIters(true);
-		WriteCheckpointFile();
-		amrex::Abort("Hydro states invalid after fillBC in RK ");
-	}
-
 
 	// LOW LEVEL DEBUGGING: output state_old_cc_tmp (with ghost cells)
 	if (lowLevelDebuggingOutput_ == 1) {
