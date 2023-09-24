@@ -104,7 +104,7 @@ By default, Quokka compiles itself to run only on CPUs. Quokka can run on either
 ### NVIDIA GPUs
 If you want to run on NVIDIA GPUs, re-build Quokka as shown below. (*CUDA >= 11.7 is required. Quokka is only supported on Volta V100 GPUs or newer models. Your MPI library **must** support CUDA-aware MPI.*)
 ```
-cmake .. -DCMAKE_BUILD_TYPE=Release -DAMReX_GPU_BACKEND=CUDA -DAMREX_GPUS_PER_NODE=N -G Ninja
+cmake .. -DCMAKE_BUILD_TYPE=Release -DAMReX_GPU_BACKEND=CUDA -DAMReX_SPACEDIM=3 -G Ninja
 ninja -j6
 ```
 where $N$ is the number of GPUs available per compute node.
