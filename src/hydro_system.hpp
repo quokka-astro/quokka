@@ -780,12 +780,12 @@ auto HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 			// Enforcing Limits on mass scalars
 			if (nmscalars_ > 0) {
 
-				amrex::Real sp_sum = NAN;
+				amrex::Real sp_sum = 0.0;
 
 				for (int idx = 0; idx < nmscalars_; ++idx) {
 
 					if (state[bx](i, j, k, scalar0_index + idx) < 0.0) {
-					state[bx](i, j, k, scalar0_index + idx) = small_x * rho;
+						state[bx](i, j, k, scalar0_index + idx) = small_x * rho;
 					}
 
 					// get sum to renormalize
@@ -793,11 +793,12 @@ auto HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 
 				}
 
+				sp_sum /= rho; //get mass fractions
+
 				for (int idx = 0; idx < nmscalars_; ++idx) {
 					// renormalize
 					state[bx](i, j, k, scalar0_index + idx) /= sp_sum;
 				}
-
 
 			}
 
