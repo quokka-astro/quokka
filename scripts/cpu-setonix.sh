@@ -23,4 +23,4 @@
 # Temporal workaround for avoiding Slingshot issues on shared nodes:
 export FI_CXI_DEFAULT_VNI=$(od -vAn -N4 -tu < /dev/urandom)
 # Run the desired code:
-srun -N $SLURM_JOB_NUM_NODES -n $SLURM_NTASKS -c $OMP_NUM_THREADS -m block:block:block ./src/PopIII/popiii ../tests/PopIII.in
+srun ./src/PopIII/popiii ../tests/PopIII.in
