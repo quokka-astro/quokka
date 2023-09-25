@@ -10,10 +10,7 @@
 
 #SBATCH --account=pawsey0807
 #SBATCH --partition=work
-#SBATCH --nodes=2
-#SBATCH --ntasks-per-node=128
-#SBATCH --cpus-per-task=1
-#SBATCH --mem=58880M      #Indicate the amount of memory per node when asking for share resources
+#SBATCH --exclusive=psharda
 #SBATCH --time=01:00:00
 
 # ---
