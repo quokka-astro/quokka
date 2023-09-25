@@ -2,11 +2,6 @@
 
 # SLURM directives
 #
-# Here we specify to SLURM we want an OpenMP job with 32 threads
-# a wall-clock time limit of one hour.
-#
-# Replace [your-project] with the appropriate project name
-# following --account (e.g., --account=project123).
 
 #SBATCH --account=pawsey0807
 #SBATCH --partition=work
