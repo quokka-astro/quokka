@@ -10,7 +10,7 @@
 
 #SBATCH --account=pawsey0807
 #SBATCH --partition=work
-#SBATCH --exclusive=psharda
+#SBATCH --exclusive
 #SBATCH --nodes=2
 #SBATCH --ntasks-per-node=128
 #SBATCH --cpus-per-task=1
