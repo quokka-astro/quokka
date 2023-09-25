@@ -480,7 +480,7 @@ auto problem_main() -> int
 	sim.doPoissonSolve_ = 1; // enable self-gravity
 	sim.densityFloor_ = 1e-25;
 	sim.tempFloor_ = 2.73 * (30.0 + 1.0);
-	sim.speedCeiling_ = 3e6;
+	// sim.speedCeiling_ = 3e6;
 
 	sim.userData_.R_sphere = R_sphere;
 	sim.userData_.numdens_init = numdens_init;
