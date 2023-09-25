@@ -330,19 +330,10 @@ auto problem_main() -> int
 		interpolate_arrays(xs_exact.data(), Tgas_numerical_interp.data(), static_cast<int>(xs_exact.size()), xs.data(), Tgas.data(),
 				   static_cast<int>(xs.size()));
 
-    // Find the first non-nan element in Tgas_numerical_interp. The first element of Tgas_numerical_interp could be nan if amr.n_cell is small (so that xs[0] > xs_exact[0])
-    int first_non_nan = 0;
-    for (int kk = 0; kk < xs_exact.size(); ++kk) {
-      if (!std::isnan(Tgas_numerical_interp[kk])) {
-        first_non_nan = kk;
-        break;
-      }
-    }
-
 		// compute L1 error norm
 		double err_norm = 0.;
 		double sol_norm = 0.;
-		for (size_t i = first_non_nan; i < xs_exact.size(); ++i) {
+		for (size_t i = 0; i < xs_exact.size(); ++i) {
 			err_norm += std::abs(Tgas_numerical_interp[i] - Tgas_exact_10[i]);
 			sol_norm += std::abs(Tgas_exact_10[i]);
 		}
