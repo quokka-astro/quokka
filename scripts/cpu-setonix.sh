@@ -11,6 +11,9 @@
 #SBATCH --account=pawsey0807
 #SBATCH --partition=work
 #SBATCH --exclusive=psharda
+#SBATCH --nodes=2
+#SBATCH --ntasks-per-node=128
+#SBATCH --cpus-per-task=1
 #SBATCH --time=01:00:00
 
 # ---

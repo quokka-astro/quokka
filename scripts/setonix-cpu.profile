@@ -15,6 +15,4 @@ export MPICH_GPU_SUPPORT_ENABLED=0
 export CC=$(which cc)
 export CXX=$(which CC)
 export FC=$(which ftn)
-export CFLAGS="-I${ROCM_PATH}/include"
-export CXXFLAGS="-I${ROCM_PATH}/include"
 
