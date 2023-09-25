@@ -713,7 +713,7 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 
 			// check that states are physically admissible; if not, use first-order
 			// reconstruction
-			if (!((erad_L > 0.) && (erad_R > 0.) && (f_L < 1.) && (f_R < 1.))) {
+			if ((erad_L <= 0.) || (erad_R <= 0.) || (f_L >= 1.) || (f_R >= 1.)) {
 				erad_L = consVar(i - 1, j, k, radEnergy_index + numRadVars_ * g);
 				erad_R = consVar(i, j, k, radEnergy_index + numRadVars_ * g);
 
@@ -777,10 +777,10 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 			const double Tf_R = (3.0 * chi_R - 1.0) / 2.0;
 
 			// assemble Eddington tensor
-			double T_L[3][3];
-			double T_R[3][3];
-			double P_L[3][3];
-			double P_R[3][3];
+		  std::array<std::array<double, 3>, 3> T_L{};
+			std::array<std::array<double, 3>, 3> T_R{};
+			std::array<std::array<double, 3>, 3> P_L{};
+			std::array<std::array<double, 3>, 3> P_R{};
 
 			for (int i = 0; i < 3; ++i) {
 				for (int j = 0; j < 3; ++j) {

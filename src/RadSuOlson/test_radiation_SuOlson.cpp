@@ -129,8 +129,8 @@ void RadSystem<MarshakProblem>::SetRadEnergySource(array_t &radEnergySource, amr
   RadSystem<MarshakProblem>::ComputePlanckEnergyFractions(radEnergyFractions, T_hohlraum);
 
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-	  amrex::Real const xl = (i + amrex::Real(0.)) * dx[0];
-	  amrex::Real const xr = (i + amrex::Real(1.)) * dx[0];
+	  amrex::Real const xl = (i + 0.) * dx[0];
+	  amrex::Real const xr = (i + 1.) * dx[0];
 
 	  amrex::Real dx_frac = 0.0;
 	  if ((xl < x0) && (xr <= x0)) {

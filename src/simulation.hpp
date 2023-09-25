@@ -1243,7 +1243,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 	}
 	// check that the valid state_new_cc_[level] is properly filled
 	AMREX_ALWAYS_ASSERT(!state_new_cc_[level].contains_nan(0, ncomp_cc));
-	AMREX_ASSERT(!state_new_cc_[level].contains_nan(0, state_new_cc_[level].nComp()));
 	// fill ghost zones
 	fillBoundaryConditions(state_new_cc_[level], state_new_cc_[level], level, time, quokka::centering::cc, quokka::direction::na, InterpHookNone,
 			       InterpHookNone, FillPatchType::fillpatch_function);
@@ -1267,7 +1266,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 		// check that the valid state_new_fc_[level][idim] data is filled properly
 		AMREX_ALWAYS_ASSERT(!state_new_fc_[level][idim].contains_nan(0, ncomp_per_dim_fc));
 		// fill ghost zones
-	  AMREX_ASSERT(!state_new_fc_[level][idim].contains_nan(0, state_new_fc_[level][idim].nComp()));
 		fillBoundaryConditions(state_new_fc_[level][idim], state_new_fc_[level][idim], level, time, quokka::centering::fc,
 				       static_cast<quokka::direction>(idim), InterpHookNone, InterpHookNone);
 		state_old_fc_[level][idim].ParallelCopy(state_new_fc_[level][idim], 0, 0, ncomp_per_dim_fc, nghost_fc, nghost_fc);
@@ -1355,8 +1353,6 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 		BCs = BCs_fc_;
 	}
 
-	AMREX_ASSERT(!state.contains_nan(0, state.nComp()));
-
 	if (lev > 0) { // refined level
 		amrex::Vector<amrex::MultiFab *> fineData{&state};
 		amrex::Vector<amrex::Real> fineTime = {time};
@@ -1385,7 +1381,6 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 			// fill physical boundaries
 			physicalBoundaryFunctor(state, 0, state.nComp(), state.nGrowVect(), time, 0);
 		}
-		AMREX_ASSERT(!state.contains_nan(0, state.nComp()));
 	}
 
 	// ensure that there are no NaNs (can happen when domain boundary filling is
