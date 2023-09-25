@@ -107,6 +107,7 @@ If you want to run on NVIDIA GPUs, re-build Quokka as shown below. (*CUDA >= 11.
 cmake .. -DCMAKE_BUILD_TYPE=Release -DAMReX_GPU_BACKEND=CUDA -DAMReX_SPACEDIM=3 -G Ninja
 ninja -j6
 ```
+**All GPUs on a node must be visible from each MPI rank on the node for efficient GPU-aware MPI communication to take place via CUDA IPC.** When using the SLURM job scheduler, this means that `--gpu-bind` should be set to `none`.
 
 The compiled test problems are in the test problem subdirectories in `build/src/`. Example scripts for running Quokka on compute clusters are in the `scripts/` subdirectory.
 
