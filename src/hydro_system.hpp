@@ -810,7 +810,7 @@ auto HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 				amrex::Real const P_star = quokka::EOS<problem_t>::ComputePressure(rho_new, Eint_star, massScalars);
 
 				if (std::isnan(P_star) || P_star < 0) {
-					printf("pres is %f", P_star);
+					printf("pressure is %f", P_star);
 				}
 				amrex::Real P_new = P_star;
 				if (P_star < pressureFloor) {

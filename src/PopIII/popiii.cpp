@@ -295,8 +295,6 @@ template <> void RadhydroSimulation<PopIII>::setInitialConditionsOnGrid(quokka::
 		double vy = renorm_amp * dvy(i, j, k);
 		double vz = renorm_amp * dvz(i, j, k);
 
-		amrex::Real pres = 0.0;
-
 		if (r <= R_sphere) {
 			state.rho = rhotot;
 			state.T = core_temp;
