@@ -288,7 +288,6 @@ template <typename problem_t> auto HydroSystem<problem_t>::CheckStatesValid(amre
 							       thermal_energy, P);
 							return {false};
 						}
-
 					}
 					return {true};
 				});
