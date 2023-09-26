@@ -734,19 +734,6 @@ auto HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 			amrex::Real Ekin = rho * vsq / 2.;
 			amrex::Real rho_new = rho;
 
-	                if (std::isnan(rho)) {
-        	                printf("rho =  %e Eint = %e Ekin = %e v_abs = %e \n", rho, Eint, Ekin, v_abs);
-                	        if (nmscalars_ > 0) {
-
-	                                for (int idx = 0; idx < nmscalars_; ++idx) {
-	                                        if (state[bx](i, j, k, scalar0_index + idx) < 0.0) {
-	                                                printf("nm is %e \n", state[bx](i, j, k, scalar0_index + idx));
-	                                        }
-	                                }
-	                        }
-
-	                }
-
 			if (rho < densityFloor) {
 				rho_new = densityFloor;
 				state[bx](i, j, k, density_index) = rho_new;
@@ -803,7 +790,7 @@ auto HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 				amrex::Real const P_star = quokka::EOS<problem_t>::ComputePressure(rho_new, Eint_star, massScalars);
 
 				if (std::isnan(P_star) || P_star < 0) {
-					printf("pressure is %f", P_star);
+					printf("pressure is %f ", P_star);
 				}
 				amrex::Real P_new = P_star;
 				if (P_star < pressureFloor) {
