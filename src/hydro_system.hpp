@@ -219,7 +219,6 @@ template <typename problem_t> auto HydroSystem<problem_t>::maxSignalSpeedLocal(a
 					} else {
 						cs = ComputeSoundSpeed(cons[bx], i, j, k);
 					}
-
 					return {cs + abs_vel};
 				});
 }
@@ -275,8 +274,8 @@ template <typename problem_t> auto HydroSystem<problem_t>::CheckStatesValid(amre
 					const auto thermal_energy = E - kinetic_energy;
 					const auto P = ComputePressure(cons[bx], i, j, k);
 
-					bool negativeDensity = (rho < 0.);
-					bool negativePressure = (P < 0.);
+					bool negativeDensity = (rho <= 0.);
+					bool negativePressure = (P <= 0.);
 
 					if constexpr (is_eos_isothermal()) {
 						if (negativeDensity) {
@@ -289,17 +288,6 @@ template <typename problem_t> auto HydroSystem<problem_t>::CheckStatesValid(amre
 						//	       thermal_energy, P);
 						//	return {false};
 						//}
-
-
-
-						if (std::isnan(rho) || std::isnan(P)) {
-							printf("nan state at (%d, %d, %d): rho %g, Etot %g, Eint %g, P %g\n", i, j, k, rho, E,
-                                                               thermal_energy, P);
-							return {false};
-						} else if (rho == 0.0 || P == 0.0) {
-							printf("zero state at (%d, %d, %d): rho %g, Etot %g, Eint %g, P %g\n", i, j, k, rho, E, thermal_energy, P);
-							return {false};
-						}
 
 					}
 					return {true};
