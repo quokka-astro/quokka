@@ -283,11 +283,11 @@ template <typename problem_t> auto HydroSystem<problem_t>::CheckStatesValid(amre
 							return {false};
 						}
 					} else {
-						//if (negativeDensity || negativePressure) {
-						//	printf("invalid state at (%d, %d, %d): rho %g, Etot %g, Eint %g, P %g\n", i, j, k, rho, E,
-						//	       thermal_energy, P);
-						//	return {false};
-						//}
+						if (negativeDensity || negativePressure) {
+							printf("invalid state at (%d, %d, %d): rho %g, Etot %g, Eint %g, P %g\n", i, j, k, rho, E,
+							       thermal_energy, P);
+							return {false};
+						}
 
 					}
 					return {true};
