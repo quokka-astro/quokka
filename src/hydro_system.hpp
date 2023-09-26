@@ -430,7 +430,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeVelocity
 template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeVelocityX3(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k)
     -> amrex::Real
-{	
+{
 	amrex::Real const rho = cons(i, j, k, density_index);
 	amrex::Real const vel_z = cons(i, j, k, x3Momentum_index) / rho;
 	return vel_z;
@@ -441,7 +441,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::isStateValid(am
 {
 	// check if cons(i, j, k) is a valid state
 	const amrex::Real rho = cons(i, j, k, density_index);
-
 	bool isDensityPositive = (rho > 0.);
 
 	bool isMassScalarPositive = true;
@@ -868,9 +867,6 @@ auto HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 		}
 
 	});
-
-	amrex::Print() << "called by " << inputString << std::endl;
-
 }
 
 template <typename problem_t>
