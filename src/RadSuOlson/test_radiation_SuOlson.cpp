@@ -153,8 +153,8 @@ void RadSystem<MarshakProblem>::SetRadEnergySource(array_t &radEnergySource, amr
 		// const auto Egas0 = ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0);
 		// const auto T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas0, massScalars);
 
-	  quokka::valarray<amrex::Real, nGroups_> radEnergyFractions{};
-    ComputePlanckEnergyFractions(radBoundaries_g, T_hohlraum, radEnergyFractions);
+	  // quokka::valarray<amrex::Real, nGroups_> radEnergyFractions{};
+    auto radEnergyFractions = ComputePlanckEnergyFractions(radBoundaries_g, T_hohlraum);
 
 	  amrex::Real const vol_frac = dx_frac;
 	  for (int g = 0; g < nGroups_; ++g) {

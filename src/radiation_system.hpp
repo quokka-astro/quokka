@@ -159,7 +159,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 				   const quokka::valarray<double, nGroups_> &aii, const double &y0, const quokka::valarray<double, nGroups_> &yi, double &x0,
 				   quokka::valarray<double, nGroups_> &xi);
 
-	AMREX_GPU_HOST_DEVICE static void ComputePlanckEnergyFractions(amrex::GpuArray<double, nGroups_ + 1> const &boundaries, amrex::Real const temperature, quokka::valarray<amrex::Real, nGroups_> &radEnergyFractions);
+	AMREX_GPU_HOST_DEVICE static auto ComputePlanckEnergyFractions(amrex::GpuArray<double, nGroups_ + 1> const &boundaries, amrex::Real const temperature) -> quokka::valarray<amrex::Real, nGroups_>;
 
   template <FluxDir DIR>
   AMREX_GPU_DEVICE static auto ComputeCellOpticalDepth(const quokka::Array4View<const amrex::Real, DIR> &consVar,
@@ -170,11 +170,13 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 // CCH: compute radiation energy fractions for each photon group from a Planck function, given nGroups, radBoundaries, and temperature
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE void RadSystem<problem_t>::ComputePlanckEnergyFractions(amrex::GpuArray<double, nGroups_ + 1> const &boundaries, amrex::Real const temperature, quokka::valarray<amrex::Real, nGroups_> &radEnergyFractions)
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckEnergyFractions(amrex::GpuArray<double, nGroups_ + 1> const &boundaries, amrex::Real const temperature) -> quokka::valarray<amrex::Real, nGroups_>
 {
+	quokka::valarray<amrex::Real, nGroups_> radEnergyFractions{};
   if constexpr (nGroups_ == 1) {
     // CCH: for future reference, if we want to use a single group as a delta function, say at 13.6 eV, rethink this.
     radEnergyFractions[0] = 1.0;
+    return radEnergyFractions;
   } else {
     amrex::Real const energy_unit_over_kT = RadSystem_Traits<problem_t>::energy_unit / (boltzmann_constant_ * temperature);
     amrex::Real previous = integrate_planck_from_0_to_x(boundaries[0] * energy_unit_over_kT);
@@ -191,6 +193,7 @@ AMREX_GPU_HOST_DEVICE void RadSystem<problem_t>::ComputePlanckEnergyFractions(am
       }
     }
     radEnergyFractions /= sum(radEnergyFractions);
+    return radEnergyFractions;
   }
 }
 
@@ -1083,9 +1086,9 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				const double dB_dTgas = (4.0 * B) / T_gas;
 
 				// compute residuals
-				quokka::valarray<amrex::Real, nGroups_> radEnergyFractions{};
         // ComputePlanckEnergyFractions(radEnergyFractions, T_gas);
-	      ComputePlanckEnergyFractions(radBoundaries_g, T_gas, radEnergyFractions);
+				// quokka::valarray<amrex::Real, nGroups_> radEnergyFractions{};
+	      auto radEnergyFractions = ComputePlanckEnergyFractions(radBoundaries_g, T_gas);
 
         AMREX_ASSERT(min(radEnergyFractions) > 0.);
 				Rvec = dt * rho * (kappaPVec * fourPiB * radEnergyFractions - chat * kappaEVec * EradVec_guess);
