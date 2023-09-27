@@ -47,7 +47,9 @@ template <typename problem_t> struct RadSystem_Traits {
 	static constexpr double Erad_floor = 0.;
 	static constexpr bool compute_v_over_c_terms = true;
 	static constexpr double energy_unit = C::ev2erg;
-	static constexpr std::array<double, Physics_Traits<problem_t>::nGroups + 1> radBoundaries{0., inf};
+	// static constexpr std::array<double, Physics_Traits<problem_t>::nGroups + 1> radBoundaries{0., inf};
+	static constexpr amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups + 1> radBoundaries = {0., inf};
+  // static constexpr amrex::Vector<amrex::Real> radBoundaries{0., inf};  // Kelvin
 };
 
 
@@ -96,6 +98,9 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static constexpr bool compute_v_over_c_terms_ = RadSystem_Traits<problem_t>::compute_v_over_c_terms;
 
 	static constexpr int nGroups_ = Physics_Traits<problem_t>::nGroups;
+	// static constexpr amrex::GpuArray<double, nGroups_ + 1> radBoundaries_ = RadSystem_Traits<problem_t>::radBoundaries;
+	// static constexpr amrex::Array1D<double, 0, nGroups_> radBoundaries_ = RadSystem_Traits<problem_t>::radBoundaries;
+	// static constexpr auto radBoundaries_ = RadSystem_Traits<problem_t>::radBoundaries;
 
 	static constexpr double mean_molecular_mass_ = quokka::EOS_Traits<problem_t>::mean_molecular_mass;
 	static constexpr double boltzmann_constant_ = quokka::EOS_Traits<problem_t>::boltzmann_constant;
@@ -154,9 +159,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 				   const quokka::valarray<double, nGroups_> &aii, const double &y0, const quokka::valarray<double, nGroups_> &yi, double &x0,
 				   quokka::valarray<double, nGroups_> &xi);
 
-	// CCH: compute radiation energy fractions for each bin, given nGroups, radBoundaries, and temperature
-	// static void ComputeRadEnergyFractions(quokka::valarray<double, nGroups_> &radEnergyFractions, amrex::Real const temperature);
-	AMREX_GPU_HOST_DEVICE static void ComputePlanckEnergyFractions(quokka::valarray<amrex::Real, nGroups_> &radEnergyFractions, amrex::Real temperature);
+	AMREX_GPU_HOST_DEVICE static void ComputePlanckEnergyFractions(amrex::GpuArray<double, nGroups_ + 1> const &boundaries, amrex::Real const temperature, quokka::valarray<amrex::Real, nGroups_> &radEnergyFractions);
 
   template <FluxDir DIR>
   AMREX_GPU_DEVICE static auto ComputeCellOpticalDepth(const quokka::Array4View<const amrex::Real, DIR> &consVar,
@@ -165,18 +168,18 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
   AMREX_GPU_DEVICE static auto isStateValid(std::array<amrex::Real, nvarHyperbolic_> &cons) -> bool;
 };
 
-// CCH: compute radiation energy fractions for each bin of a Planck function, given the temperature.
+// CCH: compute radiation energy fractions for each photon group from a Planck function, given nGroups, radBoundaries, and temperature
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE void RadSystem<problem_t>::ComputePlanckEnergyFractions(quokka::valarray<amrex::Real, nGroups_> &radEnergyFractions, amrex::Real const temperature)
+AMREX_GPU_HOST_DEVICE void RadSystem<problem_t>::ComputePlanckEnergyFractions(amrex::GpuArray<double, nGroups_ + 1> const &boundaries, amrex::Real const temperature, quokka::valarray<amrex::Real, nGroups_> &radEnergyFractions)
 {
   if constexpr (nGroups_ == 1) {
     // CCH: for future reference, if we want to use a single group as a delta function, say at 13.6 eV, rethink this.
     radEnergyFractions[0] = 1.0;
   } else {
     amrex::Real const energy_unit_over_kT = RadSystem_Traits<problem_t>::energy_unit / (boltzmann_constant_ * temperature);
-    amrex::Real previous = integrate_planck_from_0_to_x(RadSystem_Traits<problem_t>::radBoundaries[0] * energy_unit_over_kT);
+    amrex::Real previous = integrate_planck_from_0_to_x(boundaries[0] * energy_unit_over_kT);
     for (int g = 0; g < nGroups_; ++g) {
-      amrex::Real y = integrate_planck_from_0_to_x(RadSystem_Traits<problem_t>::radBoundaries[g + 1] * energy_unit_over_kT);
+      amrex::Real y = integrate_planck_from_0_to_x(boundaries[g + 1] * energy_unit_over_kT);
       radEnergyFractions[g] = y - previous;
       previous = y;
     }
@@ -755,9 +758,9 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 			std::array<amrex::Real, 3> n_L{};
 			std::array<amrex::Real, 3> n_R{};
 
-			for (int i = 0; i < 3; ++i) {
-				n_L[i] = (f_L > 0.) ? (fvec_L[i] / f_L) : 0.;
-				n_R[i] = (f_R > 0.) ? (fvec_R[i] / f_R) : 0.;
+			for (int ii = 0; ii < 3; ++ii) {
+				n_L[ii] = (f_L > 0.) ? (fvec_L[ii] / f_L) : 0.;
+				n_R[ii] = (f_R > 0.) ? (fvec_R[ii] / f_R) : 0.;
 			}
 
 			// compute radiation pressure tensors
@@ -782,15 +785,15 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 			std::array<std::array<double, 3>, 3> P_L{};
 			std::array<std::array<double, 3>, 3> P_R{};
 
-			for (int i = 0; i < 3; ++i) {
-				for (int j = 0; j < 3; ++j) {
-					const double delta_ij = (i == j) ? 1 : 0;
-					T_L[i][j] = Tdiag_L * delta_ij + Tf_L * (n_L[i] * n_L[j]);
-					T_R[i][j] = Tdiag_R * delta_ij + Tf_R * (n_R[i] * n_R[j]);
+			for (int ii = 0; ii < 3; ++ii) {
+				for (int jj = 0; jj < 3; ++jj) {
+					const double delta_ij = (ii == jj) ? 1 : 0;
+					T_L[ii][jj] = Tdiag_L * delta_ij + Tf_L * (n_L[ii] * n_L[jj]);
+					T_R[ii][jj] = Tdiag_R * delta_ij + Tf_R * (n_R[ii] * n_R[jj]);
 					// compute the elements of the total radiation pressure
 					// tensor
-					P_L[i][j] = T_L[i][j] * erad_L;
-					P_R[i][j] = T_R[i][j] * erad_R;
+					P_L[ii][jj] = T_L[ii][jj] * erad_L;
+					P_R[ii][jj] = T_R[ii][jj] * erad_R;
 				}
 			}
 
@@ -980,6 +983,10 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 	arrayconst_t &consPrev = consVar; // make read-only
 	array_t &consNew = consVar;
 
+	// amrex::GpuArray<amrex::Real, nGroups_+1> radBoundaries_ = RadSystem_Traits<problem_t>::radBoundaries;
+
+	const auto radBoundaries_g = RadSystem_Traits<problem_t>::radBoundaries;
+
 	// Add source terms
 
 	// 1. Compute gas energy and radiation energy update following Howell &
@@ -1027,7 +1034,8 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			EradVec_guess[g] = NAN;
     }
 
-		if constexpr (gamma_ != 1.0) {
+		// if constexpr (gamma_ != 1.0) {
+		if (gamma_ != 1.0) {
 			Egas0 = ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0);
 			Ekin0 = Egastot0 - Egas0;
 
@@ -1076,8 +1084,9 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 
 				// compute residuals
 				quokka::valarray<amrex::Real, nGroups_> radEnergyFractions{};
-        // RadSystem<problem_t>::ComputeRadEnergyFractions(radEnergyFractions, T_gas);
-        ComputePlanckEnergyFractions(radEnergyFractions, T_gas);
+        // ComputePlanckEnergyFractions(radEnergyFractions, T_gas);
+	      ComputePlanckEnergyFractions(radBoundaries_g, T_gas, radEnergyFractions);
+
         AMREX_ASSERT(min(radEnergyFractions) > 0.);
 				Rvec = dt * rho * (kappaPVec * fourPiB * radEnergyFractions - chat * kappaEVec * EradVec_guess);
 				Rtot = sum(Rvec);
