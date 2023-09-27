@@ -150,20 +150,7 @@ template <> void RadhydroSimulation<TubeProblem>::setInitialConditionsOnGrid(quo
 	auto const &Erad_ptr = Erad_arr_g.dataPtr();
 	int x_size = static_cast<int>(x_arr_g.size());
 
-  // // Multigroup: copy radBoundaries to Device
-	// if constexpr (Physics_Traits<TubeProblem>::nGroups > 1) {
-	// 	// // amrex::Gpu::DeviceVector<double> radBoundaries_g(radBoundaries_.size());
-  //   // radBoundaries_g.resize(RadSystem_Traits<TubeProblem>::radBoundaries.size());
-	// 	// amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, RadSystem_Traits<TubeProblem>::radBoundaries.begin(), RadSystem_Traits<TubeProblem>::radBoundaries.end(), radBoundaries_g.begin());
-	//   // amrex::Gpu::streamSynchronizeAll();
-  //   // auto const &radBoundaries_ptr = radBoundaries_g.dataPtr();
-  // }
-
-	// copy RadSystem_Traits<TubeProblem>::radBoundaries as GpuArray
-	amrex::GpuArray<double, Physics_Traits<TubeProblem>::nGroups + 1> radBoundaries_g;
-	for (int g = 0; g < Physics_Traits<TubeProblem>::nGroups + 1; ++g) {
-    radBoundaries_g[g] = RadSystem_Traits<TubeProblem>::radBoundaries[g];
-  }
+	const auto radBoundaries_g = RadSystem_Traits<TubeProblem>::radBoundaries;
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
@@ -175,9 +162,7 @@ template <> void RadhydroSimulation<TubeProblem>::setInitialConditionsOnGrid(quo
 		amrex::Real const Tgas = Pgas / C::k_B * mu / rho;
 
     // CCH: calculate radEnergyFractions based on the boundary conditions
-	  quokka::valarray<amrex::Real, Physics_Traits<TubeProblem>::nGroups> radEnergyFractions{};
-    const amrex::Real energy_unit_over_kT = RadSystem_Traits<TubeProblem>::energy_unit / (quokka::EOS_Traits<TubeProblem>::boltzmann_constant * Tgas);
-    RadSystem<TubeProblem>::ComputePlanckEnergyFractions3(radBoundaries_g, energy_unit_over_kT, radEnergyFractions);
+    auto radEnergyFractions = RadSystem<TubeProblem>::ComputePlanckEnergyFractions(radBoundaries_g, Tgas);
 
 		// CCH: multigroup radiation
 		for (int g = 0; g < Physics_Traits<TubeProblem>::nGroups; ++g) {
@@ -220,15 +205,15 @@ AMRSimulation<TubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv
 	amrex::GpuArray<int, 3> lo = box.loVect3d();
 	amrex::GpuArray<int, 3> hi = box.hiVect3d();
 
+	auto const &radBoundaries_g = RadSystem_Traits<TubeProblem>::radBoundaries;
+
   // CCH: calculate radEnergyFractions 
-	quokka::valarray<amrex::Real, Physics_Traits<TubeProblem>::nGroups> radEnergyFractionsT0{};
-	quokka::valarray<amrex::Real, Physics_Traits<TubeProblem>::nGroups> radEnergyFractionsT1{};
-  const amrex::Real energy_unit_over_kT0 = RadSystem_Traits<TubeProblem>::energy_unit / (quokka::EOS_Traits<TubeProblem>::boltzmann_constant * T0);
-  const amrex::Real energy_unit_over_kT1 = RadSystem_Traits<TubeProblem>::energy_unit / (quokka::EOS_Traits<TubeProblem>::boltzmann_constant * T1);
+	// quokka::valarray<amrex::Real, Physics_Traits<TubeProblem>::nGroups> radEnergyFractionsT0{};
+	// quokka::valarray<amrex::Real, Physics_Traits<TubeProblem>::nGroups> radEnergyFractionsT1{};
   // RadSystem<TubeProblem>::ComputePlanckEnergyFractions3(RadSystem_Traits<TubeProblem>::radBoundaries, energy_unit_over_kT0, radEnergyFractionsT0);
   // RadSystem<TubeProblem>::ComputePlanckEnergyFractions3(RadSystem_Traits<TubeProblem>::radBoundaries, energy_unit_over_kT1, radEnergyFractionsT1);
-  RadSystem<TubeProblem>::ComputePlanckEnergyFractions3(radBoundaries_g, energy_unit_over_kT0, radEnergyFractionsT0);
-  RadSystem<TubeProblem>::ComputePlanckEnergyFractions3(radBoundaries_g, energy_unit_over_kT1, radEnergyFractionsT1);
+  auto radEnergyFractionsT0 = RadSystem<TubeProblem>::ComputePlanckEnergyFractions(radBoundaries_g, T0);
+  auto radEnergyFractionsT1 = RadSystem<TubeProblem>::ComputePlanckEnergyFractions(radBoundaries_g, T1);
 
 
 	if (i < lo[0]) {
