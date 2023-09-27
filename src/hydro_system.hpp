@@ -108,8 +108,8 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	AMREX_GPU_DEVICE static auto GetGradFixedPotential(amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> posvec) -> amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>;
 
-	static auto EnforceLimits(amrex::Real densityFloor, amrex::Real pressureFloor, amrex::Real speedCeiling, amrex::Real tempCeiling,
-				  amrex::Real const tempFloor, amrex::MultiFab &state_mf, const char* inputString) -> bool;
+	static void EnforceLimits(amrex::Real densityFloor, amrex::Real pressureFloor, amrex::Real speedCeiling, amrex::Real tempCeiling,
+				  amrex::Real const tempFloor, amrex::MultiFab &state_mf);
 
 	static void AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex::MultiFab const &consVar_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
 					 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &faceVelArray, amrex::iMultiFab const &redoFlag_mf);
@@ -700,145 +700,132 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::MultiFab const &q_mf, amrex::M
 // to ensure that physical quantities are within reasonable
 // floors and ceilings which can be set in the param file
 template <typename problem_t>
-auto HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex::Real const pressureFloor, amrex::Real const speedCeiling,
-					   amrex::Real const tempCeiling, amrex::Real const tempFloor, amrex::MultiFab &state_mf, const char* inputString) -> bool
+void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex::Real const pressureFloor, amrex::Real const speedCeiling,
+					   amrex::Real const tempCeiling, amrex::Real const tempFloor, amrex::MultiFab &state_mf)
 {
 
 	auto state = state_mf.arrays();
-	amrex::Real strcall = 0.0;
 
-	return amrex::ParReduce(amrex::TypeList<amrex::ReduceOpLogicalAnd>{}, amrex::TypeList<bool>{}, state_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept -> amrex::GpuTuple<bool> {
+	amrex::ParallelFor(state_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		amrex::Real const rho = state[bx](i, j, k, density_index);
 
-		if (rho != 0.0 && !std::isnan(rho)) {
-			amrex::Real const vx1 = state[bx](i, j, k, x1Momentum_index) / rho;
-			amrex::Real const vx2 = state[bx](i, j, k, x2Momentum_index) / rho;
-			amrex::Real const vx3 = state[bx](i, j, k, x3Momentum_index) / rho;
-			amrex::Real const vsq = (vx1 * vx1 + vx2 * vx2 + vx3 * vx3);
-			amrex::Real const v_abs = std::sqrt(vx1 * vx1 + vx2 * vx2 + vx3 * vx3);
-			amrex::Real Etot = state[bx](i, j, k, energy_index);
-			amrex::Real Eint = state[bx](i, j, k, internalEnergy_index);
-			amrex::Real Ekin = rho * vsq / 2.;
-			amrex::Real rho_new = rho;
+		amrex::Real const vx1 = state[bx](i, j, k, x1Momentum_index) / rho;
+		amrex::Real const vx2 = state[bx](i, j, k, x2Momentum_index) / rho;
+		amrex::Real const vx3 = state[bx](i, j, k, x3Momentum_index) / rho;
+		amrex::Real const vsq = (vx1 * vx1 + vx2 * vx2 + vx3 * vx3);
+		amrex::Real const v_abs = std::sqrt(vx1 * vx1 + vx2 * vx2 + vx3 * vx3);
+		amrex::Real Etot = state[bx](i, j, k, energy_index);
+		amrex::Real Eint = state[bx](i, j, k, internalEnergy_index);
+		amrex::Real Ekin = rho * vsq / 2.;
+		amrex::Real rho_new = rho;
 
-			if (rho < densityFloor) {
-				rho_new = densityFloor;
-				state[bx](i, j, k, density_index) = rho_new;
-				state[bx](i, j, k, internalEnergy_index) = Eint * rho_new / rho;
-				state[bx](i, j, k, energy_index) = rho_new * vsq / 2. + (Etot - Ekin);
-				if (nscalars_ > 0) {
-					for (int n = 0; n < nscalars_; ++n) {
-						if (rho_new == 0.0) {
-							state[bx](i, j, k, scalar0_index + n) = 0.0;
-						} else {
-							state[bx](i, j, k, scalar0_index + n) *= rho / rho_new;
-						}
+		if (rho < densityFloor) {
+			rho_new = densityFloor;
+			state[bx](i, j, k, density_index) = rho_new;
+			state[bx](i, j, k, internalEnergy_index) = Eint * rho_new / rho;
+			state[bx](i, j, k, energy_index) = rho_new * vsq / 2. + (Etot - Ekin);
+			if (nscalars_ > 0) {
+				for (int n = 0; n < nscalars_; ++n) {
+					if (rho_new == 0.0) {
+						state[bx](i, j, k, scalar0_index + n) = 0.0;
+					} else {
+						state[bx](i, j, k, scalar0_index + n) *= rho / rho_new;
 					}
 				}
 			}
-
-			if (v_abs > speedCeiling) {
-				amrex::Real rescale_factor = speedCeiling / v_abs;
-				state[bx](i, j, k, x1Momentum_index) *= rescale_factor;
-				state[bx](i, j, k, x2Momentum_index) *= rescale_factor;
-				state[bx](i, j, k, x3Momentum_index) *= rescale_factor;
-			}
-
-			// Enforcing Limits on mass scalars
-			if (nmscalars_ > 0) {
-
-				amrex::Real sp_sum = 0.0;
-
-				for (int idx = 0; idx < nmscalars_; ++idx) {
-
-					if (state[bx](i, j, k, scalar0_index + idx) < 0.0) {
-						state[bx](i, j, k, scalar0_index + idx) = small_x * rho;
-					}
-
-					// get sum to renormalize
-					sp_sum += state[bx](i, j, k, scalar0_index + idx);
-
-				}
-
-				sp_sum /= rho; //get mass fractions
-
-				for (int idx = 0; idx < nmscalars_; ++idx) {
-					// renormalize
-					state[bx](i, j, k, scalar0_index + idx) /= sp_sum;
-				}
-
-			}
-
-			// Enforcing Limits on temperature estimated from Etot and Ekin
-			if (!HydroSystem<problem_t>::is_eos_isothermal()) {
-				// recompute gas energy (to prevent P < 0)
-				amrex::Real const Eint_star = Etot - 0.5 * rho_new * vsq;
-				amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(state[bx], i, j, k);
-				amrex::Real const P_star = quokka::EOS<problem_t>::ComputePressure(rho_new, Eint_star, massScalars);
-
-				if (std::isnan(P_star) || P_star < 0) {
-					printf("pressure is %f ", P_star);
-				}
-				amrex::Real P_new = P_star;
-				if (P_star < pressureFloor) {
-					P_new = pressureFloor;
-#pragma nv_diag_suppress divide_by_zero
-					amrex::Real const Etot_new = quokka::EOS<problem_t>::ComputeEintFromPres(rho_new, P_new, massScalars) + 0.5 * rho_new * vsq;
-					state[bx](i, j, k, HydroSystem<problem_t>::energy_index) = Etot_new;
-				}
-			}
-			// re-obtain Ekin and Etot for putting limits on Temperature
-			if (rho_new == 0.0) {
-				Ekin = Etot = 0.0;
-			} else {
-				Ekin = std::pow(state[bx](i, j, k, x1Momentum_index), 2.) / state[bx](i, j, k, density_index) / 2.;
-				Ekin += std::pow(state[bx](i, j, k, x2Momentum_index), 2.) / state[bx](i, j, k, density_index) / 2.;
-				Ekin += std::pow(state[bx](i, j, k, x3Momentum_index), 2.) / state[bx](i, j, k, density_index) / 2.;
-				Etot = state[bx](i, j, k, energy_index);
-			}
-			amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(state[bx], i, j, k);
-			amrex::Real primTemp = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, (Etot - Ekin), massScalars);
-
-			if (primTemp > tempCeiling) {
-				amrex::Real prim_eint = quokka::EOS<problem_t>::ComputeEintFromTgas(state[bx](i, j, k, density_index), tempCeiling, massScalars);
-				state[bx](i, j, k, energy_index) = Ekin + prim_eint;
-			}
-
-			if (primTemp < tempFloor) {
-				amrex::Real prim_eint = quokka::EOS<problem_t>::ComputeEintFromTgas(state[bx](i, j, k, density_index), tempFloor, massScalars);
-				state[bx](i, j, k, energy_index) = Ekin + prim_eint;
-			}
-
-			// Enforcing Limits on Auxiliary temperature estimated from Eint
-			Eint = state[bx](i, j, k, internalEnergy_index);
-			amrex::Real auxTemp = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint, massScalars);
-
-			if (auxTemp > tempCeiling) {
-				state[bx](i, j, k, internalEnergy_index) =
-				    quokka::EOS<problem_t>::ComputeEintFromTgas(state[bx](i, j, k, density_index), tempCeiling, massScalars);
-				state[bx](i, j, k, energy_index) = Ekin + state[bx](i, j, k, internalEnergy_index);
-			}
-
-			if (auxTemp < tempFloor) {
-				state[bx](i, j, k, internalEnergy_index) =
-				    quokka::EOS<problem_t>::ComputeEintFromTgas(state[bx](i, j, k, density_index), tempFloor, massScalars);
-				state[bx](i, j, k, energy_index) = Ekin + state[bx](i, j, k, internalEnergy_index);
-			}
-
-			if (std::isnan(state[bx](i, j, k, density_index)) || state[bx](i, j, k, density_index) == 0.0) {
-				printf("rho out is nan or zero even though rho in is not nan %e !! ", state[bx](i, j, k, density_index));
-			}
-
-		return {true};
-		} else if (std::isnan(rho)) {
-			//printf("rho in is nan howcome %e! \n", rho);
-			//strcall = 1.0;
-			return {false};
-		} else {
-			//printf("rho in is zero woah %e! \n", rho);
-			//strcall = 1.0;
-			return {false};
 		}
+
+		if (v_abs > speedCeiling) {
+			amrex::Real rescale_factor = speedCeiling / v_abs;
+			state[bx](i, j, k, x1Momentum_index) *= rescale_factor;
+			state[bx](i, j, k, x2Momentum_index) *= rescale_factor;
+			state[bx](i, j, k, x3Momentum_index) *= rescale_factor;
+		}
+
+		// Enforcing Limits on mass scalars
+		if (nmscalars_ > 0) {
+
+			amrex::Real sp_sum = 0.0;
+
+			for (int idx = 0; idx < nmscalars_; ++idx) {
+
+				if (state[bx](i, j, k, scalar0_index + idx) < 0.0) {
+					state[bx](i, j, k, scalar0_index + idx) = small_x * rho;
+				}
+
+				// get sum to renormalize
+				sp_sum += state[bx](i, j, k, scalar0_index + idx);
+
+			}
+
+			sp_sum /= rho; //get mass fractions
+
+			for (int idx = 0; idx < nmscalars_; ++idx) {
+				// renormalize
+				state[bx](i, j, k, scalar0_index + idx) /= sp_sum;
+			}
+		}
+
+		// Enforcing Limits on temperature estimated from Etot and Ekin
+		if (!HydroSystem<problem_t>::is_eos_isothermal()) {
+			// recompute gas energy (to prevent P < 0)
+			amrex::Real const Eint_star = Etot - 0.5 * rho_new * vsq;
+			amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(state[bx], i, j, k);
+			amrex::Real const P_star = quokka::EOS<problem_t>::ComputePressure(rho_new, Eint_star, massScalars);
+
+			if (std::isnan(P_star) || P_star < 0) {
+				printf("pressure is %f ", P_star);
+			}
+			amrex::Real P_new = P_star;
+			if (P_star < pressureFloor) {
+				P_new = pressureFloor;
+#pragma nv_diag_suppress divide_by_zero
+				amrex::Real const Etot_new = quokka::EOS<problem_t>::ComputeEintFromPres(rho_new, P_new, massScalars) + 0.5 * rho_new * vsq;
+				state[bx](i, j, k, HydroSystem<problem_t>::energy_index) = Etot_new;
+			}
+		}
+		// re-obtain Ekin and Etot for putting limits on Temperature
+		if (rho_new == 0.0) {
+			Ekin = Etot = 0.0;
+		} else {
+			Ekin = std::pow(state[bx](i, j, k, x1Momentum_index), 2.) / state[bx](i, j, k, density_index) / 2.;
+			Ekin += std::pow(state[bx](i, j, k, x2Momentum_index), 2.) / state[bx](i, j, k, density_index) / 2.;
+			Ekin += std::pow(state[bx](i, j, k, x3Momentum_index), 2.) / state[bx](i, j, k, density_index) / 2.;
+			Etot = state[bx](i, j, k, energy_index);
+		}
+		amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(state[bx], i, j, k);
+		amrex::Real primTemp = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, (Etot - Ekin), massScalars);
+
+		if (primTemp > tempCeiling) {
+			amrex::Real prim_eint = quokka::EOS<problem_t>::ComputeEintFromTgas(state[bx](i, j, k, density_index), tempCeiling, massScalars);
+			state[bx](i, j, k, energy_index) = Ekin + prim_eint;
+		}
+
+		if (primTemp < tempFloor) {
+			amrex::Real prim_eint = quokka::EOS<problem_t>::ComputeEintFromTgas(state[bx](i, j, k, density_index), tempFloor, massScalars);
+			state[bx](i, j, k, energy_index) = Ekin + prim_eint;
+		}
+
+		// Enforcing Limits on Auxiliary temperature estimated from Eint
+		Eint = state[bx](i, j, k, internalEnergy_index);
+		amrex::Real auxTemp = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint, massScalars);
+
+		if (auxTemp > tempCeiling) {
+			state[bx](i, j, k, internalEnergy_index) = quokka::EOS<problem_t>::ComputeEintFromTgas(state[bx](i, j, k, density_index), tempCeiling, massScalars);
+			state[bx](i, j, k, energy_index) = Ekin + state[bx](i, j, k, internalEnergy_index);
+		}
+
+		if (auxTemp < tempFloor) {
+			state[bx](i, j, k, internalEnergy_index) =
+			    quokka::EOS<problem_t>::ComputeEintFromTgas(state[bx](i, j, k, density_index), tempFloor, massScalars);
+			state[bx](i, j, k, energy_index) = Ekin + state[bx](i, j, k, internalEnergy_index);
+		}
+
+		if (std::isnan(state[bx](i, j, k, density_index)) || state[bx](i, j, k, density_index) == 0.0) {
+			printf("rho out is nan or zero even though rho in is not nan %e !! ", state[bx](i, j, k, density_index));
+		}
+
+	return {true};
 
 	});
 }
