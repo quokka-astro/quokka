@@ -71,7 +71,7 @@ template <> struct RadSystem_Traits<TubeProblem> {
 	static constexpr double Erad_floor = 0.;
 	static constexpr bool compute_v_over_c_terms = true;
 	static constexpr double energy_unit = C::ev2erg;
-  static constexpr std::array<double, Physics_Traits<TubeProblem>::nGroups + 1> radBoundaries {0., 13.6, inf};  // eV
+  static constexpr amrex::GpuArray<double, Physics_Traits<TubeProblem>::nGroups + 1> radBoundaries {0., 13.6, inf};  // eV
 };
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, Physics_Traits<TubeProblem>::nGroups>

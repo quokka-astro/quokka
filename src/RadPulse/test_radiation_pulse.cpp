@@ -51,6 +51,7 @@ template <> struct Physics_Traits<PulseProblem> {
 	static constexpr bool is_radiation_enabled = true;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
+	static constexpr int nGroups = 1;
   };
 
 AMREX_GPU_HOST_DEVICE

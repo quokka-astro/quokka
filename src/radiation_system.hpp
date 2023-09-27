@@ -988,7 +988,10 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 
 	// amrex::GpuArray<amrex::Real, nGroups_+1> radBoundaries_ = RadSystem_Traits<problem_t>::radBoundaries;
 
-	const auto radBoundaries_g = RadSystem_Traits<problem_t>::radBoundaries;
+	const amrex::GpuArray<amrex::Real, nGroups_ + 1> radBoundaries_g{};
+	if constexpr (nGroups_ > 1) {
+	  const auto radBoundaries_g = RadSystem_Traits<problem_t>::radBoundaries;
+	}
 
 	// Add source terms
 
@@ -1087,10 +1090,14 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 
 				// compute residuals
         // ComputePlanckEnergyFractions(radEnergyFractions, T_gas);
-				// quokka::valarray<amrex::Real, nGroups_> radEnergyFractions{};
-	      auto radEnergyFractions = ComputePlanckEnergyFractions(radBoundaries_g, T_gas);
+				quokka::valarray<amrex::Real, nGroups_> radEnergyFractions{};
+        if constexpr (nGroups_ > 1) {
+          radEnergyFractions = ComputePlanckEnergyFractions(radBoundaries_g, T_gas);
+          AMREX_ASSERT(min(radEnergyFractions) > 0.);
+        } else {
+          radEnergyFractions[0] = 1.0;
+        }
 
-        AMREX_ASSERT(min(radEnergyFractions) > 0.);
 				Rvec = dt * rho * (kappaPVec * fourPiB * radEnergyFractions - chat * kappaEVec * EradVec_guess);
 				Rtot = sum(Rvec);
 				F_G = Egas_guess - Egas0 + (c / chat) * Rtot;
