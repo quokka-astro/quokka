@@ -113,11 +113,10 @@ template <> void RadhydroSimulation<CollapseProblem>::ComputeDerivedVar(int lev,
 		auto const &phi_data_ref = phi_data[lev].const_arrays();
 		auto output = mf.arrays();
 
-		//const amrex::Vector<amrex::MultiFab>& phi_data_ref = this->phi_data;
+		// const amrex::Vector<amrex::MultiFab>& phi_data_ref = this->phi_data;
 
-		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			output[bx](i, j, k, ncomp) = phi_data_ref[bx](i, j, k, ncomp);
-		});
+		amrex::ParallelFor(
+		    mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept { output[bx](i, j, k, ncomp) = phi_data_ref[bx](i, j, k, ncomp); });
 	}
 }
 
