@@ -166,12 +166,11 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real tempCeiling_ = std::numeric_limits<double>::max();	// default
 	amrex::Real tempFloor_ = 0.0;					// default
 	amrex::Real speedCeiling_ = std::numeric_limits<double>::max(); // default
-
+	amrex::Vector<amrex::MultiFab> phi_data;
 	std::unordered_map<std::string, variant_t> simulationMetadata_;
 
 	// constructor
 	explicit AMRSimulation(amrex::Vector<amrex::BCRec> &BCs_cc, amrex::Vector<amrex::BCRec> &BCs_fc) : BCs_cc_(BCs_cc), BCs_fc_(BCs_fc) { initialize(); }
-
 	explicit AMRSimulation(amrex::Vector<amrex::BCRec> &BCs_cc) : BCs_cc_(BCs_cc) { initialize(); }
 
 	void initialize();
@@ -901,14 +900,18 @@ template <typename problem_t> void AMRSimulation<problem_t>::ellipticSolveAllLev
 
 		// solve Poisson equation with open b.c. using the method of James (1977)
 		amrex::Vector<amrex::MultiFab> phi(finest_level + 1);
+		// define another fab to store phi
+		amrex::Vector<amrex::MultiFab> phi_data(finest_level + 1);
 		amrex::Vector<amrex::MultiFab> rhs(finest_level + 1);
 		const int nghost = 1;
 		const int ncomp = 1;
 		amrex::Real rhs_min = std::numeric_limits<amrex::Real>::max();
 		for (int lev = 0; lev <= finest_level; ++lev) {
 			phi[lev].define(grids[lev], dmap[lev], ncomp, nghost);
+			phi_data[lev].define(grids[lev], dmap[lev], ncomp, nghost);
 			rhs[lev].define(grids[lev], dmap[lev], ncomp, nghost);
 			phi[lev].setVal(0); // set initial guess to zero
+			MultiFab::Copy(phi_data[lev], phi[lev], 0, 0, ncomp, nghost);
 			rhs[lev].setVal(0);
 			fillPoissonRhsAtLevel(rhs[lev], lev);
 			rhs_min = std::min(rhs_min, rhs[lev].min(0));
