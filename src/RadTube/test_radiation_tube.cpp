@@ -205,7 +205,7 @@ AMRSimulation<TubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv
 	amrex::GpuArray<int, 3> lo = box.loVect3d();
 	amrex::GpuArray<int, 3> hi = box.hiVect3d();
 
-	auto const &radBoundaries_g = RadSystem_Traits<TubeProblem>::radBoundaries;
+	auto const radBoundaries_g = RadSystem_Traits<TubeProblem>::radBoundaries;
 
   // CCH: calculate radEnergyFractions 
 	// quokka::valarray<amrex::Real, Physics_Traits<TubeProblem>::nGroups> radEnergyFractionsT0{};
