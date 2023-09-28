@@ -13,17 +13,19 @@ amr.v              = 1       # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 64 64 64
+amr.n_cell          = 8 8 8
 amr.max_level       = 0     # number of levels = max_level + 1
-amr.blocking_factor = 32    # grid size must be divisible by this
+amr.blocking_factor = 8    # grid size must be divisible by this
 amr.max_grid_size   = 128   # at least 128 for GPUs
 amr.n_error_buf     = 3     # minimum 3 cell buffer around tagged cells
 amr.grid_eff        = 0.7   # default
 
 hydro.reconstruction_order = 3  # PPM
 cfl = 0.25
-max_timesteps = 50000
+max_timesteps = 50
 stop_time = 0.15
+
+derived_vars = gpot
 
 gravity.Gconst = 1.0    #gravitational constant
 
