@@ -951,7 +951,6 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::printCoordinat
 			z_coord = geom[lev].ProbLo(2) + (cell_idx[2] + 0.5) * geom[lev].CellSize(2);
 		}
 	}
-
 	amrex::Print() << "Coordinates: (" << x_coord << ", " << y_coord << ", " << z_coord << "): ";
 }
 
