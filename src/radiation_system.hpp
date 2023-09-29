@@ -162,12 +162,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 							 const double &y0, const quokka::valarray<double, nGroups_> &yi, double &x0,
 							 quokka::valarray<double, nGroups_> &xi);
 
-<<<<<<< HEAD
-	AMREX_GPU_HOST_DEVICE static auto ComputePlanckEnergyFractions(amrex::GpuArray<double, nGroups_ + 1> const &boundaries, amrex::Real temperature) -> quokka::valarray<amrex::Real, nGroups_>;
-=======
 	AMREX_GPU_HOST_DEVICE static auto ComputePlanckEnergyFractions(amrex::GpuArray<double, nGroups_ + 1> const &boundaries, amrex::Real const temperature)
 	    -> quokka::valarray<amrex::Real, nGroups_>;
->>>>>>> 7901a08f179a6fb7d7969769b4823f64444ee283
 
 	template <FluxDir DIR>
 	AMREX_GPU_DEVICE static auto ComputeCellOpticalDepth(const quokka::Array4View<const amrex::Real, DIR> &consVar,
@@ -179,12 +175,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 // CCH: compute radiation energy fractions for each photon group from a Planck function, given nGroups, radBoundaries, and temperature
 template <typename problem_t>
-<<<<<<< HEAD
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckEnergyFractions(amrex::GpuArray<double, nGroups_ + 1> const &boundaries, amrex::Real temperature) -> quokka::valarray<amrex::Real, nGroups_>
-=======
 AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckEnergyFractions(amrex::GpuArray<double, nGroups_ + 1> const &boundaries,
 									      amrex::Real const temperature) -> quokka::valarray<amrex::Real, nGroups_>
->>>>>>> 7901a08f179a6fb7d7969769b4823f64444ee283
 {
 	quokka::valarray<amrex::Real, nGroups_> radEnergyFractions{};
 	if constexpr (nGroups_ == 1) {
