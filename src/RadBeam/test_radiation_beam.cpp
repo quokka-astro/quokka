@@ -72,7 +72,7 @@ template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<BeamProblem>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
 <<<<<<< HEAD
-  return ComputePlanckOpacity(0., 0.);
+	return ComputePlanckOpacity(0., 0.);
 =======
 	ComputePlanckOpacity(0., 0.);
 >>>>>>> 7901a08f179a6fb7d7969769b4823f64444ee283

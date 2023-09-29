@@ -163,7 +163,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 							 quokka::valarray<double, nGroups_> &xi);
 
 <<<<<<< HEAD
-	AMREX_GPU_HOST_DEVICE static auto ComputePlanckEnergyFractions(amrex::GpuArray<double, nGroups_ + 1> const &boundaries, amrex::Real temperature) -> quokka::valarray<amrex::Real, nGroups_>;
+	AMREX_GPU_HOST_DEVICE static auto ComputePlanckEnergyFractions(amrex::GpuArray<double, nGroups_ + 1> const &boundaries, amrex::Real temperature)
+	    -> quokka::valarray<amrex::Real, nGroups_>;
 =======
 	AMREX_GPU_HOST_DEVICE static auto ComputePlanckEnergyFractions(amrex::GpuArray<double, nGroups_ + 1> const &boundaries, amrex::Real const temperature)
 	    -> quokka::valarray<amrex::Real, nGroups_>;
@@ -180,7 +181,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 // CCH: compute radiation energy fractions for each photon group from a Planck function, given nGroups, radBoundaries, and temperature
 template <typename problem_t>
 <<<<<<< HEAD
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckEnergyFractions(amrex::GpuArray<double, nGroups_ + 1> const &boundaries, amrex::Real temperature) -> quokka::valarray<amrex::Real, nGroups_>
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckEnergyFractions(amrex::GpuArray<double, nGroups_ + 1> const &boundaries, amrex::Real temperature)
+    -> quokka::valarray<amrex::Real, nGroups_>
 =======
 AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckEnergyFractions(amrex::GpuArray<double, nGroups_ + 1> const &boundaries,
 									      amrex::Real const temperature) -> quokka::valarray<amrex::Real, nGroups_>
