@@ -96,7 +96,6 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static constexpr bool compute_v_over_c_terms_ = RadSystem_Traits<problem_t>::compute_v_over_c_terms;
 
 	static constexpr int nGroups_ = Physics_Traits<problem_t>::nGroups;
-	// static constexpr auto radBoundaries_ = RadSystem_Traits<problem_t>::radBoundaries;
 	static constexpr amrex::GpuArray<double, nGroups_+1> radBoundaries_ = []() constexpr {
 		if constexpr (nGroups_ > 1) {
       return RadSystem_Traits<problem_t>::radBoundaries;
