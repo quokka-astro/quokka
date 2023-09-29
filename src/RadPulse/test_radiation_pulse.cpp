@@ -52,7 +52,7 @@ template <> struct Physics_Traits<PulseProblem> {
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
 	static constexpr int nGroups = 1;
-  };
+};
 
 AMREX_GPU_HOST_DEVICE
 auto compute_exact_Trad(const double x, const double t) -> double
@@ -69,20 +69,23 @@ auto compute_exact_Trad(const double x, const double t) -> double
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, nGroups_> kappaPVec{};
-  auto kappa = (kappa0 / rho) * std::max(std::pow(Tgas / T0, 3), 1.0);
+	auto kappa = (kappa0 / rho) * std::max(std::pow(Tgas / T0, 3), 1.0);
 	kappaPVec.fillin(kappa);
 	return kappaPVec;
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
+template <>
+AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
 {
-  return ComputePlanckOpacity(rho, Tgas);
+	return ComputePlanckOpacity(rho, Tgas);
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacityTempDerivative(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
+template <>
+AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacityTempDerivative(const double rho, const double Tgas)
+    -> quokka::valarray<double, nGroups_>
 {
-  quokka::valarray<double, nGroups_> opacity_deriv{};
-  double opacity_deriv_scalar = 0.;
+	quokka::valarray<double, nGroups_> opacity_deriv{};
+	double opacity_deriv_scalar = 0.;
 	if (Tgas > 1.0) {
 		opacity_deriv_scalar = (kappa0 / rho) * (3.0 / T0) * std::pow(Tgas / T0, 2);
 	}
@@ -106,12 +109,12 @@ template <> void RadhydroSimulation<PulseProblem>::setInitialConditionsOnGrid(qu
 		amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
 		const double Trad = compute_exact_Trad(x - x0, initial_time);
 		const double Egas = quokka::EOS<PulseProblem>::ComputeEintFromTgas(rho0, Trad);
-	  
+
 		state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = erad_floor;
-      state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index) = 0;
-      state_cc(i, j, k, RadSystem<PulseProblem>::x2RadFlux_index) = 0;
-      state_cc(i, j, k, RadSystem<PulseProblem>::x3RadFlux_index) = 0;
-    		state_cc(i, j, k, RadSystem<PulseProblem>::gasEnergy_index) = Egas;
+		state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index) = 0;
+		state_cc(i, j, k, RadSystem<PulseProblem>::x2RadFlux_index) = 0;
+		state_cc(i, j, k, RadSystem<PulseProblem>::x3RadFlux_index) = 0;
+		state_cc(i, j, k, RadSystem<PulseProblem>::gasEnergy_index) = Egas;
 		state_cc(i, j, k, RadSystem<PulseProblem>::gasDensity_index) = rho0;
 		state_cc(i, j, k, RadSystem<PulseProblem>::gasInternalEnergy_index) = Egas;
 		state_cc(i, j, k, RadSystem<PulseProblem>::x1GasMomentum_index) = 0.;
@@ -189,7 +192,7 @@ auto problem_main() -> int
 		amrex::Real const x = position[i];
 		xs.at(i) = x;
 		const auto Erad_t = values.at(RadSystem<PulseProblem>::radEnergy_index)[i];
-				const auto Trad_t = std::pow(Erad_t / a_rad, 1. / 4.);
+		const auto Trad_t = std::pow(Erad_t / a_rad, 1. / 4.);
 		Erad.at(i) = Erad_t;
 		Trad.at(i) = Trad_t;
 		Egas.at(i) = values.at(RadSystem<PulseProblem>::gasEnergy_index)[i];
