@@ -77,14 +77,17 @@ template <> struct RadSystem_Traits<TubeProblem> {
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, Physics_Traits<TubeProblem>::nGroups>
 {
 	quokka::valarray<double, Physics_Traits<TubeProblem>::nGroups> kappaPVec{};
-	kappaPVec.fillin(0.);  // no heating/cooling
+	// kappaPVec.fillin(0.);  
+  for (int g = 0; g < nGroups_; ++g) {
+    kappaPVec[g] = 0.;  // no heating/cooling
+  }
 	return kappaPVec;
 }
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, Physics_Traits<TubeProblem>::nGroups>
 {
 	quokka::valarray<double, Physics_Traits<TubeProblem>::nGroups> kappaFVec{};
-  kappaFVec.fillin(kappa0);
+  // kappaFVec.fillin(kappa0);
 	kappaFVec[0] = kappa0 * 1.5;
 	kappaFVec[1] = kappa0 * 0.5;
 	return kappaFVec;
@@ -148,10 +151,11 @@ template <> void RadhydroSimulation<TubeProblem>::setInitialConditionsOnGrid(quo
 	int x_size = static_cast<int>(x_arr_g.size());
 
   // CCH: calculate radEnergyFractions 
-  // amrex::Real const temperature = 0.0;
-	// RadSystem<TubeProblem>::ComputeRadEnergyFractions(radEnergyFractions, temperature);
 	quokka::valarray<amrex::Real, Physics_Traits<TubeProblem>::nGroups> radEnergyFractions{};
-  radEnergyFractions.fillin(1.0 / Physics_Traits<TubeProblem>::nGroups);
+  // radEnergyFractions.fillin(1.0 / Physics_Traits<TubeProblem>::nGroups);
+  for (int g = 0; g < Physics_Traits<TubeProblem>::nGroups; ++g) {
+    radEnergyFractions[g] = 1.0 / Physics_Traits<TubeProblem>::nGroups;
+  }
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
@@ -211,7 +215,10 @@ AMRSimulation<TubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv
   // amrex::Real const temperature = 0.0;
   // RadSystem<TubeProblem>::ComputeRadEnergyFractions(radEnergyFractions, temperature);
 	quokka::valarray<amrex::Real, Physics_Traits<TubeProblem>::nGroups> radEnergyFractions{};
-  radEnergyFractions.fillin(1.0 / Physics_Traits<TubeProblem>::nGroups);
+  // radEnergyFractions.fillin(1.0 / Physics_Traits<TubeProblem>::nGroups);
+  for (int g = 0; g < Physics_Traits<TubeProblem>::nGroups; ++g) {
+    radEnergyFractions[g] = 1.0 / Physics_Traits<TubeProblem>::nGroups;
+  }
 
 	if (i < lo[0]) {
 		// left side

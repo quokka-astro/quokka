@@ -47,9 +47,7 @@ template <typename problem_t> struct RadSystem_Traits {
 	static constexpr double Erad_floor = 0.;
 	static constexpr bool compute_v_over_c_terms = true;
 	static constexpr double energy_unit = C::ev2erg;
-	// static constexpr std::array<double, Physics_Traits<problem_t>::nGroups + 1> radBoundaries{0., inf};
 	static constexpr amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups + 1> radBoundaries = {0., inf};
-  // static constexpr amrex::Vector<amrex::Real> radBoundaries{0., inf};  // Kelvin
 };
 
 
@@ -98,9 +96,15 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static constexpr bool compute_v_over_c_terms_ = RadSystem_Traits<problem_t>::compute_v_over_c_terms;
 
 	static constexpr int nGroups_ = Physics_Traits<problem_t>::nGroups;
-	// static constexpr amrex::GpuArray<double, nGroups_ + 1> radBoundaries_ = RadSystem_Traits<problem_t>::radBoundaries;
-	// static constexpr amrex::Array1D<double, 0, nGroups_> radBoundaries_ = RadSystem_Traits<problem_t>::radBoundaries;
 	// static constexpr auto radBoundaries_ = RadSystem_Traits<problem_t>::radBoundaries;
+	static constexpr amrex::GpuArray<double, nGroups_+1> radBoundaries_ = []() constexpr {
+		if constexpr (nGroups_ > 1) {
+      return RadSystem_Traits<problem_t>::radBoundaries;
+    } else {
+      amrex::GpuArray<double, 2> boundaries{0., inf};
+      return boundaries;
+    }
+  }();
 
 	static constexpr double mean_molecular_mass_ = quokka::EOS_Traits<problem_t>::mean_molecular_mass;
 	static constexpr double boltzmann_constant_ = quokka::EOS_Traits<problem_t>::boltzmann_constant;
@@ -986,11 +990,9 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 	arrayconst_t &consPrev = consVar; // make read-only
 	array_t &consNew = consVar;
 
-	// amrex::GpuArray<amrex::Real, nGroups_+1> radBoundaries_ = RadSystem_Traits<problem_t>::radBoundaries;
-
-	const amrex::GpuArray<amrex::Real, nGroups_ + 1> radBoundaries_g{};
+	amrex::GpuArray<amrex::Real, nGroups_ + 1> radBoundaries_g{};
 	if constexpr (nGroups_ > 1) {
-	  const auto radBoundaries_g = RadSystem_Traits<problem_t>::radBoundaries;
+	  radBoundaries_g = RadSystem_Traits<problem_t>::radBoundaries;
 	}
 
 	// Add source terms
@@ -1089,9 +1091,11 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				const double dB_dTgas = (4.0 * B) / T_gas;
 
 				// compute residuals
-        // ComputePlanckEnergyFractions(radEnergyFractions, T_gas);
 				quokka::valarray<amrex::Real, nGroups_> radEnergyFractions{};
-        if constexpr (nGroups_ > 1) {
+        // TODO(CCH): fix this: if constexpr (nGroups_ > 1)
+				// if constexpr (nGroups_ > 1) {
+				// ../src/radiation_system.hpp(1089): error: An extended __device__ lambda cannot first-capture variable in constexpr-if context detected during: ...
+        if (nGroups_ > 1) {
           radEnergyFractions = ComputePlanckEnergyFractions(radBoundaries_g, T_gas);
           AMREX_ASSERT(min(radEnergyFractions) > 0.);
         } else {

@@ -80,17 +80,7 @@ template <> AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProble
 
 template <> AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeFluxMeanOpacity(const double rho, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
-	quokka::valarray<double, nGroups_> kappaPVec{};
-	amrex::Real kappa = 0.;
-	if (rho == rho_pipe) {
-		kappa = kappa_pipe;
-	} else if (rho == rho_wall) {
-		kappa = kappa_wall;
-	} else {
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(true, "opacity not defined!");
-	}
-	kappaPVec.fillin(kappa);
-	return kappaPVec;
+  return ComputePlanckOpacity(rho, 0.);
 }
 
 static constexpr int nmscalars_ = Physics_Traits<TophatProblem>::numMassScalars;

@@ -76,10 +76,7 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpa
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
 {
-	quokka::valarray<double, nGroups_> kappaPVec{};
-  auto kappa = (kappa0 / rho) * std::max(std::pow(Tgas / T0, 3), 1.0);
-	kappaPVec.fillin(kappa);
-	return kappaPVec;
+  return ComputePlanckOpacity(rho, Tgas);
 }
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacityTempDerivative(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>

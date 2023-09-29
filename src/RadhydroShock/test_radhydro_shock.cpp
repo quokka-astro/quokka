@@ -82,15 +82,16 @@ template <> struct Physics_Traits<ShockProblem> {
 template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<ShockProblem>::ComputePlanckOpacity(const double rho, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, nGroups_> kappaPVec{};
-	kappaPVec.fillin(kappa / rho);
+	// kappaPVec.fillin(kappa / rho);
+  for (int i = 0; i < nGroups_; ++i) {
+    kappaPVec[i] = kappa / rho;
+  }
 	return kappaPVec;
 }
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<ShockProblem>::ComputeFluxMeanOpacity(const double rho, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
-	quokka::valarray<double, nGroups_> kappaFVec{};
-  kappaFVec.fillin(kappa / rho);
-	return kappaFVec;
+  return ComputePlanckOpacity(rho, 0.0);
 }
 
 template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<ShockProblem>::ComputeEddingtonFactor(double /*f*/) -> double

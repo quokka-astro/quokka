@@ -61,15 +61,15 @@ template <> struct Physics_Traits<BeamProblem> {
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<BeamProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, nGroups_> kappaPVec{};
-	kappaPVec.fillin(kappa0);
+	for (int g = 0; g < nGroups_; ++g) {
+    kappaPVec[g] = kappa0;
+  }
 	return kappaPVec;
 }
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<BeamProblem>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
-	quokka::valarray<double, nGroups_> kappaFVec{};
-  kappaFVec.fillin(kappa0);
-	return kappaFVec;
+  ComputePlanckOpacity(0., 0.);
 }
 
 template <>

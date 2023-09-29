@@ -12,6 +12,7 @@
 #include "AMReX.H"
 #include "AMReX_BC_TYPES.H"
 
+#include "AMReX_ValLocPair.H"
 #include "ArrayUtil.hpp"
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
@@ -64,14 +65,13 @@ template <> struct RadSystem_Traits<TubeProblem> {
 	static constexpr bool compute_v_over_c_terms = true;
 	static constexpr double energy_unit = C::k_B;
   static constexpr amrex::GpuArray<double, Physics_Traits<TubeProblem>::nGroups + 1> radBoundaries {0., T0, 3.3 * T0, inf};  // Kelvin
-  // static constexpr amrex::Vector<amrex::Real> radBoundaries{0., T0, 3.3 * T0, inf};  // Kelvin
-  // static constexpr amrex::Array1D<double, 0, Physics_Traits<TubeProblem>::nGroups> radBoundaries = {0., T0, 3.3 * T0, inf};  // Kelvin
 };
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, nGroups_> kappaPVec{};
-	// kappaPVec.fillin(kappa0);
+  // amrex::Real const kappa0_g = kappa0;
+  // kappaPVec.fillin(kappa0_g);
   for (int g = 0; g < nGroups_; ++g) {
     kappaPVec[g] = kappa0;
   }
@@ -94,8 +94,6 @@ amrex::Gpu::DeviceVector<double> x_arr_g;
 amrex::Gpu::DeviceVector<double> rho_arr_g;
 amrex::Gpu::DeviceVector<double> Pgas_arr_g;
 amrex::Gpu::DeviceVector<double> Erad_arr_g;
-
-// amrex::Gpu::DeviceVector<double> radBoundaries_g;
 
 template <> void RadhydroSimulation<TubeProblem>::preCalculateInitialConditions()
 {
@@ -205,16 +203,11 @@ AMRSimulation<TubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv
 	amrex::GpuArray<int, 3> lo = box.loVect3d();
 	amrex::GpuArray<int, 3> hi = box.hiVect3d();
 
-	auto const radBoundaries_g = RadSystem_Traits<TubeProblem>::radBoundaries;
+	auto const radBoundaries_g = RadSystem<TubeProblem>::radBoundaries_; 
 
   // CCH: calculate radEnergyFractions 
-	// quokka::valarray<amrex::Real, Physics_Traits<TubeProblem>::nGroups> radEnergyFractionsT0{};
-	// quokka::valarray<amrex::Real, Physics_Traits<TubeProblem>::nGroups> radEnergyFractionsT1{};
-  // RadSystem<TubeProblem>::ComputePlanckEnergyFractions3(RadSystem_Traits<TubeProblem>::radBoundaries, energy_unit_over_kT0, radEnergyFractionsT0);
-  // RadSystem<TubeProblem>::ComputePlanckEnergyFractions3(RadSystem_Traits<TubeProblem>::radBoundaries, energy_unit_over_kT1, radEnergyFractionsT1);
   auto radEnergyFractionsT0 = RadSystem<TubeProblem>::ComputePlanckEnergyFractions(radBoundaries_g, T0);
   auto radEnergyFractionsT1 = RadSystem<TubeProblem>::ComputePlanckEnergyFractions(radBoundaries_g, T1);
-
 
 	if (i < lo[0]) {
 		// left side boundary -- constant

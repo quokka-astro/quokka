@@ -64,7 +64,6 @@ template <> struct RadSystem_Traits<MarshakProblem> {
 	static constexpr double Erad_floor = 0.;
 	static constexpr bool compute_v_over_c_terms = false;
 	static constexpr double energy_unit = C::ev2erg;
-  // static constexpr std::array<double, Physics_Traits<MarshakProblem>::nGroups + 1> radBoundaries {0., 13.6, inf};  // eV
   static constexpr amrex::GpuArray<double, Physics_Traits<MarshakProblem>::nGroups + 1> radBoundaries {0., 13.6, inf};  // eV
 };
 
@@ -80,11 +79,7 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputePlanckO
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
 {
-	quokka::valarray<double, nGroups_> kappaFVec{};
-  for (int g = 0; g < nGroups_; ++g) {
-    kappaFVec[g] = kappa / rho;
-  }
-	return kappaFVec;
+  return ComputePlanckOpacity(rho, Tgas);
 }
 
 static constexpr int nmscalars_ = Physics_Traits<MarshakProblem>::numMassScalars;
@@ -130,9 +125,6 @@ void RadSystem<MarshakProblem>::SetRadEnergySource(array_t &radEnergySource, amr
 
 	const auto radBoundaries_g = RadSystem_Traits<MarshakProblem>::radBoundaries;
 
-	// quokka::valarray<amrex::Real, nGroups_> radEnergyFractions{};
-  // ComputePlanckEnergyFractions(radEnergyFractions, T_hohlraum);
-
   amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 	  amrex::Real const xl = (i + 0.) * dx[0];
 	  amrex::Real const xr = (i + 1.) * dx[0];
@@ -145,15 +137,6 @@ void RadSystem<MarshakProblem>::SetRadEnergySource(array_t &radEnergySource, amr
 		  AMREX_ALWAYS_ASSERT(dx_frac > 0.0);
 	  }
 
-		// const auto rho = consPrev(i, j, k, gasDensity_index);
-		// const auto Egastot0 = consPrev(i, j, k, gasEnergy_index);
-		// const auto x1GasMom0 = consPrev(i, j, k, x1GasMomentum_index);
-		// const double x2GasMom0 = consPrev(i, j, k, x2GasMomentum_index);
-		// const double x3GasMom0 = consPrev(i, j, k, x3GasMomentum_index);
-		// const auto Egas0 = ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0);
-		// const auto T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas0, massScalars);
-
-	  // quokka::valarray<amrex::Real, nGroups_> radEnergyFractions{};
     auto radEnergyFractions = ComputePlanckEnergyFractions(radBoundaries_g, T_hohlraum);
 
 	  amrex::Real const vol_frac = dx_frac;
