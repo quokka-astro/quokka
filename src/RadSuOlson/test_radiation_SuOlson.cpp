@@ -70,7 +70,7 @@ template <> struct RadSystem_Traits<MarshakProblem> {
 template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputePlanckOpacity(const double rho, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
-	quokka::valarray<double, nGroups_> kappaVec;
+	quokka::valarray<double, nGroups_> kappaVec{};
 	// kappaVec.fillin(kappa / rho);
 	for (int g = 0; g < nGroups_; ++g) {
 		kappaVec[g] = kappa / rho;
