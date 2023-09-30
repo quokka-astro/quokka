@@ -8,13 +8,12 @@
 #SBATCH --exclusive
 #SBATCH --ntasks-per-node=8
 #SBATCH --gpus-per-node=8
-#SBATCH --cpus-per-task=8
 ##SBATCH --core-spec=8
 #SBATCH -N 1
 
 # load modules
 module load craype-accel-amd-gfx90a
-module load rocm/5.4.3
+module load rocm/5.2.3
 
 # workaround no longer needed for AMReX 23.07+
 #export FI_MR_CACHE_MAX_COUNT=0  # libfabric disable caching
