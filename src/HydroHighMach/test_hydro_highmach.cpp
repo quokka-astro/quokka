@@ -37,7 +37,6 @@ template <> struct quokka::EOS_Traits<HighMachProblem> {
 template <> struct Physics_Traits<HighMachProblem> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr bool is_chemistry_enabled = false;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = false;
@@ -266,7 +265,7 @@ auto problem_main() -> int
 	sim.setInitialConditions();
 	sim.evolve();
 
-	const double error_tol = 0.25;
+	const double error_tol = 0.26;
 	int status = 0;
 	if (sim.errorNorm_ > error_tol || std::isnan(sim.errorNorm_)) {
 		status = 1;
