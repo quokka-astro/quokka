@@ -73,7 +73,7 @@ template <> void RadhydroSimulation<StreamingProblem>::setInitialConditionsOnGri
 	const auto Erad0 = initial_Erad;
 	const auto Egas0 = initial_Egas;
 
-	// CCH: calculate radEnergyFractions
+	// calculate radEnergyFractions
 	quokka::valarray<amrex::Real, Physics_Traits<StreamingProblem>::nGroups> radEnergyFractions{};
 	for (int g = 0; g < Physics_Traits<StreamingProblem>::nGroups; ++g) {
 		radEnergyFractions[g] = 1.0 / Physics_Traits<StreamingProblem>::nGroups;
@@ -81,7 +81,6 @@ template <> void RadhydroSimulation<StreamingProblem>::setInitialConditionsOnGri
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		// CCH: multigroup radiation
 		for (int g = 0; g < Physics_Traits<StreamingProblem>::nGroups; ++g) {
 			state_cc(i, j, k, RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad0 * radEnergyFractions[g];
 			state_cc(i, j, k, RadSystem<StreamingProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
@@ -120,7 +119,7 @@ AMRSimulation<StreamingProblem>::setCustomBoundaryConditions(const amrex::IntVec
 	amrex::GpuArray<int, 3> lo = box.loVect3d();
 	amrex::GpuArray<int, 3> hi = box.hiVect3d();
 
-	// CCH: calculate radEnergyFractions
+	// calculate radEnergyFractions
 	quokka::valarray<amrex::Real, Physics_Traits<StreamingProblem>::nGroups> radEnergyFractions{};
 	for (int g = 0; g < Physics_Traits<StreamingProblem>::nGroups; ++g) {
 		radEnergyFractions[g] = 1.0 / Physics_Traits<StreamingProblem>::nGroups;
@@ -131,7 +130,7 @@ AMRSimulation<StreamingProblem>::setCustomBoundaryConditions(const amrex::IntVec
 		const double Erad = 1.0;
 		const double Frad = c * Erad;
 
-		// CCH: multigroup radiation
+		// multigroup radiation
 		// x1 left side boundary (Marshak)
 		for (int g = 0; g < Physics_Traits<StreamingProblem>::nGroups; ++g) {
 			consVar(i, j, k, RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad * radEnergyFractions[g];

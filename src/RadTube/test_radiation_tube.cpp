@@ -157,10 +157,9 @@ template <> void RadhydroSimulation<TubeProblem>::setInitialConditionsOnGrid(quo
 		amrex::Real const Erad = interpolate_value(x, x_ptr, Erad_ptr, x_size);
 		amrex::Real const Tgas = Pgas / C::k_B * mu / rho;
 
-		// CCH: calculate radEnergyFractions based on the boundary conditions
+		// calculate radEnergyFractions based on the boundary conditions
 		auto radEnergyFractions = RadSystem<TubeProblem>::ComputePlanckEnergyFractions(radBoundaries_g, Tgas);
 
-		// CCH: multigroup radiation
 		for (int g = 0; g < Physics_Traits<TubeProblem>::nGroups; ++g) {
 			state_cc(i, j, k, RadSystem<TubeProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad * radEnergyFractions[g];
 			state_cc(i, j, k, RadSystem<TubeProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
@@ -203,7 +202,7 @@ AMRSimulation<TubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv
 
 	auto const radBoundaries_g = RadSystem<TubeProblem>::radBoundaries_;
 
-	// CCH: calculate radEnergyFractions
+	// calculate radEnergyFractions
 	auto radEnergyFractionsT0 = RadSystem<TubeProblem>::ComputePlanckEnergyFractions(radBoundaries_g, T0);
 	auto radEnergyFractionsT1 = RadSystem<TubeProblem>::ComputePlanckEnergyFractions(radBoundaries_g, T1);
 

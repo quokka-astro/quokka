@@ -1601,7 +1601,6 @@ void RadhydroSimulation<problem_t>::operatorSplitSourceTerms(amrex::Array4<amrex
 							     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
 							     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi)
 {
-	// CCH: multigroup radiation
 	amrex::FArrayBox radEnergySource(indexRange, Physics_Traits<problem_t>::nGroups,
 					 amrex::The_Async_Arena()); // cell-centered scalar
 	amrex::FArrayBox advectionFluxes(indexRange, 3 * Physics_Traits<problem_t>::nGroups,

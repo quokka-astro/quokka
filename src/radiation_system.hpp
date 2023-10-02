@@ -61,8 +61,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	}
 
 	static constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
-	static constexpr int numRadVars_ = Physics_NumVars::numRadVars;				 // CCH: number of radiation variables for each photon group
-	static constexpr int nvarHyperbolic_ = numRadVars_ * Physics_Traits<problem_t>::nGroups; // CCH: total number of radiation variables
+	static constexpr int numRadVars_ = Physics_NumVars::numRadVars;				 // number of radiation variables for each photon group
+	static constexpr int nvarHyperbolic_ = numRadVars_ * Physics_Traits<problem_t>::nGroups; // total number of radiation variables
 	static constexpr int nstartHyperbolic_ = Physics_Indices<problem_t>::radFirstIndex;
 	static constexpr int nvar_ = nstartHyperbolic_ + nvarHyperbolic_;
 
@@ -156,7 +156,6 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	AMREX_GPU_HOST_DEVICE static auto ComputeEintFromEgas(double density, double X1GasMom, double X2GasMom, double X3GasMom, double Etot) -> double;
 	AMREX_GPU_HOST_DEVICE static auto ComputeEgasFromEint(double density, double X1GasMom, double X2GasMom, double X3GasMom, double Eint) -> double;
 
-	// CCH: linear equation solver for matrix with non-zeros at the first row, first column, and diagonal only
 	AMREX_GPU_HOST_DEVICE static void SolveLinearEqs(double a00, const quokka::valarray<double, nGroups_> &a0i,
 							 const quokka::valarray<double, nGroups_> &ai0, const quokka::valarray<double, nGroups_> &aii,
 							 const double &y0, const quokka::valarray<double, nGroups_> &yi, double &x0,
@@ -173,14 +172,14 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	AMREX_GPU_DEVICE static auto isStateValid(std::array<amrex::Real, nvarHyperbolic_> &cons) -> bool;
 };
 
-// CCH: compute radiation energy fractions for each photon group from a Planck function, given nGroups, radBoundaries, and temperature
+// Compute radiation energy fractions for each photon group from a Planck function, given nGroups, radBoundaries, and temperature
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckEnergyFractions(amrex::GpuArray<double, nGroups_ + 1> const &boundaries, amrex::Real temperature)
     -> quokka::valarray<amrex::Real, nGroups_>
 {
 	quokka::valarray<amrex::Real, nGroups_> radEnergyFractions{};
 	if constexpr (nGroups_ == 1) {
-		// CCH: for future reference, if we want to use a single group as a delta function, say at 13.6 eV, rethink this.
+		// TODO(CCH): allow the total radEnergyFraction to be smaller than 1, to allow, say, a single group 13.6 eV and 24.6 eV.
 		radEnergyFractions[0] = 1.0;
 		return radEnergyFractions;
 	} else {
@@ -192,7 +191,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckEnergyFractions(am
 			previous = y;
 		}
 		// A hack to avoid zeros in radEnergyFractions
-		// TODO(CCH): find a better way to do this
+		// TODO(CCH): use energy_floor
 		for (int g = 0; g < nGroups_; ++g) {
 			if (radEnergyFractions[g] < 1e-14) {
 				radEnergyFractions[g] = 1e-14;
@@ -203,12 +202,11 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckEnergyFractions(am
 	}
 }
 
-// CCH: linear equation solver for matrix with non-zeros at the first row, first column, and diagonal only
+// Linear equation solver for matrix with non-zeros at the first row, first column, and diagonal only.
 // solve the linear system
 //   [a00 a0i] [x0] = [y0]
 //   [ai0 aii] [xi]   [yi]
 // for x0 and xi, where a0i = (a01, a02, a03, ...); ai0 = (a10, a20, a30, ...); aii = (a11, a22, a33, ...), xi = (x1, x2, x3, ...), yi = (y1, y2, y3, ...)
-// and x0 and xi are unknown
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE void RadSystem<problem_t>::SolveLinearEqs(const double a00, const quokka::valarray<double, nGroups_> &a0i,
 								const quokka::valarray<double, nGroups_> &ai0, const quokka::valarray<double, nGroups_> &aii,
@@ -237,7 +235,7 @@ void RadSystem<problem_t>::ConservedToPrimitive(amrex::Array4<const amrex::Real>
 
 	// cell-centered kernel
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		// CCH: add reduced fluxes for each radiation group
+		// add reduced fluxes for each radiation group
 		for (int g = 0; g < nGroups_; ++g) {
 			const auto E_r = cons(i, j, k, radEnergy_index + numRadVars_ * g);
 			const auto Fx = cons(i, j, k, x1RadFlux_index + numRadVars_ * g);
@@ -880,7 +878,6 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 			AMREX_ASSERT(Pnz_L != NAN);
 			AMREX_ASSERT(Pnz_R != NAN);
 
-			// CCH: changed nvarHyperbolic_ to numRadVars_ (= 4)
 			const quokka::valarray<double, numRadVars_> F_L = {(c_hat_ / c_light_) * Fn_L, (c_hat_ * c_light_) * Pnx_L, (c_hat_ * c_light_) * Pny_L,
 									   (c_hat_ * c_light_) * Pnz_L};
 
@@ -1019,7 +1016,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		const double Egastot0 = consPrev(i, j, k, gasEnergy_index);
 		auto massScalars = RadSystem<problem_t>::ComputeMassScalars(consPrev, i, j, k);
 
-		// ------  CCH: Multigroup ---------
 		// load radiation energy
 		quokka::valarray<double, nGroups_> Erad0Vec;
 		for (int g = 0; g < nGroups_; ++g) {
@@ -1048,8 +1044,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			EradVec_guess[g] = NAN;
 		}
 
-		// if constexpr (gamma_ != 1.0) {
-		if (gamma_ != 1.0) {
+		if constexpr (gamma_ != 1.0) {
 			Egas0 = ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0);
 			Ekin0 = Egastot0 - Egas0;
 
@@ -1091,15 +1086,14 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				auto B = fourPiB / (4.0 * pi);
 				kappaPVec = ComputePlanckOpacity(rho, T_gas);
 				kappaFVec = ComputeFluxMeanOpacity(rho, T_gas);
-				kappaEVec = kappaFVec; // TODO(CCH): later, define ComputeEnergyMeanOpacity
+				kappaEVec = kappaFVec; // TODO(CCH): define ComputeEnergyMeanOpacity
 
 				// compute derivatives w/r/t T_gas
 				const double dB_dTgas = (4.0 * B) / T_gas;
 
 				// compute residuals
 				quokka::valarray<amrex::Real, nGroups_> radEnergyFractions{};
-				// TODO(CCH): try to make it constexpr
-				if (nGroups_ > 1) {
+				if constexpr (nGroups_ > 1) {
 					radEnergyFractions = ComputePlanckEnergyFractions(radBoundaries_g, T_gas);
 					AMREX_ASSERT(min(radEnergyFractions) > 0.);
 				} else {
@@ -1118,22 +1112,18 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 
 				quokka::valarray<double, nGroups_> dkappaP_dTgas = ComputePlanckOpacityTempDerivative(rho, T_gas);
 				quokka::valarray<double, nGroups_> dkappaE_dTgas = dkappaP_dTgas;
-				// TODO(CCH): later, define ComputeEnergyMeanOpacityTempDerivative
 				AMREX_ASSERT(!std::isnan(sum(dkappaP_dTgas)));
 
 				// prepare to compute Jacobian elements
 				const double c_v = quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas, massScalars);
 				dRtot_dErad = -dt * rho * kappaEVec * chat;
-				// TODO(CCH): fix this: dB_dTgas * radEnergyFractions is inaccurate. Define ComputePlanckEnergyFractionsTempDerivative
+				// TODO(CCH): dB_dTgas * radEnergyFractions is a small-dT approximation. Define ComputePlanckEnergyFractionsTempDerivative
 				dRvec_dEgas = dt * rho / c_v *
 					      (4 * pi * kappaPVec * dB_dTgas * radEnergyFractions + dkappaP_dTgas * fourPiB * radEnergyFractions -
 					       chat * dkappaE_dTgas * EradVec_guess);
 				dRtot_dEgas = sum(dRvec_dEgas);
-				// kappaP = RadSystem<problem_t>::ComputePlanckOpacity(rho, T_gas);
-				// dRtot_dEgas = dt * rho / c_v * (4 * pi * kappaP * dB_dTgas + dkappa_dTgas * fourPiB - chat * sum(dkappaVec_dTgas *
-				// EradVec_guess));
-				// TODO(CCH): Equivalent of eta = (eta > 0.0) ? eta : 0.0. Consider Ben's suggesting to use a global Newton method. Another
-				// possibility is to force each element of dRvec_dEgas to non-negative.
+				// TODO(CCH): Consider Ben's suggestion of using a global Newton method. 
+        // Equivalent of eta = (eta > 0.0) ? eta : 0.0, to ensure possitivity of Egas_guess
 				if (dRtot_dEgas < 0.0) {
 					dRtot_dEgas = 0.0;
 				}
@@ -1166,7 +1156,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		// Erad_guess is the new radiation energy (excluding work term)
 		// Egas_guess is the new gas internal energy
 
-		// CCH: multigroup, apportion w.r.t. v_1 * F_1
 		// 2. Compute radiation flux update
 
 		amrex::GpuArray<amrex::Real, 3> Frad_t0{};
@@ -1183,7 +1172,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			Frad_t0[2] = consPrev(i, j, k, x3RadFlux_index + numRadVars_ * g);
 
 			for (int n = 0; n < 3; ++n) {
-				AMREX_ASSERT((advectionFluxes(i, j, k, n) == 0.0)); // CCH: for sanity check
+				AMREX_ASSERT((advectionFluxes(i, j, k, n) == 0.0));
 				Frad_t1[n] = (Frad_t0[n] + (dt * advectionFluxes(i, j, k, n))) / (1.0 + rho * kappaFVec[g] * chat * dt);
 				// Compute conservative gas momentum update
 				dMomentum[n] = -(Frad_t1[n] - Frad_t0[n]) / (c * chat);
@@ -1217,21 +1206,25 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				// compute loss of radiation energy to gas kinetic energy
 				dErad_work = -(c_hat_ / c_light_) * dEkin_work;
 
-				// compute energyLossFractions
+		    // apportion dErad_work according to kappaF_i * (v * F_i)
 				quokka::valarray<double, nGroups_> energyLossFractions{};
-				for (int g = 0; g < nGroups_; ++g) {
-					Frad_t1[0] = consNew(i, j, k, x1RadFlux_index + numRadVars_ * g);
-					Frad_t1[1] = consNew(i, j, k, x2RadFlux_index + numRadVars_ * g);
-					Frad_t1[2] = consNew(i, j, k, x3RadFlux_index + numRadVars_ * g);
-					energyLossFractions[g] = kappaFVec[g] * (x1GasMom1 * Frad_t1[0] + x2GasMom1 * Frad_t1[1] + x3GasMom1 * Frad_t1[2]);
-				}
-				// TODO(CCH): tricky here. Have to avoid negavie radiation energy.
-				auto energyLossFractionsTot = sum(energyLossFractions);
-				if (energyLossFractionsTot != 0.0) {
-					energyLossFractions /= energyLossFractionsTot;
+				if constexpr (nGroups_ == 1) {
+          energyLossFractions[0] = 1.0;
 				} else {
-					energyLossFractions.fillin(0.0);
-				}
+          // compute energyLossFractions
+          for (int g = 0; g < nGroups_; ++g) {
+            Frad_t1[0] = consNew(i, j, k, x1RadFlux_index + numRadVars_ * g);
+            Frad_t1[1] = consNew(i, j, k, x2RadFlux_index + numRadVars_ * g);
+            Frad_t1[2] = consNew(i, j, k, x3RadFlux_index + numRadVars_ * g);
+            energyLossFractions[g] = kappaFVec[g] * (x1GasMom1 * Frad_t1[0] + x2GasMom1 * Frad_t1[1] + x3GasMom1 * Frad_t1[2]);
+          }
+          auto energyLossFractionsTot = sum(energyLossFractions);
+          if (energyLossFractionsTot != 0.0) {
+            energyLossFractions /= energyLossFractionsTot;
+          } else {
+            energyLossFractions.fillin(0.0);
+          }
+        }
 				for (int g = 0; g < nGroups_; ++g) {
 					auto radEnergyNew = EradVec_guess[g] + dErad_work * energyLossFractions[g];
 					consNew(i, j, k, radEnergy_index + numRadVars_ * g) = radEnergyNew;
@@ -1243,9 +1236,12 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				}
 			}
 
+			// compute difference between new and old internal energy
+			amrex::Real const dEint = Egas_guess - Egas0;
+
 			// 4b. Store new radiation energy, gas energy
 			consNew(i, j, k, gasEnergy_index) = Egastot1;
-			consNew(i, j, k, gasInternalEnergy_index) += Egas_guess - Egas0; // must compute difference
+			consNew(i, j, k, gasInternalEnergy_index) += dEint; // must compute difference
 		} else {
 			amrex::ignore_unused(EradVec_guess);
 			amrex::ignore_unused(Egas_guess);

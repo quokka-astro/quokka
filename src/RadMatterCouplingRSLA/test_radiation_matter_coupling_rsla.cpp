@@ -234,8 +234,8 @@ auto problem_main() -> int
 			sol_norm += std::abs(Tgas_rsla_exact[i]);
 		}
 		const double rel_error = err_norm / sol_norm;
-		const double error_tol =
-		    5e-5; // CCH: when using C::a_rad as radiation_constant_cgs_, the relative error goes up to 3e-5, so I'm increasing the tolerance
+    // When using C::a_rad as radiation_constant_cgs_, the relative error goes up to 3e-5, so I'm increasing the tolerance
+		const double error_tol = 5e-5; 
 		amrex::Print() << "relative L1 error norm = " << rel_error << std::endl;
 		if (rel_error > error_tol) {
 			status = 1;

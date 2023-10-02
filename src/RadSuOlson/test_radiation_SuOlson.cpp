@@ -158,7 +158,7 @@ template <> void RadhydroSimulation<MarshakProblem>::setInitialConditionsOnGrid(
 	const auto Erad0 = initial_Erad;
 	const auto Egas0 = initial_Egas;
 
-	// CCH: calculate radEnergyFractions
+	// calculate radEnergyFractions
 	quokka::valarray<amrex::Real, Physics_Traits<MarshakProblem>::nGroups> radEnergyFractions{};
   for (int g = 0; g < Physics_Traits<MarshakProblem>::nGroups; ++g) {
     radEnergyFractions[g] = 1.0 / Physics_Traits<MarshakProblem>::nGroups;
