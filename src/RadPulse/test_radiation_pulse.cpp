@@ -69,7 +69,9 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpa
 {
 	quokka::valarray<double, nGroups_> kappaPVec{};
 	auto kappa = (kappa0 / rho) * std::max(std::pow(Tgas / T0, 3), 1.0);
-	kappaPVec.fillin(kappa);
+  for (int i = 0; i < nGroups_; ++i) {
+    kappaPVec[i] = kappa;
+  }
 	return kappaPVec;
 }
 

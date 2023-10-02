@@ -78,7 +78,6 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputePlanckOpacity(const do
     -> quokka::valarray<double, Physics_Traits<TubeProblem>::nGroups>
 {
 	quokka::valarray<double, Physics_Traits<TubeProblem>::nGroups> kappaPVec{};
-	// kappaPVec.fillin(0.);
 	for (int g = 0; g < nGroups_; ++g) {
 		kappaPVec[g] = 0.; // no heating/cooling
 	}
@@ -90,7 +89,6 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputeFluxMeanOpacity(const 
     -> quokka::valarray<double, Physics_Traits<TubeProblem>::nGroups>
 {
 	quokka::valarray<double, Physics_Traits<TubeProblem>::nGroups> kappaFVec{};
-	// kappaFVec.fillin(kappa0);
 	kappaFVec[0] = kappa0 * 1.5;
 	kappaFVec[1] = kappa0 * 0.5;
 	return kappaFVec;
@@ -155,7 +153,6 @@ template <> void RadhydroSimulation<TubeProblem>::setInitialConditionsOnGrid(quo
 
 	// CCH: calculate radEnergyFractions
 	quokka::valarray<amrex::Real, Physics_Traits<TubeProblem>::nGroups> radEnergyFractions{};
-	// radEnergyFractions.fillin(1.0 / Physics_Traits<TubeProblem>::nGroups);
 	for (int g = 0; g < Physics_Traits<TubeProblem>::nGroups; ++g) {
 		radEnergyFractions[g] = 1.0 / Physics_Traits<TubeProblem>::nGroups;
 	}
@@ -219,7 +216,6 @@ AMRSimulation<TubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv
 	// amrex::Real const temperature = 0.0;
 	// RadSystem<TubeProblem>::ComputeRadEnergyFractions(radEnergyFractions, temperature);
 	quokka::valarray<amrex::Real, Physics_Traits<TubeProblem>::nGroups> radEnergyFractions{};
-	// radEnergyFractions.fillin(1.0 / Physics_Traits<TubeProblem>::nGroups);
 	for (int g = 0; g < Physics_Traits<TubeProblem>::nGroups; ++g) {
 		radEnergyFractions[g] = 1.0 / Physics_Traits<TubeProblem>::nGroups;
 	}

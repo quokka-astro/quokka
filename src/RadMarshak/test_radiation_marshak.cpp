@@ -59,7 +59,6 @@ template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, nGroups_> kappaPVec{};
-	// kappaPVec.fillin(kappa);
 	for (int i = 0; i < nGroups_; ++i) {
 		kappaPVec[i] = kappa;
 	}

@@ -70,7 +70,6 @@ template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputePlanckOpacity(const double rho, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, nGroups_> kappaVec{};
-	// kappaVec.fillin(kappa / rho);
 	for (int g = 0; g < nGroups_; ++g) {
 		kappaVec[g] = kappa / rho;
 	}
@@ -161,7 +160,9 @@ template <> void RadhydroSimulation<MarshakProblem>::setInitialConditionsOnGrid(
 
 	// CCH: calculate radEnergyFractions
 	quokka::valarray<amrex::Real, Physics_Traits<MarshakProblem>::nGroups> radEnergyFractions{};
-	radEnergyFractions.fillin(1.0 / Physics_Traits<MarshakProblem>::nGroups);
+  for (int g = 0; g < Physics_Traits<MarshakProblem>::nGroups; ++g) {
+    radEnergyFractions[g] = 1.0 / Physics_Traits<MarshakProblem>::nGroups;
+  }
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {

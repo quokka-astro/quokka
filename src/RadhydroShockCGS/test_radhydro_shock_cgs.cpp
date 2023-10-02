@@ -84,7 +84,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<ShockProblem>::ComputePl
     -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, nGroups_> kappaPVec{};
-	// kappaPVec.fillin(kappa / rho);
 	for (int i = 0; i < nGroups_; ++i) {
 		kappaPVec[i] = kappa / rho;
 	}

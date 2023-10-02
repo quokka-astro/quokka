@@ -691,8 +691,6 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 		// HLL solver following Toro (1998) and Balsara (2017).
 		// Radiation eigenvalues from Skinner & Ostriker (2013).
 
-		// CCH: add reduced fluxes for each radiation group. Trivial: just do each group separately.
-
 		// calculate cell optical depth for each photon group
 		// asymptotic-preserving flux correction
 		// [Similar to Skinner et al. (2019), but tau^-2 instead of tau^-1, which
@@ -961,7 +959,6 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeFluxMeanOpacity(const do
 	return kappaFVec;
 }
 
-// TODO(CCH): Derivative of Planck/energy-mean opacity with respect to gas temperature. In the future, they should be defined separately.
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckOpacityTempDerivative(const double /* rho */, const double /* Tgas */)
     -> quokka::valarray<double, nGroups_>
@@ -1101,10 +1098,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 
 				// compute residuals
 				quokka::valarray<amrex::Real, nGroups_> radEnergyFractions{};
-				// TODO(CCH): fix this: if constexpr (nGroups_ > 1)
-				// if constexpr (nGroups_ > 1) {
-				// ../src/radiation_system.hpp(1089): error: An extended __device__ lambda cannot first-capture variable in constexpr-if context
-				// detected during: ...
+				// TODO(CCH): try to make it constexpr
 				if (nGroups_ > 1) {
 					radEnergyFractions = ComputePlanckEnergyFractions(radBoundaries_g, T_gas);
 					AMREX_ASSERT(min(radEnergyFractions) > 0.);

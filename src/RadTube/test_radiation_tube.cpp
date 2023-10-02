@@ -70,8 +70,6 @@ template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, nGroups_> kappaPVec{};
-	// amrex::Real const kappa0_g = kappa0;
-	// kappaPVec.fillin(kappa0_g);
 	for (int g = 0; g < nGroups_; ++g) {
 		kappaPVec[g] = kappa0;
 	}

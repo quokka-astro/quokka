@@ -52,7 +52,6 @@ template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, nGroups_> kappaPVec{};
-	// kappaPVec.fillin(kappa0);
 	for (int g = 0; g < nGroups_; ++g) {
 		kappaPVec[g] = kappa0;
 	}
@@ -76,7 +75,6 @@ template <> void RadhydroSimulation<StreamingProblem>::setInitialConditionsOnGri
 
 	// CCH: calculate radEnergyFractions
 	quokka::valarray<amrex::Real, Physics_Traits<StreamingProblem>::nGroups> radEnergyFractions{};
-	// radEnergyFractions.fillin(1.0 / Physics_Traits<StreamingProblem>::nGroups);
 	for (int g = 0; g < Physics_Traits<StreamingProblem>::nGroups; ++g) {
 		radEnergyFractions[g] = 1.0 / Physics_Traits<StreamingProblem>::nGroups;
 	}
@@ -124,7 +122,6 @@ AMRSimulation<StreamingProblem>::setCustomBoundaryConditions(const amrex::IntVec
 
 	// CCH: calculate radEnergyFractions
 	quokka::valarray<amrex::Real, Physics_Traits<StreamingProblem>::nGroups> radEnergyFractions{};
-	// radEnergyFractions.fillin(1.0 / Physics_Traits<StreamingProblem>::nGroups);
 	for (int g = 0; g < Physics_Traits<StreamingProblem>::nGroups; ++g) {
 		radEnergyFractions[g] = 1.0 / Physics_Traits<StreamingProblem>::nGroups;
 	}
