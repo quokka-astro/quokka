@@ -13,7 +13,7 @@ pr:
     - development
 
 jobs:
-  - job: CUDA-Build-Test
+  - job: CUDA_Build_Test
     pool: avatar
     timeoutInMinutes: 90
     steps:
