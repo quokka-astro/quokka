@@ -273,7 +273,7 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::advanceSingle
 
 	// We use the RK2-SSP integrator in a method-of-lines framework. It needs 2
 	// registers: one to store the old timestep, and one to store the intermediate stage
-	// and final stage. The intermediate stage and final stage re-use the same register.
+	// and final stage. The intermediate stage and final stage reuse the same register.
 
 	// update ghost zones [w/ old timestep]
 	// (N.B. the input and output multifabs are allowed to be the same, as done here)
