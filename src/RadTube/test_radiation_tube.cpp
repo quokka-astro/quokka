@@ -8,6 +8,7 @@
 ///
 
 #include <string>
+#include <vector>
 
 #include "AMReX.H"
 #include "AMReX_BC_TYPES.H"
@@ -53,7 +54,7 @@ template <> struct Physics_Traits<TubeProblem> {
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
 	// number of radiation groups
-	static constexpr int nGroups = 3;
+	static constexpr int nGroups = 2;
 };
 
 template <> struct RadSystem_Traits<TubeProblem> {
@@ -63,7 +64,7 @@ template <> struct RadSystem_Traits<TubeProblem> {
 	static constexpr double Erad_floor = 0.;
 	static constexpr bool compute_v_over_c_terms = true;
 	static constexpr double energy_unit = C::k_B;
-	static constexpr amrex::GpuArray<double, Physics_Traits<TubeProblem>::nGroups + 1> radBoundaries{0., T0, 3.3 * T0, inf}; // Kelvin
+	static constexpr amrex::GpuArray<double, Physics_Traits<TubeProblem>::nGroups + 1> radBoundaries{0., 3.3 * T0, inf}; // Kelvin
 };
 
 template <>
@@ -344,6 +345,9 @@ auto problem_main() -> int
 
 		Tgas_arr[i] = Tgas;
 		Tgas_err[i] = (Tgas - Tgas_exact) / Tgas_exact;
+
+		// For benchmarking: print x, Tgas_exact, Erad_exact_arr. This is used to calculate E_1_exact and E_2_exact 
+		// std::cout << xs[i] << ", " << Tgas_exact << ", " << Erad_0 << std::endl;
 	}
 
 	double err_norm = 0.;
@@ -360,6 +364,30 @@ auto problem_main() -> int
 		status = 0;
 	}
 	amrex::Print() << "Relative L1 norm = " << rel_err_norm << std::endl;
+
+
+  // define xs_exact, E1_exact, E2_exact
+	std::vector<double> xs_exact = {5.00000000000000e-01, 4.50000000000000e+00, 8.50000000000000e+00, 1.25000000000000e+01, 1.65000000000000e+01,
+					2.05000000000000e+01, 2.45000000000000e+01, 2.85000000000000e+01, 3.25000000000000e+01, 3.65000000000000e+01,
+					4.05000000000000e+01, 4.45000000000000e+01, 4.85000000000000e+01, 5.25000000000000e+01, 5.65000000000000e+01,
+					6.05000000000000e+01, 6.45000000000000e+01, 6.85000000000000e+01, 7.25000000000000e+01, 7.65000000000000e+01,
+					8.05000000000000e+01, 8.45000000000000e+01, 8.85000000000000e+01, 9.25000000000000e+01, 9.65000000000000e+01,
+					1.00500000000000e+02, 1.04500000000000e+02, 1.08500000000000e+02, 1.12500000000000e+02, 1.16500000000000e+02,
+					1.20500000000000e+02, 1.24500000000000e+02};
+	std::vector<double> E1_exact = {1.99988508857642e+15, 1.98528882484711e+15, 1.97030095669875e+15, 1.95490594807292e+15, 1.93908710907345e+15,
+					1.92282648534287e+15, 1.90610491848736e+15, 1.88890209032798e+15, 1.87119606071810e+15, 1.85293599130086e+15,
+					1.83410094316186e+15, 1.81468673677205e+15, 1.79468094475058e+15, 1.77406311223527e+15, 1.75280499952771e+15,
+					1.73087086164613e+15, 1.70821774793938e+15, 1.68479585502165e+15, 1.66054890926775e+15, 1.63541460441593e+15,
+					1.60932510087867e+15, 1.58220758576124e+15, 1.55398491577249e+15, 1.52457634762981e+15, 1.49389837479799e+15,
+					1.46186568541708e+15, 1.42839225422523e+15, 1.39339260409995e+15, 1.35677267409764e+15, 1.31832574135472e+15,
+					1.27785351117112e+15, 1.23513662178893e+15};
+	std::vector<double> E2_exact = {2.32015717342358e+15, 2.28411350515288e+15, 2.24742946830125e+15, 2.21009256492708e+15, 2.17208951792655e+15,
+					2.13340621665713e+15, 2.09402807451264e+15, 2.05394041167202e+15, 2.01312761028190e+15, 1.97151166269914e+15,
+					1.92908783283814e+15, 1.88589179922795e+15, 1.84194281624942e+15, 1.79724540076473e+15, 1.75179112747229e+15,
+					1.70556053735387e+15, 1.65852516306062e+15, 1.61064967197835e+15, 1.56189414273225e+15, 1.51221648758407e+15,
+					1.46157501212133e+15, 1.40993113123876e+15, 1.35725223722751e+15, 1.30351471937019e+15, 1.24870711720201e+15,
+					1.19283339558292e+15, 1.13591631377477e+15, 1.07800083090005e+15, 1.01914078090236e+15, 9.59242762645278e+14,
+					8.98276456828882e+14, 8.36234375211069e+14};
 
 #ifdef HAVE_PYTHON
 	// Plot results: temperature
@@ -390,19 +418,34 @@ auto problem_main() -> int
 	matplotlibcpp::clf();
 	matplotlibcpp::xlabel("length x (cm)");
 	matplotlibcpp::ylabel("energy density (erg/cm^3)");
+	Trad_args["label"] = fmt::format("E_tot");
+	Trad_args["color"] = "k";
+	matplotlibcpp::plot(xs, Erad_arr, Trad_args);
 	for (int g = 0; g < Physics_Traits<TubeProblem>::nGroups; ++g) {
-		Trad_args["label"] = fmt::format("group {}", g);
+		Trad_args["label"] = fmt::format("E_{}", g);
 		Trad_args["color"] = fmt::format("C{}", g);
 		// matplotlibcpp::plot(xs, strided_vector_from(Erad_arr_at_group, s, g), Trad_args);
 		matplotlibcpp::plot(xs, Erad_arr_at_group[g], Trad_args);
 	}
-	Trad_args["label"] = fmt::format("total");
-	Trad_args["color"] = "k";
-	matplotlibcpp::plot(xs, Erad_arr, Trad_args);
-	Texact_args["label"] = "exact";
+	Texact_args["label"] = "E_tot (exact)";
 	Texact_args["marker"] = "o";
 	Texact_args["color"] = "r";
 	matplotlibcpp::scatter(strided_vector_from(xs, s), strided_vector_from(Erad_exact_arr, s), 10.0, Texact_args);
+
+  std::map<std::string, std::string> E1_args;
+  E1_args["label"] = "E_0 (exact)";
+  E1_args["marker"] = "*";
+  E1_args["linestyle"] = "none";
+  E1_args["color"] = "C0";
+  matplotlibcpp::plot(xs_exact, E1_exact, E1_args);
+
+  std::map<std::string, std::string> E2_args;
+  E2_args["label"] = "E_1 (exact)";
+  E2_args["marker"] = "*";
+  E2_args["linestyle"] = "none";
+  E2_args["color"] = "C1";
+  matplotlibcpp::plot(xs_exact, E2_exact, E2_args);
+
 	matplotlibcpp::legend();
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./radiation_pressure_tube_energy_density.pdf");
