@@ -347,8 +347,34 @@ auto problem_main() -> int
 		Tgas_err[i] = (Tgas - Tgas_exact) / Tgas_exact;
 
 		// For benchmarking: print x, Tgas_exact, Erad_exact_arr. This is used to calculate E_1_exact and E_2_exact 
-		// std::cout << xs[i] << ", " << Tgas_exact << ", " << Erad_0 << std::endl;
+		// std::cout << xs[i] << ", " << Trad_exact << ", " << Erad_0 << std::endl;
 	}
+
+  // define xs_exact, E1_exact, E2_exact
+	std::vector<double> xs_exact = {5.00000000000000e-01, 5.50000000000000e+00, 1.05000000000000e+01, 1.55000000000000e+01, 2.05000000000000e+01,
+					2.55000000000000e+01, 3.05000000000000e+01, 3.55000000000000e+01, 4.05000000000000e+01, 4.55000000000000e+01,
+					5.05000000000000e+01, 5.55000000000000e+01, 6.05000000000000e+01, 6.55000000000000e+01, 7.05000000000000e+01,
+					7.55000000000000e+01, 8.05000000000000e+01, 8.55000000000000e+01, 9.05000000000000e+01, 9.55000000000000e+01,
+					1.00500000000000e+02, 1.05500000000000e+02, 1.10500000000000e+02, 1.15500000000000e+02, 1.20500000000000e+02,
+					1.25500000000000e+02};
+	std::vector<double> E1_exact = {1.97806231974620e+15, 1.96003267738932e+15, 1.94139375399209e+15, 1.92211477326756e+15, 1.90216201239978e+15,
+					1.88149879792274e+15, 1.86008566953792e+15, 1.83786164032564e+15, 1.81475431543605e+15, 1.79075351115540e+15,
+					1.76583321387339e+15, 1.73994821924481e+15, 1.71303490596213e+15, 1.68501210246915e+15, 1.65578211109368e+15,
+					1.62523187429012e+15, 1.59323434543658e+15, 1.55965009717319e+15, 1.52432919817267e+15, 1.48711344303233e+15,
+					1.44783897852076e+15, 1.40633941779824e+15, 1.36244954047942e+15, 1.31590909579761e+15, 1.26631043035030e+15,
+					1.21323876205627e+15};
+	std::vector<double> E2_exact = {2.34197994225380e+15, 2.29654950261068e+15, 2.25010503500791e+15, 2.20262123173244e+15, 2.15407068960022e+15,
+					2.10442459607726e+15, 2.05365387846208e+15, 2.00168645967436e+15, 1.94843446056395e+15, 1.89396262984460e+15,
+					1.83830481312661e+15, 1.78145970875519e+15, 1.72339649303787e+15, 1.66406088653085e+15, 1.60338168190632e+15,
+					1.54127777970988e+15, 1.47766576756342e+15, 1.41246806782681e+15, 1.34562168082733e+15, 1.27708749196767e+15,
+					1.20686010247924e+15, 1.13497806420176e+15, 1.06153434252058e+15, 9.86527809202386e+14, 9.09819537649705e+14,
+					8.31394523943729e+14};
+
+	// interpolate numerical solution onto exact solution tabulated points
+	std::vector<double> Erad_arr_numerical_interp_at_group_1(xs_exact.size());
+	std::vector<double> Erad_arr_numerical_interp_at_group_2(xs_exact.size());
+	interpolate_arrays(xs_exact.data(), Erad_arr_numerical_interp_at_group_1.data(), static_cast<int>(xs_exact.size()), xs.data(), Erad_arr_at_group[0].data(), static_cast<int>(xs.size()));
+	interpolate_arrays(xs_exact.data(), Erad_arr_numerical_interp_at_group_2.data(), static_cast<int>(xs_exact.size()), xs.data(), Erad_arr_at_group[1].data(), static_cast<int>(xs.size()));
 
 	double err_norm = 0.;
 	double sol_norm = 0.;
@@ -356,38 +382,21 @@ auto problem_main() -> int
 		err_norm += std::abs(Trad_arr[i] - Trad_exact_arr[i]);
 		sol_norm += std::abs(Trad_exact_arr[i]);
 	}
+	for (int i = 0; i < xs_exact.size(); ++i) {
+    err_norm += std::abs(Erad_arr_numerical_interp_at_group_1[i] - E1_exact[i]);
+    sol_norm += std::abs(E1_exact[i]);
+    err_norm += std::abs(Erad_arr_numerical_interp_at_group_2[i] - E2_exact[i]);
+    sol_norm += std::abs(E2_exact[i]);
+  }
 
 	const double rel_err_norm = err_norm / sol_norm;
-	const double rel_err_tol = 0.0008;
+	const double rel_err_tol = 0.003;
 	int status = 1;
 	if (rel_err_norm < rel_err_tol) {
 		status = 0;
 	}
 	amrex::Print() << "Relative L1 norm = " << rel_err_norm << std::endl;
 
-
-  // define xs_exact, E1_exact, E2_exact
-	std::vector<double> xs_exact = {5.00000000000000e-01, 4.50000000000000e+00, 8.50000000000000e+00, 1.25000000000000e+01, 1.65000000000000e+01,
-					2.05000000000000e+01, 2.45000000000000e+01, 2.85000000000000e+01, 3.25000000000000e+01, 3.65000000000000e+01,
-					4.05000000000000e+01, 4.45000000000000e+01, 4.85000000000000e+01, 5.25000000000000e+01, 5.65000000000000e+01,
-					6.05000000000000e+01, 6.45000000000000e+01, 6.85000000000000e+01, 7.25000000000000e+01, 7.65000000000000e+01,
-					8.05000000000000e+01, 8.45000000000000e+01, 8.85000000000000e+01, 9.25000000000000e+01, 9.65000000000000e+01,
-					1.00500000000000e+02, 1.04500000000000e+02, 1.08500000000000e+02, 1.12500000000000e+02, 1.16500000000000e+02,
-					1.20500000000000e+02, 1.24500000000000e+02};
-	std::vector<double> E1_exact = {1.99988508857642e+15, 1.98528882484711e+15, 1.97030095669875e+15, 1.95490594807292e+15, 1.93908710907345e+15,
-					1.92282648534287e+15, 1.90610491848736e+15, 1.88890209032798e+15, 1.87119606071810e+15, 1.85293599130086e+15,
-					1.83410094316186e+15, 1.81468673677205e+15, 1.79468094475058e+15, 1.77406311223527e+15, 1.75280499952771e+15,
-					1.73087086164613e+15, 1.70821774793938e+15, 1.68479585502165e+15, 1.66054890926775e+15, 1.63541460441593e+15,
-					1.60932510087867e+15, 1.58220758576124e+15, 1.55398491577249e+15, 1.52457634762981e+15, 1.49389837479799e+15,
-					1.46186568541708e+15, 1.42839225422523e+15, 1.39339260409995e+15, 1.35677267409764e+15, 1.31832574135472e+15,
-					1.27785351117112e+15, 1.23513662178893e+15};
-	std::vector<double> E2_exact = {2.32015717342358e+15, 2.28411350515288e+15, 2.24742946830125e+15, 2.21009256492708e+15, 2.17208951792655e+15,
-					2.13340621665713e+15, 2.09402807451264e+15, 2.05394041167202e+15, 2.01312761028190e+15, 1.97151166269914e+15,
-					1.92908783283814e+15, 1.88589179922795e+15, 1.84194281624942e+15, 1.79724540076473e+15, 1.75179112747229e+15,
-					1.70556053735387e+15, 1.65852516306062e+15, 1.61064967197835e+15, 1.56189414273225e+15, 1.51221648758407e+15,
-					1.46157501212133e+15, 1.40993113123876e+15, 1.35725223722751e+15, 1.30351471937019e+15, 1.24870711720201e+15,
-					1.19283339558292e+15, 1.13591631377477e+15, 1.07800083090005e+15, 1.01914078090236e+15, 9.59242762645278e+14,
-					8.98276456828882e+14, 8.36234375211069e+14};
 
 #ifdef HAVE_PYTHON
 	// Plot results: temperature
@@ -418,7 +427,7 @@ auto problem_main() -> int
 	matplotlibcpp::clf();
 	matplotlibcpp::xlabel("length x (cm)");
 	matplotlibcpp::ylabel("energy density (erg/cm^3)");
-	Trad_args["label"] = fmt::format("E_tot");
+	Trad_args["label"] = "E_tot";
 	Trad_args["color"] = "k";
 	matplotlibcpp::plot(xs, Erad_arr, Trad_args);
 	for (int g = 0; g < Physics_Traits<TubeProblem>::nGroups; ++g) {
@@ -427,30 +436,28 @@ auto problem_main() -> int
 		// matplotlibcpp::plot(xs, strided_vector_from(Erad_arr_at_group, s, g), Trad_args);
 		matplotlibcpp::plot(xs, Erad_arr_at_group[g], Trad_args);
 	}
-	Texact_args["label"] = "E_tot (exact)";
-	Texact_args["marker"] = "o";
-	Texact_args["color"] = "r";
-	matplotlibcpp::scatter(strided_vector_from(xs, s), strided_vector_from(Erad_exact_arr, s), 10.0, Texact_args);
+	std::unordered_map<std::string, std::string> E_tot_args;
+	E_tot_args["label"] = "E_tot (exact)";
+	E_tot_args["marker"] = "o";
+	E_tot_args["color"] = "r";
+	matplotlibcpp::scatter(strided_vector_from(xs, s), strided_vector_from(Erad_exact_arr, s), 10.0, E_tot_args);
 
-  std::map<std::string, std::string> E1_args;
-  E1_args["label"] = "E_0 (exact)";
-  E1_args["marker"] = "*";
-  E1_args["linestyle"] = "none";
-  E1_args["color"] = "C0";
-  matplotlibcpp::plot(xs_exact, E1_exact, E1_args);
+	std::unordered_map<std::string, std::string> E_0_args;
+  E_0_args["label"] = "E_0 (exact)";
+  E_0_args["marker"] = "o";
+  E_0_args["color"] = "C0";
+  matplotlibcpp::scatter(xs_exact, E1_exact, 10.0, E_0_args);
 
-  std::map<std::string, std::string> E2_args;
-  E2_args["label"] = "E_1 (exact)";
-  E2_args["marker"] = "*";
-  E2_args["linestyle"] = "none";
-  E2_args["color"] = "C1";
-  matplotlibcpp::plot(xs_exact, E2_exact, E2_args);
+	std::unordered_map<std::string, std::string> E_1_args;
+  E_1_args["label"] = "E_1 (exact)";
+  E_1_args["marker"] = "o";
+  E_1_args["color"] = "C1";
+  matplotlibcpp::scatter(xs_exact, E2_exact, 10.0, E_1_args);
 
 	matplotlibcpp::legend();
-	matplotlibcpp::tight_layout();
+	// matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./radiation_pressure_tube_energy_density.pdf");
 	matplotlibcpp::yscale("log");
-	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./radiation_pressure_tube_energy_density_log.pdf");
 #endif // HAVE_PYTHON
 
