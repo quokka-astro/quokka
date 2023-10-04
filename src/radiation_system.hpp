@@ -1117,13 +1117,14 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				// prepare to compute Jacobian elements
 				const double c_v = quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas, massScalars);
 				dRtot_dErad = -dt * rho * kappaEVec * chat;
-				// TODO(CCH): dB_dTgas * radEnergyFractions is a small-dT approximation. Define ComputePlanckEnergyFractionsTempDerivative. Note this is accurate in 1-group case.
+				// TODO(CCH): dB_dTgas * radEnergyFractions is a small-dT approximation. Define ComputePlanckEnergyFractionsTempDerivative. Note
+				// this is accurate in 1-group case.
 				dRvec_dEgas = dt * rho / c_v *
 					      (4 * M_PI * kappaPVec * dB_dTgas * radEnergyFractions + dkappaP_dTgas * fourPiB * radEnergyFractions -
 					       chat * dkappaE_dTgas * EradVec_guess);
 				dRtot_dEgas = sum(dRvec_dEgas);
-				// TODO(CCH): Consider Ben's suggestion of using a global Newton method. 
-        // Equivalent of eta = (eta > 0.0) ? eta : 0.0, to ensure possitivity of Egas_guess
+				// TODO(CCH): Consider Ben's suggestion of using a global Newton method.
+				// Equivalent of eta = (eta > 0.0) ? eta : 0.0, to ensure possitivity of Egas_guess
 				if (dRtot_dEgas < 0.0) {
 					dRtot_dEgas = 0.0;
 				}
@@ -1206,25 +1207,26 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				// compute loss of radiation energy to gas kinetic energy
 				dErad_work = -(c_hat_ / c_light_) * dEkin_work;
 
-		    // apportion dErad_work according to kappaF_i * (v * F_i)
+				// apportion dErad_work according to kappaF_i * (v * F_i)
 				quokka::valarray<double, nGroups_> energyLossFractions{};
 				if constexpr (nGroups_ == 1) {
-          energyLossFractions[0] = 1.0;
+					energyLossFractions[0] = 1.0;
 				} else {
-          // compute energyLossFractions
-          for (int g = 0; g < nGroups_; ++g) {
-            Frad_t1[0] = consNew(i, j, k, x1RadFlux_index + numRadVars_ * g);
-            Frad_t1[1] = consNew(i, j, k, x2RadFlux_index + numRadVars_ * g);
-            Frad_t1[2] = consNew(i, j, k, x3RadFlux_index + numRadVars_ * g);
-            energyLossFractions[g] = kappaFVec[g] * (x1GasMom1 * Frad_t1[0] + x2GasMom1 * Frad_t1[1] + x3GasMom1 * Frad_t1[2]);
-          }
-          auto energyLossFractionsTot = sum(energyLossFractions);
-          if (energyLossFractionsTot != 0.0) {
-            energyLossFractions /= energyLossFractionsTot;
-          } else {
-            energyLossFractions.fillin(0.0);
-          }
-        }
+					// compute energyLossFractions
+					for (int g = 0; g < nGroups_; ++g) {
+						Frad_t1[0] = consNew(i, j, k, x1RadFlux_index + numRadVars_ * g);
+						Frad_t1[1] = consNew(i, j, k, x2RadFlux_index + numRadVars_ * g);
+						Frad_t1[2] = consNew(i, j, k, x3RadFlux_index + numRadVars_ * g);
+						energyLossFractions[g] =
+						    kappaFVec[g] * (x1GasMom1 * Frad_t1[0] + x2GasMom1 * Frad_t1[1] + x3GasMom1 * Frad_t1[2]);
+					}
+					auto energyLossFractionsTot = sum(energyLossFractions);
+					if (energyLossFractionsTot != 0.0) {
+						energyLossFractions /= energyLossFractionsTot;
+					} else {
+						energyLossFractions.fillin(0.0);
+					}
+				}
 				for (int g = 0; g < nGroups_; ++g) {
 					auto radEnergyNew = EradVec_guess[g] + dErad_work * energyLossFractions[g];
 					consNew(i, j, k, radEnergy_index + numRadVars_ * g) = radEnergyNew;

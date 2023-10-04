@@ -346,11 +346,11 @@ auto problem_main() -> int
 		Tgas_arr[i] = Tgas;
 		Tgas_err[i] = (Tgas - Tgas_exact) / Tgas_exact;
 
-		// For benchmarking: print x, Tgas_exact, Erad_exact_arr. This is used to calculate E_1_exact and E_2_exact 
+		// For benchmarking: print x, Tgas_exact, Erad_exact_arr. This is used to calculate E_1_exact and E_2_exact
 		// std::cout << xs[i] << ", " << Trad_exact << ", " << Erad_0 << std::endl;
 	}
 
-  // define xs_exact, E1_exact, E2_exact
+	// define xs_exact, E1_exact, E2_exact
 	std::vector<double> xs_exact = {5.00000000000000e-01, 5.50000000000000e+00, 1.05000000000000e+01, 1.55000000000000e+01, 2.05000000000000e+01,
 					2.55000000000000e+01, 3.05000000000000e+01, 3.55000000000000e+01, 4.05000000000000e+01, 4.55000000000000e+01,
 					5.05000000000000e+01, 5.55000000000000e+01, 6.05000000000000e+01, 6.55000000000000e+01, 7.05000000000000e+01,
@@ -373,8 +373,10 @@ auto problem_main() -> int
 	// interpolate numerical solution onto exact solution tabulated points
 	std::vector<double> Erad_arr_numerical_interp_at_group_1(xs_exact.size());
 	std::vector<double> Erad_arr_numerical_interp_at_group_2(xs_exact.size());
-	interpolate_arrays(xs_exact.data(), Erad_arr_numerical_interp_at_group_1.data(), static_cast<int>(xs_exact.size()), xs.data(), Erad_arr_at_group[0].data(), static_cast<int>(xs.size()));
-	interpolate_arrays(xs_exact.data(), Erad_arr_numerical_interp_at_group_2.data(), static_cast<int>(xs_exact.size()), xs.data(), Erad_arr_at_group[1].data(), static_cast<int>(xs.size()));
+	interpolate_arrays(xs_exact.data(), Erad_arr_numerical_interp_at_group_1.data(), static_cast<int>(xs_exact.size()), xs.data(),
+			   Erad_arr_at_group[0].data(), static_cast<int>(xs.size()));
+	interpolate_arrays(xs_exact.data(), Erad_arr_numerical_interp_at_group_2.data(), static_cast<int>(xs_exact.size()), xs.data(),
+			   Erad_arr_at_group[1].data(), static_cast<int>(xs.size()));
 
 	double err_norm = 0.;
 	double sol_norm = 0.;
@@ -383,11 +385,11 @@ auto problem_main() -> int
 		sol_norm += std::abs(Trad_exact_arr[i]);
 	}
 	for (int i = 0; i < xs_exact.size(); ++i) {
-    err_norm += std::abs(Erad_arr_numerical_interp_at_group_1[i] - E1_exact[i]);
-    sol_norm += std::abs(E1_exact[i]);
-    err_norm += std::abs(Erad_arr_numerical_interp_at_group_2[i] - E2_exact[i]);
-    sol_norm += std::abs(E2_exact[i]);
-  }
+		err_norm += std::abs(Erad_arr_numerical_interp_at_group_1[i] - E1_exact[i]);
+		sol_norm += std::abs(E1_exact[i]);
+		err_norm += std::abs(Erad_arr_numerical_interp_at_group_2[i] - E2_exact[i]);
+		sol_norm += std::abs(E2_exact[i]);
+	}
 
 	const double rel_err_norm = err_norm / sol_norm;
 	const double rel_err_tol = 0.003;
@@ -396,7 +398,6 @@ auto problem_main() -> int
 		status = 0;
 	}
 	amrex::Print() << "Relative L1 norm = " << rel_err_norm << std::endl;
-
 
 #ifdef HAVE_PYTHON
 	// Plot results: temperature
@@ -443,16 +444,16 @@ auto problem_main() -> int
 	matplotlibcpp::scatter(strided_vector_from(xs, s), strided_vector_from(Erad_exact_arr, s), 10.0, E_tot_args);
 
 	std::unordered_map<std::string, std::string> E_0_args;
-  E_0_args["label"] = "E_0 (exact)";
-  E_0_args["marker"] = "o";
-  E_0_args["color"] = "C0";
-  matplotlibcpp::scatter(xs_exact, E1_exact, 10.0, E_0_args);
+	E_0_args["label"] = "E_0 (exact)";
+	E_0_args["marker"] = "o";
+	E_0_args["color"] = "C0";
+	matplotlibcpp::scatter(xs_exact, E1_exact, 10.0, E_0_args);
 
 	std::unordered_map<std::string, std::string> E_1_args;
-  E_1_args["label"] = "E_1 (exact)";
-  E_1_args["marker"] = "o";
-  E_1_args["color"] = "C1";
-  matplotlibcpp::scatter(xs_exact, E2_exact, 10.0, E_1_args);
+	E_1_args["label"] = "E_1 (exact)";
+	E_1_args["marker"] = "o";
+	E_1_args["color"] = "C1";
+	matplotlibcpp::scatter(xs_exact, E2_exact, 10.0, E_1_args);
 
 	matplotlibcpp::legend();
 	// matplotlibcpp::tight_layout();

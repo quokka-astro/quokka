@@ -207,8 +207,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_planck_integral(Real l
 	if ((j < 0) || (j >= arr_len - 1)) {
 		return y;
 	}
-  if constexpr (!USE_SECOND_ORDER) {
-    // linear interpolation
+	if constexpr (!USE_SECOND_ORDER) {
+		// linear interpolation
 		const Real slope = (Y_interp[j + 1] - Y_interp[j]) / gap;
 		y = slope * (logx - (LOG_X_MIN + j * gap)) + Y_interp[j];
   } else {

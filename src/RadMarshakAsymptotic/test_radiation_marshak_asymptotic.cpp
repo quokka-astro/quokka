@@ -57,7 +57,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::Comp
 	auto sigma = kappa * std::pow(Tgas / T_hohlraum, -3); // cm^-1
 	quokka::valarray<double, nGroups_> kappaPVec{};
 	for (int i = 0; i < nGroups_; ++i) {
-		kappaPVec[i] = sigma / rho;      // cm^2 g^-1
+		kappaPVec[i] = sigma / rho; // cm^2 g^-1
 	}
 	return kappaPVec;
 }
