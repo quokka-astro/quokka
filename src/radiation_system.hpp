@@ -35,8 +35,8 @@
 // physical constants in CGS units
 static constexpr double c_light_cgs_ = C::c_light;	    // cgs
 static constexpr double radiation_constant_cgs_ = C::a_rad; // cgs
-static constexpr double pi = 3.14159265358979323846;
 static constexpr double inf = std::numeric_limits<double>::max();
+static constexpr double Erad_zero = 1e-14;
 
 // this struct is specialized by the user application code
 //
@@ -179,7 +179,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckEnergyFractions(am
 {
 	quokka::valarray<amrex::Real, nGroups_> radEnergyFractions{};
 	if constexpr (nGroups_ == 1) {
-		// TODO(CCH): allow the total radEnergyFraction to be smaller than 1, to allow, say, a single group 13.6 eV and 24.6 eV.
+		// TODO(CCH): allow the total radEnergyFraction to be smaller than 1. One usage case is to allow, say, a single group from 13.6 eV to 24.6 eV.
 		radEnergyFractions[0] = 1.0;
 		return radEnergyFractions;
 	} else {
@@ -193,8 +193,8 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckEnergyFractions(am
 		// A hack to avoid zeros in radEnergyFractions
 		// TODO(CCH): use energy_floor
 		for (int g = 0; g < nGroups_; ++g) {
-			if (radEnergyFractions[g] < 1e-14) {
-				radEnergyFractions[g] = 1e-14;
+			if (radEnergyFractions[g] < Erad_zero) {
+				radEnergyFractions[g] = Erad_zero;
 			}
 		}
 		radEnergyFractions /= sum(radEnergyFractions);
@@ -1083,7 +1083,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 
 				// compute opacity, emissivity
 				fourPiB = chat * a_rad * std::pow(T_gas, 4);
-				auto B = fourPiB / (4.0 * pi);
+				auto B = fourPiB / (4.0 * M_PI);
 				kappaPVec = ComputePlanckOpacity(rho, T_gas);
 				kappaFVec = ComputeFluxMeanOpacity(rho, T_gas);
 				kappaEVec = kappaFVec; // TODO(CCH): define ComputeEnergyMeanOpacity
@@ -1117,9 +1117,9 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				// prepare to compute Jacobian elements
 				const double c_v = quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas, massScalars);
 				dRtot_dErad = -dt * rho * kappaEVec * chat;
-				// TODO(CCH): dB_dTgas * radEnergyFractions is a small-dT approximation. Define ComputePlanckEnergyFractionsTempDerivative
+				// TODO(CCH): dB_dTgas * radEnergyFractions is a small-dT approximation. Define ComputePlanckEnergyFractionsTempDerivative. Note this is accurate in 1-group case.
 				dRvec_dEgas = dt * rho / c_v *
-					      (4 * pi * kappaPVec * dB_dTgas * radEnergyFractions + dkappaP_dTgas * fourPiB * radEnergyFractions -
+					      (4 * M_PI * kappaPVec * dB_dTgas * radEnergyFractions + dkappaP_dTgas * fourPiB * radEnergyFractions -
 					       chat * dkappaE_dTgas * EradVec_guess);
 				dRtot_dEgas = sum(dRvec_dEgas);
 				// TODO(CCH): Consider Ben's suggestion of using a global Newton method. 

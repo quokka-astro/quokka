@@ -22,7 +22,7 @@
 using Real = amrex::Real;
 
 static constexpr bool USE_SECOND_ORDER = false;
-static constexpr double PI = 3.14159265358979323846;
+static constexpr double PI = M_PI;
 static constexpr Real gInf = PI * PI * PI * PI / 15.0;
 static constexpr int INTERP_SIZE = 1000;
 static constexpr Real LOG_X_MIN = -3.;
