@@ -220,12 +220,10 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_planck_integral(Real l
       // quadratic interpolation
       const Real slope = (Y_interp[j + 1] - Y_interp[j]) / gap;
       const Real slope2 = (Y_interp[j + 2] - Y_interp[j + 1]) / gap;
-      const Real slope3 = (slope2 - slope) / gap;
+      const Real slope3 = (slope2 - slope) / (2.0 * gap);
       const Real x0 = LOG_X_MIN + j * gap;
       const Real x1 = LOG_X_MIN + (j + 1) * gap;
-      const Real x2 = LOG_X_MIN + (j + 2) * gap;
-      const Real x = logx;
-      y = Y_interp[j] + slope * (x - x0) + slope3 * (x - x0) * (x - x1) / 2.;
+      y = Y_interp[j] + slope * (logx - x0) + slope3 * (logx - x0) * (logx - x1);
     }
   }
   return y;
