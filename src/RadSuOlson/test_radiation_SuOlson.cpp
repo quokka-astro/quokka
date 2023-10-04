@@ -41,18 +41,6 @@ constexpr double alpha_SuOlson = 4.0 * a_rad / eps_SuOlson;
 constexpr double Q = (1.0 / (2.0 * x0));						// do NOT change this
 constexpr double S = Q * (a_rad * (T_hohlraum * T_hohlraum * T_hohlraum * T_hohlraum)); // erg cm^{-3}
 
-template <> struct Physics_Traits<MarshakProblem> {
-	// cell-centred
-	static constexpr bool is_hydro_enabled = false;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
-	static constexpr bool is_radiation_enabled = true;
-	// face-centred
-	static constexpr bool is_mhd_enabled = false;
-	// number of radiation groups
-	static constexpr int nGroups = 2;
-};
-
 template <> struct RadSystem_Traits<MarshakProblem> {
 	static constexpr double c_light = c;
 	static constexpr double c_hat = c;
@@ -62,8 +50,18 @@ template <> struct RadSystem_Traits<MarshakProblem> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double Erad_floor = 0.;
 	static constexpr bool compute_v_over_c_terms = false;
-	static constexpr double energy_unit = C::ev2erg;
-	static constexpr amrex::GpuArray<double, Physics_Traits<MarshakProblem>::nGroups + 1> radBoundaries{0., 13.6, inf}; // eV
+};
+
+template <> struct Physics_Traits<MarshakProblem> {
+	// cell-centred
+	static constexpr bool is_hydro_enabled = false;
+	static constexpr bool is_chemistry_enabled = false;
+	static constexpr int numMassScalars = 0;		     // number of mass scalars
+	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
+	static constexpr bool is_radiation_enabled = true;
+	// face-centred
+	static constexpr bool is_mhd_enabled = false;
+	static constexpr int nGroups = 1; // number of radiation groups
 };
 
 template <>
@@ -123,8 +121,6 @@ void RadSystem<MarshakProblem>::SetRadEnergySource(array_t &radEnergySource, amr
 						   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_hi*/, amrex::Real time)
 {
 
-	const auto radBoundaries_g = RadSystem_Traits<MarshakProblem>::radBoundaries;
-
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		amrex::Real const xl = (i + 0.) * dx[0];
 		amrex::Real const xr = (i + 1.) * dx[0];
@@ -137,16 +133,12 @@ void RadSystem<MarshakProblem>::SetRadEnergySource(array_t &radEnergySource, amr
 			AMREX_ALWAYS_ASSERT(dx_frac > 0.0);
 		}
 
-		auto radEnergyFractions = ComputePlanckEnergyFractions(radBoundaries_g, T_hohlraum);
-
 		amrex::Real const vol_frac = dx_frac;
-		for (int g = 0; g < nGroups_; ++g) {
-			amrex::Real src = 0.;
-			if (time < t0) {
-				src = S * radEnergyFractions[g] * vol_frac;
-			}
-			radEnergySource(i, j, k, g) = src;
+		amrex::Real src = 0.;
+		if (time < t0) {
+			src = S * vol_frac;
 		}
+		radEnergySource(i, j, k, 0) = src;
 	});
 }
 
@@ -158,20 +150,12 @@ template <> void RadhydroSimulation<MarshakProblem>::setInitialConditionsOnGrid(
 	const auto Erad0 = initial_Erad;
 	const auto Egas0 = initial_Egas;
 
-	// calculate radEnergyFractions
-	quokka::valarray<amrex::Real, Physics_Traits<MarshakProblem>::nGroups> radEnergyFractions{};
-  for (int g = 0; g < Physics_Traits<MarshakProblem>::nGroups; ++g) {
-    radEnergyFractions[g] = 1.0 / Physics_Traits<MarshakProblem>::nGroups;
-  }
-
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		for (int g = 0; g < Physics_Traits<MarshakProblem>::nGroups; ++g) {
-			state_cc(i, j, k, RadSystem<MarshakProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad0 * radEnergyFractions[g];
-			state_cc(i, j, k, RadSystem<MarshakProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
-			state_cc(i, j, k, RadSystem<MarshakProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
-			state_cc(i, j, k, RadSystem<MarshakProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
-		}
+		state_cc(i, j, k, RadSystem<MarshakProblem>::radEnergy_index) = Erad0;
+		state_cc(i, j, k, RadSystem<MarshakProblem>::x1RadFlux_index) = 0;
+		state_cc(i, j, k, RadSystem<MarshakProblem>::x2RadFlux_index) = 0;
+		state_cc(i, j, k, RadSystem<MarshakProblem>::x3RadFlux_index) = 0;
 		state_cc(i, j, k, RadSystem<MarshakProblem>::gasEnergy_index) = Egas0;
 		state_cc(i, j, k, RadSystem<MarshakProblem>::gasDensity_index) = rho0;
 		state_cc(i, j, k, RadSystem<MarshakProblem>::gasInternalEnergy_index) = Egas0;
@@ -260,10 +244,7 @@ auto problem_main() -> int
 
 		for (int i = 0; i < nx; ++i) {
 			xs.at(i) = position[i];
-			double Erad_t = 0.0;
-			for (int g = 0; g < Physics_Traits<MarshakProblem>::nGroups; ++g) {
-				Erad_t += values.at(RadSystem<MarshakProblem>::radEnergy_index + Physics_NumVars::numRadVars * g)[i];
-			}
+			const auto Erad_t = values.at(RadSystem<MarshakProblem>::radEnergy_index)[i];
 			const auto Etot_t = values.at(RadSystem<MarshakProblem>::gasEnergy_index)[i];
 			const auto rho = values.at(RadSystem<MarshakProblem>::gasDensity_index)[i];
 			const auto x1GasMom = values.at(RadSystem<MarshakProblem>::x1GasMomentum_index)[i];

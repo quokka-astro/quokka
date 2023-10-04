@@ -297,7 +297,6 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::defineComponen
 	}
 	// add radiation state variables
 	if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
-		// std::vector<std::string> radNames = {"radEnergy", "x-RadFlux", "y-RadFlux", "z-RadFlux"};
 		std::vector<std::string> radNames = {};
 		for (int i = 0; i < Physics_Traits<problem_t>::nGroups; ++i) {
 			radNames.push_back("radEnergy-Group" + std::to_string(i));
@@ -550,13 +549,11 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::computeAfterEv
 	amrex::Real Etot0 = NAN;
 	amrex::Real Etot = NAN;
 	if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
-		// amrex::Real const Erad0 = initSumCons[RadSystem<problem_t>::radEnergy_index];
 		amrex::Real Erad0 = 0.;
 		for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
 			Erad0 += initSumCons[RadSystem<problem_t>::radEnergy_index + Physics_NumVars::numRadVars * g];
 		}
 		Etot0 = Egas0 + (RadSystem<problem_t>::c_light_ / RadSystem<problem_t>::c_hat_) * Erad0;
-		// amrex::Real const Erad = state_new_cc_[0].sum(RadSystem<problem_t>::radEnergy_index) * vol;
 		amrex::Real Erad = 0.;
 		for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
 			Erad += state_new_cc_[0].sum(RadSystem<problem_t>::radEnergy_index + Physics_NumVars::numRadVars * g) * vol;
