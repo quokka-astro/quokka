@@ -21,6 +21,7 @@
 
 using Real = amrex::Real;
 
+static constexpr bool USE_SECOND_ORDER = false;
 static constexpr double PI = 3.14159265358979323846;
 static constexpr Real gInf = PI * PI * PI * PI / 15.0;
 static constexpr int INTERP_SIZE = 1000;
@@ -30,9 +31,6 @@ static constexpr Real Y_INTERP_MIN = 5.13106651231913e-11;
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_planck_integral(Real logx) -> Real
 {
-	const int arr_len = INTERP_SIZE;
-	const int j = static_cast<int>((logx - LOG_X_MIN) / (LOG_X_MAX - LOG_X_MIN) * (arr_len - 1));
-	const Real gap = (LOG_X_MAX - LOG_X_MIN) / (arr_len - 1);
 	const amrex::GpuArray<Real, INTERP_SIZE> Y_interp = {
 	    5.13106651231913e-11, 5.31154385234633e-11, 5.49836892699242e-11, 5.69176498520072e-11, 5.89196312693410e-11, 6.09920257923993e-11,
 	    6.31373098202748e-11, 6.53580468388731e-11, 6.76568904831568e-11, 7.00365877070177e-11, 7.24999820646129e-11, 7.50500171070513e-11,
@@ -201,15 +199,36 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_planck_integral(Real l
 	    1.00000000000000e+00, 1.00000000000000e+00, 1.00000000000000e+00, 1.00000000000000e+00, 1.00000000000000e+00, 1.00000000000000e+00,
 	    1.00000000000000e+00, 1.00000000000000e+00, 1.00000000000000e+00, 1.00000000000000e+00, 1.00000000000000e+00, 1.00000000000000e+00,
 	    1.00000000000000e+00, 1.00000000000000e+00, 1.00000000000000e+00, 1.00000000000000e+00};
+	const int arr_len = INTERP_SIZE;
+	const int j = static_cast<int>((logx - LOG_X_MIN) / (LOG_X_MAX - LOG_X_MIN) * (arr_len - 1));
+	const Real gap = (LOG_X_MAX - LOG_X_MIN) / (arr_len - 1);
 
 	Real y = NAN;
 	if ((j < 0) || (j >= arr_len - 1)) {
-		y = NAN;
-	} else {
+		return y;
+	}
+  if constexpr (!USE_SECOND_ORDER) {
+    // linear interpolation
 		const Real slope = (Y_interp[j + 1] - Y_interp[j]) / gap;
 		y = slope * (logx - (LOG_X_MIN + j * gap)) + Y_interp[j];
-	}
-	return y;
+  } else {
+	  if (j >= arr_len - 2) {
+      // linear interpolation
+      const Real slope = (Y_interp[j + 1] - Y_interp[j]) / gap;
+      y = slope * (logx - (LOG_X_MIN + j * gap)) + Y_interp[j];
+	  } else {
+      // quadratic interpolation
+      const Real slope = (Y_interp[j + 1] - Y_interp[j]) / gap;
+      const Real slope2 = (Y_interp[j + 2] - Y_interp[j + 1]) / gap;
+      const Real slope3 = (slope2 - slope) / gap;
+      const Real x0 = LOG_X_MIN + j * gap;
+      const Real x1 = LOG_X_MIN + (j + 1) * gap;
+      const Real x2 = LOG_X_MIN + (j + 2) * gap;
+      const Real x = logx;
+      y = Y_interp[j] + slope * (x - x0) + slope3 * (x - x0) * (x - x1) / 2.;
+    }
+  }
+  return y;
 }
 
 // Integrate the Planck integral, x^3 / (exp(x) - 1), from 0 to x. Return its ratio to the integral from 0 to infinity (pi^4 / 15).
