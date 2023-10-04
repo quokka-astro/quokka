@@ -207,28 +207,28 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_planck_integral(Real l
 	if ((j < 0) || (j >= arr_len - 1)) {
 		return y;
 	}
-  if constexpr (!USE_SECOND_ORDER) {
-    // linear interpolation
+	if constexpr (!USE_SECOND_ORDER) {
+		// linear interpolation
 		const Real slope = (Y_interp[j + 1] - Y_interp[j]) / gap;
 		y = slope * (logx - (LOG_X_MIN + j * gap)) + Y_interp[j];
-  } else {
-	  if (j >= arr_len - 2) {
-      // linear interpolation
-      const Real slope = (Y_interp[j + 1] - Y_interp[j]) / gap;
-      y = slope * (logx - (LOG_X_MIN + j * gap)) + Y_interp[j];
-	  } else {
-      // quadratic interpolation
-      const Real slope = (Y_interp[j + 1] - Y_interp[j]) / gap;
-      const Real slope2 = (Y_interp[j + 2] - Y_interp[j + 1]) / gap;
-      const Real slope3 = (slope2 - slope) / gap;
-      const Real x0 = LOG_X_MIN + j * gap;
-      const Real x1 = LOG_X_MIN + (j + 1) * gap;
-      const Real x2 = LOG_X_MIN + (j + 2) * gap;
-      const Real x = logx;
-      y = Y_interp[j] + slope * (x - x0) + slope3 * (x - x0) * (x - x1) / 2.;
-    }
-  }
-  return y;
+	} else {
+		if (j >= arr_len - 2) {
+			// linear interpolation
+			const Real slope = (Y_interp[j + 1] - Y_interp[j]) / gap;
+			y = slope * (logx - (LOG_X_MIN + j * gap)) + Y_interp[j];
+		} else {
+			// quadratic interpolation
+			const Real slope = (Y_interp[j + 1] - Y_interp[j]) / gap;
+			const Real slope2 = (Y_interp[j + 2] - Y_interp[j + 1]) / gap;
+			const Real slope3 = (slope2 - slope) / gap;
+			const Real x0 = LOG_X_MIN + j * gap;
+			const Real x1 = LOG_X_MIN + (j + 1) * gap;
+			const Real x2 = LOG_X_MIN + (j + 2) * gap;
+			const Real x = logx;
+			y = Y_interp[j] + slope * (x - x0) + slope3 * (x - x0) * (x - x1) / 2.;
+		}
+	}
+	return y;
 }
 
 // Integrate the Planck integral, x^3 / (exp(x) - 1), from 0 to x. Return its ratio to the integral from 0 to infinity (pi^4 / 15).
