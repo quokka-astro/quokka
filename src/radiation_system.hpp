@@ -1047,8 +1047,8 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		// make a copy of radBoundaries_g
 		amrex::GpuArray<double, nGroups_ + 1> radBoundaries_g_copy{};
 		for (int g = 0; g < nGroups_ + 1; ++g) {
-      radBoundaries_g_copy[g] = radBoundaries_g[g];
-    }
+			radBoundaries_g_copy[g] = radBoundaries_g[g];
+		}
 
 		if constexpr (gamma_ != 1.0) {
 			Egas0 = ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0);
