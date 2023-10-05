@@ -1044,6 +1044,12 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			EradVec_guess[g] = NAN;
 		}
 
+		// make a copy of radBoundaries_g
+		amrex::GpuArray<double, nGroups_ + 1> radBoundaries_g_copy{};
+		for (int g = 0; g < nGroups_ + 1; ++g) {
+      radBoundaries_g_copy[g] = radBoundaries_g[g];
+    }
+
 		if constexpr (gamma_ != 1.0) {
 			Egas0 = ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0);
 			Ekin0 = Egastot0 - Egas0;
@@ -1094,7 +1100,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				// compute residuals
 				quokka::valarray<amrex::Real, nGroups_> radEnergyFractions{};
 				if constexpr (nGroups_ > 1) {
-					radEnergyFractions = ComputePlanckEnergyFractions(radBoundaries_g, T_gas);
+					radEnergyFractions = ComputePlanckEnergyFractions(radBoundaries_g_copy, T_gas);
 					AMREX_ASSERT(min(radEnergyFractions) > 0.);
 				} else {
 					radEnergyFractions[0] = 1.0;
