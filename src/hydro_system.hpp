@@ -743,7 +743,6 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 
 			amrex::Real sp_sum = 0.0;
 			for (int idx = 0; idx < nmscalars_; ++idx) {
-
 				if (state[bx](i, j, k, scalar0_index + idx) < 0.0) {
 					state[bx](i, j, k, scalar0_index + idx) = small_x * rho;
 				}
