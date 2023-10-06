@@ -742,7 +742,6 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 		if (nmscalars_ > 0) {
 
 			amrex::Real sp_sum = 0.0;
-
 			for (int idx = 0; idx < nmscalars_; ++idx) {
 
 				if (state[bx](i, j, k, scalar0_index + idx) < 0.0) {
@@ -753,11 +752,12 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 				sp_sum += state[bx](i, j, k, scalar0_index + idx);
 			}
 
-			sp_sum /= rho; // get mass fractions
-
-			for (int idx = 0; idx < nmscalars_; ++idx) {
-				// renormalize
-				state[bx](i, j, k, scalar0_index + idx) /= sp_sum;
+			if (sp_sum > 0) {
+				sp_sum /= rho; // get mass fractions
+				for (int idx = 0; idx < nmscalars_; ++idx) {
+					// renormalize
+					state[bx](i, j, k, scalar0_index + idx) /= sp_sum;
+				}
 			}
 		}
 
