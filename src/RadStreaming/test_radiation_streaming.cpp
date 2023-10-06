@@ -11,6 +11,7 @@
 #include "AMReX.H"
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
+#include "valarray.hpp"
 
 struct StreamingProblem {
 };
@@ -28,14 +29,6 @@ template <> struct quokka::EOS_Traits<StreamingProblem> {
 	static constexpr double gamma = 5. / 3.;
 };
 
-template <> struct RadSystem_Traits<StreamingProblem> {
-	static constexpr double c_light = c;
-	static constexpr double c_hat = chat;
-	static constexpr double radiation_constant = 1.0;
-	static constexpr double Erad_floor = initial_Erad;
-	static constexpr bool compute_v_over_c_terms = false;
-};
-
 template <> struct Physics_Traits<StreamingProblem> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = false;
@@ -44,16 +37,32 @@ template <> struct Physics_Traits<StreamingProblem> {
 	static constexpr bool is_radiation_enabled = true;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
+	static constexpr int nGroups = 1; // number of radiation groups
 };
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> double
+template <> struct RadSystem_Traits<StreamingProblem> {
+	static constexpr double c_light = c;
+	static constexpr double c_hat = chat;
+	static constexpr double radiation_constant = 1.0;
+	static constexpr double Erad_floor = initial_Erad;
+	static constexpr bool compute_v_over_c_terms = false;
+};
+
+template <>
+AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
-	return kappa0;
+	quokka::valarray<double, nGroups_> kappaPVec{};
+	for (int g = 0; g < nGroups_; ++g) {
+		kappaPVec[g] = kappa0;
+	}
+	return kappaPVec;
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputeRosselandOpacity(const double /*rho*/, const double /*Tgas*/) -> double
+template <>
+AMREX_GPU_HOST_DEVICE auto RadSystem<StreamingProblem>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/)
+    -> quokka::valarray<double, nGroups_>
 {
-	return kappa0;
+	return ComputePlanckOpacity(0.0, 0.0);
 }
 
 template <> void RadhydroSimulation<StreamingProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
@@ -64,12 +73,20 @@ template <> void RadhydroSimulation<StreamingProblem>::setInitialConditionsOnGri
 	const auto Erad0 = initial_Erad;
 	const auto Egas0 = initial_Egas;
 
+	// calculate radEnergyFractions
+	quokka::valarray<amrex::Real, Physics_Traits<StreamingProblem>::nGroups> radEnergyFractions{};
+	for (int g = 0; g < Physics_Traits<StreamingProblem>::nGroups; ++g) {
+		radEnergyFractions[g] = 1.0 / Physics_Traits<StreamingProblem>::nGroups;
+	}
+
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		state_cc(i, j, k, RadSystem<StreamingProblem>::radEnergy_index) = Erad0;
-		state_cc(i, j, k, RadSystem<StreamingProblem>::x1RadFlux_index) = 0;
-		state_cc(i, j, k, RadSystem<StreamingProblem>::x2RadFlux_index) = 0;
-		state_cc(i, j, k, RadSystem<StreamingProblem>::x3RadFlux_index) = 0;
+		for (int g = 0; g < Physics_Traits<StreamingProblem>::nGroups; ++g) {
+			state_cc(i, j, k, RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad0 * radEnergyFractions[g];
+			state_cc(i, j, k, RadSystem<StreamingProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+			state_cc(i, j, k, RadSystem<StreamingProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+			state_cc(i, j, k, RadSystem<StreamingProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+		}
 		state_cc(i, j, k, RadSystem<StreamingProblem>::gasEnergy_index) = Egas0;
 		state_cc(i, j, k, RadSystem<StreamingProblem>::gasDensity_index) = rho;
 		state_cc(i, j, k, RadSystem<StreamingProblem>::gasInternalEnergy_index) = Egas0;
@@ -102,23 +119,35 @@ AMRSimulation<StreamingProblem>::setCustomBoundaryConditions(const amrex::IntVec
 	amrex::GpuArray<int, 3> lo = box.loVect3d();
 	amrex::GpuArray<int, 3> hi = box.hiVect3d();
 
+	// calculate radEnergyFractions
+	quokka::valarray<amrex::Real, Physics_Traits<StreamingProblem>::nGroups> radEnergyFractions{};
+	for (int g = 0; g < Physics_Traits<StreamingProblem>::nGroups; ++g) {
+		radEnergyFractions[g] = 1.0 / Physics_Traits<StreamingProblem>::nGroups;
+	}
+
 	if (i < lo[0]) {
 		// streaming inflow boundary
 		const double Erad = 1.0;
 		const double Frad = c * Erad;
 
+		// multigroup radiation
 		// x1 left side boundary (Marshak)
-		consVar(i, j, k, RadSystem<StreamingProblem>::radEnergy_index) = Erad;
-		consVar(i, j, k, RadSystem<StreamingProblem>::x1RadFlux_index) = Frad;
-		consVar(i, j, k, RadSystem<StreamingProblem>::x2RadFlux_index) = 0.;
-		consVar(i, j, k, RadSystem<StreamingProblem>::x3RadFlux_index) = 0.;
+		for (int g = 0; g < Physics_Traits<StreamingProblem>::nGroups; ++g) {
+			consVar(i, j, k, RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad * radEnergyFractions[g];
+			consVar(i, j, k, RadSystem<StreamingProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = Frad * radEnergyFractions[g];
+			consVar(i, j, k, RadSystem<StreamingProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+			consVar(i, j, k, RadSystem<StreamingProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+		}
 	} else if (i >= hi[0]) {
 		// right-side boundary -- constant
 		const double Erad = initial_Erad;
-		consVar(i, j, k, RadSystem<StreamingProblem>::radEnergy_index) = Erad;
-		consVar(i, j, k, RadSystem<StreamingProblem>::x1RadFlux_index) = 0;
-		consVar(i, j, k, RadSystem<StreamingProblem>::x2RadFlux_index) = 0;
-		consVar(i, j, k, RadSystem<StreamingProblem>::x3RadFlux_index) = 0;
+		for (int g = 0; g < Physics_Traits<StreamingProblem>::nGroups; ++g) {
+			auto const Erad_g = Erad * radEnergyFractions[g];
+			consVar(i, j, k, RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad_g;
+			consVar(i, j, k, RadSystem<StreamingProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+			consVar(i, j, k, RadSystem<StreamingProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+			consVar(i, j, k, RadSystem<StreamingProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+		}
 	}
 
 	// gas boundary conditions are the same everywhere
@@ -181,7 +210,11 @@ auto problem_main() -> int
 		amrex::Real const x = position[i];
 		xs.at(i) = x;
 		erad_exact.at(i) = (x <= chat * tmax) ? 1.0 : 0.0;
-		erad.at(i) = values.at(RadSystem<StreamingProblem>::radEnergy_index)[i];
+		double erad_sim = 0.0;
+		for (int g = 0; g < Physics_Traits<StreamingProblem>::nGroups; ++g) {
+			erad_sim += values.at(RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVars * g)[i];
+		}
+		erad.at(i) = erad_sim;
 	}
 
 	double err_norm = 0.;

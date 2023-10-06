@@ -45,6 +45,7 @@ template <> struct Physics_Traits<ShocktubeProblem> {
 	static constexpr bool is_radiation_enabled = false;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
+	static constexpr int nGroups = 1; // number of radiation groups
 };
 
 // left- and right- side shock states
