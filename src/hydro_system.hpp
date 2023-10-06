@@ -40,9 +40,7 @@ template <typename problem_t> struct HydroSystem_Traits {
 	static constexpr bool reconstruct_eint = true;
 };
 
-enum class RiemannSolver {
-	HLLC, LLF
-};
+enum class RiemannSolver { HLLC, LLF };
 
 /// Class for the Euler equations of inviscid hydrodynamics
 ///
@@ -437,10 +435,9 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::isStateValid(am
 		for (int idx = 0; idx < nmscalars_; ++idx) {
 			if (massScalars_[idx] < 0.0) {
 				isMassScalarPositive = false;
-				break;  // Exit the loop early if any element is not positive
+				break; // Exit the loop early if any element is not positive
 			}
 		}
-
 	}
 	// when the dual energy method is used, we *cannot* reset on pressure
 	// failures. on the other hand, we don't need to -- the auxiliary internal
