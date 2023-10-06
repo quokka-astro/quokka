@@ -59,6 +59,7 @@ template <> struct Physics_Traits<QuirkProblem> {
 	static constexpr bool is_radiation_enabled = false;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
+	static constexpr int nGroups = 1; // number of radiation groups
 };
 
 constexpr Real dl = 3.692;
