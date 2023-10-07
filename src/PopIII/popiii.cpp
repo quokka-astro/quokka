@@ -30,7 +30,6 @@
 #include "hydro_system.hpp"
 #include "popiii.hpp"
 
-#include "actual_eos_data.H"
 #include "burn_type.H"
 #include "eos.H"
 #include "extern_parameters.H"
