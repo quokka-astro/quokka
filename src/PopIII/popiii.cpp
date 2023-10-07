@@ -30,6 +30,7 @@
 #include "hydro_system.hpp"
 #include "popiii.hpp"
 
+#include "actual_eos_data.H"
 #include "burn_type.H"
 #include "eos.H"
 #include "extern_parameters.H"
@@ -95,7 +96,7 @@ template <> void RadhydroSimulation<PopIII>::preCalculateInitialConditions()
 	init_extern_parameters();
 
 	// parmparse species and temperature
-	amrex::ParmParse pp("primordial_chem");
+	amrex::ParmParse const pp("primordial_chem");
 	userData_.small_temp = 1e1;
 	pp.query("small_temp", userData_.small_temp);
 
@@ -142,7 +143,7 @@ template <> void RadhydroSimulation<PopIII>::preCalculateInitialConditions()
 	if (!isSamplingDone) {
 		// read perturbations from file
 		turb_data turbData;
-		amrex::ParmParse pp("perturb");
+		amrex::ParmParse const pp("perturb");
 		std::string turbdata_filename;
 		pp.query("filename", turbdata_filename);
 		initialize_turbdata(turbData, turbdata_filename);
@@ -260,7 +261,7 @@ template <> void RadhydroSimulation<PopIII>::setInitialConditionsOnGrid(quokka::
 		amrex::Real const distxy = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2));
 
 		eos_t state;
-		amrex::Real rhotot = 0.0;
+		amrex::Real const rhotot = 0.0;
 
 		for (int n = 0; n < NumSpec; ++n) {
 			state.xn[n] = numdens[n] * numdens_init;
@@ -283,11 +284,11 @@ template <> void RadhydroSimulation<PopIII>::setInitialConditionsOnGrid(quokka::
 
 		// amrex::Print() << "cell " << i << j << k << " " << rhotot << " " << numdens_init << " " << numdens[0] << std::endl;
 
-		amrex::Real phi = atan2((y - y0), (x - x0));
+		amrex::Real const phi = atan2((y - y0), (x - x0));
 
 		double vx = renorm_amp * dvx(i, j, k);
 		double vy = renorm_amp * dvy(i, j, k);
-		double vz = renorm_amp * dvz(i, j, k);
+		double const vz = renorm_amp * dvz(i, j, k);
 
 		if (r <= R_sphere) {
 			state.rho = rhotot;
@@ -305,7 +306,7 @@ template <> void RadhydroSimulation<PopIII>::setInitialConditionsOnGrid(quokka::
 		}
 
 		// call the EOS to set initial internal energy e
-		amrex::Real e = state.rho * state.e;
+		amrex::Real const e = state.rho * state.e;
 
 		// amrex::Print() << "cell " << i << j << k << " " << state.rho << " " << state.T << " " << e << std::endl;
 
@@ -350,7 +351,7 @@ template <> void RadhydroSimulation<PopIII>::ErrorEst(int lev, amrex::TagBoxArra
 			amrex::Real const z = prob_lo[2] + (k + static_cast<amrex::Real>(0.5)) * dx;
 
 			Real const rho = state(i, j, k, nidx);
-			Real pressure = HydroSystem<PopIII>::ComputePressure(state, i, j, k);
+			Real const pressure = HydroSystem<PopIII>::ComputePressure(state, i, j, k);
 			amrex::GpuArray<Real, Physics_Traits<PopIII>::numMassScalars> massScalars = RadSystem<PopIII>::ComputeMassScalars(state, i, j, k);
 
 			amrex::Real cs = quokka::EOS<PopIII>::ComputeSoundSpeed(rho, pressure, massScalars);
