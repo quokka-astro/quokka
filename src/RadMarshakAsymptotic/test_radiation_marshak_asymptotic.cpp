@@ -42,31 +42,43 @@ template <> struct RadSystem_Traits<SuOlsonProblemCgs> {
 template <> struct Physics_Traits<SuOlsonProblemCgs> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = false;
-	static constexpr bool is_chemistry_enabled = false;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = true;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
+	static constexpr int nGroups = 1; // number of radiation groups
 };
 
-template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputePlanckOpacity(const double rho, const double Tgas) -> double
+template <>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputePlanckOpacity(const double rho, const double Tgas)
+    -> quokka::valarray<double, nGroups_>
 {
 	auto sigma = kappa * std::pow(Tgas / T_hohlraum, -3); // cm^-1
-	return (sigma / rho);				      // cm^2 g^-1
-}
-
-template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputeRosselandOpacity(const double rho, const double Tgas) -> double
-{
-	auto sigma = kappa * std::pow(Tgas / T_hohlraum, -3); // cm^-1
-	return (sigma / rho);				      // cm^2 g^-1
+	quokka::valarray<double, nGroups_> kappaPVec{};
+	for (int i = 0; i < nGroups_; ++i) {
+		kappaPVec[i] = sigma / rho; // cm^2 g^-1
+	}
+	return kappaPVec;
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputePlanckOpacityTempDerivative(const double rho, const double Tgas) -> double
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputeFluxMeanOpacity(const double rho, const double Tgas)
+    -> quokka::valarray<double, nGroups_>
 {
+	return ComputePlanckOpacity(rho, Tgas);
+}
+
+template <>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputePlanckOpacityTempDerivative(const double rho, const double Tgas)
+    -> quokka::valarray<double, nGroups_>
+{
+	quokka::valarray<double, nGroups_> opacity_deriv{};
 	auto sigma_dT = (-3.0 * kappa / Tgas) * std::pow(Tgas / T_hohlraum, -3); // cm^-1
-	return (sigma_dT / rho);
+	for (int i = 0; i < nGroups_; ++i) {
+		opacity_deriv[i] = sigma_dT / rho;
+	}
+	return opacity_deriv;
 }
 
 template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputeEddingtonFactor(double /*f*/) -> double

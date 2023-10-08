@@ -49,19 +49,28 @@ template <> struct RadSystem_Traits<CouplingProblem> {
 template <> struct Physics_Traits<CouplingProblem> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = false;
-	static constexpr bool is_chemistry_enabled = false;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = true;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
+	static constexpr int nGroups = 1; // number of radiation groups
 };
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<CouplingProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> double { return 1.0; }
-
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<CouplingProblem>::ComputeRosselandOpacity(const double /*rho*/, const double /*Tgas*/) -> double
+template <>
+AMREX_GPU_HOST_DEVICE auto RadSystem<CouplingProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
-	return 1.0;
+	quokka::valarray<double, nGroups_> kappaPVec{};
+	for (int i = 0; i < nGroups_; ++i) {
+		kappaPVec[i] = 1.0;
+	}
+	return kappaPVec;
+}
+
+template <>
+AMREX_GPU_HOST_DEVICE auto RadSystem<CouplingProblem>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
+{
+	return ComputePlanckOpacity(0.0, 0.0);
 }
 
 static constexpr int nmscalars_ = Physics_Traits<CouplingProblem>::numMassScalars;
@@ -187,7 +196,7 @@ auto problem_main() -> int
 		std::vector<double> Tgas_rsla_exact(nmax);
 
 		const double initial_Tgas = quokka::EOS<CouplingProblem>::ComputeTgasFromEint(rho0, Egas0);
-		const auto kappa = RadSystem<CouplingProblem>::ComputePlanckOpacity(rho0, initial_Tgas);
+		const auto kappa = RadSystem<CouplingProblem>::ComputePlanckOpacity(rho0, initial_Tgas)[0];
 
 		for (int n = 0; n < nmax; ++n) {
 			const double time_t = sim.userData_.t_vec_.at(n);
@@ -225,7 +234,8 @@ auto problem_main() -> int
 			sol_norm += std::abs(Tgas_rsla_exact[i]);
 		}
 		const double rel_error = err_norm / sol_norm;
-		const double error_tol = 1e-5;
+		// When using C::a_rad as radiation_constant_cgs_, the relative error goes up to 3e-5, so I'm increasing the tolerance
+		const double error_tol = 5e-5;
 		amrex::Print() << "relative L1 error norm = " << rel_error << std::endl;
 		if (rel_error > error_tol) {
 			status = 1;

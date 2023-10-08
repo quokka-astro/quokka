@@ -25,9 +25,13 @@
 #include "ArrayView.hpp"
 #include "EOS.hpp"
 #include "HLLC.hpp"
+#include "LLF.hpp"
 #include "hyperbolic_system.hpp"
 #include "radiation_system.hpp"
 #include "valarray.hpp"
+
+// Microphysics headers
+#include "extern_parameters.H"
 
 // this struct is specialized by the user application code
 //
@@ -35,6 +39,8 @@ template <typename problem_t> struct HydroSystem_Traits {
 	// if true, reconstruct e_int instead of pressure
 	static constexpr bool reconstruct_eint = true;
 };
+
+enum class RiemannSolver { HLLC, LLF };
 
 /// Class for the Euler equations of inviscid hydrodynamics
 ///
@@ -108,7 +114,7 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	static void SyncDualEnergy(amrex::MultiFab &consVar_mf);
 
-	template <FluxDir DIR>
+	template <RiemannSolver RIEMANN, FluxDir DIR>
 	static void ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab &x1FaceVel_mf, amrex::MultiFab const &x1LeftState_mf,
 				  amrex::MultiFab const &x1RightState_mf, amrex::MultiFab const &primVar_mf, amrex::Real K_visc);
 
@@ -422,6 +428,17 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::isStateValid(am
 	const amrex::Real rho = cons(i, j, k, density_index);
 	bool isDensityPositive = (rho > 0.);
 
+	bool isMassScalarPositive = true;
+	if constexpr (nmscalars_ > 0) {
+		amrex::GpuArray<Real, nmscalars_> massScalars_ = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
+
+		for (int idx = 0; idx < nmscalars_; ++idx) {
+			if (massScalars_[idx] < 0.0) {
+				isMassScalarPositive = false;
+				break; // Exit the loop early if any element is not positive
+			}
+		}
+	}
 	// when the dual energy method is used, we *cannot* reset on pressure
 	// failures. on the other hand, we don't need to -- the auxiliary internal
 	// energy is used instead!
@@ -436,7 +453,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::isStateValid(am
 #endif
 	// return (isDensityPositive && isPressurePositive);
 
-	return isDensityPositive;
+	return isDensityPositive && isMassScalarPositive;
 }
 
 template <typename problem_t>
@@ -721,6 +738,28 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 			state[bx](i, j, k, x3Momentum_index) *= rescale_factor;
 		}
 
+		// Enforcing Limits on mass scalars
+		if (nmscalars_ > 0) {
+
+			amrex::Real sp_sum = 0.0;
+			for (int idx = 0; idx < nmscalars_; ++idx) {
+				if (state[bx](i, j, k, scalar0_index + idx) < 0.0) {
+					state[bx](i, j, k, scalar0_index + idx) = small_x * rho;
+				}
+
+				// get sum to renormalize
+				sp_sum += state[bx](i, j, k, scalar0_index + idx);
+			}
+
+			if (sp_sum > 0) {
+				sp_sum /= rho; // get mass fractions
+				for (int idx = 0; idx < nmscalars_; ++idx) {
+					// renormalize
+					state[bx](i, j, k, scalar0_index + idx) /= sp_sum;
+				}
+			}
+		}
+
 		// Enforcing Limits on temperature estimated from Etot and Ekin
 		if (!HydroSystem<problem_t>::is_eos_isothermal()) {
 			// recompute gas energy (to prevent P < 0)
@@ -853,7 +892,7 @@ template <typename problem_t> void HydroSystem<problem_t>::SyncDualEnergy(amrex:
 }
 
 template <typename problem_t>
-template <FluxDir DIR>
+template <RiemannSolver RIEMANN, FluxDir DIR>
 void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab &x1FaceVel_mf, amrex::MultiFab const &x1LeftState_mf,
 					   amrex::MultiFab const &x1RightState_mf, amrex::MultiFab const &primVar_mf, const amrex::Real K_visc)
 {
@@ -1029,8 +1068,15 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		dw = std::min(std::min(dwl, dwr), dw);
 #endif
 
-		// solve the Riemann problem in canonical form
-		quokka::valarray<double, nvar_> F_canonical = quokka::Riemann::HLLC<problem_t, nscalars_, nmscalars_, nvar_>(sL, sR, gamma_, du, dw);
+		// solve the Riemann problem in canonical form (i.e., where the x-dir is the normal direction)
+		quokka::valarray<double, nvar_> F_canonical{};
+
+		if constexpr (RIEMANN == RiemannSolver::HLLC) {
+			F_canonical = quokka::Riemann::HLLC<problem_t, nscalars_, nmscalars_, nvar_>(sL, sR, gamma_, du, dw);
+		} else if constexpr (RIEMANN == RiemannSolver::LLF) {
+			F_canonical = quokka::Riemann::LLF<problem_t, nscalars_, nmscalars_, nvar_>(sL, sR);
+		}
+
 		quokka::valarray<double, nvar_> F = F_canonical;
 
 		// add artificial viscosity
