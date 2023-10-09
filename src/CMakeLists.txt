@@ -15,7 +15,7 @@ endif()
 find_package(HDF5 REQUIRED)
 
 # std::filesystem (required for GCC < 9)
-if ((NOT CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang") AND (NOT CMAKE_SYSTEM_NAME MATCHES "Darwin"))
+if ((NOT CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang") AND (NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang"))
     link_libraries(stdc++fs)
 endif()
 
