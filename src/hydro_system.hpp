@@ -25,8 +25,8 @@
 #include "ArrayView.hpp"
 #include "EOS.hpp"
 #include "HLLC.hpp"
-#include "LLF.hpp"
 #include "HLLD.hpp"
+#include "LLF.hpp"
 #include "hyperbolic_system.hpp"
 #include "physics_info.hpp"
 #include "radiation_system.hpp"
@@ -42,9 +42,7 @@ template <typename problem_t> struct HydroSystem_Traits {
 	static constexpr bool reconstruct_eint = true;
 };
 
-enum class RiemannSolver {
-	HLLC, LLF, HLLD
-};
+enum class RiemannSolver { HLLC, LLF, HLLD };
 
 /// Class for the Euler equations of inviscid hydrodynamics
 ///
@@ -1030,8 +1028,8 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		sL.cs = cs_L;
 		sL.E = E_L;
 		sL.Eint = Eint_L;
-    sL.by = 0.0;
-    sL.bz = 0.0;
+		sL.by = 0.0;
+		sL.bz = 0.0;
 
 		quokka::HydroState<nscalars_, nmscalars_> sR{};
 		sR.rho = rho_R;
@@ -1042,8 +1040,8 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		sR.cs = cs_R;
 		sR.E = E_R;
 		sR.Eint = Eint_R;
-    sR.by = 0.0;
-    sR.bz = 0.0;
+		sR.by = 0.0;
+		sR.bz = 0.0;
 
 		// The remaining components are mass scalars and passive scalars, so just copy them from
 		// x1LeftState and x1RightState into the (left, right) state vectors U_L and
@@ -1080,10 +1078,10 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		quokka::valarray<double, nvar_> F_canonical{};
 
 		if constexpr (RIEMANN == RiemannSolver::HLLC) {
-      static_assert(!Physics_Traits<problem_t>::is_mhd_enabled, "Cannot use HLLC solver for MHD problems!");
+			static_assert(!Physics_Traits<problem_t>::is_mhd_enabled, "Cannot use HLLC solver for MHD problems!");
 			F_canonical = quokka::Riemann::HLLC<problem_t, nscalars_, nmscalars_, nvar_>(sL, sR, gamma_, du, dw);
 		} else if constexpr (RIEMANN == RiemannSolver::LLF) {
-      static_assert(!Physics_Traits<problem_t>::is_mhd_enabled, "Cannot use LLF solver for MHD problems!");
+			static_assert(!Physics_Traits<problem_t>::is_mhd_enabled, "Cannot use LLF solver for MHD problems!");
 			F_canonical = quokka::Riemann::LLF<problem_t, nscalars_, nmscalars_, nvar_>(sL, sR);
 		} else if constexpr (RIEMANN == RiemannSolver::HLLD) {
 			F_canonical = quokka::Riemann::HLLD<problem_t, nscalars_, nmscalars_, nvar_>(sL, sR, gamma_, 0.0);
