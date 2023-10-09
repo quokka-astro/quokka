@@ -195,10 +195,10 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const override;
 
 	// compute projected vars
-  [[nodiscard]] auto ComputeProjections(int dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> override;
+	[[nodiscard]] auto ComputeProjections(int dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> override;
 
-  // compute statistics
-  auto ComputeStatistics() -> std::map<std::string, amrex::Real> override;
+	// compute statistics
+	auto ComputeStatistics() -> std::map<std::string, amrex::Real> override;
 
 	// fix-up states
 	void FixupState(int level) override;
@@ -229,7 +229,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	auto expandFluxArrays(std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxes, int nstartNew, int ncompNew)
 	    -> std::array<amrex::FArrayBox, AMREX_SPACEDIM>;
 
-	void printCoordinates(int lev, const amrex::IntVect& cell_idx);
+	void printCoordinates(int lev, const amrex::IntVect &cell_idx);
 
 	void advanceHydroAtLevelWithRetries(int lev, amrex::Real time, amrex::Real dt_lev, amrex::YAFluxRegister *fr_as_crse,
 					    amrex::YAFluxRegister *fr_as_fine);
@@ -297,7 +297,13 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::defineComponen
 	}
 	// add radiation state variables
 	if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
-		std::vector<std::string> radNames = {"radEnergy", "x-RadFlux", "y-RadFlux", "z-RadFlux"};
+		std::vector<std::string> radNames = {};
+		for (int i = 0; i < Physics_Traits<problem_t>::nGroups; ++i) {
+			radNames.push_back("radEnergy-Group" + std::to_string(i));
+			radNames.push_back("x-RadFlux-Group" + std::to_string(i));
+			radNames.push_back("y-RadFlux-Group" + std::to_string(i));
+			radNames.push_back("z-RadFlux-Group" + std::to_string(i));
+		}
 		componentNames_cc_.insert(componentNames_cc_.end(), radNames.begin(), radNames.end());
 	}
 
@@ -512,8 +518,7 @@ auto RadhydroSimulation<problem_t>::ComputeProjections(int /*dir*/) const -> std
 	return std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>{};
 }
 
-template <typename problem_t>
-auto RadhydroSimulation<problem_t>::ComputeStatistics() -> std::map<std::string, amrex::Real> 
+template <typename problem_t> auto RadhydroSimulation<problem_t>::ComputeStatistics() -> std::map<std::string, amrex::Real>
 {
 	// compute statistics and return a std::map<std::string, amrex::Real> -- user should implement
 	// IMPORTANT: the user is responsible for performing any necessary MPI reductions before returning
@@ -544,9 +549,15 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::computeAfterEv
 	amrex::Real Etot0 = NAN;
 	amrex::Real Etot = NAN;
 	if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
-		amrex::Real const Erad0 = initSumCons[RadSystem<problem_t>::radEnergy_index];
+		amrex::Real Erad0 = 0.;
+		for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
+			Erad0 += initSumCons[RadSystem<problem_t>::radEnergy_index + Physics_NumVars::numRadVars * g];
+		}
 		Etot0 = Egas0 + (RadSystem<problem_t>::c_light_ / RadSystem<problem_t>::c_hat_) * Erad0;
-		amrex::Real const Erad = state_new_cc_[0].sum(RadSystem<problem_t>::radEnergy_index) * vol;
+		amrex::Real Erad = 0.;
+		for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
+			Erad += state_new_cc_[0].sum(RadSystem<problem_t>::radEnergy_index + Physics_NumVars::numRadVars * g) * vol;
+		}
 		Etot = Egas + (RadSystem<problem_t>::c_light_ / RadSystem<problem_t>::c_hat_) * Erad;
 	} else {
 		Etot0 = Egas0;
@@ -905,10 +916,10 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 		amrex::WriteBlueprintFiles(bpMeshHost, "debug_hydro_state_fatal", istep[lev] + 1, "hdf5");
 #else
 		WriteSingleLevelPlotfile(CustomPlotFileName("debug_hydro_state_fatal", istep[lev] + 1), state_new_cc_[lev], componentNames_cc_, geom[lev], time,
-			 istep[lev] + 1);
+					 istep[lev] + 1);
 #endif
 		amrex::ParallelDescriptor::Barrier();
-		
+
 		if (amrex::ParallelDescriptor::IOProcessor()) {
 			amrex::ParallelDescriptor::Abort();
 		}
@@ -938,7 +949,8 @@ template <typename problem_t> auto RadhydroSimulation<problem_t>::isCflViolated(
 	return cflViolation;
 }
 
-template <typename problem_t> void RadhydroSimulation<problem_t>::printCoordinates(int lev, const amrex::IntVect& cell_idx) {
+template <typename problem_t> void RadhydroSimulation<problem_t>::printCoordinates(int lev, const amrex::IntVect &cell_idx)
+{
 
 	amrex::Real x_coord = geom[lev].ProbLo(0) + (cell_idx[0] + 0.5) * geom[lev].CellSize(0);
 	amrex::Real y_coord = NAN;
@@ -951,10 +963,8 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::printCoordinat
 			z_coord = geom[lev].ProbLo(2) + (cell_idx[2] + 0.5) * geom[lev].CellSize(2);
 		}
 	}
-
 	amrex::Print() << "Coordinates: (" << x_coord << ", " << y_coord << ", " << z_coord << "): ";
 }
-
 
 template <typename problem_t>
 auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old_cc_tmp, amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine,
@@ -1592,9 +1602,9 @@ void RadhydroSimulation<problem_t>::operatorSplitSourceTerms(amrex::Array4<amrex
 							     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
 							     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi)
 {
-	amrex::FArrayBox radEnergySource(indexRange, 1,
+	amrex::FArrayBox radEnergySource(indexRange, Physics_Traits<problem_t>::nGroups,
 					 amrex::The_Async_Arena()); // cell-centered scalar
-	amrex::FArrayBox advectionFluxes(indexRange, 3,
+	amrex::FArrayBox advectionFluxes(indexRange, 3 * Physics_Traits<problem_t>::nGroups,
 					 amrex::The_Async_Arena()); // cell-centered vector
 
 	radEnergySource.setVal<amrex::RunOn::Device>(0.);
