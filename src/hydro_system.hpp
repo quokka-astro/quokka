@@ -1081,7 +1081,6 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			static_assert(!Physics_Traits<problem_t>::is_mhd_enabled, "Cannot use HLLC solver for MHD problems!");
 			F_canonical = quokka::Riemann::HLLC<problem_t, nscalars_, nmscalars_, nvar_>(sL, sR, gamma_, du, dw);
 		} else if constexpr (RIEMANN == RiemannSolver::LLF) {
-			static_assert(!Physics_Traits<problem_t>::is_mhd_enabled, "Cannot use LLF solver for MHD problems!");
 			F_canonical = quokka::Riemann::LLF<problem_t, nscalars_, nmscalars_, nvar_>(sL, sR);
 		} else if constexpr (RIEMANN == RiemannSolver::HLLD) {
 			F_canonical = quokka::Riemann::HLLD<problem_t, nscalars_, nmscalars_, nvar_>(sL, sR, gamma_, 0.0);
