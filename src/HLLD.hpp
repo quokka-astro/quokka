@@ -27,6 +27,7 @@ struct ConsHydro1D {
 	double bz;  // z-magnetic field
 };
 
+template <int N_scalars, int N_mscalars>
 AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto FastMagnetoSonicSpeed(double gamma, quokka::HydroState<N_scalars, N_mscalars> const state, const double bx) -> double
 {
 	double gp = gamma * state.P;
