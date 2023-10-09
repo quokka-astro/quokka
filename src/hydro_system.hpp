@@ -28,6 +28,7 @@
 #include "LLF.hpp"
 #include "HLLD.hpp"
 #include "hyperbolic_system.hpp"
+#include "physics_info.hpp"
 #include "radiation_system.hpp"
 #include "valarray.hpp"
 
@@ -1069,11 +1070,13 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		quokka::valarray<double, nvar_> F_canonical{};
 
 		if constexpr (RIEMANN == RiemannSolver::HLLC) {
+      static_assert(!Physics_Traits<problem_t>::is_mhd_enabled, "Cannot use HLLC solver for MHD problems!");
 			F_canonical = quokka::Riemann::HLLC<problem_t, nscalars_, nmscalars_, nvar_>(sL, sR, gamma_, du, dw);
 		} else if constexpr (RIEMANN == RiemannSolver::LLF) {
+      static_assert(!Physics_Traits<problem_t>::is_mhd_enabled, "Cannot use LLF solver for MHD problems!");
 			F_canonical = quokka::Riemann::LLF<problem_t, nscalars_, nmscalars_, nvar_>(sL, sR);
 		} else if constexpr (RIEMANN == RiemannSolver::HLLD) {
-			F_canonical = quokka::Riemann::HLLD<problem_t, nscalars_, nmscalars_, nvar_>(sL, sR, 0.0);
+			F_canonical = quokka::Riemann::HLLD<problem_t, nscalars_, nmscalars_, nvar_>(sL, sR, gamma_, 0.0);
 		}
 
 		quokka::valarray<double, nvar_> F = F_canonical;
