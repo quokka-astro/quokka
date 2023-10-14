@@ -31,7 +31,9 @@ jobs:
       run: cmake -E make_directory ${{runner.workspace}}/build
 
     - name: Install Homebrew dependencies
-      run: brew install python3 openmpi hdf5
+      run: |
+        brew install python3 openmpi hdf5 || true
+        brew link --overwrite python@3.11
 
     - name: Install pip dependencies
       run: python3 -m pip install --user numpy matplotlib
