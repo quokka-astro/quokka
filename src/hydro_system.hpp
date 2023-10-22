@@ -40,9 +40,7 @@ template <typename problem_t> struct HydroSystem_Traits {
 	static constexpr bool reconstruct_eint = true;
 };
 
-enum class RiemannSolver {
-	HLLC, LLF
-};
+enum class RiemannSolver { HLLC, LLF };
 
 /// Class for the Euler equations of inviscid hydrodynamics
 ///
@@ -437,10 +435,9 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::isStateValid(am
 		for (int idx = 0; idx < nmscalars_; ++idx) {
 			if (massScalars_[idx] < 0.0) {
 				isMassScalarPositive = false;
-				break;  // Exit the loop early if any element is not positive
+				break; // Exit the loop early if any element is not positive
 			}
 		}
-
 	}
 	// when the dual energy method is used, we *cannot* reset on pressure
 	// failures. on the other hand, we don't need to -- the auxiliary internal
@@ -744,12 +741,23 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 		// Enforcing Limits on mass scalars
 		if (nmscalars_ > 0) {
 
-		    for (int idx = 0; idx < nmscalars_; ++idx) {
-		        if (state[bx](i, j, k, scalar0_index + idx) < 0.0) {
-		            state[bx](i, j, k, scalar0_index + idx) = small_x * rho;
-		        }
-		    }
+			amrex::Real sp_sum = 0.0;
+			for (int idx = 0; idx < nmscalars_; ++idx) {
+				if (state[bx](i, j, k, scalar0_index + idx) < 0.0) {
+					state[bx](i, j, k, scalar0_index + idx) = small_x * rho;
+				}
 
+				// get sum to renormalize
+				sp_sum += state[bx](i, j, k, scalar0_index + idx);
+			}
+
+			if (sp_sum > 0) {
+				sp_sum /= rho; // get mass fractions
+				for (int idx = 0; idx < nmscalars_; ++idx) {
+					// renormalize
+					state[bx](i, j, k, scalar0_index + idx) /= sp_sum;
+				}
+			}
 		}
 
 		// Enforcing Limits on temperature estimated from Etot and Ekin
