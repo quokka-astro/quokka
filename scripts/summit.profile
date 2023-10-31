@@ -21,13 +21,6 @@ export Ascent_DIR=/sw/summit/ums/ums010/ascent/0.8.0_warpx/summit/cuda/gnu/ascen
 module load python/3.8.10
 module load freetype/2.10.4     # matplotlib
 
-# set tuning vars for maximizing network bandwidth
-# https://docs.olcf.ornl.gov/systems/summit_user_guide.html#spectrum-mpi-tunings-needed-for-maximum-bandwidth
-export PAMI_ENABLE_STRIPING=1
-export PAMI_IBV_ADAPTER_AFFINITY=1
-export PAMI_IBV_DEVICE_NAME="mlx5_0:1,mlx5_3:1"
-export PAMI_IBV_DEVICE_NAME_1="mlx5_3:1,mlx5_0:1"
-
 # an alias to request an interactive batch node for two hours
 #   for paralle execution, start on the batch node: jsrun <command>
 alias getNode="bsub -q debug -P $proj -W 2:00 -nnodes 1 -Is /bin/bash"
