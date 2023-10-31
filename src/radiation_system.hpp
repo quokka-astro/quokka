@@ -121,6 +121,9 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 				 amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxDiffusiveArray, double dt_in,
 				 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange, int nvars);
 
+  template <FluxDir DIR>
+  static void ComputeRadPressure(const double erad_L, const double Fx_L, const double Fy_L, const double Fz_L, const double fx_L, const double fy_L, const double fz_L, quokka::valarray<double, numRadVars_> &F_L, double &S_L);
+
 	template <FluxDir DIR>
 	static void ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiffusive_in, amrex::Array4<const amrex::Real> const &x1LeftState_in,
 				  amrex::Array4<const amrex::Real> const &x1RightState_in, amrex::Box const &indexRange, arrayconst_t &consVar_in,
@@ -666,6 +669,104 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeCellOpticalDepth(const quokka
 
 template <typename problem_t>
 template <FluxDir DIR>
+void RadSystem<problem_t>::ComputeRadPressure(const double erad_L, const double Fx_L, const double Fy_L, const double Fz_L, const double fx_L, const double fy_L, const double fz_L, quokka::valarray<double, numRadVars_> &F_L, double &S_L)
+{
+    // check that states are physically admissible
+    AMREX_ASSERT(erad_L > 0.0);
+    // AMREX_ASSERT(f_L < 1.0); // there is sometimes a small (<1%) flux
+    // limiting violation when using P1 AMREX_ASSERT(f_R < 1.0);
+
+		auto f_L = std::sqrt(fx_L * fx_L + fy_L * fy_L + fz_L * fz_L);
+    std::array<amrex::Real, 3> fvec_L = {fx_L, fy_L, fz_L};
+
+    // angle between interface and radiation flux \hat{n}
+    // If direction is undefined, just drop direction-dependent
+    // terms.
+    std::array<amrex::Real, 3> n_L{};
+
+    for (int ii = 0; ii < 3; ++ii) {
+      n_L[ii] = (f_L > 0.) ? (fvec_L[ii] / f_L) : 0.;
+    }
+
+    // compute radiation pressure tensors
+    const double chi_L = RadSystem<problem_t>::ComputeEddingtonFactor(f_L);
+
+    AMREX_ASSERT((chi_L >= 1. / 3.) && (chi_L <= 1.0)); // NOLINT
+
+    // diagonal term of Eddington tensor
+    const double Tdiag_L = (1.0 - chi_L) / 2.0;
+
+    // anisotropic term of Eddington tensor (in the direction of the
+    // rad. flux)
+    const double Tf_L = (3.0 * chi_L - 1.0) / 2.0;
+
+    // assemble Eddington tensor
+    std::array<std::array<double, 3>, 3> T_L{};
+    std::array<std::array<double, 3>, 3> P_L{};
+
+    for (int ii = 0; ii < 3; ++ii) {
+      for (int jj = 0; jj < 3; ++jj) {
+        const double delta_ij = (ii == jj) ? 1 : 0;
+        T_L[ii][jj] = Tdiag_L * delta_ij + Tf_L * (n_L[ii] * n_L[jj]);
+        // compute the elements of the total radiation pressure
+        // tensor
+        P_L[ii][jj] = T_L[ii][jj] * erad_L;
+      }
+    }
+
+    // frozen Eddington tensor approximation, following Balsara
+    // (1999) [JQSRT Vol. 61, No. 5, pp. 617–627, 1999], Eq. 46.
+    double Tnormal_L = NAN;
+    if constexpr (DIR == FluxDir::X1) {
+      Tnormal_L = T_L[0][0];
+    } else if constexpr (DIR == FluxDir::X2) {
+      Tnormal_L = T_L[1][1];
+    } else if constexpr (DIR == FluxDir::X3) {
+      Tnormal_L = T_L[2][2];
+    }
+
+    // compute fluxes F_L, F_R
+    // P_nx, P_ny, P_nz indicate components where 'n' is the direction of the
+    // face normal F_n is the radiation flux component in the direction of the
+    // face normal
+    double Fn_L = NAN;
+    double Pnx_L = NAN;
+    double Pny_L = NAN;
+    double Pnz_L = NAN;
+
+    if constexpr (DIR == FluxDir::X1) {
+      Fn_L = Fx_L;
+
+      Pnx_L = P_L[0][0];
+      Pny_L = P_L[0][1];
+      Pnz_L = P_L[0][2];
+    } else if constexpr (DIR == FluxDir::X2) {
+      Fn_L = Fy_L;
+
+      Pnx_L = P_L[1][0];
+      Pny_L = P_L[1][1];
+      Pnz_L = P_L[1][2];
+    } else if constexpr (DIR == FluxDir::X3) {
+      Fn_L = Fz_L;
+
+      Pnx_L = P_L[2][0];
+      Pny_L = P_L[2][1];
+      Pnz_L = P_L[2][2];
+    }
+
+    AMREX_ASSERT(Fn_L != NAN);
+    AMREX_ASSERT(Pnx_L != NAN);
+    AMREX_ASSERT(Pny_L != NAN);
+    AMREX_ASSERT(Pnz_L != NAN);
+
+    F_L = {(c_hat_ / c_light_) * Fn_L, (c_hat_ * c_light_) * Pnx_L, (c_hat_ * c_light_) * Pny_L,
+                    (c_hat_ * c_light_) * Pnz_L};
+    
+		S_L = std::min(-0.1 * c_hat_, -c_hat_ * std::sqrt(Tnormal_L));
+}
+
+template <typename problem_t>
+template <FluxDir DIR>
 void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiffusive_in, amrex::Array4<const amrex::Real> const &x1LeftState_in,
 					 amrex::Array4<const amrex::Real> const &x1RightState_in, amrex::Box const &indexRange, arrayconst_t &consVar_in,
 					 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx)
@@ -752,137 +853,13 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 				f_R = std::sqrt(fx_R * fx_R + fy_R * fy_R + fz_R * fz_R);
 			}
 
-			// check that states are physically admissible
-			AMREX_ASSERT(erad_L > 0.0);
-			AMREX_ASSERT(erad_R > 0.0);
-			// AMREX_ASSERT(f_L < 1.0); // there is sometimes a small (<1%) flux
-			// limiting violation when using P1 AMREX_ASSERT(f_R < 1.0);
-
-			std::array<amrex::Real, 3> fvec_L = {fx_L, fy_L, fz_L};
-			std::array<amrex::Real, 3> fvec_R = {fx_R, fy_R, fz_R};
-
-			// angle between interface and radiation flux \hat{n}
-			// If direction is undefined, just drop direction-dependent
-			// terms.
-			std::array<amrex::Real, 3> n_L{};
-			std::array<amrex::Real, 3> n_R{};
-
-			for (int ii = 0; ii < 3; ++ii) {
-				n_L[ii] = (f_L > 0.) ? (fvec_L[ii] / f_L) : 0.;
-				n_R[ii] = (f_R > 0.) ? (fvec_R[ii] / f_R) : 0.;
-			}
-
-			// compute radiation pressure tensors
-			const double chi_L = RadSystem<problem_t>::ComputeEddingtonFactor(f_L);
-			const double chi_R = RadSystem<problem_t>::ComputeEddingtonFactor(f_R);
-
-			AMREX_ASSERT((chi_L >= 1. / 3.) && (chi_L <= 1.0)); // NOLINT
-			AMREX_ASSERT((chi_R >= 1. / 3.) && (chi_R <= 1.0)); // NOLINT
-
-			// diagonal term of Eddington tensor
-			const double Tdiag_L = (1.0 - chi_L) / 2.0;
-			const double Tdiag_R = (1.0 - chi_R) / 2.0;
-
-			// anisotropic term of Eddington tensor (in the direction of the
-			// rad. flux)
-			const double Tf_L = (3.0 * chi_L - 1.0) / 2.0;
-			const double Tf_R = (3.0 * chi_R - 1.0) / 2.0;
-
-			// assemble Eddington tensor
-			std::array<std::array<double, 3>, 3> T_L{};
-			std::array<std::array<double, 3>, 3> T_R{};
-			std::array<std::array<double, 3>, 3> P_L{};
-			std::array<std::array<double, 3>, 3> P_R{};
-
-			for (int ii = 0; ii < 3; ++ii) {
-				for (int jj = 0; jj < 3; ++jj) {
-					const double delta_ij = (ii == jj) ? 1 : 0;
-					T_L[ii][jj] = Tdiag_L * delta_ij + Tf_L * (n_L[ii] * n_L[jj]);
-					T_R[ii][jj] = Tdiag_R * delta_ij + Tf_R * (n_R[ii] * n_R[jj]);
-					// compute the elements of the total radiation pressure
-					// tensor
-					P_L[ii][jj] = T_L[ii][jj] * erad_L;
-					P_R[ii][jj] = T_R[ii][jj] * erad_R;
-				}
-			}
-
-			// frozen Eddington tensor approximation, following Balsara
-			// (1999) [JQSRT Vol. 61, No. 5, pp. 617–627, 1999], Eq. 46.
-			double Tnormal_L = NAN;
-			double Tnormal_R = NAN;
-			if constexpr (DIR == FluxDir::X1) {
-				Tnormal_L = T_L[0][0];
-				Tnormal_R = T_R[0][0];
-			} else if constexpr (DIR == FluxDir::X2) {
-				Tnormal_L = T_L[1][1];
-				Tnormal_R = T_R[1][1];
-			} else if constexpr (DIR == FluxDir::X3) {
-				Tnormal_L = T_L[2][2];
-				Tnormal_R = T_R[2][2];
-			}
-
-			// compute fluxes F_L, F_R
-			// P_nx, P_ny, P_nz indicate components where 'n' is the direction of the
-			// face normal F_n is the radiation flux component in the direction of the
-			// face normal
-			double Fn_L = NAN;
-			double Fn_R = NAN;
-			double Pnx_L = NAN;
-			double Pnx_R = NAN;
-			double Pny_L = NAN;
-			double Pny_R = NAN;
-			double Pnz_L = NAN;
-			double Pnz_R = NAN;
-
-			if constexpr (DIR == FluxDir::X1) {
-				Fn_L = Fx_L;
-				Fn_R = Fx_R;
-
-				Pnx_L = P_L[0][0];
-				Pny_L = P_L[0][1];
-				Pnz_L = P_L[0][2];
-
-				Pnx_R = P_R[0][0];
-				Pny_R = P_R[0][1];
-				Pnz_R = P_R[0][2];
-			} else if constexpr (DIR == FluxDir::X2) {
-				Fn_L = Fy_L;
-				Fn_R = Fy_R;
-
-				Pnx_L = P_L[1][0];
-				Pny_L = P_L[1][1];
-				Pnz_L = P_L[1][2];
-
-				Pnx_R = P_R[1][0];
-				Pny_R = P_R[1][1];
-				Pnz_R = P_R[1][2];
-			} else if constexpr (DIR == FluxDir::X3) {
-				Fn_L = Fz_L;
-				Fn_R = Fz_R;
-
-				Pnx_L = P_L[2][0];
-				Pny_L = P_L[2][1];
-				Pnz_L = P_L[2][2];
-
-				Pnx_R = P_R[2][0];
-				Pny_R = P_R[2][1];
-				Pnz_R = P_R[2][2];
-			}
-
-			AMREX_ASSERT(Fn_L != NAN);
-			AMREX_ASSERT(Fn_R != NAN);
-			AMREX_ASSERT(Pnx_L != NAN);
-			AMREX_ASSERT(Pnx_R != NAN);
-			AMREX_ASSERT(Pny_L != NAN);
-			AMREX_ASSERT(Pny_R != NAN);
-			AMREX_ASSERT(Pnz_L != NAN);
-			AMREX_ASSERT(Pnz_R != NAN);
-
-			const quokka::valarray<double, numRadVars_> F_L = {(c_hat_ / c_light_) * Fn_L, (c_hat_ * c_light_) * Pnx_L, (c_hat_ * c_light_) * Pny_L,
-									   (c_hat_ * c_light_) * Pnz_L};
-
-			const quokka::valarray<double, numRadVars_> F_R = {(c_hat_ / c_light_) * Fn_R, (c_hat_ * c_light_) * Pnx_R, (c_hat_ * c_light_) * Pny_R,
-									   (c_hat_ * c_light_) * Pnz_R};
+      // compute radiation pressure F_L and F_R using ComputeRadPressure
+      quokka::valarray<double, numRadVars_> F_L{};
+      quokka::valarray<double, numRadVars_> F_R{};
+      double S_L = NAN;
+      double S_R = NAN;
+      ComputeRadPressure<DIR>(erad_L, Fx_L, Fy_L, Fz_L, fx_L, fy_L, fz_L, F_L, S_L);
+      ComputeRadPressure<DIR>(erad_R, Fx_R, Fy_R, Fz_R, fx_R, fy_R, fz_R, F_R, S_R);
 
 			const quokka::valarray<double, numRadVars_> U_L = {erad_L, Fx_L, Fy_L, Fz_L};
 			const quokka::valarray<double, numRadVars_> U_R = {erad_R, Fx_R, Fy_R, Fz_R};
@@ -901,10 +878,6 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 			// S_corr,
 			//    S_corr, S_corr}; // Jiang et al. (2013)
 			const quokka::valarray<double, numRadVars_> epsilon = {S_corr * S_corr, S_corr, S_corr, S_corr}; // this code
-
-			// compute the norm of the wavespeed vector
-			const double S_L = std::min(-0.1 * c_hat_, -c_hat_ * std::sqrt(Tnormal_L));
-			const double S_R = std::max(0.1 * c_hat_, c_hat_ * std::sqrt(Tnormal_R));
 
 			AMREX_ASSERT(std::abs(S_L) <= c_hat_); // NOLINT
 			AMREX_ASSERT(std::abs(S_R) <= c_hat_); // NOLINT
