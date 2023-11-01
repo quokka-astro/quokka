@@ -77,7 +77,7 @@ AMREX_GPU_MANAGED Real u_inflow = NAN;							 // NOLINT(cppcoreguidelines-avoid-
 AMREX_GPU_MANAGED Real v_inflow = NAN;							 // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 AMREX_GPU_MANAGED Real w_inflow = NAN;							 // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 AMREX_GPU_MANAGED GpuArray<Real, Physics_Traits<Channel>::numPassiveScalars> s_inflow{}; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-#if 0 // workaround AMDGPU compiler bug
+#if 0											 // workaround AMDGPU compiler bug
 };											 // namespace
 #endif
 
