@@ -1019,10 +1019,12 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			Src[g] = dt * (chat * radEnergySource(i, j, k, g) + advectionFluxes(i, j, k, g));
 		}
 
+		const double a_rad = radiation_constant_;
 		double Egas0 = NAN;
 		double Ekin0 = NAN;
 		double Egas_guess = NAN;
 		double T_gas = NAN;
+		double fourPiB = NAN;
 		quokka::valarray<double, nGroups_> EradVec_guess{};
 		quokka::valarray<double, nGroups_> kappaPVec{};
 		quokka::valarray<double, nGroups_> kappaEVec{};
@@ -1051,9 +1053,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			Egas_guess = Egas0;
 			EradVec_guess = Erad0Vec;
 
-			const double a_rad = radiation_constant_;
 			double F_G = NAN;
-			double fourPiB = NAN;
 			double dFG_dEgas = NAN;
 			double deltaEgas = NAN;
 			double Rtot = NAN;
@@ -1158,7 +1158,20 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		amrex::GpuArray<amrex::Real, 3> dMomentum{};
 
 		T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
+    fourPiB = chat * a_rad * std::pow(T_gas, 4);
 		kappaFVec = ComputeFluxMeanOpacity(rho, T_gas);
+
+    quokka::valarray<amrex::Real, nGroups_> radEnergyFractions{};
+    if constexpr (nGroups_ > 1) {
+      radEnergyFractions = ComputePlanckEnergyFractions(radBoundaries_g_copy, T_gas);
+      AMREX_ASSERT(min(radEnergyFractions) > 0.);
+    } else {
+      radEnergyFractions[0] = 1.0;
+    }
+
+    kappaFVec = ComputeFluxMeanOpacity(rho, T_gas);
+    kappaPVec = ComputePlanckOpacity(rho, T_gas);
+    std::array<double, 3> gasMtm = {x1GasMom0, x2GasMom0, x3GasMom0};
 
 		for (int g = 0; g < nGroups_; ++g) {
 
@@ -1166,12 +1179,45 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			Frad_t0[1] = consPrev(i, j, k, x2RadFlux_index + numRadVars_ * g);
 			Frad_t0[2] = consPrev(i, j, k, x3RadFlux_index + numRadVars_ * g);
 
-			for (int n = 0; n < 3; ++n) {
-				AMREX_ASSERT((advectionFluxes(i, j, k, n) == 0.0));
-				Frad_t1[n] = (Frad_t0[n] + (dt * advectionFluxes(i, j, k, n))) / (1.0 + rho * kappaFVec[g] * chat * dt);
-				// Compute conservative gas momentum update
-				dMomentum[n] = -(Frad_t1[n] - Frad_t0[n]) / (c * chat);
-			}
+      // compute radiation pressure F using ComputeRadPressure
+		  if constexpr (gamma_ != 1.0) {
+        auto erad = EradVec_guess[g];
+        auto Fx = Frad_t0[0];
+        auto Fy = Frad_t0[1];
+        auto Fz = Frad_t0[2];
+        auto fx = Fx / (c_light_ * erad);
+        auto fy = Fy / (c_light_ * erad);
+        auto fz = Fz / (c_light_ * erad);
+
+        std::array<std::array<double, 4>, 3> P{};
+        double S = NAN;
+        // loop DIR over {FluxDir::X1, FluxDir::X2, FluxDir::X3}
+        ComputeRadPressure<FluxDir::X1>(erad, Fx, Fy, Fz, fx, fy, fz, P[0], S);
+        ComputeRadPressure<FluxDir::X2>(erad, Fx, Fy, Fz, fx, fy, fz, P[1], S);
+        ComputeRadPressure<FluxDir::X3>(erad, Fx, Fy, Fz, fx, fy, fz, P[2], S);
+
+        // loop over spatial dimensions
+        for (int n = 0; n < 3; ++n) {
+          double lastTwoTerms = gasMtm[n] * kappaPVec[g] * fourPiB * radEnergyFractions[g] * chat / c;
+          // loop over the second rank of the radiation pressure tensor
+          for (int z = 0; z < 3; ++z) {
+            lastTwoTerms += chat * kappaFVec[g] * gasMtm[z] * P[n][z + 1];
+          }
+          lastTwoTerms = 0.0;
+          AMREX_ASSERT((advectionFluxes(i, j, k, n) == 0.0));
+          Frad_t1[n] = (Frad_t0[n] + (dt * lastTwoTerms) + (dt * advectionFluxes(i, j, k, n))) / (1.0 + rho * kappaFVec[g] * chat * dt);
+
+          // Compute conservative gas momentum update
+          dMomentum[n] = -(Frad_t1[n] - Frad_t0[n]) / (c * chat);
+        }
+      } else {
+        for (int n = 0; n < 3; ++n) {
+          AMREX_ASSERT((advectionFluxes(i, j, k, n) == 0.0));
+          Frad_t1[n] = (Frad_t0[n] + (dt * advectionFluxes(i, j, k, n))) / (1.0 + rho * kappaFVec[g] * chat * dt);
+          // Compute conservative gas momentum update
+          dMomentum[n] = -(Frad_t1[n] - Frad_t0[n]) / (c * chat);
+        }
+      }   // end if gamma_ != 1.0
 
 			// update radiation flux on consNew at current group
 			consNew(i, j, k, x1RadFlux_index + numRadVars_ * g) = Frad_t1[0];
@@ -1182,7 +1228,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			consNew(i, j, k, x1GasMomentum_index) += dMomentum[0];
 			consNew(i, j, k, x2GasMomentum_index) += dMomentum[1];
 			consNew(i, j, k, x3GasMomentum_index) += dMomentum[2];
-		}
+		}   // end loop over radiation groups
 
 		// update gas momentum from radiation momentum of the current group
 		if constexpr (gamma_ != 1.0) {
