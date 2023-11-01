@@ -21,7 +21,7 @@
 #include "interpolate.hpp"
 #include "physics_info.hpp"
 #include "radiation_system.hpp"
-#include "test_radiation_force.hpp"
+#include "test_radiation_force_multigroup.hpp"
 #ifdef HAVE_PYTHON
 #include "matplotlibcpp.h"
 #endif
@@ -60,7 +60,7 @@ template <> struct Physics_Traits<TubeProblem> {
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
 	// number of radiation groups
-	static constexpr int nGroups = 1;
+	static constexpr int nGroups = 2;
 };
 
 template <> struct RadSystem_Traits<TubeProblem> {
@@ -70,6 +70,7 @@ template <> struct RadSystem_Traits<TubeProblem> {
 	static constexpr double Erad_floor = 0.;
 	static constexpr bool compute_v_over_c_terms = true;
 	static constexpr double energy_unit = C::ev2erg;
+	static constexpr amrex::GpuArray<double, Physics_Traits<TubeProblem>::nGroups + 1> radBoundaries{0., 13.6, inf}; // eV
 };
 
 template <>
@@ -88,9 +89,8 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputeFluxMeanOpacity(const 
     -> quokka::valarray<double, Physics_Traits<TubeProblem>::nGroups>
 {
 	quokka::valarray<double, Physics_Traits<TubeProblem>::nGroups> kappaFVec{};
-	for (int g = 0; g < nGroups_; ++g) {
-		kappaFVec[g] = kappa0;
-	}
+	kappaFVec[0] = kappa0 * 1.5;
+	kappaFVec[1] = kappa0 * 0.5;
 	return kappaFVec;
 }
 
