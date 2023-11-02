@@ -1203,7 +1203,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
           for (int z = 0; z < 3; ++z) {
             lastTwoTerms += chat * kappaFVec[g] * gasMtm[z] * P[n][z + 1];
           }
-          lastTwoTerms = 0.0;
+          // lastTwoTerms = 0.0;
           AMREX_ASSERT((advectionFluxes(i, j, k, n) == 0.0));
           Frad_t1[n] = (Frad_t0[n] + (dt * lastTwoTerms) + (dt * advectionFluxes(i, j, k, n))) / (1.0 + rho * kappaFVec[g] * chat * dt);
 
