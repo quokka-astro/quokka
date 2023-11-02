@@ -17,22 +17,24 @@
 struct PulseProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-constexpr double kappa0 = 10.0;  // cm^2 g^-1 
+// constexpr double kappa0 = 0.1;  // cm^2 g^-1 
+constexpr double kappa0 = 1.;  // cm^2 g^-1 
 constexpr double T0 = 1.0e7;	  // K (temperature)
 constexpr double T1 = 2.0e7;	  // K (temperature)
 constexpr double rho0 = 1.2;	  // g cm^-3 (matter density)
 constexpr double a_rad = C::a_rad;
 constexpr double c = C::c_light;	  // speed of light (cgs)
-constexpr double chat = 0.01 * c;
+constexpr double chat = 0.1 * c;
 constexpr double width = 24.0;      // cm, width of the pulse
 constexpr double erad_floor = a_rad * (1.0e-8);
 constexpr double mu = 2.33 * C::m_u;
 constexpr double k_B = C::k_B;
 // constexpr double max_time = 0.0;
 constexpr double max_time = 4.8e-5;
-constexpr double v0 = 0.;
-// constexpr double v0 = 1.0e6;      // = 2.0 * width / max_time;
+// constexpr double v0 = 0.;
+constexpr double v0 = 1.0e6;      // = 2.0 * width / max_time;
 // constexpr double v0 = 1.0e5;      // = 0.2 * width / max_time;
+constexpr double lorentz_factor_sqr = 1.0 / (1.0 - v0 * v0 / (c * c));
 
 // constexpr double Lx = 1.0; // dimensionless length
 // constexpr double initial_time = 1.0e-8;
@@ -130,8 +132,8 @@ template <> void RadhydroSimulation<PulseProblem>::setInitialConditionsOnGrid(qu
 		const double rho = compute_exact_rho(x - x0, initial_time);
 		const double Egas = quokka::EOS<PulseProblem>::ComputeEintFromTgas(rho, Trad);
 
-		state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = Erad;
-		state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index) = 0;
+		state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = Erad * lorentz_factor_sqr;
+		state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index) = - v0 * Erad * lorentz_factor_sqr;
 		state_cc(i, j, k, RadSystem<PulseProblem>::x2RadFlux_index) = 0;
 		state_cc(i, j, k, RadSystem<PulseProblem>::x3RadFlux_index) = 0;
 		state_cc(i, j, k, RadSystem<PulseProblem>::gasEnergy_index) = Egas + 0.5 * rho * v0 * v0;
