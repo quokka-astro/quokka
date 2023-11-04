@@ -261,7 +261,7 @@ template <> void RadhydroSimulation<PopIII>::setInitialConditionsOnGrid(quokka::
 		amrex::Real const distxy = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2));
 
 		eos_t state;
-		amrex::Real const rhotot = 0.0;
+		amrex::Real rhotot = 0.0;
 
 		for (int n = 0; n < NumSpec; ++n) {
 			state.xn[n] = numdens[n] * numdens_init;
