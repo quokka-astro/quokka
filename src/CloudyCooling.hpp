@@ -291,7 +291,7 @@ template <typename problem_t> auto computeCooling(amrex::MultiFab &mf, const Rea
 				Real const T = ComputeTgasFromEgas(rho, Eint, quokka::EOS_Traits<problem_t>::gamma, tables);
 				Real const Edot = cloudy_cooling_function(rho, T, tables);
 				Real const t_cool = Eint / Edot;
-				Real const abs_vel = std::sqrt((x1Mom*x1Mom + x2Mom*x2Mom + x3Mom*x3Mom) / (rho*rho));
+				Real const abs_vel = std::sqrt((x1Mom * x1Mom + x2Mom * x2Mom + x3Mom * x3Mom) / (rho * rho));
 				printf("max substeps exceeded! rho = %.17e, Eint = %.17e, T = %g, cooling "
 				       "time = %g, abs_vel = %.17e, dt_operator = %.17e\n",
 				       rho, Eint, T, t_cool, abs_vel, dt);
@@ -308,12 +308,12 @@ template <typename problem_t> auto computeCooling(amrex::MultiFab &mf, const Rea
 	int nmax = nsubstepsMF.max(0);
 	Real navg = static_cast<Real>(nsubstepsMF.sum(0)) / static_cast<Real>(nsubstepsMF.boxArray().numPts());
 	amrex::Print() << fmt::format("\tcooling substeps (per cell): avg {}, max {}\n", navg, nmax);
-	
+
 	// check if integration succeeded
 	if (nmax >= maxStepsODEIntegrate) {
 		amrex::Print() << "\t[CloudyCooling] Reaction ODE failure. Max steps exceeded in cooling solve!\n";
 		return false;
-		//amrex::ParallelDescriptor::Abort();
+		// amrex::ParallelDescriptor::Abort();
 	}
 	return true; // success
 }

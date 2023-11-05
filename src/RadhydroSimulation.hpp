@@ -1215,7 +1215,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		amrex::Copy(state_new_cc_[lev], state_inter_cc_, 0, 0, ncompHydro_, 0);
 	}
 	amrex::Gpu::streamSynchronizeAll();
-	
+
 #if 0
 	// abort early if hydro update is bad
 	if (isCflViolated(lev, time, dt_lev)) {

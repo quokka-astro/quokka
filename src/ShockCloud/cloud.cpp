@@ -221,7 +221,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<ShockCloud>::isStateValid(a
 	const amrex::Real vx = cons(i, j, k, x1Momentum_index) / rho;
 	const amrex::Real vy = cons(i, j, k, x2Momentum_index) / rho;
 	const amrex::Real vz = cons(i, j, k, x3Momentum_index) / rho;
-	const amrex::Real abs_vel = std::sqrt(vx*vx + vy*vy + vz*vz);
+	const amrex::Real abs_vel = std::sqrt(vx * vx + vy * vy + vz * vz);
 	const bool isVelocityReasonable = (abs_vel < 1.0e10);
 
 	return (isDensityPositive && isVelocityReasonable);
@@ -500,12 +500,11 @@ template <> auto RadhydroSimulation<ShockCloud>::ComputeStatistics() -> std::map
 	stats["inflow_vx"] = (v_wind - dvx_cgs) / 1.0e5; // km/s
 
 	// save total simulation mass
-	const Real sim_mass = amrex::volumeWeightedSum(amrex::GetVecOfConstPtrs(state_new_cc_),
-						       HydroSystem<ShockCloud>::density_index, geom, ref_ratio);
-	const Real sim_partialcloud_mass = amrex::volumeWeightedSum(
-	    amrex::GetVecOfConstPtrs(state_new_cc_), HydroSystem<ShockCloud>::scalar0_index + 1, geom, ref_ratio);
-	const Real sim_partialwind_mass = amrex::volumeWeightedSum(
-	    amrex::GetVecOfConstPtrs(state_new_cc_), HydroSystem<ShockCloud>::scalar0_index + 2, geom, ref_ratio);
+	const Real sim_mass = amrex::volumeWeightedSum(amrex::GetVecOfConstPtrs(state_new_cc_), HydroSystem<ShockCloud>::density_index, geom, ref_ratio);
+	const Real sim_partialcloud_mass =
+	    amrex::volumeWeightedSum(amrex::GetVecOfConstPtrs(state_new_cc_), HydroSystem<ShockCloud>::scalar0_index + 1, geom, ref_ratio);
+	const Real sim_partialwind_mass =
+	    amrex::volumeWeightedSum(amrex::GetVecOfConstPtrs(state_new_cc_), HydroSystem<ShockCloud>::scalar0_index + 2, geom, ref_ratio);
 
 	stats["sim_mass"] = sim_mass / solarmass_in_g;
 	stats["sim_partialcloud_mass"] = sim_partialcloud_mass / solarmass_in_g;
@@ -514,41 +513,36 @@ template <> auto RadhydroSimulation<ShockCloud>::ComputeStatistics() -> std::map
 	// compute cloud mass according to temperature threshold
 	auto tables = cloudyTables_.const_tables();
 
-	const Real M_cl_1e4 = computeVolumeIntegral(
-	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-		    Real const T = ComputeCellTemp(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
-		    Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
-		    Real const result = (T < 1.0e4) ? rho : 0.0;
-		    return result;
-	    });
-	const Real M_cl_8000 = computeVolumeIntegral(
-	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-		    Real const T = ComputeCellTemp(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
-		    Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
-		    Real const result = (T < 8000.) ? rho : 0.0;
-		    return result;
-	    });
-	const Real M_cl_9000 = computeVolumeIntegral(
-	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-		    Real const T = ComputeCellTemp(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
-		    Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
-		    Real const result = (T < 9000.) ? rho : 0.0;
-		    return result;
-	    });
-	const Real M_cl_11000 = computeVolumeIntegral(
-	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-		    Real const T = ComputeCellTemp(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
-		    Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
-		    Real const result = (T < 1.1e4) ? rho : 0.0;
-		    return result;
-	    });
-	const Real M_cl_12000 = computeVolumeIntegral(
-	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-		    Real const T = ComputeCellTemp(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
-		    Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
-		    Real const result = (T < 1.2e4) ? rho : 0.0;
-		    return result;
-	    });
+	const Real M_cl_1e4 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+		Real const T = ComputeCellTemp(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+		Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
+		Real const result = (T < 1.0e4) ? rho : 0.0;
+		return result;
+	});
+	const Real M_cl_8000 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+		Real const T = ComputeCellTemp(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+		Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
+		Real const result = (T < 8000.) ? rho : 0.0;
+		return result;
+	});
+	const Real M_cl_9000 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+		Real const T = ComputeCellTemp(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+		Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
+		Real const result = (T < 9000.) ? rho : 0.0;
+		return result;
+	});
+	const Real M_cl_11000 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+		Real const T = ComputeCellTemp(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+		Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
+		Real const result = (T < 1.1e4) ? rho : 0.0;
+		return result;
+	});
+	const Real M_cl_12000 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+		Real const T = ComputeCellTemp(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+		Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
+		Real const result = (T < 1.2e4) ? rho : 0.0;
+		return result;
+	});
 
 	stats["cloud_mass_1e4"] = M_cl_1e4 / solarmass_in_g;
 	stats["cloud_mass_8000"] = M_cl_8000 / solarmass_in_g;
@@ -556,41 +550,36 @@ template <> auto RadhydroSimulation<ShockCloud>::ComputeStatistics() -> std::map
 	stats["cloud_mass_11000"] = M_cl_11000 / solarmass_in_g;
 	stats["cloud_mass_12000"] = M_cl_12000 / solarmass_in_g;
 
-	const Real origM_cl_1e4 = computeVolumeIntegral(
-	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-		    Real const T = ComputeCellTemp(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
-		    Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
-		    Real const result = (T < 1.0e4) ? rho_cloud : 0.0;
-		    return result;
-	    });
-	const Real origM_cl_8000 = computeVolumeIntegral(
-	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-		    Real const T = ComputeCellTemp(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
-		    Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
-		    Real const result = (T < 8000.) ? rho_cloud : 0.0;
-		    return result;
-	    });
-	const Real origM_cl_9000 = computeVolumeIntegral(
-	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-		    Real const T = ComputeCellTemp(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
-		    Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
-		    Real const result = (T < 9000.) ? rho_cloud : 0.0;
-		    return result;
-	    });
-	const Real origM_cl_11000 = computeVolumeIntegral(
-	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-		    Real const T = ComputeCellTemp(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
-		    Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
-		    Real const result = (T < 1.1e4) ? rho_cloud : 0.0;
-		    return result;
-	    });
-	const Real origM_cl_12000 = computeVolumeIntegral(
-	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-		    Real const T = ComputeCellTemp(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
-		    Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
-		    Real const result = (T < 1.2e4) ? rho_cloud : 0.0;
-		    return result;
-	    });
+	const Real origM_cl_1e4 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+		Real const T = ComputeCellTemp(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+		Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
+		Real const result = (T < 1.0e4) ? rho_cloud : 0.0;
+		return result;
+	});
+	const Real origM_cl_8000 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+		Real const T = ComputeCellTemp(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+		Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
+		Real const result = (T < 8000.) ? rho_cloud : 0.0;
+		return result;
+	});
+	const Real origM_cl_9000 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+		Real const T = ComputeCellTemp(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+		Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
+		Real const result = (T < 9000.) ? rho_cloud : 0.0;
+		return result;
+	});
+	const Real origM_cl_11000 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+		Real const T = ComputeCellTemp(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+		Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
+		Real const result = (T < 1.1e4) ? rho_cloud : 0.0;
+		return result;
+	});
+	const Real origM_cl_12000 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+		Real const T = ComputeCellTemp(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+		Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
+		Real const result = (T < 1.2e4) ? rho_cloud : 0.0;
+		return result;
+	});
 
 	stats["cloud_mass_1e4_original"] = origM_cl_1e4 / solarmass_in_g;
 	stats["cloud_mass_8000_original"] = origM_cl_8000 / solarmass_in_g;
@@ -599,45 +588,41 @@ template <> auto RadhydroSimulation<ShockCloud>::ComputeStatistics() -> std::map
 	stats["cloud_mass_12000_original"] = origM_cl_12000 / solarmass_in_g;
 
 	// compute cloud mass according to passive scalar threshold
-	const Real M_cl_scalar_01 = computeVolumeIntegral(
-	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-		    Real const C = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index);
-		    Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
-		    Real const result = (C > 0.1) ? rho : 0.0;
-		    return result;
-	    });
-	const Real M_cl_scalar_01_09 = computeVolumeIntegral(
-	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-		    Real const C = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index);
-		    Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
-		    Real const result = ((C > 0.1) && (C < 0.9)) ? rho : 0.0;
-		    return result;
-	    });
+	const Real M_cl_scalar_01 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+		Real const C = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index);
+		Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
+		Real const result = (C > 0.1) ? rho : 0.0;
+		return result;
+	});
+	const Real M_cl_scalar_01_09 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+		Real const C = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index);
+		Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
+		Real const result = ((C > 0.1) && (C < 0.9)) ? rho : 0.0;
+		return result;
+	});
 
 	stats["cloud_mass_scalar_01"] = M_cl_scalar_01 / solarmass_in_g;
 	stats["cloud_mass_scalar_01_09"] = M_cl_scalar_01_09 / solarmass_in_g;
 
 	// compute cloud mass according to cloud fraction threshold
-	const Real M_cl_fraction_01 = computeVolumeIntegral(
-	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-		    Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
-		    Real const rho_bg = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 2);
-		    Real const C_frac = rho_cloud / (rho_cloud + rho_bg);
+	const Real M_cl_fraction_01 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+		Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
+		Real const rho_bg = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 2);
+		Real const C_frac = rho_cloud / (rho_cloud + rho_bg);
 
-		    Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
-		    Real const result = (C_frac > 0.1) ? rho : 0.0;
-		    return result;
-	    });
-	const Real M_cl_fraction_01_09 = computeVolumeIntegral(
-	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-		    Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
-		    Real const rho_bg = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 2);
-		    Real const C_frac = rho_cloud / (rho_cloud + rho_bg);
+		Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
+		Real const result = (C_frac > 0.1) ? rho : 0.0;
+		return result;
+	});
+	const Real M_cl_fraction_01_09 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+		Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
+		Real const rho_bg = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 2);
+		Real const C_frac = rho_cloud / (rho_cloud + rho_bg);
 
-		    Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
-		    Real const result = ((C_frac > 0.1) && (C_frac < 0.9)) ? rho : 0.0;
-		    return result;
-	    });
+		Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
+		Real const result = ((C_frac > 0.1) && (C_frac < 0.9)) ? rho : 0.0;
+		return result;
+	});
 
 	stats["cloud_mass_fraction_01"] = M_cl_fraction_01 / solarmass_in_g;
 	stats["cloud_mass_fraction_01_09"] = M_cl_fraction_01_09 / solarmass_in_g;
@@ -645,9 +630,7 @@ template <> auto RadhydroSimulation<ShockCloud>::ComputeStatistics() -> std::map
 	return stats;
 }
 
-template <>
-auto RadhydroSimulation<ShockCloud>::ComputeProjections(const int dir) const
-    -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>
+template <> auto RadhydroSimulation<ShockCloud>::ComputeProjections(const int dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>
 {
 	std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj;
 
