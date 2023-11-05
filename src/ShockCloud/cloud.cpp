@@ -637,7 +637,7 @@ template <> auto RadhydroSimulation<ShockCloud>::ComputeProjections(const int di
 	// compute (total) density projection
 	proj["nH"] = computePlaneProjection<amrex::ReduceOpSum>(
 	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-		    Real rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
+		    Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
 		    return (quokka::cooling::cloudy_H_mass_fraction * rho) / m_H;
 	    },
 	    dir);
@@ -646,7 +646,7 @@ template <> auto RadhydroSimulation<ShockCloud>::ComputeProjections(const int di
 	proj["nH_cloud"] = computePlaneProjection<amrex::ReduceOpSum>(
 	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
 		    // partial cloud density
-		    Real rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
+		    Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
 		    return (quokka::cooling::cloudy_H_mass_fraction * rho_cloud) / m_H;
 	    },
 	    dir);
@@ -655,7 +655,7 @@ template <> auto RadhydroSimulation<ShockCloud>::ComputeProjections(const int di
 	proj["nH_wind"] = computePlaneProjection<amrex::ReduceOpSum>(
 	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
 		    // partial wind density
-		    Real rho_wind = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 2);
+		    Real const rho_wind = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 2);
 		    return (quokka::cooling::cloudy_H_mass_fraction * rho_wind) / m_H;
 	    },
 	    dir);
