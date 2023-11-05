@@ -19,6 +19,7 @@
 #include "GrackleDataReader.hpp"
 #include "Interpolate2D.hpp"
 #include "ODEIntegrate.hpp"
+#include "fundamental_constants.H"
 #include "hydro_system.hpp"
 #include "radiation_system.hpp"
 #include "root_finding.hpp"
