@@ -147,6 +147,7 @@ add_subdirectory(RadTube)
 add_subdirectory(RadhydroShell)
 add_subdirectory(RadhydroShock)
 add_subdirectory(RadhydroShockCGS)
+add_subdirectory(RadhydroPulse)
 
 add_subdirectory(ODEIntegration)
 add_subdirectory(Cooling)
