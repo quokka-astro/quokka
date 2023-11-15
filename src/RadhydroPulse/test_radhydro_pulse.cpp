@@ -24,22 +24,17 @@ constexpr double rho0 = 1.2;	  // g cm^-3 (matter density)
 constexpr double a_rad = C::a_rad;
 constexpr double c = C::c_light;	  // speed of light (cgs)
 // constexpr double chat = 0.01 * c;
-constexpr double chat = 0.1 * c;
-// constexpr double chat = c;
+// constexpr double chat = 0.1 * c;
+constexpr double chat = c;
 constexpr double width = 24.0;      // cm, width of the pulse
 // constexpr double erad_floor = a_rad * std::pow(T0, 4) * 1.0e-8;
 constexpr double erad_floor = a_rad * 1e-8;
 constexpr double mu = 2.33 * C::m_u;
 constexpr double k_B = C::k_B;
-constexpr double max_time = 4.8e-5;
-// constexpr double max_time = 4.8e-6;    // 0.1 t_end
-// constexpr double max_time = 0.;
-// constexpr double v0 = 1.0e6;      // = 2.0 * width / max_time;
-constexpr double v0 = 0.;
-// constexpr double CFL_number = 0.8;
-// constexpr double CFL_number = 0.08;
-
 constexpr double initial_time = 0.0;
+constexpr double max_time = 4.8e-5;
+constexpr double v0 = 0.;
+// constexpr double v0 = 1.0e6;      // = 2.0 * width / max_time;
 
 template <> struct quokka::EOS_Traits<PulseProblem> {
 	static constexpr double mean_molecular_weight = mu;
@@ -162,7 +157,6 @@ auto problem_main() -> int
 	// Problem parameters
 	const long int max_timesteps = 1e8;
 	const double CFL_number = 0.8;
-  // const double CFL_number = 0.08;
 	// const int nx = 32;
 
 	// const double max_dt = 2e-9;   // t_cr = 2 cm / cs = 7e-8 s	

@@ -1,0 +1,43 @@
+Host Name: gadi-login-08.gadi.nci.org.au
+=== If no file names and line numbers are shown below, one can run
+            addr2line -Cpfie my_exefile my_line_address
+    to convert `my_line_address` (e.g., 0x4a6b) into file name and line number.
+    Or one can use amrex/Tools/Backtrace/parse_bt.py.
+
+=== Please note that the line number reported by addr2line may not be accurate.
+    One can use
+            readelf -wl my_exefile | grep my_line_address'
+    to find out the offset for that line.
+
+ 0: /home/120/ch1506/softwares/quokka/quokka-mac/build/build1D/src/RadhydroPulse/test_radhydro_pulse() [0x51e8d6]
+    amrex::BLBackTrace::print_backtrace_info(_IO_FILE*) at ??:?
+
+ 1: /home/120/ch1506/softwares/quokka/quokka-mac/build/build1D/src/RadhydroPulse/test_radhydro_pulse() [0x520af7]
+    amrex::BLBackTrace::handler(int) at ??:?
+
+ 2: /home/120/ch1506/softwares/quokka/quokka-mac/build/build1D/src/RadhydroPulse/test_radhydro_pulse() [0x4d40c3]
+    amrex::FileOpenFailed(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&) at ??:?
+
+ 3: /home/120/ch1506/softwares/quokka/quokka-mac/build/build1D/src/RadhydroPulse/test_radhydro_pulse() [0x4fd988]
+    amrex::ParallelDescriptor::ReadAndBcastFile(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, amrex::Vector<char, std::allocator<char> >&, bool, ompi_communicator_t* const&) at ??:?
+
+ 4: /home/120/ch1506/softwares/quokka/quokka-mac/build/build1D/src/RadhydroPulse/test_radhydro_pulse() [0x4bcf99]
+    amrex::(anonymous namespace)::read_file(char const*, std::__cxx11::list<amrex::ParmParse::PP_entry, std::allocator<amrex::ParmParse::PP_entry> >&) at AMReX_ParmParse.cpp:?
+
+ 5: /home/120/ch1506/softwares/quokka/quokka-mac/build/build1D/src/RadhydroPulse/test_radhydro_pulse() [0x4bfcb8]
+    amrex::ParmParse::Initialize(int, char**, char const*) at ??:?
+
+ 6: /home/120/ch1506/softwares/quokka/quokka-mac/build/build1D/src/RadhydroPulse/test_radhydro_pulse() [0x4a6975]
+    amrex::Initialize(int&, char**&, bool, ompi_communicator_t*, std::function<void ()> const&, std::ostream&, std::ostream&, void (*)(char const*)) at ??:?
+
+ 7: /home/120/ch1506/softwares/quokka/quokka-mac/build/build1D/src/RadhydroPulse/test_radhydro_pulse() [0x424876]
+    main at ??:?
+
+ 8: /lib64/libc.so.6(__libc_start_main+0xe5) [0x7feb0abebd85]
+
+ 9: /home/120/ch1506/softwares/quokka/quokka-mac/build/build1D/src/RadhydroPulse/test_radhydro_pulse() [0x42853e]
+    _start at ??:?
+
+
+===== TinyProfilers ======
+
