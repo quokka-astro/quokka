@@ -38,6 +38,20 @@ static constexpr double radiation_constant_cgs_ = C::a_rad; // cgs
 static constexpr double inf = std::numeric_limits<double>::max();
 static constexpr double Erad_zero = 1e-14;
 
+// Hyper parameters of the IMEX time integrator for the radiation subsystem
+
+// IMEX PD-ARS scheme
+static constexpr double IMEX_a22 = 1.0;
+static constexpr double IMEX_a32 = 0.4;      // 0 < IMEX_a32 <= 0.5
+
+// SSP-RK2 + implicit radiation-matter exchange
+// static constexpr double IMEX_a22 = 0.0;
+// static constexpr double IMEX_a32 = 0.0;
+
+// test
+// static constexpr double IMEX_a22 = 1.0;
+// static constexpr double IMEX_a32 = 0.00001;
+
 // this struct is specialized by the user application code
 //
 template <typename problem_t> struct RadSystem_Traits {
@@ -117,9 +131,12 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 				amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxDiffusiveArray, double dt_in,
 				amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange, int nvars);
 
-	static void AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayconst_t &U1, amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray,
-				 amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxDiffusiveArray, double dt_in,
-				 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange, int nvars);
+	static void AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayconst_t &U1, 
+        amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrayOld,
+        amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray,
+				amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxDiffusiveArrayOld,
+				amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxDiffusiveArray, 
+        double dt_in, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange, int nvars);
 
 	template <FluxDir DIR>
 	static void ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiffusive_in, amrex::Array4<const amrex::Real> const &x1LeftState_in,
@@ -131,7 +148,10 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 				       amrex::Real time);
 
 	static void AddSourceTerms(array_t &consVar, arrayconst_t &radEnergySource, arrayconst_t &advectionFluxes, amrex::Box const &indexRange,
-				   amrex::Real dt);
+				   amrex::Real dt, const int stage);
+
+	static void balanceMatterRadiation(arrayconst_t &consPrev, array_t &consNew, amrex::Box const &indexRange);
+
 	static void ComputeSourceTermsExplicit(arrayconst_t &consPrev, arrayconst_t &radEnergySource, array_t &src, amrex::Box const &indexRange,
 					       amrex::Real dt);
 
@@ -511,9 +531,12 @@ void RadSystem<problem_t>::PredictStep(arrayconst_t &consVarOld, array_t &consVa
 }
 
 template <typename problem_t>
-void RadSystem<problem_t>::AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayconst_t &U1, amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray,
-					amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxDiffusiveArray, const double dt_in,
-					amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange, const int /*nvars*/)
+void RadSystem<problem_t>::AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayconst_t &U1, 
+          amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrayOld,
+          amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray,
+					amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxDiffusiveArrayOld, 
+					amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxDiffusiveArray, 
+          const double dt_in, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange, const int /*nvars*/)
 {
 	// By convention, the fluxes are defined on the left edge of each zone,
 	// i.e. flux_(i) is the flux *into* zone i through the interface on the
@@ -522,34 +545,44 @@ void RadSystem<problem_t>::AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayc
 
 	auto const dt = dt_in;
 	const auto dx = dx_in[0];
+	const auto x1FluxOld = fluxArrayOld[0];
 	const auto x1Flux = fluxArray[0];
+	const auto x1FluxDiffusiveOld = fluxDiffusiveArrayOld[0];
 	const auto x1FluxDiffusive = fluxDiffusiveArray[0];
 #if (AMREX_SPACEDIM >= 2)
 	const auto dy = dx_in[1];
+  const auto x2FluxOld = fluxArrayOld[1];
 	const auto x2Flux = fluxArray[1];
+  const auto x2FluxDiffusiveOld = fluxDiffusiveArrayOld[1];
 	const auto x2FluxDiffusive = fluxDiffusiveArray[1];
 #endif
 #if (AMREX_SPACEDIM == 3)
 	const auto dz = dx_in[2];
+  const auto x3FluxOld = fluxArrayOld[2];
 	const auto x3Flux = fluxArray[2];
+  const auto x3FluxDiffusiveOld = fluxDiffusiveArrayOld[2];
 	const auto x3FluxDiffusive = fluxDiffusiveArray[2];
 #endif
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 		std::array<amrex::Real, nvarHyperbolic_> cons_new{};
 
+    // y^n+1 = (0.5 + epsilon) y^n + (0.5 - epsilon) y^(2) + dt * epsilon * s(y^n) + dt * 0.5 * s(y^(2)) + dt * (0.5 + epsilon) * f(y^n+1)            the last term is implicit and not used here
 		for (int n = 0; n < nvarHyperbolic_; ++n) {
 			const double U_0 = U0(i, j, k, nstartHyperbolic_ + n);
 			const double U_1 = U1(i, j, k, nstartHyperbolic_ + n);
+			const double FxU_0 = (dt / dx) * (x1FluxOld(i, j, k, n) - x1FluxOld(i + 1, j, k, n));
 			const double FxU_1 = (dt / dx) * (x1Flux(i, j, k, n) - x1Flux(i + 1, j, k, n));
 #if (AMREX_SPACEDIM >= 2)
+      const double FyU_0 = (dt / dy) * (x2FluxOld(i, j, k, n) - x2FluxOld(i, j + 1, k, n));
 			const double FyU_1 = (dt / dy) * (x2Flux(i, j, k, n) - x2Flux(i, j + 1, k, n));
 #endif
 #if (AMREX_SPACEDIM == 3)
+      const double FzU_0 = (dt / dz) * (x3FluxOld(i, j, k, n) - x3FluxOld(i, j, k + 1, n));
 			const double FzU_1 = (dt / dz) * (x3Flux(i, j, k, n) - x3Flux(i, j, k + 1, n));
 #endif
 			// save results in cons_new
-			cons_new[n] = (0.5 * U_0 + 0.5 * U_1) + (AMREX_D_TERM(0.5 * FxU_1, +0.5 * FyU_1, +0.5 * FzU_1));
+			cons_new[n] = (1.0 - IMEX_a32) * U_0 + IMEX_a32 * U_1 + ((0.5 - IMEX_a32) * AMREX_D_TERM(FxU_0, FyU_0, FzU_0)) + (0.5 * AMREX_D_TERM(FxU_1, FyU_1, FzU_1));
 		}
 
 		if (!isStateValid(cons_new)) {
@@ -557,15 +590,18 @@ void RadSystem<problem_t>::AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayc
 			for (int n = 0; n < nvarHyperbolic_; ++n) {
 				const double U_0 = U0(i, j, k, nstartHyperbolic_ + n);
 				const double U_1 = U1(i, j, k, nstartHyperbolic_ + n);
+        const double FxU_0 = (dt / dx) * (x1FluxDiffusiveOld(i, j, k, n) - x1FluxDiffusiveOld(i + 1, j, k, n));
 				const double FxU_1 = (dt / dx) * (x1FluxDiffusive(i, j, k, n) - x1FluxDiffusive(i + 1, j, k, n));
 #if (AMREX_SPACEDIM >= 2)
+        const double FyU_0 = (dt / dy) * (x2FluxDiffusiveOld(i, j, k, n) - x2FluxDiffusiveOld(i, j + 1, k, n));
 				const double FyU_1 = (dt / dy) * (x2FluxDiffusive(i, j, k, n) - x2FluxDiffusive(i, j + 1, k, n));
 #endif
 #if (AMREX_SPACEDIM == 3)
+        const double FzU_0 = (dt / dz) * (x3FluxDiffusiveOld(i, j, k, n) - x3FluxDiffusiveOld(i, j, k + 1, n));
 				const double FzU_1 = (dt / dz) * (x3FluxDiffusive(i, j, k, n) - x3FluxDiffusive(i, j, k + 1, n));
 #endif
 				// save results in cons_new
-				cons_new[n] = (0.5 * U_0 + 0.5 * U_1) + (AMREX_D_TERM(0.5 * FxU_1, +0.5 * FyU_1, +0.5 * FzU_1));
+			  cons_new[n] = (1.0 - IMEX_a32) * U_0 + IMEX_a32 * U_1 + ((0.5 - IMEX_a32) * AMREX_D_TERM(FxU_0, FyU_0, FzU_0)) + (0.5 * AMREX_D_TERM(FxU_1, FyU_1, FzU_1));
 			}
 		}
 
@@ -987,11 +1023,62 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeEgasFromEint(const doubl
 }
 
 template <typename problem_t>
+void RadSystem<problem_t>::balanceMatterRadiation(arrayconst_t &consPrev, array_t &consNew, amrex::Box const &indexRange)
+{
+	// cell-centered kernel
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		const double c = c_light_;
+		const double chat = c_hat_;
+    auto rho = consPrev(i, j, k, gasDensity_index);
+		amrex::GpuArray<amrex::Real, 3> dMomentum{0., 0., 0.};
+		amrex::Real dErad = 0.0;
+    amrex::Real Frad_t0 = NAN;
+    amrex::Real Frad_t1 = NAN;
+		for (int g = 0; g < nGroups_; ++g) {
+      dErad += -(consNew(i, j, k, radEnergy_index + numRadVars_ * g) - consPrev(i, j, k, radEnergy_index + numRadVars_ * g)) * (c / chat);
+      // x1 component momentum
+			Frad_t0 = consPrev(i, j, k, x1RadFlux_index + numRadVars_ * g);
+      Frad_t1 = consNew(i, j, k, x1RadFlux_index + numRadVars_ * g);
+			dMomentum[0] += -(Frad_t1 - Frad_t0) / (c * chat);
+      // x2 component momentum
+      Frad_t0 = consPrev(i, j, k, x2RadFlux_index + numRadVars_ * g);
+      Frad_t1 = consNew(i, j, k, x2RadFlux_index + numRadVars_ * g);
+      dMomentum[1] = -(Frad_t1 - Frad_t0) / (c * chat);
+      // x3 component momentum
+      Frad_t0 = consPrev(i, j, k, x3RadFlux_index + numRadVars_ * g);
+      Frad_t1 = consNew(i, j, k, x3RadFlux_index + numRadVars_ * g);
+      dMomentum[2] = -(Frad_t1 - Frad_t0) / (c * chat);
+    }
+
+    // balance momentum
+    const auto x1GasMom1 = consPrev(i, j, k, x1GasMomentum_index) + dMomentum[0];
+    const auto x2GasMom1 = consPrev(i, j, k, x2GasMomentum_index) + dMomentum[1];
+    const auto x3GasMom1 = consPrev(i, j, k, x3GasMomentum_index) + dMomentum[2];
+    consNew(i, j, k, x1GasMomentum_index) = x1GasMom1;
+    consNew(i, j, k, x2GasMomentum_index) = x2GasMom1;
+    consNew(i, j, k, x3GasMomentum_index) = x3GasMom1;
+
+    // balance energy
+    const auto Eint0 = consPrev(i, j, k, gasInternalEnergy_index);
+    const auto Ekin0 = consPrev(i, j, k, gasEnergy_index) - Eint0;
+    const auto Ekin1 = (x1GasMom1 * x1GasMom1 + x2GasMom1 * x2GasMom1 + x3GasMom1 * x3GasMom1) / (2.0 * rho);
+    const auto dEkin = Ekin1 - Ekin0;
+    const auto Eint1 = Eint0 + dErad - dEkin;
+    consNew(i, j, k, gasInternalEnergy_index) = Eint1;
+    consNew(i, j, k, gasEnergy_index) = ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Eint1);
+  });
+}
+
+template <typename problem_t>
 void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEnergySource, arrayconst_t &advectionFluxes, amrex::Box const &indexRange,
-					  amrex::Real dt)
+					  amrex::Real dt_radiation, const int stage)
 {
 	arrayconst_t &consPrev = consVar; // make read-only
 	array_t &consNew = consVar;
+  auto dt = dt_radiation;
+  if (stage != 1) {
+    dt = (1.0 - IMEX_a32) * dt_radiation;
+  }
 
 	amrex::GpuArray<amrex::Real, nGroups_ + 1> radBoundaries_g{};
 	if constexpr (nGroups_ > 1) {
