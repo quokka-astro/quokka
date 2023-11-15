@@ -247,18 +247,18 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	auto computeNumberOfRadiationSubsteps(int lev, amrex::Real dt_lev_hydro) -> int;
 	void advanceRadiationSubstepAtLevel(int lev, amrex::Real time, amrex::Real dt_radiation, int iter_count, int nsubsteps,
 					    amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine);
-	void advanceRadiationForwardEuler(int lev, amrex::Real time, amrex::Real dt_radiation, int iter_count, int nsubsteps,
-					    amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine);
-	void advanceRadiationMidpointRK2(int lev, amrex::Real time, amrex::Real dt_radiation, int iter_count, int nsubsteps,
-					    amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine);
+	void advanceRadiationForwardEuler(int lev, amrex::Real time, amrex::Real dt_radiation, int iter_count, int nsubsteps, amrex::YAFluxRegister *fr_as_crse,
+					  amrex::YAFluxRegister *fr_as_fine);
+	void advanceRadiationMidpointRK2(int lev, amrex::Real time, amrex::Real dt_radiation, int iter_count, int nsubsteps, amrex::YAFluxRegister *fr_as_crse,
+					 amrex::YAFluxRegister *fr_as_fine);
 
 	void subcycleRadiationAtLevel(int lev, amrex::Real time, amrex::Real dt_lev_hydro, amrex::YAFluxRegister *fr_as_crse,
 				      amrex::YAFluxRegister *fr_as_fine);
 
-	void operatorSplitSourceTerms(amrex::Array4<const amrex::Real> const &stateOld, amrex::Array4<amrex::Real> const &stateNew, 
-              const amrex::Box &indexRange, amrex::Real time, double dt, const int stage, 
-              amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, 
-              AMREX_SPACEDIM> const &prob_lo, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi);
+	void operatorSplitSourceTerms(amrex::Array4<const amrex::Real> const &stateOld, amrex::Array4<amrex::Real> const &stateNew,
+				      const amrex::Box &indexRange, amrex::Real time, double dt, const int stage,
+				      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+				      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi);
 
 	auto computeRadiationFluxes(amrex::Array4<const amrex::Real> const &consVar, const amrex::Box &indexRange, int nvars,
 				    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx)
@@ -1505,7 +1505,7 @@ void RadhydroSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Rea
 			swapRadiationState(state_old_cc_[lev], state_new_cc_[lev]);
 		}
 
-    // We use the IMEX PD-ARS scheme to evolve the radiation subsystem and radiation-matter coupling.
+		// We use the IMEX PD-ARS scheme to evolve the radiation subsystem and radiation-matter coupling.
 
 		// Stage 1: advance hyperbolic radiation subsystem using Forward Euler method, starting from state_old_cc_ to state_new_cc_
 		advanceRadiationForwardEuler(lev, time_subcycle, dt_radiation, i, nsubSteps, fr_as_crse, fr_as_fine);
@@ -1513,19 +1513,20 @@ void RadhydroSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Rea
 		// new radiation state is stored in state_new_cc_
 		// new hydro state is stored in state_new_cc_ (always the case during radiation update)
 
-    if constexpr (IMEX_a22 > 0.0) {
-		  // matter-radiation exchange source terms of stage 1
-      for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
-        const amrex::Box &indexRange = iter.validbox();
-        auto const &stateOld = state_old_cc_[lev].const_array(iter);
-        auto const &stateNew = state_new_cc_[lev].array(iter);
-        auto const &prob_lo = geom[lev].ProbLoArray();
-        auto const &prob_hi = geom[lev].ProbHiArray();
-        // update state_new_cc_[lev] in place (updates both radiation and hydro vars)
-        // Note that only a fraction (IMEX_a32) of the matter-radiation exchange source terms are added to hydro. This ensures that the hydro properties get to t + IMEX_a32 dt in terms of matter-radiation exchange.
-        operatorSplitSourceTerms(stateOld, stateNew, indexRange, time_subcycle, dt_radiation, 1, dx, prob_lo, prob_hi);
-      }
-    }
+		if constexpr (IMEX_a22 > 0.0) {
+			// matter-radiation exchange source terms of stage 1
+			for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
+				const amrex::Box &indexRange = iter.validbox();
+				auto const &stateOld = state_old_cc_[lev].const_array(iter);
+				auto const &stateNew = state_new_cc_[lev].array(iter);
+				auto const &prob_lo = geom[lev].ProbLoArray();
+				auto const &prob_hi = geom[lev].ProbHiArray();
+				// update state_new_cc_[lev] in place (updates both radiation and hydro vars)
+				// Note that only a fraction (IMEX_a32) of the matter-radiation exchange source terms are added to hydro. This ensures that the
+				// hydro properties get to t + IMEX_a32 dt in terms of matter-radiation exchange.
+				operatorSplitSourceTerms(stateOld, stateNew, indexRange, time_subcycle, dt_radiation, 1, dx, prob_lo, prob_hi);
+			}
+		}
 
 		// Stage 2: advance hyperbolic radiation subsystem using midpoint RK2 method, starting from state_old_cc_ to state_new_cc_
 		advanceRadiationMidpointRK2(lev, time_subcycle, dt_radiation, i, nsubSteps, fr_as_crse, fr_as_fine);
@@ -1533,10 +1534,10 @@ void RadhydroSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Rea
 		// new radiation state is stored in state_new_cc_
 		// new hydro state is stored in state_new_cc_ (always the case during radiation update)
 
-    // Add the matter-radiation exchange source terms to the radiation subsystem and evolve by (1 - IMEX_a32) * dt
+		// Add the matter-radiation exchange source terms to the radiation subsystem and evolve by (1 - IMEX_a32) * dt
 		for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
 			const amrex::Box &indexRange = iter.validbox();
-      auto const &stateOld = state_old_cc_[lev].const_array(iter);
+			auto const &stateOld = state_old_cc_[lev].const_array(iter);
 			auto const &stateNew = state_new_cc_[lev].array(iter);
 			auto const &prob_lo = geom[lev].ProbLoArray();
 			auto const &prob_hi = geom[lev].ProbHiArray();
@@ -1623,8 +1624,7 @@ void RadhydroSimulation<problem_t>::advanceRadiationSubstepAtLevel(int lev, amre
 
 template <typename problem_t>
 void RadhydroSimulation<problem_t>::advanceRadiationForwardEuler(int lev, amrex::Real time, amrex::Real dt_radiation, int const iter_count,
-                 int const /*nsubsteps*/, amrex::YAFluxRegister *fr_as_crse,
-                 amrex::YAFluxRegister *fr_as_fine)
+								 int const /*nsubsteps*/, amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine)
 {
 	// get cell sizes
 	auto const &dx = geom[lev].CellSizeArray();
@@ -1661,8 +1661,7 @@ void RadhydroSimulation<problem_t>::advanceRadiationForwardEuler(int lev, amrex:
 
 template <typename problem_t>
 void RadhydroSimulation<problem_t>::advanceRadiationMidpointRK2(int lev, amrex::Real time, amrex::Real dt_radiation, int const iter_count,
-                 int const /*nsubsteps*/, amrex::YAFluxRegister *fr_as_crse,
-                 amrex::YAFluxRegister *fr_as_fine)
+								int const /*nsubsteps*/, amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine)
 {
 	auto const &dx = geom[lev].CellSizeArray();
 
@@ -1681,9 +1680,8 @@ void RadhydroSimulation<problem_t>::advanceRadiationMidpointRK2(int lev, amrex::
 
 		// Stage 2 of RK2-SSP
 		RadSystem<problem_t>::AddFluxesRK2(
-		    stateNew, stateOld, stateInter, 
-        {AMREX_D_DECL(fluxArraysOld[0].array(), fluxArraysOld[1].array(), fluxArraysOld[2].array())},
-        {AMREX_D_DECL(fluxArrays[0].array(), fluxArrays[1].array(), fluxArrays[2].array())},
+		    stateNew, stateOld, stateInter, {AMREX_D_DECL(fluxArraysOld[0].array(), fluxArraysOld[1].array(), fluxArraysOld[2].array())},
+		    {AMREX_D_DECL(fluxArrays[0].array(), fluxArrays[1].array(), fluxArrays[2].array())},
 		    {AMREX_D_DECL(fluxDiffusiveArraysOld[0].const_array(), fluxDiffusiveArraysOld[1].const_array(), fluxDiffusiveArraysOld[2].const_array())},
 		    {AMREX_D_DECL(fluxDiffusiveArrays[0].const_array(), fluxDiffusiveArrays[1].const_array(), fluxDiffusiveArrays[2].const_array())},
 		    dt_radiation, dx, indexRange, ncompHyperbolic_);
@@ -1702,8 +1700,9 @@ void RadhydroSimulation<problem_t>::advanceRadiationMidpointRK2(int lev, amrex::
 }
 
 template <typename problem_t>
-void RadhydroSimulation<problem_t>::operatorSplitSourceTerms(amrex::Array4<const amrex::Real> const &stateOld, amrex::Array4<amrex::Real> const &stateNew, const amrex::Box &indexRange, const amrex::Real time,
-							     const double dt, const int stage, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+void RadhydroSimulation<problem_t>::operatorSplitSourceTerms(amrex::Array4<const amrex::Real> const &stateOld, amrex::Array4<amrex::Real> const &stateNew,
+							     const amrex::Box &indexRange, const amrex::Real time, const double dt, const int stage,
+							     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 							     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
 							     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi)
 {

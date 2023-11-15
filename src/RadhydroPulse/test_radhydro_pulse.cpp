@@ -17,14 +17,14 @@
 struct PulseProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-constexpr double kappa0 = 100.;  // cm^2 g^-1 
-constexpr double T0 = 1.0e7;	  // K (temperature)
-constexpr double T1 = 2.0e7;	  // K (temperature)
-constexpr double rho0 = 1.2;	  // g cm^-3 (matter density)
+constexpr double kappa0 = 100.; // cm^2 g^-1
+constexpr double T0 = 1.0e7;	// K (temperature)
+constexpr double T1 = 2.0e7;	// K (temperature)
+constexpr double rho0 = 1.2;	// g cm^-3 (matter density)
 constexpr double a_rad = C::a_rad;
-constexpr double c = C::c_light;	  // speed of light (cgs)
+constexpr double c = C::c_light; // speed of light (cgs)
 constexpr double chat = c;
-constexpr double width = 24.0;      // cm, width of the pulse
+constexpr double width = 24.0; // cm, width of the pulse
 // constexpr double erad_floor = a_rad * std::pow(T0, 4) * 1.0e-8;
 constexpr double erad_floor = a_rad * 1e-8;
 constexpr double mu = 2.33 * C::m_u;
@@ -32,7 +32,7 @@ constexpr double k_B = C::k_B;
 constexpr double initial_time = 0.0;
 constexpr double max_time = 4.8e-5;
 // constexpr double v0 = 0.;      // non-advecting pulse
-constexpr double v0 = 1.0e6;      // advecting pulse, v0 = 2.0 * width / max_time;
+constexpr double v0 = 1.0e6; // advecting pulse, v0 = 2.0 * width / max_time;
 
 template <> struct quokka::EOS_Traits<PulseProblem> {
 	static constexpr double mean_molecular_weight = mu;
@@ -65,7 +65,7 @@ auto compute_exact_Trad(const double x, const double t) -> double
 	// compute exact solution for Gaussian radiation pulse
 	// 		assuming diffusion approximation
 	const double sigma = width;
-  return T0 + (T1 - T0) * std::exp(-x * x / (2.0 * sigma * sigma));
+	return T0 + (T1 - T0) * std::exp(-x * x / (2.0 * sigma * sigma));
 }
 
 AMREX_GPU_HOST_DEVICE
@@ -74,7 +74,7 @@ auto compute_exact_rho(const double x, const double t) -> double
 	// compute exact solution for Gaussian radiation pulse
 	// 		assuming diffusion approximation
 	auto T = compute_exact_Trad(x, t);
-  return rho0 * T0 / T + (a_rad * mu / 3. / k_B) * (std::pow(T0, 4) / T - std::pow(T, 3));
+	return rho0 * T0 / T + (a_rad * mu / 3. / k_B) * (std::pow(T0, 4) / T - std::pow(T, 3));
 }
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
@@ -101,8 +101,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacityTempDeri
 	return opacity_deriv;
 }
 
-template <> 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<PulseProblem>::ComputeEddingtonFactor(double /*f*/) -> double
+template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<PulseProblem>::ComputeEddingtonFactor(double /*f*/) -> double
 {
 	return (1. / 3.); // Eddington approximation
 }
@@ -157,8 +156,8 @@ auto problem_main() -> int
 	const double CFL_number = 0.8;
 	// const int nx = 32;
 
-	// const double max_dt = 2e-9;   // t_cr = 2 cm / cs = 7e-8 s	
-	const double max_dt = 1e-3;   // t_cr = 2 cm / cs = 7e-8 s	
+	// const double max_dt = 2e-9;   // t_cr = 2 cm / cs = 7e-8 s
+	const double max_dt = 1e-3; // t_cr = 2 cm / cs = 7e-8 s
 
 	// Boundary conditions
 	constexpr int nvars = RadSystem<PulseProblem>::nvar_;
@@ -212,14 +211,14 @@ auto problem_main() -> int
 		xs.at(i) = x;
 		const auto Erad_t = values.at(RadSystem<PulseProblem>::radEnergy_index)[i];
 		const auto Trad_t = std::pow(Erad_t / a_rad, 1. / 4.);
-    const auto rho_t = values.at(RadSystem<PulseProblem>::gasDensity_index)[i];
-    const auto v_t = values.at(RadSystem<PulseProblem>::x1GasMomentum_index)[i] / rho_t;
+		const auto rho_t = values.at(RadSystem<PulseProblem>::gasDensity_index)[i];
+		const auto v_t = values.at(RadSystem<PulseProblem>::x1GasMomentum_index)[i] / rho_t;
 		rhogas.at(i) = rho_t;
 		Erad.at(i) = Erad_t;
 		Trad.at(i) = Trad_t;
 		Egas.at(i) = values.at(RadSystem<PulseProblem>::gasInternalEnergy_index)[i];
 		Tgas.at(i) = quokka::EOS<PulseProblem>::ComputeTgasFromEint(rho_t, Egas.at(i));
-    Vgas.at(i) = v_t;
+		Vgas.at(i) = v_t;
 
 		auto Trad_val = compute_exact_Trad(x - x0, initial_time + sim.tNew_[0]);
 		auto Erad_val = a_rad * std::pow(Trad_val, 4);
@@ -235,7 +234,7 @@ auto problem_main() -> int
 		err_norm += std::abs(Tgas[i] - Trad[i]);
 		sol_norm += std::abs(Trad[i]);
 	}
-	const double error_tol = 0.002;       // without advection, rel_error = 0.002275703823
+	const double error_tol = 0.002; // without advection, rel_error = 0.002275703823
 	const double rel_error = err_norm / sol_norm;
 	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
 
@@ -257,31 +256,31 @@ auto problem_main() -> int
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./radhydro_pulse_temperature.pdf");
 
-  // plot gas density profile
-  matplotlibcpp::clf();
-  std::map<std::string, std::string> rho_args;
-  rho_args["label"] = "gas density";
-  rho_args["linestyle"] = "-";
-  matplotlibcpp::plot(xs, rhogas, rho_args);
-  matplotlibcpp::xlabel("length x (cm)");
-  matplotlibcpp::ylabel("density (g cm^-3)");
-  matplotlibcpp::legend();
-  matplotlibcpp::title(fmt::format("time ct = {:.4g}", initial_time + sim.tNew_[0] * c));
+	// plot gas density profile
+	matplotlibcpp::clf();
+	std::map<std::string, std::string> rho_args;
+	rho_args["label"] = "gas density";
+	rho_args["linestyle"] = "-";
+	matplotlibcpp::plot(xs, rhogas, rho_args);
+	matplotlibcpp::xlabel("length x (cm)");
+	matplotlibcpp::ylabel("density (g cm^-3)");
+	matplotlibcpp::legend();
+	matplotlibcpp::title(fmt::format("time ct = {:.4g}", initial_time + sim.tNew_[0] * c));
 	matplotlibcpp::tight_layout();
-  matplotlibcpp::save("./radhydro_pulse_density.pdf");
+	matplotlibcpp::save("./radhydro_pulse_density.pdf");
 
-  // plot gas velocity profile
-  matplotlibcpp::clf();
-  std::map<std::string, std::string> vgas_args;
-  vgas_args["label"] = "gas velocity";
-  vgas_args["linestyle"] = "-";
-  matplotlibcpp::plot(xs, Vgas, vgas_args);
-  matplotlibcpp::xlabel("length x (cm)");
-  matplotlibcpp::ylabel("velocity (cm s^-1)");
-  matplotlibcpp::legend();
-  matplotlibcpp::title(fmt::format("time ct = {:.4g}", initial_time + sim.tNew_[0] * c));
+	// plot gas velocity profile
+	matplotlibcpp::clf();
+	std::map<std::string, std::string> vgas_args;
+	vgas_args["label"] = "gas velocity";
+	vgas_args["linestyle"] = "-";
+	matplotlibcpp::plot(xs, Vgas, vgas_args);
+	matplotlibcpp::xlabel("length x (cm)");
+	matplotlibcpp::ylabel("velocity (cm s^-1)");
+	matplotlibcpp::legend();
+	matplotlibcpp::title(fmt::format("time ct = {:.4g}", initial_time + sim.tNew_[0] * c));
 	matplotlibcpp::tight_layout();
-  matplotlibcpp::save("./radhydro_pulse_velocity.pdf");
+	matplotlibcpp::save("./radhydro_pulse_velocity.pdf");
 
 #endif
 
