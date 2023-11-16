@@ -132,8 +132,8 @@ AMRSimulation<ShockProblem>::setCustomBoundaryConditions(const amrex::IntVect &i
 	}
 
 	if (i < lo[0]) {
-    const double px_L = rho0 * v0;
-    const double Egas_L = Egas0;
+		const double px_L = rho0 * v0;
+		const double Egas_L = Egas0;
 
 		// x1 left side boundary -- constant
 		consVar(i, j, k, RadSystem<ShockProblem>::gasDensity_index) = rho0;
@@ -148,8 +148,8 @@ AMRSimulation<ShockProblem>::setCustomBoundaryConditions(const amrex::IntVect &i
 		consVar(i, j, k, RadSystem<ShockProblem>::x2RadFlux_index) = 0;
 		consVar(i, j, k, RadSystem<ShockProblem>::x3RadFlux_index) = 0;
 	} else if (i >= hi[0]) {
-    const double px_R = rho1 * v1;
-    const double Egas_R = Egas1;
+		const double px_R = rho1 * v1;
+		const double Egas_R = Egas1;
 
 		// x1 right-side boundary -- constant
 		consVar(i, j, k, RadSystem<ShockProblem>::gasDensity_index) = rho1;
