@@ -212,21 +212,21 @@ auto problem_main() -> int
 	//     Radiative Transfer, 69, 475–489, 2001.
 
 	// Problem parameters
-	const int max_timesteps = 1e5;
+	const long int max_timesteps = 1e8;
 	const double CFL_number = 0.9;
-	const double initial_dt = 5.0e-12; // s
-	const double max_dt = 5.0e-12;	   // s
-	const double max_time = 10.0e-9;   // s
+	const double initial_dt = 4.0e-12; // s
+	const double max_dt = 4.0e-12;	   // s
+	const double max_time = 1.0e-8;   // s
 	// const int nx = 60; // [18 == matches resolution of McClarren & Lowrie (2008)]
 	// const double Lx = 0.66; // cm
 
-	// Problem initialization
-	std::cout << "radiation constant (code units) = " << RadSystem_Traits<SuOlsonProblemCgs>::radiation_constant << "\n";
-	std::cout << "c_light (code units) = " << RadSystem_Traits<SuOlsonProblemCgs>::c_light << "\n";
-	std::cout << "rho * c_v = " << rho0 * c_v << "\n";
-	std::cout << "initial_dt = " << initial_dt << "\n";
-	std::cout << "max_dt = " << max_dt << "\n";
-	std::cout << "max_time = " << max_time << std::endl;
+	// // Problem initialization
+	// std::cout << "radiation constant (code units) = " << RadSystem_Traits<SuOlsonProblemCgs>::radiation_constant << "\n";
+	// std::cout << "c_light (code units) = " << RadSystem_Traits<SuOlsonProblemCgs>::c_light << "\n";
+	// std::cout << "rho * c_v = " << rho0 * c_v << "\n";
+	// std::cout << "initial_dt = " << initial_dt << "\n";
+	// std::cout << "max_dt = " << max_dt << "\n";
+	// std::cout << "max_time = " << max_time << std::endl;
 
 	constexpr int nvars = RadSystem<SuOlsonProblemCgs>::nvar_;
 	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
