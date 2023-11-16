@@ -32,23 +32,24 @@
 #include "simulation.hpp"
 #include "valarray.hpp"
 
-// physical constants in CGS units
-static constexpr double c_light_cgs_ = C::c_light;	    // cgs
-static constexpr double radiation_constant_cgs_ = C::a_rad; // cgs
-static constexpr double inf = std::numeric_limits<double>::max();
-static constexpr double Erad_zero = 1e-14;
-
 static constexpr bool compute_G_last_two_terms = true;
 
 // Hyper parameters of the IMEX time integrator for the radiation subsystem and matter-radiation exchange
 
 // IMEX PD-ARS scheme
-// static constexpr double IMEX_a22 = 1.0;
-// static constexpr double IMEX_a32 = 0.4;      // 0 < IMEX_a32 <= 0.5
+static constexpr double IMEX_a22 = 1.0;
+static constexpr double IMEX_a32 = 0.4;      // 0 < IMEX_a32 <= 0.5
 
 // SSP-RK2 + implicit radiation-matter exchange
-static constexpr double IMEX_a22 = 0.0;
-static constexpr double IMEX_a32 = 0.0;
+// static constexpr double IMEX_a22 = 0.0;
+// static constexpr double IMEX_a32 = 0.0;
+
+
+// physical constants in CGS units
+static constexpr double c_light_cgs_ = C::c_light;	    // cgs
+static constexpr double radiation_constant_cgs_ = C::a_rad; // cgs
+static constexpr double inf = std::numeric_limits<double>::max();
+static constexpr double Erad_zero = 1e-14;
 
 // this struct is specialized by the user application code
 //
