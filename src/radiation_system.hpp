@@ -44,6 +44,8 @@ static constexpr double IMEX_a32 = 0.4; // 0 < IMEX_a32 <= 0.5
 // static constexpr double IMEX_a22 = 0.0;
 // static constexpr double IMEX_a32 = 0.0;
 
+static constexpr int maxIter = 400;
+
 // physical constants in CGS units
 static constexpr double c_light_cgs_ = C::c_light;	    // cgs
 static constexpr double radiation_constant_cgs_ = C::a_rad; // cgs
@@ -1155,9 +1157,9 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			quokka::valarray<double, nGroups_> F_R;
 
 			const double resid_tol = 1.0e-10; // 1.0e-15;
-			const int maxIter = 400;
-			int n = 0;
-			for (; n < maxIter; ++n) {
+			// const int maxIter = 400;
+			int iter = 0;
+			for (; iter < maxIter; ++iter) {
 				// compute material temperature
 				T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
 				AMREX_ASSERT(T_gas >= 0.);
@@ -1167,7 +1169,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				auto B = fourPiB / (4.0 * M_PI);
 				kappaPVec = ComputePlanckOpacity(rho, T_gas);
 				kappaFVec = ComputeFluxMeanOpacity(rho, T_gas);
-				kappaEVec = kappaFVec; // TODO(CCH): define ComputeEnergyMeanOpacity
+				kappaEVec = kappaPVec; // TODO(CCH): define ComputeEnergyMeanOpacity
 
 				// compute derivatives w/r/t T_gas
 				const double dB_dTgas = (4.0 * B) / T_gas;
@@ -1230,7 +1232,8 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				AMREX_ASSERT(Egas_guess > 0.);
 			} // END NEWTON-RAPHSON LOOP
 
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(n < maxIter, "Newton-Raphson iteration failed to converge!");
+	    // std::cout << "Number of iterations = " << iter << "\n";
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(iter < maxIter, "Newton-Raphson iteration failed to converge!");
 			AMREX_ALWAYS_ASSERT(Egas_guess > 0.0);
 			AMREX_ALWAYS_ASSERT(min(EradVec_guess) >= 0.0);
 		} // endif gamma != 1.0
