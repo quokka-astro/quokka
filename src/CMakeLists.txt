@@ -143,11 +143,13 @@ add_subdirectory(RadStreaming)
 add_subdirectory(RadSuOlson)
 add_subdirectory(RadTophat)
 add_subdirectory(RadTube)
+add_subdirectory(RadLinearDiffusionMultigroup)
 
 add_subdirectory(RadhydroShell)
 add_subdirectory(RadhydroShock)
 add_subdirectory(RadhydroShockCGS)
 add_subdirectory(RadhydroPulse)
+add_subdirectory(RadhydroPulseMultigroup)
 
 add_subdirectory(ODEIntegration)
 add_subdirectory(Cooling)

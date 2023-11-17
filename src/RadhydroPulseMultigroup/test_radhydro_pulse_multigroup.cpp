@@ -7,7 +7,7 @@
 /// \brief Defines a test problem for radiation in the diffusion regime.
 ///
 
-#include "test_radhydro_pulse.hpp"
+#include "test_radhydro_pulse_multigroup.hpp"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_Print.H"
 #include "RadhydroSimulation.hpp"
@@ -30,8 +30,6 @@ constexpr double erad_floor = a_rad * 1e-8;
 constexpr double mu = 2.33 * C::m_u;
 constexpr double k_B = C::k_B;
 constexpr double initial_time = 0.0;
-// constexpr double max_time = 0.;
-// constexpr double max_time = 4.8e-7;
 constexpr double max_time = 4.8e-5;
 constexpr double v0 = 0.;      // non-advecting pulse
 // constexpr double v0 = 1.0e6; // advecting pulse, v0 = 2.0 * width / max_time;
@@ -42,14 +40,6 @@ template <> struct quokka::EOS_Traits<PulseProblem> {
 	static constexpr double gamma = 5. / 3.;
 };
 
-template <> struct RadSystem_Traits<PulseProblem> {
-	static constexpr double c_light = c;
-	static constexpr double c_hat = chat;
-	static constexpr double radiation_constant = a_rad;
-	static constexpr double Erad_floor = erad_floor;
-	static constexpr bool compute_v_over_c_terms = true;
-};
-
 template <> struct Physics_Traits<PulseProblem> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
@@ -58,7 +48,17 @@ template <> struct Physics_Traits<PulseProblem> {
 	static constexpr bool is_radiation_enabled = true;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
-	static constexpr int nGroups = 1;
+	static constexpr int nGroups = 8;
+};
+
+template <> struct RadSystem_Traits<PulseProblem> {
+	static constexpr double c_light = c;
+	static constexpr double c_hat = chat;
+	static constexpr double radiation_constant = a_rad;
+	static constexpr double Erad_floor = erad_floor;
+	static constexpr bool compute_v_over_c_terms = true;
+	static constexpr double energy_unit = C::k_B;
+	static constexpr amrex::GpuArray<double, Physics_Traits<PulseProblem>::nGroups + 1> radBoundaries{1e15, 3.16e15, 1e16, 3.16e16, 1e17, 3.16e17, 1e18, 3.16e18, 1e19};
 };
 
 AMREX_GPU_HOST_DEVICE
@@ -121,6 +121,12 @@ template <> void RadhydroSimulation<PulseProblem>::setInitialConditionsOnGrid(qu
 
 	amrex::Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
 
+	// calculate radEnergyFractions
+	quokka::valarray<amrex::Real, Physics_Traits<PulseProblem>::nGroups> radEnergyFractions{};
+	for (int g = 0; g < Physics_Traits<PulseProblem>::nGroups; ++g) {
+		radEnergyFractions[g] = 1.0 / Physics_Traits<PulseProblem>::nGroups;
+	}
+
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
@@ -129,11 +135,14 @@ template <> void RadhydroSimulation<PulseProblem>::setInitialConditionsOnGrid(qu
 		const double rho = compute_exact_rho(x - x0, initial_time);
 		const double Egas = quokka::EOS<PulseProblem>::ComputeEintFromTgas(rho, Trad);
 
-		// state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = (1. + 4. / 3. * (v0 * v0) / (c * c)) * Erad;
-		state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = Erad;
-		state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index) = 4. / 3. * v0 * Erad;
-		state_cc(i, j, k, RadSystem<PulseProblem>::x2RadFlux_index) = 0;
-		state_cc(i, j, k, RadSystem<PulseProblem>::x3RadFlux_index) = 0;
+		for (int g = 0; g < Physics_Traits<PulseProblem>::nGroups; ++g) {
+      // state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = (1. + 4. / 3. * (v0 * v0) / (c * c)) * Erad;
+      state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad * radEnergyFractions[g];
+      state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 4. / 3. * v0 * Erad * radEnergyFractions[g];
+      state_cc(i, j, k, RadSystem<PulseProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+      state_cc(i, j, k, RadSystem<PulseProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+    }
+
 		state_cc(i, j, k, RadSystem<PulseProblem>::gasEnergy_index) = Egas + 0.5 * rho * v0 * v0;
 		state_cc(i, j, k, RadSystem<PulseProblem>::gasDensity_index) = rho;
 		state_cc(i, j, k, RadSystem<PulseProblem>::gasInternalEnergy_index) = Egas;
@@ -213,7 +222,11 @@ auto problem_main() -> int
 	for (int i = 0; i < nx; ++i) {
 		amrex::Real const x = position[i];
 		xs.at(i) = x;
-		const auto Erad_t = values.at(RadSystem<PulseProblem>::radEnergy_index)[i];
+		// const auto Erad_t = values.at(RadSystem<PulseProblem>::radEnergy_index)[i];
+    double Erad_t = 0.0;
+    for (int g = 0; g < Physics_Traits<PulseProblem>::nGroups; ++g) {
+      Erad_t += values.at(RadSystem<PulseProblem>::radEnergy_index + Physics_NumVars::numRadVars * g)[i];
+    }
 		const auto Trad_t = std::pow(Erad_t / a_rad, 1. / 4.);
 		const auto rho_t = values.at(RadSystem<PulseProblem>::gasDensity_index)[i];
 		const auto v_t = values.at(RadSystem<PulseProblem>::x1GasMomentum_index)[i] / rho_t;
