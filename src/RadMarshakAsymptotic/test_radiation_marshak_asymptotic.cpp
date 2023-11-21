@@ -9,6 +9,7 @@
 
 #include "AMReX_BLassert.H"
 
+#include "ArrayUtil.hpp"
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
 #include "test_radiation_marshak_asymptotic.hpp"
@@ -19,7 +20,8 @@ struct SuOlsonProblemCgs {
 constexpr double kappa = 300.0;		      // cm^-1 (opacity)
 constexpr double rho0 = 2.0879373766122384;   // g cm^-3 (matter density)
 constexpr double T_hohlraum = 1.1604448449e7; // K (1 keV)
-constexpr double T_initial = 300.;	      // K
+// constexpr double T_initial = 300.;	      // K
+constexpr double T_initial = 1e-3 * T_hohlraum; // K
 
 // constexpr double kelvin_to_eV = 8.617385e-5;
 constexpr double a_rad = radiation_constant_cgs_;
@@ -120,19 +122,21 @@ AMRSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(const amrex::IntVe
 
 		const double E_0 = consVar(0, j, k, RadSystem<SuOlsonProblemCgs>::radEnergy_index);
 		const double F_0 = consVar(0, j, k, RadSystem<SuOlsonProblemCgs>::x1RadFlux_index);
-		// const double E_1 = consVar(1, j, k,
-		// RadSystem<SuOlsonProblemCgs>::radEnergy_index); const double F_1 =
-		// consVar(1, j, k, RadSystem<SuOlsonProblemCgs>::x1RadFlux_index);
 
 		// use PPM stencil at interface to solve for F_rad in the ghost zones
-		// const double F_bdry = 0.5 * c * E_inc - (7. / 12.) * (c * E_0 + 2.0 *
-		// F_0) +
-		//		      (1. / 12.) * (c * E_1 + 2.0 * F_1);
+		// const double E_1 = consVar(1, j, k, RadSystem<SuOlsonProblemCgs>::radEnergy_index); const double F_1 = consVar(1, j, k, RadSystem<SuOlsonProblemCgs>::x1RadFlux_index);
+		// const double F_bdry = 0.5 * c * E_inc - (7. / 12.) * (c * E_0 + 2.0 * F_0) + (1. / 12.) * (c * E_1 + 2.0 * F_1);
 
 		// use value at interface to solve for F_rad in the ghost zones
-		const double F_bdry = 0.5 * c * E_inc - 0.5 * (c * E_0 + 2.0 * F_0);
+		// const double F_bdry = 0.5 * c * E_inc - 0.5 * (c * E_0 + 2.0 * F_0);
 
-		AMREX_ASSERT(std::abs(F_bdry / (c * E_inc)) < 1.0);
+    // streaming in vacuum 
+    // const double F_bdry = c * E_inc;
+
+    // isotropic, zero flux
+    const double F_bdry = 0.;
+
+		AMREX_ALWAYS_ASSERT(std::abs(F_bdry / (c * E_inc)) <= 1.0);
 
 		// x1 left side boundary (Marshak)
 		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::radEnergy_index) = E_inc;
@@ -212,21 +216,21 @@ auto problem_main() -> int
 	//     Radiative Transfer, 69, 475–489, 2001.
 
 	// Problem parameters
-	const int max_timesteps = 1e5;
+	const long int max_timesteps = 1e8;
 	const double CFL_number = 0.9;
-	const double initial_dt = 5.0e-12; // s
-	const double max_dt = 5.0e-12;	   // s
+	const double initial_dt = 4.0e-12; // s
+	const double max_dt = 4.0e-12;	   // s
 	const double max_time = 10.0e-9;   // s
 	// const int nx = 60; // [18 == matches resolution of McClarren & Lowrie (2008)]
 	// const double Lx = 0.66; // cm
 
 	// Problem initialization
-	std::cout << "radiation constant (code units) = " << RadSystem_Traits<SuOlsonProblemCgs>::radiation_constant << "\n";
-	std::cout << "c_light (code units) = " << RadSystem_Traits<SuOlsonProblemCgs>::c_light << "\n";
-	std::cout << "rho * c_v = " << rho0 * c_v << "\n";
-	std::cout << "initial_dt = " << initial_dt << "\n";
-	std::cout << "max_dt = " << max_dt << "\n";
-	std::cout << "max_time = " << max_time << std::endl;
+	// std::cout << "radiation constant (code units) = " << RadSystem_Traits<SuOlsonProblemCgs>::radiation_constant << "\n";
+	// std::cout << "c_light (code units) = " << RadSystem_Traits<SuOlsonProblemCgs>::c_light << "\n";
+	// std::cout << "rho * c_v = " << rho0 * c_v << "\n";
+	// std::cout << "initial_dt = " << initial_dt << "\n";
+	// std::cout << "max_dt = " << max_dt << "\n";
+	// std::cout << "max_time = " << max_time << std::endl;
 
 	constexpr int nvars = RadSystem<SuOlsonProblemCgs>::nvar_;
 	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
@@ -327,22 +331,23 @@ auto problem_main() -> int
 
 #ifdef HAVE_PYTHON
 	// plot results
+	int s = xs.size() / 50; // stride
 	matplotlibcpp::clf();
 	std::map<std::string, std::string> Tgas_args;
 	std::map<std::string, std::string> Tgas_exact_args;
 	Tgas_args["label"] = "gas temperature";
 	Tgas_args["marker"] = ".";
 	Tgas_exact_args["label"] = "gas temperature (exact)";
-	Tgas_exact_args["marker"] = "x";
-	matplotlibcpp::plot(xs, Tgas_keV, Tgas_args);
+	matplotlibcpp::plot(strided_vector_from(xs, s), strided_vector_from(Tgas_keV, s), Tgas_args);
 	matplotlibcpp::plot(xs_exact, Tmat_exact, Tgas_exact_args);
 
 	matplotlibcpp::ylim(0.0, 1.0);	// keV
-	matplotlibcpp::xlim(0.0, 0.55); // cm
+	matplotlibcpp::xlim(0.0, 0.5); // cm
 	matplotlibcpp::xlabel("length x (cm)");
 	matplotlibcpp::ylabel("temperature (keV)");
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
+	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./marshak_wave_asymptotic_gastemperature.pdf");
 #endif // HAVE_PYTHON
 
