@@ -124,17 +124,18 @@ AMRSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(const amrex::IntVe
 		const double F_0 = consVar(0, j, k, RadSystem<SuOlsonProblemCgs>::x1RadFlux_index);
 
 		// use PPM stencil at interface to solve for F_rad in the ghost zones
-		// const double E_1 = consVar(1, j, k, RadSystem<SuOlsonProblemCgs>::radEnergy_index); const double F_1 = consVar(1, j, k, RadSystem<SuOlsonProblemCgs>::x1RadFlux_index);
-		// const double F_bdry = 0.5 * c * E_inc - (7. / 12.) * (c * E_0 + 2.0 * F_0) + (1. / 12.) * (c * E_1 + 2.0 * F_1);
+		// const double E_1 = consVar(1, j, k, RadSystem<SuOlsonProblemCgs>::radEnergy_index); const double F_1 = consVar(1, j, k,
+		// RadSystem<SuOlsonProblemCgs>::x1RadFlux_index); const double F_bdry = 0.5 * c * E_inc - (7. / 12.) * (c * E_0 + 2.0 * F_0) + (1. / 12.) * (c
+		// * E_1 + 2.0 * F_1);
 
 		// use value at interface to solve for F_rad in the ghost zones
 		// const double F_bdry = 0.5 * c * E_inc - 0.5 * (c * E_0 + 2.0 * F_0);
 
-    // streaming in vacuum 
-    // const double F_bdry = c * E_inc;
+		// streaming in vacuum
+		// const double F_bdry = c * E_inc;
 
-    // isotropic, zero flux
-    const double F_bdry = 0.;
+		// isotropic, zero flux
+		const double F_bdry = 0.;
 
 		AMREX_ALWAYS_ASSERT(std::abs(F_bdry / (c * E_inc)) <= 1.0);
 
@@ -341,7 +342,7 @@ auto problem_main() -> int
 	matplotlibcpp::plot(strided_vector_from(xs, s), strided_vector_from(Tgas_keV, s), Tgas_args);
 	matplotlibcpp::plot(xs_exact, Tmat_exact, Tgas_exact_args);
 
-	matplotlibcpp::ylim(0.0, 1.0);	// keV
+	matplotlibcpp::ylim(0.0, 1.0); // keV
 	matplotlibcpp::xlim(0.0, 0.5); // cm
 	matplotlibcpp::xlabel("length x (cm)");
 	matplotlibcpp::ylabel("temperature (keV)");
