@@ -904,7 +904,7 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 			for (int idx = 0; idx < numRadVars_; ++idx) {
 				const double u_im2 = consVar(i - 2, j, k, idx + numRadVars_ * g);
 				const double u_im1 = consVar(i - 1, j, k, idx + numRadVars_ * g);
-				const double u_i   = consVar(i    , j, k, idx + numRadVars_ * g);
+				const double u_i = consVar(i, j, k, idx + numRadVars_ * g);
 				const double u_ip1 = consVar(i + 1, j, k, idx + numRadVars_ * g);
 				// check for local maximum/minimum
 				if (((u_im1 - u_im2) * (u_i - u_im1) < 0.) && ((u_i - u_im1) * (u_ip1 - u_i) < 0.)) {
