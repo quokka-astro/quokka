@@ -43,7 +43,7 @@ static constexpr double Erad_zero = 1e-14;
 // IMEX PD-ARS scheme
 static constexpr double IMEX_a22 = 1.0;
 static constexpr double IMEX_a32 = 0.4; // 0 < IMEX_a32 <= 0.5
-
+ 
 // SSP-RK2 + implicit radiation-matter exchange
 // static constexpr double IMEX_a22 = 0.0;
 // static constexpr double IMEX_a32 = 0.0;
@@ -932,7 +932,21 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 			// const quokka::valarray<double, nvarHyperbolic_> epsilon = {S_corr,
 			// S_corr,
 			//    S_corr, S_corr}; // Jiang et al. (2013)
-			const quokka::valarray<double, numRadVars_> epsilon = {S_corr * S_corr, S_corr, S_corr, S_corr}; // this code
+			quokka::valarray<double, numRadVars_> epsilon = {S_corr * S_corr, S_corr, S_corr, S_corr}; // this code
+			// fix odd-even instability that appears in the asymptotic diffusion limit
+			// [for details, see section 3.1: https://ui.adsabs.harvard.edu/abs/2022MNRAS.512.1499R/abstract]
+			for (int idx = 0; idx < numRadVars_; ++idx) {
+				const double u_im2 = consVar(i - 2, j, k, idx + numRadVars_ * g);
+				const double u_im1 = consVar(i - 1, j, k, idx + numRadVars_ * g);
+				const double u_i = consVar(i, j, k, idx + numRadVars_ * g);
+				const double u_ip1 = consVar(i + 1, j, k, idx + numRadVars_ * g);
+				// check for local maximum/minimum
+				if (((u_im1 - u_im2) * (u_i - u_im1) < 0.) && ((u_i - u_im1) * (u_ip1 - u_i) < 0.)) {
+					// revert to more diffusive flux (has no effect in optically-thin limit)
+					epsilon /= S_corr;
+					break;
+				}
+			}
 
 			// compute the norm of the wavespeed vector
 			const double S_L = std::min(-0.1 * c_hat_, -c_hat_ * std::sqrt(Tnormal_L));
