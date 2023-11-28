@@ -3,6 +3,8 @@
 
 #include <array>
 
+#include "AMReX.H"
+
 namespace quokka
 {
 template <int Nall, int Nmass> struct HydroState {
