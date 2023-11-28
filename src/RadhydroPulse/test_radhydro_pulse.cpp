@@ -31,8 +31,8 @@ constexpr double mu = 2.33 * C::m_u;
 constexpr double k_B = C::k_B;
 constexpr double initial_time = 0.0;
 constexpr double max_time = 4.8e-5;
-// constexpr double v0 = 0.;      // non-advecting pulse
-constexpr double v0 = 1.0e6; // advecting pulse, v0 = 2.0 * width / max_time;
+constexpr double v0 = 0.;      // non-advecting pulse
+// constexpr double v0 = 1.0e6; // advecting pulse, v0 = 2.0 * width / max_time;
 
 template <> struct quokka::EOS_Traits<PulseProblem> {
 	static constexpr double mean_molecular_weight = mu;
