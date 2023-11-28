@@ -3,7 +3,7 @@
 
 #include <array>
 
-#include "AMReX.H"
+#include "AMReX_Array.H"
 
 namespace quokka
 {
