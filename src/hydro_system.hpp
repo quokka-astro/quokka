@@ -1028,7 +1028,9 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		sL.cs = cs_L;
 		sL.E = E_L;
 		sL.Eint = Eint_L;
-		sL.by = 0.0;
+		// the following has been set to zero to test that the HLLD solver works with hydro only
+    // TODO(Neco): set correct magnetic field values once magnetic fields are enabled
+    sL.by = 0.0;
 		sL.bz = 0.0;
 
 		quokka::HydroState<nscalars_, nmscalars_> sR{};
@@ -1040,6 +1042,7 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		sR.cs = cs_R;
 		sR.E = E_R;
 		sR.Eint = Eint_R;
+    // as above, set to zero for testing purposes
 		sR.by = 0.0;
 		sR.bz = 0.0;
 
