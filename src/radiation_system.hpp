@@ -1162,10 +1162,10 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				AMREX_ASSERT(!std::isnan(deltaEgas));
 				AMREX_ASSERT(!deltaErad.hasnan());
 
-        // check relative and absolute convergence of E_r 
-        if ((max(abs(deltaErad / Erad0Vec)) < resid_tol) || (max(abs(deltaErad)) < 0.1 * Erad_floor_)) {
-          break;
-        }
+				// check relative and absolute convergence of E_r
+				if ((max(abs(deltaErad / Erad0Vec)) < resid_tol) || (max(abs(deltaErad)) < 0.1 * Erad_floor_)) {
+					break;
+				}
 
 				EradVec_guess += deltaErad;
 				Egas_guess += deltaEgas;
