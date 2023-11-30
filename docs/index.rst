@@ -19,6 +19,7 @@ run with high performance on either CPUs or GPUs.
    equations
    flowchart
    tests/index
+   parameters
    api
    bibliography
    
