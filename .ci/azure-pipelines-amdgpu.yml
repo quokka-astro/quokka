@@ -13,14 +13,14 @@ pr:
     - development
 
 jobs:
-  - job: CUDA_Build_Test
-    pool: avatar
+  - job: HIP_Build_Test
+    pool: amdgpu
     timeoutInMinutes: 90
     steps:
     - task: CMake@1
       displayName: 'Configure CMake'
       inputs:
-        cmakeArgs: '.. -DCMAKE_BUILD_TYPE=Release -DAMReX_SPACEDIM=3 -DAMReX_GPU_BACKEND=CUDA -DQUOKKA_PYTHON=OFF'
+        cmakeArgs: '.. -DCMAKE_BUILD_TYPE=Release -DAMReX_SPACEDIM=3 -DAMReX_GPU_BACKEND=HIP'
     
     - task: CMake@1
       displayName: 'Build Quokka'
