@@ -23,7 +23,7 @@ constexpr double rho0 = 1.0;	  // g cm^-3 (matter density)
 constexpr double a_rad = 4.0e-10; // radiation constant == 4sigma_SB/c (dimensionless)
 constexpr double c = 1.0e8;	  // speed of light (dimensionless)
 constexpr double chat = 1.0e7;
-constexpr double erad_floor = a_rad * (1.0e-8);
+constexpr double erad_floor = a_rad * (1.0e-10);
 
 // constexpr double Lx = 1.0; // dimensionless length
 constexpr double initial_time = 1.0e-8;
