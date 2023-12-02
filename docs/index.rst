@@ -20,6 +20,7 @@ run with high performance on either CPUs or GPUs.
    flowchart
    tests/index
    parameters
+   instability
    api
    bibliography
    
