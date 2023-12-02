@@ -21,7 +21,7 @@ Using the AMReX ParmParse object, these parameters are read in the `readParamete
      - Sets the CFL number for the simulation.
    * - amr_interpolation_method
      - Integer
-     - Selects the method used to interpolate from coarse to fine AMR levels.
+     - Selects the method (piecewise constant or piecewise linear with limiters) used to interpolate from coarse to fine AMR levels. Except for debugging, this should not be changed.
    * - stop_time
      - Float
      - The simulation time at which to stop evolving the simulation.
@@ -31,21 +31,24 @@ Using the AMReX ParmParse object, these parameters are read in the `readParamete
    * - plotfile_interval
      - Integer
      - The number of coarse timesteps between plotfile outputs.
+   * - plottime_interval
+     - Float
+     - The time interval (in simulated time) between plotfile outputs.
    * - projection_interval
      - Integer
      - The number of coarse timesteps between 2D projection outputs.
    * - statistics_interval
      - Integer
      - The number of coarse timesteps between statistics outputs.
-   * - checkpointtime_interval
-     - Float
-     - The time interval (in simulated time) between checkpoint outputs.
    * - checkpoint_interval
      - Float
      - The number of coarse timesteps between checkpoint outputs.
+   * - checkpointtime_interval
+     - Float
+     - The time interval (in simulated time) between checkpoint outputs.
    * - do_reflux
      - Integer
-     - this turns on refluxing at coarse-fine boundaries (1) or turns it off (0). Except for debugging, this should always be on if AMR is used.
+     - this turns on refluxing at coarse-fine boundaries (1) or turns it off (0). Except for debugging, this should always be on when AMR is used.
    * - suppress_output
      - Integer
      - If set to 1, this disables output to stdout while the simulation is running.
@@ -66,4 +69,4 @@ Using the AMReX ParmParse object, these parameters are read in the `readParamete
      - The ceiling on the absolute value of the fluid velocity in the simulation. Enforced through EnforceLimits.
    * - max_walltime
      - String
-     - The maximum walltime for the simulation in the format DD:HH:SS (days/hours/seconds). After 90% of this walltime elapses, the simulation will stop and exit.
+     - The maximum walltime for the simulation in the format DD:HH:SS (days/hours/seconds). After 90% of this walltime elapses, the simulation will automatically stop and exit.
