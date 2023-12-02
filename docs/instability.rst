@@ -6,8 +6,8 @@ Debugging simulation instability
 Nonlinear stability of systems of PDEs is an unsolved problem. There is no complete, rigorous mathematical theory.
 There are two concepts, however, that are closely associated with nonlinear stability:
 
-* *positivity preservation:* This is the property that, given a positive initial density and pressure at timestep :math:`$n$`,
-  the density and pressure are positive at timestep :math:`$n+1$`. For theoretical background, see
+* *positivity preservation:* This is the property that, given a positive initial density and pressure at timestep :math:`n`,
+  the density and pressure are positive at timestep :math:`n+1`. For theoretical background, see
   `Linde & Roe (1997) <https://deepblue.lib.umich.edu/bitstream/handle/2027.42/77032/AIAA-1997-2098-398.pdf?sequence=1>`_.
   and `Perthame & Shu (1996) <https://link.springer.com/article/10.1007/s002110050187>`_.
 * *entropy stability:* This is the property that the *discretized* system of equations obeys the second law of thermodynamics,
