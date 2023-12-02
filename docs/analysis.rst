@@ -10,8 +10,9 @@ Ascent
 =====
 Ascent allows you to generate visualizations (as PNG images) while the simulation is running, without any extra effort.
 
-On Setonix, Ascent is already built. In your job script, add the line:
-``export Ascent_DIR=/software/projects/pawsey0807/bwibking/ascent_06082023/install/ascent-develop/lib/cmake/ascent``.
+.. note:: On Setonix, Ascent is already built.
+  In your job script, add the line:
+  ``export Ascent_DIR=/software/projects/pawsey0807/bwibking/ascent_06082023/install/ascent-develop/lib/cmake/ascent``.
 
 Compiling Ascent via Spack
 -----------------------
@@ -35,9 +36,7 @@ Customizing the visualization
 Add an `ascent_actions.yaml file <https://ascent.readthedocs.io/en/latest/Actions/Actions.html>`_ to the simulation working directory.
 This file can even be edited while the simulation is running!
 
-Caveats
------------------------
-Volume renderings do not correctly handle ghost cells (`GitHub issue <https://github.com/Alpine-DAV/ascent/issues/955>`_).
+.. warning:: Volume renderings do not correctly handle ghost cells (`GitHub issue <https://github.com/Alpine-DAV/ascent/issues/955>`_).
 
 AMReX PlotfileTools
 =====
@@ -59,12 +58,11 @@ Other tools:
 
 yt
 =====
-*Caution:* There are `known bugs <https://github.com/yt-project/yt/issues/3889>`_ that affect Quokka outputs.
-PlotfileTools (see above) can be used instead for axis-aligned slice plots.
+.. warning:: There are `known bugs <https://github.com/yt-project/yt/issues/3889>`_ that affect Quokka outputs.
+  PlotfileTools (see above) can be used instead for axis-aligned slice plots.
 
-It works, but the standard fields such as ``('gas', 'density')`` are not defined.
-Instead, you have to use non-standard fields.
-Examine ``ds.field_list`` to see the fields that exist in the plotfiles. These should be: ::
+The plotfile directory can be loaded with ``yt.load`` as usual. However, the standard fields such as ``('gas', 'density')`` are not defined.
+Instead, you have to use non-standard fields. Examine ``ds.field_list`` to see the fields that exist in the plotfiles. These should be: ::
 
   [('boxlib', 'gasDensity'), ('boxlib', 'gasEnergy'),
   ('boxlib', 'radEnergy'), ('boxlib', 'scalar'),
@@ -74,14 +72,15 @@ Examine ``ds.field_list`` to see the fields that exist in the plotfiles. These s
 
 For details, see the `yt documentation on reading AMReX data <https://yt-project.org/doc/examining/loading_data.html#amrex-boxlib-data>`_.
 
-One of the most useful things to do is to convert the data into a uniform-resolution NumPy array with the
-`covering_grid <https://yt-project.org/doc/examining/low_level_inspection.html#examining-grid-data-in-a-fixed-resolution-array>`_ function.
+.. tip:: One of the most useful things to do is to convert the data into a uniform-resolution NumPy array
+  with the `covering_grid <https://yt-project.org/doc/examining/low_level_inspection.html#examining-grid-data-in-a-fixed-resolution-array>`_ function.
 
-This `WarpX script <https://warpx.readthedocs.io/en/latest/dataanalysis/plot_parallel.html>`_ may be useful as a starting point
-for visualizing a time series of outputs. This script will require some modification to work with Quokka outputs.
+.. tip:: This `WarpX script <https://warpx.readthedocs.io/en/latest/dataanalysis/plot_parallel.html>`_ may be useful as a starting point
+  for visualizing a time series of outputs. This script will require some modification to work with Quokka outputs.
 
 VisIt
 =====
 VisIt can read AMReX plotfiles. You have to select the ``plt00000/Header`` file in VisIt's Open dialog box.
 
-There are some rendering bugs with unscaled box dimensions. Do not expect volume rendering to work when using, e.g. parsec-size boxes with cgs units.
+.. warning:: There are some rendering bugs with unscaled box dimensions.
+  Do not expect volume rendering to work when using, e.g. parsec-size boxes with cgs units.
