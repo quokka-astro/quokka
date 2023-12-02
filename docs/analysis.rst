@@ -7,7 +7,7 @@ There are several ways to analyze Quokka simulations. One method (Ascent) allows
 The other methods (AMReX PlotfileTools, yt, VisIt) allow you to analyze the outputs after they are written to disk.
 
 Ascent
-=====
+-----------------------
 Ascent allows you to generate visualizations (as PNG images) while the simulation is running, without any extra effort.
 
 .. note:: On Setonix, Ascent is already built.
@@ -15,7 +15,7 @@ Ascent allows you to generate visualizations (as PNG images) while the simulatio
   ``export Ascent_DIR=/software/projects/pawsey0807/bwibking/ascent_06082023/install/ascent-develop/lib/cmake/ascent``.
 
 Compiling Ascent via Spack
------------------------
+^^^^^^^^^^^^^^^^^^^^^^^
 1. Run ``spack external find``.
 2. Make sure there are entries listed for ``hdf5``, ``cuda``, and ``openmpi`` in your ``~/.spack/packages.yaml`` file.
 3. Add `buildable: False <https://spack.readthedocs.io/en/latest/build_settings.html#external-packages>`_ to each entry.
@@ -26,20 +26,20 @@ For A100 GPUs, change the above lines to `cuda_arch=80`.
 Currently, it's not possible to `build for both GPU models at the same time <https://github.com/Alpine-DAV/ascent/issues/950#issuecomment-1153243232>`_.
 
 Compiling Quokka with Ascent support
------------------------
+^^^^^^^^^^^^^^^^^^^^^^^
 1. Load Ascent: ``spack load ascent``
 2. Add ``-DAMReX_ASCENT=ON -DAMReX_CONDUIT=ON`` to your CMake options.
 3. Compile your problem, e.g.: ``ninja -j4 test_hydro3d_blast``
 
 Customizing the visualization
------------------------
+^^^^^^^^^^^^^^^^^^^^^^^
 Add an `ascent_actions.yaml file <https://ascent.readthedocs.io/en/latest/Actions/Actions.html>`_ to the simulation working directory.
 This file can even be edited while the simulation is running!
 
 .. warning:: Volume renderings do not correctly handle ghost cells (`GitHub issue <https://github.com/Alpine-DAV/ascent/issues/955>`_).
 
 AMReX PlotfileTools
-=====
+-----------------------
 These are self-contained C++ programs (included with AMReX in the ``Tools/Plotfile`` subdirectory) that will output a 2D slice (axis-aligned), a 1D slice (axis-aligned), or compute a volume integral given an AMReX plotfile.
 For these tasks, it is almost always easier to use the Plotfile tools rather than, e.g., yt or VisIt.
 
@@ -57,7 +57,7 @@ Other tools:
 * `fvarnames <https://github.com/AMReX-Codes/amrex/blob/development/Tools/Plotfile/fvarnames.cpp>`_ prints the names of all the variables in a given plotfile
 
 yt
-=====
+-----------------------
 .. warning:: There are `known bugs <https://github.com/yt-project/yt/issues/3889>`_ that affect Quokka outputs.
   PlotfileTools (see above) can be used instead for axis-aligned slice plots.
 
@@ -79,8 +79,8 @@ For details, see the `yt documentation on reading AMReX data <https://yt-project
   for visualizing a time series of outputs. This script will require some modification to work with Quokka outputs.
 
 VisIt
-=====
+-----------------------
 VisIt can read AMReX plotfiles. You have to select the ``plt00000/Header`` file in VisIt's Open dialog box.
 
-.. warning:: There are some rendering bugs with unscaled box dimensions.
-  Do not expect volume rendering to work when using, e.g. parsec-size boxes with cgs units.
+.. warning:: There are rendering bugs with unscaled box dimensions. Slices generally work.
+  However, do not expect volume rendering to work when using, e.g. parsec-size boxes with cgs units.
