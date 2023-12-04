@@ -62,7 +62,7 @@ template <> struct Physics_Traits<PulseProblem> {
 };
 
 AMREX_GPU_HOST_DEVICE
-auto compute_exact_Trad(const double x, const double t) -> double
+auto compute_exact_Trad(const double x) -> double
 {
 	// compute exact solution for Gaussian radiation pulse
 	// 		assuming diffusion approximation
@@ -75,11 +75,11 @@ auto compute_exact_rho(const double x, const double t) -> double
 {
 	// compute exact solution for Gaussian radiation pulse
 	// 		assuming diffusion approximation
-	auto T = compute_exact_Trad(x, t);
+	auto T = compute_exact_Trad(x);
 	return rho0 * T0 / T + (a_rad * mu / 3. / k_B) * (std::pow(T0, 4) / T - std::pow(T, 3));
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, nGroups_> kappaPVec{};
 	for (int i = 0; i < nGroups_; ++i) {
@@ -94,15 +94,6 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputeFluxMeanOpacity(const
 	return ComputePlanckOpacity(rho, Tgas);
 }
 
-template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacityTempDerivative(const double rho, const double Tgas)
-    -> quokka::valarray<double, nGroups_>
-{
-	quokka::valarray<double, nGroups_> opacity_deriv{};
-	opacity_deriv.fillin(0.0);
-	return opacity_deriv;
-}
-
 template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<PulseProblem>::ComputeEddingtonFactor(double /*f*/) -> double
 {
 	return (1. / 3.); // Eddington approximation
@@ -111,7 +102,7 @@ template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<PulseProblem
 template <> void RadhydroSimulation<PulseProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
 	// extract variables required from the geom object
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_elem.prob_hi_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
@@ -121,8 +112,8 @@ template <> void RadhydroSimulation<PulseProblem>::setInitialConditionsOnGrid(qu
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
-		const double Trad = compute_exact_Trad(x - x0, initial_time);
+		amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
+		const double Trad = compute_exact_Trad(x - x0);
 		const double Erad = a_rad * std::pow(Trad, 4);
 		const double rho = compute_exact_rho(x - x0, initial_time);
 		const double Egas = quokka::EOS<PulseProblem>::ComputeEintFromTgas(rho, Trad);
@@ -154,7 +145,7 @@ auto problem_main() -> int
 	// of order 10^5.
 
 	// Problem parameters
-	const long int max_timesteps = 1e8;
+	const int max_timesteps = 1e6;
 	const double CFL_number = 0.8;
 	// const int nx = 32;
 
@@ -203,7 +194,6 @@ auto problem_main() -> int
 	std::vector<double> Egas(nx);
 	std::vector<double> Vgas(nx);
 	std::vector<double> rhogas(nx);
-	std::vector<double> T_initial(nx);
 	std::vector<double> xs_exact;
 	std::vector<double> Trad_exact;
 	std::vector<double> Erad_exact;
@@ -222,7 +212,7 @@ auto problem_main() -> int
 		Tgas.at(i) = quokka::EOS<PulseProblem>::ComputeTgasFromEint(rho_t, Egas.at(i));
 		Vgas.at(i) = v_t;
 
-		auto Trad_val = compute_exact_Trad(x - x0, initial_time + sim.tNew_[0]);
+		auto Trad_val = compute_exact_Trad(x - x0);
 		auto Erad_val = a_rad * std::pow(Trad_val, 4);
 		xs_exact.push_back(x);
 		Trad_exact.push_back(Trad_val);
