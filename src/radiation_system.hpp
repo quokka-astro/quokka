@@ -503,20 +503,20 @@ void RadSystem<problem_t>::PredictStep(arrayconst_t &consVarOld, array_t &consVa
 											     +(dt / dz) * (x3Flux(i, j, k, n) - x3Flux(i, j, k + 1, n))));
 		}
 
-		if (!isStateValid(cons)) {
-			// use diffusive fluxes instead
-			for (int n = 0; n < nvarHyperbolic_; ++n) {
-				cons[n] = consVarOld(i, j, k, nstartHyperbolic_ + n) +
-					  (AMREX_D_TERM((dt / dx) * (x1FluxDiffusive(i, j, k, n) - x1FluxDiffusive(i + 1, j, k, n)),
-							+(dt / dy) * (x2FluxDiffusive(i, j, k, n) - x2FluxDiffusive(i, j + 1, k, n)),
-							+(dt / dz) * (x3FluxDiffusive(i, j, k, n) - x3FluxDiffusive(i, j, k + 1, n))));
+		// if (!isStateValid(cons)) {
+		// 	// use diffusive fluxes instead
+		// 	for (int n = 0; n < nvarHyperbolic_; ++n) {
+		// 		cons[n] = consVarOld(i, j, k, nstartHyperbolic_ + n) +
+		// 			  (AMREX_D_TERM((dt / dx) * (x1FluxDiffusive(i, j, k, n) - x1FluxDiffusive(i + 1, j, k, n)),
+		// 					+(dt / dy) * (x2FluxDiffusive(i, j, k, n) - x2FluxDiffusive(i, j + 1, k, n)),
+		// 					+(dt / dz) * (x3FluxDiffusive(i, j, k, n) - x3FluxDiffusive(i, j, k + 1, n))));
 
-				// x1Flux(i, j, k, n) = x1FluxDiffusive(i, j, k, n);
-				// x1Flux(i + 1, j, k, n) = x1FluxDiffusive(i + 1, j, k, n);
-				// x1Flux(i, j + 1, k, n) = x1FluxDiffusive(i, j + 1, k, n);
-				// x1Flux(i, j, k + 1, n) = x1FluxDiffusive(i, j, k + 1, n);
-			}
-		}
+		// 		// x1Flux(i, j, k, n) = x1FluxDiffusive(i, j, k, n);
+		// 		// x1Flux(i + 1, j, k, n) = x1FluxDiffusive(i + 1, j, k, n);
+		// 		// x1Flux(i, j + 1, k, n) = x1FluxDiffusive(i, j + 1, k, n);
+		// 		// x1Flux(i, j, k + 1, n) = x1FluxDiffusive(i, j, k + 1, n);
+		// 	}
+		// }
 
 		for (int n = 0; n < nvarHyperbolic_; ++n) {
 			consVarNew(i, j, k, nstartHyperbolic_ + n) = cons[n];
@@ -580,26 +580,26 @@ void RadSystem<problem_t>::AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayc
 				      (0.5 * AMREX_D_TERM(FxU_1, FyU_1, FzU_1));
 		}
 
-		if (!isStateValid(cons_new)) {
-			// use diffusive fluxes instead
-			for (int n = 0; n < nvarHyperbolic_; ++n) {
-				const double U_0 = U0(i, j, k, nstartHyperbolic_ + n);
-				const double U_1 = U1(i, j, k, nstartHyperbolic_ + n);
-				const double FxU_0 = (dt / dx) * (x1FluxDiffusiveOld(i, j, k, n) - x1FluxDiffusiveOld(i + 1, j, k, n));
-				const double FxU_1 = (dt / dx) * (x1FluxDiffusive(i, j, k, n) - x1FluxDiffusive(i + 1, j, k, n));
-#if (AMREX_SPACEDIM >= 2)
-				const double FyU_0 = (dt / dy) * (x2FluxDiffusiveOld(i, j, k, n) - x2FluxDiffusiveOld(i, j + 1, k, n));
-				const double FyU_1 = (dt / dy) * (x2FluxDiffusive(i, j, k, n) - x2FluxDiffusive(i, j + 1, k, n));
-#endif
-#if (AMREX_SPACEDIM == 3)
-				const double FzU_0 = (dt / dz) * (x3FluxDiffusiveOld(i, j, k, n) - x3FluxDiffusiveOld(i, j, k + 1, n));
-				const double FzU_1 = (dt / dz) * (x3FluxDiffusive(i, j, k, n) - x3FluxDiffusive(i, j, k + 1, n));
-#endif
-				// save results in cons_new
-				cons_new[n] = (1.0 - IMEX_a32) * U_0 + IMEX_a32 * U_1 + ((0.5 - IMEX_a32) * AMREX_D_TERM(FxU_0, FyU_0, FzU_0)) +
-					      (0.5 * AMREX_D_TERM(FxU_1, FyU_1, FzU_1));
-			}
-		}
+// 		if (!isStateValid(cons_new)) {
+// 			// use diffusive fluxes instead
+// 			for (int n = 0; n < nvarHyperbolic_; ++n) {
+// 				const double U_0 = U0(i, j, k, nstartHyperbolic_ + n);
+// 				const double U_1 = U1(i, j, k, nstartHyperbolic_ + n);
+// 				const double FxU_0 = (dt / dx) * (x1FluxDiffusiveOld(i, j, k, n) - x1FluxDiffusiveOld(i + 1, j, k, n));
+// 				const double FxU_1 = (dt / dx) * (x1FluxDiffusive(i, j, k, n) - x1FluxDiffusive(i + 1, j, k, n));
+// #if (AMREX_SPACEDIM >= 2)
+// 				const double FyU_0 = (dt / dy) * (x2FluxDiffusiveOld(i, j, k, n) - x2FluxDiffusiveOld(i, j + 1, k, n));
+// 				const double FyU_1 = (dt / dy) * (x2FluxDiffusive(i, j, k, n) - x2FluxDiffusive(i, j + 1, k, n));
+// #endif
+// #if (AMREX_SPACEDIM == 3)
+// 				const double FzU_0 = (dt / dz) * (x3FluxDiffusiveOld(i, j, k, n) - x3FluxDiffusiveOld(i, j, k + 1, n));
+// 				const double FzU_1 = (dt / dz) * (x3FluxDiffusive(i, j, k, n) - x3FluxDiffusive(i, j, k + 1, n));
+// #endif
+// 				// save results in cons_new
+// 				cons_new[n] = (1.0 - IMEX_a32) * U_0 + IMEX_a32 * U_1 + ((0.5 - IMEX_a32) * AMREX_D_TERM(FxU_0, FyU_0, FzU_0)) +
+// 					      (0.5 * AMREX_D_TERM(FxU_1, FyU_1, FzU_1));
+// 			}
+// 		}
 
 		for (int n = 0; n < nvarHyperbolic_; ++n) {
 			U_new(i, j, k, nstartHyperbolic_ + n) = cons_new[n];
