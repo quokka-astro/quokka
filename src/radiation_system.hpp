@@ -482,16 +482,16 @@ void RadSystem<problem_t>::PredictStep(arrayconst_t &consVarOld, array_t &consVa
 	auto const dt = dt_in;
 	const auto dx = dx_in[0];
 	const auto x1Flux = fluxArray[0];
-	const auto x1FluxDiffusive = fluxDiffusiveArray[0];
+	// const auto x1FluxDiffusive = fluxDiffusiveArray[0];
 #if (AMREX_SPACEDIM >= 2)
 	const auto dy = dx_in[1];
 	const auto x2Flux = fluxArray[1];
-	const auto x2FluxDiffusive = fluxDiffusiveArray[1];
+	// const auto x2FluxDiffusive = fluxDiffusiveArray[1];
 #endif
 #if (AMREX_SPACEDIM == 3)
 	const auto dz = dx_in[2];
 	const auto x3Flux = fluxArray[2];
-	const auto x3FluxDiffusive = fluxDiffusiveArray[2];
+	// const auto x3FluxDiffusive = fluxDiffusiveArray[2];
 #endif
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
@@ -540,21 +540,21 @@ void RadSystem<problem_t>::AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayc
 	const auto dx = dx_in[0];
 	const auto x1FluxOld = fluxArrayOld[0];
 	const auto x1Flux = fluxArray[0];
-	const auto x1FluxDiffusiveOld = fluxDiffusiveArrayOld[0];
-	const auto x1FluxDiffusive = fluxDiffusiveArray[0];
+	// const auto x1FluxDiffusiveOld = fluxDiffusiveArrayOld[0];
+	// const auto x1FluxDiffusive = fluxDiffusiveArray[0];
 #if (AMREX_SPACEDIM >= 2)
 	const auto dy = dx_in[1];
 	const auto x2FluxOld = fluxArrayOld[1];
 	const auto x2Flux = fluxArray[1];
-	const auto x2FluxDiffusiveOld = fluxDiffusiveArrayOld[1];
-	const auto x2FluxDiffusive = fluxDiffusiveArray[1];
+	// const auto x2FluxDiffusiveOld = fluxDiffusiveArrayOld[1];
+	// const auto x2FluxDiffusive = fluxDiffusiveArray[1];
 #endif
 #if (AMREX_SPACEDIM == 3)
 	const auto dz = dx_in[2];
 	const auto x3FluxOld = fluxArrayOld[2];
 	const auto x3Flux = fluxArray[2];
-	const auto x3FluxDiffusiveOld = fluxDiffusiveArrayOld[2];
-	const auto x3FluxDiffusive = fluxDiffusiveArray[2];
+	// const auto x3FluxDiffusiveOld = fluxDiffusiveArrayOld[2];
+	// const auto x3FluxDiffusive = fluxDiffusiveArray[2];
 #endif
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
