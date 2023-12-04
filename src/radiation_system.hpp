@@ -927,12 +927,10 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 
 			// adjust the wavespeeds
 			// (this factor cancels out except for the last term in the HLL flux)
-			// const quokka::valarray<double, nvarHyperbolic_> epsilon = {
-			//    S_corr, 1.0, 1.0, 1.0}; // Skinner et al. (2019)
-			// const quokka::valarray<double, nvarHyperbolic_> epsilon = {S_corr,
-			// S_corr,
-			//    S_corr, S_corr}; // Jiang et al. (2013)
+			// const quokka::valarray<double, numRadVars_> epsilon = {S_corr, 1.0, 1.0, 1.0}; // Skinner et al. (2019)
+			// const quokka::valarray<double, numRadVars_> epsilon = {S_corr, S_corr, S_corr, S_corr}; // Jiang et al. (2013)
 			quokka::valarray<double, numRadVars_> epsilon = {S_corr * S_corr, S_corr, S_corr, S_corr}; // this code
+
 			// fix odd-even instability that appears in the asymptotic diffusion limit
 			// [for details, see section 3.1: https://ui.adsabs.harvard.edu/abs/2022MNRAS.512.1499R/abstract]
 			for (int idx = 0; idx < numRadVars_; ++idx) {
@@ -1176,7 +1174,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			quokka::valarray<double, nGroups_> deltaErad;
 			quokka::valarray<double, nGroups_> F_R;
 
-			const double resid_tol = 1.0e-10; // 1.0e-15;
+			const double resid_tol = 1.0e-13; // 1.0e-15;
 			const int maxIter = 400;
 			int n = 0;
 			for (; n < maxIter; ++n) {
@@ -1246,6 +1244,12 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				RadSystem<problem_t>::SolveLinearEqs(dFG_dEgas, dFG_dErad, dFR_dEgas, dFR_i_dErad_i, -F_G, -1. * F_R, deltaEgas, deltaErad);
 				AMREX_ASSERT(!std::isnan(deltaEgas));
 				AMREX_ASSERT(!deltaErad.hasnan());
+
+				// check relative and absolute convergence of E_r
+				if ((max(abs(deltaErad / Erad0Vec)) < resid_tol) || (max(abs(deltaErad)) < 0.1 * Erad_floor_)) {
+					break;
+				}
+
 				EradVec_guess += deltaErad;
 				Egas_guess += deltaEgas;
 				AMREX_ASSERT(min(EradVec_guess) >= 0.);
