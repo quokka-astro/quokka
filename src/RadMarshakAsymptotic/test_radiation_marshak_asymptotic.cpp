@@ -328,14 +328,16 @@ auto problem_main() -> int
 #ifdef HAVE_PYTHON
 	// plot results
 	matplotlibcpp::clf();
-	std::map<std::string, std::string> Tgas_args;
+	std::unordered_map<std::string, std::string> Tgas_args;
 	std::map<std::string, std::string> Tgas_exact_args;
-	Tgas_args["label"] = "gas temperature";
-	Tgas_args["marker"] = ".";
+	Tgas_args["label"] = "gas temperature (numerical)";
+	Tgas_args["marker"] = "o";
+	Tgas_args["color"] = "C1";
 	Tgas_exact_args["label"] = "gas temperature (exact)";
-	Tgas_exact_args["marker"] = "x";
-	matplotlibcpp::plot(xs, Tgas_keV, Tgas_args);
+	Tgas_exact_args["color"] = "C0";
+	// Tgas_exact_args["marker"] = "x";
 	matplotlibcpp::plot(xs_exact, Tmat_exact, Tgas_exact_args);
+	matplotlibcpp::scatter(xs, Tgas_keV, 20.0, Tgas_args);
 
 	matplotlibcpp::ylim(0.0, 1.0);	// keV
 	matplotlibcpp::xlim(0.0, 0.55); // cm
