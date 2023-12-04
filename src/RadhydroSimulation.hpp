@@ -256,7 +256,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 				      amrex::YAFluxRegister *fr_as_fine);
 
 	void operatorSplitSourceTerms(amrex::Array4<const amrex::Real> const &stateOld, amrex::Array4<amrex::Real> const &stateNew,
-				      const amrex::Box &indexRange, amrex::Real time, double dt, const int stage,
+				      const amrex::Box &indexRange, amrex::Real time, double dt, int stage,
 				      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
 				      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi);
 
@@ -1627,7 +1627,7 @@ void RadhydroSimulation<problem_t>::advanceRadiationSubstepAtLevel(int lev, amre
 }
 
 template <typename problem_t>
-void RadhydroSimulation<problem_t>::advanceRadiationForwardEuler(int lev, amrex::Real time, amrex::Real dt_radiation, int const iter_count,
+void RadhydroSimulation<problem_t>::advanceRadiationForwardEuler(int lev, amrex::Real time, amrex::Real dt_radiation, int const /*iter_count*/,
 								 int const /*nsubsteps*/, amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine)
 {
 	// get cell sizes
@@ -1664,7 +1664,7 @@ void RadhydroSimulation<problem_t>::advanceRadiationForwardEuler(int lev, amrex:
 }
 
 template <typename problem_t>
-void RadhydroSimulation<problem_t>::advanceRadiationMidpointRK2(int lev, amrex::Real time, amrex::Real dt_radiation, int const iter_count,
+void RadhydroSimulation<problem_t>::advanceRadiationMidpointRK2(int lev, amrex::Real time, amrex::Real dt_radiation, int const /*iter_count*/,
 								int const /*nsubsteps*/, amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine)
 {
 	auto const &dx = geom[lev].CellSizeArray();
