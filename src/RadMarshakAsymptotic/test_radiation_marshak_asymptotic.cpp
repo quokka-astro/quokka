@@ -16,9 +16,9 @@
 struct SuOlsonProblemCgs {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-constexpr double kappa = 300.0;		      // cm^-1 (opacity)
-constexpr double rho0 = 2.0879373766122384;   // g cm^-3 (matter density)
-constexpr double T_hohlraum = 1.1604448449e7; // K (1 keV)
+constexpr double kappa = 300.0;			// cm^-1 (opacity)
+constexpr double rho0 = 2.0879373766122384;	// g cm^-3 (matter density)
+constexpr double T_hohlraum = 1.1604448449e7;	// K (1 keV)
 constexpr double T_initial = T_hohlraum * 1e-3; // K
 
 // constexpr double kelvin_to_eV = 8.617385e-5;
