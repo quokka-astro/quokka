@@ -43,7 +43,7 @@ static constexpr double Erad_zero = 1e-14;
 // IMEX PD-ARS scheme
 static constexpr double IMEX_a22 = 1.0;
 static constexpr double IMEX_a32 = 0.4; // 0 < IMEX_a32 <= 0.5
- 
+
 // SSP-RK2 + implicit radiation-matter exchange
 // static constexpr double IMEX_a22 = 0.0;
 // static constexpr double IMEX_a32 = 0.0;
