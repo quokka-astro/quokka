@@ -19,7 +19,7 @@ struct SuOlsonProblemCgs {
 constexpr double kappa = 300.0;		      // cm^-1 (opacity)
 constexpr double rho0 = 2.0879373766122384;   // g cm^-3 (matter density)
 constexpr double T_hohlraum = 1.1604448449e7; // K (1 keV)
-constexpr double T_initial = 300.;	      // K
+constexpr double T_initial = T_hohlraum * 1e-3; // K
 
 // constexpr double kelvin_to_eV = 8.617385e-5;
 constexpr double a_rad = radiation_constant_cgs_;
@@ -36,7 +36,7 @@ template <> struct RadSystem_Traits<SuOlsonProblemCgs> {
 	static constexpr double c_hat = c_light_cgs_;
 	static constexpr double radiation_constant = radiation_constant_cgs_;
 	static constexpr double Erad_floor = 0.;
-	static constexpr bool compute_v_over_c_terms = true;
+	static constexpr bool compute_v_over_c_terms = false;
 };
 
 template <> struct Physics_Traits<SuOlsonProblemCgs> {
