@@ -19,11 +19,14 @@ struct SuOlsonProblemCgs {
 constexpr double kappa = 300.0;		      // cm^-1 (opacity)
 constexpr double rho0 = 2.0879373766122384;   // g cm^-3 (matter density)
 constexpr double T_hohlraum = 1.1604448449e7; // K (1 keV)
-constexpr double T_initial = 300.;	      // K
+// constexpr double T_initial = 300.;	      // K
+constexpr double T_initial = T_hohlraum * 0.001;
 
 // constexpr double kelvin_to_eV = 8.617385e-5;
 constexpr double a_rad = radiation_constant_cgs_;
 constexpr double c_v = (C::k_B / C::m_u) / (5. / 3. - 1.);
+
+constexpr double Erad_floor_ = a_rad * T_initial * T_initial * T_initial * T_initial;
 
 template <> struct quokka::EOS_Traits<SuOlsonProblemCgs> {
 	static constexpr double mean_molecular_weight = C::m_u;
@@ -35,8 +38,8 @@ template <> struct RadSystem_Traits<SuOlsonProblemCgs> {
 	static constexpr double c_light = c_light_cgs_;
 	static constexpr double c_hat = c_light_cgs_;
 	static constexpr double radiation_constant = radiation_constant_cgs_;
-	static constexpr double Erad_floor = 0.;
-	static constexpr bool compute_v_over_c_terms = true;
+	static constexpr double Erad_floor = Erad_floor_;
+	static constexpr bool compute_v_over_c_terms = false;
 };
 
 template <> struct Physics_Traits<SuOlsonProblemCgs> {
@@ -130,7 +133,9 @@ AMRSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(const amrex::IntVe
 		//		      (1. / 12.) * (c * E_1 + 2.0 * F_1);
 
 		// use value at interface to solve for F_rad in the ghost zones
-		const double F_bdry = 0.5 * c * E_inc - 0.5 * (c * E_0 + 2.0 * F_0);
+		// const double F_bdry = 0.5 * c * E_inc - 0.5 * (c * E_0 + 2.0 * F_0);
+		double F_bdry = 0.5 * c * E_inc - 0.5 * (c * E_0 + 2.0 * F_0);
+		F_bdry = std::max(F_bdry, 0.0);
 
 		AMREX_ASSERT(std::abs(F_bdry / (c * E_inc)) < 1.0);
 
