@@ -150,6 +150,7 @@ add_subdirectory(RadhydroShockCGS)
 add_subdirectory(RadhydroUniformAdvecting)
 add_subdirectory(RadhydroPulse)
 add_subdirectory(RadhydroPulseGrey)
+add_subdirectory(RadhydroPulseMultigroup)
 
 add_subdirectory(ODEIntegration)
 add_subdirectory(Cooling)
