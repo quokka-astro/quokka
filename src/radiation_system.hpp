@@ -1300,13 +1300,13 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				Egas_guess += deltaEgas;
 				AMREX_ASSERT(min(EradVec_guess) >= 0.);
 				AMREX_ASSERT(Egas_guess > 0.);
-        // set negative values in EradVec_guess to Erad_floor_ and return the excess to Egas_guess
-        for (int g = 0; g < nGroups_; ++g) {
-          if (EradVec_guess[g] < 0.0) {
-            Egas_guess += (EradVec_guess[g] - Erad_floor_) * (c / chat);
-            EradVec_guess[g] = Erad_floor_;
-          }
-        }
+				// set negative values in EradVec_guess to Erad_floor_ and return the excess to Egas_guess
+				for (int g = 0; g < nGroups_; ++g) {
+					if (EradVec_guess[g] < 0.0) {
+						Egas_guess += (EradVec_guess[g] - Erad_floor_) * (c / chat);
+						EradVec_guess[g] = Erad_floor_;
+					}
+				}
 			} // END NEWTON-RAPHSON LOOP
 
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(n < maxIter, "Newton-Raphson iteration failed to converge!");

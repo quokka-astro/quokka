@@ -136,7 +136,7 @@ AMRSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(const amrex::IntVe
 		// const double F_bdry = 0.5 * c * E_inc - 0.5 * (c * E_0 + 2.0 * F_0);
 		double F_bdry = 0.5 * c * E_inc - 0.5 * (c * E_0 + 2.0 * F_0);
 		// F_bdry = std::max(F_bdry, 0.0);
-    // AMREX_ASSERT(F_bdry >= 0.0);
+		// AMREX_ASSERT(F_bdry >= 0.0);
 
 		AMREX_ASSERT(std::abs(F_bdry / (c * E_inc)) < 1.0);
 
