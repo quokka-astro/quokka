@@ -307,29 +307,29 @@ template <typename problem_t> AMREX_GPU_DEVICE void RadSystem<problem_t>::amendR
 		const auto Fx = cons[x1RadFlux_index + numRadVars_ * g - nstartHyperbolic_];
 		const auto Fy = cons[x2RadFlux_index + numRadVars_ * g - nstartHyperbolic_];
 		const auto Fz = cons[x3RadFlux_index + numRadVars_ * g - nstartHyperbolic_];
-    if (E_r < Erad_floor_) {
-      E_r = Erad_floor_;
-      cons[radEnergy_index + numRadVars_ * g - nstartHyperbolic_] = Erad_floor_;
-    } 
+		if (E_r < Erad_floor_) {
+			E_r = Erad_floor_;
+			cons[radEnergy_index + numRadVars_ * g - nstartHyperbolic_] = Erad_floor_;
+		}
 #if (AMREX_SPACEDIM == 1)
-    if (std::abs(Fx) > c_light_ * E_r) {
-      cons[x1RadFlux_index + numRadVars_ * g - nstartHyperbolic_] = c_light_ * E_r * sgn(Fx);
-    }
+		if (std::abs(Fx) > c_light_ * E_r) {
+			cons[x1RadFlux_index + numRadVars_ * g - nstartHyperbolic_] = c_light_ * E_r * sgn(Fx);
+		}
 #elif (AMREX_SPACEDIM == 2)
-    if (Fx * Fx + Fy * Fy > c_light_ * c_light_ * E_r * E_r) {
-      const auto Fnorm = std::sqrt(Fx * Fx + Fy * Fy);
-      cons[x1RadFlux_index + numRadVars_ * g - nstartHyperbolic_] = Fx / Fnorm * c_light_ * E_r;
-      cons[x2RadFlux_index + numRadVars_ * g - nstartHyperbolic_] = Fy / Fnorm * c_light_ * E_r;
-    }
+		if (Fx * Fx + Fy * Fy > c_light_ * c_light_ * E_r * E_r) {
+			const auto Fnorm = std::sqrt(Fx * Fx + Fy * Fy);
+			cons[x1RadFlux_index + numRadVars_ * g - nstartHyperbolic_] = Fx / Fnorm * c_light_ * E_r;
+			cons[x2RadFlux_index + numRadVars_ * g - nstartHyperbolic_] = Fy / Fnorm * c_light_ * E_r;
+		}
 #elif (AMREX_SPACEDIM == 3)
-    if (Fx * Fx + Fy * Fy + Fz * Fz > c_light_ * c_light_ * E_r * E_r) {
-      const auto Fnorm = std::sqrt(Fx * Fx + Fy * Fy + Fz * Fz);
-      cons[x1RadFlux_index + numRadVars_ * g - nstartHyperbolic_] = Fx / Fnorm * c_light_ * E_r;
-      cons[x2RadFlux_index + numRadVars_ * g - nstartHyperbolic_] = Fy / Fnorm * c_light_ * E_r;
-      cons[x3RadFlux_index + numRadVars_ * g - nstartHyperbolic_] = Fz / Fnorm * c_light_ * E_r;
-    }
+		if (Fx * Fx + Fy * Fy + Fz * Fz > c_light_ * c_light_ * E_r * E_r) {
+			const auto Fnorm = std::sqrt(Fx * Fx + Fy * Fy + Fz * Fz);
+			cons[x1RadFlux_index + numRadVars_ * g - nstartHyperbolic_] = Fx / Fnorm * c_light_ * E_r;
+			cons[x2RadFlux_index + numRadVars_ * g - nstartHyperbolic_] = Fy / Fnorm * c_light_ * E_r;
+			cons[x3RadFlux_index + numRadVars_ * g - nstartHyperbolic_] = Fz / Fnorm * c_light_ * E_r;
+		}
 #endif
-  }
+	}
 }
 
 template <typename problem_t>
@@ -553,10 +553,10 @@ void RadSystem<problem_t>::PredictStep(arrayconst_t &consVarOld, array_t &consVa
 		// 	}
 		// }
 
-    if (!isStateValid(cons)) {
-      amendRadState(cons);
-    }
-    AMREX_ASSERT(isStateValid(cons));
+		if (!isStateValid(cons)) {
+			amendRadState(cons);
+		}
+		AMREX_ASSERT(isStateValid(cons));
 
 		for (int n = 0; n < nvarHyperbolic_; ++n) {
 			consVarNew(i, j, k, nstartHyperbolic_ + n) = cons[n];
@@ -641,10 +641,10 @@ void RadSystem<problem_t>::AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayc
 		// 			}
 		// 		}
 
-    if (!isStateValid(cons_new)) {
-      amendRadState(cons_new);
-    }
-    AMREX_ASSERT(isStateValid(cons_new));
+		if (!isStateValid(cons_new)) {
+			amendRadState(cons_new);
+		}
+		AMREX_ASSERT(isStateValid(cons_new));
 
 		for (int n = 0; n < nvarHyperbolic_; ++n) {
 			U_new(i, j, k, nstartHyperbolic_ + n) = cons_new[n];
@@ -1298,13 +1298,13 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 
 				EradVec_guess += deltaErad;
 				Egas_guess += deltaEgas;
-        // set negative values in EradVec_guess to Erad_floor_ and return the excess to Egas_guess
-        for (int g = 0; g < nGroups_; ++g) {
-          if (EradVec_guess[g] < 0.0) {
-            Egas_guess += (EradVec_guess[g] - Erad_floor_) * (c / chat);
-            EradVec_guess[g] = Erad_floor_;
-          }
-        }
+				// set negative values in EradVec_guess to Erad_floor_ and return the excess to Egas_guess
+				for (int g = 0; g < nGroups_; ++g) {
+					if (EradVec_guess[g] < 0.0) {
+						Egas_guess += (EradVec_guess[g] - Erad_floor_) * (c / chat);
+						EradVec_guess[g] = Erad_floor_;
+					}
+				}
 				AMREX_ASSERT(min(EradVec_guess) >= 0.);
 				AMREX_ASSERT(Egas_guess > 0.);
 			} // END NEWTON-RAPHSON LOOP
