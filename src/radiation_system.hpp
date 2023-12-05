@@ -305,8 +305,6 @@ template <typename problem_t> AMREX_GPU_DEVICE void RadSystem<problem_t>::amendR
 	for (int g = 0; g < nGroups_; ++g) {
 		auto E_r = cons[radEnergy_index + numRadVars_ * g - nstartHyperbolic_];
 		const auto Fx = cons[x1RadFlux_index + numRadVars_ * g - nstartHyperbolic_];
-		const auto Fy = cons[x2RadFlux_index + numRadVars_ * g - nstartHyperbolic_];
-		const auto Fz = cons[x3RadFlux_index + numRadVars_ * g - nstartHyperbolic_];
 		if (E_r < Erad_floor_) {
 			E_r = Erad_floor_;
 			cons[radEnergy_index + numRadVars_ * g - nstartHyperbolic_] = Erad_floor_;
@@ -316,12 +314,15 @@ template <typename problem_t> AMREX_GPU_DEVICE void RadSystem<problem_t>::amendR
 			cons[x1RadFlux_index + numRadVars_ * g - nstartHyperbolic_] = c_light_ * E_r * sgn(Fx);
 		}
 #elif (AMREX_SPACEDIM == 2)
+		const auto Fy = cons[x2RadFlux_index + numRadVars_ * g - nstartHyperbolic_];
 		if (Fx * Fx + Fy * Fy > c_light_ * c_light_ * E_r * E_r) {
 			const auto Fnorm = std::sqrt(Fx * Fx + Fy * Fy);
 			cons[x1RadFlux_index + numRadVars_ * g - nstartHyperbolic_] = Fx / Fnorm * c_light_ * E_r;
 			cons[x2RadFlux_index + numRadVars_ * g - nstartHyperbolic_] = Fy / Fnorm * c_light_ * E_r;
 		}
 #elif (AMREX_SPACEDIM == 3)
+		const auto Fy = cons[x2RadFlux_index + numRadVars_ * g - nstartHyperbolic_];
+		const auto Fz = cons[x3RadFlux_index + numRadVars_ * g - nstartHyperbolic_];
 		if (Fx * Fx + Fy * Fy + Fz * Fz > c_light_ * c_light_ * E_r * E_r) {
 			const auto Fnorm = std::sqrt(Fx * Fx + Fy * Fy + Fz * Fz);
 			cons[x1RadFlux_index + numRadVars_ * g - nstartHyperbolic_] = Fx / Fnorm * c_light_ * E_r;
