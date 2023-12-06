@@ -38,7 +38,7 @@
 static constexpr bool compute_G_last_two_terms = true;
 
 // Time integration scheme
-// IMEX PD-ARS 
+// IMEX PD-ARS
 static constexpr double IMEX_a22 = 1.0;
 static constexpr double IMEX_a32 = 0.4; // 0 < IMEX_a32 <= 0.5
 // SSP-RK2 + implicit radiation-matter exchange
@@ -136,8 +136,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 				 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange, int nvars);
 
 	template <FluxDir DIR, typename ARRAY>
-	static void ComputeRadPressure(double erad_L, double Fx_L, double Fy_L, double Fz_L, double fx_L, double fy_L,
-				       double fz_L, ARRAY &F_L, double &S_L, int speed_sign = 1);
+	static void ComputeRadPressure(double erad_L, double Fx_L, double Fy_L, double Fz_L, double fx_L, double fy_L, double fz_L, ARRAY &F_L, double &S_L,
+				       int speed_sign = 1);
 
 	template <FluxDir DIR>
 	static void ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiffusive_in, amrex::Array4<const amrex::Real> const &x1LeftState_in,
