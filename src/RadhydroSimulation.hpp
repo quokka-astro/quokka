@@ -255,7 +255,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	void subcycleRadiationAtLevel(int lev, amrex::Real time, amrex::Real dt_lev_hydro, amrex::YAFluxRegister *fr_as_crse,
 				      amrex::YAFluxRegister *fr_as_fine);
 
-	void operatorSplitSourceTerms(amrex::Array4<const amrex::Real> const &stateOld, amrex::Array4<amrex::Real> const &stateNew,
+	void operatorSplitSourceTerms(amrex::Array4<amrex::Real> const &stateNew,
 				      const amrex::Box &indexRange, amrex::Real time, double dt, int stage,
 				      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
 				      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi);
@@ -1521,14 +1521,13 @@ void RadhydroSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Rea
 			// matter-radiation exchange source terms of stage 1
 			for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
 				const amrex::Box &indexRange = iter.validbox();
-				auto const &stateOld = state_old_cc_[lev].const_array(iter);
 				auto const &stateNew = state_new_cc_[lev].array(iter);
 				auto const &prob_lo = geom[lev].ProbLoArray();
 				auto const &prob_hi = geom[lev].ProbHiArray();
 				// update state_new_cc_[lev] in place (updates both radiation and hydro vars)
 				// Note that only a fraction (IMEX_a32) of the matter-radiation exchange source terms are added to hydro. This ensures that the
 				// hydro properties get to t + IMEX_a32 dt in terms of matter-radiation exchange.
-				operatorSplitSourceTerms(stateOld, stateNew, indexRange, time_subcycle, dt_radiation, 1, dx, prob_lo, prob_hi);
+				operatorSplitSourceTerms(stateNew, indexRange, time_subcycle, dt_radiation, 1, dx, prob_lo, prob_hi);
 			}
 		}
 
@@ -1541,12 +1540,11 @@ void RadhydroSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Rea
 		// Add the matter-radiation exchange source terms to the radiation subsystem and evolve by (1 - IMEX_a32) * dt
 		for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
 			const amrex::Box &indexRange = iter.validbox();
-			auto const &stateOld = state_old_cc_[lev].const_array(iter);
 			auto const &stateNew = state_new_cc_[lev].array(iter);
 			auto const &prob_lo = geom[lev].ProbLoArray();
 			auto const &prob_hi = geom[lev].ProbHiArray();
 			// update state_new_cc_[lev] in place (updates both radiation and hydro vars)
-			operatorSplitSourceTerms(stateOld, stateNew, indexRange, time_subcycle, dt_radiation, 2, dx, prob_lo, prob_hi);
+			operatorSplitSourceTerms(stateNew, indexRange, time_subcycle, dt_radiation, 2, dx, prob_lo, prob_hi);
 		}
 
 		// new hydro+radiation state is stored in state_new_cc_
@@ -1704,7 +1702,7 @@ void RadhydroSimulation<problem_t>::advanceRadiationMidpointRK2(int lev, amrex::
 }
 
 template <typename problem_t>
-void RadhydroSimulation<problem_t>::operatorSplitSourceTerms(amrex::Array4<const amrex::Real> const &stateOld, amrex::Array4<amrex::Real> const &stateNew,
+void RadhydroSimulation<problem_t>::operatorSplitSourceTerms(amrex::Array4<amrex::Real> const &stateNew,
 							     const amrex::Box &indexRange, const amrex::Real time, const double dt, const int stage,
 							     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 							     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
