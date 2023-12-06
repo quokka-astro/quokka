@@ -637,8 +637,8 @@ void RadSystem<problem_t>::AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayc
 		// 				const double FzU_1 = (dt / dz) * (x3FluxDiffusive(i, j, k, n) - x3FluxDiffusive(i, j, k + 1, n));
 		// #endif
 		// 				// save results in cons_new
-		// 				cons_new[n] = (1.0 - IMEX_a32) * U_0 + IMEX_a32 * U_1 + ((0.5 - IMEX_a32) * AMREX_D_TERM(FxU_0, +FyU_0,  +FzU_0)) +
-		// 					      (0.5 * AMREX_D_TERM(FxU_1,  +FyU_1,  +FzU_1));
+		// 				cons_new[n] = (1.0 - IMEX_a32) * U_0 + IMEX_a32 * U_1 + ((0.5 - IMEX_a32) * AMREX_D_TERM(FxU_0, +FyU_0, +FzU_0))
+		// + 					      (0.5 * AMREX_D_TERM(FxU_1,  +FyU_1,  +FzU_1));
 		// 			}
 		// 		}
 
