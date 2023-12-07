@@ -58,8 +58,10 @@ User Guide
    :hidden:
 
    installation
+   running_on_hpc_clusters
    tests/index
    parameters
+   analysis
 
 Developer Guide
 -----------
