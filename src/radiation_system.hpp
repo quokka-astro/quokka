@@ -41,6 +41,7 @@ static constexpr bool compute_G_last_two_terms = true;
 // IMEX PD-ARS
 static constexpr double IMEX_a22 = 1.0;
 static constexpr double IMEX_a32 = 0.4; // 0 < IMEX_a32 <= 0.5
+static constexpr double IMEX_at31 = 0.5;
 // SSP-RK2 + implicit radiation-matter exchange
 // static constexpr double IMEX_a22 = 0.0;
 // static constexpr double IMEX_a32 = 0.0;
@@ -130,10 +131,11 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 				amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxDiffusiveArray, double dt_in,
 				amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange, int nvars);
 
-	static void AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayconst_t &U1, amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrayOld,
+	static void AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayconst_t &U1, arrayconst_t &Udiff, 
+         amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrayOld,
 				 amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray, amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxDiffusiveArrayOld,
 				 amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxDiffusiveArray, double dt_in,
-				 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange, int nvars);
+				 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange, int nvars, const int stage);
 
 	template <FluxDir DIR, typename ARRAY>
 	static void ComputeRadPressure(double erad_L, double Fx_L, double Fy_L, double Fz_L, double fx_L, double fy_L, double fz_L, ARRAY &F_L, double &S_L,
@@ -148,8 +150,12 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 				       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi,
 				       amrex::Real time);
 
-	static void AddSourceTerms(array_t &consVar, arrayconst_t &radEnergySource, arrayconst_t &advectionFluxes, amrex::Box const &indexRange, amrex::Real dt,
-				   int stage);
+	// static void ResetHydro(array_t &consVar, arrayconst_t &consVarDiff, amrex::Box const &indexRange, amrex::Real const backfrac);
+
+	static void AddSourceTerms(array_t &consVar, array_t &consVarDiff, arrayconst_t &radEnergySource, arrayconst_t &advectionFluxes, amrex::Box const &indexRange, amrex::Real dt,
+				   const int stage);
+
+  static void ValidateHyperbolicVars(amrex::Box const &indexRange, arrayconst_t &consVar);
 
 	static void balanceMatterRadiation(arrayconst_t &consPrev, array_t &consNew, amrex::Box const &indexRange);
 
@@ -545,11 +551,12 @@ void RadSystem<problem_t>::PredictStep(arrayconst_t &consVarOld, array_t &consVa
 }
 
 template <typename problem_t>
-void RadSystem<problem_t>::AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayconst_t &U1, amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrayOld,
+void RadSystem<problem_t>::AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayconst_t &U1, arrayconst_t &Udiff,
+          amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrayOld,
 					amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray,
 					amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> /*fluxDiffusiveArrayOld*/,
 					amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> /*fluxDiffusiveArray*/, const double dt_in,
-					amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange, const int /*nvars*/)
+					amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange, const int /*nvars*/, const int step)
 {
 	// By convention, the fluxes are defined on the left edge of each zone,
 	// i.e. flux_(i) is the flux *into* zone i through the interface on the
@@ -1005,15 +1012,26 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeEgasFromEint(const doubl
 }
 
 template <typename problem_t>
-void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEnergySource, arrayconst_t &advectionFluxes, amrex::Box const &indexRange,
+void RadSystem<problem_t>::ValidateHyperbolicVars(amrex::Box const &indexRange, arrayconst_t &consVar)
+{
+  // cell-centered kernel
+  amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		std::array<amrex::Real, nvarHyperbolic_> cons_new{};
+    for (int idx = 0; idx < nvarHyperbolic_; ++idx) {
+      cons_new[idx] = consVar(i, j, k, nstartHyperbolic_ + idx);
+    }
+    AMREX_ASSERT(isStateValid(cons_new));
+  });
+}
+
+template <typename problem_t>
+void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, array_t &consVarDiff, arrayconst_t &radEnergySource, arrayconst_t &advectionFluxes, amrex::Box const &indexRange,
 					  amrex::Real dt_radiation, const int stage)
 {
 	arrayconst_t &consPrev = consVar; // make read-only
 	array_t &consNew = consVar;
+	array_t &consNewDiff = consVarDiff;
 	auto dt = dt_radiation;
-	if (stage == 2) {
-		dt = (1.0 - IMEX_a32) * dt_radiation;
-	}
 
 	amrex::GpuArray<amrex::Real, nGroups_ + 1> radBoundaries_g{};
 	if constexpr (nGroups_ > 1) {
@@ -1114,7 +1132,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				auto B = fourPiB / (4.0 * M_PI);
 				kappaPVec = ComputePlanckOpacity(rho, T_gas);
 				kappaFVec = ComputeFluxMeanOpacity(rho, T_gas);
-				kappaEVec = kappaFVec; // TODO(CCH): define ComputeEnergyMeanOpacity
+				kappaEVec = kappaPVec;
 
 				// compute derivatives w/r/t T_gas
 				const double dB_dTgas = (4.0 * B) / T_gas;

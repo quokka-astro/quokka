@@ -292,6 +292,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Vector<amrex::BCRec> BCs_fc_; // on level 0
 	amrex::Vector<amrex::MultiFab> state_old_cc_;
 	amrex::Vector<amrex::MultiFab> state_new_cc_;
+	amrex::Vector<amrex::MultiFab> state_diff_cc_;
 	amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> state_old_fc_;
 	amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> state_new_fc_;
 	amrex::Vector<amrex::MultiFab> max_signal_speed_; // needed to compute CFL timestep
@@ -380,6 +381,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::initialize()
 	reductionFactor_.resize(nlevs_max, 1);
 	state_new_cc_.resize(nlevs_max);
 	state_old_cc_.resize(nlevs_max);
+	state_diff_cc_.resize(nlevs_max);
 	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
 		state_new_fc_.resize(nlevs_max);
 		state_old_fc_.resize(nlevs_max);
@@ -689,8 +691,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 	if (work_nonsubcycling <= work_subcycling) {
 		// use global timestep on this coarse step
 		if (verbose) {
-			const amrex::Real ratio = work_nonsubcycling / work_subcycling;
-			amrex::Print() << "\t>> Using global timestep on this coarse step (estimated work ratio: " << ratio << ").\n";
+      // TODO(CCH): why is this routine activated when doing iterations in the second stage of IMEX?
+			// const amrex::Real ratio = work_nonsubcycling / work_subcycling;
+			// amrex::Print() << "\t>> Using global timestep on this coarse step (estimated work ratio: " << ratio << ").\n";
 		}
 		for (int lev = 1; lev <= max_level; ++lev) {
 			nsubsteps[lev] = 1;
@@ -1163,8 +1166,10 @@ void AMRSimulation<problem_t>::MakeNewLevelFromCoarse(int level, amrex::Real tim
 	const int nghost_cc = state_new_cc_[level - 1].nGrow();
 	state_new_cc_[level].define(ba, dm, ncomp_cc, nghost_cc);
 	state_old_cc_[level].define(ba, dm, ncomp_cc, nghost_cc);
+	state_diff_cc_[level].define(ba, dm, ncomp_cc, nghost_cc);
 	FillCoarsePatch(level, time, state_new_cc_[level], 0, ncomp_cc, BCs_cc_, quokka::centering::cc, quokka::direction::na);
 	FillCoarsePatch(level, time, state_old_cc_[level], 0, ncomp_cc, BCs_cc_, quokka::centering::cc, quokka::direction::na); // also necessary
+	FillCoarsePatch(level, time, state_diff_cc_[level], 0, ncomp_cc, BCs_cc_, quokka::centering::cc, quokka::direction::na); 
 
 	max_signal_speed_[level].define(ba, dm, 1, nghost_cc);
 	tNew_[level] = time;
@@ -1247,6 +1252,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ClearLevel(int leve
 
 	state_new_cc_[level].clear();
 	state_old_cc_[level].clear();
+	state_diff_cc_[level].clear();
 	max_signal_speed_[level].clear();
 
 	flux_reg_[level].reset(nullptr);
@@ -1376,6 +1382,7 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(int level, amrex::Real ti
 	const int nghost_cc = nghost_cc_;
 	state_new_cc_[level].define(ba, dm, ncomp_cc, nghost_cc);
 	state_old_cc_[level].define(ba, dm, ncomp_cc, nghost_cc);
+	state_diff_cc_[level].define(ba, dm, ncomp_cc, nghost_cc);
 	max_signal_speed_[level].define(ba, dm, 1, nghost_cc);
 
 	tNew_[level] = time;
@@ -2269,6 +2276,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 		const int nghost_cc = nghost_cc_;
 		state_old_cc_[lev].define(grids[lev], dmap[lev], ncomp_cc, nghost_cc);
 		state_new_cc_[lev].define(grids[lev], dmap[lev], ncomp_cc, nghost_cc);
+		state_diff_cc_[lev].define(grids[lev], dmap[lev], ncomp_cc, nghost_cc);
 		max_signal_speed_[lev].define(ba, dm, 1, nghost_cc);
 
 		if (lev > 0 && (do_reflux != 0)) {
