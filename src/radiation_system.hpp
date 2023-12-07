@@ -135,10 +135,6 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 				 amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxDiffusiveArray, double dt_in,
 				 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange, int nvars);
 
-	template <FluxDir DIR, typename ARRAY>
-	static void ComputeRadPressure(double erad_L, double Fx_L, double Fy_L, double Fz_L, double fx_L, double fy_L, double fz_L, ARRAY &F_L, double &S_L,
-				       int speed_sign = 1);
-
 	template <FluxDir DIR>
 	static void ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiffusive_in, amrex::Array4<const amrex::Real> const &x1LeftState_in,
 				  amrex::Array4<const amrex::Real> const &x1RightState_in, amrex::Box const &indexRange, arrayconst_t &consVar_in,
@@ -193,6 +189,9 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	AMREX_GPU_DEVICE static auto isStateValid(std::array<amrex::Real, nvarHyperbolic_> &cons) -> bool;
 
 	AMREX_GPU_DEVICE static void amendRadState(std::array<amrex::Real, nvarHyperbolic_> &cons);
+
+	template <FluxDir DIR, typename TARRAY>
+	AMREX_GPU_DEVICE static void ComputeRadPressure(double erad_L, double Fx_L, double Fy_L, double Fz_L, double fx_L, double fy_L, double fz_L, TARRAY &F_L, double &S_L, int speed_sign = 1);
 };
 
 // Compute radiation energy fractions for each photon group from a Planck function, given nGroups, radBoundaries, and temperature
@@ -695,9 +694,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeCellOpticalDepth(const quokka
 }
 
 template <typename problem_t>
-template <FluxDir DIR, typename ARRAY>
-void RadSystem<problem_t>::ComputeRadPressure(const double erad, const double Fx, const double Fy, const double Fz, const double fx, const double fy,
-					      const double fz, ARRAY &F, double &S, const int speed_sign)
+template <FluxDir DIR, typename TARRAY>
+AMREX_GPU_DEVICE void RadSystem<problem_t>::ComputeRadPressure(const double erad, const double Fx, const double Fy, const double Fz, const double fx, const double fy, const double fz, TARRAY &F, double &S, const int speed_sign)
 {
 	// check that states are physically admissible
 	AMREX_ASSERT(erad > 0.0);
@@ -1156,6 +1154,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				if (dRtot_dEgas < 0.0) {
 					dRtot_dEgas = 0.0;
 				}
+				// AMREX_ASSERT(dRtot_dEgas >= 0.0);
 
 				// compute Jacobian elements
 				dFG_dEgas = 1.0 + (c / chat) * dRtot_dEgas;
