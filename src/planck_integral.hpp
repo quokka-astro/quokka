@@ -232,6 +232,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_planck_integral(Real l
 // Integrate the Planck integral, x^3 / (exp(x) - 1), from 0 to x. Return its ratio to the integral from 0 to infinity (pi^4 / 15).
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto integrate_planck_from_0_to_x(const Real x) -> Real
 {
+  AMREX_ASSERT(!std::isnan(x));
 	AMREX_ASSERT(x >= 0.);
 
 	if (x <= 0.) {
@@ -243,8 +244,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto integrate_planck_from_0_to_x(const
 	if (logx < LOG_X_MIN) {
 		// y = x * x * x / 3.0;    // 1st order
 		y = (-4 + x) * x + 8 * std::log((2 + x) / 2); // 2nd order
-		// AMREX_ASSERT(y <= Y_interp[0]);
-		AMREX_ASSERT(y <= Y_INTERP_MIN);
+    if (y > Y_INTERP_MIN) {
+      y = Y_INTERP_MIN;
+    }
 	} else if (logx >= LOG_X_MAX) {
 		return 1.0;
 	} else {
