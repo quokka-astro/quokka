@@ -26,7 +26,7 @@ constexpr double erad_floor = a_rad * T0 * T0 * T0 * T0 * 1.0e-10;
 constexpr double mu = 2.33 * C::m_u;
 constexpr double k_B = C::k_B;
 constexpr double v0_nonadv = 0.;    // non-advecting pulse
-constexpr double v0_adv = 1.0e6; // advecting pulse
+constexpr double v0_adv = 1.0e6;    // advecting pulse
 constexpr double max_time = 4.8e-5; // max_time = 2.0 * width / v1;
 
 template <> struct quokka::EOS_Traits<PulseProblem> {
@@ -149,7 +149,7 @@ template <> void RadhydroSimulation<PulseProblem>::setInitialConditionsOnGrid(qu
 		const double Erad = a_rad * std::pow(Trad, 4);
 		const double rho = compute_exact_rho(x - x0);
 		const double Egas = quokka::EOS<PulseProblem>::ComputeEintFromTgas(rho, Trad);
-    const double v0 = v0_nonadv;
+		const double v0 = v0_nonadv;
 
 		// state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = (1. + 4. / 3. * (v0 * v0) / (c * c)) * Erad;
 		state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = Erad;
@@ -182,7 +182,7 @@ template <> void RadhydroSimulation<AdvPulseProblem>::setInitialConditionsOnGrid
 		const double Erad = a_rad * std::pow(Trad, 4);
 		const double rho = compute_exact_rho(x - x0);
 		const double Egas = quokka::EOS<PulseProblem>::ComputeEintFromTgas(rho, Trad);
-    const double v0 = v0_adv;
+		const double v0 = v0_adv;
 
 		// state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = (1. + 4. / 3. * (v0 * v0) / (c * c)) * Erad;
 		state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = Erad;
@@ -201,8 +201,8 @@ template <> void RadhydroSimulation<AdvPulseProblem>::setInitialConditionsOnGrid
 auto problem_main() -> int
 {
 	// This problem is a test of radiation diffusion plus advection by gas.
-	// This makes this problem a stringent test of the radiation advection 
-  // in the diffusion limit.
+	// This makes this problem a stringent test of the radiation advection
+	// in the diffusion limit.
 
 	// Problem parameters
 	const int max_timesteps = 1e5;
@@ -221,7 +221,7 @@ auto problem_main() -> int
 		}
 	}
 
-  // Problem 1: non-advecting pulse
+	// Problem 1: non-advecting pulse
 
 	// Problem initialization
 	RadhydroSimulation<PulseProblem> sim(BCs_cc);
@@ -265,9 +265,9 @@ auto problem_main() -> int
 		Tgas.at(i) = quokka::EOS<PulseProblem>::ComputeTgasFromEint(rho_t, Egas);
 		Vgas.at(i) = 1e-5 * v_t;
 	}
-  // END OF PROBLEM 1
+	// END OF PROBLEM 1
 
-  // Problem 2: advecting pulse
+	// Problem 2: advecting pulse
 
 	// Problem initialization
 	RadhydroSimulation<AdvPulseProblem> sim2(BCs_cc);
@@ -289,9 +289,9 @@ auto problem_main() -> int
 	auto [position2, values2] = fextract(sim2.state_new_cc_[0], sim2.Geom(0), 0, 0.0);
 	prob_lo = sim2.geom[0].ProbLoArray();
 	prob_hi = sim2.geom[0].ProbHiArray();
-  // compute the pixel size
-  const double dx = (prob_hi[0] - prob_lo[0]) / static_cast<double>(nx);
-  const int nshift = static_cast<int>(v0_adv * max_time / dx);
+	// compute the pixel size
+	const double dx = (prob_hi[0] - prob_lo[0]) / static_cast<double>(nx);
+	const int nshift = static_cast<int>(v0_adv * max_time / dx);
 
 	std::vector<double> xs2(nx);
 	std::vector<double> Trad2(nx);
@@ -300,10 +300,10 @@ auto problem_main() -> int
 	std::vector<double> rhogas2(nx);
 
 	for (int i = 0; i < nx; ++i) {
-    int i_shift = i + nshift;
-    if (i_shift >= nx) {
-      i_shift = i_shift - nx;
-    }
+		int i_shift = i + nshift;
+		if (i_shift >= nx) {
+			i_shift = i_shift - nx;
+		}
 		amrex::Real const x = position2[i];
 		xs2.at(i) = x;
 		const auto Erad_t = values2.at(RadSystem<PulseProblem>::radEnergy_index)[i_shift];
@@ -316,7 +316,7 @@ auto problem_main() -> int
 		Tgas2.at(i) = quokka::EOS<PulseProblem>::ComputeTgasFromEint(rho_t, Egas);
 		Vgas2.at(i) = 1e-5 * (v_t - v0_adv);
 	}
-  // END OF PROBLEM 2
+	// END OF PROBLEM 2
 
 	// compute error norm
 	double err_norm = 0.;
