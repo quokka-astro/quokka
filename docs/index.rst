@@ -16,10 +16,12 @@ run with high performance on either CPUs or GPUs.
 
    about
    installation
+   running_on_hpc_clusters
    equations
    flowchart
    tests/index
    parameters
+   analysis
    api
    bibliography
    

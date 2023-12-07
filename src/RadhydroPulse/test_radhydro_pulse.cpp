@@ -247,7 +247,6 @@ auto problem_main() -> int
 	const int nx = static_cast<int>(position.size());
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = sim.geom[0].ProbLoArray();
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = sim.geom[0].ProbHiArray();
-	amrex::Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
 
 	std::vector<double> xs(nx);
 	std::vector<double> Trad(nx);
