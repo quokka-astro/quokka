@@ -205,7 +205,7 @@ auto problem_main() -> int
 	// in the diffusion limit.
 
 	// Problem parameters
-	const int max_timesteps = 1e5;
+	const int64_t max_timesteps = 1e8;
 	const double CFL_number = 0.8;
 	// const int nx = 32;
 
@@ -215,7 +215,10 @@ auto problem_main() -> int
 	constexpr int nvars = RadSystem<PulseProblem>::nvar_;
 	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
 	for (int n = 0; n < nvars; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+    // periodic boundary condition in the x-direction will not work
+		BCs_cc[n].setLo(0, amrex::BCType::foextrap); // extrapolate
+		BCs_cc[n].setHi(0, amrex::BCType::foextrap);
+		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
 			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
 			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
 		}
@@ -291,7 +294,7 @@ auto problem_main() -> int
 	prob_hi = sim2.geom[0].ProbHiArray();
 	// compute the pixel size
 	const double dx = (prob_hi[0] - prob_lo[0]) / static_cast<double>(nx);
-	const int nshift = static_cast<int>(v0_adv * max_time / dx);
+	const int nshift = static_cast<int>(v0_adv * sim2.tNew_[0] / dx);
 
 	std::vector<double> xs2(nx);
 	std::vector<double> Trad2(nx);
