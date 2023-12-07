@@ -215,7 +215,7 @@ auto problem_main() -> int
 	constexpr int nvars = RadSystem<PulseProblem>::nvar_;
 	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
 	for (int n = 0; n < nvars; ++n) {
-    // periodic boundary condition in the x-direction will not work
+		// periodic boundary condition in the x-direction will not work
 		BCs_cc[n].setLo(0, amrex::BCType::foextrap); // extrapolate
 		BCs_cc[n].setHi(0, amrex::BCType::foextrap);
 		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
