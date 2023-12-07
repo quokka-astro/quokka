@@ -40,7 +40,7 @@ static constexpr bool compute_G_last_two_terms = true;
 // Time integration scheme
 // IMEX PD-ARS
 static constexpr double IMEX_a22 = 1.0;
-static constexpr double IMEX_a32 = 0.4; // 0 < IMEX_a32 <= 0.5
+static constexpr double IMEX_a32 = 0.5; // 0 < IMEX_a32 <= 0.5
 static constexpr double IMEX_at31 = 0.5;
 // SSP-RK2 + implicit radiation-matter exchange
 // static constexpr double IMEX_a22 = 0.0;

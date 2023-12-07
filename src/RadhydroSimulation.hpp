@@ -1495,14 +1495,14 @@ void RadhydroSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Rea
 	}
 
 	if (Verbose() != 0) {
-		amrex::Print() << "\tRadiation substeps: " << nsubSteps << "\tdt: " << dt_radiation << "\n";
+		// amrex::Print() << "\tRadiation substeps: " << nsubSteps << "\tdt: " << dt_radiation << "\n";
 	}
 	AMREX_ALWAYS_ASSERT(nsubSteps >= 1);
 	AMREX_ALWAYS_ASSERT(nsubSteps <= (maxSubsteps_ + 1));
 	AMREX_ALWAYS_ASSERT(dt_radiation > 0.0);
 
   // Currently, iteration only support IMEX_a32 = 0.5
-	AMREX_ALWAYS_ASSERT(IMEX_a32 == 0.5);
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(IMEX_a32 == 0.5, "Fixed-point iteration only support IMEX_a32 = 0.5");
 
 	// perform subcycle
 	auto const &dx = geom[lev].CellSizeArray();

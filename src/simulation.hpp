@@ -1037,8 +1037,8 @@ template <typename problem_t> auto AMRSimulation<problem_t>::timeStepWithSubcycl
 #endif
 
 	if (Verbose()) {
-		amrex::Print() << "[Level " << lev << " step " << istep[lev] + 1 << "] ";
-		amrex::Print() << "ADVANCE with time = " << tNew_[lev] << " dt = " << dt_[lev] << std::endl;
+		// amrex::Print() << "[Level " << lev << " step " << istep[lev] + 1 << "] ";
+		// amrex::Print() << "ADVANCE with time = " << tNew_[lev] << " dt = " << dt_[lev] << std::endl;
 	}
 
 	// Advance a single level for a single time step, and update flux registers
@@ -1053,8 +1053,8 @@ template <typename problem_t> auto AMRSimulation<problem_t>::timeStepWithSubcycl
 	cellUpdatesEachLevel_[lev] += CountCells(lev);
 
 	if (Verbose()) {
-		amrex::Print() << "[Level " << lev << " step " << istep[lev] << "] ";
-		amrex::Print() << "Advanced " << CountCells(lev) << " cells" << std::endl;
+		// amrex::Print() << "[Level " << lev << " step " << istep[lev] << "] ";
+		// amrex::Print() << "Advanced " << CountCells(lev) << " cells" << std::endl;
 	}
 
 	// advance finer levels

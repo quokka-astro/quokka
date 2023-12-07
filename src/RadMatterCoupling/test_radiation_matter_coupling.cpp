@@ -222,7 +222,7 @@ auto problem_main() -> int
 			sol_norm += std::abs(Tgas_exact_interp[i]);
 		}
 		const double rel_error = err_norm / sol_norm;
-		const double error_tol = 2e-5;
+		const double error_tol = 2e-6;
 		amrex::Print() << "relative L1 error norm = " << rel_error << std::endl;
 		if (rel_error > error_tol) {
 			status = 1;
