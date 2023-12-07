@@ -191,7 +191,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	AMREX_GPU_DEVICE static void amendRadState(std::array<amrex::Real, nvarHyperbolic_> &cons);
 
 	template <FluxDir DIR, typename TARRAY>
-	AMREX_GPU_DEVICE static void ComputeRadPressure(double erad_L, double Fx_L, double Fy_L, double Fz_L, double fx_L, double fy_L, double fz_L, TARRAY &F_L, double &S_L, int speed_sign = 1);
+	AMREX_GPU_DEVICE static void ComputeRadPressure(double erad_L, double Fx_L, double Fy_L, double Fz_L, double fx_L, double fy_L, double fz_L,
+							TARRAY &F_L, double &S_L, int speed_sign = 1);
 };
 
 // Compute radiation energy fractions for each photon group from a Planck function, given nGroups, radBoundaries, and temperature
@@ -695,7 +696,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeCellOpticalDepth(const quokka
 
 template <typename problem_t>
 template <FluxDir DIR, typename TARRAY>
-AMREX_GPU_DEVICE void RadSystem<problem_t>::ComputeRadPressure(const double erad, const double Fx, const double Fy, const double Fz, const double fx, const double fy, const double fz, TARRAY &F, double &S, const int speed_sign)
+AMREX_GPU_DEVICE void RadSystem<problem_t>::ComputeRadPressure(const double erad, const double Fx, const double Fy, const double Fz, const double fx,
+							       const double fy, const double fz, TARRAY &F, double &S, const int speed_sign)
 {
 	// check that states are physically admissible
 	AMREX_ASSERT(erad > 0.0);
