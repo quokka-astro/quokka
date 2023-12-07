@@ -54,7 +54,8 @@ template <> struct Physics_Traits<PulseProblem> {
 	static constexpr int nGroups = 1;
 };
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
+template <>
+AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, nGroups_> kappaPVec{};
 	for (int i = 0; i < nGroups_; ++i) {
@@ -112,7 +113,7 @@ auto problem_main() -> int
 	// of order 10^5.
 
 	// Problem parameters
-	const long int max_timesteps = 1e8;
+	const int max_timesteps = 1e5;
 	const double CFL_number = 0.8;
 
 	const double max_dt = 1e-3;
@@ -148,7 +149,6 @@ auto problem_main() -> int
 	const int nx = static_cast<int>(position.size());
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = sim.geom[0].ProbLoArray();
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = sim.geom[0].ProbHiArray();
-	amrex::Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
 
 	std::vector<double> xs(nx);
 	std::vector<double> Trad(nx);
@@ -190,7 +190,7 @@ auto problem_main() -> int
 		err_norm += std::abs(Tgas[i] - Tgas_exact[i]);
 		sol_norm += std::abs(Tgas_exact[i]);
 	}
-	const double error_tol = 1.0e-12;   // This is a very very stringent test (to machine accuray!)
+	const double error_tol = 1.0e-12; // This is a very very stringent test (to machine accuracy!)
 	const double rel_error = err_norm / sol_norm;
 	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
 
