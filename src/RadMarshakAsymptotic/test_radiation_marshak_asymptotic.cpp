@@ -19,7 +19,6 @@ struct SuOlsonProblemCgs {
 constexpr double kappa = 300.0;		      // cm^-1 (opacity)
 constexpr double rho0 = 2.0879373766122384;   // g cm^-3 (matter density)
 constexpr double T_hohlraum = 1.1604448449e7; // K (1 keV)
-// constexpr double T_initial = 300.;	      // K
 constexpr double T_initial = T_hohlraum * 0.001;
 
 // constexpr double kelvin_to_eV = 8.617385e-5;
@@ -133,6 +132,7 @@ AMRSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(const amrex::IntVe
 		//		      (1. / 12.) * (c * E_1 + 2.0 * F_1);
 
 		// use value at interface to solve for F_rad in the ghost zones
+		// const double F_bdry = 0.5 * c * E_inc - 0.5 * (c * E_0 + 2.0 * F_0);
 		const double F_bdry = 0.5 * c * E_inc - 0.5 * (c * E_0 + 2.0 * F_0);
 		// F_bdry = std::max(F_bdry, 0.0);
 		// AMREX_ASSERT(F_bdry >= 0.0);
