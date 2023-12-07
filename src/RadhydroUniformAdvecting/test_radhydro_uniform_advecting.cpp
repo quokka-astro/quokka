@@ -1,10 +1,5 @@
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
-/// \file test_radiation_pulse.cpp
-/// \brief Defines a test problem for radiation in the diffusion regime.
+/// \file test_radhydro_uniform_advecting.cpp
+/// \brief Defines a test problem for radiation advection in a uniform medium with grey radiation.
 ///
 
 #include "test_radhydro_uniform_advecting.hpp"
