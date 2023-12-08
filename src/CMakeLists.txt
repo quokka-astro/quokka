@@ -17,6 +17,9 @@ if(QUOKKA_OPENPMD)
   find_package(openPMD 0.15.2 CONFIG COMPONENTS MPI ADIOS2)
   include_directories(${OpenPMD_INCLUDE_DIRS_RET})
   link_libraries(openPMD::openPMD)
+  set(openPMDSources "${CMAKE_CURRENT_SOURCE_DIR}/openPMD.cpp")
+else()
+  set(openPMDSources "")
 endif()
 
 # HDF5
@@ -105,7 +108,7 @@ include(CTest)
 
 #create an object library for files that should be compiled with all test problems
 set (QuokkaObjSources "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/CloudyCooling.cpp" 
-                      "${CMAKE_CURRENT_SOURCE_DIR}/GrackleDataReader.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/openPMD.cpp"
+                      "${CMAKE_CURRENT_SOURCE_DIR}/GrackleDataReader.cpp" "${openPMDSources}"
                       "${gamma_law_sources}")
 #we don't use it anymore because it gives issues on Cray systems
 #add_library(QuokkaObj OBJECT ${QuokkaObjSources} ${gamma_law_sources})
