@@ -112,7 +112,7 @@ void WriteFile(const std::vector<std::string> &varnames, int const output_levels
 			if (!meshes.contains(field_name)) {
 				auto mesh = meshes[field_name];
 				detail::SetupMeshComponent(mesh, full_geom);
-        amrex::Print() << "Setting up field " << field_name << "\n";
+				amrex::Print() << "Setting up field " << field_name << "\n";
 			}
 		}
 
@@ -130,8 +130,8 @@ void WriteFile(const std::vector<std::string> &varnames, int const output_levels
 				amrex::IntVect const box_offset = local_box.smallEnd() - global_box.smallEnd();
 				auto chunk_offset = detail::getReversedVec(box_offset); // this overflows if ghost zones are used
 				auto chunk_size = detail::getReversedVec(local_box.size());
-        amrex::Print() << "chunk_offset = " << chunk_offset[0] << ", " << chunk_offset[1] << ", " << chunk_offset[2] << "\n";
-        amrex::Print() << "chunk_size = " << chunk_size[0] << ", " << chunk_size[1] << ", " << chunk_size[2] << "\n";
+				amrex::Print() << "chunk_offset = " << chunk_offset[0] << ", " << chunk_offset[1] << ", " << chunk_offset[2] << "\n";
+				amrex::Print() << "chunk_size = " << chunk_size[0] << ", " << chunk_size[1] << ", " << chunk_size[2] << "\n";
 
 				// pass device pointer directly to ADIOS
 				amrex::Real const *local_data = fab.dataPtr(icomp);
