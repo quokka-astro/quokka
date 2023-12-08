@@ -85,8 +85,8 @@ namespace filesystem = experimental::filesystem;
 #include "CheckNaN.hpp"
 #include "grid.hpp"
 #include "math_impl.hpp"
-#include "physics_info.hpp"
 #include "openPMD.hpp"
+#include "physics_info.hpp"
 
 #define USE_YAFLUXREGISTER
 

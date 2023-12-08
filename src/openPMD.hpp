@@ -32,8 +32,8 @@ auto GetMeshComponentName(int meshLevel, std::string const &field_name) -> std::
 
 } // namespace detail
 
-void WriteFile(const std::vector<std::string> &varnames, int output_levels, amrex::Vector<const amrex::MultiFab *> &mf,
-	       amrex::Vector<amrex::Geometry> &geom, const std::string &output_basename, amrex::Real time, int file_number);
+void WriteFile(const std::vector<std::string> &varnames, int output_levels, amrex::Vector<const amrex::MultiFab *> &mf, amrex::Vector<amrex::Geometry> &geom,
+	       const std::string &output_basename, amrex::Real time, int file_number);
 
 } // namespace quokka::OpenPMDOutput
 
