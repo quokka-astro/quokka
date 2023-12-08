@@ -269,8 +269,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	[[nodiscard]] auto PlotFileName(int lev) const -> std::string;
 	[[nodiscard]] auto CustomPlotFileName(const char *base, int lev) const -> std::string;
 	[[nodiscard]] auto GetPlotfileVarNames() const -> amrex::Vector<std::string>;
-	[[nodiscard]] auto PlotFileMF() -> amrex::Vector<amrex::MultiFab>;
-	[[nodiscard]] auto PlotFileMFAtLevel(int lev) -> amrex::MultiFab;
+	[[nodiscard]] auto PlotFileMF(int included_ghosts) -> amrex::Vector<amrex::MultiFab>;
+	[[nodiscard]] auto PlotFileMFAtLevel(int lev, int included_ghosts) -> amrex::MultiFab;
 	void WriteMetadataFile(std::string const &MetadataFileName) const;
 	void ReadMetadataFile(std::string const &chkfilename);
 	void WriteStatisticsFile();
@@ -1665,12 +1665,12 @@ void AMRSimulation<problem_t>::AverageFCToCC(amrex::MultiFab &mf_cc, const amrex
 	amrex::Gpu::streamSynchronize();
 }
 
-template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel(int lev) -> amrex::MultiFab
+template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel(const int lev, const int included_ghosts) -> amrex::MultiFab
 {
 	// Combine state_new_cc_[lev] and derived variables in a new MF
-	int comp = 0;
 	const int ncomp_cc = state_new_cc_[lev].nComp();
 	const int nghost_cc = state_new_cc_[lev].nGrow(); // workaround Ascent bug
+	int comp = 0;
 	int ncomp_per_dim_fc = 0;
 	int ncomp_tot_fc = 0;
 	int nghost_fc = 0;
@@ -1681,12 +1681,13 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel(i
 	}
 	const int ncomp_deriv = derivedNames_.size();
 	const int ncomp_plotMF = ncomp_cc + ncomp_tot_fc + ncomp_deriv;
-	const int nghost_plotMF = nghost_cc;
-	amrex::MultiFab plotMF(grids[lev], dmap[lev], ncomp_plotMF, nghost_plotMF);
+	amrex::MultiFab plotMF(grids[lev], dmap[lev], ncomp_plotMF, included_ghosts);
 
-	// Fill ghost zones for state_new_cc_
-	fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, tNew_[lev], quokka::centering::cc, quokka::direction::na, InterpHookNone,
+	if (included_ghosts > 0) {
+		// Fill ghost zones for state_new_cc_
+		fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, tNew_[lev], quokka::centering::cc, quokka::direction::na, InterpHookNone,
 			       InterpHookNone, FillPatchType::fillpatch_function);
+	}
 
 	// Fill ghost zones for state_new_fc_
 	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
@@ -1698,7 +1699,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel(i
 
 	// copy data from cell-centred state variables
 	for (int i = 0; i < ncomp_cc; i++) {
-		amrex::MultiFab::Copy(plotMF, state_new_cc_[lev], i, comp, 1, nghost_cc);
+		amrex::MultiFab::Copy(plotMF, state_new_cc_[lev], i, comp, 1, included_ghosts);
 		comp++;
 	}
 
@@ -1720,11 +1721,11 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel(i
 }
 
 // put together an array of multifabs for writing
-template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMF() -> amrex::Vector<amrex::MultiFab>
+template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMF(const int included_ghosts) -> amrex::Vector<amrex::MultiFab>
 {
 	amrex::Vector<amrex::MultiFab> r;
 	for (int i = 0; i <= finest_level; ++i) {
-		r.push_back(PlotFileMFAtLevel(i));
+		r.push_back(PlotFileMFAtLevel(i, included_ghosts));
 	}
 	return r;
 }
@@ -1766,7 +1767,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::RenderAscent()
 	BL_PROFILE("AMRSimulation::RenderAscent()");
 
 	// combine multifabs
-	amrex::Vector<amrex::MultiFab> mf = PlotFileMF();
+	amrex::Vector<amrex::MultiFab> mf = PlotFileMF(nghost_cc_);
 	amrex::Vector<const amrex::MultiFab *> mf_ptr = amrex::GetVecOfConstPtrs(mf);
 	amrex::Vector<std::string> varnames;
 	varnames.insert(varnames.end(), componentNames_cc_.begin(), componentNames_cc_.end());
@@ -1826,7 +1827,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 	}
 
 	// now construct output and submit to async write queue
-	amrex::Vector<amrex::MultiFab> mf = PlotFileMF();
+#ifdef QUOKKA_USE_OPENPMD
+	int included_ghosts = 0;
+#else
+	int included_ghosts = nghost_cc;
+#endif
+	amrex::Vector<amrex::MultiFab> mf = PlotFileMF(included_ghosts);
 	amrex::Vector<const amrex::MultiFab *> mf_ptr = amrex::GetVecOfConstPtrs(mf);
 
 	const std::string &plotfilename = PlotFileName(istep[0]);
