@@ -11,6 +11,14 @@ if(Python_FOUND)
     link_libraries(${Python_LIBRARIES})
 endif()
 
+if(QUOKKA_OPENPMD)
+  message(STATUS "Building Quokka with OpenPMD support")
+  add_compile_definitions(QUOKKA_USE_OPENPMD)
+  find_package(openPMD 0.15.2 CONFIG COMPONENTS MPI ADIOS2)
+  include_directories(${OpenPMD_INCLUDE_DIRS_RET})
+  link_libraries(openPMD::openPMD)
+endif()
+
 # HDF5
 find_package(HDF5 REQUIRED)
 
@@ -97,7 +105,7 @@ include(CTest)
 
 #create an object library for files that should be compiled with all test problems
 set (QuokkaObjSources "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/CloudyCooling.cpp" 
-                      "${CMAKE_CURRENT_SOURCE_DIR}/GrackleDataReader.cpp"
+                      "${CMAKE_CURRENT_SOURCE_DIR}/GrackleDataReader.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/openPMD.cpp"
                       "${gamma_law_sources}")
 #we don't use it anymore because it gives issues on Cray systems
 #add_library(QuokkaObj OBJECT ${QuokkaObjSources} ${gamma_law_sources})

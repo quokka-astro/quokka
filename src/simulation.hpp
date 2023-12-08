@@ -86,6 +86,7 @@ namespace filesystem = experimental::filesystem;
 #include "grid.hpp"
 #include "math_impl.hpp"
 #include "physics_info.hpp"
+#include "openPMD.hpp"
 
 #define USE_YAFLUXREGISTER
 
@@ -1819,12 +1820,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 {
 	BL_PROFILE("AMRSimulation::WritePlotFile()");
 
-#ifndef AMREX_USE_HDF5
 	if (amrex::AsyncOut::UseAsyncOut()) {
 		// ensure that we flush any plotfiles that are currently being written
 		amrex::AsyncOut::Finish();
 	}
-#endif
 
 	// now construct output and submit to async write queue
 	amrex::Vector<amrex::MultiFab> mf = PlotFileMF();
@@ -1836,8 +1835,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 	// write plotfile
 	amrex::Print() << "Writing plotfile " << plotfilename << "\n";
 
-#ifdef AMREX_USE_HDF5
-	amrex::WriteMultiLevelPlotfileHDF5(plotfilename, finest_level + 1, mf_ptr, varnames, Geom(), tNew_[0], istep, refRatio());
+#ifdef QUOKKA_USE_OPENPMD
+	quokka::OpenPMDOutput::WriteFile(varnames, finest_level + 1, mf_ptr, Geom(), plotfilename, tNew_[0], istep[0]);
 	WriteMetadataFile(plotfilename + ".yaml");
 #else
 	amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, mf_ptr, varnames, Geom(), tNew_[0], istep, refRatio());
