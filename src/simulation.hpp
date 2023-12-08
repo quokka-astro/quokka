@@ -1686,7 +1686,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel(c
 	if (included_ghosts > 0) {
 		// Fill ghost zones for state_new_cc_
 		fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, tNew_[lev], quokka::centering::cc, quokka::direction::na, InterpHookNone,
-			       InterpHookNone, FillPatchType::fillpatch_function);
+				       InterpHookNone, FillPatchType::fillpatch_function);
 	}
 
 	// Fill ghost zones for state_new_fc_
