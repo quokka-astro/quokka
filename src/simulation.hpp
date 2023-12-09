@@ -1833,7 +1833,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 #ifdef QUOKKA_USE_OPENPMD
 	int included_ghosts = 0;
 #else
-	int included_ghosts = nghost_cc;
+	int included_ghosts = nghost_cc_;
 #endif
 	amrex::Vector<amrex::MultiFab> mf = PlotFileMF(included_ghosts);
 	amrex::Vector<const amrex::MultiFab *> mf_ptr = amrex::GetVecOfConstPtrs(mf);
