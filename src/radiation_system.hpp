@@ -144,8 +144,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 				       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi,
 				       amrex::Real time);
 
-	static void AddSourceTerms(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt,
-				   int stage);
+	static void AddSourceTerms(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt, int stage);
 
 	static void balanceMatterRadiation(arrayconst_t &consPrev, array_t &consNew, amrex::Box const &indexRange);
 
@@ -1005,8 +1004,8 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeEgasFromEint(const doubl
 }
 
 template <typename problem_t>
-void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange,
-					  amrex::Real dt_radiation, const int stage)
+void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt_radiation,
+					  const int stage)
 {
 	arrayconst_t &consPrev = consVar; // make read-only
 	array_t &consNew = consVar;
@@ -1257,8 +1256,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					for (int z = 0; z < 3; ++z) {
 						lastTwoTerms += chat * kappaFVec[g] * gasMtm[z] * P[n][z + 1];
 					}
-					Frad_t1[n] =
-					    (Frad_t0[n] + (dt * lastTwoTerms)) / (1.0 + rho * kappaFVec[g] * chat * dt);
+					Frad_t1[n] = (Frad_t0[n] + (dt * lastTwoTerms)) / (1.0 + rho * kappaFVec[g] * chat * dt);
 
 					// Compute conservative gas momentum update
 					dMomentum[n] += -(Frad_t1[n] - Frad_t0[n]) / (c * chat);
