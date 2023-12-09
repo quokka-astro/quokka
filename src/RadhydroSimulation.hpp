@@ -1702,7 +1702,7 @@ void RadhydroSimulation<problem_t>::advanceRadiationForwardEuler(int lev, amrex:
 	fillBoundaryConditions(state_old_cc_[lev], state_old_cc_[lev], lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState,
 			       PostInterpState);
 
-	// AMREX_ALWAYS_ASSERT(!state_new_cc_[lev].contains_nan(0, state_new_cc_[lev].nComp()));
+	AMREX_ALWAYS_ASSERT(!state_new_cc_[lev].contains_nan(0, state_new_cc_[lev].nComp()));
 
 	// advance all grids on local processor (Stage 1 of integrator)
 	for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
@@ -1711,7 +1711,7 @@ void RadhydroSimulation<problem_t>::advanceRadiationForwardEuler(int lev, amrex:
 		auto const &stateNew = state_new_cc_[lev].array(iter);
 		auto [fluxArrays, fluxDiffusiveArrays] = computeRadiationFluxes(stateOld, indexRange, ncompHyperbolic_, dx);
 
-    // AMREX_ALWAYS_ASSERT(!fluxDiffusiveArrays[0].contains_nan());
+    AMREX_ALWAYS_ASSERT(!fluxDiffusiveArrays[0].contains_nan());
 
 		// Stage 1 of RK2-SSP
 		RadSystem<problem_t>::PredictStep(
@@ -1771,10 +1771,9 @@ void RadhydroSimulation<problem_t>::advanceRadiationMidpointRK2(int lev, amrex::
 		}
 	}
 
-	// update ghost zones [intermediate stage stored in state_new_cc_]
-  // TODO: remove this later
-	fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, (time + dt_radiation), quokka::centering::cc, quokka::direction::na, PreInterpState,
-			       PostInterpState);
+	// // update ghost zones [intermediate stage stored in state_new_cc_]
+	// fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, (time + dt_radiation), quokka::centering::cc, quokka::direction::na, PreInterpState,
+	// 		       PostInterpState);
 }
 
 template <typename problem_t>
@@ -1798,10 +1797,10 @@ void RadhydroSimulation<problem_t>::advanceRadiationExchange(int lev, amrex::Rea
     operatorSplitSourceTerms(stateNew, stateNewDiff, indexRange, time, dt_radiation, stage, dx, prob_lo, prob_hi);
   }
 
-	// update ghost zones [intermediate stage stored in state_new_cc_]
-  // TODO: remove this later
-	fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, (time + dt_radiation), quokka::centering::cc, quokka::direction::na, PreInterpState,
-			       PostInterpState);
+	// // update ghost zones [intermediate stage stored in state_new_cc_]
+  // // TODO: remove this later
+	// fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, (time + dt_radiation), quokka::centering::cc, quokka::direction::na, PreInterpState,
+	// 		       PostInterpState);
 }
 
 template <typename problem_t>
