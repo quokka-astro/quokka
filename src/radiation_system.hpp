@@ -144,7 +144,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 				       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi,
 				       amrex::Real time);
 
-	static void AddSourceTerms(array_t &consVar, arrayconst_t &radEnergySource, arrayconst_t &advectionFluxes, amrex::Box const &indexRange, amrex::Real dt,
+	static void AddSourceTerms(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt,
 				   int stage);
 
 	static void balanceMatterRadiation(arrayconst_t &consPrev, array_t &consNew, amrex::Box const &indexRange);
@@ -1005,7 +1005,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeEgasFromEint(const doubl
 }
 
 template <typename problem_t>
-void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEnergySource, arrayconst_t &advectionFluxes, amrex::Box const &indexRange,
+void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange,
 					  amrex::Real dt_radiation, const int stage)
 {
 	arrayconst_t &consPrev = consVar; // make read-only
@@ -1050,7 +1050,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		// plus advection source term (for well-balanced/SDC integrators)
 		quokka::valarray<double, nGroups_> Src;
 		for (int g = 0; g < nGroups_; ++g) {
-			Src[g] = dt * (chat * radEnergySource(i, j, k, g) + advectionFluxes(i, j, k, g));
+			Src[g] = dt * (chat * radEnergySource(i, j, k, g));
 		}
 
 		const double a_rad = radiation_constant_;
@@ -1234,7 +1234,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			Frad_t0[2] = consPrev(i, j, k, x3RadFlux_index + numRadVars_ * g);
 
 			// compute radiation pressure F using ComputeRadPressure
-			if constexpr ((compute_G_last_two_terms) && (gamma_ != 1.0)) {
+			if constexpr ((compute_v_over_c_terms_) && (compute_G_last_two_terms) && (gamma_ != 1.0)) {
 				auto erad = EradVec_guess[g];
 				auto Fx = Frad_t0[0];
 				auto Fy = Frad_t0[1];
@@ -1257,17 +1257,15 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					for (int z = 0; z < 3; ++z) {
 						lastTwoTerms += chat * kappaFVec[g] * gasMtm[z] * P[n][z + 1];
 					}
-					AMREX_ASSERT((advectionFluxes(i, j, k, n) == 0.0));
 					Frad_t1[n] =
-					    (Frad_t0[n] + (dt * lastTwoTerms) + (dt * advectionFluxes(i, j, k, n))) / (1.0 + rho * kappaFVec[g] * chat * dt);
+					    (Frad_t0[n] + (dt * lastTwoTerms)) / (1.0 + rho * kappaFVec[g] * chat * dt);
 
 					// Compute conservative gas momentum update
 					dMomentum[n] += -(Frad_t1[n] - Frad_t0[n]) / (c * chat);
 				}
 			} else {
 				for (int n = 0; n < 3; ++n) {
-					AMREX_ASSERT((advectionFluxes(i, j, k, n) == 0.0));
-					Frad_t1[n] = (Frad_t0[n] + (dt * advectionFluxes(i, j, k, n))) / (1.0 + rho * kappaFVec[g] * chat * dt);
+					Frad_t1[n] = Frad_t0[n] / (1.0 + rho * kappaFVec[g] * chat * dt);
 					// Compute conservative gas momentum update
 					dMomentum[n] += -(Frad_t1[n] - Frad_t0[n]) / (c * chat);
 				}
