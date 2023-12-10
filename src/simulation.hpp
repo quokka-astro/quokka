@@ -1672,7 +1672,6 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel(c
 {
 	// Combine state_new_cc_[lev] and derived variables in a new MF
 	const int ncomp_cc = state_new_cc_[lev].nComp();
-	const int nghost_cc = state_new_cc_[lev].nGrow(); // workaround Ascent bug
 	int comp = 0;
 	int ncomp_per_dim_fc = 0;
 	int ncomp_tot_fc = 0;
