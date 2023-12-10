@@ -214,8 +214,8 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	// add gravitational acceleration to hydro state
 	void applyPoissonGravityAtLevel(amrex::MultiFab const &phi, int lev, amrex::Real dt) override;
 
-	void addFluxArrays(std::array<amrex::MultiFab, AMREX_SPACEDIM> &dstfluxes, std::array<amrex::MultiFab, AMREX_SPACEDIM> &srcfluxes,  int srccomp,
-			    int dstcomp);
+	void addFluxArrays(std::array<amrex::MultiFab, AMREX_SPACEDIM> &dstfluxes, std::array<amrex::MultiFab, AMREX_SPACEDIM> &srcfluxes, int srccomp,
+			   int dstcomp);
 
 	auto expandFluxArrays(std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxes, int nstartNew, int ncompNew)
 	    -> std::array<amrex::FArrayBox, AMREX_SPACEDIM>;
@@ -254,10 +254,10 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 				    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx)
 	    -> std::tuple<std::array<amrex::FArrayBox, AMREX_SPACEDIM>, std::array<amrex::FArrayBox, AMREX_SPACEDIM>>;
 
-	auto computeHydroFluxes(amrex::MultiFab const &consVar,  int nvars,  int lev)
+	auto computeHydroFluxes(amrex::MultiFab const &consVar, int nvars, int lev)
 	    -> std::pair<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>>;
 
-	auto computeFOHydroFluxes(amrex::MultiFab const &consVar,  int nvars,  int lev)
+	auto computeFOHydroFluxes(amrex::MultiFab const &consVar, int nvars, int lev)
 	    -> std::pair<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>>;
 
 	template <FluxDir DIR>
@@ -425,7 +425,7 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::computeMaxSign
 	}
 }
 
-template <typename problem_t> auto RadhydroSimulation<problem_t>::computeExtraPhysicsTimestep(int const  /*level*/) -> amrex::Real
+template <typename problem_t> auto RadhydroSimulation<problem_t>::computeExtraPhysicsTimestep(int const /*level*/) -> amrex::Real
 {
 	BL_PROFILE("RadhydroSimulation::computeExtraPhysicsTimestep()");
 	// users can override this to enforce additional timestep constraints
@@ -750,7 +750,7 @@ void RadhydroSimulation<problem_t>::FillPatch(int lev, amrex::Real time, amrex::
 	}
 }
 
-template <typename problem_t> void RadhydroSimulation<problem_t>::PreInterpState(amrex::MultiFab &mf, int  /*scomp*/, int  /*ncomp*/)
+template <typename problem_t> void RadhydroSimulation<problem_t>::PreInterpState(amrex::MultiFab &mf, int /*scomp*/, int /*ncomp*/)
 {
 	BL_PROFILE("RadhydroSimulation::PreInterpState()");
 
@@ -769,7 +769,7 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::PreInterpState
 	});
 }
 
-template <typename problem_t> void RadhydroSimulation<problem_t>::PostInterpState(amrex::MultiFab &mf, int  /*scomp*/, int  /*ncomp*/)
+template <typename problem_t> void RadhydroSimulation<problem_t>::PostInterpState(amrex::MultiFab &mf, int /*scomp*/, int /*ncomp*/)
 {
 	BL_PROFILE("RadhydroSimulation::PostInterpState()");
 
@@ -922,7 +922,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 	}
 }
 
-template <typename problem_t> auto RadhydroSimulation<problem_t>::isCflViolated(int lev, amrex::Real  /*time*/, amrex::Real dt_actual) -> bool
+template <typename problem_t> auto RadhydroSimulation<problem_t>::isCflViolated(int lev, amrex::Real /*time*/, amrex::Real dt_actual) -> bool
 {
 	// check whether dt_actual would violate CFL condition using the post-update hydro state
 

@@ -605,9 +605,9 @@ template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::C
 	const double chi = (3.0 + 4.0 * (f * f)) / (5.0 + 2.0 * f_fac);
 
 #if 0 // NOLINT
-	// compute Minerbo (1978) closure [piecewise approximation]
-	// (For unknown reasons, this closure tends to work better
-	// than the Levermore/Lorentz closure on the Su & Olson 1997 test.)
+      // compute Minerbo (1978) closure [piecewise approximation]
+      // (For unknown reasons, this closure tends to work better
+      // than the Levermore/Lorentz closure on the Su & Olson 1997 test.)
 	const double chi = (f < 1. / 3.) ? (1. / 3.) : (0.5 - f + 1.5 * f*f);
 #endif
 

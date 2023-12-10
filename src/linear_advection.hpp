@@ -26,7 +26,7 @@ template <typename problem_t> class LinearAdvectionSystem : public HyperbolicSys
 
 	// static member functions
 
-	static void ConservedToPrimitive(amrex::MultiFab const &cons_mf, amrex::MultiFab &primVar_mf,  int nghost,  int nvars);
+	static void ConservedToPrimitive(amrex::MultiFab const &cons_mf, amrex::MultiFab &primVar_mf, int nghost, int nvars);
 
 	static void ComputeMaxSignalSpeed(amrex::Array4<amrex::Real const> const & /*cons*/, amrex::Array4<amrex::Real> const &maxSignal, double advectionVx,
 					  double advectionVy, double advectionVz, amrex::Box const &indexRange);
@@ -35,16 +35,16 @@ template <typename problem_t> class LinearAdvectionSystem : public HyperbolicSys
 	static auto isStateValid(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> bool;
 
 	static void PredictStep(amrex::MultiFab const &consVarOld_mf, amrex::MultiFab &consVarNew_mf,
-				std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fluxArray,  double dt,
-				amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,  int nvars);
+				std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fluxArray, double dt, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,
+				int nvars);
 
 	static void AddFluxesRK2(amrex::MultiFab &U_new_mf, amrex::MultiFab const &U0_mf, amrex::MultiFab const &U1_mf,
-				 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fluxArray,  double dt,
-				 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,  int nvars);
+				 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fluxArray, double dt, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,
+				 int nvars);
 
 	template <FluxDir DIR>
-	static void ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab const &x1LeftState_mf, amrex::MultiFab const &x1RightState_mf,
-				   double advectionVx,  int nvars);
+	static void ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab const &x1LeftState_mf, amrex::MultiFab const &x1RightState_mf, double advectionVx,
+				  int nvars);
 };
 
 template <typename problem_t>

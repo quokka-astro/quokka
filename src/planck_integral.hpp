@@ -16,7 +16,6 @@
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
 
-
 using Real = amrex::Real;
 
 static constexpr bool USE_SECOND_ORDER = false;

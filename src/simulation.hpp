@@ -919,7 +919,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::ellipticSolveAllLev
 
 // N.B.: This function actually works for subcycled or not subcycled, as long as
 // nsubsteps[lev] is set correctly.
-template <typename problem_t> auto AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time, bool  /*coarseTimeBoundary*/, int stepsLeft) -> int
+template <typename problem_t>
+auto AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time, bool /*coarseTimeBoundary*/, int stepsLeft) -> int
 {
 	BL_PROFILE("AMRSimulation::timeStepWithSubcycling()");
 
@@ -1027,13 +1028,15 @@ void AMRSimulation<problem_t>::incrementFluxRegisters(amrex::MFIter &mfi, amrex:
 	if (fr_as_crse != nullptr) {
 		AMREX_ASSERT(lev < finestLevel());
 		AMREX_ASSERT(fr_as_crse == flux_reg_[lev + 1].get());
-		fr_as_crse->CrseAdd(mfi, {AMREX_D_DECL(&fluxArrays[0], &fluxArrays[1], &fluxArrays[2])}, geom[lev].CellSize(), dt_lev, amrex::RunOn::Gpu); // NOLINT
+		fr_as_crse->CrseAdd(mfi, {AMREX_D_DECL(&fluxArrays[0], &fluxArrays[1], &fluxArrays[2])}, geom[lev].CellSize(), dt_lev,
+				    amrex::RunOn::Gpu); // NOLINT
 	}
 
 	if (fr_as_fine != nullptr) {
 		AMREX_ASSERT(lev > 0);
 		AMREX_ASSERT(fr_as_fine == flux_reg_[lev].get());
-		fr_as_fine->FineAdd(mfi, {AMREX_D_DECL(&fluxArrays[0], &fluxArrays[1], &fluxArrays[2])}, geom[lev].CellSize(), dt_lev, amrex::RunOn::Gpu); // NOLINT
+		fr_as_fine->FineAdd(mfi, {AMREX_D_DECL(&fluxArrays[0], &fluxArrays[1], &fluxArrays[2])}, geom[lev].CellSize(), dt_lev,
+				    amrex::RunOn::Gpu); // NOLINT
 	}
 }
 

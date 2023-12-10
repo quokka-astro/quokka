@@ -71,9 +71,9 @@ namespace quokka::math
 template <class T> class eps_tolerance
 {
       public:
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE eps_tolerance() : eps(4 * std::numeric_limits<T>::epsilon()) {  }
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE eps_tolerance() : eps(4 * std::numeric_limits<T>::epsilon()) {}
 	AMREX_GPU_HOST_DEVICE
-	AMREX_FORCE_INLINE explicit eps_tolerance(amrex::Real eps_) : eps(eps_) {  }
+	AMREX_FORCE_INLINE explicit eps_tolerance(amrex::Real eps_) : eps(eps_) {}
 	AMREX_GPU_HOST_DEVICE
 	AMREX_FORCE_INLINE explicit eps_tolerance(unsigned bits)
 	{
@@ -315,7 +315,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE std::pair<T, T> toms748_solve(F f, cons
 			b = a;
 		} else if (fb == 0) {
 			a = b;
-}
+		}
 		return std::make_pair(a, b);
 	}
 
