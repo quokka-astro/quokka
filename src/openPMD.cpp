@@ -10,14 +10,13 @@
 #include <string>
 
 // AMReX headers
+#include "AMReX.H"
 #include "AMReX_Geometry.H"
 #include "AMReX_IntVect.H"
 #include "AMReX_MultiFab.H"
-#include "AMReX_ParallelDescriptor.H"
-#include <AMReX.H>
 
 // openPMD headers
-#include <openPMD/openPMD.hpp>
+#include "openPMD/openPMD.hpp"
 
 namespace quokka::OpenPMDOutput
 {
@@ -36,7 +35,6 @@ auto getReversedVec(const amrex::IntVect &v) -> std::vector<std::uint64_t>
 	// Reverse the order of elements, if v corresponds to the indices of a Fortran-order array (like an AMReX FArrayBox)
 	// but u is intended to be used with a C-order API (like openPMD)
 	std::reverse(u.begin(), u.end());
-
 	return u;
 }
 
@@ -48,11 +46,10 @@ auto getReversedVec(const amrex::IntVect &v) -> std::vector<std::uint64_t>
 auto getReversedVec(const amrex::Real *v) -> std::vector<double>
 {
 	// Convert Real* v to and std::vector u
-	std::vector<double> u = {AMREX_D_DECL(static_cast<double>(v[0]), static_cast<double>(v[1]), static_cast<double>(v[2]))};
+	std::vector<double> u = {AMREX_D_DECL(static_cast<double>(v[0]), static_cast<double>(v[1]), static_cast<double>(v[2]))}; // NOLINT
 	// Reverse the order of elements, if v corresponds to the indices of a Fortran-order array (like an AMReX FArrayBox)
 	// but u is intended to be used with a C-order API (like openPMD)
 	std::reverse(u.begin(), u.end());
-
 	return u;
 }
 
@@ -87,7 +84,7 @@ auto GetMeshComponentName(int meshLevel, std::string const &field_name) -> std::
 } // namespace detail
 //----------------------------------------------------------------------------------------
 //! \fn void OpenPMDOutput:::WriteOutputFile(Mesh *pm)
-//  \brief  Write all Cell variables using openPMD
+//  \brief  Write cell-centered MultiFab using openPMD
 void WriteFile(const std::vector<std::string> &varnames, int const output_levels, amrex::Vector<const amrex::MultiFab *> &mf,
 	       amrex::Vector<amrex::Geometry> &geom, const std::string &output_basename, amrex::Real const time, int const file_number)
 {
