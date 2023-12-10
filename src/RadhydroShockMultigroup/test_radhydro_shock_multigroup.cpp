@@ -31,13 +31,13 @@ constexpr double c_s0 = 1.73e7; // adiabatic sound speed [cm s^-1]
 constexpr double kappa = 577.0; // "opacity" == rho*kappa [cm^-1] (!!)
 constexpr double gamma_gas = (5. / 3.);
 constexpr double c_v = k_B / ((C::m_p + C::m_e) * (gamma_gas - 1.0)); // specific heat [erg g^-1 K^-1]
-constexpr double T0 = 2.18e6; // K
-constexpr double rho0 = 5.69; // g cm^-3
-constexpr double v0 = 5.19e7; // cm s^-1
-constexpr double T1 = 7.98e6; // K [7.98297e6]
-constexpr double rho1 = 17.1; // g cm^-3 [17.08233]
-constexpr double v1 = 1.73e7; // cm s^-1 [1.72875e7]
-constexpr double chat = 10.0 * (v0 + c_s0); // reduced speed of light
+constexpr double T0 = 2.18e6;					      // K
+constexpr double rho0 = 5.69;					      // g cm^-3
+constexpr double v0 = 5.19e7;					      // cm s^-1
+constexpr double T1 = 7.98e6;					      // K [7.98297e6]
+constexpr double rho1 = 17.1;					      // g cm^-3 [17.08233]
+constexpr double v1 = 1.73e7;					      // cm s^-1 [1.72875e7]
+constexpr double chat = 10.0 * (v0 + c_s0);			      // reduced speed of light
 
 constexpr double Erad0 = a_rad * (T0 * T0 * T0 * T0); // erg cm^-3
 constexpr double Egas0 = rho0 * c_v * T0;	      // erg cm^-3
