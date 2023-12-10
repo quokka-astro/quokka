@@ -17,7 +17,7 @@
 #include <AMReX.H>
 
 // openPMD headers
-#include <openPMD/openPMD.hpp>
+#include "openPMD/openPMD.hpp"
 
 namespace quokka::OpenPMDOutput
 {
