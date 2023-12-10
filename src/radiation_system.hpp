@@ -13,8 +13,6 @@
 
 #include <array>
 #include <cmath>
-#include <iostream>
-#include <vector>
 
 // library headers
 #include "AMReX.H"
@@ -24,13 +22,11 @@
 #include "AMReX_REAL.H"
 
 // internal headers
-#include "ArrayView.hpp"
 #include "EOS.hpp"
 #include "hyperbolic_system.hpp"
 #include "math_impl.hpp"
 #include "physics_info.hpp"
 #include "planck_integral.hpp"
-#include "simulation.hpp"
 #include "valarray.hpp"
 
 // physical constants in CGS units
@@ -608,7 +604,7 @@ template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::C
 	const double f_fac = std::sqrt(4.0 - 3.0 * (f * f));
 	const double chi = (3.0 + 4.0 * (f * f)) / (5.0 + 2.0 * f_fac);
 
-#if 0
+#if 0 // NOLINT
 	// compute Minerbo (1978) closure [piecewise approximation]
 	// (For unknown reasons, this closure tends to work better
 	// than the Levermore/Lorentz closure on the Su & Olson 1997 test.)

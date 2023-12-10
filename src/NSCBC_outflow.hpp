@@ -11,10 +11,8 @@
 
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
-#include "ArrayView.hpp"
 #include "EOS.hpp"
 #include "hydro_system.hpp"
-#include "physics_numVars.hpp"
 #include "valarray.hpp"
 
 namespace NSCBC

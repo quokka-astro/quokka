@@ -7,17 +7,15 @@
 #ifndef PLANCKINTEGRAL_HPP_ // NOLINT
 #define PLANCKINTEGRAL_HPP_
 
-#include <algorithm>
+#include <cassert>
 #include <cmath>
 
-#include "AMReX.H"
 #include "AMReX_Array.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_Extension.H"
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
 
-#include "valarray.hpp"
 
 using Real = amrex::Real;
 

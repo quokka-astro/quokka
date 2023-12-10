@@ -10,16 +10,11 @@
 ///
 
 // c++ headers
-#include <cassert>
 #include <cmath>
-#include <type_traits>
 
 // library headers
 
 // internal headers
-#include "AMReX_BLassert.H"
-#include "AMReX_FArrayBox.H"
-#include "AMReX_FabArrayUtility.H"
 #include "hyperbolic_system.hpp"
 
 /// Class for a linear, scalar advection equation
@@ -31,7 +26,7 @@ template <typename problem_t> class LinearAdvectionSystem : public HyperbolicSys
 
 	// static member functions
 
-	static void ConservedToPrimitive(amrex::MultiFab const &cons_mf, amrex::MultiFab &primVar_mf, const int nghost, const int nvars);
+	static void ConservedToPrimitive(amrex::MultiFab const &cons_mf, amrex::MultiFab &primVar_mf,  int nghost,  int nvars);
 
 	static void ComputeMaxSignalSpeed(amrex::Array4<amrex::Real const> const & /*cons*/, amrex::Array4<amrex::Real> const &maxSignal, double advectionVx,
 					  double advectionVy, double advectionVz, amrex::Box const &indexRange);
@@ -40,16 +35,16 @@ template <typename problem_t> class LinearAdvectionSystem : public HyperbolicSys
 	static auto isStateValid(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> bool;
 
 	static void PredictStep(amrex::MultiFab const &consVarOld_mf, amrex::MultiFab &consVarNew_mf,
-				std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fluxArray, const double dt,
-				amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, const int nvars);
+				std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fluxArray,  double dt,
+				amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,  int nvars);
 
 	static void AddFluxesRK2(amrex::MultiFab &U_new_mf, amrex::MultiFab const &U0_mf, amrex::MultiFab const &U1_mf,
-				 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fluxArray, const double dt,
-				 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, const int nvars);
+				 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fluxArray,  double dt,
+				 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in,  int nvars);
 
 	template <FluxDir DIR>
 	static void ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab const &x1LeftState_mf, amrex::MultiFab const &x1RightState_mf,
-				  const double advectionVx, const int nvars);
+				   double advectionVx,  int nvars);
 };
 
 template <typename problem_t>
@@ -118,14 +113,6 @@ void LinearAdvectionSystem<problem_t>::PredictStep(amrex::MultiFab const &consVa
 								       +(dt / dy) * (x2Flux[bx](i, j, k, n) - x2Flux[bx](i, j + 1, k, n)),
 								       +(dt / dz) * (x3Flux[bx](i, j, k, n) - x3Flux[bx](i, j, k + 1, n))));
 		}
-#if 0
-			// check if state is valid -- flag for re-do if not
-			if (!isStateValid(consVarNew, i, j, k)) {
-				redoFlag(i, j, k) = quokka::redoFlag::redo;
-			} else {
-				redoFlag(i, j, k) = quokka::redoFlag::none;
-			}
-#endif
 	});
 }
 
@@ -172,15 +159,6 @@ void LinearAdvectionSystem<problem_t>::AddFluxesRK2(amrex::MultiFab &U_new_mf, a
 			// save results in U_new
 			U_new[bx](i, j, k, n) = (0.5 * U_0 + 0.5 * U_1) + (AMREX_D_TERM(0.5 * FxU_1, +0.5 * FyU_1, +0.5 * FzU_1));
 		}
-
-#if 0
-			// check if state is valid -- flag for re-do if not
-			if (!isStateValid(U_new, i, j, k)) {
-				redoFlag(i, j, k) = quokka::redoFlag::redo;
-			} else {
-				redoFlag(i, j, k) = quokka::redoFlag::none;
-			}
-#endif
 	});
 }
 

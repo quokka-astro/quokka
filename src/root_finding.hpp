@@ -71,14 +71,14 @@ namespace quokka::math
 template <class T> class eps_tolerance
 {
       public:
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE eps_tolerance() { eps = 4 * std::numeric_limits<T>::epsilon(); }
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE eps_tolerance() : eps(4 * std::numeric_limits<T>::epsilon()) {  }
 	AMREX_GPU_HOST_DEVICE
-	AMREX_FORCE_INLINE explicit eps_tolerance(amrex::Real eps_) { eps = eps_; }
+	AMREX_FORCE_INLINE explicit eps_tolerance(amrex::Real eps_) : eps(eps_) {  }
 	AMREX_GPU_HOST_DEVICE
 	AMREX_FORCE_INLINE explicit eps_tolerance(unsigned bits)
 	{
 		BOOST_MATH_STD_USING
-		eps = (std::max)(T(ldexp(1.0F, 1 - bits)), T(4 * std::numeric_limits<T>::epsilon()));
+		eps = (std::max)(T(ldexp(1.0F, 1 - bits)), T(4 * std::numeric_limits<T>::epsilon())); // NOLINT(cppcoreguidelines-prefer-member-initializer)
 	}
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE bool operator()(const T &a, const T &b)
 	{
@@ -285,7 +285,19 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE std::pair<T, T> toms748_solve(F f, cons
 	BOOST_MATH_STD_USING // For ADL of std math functions
 
 	    int count = max_iter;
-	T a, b, fa, fb, c, u, fu, a0, b0, d, fd, e, fe;
+	T a;
+	T b;
+	T fa;
+	T fb;
+	T c;
+	T u;
+	T fu;
+	T a0;
+	T b0;
+	T d;
+	T fd;
+	T e;
+	T fe;
 	static const T mu = 0.5F;
 
 	// initialise a, b and fa, fb:
@@ -299,10 +311,11 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE std::pair<T, T> toms748_solve(F f, cons
 
 	if (tol(a, b) || (fa == 0) || (fb == 0)) {
 		max_iter = 0;
-		if (fa == 0)
+		if (fa == 0) {
 			b = a;
-		else if (fb == 0)
+		} else if (fb == 0) {
 			a = b;
+}
 		return std::make_pair(a, b);
 	}
 

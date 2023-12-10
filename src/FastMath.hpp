@@ -17,10 +17,10 @@
 // Code taken from singularity-eos
 // https://github.com/lanl/singularity-eos
 
+#include <cstdint>
+
 #include "AMReX_Extension.H"
 #include "AMReX_GpuQualifiers.H"
-#include <cassert>
-#include <cmath>
 
 // this speeds up the *total walltime* for problems with cooling by ~30% on a
 // single V100

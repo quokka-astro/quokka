@@ -13,7 +13,6 @@
 #include <algorithm>
 #include <cmath>
 
-#include "AMReX.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_Extension.H"
 #include "AMReX_GpuQualifiers.H"
@@ -126,7 +125,7 @@ constexpr int maxStepsODEIntegrate = 2000;
 
 template <typename F, int N>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rk_adaptive_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0, Real t1, void *user_data, Real reltol,
-								    quokka::valarray<Real, N> const &abstol, int &steps_taken, bool debug = false)
+								    quokka::valarray<Real, N> const &abstol, int &steps_taken)
 {
 	// Integrate dy/dt = rhs(y, t) from t0 to t1,
 	// with local truncation error bounded by relative tolerance 'reltol'
@@ -162,10 +161,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rk_adaptive_integrate(F &&rhs, Rea
 			dt = t1 - time;
 		}
 
-		if (debug) {
-			printf("Step i = %d t = %e dt = %e\n", i, time, dt);
-		}
-
 		bool step_success = false;
 		for (int k = 0; k < maxRetries; ++k) {
 			// compute single step of chosen RK method
@@ -196,9 +191,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rk_adaptive_integrate(F &&rhs, Rea
 					}
 					dt *= eta; // use new timestep
 					step_success = true;
-					if (debug) {
-						printf("\tsuccess k = %d epsilon = %e eta = %e\n", k, epsilon, eta);
-					}
 					break;
 				}
 			}
@@ -212,9 +204,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rk_adaptive_integrate(F &&rhs, Rea
 			}
 			dt *= eta; // use new timestep
 			AMREX_ASSERT(!std::isnan(dt));
-			if (debug) {
-				printf("\tfailed step k = %d eta = %e\n", k, eta);
-			}
 		}
 
 		if (!step_success) {

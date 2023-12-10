@@ -6,8 +6,6 @@
 #include <AMReX.H>
 #include <AMReX_REAL.H>
 
-#include "ArrayView.hpp"
-#include "EOS.hpp"
 #include "HydroState.hpp"
 #include "valarray.hpp"
 
