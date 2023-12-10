@@ -27,6 +27,7 @@
 #include "ArrayView.hpp"
 #include "EOS.hpp"
 #include "hyperbolic_system.hpp"
+#include "math_impl.hpp"
 #include "physics_info.hpp"
 #include "planck_integral.hpp"
 #include "simulation.hpp"

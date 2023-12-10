@@ -33,6 +33,7 @@
 #include "AMReX_TagBox.H"
 #include "ArrayView.hpp"
 #include "simulation.hpp"
+#include "math_impl.hpp"
 
 // #define MULTIDIM_EXTREMA_CHECK
 
