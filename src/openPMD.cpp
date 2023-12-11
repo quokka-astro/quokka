@@ -89,7 +89,7 @@ void WriteFile(const std::vector<std::string> &varnames, int const output_levels
 	       amrex::Vector<amrex::Geometry> &geom, const std::string &output_basename, amrex::Real const time, int const file_number)
 {
 	// open file
-	std::string filename = output_basename + ".bp";
+	std::string const filename = output_basename + ".bp";
 	auto series = openPMD::Series(filename, openPMD::Access::CREATE, amrex::ParallelDescriptor::Communicator());
 	series.setSoftware("Quokka", "1.0");
 
