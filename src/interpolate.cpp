@@ -1,6 +1,3 @@
-#include <cassert>
-#include <cmath>
-
 #include "interpolate.hpp"
 
 #define LIKELY_IN_CACHE_SIZE 8
@@ -33,8 +30,7 @@ int64_t binary_search_with_guess(const double key, const double *arr, int64_t le
 	/* Handle keys outside of the arr range first */
 	if (key > arr[len - 1]) {
 		return len;
-	}
-	if (key < arr[0]) {
+	} else if (key < arr[0]) {
 		return -1;
 	}
 
@@ -43,11 +39,10 @@ int64_t binary_search_with_guess(const double key, const double *arr, int64_t le
 	 * From above we know key >= arr[0] when we start.
 	 */
 	if (len <= 4) {
-		int64_t i = 0;
+		int64_t i;
 
-		for (i = 1; i < len && key >= arr[i]; ++i) {
+		for (i = 1; i < len && key >= arr[i]; ++i)
 			;
-		}
 		return i - 1;
 	}
 
@@ -74,22 +69,25 @@ int64_t binary_search_with_guess(const double key, const double *arr, int64_t le
 		/* key >= arr[guess] */
 		if (key < arr[guess + 1]) {
 			return guess;
-		}
-		/* key >= arr[guess + 1] */
-		if (key < arr[guess + 2]) {
-			return guess + 1;
-		} /* key >= arr[guess + 2] */
-		imin = guess + 2;
-		/* last attempt to restrict search to items in
-		 * cache */
-		if (guess < len - LIKELY_IN_CACHE_SIZE - 1 && key < arr[guess + LIKELY_IN_CACHE_SIZE]) {
-			imax = guess + LIKELY_IN_CACHE_SIZE;
+		} else {
+			/* key >= arr[guess + 1] */
+			if (key < arr[guess + 2]) {
+				return guess + 1;
+			} else {
+				/* key >= arr[guess + 2] */
+				imin = guess + 2;
+				/* last attempt to restrict search to items in
+				 * cache */
+				if (guess < len - LIKELY_IN_CACHE_SIZE - 1 && key < arr[guess + LIKELY_IN_CACHE_SIZE]) {
+					imax = guess + LIKELY_IN_CACHE_SIZE;
+				}
+			}
 		}
 	}
 
 	/* finally, find index by bisection */
 	while (imin < imax) {
-		const int64_t imid = imin + ((imax - imin) >> 1); // NOLINT(hicpp-signed-bitwise)
+		const int64_t imid = imin + ((imax - imin) >> 1);
 		if (key >= arr[imid]) {
 			imin = imid + 1;
 		} else {
