@@ -21,21 +21,21 @@ jobs:
         submodules: true
         fetch-depth: 0
 
-    - name: Restore Spack cache
-      uses: actions/cache@v3
-      id: cache-spack
-      with:
-        path: ${{env.SPACK_ROOT}}
-        key: spack
+#    - name: Restore Spack cache
+#      uses: actions/cache@v3
+#      id: cache-spack
+#      with:
+#        path: ${{env.SPACK_ROOT}}
+#        key: spack
 
-    - name: Install ADIOS2
-      if: steps.cache-spack.outputs.cache-hit != 'true'
-      run: |
-        mkdir -p $SPACK_ROOT
-        git clone -c feature.manyFiles=true $SPACK_URL $SPACK_ROOT
-        . $SPACK_ROOT/share/spack/setup-env.sh
-        spack install adios2
-      shell: bash
+#    - name: Install ADIOS2
+#      if: steps.cache-spack.outputs.cache-hit != 'true'
+#      run: |
+#        mkdir -p $SPACK_ROOT
+#        git clone -c feature.manyFiles=true $SPACK_URL $SPACK_ROOT
+#        . $SPACK_ROOT/share/spack/setup-env.sh
+#        spack install adios2
+#      shell: bash
 
     - uses: ZedThree/clang-tidy-review@v0.14.0
       id: review
@@ -43,7 +43,7 @@ jobs:
         config_file: src/.clang-tidy
         build_dir: build
         apt_packages: libopenmpi-dev,libhdf5-mpi-dev,python3-dev,python3-numpy,python3-matplotlib
-        cmake_command: cmake . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DQUOKKA_PYTHON=ON -DQUOKKA_OPENPMD=ON
+        cmake_command: cmake . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DQUOKKA_PYTHON=ON -DQUOKKA_OPENPMD=ON -DopenPMD_USE_ADIOS2=OFF
         split_workflow: true
 
     # Uploads an artefact containing clang_fixes.json
