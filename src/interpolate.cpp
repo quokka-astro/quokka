@@ -1,3 +1,6 @@
+#include <cassert>
+#include <cmath>
+
 #include "interpolate.hpp"
 
 #define LIKELY_IN_CACHE_SIZE 8
