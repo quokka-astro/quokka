@@ -11,11 +11,31 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    env:
+      SPACK_ROOT: ${{github.workspace}}/spack
+      SPACK_URL: https://github.com/spack/spack.git
+
     steps:
     - uses: actions/checkout@v4
       with:
         submodules: true
         fetch-depth: 0
+
+    - name: Restore Spack cache
+      uses: actions/cache@v3
+      id: cache-spack
+      with:
+        path: ${{env.SPACK_ROOT}}
+        key: spack
+
+    - name: Install ADIOS2
+      if: steps.cache-spack.outputs.cache-hit != 'true'
+      run: |
+        mkdir -p $SPACK_ROOT
+        git clone -c feature.manyFiles=true $SPACK_URL $SPACK_ROOT
+        . $SPACK_ROOT/share/spack/setup-env.sh
+        spack install adios2
+      shell: bash
 
     - uses: ZedThree/clang-tidy-review@v0.14.0
       id: review
