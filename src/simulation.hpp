@@ -1028,14 +1028,16 @@ void AMRSimulation<problem_t>::incrementFluxRegisters(amrex::MFIter &mfi, amrex:
 	if (fr_as_crse != nullptr) {
 		AMREX_ASSERT(lev < finestLevel());
 		AMREX_ASSERT(fr_as_crse == flux_reg_[lev + 1].get());
-		fr_as_crse->CrseAdd(mfi, {AMREX_D_DECL(&fluxArrays[0], &fluxArrays[1], &fluxArrays[2])}, geom[lev].CellSize(), dt_lev, // NOLINT(readability-container-data-pointer)
+		fr_as_crse->CrseAdd(mfi, {AMREX_D_DECL(&fluxArrays[0], &fluxArrays[1], &fluxArrays[2])}, geom[lev].CellSize(),
+				    dt_lev, // NOLINT(readability-container-data-pointer)
 				    amrex::RunOn::Gpu);
 	}
 
 	if (fr_as_fine != nullptr) {
 		AMREX_ASSERT(lev > 0);
 		AMREX_ASSERT(fr_as_fine == flux_reg_[lev].get());
-		fr_as_fine->FineAdd(mfi, {AMREX_D_DECL(&fluxArrays[0], &fluxArrays[1], &fluxArrays[2])}, geom[lev].CellSize(), dt_lev, // NOLINT(readability-container-data-pointer)
+		fr_as_fine->FineAdd(mfi, {AMREX_D_DECL(&fluxArrays[0], &fluxArrays[1], &fluxArrays[2])}, geom[lev].CellSize(),
+				    dt_lev, // NOLINT(readability-container-data-pointer)
 				    amrex::RunOn::Gpu);
 	}
 }
