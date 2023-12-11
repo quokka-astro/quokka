@@ -69,7 +69,7 @@ void SetupMeshComponent(openPMD::Mesh &mesh, amrex::Geometry &full_geom)
 	auto mesh_comp = mesh[openPMD::MeshRecordComponent::SCALAR];
 	auto const dataset = openPMD::Dataset(openPMD::determineDatatype<amrex::Real>(), global_size);
 	mesh_comp.resetDataset(dataset);
-	std::vector<amrex::Real> relativePosition{0.5, 0.5, 0.5}; // cell-centered only (for now)
+	std::vector<amrex::Real> const relativePosition{0.5, 0.5, 0.5}; // cell-centered only (for now)
 	mesh_comp.setPosition(relativePosition);
 }
 
