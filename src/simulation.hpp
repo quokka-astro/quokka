@@ -467,7 +467,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::PerformanceHints()
 	// warning about face-centered variables and OpenPMD outputs
 	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
 		amrex::Print() << "\n[Warning] [I/O] Plotfiles will ONLY contain cell-centered averages of face-centered variables!"
-			       << "Support for outputting face-centered variables for openPMD not yet implemented.\n";
+			       << " Support for outputting face-centered variables for openPMD is not yet implemented.\n";
 	}
 }
 
