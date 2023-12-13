@@ -15,7 +15,6 @@
 #include <cmath>
 #include <iostream>
 #include <vector>
-#include <thrust/pair.h>
 
 // library headers
 #include "AMReX.H"
@@ -190,9 +189,9 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	AMREX_GPU_DEVICE static void amendRadState(std::array<amrex::Real, nvarHyperbolic_> &cons);
 
-	template <FluxDir DIR>
-	AMREX_GPU_DEVICE static auto ComputeRadPressure(double erad_L, double Fx_L, double Fy_L, double Fz_L, double fx_L, double fy_L, double fz_L)
-	    -> thrust::pair<quokka::valarray<double, numRadVars_>, double>;
+	template <FluxDir DIR, typename TARRAY>
+	AMREX_GPU_DEVICE static void ComputeRadPressure(double erad_L, double Fx_L, double Fy_L, double Fz_L, double fx_L, double fy_L, double fz_L,
+							TARRAY &F_L, double &S_L);
 };
 
 // Compute radiation energy fractions for each photon group from a Planck function, given nGroups, radBoundaries, and temperature
@@ -695,9 +694,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeCellOpticalDepth(const quokka
 }
 
 template <typename problem_t>
-template <FluxDir DIR>
-AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeRadPressure(const double erad, const double Fx, const double Fy, const double Fz, const double fx,
-							       const double fy, const double fz) -> thrust::pair<quokka::valarray<double, numRadVars_>, double>
+template <FluxDir DIR, typename TARRAY>
+AMREX_GPU_DEVICE void RadSystem<problem_t>::ComputeRadPressure(const double erad, const double Fx, const double Fy, const double Fz, const double fx,
+							       const double fy, const double fz, TARRAY &F, double &S)
 {
 	// check that states are physically admissible
 	AMREX_ASSERT(erad > 0.0);
@@ -787,11 +786,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeRadPressure(const double erad
 	AMREX_ASSERT(Pny != NAN);
 	AMREX_ASSERT(Pnz != NAN);
 
-	double S = std::max(0.1, std::sqrt(Tnormal));
+	F = {Fn, Pnx, Pny, Pnz};
 
-	quokka::valarray<double, numRadVars_> F = {Fn, Pnx, Pny, Pnz};
-
-	return thrust::make_pair(F, S);
+	S = std::max(0.1, std::sqrt(Tnormal));
 }
 
 template <typename problem_t>
@@ -883,9 +880,13 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 			}
 
 			// compute radiation pressure F_L and F_R using ComputeRadPressure
-			auto [F_L, S_L] = ComputeRadPressure<DIR>(erad_L, Fx_L, Fy_L, Fz_L, fx_L, fy_L, fz_L);
+			quokka::valarray<double, numRadVars_> F_L{};
+			quokka::valarray<double, numRadVars_> F_R{};
+			double S_L = NAN;
+			double S_R = NAN;
+			ComputeRadPressure<DIR>(erad_L, Fx_L, Fy_L, Fz_L, fx_L, fy_L, fz_L, F_L, S_L);
 			S_L *= -1.; // speed sign is -1
-			auto [F_R, S_R] = ComputeRadPressure<DIR>(erad_R, Fx_R, Fy_R, Fz_R, fx_R, fy_R, fz_R);
+			ComputeRadPressure<DIR>(erad_R, Fx_R, Fy_R, Fz_R, fx_R, fy_R, fz_R, F_R, S_R);
 			// speed sign is +1, S_R unchanged.
 
 			// FluxDir::X2
@@ -1241,19 +1242,10 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 
 				std::array<std::array<double, numRadVars_>, 3> P{};
 				double S = NAN;
-				quokka::valarray<double, numRadVars_> P_row{};
-				thrust::pair(P_row, S) = ComputeRadPressure<FluxDir::X1>(erad, Fx, Fy, Fz, fx, fy, fz);
-				for (int n = 1; n < 4; ++n) {
-					P[0][n] = P_row[n];
-				}
-				thrust::pair(P_row, S) = ComputeRadPressure<FluxDir::X2>(erad, Fx, Fy, Fz, fx, fy, fz);
-				for (int n = 1; n < 4; ++n) {
-					P[1][n] = P_row[n];
-				}
-				thrust::pair(P_row, S) = ComputeRadPressure<FluxDir::X3>(erad, Fx, Fy, Fz, fx, fy, fz);
-				for (int n = 1; n < 4; ++n) {
-					P[2][n] = P_row[n];
-				}
+				// loop DIR over {FluxDir::X1, FluxDir::X2, FluxDir::X3}
+				ComputeRadPressure<FluxDir::X1>(erad, Fx, Fy, Fz, fx, fy, fz, P[0], S);
+				ComputeRadPressure<FluxDir::X2>(erad, Fx, Fy, Fz, fx, fy, fz, P[1], S);
+				ComputeRadPressure<FluxDir::X3>(erad, Fx, Fy, Fz, fx, fy, fz, P[2], S);
 
 				// loop over spatial dimensions
 				for (int n = 0; n < 3; ++n) {
