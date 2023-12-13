@@ -15,6 +15,7 @@
 #include <cmath>
 #include <iostream>
 #include <vector>
+#include <thrust/pair.h>
 
 // library headers
 #include "AMReX.H"
@@ -191,7 +192,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	template <FluxDir DIR>
 	AMREX_GPU_DEVICE static auto ComputeRadPressure(double erad_L, double Fx_L, double Fy_L, double Fz_L, double fx_L, double fy_L, double fz_L)
-	    -> std::tuple<quokka::valarray<double, numRadVars_>, double>;
+	    -> thrust::pair<quokka::valarray<double, numRadVars_>, double>;
 };
 
 // Compute radiation energy fractions for each photon group from a Planck function, given nGroups, radBoundaries, and temperature
@@ -696,7 +697,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeCellOpticalDepth(const quokka
 template <typename problem_t>
 template <FluxDir DIR>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeRadPressure(const double erad, const double Fx, const double Fy, const double Fz, const double fx,
-							       const double fy, const double fz) -> std::tuple<quokka::valarray<double, numRadVars_>, double>
+							       const double fy, const double fz) -> thrust::pair<quokka::valarray<double, numRadVars_>, double>
 {
 	// check that states are physically admissible
 	AMREX_ASSERT(erad > 0.0);
@@ -790,7 +791,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeRadPressure(const double erad
 
 	quokka::valarray<double, numRadVars_> F = {Fn, Pnx, Pny, Pnz};
 
-	return std::make_tuple(F, S);
+	return thrust::make_pair(F, S);
 }
 
 template <typename problem_t>
@@ -1241,15 +1242,15 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				std::array<std::array<double, numRadVars_>, 3> P{};
 				double S = NAN;
 				quokka::valarray<double, numRadVars_> P_row{};
-				std::tie(P_row, S) = ComputeRadPressure<FluxDir::X1>(erad, Fx, Fy, Fz, fx, fy, fz);
+				thrust::pair(P_row, S) = ComputeRadPressure<FluxDir::X1>(erad, Fx, Fy, Fz, fx, fy, fz);
 				for (int n = 1; n < 4; ++n) {
 					P[0][n] = P_row[n];
 				}
-				std::tie(P_row, S) = ComputeRadPressure<FluxDir::X2>(erad, Fx, Fy, Fz, fx, fy, fz);
+				thrust::pair(P_row, S) = ComputeRadPressure<FluxDir::X2>(erad, Fx, Fy, Fz, fx, fy, fz);
 				for (int n = 1; n < 4; ++n) {
 					P[1][n] = P_row[n];
 				}
-				std::tie(P_row, S) = ComputeRadPressure<FluxDir::X3>(erad, Fx, Fy, Fz, fx, fy, fz);
+				thrust::pair(P_row, S) = ComputeRadPressure<FluxDir::X3>(erad, Fx, Fy, Fz, fx, fy, fz);
 				for (int n = 1; n < 4; ++n) {
 					P[2][n] = P_row[n];
 				}
