@@ -190,7 +190,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	AMREX_GPU_DEVICE static void amendRadState(std::array<amrex::Real, nvarHyperbolic_> &cons);
 
 	template <FluxDir DIR, typename TARRAY>
-	AMREX_GPU_DEVICE static void ComputeRadPressure(TARRAY &F_L, double &S_L, double erad_L, double Fx_L, double Fy_L, double Fz_L, double fx_L, double fy_L, double fz_L);
+	AMREX_GPU_DEVICE static void ComputeRadPressure(TARRAY &F_L, double &S_L, double erad_L, double Fx_L, double Fy_L, double Fz_L, double fx_L,
+							double fy_L, double fz_L);
 };
 
 // Compute radiation energy fractions for each photon group from a Planck function, given nGroups, radBoundaries, and temperature
@@ -694,8 +695,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeCellOpticalDepth(const quokka
 
 template <typename problem_t>
 template <FluxDir DIR, typename TARRAY>
-AMREX_GPU_DEVICE void RadSystem<problem_t>::ComputeRadPressure(TARRAY &F, double &S, const double erad, const double Fx, const double Fy, const double Fz, const double fx,
-							       const double fy, const double fz)
+AMREX_GPU_DEVICE void RadSystem<problem_t>::ComputeRadPressure(TARRAY &F, double &S, const double erad, const double Fx, const double Fy, const double Fz,
+							       const double fx, const double fy, const double fz)
 {
 	// check that states are physically admissible
 	AMREX_ASSERT(erad > 0.0);
@@ -883,10 +884,10 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 			quokka::valarray<double, numRadVars_> F_R{};
 			double S_L = NAN;
 			double S_R = NAN;
-      // ComputeRadPressure will modify F_L and S_L
+			// ComputeRadPressure will modify F_L and S_L
 			ComputeRadPressure<DIR>(F_L, S_L, erad_L, Fx_L, Fy_L, Fz_L, fx_L, fy_L, fz_L);
 			S_L *= -1.; // speed sign is -1
-      // ComputeRadPressure will modify F_R and S_R
+				    // ComputeRadPressure will modify F_R and S_R
 			ComputeRadPressure<DIR>(F_R, S_R, erad_R, Fx_R, Fy_R, Fz_R, fx_R, fy_R, fz_R);
 			// speed sign is +1, S_R unchanged.
 
@@ -1244,7 +1245,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				std::array<std::array<double, numRadVars_>, 3> P{};
 				double S = NAN;
 				// loop DIR over {FluxDir::X1, FluxDir::X2, FluxDir::X3}
-        // ComputeRadPressure will modify P[DIR] and S
+				// ComputeRadPressure will modify P[DIR] and S
 				ComputeRadPressure<FluxDir::X1>(P[0], S, erad, Fx, Fy, Fz, fx, fy, fz);
 				ComputeRadPressure<FluxDir::X2>(P[1], S, erad, Fx, Fy, Fz, fx, fy, fz);
 				ComputeRadPressure<FluxDir::X3>(P[2], S, erad, Fx, Fy, Fz, fx, fy, fz);
