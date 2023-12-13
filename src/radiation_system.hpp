@@ -190,7 +190,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	AMREX_GPU_DEVICE static void amendRadState(std::array<amrex::Real, nvarHyperbolic_> &cons);
 
 	template <FluxDir DIR>
-	AMREX_GPU_DEVICE static auto ComputeRadPressure(double erad_L, double Fx_L, double Fy_L, double Fz_L, double fx_L, double fy_L, double fz_L) -> std::tuple<quokka::valarray<double, numRadVars_>, double>;
+	AMREX_GPU_DEVICE static auto ComputeRadPressure(double erad_L, double Fx_L, double Fy_L, double Fz_L, double fx_L, double fy_L, double fz_L)
+	    -> std::tuple<quokka::valarray<double, numRadVars_>, double>;
 };
 
 // Compute radiation energy fractions for each photon group from a Planck function, given nGroups, radBoundaries, and temperature
@@ -787,9 +788,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeRadPressure(const double erad
 
 	double S = std::max(0.1, std::sqrt(Tnormal));
 
-  quokka::valarray<double, numRadVars_> F = {Fn, Pnx, Pny, Pnz};
+	quokka::valarray<double, numRadVars_> F = {Fn, Pnx, Pny, Pnz};
 
-  return std::make_tuple(F, S); 
+	return std::make_tuple(F, S);
 }
 
 template <typename problem_t>
@@ -882,9 +883,9 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 
 			// compute radiation pressure F_L and F_R using ComputeRadPressure
 			auto [F_L, S_L] = ComputeRadPressure<DIR>(erad_L, Fx_L, Fy_L, Fz_L, fx_L, fy_L, fz_L);
-      S_L *= -1.; // speed sign is -1
+			S_L *= -1.; // speed sign is -1
 			auto [F_R, S_R] = ComputeRadPressure<DIR>(erad_R, Fx_R, Fy_R, Fz_R, fx_R, fy_R, fz_R);
-      // speed sign is +1, S_R unchanged. 
+			// speed sign is +1, S_R unchanged.
 
 			// FluxDir::X2
 
@@ -1238,20 +1239,20 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				auto fz = Fz / (c_light_ * erad);
 
 				std::array<std::array<double, numRadVars_>, 3> P{};
-        double S = NAN;
-        quokka::valarray<double, numRadVars_> P_row{};
-        std::tie(P_row, S) = ComputeRadPressure<FluxDir::X1>(erad, Fx, Fy, Fz, fx, fy, fz);
-        for (int n = 1; n < 4; ++n) {
-          P[0][n] = P_row[n];
-        }
-        std::tie(P_row, S) = ComputeRadPressure<FluxDir::X2>(erad, Fx, Fy, Fz, fx, fy, fz);
-        for (int n = 1; n < 4; ++n) {
-          P[1][n] = P_row[n];
-        }
-        std::tie(P_row, S) = ComputeRadPressure<FluxDir::X3>(erad, Fx, Fy, Fz, fx, fy, fz);
-        for (int n = 1; n < 4; ++n) {
-          P[2][n] = P_row[n];
-        }
+				double S = NAN;
+				quokka::valarray<double, numRadVars_> P_row{};
+				std::tie(P_row, S) = ComputeRadPressure<FluxDir::X1>(erad, Fx, Fy, Fz, fx, fy, fz);
+				for (int n = 1; n < 4; ++n) {
+					P[0][n] = P_row[n];
+				}
+				std::tie(P_row, S) = ComputeRadPressure<FluxDir::X2>(erad, Fx, Fy, Fz, fx, fy, fz);
+				for (int n = 1; n < 4; ++n) {
+					P[1][n] = P_row[n];
+				}
+				std::tie(P_row, S) = ComputeRadPressure<FluxDir::X3>(erad, Fx, Fy, Fz, fx, fy, fz);
+				for (int n = 1; n < 4; ++n) {
+					P[2][n] = P_row[n];
+				}
 
 				// loop over spatial dimensions
 				for (int n = 0; n < 3; ++n) {
