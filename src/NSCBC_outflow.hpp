@@ -251,6 +251,18 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto unpermute_vel(quokka::valarray<amrex::R
 	}
 	return newPrim;
 }
+
+template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto isStateValid(quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> const &Q) -> bool
+{
+	const amrex::Real rho = Q[0];
+	const amrex::Real u = Q[1];
+	const amrex::Real v = Q[2];
+	const amrex::Real w = Q[3];
+	const amrex::Real P = Q[4];
+	// check whether density and pressure are positive
+	return ((rho > 0.) && (P > 0.));
+}
 } // namespace detail
 
 template <typename problem_t, FluxDir DIR, BoundarySide SIDE>
@@ -316,16 +328,29 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setOutflowBoundary(const amrex::IntVect
 
 	// compute centered ghost values
 	dQ_dx *= (SIDE == BoundarySide::Lower) ? -1.0 : 1.0;
-	quokka::valarray<amrex::Real, N> const Q_ip1 = Q_im1 + 2.0 * dx * dQ_dx;
-	quokka::valarray<amrex::Real, N> const Q_ip2 = -2.0 * Q_im1 - 3.0 * Q_i + 6.0 * Q_ip1 - 6.0 * dx * dQ_dx;
-	quokka::valarray<amrex::Real, N> const Q_ip3 = 3.0 * Q_im1 + 10.0 * Q_i - 18.0 * Q_ip1 + 6.0 * Q_ip2 + 12.0 * dx * dQ_dx;
-	quokka::valarray<amrex::Real, N> const Q_ip4 = -2.0 * Q_im1 - 13.0 * Q_i + 24.0 * Q_ip1 - 12.0 * Q_ip2 + 4.0 * Q_ip3 - 12.0 * dx * dQ_dx;
+	quokka::valarray<amrex::Real, N> Q_ip1 = Q_im1 + 2.0 * dx * dQ_dx;
+	quokka::valarray<amrex::Real, N> Q_ip2 = -2.0 * Q_im1 - 3.0 * Q_i + 6.0 * Q_ip1 - 6.0 * dx * dQ_dx;
+	quokka::valarray<amrex::Real, N> Q_ip3 = 3.0 * Q_im1 + 10.0 * Q_i - 18.0 * Q_ip1 + 6.0 * Q_ip2 + 12.0 * dx * dQ_dx;
+	quokka::valarray<amrex::Real, N> Q_ip4 = -2.0 * Q_im1 - 13.0 * Q_i + 24.0 * Q_ip1 - 12.0 * Q_ip2 + 4.0 * Q_ip3 - 12.0 * dx * dQ_dx;
 
 	// set cell values
 	const int ip1 = (SIDE == BoundarySide::Lower) ? ibr - 1 : ibr + 1;
 	const int ip2 = (SIDE == BoundarySide::Lower) ? ibr - 2 : ibr + 2;
 	const int ip3 = (SIDE == BoundarySide::Lower) ? ibr - 3 : ibr + 3;
 	const int ip4 = (SIDE == BoundarySide::Lower) ? ibr - 4 : ibr + 4;
+
+	// check state positivity (density, pressure)
+	// TODO(bwibking): reset to zero-gradient outflow if any state Q_{ip1...ip4} is invalid
+	if (!(detail::isStateValid<problem_t>(Q_ip1) && detail::isStateValid<problem_t>(Q_ip2) && detail::isStateValid<problem_t>(Q_ip3) &&
+	      detail::isStateValid<problem_t>(Q_ip4))) {
+		if (idx[static_cast<int>(DIR)] == ip1) {
+			printf("WARNING: reset boundary cell (%d, %d, %d) to zero-gradient extrapolation.\n", i, j, k); // NOLINT
+		}
+		Q_ip1 = Q_i;
+		Q_ip2 = Q_i;
+		Q_ip3 = Q_i;
+		Q_ip4 = Q_i;
+	}
 
 	quokka::valarray<amrex::Real, N> consCell{};
 	if (idx[static_cast<int>(DIR)] == ip1) {
