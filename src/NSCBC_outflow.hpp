@@ -343,16 +343,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setOutflowBoundary(const amrex::IntVect
 	// TODO(bwibking): reset to zero-gradient outflow if any state Q_{ip1...ip4} is invalid
 	if (!(detail::isStateValid<problem_t>(Q_ip1) && detail::isStateValid<problem_t>(Q_ip2) && detail::isStateValid<problem_t>(Q_ip3) &&
 	      detail::isStateValid<problem_t>(Q_ip4))) {
-		if (idx[static_cast<int>(DIR)] == ip1) {
-			const amrex::Real rho = Q_i[0];
-			const amrex::Real u = Q_i[1];
-			const amrex::Real v = Q_i[2];
-			const amrex::Real w = Q_i[3];
-			const amrex::Real P = Q_i[4];
-			const amrex::Real c = quokka::EOS<problem_t>::ComputeSoundSpeed(rho, P);
-			const amrex::Real M = std::sqrt(u * u + v * v + w * w) / c;
-			printf("WARNING: reset boundary cell (%d, %d, %d) to zero-gradient extrapolation. Mach number = %g\n", i, j, k, M); // NOLINT
-		}
 		Q_ip1 = Q_i;
 		Q_ip2 = Q_i;
 		Q_ip3 = Q_i;
