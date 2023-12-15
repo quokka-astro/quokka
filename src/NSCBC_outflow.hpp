@@ -251,6 +251,18 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto unpermute_vel(quokka::valarray<amrex::R
 	}
 	return newPrim;
 }
+
+template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto isStateValid(quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> const &Q) -> bool
+{
+	const amrex::Real rho = Q[0];
+	const amrex::Real u = Q[1];
+	const amrex::Real v = Q[2];
+	const amrex::Real w = Q[3];
+	const amrex::Real P = Q[4];
+	// check whether density and pressure are positive
+	return ((rho > 0.) && (P > 0.));
+}
 } // namespace detail
 
 template <typename problem_t, FluxDir DIR, BoundarySide SIDE>
