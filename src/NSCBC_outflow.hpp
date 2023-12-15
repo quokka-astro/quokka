@@ -339,8 +339,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setOutflowBoundary(const amrex::IntVect
 	const int ip3 = (SIDE == BoundarySide::Lower) ? ibr - 3 : ibr + 3;
 	const int ip4 = (SIDE == BoundarySide::Lower) ? ibr - 4 : ibr + 4;
 
-	// check state positivity (density, pressure)
-	// TODO(bwibking): reset to zero-gradient outflow if any state Q_{ip1...ip4} is invalid
+	// reset to zero-gradient outflow if any state Q_{ip1...ip4} is invalid
 	if (!(detail::isStateValid<problem_t>(Q_ip1) && detail::isStateValid<problem_t>(Q_ip2) && detail::isStateValid<problem_t>(Q_ip3) &&
 	      detail::isStateValid<problem_t>(Q_ip4))) {
 		Q_ip1 = Q_i;
