@@ -14,9 +14,9 @@ struct PulseProblem {
 struct AdvPulseProblem {
 };
 
-constexpr double T0 = 1.0e7;	// K (temperature)
-constexpr double T1 = 2.0e7;	// K (temperature)
-constexpr double rho0 = 1.2;	// g cm^-3 (matter density)
+constexpr double T0 = 1.0e7; // K (temperature)
+constexpr double T1 = 2.0e7; // K (temperature)
+constexpr double rho0 = 1.2; // g cm^-3 (matter density)
 constexpr double a_rad = C::a_rad;
 constexpr double c = C::c_light; // speed of light (cgs)
 constexpr double chat = c;
@@ -24,10 +24,10 @@ constexpr double width = 24.0; // cm, width of the pulse
 constexpr double erad_floor = a_rad * T0 * T0 * T0 * T0 * 1.0e-10;
 constexpr double mu = 2.33 * C::m_u;
 constexpr double k_B = C::k_B;
-constexpr double v0_nonadv = 0.;    // non-advecting pulse
+constexpr double v0_nonadv = 0.; // non-advecting pulse
 
 // static diffusion: tau = 2e3, beta = 3e-5, beta tau = 6e-2
-constexpr double kappa0 = 100.; // cm^2 g^-1
+constexpr double kappa0 = 100.;	    // cm^2 g^-1
 constexpr double v0_adv = 1.0e6;    // advecting pulse
 constexpr double max_time = 4.8e-5; // max_time = 2.0 * width / v1;
 
@@ -300,12 +300,12 @@ auto problem_main() -> int
 	prob_hi = sim2.geom[0].ProbHiArray();
 	// compute the pixel size
 	const double dx = (prob_hi[0] - prob_lo[0]) / static_cast<double>(nx);
-  const double width = prob_hi[0] - prob_lo[0];
-  const double move = v0_adv * sim2.tNew_[0];
-  const int n_p = static_cast<int>(move / dx);
-  const int half = static_cast<int>(nx / 2.0);
-  const double drift = move - static_cast<double>(n_p) * dx;
-  const int shift = n_p - static_cast<int>((n_p + half) / nx) * nx;
+	const double width = prob_hi[0] - prob_lo[0];
+	const double move = v0_adv * sim2.tNew_[0];
+	const int n_p = static_cast<int>(move / dx);
+	const int half = static_cast<int>(nx / 2.0);
+	const double drift = move - static_cast<double>(n_p) * dx;
+	const int shift = n_p - static_cast<int>((n_p + half) / nx) * nx;
 
 	std::vector<double> xs2(nx);
 	std::vector<double> Trad2(nx);
@@ -314,20 +314,20 @@ auto problem_main() -> int
 	std::vector<double> rhogas2(nx);
 
 	for (int i = 0; i < nx; ++i) {
-    int index_ = 0;
-    if (shift >= 0) {
-      if (i < shift) {
-        index_ = nx - shift + i;
-      } else {
-        index_ = i - shift;
-      }
-    } else {
-      if (i <= nx - 1 + shift) {
-        index_ = i - shift;
-      } else {
-        index_ = i - (nx + shift);
-      }
-    }
+		int index_ = 0;
+		if (shift >= 0) {
+			if (i < shift) {
+				index_ = nx - shift + i;
+			} else {
+				index_ = i - shift;
+			}
+		} else {
+			if (i <= nx - 1 + shift) {
+				index_ = i - shift;
+			} else {
+				index_ = i - (nx + shift);
+			}
+		}
 		amrex::Real x = position2[i];
 		const auto Erad_t = values2.at(RadSystem<PulseProblem>::radEnergy_index)[i];
 		const auto Trad_t = std::pow(Erad_t / a_rad, 1. / 4.);
