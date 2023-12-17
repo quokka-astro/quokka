@@ -80,8 +80,8 @@ void SetupMeshComponent(openPMD::Mesh &mesh, amrex::Geometry &full_geom)
 auto GetMeshComponentName(int meshLevel, std::string const &field_name) -> std::string
 {
 	std::string new_field_name = field_name;
-	// TODO(bwibking): convert dash to underscore
-
+	// convert dashes to underscores
+	std::replace(new_field_name.begin(), new_field_name.end(), '-', '_');
 	if (meshLevel > 0) {
 		new_field_name += std::string("_lvl").append(std::to_string(meshLevel));
 	}
@@ -95,7 +95,7 @@ void WriteFile(const std::vector<std::string> &varnames, int const output_levels
 	       amrex::Vector<amrex::Geometry> &geom, const std::string &output_basename, amrex::Real const time, int const file_number)
 {
 	// open file
-	std::string const filename = output_basename + "%05T.h5";
+	std::string const filename = output_basename + "%05T.bp";
 	auto series = openPMD::Series(filename, openPMD::Access::CREATE, amrex::ParallelDescriptor::Communicator());
 	series.setSoftware("Quokka", "1.0");
 	series.setIterationEncoding(openPMD::IterationEncoding::fileBased);
