@@ -59,11 +59,14 @@ void SetupMeshComponent(openPMD::Mesh &mesh, amrex::Geometry &full_geom)
 	auto global_size = getReversedVec(global_box.size());
 	std::vector<double> const grid_spacing = getReversedVec(full_geom.CellSize());
 	std::vector<double> const global_offset = getReversedVec(full_geom.ProbLo());
+	std::vector<std::string> const coordinateLabels{AMREX_D_DECL("x", "y", "z")};
+	std::vector<std::string> const grid_axes{coordinateLabels.rbegin(), coordinateLabels.rend()}; // reverse order
 
 	// Prepare the type of dataset that will be written
 	mesh.setDataOrder(openPMD::Mesh::DataOrder::C);
 	mesh.setGridSpacing(grid_spacing);
 	mesh.setGridGlobalOffset(global_offset);
+	mesh.setAxisLabels(grid_axes); // use C-ordering
 	mesh.setAttribute("fieldSmoothing", "none");
 
 	auto mesh_comp = mesh[openPMD::MeshRecordComponent::SCALAR];
@@ -89,7 +92,7 @@ void WriteFile(const std::vector<std::string> &varnames, int const output_levels
 	       amrex::Vector<amrex::Geometry> &geom, const std::string &output_basename, amrex::Real const time, int const file_number)
 {
 	// open file
-	std::string const filename = output_basename + ".bp";
+	std::string const filename = output_basename + ".h5";
 	auto series = openPMD::Series(filename, openPMD::Access::CREATE, amrex::ParallelDescriptor::Communicator());
 	series.setSoftware("Quokka", "1.0");
 
