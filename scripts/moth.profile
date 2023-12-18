@@ -1,5 +1,5 @@
 module load mpi/openmpi-x86_64
-module load rocm/5.7.0
+module load rocm/6.0.0
 
 # optimize ROCm/HIP compilation for MI210
 export AMREX_AMD_ARCH=gfx90a
