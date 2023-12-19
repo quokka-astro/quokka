@@ -20,7 +20,7 @@ constexpr double c = C::c_light; // speed of light (cgs)
 constexpr double chat = c;
 constexpr double mu = 2.33 * C::m_u;
 constexpr double k_B = C::k_B;
-constexpr double max_time = 4.8e-5;
+constexpr double max_time = 1e-5;
 // constexpr double v0 = 0.;      // non-advecting pulse
 constexpr double v0 = 1.0e7; // advecting pulse
 
