@@ -15,7 +15,7 @@ pr:
 jobs:
   - job: HIP_Build_Test
     pool: amdgpu
-    timeoutInMinutes: 90
+    timeoutInMinutes: 120
     steps:
     - task: CMake@1
       displayName: 'Configure CMake'

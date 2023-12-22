@@ -256,9 +256,6 @@ template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto isStateValid(quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> const &Q) -> bool
 {
 	const amrex::Real rho = Q[0];
-	const amrex::Real u = Q[1];
-	const amrex::Real v = Q[2];
-	const amrex::Real w = Q[3];
 	const amrex::Real P = Q[4];
 	// check whether density and pressure are positive
 	return ((rho > 0.) && (P > 0.));
@@ -339,8 +336,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setOutflowBoundary(const amrex::IntVect
 	const int ip3 = (SIDE == BoundarySide::Lower) ? ibr - 3 : ibr + 3;
 	const int ip4 = (SIDE == BoundarySide::Lower) ? ibr - 4 : ibr + 4;
 
-	// check state positivity (density, pressure)
-	// TODO(bwibking): reset to zero-gradient outflow if any state Q_{ip1...ip4} is invalid
+	// reset to zero-gradient outflow if any state Q_{ip1...ip4} is invalid
 	if (!(detail::isStateValid<problem_t>(Q_ip1) && detail::isStateValid<problem_t>(Q_ip2) && detail::isStateValid<problem_t>(Q_ip3) &&
 	      detail::isStateValid<problem_t>(Q_ip4))) {
 		Q_ip1 = Q_i;
