@@ -27,7 +27,7 @@ static constexpr Real gInf = PI * PI * PI * PI / 15.0;
 static constexpr int INTERP_SIZE = 1000;
 static constexpr Real LOG_X_MIN = -3.;
 static constexpr Real LOG_X_MAX = 2.;
-static constexpr Real Y_INTERP_MIN = 5.13106651231913e-11;
+static constexpr Real Y_INTERP_MIN = 5.13106651231913e-11; // = Y_interp[0]
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_planck_integral(Real logx) -> Real
 {
@@ -244,6 +244,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto integrate_planck_from_0_to_x(const
 	if (logx < LOG_X_MIN) {
 		// y = x * x * x / 3.0;    // 1st order
 		y = (-4 + x) * x + 8 * std::log((2 + x) / 2); // 2nd order
+    // Y_INTERP_MIN is the minimum value returned from interpolate_planck_integral. To ensure y is monotonic with respect to x:
 		if (y > Y_INTERP_MIN) {
 			y = Y_INTERP_MIN;
 		}

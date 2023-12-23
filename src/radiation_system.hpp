@@ -891,8 +891,6 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 			ComputeRadPressure<DIR>(F_R, S_R, erad_R, Fx_R, Fy_R, Fz_R, fx_R, fy_R, fz_R);
 			// speed sign is +1, S_R unchanged.
 
-			// FluxDir::X2
-
 			// correct for reduced speed of light
 			F_L[0] *= c_hat_ / c_light_;
 			F_R[0] *= c_hat_ / c_light_;
@@ -1101,7 +1099,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			quokka::valarray<double, nGroups_> deltaErad;
 			quokka::valarray<double, nGroups_> F_R;
 
-			const double resid_tol = 1.0e-10; // 1.0e-15;
+			const double resid_tol = 1.0e-13; // 1.0e-15;
 			const int maxIter = 400;
 			int n = 0;
 			for (; n < maxIter; ++n) {
