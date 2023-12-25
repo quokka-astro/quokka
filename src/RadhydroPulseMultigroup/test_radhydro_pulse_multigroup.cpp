@@ -17,26 +17,33 @@
 struct PulseProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
+constexpr int isconst = 0;
+#if 1
+constexpr int n_groups_ = 1;
+constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{0., inf};
+#elif 1
 constexpr int n_groups_ = 8;
-// constexpr int n_groups_ = 64;
 constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e15, 3.16e15, 1e16, 3.16e16, 1e17, 3.16e17, 1e18, 3.16e18, 1e19};
-// constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1.00000000e+15, 1.15478198e+15, 1.33352143e+15, 1.53992653e+15,
-//        1.77827941e+15, 2.05352503e+15, 2.37137371e+15, 2.73841963e+15,
-//        3.16227766e+15, 3.65174127e+15, 4.21696503e+15, 4.86967525e+15,
-//        5.62341325e+15, 6.49381632e+15, 7.49894209e+15, 8.65964323e+15,
-//        1.00000000e+16, 1.15478198e+16, 1.33352143e+16, 1.53992653e+16,
-//        1.77827941e+16, 2.05352503e+16, 2.37137371e+16, 2.73841963e+16,
-//        3.16227766e+16, 3.65174127e+16, 4.21696503e+16, 4.86967525e+16,
-//        5.62341325e+16, 6.49381632e+16, 7.49894209e+16, 8.65964323e+16,
-//        1.00000000e+17, 1.15478198e+17, 1.33352143e+17, 1.53992653e+17,
-//        1.77827941e+17, 2.05352503e+17, 2.37137371e+17, 2.73841963e+17,
-//        3.16227766e+17, 3.65174127e+17, 4.21696503e+17, 4.86967525e+17,
-//        5.62341325e+17, 6.49381632e+17, 7.49894209e+17, 8.65964323e+17,
-//        1.00000000e+18, 1.15478198e+18, 1.33352143e+18, 1.53992653e+18,
-//        1.77827941e+18, 2.05352503e+18, 2.37137371e+18, 2.73841963e+18,
-//        3.16227766e+18, 3.65174127e+18, 4.21696503e+18, 4.86967525e+18,
-//        5.62341325e+18, 6.49381632e+18, 7.49894209e+18, 8.65964323e+18,
-//        1.00000000e+19};
+#else
+constexpr int n_groups_ = 64;
+constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1.00000000e+15, 1.15478198e+15, 1.33352143e+15, 1.53992653e+15,
+       1.77827941e+15, 2.05352503e+15, 2.37137371e+15, 2.73841963e+15,
+       3.16227766e+15, 3.65174127e+15, 4.21696503e+15, 4.86967525e+15,
+       5.62341325e+15, 6.49381632e+15, 7.49894209e+15, 8.65964323e+15,
+       1.00000000e+16, 1.15478198e+16, 1.33352143e+16, 1.53992653e+16,
+       1.77827941e+16, 2.05352503e+16, 2.37137371e+16, 2.73841963e+16,
+       3.16227766e+16, 3.65174127e+16, 4.21696503e+16, 4.86967525e+16,
+       5.62341325e+16, 6.49381632e+16, 7.49894209e+16, 8.65964323e+16,
+       1.00000000e+17, 1.15478198e+17, 1.33352143e+17, 1.53992653e+17,
+       1.77827941e+17, 2.05352503e+17, 2.37137371e+17, 2.73841963e+17,
+       3.16227766e+17, 3.65174127e+17, 4.21696503e+17, 4.86967525e+17,
+       5.62341325e+17, 6.49381632e+17, 7.49894209e+17, 8.65964323e+17,
+       1.00000000e+18, 1.15478198e+18, 1.33352143e+18, 1.53992653e+18,
+       1.77827941e+18, 2.05352503e+18, 2.37137371e+18, 2.73841963e+18,
+       3.16227766e+18, 3.65174127e+18, 4.21696503e+18, 4.86967525e+18,
+       5.62341325e+18, 6.49381632e+18, 7.49894209e+18, 8.65964323e+18,
+       1.00000000e+19};
+#endif 
 
 constexpr double kappa0 = 180.; // cm^2 g^-1
 constexpr double T0 = 1.0e7;	// K (temperature)
@@ -46,7 +53,7 @@ constexpr double a_rad = C::a_rad;
 constexpr double c = C::c_light; // speed of light (cgs)
 constexpr double chat = c;
 constexpr double width = 24.0; // cm, width of the pulse
-constexpr double erad_floor = a_rad * T0 * T0 * T0 * T0 * 1.0e-10;
+constexpr double erad_floor = a_rad * T0 * T0 * T0 * T0 * 1.0e-12;
 constexpr double mu = 2.33 * C::m_u;
 constexpr double h_planck = C::hplanck;
 constexpr double k_B = C::k_B;
@@ -55,7 +62,9 @@ constexpr double max_time = 4.8e-5;
 constexpr double v0 = 0.;      // non-advecting pulse
 // constexpr double v0 = 1.0e6; // advecting pulse, v0 = 2.0 * width / max_time;
 
+constexpr double T_ref = T0;
 constexpr double nu_ref = 1.0e18; // Hz
+constexpr double coeff_ = h_planck * nu_ref / (k_B * T_ref);
 
 template <> struct quokka::EOS_Traits<PulseProblem> {
 	static constexpr double mean_molecular_weight = mu;
@@ -80,7 +89,7 @@ template <> struct RadSystem_Traits<PulseProblem> {
 	static constexpr double radiation_constant = a_rad;
 	static constexpr double Erad_floor = erad_floor;
 	static constexpr bool compute_v_over_c_terms = true;
-	static constexpr double energy_unit = C::k_B;
+	static constexpr double energy_unit = C::hplanck;
 	static constexpr amrex::GpuArray<double, Physics_Traits<PulseProblem>::nGroups + 1> radBoundaries = rad_boundaries_;
 };
 
@@ -104,7 +113,9 @@ AMREX_GPU_HOST_DEVICE
 auto compute_kappa(const double nu, const double Tgas) -> double
 {
   // cm^-1
-  return kappa0 * std::pow(Tgas / T0, -0.5) * std::pow(nu / nu_ref, -3) * (1.0 - std::exp(-h_planck * nu / (k_B * Tgas)));
+  auto T_ = Tgas / T_ref;
+  auto nu_ = nu / nu_ref;
+  return kappa0 * std::pow(T_, -0.5) * std::pow(nu_, -3) * (1.0 - std::exp(-coeff_ * nu_ / T_));
 }
 
 AMREX_GPU_HOST_DEVICE 
@@ -112,19 +123,25 @@ auto compute_repres_nu() -> quokka::valarray<double, n_groups_>
 {
   // return the geometrical mean as the representative frequency for each group
   quokka::valarray<double, n_groups_> nu_rep{};
-  for (int g = 0; g < n_groups_; ++g) {
-    nu_rep[g] = std::sqrt(rad_boundaries_[g] * rad_boundaries_[g + 1]);
+  if constexpr (n_groups_ == 1) {
+    nu_rep[0] = nu_ref;
+  } else {
+    for (int g = 0; g < n_groups_; ++g) {
+      nu_rep[g] = std::sqrt(rad_boundaries_[g] * rad_boundaries_[g + 1]);
+    }
   }
   return nu_rep;
 }
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
 {
-  // double sigma = 3063.96 * std::pow(Tgas / T0, -3.5);
 	quokka::valarray<double, nGroups_> kappaPVec{};
   auto nu_rep = compute_repres_nu();
   for (int g = 0; g < nGroups_; ++g) {
     kappaPVec[g] = compute_kappa(nu_rep[g], Tgas) / rho;
+  }
+  if constexpr (isconst == 1) {
+    kappaPVec.fillin(100.0);
   }
 	return kappaPVec;
 }
@@ -142,12 +159,13 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacityTempDeri
   quokka::valarray<double, nGroups_> opacity_deriv{};
   auto nu_rep = compute_repres_nu();
   auto T = Tgas / T0;
-  auto coeff = h_planck * nu_ref / (k_B * T0);
   for (int g = 0; g < nGroups_; ++g) {
-    // opacity_deriv[g] = kappa0 * std::pow(nu_rep[g] / nu_ref, -3) * std::pow(Tgas / T0, -1.5) / T0 * (-0.5 + 1.5 * std::exp(-h_planck * nu_rep[g] / (k_B * Tgas)));
     auto nu = nu_rep[g] / nu_ref;
-    opacity_deriv[g] = kappa0 * std::exp(-coeff*nu/T) / (std::pow(nu,3) * std::pow(T, 4)) * (- coeff * nu * std::pow(T, 1.5) + 0.5 * std::pow(T, 2.5) * (1.0 - std::exp(coeff*nu/T)));
+    opacity_deriv[g] = kappa0 * std::exp(-coeff_*nu/T) / (std::pow(nu,3) * std::pow(T, 4)) * (- coeff_ * nu * std::pow(T, 1.5) + 0.5 * std::pow(T, 2.5) * (1.0 - std::exp(coeff_*nu/T)));
     opacity_deriv[g] /= rho;
+  }
+  if constexpr (isconst == 1) {
+    opacity_deriv.fillin(0.0);
   }
 	return opacity_deriv;
 }
@@ -174,17 +192,15 @@ template <> void RadhydroSimulation<PulseProblem>::setInitialConditionsOnGrid(qu
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
 		const double Trad = compute_initial_Tgas(x - x0);
-		const double Erad = a_rad * std::pow(Trad, 4);
 		const double rho = compute_exact_rho(x - x0);
 		const double Egas = quokka::EOS<PulseProblem>::ComputeEintFromTgas(rho, Trad);
 
-		// calculate radEnergyFractions based on the boundary conditions
-		auto radEnergyFractions = RadSystem<PulseProblem>::ComputePlanckEnergyFractions(radBoundaries_g, Trad);
+    auto Erad_g = RadSystem<PulseProblem>::ComputeThermalRadiation(Trad, radBoundaries_g);
 
 		for (int g = 0; g < Physics_Traits<PulseProblem>::nGroups; ++g) {
       // state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = (1. + 4. / 3. * (v0 * v0) / (c * c)) * Erad;
-      state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad * radEnergyFractions[g];
-      state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 4. / 3. * v0 * Erad * radEnergyFractions[g];
+      state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad_g[g];
+      state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 4. / 3. * v0 * Erad_g[g];
       state_cc(i, j, k, RadSystem<PulseProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
       state_cc(i, j, k, RadSystem<PulseProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
     }
@@ -212,7 +228,6 @@ auto problem_main() -> int
 
 	// Problem parameters
 	const long int max_timesteps = 1e8;
-	// const long int max_timesteps = 0;
 	const double CFL_number = 0.8;
 	// const int nx = 32;
 

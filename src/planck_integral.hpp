@@ -243,8 +243,12 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto integrate_planck_from_0_to_x(const
 	if (logx < LOG_X_MIN) {
 		// y = x * x * x / 3.0;    // 1st order
 		y = (-4 + x) * x + 8 * std::log((2 + x) / 2); // 2nd order
-		// AMREX_ASSERT(y <= Y_interp[0]);
-		AMREX_ASSERT(y <= Y_INTERP_MIN);
+		// AMREX_ASSERT(y <= Y_INTERP_MIN);
+    if (y > Y_INTERP_MIN) {
+      y = Y_INTERP_MIN;
+    } else if (y < 0.) {
+      y = 0.;
+    }
 	} else if (logx >= LOG_X_MAX) {
 		return 1.0;
 	} else {
