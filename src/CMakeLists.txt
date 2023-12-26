@@ -174,3 +174,5 @@ add_subdirectory(PassiveScalar)
 add_subdirectory(FCQuantities)
 add_subdirectory(SphericalCollapse)
 add_subdirectory(NSCBC)
+
+add_subdirectory(MetalAdvectionProblem)
