@@ -1852,7 +1852,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 	amrex::Print() << "Writing plotfile " << plotfilename << "\n";
 
 #ifdef QUOKKA_USE_OPENPMD
-	quokka::OpenPMDOutput::WriteFile(varnames, finest_level + 1, mf_ptr, Geom(), plotfilename, tNew_[0], istep[0]);
+	quokka::OpenPMDOutput::WriteFile(varnames, finest_level + 1, mf_ptr, Geom(), plot_file, tNew_[0], istep[0]);
 	WriteMetadataFile(plotfilename + ".yaml");
 #else
 	amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, mf_ptr, varnames, Geom(), tNew_[0], istep, refRatio());
