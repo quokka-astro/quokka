@@ -62,6 +62,7 @@ User Guide
    tests/index
    parameters
    analysis
+   instability
 
 Developer Guide
 -----------

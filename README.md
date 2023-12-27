@@ -34,6 +34,7 @@ Quokka also features advanced Adaptive Quokka Refinement:tm: technology:
 * ROCm 5.2.0+ (optional, for AMD GPUs)
 * Ninja (optional, for faster builds)
 * Python 3.7+ (optional)
+* ADIOS2 2.9+ with GPU-aware support (optional, for writing terabyte-sized or larger outputs)
 
 ## Quickstart
 

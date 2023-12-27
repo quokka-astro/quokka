@@ -300,7 +300,6 @@ auto problem_main() -> int
 	prob_hi = sim2.geom[0].ProbHiArray();
 	// compute the pixel size
 	const double dx = (prob_hi[0] - prob_lo[0]) / static_cast<double>(nx);
-	const double width = prob_hi[0] - prob_lo[0];
 	const double move = v0_adv * sim2.tNew_[0];
 	const int n_p = static_cast<int>(move / dx);
 	const int half = static_cast<int>(nx / 2.0);
@@ -328,7 +327,7 @@ auto problem_main() -> int
 				index_ = i - (nx + shift);
 			}
 		}
-		amrex::Real x = position2[i];
+		const amrex::Real x = position2[i];
 		const auto Erad_t = values2.at(RadSystem<PulseProblem>::radEnergy_index)[i];
 		const auto Trad_t = std::pow(Erad_t / a_rad, 1. / 4.);
 		const auto rho_t = values2.at(RadSystem<PulseProblem>::gasDensity_index)[i];
