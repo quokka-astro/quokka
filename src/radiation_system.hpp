@@ -49,7 +49,7 @@ static constexpr double IMEX_a32 = 0.5; // 0 < IMEX_a32 <= 0.5
 static constexpr double c_light_cgs_ = C::c_light;	    // cgs
 static constexpr double radiation_constant_cgs_ = C::a_rad; // cgs
 static constexpr double inf = std::numeric_limits<double>::max();
-// static constexpr double Erad_zero = 1e-14;
+static constexpr double Erad_fraction_floor = 1e-14; // minimum fraction of radiation energy in each group
 
 // this struct is specialized by the user application code
 //
@@ -197,8 +197,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	AMREX_GPU_DEVICE static void amendRadState(std::array<amrex::Real, nvarHyperbolic_> &cons);
 
 	template <FluxDir DIR, typename TARRAY>
-	AMREX_GPU_DEVICE static void ComputeRadPressure(double erad_L, double Fx_L, double Fy_L, double Fz_L, double fx_L, double fy_L, double fz_L,
-							TARRAY &F_L, double &S_L, int speed_sign = 1);
+	AMREX_GPU_DEVICE static void ComputeRadPressure(TARRAY &F_L, double &S_L, double erad_L, double Fx_L, double Fy_L, double Fz_L, double fx_L,
+							double fy_L, double fz_L);
 };
 
 // Compute radiation energy fractions for each photon group from a Planck function, given nGroups, radBoundaries, and temperature
@@ -219,17 +219,17 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckEnergyFractions(am
 			radEnergyFractions[g] = y - previous;
 			previous = y;
 		}
-		// // A hack to avoid zeros in radEnergyFractions
-		// // TODO(CCH): use energy_floor
-		// for (int g = 0; g < nGroups_; ++g) {
-		// 	if (radEnergyFractions[g] < Erad_zero) {
-		// 		radEnergyFractions[g] = Erad_zero;
-		// 	}
-		// }
-		// radEnergyFractions /= sum(radEnergyFractions);
+		// A hack to avoid zeros in radEnergyFractions
+		// TODO(CCH): use energy_floor
+		for (int g = 0; g < nGroups_; ++g) {
+			if (radEnergyFractions[g] < Erad_fraction_floor) {
+				radEnergyFractions[g] = Erad_fraction_floor;
+			}
+		}
     auto tote = sum(radEnergyFractions);
-    AMREX_ASSERT(tote <= 1.0);
-    AMREX_ASSERT(tote > 0.9999);
+    AMREX_ALWAYS_ASSERT(tote <= 1.0);
+    AMREX_ALWAYS_ASSERT(tote > 0.9999);
+		radEnergyFractions /= sum(radEnergyFractions);
 		return radEnergyFractions;
 	}
 }
@@ -731,8 +731,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeCellOpticalDepth(const quokka
 
 template <typename problem_t>
 template <FluxDir DIR, typename TARRAY>
-AMREX_GPU_DEVICE void RadSystem<problem_t>::ComputeRadPressure(const double erad, const double Fx, const double Fy, const double Fz, const double fx,
-							       const double fy, const double fz, TARRAY &F, double &S, const int speed_sign)
+AMREX_GPU_DEVICE void RadSystem<problem_t>::ComputeRadPressure(TARRAY &F, double &S, const double erad, const double Fx, const double Fy, const double Fz,
+							       const double fx, const double fy, const double fz)
 {
 	// check that states are physically admissible
 	AMREX_ASSERT(erad > 0.0);
@@ -824,11 +824,7 @@ AMREX_GPU_DEVICE void RadSystem<problem_t>::ComputeRadPressure(const double erad
 
 	F = {Fn, Pnx, Pny, Pnz};
 
-	if (speed_sign == -1) {
-		S = std::min(-0.1, -std::sqrt(Tnormal));
-	} else {
-		S = std::max(0.1, std::sqrt(Tnormal));
-	}
+	S = std::max(0.1, std::sqrt(Tnormal));
 }
 
 template <typename problem_t>
@@ -924,10 +920,12 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 			quokka::valarray<double, numRadVars_> F_R{};
 			double S_L = NAN;
 			double S_R = NAN;
-			ComputeRadPressure<DIR>(erad_L, Fx_L, Fy_L, Fz_L, fx_L, fy_L, fz_L, F_L, S_L, -1);
-			ComputeRadPressure<DIR>(erad_R, Fx_R, Fy_R, Fz_R, fx_R, fy_R, fz_R, F_R, S_R, 1);
-
-			// FluxDir::X2
+			// ComputeRadPressure will modify F_L and S_L
+			ComputeRadPressure<DIR>(F_L, S_L, erad_L, Fx_L, Fy_L, Fz_L, fx_L, fy_L, fz_L);
+			S_L *= -1.; // speed sign is -1
+				    // ComputeRadPressure will modify F_R and S_R
+			ComputeRadPressure<DIR>(F_R, S_R, erad_R, Fx_R, Fy_R, Fz_R, fx_R, fy_R, fz_R);
+			// speed sign is +1, S_R unchanged.
 
 			// correct for reduced speed of light
 			F_L[0] *= c_hat_ / c_light_;
@@ -1145,7 +1143,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			quokka::valarray<double, nGroups_> deltaErad{};
 			quokka::valarray<double, nGroups_> F_R{};
 
-			const double resid_tol = 1.0e-10; // 1.0e-15;
+			const double resid_tol = 1.0e-13; // 1.0e-15;
 			const int maxIter = 400;
 			int n = 0;
 			// TODO(CCH): Consider Ben's suggestion of using a global Newton method.
@@ -1290,12 +1288,13 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				auto fy = Fy / (c_light_ * erad);
 				auto fz = Fz / (c_light_ * erad);
 
-				std::array<std::array<double, 4>, 3> P{};
+				std::array<std::array<double, numRadVars_>, 3> P{};
 				double S = NAN;
 				// loop DIR over {FluxDir::X1, FluxDir::X2, FluxDir::X3}
-				ComputeRadPressure<FluxDir::X1>(erad, Fx, Fy, Fz, fx, fy, fz, P[0], S);
-				ComputeRadPressure<FluxDir::X2>(erad, Fx, Fy, Fz, fx, fy, fz, P[1], S);
-				ComputeRadPressure<FluxDir::X3>(erad, Fx, Fy, Fz, fx, fy, fz, P[2], S);
+				// ComputeRadPressure will modify P[DIR] and S
+				ComputeRadPressure<FluxDir::X1>(P[0], S, erad, Fx, Fy, Fz, fx, fy, fz);
+				ComputeRadPressure<FluxDir::X2>(P[1], S, erad, Fx, Fy, Fz, fx, fy, fz);
+				ComputeRadPressure<FluxDir::X3>(P[2], S, erad, Fx, Fy, Fz, fx, fy, fz);
 
 				// loop over spatial dimensions
 				for (int n = 0; n < 3; ++n) {
