@@ -14,10 +14,9 @@ struct PulseProblem {
 struct AdvPulseProblem {
 };
 
-constexpr double kappa0 = 100.; // cm^2 g^-1
-constexpr double T0 = 1.0e7;	// K (temperature)
-constexpr double T1 = 2.0e7;	// K (temperature)
-constexpr double rho0 = 1.2;	// g cm^-3 (matter density)
+constexpr double T0 = 1.0e7; // K (temperature)
+constexpr double T1 = 2.0e7; // K (temperature)
+constexpr double rho0 = 1.2; // g cm^-3 (matter density)
 constexpr double a_rad = C::a_rad;
 constexpr double c = C::c_light; // speed of light (cgs)
 constexpr double chat = c;
@@ -25,9 +24,17 @@ constexpr double width = 24.0; // cm, width of the pulse
 constexpr double erad_floor = a_rad * T0 * T0 * T0 * T0 * 1.0e-10;
 constexpr double mu = 2.33 * C::m_u;
 constexpr double k_B = C::k_B;
-constexpr double v0_nonadv = 0.;    // non-advecting pulse
+constexpr double v0_nonadv = 0.; // non-advecting pulse
+
+// static diffusion: tau = 2e3, beta = 3e-5, beta tau = 6e-2
+constexpr double kappa0 = 100.;	    // cm^2 g^-1
 constexpr double v0_adv = 1.0e6;    // advecting pulse
 constexpr double max_time = 4.8e-5; // max_time = 2.0 * width / v1;
+
+// dynamic diffusion: tau = 2e4, beta = 3e-3, beta tau = 60
+// constexpr double kappa0 = 1000.; // cm^2 g^-1
+// constexpr double v0_adv = 1.0e8;    // advecting pulse
+// constexpr double max_time = 1.2e-4; // max_time = 2.0 * width / v1;
 
 template <> struct quokka::EOS_Traits<PulseProblem> {
 	static constexpr double mean_molecular_weight = mu;
@@ -215,7 +222,7 @@ auto problem_main() -> int
 	constexpr int nvars = RadSystem<PulseProblem>::nvar_;
 	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
 	for (int n = 0; n < nvars; ++n) {
-    // periodic boundary condition in the x-direction will not work
+		// periodic boundary condition in the x-direction will not work
 		BCs_cc[n].setLo(0, amrex::BCType::foextrap); // extrapolate
 		BCs_cc[n].setHi(0, amrex::BCType::foextrap);
 		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
@@ -247,7 +254,6 @@ auto problem_main() -> int
 	const int nx = static_cast<int>(position.size());
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = sim.geom[0].ProbLoArray();
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = sim.geom[0].ProbHiArray();
-	amrex::Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
 
 	std::vector<double> xs(nx);
 	std::vector<double> Trad(nx);
@@ -294,7 +300,11 @@ auto problem_main() -> int
 	prob_hi = sim2.geom[0].ProbHiArray();
 	// compute the pixel size
 	const double dx = (prob_hi[0] - prob_lo[0]) / static_cast<double>(nx);
-	const int nshift = static_cast<int>(v0_adv * sim2.tNew_[0] / dx);
+	const double move = v0_adv * sim2.tNew_[0];
+	const int n_p = static_cast<int>(move / dx);
+	const int half = static_cast<int>(nx / 2.0);
+	const double drift = move - static_cast<double>(n_p) * dx;
+	const int shift = n_p - static_cast<int>((n_p + half) / nx) * nx;
 
 	std::vector<double> xs2(nx);
 	std::vector<double> Trad2(nx);
@@ -303,21 +313,31 @@ auto problem_main() -> int
 	std::vector<double> rhogas2(nx);
 
 	for (int i = 0; i < nx; ++i) {
-		int i_shift = i + nshift;
-		if (i_shift >= nx) {
-			i_shift = i_shift - nx;
+		int index_ = 0;
+		if (shift >= 0) {
+			if (i < shift) {
+				index_ = nx - shift + i;
+			} else {
+				index_ = i - shift;
+			}
+		} else {
+			if (i <= nx - 1 + shift) {
+				index_ = i - shift;
+			} else {
+				index_ = i - (nx + shift);
+			}
 		}
-		amrex::Real const x = position2[i];
-		xs2.at(i) = x;
-		const auto Erad_t = values2.at(RadSystem<PulseProblem>::radEnergy_index)[i_shift];
+		const amrex::Real x = position2[i];
+		const auto Erad_t = values2.at(RadSystem<PulseProblem>::radEnergy_index)[i];
 		const auto Trad_t = std::pow(Erad_t / a_rad, 1. / 4.);
-		const auto rho_t = values2.at(RadSystem<PulseProblem>::gasDensity_index)[i_shift];
-		const auto v_t = values2.at(RadSystem<PulseProblem>::x1GasMomentum_index)[i_shift] / rho_t;
-		const auto Egas = values2.at(RadSystem<PulseProblem>::gasInternalEnergy_index)[i_shift];
-		rhogas2.at(i) = rho_t;
-		Trad2.at(i) = Trad_t;
-		Tgas2.at(i) = quokka::EOS<PulseProblem>::ComputeTgasFromEint(rho_t, Egas);
-		Vgas2.at(i) = 1e-5 * (v_t - v0_adv);
+		const auto rho_t = values2.at(RadSystem<PulseProblem>::gasDensity_index)[i];
+		const auto v_t = values2.at(RadSystem<PulseProblem>::x1GasMomentum_index)[i] / rho_t;
+		const auto Egas = values2.at(RadSystem<PulseProblem>::gasInternalEnergy_index)[i];
+		xs2.at(i) = x - drift;
+		rhogas2.at(index_) = rho_t;
+		Trad2.at(index_) = Trad_t;
+		Tgas2.at(index_) = quokka::EOS<PulseProblem>::ComputeTgasFromEint(rho_t, Egas);
+		Vgas2.at(index_) = 1e-5 * (v_t - v0_adv);
 	}
 	// END OF PROBLEM 2
 
