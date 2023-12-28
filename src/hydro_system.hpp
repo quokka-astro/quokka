@@ -251,6 +251,8 @@ void HydroSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Re
 
 		const double signal_max = cs + vel_mag;
 		maxSignal(i, j, k) = signal_max;
+		// printf("Cs (%d, %d, %d): cs %g, vel_mag= %g\n", i, j, k, cs, vel_mag);
+		// printf("rho (%d, %d, %d)= %g, vel_mag= %g\n", i, j, k, rho, vel_mag);
 	});
 }
 

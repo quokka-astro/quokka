@@ -623,6 +623,8 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	// compute timestep due to extra physics on level 'lev'
 	const amrex::Real extra_physics_dt = computeExtraPhysicsTimestep(lev);
 
+	amrex::Print() << "hydro_dt==" << domain_signal_max <<"\n";
+	
 	// return minimum timestep
 	return std::min(hydro_dt, extra_physics_dt);
 }
