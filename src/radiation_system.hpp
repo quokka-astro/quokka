@@ -1167,9 +1167,9 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
         const auto emission = kappaPVec * fourPiB;
         const auto Ediff = emission - absorption;
         auto tot_ediff = sum(abs(Ediff));
-        if ((tot_ediff <= Erad_floor_) || (tot_ediff / (sum(absorption) + sum(emission)) < resid_tol)) {
-          break;
-        }
+        // if ((tot_ediff <= Erad_floor_) || (tot_ediff / (sum(absorption) + sum(emission)) < resid_tol)) {
+        //   break;
+        // }
 				Rvec = dt * rho * Ediff;
 				Rtot = sum(Rvec);
 				F_G = Egas_guess - Egas0 + (c / chat) * Rtot;
@@ -1220,12 +1220,32 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				AMREX_ASSERT(!deltaErad.hasnan());
 
 				// check relative and absolute convergence of E_r
-				if ((max(abs(deltaErad / Erad0Vec)) < resid_tol) || (max(abs(deltaErad)) <= Erad_floor_)) {
-					break;
-				}
+				// if ((sum(abs(deltaErad / Erad0Vec)) < 1e-7) || (sum(abs(deltaErad)) <= Erad_floor_)) {
+				// 	break;
+				// }
         // if (n > 100) {
         //   break;
         // }
+
+        // rigorously check every element of deltaErad to ensure that it is converging
+        // bool converged = true;
+        // for (int g = 0; g < nGroups_; ++g) {
+        //   if (!((std::abs(deltaErad[g] / Erad0Vec[g]) < 1e-6) || (std::abs(deltaErad[g]) <= Erad_floor_))) {
+        //     converged = false;
+        //     break;
+        //   }
+        // }
+        // if (converged) {
+        //   break;
+        // }
+
+        // if (std::abs(deltaEgas / Egas_guess) < 2e-7) {
+        //   break;
+        // }
+
+        if (n > 100) {
+          break;
+        }
 
 				EradVec_guess += deltaErad;
 				Egas_guess += deltaEgas;
