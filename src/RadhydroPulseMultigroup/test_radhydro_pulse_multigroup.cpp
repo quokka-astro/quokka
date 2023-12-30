@@ -18,10 +18,10 @@ struct PulseProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
 constexpr int isconst = 0;
-#if 1
+#if 0
 constexpr int n_groups_ = 1;
 constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{0., inf};
-#elif 1
+#elif 0
 constexpr int n_groups_ = 8;
 constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e15, 3.16e15, 1e16, 3.16e16, 1e17, 3.16e17, 1e18, 3.16e18, 1e19};
 #else

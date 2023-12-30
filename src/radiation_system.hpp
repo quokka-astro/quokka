@@ -104,7 +104,6 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static constexpr double c_hat_ = RadSystem_Traits<problem_t>::c_hat;
 	static constexpr double radiation_constant_ = RadSystem_Traits<problem_t>::radiation_constant;
 
-	static constexpr double Erad_floor_ = RadSystem_Traits<problem_t>::Erad_floor;
 	static constexpr bool compute_v_over_c_terms_ = RadSystem_Traits<problem_t>::compute_v_over_c_terms;
 
 	static constexpr int nGroups_ = Physics_Traits<problem_t>::nGroups;
@@ -116,6 +115,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 			return boundaries;
 		}
 	}();
+	static constexpr double Erad_floor_ = RadSystem_Traits<problem_t>::Erad_floor / nGroups_;
 
 	static constexpr double mean_molecular_mass_ = quokka::EOS_Traits<problem_t>::mean_molecular_mass;
 	static constexpr double boltzmann_constant_ = quokka::EOS_Traits<problem_t>::boltzmann_constant;
@@ -219,17 +219,10 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckEnergyFractions(am
 			radEnergyFractions[g] = y - previous;
 			previous = y;
 		}
-		// A hack to avoid zeros in radEnergyFractions
-		// TODO(CCH): use energy_floor
-		for (int g = 0; g < nGroups_; ++g) {
-			if (radEnergyFractions[g] < Erad_fraction_floor) {
-				radEnergyFractions[g] = Erad_fraction_floor;
-			}
-		}
     auto tote = sum(radEnergyFractions);
-    AMREX_ALWAYS_ASSERT(tote <= 1.0);
-    AMREX_ALWAYS_ASSERT(tote > 0.9999);
-		radEnergyFractions /= sum(radEnergyFractions);
+    // AMREX_ALWAYS_ASSERT(tote <= 1.0);
+    // AMREX_ALWAYS_ASSERT(tote > 0.9999);
+		radEnergyFractions /= tote;
 		return radEnergyFractions;
 	}
 }
@@ -1259,16 +1252,13 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					}
 				}
         if (Egas_guess <= 0.0) {
-          // compute T_floor from Erad_floor_
-          auto T_floor = std::pow(Erad_floor_ / a_rad, 1.0 / 4.0);
-          // C_v * rho * T
-          Egas_guess = T_floor * quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_floor, massScalars);
+          Egas_guess -= deltaEgas;
         }
 			} // END NEWTON-RAPHSON LOOP
 
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(n < maxIter, "Newton-Raphson iteration failed to converge!");
-			AMREX_ALWAYS_ASSERT(Egas_guess > 0.0);
-			AMREX_ALWAYS_ASSERT(min(EradVec_guess) >= 0.0);
+			// AMREX_ALWAYS_ASSERT(Egas_guess > 0.0);
+			// AMREX_ALWAYS_ASSERT(min(EradVec_guess) >= 0.0);
 		} // endif gamma != 1.0
 
 		// Erad_guess is the new radiation energy (excluding work term)
