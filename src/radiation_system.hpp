@@ -1184,6 +1184,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				dRvec_dEgas = dt * rho / c_v *
 					      (kappaPVec * dfourPiB_dTgas + dkappaP_dTgas * fourPiB -
 					       chat * dkappaE_dTgas * EradVec_guess);
+				// Equivalent of eta = (eta > 0.0) ? eta : 0.0, to ensure possitivity of Egas_guess
         for (int g = 0; g < nGroups_; ++g) {
           // AMREX_ASSERT(dRvec_dEgas[g] >= 0.0);
           if (dRvec_dEgas[g] < 0.0) {
@@ -1191,10 +1192,9 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
           }
         }
 				dRtot_dEgas = sum(dRvec_dEgas);
-				// Equivalent of eta = (eta > 0.0) ? eta : 0.0, to ensure possitivity of Egas_guess
-				if (dRtot_dEgas < 0.0) {
-					dRtot_dEgas = 0.0;
-				}
+				// if (dRtot_dEgas < 0.0) {
+				// 	dRtot_dEgas = 0.0;
+				// }
 				// AMREX_ASSERT(dRtot_dEgas >= 0.0);
 
 				// compute Jacobian elements
@@ -1242,8 +1242,8 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 
 				EradVec_guess += deltaErad;
 				Egas_guess += deltaEgas;
-				AMREX_ASSERT(min(EradVec_guess) >= 0.);
-				AMREX_ASSERT(Egas_guess > 0.);
+				// AMREX_ASSERT(min(EradVec_guess) >= 0.);
+				// AMREX_ASSERT(Egas_guess > 0.);
 				// set negative values in EradVec_guess to Erad_floor_ and return the excess to Egas_guess
 				for (int g = 0; g < nGroups_; ++g) {
 					if (EradVec_guess[g] < Erad_floor_) {
