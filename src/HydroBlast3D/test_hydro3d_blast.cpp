@@ -244,7 +244,8 @@ template <> void RadhydroSimulation<SedovProblem>::computeAfterEvolve(amrex::Vec
 
 	amrex::Print() << "\n";
 }
-
+template <> void RadhydroSimulation<SedovProblem>::computeBeforeTimestep()
+{}
 auto problem_main() -> int
 {
 	auto isNormalComp = [=](int n, int dim) {

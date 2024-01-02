@@ -48,6 +48,13 @@ template <> struct HydroSystem_Traits<NewProblem> {
   static constexpr double gamma = 5./3.;
   static constexpr bool reconstruct_eint = true; //Set to true - temperature
 };
+
+template <> struct quokka::EOS_Traits<NewProblem> {
+	static constexpr double gamma = 5./3.;
+	static constexpr double mean_molecular_weight = C::m_u;
+	static constexpr double boltzmann_constant = C::k_B;
+};
+
 template <> struct Physics_Traits<NewProblem> {
   static constexpr bool is_hydro_enabled = true;
   static constexpr bool is_radiation_enabled = false;
@@ -255,15 +262,14 @@ void AddSupernova(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> pro
         z0 = std::abs(zc -pz(n));
 
         if(x0<0.5*dx[0] && y0<0.5*dx[1] && z0< 0.5*dx[2] ) {
-
         state(i, j, k, HydroSystem<NewProblem>::energy_index)         +=   rho_eint_blast; 
         state(i, j, k, HydroSystem<NewProblem>::internalEnergy_index) +=    rho_eint_blast; 
         state(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+2)+=  1.e3/cell_vol;
         printf("The location of SN=%d,%d,%d\n",i, j, k);
-        printf("SN added at level=%d\n", level);
-        printf("The total number of SN gone off=%d\n", cum_sn);
-        Rpds = 14. * std::pow(state(i, j, k, HydroSystem<NewProblem>::density_index)/Const_mH, -3./7.);
-        printf("Rpds = %.2e pc\n", Rpds);
+        // printf("SN added at level=%d\n", level);
+        // printf("The total number of SN gone off=%d\n", cum_sn);
+        // Rpds = 14. * std::pow(state(i, j, k, HydroSystem<NewProblem>::density_index)/Const_mH, -3./7.);
+        // printf("Rpds = %.2e pc\n", Rpds);
         }
 			}
 		});
@@ -288,7 +294,7 @@ template <> void RadhydroSimulation<NewProblem>::computeBeforeTimestep()
   
 	if (count > 0) {
 		amrex::Print() << "\t" << count << " SNe to be exploded.\n";
-    amrex::Print() << "\t" << ks_sigma_sfr << " Expectation value.\n";
+    // amrex::Print() << "\t" << ks_sigma_sfr << " Expectation value.\n";
   }
 	// resize particle arrays
 	amrex::Array<int, 1> const lo{0};
@@ -308,7 +314,7 @@ template <> void RadhydroSimulation<NewProblem>::computeBeforeTimestep()
 		py(i) = geom[0].ProbLength(1) * amrex::Random();
 		pz(i) = geom[0].ProbLength(2) * amrex::RandomNormal(mean, stddev);
 	}
-}
+} 
 
 /*******************************************************************/
 
@@ -422,10 +428,29 @@ void RadhydroSimulation<NewProblem>::addStrangSplitSources(amrex::MultiFab &mf, 
 
 /**************************End Adding Strang Split Source Term *****************/
 
-auto problem_main() -> int {
+/**************************Begin NSCBC *****************/
 
-  // const int nvars = RadhydroSimulation<NewProblem>::nvarTotal_cc_;
-	// amrex::Vector<amrex::BCRec> boundaryConditions(nvars);
+// template <>
+// AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<Channel>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<Real> const &consVar,
+// 											     int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
+// 											     const Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
+// 											     int /*orig_comp*/)
+// {
+// 	auto [i, j, k] = iv.dim3();
+// 	amrex::Box const &box = geom.Domain();
+// 	const auto &domain_lo = box.loVect3d();
+// 	const auto &domain_hi = box.hiVect3d();
+// 	const int ilo = domain_lo[0];
+// 	const int ihi = domain_hi[0];
+
+// 	if (i < ilo || i > ihi) {
+		// NSCBC::setOutflowBoundary<Channel, FluxDir::X1, NSCBC::BoundarySide::Upper>(iv, consVar, geom, P_outflow);
+// 	}
+// }
+
+/**************************End NSCBC *****************/
+
+auto problem_main() -> int {
 
   const int ncomp_cc = Physics_Indices<NewProblem>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);

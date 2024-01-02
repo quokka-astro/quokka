@@ -227,6 +227,7 @@ template <typename problem_t>
 void HydroSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real> const &cons, array_t &maxSignal, amrex::Box const &indexRange)
 {
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		const auto press = cons(i, j, k, pressure_index);
 		const auto rho = cons(i, j, k, density_index);
 		const auto px = cons(i, j, k, x1Momentum_index);
 		const auto py = cons(i, j, k, x2Momentum_index);
@@ -245,14 +246,17 @@ void HydroSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Re
 		if constexpr (is_eos_isothermal()) {
 			cs = cs_iso_;
 		} else {
-			cs = ComputeSoundSpeed(cons, i, j, k);
+			// cs = ComputeSoundSpeed(cons, i, j, k);
+			cs =std::sqrt(1.4 * press/rho);
 		}
 		AMREX_ASSERT(cs > 0.);
 
 		const double signal_max = cs + vel_mag;
 		maxSignal(i, j, k) = signal_max;
-		// printf("Cs (%d, %d, %d): cs %g, vel_mag= %g\n", i, j, k, cs, vel_mag);
-		// printf("rho (%d, %d, %d)= %g, vel_mag= %g\n", i, j, k, rho, vel_mag);
+
+		if(std::isnan(cs)){
+		printf("Cs (%d, %d, %d): %g\n", i, j, k, cs);
+		}
 	});
 }
 
@@ -380,7 +384,7 @@ template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeSoundSpeed(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k)
     -> amrex::Real
 {
-	const auto rho = cons(i, j, k, density_index);
+	const auto rho = cons(i, j, k, energy_index);
 	const auto px = cons(i, j, k, x1Momentum_index);
 	const auto py = cons(i, j, k, x2Momentum_index);
 	const auto pz = cons(i, j, k, x3Momentum_index);
@@ -431,7 +435,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::isStateValid(am
 	// check if cons(i, j, k) is a valid state
 	const amrex::Real rho = cons(i, j, k, density_index);
 	bool isDensityPositive = (rho > 0.);
-
 	bool isMassScalarPositive = true;
 	if constexpr (nmscalars_ > 0) {
 		amrex::GpuArray<Real, nmscalars_> massScalars_ = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
@@ -457,7 +460,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::isStateValid(am
 #endif
 	// return (isDensityPositive && isPressurePositive);
 
-	return isDensityPositive && isMassScalarPositive;
+	return isDensityPositive; // && isMassScalarPositive;
 }
 
 template <typename problem_t>
@@ -484,6 +487,7 @@ void HydroSystem<problem_t>::ComputeRhsFromFluxes(amrex::MultiFab &rhs_mf, std::
 		rhs[bx](i, j, k, n) = AMREX_D_TERM((1.0 / dx[0]) * (x1Flux[bx](i, j, k, n) - x1Flux[bx](i + 1, j, k, n)),
 						   +(1.0 / dx[1]) * (x2Flux[bx](i, j, k, n) - x2Flux[bx](i, j + 1, k, n)),
 						   +(1.0 / dx[2]) * (x3Flux[bx](i, j, k, n) - x3Flux[bx](i, j, k + 1, n)));
+							
 	});
 }
 
@@ -856,6 +860,7 @@ void HydroSystem<problem_t>::AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex
 
 		// add P dV term to rhs array
 		rhs[bx](i, j, k, internalEnergy_index) += -Pgas * div_v;
+		
 	});
 }
 
