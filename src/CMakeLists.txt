@@ -11,6 +11,25 @@ if(Python_FOUND)
     link_libraries(${Python_LIBRARIES})
 endif()
 
+if(QUOKKA_OPENPMD)
+  message(STATUS "Building Quokka with OpenPMD support")
+  add_compile_definitions(QUOKKA_USE_OPENPMD)
+  set(openPMD_USE_ADIOS2 ON CACHE BOOL "") # ADIOS2 is required
+  set(openPMD_USE_HDF5 OFF CACHE BOOL "")
+  set(openPMD_USE_PYTHON OFF CACHE BOOL "")
+  set(openPMD_BUILD_TESTING OFF CACHE BOOL "")
+  set(openPMD_BUILD_EXAMPLES OFF CACHE BOOL "")
+  set(openPMD_BUILD_CLI_TOOLS OFF CACHE BOOL "")
+  set(openPMD_INSTALL OFF CACHE BOOL "")
+  add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/openPMD-api ${QuokkaCode_BINARY_DIR}/openPMD-api)
+  include_directories(${OpenPMD_INCLUDE_DIRS_RET})
+  link_libraries(openPMD::openPMD)
+  set(openPMDSources "${CMAKE_CURRENT_SOURCE_DIR}/openPMD.cpp")
+  message(STATUS "WARNING: OpenPMD plotfiles are ENABLED. Face-centered variables will only be available as cell-centered averages in plotfiles!")
+else()
+  set(openPMDSources "")
+endif()
+
 # HDF5
 find_package(HDF5 REQUIRED)
 
@@ -97,7 +116,7 @@ include(CTest)
 
 #create an object library for files that should be compiled with all test problems
 set (QuokkaObjSources "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/CloudyCooling.cpp" 
-                      "${CMAKE_CURRENT_SOURCE_DIR}/GrackleDataReader.cpp"
+                      "${CMAKE_CURRENT_SOURCE_DIR}/GrackleDataReader.cpp" "${openPMDSources}"
                       "${gamma_law_sources}")
 #we don't use it anymore because it gives issues on Cray systems
 #add_library(QuokkaObj OBJECT ${QuokkaObjSources} ${gamma_law_sources})
@@ -148,6 +167,7 @@ add_subdirectory(RadhydroShell)
 add_subdirectory(RadhydroShock)
 add_subdirectory(RadhydroShockCGS)
 add_subdirectory(RadhydroShockMultigroup)
+add_subdirectory(RadhydroUniformAdvecting)
 
 add_subdirectory(ODEIntegration)
 add_subdirectory(Cooling)
