@@ -104,8 +104,7 @@ AMRSimulation<ShockProblem>::setCustomBoundaryConditions(const amrex::IntVect &i
 							 amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec *bcr, int /*bcomp*/,
 							 int /*orig_comp*/)
 {
-  // NOLINT
-	if (!((bcr->lo(0) == amrex::BCType::ext_dir) || (bcr->hi(0) == amrex::BCType::ext_dir))) {
+	if (!((bcr->lo(0) == amrex::BCType::ext_dir) || (bcr->hi(0) == amrex::BCType::ext_dir))) { // NOLINT
 		return;
 	}
 
