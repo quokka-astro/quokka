@@ -15,7 +15,10 @@ amr.v              = 0       # verbosity in Amr
 # *****************************************************************
 amr.n_cell          = 128 4 4
 amr.max_level       = 0     # number of levels = max_level + 1
-amr.blocking_factor = 4     # grid size must be divisible by this
+amr.blocking_factor = 8     # grid size must be divisible by this
+amr.max_grid_size_x = 128
+amr.max_grid_size_y = 8 
+amr.max_grid_size_z = 8
 
 do_reflux = 0
 do_subcycle = 0
