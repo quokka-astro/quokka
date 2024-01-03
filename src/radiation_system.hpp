@@ -45,6 +45,11 @@ static constexpr double IMEX_a32 = 0.5; // 0 < IMEX_a32 <= 0.5
 // static constexpr double IMEX_a22 = 0.0;
 // static constexpr double IMEX_a32 = 0.0;
 
+// Line-search backtracking parameters
+static constexpr bool use_linesearch = true;
+static constexpr double linesearch_c = 1e-3;
+static constexpr double linesearch_rho = 0.5;
+
 // physical constants in CGS units
 static constexpr double c_light_cgs_ = C::c_light;	    // cgs
 static constexpr double radiation_constant_cgs_ = C::a_rad; // cgs
@@ -1077,7 +1082,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		for (int g = 0; g < nGroups_; ++g) {
 			Erad0Vec[g] = consPrev(i, j, k, radEnergy_index + numRadVars_ * g);
 		}
-		AMREX_ASSERT(min(Erad0Vec) >= 0.0);
+		AMREX_ALWAYS_ASSERT(min(Erad0Vec) > 0.0);
 		const double Erad0 = sum(Erad0Vec);
 
 		// load radiation energy source term
@@ -1114,7 +1119,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			Ekin0 = Egastot0 - Egas0;
 
 			AMREX_ASSERT(min(Src) >= 0.0);
-			AMREX_ASSERT(Egas0 > 0.0);
+			AMREX_ALWAYS_ASSERT(Egas0 > 0.0);
 
 			const double Etot0 = Egas0 + (c / chat) * (Erad0 + sum(Src));
 
@@ -1211,6 +1216,44 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				RadSystem<problem_t>::SolveLinearEqs(dFG_dEgas, dFG_dErad, dFR_dEgas, dFR_i_dErad_i, -F_G, -1. * F_R, deltaEgas, deltaErad);
 				AMREX_ASSERT(!std::isnan(deltaEgas));
 				AMREX_ASSERT(!deltaErad.hasnan());
+
+        // line search iteration
+        double _lambda = 1.0;
+        double f0 = 0.5 * (F_G * F_G + (c / chat) * (c / chat) * sum(F_R * F_R));
+        int l = 0;
+        for (; l < 100; ++l) {
+          if (_lambda < 1e-14) {
+            std::cout << "Linesearch failed to converge after " << l << " it. lambda = " << _lambda << ". There is no finite step size that satisfies the Wolfe conditions." << std::endl;
+            amrex::Abort();
+          }
+
+          auto Egas_guess_new = Egas_guess + _lambda * deltaEgas;
+          auto EradVec_guess_new = EradVec_guess + _lambda * deltaErad;
+          auto T_gas_new = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess_new, massScalars);
+          auto fourPiB_new = chat * ComputeThermalRadiation(T_gas_new, radBoundaries_g_copy);
+          auto kappaPVec_new = ComputePlanckOpacity(rho, T_gas_new);
+          auto kappaEVec_new = ComputeEnergyMeanOpacity(rho, T_gas_new);
+          auto absorption_new = chat * kappaEVec_new * EradVec_guess_new;
+          auto emission_new = kappaPVec_new * fourPiB_new;
+          auto Ediff_new = emission_new - absorption_new;
+          // auto tot_ediff_new = sum(abs(Ediff_new));
+          auto Rvec_new = dt * rho * Ediff_new;
+          auto Rtot_new = sum(Rvec_new);
+          auto F_G_new = Egas_guess_new - Egas0 + (c / chat) * Rtot_new;
+          auto F_R_new = EradVec_guess_new - Erad0Vec - (Rvec_new + Src);
+
+          // compute module f
+          double f = 0.5 * (F_G_new * F_G_new + (c / chat) * (c / chat) * sum(F_R_new * F_R_new));
+          if ((f <= (1.0 - 2. * linesearch_c * _lambda) * f0) && (Egas_guess + _lambda * deltaEgas > 0.0) && (min(EradVec_guess + _lambda * deltaErad) > 0.0)) {
+            break;
+          }
+
+          _lambda *= linesearch_rho;
+        }
+
+        // update deltaErad and deltaEgas
+        deltaErad *= _lambda;
+        deltaEgas *= _lambda;
 
 				// check relative and absolute convergence of E_r
 				// if ((sum(abs(deltaErad / Erad0Vec)) < 1e-7) || (sum(abs(deltaErad)) <= Erad_floor_)) {
