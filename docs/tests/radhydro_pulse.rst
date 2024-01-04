@@ -7,8 +7,8 @@ This test demonstrates the code’s ability to deal with the relativistic
 correction source terms that arise from the mixed frame formulation of
 the RHD moment equations, in a fully-coupled RHD problem. The problems
 involve the advection of the a pulse of radiation energy in an optically
-thick (:math:`\tau \gg 1`) gas in both static (:math:`\beta \tau \gg 1`)
-and dynamic (:math:`\beta \tau \ll 1`) diffusion regimes, with a uniform
+thick (:math:`\tau \gg 1`) gas in both static (:math:`\beta \tau \ll 1`)
+and dynamic (:math:`\beta \tau \gg 1`) diffusion regimes, with a uniform
 background flow velocity :cite:`Krumholz_2007`.
 
 Parameters
