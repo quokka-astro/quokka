@@ -1700,17 +1700,14 @@ void RadhydroSimulation<problem_t>::operatorSplitSourceTerms(amrex::Array4<amrex
 {
 	amrex::FArrayBox radEnergySource(indexRange, Physics_Traits<problem_t>::nGroups,
 					 amrex::The_Async_Arena()); // cell-centered scalar
-	amrex::FArrayBox advectionFluxes(indexRange, 3 * Physics_Traits<problem_t>::nGroups,
-					 amrex::The_Async_Arena()); // cell-centered vector
 
 	radEnergySource.setVal<amrex::RunOn::Device>(0.);
-	advectionFluxes.setVal<amrex::RunOn::Device>(0.);
 
 	// cell-centered radiation energy source
 	RadSystem<problem_t>::SetRadEnergySource(radEnergySource.array(), indexRange, dx, prob_lo, prob_hi, time + dt);
 
 	// cell-centered source terms
-	RadSystem<problem_t>::AddSourceTerms(stateNew, radEnergySource.const_array(), advectionFluxes.const_array(), indexRange, dt, stage);
+	RadSystem<problem_t>::AddSourceTerms(stateNew, radEnergySource.const_array(), indexRange, dt, stage);
 }
 
 template <typename problem_t>
