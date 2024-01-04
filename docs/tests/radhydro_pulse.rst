@@ -9,7 +9,7 @@ the RHD moment equations, in a fully-coupled RHD problem. The problems
 involve the advection of the a pulse of radiation energy in an optically
 thick (:math:`\tau \gg 1`) gas in both static (:math:`\beta \tau \gg 1`)
 and dynamic (:math:`\beta \tau \ll 1`) diffusion regimes, with a uniform
-background flow velocity Krumholz+07.
+background flow velocity :cite:`Krumholz_2007`.
 
 Parameters
 ----------
@@ -51,33 +51,33 @@ Results
 Static diffusion regime:
 
 .. figure:: attach/radhydro_pulse_temperature-1.png
-   :alt: radhydro_pulse_temperature-1
+   :alt: radhydro_pulse_temperature-static-diffusion
 
-   radhydro_pulse_temperature-1
+   radhydro_pulse_temperature-static-diffusion
 
 .. figure:: attach/radhydro_pulse_density-1.png
-   :alt: radhydro_pulse_density-1
+   :alt: radhydro_pulse_density-static-diffusion
 
-   radhydro_pulse_density-1
+   radhydro_pulse_density-static-diffusion
 
 .. figure:: attach/radhydro_pulse_velocity-1.png
-   :alt: radhydro_pulse_velocity-1
+   :alt: radhydro_pulse_velocity-static-diffusion
 
-   radhydro_pulse_velocity-1
+   radhydro_pulse_velocity-static-diffusion
 
 Dynamic diffusion regime:
 
 .. figure:: attach/radhydro_pulse_temperature.png
-   :alt: radhydro_pulse_temperature
+   :alt: radhydro_pulse_temperature-dynamic-diffusion
 
-   radhydro_pulse_temperature
+   radhydro_pulse_temperature-dynamic-diffusion
 
 .. figure:: attach/radhydro_pulse_density.png
-   :alt: radhydro_pulse_density
+   :alt: radhydro_pulse_density-dynamic-diffusion
 
-   radhydro_pulse_density
+   radhydro_pulse_density-dynamic-diffusion
 
 .. figure:: attach/radhydro_pulse_velocity.png
-   :alt: radhydro_pulse_velocity
+   :alt: radhydro_pulse_velocity-dynamic-diffusion
 
-   radhydro_pulse_velocity
+   radhydro_pulse_velocity-dynamic-diffusion

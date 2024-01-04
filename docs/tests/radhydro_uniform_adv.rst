@@ -28,13 +28,28 @@ Results
 
 With :math:`O(\beta \tau)` terms:
 
-|radhydro_uniform_advecting_temperature|
-|radhydro_uniform_advecting_velocity|
+.. figure:: attach/radhydro_uniform_advecting_temperature.png
+    :alt: A figure showing the radiation temperature and material temperature as a function of time.
+
+    The radiation temperature and matter temperatures, along with the exact solution.
+
+.. figure:: attach/radhydro_uniform_advecting_velocity.png
+    :alt: A figure showing the radiation velocity and material velocity as a function of time.
+
+    The matter velocity, along with the exact solution.
 
 Without :math:`O(\beta \tau)` terms:
 
-|radhydro_uniform_advecting_temperature-nobeta|
-|radhydro_uniform_advecting_velocity-nobeta|
+.. figure:: attach/radhydro_uniform_advecting_temperature-nobeta.png
+    :alt: A figure showing the radiation temperature and material temperature as a function of time.
+
+    The radiation temperature and matter temperatures, along with the exact solution.
+
+.. figure:: attach/radhydro_uniform_advecting_velocity-nobeta.png
+    :alt: A figure showing the radiation velocity and material velocity as a function of time.
+
+    The matter velocity, along with the exact solution.
+
 
 Physics
 -------
