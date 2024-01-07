@@ -826,6 +826,104 @@ AMREX_GPU_DEVICE void RadSystem<problem_t>::ComputeRadPressure(TARRAY &F, double
 }
 
 template <typename problem_t>
+template <FluxDir DIR, typename TARRAY>
+AMREX_GPU_DEVICE void RadSystem<problem_t>::ComputeRadPressure(TARRAY &F, double &S, const double erad, const double Fx, const double Fy, const double Fz,
+							       const double fx, const double fy, const double fz)
+{
+	// check that states are physically admissible
+	AMREX_ASSERT(erad > 0.0);
+	// AMREX_ASSERT(f < 1.0); // there is sometimes a small (<1%) flux
+	// limiting violation when using P1 AMREX_ASSERT(f_R < 1.0);
+
+	auto f = std::sqrt(fx * fx + fy * fy + fz * fz);
+	std::array<amrex::Real, 3> fvec = {fx, fy, fz};
+
+	// angle between interface and radiation flux \hat{n}
+	// If direction is undefined, just drop direction-dependent
+	// terms.
+	std::array<amrex::Real, 3> n{};
+
+	for (int ii = 0; ii < 3; ++ii) {
+		n[ii] = (f > 0.) ? (fvec[ii] / f) : 0.;
+	}
+
+	// compute radiation pressure tensors
+	const double chi = RadSystem<problem_t>::ComputeEddingtonFactor(f);
+
+	AMREX_ASSERT((chi >= 1. / 3.) && (chi <= 1.0)); // NOLINT
+
+	// diagonal term of Eddington tensor
+	const double Tdiag = (1.0 - chi) / 2.0;
+
+	// anisotropic term of Eddington tensor (in the direction of the
+	// rad. flux)
+	const double Tf = (3.0 * chi - 1.0) / 2.0;
+
+	// assemble Eddington tensor
+	std::array<std::array<double, 3>, 3> T{};
+	std::array<std::array<double, 3>, 3> P{};
+
+	for (int ii = 0; ii < 3; ++ii) {
+		for (int jj = 0; jj < 3; ++jj) {
+			const double delta_ij = (ii == jj) ? 1 : 0;
+			T[ii][jj] = Tdiag * delta_ij + Tf * (n[ii] * n[jj]);
+			// compute the elements of the total radiation pressure
+			// tensor
+			P[ii][jj] = T[ii][jj] * erad;
+		}
+	}
+
+	// frozen Eddington tensor approximation, following Balsara
+	// (1999) [JQSRT Vol. 61, No. 5, pp. 617–627, 1999], Eq. 46.
+	double Tnormal = NAN;
+	if constexpr (DIR == FluxDir::X1) {
+		Tnormal = T[0][0];
+	} else if constexpr (DIR == FluxDir::X2) {
+		Tnormal = T[1][1];
+	} else if constexpr (DIR == FluxDir::X3) {
+		Tnormal = T[2][2];
+	}
+
+	// compute fluxes F_L, F_R
+	// P_nx, P_ny, P_nz indicate components where 'n' is the direction of the
+	// face normal F_n is the radiation flux component in the direction of the
+	// face normal
+	double Fn = NAN;
+	double Pnx = NAN;
+	double Pny = NAN;
+	double Pnz = NAN;
+
+	if constexpr (DIR == FluxDir::X1) {
+		Fn = Fx;
+
+		Pnx = P[0][0];
+		Pny = P[0][1];
+		Pnz = P[0][2];
+	} else if constexpr (DIR == FluxDir::X2) {
+		Fn = Fy;
+
+		Pnx = P[1][0];
+		Pny = P[1][1];
+		Pnz = P[1][2];
+	} else if constexpr (DIR == FluxDir::X3) {
+		Fn = Fz;
+
+		Pnx = P[2][0];
+		Pny = P[2][1];
+		Pnz = P[2][2];
+	}
+
+	AMREX_ASSERT(Fn != NAN);
+	AMREX_ASSERT(Pnx != NAN);
+	AMREX_ASSERT(Pny != NAN);
+	AMREX_ASSERT(Pnz != NAN);
+
+	F = {Fn, Pnx, Pny, Pnz};
+
+	S = std::max(0.1, std::sqrt(Tnormal));
+}
+
+template <typename problem_t>
 template <FluxDir DIR>
 void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiffusive_in, amrex::Array4<const amrex::Real> const &x1LeftState_in,
 					 amrex::Array4<const amrex::Real> const &x1RightState_in, amrex::Box const &indexRange, arrayconst_t &consVar_in,
@@ -1317,6 +1415,8 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		amrex::GpuArray<amrex::Real, 3> Frad_t0{};
 		amrex::GpuArray<amrex::Real, 3> Frad_t1{};
 		amrex::GpuArray<amrex::Real, 3> dMomentum{0., 0., 0.};
+		std::array<double, 3> gasMtm{};
+		double realFourPiB = NAN;
 
 		T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
 		auto realFourPiB = c * ComputeThermalRadiation(T_gas, radBoundaries_g_copy);

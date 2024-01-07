@@ -244,6 +244,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto integrate_planck_from_0_to_x(const
 	if (logx < LOG_X_MIN) {
 		// y = x * x * x / 3.0;    // 1st order
 		y = (-4 + x) * x + 8 * std::log((2 + x) / 2); // 2nd order
+		// Y_INTERP_MIN is the minimum value returned from interpolate_planck_integral. To ensure y is monotonic with respect to x:
 		// AMREX_ASSERT(y <= Y_INTERP_MIN);
     if (y > Y_INTERP_MIN) {
       y = Y_INTERP_MIN;
