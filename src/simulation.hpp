@@ -338,9 +338,9 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	// tracer particles
 #ifdef AMREX_PARTICLES
-    void InitParticles(); // create tracer particles
-    int do_tracers = 0;
-    std::unique_ptr<amrex::AmrTracerParticleContainer> TracerPC;
+	void InitParticles(); // create tracer particles
+	int do_tracers = 0;
+	std::unique_ptr<amrex::AmrTracerParticleContainer> TracerPC;
 #endif
 
 	// external objects
@@ -576,9 +576,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 		AverageDown();
 
 #ifdef AMREX_PARTICLES
-        if (do_tracers) {
-            InitParticles();
-        }
+		if (do_tracers) {
+			InitParticles();
+		}
 #endif
 
 		if (checkpointInterval_ > 0) {
@@ -991,9 +991,9 @@ template <typename problem_t> auto AMRSimulation<problem_t>::timeStepWithSubcycl
 
 #ifdef AMREX_PARTICLES
 				// redistribute particles
-                if (do_tracers) {
-                    TracerPC->Redistribute(lev);
-                }
+				if (do_tracers) {
+					TracerPC->Redistribute(lev);
+				}
 #endif
 
 				// do fix-up on all levels that have been re-gridded
@@ -1121,17 +1121,17 @@ template <typename problem_t> auto AMRSimulation<problem_t>::timeStepWithSubcycl
 
 #ifdef AMREX_PARTICLES
 	// redistribute particles
-    if (do_tracers) {
-        int redistribute_ngrow = 0;
-        if ((iteration < nsubsteps[lev]) || (lev == 0)){
-            if (lev == 0){
-                redistribute_ngrow = 0;
-            } else {
-                redistribute_ngrow = iteration;
-            }
-            TracerPC->Redistribute(lev, TracerPC->finestLevel(), redistribute_ngrow);
-        }
-    }
+	if (do_tracers) {
+		int redistribute_ngrow = 0;
+		if ((iteration < nsubsteps[lev]) || (lev == 0)) {
+			if (lev == 0) {
+				redistribute_ngrow = 0;
+			} else {
+				redistribute_ngrow = iteration;
+			}
+			TracerPC->Redistribute(lev, TracerPC->finestLevel(), redistribute_ngrow);
+		}
+	}
 #endif
 
 	return stepsLeft;
@@ -1680,17 +1680,16 @@ template <typename problem_t> void AMRSimulation<problem_t>::AverageDownTo(int c
 #ifdef AMREX_PARTICLES
 template <typename problem_t> void AMRSimulation<problem_t>::InitParticles()
 {
-  if (do_tracers)
-    {
-      AMREX_ASSERT(TracerPC == nullptr);
-      TracerPC = std::make_unique<AmrTracerParticleContainer>(this);
+	if (do_tracers) {
+		AMREX_ASSERT(TracerPC == nullptr);
+		TracerPC = std::make_unique<AmrTracerParticleContainer>(this);
 
-      AmrTracerParticleContainer::ParticleInitData pdata = {{AMREX_D_DECL(0.0, 0.0, 0.0)},{},{},{}};
+		AmrTracerParticleContainer::ParticleInitData pdata = {{AMREX_D_DECL(0.0, 0.0, 0.0)}, {}, {}, {}};
 
-      TracerPC->SetVerbose(0);
-      TracerPC->InitOnePerCell(0.5, 0.5, 0.5, pdata);
-      TracerPC->Redistribute();
-    }
+		TracerPC->SetVerbose(0);
+		TracerPC->InitOnePerCell(0.5, 0.5, 0.5, pdata);
+		TracerPC->Redistribute();
+	}
 }
 #endif
 
@@ -1914,9 +1913,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 	WriteMetadataFile(plotfilename + "/metadata.yaml");
 #ifdef AMREX_PARTICLES
 	// write particles
-    if (do_tracers) {
-            TracerPC->WritePlotFile(plotfilename, "particles");
-    }
+	if (do_tracers) {
+		TracerPC->WritePlotFile(plotfilename, "particles");
+	}
 #endif // AMREX_PARTICLES
 #endif
 }
@@ -2241,9 +2240,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile
 
 	// write particle data
 #ifdef AMREX_PARTICLES
-    if (do_tracers) {
-        TracerPC->Checkpoint(checkpointname, "particles", true);
-    }
+	if (do_tracers) {
+		TracerPC->Checkpoint(checkpointname, "particles", true);
+	}
 #endif
 
 	// create symlink and point it at this checkpoint dir
@@ -2402,11 +2401,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 
 #ifdef AMREX_PARTICLES
 	// read particle data
-    if (do_tracers) {
-        AMREX_ASSERT(TracerPC == nullptr);
-        TracerPC = std::make_unique<AmrTracerParticleContainer>(this);
-        TracerPC->Restart(restart_chkfile, "particles");
-    }
+	if (do_tracers) {
+		AMREX_ASSERT(TracerPC == nullptr);
+		TracerPC = std::make_unique<AmrTracerParticleContainer>(this);
+		TracerPC->Restart(restart_chkfile, "particles");
+	}
 #endif
 
 	areInitialConditionsDefined_ = true;
