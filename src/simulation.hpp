@@ -581,7 +581,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 		AverageDown();
 
 #ifdef AMREX_PARTICLES
-		if (do_tracers) {
+		if (do_tracers == 1) {
 			InitParticles();
 		}
 #endif
@@ -995,7 +995,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 
 #ifdef AMREX_PARTICLES
 				// redistribute particles
-				if (do_tracers) {
+				if (do_tracers == 1) {
 					TracerPC->Redistribute(lev);
 				}
 #endif
@@ -1057,7 +1057,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 
 #ifdef AMREX_PARTICLES
 	// redistribute particles
-	if (do_tracers) {
+	if (do_tracers == 1) {
 		int redistribute_ngrow = 0;
 		if ((iteration < nsubsteps[lev]) || (lev == 0)) {
 			if (lev == 0) {
@@ -1614,11 +1614,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::AverageDownTo(int c
 #ifdef AMREX_PARTICLES
 template <typename problem_t> void AMRSimulation<problem_t>::InitParticles()
 {
-	if (do_tracers) {
+	if (do_tracers == 1) {
 		AMREX_ASSERT(TracerPC == nullptr);
 		TracerPC = std::make_unique<amrex::AmrTracerParticleContainer>(this);
 
-		amrex::AmrTracerParticleContainer::ParticleInitData pdata = {{AMREX_D_DECL(0.0, 0.0, 0.0)}, {}, {}, {}};
+		const amrex::AmrTracerParticleContainer::ParticleInitData pdata = {{AMREX_D_DECL(0.0, 0.0, 0.0)}, {}, {}, {}};
 
 		TracerPC->SetVerbose(0);
 		TracerPC->InitOnePerCell(0.5, 0.5, 0.5, pdata);
@@ -1847,7 +1847,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 	WriteMetadataFile(plotfilename + "/metadata.yaml");
 #ifdef AMREX_PARTICLES
 	// write particles
-	if (do_tracers) {
+	if (do_tracers == 1) {
 		TracerPC->WritePlotFile(plotfilename, "particles");
 	}
 #endif // AMREX_PARTICLES
@@ -2174,7 +2174,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile
 
 	// write particle data
 #ifdef AMREX_PARTICLES
-	if (do_tracers) {
+	if (do_tracers == 1) {
 		TracerPC->Checkpoint(checkpointname, "particles", true);
 	}
 #endif
@@ -2335,7 +2335,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 
 #ifdef AMREX_PARTICLES
 	// read particle data
-	if (do_tracers) {
+	if (do_tracers == 1) {
 		AMREX_ASSERT(TracerPC == nullptr);
 		TracerPC = std::make_unique<amrex::AmrTracerParticleContainer>(this);
 		TracerPC->Restart(restart_chkfile, "particles");
