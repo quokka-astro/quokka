@@ -667,7 +667,7 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::advanceSingleT
 	// (N.B. This must be done here because momentum source terms
 	//  would otherwise need to be manually applied to tracer particles.)
 #ifdef AMREX_PARTICLES
-    if (do_tracers != 0) {
+	if (do_tracers != 0) {
 		// compute face-centered velocities from state_new_cc_[lev]
 		const int ncomp_vel = 3;
 		const int nghost_vel = 1;
@@ -686,13 +686,13 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::advanceSingleT
 			vel[bx](i, j, k, 2) = vz;
 		});
 		amrex::Gpu::streamSynchronizeAll();
-		
+
 		// fill ghost velocity cells
 		vel_mf.FillBoundary(geom[lev].periodicity());
-	
+
 		// advect particles with cell-centered velocities
-        TracerPC->AdvectWithUcc(vel_mf, lev, dt_lev);
-    }
+		TracerPC->AdvectWithUcc(vel_mf, lev, dt_lev);
+	}
 #endif
 
 	// check state validity
