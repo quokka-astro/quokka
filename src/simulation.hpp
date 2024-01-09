@@ -72,6 +72,11 @@ namespace filesystem = experimental::filesystem;
 #include <fmt/core.h>
 #include <yaml-cpp/yaml.h>
 
+#ifdef AMREX_PARTICLES
+#include <AMReX_AmrParticles.H>
+#include <AMReX_Particles.H>
+#endif
+
 #if AMREX_SPACEDIM == 3
 #include "AMReX_OpenBC.H"
 #endif
@@ -252,7 +257,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 		     quokka::direction dir);
 	void AverageDown();
 	void AverageDownTo(int crse_lev);
-	auto timeStepWithSubcycling(int lev, amrex::Real time, bool coarseTimeBoundary, int stepsLeft) -> int;
+	void timeStepWithSubcycling(int lev, amrex::Real time, int iteration);
 	void ellipticSolveAllLevels(amrex::Real dt);
 
 	void incrementFluxRegisters(amrex::MFIter &mfi, amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine,
@@ -784,10 +789,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		computeTimestep();
 
 		// hyperbolic advance over all levels
-		int lev = 0;	   // coarsest level
-		int stepsLeft = 1; // coarsest level is advanced one step
-		bool coarseTimeBoundary = true;
-		timeStepWithSubcycling(lev, cur_time, coarseTimeBoundary, stepsLeft);
+		int lev = 0;	  			// coarsest level
+        const int iteration = 1;	// this is the first call to advance level 'lev'
+		timeStepWithSubcycling(lev, cur_time, iteration);
 
 		// elliptic solve over entire AMR grid (post-timestep)
 		ellipticSolveAllLevels(dt_[0]);
@@ -955,7 +959,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ellipticSolveAllLev
 
 // N.B.: This function actually works for subcycled or not subcycled, as long as
 // nsubsteps[lev] is set correctly.
-template <typename problem_t> auto AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time, bool coarseTimeBoundary, int stepsLeft) -> int
+template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time, int iteration)
 {
 	BL_PROFILE("AMRSimulation::timeStepWithSubcycling()");
 
@@ -1004,67 +1008,6 @@ template <typename problem_t> auto AMRSimulation<problem_t>::timeStepWithSubcycl
 		}
 	}
 
-	/// "additional AMR subcycling" code borrowed from Chombo:
-	stepsLeft--;
-
-#if 0
-  // If this wasn't just done by the next coarser level, check to see if
-  // it is necessary to do additional subcycling in time.
-  if ((!coarseTimeBoundary) && (constantDt_ <= 0)) {
-
-    // The factor by which the current time step at the current level
-    // has been divided (so far) for subcycling.
-    int maxFactorSublevels = reductionFactor_[lev];
-
-    // Compute the new subcycling factor for this level and all finer
-    // levels and find the maximum
-    for (int i = lev; i <= finest_level; i++) {
-      amrex::Real dtCFL = computeTimestepAtLevel(i);
-      amrex::Real dtCur = dt_[i];
-
-      // The current factor for level "i"
-      int factor = reductionFactor_[i];
-
-      // While the current dt exceeds the CFL-limited dt by a tolerance,
-      // double the subcycling factor and halve the current dt
-      while (dtCur > dtToleranceFactor_ * dtCFL) {
-        factor *= 2;
-        dtCur *= 0.5;
-      }
-
-      if (factor > maxFactorSublevels) {
-        maxFactorSublevels = factor;
-      }
-    }
-
-    // More subcycling is necessary
-    if (maxFactorSublevels > reductionFactor_[lev]) {
-      if (verbose) {
-        amrex::Print() << "\tSubcycling --- maxFactorSublevels: "
-                       << maxFactorSublevels << std::endl;
-      }
-
-      // Adjust the number of time steps left for the current level
-      stepsLeft =
-          (stepsLeft + 1) * maxFactorSublevels / reductionFactor_[lev] - 1;
-
-      // Adjust the dt's on this and all finer levels
-      for (int i = lev; i <= finest_level; i++) {
-        const int divisor = maxFactorSublevels / reductionFactor_[i];
-        dt_[i] /= static_cast<amrex::Real>(divisor);
-
-        if (verbose) {
-          amrex::Print() << "\t\tLevel " << i << ": factor: " << divisor << " ("
-                         << reductionFactor_[i] << "), "
-                         << "dt: " << dt_[i] << std::endl;
-        }
-
-        reductionFactor_[i] = maxFactorSublevels;
-      }
-    }
-  }
-#endif
-
 	if (Verbose()) {
 		amrex::Print() << "[Level " << lev << " step " << istep[lev] + 1 << "] ";
 		amrex::Print() << "ADVANCE with time = " << tNew_[lev] << " dt = " << dt_[lev] << std::endl;
@@ -1091,19 +1034,12 @@ template <typename problem_t> auto AMRSimulation<problem_t>::timeStepWithSubcycl
 	// advance finer levels
 
 	if (lev < finest_level) {
-		int r_iteration = 1;
-		int r_stepsLeft = nsubsteps[lev + 1]; // nominal number of substeps, may change inside
-						      // recursive calls to timeStepWithSubcycling
-		bool r_timeBoundary = true;
 
 		// recursive call for next-finer level
-		while (r_stepsLeft > 0) {
+        for (int i = 1; i <= nsubsteps[lev+1]; ++i) {
 			if (lev < finest_level) { // this may change during a regrid!
-				r_stepsLeft = timeStepWithSubcycling(lev + 1, time + (r_iteration - 1) * dt_[lev + 1], r_timeBoundary, r_stepsLeft);
-				r_iteration++;
+				timeStepWithSubcycling(lev + 1, time + (i - 1) * dt_[lev + 1], i);
 			}
-			// the next (and subsequent) subcycles are not at a time boundary
-			r_timeBoundary = false;
 		}
 
 		// do post-timestep operations
@@ -1133,8 +1069,6 @@ template <typename problem_t> auto AMRSimulation<problem_t>::timeStepWithSubcycl
 		}
 	}
 #endif
-
-	return stepsLeft;
 }
 
 template <typename problem_t>
@@ -1682,9 +1616,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitParticles()
 {
 	if (do_tracers) {
 		AMREX_ASSERT(TracerPC == nullptr);
-		TracerPC = std::make_unique<AmrTracerParticleContainer>(this);
+		TracerPC = std::make_unique<amrex::AmrTracerParticleContainer>(this);
 
-		AmrTracerParticleContainer::ParticleInitData pdata = {{AMREX_D_DECL(0.0, 0.0, 0.0)}, {}, {}, {}};
+		amrex::AmrTracerParticleContainer::ParticleInitData pdata = {{AMREX_D_DECL(0.0, 0.0, 0.0)}, {}, {}, {}};
 
 		TracerPC->SetVerbose(0);
 		TracerPC->InitOnePerCell(0.5, 0.5, 0.5, pdata);
@@ -2403,7 +2337,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 	// read particle data
 	if (do_tracers) {
 		AMREX_ASSERT(TracerPC == nullptr);
-		TracerPC = std::make_unique<AmrTracerParticleContainer>(this);
+		TracerPC = std::make_unique<amrex::AmrTracerParticleContainer>(this);
 		TracerPC->Restart(restart_chkfile, "particles");
 	}
 #endif
