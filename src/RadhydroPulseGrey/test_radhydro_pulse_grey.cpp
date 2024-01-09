@@ -30,7 +30,7 @@ constexpr double mu = 2.33 * C::m_u;
 constexpr double k_B = C::k_B;
 constexpr double initial_time = 0.0;
 constexpr double max_time = 4.8e-5;
-constexpr double v0 = 0.;      // non-advecting pulse
+constexpr double v0 = 0.; // non-advecting pulse
 // constexpr double v0 = 1.0e6; // advecting pulse, v0 = 2.0 * width / max_time;
 
 template <> struct quokka::EOS_Traits<PulseProblem> {
@@ -76,45 +76,45 @@ auto compute_exact_rho(const double x) -> double
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
 {
-  if constexpr (isnew) {
-    double sigma = 3063.96 * std::pow(Tgas / T0, -3.5);
-    quokka::valarray<double, nGroups_> kappaPVec{};
-    kappaPVec.fillin(sigma / rho);
-    return kappaPVec;
-  } else {
-    quokka::valarray<double, nGroups_> kappaPVec{};
-    auto kappa = kappa0;
-    kappaPVec.fillin(kappa);
-    return kappaPVec;
-  }
+	if constexpr (isnew) {
+		double sigma = 3063.96 * std::pow(Tgas / T0, -3.5);
+		quokka::valarray<double, nGroups_> kappaPVec{};
+		kappaPVec.fillin(sigma / rho);
+		return kappaPVec;
+	} else {
+		quokka::valarray<double, nGroups_> kappaPVec{};
+		auto kappa = kappa0;
+		kappaPVec.fillin(kappa);
+		return kappaPVec;
+	}
 }
 
 template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
 {
-  if constexpr (isnew) {
-    double sigma = 101.248 * std::pow(Tgas / T0, -3.5);
-    quokka::valarray<double, nGroups_> kappaPVec{};
-    kappaPVec.fillin(sigma / rho);
-    return kappaPVec;
-  } else {
-    return ComputePlanckOpacity(rho, Tgas);
-  }
+	if constexpr (isnew) {
+		double sigma = 101.248 * std::pow(Tgas / T0, -3.5);
+		quokka::valarray<double, nGroups_> kappaPVec{};
+		kappaPVec.fillin(sigma / rho);
+		return kappaPVec;
+	} else {
+		return ComputePlanckOpacity(rho, Tgas);
+	}
 }
 
 template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacityTempDerivative(const double rho, const double Tgas)
     -> quokka::valarray<double, nGroups_>
 {
-  if constexpr (isnew) {
-    auto kappa = ComputePlanckOpacity(rho, Tgas);
-    auto opacity_deriv = -3.5 * kappa / Tgas;
-    return opacity_deriv;
-  } else {
-    quokka::valarray<double, nGroups_> opacity_deriv{};
-    opacity_deriv.fillin(0.0);
-    return opacity_deriv;
-  }
+	if constexpr (isnew) {
+		auto kappa = ComputePlanckOpacity(rho, Tgas);
+		auto opacity_deriv = -3.5 * kappa / Tgas;
+		return opacity_deriv;
+	} else {
+		quokka::valarray<double, nGroups_> opacity_deriv{};
+		opacity_deriv.fillin(0.0);
+		return opacity_deriv;
+	}
 }
 
 template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<PulseProblem>::ComputeEddingtonFactor(double /*f*/) -> double
@@ -138,7 +138,7 @@ template <> void RadhydroSimulation<PulseProblem>::setInitialConditionsOnGrid(qu
 		amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
 		const double Trad = compute_initial_Tgas(x - x0);
 		double Erad = a_rad * std::pow(Trad, 4);
-    Erad = std::max(Erad, erad_floor);
+		Erad = std::max(Erad, erad_floor);
 		const double rho = compute_exact_rho(x - x0);
 		const double Egas = quokka::EOS<PulseProblem>::ComputeEintFromTgas(rho, Trad);
 
@@ -260,7 +260,7 @@ auto problem_main() -> int
 
 #ifdef HAVE_PYTHON
 	// plot temperature
-  std::string t_str = fmt::format("t{:.5g}", initial_time + sim.tNew_[0]);
+	std::string t_str = fmt::format("t{:.5g}", initial_time + sim.tNew_[0]);
 	matplotlibcpp::clf();
 	std::map<std::string, std::string> Trad_args;
 	std::map<std::string, std::string> Tgas_args;
