@@ -336,6 +336,13 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Long cellUpdates_ = 0;
 	amrex::Vector<amrex::Long> cellUpdatesEachLevel_;
 
+	// tracer particles
+#ifdef AMREX_PARTICLES
+    void InitParticles(); // create tracer particles
+    int do_tracers = 0;
+    std::unique_ptr<amrex::AmrTracerParticleContainer> TracerPC;
+#endif
+
 	// external objects
 #ifdef AMREX_USE_ASCENT
 	Ascent ascent_;
@@ -567,6 +574,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 		const amrex::Real time = 0.0;
 		InitFromScratch(time);
 		AverageDown();
+
+#ifdef AMREX_PARTICLES
+        if (do_tracers) {
+            InitParticles();
+        }
+#endif
 
 		if (checkpointInterval_ > 0) {
 			WriteCheckpointFile();
@@ -976,6 +989,13 @@ template <typename problem_t> auto AMRSimulation<problem_t>::timeStepWithSubcycl
 					}
 				}
 
+#ifdef AMREX_PARTICLES
+				// redistribute particles
+                if (do_tracers) {
+                    TracerPC->Redistribute(lev);
+                }
+#endif
+
 				// do fix-up on all levels that have been re-gridded
 				for (int k = lev; k <= finest_level; ++k) {
 					FixupState(k);
@@ -1057,6 +1077,8 @@ template <typename problem_t> auto AMRSimulation<problem_t>::timeStepWithSubcycl
 	// do hyperbolic advance over all levels
 	advanceSingleTimestepAtLevel(lev, time, dt_[lev], nsubsteps[lev]);
 
+	// TODO(bwibking): advect tracer particles here
+
 	++istep[lev];
 	cellUpdates_ += CountCells(lev); // keep track of total number of cell updates
 	cellUpdatesEachLevel_[lev] += CountCells(lev);
@@ -1096,6 +1118,21 @@ template <typename problem_t> auto AMRSimulation<problem_t>::timeStepWithSubcycl
 
 		fillpatcher_[lev + 1].reset(); // because the data on lev have changed.
 	}
+
+#ifdef AMREX_PARTICLES
+	// redistribute particles
+    if (do_tracers) {
+        int redistribute_ngrow = 0;
+        if ((iteration < nsubsteps[lev]) || (lev == 0)){
+            if (lev == 0){
+                redistribute_ngrow = 0;
+            } else {
+                redistribute_ngrow = iteration;
+            }
+            TracerPC->Redistribute(lev, TracerPC->finestLevel(), redistribute_ngrow);
+        }
+    }
+#endif
 
 	return stepsLeft;
 }
@@ -1640,6 +1677,23 @@ template <typename problem_t> void AMRSimulation<problem_t>::AverageDownTo(int c
 	}
 }
 
+#ifdef AMREX_PARTICLES
+template <typename problem_t> void AMRSimulation<problem_t>::InitParticles()
+{
+  if (do_tracers)
+    {
+      AMREX_ASSERT(TracerPC == nullptr);
+      TracerPC = std::make_unique<AmrTracerParticleContainer>(this);
+
+      AmrTracerParticleContainer::ParticleInitData pdata = {{AMREX_D_DECL(0.0, 0.0, 0.0)},{},{},{}};
+
+      TracerPC->SetVerbose(0);
+      TracerPC->InitOnePerCell(0.5, 0.5, 0.5, pdata);
+      TracerPC->Redistribute();
+    }
+}
+#endif
+
 // get plotfile name
 template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileName(int lev) const -> std::string { return amrex::Concatenate(plot_file, lev, 5); }
 
@@ -1852,11 +1906,18 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 	amrex::Print() << "Writing plotfile " << plotfilename << "\n";
 
 #ifdef QUOKKA_USE_OPENPMD
+	// TODO(bwibking): write particles using openPMD
 	quokka::OpenPMDOutput::WriteFile(varnames, finest_level + 1, mf_ptr, Geom(), plot_file, tNew_[0], istep[0]);
 	WriteMetadataFile(plotfilename + ".yaml");
 #else
 	amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, mf_ptr, varnames, Geom(), tNew_[0], istep, refRatio());
 	WriteMetadataFile(plotfilename + "/metadata.yaml");
+#ifdef AMREX_PARTICLES
+	// write particles
+    if (do_tracers) {
+            TracerPC->WritePlotFile(plotfilename, "particles");
+    }
+#endif // AMREX_PARTICLES
 #endif
 }
 
@@ -2178,6 +2239,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile
 		}
 	}
 
+	// write particle data
+#ifdef AMREX_PARTICLES
+    if (do_tracers) {
+        TracerPC->Checkpoint(checkpointname, "particles", true);
+    }
+#endif
+
 	// create symlink and point it at this checkpoint dir
 	SetLastCheckpointSymlink(checkpointname);
 }
@@ -2331,6 +2399,16 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 			}
 		}
 	}
+
+#ifdef AMREX_PARTICLES
+	// read particle data
+    if (do_tracers) {
+        AMREX_ASSERT(TracerPC == nullptr);
+        TracerPC = std::make_unique<AmrTracerParticleContainer>(this);
+        TracerPC->Restart(restart_chkfile, "particles");
+    }
+#endif
+
 	areInitialConditionsDefined_ = true;
 }
 
