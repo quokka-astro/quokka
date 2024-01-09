@@ -73,6 +73,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	using AMRSimulation<problem_t>::state_old_cc_;
 	using AMRSimulation<problem_t>::state_new_cc_;
 	using AMRSimulation<problem_t>::max_signal_speed_;
+	using AMRSimulation<problem_t>::TracerPC;
 
 	using AMRSimulation<problem_t>::nghost_cc_;
 	using AMRSimulation<problem_t>::areInitialConditionsDefined_;
@@ -92,6 +93,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	using AMRSimulation<problem_t>::finest_level;
 	using AMRSimulation<problem_t>::finestLevel;
 	using AMRSimulation<problem_t>::do_reflux;
+	using AMRSimulation<problem_t>::do_tracers;
 	using AMRSimulation<problem_t>::Verbose;
 	using AMRSimulation<problem_t>::constantDt_;
 	using AMRSimulation<problem_t>::boxArray;
@@ -660,6 +662,38 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::advanceSingleT
 
 	// check hydro states after user work
 	CHECK_HYDRO_STATES(state_new_cc_[lev]);
+
+	// advect tracer particles
+	// (N.B. This must be done here because momentum source terms
+	//  would otherwise need to be manually applied to tracer particles.)
+#ifdef AMREX_PARTICLES
+    if (do_tracers != 0) {
+		// compute face-centered velocities from state_new_cc_[lev]
+		const int ncomp_vel = 3;
+		const int nghost_vel = 1;
+		amrex::MultiFab vel_mf(boxArray(lev), DistributionMap(lev), ncomp_vel, nghost_vel);
+		auto vel = vel_mf.arrays();
+		auto const &state = state_new_cc_[lev].const_arrays();
+
+		amrex::ParallelFor(vel_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			// add operator-split gravitational acceleration
+			const amrex::Real rho = state[bx](i, j, k, HydroSystem<problem_t>::density_index);
+			amrex::Real vx = state[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index) / rho;
+			amrex::Real vy = state[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index) / rho;
+			amrex::Real vz = state[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index) / rho;
+			vel[bx](i, j, k, 0) = vx;
+			vel[bx](i, j, k, 1) = vy;
+			vel[bx](i, j, k, 2) = vz;
+		});
+		amrex::Gpu::streamSynchronizeAll();
+		
+		// fill ghost velocity cells
+		vel_mf.FillBoundary(geom[lev].periodicity());
+	
+		// advect particles with cell-centered velocities
+        TracerPC->AdvectWithUcc(vel_mf, lev, dt_lev);
+    }
+#endif
 
 	// check state validity
 	AMREX_ASSERT(!state_new_cc_[lev].contains_nan(0, state_new_cc_[lev].nComp()));
