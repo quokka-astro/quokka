@@ -789,8 +789,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		computeTimestep();
 
 		// hyperbolic advance over all levels
-		int lev = 0;	  			// coarsest level
-        const int iteration = 1;	// this is the first call to advance level 'lev'
+		int lev = 0;		 // coarsest level
+		const int iteration = 1; // this is the first call to advance level 'lev'
 		timeStepWithSubcycling(lev, cur_time, iteration);
 
 		// elliptic solve over entire AMR grid (post-timestep)
@@ -1036,7 +1036,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 	if (lev < finest_level) {
 
 		// recursive call for next-finer level
-        for (int i = 1; i <= nsubsteps[lev+1]; ++i) {
+		for (int i = 1; i <= nsubsteps[lev + 1]; ++i) {
 			if (lev < finest_level) { // this may change during a regrid!
 				timeStepWithSubcycling(lev + 1, time + (i - 1) * dt_[lev + 1], i);
 			}
