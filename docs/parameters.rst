@@ -3,8 +3,11 @@
 Runtime parameters
 ==========================
 
-This document lists all of the runtime parameters in Quokka.
-Using the AMReX ParmParse object, these parameters are read in the `readParameters()` function in `simulation.hpp` from an input file or from command line arguments.
+This document lists all of the runtime parameters in Quokka that are set using the AMReX ParmParse object. Users can set these via the input file or by using command-line arguments.
+
+General
+^^^^^^^^^^^^^^^^^^^
+These parameters are read in the `AMRSimulation<problem_t>::readParameters()` function in `src/simulation.hpp`.
 
 .. list-table:: Table of runtime parameters.
    :widths: 25 25 50
@@ -73,6 +76,7 @@ Using the AMReX ParmParse object, these parameters are read in the `readParamete
 
 Hydrodynamics
 ^^^^^^^^^^^^^^^^^^^
+These parameters are read in the `RadhydroSimulation<problem_t>::readParmParse() ` function in `src/RadhydroSimulation.hpp`.
 
 .. list-table:: Table of hydrodynamics parameters.
    :widths: 25 25 50
@@ -102,6 +106,7 @@ Hydrodynamics
 
 Radiation
 ^^^^^^^^^^^^^^^^^^^
+These parameters are read in the `RadhydroSimulation<problem_t>::readParmParse() ` function in `src/RadhydroSimulation.hpp`.
 
 .. list-table:: Table of radiation parameters.
    :widths: 25 25 50
@@ -119,6 +124,7 @@ Radiation
 
 Optically-thin radiative cooling
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+These parameters are read in the `RadhydroSimulation<problem_t>::readParmParse() ` function in `src/RadhydroSimulation.hpp`.
 
 .. list-table:: Table of optically-thin radiative cooling parameters.
    :widths: 25 25 50
