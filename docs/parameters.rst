@@ -76,7 +76,7 @@ These parameters are read in the `AMRSimulation<problem_t>::readParameters()` fu
 
 Hydrodynamics
 ^^^^^^^^^^^^^^^^^^^
-These parameters are read in the `RadhydroSimulation<problem_t>::readParmParse() ` function in `src/RadhydroSimulation.hpp`.
+These parameters are read in the `RadhydroSimulation<problem_t>::readParmParse()` function in `src/RadhydroSimulation.hpp`.
 
 .. list-table:: Table of hydrodynamics parameters.
    :widths: 25 25 50
@@ -106,7 +106,7 @@ These parameters are read in the `RadhydroSimulation<problem_t>::readParmParse()
 
 Radiation
 ^^^^^^^^^^^^^^^^^^^
-These parameters are read in the `RadhydroSimulation<problem_t>::readParmParse() ` function in `src/RadhydroSimulation.hpp`.
+These parameters are read in the `RadhydroSimulation<problem_t>::readParmParse()` function in `src/RadhydroSimulation.hpp`.
 
 .. list-table:: Table of radiation parameters.
    :widths: 25 25 50
@@ -124,7 +124,7 @@ These parameters are read in the `RadhydroSimulation<problem_t>::readParmParse()
 
 Optically-thin radiative cooling
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-These parameters are read in the `RadhydroSimulation<problem_t>::readParmParse() ` function in `src/RadhydroSimulation.hpp`.
+These parameters are read in the `RadhydroSimulation<problem_t>::readParmParse()` function in `src/RadhydroSimulation.hpp`.
 
 .. list-table:: Table of optically-thin radiative cooling parameters.
    :widths: 25 25 50
