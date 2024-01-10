@@ -13,6 +13,7 @@
 #include <climits>
 #include <filesystem>
 #include <limits>
+#include <memory>
 #include <string>
 #include <tuple>
 #include <unordered_map>
@@ -20,6 +21,7 @@
 
 #include "AMReX.H"
 #include "AMReX_Algorithm.H"
+#include "AMReX_AmrParticles.H"
 #include "AMReX_Arena.H"
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
@@ -859,6 +861,10 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 		amrex::Copy(originalFineData, fineData, 0, 0, fineData.nComp(), 0);
 	}
 
+	// save the pre-advance tracer particles
+	// (needs deleted copy constructor!!)
+	//auto originalTracerPC = std::make_unique<amrex::AmrTracerParticleContainer>(*TracerPC);
+
 	for (int retry_count = 0; retry_count <= max_retries; ++retry_count) {
 		// reduce timestep by a factor of 2^retry_count
 		const int nsubsteps = std::pow(2, retry_count);
@@ -877,6 +883,9 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 			if (fr_as_fine != nullptr) {
 				amrex::Copy(fr_as_fine->getFineData(), originalFineData, 0, 0, originalFineData.nComp(), 0);
 			}
+
+			// reset the tracer particles to their pre-advance state
+			//std::swap(originalTracerPC, TracerPC);
 		}
 
 		// create temporary multifab for old state
