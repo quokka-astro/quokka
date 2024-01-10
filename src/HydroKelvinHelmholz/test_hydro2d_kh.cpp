@@ -84,6 +84,7 @@ template <> void RadhydroSimulation<KelvinHelmholzProblem>::setInitialConditions
 		state_cc(i, j, k, HydroSystem<KelvinHelmholzProblem>::x2Momentum_index) = rho * vy;
 		state_cc(i, j, k, HydroSystem<KelvinHelmholzProblem>::x3Momentum_index) = rho * vz;
 		state_cc(i, j, k, HydroSystem<KelvinHelmholzProblem>::energy_index) = P / (gamma - 1.) + 0.5 * rho * v_sq;
+		state_cc(i, j, k, HydroSystem<KelvinHelmholzProblem>::internalEnergy_index) = P / (gamma - 1.);
 	});
 }
 

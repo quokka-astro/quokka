@@ -13,12 +13,16 @@ amr.v              = 0       # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 2048 2048 8
+amr.n_cell          = 128 128 8
 amr.max_level       = 4     # number of levels = max_level + 1
-amr.blocking_factor = 128   # grid size must be divisible by this
-amr.max_grid_size   = 128
+amr.blocking_factor = 16   # grid size must be divisible by this
+amr.max_grid_size   = 64
 amr.n_error_buf     = 3     # minimum 3 cell buffer around tagged cells
 amr.grid_eff        = 0.7   # default
 
 do_reflux = 1
 do_subcycle = 1
+do_tracers = 1
+
+#amrex.throw_exception = 0
+#amrex.signal_handling = 1

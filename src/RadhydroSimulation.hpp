@@ -1015,7 +1015,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		flux_rk2[idim] = amrex::MultiFab(ba_face, dm, ncompHydro_, 0);
 		flux_rk2[idim].setVal(0);
 		// initialize velocity MultiFab
-		avgFaceVel[idim] = amrex::MultiFab(ba_face, dm, 1, 0);
+		avgFaceVel[idim] = amrex::MultiFab(ba_face, dm, 1, 1); // ghost face needed for tracer particles
 		avgFaceVel[idim].setVal(0);
 	}
 
@@ -1234,6 +1234,9 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	// advect tracer particles using avgFaceVel
 #ifdef AMREX_PARTICLES
 	if (do_tracers != 0) {
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			avgFaceVel[idim].FillBoundary(geom[lev].periodicity()); // ignore coarse-fine boundary (eek!)
+		}
 		TracerPC->AdvectWithUmac(avgFaceVel.data(), lev, dt_lev);
 	}
 #endif
