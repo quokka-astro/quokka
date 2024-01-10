@@ -663,35 +663,6 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::advanceSingleT
 	// check hydro states after user work
 	CHECK_HYDRO_STATES(state_new_cc_[lev]);
 
-	// advect tracer particles
-#ifdef AMREX_PARTICLES
-	if (do_tracers != 0) {
-		// compute cell-centered velocities from state_new_cc_[lev]
-		const int ncomp_vel = 3;
-		const int nghost_vel = 1;
-		amrex::MultiFab vel_mf(boxArray(lev), DistributionMap(lev), ncomp_vel, nghost_vel);
-		auto vel = vel_mf.arrays();
-		auto const &state = state_new_cc_[lev].const_arrays();
-
-		amrex::ParallelFor(vel_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			const amrex::Real rho = state[bx](i, j, k, HydroSystem<problem_t>::density_index);
-			amrex::Real vx = state[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index) / rho;
-			amrex::Real vy = state[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index) / rho;
-			amrex::Real vz = state[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index) / rho;
-			vel[bx](i, j, k, 0) = vx;
-			vel[bx](i, j, k, 1) = vy;
-			vel[bx](i, j, k, 2) = vz;
-		});
-		amrex::Gpu::streamSynchronizeAll();
-
-		// fill ghost velocity cells
-		vel_mf.FillBoundary(geom[lev].periodicity());
-
-		// advect particles with cell-centered velocities
-		TracerPC->AdvectWithUcc(vel_mf, lev, dt_lev);
-	}
-#endif
-
 	// check state validity
 	AMREX_ASSERT(!state_new_cc_[lev].contains_nan(0, state_new_cc_[lev].nComp()));
 }
@@ -1024,14 +995,19 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	amrex::MultiFab state_inter_cc_(grids[lev], dmap[lev], Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
 	state_inter_cc_.setVal(0); // prevent assert in fillBoundaryConditions when radiation is enabled
 
-	// create temporary multifabs for combined RK2 flux
+	// create temporary multifabs for combined RK2 flux and time-average face velocity
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> flux_rk2;
+	std::array<amrex::MultiFab, AMREX_SPACEDIM> avgFaceVel;
 	auto ba = grids[lev];
 	auto dm = dmap[lev];
 	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 		auto ba_face = amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim));
+		// initialize flux MultiFab
 		flux_rk2[idim] = amrex::MultiFab(ba_face, dm, ncompHydro_, 0);
 		flux_rk2[idim].setVal(0);
+		// initialize velocity MultiFab
+		avgFaceVel[idim] = amrex::MultiFab(ba_face, dm, 1, 0);
+		avgFaceVel[idim].setVal(0);
 	}
 
 	// update ghost zones [old timestep]
@@ -1066,6 +1042,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			amrex::MultiFab::Saxpy(flux_rk2[idim], 0.5, fluxArrays[idim], 0, 0, ncompHydro_, 0);
+			amrex::MultiFab::Saxpy(avgFaceVel[idim], 0.5, faceVel[idim], 0, 0, 1, 0);
 		}
 
 		amrex::MultiFab rhs(grids[lev], dmap[lev], ncompHydro_, 0);
@@ -1176,6 +1153,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			amrex::MultiFab::Saxpy(flux_rk2[idim], 0.5, fluxArrays[idim], 0, 0, ncompHydro_, 0);
+			amrex::MultiFab::Saxpy(avgFaceVel[idim], 0.5, faceVel[idim], 0, 0, 1, 0);
 		}
 
 		amrex::MultiFab rhs(grids[lev], dmap[lev], ncompHydro_, 0);
@@ -1183,7 +1161,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		redoFlag.setVal(quokka::redoFlag::none);
 
 		HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, flux_rk2, dx, ncompHydro_);
-		HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateInter, dx, faceVel, redoFlag);
+		HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld, dx, avgFaceVel, redoFlag);
 		HydroSystem<problem_t>::PredictStep(stateOld, stateFinal, rhs, dt_lev, ncompHydro_, redoFlag);
 
 		// do first-order flux correction (FOFC)
@@ -1202,11 +1180,11 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 
 			// replace fluxes around troubled cells with Godunov fluxes
 			replaceFluxes(flux_rk2, FOfluxArrays, redoFlag);
-			replaceFluxes(faceVel, FOfaceVel, redoFlag); // needed for dual energy
+			replaceFluxes(avgFaceVel, FOfaceVel, redoFlag); // needed for dual energy
 
 			// re-do RK update
 			HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, flux_rk2, dx, ncompHydro_);
-			HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateInter, dx, faceVel, redoFlag);
+			HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld, dx, avgFaceVel, redoFlag);
 			HydroSystem<problem_t>::PredictStep(stateOld, stateFinal, rhs, dt_lev, ncompHydro_, redoFlag);
 
 			amrex::Gpu::streamSynchronizeAll(); // just in case
@@ -1243,6 +1221,13 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		amrex::Copy(state_new_cc_[lev], state_inter_cc_, 0, 0, ncompHydro_, 0);
 	}
 	amrex::Gpu::streamSynchronizeAll();
+
+	// advect tracer particles using avgFaceVel
+#ifdef AMREX_PARTICLES
+	if (do_tracers != 0) {
+		TracerPC->AdvectWithUmac(avgFaceVel.data(), lev, dt_lev);
+	}
+#endif
 
 	// do Strang split source terms (second half-step)
 	addStrangSplitSourcesWithBuiltin(state_new_cc_[lev], lev, time + dt_lev, 0.5 * dt_lev);
