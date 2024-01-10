@@ -664,11 +664,9 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::advanceSingleT
 	CHECK_HYDRO_STATES(state_new_cc_[lev]);
 
 	// advect tracer particles
-	// (N.B. This must be done here because momentum source terms
-	//  would otherwise need to be manually applied to tracer particles.)
 #ifdef AMREX_PARTICLES
 	if (do_tracers != 0) {
-		// compute face-centered velocities from state_new_cc_[lev]
+		// compute cell-centered velocities from state_new_cc_[lev]
 		const int ncomp_vel = 3;
 		const int nghost_vel = 1;
 		amrex::MultiFab vel_mf(boxArray(lev), DistributionMap(lev), ncomp_vel, nghost_vel);
@@ -676,7 +674,6 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::advanceSingleT
 		auto const &state = state_new_cc_[lev].const_arrays();
 
 		amrex::ParallelFor(vel_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			// add operator-split gravitational acceleration
 			const amrex::Real rho = state[bx](i, j, k, HydroSystem<problem_t>::density_index);
 			amrex::Real vx = state[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index) / rho;
 			amrex::Real vy = state[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index) / rho;
