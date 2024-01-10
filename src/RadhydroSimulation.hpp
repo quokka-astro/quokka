@@ -862,8 +862,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 	}
 
 	// save the pre-advance tracer particles
-	// (needs deleted copy constructor!!)
-	// auto originalTracerPC = std::make_unique<amrex::AmrTracerParticleContainer>(*TracerPC);
+	auto originalTracerPC = TracerPC->make_alike();
 
 	for (int retry_count = 0; retry_count <= max_retries; ++retry_count) {
 		// reduce timestep by a factor of 2^retry_count
@@ -885,7 +884,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 			}
 
 			// reset the tracer particles to their pre-advance state
-			// std::swap(originalTracerPC, TracerPC);
+			TracerPC->copyParticles(originalTracerPC, true);
 		}
 
 		// create temporary multifab for old state
