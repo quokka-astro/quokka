@@ -861,8 +861,12 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 		amrex::Copy(originalFineData, fineData, 0, 0, fineData.nComp(), 0);
 	}
 
-	// save the pre-advance tracer particles
-	auto originalTracerPC = TracerPC->make_alike();
+#ifdef AMREX_PARTICLES
+	if (do_tracers != 0) {
+		// save the pre-advance tracer particles
+		auto originalTracerPC = TracerPC->make_alike();
+	}
+#endif
 
 	for (int retry_count = 0; retry_count <= max_retries; ++retry_count) {
 		// reduce timestep by a factor of 2^retry_count
@@ -883,8 +887,12 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 				amrex::Copy(fr_as_fine->getFineData(), originalFineData, 0, 0, originalFineData.nComp(), 0);
 			}
 
-			// reset the tracer particles to their pre-advance state
-			TracerPC->copyParticles(originalTracerPC, true);
+#ifdef AMREX_PARTICLES
+			if (do_tracers != 0) {
+				// reset the tracer particles to their pre-advance state
+				TracerPC->copyParticles(originalTracerPC, true);
+			}
+#endif
 		}
 
 		// create temporary multifab for old state
