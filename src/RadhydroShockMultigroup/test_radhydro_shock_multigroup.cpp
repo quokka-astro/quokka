@@ -1,10 +1,5 @@
-//==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
-// Released under the MIT license. See LICENSE file included in the GitHub repo.
-//==============================================================================
 /// \file test_radhydro_shock.cpp
-/// \brief Defines a test problem for a radiative shock.
+/// \brief Defines a test problem for a multigroup gray-opacity non-equilibrium radiative shock.
 ///
 
 #include <cmath>
@@ -14,36 +9,35 @@
 
 #include "ArrayUtil.hpp"
 #include "fextract.hpp"
-#include "test_radhydro_shock_cgs.hpp"
+#include "fundamental_constants.H"
+#include "radiation_system.hpp"
+#include "test_radhydro_shock_multigroup.hpp"
+#include "valarray.hpp"
+#ifdef HAVE_PYTHON
+#include "matplotlibcpp.h"
+#endif
 
 struct ShockProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
 // parameters taken from Section 9.5 of Skinner et al. (2019)
-// [The Astrophysical Journal Supplement Series, 241:7 (27pp), 2019 March]
+// https://doi.org/10.3847/1538-4365/ab007f
 
-constexpr double a_rad = 7.5646e-15; // erg cm^-3 K^-4
-constexpr double c = 2.99792458e10;  // cm s^-1
-constexpr double k_B = C::k_B;	     // erg K^-1
+constexpr double a_rad = C::a_rad; // erg cm^-3 K^-4
+constexpr double c = C::c_light;   // cm s^-1
+constexpr double k_B = C::k_B;	   // erg K^-1
 
-// constexpr double P0 = 1.0e-4;	// equal to P_0 in dimensionless units
-// constexpr double sigma_a = 1.0e6;	// absorption cross section
-// constexpr double Mach0 = 3.0;
 constexpr double c_s0 = 1.73e7; // adiabatic sound speed [cm s^-1]
-
 constexpr double kappa = 577.0; // "opacity" == rho*kappa [cm^-1] (!!)
 constexpr double gamma_gas = (5. / 3.);
 constexpr double c_v = k_B / ((C::m_p + C::m_e) * (gamma_gas - 1.0)); // specific heat [erg g^-1 K^-1]
-
-constexpr double T0 = 2.18e6; // K
-constexpr double rho0 = 5.69; // g cm^-3
-constexpr double v0 = 5.19e7; // cm s^-1
-
-constexpr double T1 = 7.98e6; // K [7.98297e6]
-constexpr double rho1 = 17.1; // g cm^-3 [17.08233]
-constexpr double v1 = 1.73e7; // cm s^-1 [1.72875e7]
-
-constexpr double chat = 10.0 * (v0 + c_s0); // reduced speed of light
+constexpr double T0 = 2.18e6;					      // K
+constexpr double rho0 = 5.69;					      // g cm^-3
+constexpr double v0 = 5.19e7;					      // cm s^-1
+constexpr double T1 = 7.98e6;					      // K [7.98297e6]
+constexpr double rho1 = 17.1;					      // g cm^-3 [17.08233]
+constexpr double v1 = 1.73e7;					      // cm s^-1 [1.72875e7]
+constexpr double chat = 10.0 * (v0 + c_s0);			      // reduced speed of light
 
 constexpr double Erad0 = a_rad * (T0 * T0 * T0 * T0); // erg cm^-3
 constexpr double Egas0 = rho0 * c_v * T0;	      // erg cm^-3
@@ -54,20 +48,6 @@ constexpr double shock_position = 0.0130; // 0.0132; // cm (shock position drift
 					  // we initialize slightly to the left...)
 constexpr double Lx = 0.01575;		  // cm
 
-template <> struct RadSystem_Traits<ShockProblem> {
-	static constexpr double c_light = c;
-	static constexpr double c_hat = chat;
-	static constexpr double radiation_constant = a_rad;
-	static constexpr double Erad_floor = 0.;
-	static constexpr bool compute_v_over_c_terms = true;
-};
-
-template <> struct quokka::EOS_Traits<ShockProblem> {
-	static constexpr double mean_molecular_weight = C::m_p + C::m_e;
-	static constexpr double boltzmann_constant = k_B;
-	static constexpr double gamma = gamma_gas;
-};
-
 template <> struct Physics_Traits<ShockProblem> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
@@ -76,7 +56,24 @@ template <> struct Physics_Traits<ShockProblem> {
 	static constexpr bool is_radiation_enabled = true;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
-	static constexpr int nGroups = 1;
+	static constexpr int nGroups = 8;
+};
+
+template <> struct RadSystem_Traits<ShockProblem> {
+	static constexpr double c_light = c;
+	static constexpr double c_hat = chat;
+	static constexpr double radiation_constant = a_rad;
+	static constexpr double Erad_floor = 0.;
+	static constexpr bool compute_v_over_c_terms = true;
+	static constexpr double energy_unit = C::hplanck; // set boundary unit to Hz
+	static constexpr amrex::GpuArray<double, Physics_Traits<ShockProblem>::nGroups + 1> radBoundaries{
+	    1.00000000e+15, 3.16227766e+15, 1.00000000e+16, 3.16227766e+16, 1.00000000e+17, 3.16227766e+17, 1.00000000e+18, 3.16227766e+18, 1.00000000e+19};
+};
+
+template <> struct quokka::EOS_Traits<ShockProblem> {
+	static constexpr double mean_molecular_weight = C::m_p + C::m_e;
+	static constexpr double boltzmann_constant = k_B;
+	static constexpr double gamma = gamma_gas;
 };
 
 template <>
@@ -107,14 +104,14 @@ AMRSimulation<ShockProblem>::setCustomBoundaryConditions(const amrex::IntVect &i
 							 amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec *bcr, int /*bcomp*/,
 							 int /*orig_comp*/)
 {
-	if (!((bcr->lo(0) == amrex::BCType::ext_dir) || (bcr->hi(0) == amrex::BCType::ext_dir))) {
+	if (!((bcr->lo(0) == amrex::BCType::ext_dir) || (bcr->hi(0) == amrex::BCType::ext_dir))) { // NOLINT
 		return;
 	}
 
 #if (AMREX_SPACEDIM == 1)
 	auto i = iv.toArray()[0];
-	int j = 0;
-	int k = 0;
+	int const j = 0;
+	int const k = 0;
 #endif
 #if (AMREX_SPACEDIM == 2)
 	auto [i, j] = iv.toArray();
@@ -128,58 +125,76 @@ AMRSimulation<ShockProblem>::setCustomBoundaryConditions(const amrex::IntVect &i
 	amrex::GpuArray<int, 3> lo = box.loVect3d();
 	amrex::GpuArray<int, 3> hi = box.hiVect3d();
 
+	auto const radBoundaries_g = RadSystem<ShockProblem>::radBoundaries_;
+
 	if (i < lo[0]) {
-		const double px_L = rho0 * v0;
-		const double Egas_L = Egas0;
+		const double Egas_L = Egas0 + 0.5 * rho0 * (v0 * v0);
+		const double xmom_L = consVar(lo[0], j, k, RadSystem<ShockProblem>::x1GasMomentum_index);
+		const double px_L = (xmom_L < (rho0 * v0)) ? xmom_L : (rho0 * v0);
+
+		const auto Tgas0 = quokka::EOS<ShockProblem>::ComputeTgasFromEint(rho0, Egas_L);
+		auto radEnergyFractionsT0 = RadSystem<ShockProblem>::ComputePlanckEnergyFractions(radBoundaries_g, Tgas0);
 
 		// x1 left side boundary -- constant
 		consVar(i, j, k, RadSystem<ShockProblem>::gasDensity_index) = rho0;
 		consVar(i, j, k, RadSystem<ShockProblem>::gasInternalEnergy_index) = 0.;
-		consVar(i, j, k, RadSystem<ShockProblem>::x1GasMomentum_index) = px_L;
+		consVar(i, j, k, RadSystem<ShockProblem>::x1GasMomentum_index) = px_L; // xmom_L;
 		consVar(i, j, k, RadSystem<ShockProblem>::x2GasMomentum_index) = 0.;
 		consVar(i, j, k, RadSystem<ShockProblem>::x3GasMomentum_index) = 0.;
-		consVar(i, j, k, RadSystem<ShockProblem>::gasEnergy_index) = Egas_L + (px_L * px_L) / (2 * rho0);
-		consVar(i, j, k, RadSystem<ShockProblem>::gasInternalEnergy_index) = Egas_L;
-		consVar(i, j, k, RadSystem<ShockProblem>::radEnergy_index) = Erad0;
-		consVar(i, j, k, RadSystem<ShockProblem>::x1RadFlux_index) = 0;
-		consVar(i, j, k, RadSystem<ShockProblem>::x2RadFlux_index) = 0;
-		consVar(i, j, k, RadSystem<ShockProblem>::x3RadFlux_index) = 0;
+		consVar(i, j, k, RadSystem<ShockProblem>::gasEnergy_index) = Egas_L;
+		consVar(i, j, k, RadSystem<ShockProblem>::gasInternalEnergy_index) = Egas_L - (px_L * px_L) / (2 * rho0);
+		for (int g = 0; g < Physics_Traits<ShockProblem>::nGroups; ++g) {
+			consVar(i, j, k, RadSystem<ShockProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad0 * radEnergyFractionsT0[g];
+			consVar(i, j, k, RadSystem<ShockProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+			consVar(i, j, k, RadSystem<ShockProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+			consVar(i, j, k, RadSystem<ShockProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+		}
 	} else if (i >= hi[0]) {
-		const double px_R = rho1 * v1;
-		const double Egas_R = Egas1;
+		const double Egas_R = Egas1 + 0.5 * rho1 * (v1 * v1);
+		const double xmom_R = consVar(hi[0], j, k, RadSystem<ShockProblem>::x1GasMomentum_index);
+		const double px_R = (xmom_R > (rho1 * v1)) ? xmom_R : (rho1 * v1);
+
+		const auto Tgas1 = quokka::EOS<ShockProblem>::ComputeTgasFromEint(rho1, Egas_R);
+		auto radEnergyFractionsT1 = RadSystem<ShockProblem>::ComputePlanckEnergyFractions(radBoundaries_g, Tgas1);
 
 		// x1 right-side boundary -- constant
 		consVar(i, j, k, RadSystem<ShockProblem>::gasDensity_index) = rho1;
 		consVar(i, j, k, RadSystem<ShockProblem>::gasInternalEnergy_index) = 0.;
-		consVar(i, j, k, RadSystem<ShockProblem>::x1GasMomentum_index) = px_R;
+		consVar(i, j, k, RadSystem<ShockProblem>::x1GasMomentum_index) = px_R; // xmom_R;
 		consVar(i, j, k, RadSystem<ShockProblem>::x2GasMomentum_index) = 0.;
 		consVar(i, j, k, RadSystem<ShockProblem>::x3GasMomentum_index) = 0.;
-		consVar(i, j, k, RadSystem<ShockProblem>::gasEnergy_index) = Egas_R + (px_R * px_R) / (2 * rho1);
-		consVar(i, j, k, RadSystem<ShockProblem>::gasInternalEnergy_index) = Egas_R;
-		consVar(i, j, k, RadSystem<ShockProblem>::radEnergy_index) = Erad1;
-		consVar(i, j, k, RadSystem<ShockProblem>::x1RadFlux_index) = 0;
-		consVar(i, j, k, RadSystem<ShockProblem>::x2RadFlux_index) = 0;
-		consVar(i, j, k, RadSystem<ShockProblem>::x3RadFlux_index) = 0;
+		consVar(i, j, k, RadSystem<ShockProblem>::gasEnergy_index) = Egas_R;
+		consVar(i, j, k, RadSystem<ShockProblem>::gasInternalEnergy_index) = Egas_R - (px_R * px_R) / (2 * rho1);
+		for (int g = 0; g < Physics_Traits<ShockProblem>::nGroups; ++g) {
+			consVar(i, j, k, RadSystem<ShockProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad1 * radEnergyFractionsT1[g];
+			consVar(i, j, k, RadSystem<ShockProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+			consVar(i, j, k, RadSystem<ShockProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+			consVar(i, j, k, RadSystem<ShockProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+		}
 	}
 }
 
 template <> void RadhydroSimulation<ShockProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
 	// extract variables required from the geom object
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_lo = grid_elem.prob_lo_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
+	const auto radBoundaries_g = RadSystem_Traits<ShockProblem>::radBoundaries;
+
 	// loop over the cell-centered quantities and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+		amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
 
 		amrex::Real radEnergy = NAN;
 		amrex::Real x1RadFlux = NAN;
 		amrex::Real energy = NAN;
 		amrex::Real density = NAN;
 		amrex::Real x1Momentum = NAN;
+		amrex::Real temp = NAN;
+		quokka::valarray<amrex::Real, Physics_Traits<ShockProblem>::nGroups> radEnergyFractions{};
 
 		if (x < shock_position) {
 			radEnergy = Erad0;
@@ -195,6 +210,9 @@ template <> void RadhydroSimulation<ShockProblem>::setInitialConditionsOnGrid(qu
 			x1Momentum = rho1 * v1;
 		}
 
+		temp = quokka::EOS<ShockProblem>::ComputeTgasFromEint(density, energy);
+		radEnergyFractions = RadSystem<ShockProblem>::ComputePlanckEnergyFractions(radBoundaries_g, temp);
+
 		state_cc(i, j, k, RadSystem<ShockProblem>::gasDensity_index) = density;
 		state_cc(i, j, k, RadSystem<ShockProblem>::gasInternalEnergy_index) = 0.;
 		state_cc(i, j, k, RadSystem<ShockProblem>::x1GasMomentum_index) = x1Momentum;
@@ -202,25 +220,13 @@ template <> void RadhydroSimulation<ShockProblem>::setInitialConditionsOnGrid(qu
 		state_cc(i, j, k, RadSystem<ShockProblem>::x3GasMomentum_index) = 0;
 		state_cc(i, j, k, RadSystem<ShockProblem>::gasEnergy_index) = energy;
 		state_cc(i, j, k, RadSystem<ShockProblem>::gasInternalEnergy_index) = energy - (x1Momentum * x1Momentum) / (2 * density);
-		state_cc(i, j, k, RadSystem<ShockProblem>::radEnergy_index) = radEnergy;
-		state_cc(i, j, k, RadSystem<ShockProblem>::x1RadFlux_index) = x1RadFlux;
-		state_cc(i, j, k, RadSystem<ShockProblem>::x2RadFlux_index) = 0;
-		state_cc(i, j, k, RadSystem<ShockProblem>::x3RadFlux_index) = 0;
+		for (int g = 0; g < Physics_Traits<ShockProblem>::nGroups; ++g) {
+			state_cc(i, j, k, RadSystem<ShockProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = radEnergy * radEnergyFractions[g];
+			state_cc(i, j, k, RadSystem<ShockProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = x1RadFlux;
+			state_cc(i, j, k, RadSystem<ShockProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+			state_cc(i, j, k, RadSystem<ShockProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+		}
 	});
-	// // loop over the face-centered quantities and set the initial condition
-	// amrex::ParallelFor
-	//   (AMREX_D_DECL(indexRange, indexRange, indexRange),
-	//   AMREX_D_DECL(
-	//     [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-
-	//     },
-	//     [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-
-	//     },
-	//     [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-
-	//     }
-	// ));
 }
 
 auto problem_main() -> int
@@ -261,7 +267,7 @@ auto problem_main() -> int
 
 	// read output variables
 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
-	int nx = static_cast<int>(position.size());
+	int const nx = static_cast<int>(position.size());
 
 	// Plot results
 	int status = 0;
@@ -276,7 +282,10 @@ auto problem_main() -> int
 			const double x = Lx * ((i + 0.5) / static_cast<double>(nx));
 			xs.at(i) = x; // cm
 
-			const double Erad_t = values.at(RadSystem<ShockProblem>::radEnergy_index)[i];
+			double Erad_t = 0.0;
+			for (int g = 0; g < Physics_Traits<ShockProblem>::nGroups; ++g) {
+				Erad_t += values.at(RadSystem<ShockProblem>::radEnergy_index + Physics_NumVars::numRadVars * g)[i];
+			}
 			Erad.at(i) = Erad_t / a_rad;			     // scaled
 			Trad.at(i) = std::pow(Erad_t / a_rad, 1. / 4.) / T0; // dimensionless
 
@@ -296,10 +305,10 @@ auto problem_main() -> int
 		std::vector<double> Trad_exact;
 		std::vector<double> Tmat_exact;
 
-		std::string filename = "../extern/LowrieEdwards/shock.txt";
+		std::string const filename = "../extern/LowrieEdwards/shock.txt";
 		std::ifstream fstream(filename, std::ios::in);
 
-		const double error_tol = 0.005;
+		const double error_tol = 0.008;
 		double rel_error = NAN;
 		if (fstream.is_open()) {
 
@@ -360,7 +369,7 @@ auto problem_main() -> int
 		}
 
 		// plot results
-		int s = 48; // stride
+		int const s = 48; // stride
 		std::map<std::string, std::string> Trad_args;
 		Trad_args["label"] = "radiation";
 		Trad_args["color"] = "C1";
@@ -393,7 +402,7 @@ auto problem_main() -> int
 		matplotlibcpp::ylabel("temperature (dimensionless)");
 		matplotlibcpp::legend();
 		matplotlibcpp::tight_layout();
-		matplotlibcpp::save("./radshock_cgs_temperature.pdf");
+		matplotlibcpp::save("./radshock_multigroup_temperature.pdf");
 #endif
 	}
 
