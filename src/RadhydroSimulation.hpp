@@ -1260,8 +1260,8 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 
 		// fill ghost faces
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			fillBoundaryConditions(state_new_fc_[lev][idim], state_new_fc_[lev][idim], lev, time + 0.5 * dt_lev, quokka::centering::fc, quokka::direction{idim},
-					       InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
+			fillBoundaryConditions(state_new_fc_[lev][idim], state_new_fc_[lev][idim], lev, time + 0.5 * dt_lev, quokka::centering::fc,
+					       quokka::direction{idim}, InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
 		}
 
 		// copy state_new_fc_[lev] to avgFaceVel
