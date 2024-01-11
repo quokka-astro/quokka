@@ -862,9 +862,10 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 	}
 
 #ifdef AMREX_PARTICLES
+	amrex::AmrTracerParticleContainer::ContainerLike<amrex::DefaultAllocator> originalTracerPC;
 	if (do_tracers != 0) {
 		// save the pre-advance tracer particles
-		auto originalTracerPC = TracerPC->make_alike();
+		originalTracerPC = TracerPC->make_alike();
 	}
 #endif
 
