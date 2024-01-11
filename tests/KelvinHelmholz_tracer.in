@@ -8,13 +8,13 @@ geometry.is_periodic =  1    1    1
 # *****************************************************************
 # VERBOSITY
 # *****************************************************************
-amr.v              = 0       # verbosity in Amr
+amr.v              = 1       # verbosity in Amr
 
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
 amr.n_cell          = 128 128 8
-amr.max_level       = 1     # number of levels = max_level + 1
+amr.max_level       = 3     # number of levels = max_level + 1
 amr.blocking_factor = 16   # grid size must be divisible by this
 amr.max_grid_size   = 64
 amr.n_error_buf     = 3     # minimum 3 cell buffer around tagged cells
@@ -27,4 +27,4 @@ do_tracers = 1
 amrex.throw_exception = 0
 amrex.signal_handling = 1
 
-checkpoint_interval = 100
+checkpoint_interval = 1000

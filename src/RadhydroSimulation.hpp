@@ -1014,7 +1014,8 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		flux_rk2[idim] = amrex::MultiFab(ba_face, dm, ncompHydro_, 0);
 		flux_rk2[idim].setVal(0);
 		// initialize velocity MultiFab
-		avgFaceVel[idim] = amrex::MultiFab(ba_face, dm, 1, 1); // ghost face needed for tracer particles
+		const int nghost_vel = 2; // 2 ghost faces are needed for tracer particles
+		avgFaceVel[idim] = amrex::MultiFab(ba_face, dm, 1, nghost_vel);
 		avgFaceVel[idim].setVal(0);
 	}
 
