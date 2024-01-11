@@ -75,6 +75,8 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	using AMRSimulation<problem_t>::state_old_cc_;
 	using AMRSimulation<problem_t>::state_new_cc_;
 	using AMRSimulation<problem_t>::max_signal_speed_;
+	using AMRSimulation<problem_t>::state_old_fc_;
+	using AMRSimulation<problem_t>::state_new_fc_;
 	using AMRSimulation<problem_t>::TracerPC;
 
 	using AMRSimulation<problem_t>::nghost_cc_;
@@ -106,6 +108,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	using AMRSimulation<problem_t>::WriteCheckpointFile;
 	using AMRSimulation<problem_t>::GetData;
 	using AMRSimulation<problem_t>::FillPatchWithData;
+	using AMRSimulation<problem_t>::InterpHookNone;
 
 	using AMRSimulation<problem_t>::densityFloor_;
 	using AMRSimulation<problem_t>::tempFloor_;
@@ -317,6 +320,11 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::defineComponen
 	}
 
 	// face-centred
+
+	// add face-centered velocities
+	for (int idim = 0; idim < AMREX_SPACEDIM; idim++) {
+		componentNames_fc_.push_back({quokka::face_dir_str[idim] + "-velocity"});
+	}
 	// add mhd state variables
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 		for (int idim = 0; idim < AMREX_SPACEDIM; idim++) {
@@ -635,6 +643,7 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::advanceSingleT
 
 	// since we are starting a new timestep, need to swap old and new state vectors
 	std::swap(state_old_cc_[lev], state_new_cc_[lev]);
+	std::swap(state_old_fc_[lev], state_new_fc_[lev]);
 
 	// check hydro states before update (this can be caused by the flux register!)
 	CHECK_HYDRO_STATES(state_old_cc_[lev]);
@@ -757,9 +766,9 @@ void RadhydroSimulation<problem_t>::FillPatch(int lev, amrex::Real time, amrex::
 	}
 
 	if (cen == quokka::centering::cc) {
-		FillPatchWithData(lev, time, mf, cmf, ctime, fmf, ftime, icomp, ncomp, BCs_cc_, fptype, PreInterpState, PostInterpState);
+		FillPatchWithData(lev, time, mf, cmf, ctime, fmf, ftime, icomp, ncomp, BCs_cc_, cen, fptype, PreInterpState, PostInterpState);
 	} else if (cen == quokka::centering::fc) {
-		FillPatchWithData(lev, time, mf, cmf, ctime, fmf, ftime, icomp, ncomp, BCs_fc_, fptype, PreInterpState, PostInterpState);
+		FillPatchWithData(lev, time, mf, cmf, ctime, fmf, ftime, icomp, ncomp, BCs_fc_, cen, fptype, PreInterpState, PostInterpState);
 	}
 }
 
@@ -1015,6 +1024,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	// create temporary multifabs for combined RK2 flux and time-average face velocity
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> flux_rk2;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> avgFaceVel;
+	const int nghost_vel = 2; // 2 ghost faces are needed for tracer particles
 	auto ba = grids[lev];
 	auto dm = dmap[lev];
 	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -1023,7 +1033,6 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		flux_rk2[idim] = amrex::MultiFab(ba_face, dm, ncompHydro_, 0);
 		flux_rk2[idim].setVal(0);
 		// initialize velocity MultiFab
-		const int nghost_vel = 2; // 2 ghost faces are needed for tracer particles
 		avgFaceVel[idim] = amrex::MultiFab(ba_face, dm, 1, nghost_vel);
 		avgFaceVel[idim].setVal(0);
 	}
@@ -1243,9 +1252,25 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	// advect tracer particles using avgFaceVel
 #ifdef AMREX_PARTICLES
 	if (do_tracers != 0) {
+		// copy avgFaceVel to state_new_fc_[lev]
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			avgFaceVel[idim].FillBoundary(geom[lev].periodicity()); // ignore coarse-fine boundary (eek!)
+			amrex::Copy(state_new_fc_[lev][idim], avgFaceVel[idim], Physics_Indices<problem_t>::velFirstIndex, 0,
+				    Physics_NumVars::numVelVars_per_dim, nghost_vel);
 		}
+
+		// fill ghost faces
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			fillBoundaryConditions(state_new_fc_[lev][idim], state_new_fc_[lev][idim], lev, time + 0.5 * dt_lev, quokka::centering::fc, quokka::direction{idim},
+					       InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
+		}
+
+		// copy state_new_fc_[lev] to avgFaceVel
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			amrex::Copy(avgFaceVel[idim], state_new_fc_[lev][idim], 0, Physics_Indices<problem_t>::velFirstIndex,
+				    Physics_NumVars::numVelVars_per_dim, nghost_vel);
+		}
+
+		// advect particles
 		TracerPC->AdvectWithUmac(avgFaceVel.data(), lev, dt_lev);
 	}
 #endif

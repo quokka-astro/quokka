@@ -10,6 +10,7 @@
 /// timestepping, solving, and I/O of a simulation.
 
 // c++ headers
+#include "AMReX_Interpolater.H"
 #include <cassert>
 #include <csignal>
 #include <cstdio>
@@ -243,14 +244,15 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	template <typename PreInterpHook, typename PostInterpHook>
 	void FillPatchWithData(int lev, amrex::Real time, amrex::MultiFab &mf, amrex::Vector<amrex::MultiFab *> &coarseData,
 			       amrex::Vector<amrex::Real> &coarseTime, amrex::Vector<amrex::MultiFab *> &fineData, amrex::Vector<amrex::Real> &fineTime,
-			       int icomp, int ncomp, amrex::Vector<amrex::BCRec> &BCs, FillPatchType fptype, PreInterpHook const &pre_interp,
-			       PostInterpHook const &post_interp);
+			       int icomp, int ncomp, amrex::Vector<amrex::BCRec> &BCs, quokka::centering &cen, FillPatchType fptype,
+			       PreInterpHook const &pre_interp, PostInterpHook const &post_interp);
 
 	static void InterpHookNone(amrex::MultiFab &mf, int scomp, int ncomp);
 	virtual void FillPatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp, quokka::centering cen, quokka::direction dir,
 			       FillPatchType fptype);
 
-	auto getAmrInterpolater() -> amrex::MFInterpolater *;
+	auto getAmrInterpolaterCellCentered() -> amrex::MFInterpolater *;
+	auto getAmrInterpolaterFaceCentered() -> amrex::Interpolater *;
 	void FillCoarsePatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp, amrex::Vector<amrex::BCRec> &BCs, quokka::centering cen,
 			     quokka::direction dir);
 	void GetData(int lev, amrex::Real time, amrex::Vector<amrex::MultiFab *> &data, amrex::Vector<amrex::Real> &datatime, quokka::centering cen,
@@ -318,7 +320,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	// Nghost = number of ghost cells for each array
 	int nghost_cc_ = 4; // PPM needs nghost >= 3, PPM+flattening needs nghost >= 4
-	int nghost_fc_ = 4;
+	int nghost_fc_ = 2; // at least 2 are needed for tracer particles
 	amrex::Vector<std::string> componentNames_cc_;
 	amrex::Vector<std::string> componentNames_fc_;
 	amrex::Vector<std::string> derivedNames_;
@@ -1023,8 +1025,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 	// do hyperbolic advance over all levels
 	advanceSingleTimestepAtLevel(lev, time, dt_[lev], nsubsteps[lev]);
 
-	// TODO(bwibking): advect tracer particles here
-
 	++istep[lev];
 	cellUpdates_ += CountCells(lev); // keep track of total number of cell updates
 	cellUpdatesEachLevel_[lev] += CountCells(lev);
@@ -1116,7 +1116,7 @@ void AMRSimulation<problem_t>::incrementFluxRegisters(amrex::YAFluxRegister *fr_
 	}
 }
 
-template <typename problem_t> auto AMRSimulation<problem_t>::getAmrInterpolater() -> amrex::MFInterpolater *
+template <typename problem_t> auto AMRSimulation<problem_t>::getAmrInterpolaterCellCentered() -> amrex::MFInterpolater *
 {
 	amrex::MFInterpolater *mapper = nullptr;
 
@@ -1133,6 +1133,14 @@ template <typename problem_t> auto AMRSimulation<problem_t>::getAmrInterpolater(
 		amrex::Abort("Invalid AMR interpolation method specified!");
 	}
 
+	return mapper; // global object, so this is ok
+}
+
+template <typename problem_t> auto AMRSimulation<problem_t>::getAmrInterpolaterFaceCentered() -> amrex::Interpolater *
+{
+	// TODO(bwibking): this must be changed to amrex::face_divfree_interp for magnetic fields!
+	// TODO(neco): implement fc interpolator
+	amrex::Interpolater *mapper = &amrex::face_linear_interp;
 	return mapper; // global object, so this is ok
 }
 
@@ -1299,9 +1307,9 @@ void AMRSimulation<problem_t>::FillPatch(int lev, amrex::Real time, amrex::Multi
 	}
 
 	if (cen == quokka::centering::cc) {
-		FillPatchWithData(lev, time, mf, cmf, ctime, fmf, ftime, icomp, ncomp, BCs_cc_, fptype, InterpHookNone, InterpHookNone);
+		FillPatchWithData(lev, time, mf, cmf, ctime, fmf, ftime, icomp, ncomp, BCs_cc_, cen, fptype, InterpHookNone, InterpHookNone);
 	} else if (cen == quokka::centering::fc) {
-		FillPatchWithData(lev, time, mf, cmf, ctime, fmf, ftime, icomp, ncomp, BCs_fc_, fptype, InterpHookNone, InterpHookNone);
+		FillPatchWithData(lev, time, mf, cmf, ctime, fmf, ftime, icomp, ncomp, BCs_fc_, cen, fptype, InterpHookNone, InterpHookNone);
 	}
 }
 
@@ -1331,7 +1339,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 	const int nghost_fc = nghost_fc_;
 	// for each face-centering
 	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-		// iterate over the domain and initialise data
+		// initialize to zero
+		state_new_fc_[level][idim].setVal(0.);
+		// iterate over the domain and re-initialise data
 		for (amrex::MFIter iter(state_new_fc_[level][idim]); iter.isValid(); ++iter) {
 			quokka::grid grid_elem(state_new_fc_[level][idim].array(iter), iter.validbox(), geom[level].CellSizeArray(), geom[level].ProbLoArray(),
 					       geom[level].ProbHiArray(), quokka::centering::fc, static_cast<quokka::direction>(idim));
@@ -1341,8 +1351,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 		// check that the valid state_new_fc_[level][idim] data is filled properly
 		AMREX_ALWAYS_ASSERT(!state_new_fc_[level][idim].contains_nan(0, ncomp_per_dim_fc));
 		// fill ghost zones
+		// N.B. for face-centered fields, we must use FillPatchType::fillpatch_function
 		fillBoundaryConditions(state_new_fc_[level][idim], state_new_fc_[level][idim], level, time, quokka::centering::fc,
-				       static_cast<quokka::direction>(idim), InterpHookNone, InterpHookNone);
+				       static_cast<quokka::direction>(idim), InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
 		state_old_fc_[level][idim].ParallelCopy(state_new_fc_[level][idim], 0, 0, ncomp_per_dim_fc, nghost_fc, nghost_fc);
 	}
 }
@@ -1443,7 +1454,8 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 			AMREX_ASSERT(!coarseData[i]->contains_nan()); // check ghost zones
 		}
 
-		FillPatchWithData(lev, time, S_filled, coarseData, coarseTime, fineData, fineTime, 0, S_filled.nComp(), BCs, fptype, pre_interp, post_interp);
+		FillPatchWithData(lev, time, S_filled, coarseData, coarseTime, fineData, fineTime, 0, S_filled.nComp(), BCs, cen, fptype, pre_interp,
+				  post_interp);
 	} else { // level 0
 		// fill internal and periodic boundaries, ignoring corners (cross=true)
 		// (there is no performance benefit for this in practice)
@@ -1474,17 +1486,17 @@ template <typename PreInterpHook, typename PostInterpHook>
 void AMRSimulation<problem_t>::FillPatchWithData(int lev, amrex::Real time, amrex::MultiFab &mf, amrex::Vector<amrex::MultiFab *> &coarseData,
 						 amrex::Vector<amrex::Real> &coarseTime, amrex::Vector<amrex::MultiFab *> &fineData,
 						 amrex::Vector<amrex::Real> &fineTime, int icomp, int ncomp, amrex::Vector<amrex::BCRec> &BCs,
-						 FillPatchType fptype, PreInterpHook const &pre_interp, PostInterpHook const &post_interp)
+						 quokka::centering &cen, FillPatchType fptype, PreInterpHook const &pre_interp,
+						 PostInterpHook const &post_interp)
 {
 	BL_PROFILE("AMRSimulation::FillPatchWithData()");
 
-	// TODO(neco): implement fc interpolator
-	amrex::MFInterpolater *mapper = getAmrInterpolater();
+	amrex::MFInterpolater *mapper_cc = getAmrInterpolaterCellCentered();
 
 	if (fptype == FillPatchType::fillpatch_class) {
 		if (fillpatcher_[lev] == nullptr) {
 			fillpatcher_[lev] = std::make_unique<amrex::FillPatcher<amrex::MultiFab>>(
-			    grids[lev], dmap[lev], geom[lev], grids[lev - 1], dmap[lev - 1], geom[lev - 1], mf.nGrowVect(), mf.nComp(), mapper);
+			    grids[lev], dmap[lev], geom[lev], grids[lev - 1], dmap[lev - 1], geom[lev - 1], mf.nGrowVect(), mf.nComp(), mapper_cc);
 		}
 	}
 
@@ -1502,12 +1514,21 @@ void AMRSimulation<problem_t>::FillPatchWithData(int lev, amrex::Real time, amre
 		// copies interior zones, fills ghost zones with space-time interpolated
 		// data
 		if (fptype == FillPatchType::fillpatch_class) {
+			// N.B.: this only works for cell-centered data
 			fillpatcher_[lev]->fill(mf, mf.nGrowVect(), time, coarseData, coarseTime, fineData, fineTime, 0, icomp, ncomp,
 						coarsePhysicalBoundaryFunctor, 0, finePhysicalBoundaryFunctor, 0, BCs, 0, pre_interp, post_interp);
 		} else {
-			amrex::FillPatchTwoLevels(mf, time, coarseData, coarseTime, fineData, fineTime, 0, icomp, ncomp, geom[lev - 1], geom[lev],
-						  coarsePhysicalBoundaryFunctor, 0, finePhysicalBoundaryFunctor, 0, refRatio(lev - 1), mapper, BCs, 0,
-						  pre_interp, post_interp);
+			if (cen == quokka::centering::cc) {
+				amrex::FillPatchTwoLevels(mf, time, coarseData, coarseTime, fineData, fineTime, 0, icomp, ncomp, geom[lev - 1], geom[lev],
+							  coarsePhysicalBoundaryFunctor, 0, finePhysicalBoundaryFunctor, 0, refRatio(lev - 1),
+							  getAmrInterpolaterCellCentered(), BCs, 0, pre_interp, post_interp);
+			} else if (cen == quokka::centering::fc) {
+				amrex::FillPatchTwoLevels(mf, time, coarseData, coarseTime, fineData, fineTime, 0, icomp, ncomp, geom[lev - 1], geom[lev],
+							  coarsePhysicalBoundaryFunctor, 0, finePhysicalBoundaryFunctor, 0, refRatio(lev - 1),
+							  getAmrInterpolaterFaceCentered(), BCs, 0, pre_interp, post_interp);
+			} else {
+				amrex::Abort("AMR interpolation is not implemented for this zone centering!");
+			}
 		}
 	}
 }
@@ -1534,10 +1555,15 @@ void AMRSimulation<problem_t>::FillCoarsePatch(int lev, amrex::Real time, amrex:
 	amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>> finePhysicalBoundaryFunctor(geom[lev], BCs, boundaryFunctor);
 	amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>> coarsePhysicalBoundaryFunctor(geom[lev - 1], BCs, boundaryFunctor);
 
-	amrex::MFInterpolater *mapper = getAmrInterpolater();
-
-	amrex::InterpFromCoarseLevel(mf, time, *cmf[0], 0, icomp, ncomp, geom[lev - 1], geom[lev], coarsePhysicalBoundaryFunctor, 0,
-				     finePhysicalBoundaryFunctor, 0, refRatio(lev - 1), mapper, BCs, 0);
+	if (cen == quokka::centering::cc) {
+		amrex::InterpFromCoarseLevel(mf, time, *cmf[0], 0, icomp, ncomp, geom[lev - 1], geom[lev], coarsePhysicalBoundaryFunctor, 0,
+					     finePhysicalBoundaryFunctor, 0, refRatio(lev - 1), getAmrInterpolaterCellCentered(), BCs, 0);
+	} else if (cen == quokka::centering::fc) {
+		amrex::InterpFromCoarseLevel(mf, time, *cmf[0], 0, icomp, ncomp, geom[lev - 1], geom[lev], coarsePhysicalBoundaryFunctor, 0,
+					     finePhysicalBoundaryFunctor, 0, refRatio(lev - 1), getAmrInterpolaterFaceCentered(), BCs, 0);
+	} else {
+		amrex::Abort("AMR interpolation is not implemented for this zone centering!");
+	}
 }
 
 // utility to copy in data from state_old_cc_[lev] and/or state_new_cc_[lev]
@@ -1608,8 +1634,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::AverageDownTo(int c
 	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
 		// for each face-centering (number of dimensions)
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			amrex::average_down(state_new_fc_[crse_lev + 1][idim], state_new_fc_[crse_lev][idim], geom[crse_lev + 1], geom[crse_lev], 0,
-					    state_new_fc_[crse_lev][idim].nComp(), refRatio(crse_lev));
+			amrex::average_down_faces(state_new_fc_[crse_lev + 1][idim], state_new_fc_[crse_lev][idim], refRatio(crse_lev), geom[crse_lev]);
 		}
 	}
 }

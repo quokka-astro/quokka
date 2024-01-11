@@ -2,6 +2,7 @@
 #define PHYSICS_INFO_HPP_
 
 #include "physics_numVars.hpp"
+#include <AMReX.H>
 
 // this struct is specialized by the user application code.
 template <typename problem_t> struct Physics_Traits {
@@ -38,9 +39,10 @@ template <typename problem_t> struct Physics_Indices {
 	static const int pscalarFirstIndex = Physics_NumVars::numHydroVars;
 	static const int radFirstIndex = pscalarFirstIndex + Physics_Traits<problem_t>::numPassiveScalars;
 	// face-centered
-	static const int nvarPerDim_fc = Physics_NumVars::numMHDVars_per_dim * static_cast<int>(Physics_Traits<problem_t>::is_mhd_enabled);
-	static const int nvarTotal_fc = Physics_NumVars::numMHDVars_tot * static_cast<int>(Physics_Traits<problem_t>::is_mhd_enabled);
-	static const int mhdFirstIndex = 0;
+	static const int nvarPerDim_fc = Physics_NumVars::numVelVars_per_dim + Physics_NumVars::numMHDVars_per_dim * static_cast<int>(Physics_Traits<problem_t>::is_mhd_enabled);
+	static const int nvarTotal_fc = AMREX_SPACEDIM * nvarPerDim_fc;
+	static const int velFirstIndex = 0;
+	static const int mhdFirstIndex = velFirstIndex + Physics_NumVars::numVelVars_per_dim;
 };
 
 #endif // PHYSICS_INFO_HPP_

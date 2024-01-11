@@ -24,7 +24,7 @@ do_reflux = 1
 do_subcycle = 1
 do_tracers = 1
 
-amrex.throw_exception = 0
-amrex.signal_handling = 1
+#amrex.throw_exception = 0
+#amrex.signal_handling = 1
 
 checkpoint_interval = 1000
