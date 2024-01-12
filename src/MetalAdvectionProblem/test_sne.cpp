@@ -35,6 +35,7 @@
 #include "radiation_system.hpp"
 #include "test_sne.hpp"
 #include "quadrature.hpp"
+#include "NSCBC_outflow.hpp"
 
 
 using amrex::Real;
@@ -45,7 +46,6 @@ using namespace amrex;
 struct NewProblem {};
 
 template <> struct HydroSystem_Traits<NewProblem> {
-  static constexpr double gamma = 5./3.;
   static constexpr bool reconstruct_eint = true; //Set to true - temperature
 };
 
@@ -61,7 +61,7 @@ template <> struct Physics_Traits<NewProblem> {
   static constexpr bool is_chemistry_enabled = false;
   static constexpr bool is_mhd_enabled = false;
   static constexpr int numMassScalars = 0;		     // number of mass scalars
-  static constexpr int numPassiveScalars = 3; // number of passive scalars
+  static constexpr int numPassiveScalars = numMassScalars + 1; // number of passive scalars
   static constexpr int nGroups = 1; // number of radiation groups
 };
 
@@ -83,7 +83,17 @@ template <> struct SimulationData<NewProblem> {
 	Real refine_threshold = 1.0; // gradient refinement threshold
 };
 
-
+// global variables needed for Dirichlet boundary condition and initial conditions
+#if 0 // workaround AMDGPU compiler bug
+namespace
+{
+#endif
+Real rho0 = NAN;									 // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real Tgas0 = NAN;							 // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real P_outflow = NAN;							 // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+#if 0											 // workaround AMDGPU compiler bug
+};											 // namespace
+#endif
 
 template <>
 void RadhydroSimulation<NewProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem) {
@@ -130,24 +140,26 @@ void RadhydroSimulation<NewProblem>::setInitialConditionsOnGrid(quokka::grid gri
              rho_disk = rho01 * std::exp(-Phitot/std::pow(sigma1,2.0)) ;
              rho_halo = rho02 * std::exp(-Phitot/std::pow(sigma2,2.0));         //in g/cc
              rho = (rho_disk + rho_halo);
+            // rho = rho01;
             
       double P = rho_disk * std::pow(sigma1, 2.0) + rho_halo * std::pow(sigma2, 2.0);
+      // double P = rho01 * std::pow(sigma1, 2.0);
 
       AMREX_ASSERT(!std::isnan(rho));
       
 			const auto gamma = HydroSystem<NewProblem>::gamma_;
      
-      if(std::sqrt(z*z)<0.25*kpc) {
-        state_cc(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex)      = 1.e2/vol;  //Disk tracer
-        state_cc(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+1)    = 1.e-5/vol;  //Halo tracer
-        state_cc(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+2)    = 1.e-5/vol;  //Injected tracer
-       }
+      // if(std::sqrt(z*z)<0.25*kpc) {
+      //   state_cc(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex)      = 1.e2/vol;  //Disk tracer
+      //   state_cc(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+1)    = 1.e-5/vol;  //Halo tracer
+      //   state_cc(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+2)    = 1.e-5/vol;  //Injected tracer
+      //  }
 
-       else {
-        state_cc(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex)      = 1.e-5/vol;  //Disk tracer
-        state_cc(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+1)    = 1.e2/vol;  //Halo tracer
-        state_cc(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+2)    = 1.e-5/vol;  //Injected tracer
-       }
+      //  else {
+      //   state_cc(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex)      = 1.e-5/vol;  //Disk tracer
+      //   state_cc(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+1)    = 1.e2/vol;  //Halo tracer
+      //   state_cc(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+2)    = 1.e-5/vol;  //Injected tracer
+      //  }
 
       state_cc(i, j, k, HydroSystem<NewProblem>::density_index)    = rho;
       state_cc(i, j, k, HydroSystem<NewProblem>::x1Momentum_index) = 0.0;
@@ -155,6 +167,7 @@ void RadhydroSimulation<NewProblem>::setInitialConditionsOnGrid(quokka::grid gri
       state_cc(i, j, k, HydroSystem<NewProblem>::x3Momentum_index) = 0.0;
       state_cc(i, j, k, HydroSystem<NewProblem>::internalEnergy_index) = P / (gamma - 1.);
       state_cc(i, j, k, HydroSystem<NewProblem>::energy_index)         = P / (gamma - 1.);
+      state_cc(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex)    = 1.e-5/vol;  //Injected tracer
 
     });
   }
@@ -177,45 +190,45 @@ void RadhydroSimulation<NewProblem>::ErrorEst(int lev,
    
     amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 
-        amrex::Real  delMoxy = Msun;
-        amrex::Real  Znorm = 1.e3;
-        amrex::Real  ZOinit = 8.6e-3;
-        amrex::Real rho_oxy_ = ZOinit *  state(i, j, k, HydroSystem<NewProblem>::density_index) ;
+      //   amrex::Real  delMoxy = Msun;
+      //   amrex::Real  Znorm = 1.e3;
+      //   amrex::Real  ZOinit = 8.6e-3;
+      //   amrex::Real rho_oxy_ = ZOinit *  state(i, j, k, HydroSystem<NewProblem>::density_index) ;
          
-         amrex::Real scal_xyz   = ZOinit + ((delMoxy/Znorm) * state(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+2)/
-                                                    state(i, j, k, HydroSystem<NewProblem>::density_index)) ;
+      //    amrex::Real scal_xyz   = ZOinit + ((delMoxy/Znorm) * state(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+2)/
+      //                                               state(i, j, k, HydroSystem<NewProblem>::density_index)) ;
 
-        amrex::Real scal_xplus  = ZOinit + ((delMoxy/Znorm) * state(i+1, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+2)/
-                                                              state(i+1, j, k, HydroSystem<NewProblem>::density_index) ) ;
+      //   amrex::Real scal_xplus  = ZOinit + ((delMoxy/Znorm) * state(i+1, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+2)/
+      //                                                         state(i+1, j, k, HydroSystem<NewProblem>::density_index) ) ;
 
-        amrex::Real scal_xminus = ZOinit + ((delMoxy/Znorm) * state(i-1, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+2)/
-                                                              state(i-1, j, k, HydroSystem<NewProblem>::density_index)) ;
+      //   amrex::Real scal_xminus = ZOinit + ((delMoxy/Znorm) * state(i-1, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+2)/
+      //                                                         state(i-1, j, k, HydroSystem<NewProblem>::density_index)) ;
 
-        amrex::Real scal_yplus  = ZOinit + ((delMoxy/Znorm) *  state(i, j+1, k, Physics_Indices<NewProblem>::pscalarFirstIndex+2)/ 
-                                                               state(i, j+1, k, HydroSystem<NewProblem>::density_index));
+      //   amrex::Real scal_yplus  = ZOinit + ((delMoxy/Znorm) *  state(i, j+1, k, Physics_Indices<NewProblem>::pscalarFirstIndex+2)/ 
+      //                                                          state(i, j+1, k, HydroSystem<NewProblem>::density_index));
 
-        amrex::Real scal_yminus = ZOinit + ((delMoxy/Znorm) *  state(i, j-1, k, Physics_Indices<NewProblem>::pscalarFirstIndex+2) / 
-                                                               state(i, j-1, k, HydroSystem<NewProblem>::density_index));
+      //   amrex::Real scal_yminus = ZOinit + ((delMoxy/Znorm) *  state(i, j-1, k, Physics_Indices<NewProblem>::pscalarFirstIndex+2) / 
+      //                                                          state(i, j-1, k, HydroSystem<NewProblem>::density_index));
 
-        amrex::Real scal_zplus  = ZOinit + ((delMoxy/Znorm) *  state(i, j, k+1, Physics_Indices<NewProblem>::pscalarFirstIndex+2)/ 
-                                                               state(i, j, k+1, HydroSystem<NewProblem>::density_index));
+      //   amrex::Real scal_zplus  = ZOinit + ((delMoxy/Znorm) *  state(i, j, k+1, Physics_Indices<NewProblem>::pscalarFirstIndex+2)/ 
+      //                                                          state(i, j, k+1, HydroSystem<NewProblem>::density_index));
 
-        amrex::Real scal_zminus = ZOinit + ((delMoxy/Znorm) *  state(i, j, k-1, Physics_Indices<NewProblem>::pscalarFirstIndex+2) / 
-                                                               state(i, j, k-1, HydroSystem<NewProblem>::density_index));
+      //   amrex::Real scal_zminus = ZOinit + ((delMoxy/Znorm) *  state(i, j, k-1, Physics_Indices<NewProblem>::pscalarFirstIndex+2) / 
+      //                                                          state(i, j, k-1, HydroSystem<NewProblem>::density_index));
         
-        amrex::Real del_scalx   = std::abs(scal_xplus - scal_xminus)/2;
-        amrex::Real del_scaly   = std::abs(scal_yplus - scal_zminus)/2.;
-        amrex::Real del_scalz   = std::abs(scal_zplus - scal_zminus)/2.;
-        // std::max(std::abs(scal_xplus - scal_xyz), std::abs(scal_xminus - scal_xyz));
-        // amrex::Real del_scaly   = std::max(std::abs(scal_yplus - scal_xyz), std::abs(scal_yminus - scal_xyz));
-        // amrex::Real del_scalz   = std::max(std::abs(scal_zplus - scal_xyz), std::abs(scal_zminus - scal_xyz));
+      //   amrex::Real del_scalx   = std::abs(scal_xplus - scal_xminus)/2;
+      //   amrex::Real del_scaly   = std::abs(scal_yplus - scal_zminus)/2.;
+      //   amrex::Real del_scalz   = std::abs(scal_zplus - scal_zminus)/2.;
+      //   // std::max(std::abs(scal_xplus - scal_xyz), std::abs(scal_xminus - scal_xyz));
+      //   // amrex::Real del_scaly   = std::max(std::abs(scal_yplus - scal_xyz), std::abs(scal_yminus - scal_xyz));
+      //   // amrex::Real del_scalz   = std::max(std::abs(scal_zplus - scal_xyz), std::abs(scal_zminus - scal_xyz));
         
-        amrex::Real const grad_scal = (del_scalx  +  del_scaly  + del_scalz )/scal_xyz;          
+      //   amrex::Real const grad_scal = (del_scalx  +  del_scaly  + del_scalz )/scal_xyz;          
         
-        if ((grad_scal > eta_threshold)) {
-        tag(i, j, k) = amrex::TagBox::SET;
-        // printf("Reached here=%d, %d, %d, %.2e\n", i, j, k, grad_scal);
-      }
+      //   if ((grad_scal > eta_threshold)) {
+      //   tag(i, j, k) = amrex::TagBox::SET;
+      //   // printf("Reached here=%d, %d, %d, %.2e\n", i, j, k, grad_scal);
+      // }
 
      
     });
@@ -251,7 +264,7 @@ void AddSupernova(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> pro
 			const Real yc = prob_lo[1] + static_cast<Real>(j) * dx[1] + 0.5 * dx[1];
 			const Real zc = prob_lo[2] + static_cast<Real>(k) * dx[2] + 0.5 * dx[2];
 
-			for (int n = 0; n < np; ++n) {
+			for (int n = 0; n <np; ++n) {
 				Real x0 = NAN;
 				Real y0 = NAN;
 				Real z0 = NAN;
@@ -262,9 +275,10 @@ void AddSupernova(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> pro
         z0 = std::abs(zc -pz(n));
 
         if(x0<0.5*dx[0] && y0<0.5*dx[1] && z0< 0.5*dx[2] ) {
+        // if(i==64 && j==20 && k==506){
         state(i, j, k, HydroSystem<NewProblem>::energy_index)         +=   rho_eint_blast; 
         state(i, j, k, HydroSystem<NewProblem>::internalEnergy_index) +=    rho_eint_blast; 
-        state(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+2)+=  1.e3/cell_vol;
+        state(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex)+=  1.e3/cell_vol;
         printf("The location of SN=%d,%d,%d\n",i, j, k);
         // printf("SN added at level=%d\n", level);
         // printf("The total number of SN gone off=%d\n", cum_sn);
@@ -329,8 +343,6 @@ void RadhydroSimulation<NewProblem>::computeAfterLevelAdvance(int lev, amrex::Re
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx = geom[lev].CellSizeArray();
   
   AddSupernova(state_new_cc_[lev], prob_lo, prob_hi, dx, userData_, lev);
-  
-  // computeCooling(state_new_cc_[lev], dt_lev, userData_.cloudyTables);
 }
 
 template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
@@ -430,23 +442,26 @@ void RadhydroSimulation<NewProblem>::addStrangSplitSources(amrex::MultiFab &mf, 
 
 /**************************Begin NSCBC *****************/
 
-// template <>
-// AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<Channel>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<Real> const &consVar,
-// 											     int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
-// 											     const Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
-// 											     int /*orig_comp*/)
-// {
-// 	auto [i, j, k] = iv.dim3();
-// 	amrex::Box const &box = geom.Domain();
-// 	const auto &domain_lo = box.loVect3d();
-// 	const auto &domain_hi = box.hiVect3d();
-// 	const int ilo = domain_lo[0];
-// 	const int ihi = domain_hi[0];
+template <>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<NewProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<Real> const &consVar,
+											     int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
+											     const Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
+											     int /*orig_comp*/)
+{
+	auto [i, j, k] = iv.dim3();
+	amrex::Box const &box = geom.Domain();
+	const auto &domain_lo = box.loVect3d();
+	const auto &domain_hi = box.hiVect3d();
+	const int klo = domain_lo[2];
+	const int khi = domain_hi[2];
 
-// 	if (i < ilo || i > ihi) {
-		// NSCBC::setOutflowBoundary<Channel, FluxDir::X1, NSCBC::BoundarySide::Upper>(iv, consVar, geom, P_outflow);
-// 	}
-// }
+  if (k < klo) {
+		NSCBC::setOutflowBoundary<NewProblem, FluxDir::X3, NSCBC::BoundarySide::Lower>(iv, consVar, geom, P_outflow);
+	} else if (k > khi) {
+		NSCBC::setOutflowBoundary<NewProblem, FluxDir::X3, NSCBC::BoundarySide::Upper>(iv, consVar, geom, P_outflow);
+	}
+
+}
 
 /**************************End NSCBC *****************/
 
@@ -461,30 +476,32 @@ auto problem_main() -> int {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
 				// outflowing boundary conditions
         if(i==2){
-				 BCs_cc[n].setLo(i, amrex::BCType::foextrap);
-				 BCs_cc[n].setHi(i, amrex::BCType::foextrap);
+				 BCs_cc[n].setLo(i, amrex::BCType::ext_dir);
+				 BCs_cc[n].setHi(i, amrex::BCType::ext_dir);
         }
         else{
            BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
            BCs_cc[n].setHi(i, amrex::BCType::int_dir); // periodic
         }
         }}
-
-
-  /**For a Fully Periodic Box*/
-	// for (int n = 0; n < nvars; ++n) {
-	// 	for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-				
-  //         boundaryConditions[n].setLo(i, amrex::BCType::int_dir); // periodic
-  //         boundaryConditions[n].setHi(i, amrex::BCType::int_dir); // periodic
-        
-  //       }}
-
    
   // Problem initialization
   RadhydroSimulation<NewProblem> sim(BCs_cc);
+
+  amrex::ParmParse const pp("metprob");
+	// initial condition parameters
+	pp.query("rho0", ::rho0);   // initial density [g/cc]
+	pp.query("Tgas0", ::Tgas0); // initial temperature [K]
+  pp.query("pressure0", ::P_outflow); // initial temperature [K]
+
+	// compute derived parameters
+	// const Real Eint0 = quokka::EOS<NewProblem>::ComputeEintFromTgas(rho0, Tgas0);
+	// ::P_outflow = quokka::EOS<NewProblem>::ComputePressure(rho0, Eint0);
+	// amrex::Print() << "Derived outflow pressure is " << ::P_outflow << " erg/cc.\n";
+  amrex::Print() << "Outflow pressure at the edge of the box is " << ::P_outflow << " erg/cc.\n";
+
   sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
-  sim.cflNumber_ = 0.35;         // *must* be less than 1/3 in 3D!
+  sim.cflNumber_ = 0.25;         // *must* be less than 1/3 in 3D!
   
 
   // readCloudyData(sim.userData_.cloudyTables);
