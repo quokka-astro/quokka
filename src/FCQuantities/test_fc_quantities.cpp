@@ -90,7 +90,20 @@ template <> void RadhydroSimulation<FCQuantities>::setInitialConditionsOnGrid(qu
 			}
 			computeWaveSolution(i, j, k, state, dx, prob_lo);
 		});
-	} else if (cen == quokka::centering::fc) {
+	}
+}
+
+template <> void RadhydroSimulation<FCQuantities>::setInitialConditionsOnGridFaceVars(quokka::grid grid_elem)
+{
+	// extract grid information
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
+	const amrex::Array4<double> &state = grid_elem.array_;
+	const amrex::Box &indexRange = grid_elem.indexRange_;
+	const quokka::centering cen = grid_elem.cen_;
+	const quokka::direction dir = grid_elem.dir_;
+
+	if (cen == quokka::centering::fc) {
 		if (dir == quokka::direction::x) {
 			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 				state(i, j, k, MHDSystem<FCQuantities>::bfield_index) = 1.0 + (i % 2);
@@ -159,7 +172,7 @@ auto problem_main() -> int
 	amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const &state_new_fc_write = sim_write.getNewMF_fc();
 	amrex::Print() << "\n";
 
-	RadhydroSimulation<FCQuantities> sim_restart(BCs_cc);
+	RadhydroSimulation<FCQuantities> sim_restart(BCs_cc, BCs_fc);
 	sim_restart.setChkFile("chk00000");
 	sim_restart.setInitialConditions();
 	amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const &state_new_fc_restart = sim_restart.getNewMF_fc();
