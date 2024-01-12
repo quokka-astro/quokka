@@ -166,6 +166,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real abstolPoisson_ = 1.0e-5;	    // default (scaled by minimum RHS value)
 	int doPoissonSolve_ = 0;		    // 1 == self-gravity enabled, 0 == disabled
 	amrex::Vector<amrex::MultiFab> phi;
+	amrex::Vector<amrex::MultiFab> rhs;
 
 	amrex::Real densityFloor_ = 0.0;				// default
 	amrex::Real tempCeiling_ = std::numeric_limits<double>::max();	// default
@@ -577,13 +578,30 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 		ReadCheckpointFile();
 	}
 
+	// set up elliptic solve object
+	amrex::OpenBCSolver poissonSolver(Geom(0, finest_level), boxArray(0, finest_level), DistributionMap(0, finest_level));
+	if (verbose) {
+		poissonSolver.setVerbose(true);
+		poissonSolver.setBottomVerbose(false);
+		amrex::Print() << "Doing initial Poisson solve...\n\n";
+	}
+
 	phi.resize(finest_level + 1);
+	rhs.resize(finest_level + 1);
 	const int nghost = 1;
 	const int ncomp = 1;
+	amrex::Real rhs_min = std::numeric_limits<amrex::Real>::max();
 	for (int lev = 0; lev <= finest_level; ++lev) {
 		phi[lev].define(grids[lev], dmap[lev], ncomp, nghost);
+		rhs[lev].define(grids[lev], dmap[lev], ncomp, nghost);
 		phi[lev].setVal(0); // set initial guess to zero
-	}
+		rhs[lev].setVal(0);
+		fillPoissonRhsAtLevel(rhs[lev], lev); // calculate phi at t=0
+		rhs_min = std::min(rhs_min, rhs[lev].min(0));
+                }
+
+	amrex::Real abstol = abstolPoisson_ * rhs_min;
+	poissonSolver.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs), reltolPoisson_, abstol);
 
 	// abort if amrex.async_out=1, it is currently broken
 	if (amrex::AsyncOut::UseAsyncOut()) {
@@ -921,7 +939,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::ellipticSolveAllLev
 		}
 
 		// solve Poisson equation with open b.c. using the method of James (1977)
-		amrex::Vector<amrex::MultiFab> rhs(finest_level + 1);
 		const int nghost = 1;
 		const int ncomp = 1;
 		amrex::Real rhs_min = std::numeric_limits<amrex::Real>::max();
