@@ -79,14 +79,14 @@ template <> void RadhydroSimulation<FCQuantities>::setInitialConditionsOnGrid(qu
 	const amrex::Array4<double> &state = grid_elem.array_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 
-		const int ncomp_cc = Physics_Indices<FCQuantities>::nvarTotal_cc;
-		// loop over the grid and set the initial condition
-		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-			for (int n = 0; n < ncomp_cc; ++n) {
-				state(i, j, k, n) = 0; // fill unused quantities with zeros
-			}
-			computeWaveSolution(i, j, k, state, dx, prob_lo);
-		});
+	const int ncomp_cc = Physics_Indices<FCQuantities>::nvarTotal_cc;
+	// loop over the grid and set the initial condition
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		for (int n = 0; n < ncomp_cc; ++n) {
+			state(i, j, k, n) = 0; // fill unused quantities with zeros
+		}
+		computeWaveSolution(i, j, k, state, dx, prob_lo);
+	});
 }
 
 template <> void RadhydroSimulation<FCQuantities>::setInitialConditionsOnGridFaceVars(quokka::grid grid_elem)
@@ -96,19 +96,16 @@ template <> void RadhydroSimulation<FCQuantities>::setInitialConditionsOnGridFac
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const quokka::direction dir = grid_elem.dir_;
 
-		if (dir == quokka::direction::x) {
-			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-				state(i, j, k, MHDSystem<FCQuantities>::bfield_index) = 1.0 + (i % 2);
-			});
-		} else if (dir == quokka::direction::y) {
-			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-				state(i, j, k, MHDSystem<FCQuantities>::bfield_index) = 2.0 + (j % 2);
-			});
-		} else if (dir == quokka::direction::z) {
-			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-				state(i, j, k, MHDSystem<FCQuantities>::bfield_index) = 3.0 + (k % 2);
-			});
-		}
+	if (dir == quokka::direction::x) {
+		amrex::ParallelFor(
+		    indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { state(i, j, k, MHDSystem<FCQuantities>::bfield_index) = 1.0 + (i % 2); });
+	} else if (dir == quokka::direction::y) {
+		amrex::ParallelFor(
+		    indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { state(i, j, k, MHDSystem<FCQuantities>::bfield_index) = 2.0 + (j % 2); });
+	} else if (dir == quokka::direction::z) {
+		amrex::ParallelFor(
+		    indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { state(i, j, k, MHDSystem<FCQuantities>::bfield_index) = 3.0 + (k % 2); });
+	}
 }
 
 void checkMFs(amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const &state1,
