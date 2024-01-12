@@ -78,10 +78,7 @@ template <> void RadhydroSimulation<FCQuantities>::setInitialConditionsOnGrid(qu
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
 	const amrex::Array4<double> &state = grid_elem.array_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
-	const quokka::centering cen = grid_elem.cen_;
-	const quokka::direction dir = grid_elem.dir_;
 
-	if (cen == quokka::centering::cc) {
 		const int ncomp_cc = Physics_Indices<FCQuantities>::nvarTotal_cc;
 		// loop over the grid and set the initial condition
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -90,20 +87,15 @@ template <> void RadhydroSimulation<FCQuantities>::setInitialConditionsOnGrid(qu
 			}
 			computeWaveSolution(i, j, k, state, dx, prob_lo);
 		});
-	}
 }
 
 template <> void RadhydroSimulation<FCQuantities>::setInitialConditionsOnGridFaceVars(quokka::grid grid_elem)
 {
 	// extract grid information
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_lo = grid_elem.prob_lo_;
 	const amrex::Array4<double> &state = grid_elem.array_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
-	const quokka::centering cen = grid_elem.cen_;
 	const quokka::direction dir = grid_elem.dir_;
 
-	if (cen == quokka::centering::fc) {
 		if (dir == quokka::direction::x) {
 			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 				state(i, j, k, MHDSystem<FCQuantities>::bfield_index) = 1.0 + (i % 2);
@@ -117,7 +109,6 @@ template <> void RadhydroSimulation<FCQuantities>::setInitialConditionsOnGridFac
 				state(i, j, k, MHDSystem<FCQuantities>::bfield_index) = 3.0 + (k % 2);
 			});
 		}
-	}
 }
 
 void checkMFs(amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const &state1,
