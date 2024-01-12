@@ -26,6 +26,7 @@
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
 #include "AMReX_BCRec.H"
+#include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_Box.H"
 #include "AMReX_FArrayBox.H"
@@ -49,6 +50,7 @@
 #include "AMReX_REAL.H"
 #include "AMReX_Utility.H"
 #include "AMReX_YAFluxRegister.H"
+#include "physics_numVars.hpp"
 
 #ifdef AMREX_USE_ASCENT
 #include "AMReX_Conduit_Blueprint.H"
@@ -150,22 +152,12 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	// member functions
 	explicit RadhydroSimulation(amrex::Vector<amrex::BCRec> &BCs_cc, amrex::Vector<amrex::BCRec> &BCs_fc) : AMRSimulation<problem_t>(BCs_cc, BCs_fc)
 	{
-		defineComponentNames();
-		// read in runtime parameters
-		readParmParse();
-		// set gamma
-		amrex::ParmParse eos("eos");
-		eos.add("eos_gamma", quokka::EOS_Traits<problem_t>::gamma);
-
-		// initialize Microphysics params
-		init_extern_parameters();
-		// initialize Microphysics EOS
-		amrex::Real small_temp = 1e-10;
-		amrex::Real small_dens = 1e-100;
-		eos_init(small_temp, small_dens);
+		initialize();
 	}
 
-	explicit RadhydroSimulation(amrex::Vector<amrex::BCRec> &BCs_cc) : AMRSimulation<problem_t>(BCs_cc)
+	explicit RadhydroSimulation(amrex::Vector<amrex::BCRec> &BCs_cc) : AMRSimulation<problem_t>(BCs_cc) { initialize(); }
+
+	inline void initialize()
 	{
 		defineComponentNames();
 		// read in runtime parameters
@@ -173,7 +165,6 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 		// set gamma
 		amrex::ParmParse eos("eos");
 		eos.add("eos_gamma", quokka::EOS_Traits<problem_t>::gamma);
-
 		// initialize Microphysics params
 		init_extern_parameters();
 		// initialize Microphysics EOS
@@ -191,6 +182,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	auto computeExtraPhysicsTimestep(int lev) -> amrex::Real override;
 	void preCalculateInitialConditions() override;
 	void setInitialConditionsOnGrid(quokka::grid grid_elem) override;
+	void setInitialConditionsOnGridFaceVars(quokka::grid grid_elem) override;
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle) override;
 	void computeAfterTimestep() override;
 	void computeAfterLevelAdvance(int lev, amrex::Real time, amrex::Real dt_lev, int /*ncycle*/);
@@ -482,6 +474,12 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::preCalculateIn
 }
 
 template <typename problem_t> void RadhydroSimulation<problem_t>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+{
+	// default empty implementation
+	// user should implement using problem-specific template specialization
+}
+
+template <typename problem_t> void RadhydroSimulation<problem_t>::setInitialConditionsOnGridFaceVars(quokka::grid grid_elem)
 {
 	// default empty implementation
 	// user should implement using problem-specific template specialization

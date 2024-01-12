@@ -182,7 +182,30 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// constructor
 	explicit AMRSimulation(amrex::Vector<amrex::BCRec> &BCs_cc, amrex::Vector<amrex::BCRec> &BCs_fc) : BCs_cc_(BCs_cc), BCs_fc_(BCs_fc) { initialize(); }
 
-	explicit AMRSimulation(amrex::Vector<amrex::BCRec> &BCs_cc) : BCs_cc_(BCs_cc) { initialize(); }
+	explicit AMRSimulation(amrex::Vector<amrex::BCRec> &BCs_cc) : BCs_cc_(BCs_cc), BCs_fc_(builtin_BCs_fc(BCs_cc)) { initialize(); }
+
+	inline auto builtin_BCs_fc(amrex::Vector<amrex::BCRec> &BCs_cc) -> amrex::Vector<amrex::BCRec>
+	{
+		AMREX_ALWAYS_ASSERT(Physics_Indices<problem_t>::nvarPerDim_fc == 1);
+
+		// set boundary conditions for face velocities (used ONLY for tracer particles)
+		amrex::Vector<amrex::BCRec> BCs_fc(Physics_Indices<problem_t>::nvarPerDim_fc);
+		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+			// lower boundary
+			if (BCs_cc[Physics_Indices<problem_t>::hydroFirstIndex].lo(i) == amrex::BCType::int_dir) {
+				BCs_fc[Physics_Indices<problem_t>::velFirstIndex].setLo(i, amrex::BCType::int_dir);
+			} else {
+				BCs_fc[Physics_Indices<problem_t>::velFirstIndex].setLo(i, amrex::BCType::foextrap);
+			}
+			// upper boundary
+			if (BCs_cc[Physics_Indices<problem_t>::hydroFirstIndex].hi(i) == amrex::BCType::int_dir) {
+				BCs_fc[Physics_Indices<problem_t>::velFirstIndex].setHi(i, amrex::BCType::int_dir);
+			} else {
+				BCs_fc[Physics_Indices<problem_t>::velFirstIndex].setHi(i, amrex::BCType::foextrap);
+			}
+		}
+		return BCs_fc;
+	}
 
 	void initialize();
 	void PerformanceHints();
@@ -202,6 +225,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	virtual void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle) = 0;
 	virtual void preCalculateInitialConditions() = 0;
 	virtual void setInitialConditionsOnGrid(quokka::grid grid_elem) = 0;
+	virtual void setInitialConditionsOnGridFaceVars(quokka::grid grid_elem) = 0;
 	virtual void computeAfterTimestep() = 0;
 	virtual void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) = 0;
 	virtual void fillPoissonRhsAtLevel(amrex::MultiFab &rhs, int lev) = 0;
@@ -272,6 +296,12 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	AMREX_GPU_DEVICE static void setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, int dcomp, int numcomp,
 								 amrex::GeometryData const &geom, amrex::Real time, const amrex::BCRec *bcr, int bcomp,
 								 int orig_comp); // template specialized by problem generator
+
+	// boundary condition
+	AMREX_GPU_DEVICE static void setCustomBoundaryConditionsFaceVar(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, int dcomp,
+									int numcomp, amrex::GeometryData const &geom, amrex::Real time, const amrex::BCRec *bcr,
+									int bcomp,
+									int orig_comp); // template specialized by problem generator
 
 	template <typename ReduceOp, typename F> auto computePlaneProjection(F const &user_f, int dir) const -> amrex::BaseFab<amrex::Real>;
 
@@ -1268,11 +1298,33 @@ template <typename problem_t> struct setBoundaryFunctor {
 	}
 };
 
+template <typename problem_t> struct setBoundaryFunctorFaceVar {
+	AMREX_GPU_DEVICE void operator()(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, const int &dcomp, const int &numcomp,
+					 amrex::GeometryData const &geom, const amrex::Real &time, const amrex::BCRec *bcr, int bcomp,
+					 const int &orig_comp) const
+	{
+		AMRSimulation<problem_t>::setCustomBoundaryConditionsFaceVar(iv, dest, dcomp, numcomp, geom, time, bcr, bcomp, orig_comp);
+	}
+};
+
 template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest,
 											       int dcomp, int numcomp, amrex::GeometryData const &geom,
 											       const amrex::Real time, const amrex::BCRec *bcr, int bcomp,
 											       int orig_comp)
+{
+	// user should implement if needed using template specialization
+	// (This is only called when amrex::BCType::ext_dir is set for a given
+	// boundary.)
+
+	// set boundary condition for cell 'iv'
+}
+
+template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+AMRSimulation<problem_t>::setCustomBoundaryConditionsFaceVar(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, int dcomp, int numcomp,
+							     amrex::GeometryData const &geom, const amrex::Real time, const amrex::BCRec *bcr, int bcomp,
+							     int orig_comp)
 {
 	// user should implement if needed using template specialization
 	// (This is only called when amrex::BCType::ext_dir is set for a given
@@ -1346,7 +1398,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 			quokka::grid grid_elem(state_new_fc_[level][idim].array(iter), iter.validbox(), geom[level].CellSizeArray(), geom[level].ProbLoArray(),
 					       geom[level].ProbHiArray(), quokka::centering::fc, static_cast<quokka::direction>(idim));
 			// set initial conditions defined by the user
-			setInitialConditionsOnGrid(grid_elem);
+			setInitialConditionsOnGridFaceVars(grid_elem);
 		}
 		// check that the valid state_new_fc_[level][idim] data is filled properly
 		AMREX_ALWAYS_ASSERT(!state_new_fc_[level][idim].contains_nan(0, ncomp_per_dim_fc));
@@ -1463,10 +1515,23 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 		state.FillBoundary(geom[lev].periodicity());
 
 		if (!geom[lev].isAllPeriodic()) {
-			amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>> boundaryFunctor(setBoundaryFunctor<problem_t>{});
-			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>> physicalBoundaryFunctor(geom[lev], BCs, boundaryFunctor);
-			// fill physical boundaries
-			physicalBoundaryFunctor(state, 0, state.nComp(), state.nGrowVect(), time, 0);
+			if (cen == quokka::centering::cc) {
+				// create cell-centered boundary functor
+				amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>> boundaryFunctor =
+				    amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>{setBoundaryFunctor<problem_t>{}};
+				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>> physicalBoundaryFunctor(geom[lev], BCs,
+																  boundaryFunctor);
+				// fill physical boundaries
+				physicalBoundaryFunctor(state, 0, state.nComp(), state.nGrowVect(), time, 0);
+			} else if (cen == quokka::centering::fc) {
+				// create face-centered boundary functor
+				amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>> boundaryFunctor =
+				    amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>>{setBoundaryFunctorFaceVar<problem_t>{}};
+				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>>> physicalBoundaryFunctor(geom[lev], BCs,
+																	 boundaryFunctor);
+				// fill physical boundaries
+				physicalBoundaryFunctor(state, 0, state.nComp(), state.nGrowVect(), time, 0);
+			}
 		}
 	}
 

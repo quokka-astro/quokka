@@ -13,7 +13,7 @@ amr.v              = 1       # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 64 64 8
+amr.n_cell          = 128 128 8
 amr.max_level       = 3     # number of levels = max_level + 1
 amr.blocking_factor = 16   # grid size must be divisible by this
 amr.max_grid_size   = 64
@@ -24,7 +24,8 @@ do_reflux = 1
 do_subcycle = 1
 do_tracers = 1
 
-#amrex.throw_exception = 0
-#amrex.signal_handling = 1
+amrex.throw_exception = 0
+amrex.signal_handling = 1
 
 checkpoint_interval = 1000
+stop_time = 5.0

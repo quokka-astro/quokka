@@ -45,10 +45,6 @@ template <> struct Physics_Traits<KelvinHelmholzProblem> {
 
 template <> void RadhydroSimulation<KelvinHelmholzProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
-	if (grid_elem.cen_ != quokka::centering::cc) {
-		return;
-	}
-
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
@@ -135,19 +131,11 @@ auto problem_main() -> int
 			BCs_cc[n].setHi(i, amrex::BCType::int_dir); // periodic
 		}
 	}
-	const int ncomp_fc = Physics_Indices<KelvinHelmholzProblem>::nvarTotal_fc;
-	amrex::Vector<amrex::BCRec> BCs_fc(ncomp_fc);
-	for (int n = 0; n < ncomp_fc; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			BCs_fc[n].setLo(i, amrex::BCType::int_dir); // periodic
-			BCs_fc[n].setLo(i, amrex::BCType::int_dir); // periodic
-		}
-	}
 
 	// Problem initialization
-	RadhydroSimulation<KelvinHelmholzProblem> sim(BCs_cc, BCs_fc);
+	RadhydroSimulation<KelvinHelmholzProblem> sim(BCs_cc);
 
-	sim.stopTime_ = 1.5;
+	//sim.stopTime_ = 1.5;
 	sim.cflNumber_ = 0.4;
 	sim.maxTimesteps_ = 40000;
 	sim.plotfileInterval_ = 100;
