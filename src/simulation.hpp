@@ -165,6 +165,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real reltolPoisson_ = 1.0e-5;	    // default
 	amrex::Real abstolPoisson_ = 1.0e-5;	    // default (scaled by minimum RHS value)
 	int doPoissonSolve_ = 0;		    // 1 == self-gravity enabled, 0 == disabled
+	amrex::Vector<amrex::MultiFab> phi;
 
 	amrex::Real densityFloor_ = 0.0;				// default
 	amrex::Real tempCeiling_ = std::numeric_limits<double>::max();	// default
@@ -910,7 +911,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ellipticSolveAllLev
 		}
 
 		// solve Poisson equation with open b.c. using the method of James (1977)
-		amrex::Vector<amrex::MultiFab> phi(finest_level + 1);
+		phi.resize(finest_level + 1);
 		amrex::Vector<amrex::MultiFab> rhs(finest_level + 1);
 		const int nghost = 1;
 		const int ncomp = 1;
