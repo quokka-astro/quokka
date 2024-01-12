@@ -97,7 +97,7 @@ template <> void RadhydroSimulation<FCQuantities>::setInitialConditionsOnGridFac
 {
 	// extract grid information
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_lo = grid_elem.prob_lo_;
 	const amrex::Array4<double> &state = grid_elem.array_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const quokka::centering cen = grid_elem.cen_;
