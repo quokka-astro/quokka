@@ -96,7 +96,7 @@ template <> void RadhydroSimulation<FCQuantities>::setInitialConditionsOnGrid(qu
 template <> void RadhydroSimulation<FCQuantities>::setInitialConditionsOnGridFaceVars(quokka::grid grid_elem)
 {
 	// extract grid information
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
 	const amrex::Array4<double> &state = grid_elem.array_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
