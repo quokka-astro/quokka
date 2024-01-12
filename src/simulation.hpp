@@ -598,7 +598,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 		rhs[lev].setVal(0);
 		fillPoissonRhsAtLevel(rhs[lev], lev); // calculate phi at t=0
 		rhs_min = std::min(rhs_min, rhs[lev].min(0));
-                }
+	}
 
 	amrex::Real abstol = abstolPoisson_ * rhs_min;
 	poissonSolver.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs), reltolPoisson_, abstol);
