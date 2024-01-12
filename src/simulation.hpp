@@ -577,6 +577,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 		ReadCheckpointFile();
 	}
 
+	phi.resize(finest_level + 1);
+	const int nghost = 1;
+	const int ncomp = 1;
+	for (int lev = 0; lev <= finest_level; ++lev) {
+		phi[lev].define(grids[lev], dmap[lev], ncomp, nghost);
+		phi[lev].setVal(0); // set initial guess to zero
+	}
+
 	// abort if amrex.async_out=1, it is currently broken
 	if (amrex::AsyncOut::UseAsyncOut()) {
 		amrex::Print() << "[ERROR] [FATAL] AsyncOut is currently broken! If you want to "
@@ -913,7 +921,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::ellipticSolveAllLev
 		}
 
 		// solve Poisson equation with open b.c. using the method of James (1977)
-		phi.resize(finest_level + 1);
 		amrex::Vector<amrex::MultiFab> rhs(finest_level + 1);
 		const int nghost = 1;
 		const int ncomp = 1;
