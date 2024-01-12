@@ -23,7 +23,7 @@ import subprocess, os
 # -- Project information -----------------------------------------------------
 
 project = 'Quokka'
-copyright = '2020-2021, Ben Wibking and Quokka Developers'
+copyright = '2020-2023, Ben Wibking and Quokka Developers'
 author = 'Ben Wibking and Quokka Developers'
 
 # The full version, including alpha/beta/rc tags
