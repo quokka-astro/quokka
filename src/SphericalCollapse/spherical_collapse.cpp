@@ -111,7 +111,7 @@ template <> void RadhydroSimulation<CollapseProblem>::ComputeDerivedVar(int lev,
 	if (dname == "gpot") {
 		const int ncomp = ncomp_cc_in;
 		auto const &state = state_new_cc_[lev].const_arrays();
-		auto const &phi_data_ref = phi_data[lev].const_arrays();
+		auto const &phi_data_ref = phi[lev].const_arrays();
 		auto output = mf.arrays();
 
 		amrex::ParallelFor(

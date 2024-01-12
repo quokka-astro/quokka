@@ -107,7 +107,6 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	using AMRSimulation<problem_t>::tempFloor_;
 	using AMRSimulation<problem_t>::tempCeiling_;
 	using AMRSimulation<problem_t>::speedCeiling_;
-	using AMRSimulation<problem_t>::phi_data;
 
 	SimulationData<problem_t> userData_;
 
