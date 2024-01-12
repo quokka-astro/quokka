@@ -15,7 +15,7 @@ pr:
 jobs:
   - job: CUDA_Build_Test
     pool: avatar
-    timeoutInMinutes: 90
+    timeoutInMinutes: 120
     steps:
     - task: CMake@1
       displayName: 'Configure CMake'
