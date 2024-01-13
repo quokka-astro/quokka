@@ -579,30 +579,32 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 	}
 
 #if AMREX_SPACEDIM == 3
-	// set up elliptic solve object
-	amrex::OpenBCSolver poissonSolver(Geom(0, finest_level), boxArray(0, finest_level), DistributionMap(0, finest_level));
-	if (verbose) {
-		poissonSolver.setVerbose(true);
-		poissonSolver.setBottomVerbose(false);
-		amrex::Print() << "Doing initial Poisson solve...\n\n";
-	}
+	if (doPoissonSolve_) {
+		// set up elliptic solve object
+		amrex::OpenBCSolver poissonSolver(Geom(0, finest_level), boxArray(0, finest_level), DistributionMap(0, finest_level));
+		if (verbose) {
+			poissonSolver.setVerbose(true);
+			poissonSolver.setBottomVerbose(false);
+			amrex::Print() << "Doing initial Poisson solve...\n\n";
+		}
 
-	phi.resize(finest_level + 1);
-	rhs.resize(finest_level + 1);
-	const int nghost = 1;
-	const int ncomp = 1;
-	amrex::Real rhs_min = std::numeric_limits<amrex::Real>::max();
-	for (int lev = 0; lev <= finest_level; ++lev) {
-		phi[lev].define(grids[lev], dmap[lev], ncomp, nghost);
-		rhs[lev].define(grids[lev], dmap[lev], ncomp, nghost);
-		phi[lev].setVal(0); // set initial guess to zero
-		rhs[lev].setVal(0);
-		fillPoissonRhsAtLevel(rhs[lev], lev); // calculate phi at t=0
-		rhs_min = std::min(rhs_min, rhs[lev].min(0));
-	}
+		phi.resize(finest_level + 1);
+		rhs.resize(finest_level + 1);
+		const int nghost = 1;
+		const int ncomp = 1;
+		amrex::Real rhs_min = std::numeric_limits<amrex::Real>::max();
+		for (int lev = 0; lev <= finest_level; ++lev) {
+			phi[lev].define(grids[lev], dmap[lev], ncomp, nghost);
+			rhs[lev].define(grids[lev], dmap[lev], ncomp, nghost);
+			phi[lev].setVal(0); // set initial guess to zero
+			rhs[lev].setVal(0);
+			fillPoissonRhsAtLevel(rhs[lev], lev); // calculate phi at t=0
+			rhs_min = std::min(rhs_min, rhs[lev].min(0));
+		}
 
-	amrex::Real abstol = abstolPoisson_ * rhs_min;
-	poissonSolver.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs), reltolPoisson_, abstol);
+		amrex::Real abstol = abstolPoisson_ * rhs_min;
+		poissonSolver.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs), reltolPoisson_, abstol);
+	}
 #endif
 
 	// abort if amrex.async_out=1, it is currently broken
