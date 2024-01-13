@@ -578,6 +578,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 		ReadCheckpointFile();
 	}
 
+#if AMREX_SPACEDIM == 3
 	// set up elliptic solve object
 	amrex::OpenBCSolver poissonSolver(Geom(0, finest_level), boxArray(0, finest_level), DistributionMap(0, finest_level));
 	if (verbose) {
@@ -602,6 +603,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 
 	amrex::Real abstol = abstolPoisson_ * rhs_min;
 	poissonSolver.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs), reltolPoisson_, abstol);
+#endif
 
 	// abort if amrex.async_out=1, it is currently broken
 	if (amrex::AsyncOut::UseAsyncOut()) {
