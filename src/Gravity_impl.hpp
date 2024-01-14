@@ -256,7 +256,7 @@ template <typename T> void Gravity<T>::solve_for_phi(int level, MultiFab &phi, c
 			grad_phi_p[0][i] = grad_phi[i];
 		}
 
-		amrex::Vector<amrex::MultiFab*> res_null;
+		amrex::Vector<amrex::MultiFab *> res_null;
 
 		level_solver_resnorm[level] = solve_phi_with_mlmg(level, level, phi_p, amrex::GetVecOfPtrs(rhs), grad_phi_p, res_null, time);
 
@@ -318,7 +318,8 @@ template <typename T> void Gravity<T>::multilevel_solve_for_new_phi(int level, i
 	actual_multilevel_solve(level, finest_level_in, amrex::GetVecOfVecOfPtrs(grad_phi_curr), is_new);
 }
 
-template <typename T> void Gravity<T>::actual_multilevel_solve(int crse_level, int finest_level_in, const amrex::Vector<amrex::MultiFab *> &grad_phi, int is_new)
+template <typename T>
+void Gravity<T>::actual_multilevel_solve(int crse_level, int finest_level_in, const amrex::Vector<amrex::MultiFab *> &grad_phi, int is_new)
 {
 	BL_PROFILE("Gravity<T>::actual_multilevel_solve()");
 

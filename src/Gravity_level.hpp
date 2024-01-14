@@ -178,7 +178,8 @@ template <typename T> void Gravity<T>::construct_new_gravity(Real time, int leve
 
 template <typename T>
 void Gravity<T>::create_comp_minus_level_grad_phi(int level, MultiFab &comp_phi, const amrex::Vector<MultiFab *> &comp_gphi,
-						  std::unique_ptr<MultiFab> &comp_minus_level_phi, amrex::Vector<std::unique_ptr<MultiFab>> &comp_minus_level_grad_phi)
+						  std::unique_ptr<MultiFab> &comp_minus_level_phi,
+						  amrex::Vector<std::unique_ptr<MultiFab>> &comp_minus_level_grad_phi)
 {
 	BL_PROFILE("Gravity<T>::create_comp_minus_level_grad_phi()");
 

@@ -12,8 +12,8 @@
 #include "Gravity.hpp"
 
 template <typename T>
-void Gravity<T>::test_residual(const Box &bx, amrex::Array4<Real> const &rhs, amrex::Array4<Real> const &ecx, amrex::Array4<Real> const &ecy, amrex::Array4<Real> const &ecz,
-			       amrex::GpuArray<Real, AMREX_SPACEDIM> dx)
+void Gravity<T>::test_residual(const Box &bx, amrex::Array4<Real> const &rhs, amrex::Array4<Real> const &ecx, amrex::Array4<Real> const &ecy,
+			       amrex::Array4<Real> const &ecz, amrex::GpuArray<Real, AMREX_SPACEDIM> dx)
 {
 	// Test whether using the edge-based gradients
 	// to compute Div(Grad(Phi)) satisfies Lap(phi) = RHS
