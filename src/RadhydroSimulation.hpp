@@ -57,8 +57,8 @@
 
 #include "Chemistry.hpp"
 #include "CloudyCooling.hpp"
-#include "HLLC.hpp"
 #include "Gravity.hpp"
+#include "HLLC.hpp"
 #include "SimulationData.hpp"
 #include "hydro_system.hpp"
 #include "hyperbolic_system.hpp"
