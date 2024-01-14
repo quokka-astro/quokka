@@ -165,6 +165,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real reltolPoisson_ = 1.0e-5;	    // default
 	amrex::Real abstolPoisson_ = 1.0e-5;	    // default (scaled by minimum RHS value)
 	int doPoissonSolve_ = 0;		    // 1 == self-gravity enabled, 0 == disabled
+	amrex::Vector<amrex::MultiFab> phi;
 
 	amrex::Real densityFloor_ = 0.0;				// default
 	amrex::Real tempCeiling_ = std::numeric_limits<double>::max();	// default
@@ -253,6 +254,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void AverageDown();
 	void AverageDownTo(int crse_lev);
 	auto timeStepWithSubcycling(int lev, amrex::Real time, bool coarseTimeBoundary, int stepsLeft) -> int;
+	void calculateGpotAllLevels();
+	void gravAccelAllLevels(amrex::Real dt);
 	void ellipticSolveAllLevels(amrex::Real dt);
 
 	void incrementFluxRegisters(amrex::MFIter &mfi, amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine,
@@ -576,6 +579,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 		ReadCheckpointFile();
 	}
 
+	calculateGpotAllLevels();
+
 	// abort if amrex.async_out=1, it is currently broken
 	if (amrex::AsyncOut::UseAsyncOut()) {
 		amrex::Print() << "[ERROR] [FATAL] AsyncOut is currently broken! If you want to "
@@ -893,7 +898,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 #endif
 }
 
-template <typename problem_t> void AMRSimulation<problem_t>::ellipticSolveAllLevels(const amrex::Real dt)
+template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLevels()
 {
 #if AMREX_SPACEDIM == 3
 	if (doPoissonSolve_) {
@@ -911,8 +916,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::ellipticSolveAllLev
 			amrex::Print() << "Doing Poisson solve...\n\n";
 		}
 
+		phi.resize(finest_level + 1);
 		// solve Poisson equation with open b.c. using the method of James (1977)
-		amrex::Vector<amrex::MultiFab> phi(finest_level + 1);
 		amrex::Vector<amrex::MultiFab> rhs(finest_level + 1);
 		const int nghost = 1;
 		const int ncomp = 1;
@@ -931,11 +936,33 @@ template <typename problem_t> void AMRSimulation<problem_t>::ellipticSolveAllLev
 		if (verbose) {
 			amrex::Print() << "\n";
 		}
+	}
+#endif
+}
+
+template <typename problem_t> void AMRSimulation<problem_t>::gravAccelAllLevels(const amrex::Real dt)
+{
+#if AMREX_SPACEDIM == 3
+	if (doPoissonSolve_) {
+
+		BL_PROFILE_REGION("GravitySolver");
 
 		// add gravitational acceleration to hydro state (using operator splitting)
 		for (int lev = 0; lev <= finest_level; ++lev) {
 			applyPoissonGravityAtLevel(phi[lev], lev, dt);
 		}
+	}
+#endif
+}
+
+template <typename problem_t> void AMRSimulation<problem_t>::ellipticSolveAllLevels(const amrex::Real dt)
+{
+#if AMREX_SPACEDIM == 3
+	if (doPoissonSolve_) {
+
+		calculateGpotAllLevels();
+
+		gravAccelAllLevels(dt);
 	}
 #endif
 }
