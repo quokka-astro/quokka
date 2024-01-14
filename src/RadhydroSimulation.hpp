@@ -823,8 +823,8 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::addGravitySour
 	// TODO(benwibking): add sources to hydro state
 }
 
-template <typename F>
 template <typename problem_t>
+template <typename F>
 auto RadhydroSimulation<problem_t>::computeAxisAlignedProfile(const int axis, F const &user_f) -> amrex::Gpu::HostVector<amrex::Real>
 {
 	// compute a 1D profile of user_f(i, j, k, state) along the given axis.
