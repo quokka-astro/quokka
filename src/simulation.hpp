@@ -254,7 +254,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void AverageDown();
 	void AverageDownTo(int crse_lev);
 	auto timeStepWithSubcycling(int lev, amrex::Real time, bool coarseTimeBoundary, int stepsLeft) -> int;
-	void calculateGpotAllLevels(amrex::Real dt);
+	void calculateGpotAllLevels();
 	void gravAccelAllLevels(amrex::Real dt);
 	void ellipticSolveAllLevels(amrex::Real dt);
 
@@ -579,7 +579,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 		ReadCheckpointFile();
 	}
 
-	calculateGpotAllLevels(dt_[0]);
+	calculateGpotAllLevels();
 
 	// abort if amrex.async_out=1, it is currently broken
 	if (amrex::AsyncOut::UseAsyncOut()) {
@@ -898,7 +898,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 #endif
 }
 
-template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLevels(const amrex::Real dt)
+template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLevels()
 {
 #if AMREX_SPACEDIM == 3
 	if (doPoissonSolve_) {
@@ -959,7 +959,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ellipticSolveAllLev
 #if AMREX_SPACEDIM == 3
 	if (doPoissonSolve_) {
 
-		calculateGpotAllLevels(dt);
+		calculateGpotAllLevels();
 
 		gravAccelAllLevels(dt);
 	}
