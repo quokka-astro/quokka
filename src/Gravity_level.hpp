@@ -214,7 +214,7 @@ template <typename T> void Gravity<T>::get_old_grav_vector(int level, MultiFab &
 	// Fill data from the level below if we're not doing a solve on this level
 
 	if (level > gravity::max_solve_level) {
-		sim->FillCoarsePatch(level, time, grav_vector, g_old_, g_new_, 0, 3);
+		sim->FillCoarsePatch(level, time, grav_vector, g_old_, g_new_, 0, 3, BCs_cc_, quokka::centering::cc, quokka::direction::na);
 		return;
 	}
 
@@ -237,7 +237,7 @@ template <typename T> void Gravity<T>::get_new_grav_vector(int level, MultiFab &
 	// Fill data from the level below if we're not doing a solve on this level
 
 	if (level > gravity::max_solve_level) {
-		sim->FillCoarsePatch(level, time, grav_vector, g_old_, g_new_, 0, 3);
+		sim->FillCoarsePatch(level, time, grav_vector, g_old_, g_new_, 0, 3, BCs_cc_, quokka::centering::cc, quokka::direction::na);
 		return;
 	}
 
