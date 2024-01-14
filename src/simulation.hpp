@@ -916,8 +916,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			amrex::Print() << "Doing Poisson solve...\n\n";
 		}
 
+		phi.resize(finest_level + 1);
 		// solve Poisson equation with open b.c. using the method of James (1977)
 		amrex::Vector<amrex::MultiFab> rhs(finest_level + 1);
+		rhs.resize(finest_level + 1);
 		const int nghost = 1;
 		const int ncomp = 1;
 		amrex::Real rhs_min = std::numeric_limits<amrex::Real>::max();
