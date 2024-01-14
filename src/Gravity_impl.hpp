@@ -262,7 +262,7 @@ template <typename T> void Gravity<T>::solve_for_phi(int level, MultiFab &phi, c
 		level_solver_resnorm[level] = solve_phi_with_mlmg(level, level, phi_p, amrex::GetVecOfPtrs(rhs), grad_phi_p, res_null, time);
 
 	} else {
-		sim->FillCoarsePatch(level, time, phi, phi_old_, phi_new_, sim->BCs_cc_, quokka::centering::cc, quokka::direction::na);
+		sim->FillCoarsePatch(level, time, phi, phi_old_, phi_new_, BCs_cc, quokka::centering::cc, quokka::direction::na);
 	}
 
 	if (gravity::verbose != 0) {
