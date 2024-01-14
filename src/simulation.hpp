@@ -935,7 +935,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		if (verbose) {
 			amrex::Print() << "\n";
 		}
-
 	}
 #endif
 }
@@ -955,7 +954,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::gravAccelAllLevels(
 #endif
 }
 
-
 template <typename problem_t> void AMRSimulation<problem_t>::ellipticSolveAllLevels(const amrex::Real dt)
 {
 #if AMREX_SPACEDIM == 3
@@ -964,7 +962,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::ellipticSolveAllLev
 		calculateGpotAllLevels(dt);
 
 		gravAccelAllLevels(dt);
-
 	}
 #endif
 }
