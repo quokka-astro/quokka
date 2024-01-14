@@ -254,6 +254,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void AverageDown();
 	void AverageDownTo(int crse_lev);
 	auto timeStepWithSubcycling(int lev, amrex::Real time, bool coarseTimeBoundary, int stepsLeft) -> int;
+	void calculateGpotAllLevels(amrex::Real dt);
+	void gravAccelAllLevels(amrex::Real dt);
 	void ellipticSolveAllLevels(amrex::Real dt);
 
 	void incrementFluxRegisters(amrex::MFIter &mfi, amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine,
@@ -577,35 +579,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 		ReadCheckpointFile();
 	}
 
-#if AMREX_SPACEDIM == 3
-	if (doPoissonSolve_) {
-		// set up elliptic solve object
-		amrex::OpenBCSolver poissonSolver(Geom(0, finest_level), boxArray(0, finest_level), DistributionMap(0, finest_level));
-		if (verbose) {
-			poissonSolver.setVerbose(true);
-			poissonSolver.setBottomVerbose(false);
-			amrex::Print() << "Doing initial Poisson solve...\n\n";
-		}
-
-		phi.resize(finest_level + 1);
-		amrex::Vector<amrex::MultiFab> rhs(finest_level + 1);
-		rhs.resize(finest_level + 1);
-		const int nghost = 1;
-		const int ncomp = 1;
-		amrex::Real rhs_min = std::numeric_limits<amrex::Real>::max();
-		for (int lev = 0; lev <= finest_level; ++lev) {
-			phi[lev].define(grids[lev], dmap[lev], ncomp, nghost);
-			rhs[lev].define(grids[lev], dmap[lev], ncomp, nghost);
-			phi[lev].setVal(0); // set initial guess to zero
-			rhs[lev].setVal(0);
-			fillPoissonRhsAtLevel(rhs[lev], lev); // calculate phi at t=0
-			rhs_min = std::min(rhs_min, rhs[lev].min(0));
-		}
-
-		amrex::Real abstol = abstolPoisson_ * rhs_min;
-		poissonSolver.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs), reltolPoisson_, abstol);
-	}
-#endif
+	calculateGpotAllLevels(dt_[0]);
 
 	// abort if amrex.async_out=1, it is currently broken
 	if (amrex::AsyncOut::UseAsyncOut()) {
@@ -924,7 +898,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 #endif
 }
 
-template <typename problem_t> void AMRSimulation<problem_t>::ellipticSolveAllLevels(const amrex::Real dt)
+template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLevels(const amrex::Real dt)
 {
 #if AMREX_SPACEDIM == 3
 	if (doPoissonSolve_) {
@@ -962,10 +936,35 @@ template <typename problem_t> void AMRSimulation<problem_t>::ellipticSolveAllLev
 			amrex::Print() << "\n";
 		}
 
+	}
+#endif
+}
+
+template <typename problem_t> void AMRSimulation<problem_t>::gravAccelAllLevels(const amrex::Real dt)
+{
+#if AMREX_SPACEDIM == 3
+	if (doPoissonSolve_) {
+
+		BL_PROFILE_REGION("GravitySolver");
+
 		// add gravitational acceleration to hydro state (using operator splitting)
 		for (int lev = 0; lev <= finest_level; ++lev) {
 			applyPoissonGravityAtLevel(phi[lev], lev, dt);
 		}
+	}
+#endif
+}
+
+
+template <typename problem_t> void AMRSimulation<problem_t>::ellipticSolveAllLevels(const amrex::Real dt)
+{
+#if AMREX_SPACEDIM == 3
+	if (doPoissonSolve_) {
+
+		calculateGpotAllLevels(dt);
+
+		gravAccelAllLevels(dt);
+
 	}
 #endif
 }
