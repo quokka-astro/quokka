@@ -250,7 +250,7 @@ template <typename T> void Gravity<T>::solve_for_phi(int level, MultiFab &phi, c
 
 		const auto &rhs = get_rhs(level, 1, is_new);
 
-		amrex::Vector<amrex::MultiFab> grad_phi_p(1);
+		amrex::Vector<amrex::Vector<amrex::MultiFab *>> grad_phi_p(1);
 		grad_phi_p[0].resize(AMREX_SPACEDIM);
 		for (int i = 0; i < AMREX_SPACEDIM; i++) {
 			grad_phi_p[0][i] = grad_phi[i];
@@ -341,7 +341,7 @@ void Gravity<T>::actual_multilevel_solve(int crse_level, int finest_level_in, co
 
 	const auto &rhs = get_rhs(crse_level, nlevels, is_new);
 
-	amrex::Vector<Vector<MultiFab *>> grad_phi_p(nlevels);
+	amrex::Vector<amrex::Vector<amrex::MultiFab *>> grad_phi_p(nlevels);
 	for (int ilev = 0; ilev < nlevels; ilev++) {
 		int amr_lev = ilev + crse_level;
 		grad_phi_p[ilev] = grad_phi[amr_lev];
@@ -543,7 +543,7 @@ template <typename T> void Gravity<T>::update_max_rhs()
 
 template <typename T>
 auto Gravity<T>::solve_phi_with_mlmg(int crse_level, int fine_level, const amrex::Vector<MultiFab *> &phi, const amrex::Vector<MultiFab *> &rhs,
-				     const amrex::Vector<Vector<MultiFab *>> &grad_phi, const amrex::Vector<MultiFab *> &res, Real time) -> Real
+				     const amrex::Vector<amrex::Vector<amrex::MultiFab *>> &grad_phi, const amrex::Vector<amrex::MultiFab *> &res, Real time) -> Real
 {
 	BL_PROFILE("Gravity<T>::solve_phi_with_mlmg()");
 

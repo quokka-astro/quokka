@@ -144,7 +144,7 @@ template <typename T> void Gravity<T>::test_composite_phi(int crse_level)
 
 	Real time = sim->tNew_[crse_level];
 
-	amrex::Vector<Vector<MultiFab *>> grad_phi_null;
+	amrex::Vector<amrex::Vector<amrex::MultiFab *>> grad_phi_null;
 	solve_phi_with_mlmg(crse_level, finest_level_local, amrex::GetVecOfPtrs(phi), amrex::GetVecOfPtrs(rhs), grad_phi_null, amrex::GetVecOfPtrs(res), time);
 
 	// Average residual from fine to coarse level before printing the norm
