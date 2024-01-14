@@ -81,29 +81,6 @@ const int mlmg_consolidation = 1;
 const int mlmg_max_fmg_iter = 0;
 } // namespace gravity
 
-///
-/// Multipole gravity data
-///
-namespace multipole
-{
-const int lnum_max = 30;
-
-constexpr amrex::Real volumeFactor = 1.0;
-constexpr amrex::Real parityFactor = 1.0;
-
-amrex::Array1D<bool, 0, 2> constexpr doSymmetricAddLo = {false};
-amrex::Array1D<bool, 0, 2> constexpr doSymmetricAddHi = {false};
-bool constexpr doSymmetricAdd = false;
-
-amrex::Array1D<bool, 0, 2> constexpr doReflectionLo = {false};
-amrex::Array1D<bool, 0, 2> constexpr doReflectionHi = {false};
-
-extern AMREX_GPU_MANAGED amrex::Real rmax;
-
-extern AMREX_GPU_MANAGED amrex::Array2D<amrex::Real, 0, lnum_max, 0, lnum_max> factArray;
-extern AMREX_GPU_MANAGED amrex::Array1D<amrex::Real, 0, lnum_max> parity_q0;
-extern AMREX_GPU_MANAGED amrex::Array2D<amrex::Real, 0, lnum_max, 0, lnum_max> parity_qC_qS;
-} // namespace multipole
 
 ///
 /// @class Gravity
@@ -118,7 +95,7 @@ template <typename T> class Gravity
 	///
 	/// @param _Density         index of density component
 	///
-	Gravity(AMRSimulation<T> *_sim, amrex::BCRec &phys_bc, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &_coordCenter, int Density_);
+	Gravity(AMRSimulation<T> *_sim, amrex::BCRec &phys_bc, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &_coordCenter, int Density_, const amrex::Vector<amrex::BCRec>& BCs_cc);
 
 	///
 	/// Read gravity-related parameters from parameter file
@@ -486,7 +463,6 @@ template <typename T> const int Gravity<T>::test_solves = 0;
 
 using GravityMode = gravity::GravityMode;
 
-#include "GravityBC.hpp"
 #include "Gravity_impl.hpp"
 #include "Gravity_level.hpp"
 #include "Gravity_residual_impl.hpp"
