@@ -319,7 +319,7 @@ template <typename T> void Gravity<T>::multilevel_solve_for_new_phi(int level, i
 }
 
 template <typename T>
-void Gravity<T>::actual_multilevel_solve(int crse_level, int finest_level_in, const amrex::Vector<amrex::MultiFab *> &grad_phi, int is_new)
+void Gravity<T>::actual_multilevel_solve(int crse_level, int finest_level_in, const amrex::Vector<amrex::Vector<amrex::MultiFab *>> &grad_phi, int is_new)
 {
 	BL_PROFILE("Gravity<T>::actual_multilevel_solve()");
 
