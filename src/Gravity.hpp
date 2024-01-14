@@ -81,7 +81,6 @@ const int mlmg_consolidation = 1;
 const int mlmg_max_fmg_iter = 0;
 } // namespace gravity
 
-
 ///
 /// @class Gravity
 /// @brief
@@ -95,7 +94,8 @@ template <typename T> class Gravity
 	///
 	/// @param _Density         index of density component
 	///
-	Gravity(AMRSimulation<T> *_sim, amrex::BCRec &phys_bc, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &_coordCenter, int Density_, const amrex::Vector<amrex::BCRec>& BCs_cc);
+	Gravity(AMRSimulation<T> *_sim, amrex::BCRec &phys_bc, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &_coordCenter, int Density_,
+		const amrex::Vector<amrex::BCRec> &BCs_cc);
 
 	///
 	/// Read gravity-related parameters from parameter file

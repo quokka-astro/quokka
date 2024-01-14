@@ -22,7 +22,8 @@ template <typename T> Real Gravity<T>::mass_offset = 0.0;
 template <typename T> Real Gravity<T>::Ggravity = 0.;
 
 template <typename T>
-Gravity<T>::Gravity(AMRSimulation<T> *_sim, BCRec &_phys_bc, amrex::GpuArray<Real, AMREX_SPACEDIM> &_coordCenter, int Density_, const amrex::Vector<amrex::BCRec>& BCs_cc)
+Gravity<T>::Gravity(AMRSimulation<T> *_sim, BCRec &_phys_bc, amrex::GpuArray<Real, AMREX_SPACEDIM> &_coordCenter, int Density_,
+		    const amrex::Vector<amrex::BCRec> &BCs_cc)
     : sim(_sim), phi_old_(_sim->maxLevel() + 1), phi_new_(_sim->maxLevel() + 1), g_old_(_sim->maxLevel() + 1), g_new_(_sim->maxLevel() + 1),
       grad_phi_curr(_sim->maxLevel() + 1), grad_phi_prev(_sim->maxLevel() + 1), corr_phi_(_sim->maxLevel() + 1), corr_grad_phi_(_sim->maxLevel() + 1),
       abs_tol(_sim->maxLevel() + 1), rel_tol(_sim->maxLevel() + 1), level_solver_resnorm(_sim->maxLevel() + 1), coordCenter(_coordCenter),
