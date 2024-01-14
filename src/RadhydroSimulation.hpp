@@ -13,6 +13,7 @@
 #include <climits>
 #include <filesystem>
 #include <limits>
+#include <memory>
 #include <string>
 #include <tuple>
 #include <unordered_map>
@@ -57,6 +58,7 @@
 #include "Chemistry.hpp"
 #include "CloudyCooling.hpp"
 #include "HLLC.hpp"
+#include "Gravity.hpp"
 #include "SimulationData.hpp"
 #include "hydro_system.hpp"
 #include "hyperbolic_system.hpp"
@@ -139,6 +141,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
 
 	amrex::Real Gconst_ = C::Gconst; // gravitational constant G
+	std::unique_ptr<Gravity<problem_t>> gravitySolver;
 
 	// member functions
 	explicit RadhydroSimulation(amrex::Vector<amrex::BCRec> &BCs_cc, amrex::Vector<amrex::BCRec> &BCs_fc) : AMRSimulation<problem_t>(BCs_cc, BCs_fc)
@@ -241,6 +244,10 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	void addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev);
 
 	auto isCflViolated(int lev, amrex::Real time, amrex::Real dt_actual) -> bool;
+
+	// source terms
+	void addGravitySourceOld(int lev, amrex::Real time, amrex::Real dt_lev);
+	void addGravitySourceNew(int lev, amrex::Real time, amrex::Real dt_lev);
 
 	// radiation subcycle
 	void swapRadiationState(amrex::MultiFab &stateOld, amrex::MultiFab const &stateNew);
@@ -632,6 +639,9 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::advanceSingleT
 	// since we are starting a new timestep, need to swap old and new state vectors
 	std::swap(state_old_cc_[lev], state_new_cc_[lev]);
 
+	// apply half-step gravity update at beginning of timestep
+	addGravitySourceOld(lev, time, dt_lev);
+
 	// check hydro states before update (this can be caused by the flux register!)
 	CHECK_HYDRO_STATES(state_old_cc_[lev]);
 
@@ -654,6 +664,9 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::advanceSingleT
 
 	// check hydro states after radiation update
 	CHECK_HYDRO_STATES(state_new_cc_[lev]);
+
+	// add half-step gravity update after timestep
+	addGravitySourceNew(lev, time, dt_lev);
 
 	// compute any operator-split terms here (user-defined)
 	computeAfterLevelAdvance(lev, time, dt_lev, ncycle);
@@ -798,8 +811,20 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::PostInterpStat
 	});
 }
 
-template <typename problem_t>
+template <typename problem_t> void RadhydroSimulation<problem_t>::addGravitySourceOld(int lev, amrex::Real time, amrex::Real dt_lev)
+{
+	gravitySolver->construct_old_gravity(time, lev);
+	// TODO(benwibking): add sources to hydro state
+}
+
+template <typename problem_t> void RadhydroSimulation<problem_t>::addGravitySourceNew(int lev, amrex::Real time, amrex::Real dt_lev)
+{
+	gravitySolver->construct_new_gravity(time, lev);
+	// TODO(benwibking): add sources to hydro state
+}
+
 template <typename F>
+template <typename problem_t>
 auto RadhydroSimulation<problem_t>::computeAxisAlignedProfile(const int axis, F const &user_f) -> amrex::Gpu::HostVector<amrex::Real>
 {
 	// compute a 1D profile of user_f(i, j, k, state) along the given axis.

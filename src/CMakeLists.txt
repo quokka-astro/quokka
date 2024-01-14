@@ -131,6 +131,7 @@ add_subdirectory(PrimordialChem)
 add_subdirectory(Advection)
 add_subdirectory(Advection2D)
 add_subdirectory(AdvectionSemiellipse)
+add_subdirectory(PoissonFreeSpace)
 
 
 add_subdirectory(HydroBlast2D)
