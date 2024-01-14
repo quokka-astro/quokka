@@ -543,7 +543,8 @@ template <typename T> void Gravity<T>::update_max_rhs()
 
 template <typename T>
 auto Gravity<T>::solve_phi_with_mlmg(int crse_level, int fine_level, const amrex::Vector<MultiFab *> &phi, const amrex::Vector<MultiFab *> &rhs,
-				     const amrex::Vector<amrex::Vector<amrex::MultiFab *>> &grad_phi, const amrex::Vector<amrex::MultiFab *> &res, Real time) -> Real
+				     const amrex::Vector<amrex::Vector<amrex::MultiFab *>> &grad_phi, const amrex::Vector<amrex::MultiFab *> &res, Real time)
+    -> Real
 {
 	BL_PROFILE("Gravity<T>::solve_phi_with_mlmg()");
 
