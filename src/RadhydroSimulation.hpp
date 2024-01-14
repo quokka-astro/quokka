@@ -110,7 +110,6 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	using AMRSimulation<problem_t>::WriteCheckpointFile;
 	using AMRSimulation<problem_t>::GetData;
 	using AMRSimulation<problem_t>::FillPatchWithData;
-	using AMRSimulation<problem_t>::InterpHookNone;
 
 	using AMRSimulation<problem_t>::densityFloor_;
 	using AMRSimulation<problem_t>::tempFloor_;
@@ -1259,7 +1258,8 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		// fill ghost faces
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			fillBoundaryConditions(state_new_fc_[lev][idim], state_new_fc_[lev][idim], lev, time + 0.5 * dt_lev, quokka::centering::fc,
-					       quokka::direction{idim}, InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
+					       quokka::direction{idim}, AMRSimulation<problem_t>::InterpHookNone, AMRSimulation<problem_t>::InterpHookNone,
+					       FillPatchType::fillpatch_function);
 		}
 
 		// copy state_new_fc_[lev] to avgFaceVel
