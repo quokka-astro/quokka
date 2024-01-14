@@ -16,7 +16,7 @@ template <typename T> void Gravity<T>::construct_old_gravity(Real time, int leve
 	MultiFab &phi_old = phi_old_[level];
 
 	std::unique_ptr<MultiFab> &comp_minus_level_phi = corr_phi_[level];
-	Vector<std::unique_ptr<MultiFab>> &comp_minus_level_grad_phi = corr_grad_phi_[level];
+	amrex::Vector<std::unique_ptr<MultiFab>> &comp_minus_level_grad_phi = corr_grad_phi_[level];
 
 	// Do level solve at beginning of time step in order to compute the
 	// difference between the multilevel and the single level solutions.
@@ -27,7 +27,7 @@ template <typename T> void Gravity<T>::construct_old_gravity(Real time, int leve
 		// Create a copy of the current (composite) data on this level.
 
 		MultiFab comp_phi;
-		Vector<std::unique_ptr<MultiFab>> comp_gphi(AMREX_SPACEDIM);
+		amrex::Vector<std::unique_ptr<MultiFab>> comp_gphi(AMREX_SPACEDIM);
 
 		// [When level == sim->finestLevel(), the composite correction is zero, so
 		// only compute it for lower levels.]
@@ -104,7 +104,7 @@ template <typename T> void Gravity<T>::construct_new_gravity(Real time, int leve
 	MultiFab &phi_new = phi_new_[level];
 
 	std::unique_ptr<MultiFab> &comp_minus_level_phi = corr_phi_[level];
-	Vector<std::unique_ptr<MultiFab>> &comp_minus_level_grad_phi = corr_grad_phi_[level];
+	amrex::Vector<std::unique_ptr<MultiFab>> &comp_minus_level_grad_phi = corr_grad_phi_[level];
 
 	// If we're doing Poisson gravity, do the new-time level solve here.
 
@@ -177,8 +177,8 @@ template <typename T> void Gravity<T>::construct_new_gravity(Real time, int leve
 }
 
 template <typename T>
-void Gravity<T>::create_comp_minus_level_grad_phi(int level, MultiFab &comp_phi, const Vector<MultiFab *> &comp_gphi,
-						  std::unique_ptr<MultiFab> &comp_minus_level_phi, Vector<std::unique_ptr<MultiFab>> &comp_minus_level_grad_phi)
+void Gravity<T>::create_comp_minus_level_grad_phi(int level, MultiFab &comp_phi, const amrex::Vector<MultiFab *> &comp_gphi,
+						  std::unique_ptr<MultiFab> &comp_minus_level_phi, amrex::Vector<std::unique_ptr<MultiFab>> &comp_minus_level_grad_phi)
 {
 	BL_PROFILE("Gravity<T>::create_comp_minus_level_grad_phi()");
 

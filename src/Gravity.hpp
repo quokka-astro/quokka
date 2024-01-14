@@ -39,13 +39,6 @@
 
 // #define GRAVITY_DEBUG
 
-namespace C
-{
-// newton's gravitational constant taken from NIST's 2010 CODATA recommended
-// value
-constexpr amrex::Real Gconst = 6.67428e-8; // cm^3/g/s^2
-} // namespace C
-
 // This vector can be accessed on the GPU.
 using RealVector = amrex::Gpu::ManagedVector<amrex::Real>;
 using Real = amrex::Real;

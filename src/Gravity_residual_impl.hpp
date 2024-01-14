@@ -12,8 +12,8 @@
 #include "Gravity.hpp"
 
 template <typename T>
-void Gravity<T>::test_residual(const Box &bx, Array4<Real> const &rhs, Array4<Real> const &ecx, Array4<Real> const &ecy, Array4<Real> const &ecz,
-			       GpuArray<Real, AMREX_SPACEDIM> dx)
+void Gravity<T>::test_residual(const Box &bx, amrex::Array4<Real> const &rhs, amrex::Array4<Real> const &ecx, amrex::Array4<Real> const &ecy, amrex::Array4<Real> const &ecz,
+			       amrex::GpuArray<Real, AMREX_SPACEDIM> dx)
 {
 	// Test whether using the edge-based gradients
 	// to compute Div(Grad(Phi)) satisfies Lap(phi) = RHS
@@ -125,9 +125,9 @@ template <typename T> void Gravity<T>::test_composite_phi(int crse_level)
 	int finest_level_local = sim->finestLevel();
 	int nlevels = finest_level_local - crse_level + 1;
 
-	Vector<std::unique_ptr<MultiFab>> phi(nlevels);
-	Vector<std::unique_ptr<MultiFab>> rhs(nlevels);
-	Vector<std::unique_ptr<MultiFab>> res(nlevels);
+	amrex::Vector<std::unique_ptr<MultiFab>> phi(nlevels);
+	amrex::Vector<std::unique_ptr<MultiFab>> rhs(nlevels);
+	amrex::Vector<std::unique_ptr<MultiFab>> res(nlevels);
 
 	for (int ilev = 0; ilev < nlevels; ++ilev) {
 		int amr_lev = crse_level + ilev;
@@ -144,7 +144,7 @@ template <typename T> void Gravity<T>::test_composite_phi(int crse_level)
 
 	Real time = sim->tNew_[crse_level];
 
-	Vector<Vector<MultiFab *>> grad_phi_null;
+	amrex::Vector<Vector<MultiFab *>> grad_phi_null;
 	solve_phi_with_mlmg(crse_level, finest_level_local, amrex::GetVecOfPtrs(phi), amrex::GetVecOfPtrs(rhs), grad_phi_null, amrex::GetVecOfPtrs(res), time);
 
 	// Average residual from fine to coarse level before printing the norm

@@ -22,7 +22,7 @@ template <typename T> Real Gravity<T>::mass_offset = 0.0;
 template <typename T> Real Gravity<T>::Ggravity = 0.;
 
 template <typename T>
-Gravity<T>::Gravity(AMRSimulation<T> *_sim, BCRec &_phys_bc, GpuArray<Real, AMREX_SPACEDIM> &_coordCenter, int Density_)
+Gravity<T>::Gravity(AMRSimulation<T> *_sim, BCRec &_phys_bc, amrex::GpuArray<Real, AMREX_SPACEDIM> &_coordCenter, int Density_)
     : sim(_sim), phi_old_(_sim->maxLevel() + 1), phi_new_(_sim->maxLevel() + 1), g_old_(_sim->maxLevel() + 1), g_new_(_sim->maxLevel() + 1),
       grad_phi_curr(_sim->maxLevel() + 1), grad_phi_prev(_sim->maxLevel() + 1), corr_phi_(_sim->maxLevel() + 1), corr_grad_phi_(_sim->maxLevel() + 1),
       abs_tol(_sim->maxLevel() + 1), rel_tol(_sim->maxLevel() + 1), level_solver_resnorm(_sim->maxLevel() + 1), coordCenter(_coordCenter),
@@ -195,13 +195,13 @@ template <typename T> auto Gravity<T>::DoCompositeCorrection() -> int { return g
 // if true, check the residuals manually
 template <typename T> auto Gravity<T>::test_results_of_solves() -> int { return test_solves; }
 
-template <typename T> auto Gravity<T>::get_grad_phi_prev(int level) -> Vector<std::unique_ptr<MultiFab>> & { return grad_phi_prev[level]; }
+template <typename T> auto Gravity<T>::get_grad_phi_prev(int level) -> amrex::Vector<std::unique_ptr<MultiFab>> & { return grad_phi_prev[level]; }
 
 template <typename T> auto Gravity<T>::get_grad_phi_prev_comp(int level, int comp) -> MultiFab * { return grad_phi_prev[level][comp].get(); }
 
-template <typename T> auto Gravity<T>::get_grad_phi_curr(int level) -> Vector<std::unique_ptr<MultiFab>> & { return grad_phi_curr[level]; }
+template <typename T> auto Gravity<T>::get_grad_phi_curr(int level) -> amrex::Vector<std::unique_ptr<MultiFab>> & { return grad_phi_curr[level]; }
 
-template <typename T> void Gravity<T>::plus_grad_phi_curr(int level, Vector<std::unique_ptr<MultiFab>> &addend)
+template <typename T> void Gravity<T>::plus_grad_phi_curr(int level, amrex::Vector<std::unique_ptr<MultiFab>> &addend)
 {
 	for (int n = 0; n < AMREX_SPACEDIM; n++) {
 		grad_phi_curr[level][n]->plus(*addend[n], 0, 1, 0);
@@ -220,7 +220,7 @@ template <typename T> void Gravity<T>::swapTimeLevels(int level)
 	}
 }
 
-template <typename T> void Gravity<T>::solve_for_phi(int level, MultiFab &phi, const Vector<MultiFab *> &grad_phi, int is_new)
+template <typename T> void Gravity<T>::solve_for_phi(int level, MultiFab &phi, const amrex::Vector<MultiFab *> &grad_phi, int is_new)
 {
 	BL_PROFILE("Gravity<T>::solve_for_phi()");
 
@@ -246,17 +246,17 @@ template <typename T> void Gravity<T>::solve_for_phi(int level, MultiFab &phi, c
 
 	if (level <= gravity::max_solve_level) {
 
-		Vector<MultiFab *> phi_p(1, &phi);
+		amrex::Vector<amrex::MultiFab *> phi_p(1, &phi);
 
 		const auto &rhs = get_rhs(level, 1, is_new);
 
-		Vector<Vector<MultiFab *>> grad_phi_p(1);
+		amrex::Vector<amrex::MultiFab> grad_phi_p(1);
 		grad_phi_p[0].resize(AMREX_SPACEDIM);
 		for (int i = 0; i < AMREX_SPACEDIM; i++) {
 			grad_phi_p[0][i] = grad_phi[i];
 		}
 
-		Vector<MultiFab *> res_null;
+		amrex::Vector<amrex::MultiFab*> res_null;
 
 		level_solver_resnorm[level] = solve_phi_with_mlmg(level, level, phi_p, amrex::GetVecOfPtrs(rhs), grad_phi_p, res_null, time);
 
@@ -318,7 +318,7 @@ template <typename T> void Gravity<T>::multilevel_solve_for_new_phi(int level, i
 	actual_multilevel_solve(level, finest_level_in, amrex::GetVecOfVecOfPtrs(grad_phi_curr), is_new);
 }
 
-template <typename T> void Gravity<T>::actual_multilevel_solve(int crse_level, int finest_level_in, const Vector<Vector<MultiFab *>> &grad_phi, int is_new)
+template <typename T> void Gravity<T>::actual_multilevel_solve(int crse_level, int finest_level_in, const amrex::Vector<amrex::MultiFab *> &grad_phi, int is_new)
 {
 	BL_PROFILE("Gravity<T>::actual_multilevel_solve()");
 
@@ -328,7 +328,7 @@ template <typename T> void Gravity<T>::actual_multilevel_solve(int crse_level, i
 
 	int nlevels = finest_level_in - crse_level + 1;
 
-	Vector<MultiFab *> phi_p(nlevels);
+	amrex::Vector<MultiFab *> phi_p(nlevels);
 	for (int ilev = 0; ilev < nlevels; ilev++) {
 		int amr_lev = ilev + crse_level;
 		if (is_new == 1) {
@@ -340,7 +340,7 @@ template <typename T> void Gravity<T>::actual_multilevel_solve(int crse_level, i
 
 	const auto &rhs = get_rhs(crse_level, nlevels, is_new);
 
-	Vector<Vector<MultiFab *>> grad_phi_p(nlevels);
+	amrex::Vector<Vector<MultiFab *>> grad_phi_p(nlevels);
 	for (int ilev = 0; ilev < nlevels; ilev++) {
 		int amr_lev = ilev + crse_level;
 		grad_phi_p[ilev] = grad_phi[amr_lev];
@@ -357,7 +357,7 @@ template <typename T> void Gravity<T>::actual_multilevel_solve(int crse_level, i
 
 	if (fine_level >= crse_level) {
 
-		Vector<MultiFab *> res_null;
+		amrex::Vector<MultiFab *> res_null;
 		solve_phi_with_mlmg(crse_level, fine_level, phi_p, amrex::GetVecOfPtrs(rhs), grad_phi_p, res_null, time);
 
 		// Average phi from fine to coarse level
@@ -412,7 +412,7 @@ template <typename T> void Gravity<T>::actual_multilevel_solve(int crse_level, i
 
 		// (Will not do anything because we do not fill on physical boundaries.)
 
-		Vector<BCRec> gp_bcs;
+		amrex::Vector<BCRec> gp_bcs;
 		BCRec dirichlet_bcs;
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
 			dirichlet_bcs.setHi(i, amrex::BCType::ext_dir);
@@ -446,7 +446,7 @@ template <typename T> void Gravity<T>::average_fine_ec_onto_crse_ec(int level, i
 		crse_gphi_fine_BA.set(i, amrex::coarsen(sim->boxArray(level + 1)[i], fine_ratio));
 	}
 
-	Vector<std::unique_ptr<MultiFab>> crse_gphi_fine(AMREX_SPACEDIM);
+	amrex::Vector<std::unique_ptr<MultiFab>> crse_gphi_fine(AMREX_SPACEDIM);
 	for (int n = 0; n < AMREX_SPACEDIM; ++n) {
 		amrex::BoxArray eba = crse_gphi_fine_BA;
 		eba.surroundingNodes(n);
@@ -464,9 +464,9 @@ template <typename T> void Gravity<T>::average_fine_ec_onto_crse_ec(int level, i
 	}
 }
 
-template <typename T> auto Gravity<T>::get_rhs(int crse_level, int nlevs, int is_new) -> Vector<std::unique_ptr<MultiFab>>
+template <typename T> auto Gravity<T>::get_rhs(int crse_level, int nlevs, int is_new) -> amrex::Vector<std::unique_ptr<MultiFab>>
 {
-	Vector<std::unique_ptr<MultiFab>> rhs(nlevs);
+	amrex::Vector<std::unique_ptr<MultiFab>> rhs(nlevs);
 
 	for (int ilev = 0; ilev < nlevs; ++ilev) {
 		int amr_lev = ilev + crse_level;
@@ -541,8 +541,8 @@ template <typename T> void Gravity<T>::update_max_rhs()
 }
 
 template <typename T>
-auto Gravity<T>::solve_phi_with_mlmg(int crse_level, int fine_level, const Vector<MultiFab *> &phi, const Vector<MultiFab *> &rhs,
-				     const Vector<Vector<MultiFab *>> &grad_phi, const Vector<MultiFab *> &res, Real time) -> Real
+auto Gravity<T>::solve_phi_with_mlmg(int crse_level, int fine_level, const amrex::Vector<MultiFab *> &phi, const amrex::Vector<MultiFab *> &rhs,
+				     const amrex::Vector<Vector<MultiFab *>> &grad_phi, const amrex::Vector<MultiFab *> &res, Real time) -> Real
 {
 	BL_PROFILE("Gravity<T>::solve_phi_with_mlmg()");
 
@@ -576,9 +576,9 @@ auto Gravity<T>::solve_phi_with_mlmg(int crse_level, int fine_level, const Vecto
 
 	Real abs_eps = abs_tol[fine_level] * max_rhs;
 
-	Vector<const MultiFab *> crhs{rhs.begin(), rhs.end()};
+	amrex::Vector<const MultiFab *> crhs{rhs.begin(), rhs.end()};
 
-	Vector<std::array<MultiFab *, AMREX_SPACEDIM>> gp;
+	amrex::Vector<std::array<MultiFab *, AMREX_SPACEDIM>> gp;
 	for (const auto &x : grad_phi) {
 		gp.push_back({AMREX_D_DECL(x[0], x[1], x[2])});
 	}
@@ -598,9 +598,9 @@ auto Gravity<T>::actual_solve_with_mlmg(int crse_level, int fine_level, const am
 	Real final_resnorm = -1.0;
 	int nlevs = fine_level - crse_level + 1;
 
-	Vector<Geometry> gmv;
-	Vector<BoxArray> bav;
-	Vector<DistributionMapping> dmv;
+	amrex::Vector<Geometry> gmv;
+	amrex::Vector<BoxArray> bav;
+	amrex::Vector<DistributionMapping> dmv;
 	for (int ilev = 0; ilev < nlevs; ++ilev) {
 		gmv.push_back(sim->Geom(ilev + crse_level));
 		bav.push_back(rhs[ilev]->boxArray());
