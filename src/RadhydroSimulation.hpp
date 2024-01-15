@@ -640,7 +640,9 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::advanceSingleT
 
 	// since we are starting a new timestep, need to swap old and new state vectors
 	std::swap(state_old_cc_[lev], state_new_cc_[lev]);
-	std::swap(state_old_fc_[lev], state_new_fc_[lev]);
+	if (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
+		std::swap(state_old_fc_[lev], state_new_fc_[lev]);
+	}
 
 	// check hydro states before update (this can be caused by the flux register!)
 	CHECK_HYDRO_STATES(state_old_cc_[lev]);
