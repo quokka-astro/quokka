@@ -105,6 +105,20 @@ template <> void RadhydroSimulation<CollapseProblem>::ErrorEst(int lev, amrex::T
 	}
 }
 
+template <> void RadhydroSimulation<CollapseProblem>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in) const
+{
+	// compute derived variables and save in 'mf'
+	if (dname == "gpot") {
+		const int ncomp = ncomp_cc_in;
+		auto const &state = state_new_cc_[lev].const_arrays();
+		auto const &phi_data_ref = phi[lev].const_arrays();
+		auto output = mf.arrays();
+
+		amrex::ParallelFor(
+		    mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept { output[bx](i, j, k, ncomp) = phi_data_ref[bx](i, j, k, ncomp); });
+	}
+}
+
 auto problem_main() -> int
 {
 	auto isNormalComp = [=](int n, int dim) {
