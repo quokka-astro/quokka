@@ -328,8 +328,6 @@ template <typename T> class Gravity
 	///
 	AMRSimulation<T> *sim;
 
-	amrex::Vector<amrex::BCRec> &BCs_cc;
-
 	///
 	/// MultiFabs for potential, acceleration
 	///
