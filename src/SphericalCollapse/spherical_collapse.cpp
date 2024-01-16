@@ -28,7 +28,7 @@ struct CollapseProblem {
 
 template <> struct quokka::EOS_Traits<CollapseProblem> {
 	static constexpr double gamma = 5. / 3.;
-	static constexpr double mean_molecular_weight = 1.0;
+	static constexpr double mean_molecular_weight = C::m_u;
 	static constexpr double boltzmann_constant = C::k_B;
 };
 
@@ -102,6 +102,20 @@ template <> void RadhydroSimulation<CollapseProblem>::ErrorEst(int lev, amrex::T
 				tag(i, j, k) = amrex::TagBox::SET;
 			}
 		});
+	}
+}
+
+template <> void RadhydroSimulation<CollapseProblem>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in) const
+{
+	// compute derived variables and save in 'mf'
+	if (dname == "gpot") {
+		const int ncomp = ncomp_cc_in;
+		auto const &state = state_new_cc_[lev].const_arrays();
+		auto const &phi_data_ref = phi[lev].const_arrays();
+		auto output = mf.arrays();
+
+		amrex::ParallelFor(
+		    mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept { output[bx](i, j, k, ncomp) = phi_data_ref[bx](i, j, k, ncomp); });
 	}
 }
 
