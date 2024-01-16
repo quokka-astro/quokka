@@ -27,7 +27,7 @@ struct BlastProblem {
 
 template <> struct quokka::EOS_Traits<BlastProblem> {
 	static constexpr double gamma = 5. / 3.;
-	static constexpr double mean_molecular_weight = C::m_u;
+	static constexpr double mean_molecular_weight = 1.0;
 	static constexpr double boltzmann_constant = C::k_B;
 };
 
@@ -169,7 +169,7 @@ auto problem_main() -> int
 	sim.stopTime_ = 0.1; // 1.5;
 	sim.cflNumber_ = 0.3;
 	sim.maxTimesteps_ = 20000;
-	// sim.plotfileInterval_ = 2000;
+	sim.plotfileInterval_ = 2000;
 
 	// initialize
 	sim.setInitialConditions();

@@ -152,6 +152,7 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::setInitialCon
 {
 	// default empty implementation
 	// user should implement using problem-specific template specialization
+	// note: an implementation is only required if face-centered vars are used
 }
 
 template <typename problem_t> void AdvectionSimulation<problem_t>::computeAfterTimestep()

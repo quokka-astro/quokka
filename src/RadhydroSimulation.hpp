@@ -482,6 +482,7 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::setInitialCond
 {
 	// default empty implementation
 	// user should implement using problem-specific template specialization
+	// note: an implementation is only required if face-centered vars are used
 }
 
 template <typename problem_t> void RadhydroSimulation<problem_t>::computeAfterTimestep()

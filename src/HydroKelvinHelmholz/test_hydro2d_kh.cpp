@@ -24,7 +24,7 @@ struct KelvinHelmholzProblem {
 
 template <> struct quokka::EOS_Traits<KelvinHelmholzProblem> {
 	static constexpr double gamma = 1.4;
-	static constexpr double mean_molecular_weight = C::m_u;
+	static constexpr double mean_molecular_weight = 1.0;
 	static constexpr double boltzmann_constant = C::k_B;
 };
 
@@ -84,7 +84,6 @@ template <> void RadhydroSimulation<KelvinHelmholzProblem>::setInitialConditions
 		state_cc(i, j, k, HydroSystem<KelvinHelmholzProblem>::x2Momentum_index) = rho * vy;
 		state_cc(i, j, k, HydroSystem<KelvinHelmholzProblem>::x3Momentum_index) = rho * vz;
 		state_cc(i, j, k, HydroSystem<KelvinHelmholzProblem>::energy_index) = P / (gamma - 1.) + 0.5 * rho * v_sq;
-		state_cc(i, j, k, HydroSystem<KelvinHelmholzProblem>::internalEnergy_index) = P / (gamma - 1.);
 	});
 }
 
@@ -122,7 +121,7 @@ template <> void RadhydroSimulation<KelvinHelmholzProblem>::ErrorEst(int lev, am
 
 auto problem_main() -> int
 {
-	// Boundary conditions
+	// Problem parameters
 	const int ncomp_cc = Physics_Indices<KelvinHelmholzProblem>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 	for (int n = 0; n < ncomp_cc; ++n) {
@@ -135,7 +134,7 @@ auto problem_main() -> int
 	// Problem initialization
 	RadhydroSimulation<KelvinHelmholzProblem> sim(BCs_cc);
 
-	// sim.stopTime_ = 1.5;
+	sim.stopTime_ = 1.5;
 	sim.cflNumber_ = 0.4;
 	sim.maxTimesteps_ = 40000;
 	sim.plotfileInterval_ = 100;
