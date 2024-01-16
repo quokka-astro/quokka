@@ -354,7 +354,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Vector<std::unique_ptr<amrex::FillPatcher<amrex::MultiFab>>> fillpatcher_;
 
 	// Nghost = number of ghost cells for each array
-	int nghost_cc_ = 4; // PPM needs nghost >= 3, PPM+flattening needs nghost >= 4
+	int nghost_cc_ = 4;						    // PPM needs nghost >= 3, PPM+flattening needs nghost >= 4
 	int nghost_fc_ = Physics_Traits<problem_t>::is_mhd_enabled ? 4 : 2; // 4 needed for MHD, otherwise only 2 for tracer particles
 	amrex::Vector<std::string> componentNames_cc_;
 	amrex::Vector<std::string> componentNames_fc_;
