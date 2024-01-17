@@ -51,7 +51,10 @@ These parameters are read in the `AMRSimulation<problem_t>::readParameters()` fu
      - The time interval (in simulated time) between checkpoint outputs.
    * - do_reflux
      - Integer
-     - this turns on refluxing at coarse-fine boundaries (1) or turns it off (0). Except for debugging, this should always be on when AMR is used.
+     - This turns on refluxing at coarse-fine boundaries (1) or turns it off (0). Except for debugging, this should always be on when AMR is used.
+   * - do_tracers
+     - Integer
+     - This turns on tracer particles. They are initialized one-per-cell and they follow the fluid velocity. Default: 0 (off).
    * - suppress_output
      - Integer
      - If set to 1, this disables output to stdout while the simulation is running.
