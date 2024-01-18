@@ -15,6 +15,7 @@
 #include "AMReX_MultiFabUtil.H"
 #include "AMReX_ParticleInterpolators.H"
 #include "AMReX_Particles.H"
+#include "AMReX_ParIter.H"
 namespace quokka
 {
 
@@ -23,7 +24,9 @@ constexpr int CICParticleInts = 0;
 
 enum ParticleDataIdx { ParticleMassIdx = 0, ParticleVxIdx, ParticleVyIdx, ParticleVzIdx };
 
-using CICParticleContainer = amrex::AmrParticleContainer<0, 0, CICParticleReals, CICParticleInts>;
+// TODO(bwibking): switch to using struct-of-arrays (SOA) particles
+using CICParticleContainer = amrex::AmrParticleContainer<CICParticleReals, CICParticleInts>;
+using CICParticleIterator = amrex::ParIter<CICParticleReals, CICParticleInts>;
 
 struct CICDeposition {
 	amrex::Real Gconst{};

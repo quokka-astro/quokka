@@ -1080,7 +1080,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 
 	if (do_cic_particles != 0) {
 		for (int lev = 0; lev <= finest_level; ++lev) {
-			const int nc = AMREX_SPACEDIM;
+			const int nstart_mesh = 0;
+			const int nstart_particle = quokka::ParticleVxIdx;
+			const int ncomps = AMREX_SPACEDIM;
 			const auto plo = geom[lev].ProbLoArray();
 			const auto dx_inv = geom[lev].InvCellSizeArray();
 
@@ -1091,7 +1093,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 				    amrex::ParticleInterpolator::Linear interp(p, plo, dx_inv);
 
 				    interp.MeshToParticle(
-					p, acc, 0, 1 + AMREX_SPACEDIM, nc,
+					p, acc, nstart_mesh, nstart_particle, ncomps,
 					[=] AMREX_GPU_DEVICE(amrex::Array4<const amrex::Real> const &arr, int i, int j, int k, int comp) {
 						// compute cell-centered acceleration -grad(phi)
 						if (comp == 0) {
@@ -1105,9 +1107,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 						}
 					},
 
-					[=] AMREX_GPU_DEVICE(quokka::CICParticleContainer::ParticleType & part, int comp, amrex::Real val) {
+					[=] AMREX_GPU_DEVICE(quokka::CICParticleContainer::ParticleType & p, int const comp, amrex::Real const acc_comp) {
 						// kick particle 'part' by updating its velocity
-						part.rdata(comp) += 0.5 * dt * amrex::ParticleReal(val);
+						p.rdata(comp) += 0.5 * dt * amrex::ParticleReal(acc_comp);
 					});
 			    });
 		}
@@ -1119,7 +1121,17 @@ template <typename problem_t> void AMRSimulation<problem_t>::driftParticlesAllLe
 	// drift all particles (do: pos[i] += dt * vel[i])
 
 	if (do_cic_particles != 0) {
-		// TODO(bwibking): implement
+		for (int lev = 0; lev <= finest_level; ++lev) {
+			for (quokka::CICParticleIterator pIter(*CICParticles, lev); pIter.isValid(); ++pIter) {
+				auto &particles = pIter.GetArrayOfStructs();
+				for (auto &particle : particles) {
+					// update particle position
+					for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+						particle.pos(i) += dt * particle.rdata(quokka::ParticleVxIdx + i);
+					}
+				}
+			}
+		}
 	}
 }
 
