@@ -12,6 +12,7 @@
 // c++ headers
 #include "AMReX_Interpolater.H"
 #include <cassert>
+#include <cmath>
 #include <csignal>
 #include <cstdio>
 #if __has_include(<filesystem>)
@@ -1099,6 +1100,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 							return -(arr(i, j + 1, k) - arr(i, j - 1, k)) * 0.5 * dx_inv[1];
 						} else if (comp == 2) {
 							return -(arr(i, j, k + 1) - arr(i, j, k - 1)) * 0.5 * dx_inv[2];
+						} else {
+							return std::nan("");
 						}
 					},
 
