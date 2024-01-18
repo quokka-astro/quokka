@@ -990,6 +990,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			phi[lev].setVal(0); // set initial guess to zero
 			rhs[lev].setVal(0);
 			fillPoissonRhsAtLevel(rhs[lev], lev);
+			// TODO(bwibking): deposit particles using amrex::ParticleToMesh
 			rhs_min = std::min(rhs_min, rhs[lev].min(0));
 		}
 
