@@ -87,7 +87,14 @@ template <> void RadhydroSimulation<CollapseProblem>::setInitialConditionsOnGrid
 
 template <> void RadhydroSimulation<CollapseProblem>::createInitialParticles()
 {
-	// note: an implementation is only required if particles are used
+	// add particles at random positions in the box
+	bool generate_on_root_rank = true;
+	int iseed = 42;
+	int num_particles = 1000;
+	double particle_mass = 0.5 / static_cast<double>(num_particles);
+
+	quokka::CICParticleContainer::ParticleInitData pdata = {{particle_mass}, {0}, {0}, {0}}; // mass vx vy vz
+	CICParticles->InitRandom(num_particles, iseed, pdata, generate_on_root_rank);
 }
 
 template <> void RadhydroSimulation<CollapseProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
