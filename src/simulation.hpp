@@ -63,6 +63,7 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_Vector.H"
 #include "AMReX_VisMF.H"
 #include "AMReX_YAFluxRegister.H"
+#include "fundamental_constants.H"
 #include "physics_numVars.hpp"
 #include <AMReX_Geometry.H>
 #include <AMReX_MultiFab.H>
@@ -72,7 +73,6 @@ namespace filesystem = experimental::filesystem;
 #include <AMReX_Utility.H>
 #include <fmt/core.h>
 #include <yaml-cpp/yaml.h>
-#include "fundamental_constants.H"
 
 #ifdef AMREX_PARTICLES
 #include "CICParticles.hpp"

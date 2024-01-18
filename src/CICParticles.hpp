@@ -26,7 +26,7 @@ enum ParticleDataIdx { ParticleMassIdx = 0, ParticleVxIdx, ParticleVyIdx, Partic
 using CICParticleContainer = amrex::AmrParticleContainer<0, 0, CICParticleReals, CICParticleInts>;
 
 struct CICDeposition {
-    amrex::Real Gconst{};
+	amrex::Real Gconst{};
 	int start_part_comp{};
 	int start_mesh_comp{};
 	int num_comp{};
