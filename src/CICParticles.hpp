@@ -17,7 +17,7 @@ namespace quokka
 constexpr int CICParticleReals = 4; // mass vx vy vz
 constexpr int CICParticleInts = 0;
 
-enum ParticleDataIdx {ParticleMass = 0, ParticleVx, ParticleVy, ParticleVz};
+enum ParticleDataIdx { ParticleMass = 0, ParticleVx, ParticleVy, ParticleVz };
 
 using CICParticleContainer = amrex::AmrParticleContainer<0, 0, CICParticleReals, CICParticleInts>;
 } // namespace quokka

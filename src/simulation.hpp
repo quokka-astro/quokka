@@ -74,9 +74,9 @@ namespace filesystem = experimental::filesystem;
 #include <yaml-cpp/yaml.h>
 
 #ifdef AMREX_PARTICLES
+#include "CICParticles.hpp"
 #include <AMReX_AmrParticles.H>
 #include <AMReX_Particles.H>
-#include "CICParticles.hpp"
 #endif
 
 #if AMREX_SPACEDIM == 3
@@ -388,7 +388,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	// tracer particles
 #ifdef AMREX_PARTICLES
-	void InitParticles(); // create tracer particles
+	void InitParticles();	 // create tracer particles
 	void InitCICParticles(); // create CIC particles
 	int do_tracers = 0;
 	int do_cic_particles = 0;
