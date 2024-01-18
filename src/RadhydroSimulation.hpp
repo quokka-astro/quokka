@@ -110,6 +110,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	using AMRSimulation<problem_t>::WriteCheckpointFile;
 	using AMRSimulation<problem_t>::GetData;
 	using AMRSimulation<problem_t>::FillPatchWithData;
+	using AMRSimulation<problem_t>::Gconst_;
 
 	using AMRSimulation<problem_t>::densityFloor_;
 	using AMRSimulation<problem_t>::tempFloor_;
@@ -145,8 +146,6 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	amrex::Real artificialViscosityK_ = 0.; // artificial viscosity coefficient (default == None)
 
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
-
-	amrex::Real Gconst_ = C::Gconst; // gravitational constant G
 
 	// member functions
 	explicit RadhydroSimulation(amrex::Vector<amrex::BCRec> &BCs_cc, amrex::Vector<amrex::BCRec> &BCs_fc) : AMRSimulation<problem_t>(BCs_cc, BCs_fc)
@@ -351,12 +350,6 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::readParmParse(
 		hpp.query("use_dual_energy", useDualEnergy_);
 		hpp.query("abort_on_fofc_failure", abortOnFofcFailure_);
 		hpp.query("artificial_viscosity_coefficient", artificialViscosityK_);
-	}
-
-	// set gravity runtime parameter
-	{
-		amrex::ParmParse hpp("gravity");
-		hpp.query("Gconst", Gconst_);
 	}
 
 	// set cooling runtime parameters

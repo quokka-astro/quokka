@@ -72,11 +72,12 @@ namespace filesystem = experimental::filesystem;
 #include <AMReX_Utility.H>
 #include <fmt/core.h>
 #include <yaml-cpp/yaml.h>
+#include "fundamental_constants.H"
 
 #ifdef AMREX_PARTICLES
+#include "CICParticles.hpp"
 #include <AMReX_AmrParticles.H>
 #include <AMReX_Particles.H>
-#include "CICParticles.hpp"
 #endif
 
 #if AMREX_SPACEDIM == 3
@@ -386,9 +387,12 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Long cellUpdates_ = 0;
 	amrex::Vector<amrex::Long> cellUpdatesEachLevel_;
 
+	// gravity
+	amrex::Real Gconst_ = C::Gconst; // gravitational constant G
+
 	// tracer particles
 #ifdef AMREX_PARTICLES
-	void InitParticles(); // create tracer particles
+	void InitParticles();	 // create tracer particles
 	void InitCICParticles(); // create CIC particles
 	int do_tracers = 0;
 	int do_cic_particles = 0;
@@ -621,6 +625,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	if (nargs == 3) {
 		maxWalltime_ = 3600 * hours + 60 * minutes + seconds;
 		amrex::Print() << fmt::format("Setting walltime limit to {} hours, {} minutes, {} seconds.\n", hours, minutes, seconds);
+	}
+
+	// set gravity runtime parameters
+	{
+		amrex::ParmParse hpp("gravity");
+		hpp.query("Gconst", Gconst_);
 	}
 }
 
@@ -1004,12 +1014,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			rhs[lev].define(grids[lev], dmap[lev], ncomp, nghost);
 			phi[lev].setVal(0); // set initial guess to zero
 			rhs[lev].setVal(0);
-			fillPoissonRhsAtLevel(rhs[lev], lev);
 		}
 
-		// TODO(bwibking): deposit particles using amrex::ParticleToMesh
+		// deposit particles using amrex::ParticleToMesh
+		amrex::ParticleToMesh(*CICParticles, amrex::GetVecOfPtrs(rhs), 0, finest_level, quokka::CICDeposition{Gconst_, quokka::ParticleMassIdx, 0, 1});
 
+		// add fluid density
 		for (int lev = 0; lev <= finest_level; ++lev) {
+			fillPoissonRhsAtLevel(rhs[lev], lev);
 			rhs_min = std::min(rhs_min, rhs[lev].min(0));
 		}
 

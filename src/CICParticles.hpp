@@ -9,17 +9,40 @@
 /// \brief Implements the particle container for gravitationally-interacting particles
 ///
 
+#include "AMReX.H"
 #include "AMReX_AmrParticles.H"
-
+#include "AMReX_MultiFab.H"
+#include "AMReX_MultiFabUtil.H"
+#include "AMReX_ParticleInterpolators.H"
+#include "AMReX_Particles.H"
 namespace quokka
 {
 
 constexpr int CICParticleReals = 4; // mass vx vy vz
 constexpr int CICParticleInts = 0;
 
-enum ParticleDataIdx {ParticleMass = 0, ParticleVx, ParticleVy, ParticleVz};
+enum ParticleDataIdx { ParticleMassIdx = 0, ParticleVxIdx, ParticleVyIdx, ParticleVzIdx };
 
 using CICParticleContainer = amrex::AmrParticleContainer<0, 0, CICParticleReals, CICParticleInts>;
+
+struct CICDeposition {
+    amrex::Real Gconst{};
+	int start_part_comp{};
+	int start_mesh_comp{};
+	int num_comp{};
+
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE void operator()(const CICParticleContainer::ParticleType &p, amrex::Array4<amrex::Real> const &rho,
+							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
+							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi) const noexcept
+	{
+		amrex::ParticleInterpolator::Linear interp(p, plo, dxi);
+		interp.ParticleToMesh(p, rho, start_part_comp, start_mesh_comp, num_comp,
+				      [=] AMREX_GPU_DEVICE(const CICParticleContainer::ParticleType &part, int comp) {
+					      return 4.0 * M_PI * Gconst * part.rdata(comp); // weight by 4 pi G
+				      });
+	}
+};
+
 } // namespace quokka
 
 #endif // CICPARTICLES_HPP_
