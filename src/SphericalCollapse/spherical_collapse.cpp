@@ -85,6 +85,11 @@ template <> void RadhydroSimulation<CollapseProblem>::setInitialConditionsOnGrid
 	});
 }
 
+template <> void RadhydroSimulation<CollapseProblem>::createInitialParticles()
+{
+	// note: an implementation is only required if particles are used
+}
+
 template <> void RadhydroSimulation<CollapseProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for refinement

@@ -234,6 +234,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	virtual void preCalculateInitialConditions() = 0;
 	virtual void setInitialConditionsOnGrid(quokka::grid grid_elem) = 0;
 	virtual void setInitialConditionsOnGridFaceVars(quokka::grid grid_elem) = 0;
+	virtual void createInitialParticles() = 0;
 	virtual void computeAfterTimestep() = 0;
 	virtual void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) = 0;
 	virtual void fillPoissonRhsAtLevel(amrex::MultiFab &rhs, int lev) = 0;
@@ -1889,7 +1890,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitCICParticles()
 		CICParticles = std::make_unique<quokka::CICParticleContainer>(this);
 
 		CICParticles->SetVerbose(0);
-		// TODO(bwibking): call user function to initialize
+		createInitialParticles();
 		CICParticles->Redistribute();
 	}
 }
