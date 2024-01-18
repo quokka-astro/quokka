@@ -76,6 +76,7 @@ namespace filesystem = experimental::filesystem;
 #ifdef AMREX_PARTICLES
 #include <AMReX_AmrParticles.H>
 #include <AMReX_Particles.H>
+#include "CICParticles.hpp"
 #endif
 
 #if AMREX_SPACEDIM == 3
@@ -331,6 +332,11 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	[[nodiscard]] auto getOldMF_fc() const -> amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const &;
 	[[nodiscard]] auto getNewMF_fc() const -> amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const &;
 
+	// particle functions
+	void advanceParticlesAllLevels(const amrex::Real dt, const ParticleStep &stage);
+	void kickParticlesAllLevels(const amrex::Real dt);
+	void driftParticlesAllLevels(const amrex::Real dt);
+
 #ifdef AMREX_USE_ASCENT
 	void AscentCustomActions(conduit::Node const &blueprintMesh);
 	void RenderAscent();
@@ -383,8 +389,11 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// tracer particles
 #ifdef AMREX_PARTICLES
 	void InitParticles(); // create tracer particles
+	void InitCICParticles(); // create CIC particles
 	int do_tracers = 0;
+	int do_cic_particles = 0;
 	std::unique_ptr<amrex::AmrTracerParticleContainer> TracerPC;
+	std::unique_ptr<quokka::CICParticleContainer> CICParticles;
 #endif
 
 	// external objects
@@ -573,6 +582,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Default do_tracers = 0 (turns on/off tracer particles)
 	pp.query("do_tracers", do_tracers);
 
+	// Default do_cic_particles = 0 (turns on/off CIC particles)
+	pp.query("do_cic_particles", do_cic_particles);
+
 	// Default suppress_output = 0
 	pp.query("suppress_output", suppress_output);
 
@@ -625,6 +637,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 #ifdef AMREX_PARTICLES
 		if (do_tracers != 0) {
 			InitParticles();
+		}
+		if (do_cic_particles != 0) {
+			InitCICParticles();
 		}
 #endif
 
@@ -990,7 +1005,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			phi[lev].setVal(0); // set initial guess to zero
 			rhs[lev].setVal(0);
 			fillPoissonRhsAtLevel(rhs[lev], lev);
-			// TODO(bwibking): deposit particles using amrex::ParticleToMesh
+		}
+
+		// TODO(bwibking): deposit particles using amrex::ParticleToMesh
+
+		for (int lev = 0; lev <= finest_level; ++lev) {
 			rhs_min = std::min(rhs_min, rhs[lev].min(0));
 		}
 
@@ -1045,13 +1064,17 @@ template <typename problem_t> void AMRSimulation<problem_t>::advanceParticlesAll
 template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLevels(const amrex::Real dt)
 {
 	// kick particles using the cell-centered gravitational acceleration
-	// TODO(bwibking): implement
+	if (do_cic_particles != 0) {
+		// TODO(bwibking): implement
+	}
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::driftParticlesAllLevels(const amrex::Real dt)
 {
 	// drift particles
-	// TODO(bwibking): implement
+	if (do_cic_particles != 0) {
+		// TODO(bwibking): implement
+	}
 }
 
 // N.B.: This function actually works for subcycled or not subcycled, as long as
@@ -1094,6 +1117,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 				// redistribute particles
 				if (do_tracers != 0) {
 					TracerPC->Redistribute(lev);
+				}
+				if (do_cic_particles != 0) {
+					CICParticles->Redistribute(lev);
 				}
 #endif
 
@@ -1151,7 +1177,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 	}
 
 #ifdef AMREX_PARTICLES
-	// redistribute particles
+	// redistribute tracer particles
 	if (do_tracers != 0) {
 		int redistribute_ngrow = 0;
 		if ((iteration < nsubsteps[lev]) || (lev == 0)) {
@@ -1161,6 +1187,18 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 				redistribute_ngrow = iteration;
 			}
 			TracerPC->Redistribute(lev, TracerPC->finestLevel(), redistribute_ngrow);
+		}
+	}
+	// redistribute CIC particles
+	if (do_cic_particles != 0) {
+		int redistribute_ngrow = 0;
+		if ((iteration < nsubsteps[lev]) || (lev == 0)) {
+			if (lev == 0) {
+				redistribute_ngrow = 0;
+			} else {
+				redistribute_ngrow = iteration;
+			}
+			CICParticles->Redistribute(lev, CICParticles->finestLevel(), redistribute_ngrow);
 		}
 	}
 #endif
@@ -1780,6 +1818,18 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitParticles()
 		TracerPC->Redistribute();
 	}
 }
+
+template <typename problem_t> void AMRSimulation<problem_t>::InitCICParticles()
+{
+	if (do_cic_particles != 0) {
+		AMREX_ASSERT(CICParticles == nullptr);
+		CICParticles = std::make_unique<quokka::CICParticleContainer>(this);
+
+		CICParticles->SetVerbose(0);
+		// TODO(bwibking): call user function to initialize
+		CICParticles->Redistribute();
+	}
+}
 #endif
 
 // get plotfile name
@@ -2004,6 +2054,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 	// write particles
 	if (do_tracers != 0) {
 		TracerPC->WritePlotFile(plotfilename, "particles");
+	}
+	if (do_cic_particles != 0) {
+		CICParticles->WritePlotFile(plotfilename, "CIC_particles");
 	}
 #endif // AMREX_PARTICLES
 #endif
@@ -2332,6 +2385,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile
 	if (do_tracers != 0) {
 		TracerPC->Checkpoint(checkpointname, "particles", true);
 	}
+	if (do_cic_particles != 0) {
+		CICParticles->Checkpoint(checkpointname, "CIC_particles", true);
+	}
 #endif
 
 	// create symlink and point it at this checkpoint dir
@@ -2494,6 +2550,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 		AMREX_ASSERT(TracerPC == nullptr);
 		TracerPC = std::make_unique<amrex::AmrTracerParticleContainer>(this);
 		TracerPC->Restart(restart_chkfile, "particles");
+	}
+	if (do_cic_particles != 0) {
+		AMREX_ASSERT(CICParticles == nullptr);
+		CICParticles = std::make_unique<quokka::CICParticleContainer>(this);
+		CICParticles->Restart(restart_chkfile, "CIC_particles");
 	}
 #endif
 
