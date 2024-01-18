@@ -104,6 +104,8 @@ using namespace conduit;
 using namespace ascent;
 #endif
 
+enum class ParticleStep { BeforePoissonSolve, AfterPoissonSolve };
+
 using variant_t = std::variant<amrex::Real, std::string>;
 
 namespace YAML
@@ -835,8 +837,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		const int iteration = 1; // this is the first call to advance level 'lev'
 		timeStepWithSubcycling(lev, cur_time, iteration);
 
+		// do particle leapfrog (first kick)
+		advanceParticlesAllLevels(dt_[0], ParticleStep::BeforePoissonSolve);
+
 		// elliptic solve over entire AMR grid (post-timestep)
 		ellipticSolveAllLevels(dt_[0]);
+
+		// do particle leapfrog (drift, second kick)
+		advanceParticlesAllLevels(dt_[0], ParticleStep::AfterPoissonSolve);
 
 		cur_time += dt_[0];
 		++cycleCount_;
@@ -1019,6 +1027,30 @@ template <typename problem_t> void AMRSimulation<problem_t>::ellipticSolveAllLev
 		gravAccelAllLevels(dt);
 	}
 #endif
+}
+
+template <typename problem_t> void AMRSimulation<problem_t>::advanceParticlesAllLevels(const amrex::Real dt, const ParticleStep &stage)
+{
+	if (stage == ParticleStep::BeforePoissonSolve) {
+		// do particle kick using the "old" gravitational potential
+		kickParticlesAllLevels(dt);
+	} else if (stage == ParticleStep::AfterPoissonSolve) {
+		// do particle drift, then final kick using the "new" gravitational potential
+		driftParticlesAllLevels(dt);
+		kickParticlesAllLevels(dt);
+	}
+}
+
+template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLevels(const amrex::Real dt)
+{
+	// kick particles using the cell-centered gravitational acceleration
+	// TODO(bwibking): implement
+}
+
+template <typename problem_t> void AMRSimulation<problem_t>::driftParticlesAllLevels(const amrex::Real dt)
+{
+	// drift particles
+	// TODO(bwibking): implement
 }
 
 // N.B.: This function actually works for subcycled or not subcycled, as long as
