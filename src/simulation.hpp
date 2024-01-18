@@ -1075,15 +1075,46 @@ template <typename problem_t> void AMRSimulation<problem_t>::advanceParticlesAll
 
 template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLevels(const amrex::Real dt)
 {
-	// kick particles using the cell-centered gravitational acceleration
+	// kick particles (do: vel[i] += 0.5 * dt * accel[i])
+
 	if (do_cic_particles != 0) {
-		// TODO(bwibking): implement
+		for (int lev = 0; lev <= finest_level; ++lev) {
+			const int nc = AMREX_SPACEDIM;
+			const auto plo = geom[lev].ProbLoArray();
+			const auto dx_inv = geom[lev].InvCellSizeArray();
+
+			// TODO(bwibking): only kick particles that live at level 'lev'
+			amrex::MeshToParticle(
+			    *CICParticles, phi[lev], 0,
+			    [=] AMREX_GPU_DEVICE(quokka::CICParticleContainer::ParticleType & p, amrex::Array4<const amrex::Real> const &acc) {
+				    amrex::ParticleInterpolator::Linear interp(p, plo, dx_inv);
+
+				    interp.MeshToParticle(
+					p, acc, 0, 1 + AMREX_SPACEDIM, nc,
+					[=] AMREX_GPU_DEVICE(amrex::Array4<const amrex::Real> const &arr, int i, int j, int k, int comp) {
+						// compute cell-centered acceleration -grad(phi)
+						if (comp == 0) {
+							return -(arr(i + 1, j, k) - arr(i - 1, j, k)) * 0.5 * dx_inv[0];
+						} else if (comp == 1) {
+							return -(arr(i, j + 1, k) - arr(i, j - 1, k)) * 0.5 * dx_inv[1];
+						} else if (comp == 2) {
+							return -(arr(i, j, k + 1) - arr(i, j, k - 1)) * 0.5 * dx_inv[2];
+						}
+					},
+
+					[=] AMREX_GPU_DEVICE(quokka::CICParticleContainer::ParticleType & part, int comp, amrex::Real val) {
+						// kick particle 'part' by updating its velocity
+						part.rdata(comp) += 0.5 * dt * amrex::ParticleReal(val);
+					});
+			    });
+		}
 	}
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::driftParticlesAllLevels(const amrex::Real dt)
 {
-	// drift particles
+	// drift all particles (do: pos[i] += dt * vel[i])
+
 	if (do_cic_particles != 0) {
 		// TODO(bwibking): implement
 	}
