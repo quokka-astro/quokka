@@ -13,9 +13,9 @@
 #include "AMReX_AmrParticles.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_MultiFabUtil.H"
+#include "AMReX_ParIter.H"
 #include "AMReX_ParticleInterpolators.H"
 #include "AMReX_Particles.H"
-#include "AMReX_ParIter.H"
 namespace quokka
 {
 
