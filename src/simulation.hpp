@@ -1016,6 +1016,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			rhs[lev].define(grids[lev], dmap[lev], ncomp, nghost);
 			phi[lev].setVal(0); // set initial guess to zero
 			rhs[lev].setVal(0);
+			fillPoissonRhsAtLevel(rhs[lev], lev);
 		}
 
 #ifdef AMREX_PARTICLES
@@ -1026,9 +1027,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		}
 #endif
 
-		// add fluid density
 		for (int lev = 0; lev <= finest_level; ++lev) {
-			fillPoissonRhsAtLevel(rhs[lev], lev);
+			AMREX_ALWAYS_ASSERT(!rhs[lev].contains_nan(0, rhs[lev].nComp()));
 			rhs_min = std::min(rhs_min, rhs[lev].min(0));
 		}
 
@@ -1086,35 +1086,52 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 
 	if (do_cic_particles != 0) {
 		for (int lev = 0; lev <= finest_level; ++lev) {
+			// compute accelerations
+			amrex::MultiFab accel(boxArray(lev), DistributionMap(lev), AMREX_SPACEDIM, 1);
+			accel.setVal(0.);
+			const auto &phi_arr = phi[lev].const_arrays();
+			auto accel_arr = accel.arrays();
+			const auto dx_inv = geom[lev].InvCellSizeArray();
+			const amrex::IntVect ng{0, 0, 0};
+			amrex::ParallelFor(accel, ng, AMREX_SPACEDIM, [=](int bx, int i, int j, int k, int n) {
+				// compute cell-centered acceleration -grad(phi)
+				if (n == 0) {
+					accel_arr[bx](i, j, k, n) = -0.5 * dx_inv[0] * (phi_arr[bx](i + 1, j, k) - phi_arr[bx](i - 1, j, k));
+				}
+				if (n == 1) {
+					accel_arr[bx](i, j, k, n) = -0.5 * dx_inv[1] * (phi_arr[bx](i, j + 1, k) - phi_arr[bx](i, j - 1, k));
+				}
+				if (n == 2) {
+					accel_arr[bx](i, j, k, n) = -0.5 * dx_inv[2] * (phi_arr[bx](i, j, k + 1) - phi_arr[bx](i, j, k - 1));
+				}
+			});
+			amrex::Gpu::streamSynchronizeAll();
+
+			// fill acceleration ghost cells
+			accel.FillBoundary(geom[lev].periodicity());
+
+			// check for NaN
+			AMREX_ALWAYS_ASSERT(!accel.contains_nan());
+
+			// TODO(bwibking): add coarse-fine boundary ghosts(!)
+			// TODO(bwibking): add physical boundary ghosts(!)
+
+			// TODO(bwibking): only kick particles that live at level 'lev'
 			const int nstart_mesh = 0;
 			const int nstart_particle = quokka::ParticleVxIdx;
 			const int ncomps = AMREX_SPACEDIM;
 			const auto plo = geom[lev].ProbLoArray();
-			const auto dx_inv = geom[lev].InvCellSizeArray();
-
-			// TODO(bwibking): only kick particles that live at level 'lev'
 			amrex::MeshToParticle(
-			    *CICParticles, phi[lev], 0,
+			    *CICParticles, accel, 0,
 			    [=] AMREX_GPU_DEVICE(quokka::CICParticleContainer::ParticleType & p, amrex::Array4<const amrex::Real> const &acc) {
 				    amrex::ParticleInterpolator::Linear interp(p, plo, dx_inv);
-
 				    interp.MeshToParticle(
 					p, acc, nstart_mesh, nstart_particle, ncomps,
 					[=] AMREX_GPU_DEVICE(amrex::Array4<const amrex::Real> const &arr, int i, int j, int k, int comp) {
-						// compute cell-centered acceleration -grad(phi)
-						if (comp == 0) {
-							return -(arr(i + 1, j, k) - arr(i - 1, j, k)) * 0.5 * dx_inv[0];
-						} else if (comp == 1) {
-							return -(arr(i, j + 1, k) - arr(i, j - 1, k)) * 0.5 * dx_inv[1];
-						} else if (comp == 2) {
-							return -(arr(i, j, k + 1) - arr(i, j, k - 1)) * 0.5 * dx_inv[2];
-						} else {
-							return std::nan("");
-						}
+						return arr(i, j, k, comp);
 					},
-
 					[=] AMREX_GPU_DEVICE(quokka::CICParticleContainer::ParticleType & p, int const comp, amrex::Real const acc_comp) {
-						// kick particle 'part' by updating its velocity
+						// kick particle by updating its velocity
 						p.rdata(comp) += 0.5 * dt * amrex::ParticleReal(acc_comp);
 					});
 			    });
