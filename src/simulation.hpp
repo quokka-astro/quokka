@@ -1016,7 +1016,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			rhs[lev].define(grids[lev], dmap[lev], ncomp, nghost);
 			phi[lev].setVal(0); // set initial guess to zero
 			rhs[lev].setVal(0);
-			fillPoissonRhsAtLevel(rhs[lev], lev);
 		}
 
 #ifdef AMREX_PARTICLES
@@ -1028,6 +1027,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 #endif
 
 		for (int lev = 0; lev <= finest_level; ++lev) {
+			AMREX_ALWAYS_ASSERT(!rhs[lev].contains_nan(0, rhs[lev].nComp()));
+			fillPoissonRhsAtLevel(rhs[lev], lev);
 			AMREX_ALWAYS_ASSERT(!rhs[lev].contains_nan(0, rhs[lev].nComp()));
 			rhs_min = std::min(rhs_min, rhs[lev].min(0));
 		}

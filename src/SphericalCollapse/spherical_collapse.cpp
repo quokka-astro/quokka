@@ -91,7 +91,7 @@ template <> void RadhydroSimulation<CollapseProblem>::createInitialParticles()
 	bool generate_on_root_rank = true;
 	int iseed = 42;
 	int num_particles = 1000;
-	double particle_mass = 0.5 / static_cast<double>(num_particles);
+	double particle_mass = 0.; // treat as test particles (for now)
 
 	quokka::CICParticleContainer::ParticleInitData pdata = {{particle_mass, 0, 0, 0}, {}, {}, {}}; // {mass vx vy vz}, empty, empty, empty
 	CICParticles->InitRandom(num_particles, iseed, pdata, generate_on_root_rank);
