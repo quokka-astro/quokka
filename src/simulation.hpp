@@ -863,7 +863,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		for (int lev = 0; lev <= finest_level; ++lev) {
 			AMREX_ALWAYS_ASSERT(!phi[lev].contains_nan()); // this fails when max_level=2 for SphericalCollapse
 		}
-		
+
 		// do particle leapfrog (first kick)
 		advanceParticlesAllLevels(dt_[0], ParticleStep::BeforePoissonSolve);
 
