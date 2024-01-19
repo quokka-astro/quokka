@@ -336,7 +336,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	[[nodiscard]] auto getNewMF_fc() const -> amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const &;
 
 	// particle functions
-	void advanceParticlesAllLevels(amrex::Real dt, const ParticleStep &stage);
 	void kickParticlesAllLevels(amrex::Real dt);
 	void driftParticlesAllLevels(amrex::Real dt);
 
@@ -864,8 +863,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 			AMREX_ALWAYS_ASSERT(!phi[lev].contains_nan()); // this fails when max_level=2 for SphericalCollapse
 		}
 
-		// do particle leapfrog (first kick)
-		advanceParticlesAllLevels(dt_[0], ParticleStep::BeforePoissonSolve);
+		// do particle leapfrog (first kick at time t)
+		kickParticlesAllLevels(dt_[0]);
 
 		// hyperbolic advance over all levels
 		// (N.B. when AMR is enabled, regridding may happen during this function!)
@@ -873,11 +872,15 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		const int iteration = 1; // this is the first call to advance level 'lev'
 		timeStepWithSubcycling(lev, cur_time, iteration);
 
+		// drift particles from t to (t + dt)
+		// N.B.: MUST be done *before* Poisson solve at new time!
+		driftParticlesAllLevels(dt_[0]);
+
 		// elliptic solve over entire AMR grid (post-timestep)
 		ellipticSolveAllLevels(dt_[0]);
 
-		// do particle leapfrog (drift, second kick)
-		advanceParticlesAllLevels(dt_[0], ParticleStep::AfterPoissonSolve);
+		// do particle leapfrog (second kick at t + dt)
+		kickParticlesAllLevels(dt_[0]);
 
 		cur_time += dt_[0];
 		++cycleCount_;
@@ -1075,19 +1078,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::ellipticSolveAllLev
 #endif
 }
 
-template <typename problem_t> void AMRSimulation<problem_t>::advanceParticlesAllLevels(const amrex::Real dt, const ParticleStep &stage)
-{
-	if (stage == ParticleStep::BeforePoissonSolve) {
-		// Do particle kick using the "old" gravitational potential
-		// (N.B.: When AMR is enabled, this *must* be done before the hydro advance, since regridding may happen.)
-		kickParticlesAllLevels(dt);
-	} else if (stage == ParticleStep::AfterPoissonSolve) {
-		// Do particle drift, then final kick using the "new" gravitational potential
-		driftParticlesAllLevels(dt);
-		kickParticlesAllLevels(dt);
-	}
-}
-
 template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLevels(const amrex::Real dt)
 {
 	// kick particles (do: vel[i] += 0.5 * dt * accel[i])
@@ -1100,7 +1090,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 			auto accel_arr = accel_mf.arrays();
 			const auto &phi_arr = phi[lev].const_arrays();
 			const auto dx_inv = geom[lev].InvCellSizeArray();
-			const amrex::IntVect ng{AMREX_D_DECL(1, 1, 1)}; // need 1 ghost for particle advection
+			const amrex::IntVect ng{AMREX_D_DECL(1, 1, 1)}; // need 1 ghost for particle kick
 
 			// check for NaN
 			AMREX_ALWAYS_ASSERT(!phi[lev].contains_nan());
