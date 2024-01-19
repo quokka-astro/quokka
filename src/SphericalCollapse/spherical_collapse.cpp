@@ -88,12 +88,13 @@ template <> void RadhydroSimulation<CollapseProblem>::setInitialConditionsOnGrid
 template <> void RadhydroSimulation<CollapseProblem>::createInitialParticles()
 {
 	// add particles at random positions in the box
-	bool generate_on_root_rank = true;
-	int iseed = 42;
-	int num_particles = 1000;
-	double particle_mass = 0.; // treat as test particles (for now)
+	const bool generate_on_root_rank = true;
+	const int iseed = 42;
+	const int num_particles = 1000;
+	const double total_particle_mass = 0.5; // about 0.1 of the total fluid mass
+	const double particle_mass = total_particle_mass / static_cast<double>(num_particles);
 
-	quokka::CICParticleContainer::ParticleInitData pdata = {{particle_mass, 0, 0, 0}, {}, {}, {}}; // {mass vx vy vz}, empty, empty, empty
+	const quokka::CICParticleContainer::ParticleInitData pdata = {{particle_mass, 0, 0, 0}, {}, {}, {}}; // {mass vx vy vz}, empty, empty, empty
 	CICParticles->InitRandom(num_particles, iseed, pdata, generate_on_root_rank);
 }
 
