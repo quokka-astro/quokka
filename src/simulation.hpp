@@ -858,11 +858,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		amrex::ParallelDescriptor::Barrier(); // synchronize all MPI ranks
 		computeTimestep();
 
-		// check for NaN
-		for (int lev = 0; lev <= finest_level; ++lev) {
-			AMREX_ALWAYS_ASSERT(!phi[lev].contains_nan()); // this fails when max_level=2 for SphericalCollapse
-		}
-
 		// do particle leapfrog (first kick at time t)
 		kickParticlesAllLevels(dt_[0]);
 
@@ -1046,6 +1041,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		poissonSolver.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs), reltolPoisson_, abstol);
 		if (verbose) {
 			amrex::Print() << "\n";
+		}
+
+		// check for NaN
+		for (int lev = 0; lev <= finest_level; ++lev) {
+			AMREX_ALWAYS_ASSERT(!phi[lev].contains_nan()); // this fails when max_level=2 for SphericalCollapse
 		}
 	}
 #endif
