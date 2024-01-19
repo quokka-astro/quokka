@@ -1095,7 +1095,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 			// check for NaN
 			AMREX_ALWAYS_ASSERT(!phi[lev].contains_nan());
 
-			amrex::ParallelFor(accel_mf, ng, AMREX_SPACEDIM, [=](int bx, int i, int j, int k, int n) {
+			amrex::ParallelFor(accel_mf, ng, AMREX_SPACEDIM, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k, int n) {
 				// compute cell-centered acceleration -grad(phi)
 				if (n == 0) {
 					accel_arr[bx](i, j, k, n) = -0.5 * dx_inv[0] * (phi_arr[bx](i + 1, j, k) - phi_arr[bx](i - 1, j, k));
