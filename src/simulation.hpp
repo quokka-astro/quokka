@@ -1017,7 +1017,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		phi.resize(finest_level + 1);
 		// solve Poisson equation with open b.c. using the method of James (1977)
 		amrex::Vector<amrex::MultiFab> rhs(finest_level + 1);
-		const int nghost = 2; // needed to have 1 acceleration ghost cell
+		const int nghost = 1;
 		const int ncomp = 1;
 		amrex::Real rhs_min = std::numeric_limits<amrex::Real>::max();
 		for (int lev = 0; lev <= finest_level; ++lev) {
@@ -1090,7 +1090,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 			auto accel_arr = accel_mf.arrays();
 			const auto &phi_arr = phi[lev].const_arrays();
 			const auto dx_inv = geom[lev].InvCellSizeArray();
-			const amrex::IntVect ng{AMREX_D_DECL(1, 1, 1)}; // need 1 ghost for particle kick
+			const amrex::IntVect ng(0);
 
 			// check for NaN
 			AMREX_ALWAYS_ASSERT(!phi[lev].contains_nan());
@@ -1109,6 +1109,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 			});
 			amrex::Gpu::streamSynchronizeAll();
 
+			accel_mf.FillBoundary(geom[lev].periodicity());
+			// TODO(bwibking): fill coarse-fine ghosts, fill physical ghosts
+
 			// check for NaN
 			AMREX_ALWAYS_ASSERT(!accel_mf.contains_nan(0, AMREX_SPACEDIM));
 			AMREX_ALWAYS_ASSERT(!accel_mf.contains_nan());
@@ -1121,9 +1124,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 
 				amrex::Array4<const amrex::Real> const &accel = accel_mf.array(pIter);
 				const auto plo = geom[lev].ProbLoArray();
-				const auto dx_inv = geom[lev].InvCellSizeArray();
 
-				amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int idx) {
+				amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(long idx) {
 					quokka::CICParticleContainer::ParticleType &p = pData[idx];
 					amrex::ParticleInterpolator::Linear interp(p, plo, dx_inv);
 					interp.MeshToParticle(
