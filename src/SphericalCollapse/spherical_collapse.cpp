@@ -93,7 +93,7 @@ template <> void RadhydroSimulation<CollapseProblem>::createInitialParticles()
 	int num_particles = 1000;
 	double particle_mass = 0.5 / static_cast<double>(num_particles);
 
-	quokka::CICParticleContainer::ParticleInitData pdata = {{particle_mass}, {0}, {0}, {0}}; // mass vx vy vz
+	quokka::CICParticleContainer::ParticleInitData pdata = {{particle_mass, 0, 0, 0}, {}, {}, {}}; // {mass vx vy vz}, empty, empty, empty
 	CICParticles->InitRandom(num_particles, iseed, pdata, generate_on_root_rank);
 }
 
@@ -122,11 +122,9 @@ template <> void RadhydroSimulation<CollapseProblem>::ComputeDerivedVar(int lev,
 	// compute derived variables and save in 'mf'
 	if (dname == "gpot") {
 		const int ncomp = ncomp_cc_in;
-		auto const &state = state_new_cc_[lev].const_arrays();
-		auto const &phi_data_ref = phi[lev].const_arrays();
+		auto const &phi_arr = phi[lev].const_arrays();
 		auto output = mf.arrays();
-
-		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept { output[bx](i, j, k, ncomp) = phi_data_ref[bx](i, j, k); });
+		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept { output[bx](i, j, k, ncomp) = phi_arr[bx](i, j, k); });
 	}
 }
 

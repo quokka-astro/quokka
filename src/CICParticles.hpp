@@ -19,14 +19,11 @@
 namespace quokka
 {
 
-constexpr int CICParticleReals = 4; // mass vx vy vz
-constexpr int CICParticleInts = 0;
-
 enum ParticleDataIdx { ParticleMassIdx = 0, ParticleVxIdx, ParticleVyIdx, ParticleVzIdx };
+constexpr int CICParticleRealComps = 4; // mass vx vy vz
 
-// TODO(bwibking): switch to using struct-of-arrays (SOA) particles
-using CICParticleContainer = amrex::AmrParticleContainer<CICParticleReals, CICParticleInts>;
-using CICParticleIterator = amrex::ParIter<CICParticleReals, CICParticleInts>;
+using CICParticleContainer = amrex::AmrParticleContainer<CICParticleRealComps>;
+using CICParticleIterator = amrex::ParIter<CICParticleRealComps>;
 
 struct CICDeposition {
 	amrex::Real Gconst{};
