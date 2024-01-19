@@ -859,13 +859,19 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		amrex::ParallelDescriptor::Barrier(); // synchronize all MPI ranks
 		computeTimestep();
 
+		// check for NaN
+		for (int lev = 0; lev <= finest_level; ++lev) {
+			AMREX_ALWAYS_ASSERT(!phi[lev].contains_nan()); // this fails when max_level=2 for SphericalCollapse
+		}
+		
+		// do particle leapfrog (first kick)
+		advanceParticlesAllLevels(dt_[0], ParticleStep::BeforePoissonSolve);
+
 		// hyperbolic advance over all levels
+		// (N.B. when AMR is enabled, regridding may happen during this function!)
 		int lev = 0;		 // coarsest level
 		const int iteration = 1; // this is the first call to advance level 'lev'
 		timeStepWithSubcycling(lev, cur_time, iteration);
-
-		// do particle leapfrog (first kick)
-		advanceParticlesAllLevels(dt_[0], ParticleStep::BeforePoissonSolve);
 
 		// elliptic solve over entire AMR grid (post-timestep)
 		ellipticSolveAllLevels(dt_[0]);
@@ -1027,9 +1033,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 #endif
 
 		for (int lev = 0; lev <= finest_level; ++lev) {
-			AMREX_ALWAYS_ASSERT(!rhs[lev].contains_nan(0, rhs[lev].nComp()));
+			AMREX_ALWAYS_ASSERT(!rhs[lev].contains_nan());
 			fillPoissonRhsAtLevel(rhs[lev], lev);
-			AMREX_ALWAYS_ASSERT(!rhs[lev].contains_nan(0, rhs[lev].nComp()));
+			AMREX_ALWAYS_ASSERT(!rhs[lev].contains_nan());
 			rhs_min = std::min(rhs_min, rhs[lev].min(0));
 		}
 
@@ -1072,10 +1078,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::ellipticSolveAllLev
 template <typename problem_t> void AMRSimulation<problem_t>::advanceParticlesAllLevels(const amrex::Real dt, const ParticleStep &stage)
 {
 	if (stage == ParticleStep::BeforePoissonSolve) {
-		// do particle kick using the "old" gravitational potential
+		// Do particle kick using the "old" gravitational potential
+		// (N.B.: When AMR is enabled, this *must* be done before the hydro advance, since regridding may happen.)
 		kickParticlesAllLevels(dt);
 	} else if (stage == ParticleStep::AfterPoissonSolve) {
-		// do particle drift, then final kick using the "new" gravitational potential
+		// Do particle drift, then final kick using the "new" gravitational potential
 		driftParticlesAllLevels(dt);
 		kickParticlesAllLevels(dt);
 	}
@@ -1088,13 +1095,17 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 	if (do_cic_particles != 0) {
 		for (int lev = 0; lev <= finest_level; ++lev) {
 			// compute accelerations
-			amrex::MultiFab accel(boxArray(lev), DistributionMap(lev), AMREX_SPACEDIM, 1);
-			accel.setVal(0.);
+			amrex::MultiFab accel_mf(boxArray(lev), DistributionMap(lev), AMREX_SPACEDIM, 1);
+			accel_mf.setVal(0.);
+			auto accel_arr = accel_mf.arrays();
 			const auto &phi_arr = phi[lev].const_arrays();
-			auto accel_arr = accel.arrays();
 			const auto dx_inv = geom[lev].InvCellSizeArray();
 			const amrex::IntVect ng{AMREX_D_DECL(0, 0, 0)};
-			amrex::ParallelFor(accel, ng, AMREX_SPACEDIM, [=](int bx, int i, int j, int k, int n) {
+
+			// check for NaN
+			AMREX_ALWAYS_ASSERT(!phi[lev].contains_nan());
+
+			amrex::ParallelFor(accel_mf, ng, AMREX_SPACEDIM, [=](int bx, int i, int j, int k, int n) {
 				// compute cell-centered acceleration -grad(phi)
 				if (n == 0) {
 					accel_arr[bx](i, j, k, n) = -0.5 * dx_inv[0] * (phi_arr[bx](i + 1, j, k) - phi_arr[bx](i - 1, j, k));
@@ -1109,10 +1120,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 			amrex::Gpu::streamSynchronizeAll();
 
 			// fill acceleration ghost cells
-			accel.FillBoundary(geom[lev].periodicity());
+			accel_mf.FillBoundary(geom[lev].periodicity());
 
 			// check for NaN
-			AMREX_ALWAYS_ASSERT(!accel.contains_nan());
+			AMREX_ALWAYS_ASSERT(!accel_mf.contains_nan(0, AMREX_SPACEDIM));
+			AMREX_ALWAYS_ASSERT(!accel_mf.contains_nan());
 
 			// TODO(bwibking): add coarse-fine boundary ghosts(!)
 			// TODO(bwibking): add physical boundary ghosts(!)
@@ -1123,7 +1135,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 			const int ncomps = AMREX_SPACEDIM;
 			const auto plo = geom[lev].ProbLoArray();
 			amrex::MeshToParticle(
-			    *CICParticles, accel, 0,
+			    *CICParticles, accel_mf, 0,
 			    [=] AMREX_GPU_DEVICE(quokka::CICParticleContainer::ParticleType & p, amrex::Array4<const amrex::Real> const &acc) {
 				    amrex::ParticleInterpolator::Linear interp(p, plo, dx_inv);
 				    interp.MeshToParticle(
