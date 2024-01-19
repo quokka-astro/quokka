@@ -1014,7 +1014,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		phi.resize(finest_level + 1);
 		// solve Poisson equation with open b.c. using the method of James (1977)
 		amrex::Vector<amrex::MultiFab> rhs(finest_level + 1);
-		const int nghost = 1;
+		const int nghost = 2; // needed to have 1 acceleration ghost cell
 		const int ncomp = 1;
 		amrex::Real rhs_min = std::numeric_limits<amrex::Real>::max();
 		for (int lev = 0; lev <= finest_level; ++lev) {
@@ -1100,7 +1100,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 			auto accel_arr = accel_mf.arrays();
 			const auto &phi_arr = phi[lev].const_arrays();
 			const auto dx_inv = geom[lev].InvCellSizeArray();
-			const amrex::IntVect ng{AMREX_D_DECL(0, 0, 0)};
+			const amrex::IntVect ng{AMREX_D_DECL(1, 1, 1)}; // need 1 ghost for particle advection
 
 			// check for NaN
 			AMREX_ALWAYS_ASSERT(!phi[lev].contains_nan());
@@ -1119,35 +1119,30 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 			});
 			amrex::Gpu::streamSynchronizeAll();
 
-			// fill acceleration ghost cells
-			accel_mf.FillBoundary(geom[lev].periodicity());
-
 			// check for NaN
 			AMREX_ALWAYS_ASSERT(!accel_mf.contains_nan(0, AMREX_SPACEDIM));
 			AMREX_ALWAYS_ASSERT(!accel_mf.contains_nan());
 
-			// TODO(bwibking): add coarse-fine boundary ghosts(!)
-			// TODO(bwibking): add physical boundary ghosts(!)
+			// loop over particles on this level
+			for (quokka::CICParticleIterator pIter(*CICParticles, lev); pIter.isValid(); ++pIter) {
+				auto &particles = pIter.GetArrayOfStructs();
+				amrex::Array4<const amrex::Real> const &accel = accel_mf.array(pIter);
+				const auto plo = geom[lev].ProbLoArray();
+				const auto dx_inv = geom[lev].InvCellSizeArray();
 
-			// TODO(bwibking): only kick particles that live at level 'lev'
-			const int nstart_mesh = 0;
-			const int nstart_particle = quokka::ParticleVxIdx;
-			const int ncomps = AMREX_SPACEDIM;
-			const auto plo = geom[lev].ProbLoArray();
-			amrex::MeshToParticle(
-			    *CICParticles, accel_mf, 0,
-			    [=] AMREX_GPU_DEVICE(quokka::CICParticleContainer::ParticleType & p, amrex::Array4<const amrex::Real> const &acc) {
-				    amrex::ParticleInterpolator::Linear interp(p, plo, dx_inv);
-				    interp.MeshToParticle(
-					p, acc, nstart_mesh, nstart_particle, ncomps,
-					[=] AMREX_GPU_DEVICE(amrex::Array4<const amrex::Real> const &arr, int i, int j, int k, int comp) {
-						return arr(i, j, k, comp);
-					},
-					[=] AMREX_GPU_DEVICE(quokka::CICParticleContainer::ParticleType & p, int const comp, amrex::Real const acc_comp) {
-						// kick particle by updating its velocity
-						p.rdata(comp) += 0.5 * dt * static_cast<amrex::ParticleReal>(acc_comp);
-					});
-			    });
+				for (auto &p : particles) {
+					amrex::ParticleInterpolator::Linear interp(p, plo, dx_inv);
+					interp.MeshToParticle(
+					    p, accel, 0, quokka::ParticleVxIdx, AMREX_SPACEDIM,
+					    [=] AMREX_GPU_DEVICE(amrex::Array4<const amrex::Real> const &arr, int i, int j, int k, int comp) {
+						    return arr(i, j, k, comp); // no weighting
+					    },
+					    [=] AMREX_GPU_DEVICE(quokka::CICParticleContainer::ParticleType & p, int const comp, amrex::Real const acc_comp) {
+						    // kick particle by updating its velocity
+						    p.rdata(comp) += 0.5 * dt * static_cast<amrex::ParticleReal>(acc_comp);
+					    });
+				}
+			}
 		}
 	}
 }
