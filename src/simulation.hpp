@@ -1092,7 +1092,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 			const auto &phi_arr = phi[lev].const_arrays();
 			auto accel_arr = accel.arrays();
 			const auto dx_inv = geom[lev].InvCellSizeArray();
-			const amrex::IntVect ng{0, 0, 0};
+			const amrex::IntVect ng{AMREX_D_DECL(0, 0, 0)};
 			amrex::ParallelFor(accel, ng, AMREX_SPACEDIM, [=](int bx, int i, int j, int k, int n) {
 				// compute cell-centered acceleration -grad(phi)
 				if (n == 0) {
