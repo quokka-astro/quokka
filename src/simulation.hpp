@@ -336,9 +336,9 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	[[nodiscard]] auto getNewMF_fc() const -> amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const &;
 
 	// particle functions
-	void advanceParticlesAllLevels(const amrex::Real dt, const ParticleStep &stage);
-	void kickParticlesAllLevels(const amrex::Real dt);
-	void driftParticlesAllLevels(const amrex::Real dt);
+	void advanceParticlesAllLevels(amrex::Real dt, const ParticleStep &stage);
+	void kickParticlesAllLevels(amrex::Real dt);
+	void driftParticlesAllLevels(amrex::Real dt);
 
 #ifdef AMREX_USE_ASCENT
 	void AscentCustomActions(conduit::Node const &blueprintMesh);
@@ -631,7 +631,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 	// set gravity runtime parameters
 	{
-		amrex::ParmParse hpp("gravity");
+		const amrex::ParmParse hpp("gravity");
 		hpp.query("Gconst", Gconst_);
 	}
 }
@@ -1133,7 +1133,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 					},
 					[=] AMREX_GPU_DEVICE(quokka::CICParticleContainer::ParticleType & p, int const comp, amrex::Real const acc_comp) {
 						// kick particle by updating its velocity
-						p.rdata(comp) += 0.5 * dt * amrex::ParticleReal(acc_comp);
+						p.rdata(comp) += 0.5 * dt * static_cast<amrex::ParticleReal>(acc_comp);
 					});
 			    });
 		}
