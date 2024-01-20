@@ -22,5 +22,6 @@ amr.grid_eff        = 0.7   # default
 
 do_reflux = 0
 do_subcycle = 0
+do_tracers = 1      # turn on tracer particles
 
 hydro.artificial_viscosity_coefficient = 0.1
