@@ -1079,16 +1079,38 @@ template <typename problem_t> void AMRSimulation<problem_t>::ellipticSolveAllLev
 #endif
 }
 
+struct setFunctorParticleAccel {
+	AMREX_GPU_DEVICE void operator()(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, const int &dcomp, const int &numcomp,
+					 amrex::GeometryData const &geom, const amrex::Real &time, const amrex::BCRec *bcr, int bcomp,
+					 const int &orig_comp) const
+	{
+		amrex::ignore_unused(iv, dest, dcomp, numcomp, geom, time, bcr, bcomp, orig_comp);
+	}
+};
+
 template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLevels(const amrex::Real dt)
 {
 	// kick particles (do: vel[i] += 0.5 * dt * accel[i])
 
 	if (do_cic_particles != 0) {
+		// gravitational acceleration multifabs
+		amrex::Vector<amrex::MultiFab> accel(finest_level + 1);
+
+		// self-gravity in Quokka requires open boundary conditions,
+		// so we extrapolate the gravitational accelerations at physical boundaries
+		amrex::Vector<amrex::BCRec> accelBC(AMREX_SPACEDIM);
+		for (int j = 0; j < AMREX_SPACEDIM; ++j) {
+			for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+				accelBC[j].setLo(i, amrex::BCType::foextrap);
+				accelBC[j].setHi(i, amrex::BCType::foextrap);
+			}
+		}
+
 		for (int lev = 0; lev <= finest_level; ++lev) {
 			// compute accelerations
-			amrex::MultiFab accel_mf(boxArray(lev), DistributionMap(lev), AMREX_SPACEDIM, 1);
-			accel_mf.setVal(0.);
-			auto accel_arr = accel_mf.arrays();
+			accel[lev].define(boxArray(lev), DistributionMap(lev), AMREX_SPACEDIM, 1);
+			accel[lev].setVal(0.);
+			auto accel_arr = accel[lev].arrays();
 			const auto &phi_arr = phi[lev].const_arrays();
 			const auto dx_inv = geom[lev].InvCellSizeArray();
 			const amrex::IntVect ng(0);
@@ -1096,7 +1118,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 			// check for NaN
 			AMREX_ALWAYS_ASSERT(!phi[lev].contains_nan());
 
-			amrex::ParallelFor(accel_mf, ng, AMREX_SPACEDIM, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k, int n) {
+			amrex::ParallelFor(accel[lev], ng, AMREX_SPACEDIM, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k, int n) {
 				// compute cell-centered acceleration -grad(phi)
 				if (n == 0) {
 					accel_arr[bx](i, j, k, n) = -0.5 * dx_inv[0] * (phi_arr[bx](i + 1, j, k) - phi_arr[bx](i - 1, j, k));
@@ -1110,12 +1132,26 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 			});
 			amrex::Gpu::streamSynchronizeAll();
 
-			accel_mf.FillBoundary(geom[lev].periodicity());
-			// TODO(bwibking): fill coarse-fine ghosts, fill physical ghosts
+			// fill ghost cells for accel[lev]
+			amrex::GpuBndryFuncFab<setFunctorParticleAccel> boundaryFunctor(setFunctorParticleAccel{});
+			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> fineBoundaryFunctor(geom[lev], accelBC, boundaryFunctor);
+
+			if (lev == 0) {
+				accel[lev].FillBoundary(geom[lev].periodicity());
+				fineBoundaryFunctor(accel[lev], 0, accel[lev].nComp(), accel[lev].nGrowVect(), 0., 0);
+			} else {
+				amrex::PhysBCFunct<GpuBndryFuncFab<setFunctorParticleAccel>> coarseBoundaryFunctor(geom[lev - 1], accelBC, boundaryFunctor);
+				amrex::Vector<amrex::MultiFab *> fineData{&accel[lev]};
+				amrex::Vector<amrex::MultiFab *> coarseData{&accel[lev - 1]};
+				// N.B.: all multifabs are at the same time, so we ignore the time arguments
+				amrex::FillPatchTwoLevels(accel[lev], 0., coarseData, {0.}, fineData, {0.}, 0, 0, AMREX_SPACEDIM, geom[lev - 1], geom[lev],
+							  coarseBoundaryFunctor, 0, fineBoundaryFunctor, 0, refRatio(lev - 1), getAmrInterpolaterCellCentered(),
+							  accelBC, 0);
+			}
 
 			// check for NaN
-			AMREX_ALWAYS_ASSERT(!accel_mf.contains_nan(0, AMREX_SPACEDIM));
-			AMREX_ALWAYS_ASSERT(!accel_mf.contains_nan());
+			AMREX_ALWAYS_ASSERT(!accel[lev].contains_nan(0, AMREX_SPACEDIM));
+			AMREX_ALWAYS_ASSERT(!accel[lev].contains_nan());
 
 			// loop over boxes of particles on this level
 			for (quokka::CICParticleIterator pIter(*CICParticles, lev); pIter.isValid(); ++pIter) {
@@ -1123,16 +1159,16 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 				quokka::CICParticleContainer::ParticleType *pData = particles().data();
 				const amrex::Long np = pIter.numParticles();
 
-				amrex::Array4<const amrex::Real> const &accel = accel_mf.array(pIter);
+				amrex::Array4<const amrex::Real> const &accel_arr = accel[lev].array(pIter);
 				const auto plo = geom[lev].ProbLoArray();
 
 				amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 					quokka::CICParticleContainer::ParticleType &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 					amrex::ParticleInterpolator::Linear interp(p, plo, dx_inv);
 					interp.MeshToParticle(
-					    p, accel, 0, quokka::ParticleVxIdx, AMREX_SPACEDIM,
-					    [=] AMREX_GPU_DEVICE(amrex::Array4<const amrex::Real> const &arr, int i, int j, int k, int comp) {
-						    return arr(i, j, k, comp); // no weighting
+					    p, accel_arr, 0, quokka::ParticleVxIdx, AMREX_SPACEDIM,
+					    [=] AMREX_GPU_DEVICE(amrex::Array4<const amrex::Real> const &acc, int i, int j, int k, int comp) {
+						    return acc(i, j, k, comp); // no weighting
 					    },
 					    [=] AMREX_GPU_DEVICE(quokka::CICParticleContainer::ParticleType & p, int comp, amrex::Real acc_comp) {
 						    // kick particle by updating its velocity
