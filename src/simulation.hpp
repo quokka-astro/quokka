@@ -54,10 +54,13 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_INT.H"
 #include "AMReX_IndexType.H"
 #include "AMReX_IntVect.H"
+#include "AMReX_Interpolater.H"
 #include "AMReX_LayoutData.H"
+#include "AMReX_MFInterpolater.H"
 #include "AMReX_MultiFabUtil.H"
 #include "AMReX_ParallelContext.H"
 #include "AMReX_ParallelDescriptor.H"
+#include "AMReX_PhysBCFunct.H"
 #include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
 #include "AMReX_Vector.H"
@@ -179,6 +182,11 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real speedCeiling_ = std::numeric_limits<double>::max(); // default
 
 	std::unordered_map<std::string, variant_t> simulationMetadata_;
+
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> coordCenter_{};
+	auto nghost() -> int;
+	auto getStateNew(int lev) -> amrex::MultiFab *;
+	auto getStateOld(int lev) -> amrex::MultiFab *;
 
 	// constructor
 	explicit AMRSimulation(amrex::Vector<amrex::BCRec> &BCs_cc, amrex::Vector<amrex::BCRec> &BCs_fc) : BCs_cc_(BCs_cc), BCs_fc_(BCs_fc) { initialize(); }
@@ -390,6 +398,20 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	Ascent ascent_;
 #endif
 };
+
+template <typename problem_t> auto AMRSimulation<problem_t>::nghost() -> int { return nghost_cc_; }
+
+template <typename problem_t> auto AMRSimulation<problem_t>::getStateNew(int lev) -> amrex::MultiFab *
+{
+	AMREX_ASSERT(lev < state_new_.size());
+	return &state_new_cc_[lev];
+}
+
+template <typename problem_t> auto AMRSimulation<problem_t>::getStateOld(int lev) -> amrex::MultiFab *
+{
+	AMREX_ASSERT(lev < state_old_.size());
+	return &state_old_cc_[lev];
+}
 
 template <typename problem_t> void AMRSimulation<problem_t>::setChkFile(std::string const &chkfile_number) { restart_chkfile = chkfile_number; }
 
@@ -664,6 +686,15 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 	}
 
 	// ensure that there are enough boxes per MPI rank
+	// initialize convenience variables
+	using Real = amrex::Real;
+	amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo = geom[0].ProbLoArray();
+	amrex::GpuArray<Real, AMREX_SPACEDIM> prob_hi = geom[0].ProbHiArray();
+
+	coordCenter_ = {AMREX_D_DECL(prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]), prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]),
+				     prob_lo[2] + 0.5 * (prob_hi[2] - prob_lo[2]))};
+	// amrex::Print() << "Coordinate center = " << coordCenter_ << std::endl;
+	//  ensure that there are enough boxes per MPI rank
 	PerformanceHints();
 }
 
@@ -1628,7 +1659,7 @@ void AMRSimulation<problem_t>::FillPatchWithData(int lev, amrex::Real time, amre
 }
 
 // Fill an entire multifab by interpolating from the coarser level
-// this comes into play when a new level of refinement appears
+// Used when a new level of refinement appears
 template <typename problem_t>
 void AMRSimulation<problem_t>::FillCoarsePatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp, amrex::Vector<amrex::BCRec> &BCs,
 					       quokka::centering cen, quokka::direction dir)
