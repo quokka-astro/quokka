@@ -14,6 +14,7 @@
 #include <cassert>
 #include <cmath>
 #include <csignal>
+#include <cstdint>
 #include <cstdio>
 #if __has_include(<filesystem>)
 #include <filesystem>
@@ -1125,8 +1126,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 				amrex::Array4<const amrex::Real> const &accel = accel_mf.array(pIter);
 				const auto plo = geom[lev].ProbLoArray();
 
-				amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(long idx) {
-					quokka::CICParticleContainer::ParticleType &p = pData[idx];
+				amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
+					quokka::CICParticleContainer::ParticleType &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 					amrex::ParticleInterpolator::Linear interp(p, plo, dx_inv);
 					interp.MeshToParticle(
 					    p, accel, 0, quokka::ParticleVxIdx, AMREX_SPACEDIM,
@@ -1154,8 +1155,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::driftParticlesAllLe
 				quokka::CICParticleContainer::ParticleType *pData = particles().data();
 				const amrex::Long np = pIter.numParticles();
 
-				amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int idx) {
-					quokka::CICParticleContainer::ParticleType &p = pData[idx];
+				amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
+					quokka::CICParticleContainer::ParticleType &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 					// update particle position
 					for (int i = 0; i < AMREX_SPACEDIM; ++i) {
 						p.pos(i) += dt * p.rdata(quokka::ParticleVxIdx + i);
