@@ -1140,7 +1140,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 				accel[lev].FillBoundary(geom[lev].periodicity());
 				fineBoundaryFunctor(accel[lev], 0, accel[lev].nComp(), accel[lev].nGrowVect(), 0., 0);
 			} else {
-				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> coarseBoundaryFunctor(geom[lev - 1], accelBC, boundaryFunctor);
+				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> coarseBoundaryFunctor(geom[lev - 1], accelBC,
+															  boundaryFunctor);
 				amrex::Vector<amrex::MultiFab *> fineData{&accel[lev]};
 				amrex::Vector<amrex::MultiFab *> coarseData{&accel[lev - 1]};
 				// N.B.: all multifabs are at the same time, so we ignore the time arguments
