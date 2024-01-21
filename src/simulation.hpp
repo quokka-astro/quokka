@@ -1134,19 +1134,15 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 
 			// fill ghost cells for accel[lev]
 			amrex::GpuBndryFuncFab<setFunctorParticleAccel> boundaryFunctor(setFunctorParticleAccel{});
-			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> fineBoundaryFunctor(geom[lev], accelBC, boundaryFunctor);
+			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> fineBdryFunct(geom[lev], accelBC, boundaryFunctor);
 
 			if (lev == 0) {
 				accel[lev].FillBoundary(geom[lev].periodicity());
-				fineBoundaryFunctor(accel[lev], 0, accel[lev].nComp(), accel[lev].nGrowVect(), 0., 0);
+				fineBdryFunct(accel[lev], 0, accel[lev].nComp(), accel[lev].nGrowVect(), 0., 0);
 			} else {
-				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> coarseBoundaryFunctor(geom[lev - 1], accelBC, boundaryFunctor);
-				amrex::Vector<amrex::MultiFab *> fineData{&accel[lev]};
-				amrex::Vector<amrex::MultiFab *> coarseData{&accel[lev - 1]};
-				// N.B.: all multifabs are at the same time, so we ignore the time arguments
-				amrex::FillPatchTwoLevels(accel[lev], 0., coarseData, {0.}, fineData, {0.}, 0, 0, AMREX_SPACEDIM, geom[lev - 1], geom[lev],
-							  coarseBoundaryFunctor, 0, fineBoundaryFunctor, 0, refRatio(lev - 1), getAmrInterpolaterCellCentered(),
-							  accelBC, 0);
+				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> coarseBdryFunct(geom[lev - 1], accelBC, boundaryFunctor);
+				amrex::InterpFromCoarseLevel(accel[lev], 0., accel[lev - 1], 0, 0, AMREX_SPACEDIM, geom[lev - 1], geom[lev], coarseBdryFunct, 0,
+							     fineBdryFunct, 0, refRatio(lev - 1), getAmrInterpolaterCellCentered(), accelBC, 0);
 			}
 
 			// check for NaN
