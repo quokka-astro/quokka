@@ -20,7 +20,7 @@ jobs:
     - task: CMake@1
       displayName: 'Configure CMake'
       inputs:
-        cmakeArgs: '.. -DCMAKE_BUILD_TYPE=Release -DAMReX_SPACEDIM=3 -DAMReX_GPU_BACKEND=HIP'
+        cmakeArgs: '.. -DCMAKE_BUILD_TYPE=Release -DAMReX_SPACEDIM=3 -DAMReX_GPU_BACKEND=HIP -DCMAKE_CXX_FLAGS="-fno-strict-aliasing"'
     
     - task: CMake@1
       displayName: 'Build Quokka'
