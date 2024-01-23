@@ -50,7 +50,7 @@ template <> void RadhydroSimulation<BinaryOrbit>::setInitialConditionsOnGrid(quo
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		double rho = 1.0e-22; // g cm^{-3}
+		double const rho = 1.0e-22; // g cm^{-3}
 		state_cc(i, j, k, HydroSystem<BinaryOrbit>::density_index) = rho;
 		state_cc(i, j, k, HydroSystem<BinaryOrbit>::x1Momentum_index) = 0;
 		state_cc(i, j, k, HydroSystem<BinaryOrbit>::x2Momentum_index) = 0;
@@ -64,7 +64,7 @@ template <> void RadhydroSimulation<BinaryOrbit>::createInitialParticles()
 {
 	// read particles from ASCII file
 	const int nreal_extra = 4; // mass vx vy vz
-	CICParticles->SetVerbose(true);
+	CICParticles->SetVerbose(1);
 	CICParticles->InitFromAsciiFile("BinaryOrbit_particles.txt", nreal_extra, nullptr);
 }
 
@@ -122,6 +122,6 @@ auto problem_main() -> int
 	// check orbital elements
 	// ...
 
-	int status = 0;
+	int const status = 0;
 	return status;
 }
