@@ -2175,7 +2175,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 #ifdef AMREX_PARTICLES
 	// write particles
 	if (do_tracers != 0) {
-		TracerPC->WritePlotFile(plotfilename, "particles");
+		TracerPC->WritePlotFile(plotfilename, "tracer_particles");
 	}
 	if (do_cic_particles != 0) {
 		CICParticles->WritePlotFile(plotfilename, "CIC_particles");
@@ -2505,7 +2505,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile
 	// write particle data
 #ifdef AMREX_PARTICLES
 	if (do_tracers != 0) {
-		TracerPC->Checkpoint(checkpointname, "particles", true);
+		TracerPC->Checkpoint(checkpointname, "tracer_particles", true);
 	}
 	if (do_cic_particles != 0) {
 		CICParticles->Checkpoint(checkpointname, "CIC_particles", true);
@@ -2671,7 +2671,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 	if (do_tracers != 0) {
 		AMREX_ASSERT(TracerPC == nullptr);
 		TracerPC = std::make_unique<amrex::AmrTracerParticleContainer>(this);
-		TracerPC->Restart(restart_chkfile, "particles");
+		TracerPC->Restart(restart_chkfile, "tracer_particles");
 	}
 	if (do_cic_particles != 0) {
 		AMREX_ASSERT(CICParticles == nullptr);
