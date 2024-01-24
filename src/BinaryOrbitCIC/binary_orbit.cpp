@@ -8,18 +8,24 @@
 ///
 
 #include "AMReX.H"
+#include "AMReX_Array.H"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_Config.H"
+#include "AMReX_DistributionMapping.H"
 #include "AMReX_FabArrayUtility.H"
+#include "AMReX_Geometry.H"
+#include "AMReX_GpuContainers.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
 
+#include "AMReX_REAL.H"
 #include "RadhydroSimulation.hpp"
 #include "binary_orbit.hpp"
 #include "hydro_system.hpp"
+#include <algorithm>
 
 struct BinaryOrbit {
 };
@@ -42,6 +48,11 @@ template <> struct Physics_Traits<BinaryOrbit> {
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr int nGroups = 1;			     // number of radiation groups
+};
+
+template <> struct SimulationData<BinaryOrbit> {
+	std::vector<amrex::ParticleReal> time{};
+	std::vector<amrex::ParticleReal> dist{};
 };
 
 template <> void RadhydroSimulation<BinaryOrbit>::setInitialConditionsOnGrid(quokka::grid grid_elem)
@@ -77,6 +88,52 @@ template <> void RadhydroSimulation<BinaryOrbit>::ComputeDerivedVar(int lev, std
 		auto output = mf.arrays();
 		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept { output[bx](i, j, k, ncomp) = phi_arr[bx](i, j, k); });
 	}
+}
+
+template <> void RadhydroSimulation<BinaryOrbit>::computeAfterTimestep()
+{
+	// every N cycles, save particle statistics
+	static int cycle = 1;
+	if (cycle % 10 == 0) {
+		// create single-box particle container
+		amrex::ParticleContainer<quokka::CICParticleRealComps> analysisPC{};
+		amrex::Box box(amrex::IntVect{0, 0, 0}, amrex::IntVect{1, 1, 1});
+		amrex::Geometry geom(box);
+		amrex::BoxArray boxArray(box);
+		amrex::DistributionMapping dmap(boxArray, 1);
+		analysisPC.Define(geom, dmap, boxArray);
+		analysisPC.copyParticles(*CICParticles);
+		// do we need to redistribute??
+
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			quokka::CICParticleIterator pIter(analysisPC, 0);
+			if (pIter.isValid()) { // this returns false when there is more than 1 MPI rank (?)
+				amrex::Print() << "Computing particle statistics...\n";
+				const amrex::Long np = pIter.numParticles();
+				auto &particles = pIter.GetArrayOfStructs();
+
+				// copy particles from device to host
+				quokka::CICParticleContainer::ParticleType *pData = particles().data();
+				amrex::Vector<quokka::CICParticleContainer::ParticleType> pData_h(np);
+				amrex::Gpu::copy(amrex::Gpu::deviceToHost, pData, pData + np, pData_h.begin());
+
+				// compute orbital elements
+				quokka::CICParticleContainer::ParticleType &p1 = pData_h[0];
+				quokka::CICParticleContainer::ParticleType &p2 = pData_h[1];
+				const amrex::ParticleReal dx = p1.pos(0) - p2.pos(0);
+				const amrex::ParticleReal dy = p1.pos(1) - p2.pos(1);
+				const amrex::ParticleReal dz = p1.pos(2) - p2.pos(2);
+				const amrex::ParticleReal dist = std::sqrt(dx * dx + dy * dy + dz * dz);
+				const amrex::ParticleReal dist0 = 6.25e12; // cm
+				const amrex::Real cell_dx0 = this->geom[0].CellSize(0);
+
+				// save statistics
+				userData_.time.push_back(tNew_[0]);
+				userData_.dist.push_back((dist - dist0) / cell_dx0);
+			}
+		}
+	}
+	++cycle;
 }
 
 auto problem_main() -> int
@@ -119,9 +176,21 @@ auto problem_main() -> int
 	// evolve
 	sim.evolve();
 
-	// check orbital elements
-	// ...
+	// check max abs particle distance
+	float max_err = NAN;
+	if (amrex::ParallelDescriptor::IOProcessor() && (sim.userData_.dist.size() > 0)) {
+		std::vector<amrex::ParticleReal>::iterator result =
+		    std::max_element(sim.userData_.dist.begin(), sim.userData_.dist.end(),
+				     [](amrex::ParticleReal a, amrex::ParticleReal b) { return std::abs(a) < std::abs(b); });
+		max_err = std::abs(*result);
+	}
+	amrex::ParallelDescriptor::Bcast(&max_err, 1, MPI_REAL, amrex::ParallelDescriptor::ioProcessor, amrex::ParallelDescriptor::Communicator());
+	amrex::Print() << "max particle separation = " << max_err << " cell widths.\n";
 
-	int const status = 0;
+	int status = 1;
+	const float max_err_tol = 0.15;
+	if (max_err < max_err_tol) {
+		status = 0;
+	}
 	return status;
 }
