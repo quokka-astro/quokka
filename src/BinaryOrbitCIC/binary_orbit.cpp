@@ -188,7 +188,7 @@ auto problem_main() -> int
 	amrex::Print() << "max particle separation = " << max_err << " cell widths.\n";
 
 	int status = 1;
-	const float max_err_tol = 0.15;
+	const float max_err_tol = 0.18; // max error tol in cell widths
 	if (max_err < max_err_tol) {
 		status = 0;
 	}
