@@ -29,6 +29,6 @@ do_subcycle = 0
 do_cic_particles = 1    # turns on CIC particles
 
 ascent_interval = -1
-plotfile_interval = 50
-checkpoint_interval = 2000
+checkpoint_interval = -1
+plottime_interval = 3.0130519e5 # s
 derived_vars = gpot
