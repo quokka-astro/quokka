@@ -21,8 +21,8 @@ amr.n_error_buf     = 3     # minimum 3 cell buffer around tagged cells
 amr.grid_eff        = 1.0
 
 cfl = 0.3
-max_timesteps = 10000
-stop_time = 1.0e7   # s
+max_timesteps = 8000
+stop_time = 5.0e7   # s
 
 do_reflux = 1
 do_subcycle = 0
@@ -30,5 +30,5 @@ do_cic_particles = 1    # turns on CIC particles
 
 ascent_interval = -1
 checkpoint_interval = -1
-plottime_interval = 3.0130519e5 # s
+plottime_interval = 2.0e5 # s
 derived_vars = gpot
