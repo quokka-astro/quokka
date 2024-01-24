@@ -5,10 +5,13 @@ from yt.frontends.boxlib.data_structures import AMReXDataset
 def particle_dist(plotfiles):
     t_arr = []
     err_arr = []
-    d0 = 2.0*3.125e12
+    d0 = 2.0 * 3.125e12
 
     for pltfile in plotfiles:
         ds = AMReXDataset(pltfile)
+        Lx = ds.domain_right_edge[0] - ds.domain_left_edge[0]
+        Nx = ds.domain_dimensions[0]
+        cell_dx = Lx/Nx
         ad = ds.all_data()
         x = ad["CIC_particles", "particle_position_x"]
         y = ad["CIC_particles", "particle_position_y"]
@@ -18,9 +21,10 @@ def particle_dist(plotfiles):
         dz = z[0] - z[1]
         from math import sqrt
         d = sqrt(dx*dx + dy*dy + dz*dz)
-        err = (d-d0)/d0
+        #fractional_err = (d-d0)/d0
+        grid_err = (d-d0)/cell_dx
         t_arr.append(float(ds.current_time) / 3.15e7)
-        err_arr.append(err)
+        err_arr.append(grid_err)
     
     return t_arr, err_arr
 
@@ -33,6 +37,6 @@ import matplotlib.pyplot as plt
 plt.figure(figsize=(6,4))
 plt.plot(t, err)
 plt.xlabel("time (yr)")
-plt.ylabel(r"$(d-d_0)/d_0$")
+plt.ylabel(r"$(d-d_0)/\Delta x$")
 plt.tight_layout()
 plt.savefig("orbit.png", dpi=150)
