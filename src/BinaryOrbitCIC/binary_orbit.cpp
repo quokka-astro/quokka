@@ -22,6 +22,7 @@
 #include "AMReX_Print.H"
 
 #include "AMReX_REAL.H"
+#include "AMReX_ccse-mpi.H"
 #include "RadhydroSimulation.hpp"
 #include "binary_orbit.hpp"
 #include "hydro_system.hpp"
@@ -177,17 +178,18 @@ auto problem_main() -> int
 	sim.evolve();
 
 	// check max abs particle distance
-	float max_err = NAN;
+	double max_err = NAN;
 	if (amrex::ParallelDescriptor::IOProcessor() && (!sim.userData_.dist.empty())) {
 		auto result = std::max_element(sim.userData_.dist.begin(), sim.userData_.dist.end(),
 					       [](amrex::ParticleReal a, amrex::ParticleReal b) { return std::abs(a) < std::abs(b); });
 		max_err = std::abs(*result);
 	}
-	amrex::ParallelDescriptor::Bcast(&max_err, 1, MPI_REAL, amrex::ParallelDescriptor::ioProcessor, amrex::ParallelDescriptor::Communicator());
+	amrex::ParallelDescriptor::Bcast(&max_err, 1, amrex::ParallelDescriptor::Mpi_typemap<double>::type(), amrex::ParallelDescriptor::ioProcessor,
+					 amrex::ParallelDescriptor::Communicator());
 	amrex::Print() << "max particle separation = " << max_err << " cell widths.\n";
 
 	int status = 1;
-	const float max_err_tol = 0.18; // max error tol in cell widths
+	const double max_err_tol = 0.18; // max error tol in cell widths
 	if (max_err < max_err_tol) {
 		status = 0;
 	}
