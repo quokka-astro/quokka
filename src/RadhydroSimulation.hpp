@@ -35,6 +35,7 @@
 #include "AMReX_FabFactory.H"
 #include "AMReX_Geometry.H"
 #include "AMReX_GpuControl.H"
+#include "AMReX_GpuDevice.H"
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_IArrayBox.H"
 #include "AMReX_IndexType.H"
@@ -110,6 +111,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	using AMRSimulation<problem_t>::WriteCheckpointFile;
 	using AMRSimulation<problem_t>::GetData;
 	using AMRSimulation<problem_t>::FillPatchWithData;
+	using AMRSimulation<problem_t>::Gconst_;
 
 	using AMRSimulation<problem_t>::densityFloor_;
 	using AMRSimulation<problem_t>::tempFloor_;
@@ -146,8 +148,6 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
 
-	amrex::Real Gconst_ = C::Gconst; // gravitational constant G
-
 	// member functions
 	explicit RadhydroSimulation(amrex::Vector<amrex::BCRec> &BCs_cc, amrex::Vector<amrex::BCRec> &BCs_fc) : AMRSimulation<problem_t>(BCs_cc, BCs_fc)
 	{
@@ -182,6 +182,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	void preCalculateInitialConditions() override;
 	void setInitialConditionsOnGrid(quokka::grid grid_elem) override;
 	void setInitialConditionsOnGridFaceVars(quokka::grid grid_elem) override;
+	void createInitialParticles() override;
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle) override;
 	void computeAfterTimestep() override;
 	void computeAfterLevelAdvance(int lev, amrex::Real time, amrex::Real dt_lev, int /*ncycle*/);
@@ -353,12 +354,6 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::readParmParse(
 		hpp.query("artificial_viscosity_coefficient", artificialViscosityK_);
 	}
 
-	// set gravity runtime parameter
-	{
-		amrex::ParmParse hpp("gravity");
-		hpp.query("Gconst", Gconst_);
-	}
-
 	// set cooling runtime parameters
 	{
 		amrex::ParmParse hpp("cooling");
@@ -483,6 +478,13 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::setInitialCond
 	// default empty implementation
 	// user should implement using problem-specific template specialization
 	// note: an implementation is only required if face-centered vars are used
+}
+
+template <typename problem_t> void RadhydroSimulation<problem_t>::createInitialParticles()
+{
+	// default empty implementation
+	// user should implement using problem-specific template specialization
+	// note: an implementation is only required if particles are used
 }
 
 template <typename problem_t> void RadhydroSimulation<problem_t>::computeAfterTimestep()
@@ -681,15 +683,16 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::advanceSingleT
 template <typename problem_t> void RadhydroSimulation<problem_t>::fillPoissonRhsAtLevel(amrex::MultiFab &rhs_mf, const int lev)
 {
 	// add hydro density to Poisson rhs
-	// NOTE: in the future, this should also deposit particle mass
 	auto const &state = state_new_cc_[lev].const_arrays();
 	auto rhs = rhs_mf.arrays();
 	const Real G = Gconst_;
 
 	amrex::ParallelFor(rhs_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-		// copy density to rhs_mf
-		rhs[bx](i, j, k) = 4.0 * M_PI * G * state[bx](i, j, k, HydroSystem<problem_t>::density_index);
+		// *add* density to rhs_mf
+		// (N.B. particles **will not work** if you overwrite the density here!)
+		rhs[bx](i, j, k) += 4.0 * M_PI * G * state[bx](i, j, k, HydroSystem<problem_t>::density_index);
 	});
+	amrex::Gpu::streamSynchronizeAll();
 }
 
 template <typename problem_t> void RadhydroSimulation<problem_t>::applyPoissonGravityAtLevel(amrex::MultiFab const &phi_mf, const int lev, const amrex::Real dt)
