@@ -97,7 +97,7 @@ template <> void RadhydroSimulation<BinaryOrbit>::computeAfterTimestep()
 	if (cycle % 10 == 0) {
 		// create single-box particle container
 		amrex::ParticleContainer<quokka::CICParticleRealComps> analysisPC{};
-		amrex::Box box(amrex::IntVect{0, 0, 0}, amrex::IntVect{1, 1, 1});
+		amrex::Box const box(amrex::IntVect{AMREX_D_DECL(0, 0, 0)}, amrex::IntVect{AMREX_D_DECL(1, 1, 1)});
 		amrex::Geometry const geom(box);
 		amrex::BoxArray const boxArray(box);
 		amrex::DistributionMapping const dmap(boxArray, 1);
@@ -115,7 +115,7 @@ template <> void RadhydroSimulation<BinaryOrbit>::computeAfterTimestep()
 				// copy particles from device to host
 				quokka::CICParticleContainer::ParticleType *pData = particles().data();
 				amrex::Vector<quokka::CICParticleContainer::ParticleType> pData_h(np);
-				amrex::Gpu::copy(amrex::Gpu::deviceToHost, pData, pData + np, pData_h.begin());
+				amrex::Gpu::copy(amrex::Gpu::deviceToHost, pData, pData + np, pData_h.begin()); // NOLINT
 
 				// compute orbital elements
 				quokka::CICParticleContainer::ParticleType &p1 = pData_h[0];
