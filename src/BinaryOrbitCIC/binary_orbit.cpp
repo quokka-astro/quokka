@@ -98,15 +98,15 @@ template <> void RadhydroSimulation<BinaryOrbit>::computeAfterTimestep()
 		// create single-box particle container
 		amrex::ParticleContainer<quokka::CICParticleRealComps> analysisPC{};
 		amrex::Box box(amrex::IntVect{0, 0, 0}, amrex::IntVect{1, 1, 1});
-		amrex::Geometry geom(box);
-		amrex::BoxArray boxArray(box);
-		amrex::DistributionMapping dmap(boxArray, 1);
+		amrex::Geometry const geom(box);
+		amrex::BoxArray const boxArray(box);
+		amrex::DistributionMapping const dmap(boxArray, 1);
 		analysisPC.Define(geom, dmap, boxArray);
 		analysisPC.copyParticles(*CICParticles);
 		// do we need to redistribute??
 
 		if (amrex::ParallelDescriptor::IOProcessor()) {
-			quokka::CICParticleIterator pIter(analysisPC, 0);
+			quokka::CICParticleIterator const pIter(analysisPC, 0);
 			if (pIter.isValid()) { // this returns false when there is more than 1 MPI rank (?)
 				amrex::Print() << "Computing particle statistics...\n";
 				const amrex::Long np = pIter.numParticles();
@@ -178,8 +178,8 @@ auto problem_main() -> int
 
 	// check max abs particle distance
 	float max_err = NAN;
-	if (amrex::ParallelDescriptor::IOProcessor() && (sim.userData_.dist.size() > 0)) {
-		std::vector<amrex::ParticleReal>::iterator result =
+	if (amrex::ParallelDescriptor::IOProcessor() && (!sim.userData_.dist.empty())) {
+		auto result =
 		    std::max_element(sim.userData_.dist.begin(), sim.userData_.dist.end(),
 				     [](amrex::ParticleReal a, amrex::ParticleReal b) { return std::abs(a) < std::abs(b); });
 		max_err = std::abs(*result);
