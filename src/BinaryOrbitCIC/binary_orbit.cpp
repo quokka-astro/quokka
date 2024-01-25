@@ -179,9 +179,8 @@ auto problem_main() -> int
 	// check max abs particle distance
 	float max_err = NAN;
 	if (amrex::ParallelDescriptor::IOProcessor() && (!sim.userData_.dist.empty())) {
-		auto result =
-		    std::max_element(sim.userData_.dist.begin(), sim.userData_.dist.end(),
-				     [](amrex::ParticleReal a, amrex::ParticleReal b) { return std::abs(a) < std::abs(b); });
+		auto result = std::max_element(sim.userData_.dist.begin(), sim.userData_.dist.end(),
+					       [](amrex::ParticleReal a, amrex::ParticleReal b) { return std::abs(a) < std::abs(b); });
 		max_err = std::abs(*result);
 	}
 	amrex::ParallelDescriptor::Bcast(&max_err, 1, MPI_REAL, amrex::ParallelDescriptor::ioProcessor, amrex::ParallelDescriptor::Communicator());
