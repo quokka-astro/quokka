@@ -1,4 +1,4 @@
-if(QUOKKA_PYTHON) 
+if(QUOKKA_PYTHON)
   message(STATUS "Building Quokka with Python support (to disable, add '-DQUOKKA_PYTHON=OFF' to the CMake command-line options)")
   find_package(Python COMPONENTS Interpreter Development NumPy)
 else()
@@ -115,7 +115,7 @@ link_libraries(yaml-cpp::yaml-cpp)
 include(CTest)
 
 #create an object library for files that should be compiled with all test problems
-set (QuokkaObjSources "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/CloudyCooling.cpp" 
+set (QuokkaObjSources "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/CloudyCooling.cpp"
                       "${CMAKE_CURRENT_SOURCE_DIR}/GrackleDataReader.cpp" "${openPMDSources}"
                       "${gamma_law_sources}")
 #we don't use it anymore because it gives issues on Cray systems
@@ -176,3 +176,4 @@ add_subdirectory(NSCBC)
 add_subdirectory(StarCluster)
 add_subdirectory(PrimordialChem)
 add_subdirectory(BinaryOrbitCIC)
+add_subdirectory(AgoraGalaxy)
