@@ -20,7 +20,7 @@ jobs:
   - task: CMake@1
     displayName: 'Configure CMake'
     inputs:
-      cmakeArgs: '.. -DCMAKE_BUILD_TYPE=Release -DENABLE_HWASAN=ON -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DAMReX_SPACEDIM=1'
+      cmakeArgs: '.. -DCMAKE_BUILD_TYPE=Release -DENABLE_HWASAN=ON -DCMAKE_CXX_FLAGS="-fPIC" -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DAMReX_SPACEDIM=1'
 
   - task: CMake@1
     displayName: 'Build Quokka'
