@@ -1180,7 +1180,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				AMREX_ASSERT(!std::isnan(sum(dkappaP_dTgas)));
 
 				// prepare to compute Jacobian elements
-				const double c_v = quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas, massScalars);  // Egas = c_v * T
+				const double c_v = quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas, massScalars); // Egas = c_v * T
 				dRtot_dErad = -dt * rho * kappaEVec * chat;
 				dRvec_dEgas = dt * rho / c_v * (kappaPVec * dfourPiB_dTgas + dkappaP_dTgas * fourPiB - chat * dkappaE_dTgas * EradVec_guess);
 				// Equivalent of eta = (eta > 0.0) ? eta : 0.0, to ensure possitivity of Egas_guess
@@ -1230,22 +1230,22 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				// 		EradVec_guess[g] = Erad_floor_;
 				// 	}
 				// }
-        // if (Egas_guess <= 0.0) {
-        //   Egas_guess -= deltaEgas;
-        // }
+				// if (Egas_guess <= 0.0) {
+				//   Egas_guess -= deltaEgas;
+				// }
 
 				// check relative and absolute convergence of E_r
-        // tol = 2e-7 for multigroup pulse test
+				// tol = 2e-7 for multigroup pulse test
 				// if ((sum(abs(deltaEgas / Egas_guess)) < 1e-7) || (sum(abs(deltaErad)) <= Erad_floor_)) {
 				// 	break;
 				// }
-        if (std::abs(deltaEgas / Egas_guess) < 1e-7) {
-          break;
-        }
+				if (std::abs(deltaEgas / Egas_guess) < 1e-7) {
+					break;
+				}
 			} // END NEWTON-RAPHSON LOOP
 
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(n < maxIter, "Newton-Raphson iteration failed to converge!");
-      // std::cout << "Newton-Raphson converged after " << n << " it." << std::endl;
+			// std::cout << "Newton-Raphson converged after " << n << " it." << std::endl;
 			AMREX_ALWAYS_ASSERT(Egas_guess > 0.0);
 			AMREX_ALWAYS_ASSERT(min(EradVec_guess) >= 0.0);
 		} // endif gamma != 1.0
