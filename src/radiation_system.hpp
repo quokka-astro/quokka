@@ -1152,14 +1152,13 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				kappaEVec = ComputeEnergyMeanOpacity(rho, T_gas);
 
 				// compute derivatives w/r/t T_gas
-				// const auto dfourPiB_dTgas = (fourPiB / M_PI) / T_gas;
 				const auto dfourPiB_dTgas = chat * ComputeThermalRadiationTempDerivative(T_gas, radBoundaries_g_copy);
 
 				// compute residuals
 				const auto absorption = chat * kappaEVec * EradVec_guess;
 				const auto emission = kappaPVec * fourPiB;
 				const auto Ediff = emission - absorption;
-				auto tot_ediff = sum(abs(Ediff));
+				// auto tot_ediff = sum(abs(Ediff));
 				// if ((tot_ediff <= Erad_floor_) || (tot_ediff / (sum(absorption) + sum(emission)) < resid_tol)) {
 				//   break;
 				// }
@@ -1170,7 +1169,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 
 				// check relative convergence of the residuals
 				if ((std::abs(F_G / Etot0) < resid_tol) && ((c / chat) * sum(abs(F_R)) / Etot0 < resid_tol)) {
-					// std::cout << "converged at A after " << n << " it." << std::endl;
 					break;
 				}
 
@@ -1206,35 +1204,12 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				AMREX_ASSERT(!std::isnan(deltaEgas));
 				AMREX_ASSERT(!deltaErad.hasnan());
 
-				// rigorously check every element of deltaErad to ensure that it is converging
-				// bool converged = true;
-				// for (int g = 0; g < nGroups_; ++g) {
-				//   if (!((std::abs(deltaErad[g] / Erad0Vec[g]) < 1e-6) || (std::abs(deltaErad[g]) <= Erad_floor_))) {
-				//     converged = false;
-				//     break;
-				//   }
-				// }
-				// if (converged) {
-				//   break;
-				// }
-
 				EradVec_guess += deltaErad;
 				Egas_guess += deltaEgas;
 				AMREX_ASSERT(min(EradVec_guess) >= 0.);
 				AMREX_ASSERT(Egas_guess > 0.);
-				// set negative values in EradVec_guess to Erad_floor_ and return the excess to Egas_guess
-				// for (int g = 0; g < nGroups_; ++g) {
-				// 	if (EradVec_guess[g] < Erad_floor_) {
-				// 		Egas_guess += (EradVec_guess[g] - Erad_floor_) * (c / chat);
-				// 		EradVec_guess[g] = Erad_floor_;
-				// 	}
-				// }
-				// if (Egas_guess <= 0.0) {
-				//   Egas_guess -= deltaEgas;
-				// }
 
 				// check relative and absolute convergence of E_r
-				// tol = 2e-7 for multigroup pulse test
 				// if ((sum(abs(deltaEgas / Egas_guess)) < 1e-7) || (sum(abs(deltaErad)) <= Erad_floor_)) {
 				// 	break;
 				// }
@@ -1264,7 +1239,11 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		amrex::GpuArray<amrex::Real, 3> dMomentum{0., 0., 0.};
 
 		T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
-		auto realFourPiB = c * ComputeThermalRadiation(T_gas, radBoundaries_g_copy);
+    quokka::valarray<amrex::Real, nGroups_> realFourPiB{};
+    if constexpr (gamma_ != 1.0)
+    {
+		  realFourPiB = c * ComputeThermalRadiation(T_gas, radBoundaries_g_copy);
+    }
 
 		kappaFVec = ComputeFluxMeanOpacity(rho, T_gas);
 		kappaPVec = ComputePlanckOpacity(rho, T_gas);
