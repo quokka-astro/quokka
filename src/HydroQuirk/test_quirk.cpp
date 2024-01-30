@@ -43,7 +43,7 @@ struct QuirkProblem {
 
 template <> struct quokka::EOS_Traits<QuirkProblem> {
 	static constexpr double gamma = 5. / 3.;
-	static constexpr double mean_molecular_weight = 1.0;
+	static constexpr double mean_molecular_weight = C::m_u;
 	static constexpr double boltzmann_constant = C::k_B;
 };
 

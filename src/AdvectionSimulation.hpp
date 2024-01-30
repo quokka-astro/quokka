@@ -71,6 +71,8 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	auto computeExtraPhysicsTimestep(int level) -> amrex::Real override;
 	void preCalculateInitialConditions() override;
 	void setInitialConditionsOnGrid(quokka::grid grid_elem) override;
+	void setInitialConditionsOnGridFaceVars(quokka::grid grid_elem) override;
+	void createInitialParticles() override;
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int /*ncycle*/) override;
 	void computeAfterTimestep() override;
 	void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) override;
@@ -145,6 +147,20 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::setInitialCon
 {
 	// default empty implementation
 	// user should implement using problem-specific template specialization
+}
+
+template <typename problem_t> void AdvectionSimulation<problem_t>::setInitialConditionsOnGridFaceVars(quokka::grid grid_elem)
+{
+	// default empty implementation
+	// user should implement using problem-specific template specialization
+	// note: an implementation is only required if face-centered vars are used
+}
+
+template <typename problem_t> void AdvectionSimulation<problem_t>::createInitialParticles()
+{
+	// default empty implementation
+	// user should implement using problem-specific template specialization
+	// note: an implementation is only required if particles are used
 }
 
 template <typename problem_t> void AdvectionSimulation<problem_t>::computeAfterTimestep()

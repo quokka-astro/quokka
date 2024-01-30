@@ -37,7 +37,7 @@ struct StarCluster {
 template <> struct quokka::EOS_Traits<StarCluster> {
 	static constexpr double gamma = 1.0;
 	static constexpr double cs_isothermal = 1.0; // dimensionless
-	static constexpr double mean_molecular_weight = 1.0;
+	static constexpr double mean_molecular_weight = C::m_u;
 	static constexpr double boltzmann_constant = C::k_B;
 };
 
