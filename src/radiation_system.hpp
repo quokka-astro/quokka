@@ -65,8 +65,8 @@ template <typename problem_t> struct RadSystem_Traits {
 
 // A struct to hold the results of the ComputeRadPressure function.
 struct RadPressureResult {
-    quokka::valarray<double, 4> F;
-    double S;
+	quokka::valarray<double, 4> F;
+	double S;
 };
 
 /// Class for the radiation moment equations
@@ -797,11 +797,11 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeRadPressure(const double erad
 
 	const double S = std::max(0.1, std::sqrt(Tnormal));
 
-  RadPressureResult result{};
-  result.F = {Fn, Pnx, Pny, Pnz};
-  result.S = std::max(0.1, std::sqrt(Tnormal));
+	RadPressureResult result{};
+	result.F = {Fn, Pnx, Pny, Pnz};
+	result.S = std::max(0.1, std::sqrt(Tnormal));
 
-  return result;
+	return result;
 }
 
 template <typename problem_t>
@@ -894,7 +894,7 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 
 			// ComputeRadPressure returns F_L_and_S_L or F_R_and_S_R
 			auto [F_L, S_L] = ComputeRadPressure<DIR>(erad_L, Fx_L, Fy_L, Fz_L, fx_L, fy_L, fz_L);
-      S_L *= -1.; // speed sign is -1
+			S_L *= -1.; // speed sign is -1
 			auto [F_R, S_R] = ComputeRadPressure<DIR>(erad_R, Fx_R, Fy_R, Fz_R, fx_R, fy_R, fz_R);
 
 			// correct for reduced speed of light
@@ -1247,24 +1247,24 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				auto fz = Fz / (c_light_ * erad);
 
 				std::array<std::array<double, numRadVars_>, 3> P{};
-        {
-          auto [F, S] = ComputeRadPressure<FluxDir::X1>(erad, Fx, Fy, Fz, fx, fy, fz);
-          for (int n = 0; n < numRadVars_; ++n) {
-            P[0][n] = F[n];
-          }
-        }
-        {
-          auto [F, S] = ComputeRadPressure<FluxDir::X2>(erad, Fx, Fy, Fz, fx, fy, fz);
-          for (int n = 0; n < numRadVars_; ++n) {
-            P[1][n] = F[n];
-          }
-        }
-        {
-          auto [F, S] = ComputeRadPressure<FluxDir::X3>(erad, Fx, Fy, Fz, fx, fy, fz);
-          for (int n = 0; n < numRadVars_; ++n) {
-            P[2][n] = F[n];
-          }
-        }
+				{
+					auto [F, S] = ComputeRadPressure<FluxDir::X1>(erad, Fx, Fy, Fz, fx, fy, fz);
+					for (int n = 0; n < numRadVars_; ++n) {
+						P[0][n] = F[n];
+					}
+				}
+				{
+					auto [F, S] = ComputeRadPressure<FluxDir::X2>(erad, Fx, Fy, Fz, fx, fy, fz);
+					for (int n = 0; n < numRadVars_; ++n) {
+						P[1][n] = F[n];
+					}
+				}
+				{
+					auto [F, S] = ComputeRadPressure<FluxDir::X3>(erad, Fx, Fy, Fz, fx, fy, fz);
+					for (int n = 0; n < numRadVars_; ++n) {
+						P[2][n] = F[n];
+					}
+				}
 
 				// loop over spatial dimensions
 				for (int n = 0; n < 3; ++n) {
