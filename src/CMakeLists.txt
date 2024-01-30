@@ -65,7 +65,7 @@ if(ENABLE_HWASAN)
   message(STATUS "Compiling with HWAddressSanitizer *enabled*")
   add_compile_options(-fsanitize=hwaddress)
   add_link_options(-fsanitize=hwaddress)
-endif(ENABLE_ASAN)
+endif(ENABLE_HWASAN)
 
 if(DISABLE_FMAD)
   message(STATUS "Fused multiply-add (FMAD) is disabled for device code.")
