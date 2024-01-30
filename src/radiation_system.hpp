@@ -45,11 +45,6 @@ static constexpr double IMEX_a32 = 0.5; // 0 < IMEX_a32 <= 0.5
 // static constexpr double IMEX_a22 = 0.0;
 // static constexpr double IMEX_a32 = 0.0;
 
-// Line-search backtracking parameters
-static constexpr bool use_linesearch = false;
-static constexpr double linesearch_c = 1e-3;
-static constexpr double linesearch_rho = 0.5;
-
 // physical constants in CGS units
 static constexpr double c_light_cgs_ = C::c_light;	    // cgs
 static constexpr double radiation_constant_cgs_ = C::a_rad; // cgs
@@ -189,8 +184,9 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	AMREX_GPU_HOST_DEVICE static auto ComputeThermalRadiation(amrex::Real temperature, amrex::GpuArray<double, nGroups_ + 1> const &boundaries)
 	    -> quokka::valarray<amrex::Real, nGroups_>;
 
-  AMREX_GPU_HOST_DEVICE static auto ComputeThermalRadiationTempDerivative(amrex::Real temperature, amrex::GpuArray<double, nGroups_ + 1> const &boundaries)
-      -> quokka::valarray<amrex::Real, nGroups_>;
+	AMREX_GPU_HOST_DEVICE static auto ComputeThermalRadiationTempDerivative(amrex::Real temperature,
+										amrex::GpuArray<double, nGroups_ + 1> const &boundaries)
+	    -> quokka::valarray<amrex::Real, nGroups_>;
 
 	template <FluxDir DIR>
 	AMREX_GPU_DEVICE static auto ComputeCellOpticalDepth(const quokka::Array4View<const amrex::Real, DIR> &consVar,
@@ -224,9 +220,9 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckEnergyFractions(am
 			radEnergyFractions[g] = y - previous;
 			previous = y;
 		}
-    auto tote = sum(radEnergyFractions);
-    // AMREX_ALWAYS_ASSERT(tote <= 1.0);
-    // AMREX_ALWAYS_ASSERT(tote > 0.9999);
+		auto tote = sum(radEnergyFractions);
+		// AMREX_ALWAYS_ASSERT(tote <= 1.0);
+		// AMREX_ALWAYS_ASSERT(tote > 0.9999);
 		radEnergyFractions /= tote;
 		return radEnergyFractions;
 	}
@@ -237,25 +233,26 @@ template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiation(amrex::Real temperature, amrex::GpuArray<double, nGroups_ + 1> const &boundaries)
     -> quokka::valarray<amrex::Real, nGroups_>
 {
-  auto radEnergyFractions = ComputePlanckEnergyFractions(boundaries, temperature);
+	auto radEnergyFractions = ComputePlanckEnergyFractions(boundaries, temperature);
 	double power = radiation_constant_ * std::pow(temperature, 4);
-  auto Erad_g = power * radEnergyFractions;
-  // set floor
-  for (int g = 0; g < nGroups_; ++g) {
-    if (Erad_g[g] < Erad_floor_) {
-      Erad_g[g] = Erad_floor_;
-    }
-  }
-  return Erad_g;
+	auto Erad_g = power * radEnergyFractions;
+	// set floor
+	for (int g = 0; g < nGroups_; ++g) {
+		if (Erad_g[g] < Erad_floor_) {
+			Erad_g[g] = Erad_floor_;
+		}
+	}
+	return Erad_g;
 }
 
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationTempDerivative(amrex::Real temperature, amrex::GpuArray<double, nGroups_ + 1> const &boundaries)
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationTempDerivative(amrex::Real temperature,
+										       amrex::GpuArray<double, nGroups_ + 1> const &boundaries)
     -> quokka::valarray<amrex::Real, nGroups_>
 {
 	// by default, d emission/dT = 4 emission / T
-  auto erad = ComputeThermalRadiation(temperature, boundaries);
-  return 4. * erad / temperature;
+	auto erad = ComputeThermalRadiation(temperature, boundaries);
+	return 4. * erad / temperature;
 }
 
 // Linear equation solver for matrix with non-zeros at the first row, first column, and diagonal only.
@@ -724,7 +721,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeCellOpticalDepth(const quokka
 	quokka::valarray<double, nGroups_> const tau_R = dl * rho_R * RadSystem<problem_t>::ComputeFluxMeanOpacity(rho_R, Tgas_R);
 
 	return (tau_L * tau_R * 2.) / (tau_L + tau_R); // harmonic mean
-	// return 0.5*(tau_L + tau_R); // arithmetic mean
+						       // return 0.5*(tau_L + tau_R); // arithmetic mean
 }
 
 template <typename problem_t>
@@ -1082,7 +1079,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		for (int g = 0; g < nGroups_; ++g) {
 			Erad0Vec[g] = consPrev(i, j, k, radEnergy_index + numRadVars_ * g);
 		}
-		AMREX_ALWAYS_ASSERT(min(Erad0Vec) > 0.0);
+		AMREX_ASSERT(min(Erad0Vec) > 0.0);
 		const double Erad0 = sum(Erad0Vec);
 
 		// load radiation energy source term
@@ -1119,7 +1116,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			Ekin0 = Egastot0 - Egas0;
 
 			AMREX_ASSERT(min(Src) >= 0.0);
-			AMREX_ALWAYS_ASSERT(Egas0 > 0.0);
+			AMREX_ASSERT(Egas0 > 0.0);
 
 			const double Etot0 = Egas0 + (c / chat) * (Erad0 + sum(Src));
 
@@ -1144,19 +1141,13 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			const double resid_tol = 1.0e-13; // 1.0e-15;
 			const int maxIter = 400;
 			int n = 0;
-			// TODO(CCH): Consider Ben's suggestion of using a global Newton method.
-	    std::vector<double> Egas_list;
-	    std::vector<double> Erad_list;
-      Egas_list.push_back(Egas0);
-      Erad_list.push_back(Erad0Vec[0]);
-
 			for (; n < maxIter; ++n) {
 				// compute material temperature
 				T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
 				AMREX_ASSERT(T_gas >= 0.);
 
 				// compute opacity, emissivity
-        fourPiB = chat * ComputeThermalRadiation(T_gas, radBoundaries_g_copy);
+				fourPiB = chat * ComputeThermalRadiation(T_gas, radBoundaries_g_copy);
 
 				kappaPVec = ComputePlanckOpacity(rho, T_gas);
 				kappaEVec = ComputeEnergyMeanOpacity(rho, T_gas);
@@ -1166,13 +1157,13 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				const auto dfourPiB_dTgas = chat * ComputeThermalRadiationTempDerivative(T_gas, radBoundaries_g_copy);
 
 				// compute residuals
-        const auto absorption = chat * kappaEVec * EradVec_guess;
-        const auto emission = kappaPVec * fourPiB;
-        const auto Ediff = emission - absorption;
-        auto tot_ediff = sum(abs(Ediff));
-        // if ((tot_ediff <= Erad_floor_) || (tot_ediff / (sum(absorption) + sum(emission)) < resid_tol)) {
-        //   break;
-        // }
+				const auto absorption = chat * kappaEVec * EradVec_guess;
+				const auto emission = kappaPVec * fourPiB;
+				const auto Ediff = emission - absorption;
+				auto tot_ediff = sum(abs(Ediff));
+				// if ((tot_ediff <= Erad_floor_) || (tot_ediff / (sum(absorption) + sum(emission)) < resid_tol)) {
+				//   break;
+				// }
 				Rvec = dt * rho * Ediff;
 				Rtot = sum(Rvec);
 				F_G = Egas_guess - Egas0 + (c / chat) * Rtot;
@@ -1180,7 +1171,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 
 				// check relative convergence of the residuals
 				if ((std::abs(F_G / Etot0) < resid_tol) && ((c / chat) * sum(abs(F_R)) / Etot0 < resid_tol)) {
-          // std::cout << "converged at A after " << n << " it." << std::endl;
+					// std::cout << "converged at A after " << n << " it." << std::endl;
 					break;
 				}
 
@@ -1189,24 +1180,17 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				AMREX_ASSERT(!std::isnan(sum(dkappaP_dTgas)));
 
 				// prepare to compute Jacobian elements
-				// const double c_v = quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas, massScalars) / rho;
 				const double c_v = quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas, massScalars);  // Egas = c_v * T
 				dRtot_dErad = -dt * rho * kappaEVec * chat;
-				dRvec_dEgas = dt * rho / c_v *
-					      (kappaPVec * dfourPiB_dTgas + dkappaP_dTgas * fourPiB -
-					       chat * dkappaE_dTgas * EradVec_guess);
+				dRvec_dEgas = dt * rho / c_v * (kappaPVec * dfourPiB_dTgas + dkappaP_dTgas * fourPiB - chat * dkappaE_dTgas * EradVec_guess);
 				// Equivalent of eta = (eta > 0.0) ? eta : 0.0, to ensure possitivity of Egas_guess
-        for (int g = 0; g < nGroups_; ++g) {
-          // AMREX_ASSERT(dRvec_dEgas[g] >= 0.0);
-          if (dRvec_dEgas[g] < 0.0) {
-            dRvec_dEgas[g] = 0.0;
-          }
-        }
+				for (int g = 0; g < nGroups_; ++g) {
+					// AMREX_ASSERT(dRvec_dEgas[g] >= 0.0);
+					if (dRvec_dEgas[g] < 0.0) {
+						dRvec_dEgas[g] = 0.0;
+					}
+				}
 				dRtot_dEgas = sum(dRvec_dEgas);
-				// if (dRtot_dEgas < 0.0) {
-				// 	dRtot_dEgas = 0.0;
-				// }
-				// AMREX_ASSERT(dRtot_dEgas >= 0.0);
 
 				// compute Jacobian elements
 				dFG_dEgas = 1.0 + (c / chat) * dRtot_dEgas;
@@ -1223,76 +1207,20 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				AMREX_ASSERT(!std::isnan(deltaEgas));
 				AMREX_ASSERT(!deltaErad.hasnan());
 
-        // line search iteration
-        if constexpr (use_linesearch) {
-          double _lambda = 1.0;
-          double f0 = 0.5 * (F_G * F_G + (c / chat) * (c / chat) * sum(F_R * F_R));
-          for (int l = 0; l < 100; ++l) {
-            if (_lambda < 1e-14) {
-              std::cout << "Linesearch failed to converge after " << l << " it. lambda = " << _lambda << ". There is no finite step size that satisfies the Wolfe conditions." << std::endl;
-              amrex::Abort();
-            }
-
-            auto Egas_guess_new = Egas_guess + _lambda * deltaEgas;
-            auto EradVec_guess_new = EradVec_guess + _lambda * deltaErad;
-            auto T_gas_new = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess_new, massScalars);
-            auto fourPiB_new = chat * ComputeThermalRadiation(T_gas_new, radBoundaries_g_copy);
-            auto kappaPVec_new = ComputePlanckOpacity(rho, T_gas_new);
-            auto kappaEVec_new = ComputeEnergyMeanOpacity(rho, T_gas_new);
-            auto absorption_new = chat * kappaEVec_new * EradVec_guess_new;
-            auto emission_new = kappaPVec_new * fourPiB_new;
-            auto Ediff_new = emission_new - absorption_new;
-            // auto tot_ediff_new = sum(abs(Ediff_new));
-            auto Rvec_new = dt * rho * Ediff_new;
-            auto Rtot_new = sum(Rvec_new);
-            auto F_G_new = Egas_guess_new - Egas0 + (c / chat) * Rtot_new;
-            auto F_R_new = EradVec_guess_new - Erad0Vec - (Rvec_new + Src);
-
-            // compute module f
-            double f = 0.5 * (F_G_new * F_G_new + (c / chat) * (c / chat) * sum(F_R_new * F_R_new));
-            if ((f <= (1.0 - 2. * linesearch_c * _lambda) * f0) && (Egas_guess + _lambda * deltaEgas > 0.0) && (min(EradVec_guess + _lambda * deltaErad) > 0.0)) {
-              break;
-            }
-
-            _lambda *= linesearch_rho;
-          }
-
-          // update deltaErad and deltaEgas
-          deltaErad *= _lambda;
-          deltaEgas *= _lambda;
-        }
-
-				// check relative and absolute convergence of E_r
-				if ((sum(abs(deltaErad / Erad0Vec)) < 1e-7) || (sum(abs(deltaErad)) <= Erad_floor_)) {
-					break;
-				}
-        // if (n > 100) {
-        //   break;
-        // }
-
-        // rigorously check every element of deltaErad to ensure that it is converging
-        // bool converged = true;
-        // for (int g = 0; g < nGroups_; ++g) {
-        //   if (!((std::abs(deltaErad[g] / Erad0Vec[g]) < 1e-6) || (std::abs(deltaErad[g]) <= Erad_floor_))) {
-        //     converged = false;
-        //     break;
-        //   }
-        // }
-        // if (converged) {
-        //   break;
-        // }
-
-        // 2e-7 for multigroup pulse test
-        // if (std::abs(deltaEgas / Egas_guess) < 1e-7) {
-        //   break;
-        // }
+				// rigorously check every element of deltaErad to ensure that it is converging
+				// bool converged = true;
+				// for (int g = 0; g < nGroups_; ++g) {
+				//   if (!((std::abs(deltaErad[g] / Erad0Vec[g]) < 1e-6) || (std::abs(deltaErad[g]) <= Erad_floor_))) {
+				//     converged = false;
+				//     break;
+				//   }
+				// }
+				// if (converged) {
+				//   break;
+				// }
 
 				EradVec_guess += deltaErad;
 				Egas_guess += deltaEgas;
-
-        Egas_list.push_back(Egas_guess);
-        Erad_list.push_back(EradVec_guess[0]);
-
 				AMREX_ASSERT(min(EradVec_guess) >= 0.);
 				AMREX_ASSERT(Egas_guess > 0.);
 				// set negative values in EradVec_guess to Erad_floor_ and return the excess to Egas_guess
@@ -1306,21 +1234,20 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
         //   Egas_guess -= deltaEgas;
         // }
 
-        // // break if relative change of Egas_guess is below 1e-6
-        // if (std::abs(deltaEgas / Egas_guess) < 1e-7) {
-        //   break;
-        // }
-
-        if (n > 100) {
-          n += 0;
-          // break;
+				// check relative and absolute convergence of E_r
+        // tol = 2e-7 for multigroup pulse test
+				// if ((sum(abs(deltaEgas / Egas_guess)) < 1e-7) || (sum(abs(deltaErad)) <= Erad_floor_)) {
+				// 	break;
+				// }
+        if (std::abs(deltaEgas / Egas_guess) < 1e-7) {
+          break;
         }
 			} // END NEWTON-RAPHSON LOOP
 
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(n < maxIter, "Newton-Raphson iteration failed to converge!");
       // std::cout << "Newton-Raphson converged after " << n << " it." << std::endl;
-			// AMREX_ALWAYS_ASSERT(Egas_guess > 0.0);
-			// AMREX_ALWAYS_ASSERT(min(EradVec_guess) >= 0.0);
+			AMREX_ALWAYS_ASSERT(Egas_guess > 0.0);
+			AMREX_ALWAYS_ASSERT(min(EradVec_guess) >= 0.0);
 		} // endif gamma != 1.0
 
 		// Erad_guess is the new radiation energy (excluding work term)
@@ -1438,12 +1365,12 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				}
 				for (int g = 0; g < nGroups_; ++g) {
 					auto radEnergyNew = EradVec_guess[g] + dErad_work * energyLossFractions[g];
-          // AMREX_ASSERT(radEnergyNew > 0.0);
-          if (radEnergyNew < Erad_floor_) {
-            // return energy to Egas_guess
-            Egas_guess -= (Erad_floor_ - radEnergyNew) * (c / chat);
-            radEnergyNew = Erad_floor_;
-          }
+					// AMREX_ASSERT(radEnergyNew > 0.0);
+					if (radEnergyNew < Erad_floor_) {
+						// return energy to Egas_guess
+						Egas_guess -= (Erad_floor_ - radEnergyNew) * (c / chat);
+						radEnergyNew = Erad_floor_;
+					}
 					consNew(i, j, k, radEnergy_index + numRadVars_ * g) = radEnergyNew;
 				}
 			} else {
