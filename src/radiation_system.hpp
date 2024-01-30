@@ -1318,7 +1318,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			} // END NEWTON-RAPHSON LOOP
 
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(n < maxIter, "Newton-Raphson iteration failed to converge!");
-      std::cout << "Newton-Raphson converged after " << n << " it." << std::endl;
+      // std::cout << "Newton-Raphson converged after " << n << " it." << std::endl;
 			// AMREX_ALWAYS_ASSERT(Egas_guess > 0.0);
 			// AMREX_ALWAYS_ASSERT(min(EradVec_guess) >= 0.0);
 		} // endif gamma != 1.0
