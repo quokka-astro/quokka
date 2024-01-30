@@ -1089,7 +1089,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			Src[g] = dt * (chat * radEnergySource(i, j, k, g));
 		}
 
-		const double a_rad = radiation_constant_;
 		double Egas0 = NAN;
 		double Ekin0 = NAN;
 		double Egas_guess = NAN;
