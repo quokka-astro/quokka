@@ -125,13 +125,9 @@ set (QuokkaObjSources "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp" "${CMAKE_CURRENT_SO
 #endif()
 #link_libraries(QuokkaObj)
 
-add_subdirectory(StarCluster)
-add_subdirectory(PrimordialChem)
-
 add_subdirectory(Advection)
 add_subdirectory(Advection2D)
 add_subdirectory(AdvectionSemiellipse)
-
 
 add_subdirectory(HydroBlast2D)
 add_subdirectory(HydroBlast3D)
@@ -177,6 +173,9 @@ add_subdirectory(PassiveScalar)
 add_subdirectory(FCQuantities)
 add_subdirectory(SphericalCollapse)
 add_subdirectory(NSCBC)
+add_subdirectory(StarCluster)
+add_subdirectory(PrimordialChem)
+add_subdirectory(BinaryOrbitCIC)
 add_subdirectory(MetalAdvectionProblem)
 
 
