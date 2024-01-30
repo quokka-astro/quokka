@@ -18,10 +18,10 @@ struct PulseProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
 constexpr int isconst = 0;
-#if 0
+#if 1
 constexpr int n_groups_ = 1;
 constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{0., inf};
-#elif 0
+#elif 1
 constexpr int n_groups_ = 8;
 constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e15, 3.16e15, 1e16, 3.16e16, 1e17, 3.16e17, 1e18, 3.16e18, 1e19};
 #else
@@ -46,6 +46,7 @@ constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1.00000000e+15,
 #endif 
 
 constexpr double kappa0 = 180.; // cm^2 g^-1
+// constexpr double kappa0 = 0.0180; // cm^2 g^-1
 constexpr double T0 = 1.0e7;	// K (temperature)
 constexpr double T1 = 2.0e7;	// K (temperature)
 constexpr double rho0 = 1.2;	// g cm^-3 (matter density)
@@ -58,9 +59,9 @@ constexpr double mu = 2.33 * C::m_u;
 constexpr double h_planck = C::hplanck;
 constexpr double k_B = C::k_B;
 constexpr double initial_time = 0.0;
-constexpr double max_time = 4.8e-5;
-constexpr double v0 = 0.;      // non-advecting pulse
-// constexpr double v0 = 1.0e6; // advecting pulse, v0 = 2.0 * width / max_time;
+constexpr double max_time = 2.4e-5;
+// constexpr double v0 = 0.;      // non-advecting pulse
+constexpr double v0 = 1.0e6; // advecting pulse, v0 = 2.0 * width / max_time;
 
 constexpr double T_ref = T0;
 constexpr double nu_ref = 1.0e18; // Hz
@@ -161,7 +162,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacityTempDeri
   auto T = Tgas / T0;
   for (int g = 0; g < nGroups_; ++g) {
     auto nu = nu_rep[g] / nu_ref;
-    opacity_deriv[g] = kappa0 * std::exp(-coeff_*nu/T) / (std::pow(nu,3) * std::pow(T, 4)) * (- coeff_ * nu * std::pow(T, 1.5) + 0.5 * std::pow(T, 2.5) * (1.0 - std::exp(coeff_*nu/T)));
+    opacity_deriv[g] = 1. / T0 * kappa0 * (-0.5 * std::pow(T, -1.5) * (1. - std::exp(-coeff_ * nu / T)) - coeff_ * std::pow(T, -2.5) * std::exp(-coeff_ * nu / T));
     opacity_deriv[g] /= rho;
   }
   if constexpr (isconst == 1) {
@@ -228,7 +229,9 @@ auto problem_main() -> int
 
 	// Problem parameters
 	const long int max_timesteps = 1e8;
-	const double CFL_number = 0.8;
+	// const double CFL_number = 0.8;
+	const double CFL_number = 0.4;
+	// const double CFL_number = 0.0008;
 	// const int nx = 32;
 
 	// const double max_dt = 2e-9;   // t_cr = 2 cm / cs = 7e-8 s
