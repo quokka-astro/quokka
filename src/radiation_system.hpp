@@ -1239,11 +1239,10 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		amrex::GpuArray<amrex::Real, 3> dMomentum{0., 0., 0.};
 
 		T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
-    quokka::valarray<amrex::Real, nGroups_> realFourPiB{};
-    if constexpr (gamma_ != 1.0)
-    {
-		  realFourPiB = c * ComputeThermalRadiation(T_gas, radBoundaries_g_copy);
-    }
+		quokka::valarray<amrex::Real, nGroups_> realFourPiB{};
+		if constexpr (gamma_ != 1.0) {
+			realFourPiB = c * ComputeThermalRadiation(T_gas, radBoundaries_g_copy);
+		}
 
 		kappaFVec = ComputeFluxMeanOpacity(rho, T_gas);
 		kappaPVec = ComputePlanckOpacity(rho, T_gas);
