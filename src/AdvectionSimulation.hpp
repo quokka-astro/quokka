@@ -71,6 +71,8 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	auto computeExtraPhysicsTimestep(int level) -> amrex::Real override;
 	void preCalculateInitialConditions() override;
 	void setInitialConditionsOnGrid(quokka::grid grid_elem) override;
+	void setInitialConditionsOnGridFaceVars(quokka::grid grid_elem) override;
+	void createInitialParticles() override;
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int /*ncycle*/) override;
 	void computeAfterTimestep() override;
 	void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) override;
@@ -82,10 +84,10 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	// compute derived variables
 	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const override;
 	// compute projected vars
-  	[[nodiscard]] auto ComputeProjections(int dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> override;
+	[[nodiscard]] auto ComputeProjections(int dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> override;
 
 	// compute statistics
-  	auto ComputeStatistics() -> std::map<std::string, amrex::Real> override;
+	auto ComputeStatistics() -> std::map<std::string, amrex::Real> override;
 
 	void FixupState(int lev) override;
 
@@ -147,6 +149,20 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::setInitialCon
 	// user should implement using problem-specific template specialization
 }
 
+template <typename problem_t> void AdvectionSimulation<problem_t>::setInitialConditionsOnGridFaceVars(quokka::grid grid_elem)
+{
+	// default empty implementation
+	// user should implement using problem-specific template specialization
+	// note: an implementation is only required if face-centered vars are used
+}
+
+template <typename problem_t> void AdvectionSimulation<problem_t>::createInitialParticles()
+{
+	// default empty implementation
+	// user should implement using problem-specific template specialization
+	// note: an implementation is only required if particles are used
+}
+
 template <typename problem_t> void AdvectionSimulation<problem_t>::computeAfterTimestep()
 {
 	// do nothing -- user should implement using problem-specific template specialization
@@ -164,8 +180,7 @@ auto AdvectionSimulation<problem_t>::ComputeProjections(int /*dir*/) const -> st
 	return std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>{};
 }
 
-template <typename problem_t>
-auto AdvectionSimulation<problem_t>::ComputeStatistics() -> std::map<std::string, amrex::Real>
+template <typename problem_t> auto AdvectionSimulation<problem_t>::ComputeStatistics() -> std::map<std::string, amrex::Real>
 {
 	// user should implement
 	return std::map<std::string, amrex::Real>{};
@@ -274,7 +289,7 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::advanceSingle
 
 	// We use the RK2-SSP integrator in a method-of-lines framework. It needs 2
 	// registers: one to store the old timestep, and one to store the intermediate stage
-	// and final stage. The intermediate stage and final stage re-use the same register.
+	// and final stage. The intermediate stage and final stage reuse the same register.
 
 	// update ghost zones [w/ old timestep]
 	// (N.B. the input and output multifabs are allowed to be the same, as done here)

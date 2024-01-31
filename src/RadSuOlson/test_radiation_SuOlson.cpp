@@ -16,6 +16,7 @@
 #include "AMReX_SPACE.H"
 
 #include "fextract.hpp"
+#include "physics_info.hpp"
 #include "radiation_system.hpp"
 #include "test_radiation_SuOlson.hpp"
 #ifdef HAVE_PYTHON
@@ -54,21 +55,29 @@ template <> struct RadSystem_Traits<MarshakProblem> {
 template <> struct Physics_Traits<MarshakProblem> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = false;
+	static constexpr bool is_chemistry_enabled = false;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = true;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
+	static constexpr int nGroups = 1; // number of radiation groups
 };
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputePlanckOpacity(const double rho, const double /*Tgas*/) -> double
+template <>
+AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputePlanckOpacity(const double rho, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
-	return (kappa / rho);
+	quokka::valarray<double, nGroups_> kappaVec{};
+	for (int g = 0; g < nGroups_; ++g) {
+		kappaVec[g] = kappa / rho;
+	}
+	return kappaVec;
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputeRosselandOpacity(const double rho, const double /*Tgas*/) -> double
+template <>
+AMREX_GPU_HOST_DEVICE auto RadSystem<MarshakProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
 {
-	return (kappa / rho);
+	return ComputePlanckOpacity(rho, Tgas);
 }
 
 static constexpr int nmscalars_ = Physics_Traits<MarshakProblem>::numMassScalars;
@@ -113,8 +122,8 @@ void RadSystem<MarshakProblem>::SetRadEnergySource(array_t &radEnergySource, amr
 {
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		amrex::Real const xl = (i + amrex::Real(0.)) * dx[0];
-		amrex::Real const xr = (i + amrex::Real(1.)) * dx[0];
+		amrex::Real const xl = (i + 0.) * dx[0];
+		amrex::Real const xr = (i + 1.) * dx[0];
 
 		amrex::Real dx_frac = 0.0;
 		if ((xl < x0) && (xr <= x0)) {
@@ -129,7 +138,7 @@ void RadSystem<MarshakProblem>::SetRadEnergySource(array_t &radEnergySource, amr
 		if (time < t0) {
 			src = S * vol_frac;
 		}
-		radEnergySource(i, j, k) = src;
+		radEnergySource(i, j, k, 0) = src;
 	});
 }
 

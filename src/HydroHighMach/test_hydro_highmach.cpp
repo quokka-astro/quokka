@@ -30,7 +30,7 @@ struct HighMachProblem {
 
 template <> struct quokka::EOS_Traits<HighMachProblem> {
 	static constexpr double gamma = 5. / 3.;
-	static constexpr double mean_molecular_weight = 1.0;
+	static constexpr double mean_molecular_weight = C::m_u;
 	static constexpr double boltzmann_constant = C::k_B;
 };
 
@@ -42,6 +42,7 @@ template <> struct Physics_Traits<HighMachProblem> {
 	static constexpr bool is_radiation_enabled = false;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
+	static constexpr int nGroups = 1; // number of radiation groups
 };
 
 template <> void RadhydroSimulation<HighMachProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)

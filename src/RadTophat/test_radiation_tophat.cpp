@@ -59,10 +59,14 @@ template <> struct Physics_Traits<TophatProblem> {
 	static constexpr bool is_radiation_enabled = true;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
+	static constexpr int nGroups = 1; // number of radiation groups
 };
 
-template <> AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputePlanckOpacity(const double rho, const double /*Tgas*/) -> double
+template <>
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputePlanckOpacity(const double rho, const double /*Tgas*/)
+    -> quokka::valarray<double, nGroups_>
 {
+	quokka::valarray<double, nGroups_> kappaPVec{};
 	amrex::Real kappa = 0.;
 	if (rho == rho_pipe) {
 		kappa = kappa_pipe;
@@ -71,20 +75,15 @@ template <> AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProble
 	} else {
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(true, "opacity not defined!");
 	}
-	return kappa;
+	kappaPVec.fillin(kappa);
+	return kappaPVec;
 }
 
-template <> AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeRosselandOpacity(const double rho, const double /*Tgas*/) -> double
+template <>
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeFluxMeanOpacity(const double rho, const double /*Tgas*/)
+    -> quokka::valarray<double, nGroups_>
 {
-	amrex::Real kappa = 0.;
-	if (rho == rho_pipe) {
-		kappa = kappa_pipe;
-	} else if (rho == rho_wall) {
-		kappa = kappa_wall;
-	} else {
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(true, "opacity not defined!");
-	}
-	return kappa;
+	return ComputePlanckOpacity(rho, 0.);
 }
 
 static constexpr int nmscalars_ = Physics_Traits<TophatProblem>::numMassScalars;

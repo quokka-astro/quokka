@@ -10,6 +10,7 @@ tests/chk*
 tests/*.csv
 tests/plt*
 sims/
+SNRecipe/
 .clangd
 __pycache__
 *.code-workspace

@@ -60,11 +60,14 @@ template <> struct Physics_Traits<Channel> {
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 1; // number of passive scalars
 	static constexpr bool is_radiation_enabled = false;
+	static constexpr int nGroups = 1; // number of radiation groups
 };
 
 // global variables needed for Dirichlet boundary condition and initial conditions
+#if 0 // workaround AMDGPU compiler bug
 namespace
 {
+#endif
 Real rho0 = NAN;									 // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 Real u0 = NAN;										 // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 Real s0 = NAN;										 // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
@@ -74,7 +77,9 @@ AMREX_GPU_MANAGED Real u_inflow = NAN;							 // NOLINT(cppcoreguidelines-avoid-
 AMREX_GPU_MANAGED Real v_inflow = NAN;							 // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 AMREX_GPU_MANAGED Real w_inflow = NAN;							 // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 AMREX_GPU_MANAGED GpuArray<Real, Physics_Traits<Channel>::numPassiveScalars> s_inflow{}; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+#if 0											 // workaround AMDGPU compiler bug
 };											 // namespace
+#endif
 
 template <> void RadhydroSimulation<Channel>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {

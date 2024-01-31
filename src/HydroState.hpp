@@ -3,6 +3,8 @@
 
 #include <array>
 
+#include "AMReX_Array.H"
+
 namespace quokka
 {
 template <int Nall, int Nmass> struct HydroState {
@@ -14,6 +16,8 @@ template <int Nall, int Nmass> struct HydroState {
 	double cs;				   // adiabatic sound speed
 	double E;				   // total energy density
 	double Eint;				   // internal energy density
+	double by;				   // transverse bfield component
+	double bz;				   // 2nd transverse bfield density
 	std::array<double, Nall> scalar;	   // passive scalars
 	amrex::GpuArray<double, Nmass> massScalar; // mass scalars
 };

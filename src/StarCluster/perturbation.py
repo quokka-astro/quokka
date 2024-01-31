@@ -224,8 +224,8 @@ parser.add_option('--seed', dest='seed',
 parser.add_option('--f_solenoidal', dest='f_solenoidal', 
                   help='volume RMS fraction of solenoidal component of the perturbations relative to the total.  ' + 
                        'If --f_solenoidal=None, the motions are purely random.  For low wave numbers ' +
-                       'the relative imporance of solenoidal to compressive may be sensitive to the ' +
-                       'choice of radom seed.  It has been suggested (Federrath 2008) that ' +
+                       'the relative importance of solenoidal to compressive may be sensitive to the ' +
+                       'choice of random seed.  It has been suggested (Federrath 2008) that ' +
                        'f_solenoidal=2/3 is the most natural driving mode and this is currently' + 
                        'the suggested best-practice.', 
                   default = -1)

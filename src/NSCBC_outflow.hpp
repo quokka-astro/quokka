@@ -56,7 +56,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dQ_dx_outflow(quokka::valarray<amrex::R
 	const amrex::Real dP_dz = dQ_dz_data[4];
 
 	const amrex::Real c = quokka::EOS<problem_t>::ComputeSoundSpeed(rho, P);
-	const amrex::Real M = std::sqrt(u * u + v * v + w * w) / c;
+	const amrex::Real M = std::clamp(std::sqrt(u * u + v * v + w * w) / c, 0., 1.);
 	const amrex::Real beta = M;
 	const amrex::Real K = 0.25 * c * (1 - M * M) / L_x; // must be non-zero for well-posedness
 
@@ -116,15 +116,19 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto transverse_xdir_dQ_data(const amrex::In
 
 	// dQ/dy
 	if constexpr (AMREX_SPACEDIM >= 2) {
-		quokka::valarray<amrex::Real, N> const Qp = HydroSystem<problem_t>::ComputePrimVars(consVar, ibr, j + 1, k);
-		quokka::valarray<amrex::Real, N> const Qm = HydroSystem<problem_t>::ComputePrimVars(consVar, ibr, j - 1, k);
-		dQ_dy_data = (Qp - Qm) / (2.0 * geom.CellSize(1));
+		if (consVar.contains(ibr, j + 1, k) && consVar.contains(ibr, j - 1, k)) {
+			quokka::valarray<amrex::Real, N> const Qp = HydroSystem<problem_t>::ComputePrimVars(consVar, ibr, j + 1, k);
+			quokka::valarray<amrex::Real, N> const Qm = HydroSystem<problem_t>::ComputePrimVars(consVar, ibr, j - 1, k);
+			dQ_dy_data = (Qp - Qm) / (2.0 * geom.CellSize(1));
+		}
 	}
 	// dQ/dz
 	if constexpr (AMREX_SPACEDIM == 3) {
-		quokka::valarray<amrex::Real, N> const Qp = HydroSystem<problem_t>::ComputePrimVars(consVar, ibr, j, k + 1);
-		quokka::valarray<amrex::Real, N> const Qm = HydroSystem<problem_t>::ComputePrimVars(consVar, ibr, j, k - 1);
-		dQ_dy_data = (Qp - Qm) / (2.0 * geom.CellSize(2));
+		if (consVar.contains(ibr, j, k + 1) && consVar.contains(ibr, j, k - 1)) {
+			quokka::valarray<amrex::Real, N> const Qp = HydroSystem<problem_t>::ComputePrimVars(consVar, ibr, j, k + 1);
+			quokka::valarray<amrex::Real, N> const Qm = HydroSystem<problem_t>::ComputePrimVars(consVar, ibr, j, k - 1);
+			dQ_dy_data = (Qp - Qm) / (2.0 * geom.CellSize(2));
+		}
 	}
 
 	return std::make_tuple(dQ_dy_data, dQ_dz_data);
@@ -146,15 +150,19 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto transverse_ydir_dQ_data(const amrex::In
 
 	// dQ/dz
 	if constexpr (AMREX_SPACEDIM == 3) {
-		quokka::valarray<amrex::Real, N> const Qp = HydroSystem<problem_t>::ComputePrimVars(consVar, i, jbr, k + 1);
-		quokka::valarray<amrex::Real, N> const Qm = HydroSystem<problem_t>::ComputePrimVars(consVar, i, jbr, k - 1);
-		dQ_dz_data = (Qp - Qm) / (2.0 * geom.CellSize(2));
+		if (consVar.contains(i, jbr, k + 1) && consVar.contains(i, jbr, k - 1)) {
+			quokka::valarray<amrex::Real, N> const Qp = HydroSystem<problem_t>::ComputePrimVars(consVar, i, jbr, k + 1);
+			quokka::valarray<amrex::Real, N> const Qm = HydroSystem<problem_t>::ComputePrimVars(consVar, i, jbr, k - 1);
+			dQ_dz_data = (Qp - Qm) / (2.0 * geom.CellSize(2));
+		}
 	}
 	// dQ/dx
 	{
-		quokka::valarray<amrex::Real, N> const Qp = HydroSystem<problem_t>::ComputePrimVars(consVar, i + 1, jbr, k);
-		quokka::valarray<amrex::Real, N> const Qm = HydroSystem<problem_t>::ComputePrimVars(consVar, i - 1, jbr, k);
-		dQ_dx_data = (Qp - Qm) / (2.0 * geom.CellSize(0));
+		if (consVar.contains(i + 1, jbr, k) && consVar.contains(i - 1, jbr, k)) {
+			quokka::valarray<amrex::Real, N> const Qp = HydroSystem<problem_t>::ComputePrimVars(consVar, i + 1, jbr, k);
+			quokka::valarray<amrex::Real, N> const Qm = HydroSystem<problem_t>::ComputePrimVars(consVar, i - 1, jbr, k);
+			dQ_dx_data = (Qp - Qm) / (2.0 * geom.CellSize(0));
+		}
 	}
 	return std::make_tuple(dQ_dz_data, dQ_dx_data);
 }
@@ -175,15 +183,19 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto transverse_zdir_dQ_data(const amrex::In
 
 	// dQ/dx
 	{
-		quokka::valarray<amrex::Real, N> const Qp = HydroSystem<problem_t>::ComputePrimVars(consVar, i + 1, j, kbr);
-		quokka::valarray<amrex::Real, N> const Qm = HydroSystem<problem_t>::ComputePrimVars(consVar, i - 1, j, kbr);
-		dQ_dx_data = (Qp - Qm) / (2.0 * geom.CellSize(0));
+		if (consVar.contains(i + 1, j, kbr) && consVar.contains(i - 1, j, kbr)) {
+			quokka::valarray<amrex::Real, N> const Qp = HydroSystem<problem_t>::ComputePrimVars(consVar, i + 1, j, kbr);
+			quokka::valarray<amrex::Real, N> const Qm = HydroSystem<problem_t>::ComputePrimVars(consVar, i - 1, j, kbr);
+			dQ_dx_data = (Qp - Qm) / (2.0 * geom.CellSize(0));
+		}
 	}
 	// dQ/dy
 	{
-		quokka::valarray<amrex::Real, N> const Qp = HydroSystem<problem_t>::ComputePrimVars(consVar, i, j + 1, kbr);
-		quokka::valarray<amrex::Real, N> const Qm = HydroSystem<problem_t>::ComputePrimVars(consVar, i, j - 1, kbr);
-		dQ_dy_data = (Qp - Qm) / (2.0 * geom.CellSize(1));
+		if (consVar.contains(i, j + 1, kbr) && consVar.contains(i, j - 1, kbr)) {
+			quokka::valarray<amrex::Real, N> const Qp = HydroSystem<problem_t>::ComputePrimVars(consVar, i, j + 1, kbr);
+			quokka::valarray<amrex::Real, N> const Qm = HydroSystem<problem_t>::ComputePrimVars(consVar, i, j - 1, kbr);
+			dQ_dy_data = (Qp - Qm) / (2.0 * geom.CellSize(1));
+		}
 	}
 	return std::make_tuple(dQ_dx_data, dQ_dy_data);
 }
@@ -238,6 +250,15 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto unpermute_vel(quokka::valarray<amrex::R
 		newPrim[6 + i] = Q[6 + i];
 	}
 	return newPrim;
+}
+
+template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto isStateValid(quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> const &Q) -> bool
+{
+	const amrex::Real rho = Q[0];
+	const amrex::Real P = Q[4];
+	// check whether density and pressure are positive
+	return ((rho > 0.) && (P > 0.));
 }
 } // namespace detail
 
@@ -304,16 +325,25 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setOutflowBoundary(const amrex::IntVect
 
 	// compute centered ghost values
 	dQ_dx *= (SIDE == BoundarySide::Lower) ? -1.0 : 1.0;
-	quokka::valarray<amrex::Real, N> const Q_ip1 = Q_im1 + 2.0 * dx * dQ_dx;
-	quokka::valarray<amrex::Real, N> const Q_ip2 = -2.0 * Q_im1 - 3.0 * Q_i + 6.0 * Q_ip1 - 6.0 * dx * dQ_dx;
-	quokka::valarray<amrex::Real, N> const Q_ip3 = 3.0 * Q_im1 + 10.0 * Q_i - 18.0 * Q_ip1 + 6.0 * Q_ip2 + 12.0 * dx * dQ_dx;
-	quokka::valarray<amrex::Real, N> const Q_ip4 = -2.0 * Q_im1 - 13.0 * Q_i + 24.0 * Q_ip1 - 12.0 * Q_ip2 + 4.0 * Q_ip3 - 12.0 * dx * dQ_dx;
+	quokka::valarray<amrex::Real, N> Q_ip1 = Q_im1 + 2.0 * dx * dQ_dx;
+	quokka::valarray<amrex::Real, N> Q_ip2 = -2.0 * Q_im1 - 3.0 * Q_i + 6.0 * Q_ip1 - 6.0 * dx * dQ_dx;
+	quokka::valarray<amrex::Real, N> Q_ip3 = 3.0 * Q_im1 + 10.0 * Q_i - 18.0 * Q_ip1 + 6.0 * Q_ip2 + 12.0 * dx * dQ_dx;
+	quokka::valarray<amrex::Real, N> Q_ip4 = -2.0 * Q_im1 - 13.0 * Q_i + 24.0 * Q_ip1 - 12.0 * Q_ip2 + 4.0 * Q_ip3 - 12.0 * dx * dQ_dx;
 
 	// set cell values
 	const int ip1 = (SIDE == BoundarySide::Lower) ? ibr - 1 : ibr + 1;
 	const int ip2 = (SIDE == BoundarySide::Lower) ? ibr - 2 : ibr + 2;
 	const int ip3 = (SIDE == BoundarySide::Lower) ? ibr - 3 : ibr + 3;
 	const int ip4 = (SIDE == BoundarySide::Lower) ? ibr - 4 : ibr + 4;
+
+	// reset to zero-gradient outflow if any state Q_{ip1...ip4} is invalid
+	if (!(detail::isStateValid<problem_t>(Q_ip1) && detail::isStateValid<problem_t>(Q_ip2) && detail::isStateValid<problem_t>(Q_ip3) &&
+	      detail::isStateValid<problem_t>(Q_ip4))) {
+		Q_ip1 = Q_i;
+		Q_ip2 = Q_i;
+		Q_ip3 = Q_i;
+		Q_ip4 = Q_i;
+	}
 
 	quokka::valarray<amrex::Real, N> consCell{};
 	if (idx[static_cast<int>(DIR)] == ip1) {

@@ -70,6 +70,7 @@ template <> struct Physics_Traits<ShellProblem> {
 	static constexpr bool is_radiation_enabled = true;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
+	static constexpr int nGroups = 1; // number of radiation groups
 };
 
 constexpr amrex::Real Msun = 2.0e33;	       // g
@@ -123,15 +124,20 @@ void RadSystem<ShellProblem>::SetRadEnergySource(array_t &radEnergy, const amrex
 	});
 }
 
-template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<ShellProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> double
+template <>
+AMREX_GPU_HOST_DEVICE auto RadSystem<ShellProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
-	return kappa0;
+	quokka::valarray<double, nGroups_> kappaPVec{};
+	for (int i = 0; i < nGroups_; ++i) {
+		kappaPVec[i] = kappa0;
+	}
+	return kappaPVec;
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<ShellProblem>::ComputeRosselandOpacity(const double /*rho*/, const double /*Tgas*/) -> double
+AMREX_GPU_HOST_DEVICE auto RadSystem<ShellProblem>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
-	return kappa0;
+	return ComputePlanckOpacity(0.0, 0.0);
 }
 
 // declare global variables

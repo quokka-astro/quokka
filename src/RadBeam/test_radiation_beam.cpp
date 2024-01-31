@@ -54,11 +54,24 @@ template <> struct Physics_Traits<BeamProblem> {
 	static constexpr bool is_radiation_enabled = true;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
+	static constexpr int nGroups = 1; // number of radiation groups
 };
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<BeamProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> double { return kappa0; }
+template <>
+AMREX_GPU_HOST_DEVICE auto RadSystem<BeamProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
+{
+	quokka::valarray<double, nGroups_> kappaPVec{};
+	for (int g = 0; g < nGroups_; ++g) {
+		kappaPVec[g] = kappa0;
+	}
+	return kappaPVec;
+}
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<BeamProblem>::ComputeRosselandOpacity(const double /*rho*/, const double /*Tgas*/) -> double { return kappa0; }
+template <>
+AMREX_GPU_HOST_DEVICE auto RadSystem<BeamProblem>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
+{
+	return ComputePlanckOpacity(0., 0.);
+}
 
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void

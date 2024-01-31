@@ -24,7 +24,7 @@ struct KelvinHelmholzProblem {
 
 template <> struct quokka::EOS_Traits<KelvinHelmholzProblem> {
 	static constexpr double gamma = 1.4;
-	static constexpr double mean_molecular_weight = 1.0;
+	static constexpr double mean_molecular_weight = C::m_u;
 	static constexpr double boltzmann_constant = C::k_B;
 };
 
@@ -40,6 +40,7 @@ template <> struct Physics_Traits<KelvinHelmholzProblem> {
 	static constexpr bool is_radiation_enabled = false;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
+	static constexpr int nGroups = 1; // number of radiation groups
 };
 
 template <> void RadhydroSimulation<KelvinHelmholzProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
