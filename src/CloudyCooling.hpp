@@ -199,7 +199,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(double rho, do
 		       rho, Egas, nH, T_sol, bounds.first, bounds.second, T_min, T_max, maxIter);
 		T_sol = NAN;
 	}
-
+    if(T_sol>1.e10) {
+		printf("T_sol>1.e10==%.2e", T_sol);
+	}
 	return T_sol;
 }
 
@@ -267,9 +269,12 @@ template <typename problem_t> void computeCooling(amrex::MultiFab &mf, const Rea
 			const Real Egas = state(i, j, k, HydroSystem<problem_t>::energy_index);
 
 			const Real Eint = RadSystem<problem_t>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+			if(Eint<=0.0){
+				printf("Eint =0.0 at %d,%d,%d\n", i,j,k);
+			}
 			const Real gamma = quokka::EOS_Traits<problem_t>::gamma;
 			ODEUserData user_data{rho, gamma, tables};
-			quokka::valarray<Real, 1> y = {Eint};
+			quokka::valarray<Real, 1> y = {Eint};			
 			quokka::valarray<Real, 1> const abstol = {reltol_floor * ComputeEgasFromTgas(rho, T_floor, gamma, tables)};
 
 			// do integration with RK2 (Heun's method)

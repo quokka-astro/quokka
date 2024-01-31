@@ -176,3 +176,6 @@ add_subdirectory(NSCBC)
 add_subdirectory(StarCluster)
 add_subdirectory(PrimordialChem)
 add_subdirectory(BinaryOrbitCIC)
+add_subdirectory(MetalAdvectionProblem)
+
+

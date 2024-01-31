@@ -232,6 +232,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	virtual void computeMaxSignalLocal(int level) = 0;
 	virtual auto computeExtraPhysicsTimestep(int lev) -> amrex::Real = 0;
 	virtual void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle) = 0;
+	virtual void computeBeforeTimestep() = 0;
 	virtual void preCalculateInitialConditions() = 0;
 	virtual void setInitialConditionsOnGrid(quokka::grid grid_elem) = 0;
 	virtual void setInitialConditionsOnGridFaceVars(quokka::grid grid_elem) = 0;
@@ -710,7 +711,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 
 	// compute timestep due to extra physics on level 'lev'
 	const amrex::Real extra_physics_dt = computeExtraPhysicsTimestep(lev);
-
+	
 	// return minimum timestep
 	return std::min(hydro_dt, extra_physics_dt);
 }
@@ -748,7 +749,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 		n_factor *= nsubsteps[level];
 		dt_0 = std::min(dt_0, n_factor * dt_tmp[level]);
 		dt_0 = std::min(dt_0, maxDt_); // limit to maxDt_
-
+		
 		if (tNew_[level] == 0.0) { // first timestep
 			dt_0 = std::min(dt_0, initDt_);
 		}
@@ -756,6 +757,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 			dt_0 = constantDt_;
 		}
 	}
+
 
 	// compute global timestep assuming no subcycling
 	amrex::Real dt_global = dt_tmp[0];
@@ -797,17 +799,18 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 			nsubsteps[lev] = 1;
 		}
 	}
-
+// amrex::Print() << "\t>> 1. Post loop dt_0 ==" << dt_0 <<"\n";
 	// Limit dt to avoid overshooting stop_time
 	const amrex::Real eps = 1.e-3 * dt_0;
 
 	if (tNew_[0] + dt_0 > stopTime_ - eps) {
 		dt_0 = stopTime_ - tNew_[0];
 	}
-
+// amrex::Print() << "\t>> 2. Post loop dt_0 ==" << dt_0 <<"\n" ;
 	// assign timesteps on each level
 	dt_[0] = dt_0;
-
+	
+// amrex::Print() << "\t>> 3. dt_ ==" << dt_[0] <<"\n";
 	for (int level = 1; level <= finest_level; ++level) {
 		dt_[level] = dt_[level - 1] / nsubsteps[level];
 	}
@@ -858,6 +861,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 		amrex::ParallelDescriptor::Barrier(); // synchronize all MPI ranks
 		computeTimestep();
+		computeBeforeTimestep(); 
 
 		// do particle leapfrog (first kick at time t)
 		kickParticlesAllLevels(dt_[0]);

@@ -227,6 +227,7 @@ template <typename problem_t>
 void HydroSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real> const &cons, array_t &maxSignal, amrex::Box const &indexRange)
 {
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		const auto press = cons(i, j, k, pressure_index);
 		const auto rho = cons(i, j, k, density_index);
 		const auto px = cons(i, j, k, x1Momentum_index);
 		const auto py = cons(i, j, k, x2Momentum_index);
@@ -245,12 +246,13 @@ void HydroSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Re
 		if constexpr (is_eos_isothermal()) {
 			cs = cs_iso_;
 		} else {
-			cs = ComputeSoundSpeed(cons, i, j, k);
+			cs = ComputeSoundSpeed(cons, i, j, k); 
 		}
 		AMREX_ASSERT(cs > 0.);
 
 		const double signal_max = cs + vel_mag;
 		maxSignal(i, j, k) = signal_max;
+
 	});
 }
 
@@ -429,7 +431,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::isStateValid(am
 	// check if cons(i, j, k) is a valid state
 	const amrex::Real rho = cons(i, j, k, density_index);
 	bool isDensityPositive = (rho > 0.);
-
 	bool isMassScalarPositive = true;
 	if constexpr (nmscalars_ > 0) {
 		amrex::GpuArray<Real, nmscalars_> massScalars_ = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
@@ -454,6 +455,19 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::isStateValid(am
   }
 #endif
 	// return (isDensityPositive && isPressurePositive);
+
+
+	const amrex::Real vx = cons(i, j, k, x1Momentum_index)/rho;
+	const amrex::Real vy = cons(i, j, k, x2Momentum_index)/rho;
+	const amrex::Real vz = cons(i, j, k, x3Momentum_index)/rho;
+	double speed = std::sqrt(vx*vx + vy*vy + vz*vz);
+	double soundspeed = ComputeSoundSpeed(cons, i, j, k);
+	double MachNumber = speed/soundspeed;
+	// if(i==64 && j==20 && k==506){
+	// 	printf("M at %d,%d,%d is =%.2e\n", i,j,k, MachNumber);
+	// 	printf("Sound speed, speed=%.2e, %.2e\n", soundspeed, speed);
+	// }
+	// cs = ComputeSoundSpeed(cons[bx], i, j, k);
 
 	return isDensityPositive && isMassScalarPositive;
 }
@@ -482,6 +496,7 @@ void HydroSystem<problem_t>::ComputeRhsFromFluxes(amrex::MultiFab &rhs_mf, std::
 		rhs[bx](i, j, k, n) = AMREX_D_TERM((1.0 / dx[0]) * (x1Flux[bx](i, j, k, n) - x1Flux[bx](i + 1, j, k, n)),
 						   +(1.0 / dx[1]) * (x2Flux[bx](i, j, k, n) - x2Flux[bx](i, j + 1, k, n)),
 						   +(1.0 / dx[2]) * (x3Flux[bx](i, j, k, n) - x3Flux[bx](i, j, k + 1, n)));
+							
 	});
 }
 
@@ -812,7 +827,7 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 			state[bx](i, j, k, internalEnergy_index) =
 			    quokka::EOS<problem_t>::ComputeEintFromTgas(state[bx](i, j, k, density_index), tempFloor, massScalars);
 			state[bx](i, j, k, energy_index) = Ekin + state[bx](i, j, k, internalEnergy_index);
-		}
+		}		
 	});
 }
 
@@ -845,15 +860,22 @@ void HydroSystem<problem_t>::AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex
 
 		if (redoFlag[bx](i, j, k) == quokka::redoFlag::none) {
 			div_v = AMREX_D_TERM((vel_x[bx](i + 1, j, k) - vel_x[bx](i, j, k)) / dx[0], +(vel_y[bx](i, j + 1, k) - vel_y[bx](i, j, k)) / dx[1],
-					     +(vel_z[bx](i, j, k + 1) - vel_z[bx](i, j, k)) / dx[2]);
+								+(vel_z[bx](i, j, k + 1) - vel_z[bx](i, j, k)) / dx[2]);
 		} else {
 			div_v = 0.5 * (AMREX_D_TERM((ComputeVelocityX1(consVar[bx], i + 1, j, k) - ComputeVelocityX1(consVar[bx], i - 1, j, k)) / dx[0],
 						    +(ComputeVelocityX2(consVar[bx], i, j + 1, k) - ComputeVelocityX2(consVar[bx], i, j - 1, k)) / dx[1],
 						    +(ComputeVelocityX3(consVar[bx], i, j, k + 1) - ComputeVelocityX3(consVar[bx], i, j, k - 1)) / dx[2]));
 		}
-
+		if(i==82 && j==74 && k==505){
+			// printf("Before RHSfrom inside AddInt=%.2e\n",rhs[bx](i, j, k, internalEnergy_index));
+		}
 		// add P dV term to rhs array
 		rhs[bx](i, j, k, internalEnergy_index) += -Pgas * div_v;
+
+		if(i==82 && j==74 && k==505){
+			// printf("After RHSfrom inside AddInt=%.2e\n",rhs[bx](i, j, k, internalEnergy_index));
+		}
+		
 	});
 }
 
@@ -1046,16 +1068,31 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		sR.by = 0.0;
 		sR.bz = 0.0;
 
+		if(i==506 && j==64 && k==20){
+			// printf("sR.rho, sR.P, sR.E, sR.Eint=%.2e, %.2e, %.2e, %.2e\n", sR.rho, sR.P, sR.E, sR.Eint);
+			// printf("sR.u  , sR.v, sR.w, sR.cs    =%.2e, %.2e, %.2e, %.2e\n", sR.u, sR.v, sR.w, sR.cs);
+
+			// printf("sL.rho, sL.P, sL.E, sL.Eint=%.2e, %.2e, %.2e, %.2e\n", sL.rho, sL.P, sL.E, sL.Eint);
+			// printf("sL.u  , sL.v, sL.w, sL.cs    =%.2e, %.2e, %.2e, %.2e\n", sL.u  , sL.v, sL.w, sL.cs);
+			
+		}
 		// The remaining components are mass scalars and passive scalars, so just copy them from
 		// x1LeftState and x1RightState into the (left, right) state vectors U_L and
 		// U_R
 		for (int n = 0; n < nscalars_; ++n) {
 			sL.scalar[n] = x1LeftState(i, j, k, scalar0_index + n);
 			sR.scalar[n] = x1RightState(i, j, k, scalar0_index + n);
+
+			if(i==506 && j==64 && k==20){
+				// printf("n, sL.scalar[n], sR.scalar[n]=%d, %.2e, %.2e\n", n, sL.scalar[n], sR.scalar[n]);
+			}
 			// also store mass scalars separately
 			if (n < nmscalars_) {
 				sL.massScalar[n] = x1LeftState(i, j, k, scalar0_index + n);
 				sR.massScalar[n] = x1RightState(i, j, k, scalar0_index + n);
+				if(i==506 && j==64 && k==20){
+				// printf("n, sL.massScalar[n], sR.massScalar[n]=%d, %.2e, %.2e\n", n, sL.massScalar[n], sR.massScalar[n]);
+			}
 			}
 		}
 
@@ -1133,6 +1170,25 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		// compute face-centered normal velocity
 		const double v_norm = (F[density_index] >= 0.) ? (F[density_index] / rho_R) : (F[density_index] / rho_L);
 		x1FaceVel(i, j, k) = v_norm;
+
+		// if(i==19 && j==20 && k==506){
+		// 	printf("At 19,20,506==>\n");
+		// 	printf("Vnorm=%.2e\n",v_norm);
+		// 	printf("F[density_index]=%.2e\n", F[density_index]);
+		// 	printf("rho_R=%.2e\n", rho_R);
+		// 	printf("rho_L=%.2e\n", rho_L);
+		// 	printf("x1FaceVel=%.2e\n", x1FaceVel(i,j,k));
+		// }
+		if(v_norm!=v_norm){
+			printf("Nan in vnorm at i,j,k=%d,%d,%d\n", i, j, k);
+			// printf("F[density_index]=%.2e\n", F[density_index]);
+			// printf("U_L[density_index]=%.2e\n", U_L[density_index]);
+			// printf("U_R[density_index]=%.2e\n", U_R[density_index]);
+			// printf("rho_R=%.2e\n", rho_R);
+			// printf("rho_L=%.2e\n", rho_L);
+			// printf("viscosity=%.2e\n", viscosity);
+			printf("***\n");
+		}
 
 		// use the same logic as above to scale and conserve specie fluxes
 		if (F[density_index] >= 0.) {

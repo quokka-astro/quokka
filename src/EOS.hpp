@@ -102,7 +102,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEin
 		chem_eos_t estate;
 		estate.rho = rho;
 		estate.e = Eint / rho;
-		estate.mu = mean_molecular_weight_ / C::m_u;
+		estate.mu = mean_molecular_weight_  / C::m_u;
 		eos(eos_input_re, estate);
 		// scale returned temperature in case boltzmann constant is dimensionless
 		Tgas = estate.T * C::k_B / boltzmann_constant_;
@@ -360,6 +360,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeSoundSpeed(
 		chem_eos_t estate;
 		estate.rho = rho;
 		estate.p = Pressure;
+		// printf("Density, pressure inside EOS=%.2e, %.2e\n", rho, Pressure);
 		estate.mu = mean_molecular_weight_ / C::m_u;
 		eos(eos_input_rp, estate);
 		cs = estate.cs;

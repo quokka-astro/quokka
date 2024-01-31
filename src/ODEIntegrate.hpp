@@ -137,6 +137,10 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rk_adaptive_integrate(F &&rhs, Rea
 	rhs(t0, y0, ydot0, user_data);
 	const Real dt_guess = 0.1 * min(abs(y0 / ydot0));
 
+	if(dt_guess<=0.0){
+		// printf("y0, ydot0=%.2e,%.2e\n", y0, ydot0);
+	}
+
 	AMREX_ALWAYS_ASSERT(dt_guess > 0.);
 
 	// adaptive timestep controller
