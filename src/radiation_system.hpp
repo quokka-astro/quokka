@@ -1245,7 +1245,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				auto fy = Fy / (c_light_ * erad);
 				auto fz = Fz / (c_light_ * erad);
 
-				std::array<std::array<double, numRadVars_>, 3> P{};
+				std::array<quokka::valarray<double, 4>, 3> P{};
         {
           auto [F, S] = ComputeRadPressure<FluxDir::X1>(erad, Fx, Fy, Fz, fx, fy, fz);
           P[0] = F;
