@@ -1246,18 +1246,18 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				auto fz = Fz / (c_light_ * erad);
 
 				std::array<quokka::valarray<double, 4>, 3> P{};
-        {
-          auto [F, S] = ComputeRadPressure<FluxDir::X1>(erad, Fx, Fy, Fz, fx, fy, fz);
-          P[0] = F;
-        }
-        {
-          auto [F, S] = ComputeRadPressure<FluxDir::X2>(erad, Fx, Fy, Fz, fx, fy, fz);
-          P[1] = F;
-        }
-        {
-          auto [F, S] = ComputeRadPressure<FluxDir::X3>(erad, Fx, Fy, Fz, fx, fy, fz);
-          P[2] = F;
-        }
+				{
+					auto [F, S] = ComputeRadPressure<FluxDir::X1>(erad, Fx, Fy, Fz, fx, fy, fz);
+					P[0] = F;
+				}
+				{
+					auto [F, S] = ComputeRadPressure<FluxDir::X2>(erad, Fx, Fy, Fz, fx, fy, fz);
+					P[1] = F;
+				}
+				{
+					auto [F, S] = ComputeRadPressure<FluxDir::X3>(erad, Fx, Fy, Fz, fx, fy, fz);
+					P[2] = F;
+				}
 
 				// loop over spatial dimensions
 				for (int n = 0; n < 3; ++n) {
