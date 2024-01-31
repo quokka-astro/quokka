@@ -503,8 +503,8 @@ auto problem_main() -> int {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
 				// outflowing boundary conditions
         if(i==2){
-				 BCs_cc[n].setLo(i, amrex::BCType::foextrap);
-				 BCs_cc[n].setHi(i, amrex::BCType::foextrap);
+				 BCs_cc[n].setLo(i, amrex::BCType::ext_dir);
+				 BCs_cc[n].setHi(i, amrex::BCType::ext_dir);
         }
         else{
            BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
