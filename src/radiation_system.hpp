@@ -65,8 +65,8 @@ template <typename problem_t> struct RadSystem_Traits {
 
 // A struct to hold the results of the ComputeRadPressure function.
 struct RadPressureResult {
-  quokka::valarray<double, 4> F;  // components of radiation pressure tensor
-  double S; // maximum wavespeed for the radiation system
+	quokka::valarray<double, 4> F; // components of radiation pressure tensor
+	double S;		       // maximum wavespeed for the radiation system
 };
 
 /// Class for the radiation moment equations
@@ -704,7 +704,7 @@ template <FluxDir DIR>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeRadPressure(const double erad, const double Fx, const double Fy, const double Fz, const double fx,
 							       const double fy, const double fz) -> RadPressureResult
 {
-	// Compute the radiation pressure tensor and the maximum signal speed and return them as a struct. 
+	// Compute the radiation pressure tensor and the maximum signal speed and return them as a struct.
 
 	// check that states are physically admissible
 	AMREX_ASSERT(erad > 0.0);
