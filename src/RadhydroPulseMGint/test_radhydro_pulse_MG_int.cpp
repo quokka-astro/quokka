@@ -6,6 +6,7 @@
 #include "test_radhydro_pulse_MG_int.hpp"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_Print.H"
+#include "EOS.hpp"
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
 #include "physics_info.hpp"
@@ -15,10 +16,10 @@ struct PulseProblem {
 struct GreyPulseProblem {
 };
 
-// constexpr int n_groups_ = 1;
-// constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{0., inf};
-constexpr int n_groups_ = 2;
-constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e15, 1e17, 1e19};
+constexpr int n_groups_ = 1;
+constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{0., inf};
+// constexpr int n_groups_ = 2;
+// constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e15, 1e17, 1e19};
 // constexpr int n_groups_ = 8;
 // constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e15, 3.16e15, 1e16, 3.16e16, 1e17, 3.16e17, 1e18, 3.16e18, 1e19};
 
@@ -142,19 +143,27 @@ auto compute_repres_nu() -> quokka::valarray<double, n_groups_>
 }
 
 template <> 
+AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::Opacity_Class::OpacityT(double /*rho*/, double Tgas) -> double
+{
+  amrex::Real const energy_unit_over_kT = RadSystem_Traits<PulseProblem>::energy_unit / (quokka::EOS_Traits<PulseProblem>::boltzmann_constant * Tgas);
+  return kappa0 * std::pow(Tgas / T0, -0.5) * std::pow(energy_unit_over_kT * nu_ref, 3);
+}
+
+template <>
+AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::Opacity_Class::OpacityX_from_0_to_x(double x) -> double
+{
+  return 1.0 - std::exp(- x);
+}
+
+template <> 
 AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
 {
-	quokka::valarray<double, nGroups_> kappaPVec{};
-	auto nu_rep = compute_repres_nu();
-	for (int g = 0; g < nGroups_; ++g) {
-		kappaPVec[g] = compute_kappa(nu_rep[g], Tgas) / rho;
-	}
-	return kappaPVec;
+	return RadSystem<PulseProblem>::Opacity_Class::ComputePlanckOpacityFromXT(rho, Tgas) / rho;
 }
 template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<GreyPulseProblem>::ComputePlanckOpacity(const double rho, const double Tgas) -> quokka::valarray<double, 1>
 {
-  const double sigma = 3063.96 * std::pow(Tgas / T0, -3.5);
+  const double sigma = 3063.956451690814 * std::pow(Tgas / T0, -3.5);
   quokka::valarray<double, 1> kappaPVec{};
   kappaPVec.fillin(sigma / rho);
   return kappaPVec;
@@ -163,7 +172,11 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<GreyPulseProblem>::ComputePlanckOpacity(con
 template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
 {
-	return ComputePlanckOpacity(rho, Tgas);
+	// return ComputePlanckOpacity(rho, Tgas);
+  const double sigma = 101.248 * std::pow(Tgas / T0, -3.5);
+  quokka::valarray<double, 1> kappaPVec{};
+  kappaPVec.fillin(sigma / rho);
+  return kappaPVec;
 }
 template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<GreyPulseProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> quokka::valarray<double, 1>
@@ -178,16 +191,19 @@ template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacityTempDerivative(const double rho, const double Tgas)
     -> quokka::valarray<double, nGroups_>
 {
-	quokka::valarray<double, nGroups_> opacity_deriv{};
-	const auto nu_rep = compute_repres_nu();
-	const auto T = Tgas / T0;
-	for (int g = 0; g < nGroups_; ++g) {
-		const auto nu = nu_rep[g] / nu_ref;
-		opacity_deriv[g] =
-		    1. / T0 * kappa0 * (-0.5 * std::pow(T, -1.5) * (1. - std::exp(-coeff_ * nu / T)) - coeff_ * std::pow(T, -2.5) * std::exp(-coeff_ * nu / T));
-		opacity_deriv[g] /= rho;
-	}
-	return opacity_deriv;
+	// quokka::valarray<double, nGroups_> opacity_deriv{};
+	// const auto nu_rep = compute_repres_nu();
+	// const auto T = Tgas / T0;
+	// for (int g = 0; g < nGroups_; ++g) {
+	// 	const auto nu = nu_rep[g] / nu_ref;
+	// 	opacity_deriv[g] =
+	// 	    1. / T0 * kappa0 * (-0.5 * std::pow(T, -1.5) * (1. - std::exp(-coeff_ * nu / T)) - coeff_ * std::pow(T, -2.5) * std::exp(-coeff_ * nu / T));
+	// 	opacity_deriv[g] /= rho;
+	// }
+	// return opacity_deriv;
+  auto kappa = ComputePlanckOpacity(rho, Tgas);
+  auto opacity_deriv = -3.5 * kappa / Tgas;
+  return opacity_deriv;
 }
 template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<GreyPulseProblem>::ComputePlanckOpacityTempDerivative(const double rho, const double Tgas)
