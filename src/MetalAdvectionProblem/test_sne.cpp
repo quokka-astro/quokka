@@ -291,7 +291,7 @@ void AddSupernova(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> pro
 }
 
 
-template <> void RadhydroSimulation<NewProblem>::computeBeforeTimestep()
+/*template <> void RadhydroSimulation<NewProblem>::computeBeforeTimestep()
 {
 	// compute how many (and where) SNe will go off on the this coarse timestep
 	// sample from Poisson distribution
@@ -328,7 +328,7 @@ template <> void RadhydroSimulation<NewProblem>::computeBeforeTimestep()
 		py(i) = geom[0].ProbLength(1) * amrex::Random();
 		pz(i) = geom[0].ProbLength(2) * amrex::RandomNormal(mean, stddev);
 	}
-} 
+} */
 
 /*******************************************************************/
 
