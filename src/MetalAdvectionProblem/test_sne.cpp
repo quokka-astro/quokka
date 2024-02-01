@@ -442,14 +442,14 @@ void RadhydroSimulation<NewProblem>::addStrangSplitSources(amrex::MultiFab &mf, 
 
 /**************************End Adding Strang Split Source Term *****************/
 
-/**************************Begin NSCBC *****************/
+/**************************Begin Diode BC *****************/
 
-template <>
+/*template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<NewProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<Real> const &consVar,
-                           int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
-                           const Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
-                           int /*orig_comp*/)
-{
+                          int /*dcomp*/ //, int /*numcomp*/, amrex::GeometryData const &geom,
+                           //const Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
+                           //int /*orig_comp*/ //)
+/*{
   auto [i, j, k] = iv.dim3();
   amrex::Box const &box = geom.Domain();
   const auto &domain_lo = box.loVect3d();
@@ -488,7 +488,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<NewProblem>::setCustomBou
     consVar(i, j, k, HydroSystem<NewProblem>::internalEnergy_index) = eint_bc;
   }
 
-}
+}*/
 
 /**************************End NSCBC *****************/
 
@@ -503,8 +503,8 @@ auto problem_main() -> int {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
 				// outflowing boundary conditions
         if(i==2){
-				 BCs_cc[n].setLo(i, amrex::BCType::ext_dir);
-				 BCs_cc[n].setHi(i, amrex::BCType::ext_dir);
+				 BCs_cc[n].setLo(i, amrex::BCType::int_dir);
+				 BCs_cc[n].setHi(i, amrex::BCType::int_dir);
         }
         else{
            BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
