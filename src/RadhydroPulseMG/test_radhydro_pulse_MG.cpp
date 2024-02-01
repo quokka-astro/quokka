@@ -56,7 +56,7 @@ constexpr double k_B = C::k_B;
 constexpr double v0_nonadv = 0.; // non-advecting pulse
 
 // static diffusion: (for single group) tau = 2e3, beta = 3e-5, beta tau = 6e-2
-constexpr double v0_adv = 1.0e6; // advecting pulse
+constexpr double v0_adv = 1.0e6;    // advecting pulse
 constexpr double max_time = 2.4e-5; // max_time = 1.0 * width / v1;
 // constexpr double max_time = 4.8e-5; // max_time = 2.0 * width / v1;
 
