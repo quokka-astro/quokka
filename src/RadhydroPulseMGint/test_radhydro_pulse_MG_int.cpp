@@ -3,6 +3,8 @@
 /// calculation of effective opacity in each photon bin.
 ///
 
+#include <cmath>
+
 #include "test_radhydro_pulse_MG_int.hpp"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_Print.H"
@@ -17,7 +19,8 @@ struct GreyPulseProblem {
 };
 
 constexpr int n_groups_ = 1;
-constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{0., inf};
+// constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{0., inf};
+constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e15, 1e19};
 // constexpr int n_groups_ = 2;
 // constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e15, 1e17, 1e19};
 // constexpr int n_groups_ = 8;
@@ -145,14 +148,25 @@ auto compute_repres_nu() -> quokka::valarray<double, n_groups_>
 template <> 
 AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::Opacity_Class::OpacityT(double /*rho*/, double Tgas) -> double
 {
+  // Assuming kappa(x, Tgas, rho) = OpacityT(Tgas, rho) * f(x), where x = h nu / k T and f(x) is dimensionless.
   amrex::Real const energy_unit_over_kT = RadSystem_Traits<PulseProblem>::energy_unit / (quokka::EOS_Traits<PulseProblem>::boltzmann_constant * Tgas);
   return kappa0 * std::pow(Tgas / T0, -0.5) * std::pow(energy_unit_over_kT * nu_ref, 3);
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::Opacity_Class::OpacityX_from_0_to_x(double x) -> double
+AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::Opacity_Class::OpacityX_planck_integral(double x) -> double
 {
+  // Assuming kappa(x, Tgas, rho) = OpacityT(Tgas, rho) * f(x), where x = h nu / k T and f(x) is dimensionless.
+  // This function returns the integral of f(x) * x^3 / (exp(x) - 1) from 0 to x.
   return 1.0 - std::exp(- x);
+}
+
+template <>
+AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::Opacity_Class::OpacityX_int_over_x(double x) -> double
+{
+  // Assuming kappa(x, Tgas, rho) = OpacityT(Tgas, rho) * f(x), where x = h nu / k T and f(x) is dimensionless.
+  // This function returns the integral of f(a) d loga from 0 to x.
+  return - (x * x * std::expint(-x) + std::exp(-x) * (x - 1.) + 1) / (2. * x * x);
 }
 
 template <> 
@@ -172,11 +186,11 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<GreyPulseProblem>::ComputePlanckOpacity(con
 template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
 {
-	// return ComputePlanckOpacity(rho, Tgas);
-  const double sigma = 101.248 * std::pow(Tgas / T0, -3.5);
-  quokka::valarray<double, 1> kappaPVec{};
-  kappaPVec.fillin(sigma / rho);
-  return kappaPVec;
+  // const double sigma = 101.248 * std::pow(Tgas / T0, -3.5);
+  // quokka::valarray<double, 1> kappaPVec{};
+  // kappaPVec.fillin(sigma / rho);
+  // return kappaPVec;
+	return RadSystem<PulseProblem>::Opacity_Class::ComputeFluxMeanOpacityZerothOrderX(rho, Tgas);
 }
 template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<GreyPulseProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> quokka::valarray<double, 1>
