@@ -17,8 +17,10 @@ struct AdvPulseProblem {
 constexpr int isconst = 0;
 // constexpr int n_groups_ = 1;
 // constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{0., inf};
-constexpr int n_groups_ = 8;
-constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e15, 3.16e15, 1e16, 3.16e16, 1e17, 3.16e17, 1e18, 3.16e18, 1e19};
+constexpr int n_groups_ = 2;
+constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e15, 1e17, 1e19};
+// constexpr int n_groups_ = 8;
+// constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e15, 3.16e15, 1e16, 3.16e16, 1e17, 3.16e17, 1e18, 3.16e18, 1e19};
 // constexpr int n_groups_ = 64;
 // constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1.00000000e+15, 1.15478198e+15, 1.33352143e+15, 1.53992653e+15,
 //        1.77827941e+15, 2.05352503e+15, 2.37137371e+15, 2.73841963e+15,
@@ -55,8 +57,8 @@ constexpr double v0_nonadv = 0.; // non-advecting pulse
 
 // static diffusion: (for single group) tau = 2e3, beta = 3e-5, beta tau = 6e-2
 constexpr double v0_adv = 1.0e6; // advecting pulse
-// constexpr double max_time = 2.4e-5; // max_time = 1.0 * width / v1;
-constexpr double max_time = 4.8e-5; // max_time = 2.0 * width / v1;
+constexpr double max_time = 2.4e-5; // max_time = 1.0 * width / v1;
+// constexpr double max_time = 4.8e-5; // max_time = 2.0 * width / v1;
 
 // dynamic diffusion: tau = 2e4, beta = 3e-3, beta tau = 60
 // constexpr double kappa0 = 1000.; // cm^2 g^-1
