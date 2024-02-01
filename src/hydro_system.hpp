@@ -1171,25 +1171,6 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		const double v_norm = (F[density_index] >= 0.) ? (F[density_index] / rho_R) : (F[density_index] / rho_L);
 		x1FaceVel(i, j, k) = v_norm;
 
-		// if(i==19 && j==20 && k==506){
-		// 	printf("At 19,20,506==>\n");
-		// 	printf("Vnorm=%.2e\n",v_norm);
-		// 	printf("F[density_index]=%.2e\n", F[density_index]);
-		// 	printf("rho_R=%.2e\n", rho_R);
-		// 	printf("rho_L=%.2e\n", rho_L);
-		// 	printf("x1FaceVel=%.2e\n", x1FaceVel(i,j,k));
-		// }
-		if(v_norm!=v_norm){
-			printf("Nan in vnorm at i,j,k=%d,%d,%d\n", i, j, k);
-			// printf("F[density_index]=%.2e\n", F[density_index]);
-			// printf("U_L[density_index]=%.2e\n", U_L[density_index]);
-			// printf("U_R[density_index]=%.2e\n", U_R[density_index]);
-			// printf("rho_R=%.2e\n", rho_R);
-			// printf("rho_L=%.2e\n", rho_L);
-			// printf("viscosity=%.2e\n", viscosity);
-			printf("***\n");
-		}
-
 		// use the same logic as above to scale and conserve specie fluxes
 		if (F[density_index] >= 0.) {
 			for (int n = 0; n < nmscalars_; ++n) {
