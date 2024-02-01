@@ -458,12 +458,12 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<NewProblem>::setCustomBou
   const int khi = domain_hi[2];
 
    if (k < klo) {
-    const double rho_bc   = consVar(i, j, klo, HydroSystem<NewProblem>::density_index);
-		const double x1Mom_bc = consVar(i, j, klo, HydroSystem<NewProblem>::x1Momentum_index);
-    const double x2Mom_bc = consVar(i, j, klo, HydroSystem<NewProblem>::x2Momentum_index);
-    const double x3Mom_bc = consVar(i, j, klo, HydroSystem<NewProblem>::x3Momentum_index);
-    const double etot_bc  = consVar(i, j, klo, HydroSystem<NewProblem>::energy_index);
-    const double eint_bc  = consVar(i, j, klo, HydroSystem<NewProblem>::internalEnergy_index);
+    const double rho_bc   = consVar(i, j, klo-k, HydroSystem<NewProblem>::density_index);
+		const double x1Mom_bc = consVar(i, j, klo-k, HydroSystem<NewProblem>::x1Momentum_index);
+    const double x2Mom_bc = consVar(i, j, klo-k, HydroSystem<NewProblem>::x2Momentum_index);
+    const double x3Mom_bc = consVar(i, j, klo-k, HydroSystem<NewProblem>::x3Momentum_index);
+    const double etot_bc  = consVar(i, j, klo-k, HydroSystem<NewProblem>::energy_index);
+    const double eint_bc  = consVar(i, j, klo-k, HydroSystem<NewProblem>::internalEnergy_index);
 
     consVar(i, j, k, HydroSystem<NewProblem>::density_index)= rho_bc ;
 		consVar(i, j, k, HydroSystem<NewProblem>::x1Momentum_index) = x1Mom_bc;
@@ -473,12 +473,12 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<NewProblem>::setCustomBou
     consVar(i, j, k, HydroSystem<NewProblem>::internalEnergy_index) = eint_bc;
 
   } else if (k > khi) {
-    const double rho_bc   = consVar(i, j, khi, HydroSystem<NewProblem>::density_index);
-		const double x1Mom_bc = consVar(i, j, khi, HydroSystem<NewProblem>::x1Momentum_index);
-    const double x2Mom_bc = consVar(i, j, khi, HydroSystem<NewProblem>::x2Momentum_index);
-    const double x3Mom_bc = consVar(i, j, khi, HydroSystem<NewProblem>::x3Momentum_index);
-    const double etot_bc  = consVar(i, j, khi, HydroSystem<NewProblem>::energy_index);
-    const double eint_bc  = consVar(i, j, khi, HydroSystem<NewProblem>::internalEnergy_index);
+    const double rho_bc   = consVar(i, j, khi-k, HydroSystem<NewProblem>::density_index);
+		const double x1Mom_bc = consVar(i, j, khi-k, HydroSystem<NewProblem>::x1Momentum_index);
+    const double x2Mom_bc = consVar(i, j, khi-k, HydroSystem<NewProblem>::x2Momentum_index);
+    const double x3Mom_bc = consVar(i, j, khi-k, HydroSystem<NewProblem>::x3Momentum_index);
+    const double etot_bc  = consVar(i, j, khi-k, HydroSystem<NewProblem>::energy_index);
+    const double eint_bc  = consVar(i, j, khi-k, HydroSystem<NewProblem>::internalEnergy_index);
 
     consVar(i, j, k, HydroSystem<NewProblem>::density_index)= rho_bc ;
 		consVar(i, j, k, HydroSystem<NewProblem>::x1Momentum_index) = x1Mom_bc;
