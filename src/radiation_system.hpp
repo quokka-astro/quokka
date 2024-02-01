@@ -63,6 +63,12 @@ template <typename problem_t> struct RadSystem_Traits {
 	static constexpr amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups + 1> radBoundaries = {0., inf};
 };
 
+// A struct to hold the results of the ComputeRadPressure function.
+struct RadPressureResult {
+	quokka::valarray<double, 4> F; // components of radiation pressure tensor
+	double S;		       // maximum wavespeed for the radiation system
+};
+
 /// Class for the radiation moment equations
 ///
 template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_t>
@@ -197,9 +203,9 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	AMREX_GPU_DEVICE static void amendRadState(std::array<amrex::Real, nvarHyperbolic_> &cons);
 
-	template <FluxDir DIR, typename TARRAY>
-	AMREX_GPU_DEVICE static void ComputeRadPressure(TARRAY &F_L, double &S_L, double erad_L, double Fx_L, double Fy_L, double Fz_L, double fx_L,
-							double fy_L, double fz_L);
+	template <FluxDir DIR>
+	AMREX_GPU_DEVICE static auto ComputeRadPressure(double erad_L, double Fx_L, double Fy_L, double Fz_L, double fx_L, double fy_L, double fz_L)
+	    -> RadPressureResult;
 };
 
 // Compute radiation energy fractions for each photon group from a Planck function, given nGroups, radBoundaries, and temperature
@@ -725,10 +731,12 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeCellOpticalDepth(const quokka
 }
 
 template <typename problem_t>
-template <FluxDir DIR, typename TARRAY>
-AMREX_GPU_DEVICE void RadSystem<problem_t>::ComputeRadPressure(TARRAY &F, double &S, const double erad, const double Fx, const double Fy, const double Fz,
-							       const double fx, const double fy, const double fz)
+template <FluxDir DIR>
+AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeRadPressure(const double erad, const double Fx, const double Fy, const double Fz, const double fx,
+							       const double fy, const double fz) -> RadPressureResult
 {
+	// Compute the radiation pressure tensor and the maximum signal speed and return them as a struct.
+
 	// check that states are physically admissible
 	AMREX_ASSERT(erad > 0.0);
 	// AMREX_ASSERT(f < 1.0); // there is sometimes a small (<1%) flux
@@ -817,9 +825,11 @@ AMREX_GPU_DEVICE void RadSystem<problem_t>::ComputeRadPressure(TARRAY &F, double
 	AMREX_ASSERT(Pny != NAN);
 	AMREX_ASSERT(Pnz != NAN);
 
-	F = {Fn, Pnx, Pny, Pnz};
+	RadPressureResult result{};
+	result.F = {Fn, Pnx, Pny, Pnz};
+	result.S = std::max(0.1, std::sqrt(Tnormal));
 
-	S = std::max(0.1, std::sqrt(Tnormal));
+	return result;
 }
 
 template <typename problem_t>
@@ -910,17 +920,10 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 				f_R = std::sqrt(fx_R * fx_R + fy_R * fy_R + fz_R * fz_R);
 			}
 
-			// compute radiation pressure F_L and F_R using ComputeRadPressure
-			quokka::valarray<double, numRadVars_> F_L{};
-			quokka::valarray<double, numRadVars_> F_R{};
-			double S_L = NAN;
-			double S_R = NAN;
-			// ComputeRadPressure will modify F_L and S_L
-			ComputeRadPressure<DIR>(F_L, S_L, erad_L, Fx_L, Fy_L, Fz_L, fx_L, fy_L, fz_L);
+			// ComputeRadPressure returns F_L_and_S_L or F_R_and_S_R
+			auto [F_L, S_L] = ComputeRadPressure<DIR>(erad_L, Fx_L, Fy_L, Fz_L, fx_L, fy_L, fz_L);
 			S_L *= -1.; // speed sign is -1
-				    // ComputeRadPressure will modify F_R and S_R
-			ComputeRadPressure<DIR>(F_R, S_R, erad_R, Fx_R, Fy_R, Fz_R, fx_R, fy_R, fz_R);
-			// speed sign is +1, S_R unchanged.
+			auto [F_R, S_R] = ComputeRadPressure<DIR>(erad_R, Fx_R, Fy_R, Fz_R, fx_R, fy_R, fz_R);
 
 			// correct for reduced speed of light
 			F_L[0] *= c_hat_ / c_light_;
@@ -1264,13 +1267,19 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				auto fy = Fy / (c_light_ * erad);
 				auto fz = Fz / (c_light_ * erad);
 
-				std::array<std::array<double, numRadVars_>, 3> P{};
-				double S = NAN;
-				// loop DIR over {FluxDir::X1, FluxDir::X2, FluxDir::X3}
-				// ComputeRadPressure will modify P[DIR] and S
-				ComputeRadPressure<FluxDir::X1>(P[0], S, erad, Fx, Fy, Fz, fx, fy, fz);
-				ComputeRadPressure<FluxDir::X2>(P[1], S, erad, Fx, Fy, Fz, fx, fy, fz);
-				ComputeRadPressure<FluxDir::X3>(P[2], S, erad, Fx, Fy, Fz, fx, fy, fz);
+				std::array<quokka::valarray<double, 4>, 3> P{};
+				{
+					auto [F, S] = ComputeRadPressure<FluxDir::X1>(erad, Fx, Fy, Fz, fx, fy, fz);
+					P[0] = F;
+				}
+				{
+					auto [F, S] = ComputeRadPressure<FluxDir::X2>(erad, Fx, Fy, Fz, fx, fy, fz);
+					P[1] = F;
+				}
+				{
+					auto [F, S] = ComputeRadPressure<FluxDir::X3>(erad, Fx, Fy, Fz, fx, fy, fz);
+					P[2] = F;
+				}
 
 				// loop over spatial dimensions
 				for (int n = 0; n < 3; ++n) {
