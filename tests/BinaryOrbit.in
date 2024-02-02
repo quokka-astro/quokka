@@ -1,8 +1,8 @@
 # *****************************************************************
 # Problem size and geometry
 # *****************************************************************
-geometry.prob_lo     =  -0.6  -0.6 -0.6 
-geometry.prob_hi     =  0.6  0.6  0.6
+geometry.prob_lo     =  -2.5e13 -2.5e13 -2.5e13
+geometry.prob_hi     =   2.5e13  2.5e13  2.5e13
 geometry.is_periodic =  0    0    0
 
 # *****************************************************************
@@ -13,27 +13,22 @@ amr.v              = 1       # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 64 64 64
-amr.max_level       = 1     # number of levels = max_level + 1
+amr.n_cell          = 32 32 32
+amr.max_level       = 0     # number of levels = max_level + 1
 amr.blocking_factor = 32    # grid size must be divisible by this
-amr.max_grid_size   = 64    # at least 128 for GPUs
+amr.max_grid_size   = 32    # at least 128 for GPUs
 amr.n_error_buf     = 3     # minimum 3 cell buffer around tagged cells
 amr.grid_eff        = 1.0
 
-hydro.reconstruction_order = 3  # PPM
-cfl = 0.25
-max_timesteps = 50000
-stop_time = 0.05
-
-derived_vars = gpot
-
-gravity.Gconst = 1.0    # gravitational constant
+cfl = 0.3
+max_timesteps = 8000
+stop_time = 5.0e7   # s
 
 do_reflux = 1
 do_subcycle = 0
-do_tracers = 0          # turn on tracer particles
 do_cic_particles = 1    # turns on CIC particles
 
-ascent_interval = 100
-plotfile_interval = 200
-checkpoint_interval = 1000
+ascent_interval = -1
+checkpoint_interval = -1
+plottime_interval = 2.0e5 # s
+derived_vars = gpot
