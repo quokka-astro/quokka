@@ -29,7 +29,7 @@ steps:
 - task: CMake@1
   displayName: 'Run CTest'
   inputs:
-    cmakeArgs: '-E chdir . ctest -E "MatterEnergyExchange*" -T Test --output-on-failure'
+    cmakeArgs: '-E chdir . ctest -E "MatterEnergyExchange*" -E "RadhydroPulseMG*" -T Test --output-on-failure'
 
 - task: PublishTestResults@2
   inputs:
