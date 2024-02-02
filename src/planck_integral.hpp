@@ -27,7 +27,7 @@ static constexpr Real gInf = PI * PI * PI * PI / 15.0;
 static constexpr int INTERP_SIZE = 1000;
 static constexpr Real LOG_X_MIN = -3.;
 static constexpr Real LOG_X_MAX = 2.;
-static constexpr Real Y_INTERP_MIN = 5.13106651231913e-11;
+static constexpr Real Y_INTERP_MIN = 5.13106651231913e-11; // = Y_interp[0]
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_planck_integral(Real logx) -> Real
 {
@@ -232,6 +232,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_planck_integral(Real l
 // Integrate the Planck integral, x^3 / (exp(x) - 1), from 0 to x. Return its ratio to the integral from 0 to infinity (pi^4 / 15).
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto integrate_planck_from_0_to_x(const Real x) -> Real
 {
+	AMREX_ASSERT(!std::isnan(x));
 	AMREX_ASSERT(x >= 0.);
 
 	if (x <= 0.) {
@@ -243,8 +244,13 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto integrate_planck_from_0_to_x(const
 	if (logx < LOG_X_MIN) {
 		// y = x * x * x / 3.0;    // 1st order
 		y = (-4 + x) * x + 8 * std::log((2 + x) / 2); // 2nd order
-		// AMREX_ASSERT(y <= Y_interp[0]);
-		AMREX_ASSERT(y <= Y_INTERP_MIN);
+		// Y_INTERP_MIN is the minimum value returned from interpolate_planck_integral. To ensure y is monotonic with respect to x:
+		// AMREX_ASSERT(y <= Y_INTERP_MIN);
+		if (y > Y_INTERP_MIN) {
+			y = Y_INTERP_MIN;
+		} else if (y < 0.) {
+			y = 0.;
+		}
 	} else if (logx >= LOG_X_MAX) {
 		return 1.0;
 	} else {
