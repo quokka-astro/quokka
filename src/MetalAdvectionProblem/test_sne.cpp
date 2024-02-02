@@ -442,13 +442,13 @@ void RadhydroSimulation<NewProblem>::addStrangSplitSources(amrex::MultiFab &mf, 
 
 /**************************End Adding Strang Split Source Term *****************/
 
-/**************************Begin NSCBC *****************/
+/**************************Begin Diode BC *****************/
 
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<NewProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<Real> const &consVar,
-                           int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
+                          int /*dcomp*/ , int /*numcomp*/, amrex::GeometryData const &geom,
                            const Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
-                           int /*orig_comp*/)
+                           int /*orig_comp*/ )
 {
   auto [i, j, k] = iv.dim3();
   amrex::Box const &box = geom.Domain();
@@ -456,34 +456,50 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<NewProblem>::setCustomBou
   const auto &domain_hi = box.hiVect3d();
   const int klo = domain_lo[2];
   const int khi = domain_hi[2];
+  int kreflect, koutflow, normal;
+  double x3Mom_edge;
 
    if (k < klo) {
-    const double rho_bc   = consVar(i, j, klo-k, HydroSystem<NewProblem>::density_index);
-		const double x1Mom_bc = consVar(i, j, klo-k, HydroSystem<NewProblem>::x1Momentum_index);
-    const double x2Mom_bc = consVar(i, j, klo-k, HydroSystem<NewProblem>::x2Momentum_index);
-    const double x3Mom_bc = consVar(i, j, klo-k, HydroSystem<NewProblem>::x3Momentum_index);
-    const double etot_bc  = consVar(i, j, klo-k, HydroSystem<NewProblem>::energy_index);
-    const double eint_bc  = consVar(i, j, klo-k, HydroSystem<NewProblem>::internalEnergy_index);
+      kreflect = klo - k -1;
+      koutflow = klo;
+      normal = -1;
+      x3Mom_edge = consVar(i, j, klo, HydroSystem<NewProblem>::x3Momentum_index);
+   }
+   else if (k > khi) {
+      kreflect = 2*khi - k;
+      koutflow = khi;
+      normal = 1.0;
+      x3Mom_edge = consVar(i, j, khi, HydroSystem<NewProblem>::x3Momentum_index);
+   }
+
+    if((x3Mom_edge*normal)<0.0) {  //reflect quantities if gas is inflowing
+
+    const double rho_bc   = consVar(i, j, kreflect, HydroSystem<NewProblem>::density_index);
+		const double x1Mom_bc = consVar(i, j, kreflect, HydroSystem<NewProblem>::x1Momentum_index);
+    const double x2Mom_bc = consVar(i, j, kreflect, HydroSystem<NewProblem>::x2Momentum_index);
+    const double x3Mom_bc = consVar(i, j, kreflect, HydroSystem<NewProblem>::x3Momentum_index);
+    const double etot_bc  = consVar(i, j, kreflect, HydroSystem<NewProblem>::energy_index);
+    const double eint_bc  = consVar(i, j, kreflect, HydroSystem<NewProblem>::internalEnergy_index);
 
     consVar(i, j, k, HydroSystem<NewProblem>::density_index)= rho_bc ;
 		consVar(i, j, k, HydroSystem<NewProblem>::x1Momentum_index) = x1Mom_bc;
     consVar(i, j, k, HydroSystem<NewProblem>::x2Momentum_index) = x2Mom_bc;
-    consVar(i, j, k, HydroSystem<NewProblem>::x3Momentum_index) = -1. * std::abs(x3Mom_bc);
+    consVar(i, j, k, HydroSystem<NewProblem>::x3Momentum_index) = -1. *(x3Mom_bc);
     consVar(i, j, k, HydroSystem<NewProblem>::energy_index)     = etot_bc;
     consVar(i, j, k, HydroSystem<NewProblem>::internalEnergy_index) = eint_bc;
 
-  } else if (k > khi) {
-    const double rho_bc   = consVar(i, j, khi-k, HydroSystem<NewProblem>::density_index);
-		const double x1Mom_bc = consVar(i, j, khi-k, HydroSystem<NewProblem>::x1Momentum_index);
-    const double x2Mom_bc = consVar(i, j, khi-k, HydroSystem<NewProblem>::x2Momentum_index);
-    const double x3Mom_bc = consVar(i, j, khi-k, HydroSystem<NewProblem>::x3Momentum_index);
-    const double etot_bc  = consVar(i, j, khi-k, HydroSystem<NewProblem>::energy_index);
-    const double eint_bc  = consVar(i, j, khi-k, HydroSystem<NewProblem>::internalEnergy_index);
+  } else if ((x3Mom_edge*normal)>0.0) {//copy last cell quantities if gas is outflowing
+    const double rho_bc   = consVar(i, j, koutflow, HydroSystem<NewProblem>::density_index);
+		const double x1Mom_bc = consVar(i, j, koutflow, HydroSystem<NewProblem>::x1Momentum_index);
+    const double x2Mom_bc = consVar(i, j, koutflow, HydroSystem<NewProblem>::x2Momentum_index);
+    const double x3Mom_bc = consVar(i, j, koutflow, HydroSystem<NewProblem>::x3Momentum_index);
+    const double etot_bc  = consVar(i, j, koutflow, HydroSystem<NewProblem>::energy_index);
+    const double eint_bc  = consVar(i, j, koutflow, HydroSystem<NewProblem>::internalEnergy_index);
 
     consVar(i, j, k, HydroSystem<NewProblem>::density_index)= rho_bc ;
 		consVar(i, j, k, HydroSystem<NewProblem>::x1Momentum_index) = x1Mom_bc;
     consVar(i, j, k, HydroSystem<NewProblem>::x2Momentum_index) = x2Mom_bc;
-    consVar(i, j, k, HydroSystem<NewProblem>::x3Momentum_index) =  std::abs(x3Mom_bc);
+    consVar(i, j, k, HydroSystem<NewProblem>::x3Momentum_index) =  (x3Mom_bc);
     consVar(i, j, k, HydroSystem<NewProblem>::energy_index)     = etot_bc;
     consVar(i, j, k, HydroSystem<NewProblem>::internalEnergy_index) = eint_bc;
   }
