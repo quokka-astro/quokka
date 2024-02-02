@@ -484,7 +484,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<NewProblem>::setCustomBou
     consVar(i, j, k, HydroSystem<NewProblem>::density_index)= rho_bc ;
 		consVar(i, j, k, HydroSystem<NewProblem>::x1Momentum_index) = x1Mom_bc;
     consVar(i, j, k, HydroSystem<NewProblem>::x2Momentum_index) = x2Mom_bc;
-    consVar(i, j, k, HydroSystem<NewProblem>::x3Momentum_index) = -1. * std::abs(x3Mom_bc);
+    consVar(i, j, k, HydroSystem<NewProblem>::x3Momentum_index) = -1. *(x3Mom_bc);
     consVar(i, j, k, HydroSystem<NewProblem>::energy_index)     = etot_bc;
     consVar(i, j, k, HydroSystem<NewProblem>::internalEnergy_index) = eint_bc;
 
@@ -499,7 +499,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<NewProblem>::setCustomBou
     consVar(i, j, k, HydroSystem<NewProblem>::density_index)= rho_bc ;
 		consVar(i, j, k, HydroSystem<NewProblem>::x1Momentum_index) = x1Mom_bc;
     consVar(i, j, k, HydroSystem<NewProblem>::x2Momentum_index) = x2Mom_bc;
-    consVar(i, j, k, HydroSystem<NewProblem>::x3Momentum_index) =  std::abs(x3Mom_bc);
+    consVar(i, j, k, HydroSystem<NewProblem>::x3Momentum_index) =  (x3Mom_bc);
     consVar(i, j, k, HydroSystem<NewProblem>::energy_index)     = etot_bc;
     consVar(i, j, k, HydroSystem<NewProblem>::internalEnergy_index) = eint_bc;
   }
