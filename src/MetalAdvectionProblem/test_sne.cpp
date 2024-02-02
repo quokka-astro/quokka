@@ -347,7 +347,7 @@ void RadhydroSimulation<NewProblem>::computeAfterLevelAdvance(int lev, amrex::Re
   // computeCooling(state_new_cc_[lev], dt_lev, userData_.cloudyTables);
 }
 
-template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
+template <> AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto
 HydroSystem<NewProblem>::GetGradFixedPotential(amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> posvec)
                                   -> amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> {
  
