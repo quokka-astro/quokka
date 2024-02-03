@@ -34,7 +34,7 @@ AMREX_GPU_DEVICE void chemburner(burn_t &chemstate, const Real dt);
 template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const Real dt, const Real max_density_allowed, const Real min_density_allowed)
 {
 
-	BL_PROFILE("Chemistry::computeChemistry()");
+	const BL_PROFILE("Chemistry::computeChemistry()");
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &state = mf.array(iter);
