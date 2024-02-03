@@ -1,0 +1,696 @@
+/// \file test_radhydro_pulse_MG_int.cpp
+/// \brief Defines a test problem for multigroup radiation in the diffusion regime with precise 
+/// calculation of effective opacity in each photon bin.
+///
+
+#include <cmath>
+
+#include "test_radhydro_pulse_MG_int.hpp"
+#include "AMReX_BC_TYPES.H"
+#include "AMReX_Print.H"
+#include "EOS.hpp"
+#include "RadhydroSimulation.hpp"
+#include "fextract.hpp"
+#include "physics_info.hpp"
+
+struct PulseProblem {
+}; // dummy type to allow compile-type polymorphism via template specialization
+struct GreyPulseProblem {
+};
+
+constexpr int tab_len = 1000;
+static constexpr double int_kappa_dBdT[tab_len] = {
+    8.00333333312492e-16, 8.47809008591786e-16, 8.98100985346180e-16, 9.51376332810177e-16, 1.00781203139233e-15, 1.06759556066175e-15, 1.13092552221849e-15,
+    1.19801229951775e-15, 1.26907875684010e-15, 1.34436097973030e-15, 1.42410905936584e-15, 1.50858792346004e-15, 1.59807821646247e-15, 1.69287723198027e-15,
+    1.79329990051950e-15, 1.89967983582801e-15, 2.01237044331792e-15, 2.13174609424991e-15, 2.25820336958174e-15, 2.39216237761402e-15, 2.53406814981298e-15,
+    2.68439211944673e-15, 2.84363368795029e-15, 3.01232188422437e-15, 3.19101712238119e-15, 3.38031306378004e-15, 3.58083858953849e-15, 3.79325989007681e-15,
+    4.01828267863811e-15, 4.25665453613963e-15, 4.50916739515072e-15, 4.77666017124875e-15, 5.06002155050144e-15, 5.36019294233616e-15, 5.67817160761338e-15,
+    6.01501397229649e-15, 6.37183913773247e-15, 6.74983259921161e-15, 7.15025018516103e-15, 7.57442223006609e-15, 8.02375799499037e-15, 8.49975035038190e-15,
+    9.00398073673297e-15, 9.53812441957998e-15, 1.01039560563081e-14, 1.07033555932645e-14, 1.13383145127795e-14, 1.20109424508581e-14, 1.27234742075431e-14,
+    1.34782771732407e-14, 1.42778591957026e-14, 1.51248769138080e-14, 1.60221445858477e-14, 1.69726434416509e-14, 1.79795315896510e-14, 1.90461545118053e-14,
+    2.01760561812718e-14, 2.13729908397837e-14, 2.26409354738791e-14, 2.39841030314582e-14, 2.54069564225919e-14, 2.69142233511411e-14, 2.85109120264699e-14,
+    3.02023278074970e-14, 3.19940908344133e-14, 3.38921547066631e-14, 3.59028262693085e-14, 3.80327865735290e-14, 4.02891130809546e-14, 4.26793031856375e-14,
+    4.52112991318765e-14, 4.78935144107147e-14, 5.07348617228853e-14, 5.37447826011635e-14, 5.69332787906051e-14, 6.03109454910096e-14, 6.38890065721231e-14,
+    6.76793518786700e-14, 7.16945767492374e-14, 7.59480238804131e-14, 8.04538276753738e-14, 8.52269612243619e-14, 9.02832860732927e-14, 9.56396049459403e-14,
+    1.01313717595018e-13, 1.07324479967884e-13, 1.13691866883573e-13, 1.20437038429599e-13, 1.27582410299292e-13, 1.35151728303568e-13, 1.43170147304927e-13,
+    1.51664314836130e-13, 1.60662459681657e-13, 1.70194485716497e-13, 1.80292071314358e-13, 1.90988774655860e-13, 2.02320145286948e-13, 2.14323842298527e-13,
+    2.27039759520352e-13, 2.40510158145544e-13, 2.54779807226804e-13, 2.69896132511623e-13, 2.85909374111510e-13, 3.02872753529591e-13, 3.20842650602217e-13,
+    3.39878790942996e-13, 3.60044444512830e-13, 3.81406635976350e-13, 4.04036367544525e-13, 4.28008855044647e-13, 4.53403778002976e-13, 4.80305544571945e-13,
+    5.08803572183176e-13, 5.38992584859972e-13, 5.70972928178249e-13, 6.04850902923822e-13, 6.40739118555909e-13, 6.78756867652854e-13, 7.19030522585776e-13,
+    7.61693955739863e-13, 8.06888984681396e-13, 8.54765843751654e-13, 9.05483683656698e-13, 9.59211100715280e-13, 1.01612669752602e-12, 1.07641967691909e-12,
+    1.14029047116901e-12, 1.20795140856217e-12, 1.27962741953704e-12, 1.35555678474702e-12, 1.43599192753531e-12, 1.52120025345858e-12, 1.61146503965399e-12,
+    1.70708637700864e-12, 1.80838216826745e-12, 1.91568918540115e-12, 2.02936418975338e-12, 2.14978511869537e-12, 2.27735234273745e-12, 2.41248999728178e-12,
+    2.55564739344917e-12, 2.70730051267574e-12, 2.86795359005478e-12, 3.03814079169429e-12, 3.21842799167379e-12, 3.40941465451593e-12, 3.61173582943958e-12,
+    3.82606426303371e-12, 4.05311263738529e-12, 4.29363594111305e-12, 4.54843398120083e-12, 4.81835404399374e-12, 5.10429371421748e-12, 5.40720386140679e-12,
+    5.72809180368741e-12, 6.06802465944672e-12, 6.42813289805377e-12, 6.80961410145297e-12, 7.21373694915839e-12, 7.64184543991985e-12, 8.09536336411999e-12,
+    8.57579904179868e-12, 9.08475034208420e-12, 9.62391000075033e-12, 1.01950712536102e-11, 1.08001338045127e-11, 1.14411101478194e-11, 1.21201322664244e-11,
+    1.28394587276298e-11, 1.36014822005152e-11, 1.44087374198465e-11, 1.52639096230549e-11, 1.61698434883982e-11, 1.71295526040828e-11, 1.81462294998995e-11,
+    1.92232562747970e-11, 2.03642158558099e-11, 2.15729039258558e-11, 2.28533415601555e-11, 2.42097886133836e-11, 2.56467579021693e-11, 2.71690302302140e-11,
+    2.87816703061052e-11, 3.04900436068824e-11, 3.22998342435667e-11, 3.42170638882068e-11, 3.62481118255366e-11, 3.83997361960900e-11, 4.06790965015934e-11,
+    4.30937774476708e-11, 4.56518142033536e-11, 4.83617191616202e-11, 5.12325102901924e-11, 5.42737411671337e-11, 5.74955328014022e-11, 6.09086073444809e-11,
+    6.45243238055169e-11, 6.83547158890810e-11, 7.24125320817554e-11, 7.67112781212591e-11, 8.12652619897726e-11, 8.60896415815545e-11, 9.12004752038699e-11,
+    9.66147750797156e-11, 1.02350564030838e-10, 1.08426935530181e-10, 1.14864117324126e-10, 1.21683538836847e-10, 1.28907902581685e-10, 1.36561259817892e-10,
+    1.44669090705215e-10, 1.53258389223863e-10, 1.62357753143309e-10, 1.71997479340211e-10, 1.82209664783693e-10, 1.93028313525057e-10, 2.04489450049176e-10,
+    2.16631239365967e-10, 2.29494114242982e-10, 2.43120910003931e-10, 2.57557007343294e-10, 2.72850483633979e-10, 2.89052273233337e-10, 3.06216337322993e-10,
+    3.24399843849765e-10, 3.43663358168779e-10, 3.64071045025646e-10, 3.85690882552509e-10, 4.08594888992932e-10, 4.32859362913216e-10, 4.58565137702817e-10,
+    4.85797851214352e-10, 5.14648231444359e-10, 5.45212399209617e-10, 5.77592188830741e-10, 6.11895487895018e-10, 6.48236597234316e-10, 6.86736612321556e-10,
+    7.27523827360967e-10, 7.70734163423295e-10, 8.16511622057664e-10, 8.65008765897071e-10, 9.16387227864971e-10, 9.70818250686111e-10, 1.02848325850631e-09,
+    1.08957446253349e-09, 1.15429550272619e-09, 1.22286212767658e-09, 1.29550291496295e-09, 1.37246003438245e-09, 1.45399005661823e-09, 1.54036481004779e-09,
+    1.63187228856049e-09, 1.72881761342326e-09, 1.83152405241481e-09, 1.94033409964060e-09, 2.05561061964443e-09, 2.17773805964804e-09, 2.30712373397878e-09,
+    2.44419918498753e-09, 2.58942162501556e-09, 2.74327546424131e-09, 2.90627392952589e-09, 3.07896077968176e-09, 3.26191212291281e-09, 3.45573834251671e-09,
+    3.66108613730420e-09, 3.87864068357525e-09, 4.10912792589987e-09, 4.35331700438445e-09, 4.61202282656265e-09, 4.88610879253598e-09, 5.17648968250388e-09,
+    5.48413471636921e-09, 5.81007079568297e-09, 6.15538593880523e-09, 6.52123292080893e-09, 6.90883313034130e-09, 7.31948065638743e-09, 7.75454661865376e-09,
+    8.21548375610871e-09, 8.70383128908603e-09, 9.22122007127709e-09, 9.76937804891372e-09, 1.03501360454773e-08, 1.09654338913650e-08, 1.16173269191068e-08,
+    1.23079928459558e-08, 1.30397390669801e-08, 1.38150103831683e-08, 1.46363971905229e-08, 1.55066441576726e-08, 1.64286594211779e-08, 1.74055243294519e-08,
+    1.84405037680647e-08, 1.95370571011612e-08, 2.06988497658019e-08, 2.19297655582327e-08, 2.32339196534303e-08, 2.46156724017387e-08, 2.60796439490361e-08,
+    2.76307297296530e-08, 2.92741168842036e-08, 3.10153016576193e-08, 3.28601078359824e-08, 3.48147062842630e-08, 3.68856356507864e-08, 3.90798243081953e-08,
+    4.14046136048521e-08, 4.38677825050561e-08, 4.64775737011423e-08, 4.92427212855091e-08, 5.21724800758947e-08, 5.52766566928159e-08, 5.85656424940091e-08,
+    6.20504484769996e-08, 6.57427422675831e-08, 6.96548873190703e-08, 7.37999844546228e-08, 7.81919158929530e-08, 8.28453919060647e-08, 8.77760002666357e-08,
+    9.30002586520904e-08, 9.85356701824416e-08, 1.04400782279594e-07, 1.10615249047076e-07, 1.17199897381098e-07, 1.24176797036508e-07, 1.31569334884614e-07,
+    1.39402293614096e-07, 1.47701935141301e-07, 1.56496089012195e-07, 1.65814246095244e-07, 1.75687657882408e-07, 1.86149441734552e-07, 1.97234692427743e-07,
+    2.08980600378344e-07, 2.21426576947520e-07, 2.34614387249867e-07, 2.48588290916391e-07, 2.63395191289146e-07, 2.79084793553555e-07, 2.95709772344841e-07,
+    3.13325949397311e-07, 3.31992481839416e-07, 3.51772061773804e-07, 3.72731127820063e-07, 3.94940089338621e-07, 4.18473564097561e-07, 4.43410630189918e-07,
+    4.69835093057729e-07, 4.97835768530612e-07, 5.27506782841383e-07, 5.58947890639202e-07, 5.92264812082212e-07, 6.27569590156861e-07, 6.64980969440276e-07,
+    7.04624797595334e-07, 7.46634450965904e-07, 7.91151285722156e-07, 8.38325116093348e-07, 8.88314721318198e-07, 9.41288383041359e-07, 9.97424454988831e-07,
+    1.05691196686575e-06, 1.11995126453736e-06, 1.18675468867848e-06, 1.25754729420856e-06, 1.33256761296967e-06, 1.41206846225308e-06, 1.49631780193747e-06,
+    1.58559964316914e-06, 1.68021501169126e-06, 1.78048296911762e-06, 1.88674169564522e-06, 1.99934963791155e-06, 2.11868672592679e-06, 2.24515566324868e-06,
+    2.37918329482045e-06, 2.52122205715939e-06, 2.67175151586793e-06, 2.83127999573986e-06, 3.00034630905385e-06, 3.17952158798548e-06, 3.36941122742797e-06,
+    3.57065694489362e-06, 3.78393896457205e-06, 4.00997833305083e-06, 4.24953937465899e-06, 4.50343229487721e-06, 4.77251594077059e-06, 5.05770072794375e-06,
+    5.35995174409465e-06, 5.68029203985529e-06, 6.01980611825696e-06, 6.37964363484617e-06, 6.76102332120842e-06, 7.16523714543239e-06, 7.59365472386965e-06,
+    8.04772799941817e-06, 8.52899620248423e-06, 9.03909111175982e-06, 9.57974263299619e-06, 1.01527847150600e-05, 1.07601616237339e-05, 1.14039345949680e-05,
+    1.20862888906133e-05, 1.28095412810689e-05, 1.35761479807653e-05, 1.43887130639873e-05, 1.52499973902144e-05, 1.61629280699398e-05, 1.71306085038151e-05,
+    1.81563290299747e-05, 1.92435782165193e-05, 2.03960548383984e-05, 2.16176805803265e-05, 2.29126135099124e-05, 2.42852623678789e-05, 2.57403017251204e-05,
+    2.72826880593811e-05, 2.89176768075701e-05, 3.06508404531553e-05, 3.24880877117138e-05, 3.44356838815801e-05, 3.65002724306318e-05, 3.86888978946015e-05,
+    4.10090301669261e-05, 4.34685902650456e-05, 4.60759776632682e-05, 4.88400992878472e-05, 5.17704002757800e-05, 5.48768966050687e-05, 5.81702097107922e-05,
+    6.16616032083649e-05, 6.53630218528048e-05, 6.92871328707524e-05, 7.34473698103827e-05, 7.78579790632722e-05, 8.25340692217597e-05, 8.74916634453953e-05,
+    9.27477550207529e-05, 9.83203663102219e-05, 1.04228611297440e-04, 1.10492761949811e-04, 1.17134318632139e-04, 1.24176084819822e-04, 1.31642246375374e-04,
+    1.39558455668295e-04, 1.47951920835598e-04, 1.56851500498612e-04, 1.66287804271221e-04, 1.76293299415303e-04, 1.86902424021205e-04, 1.98151707114336e-04,
+    2.10079896113827e-04, 2.22728092095480e-04, 2.36139893339220e-04, 2.50361547670976e-04, 2.65442114140443e-04, 2.81433634609711e-04, 2.98391315863358e-04,
+    3.16373722888391e-04, 3.35442984012631e-04, 3.55665008632782e-04, 3.77109718308787e-04, 3.99851292049220e-04, 4.23968426663637e-04, 4.49544613112167e-04,
+    4.76668429840379e-04, 5.05433854148813e-04, 5.35940592711745e-04, 5.68294432429033e-04, 6.02607612868455e-04, 6.38999221634161e-04, 6.77595614079909e-04,
+    7.18530858874042e-04, 7.61947211016958e-04, 8.07995614011462e-04, 8.56836232992313e-04, 9.08639020733799e-04, 9.63584318573744e-04, 1.02186349441942e-03,
+    1.08367962013588e-03, 1.14924819076072e-03, 1.21879788814174e-03, 1.29257139175608e-03, 1.37082623964157e-03, 1.45383574255416e-03, 1.54188995465965e-03,
+    1.63529670427479e-03, 1.73438268839262e-03, 1.83949463496009e-03, 1.95100053712460e-03, 2.06929096392952e-03, 2.19478045221935e-03, 2.32790898481300e-03,
+    2.46914356032046e-03, 2.61897986031472e-03, 2.77794401992860e-03, 2.94659450832658e-03, 3.12552412590563e-03, 3.31536212550927e-03, 3.51677646539524e-03,
+    3.73047620218299e-03, 3.95721403252326e-03, 4.19778899278020e-03, 4.45304932660019e-03, 4.72389553086054e-03, 5.01128359115092e-03, 5.31622841864001e-03,
+    5.63980750092479e-03, 5.98316478025111e-03, 6.34751477333537e-03, 6.73414694791142e-03, 7.14443037207742e-03, 7.57981865352779e-03, 8.04185518682952e-03,
+    8.53217872804395e-03, 9.05252931720906e-03, 9.60475457048704e-03, 1.01908163651539e-02, 1.08127979420659e-02, 1.14729114517859e-02, 1.21735059722027e-02,
+    1.29170760272244e-02, 1.37062706379902e-02, 1.45439029400231e-02, 1.54329604018474e-02, 1.63766156828331e-02, 1.73782381704014e-02, 1.84414062392541e-02,
+    1.95699202779717e-02, 2.07678165311780e-02, 2.20393818085019e-02, 2.33891691147872e-02, 2.48220142594294e-02, 2.63430535063530e-02, 2.79577423300157e-02,
+    2.96718753469332e-02, 3.14916074965852e-02, 3.34234765502088e-02, 3.54744270309118e-02, 3.76518356337841e-02, 3.99635382402488e-02, 4.24178586268137e-02,
+    4.50236389746682e-02, 4.77902722932453e-02, 5.07277368779675e-02, 5.38466329299224e-02, 5.71582214732274e-02, 6.06744657143358e-02, 6.44080749965719e-02,
+    6.83725515127708e-02, 7.25822399490832e-02, 7.70523802438191e-02, 8.17991636566918e-02, 8.68397923560117e-02, 9.21925427443280e-02, 9.78768327567592e-02,
+    1.03913293380840e-01, 1.10323844662197e-01, 1.17131776476804e-01, 1.24361834367997e-01, 1.32040310764957e-01, 1.40195141918988e-01, 1.48856010914749e-01,
+    1.58054457135725e-01, 1.67823992586640e-01, 1.78200225500379e-01, 1.89220991683375e-01, 2.00926494081347e-01, 2.13359451076929e-01, 2.26565254062154e-01,
+    2.40592134862037e-01, 2.55491343620819e-01, 2.71317337799815e-01, 2.88127982975413e-01, 3.05984766167769e-01, 3.24953022475143e-01, 3.45102175835918e-01,
+    3.66505994790144e-01, 3.89242864165193e-01, 4.13396073665919e-01, 4.39054124408781e-01, 4.66311054501834e-01, 4.95266784838583e-01, 5.26027486343546e-01,
+    5.58705969981217e-01, 5.93422100918192e-01, 6.30303238310662e-01, 6.69484702276632e-01, 7.11110269704185e-01, 7.55332700644261e-01, 8.02314297138933e-01,
+    8.52227496444313e-01, 9.05255500721309e-01, 9.61592945387753e-01, 1.02144660845222e+00, 1.08503616328343e+00, 1.15259497740998e+00, 1.22437096009303e+00,
+    1.30062746157092e+00, 1.38164422703842e+00, 1.46771840859589e+00, 1.55916563858514e+00, 1.65632116791903e+00, 1.75954107321209e+00, 1.86920353672926e+00,
+    1.98571020339011e+00, 2.10948761929681e+00, 2.24098875649610e+00, 2.38069462893859e+00, 2.52911600486399e+00, 2.68679522111814e+00, 2.85430810519713e+00,
+    3.03226601111652e+00, 3.22131797551923e+00, 3.42215300076473e+00, 3.63550247208509e+00, 3.86214271624995e+00, 4.10289770955386e+00, 4.35864194332426e+00,
+    4.63030345554879e+00, 4.91886703763450e+00, 5.22537762574092e+00, 5.55094388657253e+00, 5.89674200797403e+00, 6.26401970514418e+00, 6.65410045377046e+00,
+    7.06838796188613e+00, 7.50837089276441e+00, 7.97562785168958e+00, 8.47183264998144e+00, 8.99875986019694e+00, 9.55829067698979e+00, 1.01524190986736e+01,
+    1.07832584451058e+01, 1.14530482280870e+01, 1.21641613910479e+01, 1.29191119353781e+01, 1.37205629513291e+01, 1.45713350719948e+01, 1.54744153694426e+01,
+    1.64329667126180e+01, 1.74503376071864e+01, 1.85300725379948e+01, 1.96759228353293e+01, 2.08918580866085e+01, 2.21820781155836e+01, 2.35510255515001e+01,
+    2.50033990110174e+01, 2.65441669159619e+01, 2.81785819702098e+01, 2.99121963191395e+01, 3.17508774151573e+01, 3.37008246127710e+01, 3.57685865165548e+01,
+    3.79610791051022e+01, 4.02856046536903e+01, 4.27498714778685e+01, 4.53620145195145e+01, 4.81306167960726e+01, 5.10647317326639e+01, 5.41739063955475e+01,
+    5.74682056439714e+01, 6.09582372157869e+01, 6.46551777602732e+01, 6.85707998294273e+01, 7.27174998364817e+01, 7.71083269876138e+01, 8.17570131896725e+01,
+    8.66780039332532e+01, 9.18864901465826e+01, 9.73984410114021e+01, 1.03230637727339e+02, 1.09400708206116e+02, 1.15927162671340e+02, 1.22829430133506e+02,
+    1.30127895703240e+02, 1.37843938698673e+02, 1.45999971495118e+02, 1.54619479056985e+02, 1.63727059082994e+02, 1.73348462686311e+02, 1.83510635521164e+02,
+    1.94241759256803e+02, 2.05571293288380e+02, 2.17530016562360e+02, 2.30150069381527e+02, 2.43464995041452e+02, 2.57509781136507e+02, 2.72320900359124e+02,
+    2.87936350601034e+02, 3.04395694149773e+02, 3.21740095757726e+02, 3.40012359344581e+02, 3.59256963077238e+02, 3.79520092554058e+02, 4.00849671802958e+02,
+    4.23295391785271e+02, 4.46908736079660e+02, 4.71743003402754e+02, 4.97853326605752e+02, 5.25296687769057e+02, 5.54131929000265e+02, 5.84419758524723e+02,
+    6.16222751642469e+02, 6.49605346110914e+02, 6.84633831499367e+02, 7.21376332049512e+02, 7.59902782565565e+02, 8.00284896849289e+02, 8.42596128188442e+02,
+    8.86911621403026e+02, 9.33308155951995e+02, 9.81864079604198e+02, 1.03265923218155e+03, 1.08577485889007e+03, 1.14129351276550e+03, 1.19929894577572e+03,
+    1.25987598814105e+03, 1.32311041545792e+03, 1.38908880323934e+03, 1.45789836851974e+03, 1.52962679820980e+03, 1.60436206393158e+03, 1.68219222311338e+03,
+    1.76320520617951e+03, 1.84748858973114e+03, 1.93512935568149e+03, 2.02621363638192e+03, 2.12082644585389e+03, 2.21905139732732e+03, 2.32097040737565e+03,
+    2.42666338703457e+03, 2.53620792039244e+03, 2.64967893124694e+03, 2.76714833853318e+03, 2.88868470134390e+03, 3.01435285448046e+03, 3.14421353559547e+03,
+    3.27832300511097e+03, 3.41673266022182e+03, 3.55948864441936e+03, 3.70663145409584e+03, 3.85819554391409e+03, 4.01420893274833e+03, 4.17469281211968e+03,
+    4.33966115916284e+03, 4.50912035626708e+03, 4.68306881963366e+03, 4.86149663908215e+03, 5.04438523151800e+03, 5.23170701054194e+03, 5.42342507473679e+03,
+    5.61949291720818e+03, 5.81985415898013e+03, 6.02444230885420e+03, 6.23318055233005e+03, 6.44598157215484e+03, 6.66274740301774e+03, 6.88336932283330e+03,
+    7.10772778296220e+03, 7.33569237959988e+03, 7.56712186842185e+03, 7.80186422440930e+03, 8.03975674858901e+03, 8.28062622320927e+03, 8.52428911663683e+03,
+    8.77055183900183e+03, 9.01921104933703e+03, 9.27005401465732e+03, 9.52285902110587e+03, 9.77739583695681e+03, 1.00334262269128e+04, 1.02907045167712e+04,
+    1.05489782071593e+04, 1.08079886346553e+04, 1.10674716782297e+04, 1.13271585085508e+04, 1.15867763773182e+04, 1.18460494434094e+04, 1.21046996322561e+04,
+    1.23624475245166e+04, 1.26190132697733e+04, 1.28741175206726e+04, 1.31274823826367e+04, 1.33788323740211e+04, 1.36278953913644e+04, 1.38744036741943e+04,
+    1.41180947637038e+04, 1.43587124495085e+04, 1.45960076986404e+04, 1.48297395609206e+04, 1.50596760448943e+04, 1.52855949586056e+04, 1.55072847096262e+04,
+    1.57245450589540e+04, 1.59371878236387e+04, 1.61450375232924e+04, 1.63479319659871e+04, 1.65457227694371e+04, 1.67382758137987e+04, 1.69254716229002e+04,
+    1.71072056712291e+04, 1.72833886145492e+04, 1.74539464425962e+04, 1.76188205528943e+04, 1.77779677453482e+04, 1.79313601378842e+04, 1.80789850040389e+04,
+    1.82208445340123e+04, 1.83569555213120e+04, 1.84873489777059e+04, 1.86120696797704e+04, 1.87311756508562e+04, 1.88447375827981e+04, 1.89528382021502e+04,
+    1.90555715861438e+04, 1.91530424339199e+04, 1.92453652988939e+04, 1.93326637883520e+04, 1.94150697365594e+04, 1.94927223577764e+04, 1.95657673856290e+04,
+    1.96343562052680e+04, 1.96986449846672e+04, 1.97587938112742e+04, 1.98149658400183e+04, 1.98673264584239e+04, 1.99160424742596e+04, 1.99612813307916e+04,
+    2.00032103543034e+04, 2.00419960380962e+04, 2.00778033667095e+04, 2.01107951835997e+04, 2.01411316049930e+04, 2.01689694820980e+04, 2.01944619133279e+04,
+    2.02177578076479e+04, 2.02390014996388e+04, 2.02583324163589e+04, 2.02758847955989e+04, 2.02917874546615e+04, 2.03061636083683e+04, 2.03191307346041e+04,
+    2.03308004853500e+04, 2.03412786408480e+04, 2.03506651042677e+04, 2.03590539340247e+04, 2.03665334107209e+04, 2.03731861355474e+04, 2.03790891569036e+04,
+    2.03843141219416e+04, 2.03889274497473e+04, 2.03929905229025e+04, 2.03965598942509e+04, 2.03996875057905e+04, 2.04024209167563e+04, 2.04048035381101e+04,
+    2.04068748708388e+04, 2.04086707456560e+04, 2.04102235619140e+04, 2.04115625237466e+04, 2.04127138716899e+04, 2.04137011082494e+04, 2.04145452161023e+04,
+    2.04152648678421e+04, 2.04158766263794e+04, 2.04163951353111e+04, 2.04168332987563e+04, 2.04172024503291e+04, 2.04175125110779e+04, 2.04177721363590e+04,
+    2.04179888517432e+04, 2.04181691781598e+04, 2.04183187465790e+04, 2.04184424026100e+04, 2.04185443014575e+04, 2.04186279937268e+04, 2.04186965026058e+04,
+    2.04187523929744e+04, 2.04187978330072e+04, 2.04188346488379e+04, 2.04188643728505e+04, 2.04188882861492e+04, 2.04189074557430e+04, 2.04189227669579e+04,
+    2.04189349515624e+04, 2.04189446120669e+04, 2.04189522426206e+04, 2.04189582469054e+04, 2.04189629533870e+04, 2.04189666282569e+04, 2.04189694863639e+04,
+    2.04189717004075e+04, 2.04189734086320e+04, 2.04189747212386e+04, 2.04189757257031e+04, 2.04189764911662e+04, 2.04189770720410e+04, 2.04189775109639e+04,
+    2.04189778411966e+04, 2.04189780885718e+04, 2.04189782730625e+04, 2.04189784100412e+04, 2.04189785112851e+04, 2.04189785857755e+04, 2.04189786403291e+04,
+    2.04189786800954e+04, 2.04189787089458e+04, 2.04189787297768e+04, 2.04189787447448e+04, 2.04189787554475e+04, 2.04189787630625e+04, 2.04189787684535e+04,
+    2.04189787722508e+04, 2.04189787749117e+04, 2.04189787767668e+04, 2.04189787780533e+04, 2.04189787789407e+04, 2.04189787795496e+04, 2.04189787799651e+04,
+    2.04189787802470e+04, 2.04189787804373e+04, 2.04189787805651e+04, 2.04189787806503e+04, 2.04189787807068e+04, 2.04189787807441e+04, 2.04189787807686e+04,
+    2.04189787807846e+04, 2.04189787807949e+04, 2.04189787808015e+04, 2.04189787808058e+04, 2.04189787808085e+04, 2.04189787808102e+04, 2.04189787808113e+04,
+    2.04189787808120e+04, 2.04189787808124e+04, 2.04189787808126e+04, 2.04189787808128e+04, 2.04189787808129e+04, 2.04189787808129e+04, 2.04189787808130e+04,
+    2.04189787808130e+04, 2.04189787808130e+04, 2.04189787808130e+04, 2.04189787808130e+04, 2.04189787808130e+04, 2.04189787808130e+04, 2.04189787808130e+04,
+    2.04189787808130e+04, 2.04189787808130e+04, 2.04189787808130e+04, 2.04189787808130e+04, 2.04189787808130e+04, 2.04189787808130e+04, 2.04189787808130e+04,
+    2.04189787808130e+04, 2.04189787808130e+04, 2.04189787808130e+04, 2.04189787808130e+04, 2.04189787808130e+04, 2.04189787808130e+04, 2.04189787808130e+04,
+    2.04189787808130e+04, 2.04189787808130e+04, 2.04189787808130e+04, 2.04189787808130e+04, 2.04189787808130e+04, 2.04189787808130e+04, 2.04189787808130e+04,
+    2.04189787808130e+04, 2.04189787808130e+04, 2.04189787808130e+04, 2.04189787808130e+04, 2.04189787808130e+04, 2.04189787808130e+04, 2.04189787808130e+04,
+    2.04189787808130e+04, 2.04189787808130e+04, 2.04189787808130e+04, 2.04189787808130e+04, 2.04189787808130e+04, 2.04189787808130e+04, 2.04189787808130e+04,
+    2.04189787808130e+04, 2.04189787808130e+04, 2.04189787808130e+04, 2.04189787808130e+04, 2.04189787808130e+04, 2.04189787808130e+04, 2.04189787808130e+04,
+    2.04189787808130e+04, 2.04189787808130e+04, 2.04189787808130e+04, 2.04189787808130e+04, 2.04189787808130e+04, 2.04189787808130e+04};
+
+// constexpr int n_groups_ = 1;
+// constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{0., inf};
+// constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e15, 1e19};
+constexpr int n_groups_ = 2;
+// constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e15, 1e17, 1e19};
+constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e10, 1e17, 1e20};
+// constexpr int n_groups_ = 8;
+// constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e15, 3.16e15, 1e16, 3.16e16, 1e17, 3.16e17, 1e18, 3.16e18, 1e19};
+
+constexpr double kappa0 = 180.;	     // cm^2 g^-1
+constexpr double kappa_const = 100.; // cm^2 g^-1
+constexpr double T0 = 1.0e7;	     // K (temperature)
+constexpr double T1 = 2.0e7;	     // K (temperature)
+constexpr double rho0 = 1.2;	     // g cm^-3 (matter density)
+constexpr double a_rad = C::a_rad;
+constexpr double c = C::c_light; // speed of light (cgs)
+constexpr double chat = c;
+constexpr double width = 24.0; // cm, width of the pulse
+constexpr double erad_floor = a_rad * T0 * T0 * T0 * T0 * 1.0e-10;
+constexpr double mu = 2.33 * C::m_u;
+constexpr double h_planck = C::hplanck;
+constexpr double k_B = C::k_B;
+constexpr double v0_nonadv = 0.; // non-advecting pulse
+
+// static diffusion: (for single group) tau = 2e3, beta = 3e-5, beta tau = 6e-2
+// constexpr double v0_adv = 1.0e6; // advecting pulse
+constexpr double v0_adv = 0.0; // advecting pulse
+// constexpr double max_time = 2.4e-5; // max_time = 1.0 * width / v1;
+constexpr double max_time = 4.8e-5; // max_time = 2.0 * width / v1;
+
+// dynamic diffusion: tau = 2e4, beta = 3e-3, beta tau = 60
+// constexpr double kappa0 = 1000.; // cm^2 g^-1
+// constexpr double v0_adv = 1.0e8;    // advecting pulse
+// constexpr double max_time = 1.2e-4; // max_time = 2.0 * width / v1;
+
+constexpr double T_ref = T0;
+constexpr double nu_ref = 1.0e18; // Hz
+constexpr double coeff_ = h_planck * nu_ref / (k_B * T_ref);
+
+template <> struct quokka::EOS_Traits<PulseProblem> {
+	static constexpr double mean_molecular_weight = mu;
+	static constexpr double boltzmann_constant = k_B;
+	static constexpr double gamma = 5. / 3.;
+};
+template <> struct quokka::EOS_Traits<GreyPulseProblem> {
+	static constexpr double mean_molecular_weight = mu;
+	static constexpr double boltzmann_constant = k_B;
+	static constexpr double gamma = 5. / 3.;
+};
+
+template <> struct Physics_Traits<PulseProblem> {
+	// cell-centred
+	static constexpr bool is_hydro_enabled = true;
+	static constexpr int numMassScalars = 0;		     // number of mass scalars
+	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
+	static constexpr bool is_radiation_enabled = true;
+	// face-centred
+	static constexpr bool is_mhd_enabled = false;
+	static constexpr int nGroups = n_groups_;
+};
+template <> struct Physics_Traits<GreyPulseProblem> {
+	// cell-centred
+	static constexpr bool is_hydro_enabled = true;
+	static constexpr int numMassScalars = 0;		     // number of mass scalars
+	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
+	static constexpr bool is_radiation_enabled = true;
+	// face-centred
+	static constexpr bool is_mhd_enabled = false;
+	static constexpr int nGroups = 1;
+};
+
+template <> struct RadSystem_Traits<PulseProblem> {
+	static constexpr double c_light = c;
+	static constexpr double c_hat = chat;
+	static constexpr double radiation_constant = a_rad;
+	static constexpr double Erad_floor = erad_floor;
+	static constexpr bool compute_v_over_c_terms = true;
+	static constexpr double energy_unit = h_planck;
+	static constexpr amrex::GpuArray<double, n_groups_ + 1> radBoundaries = rad_boundaries_;
+};
+template <> struct RadSystem_Traits<GreyPulseProblem> {
+	static constexpr double c_light = c;
+	static constexpr double c_hat = chat;
+	static constexpr double radiation_constant = a_rad;
+	static constexpr double Erad_floor = erad_floor;
+	static constexpr bool compute_v_over_c_terms = true;
+	static constexpr double energy_unit = h_planck;
+	static constexpr amrex::GpuArray<double, n_groups_ + 1> radBoundaries = rad_boundaries_;
+};
+
+AMREX_GPU_HOST_DEVICE
+auto compute_initial_Tgas(const double x) -> double
+{
+	// compute temperature profile for Gaussian radiation pulse
+	const double sigma = width;
+	return T0 + (T1 - T0) * std::exp(-x * x / (2.0 * sigma * sigma));
+}
+
+AMREX_GPU_HOST_DEVICE
+auto compute_exact_rho(const double x) -> double
+{
+	// compute density profile for Gaussian radiation pulse
+	auto T = compute_initial_Tgas(x);
+	return rho0 * T0 / T + (a_rad * mu / 3. / k_B) * (std::pow(T0, 4) / T - std::pow(T, 3));
+}
+
+AMREX_GPU_HOST_DEVICE
+auto compute_kappa(const double nu, const double Tgas) -> double
+{
+	// cm^-1
+	auto T_ = Tgas / T_ref;
+	auto nu_ = nu / nu_ref;
+	return kappa0 * std::pow(T_, -0.5) * std::pow(nu_, -3) * (1.0 - std::exp(-coeff_ * nu_ / T_));
+}
+
+AMREX_GPU_HOST_DEVICE
+auto compute_repres_nu() -> quokka::valarray<double, n_groups_>
+{
+	// return the geometrical mean as the representative frequency for each group
+	quokka::valarray<double, n_groups_> nu_rep{};
+	if constexpr (n_groups_ == 1) {
+		nu_rep[0] = nu_ref;
+	} else {
+		for (int g = 0; g < n_groups_; ++g) {
+			nu_rep[g] = std::sqrt(rad_boundaries_[g] * rad_boundaries_[g + 1]);
+		}
+	}
+	return nu_rep;
+}
+
+template <> 
+AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::Opacity_Class::OpacityT(double /*rho*/, double Tgas) -> double
+{
+  // Assuming kappa(x, Tgas, rho) = OpacityT(Tgas, rho) * f(x), where x = h nu / k T and f(x) is dimensionless.
+  amrex::Real const energy_unit_over_kT = RadSystem_Traits<PulseProblem>::energy_unit / (quokka::EOS_Traits<PulseProblem>::boltzmann_constant * Tgas);
+  return kappa0 * std::pow(Tgas / T0, -0.5) * std::pow(energy_unit_over_kT * nu_ref, 3);
+}
+
+template <> 
+AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::Opacity_Class::OpacityT_temp_derivative(double rho, double Tgas) -> double
+{
+  // Assuming kappa(x, Tgas, rho) = OpacityT(Tgas, rho) * f(x), where x = h nu / k T and f(x) is dimensionless.
+  // Returns d OpacityT / d T
+  return -3.5 * OpacityT(rho, Tgas) / Tgas;
+}
+
+template <>
+AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::Opacity_Class::OpacityX_planck_integral(double x) -> double
+{
+  // Assuming kappa(x, Tgas, rho) = OpacityT(Tgas, rho) * f(x), where x = h nu / k T and f(x) is dimensionless.
+  // This function returns the integral of f(x) * x^3 / (exp(x) - 1) from 0 to x.
+  return 1.0 - std::exp(- x);
+}
+
+template <>
+AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::Opacity_Class::OpacityX_dBdT_int_over_x(double x) -> double
+{
+  // Assuming kappa(x, Tgas, rho) = OpacityT(Tgas, rho) * f(x), where x = h nu / k T and f(x) is dimensionless.
+  // This function returns the integral of f(x) * x^4 * csch^2(x/2) from 0 to x.
+  const double logx = std::log10(x);
+  const double x0 = -3.0;
+  const double x1 = 2.0;
+  if (logx < x0) {
+    return 4./5 * std::pow(x, 5);
+  }
+  return interpolate_arr(logx, x0, x1, tab_len, int_kappa_dBdT);
+}
+
+// template <>
+// AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::Opacity_Class::OpacityX_int_over_x(double x) -> double
+// {
+//   // Assuming kappa(x, Tgas, rho) = OpacityT(Tgas, rho) * f(x), where x = h nu / k T and f(x) is dimensionless.
+//   // This function returns the integral of f(a) d loga from 0 to x.
+//   return - (x * x * std::expint(-x) + std::exp(-x) * (x - 1.) + 1) / (2. * x * x);
+// }
+
+template <> 
+AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
+{
+	return RadSystem<PulseProblem>::Opacity_Class::ComputePlanckOpacityFromXT(rho, Tgas) / rho;
+}
+template <>
+AMREX_GPU_HOST_DEVICE auto RadSystem<GreyPulseProblem>::ComputePlanckOpacity(const double rho, const double Tgas) -> quokka::valarray<double, 1>
+{
+  const double sigma = 3063.956451690814 * std::pow(Tgas / T0, -3.5);
+  quokka::valarray<double, 1> kappaPVec{};
+  kappaPVec.fillin(sigma / rho);
+  return kappaPVec;
+}
+
+template <>
+AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
+{
+  // const double sigma = 101.248 * std::pow(Tgas / T0, -3.5);
+  // quokka::valarray<double, 1> kappaPVec{};
+  // kappaPVec.fillin(sigma / rho);
+  // return kappaPVec;
+	return RadSystem<PulseProblem>::Opacity_Class::ComputeRosselandOpacity(rho, Tgas);
+}
+template <>
+AMREX_GPU_HOST_DEVICE auto RadSystem<GreyPulseProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> quokka::valarray<double, 1>
+{
+  const double sigma = 101.248 * std::pow(Tgas / T0, -3.5);
+  quokka::valarray<double, 1> kappaPVec{};
+  kappaPVec.fillin(sigma / rho);
+  return kappaPVec;
+}
+
+template <>
+AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacityTempDerivative(const double rho, const double Tgas)
+    -> quokka::valarray<double, nGroups_>
+{
+	// quokka::valarray<double, nGroups_> opacity_deriv{};
+  // opacity_deriv.fillin(0.0);
+  // return opacity_deriv;
+
+  return RadSystem<PulseProblem>::Opacity_Class::ComputePlanckOpacityTempDerivativeFromXT(rho, Tgas);
+}
+template <>
+AMREX_GPU_HOST_DEVICE auto RadSystem<GreyPulseProblem>::ComputePlanckOpacityTempDerivative(const double rho, const double Tgas)
+    -> quokka::valarray<double, 1>
+{
+  auto kappa = ComputePlanckOpacity(rho, Tgas);
+  auto opacity_deriv = -3.5 * kappa / Tgas;
+  return opacity_deriv;
+}
+
+template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<PulseProblem>::ComputeEddingtonFactor(double /*f*/) -> double
+{
+	return (1. / 3.); // Eddington approximation
+}
+template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<GreyPulseProblem>::ComputeEddingtonFactor(double /*f*/) -> double
+{
+	return (1. / 3.); // Eddington approximation
+}
+
+template <> void RadhydroSimulation<PulseProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+{
+	// extract variables required from the geom object
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_elem.prob_hi_;
+	const amrex::Box &indexRange = grid_elem.indexRange_;
+	const amrex::Array4<double> &state_cc = grid_elem.array_;
+
+	amrex::Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
+
+	const auto radBoundaries_g = RadSystem_Traits<PulseProblem>::radBoundaries;
+
+	// loop over the grid and set the initial condition
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
+		const double Trad = compute_initial_Tgas(x - x0);
+		const double rho = compute_exact_rho(x - x0);
+		const double Egas = quokka::EOS<PulseProblem>::ComputeEintFromTgas(rho, Trad);
+		const double v0 = v0_adv;
+
+		auto Erad_g = RadSystem<PulseProblem>::ComputeThermalRadiation(Trad, radBoundaries_g);
+
+		for (int g = 0; g < Physics_Traits<PulseProblem>::nGroups; ++g) {
+			// state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = (1. + 4. / 3. * (v0 * v0) / (c * c)) * Erad;
+			state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad_g[g];
+			state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 4. / 3. * v0 * Erad_g[g];
+			state_cc(i, j, k, RadSystem<PulseProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+			state_cc(i, j, k, RadSystem<PulseProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+		}
+
+		state_cc(i, j, k, RadSystem<PulseProblem>::gasEnergy_index) = Egas + 0.5 * rho * v0 * v0;
+		state_cc(i, j, k, RadSystem<PulseProblem>::gasDensity_index) = rho;
+		state_cc(i, j, k, RadSystem<PulseProblem>::gasInternalEnergy_index) = Egas;
+		state_cc(i, j, k, RadSystem<PulseProblem>::x1GasMomentum_index) = v0 * rho;
+		state_cc(i, j, k, RadSystem<PulseProblem>::x2GasMomentum_index) = 0.;
+		state_cc(i, j, k, RadSystem<PulseProblem>::x3GasMomentum_index) = 0.;
+	});
+}
+template <> void RadhydroSimulation<GreyPulseProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
+{
+	// extract variables required from the geom object
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_elem.prob_hi_;
+	const amrex::Box &indexRange = grid_elem.indexRange_;
+	const amrex::Array4<double> &state_cc = grid_elem.array_;
+
+	amrex::Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
+
+	// loop over the grid and set the initial condition
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
+		const double Trad = compute_initial_Tgas(x - x0);
+		double Erad = a_rad * std::pow(Trad, 4);
+    Erad = std::max(Erad, erad_floor);
+		const double rho = compute_exact_rho(x - x0);
+		const double Egas = quokka::EOS<PulseProblem>::ComputeEintFromTgas(rho, Trad);
+		const double v0 = 0.0;
+
+		// state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = (1. + 4. / 3. * (v0 * v0) / (c * c)) * Erad;
+		state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = Erad;
+		state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index) = 4. / 3. * v0 * Erad;
+		state_cc(i, j, k, RadSystem<PulseProblem>::x2RadFlux_index) = 0;
+		state_cc(i, j, k, RadSystem<PulseProblem>::x3RadFlux_index) = 0;
+		state_cc(i, j, k, RadSystem<PulseProblem>::gasEnergy_index) = Egas + 0.5 * rho * v0 * v0;
+		state_cc(i, j, k, RadSystem<PulseProblem>::gasDensity_index) = rho;
+		state_cc(i, j, k, RadSystem<PulseProblem>::gasInternalEnergy_index) = Egas;
+		state_cc(i, j, k, RadSystem<PulseProblem>::x1GasMomentum_index) = v0 * rho;
+		state_cc(i, j, k, RadSystem<PulseProblem>::x2GasMomentum_index) = 0.;
+		state_cc(i, j, k, RadSystem<PulseProblem>::x3GasMomentum_index) = 0.;
+	});
+}
+
+auto problem_main() -> int
+{
+	// This problem is a test of radiation diffusion plus advection by gas.
+	// This makes this problem a stringent test of the radiation advection
+	// in the diffusion limit.
+
+	// Problem parameters
+	const int64_t max_timesteps = 1e8;
+	const double CFL_number = 0.8;
+	// const int nx = 32;
+
+	const double max_dt = 1e-3; // t_cr = 2 cm / cs = 7e-8 s
+
+	// Boundary conditions
+	constexpr int nvars = RadSystem<PulseProblem>::nvar_;
+	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
+	for (int n = 0; n < nvars; ++n) {
+		// periodic boundary condition in the x-direction will not work
+		BCs_cc[n].setLo(0, amrex::BCType::foextrap); // extrapolate
+		BCs_cc[n].setHi(0, amrex::BCType::foextrap);
+		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
+			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
+			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
+		}
+	}
+
+	// Problem 1: grey radiation pulse
+
+	// Problem initialization
+	RadhydroSimulation<GreyPulseProblem> sim(BCs_cc);
+
+	sim.radiationReconstructionOrder_ = 3; // PPM
+	sim.stopTime_ = max_time;
+	sim.radiationCflNumber_ = CFL_number;
+	sim.cflNumber_ = CFL_number;
+	sim.maxDt_ = max_dt;
+	sim.maxTimesteps_ = max_timesteps;
+	sim.plotfileInterval_ = -1;
+
+	// initialize
+	sim.setInitialConditions();
+
+	// evolve
+	sim.evolve();
+
+	// read output variables
+	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
+	const int nx = static_cast<int>(position.size());
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = sim.geom[0].ProbLoArray();
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = sim.geom[0].ProbHiArray();
+
+	std::vector<double> xs(nx);
+	std::vector<double> Trad(nx);
+	std::vector<double> Tgas(nx);
+	std::vector<double> Vgas(nx);
+	std::vector<double> rhogas(nx);
+
+	for (int i = 0; i < nx; ++i) {
+		amrex::Real const x = position[i];
+		xs.at(i) = x;
+		double Erad_t = 0.0;
+		for (int g = 0; g < Physics_Traits<GreyPulseProblem>::nGroups; ++g) {
+			Erad_t += values.at(RadSystem<GreyPulseProblem>::radEnergy_index + Physics_NumVars::numRadVars * g)[i];
+		}
+		const auto Trad_t = std::pow(Erad_t / a_rad, 1. / 4.);
+		const auto rho_t = values.at(RadSystem<GreyPulseProblem>::gasDensity_index)[i];
+		const auto v_t = values.at(RadSystem<GreyPulseProblem>::x1GasMomentum_index)[i] / rho_t;
+		const auto Egas = values.at(RadSystem<GreyPulseProblem>::gasInternalEnergy_index)[i];
+		rhogas.at(i) = rho_t;
+		Trad.at(i) = Trad_t;
+		Tgas.at(i) = quokka::EOS<GreyPulseProblem>::ComputeTgasFromEint(rho_t, Egas);
+		Vgas.at(i) = 1e-5 * v_t;
+	}
+	// END OF PROBLEM 1
+
+	// Problem 2: multigroup advecting pulse
+
+	// Problem initialization
+	RadhydroSimulation<PulseProblem> sim2(BCs_cc);
+
+	sim2.radiationReconstructionOrder_ = 3; // PPM
+	sim2.stopTime_ = max_time;
+	sim2.radiationCflNumber_ = CFL_number;
+	sim2.maxDt_ = max_dt;
+	sim2.maxTimesteps_ = max_timesteps;
+	sim2.plotfileInterval_ = -1;
+
+	// initialize
+	sim2.setInitialConditions();
+
+	// evolve
+	sim2.evolve();
+
+	// read output variables
+	auto [position2, values2] = fextract(sim2.state_new_cc_[0], sim2.Geom(0), 0, 0.0);
+	prob_lo = sim2.geom[0].ProbLoArray();
+	prob_hi = sim2.geom[0].ProbHiArray();
+	// compute the pixel size
+	const double dx = (prob_hi[0] - prob_lo[0]) / static_cast<double>(nx);
+	const double move = v0_adv * sim2.tNew_[0];
+	const int n_p = static_cast<int>(move / dx);
+	const int half = static_cast<int>(nx / 2.0);
+	const double drift = move - static_cast<double>(n_p) * dx;
+	const int shift = n_p - static_cast<int>((n_p + half) / nx) * nx;
+
+	std::vector<double> xs2(nx);
+	std::vector<double> Trad2(nx);
+	std::vector<double> Tgas2(nx);
+	std::vector<double> Vgas2(nx);
+	std::vector<double> rhogas2(nx);
+
+	for (int i = 0; i < nx; ++i) {
+		int index_ = 0;
+		if (shift >= 0) {
+			if (i < shift) {
+				index_ = nx - shift + i;
+			} else {
+				index_ = i - shift;
+			}
+		} else {
+			if (i <= nx - 1 + shift) {
+				index_ = i - shift;
+			} else {
+				index_ = i - (nx + shift);
+			}
+		}
+		const amrex::Real x = position2[i];
+		// const auto Erad_t = values2.at(RadSystem<PulseProblem>::radEnergy_index)[i];
+		double Erad_t = 0.0;
+		for (int g = 0; g < Physics_Traits<PulseProblem>::nGroups; ++g) {
+			Erad_t += values2.at(RadSystem<PulseProblem>::radEnergy_index + Physics_NumVars::numRadVars * g)[i];
+		}
+		const auto Trad_t = std::pow(Erad_t / a_rad, 1. / 4.);
+		const auto rho_t = values2.at(RadSystem<PulseProblem>::gasDensity_index)[i];
+		const auto v_t = values2.at(RadSystem<PulseProblem>::x1GasMomentum_index)[i] / rho_t;
+		const auto Egas = values2.at(RadSystem<PulseProblem>::gasInternalEnergy_index)[i];
+		xs2.at(i) = x - drift;
+		rhogas2.at(index_) = rho_t;
+		Trad2.at(index_) = Trad_t;
+		Tgas2.at(index_) = quokka::EOS<PulseProblem>::ComputeTgasFromEint(rho_t, Egas);
+		Vgas2.at(index_) = 1e-5 * (v_t - v0_adv);
+	}
+	// END OF PROBLEM 2
+
+	// compute error norm
+	double err_norm = 0.;
+	double sol_norm = 0.;
+	for (size_t i = 0; i < xs2.size(); ++i) {
+		err_norm += std::abs(Tgas[i] - Trad[i]);
+		err_norm += std::abs(Trad2[i] - Trad[i]);
+		err_norm += std::abs(Tgas2[i] - Trad[i]);
+		sol_norm += std::abs(Trad[i]) * 3.0;
+	}
+	// const double error_tol = 0.008;
+	const double error_tol = 0.1;
+	const double rel_error = err_norm / sol_norm;
+	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
+
+#ifdef HAVE_PYTHON
+	// plot temperature
+	matplotlibcpp::clf();
+	std::map<std::string, std::string> Trad_args;
+	std::map<std::string, std::string> Tgas_args;
+	Trad_args["label"] = "Trad (grey)";
+	Trad_args["linestyle"] = "-";
+	Tgas_args["label"] = "Tgas (grey)";
+	Tgas_args["linestyle"] = "--";
+	matplotlibcpp::plot(xs, Trad, Trad_args);
+	matplotlibcpp::plot(xs, Tgas, Tgas_args);
+	Trad_args["label"] = "Trad (MG)";
+	Tgas_args["label"] = "Tgas (MG)";
+	matplotlibcpp::plot(xs2, Trad2, Trad_args);
+	matplotlibcpp::plot(xs2, Tgas2, Tgas_args);
+	matplotlibcpp::xlabel("length x (cm)");
+	matplotlibcpp::ylabel("temperature (K)");
+	matplotlibcpp::legend();
+	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
+	matplotlibcpp::tight_layout();
+	matplotlibcpp::save("./radhydro_pulse_MG_int_temperature.pdf");
+
+	// plot gas density profile
+	matplotlibcpp::clf();
+	std::map<std::string, std::string> rho_args;
+	rho_args["label"] = "gas density (grey)";
+	rho_args["linestyle"] = "-";
+	matplotlibcpp::plot(xs, rhogas, rho_args);
+	rho_args["label"] = "gas density (MG))";
+	rho_args["linestyle"] = "--";
+	matplotlibcpp::plot(xs2, rhogas2, rho_args);
+	matplotlibcpp::xlabel("length x (cm)");
+	matplotlibcpp::ylabel("density (g cm^-3)");
+	matplotlibcpp::legend();
+	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
+	matplotlibcpp::tight_layout();
+	matplotlibcpp::save("./radhydro_pulse_MG_int_density.pdf");
+
+	// plot gas velocity profile
+	matplotlibcpp::clf();
+	std::map<std::string, std::string> vgas_args;
+	vgas_args["label"] = "gas velocity (grey)";
+	vgas_args["linestyle"] = "-";
+	matplotlibcpp::plot(xs, Vgas, vgas_args);
+	vgas_args["label"] = "gas velocity (MG)";
+	vgas_args["linestyle"] = "--";
+	matplotlibcpp::plot(xs2, Vgas2, vgas_args);
+	matplotlibcpp::xlabel("length x (cm)");
+	matplotlibcpp::ylabel("velocity (km s^-1)");
+	matplotlibcpp::legend();
+	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
+	matplotlibcpp::tight_layout();
+	matplotlibcpp::save("./radhydro_pulse_MG_int_velocity.pdf");
+#endif
+
+	// Cleanup and exit
+	int status = 0;
+	if ((rel_error > error_tol) || std::isnan(rel_error)) {
+		status = 1;
+	}
+	return status;
+}

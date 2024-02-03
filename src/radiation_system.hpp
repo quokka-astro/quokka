@@ -206,6 +206,27 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	template <FluxDir DIR>
 	AMREX_GPU_DEVICE static auto ComputeRadPressure(double erad_L, double Fx_L, double Fy_L, double Fz_L, double fx_L, double fy_L, double fz_L)
 	    -> RadPressureResult;
+
+	class Opacity_Class
+	{
+	      public:
+		// AMREX_GPU_HOST_DEVICE static auto FluxMeanOpacity1(double rho, double Tgas) -> quokka::valarray<double, nGroups_>;
+		// AMREX_GPU_HOST_DEVICE static auto FluxMeanOpacity2(double rho, double Tgas) -> quokka::valarray<double, nGroups_>;
+
+		AMREX_GPU_HOST_DEVICE static auto OpacityT(double rho, double Tgas) -> double;
+		AMREX_GPU_HOST_DEVICE static auto OpacityT_temp_derivative(double rho, double Tgas) -> double;
+		AMREX_GPU_HOST_DEVICE static auto OpacityX_planck_integral(double x) -> double;
+		// AMREX_GPU_HOST_DEVICE static auto Kappa0(double rho, double Tgas) -> quokka::valarray<double, nGroups_>;
+		AMREX_GPU_HOST_DEVICE static auto OpacityX_int_over_x(double x) -> double;
+		AMREX_GPU_HOST_DEVICE static auto OpacityX_int_over_logx(double x) -> double;
+		AMREX_GPU_HOST_DEVICE static auto OpacityX_dBdT_int_over_x(double x) -> double;
+
+		AMREX_GPU_HOST_DEVICE static auto ComputePlanckOpacityFromXT(double rho, double Tgas) -> quokka::valarray<double, nGroups_>;
+		AMREX_GPU_HOST_DEVICE static auto ComputePlanckOpacityTempDerivativeFromXT(double rho, double Tgas) -> quokka::valarray<double, nGroups_>;
+    // , double Erad, double F
+		AMREX_GPU_HOST_DEVICE static auto ComputeRosselandOpacity(double rho, double Tgas) -> quokka::valarray<double, nGroups_>;
+		AMREX_GPU_HOST_DEVICE static auto ComputeFluxMeanOpacityZerothOrderX(double rho, double Tgas) -> quokka::valarray<double, nGroups_>;
+  };
 };
 
 // Compute radiation energy fractions for each photon group from a Planck function, given nGroups, radBoundaries, and temperature
@@ -986,6 +1007,152 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 		} // end loop over radiation groups
 	});
 }
+
+template <typename problem_t>
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::Opacity_Class::OpacityT(double /*rho*/, double /*Tgas*/) -> double
+{
+  // Assuming kappa(x, Tgas, rho) = OpacityT(Tgas, rho) * f(x), where x = h nu / k T and f(x) is dimensionless.
+  // Returns OpacityT
+  return NAN;
+}
+
+template <typename problem_t>
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::Opacity_Class::OpacityT_temp_derivative(double /*rho*/, double /*Tgas*/) -> double
+{
+  // Assuming kappa(x, Tgas, rho) = OpacityT(Tgas, rho) * f(x), where x = h nu / k T and f(x) is dimensionless.
+  // Returns d OpacityT / d T
+  return NAN;
+}
+
+template <typename problem_t>
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::Opacity_Class::OpacityX_planck_integral(double /*x*/) -> double
+{
+  // Assuming kappa(x, Tgas, rho) = OpacityT(Tgas, rho) * f(x), where x = h nu / k T and f(x) is dimensionless.
+  // This function returns the integral of f(x) * x^3 / (exp(x) - 1) from 0 to x.
+  return NAN;
+}
+
+template <typename problem_t>
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::Opacity_Class::OpacityX_dBdT_int_over_x(double /*x*/) -> double
+{
+  // Assuming kappa(x, Tgas, rho) = OpacityT(Tgas, rho) * f(x), where x = h nu / k T and f(x) is dimensionless.
+  // This function returns the integral of f(x)^-1 * x^4 * csch(x/2)^2 from 0 to x.
+  return NAN;
+}
+
+template <typename problem_t>
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::Opacity_Class::ComputePlanckOpacityFromXT(double rho, double Tgas) -> quokka::valarray<double, nGroups_>
+{
+  quokka::valarray<double, nGroups_> kappa{};
+	// if constexpr (nGroups_ > 1) {
+  auto boundaries = RadSystem_Traits<problem_t>::radBoundaries;
+  double opacity_T = OpacityT(rho, Tgas);
+  amrex::Real const energy_unit_over_kT = RadSystem_Traits<problem_t>::energy_unit / (boltzmann_constant_ * Tgas);
+  amrex::Real x = boundaries[0] * energy_unit_over_kT;
+  amrex::Real top_previous = opacity_T * OpacityX_planck_integral(x);
+  amrex::Real bottom_previous = integrate_planck_from_0_to_x(x) * gInf; // integrate x^3 / (exp(x) - 1) from 0 to x
+  for (int g = 0; g < nGroups_; ++g) {
+    x = energy_unit_over_kT * boundaries[g + 1];
+
+    amrex::Real top_this = opacity_T * OpacityX_planck_integral(x);
+    amrex::Real top = top_this - top_previous;
+    top_previous = top_this;
+
+    amrex::Real bottom_this = integrate_planck_from_0_to_x(x) * gInf; // integrate x^3 / (exp(x) - 1) from 0 to x
+    amrex::Real bottom = bottom_this - bottom_previous;
+    bottom_previous = bottom_this;
+
+    kappa[g] = top / bottom;
+  }
+	// }
+	return kappa;
+}
+
+template <typename problem_t>
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::Opacity_Class::ComputePlanckOpacityTempDerivativeFromXT(double rho, double Tgas) -> quokka::valarray<double, nGroups_>
+{
+  // Assuming kappa(x, Tgas, rho) = OpacityT(Tgas, rho) * f(x), where x = h nu / k T and f(x) is dimensionless.
+  // This function approximates the derivative of kappaP with respect to Tgas. kappaP = (d/dT OpacityT) * (int f(x)^-1 dBdT dx / int dBdT dx).
+  auto kappaP = ComputePlanckOpacityFromXT(rho, Tgas);
+  return OpacityT_temp_derivative(rho, Tgas) / OpacityT(rho, Tgas) * kappaP;
+}
+
+template <typename problem_t>
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::Opacity_Class::ComputeRosselandOpacity(double rho, double Tgas) -> quokka::valarray<double, nGroups_>
+{
+  // Assuming kappa(x, Tgas, rho) = OpacityT(Tgas, rho) * f(x), where x = h nu / k T and f(x) is dimensionless.
+  // This function computes the Rosseland opacity: kappaR^-1 = OpacityT^-1 * (int f(x)^-1 dBdT dx / int dBdT dx).
+
+  quokka::valarray<double, nGroups_> kappa{};
+	// if constexpr (nGroups_ > 1) {
+  auto boundaries = RadSystem_Traits<problem_t>::radBoundaries;
+  double opacity_T = OpacityT(rho, Tgas);
+  amrex::Real const energy_unit_over_kT = RadSystem_Traits<problem_t>::energy_unit / (boltzmann_constant_ * Tgas);
+  amrex::Real x = boundaries[0] * energy_unit_over_kT;
+  amrex::Real top_previous = OpacityX_dBdT_int_over_x(x);
+  amrex::Real bottom_previous = integrate_dBdT_from_0_to_x(x);
+  for (int g = 0; g < nGroups_; ++g) {
+    x = energy_unit_over_kT * boundaries[g + 1];
+
+    amrex::Real top_this = OpacityX_dBdT_int_over_x(x);
+    amrex::Real top = top_this - top_previous;
+    top_previous = top_this;
+
+    amrex::Real bottom_this = integrate_dBdT_from_0_to_x(x);
+    amrex::Real bottom = bottom_this - bottom_previous;
+    bottom_previous = bottom_this;
+
+    kappa[g] = opacity_T * bottom / top; // note that kappa^-1 = opacity_T^-1 * top / bottom
+  }
+	// }
+	return kappa;
+}
+
+template <typename problem_t>
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::Opacity_Class::OpacityX_int_over_x(double x) -> double
+{
+  return NAN;
+}
+
+template <typename problem_t>
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::Opacity_Class::OpacityX_int_over_logx(double x) -> double
+{
+  return NAN;
+}
+
+template <typename problem_t>
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::Opacity_Class::ComputeFluxMeanOpacityZerothOrderX(double rho, double Tgas) -> quokka::valarray<double, nGroups_>
+{
+  quokka::valarray<double, nGroups_> kappa{};
+	// if constexpr (nGroups_ > 1) {
+  auto boundaries = RadSystem_Traits<problem_t>::radBoundaries;
+  double opacity_T = OpacityT(rho, Tgas);
+  amrex::Real const energy_unit_over_kT = RadSystem_Traits<problem_t>::energy_unit / (boltzmann_constant_ * Tgas);
+  amrex::Real x = boundaries[0] * energy_unit_over_kT;
+  amrex::Real top_previous = opacity_T * OpacityX_int_over_x(x);
+  amrex::Real bottom_previous = x; // integrate 1 from 0 to x
+  for (int g = 0; g < nGroups_; ++g) {
+    x = energy_unit_over_kT * boundaries[g + 1];
+
+    amrex::Real top_this = opacity_T * OpacityX_int_over_x(x);
+    amrex::Real top = top_this - top_previous;
+    top_previous = top_this;
+
+    amrex::Real bottom = x - bottom_previous;
+    bottom_previous = x;
+
+    kappa[g] = top / bottom;
+  }
+	// }
+	return kappa;
+}
+
+// template <typename problem_t>
+// AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::Opacity_Class::ComputeFluxMeanOpacityZerothOrderLogx(double rho, double Tgas) -> quokka::valarray<double, nGroups_>
+// {
+//   // Zeroth order
+//   return Kappa0(rho, Tgas);
+// }
 
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
