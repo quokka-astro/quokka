@@ -60,6 +60,13 @@ if(ENABLE_ASAN)
   add_link_options(-fsanitize=address -fsanitize=undefined)
 endif(ENABLE_ASAN)
 
+if(ENABLE_HWASAN)
+  # enable HWAddressSanitizer for debugging
+  message(STATUS "Compiling with HWAddressSanitizer *enabled*")
+  add_compile_options(-fsanitize=hwaddress)
+  add_link_options(-fsanitize=hwaddress)
+endif(ENABLE_HWASAN)
+
 if(DISABLE_FMAD)
   message(STATUS "Fused multiply-add (FMAD) is disabled for device code.")
   add_compile_options($<$<COMPILE_LANGUAGE:C>:-ffp-contract=off>)
@@ -171,6 +178,7 @@ add_subdirectory(RadhydroShockCGS)
 add_subdirectory(RadhydroShockMultigroup)
 add_subdirectory(RadhydroUniformAdvecting)
 add_subdirectory(RadhydroPulse)
+add_subdirectory(RadhydroPulseMG)
 
 add_subdirectory(ODEIntegration)
 add_subdirectory(Cooling)

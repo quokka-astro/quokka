@@ -40,6 +40,7 @@ constexpr double v1 = 1.73e7;					      // cm s^-1 [1.72875e7]
 constexpr double chat = 10.0 * (v0 + c_s0);			      // reduced speed of light
 
 constexpr double Erad0 = a_rad * (T0 * T0 * T0 * T0); // erg cm^-3
+constexpr double Erad_floor_ = Erad0 * 1e-12;
 constexpr double Egas0 = rho0 * c_v * T0;	      // erg cm^-3
 constexpr double Erad1 = a_rad * (T1 * T1 * T1 * T1); // erg cm^-3
 constexpr double Egas1 = rho1 * c_v * T1;	      // erg cm^-3
@@ -63,7 +64,7 @@ template <> struct RadSystem_Traits<ShockProblem> {
 	static constexpr double c_light = c;
 	static constexpr double c_hat = chat;
 	static constexpr double radiation_constant = a_rad;
-	static constexpr double Erad_floor = 0.;
+	static constexpr double Erad_floor = Erad_floor_;
 	static constexpr bool compute_v_over_c_terms = true;
 	static constexpr double energy_unit = C::hplanck; // set boundary unit to Hz
 	static constexpr amrex::GpuArray<double, Physics_Traits<ShockProblem>::nGroups + 1> radBoundaries{
