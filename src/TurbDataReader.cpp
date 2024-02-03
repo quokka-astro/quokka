@@ -78,7 +78,7 @@ auto get_tabledata(amrex::Table3D<double> &in_t) -> amrex::TableData<double, 3>
 	amrex::TableData<double, 3> tableData(tlo, thi, amrex::The_Pinned_Arena());
 	auto h_table = tableData.table();
 
-	amrex::Print() << "Copying tableData on indices " << tlo << " to " << thi << ".\n";
+	// amrex::Print() << "Copying tableData on indices " << tlo << " to " << thi << ".\n";
 
 	// fill tableData
 	for (int i = tlo[0]; i <= thi[0]; ++i) {
