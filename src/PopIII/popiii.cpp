@@ -7,9 +7,9 @@
 /// \brief Defines a test problem for Pop III star formation.
 /// Author: Piyush Sharda (Leiden University, 2023)
 ///
+#include <array>
 #include <limits>
 #include <memory>
-#include <array>
 #include <random>
 #include <vector>
 
@@ -33,10 +33,10 @@
 
 #include "RadhydroSimulation.hpp"
 #include "SimulationData.hpp"
-#include "hydro_system.hpp"
-#include "radiation_system.hpp"
 #include "TurbDataReader.hpp"
+#include "hydro_system.hpp"
 #include "popiii.hpp"
+#include "radiation_system.hpp"
 
 #include "actual_eos_data.H"
 #include "burn_type.H"
