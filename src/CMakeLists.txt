@@ -136,7 +136,7 @@ add_subdirectory(PopIII)
 
 
 add_subdirectory(StarCluster)
-add_subdirectory(PrimordialChem)
+#add_subdirectory(PrimordialChem)
 
 add_subdirectory(Advection)
 add_subdirectory(Advection2D)
