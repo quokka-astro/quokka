@@ -33,14 +33,14 @@ auto read_dataset(hid_t &file_id, char const *dataset_name) -> amrex::Table3D<do
 	}
 
 	// allocate array for dataset storage
-	auto *temp_data = new double[data_size];
+	std::unique_ptr<double[]> temp_data(new double[data_size]);
 
 	// read dataset
 	herr_t status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, temp_data);
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != -1, "Failed to read dataset!");
 
 	// close dataset
-	status = H5Dclose(dset_id);
+	H5Dclose(dset_id);
 
 	// WARNING: Table3D uses column-major (Fortran-order) indexing, but HDF5
 	// tables use row-major (C-order) indexing!
@@ -68,7 +68,7 @@ void initialize_turbdata(turb_data &data, std::string &data_file)
 	data.dvz = read_dataset(file_id, "pertz");
 
 	// close file
-	status = H5Fclose(file_id);
+	H5Fclose(file_id);
 }
 
 auto get_tabledata(amrex::Table3D<double> &in_t) -> amrex::TableData<double, 3>
