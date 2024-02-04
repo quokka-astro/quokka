@@ -2372,7 +2372,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteProjectionPlot
 			++iter;
 		}
 
-		const std::string basename = "proj" + dir_str;
+		const std::string basename = "proj_" + dir_str + "_plt";
 		const std::string filename = amrex::Concatenate(basename, istep[0], 5);
 		amrex::Print() << "Writing projection " << filename << "\n";
 		const amrex::Geometry mygeom(firstFab.box());
