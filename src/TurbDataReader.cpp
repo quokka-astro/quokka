@@ -27,7 +27,7 @@ auto read_dataset(hid_t &file_id, char const *dataset_name) -> amrex::Table3D<do
 	std::vector<hsize_t> dims(ndims);
 	H5Sget_simple_extent_dims(dspace, dims.data(), nullptr);
 
-	size_t 	data_size = 1;
+	size_t data_size = 1;
 	for (int idim = 0; idim < ndims; ++idim) {
 		data_size *= dims[idim];
 	}
