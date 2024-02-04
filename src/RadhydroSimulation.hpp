@@ -1056,7 +1056,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 #else
 		// write AMReX plotfile
 		// WriteSingleLevelPlotfile(CustomPlotFileName("debug_stage1_filled_state_old", istep[lev]+1),
-		//	state_old_cc_tmp, componentNames_cc_, geom[lev], time, istep[lev]+1);
+		//    state_old_cc_tmp, componentNames_cc_, geom[lev], time, istep[lev]+1);
 #endif
 	}
 
@@ -1571,7 +1571,7 @@ void RadhydroSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Rea
 	for (int i = 0; i < nsubSteps; ++i) {
 		if (i > 0) {
 			// since we are starting a new substep, we need to copy radiation state from
-			// 	new state vector to old state vector
+			//     new state vector to old state vector
 			// (this is not necessary for the i=0 substep because we have already swapped
 			//  the full hydro+radiation state vectors at the beginning of the level advance)
 			swapRadiationState(state_old_cc_[lev], state_new_cc_[lev]);
