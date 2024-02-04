@@ -14,14 +14,15 @@ repos:
     rev: v17.0.6
     hooks:
     -   id: clang-format
-ci:
-    autofix_commit_msg: |
-        [pre-commit.ci] auto fixes from pre-commit.com hooks
+# ci section is removed or commented out
+# ci:
+#     autofix_commit_msg: |
+#         [pre-commit.ci] auto fixes from pre-commit.com hooks
+#         for more information, see https://pre-commit.ci
+#     autofix_prs: true
+#     autoupdate_branch: ''
+#     autoupdate_commit_msg: '[pre-commit.ci] pre-commit autoupdate'
+#     autoupdate_schedule: weekly
+#     skip: []
+#     submodules: false
 
-        for more information, see https://pre-commit.ci
-    autofix_prs: true
-    autoupdate_branch: ''
-    autoupdate_commit_msg: '[pre-commit.ci] pre-commit autoupdate'
-    autoupdate_schedule: weekly
-    skip: []
-    submodules: false
