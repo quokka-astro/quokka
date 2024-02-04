@@ -27,14 +27,13 @@ auto read_dataset(hid_t &file_id, char const *dataset_name) -> amrex::Table3D<do
 	std::vector<hsize_t> dims(ndims);
 	H5Sget_simple_extent_dims(dspace, dims.data(), nullptr);
 
-	size_t data_size = 1;
+	uint64_t data_size = 1;
 	for (int idim = 0; idim < ndims; ++idim) {
 		data_size *= dims[idim];
 	}
 
 	// allocate array for dataset storage
-	// std::unique_ptr<double[]> temp_data(new double[data_size]);
-	std::vector<double> temp_data(data_size);
+	auto *temp_data = new double[data_size];
 
 	// read dataset
 	herr_t status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, temp_data);
