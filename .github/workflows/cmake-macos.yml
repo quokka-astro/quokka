@@ -17,13 +17,18 @@ env:
 
 jobs:
   build:
-    runs-on: macos-13
+    runs-on: macos-14
 
     steps:
     - uses: actions/checkout@v4
       with:
         submodules: true
         fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of sonarcloud analysis
+    
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip' # caching pip dependencies
 
     - name: Create Build Environment
       # Some projects don't allow in-source building, so create a separate build directory
@@ -32,8 +37,14 @@ jobs:
 
     - name: Install Homebrew dependencies
       run: |
-        brew install python3 openmpi hdf5 || true
-        brew link --overwrite python@3.11
+        brew install openmpi hdf5@1.10 || true
+        brew link --force hdf5@1.10
+
+    - name: Output HDF5 configuration (verbose)
+      run: h5cc -showconfig
+
+    - name: Output HDF5 compile flags
+      run: h5cc -show
 
     - name: Install pip dependencies
       run: python3 -m pip install --user numpy matplotlib
@@ -49,8 +60,7 @@ jobs:
       working-directory: ${{runner.workspace}}/build
       shell: bash
       # Execute the build.  You can specify a specific target with "--target <NAME>"
-      # Restrict to 1 build process at a time to avoid OOM kills.
-      run: cmake --build . --config $BUILD_TYPE --parallel 1
+      run: cmake --build . --config $BUILD_TYPE --parallel 2
 
     - name: Create test output directory
       run: cmake -E make_directory $GITHUB_WORKSPACE/tests
@@ -64,7 +74,7 @@ jobs:
 
     - name: Upload test output
       if: always()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: test-results
         path: ${{github.workspace}}/tests

@@ -23,3 +23,5 @@ amr.grid_eff        = 0.7   # default
 
 do_reflux = 0
 do_subcycle = 0
+do_tracers = 1
+plotfile_interval = 200
