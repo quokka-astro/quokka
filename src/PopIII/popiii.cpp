@@ -338,8 +338,14 @@ template <> void RadhydroSimulation<PopIII>::setInitialConditionsOnGrid(quokka::
 
 template <> void RadhydroSimulation<PopIII>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
-	// refine on Jeans length
-	const int N_cells = 64; // inverse of the 'Jeans number' [Truelove et al. (1997)]
+
+	// read-in jeans length refinement runtime params
+	amrex::ParmParse const pp("jeansRefine");
+	int N_cells;
+	pp.query("ncells", N_cells); // inverse of the 'Jeans number' [Truelove et al. (1997)]
+	Real jeans_density_threshold;
+	pp.query("density_threshold", jeans_density_threshold);
+
 	const amrex::Real G = Gconst_;
 	const amrex::Real dx = geom[lev].CellSizeArray()[0];
 
@@ -364,7 +370,9 @@ template <> void RadhydroSimulation<PopIII>::ErrorEst(int lev, amrex::TagBoxArra
 			amrex::Real const cs = quokka::EOS<PopIII>::ComputeSoundSpeed(rho, pressure, massScalars);
 
 			const amrex::Real l_Jeans = cs * std::sqrt(M_PI / (G * rho));
-			if (l_Jeans < (N_cells * dx) && rho > 2e-20) {
+			// add a density criterion for refinement so that no initial refinement is ever triggered outside the core
+			// typically, a density threshold ~ initial core density works well
+			if (l_Jeans < (N_cells * dx) && rho > jeans_density_threshold) {
 				tag(i, j, k) = amrex::TagBox::SET;
 			}
 		});

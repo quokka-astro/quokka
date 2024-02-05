@@ -37,6 +37,10 @@ perturb.cloud_omega = 2.016008E-14 #initial cloud angular velocity in s^-1
 perturb.cloud_numdens = 0.90861183E+004 #initial cloud number density in cm^-3
 perturb.rms_velocity = 1.8050e5 #initial cloud rms velocity (to drive turbulence)
 
+# params for jeans refinement
+jeansRefine.ncells = 64 #refine on these many cells per jeans length
+jeansRefine.jeans_density_threshold = 2e-20 #do not refine if density is less than this density
+
 # in quokka/src/StarCluster, generate with 'python3 perturbation.py --kmin=2 --kmax=64 --size=128 --alpha=2 --f_solenoidal=1.0'
 # and put it in quokka/tests/
 perturb.filename = "zdrv.hdf5"
