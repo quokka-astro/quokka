@@ -470,9 +470,9 @@ auto problem_main() -> int
 	RadhydroSimulation<PopIII> sim(BCs_cc);
 	sim.doPoissonSolve_ = 1; // enable self-gravity
 
-        amrex::ParmParse const pp("popiii");
+	amrex::ParmParse const pp("popiii");
 	Real densfloor = NAN;
-        pp.query("density_floor", densfloor);
+	pp.query("density_floor", densfloor);
 	sim.densityFloor_ = densfloor;
 
 	sim.tempFloor_ = 2.73 * (30.0 + 1.0);
