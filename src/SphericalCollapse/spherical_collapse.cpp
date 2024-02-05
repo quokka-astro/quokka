@@ -28,7 +28,7 @@ struct CollapseProblem {
 
 template <> struct quokka::EOS_Traits<CollapseProblem> {
 	static constexpr double gamma = 5. / 3.;
-	static constexpr double mean_molecular_weight = 1.0;
+	static constexpr double mean_molecular_weight = C::m_u;
 	static constexpr double boltzmann_constant = C::k_B;
 };
 
@@ -85,6 +85,19 @@ template <> void RadhydroSimulation<CollapseProblem>::setInitialConditionsOnGrid
 	});
 }
 
+template <> void RadhydroSimulation<CollapseProblem>::createInitialParticles()
+{
+	// add particles at random positions in the box
+	const bool generate_on_root_rank = true;
+	const int iseed = 42;
+	const int num_particles = 1000;
+	const double total_particle_mass = 0.5; // about 0.1 of the total fluid mass
+	const double particle_mass = total_particle_mass / static_cast<double>(num_particles);
+
+	const quokka::CICParticleContainer::ParticleInitData pdata = {{particle_mass, 0, 0, 0}, {}, {}, {}}; // {mass vx vy vz}, empty, empty, empty
+	CICParticles->InitRandom(num_particles, iseed, pdata, generate_on_root_rank);
+}
+
 template <> void RadhydroSimulation<CollapseProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for refinement
@@ -102,6 +115,17 @@ template <> void RadhydroSimulation<CollapseProblem>::ErrorEst(int lev, amrex::T
 				tag(i, j, k) = amrex::TagBox::SET;
 			}
 		});
+	}
+}
+
+template <> void RadhydroSimulation<CollapseProblem>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in) const
+{
+	// compute derived variables and save in 'mf'
+	if (dname == "gpot") {
+		const int ncomp = ncomp_cc_in;
+		auto const &phi_arr = phi[lev].const_arrays();
+		auto output = mf.arrays();
+		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept { output[bx](i, j, k, ncomp) = phi_arr[bx](i, j, k); });
 	}
 }
 
