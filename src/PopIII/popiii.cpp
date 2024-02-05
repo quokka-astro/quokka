@@ -165,7 +165,7 @@ template <> void RadhydroSimulation<PopIII>::preCalculateInitialConditions()
 		userData_.dv_rms_generated = computeRms(pinned_dvx, pinned_dvy, pinned_dvz);
 		amrex::Print() << "rms dv = " << userData_.dv_rms_generated << "\n";
 
-		Real rms_dv_target;
+		Real rms_dv_target = NAN;
 		pp.query("rms_velocity", rms_dv_target);
 		const Real rms_dv_actual = userData_.dv_rms_generated;
 		userData_.rescale_factor = rms_dv_target / rms_dv_actual;
@@ -341,9 +341,9 @@ template <> void RadhydroSimulation<PopIII>::ErrorEst(int lev, amrex::TagBoxArra
 
 	// read-in jeans length refinement runtime params
 	amrex::ParmParse const pp("jeansRefine");
-	int N_cells;
+	int N_cells = 0;
 	pp.query("ncells", N_cells); // inverse of the 'Jeans number' [Truelove et al. (1997)]
-	Real jeans_density_threshold;
+	Real jeans_density_threshold = NAN;
 	pp.query("density_threshold", jeans_density_threshold);
 
 	const amrex::Real G = Gconst_;
