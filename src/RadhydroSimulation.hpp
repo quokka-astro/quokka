@@ -1156,6 +1156,15 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 					amrex::Print() << "[FOFC-1] failed for " << ncells_bad << " cells on level " << lev << "\n";
 				}
 				if (abortOnFofcFailure_ != 0) {
+#ifdef AMREX_USE_ASCENT
+					// write Blueprint HDF5 files
+					conduit::Node mesh;
+					amrex::SingleLevelToBlueprint(state_inter_cc_, componentNames_cc_, geom[lev], time, istep[lev] + 1, mesh);
+					conduit::Node bpMeshHost;
+					bpMeshHost.set(mesh); // copy to host mem (needed for Blueprint HDF5 output)
+					amrex::WriteBlueprintFiles(bpMeshHost, "debug_hydro_state_inter_cc_", istep[lev] + 1, "hdf5");
+#endif
+					// indicate failure
 					return false;
 				}
 			}
