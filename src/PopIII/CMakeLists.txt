@@ -17,6 +17,7 @@ if (AMReX_SPACEDIM EQUAL 3)
     endif()
 
     #need h5py to run perturbations.py file below
+    #purpose of this code is to check whether the h5py python package is installed
     execute_process(
         COMMAND Python3::Interpreter -c "h5py"
         RESULT_VARIABLE EXIT_CODE
