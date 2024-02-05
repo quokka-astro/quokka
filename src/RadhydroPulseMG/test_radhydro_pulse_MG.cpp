@@ -17,10 +17,10 @@ struct AdvPulseProblem {
 constexpr int isconst = 0;
 // constexpr int n_groups_ = 1;
 // constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{0., inf};
-constexpr int n_groups_ = 2;
-constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e15, 1e17, 1e19};
-// constexpr int n_groups_ = 8;
-// constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e15, 3.16e15, 1e16, 3.16e16, 1e17, 3.16e17, 1e18, 3.16e18, 1e19};
+// constexpr int n_groups_ = 2;
+// constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e15, 1e17, 1e19};
+constexpr int n_groups_ = 8;
+constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e15, 3.16e15, 1e16, 3.16e16, 1e17, 3.16e17, 1e18, 3.16e18, 1e19};
 // constexpr int n_groups_ = 64;
 // constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1.00000000e+15, 1.15478198e+15, 1.33352143e+15, 1.53992653e+15,
 //        1.77827941e+15, 2.05352503e+15, 2.37137371e+15, 2.73841963e+15,
