@@ -123,6 +123,8 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	int enableCooling_ = 0;
 	int enableChemistry_ = 0;
 	Real max_density_allowed = std::numeric_limits<amrex::Real>::max();
+	Real min_density_allowed = std::numeric_limits<amrex::Real>::min();
+
 	quokka::cooling::cloudy_tables cloudyTables_;
 	std::string coolingTableFilename_{};
 
@@ -374,7 +376,8 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::readParmParse(
 	{
 		amrex::ParmParse hpp("primordial_chem");
 		hpp.query("enabled", enableChemistry_);
-		hpp.query("max_density_allowed", max_density_allowed);
+		hpp.query("max_density_allowed", max_density_allowed); // chemistry is not accurate for densities > 3e-6
+		hpp.query("min_density_allowed", min_density_allowed); // don't do chemistry in cells with densities below the minimum density specified
 	}
 #endif
 
@@ -514,7 +517,7 @@ void RadhydroSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::Mult
 #ifdef PRIMORDIAL_CHEM
 	if (enableChemistry_ == 1) {
 		// compute chemistry
-		quokka::chemistry::computeChemistry<problem_t>(state, dt, max_density_allowed);
+		quokka::chemistry::computeChemistry<problem_t>(state, dt, max_density_allowed, min_density_allowed);
 	}
 #endif
 
@@ -1053,7 +1056,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 #else
 		// write AMReX plotfile
 		// WriteSingleLevelPlotfile(CustomPlotFileName("debug_stage1_filled_state_old", istep[lev]+1),
-		//	state_old_cc_tmp, componentNames_cc_, geom[lev], time, istep[lev]+1);
+		//    state_old_cc_tmp, componentNames_cc_, geom[lev], time, istep[lev]+1);
 #endif
 	}
 
@@ -1568,7 +1571,7 @@ void RadhydroSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Rea
 	for (int i = 0; i < nsubSteps; ++i) {
 		if (i > 0) {
 			// since we are starting a new substep, we need to copy radiation state from
-			// 	new state vector to old state vector
+			//     new state vector to old state vector
 			// (this is not necessary for the i=0 substep because we have already swapped
 			//  the full hydro+radiation state vectors at the beginning of the level advance)
 			swapRadiationState(state_old_cc_[lev], state_new_cc_[lev]);
