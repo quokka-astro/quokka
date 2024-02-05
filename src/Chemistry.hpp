@@ -39,6 +39,10 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &state = mf.array(iter);
 
+		if (dt < 0) {
+			amrex::Abort("Cannot do chemistry with dt < 0!");
+		}
+
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			const Real rho = state(i, j, k, HydroSystem<problem_t>::density_index);
 			const Real xmom = state(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
@@ -82,10 +86,6 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 
 			// call the EOS to set initial internal energy e
 			eos(eos_input_re, chemstate);
-
-			if (dt < 0) {
-				amrex::Abort("Cannot do chemistry with dt < 0!");
-			}
 
 			// do the actual integration
 			// do it in .cpp so that it is not built at compile time for all tests
