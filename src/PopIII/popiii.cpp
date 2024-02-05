@@ -165,7 +165,7 @@ template <> void RadhydroSimulation<PopIII>::preCalculateInitialConditions()
 		userData_.dv_rms_generated = computeRms(pinned_dvx, pinned_dvy, pinned_dvz);
 		amrex::Print() << "rms dv = " << userData_.dv_rms_generated << "\n";
 
-		const Real rms_dv_target;
+		Real rms_dv_target;
 		pp.query("rms_velocity", rms_dv_target);
 		const Real rms_dv_actual = userData_.dv_rms_generated;
 		userData_.rescale_factor = rms_dv_target / rms_dv_actual;
@@ -299,18 +299,20 @@ template <> void RadhydroSimulation<PopIII>::setInitialConditionsOnGrid(quokka::
 		double vy = renorm_amp * dvy(i, j, k);
 		double const vz = renorm_amp * dvz(i, j, k);
 
-		if (r <= R_sphere) {
-			state.rho = rhotot;
-			state.T = core_temp;
-			eos(eos_input_rt, state);
+		// calculate eos params for the core
+		state.rho = rhotot;
+		state.T = core_temp;
+		eos(eos_input_rt, state);
 
+		if (r <= R_sphere) {
 			// add rotation to vx and vy
 			vx += (-1.0) * distxy * omega_sphere * std::sin(phi);
 			vy += distxy * omega_sphere * std::cos(phi);
 
 		} else {
+			// re-calculate eos params outside the core, using pressure equilibrium (so, pressure within the core = pressure outside)
 			state.rho = 0.01 * rhotot;
-			state.p = 3.595730e-10; // pressure equilibrium - this is the pressure within the core
+			state.p = state.p;
 			eos(eos_input_rp, state);
 		}
 
