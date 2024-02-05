@@ -165,7 +165,8 @@ template <> void RadhydroSimulation<PopIII>::preCalculateInitialConditions()
 		userData_.dv_rms_generated = computeRms(pinned_dvx, pinned_dvy, pinned_dvz);
 		amrex::Print() << "rms dv = " << userData_.dv_rms_generated << "\n";
 
-		const Real rms_dv_target = 1.8050e5;
+		const Real rms_dv_target;
+		pp.query("rms_velocity", rms_dv_target);
 		const Real rms_dv_actual = userData_.dv_rms_generated;
 		userData_.rescale_factor = rms_dv_target / rms_dv_actual;
 

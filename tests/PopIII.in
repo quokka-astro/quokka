@@ -32,9 +32,10 @@ do_subcycle = 0
 plotfile_interval = 50 #100
 checkpoint_interval = 200
 
-perturb.cloud_radius = 3.086e18
-perturb.cloud_omega = 2.016008E-14
-perturb.cloud_numdens = 0.90861183E+004
+perturb.cloud_radius = 3.086e18 #initial cloud radius in cm
+perturb.cloud_omega = 2.016008E-14 #initial cloud angular velocity in s^-1
+perturb.cloud_numdens = 0.90861183E+004 #initial cloud number density in cm^-3
+perturb.rms_velocity = 1.8050e5 #initial cloud rms velocity (to drive turbulence)
 
 # in quokka/src/StarCluster, generate with 'python3 perturbation.py --kmin=2 --kmax=64 --size=128 --alpha=2 --f_solenoidal=1.0'
 # and put it in quokka/tests/
