@@ -104,11 +104,10 @@ template <> void RadhydroSimulation<BinaryOrbit>::computeAfterTimestep()
 		amrex::DistributionMapping const dmap({0});
 		analysisPC.Define(geom, dmap, boxArray);
 		analysisPC.copyParticles(*CICParticles);
-		// do we need to redistribute??
 
 		if (amrex::ParallelDescriptor::IOProcessor()) {
 			quokka::CICParticleIterator const pIter(analysisPC, 0);
-			if (pIter.isValid()) { // this returns false when there is more than 1 MPI rank (?)
+			if (pIter.isValid()) {
 				amrex::Print() << "Computing particle statistics...\n";
 				const amrex::Long np = pIter.numParticles();
 				auto &particles = pIter.GetArrayOfStructs();
