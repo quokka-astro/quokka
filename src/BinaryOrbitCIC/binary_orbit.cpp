@@ -101,7 +101,7 @@ template <> void RadhydroSimulation<BinaryOrbit>::computeAfterTimestep()
 		amrex::Box const box(amrex::IntVect{AMREX_D_DECL(0, 0, 0)}, amrex::IntVect{AMREX_D_DECL(1, 1, 1)});
 		amrex::Geometry const geom(box);
 		amrex::BoxArray const boxArray(box);
-		amrex::DistributionMapping const dmap(boxArray, 1);
+		amrex::DistributionMapping const dmap({0});
 		analysisPC.Define(geom, dmap, boxArray);
 		analysisPC.copyParticles(*CICParticles);
 		// do we need to redistribute??
