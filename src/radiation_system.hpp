@@ -35,7 +35,7 @@
 // Hyper parameters of the radiation solver
 
 // Include O(beta tau) terms in the space-like components of the radiation
-static constexpr bool compute_G_last_two_terms = true;
+static constexpr bool compute_G_last_two_terms = false;
 
 // Time integration scheme
 // IMEX PD-ARS
@@ -173,7 +173,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	AMREX_GPU_HOST_DEVICE static auto ComputeEddingtonFactor(double f) -> double;
 	AMREX_GPU_HOST_DEVICE static auto ComputePlanckOpacity(double rho, double Tgas) -> quokka::valarray<double, nGroups_>;
-	AMREX_GPU_HOST_DEVICE static auto ComputeFluxMeanOpacity(double rho, double Tgas) -> quokka::valarray<double, nGroups_>;
+	AMREX_GPU_HOST_DEVICE static auto ComputeFluxMeanOpacity(double rho, double Tgas, amrex::GpuArray<amrex::Real, nGroups_> Frad) -> quokka::valarray<double, nGroups_>;
 	AMREX_GPU_HOST_DEVICE static auto ComputeEnergyMeanOpacity(double rho, double Tgas) -> quokka::valarray<double, nGroups_>;
 	AMREX_GPU_HOST_DEVICE static auto ComputePlanckOpacityTempDerivative(double rho, double Tgas) -> quokka::valarray<double, nGroups_>;
 	AMREX_GPU_HOST_DEVICE static auto ComputeEintFromEgas(double density, double X1GasMom, double X2GasMom, double X3GasMom, double Etot) -> double;
@@ -219,6 +219,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 		// AMREX_GPU_HOST_DEVICE static auto Kappa0(double rho, double Tgas) -> quokka::valarray<double, nGroups_>;
 		// AMREX_GPU_HOST_DEVICE static auto OpacityX_int_over_x(double x) -> double;
 		AMREX_GPU_HOST_DEVICE static auto OpacityX_int_over_logx(double x) -> double;
+		AMREX_GPU_HOST_DEVICE static auto OpacityX_times_logx_int_over_logx(double x) -> double;
 		// AMREX_GPU_HOST_DEVICE static auto OpacityX_dBdT_int_over_x(double x) -> double;
 
 		AMREX_GPU_HOST_DEVICE static auto ComputePlanckOpacityFromXT(double rho, double Tgas) -> quokka::valarray<double, nGroups_>;
@@ -226,6 +227,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
     // , double Erad, double F
 		// AMREX_GPU_HOST_DEVICE static auto ComputeRosselandOpacity(double rho, double Tgas) -> quokka::valarray<double, nGroups_>;
 		AMREX_GPU_HOST_DEVICE static auto ComputeFluxMeanOpacityZerothOrder(double rho, double Tgas) -> quokka::valarray<double, nGroups_>;
+		AMREX_GPU_HOST_DEVICE static auto ComputeFluxMeanOpacityFirstOrder(double rho, double Tgas, amrex::GpuArray<amrex::Real, nGroups_> Frad) -> quokka::valarray<double, nGroups_>;
   };
 };
 
@@ -744,8 +746,21 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeCellOpticalDepth(const quokka
 	} else if constexpr (DIR == FluxDir::X3) {
 		dl = dx[2];
 	}
-	quokka::valarray<double, nGroups_> const tau_L = dl * rho_L * RadSystem<problem_t>::ComputeFluxMeanOpacity(rho_L, Tgas_L);
-	quokka::valarray<double, nGroups_> const tau_R = dl * rho_R * RadSystem<problem_t>::ComputeFluxMeanOpacity(rho_R, Tgas_R);
+
+  // compute the magnitude of the radiation flux for each photon group
+  amrex::GpuArray<amrex::Real, nGroups_> Frad_t0_mag{};
+  if constexpr (nGroups_ > 1) {
+    for (int g = 0; g < nGroups_; ++g) {
+      amrex::Real sum_ = 0.0;
+      sum_ += consVar(i, j, k, x1RadFlux_index + numRadVars_ * g) * consVar(i, j, k, x1RadFlux_index + numRadVars_ * g);
+      sum_ += consVar(i, j, k, x2RadFlux_index + numRadVars_ * g) * consVar(i, j, k, x2RadFlux_index + numRadVars_ * g);
+      sum_ += consVar(i, j, k, x3RadFlux_index + numRadVars_ * g) * consVar(i, j, k, x3RadFlux_index + numRadVars_ * g);
+      Frad_t0_mag[g] = std::sqrt(sum_);
+    }
+  }
+
+	quokka::valarray<double, nGroups_> const tau_L = dl * rho_L * RadSystem<problem_t>::ComputeFluxMeanOpacity(rho_L, Tgas_L, Frad_t0_mag);
+	quokka::valarray<double, nGroups_> const tau_R = dl * rho_R * RadSystem<problem_t>::ComputeFluxMeanOpacity(rho_R, Tgas_R, Frad_t0_mag);
 
 	return (tau_L * tau_R * 2.) / (tau_L + tau_R); // harmonic mean
 						       // return 0.5*(tau_L + tau_R); // arithmetic mean
@@ -1121,27 +1136,119 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::Opacity_Class::OpacityX_int_ove
 }
 
 template <typename problem_t>
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::Opacity_Class::OpacityX_times_logx_int_over_logx(double x) -> double
+{
+  return NAN;
+}
+
+template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::Opacity_Class::ComputeFluxMeanOpacityZerothOrder(double rho, double Tgas) -> quokka::valarray<double, nGroups_>
 {
   quokka::valarray<double, nGroups_> kappa{};
-	// if constexpr (nGroups_ > 1) {
-  auto boundaries = RadSystem_Traits<problem_t>::radBoundaries;
-  double opacity_T = OpacityT(rho, Tgas);
-  amrex::Real const energy_unit_over_kT = RadSystem_Traits<problem_t>::energy_unit / (boltzmann_constant_ * Tgas);
-  amrex::Real logx = std::log(boundaries[0] * energy_unit_over_kT);
-  amrex::Real top_previous = OpacityX_int_over_logx(logx); // integrate opacity_x(logx) d logx from -8 to log(x)
-  for (int g = 0; g < nGroups_; ++g) {
-    logx = std::log(energy_unit_over_kT * boundaries[g + 1]);
-    amrex::Real dlogx = std::log(boundaries[g + 1] / boundaries[g]);
 
-    amrex::Real top_this = OpacityX_int_over_logx(logx);
-    amrex::Real top = top_this - top_previous;
-    top_previous = top_this;
+  const auto boundaries = RadSystem_Traits<problem_t>::radBoundaries;
+  const double opacity_T = OpacityT(rho, Tgas);
+  const amrex::Real energy_unit_over_kT = RadSystem_Traits<problem_t>::energy_unit / (boltzmann_constant_ * Tgas);
+  if constexpr (nGroups_ == 1) {
+    const amrex::Real logx0 = std::log(energy_unit_over_kT * boundaries[0]);
+    const amrex::Real logx1 = std::log(energy_unit_over_kT * boundaries[1]);
+    const auto dlogx = logx1 - logx0;
+    const amrex::Real top = OpacityX_int_over_logx(logx1) - OpacityX_int_over_logx(logx0);
+    kappa[0] = opacity_T * top / dlogx;
+  } else {
+    amrex::Real logx = std::log(boundaries[0] * energy_unit_over_kT);
+    amrex::Real top_previous = OpacityX_int_over_logx(logx); // integrate opacity_x(logx) d logx from -8 to log(x)
+    for (int g = 0; g < nGroups_; ++g) {
+      logx = std::log(energy_unit_over_kT * boundaries[g + 1]);
+      amrex::Real dlogx = std::log(boundaries[g + 1] / boundaries[g]);
 
-    kappa[g] = opacity_T * top / dlogx;
+      amrex::Real top_this = OpacityX_int_over_logx(logx);
+      amrex::Real const top = top_this - top_previous;
+      top_previous = top_this;
+
+      kappa[g] = opacity_T * top / dlogx;
+    }
   }
-	// }
 	return kappa;
+}
+
+template <typename problem_t>
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::Opacity_Class::ComputeFluxMeanOpacityFirstOrder(double rho, double Tgas, amrex::GpuArray<amrex::Real, nGroups_> Frad) -> quokka::valarray<double, nGroups_>
+{
+	if constexpr (nGroups_ == 1) {
+    return ComputeFluxMeanOpacityZerothOrder(rho, Tgas);
+  } else {
+    quokka::valarray<double, nGroups_> kappa{};
+    const auto boundaries = RadSystem_Traits<problem_t>::radBoundaries;
+    const double opacity_T = OpacityT(rho, Tgas);
+    const amrex::Real energy_unit_over_kT = RadSystem_Traits<problem_t>::energy_unit / (boltzmann_constant_ * Tgas);
+    double thekappa = NAN;
+    double kappa_norm = NAN;
+	  amrex::GpuArray<double, nGroups_ + 1> logx{};
+	  amrex::GpuArray<double, nGroups_> logx_center{};
+		amrex::GpuArray<double, nGroups_> Frad_perlogx{}; // radiation flux per unit logx
+	  amrex::GpuArray<double, nGroups_ - 1> slopes{};
+	  amrex::GpuArray<double, nGroups_ + 1> kappa_dx{};
+	  amrex::GpuArray<double, nGroups_ + 1> kappa_times_logx_dx{};
+	  amrex::GpuArray<double, nGroups_> kappa_dx_center{};
+	  amrex::GpuArray<double, nGroups_> kappa_times_logx_dx_center{};
+
+    logx[0] = std::log(boundaries[0] * energy_unit_over_kT);
+    kappa_dx[0] = OpacityX_int_over_logx(logx[0]); // integrate opacity_x(logx) d logx from -8 to log(x)
+    kappa_times_logx_dx[0] = OpacityX_times_logx_int_over_logx(logx[0]); // integrate opacity_x(logx) logx d logx from -8 to log(x)
+    for (int g = 0; g < nGroups_; ++g) {
+      logx[g + 1] = std::log(boundaries[g + 1] * energy_unit_over_kT);
+      logx_center[g] = (logx[g] + logx[g + 1]) / 2.0;
+      Frad_perlogx[g] = Frad[g] / (logx[g + 1] - logx[g]);
+      kappa_dx[g] = OpacityX_int_over_logx(logx[g]);
+      kappa_times_logx_dx[g] = OpacityX_times_logx_int_over_logx(logx[g]);
+      kappa_dx_center[g] = OpacityX_int_over_logx(logx_center[g]);
+      kappa_times_logx_dx_center[g] = OpacityX_times_logx_int_over_logx(logx_center[g]);
+    }
+    logx[nGroups_] = std::log(boundaries[nGroups_] * energy_unit_over_kT);
+    kappa_dx[nGroups_] = OpacityX_int_over_logx(logx[nGroups_]);
+    kappa_times_logx_dx[nGroups_] = OpacityX_times_logx_int_over_logx(logx[nGroups_]);
+    for (int g = 0; g < nGroups_ - 1; ++g) {
+      slopes[g] = (Frad_perlogx[g + 1] - Frad_perlogx[g]) / (logx_center[g + 1] - logx_center[g]);
+    }
+
+    // group 0
+    if (Frad[0] == 0.0) {
+      kappa[0] = opacity_T * (kappa_dx[1] - kappa_dx[0]) / (logx[1] - logx[0]);
+    } else {
+      thekappa = (Frad_perlogx[0] - slopes[0] * logx_center[0]) * (kappa_dx[1] - kappa_dx[0]);
+      thekappa += slopes[0] * (kappa_times_logx_dx[1] - kappa_times_logx_dx[0]);
+      kappa[0] = opacity_T * thekappa / Frad[0];
+    }
+
+    // group 1 to nGroups_ - 2
+    if constexpr (nGroups_ > 2) {
+      for (int g = 1; g < nGroups_ - 1; ++g) {
+        if (Frad[g] == 0.0) {
+          kappa[g] = opacity_T * (kappa_dx[g + 1] - kappa_dx[g]) / (logx[g + 1] - logx[g]);
+        } else {
+          thekappa = (Frad_perlogx[g] - slopes[g - 1] * logx_center[g]) * (kappa_dx_center[g] - kappa_dx[g]);
+          thekappa += slopes[g - 1] * (kappa_times_logx_dx_center[g] - kappa_times_logx_dx[g]);
+          thekappa += (Frad_perlogx[g] - slopes[g] * logx_center[g]) * (kappa_dx[g + 1] - kappa_dx_center[g]);
+          thekappa += slopes[g] * (kappa_times_logx_dx[g + 1] - kappa_times_logx_dx_center[g]);
+          kappa_norm = (Frad_perlogx[g] - 0.5 * (slopes[g - 1] + slopes[g]) * logx_center[g]) * (logx[g + 1] - logx[g]);
+          kappa_norm += 0.25 * (slopes[g - 1] * logx[g] + (slopes[g - 1] + slopes[g]) * logx_center[g] + slopes[g] * logx[g + 1]) * (logx[g + 1] - logx[g]);
+          kappa[g] = opacity_T * thekappa / kappa_norm;
+        }
+      }
+    }
+
+    // group nGroups_ - 1
+    if (Frad[nGroups_ - 1] == 0.0) {
+      kappa[nGroups_ - 1] = opacity_T * (kappa_dx[nGroups_] - kappa_dx[nGroups_ - 1]) / (logx[nGroups_] - logx[nGroups_ - 1]);
+    } else {
+      thekappa = (Frad_perlogx[nGroups_ - 1] - slopes[nGroups_ - 2] * logx_center[nGroups_ - 1]) * (kappa_dx[nGroups_] - kappa_dx[nGroups_ - 1]);
+      thekappa += slopes[nGroups_ - 2] * (kappa_times_logx_dx[nGroups_] - kappa_times_logx_dx[nGroups_ - 1]);
+      kappa[nGroups_ - 1] = opacity_T * thekappa / Frad[nGroups_ - 1];
+    }
+
+	  return kappa;
+	}
 }
 
 // template <typename problem_t>
@@ -1162,7 +1269,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckOpacity(const doub
 }
 
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/, amrex::GpuArray<amrex::Real, nGroups_> /*Frad*/) -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, nGroups_> kappaFVec{};
 	for (int g = 0; g < nGroups_; ++g) {
@@ -1377,12 +1484,13 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				AMREX_ASSERT(Egas_guess > 0.);
 
 				// check relative and absolute convergence of E_r
-				// if ((sum(abs(deltaEgas / Egas_guess)) < 1e-7) || (sum(abs(deltaErad)) <= Erad_floor_)) {
-				// 	break;
-				// }
-				if (std::abs(deltaEgas / Egas_guess) < 1e-7) {
+				// if ((abs(deltaEgas / Egas_guess) < 1e-7) || (sum(abs(deltaErad / Erad0Vec)) <= Erad_floor_)) {
+				if ((std::abs(deltaEgas / Egas_guess) < 1e-7) || (sum(abs(deltaErad / Erad0Vec)) < 1e-7) || (max(abs(deltaErad)) <= Erad_floor_)) {
 					break;
 				}
+				// if (std::abs(deltaEgas / Egas_guess) < 1e-7) {
+				// 	break;
+				// }
 			} // END NEWTON-RAPHSON LOOP
 
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(n < maxIter, "Newton-Raphson iteration failed to converge!");
@@ -1411,7 +1519,18 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			realFourPiB = c * ComputeThermalRadiation(T_gas, radBoundaries_g_copy);
 		}
 
-		kappaFVec = ComputeFluxMeanOpacity(rho, T_gas);
+    // compute the magnitude of the radiation flux for each photon group
+		amrex::GpuArray<amrex::Real, nGroups_> Frad_t0_mag{};
+    if constexpr (nGroups_ > 1) {
+      for (int g = 0; g < nGroups_; ++g) {
+        amrex::Real sum_ = 0.0;
+        sum_ += consPrev(i, j, k, x1RadFlux_index + numRadVars_ * g) * consPrev(i, j, k, x1RadFlux_index + numRadVars_ * g);
+        sum_ += consPrev(i, j, k, x2RadFlux_index + numRadVars_ * g) * consPrev(i, j, k, x2RadFlux_index + numRadVars_ * g);
+        sum_ += consPrev(i, j, k, x3RadFlux_index + numRadVars_ * g) * consPrev(i, j, k, x3RadFlux_index + numRadVars_ * g);
+        Frad_t0_mag[g] = std::sqrt(sum_);
+      }
+    }
+		kappaFVec = ComputeFluxMeanOpacity(rho, T_gas, Frad_t0_mag);
 		kappaPVec = ComputePlanckOpacity(rho, T_gas);
 		std::array<double, 3> gasMtm = {x1GasMom0, x2GasMom0, x3GasMom0};
 
@@ -1423,7 +1542,8 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 
 			// compute radiation pressure F using ComputeRadPressure
 			if constexpr ((compute_v_over_c_terms_) && (compute_G_last_two_terms) && (gamma_ != 1.0)) {
-				auto erad = EradVec_guess[g];
+				// auto erad = EradVec_guess[g];
+				auto erad = Erad0Vec[g];
 				auto Fx = Frad_t0[0];
 				auto Fy = Frad_t0[1];
 				auto Fz = Frad_t0[2];
