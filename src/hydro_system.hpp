@@ -430,6 +430,11 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::isStateValid(am
 	const amrex::Real rho = cons(i, j, k, density_index);
 	bool isDensityPositive = (rho > 0.);
 
+	// FOR DEBUGGING FOFC FAILURE ONLY
+	if (!isDensityPositive) {
+		printf("[WARNING] density is non-positive! rho = %.15e\n", rho); // NOLINT(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
+	}
+
 	bool isMassScalarPositive = true;
 	if constexpr (nmscalars_ > 0) {
 		amrex::GpuArray<Real, nmscalars_> massScalars_ = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
@@ -441,6 +446,16 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::isStateValid(am
 			}
 		}
 	}
+
+	// FOR DEBUGGING FOFC FAILURE ONLY
+	if (!isMassScalarPositive) {
+		printf("[WARNING] a massScalar is negative!"); // NOLINT(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
+		amrex::GpuArray<Real, nmscalars_> massScalars_ = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
+		for (int idx = 0; idx < nmscalars_; ++idx) {
+			print("massScalars_[%d] = %.15g", idx, massScalars_[idx]); // NOLINT(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
+		}
+	}
+
 	// when the dual energy method is used, we *cannot* reset on pressure
 	// failures. on the other hand, we don't need to -- the auxiliary internal
 	// energy is used instead!
