@@ -273,7 +273,7 @@ seed = int(options.seed)
 # data precision
 dtype = np.float64
 # ratio of solenoidal to compressive components
-if options.f_solenoidal is None or options.f_solenoidal is None:
+if (options.f_solenoidal is None) or (options.f_solenoidal=="None"):
     f_solenoidal = None
 else:
     f_solenoidal = min(max(float(options.f_solenoidal), 0.), 1.)
