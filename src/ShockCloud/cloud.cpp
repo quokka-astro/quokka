@@ -293,6 +293,9 @@ template <> void RadhydroSimulation<ShockCloud>::computeAfterTimestep()
 			});
 		}
 		amrex::Gpu::streamSynchronizeAll();
+
+		// TODO(bwibking): shift particle velocities
+		// ...
 	}
 }
 

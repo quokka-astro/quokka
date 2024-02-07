@@ -452,7 +452,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::isStateValid(am
 		printf("[WARNING] a massScalar is negative!"); // NOLINT(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
 		amrex::GpuArray<Real, nmscalars_> massScalars_ = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
 		for (int idx = 0; idx < nmscalars_; ++idx) {
-			print("massScalars_[%d] = %.15g", idx, massScalars_[idx]); // NOLINT(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
+			printf("massScalars_[%d] = %.15g", idx, massScalars_[idx]); // NOLINT(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
 		}
 	}
 
