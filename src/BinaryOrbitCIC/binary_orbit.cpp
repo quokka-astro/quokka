@@ -101,7 +101,7 @@ template <> void RadhydroSimulation<BinaryOrbit>::computeAfterTimestep()
 		amrex::Box const box(amrex::IntVect{AMREX_D_DECL(0, 0, 0)}, amrex::IntVect{AMREX_D_DECL(1, 1, 1)});
 		amrex::Geometry const geom(box);
 		amrex::BoxArray const boxArray(box);
-		amrex::Vector<int> ranks({0}); // workaround nvcc bug
+		amrex::Vector<int> const ranks({0}); // workaround nvcc bug
 		amrex::DistributionMapping const dmap(ranks);
 		analysisPC.Define(geom, dmap, boxArray);
 		analysisPC.copyParticles(*CICParticles);
