@@ -230,7 +230,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<ShockCloud>::isStateValid(a
 	const amrex::Real vy = cons(i, j, k, x2Momentum_index) / rho;
 	const amrex::Real vz = cons(i, j, k, x3Momentum_index) / rho;
 	const amrex::Real abs_vel = std::sqrt(vx * vx + vy * vy + vz * vz);
-	const bool isVelocityReasonable = (abs_vel < 1.0e10);
+	const bool isVelocityReasonable = (abs_vel < 3.0e8); // 3000 km/s
 
 	// FOR DEBUGGING FOFC FAILURE ONLY
 	if (!isVelocityReasonable) {
