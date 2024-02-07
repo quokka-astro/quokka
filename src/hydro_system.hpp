@@ -426,15 +426,11 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeVelocity
 template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::isStateValid(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> bool
 {
-	// check if cons(i, j, k) is a valid state
+	// check density positivity
 	const amrex::Real rho = cons(i, j, k, density_index);
 	bool isDensityPositive = (rho > 0.);
 
-	// FOR DEBUGGING FOFC FAILURE ONLY
-	if (!isDensityPositive) {
-		printf("[WARNING] density is non-positive! rho = %.15e\n", rho); // NOLINT(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
-	}
-
+	// check mass scalar positivity
 	bool isMassScalarPositive = true;
 	if constexpr (nmscalars_ > 0) {
 		amrex::GpuArray<Real, nmscalars_> massScalars_ = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
@@ -444,15 +440,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::isStateValid(am
 				isMassScalarPositive = false;
 				break; // Exit the loop early if any element is not positive
 			}
-		}
-	}
-
-	// FOR DEBUGGING FOFC FAILURE ONLY
-	if (!isMassScalarPositive) {
-		printf("[WARNING] a massScalar is negative!"); // NOLINT(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
-		amrex::GpuArray<Real, nmscalars_> massScalars_ = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
-		for (int idx = 0; idx < nmscalars_; ++idx) {
-			printf("massScalars_[%d] = %.15g", idx, massScalars_[idx]); // NOLINT(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
 		}
 	}
 
@@ -467,8 +454,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::isStateValid(am
   } else {
     isPressurePositive = true;
   }
+	return (isDensityPositive && isPressurePositive);
 #endif
-	// return (isDensityPositive && isPressurePositive);
 
 	return isDensityPositive && isMassScalarPositive;
 }
