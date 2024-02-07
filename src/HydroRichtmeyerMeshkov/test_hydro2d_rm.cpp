@@ -49,7 +49,7 @@ template <> void RadhydroSimulation<RichtmeyerMeshkovProblem>::computeAfterTimes
 	// copy all FAB data to a single FAB on rank zero
 	amrex::Box const domainBox = geom[0].Domain();
 	amrex::BoxArray const localBoxes(domainBox);
-	amrex::Vector<int> ranks({0}); // workaround nvcc bug
+	amrex::Vector<int> const ranks({0}); // workaround nvcc bug
 	amrex::DistributionMapping const localDistribution(ranks);
 	amrex::MultiFab state_mf(localBoxes, localDistribution, ncomp_cc, 0);
 	state_mf.ParallelCopy(state_new_cc_[0]);
