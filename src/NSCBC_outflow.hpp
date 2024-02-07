@@ -256,9 +256,14 @@ template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto isStateValid(quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> const &Q) -> bool
 {
 	const amrex::Real rho = Q[0];
+	const amrex::Real v1 = Q[1];
+	const amrex::Real v2 = Q[2];
+	const amrex::Real v3 = Q[3];
 	const amrex::Real P = Q[4];
-	// check whether density and pressure are positive
-	return ((rho > 0.) && (P > 0.));
+	const amrex::Real abs_v = std::sqrt(v1*v1 + v2*v2 + v3*v3);
+
+	// check whether density and pressure are positive, and velocity < 1e10 cm s^{-1}
+	return ((rho > 0.) && (P > 0.) && (abs_v < 1.0e10));
 }
 } // namespace detail
 
