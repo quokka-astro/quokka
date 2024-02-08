@@ -1748,8 +1748,8 @@ void RadhydroSimulation<problem_t>::advanceRadiationForwardEuler(int lev, amrex:
 	auto const &dx = geom[lev].CellSizeArray();
 
 	// update ghost zones [old timestep]
-	fillBoundaryConditions(state_old_cc_[lev], state_old_cc_[lev], lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState,
-			       PostInterpState, setBoundaryFunctor<problem_t>{});
+	fillBoundaryConditions(state_old_cc_[lev], state_old_cc_[lev], lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState,
+			       setBoundaryFunctor<problem_t>{});
 
 	// advance all grids on local processor (Stage 1 of integrator)
 	for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
