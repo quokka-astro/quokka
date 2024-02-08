@@ -314,9 +314,10 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 								 int orig_comp); // template specialized by problem generator
 
 	// boundary condition
-	AMREX_GPU_DEVICE static void setCustomBoundaryConditionsLowOrder(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, int dcomp, int numcomp,
-								 amrex::GeometryData const &geom, amrex::Real time, const amrex::BCRec *bcr, int bcomp,
-								 int orig_comp); // template specialized by problem generator
+	AMREX_GPU_DEVICE static void setCustomBoundaryConditionsLowOrder(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, int dcomp,
+									 int numcomp, amrex::GeometryData const &geom, amrex::Real time,
+									 const amrex::BCRec *bcr, int bcomp,
+									 int orig_comp); // template specialized by problem generator
 
 	// boundary condition
 	AMREX_GPU_DEVICE static void setCustomBoundaryConditionsFaceVar(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, int dcomp,
@@ -1561,10 +1562,10 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setCustomBoun
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setCustomBoundaryConditionsLowOrder(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest,
-											       int dcomp, int numcomp, amrex::GeometryData const &geom,
-											       const amrex::Real time, const amrex::BCRec *bcr, int bcomp,
-											       int orig_comp)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+AMRSimulation<problem_t>::setCustomBoundaryConditionsLowOrder(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, int dcomp, int numcomp,
+							      amrex::GeometryData const &geom, const amrex::Real time, const amrex::BCRec *bcr, int bcomp,
+							      int orig_comp)
 {
 	// by default, call the standard boundary condition functor
 	// (may be overridden using template specialization)
