@@ -1749,7 +1749,7 @@ void RadhydroSimulation<problem_t>::advanceRadiationForwardEuler(int lev, amrex:
 
 	// update ghost zones [old timestep]
 	fillBoundaryConditions(state_old_cc_[lev], state_old_cc_[lev], lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState,
-			       PostInterpState);
+			       PostInterpState, setBoundaryFunctor<problem_t>{});
 
 	// advance all grids on local processor (Stage 1 of integrator)
 	for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
@@ -1781,7 +1781,7 @@ void RadhydroSimulation<problem_t>::advanceRadiationMidpointRK2(int lev, amrex::
 
 	// update ghost zones [intermediate stage stored in state_new_cc_]
 	fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, (time + dt_radiation), quokka::centering::cc, quokka::direction::na, PreInterpState,
-			       PostInterpState);
+			       PostInterpState, setBoundaryFunctor<problem_t>{});
 
 	// advance all grids on local processor (Stage 2 of integrator)
 	for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
