@@ -28,12 +28,17 @@ namespace quokka::chemistry
 
 AMREX_GPU_DEVICE void chemburner(burn_t &chemstate, Real dt);
 
-template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const Real dt, const Real max_density_allowed)
+template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const Real dt, const Real max_density_allowed, const Real min_density_allowed)
 {
 
+	const BL_PROFILE("Chemistry::computeChemistry()");
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &state = mf.array(iter);
+
+		if (dt < 0) {
+			amrex::Abort("Cannot do chemistry with dt < 0!");
+		}
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			const Real rho = state(i, j, k, HydroSystem<problem_t>::density_index);
@@ -61,6 +66,11 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 				chemstate.xn[nn] = inmfracs[nn];
 			}
 
+			// dont do chemistry in cells with densities below the minimum density specified
+			if (rho < min_density_allowed) {
+				return;
+			}
+
 			// stop the test if we have reached very high densities
 			if (rho > max_density_allowed) {
 				amrex::Abort("Density exceeded max_density_allowed!");
@@ -78,6 +88,10 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 			// do it in .cpp so that it is not built at compile time for all tests
 			// which would otherwise slow down compilation due to the large RHS file
 			chemburner(chemstate, dt);
+
+			if (std::isnan(chemstate.xn[0]) || std::isnan(chemstate.rho)) {
+				amrex::Abort("Burner returned NAN");
+			}
 
 			if (!chemstate.success) {
 				amrex::Abort("VODE integration was unsuccessful!");
