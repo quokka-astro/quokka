@@ -101,14 +101,14 @@ template <> void RadhydroSimulation<BinaryOrbit>::computeAfterTimestep()
 		amrex::Box const box(amrex::IntVect{AMREX_D_DECL(0, 0, 0)}, amrex::IntVect{AMREX_D_DECL(1, 1, 1)});
 		amrex::Geometry const geom(box);
 		amrex::BoxArray const boxArray(box);
-		amrex::DistributionMapping const dmap(boxArray, 1);
+		amrex::Vector<int> const ranks({0}); // workaround nvcc bug
+		amrex::DistributionMapping const dmap(ranks);
 		analysisPC.Define(geom, dmap, boxArray);
 		analysisPC.copyParticles(*CICParticles);
-		// do we need to redistribute??
 
 		if (amrex::ParallelDescriptor::IOProcessor()) {
 			quokka::CICParticleIterator const pIter(analysisPC, 0);
-			if (pIter.isValid()) { // this returns false when there is more than 1 MPI rank (?)
+			if (pIter.isValid()) {
 				amrex::Print() << "Computing particle statistics...\n";
 				const amrex::Long np = pIter.numParticles();
 				auto &particles = pIter.GetArrayOfStructs();
