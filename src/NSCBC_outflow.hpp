@@ -262,8 +262,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto isStateValid(quokka::valarray<amrex::Re
 	const amrex::Real P = Q[4];
 	const amrex::Real abs_v = std::sqrt(v1 * v1 + v2 * v2 + v3 * v3);
 
-	// check whether density and pressure are positive, and velocity < 3000 km s^{-1}
-	return ((rho > 0.) && (P > 0.) && (abs_v < 3.0e8));
+	// check whether density and pressure are positive, and velocity < 10,000 km s^{-1}
+	return ((rho > 0.) && (P > 0.) && (abs_v < 1.0e9));
 }
 } // namespace detail
 
