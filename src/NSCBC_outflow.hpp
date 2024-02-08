@@ -251,20 +251,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto unpermute_vel(quokka::valarray<amrex::R
 	}
 	return newPrim;
 }
-
-template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto isStateValid(quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> const &Q) -> bool
-{
-	const amrex::Real rho = Q[0];
-	const amrex::Real v1 = Q[1];
-	const amrex::Real v2 = Q[2];
-	const amrex::Real v3 = Q[3];
-	const amrex::Real P = Q[4];
-	const amrex::Real abs_v = std::sqrt(v1 * v1 + v2 * v2 + v3 * v3);
-
-	// check whether density and pressure are positive, and velocity < 10,000 km s^{-1}
-	return ((rho > 0.) && (P > 0.) && (abs_v < 1.0e9));
-}
 } // namespace detail
 
 template <typename problem_t, FluxDir DIR, BoundarySide SIDE>
@@ -340,15 +326,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setOutflowBoundary(const amrex::IntVect
 	const int ip2 = (SIDE == BoundarySide::Lower) ? ibr - 2 : ibr + 2;
 	const int ip3 = (SIDE == BoundarySide::Lower) ? ibr - 3 : ibr + 3;
 	const int ip4 = (SIDE == BoundarySide::Lower) ? ibr - 4 : ibr + 4;
-
-	// reset to zero-gradient outflow if any state Q_{ip1...ip4} is invalid
-	if (!(detail::isStateValid<problem_t>(Q_ip1) && detail::isStateValid<problem_t>(Q_ip2) && detail::isStateValid<problem_t>(Q_ip3) &&
-	      detail::isStateValid<problem_t>(Q_ip4))) {
-		Q_ip1 = Q_i;
-		Q_ip2 = Q_i;
-		Q_ip3 = Q_i;
-		Q_ip4 = Q_i;
-	}
 
 	quokka::valarray<amrex::Real, N> consCell{};
 	if (idx[static_cast<int>(DIR)] == ip1) {

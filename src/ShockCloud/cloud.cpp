@@ -21,6 +21,7 @@
 #include "AMReX_GpuDevice.H"
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_IntVect.H"
+#include "AMReX_Loop.H"
 #include "AMReX_MFParallelFor.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParallelContext.H"
@@ -212,17 +213,62 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<ShockCloud>::setCustomBou
 }
 
 template <>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+AMRSimulation<ShockCloud>::setCustomBoundaryConditionsLowOrder(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int numcomp,
+							       amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/,
+							       int /*bcomp*/, int /*orig_comp*/)
+{
+	// use the naive inflow/outflow boundary conditions
+	auto [i, j, k] = iv.toArray();
+
+	amrex::Box const &box = geom.Domain();
+	const auto &domain_lo = box.loVect3d();
+	const auto &domain_hi = box.hiVect3d();
+	const int ilo = domain_lo[0];
+	const int ihi = domain_hi[0];
+
+	const Real delta_vx = ::delta_vx;
+	const Real rho_wind = ::rho_wind;
+	const Real v_wind = ::v_wind;
+	const Real P_wind = ::P_wind;
+
+	if (i < ilo) {
+		// x1 lower boundary -- shock
+		Real const rho = rho_wind;
+		Real const vx = v_wind - delta_vx;
+		Real const Eint = quokka::EOS<ShockCloud>::ComputeEintFromPres(rho, P_wind);
+		Real const T = quokka::EOS<ShockCloud>::ComputeTgasFromEint(rho, Eint);
+		GpuArray<amrex::Real, HydroSystem<ShockCloud>::nscalars_> scalars{0, 0, rho};
+
+		Real const xmom = rho_wind * vx;
+		Real const ymom = 0;
+		Real const zmom = 0;
+		Real const Egas = RadSystem<ShockCloud>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
+
+		consVar(i, j, k, RadSystem<ShockCloud>::gasDensity_index) = rho;
+		consVar(i, j, k, RadSystem<ShockCloud>::x1GasMomentum_index) = xmom;
+		consVar(i, j, k, RadSystem<ShockCloud>::x2GasMomentum_index) = ymom;
+		consVar(i, j, k, RadSystem<ShockCloud>::x3GasMomentum_index) = zmom;
+		consVar(i, j, k, RadSystem<ShockCloud>::gasEnergy_index) = Egas;
+		consVar(i, j, k, RadSystem<ShockCloud>::gasInternalEnergy_index) = Eint;
+		consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index) = scalars[0];
+		consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index + 1) = scalars[1]; // cloud partial density
+		consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index + 2) = scalars[2]; // non-cloud partial density
+
+	} else if (i > ihi) {
+		// x1 upper boundary -- extrapolating outflow
+		for (int n = 0; n < numcomp; ++n) {
+			consVar(i, j, k, n) = consVar(ihi, j, k, n);
+		}
+	}
+}
+
+template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<ShockCloud>::isStateValid(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> bool
 {
 	// check density
 	const amrex::Real rho = cons(i, j, k, density_index);
 	bool isDensityPositive = (rho > 0.);
-#if 0
-	// FOR DEBUGGING FOFC FAILURE ONLY
-	if (!isDensityPositive) {
-		printf("[FOFC WARNING] density is non-positive! rho = %.15e g/cc\n", rho); // NOLINT(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
-	}
-#endif
 
 	// check velocity
 	const amrex::Real vx = cons(i, j, k, x1Momentum_index) / rho;
@@ -230,13 +276,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<ShockCloud>::isStateValid(a
 	const amrex::Real vz = cons(i, j, k, x3Momentum_index) / rho;
 	const amrex::Real abs_vel = std::sqrt(vx * vx + vy * vy + vz * vz);
 	const bool isVelocityReasonable = (abs_vel < 1.0e9); // 10,000 km/s
-#if 0
-	// FOR DEBUGGING FOFC FAILURE ONLY
-	if (!isVelocityReasonable) {
-		printf("[FOFC WARNING] velocity is unphysically large! abs_vel = %.15e km/s\n", // NOLINT(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
-		       abs_vel / 1.0e5);
-	}
-#endif
 
 	return (isDensityPositive && isVelocityReasonable);
 }

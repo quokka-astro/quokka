@@ -274,15 +274,16 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void MakeNewLevelFromScratch(int lev, amrex::Real time, const amrex::BoxArray &ba, const amrex::DistributionMapping &dm) override;
 
 	// AMR utility functions
-	template <typename PreInterpHook, typename PostInterpHook>
+	template <typename PreInterpHook, typename PostInterpHook, typename BdryFunct>
 	void fillBoundaryConditions(amrex::MultiFab &S_filled, amrex::MultiFab &state, int lev, amrex::Real time, quokka::centering cen, quokka::direction dir,
-				    PreInterpHook const &pre_interp, PostInterpHook const &post_interp, FillPatchType fptype = FillPatchType::fillpatch_class);
+				    PreInterpHook const &pre_interp, PostInterpHook const &post_interp, BdryFunct const &myBoundaryFunctor,
+				    FillPatchType fptype = FillPatchType::fillpatch_class);
 
-	template <typename PreInterpHook, typename PostInterpHook>
+	template <typename PreInterpHook, typename PostInterpHook, typename BdryFunct>
 	void FillPatchWithData(int lev, amrex::Real time, amrex::MultiFab &mf, amrex::Vector<amrex::MultiFab *> &coarseData,
 			       amrex::Vector<amrex::Real> &coarseTime, amrex::Vector<amrex::MultiFab *> &fineData, amrex::Vector<amrex::Real> &fineTime,
 			       int icomp, int ncomp, amrex::Vector<amrex::BCRec> &BCs, quokka::centering &cen, FillPatchType fptype,
-			       PreInterpHook const &pre_interp, PostInterpHook const &post_interp);
+			       PreInterpHook const &pre_interp, PostInterpHook const &post_interp, BdryFunct const &myBoundaryFunctor);
 
 	static void InterpHookNone(amrex::MultiFab &mf, int scomp, int ncomp);
 	virtual void FillPatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp, quokka::centering cen, quokka::direction dir,
@@ -309,6 +310,11 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	// boundary condition
 	AMREX_GPU_DEVICE static void setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, int dcomp, int numcomp,
+								 amrex::GeometryData const &geom, amrex::Real time, const amrex::BCRec *bcr, int bcomp,
+								 int orig_comp); // template specialized by problem generator
+
+	// boundary condition
+	AMREX_GPU_DEVICE static void setCustomBoundaryConditionsLowOrder(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, int dcomp, int numcomp,
 								 amrex::GeometryData const &geom, amrex::Real time, const amrex::BCRec *bcr, int bcomp,
 								 int orig_comp); // template specialized by problem generator
 
@@ -1514,6 +1520,15 @@ template <typename problem_t> void AMRSimulation<problem_t>::InterpHookNone(amre
 	// do nothing
 }
 
+template <typename problem_t> struct setBoundaryFunctorLowOrder {
+	AMREX_GPU_DEVICE void operator()(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, const int &dcomp, const int &numcomp,
+					 amrex::GeometryData const &geom, const amrex::Real &time, const amrex::BCRec *bcr, int bcomp,
+					 const int &orig_comp) const
+	{
+		AMRSimulation<problem_t>::setCustomBoundaryConditionsLowOrder(iv, dest, dcomp, numcomp, geom, time, bcr, bcomp, orig_comp);
+	}
+};
+
 template <typename problem_t> struct setBoundaryFunctor {
 	AMREX_GPU_DEVICE void operator()(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, const int &dcomp, const int &numcomp,
 					 amrex::GeometryData const &geom, const amrex::Real &time, const amrex::BCRec *bcr, int bcomp,
@@ -1543,6 +1558,17 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setCustomBoun
 	// boundary.)
 
 	// set boundary condition for cell 'iv'
+}
+
+template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setCustomBoundaryConditionsLowOrder(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest,
+											       int dcomp, int numcomp, amrex::GeometryData const &geom,
+											       const amrex::Real time, const amrex::BCRec *bcr, int bcomp,
+											       int orig_comp)
+{
+	// by default, call the standard boundary condition functor
+	// (may be overridden using template specialization)
+	AMRSimulation<problem_t>::setCustomBoundaryConditions(iv, dest, dcomp, numcomp, geom, time, bcr, bcomp, orig_comp);
 }
 
 template <typename problem_t>
@@ -1584,9 +1610,11 @@ void AMRSimulation<problem_t>::FillPatch(int lev, amrex::Real time, amrex::Multi
 	}
 
 	if (cen == quokka::centering::cc) {
-		FillPatchWithData(lev, time, mf, cmf, ctime, fmf, ftime, icomp, ncomp, BCs_cc_, cen, fptype, InterpHookNone, InterpHookNone);
+		FillPatchWithData(lev, time, mf, cmf, ctime, fmf, ftime, icomp, ncomp, BCs_cc_, cen, fptype, InterpHookNone, InterpHookNone,
+				  setBoundaryFunctor<problem_t>{});
 	} else if (cen == quokka::centering::fc) {
-		FillPatchWithData(lev, time, mf, cmf, ctime, fmf, ftime, icomp, ncomp, BCs_fc_, cen, fptype, InterpHookNone, InterpHookNone);
+		FillPatchWithData(lev, time, mf, cmf, ctime, fmf, ftime, icomp, ncomp, BCs_fc_, cen, fptype, InterpHookNone, InterpHookNone,
+				  setBoundaryFunctorFaceVar<problem_t>{});
 	}
 }
 
@@ -1605,7 +1633,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 	AMREX_ALWAYS_ASSERT(!state_new_cc_[level].contains_nan(0, ncomp_cc));
 	// fill ghost zones
 	fillBoundaryConditions(state_new_cc_[level], state_new_cc_[level], level, time, quokka::centering::cc, quokka::direction::na, InterpHookNone,
-			       InterpHookNone, FillPatchType::fillpatch_function);
+			       InterpHookNone, setBoundaryFunctor<problem_t>{}, FillPatchType::fillpatch_function);
 	// copy to state_old_cc_ (including ghost zones)
 	state_old_cc_[level].ParallelCopy(state_new_cc_[level], 0, 0, ncomp_cc, nghost_cc, nghost_cc);
 }
@@ -1630,7 +1658,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 		// fill ghost zones
 		// N.B. for face-centered fields, we must use FillPatchType::fillpatch_function
 		fillBoundaryConditions(state_new_fc_[level][idim], state_new_fc_[level][idim], level, time, quokka::centering::fc,
-				       static_cast<quokka::direction>(idim), InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
+				       static_cast<quokka::direction>(idim), InterpHookNone, InterpHookNone, setBoundaryFunctorFaceVar<problem_t>{},
+				       FillPatchType::fillpatch_function);
 		state_old_fc_[level][idim].ParallelCopy(state_new_fc_[level][idim], 0, 0, ncomp_per_dim_fc, nghost_fc, nghost_fc);
 	}
 }
@@ -1687,10 +1716,10 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(int level, amrex::Real ti
 }
 
 template <typename problem_t>
-template <typename PreInterpHook, typename PostInterpHook>
+template <typename PreInterpHook, typename PostInterpHook, typename BdryFunct>
 void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled, amrex::MultiFab &state, int const lev, amrex::Real const time,
 						      quokka::centering cen, quokka::direction dir, PreInterpHook const &pre_interp,
-						      PostInterpHook const &post_interp, FillPatchType fptype)
+						      PostInterpHook const &post_interp, BdryFunct const &myBoundaryFunctor, FillPatchType fptype)
 {
 	BL_PROFILE("AMRSimulation::fillBoundaryConditions()");
 
@@ -1732,7 +1761,7 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 		}
 
 		FillPatchWithData(lev, time, S_filled, coarseData, coarseTime, fineData, fineTime, 0, S_filled.nComp(), BCs, cen, fptype, pre_interp,
-				  post_interp);
+				  post_interp, myBoundaryFunctor);
 	} else { // level 0
 		// fill internal and periodic boundaries, ignoring corners (cross=true)
 		// (there is no performance benefit for this in practice)
@@ -1740,23 +1769,11 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 		state.FillBoundary(geom[lev].periodicity());
 
 		if (!geom[lev].isAllPeriodic()) {
-			if (cen == quokka::centering::cc) {
-				// create cell-centered boundary functor
-				amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>> boundaryFunctor =
-				    amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>{setBoundaryFunctor<problem_t>{}};
-				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>> physicalBoundaryFunctor(geom[lev], BCs,
-																  boundaryFunctor);
-				// fill physical boundaries
-				physicalBoundaryFunctor(state, 0, state.nComp(), state.nGrowVect(), time, 0);
-			} else if (cen == quokka::centering::fc) {
-				// create face-centered boundary functor
-				amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>> boundaryFunctor =
-				    amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>>{setBoundaryFunctorFaceVar<problem_t>{}};
-				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>>> physicalBoundaryFunctor(geom[lev], BCs,
-																	 boundaryFunctor);
-				// fill physical boundaries
-				physicalBoundaryFunctor(state, 0, state.nComp(), state.nGrowVect(), time, 0);
-			}
+			// create boundary functor
+			amrex::GpuBndryFuncFab<BdryFunct> boundaryFunctor = amrex::GpuBndryFuncFab<BdryFunct>{myBoundaryFunctor};
+			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<BdryFunct>> physicalBoundaryFunctor(geom[lev], BCs, boundaryFunctor);
+			// fill physical boundaries
+			physicalBoundaryFunctor(state, 0, state.nComp(), state.nGrowVect(), time, 0);
 		}
 	}
 
@@ -1772,12 +1789,12 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 // Compute a new multifab 'mf' by copying in state from given data and filling
 // ghost cells
 template <typename problem_t>
-template <typename PreInterpHook, typename PostInterpHook>
+template <typename PreInterpHook, typename PostInterpHook, typename BdryFunct>
 void AMRSimulation<problem_t>::FillPatchWithData(int lev, amrex::Real time, amrex::MultiFab &mf, amrex::Vector<amrex::MultiFab *> &coarseData,
 						 amrex::Vector<amrex::Real> &coarseTime, amrex::Vector<amrex::MultiFab *> &fineData,
 						 amrex::Vector<amrex::Real> &fineTime, int icomp, int ncomp, amrex::Vector<amrex::BCRec> &BCs,
 						 quokka::centering &cen, FillPatchType fptype, PreInterpHook const &pre_interp,
-						 PostInterpHook const &post_interp)
+						 PostInterpHook const &post_interp, BdryFunct const &myBoundaryFunctor)
 {
 	BL_PROFILE("AMRSimulation::FillPatchWithData()");
 
@@ -1792,14 +1809,14 @@ void AMRSimulation<problem_t>::FillPatchWithData(int lev, amrex::Real time, amre
 
 	// create functor to fill ghost zones at domain boundaries
 	// (note that domain boundaries may be present at any refinement level)
-	amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>> boundaryFunctor(setBoundaryFunctor<problem_t>{});
-	amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>> finePhysicalBoundaryFunctor(geom[lev], BCs, boundaryFunctor);
+	amrex::GpuBndryFuncFab<BdryFunct> boundaryFunctor(myBoundaryFunctor);
+	amrex::PhysBCFunct<amrex::GpuBndryFuncFab<BdryFunct>> finePhysicalBoundaryFunctor(geom[lev], BCs, boundaryFunctor);
 
 	if (lev == 0) { // NOTE: used by RemakeLevel
 		// copies interior zones, fills ghost zones
 		amrex::FillPatchSingleLevel(mf, time, fineData, fineTime, 0, icomp, ncomp, geom[lev], finePhysicalBoundaryFunctor, 0);
 	} else {
-		amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>> coarsePhysicalBoundaryFunctor(geom[lev - 1], BCs, boundaryFunctor);
+		amrex::PhysBCFunct<amrex::GpuBndryFuncFab<BdryFunct>> coarsePhysicalBoundaryFunctor(geom[lev - 1], BCs, boundaryFunctor);
 
 		// copies interior zones, fills ghost zones with space-time interpolated
 		// data
@@ -2039,14 +2056,15 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel(c
 	if (included_ghosts > 0) {
 		// Fill ghost zones for state_new_cc_
 		fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, tNew_[lev], quokka::centering::cc, quokka::direction::na, InterpHookNone,
-				       InterpHookNone, FillPatchType::fillpatch_function);
+				       InterpHookNone, setBoundaryFunctor<problem_t>{}, FillPatchType::fillpatch_function);
 	}
 
 	// Fill ghost zones for state_new_fc_
 	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			fillBoundaryConditions(state_new_fc_[lev][idim], state_new_fc_[lev][idim], lev, tNew_[lev], quokka::centering::fc,
-					       static_cast<quokka::direction>(idim), InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
+					       static_cast<quokka::direction>(idim), InterpHookNone, InterpHookNone, setBoundaryFunctorFaceVar<problem_t>{},
+					       FillPatchType::fillpatch_function);
 		}
 	}
 
