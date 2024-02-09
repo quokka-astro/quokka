@@ -181,27 +181,30 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<ShockCloud>::setCustomBou
 		Real const T = quokka::EOS<ShockCloud>::ComputeTgasFromEint(rho, Eint);
 		GpuArray<amrex::Real, HydroSystem<ShockCloud>::nscalars_> scalars{0, 0, rho};
 
+#if 0
 		if (time < ::shock_crossing_time) {
-			// shock
-			Real const xmom = rho_wind * vx;
-			Real const ymom = 0;
-			Real const zmom = 0;
-			Real const Egas = RadSystem<ShockCloud>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
+#endif
+		// Dirichlet/shock boundary
+		Real const xmom = rho_wind * vx;
+		Real const ymom = 0;
+		Real const zmom = 0;
+		Real const Egas = RadSystem<ShockCloud>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
 
-			consVar(i, j, k, RadSystem<ShockCloud>::gasDensity_index) = rho;
-			consVar(i, j, k, RadSystem<ShockCloud>::x1GasMomentum_index) = xmom;
-			consVar(i, j, k, RadSystem<ShockCloud>::x2GasMomentum_index) = ymom;
-			consVar(i, j, k, RadSystem<ShockCloud>::x3GasMomentum_index) = zmom;
-			consVar(i, j, k, RadSystem<ShockCloud>::gasEnergy_index) = Egas;
-			consVar(i, j, k, RadSystem<ShockCloud>::gasInternalEnergy_index) = Eint;
-			consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index) = scalars[0];
-			consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index + 1) = scalars[1]; // cloud partial density
-			consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index + 2) = scalars[2]; // non-cloud partial density
+		consVar(i, j, k, RadSystem<ShockCloud>::gasDensity_index) = rho;
+		consVar(i, j, k, RadSystem<ShockCloud>::x1GasMomentum_index) = xmom;
+		consVar(i, j, k, RadSystem<ShockCloud>::x2GasMomentum_index) = ymom;
+		consVar(i, j, k, RadSystem<ShockCloud>::x3GasMomentum_index) = zmom;
+		consVar(i, j, k, RadSystem<ShockCloud>::gasEnergy_index) = Egas;
+		consVar(i, j, k, RadSystem<ShockCloud>::gasInternalEnergy_index) = Eint;
+		consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index) = scalars[0];
+		consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index + 1) = scalars[1]; // cloud partial density
+		consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index + 2) = scalars[2]; // non-cloud partial density
+#if 0
 		} else {
 			// NSCBC inflow
 			NSCBC::setInflowX1Lower<ShockCloud>(iv, consVar, geom, T, vx, 0, 0, scalars);
 		}
-
+#endif
 	} else if (i > ihi) {
 		// x1 upper boundary -- NSCBC outflow
 		if (time < ::shock_crossing_time) {
