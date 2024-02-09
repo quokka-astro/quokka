@@ -253,7 +253,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto integrate_planck_from_0_to_x(const
 	} else {
 		y = interpolate_planck_integral(logx);
 	}
-	assert(!isnan(y));
+	assert(!std::isnan(y));
 	assert(y <= 1.);
 	return y;
 }
