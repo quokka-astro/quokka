@@ -13,7 +13,6 @@
 #include <cmath>
 #include <cstddef>
 #include <iterator>
-#include <limits>
 
 // library headers
 #include "AMReX_Extension.H"

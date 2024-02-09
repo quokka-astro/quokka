@@ -10,11 +10,8 @@
 ///
 
 #include <array>
-#include <limits>
 
 #include "AMReX.H"
-#include "AMReX_BLassert.H"
-#include "AMReX_Extension.H"
 #include "AMReX_GpuQualifiers.H"
 
 #include "hydro_system.hpp"
@@ -29,7 +26,7 @@
 namespace quokka::chemistry
 {
 
-AMREX_GPU_DEVICE void chemburner(burn_t &chemstate, const Real dt);
+AMREX_GPU_DEVICE void chemburner(burn_t &chemstate, Real dt);
 
 template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const Real dt, const Real max_density_allowed, const Real min_density_allowed)
 {
