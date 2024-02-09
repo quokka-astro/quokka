@@ -68,16 +68,16 @@ template <> struct Physics_Traits<Channel> {
 namespace
 {
 #endif
-Real rho0 = NAN;									 // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-Real u0 = NAN;										 // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-Real s0 = NAN;										 // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED amrex::Real Tgas0 = NAN;							 // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED amrex::Real P_outflow = NAN;							 // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED amrex::Real u_inflow = NAN;							 // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED amrex::Real v_inflow = NAN;							 // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED amrex::Real w_inflow = NAN;							 // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+Real rho0 = NAN;										// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+Real u0 = NAN;											// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+Real s0 = NAN;											// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED amrex::Real Tgas0 = NAN;							// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED amrex::Real P_outflow = NAN;							// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED amrex::Real u_inflow = NAN;							// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED amrex::Real v_inflow = NAN;							// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED amrex::Real w_inflow = NAN;							// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 AMREX_GPU_MANAGED amrex::GpuArray<Real, Physics_Traits<Channel>::numPassiveScalars> s_inflow{}; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-#if 0											 // workaround AMDGPU compiler bug
+#if 0												// workaround AMDGPU compiler bug
 };											 // namespace
 #endif
 
