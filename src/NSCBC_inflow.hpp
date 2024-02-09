@@ -14,7 +14,6 @@
 #include "AMReX_REAL.H"
 #include "EOS.hpp"
 #include "hydro_system.hpp"
-#include "physics_numVars.hpp"
 #include "valarray.hpp"
 
 namespace NSCBC
@@ -31,6 +30,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dQ_dx_inflow_x1_lower(quokka::valarray<
 	// return dQ/dx corresponding to subsonic inflow on the x1 lower boundary
 	// (This is only necessary for continuous inflows, i.e., where a shock or contact discontinuity is not desired.)
 	// NOTE: This boundary condition is only defined for an ideal gas (with constant k_B/mu).
+	
+	// TODO(bwibking): add transverse terms
 
 	const Real rho = Q[0];
 	const Real u = Q[1];
@@ -50,7 +51,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dQ_dx_inflow_x1_lower(quokka::valarray<
 	const Real dP_dx = dQ_dx_data[4];
 
 	const Real c = quokka::EOS<problem_t>::ComputeSoundSpeed(rho, P);
-	const Real M = std::sqrt(u * u + v * v + w * w) / c;
+	const amrex::Real M = std::clamp(std::sqrt(u * u + v * v + w * w) / c, 0., 1.);
 
 	const Real eta_2 = 2.;
 	const Real eta_3 = 2.;

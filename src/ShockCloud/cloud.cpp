@@ -7,31 +7,22 @@
 /// \brief Implements a shock-cloud problem with radiative cooling.
 ///
 
-#include <variant>
-#include <vector>
 
 #include "AMReX.H"
 #include "AMReX_Array.H"
 #include "AMReX_BC_TYPES.H"
-#include "AMReX_BLProfiler.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_FabArray.H"
 #include "AMReX_Geometry.H"
-#include "AMReX_GpuContainers.H"
 #include "AMReX_GpuDevice.H"
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_IntVect.H"
-#include "AMReX_Loop.H"
 #include "AMReX_MFParallelFor.H"
 #include "AMReX_MultiFab.H"
-#include "AMReX_ParallelContext.H"
-#include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_REAL.H"
 #include "AMReX_Reduce.H"
 #include "AMReX_SPACE.H"
-#include "AMReX_TableData.H"
-#include "AMReX_iMultiFab.H"
 
 #include "CloudyCooling.hpp"
 #include "EOS.hpp"
@@ -181,30 +172,27 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<ShockCloud>::setCustomBou
 		Real const T = quokka::EOS<ShockCloud>::ComputeTgasFromEint(rho, Eint);
 		GpuArray<amrex::Real, HydroSystem<ShockCloud>::nscalars_> scalars{0, 0, rho};
 
-#if 0
 		if (time < ::shock_crossing_time) {
-#endif
-		// Dirichlet/shock boundary
-		Real const xmom = rho_wind * vx;
-		Real const ymom = 0;
-		Real const zmom = 0;
-		Real const Egas = RadSystem<ShockCloud>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
+			// Dirichlet/shock boundary
+			Real const xmom = rho_wind * vx;
+			Real const ymom = 0;
+			Real const zmom = 0;
+			Real const Egas = RadSystem<ShockCloud>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
 
-		consVar(i, j, k, RadSystem<ShockCloud>::gasDensity_index) = rho;
-		consVar(i, j, k, RadSystem<ShockCloud>::x1GasMomentum_index) = xmom;
-		consVar(i, j, k, RadSystem<ShockCloud>::x2GasMomentum_index) = ymom;
-		consVar(i, j, k, RadSystem<ShockCloud>::x3GasMomentum_index) = zmom;
-		consVar(i, j, k, RadSystem<ShockCloud>::gasEnergy_index) = Egas;
-		consVar(i, j, k, RadSystem<ShockCloud>::gasInternalEnergy_index) = Eint;
-		consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index) = scalars[0];
-		consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index + 1) = scalars[1]; // cloud partial density
-		consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index + 2) = scalars[2]; // non-cloud partial density
-#if 0
+			consVar(i, j, k, RadSystem<ShockCloud>::gasDensity_index) = rho;
+			consVar(i, j, k, RadSystem<ShockCloud>::x1GasMomentum_index) = xmom;
+			consVar(i, j, k, RadSystem<ShockCloud>::x2GasMomentum_index) = ymom;
+			consVar(i, j, k, RadSystem<ShockCloud>::x3GasMomentum_index) = zmom;
+			consVar(i, j, k, RadSystem<ShockCloud>::gasEnergy_index) = Egas;
+			consVar(i, j, k, RadSystem<ShockCloud>::gasInternalEnergy_index) = Eint;
+			consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index) = scalars[0];
+			consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index + 1) = scalars[1]; // cloud partial density
+			consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index + 2) = scalars[2]; // non-cloud partial density
 		} else {
 			// NSCBC inflow
+			// TODO(bwibking): add transverse terms to NSCBC inflow
 			NSCBC::setInflowX1Lower<ShockCloud>(iv, consVar, geom, T, vx, 0, 0, scalars);
 		}
-#endif
 	} else if (i > ihi) {
 		// x1 upper boundary -- NSCBC outflow
 		if (time < ::shock_crossing_time) {
