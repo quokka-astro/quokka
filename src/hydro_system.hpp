@@ -505,6 +505,10 @@ void HydroSystem<problem_t>::PredictStep(amrex::MultiFab const &consVarOld_mf, a
 		// check if state is valid -- flag for re-do if not
 		if (!isStateValid(consVarNew[bx], i, j, k)) {
 			redoFlag[bx](i, j, k) = quokka::redoFlag::redo;
+			printf("redoFlag on cell (%d, %d, %d): \n", i, j, k); // NOLINT
+			for (int n = 0; n < nvars; ++n) {
+				printf("\t(%d, %d, %d) comp %d = %g\n", i, j, k, n, consVarNew[bx](i, j, k, n)); // NOLINT
+			}
 		} else {
 			redoFlag[bx](i, j, k) = quokka::redoFlag::none;
 		}
