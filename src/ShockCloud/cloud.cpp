@@ -254,23 +254,6 @@ AMRSimulation<ShockCloud>::setCustomBoundaryConditionsLowOrder(const amrex::IntV
 	}
 }
 
-template <>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<ShockCloud>::isStateValid(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> bool
-{
-	// check density
-	const amrex::Real rho = cons(i, j, k, density_index);
-	bool isDensityPositive = (rho > 0.);
-
-	// check velocity
-	const amrex::Real vx = cons(i, j, k, x1Momentum_index) / rho;
-	const amrex::Real vy = cons(i, j, k, x2Momentum_index) / rho;
-	const amrex::Real vz = cons(i, j, k, x3Momentum_index) / rho;
-	const amrex::Real abs_vel = std::sqrt(vx * vx + vy * vy + vz * vz);
-	const bool isVelocityReasonable = (abs_vel < 1.0e9); // 10,000 km/s
-
-	return (isDensityPositive && isVelocityReasonable);
-}
-
 template <> void RadhydroSimulation<ShockCloud>::computeAfterTimestep()
 {
 	const amrex::Real dt_coarse = dt_[0];
