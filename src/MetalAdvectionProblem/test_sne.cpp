@@ -466,7 +466,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<NewProblem>::setCustomBou
       x3Mom_edge = consVar(i, j, klo, HydroSystem<NewProblem>::x3Momentum_index);
    }
    else if (k > khi) {
-      kreflect = 2*khi - k;
+      kreflect = 2*khi - k + 1;
       koutflow = khi;
       normal = 1.0;
       x3Mom_edge = consVar(i, j, khi, HydroSystem<NewProblem>::x3Momentum_index);
