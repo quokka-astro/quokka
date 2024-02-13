@@ -1096,9 +1096,10 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		quokka::valarray<double, nGroups_> fourPiB{};
 		quokka::valarray<double, nGroups_> EradVec_guess{};
 		quokka::valarray<double, nGroups_> kappaPVec{};
-		quokka::valarray<double, nGroups_> kappaEVec{};
 		quokka::valarray<double, nGroups_> kappaFVec{};
-		quokka::valarray<double, nGroups_> radEnergyFractions{};
+		quokka::valarray<double, nGroups_> tau{}; // optical depth across c * dt
+		quokka::valarray<double, nGroups_> tau0{}; // tau at (t)
+		quokka::valarray<double, nGroups_> D{}; // D = S / tau0
 
 		for (int g = 0; g < nGroups_; ++g) {
 			EradVec_guess[g] = NAN;
@@ -1121,20 +1122,23 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 
 			// BEGIN NEWTON-RAPHSON LOOP
 			Egas_guess = Egas0;
-			EradVec_guess = Erad0Vec;
+      T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
+      AMREX_ASSERT(T_gas >= 0.);
+      fourPiB = chat * ComputeThermalRadiation(T_gas, radBoundaries_g_copy);
+      kappaPVec = ComputePlanckOpacity(rho, T_gas);
+			AMREX_ASSERT(!kappaPVec.hasnan());
+      // note that I assume kappa_P = kappa_E here
+      tau0 = dt * rho * kappaPVec * chat;
+      D = fourPiB / chat - Erad0Vec;
 
 			double F_G = NAN;
 			double dFG_dEgas = NAN;
 			double deltaEgas = NAN;
-			double Rtot = NAN;
-			double dRtot_dEgas = NAN;
 			quokka::valarray<double, nGroups_> Rvec{};
-			quokka::valarray<double, nGroups_> dRtot_dErad{};
-			quokka::valarray<double, nGroups_> dRvec_dEgas{};
-			quokka::valarray<double, nGroups_> dFG_dErad{};
+			quokka::valarray<double, nGroups_> dFG_dD{};
 			quokka::valarray<double, nGroups_> dFR_dEgas{};
-			quokka::valarray<double, nGroups_> dFR_i_dErad_i{};
-			quokka::valarray<double, nGroups_> deltaErad{};
+			quokka::valarray<double, nGroups_> dFR_i_dD_i{};
+			quokka::valarray<double, nGroups_> deltaD{};
 			quokka::valarray<double, nGroups_> F_R{};
 
 			const double resid_tol = 1.0e-13; // 1.0e-15;
@@ -1144,27 +1148,15 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				// compute material temperature
 				T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
 				AMREX_ASSERT(T_gas >= 0.);
-
 				// compute opacity, emissivity
 				fourPiB = chat * ComputeThermalRadiation(T_gas, radBoundaries_g_copy);
-
 				kappaPVec = ComputePlanckOpacity(rho, T_gas);
-				kappaEVec = ComputeEnergyMeanOpacity(rho, T_gas);
+			  AMREX_ASSERT(!kappaPVec.hasnan());
 
-				// compute derivatives w/r/t T_gas
-				const auto dfourPiB_dTgas = chat * ComputeThermalRadiationTempDerivative(T_gas, radBoundaries_g_copy);
-
-				// compute residuals
-				const auto absorption = chat * kappaEVec * EradVec_guess;
-				const auto emission = kappaPVec * fourPiB;
-				const auto Ediff = emission - absorption;
-				// auto tot_ediff = sum(abs(Ediff));
-				// if ((tot_ediff <= Erad_floor_) || (tot_ediff / (sum(absorption) + sum(emission)) < resid_tol)) {
-				//   break;
-				// }
-				Rvec = dt * rho * Ediff;
-				Rtot = sum(Rvec);
-				F_G = Egas_guess - Egas0 + (c / chat) * Rtot;
+        tau = dt * rho * kappaPVec * chat;
+        Rvec = tau0 * D;
+        EradVec_guess = fourPiB / chat - Rvec / tau;
+				F_G = Egas_guess - Egas0 + (c / chat) * sum(Rvec);
 				F_R = EradVec_guess - Erad0Vec - (Rvec + Src);
 
 				// check relative convergence of the residuals
@@ -1172,50 +1164,29 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					break;
 				}
 
-				quokka::valarray<double, nGroups_> dkappaP_dTgas = ComputePlanckOpacityTempDerivative(rho, T_gas);
-				quokka::valarray<double, nGroups_> dkappaE_dTgas = dkappaP_dTgas;
-				AMREX_ASSERT(!std::isnan(sum(dkappaP_dTgas)));
-
-				// prepare to compute Jacobian elements
 				const double c_v = quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas, massScalars); // Egas = c_v * T
-				dRtot_dErad = -dt * rho * kappaEVec * chat;
-				dRvec_dEgas = dt * rho / c_v * (kappaPVec * dfourPiB_dTgas + dkappaP_dTgas * fourPiB - chat * dkappaE_dTgas * EradVec_guess);
-				// Equivalent of eta = (eta > 0.0) ? eta : 0.0, to ensure possitivity of Egas_guess
-				for (int g = 0; g < nGroups_; ++g) {
-					// AMREX_ASSERT(dRvec_dEgas[g] >= 0.0);
-					if (dRvec_dEgas[g] < 0.0) {
-						dRvec_dEgas[g] = 0.0;
-					}
-				}
-				dRtot_dEgas = sum(dRvec_dEgas);
+
+				const auto dfourPiB_dTgas = chat * ComputeThermalRadiationTempDerivative(T_gas, radBoundaries_g_copy);
+				AMREX_ASSERT(!dfourPiB_dTgas.hasnan());
 
 				// compute Jacobian elements
-				dFG_dEgas = 1.0 + (c / chat) * dRtot_dEgas;
-				dFG_dErad = dRtot_dErad * (c / chat);
-				dFR_dEgas = -1.0 * dRvec_dEgas;
-				dFR_i_dErad_i = -1.0 * dRtot_dErad + 1.0;
-				AMREX_ASSERT(!std::isnan(dFG_dEgas));
-				AMREX_ASSERT(!dFG_dErad.hasnan());
-				AMREX_ASSERT(!dFR_dEgas.hasnan());
-				AMREX_ASSERT(!dFR_i_dErad_i.hasnan());
+				dFG_dEgas = 1.0;
+				dFG_dD = (c / chat) * tau0;
+				dFR_dEgas = 1.0 / (chat * c_v) * dfourPiB_dTgas;
+				dFR_i_dD_i = -1.0 * (1.0 / tau + 1.0) * tau0;
 
 				// update variables
-				RadSystem<problem_t>::SolveLinearEqs(dFG_dEgas, dFG_dErad, dFR_dEgas, dFR_i_dErad_i, -F_G, -1. * F_R, deltaEgas, deltaErad);
+				RadSystem<problem_t>::SolveLinearEqs(dFG_dEgas, dFG_dD, dFR_dEgas, dFR_i_dD_i, -F_G, -1. * F_R, deltaEgas, deltaD);
 				AMREX_ASSERT(!std::isnan(deltaEgas));
-				AMREX_ASSERT(!deltaErad.hasnan());
+				AMREX_ASSERT(!deltaD.hasnan());
 
-				EradVec_guess += deltaErad;
-				Egas_guess += deltaEgas;
-				AMREX_ASSERT(min(EradVec_guess) >= 0.);
-				AMREX_ASSERT(Egas_guess > 0.);
+        Egas_guess += deltaEgas;
+				D += deltaD;
 
 				// check relative and absolute convergence of E_r
-				// if ((sum(abs(deltaEgas / Egas_guess)) < 1e-7) || (sum(abs(deltaErad)) <= Erad_floor_)) {
+				// if (std::abs(deltaEgas / Egas_guess) < 1e-7) {
 				// 	break;
 				// }
-				if (std::abs(deltaEgas / Egas_guess) < 1e-7) {
-					break;
-				}
 			} // END NEWTON-RAPHSON LOOP
 
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(n < maxIter, "Newton-Raphson iteration failed to converge!");
