@@ -1151,11 +1151,11 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				// compute opacity, emissivity
 				fourPiB = chat * ComputeThermalRadiation(T_gas, radBoundaries_g_copy);
 				kappaPVec = ComputePlanckOpacity(rho, T_gas);
-			  AMREX_ASSERT(!kappaPVec.hasnan());
+				AMREX_ASSERT(!kappaPVec.hasnan());
 
-        tau = dt * rho * kappaPVec * chat;
-        Rvec = tau0 * D;
-        EradVec_guess = fourPiB / chat - Rvec / tau;
+				tau = dt * rho * kappaPVec * chat;
+				Rvec = tau0 * D;
+				EradVec_guess = fourPiB / chat - Rvec / tau;
 				F_G = Egas_guess - Egas0 + (c / chat) * sum(Rvec);
 				F_R = EradVec_guess - Erad0Vec - (Rvec + Src);
 
