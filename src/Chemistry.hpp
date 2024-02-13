@@ -40,7 +40,7 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 			amrex::Abort("Cannot do chemistry with dt < 0!");
 		}
 
-		amrex::ParallelFor<64>(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+		amrex::ParallelFor<1>(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			const Real rho = state(i, j, k, HydroSystem<problem_t>::density_index);
 			const Real xmom = state(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
 			const Real ymom = state(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
