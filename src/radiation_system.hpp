@@ -1097,9 +1097,9 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		quokka::valarray<double, nGroups_> EradVec_guess{};
 		quokka::valarray<double, nGroups_> kappaPVec{};
 		quokka::valarray<double, nGroups_> kappaFVec{};
-		quokka::valarray<double, nGroups_> tau{}; // optical depth across c * dt
+		quokka::valarray<double, nGroups_> tau{};  // optical depth across c * dt
 		quokka::valarray<double, nGroups_> tau0{}; // tau at (t)
-		quokka::valarray<double, nGroups_> D{}; // D = S / tau0
+		quokka::valarray<double, nGroups_> D{};	   // D = S / tau0
 
 		for (int g = 0; g < nGroups_; ++g) {
 			EradVec_guess[g] = NAN;
@@ -1122,14 +1122,14 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 
 			// BEGIN NEWTON-RAPHSON LOOP
 			Egas_guess = Egas0;
-      T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
-      AMREX_ASSERT(T_gas >= 0.);
-      fourPiB = chat * ComputeThermalRadiation(T_gas, radBoundaries_g_copy);
-      kappaPVec = ComputePlanckOpacity(rho, T_gas);
+			T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
+			AMREX_ASSERT(T_gas >= 0.);
+			fourPiB = chat * ComputeThermalRadiation(T_gas, radBoundaries_g_copy);
+			kappaPVec = ComputePlanckOpacity(rho, T_gas);
 			AMREX_ASSERT(!kappaPVec.hasnan());
-      // note that I assume kappa_P = kappa_E here
-      tau0 = dt * rho * kappaPVec * chat;
-      D = fourPiB / chat - Erad0Vec;
+			// note that I assume kappa_P = kappa_E here
+			tau0 = dt * rho * kappaPVec * chat;
+			D = fourPiB / chat - Erad0Vec;
 
 			double F_G = NAN;
 			double dFG_dEgas = NAN;
@@ -1180,7 +1180,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				AMREX_ASSERT(!std::isnan(deltaEgas));
 				AMREX_ASSERT(!deltaD.hasnan());
 
-        Egas_guess += deltaEgas;
+				Egas_guess += deltaEgas;
 				D += deltaD;
 
 				// check relative and absolute convergence of E_r
