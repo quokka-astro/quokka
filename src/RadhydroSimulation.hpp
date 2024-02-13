@@ -10,7 +10,15 @@
 /// timestepping, solving, and I/O of a simulation for radiation moments.
 
 #include <array>
+#if __has_include(<filesystem>)
 #include <filesystem>
+#elif __has_include(<experimental/filesystem>)
+#include <experimental/filesystem>
+namespace std
+{
+namespace filesystem = experimental::filesystem;
+}
+#endif
 #include <limits>
 #include <memory>
 #include <string>
