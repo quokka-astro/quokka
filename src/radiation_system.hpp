@@ -69,20 +69,16 @@ struct RadPressureResult {
 };
 
 // Define a helper type trait to check for member existence
-template <typename T>
-struct has_member_flux_full_implicit_update {
-private:
-    template <typename C>
-    static constexpr auto check(C*) -> typename std::is_same<decltype(C::flux_full_implicit_update), bool>::type;
+template <typename T> struct has_member_flux_full_implicit_update {
+      private:
+	template <typename C> static constexpr auto check(C *) -> typename std::is_same<decltype(C::flux_full_implicit_update), bool>::type;
 
-    template <typename>
-    static constexpr auto check(...) -> std::false_type;
+	template <typename> static constexpr auto check(...) -> std::false_type;
 
-public:
-    using type = decltype(check<T>(nullptr));
-    static constexpr bool value = type::value;
+      public:
+	using type = decltype(check<T>(nullptr));
+	static constexpr bool value = type::value;
 };
-
 
 /// Class for the radiation moment equations
 ///
@@ -127,10 +123,10 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	static constexpr bool compute_v_over_c_terms_ = RadSystem_Traits<problem_t>::compute_v_over_c_terms;
 
-  // Set flux_full_implicit_update_ to true if it is defined, otherwise default to false.
-  static constexpr bool flux_full_implicit_update_ = []() constexpr {
-    return has_member_flux_full_implicit_update<RadSystem_Traits<problem_t>>::value;
-  }();
+	// Set flux_full_implicit_update_ to true if it is defined, otherwise default to false.
+	static constexpr bool flux_full_implicit_update_ = []() constexpr {
+		return has_member_flux_full_implicit_update<RadSystem_Traits<problem_t>>::value;
+	}();
 
 	static constexpr int nGroups_ = Physics_Traits<problem_t>::nGroups;
 	static constexpr amrex::GpuArray<double, nGroups_ + 1> radBoundaries_ = []() constexpr {
@@ -204,7 +200,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 							 const double &y0, const quokka::valarray<double, nGroups_> &yi, double &x0,
 							 quokka::valarray<double, nGroups_> &xi);
 
-  AMREX_GPU_HOST_DEVICE static auto Solve3x3matrix(double C00, double C01, double C02, double C10, double C11, double C12, double C20, double C21, double C22, double Y0, double Y1, double Y2) -> std::tuple<double, double, double>;
+	AMREX_GPU_HOST_DEVICE static auto Solve3x3matrix(double C00, double C01, double C02, double C10, double C11, double C12, double C20, double C21,
+							 double C22, double Y0, double Y1, double Y2) -> std::tuple<double, double, double>;
 
 	AMREX_GPU_HOST_DEVICE static auto ComputePlanckEnergyFractions(amrex::GpuArray<double, nGroups_ + 1> const &boundaries, amrex::Real temperature)
 	    -> quokka::valarray<amrex::Real, nGroups_>;
@@ -299,23 +296,24 @@ AMREX_GPU_HOST_DEVICE void RadSystem<problem_t>::SolveLinearEqs(const double a00
 	xi = (yi - ai0 * x0) / aii;
 }
 
-
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::Solve3x3matrix(const double C00, const double C01, const double C02, const double C10, const double C11, const double C12, const double C20, const double C21, const double C22, const double Y0, const double Y1, const double Y2) -> std::tuple<double, double, double>
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::Solve3x3matrix(const double C00, const double C01, const double C02, const double C10, const double C11,
+								const double C12, const double C20, const double C21, const double C22, const double Y0,
+								const double Y1, const double Y2) -> std::tuple<double, double, double>
 {
-  // Solve the 3x3 matrix equation: C * X = Y under the assumption that only the diagonal terms 
-  // are guaranteed to be non-zero and are thus allowed to be divided by.
+	// Solve the 3x3 matrix equation: C * X = Y under the assumption that only the diagonal terms
+	// are guaranteed to be non-zero and are thus allowed to be divided by.
 
-  auto E11 = C11 - C01 * C10 / C00;
-  auto E12 = C12 - C02 * C10 / C00;
-  auto E21 = C21 - C01 * C20 / C00;
-  auto E22 = C22 - C02 * C20 / C00;
-  auto Z1 = Y1 - Y0 * C10 / C00;
-  auto Z2 = Y2 - Y0 * C20 / C00;
-  auto X2 = (Z2 - Z1 * E21 / E11) / (E22 - E12 * E21 / E11);
-  auto X1 = (Z1 - E12 * X2) / E11;
-  auto X0 = (Y0 - C01 * X1 - C02 * X2) / C00;
-  return std::make_tuple(X0, X1, X2);
+	auto E11 = C11 - C01 * C10 / C00;
+	auto E12 = C12 - C02 * C10 / C00;
+	auto E21 = C21 - C01 * C20 / C00;
+	auto E22 = C22 - C02 * C20 / C00;
+	auto Z1 = Y1 - Y0 * C10 / C00;
+	auto Z2 = Y2 - Y0 * C20 / C00;
+	auto X2 = (Z2 - Z1 * E21 / E11) / (E22 - E12 * E21 / E11);
+	auto X1 = (Z1 - E12 * X2) / E11;
+	auto X0 = (Y0 - C01 * X1 - C02 * X2) / C00;
+	return std::make_tuple(X0, X1, X2);
 }
 
 template <typename problem_t>
@@ -1290,186 +1288,186 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 
 		kappaFVec = ComputeFluxMeanOpacity(rho, T_gas);
 		kappaPVec = ComputePlanckOpacity(rho, T_gas);
-    quokka::valarray<double, 3> gasMtm = {x1GasMom0, x2GasMom0, x3GasMom0}; // old state
+		quokka::valarray<double, 3> gasMtm = {x1GasMom0, x2GasMom0, x3GasMom0}; // old state
 
-    if constexpr (!((flux_full_implicit_update_) && (compute_v_over_c_terms_) && (compute_G_last_two_terms) && (gamma_ != 1.0))) { // NOLINT
-      for (int g = 0; g < nGroups_; ++g) {
+		if constexpr (!((flux_full_implicit_update_) && (compute_v_over_c_terms_) && (compute_G_last_two_terms) && (gamma_ != 1.0))) { // NOLINT
+			for (int g = 0; g < nGroups_; ++g) {
 
-        Frad_t0[0] = consPrev(i, j, k, x1RadFlux_index + numRadVars_ * g);
-        Frad_t0[1] = consPrev(i, j, k, x2RadFlux_index + numRadVars_ * g);
-        Frad_t0[2] = consPrev(i, j, k, x3RadFlux_index + numRadVars_ * g);
+				Frad_t0[0] = consPrev(i, j, k, x1RadFlux_index + numRadVars_ * g);
+				Frad_t0[1] = consPrev(i, j, k, x2RadFlux_index + numRadVars_ * g);
+				Frad_t0[2] = consPrev(i, j, k, x3RadFlux_index + numRadVars_ * g);
 
-        // compute radiation pressure F using ComputeRadPressure
-        if constexpr ((compute_v_over_c_terms_) && (compute_G_last_two_terms) && (gamma_ != 1.0)) {
-          auto erad = EradVec_guess[g];
-          auto Fx = Frad_t0[0];
-          auto Fy = Frad_t0[1];
-          auto Fz = Frad_t0[2];
-          auto fx = Fx / (c_light_ * erad);
-          auto fy = Fy / (c_light_ * erad);
-          auto fz = Fz / (c_light_ * erad);
+				// compute radiation pressure F using ComputeRadPressure
+				if constexpr ((compute_v_over_c_terms_) && (compute_G_last_two_terms) && (gamma_ != 1.0)) {
+					auto erad = EradVec_guess[g];
+					auto Fx = Frad_t0[0];
+					auto Fy = Frad_t0[1];
+					auto Fz = Frad_t0[2];
+					auto fx = Fx / (c_light_ * erad);
+					auto fy = Fy / (c_light_ * erad);
+					auto fz = Fz / (c_light_ * erad);
 
-          std::array<quokka::valarray<double, 4>, 3> P{};
-          {
-            auto [F, S] = ComputeRadPressure<FluxDir::X1>(erad, Fx, Fy, Fz, fx, fy, fz);
-            P[0] = F;
-          }
-          {
-            auto [F, S] = ComputeRadPressure<FluxDir::X2>(erad, Fx, Fy, Fz, fx, fy, fz);
-            P[1] = F;
-          }
-          {
-            auto [F, S] = ComputeRadPressure<FluxDir::X3>(erad, Fx, Fy, Fz, fx, fy, fz);
-            P[2] = F;
-          }
+					std::array<quokka::valarray<double, 4>, 3> P{};
+					{
+						auto [F, S] = ComputeRadPressure<FluxDir::X1>(erad, Fx, Fy, Fz, fx, fy, fz);
+						P[0] = F;
+					}
+					{
+						auto [F, S] = ComputeRadPressure<FluxDir::X2>(erad, Fx, Fy, Fz, fx, fy, fz);
+						P[1] = F;
+					}
+					{
+						auto [F, S] = ComputeRadPressure<FluxDir::X3>(erad, Fx, Fy, Fz, fx, fy, fz);
+						P[2] = F;
+					}
 
-          // loop over spatial dimensions
-          for (int n = 0; n < 3; ++n) {
-            double lastTwoTerms = gasMtm[n] * kappaPVec[g] * realFourPiB[g] * chat / c;
-            // loop over the second rank of the radiation pressure tensor
-            for (int z = 0; z < 3; ++z) {
-              lastTwoTerms += chat * kappaFVec[g] * gasMtm[z] * P[n][z + 1];
-            }
-            Frad_t1[n] = (Frad_t0[n] + (dt * lastTwoTerms)) / (1.0 + rho * kappaFVec[g] * chat * dt);
+					// loop over spatial dimensions
+					for (int n = 0; n < 3; ++n) {
+						double lastTwoTerms = gasMtm[n] * kappaPVec[g] * realFourPiB[g] * chat / c;
+						// loop over the second rank of the radiation pressure tensor
+						for (int z = 0; z < 3; ++z) {
+							lastTwoTerms += chat * kappaFVec[g] * gasMtm[z] * P[n][z + 1];
+						}
+						Frad_t1[n] = (Frad_t0[n] + (dt * lastTwoTerms)) / (1.0 + rho * kappaFVec[g] * chat * dt);
 
-            // Compute conservative gas momentum update
-            dMomentum[n] += -(Frad_t1[n] - Frad_t0[n]) / (c * chat);
-          }
-        } else {
-          for (int n = 0; n < 3; ++n) {
-            Frad_t1[n] = Frad_t0[n] / (1.0 + rho * kappaFVec[g] * chat * dt);
-            // Compute conservative gas momentum update
-            dMomentum[n] += -(Frad_t1[n] - Frad_t0[n]) / (c * chat);
-          }
-        }
+						// Compute conservative gas momentum update
+						dMomentum[n] += -(Frad_t1[n] - Frad_t0[n]) / (c * chat);
+					}
+				} else {
+					for (int n = 0; n < 3; ++n) {
+						Frad_t1[n] = Frad_t0[n] / (1.0 + rho * kappaFVec[g] * chat * dt);
+						// Compute conservative gas momentum update
+						dMomentum[n] += -(Frad_t1[n] - Frad_t0[n]) / (c * chat);
+					}
+				}
 
-        // update radiation flux on consNew at current group
-        consNew(i, j, k, x1RadFlux_index + numRadVars_ * g) = Frad_t1[0];
-        consNew(i, j, k, x2RadFlux_index + numRadVars_ * g) = Frad_t1[1];
-        consNew(i, j, k, x3RadFlux_index + numRadVars_ * g) = Frad_t1[2];
-      } // end loop over radiation groups
-    } else {
-      // - chat * dt * rho * kappa
-      const auto Ai = - chat * dt * rho * kappaFVec;
-      // -(1 + chat * dt * rho * kappa)
-      const auto Bi = Ai  + (-1.0);
-      auto Zn = chat * c * gasMtm;
-      // const auto Yx = - Frad_t0_x_groupi, Yy = - Frad_t0_y_groupi, Yz = - Frad_t0_z_groupi
+				// update radiation flux on consNew at current group
+				consNew(i, j, k, x1RadFlux_index + numRadVars_ * g) = Frad_t1[0];
+				consNew(i, j, k, x2RadFlux_index + numRadVars_ * g) = Frad_t1[1];
+				consNew(i, j, k, x3RadFlux_index + numRadVars_ * g) = Frad_t1[2];
+			} // end loop over radiation groups
+		} else {
+			// - chat * dt * rho * kappa
+			const auto Ai = -chat * dt * rho * kappaFVec;
+			// -(1 + chat * dt * rho * kappa)
+			const auto Bi = Ai + (-1.0);
+			auto Zn = chat * c * gasMtm;
+			// const auto Yx = - Frad_t0_x_groupi, Yy = - Frad_t0_y_groupi, Yz = - Frad_t0_z_groupi
 
-      quokka::valarray<double, 3> C0{};
-      quokka::valarray<double, 3> C1{};
-      quokka::valarray<double, 3> C2{};
-      quokka::valarray<double, nGroups_> D00{};
-      quokka::valarray<double, nGroups_> D01{};
-      quokka::valarray<double, nGroups_> D02{};
-      quokka::valarray<double, nGroups_> D10{};
-      quokka::valarray<double, nGroups_> D11{};
-      quokka::valarray<double, nGroups_> D12{};
-      quokka::valarray<double, nGroups_> D20{};
-      quokka::valarray<double, nGroups_> D21{};
-      quokka::valarray<double, nGroups_> D22{};
+			quokka::valarray<double, 3> C0{};
+			quokka::valarray<double, 3> C1{};
+			quokka::valarray<double, 3> C2{};
+			quokka::valarray<double, nGroups_> D00{};
+			quokka::valarray<double, nGroups_> D01{};
+			quokka::valarray<double, nGroups_> D02{};
+			quokka::valarray<double, nGroups_> D10{};
+			quokka::valarray<double, nGroups_> D11{};
+			quokka::valarray<double, nGroups_> D12{};
+			quokka::valarray<double, nGroups_> D20{};
+			quokka::valarray<double, nGroups_> D21{};
+			quokka::valarray<double, nGroups_> D22{};
 
-      // initialize C0, C1, C2 with zeros
-      C0.fillin(0.0);
-      C1.fillin(0.0);
-      C2.fillin(0.0);
-      
-      // compute pressure tensor and fill in the terms that include the pressure tensor
-      for (int g = 0; g < nGroups_; ++g) {
+			// initialize C0, C1, C2 with zeros
+			C0.fillin(0.0);
+			C1.fillin(0.0);
+			C2.fillin(0.0);
 
-        Frad_t0[0] = consPrev(i, j, k, x1RadFlux_index + numRadVars_ * g);
-        Frad_t0[1] = consPrev(i, j, k, x2RadFlux_index + numRadVars_ * g);
-        Frad_t0[2] = consPrev(i, j, k, x3RadFlux_index + numRadVars_ * g);
+			// compute pressure tensor and fill in the terms that include the pressure tensor
+			for (int g = 0; g < nGroups_; ++g) {
 
-        // compute radiation pressure F using ComputeRadPressure
-        amrex::Real erad = NAN;
-        erad = EradVec_guess[g];
-        auto Fx = Frad_t0[0];
-        auto Fy = Frad_t0[1];
-        auto Fz = Frad_t0[2];
-        auto fx = Fx / (c_light_ * erad);
-        auto fy = Fy / (c_light_ * erad);
-        auto fz = Fz / (c_light_ * erad);
+				Frad_t0[0] = consPrev(i, j, k, x1RadFlux_index + numRadVars_ * g);
+				Frad_t0[1] = consPrev(i, j, k, x2RadFlux_index + numRadVars_ * g);
+				Frad_t0[2] = consPrev(i, j, k, x3RadFlux_index + numRadVars_ * g);
 
-        std::array<quokka::valarray<double, 4>, 3> P{};
-        {
-          auto [F, S] = ComputeRadPressure<FluxDir::X1>(erad, Fx, Fy, Fz, fx, fy, fz);
-          P[0] = F;
-        }
-        {
-          auto [F, S] = ComputeRadPressure<FluxDir::X2>(erad, Fx, Fy, Fz, fx, fy, fz);
-          P[1] = F;
-        }
-        {
-          auto [F, S] = ComputeRadPressure<FluxDir::X3>(erad, Fx, Fy, Fz, fx, fy, fz);
-          P[2] = F;
-        }
+				// compute radiation pressure F using ComputeRadPressure
+				amrex::Real erad = NAN;
+				erad = EradVec_guess[g];
+				auto Fx = Frad_t0[0];
+				auto Fy = Frad_t0[1];
+				auto Fz = Frad_t0[2];
+				auto fx = Fx / (c_light_ * erad);
+				auto fy = Fy / (c_light_ * erad);
+				auto fz = Fz / (c_light_ * erad);
 
-        D00[g] = chat * dt * kappaFVec[g] * P[0][1] + kappaPVec[g] * realFourPiB[g] * chat / c * dt;
-        D01[g] = chat * dt * kappaFVec[g] * P[0][2];
-        D02[g] = chat * dt * kappaFVec[g] * P[0][3];
-        D10[g] = chat * dt * kappaFVec[g] * P[1][1];
-        D11[g] = chat * dt * kappaFVec[g] * P[1][2] + kappaPVec[g] * realFourPiB[g] * chat / c * dt;
-        D12[g] = chat * dt * kappaFVec[g] * P[1][3];
-        D20[g] = chat * dt * kappaFVec[g] * P[2][1];
-        D21[g] = chat * dt * kappaFVec[g] * P[2][2];
-        D22[g] = chat * dt * kappaFVec[g] * P[2][3] + kappaPVec[g] * realFourPiB[g] * chat / c * dt;
+				std::array<quokka::valarray<double, 4>, 3> P{};
+				{
+					auto [F, S] = ComputeRadPressure<FluxDir::X1>(erad, Fx, Fy, Fz, fx, fy, fz);
+					P[0] = F;
+				}
+				{
+					auto [F, S] = ComputeRadPressure<FluxDir::X2>(erad, Fx, Fy, Fz, fx, fy, fz);
+					P[1] = F;
+				}
+				{
+					auto [F, S] = ComputeRadPressure<FluxDir::X3>(erad, Fx, Fy, Fz, fx, fy, fz);
+					P[2] = F;
+				}
 
-        // loop over C0, C1, C2 and add the terms that include the pressure tensor
-        C0[0] += D00[g];
-        C0[1] += D01[g];
-        C0[2] += D02[g];
-        C1[0] += D10[g];
-        C1[1] += D11[g];
-        C1[2] += D12[g];
-        C2[0] += D20[g];
-        C2[1] += D21[g];
-        C2[2] += D22[g];
+				D00[g] = chat * dt * kappaFVec[g] * P[0][1] + kappaPVec[g] * realFourPiB[g] * chat / c * dt;
+				D01[g] = chat * dt * kappaFVec[g] * P[0][2];
+				D02[g] = chat * dt * kappaFVec[g] * P[0][3];
+				D10[g] = chat * dt * kappaFVec[g] * P[1][1];
+				D11[g] = chat * dt * kappaFVec[g] * P[1][2] + kappaPVec[g] * realFourPiB[g] * chat / c * dt;
+				D12[g] = chat * dt * kappaFVec[g] * P[1][3];
+				D20[g] = chat * dt * kappaFVec[g] * P[2][1];
+				D21[g] = chat * dt * kappaFVec[g] * P[2][2];
+				D22[g] = chat * dt * kappaFVec[g] * P[2][3] + kappaPVec[g] * realFourPiB[g] * chat / c * dt;
 
-        // Do some steps of solving the linear equation for the updated gas momentum and radiation flux
-        // Use rows 3, 4, 5, ... to eliminate the 3, 4, 5, ... elements in the first three rows
-        auto ratio = - Ai[g] / Bi[g];
-        C0[0] += ratio * D00[g];
-        C0[1] += ratio * D01[g];
-        C0[2] += ratio * D02[g];
-        C1[0] += ratio * D10[g];
-        C1[1] += ratio * D11[g];
-        C1[2] += ratio * D12[g];
-        C2[0] += ratio * D20[g];
-        C2[1] += ratio * D21[g];
-        C2[2] += ratio * D22[g];
-        Zn[0] += ratio * (-Frad_t0[0]);
-        Zn[1] += ratio * (-Frad_t0[1]);
-        Zn[2] += ratio * (-Frad_t0[2]);
-      }
+				// loop over C0, C1, C2 and add the terms that include the pressure tensor
+				C0[0] += D00[g];
+				C0[1] += D01[g];
+				C0[2] += D02[g];
+				C1[0] += D10[g];
+				C1[1] += D11[g];
+				C1[2] += D12[g];
+				C2[0] += D20[g];
+				C2[1] += D21[g];
+				C2[2] += D22[g];
 
-      // add the chat * c term in C0, C1, C2
-      C0[0] += chat * c;
-      C1[1] += chat * c;
-      C2[2] += chat * c;
+				// Do some steps of solving the linear equation for the updated gas momentum and radiation flux
+				// Use rows 3, 4, 5, ... to eliminate the 3, 4, 5, ... elements in the first three rows
+				auto ratio = -Ai[g] / Bi[g];
+				C0[0] += ratio * D00[g];
+				C0[1] += ratio * D01[g];
+				C0[2] += ratio * D02[g];
+				C1[0] += ratio * D10[g];
+				C1[1] += ratio * D11[g];
+				C1[2] += ratio * D12[g];
+				C2[0] += ratio * D20[g];
+				C2[1] += ratio * D21[g];
+				C2[2] += ratio * D22[g];
+				Zn[0] += ratio * (-Frad_t0[0]);
+				Zn[1] += ratio * (-Frad_t0[1]);
+				Zn[2] += ratio * (-Frad_t0[2]);
+			}
 
-      // Solve the 3 x 3 matrix equation C * X = Zn
-      auto [X0, X1, X2] = Solve3x3matrix(C0[0], C0[1], C0[2], C1[0], C1[1], C1[2], C2[0], C2[1], C2[2], Zn[0], Zn[1], Zn[2]);
+			// add the chat * c term in C0, C1, C2
+			C0[0] += chat * c;
+			C1[1] += chat * c;
+			C2[2] += chat * c;
 
-      dMomentum[0] = X0 - x1GasMom0;
-      dMomentum[1] = X1 - x2GasMom0;
-      dMomentum[2] = X2 - x3GasMom0;
+			// Solve the 3 x 3 matrix equation C * X = Zn
+			auto [X0, X1, X2] = Solve3x3matrix(C0[0], C0[1], C0[2], C1[0], C1[1], C1[2], C2[0], C2[1], C2[2], Zn[0], Zn[1], Zn[2]);
 
-      // Solve for the updated radiation flux
-      for (int g = 0; g < nGroups_; ++g) {
-        Frad_t0[0] = consPrev(i, j, k, x1RadFlux_index + numRadVars_ * g);
-        Frad_t0[1] = consPrev(i, j, k, x2RadFlux_index + numRadVars_ * g);
-        Frad_t0[2] = consPrev(i, j, k, x3RadFlux_index + numRadVars_ * g);
+			dMomentum[0] = X0 - x1GasMom0;
+			dMomentum[1] = X1 - x2GasMom0;
+			dMomentum[2] = X2 - x3GasMom0;
 
-        consNew(i, j, k, x1RadFlux_index + numRadVars_ * g) = (-Frad_t0[0] - (D00[g] * X0 + D01[g] * X1 + D02[g] * X2)) / Bi[g];
-        consNew(i, j, k, x2RadFlux_index + numRadVars_ * g) = (-Frad_t0[1] - (D10[g] * X0 + D11[g] * X1 + D12[g] * X2)) / Bi[g];
-        consNew(i, j, k, x3RadFlux_index + numRadVars_ * g) = (-Frad_t0[2] - (D20[g] * X0 + D21[g] * X1 + D22[g] * X2)) / Bi[g];
-      }
-    }
+			// Solve for the updated radiation flux
+			for (int g = 0; g < nGroups_; ++g) {
+				Frad_t0[0] = consPrev(i, j, k, x1RadFlux_index + numRadVars_ * g);
+				Frad_t0[1] = consPrev(i, j, k, x2RadFlux_index + numRadVars_ * g);
+				Frad_t0[2] = consPrev(i, j, k, x3RadFlux_index + numRadVars_ * g);
 
-    amrex::Real x1GasMom1 = consNew(i, j, k, x1GasMomentum_index) + dMomentum[0];
-    amrex::Real x2GasMom1 = consNew(i, j, k, x2GasMomentum_index) + dMomentum[1];
-    amrex::Real x3GasMom1 = consNew(i, j, k, x3GasMomentum_index) + dMomentum[2];
+				consNew(i, j, k, x1RadFlux_index + numRadVars_ * g) = (-Frad_t0[0] - (D00[g] * X0 + D01[g] * X1 + D02[g] * X2)) / Bi[g];
+				consNew(i, j, k, x2RadFlux_index + numRadVars_ * g) = (-Frad_t0[1] - (D10[g] * X0 + D11[g] * X1 + D12[g] * X2)) / Bi[g];
+				consNew(i, j, k, x3RadFlux_index + numRadVars_ * g) = (-Frad_t0[2] - (D20[g] * X0 + D21[g] * X1 + D22[g] * X2)) / Bi[g];
+			}
+		}
+
+		amrex::Real x1GasMom1 = consNew(i, j, k, x1GasMomentum_index) + dMomentum[0];
+		amrex::Real x2GasMom1 = consNew(i, j, k, x2GasMomentum_index) + dMomentum[1];
+		amrex::Real x3GasMom1 = consNew(i, j, k, x3GasMomentum_index) + dMomentum[2];
 
 		// compute the gas momentum after adding the current group's momentum
 		consNew(i, j, k, x1GasMomentum_index) += dMomentum[0] * gas_update_factor;

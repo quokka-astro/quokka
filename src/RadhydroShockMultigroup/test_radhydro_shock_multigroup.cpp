@@ -66,8 +66,8 @@ template <> struct RadSystem_Traits<ShockProblem> {
 	static constexpr double radiation_constant = a_rad;
 	static constexpr double Erad_floor = Erad_floor_;
 	static constexpr bool compute_v_over_c_terms = true;
-  // Note that flux_full_implicit_update should not be defined as constexpr.
-  static bool flux_full_implicit_update; // NOLINT
+	// Note that flux_full_implicit_update should not be defined as constexpr.
+	static bool flux_full_implicit_update;		  // NOLINT
 	static constexpr double energy_unit = C::hplanck; // set boundary unit to Hz
 	static constexpr amrex::GpuArray<double, Physics_Traits<ShockProblem>::nGroups + 1> radBoundaries{
 	    1.00000000e+15, 3.16227766e+15, 1.00000000e+16, 3.16227766e+16, 1.00000000e+17, 3.16227766e+17, 1.00000000e+18, 3.16227766e+18, 1.00000000e+19};
