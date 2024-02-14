@@ -1311,14 +1311,17 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					{
 						auto [F, S] = ComputeRadPressure<FluxDir::X1>(erad, Fx, Fy, Fz, fx, fy, fz);
 						P[0] = F;
+            amrex::ignore_unused(S);
 					}
 					{
 						auto [F, S] = ComputeRadPressure<FluxDir::X2>(erad, Fx, Fy, Fz, fx, fy, fz);
 						P[1] = F;
+            amrex::ignore_unused(S);
 					}
 					{
 						auto [F, S] = ComputeRadPressure<FluxDir::X3>(erad, Fx, Fy, Fz, fx, fy, fz);
 						P[2] = F;
+            amrex::ignore_unused(S);
 					}
 
 					// loop over spatial dimensions
