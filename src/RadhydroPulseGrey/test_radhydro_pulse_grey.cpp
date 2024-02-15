@@ -1,5 +1,5 @@
-/// \file test_radhydro_pulse.cpp
-/// \brief Defines a test problem for radiation in the diffusion regime with advection by gas.
+/// \file test_radhydro_pulse_grey.cpp
+/// \brief Defines a test problem for radiation in the diffusion regime with advection in medium with variable opacity under grey approximation.
 ///
 
 #include "test_radhydro_pulse_grey.hpp"
@@ -13,9 +13,6 @@ struct PulseProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
 struct AdvPulseProblem {
 };
-
-// constexpr int64_t MaxStep = 1e3;
-constexpr int64_t MaxStep = 1e8;
 
 constexpr double T0 = 1.0e7; // K (temperature)
 constexpr double T1 = 2.0e7; // K (temperature)
@@ -32,7 +29,6 @@ constexpr double v0_nonadv = 0.; // non-advecting pulse
 // static diffusion: tau = 2e3, beta = 3e-5, beta tau = 6e-2
 constexpr double kappa0 = 100.;	    // cm^2 g^-1
 constexpr double v0_adv = 1.0e6;    // advecting pulse
-// constexpr double v0_adv = 0.0;    // advecting pulse
 constexpr double max_time = 4.8e-5; // max_time = 2.0 * width / v1;
 
 // dynamic diffusion: tau = 2e4, beta = 3e-3, beta tau = 60
@@ -134,15 +130,6 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<AdvPulseProblem>::ComputeFluxMeanOpacity(co
   return RadSystem<PulseProblem>::ComputeFluxMeanOpacity(rho, Tgas);
 }
 
-template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<PulseProblem>::ComputeEddingtonFactor(double /*f*/) -> double
-{
-	return (1. / 3.); // Eddington approximation
-}
-template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<AdvPulseProblem>::ComputeEddingtonFactor(double /*f*/) -> double
-{
-	return (1. / 3.); // Eddington approximation
-}
-
 template <> void RadhydroSimulation<PulseProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
 	// extract variables required from the geom object
@@ -212,13 +199,12 @@ template <> void RadhydroSimulation<AdvPulseProblem>::setInitialConditionsOnGrid
 
 auto problem_main() -> int
 {
-	// This problem is a test of radiation diffusion plus advection by gas.
+	// This problem is a test of grey radiation diffusion plus advection by gas.
 	// This makes this problem a stringent test of the radiation advection
-	// in the diffusion limit.
+	// in the diffusion limit under grey approximation.
 
 	// Problem parameters
-	// const int64_t max_timesteps = 1e8;
-	const int64_t max_timesteps = MaxStep;
+	const int64_t max_timesteps = 1e8;
 	const double CFL_number = 0.8;
 	// const int nx = 32;
 
@@ -350,32 +336,29 @@ auto problem_main() -> int
 	// compute error norm
 	double err_norm = 0.;
 	double sol_norm = 0.;
-  double Tmax = 0.;
+  // double Tmax = 0.;
 	for (size_t i = 0; i < xs2.size(); ++i) {
 		err_norm += std::abs(Tgas[i] - Trad[i]);
 		err_norm += std::abs(Trad2[i] - Trad[i]);
 		err_norm += std::abs(Tgas2[i] - Trad[i]);
 		sol_norm += std::abs(Trad[i]) * 3.0;
-		// err_norm += std::abs(Tgas2[i] - Trad2[i]);
-		// sol_norm += std::abs(Trad2[i]);
     // Tmax = std::max(Tmax, Tgas2[i]);
 	}
-  const double Tmax_tol = 1.37e7;
-	const double error_tol = 0.006;
+  // const double Tmax_tol = 1.37e7;
+	const double error_tol = 1e-3;
 	const double rel_error = err_norm / sol_norm;
 	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
 
-  // // symmetry check
-  // double symm_err = 0.;
-  // double symm_norm = 0.;
-  // const double symm_err_tol = 1.0e-5;
-  // for (size_t i = 0; i < xs2.size(); ++i) {
-  //   symm_err += std::abs(Tgas2[i] - Tgas2[xs2.size() - 1 - i]);
-  //   symm_norm += std::abs(Tgas2[i]);
-  // }
-  // const double symm_rel_error = symm_err / symm_norm;
-  // amrex::Print() << "Symmetry relative error = " << symm_rel_error << std::endl;
-
+  // symmetry check
+  double symm_err = 0.;
+  double symm_norm = 0.;
+  const double symm_err_tol = 1.0e-3;
+  for (size_t i = 0; i < xs2.size(); ++i) {
+    symm_err += std::abs(Tgas2[i] - Tgas2[xs2.size() - 1 - i]);
+    symm_norm += std::abs(Tgas2[i]);
+  }
+  const double symm_rel_error = symm_err / symm_norm;
+  amrex::Print() << "Symmetry L1 error norm = " << symm_rel_error << std::endl;
 
 #ifdef HAVE_PYTHON
 	// plot temperature
@@ -394,28 +377,28 @@ auto problem_main() -> int
 	matplotlibcpp::plot(xs2, Tgas2, Tgas_args);
 	matplotlibcpp::xlabel("length x (cm)");
 	matplotlibcpp::ylabel("temperature (K)");
-  matplotlibcpp::ylim(0.98e7, 2.0e7);
+  matplotlibcpp::ylim(0.98e7, 1.3499e7);
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim2.tNew_[0]));
 	matplotlibcpp::tight_layout();
 	// matplotlibcpp::save("./radhydro_pulse_temperature_greynew.pdf");
   // save to file with tNew_[0] in the name
-  matplotlibcpp::save(fmt::format("./radhydro_pulse_temperature_greynew_t{:.3g}.pdf", sim2.tNew_[0]));
+  matplotlibcpp::save(fmt::format("./radhydro_pulse_grey_temperature.pdf", sim2.tNew_[0]));
 
-	// // plot gas density profile
-	// matplotlibcpp::clf();
-	// std::map<std::string, std::string> rho_args;
-	// rho_args["label"] = "gas density (non-advecting)";
-	// rho_args["linestyle"] = "-";
-	// matplotlibcpp::plot(xs, rhogas, rho_args);
-	// rho_args["label"] = "gas density (advecting))";
-	// matplotlibcpp::plot(xs2, rhogas2, rho_args);
-	// matplotlibcpp::xlabel("length x (cm)");
-	// matplotlibcpp::ylabel("density (g cm^-3)");
-	// matplotlibcpp::legend();
-	// matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
-	// matplotlibcpp::tight_layout();
-	// matplotlibcpp::save("./radhydro_pulse_density_greynew.pdf");
+	// plot gas density profile
+	matplotlibcpp::clf();
+	std::map<std::string, std::string> rho_args;
+	rho_args["label"] = "gas density (non-advecting)";
+	rho_args["linestyle"] = "-";
+	matplotlibcpp::plot(xs, rhogas, rho_args);
+	rho_args["label"] = "gas density (advecting))";
+	matplotlibcpp::plot(xs2, rhogas2, rho_args);
+	matplotlibcpp::xlabel("length x (cm)");
+	matplotlibcpp::ylabel("density (g cm^-3)");
+	matplotlibcpp::legend();
+	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
+	matplotlibcpp::tight_layout();
+	matplotlibcpp::save("./radhydro_pulse_grey_density.pdf");
 
 	// plot gas velocity profile
 	matplotlibcpp::clf();
@@ -430,15 +413,13 @@ auto problem_main() -> int
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
 	matplotlibcpp::tight_layout();
-	matplotlibcpp::save("./radhydro_pulse_velocity_greynew.pdf");
+	matplotlibcpp::save("./radhydro_pulse_grey_velocity.pdf");
 
 #endif
 
 	// Cleanup and exit
 	int status = 0;
-	if ((rel_error > error_tol) || std::isnan(rel_error)) {
-	// if ((rel_error > error_tol) || std::isnan(rel_error) || (Tmax > Tmax_tol) || (symm_err > symm_err_tol)) {
-	// if ((rel_error > error_tol) || std::isnan(rel_error) || (symm_rel_error > symm_err_tol)) {
+	if ((rel_error > error_tol) || std::isnan(rel_error) || (symm_rel_error > symm_err_tol) || std::isnan(symm_rel_error)){
 		status = 1;
 	}
 	return status;
