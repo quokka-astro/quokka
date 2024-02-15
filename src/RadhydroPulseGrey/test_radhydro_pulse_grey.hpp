@@ -1,5 +1,5 @@
-#ifndef TEST_RADHYDRO_PULSE_HPP_ // NOLINT
-#define TEST_RADHYDRO_PULSE_HPP_
+#ifndef TEST_RADHYDRO_PULSE_GREY_HPP_ // NOLINT
+#define TEST_RADHYDRO_PULSE_GREY_HPP_
 /// \file test_radiation_marshak.hpp
 /// \brief Defines a test problem for radiation in the static diffusion regime.
 ///
@@ -18,4 +18,4 @@
 
 // function definitions
 
-#endif // TEST_RADHYDRO_PULSE_HPP_
+#endif // TEST_RADHYDRO_PULSE_GREY_HPP_
