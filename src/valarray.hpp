@@ -175,6 +175,16 @@ template <typename T, int d> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto opera
 	return scalardiv;
 }
 
+// scalar / array
+template <typename T, int d> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto operator/(T const &scalar, quokka::valarray<T, d> const &v) -> quokka::valarray<T, d>
+{
+	quokka::valarray<T, d> scalardiv;
+	for (size_t i = 0; i < v.size(); ++i) {
+		scalardiv[i] = scalar / v[i];
+	}
+	return scalardiv;
+}
+
 // array /= scalar
 template <typename T, int d> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void operator/=(quokka::valarray<T, d> &v, T const &scalar)
 {
