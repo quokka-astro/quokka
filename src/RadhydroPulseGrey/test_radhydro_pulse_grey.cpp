@@ -99,35 +99,34 @@ auto compute_exact_rho(const double x) -> double
 	return rho0 * T0 / T + (a_rad * mu / 3. / k_B) * (std::pow(T0, 4) / T - std::pow(T, 3));
 }
 
-template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
 {
-  const double sigma = 3063.96 * std::pow(Tgas / T0, -3.5);
-  quokka::valarray<double, nGroups_> kappaPVec{};
-  kappaPVec.fillin(sigma / rho);
-  return kappaPVec;
+	const double sigma = 3063.96 * std::pow(Tgas / T0, -3.5);
+	quokka::valarray<double, nGroups_> kappaPVec{};
+	kappaPVec.fillin(sigma / rho);
+	return kappaPVec;
 }
 template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<AdvPulseProblem>::ComputePlanckOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
 {
-  const double sigma = 3063.96 * std::pow(Tgas / T0, -3.5);
-  quokka::valarray<double, nGroups_> kappaPVec{};
-  kappaPVec.fillin(sigma / rho);
-  return kappaPVec;
+	const double sigma = 3063.96 * std::pow(Tgas / T0, -3.5);
+	quokka::valarray<double, nGroups_> kappaPVec{};
+	kappaPVec.fillin(sigma / rho);
+	return kappaPVec;
 }
 
 template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
 {
-  const double sigma = 101.248 * std::pow(Tgas / T0, -3.5);
-  quokka::valarray<double, nGroups_> kappaPVec{};
-  kappaPVec.fillin(sigma / rho);
-  return kappaPVec;
+	const double sigma = 101.248 * std::pow(Tgas / T0, -3.5);
+	quokka::valarray<double, nGroups_> kappaPVec{};
+	kappaPVec.fillin(sigma / rho);
+	return kappaPVec;
 }
 template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<AdvPulseProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
 {
-  return RadSystem<PulseProblem>::ComputeFluxMeanOpacity(rho, Tgas);
+	return RadSystem<PulseProblem>::ComputeFluxMeanOpacity(rho, Tgas);
 }
 
 template <> void RadhydroSimulation<PulseProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
@@ -336,29 +335,29 @@ auto problem_main() -> int
 	// compute error norm
 	double err_norm = 0.;
 	double sol_norm = 0.;
-  // double Tmax = 0.;
+	// double Tmax = 0.;
 	for (size_t i = 0; i < xs2.size(); ++i) {
 		err_norm += std::abs(Tgas[i] - Trad[i]);
 		err_norm += std::abs(Trad2[i] - Trad[i]);
 		err_norm += std::abs(Tgas2[i] - Trad[i]);
 		sol_norm += std::abs(Trad[i]) * 3.0;
-    // Tmax = std::max(Tmax, Tgas2[i]);
+		// Tmax = std::max(Tmax, Tgas2[i]);
 	}
-  // const double Tmax_tol = 1.37e7;
+	// const double Tmax_tol = 1.37e7;
 	const double error_tol = 1e-3;
 	const double rel_error = err_norm / sol_norm;
 	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
 
-  // symmetry check
-  double symm_err = 0.;
-  double symm_norm = 0.;
-  const double symm_err_tol = 1.0e-3;
-  for (size_t i = 0; i < xs2.size(); ++i) {
-    symm_err += std::abs(Tgas2[i] - Tgas2[xs2.size() - 1 - i]);
-    symm_norm += std::abs(Tgas2[i]);
-  }
-  const double symm_rel_error = symm_err / symm_norm;
-  amrex::Print() << "Symmetry L1 error norm = " << symm_rel_error << std::endl;
+	// symmetry check
+	double symm_err = 0.;
+	double symm_norm = 0.;
+	const double symm_err_tol = 1.0e-3;
+	for (size_t i = 0; i < xs2.size(); ++i) {
+		symm_err += std::abs(Tgas2[i] - Tgas2[xs2.size() - 1 - i]);
+		symm_norm += std::abs(Tgas2[i]);
+	}
+	const double symm_rel_error = symm_err / symm_norm;
+	amrex::Print() << "Symmetry L1 error norm = " << symm_rel_error << std::endl;
 
 #ifdef HAVE_PYTHON
 	// plot temperature
@@ -377,13 +376,13 @@ auto problem_main() -> int
 	matplotlibcpp::plot(xs2, Tgas2, Tgas_args);
 	matplotlibcpp::xlabel("length x (cm)");
 	matplotlibcpp::ylabel("temperature (K)");
-  matplotlibcpp::ylim(0.98e7, 1.3499e7);
+	matplotlibcpp::ylim(0.98e7, 1.3499e7);
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim2.tNew_[0]));
 	matplotlibcpp::tight_layout();
 	// matplotlibcpp::save("./radhydro_pulse_temperature_greynew.pdf");
-  // save to file with tNew_[0] in the name
-  matplotlibcpp::save(fmt::format("./radhydro_pulse_grey_temperature.pdf", sim2.tNew_[0]));
+	// save to file with tNew_[0] in the name
+	matplotlibcpp::save(fmt::format("./radhydro_pulse_grey_temperature.pdf", sim2.tNew_[0]));
 
 	// plot gas density profile
 	matplotlibcpp::clf();
@@ -419,7 +418,7 @@ auto problem_main() -> int
 
 	// Cleanup and exit
 	int status = 0;
-	if ((rel_error > error_tol) || std::isnan(rel_error) || (symm_rel_error > symm_err_tol) || std::isnan(symm_rel_error)){
+	if ((rel_error > error_tol) || std::isnan(rel_error) || (symm_rel_error > symm_err_tol) || std::isnan(symm_rel_error)) {
 		status = 1;
 	}
 	return status;

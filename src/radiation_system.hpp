@@ -204,8 +204,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	AMREX_GPU_DEVICE static auto ComputeRadPressure(double erad_L, double Fx_L, double Fy_L, double Fz_L, double fx_L, double fy_L, double fz_L)
 	    -> RadPressureResult;
 
-	AMREX_GPU_DEVICE static auto ComputeEddingtonTensor(double fx_L, double fy_L, double fz_L)
-	    -> std::array<std::array<double, 3>, 3>;
+	AMREX_GPU_DEVICE static auto ComputeEddingtonTensor(double fx_L, double fy_L, double fz_L) -> std::array<std::array<double, 3>, 3>;
 };
 
 // Compute radiation energy fractions for each photon group from a Planck function, given nGroups, radBoundaries, and temperature
@@ -772,7 +771,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeEddingtonTensor(const double 
 		}
 	}
 
-  return T;
+	return T;
 }
 
 template <typename problem_t>
@@ -785,8 +784,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeRadPressure(const double erad
 	// check that states are physically admissible
 	AMREX_ASSERT(erad > 0.0);
 
-  // Compute the Eddington tensor
-  auto T = ComputeEddingtonTensor(fx, fy, fz);
+	// Compute the Eddington tensor
+	auto T = ComputeEddingtonTensor(fx, fy, fz);
 
 	// frozen Eddington tensor approximation, following Balsara
 	// (1999) [JQSRT Vol. 61, No. 5, pp. 617–627, 1999], Eq. 46.
@@ -1162,11 +1161,11 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				// compute opacity, emissivity
 				fourPiB = chat * ComputeThermalRadiation(T_gas, radBoundaries_g_copy);
 				kappaPVec = ComputePlanckOpacity(rho, T_gas);
-			  AMREX_ASSERT(!kappaPVec.hasnan());
+				AMREX_ASSERT(!kappaPVec.hasnan());
 
-        tau = dt * rho * kappaPVec * chat;
-        Rvec = tau0 * D;
-        EradVec_guess = fourPiB / chat - Rvec / tau;
+				tau = dt * rho * kappaPVec * chat;
+				Rvec = tau0 * D;
+				EradVec_guess = fourPiB / chat - Rvec / tau;
 				F_G = Egas_guess - Egas0 + (c / chat) * sum(Rvec);
 				F_R = EradVec_guess - Erad0Vec - (Rvec + Src);
 
@@ -1245,16 +1244,16 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				auto fy = Fy / (c_light_ * erad);
 				auto fz = Fz / (c_light_ * erad);
 
-        auto Tedd = ComputeEddingtonTensor(fx, fy, fz);
+				auto Tedd = ComputeEddingtonTensor(fx, fy, fz);
 
 				// loop over spatial dimensions
 				for (int n = 0; n < 3; ++n) {
 					double lastTwoTerms = gasMtm[n] * kappaPVec[g] * (realFourPiB[g] / c - erad) * chat;
 					// loop over the second rank of the radiation pressure tensor
 					for (int z = 0; z < 3; ++z) {
-            lastTwoTerms += chat * kappaFVec[g] * gasMtm[z] * Tedd[n][z] * erad;
+						lastTwoTerms += chat * kappaFVec[g] * gasMtm[z] * Tedd[n][z] * erad;
 					}
-          lastTwoTerms += chat * kappaFVec[g] * gasMtm[n] * erad;
+					lastTwoTerms += chat * kappaFVec[g] * gasMtm[n] * erad;
 					Frad_t1[n] = (Frad_t0[n] + (dt * lastTwoTerms)) / (1.0 + rho * kappaFVec[g] * chat * dt);
 
 					// Compute conservative gas momentum update
