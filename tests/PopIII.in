@@ -22,7 +22,7 @@ amr.grid_eff        = 0.7   # default
 
 hydro.reconstruction_order = 3  # PPM
 cfl = 0.15
-max_timesteps = 10
+max_timesteps = 300
 stop_time = 1e16
 
 do_reflux = 1
