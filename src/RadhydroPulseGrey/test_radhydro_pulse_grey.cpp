@@ -24,7 +24,6 @@ constexpr double width = 24.0; // cm, width of the pulse
 constexpr double erad_floor = a_rad * T0 * T0 * T0 * T0 * 1.0e-10;
 constexpr double mu = 2.33 * C::m_u;
 constexpr double k_B = C::k_B;
-constexpr double v0_nonadv = 0.; // non-advecting pulse
 
 // static diffusion: tau = 2e3, beta = 3e-5, beta tau = 6e-2
 constexpr double kappa0 = 100.;	    // cm^2 g^-1
@@ -147,17 +146,16 @@ template <> void RadhydroSimulation<PulseProblem>::setInitialConditionsOnGrid(qu
 		const double Erad = a_rad * std::pow(Trad, 4);
 		const double rho = compute_exact_rho(x - x0);
 		const double Egas = quokka::EOS<PulseProblem>::ComputeEintFromTgas(rho, Trad);
-		const double v0 = v0_nonadv;
+		const double v0 = 0.0;
 
-		// state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = (1. + 4. / 3. * (v0 * v0) / (c * c)) * Erad;
 		state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = Erad;
-		state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index) = 4. / 3. * v0 * Erad;
+		state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index) = 0;
 		state_cc(i, j, k, RadSystem<PulseProblem>::x2RadFlux_index) = 0;
 		state_cc(i, j, k, RadSystem<PulseProblem>::x3RadFlux_index) = 0;
-		state_cc(i, j, k, RadSystem<PulseProblem>::gasEnergy_index) = Egas + 0.5 * rho * v0 * v0;
+		state_cc(i, j, k, RadSystem<PulseProblem>::gasEnergy_index) = Egas;
 		state_cc(i, j, k, RadSystem<PulseProblem>::gasDensity_index) = rho;
 		state_cc(i, j, k, RadSystem<PulseProblem>::gasInternalEnergy_index) = Egas;
-		state_cc(i, j, k, RadSystem<PulseProblem>::x1GasMomentum_index) = v0 * rho;
+		state_cc(i, j, k, RadSystem<PulseProblem>::x1GasMomentum_index) = 0.;
 		state_cc(i, j, k, RadSystem<PulseProblem>::x2GasMomentum_index) = 0.;
 		state_cc(i, j, k, RadSystem<PulseProblem>::x3GasMomentum_index) = 0.;
 	});
@@ -213,10 +211,7 @@ auto problem_main() -> int
 	constexpr int nvars = RadSystem<PulseProblem>::nvar_;
 	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
 	for (int n = 0; n < nvars; ++n) {
-		// periodic boundary condition in the x-direction will not work
-		BCs_cc[n].setLo(0, amrex::BCType::foextrap); // extrapolate
-		BCs_cc[n].setHi(0, amrex::BCType::foextrap);
-		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
+		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
 			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
 			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
 		}
