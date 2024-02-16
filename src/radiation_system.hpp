@@ -1106,7 +1106,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		quokka::valarray<double, nGroups_> fourPiB{};
 		quokka::valarray<double, nGroups_> EradVec_guess{};
 		quokka::valarray<double, nGroups_> kappaPVec{};
-    quokka::valarray<double, nGroups_> kappaEVec{};
+		quokka::valarray<double, nGroups_> kappaEVec{};
 		quokka::valarray<double, nGroups_> kappaFVec{};
 		quokka::valarray<double, nGroups_> tau0{}; // optical depth across c * dt at old state
 		quokka::valarray<double, nGroups_> tau{};  // optical depth across c * dt at new state
@@ -1132,7 +1132,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			const double Etot0 = Egas0 + (c / chat) * (Erad0 + sum(Src));
 
 			// BEGIN NEWTON-RAPHSON LOOP
-      // Solve for the new radiation energy and gas internal energy using a Newton-Raphson method using the base variables (Egas, D_0, D_1,
+			// Solve for the new radiation energy and gas internal energy using a Newton-Raphson method using the base variables (Egas, D_0, D_1,
 			// ...), where D_i = R_i / tau_i^(t) and tau_i^(t) = dt * rho * kappa_{P,i}^(t) * chat is the optical depth across chat * dt for group i
 			// at time t. Compared with the old base (Egas, Erad_0, Erad_1, ...), this new base is more stable and converges faster. Furthermore,
 			// the PlanckOpacityTempDerivative term is not needed anymore since I assume d/dT (kappa_P / kappa_E) = 0 in the calculation of the
@@ -1151,7 +1151,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			AMREX_ASSERT(T_gas >= 0.);
 			fourPiB = chat * ComputeThermalRadiation(T_gas, radBoundaries_g_copy);
 			kappaPVec = ComputePlanckOpacity(rho, T_gas);
-      kappaEVec = ComputeEnergyMeanOpacity(rho, T_gas);
+			kappaEVec = ComputeEnergyMeanOpacity(rho, T_gas);
 			AMREX_ASSERT(!kappaPVec.hasnan());
 			AMREX_ASSERT(!kappaEVec.hasnan());
 			tau0 = dt * rho * kappaPVec * chat;
@@ -1177,7 +1177,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				// compute opacity, emissivity
 				fourPiB = chat * ComputeThermalRadiation(T_gas, radBoundaries_g_copy);
 				kappaPVec = ComputePlanckOpacity(rho, T_gas);
-        kappaEVec = ComputeEnergyMeanOpacity(rho, T_gas);
+				kappaEVec = ComputeEnergyMeanOpacity(rho, T_gas);
 				AMREX_ASSERT(!kappaPVec.hasnan());
 
 				tau = dt * rho * kappaEVec * chat;
@@ -1197,7 +1197,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				AMREX_ASSERT(!dfourPiB_dTgas.hasnan());
 
 				// compute Jacobian elements
-        // I assume (kappaPVec / kappaEVec) is constant here. This is usually a reasonable assumption. Note that this assumption only
+				// I assume (kappaPVec / kappaEVec) is constant here. This is usually a reasonable assumption. Note that this assumption only
 				// affects the convergence rate of the Newton-Raphson iteration and does not affect the converged solution at all.
 				dFG_dEgas = 1.0;
 				dFG_dD = (c / chat) * tau0;
