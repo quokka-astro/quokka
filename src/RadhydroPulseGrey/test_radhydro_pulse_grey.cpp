@@ -146,7 +146,6 @@ template <> void RadhydroSimulation<PulseProblem>::setInitialConditionsOnGrid(qu
 		const double Erad = a_rad * std::pow(Trad, 4);
 		const double rho = compute_exact_rho(x - x0);
 		const double Egas = quokka::EOS<PulseProblem>::ComputeEintFromTgas(rho, Trad);
-		const double v0 = 0.0;
 
 		state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = Erad;
 		state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index) = 0;
