@@ -203,6 +203,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	template <FluxDir DIR>
 	AMREX_GPU_DEVICE static auto ComputeRadPressure(double erad_L, double Fx_L, double Fy_L, double Fz_L, double fx_L, double fy_L, double fz_L)
 	    -> RadPressureResult;
+
+	AMREX_GPU_DEVICE static auto ComputeEddingtonTensor(double fx_L, double fy_L, double fz_L) -> std::array<std::array<double, 3>, 3>;
 };
 
 // Compute radiation energy fractions for each photon group from a Planck function, given nGroups, radBoundaries, and temperature
@@ -728,14 +730,10 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeCellOpticalDepth(const quokka
 }
 
 template <typename problem_t>
-template <FluxDir DIR>
-AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeRadPressure(const double erad, const double Fx, const double Fy, const double Fz, const double fx,
-							       const double fy, const double fz) -> RadPressureResult
+AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeEddingtonTensor(const double fx, const double fy, const double fz) -> std::array<std::array<double, 3>, 3>
 {
-	// Compute the radiation pressure tensor and the maximum signal speed and return them as a struct.
+	// Compute the radiation pressure tensor
 
-	// check that states are physically admissible
-	AMREX_ASSERT(erad > 0.0);
 	// AMREX_ASSERT(f < 1.0); // there is sometimes a small (<1%) flux
 	// limiting violation when using P1 AMREX_ASSERT(f_R < 1.0);
 
@@ -765,17 +763,29 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeRadPressure(const double erad
 
 	// assemble Eddington tensor
 	std::array<std::array<double, 3>, 3> T{};
-	std::array<std::array<double, 3>, 3> P{};
 
 	for (int ii = 0; ii < 3; ++ii) {
 		for (int jj = 0; jj < 3; ++jj) {
 			const double delta_ij = (ii == jj) ? 1 : 0;
 			T[ii][jj] = Tdiag * delta_ij + Tf * (n[ii] * n[jj]);
-			// compute the elements of the total radiation pressure
-			// tensor
-			P[ii][jj] = T[ii][jj] * erad;
 		}
 	}
+
+	return T;
+}
+
+template <typename problem_t>
+template <FluxDir DIR>
+AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeRadPressure(const double erad, const double Fx, const double Fy, const double Fz, const double fx,
+							       const double fy, const double fz) -> RadPressureResult
+{
+	// Compute the radiation pressure tensor and the maximum signal speed and return them as a struct.
+
+	// check that states are physically admissible
+	AMREX_ASSERT(erad > 0.0);
+
+	// Compute the Eddington tensor
+	auto T = ComputeEddingtonTensor(fx, fy, fz);
 
 	// frozen Eddington tensor approximation, following Balsara
 	// (1999) [JQSRT Vol. 61, No. 5, pp. 617–627, 1999], Eq. 46.
@@ -789,41 +799,41 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeRadPressure(const double erad
 	}
 
 	// compute fluxes F_L, F_R
-	// P_nx, P_ny, P_nz indicate components where 'n' is the direction of the
-	// face normal F_n is the radiation flux component in the direction of the
+	// T_nx, T_ny, T_nz indicate components where 'n' is the direction of the
+	// face normal. F_n is the radiation flux component in the direction of the
 	// face normal
 	double Fn = NAN;
-	double Pnx = NAN;
-	double Pny = NAN;
-	double Pnz = NAN;
+	double Tnx = NAN;
+	double Tny = NAN;
+	double Tnz = NAN;
 
 	if constexpr (DIR == FluxDir::X1) {
 		Fn = Fx;
 
-		Pnx = P[0][0];
-		Pny = P[0][1];
-		Pnz = P[0][2];
+		Tnx = T[0][0];
+		Tny = T[0][1];
+		Tnz = T[0][2];
 	} else if constexpr (DIR == FluxDir::X2) {
 		Fn = Fy;
 
-		Pnx = P[1][0];
-		Pny = P[1][1];
-		Pnz = P[1][2];
+		Tnx = T[1][0];
+		Tny = T[1][1];
+		Tnz = T[1][2];
 	} else if constexpr (DIR == FluxDir::X3) {
 		Fn = Fz;
 
-		Pnx = P[2][0];
-		Pny = P[2][1];
-		Pnz = P[2][2];
+		Tnx = T[2][0];
+		Tny = T[2][1];
+		Tnz = T[2][2];
 	}
 
 	AMREX_ASSERT(Fn != NAN);
-	AMREX_ASSERT(Pnx != NAN);
-	AMREX_ASSERT(Pny != NAN);
-	AMREX_ASSERT(Pnz != NAN);
+	AMREX_ASSERT(Tnx != NAN);
+	AMREX_ASSERT(Tny != NAN);
+	AMREX_ASSERT(Tnz != NAN);
 
 	RadPressureResult result{};
-	result.F = {Fn, Pnx, Pny, Pnz};
+	result.F = {Fn, Tnx * erad, Tny * erad, Tnz * erad};
 	result.S = std::max(0.1, std::sqrt(Tnormal));
 
 	return result;
@@ -1244,7 +1254,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			Frad_t0[1] = consPrev(i, j, k, x2RadFlux_index + numRadVars_ * g);
 			Frad_t0[2] = consPrev(i, j, k, x3RadFlux_index + numRadVars_ * g);
 
-			// compute radiation pressure F using ComputeRadPressure
 			if constexpr ((compute_v_over_c_terms_) && (compute_G_last_two_terms) && (gamma_ != 1.0)) {
 				auto erad = EradVec_guess[g];
 				auto Fx = Frad_t0[0];
@@ -1254,27 +1263,16 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				auto fy = Fy / (c_light_ * erad);
 				auto fz = Fz / (c_light_ * erad);
 
-				std::array<quokka::valarray<double, 4>, 3> P{};
-				{
-					auto [F, S] = ComputeRadPressure<FluxDir::X1>(erad, Fx, Fy, Fz, fx, fy, fz);
-					P[0] = F;
-				}
-				{
-					auto [F, S] = ComputeRadPressure<FluxDir::X2>(erad, Fx, Fy, Fz, fx, fy, fz);
-					P[1] = F;
-				}
-				{
-					auto [F, S] = ComputeRadPressure<FluxDir::X3>(erad, Fx, Fy, Fz, fx, fy, fz);
-					P[2] = F;
-				}
+				auto Tedd = ComputeEddingtonTensor(fx, fy, fz);
 
 				// loop over spatial dimensions
 				for (int n = 0; n < 3; ++n) {
-					double lastTwoTerms = gasMtm[n] * kappaPVec[g] * realFourPiB[g] * chat / c;
+					double lastTwoTerms = gasMtm[n] * kappaPVec[g] * (realFourPiB[g] / c - erad) * chat;
 					// loop over the second rank of the radiation pressure tensor
 					for (int z = 0; z < 3; ++z) {
-						lastTwoTerms += chat * kappaFVec[g] * gasMtm[z] * P[n][z + 1];
+						lastTwoTerms += chat * kappaFVec[g] * gasMtm[z] * Tedd[n][z] * erad;
 					}
+					lastTwoTerms += chat * kappaFVec[g] * gasMtm[n] * erad;
 					Frad_t1[n] = (Frad_t0[n] + (dt * lastTwoTerms)) / (1.0 + rho * kappaFVec[g] * chat * dt);
 
 					// Compute conservative gas momentum update
