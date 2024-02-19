@@ -16,6 +16,7 @@
 #include "AMReX.H"
 #include "AMReX_Array4.H"
 #include "AMReX_BLassert.H"
+#include "AMReX_Extension.H"
 #include "AMReX_REAL.H"
 #include "AMReX_iMultiFab.H"
 
@@ -92,6 +93,11 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	AMREX_GPU_DEVICE static auto ReconstructToPrimVars(quokka::valarray<amrex::Real, nvar_> const &r, quokka::valarray<amrex::Real, nvar_> const &q_i)
 	    -> quokka::valarray<amrex::Real, nvar_>;
+
+	AMREX_FORCE_INLINE AMREX_GPU_DEVICE static auto
+	ReconstructCellPPM(quokka::valarray<Real, nvar_> const &r_im2, quokka::valarray<Real, nvar_> const &r_im1, quokka::valarray<Real, nvar_> const &r_i,
+			   quokka::valarray<Real, nvar_> const &r_ip1, quokka::valarray<Real, nvar_> const &r_ip2)
+	    -> std::pair<quokka::valarray<Real, nvar_>, quokka::valarray<Real, nvar_>>;
 
 	AMREX_GPU_DEVICE static auto ComputePressure(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> amrex::Real;
 
@@ -375,11 +381,11 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::PrimToReconstru
 
 	// Project primitive vars onto the right eigenvectors
 	quokka::valarray<amrex::Real, nvar_> charVars{};
-	charVars[0] = 0.5 * (q[0] - 2 * q[1] + q[4]) / (cs * cs);
+	charVars[0] = (0.5 * (q[0] + q[4]) - q[1]) / (cs * cs);
 	charVars[1] = 0.5 * (-q[0] + q[4]) / (cs * rho);
 	charVars[2] = q[2];
 	charVars[3] = q[3];
-	charVars[4] = 0.5 * q[0] + 0.5 * q[4];
+	charVars[4] = 0.5 * (q[0] + q[4]);
 	charVars[5] = q[5];
 
 	for (int i = 0; i < nscalars_; ++i) {
@@ -415,8 +421,82 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ReconstructToPr
 
 	// Un-permute velocity component indices
 	// ...
-	
+
 	return primVars;
+}
+
+template <typename problem_t>
+auto HydroSystem<problem_t>::ReconstructCellPPM(quokka::valarray<Real, nvar_> const &r_im2, quokka::valarray<Real, nvar_> const &r_im1,
+						quokka::valarray<Real, nvar_> const &r_i, quokka::valarray<Real, nvar_> const &r_ip1,
+						quokka::valarray<Real, nvar_> const &r_ip2)
+    -> std::pair<quokka::valarray<Real, nvar_>, quokka::valarray<Real, nvar_>>
+{
+	// reconstructed edge states (in characteristic variables)
+	quokka::valarray<Real, nvar_> r_minus{};
+	quokka::valarray<Real, nvar_> r_plus{};
+
+	for (int n = 0; n < nvar_; ++n) {
+		const double q_im2 = r_im2[n];
+		const double q_im1 = r_im1[n];
+		const double q_i = r_i[n];
+		const double q_ip1 = r_ip1[n];
+		const double q_ip2 = r_ip2[n];
+
+		// (1.) Estimate the interface a_{i - 1/2}. Equivalent to step 1
+		// in Athena++ [ppm_simple.cpp].
+
+		// C&W Eq. (1.9) [parabola midpoint for the case of
+		// equally-spaced zones]: a_{j+1/2} = (7/12)(a_j + a_{j+1}) -
+		// (1/12)(a_{j+2} + a_{j-1}). Terms are grouped to preserve exact
+		// symmetry in floating-point arithmetic, following Athena++.
+		const double coef_1 = (7. / 12.);
+		const double coef_2 = (-1. / 12.);
+		const double a_minus = (coef_1 * q_i + coef_2 * q_ip1) + (coef_1 * q_im1 + coef_2 * q_im2);
+		const double a_plus = (coef_1 * q_ip1 + coef_2 * q_ip2) + (coef_1 * q_i + coef_2 * q_im1);
+
+		// (2.) Constrain interfaces to lie between surrounding cell-averaged
+		// values (equivalent to step 2b in Athena++ [ppm_simple.cpp]).
+		// [See Eq. B8 of Mignone+ 2005.]
+
+		// compute bounds from neighboring cell-averaged values along axis
+		const std::pair<double, double> bounds = std::minmax({q_im1, q_i, q_ip1});
+
+		// left side of zone i
+		double new_a_minus = clamp(a_minus, bounds.first, bounds.second);
+		// right side of zone i
+		double new_a_plus = clamp(a_plus, bounds.first, bounds.second);
+
+		// (3.) Monotonicity correction, using Eq. (1.10) in PPM paper. Equivalent
+		// to step 4b in Athena++ [ppm_simple.cpp].
+
+		const double a = q_i; // a_i in C&W
+		const double dq_minus = (a - new_a_minus);
+		const double dq_plus = (new_a_plus - a);
+		const double qa = dq_plus * dq_minus; // interface extrema
+
+		if (qa <= 0.0) { // local extremum
+			const double dq0 = MC(q_ip1 - q_i, q_i - q_im1);
+			// use linear reconstruction, following Balsara (2017) [Living Rev Comput Astrophys (2017) 3:2]
+			new_a_minus = a - 0.5 * dq0;
+			new_a_plus = a + 0.5 * dq0;
+
+		} else { // no local extrema
+			// parabola overshoots near a_plus -> reset a_minus
+			if (std::abs(dq_minus) >= 2.0 * std::abs(dq_plus)) {
+				new_a_minus = a - 2.0 * dq_plus;
+			}
+
+			// parabola overshoots near a_minus -> reset a_plus
+			if (std::abs(dq_plus) >= 2.0 * std::abs(dq_minus)) {
+				new_a_plus = a + 2.0 * dq_minus;
+			}
+		}
+
+		r_minus[n] = new_a_minus;
+		r_plus[n] = new_a_plus;
+	}
+
+	return std::make_pair(r_minus, r_plus);
 }
 
 template <typename problem_t>
@@ -456,6 +536,7 @@ void HydroSystem<problem_t>::ReconstructStatesPPM(amrex::MultiFab const &q_mf, a
 		quokka::valarray<Real, nvar_> p_i{};
 		quokka::valarray<Real, nvar_> p_ip1{};
 		quokka::valarray<Real, nvar_> p_ip2{};
+
 		for (int n = 0; n < nvar_; ++n) {
 			p_im2[n] = q(i - 2, j, k, n);
 			p_im1[n] = q(i - 1, j, k, n);
@@ -471,84 +552,29 @@ void HydroSystem<problem_t>::ReconstructStatesPPM(amrex::MultiFab const &q_mf, a
 		quokka::valarray<Real, nvar_> const r_ip1 = PrimToReconstructVars(p_ip1, p_i);
 		quokka::valarray<Real, nvar_> const r_ip2 = PrimToReconstructVars(p_ip2, p_i);
 
-		// reconstructed edge states (in characteristic variables)
-		quokka::valarray<Real, nvar_> r_minus{};
-		quokka::valarray<Real, nvar_> r_plus{};
-
-		for (int n = 0; n < nvars; ++n) {
-			const double q_im2 = r_im2[n];
-			const double q_im1 = r_im1[n];
-			const double q_i = r_i[n];
-			const double q_ip1 = r_ip1[n];
-			const double q_ip2 = r_ip2[n];
-
-			// (1.) Estimate the interface a_{i - 1/2}. Equivalent to step 1
-			// in Athena++ [ppm_simple.cpp].
-
-			// C&W Eq. (1.9) [parabola midpoint for the case of
-			// equally-spaced zones]: a_{j+1/2} = (7/12)(a_j + a_{j+1}) -
-			// (1/12)(a_{j+2} + a_{j-1}). Terms are grouped to preserve exact
-			// symmetry in floating-point arithmetic, following Athena++.
-			const double coef_1 = (7. / 12.);
-			const double coef_2 = (-1. / 12.);
-			const double a_minus = (coef_1 * q_i + coef_2 * q_ip1) + (coef_1 * q_im1 + coef_2 * q_im2);
-			const double a_plus = (coef_1 * q_ip1 + coef_2 * q_ip2) + (coef_1 * q_i + coef_2 * q_im1);
-
-			// (2.) Constrain interfaces to lie between surrounding cell-averaged
-			// values (equivalent to step 2b in Athena++ [ppm_simple.cpp]).
-			// [See Eq. B8 of Mignone+ 2005.]
-
-			// compute bounds from neighboring cell-averaged values along axis
-			const std::pair<double, double> bounds = std::minmax({q_im1, q_i, q_ip1});
-
-			// left side of zone i
-			double new_a_minus = clamp(a_minus, bounds.first, bounds.second);
-			// right side of zone i
-			double new_a_plus = clamp(a_plus, bounds.first, bounds.second);
-
-			// (3.) Monotonicity correction, using Eq. (1.10) in PPM paper. Equivalent
-			// to step 4b in Athena++ [ppm_simple.cpp].
-
-			const double a = q_i; // a_i in C&W
-			const double dq_minus = (a - new_a_minus);
-			const double dq_plus = (new_a_plus - a);
-			const double qa = dq_plus * dq_minus; // interface extrema
-
-			if (qa <= 0.0) { // local extremum
-				const double dq0 = MC(q_ip1 - q_i, q_i - q_im1);
-				// use linear reconstruction, following Balsara (2017) [Living Rev Comput Astrophys (2017) 3:2]
-				new_a_minus = a - 0.5 * dq0;
-				new_a_plus = a + 0.5 * dq0;
-
-			} else { // no local extrema
-				// parabola overshoots near a_plus -> reset a_minus
-				if (std::abs(dq_minus) >= 2.0 * std::abs(dq_plus)) {
-					new_a_minus = a - 2.0 * dq_plus;
-				}
-
-				// parabola overshoots near a_minus -> reset a_plus
-				if (std::abs(dq_plus) >= 2.0 * std::abs(dq_minus)) {
-					new_a_plus = a + 2.0 * dq_minus;
-				}
-			}
-
-			r_minus[n] = new_a_minus;
-			r_plus[n] = new_a_plus;
-		}
+		auto [r_minus, r_plus] = ReconstructCellPPM(r_im2, r_im1, r_i, r_ip1, r_ip2);
 
 		// convert back to primitive vars
 		quokka::valarray<Real, nvar_> const q_minus = ReconstructToPrimVars(r_minus, p_i);
 		quokka::valarray<Real, nvar_> const q_plus = ReconstructToPrimVars(r_plus, p_i);
-		// check density
-		AMREX_ASSERT(q_minus[primDensity_index] > 0.);
-		AMREX_ASSERT(q_plus[primDensity_index] > 0.);
-		// check pressure
-		AMREX_ASSERT(q_minus[pressure_index] > 0.);
-		AMREX_ASSERT(q_plus[pressure_index] > 0.);
 
-		for (int n = 0; n < nvars; ++n) {
-			rightState(i, j, k, n) = q_minus[n];
-			leftState(i + 1, j, k, n) = q_plus[n];
+		// check state validity
+		bool isDensityPositive = (q_minus[primDensity_index] > 0.) && (q_plus[primDensity_index] > 0.);
+		bool isPressurePositive = (q_minus[pressure_index] > 0.) && (q_plus[pressure_index] > 0.);
+
+		if (isDensityPositive && isPressurePositive) {
+			// we are done
+			for (int n = 0; n < nvars; ++n) {
+				rightState(i, j, k, n) = q_minus[n];
+				leftState(i + 1, j, k, n) = q_plus[n];
+			}
+		} else {
+			// state is invalid, so fall back to reconstruction using primitive vars
+			auto [q_minus, q_plus] = ReconstructCellPPM(p_im2, p_im1, p_i, p_ip1, p_ip2);
+			for (int n = 0; n < nvars; ++n) {
+				rightState(i, j, k, n) = q_minus[n];
+				leftState(i + 1, j, k, n) = q_plus[n];
+			}
 		}
 	});
 }
