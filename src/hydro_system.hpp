@@ -415,7 +415,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ReconstructToPr
 
 	// Un-permute velocity component indices
 	// ...
-
+	
 	return primVars;
 }
 
@@ -539,6 +539,12 @@ void HydroSystem<problem_t>::ReconstructStatesPPM(amrex::MultiFab const &q_mf, a
 		// convert back to primitive vars
 		quokka::valarray<Real, nvar_> const q_minus = ReconstructToPrimVars(r_minus, p_i);
 		quokka::valarray<Real, nvar_> const q_plus = ReconstructToPrimVars(r_plus, p_i);
+		// check density
+		AMREX_ASSERT(q_minus[primDensity_index] > 0.);
+		AMREX_ASSERT(q_plus[primDensity_index] > 0.);
+		// check pressure
+		AMREX_ASSERT(q_minus[pressure_index] > 0.);
+		AMREX_ASSERT(q_plus[pressure_index] > 0.);
 
 		for (int n = 0; n < nvars; ++n) {
 			rightState(i, j, k, n) = q_minus[n];
