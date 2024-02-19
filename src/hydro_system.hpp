@@ -381,7 +381,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::PrimToReconstru
 
 	// Project primitive vars onto the right eigenvectors
 	quokka::valarray<amrex::Real, nvar_> charVars{};
-	charVars[0] = (0.5 * (q[0] + q[4]) - q[1]) / (cs * cs);
+	charVars[0] = (0.5 * (q[0] + q[4]) / (cs * cs)) - (q[1] / (cs * cs));
 	charVars[1] = 0.5 * (-q[0] + q[4]) / (cs * rho);
 	charVars[2] = q[2];
 	charVars[3] = q[3];
@@ -407,9 +407,9 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ReconstructToPr
 	// Project characteristic vars onto left eigenvectors
 	quokka::valarray<amrex::Real, nvar_> primVars{};
 	const amrex::Real x0 = -r[4];
-	const amrex::Real x1 = cs * r[1] * rho;
-	primVars[0] = -x0 - x1;
-	primVars[1] = -(cs * cs) * r[0] - x0;
+	const amrex::Real x1 = (cs * rho) * r[1];
+	primVars[0] = -(x0 + x1);
+	primVars[1] = -((cs * cs) * r[0] + x0);
 	primVars[2] = r[2];
 	primVars[3] = r[3];
 	primVars[4] = r[4] + x1;
