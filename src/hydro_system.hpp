@@ -20,7 +20,6 @@
 #include "AMReX_iMultiFab.H"
 
 // internal headers
-#include "ArrayView.hpp"
 #include "EOS.hpp"
 #include "HLLC.hpp"
 #include "HLLD.hpp"
@@ -47,6 +46,11 @@ enum class RiemannSolver { HLLC, LLF, HLLD };
 template <typename problem_t> class HydroSystem : public HyperbolicSystem<problem_t>
 {
       public:
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto MC(double a, double b) -> double
+	{
+		return 0.5 * (sgn(a) + sgn(b)) * std::min(0.5 * std::abs(a + b), std::min(2.0 * std::abs(a), 2.0 * std::abs(b)));
+	}
+
 	static constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
 	static constexpr int nscalars_ = Physics_Traits<problem_t>::numPassiveScalars;
 	static constexpr int nvar_ = Physics_NumVars::numHydroVars + nscalars_;
@@ -83,6 +87,12 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	AMREX_GPU_DEVICE static auto ComputeConsVars(quokka::valarray<amrex::Real, nvar_> const &prim) -> quokka::valarray<amrex::Real, nvar_>;
 
+	AMREX_GPU_DEVICE static auto PrimToReconstructVars(quokka::valarray<amrex::Real, nvar_> const &q, quokka::valarray<amrex::Real, nvar_> const &q_i)
+	    -> quokka::valarray<amrex::Real, nvar_>;
+
+	AMREX_GPU_DEVICE static auto ReconstructToPrimVars(quokka::valarray<amrex::Real, nvar_> const &r, quokka::valarray<amrex::Real, nvar_> const &q_i)
+	    -> quokka::valarray<amrex::Real, nvar_>;
+
 	AMREX_GPU_DEVICE static auto ComputePressure(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> amrex::Real;
 
 	AMREX_GPU_DEVICE static auto ComputeSoundSpeed(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> amrex::Real;
@@ -94,6 +104,9 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	AMREX_GPU_DEVICE static auto ComputeVelocityX3(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> amrex::Real;
 
 	AMREX_GPU_DEVICE static auto isStateValid(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> bool;
+
+	template <FluxDir DIR>
+	static void ReconstructStatesPPM(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf, int nghost, int nvars);
 
 	static void ComputeRhsFromFluxes(amrex::MultiFab &rhs_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fluxArray,
 					 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, int nvars);
@@ -345,6 +358,193 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeConsVars
 		consVars[scalar0_index + i] = prim[primScalar0_index + i];
 	}
 	return consVars;
+}
+
+template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::PrimToReconstructVars(quokka::valarray<amrex::Real, nvar_> const &q,
+										       quokka::valarray<amrex::Real, nvar_> const &q_i)
+    -> quokka::valarray<amrex::Real, nvar_>
+{
+	// Get rho, cs from q_i
+	const amrex::Real rho = q_i[primDensity_index];
+	const amrex::Real P = q_i[pressure_index];
+	const amrex::Real cs = quokka::EOS<problem_t>::ComputeSoundSpeed(rho, P);
+
+	// Permute velocity component indices
+	// ...
+
+	// Project primitive vars onto the right eigenvectors
+	quokka::valarray<amrex::Real, nvar_> charVars{};
+	charVars[0] = 0.5 * (q[0] - 2 * q[1] + q[4]) / (cs * cs);
+	charVars[1] = 0.5 * (-q[0] + q[4]) / (cs * rho);
+	charVars[2] = q[2];
+	charVars[3] = q[3];
+	charVars[4] = 0.5 * q[0] + 0.5 * q[4];
+	charVars[5] = q[5];
+
+	for (int i = 0; i < nscalars_; ++i) {
+		charVars[scalar0_index + i] = q[primScalar0_index + i];
+	}
+	return charVars;
+}
+
+template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ReconstructToPrimVars(quokka::valarray<amrex::Real, nvar_> const &r,
+										       quokka::valarray<amrex::Real, nvar_> const &q_i)
+    -> quokka::valarray<amrex::Real, nvar_>
+{
+	// Get rho, cs from q_i
+	const amrex::Real rho = q_i[primDensity_index];
+	const amrex::Real P = q_i[pressure_index];
+	const amrex::Real cs = quokka::EOS<problem_t>::ComputeSoundSpeed(rho, P);
+
+	// Project characteristic vars onto left eigenvectors
+	quokka::valarray<amrex::Real, nvar_> primVars{};
+	const amrex::Real x0 = -r[4];
+	const amrex::Real x1 = cs * r[1] * rho;
+	primVars[0] = -x0 - x1;
+	primVars[1] = -(cs * cs) * r[0] - x0;
+	primVars[2] = r[2];
+	primVars[3] = r[3];
+	primVars[4] = r[4] + x1;
+	primVars[5] = r[5];
+
+	for (int i = 0; i < nscalars_; ++i) {
+		primVars[scalar0_index + i] = r[primScalar0_index + i];
+	}
+
+	// Un-permute velocity component indices
+	// ...
+
+	return primVars;
+}
+
+template <typename problem_t>
+template <FluxDir DIR>
+void HydroSystem<problem_t>::ReconstructStatesPPM(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf, const int nghost,
+						  const int nvars)
+{
+	BL_PROFILE("HydroSystem::ReconstructStatesPPM()");
+
+	// PPM reconstruction following Colella & Woodward (1984), with
+	// some modifications following Mignone (2014), as implemented in
+	// Athena++.
+
+	// By convention, the interfaces are defined on the left edge of each
+	// zone, i.e. xleft_(i) is the "left"-side of the interface at the left
+	// edge of zone i, and xright_(i) is the "right"-side of the interface
+	// at the *left* edge of zone i.
+
+	auto const &q_in = q_mf.const_arrays();
+	auto leftState_in = leftState_mf.arrays();
+	auto rightState_in = rightState_mf.arrays();
+	amrex::IntVect ng{AMREX_D_DECL(nghost, nghost, nghost)};
+
+	// cell-centered kernel
+	amrex::ParallelFor(q_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i_in, int j_in, int k_in) noexcept {
+		// construct ArrayViews for permuted indices
+		quokka::Array4View<amrex::Real const, DIR> q(q_in[bx]);
+		quokka::Array4View<amrex::Real, DIR> leftState(leftState_in[bx]);
+		quokka::Array4View<amrex::Real, DIR> rightState(rightState_in[bx]);
+
+		// permute array indices according to dir
+		auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
+
+		// primitive variable states
+		quokka::valarray<Real, nvar_> p_im2{};
+		quokka::valarray<Real, nvar_> p_im1{};
+		quokka::valarray<Real, nvar_> p_i{};
+		quokka::valarray<Real, nvar_> p_ip1{};
+		quokka::valarray<Real, nvar_> p_ip2{};
+		for (int n = 0; n < nvar_; ++n) {
+			p_im2[n] = q(i - 2, j, k, n);
+			p_im1[n] = q(i - 1, j, k, n);
+			p_i[n] = q(i, j, k, n);
+			p_ip1[n] = q(i + 1, j, k, n);
+			p_ip2[n] = q(i + 2, j, k, n);
+		}
+
+		// characteristic variable states
+		quokka::valarray<Real, nvar_> const r_im2 = PrimToReconstructVars(p_im2, p_i);
+		quokka::valarray<Real, nvar_> const r_im1 = PrimToReconstructVars(p_im1, p_i);
+		quokka::valarray<Real, nvar_> const r_i = PrimToReconstructVars(p_i, p_i);
+		quokka::valarray<Real, nvar_> const r_ip1 = PrimToReconstructVars(p_ip1, p_i);
+		quokka::valarray<Real, nvar_> const r_ip2 = PrimToReconstructVars(p_ip2, p_i);
+
+		// reconstructed edge states (in characteristic variables)
+		quokka::valarray<Real, nvar_> r_minus{};
+		quokka::valarray<Real, nvar_> r_plus{};
+
+		for (int n = 0; n < nvars; ++n) {
+			const double q_im2 = r_im2[n];
+			const double q_im1 = r_im1[n];
+			const double q_i = r_i[n];
+			const double q_ip1 = r_ip1[n];
+			const double q_ip2 = r_ip2[n];
+
+			// (1.) Estimate the interface a_{i - 1/2}. Equivalent to step 1
+			// in Athena++ [ppm_simple.cpp].
+
+			// C&W Eq. (1.9) [parabola midpoint for the case of
+			// equally-spaced zones]: a_{j+1/2} = (7/12)(a_j + a_{j+1}) -
+			// (1/12)(a_{j+2} + a_{j-1}). Terms are grouped to preserve exact
+			// symmetry in floating-point arithmetic, following Athena++.
+			const double coef_1 = (7. / 12.);
+			const double coef_2 = (-1. / 12.);
+			const double a_minus = (coef_1 * q_i + coef_2 * q_ip1) + (coef_1 * q_im1 + coef_2 * q_im2);
+			const double a_plus = (coef_1 * q_ip1 + coef_2 * q_ip2) + (coef_1 * q_i + coef_2 * q_im1);
+
+			// (2.) Constrain interfaces to lie between surrounding cell-averaged
+			// values (equivalent to step 2b in Athena++ [ppm_simple.cpp]).
+			// [See Eq. B8 of Mignone+ 2005.]
+
+			// compute bounds from neighboring cell-averaged values along axis
+			const std::pair<double, double> bounds = std::minmax({q_im1, q_i, q_ip1});
+
+			// left side of zone i
+			double new_a_minus = clamp(a_minus, bounds.first, bounds.second);
+			// right side of zone i
+			double new_a_plus = clamp(a_plus, bounds.first, bounds.second);
+
+			// (3.) Monotonicity correction, using Eq. (1.10) in PPM paper. Equivalent
+			// to step 4b in Athena++ [ppm_simple.cpp].
+
+			const double a = q_i; // a_i in C&W
+			const double dq_minus = (a - new_a_minus);
+			const double dq_plus = (new_a_plus - a);
+			const double qa = dq_plus * dq_minus; // interface extrema
+
+			if (qa <= 0.0) { // local extremum
+				const double dq0 = MC(q_ip1 - q_i, q_i - q_im1);
+				// use linear reconstruction, following Balsara (2017) [Living Rev Comput Astrophys (2017) 3:2]
+				new_a_minus = a - 0.5 * dq0;
+				new_a_plus = a + 0.5 * dq0;
+
+			} else { // no local extrema
+				// parabola overshoots near a_plus -> reset a_minus
+				if (std::abs(dq_minus) >= 2.0 * std::abs(dq_plus)) {
+					new_a_minus = a - 2.0 * dq_plus;
+				}
+
+				// parabola overshoots near a_minus -> reset a_plus
+				if (std::abs(dq_plus) >= 2.0 * std::abs(dq_minus)) {
+					new_a_plus = a + 2.0 * dq_minus;
+				}
+			}
+
+			r_minus[n] = new_a_minus;
+			r_plus[n] = new_a_plus;
+		}
+
+		// convert back to primitive vars
+		quokka::valarray<Real, nvar_> const q_minus = ReconstructToPrimVars(r_minus, p_i);
+		quokka::valarray<Real, nvar_> const q_plus = ReconstructToPrimVars(r_plus, p_i);
+
+		for (int n = 0; n < nvars; ++n) {
+			rightState(i, j, k, n) = q_minus[n];
+			leftState(i + 1, j, k, n) = q_plus[n];
+		}
+	});
 }
 
 template <typename problem_t>
