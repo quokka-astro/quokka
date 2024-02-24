@@ -21,6 +21,7 @@
 #include "AMReX_iMultiFab.H"
 
 // internal headers
+#include "ArrayView_3d.hpp"
 #include "EOS.hpp"
 #include "HLLC.hpp"
 #include "HLLD.hpp"
@@ -41,6 +42,8 @@ template <typename problem_t> struct HydroSystem_Traits {
 };
 
 enum class RiemannSolver { HLLC, LLF, HLLD };
+
+enum class CellSide { minus, plus };
 
 /// Class for the Euler equations of inviscid hydrodynamics
 ///
@@ -88,10 +91,12 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	AMREX_GPU_DEVICE static auto ComputeConsVars(quokka::valarray<amrex::Real, nvar_> const &prim) -> quokka::valarray<amrex::Real, nvar_>;
 
+	template <FluxDir DIR>
 	AMREX_GPU_DEVICE static auto PrimToReconstructVars(quokka::valarray<amrex::Real, nvar_> const &q, quokka::valarray<amrex::Real, nvar_> const &q_i)
 	    -> quokka::valarray<amrex::Real, nvar_>;
 
-	AMREX_GPU_DEVICE static auto ReconstructToPrimVars(quokka::valarray<amrex::Real, nvar_> const &r, quokka::valarray<amrex::Real, nvar_> const &q_i)
+	template <FluxDir DIR>
+	AMREX_GPU_DEVICE static auto ReconstructToPrimVars(quokka::valarray<amrex::Real, nvar_> &beta, quokka::valarray<amrex::Real, nvar_> const &q_i, CellSide const &side)
 	    -> quokka::valarray<amrex::Real, nvar_>;
 
 	AMREX_FORCE_INLINE AMREX_GPU_DEVICE static auto
@@ -367,6 +372,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeConsVars
 }
 
 template <typename problem_t>
+template <FluxDir DIR>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::PrimToReconstructVars(quokka::valarray<amrex::Real, nvar_> const &q,
 										       quokka::valarray<amrex::Real, nvar_> const &q_i)
     -> quokka::valarray<amrex::Real, nvar_>
@@ -374,19 +380,44 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::PrimToReconstru
 	// Get rho, cs from q_i
 	const amrex::Real rho = q_i[primDensity_index];
 	const amrex::Real P = q_i[pressure_index];
+	const amrex::Real h = (q_i[primEint_index] + P) / rho;
 	const amrex::Real cs = quokka::EOS<problem_t>::ComputeSoundSpeed(rho, P);
 
-	// Permute velocity component indices
-	// ...
+	const amrex::Real rho_hat = q[primDensity_index];
+	const amrex::Real P_hat = q[pressure_index];
+	const amrex::Real e_hat = q[primEint_index] / rho_hat;
+
+	// Pick normal velocity component
+	amrex::Real u_hat{};
+	amrex::Real v_hat{};
+	amrex::Real w_hat{};
+	if constexpr (DIR == FluxDir::X1) {
+		u_hat = q[x1Velocity_index];
+		v_hat = q[x2Velocity_index];
+		w_hat = q[x3Velocity_index];
+	} else if constexpr (DIR == FluxDir::X2) {
+		u_hat = q[x2Velocity_index];
+		v_hat = q[x3Velocity_index];
+		w_hat = q[x1Velocity_index];
+	} else if constexpr (DIR == FluxDir::X3) {
+		u_hat = q[x3Velocity_index];
+		v_hat = q[x1Velocity_index];
+		w_hat = q[x2Velocity_index];
+	}
 
 	// Project primitive vars onto the right eigenvectors
 	quokka::valarray<amrex::Real, nvar_> charVars{};
-	charVars[0] = (0.5 * (q[0] + q[4]) / (cs * cs)) - (q[1] / (cs * cs));
-	charVars[1] = 0.5 * (-q[0] + q[4]) / (cs * rho);
-	charVars[2] = q[2];
-	charVars[3] = q[3];
-	charVars[4] = 0.5 * (q[0] + q[4]);
-	charVars[5] = q[5];
+	const amrex::Real x0 = cs * rho * u_hat;
+	const amrex::Real x1 = 1.0 / (cs * cs);
+	const amrex::Real x2 = 0.5 * x1;
+	const amrex::Real x3 = 1.0 / h;
+	const amrex::Real x4 = P_hat * x1;
+	charVars[0] = x2 * (P_hat - x0);
+	charVars[1] = rho_hat * x3 - x3 * x4;
+	charVars[2] = v_hat;
+	charVars[3] = w_hat;
+	charVars[4] = e_hat * x3 - x4;
+	charVars[5] = x2 * (P_hat + x0);
 
 	for (int i = 0; i < nscalars_; ++i) {
 		charVars[scalar0_index + i] = q[primScalar0_index + i];
@@ -395,32 +426,108 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::PrimToReconstru
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ReconstructToPrimVars(quokka::valarray<amrex::Real, nvar_> const &r,
-										       quokka::valarray<amrex::Real, nvar_> const &q_i)
+template <FluxDir DIR>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ReconstructToPrimVars(quokka::valarray<amrex::Real, nvar_> &beta,
+										       quokka::valarray<amrex::Real, nvar_> const &q_i, CellSide const &side)
     -> quokka::valarray<amrex::Real, nvar_>
 {
 	// Get rho, cs from q_i
 	const amrex::Real rho = q_i[primDensity_index];
 	const amrex::Real P = q_i[pressure_index];
+	const amrex::Real h = (q_i[primEint_index] + P) / rho;
 	const amrex::Real cs = quokka::EOS<problem_t>::ComputeSoundSpeed(rho, P);
+
+#if 0
+	// Pick normal velocity component
+	amrex::Real u_i{};
+	if constexpr (DIR == FluxDir::X1) {
+		u_i = q_i[x1Velocity_index];
+	} else if constexpr (DIR == FluxDir::X2) {
+		u_i = q_i[x2Velocity_index];
+	} else if constexpr (DIR == FluxDir::X3) {
+		u_i = q_i[x3Velocity_index];
+	}
+
+	// delete characteristics moving away from the interface
+	if (side == CellSide::minus) {
+		if (u_i + cs > 0.) {
+			// left wave is moving away
+			beta[0] = 0.;
+		}
+		if (u_i > 0.) {
+			// intermediate waves are moving away
+			beta[1] = 0.;
+			beta[2] = 0.;
+			beta[3] = 0.;
+			beta[4] = 0.;
+			for (int i = 0; i < nscalars_; ++i) {
+				beta[scalar0_index + i] = 0.;
+			}
+		}
+		if (u_i - cs > 0.) {
+			// right wave is moving away
+			beta[5] = 0.;
+		}
+	} else if (side == CellSide::plus) {
+		if (u_i + cs < 0.) {
+			// left wave is moving away
+			beta[0] = 0.;
+		}
+		if (u_i < 0.) {
+			// intermediate waves are moving away
+			beta[1] = 0.;
+			beta[2] = 0.;
+			beta[3] = 0.;
+			beta[4] = 0.;
+			for (int i = 0; i < nscalars_; ++i) {
+				beta[scalar0_index + i] = 0.;
+			}
+		}
+		if (u_i - cs < 0.) {
+			// right wave is moving away
+			beta[5] = 0.;
+		}
+	}
+
+	if (!beta.nonzero()) {
+		// all waves are traveling away from the interface, return the cell-average value
+		return q_i;
+	}
+#endif
 
 	// Project characteristic vars onto left eigenvectors
 	quokka::valarray<amrex::Real, nvar_> primVars{};
-	const amrex::Real x0 = -r[4];
-	const amrex::Real x1 = (cs * rho) * r[1];
-	primVars[0] = -(x0 + x1);
-	primVars[1] = -((cs * cs) * r[0] + x0);
-	primVars[2] = r[2];
-	primVars[3] = r[3];
-	primVars[4] = r[4] + x1;
-	primVars[5] = r[5];
+	const amrex::Real x0 = beta[0] + beta[5];
+	primVars[0] = beta[1] * h + x0;
+	primVars[1] = cs * (-beta[0] + beta[5]) / rho;
+	primVars[2] = beta[2];
+	primVars[3] = beta[3];
+	primVars[4] = (cs * cs) * x0;
+	primVars[5] = h * (beta[4] + x0);
 
 	for (int i = 0; i < nscalars_; ++i) {
-		primVars[scalar0_index + i] = r[primScalar0_index + i];
+		primVars[scalar0_index + i] = beta[primScalar0_index + i];
 	}
 
-	// Un-permute velocity component indices
-	// ...
+	amrex::Real u{};
+	amrex::Real v{};
+	amrex::Real w{};
+	if constexpr (DIR == FluxDir::X1) {
+		u = primVars[x1Velocity_index];
+		v = primVars[x2Velocity_index];
+		w = primVars[x3Velocity_index];
+	} else if constexpr (DIR == FluxDir::X2) {
+		u = primVars[x3Velocity_index];
+		v = primVars[x1Velocity_index];
+		w = primVars[x2Velocity_index];
+	} else if constexpr (DIR == FluxDir::X3) {
+		u = primVars[x2Velocity_index];
+		v = primVars[x3Velocity_index];
+		w = primVars[x1Velocity_index];
+	}
+	primVars[x1Velocity_index] = u;
+	primVars[x2Velocity_index] = v;
+	primVars[x3Velocity_index] = w;
 
 	return primVars;
 }
@@ -546,17 +653,17 @@ void HydroSystem<problem_t>::ReconstructStatesPPM(amrex::MultiFab const &q_mf, a
 		}
 
 		// characteristic variable states
-		quokka::valarray<Real, nvar_> const r_im2 = PrimToReconstructVars(p_im2, p_i);
-		quokka::valarray<Real, nvar_> const r_im1 = PrimToReconstructVars(p_im1, p_i);
-		quokka::valarray<Real, nvar_> const r_i = PrimToReconstructVars(p_i, p_i);
-		quokka::valarray<Real, nvar_> const r_ip1 = PrimToReconstructVars(p_ip1, p_i);
-		quokka::valarray<Real, nvar_> const r_ip2 = PrimToReconstructVars(p_ip2, p_i);
+		quokka::valarray<Real, nvar_> const r_im2 = PrimToReconstructVars<DIR>(p_im2, p_i);
+		quokka::valarray<Real, nvar_> const r_im1 = PrimToReconstructVars<DIR>(p_im1, p_i);
+		quokka::valarray<Real, nvar_> const r_i = PrimToReconstructVars<DIR>(p_i, p_i);
+		quokka::valarray<Real, nvar_> const r_ip1 = PrimToReconstructVars<DIR>(p_ip1, p_i);
+		quokka::valarray<Real, nvar_> const r_ip2 = PrimToReconstructVars<DIR>(p_ip2, p_i);
 
 		auto [r_minus, r_plus] = ReconstructCellPPM(r_im2, r_im1, r_i, r_ip1, r_ip2);
 
 		// convert back to primitive vars
-		quokka::valarray<Real, nvar_> const q_minus = ReconstructToPrimVars(r_minus, p_i);
-		quokka::valarray<Real, nvar_> const q_plus = ReconstructToPrimVars(r_plus, p_i);
+		quokka::valarray<Real, nvar_> const q_minus = ReconstructToPrimVars<DIR>(r_minus, p_i, CellSide::minus);
+		quokka::valarray<Real, nvar_> const q_plus = ReconstructToPrimVars<DIR>(r_plus, p_i, CellSide::plus);
 
 		// check state validity
 		bool isDensityPositive = (q_minus[primDensity_index] > 0.) && (q_plus[primDensity_index] > 0.);

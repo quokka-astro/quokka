@@ -69,6 +69,16 @@ template <typename T, int d> class valarray
 		return false;
 	}
 
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto nonzero() const -> bool
+	{
+		for (size_t i = 0; i < d; ++i) {
+			if (values[i] != 0.) {
+				return true;
+			}
+		}
+		return false;
+	}
+
       private:
 	T values[d]; // NOLINT
 	static constexpr T default_value = 0;
