@@ -96,8 +96,8 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	    -> quokka::valarray<amrex::Real, nvar_>;
 
 	template <FluxDir DIR>
-	AMREX_GPU_DEVICE static auto ReconstructToPrimVars(quokka::valarray<amrex::Real, nvar_> &beta, quokka::valarray<amrex::Real, nvar_> const &q_i, CellSide const &side)
-	    -> quokka::valarray<amrex::Real, nvar_>;
+	AMREX_GPU_DEVICE static auto ReconstructToPrimVars(quokka::valarray<amrex::Real, nvar_> &beta, quokka::valarray<amrex::Real, nvar_> const &q_i,
+							   CellSide const &side) -> quokka::valarray<amrex::Real, nvar_>;
 
 	AMREX_FORCE_INLINE AMREX_GPU_DEVICE static auto
 	ReconstructCellPPM(quokka::valarray<Real, nvar_> const &r_im2, quokka::valarray<Real, nvar_> const &r_im1, quokka::valarray<Real, nvar_> const &r_i,
