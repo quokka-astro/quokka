@@ -585,7 +585,7 @@ auto HydroSystem<problem_t>::ReconstructCellPPM(quokka::valarray<Real, nvar_> co
 			const double dq0 = MC(q_ip1 - q_i, q_i - q_im1);
 			// use linear reconstruction, following Balsara (2017) [Living Rev Comput Astrophys (2017) 3:2]
 			new_a_minus = a; // - 0.5 * dq0;
-			new_a_plus = a; // + 0.5 * dq0;
+			new_a_plus = a;	 // + 0.5 * dq0;
 
 		} else { // no local extrema
 			// parabola overshoots near a_plus -> reset a_minus
