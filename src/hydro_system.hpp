@@ -21,7 +21,7 @@
 #include "AMReX_iMultiFab.H"
 
 // internal headers
-#include "ArrayView_3d.hpp"
+#include "ArrayView.hpp" // NOLINT(unused-includes)
 #include "EOS.hpp"
 #include "HLLC.hpp"
 #include "HLLD.hpp"
