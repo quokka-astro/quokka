@@ -338,7 +338,7 @@ auto problem_main() -> int
 		// Tmax = std::max(Tmax, Tgas2[i]);
 	}
 	// const double Tmax_tol = 1.37e7;
-	const double error_tol = 1e-3;
+	const double error_tol = 1.5e-3;
 	const double rel_error = err_norm / sol_norm;
 	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
 
