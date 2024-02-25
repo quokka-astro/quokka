@@ -23,7 +23,7 @@ do_subcycle = 0
 
 # cfl = 0.45        # maximum stable CFL for eta = 0.001
 # cfl = 0.84        # maximum stable CFL for eta = 0.01
-cfl = 0.4
+cfl = 0.15
 hydro.use_dual_energy = 1
 
 stop_time = 3.0
