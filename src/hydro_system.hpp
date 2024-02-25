@@ -405,7 +405,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::PrimToReconstru
 	}
 
 	// Project primitive vars onto the right eigenvectors
-#if 0
 	// (tau, u, p, e) eigensystem
 	const amrex::Real tau = 1. / rho;
 	const amrex::Real tau_hat = 1. / rho_hat;
@@ -415,14 +414,15 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::PrimToReconstru
 	const amrex::Real x3 = 0.5 * tau * x2;
 	const amrex::Real x4 = 1. / P;
 	const amrex::Real x5 = P_hat * (tau * tau) * x2;
+	quokka::valarray<amrex::Real, nvar_> charVars{};
 	charVars[0] = x3 * (-x0 + x1);
 	charVars[1] = -tau_hat * x4 - x4 * x5;
 	charVars[2] = v_hat;
 	charVars[3] = w_hat;
 	charVars[4] = -e_hat * x4 + x5;
 	charVars[5] = x3 * (-x0 - x1);
-#endif
 
+#if 0
 	// (rho, u, p, e) eigensystem
 	quokka::valarray<amrex::Real, nvar_> charVars{};
 	const amrex::Real h = (q_i[primEint_index] + P) / rho;
@@ -437,6 +437,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::PrimToReconstru
 	charVars[3] = w_hat;
 	charVars[4] = e_hat * x3 - x4;
 	charVars[5] = x2 * (P_hat + x0);
+#endif
 
 	for (int i = 0; i < nscalars_; ++i) {
 		charVars[scalar0_index + i] = q[primScalar0_index + i];
@@ -456,10 +457,10 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ReconstructToPr
 	const amrex::Real cs = quokka::EOS<problem_t>::ComputeSoundSpeed(rho, P);
 
 	// Project characteristic vars onto left eigenvectors
-#if 0
 	// (tau, u, p, e) eigensystem
 	const amrex::Real tau = 1. / rho;
 	const amrex::Real x0 = beta[0] + beta[5];
+	quokka::valarray<amrex::Real, nvar_> primVars{};
 	primVars[0] = -P * beta[1] + x0;
 	primVars[1] = cs * (beta[0] - beta[5]) / tau;
 	primVars[2] = beta[2];
@@ -469,8 +470,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ReconstructToPr
 
 	// convert tau -> rho
 	primVars[0] = 1.0 / primVars[0];
-#endif
 
+#if 0
 	// (rho, u, p, e) eigensystem
 	const amrex::Real h = (q_i[primEint_index] + P) / rho;
 	const amrex::Real x0 = beta[0] + beta[5];
@@ -481,6 +482,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ReconstructToPr
 	primVars[3] = beta[3];
 	primVars[4] = (cs * cs) * x0;
 	primVars[5] = h * (beta[4] + x0);
+#endif
 
 	for (int i = 0; i < nscalars_; ++i) {
 		primVars[scalar0_index + i] = beta[primScalar0_index + i];
