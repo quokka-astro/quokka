@@ -38,7 +38,7 @@
 //
 template <typename problem_t> struct HydroSystem_Traits {
 	// if true, reconstruct e_int instead of pressure
-	static constexpr bool reconstruct_eint = true;
+	static constexpr bool reconstruct_eint = false;
 };
 
 enum class RiemannSolver { HLLC, LLF, HLLD };
@@ -380,7 +380,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::PrimToReconstru
 	// Get rho, cs from q_i
 	const amrex::Real rho = q_i[primDensity_index];
 	const amrex::Real P = q_i[pressure_index];
-	const amrex::Real h = (q_i[primEint_index] + P) / rho;
 	const amrex::Real cs = quokka::EOS<problem_t>::ComputeSoundSpeed(rho, P);
 
 	const amrex::Real rho_hat = q[primDensity_index];
@@ -406,7 +405,27 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::PrimToReconstru
 	}
 
 	// Project primitive vars onto the right eigenvectors
+#if 0
+	// (tau, u, p, e) eigensystem
+	const amrex::Real tau = 1. / rho;
+	const amrex::Real tau_hat = 1. / rho_hat;
+	const amrex::Real x0 = P_hat * tau;
+	const amrex::Real x1 = cs * u_hat;
+	const amrex::Real x2 = 1. / (cs * cs);
+	const amrex::Real x3 = 0.5 * tau * x2;
+	const amrex::Real x4 = 1. / P;
+	const amrex::Real x5 = P_hat * (tau * tau) * x2;
+	charVars[0] = x3 * (-x0 + x1);
+	charVars[1] = -tau_hat * x4 - x4 * x5;
+	charVars[2] = v_hat;
+	charVars[3] = w_hat;
+	charVars[4] = -e_hat * x4 + x5;
+	charVars[5] = x3 * (-x0 - x1);
+#endif
+
+	// (rho, u, p, e) eigensystem
 	quokka::valarray<amrex::Real, nvar_> charVars{};
+	const amrex::Real h = (q_i[primEint_index] + P) / rho;
 	const amrex::Real x0 = cs * rho * u_hat;
 	const amrex::Real x1 = 1.0 / (cs * cs);
 	const amrex::Real x2 = 0.5 * x1;
@@ -434,70 +453,28 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ReconstructToPr
 	// Get rho, cs from q_i
 	const amrex::Real rho = q_i[primDensity_index];
 	const amrex::Real P = q_i[pressure_index];
-	const amrex::Real h = (q_i[primEint_index] + P) / rho;
 	const amrex::Real cs = quokka::EOS<problem_t>::ComputeSoundSpeed(rho, P);
 
+	// Project characteristic vars onto left eigenvectors
 #if 0
-	// Pick normal velocity component
-	amrex::Real u_i{};
-	if constexpr (DIR == FluxDir::X1) {
-		u_i = q_i[x1Velocity_index];
-	} else if constexpr (DIR == FluxDir::X2) {
-		u_i = q_i[x2Velocity_index];
-	} else if constexpr (DIR == FluxDir::X3) {
-		u_i = q_i[x3Velocity_index];
-	}
+	// (tau, u, p, e) eigensystem
+	const amrex::Real tau = 1. / rho;
+	const amrex::Real x0 = beta[0] + beta[5];
+	primVars[0] = -P * beta[1] + x0;
+	primVars[1] = cs * (beta[0] - beta[5]) / tau;
+	primVars[2] = beta[2];
+	primVars[3] = beta[3];
+	primVars[4] = -(cs * cs) * x0 / (tau * tau);
+	primVars[5] = -P * (beta[4] + x0);
 
-	// delete characteristics moving away from the interface
-	if (side == CellSide::minus) {
-		if (u_i + cs > 0.) {
-			// left wave is moving away
-			beta[0] = 0.;
-		}
-		if (u_i > 0.) {
-			// intermediate waves are moving away
-			beta[1] = 0.;
-			beta[2] = 0.;
-			beta[3] = 0.;
-			beta[4] = 0.;
-			for (int i = 0; i < nscalars_; ++i) {
-				beta[scalar0_index + i] = 0.;
-			}
-		}
-		if (u_i - cs > 0.) {
-			// right wave is moving away
-			beta[5] = 0.;
-		}
-	} else if (side == CellSide::plus) {
-		if (u_i + cs < 0.) {
-			// left wave is moving away
-			beta[0] = 0.;
-		}
-		if (u_i < 0.) {
-			// intermediate waves are moving away
-			beta[1] = 0.;
-			beta[2] = 0.;
-			beta[3] = 0.;
-			beta[4] = 0.;
-			for (int i = 0; i < nscalars_; ++i) {
-				beta[scalar0_index + i] = 0.;
-			}
-		}
-		if (u_i - cs < 0.) {
-			// right wave is moving away
-			beta[5] = 0.;
-		}
-	}
-
-	if (!beta.nonzero()) {
-		// all waves are traveling away from the interface, return the cell-average value
-		return q_i;
-	}
+	// convert tau -> rho
+	primVars[0] = 1.0 / primVars[0];
 #endif
 
-	// Project characteristic vars onto left eigenvectors
-	quokka::valarray<amrex::Real, nvar_> primVars{};
+	// (rho, u, p, e) eigensystem
+	const amrex::Real h = (q_i[primEint_index] + P) / rho;
 	const amrex::Real x0 = beta[0] + beta[5];
+	quokka::valarray<amrex::Real, nvar_> primVars{};
 	primVars[0] = beta[1] * h + x0;
 	primVars[1] = cs * (-beta[0] + beta[5]) / rho;
 	primVars[2] = beta[2];
@@ -528,6 +505,9 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ReconstructToPr
 	primVars[x1Velocity_index] = u;
 	primVars[x2Velocity_index] = v;
 	primVars[x3Velocity_index] = w;
+
+	// convert e_int -> rho*e_int
+	primVars[primEint_index] *= primVars[primDensity_index];
 
 	return primVars;
 }
@@ -585,7 +565,7 @@ auto HydroSystem<problem_t>::ReconstructCellPPM(quokka::valarray<Real, nvar_> co
 			const double dq0 = MC(q_ip1 - q_i, q_i - q_im1);
 			// use linear reconstruction, following Balsara (2017) [Living Rev Comput Astrophys (2017) 3:2]
 			new_a_minus = a; // - 0.5 * dq0;
-			new_a_plus = a; // + 0.5 * dq0;
+			new_a_plus = a;	 // + 0.5 * dq0;
 
 		} else { // no local extrema
 			// parabola overshoots near a_plus -> reset a_minus
