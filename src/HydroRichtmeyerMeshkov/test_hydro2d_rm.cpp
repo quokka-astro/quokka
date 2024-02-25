@@ -27,10 +27,6 @@ template <> struct quokka::EOS_Traits<RichtmeyerMeshkovProblem> {
 	static constexpr double boltzmann_constant = C::k_B;
 };
 
-template <> struct HydroSystem_Traits<RichtmeyerMeshkovProblem> {
-	static constexpr bool reconstruct_eint = false;
-};
-
 template <> struct Physics_Traits<RichtmeyerMeshkovProblem> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;

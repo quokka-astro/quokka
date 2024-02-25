@@ -49,10 +49,6 @@ using amrex::Real;
 struct PopIII {
 };
 
-template <> struct HydroSystem_Traits<PopIII> {
-	static constexpr bool reconstruct_eint = true;
-};
-
 template <> struct Physics_Traits<PopIII> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;

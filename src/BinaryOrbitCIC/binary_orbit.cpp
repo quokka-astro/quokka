@@ -38,10 +38,6 @@ template <> struct quokka::EOS_Traits<BinaryOrbit> {
 	static constexpr double boltzmann_constant = C::k_B;
 };
 
-template <> struct HydroSystem_Traits<BinaryOrbit> {
-	static constexpr bool reconstruct_eint = false;
-};
-
 template <> struct Physics_Traits<BinaryOrbit> {
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_radiation_enabled = false;

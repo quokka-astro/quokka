@@ -34,16 +34,7 @@
 // Microphysics headers
 #include "extern_parameters.H"
 
-// this struct is specialized by the user application code
-//
-template <typename problem_t> struct HydroSystem_Traits {
-	// if true, reconstruct e_int instead of pressure
-	static constexpr bool reconstruct_eint = false;
-};
-
 enum class RiemannSolver { HLLC, LLF, HLLD };
-
-enum class CellSide { minus, plus };
 
 /// Class for the Euler equations of inviscid hydrodynamics
 ///
@@ -96,8 +87,8 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	    -> quokka::valarray<amrex::Real, nvar_>;
 
 	template <FluxDir DIR>
-	AMREX_GPU_DEVICE static auto ReconstructToPrimVars(quokka::valarray<amrex::Real, nvar_> &beta, quokka::valarray<amrex::Real, nvar_> const &q_i,
-							   CellSide const &side) -> quokka::valarray<amrex::Real, nvar_>;
+	AMREX_GPU_DEVICE static auto ReconstructToPrimVars(quokka::valarray<amrex::Real, nvar_> &beta, quokka::valarray<amrex::Real, nvar_> const &q_i)
+	    -> quokka::valarray<amrex::Real, nvar_>;
 
 	AMREX_FORCE_INLINE AMREX_GPU_DEVICE static auto
 	ReconstructCellPPM(quokka::valarray<Real, nvar_> const &r_im2, quokka::valarray<Real, nvar_> const &r_im1, quokka::valarray<Real, nvar_> const &r_i,
@@ -156,8 +147,6 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	static constexpr double gamma_ = quokka::EOS_Traits<problem_t>::gamma;
 	static constexpr double cs_iso_ = quokka::EOS_Traits<problem_t>::cs_isothermal;
 	static constexpr auto is_eos_isothermal() -> bool { return (gamma_ == 1.0); }
-
-	static constexpr bool reconstruct_eint = HydroSystem_Traits<problem_t>::reconstruct_eint;
 };
 
 template <typename problem_t> void HydroSystem<problem_t>::ConservedToPrimitive(amrex::MultiFab const &cons_mf, amrex::MultiFab &primVar_mf, const int nghost)
@@ -201,17 +190,10 @@ template <typename problem_t> void HydroSystem<problem_t>::ConservedToPrimitive(
 		primVar[bx](i, j, k, x2Velocity_index) = vy;
 		primVar[bx](i, j, k, x3Velocity_index) = vz;
 
-		if constexpr (reconstruct_eint) {
-			// save specific internal energy (SIE) == (Etot - KE) / rho
-			primVar[bx](i, j, k, pressure_index) = eint_cons;
-			// save auxiliary specific internal energy (SIE) == Eint_aux / rho
-			primVar[bx](i, j, k, primEint_index) = eint_aux;
-		} else {
-			// save pressure
-			primVar[bx](i, j, k, pressure_index) = Pgas;
-			// save auxiliary internal energy (rho * e)
-			primVar[bx](i, j, k, primEint_index) = Eint_aux;
-		}
+		// save pressure
+		primVar[bx](i, j, k, pressure_index) = Pgas;
+		// save auxiliary internal energy (rho * e)
+		primVar[bx](i, j, k, primEint_index) = Eint_aux;
 
 		// copy any passive scalars
 		for (int nc = 0; nc < nscalars_; ++nc) {
@@ -448,7 +430,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::PrimToReconstru
 template <typename problem_t>
 template <FluxDir DIR>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ReconstructToPrimVars(quokka::valarray<amrex::Real, nvar_> &beta,
-										       quokka::valarray<amrex::Real, nvar_> const &q_i, CellSide const &side)
+										       quokka::valarray<amrex::Real, nvar_> const &q_i)
     -> quokka::valarray<amrex::Real, nvar_>
 {
 	// Get rho, cs from q_i
@@ -515,9 +497,10 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ReconstructToPr
 }
 
 template <typename problem_t>
-auto HydroSystem<problem_t>::ReconstructCellPPM(quokka::valarray<Real, nvar_> const &r_im2, quokka::valarray<Real, nvar_> const &r_im1,
-						quokka::valarray<Real, nvar_> const &r_i, quokka::valarray<Real, nvar_> const &r_ip1,
-						quokka::valarray<Real, nvar_> const &r_ip2)
+AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto
+HydroSystem<problem_t>::ReconstructCellPPM(quokka::valarray<Real, nvar_> const &r_im2, quokka::valarray<Real, nvar_> const &r_im1,
+					   quokka::valarray<Real, nvar_> const &r_i, quokka::valarray<Real, nvar_> const &r_ip1,
+					   quokka::valarray<Real, nvar_> const &r_ip2)
     -> std::pair<quokka::valarray<Real, nvar_>, quokka::valarray<Real, nvar_>>
 {
 	// reconstructed edge states (in characteristic variables)
@@ -566,8 +549,8 @@ auto HydroSystem<problem_t>::ReconstructCellPPM(quokka::valarray<Real, nvar_> co
 		if (qa <= 0.0) { // local extremum
 			const double dq0 = MC(q_ip1 - q_i, q_i - q_im1);
 			// use linear reconstruction, following Balsara (2017) [Living Rev Comput Astrophys (2017) 3:2]
-			new_a_minus = a; // - 0.5 * dq0;
-			new_a_plus = a;	 // + 0.5 * dq0;
+			new_a_minus = a - 0.5 * dq0;
+			new_a_plus = a + 0.5 * dq0;
 
 		} else { // no local extrema
 			// parabola overshoots near a_plus -> reset a_minus
@@ -644,8 +627,8 @@ void HydroSystem<problem_t>::ReconstructStatesPPM(amrex::MultiFab const &q_mf, a
 		auto [r_minus, r_plus] = ReconstructCellPPM(r_im2, r_im1, r_i, r_ip1, r_ip2);
 
 		// convert back to primitive vars
-		quokka::valarray<Real, nvar_> const q_minus = ReconstructToPrimVars<DIR>(r_minus, p_i, CellSide::minus);
-		quokka::valarray<Real, nvar_> const q_plus = ReconstructToPrimVars<DIR>(r_plus, p_i, CellSide::plus);
+		quokka::valarray<Real, nvar_> const q_minus = ReconstructToPrimVars<DIR>(r_minus, p_i);
+		quokka::valarray<Real, nvar_> const q_plus = ReconstructToPrimVars<DIR>(r_plus, p_i);
 
 		// check state validity
 		bool isDensityPositive = (q_minus[primDensity_index] > 0.) && (q_plus[primDensity_index] > 0.);
@@ -879,24 +862,6 @@ void HydroSystem<problem_t>::ComputeFlatteningCoefficients(amrex::MultiFab const
 		amrex::Real P = primVar(i, j, k, pressure_index);
 		amrex::Real Pminus1 = primVar(i - 1, j, k, pressure_index);
 		amrex::Real Pminus2 = primVar(i - 2, j, k, pressure_index);
-
-		if constexpr (reconstruct_eint) {
-			// compute (rho e) (gamma - 1)
-			amrex::GpuArray<Real, nmscalars_> massScalars_plus2 = RadSystem<problem_t>::ComputeMassScalars(primVar, i + 2, j, k);
-			Pplus2 = quokka::EOS<problem_t>::ComputePressure(primVar(i + 2, j, k, primDensity_index),
-									 primVar(i + 2, j, k, primDensity_index) * Pplus2, massScalars_plus2);
-			amrex::GpuArray<Real, nmscalars_> massScalars_plus1 = RadSystem<problem_t>::ComputeMassScalars(primVar, i + 1, j, k);
-			Pplus1 = quokka::EOS<problem_t>::ComputePressure(primVar(i + 1, j, k, primDensity_index),
-									 primVar(i + 1, j, k, primDensity_index) * Pplus1, massScalars_plus1);
-			amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(primVar, i, j, k);
-			P = quokka::EOS<problem_t>::ComputePressure(primVar(i, j, k, primDensity_index), primVar(i, j, k, primDensity_index) * P, massScalars);
-			amrex::GpuArray<Real, nmscalars_> massScalars_minus1 = RadSystem<problem_t>::ComputeMassScalars(primVar, i - 1, j, k);
-			Pminus1 = quokka::EOS<problem_t>::ComputePressure(primVar(i - 1, j, k, primDensity_index),
-									  primVar(i - 1, j, k, primDensity_index) * Pminus1, massScalars_minus1);
-			amrex::GpuArray<Real, nmscalars_> massScalars_minus2 = RadSystem<problem_t>::ComputeMassScalars(primVar, i - 2, j, k);
-			Pminus2 = quokka::EOS<problem_t>::ComputePressure(primVar(i - 2, j, k, primDensity_index),
-									  primVar(i - 2, j, k, primDensity_index) * Pminus2, massScalars_minus2);
-		}
 
 		if constexpr (is_eos_isothermal()) {
 			const amrex::Real cs_sq = cs_iso_ * cs_iso_;
@@ -1267,28 +1232,11 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			cs_L = cs_iso_;
 			cs_R = cs_iso_;
 		} else {
-			if constexpr (reconstruct_eint) {
-				// compute pressure from specific internal energy
-				// (pressure_index is actually eint)
-				const double eint_L = x1LeftState(i, j, k, pressure_index);
-				const double eint_R = x1RightState(i, j, k, pressure_index);
-				amrex::GpuArray<Real, nmscalars_> massScalars_L = RadSystem<problem_t>::ComputeMassScalars(x1LeftState, i, j, k);
-				P_L = quokka::EOS<problem_t>::ComputePressure(rho_L, eint_L * rho_L, massScalars_L);
-				amrex::GpuArray<Real, nmscalars_> massScalars_R = RadSystem<problem_t>::ComputeMassScalars(x1RightState, i, j, k);
-				P_R = quokka::EOS<problem_t>::ComputePressure(rho_R, eint_R * rho_R, massScalars_R);
+			P_L = x1LeftState(i, j, k, pressure_index);
+			P_R = x1RightState(i, j, k, pressure_index);
 
-				// auxiliary Eint is actually (auxiliary) specific internal energy
-				Eint_L = rho_L * x1LeftState(i, j, k, primEint_index);
-				Eint_R = rho_R * x1RightState(i, j, k, primEint_index);
-			} else {
-				// pressure_index is actually pressure
-				P_L = x1LeftState(i, j, k, pressure_index);
-				P_R = x1RightState(i, j, k, pressure_index);
-
-				// primEint_index is actually (rho * e)
-				Eint_L = x1LeftState(i, j, k, primEint_index);
-				Eint_R = x1RightState(i, j, k, primEint_index);
-			}
+			Eint_L = x1LeftState(i, j, k, primEint_index);
+			Eint_R = x1RightState(i, j, k, primEint_index);
 
 			amrex::GpuArray<Real, nmscalars_> massScalars_L = RadSystem<problem_t>::ComputeMassScalars(x1LeftState, i, j, k);
 			cs_L = quokka::EOS<problem_t>::ComputeSoundSpeed(rho_L, P_L, massScalars_L);

@@ -28,10 +28,6 @@ template <> struct quokka::EOS_Traits<RTProblem> {
 	static constexpr double boltzmann_constant = C::k_B;
 };
 
-template <> struct HydroSystem_Traits<RTProblem> {
-	static constexpr bool reconstruct_eint = false;
-};
-
 template <> struct Physics_Traits<RTProblem> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;

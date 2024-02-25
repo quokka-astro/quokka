@@ -58,10 +58,6 @@ template <> struct RadSystem_Traits<ShellProblem> {
 	static constexpr bool compute_v_over_c_terms = true;
 };
 
-template <> struct HydroSystem_Traits<ShellProblem> {
-	static constexpr bool reconstruct_eint = false;
-};
-
 template <> struct Physics_Traits<ShellProblem> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
