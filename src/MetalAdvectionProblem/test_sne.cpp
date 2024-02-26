@@ -495,7 +495,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<NewProblem>::setCustomBou
 
     int create_vaccuum=1; //create vaccuum at boundary 
 
-    if(((x3Mom_edge*normal)>0.0 && (Mach_number>1.))) {
+    if(((x3Mom_edge*normal)>0.0 && (Mach_number>1.2))) {
           create_vaccuum = 0; //gas is supersonic and outflowing so no need to create artificial vaccuum
         }
 
@@ -516,7 +516,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<NewProblem>::setCustomBou
   } else { //copy last cell quantities because the gas is outflowing and supersonic
     
 
-    consVar(i, j, k, HydroSystem<NewProblem>::density_index)= rho_bc ;
+    consVar(i, j, k, HydroSystem<NewProblem>::density_index)    = rho_bc ;
 		consVar(i, j, k, HydroSystem<NewProblem>::x1Momentum_index) = x1Mom_bc;
     consVar(i, j, k, HydroSystem<NewProblem>::x2Momentum_index) = x2Mom_bc;
     consVar(i, j, k, HydroSystem<NewProblem>::x3Momentum_index) =  (x3Mom_bc);
