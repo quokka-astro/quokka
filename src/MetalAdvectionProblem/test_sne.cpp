@@ -62,7 +62,7 @@ template <> struct Physics_Traits<NewProblem> {
   static constexpr bool is_chemistry_enabled = false;
   static constexpr bool is_mhd_enabled = false;
   static constexpr int numMassScalars = 0;		     // number of mass scalars
-  static constexpr int numPassiveScalars = 3; // number of passive scalars
+  static constexpr int numPassiveScalars = 0; // number of passive scalars
   static constexpr int nGroups = 1; // number of radiation groups
 };
 
@@ -144,24 +144,30 @@ void RadhydroSimulation<NewProblem>::setInitialConditionsOnGrid(quokka::grid gri
              rho_disk = rho01 * std::exp(-Phitot/std::pow(sigma1,2.0)) ;
              rho_halo = rho02 * std::exp(-Phitot/std::pow(sigma2,2.0));         //in g/cc
              rho = (rho_disk + rho_halo);
-            
+
       double P = rho_disk * std::pow(sigma1, 2.0) + rho_halo * std::pow(sigma2, 2.0);
 
       AMREX_ASSERT(!std::isnan(rho));
       
 			const auto gamma = HydroSystem<NewProblem>::gamma_;
-     
-      if(std::sqrt(z*z)<0.25*kpc) {
-        state_cc(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex)      = 1.e2/vol;  //Disk tracer
-        state_cc(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+1)    = 1.e-5/vol;  //Halo tracer
-        state_cc(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+2)    = 1.e-5/vol;  //Injected tracer
-       }
 
-       else {
-        state_cc(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex)      = 1.e-5/vol;  //Disk tracer
-        state_cc(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+1)    = 1.e2/vol;  //Halo tracer
-        state_cc(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+2)    = 1.e-5/vol;  //Injected tracer
-       }
+      //For a uniform box
+        // rho01  = 1.e-2 * Const_mH;
+        // rho = rho01;
+        // sigma1 = 37. * kmps;
+        // P = rho01 * std::pow(sigma1, 2.0);
+     
+      // if(std::sqrt(z*z)<0.25*kpc) {
+      //   state_cc(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex)      = 1.e2/vol;  //Disk tracer
+      //   state_cc(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+1)    = 1.e-5/vol;  //Halo tracer
+      //   state_cc(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+2)    = 1.e-5/vol;  //Injected tracer
+      //  }
+
+      //  else {
+      //   state_cc(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex)      = 1.e-5/vol;  //Disk tracer
+      //   state_cc(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+1)    = 1.e2/vol;  //Halo tracer
+      //   state_cc(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+2)    = 1.e-5/vol;  //Injected tracer
+      //  }
 
       state_cc(i, j, k, HydroSystem<NewProblem>::density_index)    = rho;
       state_cc(i, j, k, HydroSystem<NewProblem>::x1Momentum_index) = 0.0;
@@ -278,12 +284,13 @@ void AddSupernova(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> pro
         if(x0<0.5*dx[0] && y0<0.5*dx[1] && z0< 0.5*dx[2] ) {
         state(i, j, k, HydroSystem<NewProblem>::energy_index)         +=   rho_eint_blast; 
         state(i, j, k, HydroSystem<NewProblem>::internalEnergy_index) +=    rho_eint_blast; 
-        state(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+2)+=  1.e3/cell_vol;
-        printf("The location of SN=%d,%d,%d\n",i, j, k);
+        state(i, j, k, HydroSystem<NewProblem>::density_index) = 1.e-2 * Const_mH;
+        // state(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+2)+=  1.e3/cell_vol;
+        // printf("The location of SN=%d,%d,%d\n",i, j, k);
         // printf("SN added at level=%d\n", level);
         // printf("The total number of SN gone off=%d\n", cum_sn);
-        // Rpds = 14. * std::pow(state(i, j, k, HydroSystem<NewProblem>::density_index)/Const_mH, -3./7.);
-        // printf("Rpds = %.2e pc\n", Rpds);
+        Rpds = 14. * std::pow(state(i, j, k, HydroSystem<NewProblem>::density_index)/Const_mH, -3./7.);
+        printf("Rpds = %.2e pc\n", Rpds);
         }
 			}
 		});
@@ -456,45 +463,58 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<NewProblem>::setCustomBou
   const auto &domain_hi = box.hiVect3d();
   const int klo = domain_lo[2];
   const int khi = domain_hi[2];
-  int kreflect, koutflow, normal;
-  double x3Mom_edge;
+  int kcopy, kedge, normal;
 
    if (k < klo) {
-      kreflect = klo - k -1;
-      koutflow = klo;
+      kcopy = klo - k -1;
+      kedge = klo;
       normal = -1;
-      x3Mom_edge = consVar(i, j, klo, HydroSystem<NewProblem>::x3Momentum_index);
    }
    else if (k > khi) {
-      kreflect = 2*khi - k + 1;
-      koutflow = khi;
+      kcopy = 2*khi - k + 1;
       normal = 1.0;
-      x3Mom_edge = consVar(i, j, khi, HydroSystem<NewProblem>::x3Momentum_index);
+      kedge = khi;
    }
 
-    if((x3Mom_edge*normal)<0.0) {  //reflect quantities if gas is inflowing
+    //Grab edge quantities
+    double x3Mom_edge = consVar(i, j, kedge, HydroSystem<NewProblem>::x3Momentum_index);
+    double rho_edge = consVar(i, j, kedge, HydroSystem<NewProblem>::density_index);    
+    double speed_edge = std::abs(x3Mom_edge/rho_edge); 
+    double soundspeed_edge = HydroSystem<NewProblem>::ComputeSoundSpeed(consVar, i, j, kedge);
+    double Mach_number = speed_edge/soundspeed_edge;
 
-    const double rho_bc   = consVar(i, j, kreflect, HydroSystem<NewProblem>::density_index);
-		const double x1Mom_bc = consVar(i, j, kreflect, HydroSystem<NewProblem>::x1Momentum_index);
-    const double x2Mom_bc = consVar(i, j, kreflect, HydroSystem<NewProblem>::x2Momentum_index);
-    const double x3Mom_bc = consVar(i, j, kreflect, HydroSystem<NewProblem>::x3Momentum_index);
-    const double etot_bc  = consVar(i, j, kreflect, HydroSystem<NewProblem>::energy_index);
-    const double eint_bc  = consVar(i, j, kreflect, HydroSystem<NewProblem>::internalEnergy_index);
+    //Get quantities from cell to be copied into corresponding ghost zone.
+    // 0-->neg1, 1-->neg2 etc
 
-    consVar(i, j, k, HydroSystem<NewProblem>::density_index)= rho_bc ;
-		consVar(i, j, k, HydroSystem<NewProblem>::x1Momentum_index) = x1Mom_bc;
-    consVar(i, j, k, HydroSystem<NewProblem>::x2Momentum_index) = x2Mom_bc;
-    consVar(i, j, k, HydroSystem<NewProblem>::x3Momentum_index) = -1. *(x3Mom_bc);
-    consVar(i, j, k, HydroSystem<NewProblem>::energy_index)     = etot_bc;
-    consVar(i, j, k, HydroSystem<NewProblem>::internalEnergy_index) = eint_bc;
+    const double rho_bc   = consVar(i, j, kcopy, HydroSystem<NewProblem>::density_index);
+		const double x1Mom_bc = consVar(i, j, kcopy, HydroSystem<NewProblem>::x1Momentum_index);
+    const double x2Mom_bc = consVar(i, j, kcopy, HydroSystem<NewProblem>::x2Momentum_index);
+    const double x3Mom_bc = consVar(i, j, kcopy, HydroSystem<NewProblem>::x3Momentum_index);
+    const double etot_bc  = consVar(i, j, kcopy, HydroSystem<NewProblem>::energy_index);
+    const double eint_bc  = consVar(i, j, kcopy, HydroSystem<NewProblem>::internalEnergy_index);
 
-  } else if ((x3Mom_edge*normal)>0.0) {//copy last cell quantities if gas is outflowing
-    const double rho_bc   = consVar(i, j, koutflow, HydroSystem<NewProblem>::density_index);
-		const double x1Mom_bc = consVar(i, j, koutflow, HydroSystem<NewProblem>::x1Momentum_index);
-    const double x2Mom_bc = consVar(i, j, koutflow, HydroSystem<NewProblem>::x2Momentum_index);
-    const double x3Mom_bc = consVar(i, j, koutflow, HydroSystem<NewProblem>::x3Momentum_index);
-    const double etot_bc  = consVar(i, j, koutflow, HydroSystem<NewProblem>::energy_index);
-    const double eint_bc  = consVar(i, j, koutflow, HydroSystem<NewProblem>::internalEnergy_index);
+    int create_vaccuum=1; //create vaccuum at boundary 
+
+    if(((x3Mom_edge*normal)>0.0 && (Mach_number>1.))) {
+          create_vaccuum = 0; //gas is supersonic and outflowing so no need to create artificial vaccuum
+        }
+
+
+    if(create_vaccuum) {  //reflect quantities if gas is inflowing
+          double factor = 1.e2;
+          double sign = (x3Mom_edge*normal)/std::abs((x3Mom_edge*normal));
+          double ke = (x1Mom_bc*x1Mom_bc + x2Mom_bc*x2Mom_bc + x3Mom_bc*x3Mom_bc)/(2. * rho_bc);
+          // double ke_xy = (x1Mom_bc*x1Mom_bc + x2Mom_bc*x2Mom_bc)/(2. * rho_bc);
+        
+          consVar(i, j, k, HydroSystem<NewProblem>::density_index)= rho_bc/factor;
+          consVar(i, j, k, HydroSystem<NewProblem>::x1Momentum_index) = x1Mom_bc/factor;
+          consVar(i, j, k, HydroSystem<NewProblem>::x2Momentum_index) = x2Mom_bc/factor;
+          consVar(i, j, k, HydroSystem<NewProblem>::x3Momentum_index) = sign *(x3Mom_bc)/factor;
+          consVar(i, j, k, HydroSystem<NewProblem>::internalEnergy_index) = eint_bc/factor;
+          consVar(i, j, k, HydroSystem<NewProblem>::energy_index)     = eint_bc/factor  +  ke/factor;
+  
+  } else { //copy last cell quantities because the gas is outflowing and supersonic
+    
 
     consVar(i, j, k, HydroSystem<NewProblem>::density_index)= rho_bc ;
 		consVar(i, j, k, HydroSystem<NewProblem>::x1Momentum_index) = x1Mom_bc;
