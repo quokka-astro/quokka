@@ -404,23 +404,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::PrimToReconstru
 	charVars[4] = -e_hat * x4 + x5;
 	charVars[5] = x3 * (-x0 - x1);
 
-#if 0
-	// (rho, u, p, e) eigensystem
-	quokka::valarray<amrex::Real, nvar_> charVars{};
-	const amrex::Real h = (q_i[primEint_index] + P) / rho;
-	const amrex::Real x0 = cs * rho * u_hat;
-	const amrex::Real x1 = 1.0 / (cs * cs);
-	const amrex::Real x2 = 0.5 * x1;
-	const amrex::Real x3 = 1.0 / h;
-	const amrex::Real x4 = P_hat * x1;
-	charVars[0] = x2 * (P_hat - x0);
-	charVars[1] = rho_hat * x3 - x3 * x4;
-	charVars[2] = v_hat;
-	charVars[3] = w_hat;
-	charVars[4] = e_hat * x3 - x4;
-	charVars[5] = x2 * (P_hat + x0);
-#endif
-
 	for (int i = 0; i < nscalars_; ++i) {
 		charVars[scalar0_index + i] = q[primScalar0_index + i];
 	}
@@ -452,19 +435,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ReconstructToPr
 
 	// convert tau -> rho
 	primVars[0] = 1.0 / primVars[0];
-
-#if 0
-	// (rho, u, p, e) eigensystem
-	const amrex::Real h = (q_i[primEint_index] + P) / rho;
-	const amrex::Real x0 = beta[0] + beta[5];
-	quokka::valarray<amrex::Real, nvar_> primVars{};
-	primVars[0] = beta[1] * h + x0;
-	primVars[1] = cs * (-beta[0] + beta[5]) / rho;
-	primVars[2] = beta[2];
-	primVars[3] = beta[3];
-	primVars[4] = (cs * cs) * x0;
-	primVars[5] = h * (beta[4] + x0);
-#endif
 
 	for (int i = 0; i < nscalars_; ++i) {
 		primVars[scalar0_index + i] = beta[primScalar0_index + i];
@@ -1136,7 +1106,7 @@ template <typename problem_t> void HydroSystem<problem_t>::SyncDualEnergy(amrex:
 	// sync internal energy and total energy
 	// this step must be done as an operator-split step after *each* RK stage
 
-	const amrex::Real eta = 1.0e-3; // dual energy parameter 'eta'
+	const amrex::Real eta = 1.0e-2; // dual energy parameter 'eta'
 
 	auto consVar = consVar_mf.arrays();
 
