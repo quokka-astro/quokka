@@ -1,0 +1,108 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  -3.703e18  -3.703e18  -3.703e18
+geometry.prob_hi     =  3.703e18   3.703e18   3.703e18
+geometry.is_periodic =  0    0    0
+#restartfile = "chk15360"
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v              = 1       # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          = 64 64 64
+amr.max_level       = 0     # number of levels = max_level + 1
+amr.blocking_factor = 32    # grid size must be divisible by this
+amr.max_grid_size   = 128    # at least 128 for GPUs
+amr.n_error_buf     = 3     # minimum 3 cell buffer around tagged cells
+amr.grid_eff        = 0.7   # default
+
+hydro.reconstruction_order = 3  # PPM
+cfl = 0.15
+max_timesteps = 10
+stop_time = 1e16
+
+do_reflux = 1
+do_subcycle = 0
+
+#ascent_interval = 50
+plotfile_interval = 50 #100
+checkpoint_interval = 200
+
+perturb.cloud_radius = 3.086e18 #initial cloud radius in cm
+perturb.cloud_omega = 2.016008E-14 #initial cloud angular velocity in s^-1
+perturb.cloud_numdens = 0.90861183E+004 #initial cloud number density in cm^-3
+perturb.rms_velocity = 1.8050e5 #initial cloud rms velocity (to drive turbulence)
+
+# params for jeans refinement
+jeansRefine.ncells = 64 #refine on these many cells per jeans length
+jeansRefine.jeans_density_threshold = 2e-20 #do not refine if density is less than this density
+
+# density floor for popiii
+density_floor = 1e-25
+
+# in quokka/src/StarCluster, generate with 'python3 perturbation.py --kmin=2 --kmax=64 --size=128 --alpha=2 --f_solenoidal=1.0'
+# and put it in quokka/tests/
+perturb.filename = "zdrv.hdf5"
+
+derived_vars = temperature velx pressure sound_speed
+
+amrex.throw_exception = 0
+amrex.signal_handling = 1
+
+primordial_chem.enabled = 1
+primordial_chem.temperature = 0.26415744E+003
+
+primordial_chem.small_temp = 1.e1
+primordial_chem.small_dens = 1.e-60
+primordial_chem.max_density_allowed = 3e-6
+primordial_chem.min_density_allowed = 1e-21
+#format in krome fort22_wD.dat file: E H- D- H HE H2 HD D H+ HE+ H2+ D+ HD+ HE++
+#format in quokka: E H+ H H- D+ D H2+ D- H2 HD+ HD HE++ HE+ HE
+primordial_chem.primary_species_1 = 0.88499253E-006
+primordial_chem.primary_species_2 = 0.88498062E-006
+primordial_chem.primary_species_3 = 0.99932238E+000
+primordial_chem.primary_species_4 = 0.54719550E-013
+primordial_chem.primary_species_5 = 0.21957612E-010
+primordial_chem.primary_species_6 = 0.29920413E-004
+primordial_chem.primary_species_7 = 0.58304958E-015
+primordial_chem.primary_species_8 = 0.22122496E-017
+primordial_chem.primary_species_9 = 0.38932607E-003
+primordial_chem.primary_species_10 = 0.36774691E-019
+primordial_chem.primary_species_11 = 0.79574711E-007
+primordial_chem.primary_species_12 = 0.39651766E-050
+primordial_chem.primary_species_13 = 0.24136647E-043
+primordial_chem.primary_species_14 = 0.77500001E-001
+
+
+# integrator runtime parameters
+# are we using primordial chemistry? then we use number densities
+integrator.use_number_densities = 1
+# we do not want to subtract the internal energy
+integrator.subtract_internal_energy = 0
+# we do not want to clip species between 0 and 1
+integrator.do_species_clip = 0
+# minimum positive value of number densities
+integrator.SMALL_X_SAFE = 1e-100
+integrator.burner_verbose = 0
+
+# do you want to use the jacobian calculated in a previous step?
+integrator.use_jacobian_caching = 0
+# integration will fail if the number density > X_reject_buffer*atol
+integrator.X_reject_buffer = 1e100
+# Set which jacobian to use
+# 1 = analytic jacobian
+# 2 = numerical jacobian
+integrator.jacobian = 1
+
+# do you want to normalize abundances within VODE? (you don't!)
+integrator.renormalize_abundances = 0
+# tolerances
+integrator.rtol_spec = 1.0e-4
+integrator.atol_spec = 1.0e-4
+
+#assumed redshift for Pop III star formation
+network.redshift = 30.0

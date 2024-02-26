@@ -14,12 +14,10 @@
 
 // library headers
 #include "AMReX.H"
-#include "AMReX_Arena.H"
 #include "AMReX_Array4.H"
 #include "AMReX_BLassert.H"
-#include "AMReX_FArrayBox.H"
-#include "AMReX_Loop.H"
 #include "AMReX_REAL.H"
+#include "AMReX_iMultiFab.H"
 
 // internal headers
 #include "ArrayView.hpp"
@@ -108,8 +106,8 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	AMREX_GPU_DEVICE static auto GetGradFixedPotential(amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> posvec) -> amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>;
 
-	static void EnforceLimits(amrex::Real densityFloor, amrex::Real pressureFloor, amrex::Real speedCeiling, amrex::Real tempCeiling,
-				  amrex::Real const tempFloor, amrex::MultiFab &state_mf);
+	static void EnforceLimits(amrex::Real densityFloor, amrex::Real pressureFloor, amrex::Real speedCeiling, amrex::Real tempCeiling, amrex::Real tempFloor,
+				  amrex::MultiFab &state_mf);
 
 	static void AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex::MultiFab const &consVar_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
 					 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &faceVelArray, amrex::iMultiFab const &redoFlag_mf);
@@ -445,16 +443,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::isStateValid(am
 	// when the dual energy method is used, we *cannot* reset on pressure
 	// failures. on the other hand, we don't need to -- the auxiliary internal
 	// energy is used instead!
-#if 0
-  bool isPressurePositive = false;
-  if constexpr (!is_eos_isothermal()) {
-    const amrex::Real P = ComputePressure(cons, i, j, k);
-    isPressurePositive = (P > 0.);
-  } else {
-    isPressurePositive = true;
-  }
-#endif
-	// return (isDensityPositive && isPressurePositive);
 
 
 	const amrex::Real vx = cons(i, j, k, x1Momentum_index)/rho;
@@ -761,7 +749,7 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 			amrex::Real sp_sum = 0.0;
 			for (int idx = 0; idx < nmscalars_; ++idx) {
 				if (state[bx](i, j, k, scalar0_index + idx) < 0.0) {
-					state[bx](i, j, k, scalar0_index + idx) = small_x * rho;
+					state[bx](i, j, k, scalar0_index + idx) = network_rp::small_x * rho;
 				}
 
 				// get sum to renormalize
