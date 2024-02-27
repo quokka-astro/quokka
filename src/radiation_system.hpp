@@ -1132,19 +1132,20 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			const double Etot0 = Egas0 + (c / chat) * (Erad0 + sum(Src));
 
 			// BEGIN NEWTON-RAPHSON LOOP
+      // Define the source term: S = dt chat gamma rho (kappa_P B - kappa_E E) + dt chat c^-2 gamma rho kappa_F v * F_i, where gamma = 1 / sqrt(1 - v^2 / c^2) is the Lorentz factor.
 			// Solve for the new radiation energy and gas internal energy using a Newton-Raphson method using the base variables (Egas, D_0, D_1,
-			// ...), where D_i = R_i / tau_i^(t) and tau_i^(t) = dt * rho * kappa_{P,i}^(t) * chat is the optical depth across chat * dt for group i
+			// ...), where D_i = R_i / tau_i^(t) and tau_i^(t) = dt * chat * gamma * rho * kappa_{P,i}^(t) is the optical depth across chat * dt for group i
 			// at time t. Compared with the old base (Egas, Erad_0, Erad_1, ...), this new base is more stable and converges faster. Furthermore,
-			// the PlanckOpacityTempDerivative term is not needed anymore since I assume d/dT (kappa_P / kappa_E) = 0 in the calculation of the
+			// the PlanckOpacityTempDerivative term is not needed anymore since we assume d/dT (kappa_P / kappa_E) = 0 in the calculation of the
 			// Jacobian. Note that this assumption only affects the convergence rate of the Newton-Raphson iteration and does not affect the result
-			// at all.
+			// at all once the iteration is converged.
 			//
 			// The Jacobian of F(E_g, D_i) is
 			//
 			// dF_G / dE_g = 1
 			// dF_G / dD_i = c / chat * tau0_i
 			// dF_{D,i} / dE_g = 1 / (chat * C_v) * (kappa_{P,i} / kappa_{E,i}) * d/dT (4 \pi B_i)
-			// dF_{D,i} / dD_i = - (1 / (chat * dt * rho * kappa_{E,i}) + 1) * tau0_i
+			// dF_{D,i} / dD_i = - (1 / (chat * dt * rho * kappa_{E,i}) + 1) * tau0_i = - ((1 / tau_i)(kappa_Pi / kappa_Ei) + 1) * tau0_i
 
 			Egas_guess = Egas0;
 			T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
@@ -1154,8 +1155,24 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			kappaEVec = ComputeEnergyMeanOpacity(rho, T_gas);
 			AMREX_ASSERT(!kappaPVec.hasnan());
 			AMREX_ASSERT(!kappaEVec.hasnan());
-			tau0 = dt * rho * kappaPVec * chat;
-			D = fourPiB / chat - (kappaEVec / kappaPVec) * Erad0Vec;
+
+      // compute the work term at the old state
+			quokka::valarray<double, nGroups_> work{};
+      const double betaSqr = (x1GasMom0 * x1GasMom0 + x2GasMom0 * x2GasMom0 + x3GasMom0 * x3GasMom0) / (c * c);
+      // const double gamma = 1.0 / sqrt(1.0 - vsqr / (c * c));
+      const double gamma = 1.0 + 0.5 * betaSqr; 
+      const double gamma_v = 1.0;
+      for (int g = 0; g < nGroups_; ++g) {
+        // work[g] = dt * chat * rho * kappaPVec[g] * (Erad0Vec[g] - fourPiB[g] / chat);
+        const double frad0 = consPrev(i, j, k, x1RadFlux_index + numRadVars_ * g);
+        const double frad1 = consPrev(i, j, k, x2RadFlux_index + numRadVars_ * g);
+        const double frad2 = consPrev(i, j, k, x3RadFlux_index + numRadVars_ * g);
+        work[g] = x1GasMom0 * frad0 + x2GasMom0 * frad1 + x3GasMom0 * frad2;
+        work[g] *= chat / (c * c) * gamma_v * kappaFVec[g] * dt;
+      }
+
+			tau0 = dt * rho * kappaPVec * chat * gamma;
+			D = fourPiB / chat - (kappaEVec / kappaPVec) * Erad0Vec + work / tau0;
 
 			double F_G = NAN;
 			double dFG_dEgas = NAN;
@@ -1180,9 +1197,10 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				kappaEVec = ComputeEnergyMeanOpacity(rho, T_gas);
 				AMREX_ASSERT(!kappaPVec.hasnan());
 
-				tau = dt * rho * kappaEVec * chat;
+				tau = dt * rho * kappaEVec * chat * gamma;
 				Rvec = tau0 * D;
-				EradVec_guess = (kappaPVec / kappaEVec) * fourPiB / chat - Rvec / tau;
+				// EradVec_guess = (kappaPVec / kappaEVec) * fourPiB / chat - Rvec / tau;
+				EradVec_guess = (kappaPVec / kappaEVec) * (fourPiB / chat - (Rvec - work) / tau);
 				F_G = Egas_guess - Egas0 + (c / chat) * sum(Rvec);
 				F_D = EradVec_guess - Erad0Vec - (Rvec + Src);
 
@@ -1201,8 +1219,8 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				// affects the convergence rate of the Newton-Raphson iteration and does not affect the converged solution at all.
 				dFG_dEgas = 1.0;
 				dFG_dD = (c / chat) * tau0;
-				dFR_dEgas = 1.0 / (chat * c_v) * (kappaPVec / kappaEVec) * dfourPiB_dTgas;
-				dFR_i_dD_i = -1.0 * (1.0 / tau + 1.0) * tau0;
+				dFR_dEgas = 1.0 / c_v * (kappaPVec / kappaEVec) * (dfourPiB_dTgas / chat);
+				dFR_i_dD_i = -1.0 * (1.0 / tau * (kappaPVec / kappaEVec) + 1.0) * tau0;
 
 				// update variables
 				RadSystem<problem_t>::SolveLinearEqs(dFG_dEgas, dFG_dD, dFR_dEgas, dFR_i_dD_i, -F_G, -1. * F_D, deltaEgas, deltaD);
