@@ -500,7 +500,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<NewProblem>::setCustomBou
         }
 
 
-    if(create_vaccuum) {  //reflect quantities if gas is inflowing
+    /*if(create_vaccuum) {  //reflect quantities if gas is inflowing
           double factor = 1.e2;
           double sign = (x3Mom_edge*normal)/std::abs((x3Mom_edge*normal));
           double ke = (x1Mom_bc*x1Mom_bc + x2Mom_bc*x2Mom_bc + x3Mom_bc*x3Mom_bc)/(2. * rho_bc);
@@ -513,7 +513,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<NewProblem>::setCustomBou
           consVar(i, j, k, HydroSystem<NewProblem>::internalEnergy_index) = eint_bc/factor;
           consVar(i, j, k, HydroSystem<NewProblem>::energy_index)     = eint_bc/factor  +  ke/factor;
   
-  } else { //copy last cell quantities because the gas is outflowing and supersonic
+  // } else { //copy last cell quantities because the gas is outflowing and supersonic*/
     
 
     consVar(i, j, k, HydroSystem<NewProblem>::density_index)    = rho_bc ;
@@ -522,7 +522,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<NewProblem>::setCustomBou
     consVar(i, j, k, HydroSystem<NewProblem>::x3Momentum_index) =  (x3Mom_bc);
     consVar(i, j, k, HydroSystem<NewProblem>::energy_index)     = etot_bc;
     consVar(i, j, k, HydroSystem<NewProblem>::internalEnergy_index) = eint_bc;
-  }
+  // }
 
 }
 
