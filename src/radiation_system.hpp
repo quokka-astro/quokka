@@ -960,32 +960,32 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 			// fix odd-even instability that appears in the asymptotic diffusion limit
 			// [for details, see section 3.1: https://ui.adsabs.harvard.edu/abs/2022MNRAS.512.1499R/abstract]
 			// if ((i + j + k) % 2 == 0) {
-      // 	// revert to more diffusive flux (has no effect in optically-thin limit)
-      // 	// epsilon = {S_corr, 1.0, 1.0, 1.0};
-      // 	epsilon = {1.0, 1.0, 1.0, 1.0};
+			// 	// revert to more diffusive flux (has no effect in optically-thin limit)
+			// 	// epsilon = {S_corr, 1.0, 1.0, 1.0};
+			// 	epsilon = {1.0, 1.0, 1.0, 1.0};
 			// }
 
-      // set epsilon to 1.0 when (u_i - u_i-1)(u_i+1 - u_i) < 0
-      for (int n = 0; n < numRadVars_; ++n) {
-	      auto u_im1 = consVar(i - 1, j, k, radEnergy_index + numRadVars_ * g + n);
-        auto u_i = consVar(i, j, k, radEnergy_index + numRadVars_ * g + n);
-        auto u_ip1 = consVar(i + 1, j, k, radEnergy_index + numRadVars_ * g + n);
-        auto u_ip2 = consVar(i + 2, j, k, radEnergy_index + numRadVars_ * g + n);
-        if (((u_i - u_im1) * (u_ip1 - u_i) < 0) && ((u_ip1 - u_i) * (u_ip2 - u_ip1) < 0)) {
-          // epsilon[n] = 1.0;
-          epsilon = {1.0, 1.0, 1.0, 1.0};
-          break;
-        }
+			// set epsilon to 1.0 when (u_i - u_i-1)(u_i+1 - u_i) < 0
+			for (int n = 0; n < numRadVars_; ++n) {
+				auto u_im1 = consVar(i - 1, j, k, radEnergy_index + numRadVars_ * g + n);
+				auto u_i = consVar(i, j, k, radEnergy_index + numRadVars_ * g + n);
+				auto u_ip1 = consVar(i + 1, j, k, radEnergy_index + numRadVars_ * g + n);
+				auto u_ip2 = consVar(i + 2, j, k, radEnergy_index + numRadVars_ * g + n);
+				if (((u_i - u_im1) * (u_ip1 - u_i) < 0) && ((u_ip1 - u_i) * (u_ip2 - u_ip1) < 0)) {
+					// epsilon[n] = 1.0;
+					epsilon = {1.0, 1.0, 1.0, 1.0};
+					break;
+				}
 			}
 
-      // check local minima and maxima of gas velocity 
-      // auto v_im1 = consVar(i - 1, j, k, x1GasMomentum_index);
-      // auto v_i = consVar(i, j, k, x1GasMomentum_index);
-      // auto v_ip1 = consVar(i + 1, j, k, x1GasMomentum_index);
-      // auto v_ip2 = consVar(i + 2, j, k, x1GasMomentum_index);
-      // if (((v_i - v_im1) * (v_ip1 - v_i) < 0) && ((v_ip1 - v_i) * (v_ip2 - v_ip1) < 0)) {
-      //   epsilon = {1.0, 1.0, 1.0, 1.0};
-      // }
+			// check local minima and maxima of gas velocity
+			// auto v_im1 = consVar(i - 1, j, k, x1GasMomentum_index);
+			// auto v_i = consVar(i, j, k, x1GasMomentum_index);
+			// auto v_ip1 = consVar(i + 1, j, k, x1GasMomentum_index);
+			// auto v_ip2 = consVar(i + 2, j, k, x1GasMomentum_index);
+			// if (((v_i - v_im1) * (v_ip1 - v_i) < 0) && ((v_ip1 - v_i) * (v_ip2 - v_ip1) < 0)) {
+			//   epsilon = {1.0, 1.0, 1.0, 1.0};
+			// }
 
 			AMREX_ASSERT(std::abs(S_L) <= c_hat_); // NOLINT
 			AMREX_ASSERT(std::abs(S_R) <= c_hat_); // NOLINT
@@ -995,21 +995,21 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 			// const quokka::valarray<double, numRadVars_> F =
 			//     (S_R / (S_R - S_L)) * F_L - (S_L / (S_R - S_L)) * F_R + epsilon * (S_R * S_L / (S_R - S_L)) * (U_R - U_L);
 
-      // Fix the Riemann solver at diffusion limit
+			// Fix the Riemann solver at diffusion limit
 			const quokka::valarray<double, numRadVars_> F_LO =
 			    (S_R / (S_R - S_L)) * F_L - (S_L / (S_R - S_L)) * F_R + (S_R * S_L / (S_R - S_L)) * (U_R - U_L);
-      const quokka::valarray<double, numRadVars_> F_HO = 0.5 * (F_L + F_R);
-      quokka::valarray<double, numRadVars_> flux_limiter{}; // minmod flux limiter
-      for (int n = 0; n < numRadVars_; ++n) {
-	      auto u_im1 = consVar(i - 1, j, k, radEnergy_index + numRadVars_ * g);
-        auto u_i = consVar(i, j, k, radEnergy_index + numRadVars_ * g);
-        auto u_ip1 = consVar(i + 1, j, k, radEnergy_index + numRadVars_ * g);
-        auto u_ip2 = consVar(i + 2, j, k, radEnergy_index + numRadVars_ * g);
-        flux_limiter[n] = std::max(0.0, std::min(1.0, std::min((u_i - u_im1) / (u_ip1 - u_i), (u_ip2 - u_ip1) / (u_ip1 - u_i))));
-      }
-      // flux_limiter.fillin(1.0);
+			const quokka::valarray<double, numRadVars_> F_HO = 0.5 * (F_L + F_R);
+			quokka::valarray<double, numRadVars_> flux_limiter{}; // minmod flux limiter
+			for (int n = 0; n < numRadVars_; ++n) {
+				auto u_im1 = consVar(i - 1, j, k, radEnergy_index + numRadVars_ * g);
+				auto u_i = consVar(i, j, k, radEnergy_index + numRadVars_ * g);
+				auto u_ip1 = consVar(i + 1, j, k, radEnergy_index + numRadVars_ * g);
+				auto u_ip2 = consVar(i + 2, j, k, radEnergy_index + numRadVars_ * g);
+				flux_limiter[n] = std::max(0.0, std::min(1.0, std::min((u_i - u_im1) / (u_ip1 - u_i), (u_ip2 - u_ip1) / (u_ip1 - u_i))));
+			}
+			// flux_limiter.fillin(1.0);
 
-      const quokka::valarray<double, numRadVars_> F = F_HO - epsilon * flux_limiter * (F_HO - F_LO);
+			const quokka::valarray<double, numRadVars_> F = F_HO - epsilon * flux_limiter * (F_HO - F_LO);
 
 			// check states are valid
 			AMREX_ASSERT(!std::isnan(F[0])); // NOLINT
