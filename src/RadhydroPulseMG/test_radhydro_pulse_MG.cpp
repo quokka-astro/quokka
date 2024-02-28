@@ -109,6 +109,7 @@ template <> struct RadSystem_Traits<PulseProblem> {
 	static constexpr bool compute_v_over_c_terms = true;
 	static constexpr double energy_unit = h_planck;
 	static constexpr amrex::GpuArray<double, n_groups_ + 1> radBoundaries = rad_boundaries_;
+	static constexpr int beta_order = 1;
 };
 template <> struct RadSystem_Traits<AdvPulseProblem> {
 	static constexpr double c_light = c;
@@ -118,6 +119,7 @@ template <> struct RadSystem_Traits<AdvPulseProblem> {
 	static constexpr bool compute_v_over_c_terms = true;
 	static constexpr double energy_unit = h_planck;
 	static constexpr amrex::GpuArray<double, n_groups_ + 1> radBoundaries = rad_boundaries_;
+	static constexpr int beta_order = 1;
 };
 
 AMREX_GPU_HOST_DEVICE

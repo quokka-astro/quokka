@@ -12,17 +12,29 @@
 struct PulseProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-constexpr double kappa0 = 100.; // cm^2 g^-1
-constexpr double T0 = 1.0e7;	// K (temperature)
-constexpr double rho0 = 1.2;	// g cm^-3 (matter density)
-constexpr double a_rad = C::a_rad;
-constexpr double c = C::c_light; // speed of light (cgs)
+constexpr int beta_order_ = 2; // order of beta in the radiation four-force
+constexpr int init_beta_order_ = beta_order_; // order of beta in the initial condition
+
+constexpr double T0 = 1.0;	// temperature
+constexpr double rho0 = 1.0;	// matter density
+constexpr double a_rad = 1.0;
+constexpr double c = 1.0;
 constexpr double chat = c;
-constexpr double mu = 2.33 * C::m_u;
-constexpr double k_B = C::k_B;
-constexpr double max_time = 1e-5;
-// constexpr double v0 = 0.;      // non-advecting pulse
-constexpr double v0 = 1.0e7; // advecting pulse
+constexpr double mu = 1.0;
+constexpr double k_B = 1.0;
+
+// static diffusion, beta = 1e-4, tau_cell = kappa0 * dx = 100, beta tau_cell = 1e-2
+constexpr double kappa0 = 100.; // cm^2 g^-1
+constexpr double v0 = 1.0e-4 * c; // advecting pulse
+constexpr double max_time = 1.0 / v0;
+
+// dynamic diffusion, beta tau = 10
+// constexpr double kappa0 = 1.0e4; // dx = 1, tau = kappa0 * dx = 1e4
+// constexpr double v0 = 1e-3 * c; // beta = 1e-3
+// constexpr double max_time = 10.0 / v0;
+
+constexpr double Erad0 = a_rad * T0 * T0 * T0 * T0;
+constexpr double Erad_beta2 = (1. + 4. / 3. * (v0 * v0) / (c * c)) * Erad0;
 
 template <> struct quokka::EOS_Traits<PulseProblem> {
 	static constexpr double mean_molecular_weight = mu;
@@ -36,6 +48,7 @@ template <> struct RadSystem_Traits<PulseProblem> {
 	static constexpr double radiation_constant = a_rad;
 	static constexpr double Erad_floor = 0.0;
 	static constexpr bool compute_v_over_c_terms = true;
+	static constexpr int beta_order = beta_order_;
 };
 
 template <> struct Physics_Traits<PulseProblem> {
@@ -65,25 +78,26 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputeFluxMeanOpacity(const
 	return ComputePlanckOpacity(rho, Tgas);
 }
 
-template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<PulseProblem>::ComputeEddingtonFactor(double /*f*/) -> double
-{
-	return (1. / 3.); // Eddington approximation
-}
-
 template <> void RadhydroSimulation<PulseProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
 	// extract variables required from the geom object
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	const double Erad = a_rad * std::pow(T0, 4);
 	const double Egas = quokka::EOS<PulseProblem>::ComputeEintFromTgas(rho0, T0);
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		// state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = (1. + 4. / 3. * (v0 * v0) / (c * c)) * Erad;
-		state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = Erad;
-		state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index) = 4. / 3. * v0 * Erad;
+    if constexpr (init_beta_order_ <= 1) {
+		  state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = Erad0;
+    } else { // init_beta_order_ == 2 or 3
+		  state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = Erad_beta2;
+    }
+    if constexpr (init_beta_order_ <= 2) {
+		  state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index) = 4. / 3. * v0 * Erad0;
+    } else { // init_beta_order_ == 3
+		  state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index) = 4. / 3. * v0 * Erad0 * (1. + (v0 * v0) / (c * c));
+    }
 		state_cc(i, j, k, RadSystem<PulseProblem>::x2RadFlux_index) = 0;
 		state_cc(i, j, k, RadSystem<PulseProblem>::x3RadFlux_index) = 0;
 		state_cc(i, j, k, RadSystem<PulseProblem>::gasEnergy_index) = Egas + 0.5 * rho0 * v0 * v0;
@@ -111,7 +125,7 @@ auto problem_main() -> int
 	const int max_timesteps = 1e5;
 	const double CFL_number = 0.8;
 
-	const double max_dt = 1e-3;
+	const double max_dt = 1.0;
 
 	// Boundary conditions
 	constexpr int nvars = RadSystem<PulseProblem>::nvar_;
@@ -129,6 +143,7 @@ auto problem_main() -> int
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.stopTime_ = max_time;
 	sim.radiationCflNumber_ = CFL_number;
+	sim.cflNumber_ = CFL_number;
 	sim.maxDt_ = max_dt;
 	sim.maxTimesteps_ = max_timesteps;
 	sim.plotfileInterval_ = -1;
@@ -168,11 +183,17 @@ auto problem_main() -> int
 		Egas.at(i) = values.at(RadSystem<PulseProblem>::gasInternalEnergy_index)[i];
 		Tgas.at(i) = quokka::EOS<PulseProblem>::ComputeTgasFromEint(rho_t, Egas.at(i)) / T0;
 		Tgas_exact.push_back(1.0);
-		Vgas.at(i) = v_t * 1e-5;
-		Vgas_exact.at(i) = v0 * 1e-5;
+		Vgas.at(i) = v_t / v0;
+		Vgas_exact.at(i) = 1.0;
 
 		auto Erad_val = a_rad * std::pow(T0, 4);
-		Trad_exact.push_back(1.0);
+    double trad_exact = NAN;
+    if constexpr (init_beta_order_ <= 1) {
+      trad_exact = std::pow(Erad0 / a_rad, 1. / 4.);
+    } else { // init_beta_order_ == 2 or 3
+      trad_exact = std::pow(Erad_beta2 / a_rad, 1. / 4.);
+    }
+		Trad_exact.push_back(trad_exact);
 		Erad_exact.push_back(Erad_val);
 	}
 
@@ -183,7 +204,7 @@ auto problem_main() -> int
 		err_norm += std::abs(Tgas[i] - Tgas_exact[i]);
 		sol_norm += std::abs(Tgas_exact[i]);
 	}
-	const double error_tol = 1.0e-12; // This is a very very stringent test (to machine accuracy!)
+	const double error_tol = 1.0e-10; // This is a very very stringent test (to machine accuracy!)
 	const double rel_error = err_norm / sol_norm;
 	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
 
@@ -193,13 +214,17 @@ auto problem_main() -> int
 	std::map<std::string, std::string> Trad_args;
 	std::map<std::string, std::string> Tgas_args;
 	std::map<std::string, std::string> Texact_args;
+	std::map<std::string, std::string> Tradexact_args;
 	Trad_args["label"] = "radiation temperature";
-	Trad_args["linestyle"] = "-.";
+	Trad_args["linestyle"] = "-";
+	Tradexact_args["label"] = "radiation temperature (exact)";
+	Tradexact_args["linestyle"] = "--";
 	Tgas_args["label"] = "gas temperature";
-	Tgas_args["linestyle"] = "--";
-	Texact_args["label"] = "temperature (exact)";
-	Texact_args["linestyle"] = "-";
+	Tgas_args["linestyle"] = "-";
+	Texact_args["label"] = "gas temperature (exact)";
+	Texact_args["linestyle"] = "--";
 	matplotlibcpp::plot(xs, Trad, Trad_args);
+	matplotlibcpp::plot(xs, Trad_exact, Tradexact_args);
 	matplotlibcpp::plot(xs, Tgas, Tgas_args);
 	matplotlibcpp::plot(xs, Tgas_exact, Texact_args);
 	matplotlibcpp::xlabel("length x (cm)");
@@ -207,7 +232,7 @@ auto problem_main() -> int
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("time ct = {:.4g}", sim.tNew_[0] * c));
 	matplotlibcpp::tight_layout();
-	matplotlibcpp::save("./radhydro_uniform_advecting_temperature.pdf");
+	matplotlibcpp::save("./radhydro_uniform_advecting_temperature_dimensionless.pdf");
 
 	// plot gas velocity profile
 	matplotlibcpp::clf();
@@ -218,12 +243,12 @@ auto problem_main() -> int
 	vgas_args["label"] = "gas velocity (exact)";
 	vgas_args["linestyle"] = "-";
 	matplotlibcpp::plot(xs, Vgas_exact, vgas_args);
-	matplotlibcpp::xlabel("length x (cm)");
-	matplotlibcpp::ylabel("velocity (km/s)");
+	matplotlibcpp::xlabel("length x (dimensionless)");
+	matplotlibcpp::ylabel("v / v0 (dimensionless)");
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("time ct = {:.4g}", sim.tNew_[0] * c));
 	matplotlibcpp::tight_layout();
-	matplotlibcpp::save("./radhydro_uniform_advecting_velocity.pdf");
+	matplotlibcpp::save("./radhydro_uniform_advecting_velocity_dimensionless.pdf");
 
 #endif
 

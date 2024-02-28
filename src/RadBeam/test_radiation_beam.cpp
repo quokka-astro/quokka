@@ -44,6 +44,7 @@ template <> struct RadSystem_Traits<BeamProblem> {
 	static constexpr double radiation_constant = radiation_constant_cgs_;
 	static constexpr double Erad_floor = 0.;
 	static constexpr bool compute_v_over_c_terms = true;
+	static constexpr int beta_order = 1;
 };
 
 template <> struct Physics_Traits<BeamProblem> {

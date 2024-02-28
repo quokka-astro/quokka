@@ -52,6 +52,7 @@ template <> struct RadSystem_Traits<PulseProblem> {
 	static constexpr double radiation_constant = a_rad;
 	static constexpr double Erad_floor = erad_floor;
 	static constexpr bool compute_v_over_c_terms = true;
+	static constexpr int beta_order = 1;
 };
 template <> struct RadSystem_Traits<AdvPulseProblem> {
 	static constexpr double c_light = c;
@@ -59,6 +60,7 @@ template <> struct RadSystem_Traits<AdvPulseProblem> {
 	static constexpr double radiation_constant = a_rad;
 	static constexpr double Erad_floor = erad_floor;
 	static constexpr bool compute_v_over_c_terms = true;
+	static constexpr int beta_order = 2;
 };
 
 template <> struct Physics_Traits<PulseProblem> {
