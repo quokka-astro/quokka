@@ -1045,14 +1045,14 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
         }
       }
 
-      // check local minima and maxima of gas velocity 
-      // auto v_im1 = consVar(i - 1, j, k, x1GasMomentum_index);
-      // auto v_i = consVar(i, j, k, x1GasMomentum_index);
-      // auto v_ip1 = consVar(i + 1, j, k, x1GasMomentum_index);
-      // auto v_ip2 = consVar(i + 2, j, k, x1GasMomentum_index);
-      // if (((v_i - v_im1) * (v_ip1 - v_i) < 0) && ((v_ip1 - v_i) * (v_ip2 - v_ip1) < 0)) {
-      //   epsilon = {1.0, 1.0, 1.0, 1.0};
-      // }
+			// check local minima and maxima of gas velocity
+			// auto v_im1 = consVar(i - 1, j, k, x1GasMomentum_index);
+			// auto v_i = consVar(i, j, k, x1GasMomentum_index);
+			// auto v_ip1 = consVar(i + 1, j, k, x1GasMomentum_index);
+			// auto v_ip2 = consVar(i + 2, j, k, x1GasMomentum_index);
+			// if (((v_i - v_im1) * (v_ip1 - v_i) < 0) && ((v_ip1 - v_i) * (v_ip2 - v_ip1) < 0)) {
+			//   epsilon = {1.0, 1.0, 1.0, 1.0};
+			// }
 
 			AMREX_ASSERT(std::abs(S_L) <= c_hat_); // NOLINT
 			AMREX_ASSERT(std::abs(S_R) <= c_hat_); // NOLINT
