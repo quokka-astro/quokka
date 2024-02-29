@@ -435,21 +435,21 @@ void RadSystem<problem_t>::ReconstructStatesPLM(arrayconst_t &q_in, array_t &lef
 template <typename problem_t>
 template <FluxDir DIR>
 void RadSystem<problem_t>::ReconstructStatesAVE(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in, amrex::Box const &indexRange,
-						     const int nvars)
+						const int nvars)
 {
 	// construct ArrayViews for permuted indices
 	quokka::Array4View<amrex::Real const, DIR> q(q_in);
 	quokka::Array4View<amrex::Real, DIR> leftState(leftState_in);
 	quokka::Array4View<amrex::Real, DIR> rightState(rightState_in);
 
-	amrex::ParallelFor(indexRange, nvars, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept { 
-    // permute array indices according to dir 
-    auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
+	amrex::ParallelFor(indexRange, nvars, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
+		// permute array indices according to dir
+		auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
 
-    const auto ave = 0.5 * (q(i - 1, j, k, n) + q(i, j, k, n));
+		const auto ave = 0.5 * (q(i - 1, j, k, n) + q(i, j, k, n));
 		leftState(i, j, k, n) = ave;
 		rightState(i, j, k, n) = ave;
-  });
+	});
 }
 
 template <typename problem_t>
@@ -906,9 +906,9 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 			// const double tau_corr = 1.0;  // optically thin, no correction
 			// const double tau_corr = 0.0;  // optically thick
 
-      // low optical depth
+			// low optical depth
 			double erad_L_RECON = x1LeftState(i, j, k, primRadEnergy_index + numRadVars_ * g);
-			double erad_R_RECON  = x1RightState(i, j, k, primRadEnergy_index + numRadVars_ * g);
+			double erad_R_RECON = x1RightState(i, j, k, primRadEnergy_index + numRadVars_ * g);
 
 			double fx_L_RECON = x1LeftState(i, j, k, x1ReducedFlux_index + numRadVars_ * g);
 			double fx_R_RECON = x1RightState(i, j, k, x1ReducedFlux_index + numRadVars_ * g);
@@ -919,31 +919,31 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 			double fz_L_RECON = x1LeftState(i, j, k, x3ReducedFlux_index + numRadVars_ * g);
 			double fz_R_RECON = x1RightState(i, j, k, x3ReducedFlux_index + numRadVars_ * g);
 
-      // high optical depth
-      double erad_L_AVE = x1LeftStateAVE(i, j, k, primRadEnergy_index + numRadVars_ * g);
-      double erad_R_AVE = x1RightStateAVE(i, j, k, primRadEnergy_index + numRadVars_ * g);
+			// high optical depth
+			double erad_L_AVE = x1LeftStateAVE(i, j, k, primRadEnergy_index + numRadVars_ * g);
+			double erad_R_AVE = x1RightStateAVE(i, j, k, primRadEnergy_index + numRadVars_ * g);
 
-      double fx_L_AVE = x1LeftStateAVE(i, j, k, x1ReducedFlux_index + numRadVars_ * g);
-      double fx_R_AVE = x1RightStateAVE(i, j, k, x1ReducedFlux_index + numRadVars_ * g);
+			double fx_L_AVE = x1LeftStateAVE(i, j, k, x1ReducedFlux_index + numRadVars_ * g);
+			double fx_R_AVE = x1RightStateAVE(i, j, k, x1ReducedFlux_index + numRadVars_ * g);
 
-      double fy_L_AVE = x1LeftStateAVE(i, j, k, x2ReducedFlux_index + numRadVars_ * g);
-      double fy_R_AVE = x1RightStateAVE(i, j, k, x2ReducedFlux_index + numRadVars_ * g);
+			double fy_L_AVE = x1LeftStateAVE(i, j, k, x2ReducedFlux_index + numRadVars_ * g);
+			double fy_R_AVE = x1RightStateAVE(i, j, k, x2ReducedFlux_index + numRadVars_ * g);
 
-      double fz_L_AVE = x1LeftStateAVE(i, j, k, x3ReducedFlux_index + numRadVars_ * g);
-      double fz_R_AVE = x1RightStateAVE(i, j, k, x3ReducedFlux_index + numRadVars_ * g);
+			double fz_L_AVE = x1LeftStateAVE(i, j, k, x3ReducedFlux_index + numRadVars_ * g);
+			double fz_R_AVE = x1RightStateAVE(i, j, k, x3ReducedFlux_index + numRadVars_ * g);
 
-      // F = F_AVE - tau_corr * (F_AVE - F_RECON)
-      double erad_L = erad_L_AVE - tau_corr * (erad_L_AVE - erad_L_RECON);
-      double erad_R = erad_R_AVE - tau_corr * (erad_R_AVE - erad_R_RECON);
+			// F = F_AVE - tau_corr * (F_AVE - F_RECON)
+			double erad_L = erad_L_AVE - tau_corr * (erad_L_AVE - erad_L_RECON);
+			double erad_R = erad_R_AVE - tau_corr * (erad_R_AVE - erad_R_RECON);
 
-      double fx_L = fx_L_AVE - tau_corr * (fx_L_AVE - fx_L_RECON);
-      double fx_R = fx_R_AVE - tau_corr * (fx_R_AVE - fx_R_RECON);
+			double fx_L = fx_L_AVE - tau_corr * (fx_L_AVE - fx_L_RECON);
+			double fx_R = fx_R_AVE - tau_corr * (fx_R_AVE - fx_R_RECON);
 
-      double fy_L = fy_L_AVE - tau_corr * (fy_L_AVE - fy_L_RECON);
-      double fy_R = fy_R_AVE - tau_corr * (fy_R_AVE - fy_R_RECON);
+			double fy_L = fy_L_AVE - tau_corr * (fy_L_AVE - fy_L_RECON);
+			double fy_R = fy_R_AVE - tau_corr * (fy_R_AVE - fy_R_RECON);
 
-      double fz_L = fz_L_AVE - tau_corr * (fz_L_AVE - fz_L_RECON);
-      double fz_R = fz_R_AVE - tau_corr * (fz_R_AVE - fz_R_RECON);
+			double fz_L = fz_L_AVE - tau_corr * (fz_L_AVE - fz_L_RECON);
+			double fz_R = fz_R_AVE - tau_corr * (fz_R_AVE - fz_R_RECON);
 
 			// compute scalar reduced flux f
 			double f_L = std::sqrt(fx_L * fx_L + fy_L * fy_L + fz_L * fz_L);
@@ -1019,31 +1019,31 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 			// quokka::valarray<double, numRadVars_> epsilon = {S_corr, S_corr, S_corr, S_corr}; // Jiang et al. (2013)
 			// quokka::valarray<double, numRadVars_> epsilon = {S_corr * S_corr, S_corr, S_corr, S_corr}; // this code
 
-      if constexpr (odd_even_correction_type == 1) {
-        // fix odd-even instability that appears in the asymptotic diffusion limit
-        // [for details, see section 3.1: https://ui.adsabs.harvard.edu/abs/2022MNRAS.512.1499R/abstract]
-        epsilon = {S_corr, 1.0, 1.0, 1.0};
-        if ((i + j + k) % 2 == 0) {
-          // revert to more diffusive flux (has no effect in optically-thin limit)
-          epsilon = {1.0, 1.0, 1.0, 1.0};
-        }
-      }
+			if constexpr (odd_even_correction_type == 1) {
+				// fix odd-even instability that appears in the asymptotic diffusion limit
+				// [for details, see section 3.1: https://ui.adsabs.harvard.edu/abs/2022MNRAS.512.1499R/abstract]
+				epsilon = {S_corr, 1.0, 1.0, 1.0};
+				if ((i + j + k) % 2 == 0) {
+					// revert to more diffusive flux (has no effect in optically-thin limit)
+					epsilon = {1.0, 1.0, 1.0, 1.0};
+				}
+			}
 
-      if constexpr (odd_even_correction_type == 2) {
-        epsilon = {S_corr, S_corr, S_corr, S_corr}; // Jiang et al. (2013)
-        // set epsilon to 1.0 when (u_i - u_i-1)(u_i+1 - u_i) < 0
-        for (int n = 0; n < numRadVars_; ++n) {
-          auto u_im1 = consVar(i - 1, j, k, radEnergy_index + numRadVars_ * g + n);
-          auto u_i = consVar(i, j, k, radEnergy_index + numRadVars_ * g + n);
-          auto u_ip1 = consVar(i + 1, j, k, radEnergy_index + numRadVars_ * g + n);
-          auto u_ip2 = consVar(i + 2, j, k, radEnergy_index + numRadVars_ * g + n);
-          if (((u_i - u_im1) * (u_ip1 - u_i) < 0) && ((u_ip1 - u_i) * (u_ip2 - u_ip1) < 0)) {
-            // epsilon[n] = 1.0;
-            epsilon = {1.0, 1.0, 1.0, 1.0};
-            break;
-          }
-        }
-      }
+			if constexpr (odd_even_correction_type == 2) {
+				epsilon = {S_corr, S_corr, S_corr, S_corr}; // Jiang et al. (2013)
+				// set epsilon to 1.0 when (u_i - u_i-1)(u_i+1 - u_i) < 0
+				for (int n = 0; n < numRadVars_; ++n) {
+					auto u_im1 = consVar(i - 1, j, k, radEnergy_index + numRadVars_ * g + n);
+					auto u_i = consVar(i, j, k, radEnergy_index + numRadVars_ * g + n);
+					auto u_ip1 = consVar(i + 1, j, k, radEnergy_index + numRadVars_ * g + n);
+					auto u_ip2 = consVar(i + 2, j, k, radEnergy_index + numRadVars_ * g + n);
+					if (((u_i - u_im1) * (u_ip1 - u_i) < 0) && ((u_ip1 - u_i) * (u_ip2 - u_ip1) < 0)) {
+						// epsilon[n] = 1.0;
+						epsilon = {1.0, 1.0, 1.0, 1.0};
+						break;
+					}
+				}
+			}
 
 			// check local minima and maxima of gas velocity
 			// auto v_im1 = consVar(i - 1, j, k, x1GasMomentum_index);
@@ -1059,26 +1059,27 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 
 			// in the frozen Eddington tensor approximation, we are always
 			// in the star region, so F = F_star
-      quokka::valarray<double, numRadVars_> F =
-          (S_R / (S_R - S_L)) * F_L - (S_L / (S_R - S_L)) * F_R + epsilon * (S_R * S_L / (S_R - S_L)) * (U_R - U_L);
+			quokka::valarray<double, numRadVars_> F =
+			    (S_R / (S_R - S_L)) * F_L - (S_L / (S_R - S_L)) * F_R + epsilon * (S_R * S_L / (S_R - S_L)) * (U_R - U_L);
 
-      if constexpr (odd_even_correction_type == 2) {
-        // Fix the Riemann solver at diffusion limit
-        const quokka::valarray<double, numRadVars_> F_LO =
-            (S_R / (S_R - S_L)) * F_L - (S_L / (S_R - S_L)) * F_R + (S_R * S_L / (S_R - S_L)) * (U_R - U_L);
-        const quokka::valarray<double, numRadVars_> F_HO = 0.5 * (F_L + F_R);
-        quokka::valarray<double, numRadVars_> flux_limiter{}; // minmod flux limiter
-        for (int n = 0; n < numRadVars_; ++n) {
-          auto u_im1 = consVar(i - 1, j, k, radEnergy_index + numRadVars_ * g);
-          auto u_i = consVar(i, j, k, radEnergy_index + numRadVars_ * g);
-          auto u_ip1 = consVar(i + 1, j, k, radEnergy_index + numRadVars_ * g);
-          auto u_ip2 = consVar(i + 2, j, k, radEnergy_index + numRadVars_ * g);
-          flux_limiter[n] = std::max(0.0, std::min(1.0, std::min((u_i - u_im1) / (u_ip1 - u_i), (u_ip2 - u_ip1) / (u_ip1 - u_i))));
-        }
-        // flux_limiter.fillin(1.0);
+			if constexpr (odd_even_correction_type == 2) {
+				// Fix the Riemann solver at diffusion limit
+				const quokka::valarray<double, numRadVars_> F_LO =
+				    (S_R / (S_R - S_L)) * F_L - (S_L / (S_R - S_L)) * F_R + (S_R * S_L / (S_R - S_L)) * (U_R - U_L);
+				const quokka::valarray<double, numRadVars_> F_HO = 0.5 * (F_L + F_R);
+				quokka::valarray<double, numRadVars_> flux_limiter{}; // minmod flux limiter
+				for (int n = 0; n < numRadVars_; ++n) {
+					auto u_im1 = consVar(i - 1, j, k, radEnergy_index + numRadVars_ * g);
+					auto u_i = consVar(i, j, k, radEnergy_index + numRadVars_ * g);
+					auto u_ip1 = consVar(i + 1, j, k, radEnergy_index + numRadVars_ * g);
+					auto u_ip2 = consVar(i + 2, j, k, radEnergy_index + numRadVars_ * g);
+					flux_limiter[n] =
+					    std::max(0.0, std::min(1.0, std::min((u_i - u_im1) / (u_ip1 - u_i), (u_ip2 - u_ip1) / (u_ip1 - u_i))));
+				}
+				// flux_limiter.fillin(1.0);
 
-        F = F_HO - epsilon * flux_limiter * (F_HO - F_LO);
-      }
+				F = F_HO - epsilon * flux_limiter * (F_HO - F_LO);
+			}
 
 			// check states are valid
 			AMREX_ASSERT(!std::isnan(F[0])); // NOLINT

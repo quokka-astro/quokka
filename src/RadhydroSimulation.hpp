@@ -1835,8 +1835,9 @@ void RadhydroSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real
 		// mixed interface/cell-centered kernel
 		RadSystem<problem_t>::template ReconstructStatesPPM<DIR>(primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange,
 									 x1ReconstructRange, nvars);
-    // Average reconstruction
-		RadSystem<problem_t>::template ReconstructStatesAVE<DIR>(primVar.array(), x1LeftStateAVE.array(), x1RightStateAVE.array(), x1ReconstructRange, nvars);
+		// Average reconstruction
+		RadSystem<problem_t>::template ReconstructStatesAVE<DIR>(primVar.array(), x1LeftStateAVE.array(), x1RightStateAVE.array(), x1ReconstructRange,
+									 nvars);
 	} else if (radiationReconstructionOrder_ == 2) {
 		// PLM and donor cell are interface-centered kernels
 		RadSystem<problem_t>::template ReconstructStatesPLM<DIR>(primVar.array(), x1LeftState.array(), x1RightState.array(), x1ReconstructRange, nvars);
@@ -1849,8 +1850,8 @@ void RadhydroSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real
 
 	// interface-centered kernel
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, dir);
-	RadSystem<problem_t>::template ComputeFluxes<DIR>(x1Flux.array(), x1FluxDiffusive.array(), x1LeftState.array(), x1RightState.array(), x1LeftStateAVE.array(), x1RightStateAVE.array(), x1FluxRange,
-							  consState,
+	RadSystem<problem_t>::template ComputeFluxes<DIR>(x1Flux.array(), x1FluxDiffusive.array(), x1LeftState.array(), x1RightState.array(),
+							  x1LeftStateAVE.array(), x1RightStateAVE.array(), x1FluxRange, consState,
 							  dx); // watch out for argument order!!
 }
 
