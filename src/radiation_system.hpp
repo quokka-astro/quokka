@@ -142,7 +142,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	template <FluxDir DIR>
 	static void ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiffusive_in, amrex::Array4<const amrex::Real> const &x1LeftState_in,
-				  amrex::Array4<const amrex::Real> const &x1RightState_in, amrex::Box const &indexRange, arrayconst_t &consVar_in,
+				  amrex::Array4<const amrex::Real> const &x1RightState_in, amrex::Array4<const amrex::Real> const &x1LeftStateAVE_in,
+				  amrex::Array4<const amrex::Real> const &x1RightStateAVE_in, amrex::Box const &indexRange, arrayconst_t &consVar_in,
 				  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx);
 
 	static void SetRadEnergySource(array_t &radEnergySource, amrex::Box const &indexRange, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
@@ -169,6 +170,9 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	template <FluxDir DIR>
 	static void ReconstructStatesPPM(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in, amrex::Box const &cellRange,
 					 amrex::Box const &interfaceRange, int nvars, int iReadFrom = 0, int iWriteFrom = 0);
+
+	template <FluxDir DIR>
+	static void ReconstructStatesAVE(arrayconst_t &q, array_t &leftState, array_t &rightState, amrex::Box const &indexRange, int nvars);
 
 	AMREX_GPU_HOST_DEVICE static auto ComputeEddingtonFactor(double f) -> double;
 	AMREX_GPU_HOST_DEVICE static auto ComputePlanckOpacity(double rho, double Tgas) -> quokka::valarray<double, nGroups_>;
@@ -426,6 +430,26 @@ void RadSystem<problem_t>::ReconstructStatesPLM(arrayconst_t &q_in, array_t &lef
 		leftState(i, j, k, n) = q(i - 1, j, k, n) + 0.25 * lslope; // NOLINT
 		rightState(i, j, k, n) = q(i, j, k, n) - 0.25 * rslope;	   // NOLINT
 	});
+}
+
+template <typename problem_t>
+template <FluxDir DIR>
+void RadSystem<problem_t>::ReconstructStatesAVE(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in, amrex::Box const &indexRange,
+						     const int nvars)
+{
+	// construct ArrayViews for permuted indices
+	quokka::Array4View<amrex::Real const, DIR> q(q_in);
+	quokka::Array4View<amrex::Real, DIR> leftState(leftState_in);
+	quokka::Array4View<amrex::Real, DIR> rightState(rightState_in);
+
+	amrex::ParallelFor(indexRange, nvars, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept { 
+    // permute array indices according to dir 
+    auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
+
+    const auto ave = 0.5 * (q(i - 1, j, k, n) + q(i, j, k, n));
+		leftState(i, j, k, n) = ave;
+		rightState(i, j, k, n) = ave;
+  });
 }
 
 template <typename problem_t>
@@ -844,11 +868,14 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeRadPressure(const double erad
 template <typename problem_t>
 template <FluxDir DIR>
 void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiffusive_in, amrex::Array4<const amrex::Real> const &x1LeftState_in,
-					 amrex::Array4<const amrex::Real> const &x1RightState_in, amrex::Box const &indexRange, arrayconst_t &consVar_in,
+					 amrex::Array4<const amrex::Real> const &x1RightState_in, amrex::Array4<const amrex::Real> const &x1LeftStateAVE_in,
+					 amrex::Array4<const amrex::Real> const &x1RightStateAVE_in, amrex::Box const &indexRange, arrayconst_t &consVar_in,
 					 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx)
 {
 	quokka::Array4View<const amrex::Real, DIR> x1LeftState(x1LeftState_in);
 	quokka::Array4View<const amrex::Real, DIR> x1RightState(x1RightState_in);
+	quokka::Array4View<const amrex::Real, DIR> x1LeftStateAVE(x1LeftStateAVE_in);
+	quokka::Array4View<const amrex::Real, DIR> x1RightStateAVE(x1RightStateAVE_in);
 	quokka::Array4View<amrex::Real, DIR> x1Flux(x1Flux_in);
 	quokka::Array4View<amrex::Real, DIR> x1FluxDiffusive(x1FluxDiffusive_in);
 	quokka::Array4View<const amrex::Real, DIR> consVar(consVar_in);
@@ -874,17 +901,49 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 
 		// gather left- and right- state variables
 		for (int g = 0; g < nGroups_; ++g) {
-			double erad_L = x1LeftState(i, j, k, primRadEnergy_index + numRadVars_ * g);
-			double erad_R = x1RightState(i, j, k, primRadEnergy_index + numRadVars_ * g);
+			const double S_corr = std::min(1.0, 1.0 / tau_cell[g]); // Skinner et al.
+			const double tau_corr = S_corr;
+			// const double tau_corr = 1.0;  // optically thin, no correction
+			// const double tau_corr = 0.0;  // optically thick
 
-			double fx_L = x1LeftState(i, j, k, x1ReducedFlux_index + numRadVars_ * g);
-			double fx_R = x1RightState(i, j, k, x1ReducedFlux_index + numRadVars_ * g);
+      // low optical depth
+			double erad_L_RECON = x1LeftState(i, j, k, primRadEnergy_index + numRadVars_ * g);
+			double erad_R_RECON  = x1RightState(i, j, k, primRadEnergy_index + numRadVars_ * g);
 
-			double fy_L = x1LeftState(i, j, k, x2ReducedFlux_index + numRadVars_ * g);
-			double fy_R = x1RightState(i, j, k, x2ReducedFlux_index + numRadVars_ * g);
+			double fx_L_RECON = x1LeftState(i, j, k, x1ReducedFlux_index + numRadVars_ * g);
+			double fx_R_RECON = x1RightState(i, j, k, x1ReducedFlux_index + numRadVars_ * g);
 
-			double fz_L = x1LeftState(i, j, k, x3ReducedFlux_index + numRadVars_ * g);
-			double fz_R = x1RightState(i, j, k, x3ReducedFlux_index + numRadVars_ * g);
+			double fy_L_RECON = x1LeftState(i, j, k, x2ReducedFlux_index + numRadVars_ * g);
+			double fy_R_RECON = x1RightState(i, j, k, x2ReducedFlux_index + numRadVars_ * g);
+
+			double fz_L_RECON = x1LeftState(i, j, k, x3ReducedFlux_index + numRadVars_ * g);
+			double fz_R_RECON = x1RightState(i, j, k, x3ReducedFlux_index + numRadVars_ * g);
+
+      // high optical depth
+      double erad_L_AVE = x1LeftStateAVE(i, j, k, primRadEnergy_index + numRadVars_ * g);
+      double erad_R_AVE = x1RightStateAVE(i, j, k, primRadEnergy_index + numRadVars_ * g);
+
+      double fx_L_AVE = x1LeftStateAVE(i, j, k, x1ReducedFlux_index + numRadVars_ * g);
+      double fx_R_AVE = x1RightStateAVE(i, j, k, x1ReducedFlux_index + numRadVars_ * g);
+
+      double fy_L_AVE = x1LeftStateAVE(i, j, k, x2ReducedFlux_index + numRadVars_ * g);
+      double fy_R_AVE = x1RightStateAVE(i, j, k, x2ReducedFlux_index + numRadVars_ * g);
+
+      double fz_L_AVE = x1LeftStateAVE(i, j, k, x3ReducedFlux_index + numRadVars_ * g);
+      double fz_R_AVE = x1RightStateAVE(i, j, k, x3ReducedFlux_index + numRadVars_ * g);
+
+      // F = F_AVE - tau_corr * (F_AVE - F_RECON)
+      double erad_L = erad_L_AVE - tau_corr * (erad_L_AVE - erad_L_RECON);
+      double erad_R = erad_R_AVE - tau_corr * (erad_R_AVE - erad_R_RECON);
+
+      double fx_L = fx_L_AVE - tau_corr * (fx_L_AVE - fx_L_RECON);
+      double fx_R = fx_R_AVE - tau_corr * (fx_R_AVE - fx_R_RECON);
+
+      double fy_L = fy_L_AVE - tau_corr * (fy_L_AVE - fy_L_RECON);
+      double fy_R = fy_R_AVE - tau_corr * (fy_R_AVE - fy_R_RECON);
+
+      double fz_L = fz_L_AVE - tau_corr * (fz_L_AVE - fz_L_RECON);
+      double fz_R = fz_R_AVE - tau_corr * (fz_R_AVE - fz_R_RECON);
 
 			// compute scalar reduced flux f
 			double f_L = std::sqrt(fx_L * fx_L + fy_L * fy_L + fz_L * fz_L);
@@ -951,7 +1010,7 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 			// limit [see Appendix of Jiang et al. ApJ 767:148 (2013)]
 			// const double S_corr = std::sqrt(1.0 - std::exp(-tau_cell * tau_cell)) /
 			//		      tau_cell; // Jiang et al. (2013)
-			const double S_corr = std::min(1.0, 1.0 / tau_cell[g]); // Skinner et al.
+			// const double S_corr = std::min(1.0, 1.0 / tau_cell[g]); // Skinner et al.
 
 			// adjust the wavespeeds
 			// (this factor cancels out except for the last term in the HLL flux)
