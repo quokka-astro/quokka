@@ -108,7 +108,7 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	AMREX_GPU_DEVICE static auto isStateValid(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> bool;
 
 	template <FluxDir DIR>
-	static void ReconstructStatesPPM(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf, int nghost, int nvars);
+	static void ReconstructStatesPPM(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf, int nghost, int nvars, double dx, double dt);
 
 	static void ComputeRhsFromFluxes(amrex::MultiFab &rhs_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fluxArray,
 					 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, int nvars);
@@ -544,7 +544,7 @@ HydroSystem<problem_t>::ReconstructCellPPM(quokka::valarray<Real, nvar_> const &
 template <typename problem_t>
 template <FluxDir DIR>
 void HydroSystem<problem_t>::ReconstructStatesPPM(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf, const int nghost,
-						  const int nvars)
+						  const int nvars, const double dx, const double dt)
 {
 	BL_PROFILE("HydroSystem::ReconstructStatesPPM()");
 
@@ -573,50 +573,51 @@ void HydroSystem<problem_t>::ReconstructStatesPPM(amrex::MultiFab const &q_mf, a
 		auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
 
 		// primitive variable states
-		quokka::valarray<Real, nvar_> p_im2{};
-		quokka::valarray<Real, nvar_> p_im1{};
-		quokka::valarray<Real, nvar_> p_i{};
-		quokka::valarray<Real, nvar_> p_ip1{};
-		quokka::valarray<Real, nvar_> p_ip2{};
+		quokka::valarray<Real, nvar_> q_im2{};
+		quokka::valarray<Real, nvar_> q_im1{};
+		quokka::valarray<Real, nvar_> q_i{};
+		quokka::valarray<Real, nvar_> q_ip1{};
+		quokka::valarray<Real, nvar_> q_ip2{};
 
 		for (int n = 0; n < nvar_; ++n) {
-			p_im2[n] = q(i - 2, j, k, n);
-			p_im1[n] = q(i - 1, j, k, n);
-			p_i[n] = q(i, j, k, n);
-			p_ip1[n] = q(i + 1, j, k, n);
-			p_ip2[n] = q(i + 2, j, k, n);
+			q_im2[n] = q(i - 2, j, k, n);
+			q_im1[n] = q(i - 1, j, k, n);
+			q_i[n] = q(i, j, k, n);
+			q_ip1[n] = q(i + 1, j, k, n);
+			q_ip2[n] = q(i + 2, j, k, n);
 		}
 
-		// characteristic variable states
-		quokka::valarray<Real, nvar_> const r_im2 = PrimToReconstructVars<DIR>(p_im2, p_i);
-		quokka::valarray<Real, nvar_> const r_im1 = PrimToReconstructVars<DIR>(p_im1, p_i);
-		quokka::valarray<Real, nvar_> const r_i = PrimToReconstructVars<DIR>(p_i, p_i);
-		quokka::valarray<Real, nvar_> const r_ip1 = PrimToReconstructVars<DIR>(p_ip1, p_i);
-		quokka::valarray<Real, nvar_> const r_ip2 = PrimToReconstructVars<DIR>(p_ip2, p_i);
+		auto [q_minus, q_plus] = ReconstructCellPPM(q_im2, q_im1, q_i, q_ip1, q_ip2);
 
-		auto [r_minus, r_plus] = ReconstructCellPPM(r_im2, r_im1, r_i, r_ip1, r_ip2);
+		// Get rho, cs from q_i
+		const amrex::Real rho = q_i[primDensity_index];
+		const amrex::Real P = q_i[pressure_index];
+		const amrex::Real cs = quokka::EOS<problem_t>::ComputeSoundSpeed(rho, P);
 
-		// convert back to primitive vars
-		quokka::valarray<Real, nvar_> const q_minus = ReconstructToPrimVars<DIR>(r_minus, p_i);
-		quokka::valarray<Real, nvar_> const q_plus = ReconstructToPrimVars<DIR>(r_plus, p_i);
+		// Pick normal velocity component
+		amrex::Real u{};
+		if constexpr (DIR == FluxDir::X1) {
+			u = q_i[x1Velocity_index];
+		} else if constexpr (DIR == FluxDir::X2) {
+			u = q_i[x2Velocity_index];
+		} else if constexpr (DIR == FluxDir::X3) {
+			u = q_i[x3Velocity_index];
+		}
 
-		// check state validity
-		bool isDensityPositive = (q_minus[primDensity_index] > 0.) && (q_plus[primDensity_index] > 0.);
-		bool isPressurePositive = (q_minus[pressure_index] > 0.) && (q_plus[pressure_index] > 0.);
+		// compute CFL numbers for characteristics
+		double sigma_plus = std::abs(u + cs) * dt / dx;
+		double sigma_minus = std::abs(u - cs) * dt / dx;
 
-		if (isDensityPositive && isPressurePositive) {
-			// we are done
-			for (int n = 0; n < nvars; ++n) {
-				rightState(i, j, k, n) = q_minus[n];
-				leftState(i + 1, j, k, n) = q_plus[n];
-			}
-		} else {
-			// state is invalid, so fall back to reconstruction using primitive vars
-			auto [q_minus, q_plus] = ReconstructCellPPM(p_im2, p_im1, p_i, p_ip1, p_ip2);
-			for (int n = 0; n < nvars; ++n) {
-				rightState(i, j, k, n) = q_minus[n];
-				leftState(i + 1, j, k, n) = q_plus[n];
-			}
+		// extrapolate characteristics (these are the reference states from CW84)
+		quokka::valarray<Real, nvar_> q_6 = 6.0 * (q_i - 0.5 * (q_minus + q_plus));
+		quokka::valarray<Real, nvar_> dq_i = q_plus - q_minus;
+
+		quokka::valarray<Real, nvar_> I_plus = q_plus - 0.5 * sigma_plus * (dq_i - q_6 * (1. - (2. / 3.) * sigma_plus));
+		quokka::valarray<Real, nvar_> I_minus = q_minus + 0.5 * sigma_minus * (dq_i + q_6 * (1. - (2. / 3.) * sigma_minus));
+
+		for (int n = 0; n < nvars; ++n) {
+			rightState(i, j, k, n) = ((u - cs) < 0.) ? I_minus[n] : q_minus[n];
+			leftState(i + 1, j, k, n) = ((u + cs) > 0.) ? I_plus[n] : q_plus[n];
 		}
 	});
 }
