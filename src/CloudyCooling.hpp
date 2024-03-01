@@ -9,12 +9,9 @@
 /// \brief Defines methods for interpolating cooling rates from Cloudy tables.
 ///
 
-#include "AMReX.H"
-#include "AMReX_BLassert.H"
 #include "AMReX_Extension.H"
 #include "AMReX_GpuQualifiers.H"
 
-#include "AMReX_ParallelDescriptor.H"
 #include "FastMath.hpp"
 #include "GrackleDataReader.hpp"
 #include "Interpolate2D.hpp"
@@ -23,7 +20,6 @@
 #include "hydro_system.hpp"
 #include "radiation_system.hpp"
 #include "root_finding.hpp"
-#include <limits>
 
 namespace quokka::cooling
 {
@@ -37,12 +33,12 @@ constexpr double cloudy_H_mass_fraction = 1. / (1. + 0.098 * 3.971);
 
 struct cloudyGpuConstTables {
 	// these are non-owning, so can make a copy of the whole struct
-	amrex::Table1D<const Real> const log_nH;
-	amrex::Table1D<const Real> const log_Tgas;
+	amrex::Table1D<const Real> log_nH;
+	amrex::Table1D<const Real> log_Tgas;
 
-	amrex::Table2D<const Real> const cool;
-	amrex::Table2D<const Real> const heat;
-	amrex::Table2D<const Real> const meanMolWeight;
+	amrex::Table2D<const Real> cool;
+	amrex::Table2D<const Real> heat;
+	amrex::Table2D<const Real> meanMolWeight;
 };
 
 class cloudy_tables
@@ -112,7 +108,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(double rho, do
 
 	if (Egas <= Eint_min) {
 		return Tmin_table;
-	} else if (Egas >= Eint_max) {
+	}
+	if (Egas >= Eint_max) {
 		return Tmax_table;
 	}
 
@@ -155,13 +152,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(double rho, do
 		T_sol = 0.5 * (bounds.first + bounds.second);
 
 		if ((maxIter >= maxIterLimit) || std::isnan(T_sol)) {
-#if 0
-			printf("\nTgas iteration failed! rho = %.17g, Eint = %.17g, nH = %e, Tgas "
-			       "= %e, "
-			       "bounds.first = %e, bounds.second = %e, T_min = %e, T_max = %e, "
-			       "maxIter = %d\n",
-			       rho, Egas, nH, T_sol, bounds.first, bounds.second, T_min, T_max, maxIter);
-#endif
 			T_sol = NAN;
 		}
 	} // else: return NAN
@@ -287,14 +277,15 @@ template <typename problem_t> auto computeCooling(amrex::MultiFab &mf, const Rea
 			rk_adaptive_integrate(user_rhs, 0, y, dt, &user_data, rtol, abstol, nsteps);
 			nsubsteps(i, j, k) = nsteps;
 
+			// TODO(bwibking): move to separate kernel
 			if (nsteps >= maxStepsODEIntegrate) {
 				Real const T = ComputeTgasFromEgas(rho, Eint, quokka::EOS_Traits<problem_t>::gamma, tables);
 				Real const Edot = cloudy_cooling_function(rho, T, tables);
 				Real const t_cool = Eint / Edot;
 				Real const abs_vel = std::sqrt((x1Mom * x1Mom + x2Mom * x2Mom + x3Mom * x3Mom) / (rho * rho));
-				printf("max substeps exceeded! rho = %.17e, Eint = %.17e, T = %g, cooling "
+				printf("max substeps exceeded at cell (%d, %d, %d)! rho = %.17e, Eint = %.17e, T = %g, cooling "
 				       "time = %g, abs_vel = %.17e, dt_operator = %.17e\n",
-				       rho, Eint, T, t_cool, abs_vel, dt);
+				       i, j, k, rho, Eint, T, t_cool, abs_vel, dt);
 			}
 
 			const Real Eint_new = y[0];
@@ -313,7 +304,6 @@ template <typename problem_t> auto computeCooling(amrex::MultiFab &mf, const Rea
 	if (nmax >= maxStepsODEIntegrate) {
 		amrex::Print() << "\t[CloudyCooling] Reaction ODE failure. Max steps exceeded in cooling solve!\n";
 		return false;
-		// amrex::ParallelDescriptor::Abort();
 	}
 	return true; // success
 }
