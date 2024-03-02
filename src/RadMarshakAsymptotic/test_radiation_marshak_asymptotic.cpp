@@ -218,7 +218,7 @@ auto problem_main() -> int
 	//     Radiative Transfer, 69, 475–489, 2001.
 
 	// Problem parameters
-	const int max_timesteps = 1e5;
+	const int max_timesteps = 1e6;
 	const double CFL_number = 0.9;
 	const double initial_dt = 5.0e-12; // s
 	const double max_dt = 5.0e-12;	   // s
