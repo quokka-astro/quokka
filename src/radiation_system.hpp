@@ -1208,6 +1208,16 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			radBoundaries_g_copy[g] = radBoundaries_g[g];
 		}
 
+    amrex::GpuArray<amrex::Real, 3> dMomentum{};
+    quokka::valarray<amrex::Real, 3> Erad_t1{};
+    amrex::GpuArray<quokka::valarray<amrex::Real, 3>, nGroups_> Frad_t1{};
+    amrex::Real Egas = NAN;
+
+    amrex::Real gas_update_factor = 1.0;
+    if (stage == 1) {
+      gas_update_factor = IMEX_a32;
+    }
+
     const int max_ite = 2;
     for (int ite = 0; ite < max_ite; ++ite) {
 
@@ -1350,16 +1360,13 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
       // Erad_guess is the new radiation energy (excluding work term)
       // Egas_guess is the new gas internal energy
 
-      amrex::Real gas_update_factor = 1.0;
-      if (stage == 1) {
-        gas_update_factor = IMEX_a32;
-      }
-
       // 2. Compute radiation flux update
 
       amrex::GpuArray<amrex::Real, 3> Frad_t0{};
-      quokka::valarray<amrex::Real, 3> Frad_t1{};
-      amrex::GpuArray<amrex::Real, 3> dMomentum{0., 0., 0.};
+      // quokka::valarray<amrex::Real, 3> Frad_t1{};
+      // amrex::GpuArray<amrex::Real, 3> dMomentum{0., 0., 0.};
+
+      dMomentum = {0., 0., 0.};
 
       T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
       if constexpr (gamma_ != 1.0) {
@@ -1418,19 +1425,19 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
           if constexpr (beta_order_ <= 1) {
             for (int n = 0; n < 3; ++n) {
               // Compute flux update
-              Frad_t1[n] = (Frad_t0[n] + v_terms[n]) / (1.0 + F_coeff);
+              Frad_t1[g][n] = (Frad_t0[n] + v_terms[n]) / (1.0 + F_coeff);
 
               // Compute conservative gas momentum update
-              dMomentum[n] += -(Frad_t1[n] - Frad_t0[n]) / (c * chat);
+              dMomentum[n] += -(Frad_t1[g][n] - Frad_t0[n]) / (c * chat);
             }
           } else if constexpr (beta_order_ == 2) {
             if (kappaFVec[g] == kappaEVec[g]) {
               for (int n = 0; n < 3; ++n) {
                 // Compute flux update
-                Frad_t1[n] = (Frad_t0[n] + v_terms[n]) / (1.0 + F_coeff);
+                Frad_t1[g][n] = (Frad_t0[n] + v_terms[n]) / (1.0 + F_coeff);
 
                 // Compute conservative gas momentum update
-                dMomentum[n] += -(Frad_t1[n] - Frad_t0[n]) / (c * chat);
+                dMomentum[n] += -(Frad_t1[g][n] - Frad_t0[n]) / (c * chat);
               }
             } else {
               const double K0 = 2.0 * rho * chat * dt * (kappaFVec[g] - kappaEVec[g]) / c / c * std::pow(lorentz_factor_v_v, 3);
@@ -1456,24 +1463,24 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
               const double B1 = v_terms[1] + Frad_t0[1];
               const double B2 = v_terms[2] + Frad_t0[2];
 
-              Frad_t1 = Solve3x3matrix(A00, A01, A02, A10, A11, A12, A20, A21, A22, B0, B1, B2);
+              Frad_t1[g] = Solve3x3matrix(A00, A01, A02, A10, A11, A12, A20, A21, A22, B0, B1, B2);
               for (int n = 0; n < 3; ++n) {
-                dMomentum[n] += -(Frad_t1[n] - Frad_t0[n]) / (c * chat);
+                dMomentum[n] += -(Frad_t1[g][n] - Frad_t0[n]) / (c * chat);
               }
             }
           }
         } else {
           for (int n = 0; n < 3; ++n) {
-            Frad_t1[n] = Frad_t0[n] / (1.0 + rho * kappaFVec[g] * chat * dt);
+            Frad_t1[g][n] = Frad_t0[n] / (1.0 + rho * kappaFVec[g] * chat * dt);
             // Compute conservative gas momentum update
-            dMomentum[n] += -(Frad_t1[n] - Frad_t0[n]) / (c * chat);
+            dMomentum[n] += -(Frad_t1[g][n] - Frad_t0[n]) / (c * chat);
           }
         }
 
         // update radiation flux on consNew at current group
-        consNew(i, j, k, x1RadFlux_index + numRadVars_ * g) = Frad_t1[0];
-        consNew(i, j, k, x2RadFlux_index + numRadVars_ * g) = Frad_t1[1];
-        consNew(i, j, k, x3RadFlux_index + numRadVars_ * g) = Frad_t1[2];
+        // consNew(i, j, k, x1RadFlux_index + numRadVars_ * g) = Frad_t1[0];
+        // consNew(i, j, k, x2RadFlux_index + numRadVars_ * g) = Frad_t1[1];
+        // consNew(i, j, k, x3RadFlux_index + numRadVars_ * g) = Frad_t1[2];
       }
 
       amrex::Real x1GasMom1 = consPrev(i, j, k, x1GasMomentum_index) + dMomentum[0];
@@ -1481,9 +1488,9 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
       amrex::Real x3GasMom1 = consPrev(i, j, k, x3GasMomentum_index) + dMomentum[2];
 
       // compute the gas momentum after adding the current group's momentum
-      consNew(i, j, k, x1GasMomentum_index) = consPrev(i, j, k, x1GasMomentum_index) + dMomentum[0] * gas_update_factor;
-      consNew(i, j, k, x2GasMomentum_index) = consPrev(i, j, k, x2GasMomentum_index) + dMomentum[1] * gas_update_factor;
-      consNew(i, j, k, x3GasMomentum_index) = consPrev(i, j, k, x3GasMomentum_index) + dMomentum[2] * gas_update_factor;
+      // consNew(i, j, k, x1GasMomentum_index) = consPrev(i, j, k, x1GasMomentum_index) + dMomentum[0] * gas_update_factor;
+      // consNew(i, j, k, x2GasMomentum_index) = consPrev(i, j, k, x2GasMomentum_index) + dMomentum[1] * gas_update_factor;
+      // consNew(i, j, k, x3GasMomentum_index) = consPrev(i, j, k, x3GasMomentum_index) + dMomentum[2] * gas_update_factor;
 
       // update gas momentum from radiation momentum of the current group
       if constexpr (gamma_ != 1.0) {
@@ -1505,11 +1512,8 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
           } else {
             // compute energyLossFractions
             for (int g = 0; g < nGroups_; ++g) {
-              Frad_t1[0] = consNew(i, j, k, x1RadFlux_index + numRadVars_ * g);
-              Frad_t1[1] = consNew(i, j, k, x2RadFlux_index + numRadVars_ * g);
-              Frad_t1[2] = consNew(i, j, k, x3RadFlux_index + numRadVars_ * g);
               energyLossFractions[g] =
-                  kappaFVec[g] * (x1GasMom1 * Frad_t1[0] + x2GasMom1 * Frad_t1[1] + x3GasMom1 * Frad_t1[2]);
+                  kappaFVec[g] * (x1GasMom1 * Frad_t1[g][0] + x2GasMom1 * Frad_t1[g][1] + x3GasMom1 * Frad_t1[g][2]);
             }
             auto energyLossFractionsTot = sum(energyLossFractions);
             if (energyLossFractionsTot != 0.0) {
@@ -1529,12 +1533,14 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
               Egas_guess -= (Erad_floor_ - radEnergyNew) * (c / chat);
               radEnergyNew = Erad_floor_;
             }
-            consNew(i, j, k, radEnergy_index + numRadVars_ * g) = radEnergyNew;
+            // consNew(i, j, k, radEnergy_index + numRadVars_ * g) = radEnergyNew;
+            Erad_t1[g] = radEnergyNew;
           }
         } else {
           // else, do not subtract radiation work in new radiation energy
           for (int g = 0; g < nGroups_; ++g) {
-            consNew(i, j, k, radEnergy_index + numRadVars_ * g) = EradVec_guess[g];
+            // consNew(i, j, k, radEnergy_index + numRadVars_ * g) = EradVec_guess[g];
+            Erad_t1[g] = EradVec_guess[g];
           }
         }
 
@@ -1547,19 +1553,43 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
         // In the first stage of the IMEX scheme, the gas energy is updated by a fraction (defined by 
         // gas_update_factor) of the total energy update.
         amrex::Real const dEint = Egas_guess - Egas0; // difference between new and old internal energy
-        amrex::Real const Egas = Egas0 + dEint * gas_update_factor;
-        consNew(i, j, k, gasInternalEnergy_index) = Egas;
+        // amrex::Real const Egas = Egas0 + dEint * gas_update_factor;
+        Egas = Egas0 + dEint * gas_update_factor;
+        // consNew(i, j, k, gasInternalEnergy_index) = Egas;
 
-        x1GasMom1 = consNew(i, j, k, x1GasMomentum_index);
-        x2GasMom1 = consNew(i, j, k, x2GasMomentum_index);
-        x3GasMom1 = consNew(i, j, k, x3GasMomentum_index);
-        consNew(i, j, k, gasEnergy_index) = ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas);
+        // x1GasMom1 = consNew(i, j, k, x1GasMomentum_index);
+        // x2GasMom1 = consNew(i, j, k, x2GasMomentum_index);
+        // x3GasMom1 = consNew(i, j, k, x3GasMomentum_index);
+        // consNew(i, j, k, gasEnergy_index) = ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas);
       } else {
         amrex::ignore_unused(EradVec_guess);
         amrex::ignore_unused(Egas_guess);
       } // endif gamma != 1.0
 
+    } // end full-step iteration
+
+    // update consNew
+    const auto x1GasMom1 = consPrev(i, j, k, x1GasMomentum_index) + dMomentum[0] * gas_update_factor;
+    const auto x2GasMom1 = consPrev(i, j, k, x2GasMomentum_index) + dMomentum[1] * gas_update_factor;
+    const auto x3GasMom1 = consPrev(i, j, k, x3GasMomentum_index) + dMomentum[2] * gas_update_factor;
+    consNew(i, j, k, x1GasMomentum_index) = x1GasMom1;
+    consNew(i, j, k, x2GasMomentum_index) = x2GasMom1;
+    consNew(i, j, k, x3GasMomentum_index) = x3GasMom1;
+    if constexpr (gamma_ != 1.0) {
+      consNew(i, j, k, gasInternalEnergy_index) = Egas;
+    } else {
+      Egas = consPrev(i, j, k, gasInternalEnergy_index);
     }
+    consNew(i, j, k, gasEnergy_index) = ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas);
+    for (int g = 0; g < nGroups_; ++g) {
+      if constexpr (gamma_ != 1.0) {
+        consNew(i, j, k, radEnergy_index + numRadVars_ * g) = Erad_t1[g];
+      }
+      consNew(i, j, k, x1RadFlux_index + numRadVars_ * g) = Frad_t1[g][0];
+      consNew(i, j, k, x2RadFlux_index + numRadVars_ * g) = Frad_t1[g][1];
+      consNew(i, j, k, x3RadFlux_index + numRadVars_ * g) = Frad_t1[g][2];
+    }
+
 	});
 }
 
