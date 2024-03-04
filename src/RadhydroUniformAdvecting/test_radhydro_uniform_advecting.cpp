@@ -24,14 +24,14 @@ constexpr double mu = 1.0;
 constexpr double k_B = 1.0;
 
 // static diffusion, beta = 1e-4, tau_cell = kappa0 * dx = 100, beta tau_cell = 1e-2
-constexpr double kappa0 = 100.; // cm^2 g^-1
-constexpr double v0 = 1.0e-4 * c; // advecting pulse
-constexpr double max_time = 1.0 / v0;
+// constexpr double kappa0 = 100.; // cm^2 g^-1
+// constexpr double v0 = 1.0e-4 * c; // advecting pulse
+// constexpr double max_time = 1.0 / v0;
 
 // dynamic diffusion, beta tau = 10
-// constexpr double kappa0 = 1.0e4; // dx = 1, tau = kappa0 * dx = 1e4
-// constexpr double v0 = 1e-3 * c; // beta = 1e-3
-// constexpr double max_time = 10.0 / v0;
+constexpr double kappa0 = 1.0e4; // dx = 1, tau = kappa0 * dx = 1e4
+constexpr double v0 = 1e-3 * c; // beta = 1e-3
+constexpr double max_time = 10.0 / v0;
 
 constexpr double Erad0 = a_rad * T0 * T0 * T0 * T0;
 constexpr double Erad_beta2 = (1. + 4. / 3. * (v0 * v0) / (c * c)) * Erad0;
