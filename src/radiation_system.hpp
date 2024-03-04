@@ -1182,6 +1182,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 
 		double Egas0 = NAN;
 		double Ekin0 = NAN;
+    double Etot0 = NAN;
 		double Egas_guess = NAN;
 		double T_gas = NAN;
 		double lorentz_factor = NAN;
@@ -1198,9 +1199,17 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		quokka::valarray<double, nGroups_> work{};
 		quokka::valarray<double, nGroups_> work_prev{};
 
+    work.fillin(0.0);
+    work_prev.fillin(0.0);
+
 		for (int g = 0; g < nGroups_; ++g) {
 			EradVec_guess[g] = NAN;
 		}
+
+    if constexpr (gamma_ != 1.0) {
+      Egas0 = ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0);
+      Etot0 = Egas0 + (c / chat) * (Erad0 + sum(Src));
+    }
 
 		// make a copy of radBoundaries_g
 		amrex::GpuArray<double, nGroups_ + 1> radBoundaries_g_copy{};
@@ -1211,27 +1220,28 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
     amrex::GpuArray<amrex::Real, 3> dMomentum{};
     quokka::valarray<amrex::Real, 3> Erad_t1{};
     amrex::GpuArray<quokka::valarray<amrex::Real, 3>, nGroups_> Frad_t1{};
-    amrex::Real Egas = NAN;
+    // amrex::Real Egas = NAN;
+    amrex::Real dEint = NAN;
 
     amrex::Real gas_update_factor = 1.0;
     if (stage == 1) {
       gas_update_factor = IMEX_a32;
     }
 
-    const int max_ite = 2;
-    for (int ite = 0; ite < max_ite; ++ite) {
+    const int max_ite = 5;
+    int ite = 0;
+    for (; ite < max_ite; ++ite) {
 
-      work.fillin(0.0);
-      work_prev.fillin(0.0);
+      // work.fillin(0.0);
+      // work_prev.fillin(0.0);
+
+      quokka::valarray<double, nGroups_> Rvec{};
 
       if constexpr (gamma_ != 1.0) {
-        Egas0 = ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0);
         Ekin0 = Egastot0 - Egas0;
 
         AMREX_ASSERT(min(Src) >= 0.0);
         AMREX_ASSERT(Egas0 > 0.0);
-
-        const double Etot0 = Egas0 + (c / chat) * (Erad0 + sum(Src));
 
         const double betaSqr = (x1GasMom0 * x1GasMom0 + x2GasMom0 * x2GasMom0 + x3GasMom0 * x3GasMom0) / (rho * rho * c * c);
         if constexpr (beta_order_ == 1) {
@@ -1278,12 +1288,14 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
         if constexpr ((compute_v_over_c_terms_) && (include_work_term_in_source)) {
           // compute the work term at the old state
           // const double gamma = 1.0 / sqrt(1.0 - vsqr / (c * c));
-          for (int g = 0; g < nGroups_; ++g) {
-            // work[g] = dt * chat * rho * kappaPVec[g] * (Erad0Vec[g] - fourPiBoverC[g]);
-            const double frad0 = consPrev(i, j, k, x1RadFlux_index + numRadVars_ * g); // TODO: problematic in iteration
-            const double frad1 = consPrev(i, j, k, x2RadFlux_index + numRadVars_ * g);
-            const double frad2 = consPrev(i, j, k, x3RadFlux_index + numRadVars_ * g);
-            work[g] = (x1GasMom0 * frad0 + x2GasMom0 * frad1 + x3GasMom0 * frad2) * chat / (c * c) * lorentz_factor_v * kappaFVec[g] * dt;
+          if (ite == 0) {
+            for (int g = 0; g < nGroups_; ++g) {
+              // work[g] = dt * chat * rho * kappaPVec[g] * (Erad0Vec[g] - fourPiBoverC[g]);
+              const double frad0 = consPrev(i, j, k, x1RadFlux_index + numRadVars_ * g);
+              const double frad1 = consPrev(i, j, k, x2RadFlux_index + numRadVars_ * g);
+              const double frad2 = consPrev(i, j, k, x3RadFlux_index + numRadVars_ * g);
+              work[g] = (x1GasMom0 * frad0 + x2GasMom0 * frad1 + x3GasMom0 * frad2) * chat / (c * c) * lorentz_factor_v * kappaFVec[g] * dt;
+            }
           }
         }
 
@@ -1293,7 +1305,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
         double F_G = NAN;
         double dFG_dEgas = NAN;
         double deltaEgas = NAN;
-        quokka::valarray<double, nGroups_> Rvec{};
+        // quokka::valarray<double, nGroups_> Rvec{};
         quokka::valarray<double, nGroups_> dFG_dD{};
         quokka::valarray<double, nGroups_> dFR_dEgas{};
         quokka::valarray<double, nGroups_> dFR_i_dD_i{};
@@ -1481,7 +1493,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
         // consNew(i, j, k, x1RadFlux_index + numRadVars_ * g) = Frad_t1[0];
         // consNew(i, j, k, x2RadFlux_index + numRadVars_ * g) = Frad_t1[1];
         // consNew(i, j, k, x3RadFlux_index + numRadVars_ * g) = Frad_t1[2];
-      }
+      } // end loop over radiation groups
 
       amrex::Real x1GasMom1 = consPrev(i, j, k, x1GasMomentum_index) + dMomentum[0];
       amrex::Real x2GasMom1 = consPrev(i, j, k, x2GasMomentum_index) + dMomentum[1];
@@ -1496,8 +1508,16 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
       if constexpr (gamma_ != 1.0) {
         // 4a. Compute radiation work terms
         amrex::Real const Egastot1 = ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess);
-        amrex::Real dErad_work = 0.;
+        // amrex::Real dErad_work = 0.;
 
+        if constexpr (compute_v_over_c_terms_) {
+          // compute difference in gas kinetic energy before and after momentum update
+          amrex::Real const Ekin1 = Egastot1 - Egas_guess;
+          amrex::Real const dEkin_work = Ekin1 - Ekin0;
+          Egas_guess -= dEkin_work;
+        }
+
+#if 0
         if constexpr (compute_v_over_c_terms_) {
           // compute difference in gas kinetic energy before and after momentum update
           amrex::Real const Ekin1 = Egastot1 - Egas_guess;
@@ -1543,18 +1563,19 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
             Erad_t1[g] = EradVec_guess[g];
           }
         }
+#endif
 
-        // 4b. Take the work term from gas internal energy and put it into gas kinetic energy
-        if constexpr (put_work_term_in_kinetic) {
-          Egas_guess += sum(work);
+        for (int g = 0; g < nGroups_; ++g) {
+          // consNew(i, j, k, radEnergy_index + numRadVars_ * g) = EradVec_guess[g];
+          Erad_t1[g] = EradVec_guess[g];
         }
 
         // 4b. Store new radiation energy, gas energy
         // In the first stage of the IMEX scheme, the gas energy is updated by a fraction (defined by 
         // gas_update_factor) of the total energy update.
-        amrex::Real const dEint = Egas_guess - Egas0; // difference between new and old internal energy
+        // dEint = Egas_guess - Egas0; // difference between new and old internal energy
         // amrex::Real const Egas = Egas0 + dEint * gas_update_factor;
-        Egas = Egas0 + dEint * gas_update_factor;
+        // Egas = Egas0 + dEint * gas_update_factor;
         // consNew(i, j, k, gasInternalEnergy_index) = Egas;
 
         // x1GasMom1 = consNew(i, j, k, x1GasMomentum_index);
@@ -1566,9 +1587,27 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
         amrex::ignore_unused(Egas_guess);
       } // endif gamma != 1.0
 
+      if constexpr ((!compute_v_over_c_terms_) || (gamma_ == 1.0)) {
+        break;
+      }
+
+      // copy work to work_prev
+      work_prev = work;
+      // compute new work
+      for (int g = 0; g < nGroups_; ++g) {
+        work[g] = (x1GasMom1 * Frad_t1[g][0] + x2GasMom1 * Frad_t1[g][1] + x3GasMom1 * Frad_t1[g][2]) * chat / (c * c) * lorentz_factor_v * kappaFVec[g] * dt;
+      }
+
+      // Check for convergence of the work term: if the relative change in the work term is less than 1e-15, then break the loop
+      if ((sum(work - work_prev) == 0.0) || ((c / chat) * sum(abs(work - work_prev)) / Etot0 < 1e-13) || (sum(abs(work - work_prev)) / sum(abs(work)) < 1e-13) || (sum(abs(work - work_prev)) / sum(Rvec) < 1e-13)) {
+        break;
+      }
+
     } // end full-step iteration
 
-    // update consNew
+    AMREX_ALWAYS_ASSERT_WITH_MESSAGE(ite < max_ite, "Full-step iteration did not converge!");
+
+    // update consNew. Need dMomentum, Egas_guess, Erad_t1, Frad_t1
     const auto x1GasMom1 = consPrev(i, j, k, x1GasMomentum_index) + dMomentum[0] * gas_update_factor;
     const auto x2GasMom1 = consPrev(i, j, k, x2GasMomentum_index) + dMomentum[1] * gas_update_factor;
     const auto x3GasMom1 = consPrev(i, j, k, x3GasMomentum_index) + dMomentum[2] * gas_update_factor;
@@ -1576,11 +1615,12 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
     consNew(i, j, k, x2GasMomentum_index) = x2GasMom1;
     consNew(i, j, k, x3GasMomentum_index) = x3GasMom1;
     if constexpr (gamma_ != 1.0) {
-      consNew(i, j, k, gasInternalEnergy_index) = Egas;
+      Egas_guess = Egas0 + (Egas_guess - Egas0) * gas_update_factor;
+      consNew(i, j, k, gasInternalEnergy_index) = Egas_guess;
     } else {
-      Egas = consPrev(i, j, k, gasInternalEnergy_index);
+      Egas_guess = consPrev(i, j, k, gasInternalEnergy_index);
     }
-    consNew(i, j, k, gasEnergy_index) = ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas);
+    consNew(i, j, k, gasEnergy_index) = ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess);
     for (int g = 0; g < nGroups_; ++g) {
       if constexpr (gamma_ != 1.0) {
         consNew(i, j, k, radEnergy_index + numRadVars_ * g) = Erad_t1[g];
