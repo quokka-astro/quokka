@@ -284,7 +284,7 @@ void AddSupernova(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> pro
         if(x0<0.5*dx[0] && y0<0.5*dx[1] && z0< 0.5*dx[2] ) {
         state(i, j, k, HydroSystem<NewProblem>::energy_index)         +=   rho_eint_blast; 
         state(i, j, k, HydroSystem<NewProblem>::internalEnergy_index) +=    rho_eint_blast; 
-        state(i, j, k, HydroSystem<NewProblem>::density_index) = 1.e-2 * Const_mH;
+        // state(i, j, k, HydroSystem<NewProblem>::density_index) = 1.e-2 * Const_mH;
         // state(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+2)+=  1.e3/cell_vol;
         // printf("The location of SN=%d,%d,%d\n",i, j, k);
         // printf("SN added at level=%d\n", level);
@@ -474,149 +474,58 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<NewProblem>::setCustomBou
    if (k < klo) {
       kcopy = klo - k -1;
       kedge = klo;
-      normal = -1;
-      zedge = prob_lo[2] - 0.5 * dx[2];
-      zcopy = prob_lo[2] + kcopy * dx[2];
-      zk    = prob_lo[2] + (k+0.5) * dx[2];
+      // normal = -1;
+      // zedge = prob_lo[2] - 0.5 * dx[2];
+      // zcopy = prob_lo[2] + kcopy * dx[2];
+      // zk    = prob_lo[2] + (k+0.5) * dx[2];
    }
    else if (k > khi) {
       kcopy = 2*khi - k + 1;
       normal = 1.0;
       kedge = khi;
-      zedge = prob_lo[2] + 0.5 * dx[2];
-      zcopy = prob_lo[2] + kcopy * dx[2];
-      zk    = prob_lo[2] + (k - khi +0.5) * dx[2];
+      // zedge = prob_lo[2] + 0.5 * dx[2];
+      // zcopy = prob_lo[2] + kcopy * dx[2];
+      // zk    = prob_lo[2] + (k - khi +0.5) * dx[2];
    }
 
     //Grab edge quantities
-    const double x1Mom_edge = consVar(i, j, kedge, HydroSystem<NewProblem>::x1Momentum_index);
-    const double x2Mom_edge = consVar(i, j, kedge, HydroSystem<NewProblem>::x2Momentum_index);
-    double x3Mom_edge = consVar(i, j, kedge, HydroSystem<NewProblem>::x3Momentum_index);
-    double rho_edge   = consVar(i, j, kedge, HydroSystem<NewProblem>::density_index);    
-    double speed_edge = std::abs(x3Mom_edge/rho_edge); 
-    double soundspeed_edge = HydroSystem<NewProblem>::ComputeSoundSpeed(consVar, i, j, kedge);
-    const double Press_edge  = consVar(i, j, kedge, HydroSystem<NewProblem>::internalEnergy_index)*(gamma-1.);
-    double vx_edge = x1Mom_edge/rho_edge;
-    double vy_edge = x2Mom_edge/rho_edge;
-    double vz_edge = x3Mom_edge/rho_edge;
+    // const double x1Mom_edge = consVar(i, j, kedge, HydroSystem<NewProblem>::x1Momentum_index);
+    // const double x2Mom_edge = consVar(i, j, kedge, HydroSystem<NewProblem>::x2Momentum_index);
+    // double x3Mom_edge = consVar(i, j, kedge, HydroSystem<NewProblem>::x3Momentum_index);
+    // double rho_edge   = consVar(i, j, kedge, HydroSystem<NewProblem>::density_index);    
+    // double speed_edge = std::abs(x3Mom_edge/rho_edge); 
+    // double soundspeed_edge = HydroSystem<NewProblem>::ComputeSoundSpeed(consVar, i, j, kedge);
+    // const double Press_edge  = consVar(i, j, kedge, HydroSystem<NewProblem>::internalEnergy_index)*(gamma-1.);
+    // double vx_edge = x1Mom_edge/rho_edge;
+    // double vy_edge = x2Mom_edge/rho_edge;
+    // double vz_edge = x3Mom_edge/rho_edge;
 
-    double Mach_number = speed_edge/soundspeed_edge;
-    bool subSonic=true;
-    bool inflow = true;
-    if(Mach_number>1.) { 
-      subSonic = false;
-    }
-    if((x3Mom_edge*normal)>0.0) { //gas is outflowing
-      inflow = false;
-    }
+    // double Mach_number = speed_edge/soundspeed_edge;
+    // bool subSonic=true;
+    // bool inflow = true;
+    // if(Mach_number>1.) { 
+    //   subSonic = false;
+    // }
+    // if((x3Mom_edge*normal)>0.0) { //gas is outflowing
+    //   inflow = false;
+    // }
     //Get quantities from cell to be copied into corresponding ghost zone.
     // 0-->neg1, 1-->neg2 etc
 
-    // const double rho_bc   = consVar(i, j, kcopy, HydroSystem<NewProblem>::density_index);
-		// const double x1Mom_bc = consVar(i, j, kcopy, HydroSystem<NewProblem>::x1Momentum_index);
-    // const double x2Mom_bc = consVar(i, j, kcopy, HydroSystem<NewProblem>::x2Momentum_index);
-    // const double x3Mom_bc = consVar(i, j, kcopy, HydroSystem<NewProblem>::x3Momentum_index);
-    // const double etot_bc  = consVar(i, j, kcopy, HydroSystem<NewProblem>::energy_index);
-    // const double eint_bc  = consVar(i, j, kcopy, HydroSystem<NewProblem>::internalEnergy_index);
-    // const double eint_bc  = consVar(i, j, kcopy, HydroSystem<NewProblem>::internalEnergy_index);
-
-
-    // const double rho_copy   = consVar(i, j, kcopy, HydroSystem<NewProblem>::density_index);
-		// const double x1Mom_copy = consVar(i, j, kcopy, HydroSystem<NewProblem>::x1Momentum_index);
-    // const double x2Mom_copy = consVar(i, j, kcopy, HydroSystem<NewProblem>::x2Momentum_index);
-    // const double x3Mom_copy = consVar(i, j, kcopy, HydroSystem<NewProblem>::x3Momentum_index);
-    // const double etot_copy  = consVar(i, j, kcopy, HydroSystem<NewProblem>::energy_index);
-    // const double eint_copy  = consVar(i, j, kcopy, HydroSystem<NewProblem>::internalEnergy_index);
-    // const double Press_copy  = consVar(i, j, kcopy, HydroSystem<NewProblem>::internalEnergy_index);
-
-    // int create_vaccuum=1; //create vaccuum at boundary 
-
-    // if(((x3Mom_edge*normal)>0.0 && (Mach_number>1.))) {
-    //       create_vaccuum = 0; //gas is supersonic and outflowing so no need to create artificial vaccuum
-    //     }
-
-    double P_ghost, rho_ghost, u_ghost, v_ghost, w_ghost;
-    if(subSonic && inflow){
-
-      //define T, vel, P=Pedge
-
-      double Tb,ub, vb, wb;
-      double Pb;
-
-      Tb = 1.e3;
-      Pb = 1.38e-16; //corresponding to T=1.e3K and nH=1.e-3
-      ub = vx_edge;
-      vb = vy_edge;
-      wb = vz_edge;
-
-      P_ghost = Pb;
-      rho_ghost = Pb * Const_mH/kb/Tb;
-      u_ghost = ub;
-      v_ghost = vb;
-      w_ghost = wb;
-
-    }else if(subSonic && !inflow){
-
-       double Pb, rhob, ub, vb, wb; 
-       
-       Pb =  1.38e-16; 
-       rhob = rho_edge + (Pb - Press_edge)/rho_edge/soundspeed_edge;
-       ub = x1Mom_edge/rho_edge;
-       vb = x2Mom_edge/rho_edge;
-       wb = x3Mom_edge/rho_edge + (Press_edge - Pb)/rho_edge/soundspeed_edge;
-        
-       double zb  = zedge;
-       P_ghost =   (Pb - Press_edge)/(zb - zedge) * (zk - zedge) + Press_edge;
-       rho_ghost = (rhob - rho_edge)/(zb - zedge) * (zk - zedge) + rho_edge;
-       u_ghost   = (ub - vx_edge)/(zb - zedge) * (zk - zedge) + vx_edge;
-       v_ghost   = (vb - vy_edge)/(zb - zedge) * (zk - zedge) + vy_edge;
-       w_ghost   = (wb - vz_edge)/(zb - zedge) * (zk - zedge) + vz_edge;
-    }
-
-    else{
-      
-      P_ghost = Press_edge;
-      rho_ghost = rho_edge;
-      u_ghost = vx_edge;
-      v_ghost = vy_edge;
-      w_ghost = vz_edge; 
-
-    }
-
-    /*if(create_vaccuum) {  //reflect quantities if gas is inflowing
-          double factor = 1.e2;
-          double sign = (x3Mom_edge*normal)/std::abs((x3Mom_edge*normal));
-          double ke = (x1Mom_bc*x1Mom_bc + x2Mom_bc*x2Mom_bc + x3Mom_bc*x3Mom_bc)/(2. * rho_bc);
-          // double ke_xy = (x1Mom_bc*x1Mom_bc + x2Mom_bc*x2Mom_bc)/(2. * rho_bc);
-        
-          consVar(i, j, k, HydroSystem<NewProblem>::density_index)= rho_bc/factor;
-          consVar(i, j, k, HydroSystem<NewProblem>::x1Momentum_index) = x1Mom_bc/factor;
-          consVar(i, j, k, HydroSystem<NewProblem>::x2Momentum_index) = x2Mom_bc/factor;
-          consVar(i, j, k, HydroSystem<NewProblem>::x3Momentum_index) = sign *(x3Mom_bc)/factor;
-          consVar(i, j, k, HydroSystem<NewProblem>::internalEnergy_index) = eint_bc/factor;
-          consVar(i, j, k, HydroSystem<NewProblem>::energy_index)     = eint_bc/factor  +  ke/factor;
-  
-  // } else { //copy last cell quantities because the gas is outflowing and supersonic*/
+    const double rho_edge   = consVar(i, j, kedge, HydroSystem<NewProblem>::density_index);
+		const double x1Mom_edge = consVar(i, j, kedge, HydroSystem<NewProblem>::x1Momentum_index);
+    const double x2Mom_edge = consVar(i, j, kedge, HydroSystem<NewProblem>::x2Momentum_index);
+    const double x3Mom_edge = consVar(i, j, kedge, HydroSystem<NewProblem>::x3Momentum_index);
+    const double etot_edge  = consVar(i, j, kedge, HydroSystem<NewProblem>::energy_index);
+    const double eint_edge  = consVar(i, j, kedge, HydroSystem<NewProblem>::internalEnergy_index);
     
 
-    // consVar(i, j, k, HydroSystem<NewProblem>::density_index)    = rho_bc ;
-		// consVar(i, j, k, HydroSystem<NewProblem>::x1Momentum_index) = x1Mom_bc;
-    // consVar(i, j, k, HydroSystem<NewProblem>::x2Momentum_index) = x2Mom_bc;
-    // consVar(i, j, k, HydroSystem<NewProblem>::x3Momentum_index) =  (x3Mom_bc);
-    // consVar(i, j, k, HydroSystem<NewProblem>::energy_index)     = etot_bc;
-    // consVar(i, j, k, HydroSystem<NewProblem>::internalEnergy_index) = eint_bc;
-    
-    
-    double eint_ghost = P_ghost / (gamma -1.);
-    double ekin_ghost = 0.5 * rho_ghost * ( u_ghost*u_ghost + v_ghost*v_ghost + w_ghost*w_ghost);
-
-    consVar(i, j, k, HydroSystem<NewProblem>::density_index)    = rho_ghost ;
-		consVar(i, j, k, HydroSystem<NewProblem>::x1Momentum_index) = rho_ghost * u_ghost;
-    consVar(i, j, k, HydroSystem<NewProblem>::x2Momentum_index) = rho_ghost * v_ghost;
-    consVar(i, j, k, HydroSystem<NewProblem>::x3Momentum_index) = rho_ghost * w_ghost;
-    consVar(i, j, k, HydroSystem<NewProblem>::energy_index)     = eint_ghost + ekin_ghost;
-    consVar(i, j, k, HydroSystem<NewProblem>::internalEnergy_index) = eint_ghost;
-  // }
+        consVar(i, j, k, HydroSystem<NewProblem>::density_index)    = rho_edge ;
+        consVar(i, j, k, HydroSystem<NewProblem>::x1Momentum_index) =  x1Mom_edge;
+        consVar(i, j, k, HydroSystem<NewProblem>::x2Momentum_index) =  x2Mom_edge;
+        consVar(i, j, k, HydroSystem<NewProblem>::x3Momentum_index) =  x3Mom_edge;
+        consVar(i, j, k, HydroSystem<NewProblem>::energy_index)     = etot_edge;
+        consVar(i, j, k, HydroSystem<NewProblem>::internalEnergy_index) = eint_edge;
 
 }
 
