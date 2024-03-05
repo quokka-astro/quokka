@@ -472,17 +472,17 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<NewProblem>::setCustomBou
   double zcopy, zedge, zk;
 
    if (k < klo) {
-      kcopy = klo - k -1;
       kedge = klo;
-      // normal = -1;
+      kcopy = klo;
+      normal = -1;
       // zedge = prob_lo[2] - 0.5 * dx[2];
       // zcopy = prob_lo[2] + kcopy * dx[2];
       // zk    = prob_lo[2] + (k+0.5) * dx[2];
    }
    else if (k > khi) {
-      kcopy = 2*khi - k + 1;
       normal = 1.0;
       kedge = khi;
+      kcopy = khi;
       // zedge = prob_lo[2] + 0.5 * dx[2];
       // zcopy = prob_lo[2] + kcopy * dx[2];
       // zk    = prob_lo[2] + (k - khi +0.5) * dx[2];
@@ -500,7 +500,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<NewProblem>::setCustomBou
     // double vy_edge = x2Mom_edge/rho_edge;
     // double vz_edge = x3Mom_edge/rho_edge;
 
-    // double Mach_number = speed_edge/soundspeed_edge;
+    
     // bool subSonic=true;
     // bool inflow = true;
     // if(Mach_number>1.) { 
@@ -518,7 +518,15 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<NewProblem>::setCustomBou
     const double x3Mom_edge = consVar(i, j, kedge, HydroSystem<NewProblem>::x3Momentum_index);
     const double etot_edge  = consVar(i, j, kedge, HydroSystem<NewProblem>::energy_index);
     const double eint_edge  = consVar(i, j, kedge, HydroSystem<NewProblem>::internalEnergy_index);
+
+    // double speed_edge = std::abs(x3Mom_edge/rho_edge); 
+    // double soundspeed_edge = HydroSystem<NewProblem>::ComputeSoundSpeed(consVar, i, j, kedge);
+    // double Mach_number = speed_edge/soundspeed_edge;
     
+    if((x3Mom_edge*normal)<0){//gas is inflowing
+      x3Mom_edge = -1 * x3Mom_edge;
+
+    }
 
         consVar(i, j, k, HydroSystem<NewProblem>::density_index)    = rho_edge ;
         consVar(i, j, k, HydroSystem<NewProblem>::x1Momentum_index) =  x1Mom_edge;
