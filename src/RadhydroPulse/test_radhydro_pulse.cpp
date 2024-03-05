@@ -14,6 +14,8 @@ struct PulseProblem {
 struct AdvPulseProblem {
 };
 
+constexpr int beta_order_ = 1; // order of beta in the radiation four-force
+
 constexpr double T0 = 1.0e7; // K (temperature)
 constexpr double T1 = 2.0e7; // K (temperature)
 constexpr double rho0 = 1.2; // g cm^-3 (matter density)
@@ -27,14 +29,14 @@ constexpr double k_B = C::k_B;
 constexpr double v0_nonadv = 0.; // non-advecting pulse
 
 // static diffusion: tau = 2e3, beta = 3e-5, beta tau = 6e-2
-constexpr double kappa0 = 100.;	    // cm^2 g^-1
-constexpr double v0_adv = 1.0e6;    // advecting pulse
-constexpr double max_time = 4.8e-5; // max_time = 2.0 * width / v1;
+// constexpr double kappa0 = 100.;	    // cm^2 g^-1
+// constexpr double v0_adv = 1.0e6;    // advecting pulse
+// constexpr double max_time = 4.8e-5; // max_time = 2.0 * width / v1;
 
 // dynamic diffusion: tau = 2e4, beta = 3e-3, beta tau = 60
-// constexpr double kappa0 = 1000.; // cm^2 g^-1
-// constexpr double v0_adv = 1.0e8;    // advecting pulse
-// constexpr double max_time = 4.8e-5; // max_time = 2.0 * width / v1; final width is sqrt(c t / kappa0), which is 3 times smaller
+constexpr double kappa0 = 1000.; // cm^2 g^-1
+constexpr double v0_adv = 1.0e8;    // advecting pulse
+constexpr double max_time = 4.8e-5; // max_time = 2.0 * width / v1; final width is sqrt(c t / kappa0), which is 3 times smaller
 
 template <> struct quokka::EOS_Traits<PulseProblem> {
 	static constexpr double mean_molecular_weight = mu;
@@ -53,7 +55,7 @@ template <> struct RadSystem_Traits<PulseProblem> {
 	static constexpr double radiation_constant = a_rad;
 	static constexpr double Erad_floor = erad_floor;
 	static constexpr bool compute_v_over_c_terms = true;
-	static constexpr int beta_order = 2;
+	static constexpr int beta_order = beta_order_;
 };
 template <> struct RadSystem_Traits<AdvPulseProblem> {
 	static constexpr double c_light = c;
@@ -61,7 +63,7 @@ template <> struct RadSystem_Traits<AdvPulseProblem> {
 	static constexpr double radiation_constant = a_rad;
 	static constexpr double Erad_floor = erad_floor;
 	static constexpr bool compute_v_over_c_terms = true;
-	static constexpr int beta_order = 2;
+	static constexpr int beta_order = beta_order_;
 };
 
 template <> struct Physics_Traits<PulseProblem> {
@@ -158,17 +160,15 @@ template <> void RadhydroSimulation<PulseProblem>::setInitialConditionsOnGrid(qu
 		const double Erad = a_rad * std::pow(Trad, 4);
 		const double rho = compute_exact_rho(x - x0);
 		const double Egas = quokka::EOS<PulseProblem>::ComputeEintFromTgas(rho, Trad);
-		const double v0 = v0_nonadv;
 
-		// state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = (1. + 4. / 3. * (v0 * v0) / (c * c)) * Erad;
 		state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = Erad;
-		state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index) = 4. / 3. * v0 * Erad;
-		state_cc(i, j, k, RadSystem<PulseProblem>::x2RadFlux_index) = 0;
-		state_cc(i, j, k, RadSystem<PulseProblem>::x3RadFlux_index) = 0;
-		state_cc(i, j, k, RadSystem<PulseProblem>::gasEnergy_index) = Egas + 0.5 * rho * v0 * v0;
+		state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index) = 0.;
+		state_cc(i, j, k, RadSystem<PulseProblem>::x2RadFlux_index) = 0.;
+		state_cc(i, j, k, RadSystem<PulseProblem>::x3RadFlux_index) = 0.;
+		state_cc(i, j, k, RadSystem<PulseProblem>::gasEnergy_index) = Egas;
 		state_cc(i, j, k, RadSystem<PulseProblem>::gasDensity_index) = rho;
 		state_cc(i, j, k, RadSystem<PulseProblem>::gasInternalEnergy_index) = Egas;
-		state_cc(i, j, k, RadSystem<PulseProblem>::x1GasMomentum_index) = v0 * rho;
+		state_cc(i, j, k, RadSystem<PulseProblem>::x1GasMomentum_index) = 0.;
 		state_cc(i, j, k, RadSystem<PulseProblem>::x2GasMomentum_index) = 0.;
 		state_cc(i, j, k, RadSystem<PulseProblem>::x3GasMomentum_index) = 0.;
 	});
@@ -193,9 +193,16 @@ template <> void RadhydroSimulation<AdvPulseProblem>::setInitialConditionsOnGrid
 		const double Egas = quokka::EOS<PulseProblem>::ComputeEintFromTgas(rho, Trad);
 		const double v0 = v0_adv;
 
-		// state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = (1. + 4. / 3. * (v0 * v0) / (c * c)) * Erad;
-		state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = Erad;
-		state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index) = 4. / 3. * v0 * Erad;
+    if constexpr (beta_order_ <= 1) {
+		  state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = Erad;
+    } else { // beta_order_ == 2 or 3
+		  state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = (1. + 4. / 3. * (v0 * v0) / (c * c)) * Erad;
+    }
+    if constexpr (beta_order_ <= 2) {
+		  state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index) = 4. / 3. * v0 * Erad;
+    } else { // beta_order_ == 3
+		  state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index) = 4. / 3. * v0 * Erad * (1. + (v0 * v0) / (c * c));
+    }
 		state_cc(i, j, k, RadSystem<PulseProblem>::x2RadFlux_index) = 0;
 		state_cc(i, j, k, RadSystem<PulseProblem>::x3RadFlux_index) = 0;
 		state_cc(i, j, k, RadSystem<PulseProblem>::gasEnergy_index) = Egas + 0.5 * rho * v0 * v0;
@@ -241,6 +248,7 @@ auto problem_main() -> int
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.stopTime_ = max_time;
 	sim.radiationCflNumber_ = CFL_number;
+	sim.cflNumber_ = CFL_number;
 	sim.maxDt_ = max_dt;
 	sim.maxTimesteps_ = max_timesteps;
 	sim.plotfileInterval_ = -1;
@@ -254,8 +262,6 @@ auto problem_main() -> int
 	// read output variables
 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
 	const int nx = static_cast<int>(position.size());
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = sim.geom[0].ProbLoArray();
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = sim.geom[0].ProbHiArray();
 
 	std::vector<double> xs(nx);
 	std::vector<double> Trad(nx);
@@ -298,8 +304,8 @@ auto problem_main() -> int
 
 	// read output variables
 	auto [position2, values2] = fextract(sim2.state_new_cc_[0], sim2.Geom(0), 0, 0.0);
-	prob_lo = sim2.geom[0].ProbLoArray();
-	prob_hi = sim2.geom[0].ProbHiArray();
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = sim2.geom[0].ProbLoArray();
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = sim2.geom[0].ProbHiArray();
 	// compute the pixel size
 	const double dx = (prob_hi[0] - prob_lo[0]) / static_cast<double>(nx);
 	const double move = v0_adv * sim2.tNew_[0];

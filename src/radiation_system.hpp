@@ -33,8 +33,7 @@
 
 // 1: 1/tau, 2: THC_M1, 3: new reconcstrction (check the chongchong/fix-odd-even-instability-issue branch)
 static constexpr int odd_even_correction_type = 1; 
-static constexpr bool include_work_term_in_source = true;
-static constexpr bool put_work_term_in_kinetic = true;
+static constexpr bool include_work_term_in_source = false;
 
 // Time integration scheme
 // IMEX PD-ARS
@@ -992,7 +991,7 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
         // fix odd-even instability that appears in the asymptotic diffusion limit
         // [for details, see section 3.1: https://ui.adsabs.harvard.edu/abs/2022MNRAS.512.1499R/abstract]
         epsilon = {S_corr, 1.0, 1.0, 1.0};
-        if ((i + j + k) % 2 == 0) {
+        if ((i + j + k) % 2 == 1) {
           // revert to more diffusive flux (has no effect in optically-thin limit)
           epsilon = {1.0, 1.0, 1.0, 1.0};
         }
@@ -1232,9 +1231,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
     int ite = 0;
     for (; ite < max_ite; ++ite) {
 
-      // work.fillin(0.0);
-      // work_prev.fillin(0.0);
-
       quokka::valarray<double, nGroups_> Rvec{};
 
       if constexpr (gamma_ != 1.0) {
@@ -1375,8 +1371,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
       // 2. Compute radiation flux update
 
       amrex::GpuArray<amrex::Real, 3> Frad_t0{};
-      // quokka::valarray<amrex::Real, 3> Frad_t1{};
-      // amrex::GpuArray<amrex::Real, 3> dMomentum{0., 0., 0.};
 
       dMomentum = {0., 0., 0.};
 
@@ -1488,21 +1482,11 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
             dMomentum[n] += -(Frad_t1[g][n] - Frad_t0[n]) / (c * chat);
           }
         }
-
-        // update radiation flux on consNew at current group
-        // consNew(i, j, k, x1RadFlux_index + numRadVars_ * g) = Frad_t1[0];
-        // consNew(i, j, k, x2RadFlux_index + numRadVars_ * g) = Frad_t1[1];
-        // consNew(i, j, k, x3RadFlux_index + numRadVars_ * g) = Frad_t1[2];
       } // end loop over radiation groups
 
       amrex::Real x1GasMom1 = consPrev(i, j, k, x1GasMomentum_index) + dMomentum[0];
       amrex::Real x2GasMom1 = consPrev(i, j, k, x2GasMomentum_index) + dMomentum[1];
       amrex::Real x3GasMom1 = consPrev(i, j, k, x3GasMomentum_index) + dMomentum[2];
-
-      // compute the gas momentum after adding the current group's momentum
-      // consNew(i, j, k, x1GasMomentum_index) = consPrev(i, j, k, x1GasMomentum_index) + dMomentum[0] * gas_update_factor;
-      // consNew(i, j, k, x2GasMomentum_index) = consPrev(i, j, k, x2GasMomentum_index) + dMomentum[1] * gas_update_factor;
-      // consNew(i, j, k, x3GasMomentum_index) = consPrev(i, j, k, x3GasMomentum_index) + dMomentum[2] * gas_update_factor;
 
       // update gas momentum from radiation momentum of the current group
       if constexpr (gamma_ != 1.0) {
@@ -1517,13 +1501,12 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
           Egas_guess -= dEkin_work;
         }
 
-#if 0
-        if constexpr (compute_v_over_c_terms_) {
+        if constexpr (compute_v_over_c_terms_ && include_work_term_in_source) {
           // compute difference in gas kinetic energy before and after momentum update
           amrex::Real const Ekin1 = Egastot1 - Egas_guess;
           amrex::Real const dEkin_work = Ekin1 - Ekin0;
           // compute loss of radiation energy to gas kinetic energy
-          dErad_work = -(c_hat_ / c_light_) * dEkin_work;
+          auto dErad_work = -(c_hat_ / c_light_) * dEkin_work;
 
           // apportion dErad_work according to kappaF_i * (v * F_i)
           quokka::valarray<double, nGroups_> energyLossFractions{};
@@ -1544,9 +1527,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
           }
           for (int g = 0; g < nGroups_; ++g) {
             auto radEnergyNew = EradVec_guess[g] + dErad_work * energyLossFractions[g];
-            if constexpr (put_work_term_in_kinetic) {
-              radEnergyNew -= work[g];
-            }
             // AMREX_ASSERT(radEnergyNew > 0.0);
             if (radEnergyNew < Erad_floor_) {
               // return energy to Egas_guess
@@ -1554,25 +1534,15 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
               radEnergyNew = Erad_floor_;
             }
             // consNew(i, j, k, radEnergy_index + numRadVars_ * g) = radEnergyNew;
-            Erad_t1[g] = radEnergyNew;
-          }
-        } else {
-          // else, do not subtract radiation work in new radiation energy
-          for (int g = 0; g < nGroups_; ++g) {
-            // consNew(i, j, k, radEnergy_index + numRadVars_ * g) = EradVec_guess[g];
-            Erad_t1[g] = EradVec_guess[g];
+            EradVec_guess[g] = radEnergyNew;
           }
         }
-#endif
 
         for (int g = 0; g < nGroups_; ++g) {
           // consNew(i, j, k, radEnergy_index + numRadVars_ * g) = EradVec_guess[g];
           Erad_t1[g] = EradVec_guess[g];
         }
 
-        // 4b. Store new radiation energy, gas energy
-        // In the first stage of the IMEX scheme, the gas energy is updated by a fraction (defined by 
-        // gas_update_factor) of the total energy update.
         // dEint = Egas_guess - Egas0; // difference between new and old internal energy
         // amrex::Real const Egas = Egas0 + dEint * gas_update_factor;
         // Egas = Egas0 + dEint * gas_update_factor;
@@ -1587,7 +1557,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
         amrex::ignore_unused(Egas_guess);
       } // endif gamma != 1.0
 
-      if constexpr ((!compute_v_over_c_terms_) || (gamma_ == 1.0)) {
+      if constexpr ((!compute_v_over_c_terms_) || (gamma_ == 1.0) || (!include_work_term_in_source)) {
         break;
       }
 
@@ -1607,7 +1577,9 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 
     AMREX_ALWAYS_ASSERT_WITH_MESSAGE(ite < max_ite, "Full-step iteration did not converge!");
 
-    // update consNew. Need dMomentum, Egas_guess, Erad_t1, Frad_t1
+    // 4b. Store new radiation energy, gas energy
+    // In the first stage of the IMEX scheme, the hydro quantities are updated by a fraction (defined by 
+    // gas_update_factor) of the time step.
     const auto x1GasMom1 = consPrev(i, j, k, x1GasMomentum_index) + dMomentum[0] * gas_update_factor;
     const auto x2GasMom1 = consPrev(i, j, k, x2GasMomentum_index) + dMomentum[1] * gas_update_factor;
     const auto x3GasMom1 = consPrev(i, j, k, x3GasMomentum_index) + dMomentum[2] * gas_update_factor;
