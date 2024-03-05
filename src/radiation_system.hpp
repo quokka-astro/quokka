@@ -31,7 +31,7 @@
 
 // Hyper parameters of the radiation solver
 
-// 1: 1/tau, 2: THC_M1, 3: new reconcstrction (check the chongchong/fix-odd-even-instability-issue branch)
+// 0: old Quokka, 1: 1/tau, 2: THC_M1, 3: new reconcstrction (check the chongchong/fix-odd-even-instability-issue branch)
 static constexpr int odd_even_correction_type = 1; 
 static constexpr bool include_work_term_in_source = true;
 
@@ -987,6 +987,16 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 			// quokka::valarray<double, numRadVars_> epsilon = {S_corr, S_corr, S_corr, S_corr}; // Jiang et al. (2013)
 			// quokka::valarray<double, numRadVars_> epsilon = {S_corr * S_corr, S_corr, S_corr, S_corr}; // this code
 
+      if constexpr (odd_even_correction_type == 0) {
+        // fix odd-even instability that appears in the asymptotic diffusion limit
+        // The old Quokka code used this correction
+        epsilon = {S_corr * S_corr, S_corr, S_corr, S_corr}; // old Quokka
+        if ((i + j + k) % 2 == 1) {
+          // revert to more diffusive flux (has no effect in optically-thin limit)
+          epsilon = {S_corr, 1.0, 1.0, 1.0};
+        }
+      }
+
       if constexpr (odd_even_correction_type == 1) {
         // fix odd-even instability that appears in the asymptotic diffusion limit
         // [for details, see section 3.1: https://ui.adsabs.harvard.edu/abs/2022MNRAS.512.1499R/abstract]
@@ -1049,6 +1059,8 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 
         F = F_HO - epsilon * flux_limiter * (F_HO - F_LO);
         diffusiveF = F_HO;
+      } else {
+			  diffusiveF = (S_R / (S_R - S_L)) * F_L - (S_L / (S_R - S_L)) * F_R + (S_R * S_L / (S_R - S_L)) * (U_R - U_L);
       }
 
 			// check states are valid
@@ -1061,10 +1073,6 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 			x1Flux(i, j, k, x1RadFlux_index + numRadVars_ * g - nstartHyperbolic_) = F[1];
 			x1Flux(i, j, k, x2RadFlux_index + numRadVars_ * g - nstartHyperbolic_) = F[2];
 			x1Flux(i, j, k, x3RadFlux_index + numRadVars_ * g - nstartHyperbolic_) = F[3];
-
-      if constexpr (odd_even_correction_type != 2) {
-			  diffusiveF = (S_R / (S_R - S_L)) * F_L - (S_L / (S_R - S_L)) * F_R + (S_R * S_L / (S_R - S_L)) * (U_R - U_L);
-      }
 
 			x1FluxDiffusive(i, j, k, radEnergy_index + numRadVars_ * g - nstartHyperbolic_) = diffusiveF[0];
 			x1FluxDiffusive(i, j, k, x1RadFlux_index + numRadVars_ * g - nstartHyperbolic_) = diffusiveF[1];

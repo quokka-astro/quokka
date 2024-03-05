@@ -139,15 +139,6 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<AdvPulseProblem>::ComputeFluxMeanOpacity(co
 	return ComputePlanckOpacity(rho, Tgas);
 }
 
-template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<PulseProblem>::ComputeEddingtonFactor(double /*f*/) -> double
-{
-	return (1. / 3.); // Eddington approximation
-}
-template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<AdvPulseProblem>::ComputeEddingtonFactor(double /*f*/) -> double
-{
-	return (1. / 3.); // Eddington approximation
-}
-
 template <> void RadhydroSimulation<PulseProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
 	// extract variables required from the geom object
@@ -274,6 +265,7 @@ auto problem_main() -> int
 	std::vector<double> Tgas(nx);
 	std::vector<double> Vgas(nx);
 	std::vector<double> rhogas(nx);
+	std::vector<double> flux(nx);
 
 	for (int i = 0; i < nx; ++i) {
 		amrex::Real const x = position[i];
@@ -283,10 +275,12 @@ auto problem_main() -> int
 		const auto rho_t = values.at(RadSystem<PulseProblem>::gasDensity_index)[i];
 		const auto v_t = values.at(RadSystem<PulseProblem>::x1GasMomentum_index)[i] / rho_t;
 		const auto Egas = values.at(RadSystem<PulseProblem>::gasInternalEnergy_index)[i];
+    const auto flux_t = values.at(RadSystem<PulseProblem>::x1RadFlux_index)[i];
 		rhogas.at(i) = rho_t;
 		Trad.at(i) = Trad_t;
 		Tgas.at(i) = quokka::EOS<PulseProblem>::ComputeTgasFromEint(rho_t, Egas);
 		Vgas.at(i) = 1e-5 * v_t;
+    flux.at(i) = flux_t;
 	}
 	// END OF PROBLEM 1
 
@@ -325,6 +319,7 @@ auto problem_main() -> int
 	std::vector<double> Tgas2(nx);
 	std::vector<double> Vgas2(nx);
 	std::vector<double> rhogas2(nx);
+	std::vector<double> flux2(nx);
 
 	for (int i = 0; i < nx; ++i) {
 		int index_ = 0;
@@ -347,11 +342,13 @@ auto problem_main() -> int
 		const auto rho_t = values2.at(RadSystem<PulseProblem>::gasDensity_index)[i];
 		const auto v_t = values2.at(RadSystem<PulseProblem>::x1GasMomentum_index)[i] / rho_t;
 		const auto Egas = values2.at(RadSystem<PulseProblem>::gasInternalEnergy_index)[i];
+    const auto flux_t = values2.at(RadSystem<PulseProblem>::x1RadFlux_index)[i];
 		xs2.at(i) = x - drift;
 		rhogas2.at(index_) = rho_t;
 		Trad2.at(index_) = Trad_t;
 		Tgas2.at(index_) = quokka::EOS<PulseProblem>::ComputeTgasFromEint(rho_t, Egas);
 		Vgas2.at(index_) = 1e-5 * (v_t - v0_adv);
+    flux2.at(index_) = flux_t;
 	}
 	// END OF PROBLEM 2
 
@@ -377,6 +374,7 @@ auto problem_main() -> int
 	Trad_args["linestyle"] = "-.";
 	Tgas_args["label"] = "Tgas (non-advecting)";
 	Tgas_args["linestyle"] = "--";
+  // matplotlibcpp::ylim(0.95e7, 2.0e7);
 	matplotlibcpp::plot(xs, Trad, Trad_args);
 	matplotlibcpp::plot(xs, Tgas, Tgas_args);
 	Trad_args["label"] = "Trad (advecting)";
@@ -389,6 +387,15 @@ auto problem_main() -> int
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./radhydro_pulse_temperature.pdf");
+
+  // Save xs, Trad, Tgas, xs2, Trad2, Tgas2 to csv file
+  std::ofstream file;
+  file.open("radhydro_pulse_temperature.csv");
+  file << "xs,Trad,Tgas,xs2,Trad2,Tgas2\n";
+  for (size_t i = 0; i < xs.size(); ++i) {
+    file << std::scientific << std::setprecision(12) << xs[i] << "," << Trad[i] << "," << Tgas[i] << "," << xs2[i] << "," << Trad2[i] << "," << Tgas2[i] << "\n";
+  }
+  file.close();
 
 	// plot gas density profile
 	matplotlibcpp::clf();
@@ -405,6 +412,14 @@ auto problem_main() -> int
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./radhydro_pulse_density.pdf");
 
+  // Save xs, rhogas, xs2, rhogas2 to csv file with format %.12e
+  file.open("radhydro_pulse_density.csv");
+  file << "xs,rhogas,xs2,rhogas2\n";
+  for (size_t i = 0; i < xs.size(); ++i) {
+    file << std::scientific << std::setprecision(12) << xs[i] << "," << rhogas[i] << "," << xs2[i] << "," << rhogas2[i] << "\n";
+  }
+  file.close();
+
 	// plot gas velocity profile
 	matplotlibcpp::clf();
 	std::map<std::string, std::string> vgas_args;
@@ -419,6 +434,37 @@ auto problem_main() -> int
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./radhydro_pulse_velocity.pdf");
+
+  // Save xs, Vgas, xs2, Vgas2 to csv file
+  file.open("radhydro_pulse_velocity.csv");
+  file << "xs,Vgas,xs2,Vgas2\n";
+  for (size_t i = 0; i < xs.size(); ++i) {
+    file << std::scientific << std::setprecision(12) << xs[i] << "," << Vgas[i] << "," << xs2[i] << "," << Vgas2[i] << "\n";
+  }
+  file.close();
+
+  // plot radiation flux profile of the non-advecting pulse
+  matplotlibcpp::clf();
+  std::map<std::string, std::string> flux_args;
+  flux_args["label"] = "radiation flux (non-advecting)";
+  flux_args["linestyle"] = "-";
+  matplotlibcpp::plot(xs, flux, flux_args);
+  flux_args["label"] = "radiation flux (advecting)";
+  matplotlibcpp::plot(xs2, flux2, flux_args);
+  matplotlibcpp::xlabel("length x (cm)");
+  matplotlibcpp::ylabel("flux (erg cm^-2 s^-1)");
+  matplotlibcpp::legend();
+  matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
+  matplotlibcpp::tight_layout();
+  matplotlibcpp::save("./radhydro_pulse_flux.pdf");
+
+  // Save xs, flux, xs2, flux2 to csv file
+  file.open("radhydro_pulse_flux.csv");
+  file << "xs,flux,xs2,flux2\n";
+  for (size_t i = 0; i < xs.size(); ++i) {
+    file << std::scientific << std::setprecision(12) << xs[i] << "," << flux[i] << "," << xs2[i] << "," << flux2[i] << "\n";
+  }
+  file.close();
 
 #endif
 
