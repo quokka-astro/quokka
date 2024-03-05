@@ -14,7 +14,7 @@ struct PulseProblem {
 struct AdvPulseProblem {
 };
 
-constexpr int beta_order_ = 1; // order of beta in the radiation four-force
+constexpr int beta_order_ = 2; // order of beta in the radiation four-force
 
 constexpr double T0 = 1.0e7; // K (temperature)
 constexpr double T1 = 2.0e7; // K (temperature)
@@ -34,9 +34,15 @@ constexpr double v0_nonadv = 0.; // non-advecting pulse
 // constexpr double max_time = 4.8e-5; // max_time = 2.0 * width / v1;
 
 // dynamic diffusion: tau = 2e4, beta = 3e-3, beta tau = 60
-constexpr double kappa0 = 1000.; // cm^2 g^-1
-constexpr double v0_adv = 1.0e8;    // advecting pulse
-constexpr double max_time = 4.8e-5; // max_time = 2.0 * width / v1; final width is sqrt(c t / kappa0), which is 3 times smaller
+// constexpr double kappa0 = 1000.; // cm^2 g^-1
+// constexpr double v0_adv = 1.0e8;    // advecting pulse
+// constexpr double max_time = 4.8e-5; // max_time = 2.0 * width / v1; final width is sqrt(c t / kappa0), which is 3 times smaller
+
+// dynamic diffusion: tau = 1e4, beta = 1e-3, beta tau = 10. 
+// Width of the pulse = sqrt(c max_time / kappa0) = 85 if max_time = 2.4e-4
+constexpr double kappa0 = 500.; // cm^2 g^-1
+constexpr double v0_adv = 3.0e7;    // advecting pulse
+constexpr double max_time = 4.8e-5;
 
 template <> struct quokka::EOS_Traits<PulseProblem> {
 	static constexpr double mean_molecular_weight = mu;

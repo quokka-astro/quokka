@@ -33,7 +33,7 @@
 
 // 1: 1/tau, 2: THC_M1, 3: new reconcstrction (check the chongchong/fix-odd-even-instability-issue branch)
 static constexpr int odd_even_correction_type = 1; 
-static constexpr bool include_work_term_in_source = false;
+static constexpr bool include_work_term_in_source = true;
 
 // Time integration scheme
 // IMEX PD-ARS
@@ -1501,7 +1501,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
           Egas_guess -= dEkin_work;
         }
 
-        if constexpr (compute_v_over_c_terms_ && include_work_term_in_source) {
+        if constexpr (compute_v_over_c_terms_ && (!include_work_term_in_source)) {
           // compute difference in gas kinetic energy before and after momentum update
           amrex::Real const Ekin1 = Egastot1 - Egas_guess;
           amrex::Real const dEkin_work = Ekin1 - Ekin0;
