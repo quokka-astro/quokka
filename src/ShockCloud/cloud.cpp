@@ -7,7 +7,6 @@
 /// \brief Implements a shock-cloud problem with radiative cooling.
 ///
 
-
 #include "AMReX.H"
 #include "AMReX_Array.H"
 #include "AMReX_BC_TYPES.H"
@@ -191,7 +190,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<ShockCloud>::setCustomBou
 		} else {
 			// NSCBC inflow
 			// TODO(bwibking): add transverse terms to NSCBC inflow
-			NSCBC::setInflowX1Lower<ShockCloud>(iv, consVar, geom, T, vx, 0, 0, scalars);
+			NSCBC::setInflowX1LowerLowOrder<ShockCloud>(iv, consVar, geom, T, vx, 0, 0, scalars);
 		}
 	} else if (i > ihi) {
 		// x1 upper boundary -- NSCBC outflow
@@ -206,7 +205,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<ShockCloud>::setCustomBou
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 AMRSimulation<ShockCloud>::setCustomBoundaryConditionsLowOrder(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int numcomp,
-							       amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/,
+							       amrex::GeometryData const &geom, const amrex::Real time, const amrex::BCRec * /*bcr*/,
 							       int /*bcomp*/, int /*orig_comp*/)
 {
 	// use the naive inflow/outflow boundary conditions
@@ -224,28 +223,32 @@ AMRSimulation<ShockCloud>::setCustomBoundaryConditionsLowOrder(const amrex::IntV
 	const Real P_wind = ::P_wind;
 
 	if (i < ilo) {
-		// x1 lower boundary -- shock
 		Real const rho = rho_wind;
 		Real const vx = v_wind - delta_vx;
 		Real const Eint = quokka::EOS<ShockCloud>::ComputeEintFromPres(rho, P_wind);
 		Real const T = quokka::EOS<ShockCloud>::ComputeTgasFromEint(rho, Eint);
 		GpuArray<amrex::Real, HydroSystem<ShockCloud>::nscalars_> scalars{0, 0, rho};
 
-		Real const xmom = rho_wind * vx;
-		Real const ymom = 0;
-		Real const zmom = 0;
-		Real const Egas = RadSystem<ShockCloud>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
+		if (time < ::shock_crossing_time) {
+			// Dirichlet/shock boundary
+			Real const xmom = rho_wind * vx;
+			Real const ymom = 0;
+			Real const zmom = 0;
+			Real const Egas = RadSystem<ShockCloud>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
 
-		consVar(i, j, k, RadSystem<ShockCloud>::gasDensity_index) = rho;
-		consVar(i, j, k, RadSystem<ShockCloud>::x1GasMomentum_index) = xmom;
-		consVar(i, j, k, RadSystem<ShockCloud>::x2GasMomentum_index) = ymom;
-		consVar(i, j, k, RadSystem<ShockCloud>::x3GasMomentum_index) = zmom;
-		consVar(i, j, k, RadSystem<ShockCloud>::gasEnergy_index) = Egas;
-		consVar(i, j, k, RadSystem<ShockCloud>::gasInternalEnergy_index) = Eint;
-		consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index) = scalars[0];
-		consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index + 1) = scalars[1]; // cloud partial density
-		consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index + 2) = scalars[2]; // non-cloud partial density
-
+			consVar(i, j, k, RadSystem<ShockCloud>::gasDensity_index) = rho;
+			consVar(i, j, k, RadSystem<ShockCloud>::x1GasMomentum_index) = xmom;
+			consVar(i, j, k, RadSystem<ShockCloud>::x2GasMomentum_index) = ymom;
+			consVar(i, j, k, RadSystem<ShockCloud>::x3GasMomentum_index) = zmom;
+			consVar(i, j, k, RadSystem<ShockCloud>::gasEnergy_index) = Egas;
+			consVar(i, j, k, RadSystem<ShockCloud>::gasInternalEnergy_index) = Eint;
+			consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index) = scalars[0];
+			consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index + 1) = scalars[1]; // cloud partial density
+			consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index + 2) = scalars[2]; // non-cloud partial density
+		} else {
+			// NSCBC inflow
+			NSCBC::setInflowX1LowerLowOrder<ShockCloud>(iv, consVar, geom, T, vx, 0, 0, scalars);
+		}
 	} else if (i > ihi) {
 		// x1 upper boundary -- extrapolating outflow
 		for (int n = 0; n < numcomp; ++n) {
