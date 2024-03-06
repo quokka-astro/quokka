@@ -33,8 +33,6 @@
 #include "physics_info.hpp"
 #include "radiation_system.hpp"
 
-#include "cloud.hpp"
-
 using amrex::Real;
 
 struct ShockCloud {
@@ -171,8 +169,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<ShockCloud>::setCustomBou
 		Real const T = quokka::EOS<ShockCloud>::ComputeTgasFromEint(rho, Eint);
 		GpuArray<amrex::Real, HydroSystem<ShockCloud>::nscalars_> scalars{0, 0, rho};
 
-		if (time < ::shock_crossing_time) {
-			// Dirichlet/shock boundary
+		if (time < 0.1 * ::shock_crossing_time) {
+			// Dirichlet/shock boundary condition
 			Real const xmom = rho_wind * vx;
 			Real const ymom = 0;
 			Real const zmom = 0;
@@ -187,16 +185,24 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<ShockCloud>::setCustomBou
 			consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index) = scalars[0];
 			consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index + 1) = scalars[1]; // cloud partial density
 			consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index + 2) = scalars[2]; // non-cloud partial density
-		} else {
-			// NSCBC inflow
-			// TODO(bwibking): add transverse terms to NSCBC inflow
+		} else if (time < 1.2 * ::shock_crossing_time) {
+			NSCBC::setInflowX1Lower<ShockCloud>(iv, consVar, geom, T, vx, 0, 0, scalars);
+		} else { // time >= 1.2 * shock_crossing_time
 			NSCBC::setInflowX1LowerLowOrder<ShockCloud>(iv, consVar, geom, T, vx, 0, 0, scalars);
 		}
 	} else if (i > ihi) {
+		Real const t0 = ::shock_crossing_time;
+		Real const t1 = 1.2 * ::shock_crossing_time;
 		// x1 upper boundary -- NSCBC outflow
-		if (time < ::shock_crossing_time) {
-			NSCBC::setOutflowBoundaryLowOrder<ShockCloud, FluxDir::X1, NSCBC::BoundarySide::Upper>(iv, consVar, geom, ::P0);
-		} else { // shock has passed, so we use P_wind
+		if (time < t0) {
+			NSCBC::setOutflowBoundary<ShockCloud, FluxDir::X1, NSCBC::BoundarySide::Upper>(iv, consVar, geom, ::P0);
+		} else if (time < t1) {
+			// shock has passed, so we set the outflow pressure to P_wind
+			const Real P_ramp = P_wind; // ::P0 + (P_wind - ::P0) * ((time - t0) / (t1 - t0));
+			NSCBC::setOutflowBoundary<ShockCloud, FluxDir::X1, NSCBC::BoundarySide::Upper>(iv, consVar, geom, P_ramp);
+		} else { // time >= t1
+			// shock has passed, so we use P_wind.
+			// also, switch to "low order" boundary conditions (do not decompose characteristics)
 			NSCBC::setOutflowBoundaryLowOrder<ShockCloud, FluxDir::X1, NSCBC::BoundarySide::Upper>(iv, consVar, geom, P_wind);
 		}
 	}
@@ -776,8 +782,7 @@ auto problem_main() -> int
 	// compute cloud-crushing time
 	const Real chi = rho1 / rho0;
 	const Real t_cc = std::sqrt(chi) * R_cloud / v_shock;
-	amrex::Print() << fmt::format("t_cc = {} Myr\n", t_cc / (1.0e6 * seconds_in_year));
-	amrex::Print() << std::endl;
+	amrex::Print() << fmt::format("t_cc = {} Myr\n", t_cc / (1.0e6 * seconds_in_year)) << "\n";
 
 	// compute maximum simulation time
 	const double max_time = max_t_cc * t_cc;

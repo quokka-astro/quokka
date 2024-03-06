@@ -13,39 +13,50 @@ amr.v               = 1     # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 256 64 64
+amr.n_cell          = 128 32 32
 amr.max_level       = 0     # number of levels = max_level + 1
-amr.blocking_factor = 16  	# grid size must be divisible by this
+amr.blocking_factor = 16    # grid size must be divisible by this
 amr.max_grid_size   = 64
 
 # *****************************************************************
 # Quokka options
 # *****************************************************************
-cfl = 0.3
 do_reflux = 1
 do_subcycle = 1
+
+cfl = 0.2
+hydro.abort_on_fofc_failure = 1
+hydro.reconstruction_order = 3
+#hydro.artificial_viscosity_coefficient = 0.1
+
+density_floor = 1.0e-28 # g cm^{-3}
+temperature_floor = 100 # K
+
+sharp_cloud_edge = 1
+do_frame_shift = 1
+
 max_walltime = 6:00:00
-max_timesteps = 20000
+max_timesteps = 100000
 max_t_cc = 20.0
 
-checkpoint_interval = 500
 plotfile_interval = 200
-projection_interval = 20
+checkpoint_interval = 200
+ascent_interval = 200
+
+statistics_interval = 200
+projection_interval = 200
 projection.dirs = x z
-ascent_interval = 20
-statistics_interval = 20
+
 derived_vars = pressure entropy nH temperature cooling_length \
 	       cloud_fraction lab_velocity_x mass velocity_mag c_s
 
 cooling.enabled = 1
-cooling.read_tables_even_if_disabled = 1
 cooling.grackle_data_file = "./isrf_1000Go_grains.h5"
-temperature_floor = 100
 
-sharp_cloud_edge = 1
-do_frame_shift = 1
-nH_bg    = 3.356403e-03 # cm^-3
-nH_cloud = 1.006921e+00 # cm^-3
+nH_bg    = 0.003356403333 # cm^-3
+nH_cloud = 1.006921e+00   # cm^-3
 P_over_k = 1.304005e+04   # K cm^-3
+
 R_cloud_pc = 16.09084149928867 # pc
 Mach_shock = 1.888892847795999
+
