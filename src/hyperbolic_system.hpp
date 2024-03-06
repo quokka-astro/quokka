@@ -14,25 +14,18 @@
 ///
 
 // c++ headers
-#include <cassert>
 #include <cmath>
 
 // library headers
 #include "AMReX_Array4.H"
-#include "AMReX_Dim3.H"
-#include "AMReX_ErrorList.H"
 #include "AMReX_Extension.H"
-#include "AMReX_FArrayBox.H"
-#include "AMReX_FabArrayUtility.H"
 #include "AMReX_IntVect.H"
-#include "AMReX_Math.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_SPACE.H"
 
 // internal headers
-#include "AMReX_TagBox.H"
 #include "ArrayView.hpp"
-#include "simulation.hpp"
+#include "math_impl.hpp"
 
 // #define MULTIDIM_EXTREMA_CHECK
 
