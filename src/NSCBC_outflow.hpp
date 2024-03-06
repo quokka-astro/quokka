@@ -363,8 +363,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setOutflowBoundaryLowOrder(const amrex:
 
 	const auto &boundary_idx = (SIDE == BoundarySide::Lower) ? box.loVect3d() : box.hiVect3d();
 	const int ibr = boundary_idx[static_cast<int>(DIR)];
-	const int im1 = (SIDE == BoundarySide::Lower) ? ibr + 1 : ibr - 1;
-	const int im2 = (SIDE == BoundarySide::Lower) ? ibr + 2 : ibr - 2;
 	const Real dx = geom.CellSize(static_cast<int>(DIR));
 
 	// compute primitive vars
