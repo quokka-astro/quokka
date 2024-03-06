@@ -262,7 +262,7 @@ else:
         print("You must choose f_solenoidal.  See --help.")
         sys.exit(0)
 alpha = options.alpha
-if alpha==None:
+if alpha is None:
     print("You must choose a power law slope, alpha.  See --help.")
     sys.exit(0)
 alpha = float(options.alpha)
@@ -273,7 +273,7 @@ seed = int(options.seed)
 # data precision
 dtype = np.float64
 # ratio of solenoidal to compressive components
-if options.f_solenoidal=="None" or options.f_solenoidal==None:
+if (options.f_solenoidal is None) or (options.f_solenoidal=="None"):
     f_solenoidal = None
 else:
     f_solenoidal = min(max(float(options.f_solenoidal), 0.), 1.)

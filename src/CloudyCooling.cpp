@@ -9,7 +9,6 @@
 ///
 
 #include "CloudyCooling.hpp"
-#include "ODEIntegrate.hpp"
 
 namespace quokka::cooling
 {

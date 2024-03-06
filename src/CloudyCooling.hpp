@@ -9,17 +9,16 @@
 /// \brief Defines methods for interpolating cooling rates from Cloudy tables.
 ///
 
-#include <limits>
-
 #include "AMReX.H"
-#include "AMReX_BLassert.H"
 #include "AMReX_Extension.H"
 #include "AMReX_GpuQualifiers.H"
+#include "AMReX_iMultiFab.H"
 
 #include "FastMath.hpp"
 #include "GrackleDataReader.hpp"
 #include "Interpolate2D.hpp"
 #include "ODEIntegrate.hpp"
+#include "fmt/core.h"
 #include "fundamental_constants.H"
 #include "hydro_system.hpp"
 #include "radiation_system.hpp"
@@ -47,14 +46,14 @@ constexpr double E_cmb = radiation_constant_cgs_ * (T_cmb * T_cmb * T_cmb * T_cm
 
 struct cloudyGpuConstTables {
 	// these are non-owning, so can make a copy of the whole struct
-	amrex::Table1D<const Real> const log_nH;
-	amrex::Table1D<const Real> const log_Tgas;
+	amrex::Table1D<const Real> log_nH;
+	amrex::Table1D<const Real> log_Tgas;
 
-	amrex::Table2D<const Real> const primCool;
-	amrex::Table2D<const Real> const primHeat;
-	amrex::Table2D<const Real> const metalCool;
-	amrex::Table2D<const Real> const metalHeat;
-	amrex::Table2D<const Real> const meanMolWeight;
+	amrex::Table2D<const Real> primCool;
+	amrex::Table2D<const Real> primHeat;
+	amrex::Table2D<const Real> metalCool;
+	amrex::Table2D<const Real> metalHeat;
+	amrex::Table2D<const Real> meanMolWeight;
 };
 
 class cloudy_tables
@@ -152,7 +151,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(double rho, do
 
 	if (Egas <= Eint_min) {
 		return Tmin_table;
-	} else if (Egas >= Eint_max) {
+	}
+	if (Egas >= Eint_max) {
 		return Tmax_table;
 	}
 

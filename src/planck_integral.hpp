@@ -7,17 +7,14 @@
 #ifndef PLANCKINTEGRAL_HPP_ // NOLINT
 #define PLANCKINTEGRAL_HPP_
 
-#include <algorithm>
+#include <cassert>
 #include <cmath>
 
-#include "AMReX.H"
 #include "AMReX_Array.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_Extension.H"
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
-
-#include "valarray.hpp"
 
 using Real = amrex::Real;
 
@@ -245,15 +242,18 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto integrate_planck_from_0_to_x(const
 		// y = x * x * x / 3.0;    // 1st order
 		y = (-4 + x) * x + 8 * std::log((2 + x) / 2); // 2nd order
 		// Y_INTERP_MIN is the minimum value returned from interpolate_planck_integral. To ensure y is monotonic with respect to x:
+		// AMREX_ASSERT(y <= Y_INTERP_MIN);
 		if (y > Y_INTERP_MIN) {
 			y = Y_INTERP_MIN;
+		} else if (y < 0.) {
+			y = 0.;
 		}
 	} else if (logx >= LOG_X_MAX) {
 		return 1.0;
 	} else {
 		y = interpolate_planck_integral(logx);
 	}
-	assert(!isnan(y));
+	assert(!std::isnan(y));
 	assert(y <= 1.);
 	return y;
 }

@@ -73,7 +73,7 @@ auto problem_main() -> int
 
 	// do integration with RK2 (Heun's method)
 	int nsteps = 0;
-	rk_adaptive_integrate(user_rhs, 0, y, dt, &user_data, rtol, abstol, nsteps, true);
+	rk_adaptive_integrate(user_rhs, 0, y, dt, &user_data, rtol, abstol, nsteps);
 
 	// check if integration failed
 	if (nsteps >= maxStepsODEIntegrate) {

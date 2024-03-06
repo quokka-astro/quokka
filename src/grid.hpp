@@ -1,8 +1,6 @@
 #ifndef GRID_HPP_ // NOLINT
 #define GRID_HPP_
 
-#include "AMReX_MFParallelFor.H"
-#include "AMReX_MultiFab.H"
 #include <AMReX.H>
 #include <AMReX_Array.H>
 #include <AMReX_Array4.H>

@@ -42,34 +42,33 @@ template <> struct Physics_Traits<RichtmeyerMeshkovProblem> {
 	static constexpr int nGroups = 1; // number of radiation groups
 };
 
-// #define DEBUG_SYMMETRY
 template <> void RadhydroSimulation<RichtmeyerMeshkovProblem>::computeAfterTimestep()
 {
-#ifdef DEBUG_SYMMETRY
-	// this code does not actually work with Nranks > 1 ...
 	const int ncomp_cc = Physics_Indices<RichtmeyerMeshkovProblem>::nvarTotal_cc;
 
-	// copy all FABs to a local FAB across the entire domain
-	amrex::BoxArray localBoxes(domain_);
-	amrex::DistributionMapping localDistribution(localBoxes, 1);
+	// copy all FAB data to a single FAB on rank zero
+	amrex::Box const domainBox = geom[0].Domain();
+	amrex::BoxArray const localBoxes(domainBox);
+	amrex::Vector<int> const ranks({0}); // workaround nvcc bug
+	amrex::DistributionMapping const localDistribution(ranks);
 	amrex::MultiFab state_mf(localBoxes, localDistribution, ncomp_cc, 0);
-	state_mf.ParallelCopy(state_new_cc_);
+	state_mf.ParallelCopy(state_new_cc_[0]);
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		auto const &state = state_mf.array(0);
-		auto const prob_lo = simGeometry_.ProbLoArray();
-		auto dx = dx_;
+		auto const prob_lo = geom[0].ProbLoArray();
+		auto const dx = geom[0].CellSizeArray();
 
 		amrex::Long asymmetry = 0;
-		auto nx = nx_;
-		auto ny = ny_;
-		auto nz = nz_;
+		auto nx = domainBox.length(0);
+		auto ny = domainBox.length(1);
+		auto nz = domainBox.length(2);
 		auto ncomp = ncomp_cc;
 		for (int i = 0; i < nx; ++i) {
 			for (int j = 0; j < ny; ++j) {
 				for (int k = 0; k < nz; ++k) {
-					amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
-					amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
+					amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
+					amrex::Real const y = prob_lo[1] + (j + static_cast<amrex::Real>(0.5)) * dx[1];
 					for (int n = 0; n < ncomp; ++n) {
 						const amrex::Real comp_upper = state(i, j, k, n);
 
@@ -100,7 +99,6 @@ template <> void RadhydroSimulation<RichtmeyerMeshkovProblem>::computeAfterTimes
 		}
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(asymmetry == 0, "x/y not symmetric!");
 	}
-#endif
 }
 
 template <> void RadhydroSimulation<RichtmeyerMeshkovProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)

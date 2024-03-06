@@ -24,6 +24,7 @@
 #include "AMReX_Print.H"
 #include "AMReX_TableData.H"
 #include "FastMath.hpp"
+#include "fmt/core.h"
 
 static const bool grackle_verbose = true;
 
@@ -109,7 +110,7 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name, std:
 			parameter_name = "Temperature";
 		}
 
-		double *temp_data = new double[my_cloudy.grid_dimension[q]];
+		auto *temp_data = new double[my_cloudy.grid_dimension[q]]; // NOLINT(cppcoreguidelines-owning-memory)
 
 		attr_id = H5Aopen_name(dset_id, parameter_name.c_str());
 
@@ -117,7 +118,7 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name, std:
 
 		my_cloudy.grid_parameters[q] = amrex::Table1D<double>(temp_data, 0, static_cast<int>(my_cloudy.grid_dimension[q]));
 
-		for (int64_t w = 0; w < my_cloudy.grid_dimension[q]; w++) {
+		for (int w = 0; w < my_cloudy.grid_dimension[q]; w++) {
 			if (q < my_cloudy.grid_rank - 1) {
 				my_cloudy.grid_parameters[q](w) = temp_data[w];
 			} else {
@@ -128,7 +129,8 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name, std:
 
 		if (grackle_verbose) {
 			amrex::Print() << fmt::format("\t{}: {} to {} ({} steps).\n", parameter_name, my_cloudy.grid_parameters[q](0),
-						      my_cloudy.grid_parameters[q](my_cloudy.grid_dimension[q] - 1), my_cloudy.grid_dimension[q]);
+						      my_cloudy.grid_parameters[q](static_cast<int>(my_cloudy.grid_dimension[q]) - 1),
+						      my_cloudy.grid_dimension[q]);
 		}
 
 		status = H5Aclose(attr_id);
@@ -142,7 +144,7 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name, std:
 
 	{
 		// Read Cooling data
-		double *temp_data = new double[my_cloudy.data_size];
+		auto *temp_data = new double[my_cloudy.data_size]; // NOLINT(cppcoreguidelines-owning-memory)
 
 		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, temp_data);
 
@@ -168,7 +170,7 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name, std:
 
 	{
 		// Read Heating data
-		double *temp_data = new double[my_cloudy.data_size];
+		auto *temp_data = new double[my_cloudy.data_size]; // NOLINT(cppcoreguidelines-owning-memory)
 
 		parameter_name = fmt::format("/CoolingRates/{}/Heating", group_name);
 
@@ -199,7 +201,7 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name, std:
 
 	if (std::string(group_name) == "Primordial") {
 		// Read mean molecular weight table
-		double *temp_data = new double[my_cloudy.data_size];
+		auto *temp_data = new double[my_cloudy.data_size]; // NOLINT(cppcoreguidelines-owning-memory)
 
 		amrex::GpuArray<int, 3> lo{0, 0, 0};
 		amrex::GpuArray<int, 3> hi{static_cast<int>(my_cloudy.grid_dimension[2]), static_cast<int>(my_cloudy.grid_dimension[1]),

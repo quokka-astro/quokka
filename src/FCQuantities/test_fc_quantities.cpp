@@ -115,14 +115,14 @@ void checkMFs(amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const
 	for (int level = 0; level < state1.size(); ++level) {
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			// initialise MF
-			const BoxArray &ba = state1[level][idim].boxArray();
-			const DistributionMapping &dm = state1[level][idim].DistributionMap();
+			const amrex::BoxArray &ba = state1[level][idim].boxArray();
+			const amrex::DistributionMapping &dm = state1[level][idim].DistributionMap();
 			int ncomp = state1[level][idim].nComp();
 			int ngrow = state1[level][idim].nGrow();
-			MultiFab mf_diff(ba, dm, ncomp, ngrow);
+			amrex::MultiFab mf_diff(ba, dm, ncomp, ngrow);
 			// compute difference between two MFs (at level)
-			MultiFab::Copy(mf_diff, state1[level][idim], 0, 0, ncomp, ngrow);
-			MultiFab::Subtract(mf_diff, state2[level][idim], 0, 0, ncomp, ngrow);
+			amrex::MultiFab::Copy(mf_diff, state1[level][idim], 0, 0, ncomp, ngrow);
+			amrex::MultiFab::Subtract(mf_diff, state2[level][idim], 0, 0, ncomp, ngrow);
 			// compute error (summed over each component)
 			for (int icomp = 0; icomp < Physics_Indices<FCQuantities>::nvarPerDim_fc; ++icomp) {
 				err += mf_diff.norm1(icomp);

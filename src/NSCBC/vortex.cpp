@@ -64,14 +64,14 @@ template <> struct Physics_Traits<Vortex> {
 namespace
 {
 const bool outflow_boundary_along_x_axis = true;
-Real G_vortex = NAN;						       // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED Real T_ref = NAN;				       // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED Real P_ref = NAN;				       // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED Real u0 = NAN;				       // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED Real v0 = NAN;				       // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED Real w0 = NAN;				       // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED GpuArray<Real, HydroSystem<Vortex>::nscalars_> s0{}; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-};								       // namespace
+amrex::Real G_vortex = NAN;						      // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED amrex::Real T_ref = NAN;				      // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED amrex::Real P_ref = NAN;				      // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED amrex::Real u0 = NAN;					      // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED amrex::Real v0 = NAN;					      // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED amrex::Real w0 = NAN;					      // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED amrex::GpuArray<Real, HydroSystem<Vortex>::nscalars_> s0{}; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+};									      // namespace
 
 template <> void RadhydroSimulation<Vortex>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {

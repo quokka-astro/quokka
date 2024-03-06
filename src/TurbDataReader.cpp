@@ -40,7 +40,7 @@ auto read_dataset(hid_t &file_id, char const *dataset_name) -> amrex::Table3D<do
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != -1, "Failed to read dataset!");
 
 	// close dataset
-	status = H5Dclose(dset_id);
+	H5Dclose(dset_id);
 
 	// WARNING: Table3D uses column-major (Fortran-order) indexing, but HDF5
 	// tables use row-major (C-order) indexing!
@@ -68,7 +68,7 @@ void initialize_turbdata(turb_data &data, std::string &data_file)
 	data.dvz = read_dataset(file_id, "pertz");
 
 	// close file
-	status = H5Fclose(file_id);
+	H5Fclose(file_id);
 }
 
 auto get_tabledata(amrex::Table3D<double> &in_t) -> amrex::TableData<double, 3>
@@ -78,7 +78,7 @@ auto get_tabledata(amrex::Table3D<double> &in_t) -> amrex::TableData<double, 3>
 	amrex::TableData<double, 3> tableData(tlo, thi, amrex::The_Pinned_Arena());
 	auto h_table = tableData.table();
 
-	amrex::Print() << "Copying tableData on indices " << tlo << " to " << thi << ".\n";
+	// amrex::Print() << "Copying tableData on indices " << tlo << " to " << thi << ".\n";
 
 	// fill tableData
 	for (int i = tlo[0]; i <= thi[0]; ++i) {
