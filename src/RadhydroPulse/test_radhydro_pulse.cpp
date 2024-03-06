@@ -352,7 +352,7 @@ auto problem_main() -> int
 	Trad_args["linestyle"] = "-.";
 	Tgas_args["label"] = "Tgas (non-advecting)";
 	Tgas_args["linestyle"] = "--";
-matplotlibcpp::ylim(0.95e7, 1.6e7);
+	matplotlibcpp::ylim(0.95e7, 1.6e7);
 	matplotlibcpp::plot(xs, Trad, Trad_args);
 	matplotlibcpp::plot(xs, Tgas, Tgas_args);
 	Trad_args["label"] = "Trad (advecting)";
@@ -366,14 +366,15 @@ matplotlibcpp::ylim(0.95e7, 1.6e7);
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./radhydro_pulse_temperature.pdf");
 
-  // Save xs, Trad, Tgas, xs2, Trad2, Tgas2 to csv file
-  std::ofstream file;
-  file.open("radhydro_pulse_temperature.csv");
-  file << "xs,Trad,Tgas,xs2,Trad2,Tgas2\n";
-  for (size_t i = 0; i < xs.size(); ++i) {
-    file << std::scientific << std::setprecision(12) << xs[i] << "," << Trad[i] << "," << Tgas[i] << "," << xs2[i] << "," << Trad2[i] << "," << Tgas2[i] << "\n";
-  }
-  file.close();
+	// Save xs, Trad, Tgas, xs2, Trad2, Tgas2 to csv file
+	std::ofstream file;
+	file.open("radhydro_pulse_temperature.csv");
+	file << "xs,Trad,Tgas,xs2,Trad2,Tgas2\n";
+	for (size_t i = 0; i < xs.size(); ++i) {
+		file << std::scientific << std::setprecision(12) << xs[i] << "," << Trad[i] << "," << Tgas[i] << "," << xs2[i] << "," << Trad2[i] << ","
+		     << Tgas2[i] << "\n";
+	}
+	file.close();
 
 	// plot gas density profile
 	matplotlibcpp::clf();
@@ -390,13 +391,13 @@ matplotlibcpp::ylim(0.95e7, 1.6e7);
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./radhydro_pulse_density.pdf");
 
-  // Save xs, rhogas, xs2, rhogas2 to csv file with format %.12e
-  file.open("radhydro_pulse_density.csv");
-  file << "xs,rhogas,xs2,rhogas2\n";
-  for (size_t i = 0; i < xs.size(); ++i) {
-    file << std::scientific << std::setprecision(12) << xs[i] << "," << rhogas[i] << "," << xs2[i] << "," << rhogas2[i] << "\n";
-  }
-  file.close();
+	// Save xs, rhogas, xs2, rhogas2 to csv file with format %.12e
+	file.open("radhydro_pulse_density.csv");
+	file << "xs,rhogas,xs2,rhogas2\n";
+	for (size_t i = 0; i < xs.size(); ++i) {
+		file << std::scientific << std::setprecision(12) << xs[i] << "," << rhogas[i] << "," << xs2[i] << "," << rhogas2[i] << "\n";
+	}
+	file.close();
 
 	// plot gas velocity profile
 	matplotlibcpp::clf();
@@ -413,13 +414,13 @@ matplotlibcpp::ylim(0.95e7, 1.6e7);
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./radhydro_pulse_velocity.pdf");
 
-  // Save xs, Vgas, xs2, Vgas2 to csv file
-  file.open("radhydro_pulse_velocity.csv");
-  file << "xs,Vgas,xs2,Vgas2\n";
-  for (size_t i = 0; i < xs.size(); ++i) {
-    file << std::scientific << std::setprecision(12) << xs[i] << "," << Vgas[i] << "," << xs2[i] << "," << Vgas2[i] << "\n";
-  }
-  file.close();
+	// Save xs, Vgas, xs2, Vgas2 to csv file
+	file.open("radhydro_pulse_velocity.csv");
+	file << "xs,Vgas,xs2,Vgas2\n";
+	for (size_t i = 0; i < xs.size(); ++i) {
+		file << std::scientific << std::setprecision(12) << xs[i] << "," << Vgas[i] << "," << xs2[i] << "," << Vgas2[i] << "\n";
+	}
+	file.close();
 
 #endif
 

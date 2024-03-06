@@ -36,10 +36,10 @@ constexpr double v0_nonadv = 0.; // non-advecting pulse
 // constexpr double v0_adv = 1.0e8;    // advecting pulse
 // constexpr double max_time = 4.8e-4;
 
-// Dynamic diffusion: tau = 1e4, beta = 1e-3, beta tau = 10. 
+// Dynamic diffusion: tau = 1e4, beta = 1e-3, beta tau = 10.
 // Width of the pulse = sqrt(c max_time / kappa0) = 85 if max_time = 2.4e-4
-constexpr double kappa0 = 500.; // cm^2 g^-1
-constexpr double v0_adv = 3.0e7;    // advecting pulse
+constexpr double kappa0 = 500.;	 // cm^2 g^-1
+constexpr double v0_adv = 3.0e7; // advecting pulse
 constexpr double max_time = 4.8e-5;
 
 template <> struct quokka::EOS_Traits<PulseProblem> {
@@ -358,7 +358,7 @@ auto problem_main() -> int
 	Trad_args["linestyle"] = "-.";
 	Tgas_args["label"] = "Tgas (non-advecting)";
 	Tgas_args["linestyle"] = "--";
-  matplotlibcpp::ylim(0.95e7, 2.0e7);
+	matplotlibcpp::ylim(0.95e7, 2.0e7);
 	matplotlibcpp::plot(xs, Trad, Trad_args);
 	matplotlibcpp::plot(xs, Tgas, Tgas_args);
 	Trad_args["label"] = "Trad (advecting)";
@@ -372,14 +372,15 @@ auto problem_main() -> int
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./radhydro_pulse_dyndiff_temperature.pdf");
 
-  // Save xs, Trad, Tgas, xs2, Trad2, Tgas2 to csv file
-  std::ofstream file;
-  file.open("radhydro_pulse_dyndiff_temperature.csv");
-  file << "xs,Trad,Tgas,xs2,Trad2,Tgas2\n";
-  for (size_t i = 0; i < xs.size(); ++i) {
-    file << std::scientific << std::setprecision(12) << xs[i] << "," << Trad[i] << "," << Tgas[i] << "," << xs2[i] << "," << Trad2[i] << "," << Tgas2[i] << "\n";
-  }
-  file.close();
+	// Save xs, Trad, Tgas, xs2, Trad2, Tgas2 to csv file
+	std::ofstream file;
+	file.open("radhydro_pulse_dyndiff_temperature.csv");
+	file << "xs,Trad,Tgas,xs2,Trad2,Tgas2\n";
+	for (size_t i = 0; i < xs.size(); ++i) {
+		file << std::scientific << std::setprecision(12) << xs[i] << "," << Trad[i] << "," << Tgas[i] << "," << xs2[i] << "," << Trad2[i] << ","
+		     << Tgas2[i] << "\n";
+	}
+	file.close();
 
 	// plot gas density profile
 	matplotlibcpp::clf();
@@ -396,13 +397,13 @@ auto problem_main() -> int
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./radhydro_pulse_dyndiff_density.pdf");
 
-  // Save xs, rhogas, xs2, rhogas2 to csv file with format %.12e
-  file.open("radhydro_pulse_dyndiff_density.csv");
-  file << "xs,rhogas,xs2,rhogas2\n";
-  for (size_t i = 0; i < xs.size(); ++i) {
-    file << std::scientific << std::setprecision(12) << xs[i] << "," << rhogas[i] << "," << xs2[i] << "," << rhogas2[i] << "\n";
-  }
-  file.close();
+	// Save xs, rhogas, xs2, rhogas2 to csv file with format %.12e
+	file.open("radhydro_pulse_dyndiff_density.csv");
+	file << "xs,rhogas,xs2,rhogas2\n";
+	for (size_t i = 0; i < xs.size(); ++i) {
+		file << std::scientific << std::setprecision(12) << xs[i] << "," << rhogas[i] << "," << xs2[i] << "," << rhogas2[i] << "\n";
+	}
+	file.close();
 
 	// plot gas velocity profile
 	matplotlibcpp::clf();
@@ -419,13 +420,13 @@ auto problem_main() -> int
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./radhydro_pulse_dyndiff_velocity.pdf");
 
-  // Save xs, Vgas, xs2, Vgas2 to csv file
-  file.open("radhydro_pulse_dyndiff_velocity.csv");
-  file << "xs,Vgas,xs2,Vgas2\n";
-  for (size_t i = 0; i < xs.size(); ++i) {
-    file << std::scientific << std::setprecision(12) << xs[i] << "," << Vgas[i] << "," << xs2[i] << "," << Vgas2[i] << "\n";
-  }
-  file.close();
+	// Save xs, Vgas, xs2, Vgas2 to csv file
+	file.open("radhydro_pulse_dyndiff_velocity.csv");
+	file << "xs,Vgas,xs2,Vgas2\n";
+	for (size_t i = 0; i < xs.size(); ++i) {
+		file << std::scientific << std::setprecision(12) << xs[i] << "," << Vgas[i] << "," << xs2[i] << "," << Vgas2[i] << "\n";
+	}
+	file.close();
 
 #endif
 
