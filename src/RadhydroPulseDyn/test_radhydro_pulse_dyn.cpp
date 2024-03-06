@@ -24,7 +24,6 @@ constexpr double width = 24.0; // cm, width of the pulse
 constexpr double erad_floor = a_rad * T0 * T0 * T0 * T0 * 1.0e-10;
 constexpr double mu = 2.33 * C::m_u;
 constexpr double k_B = C::k_B;
-constexpr double v0_nonadv = 0.; // non-advecting pulse
 
 // Static diffusion: tau = 2e3, beta = 3e-5, beta tau = 6e-2
 // constexpr double kappa0 = 100.;	    // cm^2 g^-1
@@ -40,7 +39,7 @@ constexpr double v0_nonadv = 0.; // non-advecting pulse
 // Width of the pulse = sqrt(c max_time / kappa0) = 85 if max_time = 2.4e-4
 constexpr double kappa0 = 500.;	 // cm^2 g^-1
 constexpr double v0_adv = 3.0e7; // advecting pulse
-constexpr double max_time = 4.8e-5;
+constexpr double max_time = 4.8e-6;
 
 template <> struct quokka::EOS_Traits<PulseProblem> {
 	static constexpr double mean_molecular_weight = mu;
@@ -153,7 +152,6 @@ template <> void RadhydroSimulation<PulseProblem>::setInitialConditionsOnGrid(qu
 		const double Erad = a_rad * std::pow(Trad, 4);
 		const double rho = compute_exact_rho(x - x0);
 		const double Egas = quokka::EOS<PulseProblem>::ComputeEintFromTgas(rho, Trad);
-		const double v0 = v0_nonadv;
 
 		state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = Erad;
 		state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index) = 0.;
@@ -345,7 +343,7 @@ auto problem_main() -> int
 		err_norm += std::abs(Tgas2[i] - Trad[i]);
 		sol_norm += std::abs(Trad[i]) * 3.0;
 	}
-	const double error_tol = 0.006;
+	const double error_tol = 0.002;
 	const double rel_error = err_norm / sol_norm;
 	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
 
