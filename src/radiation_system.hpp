@@ -458,7 +458,7 @@ template <FluxDir DIR>
 void RadSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in, amrex::Box const &cellRange,
 						amrex::Box const & /*interfaceRange*/, const int nvars, const int iReadFrom, const int iWriteFrom)
 {
-	BL_PROFILE("HyperbolicSystem::ReconstructStatesPPM()");
+	BL_PROFILE("HyperbolicSystem::ReconstructStatesPPM()"); // NOLINT
 
 	// construct ArrayViews for permuted indices
 	quokka::Array4View<amrex::Real const, DIR> q(q_in);
@@ -1166,8 +1166,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		amrex::GpuArray<amrex::Real, 3> dMomentum{};
 		quokka::valarray<amrex::Real, 3> Erad_t1{};
 		amrex::GpuArray<quokka::valarray<amrex::Real, 3>, nGroups_> Frad_t1{};
-		// amrex::Real Egas = NAN;
-		amrex::Real dEint = NAN;
 
 		amrex::Real gas_update_factor = 1.0;
 		if (stage == 1) {
@@ -1272,6 +1270,9 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					EradVec_guess = (kappaPVec / kappaEVec) * (fourPiBoverC - (Rvec - work) / tau);
 					F_G = Egas_guess - Egas0 + (c / chat) * sum(Rvec);
 					F_D = EradVec_guess - Erad0Vec - (Rvec + Src);
+					// if (min(EradVec_guess) <= 0.0) {
+					// 	std::cout << "EradVec_guess = " << min(EradVec_guess) << std::endl;
+					// }
 
 					// check relative convergence of the residuals
 					if ((std::abs(F_G / Etot0) < resid_tol) && ((c / chat) * sum(abs(F_D)) / Etot0 < resid_tol)) {
@@ -1304,6 +1305,13 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					// 	break;
 					// }
 				} // END NEWTON-RAPHSON LOOP
+
+				// Set EradVec_guess to Erad_floor_ if it is less than Erad_floor_
+				// for (int g = 0; g < nGroups_; ++g) {
+				// 	if (EradVec_guess[g] < Erad_floor_) {
+				// 		EradVec_guess[g] = Erad_floor_;
+				// 	}
+				// }
 
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(n < maxIter, "Newton-Raphson iteration failed to converge!");
 				// std::cout << "Newton-Raphson converged after " << n << " it." << std::endl;
@@ -1443,6 +1451,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					Egas_guess -= dEkin_work;
 				}
 
+				// Remove the work term from radiation energy
 				if constexpr (compute_v_over_c_terms_ && (!include_work_term_in_source)) {
 					// compute difference in gas kinetic energy before and after momentum update
 					amrex::Real const Ekin1 = Egastot1 - Egas_guess;
@@ -1477,7 +1486,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 						}
 						EradVec_guess[g] = radEnergyNew;
 					}
-				}
+				} // End of "Remove the work term from radiation energy"
 
 				for (int g = 0; g < nGroups_; ++g) {
 					Erad_t1[g] = EradVec_guess[g];
@@ -1498,8 +1507,8 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				work[g] = (x1GasMom1 * Frad_t1[g][0] + x2GasMom1 * Frad_t1[g][1] + x3GasMom1 * Frad_t1[g][2]) * chat / (c * c) * lorentz_factor_v * kappaFVec[g] * dt;
 			}
 
-			// Check for convergence of the work term: if the relative change in the work term is less than 1e-15, then break the loop
-			if ((sum(work - work_prev) == 0.0) || ((c / chat) * sum(abs(work - work_prev)) / Etot0 < 1e-13) || (sum(abs(work - work_prev)) / sum(abs(work)) < 1e-13) || (sum(abs(work - work_prev)) / sum(Rvec) < 1e-13)) {
+			// Check for convergence of the work term: if the relative change in the work term is less than 1e-13, then break the loop
+			if (((c / chat) * sum(abs(work - work_prev)) / Etot0 < 1e-13) || (sum(abs(work - work_prev)) / sum(abs(work)) < 1e-13) || (sum(abs(work - work_prev)) / sum(Rvec) < 1e-13)) {
 				break;
 			}
 

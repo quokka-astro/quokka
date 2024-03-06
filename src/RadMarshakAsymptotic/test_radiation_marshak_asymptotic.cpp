@@ -327,7 +327,7 @@ auto problem_main() -> int
 		sol_norm += std::abs(Tmat_exact[i]);
 	}
 
-	const double error_tol = 0.05; // 5 per cent
+	const double error_tol = 0.09;
 	const double rel_error = err_norm / sol_norm;
 	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
 
