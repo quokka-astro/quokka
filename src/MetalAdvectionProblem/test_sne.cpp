@@ -62,7 +62,7 @@ template <> struct Physics_Traits<NewProblem> {
   static constexpr bool is_chemistry_enabled = false;
   static constexpr bool is_mhd_enabled = false;
   static constexpr int numMassScalars = 0;		     // number of mass scalars
-  static constexpr int numPassiveScalars = 0; // number of passive scalars
+  static constexpr int numPassiveScalars = 2; // number of passive scalars
   static constexpr int nGroups = 1; // number of radiation groups
 };
 
@@ -157,17 +157,11 @@ void RadhydroSimulation<NewProblem>::setInitialConditionsOnGrid(quokka::grid gri
         // sigma1 = 37. * kmps;
         // P = rho01 * std::pow(sigma1, 2.0);
      
-      // if(std::sqrt(z*z)<0.25*kpc) {
-      //   state_cc(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex)      = 1.e2/vol;  //Disk tracer
-      //   state_cc(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+1)    = 1.e-5/vol;  //Halo tracer
-      //   state_cc(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+2)    = 1.e-5/vol;  //Injected tracer
-      //  }
-
-      //  else {
-      //   state_cc(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex)      = 1.e-5/vol;  //Disk tracer
-      //   state_cc(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+1)    = 1.e2/vol;  //Halo tracer
-      //   state_cc(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+2)    = 1.e-5/vol;  //Injected tracer
-      //  }
+      if(std::sqrt(z*z)<0.25*kpc) {
+        state_cc(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex)      = 1.e2/vol;  //Disk tracer
+       }else {
+        state_cc(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex)      = 1.e-5/vol;  //Disk tracer
+       }
 
       state_cc(i, j, k, HydroSystem<NewProblem>::density_index)    = rho;
       state_cc(i, j, k, HydroSystem<NewProblem>::x1Momentum_index) = 0.0;
@@ -175,6 +169,7 @@ void RadhydroSimulation<NewProblem>::setInitialConditionsOnGrid(quokka::grid gri
       state_cc(i, j, k, HydroSystem<NewProblem>::x3Momentum_index) = 0.0;
       state_cc(i, j, k, HydroSystem<NewProblem>::internalEnergy_index) = P / (gamma - 1.);
       state_cc(i, j, k, HydroSystem<NewProblem>::energy_index)         = P / (gamma - 1.);
+      state_cc(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+1)    = 1.e-5/vol;  //Injected tracer
 
     });
   }
@@ -285,7 +280,7 @@ void AddSupernova(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> pro
         state(i, j, k, HydroSystem<NewProblem>::energy_index)         +=   rho_eint_blast; 
         state(i, j, k, HydroSystem<NewProblem>::internalEnergy_index) +=    rho_eint_blast; 
         // state(i, j, k, HydroSystem<NewProblem>::density_index) = 1.e-2 * Const_mH;
-        // state(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+2)+=  1.e3/cell_vol;
+        state(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+1)+=  1.e3/cell_vol;
         // printf("The location of SN=%d,%d,%d\n",i, j, k);
         // printf("SN added at level=%d\n", level);
         // printf("The total number of SN gone off=%d\n", cum_sn);
@@ -461,56 +456,19 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<NewProblem>::setCustomBou
   amrex::Box const &box = geom.Domain();
   const auto &domain_lo = box.loVect3d();
   const auto &domain_hi = box.hiVect3d();
-  const amrex::Real* prob_hi = geom.ProbHi();
-  const amrex::Real* prob_lo = geom.ProbLo();
-  const amrex::Real* dx = geom.CellSize();
-  double gamma = HydroSystem<NewProblem>::gamma_;
-  
   const int klo = domain_lo[2];
   const int khi = domain_hi[2];
-  int kcopy, kedge, normal;
-  double zcopy, zedge, zk;
+  int kedge, normal;
+ 
 
    if (k < klo) {
       kedge = klo;
-      kcopy = klo;
       normal = -1;
-      // zedge = prob_lo[2] - 0.5 * dx[2];
-      // zcopy = prob_lo[2] + kcopy * dx[2];
-      // zk    = prob_lo[2] + (k+0.5) * dx[2];
    }
    else if (k > khi) {
-      normal = 1.0;
       kedge = khi;
-      kcopy = khi;
-      // zedge = prob_lo[2] + 0.5 * dx[2];
-      // zcopy = prob_lo[2] + kcopy * dx[2];
-      // zk    = prob_lo[2] + (k - khi +0.5) * dx[2];
+      normal = 1.0;
    }
-
-    //Grab edge quantities
-    // const double x1Mom_edge = consVar(i, j, kedge, HydroSystem<NewProblem>::x1Momentum_index);
-    // const double x2Mom_edge = consVar(i, j, kedge, HydroSystem<NewProblem>::x2Momentum_index);
-    // double x3Mom_edge = consVar(i, j, kedge, HydroSystem<NewProblem>::x3Momentum_index);
-    // double rho_edge   = consVar(i, j, kedge, HydroSystem<NewProblem>::density_index);    
-    // double speed_edge = std::abs(x3Mom_edge/rho_edge); 
-    // double soundspeed_edge = HydroSystem<NewProblem>::ComputeSoundSpeed(consVar, i, j, kedge);
-    // const double Press_edge  = consVar(i, j, kedge, HydroSystem<NewProblem>::internalEnergy_index)*(gamma-1.);
-    // double vx_edge = x1Mom_edge/rho_edge;
-    // double vy_edge = x2Mom_edge/rho_edge;
-    // double vz_edge = x3Mom_edge/rho_edge;
-
-    
-    // bool subSonic=true;
-    // bool inflow = true;
-    // if(Mach_number>1.) { 
-    //   subSonic = false;
-    // }
-    // if((x3Mom_edge*normal)>0.0) { //gas is outflowing
-    //   inflow = false;
-    // }
-    //Get quantities from cell to be copied into corresponding ghost zone.
-    // 0-->neg1, 1-->neg2 etc
 
     const double rho_edge   = consVar(i, j, kedge, HydroSystem<NewProblem>::density_index);
 		const double x1Mom_edge = consVar(i, j, kedge, HydroSystem<NewProblem>::x1Momentum_index);
@@ -519,9 +477,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<NewProblem>::setCustomBou
     const double etot_edge  = consVar(i, j, kedge, HydroSystem<NewProblem>::energy_index);
     const double eint_edge  = consVar(i, j, kedge, HydroSystem<NewProblem>::internalEnergy_index);
 
-    // double speed_edge = std::abs(x3Mom_edge/rho_edge); 
-    // double soundspeed_edge = HydroSystem<NewProblem>::ComputeSoundSpeed(consVar, i, j, kedge);
-    // double Mach_number = speed_edge/soundspeed_edge;
     
     if((x3Mom_edge*normal)<0){//gas is inflowing
       x3Mom_edge = -1. *consVar(i, j, kedge, HydroSystem<NewProblem>::x3Momentum_index);
