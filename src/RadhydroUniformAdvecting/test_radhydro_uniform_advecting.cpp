@@ -13,7 +13,6 @@ struct PulseProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
 constexpr int beta_order_ = 2; // order of beta in the radiation four-force
-constexpr int init_beta_order_ = beta_order_; // order of beta in the initial condition
 
 constexpr double T0 = 1.0;	// temperature
 constexpr double rho0 = 1.0;	// matter density
@@ -28,7 +27,7 @@ constexpr double k_B = 1.0;
 // constexpr double v0 = 1.0e-4 * c; // advecting pulse
 // constexpr double max_time = 1.0 / v0;
 
-// dynamic diffusion, beta tau = 10
+// dynamic diffusion, beta = 1e-3, tau = kappa0 * dx = 1e5, beta tau = 100
 constexpr double kappa0 = 1.0e4; // dx = 1, tau = kappa0 * dx = 1e4
 constexpr double v0 = 1e-3 * c; // beta = 1e-3
 constexpr double max_time = 10.0 / v0;
@@ -88,14 +87,14 @@ template <> void RadhydroSimulation<PulseProblem>::setInitialConditionsOnGrid(qu
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-    if constexpr (init_beta_order_ <= 1) {
+    if constexpr (beta_order_ <= 1) {
 		  state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = Erad0;
-    } else { // init_beta_order_ == 2 or 3
+    } else { // beta_order_ == 2 or 3
 		  state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = Erad_beta2;
     }
-    if constexpr (init_beta_order_ <= 2) {
+    if constexpr (beta_order_ <= 2) {
 		  state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index) = 4. / 3. * v0 * Erad0;
-    } else { // init_beta_order_ == 3
+    } else { // beta_order_ == 3
 		  state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index) = 4. / 3. * v0 * Erad0 * (1. + (v0 * v0) / (c * c));
     }
 		state_cc(i, j, k, RadSystem<PulseProblem>::x2RadFlux_index) = 0;
@@ -188,9 +187,9 @@ auto problem_main() -> int
 
 		auto Erad_val = a_rad * std::pow(T0, 4);
     double trad_exact = NAN;
-    if constexpr (init_beta_order_ <= 1) {
+    if constexpr (beta_order_ <= 1) {
       trad_exact = std::pow(Erad0 / a_rad, 1. / 4.);
-    } else { // init_beta_order_ == 2 or 3
+    } else { // beta_order_ == 2 or 3
       trad_exact = std::pow(Erad_beta2 / a_rad, 1. / 4.);
     }
 		Trad_exact.push_back(trad_exact);
