@@ -184,16 +184,16 @@ template <> void RadhydroSimulation<AdvPulseProblem>::setInitialConditionsOnGrid
 		const double Egas = quokka::EOS<PulseProblem>::ComputeEintFromTgas(rho, Trad);
 		const double v0 = v0_adv;
 
-    if constexpr (beta_order_ <= 1) {
-		  state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = Erad;
-    } else { // beta_order_ == 2 or 3
-		  state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = (1. + 4. / 3. * (v0 * v0) / (c * c)) * Erad;
-    }
-    if constexpr (beta_order_ <= 2) {
-		  state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index) = 4. / 3. * v0 * Erad;
-    } else { // beta_order_ == 3
-		  state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index) = 4. / 3. * v0 * Erad * (1. + (v0 * v0) / (c * c));
-    }
+		if constexpr (beta_order_ <= 1) {
+			state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = Erad;
+		} else { // beta_order_ == 2 or 3
+			state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = (1. + 4. / 3. * (v0 * v0) / (c * c)) * Erad;
+		}
+		if constexpr (beta_order_ <= 2) {
+			state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index) = 4. / 3. * v0 * Erad;
+		} else { // beta_order_ == 3
+			state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index) = 4. / 3. * v0 * Erad * (1. + (v0 * v0) / (c * c));
+		}
 		state_cc(i, j, k, RadSystem<PulseProblem>::x2RadFlux_index) = 0;
 		state_cc(i, j, k, RadSystem<PulseProblem>::x3RadFlux_index) = 0;
 		state_cc(i, j, k, RadSystem<PulseProblem>::gasEnergy_index) = Egas + 0.5 * rho * v0 * v0;
@@ -269,12 +269,12 @@ auto problem_main() -> int
 		const auto rho_t = values.at(RadSystem<PulseProblem>::gasDensity_index)[i];
 		const auto v_t = values.at(RadSystem<PulseProblem>::x1GasMomentum_index)[i] / rho_t;
 		const auto Egas = values.at(RadSystem<PulseProblem>::gasInternalEnergy_index)[i];
-    const auto flux_t = values.at(RadSystem<PulseProblem>::x1RadFlux_index)[i];
+		const auto flux_t = values.at(RadSystem<PulseProblem>::x1RadFlux_index)[i];
 		rhogas.at(i) = rho_t;
 		Trad.at(i) = Trad_t;
 		Tgas.at(i) = quokka::EOS<PulseProblem>::ComputeTgasFromEint(rho_t, Egas);
 		Vgas.at(i) = 1e-5 * v_t;
-    flux.at(i) = flux_t;
+		flux.at(i) = flux_t;
 	}
 	// END OF PROBLEM 1
 
@@ -336,13 +336,13 @@ auto problem_main() -> int
 		const auto rho_t = values2.at(RadSystem<PulseProblem>::gasDensity_index)[i];
 		const auto v_t = values2.at(RadSystem<PulseProblem>::x1GasMomentum_index)[i] / rho_t;
 		const auto Egas = values2.at(RadSystem<PulseProblem>::gasInternalEnergy_index)[i];
-    const auto flux_t = values2.at(RadSystem<PulseProblem>::x1RadFlux_index)[i];
+		const auto flux_t = values2.at(RadSystem<PulseProblem>::x1RadFlux_index)[i];
 		xs2.at(i) = x - drift;
 		rhogas2.at(index_) = rho_t;
 		Trad2.at(index_) = Trad_t;
 		Tgas2.at(index_) = quokka::EOS<PulseProblem>::ComputeTgasFromEint(rho_t, Egas);
 		Vgas2.at(index_) = 1e-5 * (v_t - v0_adv);
-    flux2.at(index_) = flux_t;
+		flux2.at(index_) = flux_t;
 	}
 	// END OF PROBLEM 2
 
