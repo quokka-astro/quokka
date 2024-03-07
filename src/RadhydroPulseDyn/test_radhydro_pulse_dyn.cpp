@@ -26,7 +26,6 @@ constexpr double width = 24.0; // cm, width of the pulse
 constexpr double erad_floor = a_rad * T0 * T0 * T0 * T0 * 1.0e-10;
 constexpr double mu = 2.33 * C::m_u;
 constexpr double k_B = C::k_B;
-constexpr double v0_nonadv = 0.; // non-advecting pulse
 
 // Static diffusion: tau = 2e3, beta = 3e-5, beta tau = 6e-2
 // constexpr double kappa0 = 100.;	    // cm^2 g^-1
@@ -42,7 +41,7 @@ constexpr double v0_nonadv = 0.; // non-advecting pulse
 // Width of the pulse = sqrt(c max_time / kappa0) = 85 if max_time = 2.4e-4
 constexpr double kappa0 = 500.;	 // cm^2 g^-1
 constexpr double v0_adv = 3.0e7; // advecting pulse
-constexpr double max_time = 4.8e-5;
+constexpr double max_time = 4.8e-6;
 
 template <> struct quokka::EOS_Traits<PulseProblem> {
 	static constexpr double mean_molecular_weight = mu;
