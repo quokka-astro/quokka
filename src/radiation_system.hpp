@@ -1164,7 +1164,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		}
 
 		amrex::GpuArray<amrex::Real, 3> dMomentum{};
-		quokka::valarray<amrex::Real, 3> Erad_t1{};
 		amrex::GpuArray<quokka::valarray<amrex::Real, 3>, nGroups_> Frad_t1{};
 
 		amrex::Real gas_update_factor = 1.0;
@@ -1270,9 +1269,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					EradVec_guess = (kappaPVec / kappaEVec) * (fourPiBoverC - (Rvec - work) / tau);
 					F_G = Egas_guess - Egas0 + (c / chat) * sum(Rvec);
 					F_D = EradVec_guess - Erad0Vec - (Rvec + Src);
-					// if (min(EradVec_guess) <= 0.0) {
-					// 	std::cout << "EradVec_guess = " << min(EradVec_guess) << std::endl;
-					// }
 
 					// check relative convergence of the residuals
 					if ((std::abs(F_G / Etot0) < resid_tol) && ((c / chat) * sum(abs(F_D)) / Etot0 < resid_tol)) {
@@ -1305,13 +1301,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					// 	break;
 					// }
 				} // END NEWTON-RAPHSON LOOP
-
-				// Set EradVec_guess to Erad_floor_ if it is less than Erad_floor_
-				// for (int g = 0; g < nGroups_; ++g) {
-				// 	if (EradVec_guess[g] < Erad_floor_) {
-				// 		EradVec_guess[g] = Erad_floor_;
-				// 	}
-				// }
 
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(n < maxIter, "Newton-Raphson iteration failed to converge!");
 				// std::cout << "Newton-Raphson converged after " << n << " it." << std::endl;
@@ -1487,10 +1476,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 						EradVec_guess[g] = radEnergyNew;
 					}
 				} // End of "Remove the work term from radiation energy"
-
-				for (int g = 0; g < nGroups_; ++g) {
-					Erad_t1[g] = EradVec_guess[g];
-				}
 			} else {
 				amrex::ignore_unused(EradVec_guess);
 				amrex::ignore_unused(Egas_guess);
@@ -1534,7 +1519,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		consNew(i, j, k, gasEnergy_index) = ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess);
 		for (int g = 0; g < nGroups_; ++g) {
 			if constexpr (gamma_ != 1.0) {
-				consNew(i, j, k, radEnergy_index + numRadVars_ * g) = Erad_t1[g];
+				consNew(i, j, k, radEnergy_index + numRadVars_ * g) = EradVec_guess[g];
 			}
 			consNew(i, j, k, x1RadFlux_index + numRadVars_ * g) = Frad_t1[g][0];
 			consNew(i, j, k, x2RadFlux_index + numRadVars_ * g) = Frad_t1[g][1];

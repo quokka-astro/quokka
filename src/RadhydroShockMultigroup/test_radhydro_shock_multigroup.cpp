@@ -51,8 +51,7 @@ template <> struct Physics_Traits<ShockProblem> {
 	static constexpr bool is_radiation_enabled = true;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
-	// static constexpr int nGroups = 8;
-	static constexpr int nGroups = 2;
+	static constexpr int nGroups = 8;
 };
 
 template <> struct RadSystem_Traits<ShockProblem> {
@@ -62,12 +61,10 @@ template <> struct RadSystem_Traits<ShockProblem> {
 	static constexpr double Erad_floor = Erad_floor_;
 	static constexpr bool compute_v_over_c_terms = true;
 	static constexpr double energy_unit = C::hplanck; // set boundary unit to Hz
-	// static constexpr amrex::GpuArray<double, Physics_Traits<ShockProblem>::nGroups + 1> radBoundaries{
-	//     1.00000000e+15, 3.16227766e+15, 1.00000000e+16, 3.16227766e+16, 1.00000000e+17, 3.16227766e+17, 1.00000000e+18, 3.16227766e+18, 1.00000000e+19};
-	// static constexpr amrex::GpuArray<double, Physics_Traits<ShockProblem>::nGroups + 1> radBoundaries{
-	//     1.00000000e+10, 1.000e12, 1.00000000e+19};
 	static constexpr amrex::GpuArray<double, Physics_Traits<ShockProblem>::nGroups + 1> radBoundaries{
-	    1.00000000e+15, 1.000e17, 1.00000000e+19};
+	    1.00000000e+15, 3.16227766e+15, 1.00000000e+16, 3.16227766e+16, 1.00000000e+17, 3.16227766e+17, 1.00000000e+18, 3.16227766e+18, 1.00000000e+19};
+	// static constexpr amrex::GpuArray<double, Physics_Traits<ShockProblem>::nGroups + 1> radBoundaries{
+	//     1.00000000e+15, 1.000e17, 1.00000000e+19};
 	static constexpr int beta_order = 1;
 };
 
