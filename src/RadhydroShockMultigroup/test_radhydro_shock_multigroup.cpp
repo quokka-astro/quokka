@@ -63,8 +63,6 @@ template <> struct RadSystem_Traits<ShockProblem> {
 	static constexpr double energy_unit = C::hplanck; // set boundary unit to Hz
 	static constexpr amrex::GpuArray<double, Physics_Traits<ShockProblem>::nGroups + 1> radBoundaries{
 	    1.00000000e+15, 3.16227766e+15, 1.00000000e+16, 3.16227766e+16, 1.00000000e+17, 3.16227766e+17, 1.00000000e+18, 3.16227766e+18, 1.00000000e+19};
-	// static constexpr amrex::GpuArray<double, Physics_Traits<ShockProblem>::nGroups + 1> radBoundaries{
-	//     1.00000000e+15, 1.000e17, 1.00000000e+19};
 	static constexpr int beta_order = 1;
 };
 
