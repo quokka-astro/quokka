@@ -1439,7 +1439,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				amrex::Real const dEkin_work = Ekin1 - Ekin0;
 
 				if constexpr (include_work_term_in_source) {
-					// New scheme: the work term is included in the soruce terms. The work done by radiation went to internal energy, but it
+					// New scheme: the work term is included in the source terms. The work done by radiation went to internal energy, but it
 					// should go to the kinetic energy. Remove the work term from internal energy.
 					Egas_guess -= dEkin_work;
 				} else {
