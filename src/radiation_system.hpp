@@ -1183,7 +1183,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				AMREX_ASSERT(Egas0 > 0.0);
 
 				const double betaSqr = (x1GasMom0 * x1GasMom0 + x2GasMom0 * x2GasMom0 + x3GasMom0 * x3GasMom0) / (rho * rho * c * c);
-				if constexpr ((beta_order_ == 0) || (beta_order_ == 1)) {
+				if constexpr (beta_order_ == 1) {
 					lorentz_factor = 1.0;
 					lorentz_factor_v = 1.0;
 				} else if constexpr (beta_order_ == 2) {
@@ -1194,6 +1194,10 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					lorentz_factor = 1.0 + 0.5 * betaSqr;
 					lorentz_factor_v = 1.0 + 0.5 * betaSqr;
 					lorentz_factor_v_v = 1.0;
+				} else if constexpr (beta_order_ < 0) {
+					lorentz_factor = 1.0 / sqrt(1.0 - betaSqr);
+					lorentz_factor_v = lorentz_factor;
+					lorentz_factor_v_v = lorentz_factor;
 				} else {
 					AMREX_ASSERT(false);
 				}
