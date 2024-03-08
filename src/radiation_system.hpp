@@ -1338,7 +1338,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				Frad_t0[1] = consPrev(i, j, k, x2RadFlux_index + numRadVars_ * g);
 				Frad_t0[2] = consPrev(i, j, k, x3RadFlux_index + numRadVars_ * g);
 
-				if constexpr ((compute_v_over_c_terms_) && (gamma_ != 1.0) && (beta_order_ >= 1)) {
+				if constexpr ((compute_v_over_c_terms_) && (gamma_ != 1.0) && (beta_order_ != 0)) {
 					auto erad = EradVec_guess[g];
 					std::array<double, 3> gasVel{};
 					std::array<double, 3> v_terms{};
@@ -1373,7 +1373,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 						v_terms[n] = v_term;
 					}
 
-					if constexpr (beta_order_ <= 1) {
+					if constexpr (beta_order_ == 1) {
 						for (int n = 0; n < 3; ++n) {
 							// Compute flux update
 							Frad_t1[g][n] = (Frad_t0[n] + v_terms[n]) / (1.0 + F_coeff);
@@ -1381,7 +1381,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 							// Compute conservative gas momentum update
 							dMomentum[n] += -(Frad_t1[g][n] - Frad_t0[n]) / (c * chat);
 						}
-					} else if constexpr (beta_order_ == 2) {
+					} else {
 						if (kappaFVec[g] == kappaEVec[g]) {
 							for (int n = 0; n < 3; ++n) {
 								// Compute flux update
@@ -1498,7 +1498,8 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 
 			// Check for convergence of the work term: if the relative change in the work term is less than 1e-13, then break the loop
 			const double lag_tol = 1.0e-13;
-			if ((sum(abs(work)) == 0.0) || ((c / chat) * sum(abs(work - work_prev)) / Etot0 < lag_tol) || (sum(abs(work - work_prev)) <= lag_tol * sum(Rvec))) {
+			if ((sum(abs(work)) == 0.0) || ((c / chat) * sum(abs(work - work_prev)) / Etot0 < lag_tol) ||
+			    (sum(abs(work - work_prev)) <= lag_tol * sum(Rvec))) {
 				break;
 			}
 		} // end full-step iteration
