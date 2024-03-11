@@ -9,21 +9,42 @@
 #include "fextract.hpp"
 #include "physics_info.hpp"
 
+namespace fs = std::filesystem;
+
 struct TheProblem {
 };
 
-constexpr double pi = M_PI;
+constexpr const char* datetime = __DATE__ " " __TIME__;
 
-constexpr double mu = 1.0;
+// model 1: 1/(1 + n^s) + 1/(1 + n1^s) * (n / n1)^(gamma - 1)
+constexpr int model = 1;
+
+constexpr double pi = M_PI;
 constexpr double k_B = 1.0;
-constexpr double gamma_ = 5.0 / 3.0;
 constexpr double c_iso = 1.0;
-constexpr double Cv = 1.0 / (gamma_ - 1.0) * k_B / mu;
+constexpr double A = 2.2;	// xi = 1.45 according to Table 1 of Shu77
+constexpr double q = 0.2;
+constexpr double r_c = 1.0;
+constexpr double r_star = q * r_c;
+constexpr double G = 1.0;
+constexpr double h = 0.1;
+constexpr double rho_star = A * c_iso * c_iso / (4.0 * pi * G * r_star * r_star);
 
 // EOS parameters
+constexpr double mu = 1.0;
+constexpr double gamma_ = 5.0 / 3.0;
+constexpr double Cv = 1.0 / (gamma_ - 1.0) * k_B / mu; // Specific heat at constant volume in the adiabatic phase
+constexpr double T0 = c_iso * c_iso;
+
+// model 1 parameters
+constexpr double rho0 = rho_star;
+constexpr double rho1 = 3.2 * rho0; // jump ends at this density
+constexpr double s = 4.0; // jump slope. The jump equals s * log10(rho1 / rho0)
+
+// model 2 parameters
 constexpr double rho_core = 1.0;
-constexpr double rho_1 = 1.2;
-constexpr double jump = 1.2;
+constexpr double rho_one = 1000.0;
+constexpr double jump_slope = 10.0;
 
 template <> struct quokka::EOS_Traits<TheProblem> {
 	static constexpr double mean_molecular_weight = mu;
@@ -47,15 +68,66 @@ template <> struct Physics_Traits<TheProblem> {
 	static constexpr int nGroups = 1;
 };
 
+AMREX_GPU_HOST_DEVICE
+auto compute_T(const double rho) -> double
+{
+	if constexpr (model == 1) {
+		const double scale = 1.0 / (1.0 + std::pow(rho / rho0, s)) + 1.0 / (1.0 + std::pow(rho1 / rho0, s)) * std::pow(rho / rho1, gamma_ - 1.0);
+		return scale * T0;
+	} else if constexpr (model == 2) {
+		const double scale = 1.0 / (1.0 + std::exp(jump_slope * (rho / rho_core - 1.0))) + std::pow(rho / rho_one, gamma_ - 1.0);
+		return scale * T0;
+	}
+}
+
+AMREX_GPU_HOST_DEVICE
+auto compute_e(const double rho) -> double
+{
+	double Tgas = NAN;
+	double e = NAN;
+	if constexpr (model == 1) {
+		Tgas = compute_T(rho);
+		e = Cv * rho * Tgas;
+		return e;
+	} else if constexpr (model == 2) {
+		if (rho >= rho_core) {
+			Tgas = compute_T(rho);
+			return Cv * rho * Tgas;
+		}
+		Tgas = compute_T(rho_core);
+		return Cv * rho_core * Tgas;
+	}
+}
+
 // redefine EOS::ComputePressure
 template <> 
 AMREX_GPU_HOST_DEVICE AMREX_GPU_HOST_DEVICE auto quokka::EOS<TheProblem>::ComputePressure(amrex::Real rho, amrex::Real /*Eint*/, 
 											const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massScalars*/) -> amrex::Real
 {
-	const double p = std::log(jump) / std::log(rho_1 / rho_core);
-	const double phase12 = 1.0 / (1.0 + std::pow(rho / rho_core, p));
-	const double phase3 = std::pow(rho_core / rho_1, p) * std::pow(rho / rho_1, gamma_);
-	return c_iso * c_iso * (phase12 + phase3);
+	if constexpr (model == 1) {
+		const double e = compute_e(rho);
+		return (gamma_ - 1.0) * e;
+	} else {
+		const double T = compute_T(rho);
+		const double e = rho * Cv * T;
+		return (gamma_ - 1.0) * e;
+	}
+}
+
+template <>
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto quokka::EOS<TheProblem>::ComputeTgasFromEint(amrex::Real rho, amrex::Real /*Egas*/,
+										  const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massScalars*/)
+    -> amrex::Real
+{
+	return compute_T(rho);
+}
+
+template <>
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto quokka::EOS<TheProblem>::ComputeEintFromTgas(amrex::Real rho, amrex::Real /*Tgas*/,
+										  const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massScalars*/)
+    -> amrex::Real
+{
+	return compute_e(rho);
 }
 
 template <>
@@ -63,24 +135,16 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto quokka::EOS<TheProblem>::ComputeEi
 										  const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massScalars*/)
     -> amrex::Real
 {
+	return compute_e(rho);
 }
 
 template <>
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto quokka::EOS<TheProblem>::ComputeEintFromTgas(amrex::Real rho, amrex::Real Tgas,
-										  const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massScalars*/)
-    -> amrex::Real
-{
-}
-
-template <>
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto quokka::EOS<TheProblem>::ComputeSoundSpeed(amrex::Real rho, amrex::Real Pressure,
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto quokka::EOS<TheProblem>::ComputeSoundSpeed(amrex::Real rho, amrex::Real /*Pressure*/,
 										const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massScalars*/)
     -> amrex::Real
 {
-	if (rho <= rho_core) {
-		return c_iso;
-	}
-	return std::sqrt(Pressure / rho);
+	const double T = compute_T(rho);
+	return std::sqrt(k_B * T / mu);
 }
 
 template <> void RadhydroSimulation<TheProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
@@ -104,31 +168,27 @@ template <> void RadhydroSimulation<TheProblem>::setInitialConditionsOnGrid(quok
 		amrex::Real const r = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2) + std::pow(z - z0, 2));
 		amrex::Real const distxy = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2));
 
-		double A = 1.0;
-		double G = 1.0;
-		double h = 0.1;
-		const double r_star = 0.5;
-		const double rho_core = A * c_iso * c_iso / (4.0 * pi * G * r_star * r_star);
-
-		const double rho_bg = 1.0e-3;
-		const double r1 = 2.0;
-		const double T0 = 1.0;
+		const double rho_bg = rho_star * std::pow(r_star / r_c, 2);
+		// const double r1 = 2.0;
 
 		// compute density
 		double rho = NAN;
 		if (r <= r_star) {
-			rho = rho_core;
-		} else if (r <= r1) {
-			rho = rho_core * std::pow(r_star / r, 2);
+			rho = rho_star;
+		} else if (r <= r_c) {
+			rho = rho_star * std::pow(r_star / r, 2);
 		} else {
 			rho = rho_bg;
 		}
-		const auto E_int = Cv * rho * T0;
+		const auto E_int = compute_e(rho);
 
 		// compute azimuthal velocity
-		double v_phi = 2 * A * c_iso * h;
+		double v_phi = 0.0;
 		if (distxy <= r_star) {
+			v_phi = 2 * A * c_iso * h;
 			v_phi *= distxy / r_star;
+		} else if (distxy <= r_c) {
+			v_phi = 2 * A * c_iso * h;
 		}
 
 		// compute x, y, z velocity
@@ -154,6 +214,7 @@ template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep()
 
 	std::vector<double> xs(nx);
 	std::vector<double> Tgas(nx);
+	std::vector<double> Egas(nx);
 	std::vector<double> Vgas(nx);
 	std::vector<double> rhogas(nx);
 	std::vector<double> pressure(nx);
@@ -167,6 +228,7 @@ template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep()
 		const auto pressure_t = (gamma_ - 1.0) * Egas_t;
 		rhogas.at(i) = rho_t;
 		Tgas.at(i) = quokka::EOS<TheProblem>::ComputeTgasFromEint(rho_t, Egas_t);
+		Egas.at(i) = Egas_t;
 		Vgas.at(i) = v_t;
 		pressure.at(i) = pressure_t;
 	}
@@ -183,8 +245,21 @@ template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep()
 	// matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", tNew_[0]));
 	matplotlibcpp::tight_layout();
-	// matplotlibcpp::save("./first-star-T.pdf");
-	matplotlibcpp::save(fmt::format("./first-star-T-{:.4g}.pdf", tNew_[0]));
+	// matplotlibcpp::save("./first-star-T.png");
+	matplotlibcpp::save(fmt::format("./{}/first-star-T-{:.4g}.png", datetime, tNew_[0]));
+
+	// plot internal energy
+	matplotlibcpp::clf();
+	std::map<std::string, std::string> Egas_args;
+	Egas_args["label"] = "gas internal energy";
+	Egas_args["linestyle"] = "-";
+	matplotlibcpp::plot(xs, Egas, Egas_args);
+	matplotlibcpp::xlabel("x");
+	matplotlibcpp::ylabel("internal energy");
+	// matplotlibcpp::legend();
+	matplotlibcpp::title(fmt::format("time t = {:.4g}", tNew_[0]));
+	matplotlibcpp::tight_layout();
+	matplotlibcpp::save(fmt::format("./{}/first-star-E-{:.4g}.png", datetime, tNew_[0]));
 
 	// plot pressure
 	matplotlibcpp::clf();
@@ -197,8 +272,8 @@ template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep()
 	// matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", tNew_[0]));
 	matplotlibcpp::tight_layout();
-	// matplotlibcpp::save("./first-star-P.pdf");
-	matplotlibcpp::save(fmt::format("./first-star-P-{:.4g}.pdf", tNew_[0]));
+	// matplotlibcpp::save("./first-star-P.png");
+	matplotlibcpp::save(fmt::format("./{}/first-star-P-{:.4g}.png", datetime, tNew_[0]));
 
 	// plot gas velocity profile
 	matplotlibcpp::clf();
@@ -211,8 +286,8 @@ template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep()
 	// matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", tNew_[0]));
 	matplotlibcpp::tight_layout();
-	// matplotlibcpp::save("./first-star-v.pdf");
-	matplotlibcpp::save(fmt::format("./first-star-v-{:.4g}.pdf", tNew_[0]));
+	// matplotlibcpp::save("./first-star-v.png");
+	matplotlibcpp::save(fmt::format("./{}/first-star-v-{:.4g}.png", datetime, tNew_[0]));
 
 	// plot density profile
 	matplotlibcpp::clf();
@@ -225,25 +300,14 @@ template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep()
 	// matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", tNew_[0]));
 	matplotlibcpp::tight_layout();
-	// matplotlibcpp::save("./first-star-rho.pdf");
-	matplotlibcpp::save(fmt::format("./first-star-rho-{:.4g}.pdf", tNew_[0]));
+	// matplotlibcpp::save("./first-star-rho.png");
+	matplotlibcpp::save(fmt::format("./{}/first-star-rho-{:.4g}.png", datetime, tNew_[0]));
 #endif
 
 }
 
 auto problem_main() -> int
 {
-
-	// // get the current date and time in the format YYYY-MM-DD.HH_mm_ss
-	// const std::string currentDateTime()
-	// {
-	// 	time_t now = time(0);
-	// 	struct tm tstruct;
-	// 	char buf[80];
-	// 	tstruct = *localtime(&now);
-	// 	strftime(buf, sizeof(buf), "%Y-%m-%d.%X", &tstruct);
-	// 	return buf;
-	// }
 
 	// Problem parameters
 
@@ -272,6 +336,19 @@ auto problem_main() -> int
 	// initialize
 	sim.setInitialConditions();
 
+	// Check if the directory already exists
+	const std::string directory_name = datetime;
+	if (fs::exists(directory_name)) {
+		std::cout << "Directory already exists." << std::endl;
+	} else {
+		// Create the directory
+		if (fs::create_directory(directory_name)) {
+			std::cout << "Directory created successfully." << std::endl;
+		} else {
+			std::cerr << "Failed to create directory." << std::endl;
+		}
+	}
+
 	// evolve
 	// sim.evolve();
 
@@ -282,6 +359,7 @@ auto problem_main() -> int
 
 	std::vector<double> xs(nx);
 	std::vector<double> Tgas(nx);
+	std::vector<double> Egas(nx);
 	std::vector<double> Vgas(nx);
 	std::vector<double> rhogas(nx);
 	std::vector<double> pressure(nx);
@@ -295,11 +373,12 @@ auto problem_main() -> int
 		const auto pressure_t = (gamma_ - 1.0) * Egas_t;
 		rhogas.at(i) = rho_t;
 		Tgas.at(i) = quokka::EOS<TheProblem>::ComputeTgasFromEint(rho_t, Egas_t);
+		Egas.at(i) = Egas_t;
 		Vgas.at(i) = v_t;
 		pressure.at(i) = pressure_t;
 	}
 
-#ifdef HAVE_PYTHON
+#if 0 // #ifdef HAVE_PYTHON
 	// plot temperature
 	matplotlibcpp::clf();
 	std::map<std::string, std::string> Tgas_args;
@@ -311,7 +390,21 @@ auto problem_main() -> int
 	// matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
 	matplotlibcpp::tight_layout();
-	matplotlibcpp::save("./first-star-T.pdf");
+	matplotlibcpp::save(fmt::format("./first-star-T-{:.4g}.pdf", sim.tNew_[0]));
+	// matplotlibcpp::save(fmt::format("./first-star-T-step{:d}.pdf", sim.nStep_));
+
+	// plot internal energy
+	matplotlibcpp::clf();
+	std::map<std::string, std::string> Egas_args;
+	Egas_args["label"] = "gas internal energy";
+	Egas_args["linestyle"] = "-";
+	matplotlibcpp::plot(xs, Egas, Egas_args);
+	matplotlibcpp::xlabel("x");
+	matplotlibcpp::ylabel("internal energy");
+	// matplotlibcpp::legend();
+	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
+	matplotlibcpp::tight_layout();
+	matplotlibcpp::save(fmt::format("./first-star-E-{:.4g}.pdf", sim.tNew_[0]));
 
 	// plot pressure
 	matplotlibcpp::clf();
@@ -324,7 +417,7 @@ auto problem_main() -> int
 	// matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
 	matplotlibcpp::tight_layout();
-	matplotlibcpp::save("./first-star-P.pdf");
+	matplotlibcpp::save(fmt::format("./first-star-P-{:.4g}.pdf", sim.tNew_[0]));
 
 	// plot gas velocity profile
 	matplotlibcpp::clf();
@@ -337,7 +430,7 @@ auto problem_main() -> int
 	// matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
 	matplotlibcpp::tight_layout();
-	matplotlibcpp::save("./first-star-v.pdf");
+	matplotlibcpp::save(fmt::format("./first-star-v-{:.4g}.pdf", sim.tNew_[0]));
 
 	// plot density profile
 	matplotlibcpp::clf();
@@ -350,7 +443,7 @@ auto problem_main() -> int
 	// matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
 	matplotlibcpp::tight_layout();
-	matplotlibcpp::save("./first-star-rho.pdf");
+	matplotlibcpp::save(fmt::format("./first-star-rho-{:.4g}.pdf", sim.tNew_[0]));
 #endif
 
 	// evolve

@@ -840,6 +840,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 	getWalltime(); // initialize start_time
 
+	computeAfterTimestep();
+
 	// Main time loop
 	for (int step = istep[0]; step < maxTimesteps_ && cur_time < stopTime_; ++step) {
 
