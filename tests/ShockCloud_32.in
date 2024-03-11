@@ -35,7 +35,7 @@ temperature_floor = 100 # K
 sharp_cloud_edge = 1
 do_frame_shift = 1
 
-max_walltime = 0:00:30
+#max_walltime = 0:00:30
 max_timesteps = 100000
 max_t_cc = 20.0
 
