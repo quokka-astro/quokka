@@ -144,6 +144,14 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 							     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, int i, int j, int k) -> double;
 
 	AMREX_GPU_DEVICE static auto isStateValid(std::array<amrex::Real, nvarHyperbolic_> &cons) -> bool;
+
+	AMREX_GPU_DEVICE static void amendRadState(std::array<amrex::Real, nvarHyperbolic_> &cons);
+
+	template <FluxDir DIR>
+	AMREX_GPU_DEVICE static auto ComputeRadPressure(double erad_L, double Fx_L, double Fy_L, double Fz_L, double fx_L, double fy_L, double fz_L)
+	    -> RadPressureResult;
+
+	AMREX_GPU_DEVICE static auto ComputeEddingtonTensor(double fx_L, double fy_L, double fz_L) -> std::array<std::array<double, 3>, 3>;
 };
 
 template <typename problem_t>
@@ -583,8 +591,118 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeCellOpticalDepth(const quokka
 	const double tau_L = dl * rho_L * RadSystem<problem_t>::ComputeRosselandOpacity(rho_L, Tgas_L);
 	const double tau_R = dl * rho_R * RadSystem<problem_t>::ComputeRosselandOpacity(rho_R, Tgas_R);
 
-	return (2.0 * tau_L * tau_R) / (tau_L + tau_R); // harmonic mean
-							// return 0.5*(tau_L + tau_R); // arithmetic mean
+	return (tau_L * tau_R * 2.) / (tau_L + tau_R); // harmonic mean
+						       // return 0.5*(tau_L + tau_R); // arithmetic mean
+}
+
+template <typename problem_t>
+AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeEddingtonTensor(const double fx, const double fy, const double fz) -> std::array<std::array<double, 3>, 3>
+{
+	// Compute the radiation pressure tensor
+
+	// AMREX_ASSERT(f < 1.0); // there is sometimes a small (<1%) flux
+	// limiting violation when using P1 AMREX_ASSERT(f_R < 1.0);
+
+	auto f = std::sqrt(fx * fx + fy * fy + fz * fz);
+	std::array<amrex::Real, 3> fvec = {fx, fy, fz};
+
+	// angle between interface and radiation flux \hat{n}
+	// If direction is undefined, just drop direction-dependent
+	// terms.
+	std::array<amrex::Real, 3> n{};
+
+	for (int ii = 0; ii < 3; ++ii) {
+		n[ii] = (f > 0.) ? (fvec[ii] / f) : 0.;
+	}
+
+	// compute radiation pressure tensors
+	const double chi = RadSystem<problem_t>::ComputeEddingtonFactor(f);
+
+	AMREX_ASSERT((chi >= 1. / 3.) && (chi <= 1.0)); // NOLINT
+
+	// diagonal term of Eddington tensor
+	const double Tdiag = (1.0 - chi) / 2.0;
+
+	// anisotropic term of Eddington tensor (in the direction of the
+	// rad. flux)
+	const double Tf = (3.0 * chi - 1.0) / 2.0;
+
+	// assemble Eddington tensor
+	std::array<std::array<double, 3>, 3> T{};
+
+	for (int ii = 0; ii < 3; ++ii) {
+		for (int jj = 0; jj < 3; ++jj) {
+			const double delta_ij = (ii == jj) ? 1 : 0;
+			T[ii][jj] = Tdiag * delta_ij + Tf * (n[ii] * n[jj]);
+		}
+	}
+
+	return T;
+}
+
+template <typename problem_t>
+template <FluxDir DIR>
+AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeRadPressure(const double erad, const double Fx, const double Fy, const double Fz, const double fx,
+							       const double fy, const double fz) -> RadPressureResult
+{
+	// Compute the radiation pressure tensor and the maximum signal speed and return them as a struct.
+
+	// check that states are physically admissible
+	AMREX_ASSERT(erad > 0.0);
+
+	// Compute the Eddington tensor
+	auto T = ComputeEddingtonTensor(fx, fy, fz);
+
+	// frozen Eddington tensor approximation, following Balsara
+	// (1999) [JQSRT Vol. 61, No. 5, pp. 617–627, 1999], Eq. 46.
+	double Tnormal = NAN;
+	if constexpr (DIR == FluxDir::X1) {
+		Tnormal = T[0][0];
+	} else if constexpr (DIR == FluxDir::X2) {
+		Tnormal = T[1][1];
+	} else if constexpr (DIR == FluxDir::X3) {
+		Tnormal = T[2][2];
+	}
+
+	// compute fluxes F_L, F_R
+	// T_nx, T_ny, T_nz indicate components where 'n' is the direction of the
+	// face normal. F_n is the radiation flux component in the direction of the
+	// face normal
+	double Fn = NAN;
+	double Tnx = NAN;
+	double Tny = NAN;
+	double Tnz = NAN;
+
+	if constexpr (DIR == FluxDir::X1) {
+		Fn = Fx;
+
+		Tnx = T[0][0];
+		Tny = T[0][1];
+		Tnz = T[0][2];
+	} else if constexpr (DIR == FluxDir::X2) {
+		Fn = Fy;
+
+		Tnx = T[1][0];
+		Tny = T[1][1];
+		Tnz = T[1][2];
+	} else if constexpr (DIR == FluxDir::X3) {
+		Fn = Fz;
+
+		Tnx = T[2][0];
+		Tny = T[2][1];
+		Tnz = T[2][2];
+	}
+
+	AMREX_ASSERT(Fn != NAN);
+	AMREX_ASSERT(Tnx != NAN);
+	AMREX_ASSERT(Tny != NAN);
+	AMREX_ASSERT(Tnz != NAN);
+
+	RadPressureResult result{};
+	result.F = {Fn, Tnx * erad, Tny * erad, Tnz * erad};
+	result.S = std::max(0.1, std::sqrt(Tnormal));
+
+	return result;
 }
 
 template <typename problem_t>
@@ -930,6 +1048,24 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		double Egas_guess = NAN;
 		double Erad_guess = NAN;
 		double T_gas = NAN;
+		quokka::valarray<double, nGroups_> fourPiB{};
+		quokka::valarray<double, nGroups_> EradVec_guess{};
+		quokka::valarray<double, nGroups_> kappaPVec{};
+		quokka::valarray<double, nGroups_> kappaEVec{};
+		quokka::valarray<double, nGroups_> kappaFVec{};
+		quokka::valarray<double, nGroups_> tau0{}; // optical depth across c * dt at old state
+		quokka::valarray<double, nGroups_> tau{};  // optical depth across c * dt at new state
+		quokka::valarray<double, nGroups_> D{};	   // D = S / tau0
+
+		for (int g = 0; g < nGroups_; ++g) {
+			EradVec_guess[g] = NAN;
+		}
+
+		// make a copy of radBoundaries_g
+		amrex::GpuArray<double, nGroups_ + 1> radBoundaries_g_copy{};
+		for (int g = 0; g < nGroups_ + 1; ++g) {
+			radBoundaries_g_copy[g] = radBoundaries_g[g];
+		}
 
 		if constexpr (gamma_ != 1.0) {
 			Egas0 = ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0);
@@ -942,8 +1078,30 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			const double Etot0 = Egas0 + (c / chat) * (Erad0 + Src);
 
 			// BEGIN NEWTON-RAPHSON LOOP
+			// Solve for the new radiation energy and gas internal energy using a Newton-Raphson method using the base variables (Egas, D_0, D_1,
+			// ...), where D_i = R_i / tau_i^(t) and tau_i^(t) = dt * rho * kappa_{P,i}^(t) * chat is the optical depth across chat * dt for group i
+			// at time t. Compared with the old base (Egas, Erad_0, Erad_1, ...), this new base is more stable and converges faster. Furthermore,
+			// the PlanckOpacityTempDerivative term is not needed anymore since I assume d/dT (kappa_P / kappa_E) = 0 in the calculation of the
+			// Jacobian. Note that this assumption only affects the convergence rate of the Newton-Raphson iteration and does not affect the result
+			// at all.
+			//
+			// The Jacobian of F(E_g, D_i) is
+			//
+			// dF_G / dE_g = 1
+			// dF_G / dD_i = c / chat * tau0_i
+			// dF_{D,i} / dE_g = 1 / (chat * C_v) * (kappa_{P,i} / kappa_{E,i}) * d/dT (4 \pi B_i)
+			// dF_{D,i} / dD_i = - (1 / (chat * dt * rho * kappa_{E,i}) + 1) * tau0_i
+
 			Egas_guess = Egas0;
-			Erad_guess = Erad0;
+			T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
+			AMREX_ASSERT(T_gas >= 0.);
+			fourPiB = chat * ComputeThermalRadiation(T_gas, radBoundaries_g_copy);
+			kappaPVec = ComputePlanckOpacity(rho, T_gas);
+			kappaEVec = ComputeEnergyMeanOpacity(rho, T_gas);
+			AMREX_ASSERT(!kappaPVec.hasnan());
+			AMREX_ASSERT(!kappaEVec.hasnan());
+			tau0 = dt * rho * kappaPVec * chat;
+			D = fourPiB / chat - (kappaEVec / kappaPVec) * Erad0Vec;
 
 			const double a_rad = radiation_constant_;
 			double F_G = NAN;
@@ -959,6 +1117,12 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			double eta = NAN;
 			double deltaErad = NAN;
 			double deltaEgas = NAN;
+			quokka::valarray<double, nGroups_> Rvec{};
+			quokka::valarray<double, nGroups_> dFG_dD{};
+			quokka::valarray<double, nGroups_> dFR_dEgas{};
+			quokka::valarray<double, nGroups_> dFR_i_dD_i{};
+			quokka::valarray<double, nGroups_> deltaD{};
+			quokka::valarray<double, nGroups_> F_D{};
 
 			const double resid_tol = 1.0e-10; // 1.0e-15;
 			const int maxIter = 400;
@@ -968,48 +1132,48 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				// compute material temperature
 				T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
 				AMREX_ASSERT(T_gas >= 0.);
-
 				// compute opacity, emissivity
-				kappa = RadSystem<problem_t>::ComputePlanckOpacity(rho, T_gas);
-				AMREX_ASSERT(kappa >= 0.);
-				fourPiB = chat * a_rad * std::pow(T_gas, 4);
+				fourPiB = chat * ComputeThermalRadiation(T_gas, radBoundaries_g_copy);
+				kappaPVec = ComputePlanckOpacity(rho, T_gas);
+				kappaEVec = ComputeEnergyMeanOpacity(rho, T_gas);
+				AMREX_ASSERT(!kappaPVec.hasnan());
 
-				// compute derivatives w/r/t T_gas
-				const double dB_dTgas = (4.0 * fourPiB) / T_gas;
-				const double dkappa_dTgas = RadSystem<problem_t>::ComputePlanckOpacityTempDerivative(rho, T_gas);
+				tau = dt * rho * kappaEVec * chat;
+				Rvec = tau0 * D;
+				EradVec_guess = (kappaPVec / kappaEVec) * fourPiB / chat - Rvec / tau;
+				F_G = Egas_guess - Egas0 + (c / chat) * sum(Rvec);
+				F_D = EradVec_guess - Erad0Vec - (Rvec + Src);
 
-				// compute residuals
-				rhs = dt * (rho * kappa) * (fourPiB - chat * Erad_guess);
-				F_G = (Egas_guess - Egas0) + ((c / chat) * rhs);
-				F_R = (Erad_guess - Erad0) - (rhs + Src);
-
-				// check if converged
-				if ((std::abs(F_G / Etot0) < resid_tol) && (std::abs(((c / chat) * F_R) / Etot0) < resid_tol)) {
+				// check relative convergence of the residuals
+				if ((std::abs(F_G / Etot0) < resid_tol) && ((c / chat) * sum(abs(F_D)) / Etot0 < resid_tol)) {
 					break;
 				}
 
+				const double c_v = quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas, massScalars); // Egas = c_v * T
+
+				const auto dfourPiB_dTgas = chat * ComputeThermalRadiationTempDerivative(T_gas, radBoundaries_g_copy);
+				AMREX_ASSERT(!dfourPiB_dTgas.hasnan());
+
 				// compute Jacobian elements
-				const double c_v = quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas, massScalars);
+				// I assume (kappaPVec / kappaEVec) is constant here. This is usually a reasonable assumption. Note that this assumption only
+				// affects the convergence rate of the Newton-Raphson iteration and does not affect the converged solution at all.
+				dFG_dEgas = 1.0;
+				dFG_dD = (c / chat) * tau0;
+				dFR_dEgas = 1.0 / (chat * c_v) * (kappaPVec / kappaEVec) * dfourPiB_dTgas;
+				dFR_i_dD_i = -1.0 * (1.0 / tau + 1.0) * tau0;
 
-				drhs_dEgas = (rho * dt / c_v) * (kappa * dB_dTgas + dkappa_dTgas * (fourPiB - chat * Erad_guess));
-
-				// Update variables
-				dFG_dEgas = 1.0 + (c / chat) * drhs_dEgas;
-				dFG_dErad = dt * (-(rho * kappa) * c);
-				dFR_dEgas = -drhs_dEgas;
-				dFR_dErad = 1.0 + dt * ((rho * kappa) * chat);
-				eta = -dFR_dEgas / dFG_dEgas;
-				eta = (eta > 0.0) ? eta : 0.0;
-
-				deltaErad = -(F_R + eta * F_G) / (dFR_dErad + eta * dFG_dErad);
-				deltaEgas = -(F_G + dFG_dErad * deltaErad) / dFG_dEgas;
-
-				AMREX_ASSERT(!std::isnan(deltaErad));
+				// update variables
+				RadSystem<problem_t>::SolveLinearEqs(dFG_dEgas, dFG_dD, dFR_dEgas, dFR_i_dD_i, -F_G, -1. * F_D, deltaEgas, deltaD);
 				AMREX_ASSERT(!std::isnan(deltaEgas));
+				AMREX_ASSERT(!deltaD.hasnan());
 
 				Egas_guess += deltaEgas;
-				Erad_guess += deltaErad;
+				D += deltaD;
 
+				// check relative and absolute convergence of E_r
+				// if (std::abs(deltaEgas / Egas_guess) < 1e-7) {
+				// 	break;
+				// }
 			} // END NEWTON-RAPHSON LOOP
 
 #if 0
@@ -1066,6 +1230,60 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		consNew(i, j, k, x2GasMomentum_index) += dMomentum[1];
 		consNew(i, j, k, x3GasMomentum_index) += dMomentum[2];
 
+		for (int g = 0; g < nGroups_; ++g) {
+
+			Frad_t0[0] = consPrev(i, j, k, x1RadFlux_index + numRadVars_ * g);
+			Frad_t0[1] = consPrev(i, j, k, x2RadFlux_index + numRadVars_ * g);
+			Frad_t0[2] = consPrev(i, j, k, x3RadFlux_index + numRadVars_ * g);
+
+			if constexpr ((compute_v_over_c_terms_) && (compute_G_last_two_terms) && (gamma_ != 1.0)) {
+				auto erad = EradVec_guess[g];
+				auto Fx = Frad_t0[0];
+				auto Fy = Frad_t0[1];
+				auto Fz = Frad_t0[2];
+				auto fx = Fx / (c_light_ * erad);
+				auto fy = Fy / (c_light_ * erad);
+				auto fz = Fz / (c_light_ * erad);
+
+				auto Tedd = ComputeEddingtonTensor(fx, fy, fz);
+
+				// loop over spatial dimensions
+				for (int n = 0; n < 3; ++n) {
+					double lastTwoTerms = gasMtm[n] * kappaPVec[g] * (realFourPiB[g] / c - erad) * chat;
+					// loop over the second rank of the radiation pressure tensor
+					for (int z = 0; z < 3; ++z) {
+						lastTwoTerms += chat * kappaFVec[g] * gasMtm[z] * Tedd[n][z] * erad;
+					}
+					lastTwoTerms += chat * kappaFVec[g] * gasMtm[n] * erad;
+					Frad_t1[n] = (Frad_t0[n] + (dt * lastTwoTerms)) / (1.0 + rho * kappaFVec[g] * chat * dt);
+
+					// Compute conservative gas momentum update
+					dMomentum[n] += -(Frad_t1[n] - Frad_t0[n]) / (c * chat);
+				}
+			} else {
+				for (int n = 0; n < 3; ++n) {
+					Frad_t1[n] = Frad_t0[n] / (1.0 + rho * kappaFVec[g] * chat * dt);
+					// Compute conservative gas momentum update
+					dMomentum[n] += -(Frad_t1[n] - Frad_t0[n]) / (c * chat);
+				}
+			}
+
+			// update radiation flux on consNew at current group
+			consNew(i, j, k, x1RadFlux_index + numRadVars_ * g) = Frad_t1[0];
+			consNew(i, j, k, x2RadFlux_index + numRadVars_ * g) = Frad_t1[1];
+			consNew(i, j, k, x3RadFlux_index + numRadVars_ * g) = Frad_t1[2];
+		}
+
+		amrex::Real x1GasMom1 = consNew(i, j, k, x1GasMomentum_index) + dMomentum[0];
+		amrex::Real x2GasMom1 = consNew(i, j, k, x2GasMomentum_index) + dMomentum[1];
+		amrex::Real x3GasMom1 = consNew(i, j, k, x3GasMomentum_index) + dMomentum[2];
+
+		// compute the gas momentum after adding the current group's momentum
+		consNew(i, j, k, x1GasMomentum_index) += dMomentum[0] * gas_update_factor;
+		consNew(i, j, k, x2GasMomentum_index) += dMomentum[1] * gas_update_factor;
+		consNew(i, j, k, x3GasMomentum_index) += dMomentum[2] * gas_update_factor;
+
+		// update gas momentum from radiation momentum of the current group
 		if constexpr (gamma_ != 1.0) {
 			amrex::Real x1GasMom1 = consNew(i, j, k, x1GasMomentum_index);
 			amrex::Real x2GasMom1 = consNew(i, j, k, x2GasMomentum_index);

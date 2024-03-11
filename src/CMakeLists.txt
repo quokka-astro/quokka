@@ -172,6 +172,7 @@ add_subdirectory(RadhydroShockCGS)
 add_subdirectory(RadhydroShockMultigroup)
 add_subdirectory(RadhydroUniformAdvecting)
 add_subdirectory(RadhydroPulse)
+add_subdirectory(RadhydroPulseGrey)
 add_subdirectory(RadhydroPulseMG)
 
 add_subdirectory(BinaryOrbitCIC)
