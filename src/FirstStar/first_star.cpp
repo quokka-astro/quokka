@@ -14,7 +14,9 @@ namespace fs = std::filesystem;
 struct TheProblem {
 };
 
-constexpr const char* datetime = __DATE__ " " __TIME__;
+// constexpr const char* subfolder = __DATE__ " " __TIME__;
+constexpr const char* subfolder = "figures";
+bool test_passes = false; // if one of the energy checks fails, set to false
 
 // model 1: 1/(1 + n^s) + 1/(1 + n1^s) * (n / n1)^(gamma - 1)
 constexpr int model = 1;
@@ -205,8 +207,65 @@ template <> void RadhydroSimulation<TheProblem>::setInitialConditionsOnGrid(quok
 	});
 }
 
-template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep()
+template <> void RadhydroSimulation<TheProblem>::computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons)
 {
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = geom[0].CellSizeArray();
+	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
+
+	// check conservation of total energy
+	amrex::Real const Egas0 = initSumCons[RadSystem<TheProblem>::gasEnergy_index];
+	amrex::Real const Egas = state_new_cc_[0].sum(RadSystem<TheProblem>::gasEnergy_index) * vol;
+
+	// compute kinetic energy
+	amrex::MultiFab Ekin_mf(boxArray(0), DistributionMap(0), 1, 0);
+	for (amrex::MFIter iter(state_new_cc_[0]); iter.isValid(); ++iter) {
+		const amrex::Box &indexRange = iter.validbox();
+		auto const &state = state_new_cc_[0].const_array(iter);
+		auto const &ekin = Ekin_mf.array(iter);
+		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+			// compute kinetic energy
+			Real rho = state(i, j, k, HydroSystem<TheProblem>::density_index);
+			Real px = state(i, j, k, HydroSystem<TheProblem>::x1Momentum_index);
+			Real py = state(i, j, k, HydroSystem<TheProblem>::x2Momentum_index);
+			Real pz = state(i, j, k, HydroSystem<TheProblem>::x3Momentum_index);
+			Real psq = px * px + py * py + pz * pz;
+			ekin(i, j, k) = psq / (2.0 * rho) * vol;
+		});
+	}
+	amrex::Real const Ekin = Ekin_mf.sum(0);
+
+	amrex::Real const abs_err = (Egas - Egas0);
+	amrex::Real const rel_err = abs_err / Egas0;
+
+	amrex::Print() << "\nInitial energy = " << Egas0 << std::endl;
+	amrex::Print() << "Final energy = " << Egas << std::endl;
+	amrex::Print() << "\tabsolute conservation error = " << abs_err << std::endl;
+	amrex::Print() << "\trelative conservation error = " << rel_err << std::endl;
+	amrex::Print() << std::endl;
+
+	bool E_test_passes = false;  // does total energy test pass?
+
+	if ((std::abs(rel_err) > 2.0e-13) || std::isnan(rel_err)) {
+		// note that 2.0e-15 is appropriate for a 256^3 grid
+		// it may need to be modified for coarser resolutions
+		amrex::Print() << "Energy not conserved to machine precision!\n";
+		E_test_passes = false;
+	} else {
+		amrex::Print() << "Energy conservation is OK.\n";
+		E_test_passes = true;
+	}
+
+	// if both tests pass, then overall pass
+  test_passes = E_test_passes;
+}
+
+template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep(const int step)
+{
+  const int skip_plot = 100;
+  if (step % skip_plot > 0) {
+    return;
+  }
+
 	// read output variables
 	// Extract the data at the final time at the center of the y-z plane (center=true) 
 	auto [position, values] = fextract(state_new_cc_[0], Geom(0), 0, 0.0, true);
@@ -246,7 +305,7 @@ template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep()
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", tNew_[0]));
 	matplotlibcpp::tight_layout();
 	// matplotlibcpp::save("./first-star-T.png");
-	matplotlibcpp::save(fmt::format("./{}/first-star-T-{:.4g}.png", datetime, tNew_[0]));
+	matplotlibcpp::save(fmt::format("./{}/first-star-T-s{:06d}-t{:.4g}.png", subfolder, step, tNew_[0]));
 
 	// plot internal energy
 	matplotlibcpp::clf();
@@ -259,7 +318,7 @@ template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep()
 	// matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", tNew_[0]));
 	matplotlibcpp::tight_layout();
-	matplotlibcpp::save(fmt::format("./{}/first-star-E-{:.4g}.png", datetime, tNew_[0]));
+	matplotlibcpp::save(fmt::format("./{}/first-star-E-s{:06d}-t{:.4g}.png", subfolder, step, tNew_[0]));
 
 	// plot pressure
 	matplotlibcpp::clf();
@@ -273,7 +332,7 @@ template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep()
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", tNew_[0]));
 	matplotlibcpp::tight_layout();
 	// matplotlibcpp::save("./first-star-P.png");
-	matplotlibcpp::save(fmt::format("./{}/first-star-P-{:.4g}.png", datetime, tNew_[0]));
+	matplotlibcpp::save(fmt::format("./{}/first-star-P-s{:06d}-t{:.4g}.png", subfolder, step, tNew_[0]));
 
 	// plot gas velocity profile
 	matplotlibcpp::clf();
@@ -287,7 +346,7 @@ template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep()
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", tNew_[0]));
 	matplotlibcpp::tight_layout();
 	// matplotlibcpp::save("./first-star-v.png");
-	matplotlibcpp::save(fmt::format("./{}/first-star-v-{:.4g}.png", datetime, tNew_[0]));
+	matplotlibcpp::save(fmt::format("./{}/first-star-v-s{:06d}-t{:.4g}.png", subfolder, step, tNew_[0]));
 
 	// plot density profile
 	matplotlibcpp::clf();
@@ -301,7 +360,7 @@ template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep()
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", tNew_[0]));
 	matplotlibcpp::tight_layout();
 	// matplotlibcpp::save("./first-star-rho.png");
-	matplotlibcpp::save(fmt::format("./{}/first-star-rho-{:.4g}.png", datetime, tNew_[0]));
+	matplotlibcpp::save(fmt::format("./{}/first-star-rho-s{:06d}-t{:.4g}.png", subfolder, step, tNew_[0]));
 #endif
 
 }
@@ -313,6 +372,7 @@ auto problem_main() -> int
 
 	const double max_dt = 1e0;
 
+#if 1
 	// Boundary conditions
 	const int ncomp_cc = Physics_Indices<TheProblem>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
@@ -324,6 +384,39 @@ auto problem_main() -> int
 			BCs_cc[n].setHi(i, amrex::BCType::foextrap);
 		}
 	}
+#else
+	auto isNormalComp = [=](int n, int dim) {
+		if ((n == HydroSystem<TheProblem>::x1Momentum_index) && (dim == 0)) {
+			return true;
+		}
+		if ((n == HydroSystem<TheProblem>::x2Momentum_index) && (dim == 1)) {
+			return true;
+		}
+		if ((n == HydroSystem<TheProblem>::x3Momentum_index) && (dim == 2)) {
+			return true;
+		}
+		return false;
+	};
+
+	const int ncomp_cc = Physics_Indices<TheProblem>::nvarTotal_cc;
+	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
+	for (int n = 0; n < ncomp_cc; ++n) {
+		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+			if constexpr (simulate_full_box) { // periodic boundaries
+				BCs_cc[n].setLo(i, amrex::BCType::int_dir);
+				BCs_cc[n].setHi(i, amrex::BCType::int_dir);
+			} else { // octant symmetry
+				if (isNormalComp(n, i)) {
+					BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);
+					BCs_cc[n].setHi(i, amrex::BCType::reflect_odd);
+				} else {
+					BCs_cc[n].setLo(i, amrex::BCType::reflect_even);
+					BCs_cc[n].setHi(i, amrex::BCType::reflect_even);
+				}
+			}
+		}
+	}
+#endif
 
 	// Problem initialization
 	RadhydroSimulation<TheProblem> sim(BCs_cc);
@@ -337,7 +430,7 @@ auto problem_main() -> int
 	sim.setInitialConditions();
 
 	// Check if the directory already exists
-	const std::string directory_name = datetime;
+	const std::string directory_name = subfolder;
 	if (fs::exists(directory_name)) {
 		std::cout << "Directory already exists." << std::endl;
 	} else {
@@ -450,6 +543,11 @@ auto problem_main() -> int
 	sim.evolve();
 
 	// Cleanup and exit
-	const int status = 0;
+	int status = 1;
+	if (test_passes) {
+		status = 0;
+	} else {
+		status = 1;
+	}
 	return status;
 }
