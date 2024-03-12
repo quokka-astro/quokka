@@ -1,3 +1,4 @@
+
 //==============================================================================
 // TwoMomentRad - a radiation transport library for patch-based AMR codes
 // Copyright 2020 Benjamin Wibking.
@@ -118,15 +119,6 @@ void RadhydroSimulation<NewProblem>::setInitialConditionsOnGrid(quokka::grid gri
 			amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
       amrex::Real const z = prob_lo[2] + (k + amrex::Real(0.5)) * dx[2];
 
-      double z_star = 245.0 * pc;
-      double Sigma_star = 42.0 * Msun/pc/pc;
-      double rho_dm = 0.0064 * Msun/pc/pc/pc;
-      double R0     = 8.e3 * pc;
-
-      double sigma1 = 7. * kmps;
-      double sigma2 = 70. * kmps;
-      double rho01  = 2.85 * Const_mH;
-      double rho02  = 1.e-5 * 2.85 * Const_mH;
 
       /*Calculate DM Potential*/
       double prefac;
@@ -355,11 +347,7 @@ HydroSystem<NewProblem>::GetGradFixedPotential(amrex::GpuArray<amrex::Real, AMRE
  
      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> grad_potential;
 
-      double z_star = 245.0 * pc;
-      double Sigma_star = 42.0 * Msun/pc/pc;
-      double rho_dm = 0.0064 * Msun/pc/pc/pc;
-      double R0     = 8.e3 * pc;
-      
+    
       double x = posvec[0];
      
      grad_potential[0] =  0.0;
@@ -515,12 +503,9 @@ auto problem_main() -> int {
    
   // Problem initialization
   RadhydroSimulation<NewProblem> sim(BCs_cc);
-   amrex::ParmParse const pp("metprob");
+
   // initial condition parameters
-  pp.query("pressure0", ::P_outflow); // initial temperature [K]
-
-  amrex::Print() << "Outflow pressure at the edge of the box is " << ::P_outflow << " erg/cc.\n";
-
+  
   sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
   sim.cflNumber_ = 0.25;         // *must* be less than 1/3 in 3D!
   
