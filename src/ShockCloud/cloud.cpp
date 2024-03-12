@@ -166,7 +166,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<ShockCloud>::setCustomBou
 		Real const rho = rho_wind;
 		Real const vx = v_wind - delta_vx;
 		Real const Eint = quokka::EOS<ShockCloud>::ComputeEintFromPres(rho, P_wind);
-		Real const T = quokka::EOS<ShockCloud>::ComputeTgasFromEint(rho, Eint);
+		Real const T_wind = quokka::EOS<ShockCloud>::ComputeTgasFromEint(rho, Eint);
 		GpuArray<amrex::Real, HydroSystem<ShockCloud>::nscalars_> scalars{0, 0, rho};
 
 		if (time < 0.1 * ::shock_crossing_time) {
@@ -175,7 +175,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<ShockCloud>::setCustomBou
 			Real const ymom = 0;
 			Real const zmom = 0;
 			Real const Egas = RadSystem<ShockCloud>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
-
 			consVar(i, j, k, RadSystem<ShockCloud>::gasDensity_index) = rho;
 			consVar(i, j, k, RadSystem<ShockCloud>::x1GasMomentum_index) = xmom;
 			consVar(i, j, k, RadSystem<ShockCloud>::x2GasMomentum_index) = ymom;
@@ -185,25 +184,31 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<ShockCloud>::setCustomBou
 			consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index) = scalars[0];
 			consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index + 1) = scalars[1]; // cloud partial density
 			consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index + 2) = scalars[2]; // non-cloud partial density
-		} else if (time < 1.2 * ::shock_crossing_time) {
-			NSCBC::setInflowX1Lower<ShockCloud>(iv, consVar, geom, T, vx, 0, 0, scalars);
-		} else { // time >= 1.2 * shock_crossing_time
-			NSCBC::setInflowX1LowerLowOrder<ShockCloud>(iv, consVar, geom, T, vx, 0, 0, scalars);
+		} else {
+			// Inflow boundary condition
+			NSCBC::setInflowX1LowerLowOrder<ShockCloud>(iv, consVar, geom, T_wind, vx, 0, 0, scalars);
 		}
 	} else if (i > ihi) {
-		Real const t0 = ::shock_crossing_time;
-		Real const t1 = 1.2 * ::shock_crossing_time;
 		// x1 upper boundary -- NSCBC outflow
-		if (time < t0) {
+		const Real rho_bdry_hi = consVar(ihi, j, k, RadSystem<ShockCloud>::gasDensity_index);
+		const Real x1mom_bdry_hi = consVar(ihi, j, k, RadSystem<ShockCloud>::x1GasMomentum_index);
+		const Real vx_bdry_hi = x1mom_bdry_hi / rho_bdry_hi;
+
+		if (time < ::shock_crossing_time) {
 			NSCBC::setOutflowBoundary<ShockCloud, FluxDir::X1, NSCBC::BoundarySide::Upper>(iv, consVar, geom, ::P0);
-		} else if (time < t1) {
-			// shock has passed, so we set the outflow pressure to P_wind
-			const Real P_ramp = P_wind; // ::P0 + (P_wind - ::P0) * ((time - t0) / (t1 - t0));
-			NSCBC::setOutflowBoundary<ShockCloud, FluxDir::X1, NSCBC::BoundarySide::Upper>(iv, consVar, geom, P_ramp);
-		} else { // time >= t1
+		} else {
 			// shock has passed, so we use P_wind.
 			// also, switch to "low order" boundary conditions (do not decompose characteristics)
 			NSCBC::setOutflowBoundaryLowOrder<ShockCloud, FluxDir::X1, NSCBC::BoundarySide::Upper>(iv, consVar, geom, P_wind);
+
+			// If vx_bdry_hi < 0, don't let the density fall below rho_wind!
+			// Otherwise, very hot gas will flow into the domain!!
+			if (vx_bdry_hi < 0.) {
+				const Real rho_outflow = consVar(i, j, k, RadSystem<ShockCloud>::gasDensity_index);
+				if (rho_outflow < rho_wind) {
+					consVar(i, j, k, RadSystem<ShockCloud>::gasDensity_index) = rho_wind;
+				}
+			}
 		}
 	}
 }
@@ -448,7 +453,7 @@ template <> void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(int lev, std:
 			output[bx](i, j, k, ncomp) = std::sqrt(v1 * v1 + v2 * v2 + v3 * v3) / 1.0e5; // km/s
 		});
 	}
-	amrex::Gpu::streamSynchronize();
+	amrex::Gpu::streamSynchronizeAll();
 }
 
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto ComputeCellTemp(int i, int j, int k, amrex::Array4<const Real> const &state, amrex::Real gamma,
