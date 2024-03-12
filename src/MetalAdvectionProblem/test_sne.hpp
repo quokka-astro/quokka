@@ -30,12 +30,14 @@ constexpr double  probSN_prefac   = ks_sigma_sfr/(hscale*sqrtpi);
 constexpr double  Lrefine  =         1.0 * kpc; // K
 constexpr double z_star = 245.0 * pc;
 constexpr double Sigma_star = 42.0 * Msun/pc/pc;
+constexpr double Sigma_gas = 12.0 * Msun/pc/pc;
 constexpr double rho_dm = 0.0064 * Msun/pc/pc/pc;
 constexpr double R0     = 8.e3 * pc;
 constexpr double sigma1 = 7. * kmps;
 constexpr double sigma2 = 70. * kmps;
 constexpr double rho01  = 2.85 * Const_mH;
 constexpr double rho02  = 1.e-5 * 2.85 * Const_mH;
+
 // internal headers
 #include "hydro_system.hpp"
 #include "interpolate.hpp"
