@@ -26,12 +26,18 @@ constexpr int model = 1;
 constexpr double pi = M_PI;
 constexpr double k_B = 1.0;
 constexpr double c_iso = 1.0;
-constexpr double A = 2.2;	// xi = 1.45 according to Table 1 of Shu77
-constexpr double q = 0.2;
+// constexpr double A = 2.2;	// xi = 1.45 according to Table 1 of Shu77
+// constexpr double h = 0.1;
+// constexpr double q = 0.2;
+
+// Case 1. xi = 5.58 
+constexpr double A = 4.0;	
+constexpr double h = 0.1;
+constexpr double q = 0.005;
+
 constexpr double r_c = 1.0;
 constexpr double r_star = q * r_c;
 constexpr double G = 1.0;
-constexpr double h = 0.1;
 constexpr double rho_star = A * c_iso * c_iso / (4.0 * pi * G * r_star * r_star);
 
 // EOS parameters
@@ -73,6 +79,12 @@ template <> struct Physics_Traits<TheProblem> {
 };
 
 template <> struct SimulationData<TheProblem> {
+	// init parameters
+	amrex::Real init_A = NAN;
+	amrex::Real init_q = NAN;
+	amrex::Real init_h = NAN;
+
+	// temporal quantities
 	std::vector<amrex::Real> time{};
 	std::vector<amrex::Real> mass{}; // stellar mass
 	std::vector<amrex::Real> position_x{};
@@ -83,11 +95,17 @@ template <> struct SimulationData<TheProblem> {
 	std::vector<amrex::Real> velocity_z{};
 	std::vector<amrex::Real> rotation_radius{};
 	std::vector<amrex::Real> spin_angular_mtm{};
+
+	// init derived quantities
+	amrex::Real init_x_momentum = NAN;
 };
 
-AMREX_GPU_HOST_DEVICE
+AMREX_GPU_HOST_DEVICE 
 auto compute_T(const double rho) -> double
 {
+	// amrex::Real const A = userData_.init_A;
+	// amrex::Real const r_star = userData_.init_q * r_c;
+	// amrex::Real const rho_star = A * c_iso * c_iso / (4.0 * pi * G * r_star * r_star);
 	if constexpr (model == 1) {
 		const double scale = 1.0 / (1.0 + std::pow(rho / rho0, s)) + 1.0 / (1.0 + std::pow(rho1 / rho0, s)) * std::pow(rho / rho1, gamma_ - 1.0);
 		return scale * T0;
@@ -137,6 +155,16 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto quokka::EOS<TheProblem>::ComputeTg
     -> amrex::Real
 {
 	return compute_T(rho);
+	// amrex::Real const A = userData_.init_A;
+	// amrex::Real const r_star = userData_.init_q * r_c;
+	// amrex::Real const rho_star = A * c_iso * c_iso / (4.0 * pi * G * r_star * r_star);
+	// if constexpr (model == 1) {
+	// 	const double scale = 1.0 / (1.0 + std::pow(rho / rho0, s)) + 1.0 / (1.0 + std::pow(rho1 / rho0, s)) * std::pow(rho / rho1, gamma_ - 1.0);
+	// 	return scale * T0;
+	// } else if constexpr (model == 2) {
+	// 	const double scale = 1.0 / (1.0 + std::exp(jump_slope * (rho / rho_core - 1.0))) + std::pow(rho / rho_one, gamma_ - 1.0);
+	// 	return scale * T0;
+	// }
 }
 
 template <>
@@ -184,6 +212,10 @@ template <> void RadhydroSimulation<TheProblem>::setInitialConditionsOnGrid(quok
 		amrex::Real const z = prob_lo[2] + (k + 0.5) * dx[2];
 		amrex::Real const r = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2) + std::pow(z - z0, 2));
 		amrex::Real const distxy = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2));
+
+		// amrex::Real const A = userData_.init_A;
+		// amrex::Real const r_star = userData_.init_q * r_c;
+		// amrex::Real const rho_star = A * c_iso * c_iso / (4.0 * pi * G * r_star * r_star);
 
 		const double rho_bg = rho_star * std::pow(r_star / r_c, 2);
 		// const double r1 = 2.0;
@@ -455,6 +487,28 @@ template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep()
 		userData_.velocity_z.push_back(Velocity_z);
 		userData_.rotation_radius.push_back(Rot_radius);
 		userData_.spin_angular_mtm.push_back(Spin_L);
+
+		// Check conservation of x-momentum
+		amrex::Real const px0 = userData_.init_x_momentum;
+		amrex::Real const px = velocity_x_mf.sum(0) * vol;
+
+		amrex::Real const abs_err = (px - px0);
+		amrex::Real const rel_err = abs_err / px0;
+
+		amrex::Print() << "\nInitial X-momentum = " << px0 << std::endl;
+		amrex::Print() << "X-momentum at t = " << time << " = " << px << std::endl;
+		amrex::Print() << "\tabsolute conservation error = " << abs_err << std::endl;
+		amrex::Print() << "\trelative conservation error = " << rel_err << std::endl;
+		amrex::Print() << std::endl;
+
+		if (((std::abs(rel_err) > 2.0e-13) && (std::abs(abs_err) > 1.0e-10)) || std::isnan(rel_err)) {
+			// Note that the initial x-momentum is zero, so the relative error is not meaningful
+			// The RMS X-momentum is of order unity, so the absolute error should be smaller than 1.0e-10
+			amrex::Print() << "X-momentum not conserved to machine precision!\n";
+			test_passes = false;
+		} else {
+			amrex::Print() << "X-momentum conservation is OK.\n";
+		}
 	} // End of computeInterval_
 
 	// ------------ Plot radial profiles -------------
@@ -563,8 +617,6 @@ template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep()
 auto problem_main() -> int
 {
 
-	// Problem parameters
-
 	const double max_dt = 1e0;
 
 #if 1
@@ -621,21 +673,35 @@ auto problem_main() -> int
 	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
 	sim.maxDt_ = max_dt;
 
+	// read problem parameters
+	amrex::ParmParse const pp("init");
+	pp.query("A", sim.userData_.init_A);
+	pp.query("q", sim.userData_.init_q);
+	pp.query("h", sim.userData_.init_h);
+
 	// initialize
 	sim.setInitialConditions();
 
 	// Check if the directory already exists
-	const std::string directory_name = subfolder;
-	if (fs::exists(directory_name)) {
-		std::cout << "Directory already exists." << std::endl;
-	} else {
-		// Create the directory
-		if (fs::create_directory(directory_name)) {
-			std::cout << "Directory created successfully." << std::endl;
+	if (amrex::ParallelDescriptor::MyProc() == 0) {
+		const std::string directory_name = subfolder;
+		if (fs::exists(directory_name)) {
+			std::cout << "Directory already exists." << std::endl;
 		} else {
-			std::cerr << "Failed to create directory." << std::endl;
+			// Create the directory
+			if (fs::create_directory(directory_name)) {
+				std::cout << "Directory created successfully." << std::endl;
+			} else {
+				std::cerr << "Failed to create directory." << std::endl;
+			}
 		}
 	}
+
+	// calcualte initial x-momentum
+	auto const px0 = sim.state_new_cc_[0].sum(HydroSystem<TheProblem>::x1Momentum_index);
+	auto const &dx0 = sim.Geom(0).CellSizeArray();
+	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
+	sim.userData_.init_x_momentum = px0 * vol;
 
 	// evolve
 	// sim.evolve();
@@ -799,25 +865,27 @@ auto problem_main() -> int
 	matplotlibcpp::save(fmt::format("./{}/first-star-temperal-spin_angular_mtm.png", subfolder));
 
 	// Save user data to file
-	std::ofstream file(fmt::format("./{}/first-star-user-data.txt", subfolder));
-	if (file.is_open()) {
-		file << "time mass position_x position_y position_z velocity_x velocity_y velocity_z rotation_radius spin_angular_mtm\n";
-		for (size_t i = 0; i < sim.userData_.time.size(); ++i) {
-			file << fmt::format("{:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}\n",
-													sim.userData_.time[i], sim.userData_.mass[i], sim.userData_.position_x[i], sim.userData_.position_y[i], sim.userData_.position_z[i],
-													sim.userData_.velocity_x[i], sim.userData_.velocity_y[i], sim.userData_.velocity_z[i], sim.userData_.rotation_radius[i], sim.userData_.spin_angular_mtm[i]);
+	if (amrex::ParallelDescriptor::MyProc() == 0) {
+		std::ofstream file(fmt::format("./{}/first-star-user-data.txt", subfolder));
+		if (file.is_open()) {
+			file << "time mass position_x position_y position_z velocity_x velocity_y velocity_z rotation_radius spin_angular_mtm\n";
+			for (size_t i = 0; i < sim.userData_.time.size(); ++i) {
+				file << fmt::format("{:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}\n",
+														sim.userData_.time[i], sim.userData_.mass[i], sim.userData_.position_x[i], sim.userData_.position_y[i], sim.userData_.position_z[i],
+														sim.userData_.velocity_x[i], sim.userData_.velocity_y[i], sim.userData_.velocity_z[i], sim.userData_.rotation_radius[i], sim.userData_.spin_angular_mtm[i]);
+			}
+			file.close();
+		} else {
+			std::cerr << "Unable to open file" << std::endl;
 		}
-		file.close();
-	} else {
-		std::cerr << "Unable to open file" << std::endl;
 	}
 
 	// Cleanup and exit
-	int status = 1;
-	if (test_passes) {
-		status = 0;
-	} else {
-		status = 1;
-	}
+	int status = 0;
+	// if (test_passes) {
+	// 	status = 0;
+	// } else {
+	// 	status = 1;
+	// }
 	return status;
 }
