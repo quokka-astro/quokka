@@ -804,6 +804,7 @@ auto problem_main() -> int
 	sim.evolve();
 
 	// Plot user data
+#ifdef HAVE_PYTHON
 	// Plot mass
 	matplotlibcpp::clf();
 	std::map<std::string, std::string> mass_args;
@@ -863,6 +864,7 @@ auto problem_main() -> int
 	// matplotlibcpp::legend();
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save(fmt::format("./{}/first-star-temperal-spin_angular_mtm.png", subfolder));
+#endif
 
 	// Save user data to file
 	if (amrex::ParallelDescriptor::MyProc() == 0) {
