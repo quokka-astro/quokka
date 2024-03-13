@@ -36,7 +36,7 @@ namespace quokka::cooling
 constexpr double cloudy_H_mass_fraction = 1. / (1. + 0.1 * 3.971);
 constexpr double X = cloudy_H_mass_fraction;
 constexpr double Zbg = 1.; //background metallicity in units of Zsolar
-constexpr double Z = Zbg * 0.02; // metal fraction by mass
+constexpr double Z  =  0.02; // metal fraction by mass
 constexpr double Y = 1. - X - Z;
 constexpr double mean_metals_A = 16.; // mean atomic weight of metals
 
