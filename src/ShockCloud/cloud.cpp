@@ -170,7 +170,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<ShockCloud>::setCustomBou
 		GpuArray<amrex::Real, HydroSystem<ShockCloud>::nscalars_> scalars{0, 0, rho};
 
 		if (time < 0.1 * ::shock_crossing_time) {
-			// Dirichlet/shock boundary condition
+			// Shock boundary condition [all primitive variables specified]
 			Real const xmom = rho_wind * vx;
 			Real const ymom = 0;
 			Real const zmom = 0;
@@ -185,31 +185,27 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<ShockCloud>::setCustomBou
 			consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index + 1) = scalars[1]; // cloud partial density
 			consVar(i, j, k, RadSystem<ShockCloud>::scalar0_index + 2) = scalars[2]; // non-cloud partial density
 		} else {
-			// Inflow boundary condition
+			// Subsonic inflow boundary condition [all *except one* primitive variable specified]
 			NSCBC::setInflowX1LowerLowOrder<ShockCloud>(iv, consVar, geom, T_wind, vx, 0, 0, scalars);
 		}
 	} else if (i > ihi) {
-		// x1 upper boundary -- extrapolate *or* NSCBC outflow
+		// x1 upper boundary -- NSCBC subsonic outflow
+		// (For this boundary condition, we must specify the pressure at the boundary.)
 		const Real rho_bdry_hi = consVar(ihi, j, k, RadSystem<ShockCloud>::gasDensity_index);
 		const Real x1mom_bdry_hi = consVar(ihi, j, k, RadSystem<ShockCloud>::x1GasMomentum_index);
 		const Real vx_bdry_hi = x1mom_bdry_hi / rho_bdry_hi;
 
 		if (time < 1.1 * ::shock_crossing_time) {
-			// naive extrapolating boundary condition
-			// (this is needed to allow the shock to exit without making the reflection worse)
-			NSCBC::setExtrapolateBoundaryLowOrder<ShockCloud, FluxDir::X1, NSCBC::BoundarySide::Upper>(iv, consVar, geom);
+			// before the shock hits the boundary, set the boundary pressure to the background pressure P0.
+			NSCBC::setOutflowBoundaryLowOrder<ShockCloud, FluxDir::X1, NSCBC::BoundarySide::Upper>(iv, consVar, geom, ::P0);
 		} else {
-			// shock has passed, so we use P_wind.
-			// also, switch to "low order" boundary conditions (do not decompose characteristics)
+			// shock has passed, so we set the boundary pressure to the wind pressure P_wind.
 			NSCBC::setOutflowBoundaryLowOrder<ShockCloud, FluxDir::X1, NSCBC::BoundarySide::Upper>(iv, consVar, geom, P_wind);
 
-			// If vx_bdry_hi < 0, don't let the density fall below rho_wind!
-			// Otherwise, very hot gas will flow into the domain!!
+			// If vx_bdry_hi < 0, fix the density to rho_wind.
+			// (Otherwise, either very hot gas *or* very cold gas will flow into the domain.)
 			if (vx_bdry_hi < 0.) {
-				const Real rho_outflow = consVar(i, j, k, RadSystem<ShockCloud>::gasDensity_index);
-				if (rho_outflow < rho_wind) {
-					consVar(i, j, k, RadSystem<ShockCloud>::gasDensity_index) = rho_wind;
-				}
+				consVar(i, j, k, RadSystem<ShockCloud>::gasDensity_index) = rho_wind;
 			}
 		}
 	}
