@@ -3,10 +3,12 @@
 # *****************************************************************
 geometry.prob_lo     =  0.0 0.0 0.0
 geometry.prob_hi     =  4.0 4.0 4.0
-geometry.is_periodic =  1    1    1
+geometry.is_periodic =  0    0    0
 
-plotfile_interval = 100
-checkpoint_interval = 100
+max_timesteps = 1
+stop_time = 1.0
+plotfile_interval = 1
+checkpoint_interval = 1
 # restartfile = plt00004
 
 # *****************************************************************
@@ -23,11 +25,11 @@ amr.blocking_factor = 64     # grid size must be divisible by this
 amr.max_grid_size   = 64
 
 hydro.reconstruction_order = 3  # PPM
-max_timesteps = 1000
-stop_time = 10.0
+
+gravity.Gconst = 1.0    #gravitational constant
 
 cfl = 0.8
 
-do_reflux = 0
+do_reflux = 1
 do_subcycle = 0
 suppress_output = 0

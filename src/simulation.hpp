@@ -160,6 +160,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Long maxWalltime_ = 0;		    // default: no limit
 	int ascentInterval_ = -1;		    // -1 == no in-situ renders with Ascent
 	int plotfileInterval_ = -1;		    // -1 == no output
+	int computeInterval_ = 1;		    // -1 == no output
 	int projectionInterval_ = -1;		    // -1 == no output
 	int statisticsInterval_ = -1;		    // -1 == no output
 	amrex::Real plotTimeInterval_ = -1.0;	    // time interval for plt file
@@ -228,7 +229,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	virtual void setInitialConditionsOnGrid(quokka::grid grid_elem) = 0;
 	virtual void setInitialConditionsOnGridFaceVars(quokka::grid grid_elem) = 0;
 	virtual void createInitialParticles() = 0;
-	virtual void computeAfterTimestep(int step) = 0;
+	virtual void computeAfterTimestep() = 0;
 	virtual void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) = 0;
 	virtual void fillPoissonRhsAtLevel(amrex::MultiFab &rhs, int lev) = 0;
 	virtual void applyPoissonGravityAtLevel(amrex::MultiFab const &phi, int lev, amrex::Real dt) = 0;
@@ -556,6 +557,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Default output interval
 	pp.query("plotfile_interval", plotfileInterval_);
 
+	// Default figure interval
+	pp.query("compute_interval", computeInterval_);
+
 	// Default projection interval
 	pp.query("projection_interval", projectionInterval_);
 
@@ -840,16 +844,15 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 	getWalltime(); // initialize start_time
 
+	computeAfterTimestep();
+
 	// Main time loop
-  int step = istep[0];
-	for (; step < maxTimesteps_ && cur_time < stopTime_; ++step) {
+	for (int step = istep[0]; step < maxTimesteps_ && cur_time < stopTime_; ++step) {
 
 		if (suppress_output == 0) {
 			amrex::Print() << "\nCoarse STEP " << step + 1 << " at t = " << cur_time << " (" << (cur_time / stopTime_) * 100. << "%) starts ..."
 				       << '\n';
 		}
-
-		computeAfterTimestep(step);
 
 		amrex::ParallelDescriptor::Barrier(); // synchronize all MPI ranks
 		computeTimestep();
@@ -875,6 +878,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 		cur_time += dt_[0];
 		++cycleCount_;
+		computeAfterTimestep();
 
 		// sync up time (to avoid roundoff error)
 		for (lev = 0; lev <= finest_level; ++lev) {
@@ -930,8 +934,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 			break;
 		}
 	}
-
-  computeAfterTimestep(step);
 
 	amrex::Real elapsed_sec = getWalltime();
 

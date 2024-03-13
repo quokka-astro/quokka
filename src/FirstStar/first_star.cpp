@@ -4,6 +4,7 @@
 
 #include "first_star.hpp"
 #include "AMReX_BC_TYPES.H"
+#include "AMReX_MultiFab.H"
 #include "AMReX_Print.H"
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
@@ -16,7 +17,7 @@ struct TheProblem {
 
 // constexpr const char* subfolder = __DATE__ " " __TIME__;
 constexpr const char* subfolder = "figures";
-bool test_passes = false; // if one of the energy checks fails, set to false
+bool test_passes = true; // if one of the energy checks fails, set to false
 
 // model 1: 1/(1 + n^s) + 1/(1 + n1^s) * (n / n1)^(gamma - 1)
 constexpr int model = 1;
@@ -68,6 +69,19 @@ template <> struct Physics_Traits<TheProblem> {
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
 	static constexpr int nGroups = 1;
+};
+
+template <> struct SimulationData<TheProblem> {
+	std::vector<amrex::Real> time{};
+	std::vector<amrex::Real> mass{}; // stellar mass
+	std::vector<amrex::Real> position_x{};
+	std::vector<amrex::Real> position_y{};
+	std::vector<amrex::Real> position_z{};
+	std::vector<amrex::Real> velocity_x{};
+	std::vector<amrex::Real> velocity_y{};
+	std::vector<amrex::Real> velocity_z{};
+	std::vector<amrex::Real> rotation_radius{};
+	std::vector<amrex::Real> spin_angular_mtm{};
 };
 
 AMREX_GPU_HOST_DEVICE
@@ -212,59 +226,232 @@ template <> void RadhydroSimulation<TheProblem>::computeAfterEvolve(amrex::Vecto
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = geom[0].CellSizeArray();
 	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
 
-	// check conservation of total energy
+	// check conservation of total energy: It should not be conserved because of the self-gravity
 	amrex::Real const Egas0 = initSumCons[RadSystem<TheProblem>::gasEnergy_index];
 	amrex::Real const Egas = state_new_cc_[0].sum(RadSystem<TheProblem>::gasEnergy_index) * vol;
 
-	// compute kinetic energy
-	amrex::MultiFab Ekin_mf(boxArray(0), DistributionMap(0), 1, 0);
-	for (amrex::MFIter iter(state_new_cc_[0]); iter.isValid(); ++iter) {
-		const amrex::Box &indexRange = iter.validbox();
-		auto const &state = state_new_cc_[0].const_array(iter);
-		auto const &ekin = Ekin_mf.array(iter);
-		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-			// compute kinetic energy
-			Real rho = state(i, j, k, HydroSystem<TheProblem>::density_index);
-			Real px = state(i, j, k, HydroSystem<TheProblem>::x1Momentum_index);
-			Real py = state(i, j, k, HydroSystem<TheProblem>::x2Momentum_index);
-			Real pz = state(i, j, k, HydroSystem<TheProblem>::x3Momentum_index);
-			Real psq = px * px + py * py + pz * pz;
-			ekin(i, j, k) = psq / (2.0 * rho) * vol;
-		});
-	}
-	amrex::Real const Ekin = Ekin_mf.sum(0);
+	// check conservation of x-momentum
+	amrex::Real const px0 = initSumCons[RadSystem<TheProblem>::x1GasMomentum_index] * vol;
+	amrex::Real const py0 = initSumCons[RadSystem<TheProblem>::x2GasMomentum_index] * vol;
+	amrex::Real const pz0 = initSumCons[RadSystem<TheProblem>::x3GasMomentum_index] * vol;
+	amrex::Real const px = state_new_cc_[0].sum(RadSystem<TheProblem>::x1GasMomentum_index) * vol;
+	amrex::Real const py = state_new_cc_[0].sum(RadSystem<TheProblem>::x2GasMomentum_index) * vol;
+	amrex::Real const pz = state_new_cc_[0].sum(RadSystem<TheProblem>::x3GasMomentum_index) * vol;
 
-	amrex::Real const abs_err = (Egas - Egas0);
-	amrex::Real const rel_err = abs_err / Egas0;
+	// // compute kinetic energy
+	// amrex::MultiFab Ekin_mf(boxArray(0), DistributionMap(0), 1, 0);
+	// for (amrex::MFIter iter(state_new_cc_[0]); iter.isValid(); ++iter) {
+	// 	const amrex::Box &indexRange = iter.validbox();
+	// 	auto const &state = state_new_cc_[0].const_array(iter);
+	// 	auto const &ekin = Ekin_mf.array(iter);
+	// 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+	// 		// compute kinetic energy
+	// 		Real rho = state(i, j, k, HydroSystem<TheProblem>::density_index);
+	// 		Real px = state(i, j, k, HydroSystem<TheProblem>::x1Momentum_index);
+	// 		Real py = state(i, j, k, HydroSystem<TheProblem>::x2Momentum_index);
+	// 		Real pz = state(i, j, k, HydroSystem<TheProblem>::x3Momentum_index);
+	// 		Real psq = px * px + py * py + pz * pz;
+	// 		ekin(i, j, k) = psq / (2.0 * rho) * vol;
+	// 	});
+	// }
+	// amrex::Real const Ekin = Ekin_mf.sum(0);
 
-	amrex::Print() << "\nInitial energy = " << Egas0 << std::endl;
-	amrex::Print() << "Final energy = " << Egas << std::endl;
+	// amrex::Real const abs_err = (Egas - Egas0);
+	// amrex::Real const rel_err = abs_err / Egas0;
+
+	// amrex::Print() << "\nInitial energy = " << Egas0 << std::endl;
+	// amrex::Print() << "Final energy = " << Egas << std::endl;
+	// amrex::Print() << "\tabsolute conservation error = " << abs_err << std::endl;
+	// amrex::Print() << "\trelative conservation error = " << rel_err << std::endl;
+	// amrex::Print() << std::endl;
+
+	// bool E_test_passes = false;  // does total energy test pass?
+
+	// if ((std::abs(rel_err) > 2.0e-13) || std::isnan(rel_err)) {
+	// 	// note that 2.0e-15 is appropriate for a 256^3 grid
+	// 	// it may need to be modified for coarser resolutions
+	// 	amrex::Print() << "Energy not conserved to machine precision!\n";
+	// 	E_test_passes = false;
+	// } else {
+	// 	amrex::Print() << "Energy conservation is OK.\n";
+	// 	E_test_passes = true;
+	// }
+
+	bool p_test_passes = true;  // does x-momentum conserve?
+
+	// Check X-momentum conservation
+
+	amrex::Real const abs_err = (px - px0);
+	amrex::Real const rel_err = abs_err / px0;
+
+	amrex::Print() << "\nInitial X-momentum = " << px0 << std::endl;
+	amrex::Print() << "Final X-momentum = " << px << std::endl;
 	amrex::Print() << "\tabsolute conservation error = " << abs_err << std::endl;
 	amrex::Print() << "\trelative conservation error = " << rel_err << std::endl;
 	amrex::Print() << std::endl;
 
-	bool E_test_passes = false;  // does total energy test pass?
-
-	if ((std::abs(rel_err) > 2.0e-13) || std::isnan(rel_err)) {
-		// note that 2.0e-15 is appropriate for a 256^3 grid
-		// it may need to be modified for coarser resolutions
-		amrex::Print() << "Energy not conserved to machine precision!\n";
-		E_test_passes = false;
+	if (((std::abs(rel_err) > 2.0e-13) && (std::abs(abs_err) > 1.0e-10)) || std::isnan(rel_err)) {
+		// Note that the initial x-momentum is zero, so the relative error is not meaningful
+		// The RMS X-momentum is of order unity, so the absolute error should be smaller than 1.0e-10
+		amrex::Print() << "X-momentum not conserved to machine precision!\n";
+		p_test_passes = false;
 	} else {
-		amrex::Print() << "Energy conservation is OK.\n";
-		E_test_passes = true;
+		amrex::Print() << "X-momentum conservation is OK.\n";
+	}
+
+	// Check Y-momentum conservation
+
+	amrex::Real const abs_err_y = (py - py0);
+	amrex::Real const rel_err_y = abs_err_y / py0;
+
+	amrex::Print() << "\nInitial Y-momentum = " << py0 << std::endl;
+	amrex::Print() << "Final Y-momentum = " << py << std::endl;
+	amrex::Print() << "\tabsolute conservation error = " << abs_err_y << std::endl;
+	amrex::Print() << "\trelative conservation error = " << rel_err_y << std::endl;
+	amrex::Print() << std::endl;
+
+	if (((std::abs(rel_err_y) > 2.0e-13) && (std::abs(abs_err_y) > 1.0e-10)) || std::isnan(rel_err_y)) {
+		// Note that the initial y-momentum is zero, so the relative error is not meaningful
+		// The RMS y-momentum is of order unity, so the absolute error should be smaller than 1.0e-10
+		amrex::Print() << "Y-momentum not conserved to machine precision!\n";
+		p_test_passes = false;
+	} else {
+		amrex::Print() << "Y-momentum conservation is OK.\n";
+	}
+
+	// Check Z-momentum conservation
+
+	amrex::Real const abs_err_z = (pz - pz0);
+	amrex::Real const rel_err_z = abs_err_z / pz0;
+
+	amrex::Print() << "\nInitial Z-momentum = " << pz0 << std::endl;
+	amrex::Print() << "Final Z-momentum = " << pz << std::endl;
+	amrex::Print() << "\tabsolute conservation error = " << abs_err_z << std::endl;
+	amrex::Print() << "\trelative conservation error = " << rel_err_z << std::endl;
+	amrex::Print() << std::endl;
+
+	if (((std::abs(rel_err_z) > 2.0e-13) && (std::abs(abs_err_z) > 1.0e-10)) || std::isnan(rel_err_z)) {
+		// Note that the initial z-momentum is zero, so the relative error is not meaningful
+		// The RMS z-momentum is of order unity, so the absolute error should be smaller than 1.0e-10
+		amrex::Print() << "Z-momentum not conserved to machine precision!\n";
+		p_test_passes = false;
+	} else {
+		amrex::Print() << "Z-momentum conservation is OK.\n";
 	}
 
 	// if both tests pass, then overall pass
-  test_passes = E_test_passes;
+  test_passes = p_test_passes;
 }
 
 template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep(const int step)
 {
-  const int skip_plot = 100;
-  if (step % skip_plot > 0) {
-    return;
-  }
+	// static int step_ = 0;
+
+  // const int skip_plot = 1;
+  // if (step % skip_plot > 0) {
+  //   return;
+  // }
+
+	// compute SimulationData
+	auto const &dx = geom[0].CellSizeArray();
+	auto const prob_lo = geom[0].ProbLoArray();
+	amrex::Real const vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
+
+	amrex::MultiFab mass_mf(boxArray(0), DistributionMap(0), 1, 0);
+	amrex::MultiFab position_x_mf(boxArray(0), DistributionMap(0), 1, 0);
+	amrex::MultiFab position_y_mf(boxArray(0), DistributionMap(0), 1, 0);
+	amrex::MultiFab position_z_mf(boxArray(0), DistributionMap(0), 1, 0);
+	amrex::MultiFab velocity_x_mf(boxArray(0), DistributionMap(0), 1, 0);
+	amrex::MultiFab velocity_y_mf(boxArray(0), DistributionMap(0), 1, 0);
+	amrex::MultiFab velocity_z_mf(boxArray(0), DistributionMap(0), 1, 0);
+	amrex::MultiFab rot_radius_mf(boxArray(0), DistributionMap(0), 1, 0);
+	amrex::MultiFab spin_L_mf(boxArray(0), DistributionMap(0), 1, 0);
+
+	for (amrex::MFIter iter(state_new_cc_[0]); iter.isValid(); ++iter) {
+		const amrex::Box &indexRange = iter.validbox();
+		auto const &state = state_new_cc_[0].const_array(iter);
+		auto const &mass = mass_mf.array(iter);
+		auto const &position_x = position_x_mf.array(iter);
+		auto const &position_y = position_y_mf.array(iter);
+		auto const &position_z = position_z_mf.array(iter);
+		auto const &velocity_x = velocity_x_mf.array(iter);
+		auto const &velocity_y = velocity_y_mf.array(iter);
+		auto const &velocity_z = velocity_z_mf.array(iter);
+		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+			// compute mass
+			Real const rho = state(i, j, k, HydroSystem<TheProblem>::density_index);
+			if (rho > rho_star) {
+				Real const x = prob_lo[0] + (i + 0.5) * dx[0];
+				Real const y = prob_lo[1] + (j + 0.5) * dx[1];
+				Real const z = prob_lo[2] + (k + 0.5) * dx[2];
+				Real const px = state(i, j, k, HydroSystem<TheProblem>::x1Momentum_index);
+				Real const py = state(i, j, k, HydroSystem<TheProblem>::x2Momentum_index);
+				Real const pz = state(i, j, k, HydroSystem<TheProblem>::x3Momentum_index);
+				mass(i, j, k) = rho;
+				position_x(i, j, k) = x * rho;
+				position_y(i, j, k) = y * rho;
+				position_z(i, j, k) = z * rho;
+				velocity_x(i, j, k) = px;
+				velocity_y(i, j, k) = py;
+				velocity_z(i, j, k) = pz;
+			} else {
+				mass(i, j, k) = 0.0;
+				position_x(i, j, k) = 0.0;
+				position_y(i, j, k) = 0.0;
+				position_z(i, j, k) = 0.0;
+				velocity_x(i, j, k) = 0.0;
+				velocity_y(i, j, k) = 0.0;
+				velocity_z(i, j, k) = 0.0;
+			}
+		});
+	}
+
+	amrex::Real const time = tNew_[0];
+	amrex::Real const Mass = mass_mf.sum(0);
+	amrex::Real const Position_x = position_x_mf.sum(0) * vol / Mass;
+	amrex::Real const Position_y = position_y_mf.sum(0) * vol / Mass;
+	amrex::Real const Position_z = position_z_mf.sum(0) * vol / Mass;
+	amrex::Real const Velocity_x = velocity_x_mf.sum(0) * vol / Mass;
+	amrex::Real const Velocity_y = velocity_y_mf.sum(0) * vol / Mass;
+	amrex::Real const Velocity_z = velocity_z_mf.sum(0) * vol / Mass;
+
+	for (amrex::MFIter iter(state_new_cc_[0]); iter.isValid(); ++iter) {
+		const amrex::Box &indexRange = iter.validbox();
+		auto const &state = state_new_cc_[0].const_array(iter);
+		auto const &rot_radius = rot_radius_mf.array(iter);
+		auto const &spin_L = spin_L_mf.array(iter);
+		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+			// compute mass
+			Real const rho = state(i, j, k, HydroSystem<TheProblem>::density_index);
+			if (rho > rho_star) {
+				Real const x = prob_lo[0] + (i + 0.5) * dx[0];
+				Real const y = prob_lo[1] + (j + 0.5) * dx[1];
+				Real const px = state(i, j, k, HydroSystem<TheProblem>::x1Momentum_index);
+				Real const py = state(i, j, k, HydroSystem<TheProblem>::x2Momentum_index);
+				Real const distSqr = std::pow(x - Position_x, 2) + std::pow(y - Position_y, 2);
+				rot_radius(i, j, k) = distSqr * rho;
+				spin_L(i, j, k) = (x - Position_x) * py - (y - Position_y) * px;
+			} else {
+				rot_radius(i, j, k) = 0.0;
+				spin_L(i, j, k) = 0.0;
+			}
+		});
+	}
+
+	amrex::Real const Rot_radius = std::sqrt(rot_radius_mf.sum(0) * vol / Mass);
+	amrex::Real const Spin_L = spin_L_mf.sum(0) * vol / Mass;
+
+	// Write to userData_
+	userData_.time.push_back(time);
+	userData_.mass.push_back(Mass);
+	userData_.position_x.push_back(Position_x);
+	userData_.position_y.push_back(Position_y);
+	userData_.position_z.push_back(Position_z);
+	userData_.velocity_x.push_back(Velocity_x);
+	userData_.velocity_y.push_back(Velocity_y);
+	userData_.velocity_z.push_back(Velocity_z);
+	userData_.rotation_radius.push_back(Rot_radius);
+	userData_.spin_angular_mtm.push_back(Spin_L);
 
 	// read output variables
 	// Extract the data at the final time at the center of the y-z plane (center=true) 
