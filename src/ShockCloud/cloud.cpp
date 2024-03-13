@@ -189,13 +189,15 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<ShockCloud>::setCustomBou
 			NSCBC::setInflowX1LowerLowOrder<ShockCloud>(iv, consVar, geom, T_wind, vx, 0, 0, scalars);
 		}
 	} else if (i > ihi) {
-		// x1 upper boundary -- NSCBC outflow
+		// x1 upper boundary -- extrapolate *or* NSCBC outflow
 		const Real rho_bdry_hi = consVar(ihi, j, k, RadSystem<ShockCloud>::gasDensity_index);
 		const Real x1mom_bdry_hi = consVar(ihi, j, k, RadSystem<ShockCloud>::x1GasMomentum_index);
 		const Real vx_bdry_hi = x1mom_bdry_hi / rho_bdry_hi;
 
-		if (time < ::shock_crossing_time) {
-			NSCBC::setOutflowBoundary<ShockCloud, FluxDir::X1, NSCBC::BoundarySide::Upper>(iv, consVar, geom, ::P0);
+		if (time < 1.1 * ::shock_crossing_time) {
+			// naive extrapolating boundary condition
+			// (this is needed to allow the shock to exit without making the reflection worse)
+			NSCBC::setExtrapolateBoundaryLowOrder<ShockCloud, FluxDir::X1, NSCBC::BoundarySide::Upper>(iv, consVar, geom);
 		} else {
 			// shock has passed, so we use P_wind.
 			// also, switch to "low order" boundary conditions (do not decompose characteristics)
