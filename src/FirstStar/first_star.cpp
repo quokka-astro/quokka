@@ -8,7 +8,7 @@
 #include "AMReX_Print.H"
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
-#include "matplotlibcpp.h"
+// #include "matplotlibcpp.h"
 #include "physics_info.hpp"
 
 namespace fs = std::filesystem;
