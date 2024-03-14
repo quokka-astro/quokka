@@ -121,16 +121,14 @@ link_libraries(yaml-cpp::yaml-cpp)
 
 include(CTest)
 
-#create an object library for files that should be compiled with all test problems
-set (QuokkaObjSources "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/CloudyCooling.cpp" 
-                      "${CMAKE_CURRENT_SOURCE_DIR}/GrackleDataReader.cpp" "${openPMDSources}"
+set (QuokkaObjSources "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
+                      "${CMAKE_CURRENT_SOURCE_DIR}/DiagBase.cpp" 
+                      "${CMAKE_CURRENT_SOURCE_DIR}/DiagFilter.cpp" 
+                      "${CMAKE_CURRENT_SOURCE_DIR}/DiagFramePlane.cpp" 
+                      "${CMAKE_CURRENT_SOURCE_DIR}/CloudyCooling.cpp" 
+                      "${CMAKE_CURRENT_SOURCE_DIR}/GrackleDataReader.cpp"
+                      "${openPMDSources}"
                       "${gamma_law_sources}")
-#we don't use it anymore because it gives issues on Cray systems
-#add_library(QuokkaObj OBJECT ${QuokkaObjSources} ${gamma_law_sources})
-#if(AMReX_GPU_BACKEND MATCHES "CUDA")
-#    setup_target_for_cuda_compilation(QuokkaObj)
-#endif()
-#link_libraries(QuokkaObj)
 
 add_subdirectory(Advection)
 add_subdirectory(Advection2D)

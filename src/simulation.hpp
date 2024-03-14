@@ -10,9 +10,7 @@
 /// timestepping, solving, and I/O of a simulation.
 
 // c++ headers
-#include <cassert>
 #include <cmath>
-#include <csignal>
 #include <cstdint>
 #include <cstdio>
 #if __has_include(<filesystem>)
@@ -84,10 +82,10 @@ namespace filesystem = experimental::filesystem;
 #endif
 
 // internal headers
+#include "DiagBase.H"
 #include "fundamental_constants.H"
 #include "grid.hpp"
 #include "physics_info.hpp"
-#include "physics_numVars.hpp"
 
 #ifdef QUOKKA_USE_OPENPMD
 #include "openPMD.hpp"
@@ -315,6 +313,9 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	[[nodiscard]] auto GetPlotfileVarNames() const -> amrex::Vector<std::string>;
 	[[nodiscard]] auto PlotFileMF(int included_ghosts) -> amrex::Vector<amrex::MultiFab>;
 	[[nodiscard]] auto PlotFileMFAtLevel(int lev, int included_ghosts) -> amrex::MultiFab;
+	void createDiagnostics();
+	void updateDiagnostics();
+	void doDiagnostics();
 	void WriteMetadataFile(std::string const &MetadataFileName) const;
 	void ReadMetadataFile(std::string const &chkfilename);
 	void WriteStatisticsFile();
@@ -370,6 +371,10 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	std::string stats_file{"history.txt"}; // statistics filename
 	/// input parameters (if >= 0 we restart from a checkpoint)
 	std::string restart_chkfile;
+
+	// Diagnostics
+	amrex::Vector<std::unique_ptr<DiagBase>> m_diagnostics;
+	amrex::Vector<std::string> m_diagVars;
 
 	/// AMR-specific parameters
 	int regrid_int = 2;	 // regrid interval (number of coarse steps)
@@ -684,6 +689,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 		WriteStatisticsFile();
 	}
 
+	// initialize diagnostics
+	createDiagnostics();
+	// output diagnostics
+	doDiagnostics();
+
 	// ensure that there are enough boxes per MPI rank
 	PerformanceHints();
 }
@@ -901,6 +911,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 			last_projection_step = step + 1;
 			WriteProjectionPlotfile();
 		}
+
+		// write diagnostics
+		doDiagnostics();
 
 		// Writing Plot files at time intervals
 		if (plotTimeInterval_ > 0 && next_plot_file_time <= cur_time) {
@@ -2046,6 +2059,89 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMF(const in
 		r.push_back(PlotFileMFAtLevel(i, included_ghosts));
 	}
 	return r;
+}
+
+template <typename problem_t> void AMRSimulation<problem_t>::createDiagnostics()
+{
+	std::string code_prefix = "quokka";
+	amrex::ParmParse pp(code_prefix);
+	amrex::Vector<std::string> diags;
+
+	int n_diags = pp.countval("diagnostics");
+	if (n_diags > 0) {
+		m_diagnostics.resize(n_diags);
+		diags.resize(n_diags);
+	}
+
+	for (int n = 0; n < n_diags; ++n) {
+		pp.get("diagnostics", diags[n], n);
+		std::string diag_prefix = code_prefix + "." + diags[n];
+		amrex::ParmParse ppd(diag_prefix);
+		std::string diag_type;
+		ppd.get("type", diag_type);
+		m_diagnostics[n] = DiagBase::create(diag_type);
+		m_diagnostics[n]->init(diag_prefix, diags[n]);
+		m_diagnostics[n]->addVars(m_diagVars);
+	}
+
+	// Remove duplicates from m_diagVars and check that all the variables exist
+	std::sort(m_diagVars.begin(), m_diagVars.end());
+	auto last = std::unique(m_diagVars.begin(), m_diagVars.end());
+	m_diagVars.erase(last, m_diagVars.end());
+
+	auto isVarName = [this](std::string const &v) {
+		auto const varnames = GetPlotfileVarNames();
+		return std::any_of(varnames.cbegin(), varnames.cend(), [v](std::string const &var) { return v == var; });
+	};
+
+	for (auto &v : m_diagVars) {
+		if (!isVarName(v)) {
+			amrex::Abort("[Diagnostics] Field " + v + " is not available!");
+		}
+	}
+}
+
+template <typename problem_t> void AMRSimulation<problem_t>::updateDiagnostics()
+{
+	// Might need to update some internal data as the grid changes
+	for (const auto &m_diagnostic : m_diagnostics) {
+		if (m_diagnostic->needUpdate()) {
+			m_diagnostic->prepare(finestLevel() + 1, Geom(0, finestLevel()), boxArray(0, finestLevel()), dmap, m_diagVars);
+		}
+	}
+}
+
+template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
+{
+	// Assemble a vector of MF containing the requested data
+	BL_PROFILE("AMRSimulation::doDiagnostics()");
+	updateDiagnostics();
+
+	amrex::Vector<std::unique_ptr<amrex::MultiFab>> diagMFVec(finestLevel() + 1);
+
+	for (int lev{0}; lev <= finestLevel(); ++lev) {
+		diagMFVec[lev] = std::make_unique<amrex::MultiFab>(grids[lev], dmap[lev], m_diagVars.size(), 1);
+		amrex::MultiFab const mf = PlotFileMFAtLevel(lev, nghost_cc_);
+		auto const varnames = GetPlotfileVarNames();
+
+		for (int v{0}; v < m_diagVars.size(); ++v) {
+			// get component index for the 'mf' multifab
+			int mf_idx = -1;
+			for (int i = 0; i < varnames.size(); ++i) {
+				if (m_diagVars[v] == varnames[i]) {
+					mf_idx = i;
+				}
+			}
+			AMREX_ALWAYS_ASSERT(mf_idx != -1);
+			amrex::MultiFab::Copy(*diagMFVec[lev], mf, mf_idx, v, 1, 1);
+		}
+	}
+
+	for (const auto &m_diagnostic : m_diagnostics) {
+		if (m_diagnostic->doDiag(tNew_[0], istep[0])) {
+			m_diagnostic->processDiag(istep[0], tNew_[0], GetVecOfConstPtrs(diagMFVec), m_diagVars);
+		}
+	}
 }
 
 // do in-situ rendering with Ascent
