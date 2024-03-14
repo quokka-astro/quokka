@@ -30,7 +30,7 @@ quokka.diagnostics = slice_z
 quokka.slice_z.type = DiagFramePlane         # Diagnostic type
 quokka.slice_z.file = slicez_plt             # Output file prefix (must end in "plt")
 quokka.slice_z.normal = 2                    # Plane normal (0 == x, 1 == y, 2 == z)
-quokka.slice_z.center = 0.6                  # Coordinate in the normal direction
+quokka.slice_z.center = 0.001                # Coordinate in the normal direction (cannot lie *exactly* on domain boundary)
 quokka.slice_z.int    = 10                   # Output cadence (in number of coarse steps)
 quokka.slice_z.interpolation = Linear        # (Optional, default is Linear) Interpolation type: Linear or Quadratic
 quokka.slice_z.field_names = gasDensity gasInternalEnergy      # List of variables included in output
