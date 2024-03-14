@@ -2123,29 +2123,33 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 	BL_PROFILE("AMRSimulation::doDiagnostics()");
 	updateDiagnostics();
 
+	bool const computeVars =
+	    std::any_of(m_diagnostics.cbegin(), m_diagnostics.cend(), [this](const auto &diag) { return diag->doDiag(tNew_[0], istep[0]); });
+
 	amrex::Vector<std::unique_ptr<amrex::MultiFab>> diagMFVec(finestLevel() + 1);
+	if (computeVars) {
+		for (int lev{0}; lev <= finestLevel(); ++lev) {
+			diagMFVec[lev] = std::make_unique<amrex::MultiFab>(grids[lev], dmap[lev], m_diagVars.size(), 1);
+			amrex::MultiFab const mf = PlotFileMFAtLevel(lev, nghost_cc_);
+			auto const varnames = GetPlotfileVarNames();
 
-	for (int lev{0}; lev <= finestLevel(); ++lev) {
-		diagMFVec[lev] = std::make_unique<amrex::MultiFab>(grids[lev], dmap[lev], m_diagVars.size(), 1);
-		amrex::MultiFab const mf = PlotFileMFAtLevel(lev, nghost_cc_);
-		auto const varnames = GetPlotfileVarNames();
-
-		for (int v{0}; v < m_diagVars.size(); ++v) {
-			// get component index for the 'mf' multifab
-			int mf_idx = -1;
-			for (int i = 0; i < varnames.size(); ++i) {
-				if (m_diagVars[v] == varnames[i]) {
-					mf_idx = i;
+			for (int v{0}; v < m_diagVars.size(); ++v) {
+				// get component index for the 'mf' multifab
+				int mf_idx = -1;
+				for (int i = 0; i < varnames.size(); ++i) {
+					if (m_diagVars[v] == varnames[i]) {
+						mf_idx = i;
+					}
 				}
+				AMREX_ALWAYS_ASSERT(mf_idx != -1);
+				amrex::MultiFab::Copy(*diagMFVec[lev], mf, mf_idx, v, 1, 1);
 			}
-			AMREX_ALWAYS_ASSERT(mf_idx != -1);
-			amrex::MultiFab::Copy(*diagMFVec[lev], mf, mf_idx, v, 1, 1);
 		}
 	}
 
-	for (const auto &m_diagnostic : m_diagnostics) {
-		if (m_diagnostic->doDiag(tNew_[0], istep[0])) {
-			m_diagnostic->processDiag(istep[0], tNew_[0], GetVecOfConstPtrs(diagMFVec), m_diagVars);
+	for (const auto &diag : m_diagnostics) {
+		if (diag->doDiag(tNew_[0], istep[0])) {
+			diag->processDiag(istep[0], tNew_[0], GetVecOfConstPtrs(diagMFVec), m_diagVars);
 		}
 	}
 }
