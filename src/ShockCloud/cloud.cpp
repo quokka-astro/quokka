@@ -211,7 +211,7 @@ template <> void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(int lev, std:
 		auto tables = cloudyTables_.const_tables();
 
 		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
-			const amrex::Box &indexRange = iter.validbox();
+			const amrex::Box &indexRange = iter.fabbox(); // include ghosts
 			auto const &output = mf.array(iter);
 			auto const &state = state_new_cc_[lev].const_array(iter);
 
