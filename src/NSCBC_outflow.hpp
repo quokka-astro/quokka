@@ -351,7 +351,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setOutflowBoundary(const amrex::IntVect
 
 template <typename problem_t, FluxDir DIR, BoundarySide SIDE>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setOutflowBoundaryLowOrder(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar,
-								    amrex::GeometryData const &geom, const amrex::Real P_outflow)
+								    amrex::GeometryData const &geom, const amrex::Real P_outflow, const amrex::Real rho_inflow)
 {
 	// subsonic outflow on the DIR SIDE boundary
 
@@ -378,49 +378,23 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setOutflowBoundaryLowOrder(const amrex:
 	quokka::valarray<amrex::Real, N> Q_ip1 = Q_i;
 	Q_ip1[4] = P_outflow; // replace pressure with target pressure
 
+	// if gas is inflowing, replace the ghost cell density with 'rho_inflow'
+	quokka::valarray<amrex::Real, N> Q_canonical = detail::permute_vel<problem_t, DIR>(Q_i);
+	amrex::Real const v_normal = Q_canonical[1]; // normal velocity component
+	if (SIDE == BoundarySide::Lower) {
+		if (v_normal > 0.) {	       // inflow from lower boundary
+			Q_ip1[0] = rho_inflow; // replace density with inflow density
+		}
+	}
+	if (SIDE == BoundarySide::Upper) {
+		if (v_normal < 0.) {	       // inflow from upper boundary
+			Q_ip1[0] = rho_inflow; // replace density with inflow density
+		}
+	}
+
 	// set cell values
 	quokka::valarray<amrex::Real, N> consCell{};
 	consCell = HydroSystem<problem_t>::ComputeConsVars(Q_ip1);
-
-	consVar(i, j, k, HydroSystem<problem_t>::density_index) = consCell[0];
-	consVar(i, j, k, HydroSystem<problem_t>::x1Momentum_index) = consCell[1];
-	consVar(i, j, k, HydroSystem<problem_t>::x2Momentum_index) = consCell[2];
-	consVar(i, j, k, HydroSystem<problem_t>::x3Momentum_index) = consCell[3];
-	consVar(i, j, k, HydroSystem<problem_t>::energy_index) = consCell[4];
-	consVar(i, j, k, HydroSystem<problem_t>::internalEnergy_index) = consCell[5];
-	for (int n = 0; n < HydroSystem<problem_t>::nscalars_; ++n) {
-		consVar(i, j, k, HydroSystem<problem_t>::scalar0_index + n) = consCell[6 + n];
-	}
-}
-
-template <typename problem_t, FluxDir DIR, BoundarySide SIDE>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setExtrapolateBoundaryLowOrder(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar,
-									amrex::GeometryData const &geom)
-{
-	// low-order extrapolation on the DIR SIDE boundary
-
-	auto [i, j, k] = iv.dim3();
-	std::array<int, 3> idx{i, j, k};
-	amrex::Box const &box = geom.Domain();
-	constexpr int N = HydroSystem<problem_t>::nvar_;
-
-	const auto &boundary_idx = (SIDE == BoundarySide::Lower) ? box.loVect3d() : box.hiVect3d();
-	const int ibr = boundary_idx[static_cast<int>(DIR)];
-	const Real dx = geom.CellSize(static_cast<int>(DIR));
-
-	// compute primitive vars
-	quokka::valarray<amrex::Real, N> Q_i{};
-	if constexpr (DIR == FluxDir::X1) {
-		Q_i = HydroSystem<problem_t>::ComputePrimVars(consVar, ibr, j, k);
-	} else if constexpr (DIR == FluxDir::X2) {
-		Q_i = HydroSystem<problem_t>::ComputePrimVars(consVar, i, ibr, k);
-	} else if constexpr (DIR == FluxDir::X3) {
-		Q_i = HydroSystem<problem_t>::ComputePrimVars(consVar, i, j, ibr);
-	}
-
-	// set cell values
-	quokka::valarray<amrex::Real, N> consCell{};
-	consCell = HydroSystem<problem_t>::ComputeConsVars(Q_i);
 
 	consVar(i, j, k, HydroSystem<problem_t>::density_index) = consCell[0];
 	consVar(i, j, k, HydroSystem<problem_t>::x1Momentum_index) = consCell[1];

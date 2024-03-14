@@ -191,22 +191,13 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<ShockCloud>::setCustomBou
 	} else if (i > ihi) {
 		// x1 upper boundary -- NSCBC subsonic outflow
 		// (For this boundary condition, we must specify the pressure at the boundary.)
-		const Real rho_bdry_hi = consVar(ihi, j, k, RadSystem<ShockCloud>::gasDensity_index);
-		const Real x1mom_bdry_hi = consVar(ihi, j, k, RadSystem<ShockCloud>::x1GasMomentum_index);
-		const Real vx_bdry_hi = x1mom_bdry_hi / rho_bdry_hi;
 
 		if (time < 1.1 * ::shock_crossing_time) {
 			// before the shock hits the boundary, set the boundary pressure to the background pressure P0.
-			NSCBC::setOutflowBoundaryLowOrder<ShockCloud, FluxDir::X1, NSCBC::BoundarySide::Upper>(iv, consVar, geom, ::P0);
+			NSCBC::setOutflowBoundaryLowOrder<ShockCloud, FluxDir::X1, NSCBC::BoundarySide::Upper>(iv, consVar, geom, ::P0, rho0);
 		} else {
 			// shock has passed, so we set the boundary pressure to the wind pressure P_wind.
-			NSCBC::setOutflowBoundaryLowOrder<ShockCloud, FluxDir::X1, NSCBC::BoundarySide::Upper>(iv, consVar, geom, P_wind);
-
-			// If vx_bdry_hi < 0, fix the density to rho_wind.
-			// (Otherwise, either very hot gas *or* very cold gas will flow into the domain.)
-			if (vx_bdry_hi < 0.) {
-				consVar(i, j, k, RadSystem<ShockCloud>::gasDensity_index) = rho_wind;
-			}
+			NSCBC::setOutflowBoundaryLowOrder<ShockCloud, FluxDir::X1, NSCBC::BoundarySide::Upper>(iv, consVar, geom, P_wind, rho_wind);
 		}
 	}
 }
