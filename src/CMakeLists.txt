@@ -121,14 +121,15 @@ link_libraries(yaml-cpp::yaml-cpp)
 
 include(CTest)
 
-set (QuokkaObjSources "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
-                      "${CMAKE_CURRENT_SOURCE_DIR}/DiagBase.cpp" 
-                      "${CMAKE_CURRENT_SOURCE_DIR}/DiagFilter.cpp" 
-                      "${CMAKE_CURRENT_SOURCE_DIR}/DiagFramePlane.cpp" 
-                      "${CMAKE_CURRENT_SOURCE_DIR}/CloudyCooling.cpp" 
-                      "${CMAKE_CURRENT_SOURCE_DIR}/GrackleDataReader.cpp"
-                      "${openPMDSources}"
-                      "${gamma_law_sources}")
+set (QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/DiagBase.cpp" 
+                        "${CMAKE_CURRENT_SOURCE_DIR}/DiagFilter.cpp" 
+                        "${CMAKE_CURRENT_SOURCE_DIR}/DiagFramePlane.cpp" 
+                        "${CMAKE_CURRENT_SOURCE_DIR}/CloudyCooling.cpp" 
+                        "${CMAKE_CURRENT_SOURCE_DIR}/GrackleDataReader.cpp"
+                        "${openPMDSources}")
+
+set (QuokkaObjSources "${QuokkaSourcesNoEOS}" "${gamma_law_sources}")
 
 add_subdirectory(Advection)
 add_subdirectory(Advection2D)
