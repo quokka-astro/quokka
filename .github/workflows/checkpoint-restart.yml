@@ -1,0 +1,64 @@
+name: CheckpointRestart
+
+on:
+  push:
+    branches: [ development ]
+  pull_request:
+    # The branches below must be a subset of the branches above
+    branches: [ development ]
+  merge_group:
+    branches: [ development ]
+
+concurrency:
+  group: ${{ github.ref }}-${{ github.head_ref }}-final-checkpoint-restart
+  cancel-in-progress: true
+
+env:
+  # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
+  BUILD_TYPE: Release
+
+jobs:
+  test:
+    runs-on: ubuntu-20.04
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: true
+
+    - name: Create Build Environment
+      run: cmake -E make_directory ${{runner.workspace}}/build
+
+    - name: Install dependencies
+      run: sudo apt-get update && sudo apt-get install gcc-11 g++-11 python3-dev python3-numpy python3-matplotlib python3-pip libopenmpi-dev libhdf5-mpi-dev
+
+    - name: Build PlotfileTools
+      shell: bash
+      working-directory: ${{github.workspace}}/extern/amrex/Tools/Plotfile
+      run: make -j4
+
+    - name: Configure CMake
+      shell: bash
+      working-directory: ${{runner.workspace}}/build
+      run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_C_COMPILER=gcc-11 -DCMAKE_CXX_COMPILER=g++-11 -DAMReX_SPACEDIM=3
+
+    - name: Build
+      working-directory: ${{runner.workspace}}/build
+      shell: bash
+      # Execute the build.  You can specify a specific target with "--target <NAME>"
+      run: cmake --build . --config $BUILD_TYPE --parallel 4 --target test_hydro3d_blast
+
+    - name: Checkpoint/Restart Test
+      working-directory: ${{github.workspace}}/tests
+      shell: bash
+      env:
+        BUILD_DIR: ${{runner.workspace}}/build
+        PLOTFILETOOLS_DIR: ${{github.workspace}}/extern/amrex/Tools/Plotfile
+      run: ./checkpoint_restart_test.sh
+
+    - name: Upload output
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: checkpoint-restart-results
+        path: ${{github.workspace}}/tests

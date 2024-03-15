@@ -908,11 +908,15 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 			WritePlotFile();
 		}
 
+		// IMPORTANT: this MUST be written *after* the plotfile to avoid corruption:
+		// 	https://github.com/quokka-astro/quokka/issues/554
 		if (checkpointTimeInterval_ > 0 && next_chk_file_time <= cur_time) {
 			next_chk_file_time += checkpointTimeInterval_;
 			WriteCheckpointFile();
 		}
 
+		// IMPORTANT: this MUST be written *after* the plotfile to avoid corruption:
+		// 	https://github.com/quokka-astro/quokka/issues/554
 		if (checkpointInterval_ > 0 && (step + 1) % checkpointInterval_ == 0) {
 			last_chk_file_step = step + 1;
 			WriteCheckpointFile();
@@ -958,11 +962,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	}
 	amrex::Print() << '\n';
 
-	// write final checkpoint
-	if (checkpointInterval_ > 0 && istep[0] > last_chk_file_step) {
-		WriteCheckpointFile();
-	}
-
 	// write final plotfile
 	if (plotfileInterval_ > 0 && istep[0] > last_plot_file_step) {
 		WritePlotFile();
@@ -976,6 +975,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	// write final statistics
 	if (statisticsInterval_ > 0 && istep[0] > last_statistics_step) {
 		WriteStatisticsFile();
+	}
+
+	// write final checkpoint
+	// IMPORTANT: this MUST be written *after* the plotfile to avoid corruption:
+	// 	https://github.com/quokka-astro/quokka/issues/554
+	if (checkpointInterval_ > 0 && istep[0] > last_chk_file_step) {
+		WriteCheckpointFile();
 	}
 
 #ifdef AMREX_USE_ASCENT

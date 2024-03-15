@@ -1,5 +1,5 @@
 /// \file test_radhydro_pulse.cpp
-/// \brief Defines a test problem for radiation in the diffusion regime with advection by gas.
+/// \brief Defines a test problem for radiation in the static diffusion regime with advection by gas.
 ///
 
 #include "test_radhydro_pulse.hpp"
