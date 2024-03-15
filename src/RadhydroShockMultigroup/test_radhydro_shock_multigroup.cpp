@@ -35,8 +35,8 @@ constexpr double chat = 10.0 * (v0 + c_s0);			      // reduced speed of light
 
 constexpr double Erad0 = a_rad * (T0 * T0 * T0 * T0); // erg cm^-3
 constexpr double Erad_floor_ = Erad0 * 1e-12;
-constexpr double Egas0 = rho0 * c_v * T0;	      // erg cm^-3
-constexpr double Egas1 = rho1 * c_v * T1;	      // erg cm^-3
+constexpr double Egas0 = rho0 * c_v * T0; // erg cm^-3
+constexpr double Egas1 = rho1 * c_v * T1; // erg cm^-3
 
 constexpr double shock_position = 0.0130; // 0.0132; // cm (shock position drifts to the right slightly during the simulation, so
 					  // we initialize slightly to the left...)
