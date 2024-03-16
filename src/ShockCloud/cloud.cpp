@@ -167,7 +167,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<ShockCloud>::setCustomBou
 		Real const vx = v_wind - delta_vx;
 		Real const Eint = quokka::EOS<ShockCloud>::ComputeEintFromPres(rho, P_wind);
 		Real const T_wind = quokka::EOS<ShockCloud>::ComputeTgasFromEint(rho, Eint);
-		GpuArray<amrex::Real, HydroSystem<ShockCloud>::nscalars_> scalars{0, 0, rho};
+		amrex::GpuArray<amrex::Real, HydroSystem<ShockCloud>::nscalars_> scalars{0, 0, rho};
 
 		if (time < 0.1 * ::shock_crossing_time) {
 			// Shock boundary condition [all primitive variables specified]
