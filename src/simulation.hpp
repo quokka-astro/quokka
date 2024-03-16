@@ -70,6 +70,7 @@ namespace filesystem = experimental::filesystem;
 
 #ifdef AMREX_PARTICLES
 #include "CICParticles.hpp"
+#include "SinkParticles.hpp"
 #include <AMReX_AmrParticles.H>
 #include <AMReX_Particles.H>
 #endif
@@ -388,10 +389,13 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 #ifdef AMREX_PARTICLES
 	void InitParticles();	 // create tracer particles
 	void InitCICParticles(); // create CIC particles
+	void InitSinkParticles(); // create Sink particles
 	int do_tracers = 0;
 	int do_cic_particles = 0;
+	int do_sink_particles = 0;
 	std::unique_ptr<amrex::AmrTracerParticleContainer> TracerPC;
 	std::unique_ptr<quokka::CICParticleContainer> CICParticles;
+	std::unique_ptr<quokka::SinkParticleContainer> SinkParticles;
 #endif
 
 	// external objects
@@ -583,6 +587,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Default do_cic_particles = 0 (turns on/off CIC particles)
 	pp.query("do_cic_particles", do_cic_particles);
 
+	// Default do_sink_particles = 0 (turns on/off Sink particles)
+	pp.query("do_sink_particles", do_sink_particles);
+
 	// Default suppress_output = 0
 	pp.query("suppress_output", suppress_output);
 
@@ -644,6 +651,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 		}
 		if (do_cic_particles != 0) {
 			InitCICParticles();
+		}
+		if (do_sink_particles != 0) {
+			InitSinkParticles();
 		}
 #endif
 
@@ -1021,6 +1031,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			amrex::ParticleToMesh(*CICParticles, amrex::GetVecOfPtrs(rhs), 0, finest_level,
 					      quokka::CICDeposition{Gconst_, quokka::ParticleMassIdx, 0, 1});
 		}
+		if (do_sink_particles != 0) {
+			// deposit particles using amrex::ParticleToMesh
+			amrex::ParticleToMesh(*SinkParticles, amrex::GetVecOfPtrs(rhs), 0, finest_level,
+					      quokka::SinkDeposition{Gconst_, quokka::ParticleMassIdx, 0, 1});
+		}
 #endif
 
 		for (int lev = 0; lev <= finest_level; ++lev) {
@@ -1084,7 +1099,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 {
 	// kick particles (do: vel[i] += 0.5 * dt * accel[i])
 
-	if (do_cic_particles != 0) {
+	if (do_cic_particles != 0  || do_sink_particles != 0) {
 		// gravitational acceleration multifabs
 		amrex::Vector<amrex::MultiFab> accel(finest_level + 1);
 
@@ -1164,6 +1179,30 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 					    });
 				});
 			}
+
+			// loop over boxes of particles on this level
+			for (quokka::SinkParticleIterator pIter(*SinkParticles, lev); pIter.isValid(); ++pIter) {
+				auto &particles = pIter.GetArrayOfStructs();
+				quokka::SinkParticleContainer::ParticleType *pData = particles().data();
+				const amrex::Long np = pIter.numParticles();
+
+				amrex::Array4<const amrex::Real> const &accel_arr = accel[lev].array(pIter);
+				const auto plo = geom[lev].ProbLoArray();
+
+				amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
+					quokka::SinkParticleContainer::ParticleType &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+					amrex::ParticleInterpolator::Linear interp(p, plo, dx_inv);
+					interp.MeshToParticle(
+					    p, accel_arr, 0, quokka::ParticleVxIdx, AMREX_SPACEDIM,
+					    [=] AMREX_GPU_DEVICE(amrex::Array4<const amrex::Real> const &acc, int i, int j, int k, int comp) {
+						    return acc(i, j, k, comp); // no weighting
+					    },
+					    [=] AMREX_GPU_DEVICE(quokka::SinkParticleContainer::ParticleType & p, int comp, amrex::Real acc_comp) {
+						    // kick particle by updating its velocity
+						    p.rdata(comp) += 0.5 * dt * static_cast<amrex::ParticleReal>(acc_comp);
+					    });
+				});
+			}
 		}
 	}
 }
@@ -1181,6 +1220,24 @@ template <typename problem_t> void AMRSimulation<problem_t>::driftParticlesAllLe
 
 				amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 					quokka::CICParticleContainer::ParticleType &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+					// update particle position
+					for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+						p.pos(i) += dt * p.rdata(quokka::ParticleVxIdx + i);
+					}
+				});
+			}
+		}
+	}
+
+	if (do_sink_particles != 0) {
+		for (int lev = 0; lev <= finest_level; ++lev) {
+			for (quokka::SinkParticleIterator pIter(*SinkParticles, lev); pIter.isValid(); ++pIter) {
+				auto &particles = pIter.GetArrayOfStructs();
+				quokka::SinkParticleContainer::ParticleType *pData = particles().data();
+				const amrex::Long np = pIter.numParticles();
+
+				amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
+					quokka::SinkParticleContainer::ParticleType &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 					// update particle position
 					for (int i = 0; i < AMREX_SPACEDIM; ++i) {
 						p.pos(i) += dt * p.rdata(quokka::ParticleVxIdx + i);
@@ -1232,8 +1289,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 				if (do_tracers != 0) {
 					TracerPC->Redistribute(lev);
 				}
-				if (do_cic_particles != 0) {
-					CICParticles->Redistribute(lev);
+				if (do_sink_particles != 0) {
+					SinkParticles->Redistribute(lev);
 				}
 #endif
 
@@ -1313,6 +1370,18 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 				redistribute_ngrow = iteration;
 			}
 			CICParticles->Redistribute(lev, CICParticles->finestLevel(), redistribute_ngrow);
+		}
+	}
+	// redistribute Sink particles
+	if (do_sink_particles != 0) {
+		int redistribute_ngrow = 0;
+		if ((iteration < nsubsteps[lev]) || (lev == 0)) {
+			if (lev == 0) {
+				redistribute_ngrow = 0;
+			} else {
+				redistribute_ngrow = iteration;
+			}
+			SinkParticles->Redistribute(lev, SinkParticles->finestLevel(), redistribute_ngrow);
 		}
 	}
 #endif
@@ -1948,6 +2017,19 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitCICParticles()
 }
 #endif
 
+template <typename problem_t> void AMRSimulation<problem_t>::InitSinkParticles()
+{
+	if (do_sink_particles != 0) {
+		AMREX_ASSERT(SinkParticles == nullptr);
+		SinkParticles = std::make_unique<quokka::SinkParticleContainer>(this);
+
+		SinkParticles->SetVerbose(0);
+		createInitialParticles();
+		SinkParticles->Redistribute();
+	}
+}
+#endif
+
 // get plotfile name
 template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileName(int lev) const -> std::string { return amrex::Concatenate(plot_file, lev, 5); }
 
@@ -2173,6 +2255,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 	}
 	if (do_cic_particles != 0) {
 		CICParticles->WritePlotFile(plotfilename, "CIC_particles");
+	}
+	if (do_sink_particles != 0) {
+		SinkParticles->WritePlotFile(plotfilename, "Sink_particles");
 	}
 #endif // AMREX_PARTICLES
 #endif
@@ -2504,6 +2589,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile
 	if (do_cic_particles != 0) {
 		CICParticles->Checkpoint(checkpointname, "CIC_particles", true);
 	}
+	if (do_sink_particles != 0) {
+		SinkParticles->Checkpoint(checkpointname, "Sink_particles", true);
+	}
 #endif
 
 	// create symlink and point it at this checkpoint dir
@@ -2671,6 +2759,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 		AMREX_ASSERT(CICParticles == nullptr);
 		CICParticles = std::make_unique<quokka::CICParticleContainer>(this);
 		CICParticles->Restart(restart_chkfile, "CIC_particles");
+	if (do_sink_particles != 0) {
+		AMREX_ASSERT(SinkParticles == nullptr);
+		SinkParticles = std::make_unique<quokka::SinkParticleContainer>(this);
+		SinkParticles->Restart(restart_chkfile, "Sink_particles");
 	}
 #endif
 
