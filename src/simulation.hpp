@@ -1289,6 +1289,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 				if (do_tracers != 0) {
 					TracerPC->Redistribute(lev);
 				}
+				if (do_cic_particles != 0) {
+					CICParticles->Redistribute(lev);
+				}
 				if (do_sink_particles != 0) {
 					SinkParticles->Redistribute(lev);
 				}
