@@ -30,7 +30,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dQ_dx_inflow_x1_lower(quokka::valarray<
 	// return dQ/dx corresponding to subsonic inflow on the x1 lower boundary
 	// (This is only necessary for continuous inflows, i.e., where a shock or contact discontinuity is not desired.)
 	// NOTE: This boundary condition is only defined for an ideal gas (with constant k_B/mu).
-	
+
 	// TODO(bwibking): add transverse terms
 
 	const Real rho = Q[0];
@@ -148,11 +148,11 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setInflowX1Lower(const amrex::IntVect &
 	}
 }
 
-
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setInflowX1LowerLowOrder(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, amrex::GeometryData const &geom,
-							  const amrex::Real T_t, const amrex::Real u_t, const amrex::Real v_t, const amrex::Real w_t,
-							  amrex::GpuArray<Real, HydroSystem<problem_t>::nscalars_> const &s_t)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setInflowX1LowerLowOrder(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar,
+								  amrex::GeometryData const &geom, const amrex::Real T_t, const amrex::Real u_t,
+								  const amrex::Real v_t, const amrex::Real w_t,
+								  amrex::GpuArray<Real, HydroSystem<problem_t>::nscalars_> const &s_t)
 {
 	// x1 upper boundary -- subsonic outflow
 	auto [i, j, k] = iv.dim3();
@@ -177,7 +177,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setInflowX1LowerLowOrder(const amrex::I
 	Q_im1[2] = v_t;
 	Q_im1[3] = w_t;
 	Q_im1[4] = quokka::EOS<problem_t>::ComputePressure(rho, Eint); // prescribe temperature
-	Q_im1[5] = Eint; // prescribe temperature
+	Q_im1[5] = Eint;					       // prescribe temperature
 	for (int i = 0; i < HydroSystem<problem_t>::nscalars_; ++i) {
 		Q_im1[6 + i] = s_t[i]; // prescribe passive scalars
 	}
