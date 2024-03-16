@@ -953,15 +953,15 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 
 			// adjust the wavespeeds
 			// (this factor cancels out except for the last term in the HLL flux)
-			// const quokka::valarray<double, numRadVars_> epsilon = {S_corr, 1.0, 1.0, 1.0}; // Skinner et al. (2019)
-			// const quokka::valarray<double, numRadVars_> epsilon = {S_corr, S_corr, S_corr, S_corr}; // Jiang et al. (2013)
-			quokka::valarray<double, numRadVars_> epsilon = {S_corr * S_corr, S_corr, S_corr, S_corr}; // this code
+			quokka::valarray<double, numRadVars_> epsilon = {S_corr, 1.0, 1.0, 1.0}; // Skinner et al. (2019)
+			// quokka::valarray<double, numRadVars_> epsilon = {S_corr, S_corr, S_corr, S_corr}; // Jiang et al. (2013)
+			// quokka::valarray<double, numRadVars_> epsilon = {S_corr * S_corr, S_corr, S_corr, S_corr}; // this code
 
 			// fix odd-even instability that appears in the asymptotic diffusion limit
 			// [for details, see section 3.1: https://ui.adsabs.harvard.edu/abs/2022MNRAS.512.1499R/abstract]
 			if ((i + j + k) % 2 == 1) {
 				// revert to more diffusive flux (has no effect in optically-thin limit)
-				epsilon = {S_corr, 1.0, 1.0, 1.0};
+				epsilon = {1.0, 1.0, 1.0, 1.0};
 			}
 
 			AMREX_ASSERT(std::abs(S_L) <= c_hat_); // NOLINT
