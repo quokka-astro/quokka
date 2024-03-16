@@ -39,8 +39,8 @@ do_frame_shift = 1
 max_timesteps = 100000
 max_t_cc = 20.0
 
-plotfile_interval = 200
-checkpoint_interval = 200
+plotfile_interval = 1000
+checkpoint_interval = 2000
 ascent_interval = 200
 
 statistics_interval = 200
@@ -60,3 +60,12 @@ P_over_k = 1.304005e+04   # K cm^-3
 R_cloud_pc = 16.09084149928867 # pc
 Mach_shock = 1.888892847795999
 
+quokka.diagnostics = slice_z           # Space-separated name(s) of diagnostics (arbitrary)
+quokka.slice_z.type = DiagFramePlane   # Diagnostic type (others may be added in the future)
+quokka.slice_z.file = slicez_plt       # Output file prefix (should end in "plt")
+quokka.slice_z.normal = 2              # Plane normal (0 == x, 1 == y, 2 == z)
+quokka.slice_z.center = 3.086e20       # Coordinate in the normal direction
+quokka.slice_z.int    = 200            # Output interval (in number of coarse steps)
+quokka.slice_z.interpolation = Linear  # Interpolation type: Linear or Quadratic (default: Linear)
+quokka.slice_z.field_names = gasDensity pressure entropy nH temperature cooling_length \
+	       cloud_fraction lab_velocity_x mass velocity_mag c_s
