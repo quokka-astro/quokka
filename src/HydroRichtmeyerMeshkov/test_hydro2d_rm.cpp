@@ -9,14 +9,12 @@
 
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
-#include "AMReX_Config.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
 
 #include "RadhydroSimulation.hpp"
 #include "hydro_system.hpp"
-#include "test_hydro2d_rm.hpp"
 
 struct RichtmeyerMeshkovProblem {
 };
@@ -106,14 +104,13 @@ template <> void RadhydroSimulation<RichtmeyerMeshkovProblem>::setInitialConditi
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_elem.prob_hi_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
-		amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
+		amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
+		amrex::Real const y = prob_lo[1] + (j + static_cast<amrex::Real>(0.5)) * dx[1];
 
 		double vx = 0.;
 		double vy = 0.;
@@ -148,12 +145,6 @@ template <> void RadhydroSimulation<RichtmeyerMeshkovProblem>::setInitialConditi
 
 auto problem_main() -> int
 {
-	// Problem parameters
-	// amrex::IntVect gridDims{AMREX_D_DECL(1024, 1024, 4)};
-	// amrex::RealBox boxSize{
-	//    {AMREX_D_DECL(amrex::Real(0.0), amrex::Real(0.0), amrex::Real(0.0))},
-	//    {AMREX_D_DECL(amrex::Real(0.3), amrex::Real(0.3), amrex::Real(1.0))}};
-
 	auto isNormalComp = [=](int n, int dim) {
 		if ((n == HydroSystem<RichtmeyerMeshkovProblem>::x1Momentum_index) && (dim == 0)) {
 			return true;
@@ -196,6 +187,6 @@ auto problem_main() -> int
 	sim.evolve();
 
 	// Cleanup and exit
-	amrex::Print() << "Finished." << std::endl;
+	amrex::Print() << "Finished." << '\n';
 	return 0;
 }

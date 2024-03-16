@@ -27,3 +27,12 @@ temperature_floor = 100
 
 derived_vars = temperature
 ascent_interval = 10
+
+quokka.diagnostics = slice_z
+quokka.slice_z.type = DiagFramePlane         # Diagnostic type
+quokka.slice_z.file = slicez_plt             # Output file prefix (must end in "plt")
+quokka.slice_z.normal = 2                    # Plane normal (0 == x, 1 == y, 2 == z)
+quokka.slice_z.center = 2.4688e20            # Coordinate in the normal direction
+quokka.slice_z.int    = 10                   # Output cadence (in number of coarse steps)
+quokka.slice_z.interpolation = Linear        # (Optional, default is Linear) Interpolation type: Linear or Quadratic
+quokka.slice_z.field_names = gasDensity gasInternalEnergy temperature      # List of variables included in output

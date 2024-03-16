@@ -1,0 +1,73 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  0.0  0.0  0.0 
+geometry.prob_hi     =  2.4688e+21  6.172e+20  6.172e+20  # 800 x 200 x 200 pc
+geometry.is_periodic =  0    1    1
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v               = 1     # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          = 128 32 32
+amr.max_level       = 0     # number of levels = max_level + 1
+amr.blocking_factor = 16    # grid size must be divisible by this
+amr.max_grid_size   = 64
+
+# *****************************************************************
+# Quokka options
+# *****************************************************************
+do_reflux = 1
+do_subcycle = 1
+
+cfl = 0.2
+hydro.abort_on_fofc_failure = 1
+hydro.reconstruction_order = 3
+#hydro.artificial_viscosity_coefficient = 0.1
+
+density_floor = 1.0e-28 # g cm^{-3}
+temperature_floor = 100 # K
+
+sharp_cloud_edge = 1
+do_frame_shift = 1
+
+#max_walltime = 0:00:30
+max_timesteps = 100000
+max_t_cc = 20.0
+
+plotfile_interval = 200
+checkpoint_interval = 1000
+ascent_interval = 200
+
+statistics_interval = 200
+projection_interval = 200
+projection.dirs = x z
+
+derived_vars = pressure entropy nH temperature cooling_length \
+	       cloud_fraction lab_velocity_x mass velocity_mag c_s
+
+cooling.enabled = 1
+cooling.grackle_data_file = "./isrf_1000Go_grains.h5"
+
+nH_bg    = 0.003356403333 # cm^-3
+nH_cloud = 1.006921e+00   # cm^-3
+P_over_k = 1.304005e+04   # K cm^-3
+
+R_cloud_pc = 16.09084149928867 # pc
+Mach_shock = 1.888892847795999
+
+quokka.diagnostics = slice_z           # Space-separated name(s) of diagnostics (arbitrary)
+quokka.slice_z.type = DiagFramePlane   # Diagnostic type (others may be added in the future)
+quokka.slice_z.file = slicez_plt       # Output file prefix (should end in "plt")
+quokka.slice_z.normal = 2              # Plane normal (0 == x, 1 == y, 2 == z)
+quokka.slice_z.center = 3.086e20       # Coordinate in the normal direction
+quokka.slice_z.int    = 200            # Output interval (in number of coarse steps)
+quokka.slice_z.interpolation = Linear  # Interpolation type: Linear or Quadratic (default: Linear)
+quokka.slice_z.field_names = gasDensity pressure entropy nH temperature cooling_length \
+	       cloud_fraction lab_velocity_x mass velocity_mag c_s
+
+do_tracers = 1		# enable tracer particles
