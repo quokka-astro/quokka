@@ -39,8 +39,8 @@ do_frame_shift = 1
 max_timesteps = 100000
 max_t_cc = 20.0
 
-plotfile_interval = 1000
-checkpoint_interval = 2000
+plotfile_interval = 10
+checkpoint_interval = 1000
 ascent_interval = 200
 
 statistics_interval = 200
@@ -69,3 +69,5 @@ quokka.slice_z.int    = 200            # Output interval (in number of coarse st
 quokka.slice_z.interpolation = Linear  # Interpolation type: Linear or Quadratic (default: Linear)
 quokka.slice_z.field_names = gasDensity pressure entropy nH temperature cooling_length \
 	       cloud_fraction lab_velocity_x mass velocity_mag c_s
+
+do_tracers = 1		# enable tracer particles
