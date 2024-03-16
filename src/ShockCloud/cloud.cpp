@@ -11,7 +11,6 @@
 #include "AMReX_Array.H"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
-#include "AMReX_FabArray.H"
 #include "AMReX_Geometry.H"
 #include "AMReX_GpuDevice.H"
 #include "AMReX_GpuQualifiers.H"
@@ -151,7 +150,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<ShockCloud>::setCustomBou
 	auto [i, j, k] = iv.toArray();
 
 	amrex::Box const &box = geom.Domain();
-	const auto &domain_lo = box.loVect3d();
 	const auto &domain_hi = box.hiVect3d();
 	const int ilo = domain_lo[0];
 	const int ihi = domain_hi[0];
