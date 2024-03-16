@@ -9,20 +9,13 @@
 /// \brief Defines methods for reading the cooling rate tables used by Grackle.
 ///
 
-#include <cmath>
 #include <cstdint>
-#include <cstdio>
-#include <iostream>
 #include <string>
 
-#include "fmt/core.h"
 #include <H5Dpublic.h>
 #include <H5Ppublic.h>
 #include <hdf5.h>
 
-#include "AMReX.H"
-#include "AMReX_Array.H"
-#include "AMReX_BLassert.H"
 #include "AMReX_TableData.H"
 
 using Real = amrex::Real;

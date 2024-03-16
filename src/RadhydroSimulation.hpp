@@ -10,7 +10,6 @@
 /// timestepping, solving, and I/O of a simulation for radiation moments.
 
 #include <array>
-#include <climits>
 #include <filesystem>
 #include <limits>
 #include <memory>
@@ -31,14 +30,11 @@
 #include "AMReX_Box.H"
 #include "AMReX_FArrayBox.H"
 #include "AMReX_FabArray.H"
-#include "AMReX_FabArrayUtility.H"
 #include "AMReX_FabFactory.H"
 #include "AMReX_Geometry.H"
 #include "AMReX_GpuControl.H"
 #include "AMReX_GpuDevice.H"
 #include "AMReX_GpuQualifiers.H"
-#include "AMReX_IArrayBox.H"
-#include "AMReX_IndexType.H"
 #include "AMReX_IntVect.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_MultiFabUtil.H"
@@ -46,12 +42,9 @@
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParallelReduce.H"
 #include "AMReX_ParmParse.H"
-#include "AMReX_Periodicity.H"
-#include "AMReX_PhysBCFunct.H"
 #include "AMReX_PlotFileUtil.H"
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
-#include "AMReX_Utility.H"
 #include "AMReX_YAFluxRegister.H"
 #include "physics_numVars.hpp"
 
@@ -63,7 +56,6 @@
 
 #include "Chemistry.hpp"
 #include "CloudyCooling.hpp"
-#include "HLLC.hpp"
 #include "SimulationData.hpp"
 #include "hydro_system.hpp"
 #include "hyperbolic_system.hpp"
@@ -226,8 +218,8 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	// add gravitational acceleration to hydro state
 	void applyPoissonGravityAtLevel(amrex::MultiFab const &phi, int lev, amrex::Real dt) override;
 
-	void addFluxArrays(std::array<amrex::MultiFab, AMREX_SPACEDIM> &dstfluxes, std::array<amrex::MultiFab, AMREX_SPACEDIM> &srcfluxes, const int srccomp,
-			   const int dstcomp);
+	void addFluxArrays(std::array<amrex::MultiFab, AMREX_SPACEDIM> &dstfluxes, std::array<amrex::MultiFab, AMREX_SPACEDIM> &srcfluxes, int srccomp,
+			   int dstcomp);
 
 	auto expandFluxArrays(std::array<amrex::FArrayBox, AMREX_SPACEDIM> &fluxes, int nstartNew, int ncompNew)
 	    -> std::array<amrex::FArrayBox, AMREX_SPACEDIM>;
@@ -237,7 +229,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	void advanceHydroAtLevelWithRetries(int lev, amrex::Real time, amrex::Real dt_lev, amrex::YAFluxRegister *fr_as_crse,
 					    amrex::YAFluxRegister *fr_as_fine);
 
-	auto advanceHydroAtLevel(amrex::MultiFab &state_old_tmp, amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine, int lev,
+	auto advanceHydroAtLevel(amrex::MultiFab &state_old_cc_tmp, amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine, int lev,
 				 amrex::Real time, amrex::Real dt_lev) -> bool;
 
 	void addStrangSplitSources(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev);
@@ -266,10 +258,10 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 				    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx)
 	    -> std::tuple<std::array<amrex::FArrayBox, AMREX_SPACEDIM>, std::array<amrex::FArrayBox, AMREX_SPACEDIM>>;
 
-	auto computeHydroFluxes(amrex::MultiFab const &consVar, const int nvars, const int lev)
+	auto computeHydroFluxes(amrex::MultiFab const &consVar, int nvars, int lev)
 	    -> std::pair<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>>;
 
-	auto computeFOHydroFluxes(amrex::MultiFab const &consVar, const int nvars, const int lev)
+	auto computeFOHydroFluxes(amrex::MultiFab const &consVar, int nvars, int lev)
 	    -> std::pair<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>>;
 
 	template <FluxDir DIR>
@@ -437,7 +429,7 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::computeMaxSign
 	}
 }
 
-template <typename problem_t> auto RadhydroSimulation<problem_t>::computeExtraPhysicsTimestep(int const level) -> amrex::Real
+template <typename problem_t> auto RadhydroSimulation<problem_t>::computeExtraPhysicsTimestep(int const /*level*/) -> amrex::Real
 {
 	BL_PROFILE("RadhydroSimulation::computeExtraPhysicsTimestep()");
 	// users can override this to enforce additional timestep constraints
@@ -460,7 +452,7 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::checkHydroStat
 	if (!validStates) {
 		amrex::Print() << "Hydro states invalid (" + std::string(file) + ":" + std::to_string(line) + ")\n";
 		amrex::Print() << "Writing checkpoint for debugging...\n";
-		amrex::MFIter::allowMultipleMFIters(true);
+		amrex::MFIter::allowMultipleMFIters(1);
 		WriteCheckpointFile();
 		amrex::Abort("Hydro states invalid (" + std::string(file) + ":" + std::to_string(line) + ")");
 	}
@@ -593,11 +585,11 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::computeAfterEv
 	amrex::Real const abs_err = (Etot - Etot0);
 	amrex::Real const rel_err = abs_err / Etot0;
 
-	amrex::Print() << "\nInitial gas+radiation energy = " << Etot0 << std::endl;
-	amrex::Print() << "Final gas+radiation energy = " << Etot << std::endl;
-	amrex::Print() << "\tabsolute conservation error = " << abs_err << std::endl;
-	amrex::Print() << "\trelative conservation error = " << rel_err << std::endl;
-	amrex::Print() << std::endl;
+	amrex::Print() << "\nInitial gas+radiation energy = " << Etot0 << '\n';
+	amrex::Print() << "Final gas+radiation energy = " << Etot << '\n';
+	amrex::Print() << "\tabsolute conservation error = " << abs_err << '\n';
+	amrex::Print() << "\trelative conservation error = " << rel_err << '\n';
+	amrex::Print() << '\n';
 
 	if (computeReferenceSolution_) {
 		// compute reference solution
@@ -623,14 +615,14 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::computeAfterEv
 
 		const double rel_error = err_norm / sol_norm;
 		errorNorm_ = rel_error;
-		amrex::Print() << "Relative rms L1 error norm = " << rel_error << std::endl;
+		amrex::Print() << "Relative rms L1 error norm = " << rel_error << '\n';
 	}
-	amrex::Print() << std::endl;
+	amrex::Print() << '\n';
 
 	// compute average number of radiation subcycles per timestep
 	double const avg_rad_subcycles = static_cast<double>(radiationCellUpdates_) / static_cast<double>(cellUpdates_);
-	amrex::Print() << "avg. num. of radiation subcycles = " << avg_rad_subcycles << std::endl;
-	amrex::Print() << std::endl;
+	amrex::Print() << "avg. num. of radiation subcycles = " << avg_rad_subcycles << '\n';
+	amrex::Print() << '\n';
 }
 
 template <typename problem_t> void RadhydroSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle)
@@ -786,7 +778,7 @@ void RadhydroSimulation<problem_t>::FillPatch(int lev, amrex::Real time, amrex::
 	}
 }
 
-template <typename problem_t> void RadhydroSimulation<problem_t>::PreInterpState(amrex::MultiFab &mf, int scomp, int ncomp)
+template <typename problem_t> void RadhydroSimulation<problem_t>::PreInterpState(amrex::MultiFab &mf, int /*scomp*/, int /*ncomp*/)
 {
 	BL_PROFILE("RadhydroSimulation::PreInterpState()");
 
@@ -805,7 +797,7 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::PreInterpState
 	});
 }
 
-template <typename problem_t> void RadhydroSimulation<problem_t>::PostInterpState(amrex::MultiFab &mf, int scomp, int ncomp)
+template <typename problem_t> void RadhydroSimulation<problem_t>::PostInterpState(amrex::MultiFab &mf, int /*scomp*/, int /*ncomp*/)
 {
 	BL_PROFILE("RadhydroSimulation::PostInterpState()");
 
@@ -894,7 +886,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 
 	for (int retry_count = 0; retry_count <= max_retries; ++retry_count) {
 		// reduce timestep by a factor of 2^retry_count
-		const int nsubsteps = std::pow(2, retry_count);
+		const int nsubsteps = static_cast<int>(std::pow(2, retry_count));
 		const amrex::Real dt_step = dt_lev / nsubsteps;
 
 		if (retry_count > 0 && Verbose()) {
@@ -952,7 +944,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 		// crash, we have exceeded max_retries
 		amrex::Print() << "\nQUOKKA FATAL ERROR\n"
 			       << "Hydro update exceeded max_retries on level " << lev << ". Cannot continue, crashing...\n"
-			       << std::endl;
+			       << std::endl; // NOLINT(performance-avoid-endl)
 
 		// write plotfile or Ascent Blueprint file
 		amrex::ParallelDescriptor::Barrier();
@@ -974,7 +966,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 	}
 }
 
-template <typename problem_t> auto RadhydroSimulation<problem_t>::isCflViolated(int lev, amrex::Real time, amrex::Real dt_actual) -> bool
+template <typename problem_t> auto RadhydroSimulation<problem_t>::isCflViolated(int lev, amrex::Real /*time*/, amrex::Real dt_actual) -> bool
 {
 	// check whether dt_actual would violate CFL condition using the post-update hydro state
 
@@ -1679,7 +1671,7 @@ void RadhydroSimulation<problem_t>::advanceRadiationSubstepAtLevel(int lev, amre
 								   amrex::YAFluxRegister *fr_as_fine)
 {
 	if (Verbose()) {
-		amrex::Print() << "\tsubstep " << iter_count << " t = " << time << std::endl;
+		amrex::Print() << "\tsubstep " << iter_count << " t = " << time << '\n';
 	}
 
 	// get cell sizes

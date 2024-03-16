@@ -11,22 +11,15 @@
 
 #include <array>
 
-#include "AMReX.H"
-#include "AMReX_Arena.H"
 #include "AMReX_Array.H"
-#include "AMReX_Array4.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_Box.H"
-#include "AMReX_Config.H"
 #include "AMReX_DistributionMapping.H"
-#include "AMReX_FArrayBox.H"
-#include "AMReX_FabArrayUtility.H"
 #include "AMReX_IntVect.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
 #include "AMReX_TagBox.H"
-#include "AMReX_Utility.H"
 #include "AMReX_YAFluxRegister.H"
 #include <AMReX_FluxRegister.H>
 
@@ -98,7 +91,7 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 
 	template <FluxDir DIR>
 	void fluxFunction(amrex::MultiFab const &consState, amrex::MultiFab &primVar, amrex::MultiFab &x1Flux, amrex::MultiFab &x1LeftState,
-			  amrex::MultiFab &x1RightState, const int ng_reconstruct, const int nvars);
+			  amrex::MultiFab &x1RightState, int ng_reconstruct, int nvars);
 
 	double advectionVx_ = 1.0; // default
 	double advectionVy_ = 0.0; // default
@@ -131,7 +124,7 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::applyPoissonG
 	// deliberately empty
 }
 
-template <typename problem_t> auto AdvectionSimulation<problem_t>::computeExtraPhysicsTimestep(int const level) -> amrex::Real
+template <typename problem_t> auto AdvectionSimulation<problem_t>::computeExtraPhysicsTimestep(int const /*level*/) -> amrex::Real
 {
 	// user can override this
 	return std::numeric_limits<amrex::Real>::max();

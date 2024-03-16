@@ -1,8 +1,8 @@
-/// \file test_radhydro_pulse.cpp
-/// \brief Defines a test problem for radiation in the static diffusion regime with advection by gas.
+/// \file test_radhydro_pulse_grey.cpp
+/// \brief Defines a test problem for radiation in the diffusion regime with advection in medium with variable opacity under grey approximation.
 ///
 
-#include "test_radhydro_pulse.hpp"
+#include "test_radhydro_pulse_grey.hpp"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_Print.H"
 #include "RadhydroSimulation.hpp"
@@ -24,7 +24,6 @@ constexpr double width = 24.0; // cm, width of the pulse
 constexpr double erad_floor = a_rad * T0 * T0 * T0 * T0 * 1.0e-10;
 constexpr double mu = 2.33 * C::m_u;
 constexpr double k_B = C::k_B;
-constexpr double v0_nonadv = 0.; // non-advecting pulse
 
 // static diffusion: tau = 2e3, beta = 3e-5, beta tau = 6e-2
 constexpr double kappa0 = 100.;	    // cm^2 g^-1
@@ -99,34 +98,34 @@ auto compute_exact_rho(const double x) -> double
 	return rho0 * T0 / T + (a_rad * mu / 3. / k_B) * (std::pow(T0, 4) / T - std::pow(T, 3));
 }
 
-template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
 {
+	const double sigma = 3063.96 * std::pow(Tgas / T0, -3.5);
 	quokka::valarray<double, nGroups_> kappaPVec{};
-	for (int i = 0; i < nGroups_; ++i) {
-		kappaPVec[i] = kappa0;
-	}
+	kappaPVec.fillin(sigma / rho);
 	return kappaPVec;
 }
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<AdvPulseProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
+AMREX_GPU_HOST_DEVICE auto RadSystem<AdvPulseProblem>::ComputePlanckOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
 {
+	const double sigma = 3063.96 * std::pow(Tgas / T0, -3.5);
 	quokka::valarray<double, nGroups_> kappaPVec{};
-	for (int i = 0; i < nGroups_; ++i) {
-		kappaPVec[i] = kappa0;
-	}
+	kappaPVec.fillin(sigma / rho);
 	return kappaPVec;
 }
 
 template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
 {
-	return ComputePlanckOpacity(rho, Tgas);
+	const double sigma = 101.248 * std::pow(Tgas / T0, -3.5);
+	quokka::valarray<double, nGroups_> kappaPVec{};
+	kappaPVec.fillin(sigma / rho);
+	return kappaPVec;
 }
 template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<AdvPulseProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
 {
-	return ComputePlanckOpacity(rho, Tgas);
+	return RadSystem<PulseProblem>::ComputeFluxMeanOpacity(rho, Tgas);
 }
 
 template <> void RadhydroSimulation<PulseProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
@@ -147,16 +146,15 @@ template <> void RadhydroSimulation<PulseProblem>::setInitialConditionsOnGrid(qu
 		const double Erad = a_rad * std::pow(Trad, 4);
 		const double rho = compute_exact_rho(x - x0);
 		const double Egas = quokka::EOS<PulseProblem>::ComputeEintFromTgas(rho, Trad);
-		const double v0 = v0_nonadv;
 
 		state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = Erad;
-		state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index) = 4. / 3. * v0 * Erad;
+		state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index) = 0;
 		state_cc(i, j, k, RadSystem<PulseProblem>::x2RadFlux_index) = 0;
 		state_cc(i, j, k, RadSystem<PulseProblem>::x3RadFlux_index) = 0;
-		state_cc(i, j, k, RadSystem<PulseProblem>::gasEnergy_index) = Egas + 0.5 * rho * v0 * v0;
+		state_cc(i, j, k, RadSystem<PulseProblem>::gasEnergy_index) = Egas;
 		state_cc(i, j, k, RadSystem<PulseProblem>::gasDensity_index) = rho;
 		state_cc(i, j, k, RadSystem<PulseProblem>::gasInternalEnergy_index) = Egas;
-		state_cc(i, j, k, RadSystem<PulseProblem>::x1GasMomentum_index) = v0 * rho;
+		state_cc(i, j, k, RadSystem<PulseProblem>::x1GasMomentum_index) = 0.;
 		state_cc(i, j, k, RadSystem<PulseProblem>::x2GasMomentum_index) = 0.;
 		state_cc(i, j, k, RadSystem<PulseProblem>::x3GasMomentum_index) = 0.;
 	});
@@ -181,6 +179,7 @@ template <> void RadhydroSimulation<AdvPulseProblem>::setInitialConditionsOnGrid
 		const double Egas = quokka::EOS<PulseProblem>::ComputeEintFromTgas(rho, Trad);
 		const double v0 = v0_adv;
 
+		// state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = (1. + 4. / 3. * (v0 * v0) / (c * c)) * Erad;
 		state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = Erad;
 		state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index) = 4. / 3. * v0 * Erad;
 		state_cc(i, j, k, RadSystem<PulseProblem>::x2RadFlux_index) = 0;
@@ -196,9 +195,9 @@ template <> void RadhydroSimulation<AdvPulseProblem>::setInitialConditionsOnGrid
 
 auto problem_main() -> int
 {
-	// This problem is a test of radiation diffusion plus advection by gas.
+	// This problem is a test of grey radiation diffusion plus advection by gas.
 	// This makes this problem a stringent test of the radiation advection
-	// in the diffusion limit.
+	// in the diffusion limit under grey approximation.
 
 	// Problem parameters
 	const int64_t max_timesteps = 1e8;
@@ -211,10 +210,7 @@ auto problem_main() -> int
 	constexpr int nvars = RadSystem<PulseProblem>::nvar_;
 	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
 	for (int n = 0; n < nvars; ++n) {
-		// periodic boundary condition in the x-direction will not work
-		BCs_cc[n].setLo(0, amrex::BCType::foextrap); // extrapolate
-		BCs_cc[n].setHi(0, amrex::BCType::foextrap);
-		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
+		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
 			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
 			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
 		}
@@ -265,7 +261,7 @@ auto problem_main() -> int
 	}
 	// END OF PROBLEM 1
 
-	// Problem 2: advecting pulse
+	// Problem 2: advecting radiation
 
 	// Problem initialization
 	RadhydroSimulation<AdvPulseProblem> sim2(BCs_cc);
@@ -333,26 +329,39 @@ auto problem_main() -> int
 	// compute error norm
 	double err_norm = 0.;
 	double sol_norm = 0.;
+	// double Tmax = 0.;
 	for (size_t i = 0; i < xs2.size(); ++i) {
 		err_norm += std::abs(Tgas[i] - Trad[i]);
 		err_norm += std::abs(Trad2[i] - Trad[i]);
 		err_norm += std::abs(Tgas2[i] - Trad[i]);
 		sol_norm += std::abs(Trad[i]) * 3.0;
+		// Tmax = std::max(Tmax, Tgas2[i]);
 	}
-	const double error_tol = 0.006;
+	// const double Tmax_tol = 1.37e7;
+	const double error_tol = 1e-3;
 	const double rel_error = err_norm / sol_norm;
 	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
+
+	// symmetry check
+	double symm_err = 0.;
+	double symm_norm = 0.;
+	const double symm_err_tol = 1.0e-3;
+	for (size_t i = 0; i < xs2.size(); ++i) {
+		symm_err += std::abs(Tgas2[i] - Tgas2[xs2.size() - 1 - i]);
+		symm_norm += std::abs(Tgas2[i]);
+	}
+	const double symm_rel_error = symm_err / symm_norm;
+	amrex::Print() << "Symmetry L1 error norm = " << symm_rel_error << std::endl;
 
 #ifdef HAVE_PYTHON
 	// plot temperature
 	matplotlibcpp::clf();
 	std::map<std::string, std::string> Trad_args;
 	std::map<std::string, std::string> Tgas_args;
-	Trad_args["label"] = "Trad (non-advecting)";
+	Trad_args["label"] = "Trad (nonadvecting)";
 	Trad_args["linestyle"] = "-.";
-	Tgas_args["label"] = "Tgas (non-advecting)";
+	Tgas_args["label"] = "Tgas (nonadvecting)";
 	Tgas_args["linestyle"] = "--";
-	matplotlibcpp::ylim(0.95e7, 1.6e7);
 	matplotlibcpp::plot(xs, Trad, Trad_args);
 	matplotlibcpp::plot(xs, Tgas, Tgas_args);
 	Trad_args["label"] = "Trad (advecting)";
@@ -361,20 +370,13 @@ auto problem_main() -> int
 	matplotlibcpp::plot(xs2, Tgas2, Tgas_args);
 	matplotlibcpp::xlabel("length x (cm)");
 	matplotlibcpp::ylabel("temperature (K)");
+	matplotlibcpp::ylim(0.98e7, 1.3499e7);
 	matplotlibcpp::legend();
-	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
+	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim2.tNew_[0]));
 	matplotlibcpp::tight_layout();
-	matplotlibcpp::save("./radhydro_pulse_temperature.pdf");
-
-	// Save xs, Trad, Tgas, xs2, Trad2, Tgas2 to csv file
-	std::ofstream file;
-	file.open("radhydro_pulse_temperature.csv");
-	file << "xs,Trad,Tgas,xs2,Trad2,Tgas2\n";
-	for (size_t i = 0; i < xs.size(); ++i) {
-		file << std::scientific << std::setprecision(12) << xs[i] << "," << Trad[i] << "," << Tgas[i] << "," << xs2[i] << "," << Trad2[i] << ","
-		     << Tgas2[i] << "\n";
-	}
-	file.close();
+	// matplotlibcpp::save("./radhydro_pulse_temperature_greynew.pdf");
+	// save to file with tNew_[0] in the name
+	matplotlibcpp::save(fmt::format("./radhydro_pulse_grey_temperature.pdf", sim2.tNew_[0]));
 
 	// plot gas density profile
 	matplotlibcpp::clf();
@@ -389,15 +391,7 @@ auto problem_main() -> int
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
 	matplotlibcpp::tight_layout();
-	matplotlibcpp::save("./radhydro_pulse_density.pdf");
-
-	// Save xs, rhogas, xs2, rhogas2 to csv file with format %.12e
-	file.open("radhydro_pulse_density.csv");
-	file << "xs,rhogas,xs2,rhogas2\n";
-	for (size_t i = 0; i < xs.size(); ++i) {
-		file << std::scientific << std::setprecision(12) << xs[i] << "," << rhogas[i] << "," << xs2[i] << "," << rhogas2[i] << "\n";
-	}
-	file.close();
+	matplotlibcpp::save("./radhydro_pulse_grey_density.pdf");
 
 	// plot gas velocity profile
 	matplotlibcpp::clf();
@@ -412,21 +406,13 @@ auto problem_main() -> int
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
 	matplotlibcpp::tight_layout();
-	matplotlibcpp::save("./radhydro_pulse_velocity.pdf");
-
-	// Save xs, Vgas, xs2, Vgas2 to csv file
-	file.open("radhydro_pulse_velocity.csv");
-	file << "xs,Vgas,xs2,Vgas2\n";
-	for (size_t i = 0; i < xs.size(); ++i) {
-		file << std::scientific << std::setprecision(12) << xs[i] << "," << Vgas[i] << "," << xs2[i] << "," << Vgas2[i] << "\n";
-	}
-	file.close();
+	matplotlibcpp::save("./radhydro_pulse_grey_velocity.pdf");
 
 #endif
 
 	// Cleanup and exit
 	int status = 0;
-	if ((rel_error > error_tol) || std::isnan(rel_error)) {
+	if ((rel_error > error_tol) || std::isnan(rel_error) || (symm_rel_error > symm_err_tol) || std::isnan(symm_rel_error)) {
 		status = 1;
 	}
 	return status;

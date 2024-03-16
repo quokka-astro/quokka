@@ -10,7 +10,6 @@
 /// timestepping, solving, and I/O of a simulation.
 
 // c++ headers
-#include "AMReX_Interpolater.H"
 #include <cassert>
 #include <cmath>
 #include <csignal>
@@ -33,7 +32,6 @@ namespace filesystem = experimental::filesystem;
 #include <optional>
 #include <ostream>
 #include <stdexcept>
-#include <tuple>
 #include <variant>
 
 // library headers
@@ -43,30 +41,24 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_Array4.H"
 #include "AMReX_AsyncOut.H"
 #include "AMReX_BCRec.H"
-#include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
-#include "AMReX_Config.H"
 #include "AMReX_DistributionMapping.H"
 #include "AMReX_Extension.H"
 #include "AMReX_FArrayBox.H"
 #include "AMReX_FillPatchUtil.H"
 #include "AMReX_FillPatcher.H"
-#include "AMReX_FluxRegister.H"
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_INT.H"
 #include "AMReX_IndexType.H"
 #include "AMReX_IntVect.H"
-#include "AMReX_LayoutData.H"
+#include "AMReX_Interpolater.H"
 #include "AMReX_MultiFabUtil.H"
-#include "AMReX_ParallelContext.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
 #include "AMReX_Vector.H"
 #include "AMReX_VisMF.H"
 #include "AMReX_YAFluxRegister.H"
-#include "fundamental_constants.H"
-#include "physics_numVars.hpp"
 #include <AMReX_Geometry.H>
 #include <AMReX_MultiFab.H>
 #include <AMReX_ParmParse.H>
@@ -92,10 +84,10 @@ namespace filesystem = experimental::filesystem;
 #endif
 
 // internal headers
-#include "CheckNaN.hpp"
+#include "fundamental_constants.H"
 #include "grid.hpp"
-#include "math_impl.hpp"
 #include "physics_info.hpp"
+#include "physics_numVars.hpp"
 
 #ifdef QUOKKA_USE_OPENPMD
 #include "openPMD.hpp"
@@ -472,7 +464,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::initialize()
 	// check that grids will be properly nested on each level
 	// (this is necessary since FillPatch only fills from non-ghost cells on
 	// lev-1)
-	auto checkIsProperlyNested = [=](int const lev, amrex::IntVect const &blockingFactor) {
+	auto checkIsProperlyNested = [this](int const lev, amrex::IntVect const &blockingFactor) {
 		return amrex::ProperlyNested(refRatio(lev - 1), blockingFactor, nghost_cc_, amrex::IndexType::TheCellType(), &amrex::cell_cons_interp);
 	};
 
@@ -481,7 +473,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::initialize()
 			// level lev is not properly nested
 			amrex::Print() << "Blocking factor is too small for proper grid nesting! "
 					  "Increase blocking factor to >= ceil(nghost,ref_ratio)*ref_ratio."
-				       << std::endl;
+				       << std::endl; // NOLINT(performance-avoid-endl)
 			amrex::Abort("Grids not properly nested!");
 		}
 	}
@@ -633,7 +625,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	int hours = 0;
 	int minutes = 0;
 	int seconds = 0;
-	int nargs = std::sscanf(maxWalltimeInput.c_str(), "%d:%d:%d", &hours, &minutes, &seconds);
+	int nargs = std::sscanf(maxWalltimeInput.c_str(), "%d:%d:%d", &hours, &minutes, &seconds); // NOLINT
 	if (nargs == 3) {
 		maxWalltime_ = 3600 * hours + 60 * minutes + seconds;
 		amrex::Print() << fmt::format("Setting walltime limit to {} hours, {} minutes, {} seconds.\n", hours, minutes, seconds);
@@ -680,7 +672,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 		amrex::Print() << "[ERROR] [FATAL] AsyncOut is currently broken! If you want to "
 				  "run with AsyncOut anyway (THIS MAY CAUSE DATA CORRUPTION), comment "
 				  "out this line in src/simulation.hpp. Aborting."
-			       << std::endl;
+			       << std::endl; // NOLINT(performance-avoid-endl)
 		amrex::Abort();
 	}
 
@@ -756,7 +748,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 
 	for (int level = 0; level <= finest_level; ++level) {
 		n_factor *= nsubsteps[level];
-		dt_0 = std::min(dt_0, n_factor * dt_tmp[level]);
+		dt_0 = std::min(dt_0, static_cast<amrex::Real>(n_factor) * dt_tmp[level]);
 		dt_0 = std::min(dt_0, maxDt_); // limit to maxDt_
 
 		if (tNew_[level] == 0.0) { // first timestep
@@ -797,10 +789,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 	}
 	const amrex::Real work_nonsubcycling = static_cast<amrex::Real>(total_cells) * (dt_0 / dt_global);
 
-	if (work_nonsubcycling <= work_subcycling) {
+	if (work_nonsubcycling <= static_cast<amrex::Real>(work_subcycling)) {
 		// use global timestep on this coarse step
 		if (verbose) {
-			const amrex::Real ratio = work_nonsubcycling / work_subcycling;
+			const amrex::Real ratio = work_nonsubcycling / static_cast<amrex::Real>(work_subcycling);
 			amrex::Print() << "\t>> Using global timestep on this coarse step (estimated work ratio: " << ratio << ").\n";
 		}
 		for (int lev = 1; lev <= max_level; ++lev) {
@@ -863,7 +855,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 		if (suppress_output == 0) {
 			amrex::Print() << "\nCoarse STEP " << step + 1 << " at t = " << cur_time << " (" << (cur_time / stopTime_) * 100. << "%) starts ..."
-				       << std::endl;
+				       << '\n';
 		}
 
 		amrex::ParallelDescriptor::Barrier(); // synchronize all MPI ranks
@@ -960,13 +952,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	for (int n = 0; n < ncomp_cc; ++n) {
 		amrex::Real const final_sum = state_new_cc_[0].sum(n) * vol;
 		amrex::Real const abs_err = (final_sum - init_sum_cons[n]);
-		amrex::Print() << "Initial " << componentNames_cc_[n] << " = " << init_sum_cons[n] << std::endl;
-		amrex::Print() << "\tabsolute conservation error = " << abs_err << std::endl;
+		amrex::Print() << "Initial " << componentNames_cc_[n] << " = " << init_sum_cons[n] << '\n';
+		amrex::Print() << "\tabsolute conservation error = " << abs_err << '\n';
 		if (init_sum_cons[n] != 0.0) {
 			amrex::Real const rel_err = abs_err / init_sum_cons[n];
-			amrex::Print() << "\trelative conservation error = " << rel_err << std::endl;
+			amrex::Print() << "\trelative conservation error = " << rel_err << '\n';
 		}
-		amrex::Print() << std::endl;
+		amrex::Print() << '\n';
 	}
 
 	// compute zone-cycles/sec
@@ -978,7 +970,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	for (int lev = 0; lev <= max_level; ++lev) {
 		amrex::Print() << "Zone-updates on level " << lev << ": " << cellUpdatesEachLevel_[lev] << "\n";
 	}
-	amrex::Print() << std::endl;
+	amrex::Print() << '\n';
 
 	// write final plotfile
 	if (plotfileInterval_ > 0 && istep[0] > last_plot_file_step) {
@@ -1271,7 +1263,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 
 	if (Verbose()) {
 		amrex::Print() << "[Level " << lev << " step " << istep[lev] + 1 << "] ";
-		amrex::Print() << "ADVANCE with time = " << tNew_[lev] << " dt = " << dt_[lev] << std::endl;
+		amrex::Print() << "ADVANCE with time = " << tNew_[lev] << " dt = " << dt_[lev] << '\n';
 	}
 
 	// Advance a single level for a single time step, and update flux registers
@@ -1351,13 +1343,15 @@ void AMRSimulation<problem_t>::incrementFluxRegisters(amrex::MFIter &mfi, amrex:
 	if (fr_as_crse != nullptr) {
 		AMREX_ASSERT(lev < finestLevel());
 		AMREX_ASSERT(fr_as_crse == flux_reg_[lev + 1].get());
-		fr_as_crse->CrseAdd(mfi, {AMREX_D_DECL(&fluxArrays[0], &fluxArrays[1], &fluxArrays[2])}, geom[lev].CellSize(), dt_lev, amrex::RunOn::Gpu);
+		fr_as_crse->CrseAdd(mfi, {AMREX_D_DECL(&fluxArrays[0], &fluxArrays[1], &fluxArrays[2])}, // NOLINT(readability-container-data-pointer)
+				    geom[lev].CellSize(), dt_lev, amrex::RunOn::Gpu);
 	}
 
 	if (fr_as_fine != nullptr) {
 		AMREX_ASSERT(lev > 0);
 		AMREX_ASSERT(fr_as_fine == flux_reg_[lev].get());
-		fr_as_fine->FineAdd(mfi, {AMREX_D_DECL(&fluxArrays[0], &fluxArrays[1], &fluxArrays[2])}, geom[lev].CellSize(), dt_lev, amrex::RunOn::Gpu);
+		fr_as_fine->FineAdd(mfi, {AMREX_D_DECL(&fluxArrays[0], &fluxArrays[1], &fluxArrays[2])}, // NOLINT(readability-container-data-pointer)
+				    geom[lev].CellSize(), dt_lev, amrex::RunOn::Gpu);
 	}
 }
 

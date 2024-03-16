@@ -11,11 +11,13 @@
 
 #include "AMReX_Extension.H"
 #include "AMReX_GpuQualifiers.H"
+#include "AMReX_iMultiFab.H"
 
 #include "FastMath.hpp"
 #include "GrackleDataReader.hpp"
 #include "Interpolate2D.hpp"
 #include "ODEIntegrate.hpp"
+#include "fmt/core.h"
 #include "fundamental_constants.H"
 #include "hydro_system.hpp"
 #include "radiation_system.hpp"
