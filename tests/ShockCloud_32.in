@@ -39,7 +39,7 @@ do_frame_shift = 1
 max_timesteps = 100000
 max_t_cc = 20.0
 
-plotfile_interval = 10
+plotfile_interval = 200
 checkpoint_interval = 1000
 ascent_interval = 200
 
