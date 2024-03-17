@@ -10,14 +10,11 @@
 #include <cmath>
 
 #include "AMReX_BLassert.H"
-#include "AMReX_Config.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
-#include "AMReX_Print.H"
 
 #include "RadhydroSimulation.hpp"
 #include "hydro_system.hpp"
-#include "test_hydro3d_rt.hpp"
 
 struct RTProblem {
 };
@@ -52,7 +49,6 @@ template <> void RadhydroSimulation<RTProblem>::setInitialConditionsOnGrid(quokk
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_elem.prob_hi_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
@@ -60,9 +56,7 @@ template <> void RadhydroSimulation<RTProblem>::setInitialConditionsOnGrid(quokk
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelForRNG(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::RandomEngine const &rng) noexcept {
-		amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
-		amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
-		amrex::Real const z = prob_lo[2] + (k + amrex::Real(0.5)) * dx[2];
+		amrex::Real const z = prob_lo[2] + (k + static_cast<amrex::Real>(0.5)) * dx[2];
 
 		double rho = NAN;
 		double scalar = NAN;
@@ -101,7 +95,8 @@ template <> void RadhydroSimulation<RTProblem>::setInitialConditionsOnGrid(quokk
 	});
 }
 
-template <> void RadhydroSimulation<RTProblem>::addStrangSplitSources(amrex::MultiFab &state_mf, const int lev, const amrex::Real time, const amrex::Real dt)
+template <>
+void RadhydroSimulation<RTProblem>::addStrangSplitSources(amrex::MultiFab &state_mf, const int /*lev*/, const amrex::Real /*time*/, const amrex::Real dt)
 {
 	// add gravitational source terms
 	const auto state = state_mf.arrays();
@@ -182,8 +177,8 @@ template <> void RadhydroSimulation<RTProblem>::computeAfterTimestep()
 			file.open("profile.txt");
 			file.precision(17);
 
-			for (int i = 0; i < profile.size(); ++i) {
-				file << profile[i] << "\n";
+			for (const double value : profile) {
+				file << value << "\n";
 			}
 			file.close();
 		}
