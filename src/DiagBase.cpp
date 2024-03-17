@@ -52,7 +52,7 @@ auto DiagBase::doDiag(const amrex::Real &a_time, int a_nstep) -> bool
 		willDo = true;
 	}
 
-	// TODO: using a_time
+	// TODO(bwibking): output based on a_time
 	amrex::ignore_unused(a_time);
 
 	return willDo;

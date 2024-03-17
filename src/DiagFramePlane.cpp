@@ -93,7 +93,7 @@ void DiagFramePlane::prepare(int a_nlevels, const amrex::Vector<amrex::Geometry>
 		// Store the level0 geometry
 		auto initDomain = a_geoms[0].Domain();
 		auto initRealBox = a_geoms[0].ProbDomain();
-		const amrex::Real *dxlcl = a_geoms[0].CellSize();
+		amrex::GpuArray const dxlcl = a_geoms[0].CellSizeArray();
 		int cdim = 0;
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			if (idim != m_normal) {
@@ -125,8 +125,8 @@ void DiagFramePlane::prepare(int a_nlevels, const amrex::Vector<amrex::Geometry>
 	// On each level, find the k0 where the plane lays
 	// and the weight of the directionnal interpolation
 	for (int lev = 0; lev < a_nlevels; lev++) {
-		const amrex::Real *dx = a_geoms[lev].CellSize();
-		const amrex::Real *problo = a_geoms[lev].ProbLo();
+		amrex::GpuArray const dx = a_geoms[lev].CellSizeArray();
+		amrex::GpuArray const problo = a_geoms[lev].ProbLoArray();
 		// How many dx away from the lowest cell-center ?
 		amrex::Real dist = (m_center[m_normal] - (problo[m_normal] + 0.5 * dx[m_normal])) / dx[m_normal];
 		int k0 = static_cast<int>(std::round(dist));
@@ -210,19 +210,19 @@ void DiagFramePlane::processDiag(int a_nstep, const amrex::Real &a_time, const a
 			auto *idx_d_p = m_fieldIndices_d.dataPtr();
 			if (m_normal == 0) {
 				amrex::ParallelFor(bx, m_fieldNames.size(), [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
-					int stIdx = idx_d_p[n];
+					int stIdx = idx_d_p[n]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 					plane(i, j, k, n) = intwgt[0] * state(p0 - 1, i, j, stIdx) + intwgt[1] * state(p0, i, j, stIdx) +
 							    intwgt[2] * state(p0 + 1, i, j, stIdx);
 				});
 			} else if (m_normal == 1) {
 				amrex::ParallelFor(bx, m_fieldNames.size(), [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
-					int stIdx = idx_d_p[n];
+					int stIdx = idx_d_p[n]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 					plane(i, j, k, n) = intwgt[0] * state(i, p0 - 1, j, stIdx) + intwgt[1] * state(i, p0, j, stIdx) +
 							    intwgt[2] * state(i, p0 + 1, j, stIdx);
 				});
 			} else if (m_normal == 2) {
 				amrex::ParallelFor(bx, m_fieldNames.size(), [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
-					int stIdx = idx_d_p[n];
+					int stIdx = idx_d_p[n]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 					plane(i, j, k, n) = intwgt[0] * state(i, j, p0 - 1, stIdx) + intwgt[1] * state(i, j, p0, stIdx) +
 							    intwgt[2] * state(i, j, p0 + 1, stIdx);
 				});
@@ -359,7 +359,7 @@ void DiagFramePlane::Write2DPlotfileHeader(std::ostream &HeaderFile, int nlevels
 	HeaderFile << '\n';
 	for (int i = 0; i <= finest_level; ++i) {
 		for (int idim = 0; idim < lowerSpaceDim; ++idim) {
-			HeaderFile << geom[i].CellSize()[idim] << ' ';
+			HeaderFile << geom[i].CellSizeArray()[idim] << ' ';
 		}
 		HeaderFile << '\n';
 	}
@@ -452,7 +452,7 @@ void DiagFramePlane::VisMF2D(const amrex::MultiFab &a_mf, const std::string &a_m
 				const amrex::FArrayBox &fab = a_mf[mfi];
 				writeDataItems = fab.box().numPts() * a_mf.nComp();
 				writeDataSize = writeDataItems * whichRDBytes;
-				char *afPtr = allFabData->data() + writePosition;
+				char *afPtr = allFabData->data() + writePosition; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 				std::stringstream hss;
 				write_2D_header(hss, fab, fab.nComp());
 				hLength = static_cast<int>(hss.tellp());
@@ -468,7 +468,7 @@ void DiagFramePlane::VisMF2D(const amrex::MultiFab &a_mf, const std::string &a_m
 					fabdata = hostfab->dataPtr();
 				}
 #endif
-				memcpy(afPtr + hLength, fabdata, writeDataSize);
+				memcpy(afPtr + hLength, fabdata, writeDataSize); // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 				writePosition += hLength + writeDataSize;
 			}
 			nfi.Stream().write(allFabData->data(), bytesWritten);
@@ -496,7 +496,7 @@ void DiagFramePlane::VisMF2D(const amrex::MultiFab &a_mf, const std::string &a_m
 					fabdata = hostfab->dataPtr();
 				}
 #endif
-				nfi.Stream().write(reinterpret_cast<const char *>(fabdata), writeDataSize);
+				nfi.Stream().write(reinterpret_cast<const char *>(fabdata), writeDataSize); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
 				nfi.Stream().flush();
 			}
 		}
