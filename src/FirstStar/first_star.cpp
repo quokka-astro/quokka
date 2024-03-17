@@ -17,7 +17,7 @@ struct TheProblem {
 };
 
 // constexpr const char* subfolder = __DATE__ " " __TIME__;
-constexpr const char* subfolder = "figures";
+constexpr const char* subfolder = "first_star_figs";
 bool test_passes = true; // if one of the energy checks fails, set to false
 
 // model 1: 1/(1 + n^s) + 1/(1 + n1^s) * (n / n1)^(gamma - 1)
@@ -252,6 +252,41 @@ template <> void RadhydroSimulation<TheProblem>::setInitialConditionsOnGrid(quok
 		state_cc(i, j, k, HydroSystem<TheProblem>::internalEnergy_index) = E_int;
 		state_cc(i, j, k, HydroSystem<TheProblem>::energy_index) = E_int + 0.5 * rho * (v_x * v_x + v_y * v_y + v_z * v_z);
 	});
+}
+
+template <> void RadhydroSimulation<TheProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+{
+
+	// read-in jeans length refinement runtime params
+	int N_J = 1e5;
+	// Real jeans_density_threshold = NAN;
+	Real jeans_density_threshold_over_rho_star = 0.5;
+
+	amrex::ParmParse const pp("refine");
+	pp.query("jeans_num", N_J); // inverse of the 'Jeans number' [Truelove et al. (1997)]
+	// pp.query("density_threshold", jeans_density_threshold);
+	pp.query("density_threshold_over_rho_star", jeans_density_threshold_over_rho_star);
+
+	auto const rho_threshold = jeans_density_threshold_over_rho_star * rho_star;
+
+	const amrex::Real dx = geom[lev].CellSizeArray()[0];
+
+	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
+		const amrex::Box &box = mfi.validbox();
+		const auto state = state_new_cc_[lev].const_array(mfi);
+		const auto tag = tags.array(mfi);
+		const int nidx = HydroSystem<TheProblem>::density_index;
+
+		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			Real const rho = state(i, j, k, nidx);
+
+			const amrex::Real rho_Jeans = std::pow(c_iso / (N_J * dx) * std::sqrt(M_PI / G), 2);
+
+			if (rho > rho_Jeans || rho > rho_threshold) {
+				tag(i, j, k) = amrex::TagBox::SET;
+			}
+		});
+	}
 }
 
 template <> void RadhydroSimulation<TheProblem>::computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons)

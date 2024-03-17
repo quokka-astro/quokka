@@ -5,11 +5,11 @@ geometry.prob_lo     =  0.0 0.0 0.0
 geometry.prob_hi     =  4.0 4.0 4.0
 geometry.is_periodic =  0    0    0
 
-max_timesteps = 10
+max_timesteps = 100
 stop_time = 10.0
 plotfile_interval = 10
 checkpoint_interval = 1000000
-compute_interval = 2
+compute_interval = 1
 # restartfile = plt00004
 
 # *****************************************************************
