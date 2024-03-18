@@ -3,7 +3,7 @@
 
 void DiagBase::init(const std::string &a_prefix, std::string_view a_diagName)
 {
-	amrex::ParmParse pp(a_prefix);
+	amrex::ParmParse const pp(a_prefix);
 
 	// IO
 	pp.query("int", m_interval);
@@ -13,8 +13,7 @@ void DiagBase::init(const std::string &a_prefix, std::string_view a_diagName)
 	AMREX_ASSERT(m_interval > 0 || m_per > 0.0);
 
 	// Filters
-	int nFilters = 0;
-	nFilters = pp.countval("filters");
+	int const nFilters = pp.countval("filters");
 	amrex::Vector<std::string> filtersName;
 	if (nFilters > 0) {
 		m_filters.resize(nFilters);
@@ -31,7 +30,7 @@ void DiagBase::prepare(int /*a_nlevels*/, const amrex::Vector<amrex::Geometry> &
 		       const amrex::Vector<amrex::DistributionMapping> & /*a_dmap*/, const amrex::Vector<std::string> &a_varNames)
 {
 	if (first_time) {
-		int nFilters = static_cast<int>(m_filters.size());
+		int const nFilters = static_cast<int>(m_filters.size());
 		// Move the filter data to the device
 		for (int n = 0; n < nFilters; ++n) {
 			m_filters[n].setup(a_varNames);
@@ -60,7 +59,7 @@ auto DiagBase::doDiag(const amrex::Real &a_time, int a_nstep) -> bool
 
 void DiagBase::addVars(amrex::Vector<std::string> &a_varList)
 {
-	int nFilters = static_cast<int>(m_filters.size());
+	int const nFilters = static_cast<int>(m_filters.size());
 	for (int n = 0; n < nFilters; ++n) {
 		a_varList.push_back(m_filters[n].m_filterVar);
 	}
