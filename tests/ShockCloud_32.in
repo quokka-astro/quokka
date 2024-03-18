@@ -58,6 +58,7 @@ nH_cloud = 1.006921e+00   # cm^-3
 P_over_k = 1.304005e+04   # K cm^-3
 
 R_cloud_pc = 16.09084149928867 # pc
+cloud_relpos_x = 0.25 		   # fraction
 Mach_shock = 1.888892847795999
 
 quokka.diagnostics = slice_z           # Space-separated name(s) of diagnostics (arbitrary)

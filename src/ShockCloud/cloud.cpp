@@ -70,6 +70,7 @@ AMREX_GPU_MANAGED Real rho0 = NAN;    // NOLINT(cppcoreguidelines-avoid-non-cons
 AMREX_GPU_MANAGED Real rho1 = NAN;    // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 AMREX_GPU_MANAGED Real P0 = NAN;      // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 AMREX_GPU_MANAGED Real R_cloud = NAN; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real cloud_relpos_x = 0.5; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
 // cloud-tracking variables needed for Dirichlet boundary condition
 AMREX_GPU_MANAGED Real shock_crossing_time = 0; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
@@ -85,7 +86,7 @@ template <> void RadhydroSimulation<ShockCloud>::setInitialConditionsOnGrid(quok
 	amrex::GpuArray<Real, AMREX_SPACEDIM> prob_lo = grid.prob_lo_;
 	amrex::GpuArray<Real, AMREX_SPACEDIM> prob_hi = grid.prob_hi_;
 
-	Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
+	Real const x0 = prob_lo[0] + cloud_relpos_x * (prob_hi[0] - prob_lo[0]);
 	Real const y0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
 	Real const z0 = prob_lo[2] + 0.5 * (prob_hi[2] - prob_lo[2]);
 
@@ -713,6 +714,9 @@ auto problem_main() -> int
 	// cloud radius
 	pp.query("R_cloud_pc", ::R_cloud); // pc
 	::R_cloud *= parsec_in_cm;	   // convert to cm
+
+	// cloud position (relative to box length)
+	pp.query("cloud_relpos_x", ::cloud_relpos_x); // dimensionless
 
 	// (pre-shock) Mach number
 	pp.query("Mach_shock", M0); // dimensionless
