@@ -178,7 +178,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	void setInitialConditionsOnGridFaceVars(quokka::grid grid_elem) override;
 	void createInitialParticles() override;
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle) override;
-	void computeAfterTimestep() override;
+	void computeAfterTimestep(std::optional<int> global_step) override;
 	void computeAfterLevelAdvance(int lev, amrex::Real time, amrex::Real dt_lev, int /*ncycle*/);
 	void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) override;
 	void computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
@@ -482,7 +482,7 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::createInitialP
 	// note: an implementation is only required if particles are used
 }
 
-template <typename problem_t> void RadhydroSimulation<problem_t>::computeAfterTimestep()
+template <typename problem_t> void RadhydroSimulation<problem_t>::computeAfterTimestep(std::optional<int> /*global_step*/)
 {
 	// do nothing -- user should implement if desired
 }

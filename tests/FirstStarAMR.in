@@ -5,11 +5,11 @@ geometry.prob_lo     =  0.0 0.0 0.0
 geometry.prob_hi     =  4.0 4.0 4.0
 geometry.is_periodic =  0    0    0
 
-max_timesteps = 100
+max_timesteps = 250
 stop_time = 10.0
-plotfile_interval = 10
+plotfile_interval = 50
 checkpoint_interval = 1000000
-compute_interval = 1
+compute_interval = 10
 # restartfile = plt00004
 
 # *****************************************************************
@@ -32,7 +32,7 @@ hydro.reconstruction_order = 3  # PPM
 
 gravity.Gconst = 1.0    #gravitational constant
 
-cfl = 0.8
+cfl = 0.15
 
 do_reflux = 1
 do_subcycle = 0

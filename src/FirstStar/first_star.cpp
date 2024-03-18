@@ -8,8 +8,11 @@
 #include "AMReX_Print.H"
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
-// #include "matplotlibcpp.h"
 #include "physics_info.hpp"
+
+#ifdef HAVE_PYTHON
+#include "matplotlibcpp.h"
+#endif
 
 namespace fs = std::filesystem;
 
@@ -411,11 +414,17 @@ template <> void RadhydroSimulation<TheProblem>::computeAfterEvolve(amrex::Vecto
   test_passes = p_test_passes;
 }
 
-template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep()
+template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep(std::optional<int> global_step)
 {
-	static int step = -1;
 
-	++step;
+	static int local_step = -1;
+  int step = 0;
+  if (global_step.has_value()) {
+    step = global_step.value();
+  } else {
+	  ++local_step;
+    step = local_step;
+  }
 
   // if ((computeInterval_ > 0) && (step % computeInterval_ > 0)) {
   //   return;
@@ -523,6 +532,19 @@ template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep()
 		userData_.rotation_radius.push_back(Rot_radius);
 		userData_.spin_angular_mtm.push_back(Spin_L);
 
+    // Save user data to file
+    if (amrex::ParallelDescriptor::MyProc() == 0) {
+      std::ofstream file(fmt::format("./{}/first-star-user-data-{:05d}.txt", subfolder, step));
+      if (file.is_open()) {
+        file << "time mass position_x position_y position_z velocity_x velocity_y velocity_z rotation_radius spin_angular_mtm\n";
+        file << fmt::format("{:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}\n",
+                            time, Mass, Position_x, Position_y, Position_z, Velocity_x, Velocity_y, Velocity_z, Rot_radius, Spin_L);
+        file.close();
+      } else {
+        std::cerr << "Unable to open file" << std::endl;
+      }
+    }
+
 		// Check conservation of x-momentum
 		amrex::Real const px0 = userData_.init_x_momentum;
 		amrex::Real const px = velocity_x_mf.sum(0) * vol;
@@ -574,6 +596,21 @@ template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep()
 			Vgas.at(i) = v_t;
 			pressure.at(i) = pressure_t;
 		}
+
+    // Save user data to file
+    if (amrex::ParallelDescriptor::MyProc() == 0) {
+      std::ofstream file(fmt::format("./{}/first-star-rho-{:05d}.txt", subfolder, step));
+      if (file.is_open()) {
+        file << "time = " << time << "\n";
+        file << "x, rho" << "\n";
+        for (int i = 0; i < nx; ++i) {
+          file << fmt::format("{:.12g}, {:.12g}\n", xs.at(i), rhogas.at(i));
+        }
+        file.close();
+      } else {
+        std::cerr << "Unable to open file" << std::endl;
+      }
+    }
 
 #ifdef HAVE_PYTHON
 		// plot temperature

@@ -229,7 +229,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	virtual void setInitialConditionsOnGrid(quokka::grid grid_elem) = 0;
 	virtual void setInitialConditionsOnGridFaceVars(quokka::grid grid_elem) = 0;
 	virtual void createInitialParticles() = 0;
-	virtual void computeAfterTimestep() = 0;
+	virtual void computeAfterTimestep(std::optional<int> global_step) = 0;
 	virtual void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) = 0;
 	virtual void fillPoissonRhsAtLevel(amrex::MultiFab &rhs, int lev) = 0;
 	virtual void applyPoissonGravityAtLevel(amrex::MultiFab const &phi, int lev, amrex::Real dt) = 0;
@@ -844,7 +844,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 	getWalltime(); // initialize start_time
 
-	computeAfterTimestep();
+	computeAfterTimestep(0);
 
 	// Main time loop
 	for (int step = istep[0]; step < maxTimesteps_ && cur_time < stopTime_; ++step) {
@@ -878,7 +878,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 		cur_time += dt_[0];
 		++cycleCount_;
-		computeAfterTimestep();
+		computeAfterTimestep(step + 1);
 
 		// sync up time (to avoid roundoff error)
 		for (lev = 0; lev <= finest_level; ++lev) {

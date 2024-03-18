@@ -5,12 +5,12 @@ geometry.prob_lo     =  0.0 0.0 0.0
 geometry.prob_hi     =  4.0 4.0 4.0
 geometry.is_periodic =  0    0    0
 
-max_timesteps = 100
+max_timesteps = 40
 stop_time = 10.0
 plotfile_interval = 10
 checkpoint_interval = 1000000
-compute_interval = 1
-# restartfile = plt00004
+compute_interval = 10
+restartfile = chk00020
 
 # *****************************************************************
 # VERBOSITY
@@ -20,7 +20,7 @@ amr.v              = 1       # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 128 128 128
+amr.n_cell          = 64 64 64
 amr.max_level       = 0     # number of levels = max_level + 1
 amr.blocking_factor = 64     # grid size must be divisible by this
 amr.max_grid_size   = 64
@@ -32,7 +32,7 @@ hydro.reconstruction_order = 3  # PPM
 
 gravity.Gconst = 1.0    #gravitational constant
 
-cfl = 0.8
+cfl = 0.15
 
 do_reflux = 1
 do_subcycle = 0

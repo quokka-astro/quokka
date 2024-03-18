@@ -99,7 +99,7 @@ template <> void RadhydroSimulation<TubeProblem>::preCalculateInitialConditions(
 	// map initial conditions to the global variables
 	std::string filename = "../extern/pressure_tube/initial_conditions.txt";
 	std::ifstream fstream(filename, std::ios::in);
-	AMREX_ALWAYS_ASSERT(fstream.is_open());
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(fstream.is_open(), filename);
 	std::string header;
 	std::getline(fstream, header);
 
