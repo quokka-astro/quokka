@@ -31,10 +31,15 @@ AMREX_GPU_DEVICE void chemburner(burn_t &chemstate, Real dt);
 template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const Real dt, const Real max_density_allowed, const Real min_density_allowed)
 {
 
+	const auto &ba = mf.boxArray();
+	const auto &dmap = mf.DistributionMap();
+	amrex::iMultiFab burnstepsMF(ba, dmap, 1, 0);
+	
 	const BL_PROFILE("Chemistry::computeChemistry()");
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &state = mf.array(iter);
+		auto const &burnsteps = burnstepsMF.array(iter);
 
 		if (dt < 0) {
 			amrex::Abort("Cannot do chemistry with dt < 0!");
@@ -88,14 +93,12 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 			// do it in .cpp so that it is not built at compile time for all tests
 			// which would otherwise slow down compilation due to the large RHS file
 			chemburner(chemstate, dt);
-
+			burnsteps(i, j, k) = chemstate.success;
+		
 			if (std::isnan(chemstate.xn[0]) || std::isnan(chemstate.rho)) {
 				amrex::Abort("Burner returned NAN");
 			}
 
-			if (!chemstate.success) {
-				amrex::Abort("VODE integration was unsuccessful!");
-			}
 
 			// ensure positivity and normalize
 			for (int nn = 0; nn < NumSpec; ++nn) {
@@ -142,6 +145,11 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 				state(i, j, k, HydroSystem<problem_t>::scalar0_index + nn) = inmfracs[nn] * rho; // scale by rho to return partial densities
 			}
 		});
+	}
+
+	int burnmin = burnstepsMF.min(0);
+	if (burnmin == 0) {
+		amrex::Abort("VODE integration was unsuccessful!");
 	}
 }
 
