@@ -7,6 +7,7 @@ module load cray-mpich
 module load cce/15.0.1
 module load cray-hdf5
 module load cray-python/3.9.13.1
+module load rocm/5.4.3
 
 # GPU-aware MPI
 export MPICH_GPU_SUPPORT_ENABLED=0
