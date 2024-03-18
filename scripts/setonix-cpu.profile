@@ -14,6 +14,6 @@ export MPICH_GPU_SUPPORT_ENABLED=0
 
 # compiler environment hints
 export CC=$(which cc)
-export CXX=$(which CC)
+export CXX="$(which CC) -fno-cray"
 export FC=$(which ftn)
 
