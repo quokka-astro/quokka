@@ -349,7 +349,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setOutflowBoundary(const amrex::IntVect
 
 template <typename problem_t, FluxDir DIR, BoundarySide SIDE>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setOutflowBoundaryLowOrder(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar,
-								    amrex::GeometryData const &geom, const amrex::Real P_outflow, const amrex::Real rho_inflow)
+								    amrex::GeometryData const &geom, const amrex::Real P_outflow)
 {
 	// subsonic outflow on the DIR SIDE boundary
 
@@ -372,23 +372,26 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setOutflowBoundaryLowOrder(const amrex:
 		Q_i = HydroSystem<problem_t>::ComputePrimVars(consVar, i, j, ibr);
 	}
 
-	// compute centered ghost values
-	quokka::valarray<amrex::Real, N> Q_ip1 = Q_i;
-	Q_ip1[4] = P_outflow; // replace pressure with target pressure
-
-	// if gas is inflowing, replace the ghost cell density with 'rho_inflow'
 	quokka::valarray<amrex::Real, N> Q_canonical = detail::permute_vel<problem_t, DIR>(Q_i);
 	amrex::Real const v_normal = Q_canonical[1]; // normal velocity component
 	if (SIDE == BoundarySide::Lower) {
-		if (v_normal > 0.) {	       // inflow from lower boundary
-			Q_ip1[0] = rho_inflow; // replace density with inflow density
+		if (v_normal > 0.) {
+			// if gas is inflowing, change to reflecting B.C.
+			Q_canonical[1] *= -1.0; // reflect normal velocity
+		} else {
+			Q_canonical[4] = P_outflow; // replace pressure with target pressure
+		}
+	} else if (SIDE == BoundarySide::Upper) {
+		if (v_normal < 0.) {
+			// if gas is inflowing, change to reflecting B.C.
+			Q_canonical[1] *= -1.0; // reflect normal velocity
+		} else {
+			Q_canonical[4] = P_outflow; // replace pressure with target pressure
 		}
 	}
-	if (SIDE == BoundarySide::Upper) {
-		if (v_normal < 0.) {	       // inflow from upper boundary
-			Q_ip1[0] = rho_inflow; // replace density with inflow density
-		}
-	}
+
+	// compute centered ghost values
+	quokka::valarray<amrex::Real, N> Q_ip1 = detail::unpermute_vel<problem_t, DIR>(Q_canonical);
 
 	// set cell values
 	quokka::valarray<amrex::Real, N> consCell{};
