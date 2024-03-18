@@ -34,7 +34,7 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 	const auto &ba = mf.boxArray();
 	const auto &dmap = mf.DistributionMap();
 	amrex::iMultiFab burnstepsMF(ba, dmap, 1, 0);
-	
+
 	const BL_PROFILE("Chemistry::computeChemistry()");
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
@@ -94,11 +94,10 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 			// which would otherwise slow down compilation due to the large RHS file
 			chemburner(chemstate, dt);
 			burnsteps(i, j, k) = chemstate.success;
-		
+
 			if (std::isnan(chemstate.xn[0]) || std::isnan(chemstate.rho)) {
 				amrex::Abort("Burner returned NAN");
 			}
-
 
 			// ensure positivity and normalize
 			for (int nn = 0; nn < NumSpec; ++nn) {
