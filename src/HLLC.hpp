@@ -61,7 +61,7 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars, N_ms
 			cs_tilde = 0.5 * (sL.cs + sR.cs);
 		} else {
 			// equation 4.12 of Kershaw+1998
-			cs_tilde = std::sqrt((1.0 / C_tilde_P) * cs_exp);
+			cs_tilde = std::sqrt(cs_exp / C_tilde_P);
 		}
 
 		const double s_NL = 0.5 * G_L * std::max(dU, 0.); // second-order wavespeed correction
