@@ -496,8 +496,8 @@ void DiagFramePlane::VisMF2D(const amrex::MultiFab &a_mf, const std::string &a_m
 					fabdata = hostfab->dataPtr();
 				}
 #endif
-				nfi.Stream().write(reinterpret_cast<const char *>(fabdata),
-						   writeDataSize); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+				nfi.Stream().write(reinterpret_cast<const char *>(fabdata), // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+						   writeDataSize);
 				nfi.Stream().flush();
 			}
 		}
