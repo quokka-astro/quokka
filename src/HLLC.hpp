@@ -55,7 +55,7 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars, N_ms
 		const double C_tilde_P = 0.5 * ((sL.Eint / sL.rho) * drdp_L + (sR.Eint / sR.rho) * drdp_R + sL.rho * dedp_L + sR.rho * dedp_R);
 
 		// avoid NAN cs_tilde
-		if (H_tilde - 0.5*vsq_tilde - C_tilde_rho < 0) {
+		if (H_tilde - 0.5 * vsq_tilde - C_tilde_rho < 0) {
 			// fall back to the gamma=1 case
 			cs_tilde = 0.5 * (sL.cs + sR.cs);
 		} else {
