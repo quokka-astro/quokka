@@ -56,7 +56,6 @@ template <> struct Physics_Traits<SedovProblem> {
 // declare global variables
 double rho = 1.0;	   // g cm^-3
 double E_blast = 0.851072; // ergs
-double R0 = 0.025;	   // cm
 
 template <> void RadhydroSimulation<SedovProblem>::preCalculateInitialConditions()
 {
@@ -81,7 +80,6 @@ template <> void RadhydroSimulation<SedovProblem>::setInitialConditionsOnGrid(qu
 	const Real cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 	double rho_copy = rho;
 	double E_blast_copy = E_blast;
-	double R0_copy = R0;
 
 	amrex::Real x0 = NAN;
 	amrex::Real y0 = NAN;
@@ -99,19 +97,6 @@ template <> void RadhydroSimulation<SedovProblem>::setInitialConditionsOnGrid(qu
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		double rho_e = NAN;
-#if 0
-    amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
-    amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
-    amrex::Real const z = prob_lo[2] + (k + amrex::Real(0.5)) * dx[2];
-    amrex::Real const r = std::sqrt(
-        std::pow(x - x0, 2) + std::pow(y - y0, 2) + std::pow(z - z0, 2));
-
-    if (r < R0_copy) {
-      rho_e = 1.0;
-    } else {
-      rho_e = 1.0e-10;
-    }
-#endif
 		static_assert(!simulate_full_box, "single-cell initialization is only "
 						  "implemented for octant symmetry!");
 		if ((i == 0) && (j == 0) && (k == 0)) {
@@ -126,7 +111,6 @@ template <> void RadhydroSimulation<SedovProblem>::setInitialConditionsOnGrid(qu
 		for (int n = 0; n < state_cc.nComp(); ++n) {
 			state_cc(i, j, k, n) = 0.; // zero fill all components
 		}
-		const auto gamma = quokka::EOS_Traits<SedovProblem>::gamma;
 
 		state_cc(i, j, k, HydroSystem<SedovProblem>::density_index) = rho_copy;
 		state_cc(i, j, k, HydroSystem<SedovProblem>::x1Momentum_index) = 0;

@@ -7,26 +7,17 @@
 /// \brief Implements a shock-cloud problem with radiative cooling.
 ///
 #include <random>
-#include <vector>
 
-#include "AMReX.H"
 #include "AMReX_BC_TYPES.H"
-#include "AMReX_BLProfiler.H"
 #include "AMReX_BLassert.H"
-#include "AMReX_FabArray.H"
 #include "AMReX_Geometry.H"
 #include "AMReX_GpuDevice.H"
 #include "AMReX_IntVect.H"
 #include "AMReX_MultiFab.H"
-#include "AMReX_ParallelContext.H"
-#include "AMReX_ParallelDescriptor.H"
 #include "AMReX_REAL.H"
-#include "AMReX_SPACE.H"
 #include "AMReX_TableData.H"
-#include "AMReX_iMultiFab.H"
 
 #include "RadhydroSimulation.hpp"
-#include "cloud.hpp"
 #include "hydro_system.hpp"
 #include "radiation_system.hpp"
 
@@ -73,12 +64,6 @@ const int kmin = 0;
 const int kmax = 16;
 Real const A = 0.05 / kmax;
 
-// cloud-tracking variables needed for Dirichlet boundary condition
-AMREX_GPU_MANAGED static Real rho_wind = 0;
-AMREX_GPU_MANAGED static Real v_wind = 0;
-AMREX_GPU_MANAGED static Real P_wind = 0;
-AMREX_GPU_MANAGED static Real delta_vx = 0;
-
 template <> void RadhydroSimulation<ShockCloud>::preCalculateInitialConditions()
 {
 	// generate random phases
@@ -117,8 +102,6 @@ template <> void RadhydroSimulation<ShockCloud>::setInitialConditionsOnGrid(quok
 	auto const &phase_table = userData_.table_data->const_table();
 
 	Real const Lx = (prob_hi[0] - prob_lo[0]);
-	Real const Ly = (prob_hi[1] - prob_lo[1]);
-	Real const Lz = (prob_hi[2] - prob_lo[2]);
 
 	Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
 	Real const y0 = prob_lo[1] + 0.8 * (prob_hi[1] - prob_lo[1]);
@@ -175,7 +158,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<ShockCloud>::setCustomBou
 	auto [i, j, k] = iv.dim3();
 
 	amrex::Box const &box = geom.Domain();
-	const auto &domain_lo = box.loVect3d();
 	const auto &domain_hi = box.hiVect3d();
 	const int jhi = domain_hi[1];
 
