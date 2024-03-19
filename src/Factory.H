@@ -71,7 +71,7 @@ template <class Base, class... Args> struct Factory {
 	static std::unique_ptr<Base> create(const std::string &key, Args... args)
 	{
 		key_exists_or_error(key);
-		auto ptr = table().at(key)(std::forward<Args>(args)...);
+		auto ptr = table().at(key)(std::move<Args>(args)...);
 		amrex::Print() << "Creating " << Base::base_identifier() << " instance: " << key << std::endl;
 		return ptr;
 	}
@@ -98,7 +98,7 @@ template <class Base, class... Args> struct Factory {
 		{
 			// TODO: Add checks against multiple registration
 			Factory::table()[T::identifier()] = [](Args... args) -> std::unique_ptr<Base> {
-				return std::unique_ptr<Base>(new T(std::forward<Args>(args)...));
+				return std::unique_ptr<Base>(new T(std::move<Args>(args)...));
 			};
 			return true;
 		}
