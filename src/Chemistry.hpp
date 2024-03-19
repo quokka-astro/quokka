@@ -36,7 +36,7 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 
 #if defined(AMREX_USE_GPU)
 	amrex::Gpu::Buffer<int> d_num_failed({0});
-	auto* p_num_failed = d_num_failed.data();
+	auto *p_num_failed = d_num_failed.data();
 #endif
 
 	int num_failed = 0;
@@ -66,7 +66,7 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 			// do chemistry using microphysics
 
 			burn_t chemstate;
-            chemstate.success = true;
+			chemstate.success = true;
 			int burn_failed = 0;
 
 			for (int nn = 0; nn < NumSpec; ++nn) {
@@ -160,21 +160,17 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 		});
 
 #if defined(AMREX_USE_HIP)
-        amrex::Gpu::streamSynchronize(); // otherwise HIP may fail to allocate the necessary resources.
+		amrex::Gpu::streamSynchronize(); // otherwise HIP may fail to allocate the necessary resources.
 #endif
-
 	}
 
 #if defined(AMREX_USE_GPU)
-    num_failed = *(d_num_failed.copyToHost());
+	num_failed = *(d_num_failed.copyToHost());
 #endif
 
-    burn_success = !num_failed;
+	burn_success = !num_failed;
 
-    amrex::ParallelDescriptor::ReduceIntMin(burn_success);
-
-
-
+	amrex::ParallelDescriptor::ReduceIntMin(burn_success);
 }
 
 } // namespace quokka::chemistry
