@@ -360,6 +360,9 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setOutflowBoundaryLowOrder(const amrex:
 
 	const auto &boundary_idx = (SIDE == BoundarySide::Lower) ? box.loVect3d() : box.hiVect3d();
 	const int ibr = boundary_idx[static_cast<int>(DIR)];
+	const int im1 = (SIDE == BoundarySide::Lower) ? ibr + 1 : ibr - 1;
+	const int im2 = (SIDE == BoundarySide::Lower) ? ibr + 2 : ibr - 2;
+	const int im3 = (SIDE == BoundarySide::Lower) ? ibr + 3 : ibr - 3;
 	const Real dx = geom.CellSize(static_cast<int>(DIR));
 
 	// compute primitive vars
@@ -372,30 +375,74 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setOutflowBoundaryLowOrder(const amrex:
 		Q_i = HydroSystem<problem_t>::ComputePrimVars(consVar, i, j, ibr);
 	}
 
-	quokka::valarray<amrex::Real, N> Q_canonical = detail::permute_vel<problem_t, DIR>(Q_i);
-	amrex::Real const v_normal = Q_canonical[1]; // normal velocity component
-	if (SIDE == BoundarySide::Lower) {
-		if (v_normal > 0.) {
-			// if gas is inflowing, change to reflecting B.C.
-			Q_canonical[1] *= -1.0; // reflect normal velocity
-		} else {
-			Q_canonical[4] = P_outflow; // replace pressure with target pressure
+	quokka::valarray<amrex::Real, N> Q_ip1{};
+	quokka::valarray<amrex::Real, N> Q_ip2{};
+	quokka::valarray<amrex::Real, N> Q_ip3{};
+	quokka::valarray<amrex::Real, N> Q_ip4{};
+
+	// if gas is inflowing, change to reflecting B.C.
+	quokka::valarray<amrex::Real, N> Qr_im0 = detail::permute_vel<problem_t, DIR>(Q_i);
+	amrex::Real const v_normal = Qr_im0[1]; // normal velocity component
+
+	if (((SIDE == BoundarySide::Lower) && (v_normal > 0.)) || ((SIDE == BoundarySide::Upper) && (v_normal < 0.))) {
+		// compute primitive vars
+		quokka::valarray<amrex::Real, N> Q_im1{};
+		quokka::valarray<amrex::Real, N> Q_im2{};
+		quokka::valarray<amrex::Real, N> Q_im3{};
+
+		if constexpr (DIR == FluxDir::X1) {
+			Q_im1 = HydroSystem<problem_t>::ComputePrimVars(consVar, im1, j, k);
+			Q_im2 = HydroSystem<problem_t>::ComputePrimVars(consVar, im2, j, k);
+			Q_im3 = HydroSystem<problem_t>::ComputePrimVars(consVar, im3, j, k);
+		} else if constexpr (DIR == FluxDir::X2) {
+			Q_im1 = HydroSystem<problem_t>::ComputePrimVars(consVar, i, im1, k);
+			Q_im2 = HydroSystem<problem_t>::ComputePrimVars(consVar, i, im2, k);
+			Q_im3 = HydroSystem<problem_t>::ComputePrimVars(consVar, i, im3, k);
+		} else if constexpr (DIR == FluxDir::X3) {
+			Q_im1 = HydroSystem<problem_t>::ComputePrimVars(consVar, i, j, im1);
+			Q_im2 = HydroSystem<problem_t>::ComputePrimVars(consVar, i, j, im2);
+			Q_im3 = HydroSystem<problem_t>::ComputePrimVars(consVar, i, j, im3);
 		}
-	} else if (SIDE == BoundarySide::Upper) {
-		if (v_normal < 0.) {
-			// if gas is inflowing, change to reflecting B.C.
-			Q_canonical[1] *= -1.0; // reflect normal velocity
-		} else {
-			Q_canonical[4] = P_outflow; // replace pressure with target pressure
-		}
+
+		// reflect velocities
+		quokka::valarray<amrex::Real, N> Qr_im1 = detail::permute_vel<problem_t, DIR>(Q_im1);
+		quokka::valarray<amrex::Real, N> Qr_im2 = detail::permute_vel<problem_t, DIR>(Q_im2);
+		quokka::valarray<amrex::Real, N> Qr_im3 = detail::permute_vel<problem_t, DIR>(Q_im3);
+
+		Qr_im0[1] *= -1.0;
+		Qr_im1[1] *= -1.0;
+		Qr_im2[1] *= -1.0;
+		Qr_im3[1] *= -1.0;
+
+		Q_ip1 = detail::unpermute_vel<problem_t, DIR>(Qr_im0);
+		Q_ip2 = detail::unpermute_vel<problem_t, DIR>(Qr_im1);
+		Q_ip3 = detail::unpermute_vel<problem_t, DIR>(Qr_im2);
+		Q_ip4 = detail::unpermute_vel<problem_t, DIR>(Qr_im3);
+	} else {
+		// specify pressure at boundary
+		Q_i[4] = P_outflow;
+		Q_ip1 = Q_i;
+		Q_ip2 = Q_i;
+		Q_ip3 = Q_i;
+		Q_ip4 = Q_i;
 	}
 
-	// compute centered ghost values
-	quokka::valarray<amrex::Real, N> Q_ip1 = detail::unpermute_vel<problem_t, DIR>(Q_canonical);
-
 	// set cell values
+	const int ip1 = (SIDE == BoundarySide::Lower) ? ibr - 1 : ibr + 1;
+	const int ip2 = (SIDE == BoundarySide::Lower) ? ibr - 2 : ibr + 2;
+	const int ip3 = (SIDE == BoundarySide::Lower) ? ibr - 3 : ibr + 3;
+	const int ip4 = (SIDE == BoundarySide::Lower) ? ibr - 4 : ibr + 4;
+
 	quokka::valarray<amrex::Real, N> consCell{};
-	consCell = HydroSystem<problem_t>::ComputeConsVars(Q_ip1);
+	if (idx[static_cast<int>(DIR)] == ip1) {
+		consCell = HydroSystem<problem_t>::ComputeConsVars(Q_ip1);
+	} else if (idx[static_cast<int>(DIR)] == ip2) {
+		consCell = HydroSystem<problem_t>::ComputeConsVars(Q_ip2);
+	} else if (idx[static_cast<int>(DIR)] == ip3) {
+		consCell = HydroSystem<problem_t>::ComputeConsVars(Q_ip3);
+	} else if (idx[static_cast<int>(DIR)] == ip4) {
+		consCell = HydroSystem<problem_t>::ComputeConsVars(Q_ip4);
+	}
 
 	consVar(i, j, k, HydroSystem<problem_t>::density_index) = consCell[0];
 	consVar(i, j, k, HydroSystem<problem_t>::x1Momentum_index) = consCell[1];
