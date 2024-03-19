@@ -7,18 +7,15 @@
 /// \brief Defines a test problem for radiation in the diffusion regime.
 ///
 
-#include <tuple>
-
 #include "AMReX_Array.H"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
-#include "AMReX_Config.H"
 #include "AMReX_IntVect.H"
 #include "AMReX_REAL.H"
 
+#include "RadhydroSimulation.hpp"
 #include "radiation_system.hpp"
 #include "simulation.hpp"
-#include "test_radiation_tophat.hpp"
 
 struct TophatProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
@@ -179,8 +176,6 @@ AMRSimulation<TophatProblem>::setCustomBoundaryConditions(const amrex::IntVect &
 			Fy_bdry = Fy_0;
 			Fz_bdry = Fz_0;
 		}
-		const amrex::Real Fnorm = std::sqrt(Fx_bdry * Fx_bdry + Fy_bdry * Fy_bdry + Fz_bdry * Fz_bdry);
-		AMREX_ASSERT((Fnorm / (c * E_inc)) < 1.0); // flux-limiting condition
 
 		// x1 left side boundary (Marshak)
 		consVar(i, j, k, RadSystem<TophatProblem>::radEnergy_index) = E_inc;
@@ -243,10 +238,6 @@ auto problem_main() -> int
 	const int max_timesteps = 10000;
 	const double CFL_number = 0.4;
 	const double max_time = 5.0e-10; // s
-	// const int nx = 700;
-	// const int ny = 200;
-	// const double Lx = 7.0;	// cm
-	// const double Ly = 2.0;	// cm
 
 	auto isNormalComp = [=](int n, int dim) {
 		if ((n == RadSystem<TophatProblem>::x1RadFlux_index) && (dim == 0)) {
@@ -303,6 +294,6 @@ auto problem_main() -> int
 	sim.evolve();
 
 	// Cleanup and exit
-	amrex::Print() << "Finished." << std::endl;
+	amrex::Print() << "Finished." << '\n';
 	return 0;
 }

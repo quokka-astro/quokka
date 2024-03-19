@@ -55,7 +55,6 @@ void initialize_turbdata(turb_data &data, std::string &data_file)
 	amrex::Print() << "Initializing turbulence data...\n";
 	amrex::Print() << fmt::format("data_file: {}.\n", data_file);
 
-	herr_t status = 0;
 	herr_t const h5_error = -1;
 
 	// open file

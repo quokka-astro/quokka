@@ -7,19 +7,13 @@
 /// \brief Defines a test problem for radiation in the streaming regime.
 ///
 
-#include <csignal>
-#include <tuple>
-
 #include "AMReX_Array.H"
 #include "AMReX_BC_TYPES.H"
-#include "AMReX_BLassert.H"
-#include "AMReX_Config.H"
 #include "AMReX_IntVect.H"
 #include "AMReX_REAL.H"
 
 #include "RadhydroSimulation.hpp"
 #include "radiation_system.hpp"
-#include "test_radiation_beam.hpp"
 
 struct BeamProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
@@ -93,8 +87,8 @@ AMRSimulation<BeamProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv
 	amrex::Box const &box = geom.Domain();
 	amrex::GpuArray<int, 3> lo = box.loVect3d();
 
-	amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
-	amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
+	amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+	amrex::Real const y = prob_lo[1] + (j + static_cast<amrex::Real>(0.5)) * dx[1]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 
 	if ((i < lo[0]) && !(j < lo[1])) {
 		// streaming boundary condition
@@ -223,8 +217,6 @@ AMRSimulation<BeamProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv
 template <> void RadhydroSimulation<BeamProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
 	// extract variables required from the geom object
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
@@ -316,6 +308,6 @@ auto problem_main() -> int
 	sim.evolve();
 
 	// Cleanup and exit
-	amrex::Print() << "Finished." << std::endl;
+	amrex::Print() << "Finished." << '\n';
 	return 0;
 }
