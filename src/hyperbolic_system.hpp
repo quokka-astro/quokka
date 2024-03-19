@@ -75,7 +75,7 @@ template <typename problem_t> class HyperbolicSystem
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void ReconstructStatesConstant(arrayconst_t &q, array_t &leftState, array_t &rightState, amrex::Box const &indexRange, int nvars);
 
 	template <FluxDir DIR>
-	static void ReconstructStatesConstant(quokka::Array4View<amrex::Real const, DIR> const &q, quokka::Array4View<amrex::Real, DIR> const &leftState,
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void ReconstructStatesConstant(quokka::Array4View<amrex::Real const, DIR> const &q, quokka::Array4View<amrex::Real, DIR> const &leftState,
 					      quokka::Array4View<amrex::Real, DIR> const &rightState, int n, int i_in, int j_in, int k_in);
 
 	template <FluxDir DIR, SlopeLimiter limiter>
@@ -85,7 +85,7 @@ template <typename problem_t> class HyperbolicSystem
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void ReconstructStatesPLM(arrayconst_t &q, array_t &leftState, array_t &rightState, amrex::Box const &indexRange, int nvars);
 
 	template <FluxDir DIR, SlopeLimiter limiter>
-	static void ReconstructStatesPLM(quokka::Array4View<amrex::Real const, DIR> const &q, quokka::Array4View<amrex::Real, DIR> const &leftState,
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void ReconstructStatesPLM(quokka::Array4View<amrex::Real const, DIR> const &q, quokka::Array4View<amrex::Real, DIR> const &leftState,
 					 quokka::Array4View<amrex::Real, DIR> const &rightState, int n, int i_in, int j_in, int k_in);
 
 	template <FluxDir DIR>
@@ -97,7 +97,7 @@ template <typename problem_t> class HyperbolicSystem
 					 amrex::Box const &interfaceRange, int nvars, int iReadFrom = 0, int iWriteFrom = 0);
 
 	template <FluxDir DIR>
-	static void ReconstructStatesPPM(quokka::Array4View<amrex::Real const, DIR> const &q, quokka::Array4View<amrex::Real, DIR> const &leftState,
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void ReconstructStatesPPM(quokka::Array4View<amrex::Real const, DIR> const &q, quokka::Array4View<amrex::Real, DIR> const &leftState,
 					 quokka::Array4View<amrex::Real, DIR> const &rightState, int n, int i_in, int j_in, int k_in, int iReadFrom = 0,
 					 int iWriteFrom = 0);
 
