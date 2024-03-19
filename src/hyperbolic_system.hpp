@@ -76,8 +76,9 @@ template <typename problem_t> class HyperbolicSystem
 										       amrex::Box const &indexRange, int nvars);
 
 	template <FluxDir DIR>
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void ReconstructStatesConstant(quokka::Array4View<amrex::Real const, DIR> const &q, quokka::Array4View<amrex::Real, DIR> const &leftState,
-					      quokka::Array4View<amrex::Real, DIR> const &rightState, int n, int i_in, int j_in, int k_in);
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void
+	ReconstructStatesConstant(quokka::Array4View<amrex::Real const, DIR> const &q, quokka::Array4View<amrex::Real, DIR> const &leftState,
+				  quokka::Array4View<amrex::Real, DIR> const &rightState, int n, int i_in, int j_in, int k_in);
 
 	template <FluxDir DIR, SlopeLimiter limiter>
 	static void ReconstructStatesPLM(amrex::MultiFab const &q, amrex::MultiFab &leftState, amrex::MultiFab &rightState, int nghost, int nvars);
@@ -87,8 +88,9 @@ template <typename problem_t> class HyperbolicSystem
 										  amrex::Box const &indexRange, int nvars);
 
 	template <FluxDir DIR, SlopeLimiter limiter>
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void ReconstructStatesPLM(quokka::Array4View<amrex::Real const, DIR> const &q, quokka::Array4View<amrex::Real, DIR> const &leftState,
-					 quokka::Array4View<amrex::Real, DIR> const &rightState, int n, int i_in, int j_in, int k_in);
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void
+	ReconstructStatesPLM(quokka::Array4View<amrex::Real const, DIR> const &q, quokka::Array4View<amrex::Real, DIR> const &leftState,
+			     quokka::Array4View<amrex::Real, DIR> const &rightState, int n, int i_in, int j_in, int k_in);
 
 	template <FluxDir DIR>
 	static void ReconstructStatesPPM(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf, int nghost, int nvars,
@@ -100,9 +102,10 @@ template <typename problem_t> class HyperbolicSystem
 										  int iReadFrom = 0, int iWriteFrom = 0);
 
 	template <FluxDir DIR>
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void ReconstructStatesPPM(quokka::Array4View<amrex::Real const, DIR> const &q, quokka::Array4View<amrex::Real, DIR> const &leftState,
-					 quokka::Array4View<amrex::Real, DIR> const &rightState, int n, int i_in, int j_in, int k_in, int iReadFrom = 0,
-					 int iWriteFrom = 0);
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void ReconstructStatesPPM(quokka::Array4View<amrex::Real const, DIR> const &q,
+										  quokka::Array4View<amrex::Real, DIR> const &leftState,
+										  quokka::Array4View<amrex::Real, DIR> const &rightState, int n, int i_in,
+										  int j_in, int k_in, int iReadFrom = 0, int iWriteFrom = 0);
 
 	template <typename F>
 #if defined(__x86_64__)
