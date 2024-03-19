@@ -150,9 +150,8 @@ void HyperbolicSystem<problem_t>::ReconstructStatesConstant(amrex::MultiFab cons
 
 template <typename problem_t>
 template <FluxDir DIR>
-AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesConstant(arrayconst_t &q_in, array_t &leftState_in,
-												     array_t &rightState_in, amrex::Box const &indexRange,
-												     const int nvars)
+AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesConstant(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in,
+										  amrex::Box const &indexRange, const int nvars)
 {
 	// construct ArrayViews for permuted indices
 	quokka::Array4View<amrex::Real const, DIR> q(q_in);
@@ -167,9 +166,9 @@ AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesConstan
 template <typename problem_t>
 template <FluxDir DIR>
 AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesConstant(quokka::Array4View<amrex::Real const, DIR> const &q,
-												     quokka::Array4View<amrex::Real, DIR> const &leftState,
-												     quokka::Array4View<amrex::Real, DIR> const &rightState,
-												     int n, int i_in, int j_in, int k_in)
+										  quokka::Array4View<amrex::Real, DIR> const &leftState,
+										  quokka::Array4View<amrex::Real, DIR> const &rightState, int n, int i_in,
+										  int j_in, int k_in)
 {
 	// permute array indices according to dir
 	auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
@@ -205,9 +204,8 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPLM(amrex::MultiFab const &q_
 
 template <typename problem_t>
 template <FluxDir DIR, SlopeLimiter limiter>
-AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPLM(arrayconst_t &q_in, array_t &leftState_in,
-												array_t &rightState_in, amrex::Box const &indexRange,
-												const int nvars)
+AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPLM(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in,
+									     amrex::Box const &indexRange, const int nvars)
 {
 	// construct ArrayViews for permuted indices
 	quokka::Array4View<amrex::Real const, DIR> q(q_in);
@@ -221,7 +219,8 @@ AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPLM(arr
 
 template <typename problem_t>
 template <FluxDir DIR, SlopeLimiter limiter>
-AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPLM(quokka::Array4View<amrex::Real const, DIR> const &q, quokka::Array4View<amrex::Real, DIR> const &leftState,
+AMREX_GPU_HOST_DEVICE void
+HyperbolicSystem<problem_t>::ReconstructStatesPLM(quokka::Array4View<amrex::Real const, DIR> const &q, quokka::Array4View<amrex::Real, DIR> const &leftState,
 						  quokka::Array4View<amrex::Real, DIR> const &rightState, int n, int i_in, int j_in, int k_in)
 {
 	// permute array indices according to dir
@@ -320,8 +319,9 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(amrex::MultiFab const &q_
 
 template <typename problem_t>
 template <FluxDir DIR>
-AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in, amrex::Box const &cellRange,
-						  amrex::Box const & /*interfaceRange*/, const int nvars, const int iReadFrom, const int iWriteFrom)
+AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in,
+									     amrex::Box const &cellRange, amrex::Box const & /*interfaceRange*/,
+									     const int nvars, const int iReadFrom, const int iWriteFrom)
 {
 	BL_PROFILE("HyperbolicSystem::ReconstructStatesPPM(Arrays)");
 
@@ -339,9 +339,9 @@ AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arr
 template <typename problem_t>
 template <FluxDir DIR>
 AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPPM(quokka::Array4View<amrex::Real const, DIR> const &q,
-												quokka::Array4View<amrex::Real, DIR> const &leftState,
-												quokka::Array4View<amrex::Real, DIR> const &rightState, int n,
-												int i_in, int j_in, int k_in, int iReadFrom, int iWriteFrom)
+									     quokka::Array4View<amrex::Real, DIR> const &leftState,
+									     quokka::Array4View<amrex::Real, DIR> const &rightState, int n, int i_in, int j_in,
+									     int k_in, int iReadFrom, int iWriteFrom)
 {
 	// permute array indices according to dir
 	auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
