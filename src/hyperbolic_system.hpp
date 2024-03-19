@@ -45,10 +45,10 @@ template <typename problem_t> class HyperbolicSystem
 {
       public:
   template <SlopeLimiter limiter>
-  static auto SlopeFunc(amrex::Real x, amrex::Real y) -> amrex::Real {
-    if (limiter == SlopeLimiter::minmod) { return minmod(x, y); }
-    if (limiter == SlopeLimiter::MC) { return MC(x, y); }
-    throw std::invalid_argument("Invalid slope limiter specified.");
+  AMREX_GPU_HOST_DEVICE static auto SlopeFunc(amrex::Real x, amrex::Real y) -> amrex::Real {
+    static_assert(limiter == SlopeLimiter::minmod || limiter == SlopeLimiter::MC, "Invalid slope limiter specified.");
+    if constexpr (limiter == SlopeLimiter::minmod) { return minmod(x, y); }
+    if constexpr (limiter == SlopeLimiter::MC) { return MC(x, y); }
   }
   
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto MC(double a, double b) -> double
