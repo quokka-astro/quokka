@@ -44,13 +44,17 @@ using arrayconst_t = amrex::Array4<const amrex::Real> const;
 template <typename problem_t> class HyperbolicSystem
 {
       public:
-  template <SlopeLimiter limiter>
-  AMREX_GPU_HOST_DEVICE static auto SlopeFunc(amrex::Real x, amrex::Real y) -> amrex::Real {
-    static_assert(limiter == SlopeLimiter::minmod || limiter == SlopeLimiter::MC, "Invalid slope limiter specified.");
-    if constexpr (limiter == SlopeLimiter::minmod) { return minmod(x, y); }
-    if constexpr (limiter == SlopeLimiter::MC) { return MC(x, y); }
-  }
-  
+	template <SlopeLimiter limiter> AMREX_GPU_HOST_DEVICE static auto SlopeFunc(amrex::Real x, amrex::Real y) -> amrex::Real
+	{
+		static_assert(limiter == SlopeLimiter::minmod || limiter == SlopeLimiter::MC, "Invalid slope limiter specified.");
+		if constexpr (limiter == SlopeLimiter::minmod) {
+			return minmod(x, y);
+		}
+		if constexpr (limiter == SlopeLimiter::MC) {
+			return MC(x, y);
+		}
+	}
+
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto MC(double a, double b) -> double
 	{
 		return 0.5 * (sgn(a) + sgn(b)) * std::min(0.5 * std::abs(a + b), std::min(2.0 * std::abs(a), 2.0 * std::abs(b)));
