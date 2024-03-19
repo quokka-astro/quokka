@@ -5,12 +5,12 @@ geometry.prob_lo     =  0.0 0.0 0.0
 geometry.prob_hi     =  4.0 4.0 4.0
 geometry.is_periodic =  0    0    0
 
-max_timesteps = 40
+max_timesteps = 10
 stop_time = 10.0
 plotfile_interval = 10
 checkpoint_interval = 1000000
 compute_interval = 10
-restartfile = chk00020
+# restartfile = chk00020
 
 # *****************************************************************
 # VERBOSITY

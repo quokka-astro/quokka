@@ -107,6 +107,101 @@ template <> struct SimulationData<TheProblem> {
 	amrex::Real init_x_momentum = NAN;
 };
 
+AMREX_GPU_HOST_DEVICE 
+auto compute_T(const double rho) -> double
+{
+	// amrex::Real const A = userData_.init_A;
+	// amrex::Real const r_star = userData_.init_q * r_c;
+	// amrex::Real const rho_star = A * c_iso * c_iso / (4.0 * pi * G * r_star * r_star);
+	if constexpr (model == 1) {
+		const double scale = 1.0 / (1.0 + std::pow(rho / rho0, s)) + 1.0 / (1.0 + std::pow(rho1 / rho0, s)) * std::pow(rho / rho1, gamma_ - 1.0);
+		return scale * T0;
+	} else if constexpr (model == 2) {
+		const double scale = 1.0 / (1.0 + std::exp(jump_slope * (rho / rho_core - 1.0))) + std::pow(rho / rho_one, gamma_ - 1.0);
+		return scale * T0;
+	} else if constexpr (model == 0) {
+    // P = c_s^2 * rho^gamma1 (1 + (rho / rho_star)^(gamma2 - gamma1))
+    auto P = c_iso * c_iso * std::pow(rho, model0_gamma1) * (1.0 + std::pow(rho / rho_star, model0_gamma2 - model0_gamma1));
+    return P / (rho * k_B / mu);
+  }
+}
+
+AMREX_GPU_HOST_DEVICE
+auto compute_e(const double rho) -> double
+{
+	if constexpr (model == 0 || model == 1) {
+		const auto Tgas = compute_T(rho);
+		const double e = Cv * rho * Tgas;
+		return e;
+	} else if constexpr (model == 2) {
+	  double Tgas = NAN;
+		if (rho >= rho_core) {
+			Tgas = compute_T(rho);
+			return Cv * rho * Tgas;
+		}
+		Tgas = compute_T(rho_core);
+		return Cv * rho_core * Tgas;
+	}
+}
+
+// redefine EOS::ComputePressure
+template <> 
+AMREX_GPU_HOST_DEVICE AMREX_GPU_HOST_DEVICE auto quokka::EOS<TheProblem>::ComputePressure(amrex::Real rho, amrex::Real /*Eint*/, 
+											const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massScalars*/) -> amrex::Real
+{
+	if constexpr (model == 0 || model == 1) {
+		const double e = compute_e(rho);
+		return (gamma_ - 1.0) * e;
+	} else if constexpr (model == 2) {
+		const double T = compute_T(rho);
+		const double e = rho * Cv * T;
+		return (gamma_ - 1.0) * e;
+	}
+}
+
+template <>
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto quokka::EOS<TheProblem>::ComputeTgasFromEint(amrex::Real rho, amrex::Real /*Egas*/,
+										  const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massScalars*/)
+    -> amrex::Real
+{
+	return compute_T(rho);
+	// amrex::Real const A = userData_.init_A;
+	// amrex::Real const r_star = userData_.init_q * r_c;
+	// amrex::Real const rho_star = A * c_iso * c_iso / (4.0 * pi * G * r_star * r_star);
+	// if constexpr (model == 1) {
+	// 	const double scale = 1.0 / (1.0 + std::pow(rho / rho0, s)) + 1.0 / (1.0 + std::pow(rho1 / rho0, s)) * std::pow(rho / rho1, gamma_ - 1.0);
+	// 	return scale * T0;
+	// } else if constexpr (model == 2) {
+	// 	const double scale = 1.0 / (1.0 + std::exp(jump_slope * (rho / rho_core - 1.0))) + std::pow(rho / rho_one, gamma_ - 1.0);
+	// 	return scale * T0;
+	// }
+}
+
+template <>
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto quokka::EOS<TheProblem>::ComputeEintFromTgas(amrex::Real rho, amrex::Real /*Tgas*/,
+										  const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massScalars*/)
+    -> amrex::Real
+{
+	return compute_e(rho);
+}
+
+template <>
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto quokka::EOS<TheProblem>::ComputeEintFromPres(amrex::Real rho, amrex::Real Pressure,
+										  const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massScalars*/)
+    -> amrex::Real
+{
+	return compute_e(rho);
+}
+
+template <>
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto quokka::EOS<TheProblem>::ComputeSoundSpeed(amrex::Real rho, amrex::Real /*Pressure*/,
+										const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massScalars*/)
+    -> amrex::Real
+{
+	const double T = compute_T(rho);
+	return std::sqrt(k_B * T / mu);
+}
+
 template <> void RadhydroSimulation<TheProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
 	// extract variables required from the geom object
@@ -144,8 +239,7 @@ template <> void RadhydroSimulation<TheProblem>::setInitialConditionsOnGrid(quok
 		} else {
 			rho = rho_bg;
 		}
-		// const auto E_int = compute_e(rho);
-		const double E_int = 1.0;
+		const auto E_int = compute_e(rho);
 
 		// compute azimuthal velocity
 		double v_phi = 0.0;
@@ -168,6 +262,163 @@ template <> void RadhydroSimulation<TheProblem>::setInitialConditionsOnGrid(quok
 		state_cc(i, j, k, HydroSystem<TheProblem>::internalEnergy_index) = E_int;
 		state_cc(i, j, k, HydroSystem<TheProblem>::energy_index) = E_int + 0.5 * rho * (v_x * v_x + v_y * v_y + v_z * v_z);
 	});
+}
+
+template <> void RadhydroSimulation<TheProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+{
+
+	// read-in jeans length refinement runtime params
+	int N_J = 1e5;
+	// Real jeans_density_threshold = NAN;
+	Real jeans_density_threshold_over_rho_star = 0.5;
+
+	amrex::ParmParse const pp("refine");
+	pp.query("jeans_num", N_J); // inverse of the 'Jeans number' [Truelove et al. (1997)]
+	// pp.query("density_threshold", jeans_density_threshold);
+	pp.query("density_threshold_over_rho_star", jeans_density_threshold_over_rho_star);
+
+	auto const rho_threshold = jeans_density_threshold_over_rho_star * rho_star;
+
+	const amrex::Real dx = geom[lev].CellSizeArray()[0];
+
+	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
+		const amrex::Box &box = mfi.validbox();
+		const auto state = state_new_cc_[lev].const_array(mfi);
+		const auto tag = tags.array(mfi);
+		const int nidx = HydroSystem<TheProblem>::density_index;
+
+		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			Real const rho = state(i, j, k, nidx);
+
+			const amrex::Real rho_Jeans = std::pow(c_iso / (N_J * dx) * std::sqrt(M_PI / G), 2);
+
+			if (rho > rho_Jeans || rho > rho_threshold) {
+				tag(i, j, k) = amrex::TagBox::SET;
+			}
+		});
+	}
+}
+
+template <> void RadhydroSimulation<TheProblem>::computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons)
+{
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = geom[0].CellSizeArray();
+	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
+
+	// check conservation of total energy: It should not be conserved because of the self-gravity
+	amrex::Real const Egas0 = initSumCons[RadSystem<TheProblem>::gasEnergy_index];
+	amrex::Real const Egas = state_new_cc_[0].sum(RadSystem<TheProblem>::gasEnergy_index) * vol;
+
+	// check conservation of x-momentum
+	amrex::Real const px0 = initSumCons[RadSystem<TheProblem>::x1GasMomentum_index] * vol;
+	amrex::Real const py0 = initSumCons[RadSystem<TheProblem>::x2GasMomentum_index] * vol;
+	amrex::Real const pz0 = initSumCons[RadSystem<TheProblem>::x3GasMomentum_index] * vol;
+	amrex::Real const px = state_new_cc_[0].sum(RadSystem<TheProblem>::x1GasMomentum_index) * vol;
+	amrex::Real const py = state_new_cc_[0].sum(RadSystem<TheProblem>::x2GasMomentum_index) * vol;
+	amrex::Real const pz = state_new_cc_[0].sum(RadSystem<TheProblem>::x3GasMomentum_index) * vol;
+
+	// // compute kinetic energy
+	// amrex::MultiFab Ekin_mf(boxArray(0), DistributionMap(0), 1, 0);
+	// for (amrex::MFIter iter(state_new_cc_[0]); iter.isValid(); ++iter) {
+	// 	const amrex::Box &indexRange = iter.validbox();
+	// 	auto const &state = state_new_cc_[0].const_array(iter);
+	// 	auto const &ekin = Ekin_mf.array(iter);
+	// 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+	// 		// compute kinetic energy
+	// 		Real rho = state(i, j, k, HydroSystem<TheProblem>::density_index);
+	// 		Real px = state(i, j, k, HydroSystem<TheProblem>::x1Momentum_index);
+	// 		Real py = state(i, j, k, HydroSystem<TheProblem>::x2Momentum_index);
+	// 		Real pz = state(i, j, k, HydroSystem<TheProblem>::x3Momentum_index);
+	// 		Real psq = px * px + py * py + pz * pz;
+	// 		ekin(i, j, k) = psq / (2.0 * rho) * vol;
+	// 	});
+	// }
+	// amrex::Real const Ekin = Ekin_mf.sum(0);
+
+	// amrex::Real const abs_err = (Egas - Egas0);
+	// amrex::Real const rel_err = abs_err / Egas0;
+
+	// amrex::Print() << "\nInitial energy = " << Egas0 << std::endl;
+	// amrex::Print() << "Final energy = " << Egas << std::endl;
+	// amrex::Print() << "\tabsolute conservation error = " << abs_err << std::endl;
+	// amrex::Print() << "\trelative conservation error = " << rel_err << std::endl;
+	// amrex::Print() << std::endl;
+
+	// bool E_test_passes = false;  // does total energy test pass?
+
+	// if ((std::abs(rel_err) > 2.0e-13) || std::isnan(rel_err)) {
+	// 	// note that 2.0e-15 is appropriate for a 256^3 grid
+	// 	// it may need to be modified for coarser resolutions
+	// 	amrex::Print() << "Energy not conserved to machine precision!\n";
+	// 	E_test_passes = false;
+	// } else {
+	// 	amrex::Print() << "Energy conservation is OK.\n";
+	// 	E_test_passes = true;
+	// }
+
+	bool p_test_passes = true;  // does x-momentum conserve?
+
+	// Check X-momentum conservation
+
+	amrex::Real const abs_err = (px - px0);
+	amrex::Real const rel_err = abs_err / px0;
+
+	amrex::Print() << "\nInitial X-momentum = " << px0 << std::endl;
+	amrex::Print() << "Final X-momentum = " << px << std::endl;
+	amrex::Print() << "\tabsolute conservation error = " << abs_err << std::endl;
+	amrex::Print() << "\trelative conservation error = " << rel_err << std::endl;
+	amrex::Print() << std::endl;
+
+	if (((std::abs(rel_err) > 2.0e-13) && (std::abs(abs_err) > 1.0e-10)) || std::isnan(rel_err)) {
+		// Note that the initial x-momentum is zero, so the relative error is not meaningful
+		// The RMS X-momentum is of order unity, so the absolute error should be smaller than 1.0e-10
+		amrex::Print() << "X-momentum not conserved to machine precision!\n";
+		p_test_passes = false;
+	} else {
+		amrex::Print() << "X-momentum conservation is OK.\n";
+	}
+
+	// Check Y-momentum conservation
+
+	amrex::Real const abs_err_y = (py - py0);
+	amrex::Real const rel_err_y = abs_err_y / py0;
+
+	amrex::Print() << "\nInitial Y-momentum = " << py0 << std::endl;
+	amrex::Print() << "Final Y-momentum = " << py << std::endl;
+	amrex::Print() << "\tabsolute conservation error = " << abs_err_y << std::endl;
+	amrex::Print() << "\trelative conservation error = " << rel_err_y << std::endl;
+	amrex::Print() << std::endl;
+
+	if (((std::abs(rel_err_y) > 2.0e-13) && (std::abs(abs_err_y) > 1.0e-10)) || std::isnan(rel_err_y)) {
+		// Note that the initial y-momentum is zero, so the relative error is not meaningful
+		// The RMS y-momentum is of order unity, so the absolute error should be smaller than 1.0e-10
+		amrex::Print() << "Y-momentum not conserved to machine precision!\n";
+		p_test_passes = false;
+	} else {
+		amrex::Print() << "Y-momentum conservation is OK.\n";
+	}
+
+	// Check Z-momentum conservation
+
+	amrex::Real const abs_err_z = (pz - pz0);
+	amrex::Real const rel_err_z = abs_err_z / pz0;
+
+	amrex::Print() << "\nInitial Z-momentum = " << pz0 << std::endl;
+	amrex::Print() << "Final Z-momentum = " << pz << std::endl;
+	amrex::Print() << "\tabsolute conservation error = " << abs_err_z << std::endl;
+	amrex::Print() << "\trelative conservation error = " << rel_err_z << std::endl;
+	amrex::Print() << std::endl;
+
+	if (((std::abs(rel_err_z) > 2.0e-13) && (std::abs(abs_err_z) > 1.0e-10)) || std::isnan(rel_err_z)) {
+		// Note that the initial z-momentum is zero, so the relative error is not meaningful
+		// The RMS z-momentum is of order unity, so the absolute error should be smaller than 1.0e-10
+		amrex::Print() << "Z-momentum not conserved to machine precision!\n";
+		p_test_passes = false;
+	} else {
+		amrex::Print() << "Z-momentum conservation is OK.\n";
+	}
+
+	// if both tests pass, then overall pass
+  test_passes = p_test_passes;
 }
 
 template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep(std::optional<int> global_step)
@@ -343,13 +594,12 @@ template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep(std::optio
       for (int i = 0; i < nx; ++i) {
         amrex::Real const x = position[i];
         xs.at(i) = x;
-        const auto rho_t = values.at(HydroSystem<TheProblem>::density_index)[i];
-        const auto v_t = values.at(HydroSystem<TheProblem>::x2Momentum_index)[i] / rho_t; // v_y
-        const auto Egas_t = values.at(HydroSystem<TheProblem>::internalEnergy_index)[i];
-        const auto pressure_t = quokka::EOS<TheProblem>::ComputePressure(rho_t, Egas_t);
-        const auto T_t = quokka::EOS<TheProblem>::ComputeTgasFromEint(rho_t, Egas_t);
+        const auto rho_t = values.at(RadSystem<TheProblem>::gasDensity_index)[i];
+        const auto v_t = values.at(RadSystem<TheProblem>::x2GasMomentum_index)[i] / rho_t;
+        const auto Egas_t = values.at(RadSystem<TheProblem>::gasInternalEnergy_index)[i];
+        const auto pressure_t = (gamma_ - 1.0) * Egas_t;
         rhogas.at(i) = rho_t;
-        Tgas.at(i) = T_t;
+        Tgas.at(i) = quokka::EOS<TheProblem>::ComputeTgasFromEint(rho_t, Egas_t);
         Egas.at(i) = Egas_t;
         Vgas.at(i) = v_t;
         pressure.at(i) = pressure_t;
