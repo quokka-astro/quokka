@@ -134,7 +134,7 @@ void RadhydroSimulation<NewProblem>::setInitialConditionsOnGrid(quokka::grid gri
       
       double Phigas = 2.* 3.1415 * Const_G * Sigma_gas * std::abs(z);
 
-      double Phitot = Phist + Phidm;
+      double Phitot = Phist + Phidm + Phigas;
 
 			double rho, rho_disk, rho_halo;
              rho_disk = rho01 * std::exp(-Phitot/std::pow(sigma1,2.0)) ;
