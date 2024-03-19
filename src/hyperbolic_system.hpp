@@ -69,7 +69,7 @@ template <typename problem_t> class HyperbolicSystem
 	    -> std::pair<double, double>;
 
 	template <FluxDir DIR>
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void ReconstructStatesConstant(amrex::MultiFab const &q, amrex::MultiFab &leftState,
+	static void ReconstructStatesConstant(amrex::MultiFab const &q, amrex::MultiFab &leftState,
 										       amrex::MultiFab &rightState, int nghost, int nvars);
 
 	template <FluxDir DIR>
@@ -94,7 +94,7 @@ template <typename problem_t> class HyperbolicSystem
 			     quokka::Array4View<amrex::Real, DIR> const &rightState, int n, int i_in, int j_in, int k_in);
 
 	template <FluxDir DIR>
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void ReconstructStatesPPM(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf,
+	static void ReconstructStatesPPM(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf,
 										  amrex::MultiFab &rightState_mf, int nghost, int nvars, int iReadFrom = 0,
 										  int iWriteFrom = 0);
 
