@@ -69,7 +69,8 @@ template <typename problem_t> class HyperbolicSystem
 	    -> std::pair<double, double>;
 
 	template <FluxDir DIR>
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void ReconstructStatesConstant(amrex::MultiFab const &q, amrex::MultiFab &leftState, amrex::MultiFab &rightState, int nghost, int nvars);
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void ReconstructStatesConstant(amrex::MultiFab const &q, amrex::MultiFab &leftState,
+										       amrex::MultiFab &rightState, int nghost, int nvars);
 
 	template <FluxDir DIR>
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void ReconstructStatesConstant(arrayconst_t &q, array_t &leftState, array_t &rightState,
@@ -93,8 +94,9 @@ template <typename problem_t> class HyperbolicSystem
 			     quokka::Array4View<amrex::Real, DIR> const &rightState, int n, int i_in, int j_in, int k_in);
 
 	template <FluxDir DIR>
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void ReconstructStatesPPM(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf, int nghost, int nvars,
-					 int iReadFrom = 0, int iWriteFrom = 0);
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void ReconstructStatesPPM(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf,
+										  amrex::MultiFab &rightState_mf, int nghost, int nvars, int iReadFrom = 0,
+										  int iWriteFrom = 0);
 
 	template <FluxDir DIR>
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void ReconstructStatesPPM(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in,
@@ -128,9 +130,9 @@ template <typename problem_t> class HyperbolicSystem
 
 template <typename problem_t>
 template <FluxDir DIR>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-void HyperbolicSystem<problem_t>::ReconstructStatesConstant(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf,
-							    const int nghost, const int nvars)
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void HyperbolicSystem<problem_t>::ReconstructStatesConstant(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf,
+												     amrex::MultiFab &rightState_mf, const int nghost,
+												     const int nvars)
 {
 	auto const &q_in = q_mf.const_arrays();
 	auto leftState_in = leftState_mf.arrays();
@@ -184,9 +186,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void HyperbolicSystem<problem_t>::Recon
 
 template <typename problem_t>
 template <FluxDir DIR, SlopeLimiter limiter>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-void HyperbolicSystem<problem_t>::ReconstructStatesPLM(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf,
-						       const int nghost, const int nvars)
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void HyperbolicSystem<problem_t>::ReconstructStatesPLM(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf,
+												amrex::MultiFab &rightState_mf, const int nghost,
+												const int nvars)
 {
 	auto const &q_in = q_mf.const_arrays();
 	auto leftState_in = leftState_mf.arrays();
@@ -298,9 +300,9 @@ AMREX_GPU_DEVICE auto HyperbolicSystem<problem_t>::GetMinmaxSurroundingCell(arra
 
 template <typename problem_t>
 template <FluxDir DIR>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-void HyperbolicSystem<problem_t>::ReconstructStatesPPM(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf,
-						       const int nghost, const int nvars, const int iReadFrom, const int iWriteFrom)
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void HyperbolicSystem<problem_t>::ReconstructStatesPPM(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf,
+												amrex::MultiFab &rightState_mf, const int nghost,
+												const int nvars, const int iReadFrom, const int iWriteFrom)
 {
 	BL_PROFILE("HyperbolicSystem::ReconstructStatesPPM(MultiFabs)");
 
