@@ -1,8 +1,8 @@
-/// \file test_radhydro_pulse.cpp
-/// \brief Defines a test problem for radiation in the static diffusion regime with advection by gas.
+/// \file test_radhydro_pulse_dyn.cpp
+/// \brief Defines a test problem for radiation in the dynamic diffusion regime with advection by gas.
 ///
 
-#include "test_radhydro_pulse.hpp"
+#include "test_radhydro_pulse_dyn.hpp"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_Print.H"
 #include "RadhydroSimulation.hpp"
@@ -24,17 +24,22 @@ constexpr double width = 24.0; // cm, width of the pulse
 constexpr double erad_floor = a_rad * T0 * T0 * T0 * T0 * 1.0e-10;
 constexpr double mu = 2.33 * C::m_u;
 constexpr double k_B = C::k_B;
-constexpr double v0_nonadv = 0.; // non-advecting pulse
 
-// static diffusion: tau = 2e3, beta = 3e-5, beta tau = 6e-2
-constexpr double kappa0 = 100.;	    // cm^2 g^-1
-constexpr double v0_adv = 1.0e6;    // advecting pulse
-constexpr double max_time = 4.8e-5; // max_time = 2.0 * width / v1;
+// Static diffusion: tau = 2e3, beta = 3e-5, beta tau = 6e-2
+// constexpr double kappa0 = 100.;	    // cm^2 g^-1
+// constexpr double v0_adv = 1.0e6;    // advecting pulse
+// constexpr double max_time = 4.8e-5; // max_time = 2.0 * width / v1;
 
-// dynamic diffusion: tau = 2e4, beta = 3e-3, beta tau = 60
+// Dynamic diffusion: tau = 2e4, beta = 3e-3, beta tau = 60
 // constexpr double kappa0 = 1000.; // cm^2 g^-1
 // constexpr double v0_adv = 1.0e8;    // advecting pulse
-// constexpr double max_time = 1.2e-4; // max_time = 2.0 * width / v1;
+// constexpr double max_time = 4.8e-4;
+
+// Dynamic diffusion: tau = 1e4, beta = 1e-3, beta tau = 10.
+// Width of the pulse = sqrt(c max_time / kappa0) = 85 if max_time = 2.4e-4
+constexpr double kappa0 = 500.;	 // cm^2 g^-1
+constexpr double v0_adv = 3.0e7; // advecting pulse
+constexpr double max_time = 4.8e-6;
 
 template <> struct quokka::EOS_Traits<PulseProblem> {
 	static constexpr double mean_molecular_weight = mu;
@@ -147,16 +152,15 @@ template <> void RadhydroSimulation<PulseProblem>::setInitialConditionsOnGrid(qu
 		const double Erad = a_rad * std::pow(Trad, 4);
 		const double rho = compute_exact_rho(x - x0);
 		const double Egas = quokka::EOS<PulseProblem>::ComputeEintFromTgas(rho, Trad);
-		const double v0 = v0_nonadv;
 
 		state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = Erad;
-		state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index) = 4. / 3. * v0 * Erad;
+		state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index) = 0.;
 		state_cc(i, j, k, RadSystem<PulseProblem>::x2RadFlux_index) = 0;
 		state_cc(i, j, k, RadSystem<PulseProblem>::x3RadFlux_index) = 0;
-		state_cc(i, j, k, RadSystem<PulseProblem>::gasEnergy_index) = Egas + 0.5 * rho * v0 * v0;
+		state_cc(i, j, k, RadSystem<PulseProblem>::gasEnergy_index) = Egas;
 		state_cc(i, j, k, RadSystem<PulseProblem>::gasDensity_index) = rho;
 		state_cc(i, j, k, RadSystem<PulseProblem>::gasInternalEnergy_index) = Egas;
-		state_cc(i, j, k, RadSystem<PulseProblem>::x1GasMomentum_index) = v0 * rho;
+		state_cc(i, j, k, RadSystem<PulseProblem>::x1GasMomentum_index) = 0.;
 		state_cc(i, j, k, RadSystem<PulseProblem>::x2GasMomentum_index) = 0.;
 		state_cc(i, j, k, RadSystem<PulseProblem>::x3GasMomentum_index) = 0.;
 	});
@@ -339,7 +343,7 @@ auto problem_main() -> int
 		err_norm += std::abs(Tgas2[i] - Trad[i]);
 		sol_norm += std::abs(Trad[i]) * 3.0;
 	}
-	const double error_tol = 0.006;
+	const double error_tol = 0.002;
 	const double rel_error = err_norm / sol_norm;
 	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
 
@@ -352,7 +356,7 @@ auto problem_main() -> int
 	Trad_args["linestyle"] = "-.";
 	Tgas_args["label"] = "Tgas (non-advecting)";
 	Tgas_args["linestyle"] = "--";
-	matplotlibcpp::ylim(0.95e7, 1.6e7);
+	matplotlibcpp::ylim(0.95e7, 2.0e7);
 	matplotlibcpp::plot(xs, Trad, Trad_args);
 	matplotlibcpp::plot(xs, Tgas, Tgas_args);
 	Trad_args["label"] = "Trad (advecting)";
@@ -364,11 +368,11 @@ auto problem_main() -> int
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
 	matplotlibcpp::tight_layout();
-	matplotlibcpp::save("./radhydro_pulse_temperature.pdf");
+	matplotlibcpp::save("./radhydro_pulse_dyndiff_temperature.pdf");
 
 	// Save xs, Trad, Tgas, xs2, Trad2, Tgas2 to csv file
 	std::ofstream file;
-	file.open("radhydro_pulse_temperature.csv");
+	file.open("radhydro_pulse_dyndiff_temperature.csv");
 	file << "xs,Trad,Tgas,xs2,Trad2,Tgas2\n";
 	for (size_t i = 0; i < xs.size(); ++i) {
 		file << std::scientific << std::setprecision(12) << xs[i] << "," << Trad[i] << "," << Tgas[i] << "," << xs2[i] << "," << Trad2[i] << ","
@@ -389,10 +393,10 @@ auto problem_main() -> int
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
 	matplotlibcpp::tight_layout();
-	matplotlibcpp::save("./radhydro_pulse_density.pdf");
+	matplotlibcpp::save("./radhydro_pulse_dyndiff_density.pdf");
 
 	// Save xs, rhogas, xs2, rhogas2 to csv file with format %.12e
-	file.open("radhydro_pulse_density.csv");
+	file.open("radhydro_pulse_dyndiff_density.csv");
 	file << "xs,rhogas,xs2,rhogas2\n";
 	for (size_t i = 0; i < xs.size(); ++i) {
 		file << std::scientific << std::setprecision(12) << xs[i] << "," << rhogas[i] << "," << xs2[i] << "," << rhogas2[i] << "\n";
@@ -412,10 +416,10 @@ auto problem_main() -> int
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
 	matplotlibcpp::tight_layout();
-	matplotlibcpp::save("./radhydro_pulse_velocity.pdf");
+	matplotlibcpp::save("./radhydro_pulse_dyndiff_velocity.pdf");
 
 	// Save xs, Vgas, xs2, Vgas2 to csv file
-	file.open("radhydro_pulse_velocity.csv");
+	file.open("radhydro_pulse_dyndiff_velocity.csv");
 	file << "xs,Vgas,xs2,Vgas2\n";
 	for (size_t i = 0; i < xs.size(); ++i) {
 		file << std::scientific << std::setprecision(12) << xs[i] << "," << Vgas[i] << "," << xs2[i] << "," << Vgas2[i] << "\n";
