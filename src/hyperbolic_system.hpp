@@ -286,12 +286,7 @@ template <FluxDir DIR>
 void HyperbolicSystem<problem_t>::ReconstructStatesPPM(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf,
 						       const int nghost, const int nvars, const int iReadFrom, const int iWriteFrom)
 {
-	BL_PROFILE("HyperbolicSystem::ReconstructStatesPPM()");
-
-	// By convention, the interfaces are defined on the left edge of each
-	// zone, i.e. xleft_(i) is the "left"-side of the interface at the left
-	// edge of zone i, and xright_(i) is the "right"-side of the interface
-	// at the *left* edge of zone i.
+	BL_PROFILE("HyperbolicSystem::ReconstructStatesPPM(MultiFabs)");
 
 	auto const &q_in = q_mf.const_arrays();
 	auto leftState_in = leftState_mf.arrays();
@@ -314,7 +309,7 @@ template <FluxDir DIR>
 void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in, amrex::Box const &cellRange,
 						       amrex::Box const & /*interfaceRange*/, const int nvars, const int iReadFrom, const int iWriteFrom)
 {
-	BL_PROFILE("HyperbolicSystem::ReconstructStatesPPM()");
+	BL_PROFILE("HyperbolicSystem::ReconstructStatesPPM(Arrays)");
 
 	// construct ArrayViews for permuted indices
 	quokka::Array4View<amrex::Real const, DIR> q(q_in);
