@@ -31,19 +31,20 @@ AMREX_GPU_DEVICE void chemburner(burn_t &chemstate, Real dt);
 template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const Real dt, const Real max_density_allowed, const Real min_density_allowed)
 {
 
-	const auto &ba = mf.boxArray();
-	const auto &dmap = mf.DistributionMap();
-	amrex::iMultiFab burnstepsMF(ba, dmap, 1, 0);
+	// Start off by assuming a successful burn.
+	int burn_success = 1;
+
+#if defined(AMREX_USE_GPU)
+	amrex::Gpu::Buffer<int> d_num_failed({0});
+	auto* p_num_failed = d_num_failed.data();
+#endif
+
+	int num_failed = 0;
 
 	const BL_PROFILE("Chemistry::computeChemistry()");
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &state = mf.array(iter);
-		auto const &burnsteps = burnstepsMF.array(iter);
-
-		if (dt < 0) {
-			amrex::Abort("Cannot do chemistry with dt < 0!");
-		}
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			const Real rho = state(i, j, k, HydroSystem<problem_t>::density_index);
@@ -65,6 +66,8 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 			// do chemistry using microphysics
 
 			burn_t chemstate;
+            chemstate.success = true;
+			int burn_failed = 0;
 
 			for (int nn = 0; nn < NumSpec; ++nn) {
 				inmfracs[nn] = chem[nn] * rho / spmasses[nn];
@@ -93,11 +96,22 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 			// do it in .cpp so that it is not built at compile time for all tests
 			// which would otherwise slow down compilation due to the large RHS file
 			chemburner(chemstate, dt);
-			burnsteps(i, j, k) = chemstate.success;
 
 			if (std::isnan(chemstate.xn[0]) || std::isnan(chemstate.rho)) {
 				amrex::Abort("Burner returned NAN");
 			}
+
+			if (!chemstate.success) {
+				burn_failed = 1;
+			}
+
+#if defined(AMREX_USE_GPU)
+			if (burn_failed) {
+				amrex::Gpu::Atomic::Add(p_num_failed, burn_failed);
+			}
+#else
+			num_failed += burn_failed;
+#endif
 
 			// ensure positivity and normalize
 			for (int nn = 0; nn < NumSpec; ++nn) {
@@ -144,12 +158,23 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 				state(i, j, k, HydroSystem<problem_t>::scalar0_index + nn) = inmfracs[nn] * rho; // scale by rho to return partial densities
 			}
 		});
+
+#if defined(AMREX_USE_HIP)
+        amrex::Gpu::streamSynchronize(); // otherwise HIP may fail to allocate the necessary resources.
+#endif
+
 	}
 
-	int burnmin = burnstepsMF.min(0);
-	if (burnmin == 0) {
-		amrex::Abort("VODE integration was unsuccessful!");
-	}
+#if defined(AMREX_USE_GPU)
+    num_failed = *(d_num_failed.copyToHost());
+#endif
+
+    burn_success = !num_failed;
+
+    amrex::ParallelDescriptor::ReduceIntMin(burn_success);
+
+
+
 }
 
 } // namespace quokka::chemistry
