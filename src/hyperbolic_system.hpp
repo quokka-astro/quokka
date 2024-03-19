@@ -128,7 +128,6 @@ template <typename problem_t> class HyperbolicSystem
 
 template <typename problem_t>
 template <FluxDir DIR>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 void HyperbolicSystem<problem_t>::ReconstructStatesConstant(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf,
 							    const int nghost, const int nvars)
 {
@@ -143,13 +142,13 @@ void HyperbolicSystem<problem_t>::ReconstructStatesConstant(amrex::MultiFab cons
 		quokka::Array4View<amrex::Real, DIR> leftState(leftState_in[bx]);
 		quokka::Array4View<amrex::Real, DIR> rightState(rightState_in[bx]);
 
-		HyperbolicSystem<problem_t>::ReconstructStatesConstant(q, leftState, rightState, n, i_in, j_in, k_in);
+		HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(q, leftState, rightState, n, i_in, j_in, k_in);
 	});
 }
 
 template <typename problem_t>
 template <FluxDir DIR>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void HyperbolicSystem<problem_t>::ReconstructStatesConstant(arrayconst_t &q_in, array_t &leftState_in,
+AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesConstant(arrayconst_t &q_in, array_t &leftState_in,
 												     array_t &rightState_in, amrex::Box const &indexRange,
 												     const int nvars)
 {
@@ -159,13 +158,13 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void HyperbolicSystem<problem_t>::Recon
 	quokka::Array4View<amrex::Real, DIR> rightState(rightState_in);
 
 	amrex::ParallelFor(indexRange, nvars, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
-		HyperbolicSystem<problem_t>::ReconstructStatesConstant(q, leftState, rightState, n, i_in, j_in, k_in);
+		HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(q, leftState, rightState, n, i_in, j_in, k_in);
 	});
 }
 
 template <typename problem_t>
 template <FluxDir DIR>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void HyperbolicSystem<problem_t>::ReconstructStatesConstant(quokka::Array4View<amrex::Real const, DIR> const &q,
+AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesConstant(quokka::Array4View<amrex::Real const, DIR> const &q,
 												     quokka::Array4View<amrex::Real, DIR> const &leftState,
 												     quokka::Array4View<amrex::Real, DIR> const &rightState,
 												     int n, int i_in, int j_in, int k_in)
@@ -184,7 +183,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void HyperbolicSystem<problem_t>::Recon
 
 template <typename problem_t>
 template <FluxDir DIR, SlopeLimiter limiter>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 void HyperbolicSystem<problem_t>::ReconstructStatesPLM(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf,
 						       const int nghost, const int nvars)
 {
@@ -205,7 +203,7 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPLM(amrex::MultiFab const &q_
 
 template <typename problem_t>
 template <FluxDir DIR, SlopeLimiter limiter>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void HyperbolicSystem<problem_t>::ReconstructStatesPLM(arrayconst_t &q_in, array_t &leftState_in,
+AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPLM(arrayconst_t &q_in, array_t &leftState_in,
 												array_t &rightState_in, amrex::Box const &indexRange,
 												const int nvars)
 {
@@ -221,8 +219,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void HyperbolicSystem<problem_t>::Recon
 
 template <typename problem_t>
 template <FluxDir DIR, SlopeLimiter limiter>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void
-HyperbolicSystem<problem_t>::ReconstructStatesPLM(quokka::Array4View<amrex::Real const, DIR> const &q, quokka::Array4View<amrex::Real, DIR> const &leftState,
+AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPLM(quokka::Array4View<amrex::Real const, DIR> const &q, quokka::Array4View<amrex::Real, DIR> const &leftState,
 						  quokka::Array4View<amrex::Real, DIR> const &rightState, int n, int i_in, int j_in, int k_in)
 {
 	// permute array indices according to dir
@@ -298,7 +295,6 @@ AMREX_GPU_DEVICE auto HyperbolicSystem<problem_t>::GetMinmaxSurroundingCell(arra
 
 template <typename problem_t>
 template <FluxDir DIR>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 void HyperbolicSystem<problem_t>::ReconstructStatesPPM(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf,
 						       const int nghost, const int nvars, const int iReadFrom, const int iWriteFrom)
 {
@@ -316,14 +312,13 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(amrex::MultiFab const &q_
 		quokka::Array4View<amrex::Real, DIR> leftState(leftState_in[bx]);
 		quokka::Array4View<amrex::Real, DIR> rightState(rightState_in[bx]);
 
-		HyperbolicSystem<problem_t>::ReconstructStatesPPM(q, leftState, rightState, n, i_in, j_in, k_in, iReadFrom, iWriteFrom);
+		HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR>(q, leftState, rightState, n, i_in, j_in, k_in, iReadFrom, iWriteFrom);
 	});
 }
 
 template <typename problem_t>
 template <FluxDir DIR>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void
-HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in, amrex::Box const &cellRange,
+AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in, amrex::Box const &cellRange,
 						  amrex::Box const & /*interfaceRange*/, const int nvars, const int iReadFrom, const int iWriteFrom)
 {
 	BL_PROFILE("HyperbolicSystem::ReconstructStatesPPM(Arrays)");
@@ -335,13 +330,13 @@ HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array_t &l
 
 	// cell-centered kernel
 	amrex::ParallelFor(cellRange, nvars, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
-		HyperbolicSystem<problem_t>::ReconstructStatesPPM(q, leftState, rightState, n, i_in, j_in, k_in, iReadFrom, iWriteFrom);
+		HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR>(q, leftState, rightState, n, i_in, j_in, k_in, iReadFrom, iWriteFrom);
 	});
 }
 
 template <typename problem_t>
 template <FluxDir DIR>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void HyperbolicSystem<problem_t>::ReconstructStatesPPM(quokka::Array4View<amrex::Real const, DIR> const &q,
+AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPPM(quokka::Array4View<amrex::Real const, DIR> const &q,
 												quokka::Array4View<amrex::Real, DIR> const &leftState,
 												quokka::Array4View<amrex::Real, DIR> const &rightState, int n,
 												int i_in, int j_in, int k_in, int iReadFrom, int iWriteFrom)
