@@ -85,18 +85,23 @@ template <> void RadhydroSimulation<PulseProblem>::setInitialConditionsOnGrid(qu
 
 	const double Egas = quokka::EOS<PulseProblem>::ComputeEintFromTgas(rho0, T0);
 
+  double erad = NAN;
+  double frad = NAN;
+  if constexpr (beta_order_ <= 1) {
+    erad = Erad0;
+    frad = 4. / 3. * v0 * Erad0;
+  } else if constexpr (beta_order_ == 2) {
+    erad = Erad_beta2;
+    frad = 4. / 3. * v0 * Erad0;
+  } else { // beta_order_ == 3
+    erad = Erad_beta2;
+    frad = 4. / 3. * v0 * Erad0 * (1. + (v0 * v0) / (c * c));
+  }
+
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		if constexpr (beta_order_ <= 1) {
-			state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = Erad0;
-		} else { // beta_order_ == 2 or 3
-			state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = Erad_beta2;
-		}
-		if constexpr (beta_order_ <= 2) {
-			state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index) = 4. / 3. * v0 * Erad0;
-		} else { // beta_order_ == 3
-			state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index) = 4. / 3. * v0 * Erad0 * (1. + (v0 * v0) / (c * c));
-		}
+    state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = erad;
+    state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index) = frad;
 		state_cc(i, j, k, RadSystem<PulseProblem>::x2RadFlux_index) = 0;
 		state_cc(i, j, k, RadSystem<PulseProblem>::x3RadFlux_index) = 0;
 		state_cc(i, j, k, RadSystem<PulseProblem>::gasEnergy_index) = Egas + 0.5 * rho0 * v0 * v0;
