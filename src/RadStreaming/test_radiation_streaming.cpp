@@ -46,6 +46,7 @@ template <> struct RadSystem_Traits<StreamingProblem> {
 	static constexpr double radiation_constant = 1.0;
 	static constexpr double Erad_floor = initial_Erad;
 	static constexpr bool compute_v_over_c_terms = false;
+	static constexpr int beta_order = 1;
 };
 
 template <>

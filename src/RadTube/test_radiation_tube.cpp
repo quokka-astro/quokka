@@ -65,6 +65,7 @@ template <> struct RadSystem_Traits<TubeProblem> {
 	static constexpr bool compute_v_over_c_terms = true;
 	static constexpr double energy_unit = C::k_B;
 	static constexpr amrex::GpuArray<double, Physics_Traits<TubeProblem>::nGroups + 1> radBoundaries{0., 3.3 * T0, inf}; // Kelvin
+	static constexpr int beta_order = 1;
 };
 
 template <>
