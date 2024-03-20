@@ -34,10 +34,8 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 	// Start off by assuming a successful burn.
 	int burn_success = 1;
 
-#if defined(AMREX_USE_GPU)
 	amrex::Gpu::Buffer<int> d_num_failed({0});
 	auto *p_num_failed = d_num_failed.data();
-#endif
 
 	int num_failed = 0;
 
@@ -105,13 +103,10 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 				burn_failed = 1;
 			}
 
-#if defined(AMREX_USE_GPU)
 			if (burn_failed) {
 				amrex::Gpu::Atomic::Add(p_num_failed, burn_failed);
 			}
-#else
 			num_failed += burn_failed;
-#endif
 
 			// ensure positivity and normalize
 			for (int nn = 0; nn < NumSpec; ++nn) {
