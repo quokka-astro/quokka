@@ -1,3 +1,9 @@
+init.A = 2.8
+init.h = 0.1
+init.q = 0.01
+
+eos.model = 0
+
 # *****************************************************************
 # Problem size and geometry
 # *****************************************************************
@@ -5,12 +11,12 @@ geometry.prob_lo     =  0.0 0.0 0.0
 geometry.prob_hi     =  4.0 4.0 4.0
 geometry.is_periodic =  0    0    0
 
-max_timesteps = 250
+max_timesteps = 10
 stop_time = 10.0
-plotfile_interval = 50
+plotfile_interval = 1
 checkpoint_interval = 1000000
-compute_interval = 10
-# restartfile = plt00004
+compute_interval = 1
+# restartfile = chk00020
 
 # *****************************************************************
 # VERBOSITY
@@ -20,8 +26,8 @@ amr.v              = 1       # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 128 128 128
-amr.max_level       = 1     # number of levels = max_level + 1
+amr.n_cell          = 64 64 64
+amr.max_level       = 2     # number of levels = max_level + 1
 amr.blocking_factor = 64     # grid size must be divisible by this
 amr.max_grid_size   = 64
 

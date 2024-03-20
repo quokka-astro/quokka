@@ -15,5 +15,5 @@ if (AMReX_SPACEDIM EQUAL 3)
 		COMMAND mkdir -p ${work_dir}
 	)
 
-	add_test(NAME FirstStar COMMAND first_star FirstStar.in WORKING_DIRECTORY ${work_dir})
+	add_test(NAME FirstStar COMMAND first_star FirstStarAMR.in WORKING_DIRECTORY ${work_dir})
 endif()

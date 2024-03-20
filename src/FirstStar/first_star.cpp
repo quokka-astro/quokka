@@ -5,6 +5,7 @@
 #include "first_star.hpp"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_MultiFab.H"
+#include <AMReX_MultiFabUtil.H>
 #include "AMReX_Print.H"
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
@@ -20,6 +21,10 @@ struct TheProblem {
 };
 
 AMREX_GPU_MANAGED int model = 0;
+AMREX_GPU_MANAGED double init_A = NAN;
+AMREX_GPU_MANAGED double init_q = NAN;
+AMREX_GPU_MANAGED double init_h = NAN;
+AMREX_GPU_MANAGED double rho_star = NAN;
 
 // constexpr const char* subfolder = __DATE__ " " __TIME__;
 constexpr const char* subfolder = "first_star_figs";
@@ -42,23 +47,21 @@ constexpr double q = 0.005;
 constexpr double r_c = 1.0;
 constexpr double r_star = q * r_c;
 constexpr double G = 1.0;
-constexpr double rho_star = A * c_iso * c_iso / (4.0 * pi * G * r_star * r_star);
+// constexpr double rho_star = A * c_iso * c_iso / (4.0 * pi * G * r_star * r_star);
 
 // EOS parameters
 constexpr double mu = 1.0;
-constexpr double gamma_ = 5.0 / 3.0;
-constexpr double Cv = 1.0 / (gamma_ - 1.0) * k_B / mu; // Specific heat at constant volume in the adiabatic phase
+constexpr double gamma_ad = 5.0 / 3.0;
+constexpr double Cv = 1.0 / (gamma_ad - 1.0) * k_B / mu; // Specific heat at constant volume in the adiabatic phase
 constexpr double T0 = c_iso * c_iso;
 
 // model 1 parameters
-constexpr double rho0 = rho_star;
-constexpr double rho1 = 3.2 * rho0; // jump ends at this density
-constexpr double s = 4.0; // jump slope. The jump equals s * log10(rho1 / rho0)
+constexpr double model1_s = 4.0; // jump slope. The jump equals s * log10(rho1 / rho0)
 
 // model 2 parameters
 constexpr double rho_core = 1.0;
 constexpr double rho_one = 1000.0;
-constexpr double jump_slope = 10.0;
+constexpr double model2_jump_slope = 10.0;
 
 // model 0 parameters
 constexpr double model0_gamma1 = 1.00001;
@@ -67,7 +70,7 @@ constexpr double model0_gamma2 = 5.0 / 3.0;
 template <> struct quokka::EOS_Traits<TheProblem> {
 	static constexpr double mean_molecular_weight = mu;
 	static constexpr double boltzmann_constant = k_B;
-	static constexpr double gamma = gamma_;
+	static constexpr double gamma = gamma_ad;
 	// static constexpr double cs_isothermal = 1.0;
 };
 
@@ -87,14 +90,11 @@ template <> struct Physics_Traits<TheProblem> {
 };
 
 template <> struct SimulationData<TheProblem> {
-	// init parameters
-	amrex::Real init_A = NAN;
-	amrex::Real init_q = NAN;
-	amrex::Real init_h = NAN;
 
 	// temporal quantities
 	std::vector<amrex::Real> time{};
 	std::vector<amrex::Real> mass{}; // stellar mass
+	std::vector<amrex::Real> tot_mass{}; // total mass in simulation box
 	std::vector<amrex::Real> position_x{};
 	std::vector<amrex::Real> position_y{};
 	std::vector<amrex::Real> position_z{};
@@ -114,17 +114,22 @@ auto compute_T(const double rho) -> double
 	// amrex::Real const A = userData_.init_A;
 	// amrex::Real const r_star = userData_.init_q * r_c;
 	// amrex::Real const rho_star = A * c_iso * c_iso / (4.0 * pi * G * r_star * r_star);
-	if (model == 1) {
-		const double scale = 1.0 / (1.0 + std::pow(rho / rho0, s)) + 1.0 / (1.0 + std::pow(rho1 / rho0, s)) * std::pow(rho / rho1, gamma_ - 1.0);
-		return scale * T0;
-	} else if (model == 2) {
-		const double scale = 1.0 / (1.0 + std::exp(jump_slope * (rho / rho_core - 1.0))) + std::pow(rho / rho_one, gamma_ - 1.0);
-		return scale * T0;
-	} else if (model == 0) {
+	if (model == 0) {
     // P = c_s^2 * rho^gamma1 (1 + (rho / rho_star)^(gamma2 - gamma1))
     auto P = c_iso * c_iso * std::pow(rho, model0_gamma1) * (1.0 + std::pow(rho / rho_star, model0_gamma2 - model0_gamma1));
     return P / (rho * k_B / mu);
   }
+	if (model == 1) {
+		auto rho0 = rho_star;
+		auto rho1 = 3.2 * rho0; // jump ends at this density
+		const double scale = 1.0 / (1.0 + std::pow(rho / rho0, model1_s)) + 1.0 / (1.0 + std::pow(rho1 / rho0, model1_s)) * std::pow(rho / rho1, gamma_ad - 1.0);
+		return scale * T0;
+	} 
+	if (model == 2) {
+		const double scale = 1.0 / (1.0 + std::exp(model2_jump_slope * (rho / rho_core - 1.0))) + std::pow(rho / rho_one, gamma_ad - 1.0);
+		return scale * T0;
+	} 
+	return -1.0;
 }
 
 AMREX_GPU_HOST_DEVICE
@@ -134,7 +139,8 @@ auto compute_e(const double rho) -> double
 		const auto Tgas = compute_T(rho);
 		const double e = Cv * rho * Tgas;
 		return e;
-	} else if (model == 2) {
+	} 
+	if (model == 2) {
 	  double Tgas = NAN;
 		if (rho >= rho_core) {
 			Tgas = compute_T(rho);
@@ -143,6 +149,7 @@ auto compute_e(const double rho) -> double
 		Tgas = compute_T(rho_core);
 		return Cv * rho_core * Tgas;
 	}
+	return -1.0;
 }
 
 // redefine EOS::ComputePressure
@@ -152,12 +159,14 @@ AMREX_GPU_HOST_DEVICE AMREX_GPU_HOST_DEVICE auto quokka::EOS<TheProblem>::Comput
 {
 	if (model == 0 || model == 1) {
 		const double e = compute_e(rho);
-		return (gamma_ - 1.0) * e;
-	} else if (model == 2) {
+		return (gamma_ad - 1.0) * e;
+	} 
+	if (model == 2) {
 		const double T = compute_T(rho);
 		const double e = rho * Cv * T;
-		return (gamma_ - 1.0) * e;
+		return (gamma_ad - 1.0) * e;
 	}
+	return -1.0;
 }
 
 template <>
@@ -170,10 +179,10 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto quokka::EOS<TheProblem>::ComputeTg
 	// amrex::Real const r_star = userData_.init_q * r_c;
 	// amrex::Real const rho_star = A * c_iso * c_iso / (4.0 * pi * G * r_star * r_star);
 	// if constexpr (model == 1) {
-	// 	const double scale = 1.0 / (1.0 + std::pow(rho / rho0, s)) + 1.0 / (1.0 + std::pow(rho1 / rho0, s)) * std::pow(rho / rho1, gamma_ - 1.0);
+	// 	const double scale = 1.0 / (1.0 + std::pow(rho / rho0, model1_s)) + 1.0 / (1.0 + std::pow(rho1 / rho0, model1_s)) * std::pow(rho / rho1, gamma_ad - 1.0);
 	// 	return scale * T0;
 	// } else if constexpr (model == 2) {
-	// 	const double scale = 1.0 / (1.0 + std::exp(jump_slope * (rho / rho_core - 1.0))) + std::pow(rho / rho_one, gamma_ - 1.0);
+	// 	const double scale = 1.0 / (1.0 + std::exp(model2_jump_slope * (rho / rho_core - 1.0))) + std::pow(rho / rho_one, gamma_ad - 1.0);
 	// 	return scale * T0;
 	// }
 }
@@ -399,94 +408,237 @@ template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep(std::optio
   // }
 
   if ((computeInterval_ > 0) && (step % computeInterval_ == 0)) {
-		// compute SimulationData
-		auto const &dx = geom[0].CellSizeArray();
-		auto const prob_lo = geom[0].ProbLoArray();
-		amrex::Real const vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
-		amrex::MultiFab mass_mf(boxArray(0), DistributionMap(0), 1, 0);
-		amrex::MultiFab position_x_mf(boxArray(0), DistributionMap(0), 1, 0);
-		amrex::MultiFab position_y_mf(boxArray(0), DistributionMap(0), 1, 0);
-		amrex::MultiFab position_z_mf(boxArray(0), DistributionMap(0), 1, 0);
-		amrex::MultiFab velocity_x_mf(boxArray(0), DistributionMap(0), 1, 0);
-		amrex::MultiFab velocity_y_mf(boxArray(0), DistributionMap(0), 1, 0);
-		amrex::MultiFab velocity_z_mf(boxArray(0), DistributionMap(0), 1, 0);
-		amrex::MultiFab rot_radius_mf(boxArray(0), DistributionMap(0), 1, 0);
-		amrex::MultiFab spin_L_mf(boxArray(0), DistributionMap(0), 1, 0);
+		// get the finest level 
+    const int fine_level = finestLevel();
+		const int dim = 3;
 
-		for (amrex::MFIter iter(state_new_cc_[0]); iter.isValid(); ++iter) {
-			const amrex::Box &indexRange = iter.validbox();
-			auto const &state = state_new_cc_[0].const_array(iter);
-			auto const &mass = mass_mf.array(iter);
-			auto const &position_x = position_x_mf.array(iter);
-			auto const &position_y = position_y_mf.array(iter);
-			auto const &position_z = position_z_mf.array(iter);
-			auto const &velocity_x = velocity_x_mf.array(iter);
-			auto const &velocity_y = velocity_y_mf.array(iter);
-			auto const &velocity_z = velocity_z_mf.array(iter);
-			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-				// compute mass
-				Real const rho = state(i, j, k, HydroSystem<TheProblem>::density_index);
-				if (rho > rho_star) {
-					Real const x = prob_lo[0] + (i + 0.5) * dx[0];
-					Real const y = prob_lo[1] + (j + 0.5) * dx[1];
-					Real const z = prob_lo[2] + (k + 0.5) * dx[2];
-					Real const px = state(i, j, k, HydroSystem<TheProblem>::x1Momentum_index);
-					Real const py = state(i, j, k, HydroSystem<TheProblem>::x2Momentum_index);
-					Real const pz = state(i, j, k, HydroSystem<TheProblem>::x3Momentum_index);
-					mass(i, j, k) = rho;
-					position_x(i, j, k) = x * rho;
-					position_y(i, j, k) = y * rho;
-					position_z(i, j, k) = z * rho;
-					velocity_x(i, j, k) = px;
-					velocity_y(i, j, k) = py;
-					velocity_z(i, j, k) = pz;
-				} else {
-					mass(i, j, k) = 0.0;
-					position_x(i, j, k) = 0.0;
-					position_y(i, j, k) = 0.0;
-					position_z(i, j, k) = 0.0;
-					velocity_x(i, j, k) = 0.0;
-					velocity_y(i, j, k) = 0.0;
-					velocity_z(i, j, k) = 0.0;
+		// const double rho_threshold = rho_star;
+		const double rho_threshold = -1.0;
+
+		double mass_tot = 0.0;
+		double position_x_tot = 0.0;
+		double position_y_tot = 0.0;
+		double position_z_tot = 0.0;
+		double velocity_x_tot = 0.0;
+		double velocity_y_tot = 0.0;
+		double velocity_z_tot = 0.0;
+		double rot_radius_tot = 0.0;
+		double spin_L_tot = 0.0;
+
+		for (int ilev = 0; ilev <= fine_level; ++ilev) {
+			// compute SimulationData
+			auto const &dx = geom[ilev].CellSizeArray();
+			amrex::Real const vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
+			auto const prob_lo = geom[ilev].ProbLoArray();
+
+			amrex::MultiFab mass_mf(boxArray(ilev), DistributionMap(ilev), 1, 0);
+			amrex::MultiFab position_x_mf(boxArray(ilev), DistributionMap(ilev), 1, 0);
+			amrex::MultiFab position_y_mf(boxArray(ilev), DistributionMap(ilev), 1, 0);
+			amrex::MultiFab position_z_mf(boxArray(ilev), DistributionMap(ilev), 1, 0);
+			amrex::MultiFab velocity_x_mf(boxArray(ilev), DistributionMap(ilev), 1, 0);
+			amrex::MultiFab velocity_y_mf(boxArray(ilev), DistributionMap(ilev), 1, 0);
+			amrex::MultiFab velocity_z_mf(boxArray(ilev), DistributionMap(ilev), 1, 0);
+
+			if (ilev < fine_level) {
+        const amrex::IntVect ratio{refRatio(ilev)};
+				const amrex::iMultiFab mask = makeFineMask(boxArray(ilev), DistributionMap(ilev), boxArray(ilev+1), ratio);
+				auto const& ima = mask.const_arrays();
+
+				for (amrex::MFIter iter(state_new_cc_[ilev]); iter.isValid(); ++iter) {
+					const amrex::Box &indexRange = iter.validbox();
+
+					const auto& m = mask.array(iter);
+
+					auto const &state = state_new_cc_[ilev].const_array(iter);
+					auto const &mass = mass_mf.array(iter);
+					auto const &position_x = position_x_mf.array(iter);
+					auto const &position_y = position_y_mf.array(iter);
+					auto const &position_z = position_z_mf.array(iter);
+					auto const &velocity_x = velocity_x_mf.array(iter);
+					auto const &velocity_y = velocity_y_mf.array(iter);
+					auto const &velocity_z = velocity_z_mf.array(iter);
+
+					amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+						Real const rho = state(i, j, k, HydroSystem<TheProblem>::density_index);
+						if ((m(i, j, k) == 0) && (rho > rho_threshold)) {
+							Real const x = prob_lo[0] + (i + 0.5) * dx[0];
+							Real const y = prob_lo[1] + (j + 0.5) * dx[1];
+							Real const z = prob_lo[2] + (k + 0.5) * dx[2];
+							Real const px = state(i, j, k, HydroSystem<TheProblem>::x1Momentum_index);
+							Real const py = state(i, j, k, HydroSystem<TheProblem>::x2Momentum_index);
+							Real const pz = state(i, j, k, HydroSystem<TheProblem>::x3Momentum_index);
+							mass(i, j, k) = rho;
+							position_x(i, j, k) = x * rho;
+							position_y(i, j, k) = y * rho;
+							position_z(i, j, k) = z * rho;
+							velocity_x(i, j, k) = px;
+							velocity_y(i, j, k) = py;
+							velocity_z(i, j, k) = pz;
+						} else {
+							mass(i, j, k) = 0.0;
+							position_x(i, j, k) = 0.0;
+							position_y(i, j, k) = 0.0;
+							position_z(i, j, k) = 0.0;
+							velocity_x(i, j, k) = 0.0;
+							velocity_y(i, j, k) = 0.0;
+							velocity_z(i, j, k) = 0.0;
+						}
+					});
 				}
-			});
+			} else { // ilev == fine_level
+				for (amrex::MFIter iter(state_new_cc_[ilev]); iter.isValid(); ++iter) {
+					const amrex::Box &indexRange = iter.validbox();
+
+					auto const &state = state_new_cc_[ilev].const_array(iter);
+					auto const &mass = mass_mf.array(iter);
+					auto const &position_x = position_x_mf.array(iter);
+					auto const &position_y = position_y_mf.array(iter);
+					auto const &position_z = position_z_mf.array(iter);
+					auto const &velocity_x = velocity_x_mf.array(iter);
+					auto const &velocity_y = velocity_y_mf.array(iter);
+					auto const &velocity_z = velocity_z_mf.array(iter);
+
+					amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+						Real const rho = state(i, j, k, HydroSystem<TheProblem>::density_index);
+						if (rho > rho_threshold) {
+							Real const x = prob_lo[0] + (i + 0.5) * dx[0];
+							Real const y = prob_lo[1] + (j + 0.5) * dx[1];
+							Real const z = prob_lo[2] + (k + 0.5) * dx[2];
+							Real const px = state(i, j, k, HydroSystem<TheProblem>::x1Momentum_index);
+							Real const py = state(i, j, k, HydroSystem<TheProblem>::x2Momentum_index);
+							Real const pz = state(i, j, k, HydroSystem<TheProblem>::x3Momentum_index);
+							mass(i, j, k) = rho;
+							position_x(i, j, k) = x * rho;
+							position_y(i, j, k) = y * rho;
+							position_z(i, j, k) = z * rho;
+							velocity_x(i, j, k) = px;
+							velocity_y(i, j, k) = py;
+							velocity_z(i, j, k) = pz;
+						} else {
+							mass(i, j, k) = 0.0;
+							position_x(i, j, k) = 0.0;
+							position_y(i, j, k) = 0.0;
+							position_z(i, j, k) = 0.0;
+							velocity_x(i, j, k) = 0.0;
+							velocity_y(i, j, k) = 0.0;
+							velocity_z(i, j, k) = 0.0;
+						}
+					});
+				}
+			}
+
+			mass_tot += mass_mf.sum(0) * vol;
+			position_x_tot += position_x_mf.sum(0) * vol;
+			position_y_tot += position_y_mf.sum(0) * vol;
+			position_z_tot += position_z_mf.sum(0) * vol;
+			velocity_x_tot += velocity_x_mf.sum(0) * vol;
+			velocity_y_tot += velocity_y_mf.sum(0) * vol;
+			velocity_z_tot += velocity_z_mf.sum(0) * vol;
 		}
 
-		amrex::Real const current_time = tNew_[0];
-		amrex::Real const Mass = mass_mf.sum(0);
-		amrex::Real const Position_x = position_x_mf.sum(0) * vol / Mass;
-		amrex::Real const Position_y = position_y_mf.sum(0) * vol / Mass;
-		amrex::Real const Position_z = position_z_mf.sum(0) * vol / Mass;
-		amrex::Real const Velocity_x = velocity_x_mf.sum(0) * vol / Mass;
-		amrex::Real const Velocity_y = velocity_y_mf.sum(0) * vol / Mass;
-		amrex::Real const Velocity_z = velocity_z_mf.sum(0) * vol / Mass;
+		const amrex::Real current_time = tNew_[0];
+		const amrex::Real Mass = mass_tot;
+		const amrex::Real Position_x = position_x_tot / Mass;
+		const amrex::Real Position_y = position_y_tot / Mass;
+		const amrex::Real Position_z = position_z_tot / Mass;
+		const amrex::Real Velocity_x = velocity_x_tot / Mass;
+		const amrex::Real Velocity_y = velocity_y_tot / Mass;
+		const amrex::Real Velocity_z = velocity_z_tot / Mass;
 
-		for (amrex::MFIter iter(state_new_cc_[0]); iter.isValid(); ++iter) {
-			const amrex::Box &indexRange = iter.validbox();
-			auto const &state = state_new_cc_[0].const_array(iter);
-			auto const &rot_radius = rot_radius_mf.array(iter);
-			auto const &spin_L = spin_L_mf.array(iter);
-			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-				// compute mass
-				Real const rho = state(i, j, k, HydroSystem<TheProblem>::density_index);
-				if (rho > rho_star) {
-					Real const x = prob_lo[0] + (i + 0.5) * dx[0];
-					Real const y = prob_lo[1] + (j + 0.5) * dx[1];
-					Real const px = state(i, j, k, HydroSystem<TheProblem>::x1Momentum_index);
-					Real const py = state(i, j, k, HydroSystem<TheProblem>::x2Momentum_index);
-					Real const distSqr = std::pow(x - Position_x, 2) + std::pow(y - Position_y, 2);
-					rot_radius(i, j, k) = distSqr * rho;
-					spin_L(i, j, k) = (x - Position_x) * py - (y - Position_y) * px;
-				} else {
-					rot_radius(i, j, k) = 0.0;
-					spin_L(i, j, k) = 0.0;
+		// for (amrex::MFIter iter(state_new_cc_[0]); iter.isValid(); ++iter) {
+		// 	const amrex::Box &indexRange = iter.validbox();
+		// 	auto const &state = state_new_cc_[0].const_array(iter);
+		// 	auto const &rot_radius = rot_radius_mf.array(iter);
+		// 	auto const &spin_L = spin_L_mf.array(iter);
+		// 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		// 		// compute mass
+		// 		Real const rho = state(i, j, k, HydroSystem<TheProblem>::density_index);
+		// 		if (rho > rho_star) {
+		// 			Real const x = prob_lo[0] + (i + 0.5) * dx[0];
+		// 			Real const y = prob_lo[1] + (j + 0.5) * dx[1];
+		// 			Real const px = state(i, j, k, HydroSystem<TheProblem>::x1Momentum_index);
+		// 			Real const py = state(i, j, k, HydroSystem<TheProblem>::x2Momentum_index);
+		// 			Real const distSqr = std::pow(x - Position_x, 2) + std::pow(y - Position_y, 2);
+		// 			rot_radius(i, j, k) = distSqr * rho;
+		// 			spin_L(i, j, k) = (x - Position_x) * py - (y - Position_y) * px;
+		// 		} else {
+		// 			rot_radius(i, j, k) = 0.0;
+		// 			spin_L(i, j, k) = 0.0;
+		// 		}
+		// 	});
+		// }
+
+		for (int ilev = 0; ilev <= fine_level; ++ilev) {
+			// compute SimulationData
+			auto const &dx = geom[ilev].CellSizeArray();
+			amrex::Real const vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
+			auto const prob_lo = geom[ilev].ProbLoArray();
+
+			amrex::MultiFab rot_radius_mf(boxArray(ilev), DistributionMap(ilev), 1, 0);
+			amrex::MultiFab spin_L_mf(boxArray(ilev), DistributionMap(ilev), 1, 0);
+
+			if (ilev < fine_level) {
+        const amrex::IntVect ratio{refRatio(ilev)};
+				const amrex::iMultiFab mask = makeFineMask(boxArray(ilev), DistributionMap(ilev), boxArray(ilev+1), ratio);
+				auto const& ima = mask.const_arrays();
+
+				for (amrex::MFIter iter(state_new_cc_[ilev]); iter.isValid(); ++iter) {
+					const amrex::Box &indexRange = iter.validbox();
+
+					const auto& m = mask.array(iter);
+					auto const &state = state_new_cc_[ilev].const_array(iter);
+					auto const &rot_radius = rot_radius_mf.array(iter);
+					auto const &spin_L = spin_L_mf.array(iter);
+
+					amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+						Real const rho = state(i, j, k, HydroSystem<TheProblem>::density_index);
+						if ((m(i, j, k) == 0) && (rho > rho_threshold)) {
+							Real const x = prob_lo[0] + (i + 0.5) * dx[0];
+							Real const y = prob_lo[1] + (j + 0.5) * dx[1];
+							Real const px = state(i, j, k, HydroSystem<TheProblem>::x1Momentum_index);
+							Real const py = state(i, j, k, HydroSystem<TheProblem>::x2Momentum_index);
+							Real const distSqr = std::pow(x - Position_x, 2) + std::pow(y - Position_y, 2);
+							rot_radius(i, j, k) = distSqr * rho;
+							spin_L(i, j, k) = (x - Position_x) * py - (y - Position_y) * px;
+						} else {
+							rot_radius(i, j, k) = 0.0;
+							spin_L(i, j, k) = 0.0;
+						}
+					});
 				}
-			});
+			} else { // ilev = fine level
+				for (amrex::MFIter iter(state_new_cc_[ilev]); iter.isValid(); ++iter) {
+					const amrex::Box &indexRange = iter.validbox();
+
+					auto const &state = state_new_cc_[ilev].const_array(iter);
+					auto const &rot_radius = rot_radius_mf.array(iter);
+					auto const &spin_L = spin_L_mf.array(iter);
+
+					amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+						Real const rho = state(i, j, k, HydroSystem<TheProblem>::density_index);
+						if (rho > rho_threshold) {
+							Real const x = prob_lo[0] + (i + 0.5) * dx[0];
+							Real const y = prob_lo[1] + (j + 0.5) * dx[1];
+							Real const px = state(i, j, k, HydroSystem<TheProblem>::x1Momentum_index);
+							Real const py = state(i, j, k, HydroSystem<TheProblem>::x2Momentum_index);
+							Real const distSqr = std::pow(x - Position_x, 2) + std::pow(y - Position_y, 2);
+							rot_radius(i, j, k) = distSqr * rho;
+							spin_L(i, j, k) = (x - Position_x) * py - (y - Position_y) * px;
+						} else {
+							rot_radius(i, j, k) = 0.0;
+							spin_L(i, j, k) = 0.0;
+						}
+					});
+				}
+			}
+
+			rot_radius_tot += rot_radius_mf.sum(0) * vol;
+			spin_L_tot += spin_L_mf.sum(0) * vol;
 		}
 
-		amrex::Real const Rot_radius = std::sqrt(rot_radius_mf.sum(0) * vol / Mass);
-		amrex::Real const Spin_L = spin_L_mf.sum(0) * vol / Mass;
+		amrex::Real const Rot_radius = std::sqrt(rot_radius_tot / Mass);
+		amrex::Real const Spin_L = spin_L_tot / Mass;
 
 		// Write to userData_
 		userData_.time.push_back(current_time);
@@ -500,13 +652,19 @@ template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep(std::optio
 		userData_.rotation_radius.push_back(Rot_radius);
 		userData_.spin_angular_mtm.push_back(Spin_L);
 
+		amrex::Real const tot_density = state_new_cc_[0].sum(HydroSystem<TheProblem>::density_index);
+		auto const &dx0 = Geom(0).CellSizeArray();
+		amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
+		const double tot_mass = tot_density * vol;
+		userData_.tot_mass.push_back(tot_mass);
+
     // Save user data to file
     if (amrex::ParallelDescriptor::MyProc() == 0) {
       std::ofstream file(fmt::format("./{}/first-star-user-data-{:05d}.txt", subfolder, step));
       if (file.is_open()) {
-        file << "time mass position_x position_y position_z velocity_x velocity_y velocity_z rotation_radius spin_angular_mtm\n";
-        file << fmt::format("{:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}\n",
-                            current_time, Mass, Position_x, Position_y, Position_z, Velocity_x, Velocity_y, Velocity_z, Rot_radius, Spin_L);
+        file << "time mass tot_mass position_x position_y position_z velocity_x velocity_y velocity_z rotation_radius spin_angular_mtm\n";
+        file << fmt::format("{:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}\n",
+                            current_time, Mass, tot_mass, Position_x, Position_y, Position_z, Velocity_x, Velocity_y, Velocity_z, Rot_radius, Spin_L);
         file.close();
       } else {
         std::cerr << "Unable to open file" << std::endl;
@@ -570,7 +728,7 @@ template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep(std::optio
     matplotlibcpp::title(fmt::format("time t = {:.4g}", tNew_[0]));
     matplotlibcpp::tight_layout();
     // matplotlibcpp::save("./first-star-T.png");
-    matplotlibcpp::save(fmt::format("./{}/first-star-T-s{:06d}-t{:.4g}.png", subfolder, step, tNew_[0]));
+    matplotlibcpp::save(fmt::format("./{}/first-star-T-s{:06d}.png", subfolder, step));
 
     // plot internal energy
     matplotlibcpp::clf();
@@ -583,7 +741,7 @@ template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep(std::optio
     // matplotlibcpp::legend();
     matplotlibcpp::title(fmt::format("time t = {:.4g}", tNew_[0]));
     matplotlibcpp::tight_layout();
-    matplotlibcpp::save(fmt::format("./{}/first-star-E-s{:06d}-t{:.4g}.png", subfolder, step, tNew_[0]));
+    matplotlibcpp::save(fmt::format("./{}/first-star-E-s{:06d}.png", subfolder, step));
 
     // plot pressure
     matplotlibcpp::clf();
@@ -597,7 +755,7 @@ template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep(std::optio
     matplotlibcpp::title(fmt::format("time t = {:.4g}", tNew_[0]));
     matplotlibcpp::tight_layout();
     // matplotlibcpp::save("./first-star-P.png");
-    matplotlibcpp::save(fmt::format("./{}/first-star-P-s{:06d}-t{:.4g}.png", subfolder, step, tNew_[0]));
+    matplotlibcpp::save(fmt::format("./{}/first-star-P-s{:06d}.png", subfolder, step));
 
     // plot gas velocity profile
     matplotlibcpp::clf();
@@ -611,7 +769,7 @@ template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep(std::optio
     matplotlibcpp::title(fmt::format("time t = {:.4g}", tNew_[0]));
     matplotlibcpp::tight_layout();
     // matplotlibcpp::save("./first-star-v.png");
-    matplotlibcpp::save(fmt::format("./{}/first-star-v-s{:06d}-t{:.4g}.png", subfolder, step, tNew_[0]));
+    matplotlibcpp::save(fmt::format("./{}/first-star-v-s{:06d}.png", subfolder, step));
 
     // plot density profile
     matplotlibcpp::clf();
@@ -625,7 +783,7 @@ template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep(std::optio
     matplotlibcpp::title(fmt::format("time t = {:.4g}", tNew_[0]));
     matplotlibcpp::tight_layout();
     // matplotlibcpp::save("./first-star-rho.png");
-    matplotlibcpp::save(fmt::format("./{}/first-star-rho-s{:06d}-t{:.4g}.png", subfolder, step, tNew_[0]));
+    matplotlibcpp::save(fmt::format("./{}/first-star-rho-s{:06d}.png", subfolder, step));
 #endif
     }
 }
@@ -659,10 +817,12 @@ auto problem_main() -> int
 	amrex::ParmParse const pp("eos");
 	pp.query("model", model);
 
-	// amrex::ParmParse const pp("init");
-	// pp.query("A", sim.userData_.init_A);
-	// pp.query("q", sim.userData_.init_q);
-	// pp.query("h", sim.userData_.init_h);
+	amrex::ParmParse const ppi("init");
+	ppi.query("A", init_A);
+	ppi.query("q", init_q);
+	ppi.query("h", init_h);
+	const double r_star = q * r_c;
+	rho_star = init_A * c_iso * c_iso / (4.0 * pi * G * r_star * r_star);
 
 	// initialize
 	sim.setInitialConditions();
