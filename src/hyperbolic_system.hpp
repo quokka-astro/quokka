@@ -299,7 +299,7 @@ template <FluxDir DIR>
 void HyperbolicSystem<problem_t>::ReconstructStatesPPM(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf,
 						       const int nghost, const int nvars, const int iReadFrom, const int iWriteFrom)
 {
-	BL_PROFILE("HyperbolicSystem::ReconstructStatesPPM(MultiFabs)");
+	const BL_PROFILE("HyperbolicSystem::ReconstructStatesPPM(MultiFabs)");
 
 	auto const &q_in = q_mf.const_arrays();
 	auto leftState_in = leftState_mf.arrays();
