@@ -44,7 +44,7 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &state = mf.array(iter);
 
-		amrex::ParallelFor(indexRange, [=, &num_failed] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			const Real rho = state(i, j, k, HydroSystem<problem_t>::density_index);
 			const Real xmom = state(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
 			const Real ymom = state(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
@@ -106,7 +106,6 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 			if (burn_failed) {
 				amrex::Gpu::Atomic::Add(p_num_failed, burn_failed);
 			}
-			num_failed += burn_failed;
 
 			// ensure positivity and normalize
 			for (int nn = 0; nn < NumSpec; ++nn) {
