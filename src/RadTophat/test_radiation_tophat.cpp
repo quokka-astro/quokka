@@ -46,6 +46,7 @@ template <> struct RadSystem_Traits<TophatProblem> {
 	static constexpr double radiation_constant = radiation_constant_cgs_;
 	static constexpr double Erad_floor = 0.;
 	static constexpr bool compute_v_over_c_terms = false;
+	static constexpr int beta_order = 1;
 };
 
 template <> struct Physics_Traits<TophatProblem> {

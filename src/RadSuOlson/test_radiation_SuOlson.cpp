@@ -50,6 +50,7 @@ template <> struct RadSystem_Traits<MarshakProblem> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double Erad_floor = 0.;
 	static constexpr bool compute_v_over_c_terms = false;
+	static constexpr int beta_order = 1;
 };
 
 template <> struct Physics_Traits<MarshakProblem> {

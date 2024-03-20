@@ -56,6 +56,7 @@ template <> struct RadSystem_Traits<ShellProblem> {
 	static constexpr double radiation_constant = a_rad;
 	static constexpr double Erad_floor = 0.;
 	static constexpr bool compute_v_over_c_terms = true;
+	static constexpr int beta_order = 1;
 };
 
 template <> struct HydroSystem_Traits<ShellProblem> {
