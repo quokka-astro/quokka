@@ -158,9 +158,7 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 #endif
 	}
 
-#if defined(AMREX_USE_GPU)
 	num_failed = *(d_num_failed.copyToHost());
-#endif
 
 	burn_success = !num_failed;
 	amrex::ParallelDescriptor::ReduceIntMin(burn_success);
