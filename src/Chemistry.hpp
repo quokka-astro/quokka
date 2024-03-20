@@ -46,7 +46,7 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &state = mf.array(iter);
 
-		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+		amrex::ParallelFor(indexRange, [=, &num_failed] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			const Real rho = state(i, j, k, HydroSystem<problem_t>::density_index);
 			const Real xmom = state(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
 			const Real ymom = state(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
@@ -169,8 +169,11 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 #endif
 
 	burn_success = !num_failed;
-
 	amrex::ParallelDescriptor::ReduceIntMin(burn_success);
+
+	if (!burn_success) {
+		amrex::Abort("Burn failed in VODE. Aborting.");
+	}
 }
 
 } // namespace quokka::chemistry
