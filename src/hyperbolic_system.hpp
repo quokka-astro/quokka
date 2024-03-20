@@ -323,7 +323,7 @@ AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arr
 									     amrex::Box const &cellRange, amrex::Box const & /*interfaceRange*/,
 									     const int nvars, const int iReadFrom, const int iWriteFrom)
 {
-	BL_PROFILE("HyperbolicSystem::ReconstructStatesPPM(Arrays)");
+	const BL_PROFILE("HyperbolicSystem::ReconstructStatesPPM(Arrays)");
 
 	// construct ArrayViews for permuted indices
 	quokka::Array4View<amrex::Real const, DIR> q(q_in);
