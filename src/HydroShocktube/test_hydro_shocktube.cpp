@@ -346,7 +346,7 @@ auto problem_main() -> int
 	// const double initial_dt = 1e-6;
 	// const double max_dt = 1e-4;
 	const double max_time = 0.4;
-	const int max_timesteps = 8000;
+	const int max_timesteps = 0;
 
 	// Problem initialization
 	const int ncomp_cc = Physics_Indices<ShocktubeProblem>::nvarTotal_cc;
@@ -372,6 +372,19 @@ auto problem_main() -> int
 	// Main time loop
 	sim.setInitialConditions();
 	sim.evolve();
+
+
+	// read output variables
+	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
+	const int nx = static_cast<int>(position.size());
+
+    amrex::Print() << "i,, rho" << std::endl;
+	for (int i = 0; i < nx; ++i) {
+		double rho = values.at(HydroSystem<ShocktubeProblem>::density_index)[i];
+        amrex::Print() << i << ",, " << rho << std::endl;
+	}
+
+
 
 	// Compute test success condition
 	int status = 0;

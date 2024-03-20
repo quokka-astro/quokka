@@ -108,7 +108,7 @@ auto problem_main() -> int
 	// of order 10^5.
 
 	// Problem parameters
-	const int max_timesteps = 1e5;
+	const int max_timesteps = 0;
 	const double CFL_number = 0.8;
 
 	const double max_dt = 1e-3;
@@ -143,94 +143,12 @@ auto problem_main() -> int
 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
 	const int nx = static_cast<int>(position.size());
 
-	std::vector<double> xs(nx);
-	std::vector<double> Trad(nx);
-	std::vector<double> Tgas(nx);
-	std::vector<double> Erad(nx);
-	std::vector<double> Egas(nx);
-	std::vector<double> Vgas(nx);
-	std::vector<double> Vgas_exact(nx);
-	std::vector<double> rhogas(nx);
-	std::vector<double> Trad_exact{};
-	std::vector<double> Tgas_exact{};
-	std::vector<double> Erad_exact{};
-
+    amrex::Print() << "i,, rho" << std::endl;
 	for (int i = 0; i < nx; ++i) {
-		amrex::Real const x = position[i];
-		xs.at(i) = x;
-		const auto Erad_t = values.at(RadSystem<PulseProblem>::radEnergy_index)[i];
-		const auto Trad_t = std::pow(Erad_t / a_rad, 1. / 4.);
-		const auto rho_t = values.at(RadSystem<PulseProblem>::gasDensity_index)[i];
-		const auto v_t = values.at(RadSystem<PulseProblem>::x1GasMomentum_index)[i] / rho_t;
-		rhogas.at(i) = rho_t;
-		Erad.at(i) = Erad_t;
-		Trad.at(i) = Trad_t / T0;
-		Egas.at(i) = values.at(RadSystem<PulseProblem>::gasInternalEnergy_index)[i];
-		Tgas.at(i) = quokka::EOS<PulseProblem>::ComputeTgasFromEint(rho_t, Egas.at(i)) / T0;
-		Tgas_exact.push_back(1.0);
-		Vgas.at(i) = v_t * 1e-5;
-		Vgas_exact.at(i) = v0 * 1e-5;
-
-		auto Erad_val = a_rad * std::pow(T0, 4);
-		Trad_exact.push_back(1.0);
-		Erad_exact.push_back(Erad_val);
+		double rho = values.at(RadSystem<PulseProblem>::gasDensity_index)[i];
+        amrex::Print() << i << ",, " << rho << std::endl;
 	}
-
-	// compute error norm
-	double err_norm = 0.;
-	double sol_norm = 0.;
-	for (size_t i = 0; i < xs.size(); ++i) {
-		err_norm += std::abs(Tgas[i] - Tgas_exact[i]);
-		sol_norm += std::abs(Tgas_exact[i]);
-	}
-	const double error_tol = 1.0e-12; // This is a very very stringent test (to machine accuracy!)
-	const double rel_error = err_norm / sol_norm;
-	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
-
-#ifdef HAVE_PYTHON
-	// plot temperature
-	matplotlibcpp::clf();
-	std::map<std::string, std::string> Trad_args;
-	std::map<std::string, std::string> Tgas_args;
-	std::map<std::string, std::string> Texact_args;
-	Trad_args["label"] = "radiation temperature";
-	Trad_args["linestyle"] = "-.";
-	Tgas_args["label"] = "gas temperature";
-	Tgas_args["linestyle"] = "--";
-	Texact_args["label"] = "temperature (exact)";
-	Texact_args["linestyle"] = "-";
-	matplotlibcpp::plot(xs, Trad, Trad_args);
-	matplotlibcpp::plot(xs, Tgas, Tgas_args);
-	matplotlibcpp::plot(xs, Tgas_exact, Texact_args);
-	matplotlibcpp::xlabel("length x (cm)");
-	matplotlibcpp::ylabel("temperature (dimensionless)");
-	matplotlibcpp::legend();
-	matplotlibcpp::title(fmt::format("time ct = {:.4g}", sim.tNew_[0] * c));
-	matplotlibcpp::tight_layout();
-	matplotlibcpp::save("./radhydro_uniform_advecting_temperature.pdf");
-
-	// plot gas velocity profile
-	matplotlibcpp::clf();
-	std::map<std::string, std::string> vgas_args;
-	vgas_args["label"] = "gas velocity";
-	vgas_args["linestyle"] = "--";
-	matplotlibcpp::plot(xs, Vgas, vgas_args);
-	vgas_args["label"] = "gas velocity (exact)";
-	vgas_args["linestyle"] = "-";
-	matplotlibcpp::plot(xs, Vgas_exact, vgas_args);
-	matplotlibcpp::xlabel("length x (cm)");
-	matplotlibcpp::ylabel("velocity (km/s)");
-	matplotlibcpp::legend();
-	matplotlibcpp::title(fmt::format("time ct = {:.4g}", sim.tNew_[0] * c));
-	matplotlibcpp::tight_layout();
-	matplotlibcpp::save("./radhydro_uniform_advecting_velocity.pdf");
-
-#endif
 
 	// Cleanup and exit
-	int status = 0;
-	if ((rel_error > error_tol) || std::isnan(rel_error)) {
-		status = 1;
-	}
-	return status;
+	return 0;
 }

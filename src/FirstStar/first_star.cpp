@@ -19,12 +19,13 @@ namespace fs = std::filesystem;
 struct TheProblem {
 };
 
+AMREX_GPU_MANAGED int model = 0;
+
 // constexpr const char* subfolder = __DATE__ " " __TIME__;
 constexpr const char* subfolder = "first_star_figs";
 bool test_passes = true; // if one of the energy checks fails, set to false
 
 // model 1: 1/(1 + n^s) + 1/(1 + n1^s) * (n / n1)^(gamma - 1)
-constexpr int model = 0;
 
 constexpr double pi = M_PI;
 constexpr double k_B = 1.0;
@@ -70,9 +71,9 @@ template <> struct quokka::EOS_Traits<TheProblem> {
 	// static constexpr double cs_isothermal = 1.0;
 };
 
-template <> struct HydroSystem_Traits<TheProblem> {
-	static constexpr bool reconstruct_eint = false;
-};
+// template <> struct HydroSystem_Traits<TheProblem> {
+// 	static constexpr bool reconstruct_eint = false;
+// };
 
 template <> struct Physics_Traits<TheProblem> {
 	// cell-centred
@@ -107,6 +108,101 @@ template <> struct SimulationData<TheProblem> {
 	amrex::Real init_x_momentum = NAN;
 };
 
+AMREX_GPU_HOST_DEVICE 
+auto compute_T(const double rho) -> double
+{
+	// amrex::Real const A = userData_.init_A;
+	// amrex::Real const r_star = userData_.init_q * r_c;
+	// amrex::Real const rho_star = A * c_iso * c_iso / (4.0 * pi * G * r_star * r_star);
+	if (model == 1) {
+		const double scale = 1.0 / (1.0 + std::pow(rho / rho0, s)) + 1.0 / (1.0 + std::pow(rho1 / rho0, s)) * std::pow(rho / rho1, gamma_ - 1.0);
+		return scale * T0;
+	} else if (model == 2) {
+		const double scale = 1.0 / (1.0 + std::exp(jump_slope * (rho / rho_core - 1.0))) + std::pow(rho / rho_one, gamma_ - 1.0);
+		return scale * T0;
+	} else if (model == 0) {
+    // P = c_s^2 * rho^gamma1 (1 + (rho / rho_star)^(gamma2 - gamma1))
+    auto P = c_iso * c_iso * std::pow(rho, model0_gamma1) * (1.0 + std::pow(rho / rho_star, model0_gamma2 - model0_gamma1));
+    return P / (rho * k_B / mu);
+  }
+}
+
+AMREX_GPU_HOST_DEVICE
+auto compute_e(const double rho) -> double
+{
+	if (model == 0 || model == 1) {
+		const auto Tgas = compute_T(rho);
+		const double e = Cv * rho * Tgas;
+		return e;
+	} else if (model == 2) {
+	  double Tgas = NAN;
+		if (rho >= rho_core) {
+			Tgas = compute_T(rho);
+			return Cv * rho * Tgas;
+		}
+		Tgas = compute_T(rho_core);
+		return Cv * rho_core * Tgas;
+	}
+}
+
+// redefine EOS::ComputePressure
+template <> 
+AMREX_GPU_HOST_DEVICE AMREX_GPU_HOST_DEVICE auto quokka::EOS<TheProblem>::ComputePressure(amrex::Real rho, amrex::Real /*Eint*/, 
+											const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massScalars*/) -> amrex::Real
+{
+	if (model == 0 || model == 1) {
+		const double e = compute_e(rho);
+		return (gamma_ - 1.0) * e;
+	} else if (model == 2) {
+		const double T = compute_T(rho);
+		const double e = rho * Cv * T;
+		return (gamma_ - 1.0) * e;
+	}
+}
+
+template <>
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto quokka::EOS<TheProblem>::ComputeTgasFromEint(amrex::Real rho, amrex::Real /*Egas*/,
+										  const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massScalars*/)
+    -> amrex::Real
+{
+	return compute_T(rho);
+	// amrex::Real const A = userData_.init_A;
+	// amrex::Real const r_star = userData_.init_q * r_c;
+	// amrex::Real const rho_star = A * c_iso * c_iso / (4.0 * pi * G * r_star * r_star);
+	// if constexpr (model == 1) {
+	// 	const double scale = 1.0 / (1.0 + std::pow(rho / rho0, s)) + 1.0 / (1.0 + std::pow(rho1 / rho0, s)) * std::pow(rho / rho1, gamma_ - 1.0);
+	// 	return scale * T0;
+	// } else if constexpr (model == 2) {
+	// 	const double scale = 1.0 / (1.0 + std::exp(jump_slope * (rho / rho_core - 1.0))) + std::pow(rho / rho_one, gamma_ - 1.0);
+	// 	return scale * T0;
+	// }
+}
+
+template <>
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto quokka::EOS<TheProblem>::ComputeEintFromTgas(amrex::Real rho, amrex::Real /*Tgas*/,
+										  const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massScalars*/)
+    -> amrex::Real
+{
+	return compute_e(rho);
+}
+
+template <>
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto quokka::EOS<TheProblem>::ComputeEintFromPres(amrex::Real rho, amrex::Real Pressure,
+										  const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massScalars*/)
+    -> amrex::Real
+{
+	return compute_e(rho);
+}
+
+template <>
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto quokka::EOS<TheProblem>::ComputeSoundSpeed(amrex::Real rho, amrex::Real /*Pressure*/,
+										const std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massScalars*/)
+    -> amrex::Real
+{
+	const double T = compute_T(rho);
+	return std::sqrt(k_B * T / mu);
+}
+
 template <> void RadhydroSimulation<TheProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
 	// extract variables required from the geom object
@@ -132,20 +228,21 @@ template <> void RadhydroSimulation<TheProblem>::setInitialConditionsOnGrid(quok
 		// amrex::Real const r_star = userData_.init_q * r_c;
 		// amrex::Real const rho_star = A * c_iso * c_iso / (4.0 * pi * G * r_star * r_star);
 
-		const double rho_bg = rho_star * std::pow(r_star / r_c, 2);
-		// const double r1 = 2.0;
+		// const double rho_bg = rho_star * std::pow(r_star / r_c, 2);
+		const double rho_bg = rho_star * (r_star / r_c) * (r_star / r_c);
 
 		// compute density
 		double rho = NAN;
 		if (r <= r_star) {
 			rho = rho_star;
 		} else if (r <= r_c) {
-			rho = rho_star * std::pow(r_star / r, 2);
+			// rho = rho_star * std::pow(r_star / r, 2);
+      rho = rho_star * (r_star / r) * (r_star / r);
 		} else {
 			rho = rho_bg;
 		}
-		// const auto E_int = compute_e(rho);
-		const double E_int = 1.0;
+    AMREX_ALWAYS_ASSERT(rho > 0.0);
+		const auto E_int = compute_e(rho);
 
 		// compute azimuthal velocity
 		double v_phi = 0.0;
@@ -168,6 +265,121 @@ template <> void RadhydroSimulation<TheProblem>::setInitialConditionsOnGrid(quok
 		state_cc(i, j, k, HydroSystem<TheProblem>::internalEnergy_index) = E_int;
 		state_cc(i, j, k, HydroSystem<TheProblem>::energy_index) = E_int + 0.5 * rho * (v_x * v_x + v_y * v_y + v_z * v_z);
 	});
+}
+
+template <> void RadhydroSimulation<TheProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+{
+
+	// read-in jeans length refinement runtime params
+	int N_J = 1e5;
+	// Real jeans_density_threshold = NAN;
+	Real jeans_density_threshold_over_rho_star = 0.5;
+
+	amrex::ParmParse const pp("refine");
+	pp.query("jeans_num", N_J); // inverse of the 'Jeans number' [Truelove et al. (1997)]
+	// pp.query("density_threshold", jeans_density_threshold);
+	pp.query("density_threshold_over_rho_star", jeans_density_threshold_over_rho_star);
+
+	auto const rho_threshold = jeans_density_threshold_over_rho_star * rho_star;
+
+	const amrex::Real dx = geom[lev].CellSizeArray()[0];
+
+	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
+		const amrex::Box &box = mfi.validbox();
+		const auto state = state_new_cc_[lev].const_array(mfi);
+		const auto tag = tags.array(mfi);
+		const int nidx = HydroSystem<TheProblem>::density_index;
+
+		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			Real const rho = state(i, j, k, nidx);
+
+			const amrex::Real rho_Jeans = std::pow(c_iso / (N_J * dx) * std::sqrt(M_PI / G), 2);
+
+			if (rho > rho_Jeans || rho > rho_threshold) {
+				tag(i, j, k) = amrex::TagBox::SET;
+			}
+		});
+	}
+}
+
+template <> void RadhydroSimulation<TheProblem>::computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons)
+{
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = geom[0].CellSizeArray();
+	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
+
+	// check conservation of x-momentum
+	amrex::Real const px0 = initSumCons[RadSystem<TheProblem>::x1GasMomentum_index] * vol;
+	amrex::Real const py0 = initSumCons[RadSystem<TheProblem>::x2GasMomentum_index] * vol;
+	amrex::Real const pz0 = initSumCons[RadSystem<TheProblem>::x3GasMomentum_index] * vol;
+	amrex::Real const px = state_new_cc_[0].sum(RadSystem<TheProblem>::x1GasMomentum_index) * vol;
+	amrex::Real const py = state_new_cc_[0].sum(RadSystem<TheProblem>::x2GasMomentum_index) * vol;
+	amrex::Real const pz = state_new_cc_[0].sum(RadSystem<TheProblem>::x3GasMomentum_index) * vol;
+
+	// Check X-momentum conservation
+
+	amrex::Real const abs_err = (px - px0);
+	amrex::Real const rel_err = abs_err / px0;
+
+	amrex::Print() << "\nInitial X-momentum = " << px0 << std::endl;
+	amrex::Print() << "Final X-momentum = " << px << std::endl;
+	amrex::Print() << "\tabsolute conservation error = " << abs_err << std::endl;
+	amrex::Print() << "\trelative conservation error = " << rel_err << std::endl;
+	amrex::Print() << std::endl;
+
+	const double err_tol = 1.0e-10;
+	bool p_test_passes = true;  // does x-momentum conserve?
+
+	if (((std::abs(rel_err) > err_tol) && (std::abs(abs_err) > 1.0e-10)) || std::isnan(abs_err)) {
+		// Note that the initial x-momentum is zero, so the relative error is not meaningful
+		// The RMS X-momentum is of order unity, so the absolute error should be smaller than 1.0e-10
+		amrex::Print() << "X-momentum not conserved to machine precision!\n";
+		p_test_passes = false;
+	} else {
+		amrex::Print() << "X-momentum conservation is OK.\n";
+	}
+
+	// Check Y-momentum conservation
+
+	amrex::Real const abs_err_y = (py - py0);
+	amrex::Real const rel_err_y = abs_err_y / py0;
+
+	amrex::Print() << "\nInitial Y-momentum = " << py0 << std::endl;
+	amrex::Print() << "Final Y-momentum = " << py << std::endl;
+	amrex::Print() << "\tabsolute conservation error = " << abs_err_y << std::endl;
+	amrex::Print() << "\trelative conservation error = " << rel_err_y << std::endl;
+	amrex::Print() << std::endl;
+
+	if (((std::abs(rel_err_y) > err_tol) && (std::abs(abs_err_y) > 1.0e-10)) || std::isnan(abs_err_y)) {
+		// Note that the initial y-momentum is zero, so the relative error is not meaningful
+		// The RMS y-momentum is of order unity, so the absolute error should be smaller than 1.0e-10
+		amrex::Print() << "Y-momentum not conserved to machine precision!\n";
+		p_test_passes = false;
+	} else {
+		amrex::Print() << "Y-momentum conservation is OK.\n";
+	}
+
+	// Check Z-momentum conservation
+
+	amrex::Real const abs_err_z = (pz - pz0);
+	amrex::Real const rel_err_z = abs_err_z / pz0;
+
+	amrex::Print() << "\nInitial Z-momentum = " << pz0 << std::endl;
+	amrex::Print() << "Final Z-momentum = " << pz << std::endl;
+	amrex::Print() << "\tabsolute conservation error = " << abs_err_z << std::endl;
+	amrex::Print() << "\trelative conservation error = " << rel_err_z << std::endl;
+	amrex::Print() << std::endl;
+
+	if (((std::abs(rel_err_z) > err_tol) && (std::abs(abs_err_z) > 1.0e-10)) || std::isnan(abs_err_z)) {
+		// Note that the initial z-momentum is zero, so the relative error is not meaningful
+		// The RMS z-momentum is of order unity, so the absolute error should be smaller than 1.0e-10
+		amrex::Print() << "Z-momentum not conserved to machine precision!\n";
+		p_test_passes = false;
+	} else {
+		amrex::Print() << "Z-momentum conservation is OK.\n";
+	}
+
+	// if both tests pass, then overall pass
+  test_passes = p_test_passes;
 }
 
 template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep(std::optional<int> global_step)
@@ -300,146 +512,122 @@ template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep(std::optio
         std::cerr << "Unable to open file" << std::endl;
       }
     }
-
-		// Check conservation of x-momentum
-		amrex::Real const px0 = userData_.init_x_momentum;
-		amrex::Real const px = velocity_x_mf.sum(0) * vol;
-
-		amrex::Real const abs_err = (px - px0);
-		amrex::Real const rel_err = abs_err / px0;
-
-		amrex::Print() << "\nInitial X-momentum = " << px0 << std::endl;
-		amrex::Print() << "X-momentum at t = " << current_time << " = " << px << std::endl;
-		amrex::Print() << "\tabsolute conservation error = " << abs_err << std::endl;
-		amrex::Print() << "\trelative conservation error = " << rel_err << std::endl;
-		amrex::Print() << std::endl;
-
-		if (((std::abs(rel_err) > 2.0e-13) && (std::abs(abs_err) > 1.0e-10)) || std::isnan(rel_err)) {
-			// Note that the initial x-momentum is zero, so the relative error is not meaningful
-			// The RMS X-momentum is of order unity, so the absolute error should be smaller than 1.0e-10
-			amrex::Print() << "X-momentum not conserved to machine precision!\n";
-			test_passes = false;
-		} else {
-			amrex::Print() << "X-momentum conservation is OK.\n";
-		}
 	} // End of computeInterval_
 
 	// ------------ Plot radial profiles -------------
 
-  if (amrex::ParallelDescriptor::MyProc() == 0) {
-    if ((plotfileInterval_ > 0) && (step % plotfileInterval_ == 0)) {
-      // read output variables
-      // Extract the data at the final time at the center of the y-z plane (center=true) 
-      auto [position, values] = fextract(state_new_cc_[0], Geom(0), 0, 0.0, true);
-      const int nx = static_cast<int>(position.size());
+  if ((plotfileInterval_ > 0) && (step % plotfileInterval_ == 0)) {
+    // read output variables
+    // Extract the data at the final time at the center of the y-z plane (center=true) 
+    auto [position, values] = fextract(state_new_cc_[0], Geom(0), 0, 0.0, true);
+    const int nx = static_cast<int>(position.size());
 
-      std::vector<double> xs(nx);
-      std::vector<double> Tgas(nx);
-      std::vector<double> Egas(nx);
-      std::vector<double> Vgas(nx);
-      std::vector<double> rhogas(nx);
-      std::vector<double> pressure(nx);
+    std::vector<double> xs(nx);
+    std::vector<double> Tgas(nx);
+    std::vector<double> Egas(nx);
+    std::vector<double> Vgas(nx);
+    std::vector<double> rhogas(nx);
+    std::vector<double> pressure(nx);
 
+    for (int i = 0; i < nx; ++i) {
+      amrex::Real const x = position[i];
+      xs.at(i) = x;
+      const auto rho_t = values.at(HydroSystem<TheProblem>::density_index)[i];
+      const auto v_t = values.at(HydroSystem<TheProblem>::x2Momentum_index)[i] / rho_t; // v_y
+      const auto Egas_t = values.at(HydroSystem<TheProblem>::internalEnergy_index)[i];
+      const auto pressure_t = quokka::EOS<TheProblem>::ComputePressure(rho_t, Egas_t);
+      const auto T_t = quokka::EOS<TheProblem>::ComputeTgasFromEint(rho_t, Egas_t);
+      rhogas.at(i) = rho_t;
+      Tgas.at(i) = T_t;
+      Egas.at(i) = Egas_t;
+      Vgas.at(i) = v_t;
+      pressure.at(i) = pressure_t;
+    }
+
+    // Save user data to file
+    std::ofstream file(fmt::format("./{}/first-star-rho-{:05d}.txt", subfolder, step));
+    if (file.is_open()) {
+      file << "time = " << tNew_[0] << "\n";
+      file << "x, rho" << "\n";
       for (int i = 0; i < nx; ++i) {
-        amrex::Real const x = position[i];
-        xs.at(i) = x;
-        const auto rho_t = values.at(HydroSystem<TheProblem>::density_index)[i];
-        const auto v_t = values.at(HydroSystem<TheProblem>::x2Momentum_index)[i] / rho_t; // v_y
-        const auto Egas_t = values.at(HydroSystem<TheProblem>::internalEnergy_index)[i];
-        const auto pressure_t = quokka::EOS<TheProblem>::ComputePressure(rho_t, Egas_t);
-        const auto T_t = quokka::EOS<TheProblem>::ComputeTgasFromEint(rho_t, Egas_t);
-        rhogas.at(i) = rho_t;
-        Tgas.at(i) = T_t;
-        Egas.at(i) = Egas_t;
-        Vgas.at(i) = v_t;
-        pressure.at(i) = pressure_t;
+        file << fmt::format("{:.12g}, {:.12g}\n", xs.at(i), rhogas.at(i));
       }
-
-      // Save user data to file
-      std::ofstream file(fmt::format("./{}/first-star-rho-{:05d}.txt", subfolder, step));
-      if (file.is_open()) {
-        file << "time = " << tNew_[0] << "\n";
-        file << "x, rho" << "\n";
-        for (int i = 0; i < nx; ++i) {
-          file << fmt::format("{:.12g}, {:.12g}\n", xs.at(i), rhogas.at(i));
-        }
-        file.close();
-      } else {
-        std::cerr << "Unable to open file" << std::endl;
-      }
+      file.close();
+    } else {
+      std::cerr << "Unable to open file" << std::endl;
+    }
 
 #ifdef HAVE_PYTHON
-      // plot temperature
-      matplotlibcpp::clf();
-      std::map<std::string, std::string> Tgas_args;
-      Tgas_args["label"] = "gas temperature";
-      Tgas_args["linestyle"] = "-";
-      matplotlibcpp::plot(xs, Tgas, Tgas_args);
-      matplotlibcpp::xlabel("x");
-      matplotlibcpp::ylabel("temperature");
-      // matplotlibcpp::legend();
-      matplotlibcpp::title(fmt::format("time t = {:.4g}", tNew_[0]));
-      matplotlibcpp::tight_layout();
-      // matplotlibcpp::save("./first-star-T.png");
-      matplotlibcpp::save(fmt::format("./{}/first-star-T-s{:06d}-t{:.4g}.png", subfolder, step, tNew_[0]));
+    // plot temperature
+    matplotlibcpp::clf();
+    std::map<std::string, std::string> Tgas_args;
+    Tgas_args["label"] = "gas temperature";
+    Tgas_args["linestyle"] = "-";
+    matplotlibcpp::plot(xs, Tgas, Tgas_args);
+    matplotlibcpp::xlabel("x");
+    matplotlibcpp::ylabel("temperature");
+    // matplotlibcpp::legend();
+    matplotlibcpp::title(fmt::format("time t = {:.4g}", tNew_[0]));
+    matplotlibcpp::tight_layout();
+    // matplotlibcpp::save("./first-star-T.png");
+    matplotlibcpp::save(fmt::format("./{}/first-star-T-s{:06d}-t{:.4g}.png", subfolder, step, tNew_[0]));
 
-      // plot internal energy
-      matplotlibcpp::clf();
-      std::map<std::string, std::string> Egas_args;
-      Egas_args["label"] = "gas internal energy";
-      Egas_args["linestyle"] = "-";
-      matplotlibcpp::plot(xs, Egas, Egas_args);
-      matplotlibcpp::xlabel("x");
-      matplotlibcpp::ylabel("internal energy");
-      // matplotlibcpp::legend();
-      matplotlibcpp::title(fmt::format("time t = {:.4g}", tNew_[0]));
-      matplotlibcpp::tight_layout();
-      matplotlibcpp::save(fmt::format("./{}/first-star-E-s{:06d}-t{:.4g}.png", subfolder, step, tNew_[0]));
+    // plot internal energy
+    matplotlibcpp::clf();
+    std::map<std::string, std::string> Egas_args;
+    Egas_args["label"] = "gas internal energy";
+    Egas_args["linestyle"] = "-";
+    matplotlibcpp::plot(xs, Egas, Egas_args);
+    matplotlibcpp::xlabel("x");
+    matplotlibcpp::ylabel("internal energy");
+    // matplotlibcpp::legend();
+    matplotlibcpp::title(fmt::format("time t = {:.4g}", tNew_[0]));
+    matplotlibcpp::tight_layout();
+    matplotlibcpp::save(fmt::format("./{}/first-star-E-s{:06d}-t{:.4g}.png", subfolder, step, tNew_[0]));
 
-      // plot pressure
-      matplotlibcpp::clf();
-      std::map<std::string, std::string> pressure_args;
-      pressure_args["label"] = "gas pressure";
-      pressure_args["linestyle"] = "-";
-      matplotlibcpp::plot(xs, pressure, pressure_args);
-      matplotlibcpp::xlabel("x");
-      matplotlibcpp::ylabel("pressure");
-      // matplotlibcpp::legend();
-      matplotlibcpp::title(fmt::format("time t = {:.4g}", tNew_[0]));
-      matplotlibcpp::tight_layout();
-      // matplotlibcpp::save("./first-star-P.png");
-      matplotlibcpp::save(fmt::format("./{}/first-star-P-s{:06d}-t{:.4g}.png", subfolder, step, tNew_[0]));
+    // plot pressure
+    matplotlibcpp::clf();
+    std::map<std::string, std::string> pressure_args;
+    pressure_args["label"] = "gas pressure";
+    pressure_args["linestyle"] = "-";
+    matplotlibcpp::plot(xs, pressure, pressure_args);
+    matplotlibcpp::xlabel("x");
+    matplotlibcpp::ylabel("pressure");
+    // matplotlibcpp::legend();
+    matplotlibcpp::title(fmt::format("time t = {:.4g}", tNew_[0]));
+    matplotlibcpp::tight_layout();
+    // matplotlibcpp::save("./first-star-P.png");
+    matplotlibcpp::save(fmt::format("./{}/first-star-P-s{:06d}-t{:.4g}.png", subfolder, step, tNew_[0]));
 
-      // plot gas velocity profile
-      matplotlibcpp::clf();
-      std::map<std::string, std::string> vgas_args;
-      vgas_args["label"] = "gas velocity";
-      vgas_args["linestyle"] = "-";
-      matplotlibcpp::plot(xs, Vgas, vgas_args);
-      matplotlibcpp::xlabel("x");
-      matplotlibcpp::ylabel("v_y");
-      // matplotlibcpp::legend();
-      matplotlibcpp::title(fmt::format("time t = {:.4g}", tNew_[0]));
-      matplotlibcpp::tight_layout();
-      // matplotlibcpp::save("./first-star-v.png");
-      matplotlibcpp::save(fmt::format("./{}/first-star-v-s{:06d}-t{:.4g}.png", subfolder, step, tNew_[0]));
+    // plot gas velocity profile
+    matplotlibcpp::clf();
+    std::map<std::string, std::string> vgas_args;
+    vgas_args["label"] = "gas velocity";
+    vgas_args["linestyle"] = "-";
+    matplotlibcpp::plot(xs, Vgas, vgas_args);
+    matplotlibcpp::xlabel("x");
+    matplotlibcpp::ylabel("v_y");
+    // matplotlibcpp::legend();
+    matplotlibcpp::title(fmt::format("time t = {:.4g}", tNew_[0]));
+    matplotlibcpp::tight_layout();
+    // matplotlibcpp::save("./first-star-v.png");
+    matplotlibcpp::save(fmt::format("./{}/first-star-v-s{:06d}-t{:.4g}.png", subfolder, step, tNew_[0]));
 
-      // plot density profile
-      matplotlibcpp::clf();
-      std::map<std::string, std::string> rhogas_args;
-      rhogas_args["label"] = "gas density";
-      rhogas_args["linestyle"] = "-";
-      matplotlibcpp::plot(xs, rhogas, rhogas_args);
-      matplotlibcpp::xlabel("x");
-      matplotlibcpp::ylabel("density");
-      // matplotlibcpp::legend();
-      matplotlibcpp::title(fmt::format("time t = {:.4g}", tNew_[0]));
-      matplotlibcpp::tight_layout();
-      // matplotlibcpp::save("./first-star-rho.png");
-      matplotlibcpp::save(fmt::format("./{}/first-star-rho-s{:06d}-t{:.4g}.png", subfolder, step, tNew_[0]));
+    // plot density profile
+    matplotlibcpp::clf();
+    std::map<std::string, std::string> rhogas_args;
+    rhogas_args["label"] = "gas density";
+    rhogas_args["linestyle"] = "-";
+    matplotlibcpp::plot(xs, rhogas, rhogas_args);
+    matplotlibcpp::xlabel("x");
+    matplotlibcpp::ylabel("density");
+    // matplotlibcpp::legend();
+    matplotlibcpp::title(fmt::format("time t = {:.4g}", tNew_[0]));
+    matplotlibcpp::tight_layout();
+    // matplotlibcpp::save("./first-star-rho.png");
+    matplotlibcpp::save(fmt::format("./{}/first-star-rho-s{:06d}-t{:.4g}.png", subfolder, step, tNew_[0]));
 #endif
     }
-	}
 }
 
 auto problem_main() -> int
@@ -447,7 +635,6 @@ auto problem_main() -> int
 
 	const double max_dt = 1e0;
 
-#if 1
 	// Boundary conditions
 	const int ncomp_cc = Physics_Indices<TheProblem>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
@@ -459,39 +646,6 @@ auto problem_main() -> int
 			BCs_cc[n].setHi(i, amrex::BCType::foextrap);
 		}
 	}
-#else
-	auto isNormalComp = [=](int n, int dim) {
-		if ((n == HydroSystem<TheProblem>::x1Momentum_index) && (dim == 0)) {
-			return true;
-		}
-		if ((n == HydroSystem<TheProblem>::x2Momentum_index) && (dim == 1)) {
-			return true;
-		}
-		if ((n == HydroSystem<TheProblem>::x3Momentum_index) && (dim == 2)) {
-			return true;
-		}
-		return false;
-	};
-
-	const int ncomp_cc = Physics_Indices<TheProblem>::nvarTotal_cc;
-	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
-	for (int n = 0; n < ncomp_cc; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			if constexpr (simulate_full_box) { // periodic boundaries
-				BCs_cc[n].setLo(i, amrex::BCType::int_dir);
-				BCs_cc[n].setHi(i, amrex::BCType::int_dir);
-			} else { // octant symmetry
-				if (isNormalComp(n, i)) {
-					BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);
-					BCs_cc[n].setHi(i, amrex::BCType::reflect_odd);
-				} else {
-					BCs_cc[n].setLo(i, amrex::BCType::reflect_even);
-					BCs_cc[n].setHi(i, amrex::BCType::reflect_even);
-				}
-			}
-		}
-	}
-#endif
 
 	// Problem initialization
 	RadhydroSimulation<TheProblem> sim(BCs_cc);
@@ -502,10 +656,13 @@ auto problem_main() -> int
 	sim.maxDt_ = max_dt;
 
 	// read problem parameters
-	amrex::ParmParse const pp("init");
-	pp.query("A", sim.userData_.init_A);
-	pp.query("q", sim.userData_.init_q);
-	pp.query("h", sim.userData_.init_h);
+	amrex::ParmParse const pp("eos");
+	pp.query("model", model);
+
+	// amrex::ParmParse const pp("init");
+	// pp.query("A", sim.userData_.init_A);
+	// pp.query("q", sim.userData_.init_q);
+	// pp.query("h", sim.userData_.init_h);
 
 	// initialize
 	sim.setInitialConditions();
@@ -614,6 +771,49 @@ auto problem_main() -> int
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save(fmt::format("./{}/first-star-temperal-spin_angular_mtm.png", subfolder));
 #endif
+
+  // save last data
+
+  auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0, true);
+  const int nx = static_cast<int>(position.size());
+
+  std::vector<double> xs(nx);
+  std::vector<double> Tgas(nx);
+  std::vector<double> Egas(nx);
+  std::vector<double> Vgas(nx);
+  std::vector<double> rhogas(nx);
+  std::vector<double> pressure(nx);
+
+  for (int i = 0; i < nx; ++i) {
+    amrex::Real const x = position[i];
+    xs.at(i) = x;
+    const auto rho_t = values.at(HydroSystem<TheProblem>::density_index)[i];
+    const auto v_t = values.at(HydroSystem<TheProblem>::x2Momentum_index)[i] / rho_t; // v_y
+    const auto Egas_t = values.at(HydroSystem<TheProblem>::internalEnergy_index)[i];
+    const auto pressure_t = quokka::EOS<TheProblem>::ComputePressure(rho_t, Egas_t);
+    const auto T_t = quokka::EOS<TheProblem>::ComputeTgasFromEint(rho_t, Egas_t);
+    rhogas.at(i) = rho_t;
+    Tgas.at(i) = T_t;
+    Egas.at(i) = Egas_t;
+    Vgas.at(i) = v_t;
+    pressure.at(i) = pressure_t;
+  }
+
+  // Save user data to file
+  std::ofstream file(fmt::format("./{}/first-star-rho-{:05d}.txt", subfolder, sim.istep[0]));
+  if (file.is_open()) {
+    file << "time = " << sim.tNew_[0] << "\n";
+    file << "x, rho" << "\n";
+    for (int i = 0; i < nx; ++i) {
+      file << fmt::format("{:.12g}, {:.12g}\n", xs.at(i), rhogas.at(i));
+    }
+    file.close();
+  } else {
+    std::cerr << "Unable to open file" << std::endl;
+  }
+
+
+
 
 	// Cleanup and exit
 	int status = 0;

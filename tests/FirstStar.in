@@ -7,9 +7,9 @@ geometry.is_periodic =  0    0    0
 
 max_timesteps = 10
 stop_time = 10.0
-plotfile_interval = 10
+plotfile_interval = 1
 checkpoint_interval = 1000000
-compute_interval = 10
+compute_interval = 1
 # restartfile = chk00020
 
 # *****************************************************************
