@@ -49,6 +49,7 @@ You can start a `Discussion <https://github.com/quokka-astro/quokka/discussions>
    about
    equations
    bibliography
+   citation
 
 User Guide
 ------------
