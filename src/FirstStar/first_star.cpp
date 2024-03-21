@@ -24,30 +24,21 @@ AMREX_GPU_MANAGED int model = 0;
 AMREX_GPU_MANAGED double init_A = NAN;
 AMREX_GPU_MANAGED double init_q = NAN;
 AMREX_GPU_MANAGED double init_h = NAN;
+AMREX_GPU_MANAGED double r_star = NAN;
 AMREX_GPU_MANAGED double rho_star = NAN;
 
 // constexpr const char* subfolder = __DATE__ " " __TIME__;
-constexpr const char* subfolder = "first_star_figs";
+constexpr const char* subfolder = "diagnostics";
 bool test_passes = true; // if one of the energy checks fails, set to false
 
+// model 0: Lin+11
 // model 1: 1/(1 + n^s) + 1/(1 + n1^s) * (n / n1)^(gamma - 1)
 
+constexpr double G = 1.0;
 constexpr double pi = M_PI;
 constexpr double k_B = 1.0;
 constexpr double c_iso = 1.0;
-// constexpr double A = 2.2;	// xi = 1.45 according to Table 1 of Shu77
-// constexpr double h = 0.1;
-// constexpr double q = 0.2;
-
-// Case 1. xi = 5.58 
-constexpr double A = 4.0;	
-constexpr double h = 0.1;
-constexpr double q = 0.005;
-
 constexpr double r_c = 1.0;
-constexpr double r_star = q * r_c;
-constexpr double G = 1.0;
-// constexpr double rho_star = A * c_iso * c_iso / (4.0 * pi * G * r_star * r_star);
 
 // EOS parameters
 constexpr double mu = 1.0;
@@ -55,17 +46,18 @@ constexpr double gamma_ad = 5.0 / 3.0;
 constexpr double Cv = 1.0 / (gamma_ad - 1.0) * k_B / mu; // Specific heat at constant volume in the adiabatic phase
 constexpr double T0 = c_iso * c_iso;
 
+// model 0 parameters
+constexpr double model0_gamma1 = 1.00001;
+constexpr double model0_gamma2 = 5.0 / 3.0;
+
 // model 1 parameters
 constexpr double model1_s = 4.0; // jump slope. The jump equals s * log10(rho1 / rho0)
+constexpr double model1_rho1_over_rho0 = 3.2;
 
 // model 2 parameters
 constexpr double rho_core = 1.0;
 constexpr double rho_one = 1000.0;
 constexpr double model2_jump_slope = 10.0;
-
-// model 0 parameters
-constexpr double model0_gamma1 = 1.00001;
-constexpr double model0_gamma2 = 5.0 / 3.0;
 
 template <> struct quokka::EOS_Traits<TheProblem> {
 	static constexpr double mean_molecular_weight = mu;
@@ -121,8 +113,8 @@ auto compute_T(const double rho) -> double
   }
 	if (model == 1) {
 		auto rho0 = rho_star;
-		auto rho1 = 3.2 * rho0; // jump ends at this density
-		const double scale = 1.0 / (1.0 + std::pow(rho / rho0, model1_s)) + 1.0 / (1.0 + std::pow(rho1 / rho0, model1_s)) * std::pow(rho / rho1, gamma_ad - 1.0);
+		// auto rho1 = 3.2 * rho0; // jump ends at this density
+		const double scale = 1.0 / (1.0 + std::pow(rho / rho0, model1_s)) + 1.0 / (1.0 + std::pow(model1_rho1_over_rho0, model1_s)) * std::pow(rho / (model1_rho1_over_rho0 * rho0), gamma_ad - 1.0);
 		return scale * T0;
 	} 
 	if (model == 2) {
@@ -256,10 +248,10 @@ template <> void RadhydroSimulation<TheProblem>::setInitialConditionsOnGrid(quok
 		// compute azimuthal velocity
 		double v_phi = 0.0;
 		if (distxy <= r_star) {
-			v_phi = 2 * A * c_iso * h;
+			v_phi = 2 * init_A * c_iso * init_h;
 			v_phi *= distxy / r_star;
 		} else if (distxy <= r_c) {
-			v_phi = 2 * A * c_iso * h;
+			v_phi = 2 * init_A * c_iso * init_h;
 		}
 
 		// compute x, y, z velocity
@@ -403,18 +395,15 @@ template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep(std::optio
     step = local_step;
   }
 
-  // if ((computeInterval_ > 0) && (step % computeInterval_ > 0)) {
-  //   return;
-  // }
-
+	// --------- Compute diagonostics every computeInterval_ steps -----------------
   if ((computeInterval_ > 0) && (step % computeInterval_ == 0)) {
 
 		// get the finest level 
     const int fine_level = finestLevel();
 		const int dim = 3;
 
-		// const double rho_threshold = rho_star;
-		const double rho_threshold = -1.0;
+		const double rho_threshold = rho_star;
+		// const double rho_threshold = -1.0;
 
 		double mass_tot = 0.0;
 		double position_x_tot = 0.0;
@@ -546,29 +535,6 @@ template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep(std::optio
 		const amrex::Real Velocity_y = velocity_y_tot / Mass;
 		const amrex::Real Velocity_z = velocity_z_tot / Mass;
 
-		// for (amrex::MFIter iter(state_new_cc_[0]); iter.isValid(); ++iter) {
-		// 	const amrex::Box &indexRange = iter.validbox();
-		// 	auto const &state = state_new_cc_[0].const_array(iter);
-		// 	auto const &rot_radius = rot_radius_mf.array(iter);
-		// 	auto const &spin_L = spin_L_mf.array(iter);
-		// 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		// 		// compute mass
-		// 		Real const rho = state(i, j, k, HydroSystem<TheProblem>::density_index);
-		// 		if (rho > rho_star) {
-		// 			Real const x = prob_lo[0] + (i + 0.5) * dx[0];
-		// 			Real const y = prob_lo[1] + (j + 0.5) * dx[1];
-		// 			Real const px = state(i, j, k, HydroSystem<TheProblem>::x1Momentum_index);
-		// 			Real const py = state(i, j, k, HydroSystem<TheProblem>::x2Momentum_index);
-		// 			Real const distSqr = std::pow(x - Position_x, 2) + std::pow(y - Position_y, 2);
-		// 			rot_radius(i, j, k) = distSqr * rho;
-		// 			spin_L(i, j, k) = (x - Position_x) * py - (y - Position_y) * px;
-		// 		} else {
-		// 			rot_radius(i, j, k) = 0.0;
-		// 			spin_L(i, j, k) = 0.0;
-		// 		}
-		// 	});
-		// }
-
 		for (int ilev = 0; ilev <= fine_level; ++ilev) {
 			// compute SimulationData
 			auto const &dx = geom[ilev].CellSizeArray();
@@ -660,11 +626,11 @@ template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep(std::optio
 
     // Save user data to file
     if (amrex::ParallelDescriptor::MyProc() == 0) {
-      std::ofstream file(fmt::format("./{}/first-star-user-data-{:05d}.txt", subfolder, step));
+      std::ofstream file(fmt::format("./{}/diagnostics-step{:05d}.txt", subfolder, step));
       if (file.is_open()) {
-        file << "time mass tot_mass position_x position_y position_z velocity_x velocity_y velocity_z rotation_radius spin_angular_mtm\n";
+        file << "time tot_mass mass position_x position_y position_z velocity_x velocity_y velocity_z rotation_radius spin_angular_mtm\n";
         file << fmt::format("{:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}\n",
-                            current_time, Mass, tot_mass, Position_x, Position_y, Position_z, Velocity_x, Velocity_y, Velocity_z, Rot_radius, Spin_L);
+                            current_time, tot_mass, Mass, Position_x, Position_y, Position_z, Velocity_x, Velocity_y, Velocity_z, Rot_radius, Spin_L);
         file.close();
       } else {
         std::cerr << "Unable to open file" << std::endl;
@@ -672,8 +638,7 @@ template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep(std::optio
     }
 	} // End of computeInterval_
 
-	// ------------ Plot radial profiles -------------
-
+	// ------------ Plot radial profiles every plotfileInterval_ steps -------------
   if ((plotfileInterval_ > 0) && (step % plotfileInterval_ == 0)) {
     // read output variables
     // Extract the data at the final time at the center of the y-z plane (center=true) 
@@ -703,7 +668,7 @@ template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep(std::optio
     }
 
     // Save user data to file
-    std::ofstream file(fmt::format("./{}/first-star-rho-{:05d}.txt", subfolder, step));
+    std::ofstream file(fmt::format("./{}/radial-profile-rho-step{:05d}.txt", subfolder, step));
     if (file.is_open()) {
       file << "time = " << tNew_[0] << "\n";
       file << "x, rho" << "\n";
@@ -716,60 +681,60 @@ template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep(std::optio
     }
 
 #ifdef HAVE_PYTHON
-    // plot temperature
-    matplotlibcpp::clf();
-    std::map<std::string, std::string> Tgas_args;
-    Tgas_args["label"] = "gas temperature";
-    Tgas_args["linestyle"] = "-";
-    matplotlibcpp::plot(xs, Tgas, Tgas_args);
-    matplotlibcpp::xlabel("x");
-    matplotlibcpp::ylabel("temperature");
-    // matplotlibcpp::legend();
-    matplotlibcpp::title(fmt::format("time t = {:.4g}", tNew_[0]));
-    matplotlibcpp::tight_layout();
-    // matplotlibcpp::save("./first-star-T.png");
-    matplotlibcpp::save(fmt::format("./{}/first-star-T-s{:06d}.png", subfolder, step));
+    // // plot temperature
+    // matplotlibcpp::clf();
+    // std::map<std::string, std::string> Tgas_args;
+    // Tgas_args["label"] = "gas temperature";
+    // Tgas_args["linestyle"] = "-";
+    // matplotlibcpp::plot(xs, Tgas, Tgas_args);
+    // matplotlibcpp::xlabel("x");
+    // matplotlibcpp::ylabel("temperature");
+    // // matplotlibcpp::legend();
+    // matplotlibcpp::title(fmt::format("time t = {:.4g}", tNew_[0]));
+    // matplotlibcpp::tight_layout();
+    // // matplotlibcpp::save("./first-star-T.png");
+    // matplotlibcpp::save(fmt::format("./{}/first-star-T-s{:06d}.png", subfolder, step));
 
-    // plot internal energy
-    matplotlibcpp::clf();
-    std::map<std::string, std::string> Egas_args;
-    Egas_args["label"] = "gas internal energy";
-    Egas_args["linestyle"] = "-";
-    matplotlibcpp::plot(xs, Egas, Egas_args);
-    matplotlibcpp::xlabel("x");
-    matplotlibcpp::ylabel("internal energy");
-    // matplotlibcpp::legend();
-    matplotlibcpp::title(fmt::format("time t = {:.4g}", tNew_[0]));
-    matplotlibcpp::tight_layout();
-    matplotlibcpp::save(fmt::format("./{}/first-star-E-s{:06d}.png", subfolder, step));
+    // // plot internal energy
+    // matplotlibcpp::clf();
+    // std::map<std::string, std::string> Egas_args;
+    // Egas_args["label"] = "gas internal energy";
+    // Egas_args["linestyle"] = "-";
+    // matplotlibcpp::plot(xs, Egas, Egas_args);
+    // matplotlibcpp::xlabel("x");
+    // matplotlibcpp::ylabel("internal energy");
+    // // matplotlibcpp::legend();
+    // matplotlibcpp::title(fmt::format("time t = {:.4g}", tNew_[0]));
+    // matplotlibcpp::tight_layout();
+    // matplotlibcpp::save(fmt::format("./{}/first-star-E-s{:06d}.png", subfolder, step));
 
-    // plot pressure
-    matplotlibcpp::clf();
-    std::map<std::string, std::string> pressure_args;
-    pressure_args["label"] = "gas pressure";
-    pressure_args["linestyle"] = "-";
-    matplotlibcpp::plot(xs, pressure, pressure_args);
-    matplotlibcpp::xlabel("x");
-    matplotlibcpp::ylabel("pressure");
-    // matplotlibcpp::legend();
-    matplotlibcpp::title(fmt::format("time t = {:.4g}", tNew_[0]));
-    matplotlibcpp::tight_layout();
-    // matplotlibcpp::save("./first-star-P.png");
-    matplotlibcpp::save(fmt::format("./{}/first-star-P-s{:06d}.png", subfolder, step));
+    // // plot pressure
+    // matplotlibcpp::clf();
+    // std::map<std::string, std::string> pressure_args;
+    // pressure_args["label"] = "gas pressure";
+    // pressure_args["linestyle"] = "-";
+    // matplotlibcpp::plot(xs, pressure, pressure_args);
+    // matplotlibcpp::xlabel("x");
+    // matplotlibcpp::ylabel("pressure");
+    // // matplotlibcpp::legend();
+    // matplotlibcpp::title(fmt::format("time t = {:.4g}", tNew_[0]));
+    // matplotlibcpp::tight_layout();
+    // // matplotlibcpp::save("./first-star-P.png");
+    // matplotlibcpp::save(fmt::format("./{}/first-star-P-s{:06d}.png", subfolder, step));
 
-    // plot gas velocity profile
-    matplotlibcpp::clf();
-    std::map<std::string, std::string> vgas_args;
-    vgas_args["label"] = "gas velocity";
-    vgas_args["linestyle"] = "-";
-    matplotlibcpp::plot(xs, Vgas, vgas_args);
-    matplotlibcpp::xlabel("x");
-    matplotlibcpp::ylabel("v_y");
-    // matplotlibcpp::legend();
-    matplotlibcpp::title(fmt::format("time t = {:.4g}", tNew_[0]));
-    matplotlibcpp::tight_layout();
-    // matplotlibcpp::save("./first-star-v.png");
-    matplotlibcpp::save(fmt::format("./{}/first-star-v-s{:06d}.png", subfolder, step));
+    // // plot gas velocity profile
+    // matplotlibcpp::clf();
+    // std::map<std::string, std::string> vgas_args;
+    // vgas_args["label"] = "gas velocity";
+    // vgas_args["linestyle"] = "-";
+    // matplotlibcpp::plot(xs, Vgas, vgas_args);
+    // matplotlibcpp::xlabel("x");
+    // matplotlibcpp::ylabel("v_y");
+    // // matplotlibcpp::legend();
+    // matplotlibcpp::title(fmt::format("time t = {:.4g}", tNew_[0]));
+    // matplotlibcpp::tight_layout();
+    // // matplotlibcpp::save("./first-star-v.png");
+    // matplotlibcpp::save(fmt::format("./{}/first-star-v-s{:06d}.png", subfolder, step));
 
     // plot density profile
     matplotlibcpp::clf();
@@ -783,7 +748,7 @@ template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep(std::optio
     matplotlibcpp::title(fmt::format("time t = {:.4g}", tNew_[0]));
     matplotlibcpp::tight_layout();
     // matplotlibcpp::save("./first-star-rho.png");
-    matplotlibcpp::save(fmt::format("./{}/first-star-rho-s{:06d}.png", subfolder, step));
+    matplotlibcpp::save(fmt::format("./{}/radial-profile-rho-s{:06d}.png", subfolder, step));
 #endif
     }
 }
@@ -821,7 +786,7 @@ auto problem_main() -> int
 	ppi.query("A", init_A);
 	ppi.query("q", init_q);
 	ppi.query("h", init_h);
-	const double r_star = q * r_c;
+	r_star = init_q * r_c;
 	rho_star = init_A * c_iso * c_iso / (4.0 * pi * G * r_star * r_star);
 
 	// initialize
@@ -855,12 +820,12 @@ auto problem_main() -> int
 
 	// Save user data to file
 	if (amrex::ParallelDescriptor::MyProc() == 0) {
-		std::ofstream file(fmt::format("./{}/first-star-user-data.txt", subfolder));
+		std::ofstream file(fmt::format("./{}/diagnostics-temperal-all.txt", subfolder));
 		if (file.is_open()) {
-			file << "time mass position_x position_y position_z velocity_x velocity_y velocity_z rotation_radius spin_angular_mtm\n";
+			file << "time tot_mass mass position_x position_y position_z velocity_x velocity_y velocity_z rotation_radius spin_angular_mtm\n";
 			for (size_t i = 0; i < sim.userData_.time.size(); ++i) {
-				file << fmt::format("{:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}\n",
-														sim.userData_.time[i], sim.userData_.mass[i], sim.userData_.position_x[i], sim.userData_.position_y[i], sim.userData_.position_z[i],
+				file << fmt::format("{:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}, {:.12g}\n",
+														sim.userData_.time[i], sim.userData_.tot_mass[i], sim.userData_.mass[i], sim.userData_.position_x[i], sim.userData_.position_y[i], sim.userData_.position_z[i],
 														sim.userData_.velocity_x[i], sim.userData_.velocity_y[i], sim.userData_.velocity_z[i], sim.userData_.rotation_radius[i], sim.userData_.spin_angular_mtm[i]);
 			}
 			file.close();
@@ -881,7 +846,7 @@ auto problem_main() -> int
 	matplotlibcpp::ylabel("mass");
 	// matplotlibcpp::legend();
 	matplotlibcpp::tight_layout();
-	matplotlibcpp::save(fmt::format("./{}/first-star-temperal-mass.png", subfolder));
+	matplotlibcpp::save(fmt::format("./{}/diagnostics-temperal-mass.png", subfolder));
 
 	// Plot position
 	matplotlibcpp::clf();
@@ -893,7 +858,7 @@ auto problem_main() -> int
 	matplotlibcpp::ylabel("position_x");
 	// matplotlibcpp::legend();
 	matplotlibcpp::tight_layout();
-	matplotlibcpp::save(fmt::format("./{}/first-star-temperal-position_x.png", subfolder));
+	matplotlibcpp::save(fmt::format("./{}/diagnostics-temperal-position_x.png", subfolder));
 
 	// Plot velocity
 	matplotlibcpp::clf();
@@ -905,7 +870,7 @@ auto problem_main() -> int
 	matplotlibcpp::ylabel("velocity_x");
 	// matplotlibcpp::legend();
 	matplotlibcpp::tight_layout();
-	matplotlibcpp::save(fmt::format("./{}/first-star-temperal-velocity_x.png", subfolder));
+	matplotlibcpp::save(fmt::format("./{}/diagnostics-temperal-velocity_x.png", subfolder));
 
 	// Plot rotation radius
 	matplotlibcpp::clf();
@@ -917,7 +882,7 @@ auto problem_main() -> int
 	matplotlibcpp::ylabel("rotation_radius");
 	// matplotlibcpp::legend();
 	matplotlibcpp::tight_layout();
-	matplotlibcpp::save(fmt::format("./{}/first-star-temperal-rotation_radius.png", subfolder));
+	matplotlibcpp::save(fmt::format("./{}/diagnostics-temperal-rotation_radius.png", subfolder));
 
 	// Plot spin angular momentum
 	matplotlibcpp::clf();
@@ -929,51 +894,8 @@ auto problem_main() -> int
 	matplotlibcpp::ylabel("spin_angular_mtm");
 	// matplotlibcpp::legend();
 	matplotlibcpp::tight_layout();
-	matplotlibcpp::save(fmt::format("./{}/first-star-temperal-spin_angular_mtm.png", subfolder));
+	matplotlibcpp::save(fmt::format("./{}/diagnostics-temperal-spin_angular_mtm.png", subfolder));
 #endif
-
-  // save last data
-
-  auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0, true);
-  const int nx = static_cast<int>(position.size());
-
-  std::vector<double> xs(nx);
-  std::vector<double> Tgas(nx);
-  std::vector<double> Egas(nx);
-  std::vector<double> Vgas(nx);
-  std::vector<double> rhogas(nx);
-  std::vector<double> pressure(nx);
-
-  for (int i = 0; i < nx; ++i) {
-    amrex::Real const x = position[i];
-    xs.at(i) = x;
-    const auto rho_t = values.at(HydroSystem<TheProblem>::density_index)[i];
-    const auto v_t = values.at(HydroSystem<TheProblem>::x2Momentum_index)[i] / rho_t; // v_y
-    const auto Egas_t = values.at(HydroSystem<TheProblem>::internalEnergy_index)[i];
-    const auto pressure_t = quokka::EOS<TheProblem>::ComputePressure(rho_t, Egas_t);
-    const auto T_t = quokka::EOS<TheProblem>::ComputeTgasFromEint(rho_t, Egas_t);
-    rhogas.at(i) = rho_t;
-    Tgas.at(i) = T_t;
-    Egas.at(i) = Egas_t;
-    Vgas.at(i) = v_t;
-    pressure.at(i) = pressure_t;
-  }
-
-  // Save user data to file
-  std::ofstream file(fmt::format("./{}/first-star-rho-{:05d}.txt", subfolder, sim.istep[0]));
-  if (file.is_open()) {
-    file << "time = " << sim.tNew_[0] << "\n";
-    file << "x, rho" << "\n";
-    for (int i = 0; i < nx; ++i) {
-      file << fmt::format("{:.12g}, {:.12g}\n", xs.at(i), rhogas.at(i));
-    }
-    file.close();
-  } else {
-    std::cerr << "Unable to open file" << std::endl;
-  }
-
-
-
 
 	// Cleanup and exit
 	int status = 0;

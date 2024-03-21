@@ -9,7 +9,7 @@ if (AMReX_SPACEDIM EQUAL 3)
 	# string(TIMESTAMP DATE_STR "%y%m%d-%H%M%S")
 	# set(work_dir ${CMAKE_SOURCE_DIR}/src/FirstStar/out/out-${DATE_STR})
 	# set(work_dir ${PROJECT_SOURCE_DIR}/sims/240307-first-star/out)
-	set(work_dir ${PROJECT_SOURCE_DIR}/tests)
+	set(work_dir ${PROJECT_SOURCE_DIR}/tests/first-star)
 
 	execute_process(
 		COMMAND mkdir -p ${work_dir}

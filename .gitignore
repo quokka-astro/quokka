@@ -1,3 +1,4 @@
+/tests/first-star/
 *.log
 compile_commands.json
 .vscode/

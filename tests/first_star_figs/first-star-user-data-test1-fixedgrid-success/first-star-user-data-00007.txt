@@ -1,2 +1,0 @@
-time mass tot_mass position_x position_y position_z velocity_x velocity_y velocity_z rotation_radius spin_angular_mtm
-0.0357646898182, 16.0746336677, 16.0746336677, 2, 2, 2, 2.34532037944e-17, -6.47500967738e-19, 7.01459381716e-18, 0, 0
