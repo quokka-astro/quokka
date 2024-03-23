@@ -75,21 +75,21 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblem>::ComputeFluxMeanOpacity(con
 static constexpr int nmscalars_ = Physics_Traits<SuOlsonProblem>::numMassScalars;
 template <>
 AMREX_GPU_HOST_DEVICE auto quokka::EOS<SuOlsonProblem>::ComputeTgasFromEint(const double /*rho*/, const double Egas,
-									    std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massScalars*/) -> double
+									    std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/) -> double
 {
 	return std::pow(4.0 * Egas / alpha_SuOlson, 1. / 4.);
 }
 
 template <>
 AMREX_GPU_HOST_DEVICE auto quokka::EOS<SuOlsonProblem>::ComputeEintFromTgas(const double /*rho*/, const double Tgas,
-									    std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massScalars*/) -> double
+									    std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/) -> double
 {
 	return (alpha_SuOlson / 4.0) * std::pow(Tgas, 4);
 }
 
 template <>
 AMREX_GPU_HOST_DEVICE auto quokka::EOS<SuOlsonProblem>::ComputeEintTempDerivative(const double /*rho*/, const double Tgas,
-										  std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massScalars*/)
+										  std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/)
     -> double
 {
 	// This is also known as the heat capacity, i.e.
