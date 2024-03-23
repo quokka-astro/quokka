@@ -1,0 +1,56 @@
+# *****************************************************************
+# Initial condition and EOS parameters
+# *****************************************************************
+init.A = 4.0
+init.h = 0.1
+init.q = 0.005
+init.rho_bg = -1
+init.v_bg = 1
+#init.init_dt = 6.629641408e-06     # 0.1 of initial dt given by CFL
+
+hydro.artificial_viscosity_coefficient = 0.01
+
+eos.model = 0
+
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  0.0 0.0 0.0
+geometry.prob_hi     =  4.0 4.0 4.0
+geometry.is_periodic =  0    0    0
+
+max_timesteps = 10000
+stop_time = 10.0
+plotfile_interval = 100
+checkpoint_interval = 100
+compute_interval = 10
+# restartfile = chk00600
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v              = 1       # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          = 128 128 128
+amr.max_level       = 5     # number of levels = max_level + 1
+amr.max_grid_size   = 128   # at least 128 for GPUs
+amr.blocking_factor = 128   # grid size must be divisible by this
+amr.n_error_buf     = 3     # minimum 3 cell buffer around tagged cells
+amr.grid_eff        = 0.7   # default
+
+refine.jeans_num = 8
+refine.density_threshold_over_rho_star = 0.5
+
+hydro.reconstruction_order = 3  # PPM
+
+gravity.Gconst = 1.0    #gravitational constant
+
+cfl = 0.15
+
+do_reflux = 1
+do_subcycle = 0
+suppress_output = 0
+
