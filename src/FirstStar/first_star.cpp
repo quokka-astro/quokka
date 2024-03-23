@@ -26,6 +26,11 @@ AMREX_GPU_MANAGED double init_q = NAN;
 AMREX_GPU_MANAGED double init_h = NAN;
 AMREX_GPU_MANAGED double r_star = NAN;
 AMREX_GPU_MANAGED double rho_star = NAN;
+AMREX_GPU_MANAGED double rho_bg = -1.0;
+AMREX_GPU_MANAGED int v_bg = 0;
+// model 0 parameters
+AMREX_GPU_MANAGED double model0_gamma1 = 1.00001;
+AMREX_GPU_MANAGED double model0_gamma2 = 5.0 / 3.0;
 
 // constexpr const char* subfolder = __DATE__ " " __TIME__;
 constexpr const char* subfolder = "diagnostics";
@@ -45,10 +50,6 @@ constexpr double mu = 1.0;
 constexpr double gamma_ad = 5.0 / 3.0;
 constexpr double Cv = 1.0 / (gamma_ad - 1.0) * k_B / mu; // Specific heat at constant volume in the adiabatic phase
 constexpr double T0 = c_iso * c_iso;
-
-// model 0 parameters
-constexpr double model0_gamma1 = 1.00001;
-constexpr double model0_gamma2 = 5.0 / 3.0;
 
 // model 1 parameters
 constexpr double model1_s = 4.0; // jump slope. The jump equals s * log10(rho1 / rho0)
@@ -230,7 +231,7 @@ template <> void RadhydroSimulation<TheProblem>::setInitialConditionsOnGrid(quok
 		// amrex::Real const rho_star = A * c_iso * c_iso / (4.0 * pi * G * r_star * r_star);
 
 		// const double rho_bg = rho_star * std::pow(r_star / r_c, 2);
-		const double rho_bg = rho_star * (r_star / r_c) * (r_star / r_c);
+		const double rho_bg_ = rho_bg > 0.0 ? rho_bg * rho_star : rho_star * (r_star / r_c) * (r_star / r_c);;
 
 		// compute density
 		double rho = NAN;
@@ -240,7 +241,7 @@ template <> void RadhydroSimulation<TheProblem>::setInitialConditionsOnGrid(quok
 			// rho = rho_star * std::pow(r_star / r, 2);
       rho = rho_star * (r_star / r) * (r_star / r);
 		} else {
-			rho = rho_bg;
+			rho = rho_bg_;
 		}
     AMREX_ALWAYS_ASSERT(rho > 0.0);
 		const auto E_int = compute_e(rho);
@@ -252,6 +253,12 @@ template <> void RadhydroSimulation<TheProblem>::setInitialConditionsOnGrid(quok
 			v_phi *= distxy / r_star;
 		} else if (distxy <= r_c) {
 			v_phi = 2 * init_A * c_iso * init_h;
+		} else {
+			if (v_bg == 0) {
+				v_phi = 0.0;
+			} else {
+				v_phi = 2 * init_A * c_iso * init_h;
+			}
 		}
 
 		// compute x, y, z velocity
@@ -414,6 +421,7 @@ template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep(std::optio
 		double velocity_z_tot = 0.0;
 		double rot_radius_tot = 0.0;
 		double spin_L_tot = 0.0;
+		double max_rho = -1.0;
 
 		for (int ilev = 0; ilev <= fine_level; ++ilev) {
 			// compute SimulationData
@@ -421,7 +429,8 @@ template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep(std::optio
 			amrex::Real const vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 			auto const prob_lo = geom[ilev].ProbLoArray();
 
-			amrex::MultiFab mass_mf(boxArray(ilev), DistributionMap(ilev), 1, 0);
+			amrex::MultiFab rho_star_mf(boxArray(ilev), DistributionMap(ilev), 1, 0);
+			amrex::MultiFab rho_mf(boxArray(ilev), DistributionMap(ilev), 1, 0);
 			amrex::MultiFab position_x_mf(boxArray(ilev), DistributionMap(ilev), 1, 0);
 			amrex::MultiFab position_y_mf(boxArray(ilev), DistributionMap(ilev), 1, 0);
 			amrex::MultiFab position_z_mf(boxArray(ilev), DistributionMap(ilev), 1, 0);
@@ -440,7 +449,8 @@ template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep(std::optio
 					const auto& m = mask.array(iter);
 
 					auto const &state = state_new_cc_[ilev].const_array(iter);
-					auto const &mass = mass_mf.array(iter);
+					auto const &mass = rho_star_mf.array(iter);
+					auto const &rho_all = rho_mf.array(iter);
 					auto const &position_x = position_x_mf.array(iter);
 					auto const &position_y = position_y_mf.array(iter);
 					auto const &position_z = position_z_mf.array(iter);
@@ -450,6 +460,7 @@ template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep(std::optio
 
 					amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 						Real const rho = state(i, j, k, HydroSystem<TheProblem>::density_index);
+						rho_all(i, j, k) = rho;
 						if ((m(i, j, k) == 0) && (rho > rho_threshold)) {
 							Real const x = prob_lo[0] + (i + 0.5) * dx[0];
 							Real const y = prob_lo[1] + (j + 0.5) * dx[1];
@@ -480,7 +491,8 @@ template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep(std::optio
 					const amrex::Box &indexRange = iter.validbox();
 
 					auto const &state = state_new_cc_[ilev].const_array(iter);
-					auto const &mass = mass_mf.array(iter);
+					auto const &mass = rho_star_mf.array(iter);
+					auto const &rho_all = rho_mf.array(iter);
 					auto const &position_x = position_x_mf.array(iter);
 					auto const &position_y = position_y_mf.array(iter);
 					auto const &position_z = position_z_mf.array(iter);
@@ -490,6 +502,7 @@ template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep(std::optio
 
 					amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 						Real const rho = state(i, j, k, HydroSystem<TheProblem>::density_index);
+						rho_all(i, j, k) = rho;
 						if (rho > rho_threshold) {
 							Real const x = prob_lo[0] + (i + 0.5) * dx[0];
 							Real const y = prob_lo[1] + (j + 0.5) * dx[1];
@@ -517,7 +530,8 @@ template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep(std::optio
 				}
 			}
 
-			mass_tot += mass_mf.sum(0) * vol;
+			mass_tot += rho_star_mf.sum(0) * vol;
+			max_rho = std::max(max_rho, rho_mf.max(0));
 			position_x_tot += position_x_mf.sum(0) * vol;
 			position_y_tot += position_y_mf.sum(0) * vol;
 			position_z_tot += position_z_mf.sum(0) * vol;
@@ -624,6 +638,8 @@ template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep(std::optio
 		const double tot_mass = tot_density * vol;
 		userData_.tot_mass.push_back(tot_mass);
 
+		amrex::Print() << "Max density = " << fmt::format("{:.12g}", max_rho) << std::endl;
+
     // Save user data to file
     if (amrex::ParallelDescriptor::MyProc() == 0) {
       std::ofstream file(fmt::format("./{}/diagnostics-step{:05d}.txt", subfolder, step));
@@ -639,7 +655,7 @@ template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep(std::optio
 	} // End of computeInterval_
 
 	// ------------ Plot radial profiles every plotfileInterval_ steps -------------
-  if ((plotfileInterval_ > 0) && (step % plotfileInterval_ == 0)) {
+  if ((computeInterval_ > 0) && (step % computeInterval_ == 0)) {
     // read output variables
     // Extract the data at the final time at the center of the y-z plane (center=true) 
     auto [position, values] = fextract(state_new_cc_[0], Geom(0), 0, 0.0, true);
@@ -668,6 +684,8 @@ template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep(std::optio
     }
 
     // Save user data to file
+
+		// save rho
     std::ofstream file(fmt::format("./{}/radial-profile-rho-step{:05d}.txt", subfolder, step));
     if (file.is_open()) {
       file << "time = " << tNew_[0] << "\n";
@@ -679,6 +697,32 @@ template <> void RadhydroSimulation<TheProblem>::computeAfterTimestep(std::optio
     } else {
       std::cerr << "Unable to open file" << std::endl;
     }
+
+		// save v
+		file.open(fmt::format("./{}/radial-profile-vy-step{:05d}.txt", subfolder, step));
+		if (file.is_open()) {
+			file << "time = " << tNew_[0] << "\n";
+			file << "x, vy" << "\n";
+			for (int i = 0; i < nx; ++i) {
+				file << fmt::format("{:.12g}, {:.12g}\n", xs.at(i), Vgas.at(i));
+			}
+			file.close();
+		} else {
+			std::cerr << "Unable to open file" << std::endl;
+		}
+
+		// save T
+		file.open(fmt::format("./{}/radial-profile-T-step{:05d}.txt", subfolder, step));
+		if (file.is_open()) {
+			file << "time = " << tNew_[0] << "\n";
+			file << "x, T" << "\n";
+			for (int i = 0; i < nx; ++i) {
+				file << fmt::format("{:.12g}, {:.12g}\n", xs.at(i), Tgas.at(i));
+			}
+			file.close();
+		} else {
+			std::cerr << "Unable to open file" << std::endl;
+		}
 
 #ifdef HAVE_PYTHON
     // // plot temperature
@@ -757,6 +801,7 @@ auto problem_main() -> int
 {
 
 	const double max_dt = 1e0;
+	double init_dt = 0.00046875;
 
 	// Boundary conditions
 	const int ncomp_cc = Physics_Indices<TheProblem>::nvarTotal_cc;
@@ -781,15 +826,22 @@ auto problem_main() -> int
 	// read problem parameters
 	amrex::ParmParse const pp("eos");
 	pp.query("model", model);
+	pp.query("model0_gamma1", model0_gamma1);
+	pp.query("model0_gamma2", model0_gamma2);
 
 	amrex::ParmParse const ppi("init");
 	ppi.query("A", init_A);
 	ppi.query("q", init_q);
 	ppi.query("h", init_h);
+	ppi.query("rho_bg", rho_bg);
+	ppi.query("v_bg", v_bg);
+	ppi.query("init_dt", init_dt);
+
 	r_star = init_q * r_c;
 	rho_star = init_A * c_iso * c_iso / (4.0 * pi * G * r_star * r_star);
 
 	// initialize
+	sim.initDt_ = init_dt;
 	sim.setInitialConditions();
 
 	// Check if the directory already exists
