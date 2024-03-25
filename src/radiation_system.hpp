@@ -1197,7 +1197,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					lorentz_factor = 1.0 / sqrt(1.0 - betaSqr);
 					lorentz_factor_v = lorentz_factor;
 					lorentz_factor_v_v = lorentz_factor;
-				} 
+				}
 
 				// 1. Compute energy exchange
 
