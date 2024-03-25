@@ -488,9 +488,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::PerformanceHints()
 		const amrex::Long nboxes = boxArray(ilev).size();
 		if (amrex::ParallelDescriptor::NProcs() > nboxes) {
 			amrex::Print() << "\n[Warning] [Performance] Too many resources / too little work!\n"
-				       << "  It looks like you requested more compute resources than "
-				       << "  the number of boxes of cells available on level " << ilev << " (" << nboxes << "). "
-				       << "You started with (" << amrex::ParallelDescriptor::NProcs() << ") MPI ranks, so ("
+				       << "  It looks like you requested more compute resources than " << "  the number of boxes of cells available on level "
+				       << ilev << " (" << nboxes << "). " << "You started with (" << amrex::ParallelDescriptor::NProcs() << ") MPI ranks, so ("
 				       << amrex::ParallelDescriptor::NProcs() - nboxes << ") rank(s) will have no work on this level.\n"
 #ifdef AMREX_USE_GPU
 				       << "  On GPUs, consider using 1-8 boxes per GPU per level that "
