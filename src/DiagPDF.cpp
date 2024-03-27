@@ -49,6 +49,8 @@ void DiagPDF::prepare(int a_nlevels, const amrex::Vector<amrex::Geometry> &a_geo
 void DiagPDF::processDiag(int a_nstep, const amrex::Real &a_time, const amrex::Vector<const amrex::MultiFab *> &a_state,
 			  const amrex::Vector<std::string> &a_stateVar)
 {
+	// TODO(bwibking): allow log-spaced bins (for positive fields)
+
 	// Set PDF range
 	int const fieldIdx = getFieldIndex(m_fieldName, a_stateVar);
 	if (m_useFieldMinMax) {
