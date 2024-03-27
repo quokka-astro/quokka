@@ -53,7 +53,6 @@ template <typename problem_t> struct RadSystem_Traits {
 	static constexpr double c_hat = c_light_cgs_;
 	static constexpr double radiation_constant = radiation_constant_cgs_;
 	static constexpr double Erad_floor = 0.;
-	static constexpr bool compute_v_over_c_terms = true;
 	static constexpr double energy_unit = C::ev2erg;
 	static constexpr amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups + 1> radBoundaries = {0., inf};
 	static constexpr double beta_order = 1;
@@ -105,8 +104,6 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static constexpr double c_light_ = RadSystem_Traits<problem_t>::c_light;
 	static constexpr double c_hat_ = RadSystem_Traits<problem_t>::c_hat;
 	static constexpr double radiation_constant_ = RadSystem_Traits<problem_t>::radiation_constant;
-
-	static constexpr bool compute_v_over_c_terms_ = RadSystem_Traits<problem_t>::compute_v_over_c_terms;
 
 	static constexpr int beta_order_ = RadSystem_Traits<problem_t>::beta_order;
 
@@ -1183,7 +1180,9 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				AMREX_ASSERT(Egas0 > 0.0);
 
 				const double betaSqr = (x1GasMom0 * x1GasMom0 + x2GasMom0 * x2GasMom0 + x3GasMom0 * x3GasMom0) / (rho * rho * c * c);
-				if constexpr (beta_order_ == 1) {
+
+				static_assert(beta_order_ <= 3);
+				if constexpr ((beta_order_ == 0) || (beta_order_ == 1)) {
 					lorentz_factor = 1.0;
 					lorentz_factor_v = 1.0;
 				} else if constexpr (beta_order_ == 2) {
@@ -1194,12 +1193,10 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					lorentz_factor = 1.0 + 0.5 * betaSqr;
 					lorentz_factor_v = 1.0 + 0.5 * betaSqr;
 					lorentz_factor_v_v = 1.0;
-				} else if constexpr (beta_order_ < 0) {
+				} else {
 					lorentz_factor = 1.0 / sqrt(1.0 - betaSqr);
 					lorentz_factor_v = lorentz_factor;
 					lorentz_factor_v_v = lorentz_factor;
-				} else {
-					AMREX_ASSERT(false);
 				}
 
 				// 1. Compute energy exchange
@@ -1231,7 +1228,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				AMREX_ASSERT(!kappaPVec.hasnan());
 				AMREX_ASSERT(!kappaEVec.hasnan());
 
-				if constexpr ((compute_v_over_c_terms_) && (include_work_term_in_source)) {
+				if constexpr ((beta_order_ != 0) && (include_work_term_in_source)) {
 					// compute the work term at the old state
 					// const double gamma = 1.0 / sqrt(1.0 - vsqr / (c * c));
 					if (ite == 0) {
@@ -1338,7 +1335,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				Frad_t0[1] = consPrev(i, j, k, x2RadFlux_index + numRadVars_ * g);
 				Frad_t0[2] = consPrev(i, j, k, x3RadFlux_index + numRadVars_ * g);
 
-				if constexpr ((compute_v_over_c_terms_) && (gamma_ != 1.0) && (beta_order_ != 0)) {
+				if constexpr ((gamma_ != 1.0) && (beta_order_ != 0)) {
 					auto erad = EradVec_guess[g];
 					std::array<double, 3> gasVel{};
 					std::array<double, 3> v_terms{};
@@ -1436,7 +1433,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			amrex::Real x3GasMom1 = consPrev(i, j, k, x3GasMomentum_index) + dMomentum[2];
 
 			// 3. Deal with the work term.
-			if constexpr ((gamma_ != 1.0) && (compute_v_over_c_terms_)) {
+			if constexpr ((gamma_ != 1.0) && (beta_order_ != 0)) {
 				// compute difference in gas kinetic energy before and after momentum update
 				amrex::Real const Egastot1 = ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess);
 				amrex::Real const Ekin1 = Egastot1 - Egas_guess;
@@ -1482,7 +1479,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				}
 			} // End of step 3
 
-			if constexpr ((!compute_v_over_c_terms_) || (gamma_ == 1.0) || (!include_work_term_in_source)) {
+			if constexpr ((beta_order_ == 0) || (gamma_ == 1.0) || (!include_work_term_in_source)) {
 				break;
 			}
 
