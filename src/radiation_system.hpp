@@ -971,24 +971,7 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 			const quokka::valarray<double, numRadVars_> U_L = {erad_L, Fx_L, Fy_L, Fz_L};
 			const quokka::valarray<double, numRadVars_> U_R = {erad_R, Fx_R, Fy_R, Fz_R};
 
-			// ensures that signal speed -> c \sqrt{f_xx} / tau_cell in the diffusion
-			// limit [see Appendix of Jiang et al. ApJ 767:148 (2013)]
-			// const double S_corr = std::sqrt(1.0 - std::exp(-tau_cell * tau_cell)) /
-			//		      tau_cell; // Jiang et al. (2013)
-			const double S_corr = std::min(1.0, 1.0 / tau_cell[g]); // Skinner et al.
-
-			// adjust the wavespeeds
-			// (this factor cancels out except for the last term in the HLL flux)
-			quokka::valarray<double, numRadVars_> epsilon = {S_corr, 1.0, 1.0, 1.0}; // Skinner et al. (2019)
-			// quokka::valarray<double, numRadVars_> epsilon = {S_corr, S_corr, S_corr, S_corr}; // Jiang et al. (2013)
-			// quokka::valarray<double, numRadVars_> epsilon = {S_corr * S_corr, S_corr, S_corr, S_corr}; // this code
-
-			// fix odd-even instability that appears in the asymptotic diffusion limit
-			// [for details, see section 3.1: https://ui.adsabs.harvard.edu/abs/2022MNRAS.512.1499R/abstract]
-			if ((i + j + k) % 2 == 1) {
-				// revert to more diffusive flux (has no effect in optically-thin limit)
-				epsilon = {1.0, 1.0, 1.0, 1.0};
-			}
+			// Adjusting wavespeeds is no longer necessary with the IMEX PD-ARS scheme.
 
 			AMREX_ASSERT(std::abs(S_L) <= c_hat_); // NOLINT
 			AMREX_ASSERT(std::abs(S_R) <= c_hat_); // NOLINT
@@ -996,7 +979,7 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 			// in the frozen Eddington tensor approximation, we are always
 			// in the star region, so F = F_star
 			const quokka::valarray<double, numRadVars_> F =
-			    (S_R / (S_R - S_L)) * F_L - (S_L / (S_R - S_L)) * F_R + epsilon * (S_R * S_L / (S_R - S_L)) * (U_R - U_L);
+			    (S_R / (S_R - S_L)) * F_L - (S_L / (S_R - S_L)) * F_R + (S_R * S_L / (S_R - S_L)) * (U_R - U_L);
 
 			// check states are valid
 			AMREX_ASSERT(!std::isnan(F[0])); // NOLINT
