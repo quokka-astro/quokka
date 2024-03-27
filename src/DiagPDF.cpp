@@ -182,9 +182,11 @@ void DiagPDF::writePDFToFile(int a_nstep, const amrex::Real &a_time, const amrex
 			<< "\n";
 
 		for (int i{0}; i < a_pdf.size(); ++i) {
-			pdfFile << std::setw(widths[0]) << std::setprecision(prec) << std::scientific
-				<< m_lowBnd + (static_cast<amrex::Real>(i) + 0.5) * binWidth << " " << std::setw(widths[1]) << std::setprecision(prec)
-				<< std::scientific << a_pdf[i] / a_sum / binWidth << "\n";
+			const amrex::Real bin_center = m_lowBnd + (static_cast<amrex::Real>(i) + 0.5) * binWidth;
+			const amrex::Real value = (a_sum != 0) ? (a_pdf[i] / a_sum / binWidth) : 0;
+
+			pdfFile << std::setw(widths[0]) << std::setprecision(prec) << std::scientific << bin_center << " " << std::setw(widths[1])
+				<< std::setprecision(prec) << std::scientific << value << "\n";
 		}
 
 		pdfFile.flush();
