@@ -35,7 +35,7 @@ namespace quokka::cooling
 
 constexpr double cloudy_H_mass_fraction = 1. / (1. + 0.1 * 3.971);
 constexpr double X = cloudy_H_mass_fraction;
-constexpr double Zbg = 0.2; //background metallicity in units of Zsolar
+constexpr double Zbg = 1.; //background metallicity in units of Zsolar
 constexpr double Z  =  0.02; // metal fraction by mass
 constexpr double Y = 1. - X - Z;
 constexpr double mean_metals_A = 16.; // mean atomic weight of metals
@@ -92,8 +92,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto cloudy_cooling_function(Real const
 	const double logMetalHeat = interpolate2d(log_nH, log_T, tables.log_nH, tables.log_Tgas, tables.metalHeat);
 
 	const double netLambda_prim = FastMath::pow10(logPrimHeat) - FastMath::pow10(logPrimCool);
-	const double netLambda_metals = FastMath::pow10(logMetalHeat) -  FastMath::pow10(logMetalCool);
-	const double netLambda = netLambda_prim +  Zbg *netLambda_metals;
+	const double netLambda_metals = FastMath::pow10(logMetalHeat) -  Zbg*FastMath::pow10(logMetalCool);
+	const double netLambda = netLambda_prim +  netLambda_metals;
+	// const double netLambda = netLambda_metals;
 
 	// multiply by the square of H mass density (**NOT number density**)
 	double Edot = (rhoH * rhoH) * netLambda;
@@ -270,9 +271,7 @@ template <typename problem_t> void computeCooling(amrex::MultiFab &mf, const Rea
 			const Real Egas = state(i, j, k, HydroSystem<problem_t>::energy_index);
 
 			const Real Eint = RadSystem<problem_t>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-			if(Eint<=0.0){
-				printf("Eint =0.0 at %d,%d,%d\n", i,j,k);
-			}
+
 			const Real gamma = quokka::EOS_Traits<problem_t>::gamma;
 			ODEUserData user_data{rho, gamma, tables};
 			quokka::valarray<Real, 1> y = {Eint};			
