@@ -44,7 +44,7 @@
 using amrex::Real;
 using namespace amrex;
 int arrshape = 4999;
-std::string input_data_file; //="/g/data/jh2/av5889/quokka_myrepo/quokka/sims/GasGravity/PhiGas_R8.h5";
+std::string input_data_file="/g/data/jh2/av5889/quokka_myrepo/quokka/sims/GasGravity/PhiGas_R8.h5";
 amrex::GpuArray<amrex::Real, 4999> phi_data;
 amrex::GpuArray<amrex::Real, 4999> g_data;
 amrex::GpuArray<amrex::Real, 4999> z_data;
@@ -140,6 +140,19 @@ void read_potential(amrex::GpuArray<amrex::Real, 4999> &z_data,
 		}
   }
 		status = H5Dclose(dset_id);
+
+ parameter_name = "gGas" ;
+  dset_id = H5Dopen2(file_id, parameter_name.c_str(),
+			   H5P_DEFAULT); // new API in HDF5 1.8.0+  
+  auto *gdata = new double[4999]; // NOLINT(cppcoreguidelines-owning-memory)
+	{
+		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, gdata);
+    for (int64_t q = 0; q < 4999; q++) {
+			double value = gdata[q];
+			g_data[q] =  FastMath::log10(value);
+		}
+  }
+		status = H5Dclose(dset_id);   
 }
 
 /************************************************************/
@@ -209,9 +222,8 @@ void RadhydroSimulation<NewProblem>::setInitialConditionsOnGrid(quokka::grid gri
       /*Calculate Gas Disk Potential*/
       
       double Phigas;
-      Phigas = linearInterpolate(z_data, phi_data, std::abs(z));
-     
-
+      Phigas =FastMath::pow10( linearInterpolate(z_data, phi_data, std::abs(z)));
+    
       double Phitot = Phist + Phidm; 
 
 			double rho, rho_disk, rho_halo;
@@ -442,7 +454,7 @@ HydroSystem<NewProblem>::GetGradFixedPotential(amrex::GpuArray<amrex::Real, AMRE
        double z      = posvec[2];
        grad_potential[2]  = 2.* 3.1415 * Const_G * rho_dm * std::pow(R0,2) * (2.* z/std::pow(R0,2))/(1. + std::pow(z,2)/std::pow(R0,2));
        grad_potential[2] += 2.* 3.1415 * Const_G * Sigma_star * (z/z_star) * (std::pow(1. + z*z/(z_star*z_star), -0.5));
-       grad_potential[2] += linearInterpolate(z_data, phi_data, std::abs(z));
+       grad_potential[2] += FastMath::pow10( linearInterpolate(z_data, g_data, std::abs(z)));;
     #endif
 
 return grad_potential;
@@ -587,8 +599,8 @@ auto problem_main() -> int {
   // Problem initialization
   RadhydroSimulation<NewProblem> sim(BCs_cc);
   
-  amrex::ParmParse const pp("phi_file");
-	pp.query("name", input_data_file); 
+  // amrex::ParmParse const pp("phi_file");
+	// pp.query("name", input_data_file); 
   
   sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
   sim.cflNumber_ = 0.25;         // *must* be less than 1/3 in 3D!
