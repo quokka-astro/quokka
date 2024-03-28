@@ -44,7 +44,7 @@
 using amrex::Real;
 using namespace amrex;
 int arrshape = 4999;
-std::string input_data_file="/g/data/jh2/av5889/quokka_myrepo/quokka/sims/GasGravity/PhiGas_R8.h5";
+std::string input_data_file; //="/g/data/jh2/av5889/quokka_myrepo/quokka/sims/GasGravity/PhiGas_R8.h5";
 amrex::GpuArray<amrex::Real, 4999> phi_data;
 amrex::GpuArray<amrex::Real, 4999> g_data;
 amrex::GpuArray<amrex::Real, 4999> z_data;
@@ -599,8 +599,8 @@ auto problem_main() -> int {
   // Problem initialization
   RadhydroSimulation<NewProblem> sim(BCs_cc);
   
-  // amrex::ParmParse const pp("phi_file");
-	// pp.query("name", input_data_file); 
+  amrex::ParmParse const pp("phi_file");
+	pp.query("name", input_data_file); 
   
   sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
   sim.cflNumber_ = 0.25;         // *must* be less than 1/3 in 3D!
