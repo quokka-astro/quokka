@@ -1840,7 +1840,7 @@ void AMRSimulation<problem_t>::FillPatchWithData(int lev, amrex::Real time, amre
 		amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>> coarsePhysicalBoundaryFunctor_cc(geom[lev - 1], BCs,
 															   boundaryFunctor_cc);
 		amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>>> coarsePhysicalBoundaryFunctor_fc(geom[lev - 1], BCs,
-															   boundaryFunctor_fc);
+																  boundaryFunctor_fc);
 
 		// copies interior zones, fills ghost zones with space-time interpolated
 		// data

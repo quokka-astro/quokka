@@ -66,10 +66,10 @@ bool sharp_cloud_edge = false; // NOLINT(cppcoreguidelines-avoid-non-const-globa
 bool do_frame_shift = true;    // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
 // Cloud parameters (set inside problem_main())
-AMREX_GPU_MANAGED Real rho0 = NAN;    // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED Real rho1 = NAN;    // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED Real P0 = NAN;      // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED Real R_cloud = NAN; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real rho0 = NAN;	     // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real rho1 = NAN;	     // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real P0 = NAN;	     // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED Real R_cloud = NAN;	     // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 AMREX_GPU_MANAGED Real cloud_relpos_x = 0.5; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
 // cloud-tracking variables needed for Dirichlet boundary condition
