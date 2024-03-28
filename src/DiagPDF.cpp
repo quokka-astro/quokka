@@ -56,8 +56,8 @@ void DiagPDF::prepare(int a_nlevels, const amrex::Vector<amrex::Geometry> &a_geo
 	}
 }
 
-auto DiagPDF::getBinIndex(const amrex::Real &realInputVal, const amrex::Real &transformedLowBnd, const amrex::Real &transformedBinWidth, const bool doLog)
-    -> int
+AMREX_GPU_HOST_DEVICE AMREX_INLINE auto DiagPDF::getBinIndex(const amrex::Real &realInputVal, const amrex::Real &transformedLowBnd,
+							     const amrex::Real &transformedBinWidth, const bool doLog) -> int
 {
 	amrex::Real const val = doLog ? std::log10(realInputVal) : realInputVal;
 	int const cbin = static_cast<int>(std::floor((val - transformedLowBnd) / transformedBinWidth));
