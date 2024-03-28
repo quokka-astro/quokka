@@ -1,9 +1,12 @@
-#include "DiagPDF.H"
+#include <ios>
+
 #include "AMReX_BLassert.H"
+#include "AMReX_Extension.H"
 #include "AMReX_MultiFabUtil.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_SPACE.H"
-#include <ios>
+
+#include "DiagPDF.H"
 
 void DiagPDF::init(const std::string &a_prefix, std::string_view a_diagName)
 {

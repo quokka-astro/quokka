@@ -40,8 +40,8 @@ class DiagPDF : public DiagBase::Register<DiagPDF>
 	amrex::Vector<amrex::IntVect> m_refRatio;
 
 	// helper functions
-	static auto getBinIndex(const amrex::Real &realInputVal, const amrex::Real &transformedLowBnd, const amrex::Real &transformedBinWidth, bool doLog)
-	    -> int;
+	AMREX_GPU_HOST_DEVICE AMREX_INLINE static auto getBinIndex(const amrex::Real &realInputVal, const amrex::Real &transformedLowBnd,
+								   const amrex::Real &transformedBinWidth, bool doLog) -> int;
 };
 
 #endif
