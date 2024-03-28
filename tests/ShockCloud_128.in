@@ -38,12 +38,15 @@ quokka.slice_z.interpolation = Linear        # (Optional, default: Linear) Inter
 quokka.slice_z.field_names = gasDensity \
             gasInternalEnergy temperature    # List of variables included in output
 
-quokka.hist_temp.type = DiagPDF              # Diagnostic type
-quokka.hist_temp.file = PDFTemp              # Output file prefix
-quokka.hist_temp.int  = 10                   # Output cadence (in number of coarse steps)
-quokka.hist_temp.normalized = 1              # (Optional, default: 1) Normalize PDF
-quokka.hist_temp.volume_weighted = 1         # (Optional, default: 1) Volume-weighted PDF
-quokka.hist_temp.field_name = temperature    # Variable of interest
-quokka.hist_temp.nBins = 20                  # Number of bins
-quokka.hist_temp.log_spaced_bins = 1         # (Optional, default: 0) Use log-spaced bins
-quokka.hist_temp.range = 1e3 1e7             # (Optional) Specify the min/max of the bins
+quokka.hist_temp.type = DiagPDF                 # Diagnostic type
+quokka.hist_temp.file = PDFTemp                 # Output file prefix
+quokka.hist_temp.int  = 10                      # Output cadence (in number of coarse steps)
+quokka.hist_temp.normalized = 1                 # (Optional, default: 1) Normalize PDF
+quokka.hist_temp.volume_weighted = 1            # (Optional, default: 1) Volume-weighted PDF
+quokka.hist_temp.field_name = temperature       # Variable of interest
+quokka.hist_temp.nBins = 20                     # Number of bins
+quokka.hist_temp.log_spaced_bins = 1            # (Optional, default: 0) Use log-spaced bins
+quokka.hist_temp.range = 1e3 1e7                # (Optional) Specify the min/max of the bins
+quokka.hist_temp.filters = dense                # (Optional) List of filters
+quokka.hist_temp.dense.field_name = gasDensity  # Filter field
+quokka.hist_temp.dense.value_greater = 1e-25    # Filters: value_greater, value_less, value_inrange
