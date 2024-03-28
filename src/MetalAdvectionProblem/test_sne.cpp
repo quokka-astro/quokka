@@ -45,11 +45,12 @@ using amrex::Real;
 using namespace amrex;
 int arrshape = 4999;
 std::string input_data_file; //="/g/data/jh2/av5889/quokka_myrepo/quokka/sims/GasGravity/PhiGas_R8.h5";
-amrex::GpuArray<amrex::Real, 4999> phi_data;
-amrex::GpuArray<amrex::Real, 4999> g_data;
-amrex::GpuArray<amrex::Real, 4999> z_data;
+AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 4999> phi_data;
+AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 4999> g_data;
+AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 4999> z_data;
 
-double linearInterpolate(amrex::GpuArray<amrex::Real, 4999>& x, amrex::GpuArray<amrex::Real, 4999>& y, double x_interp) {
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto linearInterpolate(amrex::GpuArray<amrex::Real, 4999>& x, amrex::GpuArray<amrex::Real, 4999>& y, double x_interp) {
     // Find the two closest data points
     size_t i = 0;
     while (i < x.size() - 1 && x_interp > x[i + 1]) {
@@ -93,8 +94,16 @@ template <> struct Physics_Traits<NewProblem> {
   static constexpr int nGroups = 1; // number of radiation groups
 };
 
+// template <> class RadhydroSimulation<NewProblem> {
+
+//   //add new vars and funcs
+
+
+// };
+
 /************************************************************/
 
+// template <>
 void read_potential(amrex::GpuArray<amrex::Real, 4999> &z_data,
                     amrex::GpuArray<amrex::Real, 4999> &phi_data,
                     amrex::GpuArray<amrex::Real, 4999> &g_data)
