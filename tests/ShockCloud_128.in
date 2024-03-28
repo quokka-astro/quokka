@@ -45,4 +45,5 @@ quokka.hist_temp.normalized = 1              # (Optional, default: 1) Normalize 
 quokka.hist_temp.volume_weighted = 1         # (Optional, default: 1) Volume-weighted PDF
 quokka.hist_temp.field_name = temperature    # Variable of interest
 quokka.hist_temp.nBins = 20                  # Number of bins
-quokka.hist_temp.range = 10000 100000        # (Optional) Specify the min/max of the bins
+quokka.hist_temp.log_spaced_bins = 1         # (Optional, default: 0) Use log-spaced bins
+quokka.hist_temp.range = 1e3 1e7             # (Optional) Specify the min/max of the bins

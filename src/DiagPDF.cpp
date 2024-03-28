@@ -1,6 +1,9 @@
 #include "DiagPDF.H"
+#include "AMReX_BLassert.H"
 #include "AMReX_MultiFabUtil.H"
 #include "AMReX_ParmParse.H"
+#include "AMReX_SPACE.H"
+#include <ios>
 
 void DiagPDF::init(const std::string &a_prefix, std::string_view a_diagName)
 {
@@ -9,7 +12,8 @@ void DiagPDF::init(const std::string &a_prefix, std::string_view a_diagName)
 	amrex::ParmParse const pp(a_prefix);
 	pp.get("field_name", m_fieldName);
 	pp.get("nBins", m_nBins);
-	AMREX_ASSERT(m_nBins > 0);
+	AMREX_ALWAYS_ASSERT(m_nBins > 0);
+	pp.query("log_spaced_bins", m_useLogSpacedBins);
 	pp.query("normalized", m_normalized);
 	pp.query("volume_weighted", m_volWeighted);
 
@@ -18,6 +22,9 @@ void DiagPDF::init(const std::string &a_prefix, std::string_view a_diagName)
 		pp.getarr("range", range, 0, 2);
 		m_lowBnd = std::min(range[0], range[1]);
 		m_highBnd = std::max(range[0], range[1]);
+		if (m_useLogSpacedBins) {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE((m_lowBnd > 0) && (m_highBnd > 0), "For log-spaced bins, histogram bounds must be positive!");
+		}
 		m_useFieldMinMax = false;
 	}
 }
@@ -46,18 +53,26 @@ void DiagPDF::prepare(int a_nlevels, const amrex::Vector<amrex::Geometry> &a_geo
 	}
 }
 
+auto DiagPDF::getBinIndex(const amrex::Real &realInputVal, const amrex::Real &transformedLowBnd, const amrex::Real &transformedBinWidth, const bool doLog)
+    -> int
+{
+	amrex::Real const val = doLog ? std::log10(realInputVal) : realInputVal;
+	int const cbin = static_cast<int>(std::floor((val - transformedLowBnd) / transformedBinWidth));
+	return cbin;
+}
+
 void DiagPDF::processDiag(int a_nstep, const amrex::Real &a_time, const amrex::Vector<const amrex::MultiFab *> &a_state,
 			  const amrex::Vector<std::string> &a_stateVar)
 {
-	// TODO(bwibking): allow log-spaced bins (for positive fields)
-
 	// Set PDF range
 	int const fieldIdx = getFieldIndex(m_fieldName, a_stateVar);
 	if (m_useFieldMinMax) {
 		m_lowBnd = MFVecMin(a_state, fieldIdx);
 		m_highBnd = MFVecMax(a_state, fieldIdx);
 	}
-	amrex::Real const binWidth = (m_highBnd - m_lowBnd) / m_nBins;
+	amrex::Real const transformed_range = m_useLogSpacedBins ? (std::log10(m_highBnd) - std::log10(m_lowBnd)) : (m_highBnd - m_lowBnd);
+	amrex::Real const transformed_binWidth = transformed_range / m_nBins;
+	amrex::Real const transformed_lowBnd = m_useLogSpacedBins ? std::log10(m_lowBnd) : m_lowBnd;
 
 	// Data holders
 	amrex::Gpu::DeviceVector<amrex::Real> pdf_d(m_nBins, 0.0);
@@ -91,41 +106,27 @@ void DiagPDF::processDiag(int a_nstep, const amrex::Real &a_time, const amrex::V
 		    });
 		amrex::Gpu::streamSynchronize();
 
+		// accumulate values in histogram
+		amrex::Real weightFac{1.0};
 		if (m_volWeighted != 0) {
-			// Get the geometry volume to account for 2D-RZ
-			amrex::MultiFab volume(a_state[lev]->boxArray(), a_state[lev]->DistributionMap(), 1, 0);
-			m_geoms[lev].GetVolume(volume);
-			auto const &varrs = volume.const_arrays();
-
-			auto *pdf_d_p = pdf_d.dataPtr();
-			amrex::ParallelFor(
-			    *a_state[lev], amrex::IntVect(0),
-			    [=, nBins = m_nBins, lowBnd = m_lowBnd] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept {
-				    if (marrs[box_no](i, j, k) != 0) {
-					    int const cbin = static_cast<int>(std::floor((sarrs[box_no](i, j, k, fieldIdx) - lowBnd) / binWidth));
-					    if (cbin >= 0 && cbin < nBins) {
-						    amrex::HostDevice::Atomic::Add(
-							&(pdf_d_p[cbin]), varrs[box_no](i, j, k)); // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-					    }
-				    }
-			    });
-		} else {
-			auto *pdf_d_p = pdf_d.dataPtr();
-			amrex::ParallelFor(
-			    *a_state[lev], amrex::IntVect(0),
-			    [=, nBins = m_nBins, lowBnd = m_lowBnd] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept {
-				    if (marrs[box_no](i, j, k) != 0) {
-					    int const cbin = static_cast<int>(std::floor((sarrs[box_no](i, j, k, fieldIdx) - lowBnd) / binWidth));
-					    if (cbin >= 0 && cbin < nBins) {
-						    amrex::HostDevice::Atomic::Add(&(pdf_d_p[cbin]), // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-										   static_cast<amrex::Real>(1.0));
-					    }
-				    }
-			    });
+			auto const cellSize = m_geoms[lev].CellSizeArray();
+			weightFac = AMREX_D_TERM(cellSize[0], *cellSize[1], *cellSize[2]);
 		}
+		auto *pdf_d_p = pdf_d.dataPtr();
+		amrex::ParallelFor(*a_state[lev], amrex::IntVect(0),
+				   [=, nBins = m_nBins, doLog = m_useLogSpacedBins] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept {
+					   if (marrs[box_no](i, j, k) != 0) {
+						   const int cbin =
+						       getBinIndex(sarrs[box_no](i, j, k, fieldIdx), transformed_lowBnd, transformed_binWidth, doLog);
+						   if (cbin >= 0 && cbin < nBins) {
+							   amrex::HostDevice::Atomic::Add(&(pdf_d_p[cbin]), weightFac); // NOLINT
+						   }
+					   }
+				   });
 		amrex::Gpu::streamSynchronize();
 	}
 
+	// normalize histogram
 	amrex::Gpu::copy(amrex::Gpu::deviceToHost, pdf_d.begin(), pdf_d.end(), pdf.begin());
 	amrex::Gpu::streamSynchronize();
 	amrex::ParallelDescriptor::ReduceRealSum(pdf.data(), static_cast<int>(pdf.size()));
@@ -176,19 +177,35 @@ void DiagPDF::writePDFToFile(int a_nstep, const amrex::Real &a_time, const amrex
 		const int width = 16;
 		amrex::Vector<int> widths(2, width);
 
-		amrex::Real const binWidth = (m_highBnd - m_lowBnd) / (m_nBins);
-
 		widths[0] = std::max(width, static_cast<int>(m_fieldName.length()) + 1);
 		widths[1] = std::max(width, static_cast<int>(m_fieldName.length()) + 5);
-		pdfFile << std::setw(widths[0]) << m_fieldName << " " << std::setw(widths[1]) << m_fieldName + "_PDF"
+		pdfFile << std::setw(widths[0]) << m_fieldName << "_left"
+			<< " " << m_fieldName << "_right"
+			<< " " << std::setw(widths[1]) << m_fieldName + "_PDF"
 			<< "\n";
 
-		for (int i{0}; i < a_pdf.size(); ++i) {
-			const amrex::Real bin_center = m_lowBnd + (static_cast<amrex::Real>(i) + 0.5) * binWidth;
-			const amrex::Real value = (a_sum != 0) ? (a_pdf[i] / a_sum / binWidth) : 0;
+		amrex::Real const transformed_range = m_useLogSpacedBins ? (std::log10(m_highBnd) - std::log10(m_lowBnd)) : (m_highBnd - m_lowBnd);
+		amrex::Real const transformed_binWidth = transformed_range / m_nBins;
+		amrex::Real const transformed_lowBnd = m_useLogSpacedBins ? std::log10(m_lowBnd) : m_lowBnd;
 
-			pdfFile << std::setw(widths[0]) << std::setprecision(prec) << std::scientific << bin_center << " " << std::setw(widths[1])
-				<< std::setprecision(prec) << std::scientific << value << "\n";
+		for (int i{0}; i < a_pdf.size(); ++i) {
+			// calculate bin edges
+			amrex::Real const transformed_bin_left = transformed_lowBnd + static_cast<amrex::Real>(i) * transformed_binWidth;
+			amrex::Real const transformed_bin_right = transformed_bin_left + transformed_binWidth;
+			amrex::Real bin_left{NAN};
+			amrex::Real bin_right{NAN};
+			if (m_useLogSpacedBins) {
+				bin_left = std::pow(10., transformed_bin_left);
+				bin_right = std::pow(10., transformed_bin_right);
+			} else {
+				bin_left = transformed_bin_left;
+				bin_right = transformed_bin_right;
+			}
+
+			const amrex::Real value = (a_sum != 0) ? (a_pdf[i] / a_sum / (bin_right - bin_left)) : 0;
+
+			pdfFile << std::setw(widths[0]) << std::setprecision(prec) << std::scientific << bin_left << " " << std::scientific << bin_right << " "
+				<< std::setw(widths[1]) << std::setprecision(prec) << std::scientific << value << "\n";
 		}
 
 		pdfFile.flush();

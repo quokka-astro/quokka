@@ -26,17 +26,22 @@ class DiagPDF : public DiagBase::Register<DiagPDF>
 
       private:
 	// PDF properties
-	std::string m_fieldName;     // Field name
-	int m_nBins{-1};	     // Number of bins
-	int m_normalized{1};	     // Normalized ?
-	int m_volWeighted{1};	     // Volume weighted ?
-	bool m_useFieldMinMax{true}; // Use min/max from field
-	amrex::Real m_lowBnd{0.0};   // User-defined low bound
-	amrex::Real m_highBnd{0.0};  // User-defined high bound
+	std::string m_fieldName;	// Field name
+	int m_nBins{-1};		// Number of bins
+	int m_normalized{1};		// Normalized ?
+	int m_volWeighted{1};		// Volume weighted ?
+	bool m_useFieldMinMax{true};	// Use min/max from field
+	bool m_useLogSpacedBins{false}; // Use log-spaced bins
+	amrex::Real m_lowBnd{0.0};	// User-defined low bound
+	amrex::Real m_highBnd{0.0};	// User-defined high bound
 
 	// Geometrical data
 	amrex::Vector<amrex::Geometry> m_geoms; // Squirrel away the geoms
 	amrex::Vector<amrex::IntVect> m_refRatio;
+
+	// helper functions
+	static auto getBinIndex(const amrex::Real &realInputVal, const amrex::Real &transformedLowBnd, const amrex::Real &transformedBinWidth, bool doLog)
+	    -> int;
 };
 
 #endif
