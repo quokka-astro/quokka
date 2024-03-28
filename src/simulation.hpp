@@ -1819,7 +1819,7 @@ void AMRSimulation<problem_t>::FillPatchWithData(int lev, amrex::Real time, amre
 		amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>> coarsePhysicalBoundaryFunctor_cc(geom[lev - 1], BCs,
 															   boundaryFunctor_cc);
 		amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>>> coarsePhysicalBoundaryFunctor_fc(geom[lev - 1], BCs,
-															   boundaryFunctor_fc);
+																  boundaryFunctor_fc);
 
 		// copies interior zones, fills ghost zones with space-time interpolated
 		// data
@@ -1830,7 +1830,11 @@ void AMRSimulation<problem_t>::FillPatchWithData(int lev, amrex::Real time, amre
 							coarsePhysicalBoundaryFunctor_cc, 0, finePhysicalBoundaryFunctor_cc, 0, BCs, 0, pre_interp,
 							post_interp);
 			} else {
-				amrex::Abort("FillPatchType::fillpatch_class cannot be used with non-cell-centered data!");
+				// AMReX only implements FillPatch class for cell-centered data
+				// See extern/amrex/Src/AmrCore/AMReX_FillPatcher.H
+				// AMReX PR with explanation: https://github.com/AMReX-Codes/amrex/pull/2972
+				amrex::Abort("FillPatchType::fillpatch_class is not implemented for non-cell-centered data! Use "
+					     "FillPatchType::fillpatch_function instead.");
 			}
 		} else {
 			if (cen == quokka::centering::cc) {
