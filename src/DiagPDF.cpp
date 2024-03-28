@@ -126,10 +126,12 @@ void DiagPDF::processDiag(int a_nstep, const amrex::Real &a_time, const amrex::V
 		amrex::Gpu::streamSynchronize();
 	}
 
-	// normalize histogram
+	// sum over all MPI ranks
 	amrex::Gpu::copy(amrex::Gpu::deviceToHost, pdf_d.begin(), pdf_d.end(), pdf.begin());
 	amrex::Gpu::streamSynchronize();
 	amrex::ParallelDescriptor::ReduceRealSum(pdf.data(), static_cast<int>(pdf.size()));
+
+	// normalize histogram
 	auto sum = std::accumulate(pdf.begin(), pdf.end(), static_cast<decltype(pdf)::value_type>(0));
 
 	writePDFToFile(a_nstep, a_time, pdf, sum);
@@ -175,13 +177,15 @@ void DiagPDF::writePDFToFile(int a_nstep, const amrex::Real &a_time, const amrex
 		pdfFile.open(diagfile.c_str(), std::ios::out);
 		const int prec = 8;
 		const int width = 16;
-		amrex::Vector<int> widths(2, width);
+		amrex::Vector<int> widths(3, width);
 
-		widths[0] = std::max(width, static_cast<int>(m_fieldName.length()) + 1);
-		widths[1] = std::max(width, static_cast<int>(m_fieldName.length()) + 5);
+		widths[0] = std::max(width, static_cast<int>(m_fieldName.length()) + 6);
+		widths[1] = std::max(width, static_cast<int>(m_fieldName.length()) + 7);
+		widths[2] = std::max(width, static_cast<int>(m_fieldName.length()) + 5);
+
 		pdfFile << std::setw(widths[0]) << m_fieldName << "_left"
-			<< " " << m_fieldName << "_right"
-			<< " " << std::setw(widths[1]) << m_fieldName + "_PDF"
+			<< " " << std::setw(widths[1]) << m_fieldName << "_right"
+			<< " " << std::setw(widths[2]) << m_fieldName + "_PDF"
 			<< "\n";
 
 		amrex::Real const transformed_range = m_useLogSpacedBins ? (std::log10(m_highBnd) - std::log10(m_lowBnd)) : (m_highBnd - m_lowBnd);
@@ -204,8 +208,9 @@ void DiagPDF::writePDFToFile(int a_nstep, const amrex::Real &a_time, const amrex
 
 			const amrex::Real value = (a_sum != 0) ? (a_pdf[i] / a_sum / (bin_right - bin_left)) : 0;
 
-			pdfFile << std::setw(widths[0]) << std::setprecision(prec) << std::scientific << bin_left << " " << std::scientific << bin_right << " "
-				<< std::setw(widths[1]) << std::setprecision(prec) << std::scientific << value << "\n";
+			pdfFile << std::setw(widths[0]) << std::setprecision(prec) << std::scientific << bin_left << " " << std::setw(widths[1])
+				<< std::setprecision(prec) << std::scientific << bin_right << " " << std::setw(widths[2]) << std::setprecision(prec)
+				<< std::scientific << value << "\n";
 		}
 
 		pdfFile.flush();
