@@ -58,7 +58,7 @@ template <> struct RadSystem_Traits<ShockProblem> {
 	static constexpr double c_hat = chat;
 	static constexpr double radiation_constant = a_rad;
 	static constexpr double Erad_floor = 0.;
-	static constexpr bool compute_v_over_c_terms = true;
+	static constexpr int beta_order = 1;
 };
 
 template <> struct quokka::EOS_Traits<ShockProblem> {

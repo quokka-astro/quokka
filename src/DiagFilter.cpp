@@ -3,7 +3,7 @@
 
 void DiagFilter::init(const std::string &a_prefix)
 {
-	amrex::ParmParse pp(a_prefix);
+	amrex::ParmParse const pp(a_prefix);
 
 	pp.query("field_name", m_filterVar);
 	if (m_filterVar.empty()) {

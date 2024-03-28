@@ -2132,11 +2132,11 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMF(const in
 
 template <typename problem_t> void AMRSimulation<problem_t>::createDiagnostics()
 {
-	std::string code_prefix = "quokka";
-	amrex::ParmParse pp(code_prefix);
+	std::string const code_prefix = "quokka";
+	amrex::ParmParse const pp(code_prefix);
 	amrex::Vector<std::string> diags;
 
-	int n_diags = pp.countval("diagnostics");
+	int const n_diags = pp.countval("diagnostics");
 	if (n_diags > 0) {
 		m_diagnostics.resize(n_diags);
 		diags.resize(n_diags);
@@ -2144,8 +2144,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::createDiagnostics()
 
 	for (int n = 0; n < n_diags; ++n) {
 		pp.get("diagnostics", diags[n], n);
-		std::string diag_prefix = code_prefix + "." + diags[n];
-		amrex::ParmParse ppd(diag_prefix);
+		std::string const diag_prefix = code_prefix + "." + diags[n];
+		amrex::ParmParse const ppd(diag_prefix);
 		std::string diag_type;
 		ppd.get("type", diag_type);
 		m_diagnostics[n] = DiagBase::create(diag_type);
@@ -2183,7 +2183,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::updateDiagnostics()
 template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 {
 	// Assemble a vector of MF containing the requested data
-	BL_PROFILE("AMRSimulation::doDiagnostics()");
+	const BL_PROFILE("AMRSimulation::doDiagnostics()");
 	updateDiagnostics();
 
 	bool const computeVars =

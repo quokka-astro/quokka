@@ -40,10 +40,10 @@ void DiagFramePlane::init(const std::string &a_prefix, std::string_view a_diagNa
 				  "be discarded \n";
 	}
 
-	amrex::ParmParse pp(a_prefix);
+	amrex::ParmParse const pp(a_prefix);
 
 	// Outputted variables
-	int nOutFields = pp.countval("field_names");
+	int const nOutFields = pp.countval("field_names");
 	AMREX_ASSERT(nOutFields > 0);
 	m_fieldNames.resize(nOutFields);
 	m_fieldIndices_d.resize(nOutFields);
@@ -93,7 +93,7 @@ void DiagFramePlane::prepare(int a_nlevels, const amrex::Vector<amrex::Geometry>
 		// Store the level0 geometry
 		auto initDomain = a_geoms[0].Domain();
 		auto initRealBox = a_geoms[0].ProbDomain();
-		const amrex::Real *dxlcl = a_geoms[0].CellSize();
+		amrex::GpuArray const dxlcl = a_geoms[0].CellSizeArray();
 		int cdim = 0;
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			if (idim != m_normal) {
@@ -108,7 +108,7 @@ void DiagFramePlane::prepare(int a_nlevels, const amrex::Vector<amrex::Geometry>
 		initRealBox.setHi(2, dxlcl[2]);
 		m_geomLev0.define(initDomain, initRealBox, a_geoms[0].Coord(), amrex::Array<int, AMREX_SPACEDIM>({AMREX_D_DECL(0, 0, 0)}));
 
-		int nOutFields = static_cast<int>(m_fieldIndices_d.size());
+		int const nOutFields = static_cast<int>(m_fieldIndices_d.size());
 		amrex::Vector<int> m_fieldIndices(nOutFields, 0);
 		for (int f{0}; f < nOutFields; ++f) {
 			m_fieldIndices[f] = getFieldIndex(m_fieldNames[f], a_varNames);
@@ -125,11 +125,11 @@ void DiagFramePlane::prepare(int a_nlevels, const amrex::Vector<amrex::Geometry>
 	// On each level, find the k0 where the plane lays
 	// and the weight of the directionnal interpolation
 	for (int lev = 0; lev < a_nlevels; lev++) {
-		const amrex::Real *dx = a_geoms[lev].CellSize();
-		const amrex::Real *problo = a_geoms[lev].ProbLo();
+		amrex::GpuArray const dx = a_geoms[lev].CellSizeArray();
+		amrex::GpuArray const problo = a_geoms[lev].ProbLoArray();
 		// How many dx away from the lowest cell-center ?
 		amrex::Real dist = (m_center[m_normal] - (problo[m_normal] + 0.5 * dx[m_normal])) / dx[m_normal];
-		int k0 = static_cast<int>(std::round(dist));
+		int const k0 = static_cast<int>(std::round(dist));
 		dist -= static_cast<amrex::Real>(k0);
 		m_k0[lev] = k0;
 		if (m_interpType == Quadratic) {
@@ -197,7 +197,7 @@ void DiagFramePlane::processDiag(int a_nstep, const amrex::Real &a_time, const a
 	amrex::Vector<amrex::MultiFab> planeData(a_state.size());
 	for (int lev = 0; lev < a_state.size(); ++lev) {
 		planeData[lev].define(m_sliceBA[lev], m_sliceDM[lev], static_cast<int>(m_fieldNames.size()), 0);
-		int p0 = m_k0[lev];
+		int const p0 = m_k0[lev];
 #ifdef AMREX_USE_OMP
 #pragma omp parallel if (amrex::Gpu::notInLaunchRegion())
 #endif
@@ -210,19 +210,19 @@ void DiagFramePlane::processDiag(int a_nstep, const amrex::Real &a_time, const a
 			auto *idx_d_p = m_fieldIndices_d.dataPtr();
 			if (m_normal == 0) {
 				amrex::ParallelFor(bx, m_fieldNames.size(), [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
-					int stIdx = idx_d_p[n];
+					int const stIdx = idx_d_p[n]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 					plane(i, j, k, n) = intwgt[0] * state(p0 - 1, i, j, stIdx) + intwgt[1] * state(p0, i, j, stIdx) +
 							    intwgt[2] * state(p0 + 1, i, j, stIdx);
 				});
 			} else if (m_normal == 1) {
 				amrex::ParallelFor(bx, m_fieldNames.size(), [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
-					int stIdx = idx_d_p[n];
+					int const stIdx = idx_d_p[n]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 					plane(i, j, k, n) = intwgt[0] * state(i, p0 - 1, j, stIdx) + intwgt[1] * state(i, p0, j, stIdx) +
 							    intwgt[2] * state(i, p0 + 1, j, stIdx);
 				});
 			} else if (m_normal == 2) {
 				amrex::ParallelFor(bx, m_fieldNames.size(), [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
-					int stIdx = idx_d_p[n];
+					int const stIdx = idx_d_p[n]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 					plane(i, j, k, n) = intwgt[0] * state(i, j, p0 - 1, stIdx) + intwgt[1] * state(i, j, p0, stIdx) +
 							    intwgt[2] * state(i, j, p0 + 1, stIdx);
 				});
@@ -243,7 +243,7 @@ void DiagFramePlane::processDiag(int a_nstep, const amrex::Real &a_time, const a
 		amrex::Vector<amrex::Geometry> pltGeoms(nlevs);
 		pltGeoms[0] = m_geomLev0;
 		amrex::Vector<amrex::IntVect> ref_ratio;
-		amrex::IntVect rref(AMREX_D_DECL(2, 2, 1));
+		amrex::IntVect const rref(AMREX_D_DECL(2, 2, 1));
 		for (int lev = 1; lev < nlevs; ++lev) {
 			pltGeoms[lev] = amrex::refine(pltGeoms[lev - 1], rref);
 			ref_ratio.push_back(rref);
@@ -257,7 +257,7 @@ void DiagFramePlane::processDiag(int a_nstep, const amrex::Real &a_time, const a
 		if (m_per > 0.0) {
 			diagfile = m_diagfile + std::to_string(a_time);
 		}
-		amrex::Vector<int> step_array(nlevs, a_nstep);
+		amrex::Vector<int> const step_array(nlevs, a_nstep);
 		Write2DMultiLevelPlotfile(diagfile, nlevs, GetVecOfConstPtrs(planeData), m_fieldNames, pltGeoms, a_time, step_array, ref_ratio);
 	}
 }
@@ -270,7 +270,7 @@ void DiagFramePlane::Write2DMultiLevelPlotfile(const std::string &a_pltfile, int
 	const std::string mfPrefix = "Cell";
 	const std::string versionName = "HyperCLaw-V1.1";
 
-	bool callBarrier(false);
+	bool const callBarrier(false);
 	amrex::PreBuildDirectorHierarchy(a_pltfile, levelPrefix, a_nlevels, callBarrier);
 	amrex::ParallelDescriptor::Barrier();
 
@@ -283,7 +283,7 @@ void DiagFramePlane::Write2DMultiLevelPlotfile(const std::string &a_pltfile, int
 		}
 
 		amrex::VisMF::IO_Buffer io_buffer(amrex::VisMF::IO_Buffer_Size);
-		std::string HeaderFileName(a_pltfile + "/Header");
+		std::string const HeaderFileName(a_pltfile + "/Header");
 		std::ofstream HeaderFile;
 		HeaderFile.rdbuf()->pubsetbuf(io_buffer.dataPtr(), io_buffer.size());
 		HeaderFile.open(HeaderFileName.c_str(), std::ofstream::out | std::ofstream::trunc | std::ofstream::binary);
@@ -296,7 +296,7 @@ void DiagFramePlane::Write2DMultiLevelPlotfile(const std::string &a_pltfile, int
 
 		// Add extra file providing the plane information
 		// because the output is always a z-normal plane at z=0
-		std::string PlaneFileName(a_pltfile + "/PlaneData");
+		std::string const PlaneFileName(a_pltfile + "/PlaneData");
 		std::ofstream PlaneFile;
 		PlaneFile.rdbuf()->pubsetbuf(io_buffer.dataPtr(), io_buffer.size());
 		PlaneFile.open(PlaneFileName.c_str(), std::ofstream::out | std::ofstream::trunc | std::ofstream::binary);
@@ -323,10 +323,10 @@ void DiagFramePlane::Write2DPlotfileHeader(std::ostream &HeaderFile, int nlevels
 					   const amrex::Vector<int> &level_steps, const amrex::Vector<amrex::IntVect> &ref_ratio,
 					   const std::string &versionName, const std::string &levelPrefix, const std::string &mfPrefix)
 {
-	int finest_level(nlevels - 1);
+	int const finest_level(nlevels - 1);
 	HeaderFile.precision(17);
 
-	int lowerSpaceDim = AMREX_SPACEDIM - 1;
+	int const lowerSpaceDim = AMREX_SPACEDIM - 1;
 
 	HeaderFile << versionName << '\n';
 	HeaderFile << varnames.size() << '\n';
@@ -359,7 +359,7 @@ void DiagFramePlane::Write2DPlotfileHeader(std::ostream &HeaderFile, int nlevels
 	HeaderFile << '\n';
 	for (int i = 0; i <= finest_level; ++i) {
 		for (int idim = 0; idim < lowerSpaceDim; ++idim) {
-			HeaderFile << geom[i].CellSize()[idim] << ' ';
+			HeaderFile << geom[i].CellSizeArray()[idim] << ' ';
 		}
 		HeaderFile << '\n';
 	}
@@ -376,7 +376,7 @@ void DiagFramePlane::Write2DPlotfileHeader(std::ostream &HeaderFile, int nlevels
 			// physical location of index (0,0,0).  This does not affect
 			// the usual cases where the domain index starts with 0.
 			const amrex::Box &b = amrex::shift(bArray[level][i], -domain_lo);
-			amrex::RealBox loc = amrex::RealBox(b, geom[level].CellSize(), geom[level].ProbLo());
+			amrex::RealBox const loc = amrex::RealBox(b, geom[level].CellSize(), geom[level].ProbLo());
 			for (int idim = 0; idim < lowerSpaceDim; ++idim) {
 				HeaderFile << loc.lo(idim) << ' ' << loc.hi(idim) << '\n';
 			}
@@ -388,20 +388,20 @@ void DiagFramePlane::Write2DPlotfileHeader(std::ostream &HeaderFile, int nlevels
 void DiagFramePlane::VisMF2D(const amrex::MultiFab &a_mf, const std::string &a_mf_name)
 {
 	auto whichRD = amrex::FArrayBox::getDataDescriptor();
-	bool doConvert(*whichRD != amrex::FPC::NativeRealDescriptor());
+	bool const doConvert(*whichRD != amrex::FPC::NativeRealDescriptor());
 
 	amrex::Long bytesWritten(0);
 
-	std::string filePrefix(a_mf_name + "_D_");
+	std::string const filePrefix(a_mf_name + "_D_");
 
-	bool calcMinMax = false;
-	amrex::VisMF::Header::Version currentVersion = amrex::VisMF::Header::Version_v1;
-	amrex::VisMF::How how = amrex::VisMF::How::NFiles;
+	bool const calcMinMax = false;
+	amrex::VisMF::Header::Version const currentVersion = amrex::VisMF::Header::Version_v1;
+	amrex::VisMF::How const how = amrex::VisMF::How::NFiles;
 	amrex::VisMF::Header hdr(a_mf, how, currentVersion, calcMinMax);
 
-	int nOutFiles = std::max(1, std::min(amrex::ParallelDescriptor::NProcs(), 256));
-	bool groupSets = false;
-	bool setBuf = true;
+	int const nOutFiles = std::max(1, std::min(amrex::ParallelDescriptor::NProcs(), 256));
+	bool const groupSets = false;
+	bool const setBuf = true;
 
 	amrex::NFilesIter nfi(nOutFiles, filePrefix, groupSets, setBuf);
 
@@ -410,12 +410,12 @@ void DiagFramePlane::VisMF2D(const amrex::MultiFab &a_mf, const std::string &a_m
 	const amrex::Vector<int> &pmap = a_mf.DistributionMap().ProcessorMap();
 	std::set<int> procsWithData;
 	amrex::Vector<int> procsWithDataVector;
-	for (int i : pmap) {
+	for (const int i : pmap) {
 		procsWithData.insert(i);
 	}
 	if (static_cast<int>(procsWithData.size()) < nOutFiles) {
 		useSparseFPP = true;
-		for (int it : procsWithData) {
+		for (const int it : procsWithData) {
 			procsWithDataVector.push_back(it);
 		}
 	}
@@ -426,7 +426,7 @@ void DiagFramePlane::VisMF2D(const amrex::MultiFab &a_mf, const std::string &a_m
 		nfi.SetDynamic();
 	}
 	for (; nfi.ReadyToWrite(); ++nfi) {
-		int whichRDBytes(whichRD->numBytes());
+		int const whichRDBytes(whichRD->numBytes());
 		int nFABs(0);
 		amrex::Long writeDataItems(0);
 		amrex::Long writeDataSize(0);
@@ -452,7 +452,7 @@ void DiagFramePlane::VisMF2D(const amrex::MultiFab &a_mf, const std::string &a_m
 				const amrex::FArrayBox &fab = a_mf[mfi];
 				writeDataItems = fab.box().numPts() * a_mf.nComp();
 				writeDataSize = writeDataItems * whichRDBytes;
-				char *afPtr = allFabData->data() + writePosition;
+				char *afPtr = allFabData->data() + writePosition; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 				std::stringstream hss;
 				write_2D_header(hss, fab, fab.nComp());
 				hLength = static_cast<int>(hss.tellp());
@@ -468,7 +468,7 @@ void DiagFramePlane::VisMF2D(const amrex::MultiFab &a_mf, const std::string &a_m
 					fabdata = hostfab->dataPtr();
 				}
 #endif
-				memcpy(afPtr + hLength, fabdata, writeDataSize);
+				memcpy(afPtr + hLength, fabdata, writeDataSize); // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 				writePosition += hLength + writeDataSize;
 			}
 			nfi.Stream().write(allFabData->data(), bytesWritten);
@@ -496,7 +496,8 @@ void DiagFramePlane::VisMF2D(const amrex::MultiFab &a_mf, const std::string &a_m
 					fabdata = hostfab->dataPtr();
 				}
 #endif
-				nfi.Stream().write(reinterpret_cast<const char *>(fabdata), writeDataSize);
+				nfi.Stream().write(reinterpret_cast<const char *>(fabdata), // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+						   writeDataSize);
 				nfi.Stream().flush();
 			}
 		}
@@ -555,7 +556,7 @@ void DiagFramePlane::Write2DMFHeader(const std::string &a_mf_name, amrex::VisMF:
 		MFHdrFile << hdr.m_min.size() << "," << hdr.m_min[0].size() << '\n';
 		MFHdrFile.precision(16);
 		for (auto &hdr_i : hdr.m_min) {
-			for (double j : hdr_i) {
+			for (const double j : hdr_i) {
 				MFHdrFile << j << ",";
 			}
 			MFHdrFile << "\n";
@@ -565,7 +566,7 @@ void DiagFramePlane::Write2DMFHeader(const std::string &a_mf_name, amrex::VisMF:
 
 		MFHdrFile << hdr.m_max.size() << "," << hdr.m_max[0].size() << '\n';
 		for (auto &hdr_i : hdr.m_max) {
-			for (double j : hdr_i) {
+			for (const double j : hdr_i) {
 				MFHdrFile << j << ",";
 			}
 			MFHdrFile << "\n";
@@ -579,7 +580,7 @@ void DiagFramePlane::Write2DMFHeader(const std::string &a_mf_name, amrex::VisMF:
 void DiagFramePlane::Find2FOffsets(const amrex::FabArray<amrex::FArrayBox> &mf, const std::string &filePrefix, amrex::VisMF::Header &hdr,
 				   amrex::VisMF::Header::Version /*whichVersion*/, amrex::NFilesIter &nfi, int nOutFiles, MPI_Comm comm)
 {
-	bool groupSets = false;
+	bool const groupSets = false;
 
 	const int myProc(amrex::ParallelDescriptor::MyProc(comm));
 	const int nProcs(amrex::ParallelDescriptor::NProcs(comm));
@@ -589,14 +590,14 @@ void DiagFramePlane::Find2FOffsets(const amrex::FabArray<amrex::FArrayBox> &mf, 
 	}
 
 	auto whichRD = amrex::FArrayBox::getDataDescriptor();
-	int whichRDBytes(whichRD->numBytes());
-	int nComps(mf.nComp());
+	int const whichRDBytes(whichRD->numBytes());
+	int const nComps(mf.nComp());
 
 	if (myProc == coordinatorProc) { // ---- calculate offsets
 		const amrex::BoxArray &mfBA = mf.boxArray();
 		const amrex::DistributionMapping &mfDM = mf.DistributionMap();
 		amrex::Vector<amrex::Long> fabHeaderBytes(mfBA.size(), 0);
-		int nFiles(amrex::NFilesIter::ActualNFiles(nOutFiles));
+		int const nFiles(amrex::NFilesIter::ActualNFiles(nOutFiles));
 		int whichFileNumber(-1);
 		std::string whichFileName;
 		amrex::Vector<amrex::Long> currentOffset(nProcs, 0L);
@@ -604,7 +605,7 @@ void DiagFramePlane::Find2FOffsets(const amrex::FabArray<amrex::FArrayBox> &mf, 
 		// ---- find the length of the fab header instead of asking the file system
 		for (int i(0); i < mfBA.size(); ++i) {
 			std::stringstream hss;
-			amrex::FArrayBox tempFab(mf.fabbox(i), nComps, false); // ---- no alloc
+			amrex::FArrayBox const tempFab(mf.fabbox(i), nComps, false); // ---- no alloc
 			write_2D_header(hss, tempFab, tempFab.nComp());
 			fabHeaderBytes[i] = static_cast<std::streamoff>(hss.tellp());
 		}
@@ -631,15 +632,15 @@ void DiagFramePlane::Find2FOffsets(const amrex::FabArray<amrex::FArrayBox> &mf, 
 		const amrex::Vector<amrex::Vector<int>> &fileNumbersWriteOrder = nfi.FileNumbersWriteOrder();
 
 		for (const auto &fn : fileNumbersWriteOrder) {
-			for (int rank : fn) {
+			for (const int rank : fn) {
 				auto rboIter = rankBoxOrder.find(rank);
 
 				if (rboIter != rankBoxOrder.end()) {
-					amrex::Vector<int> &index = rboIter->second;
+					amrex::Vector<int> const &index = rboIter->second;
 					whichFileNumber = fileNumbers[rank];
 					whichFileName = amrex::VisMF::BaseName(amrex::NFilesIter::FileName(whichFileNumber, filePrefix));
 
-					for (int idx : index) {
+					for (const int idx : index) {
 						hdr.m_fod[idx].m_name = whichFileName;
 						hdr.m_fod[idx].m_head = currentOffset[whichFileNumber];
 						currentOffset[whichFileNumber] += mf.fabbox(idx).numPts() * nComps * whichRDBytes + fabHeaderBytes[idx];
