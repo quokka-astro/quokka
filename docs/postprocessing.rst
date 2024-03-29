@@ -1,42 +1,10 @@
-.. Analysis
+.. Postprocessing
 
-Analyzing simulations
+Postprocessing
 =====
 
-There are several ways to analyze Quokka simulations. One method (Ascent) allows you to run the analysis in memory as the simulation is running.
-The other methods (AMReX PlotfileTools, yt, VisIt) allow you to analyze the outputs after they are written to disk.
-
-Ascent
------------------------
-Ascent allows you to generate visualizations (as PNG images) while the simulation is running, without any extra effort.
-
-.. note:: On Setonix, Ascent is already built.
-  In your job script, add the line:
-  ``export Ascent_DIR=/software/projects/pawsey0807/bwibking/ascent_06082023/install/ascent-develop/lib/cmake/ascent``.
-
-Compiling Ascent via Spack
-^^^^^^^^^^^^^^^^^^^^^^^
-1. Run ``spack external find``.
-2. Make sure there are entries listed for ``hdf5``, ``cuda``, and ``openmpi`` in your ``~/.spack/packages.yaml`` file.
-3. Add `buildable: False <https://spack.readthedocs.io/en/latest/build_settings.html#external-packages>`_ to each entry.
-4. Run ``spack fetch --dependencies ascent@develop+cuda+vtkh~fortran~shared cuda_arch=70 ^conduit~parmetis~fortran``
-5. On a dedicated compute node, run ``spack install ascent@develop+cuda+vtkh~fortran~shared cuda_arch=70 ^conduit~parmetis~fortran``
-
-For A100 GPUs, change the above lines to `cuda_arch=80`.
-Currently, it's not possible to `build for both GPU models at the same time <https://github.com/Alpine-DAV/ascent/issues/950#issuecomment-1153243232>`_.
-
-Compiling Quokka with Ascent support
-^^^^^^^^^^^^^^^^^^^^^^^
-1. Load Ascent: ``spack load ascent``
-2. Add ``-DAMReX_ASCENT=ON -DAMReX_CONDUIT=ON`` to your CMake options.
-3. Compile your problem, e.g.: ``ninja -j4 test_hydro3d_blast``
-
-Customizing the visualization
-^^^^^^^^^^^^^^^^^^^^^^^
-Add an `ascent_actions.yaml file <https://ascent.readthedocs.io/en/latest/Actions/Actions.html>`_ to the simulation working directory.
-This file can even be edited while the simulation is running!
-
-.. warning:: Volume renderings do not correctly handle ghost cells (`GitHub issue <https://github.com/Alpine-DAV/ascent/issues/955>`_).
+There are several ways to post-process the output of Quokka simulations.
+AMReX PlotfileTools, yt, and VisIt all allow you to analyze the outputs after they are written to disk.
 
 AMReX PlotfileTools
 -----------------------
@@ -80,7 +48,15 @@ For details, see the `yt documentation on reading AMReX data <https://yt-project
 
 VisIt
 -----------------------
-VisIt can read AMReX plotfiles. You have to select the ``plt00000/Header`` file in VisIt's Open dialog box.
+VisIt can read cell-centered output variables from AMReX plotfiles. Currently, there is no support for reading either face-centered variables or particles. (However, by default, cell-centered averages of face-centered variables are included in Quokka plotfiles.)
+
+In order to read an individual plotfile, you can select the ``plt00000/Header`` file in VisIt's Open dialog box.
+
+If you want to read a timeseries of plotfiles, you can create a file with a `.visit` extension that lists the `plt*/Header` files, one per line, with the following command: ::
+
+  ls -1 plt*/Header | tee plotfiles.visit
+
+Then select `plotfiles.visit` in VisIt's Open dialog box.
 
 .. warning:: There are rendering bugs with unscaled box dimensions. Slices generally work.
   However, do not expect volume rendering to work when using, e.g. parsec-size boxes with cgs units.
