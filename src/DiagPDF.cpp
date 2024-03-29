@@ -326,8 +326,13 @@ void DiagPDF::writePDFToFile(int a_nstep, const amrex::Real &a_time, const amrex
 					<< std::setw(widths[n][1]) << std::setprecision(prec) << std::scientific << bin_max[n] << " ";
 			}
 
-			// write normalized PDF value
-			const amrex::Real value = (a_sum != 0) ? (a_pdf[linidx] / a_sum / binvol) : 0;
+			// write PDF value (optionally normalized)
+			amrex::Real value{NAN};
+			if ((m_normalized != 0) && (a_sum != 0)) {
+				value = a_pdf[linidx] / a_sum / binvol;
+			} else {
+				value = a_pdf[linidx] / binvol;
+			}
 			pdfFile << std::setw(width) << std::setprecision(prec) << std::scientific << value << "\n";
 		}
 
