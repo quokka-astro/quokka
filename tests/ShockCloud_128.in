@@ -29,6 +29,7 @@ derived_vars = temperature
 ascent_interval = 10
 
 quokka.diagnostics = slice_z hist_temp
+
 quokka.slice_z.type = DiagFramePlane         # Diagnostic type
 quokka.slice_z.file = slicez_plt             # Output file prefix (must end in "plt")
 quokka.slice_z.normal = 2                    # Plane normal (0 == x, 1 == y, 2 == z)
@@ -41,11 +42,11 @@ quokka.slice_z.field_names = gasDensity \
 quokka.hist_temp.type = DiagPDF                         # Diagnostic type
 quokka.hist_temp.file = PDFTemp                         # Output file prefix
 quokka.hist_temp.int  = 10                              # Output cadence (in number of coarse steps)
-quokka.hist_temp.normalized = 1                         # (Optional, default: 1) Normalize PDF
-quokka.hist_temp.volume_weighted = 1                    # (Optional, default: 1) Volume-weighted PDF
+quokka.hist_temp.weight_by = mass                       # (Optional) Weight by: mass, volume, cell_counts
 #quokka.hist_temp.filters = dense                       # (Optional) List of filters
 #quokka.hist_temp.dense.field_name = gasDensity         # Filter field
 #quokka.hist_temp.dense.value_greater = 1e-25           # Filters: value_greater, value_less, value_inrange
+
 quokka.hist_temp.var_names = temperature gasDensity     # Variable(s) of interest (compute a N-D histogram)
 quokka.hist_temp.temperature.nBins = 20                 # temperature: Number of bins
 quokka.hist_temp.temperature.log_spaced_bins = 1        # temperature: (Optional, default: 0) Use log-spaced bins

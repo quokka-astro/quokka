@@ -14,8 +14,7 @@ void DiagPDF::init(const std::string &a_prefix, std::string_view a_diagName)
 	DiagBase::init(a_prefix, a_diagName);
 
 	amrex::ParmParse const hist_pp(a_prefix);
-	hist_pp.query("normalized", m_normalized);
-	hist_pp.query("volume_weighted", m_volWeighted);
+	hist_pp.query("weight_by", m_weightType); // "volume", "mass", "cell_counts"
 
 	// get number of histogram axes
 	const int ndims = hist_pp.countval("var_names");
@@ -221,10 +220,7 @@ void DiagPDF::processDiag(int a_nstep, const amrex::Real &a_time, const amrex::V
 	amrex::Gpu::streamSynchronize();
 	amrex::ParallelDescriptor::ReduceRealSum(pdf.data(), static_cast<int>(pdf.size()));
 
-	// compute sum (used to normalize histogram)
-	auto sum = std::accumulate(pdf.begin(), pdf.end(), static_cast<decltype(pdf)::value_type>(0));
-
-	writePDFToFile(a_nstep, a_time, pdf, sum);
+	writePDFToFile(a_nstep, a_time, pdf);
 }
 
 auto DiagPDF::MFVecMin(const amrex::Vector<const amrex::MultiFab *> &a_state, int comp) -> amrex::Real
@@ -251,7 +247,7 @@ auto DiagPDF::MFVecMax(const amrex::Vector<const amrex::MultiFab *> &a_state, in
 	return mmax;
 }
 
-void DiagPDF::writePDFToFile(int a_nstep, const amrex::Real &a_time, const amrex::Vector<amrex::Real> &a_pdf, const amrex::Real &a_sum)
+void DiagPDF::writePDFToFile(int a_nstep, const amrex::Real &a_time, const amrex::Vector<amrex::Real> &a_pdf)
 {
 	std::string diagfile;
 	if (m_interval > 0) {
@@ -281,7 +277,9 @@ void DiagPDF::writePDFToFile(int a_nstep, const amrex::Real &a_time, const amrex
 				<< " " << std::setw(widths[n][0]) << m_varNames[n] << "_min"
 				<< " " << std::setw(widths[n][1]) << m_varNames[n] << "_max";
 		}
-		pdfFile << " " << std::setw(width) << "PDF"
+		pdfFile << " " << std::setw(width) << m_weightType + "_sum" // "mass_sum", "volume_sum", or "cell_counts_sum"
+			<< " " << std::setw(width) << "bin_volume"
+			<< " " << std::setw(width) << "transformed_bin_volume"
 			<< "\n";
 
 		std::vector<amrex::Real> transformed_range(nvars);
@@ -299,6 +297,7 @@ void DiagPDF::writePDFToFile(int a_nstep, const amrex::Real &a_time, const amrex
 			std::vector<amrex::Real> bin_min(nvars);
 			std::vector<amrex::Real> bin_max(nvars);
 			amrex::Real binvol = 1;
+			amrex::Real transformed_binvol = 1;
 
 			// calculate bin edges, bin volume
 			for (int n = 0; n < nvars; ++n) {
@@ -315,9 +314,12 @@ void DiagPDF::writePDFToFile(int a_nstep, const amrex::Real &a_time, const amrex
 					bin_left = transformed_bin_left;
 					bin_right = transformed_bin_right;
 				}
-				binvol *= (bin_right - bin_left);
 				bin_min[n] = bin_left;
 				bin_max[n] = bin_right;
+
+				// compute bin volumes
+				binvol *= (bin_right - bin_left);
+				transformed_binvol *= (transformed_bin_right - transformed_bin_left);
 			}
 
 			// write out bin edges
@@ -326,9 +328,12 @@ void DiagPDF::writePDFToFile(int a_nstep, const amrex::Real &a_time, const amrex
 					<< std::setw(widths[n][1]) << std::setprecision(prec) << std::scientific << bin_max[n] << " ";
 			}
 
-			// write normalized PDF value
-			const amrex::Real value = (a_sum != 0) ? (a_pdf[linidx] / a_sum / binvol) : 0;
-			pdfFile << std::setw(width) << std::setprecision(prec) << std::scientific << value << "\n";
+			// write histogram value (i.e., un-normalized probability *mass* function)
+			//    and bin volume (in both original coordinates and possibly-log-transformed coordinates)
+			amrex::Real const value = a_pdf[linidx];
+			pdfFile << std::setw(width) << std::setprecision(prec) << std::scientific << value << " " << std::setw(width) << std::setprecision(prec)
+				<< std::scientific << binvol << " " << std::setw(width) << std::setprecision(prec) << std::scientific << transformed_binvol
+				<< "\n";
 		}
 
 		pdfFile.flush();

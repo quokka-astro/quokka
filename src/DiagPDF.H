@@ -20,14 +20,13 @@ class DiagPDF : public DiagBase::Register<DiagPDF>
 
 	static auto MFVecMin(const amrex::Vector<const amrex::MultiFab *> &a_state, int comp) -> amrex::Real;
 	static auto MFVecMax(const amrex::Vector<const amrex::MultiFab *> &a_state, int comp) -> amrex::Real;
-	void writePDFToFile(int a_nstep, const amrex::Real &a_time, const amrex::Vector<amrex::Real> &a_pdf, const amrex::Real &a_sum);
+	void writePDFToFile(int a_nstep, const amrex::Real &a_time, const amrex::Vector<amrex::Real> &a_pdf);
 
 	void close() override {}
 
       private:
 	// PDF properties
-	int m_normalized{1};		       // Normalized ?
-	int m_volWeighted{1};		       // Volume weighted ?
+	std::string m_weightType{"volume"};    // Weighting types: "volume", "mass", "cell_counts"
 	std::vector<std::string> m_varNames{}; // Variable names
 	std::vector<int> m_nBins{};	       // Number of bins
 	std::vector<int> m_useLogSpacedBins{}; // Use log-spaced bins
