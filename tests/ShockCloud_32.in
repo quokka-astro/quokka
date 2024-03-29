@@ -61,7 +61,12 @@ R_cloud_pc = 16.09084149928867 # pc
 cloud_relpos_x = 0.25 		   # fraction
 Mach_shock = 1.888892847795999
 
-quokka.diagnostics = slice_z           # Space-separated name(s) of diagnostics (arbitrary)
+do_tracers = 1		# enable tracer particles
+
+quokka.diagnostics = slice_z hist1 hist2 hist3 hist4
+
+## z-slice output
+
 quokka.slice_z.type = DiagFramePlane   # Diagnostic type (others may be added in the future)
 quokka.slice_z.file = slicez_plt       # Output file prefix (should end in "plt")
 quokka.slice_z.normal = 2              # Plane normal (0 == x, 1 == y, 2 == z)
@@ -71,4 +76,66 @@ quokka.slice_z.interpolation = Linear  # Interpolation type: Linear or Quadratic
 quokka.slice_z.field_names = gasDensity pressure entropy nH temperature cooling_length \
 	       cloud_fraction lab_velocity_x mass velocity_mag c_s
 
-do_tracers = 1		# enable tracer particles
+## Histogram 1 output
+
+quokka.hist1.type = DiagPDF
+quokka.hist1.file = PDFTempDens
+quokka.hist1.int  = 20
+quokka.hist1.weight_by = mass
+quokka.hist1.var_names = temperature nH
+
+quokka.hist1.temperature.nBins = 50
+quokka.hist1.temperature.log_spaced_bins = 1
+quokka.hist1.temperature.range = 1e2 1e8
+
+quokka.hist1.nH.nBins = 50
+quokka.hist1.nH.log_spaced_bins = 1
+quokka.hist1.nH.range = 1e-3 1e3
+
+## Histogram 2 output
+
+quokka.hist2.type = DiagPDF
+quokka.hist2.file = PDFPressureEntropy
+quokka.hist2.int  = 20
+quokka.hist2.weight_by = mass
+quokka.hist2.var_names = pressure entropy
+
+quokka.hist2.pressure.nBins = 50
+quokka.hist2.pressure.log_spaced_bins = 1
+quokka.hist2.pressure.range = 1e3 1e6
+
+quokka.hist2.entropy.nBins = 50
+quokka.hist2.entropy.log_spaced_bins = 1
+quokka.hist2.entropy.range = 1e-4 1e2
+
+## Histogram 3 output
+
+quokka.hist3.type = DiagPDF
+quokka.hist3.file = PDFVelocityTemp
+quokka.hist3.int  = 20
+quokka.hist3.weight_by = mass
+quokka.hist3.var_names = lab_velocity_x temperature
+
+quokka.hist3.lab_velocity_x.nBins = 100
+quokka.hist3.lab_velocity_x.log_spaced_bins = 0
+quokka.hist3.lab_velocity_x.range = 0.0 400.0
+
+quokka.hist3.temperature.nBins = 9
+quokka.hist3.temperature.log_spaced_bins = 1
+quokka.hist3.temperature.range = 1e1 1e10
+
+## Histogram 4 output
+
+quokka.hist4.type = DiagPDF
+quokka.hist4.file = PDFVelocityDens
+quokka.hist4.int  = 20
+quokka.hist4.weight_by = mass
+quokka.hist4.var_names = lab_velocity_x nH
+
+quokka.hist4.lab_velocity_x.nBins = 100
+quokka.hist4.lab_velocity_x.log_spaced_bins = 0
+quokka.hist4.lab_velocity_x.range = 0.0 400.0
+
+quokka.hist4.nH.nBins = 6
+quokka.hist4.nH.log_spaced_bins = 1
+quokka.hist4.nH.range = 1e-3 1e3
