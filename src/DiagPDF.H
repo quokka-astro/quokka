@@ -27,7 +27,7 @@ class DiagPDF : public DiagBase::Register<DiagPDF>
       private:
 	// PDF properties
 	int m_normalized{1};		       // Normalized ?
-	std::string m_weightType{"volume"}; // Weighting types: "volume", "mass", "cell_counts"
+	std::string m_weightType{"volume"};    // Weighting types: "volume", "mass", "cell_counts"
 	std::vector<std::string> m_varNames{}; // Variable names
 	std::vector<int> m_nBins{};	       // Number of bins
 	std::vector<int> m_useLogSpacedBins{}; // Use log-spaced bins
