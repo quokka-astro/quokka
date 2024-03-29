@@ -15,7 +15,7 @@ void DiagPDF::init(const std::string &a_prefix, std::string_view a_diagName)
 
 	amrex::ParmParse const hist_pp(a_prefix);
 	hist_pp.query("normalized", m_normalized);
-	hist_pp.query("volume_weighted", m_volWeighted);
+	hist_pp.query("weight_by", m_weightType); // "volume", "mass", "cell_counts"
 
 	// get number of histogram axes
 	const int ndims = hist_pp.countval("var_names");
@@ -57,6 +57,10 @@ void DiagPDF::init(const std::string &a_prefix, std::string_view a_diagName)
 void DiagPDF::addVars(amrex::Vector<std::string> &a_varList)
 {
 	DiagBase::addVars(a_varList);
+	if (m_weightType == "mass") {
+		a_varList.push_back("gasDensity");
+	}
+
 	for (const std::string &var : m_varNames) {
 		a_varList.push_back(var);
 	}
@@ -119,6 +123,7 @@ void DiagPDF::processDiag(int a_nstep, const amrex::Real &a_time, const amrex::V
 {
 	// Set PDF range
 	const int nvars = static_cast<int>(m_varNames.size());
+	const int gasDensity_idx = getFieldIndex("gasDensity", a_stateVar);
 	amrex::Vector<int> const fieldIdx = getFieldIndexVec(m_varNames, a_stateVar);
 	amrex::Vector<amrex::Real> transformed_range(nvars);
 	amrex::Vector<amrex::Real> transformed_binWidth(nvars);
@@ -166,11 +171,23 @@ void DiagPDF::processDiag(int a_nstep, const amrex::Real &a_time, const amrex::V
 		    });
 		amrex::Gpu::streamSynchronize();
 
-		// accumulate values in histogram
-		amrex::Real weightFac{1.0};
-		if (m_volWeighted != 0) {
+		/// accumulate values in histogram
+
+		// set weight factor per cell value
+		amrex::Real weightFac{NAN};
+		if (m_weightType == "volume" || m_weightType == "mass") {
 			auto const cellSize = m_geoms[lev].CellSizeArray();
 			weightFac = AMREX_D_TERM(cellSize[0], *cellSize[1], *cellSize[2]);
+		} else if (m_weightType == "cell_counts") {
+			weightFac = 1.0;
+		} else {
+			amrex::Abort("Invalid histogram weight type! Must be either 'volume', 'mass' or 'cell_counts'.");
+		}
+
+		// set flag to check within ParallelFor below
+		bool multiply_by_gasDensity = false;
+		if (m_weightType == "mass") {
+			multiply_by_gasDensity = true;
 		}
 
 		amrex::Gpu::DeviceVector<int> idx_d(nvars);
@@ -195,10 +212,13 @@ void DiagPDF::processDiag(int a_nstep, const amrex::Real &a_time, const amrex::V
 		auto const *binWidth_p = binWidth_d.data();
 		auto const *doLog_p = doLog_d.data();
 
+		// compute histogram
 		amrex::ParallelFor(*a_state[lev], amrex::IntVect(0), [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept {
 			if (marrs[box_no](i, j, k) != 0) {
 				bool within_range = true;
+				amrex::Real weight = weightFac;
 				amrex::Long cbin = 0;
+
 				for (int n = 0; n < nvars; ++n) {
 					// compute 1D index
 					const int bin = getBinIndex1D(sarrs[box_no](i, j, k, idx_p[n]), lowBnd_p[n], binWidth_p[n], doLog_p[n]); // NOLINT
@@ -208,8 +228,13 @@ void DiagPDF::processDiag(int a_nstep, const amrex::Real &a_time, const amrex::V
 					// compute linear index in N-D histogram
 					cbin = cbin * nbins_p[n] + static_cast<amrex::Long>(bin); // NOLINT
 				}
+
+				if (multiply_by_gasDensity) {
+					weight *= sarrs[box_no](i, j, k, gasDensity_idx);
+				}
+
 				if (within_range) {
-					amrex::HostDevice::Atomic::Add(&(pdf_d_p[cbin]), weightFac); // NOLINT
+					amrex::HostDevice::Atomic::Add(&(pdf_d_p[cbin]), weight); // NOLINT
 				}
 			}
 		});
