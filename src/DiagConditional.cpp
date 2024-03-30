@@ -136,8 +136,8 @@ DiagConditional::processDiag(
       [=, nFilters = m_filters.size()] AMREX_GPU_DEVICE(
         int box_no, int i, int j, int k) noexcept {
         for (int f{0}; f < nFilters; ++f) {
-          amrex::Real const fval = sarrs[box_no](i, j, k, fdata_p[f].m_filterVarIdx);
-          if (fval < fdata_p[f].m_low_val || fval > fdata_p[f].m_high_val) {
+          amrex::Real const fval = sarrs[box_no](i, j, k, fdata_p[f].m_filterVarIdx); // NOLINT
+          if (fval < fdata_p[f].m_low_val || fval > fdata_p[f].m_high_val) { // NOLINT
             marrs[box_no](i, j, k) = 0;
           }
         }
@@ -165,20 +165,20 @@ DiagConditional::processDiag(
               (sarrs[box_no](i, j, k, cFieldIdx) - lowBnd) / binWidth));
             if (cbin >= 0 && cbin < nBins) {
               for (int f{0}; f < nProcessFields; ++f) {
-                int const fidx = idx_d_p[f];
+                int const fidx = idx_d_p[f]; // NOLINT
                 int const binOffset = f * nBins;
                 amrex::HostDevice::Atomic::Add(
-                  &(cond_d_p[binOffset + cbin]),
+                  &(cond_d_p[binOffset + cbin]), // NOLINT
                   varrs[box_no](i, j, k) * sarrs[box_no](i, j, k, fidx));
                 amrex::HostDevice::Atomic::Add(
-                  &(condSq_d_p[binOffset + cbin]),
+                  &(condSq_d_p[binOffset + cbin]), // NOLINT
                   varrs[box_no](i, j, k) * sarrs[box_no](i, j, k, fidx) *
                     sarrs[box_no](i, j, k, fidx));
               }
               amrex::HostDevice::Atomic::Add(
-                &(condVol_d_p[cbin]), varrs[box_no](i, j, k));
+                &(condVol_d_p[cbin]), varrs[box_no](i, j, k)); // NOLINT
               amrex::HostDevice::Atomic::Add(
-                &(condAbs_d_p[cbin]),
+                &(condAbs_d_p[cbin]), // NOLINT
                 varrs[box_no](i, j, k) * sarrs[box_no](i, j, k, cFieldIdx));
             }
           }
@@ -193,14 +193,14 @@ DiagConditional::processDiag(
               (sarrs[box_no](i, j, k, cFieldIdx) - lowBnd) / binWidth));
             if (cbin >= 0 && cbin < nBins) {
               for (int f{0}; f < nProcessFields; ++f) {
-                int const fidx = idx_d_p[f];
+                int const fidx = idx_d_p[f]; // NOLINT
                 int const binOffset = f * nBins;
                 amrex::HostDevice::Atomic::Add(
-                  &(cond_d_p[binOffset + cbin]),
+                  &(cond_d_p[binOffset + cbin]), // NOLINT
                   varrs[box_no](i, j, k) * sarrs[box_no](i, j, k, fidx));
               }
               amrex::HostDevice::Atomic::Add(
-                &(condAbs_d_p[cbin]),
+                &(condAbs_d_p[cbin]), // NOLINT
                 varrs[box_no](i, j, k) * sarrs[box_no](i, j, k, cFieldIdx));
             }
           }
@@ -215,13 +215,13 @@ DiagConditional::processDiag(
               (sarrs[box_no](i, j, k, cFieldIdx) - lowBnd) / binWidth));
             if (cbin >= 0 && cbin < nBins) {
               for (int f{0}; f < nProcessFields; ++f) {
-                int const fidx = idx_d_p[f];
+                int const fidx = idx_d_p[f]; // NOLINT
                 int const binOffset = f * nBins;
                 amrex::HostDevice::Atomic::Add(
-                  &(cond_d_p[binOffset + cbin]), sarrs[box_no](i, j, k, fidx));
+                  &(cond_d_p[binOffset + cbin]), sarrs[box_no](i, j, k, fidx)); // NOLINT
               }
               amrex::HostDevice::Atomic::Add(
-                &(condAbs_d_p[cbin]),
+                &(condAbs_d_p[cbin]), // NOLINT
                 varrs[box_no](i, j, k) * sarrs[box_no](i, j, k, cFieldIdx));
             }
           }
