@@ -10,7 +10,7 @@ DiagConditional::init(const std::string& a_prefix, std::string_view a_diagName)
 {
   DiagBase::init(a_prefix, a_diagName);
 
-  amrex::ParmParse pp(a_prefix);
+  amrex::ParmParse const pp(a_prefix);
 
   std::string condType;
   pp.get("conditional_type", condType);
@@ -64,7 +64,7 @@ DiagConditional::prepare(
   if (first_time) {
     DiagBase::prepare(a_nlevels, a_geoms, a_grids, a_dmap, a_varNames);
     first_time = false;
-    int nProcessFields = static_cast<int>(m_fieldIndices_d.size());
+    int const  nProcessFields = static_cast<int>(m_fieldIndices_d.size());
     amrex::Vector<int> m_fieldIndices(nProcessFields, 0);
     for (int f{0}; f < nProcessFields; ++f) {
       m_fieldIndices[f] = getFieldIndex(m_fieldNames[f], a_varNames);
@@ -93,17 +93,17 @@ DiagConditional::processDiag(
   const amrex::Vector<std::string>& a_stateVar)
 {
   // Set conditional range
-  int cFieldIdx = getFieldIndex(m_cFieldName, a_stateVar);
+  int const cFieldIdx = getFieldIndex(m_cFieldName, a_stateVar);
   if (m_usecFieldMinMax) {
     m_lowBnd = MFVecMin(a_state, cFieldIdx);
     m_highBnd = MFVecMax(a_state, cFieldIdx);
   }
-  amrex::Real binWidth =
+  amrex::Real const binWidth =
     (m_highBnd - m_lowBnd) / static_cast<amrex::Real>(m_nBins);
 
   // Data holders
-  int nProcessFields = static_cast<int>(m_fieldIndices_d.size());
-  int vecSize = m_nBins * nProcessFields;
+  int const nProcessFields = static_cast<int>(m_fieldIndices_d.size());
+  int const vecSize = m_nBins * nProcessFields;
   amrex::Gpu::DeviceVector<amrex::Real> cond_d(vecSize, 0.0);
   amrex::Gpu::DeviceVector<amrex::Real> condSq_d(vecSize, 0.0);
   amrex::Gpu::DeviceVector<amrex::Real> condAbs_d(m_nBins, 0.0);
@@ -136,7 +136,7 @@ DiagConditional::processDiag(
       [=, nFilters = m_filters.size()] AMREX_GPU_DEVICE(
         int box_no, int i, int j, int k) noexcept {
         for (int f{0}; f < nFilters; ++f) {
-          amrex::Real fval = sarrs[box_no](i, j, k, fdata_p[f].m_filterVarIdx);
+          amrex::Real const fval = sarrs[box_no](i, j, k, fdata_p[f].m_filterVarIdx);
           if (fval < fdata_p[f].m_low_val || fval > fdata_p[f].m_high_val) {
             marrs[box_no](i, j, k) = 0;
           }
@@ -161,12 +161,12 @@ DiagConditional::processDiag(
         [=, nBins = m_nBins, lowBnd = m_lowBnd] AMREX_GPU_DEVICE(
           int box_no, int i, int j, int k) noexcept {
           if (marrs[box_no](i, j, k) != 0) {
-            int cbin = static_cast<int>(std::floor(
+            int const cbin = static_cast<int>(std::floor(
               (sarrs[box_no](i, j, k, cFieldIdx) - lowBnd) / binWidth));
             if (cbin >= 0 && cbin < nBins) {
               for (int f{0}; f < nProcessFields; ++f) {
-                int fidx = idx_d_p[f];
-                int binOffset = f * nBins;
+                int const fidx = idx_d_p[f];
+                int const binOffset = f * nBins;
                 amrex::HostDevice::Atomic::Add(
                   &(cond_d_p[binOffset + cbin]),
                   varrs[box_no](i, j, k) * sarrs[box_no](i, j, k, fidx));
@@ -189,12 +189,12 @@ DiagConditional::processDiag(
         [=, nBins = m_nBins, lowBnd = m_lowBnd] AMREX_GPU_DEVICE(
           int box_no, int i, int j, int k) noexcept {
           if (marrs[box_no](i, j, k) != 0) {
-            int cbin = static_cast<int>(std::floor(
+            int const cbin = static_cast<int>(std::floor(
               (sarrs[box_no](i, j, k, cFieldIdx) - lowBnd) / binWidth));
             if (cbin >= 0 && cbin < nBins) {
               for (int f{0}; f < nProcessFields; ++f) {
-                int fidx = idx_d_p[f];
-                int binOffset = f * nBins;
+                int const fidx = idx_d_p[f];
+                int const binOffset = f * nBins;
                 amrex::HostDevice::Atomic::Add(
                   &(cond_d_p[binOffset + cbin]),
                   varrs[box_no](i, j, k) * sarrs[box_no](i, j, k, fidx));
@@ -211,12 +211,12 @@ DiagConditional::processDiag(
         [=, nBins = m_nBins, lowBnd = m_lowBnd] AMREX_GPU_DEVICE(
           int box_no, int i, int j, int k) noexcept {
           if (marrs[box_no](i, j, k) != 0) {
-            int cbin = static_cast<int>(std::floor(
+            int const cbin = static_cast<int>(std::floor(
               (sarrs[box_no](i, j, k, cFieldIdx) - lowBnd) / binWidth));
             if (cbin >= 0 && cbin < nBins) {
               for (int f{0}; f < nProcessFields; ++f) {
-                int fidx = idx_d_p[f];
-                int binOffset = f * nBins;
+                int const fidx = idx_d_p[f];
+                int const binOffset = f * nBins;
                 amrex::HostDevice::Atomic::Add(
                   &(cond_d_p[binOffset + cbin]), sarrs[box_no](i, j, k, fidx));
               }
@@ -255,7 +255,7 @@ DiagConditional::processDiag(
     amrex::ParallelDescriptor::ReduceRealSum(
       condSq.data(), static_cast<int>(condSq.size()));
     for (int f{0}; f < nProcessFields; ++f) {
-      int binOffset = f * m_nBins;
+      int const binOffset = f * m_nBins;
       for (int n{0}; n < m_nBins; ++n) {
         if (condVol[n] != 0.0) {
           cond[binOffset + n] /= condVol[n];
@@ -280,11 +280,11 @@ DiagConditional::processDiag(
   }
 }
 
-amrex::Real
+auto
 DiagConditional::MFVecMin(
-  const amrex::Vector<const amrex::MultiFab*>& a_state, int comp)
+  const amrex::Vector<const amrex::MultiFab*>& a_state, int comp) -> amrex::Real
 {
-  // TODO: skip fine-covered in search
+  // TODO(bwibking): skip fine-covered in search
   amrex::Real mmin{AMREX_REAL_MAX};
   for (const auto* st : a_state) {
     mmin = std::min(mmin, st->min(comp, 0, true));
@@ -294,11 +294,11 @@ DiagConditional::MFVecMin(
   return mmin;
 }
 
-amrex::Real
+auto
 DiagConditional::MFVecMax(
-  const amrex::Vector<const amrex::MultiFab*>& a_state, int comp)
+  const amrex::Vector<const amrex::MultiFab*>& a_state, int comp) -> amrex::Real
 {
-  // TODO: skip fine-covered in search
+  // TODO(bwibking): skip fine-covered in search
   amrex::Real mmax{AMREX_REAL_LOWEST};
   for (const auto* st : a_state) {
     mmax = std::max(mmax, st->max(comp, 0, true));
@@ -355,7 +355,7 @@ DiagConditional::writeAverageDataToFile(
     condFile << "\n";
 
     // Retrieve some data
-    amrex::Real binWidth = (m_highBnd - m_lowBnd) / (m_nBins);
+    amrex::Real const binWidth = (m_highBnd - m_lowBnd) / (m_nBins);
 
     for (int n{0}; n < m_nBins; ++n) {
       condFile << std::left << std::setw(widths[0]) << std::setprecision(prec)
@@ -365,7 +365,7 @@ DiagConditional::writeAverageDataToFile(
       condFile << std::left << std::setw(widths[2]) << std::setprecision(prec)
                << std::scientific << a_condVol[n] << " ";
       for (int f{0}; f < nProcessFields; ++f) {
-        int binOffset = f * m_nBins;
+        int const binOffset = f * m_nBins;
         condFile << std::left << std::setw(widths[3 + 2 * f])
                  << std::setprecision(prec) << std::scientific
                  << a_cond[binOffset + n] << " " << std::setw(widths[4 + 2 * f])
@@ -421,7 +421,7 @@ DiagConditional::writeIntegralDataToFile(
       condFile << std::left << std::setw(widths[0]) << std::setprecision(prec)
                << std::scientific << a_condAbs[n] << " ";
       for (int f{0}; f < nProcessFields; ++f) {
-        int binOffset = f * m_nBins;
+        int const binOffset = f * m_nBins;
         condFile << std::left << std::setw(widths[1 + f])
                  << std::setprecision(prec) << std::scientific
                  << a_cond[binOffset + n] << " ";
@@ -472,7 +472,7 @@ DiagConditional::writeSumDataToFile(
       condFile << std::left << std::setw(widths[0]) << std::setprecision(prec)
                << std::scientific << a_condAbs[n] << " ";
       for (int f{0}; f < nProcessFields; ++f) {
-        int binOffset = f * m_nBins;
+        int const binOffset = f * m_nBins;
         condFile << std::left << std::setw(widths[1 + f])
                  << std::setprecision(prec) << std::scientific
                  << a_cond[binOffset + n] << " ";
