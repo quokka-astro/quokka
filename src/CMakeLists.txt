@@ -123,6 +123,7 @@ include(CTest)
 
 set (QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/DiagBase.cpp" 
+                        "${CMAKE_CURRENT_SOURCE_DIR}/DiagConditional.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/DiagFilter.cpp" 
                         "${CMAKE_CURRENT_SOURCE_DIR}/DiagFramePlane.cpp" 
                         "${CMAKE_CURRENT_SOURCE_DIR}/CloudyCooling.cpp" 
