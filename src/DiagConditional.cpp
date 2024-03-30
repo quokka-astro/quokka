@@ -34,7 +34,7 @@ void DiagConditional::init(const std::string &a_prefix, std::string_view a_diagN
 		m_highBnd = std::max(range[0], range[1]);
 		m_usecFieldMinMax = false;
 	}
-	
+
 	int nProcessFields = -1;
 	nProcessFields = pp.countval("field_names");
 	AMREX_ASSERT(nProcessFields > 0);
