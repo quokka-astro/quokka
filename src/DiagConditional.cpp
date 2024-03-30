@@ -22,9 +22,11 @@ void DiagConditional::init(const std::string &a_prefix, std::string_view a_diagN
 	} else {
 		amrex::Abort("Unknown conditional_type: " + condType);
 	}
+
 	pp.get("nBins", m_nBins);
-	AMREX_ASSERT(m_nBins > 0);
+	AMREX_ALWAYS_ASSERT(m_nBins > 0);
 	pp.get("condition_field_name", m_cFieldName);
+
 	if (pp.countval("range") != 0) {
 		amrex::Vector<amrex::Real> range{0.0};
 		pp.getarr("range", range, 0, 2);
@@ -32,6 +34,7 @@ void DiagConditional::init(const std::string &a_prefix, std::string_view a_diagN
 		m_highBnd = std::max(range[0], range[1]);
 		m_usecFieldMinMax = false;
 	}
+	
 	int nProcessFields = -1;
 	nProcessFields = pp.countval("field_names");
 	AMREX_ASSERT(nProcessFields > 0);

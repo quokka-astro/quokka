@@ -28,7 +28,8 @@ temperature_floor = 100
 derived_vars = temperature
 ascent_interval = 10
 
-quokka.diagnostics = slice_z
+quokka.diagnostics = slice_z condTemp
+
 quokka.slice_z.type = DiagFramePlane         # Diagnostic type
 quokka.slice_z.file = slicez_plt             # Output file prefix (must end in "plt")
 quokka.slice_z.normal = 2                    # Plane normal (0 == x, 1 == y, 2 == z)
@@ -36,3 +37,11 @@ quokka.slice_z.center = 2.4688e20            # Coordinate in the normal directio
 quokka.slice_z.int    = 10                   # Output cadence (in number of coarse steps)
 quokka.slice_z.interpolation = Linear        # (Optional, default is Linear) Interpolation type: Linear or Quadratic
 quokka.slice_z.field_names = gasDensity gasInternalEnergy temperature      # List of variables included in output
+
+quokka.condTemp.type = DiagConditional             # Diagnostic type
+quokka.condTemp.file = condTemp                    # Output file prefix
+quokka.condTemp.int  = 10                          # Frequency (as step #) for performing the diagnostic
+quokka.condTemp.conditional_type = Average         # Conditional type: Average, Integral or Sum
+quokka.condTemp.field_names = temperature          # List of variables to be averaged, integrated, or summed
+quokka.condTemp.nBins = 50                         # Number of bins for the conditioning variable
+quokka.condTemp.condition_field_name = gasDensity  # Conditioning variable name
