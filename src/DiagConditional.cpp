@@ -184,8 +184,8 @@ void DiagConditional::processDiag(int a_nstep, const amrex::Real &a_time, const 
 								   for (int f{0}; f < nProcessFields; ++f) {
 									   int const fidx = idx_d_p[f]; // NOLINT
 									   int const binOffset = f * nBins;
-									   amrex::HostDevice::Atomic::Add(&(cond_d_p[binOffset + cbin]),
-													  sarrs[box_no](i, j, k, fidx)); // NOLINT
+									   amrex::HostDevice::Atomic::Add(&(cond_d_p[binOffset + cbin]), // NOLINT
+													  sarrs[box_no](i, j, k, fidx));
 								   }
 								   amrex::HostDevice::Atomic::Add(&(condAbs_d_p[cbin]), // NOLINT
 												  varrs[box_no](i, j, k) * sarrs[box_no](i, j, k, cFieldIdx));
