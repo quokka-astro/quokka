@@ -288,28 +288,51 @@ void DiagPDF::writePDFToFile(int a_nstep, const amrex::Real &a_time, const amrex
 		pdfFile.open(diagfile.c_str(), std::ios::out);
 		const int prec = 17;
 		const int width = 25;
-
 		const int nvars = static_cast<int>(m_varNames.size());
 		amrex::Vector<amrex::Vector<int>> widths(nvars);
 
+		// compute fixed-width column sizes
 		for (int n = 0; n < nvars; ++n) {
 			widths[n].resize(3, width);
 			widths[n][0] = std::max(width, static_cast<int>(m_varNames[n].length()) + 5);
 			widths[n][1] = std::max(width, static_cast<int>(m_varNames[n].length()) + 5);
 			widths[n][2] = std::max(width, static_cast<int>(m_varNames[n].length()) + 5);
-
-			pdfFile << std::setw(widths[n][0]) << m_varNames[n] << "_idx"
-				<< " " << std::setw(widths[n][0]) << m_varNames[n] << "_min"
-				<< " " << std::setw(widths[n][1]) << m_varNames[n] << "_max";
 		}
-		pdfFile << " " << std::setw(width) << m_weightType + "_sum" // "mass_sum", "volume_sum", or "cell_counts_sum"
-			<< " " << std::setw(width) << "bin_volume"
-			<< " " << std::setw(width) << "transformed_bin_volume"
+
+		// write cycle and simulation time
+		pdfFile << "# " << std::setw(width) << "time:"
+			<< " " << std::setw(width) << std::setprecision(prec) << std::scientific << a_time << "\n";
+		pdfFile << "# " << std::setw(width) << "cycle:"
+			<< " " << std::setw(width) << a_nstep << "\n";
+
+		// write variable names
+		pdfFile << "# " << std::setw(width) << "variables:";
+		for (int n = 0; n < nvars; ++n) {
+			pdfFile << " " << std::setw(width) << m_varNames[n];
+		}
+		pdfFile << "\n";
+
+		// write flag for log-spaced bins
+		pdfFile << "# " << std::setw(width) << "is_log_spaced:";
+		for (int n = 0; n < nvars; ++n) {
+			pdfFile << " " << std::setw(width) << m_useLogSpacedBins[n];
+		}
+		pdfFile << "\n";
+
+		// write column names for variables
+		for (int n = 0; n < nvars; ++n) {
+			pdfFile << std::setw(widths[n][0]) << m_varNames[n] + "_idx"
+				<< " " << std::setw(widths[n][0]) << m_varNames[n] + "_min"
+				<< " " << std::setw(widths[n][1]) << m_varNames[n] + "_max";
+		}
+		// write out column name for histogram value: "mass_sum", "volume_sum", or "cell_counts_sum"
+		pdfFile << " " << std::setw(width) << m_weightType + "_sum"
 			<< "\n";
 
 		std::vector<amrex::Real> transformed_range(nvars);
 		std::vector<amrex::Real> transformed_binWidth(nvars);
 		std::vector<amrex::Real> transformed_lowBnd(nvars);
+
 		for (int n = 0; n < nvars; ++n) {
 			transformed_range[n] =
 			    (m_useLogSpacedBins[n] != 0) ? (std::log10(m_highBnd[n]) - std::log10(m_lowBnd[n])) : (m_highBnd[n] - m_lowBnd[n]);
@@ -321,10 +344,8 @@ void DiagPDF::writePDFToFile(int a_nstep, const amrex::Real &a_time, const amrex
 			std::vector<int> const idxVec = getIdxVec(linidx, m_nBins);
 			std::vector<amrex::Real> bin_min(nvars);
 			std::vector<amrex::Real> bin_max(nvars);
-			amrex::Real binvol = 1;
-			amrex::Real transformed_binvol = 1;
 
-			// calculate bin edges, bin volume
+			// calculate bin edges
 			for (int n = 0; n < nvars; ++n) {
 				int const i = idxVec[n];
 				amrex::Real const transformed_bin_left = transformed_lowBnd[n] + static_cast<amrex::Real>(i) * transformed_binWidth[n];
@@ -341,24 +362,17 @@ void DiagPDF::writePDFToFile(int a_nstep, const amrex::Real &a_time, const amrex
 				}
 				bin_min[n] = bin_left;
 				bin_max[n] = bin_right;
-
-				// compute bin volumes
-				binvol *= (bin_right - bin_left);
-				transformed_binvol *= (transformed_bin_right - transformed_bin_left);
 			}
 
 			// write out bin edges
 			for (int n = 0; n < nvars; ++n) {
-				pdfFile << idxVec[n] << " " << std::setw(widths[n][0]) << std::setprecision(prec) << std::scientific << bin_min[n] << " "
-					<< std::setw(widths[n][1]) << std::setprecision(prec) << std::scientific << bin_max[n] << " ";
+				pdfFile << std::setw(width) << idxVec[n] << " " << std::setw(widths[n][0]) << std::setprecision(prec) << std::scientific
+					<< bin_min[n] << " " << std::setw(widths[n][1]) << std::setprecision(prec) << std::scientific << bin_max[n] << " ";
 			}
 
 			// write histogram value (i.e., un-normalized probability *mass* function)
-			//    and bin volume (in both original coordinates and possibly-log-transformed coordinates)
 			amrex::Real const value = a_pdf[linidx];
-			pdfFile << std::setw(width) << std::setprecision(prec) << std::scientific << value << " " << std::setw(width) << std::setprecision(prec)
-				<< std::scientific << binvol << " " << std::setw(width) << std::setprecision(prec) << std::scientific << transformed_binvol
-				<< "\n";
+			pdfFile << std::setw(width) << std::setprecision(prec) << std::scientific << value << "\n";
 		}
 
 		pdfFile.flush();
