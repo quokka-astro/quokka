@@ -16,7 +16,7 @@ class DiagBase : public quokka::Factory<DiagBase>
 
 	virtual void close() = 0;
 
-	auto needUpdate() const -> bool { return need_update; }
+	[[nodiscard]] auto needUpdate() const -> bool { return need_update; }
 
 	virtual auto doDiag(const amrex::Real &a_time, int a_nstep) -> bool;
 
@@ -29,6 +29,8 @@ class DiagBase : public quokka::Factory<DiagBase>
 	virtual void addVars(amrex::Vector<std::string> &a_varList);
 
 	static auto getFieldIndex(const std::string &a_field, const amrex::Vector<std::string> &a_varList) -> int;
+
+	static auto getFieldIndexVec(const std::vector<std::string> &a_field, const amrex::Vector<std::string> &a_varList) -> amrex::Vector<int>;
 
       protected:
 	std::string m_diagfile;
