@@ -74,10 +74,10 @@ Histograms/PDFs
 ^^^^^^^^^^^^^^^^^^^^^^^
 .. note:: This is based on the *DiagPDF* diagnostic from PelePhysics, but significant changes
   have been made to both the runtime parameters and the output format in order to support
-  N-dimensional histograms, log-spaced binning, and mass weighting.
+  N-dimensional histograms, log-spaced binning, and histogramming by mass.
 
-This adds histogram / probability density function (PDF) outputs (as fixed-width text files)
-at fixed timestep intervals as the simulation evolves.
+This adds histogram outputs (as fixed-width text files) at fixed timestep intervals as the simulation evolves.
+The quantity accumulated in each bin is the total mass, volume, or cell count summed over all cells not covered by refined grids over all AMR levels.
 
 Bins can be optionally log-spaced. Normalization of the output is left up to the user.
 
@@ -86,7 +86,7 @@ Bins can be optionally log-spaced. Normalization of the output is left up to the
   quokka.hist_temp.type = DiagPDF                         # Diagnostic type
   quokka.hist_temp.file = PDFTempDens                     # Output file prefix
   quokka.hist_temp.int  = 10                              # Output cadence (in number of coarse steps)
-  quokka.hist_temp.weight_by = mass                       # (Optional) Weight by: mass, volume, cell_counts
+  quokka.hist_temp.weight_by = mass                       # (Optional) Accumulate: mass, volume, cell_counts
   quokka.hist_temp.var_names = temperature gasDensity     # Variable(s) of interest (compute a N-D histogram)
 
   quokka.hist_temp.temperature.nBins = 20                 # temperature: Number of bins
