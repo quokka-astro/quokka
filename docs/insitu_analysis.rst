@@ -79,8 +79,7 @@ Histograms/PDFs
 This adds histogram / probability density function (PDF) outputs (as fixed-width text files)
 at fixed timestep intervals as the simulation evolves.
 
-Bins can be optionally log-spaced. Normalization of the output is left up to the user,
-with bin volumes calculated (for convenience) in both original variable coordinates and optionally-log-transformed coordinates.
+Bins can be optionally log-spaced. Normalization of the output is left up to the user.
 
 *Example input file configuration:* ::
 
