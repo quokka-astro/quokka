@@ -1,24 +1,44 @@
+import warnings
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import argparse
 
+def float_if_possible(element: any) -> bool:
+    try:
+        float(element)
+        return float(element)
+    except ValueError:
+        return element
+
+def read_header(filename):
+    f = open(filename)
+    header = {}
+    for line in f:
+        if line.startswith('#'):
+            tokens = line[1:].split()
+            key = tokens[0][:-1]
+            values = [float_if_possible(val) for val in tokens[1:]]
+            header[key] = values
+    f.close()
+    return header
+        
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("xvar")
-    parser.add_argument("yvar")
-    parser.add_argument("islog_x", type=bool)
-    parser.add_argument("islog_y", type=bool)
     parser.add_argument("filenames", nargs='*')
     args = parser.parse_args()
 
-    xvar = args.xvar
-    yvar = args.yvar
-    islog_x = args.islog_x
-    islog_y = args.islog_y
-    
+    header = read_header(args.filenames[0])
+    xvar, yvar = header['variables']
+    islog_x, islog_y = [bool(v) for v in header['is_log_spaced']]
+
     for filename in args.filenames:
-        hist = pd.read_csv(filename, sep='\s+')
+        header = read_header(filename)
+        cycle = int(header['cycle'][0])
+        time = header['time'][0]
+        print(cycle)
+        
+        hist = pd.read_csv(filename, sep='\s+', comment='#')
 
         xmin = hist[xvar + '_min'].min()
         xmax = hist[xvar + '_max'].max()
@@ -44,7 +64,8 @@ if __name__ == "__main__":
         
         ## plot
         plt.figure()
-        im = plt.imshow(np.log10(arr.T), extent=[xmin, xmax, ymin, ymax], aspect='auto', origin='lower')
+        with warnings.catch_warnings(action="ignore"):
+            im = plt.imshow(np.log10(arr.T), extent=[xmin, xmax, ymin, ymax], aspect='auto', origin='lower')
         plt.colorbar(im)
 
         if islog_x:
@@ -56,5 +77,8 @@ if __name__ == "__main__":
             plt.ylabel(r"$\log_{10}$" + yvar)
         else:
             plt.ylabel(yvar)
-        
+
+        plt.title(f"cycle {cycle:06d} time {time:.3g}")
         plt.savefig(filename + ".png")
+        plt.close()
+        
