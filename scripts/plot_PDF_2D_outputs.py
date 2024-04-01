@@ -1,6 +1,5 @@
 import warnings
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
 import argparse
 
@@ -24,21 +23,20 @@ def read_header(filename):
     return header
         
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("filenames", nargs='*')
+    parser = argparse.ArgumentParser(description="This script reads and plots a 2D histogram/PDF output produced using the DiagPDF diagnostic.")
+    parser.add_argument("filenames", nargs='*', help="A list of *.dat histogram output files.")
     args = parser.parse_args()
-
-    header = read_header(args.filenames[0])
-    xvar, yvar = header['variables']
-    islog_x, islog_y = [bool(v) for v in header['is_log_spaced']]
 
     for filename in args.filenames:
         header = read_header(filename)
+        xvar, yvar = header['variables']
+        islog_x, islog_y = [bool(v) for v in header['is_log_spaced']]
+
         cycle = int(header['cycle'][0])
         time = header['time'][0]
         print(cycle)
         
-        hist = pd.read_csv(filename, sep='\s+', comment='#')
+        hist = np.genfromtxt(filename, names=True, skip_header=4)
 
         xmin = hist[xvar + '_min'].min()
         xmax = hist[xvar + '_max'].max()
@@ -51,8 +49,8 @@ if __name__ == "__main__":
             ymin = np.log10(ymin)
             ymax = np.log10(ymax)
             
-        Xidx = hist[xvar + '_idx']
-        Yidx = hist[yvar + '_idx']
+        Xidx = hist[xvar + '_idx'].astype(int)
+        Yidx = hist[yvar + '_idx'].astype(int)
         nx = Xidx.max() + 1
         ny = Yidx.max() + 1
         arr = np.ndarray((nx,ny))
@@ -64,7 +62,8 @@ if __name__ == "__main__":
         
         ## plot
         plt.figure()
-        with warnings.catch_warnings(action="ignore"):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore") # ignore exceptions due to applying np.log10 to zero values
             im = plt.imshow(np.log10(arr.T), extent=[xmin, xmax, ymin, ymax], aspect='auto', origin='lower')
         plt.colorbar(im)
 
