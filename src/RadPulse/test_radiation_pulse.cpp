@@ -35,7 +35,7 @@ constexpr double rho0 = 1.0; // cgs
 constexpr double c = C::c_light;
 constexpr double vshift = c / 514.4;
 constexpr double v = 0.0;
-constexpr double kappa0 = 4.0e1;  // absorption coefficient
+constexpr double kappa0 = 4.0e1; // absorption coefficient
 constexpr double nuSqr = 0.002;
 constexpr double max_time_ = 3 * 45.0 / vshift;
 
@@ -74,10 +74,10 @@ AMREX_GPU_HOST_DEVICE
 auto compute_exact_Erad(const double x, const double t) -> double
 {
 	// compute exact solution for Gaussian radiation pulse, assuming diffusion approximation
-	const double base = std::exp(- nuSqr * 50.0 * 50.0);
+	const double base = std::exp(-nuSqr * 50.0 * 50.0);
 	const double xhat = x - v * t;
 	const double widthSqr = 4.0 * diff_coeff * t * nuSqr + 1;
-	const double erad = 1.0 / std::sqrt(widthSqr) * std::exp(- nuSqr * std::pow(xhat, 2) / widthSqr);
+	const double erad = 1.0 / std::sqrt(widthSqr) * std::exp(-nuSqr * std::pow(xhat, 2) / widthSqr);
 	return std::max(base, erad);
 }
 

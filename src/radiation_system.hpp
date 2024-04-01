@@ -986,7 +986,7 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 				// revert to more diffusive flux (has no effect in optically-thin limit)
 				epsilon = {1.0, 1.0, 1.0, 1.0};
 			}
-				epsilon = {1.0, 1.0, 1.0, 1.0};
+			epsilon = {1.0, 1.0, 1.0, 1.0};
 
 			AMREX_ASSERT(std::abs(S_L) <= c_hat_); // NOLINT
 			AMREX_ASSERT(std::abs(S_R) <= c_hat_); // NOLINT
