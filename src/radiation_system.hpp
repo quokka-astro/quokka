@@ -890,12 +890,6 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 		// HLL solver following Toro (1998) and Balsara (2017).
 		// Radiation eigenvalues from Skinner & Ostriker (2013).
 
-		// calculate cell optical depth for each photon group
-		// asymptotic-preserving flux correction
-		// [Similar to Skinner et al. (2019), but tau^-2 instead of tau^-1, which
-		// does not appear to be asymptotic-preserving with PLM+SDC2.]
-		quokka::valarray<double, nGroups_> const tau_cell = ComputeCellOpticalDepth<DIR>(consVar, dx, i, j, k);
-
 		// gather left- and right- state variables
 		for (int g = 0; g < nGroups_; ++g) {
 			double erad_L = x1LeftState(i, j, k, primRadEnergy_index + numRadVars_ * g);
