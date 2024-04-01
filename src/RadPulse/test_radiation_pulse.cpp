@@ -13,26 +13,41 @@
 #include "AMReX_Print.H"
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
+#include "fundamental_constants.H"
 #include "physics_info.hpp"
+#ifdef HAVE_PYTHON
+#include "matplotlibcpp.h"
+#endif
 
 struct PulseProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-// constexpr int max_steps_ = 3e2;
-constexpr double kappa0 = 4.0e4;  // absorption coefficient
-constexpr double T0 = 1.0;	  // 
-constexpr double rho0 = 1.0;	  // 
-constexpr double c = 10.0;
-constexpr double chat = c;
-constexpr double a_rad = 1.0;
-// constexpr double erad_floor = a_rad * 1.0e-12;
-constexpr double erad_floor = 0.0;
-constexpr double diff_coeff = c / (3.0 * rho0 * kappa0);
-constexpr double max_time_ = 0.13 * 0.13 / diff_coeff;
+constexpr double rho0 = 1.0; // cgs
+
+// Jiang+2013
+// constexpr double c = 514.4;
+// constexpr double v = 1.0;
+// constexpr double kappa0 = 4.0e1;  // absorption coefficient
+// constexpr double nuSqr = 0.002;
+// constexpr double max_time_ = 45.0 / v;
+
+// Jiang+2013, dimensional
+constexpr double c = C::c_light;
+constexpr double vshift = c / 514.4;
+constexpr double v = 0.0;
+constexpr double kappa0 = 4.0e1;  // absorption coefficient
+constexpr double nuSqr = 0.002;
+constexpr double max_time_ = 3 * 45.0 / vshift;
+
+constexpr double chat = 0.1 * c;
+constexpr double a_rad = C::a_rad;
+constexpr double erad_floor = a_rad * 1.0e-13;
+// constexpr double erad_floor = 0.0;
+constexpr double diff_coeff = c / (3.0 * kappa0);
 
 template <> struct quokka::EOS_Traits<PulseProblem> {
-	static constexpr double mean_molecular_weight = 1.0;
-	static constexpr double boltzmann_constant = 1.0;
+	static constexpr double mean_molecular_weight = C::m_p;
+	static constexpr double boltzmann_constant = C::k_B;
 	static constexpr double gamma = 5. / 3.;
 };
 
@@ -59,15 +74,19 @@ AMREX_GPU_HOST_DEVICE
 auto compute_exact_Erad(const double x, const double t) -> double
 {
 	// compute exact solution for Gaussian radiation pulse, assuming diffusion approximation
-	return 1.0 / std::sqrt(160.0 * diff_coeff * t + 1) * std::exp(-40.0 * x * x / (160.0 * diff_coeff * t + 1.0));
+	const double base = std::exp(- nuSqr * 50.0 * 50.0);
+	const double xhat = x - v * t;
+	const double widthSqr = 4.0 * diff_coeff * t * nuSqr + 1;
+	const double erad = 1.0 / std::sqrt(widthSqr) * std::exp(- nuSqr * std::pow(xhat, 2) / widthSqr);
+	return std::max(base, erad);
 }
 
 AMREX_GPU_HOST_DEVICE
-auto compute_exact_Frad(const double x, const double t) -> double
+auto compute_exact_Frad0(const double x) -> double
 {
 	// compute exact solution for Gaussian radiation pulse, assuming diffusion approximation
-	const auto erad = compute_exact_Erad(x, t);
-	return 80. * x / (3. * kappa0) * erad;
+	auto erad = compute_exact_Erad(x, 0.0);
+	return 2.0 * nuSqr * x / (3. * kappa0) * erad + 4.0 * v / (3. * c) * erad;
 }
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
@@ -102,12 +121,8 @@ template <> void RadhydroSimulation<PulseProblem>::setInitialConditionsOnGrid(qu
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
-		double Erad = compute_exact_Erad(x, 0.0);
-		double Frad = compute_exact_Frad(x, 0.0);
-		if (std::abs(x) > 0.5) {
-			Erad = std::exp(-10.0);
-			Frad = 0.0;
-		}
+		const double Erad = compute_exact_Erad(x, 0.0);
+		const double Frad = compute_exact_Frad0(x);
 		const double Trad = std::pow(Erad / a_rad, 1. / 4.);
 		const double Egas = quokka::EOS<PulseProblem>::ComputeEintFromTgas(rho0, Trad);
 
@@ -115,10 +130,10 @@ template <> void RadhydroSimulation<PulseProblem>::setInitialConditionsOnGrid(qu
 		state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index) = Frad;
 		state_cc(i, j, k, RadSystem<PulseProblem>::x2RadFlux_index) = 0.;
 		state_cc(i, j, k, RadSystem<PulseProblem>::x3RadFlux_index) = 0.;
-		state_cc(i, j, k, RadSystem<PulseProblem>::gasEnergy_index) = Egas;
+		state_cc(i, j, k, RadSystem<PulseProblem>::gasEnergy_index) = Egas + 0.5 * rho0 * v * v;
 		state_cc(i, j, k, RadSystem<PulseProblem>::gasDensity_index) = rho0;
 		state_cc(i, j, k, RadSystem<PulseProblem>::gasInternalEnergy_index) = Egas;
-		state_cc(i, j, k, RadSystem<PulseProblem>::x1GasMomentum_index) = 0.;
+		state_cc(i, j, k, RadSystem<PulseProblem>::x1GasMomentum_index) = rho0 * v;
 		state_cc(i, j, k, RadSystem<PulseProblem>::x2GasMomentum_index) = 0.;
 		state_cc(i, j, k, RadSystem<PulseProblem>::x3GasMomentum_index) = 0.;
 	});
@@ -137,8 +152,8 @@ auto problem_main() -> int
 	// of order 10^5.
 
 	// Problem parameters
-	int max_timesteps;
-	const double CFL_number = 5.0;
+	int max_timesteps = 1e5;
+	const double CFL_number = 0.8;
 	// const int nx = 32;
 
 	// read max_timesteps from input file
@@ -152,8 +167,10 @@ auto problem_main() -> int
 	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
 	for (int n = 0; n < nvars; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			BCs_cc[n].setLo(0, amrex::BCType::foextrap); // extrapolate
-			BCs_cc[n].setHi(0, amrex::BCType::foextrap);
+			// BCs_cc[n].setLo(0, amrex::BCType::foextrap); // extrapolate
+			// BCs_cc[n].setHi(0, amrex::BCType::foextrap);
+			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
+			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
 		}
 	}
 
@@ -163,14 +180,14 @@ auto problem_main() -> int
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.stopTime_ = max_time;
 	sim.radiationCflNumber_ = CFL_number;
-	// sim.maxDt_ = max_dt;
+	sim.maxDt_ = 1.e-2;
 	sim.maxTimesteps_ = max_timesteps;
 	sim.plotfileInterval_ = -1;
 
 	// initialize
 	sim.setInitialConditions();
 
-	auto [position0, values0] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
+	// auto [position0, values0] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
 
 	// evolve
 	sim.evolve();
@@ -195,9 +212,10 @@ auto problem_main() -> int
 	std::vector<double> rho(nx);
 
 	for (int i = 0; i < nx; ++i) {
-		amrex::Real const x = position0[i];
+		amrex::Real const x = position[i];
 		xs.at(i) = x;
-		Erad0.at(i) = values0.at(RadSystem<PulseProblem>::radEnergy_index)[i];
+		auto Erad0_val = compute_exact_Erad(x, 0.0);
+		Erad0.at(i) = Erad0_val;
 
 		rho.at(i) = values.at(RadSystem<PulseProblem>::gasDensity_index)[i];
 		mtm.at(i) = values.at(RadSystem<PulseProblem>::x1GasMomentum_index)[i];
@@ -233,52 +251,42 @@ auto problem_main() -> int
 	// plot temperature
 	matplotlibcpp::clf();
 
-	// Initial pulse
-
+	// Plot radiation energy density
 	std::map<std::string, std::string> args;
-	std::map<std::string, std::string> Trad_args;
-	std::map<std::string, std::string> Tgas_args;
-	std::map<std::string, std::string> Tinit_args;
-	std::map<std::string, std::string> Trad_exact_args;
-	Tinit_args["label"] = "initial";
-	Tinit_args["color"] = "grey";
-	// Trad_args["label"] = "radiation";
-	Trad_args["linestyle"] = "-";
-	// Tgas_args["label"] = "gas";
-	Tgas_args["linestyle"] = "--";
-	// Trad_exact_args["label"] = "radiation (exact)";
-	Trad_exact_args["linestyle"] = ":";
-
-	matplotlibcpp::plot(xs, Erad0, Tinit_args);
-	matplotlibcpp::plot(xs, Erad, Trad_args);
-	// matplotlibcpp::plot(xs, Egas, Tgas_args);
-	matplotlibcpp::plot(xs, Erad_exact, Trad_exact_args);
-
-	// Plot radiation temperature
-
+	args["label"] = "initial";
+	args["color"] = "grey";
 	args["linestyle"] = "-";
-	args["color"] = "r";
-	matplotlibcpp::plot(xs, Trad, args);
+	matplotlibcpp::plot(xs, Erad0, args);
+	args["label"] = "numerical";
+	args["color"] = "C0";
 	args["linestyle"] = "--";
-	args["color"] = "g";
-	matplotlibcpp::plot(xs, Tgas, args);
+	matplotlibcpp::plot(xs, Erad, args);
+	args["label"] = "exact";
+	args["color"] = "C1";
+	args["linestyle"] = "-.";
+	matplotlibcpp::plot(xs, Erad_exact, args);
 
-	matplotlibcpp::xlabel("length x (dimensionless)");
-	matplotlibcpp::ylabel("temperature (dimensionless)");
+	// save figure
+	matplotlibcpp::yscale("log");
+	matplotlibcpp::ylim(0.003, 2.0);
+	matplotlibcpp::xlabel("x (dimensionless)");
+	matplotlibcpp::ylabel("Erad (dimensionless)");
 	matplotlibcpp::legend();
-	matplotlibcpp::title(fmt::format("time sqrt(2 D t) = {:.4g}", std::sqrt(2.0 * diff_coeff * sim.tNew_[0])));
-	matplotlibcpp::save("./radiation_pulse_temperature.pdf");
+	// matplotlibcpp::title(fmt::format("time sqrt(2 D t) = {:.4g}", std::sqrt(2.0 * diff_coeff * sim.tNew_[0])));
+	matplotlibcpp::title(fmt::format("vshift t = {:.4g}", vshift * sim.tNew_[0]));
+	matplotlibcpp::save("./radiation_pulse_Erad.pdf");
 
-	// plot gas velocity profile
+	// Plot velocity
+
 	matplotlibcpp::clf();
-	std::map<std::string, std::string> vgas_args;
-	vgas_args["label"] = "gas velocity";
-	vgas_args["linestyle"] = "--";
-	matplotlibcpp::plot(xs, mtm, vgas_args);
-	matplotlibcpp::xlabel("length x (dimensionless)");
-	matplotlibcpp::ylabel("rho * v_x (dimensionless)");
+	args["label"] = "velocity";
+	args["color"] = "C0";
+	args["linestyle"] = "-";
+	matplotlibcpp::plot(xs, mtm, args);
+	matplotlibcpp::xlabel("x (dimensionless)");
+	matplotlibcpp::ylabel("x momentum (dimensionless)");
 	matplotlibcpp::legend();
-	matplotlibcpp::title(fmt::format("time sqrt(2 D t) = {:.4g}", std::sqrt(2.0 * diff_coeff * sim.tNew_[0])));
+	matplotlibcpp::title(fmt::format("vshift t = {:.4g}", vshift * sim.tNew_[0]));
 	matplotlibcpp::save("./radiation_pulse_velocity.pdf");
 #endif
 
