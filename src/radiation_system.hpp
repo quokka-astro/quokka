@@ -986,6 +986,7 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 				// revert to more diffusive flux (has no effect in optically-thin limit)
 				epsilon = {1.0, 1.0, 1.0, 1.0};
 			}
+				epsilon = {1.0, 1.0, 1.0, 1.0};
 
 			AMREX_ASSERT(std::abs(S_L) <= c_hat_); // NOLINT
 			AMREX_ASSERT(std::abs(S_R) <= c_hat_); // NOLINT
@@ -1256,7 +1257,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				quokka::valarray<double, nGroups_> F_D{};
 
 				const double resid_tol = 1.0e-13; // 1.0e-15;
-				const int maxIter = 400;
+				const int maxIter = 20;
 				int n = 0;
 				for (; n < maxIter; ++n) {
 					// compute material temperature
@@ -1423,7 +1424,9 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					for (int n = 0; n < 3; ++n) {
 						Frad_t1[g][n] = Frad_t0[n] / (1.0 + rho * kappaFVec[g] * chat * dt);
 						// Compute conservative gas momentum update
-						dMomentum[n] += -(Frad_t1[g][n] - Frad_t0[n]) / (c * chat);
+						if constexpr (beta_order_ != 0) {
+							dMomentum[n] += -(Frad_t1[g][n] - Frad_t0[n]) / (c * chat);
+						}
 					}
 				}
 			} // end loop over radiation groups for flux update
