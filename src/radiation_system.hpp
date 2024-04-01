@@ -857,7 +857,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeRadPressure(const double erad
 
 	RadPressureResult result{};
 	result.F = {Fn, Tnx * erad, Tny * erad, Tnz * erad};
-	result.S = std::sqrt(Tnormal);
+	result.S = std::max(0.1, std::sqrt(Tnormal));
 
 	return result;
 }
