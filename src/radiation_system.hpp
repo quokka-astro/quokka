@@ -860,7 +860,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeRadPressure(const double erad
 
 	RadPressureResult result{};
 	result.F = {Fn, Tnx * erad, Tny * erad, Tnz * erad};
-	result.S = std::max(0.1, std::sqrt(Tnormal));
+	result.S = std::sqrt(Tnormal);
 
 	return result;
 }
@@ -972,6 +972,7 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 			const quokka::valarray<double, numRadVars_> U_R = {erad_R, Fx_R, Fy_R, Fz_R};
 
 			// Adjusting wavespeeds is no longer necessary with the IMEX PD-ARS scheme.
+			// Read more in https://github.com/quokka-astro/quokka/pull/582
 
 			AMREX_ASSERT(std::abs(S_L) <= c_hat_); // NOLINT
 			AMREX_ASSERT(std::abs(S_R) <= c_hat_); // NOLINT
