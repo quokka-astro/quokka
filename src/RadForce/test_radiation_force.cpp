@@ -68,7 +68,6 @@ template <> struct RadSystem_Traits<TubeProblem> {
 	static constexpr double c_hat = 10. * (Mach1 * a0);
 	static constexpr double radiation_constant = radiation_constant_cgs_;
 	static constexpr double Erad_floor = 0.;
-	static constexpr bool compute_v_over_c_terms = true;
 	static constexpr double energy_unit = C::ev2erg;
 	static constexpr amrex::GpuArray<double, Physics_Traits<TubeProblem>::nGroups + 1> radBoundaries{0., 13.6, inf}; // eV
 	static constexpr int beta_order = 1;
