@@ -77,25 +77,27 @@ Histograms/PDFs
   N-dimensional histograms, log-spaced binning, and histogramming by mass.
 
 This adds histogram outputs (as fixed-width text files) at fixed timestep intervals as the simulation evolves.
-The quantity accumulated in each bin is the total mass, volume, or cell count summed over all cells not covered by refined grids over all AMR levels.
+The quantity accumulated in each bin is the total mass, volume, or cell count summed over all cells not covered by refined grids over all AMR levels. If unspecified in the input parameters, the default is to accumulate the volume in each bin.
 
-Bins can be optionally log-spaced. Normalization of the output is left up to the user.
+By default, the bins extend over the full range of the data at a given timestep. The *range* parameter can instead specify the minimum and maximum extent for the bins. Bins can be optionally log-spaced by setting *log_spaced_bins = 1*.
+
+Normalization of the output is left up to the user.
 
 *Example input file configuration:* ::
 
   quokka.hist_temp.type = DiagPDF                         # Diagnostic type
   quokka.hist_temp.file = PDFTempDens                     # Output file prefix
   quokka.hist_temp.int  = 10                              # Output cadence (in number of coarse steps)
-  quokka.hist_temp.weight_by = mass                       # (Optional) Accumulate: mass, volume, cell_counts
+  quokka.hist_temp.weight_by = mass                       # (Optional, default: volume) Accumulate: mass, volume, cell_counts
   quokka.hist_temp.var_names = temperature gasDensity     # Variable(s) of interest (compute a N-D histogram)
 
   quokka.hist_temp.temperature.nBins = 20                 # temperature: Number of bins
   quokka.hist_temp.temperature.log_spaced_bins = 1        # temperature: (Optional, default: 0) Use log-spaced bins
-  quokka.hist_temp.temperature.range = 1e3 1e7            # temperature: (Optional) Specify the min/max of the bins
+  quokka.hist_temp.temperature.range = 1e3 1e7            # temperature: (Optional, default: data range) Specify min/max of bins
 
   quokka.hist_temp.gasDensity.nBins = 5                   # gasDensity: Number of bins
   quokka.hist_temp.gasDensity.log_spaced_bins = 1         # gasDensity: (Optional, default: 0) Use log-spaced bins
-  quokka.hist_temp.gasDensity.range = 1e-29 1e-23         # gasDensity: (Optional) Specify the min/max of the bins
+  quokka.hist_temp.gasDensity.range = 1e-29 1e-23         # gasDensity: (Optional, default: data range) Specify min/max of bins
 
 
 *Filters (based on any variables, not necessary those used for the histogram) can be optionally added:* ::
