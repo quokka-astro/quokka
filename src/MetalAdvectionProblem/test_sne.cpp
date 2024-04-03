@@ -152,6 +152,7 @@ void read_potential(amrex::GpuArray<amrex::Real, 4999> &z_data,
 		}
   }
 		status = H5Dclose(dset_id);   
+		printf("Read data!gdata=%.5e\n",g_data[10]);
 }
 
 /************************************************************/
@@ -453,7 +454,7 @@ HydroSystem<NewProblem>::GetGradFixedPotential(amrex::GpuArray<amrex::Real, AMRE
        double z      = posvec[2];
        grad_potential[2]  = 2.* 3.1415 * Const_G * rho_dm * std::pow(R0,2) * (2.* z/std::pow(R0,2))/(1. + std::pow(z,2)/std::pow(R0,2));
        grad_potential[2] += 2.* 3.1415 * Const_G * Sigma_star * (z/z_star) * (std::pow(1. + z*z/(z_star*z_star), -0.5));
-       grad_potential[2] += FastMath::pow10( linearInterpolate(z_data, g_data, std::abs(z)));;
+       //grad_potential[2] += FastMath::pow10( linearInterpolate(z_data, g_data, std::abs(z)));;
     #endif
 
 return grad_potential;
