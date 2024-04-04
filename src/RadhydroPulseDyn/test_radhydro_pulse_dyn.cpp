@@ -41,7 +41,6 @@ constexpr double k_B = C::k_B;
 // Width of the pulse = sqrt(c max_time / kappa0) = 85 if max_time = 2.4e-4
 constexpr double kappa0 = 500.;	 // cm^2 g^-1
 constexpr double v0_adv = 3.0e7; // advecting pulse
-constexpr double max_time = 4.8e-6;
 
 template <> struct quokka::EOS_Traits<PulseProblem> {
 	static constexpr double mean_molecular_weight = mu;
@@ -238,6 +237,11 @@ auto problem_main() -> int
 
 	// Problem initialization
 	RadhydroSimulation<PulseProblem> sim(BCs_cc);
+
+	double max_time = 4.8e-6;
+	// read max_time from the input file
+	amrex::ParmParse pp; // NOLINT
+	pp.query("max_time", max_time);
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.stopTime_ = max_time;
