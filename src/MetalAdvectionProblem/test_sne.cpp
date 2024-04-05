@@ -44,10 +44,11 @@
 using amrex::Real;
 using namespace amrex;
 int arrshape = 4999;
-std::string input_data_file="/g/data/jh2/av5889/quokka_myrepo/quokka/sims/GasGravity/PhiGas_R8.h5";
+std::string input_data_file; //="/g/data/jh2/av5889/quokka_myrepo/quokka/sims/GasGravity/PhiGas_R8.h5";
 AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 4999> phi_data;
 AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 4999> g_data;
 AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 4999> z_data;
+
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto linearInterpolate(amrex::GpuArray<amrex::Real, 4999>& x, amrex::GpuArray<amrex::Real, 4999>& y, double x_interp) {
     // Find the two closest data points
     size_t i = 0;
@@ -94,6 +95,7 @@ template <> struct Physics_Traits<NewProblem> {
 
 /************************************************************/
 
+// template <>
 void read_potential(amrex::GpuArray<amrex::Real, 4999> &z_data,
                     amrex::GpuArray<amrex::Real, 4999> &phi_data,
                     amrex::GpuArray<amrex::Real, 4999> &g_data)
@@ -152,7 +154,6 @@ void read_potential(amrex::GpuArray<amrex::Real, 4999> &z_data,
 		}
   }
 		status = H5Dclose(dset_id);   
-		printf("Read data!gdata=%.5e\n",g_data[10]);
 }
 
 /************************************************************/
@@ -454,7 +455,7 @@ HydroSystem<NewProblem>::GetGradFixedPotential(amrex::GpuArray<amrex::Real, AMRE
        double z      = posvec[2];
        grad_potential[2]  = 2.* 3.1415 * Const_G * rho_dm * std::pow(R0,2) * (2.* z/std::pow(R0,2))/(1. + std::pow(z,2)/std::pow(R0,2));
        grad_potential[2] += 2.* 3.1415 * Const_G * Sigma_star * (z/z_star) * (std::pow(1. + z*z/(z_star*z_star), -0.5));
-       //grad_potential[2] += FastMath::pow10( linearInterpolate(z_data, g_data, std::abs(z)));;
+       grad_potential[2] += (z/std::abs(z))*FastMath::pow10( linearInterpolate(z_data, g_data, std::abs(z)));;
     #endif
 
 return grad_potential;
@@ -599,8 +600,8 @@ auto problem_main() -> int {
   // Problem initialization
   RadhydroSimulation<NewProblem> sim(BCs_cc);
   
-  // amrex::ParmParse const pp("phi_file");
-	// pp.query("name", input_data_file); 
+  amrex::ParmParse const pp("phi_file");
+	pp.query("name", input_data_file); 
   
   sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
   sim.cflNumber_ = 0.25;         // *must* be less than 1/3 in 3D!
