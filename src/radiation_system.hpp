@@ -1256,8 +1256,8 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				if constexpr (use_D_as_base) {
 					for (int g = 0; g < nGroups_; ++g) {
 						if (tau0[g] <= 0.0) {
-              tau0[g] = 1.0;
-            }
+							tau0[g] = 1.0;
+						}
 					}
 					D = Rvec / tau0;
 				}
