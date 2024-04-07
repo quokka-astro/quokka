@@ -1252,16 +1252,14 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				}
 
 				tau0 = dt * rho * kappaPVec * chat * lorentz_factor;
+				Rvec = (fourPiBoverC - Erad0Vec / kappaPoverE) * tau0 + work;
 				if constexpr (use_D_as_base) {
 					for (int g = 0; g < nGroups_; ++g) {
-						if (tau0[g] == 0.0) {
-							tau0[g] = 1.0;
-						}
+						if (tau0[g] <= 0.0) {
+              tau0[g] = 1.0;
+            }
 					}
-					D = (fourPiBoverC - Erad0Vec / kappaPoverE) + work / tau0;
-				} else {
-					// use D * tau0 as the base
-					Rvec = (fourPiBoverC - Erad0Vec / kappaPoverE) * tau0 + work;
+					D = Rvec / tau0;
 				}
 
 				double F_G = NAN;
