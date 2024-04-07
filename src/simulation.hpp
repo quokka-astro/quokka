@@ -307,9 +307,9 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	template <typename ReduceOp, typename F> auto computePlaneProjection(F const &user_f, int dir) const -> amrex::BaseFab<amrex::Real>;
 
-  	// compute volume integrals
+	// compute volume integrals
 	template <typename F> auto computeVolumeIntegral(F const &user_f) -> amrex::Real;
-  
+
 	// I/O functions
 	[[nodiscard]] auto PlotFileName(int lev) const -> std::string;
 	[[nodiscard]] auto CustomPlotFileName(const char *base, int lev) const -> std::string;
@@ -391,7 +391,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	// gravity
 	amrex::Real Gconst_ = C::Gconst; // gravitational constant G
-  
+
 	// tracer particles
 #ifdef AMREX_PARTICLES
 	void InitParticles();	 // create tracer particles
@@ -1960,7 +1960,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::AverageDownTo(int c
 		}
 	}
 }
-
 
 template <typename problem_t> template <typename F> auto AMRSimulation<problem_t>::computeVolumeIntegral(F const &user_f) -> amrex::Real
 {
