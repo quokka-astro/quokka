@@ -1319,7 +1319,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					// only affects the convergence rate of the Newton-Raphson iteration and does not affect the converged solution at all.
 					dFG_dEgas = 1.0;
 					for (int g = 0; g < nGroups_; ++g) {
-						if (tau[g] == 0.0) {
+						if (tau[g] <= 0.0) {
 							dFR_i_dD_i[g] = -std::numeric_limits<double>::infinity();
 						} else {
 							dFR_i_dD_i[g] = -1.0 * (1.0 / tau[g] * kappaPoverE[g] + 1.0);
