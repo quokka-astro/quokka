@@ -50,7 +50,7 @@ template <> struct Physics_Traits<ShockProblem> {
 	static constexpr bool is_radiation_enabled = true;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
-	static constexpr int nGroups = 8;
+	static constexpr int nGroups = 5;
 };
 
 template <> struct RadSystem_Traits<ShockProblem> {
@@ -60,7 +60,7 @@ template <> struct RadSystem_Traits<ShockProblem> {
 	static constexpr double Erad_floor = Erad_floor_;
 	static constexpr double energy_unit = C::hplanck; // set boundary unit to Hz
 	static constexpr amrex::GpuArray<double, Physics_Traits<ShockProblem>::nGroups + 1> radBoundaries{
-	    1.00000000e+15, 3.16227766e+15, 1.00000000e+16, 3.16227766e+16, 1.00000000e+17, 3.16227766e+17, 1.00000000e+18, 3.16227766e+18, 1.00000000e+19};
+	    1.00000000e+15, 1.00000000e+16, 1.00000000e+17, 1.00000000e+18, 1.00000000e+19, 1.00000000e+20};
 	static constexpr int beta_order = 1;
 };
 
@@ -75,9 +75,10 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<ShockProblem>::ComputePl
     -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, nGroups_> kappaPVec{};
-	for (int i = 0; i < nGroups_; ++i) {
+	for (int i = 0; i < nGroups_ - 1; ++i) {
 		kappaPVec[i] = kappa / rho;
 	}
+	kappaPVec[nGroups_ - 1] = 0.0;
 	return kappaPVec;
 }
 
