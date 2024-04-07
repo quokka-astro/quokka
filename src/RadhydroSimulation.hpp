@@ -38,9 +38,7 @@
 #include "AMReX_IntVect.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_MultiFabUtil.H"
-#include "AMReX_ParallelContext.H"
 #include "AMReX_ParallelDescriptor.H"
-#include "AMReX_ParallelReduce.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_PlotFileUtil.H"
 #include "AMReX_Print.H"
@@ -233,7 +231,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 				 amrex::Real time, amrex::Real dt_lev) -> bool;
 
 	void addStrangSplitSources(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev);
-	auto addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev) -> bool;
+	void addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev);
 
 	auto isCflViolated(int lev, amrex::Real time, amrex::Real dt_actual) -> bool;
 
@@ -501,14 +499,11 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::addStrangSplit
 }
 
 template <typename problem_t>
-auto RadhydroSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt) -> bool
+void RadhydroSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt)
 {
 	if (enableCooling_ == 1) {
 		// compute cooling
-		bool success = quokka::cooling::computeCooling<problem_t>(state, dt, cloudyTables_, tempFloor_);
-		if (!success) {
-			return success;
-		}
+		quokka::cooling::computeCooling<problem_t>(state, dt, cloudyTables_, tempFloor_);
 	}
 
 #ifdef PRIMORDIAL_CHEM
@@ -520,7 +515,6 @@ auto RadhydroSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::Mult
 
 	// compute user-specified sources
 	addStrangSplitSources(state, lev, time, dt);
-	return true;
 }
 
 template <typename problem_t>
@@ -770,11 +764,9 @@ void RadhydroSimulation<problem_t>::FillPatch(int lev, amrex::Real time, amrex::
 	}
 
 	if (cen == quokka::centering::cc) {
-		FillPatchWithData(lev, time, mf, cmf, ctime, fmf, ftime, icomp, ncomp, BCs_cc_, cen, fptype, PreInterpState, PostInterpState,
-				  setBoundaryFunctor<problem_t>{});
+		FillPatchWithData(lev, time, mf, cmf, ctime, fmf, ftime, icomp, ncomp, BCs_cc_, cen, fptype, PreInterpState, PostInterpState);
 	} else if (cen == quokka::centering::fc) {
-		FillPatchWithData(lev, time, mf, cmf, ctime, fmf, ftime, icomp, ncomp, BCs_fc_, cen, fptype, PreInterpState, PostInterpState,
-				  setBoundaryFunctor<problem_t>{});
+		FillPatchWithData(lev, time, mf, cmf, ctime, fmf, ftime, icomp, ncomp, BCs_fc_, cen, fptype, PreInterpState, PostInterpState);
 	}
 }
 
@@ -865,7 +857,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 {
 	BL_PROFILE_REGION("HydroSolver");
 	// timestep retries
-	const int max_retries = 6;
+	const int max_retries = 4;
 	bool success = false;
 
 	// save the pre-advance fine flux register state in originalFineData
@@ -880,7 +872,7 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 	amrex::AmrTracerParticleContainer::ContainerLike<amrex::DefaultAllocator> originalTracerPC;
 	if (do_tracers != 0) {
 		// save the pre-advance tracer particles
-		originalTracerPC = TracerPC->make_alike();	 // create empty particle container
+	        originalTracerPC = TracerPC->make_alike();	 // create empty particle container
 		originalTracerPC.copyParticles(*TracerPC, true); // do local copy of particles
 	}
 #endif
@@ -940,7 +932,6 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 		}
 	}
 
-	// N.B.: success is identical on every MPI rank
 	if (!success) {
 		// crash, we have exceeded max_retries
 		amrex::Print() << "\nQUOKKA FATAL ERROR\n"
@@ -1023,10 +1014,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	auto dx = geom[lev].CellSizeArray();
 
 	// do Strang split source terms (first half-step)
-	bool reactSuccess = addStrangSplitSourcesWithBuiltin(state_old_cc_tmp, lev, time, 0.5 * dt_lev);
-	if (!reactSuccess) {
-		return false;
-	}
+	addStrangSplitSourcesWithBuiltin(state_old_cc_tmp, lev, time, 0.5 * dt_lev);
 
 	// create temporary multifab for intermediate state
 	amrex::MultiFab state_inter_cc_(grids[lev], dmap[lev], Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
@@ -1049,20 +1037,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	}
 
 	// update ghost zones [old timestep]
-	// use *low-order* boundary conditions for first-order fluxes (i.e., no NSCBC!)
-	fillBoundaryConditions(state_old_cc_tmp, state_old_cc_tmp, lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState,
-			       setBoundaryFunctorLowOrder<problem_t>{});
-
-	// check state validity
-	AMREX_ASSERT(!state_old_cc_tmp.contains_nan(0, state_old_cc_tmp.nComp()));
-	AMREX_ASSERT(!state_old_cc_tmp.contains_nan()); // check ghost cells
-
-	// compute first-order fluxes
-	auto [FOfluxArrays, FOfaceVel] = computeFOHydroFluxes(state_old_cc_tmp, ncompHydro_, lev);
-
-	// redo boundary fill with high-order boundary conditions
-	fillBoundaryConditions(state_old_cc_tmp, state_old_cc_tmp, lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState,
-			       setBoundaryFunctor<problem_t>{});
+	fillBoundaryConditions(state_old_cc_tmp, state_old_cc_tmp, lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState);
 
 	// LOW LEVEL DEBUGGING: output state_old_cc_tmp (with ghost cells)
 	if (lowLevelDebuggingOutput_ == 1) {
@@ -1081,6 +1056,8 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	// check state validity
 	AMREX_ASSERT(!state_old_cc_tmp.contains_nan(0, state_old_cc_tmp.nComp()));
 	AMREX_ASSERT(!state_old_cc_tmp.contains_nan()); // check ghost cells
+
+	auto [FOfluxArrays, FOfaceVel] = computeFOHydroFluxes(state_old_cc_tmp, ncompHydro_, lev);
 
 	// Stage 1 of RK2-SSP
 	{
@@ -1165,19 +1142,11 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 					amrex::Print() << "[FOFC-1] failed for " << ncells_bad << " cells on level " << lev << "\n";
 				}
 				if (abortOnFofcFailure_ != 0) {
-#ifdef AMREX_USE_ASCENT
-					// write Blueprint HDF5 files
-					conduit::Node mesh;
-					amrex::SingleLevelToBlueprint(state_inter_cc_, componentNames_cc_, geom[lev], time, istep[lev] + 1, mesh);
-					conduit::Node bpMeshHost;
-					bpMeshHost.set(mesh); // copy to host mem (needed for Blueprint HDF5 output)
-					amrex::WriteBlueprintFiles(bpMeshHost, "debug_hydro_state_inter_cc_", istep[lev] + 1, "hdf5");
-#endif
-					// indicate failure
 					return false;
 				}
 			}
 		}
+
 		// prevent vacuum
 		HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, stateNew);
 
@@ -1197,7 +1166,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	if (integratorOrder_ == 2) {
 		// update ghost zones [intermediate stage stored in state_inter_cc_]
 		fillBoundaryConditions(state_inter_cc_, state_inter_cc_, lev, time + dt_lev, quokka::centering::cc, quokka::direction::na, PreInterpState,
-				       PostInterpState, setBoundaryFunctor<problem_t>{});
+				       PostInterpState);
 
 		// check intermediate state validity
 		AMREX_ASSERT(!state_inter_cc_.contains_nan(0, state_inter_cc_.nComp()));
@@ -1261,6 +1230,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 				}
 			}
 		}
+
 		// prevent vacuum
 		HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, stateFinal);
 
@@ -1278,13 +1248,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	}
 	amrex::Gpu::streamSynchronizeAll();
 
-#if 0
-	// abort early if hydro update is bad
-	if (isCflViolated(lev, time, dt_lev)) {
-		return false;
-#endif
-
-// advect tracer particles using avgFaceVel
+	// advect tracer particles using avgFaceVel
 #ifdef AMREX_PARTICLES
 	if (do_tracers != 0) {
 		// copy avgFaceVel to state_new_fc_[lev]
@@ -1297,7 +1261,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			fillBoundaryConditions(state_new_fc_[lev][idim], state_new_fc_[lev][idim], lev, time + 0.5 * dt_lev, quokka::centering::fc,
 					       quokka::direction{idim}, AMRSimulation<problem_t>::InterpHookNone, AMRSimulation<problem_t>::InterpHookNone,
-					       setBoundaryFunctorFaceVar<problem_t>{}, FillPatchType::fillpatch_function);
+					       FillPatchType::fillpatch_function);
 		}
 
 		// copy state_new_fc_[lev] to avgFaceVel
@@ -1312,19 +1276,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 #endif
 
 	// do Strang split source terms (second half-step)
-	reactSuccess = addStrangSplitSourcesWithBuiltin(state_new_cc_[lev], lev, time + dt_lev, 0.5 * dt_lev);
-	if (!reactSuccess) {
-		return false;
-	}
-
-#if 0
-	// prevent vacuum
-	HydroSystem<problem_t>::EnforceLimits(densityFloor_, pressureFloor_, speedCeiling_, tempCeiling_, tempFloor_, state_new_cc_[lev]);
-	if (useDualEnergy_ == 1) {
-		// sync internal energy (requires positive density)
-		HydroSystem<problem_t>::SyncDualEnergy(state_new_cc_[lev]);
-	}
-#endif
+	addStrangSplitSourcesWithBuiltin(state_new_cc_[lev], lev, time + dt_lev, 0.5 * dt_lev);
 
 	// check if we have violated the CFL timestep
 	return !isCflViolated(lev, time, dt_lev);
@@ -1741,8 +1693,8 @@ void RadhydroSimulation<problem_t>::advanceRadiationForwardEuler(int lev, amrex:
 	auto const &dx = geom[lev].CellSizeArray();
 
 	// update ghost zones [old timestep]
-	fillBoundaryConditions(state_old_cc_[lev], state_old_cc_[lev], lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState,
-			       setBoundaryFunctor<problem_t>{});
+	fillBoundaryConditions(state_old_cc_[lev], state_old_cc_[lev], lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState,
+			       PostInterpState);
 
 	// advance all grids on local processor (Stage 1 of integrator)
 	for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
@@ -1774,7 +1726,7 @@ void RadhydroSimulation<problem_t>::advanceRadiationMidpointRK2(int lev, amrex::
 
 	// update ghost zones [intermediate stage stored in state_new_cc_]
 	fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, (time + dt_radiation), quokka::centering::cc, quokka::direction::na, PreInterpState,
-			       PostInterpState, setBoundaryFunctor<problem_t>{});
+			       PostInterpState);
 
 	// advance all grids on local processor (Stage 2 of integrator)
 	for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
