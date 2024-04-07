@@ -424,11 +424,10 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeVelocity
 template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::isStateValid(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> bool
 {
-	// check density positivity
+	// check if cons(i, j, k) is a valid state
 	const amrex::Real rho = cons(i, j, k, density_index);
 	bool isDensityPositive = (rho > 0.);
 
-	// check mass scalar positivity
 	bool isMassScalarPositive = true;
 	if constexpr (nmscalars_ > 0) {
 		amrex::GpuArray<Real, nmscalars_> massScalars_ = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
@@ -440,7 +439,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::isStateValid(am
 			}
 		}
 	}
-
 	// when the dual energy method is used, we *cannot* reset on pressure
 	// failures. on the other hand, we don't need to -- the auxiliary internal
 	// energy is used instead!
@@ -493,10 +491,6 @@ void HydroSystem<problem_t>::PredictStep(amrex::MultiFab const &consVarOld_mf, a
 		// check if state is valid -- flag for re-do if not
 		if (!isStateValid(consVarNew[bx], i, j, k)) {
 			redoFlag[bx](i, j, k) = quokka::redoFlag::redo;
-			printf("redoFlag on cell (%d, %d, %d): \n", i, j, k); // NOLINT
-			for (int n = 0; n < nvars; ++n) {
-				printf("\t(%d, %d, %d) comp %d = %g\n", i, j, k, n, consVarNew[bx](i, j, k, n)); // NOLINT
-			}
 		} else {
 			redoFlag[bx](i, j, k) = quokka::redoFlag::none;
 		}
