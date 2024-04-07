@@ -1296,7 +1296,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					tau = dt * rho * kappaEVec * chat * lorentz_factor;
 					if constexpr (use_D_as_base) {
 						Rvec = tau0 * D;
-					} 
+					}
 					for (int g = 0; g < nGroups_; ++g) {
 						// If tau = 0.0, Erad_guess shouldn't change
 						if (tau[g] > 0.0) {
