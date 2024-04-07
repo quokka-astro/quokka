@@ -31,6 +31,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dQ_dx_inflow_x1_lower(quokka::valarray<
 	// (This is only necessary for continuous inflows, i.e., where a shock or contact discontinuity is not desired.)
 	// NOTE: This boundary condition is only defined for an ideal gas (with constant k_B/mu).
 
+	// TODO(bwibking): add transverse terms
+
 	const Real rho = Q[0];
 	const Real u = Q[1];
 	const Real v = Q[2];
@@ -49,7 +51,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dQ_dx_inflow_x1_lower(quokka::valarray<
 	const Real dP_dx = dQ_dx_data[4];
 
 	const Real c = quokka::EOS<problem_t>::ComputeSoundSpeed(rho, P);
-	const Real M = std::sqrt(u * u + v * v + w * w) / c;
+	const amrex::Real M = std::clamp(std::sqrt(u * u + v * v + w * w) / c, 0., 1.);
 
 	const Real eta_2 = 2.;
 	const Real eta_3 = 2.;
@@ -134,6 +136,55 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setInflowX1Lower(const amrex::IntVect &
 	} else if (i == ilo - 4) {
 		consCell = HydroSystem<problem_t>::ComputeConsVars(Q_im4);
 	}
+
+	consVar(i, j, k, HydroSystem<problem_t>::density_index) = consCell[0];
+	consVar(i, j, k, HydroSystem<problem_t>::x1Momentum_index) = consCell[1];
+	consVar(i, j, k, HydroSystem<problem_t>::x2Momentum_index) = consCell[2];
+	consVar(i, j, k, HydroSystem<problem_t>::x3Momentum_index) = consCell[3];
+	consVar(i, j, k, HydroSystem<problem_t>::energy_index) = consCell[4];
+	consVar(i, j, k, HydroSystem<problem_t>::internalEnergy_index) = consCell[5];
+	for (int n = 0; n < HydroSystem<problem_t>::nscalars_; ++n) {
+		consVar(i, j, k, HydroSystem<problem_t>::scalar0_index + n) = consCell[6 + n];
+	}
+}
+
+template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setInflowX1LowerLowOrder(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar,
+								  amrex::GeometryData const &geom, const amrex::Real T_t, const amrex::Real u_t,
+								  const amrex::Real v_t, const amrex::Real w_t,
+								  amrex::GpuArray<Real, HydroSystem<problem_t>::nscalars_> const &s_t)
+{
+	// x1 upper boundary -- subsonic outflow
+	auto [i, j, k] = iv.dim3();
+	amrex::Box const &box = geom.Domain();
+	const auto &domain_lo = box.loVect3d();
+	const int ilo = domain_lo[0];
+	const Real dx = geom.CellSize(0);
+	const Real Lx = geom.prob_domain.length(0);
+	constexpr int N = HydroSystem<problem_t>::nvar_;
+
+	/// x1 lower boundary -- subsonic inflow
+
+	// compute primitive vars from valid region
+	quokka::valarray<amrex::Real, N> const Q_i = HydroSystem<problem_t>::ComputePrimVars(consVar, ilo, j, k);
+
+	// compute centered ghost values
+	const Real rho = Q_i[0];
+	const Real Eint = quokka::EOS<problem_t>::ComputeEintFromTgas(rho, T_t);
+	quokka::valarray<amrex::Real, N> Q_im1{};
+	Q_im1[0] = rho; // extrapolate density
+	Q_im1[1] = u_t; // prescribe velocity
+	Q_im1[2] = v_t;
+	Q_im1[3] = w_t;
+	Q_im1[4] = quokka::EOS<problem_t>::ComputePressure(rho, Eint); // prescribe temperature
+	Q_im1[5] = Eint;					       // prescribe temperature
+	for (int i = 0; i < HydroSystem<problem_t>::nscalars_; ++i) {
+		Q_im1[6 + i] = s_t[i]; // prescribe passive scalars
+	}
+
+	// set cell values
+	quokka::valarray<amrex::Real, N> consCell{};
+	consCell = HydroSystem<problem_t>::ComputeConsVars(Q_im1);
 
 	consVar(i, j, k, HydroSystem<problem_t>::density_index) = consCell[0];
 	consVar(i, j, k, HydroSystem<problem_t>::x1Momentum_index) = consCell[1];
