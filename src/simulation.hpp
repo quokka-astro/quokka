@@ -1965,7 +1965,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::AverageDownTo(int c
 template <typename problem_t> template <typename F> auto AMRSimulation<problem_t>::computeVolumeIntegral(F const &user_f) -> amrex::Real
 {
 	// compute integral of user_f(i, j, k, state) along the given axis.
-	BL_PROFILE("AMRSimulation::computeVolumeIntegral()");
+	const BL_PROFILE("AMRSimulation::computeVolumeIntegral()");
 
 	// allocate temporary multifabs
 	amrex::Vector<amrex::MultiFab> q;
