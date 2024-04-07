@@ -218,9 +218,8 @@ auto problem_main() -> int
 
 	// Problem parameters
 	const int max_timesteps = 1e6;
-	const double CFL_number = 0.9;
 	const double initial_dt = 5.0e-12; // s
-	const double max_dt = 5.0e-12;	   // s
+	const double max_dt = 5.0;	   // s
 	const double max_time = 10.0e-9;   // s
 	// const int nx = 60; // [18 == matches resolution of McClarren & Lowrie (2008)]
 	// const double Lx = 0.66; // cm
@@ -252,7 +251,6 @@ auto problem_main() -> int
 	sim.stopTime_ = max_time;
 	sim.initDt_ = initial_dt;
 	sim.maxDt_ = max_dt;
-	sim.radiationCflNumber_ = CFL_number;
 	sim.maxTimesteps_ = max_timesteps;
 	sim.plotfileInterval_ = -1;
 
