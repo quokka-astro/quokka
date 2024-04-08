@@ -161,7 +161,7 @@ void initialize_cloudy_data(cloudy_cooling_tools_data &my_cloudy, std::string co
 
 		for (int64_t q = 0; q < my_cloudy.data_size; q++) {
 			// Convert to code units
-			double value = my_cloudy.heating_dataVec[q] / CoolUnit;
+			double const value = my_cloudy.heating_dataVec[q] / CoolUnit;
 			// Convert to not-quite-log10 (using FastMath)
 			my_cloudy.heating_dataVec[q] = value > 0 ? FastMath::log10(value) : small_fastlog_value;
 		}

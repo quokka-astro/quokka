@@ -132,9 +132,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(double rho, do
 
 	auto f = [log_nH, C, tables](const Real &T) noexcept {
 		// compute new mu from mu(log10 T) table
-		Real log_T = clamp(std::log10(T), 1., 9.);
-		Real mu = interpolate2d(log_nH, log_T, tables.log_nH, tables.log_Tgas, tables.meanMolWeight);
-		Real fun = C * mu - T;
+		Real const log_T = clamp(std::log10(T), 1., 9.);
+		Real const mu = interpolate2d(log_nH, log_T, tables.log_nH, tables.log_Tgas, tables.meanMolWeight);
+		Real const fun = C * mu - T;
 		return fun;
 	};
 
@@ -145,7 +145,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(double rho, do
 	const Real T_max = std::clamp(C * mu_max, Tmin_table, Tmax_table);
 
 	// do root-finding
-	quokka::math::eps_tolerance<Real> tol(reltol);
+	quokka::math::eps_tolerance<Real> const tol(reltol);
 	Real T_sol = NAN;
 
 	if (T_min < T_max) {
