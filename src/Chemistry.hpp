@@ -31,14 +31,18 @@ AMREX_GPU_DEVICE void chemburner(burn_t &chemstate, Real dt);
 template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const Real dt, const Real max_density_allowed, const Real min_density_allowed)
 {
 
+	// Start off by assuming a successful burn.
+	int burn_success = 1;
+
+	amrex::Gpu::Buffer<int> d_num_failed({0});
+	auto *p_num_failed = d_num_failed.data();
+
+	int num_failed = 0;
+
 	const BL_PROFILE("Chemistry::computeChemistry()");
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &state = mf.array(iter);
-
-		if (dt < 0) {
-			amrex::Abort("Cannot do chemistry with dt < 0!");
-		}
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			const Real rho = state(i, j, k, HydroSystem<problem_t>::density_index);
@@ -60,6 +64,8 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 			// do chemistry using microphysics
 
 			burn_t chemstate;
+			chemstate.success = true;
+			int burn_failed = 0;
 
 			for (int nn = 0; nn < NumSpec; ++nn) {
 				inmfracs[nn] = chem[nn] * rho / spmasses[nn];
@@ -94,7 +100,11 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 			}
 
 			if (!chemstate.success) {
-				amrex::Abort("VODE integration was unsuccessful!");
+				burn_failed = 1;
+			}
+
+			if (burn_failed) {
+				amrex::Gpu::Atomic::Add(p_num_failed, burn_failed);
 			}
 
 			// ensure positivity and normalize
@@ -142,6 +152,19 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 				state(i, j, k, HydroSystem<problem_t>::scalar0_index + nn) = inmfracs[nn] * rho; // scale by rho to return partial densities
 			}
 		});
+
+#if defined(AMREX_USE_HIP)
+		amrex::Gpu::streamSynchronize(); // otherwise HIP may fail to allocate the necessary resources.
+#endif
+	}
+
+	num_failed = *(d_num_failed.copyToHost());
+
+	burn_success = !num_failed;
+	amrex::ParallelDescriptor::ReduceIntMin(burn_success);
+
+	if (!burn_success) {
+		amrex::Abort("Burn failed in VODE. Aborting.");
 	}
 }
 
