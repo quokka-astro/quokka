@@ -10,10 +10,9 @@
 // uncomment this to debug the root-finding code (does NOT work on GPU!)
 // #define BOOST_MATH_INSTRUMENT
 
-
 #include "AMReX_ParmParse.H"
-#include "GrackleLikeCooling.hpp"
 #include "EOS.hpp"
+#include "GrackleLikeCooling.hpp"
 #include "ODEIntegrate.hpp"
 
 using amrex::Real;
