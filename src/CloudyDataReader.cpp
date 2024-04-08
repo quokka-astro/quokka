@@ -55,8 +55,7 @@ void initialize_cloudy_data(cloudy_cooling_tools_data &my_cloudy, std::string co
 	amrex::Print() << fmt::format("cloudy_table_file: {}.\n", grackle_data_file);
 
 	// Read cooling data from hdf5 file
-	herr_t status = 0;
-	herr_t h5_error = -1;
+	herr_t const h5_error = -1;
 	hid_t const file_id = H5Fopen(grackle_data_file.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(file_id != h5_error, "Failed to open Grackle data file!");
 
@@ -69,21 +68,24 @@ void initialize_cloudy_data(cloudy_cooling_tools_data &my_cloudy, std::string co
 	{
 		hid_t const attr_id = H5Aopen_name(dset_id, "Rank");
 		int64_t temp_int = 0;
-		status = H5Aread(attr_id, HDF5_I8, &temp_int);
+		H5Aread(attr_id, HDF5_I8, &temp_int);
 		my_cloudy.grid_rank = temp_int;
-		status = H5Aclose(attr_id);
+		H5Aclose(attr_id);
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(my_cloudy.grid_rank <= CLOUDY_MAX_DIMENSION,
+						 "Error: rank of Cloudy cooling data must be less than or equal to "
+						 "CLOUDY_MAX_DIMENSION");
 	}
 
 	// Grid dimension
 	{
 		std::vector<int64_t> temp_int_arr(my_cloudy.grid_rank);
 		hid_t const attr_id = H5Aopen_name(dset_id, "Dimension");
-		status = H5Aread(attr_id, HDF5_I8, temp_int_arr.data());
+		H5Aread(attr_id, HDF5_I8, temp_int_arr.data());
 
 		for (int64_t q = 0; q < my_cloudy.grid_rank; q++) {
 			my_cloudy.grid_dimension[q] = temp_int_arr[q];
 		}
-		status = H5Aclose(attr_id);
+		H5Aclose(attr_id);
 	}
 
 	// Read grid parameters
@@ -96,7 +98,7 @@ void initialize_cloudy_data(cloudy_cooling_tools_data &my_cloudy, std::string co
 
 		my_cloudy.grid_parametersVec[q] = amrex::Gpu::PinnedVector<double>(my_cloudy.grid_dimension[q]);
 		dset_id = H5Dopen2(file_id, parameter_name.c_str(), H5P_DEFAULT);
-		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, my_cloudy.grid_parametersVec[q].dataPtr());
+		H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, my_cloudy.grid_parametersVec[q].dataPtr());
 		my_cloudy.grid_parameters[q] =
 		    amrex::Table1D<double>(my_cloudy.grid_parametersVec[q].dataPtr(), 0, static_cast<int>(my_cloudy.grid_dimension[q]));
 
@@ -106,7 +108,7 @@ void initialize_cloudy_data(cloudy_cooling_tools_data &my_cloudy, std::string co
 				my_cloudy.grid_parameters[q](w) = log10(my_cloudy.grid_parameters[q](w));
 			}
 		}
-		status = H5Dclose(dset_id);
+		H5Dclose(dset_id);
 
 		amrex::Print() << fmt::format("\t{}: {} to {} ({} steps).\n", parameter_name, my_cloudy.grid_parameters[q](0),
 					      my_cloudy.grid_parameters[q](static_cast<int>(my_cloudy.grid_dimension[q]) - 1), my_cloudy.grid_dimension[q]);
@@ -125,7 +127,7 @@ void initialize_cloudy_data(cloudy_cooling_tools_data &my_cloudy, std::string co
 		parameter_name = "/Cooling";
 		dset_id = H5Dopen2(file_id, parameter_name.c_str(),
 				   H5P_DEFAULT); // new API in HDF5 1.8.0+
-		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, my_cloudy.cooling_dataVec.dataPtr());
+		const hid_t status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, my_cloudy.cooling_dataVec.dataPtr());
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read Cooling dataset!");
 
 		// N.B.: Table2D uses column-major (Fortran-order) indexing, but HDF5 tables use row-major (C-order) indexing!
@@ -139,7 +141,7 @@ void initialize_cloudy_data(cloudy_cooling_tools_data &my_cloudy, std::string co
 			// Convert to not-quite-log10 (using FastMath)
 			my_cloudy.cooling_dataVec[q] = value > 0 ? FastMath::log10(value) : small_fastlog_value;
 		}
-		status = H5Dclose(dset_id);
+		H5Dclose(dset_id);
 	}
 
 	// Read heating data
@@ -149,7 +151,7 @@ void initialize_cloudy_data(cloudy_cooling_tools_data &my_cloudy, std::string co
 		parameter_name = "/Heating";
 		dset_id = H5Dopen2(file_id, parameter_name.c_str(),
 				   H5P_DEFAULT); // new API in HDF5 1.8.0+
-		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, my_cloudy.heating_dataVec.dataPtr());
+		const hid_t status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, my_cloudy.heating_dataVec.dataPtr());
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read Heating dataset!");
 
 		// N.B.: Table2D uses column-major (Fortran-order) indexing, but HDF5 tables use row-major (C-order) indexing!
@@ -163,7 +165,7 @@ void initialize_cloudy_data(cloudy_cooling_tools_data &my_cloudy, std::string co
 			// Convert to not-quite-log10 (using FastMath)
 			my_cloudy.heating_dataVec[q] = value > 0 ? FastMath::log10(value) : small_fastlog_value;
 		}
-		status = H5Dclose(dset_id);
+		H5Dclose(dset_id);
 	}
 
 	// Read mean molecular weight table
@@ -178,14 +180,13 @@ void initialize_cloudy_data(cloudy_cooling_tools_data &my_cloudy, std::string co
 		parameter_name = "/MMW";
 		dset_id = H5Dopen2(file_id, parameter_name.c_str(),
 				   H5P_DEFAULT); // new API in HDF5 1.8.0+
-		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, my_cloudy.mmw_dataVec.dataPtr());
+		const hid_t status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, my_cloudy.mmw_dataVec.dataPtr());
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read MMW dataset!");
-		status = H5Dclose(dset_id);
+		H5Dclose(dset_id);
 	}
-	status = H5Fclose(file_id);
 
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(my_cloudy.grid_rank <= CLOUDY_MAX_DIMENSION, "Error: rank of Cloudy cooling data must be less than or equal to "
-										      "CLOUDY_MAX_DIMENSION");
+	// close HDF5 file
+	H5Fclose(file_id);
 }
 
 auto extract_2d_table(amrex::Table2D<double> const &table2D) -> amrex::TableData<double, 2>
