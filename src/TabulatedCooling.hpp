@@ -245,7 +245,7 @@ template <typename problem_t> auto computeCooling(amrex::MultiFab &mf, const Rea
 {
 	const BL_PROFILE("computeCooling()")
 
-	const Real dt = dt_in;
+	    const Real dt = dt_in;
 	const Real reltol_floor = 0.01;
 	const Real rtol = 1.0e-4; // not recommended to change this
 
