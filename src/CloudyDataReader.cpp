@@ -122,7 +122,7 @@ void initialize_cloudy_data(cloudy_cooling_tools_data &my_cloudy, std::string co
 	{
 		my_cloudy.cooling_dataVec = amrex::Gpu::PinnedVector<double>(my_cloudy.data_size);
 
-		std::string const parameter_name = "/Cooling";
+		parameter_name = "/Cooling";
 		dset_id = H5Dopen2(file_id, parameter_name.c_str(),
 				   H5P_DEFAULT); // new API in HDF5 1.8.0+
 		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, my_cloudy.cooling_dataVec.dataPtr());
