@@ -10,17 +10,11 @@
 // uncomment this to debug the root-finding code (does NOT work on GPU!)
 // #define BOOST_MATH_INSTRUMENT
 
-#include <random>
-#include <vector>
 
-#include "AMReX.H"
 #include "AMReX_ParmParse.H"
-#include "CloudyCooling.hpp"
+#include "GrackleLikeCooling.hpp"
 #include "EOS.hpp"
 #include "ODEIntegrate.hpp"
-#include "cloud.hpp"
-#include "hydro_system.hpp"
-#include "radiation_system.hpp"
 
 using amrex::Real;
 using namespace quokka::GrackleLikeCooling;
@@ -40,11 +34,11 @@ auto problem_main() -> int
 	const Real dt = 1.92399749834457487e8;	   // s
 
 	// Read Cloudy tables
-	cloudy_tables cloudyTables;
+	grackle_tables cloudyTables;
 	std::string filename;
 	amrex::ParmParse pp("cooling");
 	pp.query("grackle_data_file", filename);
-	readCloudyData(filename, cloudyTables);
+	readGrackleData(filename, cloudyTables);
 	auto tables = cloudyTables.const_tables();
 
 	const Real T = ComputeTgasFromEgas(rho, Eint, quokka::EOS_Traits<ShockCloud>::gamma, tables);
