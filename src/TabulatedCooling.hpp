@@ -243,7 +243,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto user_rhs(Real /*t*/, quokka::valar
 
 template <typename problem_t> auto computeCooling(amrex::MultiFab &mf, const Real dt_in, cloudy_tables &cloudyTables, const Real T_floor) -> bool
 {
-	BL_PROFILE("computeCooling()")
+	const BL_PROFILE("computeCooling()")
 
 	const Real dt = dt_in;
 	const Real reltol_floor = 0.01;
