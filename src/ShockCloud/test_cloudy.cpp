@@ -23,7 +23,7 @@
 #include "radiation_system.hpp"
 
 using amrex::Real;
-using namespace quokka::cooling;
+using namespace quokka::GrackleLikeCooling;
 
 struct ShockCloud {
 }; // dummy type to allow compile-type polymorphism via template specialization

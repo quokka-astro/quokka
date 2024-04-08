@@ -3,20 +3,20 @@
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file CloudyCooling.cpp
-/// \brief Implements methods for interpolating cooling rates from Cloudy
+/// \file GrackleLikeCooling.cpp
+/// \brief Implements methods for interpolating cooling rates from Grackle
 /// tables.
 ///
 
-#include "CloudyCooling.hpp"
+#include "GrackleLikeCooling.hpp"
 
-namespace quokka::cooling
+namespace quokka::GrackleLikeCooling
 {
 
-void readCloudyData(std::string &grackle_hdf5_file, cloudy_tables &cloudyTables)
+void readGrackleData(std::string &grackle_hdf5_file, grackle_tables &cloudyTables)
 {
-	cloudy_data cloudy_primordial;
-	cloudy_data cloudy_metals;
+	grackle_data cloudy_primordial;
+	grackle_data cloudy_metals;
 	code_units my_units; // cgs
 	my_units.density_units = 1.0;
 	my_units.length_units = 1.0;
@@ -39,11 +39,11 @@ void readCloudyData(std::string &grackle_hdf5_file, cloudy_tables &cloudyTables)
 	cloudyTables.metalHeating = std::make_unique<amrex::TableData<double, 2>>(extract_2d_table(cloudy_metals.heating_data, z_index));
 }
 
-auto cloudy_tables::const_tables() const -> cloudyGpuConstTables
+auto grackle_tables::const_tables() const -> grackleGpuConstTables
 {
-	cloudyGpuConstTables tables{log_nH->const_table(),	 log_Tgas->const_table(),     primCooling->const_table(),    primHeating->const_table(),
-				    metalCooling->const_table(), metalHeating->const_table(), mean_mol_weight->const_table()};
+	grackleGpuConstTables tables{log_nH->const_table(),	  log_Tgas->const_table(),     primCooling->const_table(),    primHeating->const_table(),
+				     metalCooling->const_table(), metalHeating->const_table(), mean_mol_weight->const_table()};
 	return tables;
 }
 
-} // namespace quokka::cooling
+} // namespace quokka::GrackleLikeCooling

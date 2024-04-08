@@ -26,9 +26,12 @@
 #include "FastMath.hpp"
 #include "fmt/core.h"
 
+namespace quokka::GrackleLikeCooling
+{
+
 static const bool grackle_verbose = true;
 
-void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name, std::string &grackle_data_file, code_units &my_units)
+void initialize_cloudy_data(grackle_data &my_cloudy, char const *group_name, std::string &grackle_data_file, code_units &my_units)
 {
 	// Initialize vectors
 	my_cloudy.grid_parameters.resize(CLOUDY_MAX_DIMENSION);
@@ -38,8 +41,8 @@ void initialize_cloudy_data(cloudy_data &my_cloudy, char const *group_name, std:
 	}
 
 	if (grackle_verbose) {
-		amrex::Print() << fmt::format("Initializing Cloudy cooling: {}.\n", group_name);
-		amrex::Print() << fmt::format("cloudy_table_file: {}.\n", grackle_data_file);
+		amrex::Print() << fmt::format("Initializing Grackle-like cooling: {}.\n", group_name);
+		amrex::Print() << fmt::format("grackle_data_file: {}.\n", grackle_data_file);
 	}
 
 	// Get unit conversion factors (assuming z=0)
@@ -270,3 +273,5 @@ auto copy_1d_table(amrex::Table1D<double> const &table1D) -> amrex::TableData<do
 	}
 	return tableData;
 }
+
+} // namespace quokka::GrackleLikeCooling

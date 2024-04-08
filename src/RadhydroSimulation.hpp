@@ -12,20 +12,17 @@
 #include <array>
 #include <filesystem>
 #include <limits>
-#include <memory>
 #include <string>
 #include <tuple>
 #include <unordered_map>
 #include <utility>
 
 #include "AMReX.H"
-#include "AMReX_Algorithm.H"
 #include "AMReX_AmrParticles.H"
 #include "AMReX_Arena.H"
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
 #include "AMReX_BCRec.H"
-#include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_Box.H"
 #include "AMReX_FArrayBox.H"
@@ -44,7 +41,6 @@
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
 #include "AMReX_YAFluxRegister.H"
-#include "physics_numVars.hpp"
 
 #ifdef AMREX_USE_ASCENT
 #include "AMReX_Conduit_Blueprint.H"
@@ -53,15 +49,16 @@
 #endif
 
 #include "Chemistry.hpp"
-#include "CloudyCooling.hpp"
+#include "GrackleLikeCooling.hpp"
 #include "SimulationData.hpp"
+#include "TabulatedCooling.hpp"
+#include "eos.H"
 #include "hydro_system.hpp"
 #include "hyperbolic_system.hpp"
 #include "physics_info.hpp"
+#include "physics_numVars.hpp"
 #include "radiation_system.hpp"
 #include "simulation.hpp"
-
-#include "eos.H"
 
 // Simulation class should be initialized only once per program (i.e., is a singleton)
 template <typename problem_t> class RadhydroSimulation : public AMRSimulation<problem_t>
@@ -117,7 +114,9 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	Real max_density_allowed = std::numeric_limits<amrex::Real>::max();
 	Real min_density_allowed = std::numeric_limits<amrex::Real>::min();
 
-	quokka::cooling::cloudy_tables cloudyTables_;
+	quokka::GrackleLikeCooling::grackle_tables grackleTables_;
+	quokka::TabulatedCooling::cloudy_tables cloudyTables_;
+	std::string coolingTableType_{};
 	std::string coolingTableFilename_{};
 
 	static constexpr int nvarTotal_cc_ = Physics_Indices<problem_t>::nvarTotal_cc;
@@ -353,13 +352,22 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::readParmParse(
 		amrex::ParmParse hpp("cooling");
 		int alwaysReadTables = 0;
 		hpp.query("enabled", enableCooling_);
+		hpp.query("cooling_table_type", coolingTableType_);
 		hpp.query("read_tables_even_if_disabled", alwaysReadTables);
-		hpp.query("grackle_data_file", coolingTableFilename_);
+		hpp.query("hdf5_data_file", coolingTableFilename_);
 
 		if ((enableCooling_ == 1) || (alwaysReadTables == 1)) {
-			// read Cloudy tables
-			amrex::Print() << "Reading Cloudy tables...\n";
-			quokka::cooling::readCloudyData(coolingTableFilename_, cloudyTables_);
+			if (coolingTableType_ == "grackle") {
+				// read Grackle tables
+				amrex::Print() << "Reading Grackle tables...\n";
+				quokka::GrackleLikeCooling::readGrackleData(coolingTableFilename_, grackleTables_);
+			} else if (coolingTableType_ == "cloudy_cooling_tools") {
+				// read cloudy_cooling_tools tables
+				amrex::Print() << "Reading cloudy-cooling-tools tables...\n";
+				quokka::TabulatedCooling::readCloudyData(coolingTableFilename_, cloudyTables_);
+			} else {
+				amrex::Abort("Invalid cooling table type!");
+			}
 		}
 	}
 
@@ -503,7 +511,13 @@ void RadhydroSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::Mult
 {
 	if (enableCooling_ == 1) {
 		// compute cooling
-		quokka::cooling::computeCooling<problem_t>(state, dt, cloudyTables_, tempFloor_);
+		if (coolingTableType_ == "grackle") {
+			quokka::GrackleLikeCooling::computeCooling<problem_t>(state, dt, grackleTables_, tempFloor_);
+		} else if (coolingTableType_ == "cloudy_cooling_tools") {
+			quokka::TabulatedCooling::computeCooling<problem_t>(state, dt, cloudyTables_, tempFloor_);
+		} else {
+			amrex::Abort("Invalid cooling table type!");
+		}
 	}
 
 #ifdef PRIMORDIAL_CHEM
