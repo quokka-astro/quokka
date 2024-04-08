@@ -1,5 +1,5 @@
-#ifndef GRACKLEDATAREADER_HPP_ // NOLINT
-#define GRACKLEDATAREADER_HPP_
+#ifndef CLOUDYDATAREADER_HPP_ // NOLINT
+#define CLOUDYDATAREADER_HPP_
 //==============================================================================
 // TwoMomentRad - a radiation transport library for patch-based AMR codes
 // Copyright 2020 Benjamin Wibking.
@@ -85,4 +85,4 @@ auto copy_1d_table(amrex::Table1D<double> const &table1D) -> amrex::TableData<do
 
 } // namespace quokka::TabulatedCooling
 
-#endif // GRACKLEDATAREADER_HPP_
+#endif // CLOUDYDATAREADER_HPP_
