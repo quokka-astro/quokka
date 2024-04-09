@@ -860,8 +860,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeRadPressure(const double erad
 
 	RadPressureResult result{};
 	result.F = {Fn, Tnx * erad, Tny * erad, Tnz * erad};
-	// Removed the 0.1 floor from the original version. More on https://github.com/quokka-astro/quokka/pull/582 .
-	result.S = std::sqrt(Tnormal);
+	// It might be possible to remove this 0.1 floor without affecting the code. I tried and only the 3D RadForce failed (causing S_L = S_R = 0.0 and F[0] = NAN). Read more on https://github.com/quokka-astro/quokka/pull/582 .
+	result.S = std::max(0.1, std::sqrt(Tnormal));
 
 	return result;
 }
