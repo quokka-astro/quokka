@@ -32,7 +32,6 @@
 // Hyper parameters of the radiation solver
 
 static constexpr bool include_work_term_in_source = true;
-static constexpr bool use_wavespeed_correction = false;
 
 // Time integration scheme
 // IMEX PD-ARS
@@ -46,6 +45,9 @@ static constexpr double IMEX_a32 = 0.5; // 0 < IMEX_a32 <= 0.5
 static constexpr double c_light_cgs_ = C::c_light;	    // cgs
 static constexpr double radiation_constant_cgs_ = C::a_rad; // cgs
 static constexpr double inf = std::numeric_limits<double>::max();
+
+// Optional: include a wavespeed correction term in the radiation flux to suppress instability
+static const bool use_wavespeed_correction = false;
 
 // this struct is specialized by the user application code
 //
@@ -892,7 +894,7 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 		// calculate cell optical depth for each photon group
 		// Similar to the asymptotic-preserving flux correction in Skinner et al. (2019). Use optionally apply it here to reduce odd-even instability.
 		quokka::valarray<double, nGroups_> tau_cell{};
-		if constexpr (use_wavespeed_correction) {
+		if (use_wavespeed_correction) {
 			tau_cell = ComputeCellOpticalDepth<DIR>(consVar, dx, i, j, k);
 		}
 
@@ -975,7 +977,7 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 			// Read more in https://github.com/quokka-astro/quokka/pull/582
 			// However, we let the user optionally apply it to reduce odd-even instability.
 			quokka::valarray<double, numRadVars_> epsilon = {1.0, 1.0, 1.0, 1.0};
-			if constexpr (use_wavespeed_correction) {
+			if (use_wavespeed_correction) {
 				// no correction for odd zones
 				if ((i + j + k) % 2 == 0) {
 					const double S_corr = std::min(1.0, 1.0 / tau_cell[g]); // Skinner et al.
