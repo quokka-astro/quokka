@@ -858,7 +858,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeRadPressure(const double erad
 
 	RadPressureResult result{};
 	result.F = {Fn, Tnx * erad, Tny * erad, Tnz * erad};
-	// Removed the 0.1 floor from the original version. More on https://github.com/quokka-astro/quokka/pull/582 . 
+	// Removed the 0.1 floor from the original version. More on https://github.com/quokka-astro/quokka/pull/582 .
 	result.S = std::sqrt(Tnormal);
 
 	return result;
@@ -893,7 +893,7 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 		// Similar to the asymptotic-preserving flux correction in Skinner et al. (2019). Use optionally apply it here to reduce odd-even instability.
 		quokka::valarray<double, nGroups_> tau_cell{};
 		if constexpr (use_wavespeed_correction) {
-			 tau_cell = ComputeCellOpticalDepth<DIR>(consVar, dx, i, j, k);
+			tau_cell = ComputeCellOpticalDepth<DIR>(consVar, dx, i, j, k);
 		}
 
 		// gather left- and right- state variables
@@ -979,7 +979,7 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 				// no correction for odd zones
 				if ((i + j + k) % 2 == 0) {
 					const double S_corr = std::min(1.0, 1.0 / tau_cell[g]); // Skinner et al.
-					epsilon = {S_corr, 1.0, 1.0, 1.0}; // Skinner et al. (2019)
+					epsilon = {S_corr, 1.0, 1.0, 1.0};			// Skinner et al. (2019)
 				}
 			}
 
