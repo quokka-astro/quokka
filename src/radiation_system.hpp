@@ -32,6 +32,7 @@
 // Hyper parameters of the radiation solver
 
 static constexpr bool include_work_term_in_source = true;
+static constexpr bool use_wavespeed_correction = false;
 
 // Time integration scheme
 // IMEX PD-ARS
@@ -857,6 +858,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeRadPressure(const double erad
 
 	RadPressureResult result{};
 	result.F = {Fn, Tnx * erad, Tny * erad, Tnz * erad};
+	// Removed the 0.1 floor from the original version. More on https://github.com/quokka-astro/quokka/pull/582 . 
 	result.S = std::sqrt(Tnormal);
 
 	return result;
@@ -886,6 +888,13 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 
 		// HLL solver following Toro (1998) and Balsara (2017).
 		// Radiation eigenvalues from Skinner & Ostriker (2013).
+
+		// calculate cell optical depth for each photon group
+		// Similar to the asymptotic-preserving flux correction in Skinner et al. (2019). Use optionally apply it here to reduce odd-even instability.
+		quokka::valarray<double, nGroups_> tau_cell{};
+		if constexpr (use_wavespeed_correction) {
+			 tau_cell = ComputeCellOpticalDepth<DIR>(consVar, dx, i, j, k);
+		}
 
 		// gather left- and right- state variables
 		for (int g = 0; g < nGroups_; ++g) {
@@ -964,6 +973,15 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 
 			// Adjusting wavespeeds is no longer necessary with the IMEX PD-ARS scheme.
 			// Read more in https://github.com/quokka-astro/quokka/pull/582
+			// However, we let the user optionally apply it to reduce odd-even instability.
+			quokka::valarray<double, numRadVars_> epsilon = {1.0, 1.0, 1.0, 1.0};
+			if constexpr (use_wavespeed_correction) {
+				// no correction for odd zones
+				if ((i + j + k) % 2 == 0) {
+					const double S_corr = std::min(1.0, 1.0 / tau_cell[g]); // Skinner et al.
+					epsilon = {S_corr, 1.0, 1.0, 1.0}; // Skinner et al. (2019)
+				}
+			}
 
 			AMREX_ASSERT(std::abs(S_L) <= c_hat_); // NOLINT
 			AMREX_ASSERT(std::abs(S_R) <= c_hat_); // NOLINT
@@ -971,7 +989,7 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 			// in the frozen Eddington tensor approximation, we are always
 			// in the star region, so F = F_star
 			const quokka::valarray<double, numRadVars_> F =
-			    (S_R / (S_R - S_L)) * F_L - (S_L / (S_R - S_L)) * F_R + (S_R * S_L / (S_R - S_L)) * (U_R - U_L);
+			    (S_R / (S_R - S_L)) * F_L - (S_L / (S_R - S_L)) * F_R + epsilon * (S_R * S_L / (S_R - S_L)) * (U_R - U_L);
 
 			// check states are valid
 			AMREX_ASSERT(!std::isnan(F[0])); // NOLINT
