@@ -29,8 +29,8 @@ constexpr double k_B = C::k_B;
 
 // Default parameters: dynamic diffusion, tau = 1e4, beta = 1e-3, beta tau = 10.
 // Width of the pulse = sqrt(c max_time / kappa0) = 85 if max_time = 2.4e-4
-AMREX_GPU_MANAGED double kappa0 = 500.;	 // cm^2 g^-1
-AMREX_GPU_MANAGED double v0_adv = 3.0e7; // advecting pulse
+AMREX_GPU_MANAGED double kappa0 = 500.;	 // NOLINT
+AMREX_GPU_MANAGED double v0_adv = 3.0e7; // NOLINT
 // AMREX_GPU_MANAGED double max_time = 4.8e-6;
 
 template <> struct quokka::EOS_Traits<PulseProblem> {
