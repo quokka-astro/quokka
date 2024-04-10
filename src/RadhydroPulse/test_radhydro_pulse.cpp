@@ -28,8 +28,8 @@ constexpr double mu = 2.33 * C::m_u;
 constexpr double k_B = C::k_B;
 
 // Default parameters: static diffusion, tau = 2e3, beta = 3e-5, beta tau = 6e-2
-AMREX_GPU_MANAGED double kappa0 = 100.;	    // cm^2 g^-1
-AMREX_GPU_MANAGED double v0_adv = 1.0e6;    // advecting pulse
+AMREX_GPU_MANAGED double kappa0 = 100.;	 // cm^2 g^-1
+AMREX_GPU_MANAGED double v0_adv = 1.0e6; // advecting pulse
 // AMREX_GPU_MANAGED double max_time = 4.8e-5; // max_time = 2.0 * width / v1;
 
 template <> struct quokka::EOS_Traits<PulseProblem> {
