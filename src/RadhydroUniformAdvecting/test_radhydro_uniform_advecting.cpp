@@ -19,20 +19,20 @@ constexpr double c = 1.0e8;
 // constexpr double kappa0 = 1.0e4; // dx = 1, tau = kappa0 * dx = 1e4
 // constexpr double chat = 1.0e7;
 // model 1
-constexpr int beta_order_ = 1; // order of beta in the radiation four-force
-constexpr double v0 = 1e-4 * c;
-constexpr double kappa0 = 1.0e4; // dx = 1, tau = kappa0 * dx = 1e4
-constexpr double chat = 1.0e8;
+// constexpr int beta_order_ = 1; // order of beta in the radiation four-force
+// constexpr double v0 = 1e-4 * c;
+// constexpr double kappa0 = 1.0e4; // dx = 1, tau = kappa0 * dx = 1e4
+// constexpr double chat = 1.0e8;
 // model 2
 // constexpr int beta_order_ = 1; // order of beta in the radiation four-force
 // constexpr double v0 = 1e-2 * c;
 // constexpr double kappa0 = 1.0e5;
 // constexpr double chat = 1.0e8;
 // model 3
-// constexpr int beta_order_ = 2; // order of beta in the radiation four-force
-// constexpr double v0 = 1e-2 * c;
-// constexpr double kappa0 = 1.0e5;
-// constexpr double chat = 1.0e8;
+constexpr int beta_order_ = 2; // order of beta in the radiation four-force
+constexpr double v0 = 1e-2 * c;
+constexpr double kappa0 = 1.0e5;
+constexpr double chat = 1.0e8;
 
 constexpr double T0 = 1.0;   // temperature
 constexpr double rho0 = 1.0; // matter density
