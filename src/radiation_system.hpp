@@ -992,7 +992,7 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 			// in the frozen Eddington tensor approximation, we are always
 			// in the star region, so F = F_star
 			const quokka::valarray<double, numRadVars_> F =
-			    (S_R / (S_R - S_L)) * F_L - (S_L / (S_R - S_L)) * F_R + (S_R * S_L / (S_R - S_L)) * (U_R - U_L);
+			    (S_R / (S_R - S_L)) * F_L - (S_L / (S_R - S_L)) * F_R + epsilon * (S_R * S_L / (S_R - S_L)) * (U_R - U_L);
 
 			// check states are valid
 			AMREX_ASSERT(!std::isnan(F[0])); // NOLINT
