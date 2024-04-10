@@ -14,11 +14,6 @@ struct PulseProblem {
 struct AdvPulseProblem {
 };
 
-// Default: static diffusion, tau = 2e3, beta = 3e-5, beta tau = 6e-2
-AMREX_GPU_MANAGED double kappa0 = 100.;
-AMREX_GPU_MANAGED double v0_adv = 1.0e6;
-AMREX_GPU_MANAGED double max_time = 4.8e-5;
-
 constexpr int beta_order_ = 1; // order of beta in the radiation four-force
 
 constexpr double T0 = 1.0e7; // K (temperature)
@@ -34,9 +29,9 @@ constexpr double k_B = C::k_B;
 constexpr double v0_nonadv = 0.; // non-advecting pulse
 
 // static diffusion: tau = 2e3, beta = 3e-5, beta tau = 6e-2
-// constexpr double kappa0 = 100.;	    // cm^2 g^-1
-// constexpr double v0_adv = 1.0e6;    // advecting pulse
-// constexpr double max_time = 4.8e-5; // max_time = 2.0 * width / v1;
+constexpr double kappa0 = 100.;	    // cm^2 g^-1
+constexpr double v0_adv = 1.0e6;    // advecting pulse
+constexpr double max_time = 4.8e-5; // max_time = 2.0 * width / v1;
 
 // dynamic diffusion: tau = 2e4, beta = 3e-3, beta tau = 60
 // constexpr double kappa0 = 1000.; // cm^2 g^-1

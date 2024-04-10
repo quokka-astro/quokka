@@ -46,6 +46,9 @@ static constexpr double c_light_cgs_ = C::c_light;	    // cgs
 static constexpr double radiation_constant_cgs_ = C::a_rad; // cgs
 static constexpr double inf = std::numeric_limits<double>::max();
 
+// Optional: include a wavespeed correction term in the radiation flux to suppress instability
+static const bool use_wavespeed_correction = false;
+
 // this struct is specialized by the user application code
 //
 template <typename problem_t> struct RadSystem_Traits {
@@ -857,6 +860,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeRadPressure(const double erad
 
 	RadPressureResult result{};
 	result.F = {Fn, Tnx * erad, Tny * erad, Tnz * erad};
+	// It might be possible to remove this 0.1 floor without affecting the code. I tried and only the 3D RadForce failed (causing S_L = S_R = 0.0 and F[0] =
+	// NAN). Read more on https://github.com/quokka-astro/quokka/pull/582 .
 	result.S = std::max(0.1, std::sqrt(Tnormal));
 
 	return result;
@@ -886,6 +891,13 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 
 		// HLL solver following Toro (1998) and Balsara (2017).
 		// Radiation eigenvalues from Skinner & Ostriker (2013).
+
+		// calculate cell optical depth for each photon group
+		// Similar to the asymptotic-preserving flux correction in Skinner et al. (2019). Use optionally apply it here to reduce odd-even instability.
+		quokka::valarray<double, nGroups_> tau_cell{};
+		if (use_wavespeed_correction) {
+			tau_cell = ComputeCellOpticalDepth<DIR>(consVar, dx, i, j, k);
+		}
 
 		// gather left- and right- state variables
 		for (int g = 0; g < nGroups_; ++g) {
@@ -964,6 +976,15 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 
 			// Adjusting wavespeeds is no longer necessary with the IMEX PD-ARS scheme.
 			// Read more in https://github.com/quokka-astro/quokka/pull/582
+			// However, we let the user optionally apply it to reduce odd-even instability.
+			quokka::valarray<double, numRadVars_> epsilon = {1.0, 1.0, 1.0, 1.0};
+			if (use_wavespeed_correction) {
+				// no correction for odd zones
+				if ((i + j + k) % 2 == 0) {
+					const double S_corr = std::min(1.0, 1.0 / tau_cell[g]); // Skinner et al.
+					epsilon = {S_corr, 1.0, 1.0, 1.0};			// Skinner et al. (2019)
+				}
+			}
 
 			AMREX_ASSERT(std::abs(S_L) <= c_hat_); // NOLINT
 			AMREX_ASSERT(std::abs(S_R) <= c_hat_); // NOLINT
