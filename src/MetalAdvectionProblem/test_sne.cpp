@@ -48,7 +48,7 @@ std::string input_data_file; //="/g/data/jh2/av5889/quokka_myrepo/quokka/sims/Ga
 AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 4999> phi_data;
 AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 4999> g_data;
 AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 4999> z_data;
-
+double z_star, Sigma_star, Sigma_gas, rho_dm, R0, ks_sigma_sfr, hscale;
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto linearInterpolate(amrex::GpuArray<amrex::Real, 4999>& x, amrex::GpuArray<amrex::Real, 4999>& y, double x_interp) {
     // Find the two closest data points
@@ -161,8 +161,86 @@ void read_potential(amrex::GpuArray<amrex::Real, 4999> &z_data,
 			g_data[q] =  FastMath::log10(value);
 		}
   }
+  status = H5Dclose(dset_id);   
+
+  parameter_name = "zStar" ;
+  dset_id = H5Dopen2(file_id, parameter_name.c_str(),
+			   H5P_DEFAULT); // new API in HDF5 1.8.0+  
+  auto *zstar = new double[1]; // NOLINT(cppcoreguidelines-owning-memory)
+	{
+		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, zstar);
+    for (int64_t q = 0; q < 1; q++) {
+			double value = zstar[q];
+			z_star =  value;
+		}
+  } 
+  status = H5Dclose(dset_id);   
+
+  parameter_name = "Sigma_star" ;
+  dset_id = H5Dopen2(file_id, parameter_name.c_str(),
+			   H5P_DEFAULT); // new API in HDF5 1.8.0+  
+  auto *sigstar = new double[1]; // NOLINT(cppcoreguidelines-owning-memory)
+	{
+		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, sigstar);
+		Sigma_star =  sigstar[0];
+		
+  } 
+		status = H5Dclose(dset_id); 
+
+  parameter_name = "Sigma_gas" ;
+  dset_id = H5Dopen2(file_id, parameter_name.c_str(),
+			   H5P_DEFAULT); // new API in HDF5 1.8.0+  
+  auto *siggas = new double[1]; // NOLINT(cppcoreguidelines-owning-memory)
+	{
+		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, siggas);
+		Sigma_gas =  siggas[0];
+		
+  } 
+		status = H5Dclose(dset_id);     
+
+  parameter_name = "rho_dm" ;
+  dset_id = H5Dopen2(file_id, parameter_name.c_str(),
+			   H5P_DEFAULT); // new API in HDF5 1.8.0+  
+  auto *rhodm = new double[1]; // NOLINT(cppcoreguidelines-owning-memory)
+	{
+		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, rhodm);
+		rho_dm =  rhodm[0];
+		
+  } 
 		status = H5Dclose(dset_id);   
-    printf("gdata = %.5e\n", g_data[10]);
+
+  parameter_name = "R0" ;
+  dset_id = H5Dopen2(file_id, parameter_name.c_str(),
+			   H5P_DEFAULT); // new API in HDF5 1.8.0+  
+  auto *rnought = new double[1]; // NOLINT(cppcoreguidelines-owning-memory)
+	{
+		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, rnought);
+		R0 =  rnought[0];
+		
+  } 
+		status = H5Dclose(dset_id);   
+
+  parameter_name = "ks_sigma_sfr" ;
+  dset_id = H5Dopen2(file_id, parameter_name.c_str(),
+			   H5P_DEFAULT); // new API in HDF5 1.8.0+  
+  auto *kssigma = new double[1]; // NOLINT(cppcoreguidelines-owning-memory)
+	{
+		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, kssigma);
+		ks_sigma_sfr =  kssigma[0];
+		
+  } 
+		status = H5Dclose(dset_id);  
+  parameter_name = "hscale" ;
+  dset_id = H5Dopen2(file_id, parameter_name.c_str(),
+			   H5P_DEFAULT); // new API in HDF5 1.8.0+  
+  auto *h_scale = new double[1]; // NOLINT(cppcoreguidelines-owning-memory)
+	{
+		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, h_scale);
+		hscale =  h_scale[0];
+		
+  } 
+		status = H5Dclose(dset_id);    
+  printf("R0, rho_dm=%.2e,%.2e\n", R0, rho_dm);
 }
 
 /************************************************************/
