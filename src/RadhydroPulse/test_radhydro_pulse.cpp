@@ -14,7 +14,7 @@ struct PulseProblem {
 struct AdvPulseProblem {
 };
 
-constexpr int beta_order_ = 2; // order of beta in the radiation four-force
+constexpr int beta_order_ = 1; // order of beta in the radiation four-force
 
 constexpr double T0 = 1.0e7; // K (temperature)
 constexpr double T1 = 2.0e7; // K (temperature)
