@@ -46,6 +46,9 @@ static constexpr double c_light_cgs_ = C::c_light;	    // cgs
 static constexpr double radiation_constant_cgs_ = C::a_rad; // cgs
 static constexpr double inf = std::numeric_limits<double>::max();
 
+// Optional: include a wavespeed correction term in the radiation flux to suppress instability
+static const bool use_wavespeed_correction = false;
+
 // this struct is specialized by the user application code
 //
 template <typename problem_t> struct RadSystem_Traits {
@@ -155,16 +158,6 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	// Use an additionalr template for ComputeMassScalars as the Array type is not always the same
 	template <typename ArrayType>
 	AMREX_GPU_DEVICE static auto ComputeMassScalars(ArrayType const &arr, int i, int j, int k) -> amrex::GpuArray<Real, nmscalars_>;
-
-	template <FluxDir DIR>
-	static void ReconstructStatesConstant(arrayconst_t &q, array_t &leftState, array_t &rightState, amrex::Box const &indexRange, int nvars);
-
-	template <FluxDir DIR>
-	static void ReconstructStatesPLM(arrayconst_t &q, array_t &leftState, array_t &rightState, amrex::Box const &indexRange, int nvars);
-
-	template <FluxDir DIR>
-	static void ReconstructStatesPPM(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in, amrex::Box const &cellRange,
-					 amrex::Box const &interfaceRange, int nvars, int iReadFrom = 0, int iWriteFrom = 0);
 
 	AMREX_GPU_HOST_DEVICE static auto ComputeEddingtonFactor(double f) -> double;
 	AMREX_GPU_HOST_DEVICE static auto ComputePlanckOpacity(double rho, double Tgas) -> quokka::valarray<double, nGroups_>;
@@ -383,178 +376,6 @@ template <typename problem_t> AMREX_GPU_DEVICE void RadSystem<problem_t>::amendR
 			cons[x3RadFlux_index + numRadVars_ * g - nstartHyperbolic_] = Fz / Fnorm * c_light_ * E_r;
 		}
 	}
-}
-
-template <typename problem_t>
-template <FluxDir DIR>
-void RadSystem<problem_t>::ReconstructStatesConstant(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in, amrex::Box const &indexRange,
-						     const int nvars)
-{
-	// construct ArrayViews for permuted indices
-	quokka::Array4View<amrex::Real const, DIR> q(q_in);
-	quokka::Array4View<amrex::Real, DIR> leftState(leftState_in);
-	quokka::Array4View<amrex::Real, DIR> rightState(rightState_in);
-
-	// By convention, the interfaces are defined on the left edge of each zone, i.e. xleft_(i)
-	// is the "left"-side of the interface at the left edge of zone i, and xright_(i) is the
-	// "right"-side of the interface at the *left* edge of zone i. [Indexing note: There are (nx
-	// + 1) interfaces for nx zones.]
-
-	amrex::ParallelFor(indexRange, nvars, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
-		// permute array indices according to dir
-		auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
-
-		// Use piecewise-constant reconstruction (This converges at first
-		// order in spatial resolution.)
-		leftState(i, j, k, n) = q(i - 1, j, k, n);
-		rightState(i, j, k, n) = q(i, j, k, n);
-	});
-}
-
-template <typename problem_t>
-template <FluxDir DIR>
-void RadSystem<problem_t>::ReconstructStatesPLM(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in, amrex::Box const &indexRange,
-						const int nvars)
-{
-	// construct ArrayViews for permuted indices
-	quokka::Array4View<amrex::Real const, DIR> q(q_in);
-	quokka::Array4View<amrex::Real, DIR> leftState(leftState_in);
-	quokka::Array4View<amrex::Real, DIR> rightState(rightState_in);
-
-	// Unlike PPM, PLM with the MC limiter is TVD.
-	// (There are no spurious oscillations, *except* in the slow-moving shock problem,
-	// which can produce unphysical oscillations even when using upwind Godunov fluxes.)
-	// However, most tests fail when using PLM reconstruction because
-	// the accuracy tolerances are very strict, and the L1 error is significantly
-	// worse compared to PPM for a fixed number of mesh elements.
-
-	// By convention, the interfaces are defined on the left edge of each
-	// zone, i.e. xleft_(i) is the "left"-side of the interface at
-	// the left edge of zone i, and xright_(i) is the "right"-side of the
-	// interface at the *left* edge of zone i.
-
-	// Indexing note: There are (nx + 1) interfaces for nx zones.
-
-	amrex::ParallelFor(indexRange, nvars, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
-		// permute array indices according to dir
-		auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
-
-		// Use piecewise-linear reconstruction
-		// (This converges at second order in spatial resolution.)
-		const auto lslope = MC(q(i, j, k, n) - q(i - 1, j, k, n), q(i - 1, j, k, n) - q(i - 2, j, k, n));
-		const auto rslope = MC(q(i + 1, j, k, n) - q(i, j, k, n), q(i, j, k, n) - q(i - 1, j, k, n));
-
-		leftState(i, j, k, n) = q(i - 1, j, k, n) + 0.25 * lslope; // NOLINT
-		rightState(i, j, k, n) = q(i, j, k, n) - 0.25 * rslope;	   // NOLINT
-	});
-}
-
-template <typename problem_t>
-template <FluxDir DIR>
-void RadSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in, amrex::Box const &cellRange,
-						amrex::Box const & /*interfaceRange*/, const int nvars, const int iReadFrom, const int iWriteFrom)
-{
-	BL_PROFILE("HyperbolicSystem::ReconstructStatesPPM()"); // NOLINT
-
-	// construct ArrayViews for permuted indices
-	quokka::Array4View<amrex::Real const, DIR> q(q_in);
-	quokka::Array4View<amrex::Real, DIR> leftState(leftState_in);
-	quokka::Array4View<amrex::Real, DIR> rightState(rightState_in);
-
-	// By convention, the interfaces are defined on the left edge of each
-	// zone, i.e. xleft_(i) is the "left"-side of the interface at the left
-	// edge of zone i, and xright_(i) is the "right"-side of the interface
-	// at the *left* edge of zone i.
-
-	// Indexing note: There are (nx + 1) interfaces for nx zones.
-
-	amrex::ParallelFor(cellRange, nvars, // cell-centered kernel
-			   [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
-				   // permute array indices according to dir
-				   auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
-
-		// (2.) Constrain interfaces to lie between surrounding cell-averaged
-		// values (equivalent to step 2b in Athena++ [ppm_simple.cpp]).
-		// [See Eq. B8 of Mignone+ 2005.]
-
-#ifdef MULTIDIM_EXTREMA_CHECK
-				   // N.B.: Checking all 27 nearest neighbors is *very* expensive on GPU
-				   // (presumably due to lots of cache misses), so it is hard-coded disabled.
-				   // Fortunately, almost all problems run stably without enabling this.
-				   auto bounds = GetMinmaxSurroundingCell(q_in, i_in, j_in, k_in, n);
-#else
-			// compute bounds from neighboring cell-averaged values along axis
-			const std::pair<double, double> bounds =
-				std::minmax({q(i, j, k, iReadFrom+n), q(i - 1, j, k, iReadFrom+n), q(i + 1, j, k, iReadFrom+n)});
-#endif
-
-				   // get interfaces
-				   // PPM reconstruction following Colella & Woodward (1984), with
-				   // some modifications following Mignone (2014), as implemented in
-				   // Athena++.
-
-				   // (1.) Estimate the interface a_{i - 1/2}. Equivalent to step 1
-				   // in Athena++ [ppm_simple.cpp].
-
-				   // C&W Eq. (1.9) [parabola midpoint for the case of
-				   // equally-spaced zones]: a_{j+1/2} = (7/12)(a_j + a_{j+1}) -
-				   // (1/12)(a_{j+2} + a_{j-1}). Terms are grouped to preserve exact
-				   // symmetry in floating-point arithmetic, following Athena++.
-				   const double coef_1 = (7. / 12.);
-				   const double coef_2 = (-1. / 12.);
-				   const double a_minus = (coef_1 * q(i, j, k, iReadFrom + n) + coef_2 * q(i + 1, j, k, iReadFrom + n)) +
-							  (coef_1 * q(i - 1, j, k, iReadFrom + n) + coef_2 * q(i - 2, j, k, iReadFrom + n));
-				   const double a_plus = (coef_1 * q(i + 1, j, k, iReadFrom + n) + coef_2 * q(i + 2, j, k, iReadFrom + n)) +
-							 (coef_1 * q(i, j, k, iReadFrom + n) + coef_2 * q(i - 1, j, k, iReadFrom + n));
-
-				   // left side of zone i
-				   double new_a_minus = clamp(a_minus, bounds.first, bounds.second);
-
-				   // right side of zone i
-				   double new_a_plus = clamp(a_plus, bounds.first, bounds.second);
-
-				   // (3.) Monotonicity correction, using Eq. (1.10) in PPM paper. Equivalent
-				   // to step 4b in Athena++ [ppm_simple.cpp].
-
-				   const double a = q(i, j, k, iReadFrom + n); // a_i in C&W
-				   const double dq_minus = (a - new_a_minus);
-				   const double dq_plus = (new_a_plus - a);
-
-				   const double qa = dq_plus * dq_minus; // interface extrema
-
-				   if (qa <= 0.0) { // local extremum
-
-					   // Causes subtle, but very weird, oscillations in the Shu-Osher test
-					   // problem. However, it is necessary to get a reasonable solution
-					   // for the sawtooth advection problem.
-					   const double dq0 = MC(q(i + 1, j, k, iReadFrom + n) - q(i, j, k, iReadFrom + n),
-								 q(i, j, k, iReadFrom + n) - q(i - 1, j, k, iReadFrom + n));
-
-					   // use linear reconstruction, following Balsara (2017) [Living Rev
-					   // Comput Astrophys (2017) 3:2]
-					   new_a_minus = a - 0.5 * dq0;
-					   new_a_plus = a + 0.5 * dq0;
-
-					   // original C&W method for this case
-					   // new_a_minus = a;
-					   // new_a_plus = a;
-
-				   } else { // no local extrema
-
-					   // parabola overshoots near a_plus -> reset a_minus
-					   if (std::abs(dq_minus) >= 2.0 * std::abs(dq_plus)) {
-						   new_a_minus = a - 2.0 * dq_plus;
-					   }
-
-					   // parabola overshoots near a_minus -> reset a_plus
-					   if (std::abs(dq_plus) >= 2.0 * std::abs(dq_minus)) {
-						   new_a_plus = a + 2.0 * dq_minus;
-					   }
-				   }
-
-				   rightState(i, j, k, iWriteFrom + n) = new_a_minus;
-				   leftState(i + 1, j, k, iWriteFrom + n) = new_a_plus;
-			   });
 }
 
 template <typename problem_t>
@@ -857,6 +678,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeRadPressure(const double erad
 
 	RadPressureResult result{};
 	result.F = {Fn, Tnx * erad, Tny * erad, Tnz * erad};
+	// It might be possible to remove this 0.1 floor without affecting the code. I tried and only the 3D RadForce failed (causing S_L = S_R = 0.0 and F[0] =
+	// NAN). Read more on https://github.com/quokka-astro/quokka/pull/582 .
 	result.S = std::max(0.1, std::sqrt(Tnormal));
 
 	return result;
@@ -888,10 +711,11 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 		// Radiation eigenvalues from Skinner & Ostriker (2013).
 
 		// calculate cell optical depth for each photon group
-		// asymptotic-preserving flux correction
-		// [Similar to Skinner et al. (2019), but tau^-2 instead of tau^-1, which
-		// does not appear to be asymptotic-preserving with PLM+SDC2.]
-		quokka::valarray<double, nGroups_> const tau_cell = ComputeCellOpticalDepth<DIR>(consVar, dx, i, j, k);
+		// Similar to the asymptotic-preserving flux correction in Skinner et al. (2019). Use optionally apply it here to reduce odd-even instability.
+		quokka::valarray<double, nGroups_> tau_cell{};
+		if (use_wavespeed_correction) {
+			tau_cell = ComputeCellOpticalDepth<DIR>(consVar, dx, i, j, k);
+		}
 
 		// gather left- and right- state variables
 		for (int g = 0; g < nGroups_; ++g) {
@@ -968,23 +792,16 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 			const quokka::valarray<double, numRadVars_> U_L = {erad_L, Fx_L, Fy_L, Fz_L};
 			const quokka::valarray<double, numRadVars_> U_R = {erad_R, Fx_R, Fy_R, Fz_R};
 
-			// ensures that signal speed -> c \sqrt{f_xx} / tau_cell in the diffusion
-			// limit [see Appendix of Jiang et al. ApJ 767:148 (2013)]
-			// const double S_corr = std::sqrt(1.0 - std::exp(-tau_cell * tau_cell)) /
-			//		      tau_cell; // Jiang et al. (2013)
-			const double S_corr = std::min(1.0, 1.0 / tau_cell[g]); // Skinner et al.
-
-			// adjust the wavespeeds
-			// (this factor cancels out except for the last term in the HLL flux)
-			quokka::valarray<double, numRadVars_> epsilon = {S_corr, 1.0, 1.0, 1.0}; // Skinner et al. (2019)
-			// quokka::valarray<double, numRadVars_> epsilon = {S_corr, S_corr, S_corr, S_corr}; // Jiang et al. (2013)
-			// quokka::valarray<double, numRadVars_> epsilon = {S_corr * S_corr, S_corr, S_corr, S_corr}; // this code
-
-			// fix odd-even instability that appears in the asymptotic diffusion limit
-			// [for details, see section 3.1: https://ui.adsabs.harvard.edu/abs/2022MNRAS.512.1499R/abstract]
-			if ((i + j + k) % 2 == 1) {
-				// revert to more diffusive flux (has no effect in optically-thin limit)
-				epsilon = {1.0, 1.0, 1.0, 1.0};
+			// Adjusting wavespeeds is no longer necessary with the IMEX PD-ARS scheme.
+			// Read more in https://github.com/quokka-astro/quokka/pull/582
+			// However, we let the user optionally apply it to reduce odd-even instability.
+			quokka::valarray<double, numRadVars_> epsilon = {1.0, 1.0, 1.0, 1.0};
+			if (use_wavespeed_correction) {
+				// no correction for odd zones
+				if ((i + j + k) % 2 == 0) {
+					const double S_corr = std::min(1.0, 1.0 / tau_cell[g]); // Skinner et al.
+					epsilon = {S_corr, 1.0, 1.0, 1.0};			// Skinner et al. (2019)
+				}
 			}
 
 			AMREX_ASSERT(std::abs(S_L) <= c_hat_); // NOLINT

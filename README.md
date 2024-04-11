@@ -122,10 +122,10 @@ which should end with output similar to the following:
 
 Total Test time (real) = 353.77 sec
 ```
-### AMD GPUs
-Compile with `-DAMReX_GPU_BACKEND=HIP`. Requires ROCm 5.2.0 or newer. Your MPI library **must** support GPU-aware MPI for AMD GPUs. Quokka has been tested on MI100 and MI250X GPUs.
+### AMD GPUs *(experimental, use at your own risk)*
+Compile with `-DAMReX_GPU_BACKEND=HIP`. Requires ROCm 5.2.0 or newer. Your MPI library **must** support GPU-aware MPI for AMD GPUs. Quokka has been tested on MI100 and MI250X GPUs, but there are known compiler issues that affect the correctness of simulation results (see https://github.com/quokka-astro/quokka/issues/394 and https://github.com/quokka-astro/quokka/issues/447).
 
-### Intel GPUs
+### Intel GPUs *(experimental, use at your own risk)*
 Not tested. You can attempt this by compiling with `-DAMReX_GPU_BACKEND=SYCL`. Please start a Discussion if you encounter issues on Intel GPUs. Your MPI library **must** support GPU-aware MPI for Intel GPUs.
 
 ## Building a specific test problem
