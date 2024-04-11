@@ -12,24 +12,39 @@
 struct PulseProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
+constexpr double c = 1.0e8;
+// model 0
+// constexpr int beta_order_ = 1; // order of beta in the radiation four-force
+// constexpr double v0 = 1e-4 * c;
+// constexpr double kappa0 = 1.0e4; // dx = 1, tau = kappa0 * dx = 1e4
+// constexpr double chat = 1.0e7;
+// model 1
+// constexpr int beta_order_ = 1; // order of beta in the radiation four-force
+// constexpr double v0 = 1e-4 * c;
+// constexpr double kappa0 = 1.0e4; // dx = 1, tau = kappa0 * dx = 1e4
+// constexpr double chat = 1.0e8;
+// model 2
+// constexpr int beta_order_ = 1; // order of beta in the radiation four-force
+// constexpr double v0 = 1e-2 * c;
+// constexpr double kappa0 = 1.0e5;
+// constexpr double chat = 1.0e8;
+// model 3
 constexpr int beta_order_ = 2; // order of beta in the radiation four-force
+constexpr double v0 = 1e-2 * c;
+constexpr double kappa0 = 1.0e5;
+constexpr double chat = 1.0e8;
 
 constexpr double T0 = 1.0;   // temperature
 constexpr double rho0 = 1.0; // matter density
 constexpr double a_rad = 1.0;
-constexpr double c = 1.0;
-constexpr double chat = c;
 constexpr double mu = 1.0;
 constexpr double k_B = 1.0;
 
 // static diffusion, beta = 1e-4, tau_cell = kappa0 * dx = 100, beta tau_cell = 1e-2
 // constexpr double kappa0 = 100.; // cm^2 g^-1
 // constexpr double v0 = 1.0e-4 * c; // advecting pulse
-// constexpr double max_time = 1.0 / v0;
 
 // dynamic diffusion, beta = 1e-3, tau = kappa0 * dx = 1e5, beta tau = 100
-constexpr double kappa0 = 1.0e4; // dx = 1, tau = kappa0 * dx = 1e4
-constexpr double v0 = 1e-3 * c;	 // beta = 1e-3
 constexpr double max_time = 10.0 / v0;
 
 constexpr double Erad0 = a_rad * T0 * T0 * T0 * T0;
@@ -86,7 +101,10 @@ template <> void RadhydroSimulation<PulseProblem>::setInitialConditionsOnGrid(qu
 
 	double erad = NAN;
 	double frad = NAN;
-	if constexpr (beta_order_ <= 1) {
+	if constexpr (beta_order_ == 0) {
+		erad = Erad0;
+		frad = 0.0;
+	} else if constexpr (beta_order_ == 1) {
 		erad = Erad0;
 		frad = 4. / 3. * v0 * Erad0;
 	} else if constexpr (beta_order_ == 2) {
@@ -125,8 +143,9 @@ auto problem_main() -> int
 	// of order 10^5.
 
 	// Problem parameters
-	const int max_timesteps = 1e5;
-	const double CFL_number = 0.8;
+	const int max_timesteps = 1e6;
+	const double CFL_number_gas = 0.8;
+	const double CFL_number_rad = 8.0;
 
 	const double max_dt = 1.0;
 
@@ -145,8 +164,8 @@ auto problem_main() -> int
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.stopTime_ = max_time;
-	sim.radiationCflNumber_ = CFL_number;
-	sim.cflNumber_ = CFL_number;
+	sim.radiationCflNumber_ = CFL_number_rad;
+	sim.cflNumber_ = CFL_number_gas;
 	sim.maxDt_ = max_dt;
 	sim.maxTimesteps_ = max_timesteps;
 	sim.plotfileInterval_ = -1;
@@ -218,22 +237,25 @@ auto problem_main() -> int
 	std::map<std::string, std::string> Tgas_args;
 	std::map<std::string, std::string> Texact_args;
 	std::map<std::string, std::string> Tradexact_args;
-	Trad_args["label"] = "radiation temperature";
+	Trad_args["label"] = "radiation (numerical)";
 	Trad_args["linestyle"] = "-";
-	Tradexact_args["label"] = "radiation temperature (exact)";
+	Tradexact_args["label"] = "radiation (exact)";
 	Tradexact_args["linestyle"] = "--";
-	Tgas_args["label"] = "gas temperature";
+	Tgas_args["label"] = "gas (numerical)";
 	Tgas_args["linestyle"] = "-";
-	Texact_args["label"] = "gas temperature (exact)";
+	Texact_args["label"] = "gas (exact)";
 	Texact_args["linestyle"] = "--";
 	matplotlibcpp::plot(xs, Trad, Trad_args);
 	matplotlibcpp::plot(xs, Trad_exact, Tradexact_args);
 	matplotlibcpp::plot(xs, Tgas, Tgas_args);
 	matplotlibcpp::plot(xs, Tgas_exact, Texact_args);
-	matplotlibcpp::xlabel("length x (cm)");
+	matplotlibcpp::xlabel("x (dimensionless)");
 	matplotlibcpp::ylabel("temperature (dimensionless)");
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("time ct = {:.4g}", sim.tNew_[0] * c));
+	if constexpr (beta_order_ == 1) {
+		matplotlibcpp::ylim(1.0 - 1.0e-7, 1.0 + 1.0e-7);
+	}
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./radhydro_uniform_advecting_temperature_dimensionless.pdf");
 
@@ -252,7 +274,6 @@ auto problem_main() -> int
 	matplotlibcpp::title(fmt::format("time ct = {:.4g}", sim.tNew_[0] * c));
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./radhydro_uniform_advecting_velocity_dimensionless.pdf");
-
 #endif
 
 	// Cleanup and exit
