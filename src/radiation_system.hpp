@@ -32,6 +32,7 @@
 // Hyper parameters of the radiation solver
 
 static constexpr bool include_work_term_in_source = true;
+static constexpr bool use_D_as_base = true;
 
 // Time integration scheme
 // IMEX PD-ARS
@@ -953,6 +954,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		quokka::valarray<double, nGroups_> kappaPVec{};
 		quokka::valarray<double, nGroups_> kappaEVec{};
 		quokka::valarray<double, nGroups_> kappaFVec{};
+		quokka::valarray<double, nGroups_> kappaPoverE{};
 		quokka::valarray<double, nGroups_> tau0{}; // optical depth across c * dt at old state
 		quokka::valarray<double, nGroups_> tau{};  // optical depth across c * dt at new state
 		quokka::valarray<double, nGroups_> D{};	   // D = S / tau0
@@ -962,9 +964,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		work.fillin(0.0);
 		work_prev.fillin(0.0);
 
-		for (int g = 0; g < nGroups_; ++g) {
-			EradVec_guess[g] = NAN;
-		}
+		EradVec_guess = Erad0Vec;
 
 		if constexpr (gamma_ != 1.0) {
 			Egas0 = ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0);
@@ -1045,6 +1045,14 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				AMREX_ASSERT(!kappaPVec.hasnan());
 				AMREX_ASSERT(!kappaEVec.hasnan());
 
+				for (int g = 0; g < nGroups_; ++g) {
+					if (kappaEVec[g] > 0.0) {
+						kappaPoverE[g] = kappaPVec[g] / kappaEVec[g];
+					} else {
+						kappaPoverE[g] = 1.0;
+					}
+				}
+
 				if constexpr ((beta_order_ != 0) && (include_work_term_in_source)) {
 					// compute the work term at the old state
 					// const double gamma = 1.0 / sqrt(1.0 - vsqr / (c * c));
@@ -1061,7 +1069,16 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				}
 
 				tau0 = dt * rho * kappaPVec * chat * lorentz_factor;
-				D = fourPiBoverC - (kappaEVec / kappaPVec) * Erad0Vec + work / tau0;
+				Rvec = (fourPiBoverC - Erad0Vec / kappaPoverE) * tau0 + work;
+				// tau0 is used as a scaling factor for Rvec
+				if constexpr (use_D_as_base) {
+					for (int g = 0; g < nGroups_; ++g) {
+						if (tau0[g] <= 1.0) {
+							tau0[g] = 1.0;
+						}
+					}
+					D = Rvec / tau0;
+				}
 
 				double F_G = NAN;
 				double dFG_dEgas = NAN;
@@ -1084,10 +1101,24 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					kappaPVec = ComputePlanckOpacity(rho, T_gas);
 					kappaEVec = ComputeEnergyMeanOpacity(rho, T_gas);
 					AMREX_ASSERT(!kappaPVec.hasnan());
+					for (int g = 0; g < nGroups_; ++g) {
+						if (kappaEVec[g] > 0.0) {
+							kappaPoverE[g] = kappaPVec[g] / kappaEVec[g];
+						} else {
+							kappaPoverE[g] = 1.0;
+						}
+					}
 
 					tau = dt * rho * kappaEVec * chat * lorentz_factor;
-					Rvec = tau0 * D;
-					EradVec_guess = (kappaPVec / kappaEVec) * (fourPiBoverC - (Rvec - work) / tau);
+					if constexpr (use_D_as_base) {
+						Rvec = tau0 * D;
+					}
+					for (int g = 0; g < nGroups_; ++g) {
+						// If tau = 0.0, Erad_guess shouldn't change
+						if (tau[g] > 0.0) {
+							EradVec_guess[g] = kappaPoverE[g] * (fourPiBoverC[g] - (Rvec[g] - work[g]) / tau[g]);
+						}
+					}
 					F_G = Egas_guess - Egas0 + (c / chat) * sum(Rvec);
 					F_D = EradVec_guess - Erad0Vec - (Rvec + Src);
 
@@ -1105,9 +1136,20 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					// I assume (kappaPVec / kappaEVec) is constant here. This is usually a reasonable assumption. Note that this assumption
 					// only affects the convergence rate of the Newton-Raphson iteration and does not affect the converged solution at all.
 					dFG_dEgas = 1.0;
-					dFG_dD = (c / chat) * tau0;
-					dFR_dEgas = 1.0 / c_v * (kappaPVec / kappaEVec) * (dfourPiB_dTgas / chat);
-					dFR_i_dD_i = -1.0 * (1.0 / tau * (kappaPVec / kappaEVec) + 1.0) * tau0;
+					for (int g = 0; g < nGroups_; ++g) {
+						if (tau[g] <= 0.0) {
+							dFR_i_dD_i[g] = -std::numeric_limits<double>::infinity();
+						} else {
+							dFR_i_dD_i[g] = -1.0 * (1.0 / tau[g] * kappaPoverE[g] + 1.0);
+						}
+					}
+					if constexpr (use_D_as_base) {
+						dFG_dD = (c / chat) * tau0;
+						dFR_i_dD_i = dFR_i_dD_i * tau0;
+					} else {
+						dFG_dD.fillin(c / chat);
+					}
+					dFR_dEgas = 1.0 / c_v * kappaPoverE * (dfourPiB_dTgas / chat);
 
 					// update variables
 					RadSystem<problem_t>::SolveLinearEqs(dFG_dEgas, dFG_dD, dFR_dEgas, dFR_i_dD_i, -F_G, -1. * F_D, deltaEgas, deltaD);
@@ -1115,7 +1157,11 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					AMREX_ASSERT(!deltaD.hasnan());
 
 					Egas_guess += deltaEgas;
-					D += deltaD;
+					if constexpr (use_D_as_base) {
+						D += deltaD;
+					} else {
+						Rvec += deltaD;
+					}
 
 					// check relative and absolute convergence of E_r
 					// if (std::abs(deltaEgas / Egas_guess) < 1e-7) {
