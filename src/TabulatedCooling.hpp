@@ -40,6 +40,14 @@ struct cloudyGpuConstTables {
 	amrex::Table2D<const Real> cool;
 	amrex::Table2D<const Real> heat;
 	amrex::Table2D<const Real> meanMolWeight;
+
+	// temperature range
+	amrex::Real T_min;
+	amrex::Real T_max;
+
+	// mean molecular weight range
+	amrex::Real mmw_min;
+	amrex::Real mmw_max;
 };
 
 class cloudy_tables
@@ -51,6 +59,14 @@ class cloudy_tables
 	std::unique_ptr<amrex::TableData<double, 2>> cooling;
 	std::unique_ptr<amrex::TableData<double, 2>> heating;
 	std::unique_ptr<amrex::TableData<double, 2>> mean_mol_weight;
+
+	// temperature range
+	amrex::Real T_min;
+	amrex::Real T_max;
+
+	// mean molecular weight range
+	amrex::Real mmw_min;
+	amrex::Real mmw_max;
 
 	[[nodiscard]] auto const_tables() const -> cloudyGpuConstTables;
 };
@@ -70,14 +86,11 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto cloudy_cooling_function(Real const
 	const Real log_T = std::log10(T);
 
 	const double logCool = interpolate2d(log_nH, log_T, tables.log_nH, tables.log_Tgas, tables.cool);
-
 	const double logHeat = interpolate2d(log_nH, log_T, tables.log_nH, tables.log_Tgas, tables.heat);
-
 	const double netLambda = FastMath::pow10(logHeat) - FastMath::pow10(logCool);
 
 	// multiply by the square of H mass density (**NOT number density**)
 	const double Edot = (rhoH * rhoH) * netLambda;
-
 	return Edot;
 }
 
@@ -102,16 +115,14 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(double rho, do
 	// convert Egas (internal gas energy) to temperature
 
 	// check whether temperature is out-of-bounds
-	const Real Tmin_table = 10.;
-	const Real Tmax_table = 1.0e9;
-	const Real Eint_min = ComputeEgasFromTgas(rho, Tmin_table, gamma, tables);
-	const Real Eint_max = ComputeEgasFromTgas(rho, Tmax_table, gamma, tables);
+	const Real Eint_min = ComputeEgasFromTgas(rho, tables.T_min, gamma, tables);
+	const Real Eint_max = ComputeEgasFromTgas(rho, tables.T_max, gamma, tables);
 
 	if (Egas <= Eint_min) {
-		return Tmin_table;
+		return tables.T_min;
 	}
 	if (Egas >= Eint_max) {
-		return Tmax_table;
+		return tables.T_max;
 	}
 
 	// solve for temperature given Eint (with fixed adiabatic index gamma)
@@ -138,11 +149,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(double rho, do
 		return fun;
 	};
 
-	// compute temperature bounds using physics
-	const Real mu_min = 0.60; // assuming fully ionized (mu ~ 0.6)
-	const Real mu_max = 2.33; // assuming neutral fully molecular (mu ~ 2.33)
-	const Real T_min = std::clamp(C * mu_min, Tmin_table, Tmax_table);
-	const Real T_max = std::clamp(C * mu_max, Tmin_table, Tmax_table);
+	// compute temperature bounds
+	const Real T_min = std::clamp(C * tables.mmw_min, tables.T_min, tables.T_max);
+	const Real T_max = std::clamp(C * tables.mmw_max, tables.T_min, tables.T_max);
 
 	// do root-finding
 	quokka::math::eps_tolerance<Real> const tol(reltol);
@@ -213,20 +222,18 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto user_rhs(Real /*t*/, quokka::valar
 	cloudyGpuConstTables const &tables = udata->tables;
 
 	// check whether temperature is out-of-bounds
-	const Real Tmin = 10.;
-	const Real Tmax = 1.0e9;
-	const Real Eint_min = ComputeEgasFromTgas(rho, Tmin, gamma, tables);
-	const Real Eint_max = ComputeEgasFromTgas(rho, Tmax, gamma, tables);
+	const Real Eint_min = ComputeEgasFromTgas(rho, tables.T_min, gamma, tables);
+	const Real Eint_max = ComputeEgasFromTgas(rho, tables.T_max, gamma, tables);
 
 	// compute temperature and cooling rate
 	const Real Eint = y_data[0];
 
 	if (Eint <= Eint_min) {
 		// set cooling to value at Tmin
-		y_rhs[0] = cloudy_cooling_function(rho, Tmin, tables);
+		y_rhs[0] = cloudy_cooling_function(rho, tables.T_min, tables);
 	} else if (Eint >= Eint_max) {
 		// set cooling to value at Tmax
-		y_rhs[0] = cloudy_cooling_function(rho, Tmax, tables);
+		y_rhs[0] = cloudy_cooling_function(rho, tables.T_max, tables);
 	} else {
 		// ok, within tabulated cooling limits
 		const Real T = ComputeTgasFromEgas(rho, Eint, gamma, tables);

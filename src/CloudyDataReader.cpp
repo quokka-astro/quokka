@@ -104,8 +104,12 @@ void initialize_cloudy_data(cloudy_cooling_tools_data &my_cloudy, std::string co
 
 		for (int w = 0; w < my_cloudy.grid_dimension[q]; w++) {
 			if (q == my_cloudy.grid_rank - 1) {
+				double const T = my_cloudy.grid_parameters[q](w);
 				// convert temperature to log
-				my_cloudy.grid_parameters[q](w) = log10(my_cloudy.grid_parameters[q](w));
+				my_cloudy.grid_parameters[q](w) = log10(T);
+				// compute min/max
+				my_cloudy.T_min = std::min(T, my_cloudy.T_min);
+				my_cloudy.T_max = std::max(T, my_cloudy.T_max);
 			}
 		}
 		H5Dclose(dset_id);
@@ -183,6 +187,12 @@ void initialize_cloudy_data(cloudy_cooling_tools_data &my_cloudy, std::string co
 		const hid_t status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, my_cloudy.mmw_dataVec.dataPtr());
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read MMW dataset!");
 		H5Dclose(dset_id);
+
+		// compute min/max
+		for(double const &mmw : my_cloudy.mmw_dataVec) {
+			my_cloudy.mmw_min = std::min(mmw, my_cloudy.mmw_min);
+			my_cloudy.mmw_max = std::max(mmw, my_cloudy.mmw_max);
+		}
 	}
 
 	// close HDF5 file

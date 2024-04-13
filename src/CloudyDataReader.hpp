@@ -10,6 +10,7 @@
 ///
 
 #include <cstdint>
+#include <limits>
 #include <string>
 
 #include <H5Dpublic.h>
@@ -68,6 +69,14 @@ using cloudy_cooling_tools_data = struct cloudy_cooling_tools_data {
 
 	// Length of 1D flattened data
 	int64_t data_size = 0;
+
+	// temperature range
+	amrex::Real T_min{std::numeric_limits<amrex::Real>::max()};
+	amrex::Real T_max{std::numeric_limits<amrex::Real>::min()};
+
+	// mean molecular weight range
+	amrex::Real mmw_min{std::numeric_limits<amrex::Real>::max()};
+	amrex::Real mmw_max{std::numeric_limits<amrex::Real>::min()};
 };
 
 using code_units = struct code_units {

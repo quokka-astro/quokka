@@ -24,6 +24,10 @@ void readCloudyData(std::string &hdf5_file, cloudy_tables &cloudyTables)
 	my_units.velocity_units = 1.0;
 
 	initialize_cloudy_data(cloudy, hdf5_file, my_units);
+	cloudyTables.T_min = cloudy.T_min;
+	cloudyTables.T_max = cloudy.T_max;
+	cloudyTables.mmw_min = cloudyTables.mmw_min;
+	cloudyTables.mmw_max = cloudyTables.mmw_max;
 	cloudyTables.log_nH = std::make_unique<amrex::TableData<double, 1>>(copy_1d_table(cloudy.grid_parameters[0]));
 	cloudyTables.log_Tgas = std::make_unique<amrex::TableData<double, 1>>(copy_1d_table(cloudy.grid_parameters[1]));
 	cloudyTables.cooling = std::make_unique<amrex::TableData<double, 2>>(extract_2d_table(cloudy.cooling_data));
@@ -34,7 +38,7 @@ void readCloudyData(std::string &hdf5_file, cloudy_tables &cloudyTables)
 auto cloudy_tables::const_tables() const -> cloudyGpuConstTables
 {
 	cloudyGpuConstTables tables{log_nH->const_table(), log_Tgas->const_table(), cooling->const_table(), heating->const_table(),
-				    mean_mol_weight->const_table()};
+				    mean_mol_weight->const_table(), T_min, T_max, mmw_min, mmw_max};
 	return tables;
 }
 
