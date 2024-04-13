@@ -230,7 +230,7 @@ void initialize_cloudy_data(grackle_data &my_cloudy, char const *group_name, std
 		status = H5Dclose(dset_id);
 
 		// compute min/max
-		for(size_t i = 0; i < my_cloudy.data_size; ++i) {
+		for (size_t i = 0; i < my_cloudy.data_size; ++i) {
 			amrex::Real const mmw = temp_data[i]; // NOLINT
 			my_cloudy.mmw_min = std::min(mmw, my_cloudy.mmw_min);
 			my_cloudy.mmw_max = std::max(mmw, my_cloudy.mmw_max);

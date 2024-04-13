@@ -47,8 +47,17 @@ void readGrackleData(std::string &grackle_hdf5_file, grackle_tables &cloudyTable
 
 auto grackle_tables::const_tables() const -> grackleGpuConstTables
 {
-	grackleGpuConstTables tables{log_nH->const_table(),	  log_Tgas->const_table(),     primCooling->const_table(),    primHeating->const_table(),
-				     metalCooling->const_table(), metalHeating->const_table(), mean_mol_weight->const_table(), T_min, T_max, mmw_min, mmw_max};
+	grackleGpuConstTables tables{log_nH->const_table(),
+				     log_Tgas->const_table(),
+				     primCooling->const_table(),
+				     primHeating->const_table(),
+				     metalCooling->const_table(),
+				     metalHeating->const_table(),
+				     mean_mol_weight->const_table(),
+				     T_min,
+				     T_max,
+				     mmw_min,
+				     mmw_max};
 	return tables;
 }
 

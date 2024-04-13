@@ -189,7 +189,7 @@ void initialize_cloudy_data(cloudy_cooling_tools_data &my_cloudy, std::string co
 		H5Dclose(dset_id);
 
 		// compute min/max
-		for(double const &mmw : my_cloudy.mmw_dataVec) {
+		for (double const &mmw : my_cloudy.mmw_dataVec) {
 			my_cloudy.mmw_min = std::min(mmw, my_cloudy.mmw_min);
 			my_cloudy.mmw_max = std::max(mmw, my_cloudy.mmw_max);
 		}

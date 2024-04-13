@@ -37,8 +37,15 @@ void readCloudyData(std::string &hdf5_file, cloudy_tables &cloudyTables)
 
 auto cloudy_tables::const_tables() const -> cloudyGpuConstTables
 {
-	cloudyGpuConstTables tables{log_nH->const_table(), log_Tgas->const_table(), cooling->const_table(), heating->const_table(),
-				    mean_mol_weight->const_table(), T_min, T_max, mmw_min, mmw_max};
+	cloudyGpuConstTables tables{log_nH->const_table(),
+				    log_Tgas->const_table(),
+				    cooling->const_table(),
+				    heating->const_table(),
+				    mean_mol_weight->const_table(),
+				    T_min,
+				    T_max,
+				    mmw_min,
+				    mmw_max};
 	return tables;
 }
 
