@@ -54,6 +54,14 @@ struct grackleGpuConstTables {
 	amrex::Table2D<const Real> metalCool;
 	amrex::Table2D<const Real> metalHeat;
 	amrex::Table2D<const Real> meanMolWeight;
+
+	// temperature range
+	amrex::Real T_min;
+	amrex::Real T_max;
+
+	// mean molecular weight range
+	amrex::Real mmw_min;
+	amrex::Real mmw_max;
 };
 
 class grackle_tables
@@ -67,6 +75,11 @@ class grackle_tables
 	std::unique_ptr<amrex::TableData<double, 2>> metalCooling;
 	std::unique_ptr<amrex::TableData<double, 2>> metalHeating;
 	std::unique_ptr<amrex::TableData<double, 2>> mean_mol_weight;
+
+	amrex::Real T_min;
+	amrex::Real T_max;
+	amrex::Real mmw_min;
+	amrex::Real mmw_max;
 
 	[[nodiscard]] auto const_tables() const -> grackleGpuConstTables;
 };
@@ -144,8 +157,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(double rho, do
 	// convert Egas (internal gas energy) to temperature
 
 	// check whether temperature is out-of-bounds
-	const Real Tmin_table = 10.;
-	const Real Tmax_table = 1.0e9;
+	const Real Tmin_table = tables.T_min;
+	const Real Tmax_table = tables.T_max;
 	const Real Eint_min = ComputeEgasFromTgas(rho, Tmin_table, gamma, tables);
 	const Real Eint_max = ComputeEgasFromTgas(rho, Tmax_table, gamma, tables);
 
@@ -172,17 +185,19 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(double rho, do
 	const int maxIterLimit = 100;
 	int maxIter = maxIterLimit;
 
-	auto f = [log_nH, C, tables](const Real &T) noexcept {
+	const Real log_Tmin = std::log10(Tmin_table);
+	const Real log_Tmax = std::log10(Tmax_table);
+	auto f = [log_nH, C, tables, log_Tmin, log_Tmax](const Real &T) noexcept {
 		// compute new mu from mu(log10 T) table
-		Real log_T = clamp(std::log10(T), 1., 9.);
+		const Real log_T = clamp(std::log10(T), log_Tmin, log_Tmax);
 		Real mu = interpolate2d(log_nH, log_T, tables.log_nH, tables.log_Tgas, tables.meanMolWeight);
 		Real fun = C * mu - T;
 		return fun;
 	};
 
 	// compute temperature bounds using physics
-	const Real mu_min = 0.60; // assuming fully ionized (mu ~ 0.6)
-	const Real mu_max = 2.33; // assuming neutral fully molecular (mu ~ 2.33)
+	const Real mu_min = tables.mmw_min;
+	const Real mu_max = tables.mmw_max;
 	const Real T_min = std::clamp(C * mu_min, Tmin_table, Tmax_table);
 	const Real T_max = std::clamp(C * mu_max, Tmin_table, Tmax_table);
 
@@ -212,8 +227,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto user_rhs(Real /*t*/, quokka::valar
 	grackleGpuConstTables const &tables = udata->tables;
 
 	// check whether temperature is out-of-bounds
-	const Real Tmin = 10.;
-	const Real Tmax = 1.0e9;
+	const Real Tmin = tables.T_min;
+	const Real Tmax = tables.T_max;
 	const Real Eint_min = ComputeEgasFromTgas(rho, Tmin, gamma, tables);
 	const Real Eint_max = ComputeEgasFromTgas(rho, Tmax, gamma, tables);
 

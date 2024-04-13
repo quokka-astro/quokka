@@ -125,8 +125,12 @@ void initialize_cloudy_data(grackle_data &my_cloudy, char const *group_name, std
 			if (q < my_cloudy.grid_rank - 1) {
 				my_cloudy.grid_parameters[q](w) = temp_data[w];
 			} else {
+				double const T = temp_data[w]; // NOLINT
 				// convert temperature to log
-				my_cloudy.grid_parameters[q](w) = log10(temp_data[w]);
+				my_cloudy.grid_parameters[q](w) = log10(T);
+				// compute min/max
+				my_cloudy.T_min = std::min(T, my_cloudy.T_min);
+				my_cloudy.T_max = std::max(T, my_cloudy.T_max);
 			}
 		}
 
@@ -224,6 +228,13 @@ void initialize_cloudy_data(grackle_data &my_cloudy, char const *group_name, std
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read MMW dataset!");
 
 		status = H5Dclose(dset_id);
+
+		// compute min/max
+		for(size_t i = 0; i < my_cloudy.data_size; ++i) {
+			amrex::Real const mmw = temp_data[i]; // NOLINT
+			my_cloudy.mmw_min = std::min(mmw, my_cloudy.mmw_min);
+			my_cloudy.mmw_max = std::max(mmw, my_cloudy.mmw_max);
+		}
 	}
 
 	status = H5Fclose(file_id);
