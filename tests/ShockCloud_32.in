@@ -51,7 +51,9 @@ derived_vars = pressure entropy nH temperature cooling_length \
 	       cloud_fraction lab_velocity_x mass velocity_mag c_s
 
 cooling.enabled = 1
-cooling.grackle_data_file = "./isrf_1000Go_grains.h5"
+cooling.read_tables_even_if_disabled = 1
+cooling.cooling_table_type = cloudy_cooling_tools
+cooling.hdf5_data_file = "./isrf_1000Go_grains.h5"
 
 nH_bg    = 0.003356403333 # cm^-3
 nH_cloud = 1.006921e+00   # cm^-3

@@ -39,7 +39,8 @@ derived_vars = pressure entropy nH temperature cooling_length \
 
 cooling.enabled = 1
 cooling.read_tables_even_if_disabled = 1
-cooling.grackle_data_file = "./isrf_1000Go_grains.h5"
+cooling.cooling_table_type = cloudy_cooling_tools
+cooling.hdf5_data_file = "./isrf_1000Go_grains.h5"
 temperature_floor = 100
 
 sharp_cloud_edge = 1
