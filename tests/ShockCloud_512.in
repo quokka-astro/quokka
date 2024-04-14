@@ -22,7 +22,8 @@ do_reflux = 1
 do_subcycle = 1
 
 cooling.enabled = 1
-cooling.grackle_data_file = "../extern/grackle_data_files/input/CloudyData_UVB=HM2012.h5"
+cooling.cooling_table_type = grackle
+cooling.hdf5_data_file = "../extern/grackle_data_files/input/CloudyData_UVB=HM2012.h5"
 temperature_floor = 100
 
 derived_vars = temperature

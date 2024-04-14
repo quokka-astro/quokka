@@ -3,11 +3,9 @@
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file GrackleDataReader.cpp
-/// \brief Implements methods for reading the cooling rate tables used by
-/// Grackle. Significantly modified from the original version in Grackle to use
-/// modern C++ constructs.
-///
+/// \file CloudyDataReader.cpp
+/// \brief Implements methods for reading the cooling rate tables produced by
+/// Cloudy Cooling Tools.
 
 /***********************************************************************
 / Initialize Cloudy cooling data
@@ -18,115 +16,95 @@
 / software.
 ************************************************************************/
 
-#include "GrackleDataReader.hpp"
+#include <vector>
+
 #include "AMReX_Arena.H"
 #include "AMReX_BLassert.H"
+#include "AMReX_GpuContainers.H"
 #include "AMReX_Print.H"
 #include "AMReX_TableData.H"
-#include "FastMath.hpp"
 #include "fmt/core.h"
 
-namespace quokka::GrackleLikeCooling
+#include "CloudyDataReader.hpp"
+#include "FastMath.hpp"
+
+namespace quokka::TabulatedCooling
 {
 
-static const bool grackle_verbose = true;
-
-void initialize_cloudy_data(grackle_data &my_cloudy, char const *group_name, std::string &grackle_data_file, code_units &my_units)
+void initialize_cloudy_data(cloudy_cooling_tools_data &my_cloudy, std::string const &grackle_data_file, code_units const &my_units)
 {
 	// Initialize vectors
 	my_cloudy.grid_parameters.resize(CLOUDY_MAX_DIMENSION);
+	my_cloudy.grid_parametersVec.resize(CLOUDY_MAX_DIMENSION);
 	my_cloudy.grid_dimension.resize(CLOUDY_MAX_DIMENSION);
 	for (int64_t q = 0; q < CLOUDY_MAX_DIMENSION; q++) {
 		my_cloudy.grid_dimension[q] = 0;
 	}
 
-	if (grackle_verbose) {
-		amrex::Print() << fmt::format("Initializing Grackle-like cooling: {}.\n", group_name);
-		amrex::Print() << fmt::format("grackle_data_file: {}.\n", grackle_data_file);
-	}
-
-	// Get unit conversion factors (assuming z=0)
-	double co_length_units = NAN;
-	double co_density_units = NAN;
-	co_length_units = my_units.length_units;
-	co_density_units = my_units.density_units;
-	double tbase1 = my_units.time_units;
-	double xbase1 = co_length_units;
-	double dbase1 = co_density_units;
-	double mh = 1.67e-24;
-	double CoolUnit = (xbase1 * xbase1 * mh * mh) / (tbase1 * tbase1 * tbase1 * dbase1);
-
+	// Get unit conversion factors
+	const double co_length_units = my_units.length_units;
+	const double co_density_units = my_units.density_units;
+	const double tbase1 = my_units.time_units;
+	const double xbase1 = co_length_units;
+	const double dbase1 = co_density_units;
+	const double mh = 1.67e-24;
+	const double CoolUnit = (xbase1 * xbase1 * mh * mh) / (tbase1 * tbase1 * tbase1 * dbase1);
 	const double small_fastlog_value = FastMath::log10(1.0e-99 / CoolUnit);
 
+	amrex::Print() << "Initializing Cloudy cooling.\n";
+	amrex::Print() << fmt::format("cloudy_table_file: {}.\n", grackle_data_file);
+
 	// Read cooling data from hdf5 file
-	hid_t file_id = 0;
-	hid_t dset_id = 0;
-	hid_t attr_id = 0;
-	herr_t status = 0;
-	herr_t h5_error = -1;
-
-	file_id = H5Fopen(grackle_data_file.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
+	herr_t const h5_error = -1;
+	hid_t const file_id = H5Fopen(grackle_data_file.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(file_id != h5_error, "Failed to open Grackle data file!");
-
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(H5Aexists(file_id, "old_style") == 0, "Old-style Grackle data tables are not supported!");
 
 	// Open cooling dataset and get grid dimensions
 	std::string parameter_name = "/Cooling";
-
-	dset_id = H5Dopen2(file_id, parameter_name.c_str(),
-			   H5P_DEFAULT); // new API in HDF5 1.8.0+
-
+	hid_t dset_id = H5Dopen2(file_id, parameter_name.c_str(), H5P_DEFAULT);
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(dset_id != h5_error, "Can't open Cooling table!");
 
+	// Grid rank
 	{
-		// Grid rank
-		attr_id = H5Aopen_name(dset_id, "Rank");
-
+		hid_t const attr_id = H5Aopen_name(dset_id, "Rank");
 		int64_t temp_int = 0;
-		status = H5Aread(attr_id, HDF5_I8, &temp_int);
+		H5Aread(attr_id, HDF5_I8, &temp_int);
 		my_cloudy.grid_rank = temp_int;
-
-		status = H5Aclose(attr_id);
+		H5Aclose(attr_id);
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(my_cloudy.grid_rank <= CLOUDY_MAX_DIMENSION,
+						 "Error: rank of Cloudy cooling data must be less than or equal to "
+						 "CLOUDY_MAX_DIMENSION");
 	}
 
+	// Grid dimension
 	{
-		// Grid dimension
 		std::vector<int64_t> temp_int_arr(my_cloudy.grid_rank);
-		attr_id = H5Aopen_name(dset_id, "Dimension");
-
-		status = H5Aread(attr_id, HDF5_I8, temp_int_arr.data());
+		hid_t const attr_id = H5Aopen_name(dset_id, "Dimension");
+		H5Aread(attr_id, HDF5_I8, temp_int_arr.data());
 
 		for (int64_t q = 0; q < my_cloudy.grid_rank; q++) {
 			my_cloudy.grid_dimension[q] = temp_int_arr[q];
 		}
-
-		status = H5Aclose(attr_id);
+		H5Aclose(attr_id);
 	}
 
-	// Grid parameters
+	// Read grid parameters
 	for (int64_t q = 0; q < my_cloudy.grid_rank; q++) {
-
 		if (q < my_cloudy.grid_rank - 1) {
 			parameter_name = fmt::format("/Parameter{}", q + 1);
 		} else {
 			parameter_name = "/Temperature";
 		}
 
-		auto *temp_data = new double[my_cloudy.grid_dimension[q]]; // NOLINT(cppcoreguidelines-owning-memory)
-
-		// attr_id = H5Aopen_name(dset_id, parameter_name.c_str());
-		// status = H5Aread(attr_id, HDF5_R8, temp_data);
-
+		my_cloudy.grid_parametersVec[q] = amrex::Gpu::PinnedVector<double>(my_cloudy.grid_dimension[q]);
 		dset_id = H5Dopen2(file_id, parameter_name.c_str(), H5P_DEFAULT);
-		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, temp_data);
-
-		my_cloudy.grid_parameters[q] = amrex::Table1D<double>(temp_data, 0, static_cast<int>(my_cloudy.grid_dimension[q]));
+		H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, my_cloudy.grid_parametersVec[q].dataPtr());
+		my_cloudy.grid_parameters[q] =
+		    amrex::Table1D<double>(my_cloudy.grid_parametersVec[q].dataPtr(), 0, static_cast<int>(my_cloudy.grid_dimension[q]));
 
 		for (int w = 0; w < my_cloudy.grid_dimension[q]; w++) {
-			if (q < my_cloudy.grid_rank - 1) {
-				my_cloudy.grid_parameters[q](w) = temp_data[w];
-			} else {
-				double const T = temp_data[w]; // NOLINT
+			if (q == my_cloudy.grid_rank - 1) {
+				double const T = my_cloudy.grid_parameters[q](w);
 				// convert temperature to log
 				my_cloudy.grid_parameters[q](w) = log10(T);
 				// compute min/max
@@ -134,115 +112,91 @@ void initialize_cloudy_data(grackle_data &my_cloudy, char const *group_name, std
 				my_cloudy.T_max = std::max(T, my_cloudy.T_max);
 			}
 		}
+		H5Dclose(dset_id);
 
-		if (grackle_verbose) {
-			amrex::Print() << fmt::format("\t{}: {} to {} ({} steps).\n", parameter_name, my_cloudy.grid_parameters[q](0),
-						      my_cloudy.grid_parameters[q](static_cast<int>(my_cloudy.grid_dimension[q]) - 1),
-						      my_cloudy.grid_dimension[q]);
-		}
-
-		// status = H5Aclose(attr_id);
-		status = H5Dclose(dset_id);
+		amrex::Print() << fmt::format("\t{}: {} to {} ({} steps).\n", parameter_name, my_cloudy.grid_parameters[q](0),
+					      my_cloudy.grid_parameters[q](static_cast<int>(my_cloudy.grid_dimension[q]) - 1), my_cloudy.grid_dimension[q]);
 	}
 
+	// compute data table size
 	my_cloudy.data_size = 1;
-
 	for (int64_t q = 0; q < my_cloudy.grid_rank; q++) {
 		my_cloudy.data_size *= my_cloudy.grid_dimension[q];
 	}
 
+	// Read cooling data
 	{
-		// Read Cooling data
-		auto *temp_data = new double[my_cloudy.data_size]; // NOLINT(cppcoreguidelines-owning-memory)
+		my_cloudy.cooling_dataVec = amrex::Gpu::PinnedVector<double>(my_cloudy.data_size);
 
-		std::string const parameter_name = "/Cooling";
+		parameter_name = "/Cooling";
 		dset_id = H5Dopen2(file_id, parameter_name.c_str(),
 				   H5P_DEFAULT); // new API in HDF5 1.8.0+
-		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, temp_data);
-
+		const hid_t status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, my_cloudy.cooling_dataVec.dataPtr());
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read Cooling dataset!");
 
+		// N.B.: Table2D uses column-major (Fortran-order) indexing, but HDF5 tables use row-major (C-order) indexing!
 		amrex::GpuArray<int, 2> const lo{0, 0};
 		amrex::GpuArray<int, 2> const hi{static_cast<int>(my_cloudy.grid_dimension[1]), static_cast<int>(my_cloudy.grid_dimension[0])};
-
-		// N.B.: Table2D uses column-major (Fortran-order) indexing, but Grackle
-		// tables use row-major (C-order) indexing!
-		my_cloudy.cooling_data = amrex::Table2D<double>(temp_data, lo, hi);
+		my_cloudy.cooling_data = amrex::Table2D<double>(my_cloudy.cooling_dataVec.dataPtr(), lo, hi);
 
 		for (int64_t q = 0; q < my_cloudy.data_size; q++) {
 			// Convert to code units
-			double value = temp_data[q] / CoolUnit;
+			double const value = my_cloudy.cooling_dataVec[q] / CoolUnit;
 			// Convert to not-quite-log10 (using FastMath)
-			temp_data[q] = value > 0 ? FastMath::log10(value) : small_fastlog_value;
+			my_cloudy.cooling_dataVec[q] = value > 0 ? FastMath::log10(value) : small_fastlog_value;
 		}
-
-		status = H5Dclose(dset_id);
+		H5Dclose(dset_id);
 	}
 
+	// Read heating data
 	{
-		// Read Heating data
-		auto *temp_data = new double[my_cloudy.data_size]; // NOLINT(cppcoreguidelines-owning-memory)
+		my_cloudy.heating_dataVec = amrex::Gpu::PinnedVector<double>(my_cloudy.data_size);
 
 		parameter_name = "/Heating";
-
 		dset_id = H5Dopen2(file_id, parameter_name.c_str(),
 				   H5P_DEFAULT); // new API in HDF5 1.8.0+
-
-		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, temp_data);
-
+		const hid_t status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, my_cloudy.heating_dataVec.dataPtr());
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read Heating dataset!");
 
+		// N.B.: Table2D uses column-major (Fortran-order) indexing, but HDF5 tables use row-major (C-order) indexing!
 		amrex::GpuArray<int, 2> const lo{0, 0};
 		amrex::GpuArray<int, 2> const hi{static_cast<int>(my_cloudy.grid_dimension[1]), static_cast<int>(my_cloudy.grid_dimension[0])};
-
-		// N.B.: Table2D uses column-major (Fortran-order) indexing, but Grackle
-		// tables use row-major (C-order) indexing!
-		my_cloudy.heating_data = amrex::Table2D<double>(temp_data, lo, hi);
+		my_cloudy.heating_data = amrex::Table2D<double>(my_cloudy.heating_dataVec.dataPtr(), lo, hi);
 
 		for (int64_t q = 0; q < my_cloudy.data_size; q++) {
 			// Convert to code units
-			double value = temp_data[q] / CoolUnit;
+			double const value = my_cloudy.heating_dataVec[q] / CoolUnit;
 			// Convert to not-quite-log10 (using FastMath)
-			temp_data[q] = value > 0 ? FastMath::log10(value) : small_fastlog_value;
+			my_cloudy.heating_dataVec[q] = value > 0 ? FastMath::log10(value) : small_fastlog_value;
 		}
-
-		status = H5Dclose(dset_id);
+		H5Dclose(dset_id);
 	}
 
+	// Read mean molecular weight table
 	{
-		// Read mean molecular weight table
-		auto *temp_data = new double[my_cloudy.data_size]; // NOLINT(cppcoreguidelines-owning-memory)
+		my_cloudy.mmw_dataVec = amrex::Gpu::PinnedVector<double>(my_cloudy.data_size);
 
+		// N.B.: Table2D uses column-major (Fortran-order) indexing, but HDF5 tables use row-major (C-order) indexing!
 		amrex::GpuArray<int, 2> const lo{0, 0};
 		amrex::GpuArray<int, 2> const hi{static_cast<int>(my_cloudy.grid_dimension[1]), static_cast<int>(my_cloudy.grid_dimension[0])};
-
-		// N.B.: Table2D uses column-major (Fortran-order) indexing, but Grackle
-		// tables use row-major (C-order) indexing!
-		my_cloudy.mmw_data = amrex::Table2D<double>(temp_data, lo, hi);
+		my_cloudy.mmw_data = amrex::Table2D<double>(my_cloudy.mmw_dataVec.dataPtr(), lo, hi);
 
 		parameter_name = "/MMW";
-
 		dset_id = H5Dopen2(file_id, parameter_name.c_str(),
 				   H5P_DEFAULT); // new API in HDF5 1.8.0+
-
-		status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, temp_data);
-
+		const hid_t status = H5Dread(dset_id, HDF5_R8, H5S_ALL, H5S_ALL, H5P_DEFAULT, my_cloudy.mmw_dataVec.dataPtr());
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read MMW dataset!");
-
-		status = H5Dclose(dset_id);
+		H5Dclose(dset_id);
 
 		// compute min/max
-		for (int64_t i = 0; i < my_cloudy.data_size; ++i) {
-			amrex::Real const mmw = temp_data[i]; // NOLINT
+		for (double const &mmw : my_cloudy.mmw_dataVec) {
 			my_cloudy.mmw_min = std::min(mmw, my_cloudy.mmw_min);
 			my_cloudy.mmw_max = std::max(mmw, my_cloudy.mmw_max);
 		}
 	}
 
-	status = H5Fclose(file_id);
-
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(my_cloudy.grid_rank <= CLOUDY_MAX_DIMENSION, "Error: rank of Cloudy cooling data must be less than or equal to "
-										      "CLOUDY_MAX_DIMENSION");
+	// close HDF5 file
+	H5Fclose(file_id);
 }
 
 auto extract_2d_table(amrex::Table2D<double> const &table2D) -> amrex::TableData<double, 2>
@@ -252,12 +206,11 @@ auto extract_2d_table(amrex::Table2D<double> const &table2D) -> amrex::TableData
 	auto lo = table2D.begin;
 	auto hi = table2D.end;
 
-	// N.B.: Table2D uses column-major (Fortran-order) indexing, but
-	// Grackle tables use row-major (C-order) indexing, so we reverse the indices
-	// here
+	// N.B.: Table2D uses column-major (Fortran-order) indexing, but HDF5 tables use row-major (C-order) indexing,
+	// so we reverse the indices here
 	amrex::Array<int, 2> newlo{lo[1], lo[0]};
 	amrex::Array<int, 2> newhi{hi[1] - 1, hi[0] - 1};
-	amrex::TableData<double, 2> tableData(newlo, newhi, amrex::The_Managed_Arena());
+	amrex::TableData<double, 2> tableData(newlo, newhi, amrex::The_Pinned_Arena());
 	auto table = tableData.table();
 
 	for (int i = newlo[0]; i <= newhi[0]; ++i) {
@@ -278,7 +231,7 @@ auto copy_1d_table(amrex::Table1D<double> const &table1D) -> amrex::TableData<do
 	amrex::Array<int, 1> newlo{lo};
 	amrex::Array<int, 1> newhi{hi - 1};
 
-	amrex::TableData<double, 1> tableData(newlo, newhi, amrex::The_Managed_Arena());
+	amrex::TableData<double, 1> tableData(newlo, newhi, amrex::The_Pinned_Arena());
 	auto table = tableData.table();
 
 	for (int i = newlo[0]; i <= newhi[0]; ++i) {
@@ -287,4 +240,4 @@ auto copy_1d_table(amrex::Table1D<double> const &table1D) -> amrex::TableData<do
 	return tableData;
 }
 
-} // namespace quokka::GrackleLikeCooling
+} // namespace quokka::TabulatedCooling
