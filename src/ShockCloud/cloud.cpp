@@ -190,7 +190,7 @@ template <> void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(int lev, std:
 	// compute derived variables and save in 'mf'
 	if (dname == "temperature") {
 		const int ncomp = ncomp_cc_in;
-		auto tables = cloudyTables_.const_tables();
+		auto tables = grackleTables_.const_tables();
 
 		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 			const amrex::Box &indexRange = iter.fabbox(); // include ghosts
@@ -204,7 +204,7 @@ template <> void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(int lev, std:
 				Real const x3Mom = state(i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
 				Real const Egas = state(i, j, k, HydroSystem<ShockCloud>::energy_index);
 				Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-				Real const Tgas = quokka::cooling::ComputeTgasFromEgas(rho, Eint, quokka::EOS_Traits<ShockCloud>::gamma, tables);
+				Real const Tgas = quokka::GrackleLikeCooling::ComputeTgasFromEgas(rho, Eint, quokka::EOS_Traits<ShockCloud>::gamma, tables);
 
 				output(i, j, k, ncomp) = Tgas;
 			});
