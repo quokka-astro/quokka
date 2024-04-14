@@ -22,11 +22,11 @@
 #include "AMReX_Reduce.H"
 #include "AMReX_SPACE.H"
 
-#include "CloudyCooling.hpp"
 #include "EOS.hpp"
 #include "NSCBC_inflow.hpp"
 #include "NSCBC_outflow.hpp"
 #include "RadhydroSimulation.hpp"
+#include "TabulatedCooling.hpp"
 #include "fundamental_constants.H"
 #include "hydro_system.hpp"
 #include "physics_info.hpp"
@@ -305,8 +305,8 @@ template <> void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(int lev, std:
 			Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
 			Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
 			Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-			Real const Tgas = ComputeTgasFromEgas(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
-			Real const mu = quokka::cooling::ComputeMMW(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
+			Real const Tgas = quokka::TabulatedCooling::ComputeTgasFromEgas(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
+			Real const mu = quokka::TabulatedCooling::ComputeMMW(rho, Eint, HydroSystem<ShockCloud>::gamma_, tables);
 			Real const cs = std::sqrt(HydroSystem<ShockCloud>::gamma_ * C::k_B * Tgas / (mu * m_H));
 			output[bx](i, j, k, ncomp) = cs / 1.0e5; // km/s
 		});
@@ -318,7 +318,7 @@ template <> void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(int lev, std:
 
 		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 			Real const rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
-			Real const nH = (quokka::cooling::cloudy_H_mass_fraction * rho) / m_H;
+			Real const nH = (quokka::TabulatedCooling::cloudy_H_mass_fraction * rho) / m_H;
 			output[bx](i, j, k, ncomp) = nH;
 		});
 
@@ -443,7 +443,7 @@ template <> void RadhydroSimulation<ShockCloud>::ComputeDerivedVar(int lev, std:
 }
 
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto ComputeCellTemp(int i, int j, int k, amrex::Array4<const Real> const &state, amrex::Real gamma,
-							 quokka::cooling::cloudyGpuConstTables const &tables)
+							 quokka::TabulatedCooling::cloudyGpuConstTables const &tables)
 {
 	// return cell temperature
 	Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
@@ -452,7 +452,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto ComputeCellTemp(int i, int j, int k, am
 	Real const x3Mom = state(i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
 	Real const Egas = state(i, j, k, HydroSystem<ShockCloud>::energy_index);
 	Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-	return ComputeTgasFromEgas(rho, Eint, gamma, tables);
+	return quokka::TabulatedCooling::ComputeTgasFromEgas(rho, Eint, gamma, tables);
 }
 
 template <> auto RadhydroSimulation<ShockCloud>::ComputeStatistics() -> std::map<std::string, amrex::Real>
@@ -613,7 +613,7 @@ template <> auto RadhydroSimulation<ShockCloud>::ComputeProjections(const int di
 	proj["nH"] = computePlaneProjection<amrex::ReduceOpSum>(
 	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
 		    Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
-		    return (quokka::cooling::cloudy_H_mass_fraction * rho) / m_H;
+		    return (quokka::TabulatedCooling::cloudy_H_mass_fraction * rho) / m_H;
 	    },
 	    dir);
 
@@ -622,7 +622,7 @@ template <> auto RadhydroSimulation<ShockCloud>::ComputeProjections(const int di
 	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
 		    // partial cloud density
 		    Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
-		    return (quokka::cooling::cloudy_H_mass_fraction * rho_cloud) / m_H;
+		    return (quokka::TabulatedCooling::cloudy_H_mass_fraction * rho_cloud) / m_H;
 	    },
 	    dir);
 
@@ -631,7 +631,7 @@ template <> auto RadhydroSimulation<ShockCloud>::ComputeProjections(const int di
 	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
 		    // partial wind density
 		    Real const rho_wind = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 2);
-		    return (quokka::cooling::cloudy_H_mass_fraction * rho_wind) / m_H;
+		    return (quokka::TabulatedCooling::cloudy_H_mass_fraction * rho_wind) / m_H;
 	    },
 	    dir);
 
@@ -730,8 +730,8 @@ auto problem_main() -> int
 	amrex::Print() << fmt::format("Pressure = {} K cm^-3\n", P_over_k);
 
 	// compute mass density of background, cloud
-	::rho0 = nH_bg * m_H / quokka::cooling::cloudy_H_mass_fraction;	   // g cm^-3
-	::rho1 = nH_cloud * m_H / quokka::cooling::cloudy_H_mass_fraction; // g cm^-3
+	::rho0 = nH_bg * m_H / quokka::TabulatedCooling::cloudy_H_mass_fraction;    // g cm^-3
+	::rho1 = nH_cloud * m_H / quokka::TabulatedCooling::cloudy_H_mass_fraction; // g cm^-3
 
 	AMREX_ALWAYS_ASSERT(!std::isnan(::rho0));
 	AMREX_ALWAYS_ASSERT(!std::isnan(::rho1));
