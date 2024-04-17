@@ -38,7 +38,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dQ_dx_outflow(quokka::valarray<amrex::R
 	static constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
 	amrex::GpuArray<Real, nmscalars_> massScalars;
 	for (int n = 0; n < nmscalars_; ++n) {
-		massScalars[n] = Q[scalar0_index + n];
+		massScalars[n] = Q[RadSystem<problem_t>::scalar0_index + n];
 	}
 
 	// normal derivatives
