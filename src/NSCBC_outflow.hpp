@@ -35,6 +35,11 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dQ_dx_outflow(quokka::valarray<amrex::R
 	const amrex::Real w = Q[3];
 	const amrex::Real P = Q[4];
 
+	amrex::GpuArray<Real, nmscalars_> massScalars;
+	for (int n = 0; n < nmscalars_; ++n) {
+		massScalars[n] = Q[scalar0_index + n];
+	}
+
 	// normal derivatives
 	const amrex::Real drho_dx = dQ_dx_data[0];
 	const amrex::Real du_dx = dQ_dx_data[1];
@@ -53,7 +58,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dQ_dx_outflow(quokka::valarray<amrex::R
 	const amrex::Real dw_dz = dQ_dz_data[3];
 	const amrex::Real dP_dz = dQ_dz_data[4];
 
-	const amrex::Real c = quokka::EOS<problem_t>::ComputeSoundSpeed(rho, P);
+	const amrex::Real c = quokka::EOS<problem_t>::ComputeSoundSpeed(rho, P, massScalars);
 	const amrex::Real M = std::clamp(std::sqrt(u * u + v * v + w * w) / c, 0., 1.);
 	const amrex::Real beta = M;
 	const amrex::Real K = 0.25 * c * (1 - M * M) / L_x; // must be non-zero for well-posedness
