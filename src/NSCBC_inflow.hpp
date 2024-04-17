@@ -192,7 +192,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setInflowX1LowerLowOrder(const amrex::I
 	Q_im1[2] = v_t;
 	Q_im1[3] = w_t;
 	Q_im1[4] = quokka::EOS<problem_t>::ComputePressure(rho, Eint, massScalars); // prescribe temperature
-	Q_im1[5] = Eint;					       // prescribe temperature
+	Q_im1[5] = Eint;							    // prescribe temperature
 	for (int i = 0; i < HydroSystem<problem_t>::nscalars_; ++i) {
 		Q_im1[6 + i] = s_t[i]; // prescribe passive scalars
 	}
