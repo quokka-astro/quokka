@@ -174,8 +174,9 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, Real dt
 		amrex::ParallelDescriptor::ReduceIntMin(burn_success);
 
 		// If burn was successful, break out of the retry loop
-		if (burn_success)
+		if (burn_success) {
 			break;
+		}
 
 		// If burn was not successful and we haven't reached max retries, reduce the timestep
 		if (retry < max_retries - 1) {
