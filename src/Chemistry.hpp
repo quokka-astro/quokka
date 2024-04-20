@@ -26,146 +26,177 @@
 namespace quokka::chemistry
 {
 
+constexpr int max_retries = 5; // Maximum number of retries
+constexpr Real dt_reduction_factor = 0.5; // Factor by which to reduce the timestep
+
 AMREX_GPU_DEVICE void chemburner(burn_t &chemstate, Real dt);
 
-template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const Real dt, const Real max_density_allowed, const Real min_density_allowed)
+template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, Real dt, const Real max_density_allowed, const Real min_density_allowed)
 {
+    // Start off by assuming a successful burn.
+    int burn_success = 1;
 
-	// Start off by assuming a successful burn.
-	int burn_success = 1;
+    amrex::Gpu::Buffer<int> d_num_failed({0});
+    auto *p_num_failed = d_num_failed.data();
 
-	amrex::Gpu::Buffer<int> d_num_failed({0});
-	auto *p_num_failed = d_num_failed.data();
+    int num_failed = 0;
 
-	int num_failed = 0;
+    const BL_PROFILE("Chemistry::computeChemistry()");
 
-	const BL_PROFILE("Chemistry::computeChemistry()");
-	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
-		const amrex::Box &indexRange = iter.validbox();
-		auto const &state = mf.array(iter);
+    // Loop for retries
+    for (int retry = 0; retry < max_retries; ++retry)
+    {
+        burn_success = 1; // Reset burn_success flag
 
-		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			const Real rho = state(i, j, k, HydroSystem<problem_t>::density_index);
-			const Real xmom = state(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
-			const Real ymom = state(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
-			const Real zmom = state(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
-			const Real Ener = state(i, j, k, HydroSystem<problem_t>::energy_index);
-			const Real Eint = RadSystem<problem_t>::ComputeEintFromEgas(rho, xmom, ymom, zmom, Ener);
+        // Loop over MultiFab
+        for (amrex::MFIter iter(mf); iter.isValid(); ++iter)
+        {
+            const amrex::Box &indexRange = iter.validbox();
+            auto const &state = mf.array(iter);
 
-			std::array<Real, NumSpec> chem = {-1.0};
-			std::array<Real, NumSpec> inmfracs = {-1.0};
-			Real insum = 0.0_rt;
+            // Perform burn computation
+            amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+                const Real rho = state(i, j, k, HydroSystem<problem_t>::density_index);
+                const Real xmom = state(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
+                const Real ymom = state(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
+                const Real zmom = state(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
+                const Real Ener = state(i, j, k, HydroSystem<problem_t>::energy_index);
+                const Real Eint = RadSystem<problem_t>::ComputeEintFromEgas(rho, xmom, ymom, zmom, Ener);
 
-			for (int nn = 0; nn < NumSpec; ++nn) {
-				chem[nn] = state(i, j, k, HydroSystem<problem_t>::scalar0_index + nn) /
-					   rho; // state has partial densities, so divide by rho to get mass fractions
-			}
+                std::array<Real, NumSpec> chem = {-1.0};
+                std::array<Real, NumSpec> inmfracs = {-1.0};
+                Real insum = 0.0_rt;
 
-			// do chemistry using microphysics
+                for (int nn = 0; nn < NumSpec; ++nn) {
+                    chem[nn] = state(i, j, k, HydroSystem<problem_t>::scalar0_index + nn) /
+                            rho; // state has partial densities, so divide by rho to get mass fractions
+                }
 
-			burn_t chemstate;
-			chemstate.success = true;
-			int burn_failed = 0;
+                // do chemistry using microphysics
 
-			for (int nn = 0; nn < NumSpec; ++nn) {
-				inmfracs[nn] = chem[nn] * rho / spmasses[nn];
-				chemstate.xn[nn] = inmfracs[nn];
-			}
+                burn_t chemstate;
+                chemstate.success = true;
+                int burn_failed = 0;
 
-			// dont do chemistry in cells with densities below the minimum density specified
-			if (rho < min_density_allowed) {
-				return;
-			}
+                for (int nn = 0; nn < NumSpec; ++nn) {
+                    inmfracs[nn] = chem[nn] * rho / spmasses[nn];
+                    chemstate.xn[nn] = inmfracs[nn];
+                }
 
-			// stop the test if we have reached very high densities
-			if (rho > max_density_allowed) {
-				amrex::Abort("Density exceeded max_density_allowed!");
-			}
+                // dont do chemistry in cells with densities below the minimum density specified
+                if (rho < min_density_allowed) {
+                    return;
+                }
 
-			// input density and eint in burn state
-			// Microphysics needs specific eint
-			chemstate.rho = rho;
-			chemstate.e = Eint / rho;
+                // stop the test if we have reached very high densities
+                if (rho > max_density_allowed) {
+                    amrex::Abort("Density exceeded max_density_allowed!");
+                }
 
-			// call the EOS to set initial internal energy e
-			eos(eos_input_re, chemstate);
+                // input density and eint in burn state
+                // Microphysics needs specific eint
+                chemstate.rho = rho;
+                chemstate.e = Eint / rho;
 
-			// do the actual integration
-			// do it in .cpp so that it is not built at compile time for all tests
-			// which would otherwise slow down compilation due to the large RHS file
-			chemburner(chemstate, dt);
+                // call the EOS to set initial internal energy e
+                eos(eos_input_re, chemstate);
 
-			if (std::isnan(chemstate.xn[0]) || std::isnan(chemstate.rho)) {
-				amrex::Abort("Burner returned NAN");
-			}
+                // do the actual integration
+                // do it in .cpp so that it is not built at compile time for all tests
+                // which would otherwise slow down compilation due to the large RHS file
+                chemburner(chemstate, dt);
 
-			if (!chemstate.success) {
-				burn_failed = 1;
-			}
+                if (std::isnan(chemstate.xn[0]) || std::isnan(chemstate.rho)) {
+                    amrex::Abort("Burner returned NAN");
+                }
 
-			if (burn_failed) {
-				amrex::Gpu::Atomic::Add(p_num_failed, burn_failed);
-			}
+                if (!chemstate.success) {
+                    burn_failed = 1;
+                }
 
-			// ensure positivity and normalize
-			for (int nn = 0; nn < NumSpec; ++nn) {
-				chemstate.xn[nn] = amrex::max(chemstate.xn[nn], small_x);
-				inmfracs[nn] = spmasses[nn] * chemstate.xn[nn] / chemstate.rho;
-				insum += inmfracs[nn];
-			}
+                if (burn_failed) {
+                    amrex::Gpu::Atomic::Add(p_num_failed, burn_failed);
+                }
 
-			for (int nn = 0; nn < NumSpec; ++nn) {
-				inmfracs[nn] /= insum;
-				// update the number densities with conserved mass fractions
-				chemstate.xn[nn] = inmfracs[nn] * chemstate.rho / spmasses[nn];
-			}
+                // ensure positivity and normalize
+                for (int nn = 0; nn < NumSpec; ++nn) {
+                    chemstate.xn[nn] = amrex::max(chemstate.xn[nn], small_x);
+                    inmfracs[nn] = spmasses[nn] * chemstate.xn[nn] / chemstate.rho;
+                    insum += inmfracs[nn];
+                }
 
-			// update the number density of electrons due to charge conservation
-			// TODO(psharda): generalize this to other chem networks
-			chemstate.xn[0] = -chemstate.xn[3] - chemstate.xn[7] + chemstate.xn[1] + chemstate.xn[12] + chemstate.xn[6] + chemstate.xn[4] +
-					  chemstate.xn[9] + 2.0 * chemstate.xn[11];
+                for (int nn = 0; nn < NumSpec; ++nn) {
+                    inmfracs[nn] /= insum;
+                    // update the number densities with conserved mass fractions
+                    chemstate.xn[nn] = inmfracs[nn] * chemstate.rho / spmasses[nn];
+                }
 
-			// reconserve mass fractions post charge conservation
-			insum = 0;
-			for (int nn = 0; nn < NumSpec; ++nn) {
-				chemstate.xn[nn] = amrex::max(chemstate.xn[nn], small_x);
-				inmfracs[nn] = spmasses[nn] * chemstate.xn[nn] / chemstate.rho;
-				insum += inmfracs[nn];
-			}
+                // update the number density of electrons due to charge conservation
+                // TODO(psharda): generalize this to other chem networks
+                chemstate.xn[0] = -chemstate.xn[3] - chemstate.xn[7] + chemstate.xn[1] + chemstate.xn[12] + chemstate.xn[6] + chemstate.xn[4] +
+                        chemstate.xn[9] + 2.0 * chemstate.xn[11];
 
-			for (int nn = 0; nn < NumSpec; ++nn) {
-				inmfracs[nn] /= insum;
-				// update the number densities with conserved mass fractions
-				chemstate.xn[nn] = inmfracs[nn] * chemstate.rho / spmasses[nn];
-			}
+                // reconserve mass fractions post charge conservation
+                insum = 0;
+                for (int nn = 0; nn < NumSpec; ++nn) {
+                    chemstate.xn[nn] = amrex::max(chemstate.xn[nn], small_x);
+                    inmfracs[nn] = spmasses[nn] * chemstate.xn[nn] / chemstate.rho;
+                    insum += inmfracs[nn];
+                }
 
-			// get the updated specific eint
-			eos(eos_input_rt, chemstate);
+                for (int nn = 0; nn < NumSpec; ++nn) {
+                    inmfracs[nn] /= insum;
+                    // update the number densities with conserved mass fractions
+                    chemstate.xn[nn] = inmfracs[nn] * chemstate.rho / spmasses[nn];
+                }
 
-			// get dEint
-			// Quokka uses rho*eint
-			const Real dEint = (chemstate.e * chemstate.rho) - Eint;
-			state(i, j, k, HydroSystem<problem_t>::internalEnergy_index) += dEint;
-			state(i, j, k, HydroSystem<problem_t>::energy_index) += dEint;
+                // get the updated specific eint
+                eos(eos_input_rt, chemstate);
 
-			for (int nn = 0; nn < NumSpec; ++nn) {
-				state(i, j, k, HydroSystem<problem_t>::scalar0_index + nn) = inmfracs[nn] * rho; // scale by rho to return partial densities
-			}
-		});
+                // get dEint
+                // Quokka uses rho*eint
+                const Real dEint = (chemstate.e * chemstate.rho) - Eint;
+                state(i, j, k, HydroSystem<problem_t>::internalEnergy_index) += dEint;
+                state(i, j, k, HydroSystem<problem_t>::energy_index) += dEint;
+
+                for (int nn = 0; nn < NumSpec; ++nn) {
+                    state(i, j, k, HydroSystem<problem_t>::scalar0_index + nn) = inmfracs[nn] * rho; // scale by rho to return partial densities
+                }
+            });
 
 #if defined(AMREX_USE_HIP)
-		amrex::Gpu::streamSynchronize(); // otherwise HIP may fail to allocate the necessary resources.
+            amrex::Gpu::streamSynchronize(); // otherwise HIP may fail to allocate the necessary resources.
 #endif
-	}
+        }
 
-	num_failed = *(d_num_failed.copyToHost());
+        num_failed = *(d_num_failed.copyToHost());
 
-	burn_success = !num_failed;
-	amrex::ParallelDescriptor::ReduceIntMin(burn_success);
+        burn_success = !num_failed;
+        amrex::ParallelDescriptor::ReduceIntMin(burn_success);
 
-	if (!burn_success) {
-		amrex::Abort("Burn failed in VODE. Aborting.");
-	}
+        // If burn was successful, break out of the retry loop
+        if (burn_success)
+            break;
+
+        // If burn was not successful and we haven't reached max retries, reduce the timestep
+        if (retry < max_retries - 1)
+        {
+            // Reduce timestep
+            Real new_dt = dt * dt_reduction_factor;
+
+            // Output information about reduced timestep
+            amrex::Print() << "Burn failed. Reducing timestep to " << new_dt << std::endl;
+
+            // Update dt for the next iteration
+            dt = new_dt;
+        }
+    }
+
+    // If burn was not successful after max retries, abort
+    if (!burn_success)
+    {
+        amrex::Abort("Burn failed after max retries.");
+    }
 }
 
 } // namespace quokka::chemistry
