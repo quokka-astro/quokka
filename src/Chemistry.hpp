@@ -28,7 +28,7 @@ namespace quokka::chemistry
 
 AMREX_GPU_DEVICE void chemburner(burn_t &chemstate, Real dt);
 
-template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const Real dt, const Real max_density_allowed, const Real min_density_allowed)
+template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const Real dt, const Real max_density_allowed, const Real min_density_allowed) -> bool
 {
 
 	// Start off by assuming a successful burn.
@@ -164,8 +164,11 @@ template <typename problem_t> void computeChemistry(amrex::MultiFab &mf, const R
 	amrex::ParallelDescriptor::ReduceIntMin(burn_success);
 
 	if (!burn_success) {
-		amrex::Abort("Burn failed in VODE. Aborting.");
+		// amrex::Abort("Burn failed in VODE. Aborting.");
+		amrex::Print() << "WARNNING: Unsuccessful burn. Retrying hydro step." << "\n";
 	}
+
+	return burn_success;
 }
 
 } // namespace quokka::chemistry
