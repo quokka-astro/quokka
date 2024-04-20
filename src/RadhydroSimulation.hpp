@@ -511,7 +511,7 @@ auto RadhydroSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::Mult
 {
 
 	// start by assuming chemistry burn is successful.
-	bool burn_success = true;
+	bool burn_success = true; // NOLINT
 
 	if (enableCooling_ == 1) {
 		// compute cooling
