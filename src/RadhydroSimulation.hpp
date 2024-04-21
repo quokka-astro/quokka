@@ -1036,6 +1036,12 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	// do Strang split source terms (first half-step)
 	auto burn_success_first = addStrangSplitSourcesWithBuiltin(state_old_cc_tmp, lev, time, 0.5 * dt_lev);
 
+	// check if burn failed in chemistry. If it did, return
+	if (!burn_success_first) {
+		return burn_success_first;
+	}
+
+
 	// create temporary multifab for intermediate state
 	amrex::MultiFab state_inter_cc_(grids[lev], dmap[lev], Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
 	state_inter_cc_.setVal(0); // prevent assert in fillBoundaryConditions when radiation is enabled
@@ -1299,7 +1305,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	auto burn_success_second = addStrangSplitSourcesWithBuiltin(state_new_cc_[lev], lev, time + dt_lev, 0.5 * dt_lev);
 
 	// check if we have violated the CFL timestep or burn failed in chemistry
-	return (!isCflViolated(lev, time, dt_lev) && burn_success_first && burn_success_second);
+	return (!isCflViolated(lev, time, dt_lev) && burn_success_second);
 }
 
 template <typename problem_t>
