@@ -509,21 +509,20 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::addStrangSplit
 template <typename problem_t>
 auto RadhydroSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt) -> bool
 {
-
-	// start by assuming chemistry burn is successful.
-	bool burn_success = true; // NOLINT
-
+	bool cool_success = true;
 	if (enableCooling_ == 1) {
 		// compute cooling
 		if (coolingTableType_ == "grackle") {
-			quokka::GrackleLikeCooling::computeCooling<problem_t>(state, dt, grackleTables_, tempFloor_);
+			cool_success = quokka::GrackleLikeCooling::computeCooling<problem_t>(state, dt, grackleTables_, tempFloor_);
 		} else if (coolingTableType_ == "cloudy_cooling_tools") {
-			quokka::TabulatedCooling::computeCooling<problem_t>(state, dt, cloudyTables_, tempFloor_);
+			cool_success = quokka::TabulatedCooling::computeCooling<problem_t>(state, dt, cloudyTables_, tempFloor_);
 		} else {
 			amrex::Abort("Invalid cooling table type!");
 		}
 	}
 
+	// start by assuming chemistry burn is successful.
+	bool burn_success = true; // NOLINT
 #ifdef PRIMORDIAL_CHEM
 	if (enableChemistry_ == 1) {
 		// compute chemistry
@@ -534,7 +533,7 @@ auto RadhydroSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::Mult
 	// compute user-specified sources
 	addStrangSplitSources(state, lev, time, dt);
 
-	return burn_success;
+	return (burn_success && cool_success);
 }
 
 template <typename problem_t>
