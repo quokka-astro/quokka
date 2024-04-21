@@ -230,7 +230,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 				 amrex::Real time, amrex::Real dt_lev) -> bool;
 
 	void addStrangSplitSources(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev);
-	void addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev);
+	auto addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev) -> bool;
 
 	auto isCflViolated(int lev, amrex::Real time, amrex::Real dt_actual) -> bool;
 
@@ -507,8 +507,12 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::addStrangSplit
 }
 
 template <typename problem_t>
-void RadhydroSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt)
+auto RadhydroSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt) -> bool
 {
+
+	// start by assuming chemistry burn is successful.
+	bool burn_success = true; // NOLINT
+
 	if (enableCooling_ == 1) {
 		// compute cooling
 		if (coolingTableType_ == "grackle") {
@@ -523,12 +527,14 @@ void RadhydroSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::Mult
 #ifdef PRIMORDIAL_CHEM
 	if (enableChemistry_ == 1) {
 		// compute chemistry
-		quokka::chemistry::computeChemistry<problem_t>(state, dt, max_density_allowed, min_density_allowed);
+		burn_success = quokka::chemistry::computeChemistry<problem_t>(state, dt, max_density_allowed, min_density_allowed);
 	}
 #endif
 
 	// compute user-specified sources
 	addStrangSplitSources(state, lev, time, dt);
+
+	return burn_success;
 }
 
 template <typename problem_t>
@@ -1028,7 +1034,12 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	auto dx = geom[lev].CellSizeArray();
 
 	// do Strang split source terms (first half-step)
-	addStrangSplitSourcesWithBuiltin(state_old_cc_tmp, lev, time, 0.5 * dt_lev);
+	auto burn_success_first = addStrangSplitSourcesWithBuiltin(state_old_cc_tmp, lev, time, 0.5 * dt_lev);
+
+	// check if burn failed in chemistry. If it did, return
+	if (!burn_success_first) {
+		return burn_success_first;
+	}
 
 	// create temporary multifab for intermediate state
 	amrex::MultiFab state_inter_cc_(grids[lev], dmap[lev], Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
@@ -1290,10 +1301,10 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 #endif
 
 	// do Strang split source terms (second half-step)
-	addStrangSplitSourcesWithBuiltin(state_new_cc_[lev], lev, time + dt_lev, 0.5 * dt_lev);
+	auto burn_success_second = addStrangSplitSourcesWithBuiltin(state_new_cc_[lev], lev, time + dt_lev, 0.5 * dt_lev);
 
-	// check if we have violated the CFL timestep
-	return !isCflViolated(lev, time, dt_lev);
+	// check if we have violated the CFL timestep or burn failed in chemistry
+	return (!isCflViolated(lev, time, dt_lev) && burn_success_second);
 }
 
 template <typename problem_t>
