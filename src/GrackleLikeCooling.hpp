@@ -255,7 +255,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto user_rhs(Real /*t*/, quokka::valar
 	return 0; // success
 }
 
-template <typename problem_t> void computeCooling(amrex::MultiFab &mf, const Real dt_in, grackle_tables &cloudyTables, const Real T_floor)
+template <typename problem_t> auto computeCooling(amrex::MultiFab &mf, const Real dt_in, grackle_tables &cloudyTables, const Real T_floor) -> bool
 {
 	BL_PROFILE("computeCooling()")
 
@@ -309,14 +309,16 @@ template <typename problem_t> void computeCooling(amrex::MultiFab &mf, const Rea
 		});
 	}
 
-	int nmin = nsubstepsMF.min(0);
 	int nmax = nsubstepsMF.max(0);
 	Real navg = static_cast<Real>(nsubstepsMF.sum(0)) / static_cast<Real>(nsubstepsMF.boxArray().numPts());
-	amrex::Print() << fmt::format("\tcooling substeps (per cell): min {}, avg {}, max {}\n", nmin, navg, nmax);
+	amrex::Print() << fmt::format("\tcooling substeps (per cell): avg {}, max {}\n", navg, nmax);
 
+	// check if integration succeeded
 	if (nmax >= maxStepsODEIntegrate) {
-		amrex::Abort("Max steps exceeded in cooling solve!");
+		amrex::Print() << "\t[GrackleLikeCooling] Reaction ODE failure! Retrying hydro update...\n";
+		return false;
 	}
+	return true; // success
 }
 
 void readGrackleData(std::string &grackle_hdf5_file, grackle_tables &cloudyTables);
