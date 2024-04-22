@@ -509,6 +509,7 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::addStrangSplit
 template <typename problem_t>
 auto RadhydroSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt) -> bool
 {
+	// start by assuming cooling integrator is successful.
 	bool cool_success = true;
 	if (enableCooling_ == 1) {
 		// compute cooling
@@ -1035,7 +1036,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	// do Strang split source terms (first half-step)
 	auto burn_success_first = addStrangSplitSourcesWithBuiltin(state_old_cc_tmp, lev, time, 0.5 * dt_lev);
 
-	// check if burn failed in chemistry. If it did, return
+	// check if reactions failed for source terms. If it failed, return false.
 	if (!burn_success_first) {
 		return burn_success_first;
 	}
@@ -1302,7 +1303,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	// do Strang split source terms (second half-step)
 	auto burn_success_second = addStrangSplitSourcesWithBuiltin(state_new_cc_[lev], lev, time + dt_lev, 0.5 * dt_lev);
 
-	// check if we have violated the CFL timestep or burn failed in chemistry
+	// check if we have violated the CFL timestep or reactions failed for source terms
 	return (!isCflViolated(lev, time, dt_lev) && burn_success_second);
 }
 
