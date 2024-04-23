@@ -40,12 +40,11 @@ jobs:
         set -e
         cmake -S . -B build                                \
             -DCMAKE_VERBOSE_MAKEFILE=ON                    \
-            -DAMReX_EB=OFF                                 \
-            -DAMReX_ENABLE_TESTS=ON                        \
             -DAMReX_GPU_BACKEND=SYCL                       \
             -DCMAKE_C_COMPILER=$(which icx)                \
             -DCMAKE_CXX_COMPILER=$(which icpx)             \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache           \
+            -DCMAKE_CXX_FLAGS="-ffp-model=precise"         \
             -DAMReX_PARALLEL_LINK_JOBS=4
         cmake --build build --parallel 4
 
