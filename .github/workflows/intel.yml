@@ -1,9 +1,16 @@
 name: intel
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [ development ]
+  pull_request:
+    # The branches below must be a subset of the branches above
+    branches: [ development ]
+  merge_group:
+    branches: [ development ]
 
 concurrency:
-  group: ${{ github.ref }}-${{ github.head_ref }}-intel
+  group: ${{ github.ref }}-${{ github.head_ref }}-cmake-intel
   cancel-in-progress: true
 
 jobs:
