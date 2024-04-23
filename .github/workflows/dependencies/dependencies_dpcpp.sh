@@ -33,6 +33,8 @@ do
         intel-oneapi-compiler-dpcpp-cpp \
         intel-oneapi-mkl-devel \
         intel-oneapi-mpi-devel \
+        python3-dev python3-numpy python3-matplotlib \
+        libhdf5-mpi-dev \
         && { sudo apt-get clean; status=0; break; }  \
         || { sleep 10; }
 done
