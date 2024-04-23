@@ -14,10 +14,12 @@ jobs:
     - uses: actions/checkout@v4
       with:
         submodules: true
+        
     - name: Dependencies
       run: |
         .github/workflows/dependencies/dependencies_dpcpp.sh
         .github/workflows/dependencies/dependencies_ccache.sh
+        
     - name: Set Up Cache
       uses: actions/cache@v4
       with:
@@ -25,6 +27,7 @@ jobs:
         key: ccache-${{ github.workflow }}-${{ github.job }}-git-${{ github.sha }}
         restore-keys: |
              ccache-${{ github.workflow }}-${{ github.job }}-git-
+             
     - name: Build & Install
       env: {CXXFLAGS: "-fno-operator-names -Werror -Wall -Wextra -Wpedantic -Wnull-dereference -Wfloat-conversion -Wshadow -Woverloaded-virtual -Wextra-semi -Wunreachable-code -Wnon-virtual-dtor"}
       run: |
@@ -48,10 +51,15 @@ jobs:
 
         ccache -s
         du -hs ~/.cache/ccache
-    - name: Test
+        
+    - name: Create output directory
+      run: cmake -E make_directory $GITHUB_WORKSPACE/tests
+      
+    - name: Run tests
       working-directory: ${{runner.workspace}}/build
       shell: bash
       run: ctest --output-on-failure -C $BUILD_TYPE
+      
     - name: Upload test output
       if: always()
       uses: actions/upload-artifact@v4
