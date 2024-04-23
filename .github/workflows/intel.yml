@@ -57,7 +57,6 @@ jobs:
       
     - name: Run tests
       working-directory: ${{runner.workspace}}/build
-      shell: bash
       run: ctest --output-on-failure -C $BUILD_TYPE
       
     - name: Upload test output
