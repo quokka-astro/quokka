@@ -29,7 +29,7 @@ jobs:
              ccache-${{ github.workflow }}-${{ github.job }}-git-
              
     - name: Build & Install
-      env: {CXXFLAGS: "-fno-operator-names -Werror -Wall -Wextra -Wpedantic -Wnull-dereference -Wfloat-conversion -Wshadow -Woverloaded-virtual -Wextra-semi -Wunreachable-code -Wnon-virtual-dtor"}
+      env: {CXXFLAGS: "-ffp-model=precise -fno-operator-names -Werror -Wall -Wextra -Wpedantic -Wnull-dereference -Wfloat-conversion -Wshadow -Woverloaded-virtual -Wextra-semi -Wunreachable-code -Wnon-virtual-dtor"}
       run: |
         export CCACHE_COMPRESS=1
         export CCACHE_COMPRESSLEVEL=10
@@ -45,8 +45,6 @@ jobs:
             -DCMAKE_C_COMPILER=$(which icx)                \
             -DCMAKE_CXX_COMPILER=$(which icpx)             \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache           \
-            -DCMAKE_CXX_FLAGS="-ffp-model=precise"         \
-            -DAMReX_PARALLEL_LINK_JOBS=4
         cmake --build build --parallel 4
 
         ccache -s
@@ -56,7 +54,7 @@ jobs:
       run: cmake -E make_directory $GITHUB_WORKSPACE/tests
       
     - name: Run tests
-      working-directory: ${{runner.workspace}}/build
+      working-directory: ${{runner.workspace}}/quokka/build
       run: ctest --output-on-failure -C $BUILD_TYPE
       
     - name: Upload test output
