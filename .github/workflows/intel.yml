@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   tests-oneapi-sycl:
-    name: oneAPI SYCL [tests]
+    name: oneAPI CPU [tests]
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
