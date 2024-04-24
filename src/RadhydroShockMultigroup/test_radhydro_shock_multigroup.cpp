@@ -93,7 +93,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<ShockProblem>::DefineOpa
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<ShockProblem>::ComputeRadQuantityExponents(amrex::GpuArray<double, nGroups_> /*quant*/) 
+template <typename ArrayType>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<ShockProblem>::ComputeRadQuantityExponents(ArrayType const &/*quant*/) 
 		-> amrex::GpuArray<double, nGroups_>
 {
 	amrex::GpuArray<double, nGroups_> exponents{};
