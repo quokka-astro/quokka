@@ -92,17 +92,17 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<ShockProblem>::DefineOpa
 	return exponents;
 }
 
-template <>
-template <typename ArrayType>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<ShockProblem>::ComputeRadQuantityExponents(ArrayType const &/*quant*/) 
-		-> amrex::GpuArray<double, nGroups_>
-{
-	amrex::GpuArray<double, nGroups_> exponents{};
-	for (int i = 0; i < nGroups_; ++i) {
-		exponents[i] = 0.0;
-	}
-	return exponents;
-}
+// template <>
+// template <typename ArrayType>
+// AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<ShockProblem>::ComputeRadQuantityExponents(ArrayType const &/*quant*/, amrex::GpuArray<double, nGroups_ + 1> const &boundaries) 
+// 		-> amrex::GpuArray<double, nGroups_>
+// {
+// 	amrex::GpuArray<double, nGroups_> exponents{};
+// 	for (int i = 0; i < nGroups_; ++i) {
+// 		exponents[i] = 0.0;
+// 	}
+// 	return exponents;
+// }
 
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<ShockProblem>::ComputePlanckOpacity(const double rho, const double /*Tgas*/)
