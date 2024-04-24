@@ -1111,13 +1111,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				if constexpr (opacity_model_ == 1) {
 					kappa_lower = DefineOpacityAtLowerBounds(rho, T_gas);
 					alpha_kappa = DefineOpacityExponents(rho, T_gas);
-					// auto alpha_E = ComputeRadQuantityExponents(Erad0Vec);
-					// auto alpha_B = ComputeRadQuantityExponents(fourPiBoverC);
-					// for (int g = 0; g < nGroups_; ++g) {
-					// 	const double part1 = (std::pow(radBoundaryRatios[g], alpha_B[g] + 1.0) - 1.0) / (alpha_B[g] + 1.0);
-					// 	const double part2 = (std::pow(radBoundaryRatios[g], alpha_B[g] + alpha_kappa[g] + 1.0) - 1.0) / (alpha_B[g] + alpha_kappa[g] + 1.0);
-					// 	kappaPVec[g] = kappa_lower[g] / part1 * part2;
-					// }
 				}
 
 				if constexpr ((beta_order_ != 0) && (include_work_term_in_source)) {
@@ -1143,14 +1136,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 							}
 							for (int n = 0; n < 3; ++n) {
 								auto alpha_F = ComputeRadQuantityExponents(frad[n]);
-								// for (int g = 0; g < nGroups_; ++g) {
-								// 	const double part1 = (std::pow(radBoundaryRatios[g], alpha_F[g] + 1.0) - 1.0) / (alpha_F[g] + 1.0);
-								// 	const double part2 = (std::pow(radBoundaryRatios[g], alpha_F[g] + alpha_kappa[g] + 1.0) - 1.0) / (alpha_F[g] + alpha_kappa[g] + 1.0);
-								// 	const double chi_F = kappa_lower[g] * frad[n][g] / part1 * part2;
-								// 	// work = v * F * chi
-								// 	const double vFchi = gasMtm0[n] * (alpha_kappa[g] + 1.0) * chi_F;
-								// 	work[g] += vFchi;
-								// }
 								kappaFVec = ComputeGroupMeanOpacity(kappa_lower, radBoundaryRatios, alpha_F, alpha_kappa);
 								for (int g = 0; g < nGroups_; ++g) {
 									work[g] += (alpha_kappa[g] + 1.0) * gasMtm0[n] * kappaFVec[g] * frad[n][g];
@@ -1466,12 +1451,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 						auto alpha_F = ComputeRadQuantityExponents(Frad_t1[n]);
 						kappaFVec = ComputeGroupMeanOpacity(kappa_lower, radBoundaryRatios, alpha_F, alpha_kappa);
 						for (int g = 0; g < nGroups_; ++g) {
-							// const double part1 = (std::pow(radBoundaryRatios[g], alpha_F[g] + 1.0) - 1.0) / (alpha_F[g] + 1.0);
-							// const double part2 = (std::pow(radBoundaryRatios[g], alpha_F[g] + alpha_kappa[g] + 1.0) - 1.0) / (alpha_F[g] + alpha_kappa[g] + 1.0);
-							// const double chi_F = kappa_lower[g] * Frad_t1[n][g] / part1 * part2;
-							// // work = v * F * chi
-							// const double vFchi = gasMtm0[n] * (alpha_kappa[g] + 1.0) * chi_F;
-							// work[g] += vFchi;
 							work[g] += (alpha_kappa[g] + 1.0) * gasMtm0[n] * kappaFVec[g] * Frad_t1[n][g];
 						}
 					}
