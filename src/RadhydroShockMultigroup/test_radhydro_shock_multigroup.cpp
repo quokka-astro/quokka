@@ -62,6 +62,7 @@ template <> struct RadSystem_Traits<ShockProblem> {
 	static constexpr amrex::GpuArray<double, Physics_Traits<ShockProblem>::nGroups + 1> radBoundaries{1.00000000e+15, 1.00000000e+16, 1.00000000e+17,
 													  1.00000000e+18, 1.00000000e+19, 1.00000000e+20};
 	static constexpr int beta_order = 1;
+	static constexpr int opacity_model = 1;
 };
 
 template <> struct quokka::EOS_Traits<ShockProblem> {
@@ -71,38 +72,18 @@ template <> struct quokka::EOS_Traits<ShockProblem> {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<ShockProblem>::DefineOpacityAtLowerBounds(const double rho, const double /*Tgas*/)
-    -> amrex::GpuArray<double, nGroups_>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<ShockProblem>::DefineOpacityExponentsAndLowerValues(const double rho, const double /*Tgas*/)
+    -> amrex::GpuArray<amrex::GpuArray<double, nGroups_>, 2>
 {
-	amrex::GpuArray<double, nGroups_> kappaPVec{};
+	amrex::GpuArray<amrex::GpuArray<double, nGroups_>, 2> exponents_and_values{};
 	for (int i = 0; i < nGroups_; ++i) {
-		kappaPVec[i] = kappa / rho;
+		exponents_and_values[0][i] = 0.0;
 	}
-	return kappaPVec;
-}
-
-template <>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<ShockProblem>::DefineOpacityExponents(const double rho, const double /*Tgas*/)
-    -> amrex::GpuArray<double, nGroups_>
-{
-	amrex::GpuArray<double, nGroups_> exponents{};
 	for (int i = 0; i < nGroups_; ++i) {
-		exponents[i] = 0.0;
+		exponents_and_values[1][i] = kappa / rho;
 	}
-	return exponents;
+	return exponents_and_values;
 }
-
-// template <>
-// template <typename ArrayType>
-// AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<ShockProblem>::ComputeRadQuantityExponents(ArrayType const &/*quant*/, amrex::GpuArray<double, nGroups_ + 1> const &boundaries) 
-// 		-> amrex::GpuArray<double, nGroups_>
-// {
-// 	amrex::GpuArray<double, nGroups_> exponents{};
-// 	for (int i = 0; i < nGroups_; ++i) {
-// 		exponents[i] = 0.0;
-// 	}
-// 	return exponents;
-// }
 
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<ShockProblem>::ComputePlanckOpacity(const double rho, const double /*Tgas*/)
