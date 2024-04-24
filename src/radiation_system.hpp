@@ -1214,7 +1214,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				quokka::valarray<double, nGroups_> deltaD{};
 				quokka::valarray<double, nGroups_> F_D{};
 
-				const double resid_tol = 1.0e-13; // 1.0e-15;
+				const double resid_tol = 1.0e-10; // 1.0e-15;
 				const int maxIter = 400;
 				int n = 0;
 				for (; n < maxIter; ++n) {
@@ -1255,11 +1255,24 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 							EradVec_guess[g] = kappaPoverE[g] * (fourPiBoverC[g] - (Rvec[g] - work[g]) / tau[g]);
 						}
 					}
-					F_G = Egas_guess - Egas0 + (c / chat) * sum(Rvec);
+					// F_G = Egas_guess - Egas0 + (c / chat) * sum(Rvec);
+					F_G = Egas_guess - Egas0;
 					F_D = EradVec_guess - Erad0Vec - (Rvec + Src);
+					double F_D_abs_sum = 0.0;
+					for (int g = 0; g < nGroups_; ++g) {
+						if (tau[g] > 0.0) {
+							F_D_abs_sum += std::abs(F_D[g]);
+							F_G += (c / chat) * Rvec[g];
+						}
+					}
+
+					// Add a breakpoint for debugging
+					if (n >= maxIter - 50) {
+						n = n;
+					}
 
 					// check relative convergence of the residuals
-					if ((std::abs(F_G / Etot0) < resid_tol) && ((c / chat) * sum(abs(F_D)) / Etot0 < resid_tol)) {
+					if ((std::abs(F_G / Etot0) < resid_tol) && ((c / chat) * F_D_abs_sum / Etot0 < resid_tol)) {
 						break;
 					}
 
