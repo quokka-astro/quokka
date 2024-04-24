@@ -8,6 +8,7 @@ tests/last_chk
 tests/plt*
 tests/chk*
 tests/*.csv
+tests/*/*.csv
 tests/plt*
 sims/
 .clangd

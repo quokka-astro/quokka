@@ -31,6 +31,8 @@
 
 // Hyper parameters of the radiation solver
 
+static constexpr int opacity_model_ = 1;	// 0: user defined, 1: power-law for both opacity and radiation quantities, 2: power-law for opacity, piecewise constant for radiation quantities
+
 static constexpr bool include_work_term_in_source = true;
 static constexpr bool use_D_as_base = true;
 
@@ -164,6 +166,10 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	AMREX_GPU_HOST_DEVICE static auto ComputePlanckOpacity(double rho, double Tgas) -> quokka::valarray<double, nGroups_>;
 	AMREX_GPU_HOST_DEVICE static auto ComputeFluxMeanOpacity(double rho, double Tgas) -> quokka::valarray<double, nGroups_>;
 	AMREX_GPU_HOST_DEVICE static auto ComputeEnergyMeanOpacity(double rho, double Tgas) -> quokka::valarray<double, nGroups_>;
+	AMREX_GPU_HOST_DEVICE static auto DefineOpacityAtLowerBounds(double rho, double Tgas) -> amrex::GpuArray<double, nGroups_>;
+	AMREX_GPU_HOST_DEVICE static auto DefineOpacityExponents(double rho, double Tgas) -> amrex::GpuArray<double, nGroups_>;
+	AMREX_GPU_HOST_DEVICE static auto ComputeRadQuantityExponents(amrex::GpuArray<double, nGroups_> quant) -> amrex::GpuArray<double, nGroups_>;
+	AMREX_GPU_HOST_DEVICE static auto ComputeGroupMeanOpacity(amrex::GpuArray<double, nGroups_> kappa_lower, amrex::GpuArray<double, nGroups_> radBoundaryRatios, amrex::GpuArray<double, nGroups_> alpha_quant, amrex::GpuArray<double, nGroups_> alpha_kappa) -> quokka::valarray<double, nGroups_>;
 	AMREX_GPU_HOST_DEVICE static auto ComputePlanckOpacityTempDerivative(double rho, double Tgas) -> quokka::valarray<double, nGroups_>;
 	AMREX_GPU_HOST_DEVICE static auto ComputeEintFromEgas(double density, double X1GasMom, double X2GasMom, double X3GasMom, double Etot) -> double;
 	AMREX_GPU_HOST_DEVICE static auto ComputeEgasFromEint(double density, double X1GasMom, double X2GasMom, double X3GasMom, double Eint) -> double;
@@ -174,7 +180,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 							 quokka::valarray<double, nGroups_> &xi);
 
 	AMREX_GPU_HOST_DEVICE static auto Solve3x3matrix(double C00, double C01, double C02, double C10, double C11, double C12, double C20, double C21,
-							 double C22, double Y0, double Y1, double Y2) -> quokka::valarray<amrex::Real, 3>;
+							 double C22, double Y0, double Y1, double Y2) -> std::tuple<amrex::Real, amrex::Real, amrex::Real>;
 
 	AMREX_GPU_HOST_DEVICE static auto ComputePlanckEnergyFractions(amrex::GpuArray<double, nGroups_ + 1> const &boundaries, amrex::Real temperature)
 	    -> quokka::valarray<amrex::Real, nGroups_>;
@@ -274,12 +280,11 @@ AMREX_GPU_HOST_DEVICE void RadSystem<problem_t>::SolveLinearEqs(const double a00
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::Solve3x3matrix(const double C00, const double C01, const double C02, const double C10, const double C11,
 								const double C12, const double C20, const double C21, const double C22, const double Y0,
-								const double Y1, const double Y2) -> quokka::valarray<amrex::Real, 3>
+								const double Y1, const double Y2) -> std::tuple<amrex::Real, amrex::Real, amrex::Real>
 {
 	// Solve the 3x3 matrix equation: C * X = Y under the assumption that only the diagonal terms
 	// are guaranteed to be non-zero and are thus allowed to be divided by.
 
-	quokka::valarray<amrex::Real, 3> ret{};
 	auto E11 = C11 - C01 * C10 / C00;
 	auto E12 = C12 - C02 * C10 / C00;
 	auto E21 = C21 - C01 * C20 / C00;
@@ -289,8 +294,8 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::Solve3x3matrix(const double C00
 	auto X2 = (Z2 - Z1 * E21 / E11) / (E22 - E12 * E21 / E11);
 	auto X1 = (Z1 - E12 * X2) / E11;
 	auto X0 = (Y0 - C01 * X1 - C02 * X2) / C00;
-	ret = {X0, X1, X2};
-	return ret;
+
+	return std::make_tuple(X0, X1, X2);
 }
 
 template <typename problem_t>
@@ -862,6 +867,43 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeEnergyMeanOpacity(const 
 }
 
 template <typename problem_t>
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::DefineOpacityAtLowerBounds(const double /*rho*/, const double /*Tgas*/) -> amrex::GpuArray<double, nGroups_>
+{
+	quokka::valarray<double, nGroups_> kappa{};
+	kappa.fillin(NAN);
+	return kappa;
+}
+
+template <typename problem_t>
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::DefineOpacityExponents(const double /*rho*/, const double /*Tgas*/) -> amrex::GpuArray<double, nGroups_>
+{
+	quokka::valarray<double, nGroups_> kappa{};
+	kappa.fillin(NAN);
+	return kappa;
+}
+
+template <typename problem_t>
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeRadQuantityExponents(amrex::GpuArray<double, nGroups_> /*quant*/) -> amrex::GpuArray<double, nGroups_>
+{
+	amrex::GpuArray<double, nGroups_> exponents{};
+	return exponents;
+}
+
+template <typename problem_t>
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeGroupMeanOpacity(amrex::GpuArray<double, nGroups_> kappa_lower, amrex::GpuArray<double, nGroups_> radBoundaryRatios, amrex::GpuArray<double, nGroups_> alpha_quant, amrex::GpuArray<double, nGroups_> alpha_kappa) -> quokka::valarray<double, nGroups_>
+{
+	// TODO(CCH): take care of the case where alpha_F[g] + 1.0 = 0
+	// TODO(CCH): take care of the case where alpha_F[g] + alpha_kappa[g] + 1.0 = 0
+	quokka::valarray<double, nGroups_> kappa{};
+	for (int g = 0; g < nGroups_; ++g) {
+		const double part1 = (std::pow(radBoundaryRatios[g], alpha_quant[g] + 1.0) - 1.0) / (alpha_quant[g] + 1.0);
+		const double part2 = (std::pow(radBoundaryRatios[g], alpha_quant[g] + alpha_kappa[g] + 1.0) - 1.0) / (alpha_quant[g] + alpha_kappa[g] + 1.0);
+		kappa[g] = kappa_lower[g] / part1 * part2;
+	}
+	return kappa;
+}
+
+template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckOpacityTempDerivative(const double /* rho */, const double /* Tgas */)
     -> quokka::valarray<double, nGroups_>
 {
@@ -903,8 +945,12 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 	}
 
 	amrex::GpuArray<amrex::Real, nGroups_ + 1> radBoundaries_g{};
+	amrex::GpuArray<amrex::Real, nGroups_> radBoundaryRatios{};
 	if constexpr (nGroups_ > 1) {
 		radBoundaries_g = RadSystem_Traits<problem_t>::radBoundaries;
+		for (int g = 0; g < nGroups_; ++g) {
+			radBoundaryRatios[g] = radBoundaries_g[g + 1] / radBoundaries_g[g];
+		}
 	}
 
 	// Add source terms
@@ -954,12 +1000,18 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		quokka::valarray<double, nGroups_> kappaPVec{};
 		quokka::valarray<double, nGroups_> kappaEVec{};
 		quokka::valarray<double, nGroups_> kappaFVec{};
+		amrex::GpuArray<double, nGroups_> kappa_lower{};
+		amrex::GpuArray<double, nGroups_> alpha_kappa{};
 		quokka::valarray<double, nGroups_> kappaPoverE{};
 		quokka::valarray<double, nGroups_> tau0{}; // optical depth across c * dt at old state
 		quokka::valarray<double, nGroups_> tau{};  // optical depth across c * dt at new state
 		quokka::valarray<double, nGroups_> D{};	   // D = S / tau0
 		quokka::valarray<double, nGroups_> work{};
 		quokka::valarray<double, nGroups_> work_prev{};
+		// quokka::valarray<amrex::Real, nGroups_> Frad_t0_x{};
+		// quokka::valarray<amrex::Real, nGroups_> Frad_t0_y{};
+		// quokka::valarray<amrex::Real, nGroups_> Frad_t0_z{};
+		amrex::GpuArray<amrex::GpuArray<amrex::Real, nGroups_>, 3> frad{};
 
 		work.fillin(0.0);
 		work_prev.fillin(0.0);
@@ -978,7 +1030,8 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		}
 
 		amrex::GpuArray<amrex::Real, 3> dMomentum{};
-		amrex::GpuArray<quokka::valarray<amrex::Real, 3>, nGroups_> Frad_t1{};
+		// amrex::GpuArray<quokka::valarray<amrex::Real, 3>, nGroups_> Frad_t1{};
+		amrex::GpuArray<amrex::GpuArray<amrex::Real, nGroups_>, 3> Frad_t1{};
 
 		amrex::Real gas_update_factor = 1.0;
 		if (stage == 1) {
@@ -1039,11 +1092,13 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
 				AMREX_ASSERT(T_gas >= 0.);
 				fourPiBoverC = ComputeThermalRadiation(T_gas, radBoundaries_g_copy);
+
 				kappaPVec = ComputePlanckOpacity(rho, T_gas);
 				kappaEVec = ComputeEnergyMeanOpacity(rho, T_gas);
 				kappaFVec = ComputeFluxMeanOpacity(rho, T_gas);
 				AMREX_ASSERT(!kappaPVec.hasnan());
 				AMREX_ASSERT(!kappaEVec.hasnan());
+				AMREX_ASSERT(!kappaFVec.hasnan());
 
 				for (int g = 0; g < nGroups_; ++g) {
 					if (kappaEVec[g] > 0.0) {
@@ -1053,17 +1108,57 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					}
 				}
 
+				if constexpr (opacity_model_ == 1) {
+					kappa_lower = DefineOpacityAtLowerBounds(rho, T_gas);
+					alpha_kappa = DefineOpacityExponents(rho, T_gas);
+					// auto alpha_E = ComputeRadQuantityExponents(Erad0Vec);
+					// auto alpha_B = ComputeRadQuantityExponents(fourPiBoverC);
+					// for (int g = 0; g < nGroups_; ++g) {
+					// 	const double part1 = (std::pow(radBoundaryRatios[g], alpha_B[g] + 1.0) - 1.0) / (alpha_B[g] + 1.0);
+					// 	const double part2 = (std::pow(radBoundaryRatios[g], alpha_B[g] + alpha_kappa[g] + 1.0) - 1.0) / (alpha_B[g] + alpha_kappa[g] + 1.0);
+					// 	kappaPVec[g] = kappa_lower[g] / part1 * part2;
+					// }
+				}
+
 				if constexpr ((beta_order_ != 0) && (include_work_term_in_source)) {
 					// compute the work term at the old state
 					// const double gamma = 1.0 / sqrt(1.0 - vsqr / (c * c));
 					if (ite == 0) {
-						for (int g = 0; g < nGroups_; ++g) {
-							// work[g] = dt * chat * rho * kappaPVec[g] * (Erad0Vec[g] - fourPiBoverC[g]);
-							const double frad0 = consPrev(i, j, k, x1RadFlux_index + numRadVars_ * g);
-							const double frad1 = consPrev(i, j, k, x2RadFlux_index + numRadVars_ * g);
-							const double frad2 = consPrev(i, j, k, x3RadFlux_index + numRadVars_ * g);
-							work[g] = (x1GasMom0 * frad0 + x2GasMom0 * frad1 + x3GasMom0 * frad2) * chat / (c * c) *
-								  lorentz_factor_v * kappaFVec[g] * dt;
+						if constexpr (opacity_model_ == 0) {
+							for (int g = 0; g < nGroups_; ++g) {
+								// work[g] = dt * chat * rho * kappaPVec[g] * (Erad0Vec[g] - fourPiBoverC[g]);
+								const double frad0 = consPrev(i, j, k, x1RadFlux_index + numRadVars_ * g);
+								const double frad1 = consPrev(i, j, k, x2RadFlux_index + numRadVars_ * g);
+								const double frad2 = consPrev(i, j, k, x3RadFlux_index + numRadVars_ * g);
+								// work = v * F * chi
+								work[g] = (x1GasMom0 * frad0 + x2GasMom0 * frad1 + x3GasMom0 * frad2) * kappaFVec[g];
+								work[g] *= chat / (c * c) * lorentz_factor_v * dt;
+							}
+						} else if constexpr (opacity_model_ == 1) {
+							for (int g = 0; g < nGroups_; ++g) {
+								frad[0][g] = consPrev(i, j, k, x1RadFlux_index + numRadVars_ * g);
+								frad[1][g] = consPrev(i, j, k, x2RadFlux_index + numRadVars_ * g);
+								frad[2][g] = consPrev(i, j, k, x3RadFlux_index + numRadVars_ * g);
+								work[g] = 0.0;
+							}
+							for (int n = 0; n < 3; ++n) {
+								auto alpha_F = ComputeRadQuantityExponents(frad[n]);
+								// for (int g = 0; g < nGroups_; ++g) {
+								// 	const double part1 = (std::pow(radBoundaryRatios[g], alpha_F[g] + 1.0) - 1.0) / (alpha_F[g] + 1.0);
+								// 	const double part2 = (std::pow(radBoundaryRatios[g], alpha_F[g] + alpha_kappa[g] + 1.0) - 1.0) / (alpha_F[g] + alpha_kappa[g] + 1.0);
+								// 	const double chi_F = kappa_lower[g] * frad[n][g] / part1 * part2;
+								// 	// work = v * F * chi
+								// 	const double vFchi = gasMtm0[n] * (alpha_kappa[g] + 1.0) * chi_F;
+								// 	work[g] += vFchi;
+								// }
+								kappaFVec = ComputeGroupMeanOpacity(kappa_lower, radBoundaryRatios, alpha_F, alpha_kappa);
+								for (int g = 0; g < nGroups_; ++g) {
+									work[g] += (alpha_kappa[g] + 1.0) * gasMtm0[n] * kappaFVec[g] * frad[n][g];
+								}
+							}
+							for (int g = 0; g < nGroups_; ++g) {
+								work[g] *= chat / (c * c) * dt;
+							}
 						}
 					}
 				}
@@ -1189,6 +1284,9 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				kappaEVec = ComputeEnergyMeanOpacity(rho, T_gas);
 			}
 			kappaFVec = ComputeFluxMeanOpacity(rho, T_gas); // note that kappaFVec is used no matter what the value of gamma is
+			if constexpr (opacity_model_ == 1) {
+				kappa_lower = DefineOpacityAtLowerBounds(rho, T_gas);
+			}
 
 			dMomentum = {0., 0., 0.};
 
@@ -1236,19 +1334,19 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					if constexpr (beta_order_ == 1) {
 						for (int n = 0; n < 3; ++n) {
 							// Compute flux update
-							Frad_t1[g][n] = (Frad_t0[n] + v_terms[n]) / (1.0 + F_coeff);
+							Frad_t1[n][g] = (Frad_t0[n] + v_terms[n]) / (1.0 + F_coeff);
 
 							// Compute conservative gas momentum update
-							dMomentum[n] += -(Frad_t1[g][n] - Frad_t0[n]) / (c * chat);
+							dMomentum[n] += -(Frad_t1[n][g] - Frad_t0[n]) / (c * chat);
 						}
 					} else {
 						if (kappaFVec[g] == kappaEVec[g]) {
 							for (int n = 0; n < 3; ++n) {
 								// Compute flux update
-								Frad_t1[g][n] = (Frad_t0[n] + v_terms[n]) / (1.0 + F_coeff);
+								Frad_t1[n][g] = (Frad_t0[n] + v_terms[n]) / (1.0 + F_coeff);
 
 								// Compute conservative gas momentum update
-								dMomentum[n] += -(Frad_t1[g][n] - Frad_t0[n]) / (c * chat);
+								dMomentum[n] += -(Frad_t1[n][g] - Frad_t0[n]) / (c * chat);
 							}
 						} else {
 							const double K0 =
@@ -1276,24 +1374,28 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 							const double B1 = v_terms[1] + Frad_t0[1];
 							const double B2 = v_terms[2] + Frad_t0[2];
 
-							Frad_t1[g] = Solve3x3matrix(A00, A01, A02, A10, A11, A12, A20, A21, A22, B0, B1, B2);
+							auto [sol0, sol1, sol2] = Solve3x3matrix(A00, A01, A02, A10, A11, A12, A20, A21, A22, B0, B1, B2);
+							Frad_t1[0][g] = sol0;
+							Frad_t1[1][g] = sol1;
+							Frad_t1[2][g] = sol2;
 							for (int n = 0; n < 3; ++n) {
-								dMomentum[n] += -(Frad_t1[g][n] - Frad_t0[n]) / (c * chat);
+								dMomentum[n] += -(Frad_t1[n][g] - Frad_t0[n]) / (c * chat);
 							}
 						}
 					}
 				} else {
 					for (int n = 0; n < 3; ++n) {
-						Frad_t1[g][n] = Frad_t0[n] / (1.0 + rho * kappaFVec[g] * chat * dt);
+						Frad_t1[n][g] = Frad_t0[n] / (1.0 + rho * kappaFVec[g] * chat * dt);
 						// Compute conservative gas momentum update
-						dMomentum[n] += -(Frad_t1[g][n] - Frad_t0[n]) / (c * chat);
+						dMomentum[n] += -(Frad_t1[n][g] - Frad_t0[n]) / (c * chat);
 					}
 				}
 			} // end loop over radiation groups for flux update
 
-			amrex::Real x1GasMom1 = consPrev(i, j, k, x1GasMomentum_index) + dMomentum[0];
-			amrex::Real x2GasMom1 = consPrev(i, j, k, x2GasMomentum_index) + dMomentum[1];
-			amrex::Real x3GasMom1 = consPrev(i, j, k, x3GasMomentum_index) + dMomentum[2];
+			amrex::Real const x1GasMom1 = consPrev(i, j, k, x1GasMomentum_index) + dMomentum[0];
+			amrex::Real const x2GasMom1 = consPrev(i, j, k, x2GasMomentum_index) + dMomentum[1];
+			amrex::Real const x3GasMom1 = consPrev(i, j, k, x3GasMomentum_index) + dMomentum[2];
+			amrex::GpuArray<amrex::Real, 3> const xGasMom1{x1GasMom1, x2GasMom1, x3GasMom1};
 
 			// 3. Deal with the work term.
 			if constexpr ((gamma_ != 1.0) && (beta_order_ != 0)) {
@@ -1320,7 +1422,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 						// compute energyLossFractions
 						for (int g = 0; g < nGroups_; ++g) {
 							energyLossFractions[g] =
-							    kappaFVec[g] * (x1GasMom1 * Frad_t1[g][0] + x2GasMom1 * Frad_t1[g][1] + x3GasMom1 * Frad_t1[g][2]);
+							    kappaFVec[g] * (x1GasMom1 * Frad_t1[0][g] + x2GasMom1 * Frad_t1[1][g] + x3GasMom1 * Frad_t1[2][g]);
 						}
 						auto energyLossFractionsTot = sum(energyLossFractions);
 						if (energyLossFractionsTot != 0.0) {
@@ -1352,8 +1454,31 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				// copy work to work_prev
 				work_prev[g] = work[g];
 				// compute new work term from the updated radiation flux and velocity
-				work[g] = (x1GasMom1 * Frad_t1[g][0] + x2GasMom1 * Frad_t1[g][1] + x3GasMom1 * Frad_t1[g][2]) * chat / (c * c) *
-					  lorentz_factor_v * kappaFVec[g] * dt;
+				if constexpr (opacity_model_ == 0) {
+					work[g] = (x1GasMom1 * Frad_t1[0][g] + x2GasMom1 * Frad_t1[1][g] + x3GasMom1 * Frad_t1[2][g]) * chat / (c * c) *
+							lorentz_factor_v * kappaFVec[g] * dt;
+				} else if constexpr (opacity_model_ == 1) {
+					for (int n = 0; n < 3; ++n) {
+						work[n] = 0.0;
+					}
+					auto alpha_kappa = DefineOpacityExponents(rho, T_gas);
+					for (int n = 0; n < 3; ++n) {
+						auto alpha_F = ComputeRadQuantityExponents(Frad_t1[n]);
+						kappaFVec = ComputeGroupMeanOpacity(kappa_lower, radBoundaryRatios, alpha_F, alpha_kappa);
+						for (int g = 0; g < nGroups_; ++g) {
+							// const double part1 = (std::pow(radBoundaryRatios[g], alpha_F[g] + 1.0) - 1.0) / (alpha_F[g] + 1.0);
+							// const double part2 = (std::pow(radBoundaryRatios[g], alpha_F[g] + alpha_kappa[g] + 1.0) - 1.0) / (alpha_F[g] + alpha_kappa[g] + 1.0);
+							// const double chi_F = kappa_lower[g] * Frad_t1[n][g] / part1 * part2;
+							// // work = v * F * chi
+							// const double vFchi = gasMtm0[n] * (alpha_kappa[g] + 1.0) * chi_F;
+							// work[g] += vFchi;
+							work[g] += (alpha_kappa[g] + 1.0) * gasMtm0[n] * kappaFVec[g] * Frad_t1[n][g];
+						}
+					}
+					for (int g = 0; g < nGroups_; ++g) {
+						work[g] *= chat * dt / (c * c);
+					}
+				}
 			}
 
 			// Check for convergence of the work term: if the relative change in the work term is less than 1e-13, then break the loop
@@ -1387,9 +1512,9 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			if constexpr (gamma_ != 1.0) {
 				consNew(i, j, k, radEnergy_index + numRadVars_ * g) = EradVec_guess[g];
 			}
-			consNew(i, j, k, x1RadFlux_index + numRadVars_ * g) = Frad_t1[g][0];
-			consNew(i, j, k, x2RadFlux_index + numRadVars_ * g) = Frad_t1[g][1];
-			consNew(i, j, k, x3RadFlux_index + numRadVars_ * g) = Frad_t1[g][2];
+			consNew(i, j, k, x1RadFlux_index + numRadVars_ * g) = Frad_t1[0][g];
+			consNew(i, j, k, x2RadFlux_index + numRadVars_ * g) = Frad_t1[1][g];
+			consNew(i, j, k, x3RadFlux_index + numRadVars_ * g) = Frad_t1[2][g];
 		}
 	});
 }

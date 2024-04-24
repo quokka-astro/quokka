@@ -71,6 +71,39 @@ template <> struct quokka::EOS_Traits<ShockProblem> {
 };
 
 template <>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<ShockProblem>::DefineOpacityAtLowerBounds(const double rho, const double /*Tgas*/)
+    -> amrex::GpuArray<double, nGroups_>
+{
+	amrex::GpuArray<double, nGroups_> kappaPVec{};
+	for (int i = 0; i < nGroups_; ++i) {
+		kappaPVec[i] = kappa / rho;
+	}
+	return kappaPVec;
+}
+
+template <>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<ShockProblem>::DefineOpacityExponents(const double rho, const double /*Tgas*/)
+    -> amrex::GpuArray<double, nGroups_>
+{
+	amrex::GpuArray<double, nGroups_> exponents{};
+	for (int i = 0; i < nGroups_; ++i) {
+		exponents[i] = 0.0;
+	}
+	return exponents;
+}
+
+template <>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<ShockProblem>::ComputeRadQuantityExponents(amrex::GpuArray<double, nGroups_> /*quant*/) 
+		-> amrex::GpuArray<double, nGroups_>
+{
+	amrex::GpuArray<double, nGroups_> exponents{};
+	for (int i = 0; i < nGroups_; ++i) {
+		exponents[i] = 0.0;
+	}
+	return exponents;
+}
+
+template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<ShockProblem>::ComputePlanckOpacity(const double rho, const double /*Tgas*/)
     -> quokka::valarray<double, nGroups_>
 {
