@@ -880,46 +880,55 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::DefineOpacityExponentsAndLowerV
 	return exponents_and_values;
 }
 
-template <typename problem_t>
-template <typename ArrayType>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeRadQuantityExponents(ArrayType const &quant, amrex::GpuArray<double, nGroups_ + 1> const &boundaries) -> amrex::GpuArray<double, nGroups_>
-{
-	// Compute the exponents for the radiation energy density, radiation flux, radiation pressure, or Planck function.
+// template <typename problem_t>
+// template <typename ArrayType>
+// AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeRadQuantityExponents(ArrayType const &quant, amrex::GpuArray<double, nGroups_ + 1> const &boundaries) -> amrex::GpuArray<double, nGroups_>
+// {
+// 	// Compute the exponents for the radiation energy density, radiation flux, radiation pressure, or Planck function.
 
-	// Note: Could save some memory by using bin_center_previous and bin_center_current
-	amrex::GpuArray<double, nGroups_> bin_center{};
-	amrex::GpuArray<double, nGroups_> quant_mean{};
-	amrex::GpuArray<double, nGroups_ - 1> logslopes{};
-	amrex::GpuArray<double, nGroups_> exponents{};
-	for (int g = 0; g < nGroups_; ++g) {
-		bin_center[g] = 0.5 * (boundaries[g] + boundaries[g + 1]);
-		quant_mean[g] = quant[g] / (boundaries[g + 1] - boundaries[g]);
-		if (g > 0) {
-			AMREX_ASSERT(bin_center[g] > bin_center[g - 1]);
-			if (quant_mean[g] == 0.0 && quant_mean[g - 1] == 0.0) {
-				logslopes[g - 1] = 0.0;
-			} else if (quant_mean[g - 1] * quant_mean[g] <= 0.0) {
-				if (quant_mean[g] > quant_mean[g - 1]) {
-					logslopes[g - 1] = inf;
-				} else {
-					logslopes[g - 1] = -inf;
-				}
-			} else {
-				logslopes[g - 1] = std::log(std::abs(quant_mean[g] / quant_mean[g - 1])) / std::log(bin_center[g] / bin_center[g - 1]);
-			}
-			AMREX_ASSERT(!std::isnan(logslopes[g - 1]));
-		}
-	}
-	for (int g = 0; g < nGroups_; ++g) {
-		if (g == 0 || g == nGroups_ - 1) {
-			exponents[g] = 0.0;
-		} else {
-			exponents[g] = minmod_func(logslopes[g - 1], logslopes[g]);
-		}
-		AMREX_ASSERT(!std::isnan(exponents[g]));
-	}
-	return exponents;
-}
+// 	// testing
+// 	// amrex::GpuArray<double, nGroups_> exponents{};
+// 	// for (int g = 0; g < nGroups_; ++g) {
+// 	// 	// exponents[g] = -1.0;
+// 	// 	exponents[g] = -2.0;
+// 	// }
+
+// 	// Note: Could save some memory by using bin_center_previous and bin_center_current
+// 	amrex::GpuArray<double, nGroups_> bin_center{};
+// 	amrex::GpuArray<double, nGroups_> quant_mean{};
+// 	amrex::GpuArray<double, nGroups_ - 1> logslopes{};
+// 	amrex::GpuArray<double, nGroups_> exponents{};
+// 	for (int g = 0; g < nGroups_; ++g) {
+// 		bin_center[g] = 0.5 * (boundaries[g] + boundaries[g + 1]);
+// 		quant_mean[g] = quant[g] / (boundaries[g + 1] - boundaries[g]);
+// 		if (g > 0) {
+// 			AMREX_ASSERT(bin_center[g] > bin_center[g - 1]);
+// 			if (quant_mean[g] == 0.0 && quant_mean[g - 1] == 0.0) {
+// 				logslopes[g - 1] = 0.0;
+// 			} else if (quant_mean[g - 1] * quant_mean[g] <= 0.0) {
+// 				if (quant_mean[g] > quant_mean[g - 1]) {
+// 					logslopes[g - 1] = inf;
+// 				} else {
+// 					logslopes[g - 1] = -inf;
+// 				}
+// 			} else {
+// 				logslopes[g - 1] = std::log(std::abs(quant_mean[g] / quant_mean[g - 1])) / std::log(bin_center[g] / bin_center[g - 1]);
+// 			}
+// 			AMREX_ASSERT(!std::isnan(logslopes[g - 1]));
+// 		}
+// 	}
+// 	for (int g = 0; g < nGroups_; ++g) {
+// 		if (g == 0 || g == nGroups_ - 1) {
+// 			exponents[g] = 0.0;
+// 		} else {
+// 			exponents[g] = minmod_func(logslopes[g - 1], logslopes[g]);
+// 		}
+// 		AMREX_ASSERT(!std::isnan(exponents[g]));
+// 		AMREX_ASSERT(std::abs(exponents[g]) < 100);
+// 	}
+
+// 	return exponents;
+// }
 
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeGroupMeanOpacity(amrex::GpuArray<amrex::GpuArray<double, nGroups_>, 2> kappa_expo_and_lower_value, amrex::GpuArray<double, nGroups_> radBoundaryRatios, amrex::GpuArray<double, nGroups_> alpha_quant) -> quokka::valarray<double, nGroups_>
@@ -944,6 +953,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeGroupMeanOpacity(amrex::
 			part2 = (std::pow(radBoundaryRatios[g], alpha) - 1.0) / alpha;
 		}
 		kappa[g] = kappa_lower[g] / part1 * part2;
+		AMREX_ASSERT(!std::isnan(kappa[g]));
 	}
 	return kappa;
 }
@@ -1214,7 +1224,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				quokka::valarray<double, nGroups_> deltaD{};
 				quokka::valarray<double, nGroups_> F_D{};
 
-				const double resid_tol = 1.0e-10; // 1.0e-15;
+				const double resid_tol = 1.0e-11; // 1.0e-15;
 				const int maxIter = 400;
 				int n = 0;
 				for (; n < maxIter; ++n) {

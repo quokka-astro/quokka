@@ -16,6 +16,8 @@ struct MGintProblem {
 struct GreyProblem { // Advecting grey pulse
 };
 
+AMREX_GPU_MANAGED double spec_power = -1.0;
+
 // set include_grey to false for the convenience of debugging multigroup interpolation
 static constexpr bool include_grey = true;
 static constexpr bool export_csv = true;
@@ -26,10 +28,10 @@ static constexpr bool export_csv = true;
 // constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e16, 1e18, 1e20};
 // constexpr int n_groups_ = 4;
 // constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e16, 1e17, 1e18, 1e19, 1e20};
-// constexpr int n_groups_ = 8;
-// constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e16, 3.16e16, 1e17, 3.16e17, 1e18, 3.16e18, 1e19, 3.16e19, 1e20};
-constexpr int n_groups_ = 16;
-constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1.00000000e+16, 1.77827941e+16, 3.16227766e+16, 5.62341325e+16, 1.00000000e+17, 1.77827941e+17, 3.16227766e+17, 5.62341325e+17, 1.00000000e+18, 1.77827941e+18, 3.16227766e+18, 5.62341325e+18, 1.00000000e+19, 1.77827941e+19, 3.16227766e+19, 5.62341325e+19, 1.00000000e+20};
+constexpr int n_groups_ = 8;
+constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e16, 3.16e16, 1e17, 3.16e17, 1e18, 3.16e18, 1e19, 3.16e19, 1e20};
+// constexpr int n_groups_ = 16;
+// constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1.00000000e+16, 1.77827941e+16, 3.16227766e+16, 5.62341325e+16, 1.00000000e+17, 1.77827941e+17, 3.16227766e+17, 5.62341325e+17, 1.00000000e+18, 1.77827941e+18, 3.16227766e+18, 5.62341325e+18, 1.00000000e+19, 1.77827941e+19, 3.16227766e+19, 5.62341325e+19, 1.00000000e+20};
 // constexpr int n_groups_ = 32;
 // constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1.00000000e+16, 1.33352143e+16, 1.77827941e+16, 2.37137371e+16, 3.16227766e+16, 4.21696503e+16, 5.62341325e+16, 7.49894209e+16, 1.00000000e+17, 1.33352143e+17, 1.77827941e+17, 2.37137371e+17, 3.16227766e+17, 4.21696503e+17, 5.62341325e+17, 7.49894209e+17, 1.00000000e+18, 1.33352143e+18, 1.77827941e+18, 2.37137371e+18, 3.16227766e+18, 4.21696503e+18, 5.62341325e+18, 7.49894209e+18, 1.00000000e+19, 1.33352143e+19, 1.77827941e+19, 2.37137371e+19, 3.16227766e+19, 4.21696503e+19, 5.62341325e+19, 7.49894209e+19, 1.00000000e+20};
 // constexpr int n_groups_ = 64;
@@ -53,6 +55,7 @@ constexpr double k_B = C::k_B;
 
 // static diffusion: (for single group) tau = 2e3, beta = 3e-5, beta tau = 6e-2
 constexpr double v0_adv = 1.0e6;    // advecting pulse
+// constexpr double v0_adv = 0.0;
 constexpr double max_time = 4.8e-5; // max_time = 2.0 * width / v1;
 // constexpr double max_time = 4.8e-6;
 
@@ -118,6 +121,17 @@ template <> struct RadSystem_Traits<GreyProblem> {
 	static constexpr int opacity_model = 0;
 };
 
+template <>
+template <typename ArrayType>
+AMREX_GPU_HOST_DEVICE auto RadSystem<MGintProblem>::ComputeRadQuantityExponents(ArrayType const &/*quant*/, amrex::GpuArray<double, nGroups_ + 1> const &/*boundaries*/) -> amrex::GpuArray<double, nGroups_>
+{
+	amrex::GpuArray<double, nGroups_> exponents{};
+	for (int g = 0; g < nGroups_; ++g) {
+		exponents[g] = spec_power;
+	}
+	return exponents;
+}
+
 AMREX_GPU_HOST_DEVICE
 auto compute_initial_Tgas(const double x) -> double
 {
@@ -143,21 +157,58 @@ auto compute_kappa(const double nu, const double Tgas) -> double
 	return kappa0 * std::pow(T_, -0.5) * std::pow(nu_, -3) * (1.0 - std::exp(-coeff_ * nu_ / T_));
 }
 
+// template <>
+// AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<MGintProblem>::DefineOpacityExponentsAndLowerValues(const double rho, const double Tgas)
+//     -> amrex::GpuArray<amrex::GpuArray<double, nGroups_>, 2>
+// {
+// 	amrex::GpuArray<double, nGroups_> exponents{};
+// 	amrex::GpuArray<double, nGroups_> kappa_lower{};
+// 	for (int g = 0; g < nGroups_; ++g) {
+// 		auto kappa_up = compute_kappa(rad_boundaries_[g + 1], Tgas);
+// 		auto kappa_down = compute_kappa(rad_boundaries_[g], Tgas);
+// 		exponents[g] = std::log(kappa_up / kappa_down) / std::log(rad_boundaries_[g + 1] / rad_boundaries_[g]);
+// 		kappa_lower[g] = kappa_down / rho;
+// 		AMREX_ASSERT(!std::isnan(exponents[g]));
+// 		AMREX_ASSERT(kappa_lower[g] >= 0.);
+// 	}
+// 	amrex::GpuArray<amrex::GpuArray<double, nGroups_>, 2> const exponents_and_values{exponents, kappa_lower};
+// 	return exponents_and_values;
+// }
+
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<MGintProblem>::DefineOpacityExponentsAndLowerValues(const double rho, const double Tgas)
     -> amrex::GpuArray<amrex::GpuArray<double, nGroups_>, 2>
 {
 	amrex::GpuArray<double, nGroups_> exponents{};
+	// amrex::GpuArray<double, nGroups_> kappa_at_edges{};
 	amrex::GpuArray<double, nGroups_> kappa_lower{};
+	amrex::GpuArray<double, nGroups_> kappa_lower_over_rho{};
 	for (int g = 0; g < nGroups_; ++g) {
+		// kappa_at_edges[g] = compute_kappa(rad_boundaries_[g], Tgas);
 		auto kappa_up = compute_kappa(rad_boundaries_[g + 1], Tgas);
 		auto kappa_down = compute_kappa(rad_boundaries_[g], Tgas);
 		exponents[g] = std::log(kappa_up / kappa_down) / std::log(rad_boundaries_[g + 1] / rad_boundaries_[g]);
-		kappa_lower[g] = kappa_down / rho;
-		AMREX_ASSERT(!std::isnan(exponents[g]));
-		AMREX_ASSERT(kappa_lower[g] >= 0.);
+		kappa_lower_over_rho[g] = kappa_down / rho;
+		// double log_nu_up = std::log(rad_boundaries_[g + 1]);
+		// double log_nu_down = std::log(rad_boundaries_[g]);
+		// double delta_x = log_nu_up - log_nu_down;
+		// double delta_y = std::log(kappa_up) - std::log(kappa_down);
+		// // trapezoidal rule
+		// const int N = 10;
+		// double area = std::log(kappa_down);
+		// for (int i = 1; i < N; ++i) {
+		// 	double log_nu = log_nu_down + i * delta_x / N;
+		// 	double kappa = compute_kappa(std::exp(log_nu), Tgas);
+		// 	area += 2.0 * std::log(kappa);
+		// }
+		// area += std::log(kappa_up);
+		// area *= delta_x / (2.0 * N);
+		// kappa_lower[g] = std::exp((area - 0.5 * delta_x * delta_x * exponents[g]) / delta_x);
+		// kappa_lower_over_rho[g] = kappa_lower[g] / rho;
+		// AMREX_ASSERT(!std::isnan(exponents[g]));
+		// AMREX_ASSERT(kappa_lower[g] >= 0.);
 	}
-	amrex::GpuArray<amrex::GpuArray<double, nGroups_>, 2> const exponents_and_values{exponents, kappa_lower};
+	amrex::GpuArray<amrex::GpuArray<double, nGroups_>, 2> const exponents_and_values{exponents, kappa_lower_over_rho};
 	return exponents_and_values;
 }
 
@@ -262,9 +313,10 @@ auto problem_main() -> int
 
 	const double max_dt = 1e-3; // t_cr = 2 cm / cs = 7e-8 s
 
-	// // read interp_order from the input file pp
-	// amrex::ParmParse const pp("rad");
+	// read interp_order from the input file pp
+	amrex::ParmParse const pp("rad");
 	// pp.query("interp_order", interp_order);
+	pp.query("spec_power", spec_power);
 
 	// Boundary conditions
 	constexpr int nvars = RadSystem<MGintProblem>::nvar_;
