@@ -1179,7 +1179,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 								const double frad1 = consPrev(i, j, k, x2RadFlux_index + numRadVars_ * g);
 								const double frad2 = consPrev(i, j, k, x3RadFlux_index + numRadVars_ * g);
 								// work = v * F * chi
-								work[g] = (x1GasMom0 * frad0 + x2GasMom0 * frad1 + x3GasMom0 * frad2) * kappaFVec[g];
+								work[g] = (x1GasMom0 * frad0 + x2GasMom0 * frad1 + x3GasMom0 * frad2) * (2.0 * kappaEVec[g] - kappaFVec[g]);
 								work[g] *= chat / (c * c) * lorentz_factor_v * dt;
 							}
 						} else if constexpr (opacity_model_ == 1) {
@@ -1548,7 +1548,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				// compute new work term from the updated radiation flux and velocity
 				if constexpr (opacity_model_ == 0) {
 					work[g] = (x1GasMom1 * Frad_t1[0][g] + x2GasMom1 * Frad_t1[1][g] + x3GasMom1 * Frad_t1[2][g]) * chat / (c * c) *
-							lorentz_factor_v * kappaFVec[g] * dt;
+							lorentz_factor_v * (2.0 * kappaEVec[g] - kappaFVec[g]) * dt;
 				} else if constexpr (opacity_model_ == 1) {
 					for (int n = 0; n < 3; ++n) {
 						work[n] = 0.0;
