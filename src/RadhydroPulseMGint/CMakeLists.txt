@@ -6,7 +6,7 @@ if (AMReX_SPACEDIM EQUAL 1)
   endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 
 	# define variable WORK_PATH = {WORKSPACE}/sims
-	set(WORK_PATH "${CMAKE_SOURCE_DIR}/tests/20240408-MG-int-v8")
+	set(WORK_PATH "${CMAKE_SOURCE_DIR}/tests/20240408-MG-int-v8.2")
 
 	# mkdir -p WORK_PATH
 	file(MAKE_DIRECTORY ${WORK_PATH})

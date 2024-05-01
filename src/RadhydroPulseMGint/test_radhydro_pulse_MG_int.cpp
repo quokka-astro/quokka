@@ -26,10 +26,10 @@ static constexpr bool export_csv = true;
 
 // constexpr int n_groups_ = 2;
 // constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e16, 1e18, 1e20};
-// constexpr int n_groups_ = 4;
-// constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e16, 1e17, 1e18, 1e19, 1e20};
-constexpr int n_groups_ = 8;
-constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e16, 3.16e16, 1e17, 3.16e17, 1e18, 3.16e18, 1e19, 3.16e19, 1e20};
+constexpr int n_groups_ = 4;
+constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e16, 1e17, 1e18, 1e19, 1e20};
+// constexpr int n_groups_ = 8;
+// constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e16, 3.16e16, 1e17, 3.16e17, 1e18, 3.16e18, 1e19, 3.16e19, 1e20};
 // constexpr int n_groups_ = 16;
 // constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1.00000000e+16, 1.77827941e+16, 3.16227766e+16, 5.62341325e+16, 1.00000000e+17, 1.77827941e+17, 3.16227766e+17, 5.62341325e+17, 1.00000000e+18, 1.77827941e+18, 3.16227766e+18, 5.62341325e+18, 1.00000000e+19, 1.77827941e+19, 3.16227766e+19, 5.62341325e+19, 1.00000000e+20};
 // constexpr int n_groups_ = 32;

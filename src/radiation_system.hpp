@@ -1416,7 +1416,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 						if constexpr (opacity_model_ == 0) {
 							pressure_term *= chat * dt * kappaFVec[g] * lorentz_factor_v;
 						} else if constexpr (opacity_model_ == 1) {
-							pressure_term *= chat * dt * kappaEVec[g] * (alpha_E[g] + 1.0);
+							pressure_term *= chat * dt * kappaEVec[g] * (kappa_expo_and_lower_value[0][g] + 1.0);
 						}
 
 						v_term += pressure_term;
