@@ -16,7 +16,7 @@ struct MGintProblem {
 struct GreyProblem { // Advecting grey pulse
 };
 
-AMREX_GPU_MANAGED double spec_power = -1.0;
+AMREX_GPU_MANAGED double spec_power = -1.0; // NOLINT
 static constexpr bool export_csv = true;
 
 // constexpr int n_groups_ = 2;

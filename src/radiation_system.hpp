@@ -1506,7 +1506,6 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			amrex::Real const x1GasMom1 = consPrev(i, j, k, x1GasMomentum_index) + dMomentum[0];
 			amrex::Real const x2GasMom1 = consPrev(i, j, k, x2GasMomentum_index) + dMomentum[1];
 			amrex::Real const x3GasMom1 = consPrev(i, j, k, x3GasMomentum_index) + dMomentum[2];
-			amrex::GpuArray<amrex::Real, 3> const xGasMom1{x1GasMom1, x2GasMom1, x3GasMom1};
 
 			// 3. Deal with the work term.
 			if constexpr ((gamma_ != 1.0) && (beta_order_ != 0)) {
