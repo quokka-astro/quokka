@@ -61,6 +61,7 @@ template <typename problem_t> struct RadSystem_Traits {
 	static constexpr double energy_unit = C::ev2erg;
 	static constexpr amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups + 1> radBoundaries = {0., inf};
 	static constexpr double beta_order = 1;
+	static constexpr int opacity_model = 0;
 };
 
 // A struct to hold the results of the ComputeRadPressure function.
@@ -73,6 +74,13 @@ struct RadPressureResult {
 {
 	return 0.5 * (sgn(a) + sgn(b)) * std::min(std::abs(a), std::abs(b));
 }
+
+// Use SFINAE (Substitution Failure Is Not An Error) to check if opacity_model is defined in RadSystem_Traits<problem_t>
+template <typename problem_t, typename = void> struct RadSystem_Has_Opacity_Model : std::false_type {};
+
+template <typename problem_t>
+struct RadSystem_Has_Opacity_Model<problem_t, std::void_t<decltype(RadSystem_Traits<problem_t>::opacity_model)>>
+		: std::true_type {};
 
 /// Class for the radiation moment equations
 ///
@@ -117,8 +125,6 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	static constexpr int beta_order_ = RadSystem_Traits<problem_t>::beta_order;
 
-	static constexpr int opacity_model_ = RadSystem_Traits<problem_t>::opacity_model;
-
 	static constexpr int nGroups_ = Physics_Traits<problem_t>::nGroups;
 	static constexpr amrex::GpuArray<double, nGroups_ + 1> radBoundaries_ = []() constexpr {
 		if constexpr (nGroups_ > 1) {
@@ -129,6 +135,15 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 		}
 	}();
 	static constexpr double Erad_floor_ = RadSystem_Traits<problem_t>::Erad_floor / nGroups_;
+
+	// static constexpr int opacity_model_ = RadSystem_Has_Opacity_Model<problem_t>::value ? RadSystem_Traits<problem_t>::opacity_model : 0;
+	static constexpr int opacity_model_ = []() constexpr {
+		if constexpr (RadSystem_Has_Opacity_Model<problem_t>::value) {
+			return RadSystem_Traits<problem_t>::opacity_model;
+		} else {
+			return 0;
+		}
+	}();
 
 	static constexpr double mean_molecular_mass_ = quokka::EOS_Traits<problem_t>::mean_molecular_mass;
 	static constexpr double boltzmann_constant_ = quokka::EOS_Traits<problem_t>::boltzmann_constant;
