@@ -57,7 +57,7 @@ constexpr double k_B = C::k_B;
 // static diffusion: (for single group) tau = 2e3, beta = 3e-5, beta tau = 6e-2
 constexpr double kappa0 = 180.;	    // cm^2 g^-1
 constexpr double v0_adv = 1.0e6;    // advecting pulse
-constexpr double max_time = 4.8e-5; // max_time = 2.0 * width / v1;
+constexpr double max_time = 4.8e-6; // max_time = 2.0 * width / v1;
 
 // dynamic diffusion: tau = 2e4, beta = 3e-3, beta tau = 60
 // constexpr double kappa0 = 1000.; // cm^2 g^-1
@@ -121,17 +121,17 @@ template <> struct RadSystem_Traits<GreyProblem> {
 	static constexpr int opacity_model = 0;
 };
 
-// template <>
-// template <typename ArrayType>
-// AMREX_GPU_HOST_DEVICE auto RadSystem<MGintProblem>::ComputeRadQuantityExponents(ArrayType const &/*quant*/, amrex::GpuArray<double, nGroups_ + 1> const
-// &/*boundaries*/) -> amrex::GpuArray<double, nGroups_>
-// {
-// 	amrex::GpuArray<double, nGroups_> exponents{};
-// 	for (int g = 0; g < nGroups_; ++g) {
-// 		exponents[g] = spec_power;
-// 	}
-// 	return exponents;
-// }
+template <>
+template <typename ArrayType>
+AMREX_GPU_HOST_DEVICE auto RadSystem<MGintProblem>::ComputeRadQuantityExponents(ArrayType const &/*quant*/, amrex::GpuArray<double, nGroups_ + 1> const
+&/*boundaries*/) -> amrex::GpuArray<double, nGroups_>
+{
+	amrex::GpuArray<double, nGroups_> exponents{};
+	for (int g = 0; g < nGroups_; ++g) {
+		exponents[g] = spec_power;
+	}
+	return exponents;
+}
 
 AMREX_GPU_HOST_DEVICE
 auto compute_initial_Tgas(const double x) -> double
@@ -440,6 +440,7 @@ auto problem_main() -> int
 		err_norm += std::abs(Tgas[i] - Tgas2[i]);
 		sol_norm += std::abs(Tgas2[i]);
 	}
+	const double error_tol = 0.008;
 	const double rel_error = err_norm / sol_norm;
 	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
 
@@ -465,8 +466,8 @@ auto problem_main() -> int
 	Tgas_args["color"] = "grey";
 	matplotlibcpp::plot(xs2, Trad2, Trad_args);
 	matplotlibcpp::plot(xs2, Tgas2, Tgas_args);
-	matplotlibcpp::ylim(0.98e7, 1.35e7);
-	// matplotlibcpp::ylim(0.98e7, 1.95e7);
+	// matplotlibcpp::ylim(0.98e7, 1.35e7);
+	matplotlibcpp::ylim(0.98e7, 2.02e7);
 	matplotlibcpp::grid(true);
 	matplotlibcpp::xlabel("length x (cm)");
 	matplotlibcpp::ylabel("temperature (K)");
@@ -542,5 +543,8 @@ auto problem_main() -> int
 
 	// Cleanup and exit
 	int status = 0;
+	if ((rel_error > error_tol) || std::isnan(rel_error)) {
+		status = 1;
+	}
 	return status;
 }
