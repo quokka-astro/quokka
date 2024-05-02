@@ -310,7 +310,7 @@ template <typename problem_t> auto computeCooling(amrex::MultiFab &mf, const Rea
 
 	// check if integration succeeded
 	if (nmax >= maxStepsODEIntegrate) {
-		amrex::Print() << "\t[CloudyCooling] Reaction ODE failure. Max steps exceeded in cooling solve!\n";
+		amrex::Print() << "\t[CloudyCooling] Reaction ODE failure! Retrying hydro update...\n";
 		return false;
 	}
 	return true; // success
