@@ -1211,7 +1211,8 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 							}
 							for (int n = 0; n < 3; ++n) {
 								alpha_F = ComputeRadQuantityExponents(frad[n], radBoundaries_g_copy);
-								kappaFVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, radBoundaryRatios_copy, alpha_F);
+								kappaFVec =
+								    ComputeGroupMeanOpacity(kappa_expo_and_lower_value, radBoundaryRatios_copy, alpha_F);
 								for (int g = 0; g < nGroups_; ++g) {
 									work[g] +=
 									    (kappa_expo_and_lower_value[0][g] + 1.0) * gasMtm0[n] * kappaFVec[g] * frad[n][g];
