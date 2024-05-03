@@ -1098,11 +1098,9 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 
 		// make a copy of radBoundaries_g
 		amrex::GpuArray<double, nGroups_ + 1> radBoundaries_g_copy{};
-		amrex::GpuArray<double, nGroups_ + 1> radBoundaryRatios_copy{};
-		for (int g = 0; g < nGroups_ + 1; ++g) {
-			radBoundaries_g_copy[g] = radBoundaries_g[g];
-			radBoundaryRatios_copy[g] = radBoundaryRatios[g];
-		}
+		amrex::GpuArray<double, nGroups_> radBoundaryRatios_copy{};
+		std::copy(radBoundaries_g.begin(), radBoundaries_g.end(), radBoundaries_g_copy.begin());
+		std::copy(radBoundaryRatios.begin(), radBoundaryRatios.end(), radBoundaryRatios_copy.begin());
 
 		amrex::Real gas_update_factor = 1.0;
 		if (stage == 1) {
