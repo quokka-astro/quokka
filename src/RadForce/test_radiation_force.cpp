@@ -160,11 +160,8 @@ template <> void RadhydroSimulation<TubeProblem>::setInitialConditionsOnGrid(quo
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 		amrex::Real const x = (prob_lo[0] + (i + amrex::Real(0.5)) * dx[0]) / Lx;
-		amrex::Real const D = interpolate_value(x, x_ptr, rho_ptr, x_size);
-		amrex::Real const Mach = interpolate_value(x, x_ptr, Mach_ptr, x_size);
 
 		amrex::Real const rho = rho0;
-		amrex::Real const vel = Mach * a0;
 
 		for (int g = 0; g < Physics_Traits<TubeProblem>::nGroups; ++g) {
 			state_cc(i, j, k, RadSystem<TubeProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) =
@@ -204,7 +201,6 @@ AMRSimulation<TubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv
 
 	amrex::Box const &box = geom.Domain();
 	amrex::GpuArray<int, 3> lo = box.loVect3d();
-	amrex::GpuArray<int, 3> hi = box.hiVect3d();
 
 	amrex::Real const Erad = Frad0 / c_light_cgs_;
 	amrex::Real const Frad = Frad0;
@@ -262,7 +258,7 @@ auto problem_main() -> int
 	}
 
 	// Read max_dt from parameter file
-	amrex::ParmParse pp;
+	amrex::ParmParse const pp;
 	pp.query("max_dt", max_dt);
 
 	// Problem initialization
@@ -311,20 +307,20 @@ auto problem_main() -> int
 	int const x_size = static_cast<int>(x_arr_g.size());
 
 	for (int i = 0; i < nx; ++i) {
-		amrex::Real const _x = position[i] / Lx;
-		amrex::Real const _D = interpolate_value(_x, x_ptr, rho_ptr, x_size);
-		amrex::Real const _Mach = interpolate_value(_x, x_ptr, Mach_ptr, x_size);
-		amrex::Real const _rho = _D * rho0;
-		amrex::Real const _vel = _Mach * a0;
+		amrex::Real const x_ = position[i] / Lx;
+		amrex::Real const D_ = interpolate_value(x_, x_ptr, rho_ptr, x_size);
+		amrex::Real const Mach_ = interpolate_value(x_, x_ptr, Mach_ptr, x_size);
+		amrex::Real const _rho = D_ * rho0;
+		amrex::Real const _vel = Mach_ * a0;
 
 		xs.at(i) = position[i];
-		double rho_exact = _rho;
+		double const rho_exact = _rho;
 		// double x1GasMom_exact = values0.at(RadSystem<TubeProblem>::x1GasMomentum_index)[i];
-		double rho = values.at(RadSystem<TubeProblem>::gasDensity_index)[i];
-		double Frad = values.at(RadSystem<TubeProblem>::x1RadFlux_index)[i];
-		double x1GasMom = values.at(RadSystem<TubeProblem>::x1GasMomentum_index)[i];
-		double vx = x1GasMom / rho;
-		double vx_exact = _vel;
+		double const rho = values.at(RadSystem<TubeProblem>::gasDensity_index)[i];
+		double const Frad = values.at(RadSystem<TubeProblem>::x1RadFlux_index)[i];
+		double const x1GasMom = values.at(RadSystem<TubeProblem>::x1GasMomentum_index)[i];
+		double const vx = x1GasMom / rho;
+		double const vx_exact = _vel;
 
 		vx_arr.at(i) = vx / a0;
 		vx_exact_arr.at(i) = vx_exact / a0;
