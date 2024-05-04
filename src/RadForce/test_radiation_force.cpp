@@ -163,7 +163,7 @@ template <> void RadhydroSimulation<TubeProblem>::setInitialConditionsOnGrid(quo
 		amrex::Real const D = interpolate_value(x, x_ptr, rho_ptr, x_size);
 		amrex::Real const Mach = interpolate_value(x, x_ptr, Mach_ptr, x_size);
 
-		amrex::Real const rho = D * rho0;
+		amrex::Real const rho = rho0;
 		amrex::Real const vel = Mach * a0;
 
 		for (int g = 0; g < Physics_Traits<TubeProblem>::nGroups; ++g) {

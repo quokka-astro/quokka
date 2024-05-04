@@ -23,7 +23,7 @@ amr.max_grid_size_x = 128
 
 do_reflux = 0
 do_subcycle = 0
-suppress_output = 0
+suppress_output = 1
 
 cfl = 0.4
 radiation.cfl = 0.4
