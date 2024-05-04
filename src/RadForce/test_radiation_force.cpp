@@ -60,7 +60,7 @@ template <> struct Physics_Traits<TubeProblem> {
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
 	// number of radiation groups
-	static constexpr int nGroups = 2;
+	static constexpr int nGroups = 1;
 };
 
 template <> struct RadSystem_Traits<TubeProblem> {
@@ -69,7 +69,6 @@ template <> struct RadSystem_Traits<TubeProblem> {
 	static constexpr double radiation_constant = radiation_constant_cgs_;
 	static constexpr double Erad_floor = 0.;
 	static constexpr double energy_unit = C::ev2erg;
-	static constexpr amrex::GpuArray<double, Physics_Traits<TubeProblem>::nGroups + 1> radBoundaries{0., 13.6, inf}; // eV
 	static constexpr int beta_order = 1;
 };
 
@@ -89,8 +88,9 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputeFluxMeanOpacity(const 
     -> quokka::valarray<double, Physics_Traits<TubeProblem>::nGroups>
 {
 	quokka::valarray<double, Physics_Traits<TubeProblem>::nGroups> kappaFVec{};
-	kappaFVec[0] = kappa0 * 1.5;
-	kappaFVec[1] = kappa0 * 0.5;
+	for (int g = 0; g < nGroups_; ++g) {
+		kappaFVec[g] = kappa0;
+	}
 	return kappaFVec;
 }
 
@@ -175,7 +175,7 @@ template <> void RadhydroSimulation<TubeProblem>::setInitialConditionsOnGrid(quo
 		}
 
 		state_cc(i, j, k, RadSystem<TubeProblem>::gasDensity_index) = rho;
-		state_cc(i, j, k, RadSystem<TubeProblem>::x1GasMomentum_index) = rho * vel;
+		state_cc(i, j, k, RadSystem<TubeProblem>::x1GasMomentum_index) = 0;
 		state_cc(i, j, k, RadSystem<TubeProblem>::x2GasMomentum_index) = 0;
 		state_cc(i, j, k, RadSystem<TubeProblem>::x3GasMomentum_index) = 0;
 		state_cc(i, j, k, RadSystem<TubeProblem>::gasEnergy_index) = 0;
@@ -220,13 +220,6 @@ AMRSimulation<TubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv
 		// left side
 		rho = rho0;
 		vel = Mach0 * a0;
-	} else if (i > hi[0]) {
-		// right side
-		rho = rho1;
-		vel = Mach1 * a0;
-	}
-
-	if ((i < lo[0]) || (i > hi[0])) {
 		// Dirichlet
 		for (int g = 0; g < Physics_Traits<TubeProblem>::nGroups; ++g) {
 			consVar(i, j, k, RadSystem<TubeProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad * radEnergyFractions[g];
@@ -249,6 +242,7 @@ auto problem_main() -> int
 	// Problem parameters
 	// const int nx = 128;
 	constexpr double CFL_number = 0.4;
+	double max_dt = 1.0e10;
 	constexpr double tmax = 10.0 * (Lx / a0);
 	constexpr int max_timesteps = 1e6;
 
@@ -258,7 +252,7 @@ auto problem_main() -> int
 	for (int n = 0; n < nvars; ++n) {
 		// for x-axis:
 		BCs_cc[n].setLo(0, amrex::BCType::ext_dir);
-		BCs_cc[n].setHi(0, amrex::BCType::ext_dir);
+		BCs_cc[n].setHi(0, amrex::BCType::foextrap); // extrapolate
 		// for y-, z- axes:
 		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
 			// periodic
@@ -266,6 +260,10 @@ auto problem_main() -> int
 			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
 		}
 	}
+
+	// Read max_dt from parameter file
+	amrex::ParmParse pp;
+	pp.query("max_dt", max_dt);
 
 	// Problem initialization
 	RadhydroSimulation<TubeProblem> sim(BCs_cc);
@@ -277,6 +275,7 @@ auto problem_main() -> int
 	sim.radiationCflNumber_ = CFL_number;
 	sim.maxTimesteps_ = max_timesteps;
 	sim.plotfileInterval_ = -1;
+	sim.maxDt_ = max_dt;
 
 	// initialize
 	sim.setInitialConditions();
@@ -287,7 +286,15 @@ auto problem_main() -> int
 
 	// read output variables
 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
-	const int nx = static_cast<int>(position0.size());
+	const int nx_tot = static_cast<int>(position0.size());
+
+	// cut off at x = 1
+	int nx = 0;
+	for (int i = 0; i < nx_tot; ++i) {
+		if (position[i] < 0.98e16) {
+			nx++;
+		}
+	}
 
 	// compute error norm
 	std::vector<double> xs(nx);
@@ -298,15 +305,26 @@ auto problem_main() -> int
 	std::vector<double> vx_exact_arr(nx);
 	std::vector<double> Frad_err(nx);
 
+	auto const &x_ptr = x_arr_g.dataPtr();
+	auto const &rho_ptr = rho_arr_g.dataPtr();
+	auto const &Mach_ptr = Mach_arr_g.dataPtr();
+	int const x_size = static_cast<int>(x_arr_g.size());
+
 	for (int i = 0; i < nx; ++i) {
+		amrex::Real const _x = position[i] / Lx;
+		amrex::Real const _D = interpolate_value(_x, x_ptr, rho_ptr, x_size);
+		amrex::Real const _Mach = interpolate_value(_x, x_ptr, Mach_ptr, x_size);
+		amrex::Real const _rho = _D * rho0;
+		amrex::Real const _vel = _Mach * a0;
+
 		xs.at(i) = position[i];
-		double rho_exact = values0.at(RadSystem<TubeProblem>::gasDensity_index)[i];
-		double x1GasMom_exact = values0.at(RadSystem<TubeProblem>::x1GasMomentum_index)[i];
+		double rho_exact = _rho;
+		// double x1GasMom_exact = values0.at(RadSystem<TubeProblem>::x1GasMomentum_index)[i];
 		double rho = values.at(RadSystem<TubeProblem>::gasDensity_index)[i];
 		double Frad = values.at(RadSystem<TubeProblem>::x1RadFlux_index)[i];
 		double x1GasMom = values.at(RadSystem<TubeProblem>::x1GasMomentum_index)[i];
 		double vx = x1GasMom / rho;
-		double vx_exact = x1GasMom_exact / rho_exact;
+		double vx_exact = _vel;
 
 		vx_arr.at(i) = vx / a0;
 		vx_exact_arr.at(i) = vx_exact / a0;
@@ -319,8 +337,8 @@ auto problem_main() -> int
 	double err_norm = 0.;
 	double sol_norm = 0.;
 	for (int i = 0; i < nx; ++i) {
-		err_norm += std::abs(rho_arr[i] - rho_exact_arr[i]);
-		sol_norm += std::abs(rho_exact_arr[i]);
+		err_norm += std::abs(vx_arr[i] - vx_exact_arr[i]);
+		sol_norm += std::abs(vx_exact_arr[i]);
 	}
 
 	const double rel_err_norm = err_norm / sol_norm;
@@ -336,7 +354,9 @@ auto problem_main() -> int
 	std::map<std::string, std::string> rho_args;
 	std::unordered_map<std::string, std::string> rhoexact_args;
 	rho_args["label"] = "simulation";
+	rho_args["color"] = "C0";
 	rhoexact_args["label"] = "exact solution";
+	rhoexact_args["color"] = "C1";
 	matplotlibcpp::plot(xs, rho_arr, rho_args);
 	matplotlibcpp::scatter(xs, rho_exact_arr, 1.0, rhoexact_args);
 	matplotlibcpp::legend();
@@ -347,14 +367,14 @@ auto problem_main() -> int
 	matplotlibcpp::save("./radiation_force_tube.pdf");
 
 	// plot velocity
-	int s = 4; // stride
+	int const s = nx_tot / 64; // stride
 	std::map<std::string, std::string> vx_args;
 	std::unordered_map<std::string, std::string> vxexact_args;
 	vxexact_args["label"] = "exact solution";
 	vx_args["label"] = "simulation";
-	vx_args["color"] = "C3";
-	vxexact_args["color"] = "C3";
+	vx_args["color"] = "C0";
 	vxexact_args["marker"] = "o";
+	vxexact_args["color"] = "C1";
 	// vxexact_args["edgecolors"] = "k";
 	matplotlibcpp::clf();
 	matplotlibcpp::plot(xs, vx_arr, vx_args);
