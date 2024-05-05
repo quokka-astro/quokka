@@ -106,7 +106,7 @@ amrex::Gpu::DeviceVector<double> Mach_arr_g;
 
 template <> void RadhydroSimulation<TubeProblem>::preCalculateInitialConditions()
 {
-	std::string filename = "../extern/pressure_tube/optically_thin_wind.txt";
+	std::string const filename = "../extern/pressure_tube/optically_thin_wind.txt";
 	std::ifstream fstream(filename, std::ios::in);
 	AMREX_ALWAYS_ASSERT(fstream.is_open());
 	std::string header;
@@ -149,7 +149,7 @@ template <> void RadhydroSimulation<TubeProblem>::setInitialConditionsOnGrid(quo
 	auto const &x_ptr = x_arr_g.dataPtr();
 	auto const &rho_ptr = rho_arr_g.dataPtr();
 	auto const &Mach_ptr = Mach_arr_g.dataPtr();
-	int x_size = static_cast<int>(x_arr_g.size());
+	int const x_size = static_cast<int>(x_arr_g.size());
 
 	// calculate radEnergyFractions
 	quokka::valarray<amrex::Real, Physics_Traits<TubeProblem>::nGroups> radEnergyFractions{};
