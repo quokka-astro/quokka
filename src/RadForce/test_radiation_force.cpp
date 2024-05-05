@@ -146,11 +146,6 @@ template <> void RadhydroSimulation<TubeProblem>::setInitialConditionsOnGrid(quo
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	auto const &x_ptr = x_arr_g.dataPtr();
-	auto const &rho_ptr = rho_arr_g.dataPtr();
-	auto const &Mach_ptr = Mach_arr_g.dataPtr();
-	int x_size = static_cast<int>(x_arr_g.size());
-
 	// calculate radEnergyFractions
 	quokka::valarray<amrex::Real, Physics_Traits<TubeProblem>::nGroups> radEnergyFractions{};
 	for (int g = 0; g < Physics_Traits<TubeProblem>::nGroups; ++g) {
@@ -159,8 +154,6 @@ template <> void RadhydroSimulation<TubeProblem>::setInitialConditionsOnGrid(quo
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-		amrex::Real const x = (prob_lo[0] + (i + amrex::Real(0.5)) * dx[0]) / Lx;
-
 		amrex::Real const rho = rho0;
 
 		for (int g = 0; g < Physics_Traits<TubeProblem>::nGroups; ++g) {
