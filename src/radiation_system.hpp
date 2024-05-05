@@ -1017,11 +1017,13 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 	}
 
 	amrex::GpuArray<amrex::Real, nGroups_ + 1> radBoundaries_g{};
-	radBoundaries_g = RadSystem_Traits<problem_t>::radBoundaries;
 	amrex::GpuArray<amrex::Real, nGroups_> radBoundaryRatios{};
-	if constexpr (nGroups_ > 1 && opacity_model_ == 1) {
-		for (int g = 0; g < nGroups_; ++g) {
-			radBoundaryRatios[g] = radBoundaries_g[g + 1] / radBoundaries_g[g];
+	if constexpr (nGroups_ > 1) {
+		radBoundaries_g = RadSystem_Traits<problem_t>::radBoundaries;
+		if constexpr (opacity_model_ == 1) {
+			for (int g = 0; g < nGroups_; ++g) {
+				radBoundaryRatios[g] = radBoundaries_g[g + 1] / radBoundaries_g[g];
+			}
 		}
 	}
 
