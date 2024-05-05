@@ -1017,9 +1017,9 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 	}
 
 	amrex::GpuArray<amrex::Real, nGroups_ + 1> radBoundaries_g{};
+	radBoundaries_g = RadSystem_Traits<problem_t>::radBoundaries;
 	amrex::GpuArray<amrex::Real, nGroups_> radBoundaryRatios{};
-	if constexpr (nGroups_ > 1) {
-		radBoundaries_g = RadSystem_Traits<problem_t>::radBoundaries;
+	if constexpr (nGroups_ > 1 && opacity_model_ == 1) {
 		for (int g = 0; g < nGroups_; ++g) {
 			radBoundaryRatios[g] = radBoundaries_g[g + 1] / radBoundaries_g[g];
 		}
@@ -1099,11 +1099,13 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		// make a copy of radBoundaries_g
 		amrex::GpuArray<double, nGroups_ + 1> radBoundaries_g_copy{};
 		amrex::GpuArray<double, nGroups_> radBoundaryRatios_copy{};
-		for (int i = 0; i < nGroups_ + 1; ++i) {
-			radBoundaries_g_copy[i] = radBoundaries_g[i];
+		for (int g = 0; g < nGroups_ + 1; ++g) {
+			radBoundaries_g_copy[g] = radBoundaries_g[g];
 		}
-		for (int i = 0; i < nGroups_; ++i) {
-			radBoundaryRatios_copy[i] = radBoundaryRatios[i];
+		if constexpr (opacity_model_ == 1) {
+			for (int g = 0; g < nGroups_; ++g) {
+				radBoundaryRatios_copy[g] = radBoundaryRatios[g];
+			}
 		}
 
 		amrex::Real gas_update_factor = 1.0;
