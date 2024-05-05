@@ -1103,9 +1103,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		amrex::GpuArray<double, nGroups_> radBoundaryRatios_copy{};
 		for (int g = 0; g < nGroups_ + 1; ++g) {
 			radBoundaries_g_copy[g] = radBoundaries_g[g];
-		}
-		if constexpr (opacity_model_ == 1) {
-			for (int g = 0; g < nGroups_; ++g) {
+			if (g < nGroups_) {
 				radBoundaryRatios_copy[g] = radBoundaryRatios[g];
 			}
 		}
