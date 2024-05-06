@@ -16,6 +16,7 @@ struct MGProblem {
 struct ExactProblem {
 };
 
+// A fixed power law for radiation quantities; for testing purpose only
 AMREX_GPU_MANAGED double spec_power = -1.0; // NOLINT
 static constexpr bool export_csv = true;
 
@@ -359,7 +360,7 @@ auto problem_main() -> int
 	}
 	// END OF PROBLEM 1
 
-	// Problem 3: grey radiation
+	// Problem 2: exact opacity
 
 	// Problem initialization
 	RadhydroSimulation<ExactProblem> sim2(BCs_cc);
@@ -432,7 +433,7 @@ auto problem_main() -> int
 		xs0.at(i) = x0;
 		Trad0.at(i) = Trad_0;
 	}
-	// END OF PROBLEM 3
+	// END OF PROBLEM 2
 
 	// compute error norm
 	double err_norm = 0.;
