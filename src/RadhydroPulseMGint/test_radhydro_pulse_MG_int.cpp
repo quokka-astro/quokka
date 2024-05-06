@@ -58,7 +58,7 @@ constexpr double k_B = C::k_B;
 // static diffusion: (for single group) tau = 2e3, beta = 3e-5, beta tau = 6e-2
 constexpr double kappa0 = 180.;	    // cm^2 g^-1
 constexpr double v0_adv = 1.0e6;    // advecting pulse
-constexpr double max_time = 4.8e-6; // max_time = 2.0 * width / v1;
+constexpr double max_time = 4.8e-6; // max_time = 0.2 * width / v1;
 
 // dynamic diffusion: tau = 2e4, beta = 3e-3, beta tau = 60
 // constexpr double kappa0 = 1000.; // cm^2 g^-1
@@ -110,7 +110,7 @@ template <> struct RadSystem_Traits<MGProblem> {
 	static constexpr double energy_unit = h_planck;
 	static constexpr amrex::GpuArray<double, n_groups_ + 1> radBoundaries = rad_boundaries_;
 	static constexpr int beta_order = 1;
-	static constexpr int opacity_model = 1;
+	static constexpr OpacityModel opacity_model = OpacityModel::piecewisePowerLaw;
 };
 template <> struct RadSystem_Traits<ExactProblem> {
 	static constexpr double c_light = c;
@@ -119,7 +119,7 @@ template <> struct RadSystem_Traits<ExactProblem> {
 	static constexpr double Erad_floor = erad_floor;
 	static constexpr bool compute_v_over_c_terms = true;
 	static constexpr int beta_order = 1;
-	static constexpr int opacity_model = 0;
+	static constexpr OpacityModel opacity_model = OpacityModel::user;
 };
 
 template <>

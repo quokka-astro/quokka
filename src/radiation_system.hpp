@@ -51,6 +51,12 @@ static constexpr double inf = std::numeric_limits<double>::max();
 // Optional: include a wavespeed correction term in the radiation flux to suppress instability
 static const bool use_wavespeed_correction = false;
 
+// enum for opacity_model
+enum OpacityModel {
+	user = 0, // user-defined opacity for each group, given as a function of density and temperature.
+	piecewisePowerLaw // piecewise power-law opacity model with piecewise power-law fitting to a user-defined opacity function and on-the-fly piecewise power-law fitting to radiation energy density and flux.
+};
+
 // this struct is specialized by the user application code
 //
 template <typename problem_t> struct RadSystem_Traits {
@@ -61,7 +67,7 @@ template <typename problem_t> struct RadSystem_Traits {
 	static constexpr double energy_unit = C::ev2erg;
 	static constexpr amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups + 1> radBoundaries = {0., inf};
 	static constexpr double beta_order = 1;
-	static constexpr int opacity_model = 0;
+	static constexpr OpacityModel opacity_model = OpacityModel::user;
 };
 
 // A struct to hold the results of the ComputeRadPressure function.
@@ -74,12 +80,6 @@ struct RadPressureResult {
 {
 	return 0.5 * (sgn(a) + sgn(b)) * std::min(std::abs(a), std::abs(b));
 }
-
-// enum for opacity_model
-enum OpacityModel {
-	constant = 0,
-	piecewisePowerLaw
-};
 
 // Use SFINAE (Substitution Failure Is Not An Error) to check if opacity_model is defined in RadSystem_Traits<problem_t>
 template <typename problem_t, typename = void> struct RadSystem_Has_Opacity_Model : std::false_type {
@@ -144,11 +144,11 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static constexpr double Erad_floor_ = RadSystem_Traits<problem_t>::Erad_floor / nGroups_;
 
 	// static constexpr int opacity_model_ = RadSystem_Has_Opacity_Model<problem_t>::value ? RadSystem_Traits<problem_t>::opacity_model : 0;
-	static constexpr int opacity_model_ = []() constexpr {
+	static constexpr OpacityModel opacity_model_ = []() constexpr {
 		if constexpr (RadSystem_Has_Opacity_Model<problem_t>::value) {
 			return RadSystem_Traits<problem_t>::opacity_model;
 		} else {
-			return 0;
+			return OpacityModel::user;
 		}
 	}();
 
@@ -1026,7 +1026,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 	amrex::GpuArray<amrex::Real, nGroups_> radBoundaryRatios{};
 	if constexpr (nGroups_ > 1) {
 		radBoundaries_g = RadSystem_Traits<problem_t>::radBoundaries;
-		if constexpr (opacity_model_ == 1) {
+		if constexpr (opacity_model_ == OpacityModel::piecewisePowerLaw) {
 			for (int g = 0; g < nGroups_; ++g) {
 				radBoundaryRatios[g] = radBoundaries_g[g + 1] / radBoundaries_g[g];
 			}
@@ -1174,11 +1174,11 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				AMREX_ASSERT(T_gas >= 0.);
 				fourPiBoverC = ComputeThermalRadiation(T_gas, radBoundaries_g_copy);
 
-				if constexpr (opacity_model_ == 0) {
+				if constexpr (opacity_model_ == OpacityModel::user) {
 					kappaPVec = ComputePlanckOpacity(rho, T_gas);
 					kappaEVec = ComputeEnergyMeanOpacity(rho, T_gas);
 					kappaFVec = ComputeFluxMeanOpacity(rho, T_gas);
-				} else if constexpr (opacity_model_ == 1) {
+				} else if constexpr (opacity_model_ == OpacityModel::piecewisePowerLaw) {
 					kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(rho, T_gas);
 					alpha_B = ComputeRadQuantityExponents(fourPiBoverC, radBoundaries_g_copy);
 					alpha_E = ComputeRadQuantityExponents(Erad0Vec, radBoundaries_g_copy);
@@ -1201,7 +1201,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					// compute the work term at the old state
 					// const double gamma = 1.0 / sqrt(1.0 - vsqr / (c * c));
 					if (ite == 0) {
-						if constexpr (opacity_model_ == 0) {
+						if constexpr (opacity_model_ == OpacityModel::user) {
 							for (int g = 0; g < nGroups_; ++g) {
 								// work[g] = dt * chat * rho * kappaPVec[g] * (Erad0Vec[g] - fourPiBoverC[g]);
 								const double frad0 = consPrev(i, j, k, x1RadFlux_index + numRadVars_ * g);
@@ -1212,7 +1212,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 									  (2.0 * kappaEVec[g] - kappaFVec[g]);
 								work[g] *= chat / (c * c) * lorentz_factor_v * dt;
 							}
-						} else if constexpr (opacity_model_ == 1) {
+						} else if constexpr (opacity_model_ == OpacityModel::piecewisePowerLaw) {
 							for (int g = 0; g < nGroups_; ++g) {
 								frad[0][g] = consPrev(i, j, k, x1RadFlux_index + numRadVars_ * g);
 								frad[1][g] = consPrev(i, j, k, x2RadFlux_index + numRadVars_ * g);
@@ -1266,10 +1266,10 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					// compute opacity, emissivity
 					fourPiBoverC = ComputeThermalRadiation(T_gas, radBoundaries_g_copy);
 
-					if constexpr (opacity_model_ == 0) {
+					if constexpr (opacity_model_ == OpacityModel::user) {
 						kappaPVec = ComputePlanckOpacity(rho, T_gas);
 						kappaEVec = ComputeEnergyMeanOpacity(rho, T_gas);
-					} else if constexpr (opacity_model_ == 1) {
+					} else if constexpr (opacity_model_ == OpacityModel::piecewisePowerLaw) {
 						kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(rho, T_gas);
 						alpha_B = ComputeRadQuantityExponents(fourPiBoverC, radBoundaries_g_copy);
 						alpha_E = ComputeRadQuantityExponents(Erad0Vec, radBoundaries_g_copy);
@@ -1373,7 +1373,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				fourPiBoverC = ComputeThermalRadiation(T_gas, radBoundaries_g_copy);
 			}
 
-			if constexpr (opacity_model_ == 0) {
+			if constexpr (opacity_model_ == OpacityModel::user) {
 				if constexpr (gamma_ != 1.0) {
 					kappaPVec = ComputePlanckOpacity(rho, T_gas);
 					kappaEVec = ComputeEnergyMeanOpacity(rho, T_gas);
@@ -1381,7 +1381,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					AMREX_ASSERT(!kappaEVec.hasnan());
 				}
 				kappaFVec = ComputeFluxMeanOpacity(rho, T_gas); // note that kappaFVec is used no matter what the value of gamma is
-			} else if constexpr (opacity_model_ == 1) {
+			} else if constexpr (opacity_model_ == OpacityModel::piecewisePowerLaw) {
 				kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(rho, T_gas);
 				if constexpr (gamma_ != 1.0) {
 					alpha_B = ComputeRadQuantityExponents(fourPiBoverC, radBoundaries_g_copy);
@@ -1422,13 +1422,13 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 						// compute thermal radiation term
 						double v_term = NAN;
 
-						if constexpr (opacity_model_ == 0) {
+						if constexpr (opacity_model_ == OpacityModel::user) {
 							v_term = kappaPVec[g] * fourPiBoverC[g] * lorentz_factor_v;
 							// compute (kappa_F - kappa_E) term
 							if (kappaFVec[g] != kappaEVec[g]) {
 								v_term += (kappaFVec[g] - kappaEVec[g]) * erad * std::pow(lorentz_factor_v, 3);
 							}
-						} else if constexpr (opacity_model_ == 1) {
+						} else if constexpr (opacity_model_ == OpacityModel::piecewisePowerLaw) {
 							v_term = kappaPVec[g] * fourPiBoverC[g] * (2.0 - kappa_expo_and_lower_value[0][g] - alpha_B[g]) / 3.0;
 						}
 
@@ -1439,9 +1439,9 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 						for (int z = 0; z < 3; ++z) {
 							pressure_term += gasMtm0[z] * Tedd[n][z] * erad;
 						}
-						if constexpr (opacity_model_ == 0) {
+						if constexpr (opacity_model_ == OpacityModel::user) {
 							pressure_term *= chat * dt * kappaFVec[g] * lorentz_factor_v;
-						} else if constexpr (opacity_model_ == 1) {
+						} else if constexpr (opacity_model_ == OpacityModel::piecewisePowerLaw) {
 							pressure_term *= chat * dt * kappaEVec[g] * (kappa_expo_and_lower_value[0][g] + 1.0);
 						}
 
@@ -1571,10 +1571,10 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				// copy work to work_prev
 				work_prev[g] = work[g];
 				// compute new work term from the updated radiation flux and velocity
-				if constexpr (opacity_model_ == 0) {
+				if constexpr (opacity_model_ == OpacityModel::user) {
 					work[g] = (x1GasMom1 * Frad_t1[0][g] + x2GasMom1 * Frad_t1[1][g] + x3GasMom1 * Frad_t1[2][g]) * chat / (c * c) *
 						  lorentz_factor_v * (2.0 * kappaEVec[g] - kappaFVec[g]) * dt;
-				} else if constexpr (opacity_model_ == 1) {
+				} else if constexpr (opacity_model_ == OpacityModel::piecewisePowerLaw) {
 					for (int n = 0; n < 3; ++n) {
 						work[n] = 0.0;
 					}
