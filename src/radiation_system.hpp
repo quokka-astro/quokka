@@ -143,7 +143,6 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	}();
 	static constexpr double Erad_floor_ = RadSystem_Traits<problem_t>::Erad_floor / nGroups_;
 
-	// static constexpr int opacity_model_ = RadSystem_Has_Opacity_Model<problem_t>::value ? RadSystem_Traits<problem_t>::opacity_model : 0;
 	static constexpr OpacityModel opacity_model_ = []() constexpr {
 		if constexpr (RadSystem_Has_Opacity_Model<problem_t>::value) {
 			return RadSystem_Traits<problem_t>::opacity_model;
