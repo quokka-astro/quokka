@@ -75,6 +75,12 @@ struct RadPressureResult {
 	return 0.5 * (sgn(a) + sgn(b)) * std::min(std::abs(a), std::abs(b));
 }
 
+// enum for opacity_model
+enum OpacityModel {
+	constant = 0,
+	piecewisePowerLaw
+};
+
 // Use SFINAE (Substitution Failure Is Not An Error) to check if opacity_model is defined in RadSystem_Traits<problem_t>
 template <typename problem_t, typename = void> struct RadSystem_Has_Opacity_Model : std::false_type {
 };
