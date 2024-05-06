@@ -12,7 +12,7 @@
 #include "radiation_system.hpp"
 
 struct MGProblem {
-};		     // dummy type to allow compile-type polymorphism via template specialization
+}; // dummy type to allow compile-type polymorphism via template specialization
 struct ExactProblem {
 };
 
@@ -125,7 +125,7 @@ template <> struct RadSystem_Traits<ExactProblem> {
 template <>
 template <typename ArrayType>
 AMREX_GPU_HOST_DEVICE auto RadSystem<MGProblem>::ComputeRadQuantityExponents(ArrayType const & /*quant*/,
-										amrex::GpuArray<double, nGroups_ + 1> const & /*boundaries*/)
+									     amrex::GpuArray<double, nGroups_ + 1> const & /*boundaries*/)
     -> amrex::GpuArray<double, nGroups_>
 {
 	amrex::GpuArray<double, nGroups_> exponents{};
@@ -186,7 +186,8 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<ExactProblem>::ComputePlanckOpa
 	return kappaPVec;
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<ExactProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
+template <>
+AMREX_GPU_HOST_DEVICE auto RadSystem<ExactProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
 {
 	const double sigma = 101.248 * std::pow(Tgas / T0, -3.5);
 	quokka::valarray<double, nGroups_> kappaPVec{};

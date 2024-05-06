@@ -53,8 +53,9 @@ static const bool use_wavespeed_correction = false;
 
 // enum for opacity_model
 enum OpacityModel {
-	user = 0, // user-defined opacity for each group, given as a function of density and temperature.
-	piecewisePowerLaw // piecewise power-law opacity model with piecewise power-law fitting to a user-defined opacity function and on-the-fly piecewise power-law fitting to radiation energy density and flux.
+	user = 0,	  // user-defined opacity for each group, given as a function of density and temperature.
+	piecewisePowerLaw // piecewise power-law opacity model with piecewise power-law fitting to a user-defined opacity function and on-the-fly piecewise
+			  // power-law fitting to radiation energy density and flux.
 };
 
 // this struct is specialized by the user application code
