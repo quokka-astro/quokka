@@ -22,6 +22,7 @@
 #include "physics_info.hpp"
 #include "radiation_system.hpp"
 #include "test_radiation_force.hpp"
+#include "NSCBC_outflow.hpp"
 #ifdef HAVE_PYTHON
 #include "matplotlibcpp.h"
 #endif
@@ -192,6 +193,7 @@ AMRSimulation<TubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv
 
 	amrex::Box const &box = geom.Domain();
 	amrex::GpuArray<int, 3> lo = box.loVect3d();
+	amrex::GpuArray<int, 3> hi = box.hiVect3d();
 
 	amrex::Real const Erad = Frad0 / c_light_cgs_;
 	amrex::Real const Frad = Frad0;
@@ -221,6 +223,11 @@ AMRSimulation<TubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv
 		consVar(i, j, k, RadSystem<TubeProblem>::x1GasMomentum_index) = rho * vel;
 		consVar(i, j, k, RadSystem<TubeProblem>::x2GasMomentum_index) = 0.;
 		consVar(i, j, k, RadSystem<TubeProblem>::x3GasMomentum_index) = 0.;
+	} else if (i > hi[0]) {
+		// amrex::Real const pressure_R = rho_arr_g.back() * a0 * a0;
+		amrex::Real const rho_R = consVar(hi[0], j, k, RadSystem<TubeProblem>::gasDensity_index);
+		amrex::Real const pressure_R = rho_R * a0 * a0;
+		NSCBC::setOutflowBoundaryLowOrder<TubeProblem, FluxDir::X1, NSCBC::BoundarySide::Upper>(iv, consVar, geom, pressure_R);
 	}
 }
 
@@ -239,7 +246,7 @@ auto problem_main() -> int
 	for (int n = 0; n < nvars; ++n) {
 		// for x-axis:
 		BCs_cc[n].setLo(0, amrex::BCType::ext_dir);
-		BCs_cc[n].setHi(0, amrex::BCType::foextrap); // extrapolate
+		BCs_cc[n].setHi(0, amrex::BCType::ext_dir);
 		// for y-, z- axes:
 		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
 			// periodic
