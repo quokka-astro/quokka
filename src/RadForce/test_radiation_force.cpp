@@ -15,6 +15,7 @@
 #include "AMReX_REAL.H"
 
 #include "ArrayUtil.hpp"
+#include "NSCBC_outflow.hpp"
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
 #include "hydro_system.hpp"
@@ -22,7 +23,6 @@
 #include "physics_info.hpp"
 #include "radiation_system.hpp"
 #include "test_radiation_force.hpp"
-#include "NSCBC_outflow.hpp"
 #ifdef HAVE_PYTHON
 #include "matplotlibcpp.h"
 #endif
