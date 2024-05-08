@@ -229,7 +229,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	void advanceHydroAtLevelWithRetries(int lev, amrex::Real time, amrex::Real dt_lev, amrex::YAFluxRegister *fr_as_crse,
 					    amrex::YAFluxRegister *fr_as_fine);
 
-	auto advanceHydroAtLevel(amrex::MultiFab &state_old_cc_tmp, amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine, int lev,
+	auto advanceHydroAtLevel(amrex::MultiFab &state_old_cc_tmp, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_old_fc_tmp, amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine, int lev,
 				 amrex::Real time, amrex::Real dt_lev) -> bool;
 
 	void addStrangSplitSources(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev);
@@ -927,9 +927,18 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 #endif
 		}
 
-		// create temporary multifab for old state
+		// create temporary multifab for old cell-cenetered state
 		amrex::MultiFab state_old_cc_tmp(grids[lev], dmap[lev], Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
 		amrex::Copy(state_old_cc_tmp, state_old_cc_[lev], 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
+
+    // create temporary array (different faces) of multifabs for old face-centered state
+    std::array<amrex::MultiFab, AMREX_SPACEDIM> state_old_fc_tmp;
+    if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+      for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+        state_old_fc_tmp[idim].define(amrex::convert(grids[lev], amrex::IntVect::TheDimensionVector(idim)), dmap[lev], Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_);
+        amrex::Copy(state_old_fc_tmp[idim], state_old_fc_[lev][idim], 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_);
+      }
+		}
 
 		// subcycle advanceHydroAtLevel, checking return value
 		for (int substep = 0; substep < nsubsteps; ++substep) {
@@ -937,9 +946,14 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 				// since we are starting a new substep, we need to copy hydro state from
 				//  the new state vector to old state vector
 				amrex::Copy(state_old_cc_tmp, state_new_cc_[lev], 0, 0, ncompHydro_, nghost_cc_);
+        if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+          for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+            amrex::Copy(state_old_fc_tmp[idim], state_new_fc_[lev][idim], 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_);
+          }
+        }
 			}
 
-			success = advanceHydroAtLevel(state_old_cc_tmp, fr_as_crse, fr_as_fine, lev, time, dt_step);
+			success = advanceHydroAtLevel(state_old_cc_tmp, state_old_fc_tmp, fr_as_crse, fr_as_fine, lev, time, dt_step);
 
 			if (!success) {
 				if (Verbose()) {
@@ -1022,7 +1036,7 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::printCoordinat
 }
 
 template <typename problem_t>
-auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old_cc_tmp, amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine,
+auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old_cc_tmp, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_old_fc_tmp, amrex::YAFluxRegister *fr_as_crse, amrex::YAFluxRegister *fr_as_fine,
 							int lev, amrex::Real time, amrex::Real dt_lev) -> bool
 {
 	BL_PROFILE("RadhydroSimulation::advanceHydroAtLevel()");
@@ -1102,7 +1116,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		auto &stateNew = state_inter_cc_;
 
     auto const &stateOld_fc = state_old_fc_tmp;
-	  auto &stateNew_fc = state_inter_fc_;
+	  // auto &stateNew_fc = state_inter_fc_;
 
 		auto [fluxArrays, faceVel] = computeHydroFluxes(stateOld, ncompHydro_, lev);
 
