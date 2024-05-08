@@ -1034,6 +1034,8 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		fluxScaleFactor = 1.0;
 	}
 
+  auto ba_cc = grids[lev];
+	auto dm = dmap[lev];
 	auto dx = geom[lev].CellSizeArray();
 
 	// do Strang split source terms (first half-step)
@@ -1047,20 +1049,26 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	// create temporary multifab for intermediate state
 	amrex::MultiFab state_inter_cc_(grids[lev], dmap[lev], Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
 	state_inter_cc_.setVal(0); // prevent assert in fillBoundaryConditions when radiation is enabled
+  std::array<amrex::MultiFab, AMREX_SPACEDIM> state_inter_fc_;
+  if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+    for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+      auto ba_fc = amrex::convert(ba_cc, amrex::IntVect::TheDimensionVector(idim));
+      state_inter_fc_[idim].define(ba_fc, dm, n_mhd_vars_per_dim_, nghost_fc_);
+	    state_inter_fc_[idim].setVal(0); // prevent assert in fillBoundaryConditions when radiation is enabled
+    }
+  }
 
 	// create temporary multifabs for combined RK2 flux and time-average face velocity
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> flux_rk2;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> avgFaceVel;
 	const int nghost_vel = 2; // 2 ghost faces are needed for tracer particles
-	auto ba = grids[lev];
-	auto dm = dmap[lev];
 	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-		auto ba_face = amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim));
+		auto ba_fc = amrex::convert(ba_cc, amrex::IntVect::TheDimensionVector(idim));
 		// initialize flux MultiFab
-		flux_rk2[idim] = amrex::MultiFab(ba_face, dm, ncompHydro_, 0);
+		flux_rk2[idim] = amrex::MultiFab(ba_fc, dm, ncompHydro_, 0);
 		flux_rk2[idim].setVal(0);
 		// initialize velocity MultiFab
-		avgFaceVel[idim] = amrex::MultiFab(ba_face, dm, 1, nghost_vel);
+		avgFaceVel[idim] = amrex::MultiFab(ba_fc, dm, 1, nghost_vel);
 		avgFaceVel[idim].setVal(0);
 	}
 
@@ -1092,6 +1100,10 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		// advance all grids on local processor (Stage 1 of integrator)
 		auto const &stateOld = state_old_cc_tmp;
 		auto &stateNew = state_inter_cc_;
+
+    auto const &stateOld_fc = state_old_fc_tmp;
+	  auto &stateNew_fc = state_inter_fc_;
+
 		auto [fluxArrays, faceVel] = computeHydroFluxes(stateOld, ncompHydro_, lev);
 
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -1106,10 +1118,10 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
     if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
       std::array<amrex::MultiFab, AMREX_SPACEDIM> rhs_fc;
       for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-        auto ba_fc = amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim));
+        auto ba_fc = amrex::convert(ba_cc, amrex::IntVect::TheDimensionVector(idim));
         rhs_fc[idim].define(ba_fc, dm, n_mhd_vars_per_dim_, 0);
       }
-      MHDSystem<problem_t>::ComputeEMF(rhs_fc, stateOld, stateOld, dx, nghost_cc_, nghost_fc_);
+      MHDSystem<problem_t>::ComputeEMF(rhs_fc, stateOld, stateOld_fc, dx, nghost_cc_, nghost_fc_);
     }
 		HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, fluxArrays, dx, ncompHydro_);
 		HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld, dx, faceVel, redoFlag);
@@ -1403,13 +1415,13 @@ auto RadhydroSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &co
 {
 	BL_PROFILE("RadhydroSimulation::computeHydroFluxes()");
 
-	auto ba = grids[lev];
+	auto ba_cc = grids[lev];
 	auto dm = dmap[lev];
 	const int flatteningGhost = 2;
 	const int reconstructGhost = 1;
 
 	// allocate temporary MultiFabs
-	amrex::MultiFab primVar(ba, dm, nvars, nghost_cc_);
+	amrex::MultiFab primVar(ba_cc, dm, nvars, nghost_cc_);
 	std::array<amrex::MultiFab, 3> flatCoefs;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> flux;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> facevel;
@@ -1417,15 +1429,15 @@ auto RadhydroSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &co
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> rightState;
 
 	for (int idim = 0; idim < 3; ++idim) {
-		flatCoefs[idim] = amrex::MultiFab(ba, dm, 1, flatteningGhost);
+		flatCoefs[idim] = amrex::MultiFab(ba_cc, dm, 1, flatteningGhost);
 	}
 
 	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-		auto ba_face = amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim));
-		leftState[idim] = amrex::MultiFab(ba_face, dm, nvars, reconstructGhost);
-		rightState[idim] = amrex::MultiFab(ba_face, dm, nvars, reconstructGhost);
-		flux[idim] = amrex::MultiFab(ba_face, dm, nvars, 0);
-		facevel[idim] = amrex::MultiFab(ba_face, dm, 1, 0);
+		auto ba_fc = amrex::convert(ba_cc, amrex::IntVect::TheDimensionVector(idim));
+		leftState[idim] = amrex::MultiFab(ba_fc, dm, nvars, reconstructGhost);
+		rightState[idim] = amrex::MultiFab(ba_fc, dm, nvars, reconstructGhost);
+		flux[idim] = amrex::MultiFab(ba_fc, dm, nvars, 0);
+		facevel[idim] = amrex::MultiFab(ba_fc, dm, 1, 0);
 	}
 
 	// conserved to primitive variables
@@ -1519,23 +1531,23 @@ auto RadhydroSimulation<problem_t>::computeFOHydroFluxes(amrex::MultiFab const &
 {
 	BL_PROFILE("RadhydroSimulation::computeFOHydroFluxes()");
 
-	auto ba = grids[lev];
+	auto ba_cc = grids[lev];
 	auto dm = dmap[lev];
 	const int reconstructRange = 1;
 
 	// allocate temporary MultiFabs
-	amrex::MultiFab primVar(ba, dm, nvars, nghost_cc_);
+	amrex::MultiFab primVar(ba_cc, dm, nvars, nghost_cc_);
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> flux;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> facevel;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> leftState;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> rightState;
 
 	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-		auto ba_face = amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim));
-		leftState[idim] = amrex::MultiFab(ba_face, dm, nvars, reconstructRange);
-		rightState[idim] = amrex::MultiFab(ba_face, dm, nvars, reconstructRange);
-		flux[idim] = amrex::MultiFab(ba_face, dm, nvars, 0);
-		facevel[idim] = amrex::MultiFab(ba_face, dm, 1, 0);
+		auto ba_fc = amrex::convert(ba_cc, amrex::IntVect::TheDimensionVector(idim));
+		leftState[idim] = amrex::MultiFab(ba_fc, dm, nvars, reconstructRange);
+		rightState[idim] = amrex::MultiFab(ba_fc, dm, nvars, reconstructRange);
+		flux[idim] = amrex::MultiFab(ba_fc, dm, nvars, 0);
+		facevel[idim] = amrex::MultiFab(ba_fc, dm, 1, 0);
 	}
 
 	// conserved to primitive variables
