@@ -54,6 +54,7 @@
 #include "TabulatedCooling.hpp"
 #include "eos.H"
 #include "hydro_system.hpp"
+#include "mhd_system.hpp"
 #include "hyperbolic_system.hpp"
 #include "physics_info.hpp"
 #include "physics_numVars.hpp"
@@ -72,6 +73,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	using AMRSimulation<problem_t>::TracerPC;
 
 	using AMRSimulation<problem_t>::nghost_cc_;
+  using AMRSimulation<problem_t>::nghost_fc_;
 	using AMRSimulation<problem_t>::areInitialConditionsDefined_;
 	using AMRSimulation<problem_t>::BCs_cc_;
 	using AMRSimulation<problem_t>::BCs_fc_;
@@ -123,6 +125,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	static constexpr int ncompHydro_ = HydroSystem<problem_t>::nvar_; // hydro
 	static constexpr int ncompHyperbolic_ = RadSystem<problem_t>::nvarHyperbolic_;
 	static constexpr int nstartHyperbolic_ = RadSystem<problem_t>::nstartHyperbolic_;
+  static constexpr int n_mhd_vars_per_dim_ = MHDSystem<problem_t>::nvar_per_dim_; // mhd
 
 	amrex::Real radiationCflNumber_ = 0.3;
 	int maxSubsteps_ = 10; // maximum number of radiation subcycles per hydro step
@@ -1100,6 +1103,14 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		amrex::iMultiFab redoFlag(grids[lev], dmap[lev], 1, 1);
 		redoFlag.setVal(quokka::redoFlag::none);
 
+    if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+      std::array<amrex::MultiFab, AMREX_SPACEDIM> rhs_fc;
+      for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+        auto ba_fc = amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim));
+        rhs_fc[idim].define(ba_fc, dm, n_mhd_vars_per_dim_, 0);
+      }
+      MHDSystem<problem_t>::ComputeEMF(rhs_fc, stateOld, stateOld, dx, nghost_cc_, nghost_fc_);
+    }
 		HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, fluxArrays, dx, ncompHydro_);
 		HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld, dx, faceVel, redoFlag);
 		HydroSystem<problem_t>::PredictStep(stateOld, stateNew, rhs, dt_lev, ncompHydro_, redoFlag);
