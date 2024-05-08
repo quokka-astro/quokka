@@ -51,7 +51,7 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
     for (int windex = 0; windex < AMREX_SPACEDIM; ++windex) {
       const auto &fcxw_a4_rhs = fcx_mf_rhs[windex][mfi].array();
       amrex::ParallelFor(box_cc, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-        fcxw_a4_rhs(i, j, k, MHDSystem<problem_t>::bfield_index) = 0;
+        fcxw_a4_rhs(i, j, k) = 0;
       });
     }
 
@@ -277,7 +277,7 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
         // const auto &fcxw_a4_rhs = fcx_mf_rhs[wsolve][mfi].array();
         // amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
         //   // the induction equation is written in an additive form: the RHS is evaluated in parts as each edge-centered electric field is computed
-        //   fcxw_a4_rhs(i,j,k,MHDSystem<problem_t>::bfield_index) += (E2_ave(i,j,k) - E2_ave(i-idx[0],j-idx[1],k-idx[2])) / dx[wsolve];
+        //   fcxw_a4_rhs(i,j,k) += (E2_ave(i,j,k) - E2_ave(i-idx[0],j-idx[1],k-idx[2])) / dx[wsolve];
         // });
       }
     }
