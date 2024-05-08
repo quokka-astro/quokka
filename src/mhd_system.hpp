@@ -31,7 +31,7 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 
   static void ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM> &fcx_mf_rhs, amrex::MultiFab const &cc_mf_cVars, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, int nghost_cc, int nghost_fc);
 
-  static void ReconstructTo(FluxDir dir, amrex::FArrayBox const &q_fab, amrex::FArrayBox &leftState_fab, amrex::FArrayBox &rightState_fab, const amrex::Box &indexRange, int reconstructionOrder, int nghost);
+  static void ReconstructTo(FluxDir dir, arrayconst_t &cState, array_t &lState, array_t &rState, const amrex::Box &indexRange, int reconstructionOrder, int nghost);
 };
 
 template <typename problem_t>
@@ -58,9 +58,9 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
     // extract cell-centered velocity fields
     // indexing: field[3: x-component]
     std::array<amrex::FArrayBox, 3> cc_fabs_Ux;
-    cc_fabs_Ux[0].resize(box_cc, 1);
-    cc_fabs_Ux[1].resize(box_cc, 1);
-    cc_fabs_Ux[2].resize(box_cc, 1);
+    cc_fabs_Ux[0].resize(amrex::grow(box_cc, nghost_cc), 1);
+    cc_fabs_Ux[1].resize(amrex::grow(box_cc, nghost_cc), 1);
+    cc_fabs_Ux[2].resize(amrex::grow(box_cc, nghost_cc), 1);
     const auto &cc_a4_Ux0 = cc_fabs_Ux[0].array();
     const auto &cc_a4_Ux1 = cc_fabs_Ux[1].array();
     const auto &cc_a4_Ux2 = cc_fabs_Ux[2].array();
@@ -82,7 +82,6 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
     //   FArrayBox(fcx_mf_cVars[1][mfi], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1),
     //   FArrayBox(fcx_mf_cVars[2][mfi], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1),
     // };
-
     // alternatively, make a complete copy of the b-field data
     std::array<amrex::FArrayBox, 3> fc_fabs_Bx;
     for (int w_index = 0; w_index < 3; ++w_index) {
@@ -149,7 +148,7 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
           // define quantities required for creating face-centered FArrayBox
           const int w_extrap_dir2face = w_extrap_dirs[iperm];
           const amrex::IntVect ivec_cc2fc = amrex::IntVect::TheDimensionVector(w_extrap_dir2face);
-          const amrex::Box box_fc = amrex::convert(box_cc, ivec_cc2fc);
+          const amrex::Box box_fc = amrex::convert(amrex::grow(box_cc, 1), ivec_cc2fc);
           const auto dir2face = static_cast<FluxDir>(w_extrap_dir2face);
 
           // define extrapolation direction to go from face to edge
@@ -164,72 +163,86 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
             const int w_comp = w_extrap_dirs[icomp];
             fc_fabs_Ui_ifside[icomp][0].resize(box_fc, 1);
             fc_fabs_Ui_ifside[icomp][1].resize(box_fc, 1);
-            // extrapolate cell-centered velocity components to the cell-face
-            MHDSystem<problem_t>::ReconstructTo(dir2face, cc_fabs_Ux[w_comp], fc_fabs_Ui_ifside[icomp][0], fc_fabs_Ui_ifside[icomp][1], box_cc, 1, nghost_cc);
-            // extrapolate face-centered velocity components to the cell-edge
-            for (int iface = 0; iface < 2; ++iface) {
-              // reset values in temporary FArrayBox
-              ec_fabs_U_ieside[0].setVal(0.0);
-              ec_fabs_U_ieside[1].setVal(0.0);
-              // extrapolate face-centered velocity component to the cell-edge
-              MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_Ui_ifside[icomp][iface], ec_fabs_U_ieside[0], ec_fabs_U_ieside[1], box_fc, 1, nghost_cc);
-              // figure out which quadrant of the cell-edge this extrapolated velocity component corresponds with
-              int iquad0 = -1;
-              int iquad1 = -1;
-              // note: quadrants are defined based on where the quantity sits relative to the edge (dir-0, dir-1):
-              // (-,+) | (+,+)
-              //   1   |   2
-              // ------+------
-              //   0   |   3
-              // (-,-) | (+,-)
-              if (iperm == 0) {
-                iquad0 = (iface == 0) ? 0 : 3;
-                iquad1 = (iface == 0) ? 1 : 2;
-              } else {
-                iquad0 = (iface == 0) ? 0 : 1;
-                iquad1 = (iface == 0) ? 3 : 2;
-              }
-              ec_fabs_Ui_q[icomp][iquad0].atomicAdd(ec_fabs_U_ieside[0], 0, 0, 1);
-              ec_fabs_Ui_q[icomp][iquad1].atomicAdd(ec_fabs_U_ieside[1], 0, 0, 1);
-            }
+            // // extrapolate cell-centered velocity components to the cell-face
+            // switch (dir2face) {
+            //   case FluxDir::X1:
+            //     std::cout << "x1" << std::endl;
+            //     MHDSystem<problem_t>::template ReconstructStatesConstant<FluxDir::X1>(cc_fabs_Ux[w_comp].array(), fc_fabs_Ui_ifside[icomp][0].array(), fc_fabs_Ui_ifside[icomp][1].array(), box_fc, 1);
+            //     break;
+            //   case FluxDir::X2:
+            //   std::cout << "x2" << std::endl;
+            //     MHDSystem<problem_t>::template ReconstructStatesConstant<FluxDir::X2>(cc_fabs_Ux[w_comp].array(), fc_fabs_Ui_ifside[icomp][0].array(), fc_fabs_Ui_ifside[icomp][1].array(), box_fc, 1);
+            //     break;
+            //   case FluxDir::X3:
+            //     std::cout << "x3" << std::endl;
+            //     MHDSystem<problem_t>::template ReconstructStatesConstant<FluxDir::X3>(cc_fabs_Ux[w_comp].array(), fc_fabs_Ui_ifside[icomp][0].array(), fc_fabs_Ui_ifside[icomp][1].array(), box_fc, 1);
+            //     break;
+            // }
+            // MHDSystem<problem_t>::ReconstructTo(dir2face, cc_fabs_Ux[w_comp].array(), fc_fabs_Ui_ifside[icomp][0].array(), fc_fabs_Ui_ifside[icomp][1].array(), box_cc, 1, nghost_cc);
+            // // extrapolate face-centered velocity components to the cell-edge
+            // for (int iface = 0; iface < 2; ++iface) {
+            //   // reset values in temporary FArrayBox
+            //   ec_fabs_U_ieside[0].setVal(0.0);
+            //   ec_fabs_U_ieside[1].setVal(0.0);
+            //   // extrapolate face-centered velocity component to the cell-edge
+            //   MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_Ui_ifside[icomp][iface], ec_fabs_U_ieside[0], ec_fabs_U_ieside[1], box_fc, 1, nghost_cc);
+            //   // figure out which quadrant of the cell-edge this extrapolated velocity component corresponds with
+            //   int iquad0 = -1;
+            //   int iquad1 = -1;
+            //   // note: quadrants are defined based on where the quantity sits relative to the edge (dir-0, dir-1):
+            //   // (-,+) | (+,+)
+            //   //   1   |   2
+            //   // ------+------
+            //   //   0   |   3
+            //   // (-,-) | (+,-)
+            //   if (iperm == 0) {
+            //     iquad0 = (iface == 0) ? 0 : 3;
+            //     iquad1 = (iface == 0) ? 1 : 2;
+            //   } else {
+            //     iquad0 = (iface == 0) ? 0 : 1;
+            //     iquad1 = (iface == 0) ? 3 : 2;
+            //   }
+            //   ec_fabs_Ui_q[icomp][iquad0].atomicAdd(ec_fabs_U_ieside[0], 0, 0, 1);
+            //   ec_fabs_Ui_q[icomp][iquad1].atomicAdd(ec_fabs_U_ieside[1], 0, 0, 1);
+            // }
           }
         }
-        // finish averaging the two different ways for extrapolating cc->ec velocity fields
-        for (int icomp = 0; icomp < 2; ++icomp) {
-          for (int iquad = 0; iquad < 4; ++iquad) {
-            ec_fabs_Ui_q[icomp][iquad].mult(0.5, 0, 1);
-          }
-        }
+        // // finish averaging the two different ways for extrapolating cc->ec velocity fields
+        // for (int icomp = 0; icomp < 2; ++icomp) {
+        //   for (int iquad = 0; iquad < 4; ++iquad) {
+        //     ec_fabs_Ui_q[icomp][iquad].mult(0.5, 0, 1);
+        //   }
+        // }
 
-        // extrapolate the two required face-centered magnetic field components to the cell-edge
-        for (int icomp = 0; icomp < 2; ++icomp) {
-          // define extrapolation direction to go from face to edge
-          const int w_comp = w_extrap_dirs[icomp];
-          const int w_extrap_dir2edge = w_extrap_dirs[(icomp+1) % 2];
-          const auto dir2edge = static_cast<FluxDir>(w_extrap_dir2edge);
-          const amrex::IntVect ivec_cc2fc = amrex::IntVect::TheDimensionVector(w_extrap_dir2edge);
-          const amrex::Box box_fc = amrex::convert(box_cc, ivec_cc2fc);
-          // extrapolate face-centered magnetic components to the cell-edge
-          MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_Bx[w_comp], ec_fabs_Bi_ieside[icomp][0], ec_fabs_Bi_ieside[icomp][1], box_fc, 1, nghost_fc);
-        }
+        // // extrapolate the two required face-centered magnetic field components to the cell-edge
+        // for (int icomp = 0; icomp < 2; ++icomp) {
+        //   // define extrapolation direction to go from face to edge
+        //   const int w_comp = w_extrap_dirs[icomp];
+        //   const int w_extrap_dir2edge = w_extrap_dirs[(icomp+1) % 2];
+        //   const auto dir2edge = static_cast<FluxDir>(w_extrap_dir2edge);
+        //   const amrex::IntVect ivec_cc2fc = amrex::IntVect::TheDimensionVector(w_extrap_dir2edge);
+        //   const amrex::Box box_fc = amrex::convert(box_cc, ivec_cc2fc);
+        //   // extrapolate face-centered magnetic components to the cell-edge
+        //   MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_Bx[w_comp], ec_fabs_Bi_ieside[icomp][0], ec_fabs_Bi_ieside[icomp][1], box_fc, 1, nghost_fc);
+        // }
 
-        // indexing: field[4: quadrant around edge]
-        std::array<amrex::FArrayBox, 4> ec_fabs_E_q;
-        // compute the EMF along the cell-edge
-        for (int iquad = 0; iquad < 4; ++iquad) {
-          // define EMF FArrayBox
-          ec_fabs_E_q[iquad].resize(box_ec, 1);
-          // extract relevant velocity and magnetic field components
-          const auto &U0_qi = ec_fabs_Ui_q[0][iquad].const_array();
-          const auto &U1_qi = ec_fabs_Ui_q[1][iquad].const_array();
-          const auto &B0_qi = ec_fabs_Bi_ieside[0][(iquad == 0 || iquad == 3) ? 0 : 1].const_array();
-          const auto &B1_qi = ec_fabs_Bi_ieside[1][(iquad < 2) ? 0 : 1].const_array();
-          // compute electric field in the quadrant about the cell-edge: cross product between velocity and magnetic field in that quadrant
-          const auto &E2_qi = ec_fabs_E_q[iquad].array();
-          amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-            E2_qi(i,j,k) = U0_qi(i,j,k) * B1_qi(i,j,k) - U1_qi(i,j,k) * B0_qi(i,j,k);
-          });
-        }
+        // // indexing: field[4: quadrant around edge]
+        // std::array<amrex::FArrayBox, 4> ec_fabs_E_q;
+        // // compute the EMF along the cell-edge
+        // for (int iquad = 0; iquad < 4; ++iquad) {
+        //   // define EMF FArrayBox
+        //   ec_fabs_E_q[iquad].resize(box_ec, 1);
+        //   // extract relevant velocity and magnetic field components
+        //   const auto &U0_qi = ec_fabs_Ui_q[0][iquad].const_array();
+        //   const auto &U1_qi = ec_fabs_Ui_q[1][iquad].const_array();
+        //   const auto &B0_qi = ec_fabs_Bi_ieside[0][(iquad == 0 || iquad == 3) ? 0 : 1].const_array();
+        //   const auto &B1_qi = ec_fabs_Bi_ieside[1][(iquad < 2) ? 0 : 1].const_array();
+        //   // compute electric field in the quadrant about the cell-edge: cross product between velocity and magnetic field in that quadrant
+        //   const auto &E2_qi = ec_fabs_E_q[iquad].array();
+        //   amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+        //     E2_qi(i,j,k) = U0_qi(i,j,k) * B1_qi(i,j,k) - U1_qi(i,j,k) * B0_qi(i,j,k);
+        //   });
+        // }
 
         // // extract both components of magnetic field either side of the cell-edge
         // const auto &B0_m = ec_fabs_Bi_ieside[0][0].const_array();
@@ -248,7 +261,7 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
         //   const double spd_x0_p = 1.0;
         //   const double spd_x1_m = 1.0;
         //   const double spd_x1_p = 1.0;
-        //   E2_ave(i,j,k) = \
+        //   E2_ave(i,j,k) = 
         //       spd_x0_p * spd_x1_p * E2_q0(i,j,k) +
         //       spd_x0_m * spd_x1_p * E2_q3(i,j,k) +
         //       spd_x0_m * spd_x1_m * E2_q1(i,j,k) +
@@ -274,51 +287,51 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 }
 
 template <typename problem_t>
-void MHDSystem<problem_t>::ReconstructTo(FluxDir dir, amrex::FArrayBox const &q_fab, amrex::FArrayBox &leftState_fab, amrex::FArrayBox &rightState_fab, const amrex::Box &indexRange, const int reconstructionOrder, const int nghost)
+void MHDSystem<problem_t>::ReconstructTo(FluxDir dir, arrayconst_t &cState, array_t &lState, array_t &rState, const amrex::Box &indexRange, const int reconstructionOrder, const int nghost)
 {
 	// N.B.: A one-zone layer around the cells must be fully reconstructed in order for PPM to work.
 	amrex::Box const &reconstructRange = amrex::grow(indexRange, 1);
 	amrex::Box const &x1ReconstructRange = amrex::surroundingNodes(reconstructRange, static_cast<int>(dir));
 
-  if (reconstructionOrder == 3) {
+  // if (reconstructionOrder == 3) {
+  //   switch (dir) {
+  //     case FluxDir::X1:
+  //       MHDSystem<problem_t>::template ReconstructStatesPPM<FluxDir::X1>(cState, lState, rState, reconstructRange, x1ReconstructRange, 1);
+  //       break;
+  //     case FluxDir::X2:
+  //       MHDSystem<problem_t>::template ReconstructStatesPPM<FluxDir::X2>(cState, lState, rState, reconstructRange, x1ReconstructRange, 1);
+  //       break;
+  //     case FluxDir::X3:
+  //       MHDSystem<problem_t>::template ReconstructStatesPPM<FluxDir::X3>(cState, lState, rState, reconstructRange, x1ReconstructRange, 1);
+  //       break;
+  //   }
+  // } else if (reconstructionOrder == 2) {
+  //   switch (dir) {
+  //     case FluxDir::X1:
+  //       MHDSystem<problem_t>::template ReconstructStatesPLM<FluxDir::X1, SlopeLimiter::minmod>(cState, lState, rState, x1ReconstructRange, 1);
+  //       break;
+  //     case FluxDir::X2:
+  //       MHDSystem<problem_t>::template ReconstructStatesPLM<FluxDir::X2, SlopeLimiter::minmod>(cState, lState, rState, x1ReconstructRange, 1);
+  //       break;
+  //     case FluxDir::X3:
+  //       MHDSystem<problem_t>::template ReconstructStatesPLM<FluxDir::X3, SlopeLimiter::minmod>(cState, lState, rState, x1ReconstructRange, 1);
+  //       break;
+  //   }
+  // } else if (reconstructionOrder == 1) {
     switch (dir) {
       case FluxDir::X1:
-        MHDSystem<problem_t>::template ReconstructStatesPPM<FluxDir::X1>(q_fab, leftState_fab, rightState_fab, reconstructRange, 1);
+        MHDSystem<problem_t>::template ReconstructStatesConstant<FluxDir::X1>(cState, lState, rState, x1ReconstructRange, 1);
         break;
       case FluxDir::X2:
-        MHDSystem<problem_t>::template ReconstructStatesPPM<FluxDir::X2>(q_fab, leftState_fab, rightState_fab, reconstructRange, 1);
+        MHDSystem<problem_t>::template ReconstructStatesConstant<FluxDir::X2>(cState, lState, rState, x1ReconstructRange, 1);
         break;
       case FluxDir::X3:
-        MHDSystem<problem_t>::template ReconstructStatesPPM<FluxDir::X3>(q_fab, leftState_fab, rightState_fab, reconstructRange, 1);
+        MHDSystem<problem_t>::template ReconstructStatesConstant<FluxDir::X3>(cState, lState, rState, x1ReconstructRange, 1);
         break;
     }
-  } else if (reconstructionOrder == 2) {
-    switch (dir) {
-      case FluxDir::X1:
-        MHDSystem<problem_t>::template ReconstructStatesPLM<FluxDir::X1>(q_fab, leftState_fab, rightState_fab, x1ReconstructRange, 1);
-        break;
-      case FluxDir::X2:
-        MHDSystem<problem_t>::template ReconstructStatesPLM<FluxDir::X2>(q_fab, leftState_fab, rightState_fab, x1ReconstructRange, 1);
-        break;
-      case FluxDir::X3:
-        MHDSystem<problem_t>::template ReconstructStatesPLM<FluxDir::X3>(q_fab, leftState_fab, rightState_fab, x1ReconstructRange, 1);
-        break;
-    }
-  } else if (reconstructionOrder == 1) {
-    switch (dir) {
-      case FluxDir::X1:
-        MHDSystem<problem_t>::template ReconstructStatesConstant<FluxDir::X1>(q_fab, leftState_fab, rightState_fab, x1ReconstructRange, 1);
-        break;
-      case FluxDir::X2:
-        MHDSystem<problem_t>::template ReconstructStatesConstant<FluxDir::X2>(q_fab, leftState_fab, rightState_fab, x1ReconstructRange, 1);
-        break;
-      case FluxDir::X3:
-        MHDSystem<problem_t>::template ReconstructStatesConstant<FluxDir::X3>(q_fab, leftState_fab, rightState_fab, x1ReconstructRange, 1);
-        break;
-    }
-  } else {
-    amrex::Abort("Invalid reconstruction order specified!");
-  }
+  // } else {
+  //   amrex::Abort("Invalid reconstruction order specified!");
+  // }
 }
 
 
