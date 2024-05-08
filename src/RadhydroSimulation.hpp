@@ -1068,7 +1068,7 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
     for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
       auto ba_fc = amrex::convert(ba_cc, amrex::IntVect::TheDimensionVector(idim));
       state_inter_fc_[idim].define(ba_fc, dm, n_mhd_vars_per_dim_, nghost_fc_);
-	    state_inter_fc_[idim].setVal(0); // prevent assert in fillBoundaryConditions when radiation is enabled
+	    state_inter_fc_[idim].setVal(0);
     }
   }
 
@@ -1130,12 +1130,12 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		redoFlag.setVal(quokka::redoFlag::none);
 
     if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-      std::array<amrex::MultiFab, AMREX_SPACEDIM> rhs_fc;
+      std::array<amrex::MultiFab, AMREX_SPACEDIM> rhs_mhd_fc;
       for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
         auto ba_fc = amrex::convert(ba_cc, amrex::IntVect::TheDimensionVector(idim));
-        rhs_fc[idim].define(ba_fc, dm, n_mhd_vars_per_dim_, 0);
+        rhs_mhd_fc[idim].define(ba_fc, dm, n_mhd_vars_per_dim_, 0);
       }
-      MHDSystem<problem_t>::ComputeEMF(rhs_fc, stateOld, stateOld_fc, dx, nghost_cc_, nghost_fc_);
+      MHDSystem<problem_t>::ComputeEMF(rhs_mhd_fc, stateOld, stateOld_fc, dx, nghost_cc_, nghost_fc_);
     }
 		HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, fluxArrays, dx, ncompHydro_);
 		HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld, dx, faceVel, redoFlag);
