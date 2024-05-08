@@ -157,6 +157,7 @@ auto problem_main() -> int
 
 	RadhydroSimulation<FCQuantities> sim_write(BCs_cc, BCs_fc);
 	sim_write.setInitialConditions();
+  sim_write.evolve();
 	amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const &state_new_fc_write = sim_write.getNewMF_fc();
 	amrex::Print() << "\n";
 
