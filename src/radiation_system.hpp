@@ -259,10 +259,10 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputePlanckEnergyFractions(am
 			radEnergyFractions[g] = y - previous;
 			previous = y;
 		}
-		auto tote = sum(radEnergyFractions);
+		// auto tote = sum(radEnergyFractions);
 		// AMREX_ALWAYS_ASSERT(tote <= 1.0);
 		// AMREX_ALWAYS_ASSERT(tote > 0.9999);
-		radEnergyFractions /= tote;
+		// radEnergyFractions /= tote;
 		return radEnergyFractions;
 	}
 }
@@ -1119,7 +1119,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			gas_update_factor = IMEX_a32;
 		}
 
-		const int max_ite = 5;
+		const int max_ite = 50;
 		int ite = 0;
 		for (; ite < max_ite; ++ite) {
 			quokka::valarray<double, nGroups_> Rvec{};

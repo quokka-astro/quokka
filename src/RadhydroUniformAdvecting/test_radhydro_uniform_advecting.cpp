@@ -10,40 +10,79 @@
 #include "physics_info.hpp"
 #include "radiation_system.hpp"
 
+static constexpr bool export_csv = true;
+
 struct PulseProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-constexpr double bin_width = 1.2589254117941673; // = 10^(0.1)
+constexpr int n_groups_ = 50;
 
-// constexpr int n_groups_ = 1;
-// constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_ = {0.0, inf};
-
-constexpr int n_groups_ = 50; // from 1e-3 to 1e2
-constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_ = {
-	1.00000000e-03, 1.25892541e-03, 1.58489319e-03, 1.99526231e-03,
-	2.51188643e-03, 3.16227766e-03, 3.98107171e-03, 5.01187234e-03,
-	6.30957344e-03, 7.94328235e-03, 1.00000000e-02, 1.25892541e-02,
-	1.58489319e-02, 1.99526231e-02, 2.51188643e-02, 3.16227766e-02,
-	3.98107171e-02, 5.01187234e-02, 6.30957344e-02, 7.94328235e-02,
-	1.00000000e-01, 1.25892541e-01, 1.58489319e-01, 1.99526231e-01,
-	2.51188643e-01, 3.16227766e-01, 3.98107171e-01, 5.01187234e-01,
-	6.30957344e-01, 7.94328235e-01, 1.00000000e+00, 1.25892541e+00,
-	1.58489319e+00, 1.99526231e+00, 2.51188643e+00, 3.16227766e+00,
-	3.98107171e+00, 5.01187234e+00, 6.30957344e+00, 7.94328235e+00,
-	1.00000000e+01, 1.25892541e+01, 1.58489319e+01, 1.99526231e+01,
-	2.51188643e+01, 3.16227766e+01, 3.98107171e+01, 5.01187234e+01,
-	6.30957344e+01, 7.94328235e+01, 1.00000000e+02
-};
-
-// constexpr int n_groups_ = 50; // from 1e-3 to 1e2
-// constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_ = []() {
-// 	amrex::GpuArray<double, n_groups_ + 1> rad_boundaries{};
-// 	rad_boundaries[0] = 1.0e-3;
-// 	for (int i = 1; i < n_groups_ + 1; ++i) {
-// 		rad_boundaries[i] = rad_boundaries[i - 1] * bin_width;
-// 	}
-// 	return rad_boundaries;
-// }();
+constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_ = []() constexpr {
+	if constexpr (n_groups_ == 1) {
+		return amrex::GpuArray<double, 2>{0.0, inf};
+	} else if constexpr (n_groups_ == 52) { // from 1e-3 to 1e2
+		constexpr amrex::GpuArray<double, 53> rad_boundaries = {
+			0.0,
+			1.00000000e-03, 1.25892541e-03, 1.58489319e-03, 1.99526231e-03,
+			2.51188643e-03, 3.16227766e-03, 3.98107171e-03, 5.01187234e-03,
+			6.30957344e-03, 7.94328235e-03, 1.00000000e-02, 1.25892541e-02,
+			1.58489319e-02, 1.99526231e-02, 2.51188643e-02, 3.16227766e-02,
+			3.98107171e-02, 5.01187234e-02, 6.30957344e-02, 7.94328235e-02,
+			1.00000000e-01, 1.25892541e-01, 1.58489319e-01, 1.99526231e-01,
+			2.51188643e-01, 3.16227766e-01, 3.98107171e-01, 5.01187234e-01,
+			6.30957344e-01, 7.94328235e-01, 1.00000000e+00, 1.25892541e+00,
+			1.58489319e+00, 1.99526231e+00, 2.51188643e+00, 3.16227766e+00,
+			3.98107171e+00, 5.01187234e+00, 6.30957344e+00, 7.94328235e+00,
+			1.00000000e+01, 1.25892541e+01, 1.58489319e+01, 1.99526231e+01,
+			2.51188643e+01, 3.16227766e+01, 3.98107171e+01, 5.01187234e+01,
+			6.30957344e+01, 7.94328235e+01, 1.00000000e+02, inf
+		};
+		return rad_boundaries;
+	} else if constexpr (n_groups_ == 50) {
+		constexpr amrex::GpuArray<double, 51> rad_boundaries = {
+			1.00000000e-03, 1.25892541e-03, 1.58489319e-03, 1.99526231e-03,
+			2.51188643e-03, 3.16227766e-03, 3.98107171e-03, 5.01187234e-03,
+			6.30957344e-03, 7.94328235e-03, 1.00000000e-02, 1.25892541e-02,
+			1.58489319e-02, 1.99526231e-02, 2.51188643e-02, 3.16227766e-02,
+			3.98107171e-02, 5.01187234e-02, 6.30957344e-02, 7.94328235e-02,
+			1.00000000e-01, 1.25892541e-01, 1.58489319e-01, 1.99526231e-01,
+			2.51188643e-01, 3.16227766e-01, 3.98107171e-01, 5.01187234e-01,
+			6.30957344e-01, 7.94328235e-01, 1.00000000e+00, 1.25892541e+00,
+			1.58489319e+00, 1.99526231e+00, 2.51188643e+00, 3.16227766e+00,
+			3.98107171e+00, 5.01187234e+00, 6.30957344e+00, 7.94328235e+00,
+			1.00000000e+01, 1.25892541e+01, 1.58489319e+01, 1.99526231e+01,
+			2.51188643e+01, 3.16227766e+01, 3.98107171e+01, 5.01187234e+01,
+			6.30957344e+01, 7.94328235e+01, 1.00000000e+02
+		};
+		return rad_boundaries;
+	} else if constexpr (n_groups_ == 82) {
+		constexpr amrex::GpuArray<double, 83> rad_boundaries = {
+			0.0,
+			1.00000000e-04, 1.25892541e-04, 1.58489319e-04, 1.99526231e-04,
+			2.51188643e-04, 3.16227766e-04, 3.98107171e-04, 5.01187234e-04,
+			6.30957344e-04, 7.94328235e-04, 1.00000000e-03, 1.25892541e-03,
+			1.58489319e-03, 1.99526231e-03, 2.51188643e-03, 3.16227766e-03,
+			3.98107171e-03, 5.01187234e-03, 6.30957344e-03, 7.94328235e-03,
+			1.00000000e-02, 1.25892541e-02, 1.58489319e-02, 1.99526231e-02,
+			2.51188643e-02, 3.16227766e-02, 3.98107171e-02, 5.01187234e-02,
+			6.30957344e-02, 7.94328235e-02, 1.00000000e-01, 1.25892541e-01,
+			1.58489319e-01, 1.99526231e-01, 2.51188643e-01, 3.16227766e-01,
+			3.98107171e-01, 5.01187234e-01, 6.30957344e-01, 7.94328235e-01,
+			1.00000000e+00, 1.25892541e+00, 1.58489319e+00, 1.99526231e+00,
+			2.51188643e+00, 3.16227766e+00, 3.98107171e+00, 5.01187234e+00,
+			6.30957344e+00, 7.94328235e+00, 1.00000000e+01, 1.25892541e+01,
+			1.58489319e+01, 1.99526231e+01, 2.51188643e+01, 3.16227766e+01,
+			3.98107171e+01, 5.01187234e+01, 6.30957344e+01, 7.94328235e+01,
+			1.00000000e+02, 1.25892541e+02, 1.58489319e+02, 1.99526231e+02,
+			2.51188643e+02, 3.16227766e+02, 3.98107171e+02, 5.01187234e+02,
+			6.30957344e+02, 7.94328235e+02, 1.00000000e+03, 1.25892541e+03,
+			1.58489319e+03, 1.99526231e+03, 2.51188643e+03, 3.16227766e+03,
+			3.98107171e+03, 5.01187234e+03, 6.30957344e+03, 7.94328235e+03,
+			1.00000000e+04, inf
+		};
+		return rad_boundaries;
+	}
+}();
 
 constexpr double c = 1.0e8;
 // model 0
@@ -63,7 +102,9 @@ constexpr double c = 1.0e8;
 // constexpr double chat = 1.0e8;
 // model 3
 constexpr int beta_order_ = 2; // order of beta in the radiation four-force
-constexpr double v0 = -1e-2 * c;
+// constexpr double v0 = 0.0;
+// constexpr double v0 = 1e-2 * c;
+constexpr double v0 = 0.3 * c;
 constexpr double kappa0 = 1.0e5;
 constexpr double chat = c;
 
@@ -84,7 +125,7 @@ constexpr double max_time = 10.0 / (1e-2 * c);
 
 constexpr double Erad0 = a_rad * T0 * T0 * T0 * T0;
 constexpr double Erad_beta2 = (1. + 4. / 3. * (v0 * v0) / (c * c)) * Erad0;
-constexpr double erad_floor = a_rad * 1e-15;
+constexpr double erad_floor = a_rad * 1e-30;
 
 template <> struct quokka::EOS_Traits<PulseProblem> {
 	static constexpr double mean_molecular_weight = mu;
@@ -111,7 +152,22 @@ template <> struct RadSystem_Traits<PulseProblem> {
 	static constexpr int beta_order = beta_order_;
 	static constexpr double energy_unit = 1.0;
 	static constexpr amrex::GpuArray<double, n_groups_ + 1> radBoundaries = rad_boundaries_;
+	static constexpr OpacityModel opacity_model = OpacityModel::piecewisePowerLaw;
 };
+
+template <>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<PulseProblem>::DefineOpacityExponentsAndLowerValues(const double rho, const double /*Tgas*/)
+    -> amrex::GpuArray<amrex::GpuArray<double, nGroups_>, 2>
+{
+	amrex::GpuArray<amrex::GpuArray<double, nGroups_>, 2> exponents_and_values{};
+	for (int i = 0; i < nGroups_; ++i) {
+		exponents_and_values[0][i] = 0.0;
+	}
+	for (int i = 0; i < nGroups_; ++i) {
+		exponents_and_values[1][i] = kappa0;
+	}
+	return exponents_and_values;
+}
 
 template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
@@ -122,6 +178,19 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacity(const d
 	}
 	return kappaPVec;
 }
+
+// template <>
+// template <typename ArrayType>
+// AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputeRadQuantityExponents(ArrayType const & /*quant*/,
+// 									     amrex::GpuArray<double, nGroups_ + 1> const & /*boundaries*/)
+//     -> amrex::GpuArray<double, nGroups_>
+// {
+// 	amrex::GpuArray<double, nGroups_> exponents{};
+// 	for (int g = 0; g < nGroups_; ++g) {
+// 		exponents[g] = 0.0;
+// 	}
+// 	return exponents;
+// }
 
 template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
@@ -249,8 +318,8 @@ auto problem_main() -> int
 		Egas.at(i) = values.at(RadSystem<PulseProblem>::gasInternalEnergy_index)[i];
 		Tgas.at(i) = quokka::EOS<PulseProblem>::ComputeTgasFromEint(rho_t, Egas.at(i)) / T0;
 		Tgas_exact.push_back(1.0);
-		Vgas.at(i) = v_t / v0;
-		Vgas_exact.at(i) = 1.0;
+		Vgas.at(i) = v_t;
+		Vgas_exact.at(i) = v0;
 
 		auto Erad_val = a_rad * std::pow(T0, 4);
 		double trad_exact = NAN;
@@ -265,12 +334,14 @@ auto problem_main() -> int
 
 	// compute spectrum
 	std::vector<double> spec{}; // spectrum density at the end, Erad / bin_width
+	std::vector<double> E_r{}; // spectrum density at the end, Erad
 	std::vector<double> bin_center{};
 	int const ii = 10; // a random grid
 	for (int g = 0; g < n_groups_; ++g) {
 		bin_center.push_back(std::sqrt(rad_boundaries_[g] * rad_boundaries_[g + 1]));
 		const auto Erad_t = values.at(RadSystem<PulseProblem>::radEnergy_index + Physics_NumVars::numRadVars * g)[ii];
 		const double bin_width = rad_boundaries_[g + 1] - rad_boundaries_[g];
+		E_r.push_back(Erad_t);
 		spec.push_back(Erad_t / bin_width);
 	}
 
@@ -340,12 +411,29 @@ auto problem_main() -> int
 	vgas_args["linestyle"] = "-";
 	matplotlibcpp::plot(xs, Vgas_exact, vgas_args);
 	matplotlibcpp::xlabel("length x (dimensionless)");
-	matplotlibcpp::ylabel("v / v0 (dimensionless)");
+	matplotlibcpp::ylabel("v");
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("time ct = {:.4g}", sim.tNew_[0] * c));
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./adv_vel.pdf");
 #endif
+
+	if (export_csv) {
+		std::ofstream file;
+		file.open("adv_spectrum.csv");
+		file << "nu_Left, E_r\n";
+		for (int g = 0; g < n_groups_; ++g) {
+			file << std::scientific << std::setprecision(12) << rad_boundaries_[g] << "," << E_r[g] << "\n";
+		}
+		file.close();
+
+		file.open("adv_temp.csv");
+		file << "xs,Tgas,Trad\n";
+		for (size_t i = 0; i < xs.size(); ++i) {
+			file << std::scientific << std::setprecision(12) << xs[i] << "," << Tgas[i] << "," << Trad[i] << "\n";
+		}
+		file.close();
+	}
 
 	// Cleanup and exit
 	int status = 0;
