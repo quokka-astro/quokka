@@ -102,6 +102,8 @@ void MHDSystem<problem_t>::SolveInductionEqn(std::array<amrex::MultiFab, AMREX_S
 
     // compute the magnetic flux through each cell-face
     for (int wsolve = 0; wsolve < 3; ++wsolve) {
+      const amrex::Box box_fcw = amrex::convert(box_cc, amrex::IntVect::TheDimensionVector(wsolve));
+
       // electric field on the cell-edge
       // indexing: field[2: i-edge on cell-face]
       std::array<amrex::FArrayBox, 2> eci_fabs_E;
@@ -252,12 +254,12 @@ void MHDSystem<problem_t>::SolveInductionEqn(std::array<amrex::MultiFab, AMREX_S
         const auto &E2_q3 = ec_fabs_E_q[3].const_array();
         // compute electric field on the cell-edge
         const auto &E2_ave = eci_fabs_E[iedge_rel2face].array();
-        amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+        amrex::ParallelFor(box_fcw, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
           const double spd_x0_m = 1.0;
           const double spd_x0_p = 1.0;
           const double spd_x1_m = 1.0;
           const double spd_x1_p = 1.0;
-          E2_ave(i,j,k) = 
+          E2_ave(i,j,k) = \
               spd_x0_p * spd_x1_p * E2_q0(i,j,k) +
               spd_x0_m * spd_x1_p * E2_q3(i,j,k) +
               spd_x0_m * spd_x1_m * E2_q1(i,j,k) +
@@ -271,18 +273,16 @@ void MHDSystem<problem_t>::SolveInductionEqn(std::array<amrex::MultiFab, AMREX_S
         idx[index_E2comp] = 1;
         // compute the magnetic flux
         const auto &fcxw_a4_rhs = fcx_mf_rhs[wsolve][mfi].array();
-        amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+        amrex::ParallelFor(box_fcw, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
           // the induction equation is written in an additive form: the RHS is evaluated in parts as each edge-centered electric field is computed
           fcxw_a4_rhs(i,j,k) += (E2_ave(i,j,k) - E2_ave(i-idx[0],j-idx[1],k-idx[2])) / dx[wsolve];
         });
       }
       
-      const amrex::IntVect ivec_cc2fc = amrex::IntVect::TheDimensionVector(wsolve);
-      const amrex::Box box_fc = amrex::convert(box_cc, ivec_cc2fc);
       const auto &fcxw_a4_rhs = fcx_mf_rhs[wsolve][mfi].const_array();
       const auto &fc_a4_Bx_old = fc_fabs_Bx_old[wsolve].const_array();
       auto fc_a4_Bx_new = fcx_mf_cVars_new[wsolve][mfi].array();
-      amrex::ParallelFor(box_fc, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+      amrex::ParallelFor(box_fcw, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
         fc_a4_Bx_new(i, j, k) = fc_a4_Bx_old(i, j, k) + dt * fcxw_a4_rhs(i, j, k);
       });
     }
@@ -294,36 +294,31 @@ void MHDSystem<problem_t>::SolveInductionEqn(std::array<amrex::MultiFab, AMREX_S
 template <typename problem_t>
 void MHDSystem<problem_t>::ReconstructTo(FluxDir dir, arrayconst_t &cState, array_t &lState, array_t &rState, const amrex::Box &reconstructRange, const int reconstructionOrder)
 {
-	// // N.B.: A one-zone layer around the cells must be fully reconstructed in order for PPM to work.
-  // amrex::Box const &reconstructRange = amrex::convert(indexRange, amrex::IntVect::TheDimensionVector(static_cast<int>(dir)));
-
-  // if (reconstructionOrder == 3) {
-  //   switch (dir) {
-  //     case FluxDir::X1:
-  //       MHDSystem<problem_t>::template ReconstructStatesPPM<FluxDir::X1>(cState, lState, rState, reconstructRange, reconstructRange, 1);
-  //       break;
-  //     case FluxDir::X2:
-  //       MHDSystem<problem_t>::template ReconstructStatesPPM<FluxDir::X2>(cState, lState, rState, reconstructRange, reconstructRange, 1);
-  //       break;
-  //     case FluxDir::X3:
-  //       MHDSystem<problem_t>::template ReconstructStatesPPM<FluxDir::X3>(cState, lState, rState, reconstructRange, reconstructRange, 1);
-  //       break;
-  //   }
-  // } else if (reconstructionOrder == 2) {
-  //   switch (dir) {
-  //     case FluxDir::X1:
-  //       MHDSystem<problem_t>::template ReconstructStatesPLM<FluxDir::X1, SlopeLimiter::minmod>(cState, lState, rState, reconstructRange, 1);
-  //       break;
-  //     case FluxDir::X2:
-  //       MHDSystem<problem_t>::template ReconstructStatesPLM<FluxDir::X2, SlopeLimiter::minmod>(cState, lState, rState, reconstructRange, 1);
-  //       break;
-  //     case FluxDir::X3:
-  //       MHDSystem<problem_t>::template ReconstructStatesPLM<FluxDir::X3, SlopeLimiter::minmod>(cState, lState, rState, reconstructRange, 1);
-  //       break;
-  //   }
-  // } else if (reconstructionOrder == 1) {
-    // amrex::Print() << "here." << std::endl;
-    // amrex::Print() << "Size of cState: " << cState.size() << std::endl;
+  if (reconstructionOrder == 3) {
+    switch (dir) {
+      case FluxDir::X1:
+        MHDSystem<problem_t>::template ReconstructStatesPPM<FluxDir::X1>(cState, lState, rState, reconstructRange, reconstructRange, 1);
+        break;
+      case FluxDir::X2:
+        MHDSystem<problem_t>::template ReconstructStatesPPM<FluxDir::X2>(cState, lState, rState, reconstructRange, reconstructRange, 1);
+        break;
+      case FluxDir::X3:
+        MHDSystem<problem_t>::template ReconstructStatesPPM<FluxDir::X3>(cState, lState, rState, reconstructRange, reconstructRange, 1);
+        break;
+    }
+  } else if (reconstructionOrder == 2) {
+    switch (dir) {
+      case FluxDir::X1:
+        MHDSystem<problem_t>::template ReconstructStatesPLM<FluxDir::X1, SlopeLimiter::minmod>(cState, lState, rState, reconstructRange, 1);
+        break;
+      case FluxDir::X2:
+        MHDSystem<problem_t>::template ReconstructStatesPLM<FluxDir::X2, SlopeLimiter::minmod>(cState, lState, rState, reconstructRange, 1);
+        break;
+      case FluxDir::X3:
+        MHDSystem<problem_t>::template ReconstructStatesPLM<FluxDir::X3, SlopeLimiter::minmod>(cState, lState, rState, reconstructRange, 1);
+        break;
+    }
+  } else if (reconstructionOrder == 1) {
     switch (dir) {
       case FluxDir::X1:
         MHDSystem<problem_t>::template ReconstructStatesConstant<FluxDir::X1>(cState, lState, rState, reconstructRange, 1);
@@ -335,9 +330,9 @@ void MHDSystem<problem_t>::ReconstructTo(FluxDir dir, arrayconst_t &cState, arra
         MHDSystem<problem_t>::template ReconstructStatesConstant<FluxDir::X3>(cState, lState, rState, reconstructRange, 1);
         break;
     }
-  // } else {
-  //   amrex::Abort("Invalid reconstruction order specified!");
-  // }
+  } else {
+    amrex::Abort("Invalid reconstruction order specified!");
+  }
 }
 
 
