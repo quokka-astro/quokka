@@ -291,9 +291,9 @@ auto problem_main() -> int
 	std::vector<double> vx_exact_arr(nx);
 	std::vector<double> Frad_err(nx);
 
-	auto const x_ptr = x_arr.data();
-	auto const rho_ptr = rho_arr.data();
-	auto const Mach_ptr = Mach_arr.data();
+	auto *const x_ptr = x_arr.data();
+	auto *const rho_ptr = rho_arr.data();
+	auto *const Mach_ptr = Mach_arr.data();
 	int const x_size = static_cast<int>(x_arr.size());
 
 	for (int i = 0; i < nx; ++i) {
