@@ -38,7 +38,6 @@ constexpr double tau = 1.0e-6;	     // optical depth (dimensionless)
 constexpr double rho0 = 1.0e5 * mu; // g cm^-3
 constexpr double Mach0 = 1.1;	    // Mach number at wind base
 constexpr double Mach1 = 2.128410288469465339;
-constexpr double rho1 = (Mach0 / Mach1) * rho0;
 
 constexpr double Frad0 = rho0 * a0 * c_light_cgs_ / tau; // erg cm^-2 s^-1
 constexpr double g0 = kappa0 * Frad0 / c_light_cgs_;	 // cm s^{-2}
@@ -275,7 +274,7 @@ auto problem_main() -> int
 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
 	const int nx_tot = static_cast<int>(position0.size());
 
-	// cut off at x = 1
+	// cut off at x = 1e16
 	int nx = 0;
 	for (int i = 0; i < nx_tot; ++i) {
 		if (position[i] < 0.98e16) {
@@ -292,21 +291,20 @@ auto problem_main() -> int
 	std::vector<double> vx_exact_arr(nx);
 	std::vector<double> Frad_err(nx);
 
-	auto const &x_ptr = x_arr_g.dataPtr();
-	auto const &rho_ptr = rho_arr_g.dataPtr();
-	auto const &Mach_ptr = Mach_arr_g.dataPtr();
-	int const x_size = static_cast<int>(x_arr_g.size());
+	auto const x_ptr = x_arr.data();
+	auto const rho_ptr = rho_arr.data();
+	auto const Mach_ptr = Mach_arr.data();
+	int const x_size = static_cast<int>(x_arr.size());
 
 	for (int i = 0; i < nx; ++i) {
-		amrex::Real const x_ = position[i] / Lx;
-		amrex::Real const D_ = interpolate_value(x_, x_ptr, rho_ptr, x_size);
-		amrex::Real const Mach_ = interpolate_value(x_, x_ptr, Mach_ptr, x_size);
-		amrex::Real const _rho = D_ * rho0;
-		amrex::Real const _vel = Mach_ * a0;
+		double const x_ = position[i] / Lx;
+		double const D_ = interpolate_value(x_, x_ptr, rho_ptr, x_size);
+		double const Mach_ = interpolate_value(x_, x_ptr, Mach_ptr, x_size);
+		double const _rho = D_ * rho0;
+		double const _vel = Mach_ * a0;
 
 		xs.at(i) = position[i];
 		double const rho_exact = _rho;
-		// double x1GasMom_exact = values0.at(RadSystem<TubeProblem>::x1GasMomentum_index)[i];
 		double const rho = values.at(RadSystem<TubeProblem>::gasDensity_index)[i];
 		double const Frad = values.at(RadSystem<TubeProblem>::x1RadFlux_index)[i];
 		double const x1GasMom = values.at(RadSystem<TubeProblem>::x1GasMomentum_index)[i];
