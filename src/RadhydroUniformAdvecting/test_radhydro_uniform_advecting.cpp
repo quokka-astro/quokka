@@ -15,11 +15,13 @@ static constexpr bool export_csv = true;
 struct PulseProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-constexpr int n_groups_ = 50;
+constexpr int n_groups_ = 4;
 
 constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_ = []() constexpr {
 	if constexpr (n_groups_ == 1) {
 		return amrex::GpuArray<double, 2>{0.0, inf};
+	} else if constexpr (n_groups_ == 4) { // from 1e-3 to 1e2
+		return amrex::GpuArray<double, 5>{1.0e-4, 1.0e-3, 3.0, 1.0e2, 1.0e3};
 	} else if constexpr (n_groups_ == 52) { // from 1e-3 to 1e2
 		constexpr amrex::GpuArray<double, 53> rad_boundaries = {
 			0.0,
@@ -101,10 +103,11 @@ constexpr double c = 1.0e8;
 // constexpr double kappa0 = 1.0e5;
 // constexpr double chat = 1.0e8;
 // model 3
-constexpr int beta_order_ = 2; // order of beta in the radiation four-force
+constexpr int beta_order_ = 1; // order of beta in the radiation four-force
 // constexpr double v0 = 0.0;
 // constexpr double v0 = 1e-2 * c;
-constexpr double v0 = 0.3 * c;
+// constexpr double v0 = 0.3 * c;
+constexpr double v0 = 0.1 * c;
 constexpr double kappa0 = 1.0e5;
 constexpr double chat = c;
 
