@@ -286,10 +286,8 @@ auto problem_main() -> int
 	std::vector<double> xs(nx);
 	std::vector<double> rho_arr(nx);
 	std::vector<double> rho_exact_arr(nx);
-	std::vector<double> rho_err(nx);
 	std::vector<double> vx_arr(nx);
 	std::vector<double> vx_exact_arr(nx);
-	std::vector<double> Frad_err(nx);
 
 	auto *const x_ptr = x_arr.data();
 	auto *const rho_ptr = rho_arr.data();
@@ -313,8 +311,6 @@ auto problem_main() -> int
 
 		vx_arr.at(i) = vx / a0;
 		vx_exact_arr.at(i) = vx_exact / a0;
-		Frad_err.at(i) = (Frad - Frad0) / Frad0;
-		rho_err.at(i) = (rho - rho_exact) / rho_exact;
 		rho_exact_arr.at(i) = rho_exact;
 		rho_arr.at(i) = rho;
 	}
