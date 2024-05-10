@@ -900,7 +900,8 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeEnergyMeanOpacity(const 
 }
 
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double /*rho*/, const double /*Tgas*/)
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/,
+										      const double /*rho*/, const double /*Tgas*/)
     -> amrex::GpuArray<amrex::GpuArray<double, nGroups_>, 2>
 {
 	amrex::GpuArray<amrex::GpuArray<double, nGroups_>, 2> exponents_and_values{};
