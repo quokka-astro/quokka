@@ -18,12 +18,12 @@
 struct SuOlsonProblemCgs {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-constexpr int max_step_ = 10;
+constexpr int max_step_ = 1e6;
 
 constexpr double kappa = 1000.0; // cm^2 g^-1 (opacity)
 constexpr double rho0 = 1.0e-3; // g cm^-3
 constexpr double T_initial = 300.0; // K
-constexpr double T_L = 310.0; // K
+constexpr double T_L = 1000.0; // K
 constexpr double T_R = 300.0; // K
 constexpr double rho_C_V = 1.0e-3; // erg g^-1 cm^-3 K^-1
 constexpr double c_v = rho_C_V / rho0;
@@ -83,7 +83,7 @@ template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProbl
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 AMRSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/,
-							      int /*numcomp*/, amrex::GeometryData const & geom, const amrex::Real /*time*/,
+							      int /*numcomp*/, amrex::GeometryData const & /*geom*/, const amrex::Real /*time*/,
 							      const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
 {
 #if (AMREX_SPACEDIM == 1)
@@ -99,42 +99,61 @@ AMRSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(const amrex::IntVe
 	auto [i, j, k] = iv.toArray();
 #endif
 
-	amrex::Box const &box = geom.Domain();
-	amrex::GpuArray<int, 3> lo = box.loVect3d();
-	amrex::GpuArray<int, 3> hi = box.hiVect3d();
+	// This boundary condition is only first-order accurate!
+	// (Not quite good enough for simulating an optically-thick Marshak wave;
+	//  the temperature becomes T_H in the first zone, rather than just at the
+	//  face.)
+	// [Solution: enforce Marshak boundary condition in Riemann solver]
 
-	if (i < lo[0] || i >= hi[0]) {
-		double T_H = NAN;
-		double F_inc = NAN;
-		double E_inc = NAN;
-		if (i < lo[0]) {
-			T_H = T_L;
-			E_inc = a_rad * std::pow(T_H, 4);
-			const double E_0 = consVar(0, j, k, RadSystem<SuOlsonProblemCgs>::radEnergy_index);
-			const double F_0 = consVar(0, j, k, RadSystem<SuOlsonProblemCgs>::x1RadFlux_index);
-			F_inc = 0.5 * c_light_cgs_ * E_inc - 0.5 * (c_light_cgs_ * E_0 + 2.0 * F_0);
-			AMREX_ASSERT(std::abs(F_inc / (c_light_cgs_ * E_inc)) <= 1.0);
-		} else {
-			T_H = T_R;
-			E_inc = a_rad * std::pow(T_H, 4);
-			F_inc = 0.;
-		}
+	if (i < 0) {
+		// Marshak boundary condition
+		const double T_H = T_L;
+		const double E_inc = radiation_constant_cgs_ * std::pow(T_H, 4);
+		const double c = c_light_cgs_;
+		// const double F_inc = c * E_inc / 4.0; // incident flux
 
-		const double Egas = quokka::EOS<SuOlsonProblemCgs>::ComputeEintFromTgas(rho0, T_initial);
+		const double E_0 = consVar(0, j, k, RadSystem<SuOlsonProblemCgs>::radEnergy_index);
+		const double F_0 = consVar(0, j, k, RadSystem<SuOlsonProblemCgs>::x1RadFlux_index);
+		// const double E_1 = consVar(1, j, k,
+		// RadSystem<SuOlsonProblemCgs>::radEnergy_index); const double F_1 =
+		// consVar(1, j, k, RadSystem<SuOlsonProblemCgs>::x1RadFlux_index);
 
+		// use PPM stencil at interface to solve for F_rad in the ghost zones
+		// const double F_bdry = 0.5 * c * E_inc - (7. / 12.) * (c * E_0 + 2.0 *
+		// F_0) +
+		//		      (1. / 12.) * (c * E_1 + 2.0 * F_1);
+
+		// use value at interface to solve for F_rad in the ghost zones
+		double F_bdry = 0.5 * c * E_inc - 0.5 * (c * E_0 + 2.0 * F_0);
+		// F_bdry = std::max(F_bdry, 0.0);
+		// AMREX_ASSERT(F_bdry >= 0.0);
+
+		AMREX_ASSERT(std::abs(F_bdry / (c * E_inc)) <= 1.0);
+		// F_bdry = std::min(F_bdry, c * E_inc);
+
+		// x1 left side boundary (Marshak)
 		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::radEnergy_index) = E_inc;
-		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x1RadFlux_index) = F_inc;
+		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x1RadFlux_index) = F_bdry;
 		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x2RadFlux_index) = 0.;
 		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x3RadFlux_index) = 0.;
+	} else {
+		// right-side boundary -- constant
+		const double Erad = radiation_constant_cgs_ * std::pow(T_R, 4);
 
-		// gas boundary conditions are the same on both sides
-		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::gasEnergy_index) = Egas;
-		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::gasDensity_index) = rho0;
-		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::gasInternalEnergy_index) = Egas;
-		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x1GasMomentum_index) = 0.;
-		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x2GasMomentum_index) = 0.;
-		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x3GasMomentum_index) = 0.;
+		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::radEnergy_index) = Erad;
+		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x1RadFlux_index) = 0;
+		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x2RadFlux_index) = 0;
+		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x3RadFlux_index) = 0;
 	}
+
+	// gas boundary conditions are the same on both sides
+	const double Egas = quokka::EOS<SuOlsonProblemCgs>::ComputeEintFromTgas(rho0, T_initial);
+	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::gasEnergy_index) = Egas;
+	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::gasDensity_index) = rho0;
+	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::gasInternalEnergy_index) = Egas;
+	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x1GasMomentum_index) = 0.;
+	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x2GasMomentum_index) = 0.;
+	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x3GasMomentum_index) = 0.;
 }
 
 template <> void RadhydroSimulation<SuOlsonProblemCgs>::setInitialConditionsOnGrid(quokka::grid grid_elem)
@@ -199,8 +218,9 @@ auto problem_main() -> int
 	constexpr int nvars = RadSystem<SuOlsonProblemCgs>::nvar_;
 	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
 	for (int n = 0; n < nvars; ++n) {
-		BCs_cc[n].setLo(0, amrex::BCType::ext_dir); // custom x1
-		BCs_cc[n].setHi(0, amrex::BCType::ext_dir); // custom x1
+		BCs_cc[n].setLo(0,
+				amrex::BCType::ext_dir);     // custom (Marshak) x1
+		BCs_cc[n].setHi(0, amrex::BCType::foextrap); // extrapolate x1
 		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
 			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
 			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
