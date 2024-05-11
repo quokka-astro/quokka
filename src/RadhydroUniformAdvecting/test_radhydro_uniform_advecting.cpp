@@ -15,13 +15,15 @@ static constexpr bool export_csv = true;
 struct PulseProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-constexpr int n_groups_ = 4;
+constexpr int n_groups_ = 50;
 
 constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_ = []() constexpr {
 	if constexpr (n_groups_ == 1) {
 		return amrex::GpuArray<double, 2>{0.0, inf};
 	} else if constexpr (n_groups_ == 4) { // from 1e-3 to 1e2
 		return amrex::GpuArray<double, 5>{1.0e-4, 1.0e-3, 3.0, 1.0e2, 1.0e3};
+	} else if constexpr (n_groups_ == 7) {
+		return amrex::GpuArray<double, 8>{1.0e-4, 1.0e-3, 1.0e-2, 1.e-1, 1.e0, 1.e1, 1.e2, 1.0e3};
 	} else if constexpr (n_groups_ == 52) { // from 1e-3 to 1e2
 		constexpr amrex::GpuArray<double, 53> rad_boundaries = {
 			0.0,
@@ -107,7 +109,7 @@ constexpr int beta_order_ = 1; // order of beta in the radiation four-force
 // constexpr double v0 = 0.0;
 // constexpr double v0 = 1e-2 * c;
 // constexpr double v0 = 0.3 * c;
-constexpr double v0 = 0.1 * c;
+constexpr double v0 = 0.001 * c;
 constexpr double kappa0 = 1.0e5;
 constexpr double chat = c;
 
@@ -338,13 +340,16 @@ auto problem_main() -> int
 	// compute spectrum
 	std::vector<double> spec{}; // spectrum density at the end, Erad / bin_width
 	std::vector<double> E_r{}; // spectrum density at the end, Erad
+	std::vector<double> F_r{}; // flux at the end, Frad
 	std::vector<double> bin_center{};
 	int const ii = 10; // a random grid
 	for (int g = 0; g < n_groups_; ++g) {
 		bin_center.push_back(std::sqrt(rad_boundaries_[g] * rad_boundaries_[g + 1]));
 		const auto Erad_t = values.at(RadSystem<PulseProblem>::radEnergy_index + Physics_NumVars::numRadVars * g)[ii];
+		const auto Frad_t = values.at(RadSystem<PulseProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g)[ii];
 		const double bin_width = rad_boundaries_[g + 1] - rad_boundaries_[g];
 		E_r.push_back(Erad_t);
+		F_r.push_back(Frad_t);
 		spec.push_back(Erad_t / bin_width);
 	}
 
@@ -427,6 +432,13 @@ auto problem_main() -> int
 		file << "nu_Left, E_r\n";
 		for (int g = 0; g < n_groups_; ++g) {
 			file << std::scientific << std::setprecision(12) << rad_boundaries_[g] << "," << E_r[g] << "\n";
+		}
+		file.close();
+
+		file.open("adv_flux_spectrum.csv");
+		file << "nu_Left, F_r\n";
+		for (int g = 0; g < n_groups_; ++g) {
+			file << std::scientific << std::setprecision(12) << rad_boundaries_[g] << "," << F_r[g] << "\n";
 		}
 		file.close();
 
