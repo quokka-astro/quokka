@@ -9,6 +9,7 @@
 
 #include "ArrayUtil.hpp"
 #include "fextract.hpp"
+#include "matplotlibcpp.h"
 #include "radiation_system.hpp"
 #include "test_radhydro_shock_multigroup.hpp"
 
@@ -22,6 +23,26 @@ constexpr double a_rad = C::a_rad; // erg cm^-3 K^-4
 constexpr double c = C::c_light;   // cm s^-1
 constexpr double k_B = C::k_B;	   // erg K^-1
 
+// constexpr int n_groups_ = 5;
+// constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries = {1.00000000e+15, 1.00000000e+16, 1.00000000e+17, 1.00000000e+18, 1.00000000e+19, 1.00000000e+20};
+constexpr int n_groups_ = 50;
+constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries = {
+	1.00000000e+15, 1.25892541e+15, 1.58489319e+15, 1.99526231e+15,
+	2.51188643e+15, 3.16227766e+15, 3.98107171e+15, 5.01187234e+15,
+	6.30957344e+15, 7.94328235e+15, 1.00000000e+16, 1.25892541e+16,
+	1.58489319e+16, 1.99526231e+16, 2.51188643e+16, 3.16227766e+16,
+	3.98107171e+16, 5.01187234e+16, 6.30957344e+16, 7.94328235e+16,
+	1.00000000e+17, 1.25892541e+17, 1.58489319e+17, 1.99526231e+17,
+	2.51188643e+17, 3.16227766e+17, 3.98107171e+17, 5.01187234e+17,
+	6.30957344e+17, 7.94328235e+17, 1.00000000e+18, 1.25892541e+18,
+	1.58489319e+18, 1.99526231e+18, 2.51188643e+18, 3.16227766e+18,
+	3.98107171e+18, 5.01187234e+18, 6.30957344e+18, 7.94328235e+18,
+	1.00000000e+19, 1.25892541e+19, 1.58489319e+19, 1.99526231e+19,
+	2.51188643e+19, 3.16227766e+19, 3.98107171e+19, 5.01187234e+19,
+	6.30957344e+19, 7.94328235e+19, 1.00000000e+20
+};
+
+
 constexpr double c_s0 = 1.73e7; // adiabatic sound speed [cm s^-1]
 constexpr double kappa = 577.0; // "opacity" == rho*kappa [cm^-1] (!!)
 constexpr double gamma_gas = (5. / 3.);
@@ -32,14 +53,15 @@ constexpr double v0 = 5.19e7;					      // cm s^-1
 constexpr double T1 = 7.98e6;					      // K [7.98297e6]
 constexpr double rho1 = 17.1;					      // g cm^-3 [17.08233]
 constexpr double v1 = 1.73e7;					      // cm s^-1 [1.72875e7]
-constexpr double chat = 10.0 * (v0 + c_s0);			      // reduced speed of light
+// constexpr double chat = 10.0 * (v0 + c_s0);			      // reduced speed of light
+constexpr double chat = c;
 
 constexpr double Erad0 = a_rad * (T0 * T0 * T0 * T0); // erg cm^-3
 constexpr double Erad_floor_ = Erad0 * 1e-12;
 constexpr double Egas0 = rho0 * c_v * T0; // erg cm^-3
 constexpr double Egas1 = rho1 * c_v * T1; // erg cm^-3
 
-constexpr double shock_position = 0.0130; // 0.0132; // cm (shock position drifts to the right slightly during the simulation, so
+constexpr double shock_position = 0.01305; // 0.0132; // cm (shock position drifts to the right slightly during the simulation, so
 					  // we initialize slightly to the left...)
 constexpr double Lx = 0.01575;		  // cm
 
@@ -51,7 +73,7 @@ template <> struct Physics_Traits<ShockProblem> {
 	static constexpr bool is_radiation_enabled = true;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
-	static constexpr int nGroups = 5;
+	static constexpr int nGroups = n_groups_;
 };
 
 template <> struct RadSystem_Traits<ShockProblem> {
@@ -60,8 +82,7 @@ template <> struct RadSystem_Traits<ShockProblem> {
 	static constexpr double radiation_constant = a_rad;
 	static constexpr double Erad_floor = Erad_floor_;
 	static constexpr double energy_unit = C::hplanck; // set boundary unit to Hz
-	static constexpr amrex::GpuArray<double, Physics_Traits<ShockProblem>::nGroups + 1> radBoundaries{1.00000000e+15, 1.00000000e+16, 1.00000000e+17,
-													  1.00000000e+18, 1.00000000e+19, 1.00000000e+20};
+	static constexpr amrex::GpuArray<double, Physics_Traits<ShockProblem>::nGroups + 1> radBoundaries = rad_boundaries;
 	static constexpr int beta_order = 1;
 	static constexpr OpacityModel opacity_model = OpacityModel::piecewisePowerLaw;
 };
@@ -236,7 +257,7 @@ template <> void RadhydroSimulation<ShockProblem>::setInitialConditionsOnGrid(qu
 auto problem_main() -> int
 {
 	// Problem parameters
-	const int max_timesteps = 2e4;
+	const int max_timesteps = 2e6;
 	const double CFL_number = 0.4;
 	// const int nx = 512;
 	//  const double initial_dtau = 1.0e-3;	  // dimensionless time
@@ -244,6 +265,7 @@ auto problem_main() -> int
 	//  const double initial_dt = initial_dtau / c_s0;
 	//  const double max_dt = max_dtau / c_s0;
 	const double max_time = 1.0e-9; // 9.08e-10; // s
+	// const double max_time = 0.0; // 9.08e-10; // s
 
 	constexpr int nvars = RadSystem<ShockProblem>::nvar_;
 	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
@@ -281,6 +303,24 @@ auto problem_main() -> int
 		std::vector<double> Tgas(nx);
 		std::vector<double> Erad(nx);
 		std::vector<double> Egas(nx);
+		std::vector<double> vel(nx);
+
+		double const pick_1 = 0.1 * Lx;
+		double const pick_2 = shock_position + 0.0005;
+		bool pick_1_done = false;
+		bool pick_2_done = false;
+		std::vector<double> E_nu_1{};
+		std::vector<double> E_nu_2{};
+		std::vector<double> F_nu_1{};
+		std::vector<double> F_nu_2{};
+		double Tgas_loc1 = NAN;
+		double Tgas_loc2 = NAN;
+		double Trad_loc1 = NAN;
+		double Trad_loc2 = NAN;
+		double vel_loc1 = NAN;
+		double vel_loc2 = NAN;
+		double x_loc1 = NAN;
+		double x_loc2 = NAN;
 
 		for (int i = 0; i < nx; ++i) {
 			const double x = Lx * ((i + 0.5) / static_cast<double>(nx));
@@ -301,6 +341,32 @@ auto problem_main() -> int
 			const double Egas_t = (Etot_t - Ekin);
 			Egas.at(i) = Egas_t;
 			Tgas.at(i) = quokka::EOS<ShockProblem>::ComputeTgasFromEint(rho, Egas_t) / T0; // dimensionless
+
+			vel.at(i) = x1GasMom / rho;
+
+			if (x >= pick_1 && !pick_1_done) {
+				Tgas_loc1 = Tgas.at(i);
+				Trad_loc1 = Trad.at(i);
+				vel_loc1 = vel.at(i);
+				x_loc1 = x;
+				for (int g = 0; g < n_groups_; ++g) {
+					E_nu_1.push_back(values.at(RadSystem<ShockProblem>::radEnergy_index + Physics_NumVars::numRadVars * g)[i]);
+					F_nu_1.push_back(values.at(RadSystem<ShockProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g)[i]);
+				}
+				pick_1_done = true;
+			}
+
+			if (x >= pick_2 && !pick_2_done) {
+				Tgas_loc2 = Tgas.at(i);
+				Trad_loc2 = Trad.at(i);
+				vel_loc2 = vel.at(i);
+				x_loc2 = x;
+				for (int g = 0; g < n_groups_; ++g) {
+					E_nu_2.push_back(values.at(RadSystem<ShockProblem>::radEnergy_index + Physics_NumVars::numRadVars * g)[i]);
+					F_nu_2.push_back(values.at(RadSystem<ShockProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g)[i]);
+				}
+				pick_2_done = true;
+			}
 		}
 
 		// read in exact solution
@@ -362,6 +428,43 @@ auto problem_main() -> int
 			status = 1;
 		}
 
+		// write results to file
+		// temperature
+		std::ofstream outfile;
+		outfile.open("radshock_multigroup_temperature.csv");
+		outfile << "# x, Trad, Tgas\n";
+		for (size_t i = 0; i < xs.size(); ++i) {
+			outfile << std::scientific << std::setprecision(12) << xs.at(i) << ", " << Trad.at(i) << ", " << Tgas.at(i) << "\n";
+		}
+		outfile.close();
+
+		// vel
+		outfile.open("radshock_multigroup_velocity.csv");
+		outfile << "# x, vel\n";
+		for (size_t i = 0; i < xs.size(); ++i) {
+			outfile << std::scientific << std::setprecision(12) << xs.at(i) << ", " << vel.at(i) << "\n";
+		}
+		outfile.close();
+
+		std::ofstream outfile2("radshock_multigroup_E_nu_loc1.csv");
+		std::ofstream outfile3("radshock_multigroup_E_nu_loc2.csv");
+		std::ofstream outfile4("radshock_multigroup_F_nu_loc1.csv");
+		std::ofstream outfile5("radshock_multigroup_F_nu_loc2.csv");
+		outfile2 << "# nu, E_nu, " << "Tgas = " << Tgas_loc1 << ", Trad = " << Trad_loc1 << ", vel = " << vel_loc1 << ", x = " << x_loc1 << "\n";
+		outfile3 << "# nu, E_nu, " << "Tgas = " << Tgas_loc2 << ", Trad = " << Trad_loc2 << ", vel = " << vel_loc2 << ", x = " << x_loc2 << "\n";
+		outfile4 << "# nu, F_nu" << "\n";
+		outfile5 << "# nu, F_nu" << "\n";
+		for (size_t i = 0; i < n_groups_; ++i) {
+			outfile2 << std::scientific << std::setprecision(12) << rad_boundaries[i] << ", " << E_nu_1.at(i) << "\n";
+			outfile3 << std::scientific << std::setprecision(12) << rad_boundaries[i] << ", " << E_nu_2.at(i) << "\n";
+			outfile4 << std::scientific << std::setprecision(12) << rad_boundaries[i] << ", " << F_nu_1.at(i) << "\n";
+			outfile5 << std::scientific << std::setprecision(12) << rad_boundaries[i] << ", " << F_nu_2.at(i) << "\n";
+		}
+		outfile2.close();
+		outfile3.close();
+		outfile4.close();
+		outfile5.close();
+
 #ifdef HAVE_PYTHON
 		std::vector<double> xs_scaled(xs.size());
 		std::vector<double> xs_exact_scaled(xs_exact.size());
@@ -407,6 +510,17 @@ auto problem_main() -> int
 		matplotlibcpp::legend();
 		matplotlibcpp::tight_layout();
 		matplotlibcpp::save("./radshock_multigroup_temperature.pdf");
+
+		std::map<std::string, std::string> vel_args;
+		vel_args["label"] = "velocity";
+		vel_args["color"] = "C0";
+		matplotlibcpp::clf();
+		matplotlibcpp::plot(xs_scaled, vel, vel_args);
+		matplotlibcpp::xlabel("length x (dimensionless)");
+		matplotlibcpp::ylabel("velocity (dimensionless)");
+		matplotlibcpp::legend();
+		matplotlibcpp::tight_layout();
+		matplotlibcpp::save("./radshock_multigroup_velocity.pdf");
 #endif
 	}
 
