@@ -161,15 +161,16 @@ auto compute_kappa(const double nu, const double Tgas) -> double
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<MGProblem>::DefineOpacityExponentsAndLowerValues(const double rho, const double Tgas)
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
+RadSystem<MGProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> const rad_boundaries, const double rho, const double Tgas)
     -> amrex::GpuArray<amrex::GpuArray<double, nGroups_>, 2>
 {
 	amrex::GpuArray<double, nGroups_> exponents{};
 	amrex::GpuArray<double, nGroups_> kappa_lower{};
 	for (int g = 0; g < nGroups_; ++g) {
-		auto kappa_up = compute_kappa(rad_boundaries_[g + 1], Tgas);
-		auto kappa_down = compute_kappa(rad_boundaries_[g], Tgas);
-		exponents[g] = std::log(kappa_up / kappa_down) / std::log(rad_boundaries_[g + 1] / rad_boundaries_[g]);
+		auto kappa_up = compute_kappa(rad_boundaries[g + 1], Tgas);
+		auto kappa_down = compute_kappa(rad_boundaries[g], Tgas);
+		exponents[g] = std::log(kappa_up / kappa_down) / std::log(rad_boundaries[g + 1] / rad_boundaries[g]);
 		kappa_lower[g] = kappa_down / rho;
 		AMREX_ASSERT(!std::isnan(exponents[g]));
 		AMREX_ASSERT(kappa_lower[g] >= 0.);

@@ -194,7 +194,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	AMREX_GPU_HOST_DEVICE static auto ComputePlanckOpacity(double rho, double Tgas) -> quokka::valarray<double, nGroups_>;
 	AMREX_GPU_HOST_DEVICE static auto ComputeFluxMeanOpacity(double rho, double Tgas) -> quokka::valarray<double, nGroups_>;
 	AMREX_GPU_HOST_DEVICE static auto ComputeEnergyMeanOpacity(double rho, double Tgas) -> quokka::valarray<double, nGroups_>;
-	AMREX_GPU_HOST_DEVICE static auto DefineOpacityExponentsAndLowerValues(double rho, double Tgas)
+	AMREX_GPU_HOST_DEVICE static auto DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> rad_boundaries, double rho, double Tgas)
 	    -> amrex::GpuArray<amrex::GpuArray<double, nGroups_>, 2>;
 	AMREX_GPU_HOST_DEVICE static auto ComputeGroupMeanOpacity(amrex::GpuArray<amrex::GpuArray<double, nGroups_>, 2> kappa_expo_and_lower_value,
 								  amrex::GpuArray<double, nGroups_> radBoundaryRatios,
@@ -900,7 +900,8 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeEnergyMeanOpacity(const 
 }
 
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::DefineOpacityExponentsAndLowerValues(const double /*rho*/, const double /*Tgas*/)
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/,
+										      const double /*rho*/, const double /*Tgas*/)
     -> amrex::GpuArray<amrex::GpuArray<double, nGroups_>, 2>
 {
 	amrex::GpuArray<amrex::GpuArray<double, nGroups_>, 2> exponents_and_values{};
@@ -1022,10 +1023,9 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		dt = (1.0 - IMEX_a32) * dt_radiation;
 	}
 
-	amrex::GpuArray<amrex::Real, nGroups_ + 1> radBoundaries_g{};
+	amrex::GpuArray<amrex::Real, nGroups_ + 1> radBoundaries_g = radBoundaries_;
 	amrex::GpuArray<amrex::Real, nGroups_> radBoundaryRatios{};
 	if constexpr (nGroups_ > 1) {
-		radBoundaries_g = RadSystem_Traits<problem_t>::radBoundaries;
 		if constexpr (opacity_model_ == OpacityModel::piecewisePowerLaw) {
 			for (int g = 0; g < nGroups_; ++g) {
 				radBoundaryRatios[g] = radBoundaries_g[g + 1] / radBoundaries_g[g];
@@ -1119,7 +1119,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 			gas_update_factor = IMEX_a32;
 		}
 
-		const int max_ite = 50;
+		const int max_ite = 5;
 		int ite = 0;
 		for (; ite < max_ite; ++ite) {
 			quokka::valarray<double, nGroups_> Rvec{};
@@ -1179,7 +1179,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					kappaEVec = ComputeEnergyMeanOpacity(rho, T_gas);
 					kappaFVec = ComputeFluxMeanOpacity(rho, T_gas);
 				} else if constexpr (opacity_model_ == OpacityModel::piecewisePowerLaw) {
-					kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(rho, T_gas);
+					kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(radBoundaries_g_copy, rho, T_gas);
 					alpha_B = ComputeRadQuantityExponents(fourPiBoverC, radBoundaries_g_copy);
 					alpha_E = ComputeRadQuantityExponents(Erad0Vec, radBoundaries_g_copy);
 					kappaPVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, radBoundaryRatios_copy, alpha_B);
@@ -1270,7 +1270,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 						kappaPVec = ComputePlanckOpacity(rho, T_gas);
 						kappaEVec = ComputeEnergyMeanOpacity(rho, T_gas);
 					} else if constexpr (opacity_model_ == OpacityModel::piecewisePowerLaw) {
-						kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(rho, T_gas);
+						kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(radBoundaries_g_copy, rho, T_gas);
 						alpha_B = ComputeRadQuantityExponents(fourPiBoverC, radBoundaries_g_copy);
 						alpha_E = ComputeRadQuantityExponents(Erad0Vec, radBoundaries_g_copy);
 						kappaPVec = ComputeGroupMeanOpacity(kappa_expo_and_lower_value, radBoundaryRatios_copy, alpha_B);
@@ -1382,7 +1382,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				}
 				kappaFVec = ComputeFluxMeanOpacity(rho, T_gas); // note that kappaFVec is used no matter what the value of gamma is
 			} else if constexpr (opacity_model_ == OpacityModel::piecewisePowerLaw) {
-				kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(rho, T_gas);
+				kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(radBoundaries_g_copy, rho, T_gas);
 				if constexpr (gamma_ != 1.0) {
 					alpha_B = ComputeRadQuantityExponents(fourPiBoverC, radBoundaries_g_copy);
 					alpha_E = ComputeRadQuantityExponents(EradVec_guess, radBoundaries_g_copy);
