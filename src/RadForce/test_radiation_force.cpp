@@ -94,50 +94,6 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputeFluxMeanOpacity(const 
 	return kappaFVec;
 }
 
-// // declare global variables
-// // initial conditions read from file
-// amrex::Gpu::HostVector<double> x_arr;
-// amrex::Gpu::HostVector<double> rho_arr;
-// amrex::Gpu::HostVector<double> Mach_arr;
-
-// amrex::Gpu::DeviceVector<double> x_arr_g;
-// amrex::Gpu::DeviceVector<double> rho_arr_g;
-// amrex::Gpu::DeviceVector<double> Mach_arr_g;
-
-// template <> void RadhydroSimulation<TubeProblem>::preCalculateInitialConditions()
-// {
-// 	std::string filename = "../extern/pressure_tube/optically_thin_wind.txt";
-// 	std::ifstream fstream(filename, std::ios::in);
-// 	AMREX_ALWAYS_ASSERT(fstream.is_open());
-// 	std::string header;
-// 	std::getline(fstream, header);
-
-// 	for (std::string line; std::getline(fstream, line);) {
-// 		std::istringstream iss(line);
-// 		std::vector<double> values;
-// 		for (double value = NAN; iss >> value;) {
-// 			values.push_back(value);
-// 		}
-// 		auto x = values.at(0);	  // position
-// 		auto rho = values.at(1);  // density
-// 		auto Mach = values.at(2); // Mach number
-
-// 		x_arr.push_back(x);
-// 		rho_arr.push_back(rho);
-// 		Mach_arr.push_back(Mach);
-// 	}
-
-// 	// copy to device
-// 	x_arr_g.resize(x_arr.size());
-// 	rho_arr_g.resize(rho_arr.size());
-// 	Mach_arr_g.resize(Mach_arr.size());
-
-// 	amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, x_arr.begin(), x_arr.end(), x_arr_g.begin());
-// 	amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, rho_arr.begin(), rho_arr.end(), rho_arr_g.begin());
-// 	amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, Mach_arr.begin(), Mach_arr.end(), Mach_arr_g.begin());
-// 	amrex::Gpu::streamSynchronizeAll();
-// }
-
 template <> void RadhydroSimulation<TubeProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
 	// extract variables required from the geom object
@@ -294,10 +250,11 @@ auto problem_main() -> int
 
 	// read in exact solution
 	std::vector<double> x_exact;
+	std::vector<double> x_exact_scaled;
 	std::vector<double> rho_exact;
 	std::vector<double> Mach_exact;
 
-	std::string filename = "../extern/pressure_tube/optically_thin_wind.txt";
+	std::string const filename = "../extern/pressure_tube/optically_thin_wind.txt";
 	std::ifstream fstream(filename, std::ios::in);
 	AMREX_ALWAYS_ASSERT(fstream.is_open());
 	std::string header;
@@ -314,22 +271,21 @@ auto problem_main() -> int
 		auto Mach = values.at(2); // Mach number
 
 		x_exact.push_back(x);
-		rho_exact.push_back(rho);
+		x_exact_scaled.push_back(x * Lx);
+		rho_exact.push_back(rho * rho0);
 		Mach_exact.push_back(Mach);
 	}
 
 	// interpolate exact solution to simulation grid
-	std::vector<double> rho_interp(nx);
 	std::vector<double> Mach_interp(nx);
 
-	interpolate_arrays(xs_norm.data(), rho_interp.data(), nx, x_exact.data(), rho_exact.data(), static_cast<int>(x_exact.size()));
 	interpolate_arrays(xs_norm.data(), Mach_interp.data(), nx, x_exact.data(), Mach_exact.data(), static_cast<int>(x_exact.size()));
 
 	double err_norm = 0.;
 	double sol_norm = 0.;
 	for (int i = 0; i < nx; ++i) {
-		err_norm += std::abs(Mach_arr[i] - Mach_exact[i]);
-		sol_norm += std::abs(Mach_exact[i]);
+		err_norm += std::abs(Mach_arr[i] - Mach_interp[i]);
+		sol_norm += std::abs(Mach_interp[i]);
 	}
 
 	const double rel_err_norm = err_norm / sol_norm;
@@ -348,7 +304,7 @@ auto problem_main() -> int
 	rhoexact_args["color"] = "C0";
 	rho_args["label"] = "simulation";
 	rho_args["color"] = "C1";
-	matplotlibcpp::plot(x_exact, rho_exact, rhoexact_args);
+	matplotlibcpp::plot(x_exact_scaled, rho_exact, rhoexact_args);
 	matplotlibcpp::scatter(xs, rho_arr, 1.0, rho_args);
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("t = {:.4g} s", sim.tNew_[0]));
@@ -367,7 +323,7 @@ auto problem_main() -> int
 	vx_args["marker"] = "o";
 	vx_args["color"] = "C1";
 	matplotlibcpp::clf();
-	matplotlibcpp::plot(x_exact, Mach_exact, vx_exact_args);
+	matplotlibcpp::plot(x_exact_scaled, Mach_exact, vx_exact_args);
 	matplotlibcpp::scatter(strided_vector_from(xs, s), strided_vector_from(Mach_arr, s), 10.0, vx_args);
 	matplotlibcpp::legend();
 	// matplotlibcpp::title(fmt::format("t = {:.4g} s", sim.tNew_[0]));
