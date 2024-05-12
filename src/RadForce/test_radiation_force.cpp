@@ -7,6 +7,7 @@
 /// \brief Defines a test problem for radiation force terms.
 ///
 
+#include <cstdint>
 #include <string>
 
 #include "AMReX.H"
@@ -93,49 +94,49 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputeFluxMeanOpacity(const 
 	return kappaFVec;
 }
 
-// declare global variables
-// initial conditions read from file
-amrex::Gpu::HostVector<double> x_arr;
-amrex::Gpu::HostVector<double> rho_arr;
-amrex::Gpu::HostVector<double> Mach_arr;
+// // declare global variables
+// // initial conditions read from file
+// amrex::Gpu::HostVector<double> x_arr;
+// amrex::Gpu::HostVector<double> rho_arr;
+// amrex::Gpu::HostVector<double> Mach_arr;
 
-amrex::Gpu::DeviceVector<double> x_arr_g;
-amrex::Gpu::DeviceVector<double> rho_arr_g;
-amrex::Gpu::DeviceVector<double> Mach_arr_g;
+// amrex::Gpu::DeviceVector<double> x_arr_g;
+// amrex::Gpu::DeviceVector<double> rho_arr_g;
+// amrex::Gpu::DeviceVector<double> Mach_arr_g;
 
-template <> void RadhydroSimulation<TubeProblem>::preCalculateInitialConditions()
-{
-	std::string filename = "../extern/pressure_tube/optically_thin_wind.txt";
-	std::ifstream fstream(filename, std::ios::in);
-	AMREX_ALWAYS_ASSERT(fstream.is_open());
-	std::string header;
-	std::getline(fstream, header);
+// template <> void RadhydroSimulation<TubeProblem>::preCalculateInitialConditions()
+// {
+// 	std::string filename = "../extern/pressure_tube/optically_thin_wind.txt";
+// 	std::ifstream fstream(filename, std::ios::in);
+// 	AMREX_ALWAYS_ASSERT(fstream.is_open());
+// 	std::string header;
+// 	std::getline(fstream, header);
 
-	for (std::string line; std::getline(fstream, line);) {
-		std::istringstream iss(line);
-		std::vector<double> values;
-		for (double value = NAN; iss >> value;) {
-			values.push_back(value);
-		}
-		auto x = values.at(0);	  // position
-		auto rho = values.at(1);  // density
-		auto Mach = values.at(2); // Mach number
+// 	for (std::string line; std::getline(fstream, line);) {
+// 		std::istringstream iss(line);
+// 		std::vector<double> values;
+// 		for (double value = NAN; iss >> value;) {
+// 			values.push_back(value);
+// 		}
+// 		auto x = values.at(0);	  // position
+// 		auto rho = values.at(1);  // density
+// 		auto Mach = values.at(2); // Mach number
 
-		x_arr.push_back(x);
-		rho_arr.push_back(rho);
-		Mach_arr.push_back(Mach);
-	}
+// 		x_arr.push_back(x);
+// 		rho_arr.push_back(rho);
+// 		Mach_arr.push_back(Mach);
+// 	}
 
-	// copy to device
-	x_arr_g.resize(x_arr.size());
-	rho_arr_g.resize(rho_arr.size());
-	Mach_arr_g.resize(Mach_arr.size());
+// 	// copy to device
+// 	x_arr_g.resize(x_arr.size());
+// 	rho_arr_g.resize(rho_arr.size());
+// 	Mach_arr_g.resize(Mach_arr.size());
 
-	amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, x_arr.begin(), x_arr.end(), x_arr_g.begin());
-	amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, rho_arr.begin(), rho_arr.end(), rho_arr_g.begin());
-	amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, Mach_arr.begin(), Mach_arr.end(), Mach_arr_g.begin());
-	amrex::Gpu::streamSynchronizeAll();
-}
+// 	amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, x_arr.begin(), x_arr.end(), x_arr_g.begin());
+// 	amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, rho_arr.begin(), rho_arr.end(), rho_arr_g.begin());
+// 	amrex::Gpu::copyAsync(amrex::Gpu::hostToDevice, Mach_arr.begin(), Mach_arr.end(), Mach_arr_g.begin());
+// 	amrex::Gpu::streamSynchronizeAll();
+// }
 
 template <> void RadhydroSimulation<TubeProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
@@ -265,60 +266,70 @@ auto problem_main() -> int
 
 	// initialize
 	sim.setInitialConditions();
-	auto [position0, values0] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
 
 	// evolve
 	sim.evolve();
 
 	// read output variables
 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
-	const int nx_tot = static_cast<int>(position0.size());
-
-	// cut off at x = 1e16
-	int nx = 0;
-	for (int i = 0; i < nx_tot; ++i) {
-		if (position[i] < 0.98e16) {
-			nx++;
-		}
-	}
+	const int nx = static_cast<int>(position.size());
 
 	// compute error norm
 	std::vector<double> xs(nx);
+	std::vector<double> xs_norm(nx);
 	std::vector<double> rho_arr(nx);
-	std::vector<double> rho_exact_arr(nx);
-	std::vector<double> vx_arr(nx);
-	std::vector<double> vx_exact_arr(nx);
-
-	auto *const x_ptr = x_arr.data();
-	auto *const rho_ptr = rho_arr.data();
-	auto *const Mach_ptr = Mach_arr.data();
-	int const x_size = static_cast<int>(x_arr.size());
+	std::vector<double> Mach_arr(nx);
 
 	for (int i = 0; i < nx; ++i) {
-		double const x_ = position[i] / Lx;
-		double const D_ = interpolate_value(x_, x_ptr, rho_ptr, x_size);
-		double const Mach_ = interpolate_value(x_, x_ptr, Mach_ptr, x_size);
-		double const _rho = D_ * rho0;
-		double const _vel = Mach_ * a0;
-
 		xs.at(i) = position[i];
-		double const rho_exact = _rho;
+		xs_norm.at(i) = position[i] / Lx;
+
 		double const rho = values.at(RadSystem<TubeProblem>::gasDensity_index)[i];
 		double const x1GasMom = values.at(RadSystem<TubeProblem>::x1GasMomentum_index)[i];
 		double const vx = x1GasMom / rho;
-		double const vx_exact = _vel;
 
-		vx_arr.at(i) = vx / a0;
-		vx_exact_arr.at(i) = vx_exact / a0;
-		rho_exact_arr.at(i) = rho_exact;
 		rho_arr.at(i) = rho;
+		Mach_arr.at(i) = vx / a0;
 	}
+
+	// read in exact solution
+	std::vector<double> x_exact;
+	std::vector<double> rho_exact;
+	std::vector<double> Mach_exact;
+
+	std::string filename = "../extern/pressure_tube/optically_thin_wind.txt";
+	std::ifstream fstream(filename, std::ios::in);
+	AMREX_ALWAYS_ASSERT(fstream.is_open());
+	std::string header;
+	std::getline(fstream, header);
+
+	for (std::string line; std::getline(fstream, line);) {
+		std::istringstream iss(line);
+		std::vector<double> values;
+		for (double value = NAN; iss >> value;) {
+			values.push_back(value);
+		}
+		auto x = values.at(0);	  // position
+		auto rho = values.at(1);  // density
+		auto Mach = values.at(2); // Mach number
+
+		x_exact.push_back(x);
+		rho_exact.push_back(rho);
+		Mach_exact.push_back(Mach);
+	}
+
+	// interpolate exact solution to simulation grid
+	std::vector<double> rho_interp(nx);
+	std::vector<double> Mach_interp(nx);
+
+	interpolate_arrays(xs_norm.data(), rho_interp.data(), nx, x_exact.data(), rho_exact.data(), static_cast<int>(x_exact.size()));
+	interpolate_arrays(xs_norm.data(), Mach_interp.data(), nx, x_exact.data(), Mach_exact.data(), static_cast<int>(x_exact.size()));
 
 	double err_norm = 0.;
 	double sol_norm = 0.;
 	for (int i = 0; i < nx; ++i) {
-		err_norm += std::abs(vx_arr[i] - vx_exact_arr[i]);
-		sol_norm += std::abs(vx_exact_arr[i]);
+		err_norm += std::abs(Mach_arr[i] - Mach_exact[i]);
+		sol_norm += std::abs(Mach_exact[i]);
 	}
 
 	const double rel_err_norm = err_norm / sol_norm;
@@ -331,14 +342,14 @@ auto problem_main() -> int
 
 #ifdef HAVE_PYTHON
 	// Plot density
-	std::map<std::string, std::string> rho_args;
-	std::unordered_map<std::string, std::string> rhoexact_args;
-	rho_args["label"] = "simulation";
-	rho_args["color"] = "C0";
+	std::map<std::string, std::string> rhoexact_args;
+	std::unordered_map<std::string, std::string> rho_args;
 	rhoexact_args["label"] = "exact solution";
-	rhoexact_args["color"] = "C1";
-	matplotlibcpp::plot(xs, rho_arr, rho_args);
-	matplotlibcpp::scatter(xs, rho_exact_arr, 1.0, rhoexact_args);
+	rhoexact_args["color"] = "C0";
+	rho_args["label"] = "simulation";
+	rho_args["color"] = "C1";
+	matplotlibcpp::plot(x_exact, rho_exact, rhoexact_args);
+	matplotlibcpp::scatter(xs, rho_arr, 1.0, rho_args);
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("t = {:.4g} s", sim.tNew_[0]));
 	matplotlibcpp::xlabel("x (cm)");
@@ -347,18 +358,17 @@ auto problem_main() -> int
 	matplotlibcpp::save("./radiation_force_tube.pdf");
 
 	// plot velocity
-	int const s = nx_tot / 64; // stride
-	std::map<std::string, std::string> vx_args;
-	std::unordered_map<std::string, std::string> vxexact_args;
-	vxexact_args["label"] = "exact solution";
+	int const s = nx / 64; // stride
+	std::map<std::string, std::string> vx_exact_args;
+	std::unordered_map<std::string, std::string> vx_args;
+	vx_exact_args["label"] = "exact solution";
+	vx_exact_args["color"] = "C0";
 	vx_args["label"] = "simulation";
-	vx_args["color"] = "C0";
-	vxexact_args["marker"] = "o";
-	vxexact_args["color"] = "C1";
-	// vxexact_args["edgecolors"] = "k";
+	vx_args["marker"] = "o";
+	vx_args["color"] = "C1";
 	matplotlibcpp::clf();
-	matplotlibcpp::plot(xs, vx_arr, vx_args);
-	matplotlibcpp::scatter(strided_vector_from(xs, s), strided_vector_from(vx_exact_arr, s), 10.0, vxexact_args);
+	matplotlibcpp::plot(x_exact, Mach_exact, vx_exact_args);
+	matplotlibcpp::scatter(strided_vector_from(xs, s), strided_vector_from(Mach_arr, s), 10.0, vx_args);
 	matplotlibcpp::legend();
 	// matplotlibcpp::title(fmt::format("t = {:.4g} s", sim.tNew_[0]));
 	matplotlibcpp::xlabel("length x (cm)");
