@@ -16,13 +16,14 @@
 #include "test_radiation_marshak_asymptotic.hpp"
 #include <ios>
 
+constexpr int the_model = 1; // 0: constant opacity (Vaytet et al. Sec 3.2.1), 1: variable opacity (Vaytet et al. Sec 3.2.2)
+
 struct SuOlsonProblemCgs {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-constexpr int opacity_model_ = 1; // 0 = user, 1 = piecewise power-law
-
 constexpr int n_groups_ = 6;
 constexpr amrex::GpuArray<double, n_groups_ + 1> group_edges_ = {0.3e12, 0.3e14, 0.6e14, 0.9e14, 1.2e14, 1.5e14, 1.5e16};
+constexpr amrex::GpuArray<double, n_groups_> group_opacities_ = {1000., 750., 500., 250., 10., 10.};
 
 constexpr int max_step_ = 1e6;
 
@@ -63,7 +64,8 @@ template <> struct RadSystem_Traits<SuOlsonProblemCgs> {
 	static constexpr int beta_order = 0;
 	static constexpr double energy_unit = C::hplanck; // set boundary unit to Hz
 	static constexpr amrex::GpuArray<double, n_groups_ + 1> radBoundaries = group_edges_;
-	static constexpr OpacityModel opacityModel = static_cast<OpacityModel>(opacity_model_); // 0: user, 1: piecewisePowerLaw
+	// static constexpr OpacityModel opacityModel = OpacityModel::user;
+	static constexpr OpacityModel opacity_model = OpacityModel::piecewisePowerLaw;
 };
 
 template <>
@@ -75,33 +77,37 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::Defi
 		exponents_and_values[0][i] = 0.0;
 	}
 	for (int i = 0; i < nGroups_; ++i) {
-		exponents_and_values[1][i] = kappa;
+		if constexpr (the_model == 0) {
+			exponents_and_values[1][i] = kappa;
+		} else {
+			exponents_and_values[1][i] = group_opacities_[i];
+		}
 	}
 	return exponents_and_values;
 }
 
-template <>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/)
-    -> quokka::valarray<double, nGroups_>
-{
-	quokka::valarray<double, nGroups_> kappaPVec{};
-	for (int i = 0; i < nGroups_; ++i) {
-		kappaPVec[i] = kappa;
-	}
-	return kappaPVec;
-}
+// template <>
+// AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/)
+//     -> quokka::valarray<double, nGroups_>
+// {
+// 	quokka::valarray<double, nGroups_> kappaPVec{};
+// 	for (int i = 0; i < nGroups_; ++i) {
+// 		kappaPVec[i] = kappa;
+// 	}
+// 	return kappaPVec;
+// }
 
-template <>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputeFluxMeanOpacity(const double rho, const double Tgas)
-    -> quokka::valarray<double, nGroups_>
-{
-	return ComputePlanckOpacity(rho, Tgas);
-}
+// template <>
+// AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputeFluxMeanOpacity(const double rho, const double Tgas)
+//     -> quokka::valarray<double, nGroups_>
+// {
+// 	return ComputePlanckOpacity(rho, Tgas);
+// }
 
-template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputeEddingtonFactor(double /*f*/) -> double
-{
-	return (1. / 3.); // Eddington approximation
-}
+// template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputeEddingtonFactor(double /*f*/) -> double
+// {
+// 	return (1. / 3.); // Eddington approximation
+// }
 
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
