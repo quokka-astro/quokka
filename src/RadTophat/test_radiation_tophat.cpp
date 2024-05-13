@@ -60,8 +60,8 @@ template <> struct Physics_Traits<TophatProblem> {
 };
 
 template <>
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputePlanckOpacity(const double rho, const double /*Tgas*/)
-    -> quokka::valarray<double, nGroups_>
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputePlanckOpacity(const double rho,
+											     const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, nGroups_> kappaPVec{};
 	amrex::Real kappa = 0.;
@@ -77,8 +77,8 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeP
 }
 
 template <>
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeFluxMeanOpacity(const double rho, const double /*Tgas*/)
-    -> quokka::valarray<double, nGroups_>
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeFluxMeanOpacity(const double rho,
+											       const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
 	return ComputePlanckOpacity(rho, 0.);
 }
@@ -86,16 +86,16 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto RadSystem<TophatProblem>::ComputeF
 static constexpr int nmscalars_ = Physics_Traits<TophatProblem>::numMassScalars;
 template <>
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto
-quokka::EOS<TophatProblem>::ComputeTgasFromEint(const double rho, const double Egas, std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massScalars*/)
-    -> double
+quokka::EOS<TophatProblem>::ComputeTgasFromEint(const double rho, const double Egas,
+						std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massScalars*/) -> double
 {
 	return Egas / (rho * c_v);
 }
 
 template <>
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto
-quokka::EOS<TophatProblem>::ComputeEintFromTgas(const double rho, const double Tgas, std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massScalars*/)
-    -> double
+quokka::EOS<TophatProblem>::ComputeEintFromTgas(const double rho, const double Tgas,
+						std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> /*massScalars*/) -> double
 {
 	return rho * c_v * Tgas;
 }

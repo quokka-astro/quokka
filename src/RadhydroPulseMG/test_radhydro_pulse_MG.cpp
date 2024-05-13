@@ -190,8 +190,8 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<AdvPulseProblem>::ComputeFluxMeanOpacity(co
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacityTempDerivative(const double rho, const double Tgas)
-    -> quokka::valarray<double, nGroups_>
+AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacityTempDerivative(const double rho,
+										       const double Tgas) -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, nGroups_> opacity_deriv{};
 	const auto nu_rep = compute_repres_nu();
@@ -208,8 +208,8 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacityTempDeri
 	return opacity_deriv;
 }
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<AdvPulseProblem>::ComputePlanckOpacityTempDerivative(const double rho, const double Tgas)
-    -> quokka::valarray<double, nGroups_>
+AMREX_GPU_HOST_DEVICE auto RadSystem<AdvPulseProblem>::ComputePlanckOpacityTempDerivative(const double rho,
+											  const double Tgas) -> quokka::valarray<double, nGroups_>
 {
 	return RadSystem<PulseProblem>::ComputePlanckOpacityTempDerivative(rho, Tgas);
 }

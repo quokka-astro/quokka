@@ -53,8 +53,8 @@ template <> struct Physics_Traits<SuOlsonProblemCgs> {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputePlanckOpacity(const double rho, const double Tgas)
-    -> quokka::valarray<double, nGroups_>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputePlanckOpacity(const double rho,
+												 const double Tgas) -> quokka::valarray<double, nGroups_>
 {
 	auto sigma = kappa * std::pow(Tgas / T_hohlraum, -3); // cm^-1
 	quokka::valarray<double, nGroups_> kappaPVec{};
@@ -65,15 +65,15 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::Comp
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputeFluxMeanOpacity(const double rho, const double Tgas)
-    -> quokka::valarray<double, nGroups_>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputeFluxMeanOpacity(const double rho,
+												   const double Tgas) -> quokka::valarray<double, nGroups_>
 {
 	return ComputePlanckOpacity(rho, Tgas);
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputePlanckOpacityTempDerivative(const double rho, const double Tgas)
-    -> quokka::valarray<double, nGroups_>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
+RadSystem<SuOlsonProblemCgs>::ComputePlanckOpacityTempDerivative(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, nGroups_> opacity_deriv{};
 	auto sigma_dT = (-3.0 * kappa / Tgas) * std::pow(Tgas / T_hohlraum, -3); // cm^-1
