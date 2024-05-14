@@ -146,7 +146,7 @@ auto compute_kappa(const double nu, const double Tgas) -> double
 	return kappa0 * std::pow(T_, -0.5) * std::pow(nu_, -3) * (1.0 - std::exp(-coeff_ * nu_ / T_));
 }
 
-AMREX_GPU_HOST_DEVICE 
+AMREX_GPU_HOST_DEVICE
 auto compute_repres_nu(amrex::GpuArray<double, n_groups_ + 1> rad_boundaries) -> quokka::valarray<double, n_groups_>
 {
 	// return the geometrical mean as the representative frequency for each group
@@ -161,8 +161,7 @@ auto compute_repres_nu(amrex::GpuArray<double, n_groups_ + 1> rad_boundaries) ->
 	return nu_rep;
 }
 
-template <> 
-AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, nGroups_> kappaPVec{};
 	auto nu_rep = compute_repres_nu(rad_boundaries_);
