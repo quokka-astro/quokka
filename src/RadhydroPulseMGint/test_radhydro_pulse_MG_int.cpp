@@ -58,7 +58,7 @@ constexpr double k_B = C::k_B;
 // static diffusion: (for single group) tau = 2e3, beta = 3e-5, beta tau = 6e-2
 constexpr double kappa0 = 180.;	    // cm^2 g^-1
 constexpr double v0_adv = 1.0e6;    // advecting pulse
-constexpr double max_time = 4.8e-6; // max_time = 0.2 * width / v1;
+constexpr double max_time = 4.8e-7; // max_time = 0.02 * width / v1;
 
 // dynamic diffusion: tau = 2e4, beta = 3e-3, beta tau = 60
 // constexpr double kappa0 = 1000.; // cm^2 g^-1
