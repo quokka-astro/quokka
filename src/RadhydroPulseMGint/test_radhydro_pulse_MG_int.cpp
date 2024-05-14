@@ -58,7 +58,8 @@ constexpr double k_B = C::k_B;
 // static diffusion: (for single group) tau = 2e3, beta = 3e-5, beta tau = 6e-2
 constexpr double kappa0 = 180.;	    // cm^2 g^-1
 constexpr double v0_adv = 1.0e6;    // advecting pulse
-constexpr double max_time = 4.8e-6; // max_time = 0.2 * width / v1;
+constexpr double max_time = 4.8e-5; // max_time = 2 * width / v1;
+constexpr int64_t max_timesteps = 10; // to make 3D test run fast on GPUs
 
 // dynamic diffusion: tau = 2e4, beta = 3e-3, beta tau = 60
 // constexpr double kappa0 = 1000.; // cm^2 g^-1
@@ -273,7 +274,6 @@ auto problem_main() -> int
 	// This problem is based on the radhydro_pulse test and is a test of interpolation for variable opacity for multigroup radiation.
 
 	// Problem parameters
-	const int64_t max_timesteps = 1e8;
 	const double CFL_number = 0.8;
 	// const int nx = 32;
 

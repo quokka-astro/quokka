@@ -17,10 +17,12 @@ struct AdvPulseProblem {
 constexpr int isconst = 0;
 // constexpr int n_groups_ = 1;
 // constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{0., inf};
-constexpr int n_groups_ = 2;
-constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e15, 1e17, 1e19};
+// constexpr int n_groups_ = 2;
+// constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e15, 1e17, 1e19};
+constexpr int n_groups_ = 4;
+constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e16, 1e17, 1e18, 1e19, 1e20};
 // constexpr int n_groups_ = 8;
-// constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e15, 3.16e15, 1e16, 3.16e16, 1e17, 3.16e17, 1e18, 3.16e18, 1e19};
+// constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e16, 3.16e16, 1e17, 3.16e17, 1e18, 3.16e18, 1e19, 3.16e19, 1e20};
 // constexpr int n_groups_ = 64;
 // constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1.00000000e+15, 1.15478198e+15, 1.33352143e+15, 1.53992653e+15,
 //        1.77827941e+15, 2.05352503e+15, 2.37137371e+15, 2.73841963e+15,
@@ -57,8 +59,8 @@ constexpr double v0_nonadv = 0.; // non-advecting pulse
 
 // static diffusion: (for single group) tau = 2e3, beta = 3e-5, beta tau = 6e-2
 constexpr double v0_adv = 1.0e6;    // advecting pulse
-constexpr double max_time = 2.4e-5; // max_time = 1.0 * width / v1;
-// constexpr double max_time = 4.8e-5; // max_time = 2.0 * width / v1;
+constexpr double max_time = 4.8e-5; // max_time = 0.02 * width / v1;
+constexpr int64_t max_timesteps = 10;
 
 // dynamic diffusion: tau = 2e4, beta = 3e-3, beta tau = 60
 // constexpr double kappa0 = 1000.; // cm^2 g^-1
@@ -146,15 +148,15 @@ auto compute_kappa(const double nu, const double Tgas) -> double
 }
 
 AMREX_GPU_HOST_DEVICE
-auto compute_repres_nu() -> quokka::valarray<double, n_groups_>
+auto compute_repres_nu(amrex::GpuArray<double, n_groups_ + 1> rad_boundaries) -> quokka::valarray<double, n_groups_>
 {
 	// return the geometrical mean as the representative frequency for each group
 	quokka::valarray<double, n_groups_> nu_rep{};
-	if constexpr (n_groups_ == 1) {
+	if (n_groups_ == 1) {
 		nu_rep[0] = nu_ref;
 	} else {
 		for (int g = 0; g < n_groups_; ++g) {
-			nu_rep[g] = std::sqrt(rad_boundaries_[g] * rad_boundaries_[g + 1]);
+			nu_rep[g] = std::sqrt(rad_boundaries[g] * rad_boundaries[g + 1]);
 		}
 	}
 	return nu_rep;
@@ -163,7 +165,7 @@ auto compute_repres_nu() -> quokka::valarray<double, n_groups_>
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, nGroups_> kappaPVec{};
-	auto nu_rep = compute_repres_nu();
+	auto nu_rep = compute_repres_nu(rad_boundaries_);
 	for (int g = 0; g < nGroups_; ++g) {
 		kappaPVec[g] = compute_kappa(nu_rep[g], Tgas) / rho;
 	}
@@ -194,7 +196,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacityTempDeri
     -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, nGroups_> opacity_deriv{};
-	const auto nu_rep = compute_repres_nu();
+	const auto nu_rep = compute_repres_nu(rad_boundaries_);
 	const auto T = Tgas / T0;
 	for (int g = 0; g < nGroups_; ++g) {
 		const auto nu = nu_rep[g] / nu_ref;
@@ -309,7 +311,6 @@ auto problem_main() -> int
 	// in the diffusion limit.
 
 	// Problem parameters
-	const int64_t max_timesteps = 1e8;
 	const double CFL_number = 0.8;
 	// const int nx = 32;
 
