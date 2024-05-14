@@ -60,7 +60,7 @@ constexpr double v0_nonadv = 0.; // non-advecting pulse
 // static diffusion: (for single group) tau = 2e3, beta = 3e-5, beta tau = 6e-2
 constexpr double v0_adv = 1.0e6;    // advecting pulse
 constexpr double max_time = 4.8e-5; // max_time = 0.02 * width / v1;
-constexpr int64_t max_timesteps = 10;
+constexpr int64_t max_timesteps = 30;
 
 // dynamic diffusion: tau = 2e4, beta = 3e-3, beta tau = 60
 // constexpr double kappa0 = 1000.; // cm^2 g^-1

@@ -59,7 +59,7 @@ constexpr double k_B = C::k_B;
 constexpr double kappa0 = 180.;	      // cm^2 g^-1
 constexpr double v0_adv = 1.0e6;      // advecting pulse
 constexpr double max_time = 4.8e-5;   // max_time = 2 * width / v1;
-constexpr int64_t max_timesteps = 10; // to make 3D test run fast on GPUs
+constexpr int64_t max_timesteps = 30; // to make 3D test run fast on GPUs
 
 // dynamic diffusion: tau = 2e4, beta = 3e-3, beta tau = 60
 // constexpr double kappa0 = 1000.; // cm^2 g^-1
