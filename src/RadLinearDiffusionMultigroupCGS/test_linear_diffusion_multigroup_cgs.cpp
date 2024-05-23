@@ -37,9 +37,8 @@ constexpr double C_v = 9.9968637e7;      // erg g^-1 K^-1
 constexpr double mu = 1. / (5./3. - 1) * C::k_B / C_v; // mean molecular weight, = 1.238548409 m_p
 constexpr double c_k = 4.0628337e43;     // cm^-1 Hz^3
 constexpr double Egas0 = C_v * rho0 * T0;
-constexpr double Egas_floor = 1e-8 * Egas0;
-constexpr double Erad_floor_ = 1e-8 * a_rad * T0 * T0 * T0 * T0;    // Erad_floor_ / (a_r * T^4) has to be > 1e-10 for the Newton-Raphson iteration to work
-// constexpr double Erad_floor_ = 1e-10 * a_rad;
+constexpr double Egas_floor = 1e-20 * Egas0;
+constexpr double Erad_floor_ = 1e-20 * a_rad * T0 * T0 * T0 * T0;
 
 template <> struct quokka::EOS_Traits<TheProblem> {
 	static constexpr double mean_molecular_weight = mu;
@@ -56,8 +55,7 @@ template <> struct Physics_Traits<TheProblem> {
 	static constexpr bool is_radiation_enabled = true;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
-	static constexpr int nGroups = 8; // number of radiation groups
-	// static constexpr int nGroups = 1; // number of radiation groups
+	static constexpr int nGroups = 1; // number of radiation groups
 };
 
 template <> struct RadSystem_Traits<TheProblem> {
@@ -69,45 +67,44 @@ template <> struct RadSystem_Traits<TheProblem> {
 	// static constexpr double gamma = 5. / 3.;
 	static constexpr double Erad_floor = Erad_floor_;
 	static constexpr bool compute_v_over_c_terms = true;
+	static constexpr int beta_order = 0;
 	static constexpr double energy_unit = C::hplanck;
-	static constexpr amrex::GpuArray<double, Physics_Traits<TheProblem>::nGroups + 1> radBoundaries{ 0.0,
-    1.2089946e13,
-    2.53888866e13,
-    4.001772126e13,
-    5.610943938600001e13,
-    7.381032932460002e13,
-    9.328130825706003e13,
-    1.1469938508276605e14,
-    1.3825926959104266e14};
+	// static constexpr amrex::GpuArray<double, Physics_Traits<TheProblem>::nGroups + 1> radBoundaries{
+	// 	1208994600000.0, 258534835994245.66, 1796939914210131.8, 1.876930569110799e+16, 5.377506043847143e+16
+	// };
+	// static constexpr amrex::GpuArray<double, Physics_Traits<TheProblem>::nGroups + 1> radBoundaries{
+	// 	1208994600000.0, 12089946000000.0, 25388886600000.0, 40017721260000.0, 56109439386000.01, 73810329324600.02, 93281308257060.03, 114699385082766.05, 138259269591042.66, 164175142550146.94, 192682602805161.66, 224040809085677.84, 258534835994245.66, 296478265593670.25, 338216038153037.3, 384127587968341.06, 434630292765175.2, 490183268041692.75, 551291540845862.06, 618510640930448.4, 692451651023493.2, 773786762125842.6, 863255384338427.0, 961670868772269.8, 1069927901649496.8, 1189010637814446.5, 1320001647595891.2, 1464091758355480.5, 1622590880191028.8, 1796939914210131.8, 1988723851631145.0, 2199686182794259.8, 2431744747073686.0, 2687009167781055.0, 2967800030559160.5, 3276669979615077.0, 3616426923576585.0, 3990159561934244.0, 4401265464127669.0, 4853481956540436.0, 5350920098194480.0, 5898102054013928.0, 6500002205415321.0, 7162092371956854.0, 7890391555152540.0, 8691520656667795.0, 9572762668334576.0, 1.0542128881168034e+16, 1.1608431715284838e+16, 1.2781364832813322e+16, 1.4071591262094656e+16, 1.5490840334304122e+16, 1.7052014313734536e+16, 1.876930569110799e+16, 2.065832620621879e+16, 2.273624877284067e+16, 2.502196359612474e+16, 2.7536249901737216e+16, 3.030196483791094e+16, 3.3344251267702036e+16, 3.669076634047224e+16, 4.037193292051947e+16, 4.442121615857142e+16, 4.887542772042857e+16, 5.377506043847143e+16
+	// };
 };
 
-template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<TheProblem>::ComputeThermalRadiation(amrex::Real temperature, amrex::GpuArray<double, nGroups_ + 1> const &boundaries)
-    -> quokka::valarray<amrex::Real, nGroups_>
-{
-	quokka::valarray<double, nGroups_> B_g{};
-	for (int g = 0; g < nGroups_; ++g) {
-	  B_g[g] = 2. * M_PI * h / (c * c) * std::pow(boundaries[g], 3) * (std::exp(- h * boundaries[g] / (k_B * T_f)) - std::exp(- h * boundaries[g + 1] / (k_B * T_f))) * temperature;
-	}
-  auto power = 4. * M_PI / c * B_g;   // = a_r * T^4
-	return power;
-}
+// template <>
+// AMREX_GPU_HOST_DEVICE auto RadSystem<TheProblem>::ComputeThermalRadiation(amrex::Real temperature, amrex::GpuArray<double, nGroups_ + 1> const &boundaries)
+//     -> quokka::valarray<amrex::Real, nGroups_>
+// {
+// 	quokka::valarray<double, nGroups_> B_g{};
+// 	for (int g = 0; g < nGroups_; ++g) {
+// 	  B_g[g] = 2. * M_PI * h / (c * c) * std::pow(boundaries[g], 3) * (std::exp(- h * boundaries[g] / (k_B * T_f)) - std::exp(- h * boundaries[g + 1] / (k_B * T_f))) * temperature;
+// 	}
+//   auto power = 4. * M_PI / c * B_g;   // = a_r * T^4
+// 	return power;
+// }
 
 template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<TheProblem>::ComputePlanckOpacity(const double rho, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
 {
 	quokka::valarray<double, nGroups_> kappaVec{};
-  double nu_g = NAN;
-	for (int g = 0; g < nGroups_; ++g) {
-    if (g == 0) {
-      nu_g = 0.5 * RadSystem_Traits<TheProblem>::radBoundaries[1];
-    } else {
-      // take the geometrical mean
-      nu_g = std::sqrt(RadSystem_Traits<TheProblem>::radBoundaries[g] * RadSystem_Traits<TheProblem>::radBoundaries[g + 1]);
-    }
-    auto kappa = c_k * std::pow(nu_g, -3);
-		kappaVec[g] = kappa / rho;
-	}
+  // double nu_g = NAN;
+	// for (int g = 0; g < nGroups_; ++g) {
+  //   if (g == 0) {
+  //     nu_g = 0.5 * RadSystem_Traits<TheProblem>::radBoundaries[1];
+  //   } else {
+  //     // take the geometrical mean
+  //     nu_g = std::sqrt(RadSystem_Traits<TheProblem>::radBoundaries[g] * RadSystem_Traits<TheProblem>::radBoundaries[g + 1]);
+  //   }
+  //   auto kappa = c_k * std::pow(nu_g, -3);
+	// 	kappaVec[g] = kappa / rho;
+	// }
+	kappaVec.fillin(1.0e-5 / rho);
 	return kappaVec;
 }
 
@@ -128,7 +125,7 @@ template <> void RadhydroSimulation<TheProblem>::setInitialConditionsOnGrid(quok
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	const auto radBoundaries_g = RadSystem_Traits<TheProblem>::radBoundaries;
+	const auto radBoundaries_g = RadSystem<TheProblem>::radBoundaries_;
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -232,7 +229,7 @@ auto problem_main() -> int
 	const int max_timesteps = 100;
 	// const int max_timesteps = 0;
 	const double CFL_number = 0.8;
-	const double initial_dt = 5.8034112e-8;
+	// const double initial_dt = 5.8034112e-8;
 	const double max_dt = 5.8034112e-8;
 	const double max_time = 1.0;	// not used. We stop based on max_timesteps
 
@@ -261,14 +258,17 @@ auto problem_main() -> int
 	constexpr int nvars = RadSystem<TheProblem>::nvar_;
 	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
 	for (int n = 0; n < nvars; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			if (isNormalComp(n, i)) {
-				BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);
-				BCs_cc[n].setHi(i, amrex::BCType::reflect_odd);
-			} else {
-				BCs_cc[n].setLo(i, amrex::BCType::reflect_even);
-				BCs_cc[n].setHi(i, amrex::BCType::reflect_even);
-			}
+		// // x1 direction: reflecting/symmetry BC on left and extrapolation on right	
+		// if (isNormalComp(n, 0)) {
+		// 	BCs_cc[n].setLo(0, amrex::BCType::reflect_odd);
+		// 	// BCs_cc[n].setHi(0, amrex::BCType::reflect_odd);
+		// } else {
+		// 	BCs_cc[n].setLo(0, amrex::BCType::reflect_even);
+		// }
+		// BCs_cc[n].setHi(0, amrex::BCType::foextrap); // extrapolate
+		for (int i = 0; i < AMREX_SPACEDIM; ++i) {	    // x2- and x3- directions
+			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
+			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
 		}
 	}
 
@@ -279,7 +279,7 @@ auto problem_main() -> int
 	sim.stopTime_ = max_time;
 	sim.maxTimesteps_ = max_timesteps;
 	sim.maxDt_ = max_dt;
-	sim.initDt_ = initial_dt;
+	// sim.initDt_ = initial_dt;
 	sim.plotfileInterval_ = -1;
 
 	// evolve
@@ -311,7 +311,8 @@ auto problem_main() -> int
 			const auto Ekin = (x1GasMom * x1GasMom) / (2.0 * rho);
 			const auto Egas_t = Etot_t - Ekin;
 			Egas.at(i) = Egas_t;
-			Tgas.at(i) = quokka::EOS<TheProblem>::ComputeTgasFromEint(rho, Egas_t) / T_ref;
+			// Tgas.at(i) = quokka::EOS<TheProblem>::ComputeTgasFromEint(rho, Egas_t) / T_ref;
+			Tgas.at(i) = quokka::EOS<TheProblem>::ComputeTgasFromEint(rho, Egas_t);
 		}
 
     // dummy print for debugging
@@ -325,32 +326,42 @@ auto problem_main() -> int
 		// matplotlibcpp::ylim(-0.05, 1.05);   // dimensionless
 
 		std::map<std::string, std::string> Trad_args;
-		Trad_args["label"] = "numerical solution";
+		Trad_args["label"] = "numerical";
 		Trad_args["color"] = "C1";
-		matplotlibcpp::plot(xs, Trad, Trad_args);
-
+		matplotlibcpp::plot(xs, Erad, Trad_args);
 		matplotlibcpp::legend();
-		matplotlibcpp::xlabel("length x (cm)");
-		matplotlibcpp::ylabel("radiation temperature");
-    // title
+		matplotlibcpp::xlabel("x (dimensionless)");
+		matplotlibcpp::ylabel("Erad");
     std::string title = "ct = " + std::to_string(sim.tNew_[0] * c / x_ref);
     matplotlibcpp::title(title);
 		matplotlibcpp::tight_layout();
-		matplotlibcpp::save("./LinearDiffusionMP_Trad.pdf");
+		matplotlibcpp::save("./LinearDiffusionMP_Erad.pdf");
 
 		matplotlibcpp::clf();
 		matplotlibcpp::xlim(0.0, 1.0);    // cm
 		matplotlibcpp::ylim(-0.05, 1.05);   // dimensionless
-
-		Trad_args["label"] = "numerical solution";
+		Trad_args["label"] = "numerical";
 		Trad_args["color"] = "C2";
 		matplotlibcpp::plot(xs, Tgas, Trad_args);
 
 		matplotlibcpp::legend();
-		matplotlibcpp::xlabel("length x (cm)");
+		matplotlibcpp::xlabel("x (dimensionless)");
 		matplotlibcpp::ylabel("gas temperature");
 		matplotlibcpp::tight_layout();
 		matplotlibcpp::save("./LinearDiffusionMP_Tgas.pdf");
+
+		matplotlibcpp::clf();
+		matplotlibcpp::xlim(0.0, 1.0);    // cm
+		// matplotlibcpp::ylim(-0.05, 1.05);   // dimensionless
+		Trad_args["label"] = "numerical";
+		Trad_args["color"] = "C2";
+		matplotlibcpp::plot(xs, Egas, Trad_args);
+
+		matplotlibcpp::legend();
+		matplotlibcpp::xlabel("x (dimensionless)");
+		matplotlibcpp::ylabel("Egas");
+		matplotlibcpp::tight_layout();
+		matplotlibcpp::save("./LinearDiffusionMP_Egas.pdf");
 #endif
 	}
 

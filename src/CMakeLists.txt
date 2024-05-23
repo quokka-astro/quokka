@@ -167,6 +167,8 @@ add_subdirectory(RadStreaming)
 add_subdirectory(RadSuOlson)
 add_subdirectory(RadTophat)
 add_subdirectory(RadTube)
+add_subdirectory(RadLinearDiffusionMultigroup)
+add_subdirectory(RadLinearDiffusionMultigroupCGS)
 
 add_subdirectory(RadhydroShell)
 add_subdirectory(RadhydroShock)

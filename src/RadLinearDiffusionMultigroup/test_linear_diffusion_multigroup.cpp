@@ -31,15 +31,17 @@
 struct TheProblem {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-constexpr int max_timesteps_ = 200;
+constexpr int max_timesteps_ = 3;
 
+// nu_0 = 1.0
+// u_0 = 1.0
 constexpr double a_rad = 1.0;
 constexpr double c = 1.7320508075688772;  // = sqrt(3.0)
-constexpr double h = 1.0 / (8.0 * M_PI);
+constexpr double h = c * c * c / (8.0 * M_PI); // B_0 = 8 * pi * h / c^3 = 1
 constexpr double k_B = h;
 constexpr double C_v = 1.0;
 constexpr double mu = 3.0 / 2.0 * k_B;    // C_v = 3/2 k_B / mu = 1, so mu = 3/2 * k_B
-constexpr double c_k = 1.0 / 1.7320508075688772;  // = 1.0 / sqrt(3.0)
+constexpr double kappa_0 = 1.0 / 1.7320508075688772;  // = 1.0 / sqrt(3.0)
 
 constexpr double rho0 = 1.0;
 constexpr double x_max = 4.0;
@@ -47,9 +49,9 @@ constexpr double x0 = 0.5;
 constexpr double t1 = 1.0;
 constexpr double T0 = 1.0;
 constexpr double T_f = 0.1;
-constexpr double T_floor = 1.0e-8 * T0;
+constexpr double T_floor = 1.0e-20 * T0;
 constexpr double Egas_floor = C_v * rho0 * T_floor;
-constexpr double Erad_floor_ = 1.0e-12;
+constexpr double Erad_floor_ = 1.0e-20;
 
 template <> struct quokka::EOS_Traits<TheProblem> {
 	static constexpr double mean_molecular_weight = mu;
@@ -77,8 +79,10 @@ template <> struct RadSystem_Traits<TheProblem> {
 	static constexpr double boltzmann_constant = k_B;
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double Erad_floor = Erad_floor_;
-	static constexpr bool compute_v_over_c_terms = true;
-	static constexpr amrex::GpuArray<double, Physics_Traits<TheProblem>::nGroups + 1> radBoundaries{ 0, 0.0005, 0.00105, 0.001655, 0.0023205, 0.00305255, 0.003857805, 0.0047435855, 0.00571794405};
+	// static constexpr bool compute_v_over_c_terms = true;
+	static constexpr int beta_order = 0;
+	static constexpr double energy_unit = h;
+	static constexpr amrex::GpuArray<double, Physics_Traits<TheProblem>::nGroups + 1> radBoundaries{0.0, 0.0057179440500000015, 0.017974864931786093, 0.044248663379038114, 0.10056888372676295, 0.22129627784088032, 0.4800861689243623, 1.0348252835920335, 2.2239578422629616};
 };
 
 template <>
@@ -114,7 +118,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<TheProblem>::ComputePlanckOpacity(const dou
       // take the geometrical mean
       nu_g = std::sqrt(RadSystem_Traits<TheProblem>::radBoundaries[g] * RadSystem_Traits<TheProblem>::radBoundaries[g + 1]);
     }
-    auto kappa = c_k * std::pow(nu_g, -3);
+    auto kappa = kappa_0 * std::pow(nu_g, -3);
 		kappaVec[g] = kappa / rho;
 	}
 	return kappaVec;
@@ -166,12 +170,10 @@ template <> void RadhydroSimulation<TheProblem>::setInitialConditionsOnGrid(quok
 
 auto problem_main() -> int
 {
-	// TODO(ben): disable v/c terms for this problem!
-
 	// Problem parameters
 
 	const int max_timesteps = max_timesteps_;
-	const double CFL_number = 0.8;
+	const double CFL_number = 100.;
 	const double initial_dt = 0.005;
 	const double max_dt = 0.005;
 	const double max_time = 1.0;
@@ -202,14 +204,15 @@ auto problem_main() -> int
 	constexpr int nvars = RadSystem<TheProblem>::nvar_;
 	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
 	for (int n = 0; n < nvars; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			if (isNormalComp(n, i)) {
-				BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);
-				BCs_cc[n].setHi(i, amrex::BCType::reflect_odd);
-			} else {
-				BCs_cc[n].setLo(i, amrex::BCType::reflect_even);
-				BCs_cc[n].setHi(i, amrex::BCType::reflect_even);
-			}
+		if (isNormalComp(n, 0)) {
+			BCs_cc[n].setLo(0, amrex::BCType::reflect_odd);
+		} else {
+			BCs_cc[n].setLo(0, amrex::BCType::reflect_even);
+		}
+		BCs_cc[n].setHi(0, amrex::BCType::foextrap); // extrapolate
+		for (int i = 1; i < AMREX_SPACEDIM; ++i) {	    // x2- and x3- directions
+			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
+			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
 		}
 	}
 
@@ -266,7 +269,7 @@ auto problem_main() -> int
 		matplotlibcpp::xlabel("length x (dimensionless)");
 		matplotlibcpp::ylabel("E");
 		matplotlibcpp::title(fmt::format("ct = {:.4g}", c * sim.tNew_[0]));
-		matplotlibcpp::xlim(0.0, 2. * x0);
+		// matplotlibcpp::xlim(0.0, 2. * x0);
 		// matplotlibcpp::ylim(0.0, 1.3);	// dimensionless
 		matplotlibcpp::tight_layout();
 		matplotlibcpp::save(fmt::format("./LinearDiffusionMP_Egas_step{:d}.pdf", max_timesteps_));
@@ -279,7 +282,7 @@ auto problem_main() -> int
 		matplotlibcpp::xlabel("length x (dimensionless)");
 		matplotlibcpp::ylabel("T");
 		matplotlibcpp::title(fmt::format("ct = {:.4g}", c * sim.tNew_[0]));
-		matplotlibcpp::xlim(0.0, 2. * x0);
+		// matplotlibcpp::xlim(0.0, 2. * x0);
 		// matplotlibcpp::ylim(0.0, 1.3);	// dimensionless
 		matplotlibcpp::tight_layout();
 		matplotlibcpp::save(fmt::format("./LinearDiffusionMP_Tgas_step{:d}.pdf", max_timesteps_));
@@ -291,7 +294,7 @@ auto problem_main() -> int
     matplotlibcpp::xlabel("length x (dimensionless)");
     matplotlibcpp::ylabel("Erad");
     matplotlibcpp::title(fmt::format("ct = {:.4g}", c * sim.tNew_[0]));
-    matplotlibcpp::xlim(0.0, 2. * x0);
+    // matplotlibcpp::xlim(0.0, 2. * x0);
     // matplotlibcpp::ylim(0.0, 1.3);	// dimensionless
     matplotlibcpp::tight_layout();
     matplotlibcpp::save(fmt::format("./LinearDiffusionMP_Erad_step{:d}.pdf", max_timesteps_));
