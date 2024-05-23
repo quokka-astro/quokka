@@ -16,7 +16,7 @@
 #include "test_radiation_marshak_asymptotic.hpp"
 #include <ios>
 
-constexpr int the_model = 1; // 0: constant opacity (Vaytet et al. Sec 3.2.1), 1: variable opacity (Vaytet et al. Sec 3.2.2)
+constexpr int the_model = 2; // 0: constant opacity (Vaytet et al. Sec 3.2.1), 1: nu-dependent opacity (Vaytet et al. Sec 3.2.2), 2: nu-and-T-dependent opacity (Vaytet et al. Sec 3.2.3)
 
 struct SuOlsonProblemCgs {
 }; // dummy type to allow compile-type polymorphism via template specialization
@@ -69,7 +69,7 @@ template <> struct RadSystem_Traits<SuOlsonProblemCgs> {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double rho, const double /*Tgas*/)
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double /*rho*/, const double Tgas)
     -> amrex::GpuArray<amrex::GpuArray<double, nGroups_>, 2>
 {
 	amrex::GpuArray<amrex::GpuArray<double, nGroups_>, 2> exponents_and_values{};
@@ -79,8 +79,10 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::Defi
 	for (int i = 0; i < nGroups_; ++i) {
 		if constexpr (the_model == 0) {
 			exponents_and_values[1][i] = kappa;
-		} else {
+		} else if constexpr (the_model == 1) {
 			exponents_and_values[1][i] = group_opacities_[i];
+		} else {
+			exponents_and_values[1][i] = group_opacities_[i] * std::pow(Tgas / T_initial, 3./2.);
 		}
 	}
 	return exponents_and_values;
