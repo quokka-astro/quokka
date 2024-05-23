@@ -69,6 +69,7 @@ template <typename problem_t> struct RadSystem_Traits {
 	static constexpr amrex::GpuArray<double, Physics_Traits<problem_t>::nGroups + 1> radBoundaries = {0., inf};
 	static constexpr double beta_order = 1;
 	static constexpr OpacityModel opacity_model = OpacityModel::user;
+	static constexpr bool disable_force = false;
 };
 
 // A struct to hold the results of the ComputeRadPressure function.
@@ -88,6 +89,14 @@ template <typename problem_t, typename = void> struct RadSystem_Has_Opacity_Mode
 
 template <typename problem_t>
 struct RadSystem_Has_Opacity_Model<problem_t, std::void_t<decltype(RadSystem_Traits<problem_t>::opacity_model)>> : std::true_type {
+};
+
+// Use SFINAE (Substitution Failure Is Not An Error) to check if disable_force is defined in RadSystem_Traits<problem_t>
+template <typename problem_t, typename = void> struct RadSystem_Has_Disable_Force : std::false_type {
+};
+
+template <typename problem_t>
+struct RadSystem_Has_Disable_Force<problem_t, std::void_t<decltype(RadSystem_Traits<problem_t>::disable_force)>> : std::true_type {
 };
 
 /// Class for the radiation moment equations
@@ -149,6 +158,14 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 			return RadSystem_Traits<problem_t>::opacity_model;
 		} else {
 			return OpacityModel::user;
+		}
+	}();
+
+	static constexpr bool disable_force_ = []() constexpr {
+		if constexpr (RadSystem_Has_Disable_Force<problem_t>::value) {
+			return RadSystem_Traits<problem_t>::disable_force;
+		} else {
+			return false;
 		}
 	}();
 
@@ -1503,9 +1520,15 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 					}
 				} else {
 					for (int n = 0; n < 3; ++n) {
-						Frad_t1[n][g] = Frad_t0[n] / (1.0 + rho * kappaFVec[g] * chat * dt);
-						// Compute conservative gas momentum update
-						dMomentum[n] += -(Frad_t1[n][g] - Frad_t0[n]) / (c * chat);
+						if constexpr (disable_force_) {
+							// if radiation force is disabled, do not update Frad and set dMomentum to 0.
+							Frad_t1[n][g] = Frad_t0[n];
+						} else {
+							Frad_t1[n][g] = Frad_t0[n] / (1.0 + rho * kappaFVec[g] * chat * dt);
+							// Compute conservative gas momentum update
+							dMomentum[n] += -(Frad_t1[n][g] - Frad_t0[n]) / (c * chat);
+						}
+
 					}
 				}
 			} // end loop over radiation groups for flux update
