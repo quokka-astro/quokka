@@ -27,21 +27,11 @@ constexpr double erad_floor = a_rad * T0 * T0 * T0 * T0 * 1.0e-10;
 constexpr double mu = 2.33 * C::m_u;
 constexpr double k_B = C::k_B;
 
-// Static diffusion: tau = 2e3, beta = 3e-5, beta tau = 6e-2
-// constexpr double kappa0 = 100.;	    // cm^2 g^-1
-// constexpr double v0_adv = 1.0e6;    // advecting pulse
-// constexpr double max_time = 4.8e-5; // max_time = 2.0 * width / v1;
-
-// Dynamic diffusion: tau = 2e4, beta = 3e-3, beta tau = 60
-// constexpr double kappa0 = 1000.; // cm^2 g^-1
-// constexpr double v0_adv = 1.0e8;    // advecting pulse
-// constexpr double max_time = 4.8e-4;
-
-// Dynamic diffusion: tau = 1e4, beta = 1e-3, beta tau = 10.
+// Default parameters: dynamic diffusion, tau = 1e4, beta = 1e-3, beta tau = 10.
 // Width of the pulse = sqrt(c max_time / kappa0) = 85 if max_time = 2.4e-4
-constexpr double kappa0 = 500.;	 // cm^2 g^-1
-constexpr double v0_adv = 3.0e7; // advecting pulse
-constexpr double max_time = 4.8e-6;
+AMREX_GPU_MANAGED double kappa0 = 500.;	 // NOLINT
+AMREX_GPU_MANAGED double v0_adv = 3.0e7; // NOLINT
+// AMREX_GPU_MANAGED double max_time = 4.8e-6;
 
 template <> struct quokka::EOS_Traits<PulseProblem> {
 	static constexpr double mean_molecular_weight = mu;
@@ -59,7 +49,6 @@ template <> struct RadSystem_Traits<PulseProblem> {
 	static constexpr double c_hat = chat;
 	static constexpr double radiation_constant = a_rad;
 	static constexpr double Erad_floor = erad_floor;
-	static constexpr bool compute_v_over_c_terms = true;
 	static constexpr int beta_order = beta_order_;
 };
 template <> struct RadSystem_Traits<AdvPulseProblem> {
@@ -67,7 +56,6 @@ template <> struct RadSystem_Traits<AdvPulseProblem> {
 	static constexpr double c_hat = chat;
 	static constexpr double radiation_constant = a_rad;
 	static constexpr double Erad_floor = erad_floor;
-	static constexpr bool compute_v_over_c_terms = true;
 	static constexpr int beta_order = beta_order_;
 };
 
@@ -241,6 +229,12 @@ auto problem_main() -> int
 	// Problem initialization
 	RadhydroSimulation<PulseProblem> sim(BCs_cc);
 
+	double max_time = 4.8e-6;
+	amrex::ParmParse pp; // NOLINT
+	pp.query("kappa0", kappa0);
+	pp.query("v0_adv", v0_adv);
+	pp.query("max_time", max_time);
+
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.stopTime_ = max_time;
 	sim.radiationCflNumber_ = CFL_number;
@@ -264,6 +258,7 @@ auto problem_main() -> int
 	std::vector<double> Tgas(nx);
 	std::vector<double> Vgas(nx);
 	std::vector<double> rhogas(nx);
+	std::vector<double> flux(nx);
 
 	for (int i = 0; i < nx; ++i) {
 		amrex::Real const x = position[i];
@@ -273,10 +268,12 @@ auto problem_main() -> int
 		const auto rho_t = values.at(RadSystem<PulseProblem>::gasDensity_index)[i];
 		const auto v_t = values.at(RadSystem<PulseProblem>::x1GasMomentum_index)[i] / rho_t;
 		const auto Egas = values.at(RadSystem<PulseProblem>::gasInternalEnergy_index)[i];
+		const auto flux_t = values.at(RadSystem<PulseProblem>::x1RadFlux_index)[i];
 		rhogas.at(i) = rho_t;
 		Trad.at(i) = Trad_t;
 		Tgas.at(i) = quokka::EOS<PulseProblem>::ComputeTgasFromEint(rho_t, Egas);
 		Vgas.at(i) = 1e-5 * v_t;
+		flux.at(i) = flux_t;
 	}
 	// END OF PROBLEM 1
 
@@ -315,6 +312,7 @@ auto problem_main() -> int
 	std::vector<double> Tgas2(nx);
 	std::vector<double> Vgas2(nx);
 	std::vector<double> rhogas2(nx);
+	std::vector<double> flux2(nx);
 
 	for (int i = 0; i < nx; ++i) {
 		int index_ = 0;
@@ -337,11 +335,13 @@ auto problem_main() -> int
 		const auto rho_t = values2.at(RadSystem<PulseProblem>::gasDensity_index)[i];
 		const auto v_t = values2.at(RadSystem<PulseProblem>::x1GasMomentum_index)[i] / rho_t;
 		const auto Egas = values2.at(RadSystem<PulseProblem>::gasInternalEnergy_index)[i];
+		const auto flux_t = values2.at(RadSystem<PulseProblem>::x1RadFlux_index)[i];
 		xs2.at(i) = x - drift;
 		rhogas2.at(index_) = rho_t;
 		Trad2.at(index_) = Trad_t;
 		Tgas2.at(index_) = quokka::EOS<PulseProblem>::ComputeTgasFromEint(rho_t, Egas);
 		Vgas2.at(index_) = 1e-5 * (v_t - v0_adv);
+		flux2.at(index_) = flux_t;
 	}
 	// END OF PROBLEM 2
 
@@ -434,6 +434,29 @@ auto problem_main() -> int
 	file << "xs,Vgas,xs2,Vgas2\n";
 	for (size_t i = 0; i < xs.size(); ++i) {
 		file << std::scientific << std::setprecision(12) << xs[i] << "," << Vgas[i] << "," << xs2[i] << "," << Vgas2[i] << "\n";
+	}
+	file.close();
+
+	// plot radiation flux profile of the non-advecting pulse
+	matplotlibcpp::clf();
+	std::map<std::string, std::string> flux_args;
+	flux_args["label"] = "radiation flux (non-advecting)";
+	flux_args["linestyle"] = "-";
+	matplotlibcpp::plot(xs, flux, flux_args);
+	flux_args["label"] = "radiation flux (advecting)";
+	matplotlibcpp::plot(xs2, flux2, flux_args);
+	matplotlibcpp::xlabel("length x (cm)");
+	matplotlibcpp::ylabel("flux (erg cm^-2 s^-1)");
+	matplotlibcpp::legend();
+	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
+	matplotlibcpp::tight_layout();
+	matplotlibcpp::save("./radhydro_pulse_dyndiff_flux.pdf");
+
+	// Save xs, flux, xs2, flux2 to csv file
+	file.open("radhydro_pulse_dyndiff_flux.csv");
+	file << "xs,flux,xs2,flux2\n";
+	for (size_t i = 0; i < xs.size(); ++i) {
+		file << std::scientific << std::setprecision(12) << xs[i] << "," << flux[i] << "," << xs2[i] << "," << flux2[i] << "\n";
 	}
 	file.close();
 

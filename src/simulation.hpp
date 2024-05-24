@@ -307,6 +307,9 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	template <typename ReduceOp, typename F> auto computePlaneProjection(F const &user_f, int dir) const -> amrex::BaseFab<amrex::Real>;
 
+	// compute volume integrals
+	template <typename F> auto computeVolumeIntegral(F const &user_f) -> amrex::Real;
+
 	// I/O functions
 	[[nodiscard]] auto PlotFileName(int lev) const -> std::string;
 	[[nodiscard]] auto CustomPlotFileName(const char *base, int lev) const -> std::string;
@@ -1266,7 +1269,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 
 	if (Verbose()) {
 		amrex::Print() << "[Level " << lev << " step " << istep[lev] + 1 << "] ";
-		amrex::Print() << "ADVANCE with time = " << tNew_[lev] << " dt = " << dt_[lev] << '\n';
+		amrex::Print() << "ADVANCE with time = " << std::scientific << tNew_[lev] << " dt = " << std::scientific << dt_[lev] << '\n';
 	}
 
 	// Advance a single level for a single time step, and update flux registers
@@ -1802,29 +1805,48 @@ void AMRSimulation<problem_t>::FillPatchWithData(int lev, amrex::Real time, amre
 
 	// create functor to fill ghost zones at domain boundaries
 	// (note that domain boundaries may be present at any refinement level)
-	amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>> boundaryFunctor(setBoundaryFunctor<problem_t>{});
-	amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>> finePhysicalBoundaryFunctor(geom[lev], BCs, boundaryFunctor);
+	amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>> boundaryFunctor_cc(setBoundaryFunctor<problem_t>{});
+	amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>> finePhysicalBoundaryFunctor_cc(geom[lev], BCs, boundaryFunctor_cc);
+
+	amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>> boundaryFunctor_fc(setBoundaryFunctorFaceVar<problem_t>{});
+	amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>>> finePhysicalBoundaryFunctor_fc(geom[lev], BCs, boundaryFunctor_fc);
 
 	if (lev == 0) { // NOTE: used by RemakeLevel
 		// copies interior zones, fills ghost zones
-		amrex::FillPatchSingleLevel(mf, time, fineData, fineTime, 0, icomp, ncomp, geom[lev], finePhysicalBoundaryFunctor, 0);
+		if (cen == quokka::centering::cc) {
+			amrex::FillPatchSingleLevel(mf, time, fineData, fineTime, 0, icomp, ncomp, geom[lev], finePhysicalBoundaryFunctor_cc, 0);
+		} else if (cen == quokka::centering::fc) {
+			amrex::FillPatchSingleLevel(mf, time, fineData, fineTime, 0, icomp, ncomp, geom[lev], finePhysicalBoundaryFunctor_fc, 0);
+		}
 	} else {
-		amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>> coarsePhysicalBoundaryFunctor(geom[lev - 1], BCs, boundaryFunctor);
+		amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>> coarsePhysicalBoundaryFunctor_cc(geom[lev - 1], BCs,
+															   boundaryFunctor_cc);
+		amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>>> coarsePhysicalBoundaryFunctor_fc(geom[lev - 1], BCs,
+																  boundaryFunctor_fc);
 
 		// copies interior zones, fills ghost zones with space-time interpolated
 		// data
 		if (fptype == FillPatchType::fillpatch_class) {
-			// N.B.: this only works for cell-centered data
-			fillpatcher_[lev]->fill(mf, mf.nGrowVect(), time, coarseData, coarseTime, fineData, fineTime, 0, icomp, ncomp,
-						coarsePhysicalBoundaryFunctor, 0, finePhysicalBoundaryFunctor, 0, BCs, 0, pre_interp, post_interp);
+			if (cen == quokka::centering::cc) {
+				// N.B.: this only works for cell-centered data
+				fillpatcher_[lev]->fill(mf, mf.nGrowVect(), time, coarseData, coarseTime, fineData, fineTime, 0, icomp, ncomp,
+							coarsePhysicalBoundaryFunctor_cc, 0, finePhysicalBoundaryFunctor_cc, 0, BCs, 0, pre_interp,
+							post_interp);
+			} else {
+				// AMReX only implements FillPatch class for cell-centered data
+				// See extern/amrex/Src/AmrCore/AMReX_FillPatcher.H
+				// AMReX PR with explanation: https://github.com/AMReX-Codes/amrex/pull/2972
+				amrex::Abort("FillPatchType::fillpatch_class is not implemented for non-cell-centered data! Use "
+					     "FillPatchType::fillpatch_function instead.");
+			}
 		} else {
 			if (cen == quokka::centering::cc) {
 				amrex::FillPatchTwoLevels(mf, time, coarseData, coarseTime, fineData, fineTime, 0, icomp, ncomp, geom[lev - 1], geom[lev],
-							  coarsePhysicalBoundaryFunctor, 0, finePhysicalBoundaryFunctor, 0, refRatio(lev - 1),
+							  coarsePhysicalBoundaryFunctor_cc, 0, finePhysicalBoundaryFunctor_cc, 0, refRatio(lev - 1),
 							  getAmrInterpolaterCellCentered(), BCs, 0, pre_interp, post_interp);
 			} else if (cen == quokka::centering::fc) {
 				amrex::FillPatchTwoLevels(mf, time, coarseData, coarseTime, fineData, fineTime, 0, icomp, ncomp, geom[lev - 1], geom[lev],
-							  coarsePhysicalBoundaryFunctor, 0, finePhysicalBoundaryFunctor, 0, refRatio(lev - 1),
+							  coarsePhysicalBoundaryFunctor_fc, 0, finePhysicalBoundaryFunctor_fc, 0, refRatio(lev - 1),
 							  getAmrInterpolaterFaceCentered(), BCs, 0, pre_interp, post_interp);
 			} else {
 				amrex::Abort("AMR interpolation is not implemented for this zone centering!");
@@ -1937,6 +1959,32 @@ template <typename problem_t> void AMRSimulation<problem_t>::AverageDownTo(int c
 			amrex::average_down_faces(state_new_fc_[crse_lev + 1][idim], state_new_fc_[crse_lev][idim], refRatio(crse_lev), geom[crse_lev]);
 		}
 	}
+}
+
+template <typename problem_t> template <typename F> auto AMRSimulation<problem_t>::computeVolumeIntegral(F const &user_f) -> amrex::Real
+{
+	// compute integral of user_f(i, j, k, state) along the given axis.
+	const BL_PROFILE("AMRSimulation::computeVolumeIntegral()");
+
+	// allocate temporary multifabs
+	amrex::Vector<amrex::MultiFab> q;
+	q.resize(finest_level + 1);
+	for (int lev = 0; lev <= finest_level; ++lev) {
+		q[lev].define(boxArray(lev), DistributionMap(lev), 1, 0);
+	}
+
+	// evaluate user_f on all levels
+	// (note: it is not necessary to average down)
+	for (int lev = 0; lev <= finest_level; ++lev) {
+		auto const &state = state_new_cc_[lev].const_arrays();
+		auto const &result = q[lev].arrays();
+		amrex::ParallelFor(q[lev], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) { result[bx](i, j, k) = user_f(i, j, k, state[bx]); });
+	}
+	amrex::Gpu::streamSynchronize();
+
+	// call amrex::volumeWeightedSum
+	const amrex::Real result = amrex::volumeWeightedSum(amrex::GetVecOfConstPtrs(q), 0, geom, ref_ratio);
+	return result;
 }
 
 #ifdef AMREX_PARTICLES

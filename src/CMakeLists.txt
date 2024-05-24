@@ -125,8 +125,11 @@ set (QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/DiagBase.cpp" 
                         "${CMAKE_CURRENT_SOURCE_DIR}/DiagFilter.cpp" 
                         "${CMAKE_CURRENT_SOURCE_DIR}/DiagFramePlane.cpp" 
-                        "${CMAKE_CURRENT_SOURCE_DIR}/CloudyCooling.cpp" 
+                        "${CMAKE_CURRENT_SOURCE_DIR}/DiagPDF.cpp" 
+                        "${CMAKE_CURRENT_SOURCE_DIR}/GrackleLikeCooling.cpp" 
                         "${CMAKE_CURRENT_SOURCE_DIR}/GrackleDataReader.cpp"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/TabulatedCooling.cpp" 
+                        "${CMAKE_CURRENT_SOURCE_DIR}/CloudyDataReader.cpp" 
                         "${openPMDSources}")
 
 set (QuokkaObjSources "${QuokkaSourcesNoEOS}" "${gamma_law_sources}")
@@ -174,6 +177,7 @@ add_subdirectory(RadhydroPulse)
 add_subdirectory(RadhydroPulseDyn)
 add_subdirectory(RadhydroPulseGrey)
 add_subdirectory(RadhydroPulseMG)
+add_subdirectory(RadhydroPulseMGint)
 
 add_subdirectory(BinaryOrbitCIC)
 add_subdirectory(Cooling)
