@@ -419,8 +419,8 @@ auto problem_main() -> int
 	vgas_args["label"] = "gas velocity (non-advecting)";
 	vgas_args["linestyle"] = "-";
 	matplotlibcpp::plot(xs, Vgas, vgas_args);
-	vgas_args["label"] = "gas velocity (advecting)";
-	matplotlibcpp::plot(xs2, Vgas2, vgas_args);
+	// vgas_args["label"] = "gas velocity (advecting)";
+	// matplotlibcpp::plot(xs2, Vgas2, vgas_args);
 	matplotlibcpp::xlabel("length x (cm)");
 	matplotlibcpp::ylabel("velocity (km s^-1)");
 	matplotlibcpp::legend();

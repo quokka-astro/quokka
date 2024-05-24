@@ -158,6 +158,11 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<TheProblem>::ComputeFluxMeanOpacity(const d
 	return ComputePlanckOpacity(rho, Tgas);
 }
 
+template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<TheProblem>::ComputeEddingtonFactor(double /*f*/) -> double
+{
+	return (1. / 3.); // Eddington approximation
+}
+
 template <> void RadhydroSimulation<TheProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
 	// extract variables required from the geom object
@@ -336,7 +341,7 @@ auto problem_main() -> int
 		matplotlibcpp::save("./LinearDiffusionMP_Tgas.pdf");
 
     matplotlibcpp::clf();
-    args["label"] = "numerical";
+    args["label"] = "numerical solution";
 		exact_args["label"] = "exact diffusion solution";
 		exact_args["color"] = "C1";
     matplotlibcpp::plot(xs, Erad, args);
