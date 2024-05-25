@@ -1,39 +1,35 @@
-# This config was automatically generated from your source code
-# Stacks detected: cicd:github-actions:.github/workflows,deps:python:docs
-version: 2.1
-orbs:
-  python: circleci/python@2
+version: 2
+
 jobs:
-  test-python:
-    # Install dependencies and run tests
-    docker:
-      - image: cimg/python:3.8-node
-    working_directory: ~/project/docs
+  linux-aarch64:
+    working_directory: ~/linux-aarch64
+    machine:
+      image: ubuntu-2204:current
+    # resource_class is what tells CircleCI to use an ARM worker for native arm builds
+    #   https://circleci.com/product/features/resource-classes/
+    #   https://circleci.com/docs/using-arm/
+    resource_class: arm.large
     steps:
-      - checkout:
-          path: ~/project
-      - python/install-packages
+      - checkout
       - run:
-          name: Run tests
-          command: pytest --junitxml=junit.xml || ((($? == 5)) && echo 'Did not find any tests to run.')
-      - store_test_results:
-          path: junit.xml
-  deploy:
-    # This is an example deploy job, not actually used by the workflow
-    docker:
-      - image: cimg/base:stable
-    steps:
-      # Replace this with steps to deploy to users
+          name: Install build dependencies
+          command: |
+            sudo apt update
+            sudo apt install cmake g++ libopenmpi-dev libhdf5-openmpi-dev hdf5-tools python3 python3-setuptools
+            python3 -m pip install -U numpy scipy matplotlib
       - run:
-          name: deploy
-          command: '#e.g. ./deploy.sh'
+          name: Build
+          command: |
+            cmake -S . -B build \
+              -DAMReX_SPACEDIM=1 -DCMAKE_BUILD_TYPE=Release
+            cmake --build build --parallel 4
       - run:
-          name: found github actions config
-          command: ':'
+          name: Test
+          command: |
+            ctest --test-dir build --output-on-failure
+
 workflows:
-  build-and-test:
+  version: 2
+  all-tests:
     jobs:
-      - test-python
-    # - deploy:
-    #     requires:
-    #       - test-python
+      - linux-aarch64
