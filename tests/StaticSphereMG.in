@@ -1,15 +1,15 @@
 kappa0 = 1.0e20
 #v0_adv = 1.0e6
 v0_adv = 0.0
-#max_time = 0.0
-#max_time = 1.0e-8
-max_time = 1.0e-5
+max_time = 0.0
+#max_time = 1.0e-9
+#max_time = 1.0e-5
 
 # *****************************************************************
 # Problem size and geometry
 # *****************************************************************
-geometry.prob_lo     =  -512.0  0.0  0.0 
-geometry.prob_hi     =  512.0  1.0  1.0
+geometry.prob_lo     =  -512.0  -512.0  0.0 
+geometry.prob_hi     =  512.0  512.0  1.0
 geometry.is_periodic =  1    1    1
 
 # *****************************************************************
@@ -20,7 +20,9 @@ amr.v              = 0       # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 1024 4 4
+#amr.n_cell          = 1024 1024 4
+amr.n_cell          = 512 512 4
+#amr.n_cell          = 128 128 4
 amr.max_level       = 0     # number of levels = max_level + 1
 amr.blocking_factor = 4     # grid size must be divisible by this
 amr.max_grid_size_x = 64
@@ -29,4 +31,4 @@ amr.max_grid_size_z = 4
 
 do_reflux = 0
 do_subcycle = 0
-suppress_output = 1
+suppress_output = 0

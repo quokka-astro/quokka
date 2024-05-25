@@ -1,5 +1,5 @@
 /// \file test_radhydro_pulse_grey.cpp
-/// \brief Defines a test problem for radiation in the diffusion regime with advection in medium with variable opacity under grey approximation.
+/// \brief Defines a 2D test problem for radiation in the diffusion regime with advection in medium with variable opacity under grey approximation.
 ///
 
 #include "test_static_sphere_MG.hpp"
@@ -115,13 +115,16 @@ template <> void RadhydroSimulation<TheProblem>::setInitialConditionsOnGrid(quok
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
 	amrex::Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
+  amrex::Real const y0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
-		const double Trad = compute_initial_Tgas(x - x0);
+		amrex::Real const y = prob_lo[1] + (j + static_cast<amrex::Real>(0.5)) * dx[1];
+    auto const r = std::sqrt((x - x0) * (x - x0) + (y - y0) * (y - y0));
+		const double Trad = compute_initial_Tgas(r);
 		const double Erad = a_rad * std::pow(Trad, 4);
-		const double rho = compute_exact_rho(x - x0);
+		const double rho = compute_exact_rho(r);
 		const double Egas = quokka::EOS<TheProblem>::ComputeEintFromTgas(rho, Trad);
 		const double v0 = v0_adv;
 
@@ -187,7 +190,7 @@ auto problem_main() -> int
 	sim2.evolve();
 
 	// read output variables
-	auto [position2, values2] = fextract(sim2.state_new_cc_[0], sim2.Geom(0), 0, 0.0);
+	auto [position2, values2] = fextract(sim2.state_new_cc_[0], sim2.Geom(0), 0, 0.0, true);
 	const int nx = static_cast<int>(position2.size());
 	auto prob_lo = sim2.geom[0].ProbLoArray();
 	auto prob_hi = sim2.geom[0].ProbHiArray();

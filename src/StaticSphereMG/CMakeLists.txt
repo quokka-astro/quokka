@@ -1,4 +1,4 @@
-if (AMReX_SPACEDIM EQUAL 1)
+if (AMReX_SPACEDIM EQUAL 2)
   add_executable(test_static_sphere_MG test_static_sphere_MG.cpp ../fextract.cpp ${QuokkaObjSources})
 
   if(AMReX_GPU_BACKEND MATCHES "CUDA")
