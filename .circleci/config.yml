@@ -10,7 +10,7 @@ jobs:
     #   https://circleci.com/docs/using-arm/
     resource_class: arm.large
     steps:
-      - checkout
+      - checkout:
           post:
             - git submodule init
             - git submodule update
