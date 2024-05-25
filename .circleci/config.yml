@@ -11,6 +11,9 @@ jobs:
     resource_class: arm.large
     steps:
       - checkout
+          post:
+          - git submodule init
+          - git submodule update
       - run:
           name: Install build dependencies
           command: |
