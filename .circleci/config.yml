@@ -12,8 +12,8 @@ jobs:
     steps:
       - checkout
           post:
-          - git submodule init
-          - git submodule update
+            - git submodule init
+            - git submodule update
       - run:
           name: Install build dependencies
           command: |
