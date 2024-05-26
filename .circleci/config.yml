@@ -101,8 +101,9 @@ jobs:
             cmake --build build --parallel 4
       - run:
           name: Test
+          no_output_timeout: 30m
           command: |
-            ctest --test-dir build -j 2 -T Test -E "RadhydroPulseMG*" --output-on-failure
+            ctest --test-dir build -j 4 -T Test -E "RadhydroPulseMG*" --output-on-failure
 
 workflows:
   version: 2
