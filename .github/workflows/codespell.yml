@@ -36,4 +36,4 @@ jobs:
 
       - name: Run codespell
         run: |
-          codespell src
+          codespell -I codespell_ignore.txt, --ignore-words=codespell_ignore.txt src
