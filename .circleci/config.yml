@@ -71,9 +71,43 @@ jobs:
           command: |
             ctest --test-dir build --output-on-failure
 
+  linux-aarch64-debug:
+    working_directory: ~/linux-aarch64-debug
+    machine:
+      image: ubuntu-2204:current
+    # resource_class is what tells CircleCI to use an ARM worker for native arm builds
+    #   https://circleci.com/product/features/resource-classes/
+    #   https://circleci.com/docs/using-arm/
+    resource_class: arm.large
+    steps:
+      - checkout
+      - run:
+          name: "Checkout Submodules"
+          command: |
+            git reset --hard
+            git submodule init
+            git submodule update
+      - run:
+          name: Install build dependencies
+          command: |
+            sudo apt update
+            sudo apt install cmake g++ libopenmpi-dev libhdf5-openmpi-dev hdf5-tools python3 python3-setuptools
+            python3 -m pip install -U numpy scipy matplotlib
+      - run:
+          name: Build
+          command: |
+            cmake -S . -B build \
+              -DAMReX_SPACEDIM=1 -DCMAKE_BUILD_TYPE=Debug
+            cmake --build build --parallel 4
+      - run:
+          name: Test
+          command: |
+            ctest -j 2 -T Test -E "RadhydroPulseMG*" --output-on-failure
+
 workflows:
   version: 2
   all-tests:
     jobs:
       - linux-aarch64-release
       - linux-aarch64-hwasan
+      - linux-aarch64-debug
