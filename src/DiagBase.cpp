@@ -79,3 +79,12 @@ auto DiagBase::getFieldIndex(const std::string &a_field, const amrex::Vector<std
 	}
 	return index;
 }
+
+auto DiagBase::getFieldIndexVec(const std::vector<std::string> &a_field, const amrex::Vector<std::string> &a_varList) -> amrex::Vector<int>
+{
+	amrex::Vector<int> indexVec(a_field.size());
+	for (amrex::Long n = 0; n < indexVec.size(); ++n) {
+		indexVec[n] = getFieldIndex(a_field[n], a_varList);
+	}
+	return indexVec;
+}

@@ -39,7 +39,7 @@ perturb.rms_velocity = 1.8050e5 #initial cloud rms velocity (to drive turbulence
 
 # params for jeans refinement
 jeansRefine.ncells = 64 #refine on these many cells per jeans length
-jeansRefine.density_threshold = 2e-20 #do not refine if density is less than this density
+jeansRefine.density_threshold = 5e-21 #do not refine if density is less than this density
 
 # density floor for popiii
 density_floor = 1e-25
@@ -59,7 +59,7 @@ primordial_chem.temperature = 0.26415744E+003
 primordial_chem.small_temp = 1.e1
 primordial_chem.small_dens = 1.e-60
 primordial_chem.max_density_allowed = 3e-6
-primordial_chem.min_density_allowed = 1e-21
+primordial_chem.min_density_allowed = 5e-21
 #format in krome fort22_wD.dat file: E H- D- H HE H2 HD D H+ HE+ H2+ D+ HD+ HE++
 #format in quokka: E H+ H H- D+ D H2+ D- H2 HD+ HD HE++ HE+ HE
 primordial_chem.primary_species_1 = 0.88499253E-006

@@ -1,6 +1,6 @@
 kappa0 = 100.0
 v0_adv = 1.0e6
-max_time = 4.8e-5
+max_time = 1e-5
 
 # *****************************************************************
 # Problem size and geometry
