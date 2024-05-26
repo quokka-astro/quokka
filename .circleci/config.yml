@@ -64,6 +64,7 @@ jobs:
             cmake --build build --parallel 4
       - run:
           name: Test
+          no_output_timeout: 30m
           command: |
             ctest --test-dir build --output-on-failure
 
