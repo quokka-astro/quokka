@@ -54,7 +54,7 @@ jobs:
           name: Install build dependencies
           command: |
             sudo apt update
-            sudo apt install cmake g++ llvm libopenmpi-dev libhdf5-openmpi-dev hdf5-tools python3 python3-setuptools
+            sudo apt install cmake clang libopenmpi-dev libhdf5-openmpi-dev hdf5-tools python3 python3-setuptools
             python3 -m pip install -U numpy scipy matplotlib
       - run:
           name: Build
