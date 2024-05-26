@@ -13,6 +13,7 @@ struct TheProblem {
 };
 
 constexpr int variable_kappa = 0;
+static constexpr bool export_csv = true;
 
 constexpr double kappa_scale_up = 1.0e6;
 constexpr double kappa_P_coeff = 3063.96 * kappa_scale_up;
@@ -264,6 +265,18 @@ auto problem_main() -> int
 	// const double symm_rel_error = symm_err / symm_norm;
 	// amrex::Print() << "Symmetry L1 error norm = " << symm_rel_error << std::endl;
 
+	// Save xs, Trad, Tgas, rhogas, Vgas, xs_mg, Trad_mg, Tgas_mg, rhogas_mg, Vgas_mg, xs2, Trad2, Tgas2, rhogas2, Vgas2
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		if (export_csv) {
+			std::ofstream file;
+			file.open("static_sphere.csv");
+			file << "xs,rho,Trad,Tgas,Vgas\n";
+			for (size_t i = 0; i < xs2.size(); ++i) {
+				file << std::scientific << std::setprecision(12) << xs2[i] << "," << rhogas2[i] << "," << Trad2[i] << "," << Tgas2[i] << "," << Vgas2[i] << "\n";
+			}
+			file.close();
+		}
+
 #ifdef HAVE_PYTHON
 	// plot temperature
 	matplotlibcpp::clf();
@@ -316,6 +329,7 @@ auto problem_main() -> int
 	matplotlibcpp::save(fmt::format("./static_sphere_velocity_t{:.5g}.pdf", sim2.tNew_[0]));
 
 #endif
+	}
 
 	// Cleanup and exit
 	int status = 0;
