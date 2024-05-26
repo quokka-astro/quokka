@@ -34,8 +34,8 @@ jobs:
           command: |
             ctest --test-dir build --output-on-failure
             
-  linux-aarch64-debug:
-    working_directory: ~/linux-aarch64-debug
+  linux-aarch64-hwasan:
+    working_directory: ~/linux-aarch64-hwasan
     machine:
       image: ubuntu-2204:current
     # resource_class is what tells CircleCI to use an ARM worker for native arm builds
@@ -54,13 +54,16 @@ jobs:
           name: Install build dependencies
           command: |
             sudo apt update
-            sudo apt install cmake g++ libopenmpi-dev libhdf5-openmpi-dev hdf5-tools python3 python3-setuptools
+            sudo apt install cmake g++ llvm libopenmpi-dev libhdf5-openmpi-dev hdf5-tools python3 python3-setuptools
             python3 -m pip install -U numpy scipy matplotlib
       - run:
           name: Build
           command: |
             cmake -S . -B build \
-              -DAMReX_SPACEDIM=1 -DCMAKE_BUILD_TYPE=Debug
+              -DCMAKE_BUILD_TYPE=Release -DENABLE_HWASAN=ON \
+              -DCMAKE_CXX_FLAGS="-fPIC" -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld" -DCMAKE_SHARED_LINKER_FLAGS="-fuse-ld=lld" \
+              -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+              -DAMReX_SPACEDIM=1
             cmake --build build --parallel 4
       - run:
           name: Test
@@ -73,4 +76,4 @@ workflows:
   all-tests:
     jobs:
       - linux-aarch64-release
-      - linux-aarch64-debug
+      - linux-aarch64-hwasan
