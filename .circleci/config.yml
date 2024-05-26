@@ -102,7 +102,7 @@ jobs:
       - run:
           name: Test
           command: |
-            ctest -j 2 -T Test -E "RadhydroPulseMG*" --output-on-failure
+            ctest --test-dir build -j 2 -T Test -E "RadhydroPulseMG*" --output-on-failure
 
 workflows:
   version: 2
