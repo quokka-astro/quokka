@@ -1603,19 +1603,19 @@ void RadhydroSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Rea
 		// new radiation state is stored in state_new_cc_
 		// new hydro state is stored in state_new_cc_ (always the case during radiation update)
 
-		if constexpr (IMEX_a22 > 0.0) {
-			// matter-radiation exchange source terms of stage 1
-			for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
-				const amrex::Box &indexRange = iter.validbox();
-				auto const &stateNew = state_new_cc_[lev].array(iter);
-				auto const &prob_lo = geom[lev].ProbLoArray();
-				auto const &prob_hi = geom[lev].ProbHiArray();
-				// update state_new_cc_[lev] in place (updates both radiation and hydro vars)
-				// Note that only a fraction (IMEX_a32) of the matter-radiation exchange source terms are added to hydro. This ensures that the
-				// hydro properties get to t + IMEX_a32 dt in terms of matter-radiation exchange.
-				operatorSplitSourceTerms(stateNew, indexRange, time_subcycle, dt_radiation, 1, dx, prob_lo, prob_hi);
-			}
-		}
+		// if constexpr (IMEX_a22 > 0.0) {
+		// 	// matter-radiation exchange source terms of stage 1
+		// 	for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
+		// 		const amrex::Box &indexRange = iter.validbox();
+		// 		auto const &stateNew = state_new_cc_[lev].array(iter);
+		// 		auto const &prob_lo = geom[lev].ProbLoArray();
+		// 		auto const &prob_hi = geom[lev].ProbHiArray();
+		// 		// update state_new_cc_[lev] in place (updates both radiation and hydro vars)
+		// 		// Note that only a fraction (IMEX_a32) of the matter-radiation exchange source terms are added to hydro. This ensures that the
+		// 		// hydro properties get to t + IMEX_a32 dt in terms of matter-radiation exchange.
+		// 		operatorSplitSourceTerms(stateNew, indexRange, time_subcycle, dt_radiation, 1, dx, prob_lo, prob_hi);
+		// 	}
+		// }
 
 		// Stage 2: advance hyperbolic radiation subsystem using midpoint RK2 method, starting from state_old_cc_ to state_new_cc_
 		advanceRadiationMidpointRK2(lev, time_subcycle, dt_radiation, i, nsubSteps, fr_as_crse, fr_as_fine);
@@ -1623,15 +1623,15 @@ void RadhydroSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Rea
 		// new radiation state is stored in state_new_cc_
 		// new hydro state is stored in state_new_cc_ (always the case during radiation update)
 
-		// Add the matter-radiation exchange source terms to the radiation subsystem and evolve by (1 - IMEX_a32) * dt
-		for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
-			const amrex::Box &indexRange = iter.validbox();
-			auto const &stateNew = state_new_cc_[lev].array(iter);
-			auto const &prob_lo = geom[lev].ProbLoArray();
-			auto const &prob_hi = geom[lev].ProbHiArray();
-			// update state_new_cc_[lev] in place (updates both radiation and hydro vars)
-			operatorSplitSourceTerms(stateNew, indexRange, time_subcycle, dt_radiation, 2, dx, prob_lo, prob_hi);
-		}
+		// // Add the matter-radiation exchange source terms to the radiation subsystem and evolve by (1 - IMEX_a32) * dt
+		// for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
+		// 	const amrex::Box &indexRange = iter.validbox();
+		// 	auto const &stateNew = state_new_cc_[lev].array(iter);
+		// 	auto const &prob_lo = geom[lev].ProbLoArray();
+		// 	auto const &prob_hi = geom[lev].ProbHiArray();
+		// 	// update state_new_cc_[lev] in place (updates both radiation and hydro vars)
+		// 	operatorSplitSourceTerms(stateNew, indexRange, time_subcycle, dt_radiation, 2, dx, prob_lo, prob_hi);
+		// }
 
 		// new hydro+radiation state is stored in state_new_cc_
 
