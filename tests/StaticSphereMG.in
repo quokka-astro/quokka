@@ -1,9 +1,10 @@
 kappa0 = 1.0e20
 #v0_adv = 1.0e6
 v0_adv = 0.0
-max_time = 0.0
-#max_time = 1.0e-9
-#max_time = 1.0e-5
+stop_time = 0.0
+#stop_time = 1.0e-9
+#stop_time = 1.0e-5
+max_timesteps = 1e6
 
 # *****************************************************************
 # Problem size and geometry
