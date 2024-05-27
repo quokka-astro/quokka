@@ -1,12 +1,12 @@
-#ifndef TEST_HYDRO2D_BLAST_HPP_ // NOLINT
-#define TEST_HYDRO2D_BLAST_HPP_
+#ifndef TEST_RADIATION_FORCE_HPP_ // NOLINT
+#define TEST_RADIATION_FORCE_HPP_
 //==============================================================================
 // TwoMomentRad - a radiation transport library for patch-based AMR codes
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file test_hydro_shocktube.hpp
-/// \brief Defines a test problem for a shock tube.
+/// \file test_radiation_tube.hpp
+/// \brief Defines a test problem for radiation in the free-streaming regime.
 ///
 
 // external headers
@@ -14,13 +14,11 @@
 #include "matplotlibcpp.h"
 #endif
 #include <fmt/format.h>
-#include <fstream>
 
 // internal headers
 
-#include "interpolate.hpp"
 #include "radiation_system.hpp"
 
 // function definitions
 
-#endif // TEST_HYDRO2D_BLAST_HPP_
+#endif // TEST_RADIATION_FORCE_HPP_

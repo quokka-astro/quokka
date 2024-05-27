@@ -25,13 +25,15 @@ constexpr double a_rad = C::a_rad;
 constexpr double c = C::c_light; // speed of light (cgs)
 constexpr double chat = c;
 constexpr double width = 24.0; // cm, width of the pulse
-constexpr double erad_floor = a_rad * T0 * T0 * T0 * T0 * 1.0e-10;
+constexpr double erad_floor = a_rad * T0 * T0 * T0 * T0 * 1.0e-20;
 constexpr double mu = 2.33 * C::m_u;
 constexpr double k_B = C::k_B;
+constexpr double Cv = 3. / 2. * k_B / mu;
 
 // Default parameters: static diffusion, tau = 2e3, beta = 3e-5, beta tau = 6e-2
 AMREX_GPU_MANAGED double kappa0 = 100. * kappa_scale_up;	 // NOLINT
-AMREX_GPU_MANAGED double v0_adv = 1.0e6; // NOLINT
+// AMREX_GPU_MANAGED double v0_adv = 1.0e6; // NOLINT
+AMREX_GPU_MANAGED double v0_adv = 0.0;
 // AMREX_GPU_MANAGED double max_time = 4.8e-5; // max_time = 2.0 * width / v1;
 
 // dynamic diffusion: tau = 2e4, beta = 3e-3, beta tau = 60
@@ -109,37 +111,57 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<TheProblem>::ComputeFluxMeanOpacity(const d
 template <> void RadhydroSimulation<TheProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)
 {
 	// extract variables required from the geom object
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_elem.prob_hi_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
 	amrex::Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
-  amrex::Real const y0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
-
+	amrex::Real const y0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
-		amrex::Real const y = prob_lo[1] + (j + static_cast<amrex::Real>(0.5)) * dx[1];
-    auto const r = std::sqrt((x - x0) * (x - x0) + (y - y0) * (y - y0));
-		const double Trad = compute_initial_Tgas(r);
-		const double Erad = a_rad * std::pow(Trad, 4);
-		const double rho = compute_exact_rho(r);
-		const double Egas = quokka::EOS<TheProblem>::ComputeEintFromTgas(rho, Trad);
-		const double v0 = v0_adv;
+		amrex::Real const x = prob_lo[0] + (i + amrex::Real(0.5)) * dx[0];
+		amrex::Real const y = prob_lo[1] + (j + amrex::Real(0.5)) * dx[1];
+		amrex::Real const R = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2));
 
-		// state_cc(i, j, k, RadSystem<TheProblem>::radEnergy_index) = (1. + 4. / 3. * (v0 * v0) / (c * c)) * Erad;
-		state_cc(i, j, k, RadSystem<TheProblem>::radEnergy_index) = Erad;
-		state_cc(i, j, k, RadSystem<TheProblem>::x1RadFlux_index) = 4. / 3. * v0 * Erad;
+		// double vx = v0_adv;
+		double vx = v0_adv;
+		double vy = 0.;
+		double vz = 0.;
+		double rho = rho0;
+		// const double rho = compute_exact_rho(R);
+		// double Tgas = 0.0;
+		// if (R < 100.) { // inside circle
+		// 	Tgas = T0;
+		// } else {
+		// 	Tgas = 0.1 * T0;
+		// }
+		const double Trad = compute_initial_Tgas(R);
+		// const double Egas = quokka::EOS<TheProblem>::ComputeEintFromTgas(rho, Trad);
+		const double Egas = Cv * rho * Trad;
+
+
+		AMREX_ASSERT(!std::isnan(vx));
+		AMREX_ASSERT(!std::isnan(vy));
+		AMREX_ASSERT(!std::isnan(vz));
+		AMREX_ASSERT(!std::isnan(rho));
+		AMREX_ASSERT(!std::isnan(P));
+
+		const auto v_sq = vx * vx + vy * vy + vz * vz;
+
+		state_cc(i, j, k, RadSystem<TheProblem>::gasDensity_index) = rho;
+		state_cc(i, j, k, RadSystem<TheProblem>::x1GasMomentum_index) = rho * vx;
+		state_cc(i, j, k, RadSystem<TheProblem>::x2GasMomentum_index) = rho * vy;
+		state_cc(i, j, k, RadSystem<TheProblem>::x3GasMomentum_index) = rho * vz;
+		state_cc(i, j, k, RadSystem<TheProblem>::gasEnergy_index) = Egas + 0.5 * rho * v_sq;
+		state_cc(i, j, k, RadSystem<TheProblem>::gasInternalEnergy_index) = Egas;
+
+		// initialize radiation variables to zero
+		state_cc(i, j, k, RadSystem<TheProblem>::radEnergy_index) = a_rad * std::pow(Trad, 4);
+		state_cc(i, j, k, RadSystem<TheProblem>::x1RadFlux_index) = 0;
 		state_cc(i, j, k, RadSystem<TheProblem>::x2RadFlux_index) = 0;
 		state_cc(i, j, k, RadSystem<TheProblem>::x3RadFlux_index) = 0;
-		state_cc(i, j, k, RadSystem<TheProblem>::gasEnergy_index) = Egas + 0.5 * rho * v0 * v0;
-		state_cc(i, j, k, RadSystem<TheProblem>::gasDensity_index) = rho;
-		state_cc(i, j, k, RadSystem<TheProblem>::gasInternalEnergy_index) = Egas;
-		state_cc(i, j, k, RadSystem<TheProblem>::x1GasMomentum_index) = v0 * rho;
-		state_cc(i, j, k, RadSystem<TheProblem>::x2GasMomentum_index) = 0.;
-		state_cc(i, j, k, RadSystem<TheProblem>::x3GasMomentum_index) = 0.;
 	});
 }
 
@@ -241,8 +263,10 @@ auto problem_main() -> int
 		xs2.at(i) = x - drift;
 		rhogas2.at(index_) = rho_t;
 		Trad2.at(index_) = Trad_t;
-		Tgas2.at(index_) = quokka::EOS<TheProblem>::ComputeTgasFromEint(rho_t, Egas);
-		Vgas2.at(index_) = 1e-5 * (v_t - v0_adv);
+		// Tgas2.at(index_) = quokka::EOS<TheProblem>::ComputeTgasFromEint(rho_t, Egas);
+		Tgas2.at(index_) = Egas / Cv / rho_t;
+		// Vgas2.at(index_) = 1e-5 * (v_t - v0_adv);
+		Vgas2.at(index_) = 1e-5 * (v_t);
 	}
 
 	for (int i = 0; i < ny; ++i) {
@@ -305,9 +329,9 @@ auto problem_main() -> int
 	matplotlibcpp::clf();
 	std::map<std::string, std::string> Trad_args;
 	std::map<std::string, std::string> Tgas_args;
-	Trad_args["label"] = "Trad (nonadvecting)";
-	Trad_args["linestyle"] = "-.";
-	Tgas_args["label"] = "Tgas (nonadvecting)";
+	// Trad_args["label"] = "Trad (nonadvecting)";
+	// Trad_args["linestyle"] = "-.";
+	// Tgas_args["label"] = "Tgas (nonadvecting)";
 	Tgas_args["linestyle"] = "--";
 	Trad_args["label"] = "Trad (advecting)";
 	Tgas_args["label"] = "Tgas (advecting)";
@@ -315,12 +339,12 @@ auto problem_main() -> int
 	matplotlibcpp::plot(xs2, Tgas2, Tgas_args);
 	matplotlibcpp::xlabel("length x (cm)");
 	matplotlibcpp::ylabel("temperature (K)");
-	matplotlibcpp::ylim(0.98e7, 2.02e7);
+	// matplotlibcpp::ylim(0.98e7, 2.02e7);
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim2.tNew_[0]));
 	matplotlibcpp::tight_layout();
 	// matplotlibcpp::save("./radhydro_pulse_temperature_greynew.pdf");
-	matplotlibcpp::save(fmt::format("./static_sphere_temperature_t{:.5g}.pdf", sim2.tNew_[0]));
+	matplotlibcpp::save(fmt::format("./static_sphere2_temperature_t{:.5g}.pdf", sim2.tNew_[0]));
 
 	// plot gas density profile
 	matplotlibcpp::clf();
@@ -335,7 +359,7 @@ auto problem_main() -> int
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim2.tNew_[0]));
 	matplotlibcpp::tight_layout();
 	// save to file: density_{tNew_[0]}
-	matplotlibcpp::save(fmt::format("./static_sphere_density_t{:.5g}.pdf", sim2.tNew_[0]));
+	matplotlibcpp::save(fmt::format("./static_sphere2_density_t{:.5g}.pdf", sim2.tNew_[0]));
 
 	// plot gas velocity profile
 	matplotlibcpp::clf();
@@ -349,7 +373,7 @@ auto problem_main() -> int
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim2.tNew_[0]));
 	matplotlibcpp::tight_layout();
-	matplotlibcpp::save(fmt::format("./static_sphere_velocity_t{:.5g}.pdf", sim2.tNew_[0]));
+	matplotlibcpp::save(fmt::format("./static_sphere2_velocity_t{:.5g}.pdf", sim2.tNew_[0]));
 
 	// plot temperature Trad2y and Tgas2y
 	matplotlibcpp::clf();
@@ -359,16 +383,16 @@ auto problem_main() -> int
 	Tgas_args["linestyle"] = "--";
 	Trad_args["label"] = "Trad (advecting)";
 	Tgas_args["label"] = "Tgas (advecting)";
-	matplotlibcpp::plot(xs2y, Trad2y, Trad_args);
+	// matplotlibcpp::plot(xs2y, Trad2y, Trad_args);
 	matplotlibcpp::plot(xs2y, Tgas2y, Tgas_args);
 	matplotlibcpp::xlabel("length x (cm)");
 	matplotlibcpp::ylabel("temperature (K)");
-	matplotlibcpp::ylim(0.98e7, 2.02e7);
+	// matplotlibcpp::ylim(0.98e7, 2.02e7);
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim2.tNew_[0]));
 	matplotlibcpp::tight_layout();
 	// matplotlibcpp::save("./radhydro_pulse_temperature_greynew.pdf");
-	matplotlibcpp::save(fmt::format("./static_sphere_temperature_y_t{:.5g}.pdf", sim2.tNew_[0]));
+	matplotlibcpp::save(fmt::format("./static_sphere2_temperature_y_t{:.5g}.pdf", sim2.tNew_[0]));
 
 	// plot gas density profile
 	matplotlibcpp::clf();
@@ -382,7 +406,7 @@ auto problem_main() -> int
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim2.tNew_[0]));
 	matplotlibcpp::tight_layout();
 	// save to file: density_{tNew_[0]}
-	matplotlibcpp::save(fmt::format("./static_sphere_density_y_t{:.5g}.pdf", sim2.tNew_[0]));
+	matplotlibcpp::save(fmt::format("./static_sphere2_density_y_t{:.5g}.pdf", sim2.tNew_[0]));
 
 	// plot gas velocity profile
 	matplotlibcpp::clf();
@@ -395,7 +419,7 @@ auto problem_main() -> int
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim2.tNew_[0]));
 	matplotlibcpp::tight_layout();
-	matplotlibcpp::save(fmt::format("./static_sphere_velocity_y_t{:.5g}.pdf", sim2.tNew_[0]));
+	matplotlibcpp::save(fmt::format("./static_sphere2_velocity_y_t{:.5g}.pdf", sim2.tNew_[0]));
 
 #endif
 	}

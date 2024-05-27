@@ -1,11 +1,16 @@
-max_time = 0.01
+tmax = 1.0e-7
+max_timesteps = 3
+plotfile_interval = -1
 
 # *****************************************************************
 # Problem size and geometry
 # *****************************************************************
-geometry.prob_lo     =  0.0  0.0  0.0 
-geometry.prob_hi     =  1.0  1.0  1.0
-geometry.is_periodic =  1    0    1
+geometry.prob_lo     =  -1.0  -1.0  -1.0 
+geometry.prob_hi     =  1.0 1.0 1.0
+geometry.is_periodic =  1    1    1
+
+# for convergence test, start with max_dt = 1.0e8
+max_dt = 1.0e10
 
 # *****************************************************************
 # VERBOSITY
@@ -15,10 +20,15 @@ amr.v              = 0       # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 4 1000 4
+amr.n_cell          = 32 32 4
 amr.max_level       = 0     # number of levels = max_level + 1
 amr.blocking_factor = 4     # grid size must be divisible by this
+amr.max_grid_size_x = 128
+amr.max_grid_size_y = 128
 
 do_reflux = 0
 do_subcycle = 0
-suppress_output = 0
+suppress_output = 1
+
+cfl = 0.4
+radiation.cfl = 0.4
