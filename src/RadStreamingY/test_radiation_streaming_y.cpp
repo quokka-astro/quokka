@@ -196,7 +196,7 @@ auto problem_main() -> int
 	RadhydroSimulation<StreamingProblem> sim(BCs_cc);
 
 	// read tmax from inputs file
-	amrex::ParmParse pp;  // NOLINT
+	amrex::ParmParse pp; // NOLINT
 	pp.query("max_time", tmax);
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
