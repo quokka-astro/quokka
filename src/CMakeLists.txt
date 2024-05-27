@@ -177,6 +177,7 @@ add_subdirectory(RadhydroPulse)
 add_subdirectory(RadhydroPulseDyn)
 add_subdirectory(RadhydroPulseGrey)
 add_subdirectory(RadhydroPulseMG)
+add_subdirectory(RadhydroPulseMGint)
 
 add_subdirectory(BinaryOrbitCIC)
 add_subdirectory(Cooling)
