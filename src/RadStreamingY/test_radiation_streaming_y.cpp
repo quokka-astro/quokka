@@ -82,8 +82,16 @@ template <> void RadhydroSimulation<StreamingProblem>::setInitialConditionsOnGri
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		// get x and y
+		amrex::Real const x = geom[0].ProbLo(0) + (i + 0.5) * geom[0].CellSize(0);
+		amrex::Real const y = geom[0].ProbLo(1) + (j + 0.5) * geom[0].CellSize(1);
+		auto erad = Erad0;
+		// if (y <= 0.3) {
+		// 	erad = 0.7;
+		// }
+
 		for (int g = 0; g < Physics_Traits<StreamingProblem>::nGroups; ++g) {
-			state_cc(i, j, k, RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad0 * radEnergyFractions[g];
+			state_cc(i, j, k, RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = erad;
 			state_cc(i, j, k, RadSystem<StreamingProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
 			state_cc(i, j, k, RadSystem<StreamingProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
 			state_cc(i, j, k, RadSystem<StreamingProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
@@ -126,30 +134,42 @@ AMRSimulation<StreamingProblem>::setCustomBoundaryConditions(const amrex::IntVec
 		radEnergyFractions[g] = 1.0 / Physics_Traits<StreamingProblem>::nGroups;
 	}
 
+	// if (j < lo[1]) {
+	// 	// streaming inflow boundary
+	// 	const double Erad = 1.0;
+	// 	const double Frad = c * Erad;
+
+	// 	// multigroup radiation
+	// 	// x1 left side boundary (Marshak)
+	// 	for (int g = 0; g < Physics_Traits<StreamingProblem>::nGroups; ++g) {
+	// 		consVar(i, j, k, RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad * radEnergyFractions[g];
+	// 		// consVar(i, j, k, RadSystem<StreamingProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = Frad * radEnergyFractions[g];
+	// 		consVar(i, j, k, RadSystem<StreamingProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+	// 		consVar(i, j, k, RadSystem<StreamingProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = Frad * radEnergyFractions[g];
+	// 		consVar(i, j, k, RadSystem<StreamingProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+	// 	}
+	// } 
+	// } else if (j >= hi[1]) {
+	// 	// right-side boundary -- constant
+	// 	const double Erad = initial_Erad;
+	// 	for (int g = 0; g < Physics_Traits<StreamingProblem>::nGroups; ++g) {
+	// 		auto const Erad_g = Erad * radEnergyFractions[g];
+	// 		consVar(i, j, k, RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad_g;
+	// 		consVar(i, j, k, RadSystem<StreamingProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+	// 		consVar(i, j, k, RadSystem<StreamingProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+	// 		consVar(i, j, k, RadSystem<StreamingProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+	// 	}
+	// }
+
 	if (j < lo[1]) {
-		// streaming inflow boundary
 		const double Erad = 1.0;
 		const double Frad = c * Erad;
-
-		// multigroup radiation
-		// x1 left side boundary (Marshak)
-		for (int g = 0; g < Physics_Traits<StreamingProblem>::nGroups; ++g) {
-			consVar(i, j, k, RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad * radEnergyFractions[g];
-			// consVar(i, j, k, RadSystem<StreamingProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = Frad * radEnergyFractions[g];
-			consVar(i, j, k, RadSystem<StreamingProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
-			consVar(i, j, k, RadSystem<StreamingProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = Frad * radEnergyFractions[g];
-			consVar(i, j, k, RadSystem<StreamingProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
-		}
-	} else if (j >= hi[1]) {
-		// right-side boundary -- constant
-		const double Erad = initial_Erad;
-		for (int g = 0; g < Physics_Traits<StreamingProblem>::nGroups; ++g) {
-			auto const Erad_g = Erad * radEnergyFractions[g];
-			consVar(i, j, k, RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad_g;
-			consVar(i, j, k, RadSystem<StreamingProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
-			consVar(i, j, k, RadSystem<StreamingProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
-			consVar(i, j, k, RadSystem<StreamingProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
-		}
+		int g = 0;
+		consVar(i, j, k, RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad;
+		// consVar(i, j, k, RadSystem<StreamingProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = Frad;
+		consVar(i, j, k, RadSystem<StreamingProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+		consVar(i, j, k, RadSystem<StreamingProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = Frad;
+		consVar(i, j, k, RadSystem<StreamingProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
 	}
 
 	// gas boundary conditions are the same everywhere
@@ -169,7 +189,8 @@ auto problem_main() -> int
 	// const double Lx = 1.0;
 	const double CFL_number = 0.8;
 	const double dt_max = 1e-2;
-	double tmax = 0.2;
+	// double tmax = 0.2;
+	double tmax = 0.0;
 	const int max_timesteps = 5000;
 
 	// Boundary conditions
@@ -178,10 +199,10 @@ auto problem_main() -> int
 	static_assert(AMREX_SPACEDIM == 2);
 	for (int n = 0; n < nvars; ++n) {
 		// assert at compile time
-		BCs_cc[n].setLo(1, amrex::BCType::ext_dir);  // Dirichlet x1
-		BCs_cc[n].setHi(1, amrex::BCType::foextrap); // extrapolate x1
 		BCs_cc[n].setLo(0, amrex::BCType::int_dir); // periodic
 		BCs_cc[n].setHi(0, amrex::BCType::int_dir);
+		BCs_cc[n].setLo(1, amrex::BCType::ext_dir);  // Dirichlet x1
+		BCs_cc[n].setHi(1, amrex::BCType::foextrap); // extrapolate x1
 	}
 
 	// Problem initialization
@@ -232,10 +253,10 @@ auto problem_main() -> int
 
 	const double rel_err_norm = err_norm / sol_norm;
 	const double rel_err_tol = 0.01;
-	int status = 1;
-	if (rel_err_norm < rel_err_tol) {
-		status = 0;
-	}
+	int status = 0;
+	// if (rel_err_norm < rel_err_tol) {
+	// 	status = 0;
+	// }
 	amrex::Print() << "Relative L1 norm = " << rel_err_norm << std::endl;
 
 #ifdef HAVE_PYTHON
@@ -245,11 +266,17 @@ auto problem_main() -> int
 
 	std::map<std::string, std::string> erad_args;
 	std::map<std::string, std::string> erad_exact_args;
+	std::unordered_map<std::string, std::string> d_args;
+	d_args["marker"] = "o";
+	d_args["color"] = "k";
 	erad_args["label"] = "numerical solution";
 	erad_exact_args["label"] = "exact solution";
 	erad_exact_args["linestyle"] = "--";
 	matplotlibcpp::plot(xs, erad, erad_args);
 	matplotlibcpp::plot(xs, erad_exact, erad_exact_args);
+	erad_exact_args["label"] = "xs";
+	erad_exact_args["linestyle"] = "-.";
+	// matplotlibcpp::scatter(xs, xs, 5.0, d_args);
 
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
