@@ -177,7 +177,6 @@ auto problem_main() -> int
 	// Boundary conditions
 	constexpr int nvars = RadSystem<StreamingProblem>::nvar_;
 	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	static_assert(AMREX_SPACEDIM == 2);
 	for (int n = 0; n < nvars; ++n) {
 		// assert at compile time
 		if constexpr (direction == 0) {
@@ -197,7 +196,7 @@ auto problem_main() -> int
 	RadhydroSimulation<StreamingProblem> sim(BCs_cc);
 
 	// read tmax from inputs file
-	amrex::ParmParse pp;
+	amrex::ParmParse pp;  // NOLINT
 	pp.query("max_time", tmax);
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
