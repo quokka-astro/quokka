@@ -62,7 +62,8 @@ User Guide
    running_on_hpc_clusters
    tests/index
    parameters
-   analysis
+   insitu_analysis
+   postprocessing
    instability
 
 Developer Guide

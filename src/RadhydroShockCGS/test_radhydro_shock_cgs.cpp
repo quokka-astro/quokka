@@ -50,16 +50,15 @@ constexpr double Egas0 = rho0 * c_v * T0;	      // erg cm^-3
 constexpr double Erad1 = a_rad * (T1 * T1 * T1 * T1); // erg cm^-3
 constexpr double Egas1 = rho1 * c_v * T1;	      // erg cm^-3
 
-constexpr double shock_position = 0.0130; // 0.0132; // cm (shock position drifts to the right slightly during the simulation, so
-					  // we initialize slightly to the left...)
-constexpr double Lx = 0.01575;		  // cm
+constexpr double shock_position = 0.01305; // 0.0132; // cm (shock position drifts to the right slightly during the simulation, so
+					   // we initialize slightly to the left...)
+constexpr double Lx = 0.01575; // cm
 
 template <> struct RadSystem_Traits<ShockProblem> {
 	static constexpr double c_light = c;
 	static constexpr double c_hat = chat;
 	static constexpr double radiation_constant = a_rad;
 	static constexpr double Erad_floor = 0.;
-	static constexpr bool compute_v_over_c_terms = true;
 	static constexpr int beta_order = 1;
 };
 

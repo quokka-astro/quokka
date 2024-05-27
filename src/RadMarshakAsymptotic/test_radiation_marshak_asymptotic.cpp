@@ -38,8 +38,7 @@ template <> struct RadSystem_Traits<SuOlsonProblemCgs> {
 	static constexpr double c_hat = c_light_cgs_;
 	static constexpr double radiation_constant = radiation_constant_cgs_;
 	static constexpr double Erad_floor = Erad_floor_;
-	static constexpr bool compute_v_over_c_terms = false;
-	static constexpr int beta_order = 1;
+	static constexpr int beta_order = 0;
 };
 
 template <> struct Physics_Traits<SuOlsonProblemCgs> {
@@ -219,9 +218,9 @@ auto problem_main() -> int
 
 	// Problem parameters
 	const int max_timesteps = 1e6;
-	const double CFL_number = 0.9;
+	const double CFL_number = 10.0;
 	const double initial_dt = 5.0e-12; // s
-	const double max_dt = 5.0e-12;	   // s
+	const double max_dt = 5.0;	   // s
 	const double max_time = 10.0e-9;   // s
 	// const int nx = 60; // [18 == matches resolution of McClarren & Lowrie (2008)]
 	// const double Lx = 0.66; // cm

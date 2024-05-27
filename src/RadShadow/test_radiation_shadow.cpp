@@ -40,7 +40,6 @@ template <> struct RadSystem_Traits<ShadowProblem> {
 	static constexpr double c_hat = c;
 	static constexpr double radiation_constant = a_rad;
 	static constexpr double Erad_floor = 0.;
-	static constexpr bool compute_v_over_c_terms = true;
 	static constexpr int beta_order = 1;
 };
 
