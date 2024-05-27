@@ -182,7 +182,7 @@ auto problem_main() -> int
 		if constexpr (direction == 0) {
 			BCs_cc[n].setLo(0, amrex::BCType::ext_dir);  // Dirichlet x1
 			BCs_cc[n].setHi(0, amrex::BCType::foextrap); // extrapolate x1
-			BCs_cc[n].setLo(1, amrex::BCType::int_dir); // periodic
+			BCs_cc[n].setLo(1, amrex::BCType::int_dir);  // periodic
 			BCs_cc[n].setHi(1, amrex::BCType::int_dir);
 		} else {
 			BCs_cc[n].setLo(0, amrex::BCType::int_dir); // periodic
@@ -259,8 +259,7 @@ auto problem_main() -> int
 	matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
 	if constexpr (direction == 0) {
 		matplotlibcpp::save("./radiation_streaming_x.pdf");
-	}
-	else {
+	} else {
 		matplotlibcpp::save("./radiation_streaming_y.pdf");
 	}
 #endif // HAVE_PYTHON
