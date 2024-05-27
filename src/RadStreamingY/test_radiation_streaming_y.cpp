@@ -9,6 +9,7 @@
 
 #include "test_radiation_streaming_y.hpp"
 #include "AMReX.H"
+#include "AMReX_BLassert.H"
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
 #include "valarray.hpp"
@@ -125,7 +126,7 @@ AMRSimulation<StreamingProblem>::setCustomBoundaryConditions(const amrex::IntVec
 		radEnergyFractions[g] = 1.0 / Physics_Traits<StreamingProblem>::nGroups;
 	}
 
-	if (i < lo[0]) {
+	if (j < lo[1]) {
 		// streaming inflow boundary
 		const double Erad = 1.0;
 		const double Frad = c * Erad;
@@ -134,11 +135,12 @@ AMRSimulation<StreamingProblem>::setCustomBoundaryConditions(const amrex::IntVec
 		// x1 left side boundary (Marshak)
 		for (int g = 0; g < Physics_Traits<StreamingProblem>::nGroups; ++g) {
 			consVar(i, j, k, RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad * radEnergyFractions[g];
-			consVar(i, j, k, RadSystem<StreamingProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = Frad * radEnergyFractions[g];
-			consVar(i, j, k, RadSystem<StreamingProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+			// consVar(i, j, k, RadSystem<StreamingProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = Frad * radEnergyFractions[g];
+			consVar(i, j, k, RadSystem<StreamingProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+			consVar(i, j, k, RadSystem<StreamingProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = Frad * radEnergyFractions[g];
 			consVar(i, j, k, RadSystem<StreamingProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
 		}
-	} else if (i >= hi[0]) {
+	} else if (j >= hi[1]) {
 		// right-side boundary -- constant
 		const double Erad = initial_Erad;
 		for (int g = 0; g < Physics_Traits<StreamingProblem>::nGroups; ++g) {
@@ -167,23 +169,27 @@ auto problem_main() -> int
 	// const double Lx = 1.0;
 	const double CFL_number = 0.8;
 	const double dt_max = 1e-2;
-	const double tmax = 0.2;
+	double tmax = 0.2;
 	const int max_timesteps = 5000;
 
 	// Boundary conditions
 	constexpr int nvars = RadSystem<StreamingProblem>::nvar_;
 	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
+	static_assert(AMREX_SPACEDIM == 2);
 	for (int n = 0; n < nvars; ++n) {
-		BCs_cc[n].setLo(0, amrex::BCType::ext_dir);  // Dirichlet x1
-		BCs_cc[n].setHi(0, amrex::BCType::foextrap); // extrapolate x1
-		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
-			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
-			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
-		}
+		// assert at compile time
+		BCs_cc[n].setLo(1, amrex::BCType::ext_dir);  // Dirichlet x1
+		BCs_cc[n].setHi(1, amrex::BCType::foextrap); // extrapolate x1
+		BCs_cc[n].setLo(0, amrex::BCType::int_dir); // periodic
+		BCs_cc[n].setHi(0, amrex::BCType::int_dir);
 	}
 
 	// Problem initialization
 	RadhydroSimulation<StreamingProblem> sim(BCs_cc);
+
+	// read tmax from inputs file
+	amrex::ParmParse pp;
+	pp.query("max_time", tmax);
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.stopTime_ = tmax;
@@ -199,7 +205,7 @@ auto problem_main() -> int
 	sim.evolve();
 
 	// read output variables
-	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
+	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 1, 0.0);
 	const int nx = static_cast<int>(position.size());
 
 	// compute error norm
@@ -235,7 +241,7 @@ auto problem_main() -> int
 #ifdef HAVE_PYTHON
 	// Plot results
 	matplotlibcpp::clf();
-	matplotlibcpp::ylim(0.0, 1.1);
+	matplotlibcpp::ylim(-0.1, 1.1);
 
 	std::map<std::string, std::string> erad_args;
 	std::map<std::string, std::string> erad_exact_args;
