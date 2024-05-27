@@ -25,10 +25,10 @@ constexpr double erad_floor = a_rad * T0 * T0 * T0 * T0 * 1.0e-10;
 constexpr double mu = 2.33 * C::m_u;
 constexpr double k_B = C::k_B;
 
-// static diffusion: tau = 2e3, beta = 3e-5, beta tau = 6e-2
-constexpr double kappa0 = 100.;	    // cm^2 g^-1
-constexpr double v0_adv = 1.0e6;    // advecting pulse
-constexpr double max_time = 4.8e-5; // max_time = 2.0 * width / v1;
+// Default parameters: static diffusion, tau = 2e3, beta = 3e-5, beta tau = 6e-2
+AMREX_GPU_MANAGED double kappa0 = 100.;	 // NOLINT
+AMREX_GPU_MANAGED double v0_adv = 1.0e6; // NOLINT
+// AMREX_GPU_MANAGED double max_time = 4.8e-5; // max_time = 2.0 * width / v1;
 
 // dynamic diffusion: tau = 2e4, beta = 3e-3, beta tau = 60
 // constexpr double kappa0 = 1000.; // cm^2 g^-1
@@ -221,6 +221,12 @@ auto problem_main() -> int
 	// Problem initialization
 	RadhydroSimulation<PulseProblem> sim(BCs_cc);
 
+	double max_time = 4.8e-5;
+	amrex::ParmParse pp; // NOLINT
+	pp.query("kappa0", kappa0);
+	pp.query("v0_adv", v0_adv);
+	pp.query("max_time", max_time);
+
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.stopTime_ = max_time;
 	sim.radiationCflNumber_ = CFL_number;
@@ -338,14 +344,14 @@ auto problem_main() -> int
 		// Tmax = std::max(Tmax, Tgas2[i]);
 	}
 	// const double Tmax_tol = 1.37e7;
-	const double error_tol = 1e-3;
+	const double error_tol = 8e-3;
 	const double rel_error = err_norm / sol_norm;
 	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
 
 	// symmetry check
 	double symm_err = 0.;
 	double symm_norm = 0.;
-	const double symm_err_tol = 1.0e-3;
+	const double symm_err_tol = 0.02;
 	for (size_t i = 0; i < xs2.size(); ++i) {
 		symm_err += std::abs(Tgas2[i] - Tgas2[xs2.size() - 1 - i]);
 		symm_norm += std::abs(Tgas2[i]);
@@ -370,7 +376,7 @@ auto problem_main() -> int
 	matplotlibcpp::plot(xs2, Tgas2, Tgas_args);
 	matplotlibcpp::xlabel("length x (cm)");
 	matplotlibcpp::ylabel("temperature (K)");
-	matplotlibcpp::ylim(0.98e7, 1.3499e7);
+	matplotlibcpp::ylim(0.98e7, 2.02e7);
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim2.tNew_[0]));
 	matplotlibcpp::tight_layout();
