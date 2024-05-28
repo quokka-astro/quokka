@@ -267,18 +267,34 @@ auto problem_main() -> int
 		}
 
 #ifdef HAVE_PYTHON
+	// plot velocity
+	int const s = nx / 64; // stride
+	std::map<std::string, std::string> args;
+	args["label"] = "vx";
+	args["color"] = "C0";
+	matplotlibcpp::clf();
+	matplotlibcpp::plot(xs2, Vgas2, args);
+	args["label"] = "vy";
+	args["linestyle"] = "--";
+	args["color"] = "C1";
+	matplotlibcpp::plot(xs2y, Vgas2y, args);
+	matplotlibcpp::legend();
+	matplotlibcpp::xlabel("length x (cm)");
+	matplotlibcpp::ylabel("vx");
+	matplotlibcpp::tight_layout();
+	matplotlibcpp::save(fmt::format("./static_sphere_vel_t{:.4g}.pdf", sim2.tNew_[0]));
+
 	// plot temperature
 	matplotlibcpp::clf();
-	std::map<std::string, std::string> Trad_args;
 	std::map<std::string, std::string> Tgas_args;
-	Trad_args["label"] = "Trad (nonadvecting)";
-	Trad_args["linestyle"] = "-.";
-	Tgas_args["label"] = "Tgas (nonadvecting)";
-	Tgas_args["linestyle"] = "--";
-	Trad_args["label"] = "Trad (advecting)";
-	Tgas_args["label"] = "Tgas (advecting)";
-	matplotlibcpp::plot(xs2, Trad2, Trad_args);
+	Tgas_args["label"] = "Tgas along x";
+	Tgas_args["linestyle"] = "-";
+	Tgas_args["color"] = "C0";
 	matplotlibcpp::plot(xs2, Tgas2, Tgas_args);
+	Tgas_args["label"] = "Tgas along y";
+	Tgas_args["linestyle"] = "--";
+	Tgas_args["color"] = "C1";
+	matplotlibcpp::plot(xs2y, Tgas2y, Tgas_args);
 	matplotlibcpp::xlabel("length x (cm)");
 	matplotlibcpp::ylabel("temperature (K)");
 	matplotlibcpp::ylim(0.98e7, 2.02e7);
@@ -291,56 +307,13 @@ auto problem_main() -> int
 	// plot gas density profile
 	matplotlibcpp::clf();
 	std::map<std::string, std::string> rho_args;
-	rho_args["label"] = "gas density (non-advecting)";
+	rho_args["label"] = "density along x";
 	rho_args["linestyle"] = "-";
-	rho_args["label"] = "gas density (advecting))";
+	rho_args["color"] = "C0";
 	matplotlibcpp::plot(xs2, rhogas2, rho_args);
-	matplotlibcpp::xlabel("length x (cm)");
-	matplotlibcpp::ylabel("density (g cm^-3)");
-	matplotlibcpp::legend();
-	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim2.tNew_[0]));
-	matplotlibcpp::tight_layout();
-	// save to file: density_{tNew_[0]}
-	matplotlibcpp::save(fmt::format("./static_sphere_density_t{:.5g}.pdf", sim2.tNew_[0]));
-
-	// plot gas velocity profile
-	matplotlibcpp::clf();
-	std::map<std::string, std::string> vgas_args;
-	vgas_args["label"] = "gas velocity (non-advecting)";
-	vgas_args["linestyle"] = "-";
-	vgas_args["label"] = "gas velocity (advecting)";
-	matplotlibcpp::plot(xs2, Vgas2, vgas_args);
-	matplotlibcpp::xlabel("length x (cm)");
-	matplotlibcpp::ylabel("velocity (km s^-1)");
-	matplotlibcpp::legend();
-	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim2.tNew_[0]));
-	matplotlibcpp::tight_layout();
-	matplotlibcpp::save(fmt::format("./static_sphere_velocity_t{:.5g}.pdf", sim2.tNew_[0]));
-
-	// plot temperature Trad2y and Tgas2y
-	matplotlibcpp::clf();
-	Trad_args["label"] = "Trad (nonadvecting)";
-	Trad_args["linestyle"] = "-.";
-	Tgas_args["label"] = "Tgas (nonadvecting)";
-	Tgas_args["linestyle"] = "--";
-	Trad_args["label"] = "Trad (advecting)";
-	Tgas_args["label"] = "Tgas (advecting)";
-	matplotlibcpp::plot(xs2y, Trad2y, Trad_args);
-	matplotlibcpp::plot(xs2y, Tgas2y, Tgas_args);
-	matplotlibcpp::xlabel("length x (cm)");
-	matplotlibcpp::ylabel("temperature (K)");
-	matplotlibcpp::ylim(0.98e7, 2.02e7);
-	matplotlibcpp::legend();
-	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim2.tNew_[0]));
-	matplotlibcpp::tight_layout();
-	// matplotlibcpp::save("./radhydro_pulse_temperature_greynew.pdf");
-	matplotlibcpp::save(fmt::format("./static_sphere_temperature_y_t{:.5g}.pdf", sim2.tNew_[0]));
-
-	// plot gas density profile
-	matplotlibcpp::clf();
-	rho_args["label"] = "gas density (non-advecting)";
-	rho_args["linestyle"] = "-";
-	rho_args["label"] = "gas density (advecting))";
+	rho_args["label"] = "density along y";
+	rho_args["linestyle"] = "--";
+	rho_args["color"] = "C1";
 	matplotlibcpp::plot(xs2y, rhogas2y, rho_args);
 	matplotlibcpp::xlabel("length x (cm)");
 	matplotlibcpp::ylabel("density (g cm^-3)");
@@ -348,21 +321,7 @@ auto problem_main() -> int
 	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim2.tNew_[0]));
 	matplotlibcpp::tight_layout();
 	// save to file: density_{tNew_[0]}
-	matplotlibcpp::save(fmt::format("./static_sphere_density_y_t{:.5g}.pdf", sim2.tNew_[0]));
-
-	// plot gas velocity profile
-	matplotlibcpp::clf();
-	vgas_args["label"] = "gas velocity (non-advecting)";
-	vgas_args["linestyle"] = "-";
-	vgas_args["label"] = "gas velocity (advecting)";
-	matplotlibcpp::plot(xs2y, Vgas2y, vgas_args);
-	matplotlibcpp::xlabel("length x (cm)");
-	matplotlibcpp::ylabel("velocity (km s^-1)");
-	matplotlibcpp::legend();
-	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim2.tNew_[0]));
-	matplotlibcpp::tight_layout();
-	matplotlibcpp::save(fmt::format("./static_sphere_velocity_y_t{:.5g}.pdf", sim2.tNew_[0]));
-
+	matplotlibcpp::save(fmt::format("./static_sphere_density_t{:.5g}.pdf", sim2.tNew_[0]));
 #endif
 	}
 
