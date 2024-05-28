@@ -150,7 +150,6 @@ auto problem_main() -> int
 	// in the diffusion limit under grey approximation.
 
 	// Problem parameters
-	const int64_t max_timesteps = 1e8;
 	const double CFL_number = 0.8;
 	// const int nx = 32;
 
@@ -166,11 +165,9 @@ auto problem_main() -> int
 		}
 	}
 
-	double max_time = 4.8e-5;
 	amrex::ParmParse pp; // NOLINT
 	pp.query("kappa0", kappa0);
 	pp.query("v0_adv", v0_adv);
-	pp.query("max_time", max_time);
 
 	// Problem 2: advecting radiation
 
@@ -178,11 +175,8 @@ auto problem_main() -> int
 	RadhydroSimulation<TheProblem> sim2(BCs_cc);
 
 	sim2.radiationReconstructionOrder_ = 3; // PPM
-	sim2.stopTime_ = max_time;
 	sim2.radiationCflNumber_ = CFL_number;
 	sim2.maxDt_ = max_dt;
-	sim2.maxTimesteps_ = max_timesteps;
-	// sim2.plotfileInterval_ = -1;
 
 	// initialize
 	sim2.setInitialConditions();
@@ -292,7 +286,8 @@ auto problem_main() -> int
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		if (export_csv) {
 			std::ofstream file;
-			file.open("static_sphere.csv");
+			// file.open("static_sphere.csv");
+			file.open(fmt::format("./static_sphere_t{:.5g}.csv", sim2.tNew_[0]));
 			file << "xs,rho,Trad,Tgas,Vgas\n";
 			for (size_t i = 0; i < xs2.size(); ++i) {
 				file << std::scientific << std::setprecision(12) << xs2[i] << "," << rhogas2[i] << "," << Trad2[i] << "," << Tgas2[i] << "," << Vgas2[i] << "\n";
