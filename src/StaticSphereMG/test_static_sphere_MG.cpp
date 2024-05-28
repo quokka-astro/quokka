@@ -12,6 +12,9 @@
 struct TheProblem {
 };
 
+constexpr int n_groups_ = 4;
+constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e16, 1e17, 1e18, 1e19, 1e20};
+
 constexpr int variable_kappa = 0;
 static constexpr bool export_csv = true;
 
@@ -45,14 +48,6 @@ template <> struct quokka::EOS_Traits<TheProblem> {
 	static constexpr double gamma = 5. / 3.;
 };
 
-template <> struct RadSystem_Traits<TheProblem> {
-	static constexpr double c_light = c;
-	static constexpr double c_hat = chat;
-	static constexpr double radiation_constant = a_rad;
-	static constexpr double Erad_floor = erad_floor;
-	static constexpr int beta_order = 1;
-};
-
 template <> struct Physics_Traits<TheProblem> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
@@ -61,7 +56,17 @@ template <> struct Physics_Traits<TheProblem> {
 	static constexpr bool is_radiation_enabled = true;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
-	static constexpr int nGroups = 1;
+	static constexpr int nGroups = n_groups_;
+};
+
+template <> struct RadSystem_Traits<TheProblem> {
+	static constexpr double c_light = c;
+	static constexpr double c_hat = chat;
+	static constexpr double radiation_constant = a_rad;
+	static constexpr double Erad_floor = erad_floor;
+	static constexpr int beta_order = 1;
+	static constexpr double energy_unit = C::hplanck; // set boundary unit to Hz
+	static constexpr amrex::GpuArray<double, n_groups_ + 1> radBoundaries = rad_boundaries_;
 };
 
 AMREX_GPU_HOST_DEVICE
@@ -118,6 +123,8 @@ template <> void RadhydroSimulation<TheProblem>::setInitialConditionsOnGrid(quok
 	amrex::Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
   amrex::Real const y0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
 
+	const auto radBoundaries_g = RadSystem_Traits<TheProblem>::radBoundaries;
+
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
@@ -129,11 +136,20 @@ template <> void RadhydroSimulation<TheProblem>::setInitialConditionsOnGrid(quok
 		const double Egas = quokka::EOS<TheProblem>::ComputeEintFromTgas(rho, Trad);
 		const double v0 = v0_adv;
 
+		auto Erad_g = RadSystem<TheProblem>::ComputeThermalRadiation(Trad, radBoundaries_g);
+
 		// state_cc(i, j, k, RadSystem<TheProblem>::radEnergy_index) = (1. + 4. / 3. * (v0 * v0) / (c * c)) * Erad;
-		state_cc(i, j, k, RadSystem<TheProblem>::radEnergy_index) = Erad;
-		state_cc(i, j, k, RadSystem<TheProblem>::x1RadFlux_index) = 4. / 3. * v0 * Erad;
-		state_cc(i, j, k, RadSystem<TheProblem>::x2RadFlux_index) = 0;
-		state_cc(i, j, k, RadSystem<TheProblem>::x3RadFlux_index) = 0;
+		// state_cc(i, j, k, RadSystem<TheProblem>::radEnergy_index) = Erad;
+		// state_cc(i, j, k, RadSystem<TheProblem>::x1RadFlux_index) = 4. / 3. * v0 * Erad;
+		// state_cc(i, j, k, RadSystem<TheProblem>::x2RadFlux_index) = 0;
+		// state_cc(i, j, k, RadSystem<TheProblem>::x3RadFlux_index) = 0;
+		for (int g = 0; g < Physics_Traits<TheProblem>::nGroups; ++g) {
+			// state_cc(i, j, k, RadSystem<TheProblem>::radEnergy_index) = (1. + 4. / 3. * (v0 * v0) / (c * c)) * Erad;
+			state_cc(i, j, k, RadSystem<TheProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad_g[g];
+			state_cc(i, j, k, RadSystem<TheProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 4. / 3. * v0 * Erad_g[g];
+			state_cc(i, j, k, RadSystem<TheProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+			state_cc(i, j, k, RadSystem<TheProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+		}
 		state_cc(i, j, k, RadSystem<TheProblem>::gasEnergy_index) = Egas + 0.5 * rho * v0 * v0;
 		state_cc(i, j, k, RadSystem<TheProblem>::gasDensity_index) = rho;
 		state_cc(i, j, k, RadSystem<TheProblem>::gasInternalEnergy_index) = Egas;
@@ -227,7 +243,11 @@ auto problem_main() -> int
 			}
 		}
 		const amrex::Real x = position2[i];
-		const auto Erad_t = values2.at(RadSystem<TheProblem>::radEnergy_index)[i];
+		// const auto Erad_t = values2.at(RadSystem<TheProblem>::radEnergy_index)[i];
+		double Erad_t = 0.0;
+		for (int g = 0; g < n_groups_; ++g) {
+			Erad_t += values2.at(RadSystem<TheProblem>::radEnergy_index + Physics_NumVars::numRadVars * g)[i];
+		}
 		const auto Trad_t = std::pow(Erad_t / a_rad, 1. / 4.);
 		const auto rho_t = values2.at(RadSystem<TheProblem>::gasDensity_index)[i];
 		const auto v_t = values2.at(RadSystem<TheProblem>::x1GasMomentum_index)[i] / rho_t;
@@ -241,7 +261,11 @@ auto problem_main() -> int
 
 	for (int i = 0; i < ny; ++i) {
 		const double x = position2y[i];
-		const auto Erad_t = values2y.at(RadSystem<TheProblem>::radEnergy_index)[i];
+		// const auto Erad_t = values2y.at(RadSystem<TheProblem>::radEnergy_index)[i];
+		double Erad_t = 0.0;
+		for (int g = 0; g < n_groups_; ++g) {
+			Erad_t += values2y.at(RadSystem<TheProblem>::radEnergy_index + Physics_NumVars::numRadVars * g)[i];
+		}
 		const auto Trad_t = std::pow(Erad_t / a_rad, 1. / 4.);
 		const auto rho_t = values2y.at(RadSystem<TheProblem>::gasDensity_index)[i];
 		const auto v_t = values2y.at(RadSystem<TheProblem>::x2GasMomentum_index)[i] / rho_t;
