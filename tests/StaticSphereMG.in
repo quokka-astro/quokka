@@ -4,8 +4,8 @@ v0_adv = 0.0
 #stop_time = 0.0
 #stop_time = 1.0e-9
 stop_time = 4.8e-5
-max_timesteps = 10
-plotfile_interval = 10
+max_timesteps = 100
+plotfile_interval = -1
 
 # *****************************************************************
 # Problem size and geometry

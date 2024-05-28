@@ -5,6 +5,7 @@
 #include "test_static_sphere_MG.hpp"
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_Print.H"
+#include "EOS.hpp"
 #include "RadhydroSimulation.hpp"
 #include "fextract.hpp"
 #include "physics_info.hpp"
@@ -159,6 +160,11 @@ template <> void RadhydroSimulation<TheProblem>::setInitialConditionsOnGrid(quok
 	});
 }
 
+// template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<TheProblem>::ComputeEddingtonFactor(double /*f*/) -> double
+// {
+// 	return (1. / 3.); // Eddington approximation
+// }
+
 auto problem_main() -> int
 {
 	// This problem is a test of grey radiation diffusion plus advection by gas.
@@ -220,12 +226,14 @@ auto problem_main() -> int
 	std::vector<double> Tgas2(nx);
 	std::vector<double> Vgas2(nx);
 	std::vector<double> rhogas2(nx);
+	std::vector<double> P2(nx); // pressure
 
 	std::vector<double> xs2y(nx);
 	std::vector<double> Trad2y(nx);
 	std::vector<double> Tgas2y(nx);
 	std::vector<double> Vgas2y(nx);
 	std::vector<double> rhogas2y(nx);
+	std::vector<double> P2y(nx);
 
 	for (int i = 0; i < nx; ++i) {
 		int index_ = 0;
@@ -252,11 +260,14 @@ auto problem_main() -> int
 		const auto rho_t = values2.at(RadSystem<TheProblem>::gasDensity_index)[i];
 		const auto v_t = values2.at(RadSystem<TheProblem>::x1GasMomentum_index)[i] / rho_t;
 		const auto Egas = values2.at(RadSystem<TheProblem>::gasInternalEnergy_index)[i];
+		const auto P_gas = quokka::EOS<TheProblem>::ComputePressure(rho_t, Egas);
+		const auto P_rad = Erad_t / 3.0;
 		xs2.at(i) = x - drift;
 		rhogas2.at(index_) = rho_t;
 		Trad2.at(index_) = Trad_t;
 		Tgas2.at(index_) = quokka::EOS<TheProblem>::ComputeTgasFromEint(rho_t, Egas);
 		Vgas2.at(index_) = 1e-5 * (v_t - v0_adv);
+		P2.at(index_) = P_gas + P_rad;
 	}
 
 	for (int i = 0; i < ny; ++i) {
@@ -270,11 +281,14 @@ auto problem_main() -> int
 		const auto rho_t = values2y.at(RadSystem<TheProblem>::gasDensity_index)[i];
 		const auto v_t = values2y.at(RadSystem<TheProblem>::x2GasMomentum_index)[i] / rho_t;
 		const auto Egas = values2y.at(RadSystem<TheProblem>::gasInternalEnergy_index)[i];
+		const auto P_gas = quokka::EOS<TheProblem>::ComputePressure(rho_t, Egas);
+		const auto P_rad = Erad_t / 3.0;
 		xs2y.at(i) = x;
 		rhogas2y.at(i) = rho_t;
 		Trad2y.at(i) = Trad_t;
 		Tgas2y.at(i) = quokka::EOS<TheProblem>::ComputeTgasFromEint(rho_t, Egas);
 		Vgas2y.at(i) = 1e-5 * (v_t);
+		P2y.at(i) = P_gas + P_rad;
 	}
 
 	// Save xs, Trad, Tgas, rhogas, Vgas, xs_mg, Trad_mg, Tgas_mg, rhogas_mg, Vgas_mg, xs2, Trad2, Tgas2, rhogas2, Vgas2
@@ -346,6 +360,25 @@ auto problem_main() -> int
 	matplotlibcpp::tight_layout();
 	// save to file: density_{tNew_[0]}
 	matplotlibcpp::save(fmt::format("./static_sphere_density_t{:.5g}.pdf", sim2.tNew_[0]));
+
+	// plot pressure profile
+	matplotlibcpp::clf();
+	std::map<std::string, std::string> P_args;
+	P_args["label"] = "pressure along x";
+	P_args["linestyle"] = "-";
+	P_args["color"] = "C0";
+	matplotlibcpp::plot(xs2, P2, P_args);
+	P_args["label"] = "pressure along y";
+	P_args["linestyle"] = "--";
+	P_args["color"] = "C1";
+	matplotlibcpp::plot(xs2y, P2y, P_args);
+	matplotlibcpp::xlabel("length x (cm)");
+	matplotlibcpp::ylabel("pressure (erg cm^-3)");
+	matplotlibcpp::legend();
+	matplotlibcpp::title(fmt::format("time t = {:.4g}", sim2.tNew_[0]));
+	matplotlibcpp::tight_layout();
+	// save to file: pressure_{tNew_[0]}
+	matplotlibcpp::save(fmt::format("./static_sphere_pressure_t{:.5g}.pdf", sim2.tNew_[0]));
 #endif
 	}
 
