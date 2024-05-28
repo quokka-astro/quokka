@@ -253,35 +253,6 @@ auto problem_main() -> int
 		Vgas2y.at(i) = 1e-5 * (v_t);
 	}
 
-	// END OF PROBLEM 2
-
-	// // compute error norm
-	// double err_norm = 0.;
-	// double sol_norm = 0.;
-	// // double Tmax = 0.;
-	// for (size_t i = 0; i < xs2.size(); ++i) {
-	// 	err_norm += std::abs(Tgas[i] - Trad[i]);
-	// 	err_norm += std::abs(Trad2[i] - Trad[i]);
-	// 	err_norm += std::abs(Tgas2[i] - Trad[i]);
-	// 	sol_norm += std::abs(Trad[i]) * 3.0;
-	// 	// Tmax = std::max(Tmax, Tgas2[i]);
-	// }
-	// // const double Tmax_tol = 1.37e7;
-	// const double error_tol = 8e-3;
-	// const double rel_error = err_norm / sol_norm;
-	// amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
-
-	// // symmetry check
-	// double symm_err = 0.;
-	// double symm_norm = 0.;
-	// const double symm_err_tol = 0.02;
-	// for (size_t i = 0; i < xs2.size(); ++i) {
-	// 	symm_err += std::abs(Tgas2[i] - Tgas2[xs2.size() - 1 - i]);
-	// 	symm_norm += std::abs(Tgas2[i]);
-	// }
-	// const double symm_rel_error = symm_err / symm_norm;
-	// amrex::Print() << "Symmetry L1 error norm = " << symm_rel_error << std::endl;
-
 	// Save xs, Trad, Tgas, rhogas, Vgas, xs_mg, Trad_mg, Tgas_mg, rhogas_mg, Vgas_mg, xs2, Trad2, Tgas2, rhogas2, Vgas2
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		if (export_csv) {
