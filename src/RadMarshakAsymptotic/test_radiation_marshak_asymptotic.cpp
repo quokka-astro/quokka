@@ -16,7 +16,7 @@
 #include "test_radiation_marshak_asymptotic.hpp"
 #include <ios>
 
-constexpr int the_model = 2; // 0: constant opacity (Vaytet et al. Sec 3.2.1), 1: nu-dependent opacity (Vaytet et al. Sec 3.2.2), 2: nu-and-T-dependent opacity (Vaytet et al. Sec 3.2.3)
+constexpr int the_model = 1; // 0: constant opacity (Vaytet et al. Sec 3.2.1), 1: nu-dependent opacity (Vaytet et al. Sec 3.2.2), 2: nu-and-T-dependent opacity (Vaytet et al. Sec 3.2.3)
 
 struct SuOlsonProblemCgs {
 }; // dummy type to allow compile-type polymorphism via template specialization
@@ -68,6 +68,7 @@ template <> struct RadSystem_Traits<SuOlsonProblemCgs> {
 	static constexpr OpacityModel opacity_model = OpacityModel::piecewisePowerLaw;
 };
 
+#if 1
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double /*rho*/, const double Tgas)
     -> amrex::GpuArray<amrex::GpuArray<double, nGroups_>, 2>
@@ -87,24 +88,25 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::Defi
 	}
 	return exponents_and_values;
 }
+#endif
 
-// template <>
-// AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/)
-//     -> quokka::valarray<double, nGroups_>
-// {
-// 	quokka::valarray<double, nGroups_> kappaPVec{};
-// 	for (int i = 0; i < nGroups_; ++i) {
-// 		kappaPVec[i] = kappa;
-// 	}
-// 	return kappaPVec;
-// }
+template <>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/)
+    -> quokka::valarray<double, nGroups_>
+{
+	quokka::valarray<double, nGroups_> kappaPVec{};
+	for (int i = 0; i < nGroups_; ++i) {
+		kappaPVec[i] = kappa;
+	}
+	return kappaPVec;
+}
 
-// template <>
-// AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputeFluxMeanOpacity(const double rho, const double Tgas)
-//     -> quokka::valarray<double, nGroups_>
-// {
-// 	return ComputePlanckOpacity(rho, Tgas);
-// }
+template <>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputeFluxMeanOpacity(const double rho, const double Tgas)
+    -> quokka::valarray<double, nGroups_>
+{
+	return ComputePlanckOpacity(rho, Tgas);
+}
 
 // template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<SuOlsonProblemCgs>::ComputeEddingtonFactor(double /*f*/) -> double
 // {
