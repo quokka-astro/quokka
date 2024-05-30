@@ -1608,7 +1608,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		auto x1GasMom1 = consPrev(i, j, k, x1GasMomentum_index);
 		auto x2GasMom1 = consPrev(i, j, k, x2GasMomentum_index);
 		auto x3GasMom1 = consPrev(i, j, k, x3GasMomentum_index);
-		if constexpr (Physics_Traits<problem_t>::is_hydro_enabled) {
+		if (Physics_Traits<problem_t>::is_hydro_enabled) {
 			x1GasMom1 += dMomentum[0] * gas_update_factor;
 			x2GasMom1 += dMomentum[1] * gas_update_factor;
 			x3GasMom1 += dMomentum[2] * gas_update_factor;
