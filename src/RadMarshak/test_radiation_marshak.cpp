@@ -244,6 +244,7 @@ auto problem_main() -> int
 		std::vector<double> Tgas(nx);
 		std::vector<double> Erad(nx);
 		std::vector<double> Egas(nx);
+		std::vector<double> vgas(nx);
 
 		for (int i = 0; i < nx; ++i) {
 			const double x = position[i];
@@ -261,6 +262,8 @@ auto problem_main() -> int
 			const double Egas_t = (Etot_t - Ekin);
 			Egas.at(i) = Egas_t;
 			Tgas.at(i) = quokka::EOS<SuOlsonProblem>::ComputeTgasFromEint(rho, Egas_t);
+
+			vgas.at(i) = x1GasMom / rho;
 		}
 
 		// read in exact solution
@@ -315,6 +318,18 @@ auto problem_main() -> int
 		amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
 
 		if ((rel_error > error_tol) || std::isnan(rel_error)) {
+			status = 1;
+		}
+
+		// check if velocity is strictly zero
+		const double error_v_tol = 1.0e-10;
+		double error_v = 0.0;
+		const double cs = std::sqrt(5. / 3. * T_initial); // sound speed
+		for (size_t i = 0; i < xs.size(); ++i) {
+			error_v += std::abs(vgas[i])/ cs;
+		}
+		amrex::Print() << "Sum of abs(v) / cs = " << error_v << std::endl;
+		if ((error_v > error_v_tol) || std::isnan(error_v)) {
 			status = 1;
 		}
 

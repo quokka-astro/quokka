@@ -1604,12 +1604,18 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 		// 4b. Store new radiation energy, gas energy
 		// In the first stage of the IMEX scheme, the hydro quantities are updated by a fraction (defined by
 		// gas_update_factor) of the time step.
-		const auto x1GasMom1 = consPrev(i, j, k, x1GasMomentum_index) + dMomentum[0] * gas_update_factor;
-		const auto x2GasMom1 = consPrev(i, j, k, x2GasMomentum_index) + dMomentum[1] * gas_update_factor;
-		const auto x3GasMom1 = consPrev(i, j, k, x3GasMomentum_index) + dMomentum[2] * gas_update_factor;
-		consNew(i, j, k, x1GasMomentum_index) = x1GasMom1;
-		consNew(i, j, k, x2GasMomentum_index) = x2GasMom1;
-		consNew(i, j, k, x3GasMomentum_index) = x3GasMom1;
+		// if is_hydro_enabled
+		auto x1GasMom1 = consPrev(i, j, k, x1GasMomentum_index);
+		auto x2GasMom1 = consPrev(i, j, k, x2GasMomentum_index);
+		auto x3GasMom1 = consPrev(i, j, k, x3GasMomentum_index);
+		if constexpr (Physics_Traits<problem_t>::is_hydro_enabled) {
+			x1GasMom1 += dMomentum[0] * gas_update_factor;
+			x2GasMom1 += dMomentum[1] * gas_update_factor;
+			x3GasMom1 += dMomentum[2] * gas_update_factor;
+			consNew(i, j, k, x1GasMomentum_index) = x1GasMom1;
+			consNew(i, j, k, x2GasMomentum_index) = x2GasMom1;
+			consNew(i, j, k, x3GasMomentum_index) = x3GasMom1;
+		}
 		if constexpr (gamma_ != 1.0) {
 			Egas_guess = Egas0 + (Egas_guess - Egas0) * gas_update_factor;
 			consNew(i, j, k, gasInternalEnergy_index) = Egas_guess;
