@@ -326,7 +326,7 @@ auto problem_main() -> int
 		double error_v = 0.0;
 		const double cs = std::sqrt(5. / 3. * T_initial); // sound speed
 		for (size_t i = 0; i < xs.size(); ++i) {
-			error_v += std::abs(vgas[i])/ cs;
+			error_v += std::abs(vgas[i]) / cs;
 		}
 		amrex::Print() << "Sum of abs(v) / cs = " << error_v << std::endl;
 		if ((error_v > error_v_tol) || std::isnan(error_v)) {
