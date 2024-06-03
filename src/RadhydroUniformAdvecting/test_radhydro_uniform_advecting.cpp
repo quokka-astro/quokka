@@ -158,10 +158,12 @@ template <> struct RadSystem_Traits<PulseProblem> {
 	static constexpr double energy_unit = 1.0;
 	static constexpr amrex::GpuArray<double, n_groups_ + 1> radBoundaries = rad_boundaries_;
 	static constexpr OpacityModel opacity_model = OpacityModel::piecewisePowerLaw;
+	// static constexpr OpacityModel opacity_model = OpacityModel::user;
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<PulseProblem>::DefineOpacityExponentsAndLowerValues(const double rho, const double /*Tgas*/)
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
+RadSystem<PulseProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> const /*rad_boundaries*/, const double /*rho*/, const double /*Tgas*/)
     -> amrex::GpuArray<amrex::GpuArray<double, nGroups_>, 2>
 {
 	amrex::GpuArray<amrex::GpuArray<double, nGroups_>, 2> exponents_and_values{};
@@ -184,23 +186,23 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputePlanckOpacity(const d
 	return kappaPVec;
 }
 
-// template <>
-// template <typename ArrayType>
-// AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputeRadQuantityExponents(ArrayType const & /*quant*/,
-// 									     amrex::GpuArray<double, nGroups_ + 1> const & /*boundaries*/)
-//     -> amrex::GpuArray<double, nGroups_>
-// {
-// 	amrex::GpuArray<double, nGroups_> exponents{};
-// 	for (int g = 0; g < nGroups_; ++g) {
-// 		exponents[g] = 0.0;
-// 	}
-// 	return exponents;
-// }
-
 template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputeFluxMeanOpacity(const double rho, const double Tgas) -> quokka::valarray<double, nGroups_>
 {
 	return ComputePlanckOpacity(rho, Tgas);
+}
+
+template <>
+template <typename ArrayType>
+AMREX_GPU_HOST_DEVICE auto RadSystem<PulseProblem>::ComputeRadQuantityExponents(ArrayType const & /*quant*/,
+									     amrex::GpuArray<double, nGroups_ + 1> const & /*boundaries*/)
+    -> amrex::GpuArray<double, nGroups_>
+{
+	amrex::GpuArray<double, nGroups_> exponents{};
+	for (int g = 0; g < nGroups_; ++g) {
+		exponents[g] = -1.0;
+	}
+	return exponents;
 }
 
 template <> void RadhydroSimulation<PulseProblem>::setInitialConditionsOnGrid(quokka::grid grid_elem)

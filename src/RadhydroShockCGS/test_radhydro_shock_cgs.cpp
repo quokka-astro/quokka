@@ -141,7 +141,7 @@ AMRSimulation<ShockProblem>::setCustomBoundaryConditions(const amrex::IntVect &i
 		consVar(i, j, k, RadSystem<ShockProblem>::gasEnergy_index) = Egas_L + (px_L * px_L) / (2 * rho0);
 		consVar(i, j, k, RadSystem<ShockProblem>::gasInternalEnergy_index) = Egas_L;
 		consVar(i, j, k, RadSystem<ShockProblem>::radEnergy_index) = Erad0;
-		consVar(i, j, k, RadSystem<ShockProblem>::x1RadFlux_index) = 0;
+		consVar(i, j, k, RadSystem<ShockProblem>::x1RadFlux_index) = 4. / 3. * v0 * Erad0;
 		consVar(i, j, k, RadSystem<ShockProblem>::x2RadFlux_index) = 0;
 		consVar(i, j, k, RadSystem<ShockProblem>::x3RadFlux_index) = 0;
 	} else if (i >= hi[0]) {
@@ -157,7 +157,7 @@ AMRSimulation<ShockProblem>::setCustomBoundaryConditions(const amrex::IntVect &i
 		consVar(i, j, k, RadSystem<ShockProblem>::gasEnergy_index) = Egas_R + (px_R * px_R) / (2 * rho1);
 		consVar(i, j, k, RadSystem<ShockProblem>::gasInternalEnergy_index) = Egas_R;
 		consVar(i, j, k, RadSystem<ShockProblem>::radEnergy_index) = Erad1;
-		consVar(i, j, k, RadSystem<ShockProblem>::x1RadFlux_index) = 0;
+		consVar(i, j, k, RadSystem<ShockProblem>::x1RadFlux_index) = 4. / 3. * v1 * Erad0;
 		consVar(i, j, k, RadSystem<ShockProblem>::x2RadFlux_index) = 0;
 		consVar(i, j, k, RadSystem<ShockProblem>::x3RadFlux_index) = 0;
 	}

@@ -24,6 +24,7 @@ static constexpr bool export_csv = true;
 // constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e16, 1e18, 1e20};
 constexpr int n_groups_ = 4;
 constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e16, 1e17, 1e18, 1e19, 1e20};
+// constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e15, 1e16, 1e17, 1e18, 1e19};
 // constexpr int n_groups_ = 8;
 // constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{1e16, 3.16e16, 1e17, 3.16e17, 1e18, 3.16e18, 1e19, 3.16e19, 1e20};
 // constexpr int n_groups_ = 16;
@@ -58,7 +59,7 @@ constexpr double k_B = C::k_B;
 // static diffusion: (for single group) tau = 2e3, beta = 3e-5, beta tau = 6e-2
 constexpr double kappa0 = 180.;	    // cm^2 g^-1
 constexpr double v0_adv = 1.0e6;    // advecting pulse
-constexpr double max_time = 4.8e-6; // max_time = 0.2 * width / v1;
+// constexpr double max_time = 4.8e-6; // max_time = 0.2 * width / v1;
 
 // dynamic diffusion: tau = 2e4, beta = 3e-3, beta tau = 60
 // constexpr double kappa0 = 1000.; // cm^2 g^-1
@@ -121,6 +122,12 @@ template <> struct RadSystem_Traits<ExactProblem> {
 	static constexpr int beta_order = 1;
 	static constexpr OpacityModel opacity_model = OpacityModel::user;
 };
+
+// set Eddington factor to 1/3
+template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<MGProblem>::ComputeEddingtonFactor(double /*f*/) -> double
+{
+	return (1. / 3.); // Eddington approximation
+}
 
 template <>
 template <typename ArrayType>
@@ -298,7 +305,7 @@ auto problem_main() -> int
 	RadhydroSimulation<MGProblem> sim(BCs_cc);
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
-	sim.stopTime_ = max_time;
+	// sim.stopTime_ = max_time;
 	sim.radiationCflNumber_ = CFL_number;
 	sim.cflNumber_ = CFL_number;
 	sim.maxDt_ = max_dt;
@@ -368,7 +375,7 @@ auto problem_main() -> int
 	RadhydroSimulation<ExactProblem> sim2(BCs_cc);
 
 	sim2.radiationReconstructionOrder_ = 3; // PPM
-	sim2.stopTime_ = max_time;
+	// sim2.stopTime_ = max_time;
 	sim2.radiationCflNumber_ = CFL_number;
 	sim2.maxDt_ = max_dt;
 	sim2.maxTimesteps_ = max_timesteps;

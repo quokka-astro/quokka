@@ -53,8 +53,8 @@ constexpr double v0 = 5.19e7;					      // cm s^-1
 constexpr double T1 = 7.98e6;					      // K [7.98297e6]
 constexpr double rho1 = 17.1;					      // g cm^-3 [17.08233]
 constexpr double v1 = 1.73e7;					      // cm s^-1 [1.72875e7]
-// constexpr double chat = 10.0 * (v0 + c_s0);			      // reduced speed of light
-constexpr double chat = c;
+constexpr double chat = 10.0 * (v0 + c_s0);			      // reduced speed of light
+// constexpr double chat = c;
 
 constexpr double Erad0 = a_rad * (T0 * T0 * T0 * T0); // erg cm^-3
 constexpr double Erad_floor_ = Erad0 * 1e-12;
@@ -118,6 +118,19 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<ShockProblem>::ComputePl
 	kappaPVec[nGroups_ - 1] = 0.0;
 	return kappaPVec;
 }
+
+// template <>
+// template <typename ArrayType>
+// AMREX_GPU_HOST_DEVICE auto RadSystem<ShockProblem>::ComputeRadQuantityExponents(ArrayType const & /*quant*/,
+// 									     amrex::GpuArray<double, nGroups_ + 1> const & /*boundaries*/)
+//     -> amrex::GpuArray<double, nGroups_>
+// {
+// 	amrex::GpuArray<double, nGroups_> exponents{};
+// 	for (int g = 0; g < nGroups_; ++g) {
+// 		exponents[g] = -1.0;
+// 	}
+// 	return exponents;
+// }
 
 template <>
 AMREX_GPU_HOST_DEVICE auto RadSystem<ShockProblem>::ComputeFluxMeanOpacity(const double rho, const double /*Tgas*/) -> quokka::valarray<double, nGroups_>
