@@ -13,6 +13,7 @@
 // library headers
 
 // internal headers
+#include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
 #include "physics_info.hpp"
 #include "hydro_system.hpp"
@@ -30,16 +31,14 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 		bfield_index = Physics_Indices<problem_t>::mhdFirstIndex,
 	};
 
-  static void SolveInductionEqn(std::array<amrex::MultiFab, AMREX_SPACEDIM> &fcx_mf_rhs, amrex::MultiFab const &cc_mf_cVars, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars_old, std::array<amrex::MultiFab, AMREX_SPACEDIM> &fcx_mf_cVars_new, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, int nghost_fc, double dt);
+  static void ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM> &fcx_mf_rhs, amrex::MultiFab const &cc_mf_cVars, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int nghost_fc);
 
   static void ReconstructTo(FluxDir dir, arrayconst_t &cState, array_t &lState, array_t &rState, const amrex::Box &reconstructRange, int reconstructionOrder);
 };
 
 template <typename problem_t>
-void MHDSystem<problem_t>::SolveInductionEqn(std::array<amrex::MultiFab, AMREX_SPACEDIM> &fcx_mf_rhs, amrex::MultiFab const &cc_mf_cVars, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars_old, std::array<amrex::MultiFab, AMREX_SPACEDIM> &fcx_mf_cVars_new, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, const int nghost_fc, const double dt)
-{
-  std::cout << "Computing EMF" << std::endl;
-
+void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM> &fcx_mf_rhs, amrex::MultiFab const &cc_mf_cVars, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, const int nghost_fc)
+{  
   // Loop over each box-array on the level
   // Note: all the different centerings still have the same distribution mapping, so it is fine for us to attach our looping to cc FArrayBox
   for (amrex::MFIter mfi(cc_mf_cVars); mfi.isValid(); ++mfi) {
@@ -82,9 +81,9 @@ void MHDSystem<problem_t>::SolveInductionEqn(std::array<amrex::MultiFab, AMREX_S
     // // indexing: field[3: x-component/x-face]
     // // create a view of all the b-field data (+ghost cells; do not make another copy)
     // std::array<amrex::FArrayBox, 3> fc_fabs_Bx_old = {
-    //   FArrayBox(fcx_mf_cVars_old[0][mfi], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1),
-    //   FArrayBox(fcx_mf_cVars_old[1][mfi], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1),
-    //   FArrayBox(fcx_mf_cVars_old[2][mfi], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1),
+    //   FArrayBox(fcx_mf_cVars[0][mfi], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1),
+    //   FArrayBox(fcx_mf_cVars[1][mfi], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1),
+    //   FArrayBox(fcx_mf_cVars[2][mfi], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1),
     // };
     // alternatively, make a complete copy of all the b-field data (+ghost cells)
     std::array<amrex::FArrayBox, 3> fc_fabs_Bx_old;
@@ -94,7 +93,7 @@ void MHDSystem<problem_t>::SolveInductionEqn(std::array<amrex::MultiFab, AMREX_S
       fc_fabs_Bx_old[windex].resize(box_fcpg, 1);
       const auto &fc_a4_Bx = fc_fabs_Bx_old[windex].array();
       // extract face-centered magnetic fields
-      const auto &fc_a4_cVars_old = fcx_mf_cVars_old[windex][mfi].const_array();
+      const auto &fc_a4_cVars_old = fcx_mf_cVars[windex][mfi].const_array();
       amrex::ParallelFor(box_fcpg, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
         fc_a4_Bx(i, j, k) = fc_a4_cVars_old(i, j, k, MHDSystem<problem_t>::bfield_index);
       });
@@ -242,6 +241,18 @@ void MHDSystem<problem_t>::SolveInductionEqn(std::array<amrex::MultiFab, AMREX_S
           });
         }
 
+        // extract wavespeeds
+        int w0_comp = -1;
+        int w1_comp = -1;
+        if (std::abs(w_extrap_dirs[0] - w_extrap_dirs[1]) == 2) {
+          w0_comp = std::max(w_extrap_dirs[0], w_extrap_dirs[1]);
+          w1_comp = std::min(w_extrap_dirs[0], w_extrap_dirs[1]);
+        } else {
+          w0_comp = std::min(w_extrap_dirs[0], w_extrap_dirs[1]);
+          w1_comp = std::max(w_extrap_dirs[0], w_extrap_dirs[1]);
+        }
+        const auto &fspd_x0 = fcx_mf_fspds[w0_comp][mfi].const_array();
+        const auto &fspd_x1 = fcx_mf_fspds[w1_comp][mfi].const_array();
         // extract both components of magnetic field either side of the cell-edge
         const auto &B0_m = ec_fabs_Bi_ieside[0][0].const_array();
         const auto &B0_p = ec_fabs_Bi_ieside[0][1].const_array();
@@ -254,41 +265,28 @@ void MHDSystem<problem_t>::SolveInductionEqn(std::array<amrex::MultiFab, AMREX_S
         const auto &E2_q3 = ec_fabs_E_q[3].const_array();
         // compute electric field on the cell-edge
         const auto &E2_ave = eci_fabs_E[iedge_rel2face].array();
-        amrex::ParallelFor(box_fcw, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-          const double spd_x0_m = 1.0;
-          const double spd_x0_p = 1.0;
-          const double spd_x1_m = 1.0;
-          const double spd_x1_p = 1.0;
+        amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
           E2_ave(i,j,k) = \
-              spd_x0_p * spd_x1_p * E2_q0(i,j,k) +
-              spd_x0_m * spd_x1_p * E2_q3(i,j,k) +
-              spd_x0_m * spd_x1_m * E2_q1(i,j,k) +
-              spd_x0_p * spd_x1_m * E2_q2(i,j,k) -
-              spd_x1_p * spd_x1_m / (spd_x1_p + spd_x1_m) * (B0_p(i,j,k) - B0_m(i,j,k)) +
-              spd_x0_p * spd_x0_m / (spd_x0_p + spd_x0_m) * (B1_p(i,j,k) - B1_m(i,j,k));
+              fspd_x0(i,j,k,1) * fspd_x1(i,j,k,1) * E2_q0(i,j,k) +
+              fspd_x0(i,j,k,0) * fspd_x1(i,j,k,1) * E2_q3(i,j,k) +
+              fspd_x0(i,j,k,0) * fspd_x1(i,j,k,0) * E2_q1(i,j,k) +
+              fspd_x0(i,j,k,1) * fspd_x1(i,j,k,0) * E2_q2(i,j,k) -
+              fspd_x1(i,j,k,1) * fspd_x1(i,j,k,0) / (fspd_x1(i,j,k,1) + fspd_x1(i,j,k,0)) * (B0_p(i,j,k) - B0_m(i,j,k)) +
+              fspd_x0(i,j,k,1) * fspd_x0(i,j,k,0) / (fspd_x0(i,j,k,1) + fspd_x0(i,j,k,0)) * (B1_p(i,j,k) - B1_m(i,j,k));
         });
 
-        const int index_E2comp = MHDSystem<problem_t>::bfield_index + (wsolve + 2*iedge_rel2face + 2) % 3;
-        std::array<int, 3> idx = {0, 0, 0};
-        idx[index_E2comp] = 1;
-        // compute the magnetic flux
-        const auto &fcxw_a4_rhs = fcx_mf_rhs[wsolve][mfi].array();
-        amrex::ParallelFor(box_fcw, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-          // the induction equation is written in an additive form: the RHS is evaluated in parts as each edge-centered electric field is computed
-          fcxw_a4_rhs(i,j,k) += (E2_ave(i,j,k) - E2_ave(i-idx[0],j-idx[1],k-idx[2])) / dx[wsolve];
-        });
+        // const int index_E2comp = MHDSystem<problem_t>::bfield_index + (wsolve + 2*iedge_rel2face + 2) % 3;
+        // std::array<int, 3> idx = {0, 0, 0};
+        // idx[index_E2comp] = 1;
+        // // compute the magnetic flux
+        // const auto &fcxw_a4_rhs = fcx_mf_rhs[wsolve][mfi].array();
+        // amrex::ParallelFor(box_fcw, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+        //   // the induction equation is written in an additive form: the RHS is evaluated in parts as each edge-centered electric field is computed
+        //   fcxw_a4_rhs(i,j,k) += (E2_ave(i,j,k) - E2_ave(i-idx[0],j-idx[1],k-idx[2])) / dx[wsolve];
+        // });
       }
-      
-      const auto &fcxw_a4_rhs = fcx_mf_rhs[wsolve][mfi].const_array();
-      const auto &fc_a4_Bx_old = fc_fabs_Bx_old[wsolve].const_array();
-      auto fc_a4_Bx_new = fcx_mf_cVars_new[wsolve][mfi].array();
-      amrex::ParallelFor(box_fcw, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-        fc_a4_Bx_new(i, j, k) = fc_a4_Bx_old(i, j, k) + dt * fcxw_a4_rhs(i, j, k);
-      });
     }
   }
-
-  std::cout << "Done computing EMF" << std::endl;
 }
 
 template <typename problem_t>
