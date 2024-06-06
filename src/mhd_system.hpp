@@ -31,13 +31,13 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 		bfield_index = Physics_Indices<problem_t>::mhdFirstIndex,
 	};
 
-  static void ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM> &fcx_mf_rhs, amrex::MultiFab const &cc_mf_cVars, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int nghost_fc);
+  static void ComputeEMF(std::array<std::array<amrex::MultiFab, 2>, AMREX_SPACEDIM> &ec_mf_emf_comps, amrex::MultiFab const &cc_mf_cVars, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int nghost_fc);
 
   static void ReconstructTo(FluxDir dir, arrayconst_t &cState, array_t &lState, array_t &rState, const amrex::Box &reconstructRange, int reconstructionOrder);
 };
 
 template <typename problem_t>
-void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM> &fcx_mf_rhs, amrex::MultiFab const &cc_mf_cVars, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, const int nghost_fc)
+void MHDSystem<problem_t>::ComputeEMF(std::array<std::array<amrex::MultiFab, 2>, AMREX_SPACEDIM> &ec_mf_emf_comps, amrex::MultiFab const &cc_mf_cVars, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, const int nghost_fc)
 {  
   // Loop over each box-array on the level
   // Note: all the different centerings still have the same distribution mapping, so it is fine for us to attach our looping to cc FArrayBox
@@ -47,15 +47,17 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
     // In this function we distinguish between world (w:3), array (i:2), quandrant (q:4), and component (x:3) indexing with prefixes. We will use the x-prefix when the w- and i- indexes are the same.
     // We will minimise the storage footprint by only computing and holding onto the quantities required for calculating the EMF in the w-direction. This inadvertently leads to duplicate computation, but also significantly reduces the memory footprint, which is a bigger bottleneck.
 
-    // initialise the rhs of the induction equation
-    for (int windex = 0; windex < AMREX_SPACEDIM; ++windex) {
-      const amrex::IntVect ivec_cc2fc = amrex::IntVect::TheDimensionVector(windex);
-      const amrex::Box box_fc = amrex::convert(box_cc, ivec_cc2fc);
-      const auto &fcxw_a4_rhs = fcx_mf_rhs[windex][mfi].array();
-      amrex::ParallelFor(box_fc, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-        fcxw_a4_rhs(i, j, k) = 0;
-      });
-    }
+    // // initialise the rhs of the induction equation
+    // for (int windex = 0; windex < AMREX_SPACEDIM; ++windex) {
+    //   const amrex::IntVect ivec_cc2fc = amrex::IntVect::TheDimensionVector(windex);
+    //   const amrex::Box box_fc = amrex::convert(box_cc, ivec_cc2fc);
+    //   const auto &ec_a4_emf_x2 = ec_mf_emf_comps[windex][0][mfi].array();
+    //   const auto &ec_a4_emf_x3 = ec_mf_emf_comps[windex][1][mfi].array();
+    //   amrex::ParallelFor(box_fc, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+    //     ec_a4_emf_x2(i, j, k) = 0;
+    //     ec_a4_emf_x3(i, j, k) = 0;
+    //   });
+    // }
 
     // extract cell-centered velocity fields
     // indexing: field[3: x-component]
@@ -103,9 +105,10 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
     for (int wsolve = 0; wsolve < 3; ++wsolve) {
       const amrex::Box box_fcw = amrex::convert(box_cc, amrex::IntVect::TheDimensionVector(wsolve));
 
-      // electric field on the cell-edge
-      // indexing: field[2: i-edge on cell-face]
-      std::array<amrex::FArrayBox, 2> eci_fabs_E;
+      // // electric field on the cell-edge
+      // // indexing: field[2: i-edge on cell-face]
+      // std::array<amrex::FArrayBox, 2> eci_fabs_E;
+
       // to solve for the magnetic flux through each face we compute the line integral of the EMF around the cell-face.
       // so let's solve for the EMF along each of the two edges along the edge of the cell-face
       for (int iedge_rel2face = 0; iedge_rel2face < 2; ++iedge_rel2face) {
@@ -124,8 +127,8 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
         // you lose 1 ghost-cell when you reconstruct b-field fc->ec
         const amrex::Box box_ecpgm1 = amrex::grow(box_ec, nghost_fc-1);
 
-        // define output electric field on the cell-edge
-        eci_fabs_E[iedge_rel2face].resize(box_ecpgm2, 1);
+        // // define output electric field on the cell-edge
+        // eci_fabs_E[iedge_rel2face].resize(box_ecpgm2, 1);
 
         // initialise FArrayBox for storing the edge-centered velocity fields averaged across the two extrapolation permutations
         // indexing: field[2: i-compnent][4: quadrant around edge]
@@ -264,7 +267,7 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
         const auto &E2_q2 = ec_fabs_E_q[2].const_array();
         const auto &E2_q3 = ec_fabs_E_q[3].const_array();
         // compute electric field on the cell-edge
-        const auto &E2_ave = eci_fabs_E[iedge_rel2face].array();
+        const auto &E2_ave = ec_mf_emf_comps[wsolve][iedge_rel2face][mfi].array();
         amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
           E2_ave(i,j,k) = \
               fspd_x0(i,j,k,1) * fspd_x1(i,j,k,1) * E2_q0(i,j,k) +

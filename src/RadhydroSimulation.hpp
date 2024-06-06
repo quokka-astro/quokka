@@ -1130,13 +1130,13 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 		redoFlag.setVal(quokka::redoFlag::none);
 
     if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-      std::array<amrex::MultiFab, AMREX_SPACEDIM> rhs4mhd_fc;
+      std::array<std::array<amrex::MultiFab, 2>, AMREX_SPACEDIM> emf_comps_ec;
       for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-        auto ba_fc = amrex::convert(ba_cc, amrex::IntVect::TheDimensionVector(idim));
-        rhs4mhd_fc[idim].define(ba_fc, dm, n_mhd_vars_per_dim_, nghost_fc_);
+        emf_comps_ec[idim][0].define(amrex::convert(ba_cc, amrex::IntVect::TheDimensionVector(idim) + amrex::IntVect::TheDimensionVector((idim+1)%3)), dm, 1, nghost_fc_);
+        emf_comps_ec[idim][1].define(amrex::convert(ba_cc, amrex::IntVect::TheDimensionVector(idim) + amrex::IntVect::TheDimensionVector((idim+2)%3)), dm, 1, nghost_fc_);
         fspds[idim].FillBoundary(geom[lev].periodicity());
       }
-      MHDSystem<problem_t>::ComputeEMF(rhs4mhd_fc, stateOld_cc, stateOld_fc, fspds, nghost_fc_);
+      MHDSystem<problem_t>::ComputeEMF(emf_comps_ec, stateOld_cc, stateOld_fc, fspds, nghost_fc_);
     }
 		HydroSystem<problem_t>::ComputeRhsFromFluxes(rhs, fluxArrays, dx, ncompHydro_);
 		HydroSystem<problem_t>::AddInternalEnergyPdV(rhs, stateOld_cc, dx, faceVel, redoFlag);
