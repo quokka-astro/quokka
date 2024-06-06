@@ -80,26 +80,13 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<std::array<amrex::MultiFab, 2>,
       cc_a4_Ux2(i,j,k) = px3 / rho;
     });
 
-    // // indexing: field[3: x-component/x-face]
-    // // create a view of all the b-field data (+ghost cells; do not make another copy)
-    // std::array<amrex::FArrayBox, 3> fc_fabs_Bx_old = {
-    //   FArrayBox(fcx_mf_cVars[0][mfi], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1),
-    //   FArrayBox(fcx_mf_cVars[1][mfi], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1),
-    //   FArrayBox(fcx_mf_cVars[2][mfi], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1),
-    // };
-    // alternatively, make a complete copy of all the b-field data (+ghost cells)
-    std::array<amrex::FArrayBox, 3> fc_fabs_Bx_old;
-    for (int windex = 0; windex < 3; ++windex) {
-      const amrex::IntVect ivec_cc2fc = amrex::IntVect::TheDimensionVector(windex);
-      const amrex::Box box_fcpg = amrex::convert(amrex::grow(box_cc, nghost_fc), ivec_cc2fc);
-      fc_fabs_Bx_old[windex].resize(box_fcpg, 1);
-      const auto &fc_a4_Bx = fc_fabs_Bx_old[windex].array();
-      // extract face-centered magnetic fields
-      const auto &fc_a4_cVars_old = fcx_mf_cVars[windex][mfi].const_array();
-      amrex::ParallelFor(box_fcpg, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-        fc_a4_Bx(i, j, k) = fc_a4_cVars_old(i, j, k, MHDSystem<problem_t>::bfield_index);
-      });
-    }
+    // indexing: field[3: x-component/x-face]
+    // create a view of all the b-field data (+ghost cells; do not make another copy)
+    std::array<amrex::FArrayBox, 3> fc_fabs_Bx_old = {
+      amrex::FArrayBox(fcx_mf_cVars[0][mfi], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1),
+      amrex::FArrayBox(fcx_mf_cVars[1][mfi], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1),
+      amrex::FArrayBox(fcx_mf_cVars[2][mfi], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1),
+    };
 
     // compute the magnetic flux through each cell-face
     for (int wsolve = 0; wsolve < 3; ++wsolve) {
