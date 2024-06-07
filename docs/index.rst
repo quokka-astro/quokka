@@ -38,7 +38,8 @@ You can start a `Discussion <https://github.com/quokka-astro/quokka/discussions>
     * needed for consistent HTML-PDF-EPUB chapters
     */
    section#user-guide,
-   section#developer-guide {
+   section#developer-guide,
+   section#epilogue, {
        display:none;
    }
    </style>
@@ -66,7 +67,7 @@ User Guide
    instability
 
 Developer Guide
------------
+---------------
 .. toctree::
    :caption: DEVELOPER GUIDE
    :maxdepth: 1
@@ -80,7 +81,7 @@ Developer Guide
    api
    
 Epilogue
-------------
+--------
 .. toctree::
    :caption: EPILOGUE
    :maxdepth: 1
