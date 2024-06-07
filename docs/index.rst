@@ -39,7 +39,7 @@ You can start a `Discussion <https://github.com/quokka-astro/quokka/discussions>
     */
    section#user-guide,
    section#developer-guide,
-   section#epilogue, {
+   section#epilogue {
        display:none;
    }
    </style>
@@ -52,7 +52,7 @@ You can start a `Discussion <https://github.com/quokka-astro/quokka/discussions>
    citation
 
 User Guide
-------------
+---------------
 .. toctree::
    :caption: USER GUIDE
    :maxdepth: 1
@@ -79,9 +79,9 @@ Developer Guide
    performance
    howto_clang_tidy
    api
-   
+
 Epilogue
---------
+---------------
 .. toctree::
    :caption: EPILOGUE
    :maxdepth: 1
