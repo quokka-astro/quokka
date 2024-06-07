@@ -42,10 +42,10 @@ template <> struct Physics_Traits<AlfvenWave> {
 	static constexpr int nGroups = 1; // number of radiation groups
 };
 
-constexpr double rho0 = 1.0;					     // background density
+constexpr double rho0 = 1.0;					   // background density
 constexpr double P0 = 1.0 / quokka::EOS_Traits<AlfvenWave>::gamma; // background pressure
-constexpr double v0 = 0.;					     // background velocity
-constexpr double amp = 1.0e-6;					     // perturbation amplitude
+constexpr double v0 = 0.;					   // background velocity
+constexpr double amp = 1.0e-6;					   // perturbation amplitude
 
 AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 					  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
@@ -97,14 +97,14 @@ template <> void RadhydroSimulation<AlfvenWave>::setInitialConditionsOnGridFaceV
 	const quokka::direction dir = grid_elem.dir_;
 
 	if (dir == quokka::direction::x) {
-		amrex::ParallelFor(
-		    indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { state(i, j, k, MHDSystem<AlfvenWave>::bfield_index) = 1.0 + (i % 2); });
+		amrex::ParallelFor(indexRange,
+				   [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { state(i, j, k, MHDSystem<AlfvenWave>::bfield_index) = 1.0 + (i % 2); });
 	} else if (dir == quokka::direction::y) {
-		amrex::ParallelFor(
-		    indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { state(i, j, k, MHDSystem<AlfvenWave>::bfield_index) = 2.0 + (j % 2); });
+		amrex::ParallelFor(indexRange,
+				   [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { state(i, j, k, MHDSystem<AlfvenWave>::bfield_index) = 2.0 + (j % 2); });
 	} else if (dir == quokka::direction::z) {
-		amrex::ParallelFor(
-		    indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { state(i, j, k, MHDSystem<AlfvenWave>::bfield_index) = 3.0 + (k % 2); });
+		amrex::ParallelFor(indexRange,
+				   [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { state(i, j, k, MHDSystem<AlfvenWave>::bfield_index) = 3.0 + (k % 2); });
 	}
 }
 
@@ -157,7 +157,7 @@ auto problem_main() -> int
 
 	RadhydroSimulation<AlfvenWave> sim_write(BCs_cc, BCs_fc);
 	sim_write.setInitialConditions();
-  sim_write.evolve();
+	sim_write.evolve();
 	amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const &state_new_fc_write = sim_write.getNewMF_fc();
 	amrex::Print() << "\n";
 

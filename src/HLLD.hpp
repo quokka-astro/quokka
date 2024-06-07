@@ -96,8 +96,8 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 	const double cfs_R = FastMagnetoSonicSpeed(gamma, sR, bx);
 	spds[0] = std::min(sL.u - cfs_L, sR.u - cfs_R);
 	spds[4] = std::max(sL.u + cfs_L, sR.u + cfs_R);
-  const double fspd_m = spds[0];
-  const double fspd_p = spds[0];
+	const double fspd_m = spds[0];
+	const double fspd_p = spds[0];
 
 	//--- Step 3. Compute L/R fluxes
 
