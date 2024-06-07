@@ -47,18 +47,6 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<std::array<amrex::MultiFab, 2>,
     // In this function we distinguish between world (w:3), array (i:2), quandrant (q:4), and component (x:3) indexing with prefixes. We will use the x-prefix when the w- and i- indexes are the same.
     // We will minimise the storage footprint by only computing and holding onto the quantities required for calculating the EMF in the w-direction. This inadvertently leads to duplicate computation, but also significantly reduces the memory footprint, which is a bigger bottleneck.
 
-    // // initialise the rhs of the induction equation
-    // for (int windex = 0; windex < AMREX_SPACEDIM; ++windex) {
-    //   const amrex::IntVect ivec_cc2fc = amrex::IntVect::TheDimensionVector(windex);
-    //   const amrex::Box box_fc = amrex::convert(box_cc, ivec_cc2fc);
-    //   const auto &ec_a4_emf_x2 = ec_mf_emf_comps[windex][0][mfi].array();
-    //   const auto &ec_a4_emf_x3 = ec_mf_emf_comps[windex][1][mfi].array();
-    //   amrex::ParallelFor(box_fc, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-    //     ec_a4_emf_x2(i, j, k) = 0;
-    //     ec_a4_emf_x3(i, j, k) = 0;
-    //   });
-    // }
-
     // extract cell-centered velocity fields
     // indexing: field[3: x-component]
     std::array<amrex::FArrayBox, 3> cc_fabs_Ux;
@@ -264,16 +252,6 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<std::array<amrex::MultiFab, 2>,
               fspd_x1(i,j,k,1) * fspd_x1(i,j,k,0) / (fspd_x1(i,j,k,1) + fspd_x1(i,j,k,0)) * (B0_p(i,j,k) - B0_m(i,j,k)) +
               fspd_x0(i,j,k,1) * fspd_x0(i,j,k,0) / (fspd_x0(i,j,k,1) + fspd_x0(i,j,k,0)) * (B1_p(i,j,k) - B1_m(i,j,k));
         });
-
-        // const int index_E2comp = MHDSystem<problem_t>::bfield_index + (wsolve + 2*iedge_rel2face + 2) % 3;
-        // std::array<int, 3> idx = {0, 0, 0};
-        // idx[index_E2comp] = 1;
-        // // compute the magnetic flux
-        // const auto &fcxw_a4_rhs = fcx_mf_rhs[wsolve][mfi].array();
-        // amrex::ParallelFor(box_fcw, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-        //   // the induction equation is written in an additive form: the RHS is evaluated in parts as each edge-centered electric field is computed
-        //   fcxw_a4_rhs(i,j,k) += (E2_ave(i,j,k) - E2_ave(i-idx[0],j-idx[1],k-idx[2])) / dx[wsolve];
-        // });
       }
     }
   }
