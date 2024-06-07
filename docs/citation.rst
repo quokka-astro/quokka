@@ -3,7 +3,8 @@
 Citation
 ========
 
-If you use Quokka or the numerical methods implemented, please cite :cite:`Wibking_2022`:
+If you use Quokka or the numerical methods originally implemented for Quokka in your research,
+please cite :cite:`Wibking_2022`:
 
 .. code-block:: bibtex
 
@@ -24,3 +25,21 @@ If you use Quokka or the numerical methods implemented, please cite :cite:`Wibki
             adsurl = {https://ui.adsabs.harvard.edu/abs/2022MNRAS.512.1430W},
             adsnote = {Provided by the SAO/NASA Astrophysics Data System}
         }
+
+Additional methods papers
+-------------------------
+If you use any of the following numerical methods or physical modules,
+please also cite the publications corresponding to the methods used in your research:
+
+.. bibliography::
+   :filter: False
+
+   He_2024
+
+Scientific applications with Quokka
+-----------------------------------
+
+.. bibliography::
+   :filter: False
+
+   Vijayan_2024

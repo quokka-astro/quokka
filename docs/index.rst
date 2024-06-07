@@ -48,7 +48,6 @@ You can start a `Discussion <https://github.com/quokka-astro/quokka/discussions>
 
    about
    equations
-   bibliography
    citation
 
 User Guide
@@ -80,3 +79,11 @@ Developer Guide
    howto_clang_tidy
    api
    
+Epilogue
+------------
+.. toctree::
+   :caption: EPILOGUE
+   :maxdepth: 1
+   :hidden:
+
+   bibliography
