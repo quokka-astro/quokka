@@ -21,11 +21,10 @@ namespace NSCBC
 namespace detail
 {
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dQ_dx_inflow_x1_lower(quokka::valarray<Real, HydroSystem<problem_t>::nvar_> const &Q,
-							       quokka::valarray<Real, HydroSystem<problem_t>::nvar_> const &dQ_dx_data, const Real T_t,
-							       const Real u_t, const Real v_t, const Real w_t,
-							       amrex::GpuArray<Real, HydroSystem<problem_t>::nscalars_> const &s_t, const Real L_x)
-    -> quokka::valarray<Real, HydroSystem<problem_t>::nvar_>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto
+dQ_dx_inflow_x1_lower(quokka::valarray<Real, HydroSystem<problem_t>::nvar_> const &Q, quokka::valarray<Real, HydroSystem<problem_t>::nvar_> const &dQ_dx_data,
+		      const Real T_t, const Real u_t, const Real v_t, const Real w_t, amrex::GpuArray<Real, HydroSystem<problem_t>::nscalars_> const &s_t,
+		      const Real L_x) -> quokka::valarray<Real, HydroSystem<problem_t>::nvar_>
 {
 	// return dQ/dx corresponding to subsonic inflow on the x1 lower boundary
 	// (This is only necessary for continuous inflows, i.e., where a shock or contact discontinuity is not desired.)

@@ -73,8 +73,8 @@ template <> struct RadSystem_Traits<TubeProblem> {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/)
-    -> quokka::valarray<double, Physics_Traits<TubeProblem>::nGroups>
+AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputePlanckOpacity(const double /*rho*/,
+									const double /*Tgas*/) -> quokka::valarray<double, Physics_Traits<TubeProblem>::nGroups>
 {
 	quokka::valarray<double, Physics_Traits<TubeProblem>::nGroups> kappaPVec{};
 	for (int g = 0; g < nGroups_; ++g) {
@@ -84,8 +84,8 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputePlanckOpacity(const do
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<TubeProblem>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/)
-    -> quokka::valarray<double, Physics_Traits<TubeProblem>::nGroups>
+AMREX_GPU_HOST_DEVICE auto
+RadSystem<TubeProblem>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> quokka::valarray<double, Physics_Traits<TubeProblem>::nGroups>
 {
 	quokka::valarray<double, Physics_Traits<TubeProblem>::nGroups> kappaFVec{};
 	for (int g = 0; g < nGroups_; ++g) {

@@ -125,9 +125,9 @@ template <> struct RadSystem_Traits<ExactProblem> {
 
 template <>
 template <typename ArrayType>
-AMREX_GPU_HOST_DEVICE auto RadSystem<MGProblem>::ComputeRadQuantityExponents(ArrayType const & /*quant*/,
-									     amrex::GpuArray<double, nGroups_ + 1> const & /*boundaries*/)
-    -> amrex::GpuArray<double, nGroups_>
+AMREX_GPU_HOST_DEVICE auto
+RadSystem<MGProblem>::ComputeRadQuantityExponents(ArrayType const & /*quant*/,
+						  amrex::GpuArray<double, nGroups_ + 1> const & /*boundaries*/) -> amrex::GpuArray<double, nGroups_>
 {
 	amrex::GpuArray<double, nGroups_> exponents{};
 	for (int g = 0; g < nGroups_; ++g) {
@@ -163,8 +163,8 @@ auto compute_kappa(const double nu, const double Tgas) -> double
 
 template <>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
-RadSystem<MGProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> const rad_boundaries, const double rho, const double Tgas)
-    -> amrex::GpuArray<amrex::GpuArray<double, nGroups_>, 2>
+RadSystem<MGProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> const rad_boundaries, const double rho,
+							   const double Tgas) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_>, 2>
 {
 	amrex::GpuArray<double, nGroups_> exponents{};
 	amrex::GpuArray<double, nGroups_> kappa_lower{};
