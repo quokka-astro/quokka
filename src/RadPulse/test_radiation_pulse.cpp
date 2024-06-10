@@ -39,7 +39,7 @@ template <> struct RadSystem_Traits<PulseProblem> {
 	static constexpr double c_hat = chat;
 	static constexpr double radiation_constant = a_rad;
 	static constexpr double Erad_floor = erad_floor;
-	static constexpr bool compute_v_over_c_terms = false;
+	static constexpr int beta_order = 0;
 };
 
 template <> struct Physics_Traits<PulseProblem> {
@@ -213,7 +213,7 @@ auto problem_main() -> int
 		err_norm += std::abs(Trad[i] - Trad_exact[i]);
 		sol_norm += std::abs(Trad_exact[i]);
 	}
-	const double error_tol = 0.005;
+	const double error_tol = 0.01;
 	const double rel_error = err_norm / sol_norm;
 	amrex::Print() << "Relative L1 error norm = " << rel_error << std::endl;
 

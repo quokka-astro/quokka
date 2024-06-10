@@ -12,5 +12,5 @@ cd docs
 
 echo "Build the Sphinx documentation for Quokka."
 #make PYTHON="python3" LATEXMKOPTS="-interaction=nonstopmode" latexpdf
-make PYTHON="python3" html &> make_source_html.out
+make PYTHON="python3" html
 cd ../

@@ -12,20 +12,17 @@
 #include <array>
 #include <filesystem>
 #include <limits>
-#include <memory>
 #include <string>
 #include <tuple>
 #include <unordered_map>
 #include <utility>
 
 #include "AMReX.H"
-#include "AMReX_Algorithm.H"
 #include "AMReX_AmrParticles.H"
 #include "AMReX_Arena.H"
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
 #include "AMReX_BCRec.H"
-#include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_Box.H"
 #include "AMReX_FArrayBox.H"
@@ -44,7 +41,6 @@
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
 #include "AMReX_YAFluxRegister.H"
-#include "physics_numVars.hpp"
 
 #ifdef AMREX_USE_ASCENT
 #include "AMReX_Conduit_Blueprint.H"
@@ -53,15 +49,16 @@
 #endif
 
 #include "Chemistry.hpp"
-#include "CloudyCooling.hpp"
+#include "GrackleLikeCooling.hpp"
 #include "SimulationData.hpp"
+#include "TabulatedCooling.hpp"
+#include "eos.H"
 #include "hydro_system.hpp"
 #include "hyperbolic_system.hpp"
 #include "physics_info.hpp"
+#include "physics_numVars.hpp"
 #include "radiation_system.hpp"
 #include "simulation.hpp"
-
-#include "eos.H"
 
 // Simulation class should be initialized only once per program (i.e., is a singleton)
 template <typename problem_t> class RadhydroSimulation : public AMRSimulation<problem_t>
@@ -117,7 +114,9 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 	Real max_density_allowed = std::numeric_limits<amrex::Real>::max();
 	Real min_density_allowed = std::numeric_limits<amrex::Real>::min();
 
-	quokka::cooling::cloudy_tables cloudyTables_;
+	quokka::GrackleLikeCooling::grackle_tables grackleTables_;
+	quokka::TabulatedCooling::cloudy_tables cloudyTables_;
+	std::string coolingTableType_{};
 	std::string coolingTableFilename_{};
 
 	static constexpr int nvarTotal_cc_ = Physics_Indices<problem_t>::nvarTotal_cc;
@@ -231,7 +230,7 @@ template <typename problem_t> class RadhydroSimulation : public AMRSimulation<pr
 				 amrex::Real time, amrex::Real dt_lev) -> bool;
 
 	void addStrangSplitSources(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev);
-	void addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev);
+	auto addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev) -> bool;
 
 	auto isCflViolated(int lev, amrex::Real time, amrex::Real dt_actual) -> bool;
 
@@ -353,13 +352,22 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::readParmParse(
 		amrex::ParmParse hpp("cooling");
 		int alwaysReadTables = 0;
 		hpp.query("enabled", enableCooling_);
+		hpp.query("cooling_table_type", coolingTableType_);
 		hpp.query("read_tables_even_if_disabled", alwaysReadTables);
-		hpp.query("grackle_data_file", coolingTableFilename_);
+		hpp.query("hdf5_data_file", coolingTableFilename_);
 
 		if ((enableCooling_ == 1) || (alwaysReadTables == 1)) {
-			// read Cloudy tables
-			amrex::Print() << "Reading Cloudy tables...\n";
-			quokka::cooling::readCloudyData(coolingTableFilename_, cloudyTables_);
+			if (coolingTableType_ == "grackle") {
+				// read Grackle tables
+				amrex::Print() << "Reading Grackle tables...\n";
+				quokka::GrackleLikeCooling::readGrackleData(coolingTableFilename_, grackleTables_);
+			} else if (coolingTableType_ == "cloudy_cooling_tools") {
+				// read cloudy_cooling_tools tables
+				amrex::Print() << "Reading cloudy-cooling-tools tables...\n";
+				quokka::TabulatedCooling::readCloudyData(coolingTableFilename_, cloudyTables_);
+			} else {
+				amrex::Abort("Invalid cooling table type!");
+			}
 		}
 	}
 
@@ -499,22 +507,34 @@ template <typename problem_t> void RadhydroSimulation<problem_t>::addStrangSplit
 }
 
 template <typename problem_t>
-void RadhydroSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt)
+auto RadhydroSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt) -> bool
 {
+	// start by assuming cooling integrator is successful.
+	bool cool_success = true;
 	if (enableCooling_ == 1) {
 		// compute cooling
-		quokka::cooling::computeCooling<problem_t>(state, dt, cloudyTables_, tempFloor_);
+		if (coolingTableType_ == "grackle") {
+			cool_success = quokka::GrackleLikeCooling::computeCooling<problem_t>(state, dt, grackleTables_, tempFloor_);
+		} else if (coolingTableType_ == "cloudy_cooling_tools") {
+			cool_success = quokka::TabulatedCooling::computeCooling<problem_t>(state, dt, cloudyTables_, tempFloor_);
+		} else {
+			amrex::Abort("Invalid cooling table type!");
+		}
 	}
 
+	// start by assuming chemistry burn is successful.
+	bool burn_success = true; // NOLINT
 #ifdef PRIMORDIAL_CHEM
 	if (enableChemistry_ == 1) {
 		// compute chemistry
-		quokka::chemistry::computeChemistry<problem_t>(state, dt, max_density_allowed, min_density_allowed);
+		burn_success = quokka::chemistry::computeChemistry<problem_t>(state, dt, max_density_allowed, min_density_allowed);
 	}
 #endif
 
 	// compute user-specified sources
 	addStrangSplitSources(state, lev, time, dt);
+
+	return (burn_success && cool_success);
 }
 
 template <typename problem_t>
@@ -872,7 +892,8 @@ void RadhydroSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amre
 	amrex::AmrTracerParticleContainer::ContainerLike<amrex::DefaultAllocator> originalTracerPC;
 	if (do_tracers != 0) {
 		// save the pre-advance tracer particles
-		originalTracerPC = TracerPC->make_alike();
+		originalTracerPC = TracerPC->make_alike();	 // create empty particle container
+		originalTracerPC.copyParticles(*TracerPC, true); // do local copy of particles
 	}
 #endif
 
@@ -1013,7 +1034,12 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 	auto dx = geom[lev].CellSizeArray();
 
 	// do Strang split source terms (first half-step)
-	addStrangSplitSourcesWithBuiltin(state_old_cc_tmp, lev, time, 0.5 * dt_lev);
+	auto burn_success_first = addStrangSplitSourcesWithBuiltin(state_old_cc_tmp, lev, time, 0.5 * dt_lev);
+
+	// check if reactions failed for source terms. If it failed, return false.
+	if (!burn_success_first) {
+		return burn_success_first;
+	}
 
 	// create temporary multifab for intermediate state
 	amrex::MultiFab state_inter_cc_(grids[lev], dmap[lev], Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
@@ -1275,10 +1301,10 @@ auto RadhydroSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_o
 #endif
 
 	// do Strang split source terms (second half-step)
-	addStrangSplitSourcesWithBuiltin(state_new_cc_[lev], lev, time + dt_lev, 0.5 * dt_lev);
+	auto burn_success_second = addStrangSplitSourcesWithBuiltin(state_new_cc_[lev], lev, time + dt_lev, 0.5 * dt_lev);
 
-	// check if we have violated the CFL timestep
-	return !isCflViolated(lev, time, dt_lev);
+	// check if we have violated the CFL timestep or reactions failed for source terms
+	return (!isCflViolated(lev, time, dt_lev) && burn_success_second);
 }
 
 template <typename problem_t>
@@ -1456,11 +1482,11 @@ void RadhydroSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab const &pri
 						      amrex::MultiFab const &x2Flat, amrex::MultiFab const &x3Flat, const int ng_reconstruct, const int nvars)
 {
 	if (reconstructionOrder_ == 3) {
-		HydroSystem<problem_t>::template ReconstructStatesPPM<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
+		HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
 	} else if (reconstructionOrder_ == 2) {
-		HydroSystem<problem_t>::template ReconstructStatesPLM<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
+		HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::minmod>(primVar, leftState, rightState, ng_reconstruct, nvars);
 	} else if (reconstructionOrder_ == 1) {
-		HydroSystem<problem_t>::template ReconstructStatesConstant<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
+		HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(primVar, leftState, rightState, ng_reconstruct, nvars);
 	} else {
 		amrex::Abort("Invalid reconstruction order specified!");
 	}
@@ -1831,14 +1857,15 @@ void RadhydroSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real
 
 	if (radiationReconstructionOrder_ == 3) {
 		// mixed interface/cell-centered kernel
-		RadSystem<problem_t>::template ReconstructStatesPPM<DIR>(primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange,
-									 x1ReconstructRange, nvars);
+		HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR>(primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange,
+										x1ReconstructRange, nvars);
 	} else if (radiationReconstructionOrder_ == 2) {
 		// PLM and donor cell are interface-centered kernels
-		RadSystem<problem_t>::template ReconstructStatesPLM<DIR>(primVar.array(), x1LeftState.array(), x1RightState.array(), x1ReconstructRange, nvars);
+		HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::MC>(primVar.array(), x1LeftState.array(), x1RightState.array(),
+												  x1ReconstructRange, nvars);
 	} else if (radiationReconstructionOrder_ == 1) {
-		RadSystem<problem_t>::template ReconstructStatesConstant<DIR>(primVar.array(), x1LeftState.array(), x1RightState.array(), x1ReconstructRange,
-									      nvars);
+		HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(primVar.array(), x1LeftState.array(), x1RightState.array(),
+										     x1ReconstructRange, nvars);
 	} else {
 		amrex::Abort("Invalid reconstruction order for radiation variables! Aborting...");
 	}
