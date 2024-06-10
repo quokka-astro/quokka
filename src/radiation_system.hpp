@@ -1257,7 +1257,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				quokka::valarray<double, nGroups_> F_D{};
 
 				const double resid_tol = 1.0e-11; // 1.0e-15;
-				const int maxIter = 400;
+				const int maxIter = 50;
 				int n = 0;
 				for (; n < maxIter; ++n) {
 					// compute material temperature
